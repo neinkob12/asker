@@ -4,6 +4,8 @@ Browserspiel für uns: Auf der Satellitenkarte von Köln tauchen an festen Spots
 Du bestellst Ware am Hafen in Rotterdam, sie wird per Transporter nach Köln gebracht, und du belieferst die Kunden.
 Mit genug Geld heuerst du Läufer an, die einen Spot automatisch bedienen.
 
+Wohin sich das Spiel entwickeln soll, steht in [`docs/konzept.md`](docs/konzept.md).
+
 ## Starten
 
 Voraussetzung: [Node.js](https://nodejs.org) ab Version 20.
