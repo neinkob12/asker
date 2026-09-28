@@ -63,3 +63,21 @@
 .shell-map.zoomed-out .spot-marker {
   display: none;
 }
+.spot-marker.is-locked .spot-dot {
+  background: var(--color-marker-idle);
+  border-color: var(--color-muted);
+  opacity: 0.7;
+}
+.spot-marker.is-locked .spot-badge {
+  font-size: 12px;
+}
+.spot-marker.is-locked .spot-name {
+  color: var(--color-muted);
+}
+.spot-marker.is-custom .spot-dot {
+  border-style: dashed;
+}
+.spot-locked p {
+  margin: var(--space-2) 0;
+  font-size: var(--font-size-sm);
+}
