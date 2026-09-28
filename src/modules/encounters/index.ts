@@ -1,8 +1,8 @@
 // Konfrontationen: taktische, rundenbasierte Situationen wie Überfälle, Polizeiflucht, Schulden eintreiben
 // oder ein Deal, der kippt. Anlässe und Handlungen sind reine Daten (kinds.ts, actions.ts).
 //
-// Ablauf für Aufrufer: startEncounter(ctx, {...}) liefert eine ID. Ist der Spieler nicht festgelegt und der
-// Anlass "joinable", entscheidet er zuerst, ob er selbst hingeht (briefing). Dann laufen Runden, in denen er
+// Ablauf für Aufrufer: startEncounter(ctx, {...}) liefert eine ID. Mit askPlayer (und einem Anlass mit "joinable")
+// entscheidet der Spieler zuerst, ob er selbst hingeht (briefing). Dann laufen Runden, in denen er
 // Handlungen wählt ('encounters.act') oder seine Leute machen lässt ('encounters.auto'). Das Ergebnis kommt als
 // Ereignis 'encounter.resolved' (mit derselben ID, dem origin und dem Ergebnis). Ohne Entscheidung (keine
 // Oberfläche, z.B. in Tests) würfeln die Leute nach DECISION_TIMEOUT Spielminuten selbst aus; sofort geht das
@@ -72,8 +72,11 @@ declare module '../../core' {
       outcome: EncounterOutcome;
       request: EncounterRequest;
       playerKilled: boolean;
-      /** Was passiert ist, aus Sicht des Spielers (Geld, Ware, ausgeschaltete Gegner, Verletzte …). */
-      result: EncounterResult;
+      /**
+       * Was passiert ist, aus Sicht des Spielers (Geld, Ware, ausgeschaltete Gegner, Verletzte …). Setzt encounters
+       * immer; optional, damit andere Module (und Tests) das Ereignis weiter ohne auslösen können.
+       */
+      result?: EncounterResult;
     };
   }
 }
@@ -147,6 +150,7 @@ function migrateV1(old: EncountersStateV1): EncountersState {
     log: [],
     bribeCost: 0,
     extraHeat: 0,
+    goodsDropped: 0,
     bribeSpent: 0,
     deadline: e.startedAt,
     outcome: e.outcome ?? 'failure',

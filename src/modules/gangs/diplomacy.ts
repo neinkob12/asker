@@ -3,7 +3,7 @@
 // Jeder Befehl prüft seine Bedingungen und sagt auf Deutsch, warum etwas nicht geht.
 
 import { type CommandResult, type Ctx, clock, formatAmount, formatEuro, journal, wallet } from '../../core';
-import { activeEncounters, startEncounter } from '../encounters';
+import { activeEncounters, ENCOUNTER_KINDS, startEncounter } from '../encounters';
 import { DEFAULT_PRODUCT, store } from '../goods';
 import { getStaffMember } from '../staff';
 import { getInfluence } from '../territory';
@@ -174,7 +174,7 @@ export function collect(ctx: Ctx, gangId: string, staffIds?: string[], playerPre
     stakes: { money: s.protection.amount },
     situation: `${gang.name} schuldet dir {stakeMoney} Schutzgeld und will nicht zahlen. Treffpunkt {place}. {opponent} warten schon.`,
     origin: { module: 'gangs', ref: `collect:${gang.id}` },
-    ...(playerPresent === undefined ? {} : { playerPresent }),
+    ...(playerPresent === undefined ? { askPlayer: true } : { playerPresent }),
   };
   s.protection.overdue = false;
   const { encounterId } = startEncounter(ctx, request);
@@ -283,8 +283,12 @@ export function acceptOffer(ctx: Ctx, gangId: string, offerId: number): CommandR
       kind: 'dealGoneWrong',
       veedelId: gang.homeVeedelId,
       staffIds: crewFor(ctx.state, {}),
+      askPlayer: true,
       opponent: { factionId: gang.id, label: gang.crew, strength: gang.traits.fighting, count: ctx.randomInt(2, 3) },
       stakes: { money: offer.price, goods: offer.amount },
+      effects: {
+        success: { ...ENCOUNTER_KINDS.dealGoneWrong.outcomes.success, goodsQuality: gang.traits.goodsQuality },
+      },
       situation:
         'Übergabe {place}: {stakeGoods} gegen {stakeMoney}. Irgendwas stimmt nicht, zu viele Leute am Treffpunkt. {opponent} wollen beides.',
       origin: { module: 'gangs', ref: `deal:${gang.id}` },
@@ -292,7 +296,12 @@ export function acceptOffer(ctx: Ctx, gangId: string, offerId: number): CommandR
     return { ok: true };
   }
   wallet.pay(ctx, offer.price, 'dirty', `Ware von ${gang.name}`);
-  store(ctx, { productId: DEFAULT_PRODUCT, amount: offer.amount });
+  store(ctx, {
+    productId: DEFAULT_PRODUCT,
+    amount: offer.amount,
+    quality: gang.traits.goodsQuality,
+    unitCost: offer.price / offer.amount,
+  });
   s.money += offer.price;
   s.goods = Math.max(0, s.goods - offer.amount);
   addRelation(s, RELATION_ON_DEAL);

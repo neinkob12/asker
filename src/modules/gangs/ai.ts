@@ -8,13 +8,14 @@ import { DEFAULT_PRODUCT, getStock, getWarehouses } from '../goods';
 import { referencePrice, setCompetitionFactor } from '../market';
 import { getSpot, getSpots } from '../spots';
 import { getStaff } from '../staff';
-import { addInfluence, controllerOf, getInfluence, PLAYER_FACTION } from '../territory';
-import { allVeedel, neighborsOf, veedelAt, veedelName } from '../veedel';
+import { addInfluence, controllerOf, getInfluence, hasPlayerPresence, influenceIn, PLAYER_FACTION } from '../territory';
+import { allVeedel, getVeedel, neighborsOf, veedelAt, veedelName } from '../veedel';
 import { addHostility, commandOption, crewFor, demandOptions, focusVeedel, say, statusOf } from './common';
 import {
   ALLIANCE_COST,
   ALLIANCE_MAX_HOSTILITY,
   ALLIANCE_PUSH_FACTOR,
+  ANNOUNCE_INTERVAL,
   ATTACK_AT,
   ATTACK_CHANCE,
   ATTACK_COOLDOWN,
@@ -22,13 +23,16 @@ import {
   DEFEND_COST,
   DEFEND_RATE,
   DEFEND_TARGET,
+  DEFEND_THREAT,
   DEFENDER_BASE,
   DEFENDER_COMMIT,
   EXPAND_CHANCE,
   HOME_CLAIM_BONUS,
+  HOME_DEFENSE_BONUS,
   HOME_PUSH_CHANCE_FACTOR,
   HOME_PUSH_MIN_PEOPLE,
   HOME_PUSH_STRENGTH,
+  HOME_TARGET_PENALTY,
   HOSTILITY_DECAY,
   HOSTILITY_PER_UNIT,
   LAST_STAND_BONUS,
@@ -180,8 +184,10 @@ function economy(ctx: Ctx, gang: Gang, s: GangStatus, newDay: boolean): void {
     s.money += Math.round(sold * price);
   }
   s.money -= Math.round((s.people * WAGE_PER_PERSON_DAY) / 24);
-  if (demand > 0 && s.goods < demand * RESTOCK_BELOW_HOURS && s.money > 0) {
-    const buy = Math.min(demand * RESTOCK_HOURS, Math.floor(s.money / gang.traits.goodsCost));
+  // Schutzgeld an dich legt sie zurück, bevor sie Ware nachkauft.
+  const spendable = s.money - (s.protection?.amount ?? 0);
+  if (demand > 0 && s.goods < demand * RESTOCK_BELOW_HOURS && spendable > 0) {
+    const buy = Math.min(demand * RESTOCK_HOURS, Math.floor(spendable / gang.traits.goodsCost));
     s.goods += buy;
     s.money -= Math.round(buy * gang.traits.goodsCost);
   }
@@ -216,10 +222,13 @@ function updateHostility(ctx: Ctx, gang: Gang, s: GangStatus): void {
 // ---------------------------------------------------------------------------------------------
 // Reviere
 
+/** Veedel verteidigen, in denen ein Rivale (du oder eine andere Gang) Fuß fasst. Die Grundregeneration macht territory. */
 function defend(ctx: Ctx, gang: Gang, s: GangStatus): void {
   for (const veedelId of gangVeedel(ctx.state, gang.id)) {
     if (s.money < DEFEND_COST) return;
     if (getInfluence(ctx.state, veedelId, gang.id) >= DEFEND_TARGET) continue;
+    const rivals = Object.entries(influenceIn(ctx.state, veedelId)).filter(([faction]) => faction !== gang.id);
+    if (!rivals.some(([, value]) => value >= DEFEND_THREAT)) continue;
     addInfluence(ctx, veedelId, gang.id, DEFEND_RATE);
     s.money -= DEFEND_COST;
   }
@@ -271,6 +280,7 @@ function pickTarget(ctx: Ctx, gang: Gang, s: GangStatus): string | null {
     let score = 100 - (holder ? getInfluence(state, v, holder) : 0) + ctx.random() * 10;
     if (controller === null) score += 20;
     if (v === gang.homeVeedelId || neighborsOf(gang.homeVeedelId).includes(v)) score += HOME_CLAIM_BONUS;
+    if (holder && holder !== PLAYER_FACTION && getGang(state, holder)?.homeVeedelId === v) score -= HOME_TARGET_PENALTY;
     if (enemy && controller === enemy) score += 40;
     if (controller === PLAYER_FACTION && s.hostility >= THREAT_AT) score += 25;
     if (holder && holder !== PLAYER_FACTION && gangPower(state, holder) > myPower) score -= STRONGER_TARGET_PENALTY;
@@ -329,7 +339,8 @@ function continuePush(ctx: Ctx, gang: Gang, s: GangStatus): void {
     defense = playerDefense(ctx, veedelId) * 50 * (0.5 + ctx.random());
   } else if (defenderGang && defender) {
     const lastStand = gangVeedel(ctx.state, defenderGang.id).length <= 1 ? LAST_STAND_BONUS : 1;
-    const local = defender.people * DEFENDER_COMMIT * lastStand + DEFENDER_BASE;
+    const home = veedelId === defenderGang.homeVeedelId ? HOME_DEFENSE_BONUS : 1;
+    const local = defender.people * DEFENDER_COMMIT * Math.max(lastStand, home) + DEFENDER_BASE;
     defense = local * defenderGang.traits.fighting * (0.5 + ctx.random());
   }
   if (attack > defense) {
@@ -337,7 +348,16 @@ function continuePush(ctx: Ctx, gang: Gang, s: GangStatus): void {
     if (controller) addInfluence(ctx, veedelId, controller, -PUSH_DEFENDER_LOSS);
     if (defender && ctx.chance(PUSH_CASUALTY_CHANCE)) defender.people = Math.max(0, defender.people - 1);
   } else {
-    if (controller) addInfluence(ctx, veedelId, controller, PUSH_DEFENDER_GAIN);
+    // Der Verteidiger festigt seinen Griff, höchstens bis zum Startwert des Veedels (wie die Regeneration in territory).
+    const cap = getVeedel(veedelId)?.startInfluence ?? DEFEND_TARGET;
+    if (controller && getInfluence(ctx.state, veedelId, controller) < cap) {
+      addInfluence(
+        ctx,
+        veedelId,
+        controller,
+        Math.min(PUSH_DEFENDER_GAIN, cap - getInfluence(ctx.state, veedelId, controller)),
+      );
+    }
     if (ctx.chance(PUSH_CASUALTY_CHANCE)) s.people = Math.max(0, s.people - 1);
   }
   if (controllerOf(ctx.state, veedelId) === gang.id) end(true);
@@ -375,6 +395,9 @@ function reactToPlayer(ctx: Ctx, gang: Gang, s: GangStatus): void {
 function escalate(ctx: Ctx, gang: Gang, s: GangStatus): void {
   const veedel = focusVeedel(ctx.state, gang, s);
   ctx.emit('gang.escalated', { gangId: gang.id, stage: s.stage });
+  // Dieselbe Stufe nur einmal am Tag ankündigen (z.B. wenn sie nach einem Überfall kurz sinkt und wieder steigt).
+  if (s.announced && s.announced.stage >= s.stage && ctx.now - s.announced.at < ANNOUNCE_INTERVAL) return;
+  s.announced = { stage: s.stage, at: ctx.now };
   if (s.stage === 1) {
     journal.add(ctx, `${gang.name} ist auf dich aufmerksam geworden.`, 'info');
     say(ctx, gang, 'warning', { veedel });
@@ -456,6 +479,7 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
       spotId: target.spotId,
       veedelId: target.veedelId,
       staffIds: target.staffIds,
+      askPlayer: true,
       opponent,
       origin,
     }).encounterId;
@@ -489,6 +513,7 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
       kind: 'raidDefense',
       veedelId: target.veedelId,
       staffIds: target.staffIds,
+      askPlayer: true,
       place: `am ${target.name}`,
       situation: '{opponent} brechen {place} das Rolltor auf. Drinnen liegt dein Vorrat.',
       opponent,
@@ -565,7 +590,8 @@ function maybeOfferAlliance(ctx: Ctx, gang: Gang, s: GangStatus): void {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Preise: Gangs drücken die Preise in ihren Veedeln, feindliche noch mehr (Preiskrieg)
+// Preise: Wo du ihnen Konkurrenz machst (Leute oder Verkäufe im Veedel), drücken die Gangs die Preise in ihrem
+// Revier, feindliche noch mehr (Preiskrieg). Ohne Konkurrenz lassen sie den Markt in Ruhe.
 
 function applyPrices(ctx: Ctx): void {
   const factors = ctx.state.modules.gangs.priceFactors;
@@ -574,7 +600,7 @@ function applyPrices(ctx: Ctx): void {
     const gang = owner ? getGang(ctx.state, owner) : undefined;
     const s = gang ? statusOf(ctx, gang.id) : undefined;
     let desired = 1;
-    if (gang && s) {
+    if (gang && s && hasPlayerPresence(ctx.state, v.id)) {
       desired =
         gang.traits.priceFactor -
         (s.hostility >= PRICE_WAR_HOSTILITY && !paysTribute(ctx.state, gang.id) ? PRICE_WAR_EXTRA : 0);

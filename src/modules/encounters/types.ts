@@ -30,6 +30,8 @@ export interface EncounterEffects {
   stakeMoney?: number;
   /** Ware in Einheiten. Gewinn wird eingelagert, Verlust aus dem Lager genommen. */
   goods?: Amount;
+  /** Qualität gewonnener Ware (0–1), sonst Standardqualität. */
+  goodsQuality?: number;
   /** Anteil des gesamten Warenbestands, negativ = Verlust, z.B. -0.3. */
   goodsShare?: number;
   /** Vielfaches des Einsatzes request.stakes.goods. */
@@ -50,7 +52,10 @@ export interface EncounterOpponentRequest {
   /** Fraktion der Gegenseite, z.B. eine Gang-ID. Leer bei Polizei oder Einzelpersonen. */
   factionId?: string;
   label?: string;
-  /** Kampfkraft 0–100 (wie ein Mitarbeiter-Wert). */
+  /**
+   * Kampfkraft 0–100 (wie ein Mitarbeiter-Wert). Werte bis STRENGTH_FACTOR_LIMIT (5) gelten als Faktor auf die
+   * Standardstärke des Anlasses, z.B. die Polizeipräsenz eines Veedels (1,4 → 40 % stärker als normal).
+   */
   strength?: number;
   /** Anzahl der Leute auf der Gegenseite. */
   count?: number;
@@ -63,11 +68,13 @@ export interface EncounterRequest {
   spotId?: string;
   /** Beteiligte eigene Leute (staff-IDs). Nur aktive Mitarbeiter machen mit. */
   staffIds?: string[];
-  /**
-   * Ist der Spieler selbst dabei? true/false legt es fest. Ohne Angabe entscheidet der Spieler zu Beginn
-   * (bei Anlässen mit joinable), sonst ist er nicht dabei.
-   */
+  /** Ist der Spieler selbst dabei? Ohne Angabe nicht (wie beim Stub), außer askPlayer fragt ihn. */
   playerPresent?: boolean;
+  /**
+   * Den Spieler zu Beginn fragen, ob er selbst hingeht (nur bei Anlässen mit joinable und ohne playerPresent).
+   * Z.B. bei einem Überfall der Gangs: selbst hin (Todesgefahr) oder die Leute machen lassen.
+   */
+  askPlayer?: boolean;
   /** Gegenseite, z.B. eine Gang oder die Polizei. Fehlende Werte kommen aus dem Anlass. */
   opponent?: EncounterOpponentRequest;
   /** Wer die Konfrontation ausgelöst hat, damit er das Ergebnis zuordnen kann. */
@@ -158,6 +165,8 @@ export interface Encounter {
   bribeCost: number;
   /** Zusätzliche Heat durch Aktionen (z.B. Gewalt gegen Polizei). */
   extraHeat: number;
+  /** Ware, die in den Runden weggeworfen wurde (Einheiten). */
+  goodsDropped: number;
   /** Bereits gezahltes Bestechungsgeld. */
   bribeSpent: number;
   /** Ab dann entscheiden die Leute selbst (nur ohne Oberfläche relevant, der Dialog pausiert das Spiel). */
@@ -191,6 +200,8 @@ export interface EncounterAction {
   requiresPlayer?: boolean;
   /** Kostet Bestechungsgeld (bei Erfolg und Misserfolg). */
   costsBribe?: boolean;
+  /** Wirft sofort so viel Ware weg (bei Erfolg und Misserfolg), z.B. vor der Polizei. */
+  dropsGoods?: Amount;
   /** Heat im Veedel bei jeder Nutzung. */
   heat?: number;
   onSuccess: {
@@ -226,10 +237,16 @@ export interface EncounterKind {
   opponent: { label: string; strength: number; count: Amount };
   /** Nach so vielen Runden entscheidet die Lage. */
   maxRounds: number;
-  /** Kann der Spieler dazukommen, wenn der Auslöser es offen lässt? */
+  /** Kann der Spieler dazukommen, wenn der Auslöser ihn fragen lässt (askPlayer)? */
   joinable: boolean;
   /** Ausgang, wenn niemand von euch da ist. Standard: 'failure'. */
   ifNobody?: EncounterOutcome;
+  /** Ausgang, wenn nach allen Runden keiner klar vorne liegt. Standard: 'retreat'. */
+  draw?: EncounterOutcome;
+  /** Kann jemand sterben? Standard: true. Sonst gehen Getroffene nur zu Boden (z.B. bei der Polizei). */
+  lethal?: boolean;
+  /** Eigener Journal-Eintrag zum Ergebnis? Standard: true. Aus, wenn der Auslöser selbst einen schreibt. */
+  journal?: boolean;
   /** Handlungen, wenn der Spieler dabei ist. */
   actions: readonly string[];
   /** Handlungen, wenn nur seine Leute da sind (Anweisungen per Handy). */

@@ -43,6 +43,10 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     opponent: { label: 'Die Streife', strength: 55, count: 2 },
     maxRounds: 4,
     joinable: false,
+    // Festnahme, Beschlagnahme und Heat regelt der Auslöser (police), hier nur was die Flucht selbst kostet.
+    draw: 'failure',
+    lethal: false,
+    journal: false,
     actions: ['flee', 'dump', 'negotiate', 'bribe', 'fight'],
     remoteActions: ['flee', 'dump', 'negotiate'],
     bribe: { base: 500, perOpponent: 200 },
@@ -51,6 +55,7 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
         hint: 'Tempo zählt. Wer entkommt, behält alles.',
         onSuccess: { resolve: 'success' },
       },
+      dump: { onSuccess: { resolve: 'success' } },
       negotiate: { label: 'Rausreden', hint: 'Charisma zählt. Freundlich bleiben, nichts zugeben.' },
       fight: {
         base: 0.35,
@@ -59,17 +64,9 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
       },
     },
     outcomes: {
-      success: { heat: 3, text: '{opponent} {place} abgehängt.' },
-      failure: {
-        goods: [-15, -5],
-        moneyShare: -0.1,
-        moneyShareMax: 800,
-        heat: 10,
-        arrestChance: 0.6,
-        reputation: -2,
-        text: 'Kontrolle {place}: Ware und Bargeld beschlagnahmt.',
-      },
-      retreat: { goods: [-15, -5], heat: 4, text: 'Ware weg, aber {place} davongekommen.' },
+      success: { text: 'Den Bullen {place} entkommen.' },
+      failure: { reputation: -2, text: 'Gefasst {place}.' },
+      retreat: { text: 'Mit Mühe {place} davongekommen.' },
     },
   },
 
@@ -133,17 +130,17 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     actions: ['fight', 'intimidate', 'hold', 'flee'],
     remoteActions: ['fight', 'hold', 'flee'],
     outcomes: {
+      // Heat durch Gewalt meldet die Polizei selbst (reportViolence bei jeder Konfrontation im Veedel).
       success: {
         stakeGoods: 1,
         stakeMoney: 1,
         influence: 5,
         opponentInfluence: -10,
-        heat: 8,
         reputation: 3,
         text: 'Spot {place} ausgeräumt.',
       },
-      failure: { influence: -2, heat: 5, reputation: -4, text: 'Zurückgeschlagen {place}.' },
-      retreat: { heat: 3, reputation: -1, text: 'Überfall {place} abgebrochen.' },
+      failure: { influence: -2, reputation: -4, text: 'Zurückgeschlagen {place}.' },
+      retreat: { reputation: -1, text: 'Überfall {place} abgebrochen.' },
     },
   },
 };

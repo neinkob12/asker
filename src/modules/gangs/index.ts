@@ -101,8 +101,8 @@ declare module '../../core' {
     'gang.escalated': { gangId: string; stage: GangStage };
     'gang.raidStarted': { gangId: string; encounterId: number; target: 'spot' | 'courier' | 'warehouse' };
     'gang.diplomacyChanged': { gangId: string; kind: GangAgreement; active: boolean };
-    /** Razzia bei einer Gang (durch deinen Tipp oder die Polizei). */
-    'gang.busted': { gangId: string; arrests: number; goods: number; money: number };
+    /** Razzia der Polizei bei einer Gang (z.B. nach deinem Tipp): was sie verloren hat. */
+    'gang.busted': { gangId: string; veedelId: string; arrests: number; goods: number; money: number };
   }
 }
 

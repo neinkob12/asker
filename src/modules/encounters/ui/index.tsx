@@ -248,7 +248,7 @@ function EncounterDialog(props: { encounterId: number }) {
       <div class={`enc enc--${encounter.phase}`}>
         <p class="enc-meta">
           {encounter.place}
-          {encounter.phase !== 'briefing'
+          {encounter.phase === 'rounds' || (done && encounter.round > 0)
             ? ` · Runde ${Math.min(encounter.round + (done ? 0 : 1), encounter.maxRounds)} von ${encounter.maxRounds}`
             : ''}
         </p>

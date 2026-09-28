@@ -14,6 +14,8 @@ export interface GangTraits {
   priceFactor: number;
   /** Einkaufspreis pro Einheit Ware. */
   goodsCost: number;
+  /** Qualität ihrer Ware (0–1), z.B. bei Angeboten an dich. */
+  goodsQuality: number;
   /** Wie oft sie dir Ware anbietet (1 = normal, 0 = nie). */
   dealing: number;
   /** Startwerte. */
@@ -61,6 +63,7 @@ export const GANGS: readonly Gang[] = [
       network: 0.2,
       priceFactor: 0.9,
       goodsCost: 4.2,
+      goodsQuality: 0.6,
       dealing: 0.3,
       start: { money: 18000, people: 16, goods: 900 },
     },
@@ -83,6 +86,7 @@ export const GANGS: readonly Gang[] = [
       network: 0.75,
       priceFactor: 0.9,
       goodsCost: 4.0,
+      goodsQuality: 0.65,
       dealing: 0.6,
       start: { money: 45000, people: 14, goods: 1200 },
     },
@@ -105,6 +109,7 @@ export const GANGS: readonly Gang[] = [
       network: 0.35,
       priceFactor: 0.8,
       goodsCost: 3.0,
+      goodsQuality: 0.45,
       dealing: 1.5,
       start: { money: 25000, people: 14, goods: 2500 },
     },
@@ -127,6 +132,7 @@ export const GANGS: readonly Gang[] = [
       network: 0.6,
       priceFactor: 0.95,
       goodsCost: 4.5,
+      goodsQuality: 0.8,
       dealing: 0.5,
       start: { money: 70000, people: 10, goods: 600 },
     },

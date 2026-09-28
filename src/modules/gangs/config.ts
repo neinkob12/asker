@@ -21,16 +21,20 @@ export const RESTOCK_HOURS = 48;
 export const RECRUIT_COST = 1500;
 export const RECRUITS_PER_DAY = 2;
 /** Höchstzahl Leute: Grundstock plus pro kontrolliertem Veedel. */
-export const BASE_PEOPLE = 4;
-export const PEOPLE_PER_VEEDEL = 4;
+export const BASE_PEOPLE = 10;
+export const PEOPLE_PER_VEEDEL = 2;
 
 // --- Reviere ---------------------------------------------------------------------------------
 
-/** Unter diesem Einfluss verstärkt eine Gang ihre Veedel. */
+/**
+ * Verteidigung zusätzlich zur Regeneration in territory: Hat ein Rivale (du oder eine andere Gang) mindestens
+ * DEFEND_THREAT Einfluss im Veedel, steckt die Gang Geld hinein, bis sie wieder DEFEND_TARGET hat.
+ */
+export const DEFEND_THREAT = 20;
 export const DEFEND_TARGET = 60;
 /** So viel Einfluss pro Stunde, und was ein Punkt kostet. */
-export const DEFEND_RATE = 1;
-export const DEFEND_COST = 30;
+export const DEFEND_RATE = 0.5;
+export const DEFEND_COST = 40;
 /** Chance pro Stunde (mal Expansionsdrang), einen Vorstoß zu beginnen. */
 export const EXPAND_CHANCE = 0.01;
 /** Mindestens so viele Leute und so viel Geld braucht ein Vorstoß; das Geld kostet er. */
@@ -55,6 +59,9 @@ export const DEFENDER_COMMIT = 0.5;
 export const DEFENDER_BASE = 2;
 /** Beim letzten Veedel kämpft eine Gang um ihr Leben. */
 export const LAST_STAND_BONUS = 1.5;
+/** Ihr Heimat-Veedel verteidigt eine Gang wie eine Festung, und andere greifen es nur ungern an. */
+export const HOME_DEFENSE_BONUS = 2;
+export const HOME_TARGET_PENALTY = 30;
 /** Ziele, deren Gang stärker ist, werden so viel unattraktiver. */
 export const STRONGER_TARGET_PENALTY = 40;
 /** Chance, dass die unterlegene Seite in einer Vorstoß-Stunde einen Mann verliert. */
@@ -69,9 +76,9 @@ export const PRICE_WAR_HOSTILITY = 50;
 // --- Verhältnis zum Spieler ---------------------------------------------------------------------
 
 /** Verkäufe in ihrem Revier (gleitende Summe) bis hierhin: du bist ein kleiner Fisch, sie ignorieren dich. */
-export const SMALL_FISH_UNITS = 30;
+export const SMALL_FISH_UNITS = 25;
 /** Feindseligkeit pro Einheit über der Schwelle und Stunde (mal Aggression). */
-export const HOSTILITY_PER_UNIT = 0.012;
+export const HOSTILITY_PER_UNIT = 0.015;
 /** Die gleitende Summe verfällt pro Stunde auf diesen Anteil (ca. ein Tag Halbwertszeit). */
 export const TURF_SALES_DECAY = 0.97;
 /** Ohne Anlass kühlt die Feindseligkeit pro Stunde so viel ab. */
@@ -82,6 +89,8 @@ export const THREAT_AT = 50;
 export const ATTACK_AT = 70;
 /** So weit muss die Feindseligkeit unter eine Stufe fallen, bevor sie wieder auslösen kann. */
 export const STAGE_HYSTERESIS = 10;
+/** Dieselbe Stufe wird höchstens so oft per Nachricht angekündigt. */
+export const ANNOUNCE_INTERVAL = DAY;
 /** Chance pro Stunde auf einen Überfall bei voller Feindseligkeit (mal Aggression). */
 export const ATTACK_CHANCE = 0.05;
 /** Mindestabstand zwischen zwei Überfällen derselben Gang. */
@@ -90,8 +99,6 @@ export const ATTACK_COOLDOWN = 18 * HOUR;
 export const HOSTILITY_AFTER_LESSON = 30;
 /** Chance, ein Lager statt eines Spots zu überfallen. */
 export const WAREHOUSE_RAID_CHANCE = 0.3;
-/** Wirtschaftlicher Druck: So viel Einfluss verliert die Gang pro Einheit, die du in ihrem Veedel verkaufst. */
-export const INFLUENCE_LOSS_PER_UNIT = 0.15;
 /** Feindseligkeit, wenn du ihr ein Veedel abnimmst. */
 export const HOSTILITY_ON_TAKEOVER = 20;
 
@@ -150,15 +157,15 @@ export const RELATION_ON_BETRAYAL = -30;
 
 // --- Polizei ----------------------------------------------------------------------------------
 
-/** Verpfeifen: Anteil der Ware, die beschlagnahmt wird, und Festnahmen (vor Vernetzung). */
-export const TIPOFF_GOODS_SHARE = 0.4;
-export const TIPOFF_MONEY_SHARE = 0.1;
-export const TIPOFF_ARRESTS: readonly [number, number] = [1, 3];
-export const TIPOFF_INFLUENCE_LOSS = 4;
-/** Innerhalb dieser Zeit nach dem letzten Tipp wirkt ein neuer nur schwach. */
-export const TIPOFF_COOLDOWN = DAY;
-export const TIPOFF_REPEAT_FACTOR = 0.3;
-/** Chance, dass sie herausfinden, wer gepetzt hat: Grundwert plus Vernetzung. */
+/**
+ * Razzia der Polizei bei einer Gang (police.raid, z.B. nach deinem Tipp): Anteil der Ware und Kasse, der
+ * beschlagnahmt wird, und Festnahmen. Gut vernetzte Gangs verlieren weniger (mal 1 - Vernetzung × 0,6).
+ * Den Einfluss nimmt ihr die Polizei selbst.
+ */
+export const RAID_GOODS_SHARE = 0.25;
+export const RAID_MONEY_SHARE = 0.05;
+export const RAID_ARRESTS: readonly [number, number] = [1, 3];
+/** Chance, dass sie herausfinden, wer gepetzt hat: Grundwert plus Vernetzung / 2. */
 export const TIPOFF_DISCOVERY_BASE = 0.2;
 export const HOSTILITY_ON_SNITCH = 30;
 export const RELATION_ON_SNITCH = -30;

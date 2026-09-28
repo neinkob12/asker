@@ -97,6 +97,7 @@ describe('encounters', () => {
         spotId: 'ebertplatz',
         veedelId: 'neustadt-nord',
         staffIds: [runner],
+        askPlayer: true,
         opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 50, count: 3 },
       }).encounterId;
 

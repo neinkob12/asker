@@ -20,6 +20,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { canSnitch } from '../../police';
 import { getStaff } from '../../staff';
 import { getInfluence } from '../../territory';
 import { veedelName } from '../../veedel';
@@ -105,6 +106,7 @@ function GangCard(props: { gang: Gang }) {
   const hostility = Math.round(s.hostility);
   const gangId = gang.id;
   const strongEnough = playerPower(state) / Math.max(1, gangPower(state, gang.id));
+  const snitch = canSnitch(state, gang.id);
   return (
     <Card
       class="gang-card"
@@ -222,11 +224,13 @@ function GangCard(props: { gang: Gang }) {
           </Button>
           <Button
             small
+            disabled={!snitch.ok}
             onClick={() => dispatch({ type: 'police.snitch', payload: { gangId } })}
-            title="Razzia bei der Gang. Gut vernetzte Gangs erfahren eher, wer gesungen hat."
+            title="Die Polizei bekommt einen Hinweis und macht Razzien bei der Gang. Gut vernetzte Gangs erfahren eher, wer gesungen hat."
           >
             Verpfeifen
           </Button>
+          {!snitch.ok && <span class="gang-actions__note">{snitch.reason}</span>}
         </div>
       </div>
     </Card>
@@ -394,5 +398,9 @@ onGameEvent('gang.escalated', 'gangs.escalationToast', (p, ui, state) => {
 });
 onGameEvent('gang.busted', 'gangs.bustedToast', (p, ui, state) => {
   const gang = getGang(state, p.gangId);
-  if (gang) ui.toast(`Razzia bei ${gang.name}: ${p.arrests} festgenommen`, 'good');
+  if (!gang) return;
+  const lost = [p.arrests > 0 ? `${p.arrests} festgenommen` : '', p.goods > 0 ? `${formatAmount(p.goods)} weg` : '']
+    .filter(Boolean)
+    .join(', ');
+  ui.toast(`Razzia bei ${gang.name}${lost ? `: ${lost}` : ''}`, 'good');
 });

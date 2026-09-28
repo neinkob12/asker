@@ -84,10 +84,11 @@ export interface GangStatus {
   /** Gleitende Summe deiner Verkäufe in ihrem Revier. */
   turfSales: number;
   stage: GangStage;
+  /** Zuletzt per Nachricht angekündigte Stufe. */
+  announced: { stage: GangStage; at: number } | null;
   push: GangPush | null;
   lastAttackAt: number | null;
   lastPlayerAttackAt: number | null;
-  lastTipOffAt: number | null;
   ceasefireUntil: number | null;
   tribute: GangTribute | null;
   protection: GangProtection | null;
@@ -113,10 +114,10 @@ export function initialGangsState(): GangsState {
       relation: 0,
       turfSales: 0,
       stage: 0,
+      announced: null,
       push: null,
       lastAttackAt: null,
       lastPlayerAttackAt: null,
-      lastTipOffAt: null,
       ceasefireUntil: null,
       tribute: null,
       protection: null,

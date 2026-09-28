@@ -102,6 +102,7 @@ export const ENCOUNTER_ACTIONS: Record<string, EncounterAction> = {
     stat: 'caution',
     statMode: 'best',
     base: 0.6,
+    dropsGoods: [5, 15],
     onSuccess: { resolve: 'retreat' },
     onFailure: { edge: -12 },
     texts: {

@@ -39,6 +39,7 @@ import {
   PLAYER_PRESENT_BONUS,
   PLAYER_STATS,
   STAFF_DEATH_CHANCE,
+  STRENGTH_FACTOR_LIMIT,
 } from './config';
 import { ENCOUNTER_KINDS } from './kinds';
 import type {
@@ -222,6 +223,13 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
     });
   }
   const count = Math.max(1, Math.round(request.opponent?.count ?? roll(ctx, kind.opponent.count)));
+  const rawStrength = request.opponent?.strength;
+  const strength =
+    rawStrength === undefined
+      ? kind.opponent.strength
+      : rawStrength <= STRENGTH_FACTOR_LIMIT
+        ? Math.round(kind.opponent.strength * rawStrength)
+        : rawStrength;
   const encounter: Encounter = {
     id: ctx.nextId(),
     kind: request.kind,
@@ -235,7 +243,7 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
     opponent: {
       label: request.opponent?.label ?? kind.opponent.label,
       factionId: request.opponent?.factionId ?? null,
-      strength: request.opponent?.strength ?? kind.opponent.strength,
+      strength,
       count,
       startCount: count,
       down: 0,
@@ -246,6 +254,7 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
     log: [],
     bribeCost: kind.bribe ? kind.bribe.base + kind.bribe.perOpponent * count : 0,
     extraHeat: 0,
+    goodsDropped: 0,
     bribeSpent: 0,
     deadline: ctx.now + DECISION_TIMEOUT,
     outcome: null,
@@ -254,7 +263,7 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
     result: null,
   };
   if (request.playerPresent === true) addPlayer(encounter);
-  else if (request.playerPresent === undefined && kind.joinable) encounter.phase = 'briefing';
+  else if (request.playerPresent === undefined && request.askPlayer && kind.joinable) encounter.phase = 'briefing';
   encounter.situation = fillText(request.situation ?? kind.situation, textVars(encounter));
   encounter.edge = startEdge(encounter);
   ctx.state.modules.encounters.active.push(encounter);
@@ -318,9 +327,15 @@ export function act(ctx: Ctx, encounterId: number, actionId: string): CommandRes
   return { ok: true };
 }
 
+/** Kosten einer Handlung, die sofort anfallen (weggeworfene Ware). */
+function payActionCosts(ctx: Ctx, encounter: Encounter, action: EncounterAction): void {
+  if (action.dropsGoods !== undefined) encounter.goodsDropped += loseGoods(ctx, roll(ctx, action.dropsGoods));
+}
+
 function hitOwn(ctx: Ctx, encounter: Encounter): string {
   const active = activeParticipants(encounter);
   if (active.length === 0) return '';
+  const lethal = getKind(encounter.kind)?.lethal !== false;
   const weights = active.map((p) => (p.isPlayer ? PLAYER_HIT_WEIGHT : 1));
   let pick = ctx.random() * weights.reduce((a, b) => a + b, 0);
   let target = active[active.length - 1];
@@ -330,6 +345,18 @@ function hitOwn(ctx: Ctx, encounter: Encounter): string {
       target = active[i];
       break;
     }
+  }
+  if (!lethal) {
+    // Niemand stirbt, Getroffene werden zu Boden gerissen.
+    const who = target.isPlayer ? 'Du' : target.name;
+    if (target.condition === 'ok') {
+      target.condition = 'injured';
+      return target.isPlayer
+        ? 'Ein Griff, ein Stoß. Du gehst zu Boden und rappelst dich auf.'
+        : `${who} wird zu Boden gerissen.`;
+    }
+    target.condition = 'down';
+    return target.isPlayer ? 'Sie drücken dich auf den Asphalt. Aus.' : `${who} liegt am Boden. Handschellen klicken.`;
   }
   if (target.isPlayer) {
     if (target.condition === 'ok') {
@@ -364,6 +391,7 @@ function playRound(ctx: Ctx, encounter: Encounter, actionId: string, action: Enc
   const chance = computeChance(encounter, action);
   const success = ctx.random() < chance;
   encounter.round += 1;
+  payActionCosts(ctx, encounter, action);
   const lines = [ctx.pick(success ? action.texts.success : action.texts.failure)];
   if (action.heat) encounter.extraHeat += action.heat;
   const opponent = encounter.opponent;
@@ -395,7 +423,7 @@ function roundOutcome(encounter: Encounter, resolve: EncounterOutcome | undefine
   if (encounter.edge <= 0) return 'failure';
   if (encounter.round < encounter.maxRounds) return null;
   if (encounter.edge >= EDGE_WIN_AFTER_ROUNDS) return 'success';
-  return encounter.edge >= EDGE_RETREAT_AFTER_ROUNDS ? 'retreat' : 'failure';
+  return encounter.edge >= EDGE_RETREAT_AFTER_ROUNDS ? (getKind(encounter.kind)?.draw ?? 'retreat') : 'failure';
 }
 
 /** Die Leute handeln selbst: Runden werden ausgewürfelt, bis es vorbei ist. Ohne Bestechung (kein Geld ohne dich). */
@@ -476,7 +504,11 @@ function applyEffects(ctx: Ctx, encounter: Encounter, effects: EncounterEffects,
   if (effects.goods !== undefined) goods += roll(ctx, effects.goods);
   if (effects.stakeGoods) goods += Math.round((stakes.goods ?? 0) * effects.stakeGoods);
   if (goods > 0) {
-    store(ctx, { productId: DEFAULT_PRODUCT, amount: goods });
+    store(ctx, {
+      productId: DEFAULT_PRODUCT,
+      amount: goods,
+      ...(effects.goodsQuality === undefined ? {} : { quality: effects.goodsQuality }),
+    });
     result.goods += goods;
   } else if (goods < 0) {
     result.goods -= loseGoods(ctx, -goods);
@@ -544,7 +576,7 @@ function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome): void
 
   const result: EncounterResult = {
     money: 0 - encounter.bribeSpent,
-    goods: 0,
+    goods: 0 - encounter.goodsDropped,
     opponentLosses: encounter.opponent.down,
     staffInjured: [],
     staffKilled: [],
@@ -582,7 +614,9 @@ function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome): void
   const ref: { veedelId?: string; spotId?: string } = {};
   if (encounter.request.veedelId) ref.veedelId = encounter.request.veedelId;
   if (encounter.request.spotId) ref.spotId = encounter.request.spotId;
-  journal.add(ctx, result.text, outcome === 'success' ? 'good' : outcome === 'failure' ? 'bad' : 'info', ref);
+  if (kind?.journal !== false || encounter.playerKilled) {
+    journal.add(ctx, result.text, outcome === 'success' ? 'good' : outcome === 'failure' ? 'bad' : 'info', ref);
+  }
 
   state.active = state.active.filter((e) => e.id !== encounter.id);
   state.history.unshift(encounter);

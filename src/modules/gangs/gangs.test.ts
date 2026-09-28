@@ -90,12 +90,22 @@ describe('gangs: Identität und Stärke', () => {
       expect(gangPower(sim.state, g.id)).toBeGreaterThan(20 * playerPower(sim.state));
   });
 
-  it('die Gangs drücken die Preise in ihren Veedeln', () => {
+  it('die Gangs drücken die Preise in ihren Veedeln, sobald du dort Konkurrenz machst', () => {
     const sim = createTestGame();
+    sell(sim, 'rheinpark', 3);
+    sell(sim, 'ebertplatz', 3);
     sim.advance(60);
-    expect(getCompetitionFactor(sim.state, 'kalk')).toBe(0.8);
-    expect(getCompetitionFactor(sim.state, 'nippes')).toBe(0.9);
-    expect(getCompetitionFactor(sim.state, 'bayenthal')).toBe(0.95);
+    expect(getCompetitionFactor(sim.state, 'deutz')).toBe(0.8);
+    expect(getCompetitionFactor(sim.state, 'neustadt-nord')).toBe(0.9);
+    // Wo du nicht bist, lassen sie den Markt in Ruhe.
+    expect(getCompetitionFactor(sim.state, 'bayenthal')).toBe(1);
+    // Preiskrieg, wenn sie dich hassen.
+    status(sim, 'nord').hostility = 80;
+    sim.advance(60);
+    expect(getCompetitionFactor(sim.state, 'neustadt-nord')).toBe(0.8);
+    // Nach einem Tag ohne Präsenz normalisiert sich der Preis.
+    sim.advance(26 * 60);
+    expect(getCompetitionFactor(sim.state, 'deutz')).toBe(1);
   });
 });
 
@@ -357,21 +367,41 @@ describe('gangs: Gewalt und Polizei', () => {
     }
   });
 
-  it('Verpfeifen: Razzia bei der Gang, ein zweiter Tipp am selben Tag wirkt kaum', () => {
+  it('Verpfeifen: Die Polizei macht Razzien bei der Gang, die verliert Leute, Ware und Einfluss', () => {
     const sim = createTestGame({ seed: 3 });
     const events = recordEvents(sim);
     const s = status(sim, 'nord');
-    const before = { people: s.people, goods: s.goods };
-    const influence = getInfluence(sim.state, 'nippes', 'nord');
     expect(sim.dispatch({ type: 'police.snitch', payload: { gangId: 'nord' } }).ok).toBe(true);
-    expect(s.goods).toBeLessThan(before.goods);
-    expect(s.people).toBeLessThan(before.people);
-    expect(getInfluence(sim.state, 'nippes', 'nord')).toBeLessThan(influence);
-    const first = before.goods - s.goods;
-    const goods = s.goods;
-    sim.dispatch({ type: 'police.snitch', payload: { gangId: 'nord' } });
-    expect(goods - s.goods).toBeLessThan(first / 2);
-    expect(eventsOfType(events, 'gang.busted')).toHaveLength(2);
+    for (let i = 0; i < 5 * 24 && eventsOfType(events, 'gang.busted').length === 0; i++) {
+      const before = { people: s.people, goods: s.goods };
+      sim.advance(60);
+      const busted = eventsOfType(events, 'gang.busted')[0];
+      if (!busted) continue;
+      expect(busted.payload.gangId).toBe('nord');
+      expect(busted.payload.goods).toBeGreaterThan(0);
+      expect(s.goods).toBeLessThan(before.goods);
+      expect(s.people).toBeLessThanOrEqual(before.people);
+    }
+    expect(eventsOfType(events, 'gang.busted')).toHaveLength(1);
+    const raid = eventsOfType(events, 'police.raid').find((e) => e.payload.target === 'nord');
+    expect(raid).toBeDefined();
+  });
+
+  it('wer verpfeift, riskiert, dass die Gang es erfährt', () => {
+    let found = false;
+    for (let seed = 1; seed <= 10 && !found; seed++) {
+      const sim = createTestGame({ seed });
+      const s = status(sim, 'west');
+      s.ceasefireUntil = sim.state.time + 5000;
+      sim.dispatch({ type: 'police.snitch', payload: { gangId: 'west' } });
+      sim.step();
+      if (s.hostility === 0) continue;
+      found = true;
+      expect(s.relation).toBeLessThan(0);
+      expect(hasCeasefire(sim.state, 'west')).toBe(false);
+      expect(messages.thread(sim.state, 'gang:west').at(-1)?.text).toMatch(/gesungen/);
+    }
+    expect(found).toBe(true);
   });
 
   it('verlierst du einen Überfall, landen deine Ware und dein Geld bei der Gang', () => {

@@ -48,5 +48,8 @@ export const STAFF_DEATH_CHANCE = 0.3;
 /** Ohne Entscheidung (z.B. ohne Oberfläche) handeln die Leute nach dieser Zeit selbst. Der Dialog pausiert das Spiel. */
 export const DECISION_TIMEOUT = 120;
 
+/** Gegnerstärken bis zu diesem Wert gelten als Faktor auf die Standardstärke des Anlasses. */
+export const STRENGTH_FACTOR_LIMIT = 5;
+
 /** So viele abgeschlossene Konfrontationen bleiben im Spielstand. */
 export const HISTORY_LIMIT = 20;
