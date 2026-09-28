@@ -1,6 +1,115 @@
 .customer-row {
   display: flex;
+  justify-content: space-between;
   gap: var(--space-3);
   align-items: baseline;
   font-size: 14px;
+}
+.customer-who {
+  margin: 0;
+}
+.customer-regular {
+  color: var(--color-warn);
+}
+.customers-sub {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--font-size-sm);
+}
+.customers-regulars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+}
+.customers-regulars li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.customers-mood {
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+}
+.customers-mood.is-bad {
+  color: var(--color-bad);
+}
+
+.orders-app {
+  font-size: var(--font-size-sm);
+}
+.orders-app__title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-md);
+}
+.orders-app__section {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.orders {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.order {
+  padding: var(--space-3);
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+}
+.order__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+.order__head .ui-hint {
+  margin: 0;
+}
+.order__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+.orders--done .order {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-muted);
+}
+.orders--done .order--done span:last-child {
+  color: var(--color-accent);
+}
+.orders--done .order--failed span:last-child,
+.orders--done .order--expired span:last-child {
+  color: var(--color-bad);
+}
+
+.delivery-marker {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-warn);
+  border: 2px solid var(--color-marker-border);
+  box-shadow: var(--shadow-marker);
+}
+.delivery-marker.is-player {
+  background: var(--color-accent);
+}
+.delivery-target {
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  background: var(--color-warn-strong);
+  border: 2px solid var(--color-marker-border);
 }
