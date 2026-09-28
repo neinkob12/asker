@@ -1,7 +1,7 @@
 // Typen der Hierarchie. Andere Module importieren sie über '../hierarchy'.
 
-/** Preisniveau: Welche Kunden die Leute im Veedel bedienen. */
-export type PriceLevel = 'volume' | 'fair' | 'premium';
+/** Preisniveau an den Spots des Veedels ('keep' = die Preise lässt er, wie sie sind). */
+export type PriceLevel = 'keep' | 'volume' | 'fair' | 'premium';
 /** Vorsicht: Ab wie viel Heat der Leutnant seine Leute von der Straße holt. */
 export type CautionLevel = 'bold' | 'normal' | 'careful';
 

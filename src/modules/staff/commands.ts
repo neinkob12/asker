@@ -2,7 +2,7 @@
 
 import { type CommandMeta, type CommandResult, type Ctx, formatEuro, journal, wallet } from '../../core';
 import { getWarehouse } from '../goods';
-import { getSpot } from '../spots';
+import { getSpot, isSpotActive } from '../spots';
 import {
   LOYALTY,
   MAX_SECURITY_PER_WAREHOUSE,
@@ -33,7 +33,7 @@ import {
 } from './members';
 import { generateProfile } from './profile';
 import { afterFired } from './routines';
-import type { StaffAssignment, StaffOrders } from './types';
+import type { StaffAssignment } from './types';
 
 const NOT_EMPLOYED = 'Diese Person arbeitet nicht für dich.';
 
@@ -41,6 +41,7 @@ const NOT_EMPLOYED = 'Diese Person arbeitet nicht für dich.';
 export function hireRunner(ctx: Ctx, spotId: string): CommandResult {
   const spot = getSpot(ctx.state, spotId);
   if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
+  if (!isSpotActive(ctx.state, spotId)) return { ok: false, reason: 'Der Spot ist noch nicht freigeschaltet.' };
   if (activeRunnerAt(ctx.state, spotId)) return { ok: false, reason: 'Hier arbeitet schon ein Läufer.' };
   if (!wallet.pay(ctx, RUNNER_HIRE_COST, 'dirty', 'Läufer angeheuert'))
     return { ok: false, reason: 'Nicht genug Geld.' };
@@ -84,6 +85,9 @@ export function assignCommand(ctx: Ctx, staffId: string, assignment: StaffAssign
   if (m.assignment?.kind === assignment.kind && m.assignment.targetId === assignment.targetId) return { ok: true };
   if (assignment.kind === 'spot') {
     if (!getSpot(ctx.state, assignment.targetId)) return { ok: false, reason: 'Unbekannter Spot.' };
+    if (!isSpotActive(ctx.state, assignment.targetId)) {
+      return { ok: false, reason: 'Der Spot ist noch nicht freigeschaltet.' };
+    }
     if (m.role === 'runner') {
       const other = activeRunnerAt(ctx.state, assignment.targetId);
       if (other && other.id !== m.id) return { ok: false, reason: `Dort arbeitet schon ${other.name}.` };
@@ -138,14 +142,4 @@ export function bail(ctx: Ctx, staffId: string, meta: CommandMeta): CommandResul
   journal.add(ctx, `${m.name} gegen ${formatEuro(cost)} Kaution rausgeholt${by}.`, 'good', { staffId });
   ctx.emit('staff.bailed', { staffId, cost });
   return { ok: true, data: { cost } };
-}
-
-export function setOrders(ctx: Ctx, staffId: string, orders: Partial<StaffOrders>): CommandResult {
-  const m = getStaffMember(ctx.state, staffId);
-  if (!m || !isEmployed(ctx.state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
-  if (orders.priceFloor !== undefined) {
-    if (!(orders.priceFloor >= 0 && orders.priceFloor <= 1.5)) return { ok: false, reason: 'Ungültiger Mindestpreis.' };
-    m.orders.priceFloor = Math.round(orders.priceFloor * 100) / 100;
-  }
-  return { ok: true };
 }

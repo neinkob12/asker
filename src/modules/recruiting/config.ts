@@ -49,8 +49,8 @@ export const POOL_LEVEL_2_CHANCE = 0.15;
 /** Empfehlung: Mitarbeiter ab dieser Loyalität empfehlen pro Tag mit dieser Wahrscheinlichkeit jemanden. */
 export const REFERRAL_MIN_LOYALTY = 65;
 export const REFERRAL_CHANCE = 0.06;
-/** Stammkunden: Wahrscheinlichkeit pro Verkauf auf der Straße (mal Charisma-Faktor des Verkäufers). */
-export const REGULAR_CHANCE_PER_SALE = 0.004;
+/** Stammkunden: Wahrscheinlichkeit pro Einkauf eines Stammkunden (mal Charisma-Faktor des Verkäufers). */
+export const REGULAR_CHANCE_PER_SALE = 0.03;
 /** Ereignis: Wahrscheinlichkeit pro Tag, dass sich jemand aus dem Milieu meldet. */
 export const EVENT_CHANCE = 0.12;
 /** Wer aus der Haft kommt, bringt manchmal einen Kontakt mit. */

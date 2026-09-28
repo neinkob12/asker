@@ -140,9 +140,23 @@ describe('recruiting: Kontakte', () => {
   it('Leute aus dem Milieu und Kumpels von Stammkunden melden sich von selbst', () => {
     const sim = quietGame(3);
     const events = recordEvents(sim);
-    sim.state.modules.goods.stock.ehrenfeld.weed = 100000;
-    // Viele Verkäufe auf der Straße, damit auch Stammkunden jemanden kennen.
-    for (let i = 0; i < 600; i++) {
+    sim.state.modules.customers.regulars.push({
+      id: 'r1',
+      name: 'Olli',
+      typeId: 'student',
+      spotId: 'uni',
+      productId: 'weed',
+      amount: 2,
+      visits: 3,
+      lastPrice: 10,
+      lastQuality: 0.6,
+      satisfaction: 0.8,
+      since: 0,
+      nextVisitAt: 1e9,
+      status: 'active',
+    });
+    // Viele Besuche des Stammkunden, damit er irgendwann jemanden kennt.
+    for (let i = 0; i < 300; i++) {
       sim.ctx('customers').emit('sale.completed', {
         channel: 'street',
         spotId: 'uni',
@@ -153,6 +167,7 @@ describe('recruiting: Kontakte', () => {
         revenue: 10,
         sellerId: null,
         customerId: null,
+        regularId: 'r1',
       });
       sim.step();
       for (const c of getContacts(sim.state)) {
@@ -168,6 +183,8 @@ describe('recruiting: Kontakte', () => {
     const sources = new Set(eventsOfType(events, 'recruiting.candidateArrived').map((e) => e.payload.source));
     expect(sources).toContain('regular');
     expect(sources).toContain('event');
+    // Der Stammkunde meldet sich unter seinem Kontakt aus dem Kundenmodul.
+    expect(messages.thread(sim.state, 'customer:r1').length).toBeGreaterThan(0);
   });
 });
 

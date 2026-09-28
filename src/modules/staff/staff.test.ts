@@ -17,7 +17,6 @@ import {
   type StaffRole,
   securityAt,
   serveTime,
-  spotReferencePrice,
 } from './index';
 
 function quietGame(seed = 1): Simulation {
@@ -113,21 +112,14 @@ describe('staff', () => {
     expect(serveTime(fast)).toBeLessThan(15);
   });
 
-  it('Preis-Anweisung: Läufer lassen Billigkäufer stehen', () => {
+  it('an gesperrten Spots wird niemand eingesetzt', () => {
     const sim = quietGame();
-    hire(sim, 'neumarkt');
-    const runner = runnerAt(sim.state, 'neumarkt') as StaffMember;
-    const ref = spotReferencePrice(sim.state, 'neumarkt', 'weed');
-    expect(
-      sim.dispatch({ type: 'staff.setOrders', payload: { staffId: runner.id, orders: { priceFloor: 1 } } }).ok,
-    ).toBe(true);
-    addCustomer(sim, 'neumarkt', 1, ref * 0.9);
-    sim.advance(5);
-    expect(sim.state.modules.customers.waiting).toHaveLength(1);
-    addCustomer(sim, 'neumarkt', 1, ref * 1.05);
-    sim.step();
-    expect(sim.state.modules.customers.waiting).toHaveLength(1);
-    expect(sim.state.modules.customers.waiting[0].pricePerUnit).toBeLessThan(ref);
+    expect(hire(sim, 'rudolfplatz')).toEqual({ ok: false, reason: 'Der Spot ist noch nicht freigeschaltet.' });
+    const runner = recruit(sim, 'runner');
+    const toLocked = { kind: 'spot' as const, targetId: 'rudolfplatz' };
+    expect(sim.dispatch({ type: 'staff.assign', payload: { staffId: runner.id, assignment: toLocked } }).ok).toBe(
+      false,
+    );
   });
 
   it('Löhne um Mitternacht pro Person, wer nicht bezahlt wird, kündigt', () => {

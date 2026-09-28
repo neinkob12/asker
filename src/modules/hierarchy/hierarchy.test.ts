@@ -13,6 +13,7 @@ import {
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import type { Customer } from '../customers';
 import { getStock } from '../goods';
+import { hasOwnPrice, priceRatio } from '../market';
 import { getCandidates } from '../recruiting';
 import {
   addXp,
@@ -26,7 +27,7 @@ import {
   type StaffRole,
   securityAt,
 } from '../staff';
-import { shipmentsInTransit } from '../suppliers';
+import { availablePackages, getSuppliers, packagePrice, shipmentsInTransit } from '../suppliers';
 import { LIEUTENANT_DEMAND } from './config';
 import { getLieutenant, getLieutenants, getPost, lieutenantSatisfaction, lieutenantVeedel } from './index';
 
@@ -144,6 +145,7 @@ describe('hierarchy: Delegation', () => {
     const events = recordEvents(sim);
     const lt = recruit(sim, 'runner', 2);
     lt.stats.charisma = 40;
+    sim.state.modules.spots.unlocked.push('rudolfplatz', 'aachener-weiher');
     const runner = recruit(sim, 'runner');
     const guard = recruit(sim, 'security');
     appoint(sim, lt.id, 'neustadt-sued');
@@ -174,15 +176,22 @@ describe('hierarchy: Delegation', () => {
     const lt = recruit(sim, 'runner', 2);
     appoint(sim, lt.id, 'deutz');
     expect(getStock(sim.state)).toBeLessThan(100);
-    sim.state.wallet.dirty = 800;
+    const cheapest = Math.min(
+      ...getSuppliers(sim.state).flatMap((s) =>
+        availablePackages(sim.state, s.id).map((p) => packagePrice(sim.state, s.id, p.id)),
+      ),
+    );
+    sim.state.wallet.dirty = 500 + cheapest - 1;
     sim.advance(5);
-    // 800 − 500 Rücklage reichen nicht für das kleinste Paket (450).
+    // Mit 500 € Rücklage reicht es für kein Paket.
     expect(shipmentsInTransit(sim.state)).toHaveLength(0);
+    expect(getPost(sim.state, 'deutz')?.log[0].text).toMatch(/Geld reicht nicht/);
     sim.state.wallet.dirty = 3000;
     sim.state.modules.hierarchy.posts.deutz.nextActionAt = sim.state.time;
     sim.advance(5);
     expect(shipmentsInTransit(sim.state)).toHaveLength(1);
     expect(shipmentsInTransit(sim.state)[0].amount).toBeGreaterThanOrEqual(100 - getStock(sim.state));
+    expect(sim.state.wallet.dirty).toBeGreaterThanOrEqual(500);
     // Solange die Lieferung unterwegs ist, bestellt er nicht doppelt.
     sim.advance(200);
     expect(shipmentsInTransit(sim.state)).toHaveLength(1);
@@ -204,17 +213,23 @@ describe('hierarchy: Delegation', () => {
     if (poolRunner) expect(hired?.name).toBe(poolRunner.name);
   });
 
-  it('Preisniveau wird zur Anweisung an die Läufer', () => {
+  it('Preisniveau: er setzt eigene Preise an seinen Spots über market.setPrice', () => {
     const sim = quietGame();
+    const events = recordEvents(sim);
     const lt = recruit(sim, 'runner', 2);
-    const runner = recruit(sim, 'runner');
     appoint(sim, lt.id, 'lindenthal');
-    sim.dispatch({
-      type: 'hierarchy.configure',
-      payload: { veedelId: 'lindenthal', settings: { priceLevel: 'premium' } },
-    });
+    // Standard: Er lässt die Preise, wie sie sind.
     sim.advance(5);
-    expect(getStaffMember(sim.state, runner.id)?.orders.priceFloor).toBe(1.02);
+    expect(hasOwnPrice(sim.state, 'uni', 'weed')).toBe(false);
+    const configure = (priceLevel: 'premium' | 'fair') =>
+      sim.dispatch({ type: 'hierarchy.configure', payload: { veedelId: 'lindenthal', settings: { priceLevel } } });
+    configure('premium');
+    sim.advance(5);
+    expect(priceRatio(sim.state, 'uni', 'weed')).toBeCloseTo(1.15, 1);
+    expect(eventsOfType(events, 'market.priceSet').length).toBeGreaterThan(0);
+    configure('fair');
+    sim.advance(5);
+    expect(hasOwnPrice(sim.state, 'uni', 'weed')).toBe(false);
   });
 
   it('Vorsicht: bei zu viel Heat holt er alle von der Straße und schickt sie später zurück', () => {
@@ -288,12 +303,13 @@ describe('hierarchy: Delegation', () => {
     sim.state.wallet.dirty = 5000;
     const lt = recruit(sim, 'runner', 2);
     lt.stats.charisma = 70; // schafft alle drei Spots
+    sim.state.modules.spots.unlocked.push('rudolfplatz', 'aachener-weiher');
     recruit(sim, 'security'); // wird verteilt, Läufer fehlen und werden angeheuert
     addCustomer(sim, 'rudolfplatz');
     appoint(sim, lt.id, 'neustadt-sued');
     sim.dispatch({
       type: 'hierarchy.configure',
-      payload: { veedelId: 'neustadt-sued', settings: { mayHire: true, priceLevel: 'fair' } },
+      payload: { veedelId: 'neustadt-sued', settings: { mayHire: true, priceLevel: 'premium' } },
     });
 
     const others = (state: GameState) => {
@@ -309,6 +325,7 @@ describe('hierarchy: Delegation', () => {
     expect(types).toContain('staff.assign');
     expect(types).toContain('suppliers.order');
     expect(types).toContain('customers.serve');
+    expect(types).toContain('market.setPrice');
     expect(types.has('recruiting.hire') || types.has('staff.hireRunner')).toBe(true);
     expect(new Set(log.map((l) => l.actor))).toEqual(new Set([`staff:${lt.id}`]));
   });

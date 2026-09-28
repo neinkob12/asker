@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { clock, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { getStock } from '../goods';
+import { getStock, store } from '../goods';
 import { getHeat } from '../police';
 import { BETRAYAL_THRESHOLD, LEVEL_XP, LOYALTY, THEFT_GOODS_MAX, THEFT_MONEY_MAX } from './config';
 import {
@@ -138,6 +138,7 @@ describe('Loyalität', () => {
 
   it('Gefahr kostet Loyalität: Festnahme, Angst im Veedel, Razzia, Konfrontation', () => {
     const sim = quietGame();
+    sim.state.modules.spots.unlocked.push('rudolfplatz');
     sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'zuelpicher' } });
     sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'rudolfplatz' } });
     const [a, b] = getStaff(sim.state);
@@ -193,7 +194,7 @@ describe('Verrat', () => {
     const sim = quietGame();
     const ctx = sim.ctx('staff');
     sim.state.wallet.dirty = 100000;
-    sim.state.modules.goods.stock.ehrenfeld.weed = 1000;
+    store(sim.ctx('goods'), { productId: 'weed', amount: 960 });
     const thief = recruit(sim, 'runner');
     expect(betray(ctx, thief, 'goods')).toBeLessThanOrEqual(THEFT_GOODS_MAX);
     expect(getStock(sim.state)).toBe(1000 - THEFT_GOODS_MAX);

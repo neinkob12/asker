@@ -23,6 +23,7 @@ import {
   messages,
   wallet,
 } from '../../core';
+import { getRegular } from '../customers';
 import { getSpot } from '../spots';
 import {
   addLoyalty,
@@ -34,7 +35,6 @@ import {
   isEmployed,
   type RecruitProfile,
   ROLE_INFO,
-  randomName,
   roleName,
   STAT_KEYS,
   type StaffAssignment,
@@ -285,21 +285,27 @@ function maybeEventContact(ctx: Ctx): void {
   announce(ctx, c, { id: `recruit:${c.id}`, name: c.name, kind: 'other' }, `${intro} (${roleName(c.role)})`);
 }
 
-/** Ein Stammkunde kennt jemanden. Charismatische Verkäufer bringen öfter Kontakte. */
-function maybeRegular(ctx: Ctx, spotId: string | null, sellerId: string | null): void {
+/** Ein Stammkunde (customers) kennt jemanden. Charismatische Verkäufer bringen öfter Kontakte. */
+function maybeRegular(ctx: Ctx, regularId: string, sellerId: string | null): void {
+  const regular = getRegular(ctx.state, regularId);
+  if (regular?.status !== 'active') return;
   const seller = sellerId ? getStaffMember(ctx.state, sellerId) : undefined;
   const factor = seller ? 0.5 + seller.stats.charisma / 100 : 1;
   if (!ctx.chance(REGULAR_CHANCE_PER_SALE * factor)) return;
-  const role = pickWeighted(ctx, POOL_ROLE_WEIGHTS);
-  const customer = randomName(ctx).split(' ')[0];
-  const spot = spotId ? getSpot(ctx.state, spotId) : undefined;
+  const spot = getSpot(ctx.state, regular.spotId);
   const where = spot ? ` vom ${spot.name}` : '';
-  const c = addContact(ctx, role, 'regular', `Kumpel von Stammkunde ${customer}${where}.`);
+  const c = addContact(
+    ctx,
+    pickWeighted(ctx, POOL_ROLE_WEIGHTS),
+    'regular',
+    `Kumpel von Stammkunde ${regular.name}${where}.`,
+  );
   if (!c) return;
   announce(
     ctx,
     c,
-    { id: `recruit:${c.id}`, name: `Stammkunde ${customer}`, kind: 'customer' },
+    // Derselbe Kontakt wie im Kundenmodul (Lieferdienst), damit es ein Chat bleibt.
+    { id: `customer:${regular.id}`, name: regular.name, kind: 'customer' },
     `Ey, kurze Frage: Ein Kumpel sucht Arbeit. ${describe(c)}. Soll ich die Nummer weitergeben?`,
   );
 }
@@ -437,8 +443,8 @@ export default defineModule({
       maybeReferral(ctx);
       maybeEventContact(ctx);
     },
-    'sale.completed': (ctx, { channel, spotId, sellerId }) => {
-      if (channel === 'street') maybeRegular(ctx, spotId, sellerId);
+    'sale.completed': (ctx, { regularId, sellerId }) => {
+      if (regularId) maybeRegular(ctx, regularId, sellerId);
     },
     'staff.statusChanged': (ctx, { staffId, from, to }) => {
       if (from === 'jailed' && to === 'active') maybeJailContact(ctx, staffId);

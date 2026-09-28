@@ -28,15 +28,6 @@ export type StaffOrigin = 'street' | 'pool' | 'referral' | 'regular' | 'event';
 
 export type StaffLeaveReason = 'fired' | 'quit' | 'dead';
 
-/** Anweisungen an einen Mitarbeiter (vom Spieler oder vom Leutnant). */
-export interface StaffOrders {
-  /**
-   * Mindestpreis als Anteil des Richtpreises am Spot: Kunden, die weniger zahlen, werden nicht bedient.
-   * 0 = jeder Kunde (Standard).
-   */
-  priceFloor: number;
-}
-
 export interface CareerEntry {
   time: number;
   text: string;
@@ -74,7 +65,6 @@ export interface StaffMember {
   knownStats: StatKey[];
   /** Anspruch: Faktor auf den üblichen Lohn (1 = normal, Leutnants höher). */
   demand: number;
-  orders: StaffOrders;
   /** Haft bzw. Verletzung dauert bis (Spielminute), sonst null. */
   statusUntil: number | null;
   /** Einsatz, zu dem die Person nach Haft oder Verletzung zurückkehrt. */

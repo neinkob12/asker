@@ -10,17 +10,17 @@
 //   runnerAt(state, spotId) (egal welcher Status), activeRunnerAt(state, spotId) (arbeitet gerade dort), securityAt(state, { spotId | warehouseId }), findAvailable(state, { role }), staffVeedel(state, member),
 //   expectedWage(state, id), expectedWageFor(role, level, demand), dailyWages(state), serveTime(member),
 //   speedFactor, riskFactor, combatValue, defenseStrength(state, { spotId | warehouseId | veedelId }),
-//   bonus(state, key), bonusProvider, bailCost, jailDuration, meetsPriceFloor, levelProgress, betrayalChance,
+//   bonus(state, key), bonusProvider, bailCost, jailDuration, levelProgress, betrayalChance,
 //   isSpecialist, isStatKnown, roleName, assignmentLabel, staffContact, ROLE_INFO, STAT_NAMES, STATUS_NAMES, STAT_KEYS
 // Öffentliche API (schreiben, mit ctx):
 //   assign(ctx, id, assignment), setStatus(ctx, id, status, until?), addXp, addLoyalty, setWage, setDemand,
 //   addCareer, revealStat, enlist(ctx, profile, options), generateProfile(ctx, role, options), randomName(ctx)
-// Befehle: 'staff.hireRunner', 'staff.fire', 'staff.assign', 'staff.setWage', 'staff.bail', 'staff.setOrders'
+// Befehle: 'staff.hireRunner', 'staff.fire', 'staff.assign', 'staff.setWage', 'staff.bail'
 // Ereignisse: 'staff.hired', 'staff.left', 'staff.statusChanged', 'staff.assigned', 'staff.levelUp',
 //   'staff.bailed', 'staff.betrayed', 'staff.raidWarning'
 
 import { type Ctx, clock, defineModule, formatEuro, type GameState, journal } from '../../core';
-import { assignCommand, bail, fire, hireRunner, setOrders, setWageCommand } from './commands';
+import { assignCommand, bail, fire, hireRunner, setWageCommand } from './commands';
 import {
   DEFAULT_STATS,
   INJURY_DURATION,
@@ -38,7 +38,6 @@ import type {
   StaffAssignment,
   StaffLeaveReason,
   StaffMember,
-  StaffOrders,
   StaffRole,
   StaffState,
   StaffStats,
@@ -82,8 +81,6 @@ declare module '../../core' {
     'staff.setWage': { staffId: string; wage: number };
     /** Kaution zahlen und jemanden aus der Haft holen. */
     'staff.bail': { staffId: string };
-    /** Anweisungen ändern, z.B. Mindestpreis. */
-    'staff.setOrders': { staffId: string; orders: Partial<StaffOrders> };
   }
   interface GameEvents {
     'staff.hired': { staffId: string; role: StaffRole };
@@ -133,7 +130,6 @@ function upgradeMember(m: StaffMemberV1, state: GameState): StaffMember {
     // Im Fundament hatten alle dieselben Werte, da gibt es nichts zu entdecken.
     knownStats: [...STAT_KEYS],
     demand: 1,
-    orders: { priceFloor: 0 },
     statusUntil: m.status === 'jailed' ? state.time + JAIL_DURATION : away ? state.time + INJURY_DURATION : null,
     returnTo: away ? m.assignment : null,
     career: [{ time: m.hiredAt, text: 'Eingestellt.' }],
@@ -181,7 +177,6 @@ export default defineModule({
     'staff.assign': (ctx, { staffId, assignment }) => assignCommand(ctx, staffId, assignment),
     'staff.setWage': (ctx, { staffId, wage }) => setWageCommand(ctx, staffId, wage),
     'staff.bail': (ctx, { staffId }, meta) => bail(ctx, staffId, meta),
-    'staff.setOrders': (ctx, { staffId, orders }) => setOrders(ctx, staffId, orders),
   },
   on: {
     'clock.dayStarted': daily,

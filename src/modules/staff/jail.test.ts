@@ -233,7 +233,7 @@ describe('Spielstände aus dem Fundament', () => {
     const file = parseSaveFile(serializeSave(createSaveFile(state, 'alt', 0)));
     const loaded = loadSimulation(file.state, sim.modules);
     const [a, b] = getStaff(loaded.state);
-    expect(a).toMatchObject({ id: 's5', knownStats: expect.any(Array), demand: 1, orders: { priceFloor: 0 } });
+    expect(a).toMatchObject({ id: 's5', knownStats: expect.any(Array), demand: 1, statusUntil: null });
     expect(a.assignment).toEqual({ kind: 'spot', targetId: 'uni' });
     expect(b).toMatchObject({ status: 'jailed', assignment: null, returnTo: { kind: 'spot', targetId: 'neumarkt' } });
     expect(b.statusUntil).toBeGreaterThan(loaded.state.time);

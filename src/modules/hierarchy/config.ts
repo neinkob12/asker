@@ -26,7 +26,7 @@ export const LIEUTENANT_XP_PER_SALE = 2;
 
 export const DEFAULT_SETTINGS: LieutenantSettings = {
   minStock: 100,
-  priceLevel: 'volume',
+  priceLevel: 'keep',
   caution: 'normal',
   mayHire: false,
   mayOrder: true,
@@ -37,11 +37,18 @@ export const DEFAULT_SETTINGS: LieutenantSettings = {
 export const MIN_STOCK_OPTIONS = [0, 50, 100, 200, 400];
 export const RESERVE_OPTIONS = [0, 500, 1000, 2000];
 
-export const PRICE_LEVELS: Record<PriceLevel, { name: string; hint: string; priceFloor: number }> = {
-  volume: { name: 'Masse', hint: 'Jeder Kunde wird bedient.', priceFloor: 0 },
-  fair: { name: 'Normal', hint: 'Keine Billigkäufer (ab 95 % des Richtpreises).', priceFloor: 0.95 },
-  premium: { name: 'Teuer', hint: 'Nur gut zahlende Kunden (ab 102 %). Weniger Verkäufe.', priceFloor: 1.02 },
+/**
+ * Preisniveau: Der Leutnant setzt an seinen Spots eigene Preise (Befehl 'market.setPrice') als Anteil vom
+ * Richtpreis. null = Richtpreis (eigene Preise löschen), 'keep' fasst die Preise nicht an.
+ */
+export const PRICE_LEVELS: Record<PriceLevel, { name: string; hint: string; factor: number | null }> = {
+  keep: { name: 'Lassen', hint: 'Die Preise an seinen Spots lässt er, wie du sie gesetzt hast.', factor: null },
+  volume: { name: 'Günstig', hint: '10 % unter Richtpreis: mehr Kundschaft, weniger Marge.', factor: 0.9 },
+  fair: { name: 'Richtpreis', hint: 'Verkauft zum Richtpreis des Markts.', factor: 1 },
+  premium: { name: 'Teuer', hint: '15 % über Richtpreis: mehr Marge, weniger Kundschaft.', factor: 1.15 },
 };
+/** So weit darf der eigene Preis vom Ziel abweichen, bevor er nachzieht (der Richtpreis schwankt). */
+export const PRICE_TOLERANCE = 0.03;
 
 /** Ab diesem Heat zieht der Leutnant die Läufer von der Straße, darunter (minus Abstand) schickt er sie zurück. */
 export const CAUTION_LEVELS: Record<CautionLevel, { name: string; hint: string; heat: number }> = {

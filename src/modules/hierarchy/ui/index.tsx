@@ -107,7 +107,7 @@ function LieutenantPanel(props: { veedelId: string }) {
       </p>
       <KeyValue label="Zufriedenheit" value={`${satisfaction} / 100`} />
       <ProgressBar value={satisfaction / 100} tone={satisfactionTone(satisfaction)} label="Zufriedenheit" />
-      <KeyValue label="Spots im Veedel" value={`${spots.length}, besetzt hält er ${lieutenantCapacity(m)}`} />
+      <KeyValue label="Offene Spots" value={`${spots.length} (er schafft ${lieutenantCapacity(m)})`} />
       <KeyValue
         label="Umsatz heute / gestern"
         value={`${formatEuro(post.revenueToday)} / ${formatEuro(post.revenueYesterday)}`}
@@ -116,10 +116,10 @@ function LieutenantPanel(props: { veedelId: string }) {
 
       <h3 class="lt-title">Anweisungen</h3>
       <div class="lt-setting">
-        <span>Mindestbestand</span>
+        <span>Mindestbestand (alle Waren zusammen)</span>
         <SegmentedControl
           aria-label="Mindestbestand"
-          options={MIN_STOCK_OPTIONS.map((v) => ({ value: v, label: `${v} g` }))}
+          options={MIN_STOCK_OPTIONS.map((v) => ({ value: v, label: String(v) }))}
           value={post.settings.minStock}
           onChange={(minStock) => configure({ minStock })}
         />

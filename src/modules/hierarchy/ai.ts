@@ -1,5 +1,5 @@
 // Die Leutnant-KI. Ein Leutnant führt sein Veedel selbstständig: Er stellt Läufer und Sicherheit an die
-// Spots, gibt Preis-Anweisungen, hält den Bestand, verkauft selbst an freien Spots und zieht seine Leute ab,
+// Spots, setzt die Preise, hält den Bestand, verkauft selbst an freien Spots und zieht seine Leute ab,
 // wenn es zu heiß wird.
 //
 // Wichtig: Er handelt ausschließlich über ctx.dispatch(...) mit actor 'staff:<id>', also über dieselben
@@ -7,7 +7,8 @@
 
 import { type Actor, type Command, type Ctx, journal } from '../../core';
 import { canServe, waitingAt } from '../customers';
-import { DEFAULT_PRODUCT, getStock } from '../goods';
+import { getStock, stockSummary } from '../goods';
+import { getSpotPrice, hasOwnPrice, priceRatio, roundPrice, spotReferencePrice } from '../market';
 import { getHeat } from '../police';
 import { getCandidates } from '../recruiting';
 import { type Spot, spotsInVeedel } from '../spots';
@@ -16,13 +17,12 @@ import {
   getStaff,
   getStaffMember,
   isEmployed,
-  meetsPriceFloor,
   RUNNER_HIRE_COST,
   type StaffMember,
   securityAt,
   serveTime,
 } from '../staff';
-import { getSuppliers, shipmentsInTransit } from '../suppliers';
+import { availablePackages, getSuppliers, isBlocked, packagePrice, shipmentsInTransit } from '../suppliers';
 import { veedelName } from '../veedel';
 import {
   ACTION_INTERVAL_BASE,
@@ -32,6 +32,7 @@ import {
   HEAT_HYSTERESIS,
   LOG_LIMIT,
   PRICE_LEVELS,
+  PRICE_TOLERANCE,
 } from './config';
 import type { CautionLevel, LieutenantPost } from './types';
 
@@ -76,6 +77,11 @@ interface Turn {
 /** Eintrag ins Protokoll des Leutnants, wichtige Dinge auch ins Journal. */
 function note(turn: Turn, text: string, toJournal = true): void {
   const { ctx, post, lt, veedelId } = turn;
+  // Dasselbe noch einmal (z.B. Preise nachgezogen): nur die Zeit aktualisieren.
+  if (post.log[0]?.text === text) {
+    post.log[0].time = ctx.now;
+    return;
+  }
   post.log.unshift({ time: ctx.now, text });
   if (post.log.length > LOG_LIMIT) post.log.length = LOG_LIMIT;
   if (toJournal)
@@ -102,7 +108,7 @@ export function tick(ctx: Ctx): void {
 function manage(turn: Turn): void {
   if (handleHeat(turn)) return;
   staffSpots(turn);
-  givePriceOrders(turn);
+  setPrices(turn);
   guardSpots(turn);
   if (turn.post.settings.mayOrder) restock(turn);
 }
@@ -185,15 +191,27 @@ function hireFor(turn: Turn, spot: Spot): void {
   }
 }
 
-/** Preisniveau als Anweisung an alle Läufer im Veedel. */
-function givePriceOrders(turn: Turn): void {
+/** Preisniveau: eigene Preise an allen Spots im Veedel, für alles, was auf Lager ist. */
+function setPrices(turn: Turn): void {
   const { ctx, veedelId, post, run } = turn;
-  const priceFloor = PRICE_LEVELS[post.settings.priceLevel].priceFloor;
+  const level = post.settings.priceLevel;
+  if (level === 'keep') return;
+  const factor = PRICE_LEVELS[level].factor ?? 1;
+  let changed = 0;
   for (const spot of spotsInVeedel(ctx.state, veedelId)) {
-    const runner = activeRunnerAt(ctx.state, spot.id);
-    if (!runner || runner.orders.priceFloor === priceFloor) continue;
-    run({ type: 'staff.setOrders', payload: { staffId: runner.id, orders: { priceFloor } } });
+    for (const { productId } of stockSummary(ctx.state)) {
+      if (level === 'fair') {
+        if (!hasOwnPrice(ctx.state, spot.id, productId)) continue;
+        if (run({ type: 'market.setPrice', payload: { spotId: spot.id, productId, price: null } })) changed++;
+        continue;
+      }
+      if (Math.abs(priceRatio(ctx.state, spot.id, productId) - factor) <= PRICE_TOLERANCE) continue;
+      const price = roundPrice(spotReferencePrice(ctx.state, spot.id, productId) * factor);
+      if (price === getSpotPrice(ctx.state, spot.id, productId)) continue;
+      if (run({ type: 'market.setPrice', payload: { spotId: spot.id, productId, price } })) changed++;
+    }
   }
+  if (changed > 0) note(turn, `Preise angepasst (${PRICE_LEVELS[level].name}).`, false);
 }
 
 /** Freie Sicherheit an die Spots mit dem meisten Andrang stellen. */
@@ -207,26 +225,33 @@ function guardSpots(turn: Turn): void {
   }
 }
 
-/** Bestand halten: unter dem Mindestbestand (mit dem, was unterwegs ist) Nachschub bestellen. */
+/**
+ * Bestand halten: Liegt der ganze Bestand (mit dem, was unterwegs ist) unter dem Mindestbestand, bestellt er
+ * das günstigste Paket, das die Lücke füllt, sonst das größte, das er bezahlen kann. Nie an die Rücklage,
+ * nie auf Kredit, nicht bei gesperrten Lieferanten.
+ */
 function restock(turn: Turn): void {
   const { ctx, post, run } = turn;
-  const inTransit = shipmentsInTransit(ctx.state)
-    .filter((s) => s.productId === DEFAULT_PRODUCT)
-    .reduce((sum, s) => sum + s.amount, 0);
-  const deficit = post.settings.minStock - getStock(ctx.state, { productId: DEFAULT_PRODUCT }) - inTransit;
+  const inTransit = shipmentsInTransit(ctx.state).reduce((sum, s) => sum + s.amount, 0);
+  const deficit = post.settings.minStock - getStock(ctx.state) - inTransit;
   if (deficit <= 0) return;
   const budget = ctx.state.wallet.dirty - post.settings.reserve;
   const offers = getSuppliers(ctx.state)
-    .flatMap((supplier) => supplier.packages.map((pkg) => ({ supplier, pkg })))
-    .filter((o) => o.pkg.productId === DEFAULT_PRODUCT && o.pkg.price <= budget);
+    .filter((supplier) => !isBlocked(ctx.state, supplier.id))
+    .flatMap((supplier) =>
+      availablePackages(ctx.state, supplier.id).map((pkg) => ({
+        supplier,
+        pkg,
+        price: packagePrice(ctx.state, supplier.id, pkg.id),
+      })),
+    )
+    .filter((o) => o.price <= budget);
   if (offers.length === 0) {
-    const text = 'Wir brauchen Ware, aber das Geld reicht nicht.';
-    if (post.log[0]?.text !== text) note(turn, text);
+    note(turn, 'Wir brauchen Ware, aber das Geld reicht nicht.');
     return;
   }
-  // Das günstigste Paket, das reicht, sonst das größte, das drin ist.
-  const covering = offers.filter((o) => o.pkg.amount >= deficit).sort((a, b) => a.pkg.price - b.pkg.price)[0];
-  const choice = covering ?? [...offers].sort((a, b) => b.pkg.amount - a.pkg.amount)[0];
+  const covering = offers.filter((o) => o.pkg.amount >= deficit).sort((a, b) => a.price - b.price)[0];
+  const choice = covering ?? [...offers].sort((a, b) => b.pkg.amount - a.pkg.amount || a.price - b.price)[0];
   const ordered = run({
     type: 'suppliers.order',
     payload: { supplierId: choice.supplier.id, packageId: choice.pkg.id },
@@ -237,12 +262,9 @@ function restock(turn: Turn): void {
 /** Der Leutnant verkauft selbst an Spots in seinem Veedel, an denen gerade kein Läufer steht. */
 function serveInPerson(turn: Turn): void {
   const { ctx, veedelId, post, lt, run } = turn;
-  const priceFloor = PRICE_LEVELS[post.settings.priceLevel].priceFloor;
   for (const spot of byDemand(spotsInVeedel(ctx.state, veedelId))) {
     if (activeRunnerAt(ctx.state, spot.id)) continue;
-    const customer = waitingAt(ctx.state, spot.id).find(
-      (c) => canServe(ctx.state, c.id) && meetsPriceFloor(ctx.state, c, priceFloor),
-    );
+    const customer = waitingAt(ctx.state, spot.id).find((c) => canServe(ctx.state, c.id));
     if (!customer) continue;
     if (run({ type: 'customers.serve', payload: { customerId: customer.id, sellerId: lt.id } })) {
       post.busyUntil = ctx.now + serveTime(lt);

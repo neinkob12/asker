@@ -1,10 +1,8 @@
 // Lese- und Schreib-API des Personals. Lesen mit state, schreiben mit ctx.
 
 import { type Contact, type Ctx, type GameState, journal } from '../../core';
-import type { Customer } from '../customers';
 import { getWarehouse } from '../goods';
-import { referencePrice } from '../market';
-import { getSpot } from '../spots';
+import { getSpot, isSpotActive } from '../spots';
 import { veedelAt, veedelName } from '../veedel';
 import {
   BAIL_BASE,
@@ -227,19 +225,6 @@ export function jailDuration(state: GameState): number {
   return Math.round(JAIL_DURATION * (1 - bonus(state, 'jailReduction')));
 }
 
-/** Richtpreis an einem Spot (für die Preis-Anweisung). */
-export function spotReferencePrice(state: GameState, spotId: string, productId: string): number {
-  const spot = getSpot(state, spotId);
-  if (!spot) return 0;
-  return referencePrice(state, productId, spot.veedelId) * spot.priceMultiplier;
-}
-
-/** Zahlt der Kunde genug für diese Preis-Anweisung? */
-export function meetsPriceFloor(state: GameState, customer: Customer, priceFloor: number): boolean {
-  if (priceFloor <= 0) return true;
-  return customer.pricePerUnit >= spotReferencePrice(state, customer.spotId, customer.productId) * priceFloor;
-}
-
 /** Kontakt fürs Handy, z.B. für Nachrichten von dieser Person. */
 export function staffContact(member: StaffMember): Contact {
   return { id: `staff:${member.id}`, name: member.name, kind: 'staff' };
@@ -278,7 +263,6 @@ export function enlist(ctx: Ctx, profile: RecruitProfile, options: EnlistOptions
     origin: options.origin,
     knownStats: STAT_KEYS.filter((k) => options.knownStats?.includes(k)),
     demand: 1,
-    orders: { priceFloor: 0 },
     statusUntil: null,
     returnTo: null,
     career: [],
@@ -384,7 +368,7 @@ function returnToPost(ctx: Ctx, member: StaffMember): void {
   member.returnTo = null;
   if (!target || member.assignment) return;
   if (target.kind === 'spot' && member.role === 'runner') {
-    if (activeRunnerAt(ctx.state, target.targetId) || !getSpot(ctx.state, target.targetId)) return;
+    if (activeRunnerAt(ctx.state, target.targetId) || !isSpotActive(ctx.state, target.targetId)) return;
   }
   if (target.kind === 'spot' && member.role === 'security') {
     if (securityAt(ctx.state, { spotId: target.targetId }).length > 0) return;

@@ -3,7 +3,7 @@
 
 import { type Ctx, formatEuro, journal, messages, wallet } from '../../core';
 import { canServe, waitingAt } from '../customers';
-import { DEFAULT_PRODUCT, getStock, take } from '../goods';
+import { formatProductAmount, stockSummary, take } from '../goods';
 import { addHeat, getHeat } from '../police';
 import { veedelName } from '../veedel';
 import {
@@ -34,7 +34,6 @@ import {
   bonusProvider,
   expectedWage,
   isSpecialist,
-  meetsPriceFloor,
   removeMember,
   revealStat,
   serveTime,
@@ -66,9 +65,7 @@ function serveCustomers(ctx: Ctx): void {
   for (const member of [...ctx.state.modules.staff.members]) {
     if (member.role !== 'runner' || member.status !== 'active' || member.assignment?.kind !== 'spot') continue;
     if (member.busyUntil > ctx.now) continue;
-    const customer = waitingAt(ctx.state, member.assignment.targetId).find(
-      (c) => canServe(ctx.state, c.id) && meetsPriceFloor(ctx.state, c, member.orders.priceFloor),
-    );
+    const customer = waitingAt(ctx.state, member.assignment.targetId).find((c) => canServe(ctx.state, c.id));
     if (!customer) continue;
     const result = ctx.dispatch(
       { type: 'customers.serve', payload: { customerId: customer.id, sellerId: member.id } },
@@ -198,14 +195,14 @@ export function betray(ctx: Ctx, m: StaffMember, kind: BetrayalKind): number {
   m.lastIncidentAt = ctx.now;
   let amount = 0;
   if (kind === 'goods') {
-    const want = Math.min(
-      THEFT_GOODS_MAX,
-      Math.ceil(getStock(ctx.state, { productId: DEFAULT_PRODUCT }) * THEFT_GOODS_SHARE),
-    );
-    amount = want > 0 ? take(ctx, { productId: DEFAULT_PRODUCT, amount: want, partial: true }).taken : 0;
-    if (amount === 0) return betray(ctx, m, 'money');
-    journal.add(ctx, `Im Lager fehlen ${amount} g. Verdacht: ${m.name}.`, 'bad', { staffId: m.id });
-    addCareer(ctx, m.id, `Hat ${amount} g Ware mitgehen lassen.`);
+    // Vom Produkt, von dem am meisten da ist, fällt es am wenigsten auf.
+    const row = [...stockSummary(ctx.state)].sort((a, b) => b.amount - a.amount)[0];
+    const want = row ? Math.min(THEFT_GOODS_MAX, Math.ceil(row.amount * THEFT_GOODS_SHARE)) : 0;
+    amount = row && want > 0 ? take(ctx, { productId: row.productId, amount: want, partial: true }).taken : 0;
+    if (!row || amount === 0) return betray(ctx, m, 'money');
+    const what = formatProductAmount(row.productId, amount);
+    journal.add(ctx, `Im Lager fehlen ${what}. Verdacht: ${m.name}.`, 'bad', { staffId: m.id });
+    addCareer(ctx, m.id, `Hat ${what} Ware mitgehen lassen.`);
   } else if (kind === 'money') {
     const want = Math.min(THEFT_MONEY_MAX, Math.round(ctx.state.wallet.dirty * THEFT_MONEY_SHARE));
     amount = wallet.lose(ctx, want, 'dirty', `Diebstahl ${m.name}`);

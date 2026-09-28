@@ -3,7 +3,7 @@
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro } from '../../../core';
-import { Button, Empty, KeyValue, ProgressBar, SegmentedControl, Slot, useGame, useUi } from '../../../ui';
+import { Button, Empty, KeyValue, ProgressBar, Slot, useGame, useUi } from '../../../ui';
 import { getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
 import {
@@ -21,12 +21,6 @@ import {
   securityAt,
 } from '../index';
 import { ORIGIN_NAMES, Portrait, StatBars, StatusStamp } from './common';
-
-const PRICE_FLOORS = [
-  { value: 0, label: 'Alle' },
-  { value: 0.95, label: 'ab 95 %' },
-  { value: 1.02, label: 'ab 102 %' },
-];
 
 export function StaffProfile(props: { staffId: string }) {
   const { state } = useGame();
@@ -154,21 +148,6 @@ function ProfileActions(props: { member: StaffMember }) {
           </Button>
         </span>
       </div>
-      {m.role === 'runner' && !isLieutenant && (
-        <div class="staff-file__row">
-          <span title="Kunden, die weniger als diesen Anteil vom Richtpreis zahlen, werden nicht bedient.">
-            Verkauft an
-          </span>
-          <SegmentedControl
-            aria-label="Mindestpreis"
-            options={PRICE_FLOORS}
-            value={PRICE_FLOORS.find((p) => p.value === m.orders.priceFloor)?.value ?? m.orders.priceFloor}
-            onChange={(priceFloor) =>
-              dispatch({ type: 'staff.setOrders', payload: { staffId: m.id, orders: { priceFloor } } })
-            }
-          />
-        </div>
-      )}
       {confirmFire ? (
         <div class="staff-file__row">
           <span>Wirklich entlassen?</span>
