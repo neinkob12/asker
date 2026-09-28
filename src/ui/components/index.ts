@@ -14,7 +14,7 @@ export {
 } from './Button';
 export { Dialog, type DialogProps } from './Dialog';
 export { Icon, type IconProps } from './Icon';
-export { ICONS, type IconName, isIconName } from './icons';
+export { EMOJI_ICONS, ICONS, type IconName, isIconName, resolveIcon } from './icons';
 export {
   Avatar,
   type AvatarProps,

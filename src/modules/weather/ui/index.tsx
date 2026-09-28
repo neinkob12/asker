@@ -130,7 +130,8 @@ function tone(factor: number): 'accent' | 'bad' | undefined {
   return undefined;
 }
 
-registerHudItem({ id: 'weather.now', order: 80, component: WeatherHud });
+// Ordnung ab 90: steht fest neben der Uhr, nicht in der wischbaren Leiste.
+registerHudItem({ id: 'weather.now', order: 95, component: WeatherHud });
 registerSlot('phone.home', { id: 'weather.widget', order: 10, component: WeatherWidget });
 registerPhoneApp({
   id: 'weather.app',

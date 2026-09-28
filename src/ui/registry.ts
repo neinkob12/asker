@@ -32,7 +32,7 @@ export type SlotProps<N extends SlotName> = N extends keyof SlotRegistry ? SlotR
 
 export interface HudItem {
   id: string;
-  /** Kleiner = weiter links. Kern: Geld 10, Uhr 90. */
+  /** Kleiner = weiter links. Kern: Geld 10, Uhr 90. Ab 90 steht der Eintrag fest neben dem Spieltempo. */
   order: number;
   component: ComponentType;
 }

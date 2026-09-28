@@ -170,3 +170,49 @@ export type IconName = keyof typeof ICONS;
 export function isIconName(name: string): name is IconName {
   return Object.hasOwn(ICONS, name);
 }
+
+/**
+ * Häufige Emoji (so haben Module bisher ihre Handy-Apps angemeldet) werden als Icon aus dem Set gezeigt,
+ * damit alles einheitlich aussieht. Andere Emoji bleiben Text.
+ */
+export const EMOJI_ICONS: Record<string, IconName> = {
+  '💬': 'message',
+  '👥': 'users',
+  '👤': 'user',
+  '🚚': 'truck',
+  '🚐': 'truck',
+  '🚗': 'car',
+  '📦': 'package',
+  '🌿': 'leaf',
+  '💰': 'money',
+  '💶': 'euro',
+  '🚓': 'siren',
+  '🚨': 'siren',
+  '👮': 'shield',
+  '📞': 'phone',
+  '📱': 'phone',
+  '🗺️': 'map',
+  '🗺': 'map',
+  '⚙️': 'sliders',
+  '⚙': 'sliders',
+  '🎵': 'music',
+  '🔒': 'lock',
+  '⭐': 'star',
+  '🏠': 'home',
+  '💀': 'skull',
+  '🔥': 'flame',
+  '📋': 'list',
+  '🕐': 'clock',
+  '📅': 'calendar',
+  '💼': 'briefcase',
+  '⚡': 'bolt',
+  '👑': 'crown',
+  '🎯': 'target',
+  '🔔': 'bell',
+};
+
+/** Icon-Name zu einem Namen oder Emoji, sonst null. */
+export function resolveIcon(name: string): IconName | null {
+  if (isIconName(name)) return name;
+  return EMOJI_ICONS[name] ?? null;
+}

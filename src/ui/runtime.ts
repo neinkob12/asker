@@ -201,7 +201,10 @@ export class UiRuntime {
       dispatch: (command) =>
         update(() => {
           const result = session.dispatch(command);
-          if (!result.ok) api.toast(result.reason, 'bad');
+          if (!result.ok) {
+            api.toast(result.reason, 'bad');
+            audio.play('error', { volume: 0.5 });
+          }
           return result;
         }),
       openPanel: (id, props) =>

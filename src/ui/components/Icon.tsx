@@ -1,4 +1,4 @@
-import { ICONS, type IconName, isIconName } from './icons';
+import { ICONS, type IconName, resolveIcon } from './icons';
 
 export interface IconProps {
   /** Name aus dem Icon-Set (src/ui/components/icons.ts). Unbekannte Namen (z.B. Emoji) werden als Text gezeigt. */
@@ -16,7 +16,8 @@ export interface IconProps {
 export function Icon(props: IconProps) {
   const size = props.size === undefined ? '1em' : `${props.size}px`;
   const cls = `ui-icon ${props.class ?? ''}`;
-  if (!isIconName(props.name)) {
+  const icon = resolveIcon(props.name);
+  if (!icon) {
     return (
       <span class={`${cls} ui-icon--text`} style={{ fontSize: size }} role={props.title ? 'img' : undefined}>
         {props.name}
@@ -40,7 +41,7 @@ export function Icon(props: IconProps) {
       focusable="false"
     >
       {props.title && <title>{props.title}</title>}
-      {ICONS[props.name].map((d) => (
+      {ICONS[icon].map((d) => (
         <path key={d} d={d} />
       ))}
     </svg>

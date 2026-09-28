@@ -99,11 +99,27 @@
 .shell-hud__items {
   display: flex;
   align-items: center;
-  gap: var(--space-3) var(--space-6);
+  gap: var(--space-3) var(--space-5);
   min-width: 0;
   flex: 1;
   overflow-x: auto;
   scrollbar-width: none;
+  /* Passt nicht alles hin, lässt sich die Leiste wischen; rechts blendet sie weich aus. */
+  padding-right: var(--space-5);
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--space-5)), transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--space-5)), transparent);
+}
+.shell-hud__items > * {
+  flex-shrink: 0;
+}
+.shell-hud__time {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-shrink: 0;
+}
+.shell-hud__time:empty {
+  display: none;
 }
 .shell-hud__items::-webkit-scrollbar {
   display: none;
@@ -250,6 +266,18 @@
   padding-bottom: 28px;
   scrollbar-width: thin;
   scrollbar-color: var(--color-line-strong) transparent;
+}
+/* Lose Texte (ohne Card) bekommen eine Fläche, damit sie über der Karte lesbar bleiben. */
+.shell-sidebar__content > p,
+.shell-sidebar__content > .ui-hint,
+.shell-sidebar__content > :not(.ui-card) > .ui-hint {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  backdrop-filter: var(--blur-panel);
+  -webkit-backdrop-filter: var(--blur-panel);
 }
 
 /* Panel (Detailansicht) */
@@ -1115,6 +1143,26 @@
   color: var(--color-muted);
 }
 
+/* Desktop: Tabs der Seitenleiste umbrechen statt abschneiden */
+@media (min-width: 761px) {
+  .shell-sidebar .ui-tabs {
+    flex-wrap: wrap;
+  }
+  .shell-sidebar .ui-tabs__tab {
+    flex: 1 1 auto;
+    padding-inline: var(--space-3);
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1600px) {
+  .shell-hud__brand span {
+    display: none;
+  }
+  .shell-hud {
+    gap: var(--space-3) var(--space-4);
+  }
+}
+
 /* Schmale Desktops und Tablets: HUD etwas kompakter */
 @media (min-width: 761px) and (max-width: 1240px) {
   .shell-hud__brand span,
@@ -1162,10 +1210,23 @@
   .shell-hud {
     left: calc(var(--gap) + var(--safe-left));
     right: calc(var(--gap) + var(--safe-right));
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-2);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "items time"
+      "controls controls";
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
     padding: var(--space-2) var(--space-3);
+  }
+  .shell-hud__items {
+    grid-area: items;
+  }
+  .shell-hud__time {
+    grid-area: time;
+  }
+  .shell-hud__controls {
+    grid-area: controls;
   }
   .shell-hud__brand {
     display: none;
