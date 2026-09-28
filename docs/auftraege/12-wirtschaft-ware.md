@@ -5,7 +5,8 @@
 - **Voraussetzung:** Auftrag 00 (Fundament) ist in `main` gemergt.
 - **Parallel dazu laufen:** die Aufträge 10, 11, 13 und 14. Halte dich an die Regeln in `docs/auftraege/README.md`.
 - **Deine Ordner:** `src/modules/goods/`, `src/modules/market/`, `src/modules/suppliers/`, `src/modules/customers/`, `src/modules/spots/`, `src/modules/reputation/`, `src/modules/laundering/`. Nur diese änderst du.
-- **Vorher lesen:** `CLAUDE.md`, `docs/konzept.md`, `docs/architektur.md`.
+- **Vorher lesen:** `CLAUDE.md`, `docs/konzept.md`, `docs/architektur.md` (dort steht, was du vorfindest).
+- **Achtung:** Die Läufer aus Auftrag 13 verkaufen über den Befehl `customers.serve` (mit `sellerId`). Payload und Verhalten nur erweitern. `staff` hängt von `customers` ab, trag in `customers` also nicht `dependsOn: ['staff']` ein.
 
 ## Ziel
 
@@ -36,7 +37,7 @@ Das ist ein erster spielbarer Prototyp, nicht die Endausbaustufe.
 
 ### Markt (`market`)
 
-- **Richtpreis pro Produkt und Veedel:** abhängig von der Kaufkraft (über die `veedel`-API), von Angebot und Nachfrage und von einem Konkurrenzdruck-Faktor. Den Faktor setzen die Gangs aus Auftrag 11 später, du stellst dafür eine Funktion bereit.
+- **Richtpreis pro Produkt und Veedel:** abhängig von der Kaufkraft (über die `veedel`-API), von Angebot und Nachfrage und von einem Konkurrenzdruck-Faktor. Den Faktor setzen die Gangs aus Auftrag 11 über `setCompetitionFactor` (gibt es seit dem Fundament, nicht brechen).
 - **Eigener Preis** pro Spot und Produkt, als Befehl. Zu teuer heißt weniger Kunden, zu billig bedeutet Verlust.
 
 ### Kunden und Spots (`customers`, `spots`)

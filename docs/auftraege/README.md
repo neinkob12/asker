@@ -39,7 +39,9 @@ Lies vorher CLAUDE.md (falls vorhanden), docs/konzept.md und docs/auftraege/READ
 | [13](13-personal-hierarchie.md) | Personal und Hierarchie | `src/modules/staff/`, `src/modules/hierarchy/`, `src/modules/recruiting/` |
 | [14](14-look-handy.md) | Look, Spiel-Handy und Sound | `src/ui/`, `src/map/`, `src/audio/`, `src/modules/weather/`, `public/` |
 
-`src/core/`, `CLAUDE.md`, `docs/konzept.md`, `docs/architektur.md`, `package.json` und `.github/` gehören in Phase 1 niemandem. Die ändert erst wieder die Integration.
+`src/core/`, `src/main.tsx`, `index.html`, `scripts/`, `CLAUDE.md`, `docs/konzept.md`, `docs/architektur.md`, `package.json`, `package-lock.json`, die Konfigurationsdateien im Repo-Root (`tsconfig.json`, `vite.config.ts`, `biome.json`) und `.github/` gehören in Phase 1 niemandem. Die ändert erst wieder die Integration.
+
+Was jede Session nach dem Fundament vorfindet und welche Schnittstellen sie nutzen kann, steht in [`docs/architektur.md`](../architektur.md) im Abschnitt "Was die parallelen Sessions vorfinden".
 
 ## Regeln für alle Sessions in Phase 1
 
@@ -49,8 +51,8 @@ Lies vorher CLAUDE.md (falls vorhanden), docs/konzept.md und docs/auftraege/READ
 4. **Andere Module nur über ihre öffentliche Schnittstelle nutzen:** die Exporte aus `index.ts`, ihre Befehle und ihre Ereignisse.
 5. **Keine neuen npm-Pakete, außer es geht wirklich nicht ohne.** Dann im PR begründen.
 6. **Ändert sich die Form des eigenen Spielzustands:** Version hochzählen und eine Migration schreiben, damit alte Spielstände weiter laden.
-7. **Vor jedem Push `npm run check` ausführen.** Es muss grün sein, und das eigene Modul braucht Tests.
-8. **Selbst ausprobieren:** das Spiel im Browser starten (z.B. per Playwright-Screenshot) und prüfen, dass das Neue funktioniert.
+7. **Vor jedem Push `npm run check` ausführen.** Es muss grün sein, und das eigene Modul braucht Tests. `npm run check` prüft auch die Ordnerregeln aus `CLAUDE.md`.
+8. **Selbst ausprobieren:** das Spiel im Browser starten (z.B. `npm run screenshot`, siehe `scripts/screenshot.mjs`) und prüfen, dass das Neue funktioniert.
 9. **Wurde `main` zwischendurch geändert, weil andere PRs gemergt wurden:** `main` in den eigenen Branch mergen, nicht rebasen.
 10. **PR-Beschreibung mit drei Abschnitten:** "Was ist neu", "Wie testen", "Für die Integration".
 

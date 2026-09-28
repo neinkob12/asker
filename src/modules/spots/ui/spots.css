@@ -1,0 +1,65 @@
+.spot-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.spot-dot {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--color-marker-idle);
+  border: 3px solid var(--color-marker-border);
+  box-shadow: var(--shadow-marker);
+  display: grid;
+  place-items: center;
+  transition: transform 0.15s;
+}
+.spot-marker:hover .spot-dot,
+.spot-marker.selected .spot-dot {
+  transform: scale(1.2);
+}
+.spot-badge {
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--color-on-accent);
+}
+.spot-marker[data-urgency="waiting"] .spot-dot {
+  background: var(--color-warn-strong);
+}
+.spot-marker[data-urgency="urgent"] .spot-dot {
+  background: var(--color-bad);
+  animation: spot-pulse 0.9s infinite;
+}
+.spot-marker.has-runner .spot-dot {
+  border-color: var(--color-accent);
+  box-shadow:
+    0 0 0 3px rgba(111, 220, 140, 0.35),
+    var(--shadow-marker);
+}
+.spot-marker.selected .spot-dot {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+.spot-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-on-accent);
+  background: var(--color-label-bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+@keyframes spot-pulse {
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 107, 91, 0.25);
+  }
+}
+.shell-map.zoomed-out .spot-marker {
+  display: none;
+}

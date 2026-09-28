@@ -1,0 +1,6 @@
+.customer-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  font-size: 14px;
+}

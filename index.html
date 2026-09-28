@@ -2,60 +2,12 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0e1512" />
     <title>Köln Tycoon</title>
   </head>
   <body>
-    <div id="map"></div>
-
-    <header id="hud">
-      <div class="brand">Köln Tycoon</div>
-      <div class="stat"><span class="label">Geld</span><span id="money" class="value">0 €</span></div>
-      <div class="stat"><span class="label">Lager</span><span id="stock" class="value">0 g</span></div>
-      <div class="stat"><span class="label">Zeit</span><span id="clock" class="value">Tag 1, 18:00</span></div>
-      <div class="speed" role="group" aria-label="Spielgeschwindigkeit">
-        <button data-speed="0">Pause</button>
-        <button data-speed="1" class="active">1x</button>
-        <button data-speed="2">2x</button>
-        <button data-speed="4">4x</button>
-      </div>
-      <div class="view-switch">
-        <button id="btn-koeln">Köln</button>
-        <button id="btn-europa">Europa</button>
-      </div>
-    </header>
-
-    <aside id="side">
-      <section class="card">
-        <h2>Hafen Rotterdam</h2>
-        <p class="hint">Lieferung dauert ca. 2,5 Minuten.</p>
-        <div id="packages" class="packages"></div>
-        <div id="shipments"></div>
-      </section>
-      <section class="card">
-        <h2>Läufer</h2>
-        <div id="runners"></div>
-      </section>
-      <section class="card">
-        <h2>Statistik</h2>
-        <div id="stats"></div>
-      </section>
-      <section class="card log-card">
-        <h2>Ereignisse</h2>
-        <ul id="log"></ul>
-      </section>
-      <button id="btn-reset" class="danger subtle">Neues Spiel</button>
-    </aside>
-
-    <section id="spot-panel" hidden>
-      <div class="spot-head">
-        <h2 id="spot-title"></h2>
-        <button id="spot-close" aria-label="Schließen">Schließen</button>
-      </div>
-      <div id="spot-body"></div>
-    </section>
-
-    <div id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

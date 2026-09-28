@@ -5,7 +5,7 @@
 - **Voraussetzung:** Auftrag 00 (Fundament) ist in `main` gemergt.
 - **Parallel dazu laufen:** die Aufträge 10 bis 12 und 14. Halte dich an die Regeln in `docs/auftraege/README.md`.
 - **Deine Ordner:** `src/modules/staff/`, `src/modules/hierarchy/`, `src/modules/recruiting/`. Nur diese änderst du.
-- **Vorher lesen:** `CLAUDE.md`, `docs/konzept.md`, `docs/architektur.md`.
+- **Vorher lesen:** `CLAUDE.md`, `docs/konzept.md`, `docs/architektur.md` (dort steht, was du vorfindest).
 
 ## Ziel
 
@@ -23,7 +23,7 @@ Das ist ein erster spielbarer Prototyp, nicht die Endausbaustufe.
 - **Status:** aktiv, verletzt, in Haft, gekündigt. Auf `police.arrest` reagierst du mit dem Haft-Status.
 - **Einsatz:**
   - Läufer an Spots, wie im Prototyp, aber mit ihren Werten
-  - Kuriere für den Lieferdienst. Stelle dafür eine API bereit, mit der Auftrag 12 einen freien Kurier findet und zuweist.
+  - Kuriere für den Lieferdienst. Auftrag 12 findet und bindet freie Kuriere über `findAvailable` und `assign` (gibt es seit dem Fundament, nicht brechen).
   - Sicherheit an Spots und Lagern. Ihre Werte fließen über deine API in die Konfrontationen aus Auftrag 11 ein.
 - **Spezialisten geben Boni** statt zu arbeiten, als abfragbare Werte über deine API:
   - Anwalt: Kaution billiger, Haft kürzer
