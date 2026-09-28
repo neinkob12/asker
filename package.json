@@ -1,0 +1,22 @@
+{
+  "name": "koeln-tycoon",
+  "version": "1.0.0",
+  "description": "Weed-Tycoon Browserspiel auf der Satellitenkarte von Köln",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "maplibre-gl": "^6.11.2"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  },
+  "private": true,
+  "type": "module"
+}
