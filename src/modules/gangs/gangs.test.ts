@@ -344,7 +344,7 @@ describe('gangs: Gewalt und Polizei', () => {
       reason: 'Du brauchst Leute oder musst selbst mit.',
     });
     expect(sim.dispatch({ type: 'gangs.attack', payload: { ...payload, veedelId: 'nippes' } }).ok).toBe(false);
-    const runner = hire(sim, 'rheinpark');
+    const runner = hire(sim, 'ebertplatz');
     const s = status(sim, 'ost');
     s.ceasefireUntil = sim.state.time + 1000;
     s.hostility = 30;
