@@ -12,6 +12,7 @@ import {
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { BAIL_BASE, JAIL_DURATION, LOYALTY } from './config';
 import {
+  activeRunnerAt,
   bailCost,
   bonus,
   enlist,
@@ -60,7 +61,9 @@ describe('Haft', () => {
     expect(jailed.status).toBe('jailed');
     expect(jailed.statusUntil).toBe(sim.state.time + JAIL_DURATION);
     expect(jailed.record.arrests).toBe(1);
-    expect(runnerAt(sim.state, 'neumarkt')).toBeUndefined();
+    // Der Spot ist frei, der Läufer gilt aber weiter als Läufer des Spots (runnerAt: egal welcher Status).
+    expect(activeRunnerAt(sim.state, 'neumarkt')).toBeUndefined();
+    expect(runnerAt(sim.state, 'neumarkt')?.status).toBe('jailed');
     expect(getStaff(sim.state, { status: 'jailed' })).toHaveLength(1);
     expect(eventsOfType(events, 'staff.statusChanged').at(-1)?.payload).toEqual({
       staffId: runner.id,
@@ -96,7 +99,8 @@ describe('Haft', () => {
     const sim = quietGame();
     const runner = runnerAtNeumarkt(sim);
     arrest(sim, runner.id);
-    sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'neumarkt' } });
+    expect(sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'neumarkt' } }).ok).toBe(true);
+    expect(runnerAt(sim.state, 'neumarkt')?.status).toBe('active');
     sim.advance(JAIL_DURATION);
     expect(getStaffMember(sim.state, runner.id)?.assignment).toBeNull();
   });
@@ -107,7 +111,7 @@ describe('Haft', () => {
     // So nutzen die Konfrontationen (Auftrag 11) die Schnittstelle.
     expect(setStatus(sim.ctx('encounters'), runner.id, 'injured')).toBe(true);
     expect(getStaffMember(sim.state, runner.id)?.status).toBe('injured');
-    expect(runnerAt(sim.state, 'neumarkt')).toBeUndefined();
+    expect(activeRunnerAt(sim.state, 'neumarkt')).toBeUndefined();
     sim.advance(2 * 1440);
     expect(getStaffMember(sim.state, runner.id)?.status).toBe('active');
     expect(runnerAt(sim.state, 'neumarkt')?.id).toBe(runner.id);

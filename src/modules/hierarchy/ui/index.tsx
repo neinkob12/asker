@@ -19,7 +19,7 @@ import {
   useUi,
 } from '../../../ui';
 import { getSpot, spotsInVeedel } from '../../spots';
-import { getStaffMember } from '../../staff';
+import { getStaff, getStaffMember } from '../../staff';
 import { allVeedel, veedelName } from '../../veedel';
 import {
   CAUTION_LEVELS,
@@ -296,8 +296,71 @@ function SpotLieutenant(props: { spotId: string }) {
   );
 }
 
+/** Im Veedel-Panel: Leutnant des Veedels oder jemanden ernennen. */
+function VeedelLieutenant(props: { veedelId: string }) {
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const post = getPost(state, props.veedelId);
+  const m = post ? getStaffMember(state, post.staffId) : undefined;
+  const people = getStaff(state, { veedelId: props.veedelId });
+  const eligible = getStaff(state)
+    .filter((c) => canBeLieutenant(state, c.id).ok && !lieutenantVeedel(state, c.id))
+    .sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
+  const [choice, setChoice] = useState(eligible[0]?.id ?? '');
+  const selected = eligible.find((c) => c.id === choice) ?? eligible[0];
+  return (
+    <Card title="Leutnant">
+      {post && m ? (
+        <>
+          <p class="ui-hint">
+            {m.name} (Level {m.level}) {postSummary(state, post)}.
+          </p>
+          <ProgressBar
+            value={(lieutenantSatisfaction(state, props.veedelId) ?? 0) / 100}
+            tone={satisfactionTone(lieutenantSatisfaction(state, props.veedelId) ?? 0)}
+            label="Zufriedenheit"
+          />
+          <Button wide onClick={() => ui.openPanel('hierarchy.lieutenant', { veedelId: props.veedelId })}>
+            Anweisungen
+          </Button>
+        </>
+      ) : eligible.length > 0 && selected ? (
+        <div class="lt-promote__row">
+          <select
+            class="lt-select"
+            aria-label="Wer"
+            value={selected.id}
+            onChange={(e) => setChoice(e.currentTarget.value)}
+          >
+            {eligible.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}, Level {c.level}
+              </option>
+            ))}
+          </select>
+          <Button
+            small
+            variant="primary"
+            onClick={() =>
+              dispatch({ type: 'hierarchy.appoint', payload: { staffId: selected.id, veedelId: props.veedelId } })
+            }
+          >
+            Zum Leutnant
+          </Button>
+        </div>
+      ) : (
+        <Hint>Kein Leutnant. Ab Level {LIEUTENANT_MIN_LEVEL} kann jemand aus deinen Leuten das Veedel führen.</Hint>
+      )}
+      <Hint>
+        {people.length === 0 ? 'Keine eigenen Leute hier.' : `${people.length} von deinen Leuten im Einsatz.`}
+      </Hint>
+    </Card>
+  );
+}
+
 registerSlot('tab:staff', { id: 'hierarchy.lieutenants', order: 20, component: LieutenantsSection });
 registerSlot('staff.profile', { id: 'hierarchy.promote', order: 10, component: PromoteSection });
+registerSlot('veedel.veedelPanel', { id: 'hierarchy.veedel', order: 30, component: VeedelLieutenant });
 registerSlot('spots.spotPanel', { id: 'hierarchy.spotLieutenant', order: 45, component: SpotLieutenant });
 registerPanel({
   id: 'hierarchy.lieutenant',

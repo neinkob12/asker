@@ -67,9 +67,22 @@ export function getStats(state: GameState, id: string): StaffStats | null {
   return member ? { ...member.stats } : null;
 }
 
-/** Läufer an einem Spot. Wer in Haft oder verletzt ist, hat seinen Spot geräumt. */
+/**
+ * Läufer an einem Spot, egal welcher Status. Wer in Haft oder verletzt ist, räumt den Spot zwar (andere können
+ * ihn übernehmen), gilt aber weiter als Läufer des Spots, solange dort niemand anderes steht.
+ */
 export function runnerAt(state: GameState, spotId: string): StaffMember | undefined {
-  return getStaff(state, { role: 'runner', spotId })[0];
+  return (
+    activeRunnerAt(state, spotId) ??
+    state.modules.staff.members.find(
+      (m) => m.role === 'runner' && m.returnTo?.kind === 'spot' && m.returnTo.targetId === spotId,
+    )
+  );
+}
+
+/** Läufer, der gerade an einem Spot arbeitet (eingesetzt und aktiv). */
+export function activeRunnerAt(state: GameState, spotId: string): StaffMember | undefined {
+  return getStaff(state, { role: 'runner', spotId }).find((m) => m.status === 'active');
 }
 
 /** Sicherheit an einem Spot oder in einem Lager. */
@@ -171,8 +184,8 @@ export function defenseStrength(
   if (target.veedelId) people = getStaff(state, { veedelId: target.veedelId, status: 'active' });
   else {
     people = securityAt(state, target);
-    const runner = target.spotId ? runnerAt(state, target.spotId) : undefined;
-    if (runner?.status === 'active') people.push(runner);
+    const runner = target.spotId ? activeRunnerAt(state, target.spotId) : undefined;
+    if (runner) people.push(runner);
   }
   const total = people.reduce((sum, m) => sum + combatValue(state, m.id) * (m.role === 'security' ? 1 : 1 / 3), 0);
   return Math.round(total);
@@ -371,7 +384,7 @@ function returnToPost(ctx: Ctx, member: StaffMember): void {
   member.returnTo = null;
   if (!target || member.assignment) return;
   if (target.kind === 'spot' && member.role === 'runner') {
-    if (runnerAt(ctx.state, target.targetId) || !getSpot(ctx.state, target.targetId)) return;
+    if (activeRunnerAt(ctx.state, target.targetId) || !getSpot(ctx.state, target.targetId)) return;
   }
   if (target.kind === 'spot' && member.role === 'security') {
     if (securityAt(ctx.state, { spotId: target.targetId }).length > 0) return;

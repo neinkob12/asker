@@ -6,8 +6,8 @@
 // Beförderung; wer kaum noch loyal ist, verrät dich manchmal (mild). Festnahmen bringen Haft, Kaution holt raus.
 //
 // Öffentliche API (lesen):
-//   getStaff(state, filter), getStaffMember(state, id), isEmployed, getStats(state, id), runnerAt(state, spotId),
-//   securityAt(state, { spotId | warehouseId }), findAvailable(state, { role }), staffVeedel(state, member),
+//   getStaff(state, filter), getStaffMember(state, id), isEmployed, getStats(state, id),
+//   runnerAt(state, spotId) (egal welcher Status), activeRunnerAt(state, spotId) (arbeitet gerade dort), securityAt(state, { spotId | warehouseId }), findAvailable(state, { role }), staffVeedel(state, member),
 //   expectedWage(state, id), expectedWageFor(role, level, demand), dailyWages(state), serveTime(member),
 //   speedFactor, riskFactor, combatValue, defenseStrength(state, { spotId | warehouseId | veedelId }),
 //   bonus(state, key), bonusProvider, bailCost, jailDuration, meetsPriceFloor, levelProgress, betrayalChance,

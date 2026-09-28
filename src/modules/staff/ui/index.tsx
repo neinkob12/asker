@@ -20,6 +20,7 @@ import {
 } from '../../../ui';
 import { veedelName } from '../../veedel';
 import {
+  activeRunnerAt,
   assignmentLabel,
   bonus,
   bonusProvider,
@@ -31,6 +32,7 @@ import {
   RUNNER_HIRE_COST,
   roleName,
   runnerAt,
+  STATUS_NAMES,
   type StaffMember,
   securityAt,
   staffVeedel,
@@ -240,7 +242,9 @@ function StaffSummary() {
 function SpotStaff(props: { spotId: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
-  const runner = runnerAt(state, props.spotId);
+  const runner = activeRunnerAt(state, props.spotId);
+  // In Haft oder verletzt: Der Spot ist frei, bis die Person zurückkommt.
+  const absent = runner ? undefined : runnerAt(state, props.spotId);
   const guard = securityAt(state, { spotId: props.spotId })[0];
   const free = (role: 'runner' | 'security') =>
     getStaff(state, { role, status: 'active' }).filter((m) => !m.assignment);
@@ -258,15 +262,22 @@ function SpotStaff(props: { spotId: string }) {
           {profile(runner)} (Level {runner.level}) bedient hier automatisch.
         </span>
       ) : (
-        <div class="spot-staff__row">
-          <span>Kein Läufer.</span>
-          <Button
-            disabled={state.wallet.dirty < RUNNER_HIRE_COST}
-            onClick={() => dispatch({ type: 'staff.hireRunner', payload: { spotId: props.spotId } })}
-          >
-            Anheuern ({formatEuro(RUNNER_HIRE_COST)})
-          </Button>
-        </div>
+        <>
+          {absent && (
+            <span>
+              {profile(absent)} ist {STATUS_NAMES[absent.status]} und kommt danach zurück, wenn der Spot frei ist.
+            </span>
+          )}
+          <div class="spot-staff__row">
+            <span>{absent ? 'Bis dahin:' : 'Kein Läufer.'}</span>
+            <Button
+              disabled={state.wallet.dirty < RUNNER_HIRE_COST}
+              onClick={() => dispatch({ type: 'staff.hireRunner', payload: { spotId: props.spotId } })}
+            >
+              Anheuern ({formatEuro(RUNNER_HIRE_COST)})
+            </Button>
+          </div>
+        </>
       )}
       {!runner && free('runner').length > 0 && (
         <div class="spot-staff__free">
@@ -300,7 +311,7 @@ registerTab({
   id: 'staff',
   // Kurz, damit alle Tabs in die Seitenleiste passen.
   title: 'Leute',
-  order: 20,
+  order: 30,
   badge: (state) => getStaff(state, { status: 'jailed' }).length,
 });
 registerSlot('tab:staff', { id: 'staff.overview', order: 10, component: StaffOverview });
@@ -316,10 +327,10 @@ onGameEvent('staff.levelUp', 'staff.levelUp', (payload, ui, state) => {
   const m = getStaffMember(state, payload.staffId);
   if (m) ui.toast(`${m.name} ist jetzt Level ${payload.level}.`, 'good');
 });
+// Festnahmen meldet schon die Polizei, hier nur Verletzungen.
 onGameEvent('staff.statusChanged', 'staff.status', (payload, ui, state) => {
   const m = getStaffMember(state, payload.staffId);
   if (!m) return;
-  if (payload.to === 'jailed') ui.toast(`${m.name} wurde festgenommen.`, 'bad');
   if (payload.to === 'injured') ui.toast(`${m.name} ist verletzt.`, 'bad');
 });
 onGameEvent('staff.betrayed', 'staff.betrayed', (payload, ui, state) => {

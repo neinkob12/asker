@@ -13,6 +13,7 @@ import {
   XP_PER_BAIL,
 } from './config';
 import {
+  activeRunnerAt,
   addCareer,
   addLoyalty,
   addXp,
@@ -25,7 +26,6 @@ import {
   isEmployed,
   removeMember,
   roleName,
-  runnerAt,
   securityAt,
   setStatus,
   setWage,
@@ -41,7 +41,7 @@ const NOT_EMPLOYED = 'Diese Person arbeitet nicht für dich.';
 export function hireRunner(ctx: Ctx, spotId: string): CommandResult {
   const spot = getSpot(ctx.state, spotId);
   if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
-  if (runnerAt(ctx.state, spotId)) return { ok: false, reason: 'Hier arbeitet schon ein Läufer.' };
+  if (activeRunnerAt(ctx.state, spotId)) return { ok: false, reason: 'Hier arbeitet schon ein Läufer.' };
   if (!wallet.pay(ctx, RUNNER_HIRE_COST, 'dirty', 'Läufer angeheuert'))
     return { ok: false, reason: 'Nicht genug Geld.' };
   const profile = generateProfile(ctx, 'runner');
@@ -85,7 +85,7 @@ export function assignCommand(ctx: Ctx, staffId: string, assignment: StaffAssign
   if (assignment.kind === 'spot') {
     if (!getSpot(ctx.state, assignment.targetId)) return { ok: false, reason: 'Unbekannter Spot.' };
     if (m.role === 'runner') {
-      const other = runnerAt(ctx.state, assignment.targetId);
+      const other = activeRunnerAt(ctx.state, assignment.targetId);
       if (other && other.id !== m.id) return { ok: false, reason: `Dort arbeitet schon ${other.name}.` };
     } else if (m.role === 'security') {
       const other = securityAt(ctx.state, { spotId: assignment.targetId }).find((s) => s.id !== m.id);

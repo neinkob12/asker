@@ -12,12 +12,12 @@ import { getHeat } from '../police';
 import { getCandidates } from '../recruiting';
 import { type Spot, spotsInVeedel } from '../spots';
 import {
+  activeRunnerAt,
   getStaff,
   getStaffMember,
   isEmployed,
   meetsPriceFloor,
   RUNNER_HIRE_COST,
-  runnerAt,
   type StaffMember,
   securityAt,
   serveTime,
@@ -139,7 +139,7 @@ function staffSpots(turn: Turn): void {
   const { ctx, veedelId, lt, run } = turn;
   const managed = managedSpots(ctx.state, veedelId, lt);
   for (const spot of managed) {
-    if (runnerAt(ctx.state, spot.id)) continue;
+    if (activeRunnerAt(ctx.state, spot.id)) continue;
     const free = freeStaff(ctx.state, 'runner')[0];
     if (free) {
       if (run(assignTo(free.id, spot))) note(turn, `${free.name} an den ${spot.name} gestellt.`);
@@ -149,8 +149,8 @@ function staffSpots(turn: Turn): void {
     const weaker = byDemand(spotsInVeedel(ctx.state, veedelId))
       .filter((s) => !managed.includes(s))
       .reverse()
-      .map((s) => runnerAt(ctx.state, s.id))
-      .find((r) => r?.status === 'active');
+      .map((s) => activeRunnerAt(ctx.state, s.id))
+      .find((r) => r !== undefined);
     if (weaker) {
       if (run(assignTo(weaker.id, spot))) note(turn, `${weaker.name} an den ${spot.name} umgesetzt, da ist mehr los.`);
       continue;
@@ -190,7 +190,7 @@ function givePriceOrders(turn: Turn): void {
   const { ctx, veedelId, post, run } = turn;
   const priceFloor = PRICE_LEVELS[post.settings.priceLevel].priceFloor;
   for (const spot of spotsInVeedel(ctx.state, veedelId)) {
-    const runner = runnerAt(ctx.state, spot.id);
+    const runner = activeRunnerAt(ctx.state, spot.id);
     if (!runner || runner.orders.priceFloor === priceFloor) continue;
     run({ type: 'staff.setOrders', payload: { staffId: runner.id, orders: { priceFloor } } });
   }
@@ -239,7 +239,7 @@ function serveInPerson(turn: Turn): void {
   const { ctx, veedelId, post, lt, run } = turn;
   const priceFloor = PRICE_LEVELS[post.settings.priceLevel].priceFloor;
   for (const spot of byDemand(spotsInVeedel(ctx.state, veedelId))) {
-    if (runnerAt(ctx.state, spot.id)?.status === 'active') continue;
+    if (activeRunnerAt(ctx.state, spot.id)) continue;
     const customer = waitingAt(ctx.state, spot.id).find(
       (c) => canServe(ctx.state, c.id) && meetsPriceFloor(ctx.state, c, priceFloor),
     );

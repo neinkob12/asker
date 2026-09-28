@@ -7,6 +7,7 @@ import { Button, Empty, KeyValue, ProgressBar, SegmentedControl, Slot, useGame, 
 import { getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
 import {
+  activeRunnerAt,
   assignmentLabel,
   bailCost,
   expectedWage,
@@ -15,7 +16,6 @@ import {
   levelProgress,
   MAX_LEVEL,
   roleName,
-  runnerAt,
   type StaffAssignment,
   type StaffMember,
   securityAt,
@@ -202,7 +202,7 @@ function MoveControl(props: { member: StaffMember }) {
   const m = props.member;
   const targets: { key: string; label: string; assignment: StaffAssignment }[] = [];
   for (const spot of getSpots(state)) {
-    const other = m.role === 'runner' ? runnerAt(state, spot.id) : securityAt(state, { spotId: spot.id })[0];
+    const other = m.role === 'runner' ? activeRunnerAt(state, spot.id) : securityAt(state, { spotId: spot.id })[0];
     const taken = other && other.id !== m.id ? ` (${other.name})` : '';
     targets.push({
       key: `spot:${spot.id}`,
