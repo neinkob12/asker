@@ -1,3 +1,63 @@
+.map-place--warehouse {
+  pointer-events: auto;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
 .map-place--warehouse .map-place-icon {
   background: #3b82f6;
+}
+
+.goods-hud {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.goods-quality {
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--color-muted);
+}
+.goods-quality--premium,
+.goods-quality--good {
+  color: var(--color-accent);
+}
+.goods-quality--weak {
+  color: var(--color-warn);
+}
+.goods-quality--trash {
+  color: var(--color-bad);
+}
+
+.goods-summary {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+}
+.goods-summary li,
+.goods-lot__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+.goods-lot__cut {
+  color: var(--color-warn);
+}
+.goods-lot__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }

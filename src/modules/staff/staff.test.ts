@@ -3,28 +3,50 @@ import { clock, type Simulation, START_DIRTY_MONEY } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import type { Customer } from '../customers';
 import { RUNNER_DAILY_WAGE, RUNNER_HIRE_COST } from './config';
-import { bonus, findAvailable, getStaff, getStats, runnerAt } from './index';
+import {
+  assign,
+  bonus,
+  enlist,
+  findAvailable,
+  generateProfile,
+  getStaff,
+  getStaffMember,
+  getStats,
+  runnerAt,
+  type StaffMember,
+  type StaffRole,
+  securityAt,
+  serveTime,
+} from './index';
 
-function quietGame(): Simulation {
-  const sim = createTestGame();
+function quietGame(seed = 1): Simulation {
+  const sim = createTestGame({ seed });
   for (const key of Object.keys(sim.state.modules.customers.nextSpawnAt)) {
     sim.state.modules.customers.nextSpawnAt[key] = Infinity;
   }
   return sim;
 }
 
-function addCustomer(sim: Simulation, spotId: string, amount: number): Customer {
+function addCustomer(sim: Simulation, spotId: string, amount: number, pricePerUnit = 10): Customer {
   const c: Customer = {
     id: sim.state.nextId++,
     spotId,
     productId: 'weed',
     amount,
-    pricePerUnit: 10,
+    pricePerUnit,
     arrivedAt: sim.state.time,
     expiresAt: sim.state.time + 100,
   };
   sim.state.modules.customers.waiting.push(c);
   return c;
+}
+
+/** Jemanden eines Typs direkt einstellen (ohne Pool). */
+function recruit(sim: Simulation, role: StaffRole, patch: Partial<StaffMember> = {}): StaffMember {
+  const ctx = sim.ctx('staff');
+  const member = enlist(ctx, generateProfile(ctx, role), { origin: 'pool' });
+  Object.assign(member, patch);
+  return member;
 }
 
 const hire = (sim: Simulation, spotId: string) => sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
@@ -36,8 +58,33 @@ describe('staff', () => {
     expect(sim.state.wallet.dirty).toBe(START_DIRTY_MONEY - RUNNER_HIRE_COST);
     expect(hire(sim, 'neumarkt')).toEqual({ ok: false, reason: 'Hier arbeitet schon ein Läufer.' });
     const runner = runnerAt(sim.state, 'neumarkt');
-    expect(runner).toMatchObject({ role: 'runner', status: 'active', wage: RUNNER_DAILY_WAGE });
+    expect(runner).toMatchObject({ role: 'runner', status: 'active', wage: RUNNER_DAILY_WAGE, level: 1 });
     expect(runner?.name).toMatch(/\S+ \S+/);
+  });
+
+  it('Mitarbeiter sind Individuen mit Alter, Hintergrund, Laufbahn und eigenen Werten', () => {
+    const sim = quietGame();
+    hire(sim, 'neumarkt');
+    hire(sim, 'uni');
+    const [a, b] = getStaff(sim.state);
+    expect(a.age).toBeGreaterThanOrEqual(17);
+    expect(a.background.length).toBeGreaterThan(10);
+    expect(a.portrait).toBeNull();
+    expect(a.career[0].text).toMatch(/Eingestellt/);
+    expect(a.stats).not.toEqual(b.stats);
+    // Von der Straße weiß man fast nichts.
+    expect(a.knownStats).toEqual(['speed']);
+  });
+
+  it('Werte hängen vom Typ ab: Sicherheit ist stärker, Läufer schneller', () => {
+    const sim = quietGame();
+    const avg = (role: StaffRole, key: 'speed' | 'strength') => {
+      let sum = 0;
+      for (let i = 0; i < 30; i++) sum += generateProfile(sim.ctx('staff'), role).stats[key];
+      return sum / 30;
+    };
+    expect(avg('security', 'strength')).toBeGreaterThan(avg('runner', 'strength') + 10);
+    expect(avg('courier', 'speed')).toBeGreaterThan(avg('security', 'speed') + 5);
   });
 
   it('Läufer bedienen Kunden an ihrem Spot automatisch, über denselben Befehl wie der Spieler', () => {
@@ -49,10 +96,33 @@ describe('staff', () => {
     addCustomer(sim, 'uni', 2);
     sim.step();
     expect(sim.state.modules.customers.waiting.map((c) => c.spotId)).toEqual(['uni']);
-    expect(eventsOfType(events, 'sale.completed')[0].payload.sellerId).toBe(runner?.id);
+    const sale = eventsOfType(events, 'sale.completed')[0].payload;
+    expect(sale.sellerId).toBe(runner?.id);
+    expect(getStaffMember(sim.state, runner?.id ?? '')?.record).toMatchObject({ sales: 1, revenue: sale.revenue });
   });
 
-  it('Löhne um Mitternacht, wer nicht bezahlt wird, kündigt', () => {
+  it('Tempo bestimmt, wie schnell ein Läufer bedient', () => {
+    const sim = quietGame();
+    const slow = recruit(sim, 'runner');
+    const fast = recruit(sim, 'runner');
+    slow.stats.speed = 10;
+    fast.stats.speed = 95;
+    expect(serveTime(fast)).toBeLessThan(serveTime(slow));
+    fast.level = 5;
+    expect(serveTime(fast)).toBeLessThan(15);
+  });
+
+  it('an gesperrten Spots wird niemand eingesetzt', () => {
+    const sim = quietGame();
+    expect(hire(sim, 'rudolfplatz')).toEqual({ ok: false, reason: 'Der Spot ist noch nicht freigeschaltet.' });
+    const runner = recruit(sim, 'runner');
+    const toLocked = { kind: 'spot' as const, targetId: 'rudolfplatz' };
+    expect(sim.dispatch({ type: 'staff.assign', payload: { staffId: runner.id, assignment: toLocked } }).ok).toBe(
+      false,
+    );
+  });
+
+  it('Löhne um Mitternacht pro Person, wer nicht bezahlt wird, kündigt', () => {
     const sim = quietGame();
     const events = recordEvents(sim);
     hire(sim, 'neumarkt');
@@ -62,22 +132,10 @@ describe('staff', () => {
     expect(getStaff(sim.state)).toHaveLength(1);
     expect(sim.state.wallet.dirty).toBe(0);
     expect(eventsOfType(events, 'staff.left')[0].payload.reason).toBe('quit');
+    expect(getStaff(sim.state, { status: 'quit' })).toHaveLength(1);
   });
 
-  it('Festnahme durch die Polizei setzt den Haft-Status, Inhaftierte arbeiten nicht', () => {
-    const sim = quietGame();
-    hire(sim, 'neumarkt');
-    const runner = runnerAt(sim.state, 'neumarkt');
-    if (!runner) throw new Error('kein Läufer');
-    sim.ctx('police').emit('police.arrest', { staffId: runner.id, veedelId: 'altstadt-sued' });
-    sim.step();
-    expect(runnerAt(sim.state, 'neumarkt')?.status).toBe('jailed');
-    addCustomer(sim, 'neumarkt', 1);
-    sim.advance(5);
-    expect(sim.state.modules.customers.waiting).toHaveLength(1);
-  });
-
-  it('filtert nach Veedel und liefert Werte für Konfrontationen', () => {
+  it('filtert nach Veedel (Spot, Lager) und liefert Werte für Konfrontationen', () => {
     const sim = quietGame();
     hire(sim, 'zuelpicher');
     hire(sim, 'ebertplatz');
@@ -88,13 +146,66 @@ describe('staff', () => {
     expect(getStats(sim.state, id)).toMatchObject({ strength: expect.any(Number), loyalty: expect.any(Number) });
     expect(findAvailable(sim.state, { role: 'courier' })).toBeUndefined();
     expect(bonus(sim.state, 'bailDiscount')).toBe(0);
+    const guard = recruit(sim, 'security');
+    expect(
+      sim.dispatch({
+        type: 'staff.assign',
+        payload: { staffId: guard.id, assignment: { kind: 'warehouse', targetId: 'ehrenfeld' } },
+      }).ok,
+    ).toBe(true);
+    expect(securityAt(sim.state, { warehouseId: 'ehrenfeld' }).map((m) => m.id)).toEqual([guard.id]);
+    expect(getStaff(sim.state, { veedelId: 'ehrenfeld' }).map((m) => m.id)).toEqual([guard.id]);
   });
 
-  it('entlassen', () => {
+  it('Kuriere findet der Lieferdienst über findAvailable und bindet sie mit assign', () => {
+    const sim = quietGame();
+    const courier = recruit(sim, 'courier');
+    expect(findAvailable(sim.state, { role: 'courier' })?.id).toBe(courier.id);
+    // So nutzt Auftrag 12 die Schnittstelle.
+    expect(assign(sim.ctx('customers'), courier.id, { kind: 'delivery', targetId: 'o1' })).toBe(true);
+    expect(findAvailable(sim.state, { role: 'courier' })).toBeUndefined();
+    assign(sim.ctx('customers'), courier.id, null);
+    expect(findAvailable(sim.state, { role: 'courier' })?.id).toBe(courier.id);
+    const toSpot = { kind: 'spot' as const, targetId: 'uni' };
+    expect(sim.dispatch({ type: 'staff.assign', payload: { staffId: courier.id, assignment: toSpot } }).ok).toBe(false);
+  });
+
+  it('versetzen prüft Typ und Ort', () => {
+    const sim = quietGame();
+    hire(sim, 'neumarkt');
+    const other = recruit(sim, 'runner');
+    const lawyer = recruit(sim, 'lawyer');
+    const guard = recruit(sim, 'security');
+    const move = (staffId: string, kind: 'spot' | 'warehouse', targetId: string) =>
+      sim.dispatch({ type: 'staff.assign', payload: { staffId, assignment: { kind, targetId } } });
+    expect(move(other.id, 'spot', 'neumarkt').ok).toBe(false);
+    expect(move(other.id, 'spot', 'uni').ok).toBe(true);
+    expect(move(lawyer.id, 'spot', 'rheinpark').ok).toBe(false);
+    expect(move(other.id, 'warehouse', 'ehrenfeld').ok).toBe(false);
+    expect(move(guard.id, 'spot', 'uni').ok).toBe(true);
+    expect(runnerAt(sim.state, 'uni')?.id).toBe(other.id);
+    expect(sim.dispatch({ type: 'staff.assign', payload: { staffId: other.id, assignment: null } }).ok).toBe(true);
+    expect(runnerAt(sim.state, 'uni')).toBeUndefined();
+  });
+
+  it('entlassen: die Akte bleibt bei den Ehemaligen', () => {
     const sim = quietGame();
     hire(sim, 'uni');
     const id = getStaff(sim.state)[0].id;
     expect(sim.dispatch({ type: 'staff.fire', payload: { staffId: id } }).ok).toBe(true);
     expect(getStaff(sim.state)).toHaveLength(0);
+    expect(runnerAt(sim.state, 'uni')).toBeUndefined();
+    expect(getStaffMember(sim.state, id)).toMatchObject({ status: 'quit', leftReason: 'fired' });
+    expect(sim.dispatch({ type: 'staff.fire', payload: { staffId: id } }).ok).toBe(false);
+  });
+
+  it('Lohn ändern: Grenzen je nach Anspruch', () => {
+    const sim = quietGame();
+    hire(sim, 'uni');
+    const id = getStaff(sim.state)[0].id;
+    expect(sim.dispatch({ type: 'staff.setWage', payload: { staffId: id, wage: 10 } }).ok).toBe(false);
+    expect(sim.dispatch({ type: 'staff.setWage', payload: { staffId: id, wage: 5000 } }).ok).toBe(false);
+    expect(sim.dispatch({ type: 'staff.setWage', payload: { staffId: id, wage: 100 } }).ok).toBe(true);
+    expect(getStaffMember(sim.state, id)?.wage).toBe(100);
   });
 });

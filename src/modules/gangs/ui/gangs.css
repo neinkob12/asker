@@ -1,0 +1,194 @@
+/* Gang-Übersicht, Dialoge und Karten-Marker. Nur Design-Tokens; die Gang-Farbe kommt als --gang-color. */
+
+.gangs-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.gang-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.gang-emblem {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-round);
+  background: var(--gang-color, var(--color-surface));
+  font-size: var(--font-size-sm);
+}
+.gang-stage {
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.gang-stage--1 {
+  color: var(--color-warn);
+}
+.gang-stage--2,
+.gang-stage--3 {
+  color: var(--color-bad);
+  font-weight: var(--font-weight-bold);
+}
+.gang-boss,
+.gang-style {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+}
+.gang-style {
+  color: var(--color-muted);
+  font-style: italic;
+}
+.gang-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+.gang-tag {
+  font-size: var(--font-size-xs);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-round);
+  border: 1px solid var(--color-line);
+  color: var(--color-text);
+}
+.gang-tag--weak {
+  color: var(--color-muted);
+  border-style: dashed;
+}
+.gang-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.gang-stats .ui-stat__value {
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+.gang-meter {
+  display: grid;
+  grid-template-columns: 96px 1fr 72px;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  margin-top: var(--space-2);
+}
+.gang-meter__value {
+  text-align: right;
+  color: var(--color-text);
+}
+.gang-lines {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  font-size: var(--font-size-sm);
+  color: var(--color-warn);
+}
+.gang-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+.gang-actions__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.gang-actions__label {
+  width: 100%;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+}
+.gang-actions .ui-button {
+  min-height: var(--touch-target);
+  font-size: var(--font-size-sm);
+}
+.gang-actions__note {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+.gang-dialog__lead {
+  margin-top: 0;
+}
+.gang-dialog__head {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+}
+.gang-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.gang-choice .ui-button {
+  min-height: var(--touch-target);
+}
+
+/* Karte */
+.gang-hq {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.gang-hq__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-round);
+  background: var(--gang-color);
+  border: 2px solid var(--color-marker-border);
+  box-shadow: var(--shadow-marker);
+  font-size: 15px;
+}
+.gang-push {
+  pointer-events: none;
+}
+.gang-push__ring {
+  display: block;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-round);
+  border: 3px solid var(--gang-color);
+  animation: gang-push 1.8s ease-out infinite;
+}
+@keyframes gang-push {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .gang-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .gang-stats .ui-stat__value {
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+  }
+  .gang-meter {
+    grid-template-columns: 84px 1fr 64px;
+  }
+}

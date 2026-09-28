@@ -1,0 +1,82 @@
+/* Hierarchie: Leutnant-Liste, Panel, Beförderung. Nur Tokens aus src/ui/styles/tokens.css. */
+
+.lt-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lt-row .ui-hint {
+  margin: 0;
+}
+.lt-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+}
+.lt-title {
+  margin: var(--space-4) 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.lt-setting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+.lt-setting .ui-segmented {
+  flex-wrap: wrap;
+}
+.lt-setting .ui-hint {
+  margin: 0;
+}
+.lt-setting--inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.lt-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--color-muted);
+}
+.lt-log time {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  margin-right: var(--space-2);
+}
+.lt-promote {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.lt-promote__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.lt-select {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--touch-target);
+  padding: var(--space-1) var(--space-3);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: var(--font-size-sm);
+}
+.lt-spot {
+  margin-top: var(--space-3);
+}

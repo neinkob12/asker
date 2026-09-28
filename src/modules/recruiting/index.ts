@@ -1,11 +1,78 @@
 // Rekrutierung: Bewerber-Pool und Kontakte.
-// Stand Fundament: leerer Pool mit minimaler API. Auftrag 13 füllt ihn.
+// In regelmäßigen Abständen kommen neue Bewerber mit unterschiedlichen Werten. Seltener tauchen Kontakte auf:
+// Empfehlungen von loyalen Mitarbeitern, Kumpels von Stammkunden, Leute aus dem Milieu oder aus dem Knast.
+// Kontakte sind oft besser. Vor der Einstellung sieht man nur einen Teil der Werte, der Rest zeigt sich
+// mit der Zeit (siehe staff: knownStats, revealStat).
 //
 // Öffentliche API:
-//   getCandidates(state)
+//   getCandidates(state), getCandidate(state, id), getPool(state), getContacts(state), searchReadyAt(state),
+//   SOURCE_NAMES, SEARCH_COST
+// Befehle: 'recruiting.hire', 'recruiting.decline', 'recruiting.search'
+// Ereignisse: 'recruiting.candidateArrived', 'recruiting.hired'
 
-import { defineModule, type GameState } from '../../core';
-import type { StaffRole, StaffStats } from '../staff';
+import {
+  type CommandMeta,
+  type CommandResult,
+  type Contact,
+  type Ctx,
+  clock,
+  defineModule,
+  formatEuro,
+  type GameState,
+  journal,
+  messages,
+  wallet,
+} from '../../core';
+import { getRegular } from '../customers';
+import { getSpot } from '../spots';
+import {
+  addLoyalty,
+  DEFAULT_STATS,
+  enlist,
+  generateProfile,
+  getStaff,
+  getStaffMember,
+  isEmployed,
+  type RecruitProfile,
+  ROLE_INFO,
+  roleName,
+  STAT_KEYS,
+  type StaffAssignment,
+  type StaffRole,
+  type StaffStats,
+  type StatKey,
+  staffContact,
+} from '../staff';
+import {
+  CANDIDATE_LIFETIME,
+  CONTACT_HIRE_COST_DAYS,
+  CONTACT_LEVEL,
+  CONTACT_LIFETIME,
+  CONTACT_MAX,
+  CONTACT_QUALITY,
+  EVENT_CHANCE,
+  EVENT_INTROS,
+  EVENT_ROLE_WEIGHTS,
+  HIRE_COST_DAYS,
+  JAIL_CONTACT_CHANCE,
+  POOL_INTERVAL,
+  POOL_LEVEL_2_CHANCE,
+  POOL_MAX,
+  POOL_ROLE_WEIGHTS,
+  POOL_START,
+  REFERRAL_CHANCE,
+  REFERRAL_MIN_LOYALTY,
+  REGULAR_CHANCE_PER_SALE,
+  SEARCH_COOLDOWN,
+  SEARCH_COST,
+  SEARCH_COUNT,
+  VISIBLE_STATS,
+} from './config';
+
+export { SEARCH_COST, SOURCE_NAMES } from './config';
+
+/** Woher ein Kandidat kommt: Pool (Bewerbung) oder Kontakt (Empfehlung, Stammkunde, Ereignis). */
+export type CandidateSource = 'pool' | 'referral' | 'regular' | 'event';
 
 export interface Candidate {
   id: string;
@@ -13,28 +80,375 @@ export interface Candidate {
   role: StaffRole;
   /** Vor der Einstellung sichtbare Werte (nur ein Teil). */
   visibleStats: Partial<StaffStats>;
+  /** Verlangter Tageslohn. */
   wage: number;
   /** Bis dahin ist der Kandidat verfügbar (Spielminute). */
   expiresAt: number;
+  age: number;
+  background: string;
+  level: number;
+  portrait: string | null;
+  source: CandidateSource;
+  /** Wie der Kontakt zustande kam, z.B. "Empfohlen von Kevin K.". */
+  note: string;
+  /** Handgeld bei der Einstellung. */
+  hireCost: number;
+  /** Alle Werte. Die Oberfläche zeigt davon nur visibleStats. */
+  stats: StaffStats;
+  arrivedAt: number;
+  /** Wer ihn empfohlen hat (Mitarbeiter-ID). */
+  referrerId: string | null;
 }
 
 export interface RecruitingState {
+  /** Bewerber und Kontakte, älteste zuerst. */
   candidates: Candidate[];
+  /** Nächste Bewerber kommen um (Spielminute). */
+  nextPoolAt: number;
+  /** Ab dann kann wieder rumgefragt werden. */
+  searchReadyAt: number;
 }
 
 declare module '../../core' {
   interface ModuleStates {
     recruiting: RecruitingState;
   }
+  interface GameCommands {
+    /** Kandidaten einstellen (Handgeld zahlen). Optional direkt einsetzen. */
+    'recruiting.hire': { candidateId: string; assignment?: StaffAssignment | null };
+    'recruiting.decline': { candidateId: string };
+    /** Rumfragen: kostet Geld, bringt sofort neue Bewerber. */
+    'recruiting.search': Record<string, never>;
+  }
+  interface GameEvents {
+    'recruiting.candidateArrived': { candidateId: string; source: CandidateSource };
+    'recruiting.hired': { candidateId: string; staffId: string };
+  }
 }
 
+// --- Lesen ---
+
+/** Alle Kandidaten: Bewerber aus dem Pool und Kontakte. */
 export function getCandidates(state: GameState): readonly Candidate[] {
   return state.modules.recruiting.candidates;
 }
 
+export function getCandidate(state: GameState, id: string): Candidate | undefined {
+  return state.modules.recruiting.candidates.find((c) => c.id === id);
+}
+
+/** Bewerber aus dem Pool (noch verfügbar). */
+export function getPool(state: GameState): Candidate[] {
+  return state.modules.recruiting.candidates.filter((c) => c.source === 'pool' && c.expiresAt > state.time);
+}
+
+/** Kontakte: Empfehlungen, Stammkunden, Ereignisse (noch verfügbar). */
+export function getContacts(state: GameState): Candidate[] {
+  return state.modules.recruiting.candidates.filter((c) => c.source !== 'pool' && c.expiresAt > state.time);
+}
+
+export function searchReadyAt(state: GameState): number {
+  return state.modules.recruiting.searchReadyAt;
+}
+
+// --- Kandidaten erzeugen ---
+
+function pickWeighted<K extends string>(ctx: Ctx, weights: Record<K, number>): K {
+  const entries = Object.entries(weights) as [K, number][];
+  let roll = ctx.random() * entries.reduce((sum, [, w]) => sum + w, 0);
+  for (const [key, weight] of entries) {
+    roll -= weight;
+    if (roll < 0) return key;
+  }
+  return entries[entries.length - 1][0];
+}
+
+/** Welche Werte man vorher sieht: ein wichtiger Wert des Typs, dann zufällige. Loyalität nur bei Empfehlungen. */
+function pickVisible(ctx: Ctx, role: StaffRole, source: CandidateSource): StatKey[] {
+  const chosen: StatKey[] = source === 'referral' ? ['loyalty'] : [];
+  chosen.push(ctx.pick(ROLE_INFO[role].keyStats.filter((k) => k !== 'loyalty')));
+  while (chosen.length < VISIBLE_STATS[source]) {
+    const rest = STAT_KEYS.filter((k) => k !== 'loyalty' && !chosen.includes(k));
+    if (rest.length === 0) break;
+    chosen.push(ctx.pick(rest));
+  }
+  return STAT_KEYS.filter((k) => chosen.includes(k));
+}
+
+interface CandidateOptions {
+  quality?: number;
+  level?: number;
+  note: string;
+  referrerId?: string | null;
+}
+
+function addCandidate(ctx: Ctx, role: StaffRole, source: CandidateSource, options: CandidateOptions): Candidate {
+  const profile = generateProfile(ctx, role, { quality: options.quality ?? 0, level: options.level ?? 1 });
+  const visible = pickVisible(ctx, role, source);
+  const days = source === 'pool' ? HIRE_COST_DAYS : CONTACT_HIRE_COST_DAYS;
+  const lifetime = source === 'pool' ? CANDIDATE_LIFETIME : CONTACT_LIFETIME;
+  const candidate: Candidate = {
+    id: `c${ctx.nextId()}`,
+    name: profile.name,
+    role,
+    visibleStats: Object.fromEntries(visible.map((k) => [k, profile.stats[k]])),
+    wage: profile.wage,
+    expiresAt: ctx.now + ctx.randomInt(lifetime[0], lifetime[1]),
+    age: profile.age,
+    background: profile.background,
+    level: profile.level,
+    portrait: profile.portrait,
+    source,
+    note: options.note,
+    hireCost: Math.round((profile.wage * days) / 10) * 10,
+    stats: profile.stats,
+    arrivedAt: ctx.now,
+    referrerId: options.referrerId ?? null,
+  };
+  ctx.state.modules.recruiting.candidates.push(candidate);
+  ctx.emit('recruiting.candidateArrived', { candidateId: candidate.id, source });
+  return candidate;
+}
+
+function addPoolCandidate(ctx: Ctx): Candidate {
+  const role = pickWeighted(ctx, POOL_ROLE_WEIGHTS);
+  const level = ctx.chance(POOL_LEVEL_2_CHANCE) ? 2 : 1;
+  return addCandidate(ctx, role, 'pool', { level, note: 'Hat sich auf deinen Aushang gemeldet.' });
+}
+
+/** Kontakte sind besser als der Durchschnitt und haben schon Erfahrung. */
+function addContact(
+  ctx: Ctx,
+  role: StaffRole,
+  source: CandidateSource,
+  note: string,
+  referrerId: string | null = null,
+): Candidate | null {
+  if (getContacts(ctx.state).length >= CONTACT_MAX) return null;
+  const quality = CONTACT_QUALITY[0] + ctx.random() * (CONTACT_QUALITY[1] - CONTACT_QUALITY[0]);
+  const level = ctx.randomInt(CONTACT_LEVEL[0], CONTACT_LEVEL[1]);
+  return addCandidate(ctx, role, source, { quality, level, note, referrerId });
+}
+
+/** Antwortmöglichkeiten für die Nachricht zu einem Kontakt. */
+function contactOptions(c: Candidate) {
+  return [
+    {
+      id: 'hire',
+      label: `Einstellen (${formatEuro(c.hireCost)} Handgeld)`,
+      command: { type: 'recruiting.hire' as const, payload: { candidateId: c.id } },
+      reply: 'Schick vorbei, ich stell ein.',
+    },
+    {
+      id: 'decline',
+      label: 'Kein Bedarf',
+      command: { type: 'recruiting.decline' as const, payload: { candidateId: c.id } },
+      reply: 'Kein Bedarf.',
+    },
+  ];
+}
+
+function announce(ctx: Ctx, c: Candidate, contact: Contact, text: string): void {
+  messages.send(ctx, { contact, text, options: contactOptions(c), expiresIn: c.expiresAt - ctx.now });
+}
+
+const describe = (c: Candidate) => `${c.name}, ${c.age}, ${roleName(c.role)}`;
+
+/** Empfehlung eines loyalen Mitarbeiters (höchstens eine pro Tag). */
+function maybeReferral(ctx: Ctx): void {
+  const loyal = getStaff(ctx.state, { status: 'active' })
+    .filter((m) => m.stats.loyalty >= REFERRAL_MIN_LOYALTY)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  for (const m of loyal) {
+    if (!ctx.chance(REFERRAL_CHANCE)) continue;
+    // Man empfiehlt Leute, die einem ähnlich sind, manchmal auch was ganz anderes.
+    const role = ctx.chance(0.6) ? m.role : pickWeighted(ctx, POOL_ROLE_WEIGHTS);
+    const c = addContact(ctx, role, 'referral', `Empfohlen von ${m.name}.`, m.id);
+    if (c) {
+      announce(
+        ctx,
+        c,
+        staffContact(m),
+        `Chef, ich kenn da wen: ${describe(c)}. ${c.background} Soll ich das klarmachen?`,
+      );
+    }
+    return;
+  }
+}
+
+/** Jemand aus dem Milieu meldet sich. */
+function maybeEventContact(ctx: Ctx): void {
+  if (!ctx.chance(EVENT_CHANCE)) return;
+  const c = addContact(ctx, pickWeighted(ctx, EVENT_ROLE_WEIGHTS), 'event', 'Hat sich von selbst gemeldet.');
+  if (!c) return;
+  const intro = ctx.pick(EVENT_INTROS).replace('{name}', c.name);
+  announce(ctx, c, { id: `recruit:${c.id}`, name: c.name, kind: 'other' }, `${intro} (${roleName(c.role)})`);
+}
+
+/** Ein Stammkunde (customers) kennt jemanden. Charismatische Verkäufer bringen öfter Kontakte. */
+function maybeRegular(ctx: Ctx, regularId: string, sellerId: string | null): void {
+  const regular = getRegular(ctx.state, regularId);
+  if (regular?.status !== 'active') return;
+  const seller = sellerId ? getStaffMember(ctx.state, sellerId) : undefined;
+  const factor = seller ? 0.5 + seller.stats.charisma / 100 : 1;
+  if (!ctx.chance(REGULAR_CHANCE_PER_SALE * factor)) return;
+  const spot = getSpot(ctx.state, regular.spotId);
+  const where = spot ? ` vom ${spot.name}` : '';
+  const c = addContact(
+    ctx,
+    pickWeighted(ctx, POOL_ROLE_WEIGHTS),
+    'regular',
+    `Kumpel von Stammkunde ${regular.name}${where}.`,
+  );
+  if (!c) return;
+  announce(
+    ctx,
+    c,
+    // Derselbe Kontakt wie im Kundenmodul (Lieferdienst), damit es ein Chat bleibt.
+    { id: `customer:${regular.id}`, name: regular.name, kind: 'customer' },
+    `Ey, kurze Frage: Ein Kumpel sucht Arbeit. ${describe(c)}. Soll ich die Nummer weitergeben?`,
+  );
+}
+
+/** Wer aus der Haft kommt, hat dort manchmal jemanden kennengelernt. */
+function maybeJailContact(ctx: Ctx, staffId: string): void {
+  const m = getStaffMember(ctx.state, staffId);
+  if (!m || !ctx.chance(JAIL_CONTACT_CHANCE)) return;
+  const c = addContact(ctx, pickWeighted(ctx, EVENT_ROLE_WEIGHTS), 'event', `Hat ${m.name} im Knast kennengelernt.`);
+  if (!c) return;
+  announce(
+    ctx,
+    c,
+    staffContact(m),
+    `Bin wieder draußen. Drinnen hab ich wen kennengelernt: ${describe(c)}. Taugt was.`,
+  );
+}
+
+// --- Ablauf ---
+
+function tick(ctx: Ctx): void {
+  const s = ctx.state.modules.recruiting;
+  s.candidates = s.candidates.filter((c) => c.expiresAt > ctx.now);
+  if (ctx.now < s.nextPoolAt) return;
+  const count = ctx.randomInt(1, 2);
+  for (let i = 0; i < count && getPool(ctx.state).length < POOL_MAX; i++) addPoolCandidate(ctx);
+  s.nextPoolAt = ctx.now + ctx.randomInt(POOL_INTERVAL[0], POOL_INTERVAL[1]);
+}
+
+function profileOf(c: Candidate): RecruitProfile {
+  return {
+    name: c.name,
+    role: c.role,
+    age: c.age,
+    background: c.background,
+    stats: { ...c.stats },
+    level: c.level,
+    wage: c.wage,
+    portrait: c.portrait,
+  };
+}
+
+function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null, meta: CommandMeta): CommandResult {
+  const c = getCandidate(ctx.state, candidateId);
+  if (!c || c.expiresAt <= ctx.now) return { ok: false, reason: 'Die Person ist nicht mehr zu haben.' };
+  if (!wallet.pay(ctx, c.hireCost, 'dirty', `Handgeld ${c.name}`)) {
+    return { ok: false, reason: `Nicht genug Geld für das Handgeld (${formatEuro(c.hireCost)}).` };
+  }
+  const s = ctx.state.modules.recruiting;
+  s.candidates = s.candidates.filter((x) => x.id !== c.id);
+  const member = enlist(ctx, profileOf(c), {
+    origin: c.source,
+    knownStats: STAT_KEYS.filter((k) => c.visibleStats[k] !== undefined),
+    note: c.note,
+  });
+  if (c.referrerId && isEmployed(ctx.state, c.referrerId)) addLoyalty(ctx, c.referrerId, 3);
+  ctx.emit('recruiting.hired', { candidateId: c.id, staffId: member.id });
+  if (assignment) ctx.dispatch({ type: 'staff.assign', payload: { staffId: member.id, assignment } }, meta);
+  return { ok: true, data: { staffId: member.id } };
+}
+
+function search(ctx: Ctx): CommandResult {
+  const s = ctx.state.modules.recruiting;
+  if (ctx.now < s.searchReadyAt) {
+    return { ok: false, reason: `Du hast gerade erst rumgefragt. Wieder ab ${clock.formatTime(s.searchReadyAt)}.` };
+  }
+  if (!wallet.pay(ctx, SEARCH_COST, 'dirty', 'Rumgefragt')) return { ok: false, reason: 'Nicht genug Geld.' };
+  for (let i = 0; i < SEARCH_COUNT; i++) addPoolCandidate(ctx);
+  s.searchReadyAt = ctx.now + SEARCH_COOLDOWN;
+  journal.add(ctx, `Rumgefragt: ${SEARCH_COUNT} neue Bewerber.`);
+  return { ok: true };
+}
+
+// --- Migration vom Fundament (Version 1) ---
+
+interface CandidateV1 {
+  id: string;
+  name: string;
+  role: StaffRole;
+  visibleStats: Partial<StaffStats>;
+  wage: number;
+  expiresAt: number;
+}
+
+interface RecruitingStateV1 {
+  candidates: CandidateV1[];
+}
+
+export function migrateRecruitingV1(old: RecruitingStateV1, state: GameState): RecruitingState {
+  return {
+    candidates: old.candidates.map((c) => ({
+      ...c,
+      age: 25,
+      background: '',
+      level: 1,
+      portrait: null,
+      source: 'pool',
+      note: '',
+      hireCost: c.wage * HIRE_COST_DAYS,
+      stats: { ...DEFAULT_STATS, ...c.visibleStats },
+      arrivedAt: state.time,
+      referrerId: null,
+    })),
+    nextPoolAt: state.time,
+    searchReadyAt: 0,
+  };
+}
+
 export default defineModule({
   id: 'recruiting',
-  version: 1,
+  version: 2,
   dependsOn: ['staff'],
-  init: () => ({ candidates: [] }),
+  init: (ctx) => {
+    const state: RecruitingState = { candidates: [], nextPoolAt: 0, searchReadyAt: 0 };
+    // Die ersten Bewerber warten schon (addCandidate schreibt in den eigenen Zustand).
+    ctx.state.modules.recruiting = state;
+    for (let i = 0; i < POOL_START; i++) addPoolCandidate(ctx);
+    state.nextPoolAt = ctx.now + ctx.randomInt(POOL_INTERVAL[0], POOL_INTERVAL[1]);
+    return state;
+  },
+  tick,
+  tickEvery: 60,
+  commands: {
+    'recruiting.hire': (ctx, { candidateId, assignment }, meta) => hire(ctx, candidateId, assignment ?? null, meta),
+    'recruiting.decline': (ctx, { candidateId }) => {
+      const s = ctx.state.modules.recruiting;
+      if (!getCandidate(ctx.state, candidateId)) return { ok: false, reason: 'Die Person ist nicht mehr zu haben.' };
+      s.candidates = s.candidates.filter((c) => c.id !== candidateId);
+      return { ok: true };
+    },
+    'recruiting.search': (ctx) => search(ctx),
+  },
+  on: {
+    'clock.dayStarted': (ctx) => {
+      maybeReferral(ctx);
+      maybeEventContact(ctx);
+    },
+    'sale.completed': (ctx, { regularId, sellerId }) => {
+      if (regularId) maybeRegular(ctx, regularId, sellerId);
+    },
+    'staff.statusChanged': (ctx, { staffId, from, to }) => {
+      if (from === 'jailed' && to === 'active') maybeJailContact(ctx, staffId);
+    },
+  },
+  migrations: { 2: migrateRecruitingV1 },
 });

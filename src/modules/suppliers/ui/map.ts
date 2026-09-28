@@ -1,10 +1,12 @@
-// Route Hafen → Lager, Hafen-Marker und Transporter, die entlang der Luftlinie fahren.
+// Routen Lieferant → Lager, Lieferanten-Marker und Transporter, die entlang der Luftlinie fahren (echte Routen später).
 
 import type { GeoJSONSource, Marker } from 'maplibre-gl';
-import { formatAmount, lerpLngLat } from '../../../core';
+import { type GameState, lerpLngLat } from '../../../core';
 import { addHtmlMarker, el, type MapLayer } from '../../../map';
-import { DEFAULT_WAREHOUSE, getWarehouse } from '../../goods';
+import { DEFAULT_WAREHOUSE, formatProductAmount, getWarehouse, productName } from '../../goods';
 import { getSuppliers, shipmentProgress, shipmentsInTransit } from '../index';
+
+const LATE_CLASS = 'is-late';
 
 const SOURCE = 'suppliers.routes';
 
@@ -22,41 +24,53 @@ export const suppliersLayer: MapLayer = {
       paint: { 'line-color': '#7CFC9A', 'line-width': 2.5, 'line-dasharray': [2, 2], 'line-opacity': 0.8 },
     });
 
-    let drawn = false;
-    const drawStatic = () => {
+    // Lieferanten-Marker einmal anlegen.
+    let placed = false;
+    const placeSuppliers = () => {
       const state = ctx.getState();
-      if (!state || drawn) return;
-      drawn = true;
-      const warehouse = getWarehouse(state, DEFAULT_WAREHOUSE);
-      const features = [];
+      if (!state || placed) return;
+      placed = true;
       for (const supplier of getSuppliers(state)) {
         addHtmlMarker(map, {
           position: supplier,
-          className: 'map-place map-place--port',
+          className: `map-place map-place--${supplier.kind}`,
           anchor: 'bottom',
           children: [el('span', 'map-place-icon'), el('span', 'map-place-name', supplier.name)],
         });
-        if (warehouse) {
-          features.push({
-            type: 'Feature' as const,
-            properties: {},
-            geometry: {
-              type: 'LineString' as const,
-              coordinates: [
-                [supplier.lng, supplier.lat],
-                [warehouse.lng, warehouse.lat],
-              ],
-            },
-          });
-        }
+      }
+    };
+    placeSuppliers();
+
+    // Routen nur für Lieferanten, von denen gerade etwas unterwegs ist.
+    let routesKey = '';
+    const drawRoutes = (state: GameState) => {
+      const active = [...new Set(shipmentsInTransit(state).map((s) => s.supplierId))].sort();
+      const key = active.join(',');
+      if (key === routesKey) return;
+      routesKey = key;
+      const warehouse = getWarehouse(state, DEFAULT_WAREHOUSE);
+      const features = [];
+      for (const supplier of getSuppliers(state)) {
+        if (!warehouse || !active.includes(supplier.id)) continue;
+        features.push({
+          type: 'Feature' as const,
+          properties: {},
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: [
+              [supplier.lng, supplier.lat],
+              [warehouse.lng, warehouse.lat],
+            ],
+          },
+        });
       }
       (map.getSource(SOURCE) as GeoJSONSource).setData({ type: 'FeatureCollection', features });
     };
-    drawStatic();
 
     return {
       update(state) {
-        drawStatic();
+        placeSuppliers();
+        drawRoutes(state);
         const active = new Set(shipmentsInTransit(state).map((s) => s.id));
         for (const [id, marker] of trucks) {
           if (!active.has(id)) {
@@ -74,11 +88,12 @@ export const suppliersLayer: MapLayer = {
             marker = addHtmlMarker(map, {
               position: pos,
               className: 'truck-marker',
-              title: `${formatAmount(s.amount)} unterwegs`,
+              title: `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)} unterwegs`,
             }).marker;
             trucks.set(s.id, marker);
           }
           marker.setLngLat([pos.lng, pos.lat]);
+          marker.getElement().classList.toggle(LATE_CLASS, s.problem === 'delayed' && !!s.problemRevealed);
         }
       },
     };
