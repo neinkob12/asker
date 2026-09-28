@@ -120,13 +120,9 @@ function upkeepAgreements(ctx: Ctx, gang: Gang, s: GangStatus): void {
   if (s.tribute && s.tribute.until <= now) {
     s.tribute = null;
     ctx.emit('gang.diplomacyChanged', { gangId: gang.id, kind: 'tribute', active: false });
-    say(
-      ctx,
-      gang,
-      'tributeDue',
-      { tribute: formatEuro(tributeAmount(ctx.state, gang.id)) },
-      demandOptions(ctx, gang, s),
-    );
+    // Erst die Optionen: Sie legen den Preis fest, den der Text nennt.
+    const options = demandOptions(ctx, gang, s);
+    say(ctx, gang, 'tributeDue', { tribute: formatEuro(tributeAmount(ctx.state, gang.id)) }, options);
   }
   if (s.alliance && s.alliance.until <= now) {
     const enemy = getGang(ctx.state, s.alliance.againstGangId);
@@ -384,13 +380,8 @@ function escalate(ctx: Ctx, gang: Gang, s: GangStatus): void {
     say(ctx, gang, 'warning', { veedel });
   } else if (s.stage === 2) {
     journal.add(ctx, `${gang.name} droht dir.`, 'bad');
-    say(
-      ctx,
-      gang,
-      'threat',
-      { veedel, tribute: formatEuro(tributeAmount(ctx.state, gang.id)) },
-      demandOptions(ctx, gang, s),
-    );
+    const options = demandOptions(ctx, gang, s);
+    say(ctx, gang, 'threat', { veedel, tribute: formatEuro(tributeAmount(ctx.state, gang.id)) }, options);
   } else if (s.stage === 3) {
     journal.add(ctx, `${gang.name} hat genug von dir. Rechne mit Überfällen.`, 'bad');
     say(ctx, gang, 'war', { veedel }, demandOptions(ctx, gang, s));

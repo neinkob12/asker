@@ -572,8 +572,9 @@ function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome): void
   if (effects && !encounter.playerKilled) applyEffects(ctx, encounter, effects, result);
 
   const vars = textVars(encounter);
+  const lastWords = encounter.log.at(-1)?.text ?? 'Du bist nicht mehr aufgestanden.';
   const headline = encounter.playerKilled
-    ? `${kind?.name ?? 'Konfrontation'} ${encounter.place}: Du bist nicht mehr aufgestanden.`
+    ? `${kind?.name ?? 'Konfrontation'} ${encounter.place}. ${lastWords}`
     : fillText(effects?.text ?? DEFAULT_TEXT[outcome], vars);
   result.text = describeResult(encounter, result, headline);
   encounter.result = result;

@@ -12,7 +12,7 @@
 //   getGangs(state), getGang(state, id), getGangStatus(state, id), gangVeedel(state, id), veedelGang(state, veedelId),
 //   gangPower(state, id),
 //   playerPower(state), isGangBroken, hasCeasefire, paysTribute, isAllied, isAtPeace, ceasefireCost,
-//   tributeAmount, protectionAmount, gangContact(gang), STAGE_NAMES, GANG_SPOT_MIN_INFLUENCE, ALLIANCE_COST
+//   tributeAmount, protectionAmount, gangContact(gang), STAGE_NAMES, GANG_SPOT_MIN_INFLUENCE, ALLIANCE_COST, WARN_AT
 // Befehle: 'gangs.ceasefire', 'gangs.payTribute', 'gangs.refuse', 'gangs.demandProtection', 'gangs.collect',
 //   'gangs.releaseProtection', 'gangs.ally', 'gangs.attack', 'gangs.acceptOffer'
 // Ereignisse: 'gang.pushStarted', 'gang.pushEnded', 'gang.escalated', 'gang.raidStarted', 'gang.diplomacyChanged',
@@ -38,7 +38,7 @@ import {
 import { onControlChanged, onEncounterResolved, onPoliceRaid, onSale, onTipOff } from './reactions';
 import { type GangStage, type GangsState, initialGangsState } from './state';
 
-export { ALLIANCE_COST, GANG_SPOT_MIN_INFLUENCE } from './config';
+export { ALLIANCE_COST, GANG_SPOT_MIN_INFLUENCE, WARN_AT } from './config';
 export type { Gang, GangTraits } from './data';
 export {
   ceasefireCost,
