@@ -15,7 +15,7 @@ export function MapView() {
     runtime.map = map;
     return () => {
       runtime.map = null;
-      map.map.remove();
+      map.destroy();
     };
   }, [runtime]);
 

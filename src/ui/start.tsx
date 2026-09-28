@@ -1,7 +1,16 @@
 // Start der Oberfläche: Sitzung anlegen, Oberflächen der Module laden, Autosave fortsetzen oder neues Spiel.
 
 import { render } from 'preact';
-import { animationFrameScheduler, browserStorage, type GameMode, GameSession, type ModuleDefinition } from '../core';
+import { audio } from '../audio';
+import {
+  animationFrameScheduler,
+  browserStorage,
+  clock,
+  type GameMode,
+  GameSession,
+  type ModuleDefinition,
+} from '../core';
+import { dayPhase } from '../map/daylight';
 import { registerBuiltins } from './builtin';
 import { dialogs } from './registry';
 import { UiRuntime } from './runtime';
@@ -22,8 +31,18 @@ declare global {
 
 export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]): UiRuntime {
   registerBuiltins();
-  const session = new GameSession({ modules, storage: browserStorage(), scheduler: animationFrameScheduler() });
-  const runtime = new UiRuntime(session);
+  const storage = browserStorage();
+  const session = new GameSession({ modules, storage, scheduler: animationFrameScheduler() });
+  const runtime = new UiRuntime(session, storage);
+
+  // Ton: Einstellungen laden, Start nach der ersten Interaktion, Musik-Stimmung folgt der Spieluhr.
+  audio.init(storage);
+  audio.attach(document);
+  runtime.subscribe(() => {
+    const state = runtime.state;
+    if (state) audio.setMood(dayPhase(clock.minuteOfDay(state.time)));
+  });
+  bindClickSound();
 
   // ?neu=normal|hardcore&seed=123 startet sofort ein frisches Spiel (praktisch für Screenshots und Tests).
   const params = new URLSearchParams(window.location.search);
@@ -49,6 +68,19 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
   return runtime;
 }
 
+/** Leises Klicken bei Knöpfen der Oberfläche. */
+function bindClickSound(): void {
+  document.addEventListener(
+    'click',
+    (e) => {
+      const target = (e.target as HTMLElement | null)?.closest?.('button');
+      if (!target || target.disabled) return;
+      audio.play(target.closest('.phone') ? 'tap' : 'click', { volume: 0.35 });
+    },
+    true,
+  );
+}
+
 function bindKeys(runtime: UiRuntime): void {
   document.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement | null;
@@ -63,6 +95,7 @@ function bindKeys(runtime: UiRuntime): void {
       else if (ui.dialog) {
         if (dialogs.get(ui.dialog.id)?.dismissable !== false) api.closeDialog();
       } else if (ui.panel) api.closePanel();
+      else if (ui.notification) api.dismissNotification();
       else if (ui.phone.open) api.closePhone();
     }
   });

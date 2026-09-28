@@ -1,4 +1,5 @@
 import type { ComponentType } from 'preact';
+import { Button, Icon, IconButton } from '../components';
 import { useRuntime } from '../hooks';
 import { dialogs, panels } from '../registry';
 
@@ -12,15 +13,21 @@ export function PanelHost() {
   if (!definition) return null;
   const Component = definition.component as ComponentType<unknown>;
   const props = ui.panel.props as never;
+  const title = definition.title(props, state);
   return (
-    <section class="shell-panel" aria-label={definition.title(props, state)}>
+    <section class="shell-panel" aria-label={title}>
       <header class="shell-panel__head">
-        <h2>{definition.title(props, state)}</h2>
-        <button type="button" class="ui-button ui-button--small" onClick={api.closePanel}>
-          Schließen
-        </button>
+        <div class="shell-panel__heading">
+          <span class="shell-panel__kicker">
+            <Icon name="target" /> Ziel erfasst
+          </span>
+          <h2>{title}</h2>
+        </div>
+        <IconButton icon="close" label="Schließen" onClick={api.closePanel} />
       </header>
-      <Component key={`${ui.panel.id}:${JSON.stringify(ui.panel.props)}`} {...(props as object)} />
+      <div class="shell-panel__body">
+        <Component key={`${ui.panel.id}:${JSON.stringify(ui.panel.props)}`} {...(props as object)} />
+      </div>
     </section>
   );
 }
@@ -35,13 +42,16 @@ export function DialogHost() {
   return <Component {...(ui.dialog.props as object)} />;
 }
 
+const TOAST_ICONS = { info: 'info', good: 'check', bad: 'alert' } as const;
+
 export function Toasts() {
   const { ui } = useRuntime();
   return (
     <div class="shell-toasts" role="status" aria-live="polite">
       {ui.toasts.map((t) => (
         <div key={t.id} class={`shell-toast shell-toast--${t.kind}`}>
-          {t.text}
+          <Icon name={TOAST_ICONS[t.kind]} class="shell-toast__icon" />
+          <span>{t.text}</span>
         </div>
       ))}
     </div>
@@ -53,11 +63,12 @@ export function PickBanner() {
   const { ui, api } = useRuntime();
   if (!ui.picking) return null;
   return (
-    <div class="shell-pick">
+    <div class="shell-pick" role="status">
+      <Icon name="target" class="shell-pick__icon" />
       <span>{ui.picking.prompt}</span>
-      <button type="button" class="ui-button ui-button--small" onClick={api.cancelPick}>
+      <Button small onClick={api.cancelPick}>
         Abbrechen
-      </button>
+      </Button>
     </div>
   );
 }

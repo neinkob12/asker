@@ -1,22 +1,41 @@
 // Gemeinsame Bausteine. Module bauen ihre Oberflächen nur hieraus (und aus einfachem HTML mit Tokens).
-// Auftrag 14 ändert den Look über Design-Tokens und das Innere der Bausteine; Props werden nur erweitert.
+// Der Look kommt aus den Design-Tokens (styles/tokens.css) und components.css; Props werden nur erweitert.
 
 import './components.css';
 
-export { Button, type ButtonProps, type ButtonVariant, SegmentedControl, type SegmentedControlProps } from './Button';
-export { Dialog, type DialogProps } from './Dialog';
 export {
+  Button,
+  type ButtonProps,
+  type ButtonVariant,
+  IconButton,
+  type IconButtonProps,
+  SegmentedControl,
+  type SegmentedControlProps,
+} from './Button';
+export { Dialog, type DialogProps } from './Dialog';
+export { Icon, type IconProps } from './Icon';
+export { ICONS, type IconName, isIconName } from './icons';
+export {
+  Avatar,
+  type AvatarProps,
   Badge,
   Card,
   type CardProps,
   Empty,
   Hint,
+  initials,
   KeyValue,
   List,
   ListItem,
   type ListItemProps,
   ProgressBar,
   type ProgressBarProps,
+  Slider,
+  type SliderProps,
   Stat,
+  Tag,
+  Toggle,
+  type ToggleProps,
+  type Tone,
 } from './Layout';
 export { type TabItem, Tabs, type TabsProps } from './Tabs';

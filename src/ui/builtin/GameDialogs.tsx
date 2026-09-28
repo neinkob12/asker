@@ -42,6 +42,8 @@ export function NewGameDialog(props: { firstStart?: boolean }) {
   return (
     <Dialog
       title="Neues Spiel"
+      kicker="Köln Tycoon · Neuer Durchgang"
+      icon="target"
       onClose={close}
       actions={
         <>
@@ -125,7 +127,7 @@ export function SavesDialog() {
   };
 
   return (
-    <Dialog title="Spielstände" onClose={api.closeDialog} size="wide">
+    <Dialog title="Spielstände" icon="save" onClose={api.closeDialog} size="wide">
       <List>
         {[AUTOSAVE_SLOT, ...MANUAL_SLOTS].map((slot, i) => {
           const info = bySlot.get(slot);
@@ -194,6 +196,9 @@ export function GameOverDialog() {
   return (
     <Dialog
       title="Game Over"
+      icon="skull"
+      tone="bad"
+      kicker={over.reason === 'killed' ? 'Tot' : 'Pleite'}
       actions={
         <>
           {!hardcore && <Button onClick={() => api.openDialog('core.saves', {})}>Spielstand laden</Button>}
@@ -227,6 +232,8 @@ export function WonDialog() {
   return (
     <Dialog
       title="Köln gehört dir"
+      icon="crown"
+      kicker="Kampagne gewonnen"
       onClose={api.closeDialog}
       actions={<Button onClick={api.closeDialog}>Weiterspielen</Button>}
     >

@@ -18,8 +18,12 @@ export interface DialogRegistry {}
  * Slots: benannte Stellen, an denen andere Module Inhalte einhängen, z.B. 'spots.spotPanel'.
  * Name → Props. Tabs ohne eigene Komponente haben automatisch den Slot 'tab:<tab-id>' (ohne Props).
  */
-// biome-ignore lint/suspicious/noEmptyInterface: wird per Declaration Merging gefüllt
-export interface SlotRegistry {}
+export interface SlotRegistry {
+  /** Widgets auf dem Startbildschirm des Spiel-Handys (z.B. Wetter), über den App-Icons. */
+  'phone.home': Record<string, never>;
+  /** Zusätzliche Abschnitte in den Einstellungen (Dialog und Handy-App). */
+  'core.settings': Record<string, never>;
+}
 
 export type PanelId = keyof PanelRegistry & string;
 export type DialogId = keyof DialogRegistry & string;
@@ -41,6 +45,8 @@ export interface SidebarTab {
   component?: ComponentType;
   /** Zahl am Tab, z.B. offene Aufgaben. 0 = keine. */
   badge?: (state: GameState) => number;
+  /** Icon vor dem Titel (Name aus dem Icon-Set, siehe src/ui/components/icons.ts). */
+  icon?: string;
 }
 
 export interface SlotContribution<N extends SlotName = SlotName> {
@@ -67,12 +73,19 @@ export interface DialogDefinition<K extends DialogId = DialogId> {
 export interface PhoneApp {
   id: string;
   name: string;
-  /** Emoji oder kurzer Text, bis Auftrag 14 ein Icon-Set bringt. */
+  /** Name aus dem Icon-Set (z.B. 'message', 'truck', 'users', siehe src/ui/components/icons.ts) oder ein Emoji. */
   icon: string;
   order: number;
   component: ComponentType;
   /** Zahl am App-Icon (z.B. ungelesene Nachrichten). */
   badge?: (state: GameState) => number;
+  /** Farbe der Kachel (CSS-Farbe oder Token, z.B. 'var(--color-info)'). Standard: Akzent. */
+  color?: string;
+  /**
+   * 'default': Das Handy zeigt oben eine Leiste mit Zurück-Knopf und App-Namen.
+   * 'none': Die App zeichnet ihre Leiste selbst (z.B. mit <PhoneScreen>).
+   */
+  chrome?: 'default' | 'none';
 }
 
 export type EventReaction<K extends EventType> = (payload: GameEvents[K], ui: UiApi, state: GameState) => void;

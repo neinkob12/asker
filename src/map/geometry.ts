@@ -1,0 +1,83 @@
+// Geometrie für Effekte: Punkte entlang einer Linie, Richtung, Versatz. Rein rechnerisch, getestet.
+
+import { distanceMeters, type LngLat } from '../core';
+
+/** Länge einer Linie in Metern. */
+export function pathLength(path: readonly LngLat[]): number {
+  let total = 0;
+  for (let i = 1; i < path.length; i++) total += distanceMeters(path[i - 1], path[i]);
+  return total;
+}
+
+/** Richtung von a nach b in Grad (0 = Norden, 90 = Osten), wie ein Kompass. */
+export function bearing(a: LngLat, b: LngLat): number {
+  const rad = Math.PI / 180;
+  const y = Math.sin((b.lng - a.lng) * rad) * Math.cos(b.lat * rad);
+  const x =
+    Math.cos(a.lat * rad) * Math.sin(b.lat * rad) -
+    Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos((b.lng - a.lng) * rad);
+  return (((Math.atan2(y, x) / rad) % 360) + 360) % 360;
+}
+
+/**
+ * Punkt bei Anteil t (0–1) der Strecke entlang einer Linie aus mehreren Punkten, gleichmäßig nach Metern.
+ * Liefert auch die Fahrtrichtung, damit Fahrzeuge sich drehen können.
+ */
+export function pointAlong(path: readonly LngLat[], t: number): { position: LngLat; bearing: number } {
+  if (path.length === 0) return { position: { lng: 0, lat: 0 }, bearing: 0 };
+  if (path.length === 1) return { position: { ...path[0] }, bearing: 0 };
+  const p = Math.min(1, Math.max(0, t));
+  const lengths: number[] = [];
+  let total = 0;
+  for (let i = 1; i < path.length; i++) {
+    const d = distanceMeters(path[i - 1], path[i]);
+    lengths.push(d);
+    total += d;
+  }
+  if (total === 0) return { position: { ...path[0] }, bearing: 0 };
+  let target = p * total;
+  for (let i = 0; i < lengths.length; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    if (target <= lengths[i] || i === lengths.length - 1) {
+      const f = lengths[i] === 0 ? 0 : Math.min(1, target / lengths[i]);
+      return {
+        position: { lng: a.lng + (b.lng - a.lng) * f, lat: a.lat + (b.lat - a.lat) * f },
+        bearing: bearing(a, b),
+      };
+    }
+    target -= lengths[i];
+  }
+  return { position: { ...path[path.length - 1] }, bearing: 0 };
+}
+
+/**
+ * Punkt im Kreis um einen Mittelpunkt, z.B. um mehrere Figuren an einem Spot nebeneinander zu stellen.
+ * index von count, Abstand in Metern.
+ */
+export function offsetAround(center: LngLat, index: number, count: number, meters = 14): LngLat {
+  if (count <= 1) return { ...center };
+  const angle = (index / count) * 2 * Math.PI - Math.PI / 2;
+  const dLat = (meters * Math.sin(angle)) / 111320;
+  const dLng = (meters * Math.cos(angle)) / (111320 * Math.cos((center.lat * Math.PI) / 180));
+  return { lng: center.lng + dLng, lat: center.lat - dLat };
+}
+
+/** Koordinate im Überwachungsstil, z.B. 50°56'21"N bzw. 006°57'04"E. */
+export function formatDms(value: number, axis: 'lat' | 'lng'): string {
+  const hemi = axis === 'lat' ? (value >= 0 ? 'N' : 'S') : value >= 0 ? 'E' : 'W';
+  const abs = Math.abs(value);
+  let deg = Math.floor(abs);
+  let min = Math.floor((abs - deg) * 60);
+  let sec = Math.round(((abs - deg) * 60 - min) * 60);
+  if (sec === 60) {
+    sec = 0;
+    min += 1;
+  }
+  if (min === 60) {
+    min = 0;
+    deg += 1;
+  }
+  const pad = (n: number, width = 2) => String(n).padStart(width, '0');
+  return `${pad(deg, axis === 'lat' ? 2 : 3)}°${pad(min)}'${pad(sec)}"${hemi}`;
+}
