@@ -1,0 +1,22 @@
+.rep-recent {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+}
+.rep-recent li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.rep-recent .is-up {
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+.rep-recent .is-down {
+  color: var(--color-bad);
+  font-variant-numeric: tabular-nums;
+}
