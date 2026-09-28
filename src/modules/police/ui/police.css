@@ -1,0 +1,21 @@
+.police-hud--watchful,
+.police-level--watchful {
+  color: var(--color-warn);
+}
+.police-hud--hot,
+.police-hud--manhunt,
+.police-level--hot,
+.police-level--manhunt {
+  color: var(--color-bad);
+}
+.police-level {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+.police-snitch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}

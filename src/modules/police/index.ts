@@ -1,19 +1,121 @@
-// Polizei (leicht): Heat pro Veedel. Stand Fundament: Heat lesen und erhöhen, Gangs verpfeifen.
-// Heat durch Verkäufe, Verfall, Kontrollen, Razzien und Festnahmen baut Auftrag 10.
+// Polizei (leicht, "Würze, nicht Kern"): Heat pro Veedel, Kontrollen, Razzien, Festnahmen und Verpfeifen.
+//
+// - Heat steigt durch Verkäufe (sale.completed) und Gewalt (Konfrontationen im Veedel, reportViolence) und sinkt
+//   jede Stunde. Mehr Polizeipräsenz im Veedel: Heat steigt schneller, Kontrollen und Razzien kommen öfter.
+// - Stündlich würfelt jedes Veedel: ab CHECK_THRESHOLD Kontrollen, ab RAID_THRESHOLD Razzien (nur wo der Spieler
+//   präsent ist; Razzien ohne Spieler treffen die Gang, die das Veedel kontrolliert).
+// - Folgen: Ware und Schwarzgeld werden beschlagnahmt, Mitarbeiter festgenommen ('police.arrest', den Haft-Status
+//   setzt staff). Eine Kontrolle kann in eine Polizeiflucht kippen (Konfrontation 'policeChase' über encounters).
+// - Verpfeifen ('police.snitch'): Heat und ein Hinweis in allen Veedeln der Gang. Solange der Hinweis gilt, kann es
+//   dort eine Razzia gegen die Gang geben, die sie Einfluss kostet.
 //
 // Öffentliche API:
-//   getHeat(state, veedelId), addHeat(ctx, veedelId, amount), snitchOnGang(ctx, gangId)
+//   getHeat(state, veedelId), addHeat(ctx, veedelId, amount), reportViolence(ctx, veedelId, severity?),
+//   heatLevel(heat), playerHeat(state), hottestVeedel(state), snitchOnGang(ctx, gangId), canSnitch(state, gangId),
+//   activeTipOff(state, veedelId), getPoliceStats(state), MAX_HEAT, CHECK_THRESHOLD, RAID_THRESHOLD, HEAT_LEVELS
 // Befehle: 'police.snitch'
-// Ereignisse: 'police.raid', 'police.arrest', 'police.tipOff'
+// Ereignisse: 'police.check', 'police.raid', 'police.arrest', 'police.tipOff', 'police.heatLevelChanged'
 
-import { type CommandResult, type Ctx, defineModule, type GameState, journal } from '../../core';
+import {
+  type CommandResult,
+  type Ctx,
+  clock,
+  defineModule,
+  formatAmount,
+  formatEuro,
+  type GameState,
+  journal,
+  wallet,
+} from '../../core';
+import { startEncounter } from '../encounters';
 import { getGang } from '../gangs';
-import { controlledBy, type FactionId } from '../territory';
-import { allVeedel } from '../veedel';
-import { MAX_HEAT, SNITCH_HEAT } from './config';
+import { allProducts, getWarehouses, take } from '../goods';
+import { getSpot, spotsInVeedel } from '../spots';
+import { bonus, getStaff, getStaffMember, getStats, type StaffMember } from '../staff';
+import {
+  addInfluence,
+  controlledBy,
+  controllerOf,
+  type FactionId,
+  getInfluence,
+  hasPlayerPresence,
+  PLAYER_FACTION,
+} from '../territory';
+import { allVeedel, getVeedel, veedelName } from '../veedel';
+import {
+  CHASE_CHANCE,
+  CHASE_ESCAPED_HEAT,
+  CHECK_ARREST_CHANCE,
+  CHECK_CHANCE_PER_HOUR,
+  CHECK_COOLDOWN,
+  CHECK_GOODS,
+  CHECK_HEAT_RELIEF,
+  CHECK_MONEY,
+  CHECK_THRESHOLD,
+  FAILED_CHASE_FACTOR,
+  GANG_RAID_INFLUENCE_LOSS,
+  HEAT_DECAY_PER_HOUR,
+  HEAT_LEVELS,
+  MAX_HEAT,
+  RAID_ARREST_CHANCE,
+  RAID_CHANCE_PER_HOUR,
+  RAID_COOLDOWN,
+  RAID_GOODS,
+  RAID_HEAT_RELIEF,
+  RAID_MONEY,
+  RAID_THRESHOLD,
+  SALE_HEAT_BASE,
+  SALE_HEAT_PER_UNIT,
+  SNITCH_COOLDOWN,
+  SNITCH_HEAT,
+  TIP_OFF_DURATION,
+  TIP_OFF_RAID_CHANCE_PER_HOUR,
+  VIOLENCE_HEAT,
+} from './config';
+
+export { CHECK_THRESHOLD, HEAT_LEVELS, MAX_HEAT, RAID_THRESHOLD } from './config';
+
+export type HeatLevelId = (typeof HEAT_LEVELS)[number]['id'];
+
+export interface HeatLevel {
+  id: HeatLevelId;
+  label: string;
+  /** Stufe 0 (ruhig) bis 3 (Großeinsatz). */
+  index: number;
+}
+
+export interface TipOff {
+  gangId: string;
+  /** Gilt bis (Spielminute). */
+  until: number;
+}
+
+export interface PoliceStats {
+  checks: number;
+  raids: number;
+  gangRaids: number;
+  arrests: number;
+  confiscatedGoods: number;
+  confiscatedMoney: number;
+}
 
 export interface PoliceState {
   /** Heat pro Veedel (0–100). */
+  heat: Record<string, number>;
+  /** Gemeldete Heat-Stufe pro Veedel (mit Hysterese beim Sinken, damit das Journal nicht flackert). */
+  level: Record<string, number>;
+  /** Frühester Zeitpunkt für die nächste Kontrolle bzw. Razzia pro Veedel. */
+  checkReadyAt: Record<string, number>;
+  raidReadyAt: Record<string, number>;
+  /** Offene Hinweise gegen Gangs pro Veedel. */
+  tipOffs: Record<string, TipOff>;
+  /** Ab wann die Polizei wieder einen Hinweis annimmt. */
+  snitchReadyAt: number;
+  stats: PoliceStats;
+}
+
+/** Zustand in Version 1 (Fundament). */
+interface PoliceStateV1 {
   heat: Record<string, number>;
 }
 
@@ -26,43 +128,458 @@ declare module '../../core' {
     'police.snitch': { gangId: string };
   }
   interface GameEvents {
-    /** Razzia in einem Veedel. target = betroffene Fraktion ('player' oder Gang-ID). */
-    'police.raid': { veedelId: string; target: FactionId; spotId?: string };
+    /** Kontrolle bei eigenen Leuten. staffId null = der Spieler selbst. chase: Es kam zur Polizeiflucht. */
+    'police.check': {
+      veedelId: string;
+      spotId: string | null;
+      staffId: string | null;
+      chase: boolean;
+      goods: number;
+      money: number;
+    };
+    /**
+     * Razzia in einem Veedel. target = betroffene Fraktion ('player' oder Gang-ID). Beim Spieler: beschlagnahmte
+     * Ware und Geld sowie Festgenommene, bei einer Gang: verlorener Einfluss.
+     */
+    'police.raid': {
+      veedelId: string;
+      target: FactionId;
+      spotId?: string;
+      goods?: number;
+      money?: number;
+      arrested?: string[];
+      influenceLost?: number;
+    };
     /** Ein Mitarbeiter wurde festgenommen. Den Haft-Status setzt das staff-Modul. */
     'police.arrest': { staffId: string; veedelId: string };
     /** Eine Gang wurde verpfiffen. */
     'police.tipOff': { gangId: string; veedelIds: string[] };
+    /** Heat-Stufe eines Veedels hat sich geändert (steigend sofort, fallend mit etwas Abstand). */
+    'police.heatLevelChanged': { veedelId: string; from: HeatLevelId; to: HeatLevelId; heat: number };
   }
 }
+
+/** Beim Sinken wechselt die Stufe erst so weit unter ihrer Schwelle (gegen Flackern). */
+const LEVEL_HYSTERESIS = 10;
 
 export function getHeat(state: GameState, veedelId: string): number {
   return state.modules.police.heat[veedelId] ?? 0;
 }
 
-/** Heat erhöhen (negativ: senken), begrenzt auf 0–100. Gibt den neuen Wert zurück. */
-export function addHeat(ctx: Ctx, veedelId: string, amount: number): number {
-  const heat = ctx.state.modules.police.heat;
-  heat[veedelId] = Math.min(MAX_HEAT, Math.max(0, (heat[veedelId] ?? 0) + amount));
-  return heat[veedelId];
+/** Stufe zu einem Heat-Wert. */
+export function heatLevel(heat: number): HeatLevel {
+  let index = 0;
+  for (let i = 0; i < HEAT_LEVELS.length; i++) if (heat >= HEAT_LEVELS[i].min) index = i;
+  return { id: HEAT_LEVELS[index].id, label: HEAT_LEVELS[index].label, index };
 }
 
-/** Gang verpfeifen: mehr Heat in ihren Veedeln. */
-export function snitchOnGang(ctx: Ctx, gangId: string): CommandResult {
-  const gang = getGang(ctx.state, gangId);
+/** Heißestes Veedel, in dem der Spieler präsent ist (Leute vor Ort oder kürzlich verkauft). null = nirgends. */
+export function playerHeat(state: GameState): { veedelId: string; heat: number } | null {
+  let best: { veedelId: string; heat: number } | null = null;
+  for (const v of allVeedel()) {
+    if (!hasPlayerPresence(state, v.id)) continue;
+    const heat = getHeat(state, v.id);
+    if (!best || heat > best.heat) best = { veedelId: v.id, heat };
+  }
+  return best;
+}
+
+/** Heißestes Veedel überhaupt. */
+export function hottestVeedel(state: GameState): { veedelId: string; heat: number } {
+  let best = { veedelId: allVeedel()[0].id, heat: -1 };
+  for (const v of allVeedel()) {
+    const heat = getHeat(state, v.id);
+    if (heat > best.heat) best = { veedelId: v.id, heat };
+  }
+  return best;
+}
+
+/** Offener Hinweis gegen eine Gang in diesem Veedel. */
+export function activeTipOff(state: GameState, veedelId: string): TipOff | null {
+  const tip = state.modules.police.tipOffs[veedelId];
+  return tip && tip.until > state.time ? tip : null;
+}
+
+export function getPoliceStats(state: GameState): PoliceStats {
+  return state.modules.police.stats;
+}
+
+/** Heat erhöhen (negativ: senken), begrenzt auf 0–100. Gibt den neuen Wert zurück. */
+export function addHeat(ctx: Ctx, veedelId: string, amount: number): number {
+  const police = ctx.state.modules.police;
+  const value = Math.min(MAX_HEAT, Math.max(0, (police.heat[veedelId] ?? 0) + amount));
+  police.heat[veedelId] = Math.round(value * 1000) / 1000;
+  updateLevel(ctx, veedelId);
+  return police.heat[veedelId];
+}
+
+/** Gewalt im Veedel melden (Überfall, Schießerei …). severity 1 = normal. */
+export function reportViolence(ctx: Ctx, veedelId: string, severity = 1): number {
+  const presence = getVeedel(veedelId)?.policePresence ?? 1;
+  return addHeat(ctx, veedelId, VIOLENCE_HEAT * severity * presence);
+}
+
+/** Kann die Gang gerade verpfiffen werden? */
+export function canSnitch(state: GameState, gangId: string): CommandResult {
+  const gang = getGang(state, gangId);
   if (!gang) return { ok: false, reason: 'Diese Gang gibt es nicht.' };
+  const readyAt = state.modules.police.snitchReadyAt;
+  if (state.time < readyAt) {
+    return { ok: false, reason: `Die Bullen haben gerade erst von dir gehört. Wieder ab ${clock.format(readyAt)}.` };
+  }
+  if (controlledBy(state, gangId).length === 0) {
+    return { ok: false, reason: `${gang.name} hat kein Revier, da gibt es nichts zu verpfeifen.` };
+  }
+  return { ok: true };
+}
+
+/** Gang verpfeifen: Heat und ein Hinweis in ihren Veedeln, dort drohen ihr Razzien. */
+export function snitchOnGang(ctx: Ctx, gangId: string): CommandResult {
+  const allowed = canSnitch(ctx.state, gangId);
+  if (!allowed.ok) return allowed;
+  const gang = getGang(ctx.state, gangId);
+  const police = ctx.state.modules.police;
   const veedelIds = controlledBy(ctx.state, gangId);
-  for (const veedelId of veedelIds) addHeat(ctx, veedelId, SNITCH_HEAT);
-  journal.add(ctx, `Du hast ${gang.name} bei den Bullen verpfiffen.`, 'info');
+  for (const veedelId of veedelIds) {
+    addHeat(ctx, veedelId, SNITCH_HEAT);
+    police.tipOffs[veedelId] = { gangId, until: ctx.now + TIP_OFF_DURATION };
+  }
+  police.snitchReadyAt = ctx.now + SNITCH_COOLDOWN;
+  journal.add(
+    ctx,
+    `Du hast ${gang?.name ?? gangId} bei den Bullen verpfiffen. In ${veedelIds.map(veedelName).join(', ')} ` +
+      'schauen sie jetzt genauer hin.',
+    'info',
+  );
   ctx.emit('police.tipOff', { gangId, veedelIds });
   return { ok: true };
 }
 
+// ---------------------------------------------------------------------------------------------
+// Innere Abläufe.
+
+function updateLevel(ctx: Ctx, veedelId: string): void {
+  const police = ctx.state.modules.police;
+  const heat = police.heat[veedelId] ?? 0;
+  const shown = police.level[veedelId] ?? 0;
+  const actual = heatLevel(heat).index;
+  let next = shown;
+  if (actual > shown) next = actual;
+  else if (actual < shown && heat < HEAT_LEVELS[shown].min - LEVEL_HYSTERESIS)
+    next = heatLevel(heat + LEVEL_HYSTERESIS).index;
+  if (next === shown) return;
+  police.level[veedelId] = next;
+  ctx.emit('police.heatLevelChanged', {
+    veedelId,
+    from: HEAT_LEVELS[shown].id,
+    to: HEAT_LEVELS[next].id,
+    heat,
+  });
+  if (next > shown && hasPlayerPresence(ctx.state, veedelId)) {
+    const name = veedelName(veedelId);
+    const text = [
+      '',
+      `In ${name} sind mehr Streifen unterwegs. Mit Kontrollen ist zu rechnen.`,
+      `In ${name} wird es heiß. Zivis an jeder Ecke, Razzien sind jetzt möglich.`,
+      `Großeinsatz in ${name}. Besser eine Weile die Füße stillhalten.`,
+    ][next];
+    journal.add(ctx, text, 'bad', { veedelId });
+  }
+}
+
+/** Ab der Schwelle steigt die Chance von einem Viertel auf den vollen Wert bei Heat 100. */
+function rampedChance(heat: number, threshold: number, chance: number): number {
+  if (heat < threshold) return 0;
+  return chance * (0.25 + (0.75 * (heat - threshold)) / (MAX_HEAT - threshold));
+}
+
+/** Vorsicht senkt das Risiko: Vorsicht 50 → 1, 100 → 0,5, 0 → 1,5. */
+function cautionFactor(state: GameState, staffId: string | null): number {
+  if (!staffId) return 1;
+  const caution = getStats(state, staffId)?.caution ?? 50;
+  return 1.5 - caution / 100;
+}
+
+function staffName(state: GameState, staffId: string): string {
+  return getStaffMember(state, staffId)?.name ?? 'Jemand';
+}
+
+function lossText(goods: number, money: number): string {
+  const parts = [];
+  if (goods > 0) parts.push(`${formatAmount(goods)} Ware`);
+  if (money > 0) parts.push(formatEuro(money));
+  return parts.length > 0 ? parts.join(' und ') : 'nichts';
+}
+
+/** Am Satzanfang groß. */
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** Ware beschlagnahmen, aus allen Lagern und Produkten, bis die Menge erreicht ist. */
+function confiscateGoods(ctx: Ctx, amount: number): number {
+  let left = Math.max(0, Math.round(amount));
+  for (const warehouse of getWarehouses(ctx.state)) {
+    for (const product of allProducts()) {
+      if (left <= 0) break;
+      left -= take(ctx, { productId: product.id, amount: left, warehouseId: warehouse.id, partial: true }).taken;
+    }
+  }
+  const taken = Math.round(amount) - left;
+  ctx.state.modules.police.stats.confiscatedGoods += taken;
+  return taken;
+}
+
+function confiscateMoney(ctx: Ctx, amount: number): number {
+  const lost = wallet.lose(ctx, Math.round(amount), 'dirty', 'Beschlagnahme');
+  ctx.state.modules.police.stats.confiscatedMoney += lost;
+  return lost;
+}
+
+function arrest(ctx: Ctx, staffId: string, veedelId: string): void {
+  ctx.state.modules.police.stats.arrests += 1;
+  ctx.emit('police.arrest', { staffId, veedelId });
+}
+
+function activeStaffIn(state: GameState, veedelId: string): StaffMember[] {
+  return getStaff(state, { veedelId, status: 'active' });
+}
+
+function spotOf(member: StaffMember | null): string | null {
+  return member?.assignment?.kind === 'spot' ? member.assignment.targetId : null;
+}
+
+function placeText(state: GameState, veedelId: string, spotId: string | null): string {
+  const spot = spotId ? getSpot(state, spotId) : undefined;
+  return spot ? `am ${spot.name}` : `in ${veedelName(veedelId)}`;
+}
+
+/** Kontrolle bei eigenen Leuten im Veedel (oder beim Spieler, wenn er dort selbst verkauft hat). */
+function runCheck(ctx: Ctx, veedelId: string): void {
+  const state = ctx.state;
+  const police = state.modules.police;
+  const people = activeStaffIn(state, veedelId);
+  const target = people.length > 0 ? ctx.pick(people) : null;
+  const spotId = spotOf(target) ?? spotsInVeedel(state, veedelId)[0]?.id ?? null;
+  const place = placeText(state, veedelId, spotId);
+  police.checkReadyAt[veedelId] = ctx.now + CHECK_COOLDOWN;
+  police.stats.checks += 1;
+  addHeat(ctx, veedelId, -CHECK_HEAT_RELIEF);
+  const ref = { veedelId, ...(spotId ? { spotId } : {}), ...(target ? { staffId: target.id } : {}) };
+
+  if (ctx.chance(CHASE_CHANCE)) {
+    const who = target ? `${target.name} rennt los` : 'Du rennst los';
+    journal.add(ctx, `Kontrolle ${place}: ${who}, die Bullen hinterher.`, 'bad', ref);
+    ctx.emit('police.check', { veedelId, spotId, staffId: target?.id ?? null, chase: true, goods: 0, money: 0 });
+    startEncounter(ctx, {
+      kind: 'policeChase',
+      veedelId,
+      ...(spotId ? { spotId } : {}),
+      staffIds: target ? [target.id] : [],
+      playerPresent: !target,
+      opponent: { label: 'Polizei', strength: getVeedel(veedelId)?.policePresence ?? 1 },
+      origin: { module: 'police', ref: 'check' },
+    });
+    return;
+  }
+
+  const goods = confiscateGoods(ctx, ctx.randomInt(CHECK_GOODS.min, CHECK_GOODS.max));
+  const money = confiscateMoney(ctx, ctx.randomInt(CHECK_MONEY.min, CHECK_MONEY.max));
+  const loss = lossText(goods, money);
+  if (!target) {
+    journal.add(
+      ctx,
+      `Kontrolle ${place}: Die Bullen filzen dich. ${capitalize(loss)} weg, gegen dich selbst haben sie nichts in der Hand.`,
+      'bad',
+      ref,
+    );
+  } else if (ctx.chance(Math.min(1, CHECK_ARREST_CHANCE * cautionFactor(state, target.id)))) {
+    arrest(ctx, target.id, veedelId);
+    journal.add(
+      ctx,
+      `Kontrolle ${place}: ${target.name} wird festgenommen. ${capitalize(loss)} beschlagnahmt.`,
+      'bad',
+      ref,
+    );
+  } else {
+    journal.add(ctx, `Kontrolle ${place}: ${target.name} wird gefilzt, ${loss} weg, mehr nicht.`, 'bad', ref);
+  }
+  ctx.emit('police.check', { veedelId, spotId, staffId: target?.id ?? null, chase: false, goods, money });
+}
+
+/** Ergebnis einer Polizeiflucht, die bei einer Kontrolle begonnen hat. */
+function onChaseResolved(ctx: Ctx, outcome: string, veedelId: string, spotId: string | null, staffIds: string[]) {
+  const state = ctx.state;
+  const place = placeText(state, veedelId, spotId);
+  const names = staffIds.map((id) => staffName(state, id)).join(', ');
+  const ref = { veedelId, ...(spotId ? { spotId } : {}) };
+  if (outcome === 'success') {
+    addHeat(ctx, veedelId, CHASE_ESCAPED_HEAT);
+    const who = staffIds.length > 0 ? `${names} ist den Bullen ${place} entkommen.` : 'Du hast die Bullen abgehängt.';
+    journal.add(ctx, `${who} In ${veedelName(veedelId)} wird jetzt gesucht.`, 'good', ref);
+    return;
+  }
+  const goods = confiscateGoods(ctx, ctx.randomInt(CHECK_GOODS.min, CHECK_GOODS.max) * FAILED_CHASE_FACTOR);
+  const money = confiscateMoney(ctx, ctx.randomInt(CHECK_MONEY.min, CHECK_MONEY.max) * FAILED_CHASE_FACTOR);
+  const loss = lossText(goods, money);
+  if (staffIds.length === 0) {
+    journal.add(
+      ctx,
+      `Die Bullen haben dich ${place} eingeholt und nehmen dir ${loss} ab. Festnehmen können sie dich nicht.`,
+      'bad',
+      ref,
+    );
+    return;
+  }
+  for (const id of staffIds) arrest(ctx, id, veedelId);
+  journal.add(ctx, `Flucht gescheitert: ${names} festgenommen, ${loss} beschlagnahmt.`, 'bad', ref);
+}
+
+/** Razzia gegen die eigenen Leute im Veedel. */
+function raidPlayer(ctx: Ctx, veedelId: string): void {
+  const state = ctx.state;
+  const people = activeStaffIn(state, veedelId);
+  const spotId = spotOf(people.length > 0 ? ctx.pick(people) : null) ?? spotsInVeedel(state, veedelId)[0]?.id ?? null;
+  const goods = confiscateGoods(ctx, ctx.randomInt(RAID_GOODS.min, RAID_GOODS.max));
+  const money = confiscateMoney(ctx, ctx.randomInt(RAID_MONEY.min, RAID_MONEY.max));
+  const arrested: string[] = [];
+  for (const member of people) {
+    if (ctx.chance(Math.min(1, RAID_ARREST_CHANCE * cautionFactor(state, member.id)))) {
+      arrested.push(member.id);
+      arrest(ctx, member.id, veedelId);
+    }
+  }
+  finishRaid(ctx, veedelId);
+  const names = arrested.map((id) => staffName(state, id)).join(', ');
+  journal.add(
+    ctx,
+    `Razzia ${placeText(state, veedelId, spotId)}! ${capitalize(lossText(goods, money))} beschlagnahmt.` +
+      (arrested.length > 0 ? ` ${names} ${arrested.length === 1 ? 'wurde' : 'wurden'} festgenommen.` : ''),
+    'bad',
+    { veedelId, ...(spotId ? { spotId } : {}) },
+  );
+  ctx.emit('police.raid', {
+    veedelId,
+    target: PLAYER_FACTION,
+    ...(spotId ? { spotId } : {}),
+    goods,
+    money,
+    arrested,
+  });
+}
+
+/** Razzia gegen eine Gang: Sie verliert Einfluss im Veedel. */
+function raidGang(ctx: Ctx, veedelId: string, gangId: string, tippedOff: boolean): void {
+  const state = ctx.state;
+  const before = getInfluence(state, veedelId, gangId);
+  const after = addInfluence(ctx, veedelId, gangId, -GANG_RAID_INFLUENCE_LOSS);
+  finishRaid(ctx, veedelId);
+  state.modules.police.stats.gangRaids += 1;
+  const gang = getGang(state, gangId)?.name ?? gangId;
+  journal.add(
+    ctx,
+    `Razzia bei ${gang} in ${veedelName(veedelId)}. Ihr Einfluss dort bröckelt.` +
+      (tippedOff ? ' Dein Hinweis hat gesessen.' : ''),
+    tippedOff ? 'good' : 'info',
+    { veedelId },
+  );
+  ctx.emit('police.raid', { veedelId, target: gangId, influenceLost: Math.round((before - after) * 10) / 10 });
+}
+
+function finishRaid(ctx: Ctx, veedelId: string): void {
+  const police = ctx.state.modules.police;
+  police.raidReadyAt[veedelId] = ctx.now + RAID_COOLDOWN;
+  police.checkReadyAt[veedelId] = Math.max(police.checkReadyAt[veedelId] ?? 0, ctx.now + CHECK_COOLDOWN);
+  police.stats.raids += 1;
+  delete police.tipOffs[veedelId];
+  addHeat(ctx, veedelId, -RAID_HEAT_RELIEF);
+}
+
+/** Stündlich: Heat sinkt, Hinweise laufen ab, Kontrollen und Razzien werden ausgewürfelt. */
+function tick(ctx: Ctx): void {
+  const state = ctx.state;
+  const police = state.modules.police;
+  const warning = Math.min(1, Math.max(0, bonus(state, 'raidWarning')));
+  for (const [veedelId, tip] of Object.entries(police.tipOffs)) {
+    if (tip.until <= ctx.now) delete police.tipOffs[veedelId];
+  }
+  for (const v of allVeedel()) {
+    const heat = addHeat(ctx, v.id, -HEAT_DECAY_PER_HOUR);
+    const presence = v.policePresence;
+    const raidReady = ctx.now >= (police.raidReadyAt[v.id] ?? 0);
+    const tip = police.tipOffs[v.id];
+
+    if (tip && raidReady) {
+      const chance = TIP_OFF_RAID_CHANCE_PER_HOUR * presence * (1 + heat / 50);
+      if (ctx.chance(chance)) {
+        raidGang(ctx, v.id, tip.gangId, true);
+        continue;
+      }
+    }
+
+    const playerThere = hasPlayerPresence(state, v.id);
+    const owner = controllerOf(state, v.id);
+    const raidTarget = playerThere ? PLAYER_FACTION : owner !== PLAYER_FACTION ? owner : null;
+    if (raidReady && raidTarget !== null) {
+      const chance = rampedChance(heat, RAID_THRESHOLD, RAID_CHANCE_PER_HOUR) * presence;
+      if (ctx.chance(raidTarget === PLAYER_FACTION ? chance * (1 - warning) : chance)) {
+        if (raidTarget === PLAYER_FACTION) raidPlayer(ctx, v.id);
+        else raidGang(ctx, v.id, raidTarget, false);
+        continue;
+      }
+    }
+
+    if (playerThere && ctx.now >= (police.checkReadyAt[v.id] ?? 0)) {
+      if (ctx.chance(rampedChance(heat, CHECK_THRESHOLD, CHECK_CHANCE_PER_HOUR) * presence)) runCheck(ctx, v.id);
+    }
+  }
+}
+
+function initialState(): PoliceState {
+  return {
+    heat: Object.fromEntries(allVeedel().map((v) => [v.id, 0])),
+    level: {},
+    checkReadyAt: {},
+    raidReadyAt: {},
+    tipOffs: {},
+    snitchReadyAt: 0,
+    stats: { checks: 0, raids: 0, gangRaids: 0, arrests: 0, confiscatedGoods: 0, confiscatedMoney: 0 },
+  };
+}
+
 export default defineModule({
   id: 'police',
-  version: 1,
+  version: 2,
   dependsOn: ['veedel', 'territory'],
-  init: () => ({ heat: Object.fromEntries(allVeedel().map((v) => [v.id, 0])) }),
+  init: () => initialState(),
+  tickEvery: 60,
+  tick,
   commands: {
     'police.snitch': (ctx, { gangId }) => snitchOnGang(ctx, gangId),
+  },
+  on: {
+    'sale.completed': (ctx, { veedelId, amount, sellerId }) => {
+      const presence = getVeedel(veedelId)?.policePresence;
+      if (presence === undefined) return;
+      const heat = (SALE_HEAT_BASE + SALE_HEAT_PER_UNIT * Math.max(0, amount)) * presence;
+      addHeat(ctx, veedelId, heat * cautionFactor(ctx.state, sellerId));
+    },
+    'encounter.resolved': (ctx, { kind, outcome, request }) => {
+      if (request.origin?.module === 'police') {
+        if (request.origin.ref === 'check' && request.veedelId) {
+          onChaseResolved(ctx, outcome, request.veedelId, request.spotId ?? null, request.staffIds ?? []);
+        }
+        return;
+      }
+      // Jede andere Konfrontation im Veedel ist Gewalt, die die Polizei mitbekommt.
+      if (kind !== 'policeChase' && request.veedelId) reportViolence(ctx, request.veedelId);
+    },
+  },
+  migrations: {
+    2: (old: PoliceStateV1): PoliceState => ({
+      ...initialState(),
+      heat: { ...old.heat },
+      level: Object.fromEntries(Object.entries(old.heat).map(([id, heat]) => [id, heatLevel(heat).index])),
+    }),
   },
 });
