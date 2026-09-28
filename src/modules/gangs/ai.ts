@@ -7,7 +7,7 @@ import { activeEncounters, startEncounter } from '../encounters';
 import { DEFAULT_PRODUCT, getStock, getWarehouses } from '../goods';
 import { referencePrice, setCompetitionFactor } from '../market';
 import { getSpot, getSpots } from '../spots';
-import { getStaff } from '../staff';
+import { defenseStrength, getStaff } from '../staff';
 import { addInfluence, controllerOf, getInfluence, hasPlayerPresence, influenceIn, PLAYER_FACTION } from '../territory';
 import { allVeedel, getVeedel, neighborsOf, veedelAt, veedelName } from '../veedel';
 import { addHostility, commandOption, crewFor, demandOptions, focusVeedel, say, statusOf } from './common';
@@ -42,6 +42,8 @@ import {
   OFFER_DURATION,
   OFFER_MARKUP,
   PEOPLE_PER_VEEDEL,
+  PLAYER_DEFENSE_BASE,
+  PLAYER_DEFENSE_FACTOR,
   PRICE_WAR_EXTRA,
   PRICE_WAR_HOSTILITY,
   PROTECTION_INTERVAL,
@@ -292,11 +294,9 @@ function pickTarget(ctx: Ctx, gang: Gang, s: GangStatus): string | null {
   return best;
 }
 
-/** Stärke, mit der der Spieler ein eigenes Veedel verteidigt: seine Leute dort plus Sicherheit. */
+/** Stärke, mit der der Spieler ein eigenes Veedel verteidigt: ein Grundstock plus die Kampfkraft seiner Leute dort. */
 function playerDefense(ctx: Ctx, veedelId: string): number {
-  const here = getStaff(ctx.state, { veedelId, status: 'active' }).length;
-  const security = getStaff(ctx.state, { role: 'security', status: 'active' }).length;
-  return 1 + here + security;
+  return (PLAYER_DEFENSE_BASE + defenseStrength(ctx.state, { veedelId })) * PLAYER_DEFENSE_FACTOR;
 }
 
 function continuePush(ctx: Ctx, gang: Gang, s: GangStatus): void {
@@ -336,7 +336,7 @@ function continuePush(ctx: Ctx, gang: Gang, s: GangStatus): void {
   const defenderGang = controller && controller !== PLAYER_FACTION ? getGang(ctx.state, controller) : undefined;
   const defender = defenderGang ? statusOf(ctx, defenderGang.id) : undefined;
   if (controller === PLAYER_FACTION) {
-    defense = playerDefense(ctx, veedelId) * 50 * (0.5 + ctx.random());
+    defense = playerDefense(ctx, veedelId) * (0.5 + ctx.random());
   } else if (defenderGang && defender) {
     const lastStand = gangVeedel(ctx.state, defenderGang.id).length <= 1 ? LAST_STAND_BONUS : 1;
     const home = veedelId === defenderGang.homeVeedelId ? HOME_DEFENSE_BONUS : 1;

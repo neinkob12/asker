@@ -62,6 +62,13 @@ export const LAST_STAND_BONUS = 1.5;
 /** Ihr Heimat-Veedel verteidigt eine Gang wie eine Festung, und andere greifen es nur ungern an. */
 export const HOME_DEFENSE_BONUS = 2;
 export const HOME_TARGET_PENALTY = 30;
+/**
+ * Drängt eine Gang in dein Revier, verteidigst du mit einem Grundstock (du, deine Kontakte) plus der Kampfkraft
+ * deiner Leute dort (defenseStrength aus staff: Sicherheit voll, andere zu einem Drittel), auf eigenem Pflaster mal
+ * PLAYER_DEFENSE_FACTOR. Vier Sicherheitsleute halten etwa so gut wie eine Gang ihr Veedel.
+ */
+export const PLAYER_DEFENSE_BASE = 60;
+export const PLAYER_DEFENSE_FACTOR = 1.5;
 /** Ziele, deren Gang stärker ist, werden so viel unattraktiver. */
 export const STRONGER_TARGET_PENALTY = 40;
 /** Chance, dass die unterlegene Seite in einer Vorstoß-Stunde einen Mann verliert. */
