@@ -5,7 +5,8 @@
 - **Voraussetzung:** Auftrag 00 (Fundament) ist in `main` gemergt.
 - **Parallel dazu laufen:** die Aufträge 10 und 12 bis 14. Halte dich an die Regeln in `docs/auftraege/README.md`.
 - **Deine Ordner:** `src/modules/gangs/`, `src/modules/encounters/`. Nur diese änderst du.
-- **Vorher lesen:** `CLAUDE.md`, `docs/konzept.md`, `docs/architektur.md`.
+- **Vorher lesen:** `CLAUDE.md`, `docs/konzept.md`, `docs/architektur.md` (dort steht, was du vorfindest).
+- **Achtung:** `territory` hängt von `gangs` ab (Startverteilung). Trag in `gangs` nicht `dependsOn: ['territory']` ein, sonst gibt es einen Zyklus. API-Aufrufe zur Laufzeit gehen trotzdem.
 
 ## Ziel
 
@@ -21,7 +22,7 @@ Das ist ein erster spielbarer Prototyp, nicht die Endausbaustufe.
 - **Stärke jeder Gang:** Geld, Leute und Ware als einfache Werte.
 - **Gang-KI** (tickt z.B. stündlich):
   - Sie expandiert in benachbarte oder schwache Veedel und verteidigt ihre eigenen. Dafür nutzt sie die APIs von `territory` und `veedel`.
-  - Sie drückt die Preise in ihren Veedeln. Gibt `market` dafür keine Schnittstelle her: Ereignis auslösen und unter "Für die Integration" notieren.
+  - Sie drückt die Preise in ihren Veedeln, über `setCompetitionFactor(ctx, veedelId, faktor)` aus `market` (gibt es seit dem Fundament).
   - Sie reagiert auf dich. Anfangs ignoriert sie dich als kleinen Fisch. Je mehr du in ihren Veedeln verkaufst, desto feindseliger wird sie: Drohungen, dann Überfälle auf Spots, Kuriere und Lager.
   - Die Gangs sollen spürbar mächtiger sein als der Spieler am Anfang.
 - **Beziehung und Feindseligkeit** pro Gang zum Spieler.

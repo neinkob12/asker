@@ -1,0 +1,67 @@
+/*
+ * Design-Tokens: Farben, Abstände, Schriften, Radien, Schatten und Ebenen.
+ * Alle Oberflächen (auch die der Module) nutzen nur diese Variablen, damit der Look zentral änderbar ist.
+ * Stand Fundament: der Look des Prototyps. Auftrag 14 ersetzt die Werte.
+ */
+:root {
+  /* Farben */
+  --color-bg: #0e1512;
+  --color-panel: rgba(14, 21, 18, 0.9);
+  --color-panel-solid: #141d19;
+  --color-surface: #22302a;
+  --color-surface-hover: #2c3d35;
+  --color-surface-subtle: rgba(255, 255, 255, 0.04);
+  --color-line: rgba(255, 255, 255, 0.1);
+  --color-text: #e8efe9;
+  --color-muted: #93a39a;
+  --color-accent: #6fdc8c;
+  --color-accent-strong: #2e7d46;
+  --color-accent-hover: #379152;
+  --color-warn: #f2c14e;
+  --color-warn-strong: #c79a1e;
+  --color-bad: #ef6b5b;
+  --color-on-accent: #fff;
+  --color-backdrop: rgba(0, 0, 0, 0.55);
+  --color-marker-idle: #3a4a42;
+  --color-marker-border: #fff;
+  --color-label-bg: rgba(0, 0, 0, 0.65);
+
+  /* Schrift */
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-size-xs: 11px;
+  --font-size-sm: 13px;
+  --font-size-md: 15px;
+  --font-size-lg: 18px;
+  --font-weight-bold: 700;
+
+  /* Abstände */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+
+  /* Radien und Schatten */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-round: 999px;
+  --shadow-panel: 0 10px 40px rgba(0, 0, 0, 0.5);
+  --shadow-marker: 0 2px 8px rgba(0, 0, 0, 0.6);
+  --blur-panel: blur(6px);
+
+  /* Layout */
+  --sidebar-width: 332px;
+  --panel-width: 360px;
+  --phone-width: 320px;
+  --touch-target: 36px;
+
+  /* Ebenen */
+  --z-hud: 5;
+  --z-panel: 6;
+  --z-phone: 7;
+  --z-banner: 8;
+  --z-dialog: 20;
+  --z-toast: 30;
+}

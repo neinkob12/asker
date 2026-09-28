@@ -5,7 +5,7 @@
 - **Voraussetzung:** Auftrag 00 (Fundament) ist in `main` gemergt.
 - **Parallel dazu laufen:** die Aufträge 11 bis 14. Halte dich an die Regeln in `docs/auftraege/README.md`.
 - **Deine Ordner:** `src/modules/veedel/`, `src/modules/territory/`, `src/modules/police/`. Nur diese änderst du.
-- **Vorher lesen:** `CLAUDE.md`, `docs/konzept.md`, `docs/architektur.md`.
+- **Vorher lesen:** `CLAUDE.md`, `docs/konzept.md`, `docs/architektur.md` (dort steht, was du vorfindest).
 
 ## Ziel
 

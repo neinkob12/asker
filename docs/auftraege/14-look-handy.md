@@ -6,7 +6,7 @@
 - **Parallel dazu laufen:** die Aufträge 10 bis 13. Halte dich an die Regeln in `docs/auftraege/README.md`.
 - **Deine Ordner:** `src/ui/`, `src/map/`, `src/audio/`, `src/modules/weather/`, `public/`. Nur diese änderst du.
 - **Wichtig:** Die anderen Sessions bauen gleichzeitig Panels mit den Bausteinen aus `src/ui/components/`. Deren Schnittstellen (Props, Exporte) darfst du erweitern, aber nicht brechen. Den Look änderst du über Design-Tokens und das Innere der Bausteine.
-- **Vorher lesen:** `CLAUDE.md`, `docs/konzept.md`, `docs/architektur.md`.
+- **Vorher lesen:** `CLAUDE.md`, `docs/konzept.md`, `docs/architektur.md` (dort steht, was du vorfindest).
 
 ## Ziel
 
@@ -74,5 +74,5 @@ Das Spiel bekommt seinen Look: realistisch und düster, eine Nacht-Satellitenkar
 - das Spiel-Handy mit Nachrichten-App und App-Registry funktioniert
 - Sound läuft
 - Desktop und Handy geprüft sind (Screenshots in beiden Größen, z.B. per Playwright)
-- Tests für Wetterverlauf und Nachrichten-Dienst vorhanden sind und `npm run check` grün ist
+- Tests für Wetterverlauf und die Nachrichten-App vorhanden sind und `npm run check` grün ist (der Nachrichtendienst selbst liegt im Kern und ist dort getestet)
 - die PR-Beschreibung die drei Abschnitte aus der README hat
