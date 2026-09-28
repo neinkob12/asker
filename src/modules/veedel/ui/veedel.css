@@ -1,0 +1,17 @@
+.veedel-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.veedel-panel__description {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  font-style: italic;
+  line-height: 1.45;
+}
+.veedel-panel__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
