@@ -8,7 +8,15 @@ import { DEFAULT_PRODUCT, getStock, getWarehouses } from '../goods';
 import { referencePrice, setCompetitionFactor } from '../market';
 import { getSpot, getSpots } from '../spots';
 import { defenseStrength, getStaff } from '../staff';
-import { addInfluence, controllerOf, getInfluence, hasPlayerPresence, influenceIn, PLAYER_FACTION } from '../territory';
+import {
+  addInfluence,
+  controlledBy,
+  controllerOf,
+  getInfluence,
+  hasPlayerPresence,
+  influenceIn,
+  PLAYER_FACTION,
+} from '../territory';
 import { allVeedel, getVeedel, neighborsOf, veedelAt, veedelName } from '../veedel';
 import { addHostility, commandOption, crewFor, demandOptions, focusVeedel, say, statusOf } from './common';
 import {
@@ -44,6 +52,8 @@ import {
   PEOPLE_PER_VEEDEL,
   PLAYER_DEFENSE_BASE,
   PLAYER_DEFENSE_FACTOR,
+  PLAYER_THREAT_EXPANSION,
+  PLAYER_THREAT_TARGET_BONUS,
   PRICE_WAR_EXTRA,
   PRICE_WAR_HOSTILITY,
   PROTECTION_INTERVAL,
@@ -246,6 +256,9 @@ function expand(ctx: Ctx, gang: Gang, s: GangStatus): void {
   if (s.people < (homeless ? HOME_PUSH_MIN_PEOPLE : PUSH_MIN_PEOPLE) || s.money < PUSH_COST * 2) return;
   let factor = isAllied(ctx.state, gang.id) ? ALLIANCE_PUSH_FACTOR : 1;
   factor *= homeless ? HOME_PUSH_CHANCE_FACTOR : Math.min(1, SATURATION_VEEDEL / turfSize);
+  // Ein starker Spieler wird zum gemeinsamen Feind.
+  if (!isAtPeace(ctx.state, gang.id))
+    factor *= 1 + PLAYER_THREAT_EXPANSION * controlledBy(ctx.state, PLAYER_FACTION).length;
   if (!ctx.chance(EXPAND_CHANCE * gang.traits.expansion * factor)) return;
   const target = pickTarget(ctx, gang, s);
   if (!target) return;
@@ -285,6 +298,7 @@ function pickTarget(ctx: Ctx, gang: Gang, s: GangStatus): string | null {
     if (holder && holder !== PLAYER_FACTION && getGang(state, holder)?.homeVeedelId === v) score -= HOME_TARGET_PENALTY;
     if (enemy && controller === enemy) score += 40;
     if (controller === PLAYER_FACTION && s.hostility >= THREAT_AT) score += 25;
+    if (controller === PLAYER_FACTION) score += PLAYER_THREAT_TARGET_BONUS * controlledBy(state, PLAYER_FACTION).length;
     if (holder && holder !== PLAYER_FACTION && gangPower(state, holder) > myPower) score -= STRONGER_TARGET_PENALTY;
     if (score > bestScore) {
       best = v;

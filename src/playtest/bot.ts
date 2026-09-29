@@ -13,7 +13,7 @@ import { getGangs } from '../modules/gangs';
 import { getStock } from '../modules/goods';
 import { getLieutenant } from '../modules/hierarchy';
 import { getCandidates } from '../modules/recruiting';
-import { getSpots, lockedSpots } from '../modules/spots';
+import { canFoundSpotAt, getSpots, lockedSpots } from '../modules/spots';
 import { dailyWages, getStaff, RUNNER_HIRE_COST } from '../modules/staff';
 import {
   availableCredit,
@@ -23,6 +23,7 @@ import {
   shipmentsInTransit,
 } from '../modules/suppliers';
 import { controlledBy, PLAYER_FACTION } from '../modules/territory';
+import { allVeedel, neighborsOf } from '../modules/veedel';
 
 export interface BotOptions {
   /** An so vielen Spots ohne Läufer verkauft der Bot selbst (ein Mensch schafft nicht alle gleichzeitig). */
@@ -78,6 +79,9 @@ function sellPersonally(sim: Simulation, stats: BotStats, options: BotOptions): 
     for (const id of ids) run(sim, stats, { type: 'customers.serve', payload: { customerId: id } });
   }
 }
+
+/** Teurere Läufer stellt der Bot nicht ein. */
+const MAX_RUNNER_WAGE = 120;
 
 /** Gewünschter Produktmix (grob nach Kundschaft). */
 const PRODUCT_MIX: Record<string, number> = { weed: 0.35, hash: 0.2, haze: 0.15, edibles: 0.12, vape: 0.1, kush: 0.08 };
@@ -144,9 +148,12 @@ function grow(sim: Simulation, stats: BotStats): void {
   // Bewerber mit Level zuerst, sonst von der Straße.
   const openSpots = free().sort((a, b) => b.demand - a.demand);
   if (openSpots.length > 0 && stock > 40 && money(state) > RUNNER_HIRE_COST + reserve(state) + 700) {
+    // Günstige Leute zuerst: Ein Läufer soll mehr einbringen, als er kostet.
     const candidate = getCandidates(state)
-      .filter((c) => c.role === 'runner' && c.hireCost <= money(state) - reserve(state) - 400)
-      .sort((a, b) => b.level - a.level)[0];
+      .filter(
+        (c) => c.role === 'runner' && c.wage <= MAX_RUNNER_WAGE && c.hireCost <= money(state) - reserve(state) - 400,
+      )
+      .sort((a, b) => a.wage - b.wage || b.level - a.level)[0];
     if (candidate) {
       run(sim, stats, {
         type: 'recruiting.hire',
@@ -165,11 +172,36 @@ function grow(sim: Simulation, stats: BotStats): void {
     }
   }
 
+  // Später: eigene Spots in Nachbar-Veedeln gründen, um weiter zu wachsen (Köln übernehmen).
+  if (lockedSpots(state).length === 0 && free().length === 0 && money(state) > reserve(state) + 3000) {
+    const mine = new Set(controlledBy(state, PLAYER_FACTION));
+    const withSpot = new Set(getSpots(state).map((s) => s.veedelId));
+    const target = allVeedel()
+      .filter((v) => !mine.has(v.id) && !withSpot.has(v.id) && neighborsOf(v.id).some((n) => mine.has(n)))
+      .sort((a, b) => b.purchasingPower - a.purchasingPower || a.id.localeCompare(b.id))[0];
+    if (target) {
+      for (const [dx, dy] of [
+        [0, 0],
+        [0.003, 0],
+        [0, 0.003],
+        [-0.003, 0],
+        [0, -0.003],
+      ]) {
+        const lng = target.center.lng + dx;
+        const lat = target.center.lat + dy;
+        if (!canFoundSpotAt(state, lng, lat).ok) continue;
+        run(sim, stats, { type: 'spots.found', payload: { lng, lat } });
+        break;
+      }
+    }
+  }
+
   // Leutnant in jedem Veedel mit mindestens zwei eigenen Spots.
   const byVeedel = new Map<string, number>();
   for (const s of getSpots(state)) byVeedel.set(s.veedelId, (byVeedel.get(s.veedelId) ?? 0) + 1);
   for (const [veedelId, count] of byVeedel) {
-    if (count < 2 || getLieutenant(state, veedelId)) continue;
+    if ((count < 2 && !controlledBy(state, PLAYER_FACTION).includes(veedelId)) || getLieutenant(state, veedelId))
+      continue;
     const best = getStaff(state, { status: 'active', veedelId })
       .filter((m) => m.role === 'runner' && m.level >= 2)
       .sort((a, b) => b.level - a.level)[0];
@@ -185,8 +217,13 @@ function grow(sim: Simulation, stats: BotStats): void {
     const runners = getStaff(state, { role: 'runner' }).length;
     if (guards < Math.ceil(runners / 3)) {
       const candidate = getCandidates(state)
-        .filter((c) => c.role === 'security' && c.hireCost <= money(state) - reserve(state) - 500)
-        .sort((a, b) => b.level - a.level)[0];
+        .filter(
+          (c) =>
+            c.role === 'security' &&
+            c.wage <= MAX_RUNNER_WAGE * 1.5 &&
+            c.hireCost <= money(state) - reserve(state) - 500,
+        )
+        .sort((a, b) => a.wage - b.wage || b.level - a.level)[0];
       const spot = getSpots(state)
         .filter((s) => getStaff(state, { spotId: s.id, role: 'security' }).length === 0)
         .sort((a, b) => b.demand - a.demand)[0];
@@ -203,7 +240,7 @@ function grow(sim: Simulation, stats: BotStats): void {
 /** Offene Handy-Nachrichten beantworten: zahlen, wenn es geht, sonst ablehnen. Aufträge lehnt er ab. */
 function answerMessages(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
-  const PREFERENCE = ['tribute', 'pay', 'ceasefire', 'raise', 'hire', 'order', 'refuse', 'decline', 'no', 'later'];
+  const PREFERENCE = ['tribute', 'pay', 'ceasefire', 'raise', 'lieLow', 'refuse', 'decline', 'no', 'later'];
   for (const m of [...state.messages.list]) {
     if (!messages.canAnswer(state, m)) continue;
     const ids = (m.options ?? []).map((o) => o.id);

@@ -39,6 +39,7 @@ import {
   SALE_PRESENCE_MINUTES,
   STAFF_PRESENCE_MAX,
   STAFF_PRESENCE_PER_HOUR,
+  TAKEOVER_MARGIN,
 } from './config';
 
 export { CONTROL_THRESHOLD, LOSE_CONTROL_THRESHOLD } from './config';
@@ -176,12 +177,13 @@ function changeInfluence(state: GameState, veedelId: string, faction: FactionId,
 
 /**
  * Kontrolle: Wer kontrolliert, behält das Veedel, solange er mindestens LOSE_CONTROL_THRESHOLD hat. Übernehmen kann,
- * wer mindestens CONTROL_THRESHOLD und mehr Einfluss als der bisherige Herr hat (bei mehreren: der stärkste).
+ * wer mindestens CONTROL_THRESHOLD und TAKEOVER_MARGIN mehr Einfluss als der bisherige Herr hat (bei mehreren: der
+ * stärkste). Der Abstand verhindert, dass ein umkämpftes Veedel ständig hin- und herspringt.
  */
 function computeController(row: Record<FactionId, number>, current: FactionId | null): FactionId | null {
   const holder = current !== null && (row[current] ?? 0) >= LOSE_CONTROL_THRESHOLD ? current : null;
   let best = holder;
-  let bestValue = holder !== null ? row[holder] : CONTROL_THRESHOLD - Number.EPSILON;
+  let bestValue = holder !== null ? row[holder] + TAKEOVER_MARGIN : CONTROL_THRESHOLD - Number.EPSILON;
   for (const [faction, value] of Object.entries(row)) {
     if (faction !== holder && value >= CONTROL_THRESHOLD && value > bestValue) {
       best = faction;

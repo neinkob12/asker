@@ -162,6 +162,10 @@ export const LOYALTY = {
   wageCutPer10: -6,
 } as const;
 
+/** Ohne Lohn kündigt, wer schon so viele Tage leer ausging oder danach unter dieser Loyalität liegt. */
+export const UNPAID_DAYS_TO_QUIT = 2;
+export const UNPAID_QUIT_LOYALTY = 30;
+
 /** Ab so viel Heat im Veedel ist die Arbeit gefährlich. */
 export const DANGER_HEAT = 60;
 

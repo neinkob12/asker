@@ -6,7 +6,7 @@ import type { CustomerType } from './index';
 export const CUSTOMER_PATIENCE = 180;
 export const MAX_CUSTOMERS_PER_SPOT = 4;
 /** Mittlerer Abstand zwischen zwei Kunden an einem Spot mit Andrang 1 (bei Richtpreis). */
-export const BASE_SPAWN_INTERVAL = 120;
+export const BASE_SPAWN_INTERVAL = 85;
 
 /** Nachfrage je nach Uhrzeit: abends und nachts ist mehr los. */
 export function hourDemandMultiplier(hour: number): number {

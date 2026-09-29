@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { clock, type Simulation, START_DIRTY_MONEY } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import type { Customer } from '../customers';
-import { RUNNER_DAILY_WAGE, RUNNER_HIRE_COST } from './config';
+import { LOYALTY, RUNNER_DAILY_WAGE, RUNNER_HIRE_COST } from './config';
 import {
   assign,
   bonus,
@@ -122,16 +122,36 @@ describe('staff', () => {
     );
   });
 
-  it('Löhne um Mitternacht pro Person, wer nicht bezahlt wird, kündigt', () => {
+  it('Löhne um Mitternacht pro Person: wer leer ausgeht, ist sauer und kündigt am zweiten Tag', () => {
     const sim = quietGame();
     const events = recordEvents(sim);
     hire(sim, 'neumarkt');
     hire(sim, 'uni');
+    const [a, b] = getStaff(sim.state);
+    a.stats.loyalty = 80;
+    b.stats.loyalty = 70;
     sim.state.wallet.dirty = RUNNER_DAILY_WAGE;
     sim.advance(clock.at(2) - sim.state.time); // bis Mitternacht
-    expect(getStaff(sim.state)).toHaveLength(1);
+    // Die Loyalere bekommt ihr Geld, der andere wartet, schreibt und ist sauer.
     expect(sim.state.wallet.dirty).toBe(0);
-    expect(eventsOfType(events, 'staff.left')[0].payload.reason).toBe('quit');
+    expect(getStaff(sim.state)).toHaveLength(2);
+    expect(getStaffMember(sim.state, b.id)?.stats.loyalty).toBeLessThanOrEqual(70 + LOYALTY.unpaid + 2);
+    expect(getStaffMember(sim.state, b.id)?.unpaidDays).toBe(1);
+    expect(sim.state.messages.list.some((m) => m.contactId === `staff:${b.id}` && m.text.includes('Geld'))).toBe(true);
+    // Zweiter Tag ohne Geld: Er geht, sie wartet (für sie ist es der erste Tag).
+    sim.advance(clock.at(3) - sim.state.time);
+    expect(getStaff(sim.state).map((m) => m.id)).toEqual([a.id]);
+    expect(eventsOfType(events, 'staff.left').map((e) => e.payload)).toEqual([{ staffId: b.id, reason: 'quit' }]);
+  });
+
+  it('wer ohne Lohn kaum noch loyal ist, kündigt sofort', () => {
+    const sim = quietGame();
+    hire(sim, 'neumarkt');
+    const [a] = getStaff(sim.state);
+    a.stats.loyalty = 40;
+    sim.state.wallet.dirty = 0;
+    sim.advance(clock.at(2) - sim.state.time);
+    expect(getStaff(sim.state)).toHaveLength(0);
     expect(getStaff(sim.state, { status: 'quit' })).toHaveLength(1);
   });
 

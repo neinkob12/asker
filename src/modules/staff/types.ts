@@ -74,6 +74,8 @@ export interface StaffMember {
   record: StaffRecord;
   /** Letzter Verrat (Spielminute). */
   lastIncidentAt: number | null;
+  /** Tage in Folge ohne Lohn (fehlt = 0; zwei Tage, dann kündigt die Person). */
+  unpaidDays?: number;
   /** Nur bei ehemaligen Mitarbeitern gesetzt. */
   leftAt: number | null;
   leftReason: StaffLeaveReason | null;

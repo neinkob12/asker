@@ -68,7 +68,9 @@ describe('market: Richtpreis', () => {
     const kush = referencePrice(sim.state, 'kush', 'nippes');
     const deutz = referencePrice(sim.state, 'weed', 'deutz');
     sim.step();
-    expect(getPressure(sim.state, 'weed', 'kalk')).toBeCloseTo((-300 * 10) / SATURATION_EUR);
+    expect(getPressure(sim.state, 'weed', 'kalk')).toBeCloseTo(
+      (-300 * (getProduct('weed')?.basePrice ?? 0)) / SATURATION_EUR,
+    );
     expect(referencePrice(sim.state, 'weed', 'kalk')).toBeLessThan(before);
     expect(referencePrice(sim.state, 'kush', 'nippes')).toBeGreaterThan(kush);
     expect(supplyDemandFactor(sim.state, 'weed', 'kalk')).toBeGreaterThanOrEqual(1 - SUPPLY_DEMAND_RANGE);
@@ -100,7 +102,8 @@ describe('market: eigene Preise', () => {
     const reference = referencePrice(sim.state, 'weed', 'neustadt-nord') * 1.2;
     expect(spotReferencePrice(sim.state, 'friesenplatz', 'weed')).toBeCloseTo(reference);
     expect(getSpotPrice(sim.state, 'friesenplatz', 'weed')).toBe(roundPrice(reference));
-    expect(priceRatio(sim.state, 'friesenplatz', 'weed')).toBeCloseTo(1);
+    // Gerundet auf 50 Cent: höchstens ein paar Prozent daneben.
+    expect(priceRatio(sim.state, 'friesenplatz', 'weed')).toBeCloseTo(1, 1);
     expect(roundPrice(9.3)).toBe(9.5);
     expect(roundPrice(0.1)).toBe(0.5);
   });

@@ -112,8 +112,11 @@ describe('territory', () => {
     addInfluence(ctx, 'nippes', PLAYER_FACTION, CONTROL_THRESHOLD - 1);
     expect(controllerOf(sim.state, 'nippes')).toBe(owner); // mehr Einfluss, aber unter der Schwelle
     addInfluence(ctx, 'nippes', PLAYER_FACTION, 1);
-    expect(controllerOf(sim.state, 'nippes')).toBe(PLAYER_FACTION);
-    addInfluence(ctx, 'nippes', PLAYER_FACTION, -3);
+    // 50 gegen 45: Übernehmen braucht TAKEOVER_MARGIN mehr als der bisherige Herr.
+    expect(controllerOf(sim.state, 'nippes')).toBe(owner);
+    addInfluence(ctx, 'nippes', PLAYER_FACTION, 1);
+    expect(controllerOf(sim.state, 'nippes')).toBe(PLAYER_FACTION); // 51
+    addInfluence(ctx, 'nippes', PLAYER_FACTION, -4);
     expect(controllerOf(sim.state, 'nippes')).toBe(PLAYER_FACTION); // 47: hält noch
     addInfluence(ctx, 'nippes', PLAYER_FACTION, -3);
     expect(controllerOf(sim.state, 'nippes')).toBeNull(); // 44: weg, und die Gang hat nur 45
@@ -152,13 +155,13 @@ describe('territory', () => {
     const events = recordEvents(sim);
     const owner = controllerOf(sim.state, 'altstadt-sued');
     let sales = 0;
-    while (controllerOf(sim.state, 'altstadt-sued') !== PLAYER_FACTION && sales < 200) {
+    while (controllerOf(sim.state, 'altstadt-sued') !== PLAYER_FACTION && sales < 300) {
       sell(sim, 'altstadt-sued', 3);
       sales++;
     }
     expect(controllerOf(sim.state, 'altstadt-sued')).toBe(PLAYER_FACTION);
-    expect(sales).toBeGreaterThan(20); // spürbar, aber kein Selbstläufer
-    expect(sales).toBeLessThan(80);
+    expect(sales).toBeGreaterThan(50); // spürbar, aber kein Selbstläufer (ein Spot schafft 10–20 am Tag)
+    expect(sales).toBeLessThan(180);
     // Die Gang rutscht zuerst unter die untere Schwelle (Veedel offen), dann übernimmt der Spieler.
     expect(eventsOfType(events, 'territory.controlChanged').map((e) => e.payload)).toEqual([
       { veedelId: 'altstadt-sued', from: owner, to: null },

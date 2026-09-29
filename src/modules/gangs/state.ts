@@ -22,6 +22,7 @@ import {
   TRIBUTE_BASE,
   TRIBUTE_HOSTILITY_FACTOR,
   TRIBUTE_PER_HOSTILITY,
+  TRIBUTE_PER_PLAYER_VEEDEL,
   VEEDEL_POWER,
   WARN_AT,
 } from './config';
@@ -261,7 +262,9 @@ export function tributeAmount(state: GameState, id: string): number {
   const s = getGangStatus(state, id);
   if (!s) return 0;
   if (s.quote && s.quote.until > state.time) return s.quote.tribute;
-  return roundTo(TRIBUTE_BASE + s.hostility * TRIBUTE_PER_HOSTILITY, 50);
+  // Wer mehr Revier hat, kann mehr zahlen: pro eigenem Veedel wird es teurer.
+  const turf = controlledBy(state, PLAYER_FACTION).length;
+  return roundTo(TRIBUTE_BASE + s.hostility * TRIBUTE_PER_HOSTILITY + turf * TRIBUTE_PER_PLAYER_VEEDEL, 50);
 }
 
 /** Schutzgeld pro Woche, das die Gang dir zahlen müsste. */

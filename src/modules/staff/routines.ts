@@ -22,6 +22,8 @@ import {
   THEFT_GOODS_SHARE,
   THEFT_MONEY_MAX,
   THEFT_MONEY_SHARE,
+  UNPAID_DAYS_TO_QUIT,
+  UNPAID_QUIT_LOYALTY,
   XP_PER_DUTY_HOUR,
   XP_PER_SPECIALIST_DAY,
   XP_PER_WARNING,
@@ -176,23 +178,47 @@ export function daily(ctx: Ctx): void {
   for (const m of [...ctx.state.modules.staff.members]) maybeBetray(ctx, m);
 }
 
-/** Löhne pro Person. Wer nicht bezahlt werden kann, kündigt (wie im Prototyp). */
+/**
+ * Löhne pro Person, die Loyalsten zuerst. Wer nicht bezahlt werden kann, ist sauer (Loyalität sinkt) und
+ * schreibt dir. Wer dann kaum noch loyal ist oder schon gestern leer ausging, kündigt.
+ */
 function payWages(ctx: Ctx): void {
-  const members = [...ctx.state.modules.staff.members];
+  const members = [...ctx.state.modules.staff.members].sort(
+    (a, b) => b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id),
+  );
   if (members.length === 0) return;
   let paid = 0;
   let total = 0;
   const quitting: StaffMember[] = [];
+  let complained = 0;
   for (const m of members) {
     if (m.wage <= 0 || wallet.pay(ctx, m.wage, 'dirty', `Lohn ${m.name}`)) {
       paid++;
       total += m.wage;
-    } else {
+      m.unpaidDays = 0;
+      continue;
+    }
+    m.unpaidDays = (m.unpaidDays ?? 0) + 1;
+    const loyalty = addLoyalty(ctx, m.id, LOYALTY.unpaid);
+    if (m.unpaidDays >= UNPAID_DAYS_TO_QUIT || loyalty < UNPAID_QUIT_LOYALTY) {
       quitting.push(m);
+    } else if (complained++ === 0) {
+      messages.send(ctx, {
+        contact: staffContact(m),
+        text: `Chef, wo bleibt mein Geld? ${formatEuro(m.wage)} für gestern. Noch einen Tag mach ich das nicht mit.`,
+      });
     }
   }
   if (paid > 0 && total > 0) {
     journal.add(ctx, `Löhne gezahlt: ${formatEuro(total)} für ${paid} ${paid === 1 ? 'Person' : 'Leute'}.`);
+  }
+  const unpaid = members.length - paid - quitting.length;
+  if (unpaid > 0) {
+    journal.add(
+      ctx,
+      `Kein Geld für Löhne: ${unpaid === 1 ? 'Eine Person wartet' : `${unpaid} Leute warten`} auf ihr Geld. Morgen gehen sie.`,
+      'bad',
+    );
   }
   if (quitting.length > 0) {
     for (const m of quitting) removeMember(ctx, m.id, 'quit');
