@@ -160,6 +160,15 @@ export interface UiApi {
   resetNorth(): void;
 }
 
+/** Handy-Breite, gleich wie MOBILE_BREAKPOINT in src/map/config.ts und die Media Queries in tokens.css. */
+function isMobileScreen(): boolean {
+  try {
+    return window.matchMedia('(max-width: 760px)').matches;
+  } catch {
+    return false;
+  }
+}
+
 /** Anzeigedauer: Routine kurz, Warnungen länger. */
 const TOAST_MS: Record<ToastKind, number> = { good: 1900, info: 2200, warn: 3000, bad: 3400 };
 const TOAST_QUEUE = 5;
@@ -190,13 +199,15 @@ export class UiRuntime {
     private readonly storage: KeyValueStorage | null = null,
   ) {
     const prefs = loadPrefs(storage);
+    // Am Desktop steht der Inspector von Anfang an offen, am Handy ist das Sheet klein.
+    const desktop = !isMobileScreen();
     this.ui = {
       panel: null,
       dialog: null,
       phone: { open: false, app: null },
       tab: null,
-      sheetExpanded: false,
-      sheet: 'peek',
+      sheetExpanded: desktop,
+      sheet: desktop ? 'half' : 'peek',
       section: null,
       toasts: [],
       alerts: [],
@@ -288,7 +299,6 @@ export class UiRuntime {
       openPanel: (id, props) =>
         update(() => {
           ui.panel = { id, props };
-          if (ui.sheet === 'peek') ui.sheet = 'half';
         }),
       closePanel: () =>
         update(() => {

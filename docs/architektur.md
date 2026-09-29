@@ -170,31 +170,38 @@ Weitere Import-Kanten nur zur Laufzeit (Funktionsaufrufe, kein `dependsOn`): `te
 
 ## Oberfläche (`src/ui/`)
 
-Look "clean und dunkel" zur Nacht-Satellitenkarte. Details zu Tokens, Bausteinen, Handy und Ton: [`src/ui/README.md`](../src/ui/README.md).
+Look "Kölsch-Sticker": hell, App-artig und comichaft (weiße Karten mit dicker Kontur und hartem Sockel-Schatten über der dunklen Nacht-Satellitenkarte). Details zu Tokens, Bausteinen, Handy und Ton: [`src/ui/README.md`](../src/ui/README.md).
 
-- **Shell** (`shell/`): Karte vollflächig, HUD oben (am Desktop wischbar, Uhr und Wetter ab Ordnung 90 fest neben
-  dem Tempo), Seitenleiste mit umbrechenden Tabs (am Handy Bottom-Sheet), Panel-Bereich (Desktop unten links,
-  Handy Bottom-Sheet), Kartensteuerung rechts, Spiel-Handy, Dialoge, Toasts, Hinweis beim Karten-Klick.
+- **Shell** (`shell/`): Karte vollflächig und dunkel. Darüber schwebende Sticker-Elemente. Desktop: HUD als Pillen
+  oben (Geld, Heat, Mehr-Popover für Lager/Ruf/Köln, Uhr mit Wetter, Tempo, Alarm-Glocke, Handy, Menü), schmales
+  Icon-Dock links (`Navigation.tsx`) mit schwebendem Inspector daneben, Panel rechts, Handy als Fenster unten rechts.
+  Handy: HUD in zwei Reihen, Bottom-Sheet mit drei Rastpunkten (klein, mittel, voll; ziehbar) über einer Tab-Leiste,
+  Panel als Sheet, Handy bildschirmfüllend. Dazu Suche (`Palette.tsx`, Strg/⌘+K), Toasts (einer sichtbar, Rest in der
+  Warteschlange), Alarm-Zentrale, Kartensteuerung, Hinweis beim Karten-Klick. Tastatur in `keys.ts`.
 - **Laufzeit** (`runtime.ts`): `UiRuntime` hält den reinen UI-Zustand (`UiState`: Panel, Dialog, Tab, Handy,
   Tempo, `camera`, `overlay`, `vibration`, `notification`, `picking`) und die `UiApi`. Neuzeichnen nach
   Simulationsschritten, gedrosselt auf ca. 10 Mal pro Sekunde; in der Pause nur bei UI-Änderungen.
 - **Hooks** (`hooks.ts`): `useGame()` → `{ state, dispatch }`, `useUi()` → `UiApi` + `state`, `useSession()`.
 - **UiApi:** `dispatch` (Toast bei Fehler), `openPanel/closePanel`, `openDialog/closeDialog`, `toast(text, kind)`,
   `notify({ title, text, icon, appId, params, sound })`, `openPhone(appId?, params?)/closePhone`, `selectTab`,
-  `setSheetExpanded`, `setSpeed`, `togglePause`, `pickLocation(prompt)` (nächster Karten-Klick als Promise),
+  `setSheetExpanded`, `setSheet('peek'|'half'|'full')`, `openSection(id)`, `togglePalette`, `setPopover`,
+  `dismissToast`, `markAlertsRead`, `clearAlerts`, `setSpeed`, `togglePause`, `pickLocation(prompt)` (nächster Karten-Klick als Promise),
   `cancelPick`, `flyTo`, `flyToKoeln`, `flyToEuropa`, `setCameraMode`, `toggleCamera`, `setOverlay`,
   `setVibration`, `zoomIn`, `zoomOut`, `resetNorth`.
 - **Registries** (`registry.ts`, alle über `src/ui/index.ts`):
 
 | Funktion | Wofür | Einträge |
 | --- | --- | --- |
-| `registerHudItem({ id, order, component })` | Anzeige im HUD | Geld (10, sauberes Geld erst wenn > 0), Lager (20), Heat (30), Ruf (40), Köln-Fortschritt (45), offene Konfrontation (50), Uhr (90), Wetter (95) |
-| `registerTab({ id, title, order, icon?, component?, badge? })` | Seitenleisten-Tab; ohne `component` zeigt er den Slot `tab:<id>` | Geschäft (10), Reviere (20), Leute (30), Gangs, Ereignisse (90) |
+| `registerHudItem({ id, order, placement?, icon?, component })` | Anzeige im HUD (`placement`: `main` dauerhaft, `more` im Popover, `time` in der Uhr-Pille, `alert` als Warnung) | Geld (10, sauberes Geld erst wenn > 0), Lager (20), Heat (30), Ruf (40), Köln-Fortschritt (45), offene Konfrontation (50), Uhr (90), Wetter (95) |
+| `registerTab({ id, title, order, icon?, layout?, shortcut?, component?, badge? })` | Tab im Dock bzw. in der Tab-Leiste; ohne `component` zeigt er den Slot `tab:<id>`; `layout: 'rows'` zeigt jede Card als tippbare Zeile | Geschäft (10), Reviere (20), Leute (30), Gangs, Ereignisse (90) |
 | `registerSlot(name, { id, order, component })` | Abschnitt in einem Slot | `tab:business` (Lager, Lieferungen, Spots, Personal, Kundschaft, Ruf, Markt, Geldwäsche), `tab:staff`, `spots.spotPanel` (Kunden, Preise, Läufer, Leutnant), `veedel.veedelPanel` (Revier, Polizei, Leutnant), `staff.profile`, `phone.home` (Widgets), `core.settings` |
 | `registerPanel({ id, title, component })` | Detailansicht, `ui.openPanel(id, props)` | `spots.spot`, `veedel.veedel`, `goods.warehouse`, `staff.profile`, `hierarchy.lieutenant`, `market.overview` |
 | `registerDialog({ id, component, pausesGame?, dismissable? })` | Dialog, `ui.openDialog(id, props)` | `core.newGame`, `core.saves`, `core.settings`, `core.gameOver`, `core.won`, `encounters.encounter` (pausiert), `gangs.attack`, `gangs.ally` |
 | `registerPhoneApp({ id, name, icon, order, color?, chrome?, component, badge? })` | App im Spiel-Handy | Nachrichten, Lieferanten, Kontakte (Bewerber), Aufträge, Wetter, Musik, Einstellungen |
 | `onGameEvent(type, id, (payload, ui, state) => …)` | Reaktion auf Ereignisse (Toast, Dialog, Effekt) | Game Over, Sieg, neue Nachricht (Banner), Toasts der Module, Karten-Effekte |
+| `registerAdvisor({ id, advise(state) })` | Empfehlung für die Karte "Nächster Schritt" (`Advice`: priority, icon, title, cost?, action?, highlight?) | Antworten (Kern), Verkauf und Läufer (Spots, Personal), Nachschub (Lieferanten), Geldwäsche, Kampagnenziel |
+| `registerSearch({ id, label, order, items(state) })` | Einträge der Suche (Strg/⌘+K) | Spots, Veedel, Leute, Gangs |
+| `registerGameStat({ id, order, icon, label, value(state) })` | Kennzahl auf dem Game-Over- und Sieg-Bildschirm | Tage, Schwarzgeld, Veedel, Kunden, Team |
 | `soundOnEvent(type, sound, { when?, throttleMs?, volume? })` | Ton zu einem Ereignis | Kasse, Nachricht, Sirene bei Razzia/Kontrolle, Warnton bei Konfrontation, Lieferung, Game Over, Sieg |
 
 - **Bausteine** (`components/`): `Button`, `IconButton`, `SegmentedControl`, `Select`, `Card`, `Hint`, `Empty`,

@@ -8,12 +8,12 @@ import {
   Card,
   Empty,
   Hint,
+  HudPill,
   List,
   ListItem,
   registerHudItem,
   registerPanel,
   registerSlot,
-  Stat,
   useGame,
   useUi,
 } from '../../../ui';
@@ -61,18 +61,15 @@ function StockHud() {
     .map((r) => `${formatProductAmount(r.productId, r.amount)} ${productName(r.productId)}`)
     .join(', ');
   return (
-    <button
-      type="button"
-      class="goods-hud"
+    <HudPill
+      icon="warehouse"
+      color="green"
+      label="Lager"
+      value={`${formatProductAmount('weed', grams)}${other > 0 ? ` +${other}` : ''}`}
+      title={title || 'Lager leer'}
+      tone={grams + other <= 0 ? 'bad' : undefined}
       onClick={() => ui.openPanel('goods.warehouse', { warehouseId: DEFAULT_WAREHOUSE })}
-      aria-label="Lager öffnen"
-    >
-      <Stat
-        label="Lager"
-        value={`${formatProductAmount('weed', grams)}${other > 0 ? ` +${other}` : ''}`}
-        title={title || 'Lager leer'}
-      />
-    </button>
+    />
   );
 }
 
@@ -149,6 +146,17 @@ function StockSection() {
   return (
     <Card
       title="Lager"
+      icon="warehouse"
+      color="green"
+      status={rows.length === 0 ? 'bad' : 'good'}
+      summary={
+        rows.length === 0
+          ? 'leer'
+          : rows
+              .slice(0, 2)
+              .map((r) => formatProductAmount(r.productId, r.amount))
+              .join(' · ')
+      }
       actions={
         <Button small onClick={() => ui.openPanel('goods.warehouse', { warehouseId: DEFAULT_WAREHOUSE })}>
           Öffnen
@@ -173,7 +181,7 @@ function StockSection() {
   );
 }
 
-registerHudItem({ id: 'goods.stock', order: 20, component: StockHud });
+registerHudItem({ id: 'goods.stock', order: 20, placement: 'more', icon: 'warehouse', component: StockHud });
 registerSlot('tab:business', { id: 'goods.stock', order: 5, component: StockSection });
 registerPanel({
   id: 'goods.warehouse',

@@ -17,7 +17,7 @@ src/modules/   Spielsysteme, je ein Ordner = ein Modul (veedel, spots, staff …
   <id>/*.test.ts    Tests neben dem Code
   <id>/ui/index.tsx Oberfläche des Moduls (Panels, Tabs, HUD, Karten-Layer …), automatisch geladen
   _template/        kommentierte Kopiervorlage (wird nicht registriert)
-src/ui/        Oberfläche: Shell, Registries, Bausteine (components/), Design-Tokens (styles/), Handy (phone/)
+src/ui/        Oberfläche (hell, comichaft): Shell, Registries, Bausteine (components/), Design-Tokens (styles/), Handy (phone/)
 src/map/       Grundkarte (MapLibre), Registry für Karten-Layer, Effekt-Werkzeuge (Fahrzeuge, Figuren, Blaulicht …)
 src/audio/     Musik und Soundeffekte (für Module über src/ui erreichbar)
 src/playtest/  Tests über alle Module: Bot fürs Balancing (bot.ts), Spielende (endings.test.ts)
@@ -88,7 +88,9 @@ export default defineModule({
 
 In `src/modules/<id>/ui/index.tsx` (Beispiel in `_template/ui/`): `registerHudItem`, `registerTab`,
 `registerSlot` (z.B. in `'tab:business'` oder `'spots.spotPanel'`), `registerPanel`, `registerDialog`,
-`registerPhoneApp`, `onGameEvent`, `soundOnEvent` aus `src/ui`, `registerMapLayer` und `mapEffects` aus `src/map`.
+`registerPhoneApp`, `registerAdvisor` (Karte "Nächster Schritt"), `registerSearch` (Strg/⌘+K), `registerGameStat`
+(Game-Over-Bildschirm), `onGameEvent`, `soundOnEvent` aus `src/ui`, `registerMapLayer` und `mapEffects` aus `src/map`.
+HUD-Anzeigen mit `<HudPill>`, Karten für den Geschäft-Tab mit `icon`, `summary` und `status` (werden dort zu Zeilen).
 Nur Bausteine aus `src/ui/components` (auch `Select`, `Avatar`, `Icon` …) und Design-Tokens (`var(--color-…)`,
 `var(--space-…)`) verwenden. Details: `src/ui/README.md`, `src/map/README.md`.
 Komponenten lesen mit `useGame()` und ändern nur mit `dispatch`.

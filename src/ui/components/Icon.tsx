@@ -100,14 +100,16 @@ export function IconChip(props: IconChipProps) {
   );
 }
 
+const STATUS_LABELS = { good: 'in Ordnung', warn: 'Achtung', bad: 'Problem', idle: 'ruhig' } as const;
+
 /** Farbiger Status-Punkt (grün gut, gelb Achtung, rot Problem, grau ruhig). */
 export function StatusDot(props: { status: 'good' | 'warn' | 'bad' | 'idle'; title?: string }) {
   return (
     <span
       class={`ui-status-dot ui-status-dot--${props.status}`}
       title={props.title}
-      role={props.title ? 'img' : undefined}
-      aria-label={props.title}
+      role="img"
+      aria-label={props.title ?? STATUS_LABELS[props.status]}
     />
   );
 }

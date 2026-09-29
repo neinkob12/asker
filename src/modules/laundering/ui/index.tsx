@@ -2,7 +2,17 @@
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro, formatPercent, wallet } from '../../../core';
-import { Button, Card, Hint, KeyValue, onGameEvent, ProgressBar, registerSlot, useGame } from '../../../ui';
+import {
+  Button,
+  Card,
+  Hint,
+  KeyValue,
+  onGameEvent,
+  ProgressBar,
+  registerAdvisor,
+  registerSlot,
+  useGame,
+} from '../../../ui';
 import {
   amountInProgress,
   batchProgress,
@@ -26,7 +36,13 @@ function LaunderingSection() {
   const batches = getBatches(state);
   const change = (delta: number) => setAmount(Math.max(0, Math.min(max, value + delta)));
   return (
-    <Card title="Geldwäsche">
+    <Card
+      title="Geldwäsche"
+      icon="washing"
+      color="green"
+      status={batches.length > 0 ? 'good' : 'idle'}
+      summary={batches.length > 0 ? `${batches.length} läuft` : `${formatEuro(free)} frei`}
+    >
       <Hint>
         Schwarzgeld wird über Zeit zu sauberem Geld, das du für Legales brauchst. Gebühr {formatPercent(fee)}, gerade
         frei: {formatEuro(free)}.
@@ -76,3 +92,23 @@ registerSlot('tab:business', { id: 'laundering.section', order: 50, component: L
 onGameEvent('laundering.completed', 'laundering.toast', (payload, ui) =>
   ui.toast(`${formatEuro(payload.amount - payload.fee)} sind jetzt sauber.`, 'good'),
 );
+
+registerAdvisor({
+  id: 'laundering.advice',
+  advise: (state) => {
+    const dirty = Math.floor(wallet.balance(state, 'dirty'));
+    if (dirty < 4000 || launderingCapacity(state) - amountInProgress(state) <= 0) return null;
+    return {
+      id: 'laundering.wash',
+      priority: 35,
+      icon: 'washing',
+      title: 'Geld waschen',
+      text: 'Sauberes Geld brauchst du für alles Legale, zum Beispiel Lager und Autos.',
+      actionLabel: 'Öffnen',
+      action: (ui) => {
+        ui.selectTab('business');
+        ui.openSection('laundering.section');
+      },
+    };
+  },
+});

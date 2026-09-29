@@ -2,12 +2,20 @@
 // Einstellungs-Dialoge, die Handy-Apps Nachrichten, Musik und Einstellungen, Benachrichtigungen und Sounds
 // für die Ereignisse des Kerns.
 
-import { messages } from '../../core';
+import { clock, formatEuro, messages, wallet } from '../../core';
 import { MessagesApp } from '../phone/MessagesApp';
 import { MusicApp } from '../phone/MusicApp';
-import { messageNotification } from '../phone/messagesModel';
+import { chatList, messageNotification } from '../phone/messagesModel';
 import { SettingsApp } from '../phone/SettingsApp';
-import { onGameEvent, registerDialog, registerHudItem, registerPhoneApp, registerTab } from '../registry';
+import {
+  onGameEvent,
+  registerAdvisor,
+  registerDialog,
+  registerGameStat,
+  registerHudItem,
+  registerPhoneApp,
+  registerTab,
+} from '../registry';
 import { soundOnEvent } from '../sound';
 import { ClockHud, MoneyHud } from './CoreHud';
 import { GameOverDialog, NewGameDialog, SavesDialog, WonDialog } from './GameDialogs';
@@ -21,11 +29,11 @@ declare module '../registry' {
 }
 
 export function registerBuiltins(): void {
-  registerHudItem({ id: 'core.money', order: 10, component: MoneyHud });
-  registerHudItem({ id: 'core.clock', order: 90, component: ClockHud });
+  registerHudItem({ id: 'core.money', order: 10, placement: 'main', component: MoneyHud });
+  registerHudItem({ id: 'core.clock', order: 90, placement: 'time', component: ClockHud });
 
   // "Geschäft" sammelt Abschnitte der Module über den Slot 'tab:business'.
-  registerTab({ id: 'business', title: 'Geschäft', order: 10, icon: 'briefcase' });
+  registerTab({ id: 'business', title: 'Geschäft', order: 10, icon: 'briefcase', layout: 'rows' });
   registerTab({ id: 'journal', title: 'Ereignisse', order: 90, component: JournalTab, icon: 'list' });
 
   registerDialog({ id: 'core.newGame', component: NewGameDialog, pausesGame: true, dismissable: false });
@@ -59,6 +67,40 @@ export function registerBuiltins(): void {
     order: 90,
     color: '#3a4656',
     component: SettingsApp,
+  });
+
+  // Wartet ein Chat auf Antwort, ist das die dringendste Empfehlung.
+  registerAdvisor({
+    id: 'core.answer',
+    advise: (state) => {
+      const open = chatList(state).filter((c) => c.awaitingAnswer);
+      if (open.length === 0) return null;
+      const first = open[0];
+      return {
+        id: 'core.answer',
+        priority: 90,
+        icon: 'message',
+        title: open.length === 1 ? `${first.name} wartet auf Antwort` : `${open.length} Chats warten auf Antwort`,
+        text: 'Manche Antworten haben eine Frist.',
+        actionLabel: 'Antworten',
+        action: (ui) => ui.openPhone('core.messages', open.length === 1 ? { contactId: first.contactId } : undefined),
+      };
+    },
+  });
+
+  registerGameStat({
+    id: 'core.days',
+    order: 10,
+    icon: 'calendar',
+    label: 'Überlebte Tage',
+    value: (state) => String(clock.day(state.time)),
+  });
+  registerGameStat({
+    id: 'core.money',
+    order: 15,
+    icon: 'moneyBag',
+    label: 'Schwarzgeld am Ende',
+    value: (state) => formatEuro(Math.round(wallet.balance(state, 'dirty'))),
   });
 
   onGameEvent('game.over', 'core.gameOver', (_payload, ui) => ui.openDialog('core.gameOver', {}));

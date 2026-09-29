@@ -14,6 +14,7 @@ export {
 } from './Button';
 export { Dialog, type DialogProps } from './Dialog';
 export { ErrorBoundary, type ErrorBoundaryProps } from './ErrorBoundary';
+export { HudPill, type HudPillProps } from './HudPill';
 export { type ChipColor, Icon, IconChip, type IconChipProps, type IconProps, StatusDot } from './Icon';
 export { EMOJI_ICONS, ICONS, type IconName, isIconName, resolveIcon } from './icons';
 export {

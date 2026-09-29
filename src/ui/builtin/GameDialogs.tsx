@@ -2,6 +2,7 @@
 
 import type { JSX } from 'preact';
 import { useMemo, useState } from 'preact/hooks';
+import type { GameState } from '../../core';
 import {
   AUTOSAVE_SLOT,
   clock,
@@ -11,8 +12,9 @@ import {
   SaveError,
   type SaveInfo,
 } from '../../core';
-import { Button, Dialog, Hint, List, ListItem } from '../components';
+import { Button, Confetti, Dialog, Hint, Icon, IconChip, List, ListItem, Stamp } from '../components';
 import { useRuntime } from '../hooks';
+import { gameStats } from '../registry';
 
 declare module '../registry' {
   interface DialogRegistry {
@@ -23,9 +25,21 @@ declare module '../registry' {
   }
 }
 
-const MODES: { mode: GameMode; title: string; text: string }[] = [
-  { mode: 'normal', title: 'Normal', text: 'Nach einem Game Over darfst du einen älteren Spielstand laden.' },
-  { mode: 'hardcore', title: 'Hardcore', text: 'Bei Game Over wird der Spielstand gelöscht. Keine zweite Chance.' },
+const MODES: { mode: GameMode; title: string; text: string; icon: string; color: 'green' | 'red' }[] = [
+  {
+    mode: 'normal',
+    title: 'Normal',
+    text: 'Nach einem Game Over darfst du einen älteren Spielstand laden.',
+    icon: 'shieldCheck',
+    color: 'green',
+  },
+  {
+    mode: 'hardcore',
+    title: 'Hardcore',
+    text: 'Bei Game Over wird der Spielstand gelöscht. Keine zweite Chance.',
+    icon: 'skull',
+    color: 'red',
+  },
 ];
 
 export function NewGameDialog(props: { firstStart?: boolean }) {
@@ -54,11 +68,15 @@ export function NewGameDialog(props: { firstStart?: boolean }) {
         </>
       }
     >
-      <p>Köln, Freitagabend. Du hast 1.500 € und ein bisschen Ware. Mach was draus.</p>
+      <p class="newgame__intro">
+        <IconChip icon="moneyBag" color="yellow" size="md" />
+        <span>Köln, Freitagabend. Du hast 1.500 € und ein bisschen Ware. Mach was draus.</span>
+      </p>
       <div class="mode-choice" role="radiogroup" aria-label="Modus">
         {MODES.map((m) => (
           <label key={m.mode} class={`mode-choice__option ${mode === m.mode ? 'is-active' : ''}`}>
             <input type="radio" name="mode" checked={mode === m.mode} onChange={() => setMode(m.mode)} />
+            <IconChip icon={m.icon} color={m.color} size="lg" />
             <strong>{m.title}</strong>
             <span>{m.text}</span>
           </label>
@@ -185,6 +203,32 @@ export function SavesDialog() {
   );
 }
 
+/** Kennzahlen des Spiels für den Ergebnis-Bildschirm, einzeln einfahrend. */
+function EndingStats(props: { state: GameState | null }) {
+  const state = props.state;
+  if (!state) return null;
+  const rows: { id: string; icon: string; label: string; value: string }[] = [];
+  for (const stat of gameStats.list()) {
+    try {
+      rows.push({ id: stat.id, icon: stat.icon, label: stat.label, value: stat.value(state) });
+    } catch (error) {
+      console.error(`Kennzahl "${stat.id}"`, error);
+    }
+  }
+  if (rows.length === 0) return null;
+  return (
+    <ul class="ending-stats">
+      {rows.map((r, i) => (
+        <li key={r.id} style={{ '--i': i }}>
+          <Icon name={r.icon} />
+          <span>{r.label}</span>
+          <strong>{r.value}</strong>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function GameOverDialog() {
   const runtime = useRuntime();
   const { session, api } = runtime;
@@ -193,51 +237,77 @@ export function GameOverDialog() {
   if (!over) return null;
   const hardcore = session.state?.meta.mode === 'hardcore';
   const canContinue = !hardcore && autosave && !autosave.state.outcome.gameOver;
+  const killed = over.reason === 'killed';
   return (
     <Dialog
       title="Game Over"
       icon="skull"
       tone="bad"
-      kicker={over.reason === 'killed' ? 'Tot' : 'Pleite'}
+      kicker={clock.formatLong(over.time)}
+      class="ui-dialog--ending"
       actions={
         <>
-          {!hardcore && <Button onClick={() => api.openDialog('core.saves', {})}>Spielstand laden</Button>}
+          {!hardcore && (
+            <Button icon="save" onClick={() => api.openDialog('core.saves', {})}>
+              Spielstand laden
+            </Button>
+          )}
           {canContinue && (
             <Button
+              icon="undo"
               onClick={() => {
                 session.load(AUTOSAVE_SLOT);
                 api.closeDialog();
               }}
             >
-              Letzten Autosave laden
+              Letzter Autosave
             </Button>
           )}
-          <Button variant="primary" onClick={() => api.openDialog('core.newGame', { firstStart: true })}>
+          <Button variant="primary" icon="refresh" onClick={() => api.openDialog('core.newGame', { firstStart: true })}>
             Neues Spiel
           </Button>
         </>
       }
     >
-      <p class="game-over__reason">{over.detail ?? GAME_OVER_TEXT[over.reason]}</p>
-      <Hint>
-        {clock.formatLong(over.time)}.{' '}
-        {hardcore ? 'Hardcore: Dein Spielstand wurde gelöscht.' : 'Du kannst einen älteren Spielstand laden.'}
-      </Hint>
+      <div class="ending">
+        <Stamp tone="bad" size="lg" rotate={-7} icon={killed ? 'skull' : 'wallet'} class="ending__stamp">
+          {killed ? 'Erledigt' : 'Pleite'}
+        </Stamp>
+        <p class="ending__reason">{over.detail ?? GAME_OVER_TEXT[over.reason]}</p>
+        <EndingStats state={session.state} />
+        <Hint>
+          {hardcore ? 'Hardcore: Dein Spielstand wurde gelöscht.' : 'Du kannst einen älteren Spielstand laden.'}
+        </Hint>
+      </div>
     </Dialog>
   );
 }
 
 export function WonDialog() {
-  const { api } = useRuntime();
+  const { api, session } = useRuntime();
   return (
     <Dialog
       title="Köln gehört dir"
       icon="crown"
       kicker="Kampagne gewonnen"
+      class="ui-dialog--won"
       onClose={api.closeDialog}
-      actions={<Button onClick={api.closeDialog}>Weiterspielen</Button>}
+      actions={
+        <Button variant="success" icon="play" onClick={api.closeDialog}>
+          Weiterspielen
+        </Button>
+      }
     >
-      <p>Die Mehrheit der Veedel hört auf dein Kommando. Das Spiel geht im Endlosmodus weiter.</p>
+      <Confetti />
+      <div class="ending">
+        <Stamp tone="accent" size="lg" rotate={-5} icon="crown" class="ending__stamp">
+          Gewonnen
+        </Stamp>
+        <p class="ending__reason">
+          Die Mehrheit der Veedel hört auf dein Kommando. Das Spiel geht im Endlosmodus weiter.
+        </p>
+        <EndingStats state={session.state} />
+      </div>
     </Dialog>
   );
 }

@@ -5,14 +5,19 @@
 import { formatAmount, formatEuro, formatPercent } from '../../../core';
 import { mapEffects } from '../../../map';
 import {
+  Avatar,
   Button,
   Dialog,
+  DuelBar,
   Hint,
+  Icon,
+  IconChip,
   onGameEvent,
-  ProgressBar,
   registerDialog,
   registerHudItem,
+  Stamp,
   soundOnEvent,
+  Tag,
   useGame,
   useUi,
 } from '../../../ui';
@@ -24,7 +29,6 @@ import {
   availableActions,
   ENCOUNTER_KINDS,
   type Encounter,
-  type EncounterOutcome,
   getEncounter,
   getEncounterAction,
   type Participant,
@@ -37,12 +41,6 @@ declare module '../../../ui' {
     'encounters.encounter': { encounterId: number };
   }
 }
-
-const OUTCOME_TITLE: Record<EncounterOutcome, string> = {
-  success: 'Geschafft',
-  failure: 'Verloren',
-  retreat: 'Rückzug',
-};
 
 function edgeText(edge: number): string {
   if (edge >= 75) return 'Ihr habt die Oberhand';
@@ -63,8 +61,11 @@ function ParticipantRow(props: { p: Participant }) {
   const s = p.stats;
   return (
     <li class={`enc-person enc-person--${p.killed ? 'dead' : p.condition}`}>
-      <span class="enc-person__name">{p.isPlayer ? 'Du' : p.name}</span>
-      <span class="enc-person__state">{conditionText(p)}</span>
+      <Avatar name={p.isPlayer ? 'Du' : p.name} size="sm" image={p.isPlayer ? 'user' : undefined} />
+      <span class="enc-person__main">
+        <span class="enc-person__name">{p.isPlayer ? 'Du' : p.name}</span>
+        <span class="enc-person__state">{conditionText(p)}</span>
+      </span>
       <span class="enc-person__stats" title="Kraft · Tempo · Charisma · Vorsicht">
         K{s.strength} T{s.speed} C{s.charisma} V{s.caution}
       </span>
@@ -78,7 +79,9 @@ function Sides(props: { encounter: Encounter }) {
   return (
     <div class="enc-sides">
       <section class="enc-side">
-        <h3 class="enc-side__title">Deine Seite</h3>
+        <h3 class="enc-side__title">
+          <Icon name="shield" /> Deine Seite
+        </h3>
         {encounter.participants.length === 0 ? (
           <p class="enc-side__empty">Niemand vor Ort.</p>
         ) : (
@@ -90,12 +93,16 @@ function Sides(props: { encounter: Encounter }) {
         )}
       </section>
       <section class="enc-side enc-side--enemy">
-        <h3 class="enc-side__title">{o.label}</h3>
+        <h3 class="enc-side__title">
+          <Icon name="skull" /> {o.label}
+        </h3>
         <p class="enc-enemy">
           <strong>{o.count}</strong> von {o.startCount} stehen
           {o.down > 0 ? `, ${o.down} am Boden` : ''}
         </p>
-        <p class="enc-enemy">Kampfkraft {o.strength}</p>
+        <Tag tone="bad" icon="fist">
+          Kampfkraft {o.strength}
+        </Tag>
       </section>
     </div>
   );
@@ -141,21 +148,55 @@ function Briefing(props: { encounter: Encounter }) {
   return (
     <div class="enc-choices">
       <p class="enc-question">Gehst du selbst hin?</p>
-      <Button variant="danger" wide class="enc-choice" onClick={() => join(true)}>
-        <strong>Selbst hin</strong>
-        <small>Bessere Chancen und mehr Möglichkeiten. Du kannst dabei sterben.</small>
-      </Button>
-      <Button wide class="enc-choice" onClick={() => join(false)}>
-        <strong>{hasCrew ? 'Deine Leute machen lassen' : 'Nicht eingreifen'}</strong>
-        <small>
-          {hasCrew
-            ? 'Du bleibst sicher und gibst Anweisungen per Handy. Weniger Möglichkeiten.'
-            : 'Niemand von euch ist dort. Die Sache läuft ohne dich.'}
-        </small>
-      </Button>
+      <button type="button" class="enc-card enc-card--danger" onClick={() => join(true)}>
+        <IconChip icon="swords" color="red" size="lg" />
+        <span class="enc-card__text">
+          <strong>Selbst hin</strong>
+          <small>Bessere Chancen und mehr Möglichkeiten.</small>
+          <span class="enc-card__chips">
+            <Tag tone="bad" icon="skull">
+              Tod möglich
+            </Tag>
+            <Tag tone="accent" icon="trendUp">
+              Bessere Chancen
+            </Tag>
+          </span>
+        </span>
+      </button>
+      <button type="button" class="enc-card" onClick={() => join(false)}>
+        <IconChip icon="shieldCheck" color="green" size="lg" />
+        <span class="enc-card__text">
+          <strong>{hasCrew ? 'Deine Leute machen lassen' : 'Nicht eingreifen'}</strong>
+          <small>
+            {hasCrew
+              ? 'Du bleibst sicher und gibst Anweisungen per Handy.'
+              : 'Niemand von euch ist dort. Die Sache läuft ohne dich.'}
+          </small>
+          <span class="enc-card__chips">
+            <Tag tone="accent" icon="shieldCheck">
+              Sicher
+            </Tag>
+            {hasCrew && (
+              <Tag tone="warn" icon="trendDown">
+                Weniger Möglichkeiten
+              </Tag>
+            )}
+          </span>
+        </span>
+      </button>
     </div>
   );
 }
+
+const ACTION_ICONS: Record<string, string> = {
+  fight: 'fist',
+  intimidate: 'megaphone',
+  hold: 'shield',
+  negotiate: 'handshake',
+  bribe: 'moneyBag',
+  flee: 'runner',
+  dump: 'trash',
+};
 
 function Actions(props: { encounter: Encounter }) {
   const { state, dispatch } = useGame();
@@ -166,39 +207,43 @@ function Actions(props: { encounter: Encounter }) {
   return (
     <div class="enc-choices">
       {!encounter.participants.some((p) => p.isPlayer && p.condition !== 'down') && (
-        <Hint>Du bist nicht vor Ort. Deine Leute bekommen deine Anweisungen per Handy.</Hint>
+        <Hint icon="phone">Du bist nicht vor Ort. Deine Leute bekommen deine Anweisungen per Handy.</Hint>
       )}
       {actions.map((id) => {
         const action = getEncounterAction(encounter.kind, id);
         if (!action) return null;
         const chance = actionChance(encounter, id);
         const cost = action.costsBribe ? encounter.bribeCost : 0;
+        const level = chance >= 0.6 ? 'good' : chance < 0.35 ? 'bad' : 'mid';
         return (
-          <Button
+          <button
             key={id}
-            wide
-            class="enc-choice"
+            type="button"
+            class={`enc-card ${id === 'fight' ? 'enc-card--danger' : ''}`}
             disabled={cost > state.wallet.dirty}
             onClick={() => act(id)}
-            variant={id === 'fight' ? 'danger' : 'default'}
           >
-            <span class="enc-choice__row">
+            <IconChip icon={ACTION_ICONS[id] ?? 'bolt'} color={id === 'fight' ? 'red' : 'yellow'} size="md" />
+            <span class="enc-card__text">
               <strong>{action.label}</strong>
-              <span class={`enc-chance ${chance >= 0.6 ? 'is-good' : chance < 0.35 ? 'is-bad' : ''}`}>
-                {formatPercent(chance)}
-              </span>
+              <small>{action.hint}</small>
+              {cost > 0 && (
+                <span class="enc-card__chips">
+                  <Tag tone={cost > state.wallet.dirty ? 'bad' : 'muted'} icon="moneyBag">
+                    Kostet {formatEuro(cost)}
+                  </Tag>
+                </span>
+              )}
             </span>
-            <small>
-              {action.hint}
-              {cost > 0 ? ` Kostet ${formatEuro(cost)}.` : ''}
-            </small>
-          </Button>
+            <span class={`enc-chance is-${level}`}>{formatPercent(chance)}</span>
+          </button>
         );
       })}
       {!encounter.playerPresent && (
         <Button
           variant="subtle"
           wide
+          icon="dice"
           onClick={() => dispatch({ type: 'encounters.auto', payload: { encounterId: encounter.id } })}
         >
           Deine Leute entscheiden lassen (auswürfeln)
@@ -211,9 +256,18 @@ function Actions(props: { encounter: Encounter }) {
 function Result(props: { encounter: Encounter }) {
   const { encounter } = props;
   const outcome = encounter.outcome ?? 'failure';
+  const stamp =
+    outcome === 'success'
+      ? { text: 'Geschafft', tone: 'accent' as const, icon: 'check' }
+      : outcome === 'retreat'
+        ? { text: 'Rückzug', tone: 'warn' as const, icon: 'runner' }
+        : { text: encounter.playerKilled ? 'Tot' : 'Verloren', tone: 'bad' as const, icon: 'skull' };
   return (
     <div class={`enc-result enc-result--${outcome}`}>
-      <p class="enc-result__title">{encounter.playerKilled ? 'Du bist tot.' : OUTCOME_TITLE[outcome]}</p>
+      <Stamp tone={stamp.tone} icon={stamp.icon} size="lg" rotate={-6}>
+        {stamp.text}
+      </Stamp>
+      {encounter.playerKilled && <p class="enc-result__title">Du bist tot.</p>}
       <p>{encounter.result?.text}</p>
     </div>
   );
@@ -240,7 +294,11 @@ function EncounterDialog(props: { encounterId: number }) {
   const edge = encounter.edge;
   return (
     <Dialog
-      title={<span class="enc-title">{kind?.name ?? 'Konfrontation'}</span>}
+      title={kind?.name ?? 'Konfrontation'}
+      icon="swords"
+      tone="bad"
+      kicker={`Konfrontation · ${encounter.place}`}
+      class="enc-dialog"
       actions={
         done ? (
           <Button variant="primary" onClick={close}>
@@ -250,19 +308,18 @@ function EncounterDialog(props: { encounterId: number }) {
       }
     >
       <div class={`enc enc--${encounter.phase}`}>
-        <p class="enc-meta">
-          {encounter.place}
-          {encounter.phase === 'rounds' || (done && encounter.round > 0)
-            ? ` · Runde ${Math.min(encounter.round + (done ? 0 : 1), encounter.maxRounds)} von ${encounter.maxRounds}`
-            : ''}
-        </p>
+        {(encounter.phase === 'rounds' || (done && encounter.round > 0)) && (
+          <p class="enc-meta">
+            <Icon name="timer" /> Runde {Math.min(encounter.round + (done ? 0 : 1), encounter.maxRounds)} von{' '}
+            {encounter.maxRounds}
+          </p>
+        )}
         <p class="enc-situation">{encounter.situation}</p>
         <Stakes encounter={encounter} />
         <Sides encounter={encounter} />
         {encounter.phase !== 'briefing' && (
           <div class="enc-edge">
-            <span class="enc-edge__label">Lage</span>
-            <ProgressBar value={edge / 100} tone={edge < 30 ? 'bad' : edge < 50 ? 'warn' : 'accent'} label="Lage" />
+            <DuelBar left={edge} right={100 - edge} leftLabel="Ihr" rightLabel={encounter.opponent.label} />
             <span class="enc-edge__text">{edgeText(edge)}</span>
           </div>
         )}
@@ -283,18 +340,18 @@ function PendingHud() {
   if (!pending || ui.state.dialog?.id === 'encounters.encounter') return null;
   return (
     <Button
-      small
       variant="danger"
+      icon="siren"
       class="enc-hud"
       onClick={() => ui.openDialog('encounters.encounter', { encounterId: pending.id })}
     >
-      ⚠ {ENCOUNTER_KINDS[pending.kind]?.name ?? 'Konfrontation'}
+      {ENCOUNTER_KINDS[pending.kind]?.name ?? 'Konfrontation'}
     </Button>
   );
 }
 
 registerDialog({ id: 'encounters.encounter', component: EncounterDialog, pausesGame: true, dismissable: false });
-registerHudItem({ id: 'encounters.pending', order: 50, component: PendingHud });
+registerHudItem({ id: 'encounters.pending', order: 50, placement: 'alert', component: PendingHud });
 onGameEvent('encounter.started', 'encounters.open', (payload, ui, state) => {
   if (state.outcome.gameOver) return;
   ui.openDialog('encounters.encounter', { encounterId: payload.encounterId });

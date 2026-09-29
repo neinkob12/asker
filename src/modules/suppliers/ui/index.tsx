@@ -16,13 +16,14 @@ import {
   onGameEvent,
   PhoneScreen,
   ProgressBar,
+  registerAdvisor,
   registerPhoneApp,
   registerSlot,
   soundOnEvent,
   useGame,
   useUi,
 } from '../../../ui';
-import { productName, qualityTier } from '../../goods';
+import { getStock, productName, qualityTier } from '../../goods';
 import {
   assortment,
   availableCredit,
@@ -236,6 +237,10 @@ function ShipmentsSection() {
   return (
     <Card
       title="Lieferungen"
+      icon="truck"
+      color="blue"
+      status={debts.length > 0 ? 'warn' : shipments.length > 0 ? 'good' : 'idle'}
+      summary={shipments.length === 0 ? 'keine' : `${shipments.length} unterwegs`}
       actions={
         <Button small onClick={() => ui.openPhone('suppliers.app')}>
           Bestellen
@@ -281,4 +286,23 @@ onGameEvent('shipment.problem', 'suppliers.problemToast', (payload, ui, state) =
 soundOnEvent('shipment.arrived', 'delivery');
 onGameEvent('shipment.arrived', 'suppliers.arrivedToast', (payload, ui, state) => {
   ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.`, 'good');
+});
+
+// Empfehlung: Nachschub bestellen, wenn die Ware knapp wird.
+registerAdvisor({
+  id: 'suppliers.restock',
+  advise: (state) => {
+    if (shipmentsInTransit(state).length > 0) return null;
+    const stock = getStock(state);
+    if (stock >= 20) return null;
+    return {
+      id: 'suppliers.restock',
+      priority: stock <= 0 ? 88 : 80,
+      icon: 'truck',
+      title: stock <= 0 ? 'Ware ist alle' : 'Ware wird knapp',
+      text: 'Bestell Nachschub über die Lieferanten-App im Handy.',
+      actionLabel: 'Bestellen',
+      action: (ui) => ui.openPhone('suppliers.app'),
+    };
+  },
 });

@@ -2,9 +2,9 @@
 // Das Panel hat den Slot 'veedel.veedelPanel', in den andere Module Abschnitte hängen (Revier, Polizei …).
 
 import { formatPercent } from '../../../core';
-import { Button, Card, KeyValue, registerPanel, Slot, useGame, useUi } from '../../../ui';
+import { Button, Card, KeyValue, registerPanel, registerSearch, Slot, useGame, useUi } from '../../../ui';
 import { getSpots } from '../../spots';
-import { getVeedel, neighborsOf, sharesBorder, veedelLinks, veedelName } from '../index';
+import { allVeedel, getVeedel, neighborsOf, sharesBorder, veedelLinks, veedelName } from '../index';
 import './veedel.css';
 
 declare module '../../../ui' {
@@ -87,4 +87,21 @@ registerPanel({
   id: 'veedel.veedel',
   title: (props) => veedelName(props.veedelId),
   component: VeedelPanel,
+});
+
+registerSearch({
+  id: 'veedel.search',
+  label: 'Veedel',
+  order: 20,
+  items: () =>
+    allVeedel().map((v) => ({
+      id: v.id,
+      title: v.name,
+      subtitle: v.district,
+      icon: 'map',
+      run: (ui) => {
+        ui.flyTo(v.center, 14.5);
+        ui.openPanel('veedel.veedel', { veedelId: v.id });
+      },
+    })),
 });

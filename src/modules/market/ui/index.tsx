@@ -167,6 +167,10 @@ function MarketSection() {
   return (
     <Card
       title="Markt"
+      icon="chart"
+      color="blue"
+      status={hot.length > 0 ? 'warn' : 'idle'}
+      summary={hot.length > 0 ? `${hot.length} gefragt` : 'ruhig'}
       actions={
         <Button small onClick={() => ui.openPanel('market.overview', {})}>
           Übersicht

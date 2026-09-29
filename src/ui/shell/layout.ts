@@ -1,6 +1,7 @@
 // Layout-Hilfen der Shell: Handy- oder Desktop-Aufbau, Icons und Kürzel der Tabs, Einordnung der HUD-Einträge.
 
 import { useEffect, useState } from 'preact/hooks';
+import type { ChipColor } from '../components';
 import { type HudItem, type SidebarTab, sidebarTabs } from '../registry';
 
 /** Gleiche Breite wie MOBILE_BREAKPOINT in src/map/config.ts und die Media Queries in tokens.css. */
@@ -38,6 +39,26 @@ const TAB_ICONS: Record<string, string> = {
   gangs: 'skull',
   journal: 'journal',
 };
+
+/** Farben der Tab-Sticker im Dock und in der Tab-Leiste. */
+const TAB_COLORS: Record<string, ChipColor> = {
+  business: 'green',
+  territory: 'blue',
+  staff: 'yellow',
+  gangs: 'red',
+  journal: 'purple',
+};
+const FALLBACK_COLORS: ChipColor[] = ['green', 'blue', 'yellow', 'red', 'purple'];
+
+export function tabColor(tab: SidebarTab): ChipColor {
+  return TAB_COLORS[tab.id] ?? FALLBACK_COLORS[Math.abs(hash(tab.id)) % FALLBACK_COLORS.length];
+}
+
+function hash(text: string): number {
+  let h = 0;
+  for (const ch of text) h = (h * 31 + (ch.codePointAt(0) ?? 0)) | 0;
+  return h;
+}
 
 export function tabIcon(tab: SidebarTab): string {
   return tab.icon ?? TAB_ICONS[tab.id] ?? 'grid';

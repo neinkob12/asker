@@ -2,8 +2,8 @@
 // die Vorlage selbst nicht (Ordner mit "_"). Hier nur Oberfläche: lesen mit useGame(), ändern nur mit dispatch.
 //
 // Möglichkeiten (alle aus '../../../ui' bzw. '../../../map'):
-//   registerHudItem    Anzeige oben im HUD
-//   registerTab        eigener Tab in der Seitenleiste
+//   registerHudItem    Anzeige im HUD (mit <HudPill>; placement: 'main' oben, 'more' im Popover)
+//   registerTab        eigener Tab im Dock (Desktop) bzw. in der Tab-Leiste (Handy)
 //   registerSlot       Abschnitt in einem vorhandenen Tab ('tab:business') oder Panel ('spots.spotPanel')
 //   registerPanel      Detailansicht, öffnen mit ui.openPanel(id, props)
 //   registerDialog     Dialog, öffnen mit ui.openDialog(id, props)

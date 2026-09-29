@@ -57,8 +57,13 @@ function MoreButton(props: { items: HudItem[] }) {
         {props.items
           .filter((i) => i.icon)
           .slice(0, 3)
-          .map((i) => (
-            <IconChip key={i.id} icon={i.icon ?? 'more'} size="xs" color="white" />
+          .map((i, n) => (
+            <IconChip
+              key={i.id}
+              icon={i.icon ?? 'more'}
+              size="xs"
+              color={(['green', 'yellow', 'blue'] as const)[n % 3]}
+            />
           ))}
         <Icon name="chevronDown" class="hud-more__chevron" />
       </button>
@@ -73,7 +78,35 @@ function MoreButton(props: { items: HudItem[] }) {
 
 function SpeedControl() {
   const { session, api } = useRuntime();
+  const mobile = useIsMobile();
   const speed = session.loop.speed;
+  if (mobile) {
+    // Am Handy nur Pause und ein Knopf, der durch 1×, 2×, 4× schaltet.
+    const running = SPEEDS.filter((x) => x > 0);
+    const next = running[(running.indexOf(speed as (typeof running)[number]) + 1) % running.length];
+    return (
+      <fieldset class="hud-pill hud-speed" aria-label="Spielgeschwindigkeit">
+        <button
+          type="button"
+          class={`hud-speed__btn is-pause ${speed === 0 ? 'is-active' : ''}`}
+          aria-pressed={speed === 0}
+          aria-label={speed === 0 ? 'Weiterspielen' : 'Pause'}
+          onClick={() => api.togglePause()}
+        >
+          <Icon name={speed === 0 ? 'play' : 'pause'} />
+        </button>
+        <button
+          type="button"
+          class={`hud-speed__btn ${speed > 0 ? 'is-active' : ''}`}
+          aria-label={`Tempo ${SPEED_LABELS[speed] ?? speed}, tippen für schneller`}
+          onClick={() => api.setSpeed(speed === 0 ? 1 : next)}
+        >
+          <Icon name={SPEED_ICONS[speed === 0 ? 1 : speed] ?? 'speed'} />
+          <span class="hud-speed__label is-visible">{SPEED_LABELS[speed === 0 ? 1 : speed]}</span>
+        </button>
+      </fieldset>
+    );
+  }
   return (
     <fieldset class="hud-pill hud-speed" aria-label="Spielgeschwindigkeit">
       {SPEEDS.map((s, i) => (
@@ -176,13 +209,13 @@ export function Hud() {
             <MoreButton items={more} />
           </div>
           <div class="hud__group">
-            <AlertCenter />
             <PhoneButton />
           </div>
         </div>
         <div class="hud__row">
           {clock}
           <SpeedControl />
+          <AlertCenter />
           <MenuButton />
         </div>
         {alerts.length > 0 && (
@@ -205,6 +238,7 @@ export function Hud() {
         <SpeedControl />
         <AlertCenter />
         <PhoneButton />
+        <MenuButton />
       </div>
     </header>
   );

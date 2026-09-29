@@ -51,6 +51,12 @@ async function shot(page, name) {
   console.log(`  Screenshot: ${file}`);
 }
 
+/** Spielstände liegen im Menü (Hamburger-Knopf im HUD). */
+async function openSaves(page) {
+  await page.getByRole('button', { name: 'Menü' }).click();
+  await page.getByRole('button', { name: 'Spielstände' }).click();
+}
+
 async function check(name, fn) {
   process.stdout.write(`- ${name} … `);
   await fn();
@@ -113,6 +119,8 @@ async function run() {
 
   await check('Ware im Handy bei den Lieferanten bestellen', async () => {
     await page.getByRole('button', { name: /^Handy/ }).click();
+    // Mit neuen Nachrichten beginnt das Handy mit dem Sperrbildschirm.
+    if (await page.locator('.phone__unlock').count()) await page.locator('.phone__unlock').click();
     await page.locator('.phone__app', { hasText: 'Lieferanten' }).click();
     await page.getByRole('button', { name: /Toni · Frankfurt/ }).click();
     await shot(page, 'lieferant');
@@ -128,13 +136,13 @@ async function run() {
   let saved;
   await check('Speichern und Laden', async () => {
     saved = await game(page, (s) => ({ time: s.time, dirty: s.wallet.dirty, staff: s.modules.staff.members.length }));
-    await page.getByRole('button', { name: 'Spielstände' }).click();
+    await openSaves(page);
     await page.getByRole('button', { name: 'Speichern', exact: true }).first().click();
     await page.keyboard.press('Escape');
     await advance(page, 300);
     const later = await game(page, (s) => s.time);
     assert.equal(later, saved.time + 300);
-    await page.getByRole('button', { name: 'Spielstände' }).click();
+    await openSaves(page);
     // Zeile "Speicherplatz 1": dort "Laden".
     await page.locator('.ui-list__item', { hasText: 'Speicherplatz 1' }).getByRole('button', { name: 'Laden' }).click();
     const loaded = await game(page, (s) => ({

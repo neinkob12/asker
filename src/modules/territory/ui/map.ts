@@ -14,9 +14,13 @@ const FILL = 'territory.veedel-fill';
 const LINE = 'territory.veedel-line';
 const SELECTED = 'territory.veedel-selected';
 
-/** Farbe eines Design-Tokens (Karten-Layer brauchen echte Farbwerte, keine CSS-Variablen). */
+/**
+ * Farbe eines Design-Tokens (Karten-Layer brauchen echte Farbwerte, keine CSS-Variablen). Gelesen wird am Kartenelement:
+ * Die Karte bleibt dunkel und setzt ihre eigenen Farben (.shell-map in shell.css), auch wenn die Oberfläche hell ist.
+ */
 function token(name: string, fallback: string): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const element = document.querySelector('.shell-map') ?? document.documentElement;
+  const value = getComputedStyle(element).getPropertyValue(name).trim();
   return value || fallback;
 }
 

@@ -200,14 +200,10 @@ export function SegmentMeter(props: SegmentMeterProps) {
   return (
     <span
       class={`ui-meter ui-meter--${props.size ?? 'md'}`}
-      role="meter"
-      aria-label={props.label}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(value * 100)}
+      role="img"
+      aria-label={`${props.label ?? 'Stufe'}: ${Math.round(value * 100)} Prozent`}
     >
       {Array.from({ length: segments }, (_, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: feste Anzahl Stufen
         <span key={i} class={`ui-meter__seg ${i < filled ? `is-on is-${colorFor(i)}` : ''}`} />
       ))}
     </span>

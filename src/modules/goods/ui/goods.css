@@ -9,15 +9,6 @@
   background: #3b82f6;
 }
 
-.goods-hud {
-  background: none;
-  border: 0;
-  padding: 0;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
 .goods-quality {
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
