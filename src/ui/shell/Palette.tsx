@@ -84,9 +84,9 @@ function collect(runtime: UiRuntime): Entry[] {
     id: 'cmd:settings',
     group: 'Befehle',
     title: 'Einstellungen',
-    icon: 'sliders',
-    keywords: 'ton musik',
-    run: () => api.openDialog('core.settings', {}),
+    icon: 'gear',
+    keywords: 'ton musik lautstärke anzeige kamera vibration',
+    run: () => api.openPhone('core.settings'),
   });
   add({
     id: 'cmd:camera',

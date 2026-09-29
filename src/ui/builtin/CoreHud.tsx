@@ -12,7 +12,7 @@ export function MoneyHud() {
   return (
     <>
       <div class="hud-pill hud-money" title="Schwarzgeld: damit bezahlst du alles Illegale">
-        <IconChip icon="moneyBag" color="yellow" size="md" />
+        <IconChip icon="moneyBag" color="dirty" size="sm" />
         <span class="hud-pill__text">
           <span class="hud-pill__label">Schwarzgeld</span>
           <span class="hud-pill__value hud-money__value">
@@ -23,7 +23,7 @@ export function MoneyHud() {
       </div>
       {clean > 0 && (
         <div class="hud-pill hud-money hud-money--clean" title="Sauberes Geld: für alles Legale">
-          <IconChip icon="euro" color="white" size="sm" />
+          <IconChip icon="coinEuro" color="money" size="sm" />
           <span class="hud-pill__text">
             <span class="hud-pill__label">Sauber</span>
             <span class="hud-pill__value">

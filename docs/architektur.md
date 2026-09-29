@@ -174,7 +174,7 @@ an `goods`, `suppliers` und `staff` (alte Spielstände: Liegeplatz, wenn schon i
 
 ## Oberfläche (`src/ui/`)
 
-Look "Nachtschicht": dunkel, gedämpft und eckig (Haarlinien, weiche Schatten, eine Akzentfarbe) über der gedämpften Karte, siehe [`src/map/README.md`](../src/map/README.md). Das Spiel-Handy ist die Schaltzentrale. Details zu Tokens, Bausteinen, Handy und Ton: [`src/ui/README.md`](../src/ui/README.md).
+Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`src/map/README.md`](../src/map/README.md). Das Spiel-Handy ist die Schaltzentrale und folgt den iOS-Mustern (Apple HIG): iPhone-Seitenverhältnis (`--phone-ratio` 0,49), Statusleiste mit Uhrzeit links, Dynamic Island in der Mitte und Empfang/WLAN/Akku rechts, Startbildschirm mit App-Raster und Dock, gruppierte Listen mit Icon-Kacheln, Large Title mit Übergang zur schmalen Titelleiste. Glas (`backdrop-filter`) gibt es nur auf der schwebenden Ebene (Statusleiste, Island, Dock, Fußleisten); Inhalte liegen auf ruhigen Flächen. **Eine Farbe hat eine Bedeutung** (`--cat-money`, `--cat-dirty`, `--cat-danger` …, je mit Hell-/Dunkel-Variante und geprüftem Kontrast). Plan, Ableitung aus der HIG und Prüfung: [`handy-design.md`](handy-design.md). Details zu Tokens, Bausteinen, Handy und Ton: [`src/ui/README.md`](../src/ui/README.md).
 
 - **Shell** (`shell/`): Karte vollflächig. Darüber nur eine schmale HUD-Leiste (Geld und Heat links, Warnungen,
   Spieltempo und Menü rechts; `Hud.tsx`) und die Kartensteuerung. **Alles andere läuft über das Spiel-Handy**
@@ -183,7 +183,19 @@ Look "Nachtschicht": dunkel, gedämpft und eckig (Haarlinien, weiche Schatten, e
   Startbildschirm. Desktop: Handy rechts fest angedockt, weggelegt eine Lasche am Rand. Handy-Bildschirm: Handy
   bildschirmfüllend unter dem HUD, in der Tasche eine Leiste unten mit Nächstem Schritt und Handy-Knopf. Dazu Suche
   (`Palette.tsx`, Strg/⌘+K), Toasts (einer sichtbar, Rest in der Warteschlange), Hinweis beim Karten-Klick.
-  Tastatur in `keys.ts`.
+  Tastatur in `keys.ts`. Größe des Handys: `min(440px, (100dvh − 24px) × Seitenverhältnis)`, es fällt also nie aus
+  dem Fenster; in kleinen Fenstern verkleinern Container-Queries (`container: phone`) Abstände und Kacheln.
+- **Startbildschirm** (`phone/PhoneFrame.tsx`): Statusleiste, Zeile "Heute" (Tag, Uhrzeit, Tagesphase, Wetter-Knopf),
+  Skyline als Signature (`phone/Skyline.tsx`, Dom, Groß St. Martin, Kranhäuser, KölnTriangle; nachts leuchten die
+  Fenster), Karte "Nächster Schritt", Kennzahlen (`placement: 'more'`), App-Raster (`HOME_ORDER`) und ein **Dock** mit
+  den vier wichtigsten Apps (Nachrichten, Geschäft, Lieferanten, Leute). Ein Tab-Bar-Muster gibt es bewusst nicht:
+  jede App ist eine eigene Seite mit Zurück-Knopf, das Dock ersetzt die Tab-Leiste (Begründung in `handy-design.md`).
+- **Statusleiste und Island:** `phone/PhoneFrame.tsx` (`StatusBar`, Grid mit drei Spalten: Uhrzeit | Island | Symbole)
+  hält die Sicherheitszone ein, die Island verdeckt nichts. Die Island zeigt Fristen nur in Stunden
+  (`islandCountdown(minutes)` in `phone/islandModel.ts`: "2 Std.", unter einer Stunde "< 1 Std.").
+- **Seiten im Handy** (`phone/PhoneScreen.tsx`): Large Title, der beim Scrollen in die Titelleiste wandert
+  (`is-collapsed`), Zurück-Knopf als Glas-Taste, Fußleiste mit Aktionen als Glas-Blatt. Zieltreffer sind im Handy
+  mindestens 44 × 44 px.
 - **Laufzeit** (`runtime.ts`): `UiRuntime` hält den reinen UI-Zustand (`UiState`: Panel, Dialog, Tab, Handy,
   Tempo, `camera`, `overlay`, `vibration`, `notification`, `picking`) und die `UiApi`. Neuzeichnen nach
   Simulationsschritten, gedrosselt auf ca. 10 Mal pro Sekunde; in der Pause nur bei UI-Änderungen.
@@ -200,22 +212,29 @@ Look "Nachtschicht": dunkel, gedämpft und eckig (Haarlinien, weiche Schatten, e
 | --- | --- | --- |
 | `registerHudItem({ id, order, placement?, icon?, component })` | Kennzahl (`placement`: `main` in der HUD-Leiste, `more` als Kachel auf dem Handy-Startbildschirm, `time` neben dem Datum auf dem Startbildschirm, `alert` als Warnung im HUD) | Geld (10, sauberes Geld erst wenn > 0), Lager (20), Heat (30), Ruf (40), Köln-Fortschritt (45), offene Konfrontation (50), Wetter (95) |
 | `registerTab({ id, title, order, icon?, layout?, shortcut?, component?, badge? })` | Bereich als App im Handy (`tab:<id>`); ohne `component` zeigt er den Slot `tab:<id>`; `layout: 'rows'` zeigt jede Card als tippbare Zeile | Geschäft (10), Reviere (20), Leute (30), Gangs, Ereignisse (90) |
-| `registerSlot(name, { id, order, component })` | Abschnitt in einem Slot | `tab:business` (Lager, Lieferungen, Logistik, Spots, Personal, Kundschaft, Ruf, Markt, Geldwäsche), `tab:staff`, `spots.spotPanel` (Kunden mit „Hier hinstellen“, Preise, Läufer, Leutnant), `veedel.veedelPanel` (Revier, Polizei, Leutnant), `staff.profile`, `phone.home` (Widgets), `core.settings` |
+| `registerSlot(name, { id, order, component })` | Abschnitt in einem Slot | `tab:business` (Lager, Lieferungen, Logistik, Spots, Personal, Kundschaft, Ruf, Markt, Geldwäsche), `tab:staff`, `spots.spotPanel` (Kunden mit „Hier hinstellen“, Preise, Läufer, Leutnant), `veedel.veedelPanel` (Revier, Polizei, Leutnant), `staff.profile`, `phone.home` (Widgets), `core.settings` (Abschnitt in der App Einstellungen) |
 | `registerPanel({ id, title, component })` | Detailansicht als Seite im Handy, `ui.openPanel(id, props)` | `spots.spot`, `veedel.veedel`, `goods.warehouse`, `staff.profile`, `hierarchy.lieutenant`, `market.overview` |
-| `registerDialog({ id, component, pausesGame?, dismissable? })` | Dialog, `ui.openDialog(id, props)` | `core.newGame`, `core.saves`, `core.settings`, `core.gameOver`, `core.won`, `encounters.encounter` (pausiert), `gangs.attack`, `gangs.ally` |
+| `registerDialog({ id, component, pausesGame?, dismissable? })` | Dialog, `ui.openDialog(id, props)` | `core.newGame`, `core.saves`, `core.gameOver`, `core.won`, `encounters.encounter` (pausiert), `gangs.attack`, `gangs.ally` |
 | `registerLiveActivity({ id, activities })` | Live-Aktivität in der Dynamic Island des Handys (`LiveActivity`: `priority`, `icon`, `tone`, `leading`, `trailing`, `title`, `detail`, `progress`, `open`) | Überfall, Razzia, Heat, Gang-Vorstoß, Chat-Frist, Auftrag, Kurier, Lieferung, Ware am Kai, Fahrt/Kontrolle, du am Spot, Umsatz heute |
-| `registerPhoneApp({ id, name, icon, order, color?, chrome?, component, badge? })` | App im Spiel-Handy | Nachrichten, Lieferanten, Logistik, Kontakte (Bewerber), Aufträge, Meldungen, Wetter, Musik, Einstellungen |
+| `registerPhoneApp({ id, name, icon, order, color?, chrome?, component, badge? })` | App im Spiel-Handy; `color` ist eine Bedeutungsfarbe (`money`, `dirty`, `danger`, `warn`, `place`, `goods`, `people`, `chat`, `sky`, `law`, `media`, `system`, `log`, `brand`) oder eine CSS-Farbe (dann wird die Schrift automatisch lesbar gewählt); `badge(state, ui)` liefert die Zahl auf dem Icon | Nachrichten (Mint), Lieferanten (Waren), Logistik (Waren), Kontakte (Leute), Aufträge, Meldungen (Orange), Wetter (Himmel), Einstellungen (Grau, mit Ton & Musik, Anzeige, Spiel) |
 | `onGameEvent(type, id, (payload, ui, state) => …)` | Reaktion auf Ereignisse (Toast, Dialog, Effekt) | Game Over, Sieg, neue Nachricht (Banner), Toasts der Module, Karten-Effekte |
 | `registerAdvisor({ id, advise(state) })` | Empfehlung für die Karte "Nächster Schritt" (`Advice`: priority, icon, title, cost?, action?, highlight?) | Antworten (Kern), Verkauf (an den Spot stellen oder alle bedienen) und Läufer (Spots, Personal), Nachschub (Lieferanten), Ware am Hafen abholen, Liegeplatz (Logistik), Geldwäsche, Kampagnenziel |
 | `registerSearch({ id, label, order, items(state) })` | Einträge der Suche (Strg/⌘+K) | Spots, Veedel, Leute, Gangs |
 | `registerGameStat({ id, order, icon, label, value(state) })` | Kennzahl auf dem Game-Over- und Sieg-Bildschirm | Tage, Schwarzgeld, Veedel, Kunden, Team |
 | `soundOnEvent(type, sound, { when?, throttleMs?, volume? })` | Ton zu einem Ereignis | Kasse, Nachricht, Sirene bei Razzia/Kontrolle, Warnton bei Konfrontation, Lieferung, Game Over, Sieg |
 
-- **Bausteine** (`components/`): `Button`, `IconButton`, `SegmentedControl`, `Select`, `Card`, `Hint`, `Empty`,
-  `KeyValue`, `Stat`, `Badge`, `ProgressBar`, `List`/`ListItem`, `Tabs`, `Dialog`, `Icon`, `Tag`, `Avatar`
-  (Porträt oder Initialen), `Toggle`, `Slider`. Props werden nur erweitert, nie gebrochen.
-- **Design-Tokens** (`styles/tokens.css`): `--color-*`, `--font-*`, `--space-1…6`, `--radius-*`, `--shadow-*`,
-  Layout-Maße, `--safe-*` und `--z-*`. Module verwenden nur diese Variablen.
+- **Bausteine** (`components/`): `Button`, `IconButton`, `SegmentedControl`, `Select`, `Card`, `Hint`, `Empty`
+  (mit `action`), `KeyValue`, `Stat`, `Badge`, `ProgressBar`, `List`/`ListItem`, `Tabs`, `Dialog`, `Icon`,
+  `IconChip` (Icon-Kachel mit Farbverlauf, `solid`, `shape="tile"`), `Tag` (mit `category`), `Avatar` (Porträt oder
+  Initialen, `tone`), `Toggle` (iOS-Schalter 51 × 31), `Slider`. Props werden nur erweitert, nie gebrochen.
+  `components/readable.ts` wählt Schriftfarbe mit ausreichendem Kontrast auf beliebigen Farben (`readableOn`).
+- **Design-Tokens** (`styles/tokens.css`): `--color-*`, `--cat-<bedeutung>` (+ `-soft`, `-a`, `-b`, `-on`),
+  `--phone-*` (Flächen, Maße), `--type-*` (Schriftstufen), `--font-*`, `--space-1…6`, `--radius-*`, `--shadow-*`,
+  `--safe-*` und `--z-*`. Farben liegen als `light-dark()`-Paare vor; das Handy ist dunkel (`.phone`), die
+  hellen Werte sind über `data-appearance="light|auto"` vorbereitet. `src/ui/styles/contrast.test.ts` prüft
+  WCAG-Kontraste aller Farbpaare (Text 4,5:1, Symbole und Bedienelemente 3:1). Module verwenden nur diese Variablen.
+  Die Karte versteht kein `light-dark()`: `mapToken()` und `darkVariant()` aus `src/map/tokens.ts` lösen Tokens für
+  MapLibre auf.
 - **Ton** (`src/audio/`, für Module über `src/ui`): selbst erzeugte Musik nach Tageszeit, 14 Effekte,
   Geräusch-Schleifen (Regen, Sturm, Wind), Lautstärken pro Gerät. Startet nach der ersten Interaktion.
 - **Start** (`start.tsx`): Registriert die Kern-Oberflächen, lädt alle `src/modules/*/ui/index.ts(x)`, setzt den
@@ -361,3 +380,10 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
     macht Screenshots der wichtigen Momente. Belege der Integration liegen in `docs/integration/`.
   - `npm run screenshot`: Desktop und Handy nach `screenshots/`. Mit `--eval="window.koeln.session.sim.advance(480)"`
     springt die Uhr z.B. in die Nacht (Start 18 Uhr).
+  - `npm run screenshot:phone`: alle Handy-Seiten (Startbildschirm, Nachrichten, Chat, Leute, Kontakte, Einstellungen,
+    Ereignisse, Meldungen, Geschäft, Panels, Island-Zustände) für Desktop und Handy-Bildschirm nach
+    `screenshots/handy/`, mit festem Seed und pausiert (Vorher/Nachher vergleichbar). Optionen `--out`, `--scenes`,
+    `--sizes`, `--time`, `--appearance=light|dark`. Szenen und Ansichten stehen in `scripts/phone-scenes.mjs`.
+  - `npm run audit:phone`: misst dieselben Seiten am laufenden Spiel: Zieltreffer ≥ 44 × 44 px, Schrift ≥ 11 px,
+    Kontrast 4,5:1 bzw. 3:1 aus den berechneten Farben. Endet mit Fehlercode 1 bei Verstößen. Text auf Verläufen
+    deckt `contrast.test.ts` ab.

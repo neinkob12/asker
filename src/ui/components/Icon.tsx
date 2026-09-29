@@ -49,8 +49,30 @@ export function Icon(props: IconProps) {
   );
 }
 
-/** Farben der Icon-Kacheln. Tone-Namen gehen auch ('accent' = Grün, 'bad' = Rot …). */
+/**
+ * Farben der Icon-Kacheln: die Bedeutungsfarben des Spiels (siehe docs/handy-design.md). Eine Farbe steht für eine
+ * Bedeutung: money Geld und Gewinn, dirty Schwarzgeld, danger Gefahr, warn Frist und Achtung, brand dein Geschäft,
+ * place Ort und Info, goods Ware, people Personen, chat Nachrichten, sky Himmel, law Recht, media Ton,
+ * system Einstellungen, log Protokoll. Alte Namen (red, green, accent, bad …) gehen weiter.
+ */
+export type CategoryColor =
+  | 'money'
+  | 'dirty'
+  | 'danger'
+  | 'warn'
+  | 'brand'
+  | 'place'
+  | 'goods'
+  | 'people'
+  | 'chat'
+  | 'sky'
+  | 'law'
+  | 'media'
+  | 'system'
+  | 'log';
+
 export type ChipColor =
+  | CategoryColor
   | 'red'
   | 'green'
   | 'yellow'
@@ -61,20 +83,62 @@ export type ChipColor =
   | 'paper'
   | 'white'
   | 'accent'
-  | 'warn'
   | 'bad'
   | 'info';
 
-const CHIP_ALIASES: Record<string, string> = { accent: 'green', warn: 'yellow', bad: 'red', info: 'blue' };
+const CHIP_ALIASES: Record<string, CategoryColor> = {
+  accent: 'money',
+  green: 'money',
+  bad: 'danger',
+  red: 'danger',
+  yellow: 'warn',
+  info: 'place',
+  blue: 'place',
+  purple: 'dirty',
+  violet: 'dirty',
+  ink: 'system',
+  paper: 'system',
+  white: 'system',
+};
+
+const CATEGORY_NAMES = new Set<string>([
+  'money',
+  'dirty',
+  'danger',
+  'warn',
+  'brand',
+  'place',
+  'goods',
+  'people',
+  'chat',
+  'sky',
+  'law',
+  'media',
+  'system',
+  'log',
+]);
+
+/** Ist das ein Farbname des Spiels (Bedeutungsfarbe oder alter Name) und keine CSS-Farbe? */
+export function isChipColor(value: string): value is ChipColor {
+  return CATEGORY_NAMES.has(value) || Object.hasOwn(CHIP_ALIASES, value);
+}
+
+/** Bedeutungsfarbe zu einem (auch alten) Farbnamen. Standard: Marke (Gold). */
+export function categoryOf(color: ChipColor | undefined): CategoryColor {
+  if (!color) return 'brand';
+  return CHIP_ALIASES[color] ?? (color as CategoryColor);
+}
 
 export interface IconChipProps {
   icon: IconName | (string & {});
-  /** Farbe der Kachel (getönte Fläche, farbige Glyphe). Standard: gelb. */
+  /** Bedeutungsfarbe der Kachel. Standard: brand (Gold). */
   color?: ChipColor;
-  /** sm 28 px, md 36 px (Standard), lg 48 px, xl 64 px. */
+  /** xs 20 px, sm 26 px, md 32 px (Standard), lg 42 px, xl 56 px. */
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
-  /** Rund (Standard) oder abgerundetes Quadrat (App-Kachel). */
-  shape?: 'round' | 'square';
+  /** 'round' (Standard, weiche Ecken), 'square' und 'tile' (App-Kachel, Radius 22,5 %). */
+  shape?: 'round' | 'square' | 'tile';
+  /** Kräftige Kachel mit Farbverlauf und weißem Symbol (App-Icon, Zeilen der Listen) statt getönter Fläche. */
+  solid?: boolean;
   /** Kleiner Punkt oben rechts: Status. */
   status?: 'good' | 'warn' | 'bad' | 'idle';
   title?: string;
@@ -82,14 +146,16 @@ export interface IconChipProps {
   style?: JSX.CSSProperties;
 }
 
-/** Icon auf einer getönten, eckigen Kachel, z.B. vor Zeilen und in Karten. */
+/** Symbol auf einer Kachel in einer Bedeutungsfarbe, z.B. vor Zeilen und in Karten. Mit solid als App-Icon. */
 export function IconChip(props: IconChipProps) {
-  const color = CHIP_ALIASES[props.color ?? ''] ?? props.color ?? 'yellow';
+  const color = categoryOf(props.color);
+  const shape = props.shape === 'square' || props.shape === 'tile' ? 'tile' : 'round';
   const cls = [
     'ui-chip',
     `ui-chip--${color}`,
     `ui-chip--${props.size ?? 'md'}`,
-    props.shape === 'square' ? 'ui-chip--square' : '',
+    shape === 'tile' ? 'ui-chip--tile' : '',
+    props.solid ? 'ui-chip--solid' : '',
     props.class ?? '',
   ];
   return (

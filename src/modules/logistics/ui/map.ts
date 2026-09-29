@@ -10,6 +10,7 @@ import {
   el,
   type MapLayer,
   mapEffects,
+  mapToken,
   pointAlong,
   type VehicleHandle,
 } from '../../../map';
@@ -23,19 +24,13 @@ interface ShownTrip {
   light: EffectHandle | null;
 }
 
-/** Farbe eines Design-Tokens (Karten-Layer brauchen echte Farbwerte). */
-function token(name: string, fallback: string): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return value || fallback;
-}
-
 export const logisticsLayer: MapLayer = {
   id: 'logistics.trips',
   order: 22,
   mount(ctx) {
     const { map } = ctx;
     const shown = new Map<number, ShownTrip>();
-    const badColor = token('--color-bad', '#e5484d');
+    const badColor = mapToken('--color-bad', '#e5484d');
     const port = portPlace();
     const name = el('span', 'map-place-name', port.name);
     const portMarker = addHtmlMarker(map, {

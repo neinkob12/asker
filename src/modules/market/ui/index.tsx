@@ -168,7 +168,7 @@ function MarketSection() {
     <Card
       title="Markt"
       icon="chart"
-      color="blue"
+      color="money"
       status={hot.length > 0 ? 'warn' : 'idle'}
       summary={hot.length > 0 ? `${hot.length} gefragt` : 'ruhig'}
       actions={

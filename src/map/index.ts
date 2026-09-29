@@ -7,6 +7,7 @@
 //   3D-Mini-Fahrzeuge: createVehicle(map, { path, kind }), animateVehicle; Hotspots: createHotspots(map, id)
 //   Stimmung: setMapMood(id, { darken, tint, … }), setPrecipitation({ kind: 'rain', intensity })
 //   Tag/Nacht: daylight(minuteOfDay), dayPhase(minuteOfDay), daylightAt(time)
+//   Farben: mapToken('--gold', '#e2ae4a') liest ein Design-Token als echten Farbwert (Dunkelvariante)
 //
 // Klick auf die Karte für eigene Aktionen: ui.pickLocation('Text') (siehe UiApi), nie selbst den
 // nächsten Klick abfangen, sonst kommen sich Module in die Quere.
@@ -47,6 +48,7 @@ export {
 } from './markers';
 export { type MapLayer, type MapLayerContext, type MapLayerInstance, registerMapLayer } from './registry';
 export { ABOVE_LAND, BASE_LAYERS, BELOW_BUILDINGS, BELOW_ROADS } from './style';
+export { darkVariant, mapToken } from './tokens';
 export {
   type AnimateVehicleOptions,
   animateVehicle,

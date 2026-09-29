@@ -32,6 +32,18 @@ const sunRays = [
   'M17.3 6.7l1.4-1.4',
 ];
 
+/** Zahnrad: gleichmäßige Zähne als Linienzug (runde Verbindungen machen es weich). */
+const gearPath = (teeth: number, outer: number, inner: number) => {
+  const step = (Math.PI * 2) / teeth;
+  const at = (angle: number, r: number) => `${n(12 + r * Math.sin(angle))} ${n(12 - r * Math.cos(angle))}`;
+  const points: string[] = [];
+  for (let k = 0; k < teeth; k++) {
+    const a = k * step;
+    points.push(at(a, inner), at(a + step * 0.2, outer), at(a + step * 0.46, outer), at(a + step * 0.66, inner));
+  }
+  return `M${points.join('L')}z`;
+};
+
 const speaker = 'M4 9.5h3.5L12 5.5v13l-4.5-4H4z';
 const person = (cx: number) => [circle(cx, 8, 3.5), `M${cx - 6.5} 20c0-3.8 2.9-6 6.5-6s6.5 2.2 6.5 6`];
 
@@ -52,6 +64,7 @@ export const ICONS = {
   xCircle: [circle(12, 12, 9), 'M9 9l6 6', 'M15 9l-6 6'],
   plusCircle: [circle(12, 12, 9), 'M12 8v8', 'M8 12h8'],
   sliders: ['M4 7h9', 'M17 7h3', circle(15, 7, 2), 'M4 17h3', 'M11 17h9', circle(9, 17, 2)],
+  gear: [gearPath(8, 9.5, 7.4), circle(12, 12, 3)],
   info: [circle(12, 12, 9), 'M12 11v5', 'M12 8h.01'],
   help: [circle(12, 12, 9), 'M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7', 'M12 16.8h.01'],
   alert: ['M10.3 4.6L2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.6a2 2 0 0 0-3.4 0z', 'M12 9.5v4', 'M12 17h.01'],
@@ -239,6 +252,7 @@ export const ICONS = {
   ],
   moon: ['M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5z'],
   cloud: [cloud(18.5)],
+  cloudSun: [cloud(19, 0.8), circle(8.5, 8.5, 3), 'M8.5 2.5v1.2', 'M2.5 8.5h1.2', 'M4.3 4.3l.9.9', 'M12.7 4.3l-.9.9'],
   rain: [cloud(14.5, 0.85), 'M8.5 17.5l-1 2.5', 'M12.5 17.5l-1 2.5', 'M16.5 17.5l-1 2.5'],
   storm: [cloud(14.5, 0.85), 'M12.5 14l-2.5 4h3.5l-2 4'],
   snow: [cloud(14.5, 0.85), 'M8 18h.01', 'M12 17.5h.01', 'M16 18h.01', 'M10 21h.01', 'M14 21h.01'],
@@ -267,6 +281,7 @@ export const ICONS = {
   ],
   wallet: ['M4 7.5V18a1.5 1.5 0 0 0 1.5 1.5h14V7.5H5.5A1.5 1.5 0 0 1 4 6a1.5 1.5 0 0 1 1.5-1.5H17v3', 'M15.5 13.5h.01'],
   euro: ['M16.5 7.5a5 5 0 1 0 0 9', 'M6.5 10.5h7', 'M6.5 13.5h6'],
+  coinEuro: [circle(12, 12, 9), 'M15.2 9a3.7 3.7 0 1 0 0 6', 'M7.8 11h5.2', 'M7.8 13h4.4'],
   bag: ['M5 8h14l-1.2 12.5H6.2z', 'M9 8V6.5a3 3 0 0 1 6 0V8'],
   moneyBag: [
     'M9 3.5h6l-1.5 3.5h-3z',
@@ -354,6 +369,15 @@ export const ICONS = {
     'M19 21l2-2',
     'M9.5 6.5L18 3h3v3l-3.5 8.5',
     'M5 14l-2 2l4 4l2-2',
+  ],
+  anchor: [circle(12, 5, 2), 'M12 7v14', 'M7.5 11.5h9', 'M4 15a8 8 0 0 0 16 0', 'M4 15l-1.5 1.8', 'M20 15l1.5 1.8'],
+  web: [
+    'M12 3.5l6.2 2.3l2.3 6.2l-2.3 6.2l-6.2 2.3l-6.2-2.3l-2.3-6.2l2.3-6.2z',
+    'M12 8l2.9 1.1L16 12l-1.1 2.9L12 16l-2.9-1.1L8 12l1.1-2.9z',
+    'M12 3.5v17',
+    'M3.5 12h17',
+    'M5.8 5.8l12.4 12.4',
+    'M18.2 5.8L5.8 18.2',
   ],
   fist: [
     'M7 11V6.5a1.5 1.5 0 0 1 3 0V10',
@@ -475,6 +499,9 @@ export const EMOJI_ICONS: Record<string, IconName> = {
   '🏠': 'home',
   '💀': 'skull',
   '🔥': 'flame',
+  '⚓': 'anchor',
+  '🕸': 'web',
+  '♛': 'crown',
   '📋': 'clipboard',
   '🕐': 'clock',
   '📅': 'calendar',

@@ -15,7 +15,17 @@ export {
 export { Dialog, type DialogProps } from './Dialog';
 export { ErrorBoundary, type ErrorBoundaryProps } from './ErrorBoundary';
 export { HudPill, type HudPillProps } from './HudPill';
-export { type ChipColor, Icon, IconChip, type IconChipProps, type IconProps, StatusDot } from './Icon';
+export {
+  type CategoryColor,
+  type ChipColor,
+  categoryOf,
+  Icon,
+  IconChip,
+  type IconChipProps,
+  type IconProps,
+  isChipColor,
+  StatusDot,
+} from './Icon';
 export { EMOJI_ICONS, ICONS, type IconName, isIconName, resolveIcon } from './icons';
 export {
   Confetti,
@@ -58,5 +68,6 @@ export {
   type ToggleProps,
   type Tone,
 } from './Layout';
+export { contrastRatio, readableOn } from './readable';
 export { SectionContext, type SectionMode } from './section';
 export { type TabItem, Tabs, type TabsProps } from './Tabs';

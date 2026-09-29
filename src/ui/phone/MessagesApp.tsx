@@ -1,25 +1,24 @@
-// Nachrichten-App: Chats pro Figur, Antwort-Optionen als Knöpfe, ungelesene Nachrichten.
+// Nachrichten-App: Chats pro Figur, nach Kontaktart gruppiert (Gangs, Polizei, Lieferanten, Team, Kunden), mit
+// Avatar in der Farbe der Kontaktart, ungelesenen Nachrichten, Fristen und Antwort-Optionen als Knöpfe.
 // Die Daten kommen aus dem Nachrichtendienst des Kerns; die Aufbereitung steht in messagesModel.ts.
 // Welcher Chat offen ist, steht in ui.phone.params.contactId (so öffnen Benachrichtigungen den Chat direkt).
 
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { messages } from '../../core';
-import { Avatar, Badge, Button, Empty, Icon, Stamp, Tag } from '../components';
+import { clock, messages } from '../../core';
+import { Avatar, Badge, Button, Empty, Icon, IconChip, SegmentedControl, Stamp, Tag } from '../components';
 import { useGame, useUi } from '../hooks';
-import { CONTACT_KIND_ICONS, CONTACT_KIND_LABELS, chatEntries, chatList, firstUnread } from './messagesModel';
+import {
+  CONTACT_KIND_ICONS,
+  CONTACT_KIND_LABELS,
+  CONTACT_KIND_TONES,
+  chatEntries,
+  chatList,
+  firstUnread,
+  groupChats,
+} from './messagesModel';
 import { PhoneScreen } from './PhoneScreen';
 
 const APP_ID = 'core.messages';
-
-/** Feste Farbe je Kontaktart: Gangs rot, Polizei blau, Team gelb … so erkennt man die Stimme schon an der Farbe. */
-const KIND_COLORS: Record<string, string> = {
-  customer: '#4dd6c4',
-  supplier: '#1cb0f6',
-  gang: '#ff4b4b',
-  staff: '#ffc800',
-  police: '#4a6cf7',
-  other: '#a560f0',
-};
 
 /** Wie lange ein Kontakt "tippt", bevor die Nachricht erscheint (nur Optik, der Spielzustand steht schon fest). */
 const typingMs = (text: string) => Math.min(2200, Math.max(700, 450 + text.length * 22));
@@ -35,50 +34,70 @@ function ChatList() {
   // Wartet etwas auf Antwort, beginnt die Liste mit "Offen".
   const [filter, setFilter] = useState<'all' | 'open'>(() => (all.some((c) => c.awaitingAnswer) ? 'open' : 'all'));
   const list = filter === 'open' ? all.filter((c) => c.awaitingAnswer || c.unread > 0) : all;
+  const groups = groupChats(list);
   const unread = messages.unreadCount(state);
   const openCount = all.filter((c) => c.awaitingAnswer).length;
   return (
     <PhoneScreen title="Nachrichten" subtitle={unread > 0 ? `${unread} ungelesen` : 'Alles gelesen'}>
-      <div class="msg-filter" role="tablist" aria-label="Filter">
-        <button type="button" role="tab" aria-selected={filter === 'all'} onClick={() => setFilter('all')}>
-          Alle
-        </button>
-        <button type="button" role="tab" aria-selected={filter === 'open'} onClick={() => setFilter('open')}>
-          Offen
-          {openCount > 0 && <span class="msg-filter__count">{openCount}</span>}
-        </button>
-      </div>
+      <SegmentedControl
+        wide
+        aria-label="Filter"
+        options={[
+          { value: 'all' as const, label: 'Alle' },
+          { value: 'open' as const, label: 'Offen', badge: openCount },
+        ]}
+        value={filter}
+        onChange={setFilter}
+      />
       {list.length === 0 && (
-        <Empty icon="message">{filter === 'open' ? 'Nichts Offenes.' : 'Noch keine Nachrichten.'}</Empty>
+        <Empty icon="message">
+          {filter === 'open' ? 'Nichts Offenes. Alle Chats sind erledigt.' : 'Noch keine Nachrichten.'}
+        </Empty>
       )}
-      <ul class="msg-list">
-        {list.map((c) => (
-          <li key={c.contactId}>
-            <button
-              type="button"
-              class={`msg-list__item ${c.unread > 0 ? 'is-unread' : ''}`}
-              onClick={() => ui.openPhone(APP_ID, { contactId: c.contactId })}
-            >
-              <Avatar name={c.name} image={avatarImage(c.avatar, c.kind)} color={KIND_COLORS[c.kind]} />
-              <span class="msg-list__main">
-                <span class="msg-list__top">
-                  <span class="msg-list__name">{c.name}</span>
-                  <span class="msg-list__time">{c.timeLabel}</span>
-                </span>
-                <span class="msg-list__bottom">
-                  <span class="msg-list__preview">{c.preview}</span>
-                  {c.awaitingAnswer && (
-                    <span class="msg-reply-sticker">
-                      <Icon name="reply" /> Antwort!
+      {groups.map((group) => {
+        const tone = CONTACT_KIND_TONES[group.kind];
+        return (
+          <section key={group.kind} class="msg-group">
+            <header class="msg-group__head">
+              <IconChip icon={CONTACT_KIND_ICONS[group.kind]} color={tone} solid size="xs" />
+              <h3 class="msg-group__title">{group.label}</h3>
+              <span class="msg-group__count">{group.items.length}</span>
+            </header>
+            <ul class="msg-list">
+              {group.items.map((c) => (
+                <li key={c.contactId}>
+                  <button
+                    type="button"
+                    class={`msg-row ${c.unread > 0 ? 'is-unread' : ''}`}
+                    onClick={() => ui.openPhone(APP_ID, { contactId: c.contactId })}
+                    aria-label={`${c.name}, ${c.kindLabel}${c.unread > 0 ? `, ${c.unread} ungelesen` : ''}${c.awaitingAnswer ? ', wartet auf Antwort' : ''}`}
+                  >
+                    <Avatar name={c.name} image={avatarImage(c.avatar, c.kind)} tone={tone} />
+                    <span class="msg-row__main">
+                      <span class="msg-row__top">
+                        <span class="msg-row__name">{c.name}</span>
+                        <time class="msg-row__time">{c.timeLabel}</time>
+                      </span>
+                      <span class="msg-row__preview">{c.preview}</span>
+                      {(c.awaitingAnswer || c.unread > 0) && (
+                        <span class="msg-row__status">
+                          {c.awaitingAnswer && (
+                            <Tag tone={c.deadlineIn !== undefined && c.deadlineIn < 30 ? 'bad' : 'warn'} icon="reply">
+                              Antwort
+                              {c.deadlineIn !== undefined ? ` · ${clock.formatDuration(c.deadlineIn)}` : ''}
+                            </Tag>
+                          )}
+                        </span>
+                      )}
                     </span>
-                  )}
-                  <Badge count={c.unread} />
-                </span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+                    <Badge count={c.unread} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
     </PhoneScreen>
   );
 }
@@ -129,7 +148,9 @@ function Chat(props: { contactId: string }) {
       class="msg-chat"
       title={name}
       subtitle={<Tag icon={CONTACT_KIND_ICONS[kind]}>{CONTACT_KIND_LABELS[kind]}</Tag>}
-      leading={<Avatar name={name} image={avatarImage(contact?.avatar, kind)} size="sm" color={KIND_COLORS[kind]} />}
+      leading={
+        <Avatar name={name} image={avatarImage(contact?.avatar, kind)} size="sm" tone={CONTACT_KIND_TONES[kind]} />
+      }
       onBack={() => ui.openPhone(APP_ID)}
       backLabel="Chats"
       footer={

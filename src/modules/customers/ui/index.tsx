@@ -160,7 +160,7 @@ function CustomersSection() {
     <Card
       title="Kundschaft"
       icon="smile"
-      color="purple"
+      color="money"
       status={waitingNow > 0 || offered > 0 ? 'warn' : 'good'}
       summary={waitingNow > 0 ? `${waitingNow} warten` : `${stats.customersServed} bedient`}
       actions={
@@ -332,7 +332,7 @@ registerPhoneApp({
   name: 'Aufträge',
   icon: 'package',
   order: 30,
-  color: '#b7791f',
+  color: 'money',
   component: OrdersApp,
   badge: (state) => getOrders(state, { status: 'offered' }).length,
 });

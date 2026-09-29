@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { clock, defineModule, messages, Simulation } from '../../core';
-import { chatEntries, chatList, firstUnread, messageNotification, timeLabel } from './messagesModel';
+import {
+  CONTACT_KIND_ORDER,
+  CONTACT_KIND_TONES,
+  chatEntries,
+  chatList,
+  firstUnread,
+  groupChats,
+  messageNotification,
+  timeLabel,
+} from './messagesModel';
 
 // Ein Testmodul mit einem Befehl, den eine Antwort-Option auslöst.
 declare module '../../core' {
@@ -160,5 +169,47 @@ describe('Nachrichten-App: Benachrichtigung', () => {
     expect(messages.get(sim.state, id)?.silent).toBe(true);
     expect(messages.unreadCount(sim.state)).toBe(1);
     expect(messageNotification(sim.state, id)).toBeNull();
+  });
+});
+
+describe('Nachrichten-App: Gruppen nach Kontaktart', () => {
+  const police = { id: 'staff:cop', name: 'Kommissar K.', kind: 'police' as const };
+  const dealer = { id: 'supplier:jansen', name: 'Jansen', kind: 'supplier' as const };
+
+  it('gruppiert in fester Reihenfolge und lässt leere Gruppen weg', () => {
+    const { sim, ctx } = game();
+    messages.send(ctx, { contact: lena, text: 'Hast du was da?' });
+    messages.send(ctx, { contact: dealer, text: 'Nachschub?' });
+    messages.send(ctx, { contact: gang, text: 'Das ist unser Revier.' });
+    messages.send(ctx, { contact: police, text: 'Heute Abend Razzia.' });
+    const groups = groupChats(chatList(sim.state));
+    expect(groups.map((g) => g.kind)).toEqual(['gang', 'police', 'supplier', 'customer']);
+    expect(groups.map((g) => g.label)).toEqual(['Gangs', 'Polizei', 'Lieferanten', 'Kunden']);
+  });
+
+  it('zählt offene Antworten und Ungelesenes je Gruppe', () => {
+    const { sim, ctx } = game();
+    messages.send(ctx, { contact: lena, text: 'Eins.' });
+    messages.send(ctx, { contact: lena, text: 'Zwei.' });
+    messages.send(ctx, {
+      contact: gang,
+      text: 'Zahl oder es knallt.',
+      options: [{ id: 'yes', label: 'Zahlen' }],
+      expiresIn: 45,
+    });
+    const groups = groupChats(chatList(sim.state));
+    const gangs = groups.find((g) => g.kind === 'gang');
+    const customers = groups.find((g) => g.kind === 'customer');
+    expect(gangs).toMatchObject({ open: 1, unread: 1 });
+    expect(customers).toMatchObject({ open: 0, unread: 2 });
+    expect(gangs?.items[0].deadlineIn).toBe(45);
+  });
+
+  it('hat für jede Kontaktart eine Reihenfolge und eine Bedeutungsfarbe', () => {
+    const kinds = ['customer', 'supplier', 'gang', 'staff', 'police', 'other'] as const;
+    expect([...CONTACT_KIND_ORDER].sort()).toEqual([...kinds].sort());
+    for (const kind of kinds) expect(CONTACT_KIND_TONES[kind]).toBeTruthy();
+    // Eine Farbe, eine Bedeutung: keine zwei Kontaktarten teilen sich eine Farbe.
+    expect(new Set(kinds.map((k) => CONTACT_KIND_TONES[k])).size).toBe(kinds.length);
   });
 });

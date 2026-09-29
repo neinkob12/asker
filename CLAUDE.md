@@ -97,7 +97,10 @@ In `src/modules/<id>/ui/index.tsx` (Beispiel in `_template/ui/`): `registerHudIt
 (Game-Over-Bildschirm), `onGameEvent`, `soundOnEvent` aus `src/ui`, `registerMapLayer` und `mapEffects` aus `src/map`.
 HUD-Anzeigen mit `<HudPill>`, Karten für den Geschäft-Tab mit `icon`, `summary` und `status` (werden dort zu Zeilen).
 Nur Bausteine aus `src/ui/components` (auch `Select`, `Avatar`, `Icon` …) und Design-Tokens (`var(--color-…)`,
-`var(--space-…)`) verwenden. Details: `src/ui/README.md`, `src/map/README.md`.
+`var(--space-…)`) verwenden. **Farben tragen Bedeutung**: `color="money" | "dirty" | "danger" | "warn" | "place" | "goods" | "people" | "chat" | "law" …`
+(Bedeutungsfarben `--cat-*`, Hell und Dunkel, Kontrast geprüft), möglichst keine freien Hex-Werte in Modul-UIs. Eine Karte
+(MapLibre) versteht kein `light-dark()`: dort `mapToken()` aus `src/map`. Details: `src/ui/README.md`, `src/map/README.md`,
+Plan und Prüfung des Handy-Designs: `docs/handy-design.md`.
 Komponenten lesen mit `useGame()` und ändern nur mit `dispatch`.
 
 ## Vor jedem Push
@@ -110,6 +113,8 @@ npm run format   # behebt Formatierung und Import-Reihenfolge
 
 Selbst ausprobieren:
 - `npm run screenshot` (Desktop + Handy nach `screenshots/`, meldet Browser-Fehler)
+- `npm run screenshot:phone` (alle Handy-Seiten für Desktop und Handy-Bildschirm nach `screenshots/handy/`, mit `--scenes`, `--sizes`, `--appearance=light`)
+- `npm run audit:phone` (misst am laufenden Spiel Zieltreffer ≥ 44 px, Schrift ≥ 11 px und Kontrast; Fehlercode bei Verstößen)
 - `npm run e2e` (Ende-zu-Ende-Test mit Playwright: neues Spiel, verkaufen, anheuern, bestellen, speichern, laden)
 - `npm run playthrough` (der Bot spielt ~20 Minuten im Browser, Screenshots der wichtigen Momente)
 - `npm run balance` (Balancing-Bericht über mehrere Seeds, siehe `docs/architektur.md`, Abschnitt "Balancing")

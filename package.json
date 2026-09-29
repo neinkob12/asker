@@ -12,6 +12,8 @@
     "format": "biome check --write .",
     "check": "npm run typecheck && npm run lint && npm test",
     "screenshot": "node scripts/screenshot.mjs",
+    "screenshot:phone": "node scripts/phone-shots.mjs",
+    "audit:phone": "node scripts/phone-audit.mjs",
     "template:smoke": "node scripts/template-smoke.mjs",
     "balance": "BALANCE=1 vitest run src/playtest",
     "e2e": "node scripts/e2e.mjs",

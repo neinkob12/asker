@@ -100,7 +100,7 @@ function SpotsSection() {
     <Card
       title="Spots"
       icon="pin"
-      color="red"
+      color="place"
       status={waiting > 0 ? 'warn' : 'good'}
       summary={waiting > 0 ? `${waiting} warten` : `${spots.length} aktiv`}
     >

@@ -125,7 +125,7 @@
 .enc-person__stats {
   display: none;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--color-muted);
 }
 

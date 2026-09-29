@@ -9,11 +9,13 @@ import {
   Card,
   Dialog,
   Hint,
+  Icon,
   KeyValue,
   List,
   ListItem,
   onGameEvent,
   ProgressBar,
+  readableOn,
   registerDialog,
   registerSearch,
   registerTab,
@@ -113,9 +115,9 @@ function GangCard(props: { gang: Gang }) {
     <Card
       class="gang-card"
       title={
-        <span class="gang-title" style={{ '--gang-color': gang.color }}>
+        <span class="gang-title" style={{ '--gang-color': gang.color, '--gang-on': readableOn(gang.color) }}>
           <span class="gang-emblem" aria-hidden="true">
-            {gang.emblem}
+            <Icon name={gang.emblem} />
           </span>
           {gang.name}
         </span>
@@ -364,8 +366,11 @@ function AllyDialog(props: { gangId: string }) {
               </Button>
             }
           >
-            <strong>
-              {e.emblem} {e.name}
+            <strong class="gang-title" style={{ '--gang-color': e.color, '--gang-on': readableOn(e.color) }}>
+              <span class="gang-emblem" aria-hidden="true">
+                <Icon name={e.emblem} />
+              </span>
+              {e.name}
             </strong>
             <div class="ui-hint">Stärke {Math.round(gangPower(state, e.id))}</div>
           </ListItem>

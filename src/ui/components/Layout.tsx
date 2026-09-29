@@ -1,6 +1,6 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { useContext } from 'preact/hooks';
-import { type ChipColor, Icon, IconChip } from './Icon';
+import { type CategoryColor, type ChipColor, Icon, IconChip } from './Icon';
 import type { IconName } from './icons';
 import { SectionContext } from './section';
 
@@ -40,7 +40,7 @@ export function Card(props: CardProps) {
   if (section?.mode === 'rows' && props.title) {
     return (
       <button type="button" class={`ui-row ${props.tone ? `ui-row--${props.tone}` : ''}`} onClick={section.open}>
-        <IconChip icon={props.icon ?? 'briefcase'} color={chipColor} status={props.status} />
+        <IconChip icon={props.icon ?? 'briefcase'} color={chipColor} status={props.status} solid />
         <span class="ui-row__title">{props.title}</span>
         {props.summary !== undefined && props.summary !== null && <span class="ui-row__summary">{props.summary}</span>}
         <Icon name="chevronRight" class="ui-row__chevron" />
@@ -79,12 +79,13 @@ export function Hint(props: { children?: ComponentChildren; icon?: IconRef }) {
   );
 }
 
-/** Text für leere Listen. */
-export function Empty(props: { children?: ComponentChildren; icon?: IconRef }) {
+/** Text für leere Listen. Mit action (z.B. ein Knopf) zeigt der leere Zustand den nächsten Schritt. */
+export function Empty(props: { children?: ComponentChildren; icon?: IconRef; action?: ComponentChildren }) {
   return (
     <div class="ui-empty">
-      <IconChip icon={props.icon ?? 'inbox'} color="paper" size="lg" />
+      <IconChip icon={props.icon ?? 'inbox'} color="system" size="lg" />
       <p class="ui-hint">{props.children}</p>
+      {props.action}
     </div>
   );
 }
@@ -169,7 +170,7 @@ export interface ListItemProps {
   active?: boolean;
 }
 
-const LIST_TONE_CHIP: Record<string, ChipColor> = { good: 'green', bad: 'red', info: 'blue', warn: 'yellow' };
+const LIST_TONE_CHIP: Record<string, ChipColor> = { good: 'money', bad: 'danger', info: 'place', warn: 'warn' };
 
 export function ListItem(props: ListItemProps) {
   const cls = ['ui-list__item'];
@@ -182,7 +183,7 @@ export function ListItem(props: ListItemProps) {
         <IconChip
           icon={props.icon}
           size="sm"
-          color={props.tone ? LIST_TONE_CHIP[props.tone] : 'paper'}
+          color={props.tone ? LIST_TONE_CHIP[props.tone] : 'system'}
           class="ui-list__icon"
         />
       )}
@@ -204,10 +205,16 @@ export function ListItem(props: ListItemProps) {
   );
 }
 
-/** Kleines Etikett, z.B. "Gang", "Neu", "Hoch". */
-export function Tag(props: { children?: ComponentChildren; tone?: Tone | 'muted'; icon?: IconRef }) {
+/** Kleines Etikett, z.B. "Gang", "Neu", "Hoch". Mit category in der Bedeutungsfarbe (Symbol immer dabei zeigen). */
+export function Tag(props: {
+  children?: ComponentChildren;
+  tone?: Tone | 'muted';
+  category?: CategoryColor;
+  icon?: IconRef;
+}) {
+  const cls = props.category ? `ui-tag--cat ui-tag--cat-${props.category}` : `ui-tag--${props.tone ?? 'muted'}`;
   return (
-    <span class={`ui-tag ui-tag--${props.tone ?? 'muted'}`}>
+    <span class={`ui-tag ${cls}`}>
       {props.icon && <Icon name={props.icon} />}
       {props.children}
     </span>
@@ -220,23 +227,27 @@ export interface AvatarProps {
   /** Bild-URL, Emoji oder Icon-Name. */
   image?: string;
   size?: 'sm' | 'md' | 'lg';
-  /** Hintergrundfarbe (CSS-Farbe), z.B. die Farbe einer Gang. Standard: aus dem Namen abgeleitet. */
+  /** Bedeutungsfarbe des Kreises (z.B. Kontaktart). Standard: aus dem Namen abgeleitet. */
+  tone?: CategoryColor;
+  /** Eigene Hintergrundfarbe (CSS-Farbe), z.B. die Farbe einer Gang. Vorrang vor tone. */
   color?: string;
 }
 
-const AVATAR_COLORS = ['#ffc800', '#1cb0f6', '#58cc02', '#ff9f43', '#a560f0', '#ff7aa8', '#4dd6c4'];
+const AVATAR_TONES: CategoryColor[] = ['place', 'money', 'people', 'brand', 'media', 'chat', 'goods', 'law'];
 
-function nameColor(name: string): string {
+function nameTone(name: string): CategoryColor {
   let hash = 0;
   for (const ch of name) hash = (hash * 31 + (ch.codePointAt(0) ?? 0)) >>> 0;
-  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+  return AVATAR_TONES[hash % AVATAR_TONES.length];
 }
 
 /** Kreis mit Porträt, Icon oder Initialen. Für Kontakte, Mitarbeiter, Gangs. */
 export function Avatar(props: AvatarProps) {
   const image = props.image;
-  const style = { background: props.color ?? nameColor(props.name) };
-  const cls = `ui-avatar ui-avatar--${props.size ?? 'md'}`;
+  const custom = props.color !== undefined;
+  const tone = props.tone ?? nameTone(props.name);
+  const style = custom ? { background: props.color } : undefined;
+  const cls = `ui-avatar ui-avatar--${props.size ?? 'md'} ${custom ? 'ui-avatar--custom' : `ui-avatar--${tone}`}`;
   if (image && /^(https?:|data:|\/|\.\/)/.test(image)) {
     return <img class={cls} src={image} alt="" style={style} />;
   }
@@ -279,7 +290,7 @@ export function Toggle(props: ToggleProps) {
       class={`ui-toggle ${props.checked ? 'is-on' : ''}`}
       onClick={() => props.onChange(!props.checked)}
     >
-      {props.icon && <IconChip icon={props.icon} size="sm" color={props.checked ? 'green' : 'paper'} />}
+      {props.icon && <IconChip icon={props.icon} size="sm" color={props.checked ? 'money' : 'system'} />}
       <span class="ui-toggle__text">
         <span class="ui-toggle__label">{props.label}</span>
         {props.hint && <span class="ui-toggle__hint">{props.hint}</span>}

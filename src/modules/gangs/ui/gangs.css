@@ -13,11 +13,13 @@
 .gang-emblem {
   display: inline-grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-sm);
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   background: var(--gang-color, var(--color-surface));
-  font-size: var(--font-size-sm);
+  color: var(--gang-on, #ffffff);
+  font-size: 16px;
 }
 .gang-stage {
   font-size: var(--font-size-xs);

@@ -150,7 +150,7 @@ function Briefing(props: { encounter: Encounter }) {
     <div class="enc-choices">
       <p class="enc-question">Gehst du selbst hin?</p>
       <button type="button" class="enc-card enc-card--danger" onClick={() => join(true)}>
-        <IconChip icon="swords" color="red" size="lg" />
+        <IconChip icon="swords" color="danger" size="lg" />
         <span class="enc-card__text">
           <strong>Selbst hin</strong>
           <small>Bessere Chancen und mehr Möglichkeiten.</small>
@@ -165,7 +165,7 @@ function Briefing(props: { encounter: Encounter }) {
         </span>
       </button>
       <button type="button" class="enc-card" onClick={() => join(false)}>
-        <IconChip icon="shieldCheck" color="green" size="lg" />
+        <IconChip icon="shieldCheck" color="money" size="lg" />
         <span class="enc-card__text">
           <strong>{hasCrew ? 'Deine Leute machen lassen' : 'Nicht eingreifen'}</strong>
           <small>
@@ -224,7 +224,7 @@ function Actions(props: { encounter: Encounter }) {
             disabled={cost > state.wallet.dirty}
             onClick={() => act(id)}
           >
-            <IconChip icon={ACTION_ICONS[id] ?? 'bolt'} color={id === 'fight' ? 'red' : 'yellow'} size="md" />
+            <IconChip icon={ACTION_ICONS[id] ?? 'bolt'} color={id === 'fight' ? 'danger' : 'warn'} size="md" />
             <span class="enc-card__text">
               <strong>{action.label}</strong>
               <small>{action.hint}</small>
