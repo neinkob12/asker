@@ -180,7 +180,7 @@ function CampaignHud() {
     <button type="button" class="territory-hud" onClick={() => ui.selectTab('territory')}>
       <Stat
         label="Köln"
-        value={progress.won ? 'gehört dir' : `${progress.controlled}/${progress.needed} Veedel`}
+        value={progress.won ? 'deins' : `${progress.controlled}/${progress.needed}`}
         title={`Kampagne "Köln übernehmen": ${progress.controlled} von ${progress.total} Veedeln, ${progress.needed} gewinnen.`}
       />
     </button>

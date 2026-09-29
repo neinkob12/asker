@@ -342,6 +342,21 @@ function visitRegulars(ctx: Ctx): void {
 // ---------------------------------------------------------------------------------------------
 // Ablauf pro Spielminute
 
+/** So lange nach einem Eintrag "Kunde ist abgehauen" kommt für denselben Spot kein neuer. */
+const LOSS_JOURNAL_INTERVAL = 60;
+
+function recentlyReportedLoss(ctx: Ctx, spotId: string): boolean {
+  return journal
+    .entries(ctx.state)
+    .some(
+      (e) =>
+        e.source === 'customers' &&
+        e.ref?.spotId === spotId &&
+        e.text.endsWith('ist abgehauen.') &&
+        ctx.now - e.time < LOSS_JOURNAL_INTERVAL,
+    );
+}
+
 function expireCustomers(ctx: Ctx): void {
   const state = ctx.state.modules.customers;
   const expired = state.waiting.filter((c) => c.expiresAt <= ctx.now);
@@ -357,7 +372,8 @@ function expireCustomers(ctx: Ctx): void {
       });
       regular.satisfaction = Math.max(0, Math.round((regular.satisfaction - 0.25) * 100) / 100);
       if (regular.satisfaction < REGULAR_LOST_BELOW) loseRegular(ctx, regular, 'zu lange gewartet');
-    } else {
+    } else if (!recentlyReportedLoss(ctx, c.spotId)) {
+      // Höchstens ein Eintrag pro Spot und Stunde, sonst verdrängt das alles andere im Journal.
       journal.add(ctx, `Kunde am ${spot?.name ?? c.spotId} ist abgehauen.`, 'bad', { spotId: c.spotId });
     }
     changeReputation(ctx, REP_CUSTOMER_LOST, 'Kunden warten lassen');

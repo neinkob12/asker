@@ -48,7 +48,7 @@ function HeatHud() {
       label="Heat"
       value={
         <span class={`police-hud police-hud--${level.id}`}>
-          {Math.round(heat)} · {hottest ? veedelName(hottest.veedelId) : level.label}
+          {Math.round(heat)} · {level.label}
         </span>
       }
       title={title}

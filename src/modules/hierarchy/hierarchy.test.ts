@@ -197,6 +197,18 @@ describe('hierarchy: Delegation', () => {
     expect(shipmentsInTransit(sim.state)).toHaveLength(1);
   });
 
+  it('er bestellt, wonach die Kunden fragen (customer.missed)', () => {
+    const sim = quietGame();
+    const lt = recruit(sim, 'runner', 2);
+    appoint(sim, lt.id, 'deutz');
+    sim.state.modules.customers.stats.missedByProduct = { hash: 12, weed: 1 };
+    sim.state.wallet.dirty = 5000;
+    sim.advance(5);
+    expect(shipmentsInTransit(sim.state)).toHaveLength(1);
+    expect(shipmentsInTransit(sim.state)[0].productId).toBe('hash');
+    expect(getPost(sim.state, 'deutz')?.log[0].text).toMatch(/fragen danach/);
+  });
+
   it('er stellt Leute aus dem Pool ein, wenn er darf', () => {
     const sim = quietGame();
     sim.state.wallet.dirty = 5000;

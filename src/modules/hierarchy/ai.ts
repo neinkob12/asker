@@ -6,7 +6,7 @@
 // Befehle wie der Spieler. Direkt ändert er nur den eigenen Zustand (state.modules.hierarchy) und das Journal.
 
 import { type Actor, type Command, type Ctx, journal } from '../../core';
-import { canServe, waitingAt } from '../customers';
+import { canServe, getSalesStats, waitingAt } from '../customers';
 import { getStock, stockSummary } from '../goods';
 import { getSpotPrice, hasOwnPrice, priceRatio, roundPrice, spotReferencePrice } from '../market';
 import { getHeat } from '../police';
@@ -267,13 +267,19 @@ function restock(turn: Turn): void {
     note(turn, 'Wir brauchen Ware, aber das Geld reicht nicht.');
     return;
   }
-  const covering = offers.filter((o) => o.pkg.amount >= deficit).sort((a, b) => a.price - b.price)[0];
-  const choice = covering ?? [...offers].sort((a, b) => b.pkg.amount - a.pkg.amount || a.price - b.price)[0];
+  // Was fragen die Kunden nach, das nicht da ist (customer.missed)? Davon zuerst, sonst irgendwas Günstiges.
+  const missed = getSalesStats(ctx.state).missedByProduct;
+  const wanted = (productId: string) => (missed[productId] ?? 0) / (1 + getStock(ctx.state, { productId }));
+  const top = [...offers].sort((a, b) => wanted(b.pkg.productId) - wanted(a.pkg.productId))[0];
+  const pool = wanted(top.pkg.productId) > 0 ? offers.filter((o) => o.pkg.productId === top.pkg.productId) : offers;
+  const covering = pool.filter((o) => o.pkg.amount >= deficit).sort((a, b) => a.price - b.price)[0];
+  const choice = covering ?? [...pool].sort((a, b) => b.pkg.amount - a.pkg.amount || a.price - b.price)[0];
   const ordered = run({
     type: 'suppliers.order',
     payload: { supplierId: choice.supplier.id, packageId: choice.pkg.id },
   });
-  if (ordered) note(turn, `Nachschub bestellt: ${choice.pkg.label} bei ${choice.supplier.name}.`);
+  const why = pool !== offers ? ' Die Kunden fragen danach.' : '';
+  if (ordered) note(turn, `Nachschub bestellt: ${choice.pkg.label} bei ${choice.supplier.name}.${why}`);
 }
 
 /** Der Leutnant verkauft selbst an Spots in seinem Veedel, an denen gerade kein Läufer steht. */

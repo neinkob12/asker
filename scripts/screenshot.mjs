@@ -14,10 +14,13 @@
 //   --sizes   desktop,mobile (Standard beide)
 //   --name    Präfix der Dateinamen (Standard: spiel)
 // Browser: CHROMIUM_PATH setzen, sonst wird der Playwright-Chromium gesucht.
+// Kartenkacheln lädt Node (auch über einen HTTPS_PROXY), dann zeigt die Karte auch in abgeschotteten Umgebungen
+// das echte Luftbild.
 
-import { existsSync, mkdirSync, readdirSync } from 'node:fs';
-import { chromium } from 'playwright-core';
-import { createServer } from 'vite';
+import { mkdirSync } from 'node:fs';
+import { launchBrowser, restartWithProxySupport, routeExternal, startServer } from './browser.mjs';
+
+restartWithProxySupport();
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -36,27 +39,8 @@ const VIEWPORTS = {
   mobile: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
 };
 
-function findChromium() {
-  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
-  const base = process.env.PLAYWRIGHT_BROWSERS_PATH ?? '/opt/pw-browsers';
-  if (!existsSync(base)) return undefined;
-  const dir = readdirSync(base).find((d) => /^chromium-\d+$/.test(d));
-  const exe = dir && `${base}/${dir}/chrome-linux/chrome`;
-  return exe && existsSync(exe) ? exe : undefined;
-}
-
-const server = await createServer({
-  server: { port: 5190, strictPort: false, forwardConsole: false },
-  logLevel: 'warn',
-});
-await server.listen();
-const base = server.resolvedUrls.local[0];
-// Nur HTTPS (Kartenkacheln) über einen gesetzten Proxy leiten, der lokale Dev-Server läuft direkt.
-const proxyHost = process.env.HTTPS_PROXY ? new URL(process.env.HTTPS_PROXY).host : null;
-const browser = await chromium.launch({
-  executablePath: findChromium(),
-  args: proxyHost ? [`--proxy-server=https=${proxyHost}`] : [],
-});
+const { server, base } = await startServer();
+const browser = await launchBrowser();
 mkdirSync(outDir, { recursive: true });
 
 const errors = [];
@@ -66,6 +50,7 @@ const isTileError = (text) => text.includes('AJAXError') || text.includes('Faile
 try {
   for (const size of sizes) {
     const context = await browser.newContext(VIEWPORTS[size]);
+    const failed = await routeExternal(context, base);
     const page = await context.newPage();
     page.on('pageerror', (e) => errors.push(`[${size}] ${e.message}`));
     page.on('console', (m) => {
@@ -82,6 +67,7 @@ try {
     const file = `${outDir}/${name}-${size}.png`;
     await page.screenshot({ path: file });
     console.log(`Screenshot: ${file}`);
+    tileFailures += failed();
     await context.close();
   }
 } finally {
