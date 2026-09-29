@@ -126,7 +126,7 @@ button.map-target:hover .map-target__reticle {
   font-weight: var(--font-weight-bold);
 }
 .map-target__sub {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: var(--font-weight-medium);
   color: var(--map-target-color);
 }
@@ -229,7 +229,7 @@ button.map-target:hover .map-target__reticle {
   gap: 4px 14px;
   max-width: calc(100% - 56px);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.06em;
   color: var(--color-info);
   opacity: 0.85;
@@ -301,7 +301,7 @@ button.map-target:hover .map-target__reticle {
 }
 .map-fx-money__caption {
   margin-top: 2px;
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: var(--font-weight-bold);
   color: var(--color-marker-ink);
   text-shadow:
@@ -359,7 +359,7 @@ button.map-target:hover .map-target__reticle {
   left: 50%;
   transform: translateX(-50%);
   padding: 1px 8px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: var(--font-weight-bold);
   color: var(--color-police-blue);
   background: var(--color-marker-bg);
@@ -405,7 +405,7 @@ button.map-target:hover .map-target__reticle {
   display: block;
   padding: 1px 7px;
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: var(--font-weight-bold);
   color: var(--color-marker-ink);
   background: var(--color-marker-bg);

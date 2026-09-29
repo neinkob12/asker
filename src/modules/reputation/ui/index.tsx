@@ -11,9 +11,9 @@ function ReputationHud() {
   return (
     <HudPill
       icon="star"
-      color="yellow"
+      color="brand"
       label="Ruf"
-      value={`${Math.round(value)} · ${reputationLabel(value)}`}
+      value={`${Math.round(value)} ${reputationLabel(value)}`}
       tone={value < 25 ? 'bad' : value < 45 ? 'warn' : undefined}
       title={`Ruf ${Math.round(value)} von 100: ${reputationLabel(value)}`}
     />
@@ -28,7 +28,7 @@ function ReputationSection() {
     <Card
       title={`Ruf: ${reputationLabel(value)}`}
       icon="star"
-      color="yellow"
+      color="brand"
       status={value < 25 ? 'bad' : value < 45 ? 'warn' : 'good'}
       summary={Math.round(value)}
     >

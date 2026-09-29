@@ -1,11 +1,10 @@
-// Oberflächen des Kerns: Geld und Uhr im HUD, Tabs "Geschäft" und "Ereignisse", Spielstand- und
-// Einstellungs-Dialoge, die Handy-Apps Nachrichten, Musik und Einstellungen, Benachrichtigungen und Sounds
+// Oberflächen des Kerns: Geld und Uhr im HUD, Tabs "Geschäft" und "Ereignisse", Spielstand-Dialoge, die
+// Handy-Apps Nachrichten, Meldungen und Einstellungen (mit Ton und Musik), Benachrichtigungen und Sounds
 // für die Ereignisse des Kerns.
 
 import { clock, formatEuro, messages, wallet } from '../../core';
-import { islandCountdown } from '../phone/DynamicIsland';
+import { islandCountdown } from '../phone/islandModel';
 import { MessagesApp } from '../phone/MessagesApp';
-import { MusicApp } from '../phone/MusicApp';
 import { chatList, messageNotification } from '../phone/messagesModel';
 import { SettingsApp } from '../phone/SettingsApp';
 import {
@@ -23,27 +22,19 @@ import { soundOnEvent } from '../sound';
 import { MoneyHud } from './CoreHud';
 import { GameOverDialog, NewGameDialog, SavesDialog, WonDialog } from './GameDialogs';
 import { JournalTab } from './JournalTab';
-import { SettingsDialog } from './Settings';
 
 /** Ab diesem Betrag erscheint eine Einnahme kurz in der Dynamic Island. */
 const ISLAND_EARN_MIN = 150;
-
-declare module '../registry' {
-  interface DialogRegistry {
-    'core.settings': Record<string, never>;
-  }
-}
 
 export function registerBuiltins(): void {
   registerHudItem({ id: 'core.money', order: 10, placement: 'main', component: MoneyHud });
 
   // "Geschäft" sammelt Abschnitte der Module über den Slot 'tab:business'.
   registerTab({ id: 'business', title: 'Geschäft', order: 10, icon: 'briefcase', layout: 'rows' });
-  registerTab({ id: 'journal', title: 'Ereignisse', order: 90, component: JournalTab, icon: 'list' });
+  registerTab({ id: 'journal', title: 'Ereignisse', order: 90, component: JournalTab, icon: 'newspaper' });
 
   registerDialog({ id: 'core.newGame', component: NewGameDialog, pausesGame: true, dismissable: false });
   registerDialog({ id: 'core.saves', component: SavesDialog, pausesGame: true });
-  registerDialog({ id: 'core.settings', component: SettingsDialog });
   registerDialog({ id: 'core.gameOver', component: GameOverDialog, dismissable: false });
   registerDialog({ id: 'core.won', component: WonDialog, pausesGame: true });
 
@@ -52,7 +43,7 @@ export function registerBuiltins(): void {
     name: 'Nachrichten',
     icon: 'message',
     order: 10,
-    color: 'var(--color-accent-strong)',
+    color: 'chat',
     component: MessagesApp,
     badge: (state) => messages.unreadCount(state),
     chrome: 'none',
@@ -62,24 +53,17 @@ export function registerBuiltins(): void {
     name: 'Meldungen',
     icon: 'bell',
     order: 50,
-    color: 'var(--color-warn)',
+    color: 'warn',
     component: AlertsApp,
+    badge: (_state, ui) => ui.alerts.filter((a) => !a.read).length,
     chrome: 'none',
-  });
-  registerPhoneApp({
-    id: 'core.music',
-    name: 'Musik',
-    icon: 'music',
-    order: 80,
-    color: 'var(--color-dirty)',
-    component: MusicApp,
   });
   registerPhoneApp({
     id: 'core.settings',
     name: 'Einstellungen',
-    icon: 'sliders',
+    icon: 'gear',
     order: 90,
-    color: 'var(--color-muted)',
+    color: 'system',
     component: SettingsApp,
   });
 

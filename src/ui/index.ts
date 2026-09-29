@@ -12,7 +12,7 @@ export {
 } from '../audio';
 export * from './components';
 export { useGame, useSession, useUi } from './hooks';
-export { islandCountdown } from './phone/DynamicIsland';
+export { islandCountdown } from './phone/islandModel';
 export { PhoneScreen, type PhoneScreenProps } from './phone/PhoneScreen';
 export {
   type Advice,

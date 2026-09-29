@@ -3,7 +3,19 @@
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro } from '../../../core';
-import { Avatar, Button, Card, Empty, Hint, registerPhoneApp, registerSlot, Tabs, useGame, useUi } from '../../../ui';
+import {
+  Avatar,
+  Button,
+  Card,
+  Empty,
+  Hint,
+  registerPhoneApp,
+  registerSlot,
+  SegmentedControl,
+  Tag,
+  useGame,
+  useUi,
+} from '../../../ui';
 import { roleName, STAT_KEYS, STAT_NAMES } from '../../staff';
 import { type Candidate, getContacts, getPool, SEARCH_COST, SOURCE_NAMES, searchReadyAt } from '../index';
 import './recruiting.css';
@@ -17,14 +29,16 @@ function CandidateCard(props: { candidate: Candidate }) {
   return (
     <li class={`rc-card rc-card--${c.source}`}>
       <header class="rc-card__head">
-        <Avatar name={c.name} image={c.portrait ?? undefined} size="sm" />
+        <Avatar name={c.name} image={c.portrait ?? undefined} tone="people" />
         <span class="rc-card__who">
           <strong>{c.name}</strong>
           <span class="ui-hint">
             {c.age}, {roleName(c.role)}, Level {c.level}
           </span>
         </span>
-        <span class="rc-card__source">{SOURCE_NAMES[c.source]}</span>
+        <Tag category={c.source === 'pool' ? 'system' : 'brand'} icon={c.source === 'pool' ? 'inbox' : 'star'}>
+          {SOURCE_NAMES[c.source]}
+        </Tag>
       </header>
       <p class="rc-card__text">
         {c.note} {c.background}
@@ -41,7 +55,6 @@ function CandidateCard(props: { candidate: Candidate }) {
       </p>
       <div class="rc-card__actions">
         <Button
-          small
           variant="primary"
           disabled={state.wallet.dirty < c.hireCost}
           onClick={() => dispatch({ type: 'recruiting.hire', payload: { candidateId: c.id } })}
@@ -49,7 +62,6 @@ function CandidateCard(props: { candidate: Candidate }) {
           Einstellen
         </Button>
         <Button
-          small
           variant="subtle"
           onClick={() => dispatch({ type: 'recruiting.decline', payload: { candidateId: c.id } })}
         >
@@ -80,21 +92,22 @@ function ContactsApp() {
   const { state } = useGame();
   const contacts = getContacts(state);
   const pool = getPool(state);
-  const [tab, setTab] = useState(contacts.length > 0 ? 'contacts' : 'pool');
+  const [tab, setTab] = useState<'contacts' | 'pool'>(contacts.length > 0 ? 'contacts' : 'pool');
   const list = tab === 'contacts' ? contacts : pool;
   return (
     <div class="rc-app">
-      <h3 class="rc-app__title">Kontakte</h3>
-      <Tabs
-        tabs={[
-          { id: 'contacts', label: 'Kontakte', badge: contacts.length },
-          { id: 'pool', label: `Bewerber (${pool.length})` },
+      <SegmentedControl
+        wide
+        aria-label="Ansicht"
+        options={[
+          { value: 'contacts', label: 'Kontakte', badge: contacts.length },
+          { value: 'pool', label: `Bewerber (${pool.length})` },
         ]}
-        active={tab}
+        value={tab}
         onChange={setTab}
       />
       {list.length === 0 ? (
-        <Empty>
+        <Empty icon="userPlus">
           {tab === 'contacts'
             ? 'Niemand meldet sich gerade. Loyale Leute empfehlen dir manchmal wen, auch Stammkunden und das Milieu.'
             : 'Keine Bewerber. Neue kommen alle paar Stunden, oder du fragst rum.'}
@@ -141,7 +154,7 @@ registerPhoneApp({
   name: 'Kontakte',
   icon: 'users',
   order: 25,
-  color: '#2f855a',
+  color: 'people',
   component: ContactsApp,
   badge: (state) => getContacts(state).length,
 });

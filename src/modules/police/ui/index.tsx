@@ -49,7 +49,7 @@ function HeatHud() {
     <HudPill
       class="hud-heat"
       icon="flame"
-      color={level.id === 'calm' ? 'green' : level.id === 'watchful' ? 'yellow' : 'red'}
+      color={level.id === 'calm' ? 'money' : level.id === 'watchful' ? 'warn' : 'danger'}
       label="Heat"
       value={level.label}
       tone={level.id === 'calm' ? undefined : TONE[level.id]}

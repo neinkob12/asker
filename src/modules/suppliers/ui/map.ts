@@ -4,7 +4,15 @@
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import type { GameState, LngLat } from '../../../core';
-import { addHtmlMarker, createVehicle, el, type MapLayer, pathLength, type VehicleHandle } from '../../../map';
+import {
+  addHtmlMarker,
+  createVehicle,
+  el,
+  type MapLayer,
+  mapToken,
+  pathLength,
+  type VehicleHandle,
+} from '../../../map';
 import { DEFAULT_WAREHOUSE, formatProductAmount, getWarehouse, productName } from '../../goods';
 import {
   deliveryLeg,
@@ -35,12 +43,6 @@ const shipFraction = (() => {
     u < split ? ((u / split) * outer) / total : (outer + ((u - split) / RHINE_APPROACH_SHARE) * inner) / total;
 })();
 
-/** Farbe eines Design-Tokens (Karten-Layer brauchen echte Farbwerte). */
-function token(name: string, fallback: string): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return value || fallback;
-}
-
 interface ShownShipment {
   ship: VehicleHandle | null;
   road: VehicleHandle;
@@ -52,7 +54,7 @@ export const suppliersLayer: MapLayer = {
   mount(ctx) {
     const { map } = ctx;
     const shown = new Map<number, ShownShipment>();
-    const lateColor = token('--color-warn', '#ffb547');
+    const lateColor = mapToken('--color-warn', '#ffb547');
     map.addSource(SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
       id: 'suppliers.routes',

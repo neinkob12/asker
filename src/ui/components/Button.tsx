@@ -92,16 +92,21 @@ export function IconButton(props: IconButtonProps) {
 }
 
 export interface SegmentedControlProps<T extends string | number> {
-  options: { value: T; label: string; icon?: IconName | (string & {}) }[];
+  options: { value: T; label: string; icon?: IconName | (string & {}); badge?: number }[];
   value: T;
   onChange: (value: T) => void;
   'aria-label'?: string;
+  /** Füllt die Breite, alle Segmente gleich breit (Standard im Handy). */
+  wide?: boolean;
 }
 
-/** Gruppe von Knöpfen, von denen einer aktiv ist (z.B. Spieltempo). */
+/** Gruppe von Segmenten, von denen eines gewählt ist (z.B. Spieltempo, Alle/Offen). Höchstens fünf Segmente. */
 export function SegmentedControl<T extends string | number>(props: SegmentedControlProps<T>) {
   return (
-    <fieldset class="ui-segmented ui-segmented--joined" aria-label={props['aria-label']}>
+    <fieldset
+      class={`ui-segmented ui-segmented--joined ${props.wide ? 'ui-segmented--wide' : ''}`}
+      aria-label={props['aria-label']}
+    >
       {props.options.map((o) => (
         <Button
           key={String(o.value)}
@@ -109,10 +114,11 @@ export function SegmentedControl<T extends string | number>(props: SegmentedCont
           icon={o.icon}
           active={o.value === props.value}
           onClick={() => props.onChange(o.value)}
-          aria-label={o.icon ? o.label : undefined}
+          aria-label={o.icon && !o.badge ? o.label : undefined}
           title={o.icon ? o.label : undefined}
         >
           {o.icon ? undefined : o.label}
+          {o.badge ? <span class="ui-segmented__count">{o.badge}</span> : null}
         </Button>
       ))}
     </fieldset>

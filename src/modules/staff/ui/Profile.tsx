@@ -20,7 +20,7 @@ import {
   type StaffMember,
   securityAt,
 } from '../index';
-import { ORIGIN_NAMES, Portrait, StatBars, StatusStamp } from './common';
+import { ORIGIN_NAMES, Portrait, StatBars, StatusTag } from './common';
 
 export function StaffProfile(props: { staffId: string }) {
   const { state } = useGame();
@@ -50,7 +50,7 @@ export function StaffProfile(props: { staffId: string }) {
           </span>
           <ProgressBar value={progress.fraction} label="Erfahrung" />
         </div>
-        <StatusStamp status={m.status} />
+        <StatusTag status={m.status} />
       </header>
 
       {m.background && <p class="staff-file__background">{m.background}</p>}

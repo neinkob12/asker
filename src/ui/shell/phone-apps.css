@@ -1,0 +1,697 @@
+/*
+ * Die Apps des Kerns im Spiel-Handy: Einstellungen (mit Ton und Musik), Ereignisse (Zeitachse), Nachrichten
+ * (Liste nach Kontaktart, Chat), Meldungen und das Banner einer Benachrichtigung. Rahmen, Startbildschirm und
+ * Bausteine im Handy stehen in phone.css. Nur Tokens verwenden (styles/tokens.css), Hell und Dunkel kommen aus
+ * den Tokens.
+ */
+
+/* ---------------------------------------------------------------- Einstellungen */
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.set-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.set-section__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 4px;
+}
+.set-section__title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--type-footnote);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-caps);
+  line-height: var(--type-footnote-lh);
+  text-transform: uppercase;
+  color: var(--phone-label-2);
+}
+/* Gruppe wie in den iOS-Einstellungen: eine Fläche, Trenner zwischen den Zeilen */
+.set-group {
+  padding: 0 16px;
+  background: var(--phone-group);
+  border-radius: var(--radius-group);
+}
+.set-group > * + * {
+  border-top: 0.5px solid var(--phone-separator);
+}
+.set-group .ui-toggle {
+  min-height: 52px;
+}
+.set-group .ui-slider {
+  gap: 0;
+  padding: 10px 0 6px;
+}
+.set-group .ui-slider__head {
+  font-size: var(--type-body);
+  font-weight: 400;
+}
+.set-group .ui-slider__value {
+  font-size: var(--type-subhead);
+}
+.set-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 12px 0;
+}
+.set-choice__label {
+  font-size: var(--type-body);
+}
+.set-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.set-link__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.set-link__label {
+  font-size: var(--type-body);
+}
+.set-link__hint {
+  font-size: var(--type-footnote);
+  color: var(--phone-label-2);
+}
+.set-link__chevron {
+  color: var(--phone-label-3);
+}
+.set-link:hover .set-link__label {
+  color: var(--cat-brand);
+}
+.set-note {
+  margin: 0;
+  padding: 12px 0;
+  font-size: var(--type-subhead);
+  line-height: var(--type-subhead-lh);
+  color: var(--phone-label-2);
+}
+.set-foot,
+.set-section__note {
+  margin: 0;
+  padding: 0 4px;
+  font-size: var(--type-footnote);
+  line-height: var(--type-footnote-lh);
+  color: var(--phone-label-2);
+  text-align: center;
+}
+.set-section__note {
+  text-align: left;
+}
+/* Player: was läuft, Stimmung, Fortschritt, weiter */
+.set-player {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 12px 0;
+}
+.set-player__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.set-player__title {
+  overflow: hidden;
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-player__moods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.set-player__time {
+  font-size: var(--type-footnote);
+  font-variant-numeric: tabular-nums;
+  color: var(--phone-label-2);
+}
+
+/* ---------------------------------------------------------------- Ereignisse (Zeitachse) */
+.journal {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.journal__day {
+  display: flex;
+  flex-direction: column;
+}
+/* Tagesmarke bleibt beim Scrollen unter der Leiste stehen (Glas, schwebende Ebene) */
+.journal__day-head {
+  position: sticky;
+  top: calc(var(--phone-status-height) + var(--phone-nav-height) + 6px);
+  z-index: 2;
+  align-self: flex-start;
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: var(--radius-round);
+  background: var(--phone-glass);
+  backdrop-filter: var(--phone-blur);
+  box-shadow: inset 0 0 0 0.5px var(--phone-separator);
+  font-family: var(--font-body);
+  font-size: var(--type-footnote);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--type-footnote-lh);
+  color: var(--phone-label-2);
+}
+.journal__list {
+  position: relative;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+/* Die Linie der Zeitachse läuft durch die Marken */
+.journal__list::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 66px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--phone-separator);
+}
+.journal__entry {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px 28px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+  padding: 8px 0;
+}
+.journal__time {
+  padding-top: 2px;
+  font-size: var(--type-footnote);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--type-footnote-lh);
+  color: var(--phone-label-2);
+  text-align: right;
+}
+.journal__mark {
+  --mark: var(--cat-place);
+  --mark-soft: var(--cat-place-soft);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(var(--mark-soft), var(--mark-soft)), var(--phone-bg);
+  color: var(--mark);
+  font-size: 16px;
+}
+.journal__entry--good .journal__mark {
+  --mark: var(--cat-money);
+  --mark-soft: var(--cat-money-soft);
+}
+.journal__entry--bad .journal__mark {
+  --mark: var(--cat-danger);
+  --mark-soft: var(--cat-danger-soft);
+}
+.journal__text {
+  margin: 0;
+  font-size: var(--type-body);
+  line-height: var(--type-body-lh);
+}
+
+/* ---------------------------------------------------------------- Nachrichten */
+.msg-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.msg-group__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 4px;
+}
+.msg-group__title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--type-footnote);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-caps);
+  line-height: var(--type-footnote-lh);
+  text-transform: uppercase;
+  color: var(--phone-label-2);
+}
+.msg-group__count {
+  font-size: var(--type-footnote);
+  color: var(--phone-label-2);
+}
+.msg-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--phone-group);
+  border-radius: var(--radius-group);
+  overflow: hidden;
+}
+.msg-list > li {
+  position: relative;
+}
+/* Trenner ab dem Text (nicht unter dem Avatar), wie in der Nachrichten-App */
+.msg-list > li + li::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 76px;
+  right: 0;
+  border-top: 0.5px solid var(--phone-separator);
+}
+.msg-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 16px 12px 16px;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.msg-row:hover {
+  background: var(--phone-group-2);
+}
+.msg-row .ui-avatar {
+  width: 48px;
+  height: 48px;
+  font-size: 18px;
+}
+.msg-row .ui-avatar .ui-icon {
+  font-size: 24px;
+}
+.msg-row__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.msg-row__top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.msg-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--type-body-lh);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-row__time {
+  flex: none;
+  font-size: var(--type-footnote);
+  font-variant-numeric: tabular-nums;
+  color: var(--phone-label-2);
+}
+.msg-row.is-unread .msg-row__time {
+  color: var(--cat-chat);
+  font-weight: var(--font-weight-bold);
+}
+.msg-row__preview {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--type-subhead);
+  line-height: var(--type-subhead-lh);
+  color: var(--phone-label-2);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.msg-row.is-unread .msg-row__preview {
+  color: var(--phone-label);
+}
+.msg-row__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: 4px;
+}
+.msg-row > .ui-badge {
+  align-self: center;
+}
+
+/* Chat */
+.msg-bubbles {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.msg-sep {
+  align-self: center;
+  padding: 6px var(--space-3) 2px;
+  font-size: var(--type-footnote);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--type-footnote-lh);
+  color: var(--phone-label-2);
+}
+.msg-sep--unread {
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-round);
+  background: var(--color-badge);
+  color: var(--color-on-badge);
+  font-size: var(--type-caption);
+}
+.msg-bubble {
+  position: relative;
+  max-width: 84%;
+  padding: 8px 12px 6px;
+  background: var(--phone-bubble);
+  border-radius: 20px;
+  font-size: var(--type-body);
+  line-height: var(--type-body-lh);
+  animation: bubble-in var(--duration) var(--ease-out);
+}
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.msg-bubble p {
+  margin: 0;
+}
+.msg-bubble time {
+  display: block;
+  margin-top: 1px;
+  font-size: var(--type-caption);
+  line-height: 16px;
+  color: var(--phone-label-2);
+  text-align: right;
+}
+.msg-bubble--contact {
+  align-self: flex-start;
+  border-bottom-left-radius: 6px;
+}
+.msg-bubble--player {
+  align-self: flex-end;
+  background: var(--cat-chat-b);
+  color: var(--cat-chat-on);
+  border-bottom-right-radius: 6px;
+}
+.msg-bubble--player time {
+  color: var(--cat-chat-on);
+  opacity: 0.85;
+}
+/* Der Stempel sitzt auf der oberen Kante der Blase; Platz darüber, damit er keinen Text verdeckt */
+.msg-bubble:has(.msg-bubble__stamp) {
+  margin-top: 14px;
+  padding-top: 14px;
+}
+.msg-bubble__stamp {
+  position: absolute;
+  top: -14px;
+  right: -6px;
+  background: var(--phone-group);
+}
+.msg-bubble.is-open {
+  box-shadow: 0 0 0 1.5px var(--cat-brand);
+}
+.msg-expired {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--type-footnote);
+  color: var(--phone-label-2);
+}
+/* Kontaktart am schmalen Farbstreifen der Blase (zusätzlich zu Symbol und Beschriftung im Kopf) */
+.msg-bubbles--gang .msg-bubble--contact {
+  box-shadow: inset 3px 0 0 var(--cat-danger);
+}
+.msg-bubbles--police .msg-bubble--contact {
+  box-shadow: inset 3px 0 0 var(--cat-law);
+}
+.msg-bubbles--staff .msg-bubble--contact {
+  box-shadow: inset 3px 0 0 var(--cat-people);
+}
+.msg-bubbles--supplier .msg-bubble--contact {
+  box-shadow: inset 3px 0 0 var(--cat-goods);
+}
+.msg-bubbles--customer .msg-bubble--contact {
+  box-shadow: inset 3px 0 0 var(--cat-money);
+}
+/* Offene Frage: Rahmen in Gold (Vorrang vor dem Farbstreifen) */
+.msg-bubbles .msg-bubble.is-open {
+  box-shadow: 0 0 0 1.5px var(--cat-brand);
+}
+.msg-typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  padding: 14px var(--space-4);
+}
+.msg-typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--phone-label-2);
+  animation: typing-bounce 1s ease-in-out infinite;
+}
+.msg-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.msg-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+/* Antwortblatt: die Knöpfe bleiben groß und links ausgerichtet, der erste ist die Hauptaktion in Gold */
+.msg-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.msg-options .ui-button {
+  justify-content: flex-start;
+  min-height: 48px;
+  padding: var(--space-3) var(--space-4);
+  font-weight: var(--font-weight-bold);
+  white-space: normal;
+  text-align: left;
+}
+.msg-deadline {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-round);
+  background: var(--cat-warn-soft);
+  font-size: var(--type-footnote);
+  font-weight: var(--font-weight-bold);
+  color: var(--cat-warn);
+  font-variant-numeric: tabular-nums;
+}
+.msg-deadline.is-urgent {
+  background: var(--cat-danger-soft);
+  color: var(--cat-danger);
+}
+
+/* ---------------------------------------------------------------- Meldungen */
+.alert-center {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.alert-group__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 8px;
+  padding: 0 4px;
+}
+.alert-group__title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--type-footnote);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-caps);
+  line-height: var(--type-footnote-lh);
+  text-transform: uppercase;
+  color: var(--phone-label-2);
+}
+.alert-group--bad .alert-group__title {
+  color: var(--cat-danger);
+}
+.alert-group--warn .alert-group__title {
+  color: var(--cat-warn);
+}
+.alert-group__count {
+  font-size: var(--type-footnote);
+  color: var(--phone-label-2);
+}
+.alert-group__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--phone-group);
+  border-radius: var(--radius-group);
+  overflow: hidden;
+}
+.alert-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 60px;
+  padding: 8px 16px;
+}
+.alert-row + .alert-row {
+  border-top: 0.5px solid var(--phone-separator);
+}
+.alert-row.is-new {
+  background: var(--phone-group-2);
+}
+.alert-row__text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--type-body);
+  line-height: var(--type-body-lh);
+}
+.alert-row__text time {
+  display: block;
+  font-size: var(--type-footnote);
+  color: var(--phone-label-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- Benachrichtigung (Banner) */
+/* Banner wie bei iOS: Glas, App-Kachel links, Absender, Text. Die Kachel trägt die Farbe der App. */
+.phone-notice {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  background: var(--phone-glass);
+  backdrop-filter: var(--phone-blur);
+  border-radius: 24px;
+  box-shadow:
+    inset 0 0 0 0.5px var(--phone-glass-edge),
+    0 10px 30px rgba(0, 0, 0, 0.35);
+  animation: notice-in var(--duration-slow) var(--ease-ios);
+}
+/* Im offenen Handy: oben unter der Island */
+.phone-notice.is-inside {
+  position: absolute;
+  z-index: 9;
+  top: var(--phone-status-height);
+  left: 8px;
+  right: 8px;
+}
+/* Handy weggelegt: oben über der Karte */
+.phone-notice.is-floating {
+  position: fixed;
+  z-index: var(--z-notification);
+  top: calc(var(--top) + var(--hud-height) + var(--gap));
+  right: calc(var(--gap) + var(--safe-right));
+  width: min(360px, calc(100% - var(--gap) * 2));
+  color: var(--color-text);
+}
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+.phone-notice__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 64px;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.phone-notice__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.phone-notice__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.phone-notice__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--type-subhead);
+  font-weight: var(--font-weight-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.phone-notice__when {
+  font-size: var(--type-footnote);
+  color: var(--phone-label-2);
+}
+.phone-notice__body {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--type-subhead);
+  line-height: var(--type-subhead-lh);
+  color: var(--phone-label);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.phone-notice__close {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-right: 4px;
+  border: 0;
+  border-radius: var(--radius-round);
+  background: transparent;
+  color: var(--phone-label-2);
+  font-size: 18px;
+  cursor: pointer;
+}
+.phone-notice__close:hover {
+  color: var(--phone-label);
+  background: var(--phone-fill);
+}

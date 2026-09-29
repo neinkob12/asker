@@ -39,7 +39,7 @@ function LaunderingSection() {
     <Card
       title="Geldwäsche"
       icon="washing"
-      color="green"
+      color="dirty"
       status={batches.length > 0 ? 'good' : 'idle'}
       summary={batches.length > 0 ? `${batches.length} läuft` : `${formatEuro(free)} frei`}
     >

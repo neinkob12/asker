@@ -4,7 +4,7 @@
 
 import type { ComponentType } from 'preact';
 import type { EventType, GameEvents, GameState, LngLat } from '../core';
-import type { UiApi } from './runtime';
+import type { UiApi, UiState } from './runtime';
 
 /** Panels (Detailansichten, z.B. ein Spot): ID → Props. Module erweitern das per Declaration Merging. */
 // biome-ignore lint/suspicious/noEmptyInterface: wird per Declaration Merging gefüllt
@@ -92,9 +92,12 @@ export interface PhoneApp {
   icon: string;
   order: number;
   component: ComponentType;
-  /** Zahl am App-Icon (z.B. ungelesene Nachrichten). */
-  badge?: (state: GameState) => number;
-  /** Farbe der Kachel (CSS-Farbe oder Token, z.B. 'var(--color-info)'). Standard: Akzent. */
+  /** Zahl am App-Icon (z.B. ungelesene Nachrichten). Bekommt auch den UI-Zustand (z.B. für ungelesene Meldungen). */
+  badge?: (state: GameState, ui: UiState) => number;
+  /**
+   * Farbe der Kachel: eine Bedeutungsfarbe des Spiels ('money', 'goods', 'people', 'chat' … siehe ChipColor,
+   * eine Farbe = eine Bedeutung) oder, für alte Module, eine CSS-Farbe. Standard: 'system' (grau).
+   */
   color?: string;
   /**
    * 'default': Das Handy zeigt oben eine Leiste mit Zurück-Knopf und App-Namen.

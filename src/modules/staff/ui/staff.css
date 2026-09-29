@@ -27,16 +27,78 @@
 }
 
 /* Übersicht */
-.staff-filters {
+.staff-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+/* Kennzahlen: drei Kacheln nebeneinander */
+.staff-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-2);
-  margin: var(--space-3) 0;
+  gap: var(--space-3);
+}
+.staff-summary__item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "chip label"
+    "value value";
+  align-items: center;
+  gap: 2px var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--phone-group, var(--color-panel-raised));
+  border-radius: var(--radius-group);
+}
+.staff-summary__item .ui-chip {
+  grid-area: chip;
+}
+.staff-summary__item span {
+  grid-area: label;
+  overflow: hidden;
+  font-size: var(--type-footnote, 13px);
+  color: var(--color-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.staff-summary__item strong {
+  grid-area: value;
+  overflow: hidden;
+  font-size: var(--type-body, 17px);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.staff-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.staff-group__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 4px;
+}
+.staff-group__title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--type-footnote, 13px);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+.staff-group__count {
+  font-size: var(--type-footnote, 13px);
+  color: var(--color-muted);
 }
 .staff-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-4);
+  width: 100%;
 }
 .staff-row__main {
   display: flex;
@@ -44,9 +106,19 @@
   flex: 1;
   min-width: 0;
 }
-.staff-row__main .ui-hint {
-  margin: 0;
+.staff-row__main strong {
   overflow: hidden;
+  font-size: var(--type-body, 17px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.staff-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  font-size: var(--type-subhead, 15px);
+  color: var(--color-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -54,60 +126,41 @@
   margin-top: var(--space-3);
 }
 
-/* Porträt (Platzhalter mit Initialen, bis es KI-Porträts gibt) */
+/* Porträt: Kreis in der Farbe der Rolle, kleines Rollen-Symbol unten rechts */
 .staff-portrait {
   position: relative;
   flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  color: var(--color-muted);
-  font-family: var(--font-mono);
-  font-weight: var(--font-weight-bold);
+  display: inline-grid;
   object-fit: cover;
 }
-.staff-portrait--lg {
-  width: 84px;
-  height: 104px;
-  font-size: var(--font-size-lg);
-  background:
-    repeating-linear-gradient(0deg, var(--color-surface-subtle) 0 2px, transparent 2px 4px), var(--color-surface);
+.staff-portrait .ui-avatar--md {
+  width: 48px;
+  height: 48px;
+  font-size: 18px;
+}
+.staff-portrait--lg .ui-avatar--lg {
+  width: 72px;
+  height: 72px;
+  font-size: 26px;
 }
 .staff-portrait__role {
   position: absolute;
   right: -4px;
   bottom: -4px;
-  font-size: var(--font-size-xs);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--phone-group, var(--color-panel-raised));
+  color: var(--role-tone, var(--color-muted));
+  font-size: 14px;
+  box-shadow: 0 0 0 2px var(--phone-group, var(--color-panel-raised));
 }
 .staff-portrait--lg .staff-portrait__role {
-  font-size: var(--font-size-md);
-}
-
-/* Status-Stempel */
-.staff-stamp {
-  flex-shrink: 0;
-  align-self: flex-start;
-  padding: 2px var(--space-2);
-  border: 2px solid currentColor;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-warn);
-  transform: rotate(-4deg);
-}
-.staff-stamp--jailed,
-.staff-stamp--dead {
-  color: var(--color-bad);
-}
-.staff-stamp--quit {
-  color: var(--color-muted);
+  width: 26px;
+  height: 26px;
+  font-size: 16px;
 }
 
 /* Akte */
@@ -119,9 +172,10 @@
 }
 .staff-file__head {
   display: flex;
+  align-items: flex-start;
   gap: var(--space-4);
   padding-bottom: var(--space-3);
-  border-bottom: 1px dashed var(--color-line);
+  border-bottom: 0.5px solid var(--color-line);
 }
 .staff-file__id {
   display: flex;

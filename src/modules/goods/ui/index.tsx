@@ -63,7 +63,7 @@ function StockHud() {
   return (
     <HudPill
       icon="warehouse"
-      color="green"
+      color="goods"
       label="Lager"
       value={`${formatProductAmount('weed', grams)}${other > 0 ? ` +${other}` : ''}`}
       title={title || 'Lager leer'}
@@ -147,7 +147,7 @@ function StockSection() {
     <Card
       title="Lager"
       icon="warehouse"
-      color="green"
+      color="goods"
       status={rows.length === 0 ? 'bad' : 'good'}
       summary={
         rows.length === 0

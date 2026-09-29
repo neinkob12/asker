@@ -239,7 +239,7 @@ function ShipmentsSection() {
     <Card
       title="Lieferungen"
       icon="truck"
-      color="blue"
+      color="goods"
       status={debts.length > 0 ? 'warn' : shipments.length > 0 ? 'good' : 'idle'}
       summary={shipments.length === 0 ? 'keine' : `${shipments.length} unterwegs`}
       actions={
@@ -267,7 +267,7 @@ registerPhoneApp({
   name: 'Lieferanten',
   icon: 'truck',
   order: 20,
-  color: '#6b46c1',
+  color: 'goods',
   chrome: 'none',
   component: SuppliersApp,
   badge: (state) => getSuppliers(state).filter((s) => isBlocked(state, s.id)).length,

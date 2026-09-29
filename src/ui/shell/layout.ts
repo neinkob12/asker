@@ -36,20 +36,20 @@ const TAB_ICONS: Record<string, string> = {
   territory: 'map',
   staff: 'users',
   gangs: 'skull',
-  journal: 'journal',
+  journal: 'newspaper',
 };
 
-/** Farbe der App-Kachel eines Tabs im Handy (gedämpft, nur die Glyphe ist farbig). */
+/** Bedeutungsfarbe der App-Kachel eines Tabs im Handy (eine Farbe = eine Bedeutung, siehe docs/handy-design.md). */
 const TAB_TINTS: Record<string, string> = {
-  business: 'var(--color-warn)',
-  territory: 'var(--color-info)',
-  staff: 'var(--color-accent)',
-  gangs: 'var(--color-bad)',
-  journal: 'var(--color-muted)',
+  business: 'brand',
+  territory: 'place',
+  staff: 'people',
+  gangs: 'danger',
+  journal: 'log',
 };
 
 export function tabTint(tab: SidebarTab): string {
-  return TAB_TINTS[tab.id] ?? 'var(--color-muted)';
+  return TAB_TINTS[tab.id] ?? 'system';
 }
 
 export function tabIcon(tab: SidebarTab): string {
