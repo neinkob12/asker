@@ -101,3 +101,20 @@
   margin: var(--space-2) 0;
   font-size: var(--font-size-sm);
 }
+
+/* Du stehst selbst am Spot: kleiner Punkt in der Akzentfarbe oben rechts. */
+.spot-marker.has-self .spot-dot::after {
+  content: "";
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-accent-strong);
+  border: 2px solid var(--color-marker-bg);
+}
+.spot-self {
+  color: var(--color-accent);
+  font-size: var(--font-size-xs);
+}

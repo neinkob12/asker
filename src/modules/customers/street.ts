@@ -11,6 +11,7 @@ import {
   wallet,
 } from '../../core';
 import { allProducts, getProduct, getStock, take } from '../goods';
+import { isPlayerOnTheRoad } from '../logistics';
 import { getSpotPrice, priceRatio, spotReferencePrice } from '../market';
 import { changeReputation, reputationDemandFactor } from '../reputation';
 import { getSpot, getSpots, isSpotActive, type Spot } from '../spots';
@@ -24,6 +25,7 @@ import {
   MAX_CHEAP_BOOST,
   MAX_CUSTOMERS_PER_SPOT,
   MAX_REGULARS,
+  PLAYER_SERVE_TIME,
   REGULAR_CHANCE,
   REGULAR_LOST_BELOW,
   REGULAR_NAMES,
@@ -203,7 +205,8 @@ export function serve(ctx: Ctx, customerId: number, sellerId: string | null): Co
   if (!customer) return { ok: false, reason: 'Kunde ist weg.' };
   const spot = getSpot(ctx.state, customer.spotId);
   if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
-  const { taken, quality, cut } = take(ctx, { productId: customer.productId, amount: customer.amount });
+  // Ware aus dem Lager, das dem Spot am nächsten liegt.
+  const { taken, quality, cut } = take(ctx, { productId: customer.productId, amount: customer.amount, near: spot });
   if (taken === 0) return { ok: false, reason: 'Nicht genug im Lager.' };
   const revenue = Math.round(customer.amount * customer.pricePerUnit);
   wallet.earn(ctx, revenue, 'dirty', 'Verkauf');
@@ -415,6 +418,34 @@ function expireCustomers(ctx: Ctx): void {
   }
 }
 
+/**
+ * Du stehst selbst an einem Spot: Du bedienst die Kunden dort nacheinander, wie ein Läufer, nur schneller. Solange
+ * du mit einer Lieferung oder Fahrt unterwegs bist, wartet der Spot.
+ */
+function serveInPerson(ctx: Ctx): void {
+  const self = ctx.state.modules.customers.self;
+  if (!self.spotId || self.busyUntil > ctx.now) return;
+  if (!isSpotActive(ctx.state, self.spotId)) {
+    self.spotId = null;
+    return;
+  }
+  if (isPlayerAway(ctx.state)) return;
+  const customer = ctx.state.modules.customers.waiting
+    .filter((c) => c.spotId === self.spotId)
+    .sort((a, b) => a.expiresAt - b.expiresAt)
+    .find((c) => getStock(ctx.state, { productId: c.productId }) >= c.amount);
+  if (!customer) return;
+  if (serve(ctx, customer.id, null).ok) self.busyUntil = ctx.now + PLAYER_SERVE_TIME;
+}
+
+/** Bist du gerade unterwegs (Lieferung oder Fahrt) und nicht am Spot? */
+export function isPlayerAway(state: GameState): boolean {
+  return (
+    state.modules.customers.orders.some((o) => o.status === 'enRoute' && o.deliveredBy === 'player') ||
+    isPlayerOnTheRoad(state)
+  );
+}
+
 export function streetTick(ctx: Ctx): void {
   const state = ctx.state.modules.customers;
   const now = ctx.now;
@@ -429,4 +460,5 @@ export function streetTick(ctx: Ctx): void {
     state.nextSpawnAt[spot.id] = next;
   }
   visitRegulars(ctx);
+  serveInPerson(ctx);
 }

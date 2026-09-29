@@ -205,6 +205,8 @@ export const ORDER_EXPIRES_IN = 90;
 export const HANDOVER_MINUTES = 10;
 /** Tempo in Metern pro Spielminute: der Spieler mit dem Rad (15 km/h), Kuriere je nach Tempo-Wert. */
 export const PLAYER_SPEED = 250;
+/** Selbst am Spot stehen: So lange brauchst du für einen Kunden (schneller als ein neuer Läufer). */
+export const PLAYER_SERVE_TIME = 10;
 export const COURIER_BASE_SPEED = 200;
 export const COURIER_SPEED_PER_POINT = 3;
 

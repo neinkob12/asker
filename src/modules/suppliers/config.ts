@@ -1,10 +1,15 @@
 import type { Supplier } from './index';
 
-/** Lieferzeit Rotterdam: 12,5 Spielstunden = 2,5 echte Minuten bei 1x. */
-export const ROTTERDAM_DELIVERY_TIME = 750;
+/**
+ * Lieferzeit Rotterdam bis an den Kai im Niehler Hafen: 10 Spielstunden = 2 echte Minuten bei 1x. Abholen und ins
+ * Lager bringen kommt dazu (logistics).
+ */
+export const ROTTERDAM_DELIVERY_TIME = 600;
 
 // Paketpreise: Grundpreis des Produkts × Preisniveau des Lieferanten × Menge, mit Mengenrabatt
 // (mittel 7 %, groß 14 %), auf 5 € gerundet. minTrust: erst ab diesem Vertrauen im Sortiment.
+// unlock: Diese Lieferanten sind am Anfang nicht zu haben. Sie melden sich per Handy, sobald du die Bedingungen
+// erfüllst (Umsatz, Veedel unter deiner Kontrolle, Liegeplatz im Hafen), und wollen eine Vermittlungsgebühr.
 
 export const SUPPLIERS: readonly Supplier[] = [
   {
@@ -18,7 +23,15 @@ export const SUPPLIERS: readonly Supplier[] = [
     priceLevel: 0.34,
     quality: 0.55,
     reliability: 0.72,
-    description: 'Container vom Hafen. Große Mengen, billig, aber es dauert und der Zoll schaut manchmal genauer hin.',
+    description:
+      'Container per Schiff bis in den Niehler Hafen. Große Mengen, billig, aber es dauert, und abholen musst du selbst.',
+    unlock: {
+      requires: { berth: true },
+      fee: 0,
+      pitch:
+        'Du hast einen Liegeplatz im Niehler Hafen? Dann können wir reden. Große Mengen per Schiff, billiger als ' +
+        'jeder andere. Abholen am Kai musst du selbst.',
+    },
     packages: [
       { id: 'small', label: '200 g Gras', productId: 'weed', amount: 200, price: 680 },
       { id: 'medium', label: '500 g Gras', productId: 'weed', amount: 500, price: 1580 },
@@ -43,7 +56,9 @@ export const SUPPLIERS: readonly Supplier[] = [
     packages: [
       { id: 'weed25', label: '25 g Gras', productId: 'weed', amount: 25, price: 140 },
       { id: 'weed50', label: '50 g Gras', productId: 'weed', amount: 50, price: 255 },
+      { id: 'weed100', label: '100 g Gras', productId: 'weed', amount: 100, price: 490, minTrust: 18 },
       { id: 'haze25', label: '25 g Amnesia Haze', productId: 'haze', amount: 25, price: 180 },
+      { id: 'haze50', label: '50 g Amnesia Haze', productId: 'haze', amount: 50, price: 350, minTrust: 22 },
       { id: 'oil20', label: '20 ml Öl', productId: 'oil', amount: 20, price: 220 },
       { id: 'oil50', label: '50 ml Öl', productId: 'oil', amount: 50, price: 510, minTrust: 40 },
     ],
@@ -60,6 +75,13 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.74,
     reliability: 0.7,
     description: 'Gute Ware aus der Hauptstadt, Edibles und Vapes. Nicht immer pünktlich.',
+    unlock: {
+      requires: { veedel: 1 },
+      fee: 600,
+      pitch:
+        'Man hört, dir gehört jetzt ein ganzes Veedel. Respekt. Mit so jemandem mach ich Geschäfte: Kush, Haze, ' +
+        'Edibles, Vapes. Für den Einstieg will ich {fee}.',
+    },
     packages: [
       { id: 'haze50', label: '50 g Amnesia Haze', productId: 'haze', amount: 50, price: 300 },
       { id: 'kush25', label: '25 g OG Kush', productId: 'kush', amount: 25, price: 200 },
@@ -80,12 +102,47 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.6,
     reliability: 0.9,
     description: 'Hanseatisch korrekt. Solide Ware, fast nie Ärger.',
+    unlock: {
+      requires: { revenue: 1500 },
+      fee: 250,
+      pitch:
+        'Moin. Hab gehört, bei dir in Köln läuft was. Ich liefer Gras, Hasch, Edibles und Vapes, fast nie Ärger. ' +
+        '{fee} Vermittlung, dann bist du im Geschäft.',
+    },
     packages: [
       { id: 'weed50', label: '50 g Gras', productId: 'weed', amount: 50, price: 240 },
+      { id: 'weed100', label: '100 g Gras', productId: 'weed', amount: 100, price: 465, minTrust: 22 },
       { id: 'hash50', label: '50 g Hasch', productId: 'hash', amount: 50, price: 220 },
       { id: 'edibles30', label: '30 Edibles', productId: 'edibles', amount: 30, price: 110 },
       { id: 'vape10', label: '10 Vape-Pens', productId: 'vape', amount: 10, price: 155 },
       { id: 'vape30', label: '30 Vape-Pens', productId: 'vape', amount: 30, price: 435, minTrust: 40 },
+    ],
+  },
+  {
+    id: 'amsterdam',
+    name: 'Amsterdam',
+    contactName: 'Daan',
+    kind: 'city',
+    lng: 4.904,
+    lat: 52.368,
+    deliveryTime: 240,
+    priceLevel: 0.42,
+    quality: 0.82,
+    reliability: 0.85,
+    description: 'Großhändler für Coffeeshops. Die beste Ware, kommt über die A57. Redet nur mit großen Leuten.',
+    unlock: {
+      requires: { veedel: 3, revenue: 15000 },
+      fee: 1500,
+      pitch:
+        'Drie Veedel in Keulen, en veel omzet. Du bist jetzt wer. Ich hab die beste Ware aus Amsterdam, für die ' +
+        'Vorstellung will ich {fee}.',
+    },
+    packages: [
+      { id: 'haze100', label: '100 g Amnesia Haze', productId: 'haze', amount: 100, price: 585 },
+      { id: 'kush100', label: '100 g OG Kush', productId: 'kush', amount: 100, price: 705 },
+      { id: 'edibles60', label: '60 Edibles', productId: 'edibles', amount: 60, price: 185 },
+      { id: 'vape20', label: '20 Vape-Pens', productId: 'vape', amount: 20, price: 265 },
+      { id: 'kush150', label: '150 g OG Kush', productId: 'kush', amount: 150, price: 1055, minTrust: 30 },
     ],
   },
 ];
@@ -134,8 +191,11 @@ export const PROBLEM_AT = 0.45;
 /** Qualität schwankt pro Lieferung um ± so viel. */
 export const QUALITY_SPREAD = 0.05;
 
-// Hafenlieferungen auf der Karte (nur Darstellung, die Lieferzeit bleibt gleich): Das Schiff kommt aus
-// Rotterdam den Rhein hinauf in den Niehler Hafen, dort wird umgeladen, den Rest fährt ein Lkw zum Lager.
+// Hafenlieferungen auf der Karte: Das Schiff kommt aus Rotterdam den Rhein hinauf in den Niehler Hafen und legt
+// an deinem Liegeplatz an (die ganze Lieferzeit auf dem Schiff). Nur alte Lieferungen aus Spielständen von vor dem
+// Liegeplatz werden noch umgeladen und per Lkw ins Lager gefahren (SHIP_SHARE, UNLOADING_SHARE).
+/** Großstadt-Lieferungen: Anteil der Lieferzeit, in dem der Transporter durch Köln fährt (damit man ihn sieht). */
+export const CITY_APPROACH_SHARE = 0.3;
 
 /** Hafen, in dem vom Schiff auf den Lkw umgeladen wird. */
 export const UNLOADING_PORT = { name: 'Niehler Hafen', lng: 6.9712, lat: 50.9862 } as const;

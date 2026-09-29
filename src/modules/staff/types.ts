@@ -1,6 +1,6 @@
 // Typen des Personals. Andere Module importieren sie über '../staff' (index.ts exportiert alles).
 
-export type StaffRole = 'runner' | 'courier' | 'security' | 'lawyer' | 'accountant' | 'policeContact';
+export type StaffRole = 'runner' | 'courier' | 'driver' | 'security' | 'lawyer' | 'accountant' | 'policeContact';
 export type StaffStatus = 'active' | 'injured' | 'jailed' | 'quit' | 'dead';
 
 /** Werte von 0 bis 100. */
@@ -16,10 +16,11 @@ export type StatKey = keyof StaffStats;
 
 /**
  * Einsatzort. kind 'spot' → targetId = Spot-ID, 'delivery' → Auftrags-ID, 'warehouse' → Lager-ID,
- * 'veedel' → Veedel-ID (Leutnant, der das Veedel führt; setzt das hierarchy-Modul).
+ * 'veedel' → Veedel-ID (Leutnant, der das Veedel führt; setzt das hierarchy-Modul),
+ * 'transport' → Fahrt-ID (Fahrer, der Ware abholt oder umlagert; setzt das logistics-Modul).
  */
 export interface StaffAssignment {
-  kind: 'spot' | 'delivery' | 'warehouse' | 'veedel';
+  kind: 'spot' | 'delivery' | 'warehouse' | 'veedel' | 'transport';
   targetId: string;
 }
 

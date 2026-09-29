@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { loadSimulation, START_DIRTY_MONEY } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
+import { nearestRoadPoint } from '../roads';
+import { veedelAt } from '../veedel';
 import { CUT_AGENT_COST, CUT_QUALITY_LOSS, START_QUALITY, START_STOCK } from './config';
 import {
   allProducts,
@@ -8,12 +10,16 @@ import {
   getLots,
   getProduct,
   getStock,
+  getWarehouse,
   getWarehouses,
+  nearestWarehouse,
   qualityTier,
   STANDARD_QUALITY,
   stockSummary,
   store,
   take,
+  warehouseSite,
+  warehouseSites,
 } from './index';
 
 describe('goods', () => {
@@ -124,6 +130,46 @@ describe('goods', () => {
     expect(getLots(loaded.state)).toEqual([
       expect.objectContaining({ productId: 'weed', amount: 25, quality: STANDARD_QUALITY, cut: 0 }),
     ]);
-    expect(loaded.state.moduleVersions.goods).toBe(2);
+    expect(loaded.state.moduleVersions.goods).toBe(3);
+    expect(getWarehouses(loaded.state).map((w) => w.id)).toEqual(['ehrenfeld']);
+  });
+
+  it('weitere Lager kauft man mit sauberem Geld, Ware kommt aus dem nächsten Lager', () => {
+    const sim = createTestGame();
+    const events = recordEvents(sim);
+    const buy = (warehouseId: string) => sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId } });
+    const kalk = warehouseSite('kalk');
+    expect(kalk?.cost).toBeGreaterThan(0);
+    expect(getWarehouse(sim.state, 'kalk')).toBeUndefined();
+    sim.state.wallet.clean = (kalk?.cost ?? 0) - 1;
+    expect(buy('kalk').ok).toBe(false);
+    sim.state.wallet.clean = kalk?.cost ?? 0;
+    const dirty = sim.state.wallet.dirty;
+    expect(buy('kalk').ok).toBe(true);
+    expect(sim.state.wallet).toMatchObject({ clean: 0, dirty });
+    expect(buy('kalk')).toEqual({ ok: false, reason: 'Halle Kalk gehört dir schon.' });
+    expect(buy('mond').ok).toBe(false);
+    expect(getWarehouses(sim.state).map((w) => w.id)).toEqual(['ehrenfeld', 'kalk']);
+    expect(eventsOfType(events, 'goods.warehouseBought')[0].payload).toEqual({ warehouseId: 'kalk', cost: kalk?.cost });
+
+    // Ware in Kalk: Ein Spot in Kalk bekommt sie von dort, ohne Ort kommt sie zuerst aus Ehrenfeld.
+    store(sim.ctx('test'), { productId: 'weed', amount: 30, warehouseId: 'kalk', quality: 0.9 });
+    const nearKalk = { lng: 7.0, lat: 50.94 };
+    expect(nearestWarehouse(sim.state, nearKalk)?.id).toBe('kalk');
+    expect(nearestWarehouse(sim.state, nearKalk, { productId: 'hash' })).toBeUndefined();
+    expect(take(sim.ctx('test'), { productId: 'weed', amount: 5, near: nearKalk }).quality).toBe(0.9);
+    expect(take(sim.ctx('test'), { productId: 'weed', amount: 5 }).quality).toBe(START_QUALITY);
+  });
+
+  it('alle Lager-Standorte liegen in einem Veedel und auf der Karte nah an einer Straße', () => {
+    for (const site of warehouseSites()) {
+      expect(veedelAt(site.lng, site.lat), site.id).toBeDefined();
+      expect(nearestRoadPoint(site)?.meters ?? 999, site.id).toBeLessThan(150);
+    }
+    expect(
+      warehouseSites()
+        .filter((w) => w.cost === 0)
+        .map((w) => w.id),
+    ).toEqual(['ehrenfeld']);
   });
 });

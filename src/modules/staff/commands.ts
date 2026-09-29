@@ -4,8 +4,10 @@ import { type CommandMeta, type CommandResult, type Ctx, formatEuro, journal, wa
 import { getWarehouse } from '../goods';
 import { getSpot, isSpotActive } from '../spots';
 import {
+  DRIVER_HIRE_COST,
   LOYALTY,
   MAX_SECURITY_PER_WAREHOUSE,
+  ROLE_INFO,
   RUNNER_DAILY_WAGE,
   WAGE_MAX_FACTOR,
   WAGE_MIN_FACTOR,
@@ -59,6 +61,23 @@ export function hireRunner(ctx: Ctx, spotId: string): CommandResult {
   return { ok: true, data: { staffId: member.id } };
 }
 
+/** Fahrer von der Straße anheuern (ohne Einsatz, die Logistik schickt ihn los). */
+export function hireDriver(ctx: Ctx): CommandResult {
+  if (!wallet.pay(ctx, DRIVER_HIRE_COST, 'dirty', 'Fahrer angeheuert')) {
+    return { ok: false, reason: `Nicht genug Geld (${formatEuro(DRIVER_HIRE_COST)}).` };
+  }
+  const profile = generateProfile(ctx, 'driver');
+  profile.wage = ROLE_INFO.driver.wage;
+  const member = enlist(ctx, profile, {
+    origin: 'street',
+    knownStats: ['caution'],
+    assignment: null,
+    note: 'Von der Straße, mit eigenem Transporter.',
+    journalText: `Fahrer ${profile.name} angeheuert.`,
+  });
+  return { ok: true, data: { staffId: member.id } };
+}
+
 export function fire(ctx: Ctx, staffId: string): CommandResult {
   const member = getStaffMember(ctx.state, staffId);
   if (!member || !isEmployed(ctx.state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
@@ -105,6 +124,8 @@ export function assignCommand(ctx: Ctx, staffId: string, assignment: StaffAssign
     if (guards.length >= MAX_SECURITY_PER_WAREHOUSE) return { ok: false, reason: 'Das Lager ist schon bewacht.' };
   } else if (assignment.kind === 'veedel') {
     return { ok: false, reason: 'Leutnants werden befördert, nicht versetzt.' };
+  } else if (assignment.kind === 'transport') {
+    return { ok: false, reason: 'Fahrer schickst du über die Logistik los.' };
   } else {
     return { ok: false, reason: 'Kuriere setzt der Lieferdienst ein.' };
   }

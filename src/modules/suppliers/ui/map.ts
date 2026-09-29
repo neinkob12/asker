@@ -1,12 +1,16 @@
-// Lieferungen auf der Karte: 3D-Mini-Fahrzeuge (createVehicle) fahren Luftlinie vom Lieferanten zum Lager
-// (echte Routen später), aus einer Großstadt als Transporter. Hafenware kommt als Schiff den Rhein hinauf in den
-// Niehler Hafen, wird umgeladen und fährt als Lkw weiter (deliveryLeg). Die Route ist nur eine dezente Linie.
+// Lieferungen auf der Karte: 3D-Mini-Fahrzeuge (createVehicle). Aus einer Großstadt kommt ein Transporter, erst
+// über die Autobahn bis an den Kölner Stadtrand (grob, man sieht ihn nur weit herausgezoomt), dann über echte Straßen
+// (roads) bis ins Ziel-Lager; den letzten Teil der Lieferzeit (CITY_APPROACH_SHARE) fährt er durch Köln.
+// Hafenware kommt als Schiff den Rhein hinauf und legt am Liegeplatz im Niehler Hafen an (den Hafen zeigt die
+// Logistik). Nur alte Lieferungen ohne Liegeplatz werden noch umgeladen und per Lkw ins Lager gefahren.
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import type { GameState, LngLat } from '../../../core';
 import { addHtmlMarker, createVehicle, el, type MapLayer, pathLength, type VehicleHandle } from '../../../map';
-import { DEFAULT_WAREHOUSE, formatProductAmount, getWarehouse, productName } from '../../goods';
+import { formatProductAmount, getWarehouse, getWarehouses, productName } from '../../goods';
+import { roadEntryFrom, roadRoute } from '../../roads';
 import {
+  CITY_APPROACH_SHARE,
   deliveryLeg,
   getSuppliers,
   RHINE_APPROACH_FROM,
@@ -41,9 +45,29 @@ function token(name: string, fallback: string): string {
   return value || fallback;
 }
 
+/**
+ * Weg eines Transporters: Autobahn bis an den Stadtrand, dann echte Straßen. split = Anteil der Weglänge, ab dem er
+ * in Köln ist; der Fortschritt wird so umgerechnet, dass er die letzten CITY_APPROACH_SHARE der Zeit in Köln fährt.
+ */
+function cityPath(supplier: Supplier, target: LngLat): { path: LngLat[]; split: number } {
+  const entry = roadEntryFrom(supplier);
+  const city = roadRoute(entry, target).path;
+  const outside = pathLength([supplier, entry]);
+  const inside = pathLength(city);
+  return { path: [supplier, ...city], split: outside / Math.max(1, outside + inside) };
+}
+
+function cityProgress(split: number, t: number): number {
+  const outsideShare = 1 - CITY_APPROACH_SHARE;
+  return t < outsideShare
+    ? (t / outsideShare) * split
+    : split + ((t - outsideShare) / CITY_APPROACH_SHARE) * (1 - split);
+}
+
 interface ShownShipment {
   ship: VehicleHandle | null;
-  road: VehicleHandle;
+  road: VehicleHandle | null;
+  split: number;
 }
 
 export const suppliersLayer: MapLayer = {
@@ -67,7 +91,7 @@ export const suppliersLayer: MapLayer = {
       },
     });
 
-    // Lieferanten-Marker einmal anlegen, den Niehler Hafen nur, solange ein Schiff unterwegs ist.
+    // Lieferanten-Marker einmal anlegen.
     let placed = false;
     const placeSuppliers = () => {
       const state = ctx.getState();
@@ -83,30 +107,31 @@ export const suppliersLayer: MapLayer = {
       }
     };
     placeSuppliers();
-    const port = addHtmlMarker(map, {
-      position: PORT,
-      className: 'map-place map-place--harbor',
-      anchor: 'bottom',
-      children: [el('span', 'map-place-icon'), el('span', 'map-place-name', UNLOADING_PORT.name)],
-    });
-    port.element.hidden = true;
 
-    const roadStart = (supplier: Supplier) => (supplier.kind === 'port' ? PORT : supplier);
+    const targetOf = (state: GameState, s: Shipment): LngLat | undefined =>
+      s.toPort ? PORT : (getWarehouse(state, s.warehouseId) ?? getWarehouses(state)[0]);
 
-    // Routen nur für Lieferanten, von denen gerade etwas unterwegs ist.
+    // Routen nur für Lieferungen, die gerade unterwegs sind.
     let routesKey = '';
     const drawRoutes = (state: GameState) => {
-      const active = [...new Set(shipmentsInTransit(state).map((s) => s.supplierId))].sort();
-      const key = active.join(',');
+      const transit = shipmentsInTransit(state);
+      const key = transit.map((s) => `${s.id}:${s.warehouseId}`).join(',');
       if (key === routesKey) return;
       routesKey = key;
-      const warehouse = getWarehouse(state, DEFAULT_WAREHOUSE);
       const lines: LngLat[][] = [];
-      for (const supplier of getSuppliers(state)) {
-        if (!warehouse || !active.includes(supplier.id)) continue;
-        if (supplier.kind === 'port') lines.push(RIVER);
-        lines.push([roadStart(supplier), warehouse]);
+      let river = false;
+      for (const s of transit) {
+        const supplier = getSuppliers(state).find((x) => x.id === s.supplierId);
+        const target = targetOf(state, s);
+        if (!supplier || !target) continue;
+        if (supplier.kind === 'port') {
+          river = true;
+          if (!s.toPort) lines.push(roadRoute(PORT, target).path);
+        } else {
+          lines.push(cityPath(supplier, target).path);
+        }
       }
+      if (river) lines.push(RIVER);
       const features = lines.map((line) => ({
         type: 'Feature' as const,
         properties: {},
@@ -115,28 +140,29 @@ export const suppliersLayer: MapLayer = {
       (map.getSource(SOURCE) as GeoJSONSource).setData({ type: 'FeatureCollection', features });
     };
 
-    const create = (s: Shipment, supplier: Supplier, warehouse: LngLat, progress: number): ShownShipment => {
+    const create = (s: Shipment, supplier: Supplier, target: LngLat, progress: number): ShownShipment => {
       const title = `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)} aus ${supplier.name}`;
       const label = formatProductAmount(s.productId, s.amount);
-      const leg = deliveryLeg(supplier, progress);
-      const ship =
-        supplier.kind === 'port'
-          ? createVehicle(map, {
-              path: RIVER,
-              kind: 'ship',
+      const leg = deliveryLeg(supplier, progress, s.toPort);
+      if (supplier.kind === 'port') {
+        const ship = createVehicle(map, { path: RIVER, kind: 'ship', title, progress: shipFraction(leg.t) });
+        ship.setLabel(label);
+        // Alte Lieferungen ohne Liegeplatz: Lkw vom Hafen ins Lager.
+        const road = s.toPort
+          ? null
+          : createVehicle(map, {
+              path: roadRoute(PORT, target).path,
+              kind: 'truck',
               title,
-              progress: leg.stage === 'ship' ? shipFraction(leg.t) : 1,
-            })
-          : null;
-      const road = createVehicle(map, {
-        path: [roadStart(supplier), warehouse],
-        kind: supplier.kind === 'port' ? 'truck' : 'van',
-        title,
-        progress: leg.stage === 'road' ? leg.t : 0,
-      });
-      ship?.setLabel(label);
+              progress: leg.stage === 'road' ? leg.t : 0,
+            });
+        road?.setLabel(label);
+        return { ship, road, split: 0 };
+      }
+      const { path, split } = cityPath(supplier, target);
+      const road = createVehicle(map, { path, kind: 'van', title, progress: cityProgress(split, progress) });
       road.setLabel(label);
-      return { ship, road };
+      return { ship: null, road, split };
     };
 
     return {
@@ -148,41 +174,45 @@ export const suppliersLayer: MapLayer = {
         for (const [id, entry] of shown) {
           if (active.has(id)) continue;
           entry.ship?.remove();
-          entry.road.remove();
+          entry.road?.remove();
           shown.delete(id);
         }
-        let shipping = false;
         for (const s of transit) {
           const supplier = getSuppliers(state).find((x) => x.id === s.supplierId);
-          const warehouse = getWarehouse(state, s.warehouseId);
-          if (!supplier || !warehouse) continue;
+          const target = targetOf(state, s);
+          if (!supplier || !target) continue;
           const progress = shipmentProgress(state, s);
           let entry = shown.get(s.id);
           if (!entry) {
-            entry = create(s, supplier, warehouse, progress);
+            entry = create(s, supplier, target, progress);
             shown.set(s.id, entry);
           }
-          const leg = deliveryLeg(supplier, progress);
           const late = s.problem === 'delayed' && !!s.problemRevealed;
+          const color = late ? lateColor : null;
+          if (supplier.kind !== 'port') {
+            entry.road?.setProgress(cityProgress(entry.split, progress));
+            entry.road?.setColor(color);
+            continue;
+          }
+          const leg = deliveryLeg(supplier, progress, s.toPort);
           if (entry.ship) {
             entry.ship.setVisible(leg.stage !== 'road');
             entry.ship.setProgress(leg.stage === 'ship' ? shipFraction(leg.t) : 1);
-            entry.ship.setColor(late ? lateColor : null);
-            shipping ||= leg.stage !== 'road';
+            entry.ship.setColor(color);
           }
-          entry.road.setVisible(leg.stage !== 'ship');
-          entry.road.setProgress(leg.stage === 'road' ? leg.t : 0);
-          entry.road.setColor(late ? lateColor : null);
+          if (entry.road) {
+            entry.road.setVisible(leg.stage !== 'ship');
+            entry.road.setProgress(leg.stage === 'road' ? leg.t : 0);
+            entry.road.setColor(color);
+          }
         }
-        port.element.hidden = !shipping;
       },
       destroy() {
         for (const entry of shown.values()) {
           entry.ship?.remove();
-          entry.road.remove();
+          entry.road?.remove();
         }
         shown.clear();
-        port.marker.remove();
       },
     };
   },

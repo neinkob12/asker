@@ -39,6 +39,11 @@ function quietGame(options: { modules?: readonly ModuleDefinition[] } = {}): Sim
   return sim;
 }
 
+/** Alle Großstädte liefern schon (sonst hat der Leutnant am Anfang nur Frankfurt). */
+function openSuppliers(sim: Simulation): void {
+  sim.state.modules.suppliers.unlocked = getSuppliers(sim.state).map((s) => s.id);
+}
+
 function recruit(sim: Simulation, role: StaffRole, level = 1): StaffMember {
   const ctx = sim.ctx('staff');
   const member = enlist(ctx, generateProfile(ctx, role, { level }), { origin: 'pool' });
@@ -173,6 +178,7 @@ describe('hierarchy: Delegation', () => {
 
   it('er hält den Bestand und bestellt Nachschub, aber nie an die Rücklage', () => {
     const sim = quietGame();
+    openSuppliers(sim);
     const lt = recruit(sim, 'runner', 2);
     appoint(sim, lt.id, 'deutz');
     expect(getStock(sim.state)).toBeLessThan(100);
@@ -199,6 +205,7 @@ describe('hierarchy: Delegation', () => {
 
   it('er bestellt, wonach die Kunden fragen (customer.missed)', () => {
     const sim = quietGame();
+    openSuppliers(sim);
     const lt = recruit(sim, 'runner', 2);
     appoint(sim, lt.id, 'deutz');
     sim.state.modules.customers.stats.missedByProduct = { hash: 12, weed: 1 };

@@ -57,13 +57,14 @@ declare module '../../../ui' {
   }
 }
 
-type RoleFilter = 'all' | 'runner' | 'courier' | 'security' | 'specialist';
+type RoleFilter = 'all' | 'runner' | 'courier' | 'driver' | 'security' | 'specialist';
 type StatusFilter = 'all' | 'active' | 'injured' | 'jailed' | 'former';
 
 const ROLE_FILTERS: { value: RoleFilter; label: string }[] = [
   { value: 'all', label: 'Typ' },
   { value: 'runner', label: 'Läufer' },
   { value: 'courier', label: 'Kuriere' },
+  { value: 'driver', label: 'Fahrer' },
   { value: 'security', label: 'Sicherheit' },
   { value: 'specialist', label: 'Spezialisten' },
 ];

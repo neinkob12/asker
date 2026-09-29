@@ -1,21 +1,26 @@
 // Lieferanten: Bestellungen, Lieferungen und Beziehungen.
-// Zwei Arten: Großstädte (Frankfurt, Berlin, Hamburg: kleine Mengen, schnell, teurer) und der Hafen Rotterdam
-// (große Mengen, langsam, günstiger). Jeder Lieferant hat Preis, Qualität, Zuverlässigkeit, Lieferzeit und
-// Sortiment. Vertrauen wächst mit Käufen und pünktlicher Zahlung und bringt Rabatt, Kredit und bessere Ware.
-// Lieferprobleme (verspätet, schlechte Ware, beschlagnahmt) werden bei der Bestellung ausgewürfelt und zeigen
-// sich unterwegs bzw. bei der Ankunft. Transporter fahren Luftlinie (echte Routen später), Hafenware kommt
-// auf der Karte per Schiff über den Rhein (deliveryLeg).
+// Zwei Arten: Großstädte (Frankfurt, Hamburg, Berlin, Amsterdam: kleine Mengen, schnell, teurer) und der Hafen
+// Rotterdam (große Mengen, langsam, günstiger). Jeder Lieferant hat Preis, Qualität, Zuverlässigkeit, Lieferzeit
+// und Sortiment. Vertrauen wächst mit Käufen und pünktlicher Zahlung und bringt Rabatt, Kredit und bessere Ware.
+// Freischalten: Am Anfang liefert nur Frankfurt. Die anderen melden sich, sobald du genug Umsatz, Veedel unter
+// Kontrolle oder einen Liegeplatz im Hafen hast (unlock in config.ts), und wollen eine Vermittlungsgebühr
+// ('suppliers.unlock'). Lieferprobleme (verspätet, schlechte Ware, beschlagnahmt) werden bei der Bestellung
+// ausgewürfelt und zeigen sich unterwegs bzw. bei der Ankunft. Transporter fahren auf der Karte über echte Straßen
+// (roads) ins gewählte Lager. Hafenware kommt per Schiff über den Rhein an deinen Liegeplatz im Niehler Hafen und
+// wartet dort, bis jemand sie abholt (logistics).
 //
 // Öffentliche API:
 //   getSuppliers(state), getSupplier(state, id), supplierContactId(id), assortment(supplier),
+//   isUnlocked(state, id), unlockRequirements(state, id), canUnlock(state, id),
 //   shipmentsInTransit(state), shipmentProgress(state, shipment), expectedArrival(shipment),
 //   cheapestPackagePrice(state), getRelation(state, id), trustLabel(trust), supplierDiscount(state, id),
 //   supplierQualityBonus(state, id), creditLimit(state, id), availableCredit(state, id), isBlocked(state, id),
 //   availablePackages(state, id), packagePrice(state, supplierId, packageId), rollShipmentProblem(...),
-//   deliveryLeg(supplier, progress) (Darstellung: Schiff, Umladen oder Straße; Hafen: RHINE_ROUTE, UNLOADING_PORT)
-// Befehle: 'suppliers.order' (onCredit für Kredit), 'suppliers.repay'
-// Ereignisse: 'shipment.ordered', 'shipment.arrived', 'shipment.problem', 'supplier.trustChanged',
-//   'supplier.repaid', 'supplier.overdue'
+//   deliveryLeg(supplier, progress, toPort?) (Darstellung: Schiff, Umladen oder Straße; Hafen: RHINE_ROUTE,
+//   UNLOADING_PORT)
+// Befehle: 'suppliers.order' (onCredit für Kredit, warehouseId als Ziel), 'suppliers.repay', 'suppliers.unlock'
+// Ereignisse: 'shipment.ordered', 'shipment.arrived' (atPort bei Schiffsware), 'shipment.problem',
+//   'supplier.trustChanged', 'supplier.repaid', 'supplier.overdue', 'supplier.unlocked'
 
 import {
   type CommandResult,
@@ -28,7 +33,19 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { DEFAULT_WAREHOUSE, formatProductAmount, getWarehouse, productName, store } from '../goods';
+import { getSalesStats } from '../customers';
+import {
+  DEFAULT_WAREHOUSE,
+  formatProductAmount,
+  getWarehouse,
+  getWarehouses,
+  nearestWarehouse,
+  productName,
+  store,
+} from '../goods';
+import { hasBerth, receiveCargo } from '../logistics';
+import { getReputation } from '../reputation';
+import { controlledBy, PLAYER_FACTION } from '../territory';
 import {
   BAD_QUALITY_FACTOR,
   BAD_QUALITY_LOSS,
@@ -59,6 +76,7 @@ import {
 } from './config';
 
 export {
+  CITY_APPROACH_SHARE,
   RHINE_APPROACH_FROM,
   RHINE_APPROACH_SHARE,
   RHINE_ROUTE,
@@ -76,6 +94,26 @@ export interface SupplierPackage {
   price: number;
   /** Erst ab diesem Vertrauen im Sortiment. */
   minTrust?: number;
+}
+
+/** Bedingungen, bevor ein Lieferant mit dir Geschäfte macht (alle müssen erfüllt sein). */
+export interface SupplierRequirements {
+  /** Umsatz insgesamt in Euro (alle Verkäufe). */
+  revenue?: number;
+  /** So viele Veedel unter deiner Kontrolle (Einfluss). */
+  veedel?: number;
+  /** Mindest-Ruf (0–100). */
+  reputation?: number;
+  /** Eigener Liegeplatz im Niehler Hafen (logistics). */
+  berth?: boolean;
+}
+
+export interface SupplierUnlock {
+  requires: SupplierRequirements;
+  /** Vermittlungsgebühr in Schwarzgeld. */
+  fee: number;
+  /** Erste Nachricht, wenn die Bedingungen erfüllt sind. {fee} wird ersetzt. */
+  pitch: string;
 }
 
 export interface Supplier {
@@ -97,6 +135,8 @@ export interface Supplier {
   reliability: number;
   description: string;
   packages: SupplierPackage[];
+  /** Fehlt: von Anfang an zu haben. */
+  unlock?: SupplierUnlock;
 }
 
 export type ShipmentProblem = 'delayed' | 'badQuality' | 'seized';
@@ -116,6 +156,8 @@ export interface Shipment {
   /** Tatsächliche Ankunft (inklusive einer Verspätung). */
   arrivesAt: number;
   onCredit?: boolean;
+  /** Schiffsware: kommt an den Kai im Niehler Hafen statt ins Lager (logistics holt sie ab). */
+  toPort?: boolean;
   /** Ausgewürfeltes Lieferproblem, der Spieler erfährt es erst, wenn es passiert. */
   problem?: ShipmentProblem;
   /** Wann das Problem unterwegs auftritt (Verspätung, Beschlagnahme). */
@@ -143,11 +185,17 @@ export interface SupplierRelation {
 export interface SuppliersState {
   shipments: Shipment[];
   relations: Record<string, SupplierRelation>;
+  /** Lieferanten, die mit dir Geschäfte machen. */
+  unlocked: string[];
+  /** Lieferanten, die sich schon mit einem Angebot gemeldet haben. */
+  offered: string[];
 }
 
 interface SuppliersStateV1 {
   shipments: Shipment[];
 }
+
+type SuppliersStateV2 = Omit<SuppliersState, 'unlocked' | 'offered'>;
 
 declare module '../../core' {
   interface ModuleStates {
@@ -155,7 +203,9 @@ declare module '../../core' {
   }
   interface GameCommands {
     /** Paket bestellen. onCredit: jetzt liefern, später zahlen (braucht Vertrauen). */
-    'suppliers.order': { supplierId: string; packageId: string; onCredit?: boolean };
+    'suppliers.order': { supplierId: string; packageId: string; onCredit?: boolean; warehouseId?: string };
+    /** Lieferanten freischalten (Bedingungen erfüllt, Vermittlungsgebühr zahlen). */
+    'suppliers.unlock': { supplierId: string };
     /** Schulden zurückzahlen, ohne amount komplett. */
     'suppliers.repay': { supplierId: string; amount?: number };
   }
@@ -175,12 +225,15 @@ declare module '../../core' {
       amount: number;
       warehouseId: string;
       quality?: number;
+      /** Schiffsware am Kai im Niehler Hafen (warehouseId ist dann 'port'). */
+      atPort?: boolean;
     };
     /** Lieferproblem ist eingetreten. */
     'shipment.problem': { shipmentId: number; supplierId: string; kind: ShipmentProblem };
     'supplier.trustChanged': { supplierId: string; trust: number; delta: number };
     'supplier.repaid': { supplierId: string; amount: number; debt: number };
     'supplier.overdue': { supplierId: string; debt: number };
+    'supplier.unlocked': { supplierId: string; fee: number };
   }
 }
 
@@ -198,6 +251,60 @@ export function getSupplier(state: GameState, id: string): Supplier | undefined 
 /** Kontakt-ID im Handy. */
 export function supplierContactId(supplierId: string): string {
   return `supplier:${supplierId}`;
+}
+
+/** Macht der Lieferant schon Geschäfte mit dir? */
+export function isUnlocked(state: GameState, supplierId: string): boolean {
+  return state.modules.suppliers.unlocked.includes(supplierId);
+}
+
+/** Bedingungen fürs Freischalten mit Stand, z.B. "1 von 3 Veedeln". Leer bei Lieferanten ohne Bedingungen. */
+export function unlockRequirements(
+  state: GameState,
+  supplierId: string,
+): { label: string; done: boolean; progress: number }[] {
+  const requires = getSupplier(state, supplierId)?.unlock?.requires;
+  if (!requires) return [];
+  const rows: { label: string; done: boolean; progress: number }[] = [];
+  if (requires.revenue !== undefined) {
+    const revenue = getSalesStats(state).revenue;
+    rows.push({
+      label: `${formatEuro(requires.revenue)} Umsatz (bisher ${formatEuro(Math.round(revenue))})`,
+      done: revenue >= requires.revenue,
+      progress: Math.min(1, revenue / requires.revenue),
+    });
+  }
+  if (requires.veedel !== undefined) {
+    const veedel = controlledBy(state, PLAYER_FACTION).length;
+    rows.push({
+      label: `${requires.veedel === 1 ? 'Ein Veedel' : `${requires.veedel} Veedel`} unter deiner Kontrolle (jetzt ${veedel})`,
+      done: veedel >= requires.veedel,
+      progress: Math.min(1, veedel / requires.veedel),
+    });
+  }
+  if (requires.reputation !== undefined) {
+    const reputation = getReputation(state);
+    rows.push({
+      label: `Ruf ${requires.reputation} (jetzt ${Math.round(reputation)})`,
+      done: reputation >= requires.reputation,
+      progress: Math.min(1, reputation / requires.reputation),
+    });
+  }
+  if (requires.berth) {
+    const berth = hasBerth(state);
+    rows.push({ label: 'Eigener Liegeplatz im Niehler Hafen', done: berth, progress: berth ? 1 : 0 });
+  }
+  return rows;
+}
+
+/** Kann der Lieferant jetzt freigeschaltet werden? Gibt den Grund zurück, wenn nicht. */
+export function canUnlock(state: GameState, supplierId: string): CommandResult {
+  const supplier = getSupplier(state, supplierId);
+  if (!supplier) return { ok: false, reason: 'Unbekannter Lieferant.' };
+  if (isUnlocked(state, supplierId)) return { ok: false, reason: `${supplier.contactName} liefert schon an dich.` };
+  const missing = unlockRequirements(state, supplierId).find((r) => !r.done);
+  if (missing) return { ok: false, reason: `${supplier.contactName} will erst mehr sehen: ${missing.label}.` };
+  return { ok: true };
 }
 
 /** Sortiment: Produkt-IDs, die der Lieferant grundsätzlich hat. */
@@ -230,9 +337,15 @@ export type DeliveryStage = 'ship' | 'unloading' | 'road';
  * fährt dann mit dem Lkw zum Lager. Großstädte liefern die ganze Strecke über die Straße.
  * t ist der Fortschritt innerhalb des Abschnitts (0–1).
  */
-export function deliveryLeg(supplier: Pick<Supplier, 'kind'>, progress: number): { stage: DeliveryStage; t: number } {
+export function deliveryLeg(
+  supplier: Pick<Supplier, 'kind'>,
+  progress: number,
+  toPort = false,
+): { stage: DeliveryStage; t: number } {
   const p = Math.min(1, Math.max(0, progress));
   if (supplier.kind !== 'port') return { stage: 'road', t: p };
+  // Mit Liegeplatz: Das Schiff fährt die ganze Zeit und legt am Kai an.
+  if (toPort) return { stage: 'ship', t: p };
   if (p < SHIP_SHARE) return { stage: 'ship', t: p / SHIP_SHARE };
   if (p < SHIP_SHARE + UNLOADING_SHARE) return { stage: 'unloading', t: (p - SHIP_SHARE) / UNLOADING_SHARE };
   return { stage: 'road', t: (p - SHIP_SHARE - UNLOADING_SHARE) / (1 - SHIP_SHARE - UNLOADING_SHARE) };
@@ -296,10 +409,14 @@ export function isBlocked(state: GameState, supplierId: string): boolean {
   return rel.debt > 0 && rel.overdue > 0;
 }
 
-/** Pakete, die der Lieferant dir bei deinem Vertrauen anbietet. */
+/**
+ * Pakete, die der Lieferant dir bei deinem Vertrauen anbietet. Leer, solange er noch nicht freigeschaltet ist (und
+ * beim Hafen ohne eigenen Liegeplatz).
+ */
 export function availablePackages(state: GameState, supplierId: string): SupplierPackage[] {
   const supplier = getSupplier(state, supplierId);
-  if (!supplier) return [];
+  if (!supplier || !isUnlocked(state, supplierId)) return [];
+  if (supplier.kind === 'port' && !hasBerth(state)) return [];
   const { trust } = getRelation(state, supplierId);
   return supplier.packages.filter((p) => (p.minTrust ?? 0) <= trust);
 }
@@ -364,10 +481,25 @@ function tell(ctx: Ctx, supplier: Supplier, text: string): void {
   messages.send(ctx, { contact: contactOf(supplier), text });
 }
 
-function order(ctx: Ctx, supplierId: string, packageId: string, onCredit: boolean): CommandResult {
+function order(
+  ctx: Ctx,
+  supplierId: string,
+  packageId: string,
+  onCredit: boolean,
+  warehouseId: string | undefined,
+): CommandResult {
   const supplier = getSupplier(ctx.state, supplierId);
   const pkg = supplier?.packages.find((p) => p.id === packageId);
   if (!supplier || !pkg) return { ok: false, reason: 'Unbekanntes Paket.' };
+  if (!isUnlocked(ctx.state, supplierId)) {
+    return { ok: false, reason: `${supplier.contactName} macht noch keine Geschäfte mit dir.` };
+  }
+  const toPort = supplier.kind === 'port';
+  if (toPort && !hasBerth(ctx.state)) {
+    return { ok: false, reason: 'Ohne eigenen Liegeplatz im Niehler Hafen kann kein Schiff für dich anlegen.' };
+  }
+  const warehouse = warehouseId ? getWarehouse(ctx.state, warehouseId) : undefined;
+  if (warehouseId && !warehouse) return { ok: false, reason: 'Dieses Lager gehört dir nicht.' };
   const rel = relationFor(ctx, supplierId);
   if ((pkg.minTrust ?? 0) > rel.trust) {
     return { ok: false, reason: `Dafür vertraut dir ${supplier.contactName} noch nicht genug.` };
@@ -400,12 +532,13 @@ function order(ctx: Ctx, supplierId: string, packageId: string, onCredit: boolea
     productId: pkg.productId,
     amount: pkg.amount,
     quality,
-    warehouseId: DEFAULT_WAREHOUSE,
+    warehouseId: toPort ? 'port' : (warehouse?.id ?? defaultWarehouse(ctx.state)),
     price,
     orderedAt: ctx.now,
     arrivesAt: ctx.now + supplier.deliveryTime,
   };
   if (onCredit) shipment.onCredit = true;
+  if (toPort) shipment.toPort = true;
   if (problem) {
     shipment.problem = problem;
     shipment.problemAt = ctx.now + Math.round(supplier.deliveryTime * PROBLEM_AT);
@@ -438,6 +571,58 @@ function order(ctx: Ctx, supplierId: string, packageId: string, onCredit: boolea
     onCredit,
   });
   return { ok: true, data: { shipmentId: shipment.id } };
+}
+
+/** Lager, in das Lieferungen ohne Angabe gehen: das Standardlager, sonst das erste eigene. */
+function defaultWarehouse(state: GameState): string {
+  return getWarehouse(state, DEFAULT_WAREHOUSE)?.id ?? getWarehouses(state)[0]?.id ?? DEFAULT_WAREHOUSE;
+}
+
+function unlock(ctx: Ctx, supplierId: string): CommandResult {
+  const allowed = canUnlock(ctx.state, supplierId);
+  if (!allowed.ok) return allowed;
+  const supplier = getSupplier(ctx.state, supplierId);
+  if (!supplier) return { ok: false, reason: 'Unbekannter Lieferant.' };
+  const fee = supplier.unlock?.fee ?? 0;
+  if (fee > 0 && !wallet.pay(ctx, fee, 'dirty', `Vermittlung ${supplier.name}`)) {
+    return { ok: false, reason: `${supplier.contactName} will ${formatEuro(fee)} für den Einstieg.` };
+  }
+  const s = ctx.state.modules.suppliers;
+  s.unlocked.push(supplierId);
+  if (!s.offered.includes(supplierId)) s.offered.push(supplierId);
+  relationFor(ctx, supplierId);
+  journal.add(
+    ctx,
+    `${supplier.contactName} (${supplier.name}) liefert jetzt an dich${fee > 0 ? ` (${formatEuro(fee)} Vermittlung)` : ''}.`,
+    'good',
+  );
+  tell(ctx, supplier, 'Abgemacht. Alle Angebote findest du in der Lieferanten-App.');
+  ctx.emit('supplier.unlocked', { supplierId, fee });
+  return { ok: true };
+}
+
+/** Wer die Bedingungen erfüllt und sich noch nicht gemeldet hat, schreibt dem Spieler (einmal). */
+function offerUnlocks(ctx: Ctx): void {
+  const s = ctx.state.modules.suppliers;
+  for (const supplier of getSuppliers(ctx.state)) {
+    if (!supplier.unlock || s.offered.includes(supplier.id) || !canUnlock(ctx.state, supplier.id).ok) continue;
+    s.offered.push(supplier.id);
+    const fee = supplier.unlock.fee;
+    messages.send(ctx, {
+      contact: contactOf(supplier),
+      text: supplier.unlock.pitch.replace('{fee}', formatEuro(fee)),
+      options: [
+        {
+          id: 'unlock',
+          label: fee > 0 ? `Einsteigen (${formatEuro(fee)})` : 'Geschäfte machen',
+          reply: 'Deal.',
+          command: { type: 'suppliers.unlock', payload: { supplierId: supplier.id } },
+        },
+        { id: 'later', label: 'Später', reply: 'Ich überleg es mir.' },
+      ],
+    });
+    journal.add(ctx, `${supplier.contactName} aus ${supplier.name} will mit dir Geschäfte machen.`, 'good');
+  }
 }
 
 function repay(ctx: Ctx, supplierId: string, amount?: number): CommandResult {
@@ -501,17 +686,30 @@ function deliver(ctx: Ctx): void {
   if (arrived.length === 0) return;
   state.shipments = state.shipments.filter((s) => s.arrivesAt > ctx.now);
   for (const s of arrived) {
-    store(ctx, {
-      productId: s.productId,
-      amount: s.amount,
-      warehouseId: s.warehouseId,
-      quality: s.quality,
-      unitCost: s.price / s.amount,
-    });
-    const warehouse = getWarehouse(ctx.state, s.warehouseId);
-    const goods = `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)}`;
-    journal.add(ctx, `Lieferung angekommen: ${goods} im ${warehouse?.name ?? 'Lager'}.`, 'good');
     const supplier = getSupplier(ctx.state, s.supplierId);
+    if (s.toPort) {
+      // Schiffsware: am Kai abladen, abholen muss der Spieler (logistics schreibt Journal und Nachricht).
+      receiveCargo(ctx, {
+        supplierId: s.supplierId,
+        productId: s.productId,
+        amount: s.amount,
+        quality: s.quality,
+        unitCost: Math.round((s.price / s.amount) * 100) / 100,
+      });
+    } else {
+      // Gehört das Ziel-Lager nicht mehr dir, geht die Ware ins nächste eigene.
+      const warehouse =
+        getWarehouse(ctx.state, s.warehouseId) ?? (supplier ? nearestWarehouse(ctx.state, supplier) : undefined);
+      store(ctx, {
+        productId: s.productId,
+        amount: s.amount,
+        warehouseId: warehouse?.id ?? s.warehouseId,
+        quality: s.quality,
+        unitCost: s.price / s.amount,
+      });
+      const goods = `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)}`;
+      journal.add(ctx, `Lieferung angekommen: ${goods} im ${warehouse?.name ?? 'Lager'}.`, 'good');
+    }
     if (s.problem === 'badQuality' && supplier) {
       s.problemRevealed = true;
       tell(ctx, supplier, 'Ich sag es lieber gleich: Die letzte Ladung ist nicht so gut wie versprochen. Kommt vor.');
@@ -523,8 +721,9 @@ function deliver(ctx: Ctx): void {
       supplierId: s.supplierId,
       productId: s.productId,
       amount: s.amount,
-      warehouseId: s.warehouseId,
+      warehouseId: s.toPort ? 'port' : s.warehouseId,
       quality: s.quality,
+      ...(s.toPort ? { atPort: true } : {}),
     });
   }
 }
@@ -557,6 +756,11 @@ function initialRelations(): Record<string, SupplierRelation> {
   return Object.fromEntries(SUPPLIERS.map((s) => [s.id, newRelation()]));
 }
 
+/** Lieferanten ohne Bedingungen (am Anfang zu haben). */
+function openFromStart(): string[] {
+  return SUPPLIERS.filter((s) => !s.unlock).map((s) => s.id);
+}
+
 /** Kann der Spieler über diesen Lieferanten noch an Ware kommen (Geld oder Kredit)? */
 /**
  * Kann der Spieler hier noch Ware bekommen? Ein gesperrter Lieferant zählt, wenn das Geld reicht, um erst die
@@ -575,10 +779,10 @@ function canRestock(state: GameState, supplier: Supplier): boolean {
 
 export default defineModule({
   id: 'suppliers',
-  version: 2,
+  version: 3,
   dependsOn: ['goods'],
   init: (ctx) => {
-    const [rotterdam, frankfurt] = [SUPPLIERS[0], SUPPLIERS[1]];
+    const frankfurt = SUPPLIERS.find((s) => s.id === 'frankfurt') ?? SUPPLIERS[0];
     const fast = frankfurt.packages[0];
     messages.send(ctx, {
       contact: contactOf(frankfurt),
@@ -592,34 +796,27 @@ export default defineModule({
         { id: 'later', label: 'Später', reply: 'Melde mich.' },
       ],
     });
-    const first = rotterdam.packages[0];
-    messages.send(ctx, {
-      contact: contactOf(rotterdam),
-      text:
-        `Du brauchst Nachschub? Wir liefern große Mengen nach Köln, billiger als jeder andere. ` +
-        `Lieferzeit ca. ${clock.formatDuration(rotterdam.deliveryTime)}. Alle Angebote in der Lieferanten-App.`,
-      options: [
-        {
-          id: 'order',
-          label: `${first.label} bestellen (${formatEuro(first.price)})`,
-          command: { type: 'suppliers.order', payload: { supplierId: rotterdam.id, packageId: first.id } },
-        },
-        { id: 'later', label: 'Später', reply: 'Melde mich.' },
-      ],
-    });
-    return { shipments: [], relations: initialRelations() };
+    return { shipments: [], relations: initialRelations(), unlocked: openFromStart(), offered: openFromStart() };
   },
   tick: (ctx) => {
     revealProblems(ctx);
     deliver(ctx);
     checkDebts(ctx);
+    if (ctx.now % 60 === 0) offerUnlocks(ctx);
   },
   commands: {
-    'suppliers.order': (ctx, { supplierId, packageId, onCredit }) => order(ctx, supplierId, packageId, !!onCredit),
+    'suppliers.order': (ctx, { supplierId, packageId, onCredit, warehouseId }) =>
+      order(ctx, supplierId, packageId, !!onCredit, warehouseId),
     'suppliers.repay': (ctx, { supplierId, amount }) => repay(ctx, supplierId, amount),
+    'suppliers.unlock': (ctx, { supplierId }) => unlock(ctx, supplierId),
   },
   migrations: {
-    2: (old: SuppliersStateV1): SuppliersState => ({ shipments: old.shipments, relations: initialRelations() }),
+    2: (old: SuppliersStateV1): SuppliersStateV2 => ({ shipments: old.shipments, relations: initialRelations() }),
+    // Version 3: Lieferanten werden freigeschaltet. Alte Spielstände kennen schon alle bisherigen Lieferanten.
+    3: (old: SuppliersStateV2): SuppliersState => {
+      const known = ['rotterdam', 'frankfurt', 'berlin', 'hamburg'];
+      return { ...old, unlocked: [...known], offered: [...known] };
+    },
   },
   // Pleite-Regel: Wer eine Lieferung erwartet oder sich eine leisten kann (bar oder auf Kredit), macht weiter.
   solvency: (state) =>

@@ -16,6 +16,7 @@ export const CONTACT_LIFETIME: [number, number] = [1440, 2 * 1440];
 export const POOL_ROLE_WEIGHTS: Record<StaffRole, number> = {
   runner: 40,
   courier: 15,
+  driver: 10,
   security: 20,
   lawyer: 8,
   accountant: 9,
@@ -26,6 +27,7 @@ export const POOL_ROLE_WEIGHTS: Record<StaffRole, number> = {
 export const EVENT_ROLE_WEIGHTS: Record<StaffRole, number> = {
   runner: 15,
   courier: 10,
+  driver: 10,
   security: 25,
   lawyer: 18,
   accountant: 16,

@@ -3,7 +3,8 @@
 import { clock, formatEuro } from '../../../core';
 import { islandCountdown, type LiveActivity, registerLiveActivity } from '../../../ui';
 import { formatProductAmount, productName } from '../../goods';
-import { getOrders, getSalesStats, orderProgress } from '../index';
+import { getSpot } from '../../spots';
+import { getOrders, getSalesStats, isPlayerAway, orderProgress, playerSpot, waitingAt } from '../index';
 
 /** Umsatz zu Beginn des Tages (nur in dieser Sitzung gemerkt, nach dem Laden zählt der Tag ab dann). */
 let dayStart: { day: number; revenue: number } | null = null;
@@ -58,6 +59,24 @@ registerLiveActivity({
             },
           ]
         : [];
-    return [...offered, ...enRoute, ...status];
+    // Du stehst an einem Spot und verkaufst selbst.
+    const spotId = playerSpot(state);
+    const spot = spotId ? getSpot(state, spotId) : undefined;
+    const self: LiveActivity[] = spot
+      ? [
+          {
+            id: 'customers.self',
+            priority: 20,
+            icon: 'runner',
+            tone: isPlayerAway(state) ? 'neutral' : 'accent',
+            leading: 'Spot',
+            trailing: String(waitingAt(state, spot.id).length),
+            title: `Du verkaufst am ${spot.name}`,
+            detail: isPlayerAway(state) ? 'gerade unterwegs' : `${waitingAt(state, spot.id).length} warten`,
+            open: (ui) => ui.openPanel('spots.spot', { spotId: spot.id }),
+          },
+        ]
+      : [];
+    return [...offered, ...enRoute, ...self, ...status];
   },
 });

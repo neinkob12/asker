@@ -1,0 +1,47 @@
+// Dynamic Island: Ware am Kai (mit Zeit bis zum Zoll-Risiko) und Fahrten unterwegs, Kontrollen ganz oben.
+
+import { clock } from '../../../core';
+import { islandCountdown, type LiveActivity, onGameEvent, registerLiveActivity } from '../../../ui';
+import { formatProductAmount, productName } from '../../goods';
+import { cargoRisk, cargoRiskFrom, getCargo, getTrips, placeOf, tripAmount, tripProgress } from '../index';
+
+registerLiveActivity({
+  id: 'logistics',
+  activities: (state) => {
+    const cargo = getCargo(state).map((c): LiveActivity => {
+      const risky = cargoRisk(state, c) === 'risky';
+      return {
+        id: `logistics.cargo.${c.id}`,
+        priority: risky ? 80 : 66,
+        icon: 'ship',
+        tone: risky ? 'bad' : 'warn',
+        leading: 'Hafen',
+        trailing: risky ? 'Zoll!' : islandCountdown(cargoRiskFrom(c) - state.time),
+        title: `${formatProductAmount(c.productId, c.amount)} ${productName(c.productId)} am Kai`,
+        detail: risky ? 'Der Zoll kann sie jederzeit finden' : `Sicher bis ${clock.formatTime(cargoRiskFrom(c))}`,
+        open: (ui) => ui.openPhone('logistics.app'),
+      };
+    });
+    const trips = getTrips(state).map((trip): LiveActivity => {
+      const stopped = trip.status === 'stopped';
+      const to = placeOf(state, trip.toId)?.name ?? 'Lager';
+      return {
+        id: `logistics.trip.${trip.id}`,
+        priority: stopped ? 88 : 54,
+        icon: stopped ? 'siren' : 'truck',
+        tone: stopped ? 'bad' : 'info',
+        leading: stopped ? 'Kontrolle' : 'Fahrt',
+        trailing: stopped ? '!' : islandCountdown(trip.arrivesAt - state.time),
+        title: trip.kind === 'pickup' ? `Abholung am Hafen → ${to}` : `Umlagern → ${to}`,
+        detail: `${tripAmount(trip)} Einheiten`,
+        progress: tripProgress(state, trip).total,
+        open: (ui) => ui.openPhone('logistics.app'),
+      };
+    });
+    return [...cargo, ...trips];
+  },
+});
+
+onGameEvent('cargo.docked', 'logistics.island', (_payload, ui) =>
+  ui.pulseIsland({ icon: 'ship', tone: 'accent', text: 'Schiff im Hafen' }),
+);

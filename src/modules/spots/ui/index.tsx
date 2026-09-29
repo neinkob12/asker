@@ -19,8 +19,9 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { getSalesStats, waitingAt } from '../../customers';
+import { getSalesStats, isPlayerAway, playerSpot, waitingAt } from '../../customers';
 import { formatProductAmount } from '../../goods';
+import { activeRunnerAt } from '../../staff';
 import { veedelName } from '../../veedel';
 import {
   customSpots,
@@ -111,6 +112,7 @@ function SpotsSection() {
             aside={<span class="ui-hint">{waitingAt(state, s.id).length} warten</span>}
           >
             {s.name} <span class="ui-hint">· {veedelName(s.veedelId)}</span>
+            {playerSpot(state) === s.id && <span class="spot-self"> · du stehst hier</span>}
           </ListItem>
         ))}
       </List>
@@ -148,9 +150,12 @@ registerAdvisor({
   id: 'spots.sell',
   advise: (state) => {
     const spots = getSpots(state);
+    // Wo niemand verkauft (kein Läufer, du stehst nicht da), zählen die Wartenden.
+    const mine = playerSpot(state);
     let busiest: (typeof spots)[number] | undefined;
     let most = 0;
     for (const spot of spots) {
+      if (spot.id === mine || activeRunnerAt(state, spot.id)) continue;
       const count = waitingAt(state, spot.id).length;
       if (count > most) {
         most = count;
@@ -159,18 +164,36 @@ registerAdvisor({
     }
     if (busiest) {
       const spot = busiest;
+      const title = `${most} ${most === 1 ? 'Kunde wartet' : 'Kunden warten'} am ${spot.name}`;
+      // Stehst du noch nirgends: hinstellen, dann verkaufst du dort automatisch. Sonst sofort alle bedienen.
+      if (!mine && !isPlayerAway(state)) {
+        return {
+          id: 'spots.waiting',
+          priority: 85,
+          icon: 'smile',
+          title,
+          text: 'Stell dich hin, dann verkaufst du dort automatisch, bis du weggehst.',
+          actionLabel: 'Hinstellen',
+          highlight: '.spot-marker',
+          target: { lng: spot.lng, lat: spot.lat },
+          action: (ui) => {
+            ui.dispatch({ type: 'customers.standAt', payload: { spotId: spot.id } });
+            ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
+          },
+        };
+      }
       return {
         id: 'spots.waiting',
         priority: 85,
         icon: 'smile',
-        title: `${most} ${most === 1 ? 'Kunde wartet' : 'Kunden warten'} am ${spot.name}`,
-        text: 'Geh hin und verkaufe, bevor sie wieder gehen.',
-        actionLabel: 'Hin',
+        title,
+        text: 'Einmal kurz rüber und alle bedienen, oder einen Läufer hinstellen.',
+        actionLabel: 'Verkaufen',
         highlight: '.spot-marker',
         target: { lng: spot.lng, lat: spot.lat },
         action: (ui) => {
-          ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
-          ui.openPanel('spots.spot', { spotId: spot.id });
+          const result = ui.dispatch({ type: 'customers.serveAll', payload: { spotId: spot.id } });
+          if (!result.ok) ui.openPanel('spots.spot', { spotId: spot.id });
         },
       };
     }
@@ -181,11 +204,12 @@ registerAdvisor({
         priority: 70,
         icon: 'pin',
         title: 'Erster Verkauf',
-        text: `Tipp auf einen Spot, zum Beispiel ${first.name}. Dort warten bald Kunden.`,
-        actionLabel: 'Zum Spot',
+        text: `Stell dich an einen Spot, zum Beispiel ${first.name}. Kommen Kunden, verkaufst du automatisch.`,
+        actionLabel: 'Hinstellen',
         highlight: '.spot-marker',
         target: { lng: first.lng, lat: first.lat },
         action: (ui) => {
+          if (!mine) ui.dispatch({ type: 'customers.standAt', payload: { spotId: first.id } });
           ui.flyTo({ lng: first.lng, lat: first.lat }, 16);
           ui.openPanel('spots.spot', { spotId: first.id });
         },

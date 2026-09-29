@@ -6,15 +6,16 @@
 //   präsent ist; Razzien ohne Spieler treffen die Gang, die das Veedel kontrolliert).
 // - Razzien gegen den Spieler werden geplant ('police.raidPlanned') und schlagen RAID_LEAD_TIME später zu. So kann
 //   der Polizei-Kontakt (staff) warnen und die Leute können abtauchen. Wer dann nicht mehr da ist, verliert nichts.
-// - Folgen: Ware und Schwarzgeld werden beschlagnahmt, Mitarbeiter festgenommen ('police.arrest', den Haft-Status
-//   setzt staff). Eine Kontrolle kann in eine Polizeiflucht kippen (Konfrontation 'policeChase' über encounters).
+// - Folgen: Ware und Schwarzgeld werden beschlagnahmt (eigene Lager im Veedel werden mit durchsucht, dort ist ein
+//   Anteil des Bestands weg), Mitarbeiter festgenommen ('police.arrest', den Haft-Status setzt staff). Eine Kontrolle kann in eine Polizeiflucht kippen (Konfrontation 'policeChase' über encounters).
 // - Verpfeifen ('police.snitch'): Heat und ein Hinweis in allen Veedeln der Gang. Solange der Hinweis gilt, kann es
 //   dort eine Razzia gegen die Gang geben, die sie Einfluss kostet.
 //
 // Öffentliche API:
 //   getHeat(state, veedelId), addHeat(ctx, veedelId, amount), reportViolence(ctx, veedelId, severity?),
 //   heatLevel(heat), playerHeat(state), hottestVeedel(state), snitchOnGang(ctx, gangId), canSnitch(state, gangId),
-//   activeTipOff(state, veedelId), plannedRaid(state, veedelId), getPoliceStats(state), MAX_HEAT, CHECK_THRESHOLD, RAID_THRESHOLD, HEAT_LEVELS
+//   activeTipOff(state, veedelId), plannedRaid(state, veedelId), getPoliceStats(state), arrestStaff(ctx, staffId,
+//   veedelId), recordConfiscation(ctx, goods), MAX_HEAT, CHECK_THRESHOLD, RAID_THRESHOLD, HEAT_LEVELS
 // Befehle: 'police.snitch'
 // Ereignisse: 'police.check', 'police.raidPlanned', 'police.raid', 'police.arrest', 'police.tipOff',
 //   'police.heatLevelChanged'
@@ -32,7 +33,7 @@ import {
 } from '../../core';
 import { startEncounter } from '../encounters';
 import { getGang } from '../gangs';
-import { allProducts, getWarehouses, take } from '../goods';
+import { allProducts, getLots, getWarehouses, take } from '../goods';
 import { getSpot, spotsInVeedel } from '../spots';
 import { getStaff, getStaffMember, isLyingLow, riskFactor, type StaffMember } from '../staff';
 import {
@@ -44,7 +45,7 @@ import {
   hasPlayerPresence,
   PLAYER_FACTION,
 } from '../territory';
-import { allVeedel, getVeedel, veedelName } from '../veedel';
+import { allVeedel, getVeedel, veedelAt, veedelName } from '../veedel';
 import {
   CHASE_CHANCE,
   CHASE_ESCAPED_HEAT,
@@ -68,6 +69,7 @@ import {
   RAID_LEAD_TIME,
   RAID_MONEY,
   RAID_THRESHOLD,
+  RAID_WAREHOUSE_SHARE,
   SALE_HEAT_BASE,
   SALE_HEAT_PER_UNIT,
   SNITCH_COOLDOWN,
@@ -231,6 +233,19 @@ export function addHeat(ctx: Ctx, veedelId: string, amount: number): number {
   return police.heat[veedelId];
 }
 
+/**
+ * Festnahme eines Mitarbeiters durch andere Module (z.B. eine Verkehrskontrolle der Logistik). Zählt in der
+ * Statistik und löst 'police.arrest' aus, den Haft-Status setzt staff.
+ */
+export function arrestStaff(ctx: Ctx, staffId: string, veedelId: string): void {
+  arrest(ctx, staffId, veedelId);
+}
+
+/** Beschlagnahmte Ware, die andere Module selbst abgezogen haben (z.B. eine Ladung), in der Statistik zählen. */
+export function recordConfiscation(ctx: Ctx, goods: number): void {
+  ctx.state.modules.police.stats.confiscatedGoods += Math.max(0, Math.round(goods));
+}
+
 /** Gewalt im Veedel melden (Überfall, Schießerei …). severity 1 = normal. */
 export function reportViolence(ctx: Ctx, veedelId: string, severity = 1): number {
   const presence = getVeedel(veedelId)?.policePresence ?? 1;
@@ -343,6 +358,26 @@ function confiscateGoods(ctx: Ctx, amount: number): number {
     }
   }
   const taken = Math.round(amount) - left;
+  ctx.state.modules.police.stats.confiscatedGoods += taken;
+  return taken;
+}
+
+/** Eigene Lager im Veedel werden bei einer Razzia mit durchsucht: RAID_WAREHOUSE_SHARE jedes Postens ist weg. */
+function searchWarehouses(ctx: Ctx, veedelId: string): number {
+  let taken = 0;
+  for (const warehouse of getWarehouses(ctx.state)) {
+    if (veedelAt(warehouse.lng, warehouse.lat)?.id !== veedelId) continue;
+    for (const lot of getLots(ctx.state, { warehouseId: warehouse.id })) {
+      const amount = Math.ceil(lot.amount * RAID_WAREHOUSE_SHARE);
+      taken += take(ctx, {
+        productId: lot.productId,
+        amount,
+        warehouseId: warehouse.id,
+        lotId: lot.id,
+        partial: true,
+      }).taken;
+    }
+  }
   ctx.state.modules.police.stats.confiscatedGoods += taken;
   return taken;
 }
@@ -479,7 +514,7 @@ function raidPlayer(ctx: Ctx, veedelId: string): void {
     return;
   }
   const spotId = spotOf(people.length > 0 ? ctx.pick(people) : null) ?? spotsInVeedel(state, veedelId)[0]?.id ?? null;
-  const goods = confiscateGoods(ctx, ctx.randomInt(RAID_GOODS.min, RAID_GOODS.max));
+  const goods = searchWarehouses(ctx, veedelId) + confiscateGoods(ctx, ctx.randomInt(RAID_GOODS.min, RAID_GOODS.max));
   const money = confiscateMoney(ctx, ctx.randomInt(RAID_MONEY.min, RAID_MONEY.max));
   const arrested: string[] = [];
   for (const member of people) {

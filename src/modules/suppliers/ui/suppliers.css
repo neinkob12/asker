@@ -104,3 +104,38 @@
 .map-place--harbor {
   --map-place-color: var(--color-marker-supplier);
 }
+
+.sup-list__item.is-locked {
+  opacity: 0.72;
+}
+.sup-list__item.is-ready {
+  opacity: 1;
+  border-color: var(--color-accent);
+}
+.sup-list__lock {
+  width: 14px;
+  height: 14px;
+  margin-right: var(--space-1);
+  vertical-align: -2px;
+}
+.sup-reqs {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.sup-reqs li {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: var(--space-1) var(--space-2);
+  align-items: center;
+  color: var(--color-muted);
+}
+.sup-reqs li.is-done {
+  color: var(--color-accent);
+}
+.sup-reqs li .ui-progress {
+  grid-column: 2;
+}

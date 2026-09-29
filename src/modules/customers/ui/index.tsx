@@ -21,7 +21,7 @@ import {
   useUi,
 } from '../../../ui';
 import { formatProductAmount, getProduct, productName } from '../../goods';
-import { findAvailable, getStaffMember } from '../../staff';
+import { activeRunnerAt, findAvailable, getStaffMember } from '../../staff';
 import { veedelName } from '../../veedel';
 import {
   canServe,
@@ -31,14 +31,63 @@ import {
   getRegular,
   getRegulars,
   getSalesStats,
+  isPlayerAway,
   isPlayerDelivering,
   type Order,
   orderProgress,
+  playerSpot,
   waitingAt,
 } from '../index';
 import { deliveriesLayer } from './map';
 import './island';
 import './customers.css';
+
+/**
+ * Selbst verkaufen ohne Klick auf jeden Kunden: Du stellst dich an den Spot und bedienst dort automatisch, bis du
+ * weggehst (oder mit einer Lieferung unterwegs bist).
+ */
+function StandHere(props: { spotId: string }) {
+  const { state, dispatch } = useGame();
+  const here = playerSpot(state) === props.spotId;
+  const elsewhere = playerSpot(state);
+  const runner = activeRunnerAt(state, props.spotId);
+  const away = isPlayerAway(state);
+  if (here) {
+    return (
+      <div class="customer-stand is-here">
+        <span>
+          <strong>Du stehst hier</strong>
+          <span class="ui-hint">
+            {away ? ' · gerade unterwegs, danach verkaufst du weiter' : ' · du bedienst die Kunden automatisch'}
+          </span>
+        </span>
+        <Button
+          small
+          variant="subtle"
+          onClick={() => dispatch({ type: 'customers.standAt', payload: { spotId: null } })}
+        >
+          Weggehen
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div class="customer-stand">
+      <span class="ui-hint">
+        {runner
+          ? `${runner.name} verkauft hier. Du kannst trotzdem mithelfen.`
+          : 'Kein Läufer hier? Stell dich selbst hin, dann verkaufst du automatisch.'}
+      </span>
+      <Button
+        small
+        variant={runner ? 'subtle' : 'primary'}
+        onClick={() => dispatch({ type: 'customers.standAt', payload: { spotId: props.spotId } })}
+      >
+        {elsewhere ? 'Hierher wechseln' : 'Hier hinstellen'}
+      </Button>
+    </div>
+  );
+}
 
 function SpotCustomers(props: { spotId: string }) {
   const { state, dispatch } = useGame();
@@ -46,6 +95,7 @@ function SpotCustomers(props: { spotId: string }) {
   const regulars = getRegulars(state, { spotId: props.spotId, status: 'active' }).length;
   return (
     <Card title="Kundschaft">
+      <StandHere spotId={props.spotId} />
       {waiting.length === 0 ? (
         <Empty>Gerade niemand da.</Empty>
       ) : (
@@ -128,8 +178,8 @@ function CustomersSection() {
         tone={stats.customersLost > 0 ? 'bad' : undefined}
       />
       <Hint>
-        Kunden warten nur eine Weile am Spot. Verkaufst du nicht rechtzeitig (Spot anklicken oder Läufer hinstellen)
-        oder ist das Lager leer, gehen sie wieder. Das kostet etwas Ruf.
+        Kunden warten nur eine Weile am Spot. Verkaufst du nicht rechtzeitig (selbst an den Spot stellen, verkaufen oder
+        einen Läufer hinstellen) oder ist das Lager leer, gehen sie wieder. Das kostet etwas Ruf.
       </Hint>
       <KeyValue label="Umsatz" value={formatEuro(stats.revenue)} />
       <KeyValue label="Lieferungen / Großhandel" value={`${stats.deliveries} / ${stats.wholesaleDeals}`} />

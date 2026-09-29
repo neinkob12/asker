@@ -143,6 +143,7 @@ function StockSection() {
   const { state } = useGame();
   const ui = useUi();
   const rows = stockSummary(state);
+  const warehouses = getWarehouses(state);
   return (
     <Card
       title="Lager"
@@ -177,6 +178,20 @@ function StockSection() {
           ))}
         </ul>
       )}
+      {warehouses.length > 1 && (
+        <List>
+          {warehouses.map((w) => (
+            <ListItem
+              key={w.id}
+              onClick={() => ui.openPanel('goods.warehouse', { warehouseId: w.id })}
+              aside={<span class="ui-hint">{getStock(state, { warehouseId: w.id })} Einheiten</span>}
+            >
+              {w.name}
+            </ListItem>
+          ))}
+        </List>
+      )}
+      <Hint>Weitere Lager kaufst du mit sauberem Geld in der Logistik-App. Umlagern geht dort auch.</Hint>
     </Card>
   );
 }

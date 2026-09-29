@@ -106,6 +106,8 @@ Schatten und nachts Scheinwerferlicht. Damit man es auf jeder Zoomstufe sieht, h
 `title` zeigt einen Namen beim Überfahren, `onClick` macht es klickbar. Alle Fahrzeuge einer Karte teilen sich eine
 GeoJSON-Quelle; neue Geometrie gibt es nur, solange sich etwas bewegt (höchstens 40 Mal pro Sekunde).
 `path` kann eine Luftlinie oder eine echte Route (viele Punkte) sein; `pointAlong` verteilt gleichmäßig nach Metern.
+Fahrzeuge der Module fahren über echte Straßen: Den Weg liefert das Modul `roads` (`roadRoute(from, to).path`) im
+`ui/`-Ordner des Moduls, die Karte selbst kennt keine Module.
 Echte Straßenrouten gibt es noch nicht (siehe Konzept, "Logistik").
 
 **Hafenlieferungen:** Ware aus Rotterdam kommt als Schiff den Rhein hinauf (`RHINE_ROUTE` in

@@ -1,0 +1,79 @@
+.logi-app {
+  font-size: var(--font-size-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.logi-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.logi-section__title {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.logi-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-subtle);
+}
+.logi-form__row,
+.logi-form__buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+.logi-form__row > *,
+.logi-form__buttons > * {
+  flex: 1;
+}
+.logi-buy {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+.logi-trips,
+.logi-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.logi-trip__head,
+.logi-log__item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.logi-eta {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.logi-eta.is-bad,
+.logi-log__item.is-seized,
+.logi-log__item.is-lost {
+  color: var(--color-bad);
+}
+.logi-log {
+  gap: var(--space-1);
+  color: var(--color-muted);
+}
+
+/* Hafen-Marker als Knopf (öffnet die Logistik-App). */
+button.map-place--harbor {
+  pointer-events: auto;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}

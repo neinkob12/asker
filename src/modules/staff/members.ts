@@ -310,7 +310,10 @@ export function assign(ctx: Ctx, staffId: string, assignment: StaffAssignment | 
     return true;
   }
   member.assignment = next;
-  if (next && next.kind !== 'delivery') addCareer(ctx, staffId, `Eingesetzt: ${assignmentLabel(ctx.state, next)}.`);
+  // Lieferungen und Fahrten sind kurz, die kommen nicht in die Laufbahn.
+  if (next && next.kind !== 'delivery' && next.kind !== 'transport') {
+    addCareer(ctx, staffId, `Eingesetzt: ${assignmentLabel(ctx.state, next)}.`);
+  }
   ctx.emit('staff.assigned', { staffId, assignment: member.assignment });
   return true;
 }
@@ -321,6 +324,7 @@ export function assignmentLabel(state: GameState, a: StaffAssignment | null): st
   if (a.kind === 'spot') return getSpot(state, a.targetId)?.name ?? a.targetId;
   if (a.kind === 'warehouse') return getWarehouse(state, a.targetId)?.name ?? a.targetId;
   if (a.kind === 'veedel') return `Leutnant in ${veedelName(a.targetId)}`;
+  if (a.kind === 'transport') return 'Fahrt';
   return 'Lieferung';
 }
 

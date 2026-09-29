@@ -12,6 +12,8 @@ export const RUNNER_HIRE_COST = 500;
 export const RUNNER_HIRE_COST_MIN = 400;
 export const RUNNER_HIRE_COST_MAX = 900;
 export const RUNNER_DAILY_WAGE = 80;
+/** Fahrer von der Straße (für Abholungen am Hafen und Fahrten zwischen Lagern). */
+export const DRIVER_HIRE_COST = 450;
 /** So lange braucht ein Läufer mit Tempo 50 auf Level 1 für einen Kunden. */
 export const RUNNER_SERVE_TIME = 20;
 /** Schneller als das geht es auch mit Top-Werten nicht. */
@@ -54,6 +56,15 @@ export const ROLE_INFO: Record<StaffRole, RoleInfo> = {
     keyStats: ['speed', 'caution'],
     specialist: false,
     age: [19, 42],
+  },
+  driver: {
+    name: 'Fahrer',
+    plural: 'Fahrer',
+    wage: 110,
+    stats: { speed: 55, caution: 60, strength: 45, charisma: 35, loyalty: 55 },
+    keyStats: ['caution', 'speed'],
+    specialist: false,
+    age: [21, 58],
   },
   security: {
     name: 'Sicherheit',
@@ -293,6 +304,12 @@ export const BACKGROUNDS: Record<StaffRole, readonly string[]> = {
     'Ehemaliger Fahrradkurier, schneller als jede Streife.',
     'Hat den Führerschein seit drei Wochen und fährt wie ein Irrer.',
     'Lieferfahrer mit altem Transporter und wenig Fragen.',
+  ],
+  driver: [
+    'Ist zwanzig Jahre Lkw gefahren, bis der Rücken nicht mehr wollte.',
+    'Hat einen Sprinter ohne Firmenlogo und stellt keine Fragen.',
+    'Kennt jede Kontrollstelle zwischen Niehl und Porz.',
+    'Fährt nachts Pakete und tagsüber das, was sonst keiner fahren will.',
   ],
   security: [
     'Ex-Türsteher aus der Altstadt, hat schon alles gesehen.',

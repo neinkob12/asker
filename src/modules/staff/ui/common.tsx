@@ -16,6 +16,7 @@ import {
 export const ROLE_ICONS: Record<StaffRole, string> = {
   runner: '🏃',
   courier: '🛵',
+  driver: '🚐',
   security: '🛡️',
   lawyer: '⚖️',
   accountant: '📒',
