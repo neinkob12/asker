@@ -9,6 +9,23 @@ importieren alles aus `src/ui/index.ts` (nur aus ihrem `ui/`-Ordner). Registries
 
 ## Aufbau: Das Handy ist die Schaltzentrale
 
+Das Spiel-Handy ist ein **iPhone (Pro) im Dunkelmodus**: Titanrahmen mit Tasten, Seitenverhältnis 393 × 852,
+Statusleiste mit **Dynamic Island**, dunkle iOS-Icons, Glas-Dock, Navigationsleiste „‹ Zurück“ mit großen Titeln,
+Listen als eingerückte Gruppen wie in der Einstellungen-App. Maße nach Apples HIG (Skill `apple-design`).
+
+**Dynamic Island** (`phone/DynamicIsland.tsx`): zeigt laufende Live-Aktivitäten der Module.
+- Anmelden mit `registerLiveActivity({ id, activities: (state) => LiveActivity | LiveActivity[] | null })`.
+  Eine Aktivität hat `priority` (90 Gefahr, 70 Frist, 50 Lieferung, 30 Status), `icon`, `tone`, `leading`
+  (kurzes Wort), `trailing` (Wert, z.B. `islandCountdown(minuten)`), `title`, `detail`, `progress` und `open(ui)`.
+- Kompakt: Symbol links, Wert rechts der Kamera. Eine zweite Aktivität hängt als Kreis daneben.
+- Aufgeklappt: Maus drüber bzw. Tipp. Dann stehen alle Aktivitäten mit Fortschritt untereinander.
+- Neue Aktivitäten ab Priorität 80 klappen kurz von selbst auf.
+- `ui.pulseIsland({ icon, text, tone, kind?, amount? })` zeigt einen kurzen Auftritt, z.B. „+450 €“.
+  Beträge gleicher `kind` werden dabei zusammengezählt.
+- Liegt das Handy weg, schwebt die Island oben über der Karte, aber nur, wenn es etwas zu zeigen gibt.
+- Bisher angemeldet: Überfälle, Razzia und hohe Heat, Gang-Vorstöße, Chat-Fristen, Aufträge mit Frist, Kuriere,
+  Lieferungen mit Restzeit und der Umsatz des Tages.
+
 - **Über der Karte** steht nur das Nötigste: eine schmale HUD-Leiste mit Geld und Heat (`placement: 'main'`),
   Warnungen (`'alert'`), rechts Spieltempo und Menü (Meldungen, Suche, Spielstände, Einstellungen, Ton). Dazu die
   Kartensteuerung.
@@ -48,7 +65,8 @@ Nur Variablen verwenden.
   - Akzente `accent/warn/bad/info`: Der Grundname ist die Textfarbe auf dunkler Fläche, `-strong` die Fläche, `-soft`
     der getönte Hintergrund, `-edge` die Kante. `--color-primary` ist Kölsch-Gold.
 - **Form:**
-  - `--radius-xs/sm/md/lg` (2/3/4/6 px), `--radius-round` nur für Zähler und Punkte.
+  - `--radius-xs/sm/md/lg/xl` (4/6/8/12/16 px): Knöpfe 8 wie bei Claude, Karten und Gruppen 12.
+  - `--radius-round` nur für Zähler und Punkte.
   - `--stroke` (1 px).
   - `--shadow-panel`, `--shadow-float`. `--shadow-pop` bleibt nur aus Kompatibilität bestehen und ist leer.
 - **Bewegung:** `--ease-out`, `--duration(-fast/-slow)`.

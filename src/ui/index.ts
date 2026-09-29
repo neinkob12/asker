@@ -12,6 +12,7 @@ export {
 } from '../audio';
 export * from './components';
 export { useGame, useSession, useUi } from './hooks';
+export { islandCountdown } from './phone/DynamicIsland';
 export { PhoneScreen, type PhoneScreenProps } from './phone/PhoneScreen';
 export {
   type Advice,
@@ -22,6 +23,8 @@ export {
   type EventReaction,
   type GameStat,
   type HudItem,
+  type LiveActivity,
+  type LiveActivitySource,
   onGameEvent,
   type PanelDefinition,
   type PanelId,
@@ -31,6 +34,7 @@ export {
   registerDialog,
   registerGameStat,
   registerHudItem,
+  registerLiveActivity,
   registerPanel,
   registerPhoneApp,
   registerSearch,
@@ -47,6 +51,7 @@ export {
 export type {
   Alert,
   CameraMode,
+  IslandPulse,
   MapController,
   PhoneNotification,
   Toast,

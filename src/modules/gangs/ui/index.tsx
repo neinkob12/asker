@@ -46,6 +46,7 @@ import {
   WARN_AT,
 } from '../index';
 import { gangsLayer } from './map';
+import './island';
 import './gangs.css';
 
 declare module '../../../ui' {

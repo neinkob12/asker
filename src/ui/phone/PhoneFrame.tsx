@@ -1,7 +1,8 @@
 // Das Spiel-Handy ist die Schaltzentrale: Alle Bereiche der Module (Tabs) und die Handy-Apps laufen hier, dazu
 // die Details von Spots, Veedeln und Personen (Panels). Am Desktop ist es rechts fest angedockt (weglegen klappt
-// es an den Rand), am Handy füllt es den Bildschirm unter dem HUD. Look: dunkles iOS-Handy, schlichte Statusleiste
-// (nur Uhrzeit), Startbildschirm mit Widgets, App-Raster und Dock.
+// es an den Rand), am Handy füllt es den Bildschirm unter dem HUD. Look: iPhone (Pro) im Dunkelmodus mit
+// Dynamic Island (Live-Aktivitäten der Module), Statusleiste nur mit Uhrzeit, Startbildschirm mit Widgets,
+// App-Raster und Dock. Liegt das Handy weg, schwebt die Island oben über der Karte.
 
 import type { ComponentType } from 'preact';
 import { clock, type GameState, messages } from '../../core';
@@ -14,6 +15,7 @@ import { hudPlacement, tabIcon, tabTint, useIsMobile } from '../shell/layout';
 import { collectAdvice, NextStepWidget } from '../shell/NextStep';
 import { Slot } from '../shell/Slot';
 import { TabContent } from '../shell/TabContent';
+import { DynamicIsland } from './DynamicIsland';
 import { PhoneNotice } from './Notification';
 import { PhoneScreen } from './PhoneScreen';
 
@@ -55,7 +57,7 @@ function StatusBar(props: { time: number }) {
   return (
     <header class="phone__status">
       <span class="phone__status-time">{clock.formatTime(props.time)}</span>
-      <span class="phone__island" aria-hidden="true" />
+      <DynamicIsland />
       <span class="phone__status-icons" aria-hidden="true">
         <Icon name="signal" />
         <Icon name="wifi" />
@@ -131,6 +133,7 @@ function TabScreen(props: { tab: SidebarTab }) {
     <PhoneScreen
       title={props.tab.title}
       onBack={() => (ui.section ? api.openSection(null) : api.openPhone(null))}
+      backLabel={ui.section ? props.tab.title : 'Start'}
       class="phone-screen--tab"
     >
       <TabContent tab={props.tab} />
@@ -237,7 +240,12 @@ export function PhoneFrame() {
   if (!state) return null;
   const unread = messages.unreadCount(state);
   if (!ui.phone.open) {
-    return mobile ? <MobileDock state={state} unread={unread} /> : <PhoneTab time={state.time} unread={unread} />;
+    return (
+      <>
+        <DynamicIsland floating />
+        {mobile ? <MobileDock state={state} unread={unread} /> : <PhoneTab time={state.time} unread={unread} />}
+      </>
+    );
   }
   const appId = ui.phone.app;
   const tab = appId?.startsWith(TAB_APP_PREFIX) ? sidebarTabs.get(appId.slice(TAB_APP_PREFIX.length)) : undefined;

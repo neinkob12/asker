@@ -991,6 +991,10 @@ kbd {
     bottom: calc(var(--mobile-dock-height) + var(--gap));
     right: 0;
   }
+  /* Platz für die schwebende Dynamic Island unter dem HUD */
+  .shell-map .maplibregl-ctrl-top-left {
+    top: calc(var(--top) + var(--hud-height) + 52px);
+  }
   .mode-choice {
     grid-template-columns: 1fr;
   }

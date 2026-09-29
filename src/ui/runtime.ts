@@ -32,6 +32,17 @@ export interface PhoneNotification {
   sound?: string | null;
 }
 
+/** Kurzer Auftritt in der Dynamic Island (z.B. "+120 €" nach Verkäufen, "Lieferung da"). */
+export interface IslandPulse {
+  id: number;
+  icon: string;
+  text: string;
+  tone?: 'accent' | 'warn' | 'bad' | 'info' | 'neutral';
+  /** Gleiche Art (z.B. 'earn'): Beträge werden zusammengezählt, solange der Auftritt läuft. */
+  kind?: string;
+  amount?: number;
+}
+
 export interface ToastOptions {
   /** Ort des Geschehens: Die Alarm-Zentrale bietet dann "Hinzoomen" an. */
   target?: LngLat;
@@ -91,6 +102,8 @@ export interface UiState {
   notification: PhoneNotification | null;
   /** Zählt jedes Vibrieren hoch (für die Animation). */
   buzz: number;
+  /** Dynamic Island: aufgeklappt (alle Live-Aktivitäten) und aktueller kurzer Auftritt. */
+  island: { expanded: boolean; pulse: IslandPulse | null };
 }
 
 /** Schnittstelle der Karte für die UI (implementiert in src/map/GameMap.ts). */
@@ -126,6 +139,13 @@ export interface UiApi {
   /** Banner am Spiel-Handy zeigen (mit Vibrieren). Sound spielt, wer es auslöst (siehe src/audio). */
   notify(notification: Omit<PhoneNotification, 'id'>): void;
   dismissNotification(): void;
+  /**
+   * Kurzer Auftritt in der Dynamic Island. Mit kind und amount werden Beträge gleicher Art zusammengezählt,
+   * z.B. pulseIsland({ kind: 'earn', amount: 35, icon: 'euro', tone: 'accent', text: '' }) → "+35 €".
+   */
+  pulseIsland(pulse: Omit<IslandPulse, 'id'>): void;
+  /** Dynamic Island auf- oder zuklappen (ohne Argument umschalten). */
+  toggleIsland(expanded?: boolean): void;
   /** Tab (Bereich eines Moduls) als App im Handy öffnen. */
   selectTab(id: string): void;
   /** Abschnitt eines Listen-Tabs öffnen (ID des Slot-Beitrags), null = zurück zur Übersicht. */
@@ -170,6 +190,7 @@ const TOAST_QUEUE = 5;
 const ALERT_LIMIT = 60;
 const NOTIFICATION_STACK = 12;
 const NOTIFICATION_MS = 5000;
+const ISLAND_PULSE_MS = 2600;
 const RENDER_INTERVAL_MS = 100;
 
 export class UiRuntime {
@@ -188,6 +209,8 @@ export class UiRuntime {
   private notificationTimer: ReturnType<typeof setTimeout> | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private alertId = 0;
+  private pulseId = 0;
+  private pulseTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     readonly session: GameSession,
@@ -213,6 +236,7 @@ export class UiRuntime {
       vibration: prefs.vibration,
       notification: null,
       buzz: 0,
+      island: { expanded: false, pulse: null },
     };
     this.api = this.createApi();
     session.subscribe((change) => {
@@ -410,6 +434,25 @@ export class UiRuntime {
             if (ui.notification?.id === id) ui.notification = null;
             this.requestRender();
           }, NOTIFICATION_MS);
+        }),
+      pulseIsland: (pulse) =>
+        update(() => {
+          const current = ui.island.pulse;
+          const next: IslandPulse = { ...pulse, id: ++this.pulseId };
+          if (current && pulse.kind && current.kind === pulse.kind && pulse.amount !== undefined) {
+            next.amount = (current.amount ?? 0) + pulse.amount;
+            next.id = current.id;
+          }
+          ui.island = { ...ui.island, pulse: next };
+          if (this.pulseTimer) clearTimeout(this.pulseTimer);
+          this.pulseTimer = setTimeout(() => {
+            ui.island = { ...ui.island, pulse: null };
+            this.requestRender();
+          }, ISLAND_PULSE_MS);
+        }),
+      toggleIsland: (expanded) =>
+        update(() => {
+          ui.island = { ...ui.island, expanded: expanded ?? !ui.island.expanded };
         }),
       dismissNotification: () =>
         update(() => {

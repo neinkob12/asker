@@ -2,10 +2,11 @@
  * Design-Tokens: Farben, Abstände, Schriften, Radien, Schatten, Bewegung und Ebenen.
  * Alle Oberflächen (auch die der Module) nutzen nur diese Variablen, damit der Look zentral änderbar ist.
  *
- * Look "Nachtschicht": dunkel und gedämpft, eckig (Radien 2–6 px), feine Haarlinien statt dicker Konturen,
- * weiche Schatten statt Sockel. Eine Akzentfarbe (Kölsch-Gold) für Hauptaktionen, sonst nur Farben mit Bedeutung:
- * Grün = Geld/gut, Rot = Heat/Gefahr, Bernstein = Achtung, Blau = Info, Violett = Schwarzgeld.
- * Zahlen stehen in einer schmalen Schrift mit gleich breiten Ziffern (Tycoon-Anzeigen).
+ * Look "Nachtschicht": dunkel und gedämpft wie iOS im Dunkelmodus. Ecken weder rund noch eckig (4–12 px, wie die
+ * Knöpfe bei Claude), feine Haarlinien, weiche Schatten. Abstände im 4er-Raster wie bei Apple (Ränder 16 px,
+ * Zeilen mindestens 44 px am Touchscreen). Eine Akzentfarbe (Kölsch-Gold) für Hauptaktionen, sonst die
+ * iOS-Systemfarben mit Bedeutung: Grün = Geld/gut, Rot = Heat/Gefahr, Orange = Achtung, Blau = Info,
+ * Violett = Schwarzgeld. Schrift: San Francisco (Apple-Geräte), sonst Inter, Zahlen mit gleich breiten Ziffern.
  *
  * Die alten Namen der Grundpalette (--ink, --paper, --dom, --money …) bleiben erhalten, zeigen aber auf die
  * gedämpften Farben. --ink ist die dunkelste Fläche (Schrift auf hellen Flächen), nicht mehr die Kontur.
@@ -17,66 +18,66 @@
   --ink: #0b0d10;
   --paper: #1b1f25;
   --paper-deep: #14171c;
-  --dom: #e5484d;
-  --dom-edge: #b8363a;
-  --money: #3dbb7f;
-  --money-edge: #2d8f60;
+  --dom: #ff453a;
+  --dom-edge: #d0342b;
+  --money: #30d158;
+  --money-edge: #24a644;
   --gold: #e2ae4a;
   --gold-edge: #b88a33;
-  --rhine: #4c8fe0;
-  --rhine-edge: #3a6fb0;
-  --lila: #9a7de0;
-  --lila-edge: #7a5fc0;
-  --dirty: #8b6fd6;
-  --dirty-edge: #6a52b0;
+  --rhine: #0a84ff;
+  --rhine-edge: #0868cc;
+  --lila: #bf5af2;
+  --lila-edge: #9a44c6;
+  --dirty: #bf5af2;
+  --dirty-edge: #9a44c6;
 
   /* Flächen */
-  --color-bg: #0e1014;
+  --color-bg: #000000;
   /* Schwebende Elemente über der Karte (HUD, Kartensteuerung, Handy) */
-  --color-panel: rgba(17, 20, 25, 0.9);
-  --color-panel-solid: #14171c;
-  --color-panel-raised: #1b1f25;
-  --color-surface: #1d2128;
-  --color-surface-hover: #252a32;
-  --color-surface-active: #2e343d;
+  --color-panel: rgba(28, 28, 30, 0.82);
+  --color-panel-solid: #1c1c1e;
+  --color-panel-raised: #1c1c1e;
+  --color-surface: #2c2c2e;
+  --color-surface-hover: #3a3a3c;
+  --color-surface-active: #48484a;
   --color-surface-subtle: rgba(255, 255, 255, 0.04);
-  --color-line: rgba(255, 255, 255, 0.08);
-  --color-line-strong: rgba(255, 255, 255, 0.16);
+  --color-line: rgba(84, 84, 88, 0.55);
+  --color-line-strong: rgba(120, 120, 128, 0.6);
   --color-backdrop: rgba(4, 6, 9, 0.62);
 
   /* Text */
-  --color-text: #e7e9ec;
-  --color-muted: #9aa2ad;
-  --color-faint: #69717c;
+  --color-text: #ffffff;
+  --color-muted: rgba(235, 235, 245, 0.6);
+  --color-faint: rgba(235, 235, 245, 0.3);
 
   /* Akzente: Grundname = Textfarbe auf dunkler Fläche, -strong = Fläche, -edge = Kante, -soft = getönter Grund */
-  --color-accent: #4fcf92;
+  --color-accent: #30d158;
   --color-accent-strong: var(--money);
-  --color-accent-hover: #4ccb8e;
+  --color-accent-hover: #3ddc63;
   --color-accent-edge: var(--money-edge);
-  --color-accent-soft: rgba(61, 187, 127, 0.14);
-  --color-warn: #eab25a;
+  --color-accent-soft: rgba(48, 209, 88, 0.16);
+  --color-warn: #ff9f0a;
   --color-warn-strong: var(--gold);
   --color-warn-edge: var(--gold-edge);
-  --color-warn-soft: rgba(226, 174, 74, 0.14);
-  --color-bad: #f0676b;
+  --color-warn-soft: rgba(255, 159, 10, 0.16);
+  --color-bad: #ff453a;
   --color-bad-strong: var(--dom);
   --color-bad-edge: var(--dom-edge);
-  --color-bad-soft: rgba(229, 72, 77, 0.14);
-  --color-info: #74a9ec;
+  --color-bad-soft: rgba(255, 69, 58, 0.16);
+  --color-info: #409cff;
   --color-info-strong: var(--rhine);
   --color-info-edge: var(--rhine-edge);
-  --color-info-soft: rgba(76, 143, 224, 0.14);
+  --color-info-soft: rgba(10, 132, 255, 0.18);
   /* Primär: Kölsch-Gold (Hauptaktionen) */
   --color-primary: var(--gold);
   --color-primary-hover: #ecbd5e;
   --color-primary-edge: var(--gold-edge);
   --color-on-primary: #15120a;
   /* Geld */
-  --color-dirty: #b39cf0;
+  --color-dirty: #da8fff;
   --color-dirty-strong: var(--dirty);
   --color-dirty-edge: var(--dirty-edge);
-  --color-dirty-soft: rgba(139, 111, 214, 0.16);
+  --color-dirty-soft: rgba(191, 90, 242, 0.16);
   --color-clean: var(--color-accent);
   --color-lila: var(--lila);
   --color-lila-edge: var(--lila-edge);
@@ -91,13 +92,13 @@
   /* Karte (gedämpfter Look, siehe src/map/README.md) */
   --color-marker-idle: #1c2735;
   --color-marker-border: #3a414c;
-  --color-label-bg: rgba(12, 14, 18, 0.86);
+  --color-label-bg: rgba(28, 28, 30, 0.88);
   /* Marker: eckig, dunkel, feine Kante, helle Schrift */
-  --color-marker-bg: #16191e;
+  --color-marker-bg: #1c1c1e;
   --color-marker-ink: #e7e9ec;
   --color-marker-muted: #7d858f;
-  --color-marker-ring: #3a414c;
-  --color-marker-supplier: #9a7de0;
+  --color-marker-ring: #48484a;
+  --color-marker-supplier: #bf5af2;
   --shadow-marker-soft: 0 2px 8px rgba(0, 0, 0, 0.45);
   /* Linien des Überwachungs-Overlays */
   --color-scan: rgba(108, 180, 255, 0.5);
@@ -107,26 +108,30 @@
   --color-police-red: #ff2f45;
   /* Heat-Flächen der Veedel auf der Karte */
   --map-heat-warm: #e2ae4a;
-  --map-heat-hot: #e5484d;
+  --map-heat-hot: #ff453a;
 
   /* Schrift */
-  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
   --font-display:
-    "Barlow Semi Condensed", "Barlow", "Inter", system-ui, -apple-system, "Segoe UI", "Arial Narrow", sans-serif;
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
   --font-mono:
     ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  /* Stufen nach Apples Textstilen: Caption 2 (11), Footnote (13), Subhead (15), Body (17), Title 2 (22), Large (34) */
   --font-size-xs: 11px;
   --font-size-sm: 13px;
-  --font-size-md: 14px;
-  --font-size-lg: 16px;
+  --font-size-md: 15px;
+  --font-size-lg: 17px;
   --font-size-xl: 22px;
-  --font-size-xxl: 32px;
+  --font-size-xxl: 34px;
   --font-weight-medium: 500;
   --font-weight-bold: 600;
   --font-weight-black: 700;
-  --letter-spacing-caps: 0.08em;
+  --letter-spacing-caps: 0.04em;
 
-  /* Abstände */
+  /* Abstände im 4er-Raster (Apple: Ränder 16, Gruppen 20–24) */
   --space-1: 4px;
   --space-2: 6px;
   --space-3: 8px;
@@ -135,11 +140,12 @@
   --space-6: 24px;
   --space-7: 32px;
 
-  /* Radien: eckig */
-  --radius-xs: 2px;
-  --radius-sm: 3px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
+  /* Radien: weder rund noch eckig (Knöpfe 8 wie bei Claude, Karten und Gruppen 12) */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-round: 999px;
 
   /* Kontur und Schatten: Haarlinie, weicher Schatten, kein Sockel */
@@ -167,12 +173,14 @@
   --dock-width: 0px;
   --sidebar-width: 360px;
   --panel-width: 360px;
-  --phone-width: 392px;
+  /* Handy im Seitenverhältnis des iPhone 16 Pro (393 × 852 pt), so hoch wie der Bildschirm erlaubt */
+  --phone-width: min(430px, calc((100dvh - 24px) * 0.4613));
   --phone-height: 940px;
   --tabbar-height: 0px;
   --mobile-dock-height: 64px;
   --sheet-peek: 58px;
   --touch-target: 36px;
+  --touch-target-phone: 44px;
   --gutter: 12px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -204,13 +212,12 @@
   :root {
     --hud-height: 52px;
     --gutter: 8px;
-    --font-size-md: 15px;
   }
 }
 /* Schmale Desktops: Handy etwas schmaler */
 @media (min-width: 761px) and (max-width: 1100px) {
   :root {
-    --phone-width: 350px;
+    --phone-width: min(360px, calc((100dvh - 24px) * 0.4613));
   }
 }
 
