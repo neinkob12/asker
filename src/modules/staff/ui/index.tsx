@@ -30,9 +30,9 @@ import {
   getStaffMember,
   isSpecialist,
   RUNNER_DAILY_WAGE,
-  RUNNER_HIRE_COST,
   roleName,
   runnerAt,
+  runnerHireCost,
   STATUS_NAMES,
   type StaffMember,
   securityAt,
@@ -200,8 +200,7 @@ function StaffSummary() {
     >
       {staff.length === 0 ? (
         <Empty>
-          Noch keine Leute. Klick auf einen Spot, um einen Läufer anzuheuern ({formatEuro(RUNNER_HIRE_COST)},{' '}
-          {formatEuro(RUNNER_DAILY_WAGE)} pro Tag).
+          Noch keine Leute. Klick auf einen Spot, um dort einen Läufer anzuheuern. Was er kostet, hängt vom Spot ab.
         </Empty>
       ) : (
         <>
@@ -221,6 +220,7 @@ function SpotStaff(props: { spotId: string }) {
   // In Haft oder verletzt: Der Spot ist frei, bis die Person zurückkommt.
   const absent = runner ? undefined : runnerAt(state, props.spotId);
   const guard = securityAt(state, { spotId: props.spotId })[0];
+  const hireCost = runnerHireCost(state, props.spotId);
   const free = (role: 'runner' | 'security') =>
     getStaff(state, { role, status: 'active' }).filter((m) => !m.assignment);
   const assign = (staffId: string) =>
@@ -246,12 +246,13 @@ function SpotStaff(props: { spotId: string }) {
           <div class="spot-staff__row">
             <span>{absent ? 'Bis dahin:' : 'Kein Läufer.'}</span>
             <Button
-              disabled={state.wallet.dirty < RUNNER_HIRE_COST}
+              disabled={state.wallet.dirty < hireCost}
               onClick={() => dispatch({ type: 'staff.hireRunner', payload: { spotId: props.spotId } })}
             >
-              Anheuern ({formatEuro(RUNNER_HIRE_COST)})
+              Anheuern ({formatEuro(hireCost)})
             </Button>
           </div>
+          <Hint>Danach {formatEuro(RUNNER_DAILY_WAGE)} Lohn pro Tag. Der Preis hängt vom Spot ab.</Hint>
         </>
       )}
       {!runner && free('runner').length > 0 && (

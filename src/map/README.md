@@ -31,7 +31,7 @@ Ebenen der Grundkarte stehen in `BASE_LAYERS`. Eigene Flächen unter den 3D-Geb�
   Hauptstraßen, viele beleuchtete Fenster. Tagsüber heller, aber gedämpft.
 - Kamera: 3D schräg (Standard) oder 2D-Draufsicht, pro Gerät gemerkt (`ui.setCameraMode`, `ui.toggleCamera`,
   `UiState.camera`). In 2D ist Drehen und Kippen aus. `ui.flyToKoeln()` hält den Modus, `ui.flyToEuropa()` zeigt
-  die Europa-Ansicht (Lieferungen) immer flach.
+  die Europa-Ansicht (Lieferungen) immer flach; einen Knopf dafür gibt es nicht mehr (hat eher verwirrt).
 - Überwachungs-Overlay: `ui.setOverlay(on)`, `UiState.overlay`, pro Gerät gemerkt.
 
 ## Stimmung und Niederschlag

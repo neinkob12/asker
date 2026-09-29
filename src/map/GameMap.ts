@@ -22,6 +22,7 @@ setWorkerUrl(workerUrl);
 
 const KOELN_PITCH = 55;
 const KOELN_BEARING = -20;
+const MAX_PIXEL_RATIO = 1.5;
 
 type PaintValue = string | number;
 
@@ -55,7 +56,11 @@ export class GameMap implements MapController {
       maxPitch: 75,
       attributionControl: { compact: true },
       fadeDuration: 200,
+      // Retina-Bildschirme zeichnen sonst mit doppelter Auflösung. Das kostet viel Grafikspeicher, und Safari
+      // lädt die Seite neu, wenn er ausgeht (weißer Bildschirm).
+      pixelRatio: Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO),
     });
+    this.map.on('webglcontextlost', () => ui.toast('Die Karte wird neu aufgebaut …', 'info'));
     // Fenstermuster sofort anlegen, damit die Gebäude es beim ersten Zeichnen finden.
     const first = computeLook(0, 0);
     this.updateWindows(first.wallColor, first.windowsLit);

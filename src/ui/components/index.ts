@@ -13,6 +13,7 @@ export {
   type SegmentedControlProps,
 } from './Button';
 export { Dialog, type DialogProps } from './Dialog';
+export { ErrorBoundary, type ErrorBoundaryProps } from './ErrorBoundary';
 export { Icon, type IconProps } from './Icon';
 export { EMOJI_ICONS, ICONS, type IconName, isIconName, resolveIcon } from './icons';
 export {

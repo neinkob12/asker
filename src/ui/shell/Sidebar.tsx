@@ -1,4 +1,4 @@
-import { Tabs } from '../components';
+import { ErrorBoundary, Tabs } from '../components';
 import { useRuntime } from '../hooks';
 import { sidebarTabs } from '../registry';
 import { Slot } from './Slot';
@@ -28,7 +28,11 @@ export function Sidebar() {
           onChange={(id) => (id === active.id && ui.sheetExpanded ? api.setSheetExpanded(false) : api.selectTab(id))}
         />
       </div>
-      <div class="shell-sidebar__content">{Content ? <Content /> : <Slot name={`tab:${active.id}`} />}</div>
+      <div class="shell-sidebar__content">
+        <ErrorBoundary key={active.id} name={active.title}>
+          {Content ? <Content /> : <Slot name={`tab:${active.id}`} />}
+        </ErrorBoundary>
+      </div>
     </aside>
   );
 }

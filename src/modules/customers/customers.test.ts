@@ -157,7 +157,7 @@ describe('customers: Straße', () => {
     sim.advance(100);
     expect(sim.state.modules.customers.waiting).toHaveLength(0);
     expect(getSalesStats(sim.state).customersLost).toBe(1);
-    expect(sim.state.journal[0].text).toBe('Kunde am Uni-Wiese ist abgehauen.');
+    expect(sim.state.journal[0].text).toBe('Kunde am Uni-Wiese ist gegangen: niemand hat rechtzeitig verkauft.');
     expect(eventsOfType(events, 'customer.left')[0].payload).toMatchObject({
       spotId: 'uni',
       productId: 'weed',

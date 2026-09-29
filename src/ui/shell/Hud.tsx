@@ -1,5 +1,5 @@
 import { messages, SPEEDS } from '../../core';
-import { Button, Icon, IconButton, SegmentedControl } from '../components';
+import { Button, ErrorBoundary, Icon, IconButton, SegmentedControl } from '../components';
 import { useRuntime } from '../hooks';
 import { hudItems } from '../registry';
 import { useAudio } from '../useAudio';
@@ -28,14 +28,18 @@ export function Hud() {
         {items
           .filter((item) => item.order < TIME_ORDER)
           .map((item) => (
-            <item.component key={item.id} />
+            <ErrorBoundary key={item.id} name={item.id} silent>
+              <item.component />
+            </ErrorBoundary>
           ))}
       </div>
       <div class="shell-hud__time">
         {items
           .filter((item) => item.order >= TIME_ORDER)
           .map((item) => (
-            <item.component key={item.id} />
+            <ErrorBoundary key={item.id} name={item.id} silent>
+              <item.component />
+            </ErrorBoundary>
           ))}
       </div>
       <div class="shell-hud__controls">

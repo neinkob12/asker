@@ -4,7 +4,13 @@ import type { StaffRole, StaffStats, StaffStatus, StatKey } from './types';
 
 // --- Läufer von der Straße (wie im Prototyp) ---
 
-export const RUNNER_HIRE_COST = 600;
+/**
+ * Grundpreis für einen Läufer von der Straße. Der echte Preis hängt vom Spot ab: Wo viel los ist und die Preise
+ * hoch sind, will der Läufer mehr (Grundpreis × Andrang × Preisniveau, auf 50 € gerundet, siehe runnerHireCost).
+ */
+export const RUNNER_HIRE_COST = 500;
+export const RUNNER_HIRE_COST_MIN = 400;
+export const RUNNER_HIRE_COST_MAX = 900;
 export const RUNNER_DAILY_WAGE = 80;
 /** So lange braucht ein Läufer mit Tempo 50 auf Level 1 für einen Kunden. */
 export const RUNNER_SERVE_TIME = 20;

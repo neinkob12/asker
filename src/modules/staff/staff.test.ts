@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { clock, type Simulation, START_DIRTY_MONEY } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import type { Customer } from '../customers';
-import { LOYALTY, RUNNER_DAILY_WAGE, RUNNER_HIRE_COST } from './config';
+import { LOYALTY, RUNNER_DAILY_WAGE } from './config';
 import {
   assign,
   bonus,
@@ -13,6 +13,7 @@ import {
   getStaffMember,
   getStats,
   runnerAt,
+  runnerHireCost,
   type StaffMember,
   type StaffRole,
   securityAt,
@@ -55,7 +56,7 @@ describe('staff', () => {
   it('Läufer anheuern kostet Geld, ein Läufer pro Spot', () => {
     const sim = quietGame();
     expect(hire(sim, 'neumarkt').ok).toBe(true);
-    expect(sim.state.wallet.dirty).toBe(START_DIRTY_MONEY - RUNNER_HIRE_COST);
+    expect(sim.state.wallet.dirty).toBe(START_DIRTY_MONEY - runnerHireCost(sim.state, 'neumarkt'));
     expect(hire(sim, 'neumarkt')).toEqual({ ok: false, reason: 'Hier arbeitet schon ein Läufer.' });
     const runner = runnerAt(sim.state, 'neumarkt');
     expect(runner).toMatchObject({ role: 'runner', status: 'active', wage: RUNNER_DAILY_WAGE, level: 1 });

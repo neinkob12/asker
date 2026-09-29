@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { ErrorBoundary } from '../components';
 import { RuntimeContext } from '../hooks';
 import { NotificationBanner } from '../phone/Notification';
 import { PhoneFrame } from '../phone/PhoneFrame';
@@ -26,16 +27,30 @@ export function App(props: { runtime: UiRuntime }) {
         <MapView />
         {hasGame && (
           <>
-            <Hud />
-            <MapControls />
-            <Sidebar />
-            <PanelHost />
-            <PhoneFrame />
-            <NotificationBanner />
+            <ErrorBoundary name="HUD">
+              <Hud />
+            </ErrorBoundary>
+            <ErrorBoundary name="Kartensteuerung" silent>
+              <MapControls />
+            </ErrorBoundary>
+            <ErrorBoundary name="Seitenleiste">
+              <Sidebar />
+            </ErrorBoundary>
+            <ErrorBoundary name="Detailansicht">
+              <PanelHost />
+            </ErrorBoundary>
+            <ErrorBoundary name="Handy">
+              <PhoneFrame />
+            </ErrorBoundary>
+            <ErrorBoundary name="Benachrichtigung" silent>
+              <NotificationBanner />
+            </ErrorBoundary>
           </>
         )}
         <PickBanner />
-        <DialogHost />
+        <ErrorBoundary name="Dialog">
+          <DialogHost />
+        </ErrorBoundary>
         <Toasts />
       </div>
     </RuntimeContext.Provider>

@@ -267,6 +267,10 @@
   scrollbar-width: thin;
   scrollbar-color: var(--color-line-strong) transparent;
 }
+/* Kästen nie zusammendrücken: Lieber scrollt die Seitenleiste, als dass Inhalt aus einem Kasten läuft. */
+.shell-sidebar__content > * {
+  flex-shrink: 0;
+}
 /* Lose Texte (ohne Card) bekommen eine Fläche, damit sie über der Karte lesbar bleiben. */
 .shell-sidebar__content > p,
 .shell-sidebar__content > .ui-hint,
@@ -413,7 +417,8 @@
 
 /* Journal */
 .journal {
-  flex: 1;
+  /* Wächst mit den Einträgen; gescrollt wird die ganze Seitenleiste, sonst laufen Einträge aus dem Kasten. */
+  flex: 1 0 auto;
   min-height: 140px;
 }
 .journal__list {

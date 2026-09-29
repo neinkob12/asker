@@ -100,6 +100,7 @@ function CustomersSection() {
   const stats = getSalesStats(state);
   const regulars = getRegulars(state, { status: 'active' });
   const offered = getOrders(state, { status: 'offered' }).length;
+  const waitingNow = state.modules.customers.waiting.length;
   const missed = Object.entries(stats.missedByProduct)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
@@ -113,13 +114,21 @@ function CustomersSection() {
         </Button>
       }
     >
-      <KeyValue label="Umsatz" value={formatEuro(stats.revenue)} />
+      <KeyValue label="Wartet gerade an deinen Spots" value={waitingNow} tone={waitingNow > 0 ? 'warn' : undefined} />
       <KeyValue label="Kunden bedient" value={stats.customersServed} />
+      <KeyValue
+        label="Ohne Ware gegangen"
+        value={stats.customersLost}
+        tone={stats.customersLost > 0 ? 'bad' : undefined}
+      />
+      <Hint>
+        Kunden warten nur eine Weile am Spot. Verkaufst du nicht rechtzeitig (Spot anklicken oder Läufer hinstellen)
+        oder ist das Lager leer, gehen sie wieder. Das kostet etwas Ruf.
+      </Hint>
+      <KeyValue label="Umsatz" value={formatEuro(stats.revenue)} />
       <KeyValue label="Lieferungen / Großhandel" value={`${stats.deliveries} / ${stats.wholesaleDeals}`} />
-      <KeyValue label="Verlorene Kunden" value={stats.customersLost} />
-      <KeyValue label="Zu teuer gefunden" value={stats.tooExpensive} />
-      <KeyValue label="Streckmittel bemerkt" value={stats.cutNoticed} />
-      <KeyValue label="Wartende Kunden" value={state.modules.customers.waiting.length} />
+      <KeyValue label="Fanden es zu teuer" value={stats.tooExpensive} />
+      <KeyValue label="Haben Streckmittel bemerkt" value={stats.cutNoticed} />
       {missed.length > 0 && (
         <Hint>Gefragt, aber nicht auf Lager: {missed.map(([id, n]) => `${productName(id)} (${n}×)`).join(', ')}</Hint>
       )}

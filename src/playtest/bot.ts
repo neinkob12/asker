@@ -14,7 +14,7 @@ import { DEFAULT_WAREHOUSE, getStock } from '../modules/goods';
 import { getLieutenant } from '../modules/hierarchy';
 import { getCandidates } from '../modules/recruiting';
 import { canFoundSpotAt, getSpots, lockedSpots } from '../modules/spots';
-import { dailyWages, getStaff, RUNNER_HIRE_COST, securityAt } from '../modules/staff';
+import { dailyWages, getStaff, runnerHireCost, securityAt } from '../modules/staff';
 import {
   availableCredit,
   availablePackages,
@@ -148,7 +148,11 @@ function grow(sim: Simulation, stats: BotStats): void {
 
   // Bewerber mit Level zuerst, sonst von der Straße.
   const openSpots = free().sort((a, b) => b.demand - a.demand);
-  if (openSpots.length > 0 && stock > 60 && money(state) > RUNNER_HIRE_COST + reserve(state) + 1000) {
+  if (
+    openSpots.length > 0 &&
+    stock > 60 &&
+    money(state) > runnerHireCost(state, openSpots[0].id) + reserve(state) + 1000
+  ) {
     // Günstige Leute zuerst: Ein Läufer soll mehr einbringen, als er kostet.
     const candidate = getCandidates(state)
       .filter(
@@ -168,7 +172,7 @@ function grow(sim: Simulation, stats: BotStats): void {
   // Freischalten, wenn alle Spots besetzt sind und Geld übrig ist.
   if (free().length === 0) {
     const next = lockedSpots(state).sort((a, b) => (a.unlockCost ?? 0) - (b.unlockCost ?? 0))[0];
-    if (next && money(state) > (next.unlockCost ?? 0) + reserve(state) + RUNNER_HIRE_COST + 600) {
+    if (next && money(state) > (next.unlockCost ?? 0) + reserve(state) + runnerHireCost(state, next.id) + 600) {
       run(sim, stats, { type: 'spots.unlock', payload: { spotId: next.id } });
     }
   }

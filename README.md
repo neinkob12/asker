@@ -27,7 +27,7 @@ Mit `npm run dev` ist das Spiel auch für Freunde im selben WLAN erreichbar (die
 - **Zeit:** 1 echte Sekunde sind 5 Spielminuten. Oben kannst du pausieren (auch mit der Leertaste) oder auf 2x und 4x stellen.
   Die Zeit läuft nur, solange das Spiel offen ist.
 - **Hafen Rotterdam** (Tab "Geschäft"): Paket kaufen (100 g, 500 g, 1 kg). Die Lieferung ist ca. 2,5 echte Minuten
-  unterwegs, der Transporter fährt auf der Karte mit (Knopf "Europa").
+  unterwegs, der Transporter fährt auf der Karte mit.
 - **Spots:** Die Zahl im Kreis zeigt wartende Kunden. Gelb heißt jemand wartet, rot pulsierend heißt gleich ist er weg.
   Klick drauf zum Verkaufen.
 - **Läufer:** Kosten einmalig 600 € und 80 € Lohn pro Spieltag (um Mitternacht). Sie bedienen ihren Spot automatisch,

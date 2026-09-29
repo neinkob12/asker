@@ -1,5 +1,5 @@
 import type { ComponentType } from 'preact';
-import { Button, Icon, IconButton } from '../components';
+import { Button, ErrorBoundary, Icon, IconButton } from '../components';
 import { useRuntime } from '../hooks';
 import { dialogs, panels } from '../registry';
 
@@ -13,7 +13,7 @@ export function PanelHost() {
   if (!definition) return null;
   const Component = definition.component as ComponentType<unknown>;
   const props = ui.panel.props as never;
-  const title = definition.title(props, state);
+  const title = safeTitle(() => definition.title(props, state));
   return (
     <section class="shell-panel" aria-label={title}>
       <header class="shell-panel__head">
@@ -26,10 +26,21 @@ export function PanelHost() {
         <IconButton icon="close" label="Schließen" onClick={api.closePanel} />
       </header>
       <div class="shell-panel__body">
-        <Component key={`${ui.panel.id}:${JSON.stringify(ui.panel.props)}`} {...(props as object)} />
+        <ErrorBoundary key={`${ui.panel.id}:${JSON.stringify(ui.panel.props)}`} name={title}>
+          <Component {...(props as object)} />
+        </ErrorBoundary>
       </div>
     </section>
   );
+}
+
+function safeTitle(fn: () => string): string {
+  try {
+    return fn();
+  } catch (error) {
+    console.error('Panel-Titel', error);
+    return 'Details';
+  }
 }
 
 /** Zeigt den offenen Dialog. Die Dialog-Komponente rendert selbst <Dialog> aus den Bausteinen. */
@@ -39,7 +50,11 @@ export function DialogHost() {
   const definition = dialogs.get(ui.dialog.id);
   if (!definition) return null;
   const Component = definition.component as ComponentType<unknown>;
-  return <Component {...(ui.dialog.props as object)} />;
+  return (
+    <ErrorBoundary key={ui.dialog.id} name={ui.dialog.id}>
+      <Component {...(ui.dialog.props as object)} />
+    </ErrorBoundary>
+  );
 }
 
 const TOAST_ICONS = { info: 'info', good: 'check', bad: 'alert' } as const;

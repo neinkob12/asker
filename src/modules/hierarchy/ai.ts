@@ -18,7 +18,7 @@ import {
   getStaffMember,
   isEmployed,
   isLyingLow,
-  RUNNER_HIRE_COST,
+  runnerHireCost,
   type StaffMember,
   securityAt,
   serveTime,
@@ -209,7 +209,7 @@ function hireFor(turn: Turn, spot: Spot): void {
     if (hired) note(turn, `${candidate.name} eingestellt und an den ${spot.name} gestellt.`);
     return;
   }
-  if (budget < RUNNER_HIRE_COST) return;
+  if (budget < runnerHireCost(ctx.state, spot.id)) return;
   if (run({ type: 'staff.hireRunner', payload: { spotId: spot.id } })) {
     note(turn, `Neuen Läufer von der Straße für den ${spot.name} angeheuert.`);
   }

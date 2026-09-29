@@ -1,7 +1,7 @@
 import { IconButton } from '../components';
 import { useRuntime } from '../hooks';
 
-/** Kartensteuerung am Rand: Zoom, Norden, Kamera 3D/2D, Überwachungs-Overlay, Köln/Europa. */
+/** Kartensteuerung am Rand: Zoom, Norden, Kamera 3D/2D, Überwachungs-Overlay, zurück nach Köln. */
 export function MapControls() {
   const { api, ui } = useRuntime();
   const is3d = ui.camera === '3d';
@@ -31,8 +31,7 @@ export function MapControls() {
         />
       </div>
       <div class="shell-mapctl__group">
-        <IconButton icon="pin" label="Köln" onClick={api.flyToKoeln} />
-        <IconButton icon="globe" label="Europa (Lieferungen)" onClick={api.flyToEuropa} />
+        <IconButton icon="pin" label="Zurück nach Köln" onClick={api.flyToKoeln} />
       </div>
     </nav>
   );

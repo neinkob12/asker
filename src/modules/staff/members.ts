@@ -14,6 +14,9 @@ import {
   LOYALTY,
   MIN_SERVE_TIME,
   ROLE_INFO,
+  RUNNER_HIRE_COST,
+  RUNNER_HIRE_COST_MAX,
+  RUNNER_HIRE_COST_MIN,
   RUNNER_SERVE_TIME,
   SPECIALIST_BONUS,
   STAT_NAMES,
@@ -458,4 +461,12 @@ export function setWage(ctx: Ctx, staffId: string, wage: number): boolean {
   addLoyalty(ctx, staffId, delta);
   addCareer(ctx, staffId, `Lohn ${next > old ? 'erhöht' : 'gekürzt'}: ${next} € pro Tag.`);
   return true;
+}
+
+/** Was ein Läufer von der Straße an diesem Spot kostet (unbekannter Spot: Grundpreis). */
+export function runnerHireCost(state: GameState, spotId: string): number {
+  const spot = getSpot(state, spotId);
+  if (!spot) return RUNNER_HIRE_COST;
+  const raw = RUNNER_HIRE_COST * spot.demand * spot.priceMultiplier;
+  return Math.min(RUNNER_HIRE_COST_MAX, Math.max(RUNNER_HIRE_COST_MIN, Math.round(raw / 50) * 50));
 }

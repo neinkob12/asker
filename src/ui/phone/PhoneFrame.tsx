@@ -5,7 +5,7 @@
 import type { ComponentType } from 'preact';
 import { clock } from '../../core';
 import { dayPhase } from '../../map/daylight';
-import { Badge, Icon } from '../components';
+import { Badge, ErrorBoundary, Icon } from '../components';
 import { useRuntime } from '../hooks';
 import { type PhoneApp, phoneApps } from '../registry';
 import { Slot } from '../shell/Slot';
@@ -77,17 +77,19 @@ export function PhoneFrame() {
       <div class={`phone__device ${ui.buzz > 0 ? `is-buzzing-${ui.buzz % 2}` : ''}`}>
         <StatusBar time={state.time} />
         <div class="phone__screen">
-          {app && Component ? (
-            app.chrome === 'none' ? (
-              <Component />
-            ) : (
-              <PhoneScreen title={app.name}>
+          <ErrorBoundary key={ui.phone.app ?? 'home'} name={app?.name ?? 'Startbildschirm'}>
+            {app && Component ? (
+              app.chrome === 'none' ? (
                 <Component />
-              </PhoneScreen>
-            )
-          ) : (
-            <HomeScreen />
-          )}
+              ) : (
+                <PhoneScreen title={app.name}>
+                  <Component />
+                </PhoneScreen>
+              )
+            ) : (
+              <HomeScreen />
+            )}
+          </ErrorBoundary>
         </div>
         <nav class="phone__nav">
           <button

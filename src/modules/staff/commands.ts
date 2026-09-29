@@ -7,7 +7,6 @@ import {
   LOYALTY,
   MAX_SECURITY_PER_WAREHOUSE,
   RUNNER_DAILY_WAGE,
-  RUNNER_HIRE_COST,
   WAGE_MAX_FACTOR,
   WAGE_MIN_FACTOR,
   XP_PER_BAIL,
@@ -26,6 +25,7 @@ import {
   isEmployed,
   removeMember,
   roleName,
+  runnerHireCost,
   securityAt,
   setStatus,
   setWage,
@@ -43,8 +43,9 @@ export function hireRunner(ctx: Ctx, spotId: string): CommandResult {
   if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
   if (!isSpotActive(ctx.state, spotId)) return { ok: false, reason: 'Der Spot ist noch nicht freigeschaltet.' };
   if (activeRunnerAt(ctx.state, spotId)) return { ok: false, reason: 'Hier arbeitet schon ein Läufer.' };
-  if (!wallet.pay(ctx, RUNNER_HIRE_COST, 'dirty', 'Läufer angeheuert'))
-    return { ok: false, reason: 'Nicht genug Geld.' };
+  const cost = runnerHireCost(ctx.state, spotId);
+  if (!wallet.pay(ctx, cost, 'dirty', 'Läufer angeheuert'))
+    return { ok: false, reason: `Nicht genug Geld (${formatEuro(cost)}).` };
   const profile = generateProfile(ctx, 'runner');
   // Von der Straße: Lohn wie im Prototyp, man weiß fast nichts über die Person.
   profile.wage = RUNNER_DAILY_WAGE;

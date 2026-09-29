@@ -8,6 +8,19 @@ export const MAX_CUSTOMERS_PER_SPOT = 4;
 /** Mittlerer Abstand zwischen zwei Kunden an einem Spot mit Andrang 1 (bei Richtpreis). */
 export const BASE_SPAWN_INTERVAL = 85;
 
+/**
+ * Anlaufphase: Am Anfang kennt dich noch keiner. Die Nachfrage startet bei diesem Anteil und steigt über
+ * WARMUP_MINUTES gleichmäßig auf 100 % (1 echte Sekunde sind 5 Spielminuten, 2 Spieltage also knapp 10 Minuten).
+ */
+export const WARMUP_START_DEMAND = 0.3;
+export const WARMUP_MINUTES = 2 * 24 * 60;
+
+export function warmupDemandFactor(minutesPlayed: number): number {
+  if (minutesPlayed >= WARMUP_MINUTES) return 1;
+  const t = Math.max(0, minutesPlayed) / WARMUP_MINUTES;
+  return WARMUP_START_DEMAND + (1 - WARMUP_START_DEMAND) * t;
+}
+
 /** Nachfrage je nach Uhrzeit: abends und nachts ist mehr los. */
 export function hourDemandMultiplier(hour: number): number {
   if (hour >= 18 || hour < 2) return 1.6;

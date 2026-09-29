@@ -1,6 +1,6 @@
 // Straßenverkauf: Interessenten an den Spots, Verkauf, Zufriedenheit und Stammkunden.
 
-import { type CommandResult, type Ctx, clock, journal, MINUTES_PER_DAY, wallet } from '../../core';
+import { type CommandResult, type Ctx, clock, journal, MINUTES_PER_DAY, START_TIME, wallet } from '../../core';
 import { allProducts, getProduct, getStock, take } from '../goods';
 import { getSpotPrice, priceRatio, spotReferencePrice } from '../market';
 import { changeReputation, reputationDemandFactor } from '../reputation';
@@ -25,6 +25,7 @@ import {
   REP_CUT_NOTICED,
   REP_PER_SATISFACTION,
   WEEKDAY_DEMAND,
+  warmupDemandFactor,
 } from './config';
 import {
   acceptsPrice,
@@ -66,6 +67,7 @@ function spawnInterval(ctx: Ctx, spot: Spot, time: number): number {
     WEEKDAY_DEMAND[clock.weekday(time)] *
     weatherDemandFactor(ctx.state) *
     reputationDemandFactor(ctx.state) *
+    warmupDemandFactor(time - START_TIME) *
     mix *
     MAX_CHEAP_BOOST;
   const mean = BASE_SPAWN_INTERVAL / Math.max(0.01, rate);
@@ -344,6 +346,13 @@ function visitRegulars(ctx: Ctx): void {
 
 /** So lange nach einem Eintrag "Kunde ist abgehauen" kommt für denselben Spot kein neuer. */
 const LOSS_JOURNAL_INTERVAL = 60;
+const LOSS_JOURNAL_MARK = 'ist gegangen:';
+
+/** Warum ein Kunde ohne Ware gegangen ist, damit man im Journal versteht, was zu tun ist. */
+function lossReason(ctx: Ctx, c: { productId: string; amount: number }): string {
+  if (getStock(ctx.state, { productId: c.productId }) <= 0) return 'Lager leer, nachbestellen';
+  return 'niemand hat rechtzeitig verkauft';
+}
 
 function recentlyReportedLoss(ctx: Ctx, spotId: string): boolean {
   return journal
@@ -352,7 +361,7 @@ function recentlyReportedLoss(ctx: Ctx, spotId: string): boolean {
       (e) =>
         e.source === 'customers' &&
         e.ref?.spotId === spotId &&
-        e.text.endsWith('ist abgehauen.') &&
+        e.text.includes(LOSS_JOURNAL_MARK) &&
         ctx.now - e.time < LOSS_JOURNAL_INTERVAL,
     );
 }
@@ -374,7 +383,9 @@ function expireCustomers(ctx: Ctx): void {
       if (regular.satisfaction < REGULAR_LOST_BELOW) loseRegular(ctx, regular, 'zu lange gewartet');
     } else if (!recentlyReportedLoss(ctx, c.spotId)) {
       // Höchstens ein Eintrag pro Spot und Stunde, sonst verdrängt das alles andere im Journal.
-      journal.add(ctx, `Kunde am ${spot?.name ?? c.spotId} ist abgehauen.`, 'bad', { spotId: c.spotId });
+      journal.add(ctx, `Kunde am ${spot?.name ?? c.spotId} ${LOSS_JOURNAL_MARK} ${lossReason(ctx, c)}.`, 'bad', {
+        spotId: c.spotId,
+      });
     }
     changeReputation(ctx, REP_CUSTOMER_LOST, 'Kunden warten lassen');
     ctx.emit('customer.left', {

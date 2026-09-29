@@ -54,11 +54,13 @@ export class GameLoop {
     const scheduler = this.options.scheduler;
     if (!scheduler || this.handle !== null) return;
     const frame = (now: number) => {
+      // Das nächste Bild zuerst anfordern: Wirft ein Schritt oder die Oberfläche einen Fehler, läuft das Spiel
+      // trotzdem weiter, statt still stehen zu bleiben.
+      this.handle = scheduler.request(frame);
       const dt = this.last === null ? 0 : (now - this.last) / 1000;
       this.last = now;
       this.advanceReal(dt);
       this.options.frame?.(Math.min(MAX_FRAME_SECONDS, dt));
-      this.handle = scheduler.request(frame);
     };
     this.handle = scheduler.request(frame);
   }
