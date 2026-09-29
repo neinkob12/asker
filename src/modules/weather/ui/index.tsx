@@ -3,17 +3,7 @@
 
 import { clock, formatPercent } from '../../../core';
 import { type MapMood, mapEffects, registerMapLayer, setMapMood, setPrecipitation } from '../../../map';
-import {
-  audio,
-  Card,
-  Icon,
-  KeyValue,
-  registerHudItem,
-  registerPhoneApp,
-  registerSlot,
-  Stat,
-  useGame,
-} from '../../../ui';
+import { audio, Card, Icon, KeyValue, registerHudItem, registerPhoneApp, registerSlot, useGame } from '../../../ui';
 import {
   getForecast,
   getWeather,
@@ -46,13 +36,16 @@ function WeatherHud() {
   const { state } = useGame();
   const w = getWeather(state);
   return (
-    <Stat
-      icon={iconFor(w.kind, state.time)}
-      label={WEATHER_NAMES[w.kind]}
-      value={temp(w.temperature)}
-      tone={w.kind === 'storm' ? 'warn' : w.kind === 'heat' ? 'warn' : undefined}
+    <div
+      class={`hud-weather ${w.kind === 'storm' || w.kind === 'heat' ? 'is-warn' : ''}`}
       title={`Wetter: ${WEATHER_NAMES[w.kind]}, ${temp(w.temperature)}C`}
-    />
+    >
+      <Icon name={iconFor(w.kind, state.time)} class="hud-weather__icon" />
+      <span class="hud-weather__text">
+        <span class="hud-weather__kind">{WEATHER_NAMES[w.kind]}</span>
+        <span class="hud-weather__temp">{temp(w.temperature)}</span>
+      </span>
+    </div>
   );
 }
 
@@ -131,7 +124,7 @@ function tone(factor: number): 'accent' | 'bad' | undefined {
 }
 
 // Ordnung ab 90: steht fest neben der Uhr, nicht in der wischbaren Leiste.
-registerHudItem({ id: 'weather.now', order: 95, component: WeatherHud });
+registerHudItem({ id: 'weather.now', order: 95, placement: 'time', component: WeatherHud });
 registerSlot('phone.home', { id: 'weather.widget', order: 10, component: WeatherWidget });
 registerPhoneApp({
   id: 'weather.app',

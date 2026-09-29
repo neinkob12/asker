@@ -3,7 +3,7 @@
 // Anmelden mit derselben ID ersetzt den alten Eintrag (wichtig für Hot Reload).
 
 import type { ComponentType } from 'preact';
-import type { EventType, GameEvents, GameState } from '../core';
+import type { EventType, GameEvents, GameState, LngLat } from '../core';
 import type { UiApi } from './runtime';
 
 /** Panels (Detailansichten, z.B. ein Spot): ID → Props. Module erweitern das per Declaration Merging. */
@@ -35,6 +35,14 @@ export interface HudItem {
   /** Kleiner = weiter links. Kern: Geld 10, Uhr 90. Ab 90 steht der Eintrag fest neben dem Spieltempo. */
   order: number;
   component: ComponentType;
+  /**
+   * Wo der Eintrag steht: 'main' dauerhaft oben (Geld, Heat), 'time' in der Uhr-Pille (Uhr, Wetter),
+   * 'alert' als auffällige Warnung oben, 'more' im Popover hinter dem Mehr-Knopf (Lager, Ruf, Köln …).
+   * Standard: ab Ordnung 90 'time', sonst 'more'.
+   */
+  placement?: 'main' | 'more' | 'time' | 'alert';
+  /** Icon für den Mehr-Knopf (zeigt die Icons der Einträge im Popover). */
+  icon?: string;
 }
 
 export interface SidebarTab {
@@ -47,6 +55,13 @@ export interface SidebarTab {
   badge?: (state: GameState) => number;
   /** Icon vor dem Titel (Name aus dem Icon-Set, siehe src/ui/components/icons.ts). */
   icon?: string;
+  /**
+   * 'stack' (Standard): Abschnitte untereinander. 'rows': Jede Karte (Card) des Slots ist eine tippbare Zeile
+   * mit Icon, Titel, Kennzahl (summary) und Status; ein Tipp öffnet den Abschnitt ganz (z.B. "Geschäft").
+   */
+  layout?: 'stack' | 'rows';
+  /** Tastenkürzel (ein Buchstabe) am Desktop. Standard: erster freier Buchstabe des Titels. */
+  shortcut?: string;
 }
 
 export interface SlotContribution<N extends SlotName = SlotName> {
@@ -88,6 +103,61 @@ export interface PhoneApp {
   chrome?: 'default' | 'none';
 }
 
+/** Empfehlung für die Karte "Nächster Schritt" (und den sanften Hinweis beim Einstieg). */
+export interface Advice {
+  /** Eindeutig, z.B. 'staff.hireFirstRunner'. */
+  id: string;
+  /** Höher = wichtiger. Richtwerte: 90 dringend (Kunden warten), 70 Aufbau, 40 Ausbau, 10 Tipp. */
+  priority: number;
+  icon: string;
+  title: string;
+  text?: string;
+  /** Kosten in Schwarzgeld. Reicht das Geld nicht, zeigt die Karte, was fehlt. */
+  cost?: number;
+  /** Was sonst noch fehlt (ersetzt die automatische Geld-Meldung). */
+  missing?: string;
+  /** Beschriftung des Knopfs, Standard "Los". */
+  actionLabel?: string;
+  action?: (ui: UiApi) => void;
+  /** CSS-Selektor eines Elements, das sanft pulsiert (z.B. ein Spot-Marker). */
+  highlight?: string;
+  /** Ort auf der Karte (für "Hinzoomen"). */
+  target?: LngLat;
+}
+
+export interface Advisor {
+  id: string;
+  advise: (state: GameState) => Advice | Advice[] | null;
+}
+
+/** Treffer der Suche (⌘K / Strg+K). */
+export interface SearchResult {
+  id: string;
+  title: string;
+  subtitle?: string;
+  icon?: string;
+  /** Zusätzliche Suchbegriffe. */
+  keywords?: string;
+  run: (ui: UiApi) => void;
+}
+
+export interface SearchProvider {
+  id: string;
+  /** Überschrift der Gruppe, z.B. "Spots". */
+  label: string;
+  order: number;
+  items: (state: GameState) => SearchResult[];
+}
+
+/** Kennzahl für den Ergebnis-Bildschirm (Game Over, Sieg) und die Übersicht. */
+export interface GameStat {
+  id: string;
+  order: number;
+  icon: string;
+  label: string;
+  value: (state: GameState) => string;
+}
+
 export type EventReaction<K extends EventType> = (payload: GameEvents[K], ui: UiApi, state: GameState) => void;
 
 class Registry<T extends { id: string; order?: number }> {
@@ -119,6 +189,9 @@ export const sidebarTabs = new Registry<SidebarTab>();
 export const panels = new Registry<PanelDefinition>();
 export const dialogs = new Registry<DialogDefinition>();
 export const phoneApps = new Registry<PhoneApp>();
+export const advisors = new Registry<Advisor>();
+export const searchProviders = new Registry<SearchProvider>();
+export const gameStats = new Registry<GameStat>();
 const slots = new Map<string, Registry<SlotContribution>>();
 const reactions = new Map<string, Map<string, EventReaction<EventType>>>();
 
@@ -154,6 +227,24 @@ export function registerDialog<K extends DialogId>(definition: DialogDefinition<
 
 export function registerPhoneApp(app: PhoneApp): void {
   phoneApps.register(app);
+}
+
+/**
+ * Empfehlungen für "Nächster Schritt" anmelden. advise(state) liefert null, eine oder mehrere Empfehlungen;
+ * die Shell zeigt die wichtigste. Nur lesen, nichts ändern.
+ */
+export function registerAdvisor(advisor: Advisor): void {
+  advisors.register(advisor);
+}
+
+/** Einträge für die Suche (⌘K / Strg+K) anmelden, z.B. Spots, Veedel, Personen. */
+export function registerSearch(provider: SearchProvider): void {
+  searchProviders.register(provider);
+}
+
+/** Kennzahl für den Ergebnis-Bildschirm anmelden (z.B. Umsatz, Veedel, Leute). */
+export function registerGameStat(stat: GameStat): void {
+  gameStats.register(stat);
 }
 
 /**

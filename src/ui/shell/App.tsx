@@ -6,21 +6,26 @@ import { PhoneFrame } from '../phone/PhoneFrame';
 import type { UiRuntime } from '../runtime';
 import { DialogHost, PanelHost, PickBanner, Toasts } from './Hosts';
 import { Hud } from './Hud';
+import { useIsMobile } from './layout';
 import { MapControls } from './MapControls';
 import { MapView } from './MapView';
-import { Sidebar } from './Sidebar';
+import { Navigation } from './Navigation';
+import { CoachHighlight } from './NextStep';
+import { Palette } from './Palette';
 
-/** Oberste Komponente: Karte, HUD, Kartensteuerung, Seitenleiste, Panel, Handy, Dialoge und Toasts. */
+/** Oberste Komponente: Karte, HUD, Kartensteuerung, Navigation, Panel, Handy, Suche, Dialoge und Toasts. */
 export function App(props: { runtime: UiRuntime }) {
   const [, setVersion] = useState(0);
   useEffect(() => props.runtime.subscribe(() => setVersion((v) => v + 1)), [props.runtime]);
+  const mobile = useIsMobile();
   const runtime = props.runtime;
   const hasGame = runtime.state !== null;
   const ui = runtime.ui;
-  const classes = ['shell'];
+  const classes = ['shell', mobile ? 'is-mobile' : 'is-desktop', `sheet-${ui.sheet}`];
   if (ui.phone.open) classes.push('has-phone');
   if (ui.panel) classes.push('has-panel');
-  if (ui.sheetExpanded) classes.push('has-sheet');
+  if (ui.sheetExpanded) classes.push('has-inspector');
+  if (ui.notification) classes.push('has-notice');
   return (
     <RuntimeContext.Provider value={runtime}>
       <div class={classes.join(' ')}>
@@ -33,8 +38,8 @@ export function App(props: { runtime: UiRuntime }) {
             <ErrorBoundary name="Kartensteuerung" silent>
               <MapControls />
             </ErrorBoundary>
-            <ErrorBoundary name="Seitenleiste">
-              <Sidebar />
+            <ErrorBoundary name="Navigation">
+              <Navigation />
             </ErrorBoundary>
             <ErrorBoundary name="Detailansicht">
               <PanelHost />
@@ -44,6 +49,12 @@ export function App(props: { runtime: UiRuntime }) {
             </ErrorBoundary>
             <ErrorBoundary name="Benachrichtigung" silent>
               <NotificationBanner />
+            </ErrorBoundary>
+            <ErrorBoundary name="Hinweis" silent>
+              <CoachHighlight />
+            </ErrorBoundary>
+            <ErrorBoundary name="Suche" silent>
+              <Palette />
             </ErrorBoundary>
           </>
         )}

@@ -12,13 +12,17 @@ import {
   List,
   ListItem,
   onGameEvent,
+  registerAdvisor,
+  registerGameStat,
   registerPanel,
+  registerSearch,
   registerSlot,
   registerTab,
   Select,
   useGame,
   useUi,
 } from '../../../ui';
+import { getSpots } from '../../spots';
 import { veedelName } from '../../veedel';
 import {
   activeRunnerAt,
@@ -30,6 +34,7 @@ import {
   getStaffMember,
   isSpecialist,
   RUNNER_DAILY_WAGE,
+  RUNNER_HIRE_COST,
   roleName,
   runnerAt,
   runnerHireCost,
@@ -192,6 +197,10 @@ function StaffSummary() {
   return (
     <Card
       title="Personal"
+      icon="users"
+      color="yellow"
+      status={staff.length === 0 ? 'idle' : active < staff.length ? 'warn' : 'good'}
+      summary={staff.length === 0 ? 'niemand' : `${active} aktiv`}
       actions={
         <Button small onClick={() => ui.selectTab('staff')}>
           Öffnen
@@ -312,4 +321,49 @@ onGameEvent('staff.statusChanged', 'staff.status', (payload, ui, state) => {
 onGameEvent('staff.betrayed', 'staff.betrayed', (payload, ui, state) => {
   const m = getStaffMember(state, payload.staffId);
   if (m) ui.toast(`Ärger mit ${m.name}. Schau ins Journal.`, 'bad');
+});
+
+// Empfehlungen, Suche und Statistik
+registerAdvisor({
+  id: 'staff.hireRunner',
+  advise: (state) => {
+    const spot = getSpots(state)[0];
+    if (!spot || getStaff(state).length > 0) return null;
+    return {
+      id: 'staff.firstRunner',
+      priority: 60,
+      icon: 'runner',
+      title: 'Läufer anheuern',
+      text: 'Ein Läufer verkauft für dich an einem Spot, dann musst du nicht mehr selbst hin.',
+      cost: RUNNER_HIRE_COST,
+      actionLabel: 'Zum Spot',
+      highlight: '.spot-marker',
+      action: (ui) => {
+        ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
+        ui.openPanel('spots.spot', { spotId: spot.id });
+      },
+    };
+  },
+});
+
+registerSearch({
+  id: 'staff.search',
+  label: 'Leute',
+  order: 30,
+  items: (state) =>
+    getStaff(state).map((m) => ({
+      id: m.id,
+      title: m.name,
+      subtitle: `${roleName(m.role)} · Level ${m.level}`,
+      icon: 'user',
+      run: (ui) => ui.openPanel('staff.profile', { staffId: m.id }),
+    })),
+});
+
+registerGameStat({
+  id: 'staff.count',
+  order: 40,
+  icon: 'users',
+  label: 'Leute im Team',
+  value: (state) => String(getStaff(state).length),
 });

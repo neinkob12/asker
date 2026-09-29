@@ -3,7 +3,11 @@ import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { Badge } from './Layout';
 
-export type ButtonVariant = 'default' | 'primary' | 'danger' | 'subtle' | 'link';
+/**
+ * default: weißer Sticker, primary: Dom-Rot (Hauptaktion), success: Geld-Grün (kaufen, verdienen),
+ * danger: Rot mit Warnung, subtle: flach ohne Sockel, link: wie ein Link.
+ */
+export type ButtonVariant = 'default' | 'primary' | 'success' | 'danger' | 'subtle' | 'link';
 
 export interface ButtonProps {
   children?: ComponentChildren;
@@ -15,6 +19,8 @@ export interface ButtonProps {
   /** Volle Breite. */
   wide?: boolean;
   small?: boolean;
+  /** Großer Knopf (z.B. Antworten im Chat, Entscheidungen). */
+  big?: boolean;
   title?: string;
   type?: 'button' | 'submit';
   class?: string;
@@ -30,6 +36,7 @@ export function Button(props: ButtonProps) {
   if (props.active) classes.push('is-active');
   if (props.wide) classes.push('ui-button--wide');
   if (props.small) classes.push('ui-button--small');
+  if (props.big) classes.push('ui-button--big');
   if (props.icon && props.children === undefined) classes.push('ui-button--icon');
   if (props.class) classes.push(props.class);
   return (
@@ -43,7 +50,11 @@ export function Button(props: ButtonProps) {
       aria-pressed={props.active === undefined ? undefined : props.active}
     >
       {props.icon && <Icon name={props.icon} class="ui-button__icon" />}
-      {props.children}
+      {props.children !== undefined && props.children !== null && props.children !== false && props.icon ? (
+        <span class="ui-button__label">{props.children}</span>
+      ) : (
+        props.children
+      )}
       {props.badge ? <Badge count={props.badge} /> : null}
     </button>
   );

@@ -1,7 +1,7 @@
 // Oberfläche des Rufs: Anzeige im HUD und ein Abschnitt mit den letzten Gründen im Tab "Geschäft".
 
 import { formatNumber } from '../../../core';
-import { Card, Empty, ProgressBar, registerHudItem, registerSlot, Stat, useGame } from '../../../ui';
+import { Card, Empty, HudPill, ProgressBar, registerHudItem, registerSlot, useGame } from '../../../ui';
 import { getReputation, recentReputationChanges, reputationLabel } from '../index';
 import './reputation.css';
 
@@ -9,7 +9,14 @@ function ReputationHud() {
   const { state } = useGame();
   const value = getReputation(state);
   return (
-    <Stat label="Ruf" value={Math.round(value)} title={`Ruf ${Math.round(value)} von 100: ${reputationLabel(value)}`} />
+    <HudPill
+      icon="star"
+      color="yellow"
+      label="Ruf"
+      value={`${Math.round(value)} · ${reputationLabel(value)}`}
+      tone={value < 25 ? 'bad' : value < 45 ? 'warn' : undefined}
+      title={`Ruf ${Math.round(value)} von 100: ${reputationLabel(value)}`}
+    />
   );
 }
 
@@ -18,7 +25,13 @@ function ReputationSection() {
   const value = getReputation(state);
   const recent = recentReputationChanges(state);
   return (
-    <Card title={`Ruf: ${reputationLabel(value)} (${Math.round(value)})`}>
+    <Card
+      title={`Ruf: ${reputationLabel(value)}`}
+      icon="star"
+      color="yellow"
+      status={value < 25 ? 'bad' : value < 45 ? 'warn' : 'good'}
+      summary={Math.round(value)}
+    >
       <ProgressBar value={value / 100} tone={value < 25 ? 'bad' : value < 45 ? 'warn' : 'accent'} label="Ruf" />
       {recent.length === 0 ? (
         <Empty>Noch redet keiner über dich.</Empty>
@@ -39,5 +52,5 @@ function ReputationSection() {
   );
 }
 
-registerHudItem({ id: 'reputation.value', order: 40, component: ReputationHud });
+registerHudItem({ id: 'reputation.value', order: 40, placement: 'more', icon: 'star', component: ReputationHud });
 registerSlot('tab:business', { id: 'reputation.summary', order: 35, component: ReputationSection });

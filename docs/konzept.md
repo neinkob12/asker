@@ -105,7 +105,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
   - Das Überwachungs-Overlay (Scanlines, Koordinaten) gibt es noch als Schalter, standardmäßig aus.
 - **Kamera:** 3D schräg als Standard, per Knopf auf 2D-Draufsicht umschaltbar.
 - **Auf der Karte sichtbar:** 3D-Mini-Fahrzeuge (später auf echten Straßen), Schiffe auf dem Rhein, pulsierende Hotspots wo etwas los ist (keine Figuren), Polizeistreifen, Effekte (Geld-Popups, Blaulicht, Heat-Färbung der Veedel).
-- **Bedienoberfläche:** Spiel-Handy für Chats, Bestellungen und Kontakte. Übrige Menüs clean und dunkel.
+- **Bedienoberfläche:** "Kölsch-Sticker": hell, clean und App-artig, dazu überzeichnet und comichaft (weiße Karten, dicke Konturen, harte Sockel-Schatten, runde Schrift, viele Icons, federnde Animationen). Sie schwebt über der pastelligen Candy-Karte. Spiel-Handy für Chats, Bestellungen und Kontakte. Desktop: Icon-Dock links mit Inspector, Handy: Bottom-Sheet mit Tab-Leiste. Desktop und Handy sind gleichwertig.
 - **Grafiken:** KI-generierte Illustrationen (z.B. Porträts) plus einfache Icons.
 - **Sound:** Musik und Soundeffekte.
 - **Sprache:** nur Deutsch.

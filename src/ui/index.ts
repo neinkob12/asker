@@ -14,28 +14,47 @@ export * from './components';
 export { useGame, useSession, useUi } from './hooks';
 export { PhoneScreen, type PhoneScreenProps } from './phone/PhoneScreen';
 export {
+  type Advice,
+  type Advisor,
   type DialogDefinition,
   type DialogId,
   type DialogRegistry,
   type EventReaction,
+  type GameStat,
   type HudItem,
   onGameEvent,
   type PanelDefinition,
   type PanelId,
   type PanelRegistry,
   type PhoneApp,
+  registerAdvisor,
   registerDialog,
+  registerGameStat,
   registerHudItem,
   registerPanel,
   registerPhoneApp,
+  registerSearch,
   registerSlot,
   registerTab,
+  type SearchProvider,
+  type SearchResult,
   type SidebarTab,
   type SlotContribution,
   type SlotName,
   type SlotProps,
   type SlotRegistry,
 } from './registry';
-export type { CameraMode, MapController, PhoneNotification, Toast, ToastKind, UiApi, UiState } from './runtime';
+export type {
+  Alert,
+  CameraMode,
+  MapController,
+  PhoneNotification,
+  SheetSnap,
+  Toast,
+  ToastKind,
+  ToastOptions,
+  UiApi,
+  UiState,
+} from './runtime';
 export { Slot } from './shell/Slot';
 export { type SoundOnEventOptions, soundOnEvent } from './sound';

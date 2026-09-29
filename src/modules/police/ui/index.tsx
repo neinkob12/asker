@@ -6,12 +6,13 @@ import {
   Button,
   Card,
   Hint,
+  HudPill,
   KeyValue,
   onGameEvent,
   ProgressBar,
   registerHudItem,
   registerSlot,
-  Stat,
+  SegmentMeter,
   soundOnEvent,
   useGame,
 } from '../../../ui';
@@ -44,15 +45,17 @@ function HeatHud() {
     ? `Heat in ${veedelName(hottest.veedelId)} (heißestes Veedel, in dem du aktiv bist)`
     : 'Du bist gerade in keinem Veedel aktiv.';
   return (
-    <Stat
+    <HudPill
+      class="hud-heat"
+      icon="flame"
+      color={level.id === 'calm' ? 'green' : level.id === 'watchful' ? 'yellow' : 'red'}
       label="Heat"
-      value={
-        <span class={`police-hud police-hud--${level.id}`}>
-          {Math.round(heat)} · {level.label}
-        </span>
-      }
+      value={level.label}
+      tone={level.id === 'calm' ? undefined : TONE[level.id]}
       title={title}
-    />
+    >
+      <SegmentMeter value={heat / MAX_HEAT} segments={5} label="Heat" size="sm" />
+    </HudPill>
   );
 }
 
@@ -101,7 +104,7 @@ function PoliceSection(props: { veedelId: string }) {
   );
 }
 
-registerHudItem({ id: 'police.heat', order: 30, component: HeatHud });
+registerHudItem({ id: 'police.heat', order: 30, placement: 'main', component: HeatHud });
 registerSlot('veedel.veedelPanel', { id: 'police.heat', order: 20, component: PoliceSection });
 
 onGameEvent('police.raid', 'police.toast.raid', (payload, ui, state) => {

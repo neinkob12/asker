@@ -241,10 +241,10 @@ export class GameMap implements MapController {
 
   // Seitenleiste und HUD liegen über der Karte, also soll die Kamera auf den freien Bereich zentrieren.
   private applyPadding(): void {
+    // Freier Kartenausschnitt: Am Desktop stehen Dock und Inspector links, am Handy HUD oben und Sheet mit Tab-Leiste
+    // unten. Das Padding bleibt fest, damit die Karte beim Öffnen und Schließen von Panels nicht wandert.
     this.map.setPadding(
-      isMobile()
-        ? { top: 130, bottom: window.innerHeight * 0.14, left: 0, right: 0 }
-        : { top: 90, bottom: 0, left: 0, right: 364 },
+      isMobile() ? { top: 120, bottom: 170, left: 0, right: 0 } : { top: 80, bottom: 0, left: 440, right: 0 },
     );
   }
 

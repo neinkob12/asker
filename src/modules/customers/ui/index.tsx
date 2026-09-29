@@ -14,6 +14,7 @@ import {
   ListItem,
   onGameEvent,
   ProgressBar,
+  registerGameStat,
   registerPhoneApp,
   registerSlot,
   useGame,
@@ -107,6 +108,10 @@ function CustomersSection() {
   return (
     <Card
       title="Kundschaft"
+      icon="smile"
+      color="purple"
+      status={waitingNow > 0 || offered > 0 ? 'warn' : 'good'}
+      summary={waitingNow > 0 ? `${waitingNow} warten` : `${stats.customersServed} bedient`}
       actions={
         <Button small onClick={() => ui.openPhone('customers.orders')}>
           Aufträge
@@ -291,4 +296,12 @@ onGameEvent('order.finished', 'customers.orderToast', (payload, ui, state) => {
 onGameEvent('customer.regularGained', 'customers.regularToast', (payload, ui, state) => {
   const regular = getRegular(state, payload.regularId);
   if (regular) ui.toast(`Neuer Stammkunde: ${regular.name}`, 'good');
+});
+
+registerGameStat({
+  id: 'customers.served',
+  order: 30,
+  icon: 'smile',
+  label: 'Kunden bedient',
+  value: (state) => String(getSalesStats(state).customersServed),
 });

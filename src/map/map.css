@@ -6,7 +6,7 @@
 
 /* Orte (Lager, Hafen …): runder weißer Knopf mit farbigem Kern und Namens-Pille */
 .map-place {
-  --map-place-color: var(--color-info);
+  --map-place-color: var(--color-info-strong);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -55,7 +55,7 @@
 
 /* Zielmarker (addTargetMarker): runder weißer Punkt mit farbigem Kern, daneben eine Pille */
 .map-target {
-  --map-target-color: var(--color-info);
+  --map-target-color: var(--color-info-strong);
   position: relative;
   display: flex;
   align-items: center;
@@ -74,10 +74,10 @@ button.map-target {
   --map-target-color: var(--color-accent-strong);
 }
 .map-target--warn {
-  --map-target-color: var(--color-warn);
+  --map-target-color: var(--color-warn-strong);
 }
 .map-target--bad {
-  --map-target-color: var(--color-bad);
+  --map-target-color: var(--color-bad-strong);
 }
 .map-target--neutral {
   --map-target-color: var(--color-marker-muted);
@@ -244,8 +244,8 @@ button.map-target:hover .map-target__reticle {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--color-bad);
-  box-shadow: 0 0 6px var(--color-bad);
+  background: var(--color-bad-strong);
+  box-shadow: 0 0 6px var(--color-bad-strong);
   animation: map-rec 1.6s steps(2, jump-none) infinite;
 }
 @keyframes map-rec {
@@ -415,20 +415,20 @@ button.map-target:hover .map-target__reticle {
 
 /* Effekt: Ping */
 .map-fx-ping {
-  --fx-ping-color: var(--color-info);
+  --fx-ping-color: var(--color-info-strong);
   position: relative;
   width: 10px;
   height: 10px;
   pointer-events: none;
 }
 .map-fx-ping--accent {
-  --fx-ping-color: var(--color-accent);
+  --fx-ping-color: var(--color-accent-strong);
 }
 .map-fx-ping--warn {
-  --fx-ping-color: var(--color-warn);
+  --fx-ping-color: var(--color-warn-strong);
 }
 .map-fx-ping--bad {
-  --fx-ping-color: var(--color-bad);
+  --fx-ping-color: var(--color-bad-strong);
 }
 .map-fx-ping__ring {
   position: absolute;

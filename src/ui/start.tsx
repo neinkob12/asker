@@ -12,12 +12,13 @@ import {
 } from '../core';
 import { dayPhase } from '../map/daylight';
 import { registerBuiltins } from './builtin';
-import { dialogs } from './registry';
 import { UiRuntime } from './runtime';
 import { App } from './shell/App';
+import { bindKeys } from './shell/keys';
 import './styles/tokens.css';
 import './styles/base.css';
 import './shell/shell.css';
+import './shell/phone.css';
 
 // Oberflächen der Module: jede src/modules/<id>/ui/index.ts(x) meldet sich beim Import selbst an.
 import.meta.glob(['../modules/*/ui/index.ts', '../modules/*/ui/index.tsx', '!../modules/_*/**'], { eager: true });
@@ -79,24 +80,4 @@ function bindClickSound(): void {
     },
     true,
   );
-}
-
-function bindKeys(runtime: UiRuntime): void {
-  document.addEventListener('keydown', (e) => {
-    const target = e.target as HTMLElement | null;
-    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-    const { ui, api } = runtime;
-    if (e.code === 'Space' && runtime.state && !ui.dialog) {
-      e.preventDefault();
-      api.togglePause();
-    }
-    if (e.code === 'Escape') {
-      if (ui.picking) api.cancelPick();
-      else if (ui.dialog) {
-        if (dialogs.get(ui.dialog.id)?.dismissable !== false) api.closeDialog();
-      } else if (ui.panel) api.closePanel();
-      else if (ui.notification) api.dismissNotification();
-      else if (ui.phone.open) api.closePhone();
-    }
-  });
 }

@@ -7,15 +7,17 @@ import { registerMapLayer } from '../../../map';
 import {
   Card,
   Hint,
+  HudPill,
   List,
   ListItem,
   onGameEvent,
   ProgressBar,
+  registerAdvisor,
+  registerGameStat,
   registerHudItem,
   registerSlot,
   registerTab,
   SegmentedControl,
-  Stat,
   useGame,
   useUi,
 } from '../../../ui';
@@ -177,14 +179,43 @@ function CampaignHud() {
   const ui = useUi();
   const progress = campaignProgress(state);
   return (
-    <button type="button" class="territory-hud" onClick={() => ui.selectTab('territory')}>
-      <Stat
-        label="Köln"
-        value={progress.won ? 'deins' : `${progress.controlled}/${progress.needed}`}
-        title={`Kampagne "Köln übernehmen": ${progress.controlled} von ${progress.total} Veedeln, ${progress.needed} gewinnen.`}
-      />
-    </button>
+    <HudPill
+      icon="flag"
+      color="blue"
+      label="Köln"
+      value={progress.won ? 'deins' : `${progress.controlled}/${progress.needed} Veedel`}
+      title={`Kampagne "Köln übernehmen": ${progress.controlled} von ${progress.total} Veedeln, ${progress.needed} gewinnen.`}
+      onClick={() => ui.selectTab('territory')}
+    />
   );
 }
 
-registerHudItem({ id: 'territory.campaign', order: 45, component: CampaignHud });
+registerHudItem({ id: 'territory.campaign', order: 45, placement: 'more', icon: 'flag', component: CampaignHud });
+
+registerAdvisor({
+  id: 'territory.goal',
+  advise: (state) => {
+    const progress = campaignProgress(state);
+    if (progress.controlled > 0 || progress.won) return null;
+    return {
+      id: 'territory.goal',
+      priority: 20,
+      icon: 'flag',
+      title: 'Ziel: Köln übernehmen',
+      text: `${progress.needed} von ${progress.total} Veedeln musst du kontrollieren. Schau dir die Reviere an.`,
+      actionLabel: 'Reviere',
+      action: (ui) => ui.selectTab('territory'),
+    };
+  },
+});
+
+registerGameStat({
+  id: 'territory.veedel',
+  order: 20,
+  icon: 'flag',
+  label: 'Veedel unter Kontrolle',
+  value: (state) => {
+    const p = campaignProgress(state);
+    return `${p.controlled} von ${p.total}`;
+  },
+});

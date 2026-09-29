@@ -15,6 +15,7 @@ import {
   onGameEvent,
   ProgressBar,
   registerDialog,
+  registerSearch,
   registerTab,
   Stat,
   useGame,
@@ -403,4 +404,18 @@ onGameEvent('gang.busted', 'gangs.bustedToast', (p, ui, state) => {
     .filter(Boolean)
     .join(', ');
   ui.toast(`Razzia bei ${gang.name}${lost ? `: ${lost}` : ''}`, 'good');
+});
+
+registerSearch({
+  id: 'gangs.search',
+  label: 'Gangs',
+  order: 40,
+  items: (state) =>
+    getGangs(state).map((g) => ({
+      id: g.id,
+      title: g.name,
+      subtitle: `Boss: ${g.boss}`,
+      icon: 'skull',
+      run: (ui) => ui.selectTab('gangs'),
+    })),
 });

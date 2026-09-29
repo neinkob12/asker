@@ -67,9 +67,9 @@ export const veedelLayer: MapLayer = {
   mount(ctx) {
     const { map } = ctx;
     const heatColors = [
-      pastel(token('--color-info', '#6cb4ff'), 0.5),
-      pastel(token('--color-warn', '#ffb547'), 0.2),
-      pastel(token('--color-bad', '#ff5d62'), 0.15),
+      pastel(token('--color-info-strong', '#1cb0f6'), 0.5),
+      pastel(token('--map-heat-warm', '#ffb547'), 0.2),
+      pastel(token('--map-heat-hot', '#ff5d62'), 0.15),
     ];
     const before = map.getLayer(BELOW_BUILDINGS) ? BELOW_BUILDINGS : undefined;
     // Die Einfärbung liegt nur auf dem Land, Rhein und Parks bleiben klar.

@@ -32,17 +32,17 @@
   color: var(--color-marker-ink);
 }
 .spot-marker[data-urgency="waiting"] {
-  --spot-ring: var(--color-warn);
+  --spot-ring: var(--color-warn-strong);
 }
 .spot-marker[data-urgency="urgent"] {
-  --spot-ring: var(--color-bad);
+  --spot-ring: var(--color-bad-strong);
 }
 .spot-marker[data-urgency="urgent"] .spot-dot {
   animation: spot-pulse 0.9s infinite;
 }
 .spot-marker.has-runner .spot-dot {
   box-shadow:
-    0 0 0 3px var(--color-accent),
+    0 0 0 3px var(--color-accent-strong),
     var(--shadow-marker-soft);
 }
 .spot-marker.selected .spot-dot {
@@ -62,7 +62,7 @@
 @keyframes spot-pulse {
   50% {
     box-shadow:
-      0 0 0 8px color-mix(in srgb, var(--color-bad) 30%, transparent),
+      0 0 0 8px color-mix(in srgb, var(--color-bad-strong) 30%, transparent),
       var(--shadow-marker-soft);
   }
 }

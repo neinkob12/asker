@@ -11,16 +11,27 @@ import {
   List,
   ListItem,
   onGameEvent,
+  registerAdvisor,
   registerPanel,
+  registerSearch,
   registerSlot,
   Slot,
   useGame,
   useUi,
 } from '../../../ui';
-import { waitingAt } from '../../customers';
+import { getSalesStats, waitingAt } from '../../customers';
 import { formatProductAmount } from '../../goods';
 import { veedelName } from '../../veedel';
-import { customSpots, FOUND_SPOT_COST, getSpot, getSpots, isSpotActive, lockedSpots, MAX_CUSTOM_SPOTS } from '../index';
+import {
+  customSpots,
+  FOUND_SPOT_COST,
+  getAllSpots,
+  getSpot,
+  getSpots,
+  isSpotActive,
+  lockedSpots,
+  MAX_CUSTOM_SPOTS,
+} from '../index';
 import { recordSaleGlow, spotsLayer } from './map';
 import './spots.css';
 
@@ -71,6 +82,7 @@ function SpotsSection() {
   const spots = getSpots(state);
   const locked = lockedSpots(state);
   const canFound = customSpots(state).length < MAX_CUSTOM_SPOTS;
+  const waiting = spots.reduce((sum, s) => sum + waitingAt(state, s.id).length, 0);
   const found = async () => {
     const pos = await ui.pickLocation(
       `Klick auf die Karte, wo dein neuer Spot hin soll (${formatEuro(FOUND_SPOT_COST)}).`,
@@ -84,7 +96,13 @@ function SpotsSection() {
     }
   };
   return (
-    <Card title="Spots">
+    <Card
+      title="Spots"
+      icon="pin"
+      color="red"
+      status={waiting > 0 ? 'warn' : 'good'}
+      summary={waiting > 0 ? `${waiting} warten` : `${spots.length} aktiv`}
+    >
       <List>
         {spots.map((s) => (
           <ListItem
@@ -123,4 +141,73 @@ onGameEvent('sale.completed', 'spots.moneyFx', (p, _ui, state) => {
   if (!spot) return;
   recordSaleGlow(spot.id, state.time);
   mapEffects.money(spot, p.revenue, { caption: formatProductAmount(p.productId, p.amount) });
+});
+
+// Empfehlungen und Suche
+registerAdvisor({
+  id: 'spots.sell',
+  advise: (state) => {
+    const spots = getSpots(state);
+    let busiest: (typeof spots)[number] | undefined;
+    let most = 0;
+    for (const spot of spots) {
+      const count = waitingAt(state, spot.id).length;
+      if (count > most) {
+        most = count;
+        busiest = spot;
+      }
+    }
+    if (busiest) {
+      const spot = busiest;
+      return {
+        id: 'spots.waiting',
+        priority: 85,
+        icon: 'smile',
+        title: `${most} ${most === 1 ? 'Kunde wartet' : 'Kunden warten'} am ${spot.name}`,
+        text: 'Geh hin und verkaufe, bevor sie wieder gehen.',
+        actionLabel: 'Hin',
+        highlight: '.spot-marker',
+        target: { lng: spot.lng, lat: spot.lat },
+        action: (ui) => {
+          ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
+          ui.openPanel('spots.spot', { spotId: spot.id });
+        },
+      };
+    }
+    const first = spots[0];
+    if (first && getSalesStats(state).customersServed === 0) {
+      return {
+        id: 'spots.firstSale',
+        priority: 70,
+        icon: 'pin',
+        title: 'Erster Verkauf',
+        text: `Tipp auf einen Spot, zum Beispiel ${first.name}. Dort warten bald Kunden.`,
+        actionLabel: 'Zum Spot',
+        highlight: '.spot-marker',
+        target: { lng: first.lng, lat: first.lat },
+        action: (ui) => {
+          ui.flyTo({ lng: first.lng, lat: first.lat }, 16);
+          ui.openPanel('spots.spot', { spotId: first.id });
+        },
+      };
+    }
+    return null;
+  },
+});
+
+registerSearch({
+  id: 'spots.search',
+  label: 'Spots',
+  order: 10,
+  items: (state) =>
+    getAllSpots(state).map((spot) => ({
+      id: spot.id,
+      title: spot.name,
+      subtitle: veedelName(spot.veedelId),
+      icon: 'pin',
+      run: (ui) => {
+        ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
+        ui.openPanel('spots.spot', { spotId: spot.id });
+      },
+    })),
 });
