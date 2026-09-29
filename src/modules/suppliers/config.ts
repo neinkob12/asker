@@ -145,6 +145,25 @@ export const SUPPLIERS: readonly Supplier[] = [
       { id: 'kush150', label: '150 g OG Kush', productId: 'kush', amount: 150, price: 1055, minTrust: 30 },
     ],
   },
+  {
+    id: 'koeln',
+    name: 'Köln',
+    contactName: 'Kalle',
+    kind: 'city',
+    lng: 6.96,
+    lat: 50.94,
+    deliveryTime: 45,
+    priceLevel: 0.62,
+    quality: 0.5,
+    reliability: 0.85,
+    description:
+      'Kalle aus Kalk, ein Kontakt aus der Nachbarschaft. Kleine Mengen, in unter einer Stunde da, dafür nicht billig.',
+    packages: [
+      { id: 'weed10', label: '10 g Gras', productId: 'weed', amount: 10, price: 60 },
+      { id: 'weed25', label: '25 g Gras', productId: 'weed', amount: 25, price: 145 },
+      { id: 'weed50', label: '50 g Gras', productId: 'weed', amount: 50, price: 280, minTrust: 20 },
+    ],
+  },
 ];
 
 // Beziehung und Vertrauen (0–100)
