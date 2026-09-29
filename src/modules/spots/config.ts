@@ -1,16 +1,18 @@
 import type { Spot } from './index';
 
+/** Vorgegebener Spot ohne Veedel: Das Veedel ergibt sich aus der Lage (veedelAt, siehe presetSpots in index.ts). */
+export type PresetSpot = Omit<Spot, 'veedelId'>;
+
 /**
  * Vorgegebene Spots. Die mit unlockCost 0 sind von Anfang an offen, die anderen muss man freischalten
  * (Schwarzgeld für Kontakte vor Ort). audience: wie stark ein Kundentyp hier vertreten ist (1 = normal).
  */
-export const PRESET_SPOTS: readonly Spot[] = [
+export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'ebertplatz',
     name: 'Ebertplatz',
     lng: 6.9575,
     lat: 50.9497,
-    veedelId: 'neustadt-nord',
     demand: 1.4,
     priceMultiplier: 0.9,
     unlockCost: 0,
@@ -21,7 +23,6 @@ export const PRESET_SPOTS: readonly Spot[] = [
     name: 'Neumarkt',
     lng: 6.9476,
     lat: 50.9362,
-    veedelId: 'altstadt-sued',
     demand: 1.3,
     priceMultiplier: 1.0,
     unlockCost: 0,
@@ -32,7 +33,6 @@ export const PRESET_SPOTS: readonly Spot[] = [
     name: 'Aachener Weiher',
     lng: 6.9282,
     lat: 50.9356,
-    veedelId: 'neustadt-sued',
     demand: 1.1,
     priceMultiplier: 1.1,
     unlockCost: 450,
@@ -43,7 +43,6 @@ export const PRESET_SPOTS: readonly Spot[] = [
     name: 'Zülpicher Platz',
     lng: 6.9398,
     lat: 50.9317,
-    veedelId: 'neustadt-sued',
     demand: 1.5,
     priceMultiplier: 1.05,
     unlockCost: 0,
@@ -54,7 +53,6 @@ export const PRESET_SPOTS: readonly Spot[] = [
     name: 'Rudolfplatz',
     lng: 6.9392,
     lat: 50.9366,
-    veedelId: 'neustadt-sued',
     demand: 1.0,
     priceMultiplier: 1.15,
     unlockCost: 600,
@@ -65,7 +63,6 @@ export const PRESET_SPOTS: readonly Spot[] = [
     name: 'Friesenplatz',
     lng: 6.9395,
     lat: 50.9407,
-    veedelId: 'neustadt-nord',
     demand: 0.9,
     priceMultiplier: 1.2,
     unlockCost: 700,
@@ -76,7 +73,6 @@ export const PRESET_SPOTS: readonly Spot[] = [
     name: 'Breslauer Platz',
     lng: 6.9612,
     lat: 50.9442,
-    veedelId: 'altstadt-nord',
     demand: 1.0,
     priceMultiplier: 0.85,
     unlockCost: 350,
@@ -87,7 +83,6 @@ export const PRESET_SPOTS: readonly Spot[] = [
     name: 'Rheinpark',
     lng: 6.979,
     lat: 50.9468,
-    veedelId: 'deutz',
     demand: 0.7,
     priceMultiplier: 1.1,
     unlockCost: 300,
@@ -98,7 +93,6 @@ export const PRESET_SPOTS: readonly Spot[] = [
     name: 'Stadtgarten',
     lng: 6.933,
     lat: 50.9422,
-    veedelId: 'neustadt-nord',
     demand: 0.8,
     priceMultiplier: 1.1,
     unlockCost: 400,
@@ -109,7 +103,6 @@ export const PRESET_SPOTS: readonly Spot[] = [
     name: 'Uni-Wiese',
     lng: 6.929,
     lat: 50.9282,
-    veedelId: 'lindenthal',
     demand: 1.0,
     priceMultiplier: 1.0,
     unlockCost: 0,

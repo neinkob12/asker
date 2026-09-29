@@ -3,6 +3,7 @@
 // Dazu eine Warnung im HUD, falls eine Konfrontation offen ist, der Dialog aber nicht (z.B. nach dem Laden).
 
 import { formatAmount, formatEuro, formatPercent } from '../../../core';
+import { mapEffects } from '../../../map';
 import {
   Button,
   Dialog,
@@ -11,9 +12,12 @@ import {
   ProgressBar,
   registerDialog,
   registerHudItem,
+  soundOnEvent,
   useGame,
   useUi,
 } from '../../../ui';
+import { getSpot } from '../../spots';
+import { getVeedel } from '../../veedel';
 import {
   actionChance,
   activeEncounters,
@@ -294,4 +298,12 @@ registerHudItem({ id: 'encounters.pending', order: 50, component: PendingHud });
 onGameEvent('encounter.started', 'encounters.open', (payload, ui, state) => {
   if (state.outcome.gameOver) return;
   ui.openDialog('encounters.encounter', { encounterId: payload.encounterId });
+});
+// Konfrontation: Warnton und ein kurzer Blitz über der Karte, bei Gewalt ein Ping am Ort.
+soundOnEvent('encounter.started', 'alert');
+onGameEvent('encounter.started', 'encounters.fx', (payload, _ui, state) => {
+  mapEffects.flash({ strength: 0.3, color: '#ff5a4a' });
+  const spot = payload.request.spotId ? getSpot(state, payload.request.spotId) : undefined;
+  const where = spot ?? (payload.request.veedelId ? getVeedel(payload.request.veedelId)?.center : undefined);
+  if (where) mapEffects.ping(where, { tone: 'bad' });
 });

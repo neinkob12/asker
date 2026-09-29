@@ -68,15 +68,32 @@ declare module '../../core' {
   }
 }
 
+let presets: readonly Spot[] | null = null;
+
+/**
+ * Vorgegebene Spots mit ihrem Veedel. Das Veedel kommt aus der echten Grenze (veedelAt), nicht aus einer Tabelle.
+ * Erst beim ersten Aufruf berechnet (keine Top-Level-Nutzung anderer Module).
+ */
+function presetSpots(): readonly Spot[] {
+  if (!presets) {
+    presets = PRESET_SPOTS.map((s) => {
+      const veedel = veedelAt(s.lng, s.lat);
+      if (!veedel) throw new Error(`Spot ${s.id} liegt in keinem Veedel.`);
+      return { ...s, veedelId: veedel.id };
+    });
+  }
+  return presets;
+}
+
 /** Alle Spots, an denen gerade verkauft werden kann (freigeschaltet oder selbst gegründet). */
 export function getSpots(state: GameState): readonly Spot[] {
   const unlocked = state.modules.spots.unlocked;
-  return [...PRESET_SPOTS.filter((s) => unlocked.includes(s.id)), ...state.modules.spots.custom];
+  return [...presetSpots().filter((s) => unlocked.includes(s.id)), ...state.modules.spots.custom];
 }
 
 /** Alle bekannten Spots, auch die noch gesperrten. */
 export function getAllSpots(state: GameState): readonly Spot[] {
-  return [...PRESET_SPOTS, ...state.modules.spots.custom];
+  return [...presetSpots(), ...state.modules.spots.custom];
 }
 
 /** Spot nach ID, auch gesperrte (für Namen und Veedel). Ob dort verkauft wird: isSpotActive. */
@@ -89,7 +106,7 @@ export function isSpotActive(state: GameState, id: string): boolean {
 }
 
 export function lockedSpots(state: GameState): Spot[] {
-  return PRESET_SPOTS.filter((s) => !state.modules.spots.unlocked.includes(s.id));
+  return presetSpots().filter((s) => !state.modules.spots.unlocked.includes(s.id));
 }
 
 export function customSpots(state: GameState): readonly Spot[] {
@@ -118,7 +135,7 @@ export function canFoundSpotAt(
 }
 
 function unlock(ctx: Ctx, spotId: string): CommandResult {
-  const spot = PRESET_SPOTS.find((s) => s.id === spotId);
+  const spot = presetSpots().find((s) => s.id === spotId);
   if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
   const state = ctx.state.modules.spots;
   if (state.unlocked.includes(spotId)) return { ok: false, reason: 'Der Spot ist schon offen.' };

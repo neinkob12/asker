@@ -117,14 +117,6 @@
 .map-place--city .map-place-icon {
   background: #a78bfa;
 }
-.truck-marker {
-  width: 18px;
-  height: 12px;
-  border-radius: 3px;
-  background: var(--color-accent);
-  border: 2px solid var(--color-marker-border);
-  box-shadow: var(--shadow-marker);
-}
-.truck-marker.is-late {
-  background: var(--color-warn);
+.map-fx-vehicle.is-late {
+  --fx-vehicle-color: var(--color-warn);
 }

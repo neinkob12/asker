@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { clock, loadSimulation, messages, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { autoResolveEncounter, activeEncounters as getEncounters } from '../encounters';
+import { activeEncounters as getEncounters } from '../encounters';
 import { allProducts, getProduct, getStock, store } from '../goods';
 import { getPressure, getSpotPrice, spotReferencePrice, supplyDemandFactor } from '../market';
 import { changeReputation, getReputation } from '../reputation';

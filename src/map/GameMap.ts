@@ -70,9 +70,14 @@ export class GameMap implements MapController {
     this.map.on('click', (e) => {
       if (!this.picking) return;
       const resolve = this.picking;
-      this.picking = null;
-      container.classList.remove('is-picking');
-      resolve({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+      // Erst nach den Klick-Handlern der Layer auflösen: Die sehen so noch isPicking() === true und
+      // öffnen beim Platzieren keine Panels.
+      queueMicrotask(() => {
+        if (this.picking !== resolve) return;
+        this.picking = null;
+        container.classList.remove('is-picking');
+        resolve({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+      });
     });
     this.map.on('load', () => this.mountLayers());
     setActiveMap(this.map);

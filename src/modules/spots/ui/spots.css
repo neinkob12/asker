@@ -81,3 +81,8 @@
   margin: var(--space-2) 0;
   font-size: var(--font-size-sm);
 }
+
+/* Figuren an den Spots nur aus der Nähe (spots-far setzt der Spot-Layer je nach Zoom). */
+.spots-far .spot-figure {
+  display: none;
+}

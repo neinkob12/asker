@@ -17,6 +17,7 @@ import {
   ProgressBar,
   registerPhoneApp,
   registerSlot,
+  soundOnEvent,
   useGame,
   useUi,
 } from '../../../ui';
@@ -256,8 +257,9 @@ function ShipmentsSection() {
 registerPhoneApp({
   id: 'suppliers.app',
   name: 'Lieferanten',
-  icon: '🚚',
+  icon: 'truck',
   order: 20,
+  color: '#6b46c1',
   component: SuppliersApp,
   badge: (state) => getSuppliers(state).filter((s) => isBlocked(state, s.id)).length,
 });
@@ -273,6 +275,7 @@ onGameEvent('shipment.problem', 'suppliers.problemToast', (payload, ui, state) =
   }[payload.kind];
   ui.toast(text, 'bad');
 });
+soundOnEvent('shipment.arrived', 'delivery');
 onGameEvent('shipment.arrived', 'suppliers.arrivedToast', (payload, ui, state) => {
   ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.`, 'good');
 });

@@ -3,8 +3,7 @@
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import type { GameState } from '../../../core';
-import { addHtmlMarker, el, type MapLayer } from '../../../map';
-import type { UiState } from '../../../ui';
+import { addHtmlMarker, BELOW_BUILDINGS, el, type MapLayer } from '../../../map';
 import { getHeat, heatLevel } from '../../police';
 import { allVeedel, getBoundary } from '../../veedel';
 import { controllerOf, factionColor, factionName } from '../index';
@@ -70,8 +69,7 @@ export const veedelLayer: MapLayer = {
       token('--color-warn', '#f2c14e'),
       token('--color-bad', '#ef6b5b'),
     ];
-    const before = map.getLayer('buildings-3d') ? 'buildings-3d' : undefined;
-    let lastUi: UiState | null = null;
+    const before = map.getLayer(BELOW_BUILDINGS) ? BELOW_BUILDINGS : undefined;
     let lastSignature = '';
     let hovered: string | null = null;
     let lastSelected = '';
@@ -179,8 +177,7 @@ export const veedelLayer: MapLayer = {
     });
 
     map.on('click', FILL, (e) => {
-      // GameMap verbraucht den Klick fürs Platzieren vor uns; lastUi.picking ist dann noch gesetzt.
-      if (ctx.isPicking() || lastUi?.picking) return;
+      if (ctx.isPicking()) return;
       const id = e.features?.[0]?.properties?.id;
       if (typeof id === 'string') ctx.ui.openPanel('veedel.veedel', { veedelId: id });
     });
@@ -200,7 +197,6 @@ export const veedelLayer: MapLayer = {
 
     return {
       update(state, ui) {
-        lastUi = ui;
         draw(state);
         const selected = ui.panel?.id === 'veedel.veedel' ? (ui.panel.props as { veedelId: string }).veedelId : '';
         if (selected !== lastSelected) {

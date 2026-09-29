@@ -37,5 +37,5 @@ function ReputationSection() {
   );
 }
 
-registerHudItem({ id: 'reputation.value', order: 25, component: ReputationHud });
+registerHudItem({ id: 'reputation.value', order: 40, component: ReputationHud });
 registerSlot('tab:business', { id: 'reputation.summary', order: 35, component: ReputationSection });

@@ -146,8 +146,9 @@ function RecruitingSection() {
 registerPhoneApp({
   id: APP_ID,
   name: 'Kontakte',
-  icon: '👥',
-  order: 20,
+  icon: 'users',
+  order: 25,
+  color: '#2f855a',
   component: ContactsApp,
   badge: (state) => getContacts(state).length,
 });

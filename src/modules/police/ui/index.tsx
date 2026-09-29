@@ -1,6 +1,7 @@
 // Oberfläche der Polizei: Heat im HUD, Abschnitt "Polizei" im Veedel-Panel (mit Verpfeifen) und Hinweise als Toast.
 
 import { clock, formatPercent } from '../../../core';
+import { mapEffects } from '../../../map';
 import {
   Button,
   Card,
@@ -11,9 +12,11 @@ import {
   registerHudItem,
   registerSlot,
   Stat,
+  soundOnEvent,
   useGame,
 } from '../../../ui';
 import { getGang } from '../../gangs';
+import { getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
 import { controllerOf, PLAYER_FACTION } from '../../territory';
 import { getVeedel, veedelName } from '../../veedel';
@@ -105,6 +108,19 @@ onGameEvent('police.raid', 'police.toast.raid', (payload, ui, state) => {
   if (payload.target === PLAYER_FACTION) ui.toast(`Razzia in ${veedelName(payload.veedelId)}!`, 'bad');
   else ui.toast(`Razzia bei ${getGang(state, payload.target)?.name ?? payload.target}.`, 'info');
 });
+// Blaulicht am Ort der Razzia bzw. Kontrolle, Sirene nur, wenn es dich trifft.
+onGameEvent('police.raid', 'police.fx.raid', (payload, _ui, state) => {
+  const spot = payload.spotId ? getSpot(state, payload.spotId) : undefined;
+  const where = spot ?? getVeedel(payload.veedelId)?.center;
+  if (where) mapEffects.blueLight(where, { label: 'Razzia', durationMs: 9000 });
+});
+onGameEvent('police.check', 'police.fx.check', (payload, _ui, state) => {
+  const spot = payload.spotId ? getSpot(state, payload.spotId) : undefined;
+  const where = spot ?? getVeedel(payload.veedelId)?.center;
+  if (where) mapEffects.blueLight(where, { label: 'Kontrolle', durationMs: 5000, size: 0.7 });
+});
+soundOnEvent('police.raid', 'siren', { when: (p) => p.target === PLAYER_FACTION && !p.empty });
+soundOnEvent('police.check', 'siren', { volume: 0.5, throttleMs: 4000 });
 onGameEvent('police.check', 'police.toast.check', (payload, ui) => {
   ui.toast(`Kontrolle in ${veedelName(payload.veedelId)}.`, 'bad');
 });
