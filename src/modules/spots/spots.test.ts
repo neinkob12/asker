@@ -22,9 +22,13 @@ describe('spots', () => {
     for (const spot of spots) expect(getVeedel(spot.veedelId), spot.id).toBeDefined();
   });
 
-  it('die Veedel-Zuordnung passt zu veedelAt()', () => {
+  it('das Veedel eines Spots kommt aus den echten Grenzen (veedelAt)', () => {
     const sim = createTestGame();
     for (const spot of getAllSpots(sim.state)) expect(veedelAt(spot.lng, spot.lat)?.id, spot.id).toBe(spot.veedelId);
+    const veedelOf = (id: string) => getAllSpots(sim.state).find((s) => s.id === id)?.veedelId;
+    expect(veedelOf('zuelpicher')).toBe('neustadt-sued');
+    expect(veedelOf('ebertplatz')).toBe('neustadt-nord');
+    expect(veedelOf('uni')).toBe('lindenthal');
   });
 
   it('zu Beginn sind ein paar Spots offen, die anderen muss man freischalten', () => {

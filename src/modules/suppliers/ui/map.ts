@@ -1,8 +1,9 @@
-// Routen Lieferant → Lager, Lieferanten-Marker und Transporter, die entlang der Luftlinie fahren (echte Routen später).
+// Routen Lieferant → Lager, Lieferanten-Marker und Transporter (Effekt-Werkzeug createVehicle), die entlang der
+// Luftlinie fahren (echte Routen später). Hafen: Lkw, Großstädte: Transporter.
 
-import type { GeoJSONSource, Marker } from 'maplibre-gl';
-import { type GameState, lerpLngLat } from '../../../core';
-import { addHtmlMarker, el, type MapLayer } from '../../../map';
+import type { GeoJSONSource } from 'maplibre-gl';
+import type { GameState } from '../../../core';
+import { addHtmlMarker, createVehicle, el, type MapLayer, type VehicleHandle } from '../../../map';
 import { DEFAULT_WAREHOUSE, formatProductAmount, getWarehouse, productName } from '../../goods';
 import { getSuppliers, shipmentProgress, shipmentsInTransit } from '../index';
 
@@ -15,7 +16,7 @@ export const suppliersLayer: MapLayer = {
   order: 20,
   mount(ctx) {
     const { map } = ctx;
-    const trucks = new Map<number, Marker>();
+    const trucks = new Map<number, VehicleHandle>();
     map.addSource(SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
       id: 'suppliers.routes',
@@ -72,9 +73,9 @@ export const suppliersLayer: MapLayer = {
         placeSuppliers();
         drawRoutes(state);
         const active = new Set(shipmentsInTransit(state).map((s) => s.id));
-        for (const [id, marker] of trucks) {
+        for (const [id, vehicle] of trucks) {
           if (!active.has(id)) {
-            marker.remove();
+            vehicle.remove();
             trucks.delete(id);
           }
         }
@@ -82,19 +83,23 @@ export const suppliersLayer: MapLayer = {
           const supplier = getSuppliers(state).find((x) => x.id === s.supplierId);
           const warehouse = getWarehouse(state, s.warehouseId);
           if (!supplier || !warehouse) continue;
-          const pos = lerpLngLat(supplier, warehouse, shipmentProgress(state, s));
-          let marker = trucks.get(s.id);
-          if (!marker) {
-            marker = addHtmlMarker(map, {
-              position: pos,
-              className: 'truck-marker',
-              title: `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)} unterwegs`,
-            }).marker;
-            trucks.set(s.id, marker);
+          let vehicle = trucks.get(s.id);
+          if (!vehicle) {
+            vehicle = createVehicle(map, {
+              path: [supplier, warehouse],
+              kind: supplier.kind === 'port' ? 'truck' : 'van',
+              label: formatProductAmount(s.productId, s.amount),
+              title: `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)} aus ${supplier.name}`,
+            });
+            trucks.set(s.id, vehicle);
           }
-          marker.setLngLat([pos.lng, pos.lat]);
-          marker.getElement().classList.toggle(LATE_CLASS, s.problem === 'delayed' && !!s.problemRevealed);
+          vehicle.setProgress(shipmentProgress(state, s));
+          vehicle.element.classList.toggle(LATE_CLASS, s.problem === 'delayed' && !!s.problemRevealed);
         }
+      },
+      destroy() {
+        for (const vehicle of trucks.values()) vehicle.remove();
+        trucks.clear();
       },
     };
   },

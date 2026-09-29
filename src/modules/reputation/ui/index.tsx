@@ -8,7 +8,9 @@ import './reputation.css';
 function ReputationHud() {
   const { state } = useGame();
   const value = getReputation(state);
-  return <Stat label="Ruf" value={`${Math.round(value)} · ${reputationLabel(value)}`} title="Ruf von 0 bis 100" />;
+  return (
+    <Stat label="Ruf" value={Math.round(value)} title={`Ruf ${Math.round(value)} von 100: ${reputationLabel(value)}`} />
+  );
 }
 
 function ReputationSection() {
@@ -37,5 +39,5 @@ function ReputationSection() {
   );
 }
 
-registerHudItem({ id: 'reputation.value', order: 25, component: ReputationHud });
+registerHudItem({ id: 'reputation.value', order: 40, component: ReputationHud });
 registerSlot('tab:business', { id: 'reputation.summary', order: 35, component: ReputationSection });

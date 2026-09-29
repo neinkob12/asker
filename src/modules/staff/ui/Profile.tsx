@@ -3,7 +3,7 @@
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro } from '../../../core';
-import { Button, Empty, KeyValue, ProgressBar, Slot, useGame, useUi } from '../../../ui';
+import { Button, Empty, KeyValue, ProgressBar, Select, Slot, useGame, useUi } from '../../../ui';
 import { getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
 import {
@@ -199,18 +199,12 @@ function MoveControl(props: { member: StaffMember }) {
   const target = targets.find((t) => t.key === choice);
   return (
     <div class="staff-file__row">
-      <select
-        class="staff-select"
-        aria-label="Einsatzort"
+      <Select
+        label="Einsatzort"
         value={choice}
-        onChange={(e) => setChoice(e.currentTarget.value)}
-      >
-        {targets.map((t) => (
-          <option key={t.key} value={t.key}>
-            {t.label}
-          </option>
-        ))}
-      </select>
+        options={targets.map((t) => ({ value: t.key, label: t.label }))}
+        onChange={setChoice}
+      />
       <span class="staff-file__buttons">
         <Button
           small

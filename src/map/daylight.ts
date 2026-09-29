@@ -1,13 +1,11 @@
 // Tag und Nacht, an die Spieluhr gekoppelt. Rein rechnerisch (kein DOM), damit Karte, Sound und Tests
 // dieselbe Kurve nutzen. Keine Jahreszeiten: Sonnenaufgang und -untergang sind jeden Tag gleich.
 
-import { clock } from '../core';
+// Die Grenzen der Dämmerung kommen aus dem Kern (clock.ts), damit clock.isNight und das Licht übereinstimmen.
 
-/** Dämmerung morgens und abends, in Minuten seit Mitternacht. */
-export const DAWN = { start: 5 * 60 + 15, end: 7 * 60 + 30 };
-export const DUSK = { start: 19 * 60 + 30, end: 21 * 60 + 45 };
+import { clock, DAWN, type DayPhase, DUSK, dayPhaseAt } from '../core';
 
-export type DayPhase = 'night' | 'dawn' | 'day' | 'dusk';
+export { DAWN, type DayPhase, DUSK } from '../core';
 
 const smoothstep = (t: number) => {
   const x = Math.min(1, Math.max(0, t));
@@ -31,11 +29,7 @@ export function twilight(minuteOfDay: number): number {
 }
 
 export function dayPhase(minuteOfDay: number): DayPhase {
-  const m = ((minuteOfDay % 1440) + 1440) % 1440;
-  if (m < DAWN.start || m >= DUSK.end) return 'night';
-  if (m < DAWN.end) return 'dawn';
-  if (m < DUSK.start) return 'day';
-  return 'dusk';
+  return dayPhaseAt(minuteOfDay);
 }
 
 /** Tageslicht zu einer Spielzeit. */

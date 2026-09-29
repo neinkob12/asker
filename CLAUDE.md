@@ -3,6 +3,8 @@
 Browserspiel (Vite + TypeScript + Preact + MapLibre). Was das Spiel werden soll: `docs/konzept.md`.
 Ausführliche Architektur mit allen Modulen, APIs, Befehlen und Ereignissen: `docs/architektur.md`.
 **Parallele Sessions:** Regeln, Phasen und wer welche Ordner besitzt stehen in `docs/auftraege/README.md`. Lies das zuerst.
+Phase 0 (Fundament), Phase 1 (Aufträge 10–14) und Phase 2 (Integration, Auftrag 20) sind erledigt; alle Systeme
+sind verbunden. Wie sie zusammenspielen: `docs/architektur.md`, Abschnitt "Zusammenspiel der Systeme".
 
 ## Architektur in Kürze
 
@@ -16,8 +18,10 @@ src/modules/   Spielsysteme, je ein Ordner = ein Modul (veedel, spots, staff …
   <id>/ui/index.tsx Oberfläche des Moduls (Panels, Tabs, HUD, Karten-Layer …), automatisch geladen
   _template/        kommentierte Kopiervorlage (wird nicht registriert)
 src/ui/        Oberfläche: Shell, Registries, Bausteine (components/), Design-Tokens (styles/), Handy (phone/)
-src/map/       Grundkarte (MapLibre) und Registry für Karten-Layer
-scripts/       Ordnerregel-Check, Vorlagen-Test, Screenshots
+src/map/       Grundkarte (MapLibre), Registry für Karten-Layer, Effekt-Werkzeuge (Fahrzeuge, Figuren, Blaulicht …)
+src/audio/     Musik und Soundeffekte (für Module über src/ui erreichbar)
+src/playtest/  Tests über alle Module: Bot fürs Balancing (bot.ts), Spielende (endings.test.ts)
+scripts/       Ordnerregel-Check, Vorlagen-Test, Screenshots, Ende-zu-Ende-Test, Durchspielen im Browser
 ```
 
 Datenfluss: **Die UI liest den Zustand und schickt Befehle, sonst nichts.** Die Simulation ändert den Zustand
@@ -70,7 +74,8 @@ export default defineModule({
 - Befehle kommen vom Spieler, aus Handy-Antworten oder von Leutnants (`ctx.dispatch(cmd, { actor: 'staff:<id>' })`).
 - Ereignisse werden am Ende des Schritts bzw. Befehls in fester Reihenfolge zugestellt.
 - Geld: `wallet.pay/earn/lose/convert` (Schwarzgeld `'dirty'`, sauber `'clean'`). Journal: `journal.add(ctx, text, kind)`.
-  Nachrichten: `messages.send(ctx, { contact, text, options })`. Spielende: `outcome.gameOver(ctx, 'killed')`, `outcome.win(ctx)`.
+  Nachrichten: `messages.send(ctx, { contact, text, options, silent? })` – alle Figuren reden per Handy mit dem
+  Spieler, Routine-Meldungen still (`silent: true`). Spielende: `outcome.gameOver(ctx, 'killed')`, `outcome.win(ctx)`.
 
 ## Migrationen
 
@@ -83,8 +88,9 @@ export default defineModule({
 
 In `src/modules/<id>/ui/index.tsx` (Beispiel in `_template/ui/`): `registerHudItem`, `registerTab`,
 `registerSlot` (z.B. in `'tab:business'` oder `'spots.spotPanel'`), `registerPanel`, `registerDialog`,
-`registerPhoneApp`, `onGameEvent` aus `src/ui`, `registerMapLayer` aus `src/map`. Nur Bausteine aus
-`src/ui/components` und Design-Tokens (`var(--color-…)`, `var(--space-…)`) verwenden.
+`registerPhoneApp`, `onGameEvent`, `soundOnEvent` aus `src/ui`, `registerMapLayer` und `mapEffects` aus `src/map`.
+Nur Bausteine aus `src/ui/components` (auch `Select`, `Avatar`, `Icon` …) und Design-Tokens (`var(--color-…)`,
+`var(--space-…)`) verwenden. Details: `src/ui/README.md`, `src/map/README.md`.
 Komponenten lesen mit `useGame()` und ändern nur mit `dispatch`.
 
 ## Vor jedem Push
@@ -95,6 +101,13 @@ npm run build
 npm run format   # behebt Formatierung und Import-Reihenfolge
 ```
 
-Selbst ausprobieren: `npm run screenshot` (Desktop + Handy nach `screenshots/`, meldet Browser-Fehler).
+Selbst ausprobieren:
+- `npm run screenshot` (Desktop + Handy nach `screenshots/`, meldet Browser-Fehler)
+- `npm run e2e` (Ende-zu-Ende-Test mit Playwright: neues Spiel, verkaufen, anheuern, bestellen, speichern, laden)
+- `npm run playthrough` (der Bot spielt ~20 Minuten im Browser, Screenshots der wichtigen Momente)
+- `npm run balance` (Balancing-Bericht über mehrere Seeds, siehe `docs/architektur.md`, Abschnitt "Balancing")
+
 Im Browser: `?neu=normal&seed=1&tempo=0` startet ein frisches Spiel; `window.koeln.session` in der Konsole.
-Kartenkacheln (Esri, OpenFreeMap) kommen aus dem Netz; in abgeschotteten Umgebungen bleibt die Karte dunkel.
+Kartenkacheln (Esri, OpenFreeMap) lädt das Skript über Node (auch hinter einem `HTTPS_PROXY`).
+TypeScript-Eigenheit: Dateien, die Module importieren, nicht in einen Ordner legen, der alphabetisch vor
+`src/core` steht (z.B. `src/balance`), sonst gehen die `declare module`-Erweiterungen verloren.

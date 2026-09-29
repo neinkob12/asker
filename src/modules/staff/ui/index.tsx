@@ -15,6 +15,7 @@ import {
   registerPanel,
   registerSlot,
   registerTab,
+  Select,
   useGame,
   useUi,
 } from '../../../ui';
@@ -124,44 +125,18 @@ function StaffOverview() {
         {jailed > 0 ? `, ${jailed} in Haft` : ''} · Löhne {formatEuro(dailyWages(state))} pro Tag
       </p>
       <div class="staff-filters">
-        <select
-          class="staff-select"
-          aria-label="Typ"
-          value={role}
-          onChange={(e) => setRole(e.currentTarget.value as RoleFilter)}
-        >
-          {ROLE_FILTERS.map((f) => (
-            <option key={f.value} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-        <select
-          class="staff-select"
-          aria-label="Status"
-          value={status}
-          onChange={(e) => setStatus(e.currentTarget.value as StatusFilter)}
-        >
-          {STATUS_FILTERS.map((f) => (
-            <option key={f.value} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-        <select
-          class="staff-select"
-          aria-label="Veedel"
+        <Select label="Typ" value={role} options={ROLE_FILTERS} onChange={setRole} />
+        <Select label="Status" value={status} options={STATUS_FILTERS} onChange={setStatus} />
+        <Select
+          label="Veedel"
           value={veedel}
-          onChange={(e) => setVeedel(e.currentTarget.value)}
-        >
-          <option value="">Veedel</option>
-          {veedelIds.map((id) => (
-            <option key={id} value={id}>
-              {veedelName(id)}
-            </option>
-          ))}
-          <option value={NO_VEEDEL}>Ohne Einsatz</option>
-        </select>
+          options={[
+            { value: '', label: 'Veedel' },
+            ...veedelIds.map((id) => ({ value: id, label: veedelName(id) })),
+            { value: NO_VEEDEL, label: 'Ohne Einsatz' },
+          ]}
+          onChange={setVeedel}
+        />
       </div>
       {shown.length === 0 ? (
         <Empty>

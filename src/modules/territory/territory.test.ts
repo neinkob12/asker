@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { loadSimulation, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getGangs } from '../gangs';
+import { enlist, generateProfile } from '../staff';
 import { allVeedel, getVeedel } from '../veedel';
 import {
   CONTROL_THRESHOLD,
   DECAY_PER_HOUR,
   GANG_REGEN_PER_HOUR,
+  LIEUTENANT_INFLUENCE_PER_HOUR,
+  LIEUTENANT_INFLUENCE_PER_LEVEL,
   LOSE_CONTROL_THRESHOLD,
   SALE_DISPLACEMENT,
   SALE_INFLUENCE_BASE,
@@ -22,6 +25,7 @@ import {
   factions,
   getInfluence,
   hasPlayerPresence,
+  lieutenantInfluence,
   PLAYER_FACTION,
   playerPresence,
 } from './index';
@@ -108,8 +112,11 @@ describe('territory', () => {
     addInfluence(ctx, 'nippes', PLAYER_FACTION, CONTROL_THRESHOLD - 1);
     expect(controllerOf(sim.state, 'nippes')).toBe(owner); // mehr Einfluss, aber unter der Schwelle
     addInfluence(ctx, 'nippes', PLAYER_FACTION, 1);
-    expect(controllerOf(sim.state, 'nippes')).toBe(PLAYER_FACTION);
-    addInfluence(ctx, 'nippes', PLAYER_FACTION, -3);
+    // 50 gegen 45: Übernehmen braucht TAKEOVER_MARGIN mehr als der bisherige Herr.
+    expect(controllerOf(sim.state, 'nippes')).toBe(owner);
+    addInfluence(ctx, 'nippes', PLAYER_FACTION, 1);
+    expect(controllerOf(sim.state, 'nippes')).toBe(PLAYER_FACTION); // 51
+    addInfluence(ctx, 'nippes', PLAYER_FACTION, -4);
     expect(controllerOf(sim.state, 'nippes')).toBe(PLAYER_FACTION); // 47: hält noch
     addInfluence(ctx, 'nippes', PLAYER_FACTION, -3);
     expect(controllerOf(sim.state, 'nippes')).toBeNull(); // 44: weg, und die Gang hat nur 45
@@ -148,13 +155,13 @@ describe('territory', () => {
     const events = recordEvents(sim);
     const owner = controllerOf(sim.state, 'altstadt-sued');
     let sales = 0;
-    while (controllerOf(sim.state, 'altstadt-sued') !== PLAYER_FACTION && sales < 200) {
+    while (controllerOf(sim.state, 'altstadt-sued') !== PLAYER_FACTION && sales < 300) {
       sell(sim, 'altstadt-sued', 3);
       sales++;
     }
     expect(controllerOf(sim.state, 'altstadt-sued')).toBe(PLAYER_FACTION);
-    expect(sales).toBeGreaterThan(20); // spürbar, aber kein Selbstläufer
-    expect(sales).toBeLessThan(80);
+    expect(sales).toBeGreaterThan(50); // spürbar, aber kein Selbstläufer (ein Spot schafft 10–20 am Tag)
+    expect(sales).toBeLessThan(180);
     // Die Gang rutscht zuerst unter die untere Schwelle (Veedel offen), dann übernimmt der Spieler.
     expect(eventsOfType(events, 'territory.controlChanged').map((e) => e.payload)).toEqual([
       { veedelId: 'altstadt-sued', from: owner, to: null },
@@ -171,6 +178,27 @@ describe('territory', () => {
     sim.advance(10 * 60);
     expect(getInfluence(sim.state, 'kalk', PLAYER_FACTION)).toBeCloseTo(30 - 10 * DECAY_PER_HOUR);
     expect(getInfluence(sim.state, 'lindenthal', PLAYER_FACTION)).toBeCloseTo(30 + 10 * STAFF_PRESENCE_PER_HOUR);
+  });
+
+  it('ein Leutnant bringt zusätzlich Einfluss, bessere Leutnants mehr', () => {
+    const sim = quietGame();
+    const ctx = sim.ctx('staff');
+    addInfluence(sim.ctx('test'), 'kalk', PLAYER_FACTION, 20);
+    const lt = enlist(ctx, generateProfile(ctx, 'runner', { level: 3 }), { origin: 'pool' });
+    lt.stats.charisma = 50;
+    expect(lieutenantInfluence(sim.state, 'kalk')).toBe(0);
+    expect(sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: lt.id, veedelId: 'kalk' } }).ok).toBe(true);
+    const perHour = lieutenantInfluence(sim.state, 'kalk');
+    expect(perHour).toBeCloseTo(LIEUTENANT_INFLUENCE_PER_HOUR + 2 * LIEUTENANT_INFLUENCE_PER_LEVEL);
+    lt.stats.charisma = 100;
+    expect(lieutenantInfluence(sim.state, 'kalk')).toBeGreaterThan(perHour);
+    lt.stats.charisma = 50;
+    const before = getInfluence(sim.state, 'kalk', PLAYER_FACTION);
+    sim.advance(10 * 60);
+    // Leutnant zählt als eine Person vor Ort plus sein eigener Beitrag, statt Verfall.
+    expect(getInfluence(sim.state, 'kalk', PLAYER_FACTION)).toBeGreaterThanOrEqual(
+      before + 10 * (perHour + STAFF_PRESENCE_PER_HOUR) - 1,
+    );
   });
 
   it('ein kürzlicher Verkauf hält den Einfluss, danach sinkt er', () => {

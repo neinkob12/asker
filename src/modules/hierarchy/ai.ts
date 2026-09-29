@@ -5,8 +5,8 @@
 // Wichtig: Er handelt ausschließlich über ctx.dispatch(...) mit actor 'staff:<id>', also über dieselben
 // Befehle wie der Spieler. Direkt ändert er nur den eigenen Zustand (state.modules.hierarchy) und das Journal.
 
-import { type Actor, type Command, type Ctx, journal } from '../../core';
-import { canServe, waitingAt } from '../customers';
+import { type Actor, type Command, type Ctx, journal, messages } from '../../core';
+import { canServe, getSalesStats, waitingAt } from '../customers';
 import { getStock, stockSummary } from '../goods';
 import { getSpotPrice, hasOwnPrice, priceRatio, roundPrice, spotReferencePrice } from '../market';
 import { getHeat } from '../police';
@@ -17,10 +17,12 @@ import {
   getStaff,
   getStaffMember,
   isEmployed,
+  isLyingLow,
   RUNNER_HIRE_COST,
   type StaffMember,
   securityAt,
   serveTime,
+  staffContact,
 } from '../staff';
 import { availablePackages, getSuppliers, isBlocked, packagePrice, shipmentsInTransit } from '../suppliers';
 import { veedelName } from '../veedel';
@@ -74,8 +76,11 @@ interface Turn {
   run: (command: Command) => boolean;
 }
 
-/** Eintrag ins Protokoll des Leutnants, wichtige Dinge auch ins Journal. */
-function note(turn: Turn, text: string, toJournal = true): void {
+/**
+ * Eintrag ins Protokoll des Leutnants, wichtige Dinge auch ins Journal. Mit phone schreibt er dir zusätzlich
+ * aufs Handy (still, ohne Banner), wie jede Figur im Spiel.
+ */
+function note(turn: Turn, text: string, toJournal = true, phone = false): void {
   const { ctx, post, lt, veedelId } = turn;
   // Dasselbe noch einmal (z.B. Preise nachgezogen): nur die Zeit aktualisieren.
   if (post.log[0]?.text === text) {
@@ -86,6 +91,7 @@ function note(turn: Turn, text: string, toJournal = true): void {
   if (post.log.length > LOG_LIMIT) post.log.length = LOG_LIMIT;
   if (toJournal)
     journal.add(ctx, `${lt.name} (${veedelName(veedelId)}): ${text}`, 'info', { veedelId, staffId: lt.id });
+  if (phone) messages.send(ctx, { contact: staffContact(lt), text: `${veedelName(veedelId)}: ${text}`, silent: true });
 }
 
 /** Alle paar Minuten: jeder Leutnant ordnet sein Veedel (wenn es Zeit ist) und verkauft selbst. */
@@ -97,6 +103,8 @@ export function tick(ctx: Ctx): void {
     if (!lt || !isEmployed(ctx.state, lt.id) || lt.status !== 'active') continue;
     const actor: Actor = `staff:${lt.id}`;
     const turn: Turn = { ctx, veedelId, post, lt, run: (command) => ctx.dispatch(command, { actor }).ok };
+    // Nach einer Razzia-Warnung hält er still, bis die Luft rein ist.
+    if (isLyingLow(ctx.state, veedelId)) continue;
     if (ctx.now >= post.nextActionAt) {
       manage(turn);
       post.nextActionAt = ctx.now + actionInterval(lt);
@@ -111,6 +119,20 @@ function manage(turn: Turn): void {
   setPrices(turn);
   guardSpots(turn);
   if (turn.post.settings.mayOrder) restock(turn);
+}
+
+/**
+ * Warnung des Polizei-Kontakts vor einer Razzia in seinem Veedel: Der Leutnant zieht die Leute sofort ab
+ * (über denselben Befehl wie der Spieler).
+ */
+export function onRaidWarning(ctx: Ctx, veedelId: string, post: LieutenantPost, until: number): void {
+  const lt = getStaffMember(ctx.state, post.staffId);
+  if (lt?.status !== 'active' || !isEmployed(ctx.state, lt.id)) return;
+  const actor: Actor = `staff:${lt.id}`;
+  const turn: Turn = { ctx, veedelId, post, lt, run: (command) => ctx.dispatch(command, { actor }).ok };
+  if (turn.run({ type: 'staff.lieLow', payload: { veedelId, until } })) {
+    note(turn, 'Tipp vom Polizei-Kontakt: Razzia im Anmarsch. Alle runter von der Straße.', false, true);
+  }
 }
 
 /** Vorsicht: bei zu viel Heat alle von der Straße holen, später zurückschicken. true = er taucht ab. */
@@ -129,13 +151,15 @@ function handleHeat(turn: Turn): boolean {
     note(
       turn,
       `Zu heiß hier (Heat ${heat}). ${pulled === 1 ? 'Einen' : pulled} von der Straße geholt, wir tauchen ab.`,
+      true,
+      true,
     );
     return true;
   }
   if (post.lyingLow) {
     if (heat >= threshold - HEAT_HYSTERESIS) return true;
     post.lyingLow = false;
-    note(turn, 'Die Luft ist wieder rein, zurück an die Arbeit.');
+    note(turn, 'Die Luft ist wieder rein, zurück an die Arbeit.', true, true);
   }
   return false;
 }
@@ -247,16 +271,22 @@ function restock(turn: Turn): void {
     )
     .filter((o) => o.price <= budget);
   if (offers.length === 0) {
-    note(turn, 'Wir brauchen Ware, aber das Geld reicht nicht.');
+    note(turn, 'Wir brauchen Ware, aber das Geld reicht nicht.', true, true);
     return;
   }
-  const covering = offers.filter((o) => o.pkg.amount >= deficit).sort((a, b) => a.price - b.price)[0];
-  const choice = covering ?? [...offers].sort((a, b) => b.pkg.amount - a.pkg.amount || a.price - b.price)[0];
+  // Was fragen die Kunden nach, das nicht da ist (customer.missed)? Davon zuerst, sonst irgendwas Günstiges.
+  const missed = getSalesStats(ctx.state).missedByProduct;
+  const wanted = (productId: string) => (missed[productId] ?? 0) / (1 + getStock(ctx.state, { productId }));
+  const top = [...offers].sort((a, b) => wanted(b.pkg.productId) - wanted(a.pkg.productId))[0];
+  const pool = wanted(top.pkg.productId) > 0 ? offers.filter((o) => o.pkg.productId === top.pkg.productId) : offers;
+  const covering = pool.filter((o) => o.pkg.amount >= deficit).sort((a, b) => a.price - b.price)[0];
+  const choice = covering ?? [...pool].sort((a, b) => b.pkg.amount - a.pkg.amount || a.price - b.price)[0];
   const ordered = run({
     type: 'suppliers.order',
     payload: { supplierId: choice.supplier.id, packageId: choice.pkg.id },
   });
-  if (ordered) note(turn, `Nachschub bestellt: ${choice.pkg.label} bei ${choice.supplier.name}.`);
+  const why = pool !== offers ? ' Die Kunden fragen danach.' : '';
+  if (ordered) note(turn, `Nachschub bestellt: ${choice.pkg.label} bei ${choice.supplier.name}.${why}`);
 }
 
 /** Der Leutnant verkauft selbst an Spots in seinem Veedel, an denen gerade kein Läufer steht. */

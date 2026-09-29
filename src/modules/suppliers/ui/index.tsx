@@ -14,9 +14,11 @@ import {
   List,
   ListItem,
   onGameEvent,
+  PhoneScreen,
   ProgressBar,
   registerPhoneApp,
   registerSlot,
+  soundOnEvent,
   useGame,
   useUi,
 } from '../../../ui';
@@ -69,7 +71,6 @@ function SupplierList(props: { onSelect: (id: string) => void }) {
   const { state } = useGame();
   return (
     <div class="sup-app">
-      <h3 class="sup-app__title">Lieferanten</h3>
       <ul class="sup-list">
         {getSuppliers(state).map((s) => {
           const rel = getRelation(state, s.id);
@@ -101,7 +102,7 @@ function SupplierList(props: { onSelect: (id: string) => void }) {
   );
 }
 
-function SupplierDetail(props: { supplierId: string; onBack: () => void }) {
+function SupplierDetail(props: { supplierId: string }) {
   const { state, dispatch } = useGame();
   const supplier = getSupplier(state, props.supplierId);
   if (!supplier) return null;
@@ -114,14 +115,6 @@ function SupplierDetail(props: { supplierId: string; onBack: () => void }) {
   const shipments = shipmentsInTransit(state).filter((s) => s.supplierId === supplier.id);
   return (
     <div class="sup-app">
-      <div class="sup-app__head">
-        <Button small variant="subtle" onClick={props.onBack} aria-label="Zurück">
-          ‹
-        </Button>
-        <h3 class="sup-app__title">
-          {supplier.contactName} · {supplier.name}
-        </h3>
-      </div>
       <p class="ui-hint">{supplier.description}</p>
       <KeyValue label="Art" value={KIND_NAME[supplier.kind]} />
       <KeyValue label="Preis" value={`${formatPercent(supplier.priceLevel)} vom Straßenpreis`} />
@@ -216,12 +209,22 @@ function SupplierDetail(props: { supplierId: string; onBack: () => void }) {
   );
 }
 
+/** Eigene Kopfleiste (chrome: 'none'): Liste mit "Lieferanten", Detail mit dem Ansprechpartner und Zurück. */
 function SuppliersApp() {
+  const { state } = useGame();
   const [supplierId, setSupplierId] = useState<string | null>(null);
-  return supplierId ? (
-    <SupplierDetail supplierId={supplierId} onBack={() => setSupplierId(null)} />
-  ) : (
-    <SupplierList onSelect={setSupplierId} />
+  const supplier = supplierId ? getSupplier(state, supplierId) : undefined;
+  if (supplier) {
+    return (
+      <PhoneScreen title={`${supplier.contactName} · ${supplier.name}`} onBack={() => setSupplierId(null)}>
+        <SupplierDetail supplierId={supplier.id} />
+      </PhoneScreen>
+    );
+  }
+  return (
+    <PhoneScreen title="Lieferanten">
+      <SupplierList onSelect={setSupplierId} />
+    </PhoneScreen>
   );
 }
 
@@ -256,8 +259,10 @@ function ShipmentsSection() {
 registerPhoneApp({
   id: 'suppliers.app',
   name: 'Lieferanten',
-  icon: '🚚',
+  icon: 'truck',
   order: 20,
+  color: '#6b46c1',
+  chrome: 'none',
   component: SuppliersApp,
   badge: (state) => getSuppliers(state).filter((s) => isBlocked(state, s.id)).length,
 });
@@ -273,6 +278,7 @@ onGameEvent('shipment.problem', 'suppliers.problemToast', (payload, ui, state) =
   }[payload.kind];
   ui.toast(text, 'bad');
 });
+soundOnEvent('shipment.arrived', 'delivery');
 onGameEvent('shipment.arrived', 'suppliers.arrivedToast', (payload, ui, state) => {
   ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.`, 'good');
 });

@@ -153,4 +153,12 @@ describe('Nachrichten-App: Benachrichtigung', () => {
     });
     expect(messageNotification(sim.state, 9999)).toBeNull();
   });
+
+  it('stille Nachrichten zählen als ungelesen, lösen aber kein Banner aus', () => {
+    const { sim, ctx } = game();
+    const id = messages.send(ctx, { contact: gang, text: 'Nur zur Info.', silent: true });
+    expect(messages.get(sim.state, id)?.silent).toBe(true);
+    expect(messages.unreadCount(sim.state)).toBe(1);
+    expect(messageNotification(sim.state, id)).toBeNull();
+  });
 });

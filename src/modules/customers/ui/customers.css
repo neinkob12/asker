@@ -95,17 +95,6 @@
   color: var(--color-bad);
 }
 
-.delivery-marker {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--color-warn);
-  border: 2px solid var(--color-marker-border);
-  box-shadow: var(--shadow-marker);
-}
-.delivery-marker.is-player {
-  background: var(--color-accent);
-}
 .delivery-target {
   width: 10px;
   height: 10px;

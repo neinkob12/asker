@@ -25,7 +25,7 @@ export const CHASE_ESCAPED_HEAT = 6;
 /** So viel Heat bekommt jedes Veedel einer verpfiffenen Gang. */
 export const SNITCH_HEAT = 20;
 /** Heat sinkt pro Stunde um so viel. */
-export const HEAT_DECAY_PER_HOUR = 0.8;
+export const HEAT_DECAY_PER_HOUR = 0.7;
 
 // --- Kontrollen -----------------------------------------------------------------------------------------------
 
@@ -38,9 +38,9 @@ export const CHECK_COOLDOWN = 6 * 60;
 /** Die Polizei ist erst mal zufrieden: Heat sinkt um so viel. */
 export const CHECK_HEAT_RELIEF = 6;
 /** Beschlagnahmte Ware bei einer Kontrolle (Einheiten). */
-export const CHECK_GOODS = { min: 3, max: 10 } as const;
+export const CHECK_GOODS = { min: 2, max: 8 } as const;
 /** Beschlagnahmtes Schwarzgeld bei einer Kontrolle (Euro). */
-export const CHECK_MONEY = { min: 50, max: 250 } as const;
+export const CHECK_MONEY = { min: 30, max: 150 } as const;
 /** Festnahme bei einer Kontrolle ohne Flucht (bei Vorsicht 50). */
 export const CHECK_ARREST_CHANCE = 0.2;
 /** So oft versucht der Kontrollierte zu fliehen (Konfrontation "Polizeiflucht"). */
@@ -54,6 +54,8 @@ export const FAILED_CHASE_FACTOR = 1.5;
 export const RAID_THRESHOLD = 60;
 /** Wahrscheinlichkeit pro Stunde bei Heat 100 und Präsenz 1 (darunter anteilig ab der Schwelle). */
 export const RAID_CHANCE_PER_HOUR = 0.06;
+/** Eine Razzia gegen den Spieler wird so lange vorher geplant (Zeit für die Warnung des Polizei-Kontakts). */
+export const RAID_LEAD_TIME = 3 * 60;
 /** Nach einer Razzia ist im Veedel so lange Ruhe. */
 export const RAID_COOLDOWN = 24 * 60;
 export const RAID_HEAT_RELIEF = 25;

@@ -4,6 +4,8 @@
 //   jede Stunde. Mehr Polizeipräsenz im Veedel: Heat steigt schneller, Kontrollen und Razzien kommen öfter.
 // - Stündlich würfelt jedes Veedel: ab CHECK_THRESHOLD Kontrollen, ab RAID_THRESHOLD Razzien (nur wo der Spieler
 //   präsent ist; Razzien ohne Spieler treffen die Gang, die das Veedel kontrolliert).
+// - Razzien gegen den Spieler werden geplant ('police.raidPlanned') und schlagen RAID_LEAD_TIME später zu. So kann
+//   der Polizei-Kontakt (staff) warnen und die Leute können abtauchen. Wer dann nicht mehr da ist, verliert nichts.
 // - Folgen: Ware und Schwarzgeld werden beschlagnahmt, Mitarbeiter festgenommen ('police.arrest', den Haft-Status
 //   setzt staff). Eine Kontrolle kann in eine Polizeiflucht kippen (Konfrontation 'policeChase' über encounters).
 // - Verpfeifen ('police.snitch'): Heat und ein Hinweis in allen Veedeln der Gang. Solange der Hinweis gilt, kann es
@@ -12,9 +14,10 @@
 // Öffentliche API:
 //   getHeat(state, veedelId), addHeat(ctx, veedelId, amount), reportViolence(ctx, veedelId, severity?),
 //   heatLevel(heat), playerHeat(state), hottestVeedel(state), snitchOnGang(ctx, gangId), canSnitch(state, gangId),
-//   activeTipOff(state, veedelId), getPoliceStats(state), MAX_HEAT, CHECK_THRESHOLD, RAID_THRESHOLD, HEAT_LEVELS
+//   activeTipOff(state, veedelId), plannedRaid(state, veedelId), getPoliceStats(state), MAX_HEAT, CHECK_THRESHOLD, RAID_THRESHOLD, HEAT_LEVELS
 // Befehle: 'police.snitch'
-// Ereignisse: 'police.check', 'police.raid', 'police.arrest', 'police.tipOff', 'police.heatLevelChanged'
+// Ereignisse: 'police.check', 'police.raidPlanned', 'police.raid', 'police.arrest', 'police.tipOff',
+//   'police.heatLevelChanged'
 
 import {
   type CommandResult,
@@ -31,7 +34,7 @@ import { startEncounter } from '../encounters';
 import { getGang } from '../gangs';
 import { allProducts, getWarehouses, take } from '../goods';
 import { getSpot, spotsInVeedel } from '../spots';
-import { bonus, getStaff, getStaffMember, getStats, type StaffMember } from '../staff';
+import { getStaff, getStaffMember, isLyingLow, riskFactor, type StaffMember } from '../staff';
 import {
   addInfluence,
   controlledBy,
@@ -62,6 +65,7 @@ import {
   RAID_COOLDOWN,
   RAID_GOODS,
   RAID_HEAT_RELIEF,
+  RAID_LEAD_TIME,
   RAID_MONEY,
   RAID_THRESHOLD,
   SALE_HEAT_BASE,
@@ -111,6 +115,8 @@ export interface PoliceState {
   tipOffs: Record<string, TipOff>;
   /** Ab wann die Polizei wieder einen Hinweis annimmt. */
   snitchReadyAt: number;
+  /** Geplante Razzien gegen den Spieler: Veedel → Zeitpunkt. */
+  plannedRaids: Record<string, number>;
   stats: PoliceStats;
 }
 
@@ -118,6 +124,9 @@ export interface PoliceState {
 interface PoliceStateV1 {
   heat: Record<string, number>;
 }
+
+/** Zustand in Version 2 (Auftrag 10), ohne geplante Razzien. */
+type PoliceStateV2 = Omit<PoliceState, 'plannedRaids'>;
 
 declare module '../../core' {
   interface ModuleStates {
@@ -139,7 +148,8 @@ declare module '../../core' {
     };
     /**
      * Razzia in einem Veedel. target = betroffene Fraktion ('player' oder Gang-ID). Beim Spieler: beschlagnahmte
-     * Ware und Geld sowie Festgenommene, bei einer Gang: verlorener Einfluss.
+     * Ware und Geld sowie Festgenommene (empty: niemand mehr da, die Razzia ging ins Leere), bei einer Gang:
+     * verlorener Einfluss.
      */
     'police.raid': {
       veedelId: string;
@@ -148,8 +158,11 @@ declare module '../../core' {
       goods?: number;
       money?: number;
       arrested?: string[];
+      empty?: boolean;
       influenceLost?: number;
     };
+    /** Eine Razzia gegen den Spieler ist geplant und kommt zur Zeit at (der Polizei-Kontakt kann warnen). */
+    'police.raidPlanned': { veedelId: string; at: number };
     /** Ein Mitarbeiter wurde festgenommen. Den Haft-Status setzt das staff-Modul. */
     'police.arrest': { staffId: string; veedelId: string };
     /** Eine Gang wurde verpfiffen. */
@@ -198,6 +211,11 @@ export function hottestVeedel(state: GameState): { veedelId: string; heat: numbe
 export function activeTipOff(state: GameState, veedelId: string): TipOff | null {
   const tip = state.modules.police.tipOffs[veedelId];
   return tip && tip.until > state.time ? tip : null;
+}
+
+/** Zeitpunkt einer geplanten Razzia gegen den Spieler in diesem Veedel, sonst null. */
+export function plannedRaid(state: GameState, veedelId: string): number | null {
+  return state.modules.police.plannedRaids[veedelId] ?? null;
 }
 
 export function getPoliceStats(state: GameState): PoliceStats {
@@ -293,11 +311,10 @@ function rampedChance(heat: number, threshold: number, chance: number): number {
   return chance * (0.25 + (0.75 * (heat - threshold)) / (MAX_HEAT - threshold));
 }
 
-/** Vorsicht senkt das Risiko: Vorsicht 50 → 1, 100 → 0,5, 0 → 1,5. */
+/** Vorsicht und Erfahrung senken das Risiko (riskFactor aus staff, 1 = Durchschnitt). Der Spieler selbst: 1. */
 function cautionFactor(state: GameState, staffId: string | null): number {
-  if (!staffId) return 1;
-  const caution = getStats(state, staffId)?.caution ?? 50;
-  return 1.5 - caution / 100;
+  if (!staffId || !getStaffMember(state, staffId)) return 1;
+  return riskFactor(state, staffId);
 }
 
 function staffName(state: GameState, staffId: string): string {
@@ -435,10 +452,32 @@ function onChaseResolved(ctx: Ctx, outcome: string, veedelId: string, spotId: st
   journal.add(ctx, `Flucht gescheitert: ${names} festgenommen, ${loss} beschlagnahmt.`, 'bad', ref);
 }
 
-/** Razzia gegen die eigenen Leute im Veedel. */
+/** Razzia gegen den Spieler planen. Sie kommt RAID_LEAD_TIME später (der Polizei-Kontakt kann warnen). */
+function planRaid(ctx: Ctx, veedelId: string): void {
+  const police = ctx.state.modules.police;
+  const at = ctx.now + RAID_LEAD_TIME;
+  police.plannedRaids[veedelId] = at;
+  police.raidReadyAt[veedelId] = at;
+  ctx.emit('police.raidPlanned', { veedelId, at });
+}
+
+/** Razzia gegen die eigenen Leute im Veedel. Ist niemand mehr da (abgetaucht), geht sie ins Leere. */
 function raidPlayer(ctx: Ctx, veedelId: string): void {
   const state = ctx.state;
-  const people = activeStaffIn(state, veedelId);
+  const underground = isLyingLow(state, veedelId);
+  // Ist das Veedel abgetaucht, hält sich auch der Leutnant bedeckt.
+  const people = activeStaffIn(state, veedelId).filter((m) => !underground || m.assignment?.kind !== 'veedel');
+  if (people.length === 0 && (underground || !hasPlayerPresence(state, veedelId))) {
+    finishRaid(ctx, veedelId);
+    journal.add(
+      ctx,
+      `Razzia in ${veedelName(veedelId)}, aber da war niemand mehr. Die Bullen ziehen mit leeren Händen ab.`,
+      'good',
+      { veedelId },
+    );
+    ctx.emit('police.raid', { veedelId, target: PLAYER_FACTION, goods: 0, money: 0, arrested: [], empty: true });
+    return;
+  }
   const spotId = spotOf(people.length > 0 ? ctx.pick(people) : null) ?? spotsInVeedel(state, veedelId)[0]?.id ?? null;
   const goods = confiscateGoods(ctx, ctx.randomInt(RAID_GOODS.min, RAID_GOODS.max));
   const money = confiscateMoney(ctx, ctx.randomInt(RAID_MONEY.min, RAID_MONEY.max));
@@ -499,14 +538,18 @@ function finishRaid(ctx: Ctx, veedelId: string): void {
 function tick(ctx: Ctx): void {
   const state = ctx.state;
   const police = state.modules.police;
-  const warning = Math.min(1, Math.max(0, bonus(state, 'raidWarning')));
   for (const [veedelId, tip] of Object.entries(police.tipOffs)) {
     if (tip.until <= ctx.now) delete police.tipOffs[veedelId];
+  }
+  for (const [veedelId, at] of Object.entries(police.plannedRaids).sort()) {
+    if (at > ctx.now) continue;
+    delete police.plannedRaids[veedelId];
+    raidPlayer(ctx, veedelId);
   }
   for (const v of allVeedel()) {
     const heat = addHeat(ctx, v.id, -HEAT_DECAY_PER_HOUR);
     const presence = v.policePresence;
-    const raidReady = ctx.now >= (police.raidReadyAt[v.id] ?? 0);
+    const raidReady = ctx.now >= (police.raidReadyAt[v.id] ?? 0) && police.plannedRaids[v.id] === undefined;
     const tip = police.tipOffs[v.id];
 
     if (tip && raidReady) {
@@ -522,8 +565,8 @@ function tick(ctx: Ctx): void {
     const raidTarget = playerThere ? PLAYER_FACTION : owner !== PLAYER_FACTION ? owner : null;
     if (raidReady && raidTarget !== null) {
       const chance = rampedChance(heat, RAID_THRESHOLD, RAID_CHANCE_PER_HOUR) * presence;
-      if (ctx.chance(raidTarget === PLAYER_FACTION ? chance * (1 - warning) : chance)) {
-        if (raidTarget === PLAYER_FACTION) raidPlayer(ctx, v.id);
+      if (ctx.chance(chance)) {
+        if (raidTarget === PLAYER_FACTION) planRaid(ctx, v.id);
         else raidGang(ctx, v.id, raidTarget, false);
         continue;
       }
@@ -543,13 +586,14 @@ function initialState(): PoliceState {
     raidReadyAt: {},
     tipOffs: {},
     snitchReadyAt: 0,
+    plannedRaids: {},
     stats: { checks: 0, raids: 0, gangRaids: 0, arrests: 0, confiscatedGoods: 0, confiscatedMoney: 0 },
   };
 }
 
 export default defineModule({
   id: 'police',
-  version: 2,
+  version: 3,
   dependsOn: ['veedel', 'territory'],
   init: () => initialState(),
   tickEvery: 60,
@@ -576,10 +620,14 @@ export default defineModule({
     },
   },
   migrations: {
-    2: (old: PoliceStateV1): PoliceState => ({
-      ...initialState(),
-      heat: { ...old.heat },
-      level: Object.fromEntries(Object.entries(old.heat).map(([id, heat]) => [id, heatLevel(heat).index])),
-    }),
+    2: (old: PoliceStateV1): PoliceStateV2 => {
+      const { plannedRaids: _, ...fresh } = initialState();
+      return {
+        ...fresh,
+        heat: { ...old.heat },
+        level: Object.fromEntries(Object.entries(old.heat).map(([id, heat]) => [id, heatLevel(heat).index])),
+      };
+    },
+    3: (old: PoliceStateV2): PoliceState => ({ ...old, plannedRaids: {} }),
   },
 });

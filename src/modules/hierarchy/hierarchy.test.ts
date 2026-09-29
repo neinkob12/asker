@@ -197,6 +197,18 @@ describe('hierarchy: Delegation', () => {
     expect(shipmentsInTransit(sim.state)).toHaveLength(1);
   });
 
+  it('er bestellt, wonach die Kunden fragen (customer.missed)', () => {
+    const sim = quietGame();
+    const lt = recruit(sim, 'runner', 2);
+    appoint(sim, lt.id, 'deutz');
+    sim.state.modules.customers.stats.missedByProduct = { hash: 12, weed: 1 };
+    sim.state.wallet.dirty = 5000;
+    sim.advance(5);
+    expect(shipmentsInTransit(sim.state)).toHaveLength(1);
+    expect(shipmentsInTransit(sim.state)[0].productId).toBe('hash');
+    expect(getPost(sim.state, 'deutz')?.log[0].text).toMatch(/fragen danach/);
+  });
+
   it('er stellt Leute aus dem Pool ein, wenn er darf', () => {
     const sim = quietGame();
     sim.state.wallet.dirty = 5000;
@@ -371,5 +383,31 @@ describe('hierarchy: Spielstände aus dem Fundament', () => {
     // Um Mitternacht zieht er auch im Personal als Leutnant ein.
     loaded.advance(1440);
     expect(getStaffMember(loaded.state, lt.id)?.assignment).toEqual({ kind: 'veedel', targetId: 'deutz' });
+  });
+});
+
+describe('hierarchy: Warnung vor Razzien', () => {
+  it('der Leutnant zieht nach der Warnung des Polizei-Kontakts seine Leute ab', () => {
+    const sim = quietGame();
+    const events = recordEvents(sim);
+    const lt = recruit(sim, 'runner', 3);
+    expect(appoint(sim, lt.id, 'lindenthal').ok).toBe(true);
+    const runner = recruit(sim, 'runner');
+    sim.dispatch({
+      type: 'staff.assign',
+      payload: { staffId: runner.id, assignment: { kind: 'spot', targetId: 'uni' } },
+    });
+    const contact = recruit(sim, 'policeContact');
+    contact.stats.charisma = 100;
+    contact.level = 10;
+    const at = sim.state.time + 180;
+    sim.ctx('police').emit('police.raidPlanned', { veedelId: 'lindenthal', at });
+    sim.step();
+    expect(eventsOfType(events, 'staff.raidWarning')).toHaveLength(1);
+    expect(getStaffMember(sim.state, runner.id)?.assignment).toBeNull();
+    expect(getPost(sim.state, 'lindenthal')?.log[0].text).toContain('Razzia');
+    // Solange abgetaucht, stellt er niemanden zurück an den Spot.
+    sim.advance(60);
+    expect(getStaffMember(sim.state, runner.id)?.assignment).toBeNull();
   });
 });

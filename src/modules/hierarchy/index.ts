@@ -29,12 +29,13 @@ import {
   staffContact,
 } from '../staff';
 import { getVeedel, veedelName } from '../veedel';
-import { tick } from './ai';
+import { onRaidWarning, tick } from './ai';
 import {
   CAUTION_LEVELS,
   COMPLAINT_COOLDOWN,
   DEFAULT_SETTINGS,
   DEMOTION_LOYALTY,
+  HIDE_AFTER_RAID,
   LIEUTENANT_DEMAND,
   LIEUTENANT_MIN_LEVEL,
   LIEUTENANT_XP_PER_SALE,
@@ -332,6 +333,11 @@ export default defineModule({
   },
   on: {
     'clock.dayStarted': daily,
+    // Der Polizei-Kontakt warnt vor einer Razzia: Der Leutnant im Veedel zieht seine Leute ab.
+    'staff.raidWarning': (ctx, { veedelId, at }) => {
+      const post = getPost(ctx.state, veedelId);
+      if (post) onRaidWarning(ctx, veedelId, post, at + HIDE_AFTER_RAID);
+    },
     // Wer geht, ist auch kein Leutnant mehr.
     'staff.left': (ctx, { staffId }) => {
       for (const [veedelId, id] of getLieutenants(ctx.state)) {

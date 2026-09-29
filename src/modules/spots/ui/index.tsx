@@ -3,9 +3,22 @@
 // Das Panel hat den Slot 'spots.spotPanel', in den andere Module Abschnitte hängen (Kunden, Preise, Läufer …).
 
 import { formatEuro, formatPercent } from '../../../core';
-import { registerMapLayer } from '../../../map';
-import { Button, Card, Hint, List, ListItem, registerPanel, registerSlot, Slot, useGame, useUi } from '../../../ui';
+import { mapEffects, registerMapLayer } from '../../../map';
+import {
+  Button,
+  Card,
+  Hint,
+  List,
+  ListItem,
+  onGameEvent,
+  registerPanel,
+  registerSlot,
+  Slot,
+  useGame,
+  useUi,
+} from '../../../ui';
 import { waitingAt } from '../../customers';
+import { formatProductAmount } from '../../goods';
 import { veedelName } from '../../veedel';
 import { customSpots, FOUND_SPOT_COST, getSpot, getSpots, isSpotActive, lockedSpots, MAX_CUSTOM_SPOTS } from '../index';
 import { spotsLayer } from './map';
@@ -103,3 +116,9 @@ registerPanel({
 });
 registerSlot('tab:business', { id: 'spots.list', order: 15, component: SpotsSection });
 registerMapLayer(spotsLayer);
+
+// Geld-Popup am Spot bei jedem Straßenverkauf.
+onGameEvent('sale.completed', 'spots.moneyFx', (p, _ui, state) => {
+  const spot = p.spotId ? getSpot(state, p.spotId) : undefined;
+  if (spot) mapEffects.money(spot, p.revenue, { caption: formatProductAmount(p.productId, p.amount) });
+});

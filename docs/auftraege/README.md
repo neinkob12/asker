@@ -56,6 +56,12 @@ Was jede Session nach dem Fundament vorfindet und welche Schnittstellen sie nutz
 9. **Wurde `main` zwischendurch geändert, weil andere PRs gemergt wurden:** `main` in den eigenen Branch mergen, nicht rebasen.
 10. **PR-Beschreibung mit drei Abschnitten:** "Was ist neu", "Wie testen", "Für die Integration".
 
+## Stand
+
+Phase 0, Phase 1 und Phase 2 (Integration, Branch `claude/integration-20`) sind erledigt. Neue Arbeit kommt als
+eigene Aufträge (unten), jede Session darf dann wieder den ganzen Code ändern, sofern der Auftrag nichts anderes
+sagt. Vor jedem Push: `npm run check`, `npm run build`, `npm run e2e`.
+
 ## Mergen
 
 - Ein PR wird gemergt, sobald er fertig und die CI grün ist. Die Reihenfolge in Phase 1 ist egal.

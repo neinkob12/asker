@@ -1,7 +1,8 @@
 // Reviere: Einfluss pro Veedel und Fraktion. Fraktionen sind der Spieler ('player') und die Gangs (Gang-ID).
 //
 // - Eigene Verkäufe (sale.completed) bringen Einfluss und drängen die stärkste Gang im Veedel zurück.
-// - Präsenz: Aktive Mitarbeiter im Veedel bringen jede Stunde etwas Einfluss. Wer im Veedel weder Leute noch einen
+// - Präsenz: Aktive Mitarbeiter im Veedel bringen jede Stunde etwas Einfluss. Ein Leutnant (hierarchy) bringt
+//   zusätzlich Einfluss, je nach Level und Charisma, und hält das Veedel auch ohne Läufer. Wer im Veedel weder Leute noch einen
 //   Verkauf in den letzten 24 Stunden hat, verliert langsam an Einfluss.
 // - Gangs halten ihre Veedel (bauen Einfluss bis zum Startwert wieder auf) und holen sich vernachlässigte Veedel
 //   langsam zurück. Die Gang-KI (Auftrag 11) arbeitet zusätzlich über addInfluence().
@@ -12,18 +13,21 @@
 //   PLAYER_FACTION, CONTROL_THRESHOLD, getInfluence(state, veedelId, faction), influenceIn(state, veedelId),
 //   addInfluence(ctx, veedelId, faction, delta), controllerOf(state, veedelId), controlledBy(state, faction),
 //   factions(state), factionName(state, faction), factionColor(state, faction), playerPresence(state, veedelId),
-//   hasPlayerPresence(state, veedelId), campaignProgress(state)
+//   hasPlayerPresence(state, veedelId), lieutenantInfluence(state, veedelId), campaignProgress(state)
 // Ereignisse: 'territory.controlChanged'
 
 import { type Ctx, defineModule, type GameState, journal, outcome } from '../../core';
 import { getGang, getGangs } from '../gangs';
-import { getStaff } from '../staff';
+import { getLieutenant } from '../hierarchy';
+import { getStaff, getStaffMember } from '../staff';
 import { allVeedel, getVeedel, neighborsOf, veedelName } from '../veedel';
 import {
   CONTROL_THRESHOLD,
   DECAY_PER_HOUR,
   GANG_PRESSURE_PER_HOUR,
   GANG_REGEN_PER_HOUR,
+  LIEUTENANT_INFLUENCE_PER_HOUR,
+  LIEUTENANT_INFLUENCE_PER_LEVEL,
   LOSE_CONTROL_THRESHOLD,
   MAX_INFLUENCE,
   NEUTRAL_COLOR,
@@ -35,6 +39,7 @@ import {
   SALE_PRESENCE_MINUTES,
   STAFF_PRESENCE_MAX,
   STAFF_PRESENCE_PER_HOUR,
+  TAKEOVER_MARGIN,
 } from './config';
 
 export { CONTROL_THRESHOLD, LOSE_CONTROL_THRESHOLD } from './config';
@@ -133,6 +138,16 @@ export function playerPresence(state: GameState, veedelId: string): PlayerPresen
   };
 }
 
+/** Zusätzlicher Einfluss pro Stunde durch einen aktiven Leutnant im Veedel (0 ohne Leutnant). */
+export function lieutenantInfluence(state: GameState, veedelId: string): number {
+  const staffId = getLieutenant(state, veedelId);
+  const lt = staffId ? getStaffMember(state, staffId) : undefined;
+  if (lt?.status !== 'active' || lt.leftAt !== null) return 0;
+  const charisma = 0.75 + lt.stats.charisma / 200;
+  const value = (LIEUTENANT_INFLUENCE_PER_HOUR + LIEUTENANT_INFLUENCE_PER_LEVEL * (lt.level - 1)) * charisma;
+  return Math.round(value * 1000) / 1000;
+}
+
 /** Hat der Spieler Leute im Veedel oder dort kürzlich verkauft? */
 export function hasPlayerPresence(state: GameState, veedelId: string): boolean {
   const presence = playerPresence(state, veedelId);
@@ -162,12 +177,13 @@ function changeInfluence(state: GameState, veedelId: string, faction: FactionId,
 
 /**
  * Kontrolle: Wer kontrolliert, behält das Veedel, solange er mindestens LOSE_CONTROL_THRESHOLD hat. Übernehmen kann,
- * wer mindestens CONTROL_THRESHOLD und mehr Einfluss als der bisherige Herr hat (bei mehreren: der stärkste).
+ * wer mindestens CONTROL_THRESHOLD und TAKEOVER_MARGIN mehr Einfluss als der bisherige Herr hat (bei mehreren: der
+ * stärkste). Der Abstand verhindert, dass ein umkämpftes Veedel ständig hin- und herspringt.
  */
 function computeController(row: Record<FactionId, number>, current: FactionId | null): FactionId | null {
   const holder = current !== null && (row[current] ?? 0) >= LOSE_CONTROL_THRESHOLD ? current : null;
   let best = holder;
-  let bestValue = holder !== null ? row[holder] : CONTROL_THRESHOLD - Number.EPSILON;
+  let bestValue = holder !== null ? row[holder] + TAKEOVER_MARGIN : CONTROL_THRESHOLD - Number.EPSILON;
   for (const [faction, value] of Object.entries(row)) {
     if (faction !== holder && value >= CONTROL_THRESHOLD && value > bestValue) {
       best = faction;
@@ -220,8 +236,10 @@ function tick(ctx: Ctx): void {
     for (const [faction, value] of Object.entries(row)) {
       if (faction === PLAYER_FACTION) {
         const presence = playerPresence(state, v.id);
-        if (presence.staff > 0) {
-          changeInfluence(state, v.id, faction, STAFF_PRESENCE_PER_HOUR * Math.min(presence.staff, STAFF_PRESENCE_MAX));
+        const lieutenant = lieutenantInfluence(state, v.id);
+        if (presence.staff > 0 || lieutenant > 0) {
+          const staffGain = STAFF_PRESENCE_PER_HOUR * Math.min(presence.staff, STAFF_PRESENCE_MAX);
+          changeInfluence(state, v.id, faction, staffGain + lieutenant);
         } else if (!presence.recentSale && value > 0) {
           changeInfluence(state, v.id, faction, -DECAY_PER_HOUR);
         }

@@ -1,7 +1,7 @@
 // Abläufe des Personals: Läufer bedienen Kunden, Haft und Verletzung laufen ab, Löhne, Loyalität,
 // Werte zeigen sich mit der Zeit, seltener Verrat und die Warnung des Polizei-Kontakts.
 
-import { type Ctx, formatEuro, journal, messages, wallet } from '../../core';
+import { type Ctx, clock, formatEuro, type GameState, journal, messages, wallet } from '../../core';
 import { canServe, waitingAt } from '../customers';
 import { formatProductAmount, stockSummary, take } from '../goods';
 import { addHeat, getHeat } from '../police';
@@ -14,22 +14,26 @@ import {
   DANGER_HEAT,
   FIRED_TALK_CHANCE,
   FIRED_TALK_LOYALTY,
+  HIDE_AFTER_RAID,
   LOYALTY,
-  RAID_WARNING_COOLDOWN,
-  RAID_WARNING_HEAT,
   REVEAL_CHANCE,
   TALK_HEAT,
   THEFT_GOODS_MAX,
   THEFT_GOODS_SHARE,
   THEFT_MONEY_MAX,
   THEFT_MONEY_SHARE,
+  UNPAID_DAYS_TO_QUIT,
+  UNPAID_QUIT_LOYALTY,
   XP_PER_DUTY_HOUR,
   XP_PER_SPECIALIST_DAY,
+  XP_PER_WARNING,
 } from './config';
 import {
+  activeRunnerAt,
   addCareer,
   addLoyalty,
   addXp,
+  assign,
   bonus,
   bonusProvider,
   expectedWage,
@@ -75,40 +79,91 @@ function serveCustomers(ctx: Ctx): void {
   }
 }
 
-/** Zur vollen Stunde: Sicherheit im Einsatz sammelt Erfahrung, der Polizei-Kontakt warnt. */
+/** Zur vollen Stunde: Sicherheit im Einsatz sammelt Erfahrung, Abgetauchte kehren zurück. */
 export function hourly(ctx: Ctx): void {
   for (const m of ctx.state.modules.staff.members) {
     if (m.role === 'security' && m.status === 'active' && m.assignment) addXp(ctx, m.id, XP_PER_DUTY_HOUR);
   }
-  warnOfRaids(ctx);
+  returnFromHiding(ctx);
+}
+
+/** Ist das Veedel gerade abgetaucht (nach einer Warnung vor einer Razzia)? */
+export function isLyingLow(state: GameState, veedelId: string): boolean {
+  const hiding = state.modules.staff.hiding[veedelId];
+  return !!hiding && hiding.until > state.time;
 }
 
 /**
- * Übergangslösung für "Warnung vor Razzien": Der Polizei-Kontakt meldet sich, wenn es in einem Veedel,
- * in dem deine Leute arbeiten, heiß wird. Die echte Warnung vor einer geplanten Razzia gehört in die
- * Polizei (Auftrag 10), die dafür bonus(state, 'raidWarning') abfragt.
+ * Alle Leute an den Spots eines Veedels von der Straße holen, bis until. Danach gehen sie an ihren Platz zurück
+ * (wenn er noch frei ist). Gibt die Zahl der Abgezogenen zurück.
  */
-function warnOfRaids(ctx: Ctx): void {
-  const contact = bonusProvider(ctx.state, 'raidWarning');
-  if (!contact) return;
-  const chance = bonus(ctx.state, 'raidWarning');
+export function lieLow(ctx: Ctx, veedelId: string, until: number): number {
   const s = ctx.state.modules.staff;
-  const veedelIds = new Set<string>();
-  for (const m of s.members) {
-    const v = staffVeedel(ctx.state, m);
-    if (v) veedelIds.add(v);
+  const hiding = s.hiding[veedelId] ?? { until, returns: [] };
+  hiding.until = Math.max(hiding.until, until);
+  let pulled = 0;
+  for (const m of [...s.members]) {
+    if (m.status !== 'active' || m.assignment?.kind !== 'spot') continue;
+    if (staffVeedel(ctx.state, m) !== veedelId) continue;
+    hiding.returns.push({ staffId: m.id, assignment: { ...m.assignment } });
+    assign(ctx, m.id, null);
+    pulled++;
   }
-  for (const veedelId of [...veedelIds].sort()) {
-    const heat = getHeat(ctx.state, veedelId);
-    if (heat < RAID_WARNING_HEAT) continue;
-    if (ctx.now - (s.warnings[veedelId] ?? -Infinity) < RAID_WARNING_COOLDOWN) continue;
-    s.warnings[veedelId] = ctx.now;
-    if (!ctx.chance(chance)) continue;
-    messages.send(ctx, {
-      contact: staffContact(contact),
-      text: `In ${veedelName(veedelId)} ist es heiß. Die Kollegen planen da was. Zieh deine Leute ab, wenn du schlau bist.`,
-    });
-    ctx.emit('staff.raidWarning', { veedelId, staffId: contact.id, heat });
+  s.hiding[veedelId] = hiding;
+  return pulled;
+}
+
+/**
+ * Warnung des Polizei-Kontakts: Wenn eine Razzia geplant ist und der Kontakt davon erfährt (bonus 'raidWarning'),
+ * schreibt er dem Spieler. Die Antwort "Leute abziehen" lässt das Veedel abtauchen.
+ */
+export function warnOfRaid(ctx: Ctx, veedelId: string, at: number): void {
+  const contact = bonusProvider(ctx.state, 'raidWarning');
+  if (!contact || !ctx.chance(bonus(ctx.state, 'raidWarning'))) return;
+  const time = clock.formatTime(at);
+  messages.send(ctx, {
+    contact: staffContact(contact),
+    text: `Pass auf: Die Kollegen planen für ${time} eine Razzia in ${veedelName(veedelId)}. Zieh deine Leute ab, wenn du schlau bist.`,
+    options: [
+      {
+        id: 'lieLow',
+        label: 'Leute abziehen',
+        command: { type: 'staff.lieLow', payload: { veedelId, until: at + HIDE_AFTER_RAID } },
+        reply: 'Danke. Alle runter von der Straße.',
+      },
+      { id: 'ignore', label: 'Ignorieren', reply: 'Die sollen ruhig kommen.' },
+    ],
+    expiresIn: Math.max(1, at - ctx.now),
+  });
+  addXp(ctx, contact.id, XP_PER_WARNING);
+  ctx.emit('staff.raidWarning', { veedelId, staffId: contact.id, heat: getHeat(ctx.state, veedelId), at });
+}
+
+/** Wer abgetaucht war, geht zurück an seinen Platz, wenn der noch frei ist und er einsatzbereit ist. */
+function returnFromHiding(ctx: Ctx): void {
+  const s = ctx.state.modules.staff;
+  for (const veedelId of Object.keys(s.hiding).sort()) {
+    const hiding = s.hiding[veedelId];
+    if (hiding.until > ctx.now) continue;
+    delete s.hiding[veedelId];
+    let back = 0;
+    for (const { staffId, assignment } of hiding.returns) {
+      const m = s.members.find((x) => x.id === staffId);
+      if (m?.status !== 'active' || m.assignment) continue;
+      if (m.role === 'runner' && assignment.kind === 'spot' && activeRunnerAt(ctx.state, assignment.targetId)) continue;
+      assign(ctx, m.id, assignment);
+      back++;
+    }
+    if (back > 0) {
+      journal.add(
+        ctx,
+        `Die Luft ist rein: ${back} von deinen Leuten in ${veedelName(veedelId)} wieder auf der Straße.`,
+        'info',
+        {
+          veedelId,
+        },
+      );
+    }
   }
 }
 
@@ -123,23 +178,47 @@ export function daily(ctx: Ctx): void {
   for (const m of [...ctx.state.modules.staff.members]) maybeBetray(ctx, m);
 }
 
-/** Löhne pro Person. Wer nicht bezahlt werden kann, kündigt (wie im Prototyp). */
+/**
+ * Löhne pro Person, die Loyalsten zuerst. Wer nicht bezahlt werden kann, ist sauer (Loyalität sinkt) und
+ * schreibt dir. Wer dann kaum noch loyal ist oder schon gestern leer ausging, kündigt.
+ */
 function payWages(ctx: Ctx): void {
-  const members = [...ctx.state.modules.staff.members];
+  const members = [...ctx.state.modules.staff.members].sort(
+    (a, b) => b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id),
+  );
   if (members.length === 0) return;
   let paid = 0;
   let total = 0;
   const quitting: StaffMember[] = [];
+  let complained = 0;
   for (const m of members) {
     if (m.wage <= 0 || wallet.pay(ctx, m.wage, 'dirty', `Lohn ${m.name}`)) {
       paid++;
       total += m.wage;
-    } else {
+      m.unpaidDays = 0;
+      continue;
+    }
+    m.unpaidDays = (m.unpaidDays ?? 0) + 1;
+    const loyalty = addLoyalty(ctx, m.id, LOYALTY.unpaid);
+    if (m.unpaidDays >= UNPAID_DAYS_TO_QUIT || loyalty < UNPAID_QUIT_LOYALTY) {
       quitting.push(m);
+    } else if (complained++ === 0) {
+      messages.send(ctx, {
+        contact: staffContact(m),
+        text: `Chef, wo bleibt mein Geld? ${formatEuro(m.wage)} für gestern. Noch einen Tag mach ich das nicht mit.`,
+      });
     }
   }
   if (paid > 0 && total > 0) {
     journal.add(ctx, `Löhne gezahlt: ${formatEuro(total)} für ${paid} ${paid === 1 ? 'Person' : 'Leute'}.`);
+  }
+  const unpaid = members.length - paid - quitting.length;
+  if (unpaid > 0) {
+    journal.add(
+      ctx,
+      `Kein Geld für Löhne: ${unpaid === 1 ? 'Eine Person wartet' : `${unpaid} Leute warten`} auf ihr Geld. Morgen gehen sie.`,
+      'bad',
+    );
   }
   if (quitting.length > 0) {
     for (const m of quitting) removeMember(ctx, m.id, 'quit');

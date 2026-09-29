@@ -6,7 +6,7 @@ import type { CustomerType } from './index';
 export const CUSTOMER_PATIENCE = 180;
 export const MAX_CUSTOMERS_PER_SPOT = 4;
 /** Mittlerer Abstand zwischen zwei Kunden an einem Spot mit Andrang 1 (bei Richtpreis). */
-export const BASE_SPAWN_INTERVAL = 120;
+export const BASE_SPAWN_INTERVAL = 85;
 
 /** Nachfrage je nach Uhrzeit: abends und nachts ist mehr los. */
 export function hourDemandMultiplier(hour: number): number {
@@ -206,6 +206,8 @@ export const WHOLESALE_AMOUNTS: Readonly<Record<string, readonly number[]>> = {
 /** Rabatt, den Großhändler wollen [von, bis]. */
 export const WHOLESALE_DISCOUNT: readonly [number, number] = [0.25, 0.4];
 export const WHOLESALE_HANDOVER_MINUTES = 20;
+/** So oft kippt ein Großhandels-Deal bei der Übergabe (Konfrontation "Deal kippt"). */
+export const WHOLESALE_BETRAYAL_CHANCE = 0.12;
 
 export const DEALERS: readonly { id: string; name: string; veedelId: string }[] = [
   { id: 'oemer', name: 'Ömer (Kalk)', veedelId: 'kalk' },

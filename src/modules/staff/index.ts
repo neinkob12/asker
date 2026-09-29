@@ -15,24 +15,27 @@
 // Öffentliche API (schreiben, mit ctx):
 //   assign(ctx, id, assignment), setStatus(ctx, id, status, until?), addXp, addLoyalty, setWage, setDemand,
 //   addCareer, revealStat, enlist(ctx, profile, options), generateProfile(ctx, role, options), randomName(ctx)
-// Befehle: 'staff.hireRunner', 'staff.fire', 'staff.assign', 'staff.setWage', 'staff.bail'
+//   isLyingLow(state, veedelId), lieLow(ctx, veedelId, until)
+// Befehle: 'staff.hireRunner', 'staff.fire', 'staff.assign', 'staff.setWage', 'staff.bail', 'staff.lieLow'
 // Ereignisse: 'staff.hired', 'staff.left', 'staff.statusChanged', 'staff.assigned', 'staff.levelUp',
-//   'staff.bailed', 'staff.betrayed', 'staff.raidWarning'
+//   'staff.bailed', 'staff.betrayed', 'staff.raidWarning', 'staff.wentUnderground'
 
-import { type Ctx, clock, defineModule, formatEuro, type GameState, journal } from '../../core';
+import { type CommandResult, type Ctx, clock, defineModule, formatEuro, type GameState, journal } from '../../core';
+import { getVeedel, veedelName } from '../veedel';
 import { assignCommand, bail, fire, hireRunner, setWageCommand } from './commands';
 import {
   DEFAULT_STATS,
   INJURY_DURATION,
   JAIL_DURATION,
   LOYALTY,
+  MAX_HIDE_DURATION,
   XP_PER_ENCOUNTER,
   XP_PER_SALE,
   XP_PER_SALE_UNIT,
 } from './config';
 import { addLoyalty, addXp, bailCost, getStaff, getStaffMember, setStatus } from './members';
 import { STAT_KEYS } from './profile';
-import { daily, hourly, tick } from './routines';
+import { daily, hourly, lieLow, tick, warnOfRaid } from './routines';
 import type {
   BetrayalKind,
   StaffAssignment,
@@ -64,7 +67,7 @@ export {
   randomName,
   STAT_KEYS,
 } from './profile';
-export { betrayalChance } from './routines';
+export { betrayalChance, isLyingLow, lieLow } from './routines';
 export type * from './types';
 
 declare module '../../core' {
@@ -81,6 +84,8 @@ declare module '../../core' {
     'staff.setWage': { staffId: string; wage: number };
     /** Kaution zahlen und jemanden aus der Haft holen. */
     'staff.bail': { staffId: string };
+    /** Alle Leute an den Spots eines Veedels bis until von der Straße holen (z.B. nach einer Razzia-Warnung). */
+    'staff.lieLow': { veedelId: string; until: number };
   }
   interface GameEvents {
     'staff.hired': { staffId: string; role: StaffRole };
@@ -91,8 +96,10 @@ declare module '../../core' {
     'staff.bailed': { staffId: string; cost: number };
     /** Verrat: amount = Einheiten Ware, Euro oder Heat (je nach kind). */
     'staff.betrayed': { staffId: string; kind: BetrayalKind; amount: number };
-    /** Der Polizei-Kontakt warnt vor einer möglichen Razzia. */
-    'staff.raidWarning': { veedelId: string; staffId: string; heat: number };
+    /** Der Polizei-Kontakt warnt vor einer geplanten Razzia (at = wann sie kommt). */
+    'staff.raidWarning': { veedelId: string; staffId: string; heat: number; at: number };
+    /** Die Leute in einem Veedel sind abgetaucht (pulled = so viele von der Straße geholt). */
+    'staff.wentUnderground': { veedelId: string; until: number; pulled: number };
   }
 }
 
@@ -140,13 +147,21 @@ function upgradeMember(m: StaffMemberV1, state: GameState): StaffMember {
   };
 }
 
-export function migrateStaffV1(old: StaffStateV1, state: GameState): StaffState {
+type StaffStateV2 = Omit<StaffState, 'hiding'> & { warnings: Record<string, number> };
+
+export function migrateStaffV1(old: StaffStateV1, state: GameState): StaffStateV2 {
   const members = old.members.map((m) => upgradeMember(m, state));
   return {
     members: members.filter((m) => m.leftAt === null),
     former: members.filter((m) => m.leftAt !== null),
     warnings: {},
   };
+}
+
+/** Version 2 → 3: Die Übergangs-Warnungen fallen weg, dafür gibt es abgetauchte Veedel. */
+export function migrateStaffV2(old: StaffStateV2): StaffState {
+  const { warnings: _, ...rest } = old;
+  return { ...rest, hiding: {} };
 }
 
 // --- Reaktionen auf andere Module ---
@@ -165,11 +180,27 @@ function onArrest(ctx: Ctx, staffId: string, veedelId: string): void {
   for (const other of getStaff(ctx.state, { veedelId })) addLoyalty(ctx, other.id, LOYALTY.arrestNearby);
 }
 
+function lieLowCommand(ctx: Ctx, veedelId: string, until: number, actor: string): CommandResult {
+  if (!getVeedel(veedelId)) return { ok: false, reason: 'Unbekanntes Veedel.' };
+  if (!(until > ctx.now) || until - ctx.now > MAX_HIDE_DURATION) return { ok: false, reason: 'Ungültige Dauer.' };
+  const pulled = lieLow(ctx, veedelId, until);
+  const by =
+    actor === 'player' ? '' : ` (${getStaffMember(ctx.state, actor.replace('staff:', ''))?.name ?? 'Leutnant'})`;
+  journal.add(
+    ctx,
+    `${veedelName(veedelId)} taucht ab${by}: ${pulled === 1 ? 'eine Person' : `${pulled} Leute`} bis ${clock.formatTime(until)} von der Straße.`,
+    'info',
+    { veedelId },
+  );
+  ctx.emit('staff.wentUnderground', { veedelId, until, pulled });
+  return { ok: true };
+}
+
 export default defineModule({
   id: 'staff',
-  version: 2,
+  version: 3,
   dependsOn: ['spots', 'customers'],
-  init: () => ({ members: [], former: [], warnings: {} }),
+  init: () => ({ members: [], former: [], hiding: {} }),
   tick,
   commands: {
     'staff.hireRunner': (ctx, { spotId }) => hireRunner(ctx, spotId),
@@ -177,11 +208,13 @@ export default defineModule({
     'staff.assign': (ctx, { staffId, assignment }) => assignCommand(ctx, staffId, assignment),
     'staff.setWage': (ctx, { staffId, wage }) => setWageCommand(ctx, staffId, wage),
     'staff.bail': (ctx, { staffId }, meta) => bail(ctx, staffId, meta),
+    'staff.lieLow': (ctx, { veedelId, until }, meta) => lieLowCommand(ctx, veedelId, until, meta.actor),
   },
   on: {
     'clock.dayStarted': daily,
     'clock.hourStarted': hourly,
     'police.arrest': (ctx, { staffId, veedelId }) => onArrest(ctx, staffId, veedelId),
+    'police.raidPlanned': (ctx, { veedelId, at }) => warnOfRaid(ctx, veedelId, at),
     'police.raid': (ctx, { veedelId }) => {
       for (const m of getStaff(ctx.state, { veedelId })) addLoyalty(ctx, m.id, LOYALTY.raid);
     },
@@ -200,5 +233,5 @@ export default defineModule({
       }
     },
   },
-  migrations: { 2: migrateStaffV1 },
+  migrations: { 2: migrateStaffV1, 3: migrateStaffV2 },
 });

@@ -11,9 +11,11 @@ import {
   ListItem,
   onGameEvent,
   ProgressBar,
+  registerHudItem,
   registerSlot,
   registerTab,
   SegmentedControl,
+  Stat,
   useGame,
   useUi,
 } from '../../../ui';
@@ -168,3 +170,21 @@ onGameEvent('territory.controlChanged', 'territory.toast', (payload, ui) => {
   if (payload.to === PLAYER_FACTION) ui.toast(`${name} gehört jetzt dir.`, 'good');
   else if (payload.from === PLAYER_FACTION) ui.toast(`Du hast ${name} verloren.`, 'bad');
 });
+
+/** HUD: Fortschritt beim Kampagnenziel "Köln übernehmen". Klick öffnet den Tab "Reviere". */
+function CampaignHud() {
+  const { state } = useGame();
+  const ui = useUi();
+  const progress = campaignProgress(state);
+  return (
+    <button type="button" class="territory-hud" onClick={() => ui.selectTab('territory')}>
+      <Stat
+        label="Köln"
+        value={progress.won ? 'deins' : `${progress.controlled}/${progress.needed}`}
+        title={`Kampagne "Köln übernehmen": ${progress.controlled} von ${progress.total} Veedeln, ${progress.needed} gewinnen.`}
+      />
+    </button>
+  );
+}
+
+registerHudItem({ id: 'territory.campaign', order: 45, component: CampaignHud });

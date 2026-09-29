@@ -19,6 +19,7 @@ import {
   generateProfile,
   getStaff,
   getStaffMember,
+  isLyingLow,
   jailDuration,
   runnerAt,
   type StaffMember,
@@ -188,19 +189,43 @@ describe('Kaution', () => {
     expect(bonus(sim.state, 'launderingFeeDiscount')).toBeGreaterThan(0.3);
   });
 
-  it('der Polizei-Kontakt warnt, wenn es in einem Veedel heiß wird', () => {
+  it('der Polizei-Kontakt warnt vor einer geplanten Razzia, abtauchen lässt sie ins Leere laufen', () => {
     const sim = quietGame();
     const events = recordEvents(sim);
-    runnerAtNeumarkt(sim);
+    const runner = runnerAtNeumarkt(sim);
     const contact = recruit(sim, 'policeContact');
     contact.stats.charisma = 100; // Warnung fast sicher
     contact.level = 10;
-    sim.state.modules.police.heat['altstadt-sued'] = 80;
-    sim.advance(120);
+    const at = sim.state.time + 180;
+    sim.ctx('police').emit('police.raidPlanned', { veedelId: 'altstadt-sued', at });
+    sim.step();
     const warnings = eventsOfType(events, 'staff.raidWarning');
     expect(warnings).toHaveLength(1);
-    expect(warnings[0].payload).toMatchObject({ veedelId: 'altstadt-sued', staffId: contact.id });
-    expect(sim.state.messages.list.some((m) => m.contactId === `staff:${contact.id}`)).toBe(true);
+    expect(warnings[0].payload).toMatchObject({ veedelId: 'altstadt-sued', staffId: contact.id, at });
+    const message = sim.state.messages.list.find((m) => m.contactId === `staff:${contact.id}`);
+    expect(sim.state.messages.contacts[`staff:${contact.id}`].kind).toBe('police');
+    expect(message?.options?.map((o) => o.id)).toEqual(['lieLow', 'ignore']);
+
+    // Antwort "Leute abziehen": Der Läufer verlässt den Spot und kommt nach der Razzia zurück.
+    const answer = sim.dispatch({
+      type: 'messages.answer',
+      payload: { messageId: message?.id ?? 0, optionId: 'lieLow' },
+    });
+    expect(answer.ok).toBe(true);
+    expect(isLyingLow(sim.state, 'altstadt-sued')).toBe(true);
+    expect(getStaffMember(sim.state, runner.id)?.assignment).toBeNull();
+    expect(eventsOfType(events, 'staff.wentUnderground')[0].payload).toMatchObject({
+      veedelId: 'altstadt-sued',
+      pulled: 1,
+    });
+
+    sim.state.modules.police.plannedRaids['altstadt-sued'] = at;
+    sim.advance(at - sim.state.time + 60);
+    const raid = eventsOfType(events, 'police.raid')[0];
+    expect(raid.payload).toMatchObject({ target: 'player', empty: true, arrested: [] });
+    sim.advance(120);
+    expect(isLyingLow(sim.state, 'altstadt-sued')).toBe(false);
+    expect(getStaffMember(sim.state, runner.id)?.assignment).toEqual({ kind: 'spot', targetId: 'neumarkt' });
   });
 });
 

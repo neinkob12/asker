@@ -202,6 +202,7 @@ function OrdersApp() {
   const statusText: Record<Order['status'], string> = {
     offered: 'offen',
     enRoute: 'unterwegs',
+    contested: 'Deal kippt',
     done: 'erledigt',
     declined: 'abgelehnt',
     expired: 'verpasst',
@@ -264,8 +265,9 @@ registerSlot('tab:business', { id: 'customers.stats', order: 30, component: Cust
 registerPhoneApp({
   id: 'customers.orders',
   name: 'Aufträge',
-  icon: '📦',
+  icon: 'package',
   order: 30,
+  color: '#b7791f',
   component: OrdersApp,
   badge: (state) => getOrders(state, { status: 'offered' }).length,
 });

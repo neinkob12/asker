@@ -145,8 +145,7 @@ export const VEEDEL: readonly Veedel[] = [
     name: 'Kalk',
     district: 'Kalk',
     center: { lng: 7.0035, lat: 50.9385 },
-    // Eigentlich eher 0,8. Bleibt bei 1, weil market.test.ts (Auftrag 12) für Kalk und Deutz Kaufkraft 1 annimmt.
-    purchasingPower: 1,
+    purchasingPower: 0.8,
     policePresence: 1.3,
     density: 1.2,
     description:

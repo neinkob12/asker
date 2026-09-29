@@ -69,6 +69,12 @@ export const HOME_TARGET_PENALTY = 30;
  */
 export const PLAYER_DEFENSE_BASE = 60;
 export const PLAYER_DEFENSE_FACTOR = 1.5;
+/**
+ * Je mehr Veedel du hältst, desto mehr schießen sich die Gangs auf dich ein: Expansionschance mal
+ * (1 + Faktor × deine Veedel), und deine Veedel werden als Ziel attraktiver (pro Veedel).
+ */
+export const PLAYER_THREAT_EXPANSION = 0.35;
+export const PLAYER_THREAT_TARGET_BONUS = 6;
 /** Ziele, deren Gang stärker ist, werden so viel unattraktiver. */
 export const STRONGER_TARGET_PENALTY = 40;
 /** Chance, dass die unterlegene Seite in einer Vorstoß-Stunde einen Mann verliert. */
@@ -99,9 +105,9 @@ export const STAGE_HYSTERESIS = 10;
 /** Dieselbe Stufe wird höchstens so oft per Nachricht angekündigt. */
 export const ANNOUNCE_INTERVAL = DAY;
 /** Chance pro Stunde auf einen Überfall bei voller Feindseligkeit (mal Aggression). */
-export const ATTACK_CHANCE = 0.05;
+export const ATTACK_CHANCE = 0.035;
 /** Mindestabstand zwischen zwei Überfällen derselben Gang. */
-export const ATTACK_COOLDOWN = 18 * HOUR;
+export const ATTACK_COOLDOWN = 30 * HOUR;
 /** Nach einem gelungenen Überfall ist die Gang erst mal zufrieden: so viel weniger Feindseligkeit. */
 export const HOSTILITY_AFTER_LESSON = 30;
 /** Chance, ein Lager statt eines Spots zu überfallen. */
@@ -125,6 +131,8 @@ export const MIN_RELATION_TO_TALK = -60;
 export const TRIBUTE_BASE = 400;
 export const TRIBUTE_PER_HOSTILITY = 10;
 export const TRIBUTE_DURATION = 7 * DAY;
+/** Schutzgeld steigt pro Veedel, das du kontrollierst (wer mehr hat, zahlt mehr). */
+export const TRIBUTE_PER_PLAYER_VEEDEL = 250;
 export const TRIBUTE_HOSTILITY_DROP = 50;
 /** Wie stark Verkäufe in ihrem Revier noch stören, solange du zahlst bzw. Frieden ist. */
 export const TRIBUTE_HOSTILITY_FACTOR = 0.2;

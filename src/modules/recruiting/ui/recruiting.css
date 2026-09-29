@@ -37,19 +37,6 @@
   align-items: center;
   gap: var(--space-3);
 }
-.rc-card__avatar {
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-round);
-  background: var(--color-surface);
-  color: var(--color-muted);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-}
 .rc-card__who {
   display: flex;
   flex-direction: column;

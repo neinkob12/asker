@@ -3,12 +3,14 @@ import { DAY_PHASE_NAMES, dayPhase } from '../../map/daylight';
 import { Stat } from '../components';
 import { useGame } from '../hooks';
 
+/** Geld im HUD. Sauberes Geld erst, wenn es welches gibt (spart Platz, am Anfang wäscht noch niemand). */
 export function MoneyHud() {
   const { state } = useGame();
+  const clean = wallet.balance(state, 'clean');
   return (
     <>
       <Stat icon="money" tone="accent" label="Schwarzgeld" value={formatEuro(wallet.balance(state, 'dirty'))} />
-      <Stat icon="euro" label="Sauber" value={formatEuro(wallet.balance(state, 'clean'))} />
+      {clean > 0 && <Stat icon="euro" label="Sauber" value={formatEuro(clean)} />}
     </>
   );
 }
