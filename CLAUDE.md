@@ -18,7 +18,7 @@ src/modules/   Spielsysteme, je ein Ordner = ein Modul (veedel, spots, staff …
   <id>/ui/index.tsx Oberfläche des Moduls (Panels, Tabs, HUD, Karten-Layer …), automatisch geladen
   _template/        kommentierte Kopiervorlage (wird nicht registriert)
 src/ui/        Oberfläche: Shell, Registries, Bausteine (components/), Design-Tokens (styles/), Handy (phone/)
-src/map/       Grundkarte (MapLibre), Registry für Karten-Layer, Effekt-Werkzeuge (Fahrzeuge, Figuren, Blaulicht …)
+src/map/       Grundkarte (MapLibre, Candy-Look), Registry für Karten-Layer, Effekt-Werkzeuge (3D-Fahrzeuge, Hotspots …)
 src/audio/     Musik und Soundeffekte (für Module über src/ui erreichbar)
 src/playtest/  Tests über alle Module: Bot fürs Balancing (bot.ts), Spielende (endings.test.ts)
 scripts/       Ordnerregel-Check, Vorlagen-Test, Screenshots, Ende-zu-Ende-Test, Durchspielen im Browser

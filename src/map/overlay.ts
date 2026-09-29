@@ -1,12 +1,10 @@
 // Überwachungs-Overlay: Scanlines, Vignette, Rahmen mit Ecken, Fadenkreuz in der Mitte und eine
-// Koordinaten-Anzeige (Mausposition am Desktop, sonst Kartenmitte). Liegt über dem Luftbild, aber unter den
-// Markern, fängt keine Klicks ab und lässt sich abschalten (UiState.overlay). Das Koordinatenraster ist eine
-// Kartenebene (kt-grid) und wird mit ein- und ausgeblendet.
+// Koordinaten-Anzeige (Mausposition am Desktop, sonst Kartenmitte). Liegt über der Karte, aber unter den
+// Markern, fängt keine Klicks ab und lässt sich einschalten (UiState.overlay, Standard aus).
 
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { formatDms } from './geometry';
 import { el } from './markers';
-import { BASE_LAYERS } from './style';
 
 export class SurveillanceOverlay {
   readonly element: HTMLElement;
@@ -16,11 +14,12 @@ export class SurveillanceOverlay {
   private readonly label: HTMLElement;
   private pointer: { lng: number; lat: number } | null = null;
   private frame = 0;
-  private enabled = true;
+  private enabled = false;
 
   constructor(private readonly map: MapLibreMap) {
     this.element = el('div', 'map-surveillance');
     this.element.setAttribute('aria-hidden', 'true');
+    this.element.hidden = true;
     for (const part of ['scanlines', 'vignette', 'reticle'])
       this.element.appendChild(el('div', `map-surveillance__${part}`));
     const frame = el('div', 'map-surveillance__frame');
@@ -58,9 +57,6 @@ export class SurveillanceOverlay {
     if (enabled === this.enabled && !force) return;
     this.enabled = enabled;
     this.element.hidden = !enabled;
-    if (this.map.getLayer(BASE_LAYERS.grid)) {
-      this.map.setLayoutProperty(BASE_LAYERS.grid, 'visibility', enabled ? 'visible' : 'none');
-    }
     if (enabled) this.schedule();
   }
 

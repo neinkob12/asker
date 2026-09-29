@@ -96,9 +96,10 @@
 }
 
 .delivery-target {
-  width: 10px;
-  height: 10px;
-  transform: rotate(45deg);
-  background: var(--color-warn-strong);
-  border: 2px solid var(--color-marker-border);
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-round);
+  background: var(--color-warn);
+  border: 3px solid var(--color-marker-bg);
+  box-shadow: var(--shadow-marker-soft);
 }

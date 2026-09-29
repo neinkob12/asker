@@ -25,6 +25,7 @@ import {
   regularAfterSale,
   regularVerdict,
   saleSatisfaction,
+  spotDemand,
   typeDemandWeight,
   waitingAt,
 } from './index';
@@ -85,6 +86,16 @@ describe('customers: Straße', () => {
       waiting.length + getSalesStats(sim.state).customersLost,
     );
     for (const c of waiting) expect(CUSTOMER_TYPES.map((t) => t.id)).toContain(c.typeId);
+  });
+
+  it('kennt die aktuelle Nachfrage je Spot: abends mehr als morgens', () => {
+    const sim = createTestGame();
+    const evening = spotDemand(sim.state, 'zuelpicher');
+    expect(evening).toBeGreaterThan(0);
+    expect(spotDemand(sim.state, 'gibt-es-nicht')).toBe(0);
+    // Tag 1 beginnt um 18 Uhr, 15 Stunden später ist es 9 Uhr morgens.
+    sim.advance(15 * 60);
+    expect(spotDemand(sim.state, 'zuelpicher')).toBeLessThan(evening);
   });
 
   it('nie mehr als die Höchstzahl Kunden pro Spot', () => {

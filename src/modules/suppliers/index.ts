@@ -3,14 +3,16 @@
 // (große Mengen, langsam, günstiger). Jeder Lieferant hat Preis, Qualität, Zuverlässigkeit, Lieferzeit und
 // Sortiment. Vertrauen wächst mit Käufen und pünktlicher Zahlung und bringt Rabatt, Kredit und bessere Ware.
 // Lieferprobleme (verspätet, schlechte Ware, beschlagnahmt) werden bei der Bestellung ausgewürfelt und zeigen
-// sich unterwegs bzw. bei der Ankunft. Transporter fahren Luftlinie (echte Routen später).
+// sich unterwegs bzw. bei der Ankunft. Transporter fahren Luftlinie (echte Routen später), Hafenware kommt
+// auf der Karte per Schiff über den Rhein (deliveryLeg).
 //
 // Öffentliche API:
 //   getSuppliers(state), getSupplier(state, id), supplierContactId(id), assortment(supplier),
 //   shipmentsInTransit(state), shipmentProgress(state, shipment), expectedArrival(shipment),
 //   cheapestPackagePrice(state), getRelation(state, id), trustLabel(trust), supplierDiscount(state, id),
 //   supplierQualityBonus(state, id), creditLimit(state, id), availableCredit(state, id), isBlocked(state, id),
-//   availablePackages(state, id), packagePrice(state, supplierId, packageId), rollShipmentProblem(...)
+//   availablePackages(state, id), packagePrice(state, supplierId, packageId), rollShipmentProblem(...),
+//   deliveryLeg(supplier, progress) (Darstellung: Schiff, Umladen oder Straße; Hafen: RHINE_ROUTE, UNLOADING_PORT)
 // Befehle: 'suppliers.order' (onCredit für Kredit), 'suppliers.repay'
 // Ereignisse: 'shipment.ordered', 'shipment.arrived', 'shipment.problem', 'supplier.trustChanged',
 //   'supplier.repaid', 'supplier.overdue'
@@ -45,6 +47,7 @@ import {
   PROBLEM_AT,
   QUALITY_SPREAD,
   SEIZE_FACTOR,
+  SHIP_SHARE,
   START_TRUST,
   SUPPLIERS,
   TRUST_CASH_BONUS,
@@ -52,6 +55,16 @@ import {
   TRUST_ON_TIME_REPAYMENT,
   TRUST_PER_1000_EUR,
   TRUST_PER_ORDER,
+  UNLOADING_SHARE,
+} from './config';
+
+export {
+  RHINE_APPROACH_FROM,
+  RHINE_APPROACH_SHARE,
+  RHINE_ROUTE,
+  SHIP_SHARE,
+  UNLOADING_PORT,
+  UNLOADING_SHARE,
 } from './config';
 
 export interface SupplierPackage {
@@ -207,6 +220,22 @@ export function shipmentProgress(state: GameState, shipment: Shipment): number {
     if (elapsed > pauseStart) elapsed = pauseStart + Math.max(0, elapsed - pauseStart - delay);
   }
   return Math.min(1, Math.max(0, elapsed / travel));
+}
+
+export type DeliveryStage = 'ship' | 'unloading' | 'road';
+
+/**
+ * Welcher Teil der Lieferung gerade zu sehen ist (reine Darstellung, die Lieferzeit bleibt gleich):
+ * Vom Hafen kommt die Ware per Schiff (SHIP_SHARE), wird im Niehler Hafen umgeladen (UNLOADING_SHARE) und
+ * fährt dann mit dem Lkw zum Lager. Großstädte liefern die ganze Strecke über die Straße.
+ * t ist der Fortschritt innerhalb des Abschnitts (0–1).
+ */
+export function deliveryLeg(supplier: Pick<Supplier, 'kind'>, progress: number): { stage: DeliveryStage; t: number } {
+  const p = Math.min(1, Math.max(0, progress));
+  if (supplier.kind !== 'port') return { stage: 'road', t: p };
+  if (p < SHIP_SHARE) return { stage: 'ship', t: p / SHIP_SHARE };
+  if (p < SHIP_SHARE + UNLOADING_SHARE) return { stage: 'unloading', t: (p - SHIP_SHARE) / UNLOADING_SHARE };
+  return { stage: 'road', t: (p - SHIP_SHARE - UNLOADING_SHARE) / (1 - SHIP_SHARE - UNLOADING_SHARE) };
 }
 
 /** Ankunft, wie der Spieler sie kennt (eine Verspätung erst, wenn sie bekannt ist). */

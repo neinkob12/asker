@@ -8,15 +8,19 @@ import {
   availablePackages,
   cheapestPackagePrice,
   creditLimit,
+  deliveryLeg,
   getRelation,
   getSupplier,
   isBlocked,
   packagePrice,
+  RHINE_APPROACH_FROM,
+  RHINE_ROUTE,
   rollShipmentProblem,
   type Shipment,
   shipmentProgress,
   shipmentsInTransit,
   supplierDiscount,
+  UNLOADING_PORT,
 } from './index';
 
 const small = SUPPLIERS[0].packages[0];
@@ -285,5 +289,36 @@ describe('suppliers', () => {
     raw.moduleVersions.suppliers = 1;
     const loaded = loadSimulation(raw, sim.modules);
     expect(getRelation(loaded.state, 'berlin')).toMatchObject({ trust: START_TRUST, debt: 0 });
+  });
+});
+
+describe('suppliers: Darstellung der Hafenlieferung', () => {
+  it('teilt die Lieferung in Schiff, Umladen und Lkw, die Großstädte fahren nur Straße', () => {
+    const port = { kind: 'port' as const };
+    expect(deliveryLeg(port, 0)).toEqual({ stage: 'ship', t: 0 });
+    expect(deliveryLeg(port, 0.39).stage).toBe('ship');
+    expect(deliveryLeg(port, 0.39).t).toBeCloseTo(0.5);
+    expect(deliveryLeg(port, 0.8).stage).toBe('unloading');
+    expect(deliveryLeg(port, 0.9).stage).toBe('road');
+    expect(deliveryLeg(port, 1)).toEqual({ stage: 'road', t: 1 });
+    expect(deliveryLeg({ kind: 'city' }, 0.3)).toEqual({ stage: 'road', t: 0.3 });
+    // Ohne Lücken: Jeder Abschnitt endet, wo der nächste beginnt.
+    let last = deliveryLeg(port, 0);
+    for (let p = 0.001; p <= 1; p += 0.001) {
+      const leg = deliveryLeg(port, p);
+      if (leg.stage === last.stage) expect(leg.t).toBeGreaterThanOrEqual(last.t);
+      last = leg;
+    }
+  });
+
+  it('das Schiff fährt von Rotterdam den Rhein hinauf in den Niehler Hafen', () => {
+    const rotterdam = getSupplier(createTestGame().state, 'rotterdam');
+    const [firstLng, firstLat] = RHINE_ROUTE[0];
+    expect(firstLng).toBeCloseTo(rotterdam?.lng ?? 0);
+    expect(firstLat).toBeCloseTo(rotterdam?.lat ?? 0);
+    expect(RHINE_ROUTE[RHINE_ROUTE.length - 1]).toEqual([UNLOADING_PORT.lng, UNLOADING_PORT.lat]);
+    // Von Norden: Die Einfahrt nach Köln liegt nördlich des Hafens.
+    expect(RHINE_ROUTE[RHINE_APPROACH_FROM][1]).toBeGreaterThan(UNLOADING_PORT.lat);
+    expect(RHINE_APPROACH_FROM).toBeLessThan(RHINE_ROUTE.length - 1);
   });
 });

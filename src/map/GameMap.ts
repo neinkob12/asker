@@ -1,26 +1,26 @@
-// Die Grundkarte: MapLibre im Nacht-Satelliten-Look, Tag und Nacht nach der Spieluhr, Stimmung der Module
-// (z.B. Wetter), Regen und Schnee, Überwachungs-Overlay, Kamera 3D/2D, Köln/Europa und die angemeldeten
-// Layer der Module.
+// Die Grundkarte: MapLibre im Candy-Look, vier Tageszeit-Paletten nach der Spieluhr, Stimmung der Module
+// (z.B. Wetter), Regen und Schnee, Überwachungs-Overlay (Standard aus), Kamera 3D/2D, Köln/Europa und die
+// angemeldeten Layer der Module.
 
-import { Map as MapLibreMap, setWorkerUrl } from 'maplibre-gl';
+import { type GeoJSONSource, Map as MapLibreMap, setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { clock, type GameState, type LngLat } from '../core';
 import type { CameraMode, MapController, UiApi, UiState } from '../ui/runtime';
 import { currentMood } from './atmosphere';
 import { EUROPA_VIEW, isMobile, KOELN_CENTER, koelnZoom } from './config';
-import { daylightAt, twilight } from './daylight';
-import { setActiveMap } from './effects';
+import { setActiveMap, setEffectsLook } from './effects';
+import { landmarkFeatures } from './landmarks';
 import { computeLook, type MapLook } from './look';
+import { addHtmlMarker, el } from './markers';
 import { SurveillanceOverlay } from './overlay';
 import { PrecipitationLayer } from './precipitation';
 import { type MapLayerInstance, mapLayers } from './registry';
-import { BASE_LAYERS, baseStyle, WINDOWS_IMAGE } from './style';
-import { drawWindows, WINDOWS_PIXEL_RATIO } from './windows';
+import { BASE_LAYERS, baseStyle, LANDMARK_SOURCE } from './style';
 
 setWorkerUrl(workerUrl);
 
-const KOELN_PITCH = 55;
+const KOELN_PITCH = 50;
 const KOELN_BEARING = -20;
 const MAX_PIXEL_RATIO = 1.5;
 
@@ -35,7 +35,7 @@ export class GameMap implements MapController {
   private readonly overlay: SurveillanceOverlay;
   private readonly precipitation: PrecipitationLayer;
   private readonly applied = new Map<string, PaintValue>();
-  private windows: { wall: string; lit: number } | null = null;
+  private landmarkNight = -1;
   private lastLight = '';
   private lastSky = '';
   private cameraMode: CameraMode = '3d';
@@ -61,12 +61,6 @@ export class GameMap implements MapController {
       pixelRatio: Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO),
     });
     this.map.on('webglcontextlost', () => ui.toast('Die Karte wird neu aufgebaut …', 'info'));
-    // Fenstermuster sofort anlegen, damit die Gebäude es beim ersten Zeichnen finden.
-    const first = computeLook(0, 0);
-    this.updateWindows(first.wallColor, first.windowsLit);
-    this.map.on('styleimagemissing', (e) => {
-      if (e.id === WINDOWS_IMAGE) this.updateWindows(first.wallColor, first.windowsLit);
-    });
     this.overlay = new SurveillanceOverlay(this.map);
     this.precipitation = new PrecipitationLayer(this.map.getCanvasContainer(), this.overlay.element);
     this.applyPadding();
@@ -84,7 +78,11 @@ export class GameMap implements MapController {
         resolve({ lng: e.lngLat.lng, lat: e.lngLat.lat });
       });
     });
+    // Schon nach dem Stil, nicht erst nach den Kacheln ('load'): Sind die Kacheln nicht erreichbar, bleiben
+    // Spots, Lager und Fahrzeuge trotzdem bedienbar.
+    this.map.on('style.load', () => this.mountLayers());
     this.map.on('load', () => this.mountLayers());
+    this.bindLandmarkHover();
     setActiveMap(this.map);
   }
 
@@ -116,6 +114,7 @@ export class GameMap implements MapController {
     this.applied.clear();
     this.lastLight = '';
     this.lastSky = '';
+    this.landmarkNight = -1;
     if (this.lastUi) this.overlay.setEnabled(this.lastUi.overlay, true);
     const state = this.getState();
     if (state && this.lastUi) this.update(state, this.lastUi);
@@ -136,27 +135,37 @@ export class GameMap implements MapController {
     this.precipitation.sync();
   }
 
-  /** Tag/Nacht und Stimmung auf die Kartenebenen übertragen. Setzt nur, was sich geändert hat. */
+  /** Tageszeit und Stimmung auf die Kartenebenen übertragen. Setzt nur, was sich geändert hat. */
   private applyLook(state: GameState): void {
-    const minute = clock.minuteOfDay(state.time);
-    const look = computeLook(daylightAt(state.time), twilight(minute), currentMood());
+    const look = computeLook(clock.minuteOfDay(state.time) + (state.time % 1), currentMood());
     const L = BASE_LAYERS;
-    this.paint(L.satellite, 'raster-brightness-max', look.rasterBrightnessMax);
-    this.paint(L.satellite, 'raster-brightness-min', look.rasterBrightnessMin);
-    this.paint(L.satellite, 'raster-saturation', look.rasterSaturation);
-    this.paint(L.satellite, 'raster-contrast', look.rasterContrast);
-    this.paint(L.tint, 'fill-color', look.tintColor);
-    this.paint(L.tint, 'fill-opacity', look.tintOpacity);
-    this.paint(L.water, 'fill-color', look.waterColor);
-    this.paint(L.water, 'fill-opacity', look.waterOpacity);
-    this.paint(L.roadsGlow, 'line-color', look.roadColor);
-    this.paint(L.roadsGlow, 'line-opacity', look.roadGlowOpacity);
-    this.paint(L.roadsCore, 'line-color', look.roadColor);
-    this.paint(L.roadsCore, 'line-opacity', look.roadCoreOpacity);
-    this.paint(L.lamps, 'line-opacity', look.lampOpacity);
-    this.paint(L.buildings, 'fill-extrusion-opacity', look.buildingOpacity);
-    this.applyWindows(look);
+    this.paint(L.land, 'background-color', look.land);
+    for (const id of [L.farmland, L.park, L.green, `${L.green}-landuse`]) this.paint(id, 'fill-color', look.park);
+    this.paint(L.wood, 'fill-color', look.wood);
+    this.paint(L.water, 'fill-color', look.water);
+    this.paint(L.waterLine, 'line-color', look.waterLine);
+    this.paint(L.waterway, 'line-color', look.water);
+    this.paint(L.rail, 'line-color', look.rail);
+    this.paint(L.roadGlow, 'line-color', look.majorCasing);
+    this.paint(L.roadGlow, 'line-opacity', look.glow);
+    this.paint(L.minorCasing, 'line-color', look.minorCasing);
+    this.paint(L.minor, 'line-color', look.minor);
+    this.paint(L.majorCasing, 'line-color', look.majorCasing);
+    this.paint(L.major, 'line-color', look.major);
+    this.paint(L.highwayCasing, 'line-color', look.highwayCasing);
+    this.paint(L.highway, 'line-color', look.highway);
+    this.paint(L.bridgeCasing, 'line-color', look.highwayCasing);
+    this.paint(L.bridge, 'line-color', look.highway);
+    for (const id of [L.buildingShadow, L.landmarkShadow]) {
+      this.paint(id, 'fill-color', look.shadow);
+      this.paint(id, 'fill-opacity', look.shadowOpacity);
+    }
+    L.buildings.forEach((id, i) => {
+      this.paint(id, 'fill-extrusion-color', look.buildings[i]);
+    });
+    this.applyLandmarks(look);
     this.applyLightAndSky(look);
+    setEffectsLook(look);
   }
 
   private paint(layer: string, property: string, value: PaintValue): void {
@@ -167,41 +176,63 @@ export class GameMap implements MapController {
     this.applied.set(key, value);
   }
 
-  private applyWindows(look: MapLook): void {
-    const w = this.windows;
-    // Das Muster neu zu zeichnen kostet etwas, also nur bei spürbarer Änderung.
-    if (w && Math.abs(w.lit - look.windowsLit) < 0.04 && colorDistance(w.wall, look.wallColor) < 6) return;
-    this.updateWindows(look.wallColor, look.windowsLit);
+  /** Wahrzeichen-Farben wandern mit der Dunkelheit (in kleinen Schritten, die Quelle ist winzig). */
+  private applyLandmarks(look: MapLook): void {
+    const night = Math.round(look.night * 20) / 20;
+    if (night === this.landmarkNight) return;
+    const source = this.map.getSource(LANDMARK_SOURCE) as GeoJSONSource | undefined;
+    if (!source) return;
+    source.setData(landmarkFeatures(night));
+    this.landmarkNight = night;
   }
 
-  private updateWindows(wall: string, lit: number): void {
-    const image = drawWindows(wall, lit);
-    if (!image) return;
-    if (this.map.hasImage(WINDOWS_IMAGE)) this.map.updateImage(WINDOWS_IMAGE, image);
-    else this.map.addImage(WINDOWS_IMAGE, image, { pixelRatio: WINDOWS_PIXEL_RATIO });
-    this.windows = { wall, lit };
+  /** Name des Wahrzeichens beim Überfahren mit der Maus. */
+  private bindLandmarkHover(): void {
+    const label = el('span', 'map-hover-label__text');
+    const { marker, element } = addHtmlMarker(this.map, {
+      position: KOELN_CENTER,
+      className: 'map-hover-label',
+      anchor: 'bottom',
+      children: [label],
+    });
+    element.hidden = true;
+    let current = '';
+    this.map.on('mousemove', BASE_LAYERS.landmarks, (e) => {
+      const feature = e.features?.[0];
+      const name = typeof feature?.properties?.name === 'string' ? feature.properties.name : '';
+      if (!name) return;
+      marker.setLngLat(e.lngLat);
+      if (name === current) return;
+      current = name;
+      label.textContent = name;
+      element.hidden = false;
+    });
+    this.map.on('mouseleave', BASE_LAYERS.landmarks, () => {
+      current = '';
+      element.hidden = true;
+    });
   }
 
   private applyLightAndSky(look: MapLook): void {
-    const light = `${look.lightColor}|${look.lightIntensity}`;
+    const light = `${look.light}|${look.lightIntensity}`;
     if (light !== this.lastLight) {
       this.map.setLight({
         anchor: 'map',
-        color: look.lightColor,
+        color: look.light,
         intensity: look.lightIntensity,
-        position: [1.3, 200, 35],
+        position: [1.15, 210, 35],
       });
       this.lastLight = light;
     }
-    const sky = `${look.skyColor}|${look.horizonColor}|${look.fogColor}|${look.fogBlend}`;
+    const sky = `${look.sky}|${look.horizon}|${look.fog}|${look.fogBlend}`;
     if (sky !== this.lastSky) {
       this.map.setSky({
-        'sky-color': look.skyColor,
-        'horizon-color': look.horizonColor,
-        'fog-color': look.fogColor,
+        'sky-color': look.sky,
+        'horizon-color': look.horizon,
+        'fog-color': look.fog,
         'fog-ground-blend': look.fogBlend,
-        'horizon-fog-blend': 0.7,
-        'sky-horizon-blend': 0.6,
+        'horizon-fog-blend': 0.6,
+        'sky-horizon-blend': 0.7,
         'atmosphere-blend': 0,
       });
       this.lastSky = sky;
@@ -288,12 +319,4 @@ export class GameMap implements MapController {
     this.container.classList.remove('is-picking');
     resolve(null);
   }
-}
-
-function colorDistance(a: string, b: string): number {
-  const pa = Number.parseInt(a.slice(1), 16);
-  const pb = Number.parseInt(b.slice(1), 16);
-  let d = 0;
-  for (const shift of [16, 8, 0]) d += Math.abs(((pa >> shift) & 255) - ((pb >> shift) & 255));
-  return d;
 }

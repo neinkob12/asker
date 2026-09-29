@@ -1,7 +1,8 @@
 # Köln Tycoon
 
-Browserspiel für uns: Auf der Satellitenkarte von Köln tauchen an festen Spots Kunden auf, die Weed wollen.
-Du bestellst Ware am Hafen in Rotterdam, sie wird per Transporter nach Köln gebracht, und du belieferst die Kunden.
+Browserspiel für uns: Auf einer bunten 3D-Karte von Köln (im Look der Snapchat-Map) tauchen an festen Spots Kunden auf,
+die Weed wollen. Du bestellst Ware am Hafen in Rotterdam, sie kommt per Schiff den Rhein hinauf und per Lkw ins Lager,
+und du belieferst die Kunden.
 Mit genug Geld heuerst du Läufer an, die einen Spot automatisch bedienen.
 
 Wohin sich das Spiel entwickeln soll, steht in [`docs/konzept.md`](docs/konzept.md).
@@ -56,7 +57,7 @@ Koordinaten findest du z.B. per Rechtsklick in Google Maps (erste Zahl ist `lat`
 
 - [Vite](https://vite.dev) + TypeScript + [Preact](https://preactjs.com)
 - [MapLibre GL](https://maplibre.org) für die Karte
-- Satellitenbild von Esri World Imagery, 3D-Gebäude von OpenFreeMap (beide ohne API-Key)
+- Vektorkacheln von OpenFreeMap (OpenMapTiles-Schema, ohne API-Key): Straßen, Wasser, Grün und 3D-Gebäude
 - Spiellogik als deterministische Simulation in `src/core/` und `src/modules/`, getestet mit Vitest
 - [Biome](https://biomejs.dev) für Lint und Formatierung
 

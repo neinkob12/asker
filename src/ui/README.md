@@ -1,7 +1,7 @@
 # Oberfläche (`src/ui/`)
 
-Look "clean und dunkel" passend zur Nacht-Satellitenkarte. Module importieren alles aus `src/ui/index.ts`
-(nur aus ihrem `ui/`-Ordner). Registries und Hooks: siehe `docs/architektur.md` und das Beispiel in
+Look "clean und dunkel" für die Bedienelemente über der Candy-Karte (Pastell, siehe `src/map/README.md`).
+Module importieren alles aus `src/ui/index.ts` (nur aus ihrem `ui/`-Ordner). Registries und Hooks: siehe `docs/architektur.md` und das Beispiel in
 `src/modules/_template/ui/index.tsx`.
 
 ## Tokens (`styles/tokens.css`)

@@ -1,8 +1,10 @@
+/* Spot-Marker im Candy-Look: runder weißer Knopf mit Zahl, farbiger Ring nach Dringlichkeit, Namens-Pille. */
 .spot-marker {
+  --spot-ring: var(--color-marker-ring);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   background: none;
   border: 0;
   padding: 0;
@@ -13,9 +15,9 @@
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: var(--color-marker-idle);
-  border: 3px solid var(--color-marker-border);
-  box-shadow: var(--shadow-marker);
+  background: var(--color-marker-bg);
+  border: 3px solid var(--spot-ring);
+  box-shadow: var(--shadow-marker-soft);
   display: grid;
   place-items: center;
   transition: transform 0.15s;
@@ -27,52 +29,58 @@
 .spot-badge {
   font-weight: 800;
   font-size: 13px;
-  color: var(--color-on-accent);
+  color: var(--color-marker-ink);
 }
-.spot-marker[data-urgency="waiting"] .spot-dot {
-  background: var(--color-warn-strong);
+.spot-marker[data-urgency="waiting"] {
+  --spot-ring: var(--color-warn);
+}
+.spot-marker[data-urgency="urgent"] {
+  --spot-ring: var(--color-bad);
 }
 .spot-marker[data-urgency="urgent"] .spot-dot {
-  background: var(--color-bad);
   animation: spot-pulse 0.9s infinite;
 }
 .spot-marker.has-runner .spot-dot {
-  border-color: var(--color-accent);
   box-shadow:
-    0 0 0 3px rgba(111, 220, 140, 0.35),
-    var(--shadow-marker);
+    0 0 0 3px var(--color-accent),
+    var(--shadow-marker-soft);
 }
 .spot-marker.selected .spot-dot {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 3px;
+  outline: 2px solid var(--color-marker-bg);
+  outline-offset: 4px;
 }
 .spot-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-on-accent);
-  background: var(--color-label-bg);
-  padding: 1px 6px;
-  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-marker-ink);
+  background: var(--color-marker-bg);
+  padding: 1px 8px;
+  border-radius: var(--radius-round);
+  box-shadow: var(--shadow-marker-soft);
   white-space: nowrap;
 }
 @keyframes spot-pulse {
   50% {
-    box-shadow: 0 0 0 8px rgba(239, 107, 91, 0.25);
+    box-shadow:
+      0 0 0 8px color-mix(in srgb, var(--color-bad) 30%, transparent),
+      var(--shadow-marker-soft);
   }
 }
 .shell-map.zoomed-out .spot-marker {
   display: none;
 }
 .spot-marker.is-locked .spot-dot {
-  background: var(--color-marker-idle);
-  border-color: var(--color-muted);
-  opacity: 0.7;
+  opacity: 0.75;
 }
 .spot-marker.is-locked .spot-badge {
   font-size: 12px;
 }
 .spot-marker.is-locked .spot-name {
-  color: var(--color-muted);
+  color: var(--color-marker-muted);
+}
+/* Aus der Ferne nur die Knöpfe gesperrter Spots, ohne Namen (spots-far setzt der Spot-Layer je nach Zoom). */
+.spots-far .spot-marker.is-locked .spot-name {
+  display: none;
 }
 .spot-marker.is-custom .spot-dot {
   border-style: dashed;
@@ -80,9 +88,4 @@
 .spot-locked p {
   margin: var(--space-2) 0;
   font-size: var(--font-size-sm);
-}
-
-/* Figuren an den Spots nur aus der Nähe (spots-far setzt der Spot-Layer je nach Zoom). */
-.spots-far .spot-figure {
-  display: none;
 }
