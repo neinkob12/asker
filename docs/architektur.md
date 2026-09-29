@@ -223,15 +223,16 @@ Details und Beispiele: [`src/map/README.md`](../src/map/README.md).
   `ctx.isPicking() === true`, der Klick wird erst danach aufgelöst. Die Layer der Module werden schon nach dem Stil
   gemountet (`style.load`), damit das Spiel auch ohne erreichbare Kacheln bedienbar bleibt.
 - `registerMapLayer({ id, order, mount(ctx) { …; return { update(state, ui), destroy() } } })`.
-  `ctx` hat `map`, `ui`, `getState()`, `isPicking()`. Quellen- und Layer-IDs mit Modul-Präfix. Flächen unter die
-  Straßen: `map.addLayer(layer, BELOW_ROADS)`, unter die 3D-Gebäude: `map.addLayer(layer, BELOW_BUILDINGS)`.
+  `ctx` hat `map`, `ui`, `getState()`, `isPicking()`. Quellen- und Layer-IDs mit Modul-Präfix. Flächen nur aufs
+  Land (unter Grün und Wasser): `map.addLayer(layer, ABOVE_LAND)`, unter die Straßen: `BELOW_ROADS`, unter die
+  3D-Gebäude: `BELOW_BUILDINGS`.
 - Stimmung und Niederschlag: `setMapMood(id, mood)`, `setPrecipitation({ kind, intensity, wind })`. Die Stimmung
   legt sich über die Palette (`computeLook`).
 - Werkzeuge: `createVehicle`/`animateVehicle` (3D-Mini-Fahrzeuge und Schiffe, fill-extrusion, weich nachgezogen),
   `createHotspots` (pulsierende Heatmap-Blobs), `addTargetMarker`/`addHtmlMarker` (runde weiße Marker), Effekte
   `moneyPopup`, `blueLight`, `ping`, `flash` (auch gebunden an die aktive Karte über `mapEffects`), Farbhilfen
   `mixColor`, `pastel`. Figuren und Avatare gibt es auf der Karte nicht mehr.
-- Layer jetzt: `territory.veedel` (Veedel-Flächen in Pastell nach Kontrolle oder Heat, unter den Straßen, Name nur
+- Layer jetzt: `territory.veedel` (Veedel-Flächen in Pastell nach Kontrolle oder Heat, nur auf dem Land, Name nur
   beim Überfahren), `suppliers.routes` (dezente Route, Lieferanten; Transporter aus Großstädten, Hafenware als Schiff
   über den Rhein bis in den Niehler Hafen, dann Lkw), `goods.warehouses`, `gangs.markers` (Hauptquartiere,
   Vorstöße), `customers.deliveries` (Kurier/Auto zum Kunden), `spots.markers` (Spots und Hotspots nach Kunden,

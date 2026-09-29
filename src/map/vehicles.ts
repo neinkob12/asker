@@ -74,7 +74,7 @@ interface KindSpec {
 const KINDS: Record<VehicleKind, KindSpec> = {
   courier: {
     meters: 2.2,
-    pixels: 11,
+    pixels: 13,
     lights: true,
     boxes: [
       { f0: -0.5, f1: 0.5, w: 0.42, base: 0, top: 0.32, color: 'body' },
@@ -83,7 +83,7 @@ const KINDS: Record<VehicleKind, KindSpec> = {
   },
   car: {
     meters: 4.5,
-    pixels: 14,
+    pixels: 17,
     lights: true,
     boxes: [
       { f0: -0.5, f1: 0.5, w: 0.46, base: 0, top: 0.22, color: 'body' },
@@ -92,7 +92,7 @@ const KINDS: Record<VehicleKind, KindSpec> = {
   },
   police: {
     meters: 4.8,
-    pixels: 15,
+    pixels: 18,
     lights: true,
     boxes: [
       { f0: -0.5, f1: 0.5, w: 0.46, base: 0, top: 0.22, color: 'cabin' },
@@ -102,7 +102,7 @@ const KINDS: Record<VehicleKind, KindSpec> = {
   },
   van: {
     meters: 5.5,
-    pixels: 17,
+    pixels: 21,
     lights: true,
     boxes: [
       { f0: -0.5, f1: 0.26, w: 0.42, base: 0, top: 0.4, color: 'body' },
@@ -111,7 +111,7 @@ const KINDS: Record<VehicleKind, KindSpec> = {
   },
   truck: {
     meters: 12,
-    pixels: 24,
+    pixels: 29,
     lights: true,
     boxes: [
       { f0: -0.5, f1: 0.24, w: 0.3, base: 0.04, top: 0.34, color: 'body' },
@@ -121,7 +121,7 @@ const KINDS: Record<VehicleKind, KindSpec> = {
   },
   ship: {
     meters: 110,
-    pixels: 38,
+    pixels: 50,
     lights: false,
     boxes: [
       { f0: -0.5, f1: 0.38, w: 0.2, base: 0, top: 0.06, color: 'hull' },

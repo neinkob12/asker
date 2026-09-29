@@ -41,8 +41,14 @@ export const BASE_LAYERS = {
  */
 export const BELOW_BUILDINGS = BASE_LAYERS.buildingShadow;
 
-/** Flächen, die unter den Straßen liegen sollen (z.B. Veedel-Einfärbung): map.addLayer(layer, BELOW_ROADS). */
+/** Flächen, die unter den Straßen liegen sollen: map.addLayer(layer, BELOW_ROADS). */
 export const BELOW_ROADS = BASE_LAYERS.rail;
+
+/**
+ * Flächen, die nur das Land einfärben (direkt über dem Land, unter Grün, Wasser und Straßen), z.B. die Veedel:
+ * map.addLayer(layer, ABOVE_LAND). So bleiben Rhein und Parks klar erkennbar.
+ */
+export const ABOVE_LAND = BASE_LAYERS.farmland;
 
 /** Quelle der Wahrzeichen (GeoJSON, Farben wechseln mit der Tageszeit). */
 export const LANDMARK_SOURCE = 'kt-landmarks';

@@ -1,10 +1,10 @@
 // Veedel auf der Karte: weiche, halbtransparente Pastellflächen nach kontrollierender Fraktion oder nach Heat,
-// unter den Straßen. Keine dauerhaften Namen: Name und Herrscher bzw. Heat erscheinen nur beim Überfahren mit
+// nur auf dem Land (unter Grün, Wasser und Straßen). Keine dauerhaften Namen: Name und Herrscher bzw. Heat erscheinen nur beim Überfahren mit
 // der Maus (und im Panel). Klick auf ein Veedel öffnet das Veedel-Panel.
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import type { GameState } from '../../../core';
-import { addHtmlMarker, BELOW_BUILDINGS, BELOW_ROADS, el, type MapLayer, pastel } from '../../../map';
+import { ABOVE_LAND, addHtmlMarker, BELOW_BUILDINGS, el, type MapLayer, pastel } from '../../../map';
 import { getHeat, heatLevel } from '../../police';
 import { allVeedel, getBoundary } from '../../veedel';
 import { controllerOf, factionColor, factionName } from '../index';
@@ -72,7 +72,8 @@ export const veedelLayer: MapLayer = {
       pastel(token('--color-bad', '#ff5d62'), 0.15),
     ];
     const before = map.getLayer(BELOW_BUILDINGS) ? BELOW_BUILDINGS : undefined;
-    const belowRoads = map.getLayer(BELOW_ROADS) ? BELOW_ROADS : before;
+    // Die Einfärbung liegt nur auf dem Land, Rhein und Parks bleiben klar.
+    const onLand = map.getLayer(ABOVE_LAND) ? ABOVE_LAND : before;
     let lastSignature = '';
     let hovered: string | null = null;
     let lastSelected = '';
@@ -115,7 +116,7 @@ export const veedelLayer: MapLayer = {
           ] as never,
         },
       },
-      belowRoads,
+      onLand,
     );
     map.addLayer(
       {

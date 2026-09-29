@@ -46,7 +46,7 @@ export {
   type TargetMarkerOptions,
 } from './markers';
 export { type MapLayer, type MapLayerContext, type MapLayerInstance, registerMapLayer } from './registry';
-export { BASE_LAYERS, BELOW_BUILDINGS, BELOW_ROADS } from './style';
+export { ABOVE_LAND, BASE_LAYERS, BELOW_BUILDINGS, BELOW_ROADS } from './style';
 export {
   type AnimateVehicleOptions,
   animateVehicle,

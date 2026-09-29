@@ -25,7 +25,9 @@ den OpenFreeMap-Vektorkacheln (OpenMapTiles-Schema, ohne Key). Module importiere
 
 Ebenen der Grundkarte stehen in `BASE_LAYERS`. Eigene Ebenen mit Modul-Präfix anlegen und einsortieren:
 
-- Flächen **unter den Straßen** (z.B. Veedel-Einfärbung): `map.addLayer(layer, BELOW_ROADS)`
+- Flächen **nur auf dem Land** (unter Grün, Wasser und Straßen, z.B. die Veedel-Einfärbung):
+  `map.addLayer(layer, ABOVE_LAND)`, damit Rhein und Parks klar bleiben
+- Flächen **unter den Straßen**: `map.addLayer(layer, BELOW_ROADS)`
 - Flächen und Linien **unter den 3D-Gebäuden** und ihren Schatten: `map.addLayer(layer, BELOW_BUILDINGS)`
 - ohne `beforeId` liegt die Ebene ganz oben (über Gebäuden und Wahrzeichen, z.B. Hotspots)
 
