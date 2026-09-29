@@ -16,7 +16,8 @@ Nur Variablen verwenden: `--color-*` (Flächen `bg/panel/surface…`, Text `text
 `Button` (neu: `icon`, `badge`), `IconButton`, `SegmentedControl` (Optionen mit `icon`), `Card` (neu: `icon`,
 `tone`), `Hint`, `Empty` (`icon`), `KeyValue` (`tone`), `Stat` (`icon`, `tone`), `Badge` (`tone` auch
 `warn|info`), `ProgressBar` (`tone` auch `info`), `List`/`ListItem` (`icon`, `active`, `tone` auch `warn`),
-`Tabs` (`icon`), `Dialog` (`icon`, `tone`, `kicker`), neu: `Icon`, `Tag`, `Avatar`, `Toggle`, `Slider`.
+`Tabs` (`icon`), `Dialog` (`icon`, `tone`, `kicker`), neu: `Icon`, `Tag`, `Avatar`, `Toggle`, `Slider`,
+`Select` (Auswahlfeld: `label`, `value`, `options: { value, label }[]`, `onChange`, `wide`).
 Bestehende Props funktionieren unverändert.
 
 **Icons:** eigenes Set in `components/icons.ts` (24er-Raster, nur Linien, kein npm-Paket).

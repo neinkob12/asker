@@ -25,3 +25,23 @@ jobs:
         run: npm run build
       - name: Neues Modul aus der Vorlage (nur eigener Ordner)
         run: npm run template:smoke
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Chromium für Playwright
+        run: npx playwright-core install --with-deps chromium
+      - name: Ende-zu-Ende-Test (Desktop und Handy)
+        run: npm run e2e
+      - name: Screenshots aufheben
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: screenshots/

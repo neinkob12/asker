@@ -1,6 +1,6 @@
 # Köln Tycoon – Konzept
 
-Stand: 28.09.2026. Grundlage sind die Antworten aus zwei Fragerunden (50 + 5 Fragen).
+Stand: 29.09.2026 (nach der Integration, Auftrag 20). Grundlage sind die Antworten aus zwei Fragerunden (50 + 5 Fragen).
 Dieses Dokument ist die gemeinsame Referenz für beide im Duo und für alle Claude-Sessions.
 Wer eine Entscheidung ändert, ändert sie hier.
 
@@ -107,6 +107,25 @@ Wer eine Entscheidung ändert, ändert sie hier.
 - **Grafiken:** KI-generierte Illustrationen (z.B. Porträts) plus einfache Icons.
 - **Sound:** Musik und Soundeffekte.
 - **Sprache:** nur Deutsch.
+
+## Stand der Umsetzung
+
+Nach Phase 2 (Integration) spielbar und verbunden: Veedel mit echten Grenzen, Reviere und Kampagne "Köln
+übernehmen" (7 von 12 Veedeln), Polizei mit Kontrollen, geplanten Razzien und Warnung durch den Polizei-Kontakt,
+vier Gangs mit KI, Diplomatie und Überfällen, rundenbasierte Konfrontationen, sieben Produkte mit Qualität und
+Strecken, Lieferanten mit Vertrauen und Kredit, Markt mit Richtpreis, Kundentypen und Stammkunden, Lieferdienst
+und Großhandel (Deals können kippen), eigene Spots, Ruf, Geldwäsche, Personal mit Werten und Level, Leutnants,
+Bewerber und Kontakte, Wetter, Tag und Nacht, Spiel-Handy, Musik und Sound, Normal- und Hardcore-Modus.
+
+- **Kampagnenlänge:** laut Balancing-Simulation (`npm run balance`) erstes Veedel nach etwa 8–10 Spieltagen,
+  drei nach 10–26, danach bremsen die Gangs spürbar. Sieg etwa nach 80–120 Spieltagen, das sind bei Tempo 1x
+  (4,8 Minuten pro Spieltag) grob 5–10 Stunden.
+- **Session-Länge:** In 20 Minuten (etwa 8 Spieltage bei 2x) kommen Verkauf, Nachschub, Personal, Leutnants,
+  Gang-Drohungen, Konfrontationen, Polizei-Kontrollen, Wetter und das erste Veedel vor (`npm run playthrough`,
+  Screenshots in `docs/integration/`).
+- **Noch nicht umgesetzt** (spätere Aufträge, siehe `docs/auftraege/README.md`): eigener Charakter und Aufträge von
+  Figuren, Stadt-Events, Tarnfirmen, Upgrade-Baum und Rang-Stufen, Immobilien, Fahrzeugflotte mit echten Routen und
+  mehreren Lagern, KI-Porträts, Hosting, Multiplayer.
 
 ## Offene Punkte
 
