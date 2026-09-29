@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { clock, loadSimulation, messages, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
+import { autoResolveEncounter, activeEncounters as getEncounters } from '../encounters';
 import { allProducts, getProduct, getStock, store } from '../goods';
 import { getPressure, getSpotPrice, spotReferencePrice, supplyDemandFactor } from '../market';
 import { changeReputation, getReputation } from '../reputation';
@@ -493,6 +494,41 @@ describe('customers: Lieferdienst und Großhandel', () => {
     sim.advance((getOrder(sim.state, order.id)?.arrivesAt ?? 0) - sim.state.time);
     expect(eventsOfType(events, 'sale.completed')[0].payload).toMatchObject({ channel: 'wholesale', spotId: null });
     expect(getSalesStats(sim.state).wholesaleDeals).toBe(1);
+  });
+
+  it('Großhandel: Ein Deal kann bei der Übergabe kippen, dann entscheidet eine Konfrontation', () => {
+    const outcomes = new Set<string>();
+    for (let seed = 1; seed <= 60 && outcomes.size < 2; seed++) {
+      const sim = createTestGame({ seed });
+      for (const key of Object.keys(sim.state.modules.customers.nextSpawnAt)) {
+        sim.state.modules.customers.nextSpawnAt[key] = Infinity;
+      }
+      changeReputation(sim.ctx('test'), 50);
+      store(sim.ctx('test'), { productId: 'hash', amount: 600, quality: 0.6 });
+      const events = recordEvents(sim);
+      const order = offerWholesale(sim.ctx('customers'), true);
+      if (!order) continue;
+      expect(answer(sim, order.messageId, 'self').ok).toBe(true);
+      sim.advance((getOrder(sim.state, order.id)?.arrivesAt ?? 0) - sim.state.time);
+      if (getOrder(sim.state, order.id)?.status !== 'contested') continue;
+      const started = eventsOfType(events, 'encounter.started')[0].payload;
+      expect(started.kind).toBe('dealGoneWrong');
+      expect(started.request.playerPresent).toBe(true);
+      const encounterId = getEncounters(sim.state)[0].id;
+      expect(sim.dispatch({ type: 'encounters.auto', payload: { encounterId } }).ok).toBe(true);
+      const resolved = eventsOfType(events, 'encounter.resolved')[0].payload;
+      if (resolved.playerKilled) continue;
+      const status = getOrder(sim.state, order.id)?.status;
+      if (resolved.outcome === 'success') {
+        expect(status).toBe('done');
+        expect(eventsOfType(events, 'sale.completed')).toHaveLength(1);
+      } else {
+        expect(status).toBe('failed');
+        expect(eventsOfType(events, 'sale.completed')).toHaveLength(0);
+      }
+      outcomes.add(resolved.outcome === 'success' ? 'success' : 'lost');
+    }
+    expect(outcomes.size).toBeGreaterThan(0);
   });
 
   it('Anfragen kommen im Spielverlauf von selbst', () => {

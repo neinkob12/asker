@@ -202,6 +202,7 @@ function OrdersApp() {
   const statusText: Record<Order['status'], string> = {
     offered: 'offen',
     enRoute: 'unterwegs',
+    contested: 'Deal kippt',
     done: 'erledigt',
     declined: 'abgelehnt',
     expired: 'verpasst',

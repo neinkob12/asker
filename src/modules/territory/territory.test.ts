@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { loadSimulation, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getGangs } from '../gangs';
+import { enlist, generateProfile } from '../staff';
 import { allVeedel, getVeedel } from '../veedel';
 import {
   CONTROL_THRESHOLD,
   DECAY_PER_HOUR,
   GANG_REGEN_PER_HOUR,
+  LIEUTENANT_INFLUENCE_PER_HOUR,
+  LIEUTENANT_INFLUENCE_PER_LEVEL,
   LOSE_CONTROL_THRESHOLD,
   SALE_DISPLACEMENT,
   SALE_INFLUENCE_BASE,
@@ -22,6 +25,7 @@ import {
   factions,
   getInfluence,
   hasPlayerPresence,
+  lieutenantInfluence,
   PLAYER_FACTION,
   playerPresence,
 } from './index';
@@ -171,6 +175,27 @@ describe('territory', () => {
     sim.advance(10 * 60);
     expect(getInfluence(sim.state, 'kalk', PLAYER_FACTION)).toBeCloseTo(30 - 10 * DECAY_PER_HOUR);
     expect(getInfluence(sim.state, 'lindenthal', PLAYER_FACTION)).toBeCloseTo(30 + 10 * STAFF_PRESENCE_PER_HOUR);
+  });
+
+  it('ein Leutnant bringt zusätzlich Einfluss, bessere Leutnants mehr', () => {
+    const sim = quietGame();
+    const ctx = sim.ctx('staff');
+    addInfluence(sim.ctx('test'), 'kalk', PLAYER_FACTION, 20);
+    const lt = enlist(ctx, generateProfile(ctx, 'runner', { level: 3 }), { origin: 'pool' });
+    lt.stats.charisma = 50;
+    expect(lieutenantInfluence(sim.state, 'kalk')).toBe(0);
+    expect(sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: lt.id, veedelId: 'kalk' } }).ok).toBe(true);
+    const perHour = lieutenantInfluence(sim.state, 'kalk');
+    expect(perHour).toBeCloseTo(LIEUTENANT_INFLUENCE_PER_HOUR + 2 * LIEUTENANT_INFLUENCE_PER_LEVEL);
+    lt.stats.charisma = 100;
+    expect(lieutenantInfluence(sim.state, 'kalk')).toBeGreaterThan(perHour);
+    lt.stats.charisma = 50;
+    const before = getInfluence(sim.state, 'kalk', PLAYER_FACTION);
+    sim.advance(10 * 60);
+    // Leutnant zählt als eine Person vor Ort plus sein eigener Beitrag, statt Verfall.
+    expect(getInfluence(sim.state, 'kalk', PLAYER_FACTION)).toBeGreaterThanOrEqual(
+      before + 10 * (perHour + STAFF_PRESENCE_PER_HOUR) - 1,
+    );
   });
 
   it('ein kürzlicher Verkauf hält den Einfluss, danach sinkt er', () => {

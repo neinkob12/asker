@@ -37,6 +37,12 @@ export const SALE_PRESENCE_MINUTES = 24 * 60;
 export const STAFF_PRESENCE_PER_HOUR = 0.1;
 /** … gezählt werden höchstens so viele. */
 export const STAFF_PRESENCE_MAX = 3;
+/**
+ * Ein Leutnant im Veedel bringt zusätzlich so viel Einfluss pro Stunde (Level 1, Charisma 50), plus so viel pro
+ * Level darüber. Charisma wirkt als Faktor 0,75 (0) bis 1,25 (100).
+ */
+export const LIEUTENANT_INFLUENCE_PER_HOUR = 0.15;
+export const LIEUTENANT_INFLUENCE_PER_LEVEL = 0.03;
 /** Verfall pro Stunde ohne Präsenz. */
 export const DECAY_PER_HOUR = 0.15;
 /** Eine Gang, die ein Veedel kontrolliert, baut ihren Einfluss wieder auf (bis zum Startwert des Veedels). */

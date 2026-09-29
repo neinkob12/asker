@@ -14,6 +14,7 @@ import {
   messages,
   wallet,
 } from '../../core';
+import { startEncounter } from '../encounters';
 import {
   allProducts,
   DEFAULT_WAREHOUSE,
@@ -22,6 +23,7 @@ import {
   getStock,
   getWarehouse,
   productName,
+  store,
   take,
 } from '../goods';
 import { averageReferencePrice, referencePrice } from '../market';
@@ -49,6 +51,7 @@ import {
   REP_ORDER_FAILED,
   REP_WHOLESALE_DONE,
   WHOLESALE_AMOUNTS,
+  WHOLESALE_BETRAYAL_CHANCE,
   WHOLESALE_CHANCE_PER_HOUR,
   WHOLESALE_DISCOUNT,
   WHOLESALE_HANDOVER_MINUTES,
@@ -58,7 +61,7 @@ import { customerType, productsFor, typeDemandWeight } from './decisions';
 import type { Order, OrderKind, Regular } from './index';
 import { pickWeighted, rateSale, updateRegularAfterSale } from './street';
 
-const isOpen = (o: Order) => o.status === 'offered' || o.status === 'enRoute';
+const isOpen = (o: Order) => o.status === 'offered' || o.status === 'enRoute' || o.status === 'contested';
 
 function findOrder(ctx: Ctx, orderId: number): Order | undefined {
   return ctx.state.modules.customers.orders.find((o) => o.id === orderId);
@@ -355,7 +358,58 @@ export function courierGone(ctx: Ctx, staffId: string, clearAssignment: boolean)
   }
 }
 
-function complete(ctx: Ctx, order: Order): void {
+/**
+ * Bei der Übergabe kann ein Großhandels-Deal kippen: Konfrontation "Deal kippt" (encounters). Wer selbst liefert,
+ * ist dabei; ein Kurier muss es allein regeln. Das Ergebnis kommt in onDealResolved an.
+ */
+function dealGoesWrong(ctx: Ctx, order: Order): boolean {
+  if (order.kind !== 'wholesale' || !ctx.chance(WHOLESALE_BETRAYAL_CHANCE)) return false;
+  order.status = 'contested';
+  const goods = `${formatProductAmount(order.productId, order.amount)} ${productName(order.productId)}`;
+  startEncounter(ctx, {
+    kind: 'dealGoneWrong',
+    veedelId: order.veedelId,
+    staffIds: order.courierId ? [order.courierId] : [],
+    playerPresent: order.deliveredBy === 'player',
+    place: `mit ${order.contactName}`,
+    situation: `Übergabe {place}: ${goods} gegen {stakeMoney}. Statt Geld zieht einer ein Messer. {opponent} wollen die Ware umsonst.`,
+    opponent: { label: `${order.contactName} und seine Jungs`, count: ctx.randomInt(2, 3) },
+    stakes: { money: order.price, goods: order.amount },
+    // Die Ware ist schon unterwegs: Das Geld verbucht customers selbst, die Folgen hier sind nur Ruf.
+    effects: {
+      success: { reputation: 2, text: 'Deal {place} gerettet. Die Kohle stimmt, der Typ entschuldigt sich.' },
+      failure: { reputation: -3, text: 'Abgezogen {place}: Ware weg, kein Geld.' },
+      retreat: { reputation: -1, text: 'Deal {place} geplatzt. Mit der Ware zurück, aber ohne Geld.' },
+    },
+    origin: { module: 'customers', ref: `order:${order.id}` },
+  });
+  return true;
+}
+
+/** Ausgang eines gekippten Deals. */
+export function onDealResolved(ctx: Ctx, ref: string | undefined, outcome: string): void {
+  const id = Number(ref?.replace('order:', ''));
+  const order = ctx.state.modules.customers.orders.find((o) => o.id === id && o.status === 'contested');
+  if (!order) return;
+  if (order.courierId && getStaffMember(ctx.state, order.courierId)) assign(ctx, order.courierId, null);
+  if (outcome === 'success') {
+    complete(ctx, order, true);
+    return;
+  }
+  if (outcome === 'retreat') {
+    store(ctx, {
+      productId: order.productId,
+      amount: order.amount,
+      ...(order.quality !== null ? { quality: order.quality } : {}),
+      ...(order.cut !== null ? { cut: order.cut } : {}),
+    });
+  }
+  changeReputation(ctx, REP_ORDER_FAILED, 'Deal geplatzt');
+  finish(ctx, order, 'failed');
+}
+
+function complete(ctx: Ctx, order: Order, afterFight = false): void {
+  if (!afterFight && dealGoesWrong(ctx, order)) return;
   const s = ctx.state.modules.customers;
   const wholesale = order.kind === 'wholesale';
   wallet.earn(ctx, order.price, 'dirty', wholesale ? 'Großhandel' : 'Lieferung');

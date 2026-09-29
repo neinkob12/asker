@@ -206,6 +206,8 @@ export const WHOLESALE_AMOUNTS: Readonly<Record<string, readonly number[]>> = {
 /** Rabatt, den Großhändler wollen [von, bis]. */
 export const WHOLESALE_DISCOUNT: readonly [number, number] = [0.25, 0.4];
 export const WHOLESALE_HANDOVER_MINUTES = 20;
+/** So oft kippt ein Großhandels-Deal bei der Übergabe (Konfrontation "Deal kippt"). */
+export const WHOLESALE_BETRAYAL_CHANCE = 0.12;
 
 export const DEALERS: readonly { id: string; name: string; veedelId: string }[] = [
   { id: 'oemer', name: 'Ömer (Kalk)', veedelId: 'kalk' },

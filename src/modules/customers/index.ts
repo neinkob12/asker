@@ -22,7 +22,7 @@ import { getStock } from '../goods';
 import { getSpots } from '../spots';
 import { CUSTOMER_TYPES } from './config';
 import { customerType } from './decisions';
-import { acceptOrder, courierGone, declineOrder, expireOrderMessage, ordersTick } from './orders';
+import { acceptOrder, courierGone, declineOrder, expireOrderMessage, onDealResolved, ordersTick } from './orders';
 import { initialSpawn, serve, streetTick } from './street';
 
 export { CUSTOMER_PATIENCE } from './config';
@@ -102,7 +102,8 @@ export interface Regular {
 }
 
 export type OrderKind = 'delivery' | 'wholesale';
-export type OrderStatus = 'offered' | 'enRoute' | 'done' | 'declined' | 'expired' | 'failed';
+/** contested: Ein Großhandels-Deal ist bei der Übergabe gekippt, die Konfrontation läuft. */
+export type OrderStatus = 'offered' | 'enRoute' | 'contested' | 'done' | 'declined' | 'expired' | 'failed';
 
 /** Auftrag über den Lieferdienst oder den Großhandel. */
 export interface Order {
@@ -333,6 +334,9 @@ export default defineModule({
       if (to !== 'active') courierGone(ctx, staffId, true);
     },
     'staff.left': (ctx, { staffId }) => courierGone(ctx, staffId, false),
+    'encounter.resolved': (ctx, { request, outcome }) => {
+      if (request.origin?.module === 'customers') onDealResolved(ctx, request.origin.ref, outcome);
+    },
   },
   migrations: {
     2: (old: CustomersStateV1): CustomersState => ({
