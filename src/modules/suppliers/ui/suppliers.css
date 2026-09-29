@@ -19,18 +19,6 @@
 .sup-app {
   font-size: var(--font-size-sm);
 }
-.sup-app__head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.sup-app__title {
-  margin: 0 0 var(--space-3);
-  font-size: var(--font-size-md);
-}
-.sup-app__head .sup-app__title {
-  margin: 0;
-}
 .sup-app__section {
   margin: var(--space-5) 0 var(--space-2);
   font-size: var(--font-size-sm);

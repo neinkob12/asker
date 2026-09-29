@@ -12,6 +12,7 @@ export {
 } from '../audio';
 export * from './components';
 export { useGame, useSession, useUi } from './hooks';
+export { PhoneScreen, type PhoneScreenProps } from './phone/PhoneScreen';
 export {
   type DialogDefinition,
   type DialogId,

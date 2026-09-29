@@ -127,7 +127,7 @@ function manage(turn: Turn): void {
  */
 export function onRaidWarning(ctx: Ctx, veedelId: string, post: LieutenantPost, until: number): void {
   const lt = getStaffMember(ctx.state, post.staffId);
-  if (!lt || lt.status !== 'active' || !isEmployed(ctx.state, lt.id)) return;
+  if (lt?.status !== 'active' || !isEmployed(ctx.state, lt.id)) return;
   const actor: Actor = `staff:${lt.id}`;
   const turn: Turn = { ctx, veedelId, post, lt, run: (command) => ctx.dispatch(command, { actor }).ok };
   if (turn.run({ type: 'staff.lieLow', payload: { veedelId, until } })) {

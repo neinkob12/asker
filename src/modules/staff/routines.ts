@@ -149,7 +149,7 @@ function returnFromHiding(ctx: Ctx): void {
     let back = 0;
     for (const { staffId, assignment } of hiding.returns) {
       const m = s.members.find((x) => x.id === staffId);
-      if (!m || m.status !== 'active' || m.assignment) continue;
+      if (m?.status !== 'active' || m.assignment) continue;
       if (m.role === 'runner' && assignment.kind === 'spot' && activeRunnerAt(ctx.state, assignment.targetId)) continue;
       assign(ctx, m.id, assignment);
       back++;

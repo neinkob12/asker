@@ -142,7 +142,7 @@ export function playerPresence(state: GameState, veedelId: string): PlayerPresen
 export function lieutenantInfluence(state: GameState, veedelId: string): number {
   const staffId = getLieutenant(state, veedelId);
   const lt = staffId ? getStaffMember(state, staffId) : undefined;
-  if (!lt || lt.status !== 'active' || lt.leftAt !== null) return 0;
+  if (lt?.status !== 'active' || lt.leftAt !== null) return 0;
   const charisma = 0.75 + lt.stats.charisma / 200;
   const value = (LIEUTENANT_INFLUENCE_PER_HOUR + LIEUTENANT_INFLUENCE_PER_LEVEL * (lt.level - 1)) * charisma;
   return Math.round(value * 1000) / 1000;
