@@ -9,15 +9,16 @@
 import { type Command, type GameState, messages, type Simulation } from '../core';
 import { allWaiting, canServe } from '../modules/customers';
 import { activeEncounters } from '../modules/encounters';
-import { getGangs } from '../modules/gangs';
-import { getStock } from '../modules/goods';
+import { ceasefireCost, getGangs, tributeAmount } from '../modules/gangs';
+import { DEFAULT_WAREHOUSE, getStock } from '../modules/goods';
 import { getLieutenant } from '../modules/hierarchy';
 import { getCandidates } from '../modules/recruiting';
 import { canFoundSpotAt, getSpots, lockedSpots } from '../modules/spots';
-import { dailyWages, getStaff, RUNNER_HIRE_COST } from '../modules/staff';
+import { dailyWages, getStaff, RUNNER_HIRE_COST, securityAt } from '../modules/staff';
 import {
   availableCredit,
   availablePackages,
+  getRelation,
   getSuppliers,
   packagePrice,
   shipmentsInTransit,
@@ -147,7 +148,7 @@ function grow(sim: Simulation, stats: BotStats): void {
 
   // Bewerber mit Level zuerst, sonst von der Straße.
   const openSpots = free().sort((a, b) => b.demand - a.demand);
-  if (openSpots.length > 0 && stock > 40 && money(state) > RUNNER_HIRE_COST + reserve(state) + 700) {
+  if (openSpots.length > 0 && stock > 60 && money(state) > RUNNER_HIRE_COST + reserve(state) + 1000) {
     // Günstige Leute zuerst: Ein Läufer soll mehr einbringen, als er kostet.
     const candidate = getCandidates(state)
       .filter(
@@ -205,7 +206,7 @@ function grow(sim: Simulation, stats: BotStats): void {
     const best = getStaff(state, { status: 'active', veedelId })
       .filter((m) => m.role === 'runner' && m.level >= 2)
       .sort((a, b) => b.level - a.level)[0];
-    if (best && money(state) > reserve(state) + 300) {
+    if (best && money(state) > reserve(state) + 1500) {
       run(sim, stats, { type: 'hierarchy.appoint', payload: { staffId: best.id, veedelId } });
     }
   }
@@ -215,7 +216,7 @@ function grow(sim: Simulation, stats: BotStats): void {
   if (threatened) {
     const guards = getStaff(state, { role: 'security' }).length;
     const runners = getStaff(state, { role: 'runner' }).length;
-    if (guards < Math.ceil(runners / 3)) {
+    if (guards < Math.ceil(runners / 3) + 1) {
       const candidate = getCandidates(state)
         .filter(
           (c) =>
@@ -224,27 +225,42 @@ function grow(sim: Simulation, stats: BotStats): void {
             c.hireCost <= money(state) - reserve(state) - 500,
         )
         .sort((a, b) => a.wage - b.wage || b.level - a.level)[0];
+      // Erst das Lager, dann die Spots mit dem meisten Andrang.
+      const warehouseGuarded = securityAt(state, { warehouseId: DEFAULT_WAREHOUSE }).length > 0;
       const spot = getSpots(state)
         .filter((s) => getStaff(state, { spotId: s.id, role: 'security' }).length === 0)
         .sort((a, b) => b.demand - a.demand)[0];
-      if (candidate && spot) {
-        run(sim, stats, {
-          type: 'recruiting.hire',
-          payload: { candidateId: candidate.id, assignment: { kind: 'spot', targetId: spot.id } },
-        });
+      const assignment = !warehouseGuarded
+        ? { kind: 'warehouse' as const, targetId: DEFAULT_WAREHOUSE }
+        : spot
+          ? { kind: 'spot' as const, targetId: spot.id }
+          : null;
+      if (candidate && assignment) {
+        run(sim, stats, { type: 'recruiting.hire', payload: { candidateId: candidate.id, assignment } });
       }
     }
   }
 }
 
-/** Offene Handy-Nachrichten beantworten: zahlen, wenn es geht, sonst ablehnen. Aufträge lehnt er ab. */
+/**
+ * Offene Handy-Nachrichten beantworten. Schutzgeld und Waffenstillstand nur, wenn es aus der Portokasse geht
+ * (höchstens ein Viertel des Geldes), sonst ablehnen. Aufträge und Angebote lehnt er ab, Warnungen nimmt er ernst.
+ */
 function answerMessages(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
-  const PREFERENCE = ['tribute', 'pay', 'ceasefire', 'raise', 'lieLow', 'refuse', 'decline', 'no', 'later'];
+  const PREFERENCE = ['tribute', 'ceasefire', 'raise', 'lieLow', 'refuse', 'decline', 'no', 'later', 'ignore'];
   for (const m of [...state.messages.list]) {
     if (!messages.canAnswer(state, m)) continue;
-    const ids = (m.options ?? []).map((o) => o.id);
-    const choices = PREFERENCE.filter((p) => ids.includes(p));
+    const options = m.options ?? [];
+    const affordable = (id: string) => {
+      const option = options.find((o) => o.id === id);
+      const command = option?.command;
+      if (!command) return true;
+      if (command.type === 'gangs.payTribute') return tributeAmount(state, command.payload.gangId) <= money(state) / 4;
+      if (command.type === 'gangs.ceasefire') return ceasefireCost(state, command.payload.gangId) <= money(state) / 4;
+      return true;
+    };
+    const choices = PREFERENCE.filter((p) => options.some((o) => o.id === p) && affordable(p));
     for (const optionId of choices) {
       if (run(sim, stats, { type: 'messages.answer', payload: { messageId: m.id, optionId } })) break;
     }
@@ -261,12 +277,24 @@ function handleEncounters(sim: Simulation, stats: BotStats): void {
   }
 }
 
+/** Kredit bei Lieferanten zurückzahlen, sobald das Geld reicht. */
+function repay(sim: Simulation, stats: BotStats): void {
+  const state = sim.state;
+  for (const supplier of getSuppliers(state)) {
+    const debt = getRelation(state, supplier.id).debt;
+    if (debt > 0 && money(state) > reserve(state) + debt) {
+      run(sim, stats, { type: 'suppliers.repay', payload: { supplierId: supplier.id, amount: debt } });
+    }
+  }
+}
+
 /** Ein Blick aufs Spiel. */
 export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = DEFAULT_BOT): void {
   if (sim.state.outcome.gameOver) return;
   handleEncounters(sim, stats);
   answerMessages(sim, stats);
   sellPersonally(sim, stats, options);
+  repay(sim, stats);
   restock(sim, stats);
   grow(sim, stats);
 }

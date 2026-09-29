@@ -128,6 +128,22 @@ describe('suppliers', () => {
     expect(broke.isOver).toBe(false);
   });
 
+  it('gesperrte Lieferanten machen nicht pleite, solange das Geld für Schulden und ein Paket reicht', () => {
+    const sim = createTestGame();
+    sim.state.modules.goods.stock.ehrenfeld = [];
+    for (const rel of Object.values(sim.state.modules.suppliers.relations)) {
+      rel.debt = 500;
+      rel.dueAt = sim.state.time + 1440;
+      rel.overdue = 1;
+    }
+    sim.state.wallet.dirty = 500 + cheapestPackagePrice(sim.state);
+    sim.step();
+    expect(sim.isOver).toBe(false);
+    sim.state.wallet.dirty = 400;
+    sim.step();
+    expect(sim.state.outcome.gameOver?.reason).toBe('bankrupt');
+  });
+
   it('Vertrauen steigt mit Käufen und bringt Rabatt, Kredit und besseres Sortiment', () => {
     const sim = createTestGame();
     const events = recordEvents(sim);

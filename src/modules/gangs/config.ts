@@ -105,9 +105,9 @@ export const STAGE_HYSTERESIS = 10;
 /** Dieselbe Stufe wird höchstens so oft per Nachricht angekündigt. */
 export const ANNOUNCE_INTERVAL = DAY;
 /** Chance pro Stunde auf einen Überfall bei voller Feindseligkeit (mal Aggression). */
-export const ATTACK_CHANCE = 0.05;
+export const ATTACK_CHANCE = 0.035;
 /** Mindestabstand zwischen zwei Überfällen derselben Gang. */
-export const ATTACK_COOLDOWN = 18 * HOUR;
+export const ATTACK_COOLDOWN = 30 * HOUR;
 /** Nach einem gelungenen Überfall ist die Gang erst mal zufrieden: so viel weniger Feindseligkeit. */
 export const HOSTILITY_AFTER_LESSON = 30;
 /** Chance, ein Lager statt eines Spots zu überfallen. */

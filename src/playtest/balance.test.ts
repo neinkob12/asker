@@ -44,26 +44,37 @@ describe('Balancing', () => {
       expect(last.gameOver, `Seed ${seed}`).toBeNull();
       expect(last.runners, `Seed ${seed}`).toBeGreaterThanOrEqual(2);
       expect(r.events['sale.completed'] ?? 0).toBeGreaterThan(100);
+      // Das erste Veedel ist in Reichweite, die Gangs merken es und machen Druck.
+      expect(Math.max(...r.days.map((d) => d.veedel)), `Seed ${seed}`).toBeGreaterThanOrEqual(1);
+      expect(r.events['gang.escalated'] ?? 0, `Seed ${seed}`).toBeGreaterThan(0);
     }
   }, 120_000);
 
   it.skipIf(!process.env.BALANCE)(
-    'Bericht: 30 Tage und Kampagne',
+    'Bericht: Kampagne mit mehreren Seeds',
     () => {
       const days = Number(process.env.BALANCE_DAYS ?? 30);
       const seeds = (process.env.BALANCE_SEEDS ?? '1,2,3').split(',').map(Number);
+      const verbose = !!process.env.BALANCE_VERBOSE;
       for (const seed of seeds) {
         const started = Date.now();
         const r = simulate(seed, days, true);
-        console.log(`\n=== Seed ${seed} (${((Date.now() - started) / 1000).toFixed(1)} s) ===`);
-        for (const d of r.days) {
-          if (d.day % 5 === 0 || d.day <= 3 || d.gameOver || d === r.days[r.days.length - 1])
-            console.log(JSON.stringify(d));
-        }
-        const keys = Object.keys(r.events)
-          .filter((k) => !k.startsWith('clock.') && !k.startsWith('wallet.') && k !== 'journal.added')
-          .sort();
-        console.log(keys.map((k) => `${k}=${r.events[k]}`).join('  '));
+        const last = r.days[r.days.length - 1];
+        const firstDay = (n: number) => r.days.find((d) => d.veedel >= n)?.day ?? '-';
+        const e = (k: string) => r.events[k] ?? 0;
+        const avg = (from: number, to: number) =>
+          Math.round(
+            r.days.slice(from, to).reduce((sum, d) => sum + d.revenue, 0) / Math.max(1, r.days.slice(from, to).length),
+          );
+        console.log(
+          `Seed ${seed}: ${last.won ? `Sieg an Tag ${last.won}` : last.gameOver ? `Game Over (${last.gameOver}) an Tag ${last.day}` : `Tag ${last.day}, ${last.veedel} Veedel`}` +
+            ` | Veedel 1/3/5/7 ab Tag ${firstDay(1)}/${firstDay(3)}/${firstDay(5)}/${firstDay(7)}` +
+            ` | Umsatz/Tag T1-5 ${avg(0, 5)}, T6-15 ${avg(5, 15)}, T16-30 ${avg(15, 30)}, danach ${avg(30, r.days.length)}` +
+            ` | Gang-Überfälle ${e('gang.raidStarted')}, Vorstöße ${e('gang.pushStarted')}, Eskalationen ${e('gang.escalated')}` +
+            ` | Razzien ${e('police.raidPlanned')}, Kontrollen ${e('police.check')}, Festnahmen ${e('police.arrest')}` +
+            ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,
+        );
+        if (verbose) for (const d of r.days) if (d.day % 10 === 0 || d === last) console.log(JSON.stringify(d));
       }
     },
     3_600_000,

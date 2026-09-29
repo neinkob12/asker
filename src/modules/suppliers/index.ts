@@ -529,12 +529,18 @@ function initialRelations(): Record<string, SupplierRelation> {
 }
 
 /** Kann der Spieler über diesen Lieferanten noch an Ware kommen (Geld oder Kredit)? */
+/**
+ * Kann der Spieler hier noch Ware bekommen? Ein gesperrter Lieferant zählt, wenn das Geld reicht, um erst die
+ * Schulden zu tilgen und dann ein Paket zu kaufen (wer Geld hat, ist nicht pleite).
+ */
 function canRestock(state: GameState, supplier: Supplier): boolean {
-  if (isBlocked(state, supplier.id)) return false;
+  const money = wallet.balance(state, 'dirty');
+  const blocked = isBlocked(state, supplier.id);
+  const debt = blocked ? getRelation(state, supplier.id).debt : 0;
   const credit = availableCredit(state, supplier.id);
   return availablePackages(state, supplier.id).some((p) => {
     const price = packagePrice(state, supplier.id, p.id);
-    return wallet.balance(state, 'dirty') >= price || credit >= price;
+    return money >= debt + price || credit >= price;
   });
 }
 
