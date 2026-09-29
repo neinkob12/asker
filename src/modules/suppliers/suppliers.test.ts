@@ -130,7 +130,7 @@ describe('suppliers', () => {
     }
     expect(unitPrice('frankfurt')).toBeGreaterThan(unitPrice('rotterdam'));
     expect(unitPrice('hamburg')).toBeGreaterThan(unitPrice('rotterdam'));
-    expect(SUPPLIERS.map((s) => s.id)).toEqual(['rotterdam', 'frankfurt', 'berlin', 'hamburg', 'amsterdam']);
+    expect(SUPPLIERS.map((s) => s.id)).toEqual(['rotterdam', 'frankfurt', 'berlin', 'hamburg', 'amsterdam', 'koeln']);
   });
 
   it('ohne genug Geld keine Bestellung', () => {
@@ -139,9 +139,9 @@ describe('suppliers', () => {
     expect(order(sim, 'frankfurt', 'weed25')).toEqual({ ok: false, reason: 'Nicht genug Geld.' });
   });
 
-  it('zu Beginn liefert nur Frankfurt, Toni schreibt eine Nachricht, über die man bestellen kann', () => {
+  it('zu Beginn liefern Köln und Frankfurt, Toni schreibt eine Nachricht, über die man bestellen kann', () => {
     const sim = createTestGame();
-    expect(SUPPLIERS.filter((s) => isUnlocked(sim.state, s.id)).map((s) => s.id)).toEqual(['frankfurt']);
+    expect(SUPPLIERS.filter((s) => isUnlocked(sim.state, s.id)).map((s) => s.id)).toEqual(['frankfurt', 'koeln']);
     expect(order(sim, 'hamburg', 'weed50')).toEqual({ ok: false, reason: 'Hein macht noch keine Geschäfte mit dir.' });
     const [thread] = messages.threads(sim.state);
     expect(thread.contact.id).toBe('supplier:frankfurt');
