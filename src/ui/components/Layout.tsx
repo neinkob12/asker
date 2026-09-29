@@ -18,11 +18,11 @@ export interface CardProps {
   actions?: ComponentChildren;
   children?: ComponentChildren;
   class?: string;
-  /** Icon vor dem Titel (als farbiger Sticker). */
+  /** Icon vor dem Titel (als getönte Kachel). */
   icon?: IconRef;
   /** Farbige Kante links, z.B. für Warnungen. */
   tone?: Tone;
-  /** Farbe des Icon-Stickers. Standard: nach tone, sonst gelb. */
+  /** Farbe der Icon-Kachel. Standard: nach tone, sonst gelb. */
   color?: ChipColor;
   /** Kennzahl für die Zeilenansicht (z.B. "40 g" oder "3 warten"). */
   summary?: ComponentChildren;

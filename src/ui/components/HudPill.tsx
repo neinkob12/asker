@@ -4,7 +4,7 @@ import type { IconName } from './icons';
 
 export interface HudPillProps {
   icon: IconName | (string & {});
-  /** Farbe des Icon-Stickers. */
+  /** Farbe der Icon-Kachel (im HUD ausgeblendet, im Handy-Widget sichtbar je nach Stil). */
   color?: ChipColor;
   /** Kleine Beschriftung über dem Wert. */
   label: ComponentChildren;
@@ -19,7 +19,10 @@ export interface HudPillProps {
   children?: ComponentChildren;
 }
 
-/** Kennzahl im HUD als Sticker-Pille: Icon, kleine Beschriftung, großer Wert. Im Mehr-Popover wird sie zur Zeile. */
+/**
+ * Kennzahl: kleine Beschriftung, großer Wert. placement 'main' steht in der HUD-Leiste, 'more' als Kachel auf dem
+ * Startbildschirm des Handys.
+ */
 export function HudPill(props: HudPillProps) {
   const inner = (
     <>

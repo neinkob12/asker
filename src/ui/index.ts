@@ -49,7 +49,6 @@ export type {
   CameraMode,
   MapController,
   PhoneNotification,
-  SheetSnap,
   Toast,
   ToastKind,
   ToastOptions,

@@ -57,24 +57,22 @@ export function createHotspots(map: MapLibreMap, id: string, options: HotspotsOp
         'heatmap-weight': ['get', 'weight'],
         'heatmap-radius': radius(size, 1) as never,
         'heatmap-intensity': 1.2,
-        'heatmap-opacity': 0.75,
-        // Durchsichtig → Gelb → Orange → Pink → Lila.
+        'heatmap-opacity': 0.5,
+        // Durchsichtig → gedämpftes Bernstein → warmes Orange (wie Straßenlicht).
         'heatmap-color': [
           'interpolate',
           ['linear'],
           ['heatmap-density'],
           0,
-          'rgba(255,216,77,0)',
-          0.08,
-          'rgba(255,216,77,0.5)',
-          0.25,
-          'rgba(255,163,77,0.75)',
-          0.45,
-          'rgba(255,111,160,0.85)',
+          'rgba(226,174,74,0)',
+          0.1,
+          'rgba(226,174,74,0.25)',
+          0.35,
+          'rgba(226,174,74,0.5)',
           0.7,
-          'rgba(176,108,240,0.9)',
+          'rgba(230,140,70,0.65)',
           1,
-          'rgba(141,92,246,0.95)',
+          'rgba(229,110,77,0.75)',
         ],
       },
     },
@@ -99,7 +97,7 @@ export function createHotspots(map: MapLibreMap, id: string, options: HotspotsOp
   const entry = {
     applyNight() {
       if (!map.getLayer(id)) return;
-      map.setPaintProperty(id, 'heatmap-opacity', 0.72 + night * 0.25);
+      map.setPaintProperty(id, 'heatmap-opacity', 0.45 + night * 0.25);
       if (reducedMotion()) map.setPaintProperty(id, 'heatmap-intensity', 1.2 + night * 0.2);
     },
   };

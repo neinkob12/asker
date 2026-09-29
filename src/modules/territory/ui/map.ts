@@ -1,14 +1,22 @@
-// Veedel auf der Karte: weiche, halbtransparente Pastellflächen nach kontrollierender Fraktion oder nach Heat,
+// Veedel auf der Karte: feine Grenzen und schwach getönte Flächen nach kontrollierender Fraktion oder nach Heat,
 // nur auf dem Land (unter Grün, Wasser und Straßen). Keine dauerhaften Namen: Name und Herrscher bzw. Heat erscheinen nur beim Überfahren mit
 // der Maus (und im Panel). Klick auf ein Veedel öffnet das Veedel-Panel.
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import type { GameState } from '../../../core';
-import { ABOVE_LAND, addHtmlMarker, BELOW_BUILDINGS, el, type MapLayer, pastel } from '../../../map';
+import { ABOVE_LAND, addHtmlMarker, BELOW_BUILDINGS, el, type MapLayer, mixColor } from '../../../map';
 import { getHeat, heatLevel } from '../../police';
 import { allVeedel, getBoundary } from '../../veedel';
 import { controllerOf, factionColor, factionName } from '../index';
 import { getMapView, MAP_VIEW_OPTIONS, onMapViewChange, setMapView, type VeedelMapView } from './view';
+
+/** Grenzen offener Veedel: dezentes Grau. */
+const NEUTRAL_LINE = '#5a616b';
+
+/** Fraktionsfarbe für die dunkle Karte etwas gedämpft (amount = Anteil Grau). */
+function muted(color: string, amount: number): string {
+  return mixColor(color, '#8a9099', amount);
+}
 
 const SOURCE = 'territory.veedel';
 const FILL = 'territory.veedel-fill';
@@ -34,8 +42,8 @@ function buildData(state: GameState, view: VeedelMapView): VeedelData {
         properties: {
           id: v.id,
           view,
-          color: pastel(factionColor(state, owner), owner === null ? 0.5 : 0.3),
-          line: pastel(factionColor(state, owner), 0.15),
+          color: muted(factionColor(state, owner), 0.25),
+          line: owner === null ? NEUTRAL_LINE : muted(factionColor(state, owner), 0.15),
           neutral: owner === null,
           heat: Math.round(getHeat(state, v.id)),
         },
@@ -67,9 +75,9 @@ export const veedelLayer: MapLayer = {
   mount(ctx) {
     const { map } = ctx;
     const heatColors = [
-      pastel(token('--color-info-strong', '#1cb0f6'), 0.5),
-      pastel(token('--map-heat-warm', '#ffb547'), 0.2),
-      pastel(token('--map-heat-hot', '#ff5d62'), 0.15),
+      muted(token('--color-info-strong', '#4c8fe0'), 0.3),
+      token('--map-heat-warm', '#e2ae4a'),
+      token('--map-heat-hot', '#e5484d'),
     ];
     const before = map.getLayer(BELOW_BUILDINGS) ? BELOW_BUILDINGS : undefined;
     // Die Einfärbung liegt nur auf dem Land, Rhein und Parks bleiben klar.
@@ -106,12 +114,12 @@ export const veedelLayer: MapLayer = {
           'fill-color': ['case', isHeat, heatColor, ['get', 'color']] as never,
           'fill-opacity': [
             '+',
-            ['case', hover, 0.1, 0],
+            ['case', hover, 0.08, 0],
             [
               'case',
               isHeat,
-              ['interpolate', ['linear'], ['get', 'heat'], 0, 0.1, 100, 0.42],
-              ['case', ['get', 'neutral'], 0.04, 0.24],
+              ['interpolate', ['linear'], ['get', 'heat'], 0, 0.06, 100, 0.34],
+              ['case', ['get', 'neutral'], 0, 0.14],
             ],
           ] as never,
         },
@@ -126,9 +134,8 @@ export const veedelLayer: MapLayer = {
         layout: { 'line-join': 'round' },
         paint: {
           'line-color': ['case', isHeat, heatColor, ['get', 'line']] as never,
-          'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1, 14, 2.5],
-          'line-opacity': ['case', ['get', 'neutral'], 0.35, 0.7] as never,
-          'line-blur': 0.6,
+          'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.8, 14, 1.6],
+          'line-opacity': ['case', ['get', 'neutral'], 0.5, 0.85] as never,
         },
       },
       before,
@@ -140,7 +147,7 @@ export const veedelLayer: MapLayer = {
         source: SOURCE,
         filter: ['==', ['get', 'id'], ''],
         layout: { 'line-join': 'round' },
-        paint: { 'line-color': '#ffffff', 'line-width': 4, 'line-opacity': 0.9 },
+        paint: { 'line-color': token('--gold', '#e2ae4a'), 'line-width': 2, 'line-opacity': 0.95 },
       },
       before,
     );

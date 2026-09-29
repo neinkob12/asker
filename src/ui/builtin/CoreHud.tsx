@@ -1,11 +1,10 @@
-import { clock, formatEuro, wallet } from '../../core';
-import { DAY_PHASE_NAMES, dayPhase } from '../../map/daylight';
-import { CountUp, FloatingNumber, Icon, IconChip } from '../components';
+import { formatEuro, wallet } from '../../core';
+import { CountUp, FloatingNumber, IconChip } from '../components';
 import { useGame } from '../hooks';
 
 const euro = (v: number) => formatEuro(Math.round(v));
 
-/** Geld im HUD: Schwarzgeld groß und grün, sauberes Geld erst, wenn es welches gibt. Zahlen zählen und fliegen. */
+/** Geld im HUD: Schwarzgeld groß, sauberes Geld erst, wenn es welches gibt. Zahlen zählen und fliegen. */
 export function MoneyHud() {
   const { state } = useGame();
   const dirty = wallet.balance(state, 'dirty');
@@ -35,23 +34,5 @@ export function MoneyHud() {
         </div>
       )}
     </>
-  );
-}
-
-/** Uhr in der Zeit-Pille: Tageszeit-Icon, Wochentag und Tag, Uhrzeit. */
-export function ClockHud() {
-  const { state } = useGame();
-  const phase = dayPhase(clock.minuteOfDay(state.time));
-  const icon = phase === 'night' ? 'moon' : phase === 'day' ? 'sun' : phase === 'dawn' ? 'sunrise' : 'sun';
-  return (
-    <div class={`hud-clock hud-clock--${phase}`} title={`${clock.formatLong(state.time)} · ${DAY_PHASE_NAMES[phase]}`}>
-      <Icon name={icon} class="hud-clock__icon" />
-      <span class="hud-clock__text">
-        <span class="hud-clock__day">
-          {clock.weekdayName(state.time, true)} · Tag {clock.day(state.time)}
-        </span>
-        <span class="hud-clock__time">{clock.formatTime(state.time)}</span>
-      </span>
-    </div>
   );
 }

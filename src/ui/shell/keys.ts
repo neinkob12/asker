@@ -1,9 +1,10 @@
-// Tastatur am Mac/PC: Leertaste Pause, 1/2/3 Tempo, T Handy, Buchstaben der Tabs, Strg/⌘+K Suche, Escape schließt.
+// Tastatur am Mac/PC: Leertaste Pause, 1/2/3 Tempo, T Handy, Buchstaben der Tabs (Apps im Handy), Strg/⌘+K Suche,
+// Escape schließt bzw. geht im Handy einen Schritt zurück.
 
 import { SPEEDS } from '../../core';
 import { dialogs, sidebarTabs } from '../registry';
-import type { UiRuntime } from '../runtime';
-import { isMobileLayout, tabShortcuts } from './layout';
+import { TAB_APP_PREFIX, type UiRuntime } from '../runtime';
+import { tabShortcuts } from './layout';
 
 export function bindKeys(runtime: UiRuntime): void {
   document.addEventListener('keydown', (e) => {
@@ -26,9 +27,9 @@ export function bindKeys(runtime: UiRuntime): void {
         if (dialogs.get(ui.dialog.id)?.dismissable !== false) api.closeDialog();
       } else if (ui.panel) api.closePanel();
       else if (ui.notification) api.dismissNotification();
+      else if (ui.phone.open && ui.section && ui.phone.app === `${TAB_APP_PREFIX}${ui.tab}`) api.openSection(null);
+      else if (ui.phone.open && ui.phone.app) api.openPhone(null);
       else if (ui.phone.open) api.closePhone();
-      else if (ui.sheetExpanded && ui.section) api.openSection(null);
-      else if (ui.sheetExpanded && !isMobileLayout()) api.setSheetExpanded(false);
       return;
     }
     if (typing || e.metaKey || e.ctrlKey || e.altKey || !runtime.state || ui.dialog || ui.palette) return;
@@ -50,7 +51,8 @@ export function bindKeys(runtime: UiRuntime): void {
     }
     for (const [tabId, letter] of tabShortcuts()) {
       if (letter !== key || !sidebarTabs.get(tabId)) continue;
-      if (ui.sheetExpanded && ui.tab === tabId && !isMobileLayout()) api.setSheetExpanded(false);
+      // Gleiche Taste noch einmal: zurück zum Startbildschirm.
+      if (ui.phone.open && !ui.panel && ui.phone.app === `${TAB_APP_PREFIX}${tabId}`) api.openPhone(null);
       else api.selectTab(tabId);
       return;
     }

@@ -1,5 +1,5 @@
-// "Nächster Schritt": die wichtigste Empfehlung der Module (registerAdvisor) als Karte oben im Tab "Geschäft",
-// in der kleinen Leiste des Bottom-Sheets und als sanfter, pulsierender Hinweis (Onboarding) am Ziel-Element.
+// "Nächster Schritt": die wichtigste Empfehlung der Module (registerAdvisor) als Widget auf dem Startbildschirm
+// des Handys, in der Leiste unten am Handy-Bildschirm und als sanfter, pulsierender Hinweis (Onboarding) am Ziel.
 // Nichts wird gesperrt: Die Karte schlägt nur vor.
 
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -38,7 +38,8 @@ export function coachingActive(state: GameState): boolean {
   return clock.day(state.time) <= 2;
 }
 
-export function NextStep() {
+/** Widget auf dem Startbildschirm des Handys. */
+export function NextStepWidget() {
   const runtime = useRuntime();
   const state = runtime.state;
   const [expanded, setExpanded] = useState(false);
@@ -49,12 +50,7 @@ export function NextStep() {
   const others = list.slice(1, 4);
   return (
     <section class={`next-step ${coachingActive(state) && top.priority >= 50 ? 'is-coaching' : ''}`}>
-      <div class="next-step__kicker">
-        <span class="next-step__spark" aria-hidden="true">
-          ★
-        </span>
-        Nächster Schritt
-      </div>
+      <div class="next-step__kicker">Nächster Schritt</div>
       <AdviceBody advice={top} state={state} />
       {others.length > 0 && (
         <>
@@ -66,7 +62,7 @@ export function NextStep() {
               {others.map((a) => (
                 <li key={a.id}>
                   <button type="button" onClick={() => a.action?.(runtime.api)} disabled={!a.action}>
-                    <IconChip icon={a.icon} size="sm" color="paper" />
+                    <IconChip icon={a.icon} size="xs" color="paper" />
                     <span>{a.title}</span>
                     {a.cost !== undefined && <Tag>{formatEuro(a.cost)}</Tag>}
                   </button>
@@ -86,7 +82,7 @@ function AdviceBody(props: { advice: Advice; state: GameState }) {
   const missing = missingFor(state, advice);
   return (
     <div class="next-step__body">
-      <IconChip icon={advice.icon} color="yellow" size="lg" />
+      <IconChip icon={advice.icon} color="yellow" size="md" shape="square" />
       <div class="next-step__text">
         <strong class="next-step__title">{advice.title}</strong>
         {advice.text && <span class="next-step__desc">{advice.text}</span>}
@@ -105,29 +101,6 @@ function AdviceBody(props: { advice: Advice; state: GameState }) {
         </Button>
       )}
     </div>
-  );
-}
-
-/** Kompakte Zeile für die kleine Leiste des Bottom-Sheets. */
-export function NextStepPeek() {
-  const runtime = useRuntime();
-  const state = runtime.state;
-  if (!state) return null;
-  const top = collectAdvice(state)[0];
-  if (!top) return null;
-  return (
-    <button
-      type="button"
-      class={`next-peek ${coachingActive(state) && top.priority >= 50 ? 'is-coaching' : ''}`}
-      onClick={() => (top.action ? top.action(runtime.api) : runtime.api.setSheet('half'))}
-    >
-      <IconChip icon={top.icon} size="sm" color="yellow" />
-      <span class="next-peek__text">
-        <span class="next-peek__kicker">Nächster Schritt</span>
-        <span class="next-peek__title">{top.title}</span>
-      </span>
-      {top.cost !== undefined && <Tag tone="accent">{formatEuro(top.cost)}</Tag>}
-    </button>
   );
 }
 

@@ -10,7 +10,10 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-body);
-  font-weight: 600;
+  font-weight: 400;
+  font-size: var(--font-size-md);
+  line-height: 1.4;
+  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
@@ -27,7 +30,19 @@ h2,
 h3,
 h4 {
   font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
   line-height: 1.15;
+  letter-spacing: 0.01em;
+}
+
+::selection {
+  background: var(--color-warn-soft);
+}
+
+/* Schmale, dunkle Scrollbalken */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-surface-active) transparent;
 }
 
 #app {
@@ -36,7 +51,7 @@ h4 {
 }
 
 :focus-visible {
-  outline: 3px solid var(--rhine);
+  outline: 2px solid var(--gold);
   outline-offset: 2px;
 }
 

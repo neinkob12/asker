@@ -1,9 +1,10 @@
-// Banner einer Benachrichtigung (neue Nachricht …), ragt oben aus dem Handy bzw. am Handy vom oberen Rand.
+// Banner einer Benachrichtigung (neue Nachricht …). Ist das Handy offen, erscheint es wie bei iOS oben im Handy
+// (PhoneNotice), liegt es in der Tasche, oben über der Karte (NotificationBanner).
 
 import { Icon, IconChip } from '../components';
 import { useRuntime } from '../hooks';
 
-export function NotificationBanner() {
+function Notice(props: { class: string }) {
   const { ui, api } = useRuntime();
   const n = ui.notification;
   if (!n) return null;
@@ -12,9 +13,9 @@ export function NotificationBanner() {
     api.openPhone(n.appId ?? null, n.params);
   };
   return (
-    <div class="phone-notice" role="status" aria-live="polite" key={n.id}>
+    <div class={`phone-notice ${props.class}`} role="status" aria-live="polite" key={n.id}>
       <button type="button" class="phone-notice__main" onClick={open}>
-        <IconChip icon={n.icon ?? 'bell'} color="green" size="md" />
+        <IconChip icon={n.icon ?? 'bell'} color="green" size="md" shape="square" />
         <span class="phone-notice__text">
           <span class="phone-notice__title">
             <span class="phone-notice__name">{n.title}</span>
@@ -28,4 +29,16 @@ export function NotificationBanner() {
       </button>
     </div>
   );
+}
+
+/** Banner im offenen Handy. */
+export function PhoneNotice() {
+  return <Notice class="is-inside" />;
+}
+
+/** Banner über der Karte, solange das Handy weggelegt ist. */
+export function NotificationBanner() {
+  const { ui } = useRuntime();
+  if (ui.phone.open) return null;
+  return <Notice class="is-floating" />;
 }

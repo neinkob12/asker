@@ -1,16 +1,12 @@
 /* Konfrontations-Dialog als Entscheidungskarte: Lage als Doppelbalken, Optionen als große Karten mit Chips. Nur Tokens. */
 
 .enc-dialog {
-  animation: enc-pop var(--duration-slow) var(--ease-spring);
+  animation: enc-pop var(--duration-slow) var(--ease-out);
 }
 @keyframes enc-pop {
   0% {
-    transform: scale(0.88);
+    transform: translateY(10px);
     opacity: 0;
-  }
-  60% {
-    transform: scale(1.03);
-    opacity: 1;
   }
 }
 .enc {
@@ -25,10 +21,10 @@
   gap: var(--space-2);
   margin: 0;
   padding: 2px var(--space-3);
-  border-radius: var(--radius-round);
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-black);
+  font-weight: var(--font-weight-bold);
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-caps);
   color: var(--color-muted);
@@ -38,8 +34,7 @@
   padding: var(--space-4);
   font-size: var(--font-size-md);
   line-height: 1.45;
-  border: var(--stroke-thin) solid var(--ink);
-  border-left: 8px solid var(--dom);
+  border-left: 2px solid var(--dom);
   border-radius: var(--radius-sm);
   background: var(--color-bad-soft);
 }
@@ -63,12 +58,13 @@
   gap: var(--space-2);
   min-width: 0;
   padding: var(--space-3);
-  border: var(--stroke-thin) solid var(--ink);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  background: #fff;
+  background: var(--color-surface);
 }
 .enc-side--enemy {
-  background: #ffe1e1;
+  background: var(--color-bad-soft);
+  border-color: color-mix(in srgb, var(--dom) 30%, transparent);
 }
 .enc-side__title {
   display: flex;
@@ -108,7 +104,7 @@
 }
 .enc-person__name {
   overflow: hidden;
-  font-weight: var(--font-weight-black);
+  font-weight: var(--font-weight-bold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -163,31 +159,29 @@
   gap: var(--space-4);
   width: 100%;
   padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
-  color: var(--ink);
-  background: #fff;
-  border: var(--stroke) solid var(--ink);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-pop);
   text-align: left;
   cursor: pointer;
   transition:
-    transform var(--duration-fast) var(--ease-spring),
-    box-shadow var(--duration-fast);
+    background var(--duration-fast),
+    border-color var(--duration-fast);
 }
 .enc-card:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 0 var(--ink);
+  background: var(--color-surface-hover);
+  border-color: var(--gold);
 }
 .enc-card:active:not(:disabled) {
-  transform: translateY(4px);
-  box-shadow: 0 0 0 var(--ink);
+  transform: translateY(1px);
 }
 .enc-card:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .enc-card--danger {
-  background: #ffe1e1;
+  background: var(--color-bad-soft);
 }
 .enc-card__text {
   flex: 1;
@@ -217,9 +211,9 @@
   flex: none;
   min-width: 56px;
   padding: 4px var(--space-3);
-  border: var(--stroke-thin) solid var(--ink);
-  border-radius: var(--radius-round);
-  background: var(--gold);
+  border-radius: var(--radius-sm);
+  background: var(--color-warn-soft);
+  color: var(--color-warn);
   font-family: var(--font-display);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
@@ -227,11 +221,12 @@
   font-variant-numeric: tabular-nums;
 }
 .enc-chance.is-good {
-  background: var(--money);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
 }
 .enc-chance.is-bad {
-  color: #fff;
-  background: var(--dom);
+  color: var(--color-bad);
+  background: var(--color-bad-soft);
 }
 
 .enc-result {
@@ -240,7 +235,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: var(--stroke) solid var(--ink);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   text-align: center;

@@ -11,7 +11,7 @@ export interface DialogProps {
   onClose?: () => void;
   /** Schmal (Standard) oder breit. */
   size?: 'narrow' | 'wide';
-  /** Icon vor dem Titel (als großer Sticker). */
+  /** Icon vor dem Titel (als Kachel). */
   icon?: IconName | (string & {});
   /** Farbton: z.B. 'bad' für Game Over oder eine Konfrontation. */
   tone?: 'accent' | 'warn' | 'bad' | 'info';

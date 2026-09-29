@@ -138,7 +138,7 @@ registerPhoneApp({
 // ---------------------------------------------------------------------------------------------
 // Karte und Ton
 
-/** Farbstimmung je Wetter (siehe MapMood in src/map). Helle, kühle Farbstiche, damit der Pastell-Look bleibt. */
+/** Farbstimmung je Wetter (siehe MapMood in src/map). Dezente, kühle Farbstiche passend zur gedämpften Karte. */
 export function moodFor(w: Weather): MapMood {
   const i = w.intensity;
   switch (w.kind) {

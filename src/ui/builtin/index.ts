@@ -16,8 +16,9 @@ import {
   registerPhoneApp,
   registerTab,
 } from '../registry';
+import { AlertsApp } from '../shell/AlertCenter';
 import { soundOnEvent } from '../sound';
-import { ClockHud, MoneyHud } from './CoreHud';
+import { MoneyHud } from './CoreHud';
 import { GameOverDialog, NewGameDialog, SavesDialog, WonDialog } from './GameDialogs';
 import { JournalTab } from './JournalTab';
 import { SettingsDialog } from './Settings';
@@ -30,7 +31,6 @@ declare module '../registry' {
 
 export function registerBuiltins(): void {
   registerHudItem({ id: 'core.money', order: 10, placement: 'main', component: MoneyHud });
-  registerHudItem({ id: 'core.clock', order: 90, placement: 'time', component: ClockHud });
 
   // "Geschäft" sammelt Abschnitte der Module über den Slot 'tab:business'.
   registerTab({ id: 'business', title: 'Geschäft', order: 10, icon: 'briefcase', layout: 'rows' });
@@ -53,11 +53,20 @@ export function registerBuiltins(): void {
     chrome: 'none',
   });
   registerPhoneApp({
+    id: 'core.alerts',
+    name: 'Meldungen',
+    icon: 'bell',
+    order: 50,
+    color: 'var(--color-warn)',
+    component: AlertsApp,
+    chrome: 'none',
+  });
+  registerPhoneApp({
     id: 'core.music',
     name: 'Musik',
     icon: 'music',
     order: 80,
-    color: '#7a3db8',
+    color: 'var(--color-dirty)',
     component: MusicApp,
   });
   registerPhoneApp({
@@ -65,7 +74,7 @@ export function registerBuiltins(): void {
     name: 'Einstellungen',
     icon: 'sliders',
     order: 90,
-    color: '#3a4656',
+    color: 'var(--color-muted)',
     component: SettingsApp,
   });
 

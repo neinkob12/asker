@@ -1,7 +1,6 @@
 // Layout-Hilfen der Shell: Handy- oder Desktop-Aufbau, Icons und Kürzel der Tabs, Einordnung der HUD-Einträge.
 
 import { useEffect, useState } from 'preact/hooks';
-import type { ChipColor } from '../components';
 import { type HudItem, type SidebarTab, sidebarTabs } from '../registry';
 
 /** Gleiche Breite wie MOBILE_BREAKPOINT in src/map/config.ts und die Media Queries in tokens.css. */
@@ -15,7 +14,7 @@ function matches(query: string): boolean {
   }
 }
 
-/** Handy-Aufbau (Bottom-Sheet, Tab-Leiste) oder Desktop (Dock, schwebende Inspector)? */
+/** Handy-Aufbau (Handy bildschirmfüllend, Leiste unten) oder Desktop (Handy rechts angedockt)? */
 export function useIsMobile(): boolean {
   const [mobile, setMobile] = useState(() => matches(MOBILE_QUERY));
   useEffect(() => {
@@ -40,24 +39,17 @@ const TAB_ICONS: Record<string, string> = {
   journal: 'journal',
 };
 
-/** Farben der Tab-Sticker im Dock und in der Tab-Leiste. */
-const TAB_COLORS: Record<string, ChipColor> = {
-  business: 'green',
-  territory: 'blue',
-  staff: 'yellow',
-  gangs: 'red',
-  journal: 'purple',
+/** Farbe der App-Kachel eines Tabs im Handy (gedämpft, nur die Glyphe ist farbig). */
+const TAB_TINTS: Record<string, string> = {
+  business: 'var(--color-warn)',
+  territory: 'var(--color-info)',
+  staff: 'var(--color-accent)',
+  gangs: 'var(--color-bad)',
+  journal: 'var(--color-muted)',
 };
-const FALLBACK_COLORS: ChipColor[] = ['green', 'blue', 'yellow', 'red', 'purple'];
 
-export function tabColor(tab: SidebarTab): ChipColor {
-  return TAB_COLORS[tab.id] ?? FALLBACK_COLORS[Math.abs(hash(tab.id)) % FALLBACK_COLORS.length];
-}
-
-function hash(text: string): number {
-  let h = 0;
-  for (const ch of text) h = (h * 31 + (ch.codePointAt(0) ?? 0)) | 0;
-  return h;
+export function tabTint(tab: SidebarTab): string {
+  return TAB_TINTS[tab.id] ?? 'var(--color-muted)';
 }
 
 export function tabIcon(tab: SidebarTab): string {

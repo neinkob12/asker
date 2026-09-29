@@ -111,7 +111,8 @@ export const spotsLayer: MapLayer = {
           entry.element.classList.toggle('selected', spot.id === selected);
           if (!active) {
             entry.element.classList.remove('has-runner');
-            entry.badge.textContent = '🔒';
+            // Das Schloss zeichnet das Stylesheet (.is-locked .spot-badge).
+            entry.badge.textContent = '';
             entry.element.dataset.urgency = 'idle';
             continue;
           }

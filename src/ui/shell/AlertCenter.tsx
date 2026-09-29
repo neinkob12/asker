@@ -1,11 +1,12 @@
-// Alarm-Zentrale: Glocke mit Zähler im HUD. Liste aller Meldungen, sortiert nach Dringend (rot), Achtung (gelb)
-// und Routine (grau). Ist der Ort bekannt, springt "Hinzoomen" auf der Karte hin.
+// Meldungen: App im Spiel-Handy mit allen Meldungen (Toasts), sortiert nach Dringend (rot), Achtung (gelb) und
+// Routine (grau). Ist der Ort bekannt, springt "Hin" auf der Karte dorthin.
 
+import { useEffect } from 'preact/hooks';
 import { clock } from '../../core';
-import { Badge, Button, Icon, IconChip } from '../components';
+import { Button, Empty, IconChip } from '../components';
 import { useRuntime } from '../hooks';
+import { PhoneScreen } from '../phone/PhoneScreen';
 import type { Alert, ToastKind } from '../runtime';
-import { Popover } from './Hud';
 
 export const TOAST_ICONS: Record<ToastKind, string> = { info: 'info', good: 'check', warn: 'alert', bad: 'siren' };
 export const TOAST_CHIPS: Record<ToastKind, 'blue' | 'green' | 'yellow' | 'red'> = {
@@ -39,40 +40,25 @@ function AlertRow(props: { alert: Alert; onZoom: () => void }) {
   );
 }
 
-export function AlertCenter() {
+export function AlertsApp() {
   const { ui, api } = useRuntime();
-  const open = ui.popover === 'alerts';
-  const unread = ui.alerts.filter((a) => !a.read);
-  const urgent = unread.some((a) => a.kind === 'bad');
-  const toggle = () => {
-    if (open) {
-      api.markAlertsRead();
-      api.setPopover(null);
-    } else api.setPopover('alerts');
-  };
+  const unread = ui.alerts.some((a) => !a.read);
+  // Beim Schließen der App gilt alles als gelesen (während sie offen ist, bleiben neue markiert).
+  useEffect(() => () => api.markAlertsRead(), [api]);
   return (
-    <div class="hud-anchor">
-      <button
-        type="button"
-        class={`hud-pill hud-icon-btn hud-bell ${urgent ? 'is-urgent' : ''} ${open ? 'is-open' : ''}`}
-        aria-label={unread.length > 0 ? `Meldungen, ${unread.length} neu` : 'Meldungen'}
-        aria-expanded={open}
-        title="Meldungen"
-        onClick={toggle}
-      >
-        <Icon name={unread.length > 0 ? 'bellRing' : 'bell'} />
-        <Badge count={unread.length} tone={urgent ? 'bad' : 'warn'} />
-      </button>
-      <Popover id="alerts" align="right" class="alert-center">
-        <header class="alert-center__head">
-          <strong>Meldungen</strong>
-          {ui.alerts.length > 0 && (
-            <Button small variant="subtle" icon="trash" onClick={api.clearAlerts}>
-              Leeren
-            </Button>
-          )}
-        </header>
-        {ui.alerts.length === 0 && <p class="ui-hint alert-center__empty">Alles ruhig in Köln.</p>}
+    <PhoneScreen
+      title="Meldungen"
+      subtitle={unread ? 'Neue Meldungen' : 'Alles gelesen'}
+      actions={
+        ui.alerts.length > 0 && (
+          <Button small variant="subtle" icon="trash" onClick={api.clearAlerts}>
+            Leeren
+          </Button>
+        )
+      }
+    >
+      <div class="alert-center">
+        {ui.alerts.length === 0 && <Empty icon="bell">Alles ruhig in Köln.</Empty>}
         {GROUPS.map((g) => {
           const list = ui.alerts.filter((a) => g.kinds.includes(a.kind));
           if (list.length === 0) return null;
@@ -82,14 +68,12 @@ export function AlertCenter() {
                 {g.title} <span>{list.length}</span>
               </h3>
               <ul class="alert-group__list">
-                {list.slice(0, 20).map((a) => (
+                {list.slice(0, 30).map((a) => (
                   <AlertRow
                     key={a.id}
                     alert={a}
                     onZoom={() => {
                       if (a.target) api.flyTo(a.target, 15.5);
-                      api.markAlertsRead();
-                      api.setPopover(null);
                     }}
                   />
                 ))}
@@ -97,7 +81,7 @@ export function AlertCenter() {
             </section>
           );
         })}
-      </Popover>
-    </div>
+      </div>
+    </PhoneScreen>
   );
 }

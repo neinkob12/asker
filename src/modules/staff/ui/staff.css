@@ -200,7 +200,7 @@
 .staff-stat__unknown {
   height: 6px;
   border: 1px dashed var(--color-line);
-  border-radius: var(--radius-round);
+  border-radius: var(--radius-sm);
 }
 .staff-stat__value {
   text-align: right;

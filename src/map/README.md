@@ -1,7 +1,8 @@
 # Karte (`src/map/`)
 
-Die Grundkarte im **Candy-Look** (wie die Snapchat-Map): Pastellflächen, dicke runde Straßen, wenig Details,
-3D-Gebäude in weichen Farben mit Schatten, Wahrzeichen als Toon-Klötze, vier Tageszeiten. Alle Daten kommen aus
+Die Grundkarte im **gedämpften Look** ("Nachtschicht", passend zur dunklen Oberfläche): Grau- und Schieferflächen,
+runde Straßen, wenig Details, 3D-Gebäude in Grautönen mit Schatten, Wahrzeichen als schlichte Klötze, vier
+Tageszeiten. Farbe tragen nur Spielinhalte (Reviere, Spots, Gangs, Hotspots). Alle Daten kommen aus
 den OpenFreeMap-Vektorkacheln (OpenMapTiles-Schema, ohne Key). Module importieren alles nur aus
 `src/map/index.ts` und nur aus ihrem `ui/`-Ordner.
 
@@ -36,7 +37,7 @@ erst ab Zoom 12, Häuser ab Zoom 13 (sie wachsen beim Hineinzoomen aus dem Boden
 
 **Farben ändern:** Jede Farbe hat ihre eigene Ebene mit festem Wert, damit `GameMap` sie pro Tageszeit mit
 `setPaintProperty` umstellen kann, ohne die Kacheln neu aufzubauen (datengetriebene Farben würden das tun). Deshalb
-gibt es drei Straßengruppen (Nebenstraßen weiß, Hauptstraßen gelb, Autobahnen und Brücken orange) und vier
+gibt es drei Straßengruppen (Nebenstraßen, Hauptstraßen, Autobahnen und Brücken) und vier
 Gebäudebänder (`BUILDING_BANDS`: unter 9 m, 9–16 m, 16–28 m, darüber). Neue Farbe = Wert in allen vier Paletten in
 `look.ts` und eine Zeile in `GameMap.applyLook`.
 
@@ -45,8 +46,8 @@ Gebäudebänder (`BUILDING_BANDS`: unter 9 m, 9–16 m, 16–28 m, darüber). Ne
 - Vier Paletten nach der Spieluhr (`dayPhase`): **Morgen** (5:15–7:30), **Tag**, **Abend** (19:30–21:45),
   **Nacht**. In der Dämmerung wird erst übergeblendet, dann steht die Morgen- bzw. Abendpalette eine Weile, dann
   wieder übergeblendet (`paletteBlend`). Sprünge gibt es nicht (getestet).
-- Tag: heller Candy-Look (Land creme, Wasser himmelblau, Parks grün, Häuser rosa/gelb/hellblau/lila).
-  Nacht: Dunkelblau, Wasser und Parks bleiben klar erkennbar, Hauptstraßen und Autobahnen glühen gelb
+- Tag: Schiefergrau (Land, Häuser in vier Grautönen, Wasser gedämpftes Blau, Parks gedämpftes Grün).
+  Nacht: fast schwarz, Wasser und Parks bleiben erkennbar, Hauptstraßen und Autobahnen glühen bernsteinfarben
   (`glow`, eigene Ebene mit Blur). Himmel und Nebel (`setSky`) und das Licht auf den Gebäuden ziehen mit.
 - `MapLook.night` (0 Tag … 1 Nacht) bekommen auch die Effekte: Hotspots leuchten nachts stärker, Fahrzeuge werfen
   Scheinwerferlicht.
@@ -79,8 +80,8 @@ setPrecipitation({ kind: 'rain', intensity: 0.8, wind: 0.3 });                //
 ```
 
 `MapMood`: `darken`, `brighten`, `desaturate`, `tint` + `tintStrength`, `haze`, `wet` (alle 0–1). Mehrere
-Beiträge werden addiert und legen sich über die Palette. Für den Pastell-Look helle, kühle Farbstiche nehmen
-(dunkle Töne machen die Karte matschig). Das Wetter-Modul nutzt beides (`src/modules/weather/ui/index.tsx`).
+Beiträge werden addiert und legen sich über die Palette. Dezente, kühle Farbstiche nehmen (kräftige Töne
+machen die gedämpfte Karte bunt). Das Wetter-Modul nutzt beides (`src/modules/weather/ui/index.tsx`).
 
 ## 3D-Mini-Fahrzeuge
 
@@ -134,25 +135,26 @@ Karte über `mapEffects` (z.B. in `onGameEvent`-Reaktionen; ohne Karte passiert 
 Effekte sind reine Optik und ändern nie den Spielzustand.
 
 ```ts
-mapEffects.money(spot, 450, { caption: 'Verkauf' });        // weiße Pille "+450 €" steigt auf und verblasst
+mapEffects.money(spot, 450, { caption: 'Verkauf' });        // Schild "+450 €" steigt auf und verblasst
 mapEffects.money(lager, -1200, { caption: 'Razzia' });      // negativ = rot
 const light = mapEffects.blueLight(pos, { label: 'Razzia', durationMs: 8000 });   // ohne durationMs: bis stop()
 mapEffects.ping(pos, { tone: 'accent' });                   // Ring breitet sich aus
 mapEffects.flash({ strength: 0.5 });                        // Blitz über der Karte (Gewitter, Schuss)
 ```
 
-Konfetti und Blaulicht-Ringe im Candy-Look kommen in einem späteren Auftrag.
+Konfetti und Blaulicht-Ringe auf der Karte kommen in einem späteren Auftrag.
 
 ## Marker
 
-Marker sind rund und weiß mit weichem Schatten, Schrift dunkel (Tokens `--color-marker-bg`, `--color-marker-ink`,
-`--color-marker-muted`, `--shadow-marker-soft`), Farben nur aus den Design-Tokens.
+Marker sind eckig und dunkel mit feiner Kante, Schrift hell, Namen auf kleinen dunklen Schildern (Tokens
+`--color-marker-bg`, `--color-marker-ink`, `--color-marker-muted`, `--color-marker-ring`, `--color-label-bg`,
+`--shadow-marker-soft`), Farben nur aus den Design-Tokens.
 
 ```ts
 const ziel = addTargetMarker(ctx.map, { position, label: 'Lager Nord', sublabel: 'Gang: Nordstadt', tone: 'bad', onClick });
 ziel.setActive(true);
 
-// Orte (Lager, Lieferanten, Hafen): runder Knopf mit farbigem Kern und Namens-Pille
+// Orte (Lager, Lieferanten, Hafen): dunkles Quadrat mit farbigem Kern und Namensschild
 addHtmlMarker(map, {
   position,
   className: 'map-place map-place--warehouse',   // Farbe im Modul: .map-place--warehouse { --map-place-color: … }

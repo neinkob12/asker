@@ -42,11 +42,11 @@ export interface VehicleHandle {
 
 /** Einheitliche Flottenfarben (der Spieler). */
 export const VEHICLE_COLORS = {
-  body: '#39c98a',
-  cabin: '#ffffff',
-  police: '#2f7bff',
-  hull: '#ff6b7a',
-  cargo: ['#ffd166', '#74c4ff', '#b79cff'],
+  body: '#3dbb7f',
+  cabin: '#d8dce2',
+  police: '#4c8fe0',
+  hull: '#8a5a5e',
+  cargo: ['#b99a5e', '#5e7a93', '#7d6ea8'],
 } as const;
 
 interface Box {

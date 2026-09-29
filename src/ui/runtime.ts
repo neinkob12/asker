@@ -16,8 +16,6 @@ import {
 /** good/info: Routine (kurz, grau in der Alarm-Zentrale), warn: gelb, bad: rot. */
 export type ToastKind = 'info' | 'good' | 'warn' | 'bad';
 
-/** Rastpunkte des Bottom-Sheets am Handy: klein (nur Kopf), mittel (ca. 45 %), voll. */
-export type SheetSnap = 'peek' | 'half' | 'full';
 export type { CameraMode } from './prefs';
 
 /** Benachrichtigung, die oben aus dem Spiel-Handy herausragt (Banner). Klick öffnet die App. */
@@ -67,12 +65,8 @@ export interface UiState {
   panel: { id: PanelId; props: unknown } | null;
   dialog: { id: DialogId; props: unknown } | null;
   phone: { open: boolean; app: string | null; params?: Record<string, unknown> };
-  /** Aktiver Seitenleisten-Tab (null = erster). */
+  /** Zuletzt geöffneter Tab (als App im Handy: 'tab:<id>'), null = keiner. */
   tab: string | null;
-  /** Seitenleiste offen? Am Handy: Bottom-Sheet über 'peek' hinaus, am Desktop: Inspector sichtbar. */
-  sheetExpanded: boolean;
-  /** Rastpunkt des Bottom-Sheets am Handy. */
-  sheet: SheetSnap;
   /** Geöffneter Abschnitt eines Listen-Tabs (ID des Slot-Beitrags), null = Übersicht. */
   section: string | null;
   /** Warteschlange: Sichtbar ist nur der erste Eintrag. */
@@ -132,10 +126,8 @@ export interface UiApi {
   /** Banner am Spiel-Handy zeigen (mit Vibrieren). Sound spielt, wer es auslöst (siehe src/audio). */
   notify(notification: Omit<PhoneNotification, 'id'>): void;
   dismissNotification(): void;
+  /** Tab (Bereich eines Moduls) als App im Handy öffnen. */
   selectTab(id: string): void;
-  setSheetExpanded(expanded: boolean): void;
-  /** Rastpunkt des Bottom-Sheets am Handy. */
-  setSheet(snap: SheetSnap): void;
   /** Abschnitt eines Listen-Tabs öffnen (ID des Slot-Beitrags), null = zurück zur Übersicht. */
   openSection(id: string | null): void;
   /** Suche öffnen/schließen (ohne Argument umschalten). */
@@ -159,6 +151,9 @@ export interface UiApi {
   zoomOut(): void;
   resetNorth(): void;
 }
+
+/** App-ID eines Tabs im Handy: 'tab:<id>', z.B. 'tab:business'. */
+export const TAB_APP_PREFIX = 'tab:';
 
 /** Handy-Breite, gleich wie MOBILE_BREAKPOINT in src/map/config.ts und die Media Queries in tokens.css. */
 function isMobileScreen(): boolean {
@@ -199,15 +194,13 @@ export class UiRuntime {
     private readonly storage: KeyValueStorage | null = null,
   ) {
     const prefs = loadPrefs(storage);
-    // Am Desktop steht der Inspector von Anfang an offen, am Handy ist das Sheet klein.
+    // Am Desktop ist das Handy fest angedockt und von Anfang an offen, am Handy liegt es in der Tasche.
     const desktop = !isMobileScreen();
     this.ui = {
       panel: null,
       dialog: null,
-      phone: { open: false, app: null },
+      phone: { open: desktop, app: null },
       tab: null,
-      sheetExpanded: desktop,
-      sheet: desktop ? 'half' : 'peek',
       section: null,
       toasts: [],
       alerts: [],
@@ -296,9 +289,12 @@ export class UiRuntime {
           }
           return result;
         }),
+      // Details (Spot, Veedel, Person …) erscheinen als Seite im Handy.
       openPanel: (id, props) =>
         update(() => {
           ui.panel = { id, props };
+          if (!ui.phone.open) ui.phone = { ...ui.phone, open: true };
+          ui.popover = null;
         }),
       closePanel: () =>
         update(() => {
@@ -364,6 +360,13 @@ export class UiRuntime {
       openPhone: (appId = null, params) =>
         update(() => {
           ui.phone = params ? { open: true, app: appId, params } : { open: true, app: appId };
+          // Eine App wechseln schließt offene Details (die liegen über der App).
+          ui.panel = null;
+          if (appId?.startsWith(TAB_APP_PREFIX)) {
+            const tab = appId.slice(TAB_APP_PREFIX.length);
+            if (ui.tab !== tab) ui.section = null;
+            ui.tab = tab;
+          }
           if (ui.notification && (!appId || ui.notification.appId === appId)) ui.notification = null;
           // Geöffnete App: Ihre Benachrichtigungen verschwinden vom Stapel (bei Chats nur die des Chats).
           if (appId) {
@@ -372,9 +375,11 @@ export class UiRuntime {
             if (ui.notifications.some(same)) ui.notifications = ui.notifications.filter((n) => !same(n));
           }
         }),
+      // Weglegen: Am Desktop klappt das Handy an den Rand, die zuletzt offene App bleibt gemerkt.
       closePhone: () =>
         update(() => {
-          ui.phone = { open: false, app: null };
+          ui.phone = { ...ui.phone, open: false };
+          ui.panel = null;
         }),
       notify: (notification) =>
         update(() => {
@@ -410,32 +415,11 @@ export class UiRuntime {
         update(() => {
           ui.notification = null;
         }),
-      selectTab: (id) =>
-        update(() => {
-          if (ui.tab !== id) ui.section = null;
-          ui.tab = id;
-          ui.sheetExpanded = true;
-          // Das Sheet bleibt beim Tab-Wechsel offen; nur aus dem kleinen Zustand geht es auf mittel.
-          if (ui.sheet === 'peek') ui.sheet = 'half';
-        }),
-      setSheetExpanded: (expanded) =>
-        update(() => {
-          ui.sheetExpanded = expanded;
-          if (expanded && ui.sheet === 'peek') ui.sheet = 'half';
-          if (!expanded) ui.sheet = 'peek';
-        }),
-      setSheet: (snap) =>
-        update(() => {
-          ui.sheet = snap;
-          ui.sheetExpanded = snap !== 'peek';
-        }),
+      // Bereiche der Module (Tabs) sind Apps im Handy.
+      selectTab: (id) => api.openPhone(`${TAB_APP_PREFIX}${id}`),
       openSection: (id) =>
         update(() => {
           ui.section = id;
-          if (id && ui.sheet === 'peek') {
-            ui.sheet = 'half';
-            ui.sheetExpanded = true;
-          }
         }),
       togglePalette: (open) =>
         update(() => {
