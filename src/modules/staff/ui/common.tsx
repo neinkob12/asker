@@ -1,6 +1,6 @@
 // Gemeinsame Bausteine der Personal-Oberfläche: Porträt (Platzhalter), Status-Stempel, Werte-Balken.
 
-import { ProgressBar } from '../../../ui';
+import { initials, ProgressBar } from '../../../ui';
 import {
   ROLE_INFO,
   STAT_KEYS,
@@ -29,14 +29,6 @@ export const ORIGIN_NAMES: Record<StaffOrigin, string> = {
   regular: 'über einen Stammkunden',
   event: 'Kontakt aus dem Milieu',
 };
-
-/** Initialen ohne Spitznamen: "Dragan „Schrank“ M." → "DM". */
-export function initials(name: string): string {
-  const words = name.split(' ').filter((w) => !w.startsWith('„'));
-  const first = words[0]?.[0] ?? '?';
-  const last = words.length > 1 ? (words[words.length - 1][0] ?? '') : '';
-  return `${first}${last}`.toUpperCase();
-}
 
 /** Porträt. Solange es keine Bilder gibt (portrait = null), ein Platzhalter mit Initialen. */
 export function Portrait(props: {

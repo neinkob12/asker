@@ -3,17 +3,12 @@
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro } from '../../../core';
-import { Button, Card, Empty, Hint, registerPhoneApp, registerSlot, Tabs, useGame, useUi } from '../../../ui';
+import { Avatar, Button, Card, Empty, Hint, registerPhoneApp, registerSlot, Tabs, useGame, useUi } from '../../../ui';
 import { roleName, STAT_KEYS, STAT_NAMES } from '../../staff';
 import { type Candidate, getContacts, getPool, SEARCH_COST, SOURCE_NAMES, searchReadyAt } from '../index';
 import './recruiting.css';
 
 const APP_ID = 'recruiting.contacts';
-
-function initials(name: string): string {
-  const words = name.split(' ').filter((w) => !w.startsWith('„'));
-  return `${words[0]?.[0] ?? '?'}${words.length > 1 ? (words[words.length - 1][0] ?? '') : ''}`.toUpperCase();
-}
 
 function CandidateCard(props: { candidate: Candidate }) {
   const { state, dispatch } = useGame();
@@ -22,9 +17,7 @@ function CandidateCard(props: { candidate: Candidate }) {
   return (
     <li class={`rc-card rc-card--${c.source}`}>
       <header class="rc-card__head">
-        <span class="rc-card__avatar" aria-hidden="true">
-          {initials(c.name)}
-        </span>
+        <Avatar name={c.name} image={c.portrait ?? undefined} size="sm" />
         <span class="rc-card__who">
           <strong>{c.name}</strong>
           <span class="ui-hint">

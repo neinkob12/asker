@@ -8,7 +8,9 @@ import './reputation.css';
 function ReputationHud() {
   const { state } = useGame();
   const value = getReputation(state);
-  return <Stat label="Ruf" value={Math.round(value)} title={`Ruf ${Math.round(value)} von 100: ${reputationLabel(value)}`} />;
+  return (
+    <Stat label="Ruf" value={Math.round(value)} title={`Ruf ${Math.round(value)} von 100: ${reputationLabel(value)}`} />
+  );
 }
 
 function ReputationSection() {

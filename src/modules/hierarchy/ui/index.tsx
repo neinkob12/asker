@@ -15,6 +15,7 @@ import {
   registerPanel,
   registerSlot,
   SegmentedControl,
+  Select,
   useGame,
   useUi,
 } from '../../../ui';
@@ -241,23 +242,17 @@ function PromoteSection(props: { staffId: string }) {
       <h3 class="lt-title">Befördern</h3>
       {check.ok ? (
         <div class="lt-promote__row">
-          <select
-            class="lt-select"
-            aria-label="Veedel"
+          <Select
+            label="Veedel"
+            wide
             value={choice}
-            onChange={(e) => setChoice(e.currentTarget.value)}
-          >
-            {withSpots.map((v) => {
+            options={withSpots.map((v) => {
               const lt = getLieutenant(state, v.id);
               const name = lt ? getStaffMember(state, lt)?.name : null;
-              return (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                  {name ? ` (jetzt: ${name})` : ''}
-                </option>
-              );
+              return { value: v.id, label: `${v.name}${name ? ` (jetzt: ${name})` : ''}` };
             })}
-          </select>
+            onChange={setChoice}
+          />
           <Button
             small
             variant="primary"
@@ -326,18 +321,13 @@ function VeedelLieutenant(props: { veedelId: string }) {
         </>
       ) : eligible.length > 0 && selected ? (
         <div class="lt-promote__row">
-          <select
-            class="lt-select"
-            aria-label="Wer"
+          <Select
+            label="Wer"
+            wide
             value={selected.id}
-            onChange={(e) => setChoice(e.currentTarget.value)}
-          >
-            {eligible.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}, Level {c.level}
-              </option>
-            ))}
-          </select>
+            options={eligible.map((c) => ({ value: c.id, label: `${c.name}, Level ${c.level}` }))}
+            onChange={setChoice}
+          />
           <Button
             small
             variant="primary"

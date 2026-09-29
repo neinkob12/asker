@@ -238,6 +238,46 @@ export function Toggle(props: ToggleProps) {
   );
 }
 
+export interface SelectOption<T extends string = string> {
+  value: T;
+  label: string;
+  disabled?: boolean;
+}
+
+export interface SelectProps<T extends string = string> {
+  value: T;
+  options: readonly SelectOption<T>[];
+  onChange: (value: T) => void;
+  /** Beschriftung für Screenreader (und als Tooltip). */
+  label: string;
+  /** Füllt die verfügbare Breite. */
+  wide?: boolean;
+  disabled?: boolean;
+  class?: string;
+}
+
+/** Auswahlfeld (natives select im Look der Bausteine, am Handy mit der System-Auswahl). */
+export function Select<T extends string = string>(props: SelectProps<T>) {
+  return (
+    <span class={`ui-select ${props.wide ? 'ui-select--wide' : ''} ${props.class ?? ''}`}>
+      <select
+        aria-label={props.label}
+        title={props.label}
+        value={props.value}
+        disabled={props.disabled}
+        onChange={(e) => props.onChange(e.currentTarget.value as T)}
+      >
+        {props.options.map((o) => (
+          <option key={o.value} value={o.value} disabled={o.disabled}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <Icon name="chevronDown" class="ui-select__chevron" />
+    </span>
+  );
+}
+
 export interface SliderProps {
   value: number;
   onChange: (value: number) => void;
