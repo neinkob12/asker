@@ -127,6 +127,8 @@ export const XP_PER_DUTY_HOUR = 3;
 export const XP_PER_SPECIALIST_DAY = 45;
 /** Anwalt, wenn er jemanden rausholt. */
 export const XP_PER_BAIL = 25;
+/** Erfahrung für den Polizei-Kontakt pro Warnung vor einer Razzia. */
+export const XP_PER_WARNING = 20;
 /** Teilnahme an einer Konfrontation. */
 export const XP_PER_ENCOUNTER = 40;
 
@@ -201,9 +203,10 @@ export const SPECIALIST_BONUS = {
   raidWarning: { role: 'policeContact', stat: 'charisma', base: 0.5, perLevel: 0.05, divisor: 200, max: 0.9 },
 } as const;
 
-/** Übergangslösung für die Razzia-Warnung: Der Polizei-Kontakt warnt ab so viel Heat, höchstens einmal pro Tag. */
-export const RAID_WARNING_HEAT = 60;
-export const RAID_WARNING_COOLDOWN = 1440;
+/** Nach der angekündigten Razzia bleiben abgetauchte Leute noch so lange weg, dann gehen sie zurück an ihren Platz. */
+export const HIDE_AFTER_RAID = 60;
+/** Länger als so lange taucht niemand ab. */
+export const MAX_HIDE_DURATION = 2 * 1440;
 
 // --- Sonstiges ---
 

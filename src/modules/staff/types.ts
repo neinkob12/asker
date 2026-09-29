@@ -84,8 +84,13 @@ export interface StaffState {
   members: StaffMember[];
   /** Ehemalige (gekündigt, entlassen, tot), neueste zuerst. */
   former: StaffMember[];
-  /** Letzte Razzia-Warnung des Polizei-Kontakts pro Veedel (Spielminute). */
-  warnings: Record<string, number>;
+  /** Abgetauchte Veedel (nach einer Warnung vor einer Razzia): bis wann und wer danach wohin zurückgeht. */
+  hiding: Record<string, StaffHiding>;
+}
+
+export interface StaffHiding {
+  until: number;
+  returns: { staffId: string; assignment: StaffAssignment }[];
 }
 
 /** Boni von Spezialisten, die andere Module abfragen. Alle Werte sind Anteile von 0 bis 1. */

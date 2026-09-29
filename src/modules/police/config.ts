@@ -54,6 +54,8 @@ export const FAILED_CHASE_FACTOR = 1.5;
 export const RAID_THRESHOLD = 60;
 /** Wahrscheinlichkeit pro Stunde bei Heat 100 und Präsenz 1 (darunter anteilig ab der Schwelle). */
 export const RAID_CHANCE_PER_HOUR = 0.06;
+/** Eine Razzia gegen den Spieler wird so lange vorher geplant (Zeit für die Warnung des Polizei-Kontakts). */
+export const RAID_LEAD_TIME = 3 * 60;
 /** Nach einer Razzia ist im Veedel so lange Ruhe. */
 export const RAID_COOLDOWN = 24 * 60;
 export const RAID_HEAT_RELIEF = 25;

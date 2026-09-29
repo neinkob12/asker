@@ -227,7 +227,7 @@ export function jailDuration(state: GameState): number {
 
 /** Kontakt fürs Handy, z.B. für Nachrichten von dieser Person. */
 export function staffContact(member: StaffMember): Contact {
-  return { id: `staff:${member.id}`, name: member.name, kind: 'staff' };
+  return { id: `staff:${member.id}`, name: member.name, kind: member.role === 'policeContact' ? 'police' : 'staff' };
 }
 
 // --- Schreiben ---

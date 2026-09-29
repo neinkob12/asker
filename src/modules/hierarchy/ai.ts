@@ -17,6 +17,7 @@ import {
   getStaff,
   getStaffMember,
   isEmployed,
+  isLyingLow,
   RUNNER_HIRE_COST,
   type StaffMember,
   securityAt,
@@ -97,6 +98,8 @@ export function tick(ctx: Ctx): void {
     if (!lt || !isEmployed(ctx.state, lt.id) || lt.status !== 'active') continue;
     const actor: Actor = `staff:${lt.id}`;
     const turn: Turn = { ctx, veedelId, post, lt, run: (command) => ctx.dispatch(command, { actor }).ok };
+    // Nach einer Razzia-Warnung hält er still, bis die Luft rein ist.
+    if (isLyingLow(ctx.state, veedelId)) continue;
     if (ctx.now >= post.nextActionAt) {
       manage(turn);
       post.nextActionAt = ctx.now + actionInterval(lt);
@@ -111,6 +114,20 @@ function manage(turn: Turn): void {
   setPrices(turn);
   guardSpots(turn);
   if (turn.post.settings.mayOrder) restock(turn);
+}
+
+/**
+ * Warnung des Polizei-Kontakts vor einer Razzia in seinem Veedel: Der Leutnant zieht die Leute sofort ab
+ * (über denselben Befehl wie der Spieler).
+ */
+export function onRaidWarning(ctx: Ctx, veedelId: string, post: LieutenantPost, until: number): void {
+  const lt = getStaffMember(ctx.state, post.staffId);
+  if (!lt || lt.status !== 'active' || !isEmployed(ctx.state, lt.id)) return;
+  const actor: Actor = `staff:${lt.id}`;
+  const turn: Turn = { ctx, veedelId, post, lt, run: (command) => ctx.dispatch(command, { actor }).ok };
+  if (turn.run({ type: 'staff.lieLow', payload: { veedelId, until } })) {
+    note(turn, 'Tipp vom Polizei-Kontakt: Razzia im Anmarsch. Alle runter von der Straße.', false);
+  }
 }
 
 /** Vorsicht: bei zu viel Heat alle von der Straße holen, später zurückschicken. true = er taucht ab. */

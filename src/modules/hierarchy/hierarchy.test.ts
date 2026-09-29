@@ -373,3 +373,29 @@ describe('hierarchy: Spielstände aus dem Fundament', () => {
     expect(getStaffMember(loaded.state, lt.id)?.assignment).toEqual({ kind: 'veedel', targetId: 'deutz' });
   });
 });
+
+describe('hierarchy: Warnung vor Razzien', () => {
+  it('der Leutnant zieht nach der Warnung des Polizei-Kontakts seine Leute ab', () => {
+    const sim = quietGame();
+    const events = recordEvents(sim);
+    const lt = recruit(sim, 'runner', 3);
+    expect(appoint(sim, lt.id, 'lindenthal').ok).toBe(true);
+    const runner = recruit(sim, 'runner');
+    sim.dispatch({
+      type: 'staff.assign',
+      payload: { staffId: runner.id, assignment: { kind: 'spot', targetId: 'uni' } },
+    });
+    const contact = recruit(sim, 'policeContact');
+    contact.stats.charisma = 100;
+    contact.level = 10;
+    const at = sim.state.time + 180;
+    sim.ctx('police').emit('police.raidPlanned', { veedelId: 'lindenthal', at });
+    sim.step();
+    expect(eventsOfType(events, 'staff.raidWarning')).toHaveLength(1);
+    expect(getStaffMember(sim.state, runner.id)?.assignment).toBeNull();
+    expect(getPost(sim.state, 'lindenthal')?.log[0].text).toContain('Razzia');
+    // Solange abgetaucht, stellt er niemanden zurück an den Spot.
+    sim.advance(60);
+    expect(getStaffMember(sim.state, runner.id)?.assignment).toBeNull();
+  });
+});

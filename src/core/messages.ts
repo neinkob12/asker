@@ -5,7 +5,7 @@
 import { MESSAGE_LIMIT } from './config';
 import type { Command, CommandResult, Ctx, GameState } from './types';
 
-export type ContactKind = 'customer' | 'supplier' | 'gang' | 'staff' | 'other';
+export type ContactKind = 'customer' | 'supplier' | 'gang' | 'staff' | 'police' | 'other';
 
 export interface Contact {
   /** Eindeutig über alle Module, Konvention: '<art>:<id>', z.B. 'gang:nord', 'staff:s12'. */
@@ -39,6 +39,8 @@ export interface Message {
   /** Ab dann kann nicht mehr geantwortet werden. */
   expiresAt?: number;
   expired?: boolean;
+  /** Still: nur Badge, kein Banner und kein Vibrieren (z.B. viele kleine Routine-Nachrichten). */
+  silent?: boolean;
   /** Modul, das die Nachricht geschickt hat. */
   source: string;
 }
@@ -55,6 +57,8 @@ export interface SendMessage {
   options?: MessageOption[];
   /** Antwortfrist in Spielminuten. */
   expiresIn?: number;
+  /** Still zustellen: ungelesen im Handy, aber ohne Banner (für Routine-Nachrichten). */
+  silent?: boolean;
 }
 
 export interface MessageThread {
@@ -95,6 +99,7 @@ export const messages = {
     };
     if (msg.options?.length) message.options = msg.options.map((o) => ({ ...o }));
     if (msg.expiresIn !== undefined) message.expiresAt = ctx.now + msg.expiresIn;
+    if (msg.silent) message.silent = true;
     state.list.push(message);
     if (state.list.length > MESSAGE_LIMIT) state.list.splice(0, state.list.length - MESSAGE_LIMIT);
     ctx.emit('message.received', { messageId: message.id, contactId: message.contactId, source: message.source });

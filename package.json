@@ -12,7 +12,8 @@
     "format": "biome check --write .",
     "check": "npm run typecheck && npm run lint && npm test",
     "screenshot": "node scripts/screenshot.mjs",
-    "template:smoke": "node scripts/template-smoke.mjs"
+    "template:smoke": "node scripts/template-smoke.mjs",
+    "balance": "BALANCE=1 vitest run src/playtest"
   },
   "dependencies": {
     "maplibre-gl": "^6.11.2",

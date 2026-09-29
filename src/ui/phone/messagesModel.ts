@@ -9,6 +9,7 @@ export const CONTACT_KIND_LABELS: Record<ContactKind, string> = {
   supplier: 'Lieferant',
   gang: 'Gang',
   staff: 'Team',
+  police: 'Polizei',
   other: 'Kontakt',
 };
 
@@ -18,6 +19,7 @@ export const CONTACT_KIND_ICONS: Record<ContactKind, string> = {
   supplier: 'truck',
   gang: 'skull',
   staff: 'users',
+  police: 'shield',
   other: 'message',
 };
 
@@ -143,7 +145,7 @@ export interface MessageNotification {
 /** Banner für eine neu eingegangene Nachricht. */
 export function messageNotification(state: GameState, messageId: number): MessageNotification | null {
   const message = messages.get(state, messageId);
-  if (!message) return null;
+  if (!message || message.silent) return null;
   const contact = messages.contact(state, message.contactId);
   const answer = messages.canAnswer(state, message) ? ' · Antwort erwartet' : '';
   return {

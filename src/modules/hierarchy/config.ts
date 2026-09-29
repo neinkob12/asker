@@ -71,3 +71,6 @@ export const TEAM_LOYALTY = 1;
 export const COMPLAINT_COOLDOWN = 2 * 1440;
 /** Einträge im Protokoll des Leutnants. */
 export const LOG_LIMIT = 12;
+
+/** Nach einer Razzia-Warnung bleibt der Leutnant mit seinen Leuten so lange nach der Razzia weg. */
+export const HIDE_AFTER_RAID = 60;

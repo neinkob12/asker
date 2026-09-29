@@ -131,6 +131,8 @@ function createOrder(
     text,
     options: orderOptions(id, fields.kind),
     expiresIn: ORDER_EXPIRES_IN,
+    // Lieferanfragen kommen oft: nur Badge im Handy, kein Banner. Großhandel ist seltener und lohnt sich mehr.
+    silent: fields.kind === 'delivery',
   });
   const order: Order = {
     ...fields,

@@ -10,12 +10,13 @@ import {
   CHASE_ESCAPED_HEAT,
   GANG_RAID_INFLUENCE_LOSS,
   HEAT_DECAY_PER_HOUR,
+  RAID_LEAD_TIME,
   SALE_HEAT_BASE,
   SALE_HEAT_PER_UNIT,
   SNITCH_HEAT,
   VIOLENCE_HEAT,
 } from './config';
-import { activeTipOff, addHeat, canSnitch, getHeat, getPoliceStats, heatLevel, playerHeat } from './index';
+import { activeTipOff, addHeat, canSnitch, getHeat, getPoliceStats, heatLevel, plannedRaid, playerHeat } from './index';
 
 /** Spiel ohne zufällig auftauchende Kunden. */
 function quietGame(seed = 1): Simulation {
@@ -154,6 +155,28 @@ describe('police', () => {
     expect(found).toBe(true);
   });
 
+  it('Razzien gegen den Spieler werden vorher geplant und kommen RAID_LEAD_TIME später', () => {
+    const sim = quietGame();
+    const events = recordEvents(sim);
+    sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'zuelpicher' } });
+    advanceUntil(
+      sim,
+      () => {
+        sim.state.modules.police.checkReadyAt['neustadt-sued'] = Infinity;
+        addHeat(sim.ctx('test'), 'neustadt-sued', 100);
+        return eventsOfType(events, 'police.raidPlanned').length > 0;
+      },
+      24 * 10,
+    );
+    const planned = eventsOfType(events, 'police.raidPlanned')[0];
+    expect(planned.payload.at - planned.time).toBe(RAID_LEAD_TIME);
+    expect(plannedRaid(sim.state, 'neustadt-sued')).toBe(planned.payload.at);
+    expect(eventsOfType(events, 'police.raid')).toHaveLength(0);
+    sim.advance(planned.payload.at - sim.state.time + 60);
+    expect(eventsOfType(events, 'police.raid')).toHaveLength(1);
+    expect(plannedRaid(sim.state, 'neustadt-sued')).toBeNull();
+  });
+
   it('Polizeiflucht: gescheitert heißt Festnahme, geglückt mehr Heat', () => {
     const sim = quietGame();
     const events = recordEvents(sim);
@@ -263,7 +286,8 @@ describe('police', () => {
     old.modules.police = { heat: { kalk: 70, deutz: 10 } };
     old.moduleVersions.police = 1;
     const loaded = loadSimulation(old, sim.modules);
-    expect(loaded.state.moduleVersions.police).toBe(2);
+    expect(loaded.state.moduleVersions.police).toBe(3);
+    expect(loaded.state.modules.police.plannedRaids).toEqual({});
     expect(getHeat(loaded.state, 'kalk')).toBe(70);
     expect(loaded.state.modules.police.level.kalk).toBe(heatLevel(70).index);
     expect(getPoliceStats(loaded.state).raids).toBe(0);
