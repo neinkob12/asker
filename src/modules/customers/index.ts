@@ -10,6 +10,7 @@
 //   customerRevenue(customer), getSalesStats(state), getCustomerTypes(), customerType(id),
 //   getRegulars(state, { spotId?, status? }), getRegular(state, id),
 //   getOrders(state, { status?, kind? }), getOrder(state, id), orderProgress(state, order), isPlayerDelivering(state),
+//   spotDemand(state, spotId) (aktuelle Nachfrage, z.B. für die Hotspots auf der Karte),
 //   Entscheidungen: priceDemandFactor, acceptsPrice, chooseProduct, saleSatisfaction, cutNoticeChance,
 //   regularVerdict, regularAfterSale, typeDemandWeight; CUSTOMER_PATIENCE
 // Befehle: 'customers.serve' (auch für Läufer, mit sellerId), 'customers.serveAll',
@@ -23,7 +24,7 @@ import { getSpots } from '../spots';
 import { CUSTOMER_TYPES } from './config';
 import { customerType } from './decisions';
 import { acceptOrder, courierGone, declineOrder, expireOrderMessage, onDealResolved, ordersTick } from './orders';
-import { initialSpawn, serve, streetTick } from './street';
+import { demandRate, initialSpawn, serve, streetTick } from './street';
 
 export { CUSTOMER_PATIENCE } from './config';
 export {
@@ -218,6 +219,15 @@ declare module '../../core' {
 /** Wartende Kunden an einem Spot, dringendste zuerst. */
 export function waitingAt(state: GameState, spotId: string): Customer[] {
   return state.modules.customers.waiting.filter((c) => c.spotId === spotId).sort((a, b) => a.expiresAt - b.expiresAt);
+}
+
+/**
+ * Aktuelle Nachfrage an einem Spot ohne Zufall (1 = ein Kunde alle BASE_SPAWN_INTERVAL Minuten), nach Andrang,
+ * Uhrzeit, Wochentag, Wetter, Ruf und Anlaufphase. 0 für unbekannte Spots.
+ */
+export function spotDemand(state: GameState, spotId: string): number {
+  const spot = getSpots(state).find((s) => s.id === spotId);
+  return spot ? demandRate(state, spot, state.time) : 0;
 }
 
 export function allWaiting(state: GameState): readonly Customer[] {

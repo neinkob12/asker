@@ -1,7 +1,7 @@
 # Oberfläche (`src/ui/`)
 
 Look **"Kölsch-Sticker"**: hell, clean und App-artig, dazu überzeichnet und comichaft. Weiße Karten mit dicker dunkler
-Kontur und hartem Sockel-Schatten (wie Aufkleber) schweben über der **dunklen** Nacht-Satellitenkarte. Runde Schrift,
+Kontur und hartem Sockel-Schatten (wie Aufkleber) schweben über der pastelligen Candy-Karte (siehe `src/map/README.md`). Runde Schrift,
 viele Icons in Farbkreisen, federnde Animationen. Desktop und Handy sind gleichwertig. Module importieren alles aus
 `src/ui/index.ts` (nur aus ihrem `ui/`-Ordner). Registries und Hooks: siehe `docs/architektur.md` und das Beispiel in
 `src/modules/_template/ui/index.tsx`.
@@ -35,8 +35,8 @@ Schrift auf Flächen `--color-on-*`. Form: `--stroke` (Kontur), `--radius-sm/md/
 **Kontrast:** Gelb, Grün und Blau sind Flächenfarben, darauf immer dunkle Schrift. Als Textfarbe auf Weiß nur
 `--color-accent`, `--color-warn`, `--color-bad`, `--color-info`.
 
-**Die Karte bleibt dunkel:** `.shell-map` in `shell/shell.css` setzt die Token dort auf die dunklen Werte. Karten-Layer
-lesen Farbwerte am Kartenelement (siehe `token()` in `src/modules/territory/ui/map.ts`).
+**Karte:** Sie hat ihren eigenen Candy-Look (`src/map`). Ihre Marker nutzen `--color-marker-*` und `--shadow-marker-soft`.
+Karten-Layer lesen Farbwerte über `token()` (siehe `src/modules/territory/ui/map.ts`).
 
 Bewegung respektiert `prefers-reduced-motion` (Tokens und Animationen werden dann fast aus).
 

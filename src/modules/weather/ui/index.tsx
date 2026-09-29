@@ -138,27 +138,27 @@ registerPhoneApp({
 // ---------------------------------------------------------------------------------------------
 // Karte und Ton
 
-/** Farbstimmung je Wetter (siehe MapMood in src/map). */
+/** Farbstimmung je Wetter (siehe MapMood in src/map). Helle, kühle Farbstiche, damit der Pastell-Look bleibt. */
 export function moodFor(w: Weather): MapMood {
   const i = w.intensity;
   switch (w.kind) {
     case 'cloudy':
-      return { darken: 0.1 + i * 0.12, desaturate: 0.15, tint: '#223246', tintStrength: 0.15 };
+      return { darken: 0.08 + i * 0.1, desaturate: 0.15, tint: '#9fb0c8', tintStrength: 0.18 };
     case 'rain':
       return {
-        darken: 0.22 + i * 0.12,
+        darken: 0.16 + i * 0.1,
         desaturate: 0.25,
-        tint: '#1a3050',
-        tintStrength: 0.3,
+        tint: '#7f9cc4',
+        tintStrength: 0.32,
         haze: 0.5,
         wet: 0.6 + i * 0.4,
       };
     case 'storm':
-      return { darken: 0.45, desaturate: 0.35, tint: '#1b2440', tintStrength: 0.4, haze: 0.8, wet: 1 };
+      return { darken: 0.38, desaturate: 0.35, tint: '#5d6a94', tintStrength: 0.4, haze: 0.8, wet: 1 };
     case 'snow':
-      return { brighten: 0.2 + i * 0.25, desaturate: 0.6, tint: '#dfe8ff', tintStrength: 0.18, haze: 0.6 };
+      return { brighten: 0.2 + i * 0.25, desaturate: 0.6, tint: '#eef4ff', tintStrength: 0.25, haze: 0.6 };
     case 'heat':
-      return { brighten: 0.05, tint: '#ff9d4d', tintStrength: 0.12 + i * 0.1, haze: 0.4 };
+      return { brighten: 0.05, tint: '#ffb070', tintStrength: 0.12 + i * 0.1, haze: 0.4 };
     default:
       return {};
   }

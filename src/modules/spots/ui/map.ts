@@ -1,31 +1,46 @@
 // Spot-Marker: Zahl der wartenden Kunden, Farbe nach Dringlichkeit, Rand wenn ein Läufer da ist.
-// Gesperrte Spots erscheinen grau mit Schloss, eigene Spots mit eigenem Rahmen.
-// Aus der Nähe (ab FIGURE_ZOOM) stehen Figuren um den Spot: Läufer, Sicherheit und wartende Kunden.
+// Gesperrte Spots erscheinen grau mit Schloss, eigene Spots mit gestricheltem Rand.
+// Dazu Hotspots: Wo etwas los ist (wartende Kunden, Verkäufe, aktuelle Nachfrage), pulsiert ein weicher
+// Farb-Blob unter dem Spot. Figuren gibt es auf der Karte nicht mehr.
 
 import type { Marker } from 'maplibre-gl';
 import type { GameState } from '../../../core';
-import { addFiguresAt, addHtmlMarker, el, type FigureHandle, type FigureOptions, type MapLayer } from '../../../map';
-import { CUSTOMER_PATIENCE, waitingAt } from '../../customers';
-import { activeRunnerAt, runnerAt, securityAt } from '../../staff';
+import { addHtmlMarker, createHotspots, el, type Hotspot, type MapLayer } from '../../../map';
+import { CUSTOMER_PATIENCE, spotDemand, waitingAt } from '../../customers';
+import { runnerAt } from '../../staff';
 import { getAllSpots, isSpotActive } from '../index';
 
-/** Ab dieser Zoomstufe zeigt die Karte Figuren an den Spots. */
-const FIGURE_ZOOM = 14;
-/** So weit (Grad Länge, ca. 45 m) rechts vom Spot stehen die Figuren. */
-const FIGURE_OFFSET_LNG = 0.00065;
-/** Höchstens so viele wartende Kunden als Figur. */
-const MAX_CUSTOMER_FIGURES = 3;
+/** Unter dieser Zoomstufe zeigen gesperrte Spots keinen Namen (sonst drängeln sich die Pillen). */
+const NAMES_ZOOM = 13;
+/** So viele Spielminuten wirkt ein Verkauf im Hotspot nach (klingt linear ab). */
+const SALE_GLOW_MINUTES = 90;
 
-type FigureSpec = Omit<FigureOptions, 'position'>;
+/** Letzte Verkäufe je Spot (Spielzeit), nur für die Optik. Füllt die Oberfläche über recordSaleGlow. */
+const recentSales = new Map<string, number[]>();
 
-function figuresFor(state: GameState, spotId: string): FigureSpec[] {
-  const figures: FigureSpec[] = [];
-  const runner = activeRunnerAt(state, spotId);
-  if (runner) figures.push({ role: 'runner', name: runner.name.split(' ')[0], state: 'active', title: runner.name });
-  for (const guard of securityAt(state, { spotId })) figures.push({ role: 'staff', state: 'alert', title: guard.name });
+/** Einen Verkauf am Spot für den Hotspot merken. */
+export function recordSaleGlow(spotId: string, time: number): void {
+  const list = recentSales.get(spotId) ?? [];
+  list.push(time);
+  while (list.length > 8) list.shift();
+  recentSales.set(spotId, list);
+}
+
+function saleGlow(spotId: string, now: number): number {
+  let glow = 0;
+  for (const at of recentSales.get(spotId) ?? []) {
+    const age = now - at;
+    if (age >= 0 && age < SALE_GLOW_MINUTES) glow += 1 - age / SALE_GLOW_MINUTES;
+  }
+  return glow;
+}
+
+/** Wie viel an einem Spot los ist (0 = nichts, 1 = viel, bis 1,5). Offene Spots glimmen immer etwas. */
+export function spotActivity(state: GameState, spotId: string): number {
+  if (!isSpotActive(state, spotId)) return 0;
+  const demand = spotDemand(state, spotId);
   const waiting = waitingAt(state, spotId).length;
-  for (let i = 0; i < Math.min(waiting, MAX_CUSTOMER_FIGURES); i++) figures.push({ role: 'customer', state: 'idle' });
-  return figures;
+  return Math.min(1.5, 0.3 + demand * 0.15 + waiting * 0.16 + saleGlow(spotId, state.time) * 0.25);
 }
 
 export const spotsLayer: MapLayer = {
@@ -33,23 +48,22 @@ export const spotsLayer: MapLayer = {
   order: 50,
   mount(ctx) {
     const markers = new Map<string, { marker: Marker; element: HTMLElement; badge: HTMLElement }>();
-    const figures = new Map<string, { key: string; handles: FigureHandle[] }>();
+    const hotspots = createHotspots(ctx.map, 'spots.hotspots');
+    let lastHotspots = '';
     const container = ctx.map.getContainer();
-    const onZoom = () => container.classList.toggle('spots-far', ctx.map.getZoom() < FIGURE_ZOOM);
+    const onZoom = () => container.classList.toggle('spots-far', ctx.map.getZoom() < NAMES_ZOOM);
     ctx.map.on('zoom', onZoom);
     onZoom();
 
-    const drawFigures = (state: GameState, spotId: string, active: boolean, position: { lng: number; lat: number }) => {
-      const specs = active ? figuresFor(state, spotId) : [];
-      const key = specs.map((f) => `${f.role}:${f.name ?? ''}`).join('|');
-      const current = figures.get(spotId);
-      if (current?.key === key) return;
-      for (const h of current?.handles ?? []) h.remove();
-      // Die Figuren stehen rechts neben dem Spot-Marker, damit sie Zahl und Namen nicht verdecken.
-      const beside = { lng: position.lng + FIGURE_OFFSET_LNG, lat: position.lat };
-      const handles = specs.length > 0 ? addFiguresAt(ctx.map, beside, specs, 14) : [];
-      for (const h of handles) h.element.classList.add('spot-figure');
-      figures.set(spotId, { key, handles });
+    const drawHotspots = (state: GameState) => {
+      const list: Hotspot[] = getAllSpots(state).map((spot) => ({
+        position: spot,
+        intensity: Math.round(spotActivity(state, spot.id) * 20) / 20,
+      }));
+      const key = list.map((h) => h.intensity).join(',');
+      if (key === lastHotspots) return;
+      lastHotspots = key;
+      hotspots.setHotspots(list);
     };
 
     const ensureMarkers = () => {
@@ -86,6 +100,7 @@ export const spotsLayer: MapLayer = {
     return {
       update(state, ui) {
         ensureMarkers();
+        drawHotspots(state);
         const selected = ui.panel?.id === 'spots.spot' ? (ui.panel.props as { spotId: string }).spotId : null;
         for (const spot of getAllSpots(state)) {
           const entry = markers.get(spot.id);
@@ -94,7 +109,6 @@ export const spotsLayer: MapLayer = {
           entry.element.classList.toggle('is-locked', !active);
           entry.element.classList.toggle('is-custom', !!spot.custom);
           entry.element.classList.toggle('selected', spot.id === selected);
-          drawFigures(state, spot.id, active, spot);
           if (!active) {
             entry.element.classList.remove('has-runner');
             entry.badge.textContent = '🔒';
@@ -111,8 +125,9 @@ export const spotsLayer: MapLayer = {
       },
       destroy() {
         ctx.map.off('zoom', onZoom);
-        for (const f of figures.values()) for (const h of f.handles) h.remove();
-        figures.clear();
+        hotspots.remove();
+        for (const entry of markers.values()) entry.marker.remove();
+        markers.clear();
       },
     };
   },

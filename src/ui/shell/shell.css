@@ -19,35 +19,13 @@
   --hud-h: 104px;
 }
 
-/* ---------------------------------------------------------------- Karte (bleibt dunkel) */
+/* ---------------------------------------------------------------- Karte (Candy-Look, siehe src/map) */
 .shell-map {
   position: fixed;
   inset: 0;
-  background: #05080c;
+  background: var(--color-bg);
   --map-readout-left: 28px;
   --map-readout-bottom: 26px;
-  /* Alles auf der Karte (Marker, Etiketten, Effekte) nutzt die dunklen Farben des Nacht-Looks. */
-  --color-accent: #3fe0a8;
-  --color-accent-strong: #3fe0a8;
-  --color-accent-soft: rgba(63, 224, 168, 0.16);
-  --color-warn: #ffb547;
-  --color-warn-strong: #ffb547;
-  --color-warn-soft: rgba(255, 181, 71, 0.16);
-  --color-bad: #ff5d62;
-  --color-bad-strong: #ff5d62;
-  --color-bad-soft: rgba(255, 93, 98, 0.16);
-  --color-info: #6cb4ff;
-  --color-info-strong: #6cb4ff;
-  --color-info-soft: rgba(108, 180, 255, 0.16);
-  --color-on-accent: #04140d;
-  --color-on-bad: #1a0507;
-  --color-text: #e9f0f8;
-  --color-muted: #9db0c6;
-  --color-faint: #6f8199;
-  --color-line: rgba(255, 255, 255, 0.14);
-  --color-panel: rgba(8, 12, 18, 0.86);
-  --color-surface: #1c2735;
-  color: var(--color-text);
 }
 .shell-map.is-picking,
 .shell-map.is-picking .maplibregl-canvas {
@@ -209,9 +187,8 @@ button.hud-pill:active {
   font-size: var(--font-size-lg);
 }
 .hud-money .ui-floaters {
-  position: absolute;
-  left: 50px;
-  top: -4px;
+  left: 62%;
+  top: calc(100% - 4px);
 }
 
 /* Heat (Modul Polizei) */

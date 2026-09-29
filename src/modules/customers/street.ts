@@ -1,6 +1,15 @@
 // Straßenverkauf: Interessenten an den Spots, Verkauf, Zufriedenheit und Stammkunden.
 
-import { type CommandResult, type Ctx, clock, journal, MINUTES_PER_DAY, START_TIME, wallet } from '../../core';
+import {
+  type CommandResult,
+  type Ctx,
+  clock,
+  type GameState,
+  journal,
+  MINUTES_PER_DAY,
+  START_TIME,
+  wallet,
+} from '../../core';
 import { allProducts, getProduct, getStock, take } from '../goods';
 import { getSpotPrice, priceRatio, spotReferencePrice } from '../market';
 import { changeReputation, reputationDemandFactor } from '../reputation';
@@ -58,19 +67,27 @@ export function pickWeighted<T>(ctx: Ctx, items: readonly T[], weights: readonly
   return items[items.length - 1];
 }
 
-/** Zeit bis zum nächsten Interessenten an einem Spot (exponentialverteilt, damit es unregelmäßig wirkt). */
-function spawnInterval(ctx: Ctx, spot: Spot, time: number): number {
+/**
+ * Aktuelle Nachfrage an einem Spot (1 = ein Kunde alle BASE_SPAWN_INTERVAL Minuten): Andrang, Uhrzeit,
+ * Wochentag, Wetter, Ruf, Anlaufphase und Kundenmix. Ohne Zufall, auch für die Karte (Hotspots).
+ */
+export function demandRate(state: GameState, spot: Spot, time: number): number {
   const mix = typeWeights(spot, time).reduce((a, b) => a + b, 0) / TYPE_NORM;
-  const rate =
+  return (
     spot.demand *
     hourDemandMultiplier(clock.hour(time)) *
     WEEKDAY_DEMAND[clock.weekday(time)] *
-    weatherDemandFactor(ctx.state) *
-    reputationDemandFactor(ctx.state) *
+    weatherDemandFactor(state) *
+    reputationDemandFactor(state) *
     warmupDemandFactor(time - START_TIME) *
     mix *
-    MAX_CHEAP_BOOST;
-  const mean = BASE_SPAWN_INTERVAL / Math.max(0.01, rate);
+    MAX_CHEAP_BOOST
+  );
+}
+
+/** Zeit bis zum nächsten Interessenten an einem Spot (exponentialverteilt, damit es unregelmäßig wirkt). */
+function spawnInterval(ctx: Ctx, spot: Spot, time: number): number {
+  const mean = BASE_SPAWN_INTERVAL / Math.max(0.01, demandRate(ctx.state, spot, time));
   return -Math.log(1 - ctx.random() * 0.999) * mean;
 }
 

@@ -1,4 +1,4 @@
-// Oberfläche der Spots: Marker auf der Karte, das Spot-Panel (freischalten oder Slot für Kunden, Preise, Läufer)
+// Oberfläche der Spots: Marker und Hotspots auf der Karte, das Spot-Panel (freischalten oder Slot für Kunden, Preise, Läufer)
 // und die Spot-Liste im Tab "Geschäft" mit "Eigenen Spot gründen" per Klick auf die Karte.
 // Das Panel hat den Slot 'spots.spotPanel', in den andere Module Abschnitte hängen (Kunden, Preise, Läufer …).
 
@@ -32,7 +32,7 @@ import {
   lockedSpots,
   MAX_CUSTOM_SPOTS,
 } from '../index';
-import { spotsLayer } from './map';
+import { recordSaleGlow, spotsLayer } from './map';
 import './spots.css';
 
 declare module '../../../ui' {
@@ -135,10 +135,12 @@ registerPanel({
 registerSlot('tab:business', { id: 'spots.list', order: 15, component: SpotsSection });
 registerMapLayer(spotsLayer);
 
-// Geld-Popup am Spot bei jedem Straßenverkauf.
+// Geld-Popup am Spot bei jedem Straßenverkauf, und der Hotspot leuchtet eine Weile stärker.
 onGameEvent('sale.completed', 'spots.moneyFx', (p, _ui, state) => {
   const spot = p.spotId ? getSpot(state, p.spotId) : undefined;
-  if (spot) mapEffects.money(spot, p.revenue, { caption: formatProductAmount(p.productId, p.amount) });
+  if (!spot) return;
+  recordSaleGlow(spot.id, state.time);
+  mapEffects.money(spot, p.revenue, { caption: formatProductAmount(p.productId, p.amount) });
 });
 
 // Empfehlungen und Suche

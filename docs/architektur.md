@@ -170,9 +170,9 @@ Weitere Import-Kanten nur zur Laufzeit (Funktionsaufrufe, kein `dependsOn`): `te
 
 ## Oberfläche (`src/ui/`)
 
-Look "Kölsch-Sticker": hell, App-artig und comichaft (weiße Karten mit dicker Kontur und hartem Sockel-Schatten über der dunklen Nacht-Satellitenkarte). Details zu Tokens, Bausteinen, Handy und Ton: [`src/ui/README.md`](../src/ui/README.md).
+Look "Kölsch-Sticker": hell, App-artig und comichaft (weiße Karten mit dicker Kontur und hartem Sockel-Schatten über der pastelligen Candy-Karte, siehe [`src/map/README.md`](../src/map/README.md)). Details zu Tokens, Bausteinen, Handy und Ton: [`src/ui/README.md`](../src/ui/README.md).
 
-- **Shell** (`shell/`): Karte vollflächig und dunkel. Darüber schwebende Sticker-Elemente. Desktop: HUD als Pillen
+- **Shell** (`shell/`): Karte vollflächig. Darüber schwebende Sticker-Elemente. Desktop: HUD als Pillen
   oben (Geld, Heat, Mehr-Popover für Lager/Ruf/Köln, Uhr mit Wetter, Tempo, Alarm-Glocke, Handy, Menü), schmales
   Icon-Dock links (`Navigation.tsx`) mit schwebendem Inspector daneben, Panel rechts, Handy als Fenster unten rechts.
   Handy: HUD in zwei Reihen, Bottom-Sheet mit drei Rastpunkten (klein, mittel, voll; ziehbar) über einer Tab-Leiste,
@@ -219,20 +219,30 @@ Look "Kölsch-Sticker": hell, App-artig und comichaft (weiße Karten mit dicker 
 
 Details und Beispiele: [`src/map/README.md`](../src/map/README.md).
 
-- `GameMap.ts`: MapLibre mit Look "Nacht-Satellit" (`style.ts`, `look.ts`): abgedunkeltes Luftbild, glühende
-  Straßen, 3D-Gebäude mit Fenstern, Tag und Nacht nach der Spieluhr (`daylight.ts`), Überwachungs-Overlay
-  (`overlay.ts`), Kamera 3D/2D, Köln/Europa, `pickLocation()`. Beim Platzieren (`pickLocation`) sehen die
-  Klick-Handler der Layer noch `ctx.isPicking() === true`, der Klick wird erst danach aufgelöst.
+- `GameMap.ts`: MapLibre im **Candy-Look** wie die Snapchat-Map (`style.ts`, `look.ts`): Pastellflächen aus den
+  OpenFreeMap-Vektorkacheln, dicke runde Straßen (Nebenstraßen weiß, Hauptstraßen gelb, Autobahnen und Brücken
+  orange), Wasser und Grün gut sichtbar, 3D-Gebäude in vier Höhenbändern mit weichen Schatten, keine POIs und keine
+  Straßennamen. Vier Tageszeit-Paletten nach der Spieluhr (Morgen, Tag, Abend, Nacht) mit weichen Übergängen, Himmel
+  und Nebel ziehen mit. Wahrzeichen als Toon-Klötze (`landmarks.ts`: Dom, Hohenzollernbrücke, Colonius, Kranhäuser,
+  KölnTriangle). Überwachungs-Overlay (`overlay.ts`) als Schalter, standardmäßig aus. Kamera 3D (50°)/2D,
+  Köln/Europa, `pickLocation()`. Beim Platzieren (`pickLocation`) sehen die Klick-Handler der Layer noch
+  `ctx.isPicking() === true`, der Klick wird erst danach aufgelöst. Die Layer der Module werden schon nach dem Stil
+  gemountet (`style.load`), damit das Spiel auch ohne erreichbare Kacheln bedienbar bleibt.
 - `registerMapLayer({ id, order, mount(ctx) { …; return { update(state, ui), destroy() } } })`.
-  `ctx` hat `map`, `ui`, `getState()`, `isPicking()`. Quellen- und Layer-IDs mit Modul-Präfix. Flächen unter die
-  3D-Gebäude: `map.addLayer(layer, BELOW_BUILDINGS)`.
-- Stimmung und Niederschlag: `setMapMood(id, mood)`, `setPrecipitation({ kind, intensity, wind })`.
-- Effekt-Werkzeuge (auch gebunden an die aktive Karte über `mapEffects`): `moneyPopup`, `blueLight`,
-  `createVehicle`/`animateVehicle`, `addFigure`/`addFiguresAt`, `addTargetMarker`, `ping`, `flash`.
-- Layer jetzt: `territory.veedel` (Veedel-Flächen nach Kontrolle oder Heat), `suppliers.routes` (Route,
-  Lieferanten, Lkw/Transporter als Fahrzeug), `goods.warehouses`, `gangs.markers` (Hauptquartiere, Vorstöße),
-  `customers.deliveries` (Kurier/Auto zum Kunden), `spots.markers` (Spots, aus der Nähe mit Figuren: Läufer,
-  Sicherheit, wartende Kunden), `weather.sky`.
+  `ctx` hat `map`, `ui`, `getState()`, `isPicking()`. Quellen- und Layer-IDs mit Modul-Präfix. Flächen nur aufs
+  Land (unter Grün und Wasser): `map.addLayer(layer, ABOVE_LAND)`, unter die Straßen: `BELOW_ROADS`, unter die
+  3D-Gebäude: `BELOW_BUILDINGS`.
+- Stimmung und Niederschlag: `setMapMood(id, mood)`, `setPrecipitation({ kind, intensity, wind })`. Die Stimmung
+  legt sich über die Palette (`computeLook`).
+- Werkzeuge: `createVehicle`/`animateVehicle` (3D-Mini-Fahrzeuge und Schiffe, fill-extrusion, weich nachgezogen),
+  `createHotspots` (pulsierende Heatmap-Blobs), `addTargetMarker`/`addHtmlMarker` (runde weiße Marker), Effekte
+  `moneyPopup`, `blueLight`, `ping`, `flash` (auch gebunden an die aktive Karte über `mapEffects`), Farbhilfen
+  `mixColor`, `pastel`. Figuren und Avatare gibt es auf der Karte nicht mehr.
+- Layer jetzt: `territory.veedel` (Veedel-Flächen in Pastell nach Kontrolle oder Heat, nur auf dem Land, Name nur
+  beim Überfahren), `suppliers.routes` (dezente Route, Lieferanten; Transporter aus Großstädten, Hafenware als Schiff
+  über den Rhein bis in den Niehler Hafen, dann Lkw), `goods.warehouses`, `gangs.markers` (Hauptquartiere,
+  Vorstöße), `customers.deliveries` (Kurier/Auto zum Kunden), `spots.markers` (Spots und Hotspots nach Kunden,
+  Verkäufen und Nachfrage), `weather.sky`.
 
 ## Module
 
@@ -247,8 +257,8 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 | `encounters` | `active`, `history` (2) | `startEncounter(ctx, request)` (mit `askPlayer`, `place`, `situation`, `stakes`, `effects`, `skipEffects`), `getEncounter`, `activeEncounters`, `pendingEncounter`, `availableActions`, `actionChance`, `autoResolveEncounter`, `ENCOUNTER_KINDS`, `ENCOUNTER_ACTIONS`, `PLAYER_STATS` | `encounters.join`, `.act`, `.auto` | `encounter.started`, `encounter.round`, `encounter.resolved` (`result`) |
 | `goods` | Posten pro Lager mit Qualität, Streckanteil, Einkaufspreis (2) | `allProducts`, `getProduct`, `productName`, `getWarehouses`, `getStock`, `getLots`, `stockSummary`, `averageQuality`, `qualityTier`, `cutPreview`, `store`, `take` (→ `taken`, `quality`, `cut`, `unitCost`), `cutLot` | `goods.cut` | `goods.stored`, `goods.taken`, `goods.cut` |
 | `market` | `competition`, `pressure`, `prices` (2) | `referencePrice`, `averageReferencePrice`, `purchasingPowerFactor`, `supplyDemandFactor`, `getPressure`, `getCompetitionFactor`, `setCompetitionFactor`, `spotReferencePrice`, `getSpotPrice`, `hasOwnPrice`, `priceRatio`, `roundPrice` | `market.setPrice` | `market.competitionChanged`, `market.priceSet` |
-| `suppliers` | `shipments`, `relations` (Vertrauen, Schulden) (2) | `getSuppliers`, `getSupplier`, `shipmentsInTransit`, `shipmentProgress`, `expectedArrival`, `cheapestPackagePrice`, `getRelation`, `supplierDiscount`, `creditLimit`, `availableCredit`, `isBlocked`, `availablePackages`, `packagePrice` | `suppliers.order` (`onCredit`), `suppliers.repay` | `shipment.ordered`, `shipment.arrived`, `shipment.problem`, `supplier.trustChanged`, `supplier.repaid`, `supplier.overdue` |
-| `customers` | `waiting`, `nextSpawnAt`, `stats`, `regulars`, `orders` (2; Auftragsstatus zusätzlich `contested`) | `waitingAt`, `allWaiting`, `canServe`, `getSalesStats`, `getRegulars`, `getOrders`, `orderProgress`, Kundenentscheidung als reine Funktionen | `customers.serve` (`sellerId`), `.serveAll`, `.acceptOrder`, `.declineOrder` | `sale.completed` (`street`/`delivery`/`wholesale`), `customer.arrived`, `customer.left`, `customer.missed`, `customer.regularGained/Lost`, `order.received/accepted/finished` |
+| `suppliers` | `shipments`, `relations` (Vertrauen, Schulden) (2) | `getSuppliers`, `getSupplier`, `shipmentsInTransit`, `shipmentProgress`, `deliveryLeg` (Schiff/Umladen/Straße, nur Darstellung), `RHINE_ROUTE`, `UNLOADING_PORT`, `expectedArrival`, `cheapestPackagePrice`, `getRelation`, `supplierDiscount`, `creditLimit`, `availableCredit`, `isBlocked`, `availablePackages`, `packagePrice` | `suppliers.order` (`onCredit`), `suppliers.repay` | `shipment.ordered`, `shipment.arrived`, `shipment.problem`, `supplier.trustChanged`, `supplier.repaid`, `supplier.overdue` |
+| `customers` | `waiting`, `nextSpawnAt`, `stats`, `regulars`, `orders` (2; Auftragsstatus zusätzlich `contested`) | `waitingAt`, `allWaiting`, `spotDemand` (aktuelle Nachfrage), `canServe`, `getSalesStats`, `getRegulars`, `getOrders`, `orderProgress`, Kundenentscheidung als reine Funktionen | `customers.serve` (`sellerId`), `.serveAll`, `.acceptOrder`, `.declineOrder` | `sale.completed` (`street`/`delivery`/`wholesale`), `customer.arrived`, `customer.left`, `customer.missed`, `customer.regularGained/Lost`, `order.received/accepted/finished` |
 | `spots` | `unlocked`, `custom` (2) | `getSpots` (aktive), `getAllSpots`, `getSpot`, `isSpotActive`, `spotsInVeedel`, `lockedSpots`, `customSpots`, `canFoundSpotAt`; das Veedel eines Spots kommt aus `veedelAt` | `spots.unlock`, `spots.found` | `spots.unlocked`, `spots.founded` |
 | `reputation` | `value`, `recent` (2) | `getReputation`, `changeReputation(ctx, delta, reason)`, `reputationDemandFactor`, `reputationLabel`, `recentReputationChanges` | | `reputation.changed` |
 | `laundering` | Wäschen mit Dauer (2) | `launderingFee`, `launderingDuration`, `launderingCapacity`, `amountInProgress`, `getBatches`, `batchProgress` | `laundering.launder` | `laundering.started`, `laundering.completed` |
@@ -314,4 +324,5 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
     Autosave nach dem Neuladen; Desktop und Handy.
   - `npm run playthrough`: Der Bot spielt im Browser eine Session (Standard 8 Spieltage ≈ 20 Minuten bei 2x) und
     macht Screenshots der wichtigen Momente. Belege der Integration liegen in `docs/integration/`.
-  - `npm run screenshot`: Desktop und Handy nach `screenshots/`.
+  - `npm run screenshot`: Desktop und Handy nach `screenshots/`. Mit `--eval="window.koeln.session.sim.advance(480)"`
+    springt die Uhr z.B. in die Nacht (Start 18 Uhr).

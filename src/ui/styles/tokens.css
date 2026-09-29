@@ -3,8 +3,8 @@
  * Alle Oberflächen (auch die der Module) nutzen nur diese Variablen, damit der Look zentral änderbar ist.
  *
  * Look "Kölsch-Sticker": hell, warmes Papier, weiße Karten mit dicker dunkler Kontur und hartem Sockel-Schatten
- * wie Aufkleber, kräftige Comic-Farben (Dom-Rot, Geld-Grün, Gelb, Rhein-Blau, Lila). Die Karte bleibt dunkel
- * (Nacht-Satellit); ihre Farben stehen weiter unten und in src/ui/shell/shell.css (.shell-map).
+ * wie Aufkleber, kräftige Comic-Farben (Dom-Rot, Geld-Grün, Gelb, Rhein-Blau, Lila). Die Karte ist im Candy-Look
+ * (Pastell, siehe src/map/README.md); ihre Marker sind rund und weiß mit weichem Schatten (--color-marker-bg, …).
  *
  * Kontrast: Gelb, Grün und Blau sind Flächenfarben mit dunkler Schrift darauf (--color-on-*). Als Textfarbe auf
  * Weiß nur die dunkleren Varianten --color-accent, --color-warn, --color-bad, --color-info verwenden.
@@ -89,10 +89,18 @@
   --color-on-bad: #ffffff;
   --color-on-dark: #ffffff;
 
-  /* Karte (bleibt dunkel, Werte wie im Nacht-Look) */
+  /* Karte (Candy-Look, siehe src/map/README.md) */
   --color-marker-idle: #1c2735;
   --color-marker-border: #dbe6f3;
   --color-label-bg: rgba(4, 8, 14, 0.82);
+  /* Marker im Candy-Look der Karte: rund, weiß, weicher Schatten, dunkle Schrift */
+  --color-marker-bg: #ffffff;
+  --color-marker-ink: #2d2640;
+  --color-marker-muted: #8a82a3;
+  --color-marker-ring: #e6def5;
+  --color-marker-supplier: #8b5cf6;
+  --shadow-marker-soft: 0 3px 10px rgba(60, 40, 100, 0.28), 0 1px 2px rgba(60, 40, 100, 0.2);
+  /* Linien des Überwachungs-Overlays */
   --color-scan: rgba(108, 180, 255, 0.5);
   --color-scan-faint: rgba(108, 180, 255, 0.08);
   --color-lamp: #ffb04d;

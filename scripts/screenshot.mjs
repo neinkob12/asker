@@ -15,7 +15,7 @@
 //   --name    Präfix der Dateinamen (Standard: spiel)
 // Browser: CHROMIUM_PATH setzen, sonst wird der Playwright-Chromium gesucht.
 // Kartenkacheln lädt Node (auch über einen HTTPS_PROXY), dann zeigt die Karte auch in abgeschotteten Umgebungen
-// das echte Luftbild.
+// die echten Vektorkacheln (OpenFreeMap).
 
 import { mkdirSync } from 'node:fs';
 import { launchBrowser, restartWithProxySupport, routeExternal, startServer } from './browser.mjs';

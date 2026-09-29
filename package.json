@@ -1,7 +1,7 @@
 {
   "name": "koeln-tycoon",
   "version": "1.0.0",
-  "description": "Browserspiel: vom Kleindealer zum Boss auf der Satellitenkarte von Köln",
+  "description": "Browserspiel: vom Kleindealer zum Boss auf der Karte von Köln",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

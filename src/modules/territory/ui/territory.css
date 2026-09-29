@@ -1,4 +1,4 @@
-/* Reviere: Einfluss-Balken, Fraktionsnamen, Veedel-Beschriftung und Kartenumschalter. Schlicht, Auftrag 14 macht den Look. */
+/* Reviere: Einfluss-Balken, Fraktionsnamen, Veedel-Beschriftung beim Überfahren und Kartenumschalter. */
 
 .territory-faction {
   display: inline-flex;
@@ -82,29 +82,29 @@
   color: var(--color-bad);
 }
 
-/* Beschriftung der Veedel auf der Karte. Klicks gehen durch auf die Fläche darunter. */
+/* Name des Veedels nur beim Überfahren mit der Maus (weiße Pille). Klicks gehen durch auf die Fläche darunter. */
 .veedel-label {
   display: flex;
   flex-direction: column;
   align-items: center;
+  padding: 3px 12px;
   pointer-events: none;
   text-align: center;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  background: var(--color-marker-bg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-marker-soft);
+}
+.veedel-label[hidden] {
+  display: none;
 }
 .veedel-label__name {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-text);
-  opacity: 0.85;
+  color: var(--color-marker-ink);
 }
 .veedel-label__detail {
   font-size: var(--font-size-xs);
-  color: var(--color-muted);
-}
-.shell-map.zoomed-out .veedel-label {
-  display: none;
+  color: var(--color-marker-muted);
 }
 
 /* Umschalter Kontrolle/Heat oben links. */

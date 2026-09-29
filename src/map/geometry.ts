@@ -2,6 +2,8 @@
 
 import { distanceMeters, type LngLat } from '../core';
 
+const METERS_PER_DEGREE = 111320;
+
 /** Länge einer Linie in Metern. */
 export function pathLength(path: readonly LngLat[]): number {
   let total = 0;
@@ -52,15 +54,34 @@ export function pointAlong(path: readonly LngLat[], t: number): { position: LngL
 }
 
 /**
- * Punkt im Kreis um einen Mittelpunkt, z.B. um mehrere Figuren an einem Spot nebeneinander zu stellen.
+ * Punkt im Kreis um einen Mittelpunkt, z.B. um mehrere Marker an einem Ort nebeneinander zu stellen.
  * index von count, Abstand in Metern.
  */
 export function offsetAround(center: LngLat, index: number, count: number, meters = 14): LngLat {
   if (count <= 1) return { ...center };
   const angle = (index / count) * 2 * Math.PI - Math.PI / 2;
-  const dLat = (meters * Math.sin(angle)) / 111320;
-  const dLng = (meters * Math.cos(angle)) / (111320 * Math.cos((center.lat * Math.PI) / 180));
+  const dLat = (meters * Math.sin(angle)) / METERS_PER_DEGREE;
+  const dLng = (meters * Math.cos(angle)) / (METERS_PER_DEGREE * Math.cos((center.lat * Math.PI) / 180));
   return { lng: center.lng + dLng, lat: center.lat - dLat };
+}
+
+/**
+ * Punkt in einem lokalen Rahmen um origin: forward Meter in Richtung heading (Kompass, 0 = Norden), left Meter
+ * quer dazu nach links. Für kleine Grundrisse (Wahrzeichen, Fahrzeuge), die gedreht auf der Karte liegen.
+ */
+export function offsetMeters(origin: LngLat, heading: number, forward: number, left: number): LngLat {
+  const h = (heading * Math.PI) / 180;
+  const east = forward * Math.sin(h) - left * Math.cos(h);
+  const north = forward * Math.cos(h) + left * Math.sin(h);
+  return {
+    lng: origin.lng + east / (METERS_PER_DEGREE * Math.cos((origin.lat * Math.PI) / 180)),
+    lat: origin.lat + north / METERS_PER_DEGREE,
+  };
+}
+
+/** Meter pro Bildschirmpixel bei einer Zoomstufe (MapLibre, 512er Kacheln). */
+export function metersPerPixel(lat: number, zoom: number): number {
+  return (40075016.686 * Math.cos((lat * Math.PI) / 180)) / (512 * 2 ** zoom);
 }
 
 /** Koordinate im Überwachungsstil, z.B. 50°56'21"N bzw. 006°57'04"E. */
