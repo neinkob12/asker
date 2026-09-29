@@ -14,7 +14,8 @@
     "screenshot": "node scripts/screenshot.mjs",
     "template:smoke": "node scripts/template-smoke.mjs",
     "balance": "BALANCE=1 vitest run src/playtest",
-    "e2e": "node scripts/e2e.mjs"
+    "e2e": "node scripts/e2e.mjs",
+    "playthrough": "node scripts/playthrough.mjs"
   },
   "dependencies": {
     "maplibre-gl": "^6.11.2",

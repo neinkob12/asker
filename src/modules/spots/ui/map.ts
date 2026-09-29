@@ -11,6 +11,8 @@ import { getAllSpots, isSpotActive } from '../index';
 
 /** Ab dieser Zoomstufe zeigt die Karte Figuren an den Spots. */
 const FIGURE_ZOOM = 14;
+/** So weit (Grad Länge, ca. 45 m) rechts vom Spot stehen die Figuren. */
+const FIGURE_OFFSET_LNG = 0.00065;
 /** Höchstens so viele wartende Kunden als Figur. */
 const MAX_CUSTOMER_FIGURES = 3;
 
@@ -43,7 +45,9 @@ export const spotsLayer: MapLayer = {
       const current = figures.get(spotId);
       if (current?.key === key) return;
       for (const h of current?.handles ?? []) h.remove();
-      const handles = specs.length > 0 ? addFiguresAt(ctx.map, position, specs, 22) : [];
+      // Die Figuren stehen rechts neben dem Spot-Marker, damit sie Zahl und Namen nicht verdecken.
+      const beside = { lng: position.lng + FIGURE_OFFSET_LNG, lat: position.lat };
+      const handles = specs.length > 0 ? addFiguresAt(ctx.map, beside, specs, 14) : [];
       for (const h of handles) h.element.classList.add('spot-figure');
       figures.set(spotId, { key, handles });
     };

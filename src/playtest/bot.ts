@@ -57,7 +57,7 @@ function run(sim: Simulation, stats: BotStats, command: Command): boolean {
 
 /** Laufende Kosten für einen Tag: Löhne plus Puffer. */
 function reserve(state: GameState): number {
-  return dailyWages(state) + 300;
+  return Math.round(dailyWages(state) * 1.5) + 500;
 }
 
 /** Selbst verkaufen: an den Spots ohne Läufer mit den meisten Wartenden. */
@@ -197,16 +197,16 @@ function grow(sim: Simulation, stats: BotStats): void {
     }
   }
 
-  // Leutnant in jedem Veedel mit mindestens zwei eigenen Spots.
+  // Leutnant in Veedeln mit zwei Spots, eigenen Veedeln oder sobald das Team groß genug ist.
   const byVeedel = new Map<string, number>();
   for (const s of getSpots(state)) byVeedel.set(s.veedelId, (byVeedel.get(s.veedelId) ?? 0) + 1);
   for (const [veedelId, count] of byVeedel) {
-    if ((count < 2 && !controlledBy(state, PLAYER_FACTION).includes(veedelId)) || getLieutenant(state, veedelId))
-      continue;
+    const enough = count >= 2 || controlledBy(state, PLAYER_FACTION).includes(veedelId) || getStaff(state).length >= 4;
+    if (!enough || getLieutenant(state, veedelId)) continue;
     const best = getStaff(state, { status: 'active', veedelId })
       .filter((m) => m.role === 'runner' && m.level >= 2)
       .sort((a, b) => b.level - a.level)[0];
-    if (best && money(state) > reserve(state) + 1500) {
+    if (best && money(state) > reserve(state) + 800) {
       run(sim, stats, { type: 'hierarchy.appoint', payload: { staffId: best.id, veedelId } });
     }
   }
