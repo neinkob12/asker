@@ -10,21 +10,24 @@
 //   customerRevenue(customer), getSalesStats(state), getCustomerTypes(), customerType(id),
 //   getRegulars(state, { spotId?, status? }), getRegular(state, id),
 //   getOrders(state, { status?, kind? }), getOrder(state, id), orderProgress(state, order), isPlayerDelivering(state),
+//   playerSpot(state) (wo du selbst stehst), isPlayerAway(state) (Lieferung oder Fahrt unterwegs),
 //   spotDemand(state, spotId) (aktuelle Nachfrage, z.B. für die Hotspots auf der Karte),
 //   Entscheidungen: priceDemandFactor, acceptsPrice, chooseProduct, saleSatisfaction, cutNoticeChance,
 //   regularVerdict, regularAfterSale, typeDemandWeight; CUSTOMER_PATIENCE
-// Befehle: 'customers.serve' (auch für Läufer, mit sellerId), 'customers.serveAll',
+// Selbst verkaufen geht auch ohne Klick auf jeden Kunden: Stellst du dich an einen Spot ('customers.standAt'),
+// bedienst du dort automatisch (PLAYER_SERVE_TIME pro Kunde), solange du nicht mit einer Lieferung unterwegs bist.
+// Befehle: 'customers.serve' (auch für Läufer, mit sellerId), 'customers.serveAll', 'customers.standAt',
 //   'customers.acceptOrder', 'customers.declineOrder'
-// Ereignisse: 'sale.completed', 'customer.arrived', 'customer.left', 'customer.missed',
+// Ereignisse: 'sale.completed', 'customer.arrived', 'customer.left', 'customer.missed', 'customers.selfMoved',
 //   'customer.regularGained', 'customer.regularLost', 'order.received', 'order.accepted', 'order.finished'
 
-import { defineModule, type GameState } from '../../core';
+import { type CommandResult, type Ctx, defineModule, type GameState, journal } from '../../core';
 import { getStock } from '../goods';
-import { getSpots } from '../spots';
+import { getSpot, getSpots, isSpotActive } from '../spots';
 import { CUSTOMER_TYPES } from './config';
 import { customerType } from './decisions';
 import { acceptOrder, courierGone, declineOrder, expireOrderMessage, onDealResolved, ordersTick } from './orders';
-import { demandRate, initialSpawn, serve, streetTick } from './street';
+import { demandRate, initialSpawn, isPlayerAway, serve, streetTick } from './street';
 
 export { CUSTOMER_PATIENCE } from './config';
 export {
@@ -39,6 +42,7 @@ export {
   saleSatisfaction,
   typeDemandWeight,
 } from './decisions';
+export { isPlayerAway } from './street';
 
 export interface CustomerType {
   id: string;
@@ -133,6 +137,8 @@ export interface Order {
   finishedAt: number | null;
   quality: number | null;
   cut: number | null;
+  /** Lager, aus dem die Ware kommt (fehlt bei alten Spielständen: Standardlager). */
+  fromWarehouseId?: string | null;
 }
 
 export interface SalesStats {
@@ -151,6 +157,15 @@ export interface SalesStats {
   wholesaleDeals: number;
 }
 
+/** Du selbst am Spot: Dort bedienst du automatisch, solange du nicht unterwegs bist. */
+export interface SelfSelling {
+  spotId: string | null;
+  /** Mit dem aktuellen Kunden beschäftigt bis (Spielminute). */
+  busyUntil: number;
+  /** Seit wann du dort stehst. */
+  since: number;
+}
+
 export interface CustomersState {
   waiting: Customer[];
   /** Nächster Interessent pro Spot (Spielminute, mit Nachkommastellen). */
@@ -158,7 +173,10 @@ export interface CustomersState {
   stats: SalesStats;
   regulars: Regular[];
   orders: Order[];
+  self: SelfSelling;
 }
+
+type CustomersStateV2 = Omit<CustomersState, 'self'>;
 
 interface CustomersStateV1 {
   waiting: Customer[];
@@ -178,6 +196,8 @@ declare module '../../core' {
     'customers.serve': { customerId: number; sellerId?: string };
     /** Alle Kunden an einem Spot bedienen, solange die Ware reicht. */
     'customers.serveAll': { spotId: string };
+    /** Selbst an einen Spot stellen und dort automatisch verkaufen (null = weggehen). */
+    'customers.standAt': { spotId: string | null };
     /** Auftrag annehmen und gleich losschicken: selbst liefern oder einen freien Kurier. */
     'customers.acceptOrder': { orderId: number; by: 'player' | 'courier' };
     'customers.declineOrder': { orderId: number };
@@ -206,6 +226,8 @@ declare module '../../core' {
     /** Interessent wollte etwas, das nicht auf Lager war (Nachfrage ohne Angebot). */
     'customer.missed': { spotId: string; veedelId: string; productId: string; amount: number; typeId: string };
     'customer.regularGained': { regularId: string; spotId: string };
+    /** Du stehst jetzt an einem Spot (spotId) bzw. bist gegangen (null). */
+    'customers.selfMoved': { spotId: string | null };
     'customer.regularLost': { regularId: string; reason: string };
     'order.received': { orderId: number; kind: OrderKind };
     'order.accepted': { orderId: number; kind: OrderKind; by: 'player' | 'courier'; courierId: string | null };
@@ -289,9 +311,42 @@ export function isPlayerDelivering(state: GameState): boolean {
   return state.modules.customers.orders.some((o) => o.status === 'enRoute' && o.deliveredBy === 'player');
 }
 
+/** Spot, an dem du selbst stehst und verkaufst (null = nirgends). */
+export function playerSpot(state: GameState): string | null {
+  return state.modules.customers.self?.spotId ?? null;
+}
+
 /** Name des Kundentyps eines Kunden. */
 export function customerTypeName(typeId: string | undefined): string {
   return customerType(typeId).name;
+}
+
+/** Selbst an einen Spot stellen oder weggehen. */
+function standAt(ctx: Ctx, spotId: string | null): CommandResult {
+  const self = ctx.state.modules.customers.self;
+  if (spotId === null) {
+    if (!self.spotId) return { ok: true };
+    const spot = getSpot(ctx.state, self.spotId);
+    self.spotId = null;
+    journal.add(ctx, `Du gehst vom ${spot?.name ?? 'Spot'} weg.`);
+    ctx.emit('customers.selfMoved', { spotId: null });
+    return { ok: true };
+  }
+  const spot = getSpot(ctx.state, spotId);
+  if (!spot || !isSpotActive(ctx.state, spotId)) return { ok: false, reason: 'Hier kannst du noch nicht verkaufen.' };
+  if (self.spotId === spotId) return { ok: true };
+  self.spotId = spotId;
+  self.since = ctx.now;
+  self.busyUntil = Math.min(self.busyUntil, ctx.now);
+  journal.add(
+    ctx,
+    `Du stellst dich an den ${spot.name} und verkaufst selbst.` +
+      (isPlayerAway(ctx.state) ? ' Sobald du von deiner Fahrt zurück bist.' : ''),
+    'info',
+    { spotId },
+  );
+  ctx.emit('customers.selfMoved', { spotId });
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -299,7 +354,7 @@ export function customerTypeName(typeId: string | undefined): string {
 
 export default defineModule({
   id: 'customers',
-  version: 2,
+  version: 3,
   dependsOn: ['spots', 'goods', 'market'],
   init: (ctx) => ({
     waiting: [],
@@ -318,6 +373,7 @@ export default defineModule({
     },
     regulars: [],
     orders: [],
+    self: { spotId: null, busyUntil: 0, since: 0 },
   }),
   tick: (ctx) => {
     streetTick(ctx);
@@ -333,6 +389,7 @@ export default defineModule({
       if (served === 0) return { ok: false, reason: 'Nicht genug im Lager.' };
       return { ok: true, data: { served } };
     },
+    'customers.standAt': (ctx, { spotId }) => standAt(ctx, spotId),
     'customers.acceptOrder': (ctx, { orderId, by }) => acceptOrder(ctx, orderId, by),
     'customers.declineOrder': (ctx, { orderId }) => declineOrder(ctx, orderId),
   },
@@ -349,7 +406,7 @@ export default defineModule({
     },
   },
   migrations: {
-    2: (old: CustomersStateV1): CustomersState => ({
+    2: (old: CustomersStateV1): CustomersStateV2 => ({
       waiting: old.waiting,
       nextSpawnAt: old.nextSpawnAt,
       stats: {
@@ -364,5 +421,7 @@ export default defineModule({
       regulars: [],
       orders: [],
     }),
+    // Version 3: Du kannst dich selbst an einen Spot stellen.
+    3: (old: CustomersStateV2): CustomersState => ({ ...old, self: { spotId: null, busyUntil: 0, since: 0 } }),
   },
 });

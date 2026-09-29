@@ -155,6 +155,41 @@ describe('police', () => {
     expect(found).toBe(true);
   });
 
+  it('Razzia im Veedel eines eigenen Lagers: Das Lager wird mit durchsucht', () => {
+    let found = false;
+    for (let seed = 1; seed <= 10 && !found; seed++) {
+      const sim = quietGame(seed);
+      const events = recordEvents(sim);
+      sim.state.wallet.dirty = 100_000;
+      store(sim.ctx('goods'), { productId: 'weed', amount: 1000 });
+      // Eigener Spot mit Läufer in Ehrenfeld, wo auch das Lager steht.
+      const spot = sim.dispatch({ type: 'spots.found', payload: { lng: 6.915, lat: 50.951 } });
+      if (!spot.ok) throw new Error(spot.reason);
+      const spotId = (spot.data as { spotId: string }).spotId;
+      sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+      const stock = getStock(sim.state, { warehouseId: 'ehrenfeld' });
+      const raids = () => eventsOfType(events, 'police.raid');
+      advanceUntil(
+        sim,
+        () => {
+          sim.state.modules.police.checkReadyAt.ehrenfeld = Infinity;
+          addHeat(sim.ctx('test'), 'ehrenfeld', 100);
+          return raids().length > 0;
+        },
+        24 * 5,
+      );
+      if (raids().length === 0) continue;
+      const raid = raids()[0].payload;
+      expect(raid.veedelId).toBe('ehrenfeld');
+      // Mindestens ein Fünftel des Lagers ist weg, mehr als eine normale Razzia.
+      expect(raid.goods ?? 0).toBeGreaterThanOrEqual(Math.floor(stock * 0.2));
+      // (Der Läufer am neuen Spot verkauft nebenbei auch etwas.)
+      expect(getStock(sim.state, { warehouseId: 'ehrenfeld' })).toBeLessThanOrEqual(stock - (raid.goods ?? 0));
+      found = true;
+    }
+    expect(found).toBe(true);
+  });
+
   it('Razzien gegen den Spieler werden vorher geplant und kommen RAID_LEAD_TIME später', () => {
     const sim = quietGame();
     const events = recordEvents(sim);

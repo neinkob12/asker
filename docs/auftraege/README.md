@@ -58,9 +58,11 @@ Was jede Session nach dem Fundament vorfindet und welche Schnittstellen sie nutz
 
 ## Stand
 
-Phase 0, Phase 1 und Phase 2 (Integration, Branch `claude/integration-20`) sind erledigt. Neue Arbeit kommt als
-eigene Aufträge (unten), jede Session darf dann wieder den ganzen Code ändern, sofern der Auftrag nichts anderes
-sagt. Vor jedem Push: `npm run check`, `npm run build`, `npm run e2e`.
+Phase 0, Phase 1 und Phase 2 (Integration, Branch `claude/integration-20`) sind erledigt, dazu
+[Auftrag 21](21-logistik-strassen.md) (Logistik mit echten Straßen, Hafen, Fahrern, mehreren Lagern und
+Lieferanten zum Freischalten). Neue Arbeit kommt als eigene Aufträge (unten), jede Session darf dann wieder den
+ganzen Code ändern, sofern der Auftrag nichts anderes sagt. Vor jedem Push: `npm run check`, `npm run build`,
+`npm run e2e`.
 
 ## Mergen
 
@@ -72,7 +74,8 @@ sagt. Vor jedem Push: `npm run check`, `npm run build`, `npm run e2e`.
 
 Diese Themen aus dem Konzept kommen nach der Integration, jeweils wieder als eigene Aufträge:
 
-- Logistik: Fahrzeugflotte, echte Straßenrouten, mehrere Lager, Kontrollen unterwegs
+- Logistik, zweiter Teil: eigene Fahrzeugflotte (Fahrzeuge kaufen, Ladekapazität), Leutnants organisieren Abholungen
+  (echte Straßenrouten, mehrere Lager und Kontrollen unterwegs sind mit Auftrag 21 da)
 - Tarnfirmen mit eigenem Gameplay und ausgebaute Geldwäsche
 - Kampagne: Aufträge von Figuren, Charakter-Erstellung, Siegbedingung "Köln übernehmen" mit Abspann
 - Fortschritt: Upgrade-Baum, Rang-Stufen, Immobilien

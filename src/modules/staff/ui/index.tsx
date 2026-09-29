@@ -66,6 +66,7 @@ type StatusFilter = 'all' | 'active' | 'trouble' | 'former';
 const ROLE_GROUPS: { id: string; label: string; icon: string; match: (m: StaffMember) => boolean }[] = [
   { id: 'runner', label: 'Läufer', icon: 'runner', match: (m) => m.role === 'runner' },
   { id: 'courier', label: 'Kuriere', icon: 'bike', match: (m) => m.role === 'courier' },
+  { id: 'driver', label: 'Fahrer', icon: 'truck', match: (m) => m.role === 'driver' },
   { id: 'security', label: 'Sicherheit', icon: 'shield', match: (m) => m.role === 'security' },
   { id: 'specialist', label: 'Spezialisten', icon: 'scale', match: (m) => isSpecialist(m.role) },
 ];

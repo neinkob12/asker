@@ -6,7 +6,6 @@ import {
   type CommandResult,
   type Ctx,
   clock,
-  distanceMeters,
   formatEuro,
   formatNumber,
   journal,
@@ -17,17 +16,18 @@ import {
 import { startEncounter } from '../encounters';
 import {
   allProducts,
-  DEFAULT_WAREHOUSE,
   formatProductAmount,
   getProduct,
   getStock,
-  getWarehouse,
+  nearestWarehouse,
   productName,
   store,
   take,
 } from '../goods';
+import { isPlayerOnTheRoad } from '../logistics';
 import { averageReferencePrice, referencePrice } from '../market';
 import { changeReputation, getReputation, reputationDemandFactor } from '../reputation';
+import { travelMinutes } from '../roads';
 import { getSpot } from '../spots';
 import { assign, findAvailable, getStaffMember, getStats } from '../staff';
 import { allVeedel, getVeedel, type Veedel } from '../veedel';
@@ -121,6 +121,7 @@ function createOrder(
     | 'finishedAt'
     | 'quality'
     | 'cut'
+    | 'fromWarehouseId'
   >,
   text: string,
 ): Order {
@@ -151,6 +152,7 @@ function createOrder(
     finishedAt: null,
     quality: null,
     cut: null,
+    fromWarehouseId: null,
   };
   ctx.state.modules.customers.orders.push(order);
   ctx.emit('order.received', { orderId: id, kind: fields.kind });
@@ -290,6 +292,7 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier')
     if (state.modules.customers.orders.some((o) => o.status === 'enRoute' && o.deliveredBy === 'player')) {
       return { ok: false, reason: 'Du bist schon mit einer Lieferung unterwegs.' };
     }
+    if (isPlayerOnTheRoad(state)) return { ok: false, reason: 'Du bist gerade mit dem Transporter unterwegs.' };
   } else {
     const courier = findAvailable(state, { role: 'courier' });
     if (!courier) return { ok: false, reason: 'Kein freier Kurier.' };
@@ -298,20 +301,25 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier')
   if (getStock(state, { productId: order.productId }) < order.amount) {
     return { ok: false, reason: 'Nicht genug im Lager.' };
   }
-  const goods = take(ctx, { productId: order.productId, amount: order.amount });
+  // Losgefahren wird im nächsten Lager, das genug davon hat (sonst im nächsten mit etwas davon).
+  const warehouse =
+    nearestWarehouse(state, order, { productId: order.productId, amount: order.amount }) ??
+    nearestWarehouse(state, order, { productId: order.productId });
+  const goods = take(ctx, { productId: order.productId, amount: order.amount, near: warehouse ?? order });
   if (goods.taken === 0) return { ok: false, reason: 'Nicht genug im Lager.' };
 
-  const warehouse = getWarehouse(state, DEFAULT_WAREHOUSE);
-  const distance = warehouse ? distanceMeters(warehouse, order) : 3000;
   const speed = courierId
     ? COURIER_BASE_SPEED + (getStats(state, courierId)?.speed ?? 50) * COURIER_SPEED_PER_POINT
     : PLAYER_SPEED;
   const handover = order.kind === 'wholesale' ? WHOLESALE_HANDOVER_MINUTES : HANDOVER_MINUTES;
+  // Fahrzeit über echte Straßen (roads).
+  const travel = warehouse ? travelMinutes(warehouse, order, speed) : Math.ceil(3000 / speed);
   order.status = 'enRoute';
   order.deliveredBy = by;
   order.courierId = courierId;
+  order.fromWarehouseId = warehouse?.id ?? null;
   order.startedAt = ctx.now;
-  order.arrivesAt = ctx.now + Math.ceil(distance / speed) + handover;
+  order.arrivesAt = ctx.now + travel + handover;
   order.quality = goods.quality;
   order.cut = goods.cut;
   if (courierId) assign(ctx, courierId, { kind: 'delivery', targetId: String(order.id) });

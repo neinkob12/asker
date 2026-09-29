@@ -18,6 +18,7 @@ import {
 export const ROLE_ICONS: Record<StaffRole, string> = {
   runner: 'runner',
   courier: 'bike',
+  driver: 'truck',
   security: 'shield',
   lawyer: 'scale',
   accountant: 'clipboard',
@@ -36,6 +37,7 @@ export const ORIGIN_NAMES: Record<StaffOrigin, string> = {
 export const ROLE_TONES: Record<StaffRole, CategoryColor> = {
   runner: 'people',
   courier: 'goods',
+  driver: 'goods',
   security: 'danger',
   lawyer: 'law',
   accountant: 'money',

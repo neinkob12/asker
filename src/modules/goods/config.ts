@@ -79,8 +79,61 @@ export const PRODUCTS: readonly Product[] = [
 
 export const DEFAULT_PRODUCT = 'weed';
 
-/** Lager. Die Datenstruktur erlaubt mehrere, vorerst gibt es eins. */
-export const WAREHOUSES: readonly Warehouse[] = [{ id: 'ehrenfeld', name: 'Lager Ehrenfeld', lng: 6.918, lat: 50.948 }];
+/**
+ * Lager-Standorte. Das erste hast du von Anfang an, die anderen kaufst du mit sauberem Geld (Immobilien sind legal,
+ * das Geld muss also vorher gewaschen werden). Mehrere Lager: kürzere Wege für Lieferungen, und eine Razzia oder
+ * ein Überfall trifft nicht alles auf einmal.
+ */
+export const WAREHOUSES: readonly Warehouse[] = [
+  {
+    id: 'ehrenfeld',
+    name: 'Lager Ehrenfeld',
+    lng: 6.918,
+    lat: 50.948,
+    cost: 0,
+    description: 'Hinterhof an der Venloer Straße. Hier hat alles angefangen.',
+  },
+  {
+    id: 'nippes',
+    name: 'Garage Nippes',
+    lng: 6.9555,
+    lat: 50.964,
+    cost: 2000,
+    description: 'Doppelgarage nah an der Neusser Straße. Kurzer Weg zum Niehler Hafen.',
+  },
+  {
+    id: 'suelz',
+    name: 'Keller Sülz',
+    lng: 6.92,
+    lat: 50.9215,
+    cost: 2200,
+    description: 'Trockener Keller unter einem Copyshop, mitten im Studentenviertel.',
+  },
+  {
+    id: 'kalk',
+    name: 'Halle Kalk',
+    lng: 7.006,
+    lat: 50.9395,
+    cost: 2500,
+    description: 'Alte Werkshalle hinter der Kalker Hauptstraße. Viel Platz, wenig Nachbarn.',
+  },
+  {
+    id: 'muelheim',
+    name: 'Werkstatt Mülheim',
+    lng: 7.0105,
+    lat: 50.962,
+    cost: 2800,
+    description: 'Kfz-Werkstatt mit Hinterhof. Transporter fallen hier nicht auf.',
+  },
+  {
+    id: 'bayenthal',
+    name: 'Bootshaus Bayenthal',
+    lng: 6.97,
+    lat: 50.91,
+    cost: 3200,
+    description: 'Bootshaus am Rhein im Süden. Teuer, aber diskret.',
+  },
+];
 
 export const DEFAULT_WAREHOUSE = 'ehrenfeld';
 

@@ -217,14 +217,36 @@ berechneten Farben: **31 Szenen je Größe (Startbildschirm, alle Apps, Detailse
 - [x] Fristen in der Island nur in Stunden ("2 Std.", "< 1 Std.")
 - [x] Leerzustände sagen, was man tun kann
 
-### 6.4 Offene Punkte
+### 6.4 Nachgezogen mit Auftrag 21 (Logistik)
+
+Die neuen Oberflächen aus Auftrag 21 sind nach denselben Regeln gebaut und stehen im Audit (`phone-scenes.mjs`:
+`lieferant-gesperrt`, `lieferant-bereit`, `logistik`, `logistik-hafen`, `geschaeft-logistik`, `spot-hinstellen`;
+dunkel und hell ohne Verstöße):
+
+- **Logistik** (neue App, Braun = Ware, Symbol `route`, im Raster bei den Spiel-Apps nach Aufträge): Kennzahlen als
+  Kacheln (Am Kai, Fahrten, Fahrer), Abschnitte Hafen, Unterwegs, Lager, Zu kaufen, Fahrer, Zuletzt. Fristen als Etikett
+  mit Symbol (`timer` „bis 08:00“, `alert` „Zoll“), Leerzustände mit nächstem Schritt („Liegeplatz mieten“, „Zu Jansen“,
+  „Fahrer anheuern“), keine Vollbreiten-Knöpfe.
+- **Lieferanten:** Liste in zwei Gruppen („Liefern an dich“, „Noch kein Geschäft“) mit Kachel (Transporter, Schiff,
+  Schloss), was noch fehlt als Zweitzeile, Status als Etikett. Gesperrte Lieferanten zeigen ihre Bedingungen als
+  Zeilen mit Haken bzw. Schloss und Fortschritt. Ein Lieferant lässt sich direkt öffnen
+  (`ui.openPhone('suppliers.app', { supplierId })`, wie ein Chat).
+- **Spot:** „Selbst verkaufen“ als Zeile mit Gold-Kachel (dein Geschäft) und Knopf „Hier hinstellen“ bzw. „Weggehen“.
+- **Leute:** Rolle Fahrer mit Symbol `truck` in Braun (wie Kuriere), eigene Gruppe.
+- Neue gemeinsame Bausteine statt Kopien pro Modul: `Group`, `ItemContent`, `SummaryTiles` (in `src/ui/components`).
+
+### 6.5 Offene Punkte
 
 - **Hell-Modus** ist in den Tokens vorbereitet und wird getestet (Audit `--appearance=light`), aber nicht angeboten:
   Das Spiel bleibt dunkel wie die Karte. Ein Schalter in "Anzeige" wäre der nächste Schritt.
-- **Tief umgebaut** sind Startbildschirm, Nachrichten, Meldungen, Einstellungen, Ereignisse, Leute und Kontakte.
+- **Tief umgebaut** sind Startbildschirm, Nachrichten, Meldungen, Einstellungen, Ereignisse, Leute, Kontakte,
+  Lieferanten und Logistik.
   Die übrigen Modul-Oberflächen (Geschäft-Abschnitte, Spot, Veedel, Markt, Gangs, Aufträge) erben Tokens, Zielgrößen,
   Zeilen-Stil und Farben, haben aber keine eigene Neugestaltung bekommen.
 - **Sehr niedrige Fenster** (unter ca. 700 px Höhe): Das Handy wird schmal, der Inhalt scrollt.
+- **Neun Apps im Raster:** Mit Logistik hat der Startbildschirm eine dritte Reihe (nur Einstellungen). Das Wetter hat
+  zusätzlich den Knopf in der Heute-Zeile; wenn die Skyline mehr Platz braucht, könnte die Wetter-Kachel aus dem
+  Raster weichen.
 - **Text auf Verläufen** (Startbildschirm, Kachel-Beschriftung im Wallpaper) misst der Audit nicht; er ist über die
   Token-Tests abgedeckt.
 - **Biome-Warnungen** (`noDescendingSpecificity` in den Handy-Stilen, `!important` in `base.css` für reduzierte

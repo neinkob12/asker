@@ -261,7 +261,8 @@ function restock(turn: Turn): void {
   if (deficit <= 0) return;
   const budget = ctx.state.wallet.dirty - post.settings.reserve;
   const offers = getSuppliers(ctx.state)
-    .filter((supplier) => !isBlocked(ctx.state, supplier.id))
+    // Schiffsware müsste jemand am Hafen abholen, darum bestellt der Leutnant nur bei den Großstädten.
+    .filter((supplier) => !isBlocked(ctx.state, supplier.id) && supplier.kind !== 'port')
     .flatMap((supplier) =>
       availablePackages(ctx.state, supplier.id).map((pkg) => ({
         supplier,

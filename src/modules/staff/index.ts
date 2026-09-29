@@ -1,7 +1,7 @@
 // Personal: Mitarbeiter mit Namen, Alter, Hintergrund, Werten, Level, Loyalität und Laufbahn.
-// Typen: Läufer, Kuriere, Sicherheit und Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt).
+// Typen: Läufer, Kuriere, Fahrer, Sicherheit und Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt).
 // Läufer bedienen Kunden an Spots über denselben Befehl wie der Spieler, Kuriere holt sich der Lieferdienst
-// (findAvailable + assign), Sicherheit steht an Spots und Lagern, Spezialisten geben Boni (bonus()).
+// (findAvailable + assign), Fahrer die Logistik (Abholung am Hafen, Umlagern), Sicherheit steht an Spots und Lagern, Spezialisten geben Boni (bonus()).
 // Arbeit bringt Erfahrung, Level-Aufstiege heben die Werte. Loyalität hängt an Lohn, Gefahr, Haft und
 // Beförderung; wer kaum noch loyal ist, verrät dich manchmal (mild). Festnahmen bringen Haft, Kaution holt raus.
 //
@@ -16,13 +16,13 @@
 //   assign(ctx, id, assignment), setStatus(ctx, id, status, until?), addXp, addLoyalty, setWage, setDemand,
 //   addCareer, revealStat, enlist(ctx, profile, options), generateProfile(ctx, role, options), randomName(ctx)
 //   isLyingLow(state, veedelId), lieLow(ctx, veedelId, until)
-// Befehle: 'staff.hireRunner', 'staff.fire', 'staff.assign', 'staff.setWage', 'staff.bail', 'staff.lieLow'
+// Befehle: 'staff.hireRunner', 'staff.hireDriver', 'staff.fire', 'staff.assign', 'staff.setWage', 'staff.bail', 'staff.lieLow'
 // Ereignisse: 'staff.hired', 'staff.left', 'staff.statusChanged', 'staff.assigned', 'staff.levelUp',
 //   'staff.bailed', 'staff.betrayed', 'staff.raidWarning', 'staff.wentUnderground'
 
 import { type CommandResult, type Ctx, clock, defineModule, formatEuro, type GameState, journal } from '../../core';
 import { getVeedel, veedelName } from '../veedel';
-import { assignCommand, bail, fire, hireRunner, setWageCommand } from './commands';
+import { assignCommand, bail, fire, hireDriver, hireRunner, setWageCommand } from './commands';
 import {
   DEFAULT_STATS,
   INJURY_DURATION,
@@ -49,6 +49,7 @@ import type {
 
 export {
   DEFAULT_STATS,
+  DRIVER_HIRE_COST,
   MAX_LEVEL,
   ROLE_INFO,
   RUNNER_DAILY_WAGE,
@@ -77,6 +78,8 @@ declare module '../../core' {
   interface GameCommands {
     /** Läufer von der Straße anheuern und direkt an einen Spot stellen (wie im Prototyp). */
     'staff.hireRunner': { spotId: string };
+    /** Fahrer von der Straße anheuern (für Abholungen am Hafen und Fahrten zwischen Lagern). */
+    'staff.hireDriver': Record<string, never>;
     'staff.fire': { staffId: string };
     /** Versetzen oder abziehen (null). Läufer an Spots, Sicherheit an Spots oder in Lager. */
     'staff.assign': { staffId: string; assignment: StaffAssignment | null };
@@ -204,6 +207,7 @@ export default defineModule({
   tick,
   commands: {
     'staff.hireRunner': (ctx, { spotId }) => hireRunner(ctx, spotId),
+    'staff.hireDriver': (ctx) => hireDriver(ctx),
     'staff.fire': (ctx, { staffId }) => fire(ctx, staffId),
     'staff.assign': (ctx, { staffId, assignment }) => assignCommand(ctx, staffId, assignment),
     'staff.setWage': (ctx, { staffId, wage }) => setWageCommand(ctx, staffId, wage),

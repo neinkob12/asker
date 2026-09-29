@@ -1,9 +1,10 @@
-// Lieferungen auf der Karte: Kurier (Roller) oder du selbst (Auto) fahren als 3D-Mini-Fahrzeug Luftlinie vom
-// Lager zum Kunden (Effekt-Werkzeug createVehicle), das Ziel ist markiert.
+// Lieferungen auf der Karte: Kurier (Roller) oder du selbst (Auto) fahren als 3D-Mini-Fahrzeug über echte Straßen
+// (roads) vom Lager, aus dem die Ware kommt, zum Kunden (Effekt-Werkzeug createVehicle). Das Ziel ist markiert.
 
 import type { Marker } from 'maplibre-gl';
 import { addHtmlMarker, createVehicle, type MapLayer, type VehicleHandle } from '../../../map';
-import { DEFAULT_WAREHOUSE, formatProductAmount, getWarehouse, productName } from '../../goods';
+import { DEFAULT_WAREHOUSE, formatProductAmount, getWarehouse, getWarehouses, productName } from '../../goods';
+import { roadRoute } from '../../roads';
 import { getOrders, orderProgress } from '../index';
 
 export const deliveriesLayer: MapLayer = {
@@ -21,15 +22,18 @@ export const deliveriesLayer: MapLayer = {
           entry.target.remove();
           shown.delete(id);
         }
-        const warehouse = getWarehouse(state, DEFAULT_WAREHOUSE);
-        if (!warehouse) return;
         for (const order of active) {
           let entry = shown.get(order.id);
           if (!entry) {
+            const from =
+              getWarehouse(state, order.fromWarehouseId ?? DEFAULT_WAREHOUSE) ??
+              getWarehouse(state, DEFAULT_WAREHOUSE) ??
+              getWarehouses(state)[0];
+            if (!from) continue;
             const title = `${formatProductAmount(order.productId, order.amount)} ${productName(order.productId)} für ${order.contactName}`;
             entry = {
               rider: createVehicle(ctx.map, {
-                path: [warehouse, order],
+                path: roadRoute(from, order).path,
                 kind: order.deliveredBy === 'player' ? 'car' : 'courier',
                 label: order.kind === 'wholesale' ? formatProductAmount(order.productId, order.amount) : undefined,
                 title,

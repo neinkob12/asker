@@ -70,6 +70,47 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     },
   },
 
+  vehicleCheck: {
+    name: 'Verkehrskontrolle',
+    baseSuccess: 0.6,
+    situation: 'Kelle raus {place}. {opponent} winkt den Transporter raus. Hinten drin: {stakeGoods} Ware.',
+    opponent: { label: 'Die Streife', strength: 50, count: 2 },
+    maxRounds: 4,
+    joinable: false,
+    // Ladung, Festnahme und Heat regelt der Auslöser (logistics), hier nur was die Kontrolle selbst kostet.
+    draw: 'failure',
+    lethal: false,
+    journal: false,
+    actions: ['negotiate', 'flee', 'bribe', 'fight'],
+    remoteActions: ['negotiate', 'flee'],
+    bribe: { base: 600, perOpponent: 250 },
+    actionOverrides: {
+      negotiate: {
+        label: 'Ruhig bleiben',
+        hint: 'Charisma zählt. Papiere zeigen, freundlich sein, nicht nach hinten gucken.',
+        texts: {
+          success: ['Die Papiere passen, der Beamte gähnt.', 'Ein Witz über den FC, die Stimmung ist gut.'],
+          failure: ['Der Beamte will doch mal hinten reingucken.', 'Zu nervös. Das merken die.'],
+        },
+      },
+      flee: {
+        label: 'Gas geben',
+        hint: 'Tempo zählt. Wer entkommt, behält die Ladung, aber im Veedel wird gesucht.',
+        onSuccess: { resolve: 'retreat' },
+        texts: {
+          success: ['Vollgas über die Kreuzung, die Streife bleibt im Verkehr hängen.'],
+          failure: ['Die Streife klebt an der Stoßstange.', 'Sackgasse.'],
+        },
+      },
+      fight: { base: 0.3, heat: 20, hint: 'Ganz schlechte Idee. Gewalt gegen Polizei bringt viel Heat.' },
+    },
+    outcomes: {
+      success: { text: 'Kontrolle {place} überstanden. Weiter geht die Fahrt.' },
+      failure: { text: 'Ladung {place} aufgeflogen.' },
+      retreat: { text: '{place} den Bullen davongefahren.' },
+    },
+  },
+
   debtCollection: {
     name: 'Schulden eintreiben',
     baseSuccess: 0.6,

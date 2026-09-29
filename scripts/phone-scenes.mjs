@@ -40,6 +40,35 @@ export const SCENES = [
   { name: 'gangs', js: "window.koeln.runtime.api.selectTab('gangs')" },
   { name: 'auftraege', js: "window.koeln.runtime.api.openPhone('customers.orders')" },
   { name: 'lieferanten', js: "window.koeln.runtime.api.openPhone('suppliers.app')" },
+  // Gesperrter Lieferant (Bedingungen mit Stand) und einer, der sich freischalten lässt
+  { name: 'lieferant-gesperrt', js: "window.koeln.runtime.api.openPhone('suppliers.app', { supplierId: 'berlin' })" },
+  {
+    name: 'lieferant-bereit',
+    js: `(() => {
+      window.koeln.session.sim.state.modules.customers.stats.revenue = 2000;
+      window.koeln.runtime.api.openPhone('suppliers.app', { supplierId: 'hamburg' });
+    })()`,
+  },
+  // Logistik: ohne Liegeplatz, dann mit Ware am Kai, Fahrern, zweitem Lager und einer Fahrt unterwegs
+  { name: 'logistik', js: "window.koeln.runtime.api.openPhone('logistics.app')" },
+  {
+    name: 'logistik-hafen',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      sim.state.wallet.clean = 8000;
+      sim.state.wallet.dirty = 6000;
+      sim.dispatch({ type: 'logistics.buyBerth', payload: {} });
+      sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'nippes' } });
+      sim.dispatch({ type: 'staff.hireDriver', payload: {} });
+      sim.dispatch({ type: 'staff.hireDriver', payload: {} });
+      sim.state.modules.suppliers.unlocked.push('rotterdam');
+      sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'small' } });
+      sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'hash' } });
+      sim.advance(600);
+      sim.dispatch({ type: 'logistics.transfer', payload: { fromId: 'ehrenfeld', toId: 'nippes', by: 'driver' } });
+      window.koeln.runtime.api.openPhone('logistics.app');
+    })()`,
+  },
   // Abschnitte des Geschäfts (jede Zeile der Liste öffnet einen)
   ...[
     ['lager', 'goods.stock'],
@@ -50,6 +79,7 @@ export const SCENES = [
     ['ruf', 'reputation.summary'],
     ['markt', 'market.summary'],
     ['geldwaesche', 'laundering.section'],
+    ['logistik', 'logistics.overview'],
   ].map(([name, section]) => ({
     name: `geschaeft-${name}`,
     js: `(() => { const api = window.koeln.runtime.api; api.selectTab('business'); api.openSection('${section}'); })()`,
@@ -59,6 +89,15 @@ export const SCENES = [
     name: 'spot',
     js: `(() => {
       const id = window.koeln.session.sim.state.modules.spots.unlocked[0];
+      window.koeln.runtime.api.openPanel('spots.spot', { spotId: id });
+    })()`,
+  },
+  {
+    name: 'spot-hinstellen',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      const id = sim.state.modules.spots.unlocked[0];
+      sim.dispatch({ type: 'customers.standAt', payload: { spotId: id } });
       window.koeln.runtime.api.openPanel('spots.spot', { spotId: id });
     })()`,
   },

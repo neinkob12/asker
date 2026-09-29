@@ -1,8 +1,9 @@
 // Einfache Bot-Strategie für die Balancing-Simulation (balance.test.ts, `npm run balance`).
 // Der Bot spielt wie ein vernünftiger, aber nicht perfekter Spieler: Er verkauft anfangs selbst an wenigen Spots,
-// bestellt Ware nach, heuert Läufer an, schaltet Spots frei, befördert Leutnants, stellt Sicherheit ein, wenn die
-// Gangs ungemütlich werden, antwortet auf Handy-Nachrichten und lässt Konfrontationen von seinen Leuten auswürfeln.
-// Er schickt nur Befehle, genau wie die Oberfläche.
+// bestellt Ware nach, schaltet Lieferanten frei, sobald sie sich melden, wäscht Geld für einen Liegeplatz im Hafen,
+// heuert einen Fahrer an und lässt Schiffsware abholen, heuert Läufer an, schaltet Spots frei, befördert
+// Leutnants, stellt Sicherheit ein, wenn die Gangs ungemütlich werden, antwortet auf Handy-Nachrichten und lässt
+// Konfrontationen von seinen Leuten auswürfeln. Er schickt nur Befehle, genau wie die Oberfläche.
 //
 // Liegt außerhalb von src/modules, weil er alle Module zusammen benutzt (wie ein Spieler).
 
@@ -12,14 +13,18 @@ import { activeEncounters } from '../modules/encounters';
 import { ceasefireCost, getGangs, tributeAmount } from '../modules/gangs';
 import { DEFAULT_WAREHOUSE, getStock } from '../modules/goods';
 import { getLieutenant } from '../modules/hierarchy';
+import { amountInProgress, launderingCapacity } from '../modules/laundering';
+import { BERTH_COST, cargoAmount, freeDrivers, getCargo, hasBerth, inTransitAmount } from '../modules/logistics';
 import { getCandidates } from '../modules/recruiting';
 import { canFoundSpotAt, getSpots, lockedSpots } from '../modules/spots';
 import { dailyWages, getStaff, runnerHireCost, securityAt } from '../modules/staff';
 import {
   availableCredit,
   availablePackages,
+  canUnlock,
   getRelation,
   getSuppliers,
+  isUnlocked,
   packagePrice,
   shipmentsInTransit,
 } from '../modules/suppliers';
@@ -94,13 +99,16 @@ const PRODUCT_MIX: Record<string, number> = { weed: 0.35, hash: 0.2, haze: 0.15,
 function restock(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
   const stock = getStock(state);
-  const incoming = shipmentsInTransit(state).reduce((sum, s) => sum + s.amount, 0);
+  const incoming =
+    shipmentsInTransit(state).reduce((sum, s) => sum + s.amount, 0) + cargoAmount(state) + inTransitAmount(state);
   const sellers = getStaff(state, { role: 'runner' }).length + 1;
   const want = 80 + sellers * 70;
   if (stock + incoming >= want) return;
   const budget = money(state) - reserve(state);
   const have = (productId: string) =>
     getStock(state, { productId }) +
+    cargoAmount(state, productId) +
+    inTransitAmount(state, productId) +
     shipmentsInTransit(state)
       .filter((s) => s.productId === productId)
       .reduce((sum, s) => sum + s.amount, 0);
@@ -134,6 +142,45 @@ function restock(sim: Simulation, stats: BotStats): void {
     if (!pkg) continue;
     const payload = { supplierId: supplier.id, packageId: pkg.id, onCredit: true };
     if (run(sim, stats, { type: 'suppliers.order', payload })) return;
+  }
+}
+
+/** Lieferanten freischalten, sobald es geht und die Gebühr aus der Portokasse kommt. */
+function unlockSuppliers(sim: Simulation, stats: BotStats): void {
+  const state = sim.state;
+  for (const supplier of getSuppliers(state)) {
+    if (isUnlocked(state, supplier.id) || !canUnlock(state, supplier.id).ok) continue;
+    if ((supplier.unlock?.fee ?? 0) > (money(state) - reserve(state)) / 2) continue;
+    run(sim, stats, { type: 'suppliers.unlock', payload: { supplierId: supplier.id } });
+  }
+}
+
+/**
+ * Hafen: Ist genug Geld übrig, wäscht der Bot Geld für den Liegeplatz und mietet ihn. Danach heuert er einen Fahrer
+ * an und lässt Schiffsware abholen, sobald sie am Kai steht.
+ */
+function harbor(sim: Simulation, stats: BotStats): void {
+  const state = sim.state;
+  if (!hasBerth(state)) {
+    if (state.wallet.clean >= BERTH_COST) {
+      run(sim, stats, { type: 'logistics.buyBerth', payload: {} });
+      return;
+    }
+    // Sparen in Raten: Sobald das Geschäft läuft (zwei Läufer, Lager voll genug), geht übriges Geld in die Wäsche.
+    const runners = getStaff(state, { role: 'runner' }).length;
+    if (amountInProgress(state) > 0 || getStock(state) < 150 || runners < 2) return;
+    const needed = Math.ceil((BERTH_COST - state.wallet.clean) / 0.8) + 50;
+    const spare = money(state) - reserve(state) - 400;
+    const amount = Math.min(Math.max(needed, 150), spare, launderingCapacity(state));
+    if (amount >= Math.min(needed, 300)) run(sim, stats, { type: 'laundering.launder', payload: { amount } });
+    return;
+  }
+  const drivers = getStaff(state, { role: 'driver' }).length;
+  if (drivers === 0 && money(state) > reserve(state) + 800) {
+    run(sim, stats, { type: 'staff.hireDriver', payload: {} });
+  }
+  if (getCargo(state).length > 0 && freeDrivers(state).length > 0) {
+    run(sim, stats, { type: 'logistics.pickup', payload: { by: 'driver' } });
   }
 }
 
@@ -299,6 +346,8 @@ export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = 
   answerMessages(sim, stats);
   sellPersonally(sim, stats, options);
   repay(sim, stats);
+  unlockSuppliers(sim, stats);
+  harbor(sim, stats);
   restock(sim, stats);
   grow(sim, stats);
 }
@@ -326,6 +375,8 @@ export function snapshot(state: GameState) {
     stock: getStock(state),
     staff: getStaff(state).length,
     runners: getStaff(state, { role: 'runner' }).length,
+    suppliers: getSuppliers(state).filter((s) => isUnlocked(state, s.id)).length,
+    berth: hasBerth(state),
     security: getStaff(state, { role: 'security' }).length,
     lieutenants: Object.keys(state.modules.hierarchy.lieutenants).length,
     spots: getSpots(state).length,

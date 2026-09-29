@@ -61,6 +61,8 @@ export const RAID_COOLDOWN = 24 * 60;
 export const RAID_HEAT_RELIEF = 25;
 /** Beschlagnahmte Ware bei einer Razzia (Einheiten). */
 export const RAID_GOODS = { min: 10, max: 30 } as const;
+/** Liegt eines deiner Lager im Veedel der Razzia, durchsuchen sie es auch: so viel vom Bestand dort ist weg. */
+export const RAID_WAREHOUSE_SHARE = 0.2;
 /** Beschlagnahmtes Schwarzgeld bei einer Razzia (Euro). */
 export const RAID_MONEY = { min: 200, max: 900 } as const;
 /** Festnahme pro Mitarbeiter im Veedel bei einer Razzia (bei Vorsicht 50). */

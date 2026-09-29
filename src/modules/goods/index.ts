@@ -1,15 +1,29 @@
 // Ware: Produkte und Bestand pro Lager. Der Bestand besteht aus Posten (Lots) mit eigener Qualität,
-// Streckanteil und Einkaufspreis. Vorerst gibt es ein Lager, die Datenstruktur erlaubt mehrere.
+// Streckanteil und Einkaufspreis. Ein Lager hast du von Anfang an, weitere kaufst du mit sauberem Geld
+// ('goods.buyWarehouse'). Entnommen wird ohne Angabe aus dem Lager, das am nächsten liegt (near) bzw. zuerst aus dem
+// Standardlager.
 //
 // Öffentliche API:
-//   allProducts(), getProduct(id), productName(id), getWarehouses(state), getWarehouse(state, id),
-//   getStock(state, filter), getLots(state, filter), stockSummary(state, warehouseId?), averageQuality(state, filter),
-//   qualityTier(quality), cutPreview(lot, ratio), store(ctx, {...}), take(ctx, {...}), cutLot(ctx, {...}),
-//   QUALITY_TIERS, CUT_STEPS, MAX_CUT, DEFAULT_PRODUCT, DEFAULT_WAREHOUSE, STANDARD_QUALITY
-// Befehle: 'goods.cut'
-// Ereignisse: 'goods.stored', 'goods.taken', 'goods.cut'
+//   allProducts(), getProduct(id), productName(id), getWarehouses(state) (eigene), getWarehouse(state, id) (eigene),
+//   warehouseSites() (alle Standorte), warehouseSite(id), isWarehouseOwned(state, id), nearestWarehouse(state, point,
+//   { productId?, amount? }), getStock(state, filter), getLots(state, filter), stockSummary(state, warehouseId?),
+//   averageQuality(state, filter), qualityTier(quality), cutPreview(lot, ratio), store(ctx, {...}), take(ctx, {...}),
+//   cutLot(ctx, {...}), QUALITY_TIERS, CUT_STEPS, MAX_CUT, DEFAULT_PRODUCT, DEFAULT_WAREHOUSE, STANDARD_QUALITY
+// Befehle: 'goods.cut', 'goods.buyWarehouse'
+// Ereignisse: 'goods.stored', 'goods.taken', 'goods.cut', 'goods.warehouseBought'
 
-import { type CommandResult, type Ctx, defineModule, formatAmount, type GameState, journal, wallet } from '../../core';
+import {
+  type CommandResult,
+  type Ctx,
+  defineModule,
+  distanceMeters,
+  formatAmount,
+  formatEuro,
+  type GameState,
+  journal,
+  type LngLat,
+  wallet,
+} from '../../core';
 import {
   CUT_AGENT_COST,
   CUT_QUALITY_LOSS,
@@ -50,6 +64,9 @@ export interface Warehouse {
   name: string;
   lng: number;
   lat: number;
+  /** Kaufpreis in sauberem Geld (0 = hast du von Anfang an). */
+  cost: number;
+  description: string;
 }
 
 /** Ein Warenposten im Lager. */
@@ -75,7 +92,12 @@ export interface QualityTier {
 export interface GoodsState {
   /** Bestand: Lager-ID → Posten, älteste zuerst. */
   stock: Record<string, StockLot[]>;
+  /** Eigene Lager (IDs aus WAREHOUSES), in der Reihenfolge des Kaufs. */
+  owned: string[];
 }
+
+/** Zustand bis Version 2: nur ein Lager. */
+type GoodsStateV2 = Omit<GoodsState, 'owned'>;
 
 /** Zustand bis Version 1: Lager-ID → Produkt-ID → Menge. */
 interface GoodsStateV1 {
@@ -99,8 +121,10 @@ export interface StoreRequest {
 export interface TakeRequest {
   productId: string;
   amount: number;
-  /** Ohne Angabe: erst das Standardlager, dann die übrigen. */
+  /** Ohne Angabe: erst das Lager am nächsten zu near, ohne near erst das Standardlager, dann die übrigen. */
   warehouseId?: string;
+  /** Ort, für den die Ware gebraucht wird (z.B. ein Spot): das nächste Lager zuerst. */
+  near?: LngLat;
   /** true: so viel wie da ist nehmen (Diebstahl, Beschlagnahme). false: alles oder nichts. */
   partial?: boolean;
   /** Nur aus diesem Posten nehmen. */
@@ -132,10 +156,13 @@ declare module '../../core' {
   interface GameCommands {
     /** Posten strecken: Menge steigt um ratio (0,25 = +25 %), Qualität sinkt. */
     'goods.cut': { lotId: number; ratio: number; warehouseId?: string };
+    /** Lager-Standort kaufen (sauberes Geld). */
+    'goods.buyWarehouse': { warehouseId: string };
   }
   interface GameEvents {
     'goods.stored': { warehouseId: string; productId: string; amount: number; quality: number; lotId?: number };
     'goods.taken': { warehouseId: string; productId: string; amount: number; quality?: number };
+    'goods.warehouseBought': { warehouseId: string; cost: number };
     'goods.cut': {
       warehouseId: string;
       lotId: number;
@@ -167,12 +194,55 @@ export function formatProductAmount(productId: string, amount: number): string {
   return formatAmount(amount, getProduct(productId)?.unit ?? 'g');
 }
 
-export function getWarehouses(_state: GameState): readonly Warehouse[] {
+/** Alle Lager-Standorte, auch die noch nicht gekauften. */
+export function warehouseSites(): readonly Warehouse[] {
   return WAREHOUSES;
 }
 
+export function warehouseSite(id: string): Warehouse | undefined {
+  return WAREHOUSES.find((w) => w.id === id);
+}
+
+/** Eigene Lager (Standardlager zuerst, dann in der Reihenfolge der Standorte). */
+export function getWarehouses(state: GameState): readonly Warehouse[] {
+  const owned = state.modules.goods.owned;
+  return WAREHOUSES.filter((w) => owned.includes(w.id));
+}
+
+/** Eigenes Lager nach ID (undefined, wenn es dir nicht gehört). */
 export function getWarehouse(state: GameState, id: string): Warehouse | undefined {
   return getWarehouses(state).find((w) => w.id === id);
+}
+
+export function isWarehouseOwned(state: GameState, id: string): boolean {
+  return state.modules.goods.owned.includes(id);
+}
+
+/**
+ * Eigenes Lager, das am nächsten zu point liegt. Mit productId (und amount) nur Lager, die genug davon haben.
+ * Bei gleichem Abstand das frühere in der Liste.
+ */
+export function nearestWarehouse(
+  state: GameState,
+  point: LngLat,
+  filter: { productId?: string; amount?: number } = {},
+): Warehouse | undefined {
+  let best: Warehouse | undefined;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const w of getWarehouses(state)) {
+    if (
+      filter.productId &&
+      getStock(state, { productId: filter.productId, warehouseId: w.id }) < (filter.amount ?? 1)
+    ) {
+      continue;
+    }
+    const d = distanceMeters(w, point);
+    if (d < bestDistance) {
+      best = w;
+      bestDistance = d;
+    }
+  }
+  return best;
 }
 
 /** Qualitätsstufe einer Qualität (0–1). */
@@ -263,9 +333,7 @@ export function store(ctx: Ctx, item: StoreRequest): number | null {
 /** Ware entnehmen (Verkauf, Diebstahl, Beschlagnahme). Älteste Posten zuerst. */
 export function take(ctx: Ctx, request: TakeRequest): TakeResult {
   const stock = ctx.state.modules.goods.stock;
-  const warehouseIds = request.warehouseId
-    ? [request.warehouseId]
-    : [DEFAULT_WAREHOUSE, ...Object.keys(stock).filter((id) => id !== DEFAULT_WAREHOUSE)];
+  const warehouseIds = request.warehouseId ? [request.warehouseId] : warehouseOrder(Object.keys(stock), request.near);
   const matches = (lot: StockLot) =>
     lot.productId === request.productId && lot.amount > 0 && (request.lotId === undefined || lot.id === request.lotId);
   const available = warehouseIds.reduce(
@@ -302,6 +370,38 @@ export function take(ctx: Ctx, request: TakeRequest): TakeResult {
   }
   const w = weighted(parts);
   return { taken: wanted, quality: w.quality, cut: w.cut, unitCost: w.unitCost };
+}
+
+/** Reihenfolge der Lager beim Entnehmen: nach Abstand zu near, sonst Standardlager zuerst. */
+function warehouseOrder(ids: string[], near: LngLat | undefined): string[] {
+  const sorted = [DEFAULT_WAREHOUSE, ...ids.filter((id) => id !== DEFAULT_WAREHOUSE).sort()];
+  if (!near) return sorted;
+  const distance = (id: string) => {
+    const site = warehouseSite(id);
+    return site ? distanceMeters(site, near) : Number.POSITIVE_INFINITY;
+  };
+  return sorted
+    .map((id, index) => ({ id, index, d: distance(id) }))
+    .sort((a, b) => a.d - b.d || a.index - b.index)
+    .map((x) => x.id);
+}
+
+/** Lager-Standort kaufen. Immobilien sind legal: bezahlt wird mit sauberem Geld. */
+export function buyWarehouse(ctx: Ctx, warehouseId: string): CommandResult {
+  const site = warehouseSite(warehouseId);
+  if (!site) return { ok: false, reason: 'Diesen Standort gibt es nicht.' };
+  if (isWarehouseOwned(ctx.state, warehouseId)) return { ok: false, reason: `${site.name} gehört dir schon.` };
+  if (!wallet.pay(ctx, site.cost, 'clean', `Kauf ${site.name}`)) {
+    return {
+      ok: false,
+      reason: `Dafür brauchst du ${formatEuro(site.cost)} sauberes Geld. Wasch vorher Schwarzgeld.`,
+    };
+  }
+  ctx.state.modules.goods.owned.push(warehouseId);
+  ctx.state.modules.goods.stock[warehouseId] ??= [];
+  journal.add(ctx, `${site.name} gekauft (${formatEuro(site.cost)} sauberes Geld). Neues Lager.`, 'good');
+  ctx.emit('goods.warehouseBought', { warehouseId, cost: site.cost });
+  return { ok: true };
 }
 
 /** Einen Posten strecken. ratio = zusätzliche Menge als Anteil (0,25 = +25 %). */
@@ -361,8 +461,9 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 export default defineModule({
   id: 'goods',
-  version: 2,
+  version: 3,
   init: (ctx) => ({
+    owned: [DEFAULT_WAREHOUSE],
     stock: {
       [DEFAULT_WAREHOUSE]: [
         {
@@ -378,10 +479,11 @@ export default defineModule({
   }),
   commands: {
     'goods.cut': (ctx, payload) => cutLot(ctx, payload),
+    'goods.buyWarehouse': (ctx, { warehouseId }) => buyWarehouse(ctx, warehouseId),
   },
   migrations: {
     // Version 1 kannte nur Mengen pro Produkt: daraus werden Posten in Standardqualität.
-    2: (old: GoodsStateV1, state: GameState): GoodsState => {
+    2: (old: GoodsStateV1, state: GameState): GoodsStateV2 => {
       const stock: GoodsState['stock'] = {};
       for (const [warehouseId, products] of Object.entries(old.stock)) {
         stock[warehouseId] = Object.entries(products)
@@ -397,6 +499,14 @@ export default defineModule({
       }
       return { stock };
     },
+    // Version 3: Lager werden gekauft. Wer schon Ware in einem Lager hat, besitzt es.
+    3: (old: GoodsStateV2): GoodsState => ({
+      stock: old.stock,
+      owned: [
+        DEFAULT_WAREHOUSE,
+        ...WAREHOUSES.map((w) => w.id).filter((id) => id !== DEFAULT_WAREHOUSE && (old.stock[id]?.length ?? 0) > 0),
+      ],
+    }),
   },
   // Pleite-Regel: Wer noch Ware hat, kann weitermachen.
   solvency: (state) => getStock(state) > 0,

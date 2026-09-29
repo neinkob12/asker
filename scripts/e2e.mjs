@@ -110,6 +110,19 @@ async function run() {
     await shot(page, 'verkauft');
   });
 
+  await check('Selbst an den Spot stellen, dann verkauft es sich von allein', async () => {
+    await page.getByRole('button', { name: 'Hier hinstellen', exact: true }).click();
+    assert.equal(await game(page, (s) => s.modules.customers.self.spotId), 'zuelpicher');
+    const served = await game(page, (s) => s.modules.customers.stats.customersServed);
+    for (let i = 0; i < 48; i++) {
+      if ((await game(page, (s) => s.modules.customers.stats.customersServed)) > served) break;
+      await advance(page, 10);
+    }
+    assert.ok((await game(page, (s) => s.modules.customers.stats.customersServed)) > served, 'automatisch verkauft');
+    await page.getByRole('button', { name: 'Weggehen', exact: true }).click();
+    assert.equal(await game(page, (s) => s.modules.customers.self.spotId), null);
+  });
+
   await check('Läufer am Spot anheuern', async () => {
     await page.getByRole('button', { name: /^Anheuern/ }).click();
     const staff = await game(page, (s) => s.modules.staff.members.map((m) => [m.role, m.assignment?.targetId]));
@@ -129,9 +142,30 @@ async function run() {
     const shipments = await game(page, (s) => s.modules.suppliers.shipments.map((x) => x.supplierId));
     assert.deepEqual(shipments, ['frankfurt']);
     await shot(page, 'bestellt');
+    // Zurück zum Startbildschirm.
+    await page.locator('.phone__nav-button').click();
+    await page.locator('.phone__nav-button').click();
+    // Gesperrte Lieferanten zeigen, was noch fehlt.
+    if (!(await page.locator('.phone').count())) await page.getByRole('button', { name: /^Handy/ }).click();
+    await page.locator('.phone').getByRole('button', { name: 'Lieferanten', exact: true }).click();
+    assert.ok(await page.getByRole('button', { name: /Jansen · Hafen Rotterdam.*Liegeplatz/ }).isVisible());
+    await page.locator('.phone__nav-button').click();
+  });
+
+  await check('Logistik-App: Liegeplatz im Hafen braucht sauberes Geld', async () => {
+    await page.locator('.phone').getByRole('button', { name: 'Logistik', exact: true }).click();
+    const berth = page.getByRole('button', { name: /^Liegeplatz mieten/ });
+    assert.ok(await berth.isDisabled(), 'ohne sauberes Geld kein Liegeplatz');
+    await page.evaluate(() => {
+      window.koeln.session.state.wallet.clean = 5000;
+    });
+    await advance(page, 1);
+    await berth.click();
+    assert.equal(await game(page, (s) => s.modules.logistics.berth !== null), true);
+    await shot(page, 'logistik');
     // Zurück zum Startbildschirm, dann das Handy weglegen.
     await page.locator('.phone__nav-button').click();
-    await page.locator('.phone__nav-button').click();
+    if (await page.locator('.phone').count()) await page.locator('.phone__nav-button').click();
   });
 
   let saved;

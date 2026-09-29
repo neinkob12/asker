@@ -5,7 +5,16 @@ import { activeEncounters as getEncounters } from '../encounters';
 import { allProducts, getProduct, getStock, store } from '../goods';
 import { getPressure, getSpotPrice, spotReferencePrice, supplyDemandFactor } from '../market';
 import { changeReputation, getReputation } from '../reputation';
-import { CUSTOMER_TYPES, MAX_CUSTOMERS_PER_SPOT, MAX_REGULARS, REGULAR_START_SATISFACTION } from './config';
+import { roadDistance } from '../roads';
+import {
+  CUSTOMER_TYPES,
+  HANDOVER_MINUTES,
+  MAX_CUSTOMERS_PER_SPOT,
+  MAX_REGULARS,
+  PLAYER_SERVE_TIME,
+  PLAYER_SPEED,
+  REGULAR_START_SATISFACTION,
+} from './config';
 import { inPeak } from './decisions';
 import {
   acceptsPrice,
@@ -19,7 +28,9 @@ import {
   getOrders,
   getRegulars,
   getSalesStats,
+  isPlayerAway,
   isPlayerDelivering,
+  playerSpot,
   priceDemandFactor,
   type Regular,
   regularAfterSale,
@@ -439,6 +450,27 @@ describe('customers: Lieferdienst und Großhandel', () => {
     expect(getSalesStats(sim.state).deliveries).toBe(1);
   });
 
+  it('Lieferungen starten im nächsten Lager mit der Ware und fahren über die Straßen', () => {
+    const sim = quietGame();
+    changeReputation(sim.ctx('test'), 40);
+    sim.state.wallet.clean = 10000;
+    sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'kalk' } });
+    store(sim.ctx('test'), { productId: 'weed', amount: 200, warehouseId: 'kalk' });
+    const order = offerDelivery(sim.ctx('customers'), true);
+    if (!order) throw new Error('keine Bestellung');
+    order.lng = 7.004;
+    order.lat = 50.941;
+    expect(answer(sim, order.messageId, 'self').ok).toBe(true);
+    const accepted = getOrder(sim.state, order.id);
+    expect(accepted?.fromWarehouseId).toBe(order.productId === 'weed' ? 'kalk' : 'ehrenfeld');
+    if (accepted?.fromWarehouseId === 'kalk') {
+      const meters = roadDistance({ lng: 7.006, lat: 50.9395 }, order);
+      expect((accepted.arrivesAt ?? 0) - (accepted.startedAt ?? 0)).toBe(
+        Math.max(1, Math.ceil(meters / PLAYER_SPEED)) + HANDOVER_MINUTES,
+      );
+    }
+  });
+
   it('Kurier ausliefern lassen: freien Kurier über staff finden, danach wieder frei', () => {
     const sim = quietGame();
     changeReputation(sim.ctx('test'), 40);
@@ -552,6 +584,49 @@ describe('customers: Lieferdienst und Großhandel', () => {
   });
 });
 
+describe('customers: selbst am Spot', () => {
+  it('stellst du dich an einen Spot, bedienst du dort automatisch nacheinander', () => {
+    const sim = quietGame();
+    const events = recordEvents(sim);
+    const a = addCustomer(sim, 'ebertplatz', 2);
+    const b = addCustomer(sim, 'ebertplatz', 3);
+    const elsewhere = addCustomer(sim, 'neumarkt', 1);
+    expect(sim.dispatch({ type: 'customers.standAt', payload: { spotId: 'friesenplatz' } }).ok).toBe(false);
+    expect(sim.dispatch({ type: 'customers.standAt', payload: { spotId: 'ebertplatz' } }).ok).toBe(true);
+    expect(playerSpot(sim.state)).toBe('ebertplatz');
+    expect(eventsOfType(events, 'customers.selfMoved')[0].payload).toEqual({ spotId: 'ebertplatz' });
+    sim.advance(1);
+    expect(waitingAt(sim.state, 'ebertplatz').map((c) => c.id)).toEqual([b.id]);
+    sim.advance(PLAYER_SERVE_TIME);
+    expect(waitingAt(sim.state, 'ebertplatz')).toEqual([]);
+    expect(waitingAt(sim.state, 'neumarkt').map((c) => c.id)).toEqual([elsewhere.id]);
+    const sales = eventsOfType(events, 'sale.completed');
+    expect(sales.map((e) => e.payload.customerId)).toEqual([a.id, b.id]);
+    expect(sales.every((e) => e.payload.sellerId === null)).toBe(true);
+    expect(sim.dispatch({ type: 'customers.standAt', payload: { spotId: null } }).ok).toBe(true);
+    expect(playerSpot(sim.state)).toBeNull();
+    addCustomer(sim, 'ebertplatz', 1);
+    sim.advance(20);
+    expect(waitingAt(sim.state, 'ebertplatz')).toHaveLength(1);
+  });
+
+  it('solange du unterwegs bist, wartet der Spot', () => {
+    const sim = quietGame();
+    changeReputation(sim.ctx('test'), 40);
+    const order = offerDelivery(sim.ctx('customers'), true);
+    if (!order) throw new Error('keine Bestellung');
+    sim.dispatch({ type: 'messages.answer', payload: { messageId: order.messageId, optionId: 'self' } });
+    sim.dispatch({ type: 'customers.standAt', payload: { spotId: 'neumarkt' } });
+    expect(isPlayerAway(sim.state)).toBe(true);
+    addCustomer(sim, 'neumarkt', 1, 10, { expiresAt: sim.state.time + 1000 });
+    sim.advance(5);
+    expect(waitingAt(sim.state, 'neumarkt')).toHaveLength(1);
+    sim.advance((getOrder(sim.state, order.id)?.arrivesAt ?? 0) - sim.state.time + 1);
+    expect(isPlayerAway(sim.state)).toBe(false);
+    expect(waitingAt(sim.state, 'neumarkt')).toHaveLength(0);
+  });
+});
+
 describe('customers: Spielstand', () => {
   it('migriert Version 1 ohne Stammkunden und Aufträge', () => {
     const sim = createTestGame();
@@ -568,6 +643,7 @@ describe('customers: Spielstand', () => {
     const loaded = loadSimulation(raw, sim.modules);
     expect(getSalesStats(loaded.state)).toMatchObject({ unitsSold: 5, deliveries: 0, missedDemand: 0 });
     expect(getRegulars(loaded.state)).toEqual([]);
+    expect(playerSpot(loaded.state)).toBeNull();
     loaded.advance(60);
   });
 });

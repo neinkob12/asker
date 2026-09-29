@@ -1,4 +1,5 @@
-// Spot-Marker: Zahl der wartenden Kunden, Farbe nach Dringlichkeit, Rand wenn ein Läufer da ist.
+// Spot-Marker: Zahl der wartenden Kunden, Farbe nach Dringlichkeit, Rand wenn ein Läufer da ist, ein Punkt, wenn
+// du selbst dort stehst.
 // Gesperrte Spots erscheinen grau mit Schloss, eigene Spots mit gestricheltem Rand.
 // Dazu Hotspots: Wo etwas los ist (wartende Kunden, Verkäufe, aktuelle Nachfrage), pulsiert ein weicher
 // Farb-Blob unter dem Spot. Figuren gibt es auf der Karte nicht mehr.
@@ -6,7 +7,7 @@
 import type { Marker } from 'maplibre-gl';
 import type { GameState } from '../../../core';
 import { addHtmlMarker, createHotspots, el, type Hotspot, type MapLayer } from '../../../map';
-import { CUSTOMER_PATIENCE, spotDemand, waitingAt } from '../../customers';
+import { CUSTOMER_PATIENCE, playerSpot, spotDemand, waitingAt } from '../../customers';
 import { runnerAt } from '../../staff';
 import { getAllSpots, isSpotActive } from '../index';
 
@@ -122,6 +123,7 @@ export const spotsLayer: MapLayer = {
           entry.badge.textContent = String(waiting.length);
           entry.element.dataset.urgency = urgency;
           entry.element.classList.toggle('has-runner', runnerAt(state, spot.id)?.status === 'active');
+          entry.element.classList.toggle('has-self', playerSpot(state) === spot.id);
         }
       },
       destroy() {

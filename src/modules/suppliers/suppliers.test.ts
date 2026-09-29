@@ -2,16 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { loadSimulation, messages, type Simulation, START_DIRTY_MONEY } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getLots, getStock } from '../goods';
+import { getCargo } from '../logistics';
 import { CREDIT_TERM, ROTTERDAM_DELIVERY_TIME, START_TRUST, SUPPLIERS, TRUST_LATE_PENALTY } from './config';
 import {
   availableCredit,
   availablePackages,
+  canUnlock,
   cheapestPackagePrice,
   creditLimit,
   deliveryLeg,
   getRelation,
   getSupplier,
   isBlocked,
+  isUnlocked,
   packagePrice,
   RHINE_APPROACH_FROM,
   RHINE_ROUTE,
@@ -21,12 +24,22 @@ import {
   shipmentsInTransit,
   supplierDiscount,
   UNLOADING_PORT,
+  unlockRequirements,
 } from './index';
 
 const small = SUPPLIERS[0].packages[0];
 
 const order = (sim: Simulation, supplierId: string, packageId: string, onCredit = false) =>
   sim.dispatch({ type: 'suppliers.order', payload: { supplierId, packageId, onCredit } });
+
+/** Testspiel, in dem alle Lieferanten schon liefern und ein Liegeplatz im Hafen da ist. */
+function openGame(): Simulation {
+  const sim = createTestGame();
+  sim.state.modules.suppliers.unlocked = SUPPLIERS.map((s) => s.id);
+  sim.state.modules.suppliers.offered = SUPPLIERS.map((s) => s.id);
+  sim.state.modules.logistics.berth = { since: sim.state.time };
+  return sim;
+}
 
 /** Ausgewürfeltes Lieferproblem entfernen, damit der Test genau rechnen kann. */
 function clean(shipment: Shipment): Shipment {
@@ -44,30 +57,61 @@ function lastShipment(sim: Simulation): Shipment {
 }
 
 describe('suppliers', () => {
-  it('Bestellung in Rotterdam kommt nach der Lieferzeit im Lager an', () => {
+  it('Bestellung in Frankfurt kommt nach der Lieferzeit im Lager an', () => {
     const sim = createTestGame();
     const events = recordEvents(sim);
     const stock = getStock(sim.state);
-    expect(order(sim, 'rotterdam', 'small').ok).toBe(true);
-    expect(sim.state.wallet.dirty).toBe(START_DIRTY_MONEY - small.price);
+    const pkg = SUPPLIERS[1].packages[1];
+    const time = SUPPLIERS[1].deliveryTime;
+    expect(order(sim, 'frankfurt', pkg.id).ok).toBe(true);
+    expect(sim.state.wallet.dirty).toBe(START_DIRTY_MONEY - pkg.price);
     const shipment = clean(lastShipment(sim));
-    sim.advance(ROTTERDAM_DELIVERY_TIME / 2);
+    sim.advance(time / 2);
     expect(shipmentProgress(sim.state, shipment)).toBeCloseTo(0.5);
     sim.state.modules.goods.stock.ehrenfeld[0].amount = stock; // keine Verkäufe mitzählen
-    sim.advance(ROTTERDAM_DELIVERY_TIME / 2 - 1);
+    sim.advance(time / 2 - 1);
     expect(shipmentsInTransit(sim.state)).toHaveLength(1);
     sim.advance(1);
     expect(shipmentsInTransit(sim.state)).toHaveLength(0);
-    expect(getStock(sim.state)).toBe(stock + small.amount);
+    expect(getStock(sim.state)).toBe(stock + pkg.amount);
     expect(eventsOfType(events, 'shipment.arrived')[0].payload).toMatchObject({
-      amount: 200,
+      amount: 50,
       warehouseId: 'ehrenfeld',
       quality: shipment.quality,
     });
-    expect(sim.state.journal.some((j) => j.text === 'Lieferung angekommen: 200 g Gras im Lager Ehrenfeld.')).toBe(true);
+    expect(sim.state.journal.some((j) => j.text === 'Lieferung angekommen: 50 g Gras im Lager Ehrenfeld.')).toBe(true);
     // Der Einkaufspreis landet im Posten (für die Marge).
     const lot = getLots(sim.state).find((l) => l.quality === shipment.quality);
-    expect(lot?.unitCost).toBeCloseTo(small.price / small.amount);
+    expect(lot?.unitCost).toBeCloseTo(pkg.price / pkg.amount);
+  });
+
+  it('Schiffsware aus Rotterdam legt am eigenen Liegeplatz an und wartet dort auf die Abholung', () => {
+    const sim = openGame();
+    const events = recordEvents(sim);
+    const stock = getStock(sim.state);
+    expect(order(sim, 'rotterdam', 'small').ok).toBe(true);
+    const shipment = clean(lastShipment(sim));
+    expect(shipment.toPort).toBe(true);
+    expect(deliveryLeg({ kind: 'port' }, 0.9, true)).toEqual({ stage: 'ship', t: 0.9 });
+    sim.state.modules.goods.stock.ehrenfeld[0].amount = stock; // keine Verkäufe mitzählen
+    sim.advance(ROTTERDAM_DELIVERY_TIME);
+    expect(shipmentsInTransit(sim.state)).toHaveLength(0);
+    expect(getStock(sim.state)).toBeLessThanOrEqual(stock);
+    expect(getCargo(sim.state)).toHaveLength(1);
+    expect(getCargo(sim.state)[0]).toMatchObject({ productId: 'weed', amount: 200, quality: shipment.quality });
+    expect(getCargo(sim.state)[0].unitCost).toBeCloseTo(small.price / small.amount);
+    expect(eventsOfType(events, 'shipment.arrived')[0].payload).toMatchObject({ atPort: true, warehouseId: 'port' });
+    expect(eventsOfType(events, 'cargo.docked')).toHaveLength(1);
+  });
+
+  it('ohne Liegeplatz legt kein Schiff an', () => {
+    const sim = openGame();
+    sim.state.modules.logistics.berth = null;
+    expect(availablePackages(sim.state, 'rotterdam')).toEqual([]);
+    expect(order(sim, 'rotterdam', 'small')).toEqual({
+      ok: false,
+      reason: 'Ohne eigenen Liegeplatz im Niehler Hafen kann kein Schiff für dich anlegen.',
+    });
   });
 
   it('Großstädte: klein, schnell, teurer; Hafen: groß, langsam, günstiger', () => {
@@ -86,22 +130,61 @@ describe('suppliers', () => {
     }
     expect(unitPrice('frankfurt')).toBeGreaterThan(unitPrice('rotterdam'));
     expect(unitPrice('hamburg')).toBeGreaterThan(unitPrice('rotterdam'));
-    expect(SUPPLIERS.map((s) => s.id)).toEqual(['rotterdam', 'frankfurt', 'berlin', 'hamburg']);
+    expect(SUPPLIERS.map((s) => s.id)).toEqual(['rotterdam', 'frankfurt', 'berlin', 'hamburg', 'amsterdam']);
   });
 
   it('ohne genug Geld keine Bestellung', () => {
     const sim = createTestGame();
     sim.state.wallet.dirty = 10;
-    expect(order(sim, 'rotterdam', 'small')).toEqual({ ok: false, reason: 'Nicht genug Geld.' });
+    expect(order(sim, 'frankfurt', 'weed25')).toEqual({ ok: false, reason: 'Nicht genug Geld.' });
   });
 
-  it('der Hafen schreibt zu Beginn eine Nachricht, über die man bestellen kann', () => {
+  it('zu Beginn liefert nur Frankfurt, Toni schreibt eine Nachricht, über die man bestellen kann', () => {
     const sim = createTestGame();
+    expect(SUPPLIERS.filter((s) => isUnlocked(sim.state, s.id)).map((s) => s.id)).toEqual(['frankfurt']);
+    expect(order(sim, 'hamburg', 'weed50')).toEqual({ ok: false, reason: 'Hein macht noch keine Geschäfte mit dir.' });
     const [thread] = messages.threads(sim.state);
-    expect(thread.contact.id).toBe('supplier:rotterdam');
+    expect(thread.contact.id).toBe('supplier:frankfurt');
     const result = sim.dispatch({ type: 'messages.answer', payload: { messageId: thread.last.id, optionId: 'order' } });
     expect(result.ok).toBe(true);
     expect(shipmentsInTransit(sim.state)).toHaveLength(1);
+  });
+
+  it('Lieferanten melden sich, sobald die Bedingungen erfüllt sind, und wollen eine Vermittlungsgebühr', () => {
+    const sim = createTestGame();
+    const events = recordEvents(sim);
+    expect(canUnlock(sim.state, 'hamburg').ok).toBe(false);
+    expect(unlockRequirements(sim.state, 'hamburg')).toEqual([expect.objectContaining({ done: false, progress: 0 })]);
+    expect(unlockRequirements(sim.state, 'berlin')[0].label).toMatch(/Veedel/);
+    expect(unlockRequirements(sim.state, 'rotterdam')[0].label).toMatch(/Liegeplatz/);
+    // Genug Umsatz: Hein meldet sich zur vollen Stunde, einmal.
+    sim.state.modules.customers.stats.revenue = 2000;
+    sim.advance(60);
+    expect(canUnlock(sim.state, 'hamburg').ok).toBe(true);
+    const thread = messages.thread(sim.state, 'supplier:hamburg');
+    expect(thread).toHaveLength(1);
+    sim.advance(120);
+    expect(messages.thread(sim.state, 'supplier:hamburg')).toHaveLength(1);
+    const fee = getSupplier(sim.state, 'hamburg')?.unlock?.fee ?? 0;
+    const money = sim.state.wallet.dirty;
+    const answer = sim.dispatch({ type: 'messages.answer', payload: { messageId: thread[0].id, optionId: 'unlock' } });
+    expect(answer.ok).toBe(true);
+    expect(isUnlocked(sim.state, 'hamburg')).toBe(true);
+    expect(sim.state.wallet.dirty).toBe(money - fee);
+    expect(availablePackages(sim.state, 'hamburg').length).toBeGreaterThan(0);
+    expect(eventsOfType(events, 'supplier.unlocked')[0].payload).toEqual({ supplierId: 'hamburg', fee });
+    expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'hamburg' } }).ok).toBe(false);
+  });
+
+  it('Rotterdam braucht einen Liegeplatz, Berlin ein Veedel', () => {
+    const sim = createTestGame();
+    expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'rotterdam' } }).ok).toBe(false);
+    sim.state.modules.logistics.berth = { since: sim.state.time };
+    expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'rotterdam' } }).ok).toBe(true);
+    expect(availablePackages(sim.state, 'rotterdam').length).toBeGreaterThan(0);
+    expect(canUnlock(sim.state, 'berlin').ok).toBe(false);
+    sim.state.modules.territory.controller.ehrenfeld = 'player';
+    expect(canUnlock(sim.state, 'berlin').ok).toBe(true);
   });
 
   it('Pleite: kein Geld für eine Bestellung, keine Ware, keine Lieferung → Game Over', () => {
@@ -114,18 +197,18 @@ describe('suppliers', () => {
 
   it('keine Pleite, solange eine Lieferung unterwegs ist oder Kredit da ist', () => {
     const sim = createTestGame();
-    order(sim, 'rotterdam', 'small');
+    order(sim, 'frankfurt', 'weed50');
     clean(lastShipment(sim));
     sim.state.modules.goods.stock.ehrenfeld = [];
     sim.state.wallet.dirty = 0;
-    sim.advance(ROTTERDAM_DELIVERY_TIME - 1);
+    sim.advance(SUPPLIERS[1].deliveryTime - 1);
     expect(sim.isOver).toBe(false);
     sim.advance(1);
     expect(getStock(sim.state)).toBeGreaterThan(0);
     expect(sim.isOver).toBe(false);
 
     const broke = createTestGame();
-    broke.state.modules.suppliers.relations.hamburg.trust = 60;
+    broke.state.modules.suppliers.relations.frankfurt.trust = 60;
     broke.state.modules.goods.stock.ehrenfeld = [];
     broke.state.wallet.dirty = 0;
     broke.step();
@@ -149,7 +232,7 @@ describe('suppliers', () => {
   });
 
   it('Vertrauen steigt mit Käufen und bringt Rabatt, Kredit und besseres Sortiment', () => {
-    const sim = createTestGame();
+    const sim = openGame();
     const events = recordEvents(sim);
     expect(getRelation(sim.state, 'rotterdam').trust).toBe(START_TRUST);
     expect(creditLimit(sim.state, 'rotterdam')).toBe(0);
@@ -164,10 +247,10 @@ describe('suppliers', () => {
     expect(availablePackages(sim.state, 'rotterdam').map((p) => p.id)).toContain('haze');
     expect(eventsOfType(events, 'supplier.trustChanged').length).toBe(5);
     // Mit mehr Vertrauen kommt bessere Ware (im Mittel).
-    const fresh = createTestGame();
+    const fresh = openGame();
     fresh.state.wallet.dirty = 100000;
     order(fresh, 'rotterdam', 'large');
-    const trusted = createTestGame();
+    const trusted = openGame();
     trusted.state.wallet.dirty = 100000;
     trusted.state.modules.suppliers.relations.rotterdam.trust = 100;
     order(trusted, 'rotterdam', 'large');
@@ -175,7 +258,7 @@ describe('suppliers', () => {
   });
 
   it('Kredit: Ware jetzt, später zahlen; pünktlich zahlen bringt Vertrauen', () => {
-    const sim = createTestGame();
+    const sim = openGame();
     sim.state.modules.suppliers.relations.hamburg.trust = 50;
     const money = sim.state.wallet.dirty;
     expect(order(sim, 'hamburg', 'weed50', true).ok).toBe(true);
@@ -194,7 +277,7 @@ describe('suppliers', () => {
   });
 
   it('Kredit ohne Vertrauen gibt es nicht, zu viel Kredit auch nicht', () => {
-    const sim = createTestGame();
+    const sim = openGame();
     expect(order(sim, 'rotterdam', 'small', true)).toEqual({
       ok: false,
       reason: 'Jansen gibt dir noch keinen Kredit.',
@@ -261,7 +344,7 @@ describe('suppliers', () => {
   });
 
   it('beschlagnahmte Lieferung ist weg, schlechte Ware kommt mit weniger Qualität', () => {
-    const sim = createTestGame();
+    const sim = openGame();
     order(sim, 'hamburg', 'vape10');
     const seized = clean(lastShipment(sim));
     seized.problem = 'seized';
@@ -289,6 +372,10 @@ describe('suppliers', () => {
     raw.moduleVersions.suppliers = 1;
     const loaded = loadSimulation(raw, sim.modules);
     expect(getRelation(loaded.state, 'berlin')).toMatchObject({ trust: START_TRUST, debt: 0 });
+    // Alte Spielstände kennen schon alle Lieferanten von damals (Amsterdam kam später).
+    expect(isUnlocked(loaded.state, 'berlin')).toBe(true);
+    expect(isUnlocked(loaded.state, 'rotterdam')).toBe(true);
+    expect(isUnlocked(loaded.state, 'amsterdam')).toBe(false);
   });
 });
 

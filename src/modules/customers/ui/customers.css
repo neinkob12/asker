@@ -103,3 +103,14 @@
   border: 3px solid var(--color-marker-bg);
   box-shadow: var(--shadow-marker-soft);
 }
+
+.customer-stand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--phone-group-2, var(--color-surface));
+  border-radius: var(--radius-lg);
+}

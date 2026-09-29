@@ -1,15 +1,16 @@
-// Oberfläche der Lieferanten: Handy-App "Lieferanten" (bestellen, Beziehung, Kredit), Lieferungen im Tab
-// "Geschäft", Routen und Transporter auf der Karte, Hinweise bei Lieferproblemen.
+// Oberfläche der Lieferanten: Handy-App "Lieferanten" (freischalten, bestellen, Beziehung, Kredit), Lieferungen im
+// Tab "Geschäft", Routen und Transporter auf der Karte, Hinweise bei Lieferproblemen.
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro, formatPercent, type GameState } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import {
-  Badge,
   Button,
   Card,
   Empty,
+  Group,
   Hint,
+  ItemContent,
   KeyValue,
   List,
   ListItem,
@@ -19,21 +20,26 @@ import {
   registerAdvisor,
   registerPhoneApp,
   registerSlot,
+  Select,
   soundOnEvent,
+  Tag,
   useGame,
   useUi,
 } from '../../../ui';
-import { getStock, productName, qualityTier } from '../../goods';
+import { getStock, getWarehouse, getWarehouses, productName, qualityTier } from '../../goods';
+import { cargoAmount, hasBerth } from '../../logistics';
 import {
   assortment,
   availableCredit,
   availablePackages,
+  canUnlock,
   creditLimit,
   expectedArrival,
   getRelation,
   getSupplier,
   getSuppliers,
   isBlocked,
+  isUnlocked,
   packagePrice,
   type Shipment,
   type Supplier,
@@ -41,10 +47,13 @@ import {
   shipmentsInTransit,
   supplierDiscount,
   trustLabel,
+  unlockRequirements,
 } from '../index';
 import { suppliersLayer } from './map';
 import './island';
 import './suppliers.css';
+
+const APP_ID = 'suppliers.app';
 
 const KIND_NAME: Record<Supplier['kind'], string> = { port: 'Hafen', city: 'Großstadt' };
 
@@ -53,12 +62,13 @@ function ShipmentRow(props: { state: GameState; shipment: Shipment; showSupplier
   const supplier = getSupplier(state, s.supplierId);
   const pkg = supplier?.packages.find((p) => p.id === s.packageId);
   const delayed = s.problem === 'delayed' && s.problemRevealed;
+  const target = s.toPort ? 'an den Kai' : `ins ${getWarehouse(state, s.warehouseId)?.name ?? 'Lager'}`;
   return (
     <div class="shipment">
       <div class="shipment__head">
         <span>
           {pkg?.label ?? productName(s.productId)}
-          {props.showSupplier && supplier ? ` aus ${supplier.name}` : ''}
+          {props.showSupplier && supplier ? ` aus ${supplier.name}` : ''} {target}
         </span>
         <span class={delayed ? 'shipment__eta is-late' : 'shipment__eta'}>
           {delayed ? 'verspätet, ' : ''}an {clock.formatTime(expectedArrival(s))}
@@ -69,45 +79,151 @@ function ShipmentRow(props: { state: GameState; shipment: Shipment; showSupplier
   );
 }
 
+/** Eine Zeile der Liste: Kachel (Schiff oder Transporter, gesperrt mit Schloss), Name, Stand, Etikett. */
+function SupplierRow(props: { supplier: Supplier; onSelect: (id: string) => void }) {
+  const { state } = useGame();
+  const s = props.supplier;
+  const rel = getRelation(state, s.id);
+  const underway = shipmentsInTransit(state).filter((x) => x.supplierId === s.id).length;
+  const unlocked = isUnlocked(state, s.id);
+  const ready = !unlocked && canUnlock(state, s.id).ok;
+  const missing = unlockRequirements(state, s.id).find((r) => !r.done);
+  const blocked = isBlocked(state, s.id);
+  const meta = unlocked
+    ? `${KIND_NAME[s.kind]} · ${clock.formatDuration(s.deliveryTime)} · ${trustLabel(rel.trust)}`
+    : ready
+      ? `Bereit: ${s.unlock && s.unlock.fee > 0 ? `${formatEuro(s.unlock.fee)} Vermittlung` : 'ohne Gebühr'}`
+      : `Fehlt: ${missing?.label ?? '…'}`;
+  const tag = blocked ? (
+    <Tag category="danger" icon="alert">
+      Schulden
+    </Tag>
+  ) : rel.debt > 0 ? (
+    <Tag category="warn" icon="coinEuro">
+      {formatEuro(rel.debt)}
+    </Tag>
+  ) : underway > 0 ? (
+    <Tag category="goods" icon="truck">
+      {underway} unterwegs
+    </Tag>
+  ) : ready ? (
+    <Tag category="money" icon="unlock">
+      bereit
+    </Tag>
+  ) : null;
+  return (
+    <ListItem onClick={() => props.onSelect(s.id)} aside={tag ?? undefined}>
+      <ItemContent
+        icon={unlocked ? (s.kind === 'port' ? 'ship' : 'truck') : ready ? 'unlock' : 'lock'}
+        color={unlocked ? 'goods' : ready ? 'money' : 'system'}
+        title={`${s.contactName} · ${s.name}`}
+        meta={meta}
+      />
+    </ListItem>
+  );
+}
+
 function SupplierList(props: { onSelect: (id: string) => void }) {
   const { state } = useGame();
+  const open = getSuppliers(state).filter((s) => isUnlocked(state, s.id));
+  const locked = getSuppliers(state).filter((s) => !isUnlocked(state, s.id));
   return (
-    <div class="sup-app">
-      <ul class="sup-list">
-        {getSuppliers(state).map((s) => {
-          const rel = getRelation(state, s.id);
-          const underway = shipmentsInTransit(state).filter((x) => x.supplierId === s.id).length;
-          return (
-            <li key={s.id}>
-              <button type="button" class="sup-list__item" onClick={() => props.onSelect(s.id)}>
-                <strong>
-                  {s.contactName} · {s.name}
-                  <Badge count={underway} tone="accent" />
-                </strong>
-                <span>
-                  {KIND_NAME[s.kind]}, {clock.formatDuration(s.deliveryTime)} · {trustLabel(rel.trust)}
-                </span>
-                {rel.debt > 0 && (
-                  <span class={isBlocked(state, s.id) ? 'sup-debt is-overdue' : 'sup-debt'}>
-                    Schulden {formatEuro(rel.debt)}
-                  </span>
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      <Hint>
-        Großstädte liefern schnell kleine Mengen, der Hafen günstig große. Vertrauen bringt Rabatt und Kredit.
-      </Hint>
+    <div class="sup-groups">
+      <Group icon="truck" color="goods" title="Liefern an dich" count={open.length}>
+        <List>
+          {open.map((s) => (
+            <SupplierRow key={s.id} supplier={s} onSelect={props.onSelect} />
+          ))}
+        </List>
+      </Group>
+      {locked.length > 0 && (
+        <Group
+          icon="lock"
+          color="system"
+          title="Noch kein Geschäft"
+          count={locked.length}
+          note="Mit mehr Umsatz, eigenen Veedeln und einem Liegeplatz im Hafen melden sich die anderen per Handy. Großstädte liefern schnell kleine Mengen, der Hafen günstig große."
+        >
+          <List>
+            {locked.map((s) => (
+              <SupplierRow key={s.id} supplier={s} onSelect={props.onSelect} />
+            ))}
+          </List>
+        </Group>
+      )}
     </div>
+  );
+}
+
+/** Noch gesperrt: Bedingungen mit Stand, Freischalten, sobald alles erfüllt ist. */
+function LockedSupplier(props: { supplierId: string }) {
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const supplier = getSupplier(state, props.supplierId);
+  if (!supplier?.unlock) return null;
+  const rows = unlockRequirements(state, supplier.id);
+  const ready = canUnlock(state, supplier.id).ok;
+  const fee = supplier.unlock.fee;
+  return (
+    <Group
+      icon={ready ? 'unlock' : 'lock'}
+      color={ready ? 'money' : 'system'}
+      title="Noch kein Geschäft"
+      note={`${supplier.contactName} macht erst Geschäfte mit dir, wenn alles erfüllt ist. Dann meldet er sich per Handy.`}
+    >
+      <List>
+        {rows.map((r) => (
+          <ListItem key={r.label}>
+            <ItemContent
+              icon={r.done ? 'checkCircle' : 'lock'}
+              color={r.done ? 'money' : 'system'}
+              title={r.done ? 'Erfüllt' : 'Fehlt noch'}
+              meta={r.label}
+            >
+              {!r.done && r.progress > 0 && <ProgressBar value={r.progress} label={r.label} />}
+            </ItemContent>
+          </ListItem>
+        ))}
+      </List>
+      <div class="sup-actions">
+        {supplier.unlock.requires.berth && !hasBerth(state) && (
+          <Button icon="ship" onClick={() => ui.openPhone('logistics.app')}>
+            Zum Hafen
+          </Button>
+        )}
+        <Button
+          variant="primary"
+          icon="unlock"
+          disabled={!ready || state.wallet.dirty < fee}
+          onClick={() => dispatch({ type: 'suppliers.unlock', payload: { supplierId: supplier.id } })}
+        >
+          {fee > 0 ? `Einsteigen · ${formatEuro(fee)}` : 'Geschäfte machen'}
+        </Button>
+      </div>
+    </Group>
   );
 }
 
 function SupplierDetail(props: { supplierId: string }) {
   const { state, dispatch } = useGame();
   const supplier = getSupplier(state, props.supplierId);
+  const [target, setTarget] = useState('');
   if (!supplier) return null;
+  if (!isUnlocked(state, supplier.id)) {
+    return (
+      <div class="sup-app">
+        <p class="ui-hint">{supplier.description}</p>
+        <KeyValue label="Art" value={KIND_NAME[supplier.kind]} />
+        <KeyValue label="Preis" value={`${formatPercent(supplier.priceLevel)} vom Straßenpreis`} />
+        <KeyValue label="Qualität" value={qualityTier(supplier.quality).name} />
+        <KeyValue label="Sortiment" value={assortment(supplier).map(productName).join(', ')} />
+        <LockedSupplier supplierId={supplier.id} />
+      </div>
+    );
+  }
+  const warehouses = getWarehouses(state);
+  const warehouseId = warehouses.some((w) => w.id === target) ? target : undefined;
+  const toPort = supplier.kind === 'port';
   const rel = getRelation(state, supplier.id);
   const limit = creditLimit(state, supplier.id);
   const credit = availableCredit(state, supplier.id);
@@ -148,6 +264,23 @@ function SupplierDetail(props: { supplierId: string }) {
       )}
 
       <h4 class="sup-app__section">Angebot</h4>
+      {toPort ? (
+        <Hint>
+          {hasBerth(state)
+            ? 'Das Schiff legt an deinem Liegeplatz im Niehler Hafen an. Abholen musst du selbst (Logistik-App).'
+            : 'Ohne Liegeplatz im Niehler Hafen kann kein Schiff für dich anlegen (Logistik-App).'}
+        </Hint>
+      ) : (
+        warehouses.length > 1 && (
+          <Select
+            label="Liefern an"
+            wide
+            value={warehouseId ?? warehouses[0].id}
+            options={warehouses.map((w) => ({ value: w.id, label: `liefern an ${w.name}` }))}
+            onChange={setTarget}
+          />
+        )
+      )}
       <List>
         {supplier.packages.map((p) => {
           const locked = !offered.has(p.id);
@@ -162,9 +295,16 @@ function SupplierDetail(props: { supplierId: string }) {
                   <div class="sup-buy">
                     <Button
                       small
-                      disabled={blocked || state.wallet.dirty < price}
+                      disabled={blocked || state.wallet.dirty < price || (toPort && !hasBerth(state))}
                       onClick={() =>
-                        dispatch({ type: 'suppliers.order', payload: { supplierId: supplier.id, packageId: p.id } })
+                        dispatch({
+                          type: 'suppliers.order',
+                          payload: {
+                            supplierId: supplier.id,
+                            packageId: p.id,
+                            ...(warehouseId ? { warehouseId } : {}),
+                          },
+                        })
                       }
                     >
                       Kaufen
@@ -173,11 +313,16 @@ function SupplierDetail(props: { supplierId: string }) {
                       <Button
                         small
                         variant="subtle"
-                        disabled={blocked || credit < price}
+                        disabled={blocked || credit < price || (toPort && !hasBerth(state))}
                         onClick={() =>
                           dispatch({
                             type: 'suppliers.order',
-                            payload: { supplierId: supplier.id, packageId: p.id, onCredit: true },
+                            payload: {
+                              supplierId: supplier.id,
+                              packageId: p.id,
+                              onCredit: true,
+                              ...(warehouseId ? { warehouseId } : {}),
+                            },
                           })
                         }
                       >
@@ -212,20 +357,26 @@ function SupplierDetail(props: { supplierId: string }) {
 }
 
 /** Eigene Kopfleiste (chrome: 'none'): Liste mit "Lieferanten", Detail mit dem Ansprechpartner und Zurück. */
+/**
+ * Welcher Lieferant offen ist, steht in ui.phone.params.supplierId (wie bei den Nachrichten). So öffnen
+ * Empfehlungen und Hinweise einen Lieferanten direkt: ui.openPhone('suppliers.app', { supplierId: 'berlin' }).
+ */
 function SuppliersApp() {
   const { state } = useGame();
-  const [supplierId, setSupplierId] = useState<string | null>(null);
+  const ui = useUi();
+  const supplierId =
+    ui.state.phone.app === APP_ID ? (ui.state.phone.params?.supplierId as string | undefined) : undefined;
   const supplier = supplierId ? getSupplier(state, supplierId) : undefined;
   if (supplier) {
     return (
-      <PhoneScreen title={`${supplier.contactName} · ${supplier.name}`} onBack={() => setSupplierId(null)}>
-        <SupplierDetail supplierId={supplier.id} />
+      <PhoneScreen title={`${supplier.contactName} · ${supplier.name}`} onBack={() => ui.openPhone(APP_ID)}>
+        <SupplierDetail key={supplier.id} supplierId={supplier.id} />
       </PhoneScreen>
     );
   }
   return (
     <PhoneScreen title="Lieferanten">
-      <SupplierList onSelect={setSupplierId} />
+      <SupplierList onSelect={(id) => ui.openPhone(APP_ID, { supplierId: id })} />
     </PhoneScreen>
   );
 }
@@ -263,14 +414,17 @@ function ShipmentsSection() {
 }
 
 registerPhoneApp({
-  id: 'suppliers.app',
+  id: APP_ID,
   name: 'Lieferanten',
   icon: 'truck',
   order: 20,
   color: 'goods',
   chrome: 'none',
   component: SuppliersApp,
-  badge: (state) => getSuppliers(state).filter((s) => isBlocked(state, s.id)).length,
+  // Gesperrt wegen Schulden oder bereit zum Freischalten.
+  badge: (state) =>
+    getSuppliers(state).filter((s) => isBlocked(state, s.id) || (!isUnlocked(state, s.id) && canUnlock(state, s.id).ok))
+      .length,
 });
 registerSlot('tab:business', { id: 'suppliers.order', order: 10, component: ShipmentsSection });
 registerMapLayer(suppliersLayer);
@@ -286,14 +440,20 @@ onGameEvent('shipment.problem', 'suppliers.problemToast', (payload, ui, state) =
 });
 soundOnEvent('shipment.arrived', 'delivery');
 onGameEvent('shipment.arrived', 'suppliers.arrivedToast', (payload, ui, state) => {
+  // Schiffsware meldet die Logistik (Ware am Kai).
+  if (payload.atPort) return;
   ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.`, 'good');
+});
+onGameEvent('supplier.unlocked', 'suppliers.unlockedToast', (payload, ui, state) => {
+  const supplier = getSupplier(state, payload.supplierId);
+  ui.toast(`${supplier?.contactName ?? 'Neuer Lieferant'} (${supplier?.name ?? ''}) liefert jetzt an dich.`, 'good');
 });
 
 // Empfehlung: Nachschub bestellen, wenn die Ware knapp wird.
 registerAdvisor({
   id: 'suppliers.restock',
   advise: (state) => {
-    if (shipmentsInTransit(state).length > 0) return null;
+    if (shipmentsInTransit(state).length > 0 || cargoAmount(state) > 0) return null;
     const stock = getStock(state);
     if (stock >= 20) return null;
     return {

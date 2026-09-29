@@ -1,6 +1,6 @@
 # Köln Tycoon – Konzept
 
-Stand: 29.09.2026 (nach der Integration, Auftrag 20). Grundlage sind die Antworten aus zwei Fragerunden (50 + 5 Fragen).
+Stand: 29.09.2026 (nach der Integration, Auftrag 20, und Logistik mit echten Straßen, Auftrag 21). Grundlage sind die Antworten aus zwei Fragerunden (50 + 5 Fragen).
 Dieses Dokument ist die gemeinsame Referenz für beide im Duo und für alle Claude-Sessions.
 Wer eine Entscheidung ändert, ändert sie hier.
 
@@ -25,7 +25,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
 - **Kampagnenlänge:** 5–10 Stunden.
 - **Session-Länge:** 10–20 Minuten.
 - **Spielfigur:** eigener Charakter (Name, Aussehen, Hintergrund).
-- **Spielstil:** Am Anfang selbst verkaufen, später alles delegieren. Vom Kleindealer zum Boss.
+- **Spielstil:** Am Anfang selbst verkaufen (an einen Spot stellen, dann läuft der Verkauf dort von allein), später alles delegieren. Vom Kleindealer zum Boss.
 - **Einstieg:** Tipps und Tooltips, wenn etwas Neues auftaucht. Kein geführtes Tutorial.
 - **Game Over:** wenn du pleite bist oder getötet wirst.
 - **Modus:** wird beim Anlegen des Spielstands gewählt.
@@ -47,11 +47,11 @@ Wer eine Entscheidung ändert, ändert sie hier.
 - **Qualität:** Qualitätsstufen, und Ware kann gestreckt werden (mehr Gewinn, schlechterer Ruf, Risiko).
 - **Beschaffung:**
   - Kleine Mengen kommen schnell aus anderen Großstädten.
-  - Große Mengen werden am Hafen Rotterdam bestellt und brauchen länger.
+  - Große Mengen werden am Hafen Rotterdam bestellt, kommen per Schiff über den Rhein in den Niehler Hafen und brauchen länger. Dafür braucht man einen eigenen Liegeplatz (mit sauberem Geld gemietet), und die Ware muss am Kai von einem Fahrer oder selbst abgeholt werden, bevor der Zoll neugierig wird.
   - Eigener Anbau kommt später als Erweiterung.
-- **Lieferanten:** mehrere, jeweils mit Preis, Qualität, Zuverlässigkeit und Lieferzeit. Dazu Beziehungen: Vertrauen bringt Rabatt, Kredit und bessere Ware.
+- **Lieferanten:** mehrere, jeweils mit Preis, Qualität, Zuverlässigkeit und Lieferzeit. Nicht alle sind von Anfang an zu haben: Am Anfang liefert nur einer, die anderen melden sich erst mit genug Umsatz, eigenen Veedeln (Einfluss) oder einem Liegeplatz im Hafen und wollen eine Vermittlungsgebühr. Dazu Beziehungen: Vertrauen bringt Rabatt, Kredit und bessere Ware.
 - **Preise:** Der Markt gibt einen Richtwert (Angebot, Nachfrage, Konkurrenz), der Spieler setzt seinen Preis drumherum.
-- **Logistik:** Fahrzeugflotte, echte Straßenrouten, Kontrollen unterwegs, mehrere Lager.
+- **Logistik:** Fahrzeuge fahren über echte Kölner Straßen, Kontrollen unterwegs, mehrere Lager (kaufen, beliefern lassen, umlagern), Fahrer für Abholungen am Hafen. Später: eigene Fahrzeugflotte.
 - **Geld:**
   - Alles Illegale wird mit Schwarzgeld bezahlt.
   - Für Legales (Lagerhallen, Autos usw.) muss Geld gewaschen werden.
@@ -60,7 +60,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
 
 ## Personal
 
-- **Typen:** Läufer und Dealer, Kuriere und Fahrer, Sicherheit, Spezialisten (Anwalt, Buchhalter, Kontakt bei der Polizei).
+- **Typen:** Läufer und Dealer, Kuriere (Lieferdienst) und Fahrer (Abholung am Hafen, Umlagern), Sicherheit, Spezialisten (Anwalt, Buchhalter, Kontakt bei der Polizei).
 - **Tiefe:** Individuen mit Namen, Porträt und Werten (z.B. Tempo, Loyalität, Vorsicht), die im Level aufsteigen.
 - **Loyalität:** Verrat kommt selten vor und hat milde Folgen.
 - **Hierarchie:** Boss → Leutnants pro Veedel → Läufer. Leutnants managen ihr Gebiet selbstständig.
@@ -105,7 +105,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
     Hauptstraßen. Farbe tragen nur Reviere (feine Grenzen, schwach getönt), Spots und Gangs.
   - Das Überwachungs-Overlay (Scanlines, Koordinaten) gibt es noch als Schalter, standardmäßig aus.
 - **Kamera:** 3D schräg als Standard, per Knopf auf 2D-Draufsicht umschaltbar.
-- **Auf der Karte sichtbar:** 3D-Mini-Fahrzeuge (später auf echten Straßen), Schiffe auf dem Rhein, pulsierende Hotspots wo etwas los ist (keine Figuren), Polizeistreifen, Effekte (Geld-Popups, Blaulicht, Heat-Färbung der Veedel).
+- **Auf der Karte sichtbar:** 3D-Mini-Fahrzeuge auf echten Straßen, Schiffe auf dem Rhein, pulsierende Hotspots wo etwas los ist (keine Figuren), Polizeistreifen, Effekte (Geld-Popups, Blaulicht, Heat-Färbung der Veedel).
 - **Bedienoberfläche:** "Nachtschicht": dunkel, gedämpft, eckig und aufgeräumt (Haarlinien statt dicker Konturen, schmale Tycoon-Zahlen, eine Akzentfarbe Kölsch-Gold, sonst nur Farben mit Bedeutung). Über der Karte stehen nur Geld, Heat und das Spieltempo. **Das Spiel-Handy ist die Schaltzentrale:** alle Bereiche (Geschäft, Reviere, Gangs, Leute …), Details zu Spots und Veedeln, Chats, Bestellungen und Kontakte laufen als Apps darüber. Desktop: Handy rechts fest angedockt (einklappbar), Handy-Bildschirm: Handy bildschirmfüllend, in der Tasche eine Leiste unten. Desktop und Handy sind gleichwertig.
 - **Grafiken:** KI-generierte Illustrationen (z.B. Porträts) plus einfache Icons.
 - **Sound:** Musik und Soundeffekte.
@@ -120,6 +120,13 @@ Strecken, Lieferanten mit Vertrauen und Kredit, Markt mit Richtpreis, Kundentype
 und Großhandel (Deals können kippen), eigene Spots, Ruf, Geldwäsche, Personal mit Werten und Level, Leutnants,
 Bewerber und Kontakte, Wetter, Tag und Nacht, Spiel-Handy, Musik und Sound, Normal- und Hardcore-Modus.
 
+Mit Auftrag 21 dazu: echtes Kölner Straßennetz (OpenStreetMap über Overture Maps) für alle Fahrzeuge und
+Fahrzeiten, Lieferanten zum Freischalten (Umsatz, Veedel, Liegeplatz; neu: Amsterdam), Liegeplatz im Niehler Hafen,
+Schiffsware am Kai mit Abholung durch Fahrer oder selbst, Zoll bei zu langem Warten, Verkehrskontrollen unterwegs,
+mehrere Lager (mit sauberem Geld gekauft, Umlagern, Razzien durchsuchen Lager im Veedel), Fahrer als neue Rolle,
+Logistik-App im Handy und selbst an einen Spot stellen (automatisch verkaufen ohne Läufer). Sauberes Geld hat damit
+zum ersten Mal einen Zweck (Liegeplatz, Lager).
+
 - **Kampagnenlänge:** laut Balancing-Simulation (`npm run balance`) erstes Veedel nach etwa 8–10 Spieltagen,
   drei nach 10–26, danach bremsen die Gangs spürbar. Sieg etwa nach 80–120 Spieltagen, das sind bei Tempo 1x
   (4,8 Minuten pro Spieltag) grob 5–10 Stunden.
@@ -127,11 +134,11 @@ Bewerber und Kontakte, Wetter, Tag und Nacht, Spiel-Handy, Musik und Sound, Norm
   Gang-Drohungen, Konfrontationen, Polizei-Kontrollen, Wetter und das erste Veedel vor (`npm run playthrough`,
   Screenshots in `docs/integration/`).
 - **Noch nicht umgesetzt** (spätere Aufträge, siehe `docs/auftraege/README.md`): eigener Charakter und Aufträge von
-  Figuren, Stadt-Events, Tarnfirmen, Upgrade-Baum und Rang-Stufen, Immobilien, Fahrzeugflotte mit echten Routen und
-  mehreren Lagern, KI-Porträts, Hosting, Multiplayer.
+  Figuren, Stadt-Events, Tarnfirmen, Upgrade-Baum und Rang-Stufen, weitere Immobilien, eigene Fahrzeugflotte (Fahrzeuge
+  kaufen, Ladekapazität), Leutnants, die selbst am Hafen abholen lassen, KI-Porträts, Hosting, Multiplayer.
 
 ## Offene Punkte
 
 1. **Offline im Multiplayer:** In der Multiplayer-Welt läuft die Zeit durch. Was passiert mit deinem Imperium, während du offline bist? Führen die Leutnants weiter? Gibt es einen Schutz vor Angriffen? Muss erst entschieden werden, wenn Multiplayer drankommt.
-2. **Straßenrouten:** Echte Routen brauchen Routing-Daten. Vorschlag: Routen vorab berechnen und als Daten ins Repo legen, statt zur Laufzeit einen Dienst abzufragen.
+2. **Straßenrouten:** Gelöst (Auftrag 21): Das Straßennetz liegt als Daten im Repo (`src/modules/roads/network.ts`, erzeugt aus Overture Maps / OpenStreetMap, ODbL), Routen rechnet das Spiel selbst (A*). Vor einer Veröffentlichung die Quellenangabe „© OpenStreetMap-Mitwirkende, Overture Maps Foundation“ auch im Spiel zeigen.
 3. **Kartenlizenz:** Die Esri-Satellitenbilder sind raus. Die OpenFreeMap-Kacheln (OpenStreetMap-Daten, ODbL) brauchen nur die Quellenangabe, die unten rechts steht. Vor einer Veröffentlichung trotzdem kurz prüfen, ob OpenFreeMap die erwartete Last trägt.
