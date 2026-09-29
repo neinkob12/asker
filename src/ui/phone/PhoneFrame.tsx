@@ -34,6 +34,7 @@ const HOME_ORDER = [
   `${TAB_APP_PREFIX}territory`,
   `${TAB_APP_PREFIX}gangs`,
   'customers.orders',
+  'logistics.app',
   'recruiting.contacts',
   `${TAB_APP_PREFIX}journal`,
   'core.alerts',

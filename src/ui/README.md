@@ -32,7 +32,8 @@ Akku bleibt.
   Beträge gleicher `kind` werden dabei zusammengezählt.
 - Liegt das Handy weg, schwebt die Island oben über der Karte, aber nur, wenn es etwas zu zeigen gibt.
 - Bisher angemeldet: Überfälle, Razzia und hohe Heat, Gang-Vorstöße, Chat-Fristen, Aufträge mit Frist, Kuriere,
-  Lieferungen mit Restzeit und der Umsatz des Tages.
+  Lieferungen mit Restzeit, Ware am Kai (Zeit bis zum Zoll), Fahrten und Verkehrskontrollen, der Spot, an dem du
+  selbst stehst, und der Umsatz des Tages.
 
 - **Über der Karte** steht nur das Nötigste: eine schmale HUD-Leiste mit Geld (Schwarzgeld mit Beutel-Symbol, sauberes
   Geld mit Münze) und Heat (`placement: 'main'`), Warnungen (`'alert'`), rechts Spieltempo und Menü (Meldungen, Suche,
@@ -140,6 +141,9 @@ Nur Variablen verwenden.
 
 ## Bausteine (`components/`)
 
+`Group` (Abschnitt wie in den iOS-Einstellungen: Kachel, Titel in Großbuchstaben, Zähler, Fußnote), `ItemContent`
+(Zeileninhalt in einem `ListItem`: Kachel in der Bedeutungsfarbe, Titel, Zweitzeile, darunter z.B. ein Fortschritt),
+`SummaryTiles` (zwei oder drei Kennzahlen als Kacheln oben auf einer Seite),
 `Button` (`variant`: default, primary, success, danger, subtle, link; `icon`, `badge`, `big`), `IconButton`,
 `SegmentedControl` (`wide`, Segmente mit `badge`), `Card` (`icon`, `color`, `tone`, `summary`, `status`), `Hint`,
 `Empty` (mit `action` für den nächsten Schritt), `KeyValue`, `Stat`, `Badge`, `ProgressBar`, `List`/`ListItem`, `Tabs`,

@@ -9,6 +9,7 @@ import {
   Card,
   Empty,
   Hint,
+  ItemContent,
   KeyValue,
   List,
   ListItem,
@@ -54,18 +55,14 @@ function StandHere(props: { spotId: string }) {
   const away = isPlayerAway(state);
   if (here) {
     return (
-      <div class="customer-stand is-here">
-        <span>
-          <strong>Du stehst hier</strong>
-          <span class="ui-hint">
-            {away ? ' · gerade unterwegs, danach verkaufst du weiter' : ' · du bedienst die Kunden automatisch'}
-          </span>
-        </span>
-        <Button
-          small
-          variant="subtle"
-          onClick={() => dispatch({ type: 'customers.standAt', payload: { spotId: null } })}
-        >
+      <div class="customer-stand">
+        <ItemContent
+          icon="runner"
+          color="brand"
+          title="Du stehst hier"
+          meta={away ? 'Gerade unterwegs, danach verkaufst du weiter.' : 'Du bedienst die Kunden automatisch.'}
+        />
+        <Button small onClick={() => dispatch({ type: 'customers.standAt', payload: { spotId: null } })}>
           Weggehen
         </Button>
       </div>
@@ -73,14 +70,19 @@ function StandHere(props: { spotId: string }) {
   }
   return (
     <div class="customer-stand">
-      <span class="ui-hint">
-        {runner
-          ? `${runner.name} verkauft hier. Du kannst trotzdem mithelfen.`
-          : 'Kein Läufer hier? Stell dich selbst hin, dann verkaufst du automatisch.'}
-      </span>
+      <ItemContent
+        icon="runner"
+        color={runner ? 'people' : 'brand'}
+        title="Selbst verkaufen"
+        meta={
+          runner
+            ? `${runner.name} verkauft hier, du kannst mithelfen.`
+            : 'Stell dich hin, dann läuft der Verkauf von allein.'
+        }
+      />
       <Button
         small
-        variant={runner ? 'subtle' : 'primary'}
+        variant={runner ? 'default' : 'primary'}
         onClick={() => dispatch({ type: 'customers.standAt', payload: { spotId: props.spotId } })}
       >
         {elsewhere ? 'Hierher wechseln' : 'Hier hinstellen'}

@@ -205,6 +205,78 @@ export function ListItem(props: ListItemProps) {
   );
 }
 
+/**
+ * Abschnitt einer Handy-Seite wie in den iOS-Einstellungen: Kachel in der Bedeutungsfarbe, Titel in Großbuchstaben,
+ * optional ein Zähler, darunter der Inhalt (meist eine `List`) und eine Fußnote.
+ */
+export function Group(props: {
+  title: ComponentChildren;
+  icon?: IconRef;
+  color?: ChipColor;
+  /** Zahl neben dem Titel (0 = keine). */
+  count?: number;
+  note?: ComponentChildren;
+  children?: ComponentChildren;
+  class?: string;
+}) {
+  return (
+    <section class={`ui-group ${props.class ?? ''}`}>
+      <header class="ui-group__head">
+        {props.icon && <IconChip icon={props.icon} color={props.color ?? 'system'} solid size="sm" />}
+        <h3 class="ui-group__title">{props.title}</h3>
+        {props.count !== undefined && props.count > 0 && <span class="ui-group__count">{props.count}</span>}
+      </header>
+      {props.children}
+      {props.note && <p class="ui-group__note">{props.note}</p>}
+    </section>
+  );
+}
+
+/**
+ * Inhalt einer Listenzeile mit Kachel in der Bedeutungsfarbe, Titel und Zweitzeile, wie in den iOS-Einstellungen.
+ * Weiteres (z.B. ein Fortschritt) kommt als children unter die Zweitzeile. In `ListItem` verwenden.
+ */
+export function ItemContent(props: {
+  icon: IconRef;
+  color?: ChipColor;
+  title: ComponentChildren;
+  meta?: ComponentChildren;
+  children?: ComponentChildren;
+}) {
+  return (
+    <span class="ui-item">
+      <IconChip icon={props.icon} color={props.color ?? 'system'} size="sm" />
+      <span class="ui-item__main">
+        <span class="ui-item__title">{props.title}</span>
+        {props.meta && <span class="ui-item__meta">{props.meta}</span>}
+        {props.children}
+      </span>
+    </span>
+  );
+}
+
+export interface SummaryTile {
+  icon: IconRef;
+  color?: ChipColor;
+  value: ComponentChildren;
+  label: string;
+}
+
+/** Drei (oder zwei) Kennzahlen als Kacheln oben auf einer Handy-Seite, z.B. Team, Lohn, Ausfälle. */
+export function SummaryTiles(props: { items: readonly SummaryTile[] }) {
+  return (
+    <div class="ui-summary" style={{ '--summary-cols': props.items.length } as JSX.CSSProperties}>
+      {props.items.map((item) => (
+        <div key={item.label} class="ui-summary__item">
+          <IconChip icon={item.icon} color={item.color ?? 'system'} size="sm" />
+          <strong>{item.value}</strong>
+          <span>{item.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Kleines Etikett, z.B. "Gang", "Neu", "Hoch". Mit category in der Bedeutungsfarbe (Symbol immer dabei zeigen). */
 export function Tag(props: {
   children?: ComponentChildren;

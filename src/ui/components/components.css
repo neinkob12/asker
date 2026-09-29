@@ -1559,3 +1559,104 @@
     box-shadow: 0 0 0 5px rgba(226, 174, 74, 0);
   }
 }
+
+/* ---------------------------------------------------------------- Gruppe, Zeile mit Kachel, Kennzahl-Kacheln */
+/* Abschnitt wie in den iOS-Einstellungen (Kopf mit Kachel, Titel in Großbuchstaben, Fußnote). */
+.ui-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ui-group__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 4px;
+}
+.ui-group__title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--type-footnote, 13px);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-caps);
+  line-height: var(--type-footnote-lh, 18px);
+  text-transform: uppercase;
+  color: var(--phone-label-2, var(--color-muted));
+}
+.ui-group__count,
+.ui-group__note {
+  font-size: var(--type-footnote, 13px);
+  line-height: var(--type-footnote-lh, 18px);
+  color: var(--phone-label-2, var(--color-muted));
+}
+.ui-group__note {
+  margin: 0;
+  padding: 0 16px;
+}
+/* Zeileninhalt: Kachel, Titel, Zweitzeile */
+.ui-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+.ui-item__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ui-item__title {
+  font-size: var(--type-body, 17px);
+  font-weight: var(--font-weight-medium);
+  color: var(--phone-label, var(--color-text));
+}
+.ui-item__meta {
+  font-size: var(--type-subhead, 15px);
+  line-height: var(--type-subhead-lh, 20px);
+  color: var(--phone-label-2, var(--color-muted));
+}
+.ui-item__main .ui-progress {
+  margin-top: var(--space-1);
+}
+/* Kennzahlen als Kacheln (z.B. oben in "Leute" oder "Logistik") */
+.ui-summary {
+  display: grid;
+  grid-template-columns: repeat(var(--summary-cols, 3), minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.ui-summary__item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "chip label"
+    "value value";
+  align-items: center;
+  gap: 2px var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--phone-group, var(--color-panel-raised));
+  border-radius: var(--radius-group);
+}
+.ui-summary__item .ui-chip {
+  grid-area: chip;
+}
+.ui-summary__item span {
+  grid-area: label;
+  overflow: hidden;
+  font-size: var(--type-footnote, 13px);
+  color: var(--color-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-summary__item strong {
+  grid-area: value;
+  overflow: hidden;
+  font-size: var(--type-body, 17px);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
