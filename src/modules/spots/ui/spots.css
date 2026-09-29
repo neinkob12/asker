@@ -78,6 +78,10 @@
 .spot-marker.is-locked .spot-name {
   color: var(--color-marker-muted);
 }
+/* Aus der Ferne nur die Knöpfe gesperrter Spots, ohne Namen (spots-far setzt der Spot-Layer je nach Zoom). */
+.spots-far .spot-marker.is-locked .spot-name {
+  display: none;
+}
 .spot-marker.is-custom .spot-dot {
   border-style: dashed;
 }

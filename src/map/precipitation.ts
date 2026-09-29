@@ -92,12 +92,15 @@ export class PrecipitationLayer {
     g.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
     g.clearRect(0, 0, this.width, this.height);
     const slow = this.reduced ? 0.4 : 1;
+    // Mittleres Blau bzw. Weiß mit zarter Kante: sichtbar auf der hellen Tageskarte und bei Nacht.
     if (this.kind === 'rain') {
-      g.strokeStyle = 'rgba(190, 214, 255, 0.5)';
+      g.strokeStyle = 'rgba(96, 128, 196, 0.5)';
       g.lineWidth = 1.3;
       g.beginPath();
     } else {
-      g.fillStyle = 'rgba(235, 242, 255, 0.78)';
+      g.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      g.strokeStyle = 'rgba(110, 130, 180, 0.45)';
+      g.lineWidth = 0.8;
     }
     const keep: Particle[] = [];
     for (const q of this.particles) {
@@ -114,6 +117,7 @@ export class PrecipitationLayer {
         g.beginPath();
         g.arc(q.x, q.y, q.size, 0, Math.PI * 2);
         g.fill();
+        g.stroke();
       }
       const out = q.y > this.height + 20 || q.x < -40 || q.x > this.width + 40;
       // Fällt weniger, als da ist, verschwinden Tropfen unten und kommen nicht nach.

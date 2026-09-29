@@ -299,7 +299,7 @@ export function computeLook(minuteOfDay: number, mood: MapMood = {}): MapLook {
   const tintStrength = mood.tint ? clamp01(mood.tintStrength ?? 0) : 0;
   const wet = clamp01(mood.wet ?? 0);
   // Tagsüber trübt das Wetter stärker als nachts (da ist ohnehin alles dunkel).
-  const dull = darken * lerp(0.4, 0.15, night);
+  const dull = darken * lerp(0.3, 0.12, night);
   const adjust = (color: string) => {
     let c = desaturateColor(color, desaturate * 0.55);
     if (tintStrength > 0 && mood.tint) c = mixColor(c, mood.tint, tintStrength * 0.45);

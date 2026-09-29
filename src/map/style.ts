@@ -126,8 +126,13 @@ const highwayFilter: FilterSpecification = ['all', notTunnel, ['!', isBridge], [
 /** Brücken der größeren Straßen (orange). */
 const bridgeFilter: FilterSpecification = ['all', isBridge, ['match', ['get', 'class'], MAIN_CLASSES, true, false]];
 
-/** Echte Gebäude, die nicht in einem Wahrzeichen stecken (die zeichnet die Wahrzeichen-Ebene). */
+/**
+ * Echte Gebäude, die nicht in einem Wahrzeichen stecken (die zeichnet die Wahrzeichen-Ebene). Die Prüfung kostet
+ * Rechenzeit beim Laden der Kacheln, deshalb nur für hohe Häuser: Niedrige verschwinden ohnehin im Wahrzeichen.
+ */
 const outsideLandmarks: ExpressionSpecification = ['>', ['distance', LANDMARK_ZONES], 0];
+/** Ab diesem Band (Index in BUILDING_BANDS) wird gegen die Wahrzeichen geprüft. */
+const LANDMARK_CHECK_FROM_BAND = 2;
 const buildingHeight: ExpressionSpecification = ['coalesce', ['get', 'render_height'], 8];
 
 function buildingBand(index: number): FilterSpecification {
@@ -136,7 +141,8 @@ function buildingBand(index: number): FilterSpecification {
   const conditions: ExpressionSpecification[] = [['!=', ['get', 'hide_3d'], true]];
   if (low !== null) conditions.push(['>=', buildingHeight, low]);
   if (high !== null) conditions.push(['<', buildingHeight, high]);
-  return ['all', ...conditions, outsideLandmarks];
+  if (index >= LANDMARK_CHECK_FROM_BAND) conditions.push(outsideLandmarks);
+  return ['all', ...conditions];
 }
 
 const day = computeLook(12 * 60);
@@ -333,7 +339,7 @@ export const baseStyle: StyleSpecification = {
       source: 'openmaptiles',
       'source-layer': 'building',
       minzoom: 13.5,
-      filter: ['all', ['!=', ['get', 'hide_3d'], true], outsideLandmarks],
+      filter: ['!=', ['get', 'hide_3d'], true],
       paint: {
         'fill-color': day.shadow,
         'fill-opacity': day.shadowOpacity,

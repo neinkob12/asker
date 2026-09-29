@@ -55,7 +55,7 @@ export function createHotspots(map: MapLibreMap, id: string, options: HotspotsOp
       paint: {
         'heatmap-weight': ['get', 'weight'],
         'heatmap-radius': radius(size, 1) as never,
-        'heatmap-intensity': 1,
+        'heatmap-intensity': 1.2,
         'heatmap-opacity': 0.75,
         // Durchsichtig → Gelb → Orange → Pink → Lila.
         'heatmap-color': [
@@ -64,13 +64,13 @@ export function createHotspots(map: MapLibreMap, id: string, options: HotspotsOp
           ['heatmap-density'],
           0,
           'rgba(255,216,77,0)',
-          0.12,
-          'rgba(255,216,77,0.45)',
-          0.35,
-          'rgba(255,163,77,0.72)',
-          0.6,
-          'rgba(255,111,160,0.82)',
-          0.85,
+          0.08,
+          'rgba(255,216,77,0.5)',
+          0.25,
+          'rgba(255,163,77,0.75)',
+          0.45,
+          'rgba(255,111,160,0.85)',
+          0.7,
           'rgba(176,108,240,0.9)',
           1,
           'rgba(141,92,246,0.95)',
@@ -91,7 +91,7 @@ export function createHotspots(map: MapLibreMap, id: string, options: HotspotsOp
       last = now;
       const wave = (Math.sin(((now - start) / PULSE_MS) * 2 * Math.PI) + 1) / 2;
       map.setPaintProperty(id, 'heatmap-radius', radius(size, 0.9 + wave * 0.2) as never);
-      map.setPaintProperty(id, 'heatmap-intensity', 0.85 + wave * 0.3 + night * 0.2);
+      map.setPaintProperty(id, 'heatmap-intensity', 1.05 + wave * 0.3 + night * 0.2);
     }
     frame = requestAnimationFrame(animate);
   };
@@ -99,7 +99,7 @@ export function createHotspots(map: MapLibreMap, id: string, options: HotspotsOp
     applyNight() {
       if (!map.getLayer(id)) return;
       map.setPaintProperty(id, 'heatmap-opacity', 0.72 + night * 0.25);
-      if (reducedMotion()) map.setPaintProperty(id, 'heatmap-intensity', 1 + night * 0.2);
+      if (reducedMotion()) map.setPaintProperty(id, 'heatmap-intensity', 1.2 + night * 0.2);
     },
   };
   handles.add(entry);

@@ -10,6 +10,8 @@ import { CUSTOMER_PATIENCE, spotDemand, waitingAt } from '../../customers';
 import { runnerAt } from '../../staff';
 import { getAllSpots, isSpotActive } from '../index';
 
+/** Unter dieser Zoomstufe zeigen gesperrte Spots keinen Namen (sonst drängeln sich die Pillen). */
+const NAMES_ZOOM = 13;
 /** So viele Spielminuten wirkt ein Verkauf im Hotspot nach (klingt linear ab). */
 const SALE_GLOW_MINUTES = 90;
 
@@ -48,6 +50,10 @@ export const spotsLayer: MapLayer = {
     const markers = new Map<string, { marker: Marker; element: HTMLElement; badge: HTMLElement }>();
     const hotspots = createHotspots(ctx.map, 'spots.hotspots');
     let lastHotspots = '';
+    const container = ctx.map.getContainer();
+    const onZoom = () => container.classList.toggle('spots-far', ctx.map.getZoom() < NAMES_ZOOM);
+    ctx.map.on('zoom', onZoom);
+    onZoom();
 
     const drawHotspots = (state: GameState) => {
       const list: Hotspot[] = getAllSpots(state).map((spot) => ({
@@ -118,6 +124,7 @@ export const spotsLayer: MapLayer = {
         }
       },
       destroy() {
+        ctx.map.off('zoom', onZoom);
         hotspots.remove();
         for (const entry of markers.values()) entry.marker.remove();
         markers.clear();
