@@ -14,8 +14,22 @@ export {
 } from './Button';
 export { Dialog, type DialogProps } from './Dialog';
 export { ErrorBoundary, type ErrorBoundaryProps } from './ErrorBoundary';
-export { Icon, type IconProps } from './Icon';
+export { type ChipColor, Icon, IconChip, type IconChipProps, type IconProps, StatusDot } from './Icon';
 export { EMOJI_ICONS, ICONS, type IconName, isIconName, resolveIcon } from './icons';
+export {
+  Confetti,
+  CountUp,
+  type CountUpProps,
+  DuelBar,
+  type DuelBarProps,
+  FloatingNumber,
+  type FloatingNumberProps,
+  prefersReducedMotion,
+  SegmentMeter,
+  type SegmentMeterProps,
+  Stamp,
+  type StampProps,
+} from './Juice';
 export {
   Avatar,
   type AvatarProps,
@@ -31,6 +45,7 @@ export {
   type ListItemProps,
   ProgressBar,
   type ProgressBarProps,
+  type SectionStatus,
   Select,
   type SelectOption,
   type SelectProps,
@@ -42,4 +57,5 @@ export {
   type ToggleProps,
   type Tone,
 } from './Layout';
+export { SectionContext, type SectionMode } from './section';
 export { type TabItem, Tabs, type TabsProps } from './Tabs';

@@ -57,7 +57,7 @@ export function DialogHost() {
   );
 }
 
-const TOAST_ICONS = { info: 'info', good: 'check', bad: 'alert' } as const;
+const TOAST_ICONS = { info: 'info', good: 'check', warn: 'alert', bad: 'alert' } as const;
 
 export function Toasts() {
   const { ui } = useRuntime();

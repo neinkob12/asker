@@ -13,7 +13,11 @@ import {
   reactionsFor,
 } from './registry';
 
-export type ToastKind = 'info' | 'good' | 'bad';
+/** good/info: Routine (kurz, grau in der Alarm-Zentrale), warn: gelb, bad: rot. */
+export type ToastKind = 'info' | 'good' | 'warn' | 'bad';
+
+/** Rastpunkte des Bottom-Sheets am Handy: klein (nur Kopf), mittel (ca. 45 %), voll. */
+export type SheetSnap = 'peek' | 'half' | 'full';
 export type { CameraMode } from './prefs';
 
 /** Benachrichtigung, die oben aus dem Spiel-Handy herausragt (Banner). Klick öffnet die App. */
@@ -30,10 +34,33 @@ export interface PhoneNotification {
   sound?: string | null;
 }
 
+export interface ToastOptions {
+  /** Ort des Geschehens: Die Alarm-Zentrale bietet dann "Hinzoomen" an. */
+  target?: LngLat;
+  /** Icon-Name statt des Standard-Icons der Art. */
+  icon?: string;
+  /** In der Alarm-Zentrale festhalten? Standard: ja (Fehlermeldungen von Befehlen nicht). */
+  log?: boolean;
+}
+
 export interface Toast {
   id: number;
   text: string;
   kind: ToastKind;
+  icon?: string;
+  target?: LngLat;
+}
+
+/** Eintrag der Alarm-Zentrale (Glocke im HUD). */
+export interface Alert {
+  id: number;
+  text: string;
+  kind: ToastKind;
+  /** Spielzeit. */
+  time: number;
+  icon?: string;
+  target?: LngLat;
+  read: boolean;
 }
 
 export interface UiState {
@@ -42,9 +69,22 @@ export interface UiState {
   phone: { open: boolean; app: string | null; params?: Record<string, unknown> };
   /** Aktiver Seitenleisten-Tab (null = erster). */
   tab: string | null;
-  /** Handy-Layout: Bottom-Sheet aufgeklappt? */
+  /** Seitenleiste offen? Am Handy: Bottom-Sheet über 'peek' hinaus, am Desktop: Inspector sichtbar. */
   sheetExpanded: boolean;
+  /** Rastpunkt des Bottom-Sheets am Handy. */
+  sheet: SheetSnap;
+  /** Geöffneter Abschnitt eines Listen-Tabs (ID des Slot-Beitrags), null = Übersicht. */
+  section: string | null;
+  /** Warteschlange: Sichtbar ist nur der erste Eintrag. */
   toasts: Toast[];
+  /** Alarm-Zentrale, neueste zuerst. */
+  alerts: Alert[];
+  /** Gestapelte Benachrichtigungen fürs Handy (Sperrbildschirm), neueste zuerst. */
+  notifications: PhoneNotification[];
+  /** Suche (⌘K / Strg+K) offen? */
+  palette: boolean;
+  /** Offenes Popover im HUD (z.B. 'more', 'alerts', 'menu'). */
+  popover: string | null;
   /** Wartet die Karte gerade auf einen Klick (pickLocation)? */
   picking: { prompt: string } | null;
   /** Kamera: 3D schräg (Standard) oder 2D-Draufsicht. Pro Gerät gemerkt. */
@@ -80,7 +120,12 @@ export interface UiApi {
   closePanel(): void;
   openDialog<K extends DialogId>(id: K, props: DialogRegistry[K]): void;
   closeDialog(): void;
-  toast(text: string, kind?: ToastKind): void;
+  toast(text: string, kind?: ToastKind, options?: ToastOptions): void;
+  /** Aktuellen Toast sofort ausblenden (der nächste aus der Warteschlange folgt). */
+  dismissToast(): void;
+  /** Alarm-Zentrale: alles als gelesen markieren bzw. leeren. */
+  markAlertsRead(): void;
+  clearAlerts(): void;
   /** Handy öffnen, optional direkt in einer App, z.B. openPhone('core.messages', { contactId: 'gang:nord' }). */
   openPhone(appId?: string | null, params?: Record<string, unknown>): void;
   closePhone(): void;
@@ -89,6 +134,14 @@ export interface UiApi {
   dismissNotification(): void;
   selectTab(id: string): void;
   setSheetExpanded(expanded: boolean): void;
+  /** Rastpunkt des Bottom-Sheets am Handy. */
+  setSheet(snap: SheetSnap): void;
+  /** Abschnitt eines Listen-Tabs öffnen (ID des Slot-Beitrags), null = zurück zur Übersicht. */
+  openSection(id: string | null): void;
+  /** Suche öffnen/schließen (ohne Argument umschalten). */
+  togglePalette(open?: boolean): void;
+  /** Popover im HUD öffnen/schließen (null = zu). */
+  setPopover(id: string | null): void;
   setSpeed(speed: number): void;
   togglePause(): void;
   /** Nächsten Klick auf die Karte abwarten, z.B. um einen Spot zu gründen. null = abgebrochen. */
@@ -107,7 +160,11 @@ export interface UiApi {
   resetNorth(): void;
 }
 
-const TOAST_MS = 2600;
+/** Anzeigedauer: Routine kurz, Warnungen länger. */
+const TOAST_MS: Record<ToastKind, number> = { good: 1900, info: 2200, warn: 3000, bad: 3400 };
+const TOAST_QUEUE = 5;
+const ALERT_LIMIT = 60;
+const NOTIFICATION_STACK = 12;
 const NOTIFICATION_MS = 5000;
 const RENDER_INTERVAL_MS = 100;
 
@@ -125,6 +182,8 @@ export class UiRuntime {
   private speedBeforeDialog: number | null = null;
   private notificationId = 0;
   private notificationTimer: ReturnType<typeof setTimeout> | null = null;
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  private alertId = 0;
 
   constructor(
     readonly session: GameSession,
@@ -137,7 +196,13 @@ export class UiRuntime {
       phone: { open: false, app: null },
       tab: null,
       sheetExpanded: false,
+      sheet: 'peek',
+      section: null,
       toasts: [],
+      alerts: [],
+      notifications: [],
+      palette: false,
+      popover: null,
       picking: null,
       camera: prefs.camera,
       overlay: prefs.overlay,
@@ -184,6 +249,19 @@ export class UiRuntime {
     return () => this.listeners.delete(listener);
   }
 
+  /** Zeigt den ersten Toast der Warteschlange für seine Dauer, danach den nächsten. */
+  private scheduleToast(): void {
+    if (this.toastTimer) return;
+    const current = this.ui.toasts[0];
+    if (!current) return;
+    this.toastTimer = setTimeout(() => {
+      this.toastTimer = null;
+      this.ui.toasts = this.ui.toasts.filter((t) => t.id !== current.id);
+      this.requestRender();
+      this.scheduleToast();
+    }, TOAST_MS[current.kind]);
+  }
+
   private savePrefs(): void {
     const prefs: UiPrefs = { overlay: this.ui.overlay, camera: this.ui.camera, vibration: this.ui.vibration };
     savePrefs(this.storage, prefs);
@@ -202,7 +280,7 @@ export class UiRuntime {
         update(() => {
           const result = session.dispatch(command);
           if (!result.ok) {
-            api.toast(result.reason, 'bad');
+            api.toast(result.reason, 'bad', { log: false });
             audio.play('error', { volume: 0.5 });
           }
           return result;
@@ -210,6 +288,7 @@ export class UiRuntime {
       openPanel: (id, props) =>
         update(() => {
           ui.panel = { id, props };
+          if (ui.sheet === 'peek') ui.sheet = 'half';
         }),
       closePanel: () =>
         update(() => {
@@ -233,19 +312,55 @@ export class UiRuntime {
             this.speedBeforeDialog = null;
           }
         }),
-      toast: (text, kind = 'info') =>
+      toast: (text, kind = 'info', options = {}) =>
         update(() => {
           const id = ++this.toastId;
-          ui.toasts = [...ui.toasts.slice(-2), { id, text, kind }];
-          setTimeout(() => {
-            ui.toasts = ui.toasts.filter((t) => t.id !== id);
-            this.requestRender();
-          }, TOAST_MS);
+          const toast: Toast = { id, text, kind };
+          if (options.icon) toast.icon = options.icon;
+          if (options.target) toast.target = options.target;
+          // Gleicher Text schon in der Schlange: nicht doppelt zeigen.
+          if (!ui.toasts.some((t) => t.text === text)) {
+            let queue = [...ui.toasts, toast];
+            // Zu voll: Routine-Meldungen (nicht die sichtbare) fliegen zuerst raus.
+            while (queue.length > TOAST_QUEUE) {
+              const drop = queue.findIndex((t, i) => i > 0 && (t.kind === 'good' || t.kind === 'info'));
+              queue = queue.filter((_, i) => i !== (drop > 0 ? drop : 1));
+            }
+            ui.toasts = queue;
+            this.scheduleToast();
+          }
+          if (options.log !== false) {
+            const alert: Alert = { id: ++this.alertId, text, kind, time: session.state?.time ?? 0, read: false };
+            if (options.icon) alert.icon = options.icon;
+            if (options.target) alert.target = options.target;
+            ui.alerts = [alert, ...ui.alerts].slice(0, ALERT_LIMIT);
+          }
+        }),
+      dismissToast: () =>
+        update(() => {
+          if (this.toastTimer) clearTimeout(this.toastTimer);
+          this.toastTimer = null;
+          ui.toasts = ui.toasts.slice(1);
+          this.scheduleToast();
+        }),
+      markAlertsRead: () =>
+        update(() => {
+          if (ui.alerts.some((a) => !a.read)) ui.alerts = ui.alerts.map((a) => (a.read ? a : { ...a, read: true }));
+        }),
+      clearAlerts: () =>
+        update(() => {
+          ui.alerts = [];
         }),
       openPhone: (appId = null, params) =>
         update(() => {
           ui.phone = params ? { open: true, app: appId, params } : { open: true, app: appId };
           if (ui.notification && (!appId || ui.notification.appId === appId)) ui.notification = null;
+          // Geöffnete App: Ihre Benachrichtigungen verschwinden vom Stapel (bei Chats nur die des Chats).
+          if (appId) {
+            const same = (n: PhoneNotification) =>
+              n.appId === appId && (!params || JSON.stringify(n.params ?? {}) === JSON.stringify(params));
+            if (ui.notifications.some(same)) ui.notifications = ui.notifications.filter((n) => !same(n));
+          }
         }),
       closePhone: () =>
         update(() => {
@@ -264,6 +379,7 @@ export class UiRuntime {
           }
           const id = ++this.notificationId;
           ui.notification = { ...notification, id };
+          ui.notifications = [ui.notification, ...ui.notifications].slice(0, NOTIFICATION_STACK);
           if (notification.sound !== null) audio.play(notification.sound ?? 'notification');
           if (ui.vibration) {
             ui.buzz++;
@@ -286,12 +402,39 @@ export class UiRuntime {
         }),
       selectTab: (id) =>
         update(() => {
+          if (ui.tab !== id) ui.section = null;
           ui.tab = id;
           ui.sheetExpanded = true;
+          // Das Sheet bleibt beim Tab-Wechsel offen; nur aus dem kleinen Zustand geht es auf mittel.
+          if (ui.sheet === 'peek') ui.sheet = 'half';
         }),
       setSheetExpanded: (expanded) =>
         update(() => {
           ui.sheetExpanded = expanded;
+          if (expanded && ui.sheet === 'peek') ui.sheet = 'half';
+          if (!expanded) ui.sheet = 'peek';
+        }),
+      setSheet: (snap) =>
+        update(() => {
+          ui.sheet = snap;
+          ui.sheetExpanded = snap !== 'peek';
+        }),
+      openSection: (id) =>
+        update(() => {
+          ui.section = id;
+          if (id && ui.sheet === 'peek') {
+            ui.sheet = 'half';
+            ui.sheetExpanded = true;
+          }
+        }),
+      togglePalette: (open) =>
+        update(() => {
+          ui.palette = open ?? !ui.palette;
+          if (ui.palette) ui.popover = null;
+        }),
+      setPopover: (id) =>
+        update(() => {
+          ui.popover = id;
         }),
       setSpeed: (speed) =>
         update(() => {

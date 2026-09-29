@@ -2,76 +2,121 @@
  * Design-Tokens: Farben, Abstände, Schriften, Radien, Schatten, Bewegung und Ebenen.
  * Alle Oberflächen (auch die der Module) nutzen nur diese Variablen, damit der Look zentral änderbar ist.
  *
- * Look "clean und dunkel" zur Nacht-Satellitenkarte: fast schwarzes Blau, kühle Linien wie auf einem
- * Überwachungsmonitor, Mint-Türkis für Geld und Aktives, Natriumgelb (Straßenlaternen) für Warnungen.
- * Namen aus dem Fundament bleiben erhalten, neue Tokens kommen nur dazu.
+ * Look "Kölsch-Sticker": hell, warmes Papier, weiße Karten mit dicker dunkler Kontur und hartem Sockel-Schatten
+ * wie Aufkleber, kräftige Comic-Farben (Dom-Rot, Geld-Grün, Gelb, Rhein-Blau, Lila). Die Karte bleibt dunkel
+ * (Nacht-Satellit); ihre Farben stehen weiter unten und in src/ui/shell/shell.css (.shell-map).
+ *
+ * Kontrast: Gelb, Grün und Blau sind Flächenfarben mit dunkler Schrift darauf (--color-on-*). Als Textfarbe auf
+ * Weiß nur die dunkleren Varianten --color-accent, --color-warn, --color-bad, --color-info verwenden.
+ * Namen aus dem Fundament bleiben erhalten, neue Tokens kommen dazu.
  */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+
+  /* Grundpalette */
+  --ink: #1b1b2f;
+  --paper: #f6f1e7;
+  --paper-deep: #ece4d3;
+  --dom: #ff4b4b;
+  --dom-edge: #c42f2f;
+  --money: #58cc02;
+  --money-edge: #3f9a00;
+  --gold: #ffc800;
+  --gold-edge: #d49b00;
+  --rhine: #1cb0f6;
+  --rhine-edge: #1283bf;
+  --lila: #a560f0;
+  --lila-edge: #7a3fc4;
+  --dirty: #6b3fa0;
+  --dirty-edge: #472573;
 
   /* Flächen */
-  --color-bg: #05080c;
-  --color-panel: rgba(7, 11, 17, 0.84);
-  --color-panel-solid: #0a0f16;
-  --color-panel-raised: #0e141d;
-  --color-surface: #131b26;
-  --color-surface-hover: #1a2533;
-  --color-surface-active: #203043;
-  --color-surface-subtle: rgba(148, 186, 255, 0.045);
-  --color-line: rgba(148, 186, 255, 0.13);
-  --color-line-strong: rgba(148, 186, 255, 0.28);
-  --color-backdrop: rgba(2, 4, 8, 0.7);
+  --color-bg: var(--paper);
+  /* Schwebende Glas-Elemente über der Karte (HUD, Dock, Kartensteuerung) */
+  --color-panel: rgba(255, 255, 255, 0.86);
+  --color-panel-solid: #ffffff;
+  --color-panel-raised: #ffffff;
+  --color-surface: #f5f0e6;
+  --color-surface-hover: #ede5d6;
+  --color-surface-active: #e3d9c5;
+  --color-surface-subtle: rgba(27, 27, 47, 0.04);
+  --color-line: rgba(27, 27, 47, 0.14);
+  --color-line-strong: var(--ink);
+  --color-backdrop: rgba(27, 27, 47, 0.5);
 
   /* Text */
-  --color-text: #e4ebf3;
-  --color-muted: #8392a6;
-  --color-faint: #56647a;
+  --color-text: var(--ink);
+  --color-muted: #5d586b;
+  --color-faint: #8c8799;
 
-  /* Akzente */
-  --color-accent: #3fe0a8;
-  --color-accent-strong: #0f7a5c;
-  --color-accent-hover: #13916d;
-  --color-accent-soft: rgba(63, 224, 168, 0.14);
-  --color-warn: #ffb547;
-  --color-warn-strong: #b8730f;
-  --color-warn-soft: rgba(255, 181, 71, 0.14);
-  --color-bad: #ff5d62;
-  --color-bad-strong: #b3262c;
-  --color-bad-soft: rgba(255, 93, 98, 0.14);
-  --color-info: #6cb4ff;
-  --color-info-strong: #1f5fa8;
-  --color-info-soft: rgba(108, 180, 255, 0.14);
-  /* Schrift auf dunklen Markierungen und kräftigen Akzentflächen. */
-  --color-on-accent: #f5f9ff;
-  /* Schrift auf hellen Akzentflächen (z.B. --color-accent). */
-  --color-on-bright: #03140e;
+  /* Akzente: Grundname = Textfarbe auf Weiß, -strong = Fläche, -edge = Sockel/Kante, -soft = heller Hintergrund */
+  --color-accent: #2e7d00;
+  --color-accent-strong: var(--money);
+  --color-accent-hover: #63d80e;
+  --color-accent-edge: var(--money-edge);
+  --color-accent-soft: rgba(88, 204, 2, 0.16);
+  --color-warn: #9a5700;
+  --color-warn-strong: var(--gold);
+  --color-warn-edge: var(--gold-edge);
+  --color-warn-soft: rgba(255, 200, 0, 0.22);
+  --color-bad: #d02828;
+  --color-bad-strong: var(--dom);
+  --color-bad-edge: var(--dom-edge);
+  --color-bad-soft: rgba(255, 75, 75, 0.14);
+  --color-info: #07689e;
+  --color-info-strong: var(--rhine);
+  --color-info-edge: var(--rhine-edge);
+  --color-info-soft: rgba(28, 176, 246, 0.16);
+  /* Primär: Dom-Rot (Hauptaktionen) */
+  --color-primary: var(--dom);
+  --color-primary-hover: #ff6262;
+  --color-primary-edge: var(--dom-edge);
+  --color-on-primary: #ffffff;
+  /* Geld */
+  --color-dirty: var(--dirty);
+  --color-dirty-strong: var(--dirty);
+  --color-dirty-edge: var(--dirty-edge);
+  --color-dirty-soft: rgba(107, 63, 160, 0.14);
+  --color-clean: var(--color-accent);
+  --color-lila: var(--lila);
+  --color-lila-edge: var(--lila-edge);
+  /* Schrift auf kräftigen hellen Flächen (Grün, Gelb, Blau) */
+  --color-on-accent: var(--ink);
+  --color-on-bright: var(--ink);
+  --color-on-warn: var(--ink);
+  --color-on-info: var(--ink);
+  /* Schrift auf Rot und Violett */
+  --color-on-bad: #ffffff;
+  --color-on-dark: #ffffff;
 
-  /* Karte */
+  /* Karte (bleibt dunkel, Werte wie im Nacht-Look) */
   --color-marker-idle: #1c2735;
   --color-marker-border: #dbe6f3;
   --color-label-bg: rgba(4, 8, 14, 0.82);
-  /* Linien des Überwachungs-Overlays */
   --color-scan: rgba(108, 180, 255, 0.5);
   --color-scan-faint: rgba(108, 180, 255, 0.08);
-  /* Straßenlaternen und Fenster */
   --color-lamp: #ffb04d;
   --color-police-blue: #2f7bff;
   --color-police-red: #ff2f45;
+  /* Heat-Flächen der Veedel auf der Karte */
+  --map-heat-warm: #ffb547;
+  --map-heat-hot: #ff5d62;
 
   /* Schrift */
-  --font-body:
-    "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, Arial, sans-serif;
-  --font-display: var(--font-body);
+  --font-body: "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Baloo 2", "Fredoka", "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono:
-    "JetBrains Mono", "SF Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
-  --font-size-xs: 11px;
-  --font-size-sm: 13px;
-  --font-size-md: 15px;
-  --font-size-lg: 18px;
-  --font-size-xl: 24px;
-  --font-weight-medium: 600;
-  --font-weight-bold: 700;
-  --letter-spacing-caps: 0.09em;
+    ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 19px;
+  --font-size-xl: 26px;
+  --font-size-xxl: 36px;
+  --font-weight-medium: 700;
+  --font-weight-bold: 800;
+  --font-weight-black: 900;
+  --letter-spacing-caps: 0.06em;
 
   /* Abstände */
   --space-1: 4px;
@@ -80,31 +125,46 @@
   --space-4: 12px;
   --space-5: 16px;
   --space-6: 24px;
+  --space-7: 32px;
 
   /* Radien */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-xs: 8px;
+  --radius-sm: 14px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
   --radius-round: 999px;
 
-  /* Schatten und Glas */
-  --shadow-panel: 0 18px 50px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  /* Kontur und Schatten: harter Sockel wie bei einem Aufkleber */
+  --stroke: 2.5px;
+  --stroke-thin: 2px;
+  --pop-depth: 4px;
+  --shadow-pop: 0 4px 0 var(--ink);
+  --shadow-pop-sm: 0 3px 0 var(--ink);
+  --shadow-float: 0 10px 30px rgba(27, 27, 47, 0.18);
+  --shadow-panel: 0 4px 0 var(--ink), 0 18px 40px rgba(27, 27, 47, 0.18);
   --shadow-marker: 0 2px 10px rgba(0, 0, 0, 0.7);
-  --shadow-glow: 0 0 0 1px rgba(63, 224, 168, 0.35), 0 0 18px rgba(63, 224, 168, 0.25);
-  --blur-panel: blur(14px) saturate(140%);
+  --shadow-glow: 0 0 0 4px rgba(255, 200, 0, 0.55);
+  /* Glas nur für schwebende Elemente über der Karte */
+  --blur-panel: blur(16px) saturate(170%);
 
   /* Bewegung */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --duration-fast: 120ms;
   --duration: 220ms;
+  --duration-slow: 420ms;
 
   /* Layout */
-  --hud-height: 60px;
-  --sidebar-width: 340px;
-  --panel-width: 380px;
-  --phone-width: 360px;
-  --phone-height: 740px;
-  --touch-target: 36px;
+  --hud-height: 64px;
+  --dock-width: 64px;
+  --sidebar-width: 360px;
+  --panel-width: 360px;
+  --phone-width: 380px;
+  --phone-height: 720px;
+  --tabbar-height: 64px;
+  --sheet-peek: 58px;
+  --touch-target: 40px;
+  --gutter: 12px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
@@ -114,10 +174,14 @@
   --z-map-overlay: 2;
   --z-hud: 5;
   --z-panel: 6;
-  --z-phone: 7;
-  --z-banner: 8;
+  --z-sheet: 6;
+  --z-tabbar: 7;
+  --z-phone: 9;
+  --z-banner: 10;
+  --z-popover: 12;
   --z-dialog: 20;
   --z-notification: 25;
+  --z-palette: 28;
   --z-toast: 30;
 }
 
@@ -130,6 +194,16 @@
 @media (max-width: 760px) {
   :root {
     --hud-height: 104px;
-    --font-size-sm: 14px;
+    --gutter: 10px;
+  }
+}
+
+/* Weniger Bewegung: Animationen fast aus, Übergänge sofort. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 1ms;
+    --duration: 1ms;
+    --duration-slow: 1ms;
+    --ease-spring: linear;
   }
 }

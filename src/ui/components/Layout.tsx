@@ -1,11 +1,16 @@
 import type { ComponentChildren, JSX } from 'preact';
-import { Icon } from './Icon';
+import { useContext } from 'preact/hooks';
+import { type ChipColor, Icon, IconChip } from './Icon';
 import type { IconName } from './icons';
+import { SectionContext } from './section';
 
 type IconRef = IconName | (string & {});
 
 /** Farbton für Hervorhebungen. */
 export type Tone = 'accent' | 'warn' | 'bad' | 'info';
+
+/** Status eines Abschnitts (Punkt in der Zeilenansicht). */
+export type SectionStatus = 'good' | 'warn' | 'bad' | 'idle';
 
 export interface CardProps {
   title?: ComponentChildren;
@@ -13,16 +18,38 @@ export interface CardProps {
   actions?: ComponentChildren;
   children?: ComponentChildren;
   class?: string;
-  /** Icon vor dem Titel. */
+  /** Icon vor dem Titel (als farbiger Sticker). */
   icon?: IconRef;
   /** Farbige Kante links, z.B. für Warnungen. */
   tone?: Tone;
+  /** Farbe des Icon-Stickers. Standard: nach tone, sonst gelb. */
+  color?: ChipColor;
+  /** Kennzahl für die Zeilenansicht (z.B. "40 g" oder "3 warten"). */
+  summary?: ComponentChildren;
+  /** Status-Punkt in der Zeilenansicht. */
+  status?: SectionStatus;
 }
 
-/** Karte mit optionaler Überschrift, z.B. als Abschnitt in einem Tab. */
+/**
+ * Karte mit optionaler Überschrift, z.B. als Abschnitt in einem Tab. In Listen-Tabs (z.B. "Geschäft") zeigt die
+ * Shell sie als tippbare Zeile mit icon, title, summary und status; ein Tipp öffnet den ganzen Inhalt.
+ */
 export function Card(props: CardProps) {
+  const section = useContext(SectionContext);
+  const chipColor = props.color ?? (props.tone ? props.tone : undefined);
+  if (section?.mode === 'rows' && props.title) {
+    return (
+      <button type="button" class={`ui-row ${props.tone ? `ui-row--${props.tone}` : ''}`} onClick={section.open}>
+        <IconChip icon={props.icon ?? 'briefcase'} color={chipColor} status={props.status} />
+        <span class="ui-row__title">{props.title}</span>
+        {props.summary !== undefined && props.summary !== null && <span class="ui-row__summary">{props.summary}</span>}
+        <Icon name="chevronRight" class="ui-row__chevron" />
+      </button>
+    );
+  }
   const cls = ['ui-card'];
   if (props.tone) cls.push(`ui-card--${props.tone}`);
+  if (section?.mode === 'detail') cls.push('ui-card--detail');
   if (props.class) cls.push(props.class);
   return (
     <section class={cls.join(' ')}>
@@ -30,8 +57,8 @@ export function Card(props: CardProps) {
         <header class="ui-card__head">
           {props.title && (
             <h2 class="ui-card__title">
-              {props.icon && <Icon name={props.icon} class="ui-card__icon" />}
-              {props.title}
+              {props.icon && <IconChip icon={props.icon} color={chipColor} size="sm" class="ui-card__icon" />}
+              <span>{props.title}</span>
             </h2>
           )}
           {props.actions && <div class="ui-card__actions">{props.actions}</div>}
@@ -43,25 +70,33 @@ export function Card(props: CardProps) {
 }
 
 /** Grauer Hinweistext. */
-export function Hint(props: { children?: ComponentChildren }) {
-  return <p class="ui-hint">{props.children}</p>;
-}
-
-/** Text für leere Listen. */
-export function Empty(props: { children?: ComponentChildren; icon?: IconRef }) {
+export function Hint(props: { children?: ComponentChildren; icon?: IconRef }) {
   return (
-    <p class="ui-hint ui-empty">
-      {props.icon && <Icon name={props.icon} class="ui-empty__icon" />}
+    <p class={`ui-hint ${props.icon ? 'has-icon' : ''}`}>
+      {props.icon && <Icon name={props.icon} class="ui-hint__icon" />}
       {props.children}
     </p>
   );
 }
 
+/** Text für leere Listen. */
+export function Empty(props: { children?: ComponentChildren; icon?: IconRef }) {
+  return (
+    <div class="ui-empty">
+      <IconChip icon={props.icon ?? 'inbox'} color="paper" size="lg" />
+      <p class="ui-hint">{props.children}</p>
+    </div>
+  );
+}
+
 /** Zeile "Beschriftung … Wert". */
-export function KeyValue(props: { label: ComponentChildren; value: ComponentChildren; tone?: Tone }) {
+export function KeyValue(props: { label: ComponentChildren; value: ComponentChildren; tone?: Tone; icon?: IconRef }) {
   return (
     <div class="ui-kv">
-      <span>{props.label}</span>
+      <span class="ui-kv__label">
+        {props.icon && <Icon name={props.icon} class="ui-kv__icon" />}
+        {props.label}
+      </span>
       <span class={`ui-kv__value ${props.tone ? `is-${props.tone}` : ''}`}>{props.value}</span>
     </div>
   );
@@ -134,6 +169,8 @@ export interface ListItemProps {
   active?: boolean;
 }
 
+const LIST_TONE_CHIP: Record<string, ChipColor> = { good: 'green', bad: 'red', info: 'blue', warn: 'yellow' };
+
 export function ListItem(props: ListItemProps) {
   const cls = ['ui-list__item'];
   if (props.tone) cls.push(`ui-list__item--${props.tone}`);
@@ -141,8 +178,16 @@ export function ListItem(props: ListItemProps) {
   if (props.active) cls.push('is-active');
   const main = (
     <>
-      {props.icon && <Icon name={props.icon} class="ui-list__icon" />}
+      {props.icon && (
+        <IconChip
+          icon={props.icon}
+          size="sm"
+          color={props.tone ? LIST_TONE_CHIP[props.tone] : 'paper'}
+          class="ui-list__icon"
+        />
+      )}
       <span class="ui-list__text">{props.children}</span>
+      {props.onClick && !props.aside && <Icon name="chevronRight" class="ui-list__chevron" />}
     </>
   );
   return (
@@ -175,14 +220,22 @@ export interface AvatarProps {
   /** Bild-URL, Emoji oder Icon-Name. */
   image?: string;
   size?: 'sm' | 'md' | 'lg';
-  /** Hintergrundfarbe (CSS-Farbe), z.B. die Farbe einer Gang. */
+  /** Hintergrundfarbe (CSS-Farbe), z.B. die Farbe einer Gang. Standard: aus dem Namen abgeleitet. */
   color?: string;
+}
+
+const AVATAR_COLORS = ['#ffc800', '#1cb0f6', '#58cc02', '#ff9f43', '#a560f0', '#ff7aa8', '#4dd6c4'];
+
+function nameColor(name: string): string {
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + (ch.codePointAt(0) ?? 0)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
 /** Kreis mit Porträt, Icon oder Initialen. Für Kontakte, Mitarbeiter, Gangs. */
 export function Avatar(props: AvatarProps) {
   const image = props.image;
-  const style = props.color ? { background: props.color } : undefined;
+  const style = { background: props.color ?? nameColor(props.name) };
   const cls = `ui-avatar ui-avatar--${props.size ?? 'md'}`;
   if (image && /^(https?:|data:|\/|\.\/)/.test(image)) {
     return <img class={cls} src={image} alt="" style={style} />;
@@ -226,7 +279,7 @@ export function Toggle(props: ToggleProps) {
       class={`ui-toggle ${props.checked ? 'is-on' : ''}`}
       onClick={() => props.onChange(!props.checked)}
     >
-      {props.icon && <Icon name={props.icon} class="ui-toggle__icon" />}
+      {props.icon && <IconChip icon={props.icon} size="sm" color={props.checked ? 'green' : 'paper'} />}
       <span class="ui-toggle__text">
         <span class="ui-toggle__label">{props.label}</span>
         {props.hint && <span class="ui-toggle__hint">{props.hint}</span>}
