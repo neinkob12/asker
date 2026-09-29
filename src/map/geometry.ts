@@ -54,7 +54,7 @@ export function pointAlong(path: readonly LngLat[], t: number): { position: LngL
 }
 
 /**
- * Punkt im Kreis um einen Mittelpunkt, z.B. um mehrere Figuren an einem Spot nebeneinander zu stellen.
+ * Punkt im Kreis um einen Mittelpunkt, z.B. um mehrere Marker an einem Ort nebeneinander zu stellen.
  * index von count, Abstand in Metern.
  */
 export function offsetAround(center: LngLat, index: number, count: number, meters = 14): LngLat {

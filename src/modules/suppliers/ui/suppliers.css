@@ -100,9 +100,7 @@
 }
 
 .map-place--port,
+.map-place--city,
 .map-place--harbor {
-  --map-place-color: #8b5cf6;
-}
-.map-place--city {
-  --map-place-color: #a78bfa;
+  --map-place-color: var(--color-marker-supplier);
 }

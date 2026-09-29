@@ -59,7 +59,7 @@ describe('Geometrie für Effekte', () => {
     expect(bearing(path[2], path[1])).toBeCloseTo(180, 0);
   });
 
-  it('verteilt Figuren im Kreis um einen Punkt', () => {
+  it('verteilt Punkte im Kreis um einen Mittelpunkt', () => {
     const center = { lng: 6.95, lat: 50.94 };
     expect(offsetAround(center, 0, 1)).toEqual(center);
     const points = [0, 1, 2].map((i) => offsetAround(center, i, 3, 20));

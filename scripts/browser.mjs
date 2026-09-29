@@ -1,5 +1,5 @@
 // Gemeinsame Hilfen für Screenshots und den Ende-zu-Ende-Test: Dev-Server starten, Chromium finden und starten,
-// Kartenkacheln über Node laden (dann zeigt die Karte auch in abgeschotteten Umgebungen das echte Luftbild).
+// Kartenkacheln über Node laden (dann zeigt die Karte auch in abgeschotteten Umgebungen die echten Kacheln).
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';

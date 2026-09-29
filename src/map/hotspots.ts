@@ -24,7 +24,8 @@ export interface HotspotsOptions {
 }
 
 const PULSE_MS = 2600;
-const FPS = 24;
+/** Der Puls zeichnet die Karte neu; langsam und weich reicht eine niedrige Rate (spart Akku). */
+const FPS = 15;
 
 const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
