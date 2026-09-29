@@ -1,9 +1,10 @@
-// Veedel auf der Karte: Grenzen, eingefärbt nach kontrollierender Fraktion oder nach Heat, mit Namen.
-// Klick auf ein Veedel öffnet das Veedel-Panel. Der Look ist bewusst schlicht (Auftrag 14 macht ihn schön).
+// Veedel auf der Karte: weiche, halbtransparente Pastellflächen nach kontrollierender Fraktion oder nach Heat,
+// unter den Straßen. Keine dauerhaften Namen: Name und Herrscher bzw. Heat erscheinen nur beim Überfahren mit
+// der Maus (und im Panel). Klick auf ein Veedel öffnet das Veedel-Panel.
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import type { GameState } from '../../../core';
-import { addHtmlMarker, BELOW_BUILDINGS, el, type MapLayer } from '../../../map';
+import { addHtmlMarker, BELOW_BUILDINGS, BELOW_ROADS, el, type MapLayer, pastel } from '../../../map';
 import { getHeat, heatLevel } from '../../police';
 import { allVeedel, getBoundary } from '../../veedel';
 import { controllerOf, factionColor, factionName } from '../index';
@@ -33,7 +34,8 @@ function buildData(state: GameState, view: VeedelMapView): VeedelData {
         properties: {
           id: v.id,
           view,
-          color: factionColor(state, owner),
+          color: pastel(factionColor(state, owner), owner === null ? 0.5 : 0.3),
+          line: pastel(factionColor(state, owner), 0.15),
           neutral: owner === null,
           heat: Math.round(getHeat(state, v.id)),
         },
@@ -65,11 +67,12 @@ export const veedelLayer: MapLayer = {
   mount(ctx) {
     const { map } = ctx;
     const heatColors = [
-      token('--color-marker-idle', '#3a4a42'),
-      token('--color-warn', '#f2c14e'),
-      token('--color-bad', '#ef6b5b'),
+      pastel(token('--color-info', '#6cb4ff'), 0.5),
+      pastel(token('--color-warn', '#ffb547'), 0.2),
+      pastel(token('--color-bad', '#ff5d62'), 0.15),
     ];
     const before = map.getLayer(BELOW_BUILDINGS) ? BELOW_BUILDINGS : undefined;
+    const belowRoads = map.getLayer(BELOW_ROADS) ? BELOW_ROADS : before;
     let lastSignature = '';
     let hovered: string | null = null;
     let lastSelected = '';
@@ -102,27 +105,29 @@ export const veedelLayer: MapLayer = {
           'fill-color': ['case', isHeat, heatColor, ['get', 'color']] as never,
           'fill-opacity': [
             '+',
-            ['case', hover, 0.12, 0],
+            ['case', hover, 0.1, 0],
             [
               'case',
               isHeat,
-              ['interpolate', ['linear'], ['get', 'heat'], 0, 0.1, 100, 0.5],
-              ['case', ['get', 'neutral'], 0.1, 0.26],
+              ['interpolate', ['linear'], ['get', 'heat'], 0, 0.1, 100, 0.42],
+              ['case', ['get', 'neutral'], 0.04, 0.24],
             ],
           ] as never,
         },
       },
-      before,
+      belowRoads,
     );
     map.addLayer(
       {
         id: LINE,
         type: 'line',
         source: SOURCE,
+        layout: { 'line-join': 'round' },
         paint: {
-          'line-color': ['case', isHeat, heatColor, ['get', 'color']] as never,
-          'line-width': 1.5,
-          'line-opacity': 0.85,
+          'line-color': ['case', isHeat, heatColor, ['get', 'line']] as never,
+          'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1, 14, 2.5],
+          'line-opacity': ['case', ['get', 'neutral'], 0.35, 0.7] as never,
+          'line-blur': 0.6,
         },
       },
       before,
@@ -133,22 +138,33 @@ export const veedelLayer: MapLayer = {
         type: 'line',
         source: SOURCE,
         filter: ['==', ['get', 'id'], ''],
-        paint: { 'line-color': token('--color-text', '#e8efe9'), 'line-width': 3 },
+        layout: { 'line-join': 'round' },
+        paint: { 'line-color': '#ffffff', 'line-width': 4, 'line-opacity': 0.9 },
       },
       before,
     );
 
-    // Namen der Veedel mit Herrscher bzw. Heat darunter.
-    const labels = new Map<string, HTMLElement>();
-    for (const v of allVeedel()) {
-      const detail = el('span', 'veedel-label__detail');
-      addHtmlMarker(map, {
-        position: v.center,
-        className: 'veedel-label',
-        children: [el('span', 'veedel-label__name', v.name), detail],
-      });
-      labels.set(v.id, detail);
-    }
+    // Name mit Herrscher bzw. Heat nur beim Überfahren mit der Maus, über der Mitte des Veedels.
+    const hoverName = el('span', 'veedel-label__name');
+    const hoverDetail = el('span', 'veedel-label__detail');
+    const label = addHtmlMarker(map, {
+      position: allVeedel()[0]?.center ?? { lng: 0, lat: 0 },
+      className: 'veedel-label',
+      children: [hoverName, hoverDetail],
+    });
+    label.element.hidden = true;
+    const showLabel = (id: string | null) => {
+      const veedel = id ? allVeedel().find((v) => v.id === id) : undefined;
+      const state = ctx.getState();
+      if (!veedel || !state) {
+        label.element.hidden = true;
+        return;
+      }
+      label.marker.setLngLat([veedel.center.lng, veedel.center.lat]);
+      hoverName.textContent = veedel.name;
+      hoverDetail.textContent = labelText(state, veedel.id, getMapView());
+      label.element.hidden = false;
+    };
 
     // Umschalter Kontrolle/Heat oben links (am Handy im Tab "Reviere").
     const control = el('div', 'maplibregl-ctrl maplibregl-ctrl-group veedel-view-control');
@@ -168,7 +184,7 @@ export const veedelLayer: MapLayer = {
       if (!force && sig === lastSignature) return;
       lastSignature = sig;
       (map.getSource(SOURCE) as GeoJSONSource | undefined)?.setData(buildData(state, view));
-      for (const [id, detail] of labels) detail.textContent = labelText(state, id, view);
+      showLabel(hovered);
     };
 
     const unsubscribe = onMapViewChange(() => {
@@ -188,11 +204,13 @@ export const veedelLayer: MapLayer = {
       hovered = id;
       map.setFeatureState({ source: SOURCE, id }, { hover: true });
       map.getCanvas().style.cursor = 'pointer';
+      showLabel(id);
     });
     map.on('mouseleave', FILL, () => {
       if (hovered) map.setFeatureState({ source: SOURCE, id: hovered }, { hover: false });
       hovered = null;
       map.getCanvas().style.cursor = '';
+      showLabel(null);
     });
 
     return {
@@ -206,6 +224,7 @@ export const veedelLayer: MapLayer = {
       },
       destroy() {
         unsubscribe();
+        label.marker.remove();
       },
     };
   },

@@ -1,55 +1,165 @@
-// Nacht-Satellit: Aus Tageslicht, Dämmerung und Stimmung (z.B. Wetter) werden die Mal-Eigenschaften der
-// Kartenebenen berechnet. Rein rechnerisch; GameMap setzt die Werte (nur wenn sie sich ändern).
+// Candy-Look: vier Tageszeit-Paletten (Morgen, Tag, Abend, Nacht) nach der Spieluhr, weich ineinander
+// übergeblendet, dazu die Stimmung der Module (z.B. Wetter). Rein rechnerisch; GameMap setzt die Werte
+// (nur wenn sie sich ändern).
+
+import { DAWN, type DayPhase, DUSK } from '../core';
 
 /**
  * Stimmung, die ein Modul zur Karte beiträgt (z.B. das Wetter). Alle Werte 0–1, alle optional.
  * Mehrere Beiträge werden zusammengezählt. Setzen mit setMapMood(id, mood) aus src/map.
  */
 export interface MapMood {
-  /** Dunkler (Wolken, Gewitter). */
+  /** Dunkler und trüber (Wolken, Gewitter). */
   darken?: number;
   /** Heller (Schnee reflektiert Licht). */
   brighten?: number;
   /** Weniger Farbe. */
   desaturate?: number;
-  /** Farbstich über dem Luftbild als Hex-Farbe, z.B. '#1b3050'. */
+  /** Farbstich als Hex-Farbe, z.B. '#1b3050'. */
   tint?: string;
   /** Stärke des Farbstichs. */
   tintStrength?: number;
   /** Dunst und Nebel am Horizont. */
   haze?: number;
-  /** Nasse Straßen: Laternen spiegeln sich stärker. */
+  /** Nasse Straßen: dunkler, nachts leuchten die Hauptstraßen stärker. */
   wet?: number;
 }
 
-export interface MapLook {
-  rasterBrightnessMax: number;
-  rasterBrightnessMin: number;
-  rasterSaturation: number;
-  rasterContrast: number;
-  tintColor: string;
-  tintOpacity: number;
-  waterColor: string;
-  waterOpacity: number;
-  roadColor: string;
-  roadGlowOpacity: number;
-  roadCoreOpacity: number;
-  lampOpacity: number;
-  /** Anteil beleuchteter Fenster (0–1). */
-  windowsLit: number;
-  wallColor: string;
-  buildingOpacity: number;
-  lightColor: string;
+/** Farben einer Tageszeit. Alle Farben als #rrggbb. */
+export interface Palette {
+  sky: string;
+  horizon: string;
+  land: string;
+  park: string;
+  wood: string;
+  water: string;
+  /** Uferlinie, etwas kräftiger als das Wasser. */
+  waterLine: string;
+  rail: string;
+  minor: string;
+  minorCasing: string;
+  major: string;
+  majorCasing: string;
+  /** Autobahnen und Brücken. */
+  highway: string;
+  highwayCasing: string;
+  /** Gebäude nach Höhe, niedrig → hoch. */
+  buildings: readonly [string, string, string, string];
+  shadow: string;
+  shadowOpacity: number;
+  /** Leuchten der Hauptstraßen (0–1), nachts hoch. */
+  glow: number;
+  light: string;
   lightIntensity: number;
-  skyColor: string;
-  horizonColor: string;
-  fogColor: string;
-  fogBlend: number;
 }
+
+export interface MapLook extends Palette {
+  fog: string;
+  fogBlend: number;
+  /** 0 = heller Tag, 1 = tiefe Nacht (für Effekte: Hotspots leuchten, Scheinwerfer). */
+  night: number;
+  /** Überwiegende Tageszeit. */
+  phase: DayPhase;
+}
+
+export const PALETTES: Record<DayPhase, Palette> = {
+  day: {
+    sky: '#e9f6fb',
+    horizon: '#fdf6ec',
+    land: '#f8f3ea',
+    park: '#bfeaa6',
+    wood: '#a9df90',
+    water: '#8ad3f4',
+    waterLine: '#62bde8',
+    rail: '#ddd2e4',
+    minor: '#ffffff',
+    minorCasing: '#e4d9c8',
+    major: '#ffe38a',
+    majorCasing: '#f2c14e',
+    highway: '#ffb56b',
+    highwayCasing: '#ee8f3a',
+    buildings: ['#ffd6e0', '#ffe8b8', '#d6f0ff', '#e3d6ff'],
+    shadow: '#5a4678',
+    shadowOpacity: 0.18,
+    glow: 0,
+    light: '#ffffff',
+    lightIntensity: 0.32,
+  },
+  dawn: {
+    sky: '#ffe4ec',
+    horizon: '#ffd3c4',
+    land: '#fdeee9',
+    park: '#c8e8b0',
+    wood: '#b3dc9b',
+    water: '#a9c8f0',
+    waterLine: '#85aee6',
+    rail: '#ecd0d4',
+    minor: '#fff7f2',
+    minorCasing: '#f1d6d0',
+    major: '#ffd7a8',
+    majorCasing: '#f2a97a',
+    highway: '#ffb8a0',
+    highwayCasing: '#e98a78',
+    buildings: ['#ffc9d9', '#ffe0c4', '#e0dcff', '#f1ccff'],
+    shadow: '#8c466e',
+    shadowOpacity: 0.2,
+    glow: 0.15,
+    light: '#ffe6ea',
+    lightIntensity: 0.3,
+  },
+  dusk: {
+    sky: '#ffcf9e',
+    horizon: '#ffa878',
+    land: '#f6dcc8',
+    park: '#b5d39a',
+    wood: '#a2c586',
+    water: '#7aa6e0',
+    waterLine: '#5a88d0',
+    rail: '#dfbcae',
+    minor: '#fff0e0',
+    minorCasing: '#e2bfa6',
+    major: '#ffc46b',
+    majorCasing: '#e8894a',
+    highway: '#ff9a5c',
+    highwayCasing: '#d9653c',
+    buildings: ['#ffb3a6', '#ffcf8a', '#c9b8ff', '#b89cff'],
+    shadow: '#6e2850',
+    shadowOpacity: 0.25,
+    glow: 0.35,
+    light: '#ffd1a6',
+    lightIntensity: 0.3,
+  },
+  night: {
+    sky: '#141433',
+    horizon: '#2a2a5e',
+    land: '#23234a',
+    park: '#2e5a50',
+    wood: '#285045',
+    water: '#1a3a78',
+    waterLine: '#3a6ac4',
+    rail: '#35356a',
+    minor: '#3f3f78',
+    minorCasing: '#2b2b5a',
+    major: '#ffd36b',
+    majorCasing: '#ff9a3c',
+    highway: '#ffe08a',
+    highwayCasing: '#ff8a3c',
+    buildings: ['#34346e', '#3d3d82', '#4a3f8f', '#5a4aa8'],
+    shadow: '#000000',
+    shadowOpacity: 0.35,
+    glow: 0.75,
+    light: '#aab0ff',
+    lightIntensity: 0.26,
+  },
+};
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const round = (n: number) => Math.round(n * 1000) / 1000;
+const smoothstep = (t: number) => {
+  const x = clamp01(t);
+  return x * x * (3 - 2 * x);
+};
 
 function parseHex(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
@@ -58,18 +168,35 @@ function parseHex(hex: string): [number, number, number] {
   return Number.isNaN(n) ? [0, 0, 0] : [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
+function toHex(rgb: readonly number[]): string {
+  return `#${rgb
+    .map((v) =>
+      Math.round(Math.min(255, Math.max(0, v)))
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
+}
+
 /** Zwei Hex-Farben mischen: t = 0 → a, t = 1 → b. */
 export function mixColor(a: string, b: string, t: number): string {
   const ca = parseHex(a);
   const cb = parseHex(b);
   const p = clamp01(t);
-  return `#${ca
-    .map((v, i) =>
-      Math.round(lerp(v, cb[i], p))
-        .toString(16)
-        .padStart(2, '0'),
-    )
-    .join('')}`;
+  return toHex(ca.map((v, i) => lerp(v, cb[i], p)));
+}
+
+/** Farbe entsättigen: amount 0 = unverändert, 1 = grau (gleiche Helligkeit). */
+export function desaturateColor(color: string, amount: number): string {
+  const [r, g, b] = parseHex(color);
+  const grey = 0.299 * r + 0.587 * g + 0.114 * b;
+  const p = clamp01(amount);
+  return toHex([lerp(r, grey, p), lerp(g, grey, p), lerp(b, grey, p)]);
+}
+
+/** Helle Pastellfassung einer Farbe (z.B. Fraktionsfarben auf der Karte). amount = Anteil Weiß. */
+export function pastel(color: string, amount = 0.45): string {
+  return mixColor(color, '#ffffff', amount);
 }
 
 /** Mehrere Stimmungen zu einer zusammenfassen. Der Farbstich wird nach Stärke gemittelt. */
@@ -100,93 +227,118 @@ export function combineMoods(moods: readonly MapMood[]): MapMood {
   };
 }
 
-// Eckwerte für Nacht (0) und Tag (1).
-const NIGHT = {
-  brightnessMax: 0.3,
-  saturation: -0.82,
-  contrast: 0.22,
-  tint: '#0a1f4d',
-  tintOpacity: 0.42,
-  water: '#01050b',
-  waterOpacity: 0.72,
-  road: '#ffb04d',
-  glow: 0.32,
-  core: 0.62,
-  lamps: 0.95,
-  wall: '#0a1019',
-  light: '#e2e4f5',
-  lightIntensity: 0.2,
-  sky: '#02060d',
-  horizon: '#0d1b31',
-  fog: '#040912',
-};
-const DAY = {
-  brightnessMax: 0.86,
-  saturation: -0.38,
-  contrast: 0.06,
-  tint: '#1d2b3d',
-  tintOpacity: 0.14,
-  water: '#0b1c2b',
-  waterOpacity: 0.35,
-  road: '#cfd7e1',
-  glow: 0.02,
-  core: 0.16,
-  lamps: 0,
-  wall: '#3c4553',
-  light: '#fff0da',
-  lightIntensity: 0.42,
-  sky: '#557090',
-  horizon: '#9fb0c4',
-  fog: '#7e8ea2',
-};
-const TWILIGHT_TINT = '#5b2f57';
-const TWILIGHT_HORIZON = '#ff8a5c';
+/** Zwei Paletten mischen (t = 0 → a, t = 1 → b). */
+export function mixPalette(a: Palette, b: Palette, t: number): Palette {
+  const c = (key: keyof Palette) => mixColor(a[key] as string, b[key] as string, t);
+  const n = (key: keyof Palette) => lerp(a[key] as number, b[key] as number, clamp01(t));
+  return {
+    sky: c('sky'),
+    horizon: c('horizon'),
+    land: c('land'),
+    park: c('park'),
+    wood: c('wood'),
+    water: c('water'),
+    waterLine: c('waterLine'),
+    rail: c('rail'),
+    minor: c('minor'),
+    minorCasing: c('minorCasing'),
+    major: c('major'),
+    majorCasing: c('majorCasing'),
+    highway: c('highway'),
+    highwayCasing: c('highwayCasing'),
+    buildings: [0, 1, 2, 3].map((i) => mixColor(a.buildings[i], b.buildings[i], t)) as unknown as Palette['buildings'],
+    shadow: c('shadow'),
+    shadowOpacity: n('shadowOpacity'),
+    glow: n('glow'),
+    light: c('light'),
+    lightIntensity: n('lightIntensity'),
+  };
+}
 
 /**
- * Mal-Eigenschaften für Tageslicht d (0 Nacht … 1 Tag), Dämmerung tw (0–1) und eine (zusammengefasste) Stimmung.
+ * Anteil der Dämmerung, in dem nur übergeblendet wird. Die Mitte (1 - 2 × BLEND) zeigt die Morgen- bzw.
+ * Abendpalette unverändert, damit man sie auch bei schnellem Tempo sieht.
  */
-export function computeLook(d: number, tw: number, mood: MapMood = {}): MapLook {
-  const day = clamp01(d);
-  const twi = clamp01(tw);
-  const darken = mood.darken ?? 0;
-  const brighten = mood.brighten ?? 0;
-  const wet = mood.wet ?? 0;
-  const night = 1 - day;
+const BLEND = 0.36;
 
-  let tint = mixColor(NIGHT.tint, DAY.tint, day);
-  tint = mixColor(tint, TWILIGHT_TINT, twi * 0.5);
-  if (mood.tint) tint = mixColor(tint, mood.tint, clamp01((mood.tintStrength ?? 0) * 1.2));
+/** Welche zwei Paletten zu einer Minute gemischt werden und wie stark. */
+export function paletteBlend(minuteOfDay: number): { from: DayPhase; to: DayPhase; t: number } {
+  const m = ((minuteOfDay % 1440) + 1440) % 1440;
+  const window = (start: number, end: number, before: DayPhase, middle: DayPhase, after: DayPhase) => {
+    const u = (m - start) / (end - start);
+    if (u < BLEND) return { from: before, to: middle, t: smoothstep(u / BLEND) };
+    if (u <= 1 - BLEND) return { from: middle, to: middle, t: 0 };
+    return { from: middle, to: after, t: smoothstep((u - (1 - BLEND)) / BLEND) };
+  };
+  if (m >= DAWN.start && m < DAWN.end) return window(DAWN.start, DAWN.end, 'night', 'dawn', 'day');
+  if (m >= DUSK.start && m < DUSK.end) return window(DUSK.start, DUSK.end, 'day', 'dusk', 'night');
+  const phase: DayPhase = m >= DAWN.end && m < DUSK.start ? 'day' : 'night';
+  return { from: phase, to: phase, t: 0 };
+}
 
-  let horizon = mixColor(NIGHT.horizon, DAY.horizon, day);
-  horizon = mixColor(horizon, TWILIGHT_HORIZON, twi * 0.55);
+/** Palette zu einer (auch gebrochenen) Minute seit Mitternacht, ohne Stimmung. */
+export function paletteAt(minuteOfDay: number): Palette {
+  const { from, to, t } = paletteBlend(minuteOfDay);
+  return mixPalette(PALETTES[from], PALETTES[to], t);
+}
 
+/** Dunkelheit für Effekte: Nacht 1, Abend 0,5, Morgen 0,35, Tag 0. */
+const NIGHTNESS: Record<DayPhase, number> = { night: 1, dusk: 0.5, dawn: 0.35, day: 0 };
+
+/**
+ * Mal-Eigenschaften zu einer Minute seit Mitternacht (auch gebrochen) und einer (zusammengefassten) Stimmung.
+ * Die Stimmung legt sich über die Palette: abdunkeln, aufhellen, entsättigen, einfärben.
+ */
+export function computeLook(minuteOfDay: number, mood: MapMood = {}): MapLook {
+  const blend = paletteBlend(minuteOfDay);
+  const base = mixPalette(PALETTES[blend.from], PALETTES[blend.to], blend.t);
+  const night = lerp(NIGHTNESS[blend.from], NIGHTNESS[blend.to], blend.t);
+  const darken = clamp01(mood.darken ?? 0);
+  const brighten = clamp01(mood.brighten ?? 0);
+  const desaturate = clamp01(mood.desaturate ?? 0);
+  const tintStrength = mood.tint ? clamp01(mood.tintStrength ?? 0) : 0;
+  const wet = clamp01(mood.wet ?? 0);
+  // Tagsüber trübt das Wetter stärker als nachts (da ist ohnehin alles dunkel).
+  const dull = darken * lerp(0.4, 0.15, night);
+  const adjust = (color: string) => {
+    let c = desaturateColor(color, desaturate * 0.55);
+    if (tintStrength > 0 && mood.tint) c = mixColor(c, mood.tint, tintStrength * 0.45);
+    if (dull > 0) c = mixColor(c, '#3b3a58', dull);
+    if (brighten > 0) c = mixColor(c, '#ffffff', brighten * 0.4);
+    return c;
+  };
+  const p = base;
+  const minor = adjust(p.minor);
+  const minorCasing = adjust(p.minorCasing);
+  const sky = adjust(p.sky);
+  const horizon = adjust(p.horizon);
+  const land = adjust(p.land);
   return {
-    rasterBrightnessMax: round(
-      clamp01(lerp(NIGHT.brightnessMax, DAY.brightnessMax, day) * (1 - darken * 0.55) * (1 + brighten * 0.35)),
-    ),
-    rasterBrightnessMin: round(lerp(0, 0.03, day) + brighten * 0.06),
-    rasterSaturation: round(
-      Math.max(-1, lerp(NIGHT.saturation, DAY.saturation, day) - (mood.desaturate ?? 0) * 0.5 + twi * 0.12),
-    ),
-    rasterContrast: round(lerp(NIGHT.contrast, DAY.contrast, day)),
-    tintColor: tint,
-    tintOpacity: round(
-      clamp01(lerp(NIGHT.tintOpacity, DAY.tintOpacity, day) + twi * 0.08 + (mood.tintStrength ?? 0) * 0.25),
-    ),
-    waterColor: mixColor(NIGHT.water, DAY.water, day),
-    waterOpacity: round(lerp(NIGHT.waterOpacity, DAY.waterOpacity, day)),
-    roadColor: mixColor(NIGHT.road, DAY.road, clamp01(day * 1.3)),
-    roadGlowOpacity: round(clamp01(lerp(NIGHT.glow, DAY.glow, day) + wet * 0.14 * night + darken * 0.08 * day)),
-    roadCoreOpacity: round(clamp01(lerp(NIGHT.core, DAY.core, day) + wet * 0.08)),
-    lampOpacity: round(clamp01(lerp(NIGHT.lamps, DAY.lamps, clamp01(day * 1.6)) + darken * 0.3 * day)),
-    windowsLit: round(clamp01(night * 0.9 + twi * 0.2 + darken * 0.25 + 0.06)),
-    wallColor: mixColor(NIGHT.wall, DAY.wall, day * (1 - darken * 0.5)),
-    buildingOpacity: round(lerp(0.94, 0.82, day)),
-    lightColor: mixColor(NIGHT.light, DAY.light, day),
-    lightIntensity: round(lerp(NIGHT.lightIntensity, DAY.lightIntensity, day) * (1 - darken * 0.4)),
-    skyColor: mixColor(NIGHT.sky, DAY.sky, day * (1 - darken * 0.6)),
-    horizonColor: horizon,
-    fogColor: mixColor(NIGHT.fog, DAY.fog, day * (1 - darken * 0.5)),
-    fogBlend: round(clamp01(0.35 + (mood.haze ?? 0) * 0.5)),
+    sky,
+    horizon,
+    land,
+    park: adjust(p.park),
+    wood: adjust(p.wood),
+    water: adjust(p.water),
+    waterLine: adjust(p.waterLine),
+    rail: adjust(p.rail),
+    // Nasse Straßen werden etwas dunkler.
+    minor: mixColor(minor, minorCasing, wet * 0.25),
+    minorCasing,
+    major: adjust(p.major),
+    majorCasing: adjust(p.majorCasing),
+    highway: adjust(p.highway),
+    highwayCasing: adjust(p.highwayCasing),
+    buildings: p.buildings.map(adjust) as unknown as Palette['buildings'],
+    shadow: p.shadow,
+    shadowOpacity: round(p.shadowOpacity * (1 - darken * 0.5)),
+    glow: round(clamp01(p.glow + wet * 0.2 * night + darken * 0.15 * (1 - night))),
+    light: adjust(p.light),
+    lightIntensity: round(p.lightIntensity * (1 - darken * 0.3) * (1 + brighten * 0.2)),
+    fog: mixColor(horizon, land, 0.35),
+    // Nebel nur zum Horizont hin (0 = Kartenmitte, 1 = Horizont), Dunst holt ihn näher.
+    fogBlend: round(clamp01(0.8 - (mood.haze ?? 0) * 0.4)),
+    night: round(night),
+    phase: blend.t < 0.5 ? blend.from : blend.to,
   };
 }

@@ -1,44 +1,86 @@
-// Grundkarte "Nacht-Satellit": echtes Luftbild (abgedunkelt, entsättigt, kalter Blaustich), leuchtende
-// Straßen aus den OpenFreeMap-Vektordaten, dunkle 3D-Gebäude mit beleuchteten Fenstern und ein dezentes
-// Koordinatenraster für den Überwachungs-Look. Die Werte hier sind der Nachtzustand; Tag, Dämmerung und
-// Wetter stellt GameMap zur Laufzeit über setPaintProperty ein (siehe look.ts).
+// Grundkarte im Candy-Look (wie die Snapchat-Map): Pastellflächen, dicke runde Straßen, wenig Details und
+// 3D-Gebäude in weichen Farben mit Schatten. Alle Daten kommen aus den OpenFreeMap-Vektorkacheln
+// (OpenMapTiles-Schema, ohne Key). Keine POIs, keine Straßennamen, keine Hausnummern.
+// Die Farben hier sind der Tag; Morgen, Abend, Nacht und Wetter stellt GameMap zur Laufzeit über
+// setPaintProperty ein (siehe look.ts). Deshalb hat jede Farbe ihre eigene Ebene mit festem Wert: Datengetriebene
+// Farben (z.B. nach Straßenklasse) müssten bei jeder Änderung die Kacheln neu aufbauen.
 
-import type { ExpressionSpecification, StyleSpecification } from 'maplibre-gl';
+import type { ExpressionSpecification, FilterSpecification, LayerSpecification, StyleSpecification } from 'maplibre-gl';
+import { LANDMARK_ZONES, landmarkFeatures } from './landmarks';
 import { computeLook } from './look';
 
 /** Ebenen-IDs der Grundkarte. Module legen eigene Ebenen mit Modul-Präfix an. */
 export const BASE_LAYERS = {
-  satellite: 'satellite',
+  land: 'kt-land',
+  farmland: 'kt-farmland',
+  park: 'kt-park',
+  green: 'kt-green',
+  wood: 'kt-wood',
   water: 'kt-water',
-  tint: 'kt-tint',
-  grid: 'kt-grid',
+  waterLine: 'kt-water-line',
+  waterway: 'kt-waterway',
   rail: 'kt-rail',
-  roadsGlow: 'kt-roads-glow',
-  roadsCore: 'kt-roads-core',
-  lamps: 'kt-lamps',
-  buildings: 'buildings-3d',
+  roadGlow: 'kt-road-glow',
+  minorCasing: 'kt-road-minor-casing',
+  majorCasing: 'kt-road-major-casing',
+  highwayCasing: 'kt-road-highway-casing',
+  minor: 'kt-road-minor',
+  major: 'kt-road-major',
+  highway: 'kt-road-highway',
+  bridgeCasing: 'kt-bridge-casing',
+  bridge: 'kt-bridge',
+  buildingShadow: 'kt-building-shadow',
+  buildings: ['kt-buildings-1', 'kt-buildings-2', 'kt-buildings-3', 'kt-buildings-4'],
+  landmarkShadow: 'kt-landmark-shadow',
+  landmarks: 'kt-landmarks',
 } as const;
 
 /**
- * Module, deren Flächen oder Linien unter den 3D-Gebäuden liegen sollen (z.B. Veedel-Grenzen), geben diese ID
+ * Module, deren Flächen oder Linien unter den 3D-Gebäuden (und ihren Schatten) liegen sollen, geben diese ID
  * als beforeId an: map.addLayer(layer, BELOW_BUILDINGS).
  */
-export const BELOW_BUILDINGS = BASE_LAYERS.buildings;
+export const BELOW_BUILDINGS = BASE_LAYERS.buildingShadow;
 
-/** Name des Fenster-Musters der Gebäude (wird in GameMap erzeugt). */
-export const WINDOWS_IMAGE = 'kt-windows';
+/** Flächen, die unter den Straßen liegen sollen (z.B. Veedel-Einfärbung): map.addLayer(layer, BELOW_ROADS). */
+export const BELOW_ROADS = BASE_LAYERS.rail;
 
-const ROAD_CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service'];
-const LAMP_CLASSES = ['trunk', 'primary', 'secondary', 'tertiary'];
+/** Quelle der Wahrzeichen (GeoJSON, Farben wechseln mit der Tageszeit). */
+export const LANDMARK_SOURCE = 'kt-landmarks';
 
-/** Linienbreite je Straßenklasse, mit dem Zoom wachsend. factor skaliert (Glühen = breiter). */
-function roadWidth(factor: number): ExpressionSpecification {
-  const byClass = (widths: [number, number, number, number, number, number]): ExpressionSpecification => [
+/** Grenzen der Gebäudebänder in Metern: niedrig, mittel, hoch, sehr hoch. */
+export const BUILDING_BANDS = [9, 16, 28] as const;
+
+type Widths = readonly [number, number, number, number, number, number, number];
+
+/** Straßenbreite in Pixeln je Zoomstufe (10, 12, 14, 16, 18) und Klasse. */
+const WIDTHS: Record<string, readonly number[]> = {
+  motorway: [1.6, 3.2, 6.5, 15, 36],
+  primary: [1.1, 2.4, 5.5, 13, 30],
+  secondary: [0.7, 1.8, 4.5, 11, 26],
+  tertiary: [0.4, 1.2, 3.4, 9, 22],
+  minor: [0, 0, 1.9, 6, 16],
+  service: [0, 0, 0.6, 3, 9],
+};
+const ZOOMS = [10, 12, 14, 16, 18];
+/** Breite der Kontur je Seite, je Zoomstufe. */
+const CASING = [0.5, 0.8, 1.3, 2, 3.2];
+
+function widthFor(index: number, casing: boolean): Widths {
+  const w = (cls: string) => {
+    const base = WIDTHS[cls][index];
+    return casing && base > 0 ? base + 2 * CASING[index] : base;
+  };
+  return [w('motorway'), w('primary'), w('secondary'), w('tertiary'), w('minor'), w('service'), w('minor')];
+}
+
+/** Linienbreite nach Klasse, mit dem Zoom wachsend. casing = mit Kontur. factor skaliert (Leuchten). */
+function roadWidth(casing: boolean, factor = 1): ExpressionSpecification {
+  const byClass = (widths: Widths): ExpressionSpecification => [
     'match',
     ['get', 'class'],
-    ['motorway', 'trunk'],
+    'motorway',
     widths[0] * factor,
-    'primary',
+    ['trunk', 'primary'],
     widths[1] * factor,
     'secondary',
     widths[2] * factor,
@@ -46,157 +88,198 @@ function roadWidth(factor: number): ExpressionSpecification {
     widths[3] * factor,
     'minor',
     widths[4] * factor,
+    'service',
     widths[5] * factor,
+    widths[6] * factor,
   ];
-  return [
-    'interpolate',
-    ['exponential', 1.6],
-    ['zoom'],
-    9,
-    byClass([0.9, 0.6, 0.4, 0.3, 0, 0]),
-    13,
-    byClass([2.2, 1.8, 1.4, 1, 0.5, 0.25]),
-    17,
-    byClass([16, 13, 11, 9, 6, 3.5]),
-  ];
+  const stops: (number | ExpressionSpecification)[] = [];
+  ZOOMS.forEach((zoom, i) => {
+    stops.push(zoom, byClass(widthFor(i, casing)));
+  });
+  return ['interpolate', ['exponential', 1.5], ['zoom'], ...stops] as ExpressionSpecification;
 }
 
-const roadFilter: ExpressionSpecification = [
+const notTunnel: ExpressionSpecification = ['!=', ['get', 'brunnel'], 'tunnel'];
+const isBridge: ExpressionSpecification = ['==', ['get', 'brunnel'], 'bridge'];
+const MAIN_CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'];
+
+/** Nebenstraßen (weiß), auch Fußgängerzonen. Brücken größerer Straßen zeichnet die Brückenebene. */
+const minorFilter: FilterSpecification = [
   'all',
-  ['match', ['get', 'class'], ROAD_CLASSES, true, false],
-  ['!=', ['get', 'brunnel'], 'tunnel'],
-];
-
-interface LineFeature {
-  type: 'Feature';
-  properties: Record<string, never>;
-  geometry: { type: 'LineString'; coordinates: number[][] };
-}
-
-/** Raster aus Längen- und Breitengraden rund um Köln (ca. 1 km Abstand). */
-function koelnGrid(): { type: 'FeatureCollection'; features: LineFeature[] } {
-  const features: LineFeature[] = [];
-  const west = 6.7;
-  const east = 7.2;
-  const south = 50.8;
-  const north = 51.1;
-  for (let lng = west; lng <= east + 1e-9; lng += 0.015) {
-    features.push({
-      type: 'Feature',
-      properties: {},
-      geometry: {
-        type: 'LineString',
-        coordinates: [
-          [lng, south],
-          [lng, north],
-        ],
-      },
-    });
-  }
-  for (let lat = south; lat <= north + 1e-9; lat += 0.01) {
-    features.push({
-      type: 'Feature',
-      properties: {},
-      geometry: {
-        type: 'LineString',
-        coordinates: [
-          [west, lat],
-          [east, lat],
-        ],
-      },
-    });
-  }
-  return { type: 'FeatureCollection', features };
-}
-
-const WORLD = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      properties: {},
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [-180, -85],
-            [180, -85],
-            [180, 85],
-            [-180, 85],
-            [-180, -85],
-          ],
-        ],
-      },
-    },
+  notTunnel,
+  [
+    'any',
+    ['match', ['get', 'class'], ['tertiary', 'minor', 'service'], true, false],
+    ['all', ['==', ['get', 'class'], 'path'], ['==', ['get', 'subclass'], 'pedestrian']],
   ],
-} as const;
+  ['!', ['all', isBridge, ['==', ['get', 'class'], 'tertiary']]],
+];
+/** Hauptstraßen (gelb). */
+const majorFilter: FilterSpecification = [
+  'all',
+  notTunnel,
+  ['!', isBridge],
+  ['match', ['get', 'class'], ['trunk', 'primary', 'secondary'], true, false],
+];
+/** Autobahnen (orange). */
+const highwayFilter: FilterSpecification = ['all', notTunnel, ['!', isBridge], ['==', ['get', 'class'], 'motorway']];
+/** Brücken der größeren Straßen (orange). */
+const bridgeFilter: FilterSpecification = ['all', isBridge, ['match', ['get', 'class'], MAIN_CLASSES, true, false]];
 
-const night = computeLook(0, 0);
+/** Echte Gebäude, die nicht in einem Wahrzeichen stecken (die zeichnet die Wahrzeichen-Ebene). */
+const outsideLandmarks: ExpressionSpecification = ['>', ['distance', LANDMARK_ZONES], 0];
+const buildingHeight: ExpressionSpecification = ['coalesce', ['get', 'render_height'], 8];
+
+function buildingBand(index: number): FilterSpecification {
+  const low = index === 0 ? null : BUILDING_BANDS[index - 1];
+  const high = index === BUILDING_BANDS.length ? null : BUILDING_BANDS[index];
+  const conditions: ExpressionSpecification[] = [['!=', ['get', 'hide_3d'], true]];
+  if (low !== null) conditions.push(['>=', buildingHeight, low]);
+  if (high !== null) conditions.push(['<', buildingHeight, high]);
+  return ['all', ...conditions, outsideLandmarks];
+}
+
+const day = computeLook(12 * 60);
+
+function roadLayer(id: string, filter: FilterSpecification, color: string, casing: boolean, minzoom = 5) {
+  return {
+    id,
+    type: 'line',
+    source: 'openmaptiles',
+    'source-layer': 'transportation',
+    minzoom,
+    filter,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': color, 'line-width': roadWidth(casing) },
+  } satisfies LayerSpecification;
+}
+
+function buildingLayers(): LayerSpecification[] {
+  return BASE_LAYERS.buildings.map((id, i) => ({
+    id,
+    type: 'fill-extrusion',
+    source: 'openmaptiles',
+    'source-layer': 'building',
+    minzoom: 13,
+    filter: buildingBand(i),
+    paint: {
+      'fill-extrusion-color': day.buildings[i],
+      // Beim Hineinzoomen wachsen die Häuser aus dem Boden.
+      'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 14, buildingHeight],
+      'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+      'fill-extrusion-opacity': 1,
+      'fill-extrusion-vertical-gradient': true,
+    },
+  }));
+}
+
+/** Weicher Schatten: Grundriss leicht versetzt, halbtransparent (der Versatz wächst mit dem Zoom). */
+const SHADOW_TRANSLATE: ExpressionSpecification = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  13,
+  ['literal', [1, 1]],
+  15,
+  ['literal', [3, 2.5]],
+  17,
+  ['literal', [9, 7]],
+  19,
+  ['literal', [26, 20]],
+];
 
 export const baseStyle: StyleSpecification = {
   version: 8,
   sources: {
-    satellite: {
-      type: 'raster',
-      tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution: 'Satellitenbild &copy; Esri, Maxar, Earthstar Geographics',
-    },
     openmaptiles: {
       type: 'vector',
       url: 'https://tiles.openfreemap.org/planet',
       attribution: '&copy; OpenFreeMap &copy; OpenMapTiles &copy; OpenStreetMap',
     },
-    'kt-world': { type: 'geojson', data: WORLD },
-    'kt-grid': { type: 'geojson', data: koelnGrid() },
+    [LANDMARK_SOURCE]: { type: 'geojson', data: landmarkFeatures(0) },
   },
   sky: {
-    'sky-color': night.skyColor,
-    'horizon-color': night.horizonColor,
-    'fog-color': night.fogColor,
-    'fog-ground-blend': night.fogBlend,
-    'horizon-fog-blend': 0.7,
-    'sky-horizon-blend': 0.6,
+    'sky-color': day.sky,
+    'horizon-color': day.horizon,
+    'fog-color': day.fog,
+    'fog-ground-blend': day.fogBlend,
+    'horizon-fog-blend': 0.6,
+    'sky-horizon-blend': 0.7,
     'atmosphere-blend': 0,
   },
-  light: { anchor: 'map', color: night.lightColor, intensity: night.lightIntensity, position: [1.3, 200, 35] },
+  light: { anchor: 'map', color: day.light, intensity: day.lightIntensity, position: [1.15, 210, 35] },
   layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#03060a' } },
+    { id: BASE_LAYERS.land, type: 'background', paint: { 'background-color': day.land } },
     {
-      id: BASE_LAYERS.satellite,
-      type: 'raster',
-      source: 'satellite',
-      paint: {
-        'raster-brightness-max': night.rasterBrightnessMax,
-        'raster-brightness-min': night.rasterBrightnessMin,
-        'raster-saturation': night.rasterSaturation,
-        'raster-contrast': night.rasterContrast,
-        'raster-fade-duration': 200,
-      },
+      id: BASE_LAYERS.farmland,
+      type: 'fill',
+      source: 'openmaptiles',
+      'source-layer': 'landcover',
+      filter: ['==', ['get', 'class'], 'farmland'],
+      paint: { 'fill-color': day.park, 'fill-opacity': 0.35 },
+    },
+    {
+      id: BASE_LAYERS.park,
+      type: 'fill',
+      source: 'openmaptiles',
+      'source-layer': 'park',
+      paint: { 'fill-color': day.park, 'fill-opacity': 0.45 },
+    },
+    {
+      id: BASE_LAYERS.green,
+      type: 'fill',
+      source: 'openmaptiles',
+      'source-layer': 'landcover',
+      filter: ['==', ['get', 'class'], 'grass'],
+      paint: { 'fill-color': day.park },
+    },
+    {
+      id: BASE_LAYERS.wood,
+      type: 'fill',
+      source: 'openmaptiles',
+      'source-layer': 'landcover',
+      filter: ['==', ['get', 'class'], 'wood'],
+      paint: { 'fill-color': day.wood },
+    },
+    {
+      // Friedhöfe (Melaten) und Sportplätze sind in Köln große grüne Flächen.
+      id: `${BASE_LAYERS.green}-landuse`,
+      type: 'fill',
+      source: 'openmaptiles',
+      'source-layer': 'landuse',
+      filter: ['match', ['get', 'class'], ['cemetery', 'pitch', 'stadium', 'playground'], true, false],
+      paint: { 'fill-color': day.park, 'fill-opacity': 0.75 },
     },
     {
       id: BASE_LAYERS.water,
       type: 'fill',
       source: 'openmaptiles',
       'source-layer': 'water',
-      paint: { 'fill-color': night.waterColor, 'fill-opacity': night.waterOpacity, 'fill-antialias': false },
+      filter: ['!=', ['get', 'class'], 'swimming_pool'],
+      paint: { 'fill-color': day.water },
     },
     {
-      id: BASE_LAYERS.tint,
-      type: 'fill',
-      source: 'kt-world',
-      paint: { 'fill-color': night.tintColor, 'fill-opacity': night.tintOpacity, 'fill-antialias': false },
-    },
-    {
-      id: BASE_LAYERS.grid,
+      id: BASE_LAYERS.waterLine,
       type: 'line',
-      source: 'kt-grid',
-      minzoom: 10,
+      source: 'openmaptiles',
+      'source-layer': 'water',
+      minzoom: 11,
+      filter: ['!=', ['get', 'class'], 'swimming_pool'],
       paint: {
-        'line-color': '#6cb4ff',
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.05, 14, 0.14],
-        'line-width': 1,
+        'line-color': day.waterLine,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.6, 16, 2.5],
+      },
+    },
+    {
+      id: BASE_LAYERS.waterway,
+      type: 'line',
+      source: 'openmaptiles',
+      'source-layer': 'waterway',
+      filter: ['all', notTunnel, ['match', ['get', 'class'], ['river', 'canal', 'stream'], true, false]],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': day.water,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.6, 14, 2, 18, 6],
       },
     },
     {
@@ -204,79 +287,84 @@ export const baseStyle: StyleSpecification = {
       type: 'line',
       source: 'openmaptiles',
       'source-layer': 'transportation',
-      minzoom: 11,
-      filter: ['all', ['==', ['get', 'class'], 'rail'], ['!=', ['get', 'brunnel'], 'tunnel']],
+      minzoom: 12,
+      filter: [
+        'all',
+        notTunnel,
+        ['==', ['get', 'class'], 'rail'],
+        ['!', ['all', isBridge, ['within', LANDMARK_ZONES]]],
+      ],
+      layout: { 'line-join': 'round' },
       paint: {
-        'line-color': '#7fa7d9',
-        'line-opacity': 0.28,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.5, 17, 2],
-        'line-dasharray': [3, 2],
+        'line-color': day.rail,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.8, 16, 2.5, 18, 4],
       },
     },
     {
-      id: BASE_LAYERS.roadsGlow,
+      // Nachts leuchten Hauptstraßen und Autobahnen (tagsüber unsichtbar).
+      id: BASE_LAYERS.roadGlow,
       type: 'line',
       source: 'openmaptiles',
       'source-layer': 'transportation',
-      filter: roadFilter,
+      filter: [
+        'all',
+        notTunnel,
+        ['match', ['get', 'class'], ['motorway', 'trunk', 'primary', 'secondary'], true, false],
+      ],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': night.roadColor,
-        'line-opacity': night.roadGlowOpacity,
-        'line-width': roadWidth(4),
-        'line-blur': roadWidth(3),
+        'line-color': day.majorCasing,
+        'line-opacity': day.glow,
+        'line-width': roadWidth(true, 3.2),
+        'line-blur': roadWidth(true, 2.2),
       },
     },
+    roadLayer(BASE_LAYERS.minorCasing, minorFilter, day.minorCasing, true, 11),
+    roadLayer(BASE_LAYERS.majorCasing, majorFilter, day.majorCasing, true),
+    roadLayer(BASE_LAYERS.highwayCasing, highwayFilter, day.highwayCasing, true),
+    roadLayer(BASE_LAYERS.minor, minorFilter, day.minor, false, 11),
+    roadLayer(BASE_LAYERS.major, majorFilter, day.major, false),
+    roadLayer(BASE_LAYERS.highway, highwayFilter, day.highway, false),
+    roadLayer(BASE_LAYERS.bridgeCasing, bridgeFilter, day.highwayCasing, true),
+    roadLayer(BASE_LAYERS.bridge, bridgeFilter, day.highway, false),
     {
-      id: BASE_LAYERS.roadsCore,
-      type: 'line',
-      source: 'openmaptiles',
-      'source-layer': 'transportation',
-      filter: roadFilter,
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: {
-        'line-color': night.roadColor,
-        'line-opacity': night.roadCoreOpacity,
-        'line-width': roadWidth(0.55),
-        'line-blur': roadWidth(0.3),
-      },
-    },
-    {
-      id: BASE_LAYERS.lamps,
-      type: 'line',
-      source: 'openmaptiles',
-      'source-layer': 'transportation',
-      minzoom: 14,
-      filter: ['all', ['match', ['get', 'class'], LAMP_CLASSES, true, false], ['!=', ['get', 'brunnel'], 'tunnel']],
-      layout: { 'line-cap': 'round' },
-      paint: {
-        'line-color': '#ffe2b0',
-        'line-opacity': night.lampOpacity,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 14, 1.6, 18, 4],
-        'line-blur': 0.6,
-        'line-dasharray': [0, 7],
-      },
-    },
-    {
-      id: BASE_LAYERS.buildings,
-      type: 'fill-extrusion',
+      id: BASE_LAYERS.buildingShadow,
+      type: 'fill',
       source: 'openmaptiles',
       'source-layer': 'building',
-      minzoom: 13,
-      filter: ['!=', ['get', 'hide_3d'], true],
+      minzoom: 13.5,
+      filter: ['all', ['!=', ['get', 'hide_3d'], true], outsideLandmarks],
       paint: {
-        'fill-extrusion-pattern': WINDOWS_IMAGE,
-        'fill-extrusion-height': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          13,
-          0,
-          14,
-          ['coalesce', ['get', 'render_height'], 8],
-        ],
-        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-        'fill-extrusion-opacity': night.buildingOpacity,
+        'fill-color': day.shadow,
+        'fill-opacity': day.shadowOpacity,
+        'fill-translate': SHADOW_TRANSLATE,
+        'fill-translate-anchor': 'map',
+        'fill-antialias': false,
+      },
+    },
+    ...buildingLayers(),
+    {
+      id: BASE_LAYERS.landmarkShadow,
+      type: 'fill',
+      source: LANDMARK_SOURCE,
+      filter: ['<', ['get', 'base'], 20],
+      paint: {
+        'fill-color': day.shadow,
+        'fill-opacity': day.shadowOpacity,
+        'fill-translate': SHADOW_TRANSLATE,
+        'fill-translate-anchor': 'map',
+        'fill-antialias': false,
+      },
+    },
+    {
+      id: BASE_LAYERS.landmarks,
+      type: 'fill-extrusion',
+      source: LANDMARK_SOURCE,
+      paint: {
+        'fill-extrusion-color': ['get', 'color'],
+        'fill-extrusion-height': ['get', 'height'],
+        'fill-extrusion-base': ['get', 'base'],
+        'fill-extrusion-opacity': 1,
         'fill-extrusion-vertical-gradient': true,
       },
     },

@@ -2,8 +2,9 @@
  * Design-Tokens: Farben, Abstände, Schriften, Radien, Schatten, Bewegung und Ebenen.
  * Alle Oberflächen (auch die der Module) nutzen nur diese Variablen, damit der Look zentral änderbar ist.
  *
- * Look "clean und dunkel" zur Nacht-Satellitenkarte: fast schwarzes Blau, kühle Linien wie auf einem
- * Überwachungsmonitor, Mint-Türkis für Geld und Aktives, Natriumgelb (Straßenlaternen) für Warnungen.
+ * Look "clean und dunkel" für die Bedienelemente: fast schwarzes Blau, kühle Linien, Mint-Türkis für Geld und
+ * Aktives, Natriumgelb für Warnungen. Die Karte selbst ist im Candy-Look (Pastell); ihre Marker sind rund und
+ * weiß mit weichem Schatten (--color-marker-bg, --color-marker-ink, --shadow-marker-soft).
  * Namen aus dem Fundament bleiben erhalten, neue Tokens kommen nur dazu.
  */
 :root {
@@ -50,6 +51,12 @@
   --color-marker-idle: #1c2735;
   --color-marker-border: #dbe6f3;
   --color-label-bg: rgba(4, 8, 14, 0.82);
+  /* Marker im Candy-Look der Karte: rund, weiß, weicher Schatten, dunkle Schrift */
+  --color-marker-bg: #ffffff;
+  --color-marker-ink: #2d2640;
+  --color-marker-muted: #8a82a3;
+  --color-marker-ring: #e6def5;
+  --shadow-marker-soft: 0 3px 10px rgba(60, 40, 100, 0.28), 0 1px 2px rgba(60, 40, 100, 0.2);
   /* Linien des Überwachungs-Overlays */
   --color-scan: rgba(108, 180, 255, 0.5);
   --color-scan-faint: rgba(108, 180, 255, 0.08);

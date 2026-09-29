@@ -1,5 +1,5 @@
-// Lieferungen auf der Karte: Kurier (Roller) oder du selbst (Auto) fahren Luftlinie vom Lager zum Kunden
-// (Effekt-Werkzeug createVehicle), das Ziel ist markiert.
+// Lieferungen auf der Karte: Kurier (Roller) oder du selbst (Auto) fahren als 3D-Mini-Fahrzeug Luftlinie vom
+// Lager zum Kunden (Effekt-Werkzeug createVehicle), das Ziel ist markiert.
 
 import type { Marker } from 'maplibre-gl';
 import { addHtmlMarker, createVehicle, type MapLayer, type VehicleHandle } from '../../../map';
@@ -33,6 +33,7 @@ export const deliveriesLayer: MapLayer = {
                 kind: order.deliveredBy === 'player' ? 'car' : 'courier',
                 label: order.kind === 'wholesale' ? formatProductAmount(order.productId, order.amount) : undefined,
                 title,
+                progress: orderProgress(state, order),
               }),
               target: addHtmlMarker(ctx.map, { position: order, className: 'delivery-target', title }).marker,
             };

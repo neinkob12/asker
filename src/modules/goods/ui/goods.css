@@ -1,12 +1,10 @@
 .map-place--warehouse {
+  --map-place-color: var(--color-info-strong);
   pointer-events: auto;
   background: none;
   border: 0;
   padding: 0;
   cursor: pointer;
-}
-.map-place--warehouse .map-place-icon {
-  background: #3b82f6;
 }
 
 .goods-hud {

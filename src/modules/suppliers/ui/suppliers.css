@@ -99,12 +99,10 @@
   gap: var(--space-1);
 }
 
-.map-place--port .map-place-icon {
-  background: #8b5cf6;
+.map-place--port,
+.map-place--harbor {
+  --map-place-color: #8b5cf6;
 }
-.map-place--city .map-place-icon {
-  background: #a78bfa;
-}
-.map-fx-vehicle.is-late {
-  --fx-vehicle-color: var(--color-warn);
+.map-place--city {
+  --map-place-color: #a78bfa;
 }
