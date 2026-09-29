@@ -5,7 +5,7 @@
 // Wichtig: Er handelt ausschließlich über ctx.dispatch(...) mit actor 'staff:<id>', also über dieselben
 // Befehle wie der Spieler. Direkt ändert er nur den eigenen Zustand (state.modules.hierarchy) und das Journal.
 
-import { type Actor, type Command, type Ctx, journal } from '../../core';
+import { type Actor, type Command, type Ctx, journal, messages } from '../../core';
 import { canServe, getSalesStats, waitingAt } from '../customers';
 import { getStock, stockSummary } from '../goods';
 import { getSpotPrice, hasOwnPrice, priceRatio, roundPrice, spotReferencePrice } from '../market';
@@ -22,6 +22,7 @@ import {
   type StaffMember,
   securityAt,
   serveTime,
+  staffContact,
 } from '../staff';
 import { availablePackages, getSuppliers, isBlocked, packagePrice, shipmentsInTransit } from '../suppliers';
 import { veedelName } from '../veedel';
@@ -75,8 +76,11 @@ interface Turn {
   run: (command: Command) => boolean;
 }
 
-/** Eintrag ins Protokoll des Leutnants, wichtige Dinge auch ins Journal. */
-function note(turn: Turn, text: string, toJournal = true): void {
+/**
+ * Eintrag ins Protokoll des Leutnants, wichtige Dinge auch ins Journal. Mit phone schreibt er dir zusätzlich
+ * aufs Handy (still, ohne Banner), wie jede Figur im Spiel.
+ */
+function note(turn: Turn, text: string, toJournal = true, phone = false): void {
   const { ctx, post, lt, veedelId } = turn;
   // Dasselbe noch einmal (z.B. Preise nachgezogen): nur die Zeit aktualisieren.
   if (post.log[0]?.text === text) {
@@ -87,6 +91,7 @@ function note(turn: Turn, text: string, toJournal = true): void {
   if (post.log.length > LOG_LIMIT) post.log.length = LOG_LIMIT;
   if (toJournal)
     journal.add(ctx, `${lt.name} (${veedelName(veedelId)}): ${text}`, 'info', { veedelId, staffId: lt.id });
+  if (phone) messages.send(ctx, { contact: staffContact(lt), text: `${veedelName(veedelId)}: ${text}`, silent: true });
 }
 
 /** Alle paar Minuten: jeder Leutnant ordnet sein Veedel (wenn es Zeit ist) und verkauft selbst. */
@@ -126,7 +131,7 @@ export function onRaidWarning(ctx: Ctx, veedelId: string, post: LieutenantPost, 
   const actor: Actor = `staff:${lt.id}`;
   const turn: Turn = { ctx, veedelId, post, lt, run: (command) => ctx.dispatch(command, { actor }).ok };
   if (turn.run({ type: 'staff.lieLow', payload: { veedelId, until } })) {
-    note(turn, 'Tipp vom Polizei-Kontakt: Razzia im Anmarsch. Alle runter von der Straße.', false);
+    note(turn, 'Tipp vom Polizei-Kontakt: Razzia im Anmarsch. Alle runter von der Straße.', false, true);
   }
 }
 
@@ -146,13 +151,15 @@ function handleHeat(turn: Turn): boolean {
     note(
       turn,
       `Zu heiß hier (Heat ${heat}). ${pulled === 1 ? 'Einen' : pulled} von der Straße geholt, wir tauchen ab.`,
+      true,
+      true,
     );
     return true;
   }
   if (post.lyingLow) {
     if (heat >= threshold - HEAT_HYSTERESIS) return true;
     post.lyingLow = false;
-    note(turn, 'Die Luft ist wieder rein, zurück an die Arbeit.');
+    note(turn, 'Die Luft ist wieder rein, zurück an die Arbeit.', true, true);
   }
   return false;
 }
@@ -264,7 +271,7 @@ function restock(turn: Turn): void {
     )
     .filter((o) => o.price <= budget);
   if (offers.length === 0) {
-    note(turn, 'Wir brauchen Ware, aber das Geld reicht nicht.');
+    note(turn, 'Wir brauchen Ware, aber das Geld reicht nicht.', true, true);
     return;
   }
   // Was fragen die Kunden nach, das nicht da ist (customer.missed)? Davon zuerst, sonst irgendwas Günstiges.
