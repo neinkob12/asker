@@ -1,28 +1,14 @@
 /*
- * Das Spiel-Handy als iPhone (Pro) im Dunkelmodus: Titanrahmen mit Tasten, schwarzer Rand, Bildschirm mit
- * gerundeten Ecken, Statusleiste mit Dynamic Island, Startbildschirm mit Widgets, App-Raster und Glas-Dock,
- * App-Seiten mit iOS-Navigationsleiste und großen Titeln, Listen als eingerückte Gruppen.
- * Maße in px entsprechen etwa iOS-Punkten (das Handy ist ungefähr so breit wie ein iPhone: 393 pt).
- * Am Desktop rechts angedockt, am Handy bildschirmfüllend unter dem HUD. Nur Tokens verwenden.
+ * Das Spiel-Handy als iPhone (Pro): Titanrahmen mit Tasten, Bildschirm mit gerundeten Ecken, Statusleiste in drei
+ * Spalten (Uhrzeit | Dynamic Island | Empfang, WLAN, Akku), Startbildschirm mit Kölner Skyline, Heute-Zeile,
+ * Kennzahlen, App-Raster und Glas-Dock, App-Seiten mit iOS-Navigationsleiste und großen Titeln, Inhalte als
+ * eingerückte Gruppen wie in der Einstellungen-App. Maße in px entsprechen etwa iOS-Punkten.
+ * Am Desktop rechts angedockt, am Handy bildschirmfüllend unter dem HUD. Nur Tokens verwenden (styles/tokens.css).
+ * Die Apps (Einstellungen, Ereignisse, Nachrichten, Meldungen, Banner) stehen in phone-apps.css.
+ *
+ * Schichten: Inhalt (flach, Gruppen und Zeilen) unten, darüber die schwebende Ebene aus Glas: Navigationsleiste
+ * beim Scrollen, Dock, Antwortblatt, Banner, Island. Bei reduzierter Transparenz oder mehr Kontrast ist Glas deckend.
  */
-
-/* Farben im Handy: iOS-Systemfarben (Dunkelmodus) */
-.phone,
-.island-wrap {
-  --ios-bg: #000000;
-  --ios-grouped: #1c1c1e;
-  --ios-grouped-2: #2c2c2e;
-  --ios-fill: rgba(120, 120, 128, 0.24);
-  --ios-separator: rgba(84, 84, 88, 0.6);
-  --ios-label-2: rgba(235, 235, 245, 0.6);
-  --ios-label-3: rgba(235, 235, 245, 0.3);
-  --ios-tint: var(--gold);
-  --ios-green: #30d158;
-  --ios-orange: #ff9f0a;
-  --ios-red: #ff453a;
-  --ios-blue: #0a84ff;
-  --ios-cyan: #64d2ff;
-}
 
 /* ---------------------------------------------------------------- Gehäuse */
 .phone {
@@ -31,7 +17,7 @@
   top: var(--top);
   right: calc(var(--gap) + var(--safe-right));
   width: var(--phone-width);
-  aspect-ratio: 393 / 852;
+  aspect-ratio: var(--phone-ratio);
   max-height: calc(100dvh - var(--top) - var(--gap) - var(--safe-bottom));
   animation: phone-in var(--duration-slow) var(--ease-out);
 }
@@ -41,39 +27,41 @@
     transform: translateX(24px);
   }
 }
-/* Titanrahmen, schwarzer Rand, Bildschirm */
+/*
+ * Titanrahmen, schwarzer Rand, Bildschirm. Container "phone": Breite und Höhe des Bildschirms in cqw/cqh und für die
+ * Anpassung an kleine Fenster (schmales oder niedriges Handy) weiter unten.
+ */
 .phone__device {
-  --phone-screen-bg: var(--ios-bg);
+  --phone-corner: calc(var(--phone-width) * 0.14);
+  container: phone / size;
   position: relative;
-  display: flex;
-  flex-direction: column;
   width: 100%;
   height: 100%;
-  padding: 9px;
-  background: #000;
-  border-radius: 58px;
+  padding: var(--phone-bezel);
+  background: var(--hw-black);
+  border-radius: var(--phone-corner);
   box-shadow:
-    0 0 0 2px #5a5a5e,
-    0 0 0 3.5px #2a2a2c,
+    0 0 0 2px var(--hw-frame),
+    0 0 0 3.5px var(--hw-frame-edge),
     inset 0 0 0 1px rgba(255, 255, 255, 0.05),
     0 24px 60px rgba(0, 0, 0, 0.6);
 }
-/* Tasten: links Aktionstaste und Lautstärke, rechts Seitentaste und Kamerasteuerung */
+/* Tasten: links Aktionstaste und Lautstärke, rechts Seitentaste */
 .phone__device::before,
 .phone__device::after {
   content: "";
   position: absolute;
   width: 3px;
   border-radius: 2px;
-  background: linear-gradient(90deg, #3a3a3d, #6a6a6f);
+  background: linear-gradient(90deg, var(--hw-key), var(--hw-key-hi));
 }
 .phone__device::before {
   left: -6px;
   top: 17%;
   height: 4%;
   box-shadow:
-    0 calc(var(--phone-width) * 0.16) 0 0 #5a5a5e,
-    0 calc(var(--phone-width) * 0.3) 0 0 #5a5a5e;
+    0 calc(var(--phone-width) * 0.16) 0 0 var(--hw-frame),
+    0 calc(var(--phone-width) * 0.3) 0 0 var(--hw-frame);
 }
 .phone__device::after {
   right: -6px;
@@ -107,94 +95,166 @@
   }
 }
 
-/* Statusleiste (54 pt): Uhrzeit links, Dynamic Island mittig, Symbole rechts */
-.phone__status {
-  position: relative;
-  z-index: 4;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  height: 54px;
-  padding: 18px 30px 0 34px;
-  background: var(--phone-screen-bg);
-  border-radius: 49px 49px 0 0;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
+/*
+ * Im Handy gelten die Textgrößen von iOS (Body 17, Subhead 15, Footnote 13): Bausteine und Module, die die
+ * --font-size-*-Tokens nutzen, wachsen hier mit. Kleiner als 11 px wird nie gesetzt.
+ */
+.phone {
+  --font-size-xs: var(--type-footnote);
+  --font-size-sm: var(--type-subhead);
+  --font-size-md: var(--type-body);
+  --font-size-lg: var(--type-title-3);
 }
-.phone__status-icons {
-  display: inline-flex;
-  gap: 6px;
-  padding-top: 1px;
-  font-size: 15px;
-  color: var(--color-text);
-}
+
+/* Bildschirm: füllt den Rahmen. Statusleiste, Seiten und Home-Balken liegen als Schichten darauf. */
 .phone__screen {
   position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--phone-screen-bg);
+  width: 100%;
+  height: 100%;
+  border-radius: calc(var(--phone-corner) - var(--phone-bezel));
+  background: var(--phone-bg);
+  color: var(--phone-label);
+  font-size: var(--type-body);
+  line-height: var(--type-body-lh);
   overflow: hidden;
 }
-/* Home-Indikator (134 × 5 pt) */
+
+/* ---------------------------------------------------------------- Statusleiste */
+/*
+ * Drei Spalten wie bei iOS: links die Uhrzeit, in der Mitte Platz für die Island, rechts Empfang, WLAN und Akku.
+ * Die mittlere Spalte ist so breit wie die größte kompakte Island (230 pt, HIG Live Activities), auf schmalen
+ * Bildschirmen schmaler, damit Uhrzeit und Symbole immer frei bleiben. Alles ohne Überlappung mit der Island.
+ */
+.phone__status {
+  --island-max: min(230px, calc(100cqw - 156px));
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--island-max) minmax(0, 1fr);
+  align-items: start;
+  height: var(--phone-status-height);
+  padding: 11px max(4px, var(--safe-left)) 0 max(4px, var(--safe-right));
+  color: var(--phone-label);
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  transition: color var(--duration);
+}
+.phone__screen.is-home .phone__status {
+  color: var(--home-label);
+}
+.phone__ear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 37px;
+  min-width: 0;
+}
+.phone__ear-gap {
+  height: 37px;
+}
+.phone__time {
+  white-space: nowrap;
+}
+.phone__ear--right .ui-icon {
+  font-size: 16px;
+}
+.phone__ear--right .phone__battery {
+  font-size: 24px;
+}
+/* Zwei Aktivitäten: Der Kreis der zweiten sitzt neben der Island, Empfang und WLAN weichen, der Akku bleibt. */
+.phone__status:has(.island-minimal) .phone__signal,
+.phone__status:has(.island-minimal) .phone__wifi {
+  display: none;
+}
+
+/* Home-Balken (134 × 5 pt) als Knopf: auf dem Startbildschirm Handy weglegen, sonst Startbildschirm */
 .phone__nav {
-  position: relative;
+  position: absolute;
+  z-index: 7;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   justify-content: center;
-  align-items: center;
-  height: 30px;
-  background: var(--phone-screen-bg);
-  border-radius: 0 0 49px 49px;
+  align-items: flex-end;
+  height: var(--phone-home-inset);
+  pointer-events: none;
 }
 .phone__nav-button {
   display: grid;
-  place-items: center;
-  width: 180px;
+  place-items: end center;
+  width: 200px;
   height: 100%;
-  padding: 0;
+  padding: 0 0 8px;
   border: 0;
   background: transparent;
   cursor: pointer;
+  pointer-events: auto;
 }
 .phone__home-indicator {
   width: 134px;
   height: 5px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.7);
-  transition: background var(--duration-fast);
+  background: var(--phone-label);
+  opacity: 0.7;
+  transition: opacity var(--duration-fast);
+}
+.phone__screen.is-home .phone__home-indicator {
+  background: var(--home-label);
 }
 .phone__nav-button:hover .phone__home-indicator {
-  background: #fff;
+  opacity: 1;
 }
+/* Handy weglegen: kleine Glas-Taste rechts unten (Trefferfläche 44 px), damit sie über dem Inhalt lesbar bleibt */
 .phone__close {
   position: absolute;
-  right: 26px;
-  bottom: 6px;
+  right: 8px;
+  bottom: 0;
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 22px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-round);
   background: transparent;
-  color: var(--ios-label-3);
-  font-size: 14px;
+  color: var(--phone-label-2);
+  font-size: 16px;
   cursor: pointer;
+  pointer-events: auto;
+}
+.phone__close::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  z-index: -1;
+  border-radius: var(--radius-round);
+  background: var(--phone-glass);
+  backdrop-filter: var(--phone-blur);
+  box-shadow: inset 0 0 0 0.5px var(--phone-glass-edge);
+}
+.phone__screen.is-home .phone__close {
+  color: var(--home-label-2);
 }
 .phone__close:hover {
-  color: var(--color-text);
-  background: var(--ios-fill);
+  color: var(--phone-label);
+}
+.phone__screen.is-home .phone__close:hover {
+  color: var(--home-label);
 }
 
 /* ---------------------------------------------------------------- Dynamic Island */
 /* Maße nach HIG (Live Activities): kompakt 37 pt hoch, Radius 44, aufgeklappt ca. 371 × 84–160, Rand 14 */
 .island-wrap {
   position: absolute;
-  z-index: 5;
+  z-index: 8;
   top: 11px;
   left: 50%;
   display: flex;
@@ -202,6 +262,7 @@
   gap: 6px;
   transform: translateX(-50%);
   interpolate-size: allow-keywords;
+  pointer-events: auto;
 }
 .island-wrap.is-floating {
   position: fixed;
@@ -210,18 +271,19 @@
   left: calc((100% - var(--map-right) + var(--gap)) / 2);
 }
 .island {
+  --island-ease: var(--ease-ios);
   position: relative;
   min-width: 126px;
   height: 37px;
-  background: #000;
+  background: var(--hw-black);
   border-radius: 44px;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07);
-  color: #fff;
+  box-shadow: 0 0 0 1px var(--hw-rim);
+  color: var(--hw-white);
   overflow: hidden;
   transition:
-    width 360ms cubic-bezier(0.32, 0.72, 0, 1),
-    height 360ms cubic-bezier(0.32, 0.72, 0, 1),
-    border-radius 360ms cubic-bezier(0.32, 0.72, 0, 1);
+    width 360ms var(--island-ease),
+    height 360ms var(--island-ease),
+    border-radius 360ms var(--island-ease);
 }
 .is-floating .island {
   box-shadow:
@@ -234,15 +296,13 @@
 .island.is-compact,
 .island.is-pulse {
   width: auto;
-  max-width: calc(var(--phone-width) - 190px);
+  max-width: var(--island-max, 230px);
+  /* Die Trefferfläche (::after am Knopf) ragt 4 px über die Island hinaus */
+  overflow: visible;
 }
-/* Uhrzeit und Symbole der Statusleiste bleiben frei: Mit zweiter Aktivität (Kreis rechts) wird die Island schmaler
-   und die Symbole weichen dem Kreis. */
+/* Mit zweiter Aktivität wird die Island schmaler: zusammen mit dem Kreis bleibt sie in der mittleren Spalte. */
 .island-wrap:has(.island-minimal) .island {
-  max-width: calc(var(--phone-width) - 240px);
-}
-.phone__status:has(.island-minimal) .phone__status-icons {
-  visibility: hidden;
+  max-width: calc(var(--island-max, 230px) - 43px);
 }
 .is-floating .island.is-compact,
 .is-floating .island.is-pulse {
@@ -250,7 +310,7 @@
 }
 .island.is-expanded,
 .island.is-alert {
-  width: min(371px, calc(var(--phone-width) - 34px));
+  width: min(371px, calc(100cqw - 20px));
   height: auto;
   border-radius: 40px;
 }
@@ -259,6 +319,7 @@
   width: 371px;
 }
 .island__compact {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -268,16 +329,23 @@
   border: 0;
   background: none;
   color: inherit;
-  font-weight: 600;
+  font-weight: var(--font-weight-bold);
   white-space: nowrap;
   cursor: pointer;
+}
+/* Trefferfläche mindestens 44 pt hoch, ohne die Island größer zu zeichnen */
+.island__compact::after {
+  content: "";
+  position: absolute;
+  inset: -4px -6px;
+  border-radius: 26px;
 }
 .island__lead,
 .island__trail {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: var(--type-subhead);
   font-variant-numeric: tabular-nums;
 }
 .island__lead .ui-icon {
@@ -328,8 +396,8 @@
 }
 .island__more {
   padding: 2px 6px 0;
-  font-size: 12px;
-  color: var(--ios-label-2);
+  font-size: var(--type-footnote);
+  color: var(--phone-label-2);
 }
 .island-row {
   display: flex;
@@ -341,7 +409,7 @@
   border: 0;
   border-radius: 26px;
   background: none;
-  color: #fff;
+  color: var(--hw-white);
   text-align: left;
   cursor: pointer;
 }
@@ -368,17 +436,17 @@
 .island-row__title {
   display: -webkit-box;
   overflow: hidden;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--type-subhead);
+  font-weight: var(--font-weight-bold);
   line-height: 1.25;
-  color: #fff;
+  color: var(--hw-white);
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 .island-row__detail {
   overflow: hidden;
-  font-size: 13px;
-  color: var(--ios-label-2);
+  font-size: var(--type-footnote);
+  color: var(--phone-label-2);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -400,8 +468,8 @@
 .island-row__value {
   flex: none;
   padding-right: 8px;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--type-title-3);
+  font-weight: var(--font-weight-bold);
   font-variant-numeric: tabular-nums;
 }
 /* Zweite Aktivität: kleiner Kreis neben der Island (minimale Darstellung) */
@@ -414,11 +482,19 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: #000;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07);
+  background: var(--hw-black);
+  box-shadow: 0 0 0 1px var(--hw-rim);
+  color: inherit;
   font-size: 17px;
   cursor: pointer;
-  animation: island-minimal-in 360ms cubic-bezier(0.32, 0.72, 0, 1);
+  animation: island-minimal-in 360ms var(--ease-ios);
+}
+/* Trefferfläche mindestens 44 pt, ohne den Kreis größer zu zeichnen */
+.island-minimal::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
 }
 .island-minimal__count {
   position: absolute;
@@ -428,10 +504,10 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: #fff;
-  color: #000;
-  font-size: 10px;
-  font-weight: 700;
+  background: var(--hw-white);
+  color: var(--hw-black);
+  font-size: var(--type-caption-2);
+  font-weight: var(--font-weight-black);
   line-height: 16px;
 }
 @keyframes island-minimal-in {
@@ -440,21 +516,21 @@
     transform: translateX(-24px) scale(0.6);
   }
 }
-/* Kräftige Farben auf Schwarz */
-.tone-accent {
-  color: var(--ios-green);
+/* Kräftige Bedeutungsfarben auf Schwarz (die Island ist immer dunkel) */
+.island-wrap .tone-accent {
+  color: var(--cat-money);
 }
-.tone-warn {
-  color: var(--ios-orange);
+.island-wrap .tone-warn {
+  color: var(--cat-warn);
 }
-.tone-bad {
-  color: var(--ios-red);
+.island-wrap .tone-bad {
+  color: var(--cat-danger);
 }
-.tone-info {
-  color: var(--ios-cyan);
+.island-wrap .tone-info {
+  color: var(--cat-sky);
 }
-.tone-neutral {
-  color: #fff;
+.island-wrap .tone-neutral {
+  color: var(--hw-white);
 }
 .island-row.tone-accent .island-row__value,
 .island-row.tone-warn .island-row__value,
@@ -464,119 +540,347 @@
 }
 
 /* ---------------------------------------------------------------- Startbildschirm */
+/*
+ * Wallpaper: Himmel aus Nacht und Tag (--daylight 0–1 aus der Spielzeit) mit Abendrot (--twilight 0–1) und die
+ * Kölner Skyline. Alles darauf ist Schrift in Weiß (immer 4.5:1, siehe contrast.test.ts).
+ */
 .phone__home {
+  --sky-top: color-mix(in srgb, var(--wall-night-top), var(--wall-day-top) calc(var(--daylight, 0) * 100%));
+  --sky-bottom: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--wall-night-bottom), var(--wall-day-bottom) calc(var(--daylight, 0) * 100%)),
+    var(--wall-twilight) calc(var(--twilight, 0) * 60%)
+  );
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--sky-top), var(--sky-bottom));
+  color: var(--home-label);
+  overflow: hidden;
+}
+.phone__sky {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* Die Skyline ist breiter als der Bildschirm (Dom in der Mitte), darunter läuft der Boden bis zum Rand weiter. */
+.skyline {
+  display: block;
+  flex: none;
+  width: 136%;
+  max-width: none;
+  height: auto;
+  margin-left: -18%;
+}
+.phone__sky::after {
+  content: "";
+  flex: none;
+  height: calc(var(--phone-home-inset) + 52px);
+  background: color-mix(in srgb, var(--sky-bottom) 32%, #000);
+}
+.skyline__far {
+  fill: color-mix(in srgb, var(--sky-bottom) 68%, #000);
+}
+.skyline__near,
+.skyline__ground {
+  fill: color-mix(in srgb, var(--sky-bottom) 32%, #000);
+}
+.skyline__bridge {
+  fill: none;
+  stroke: color-mix(in srgb, var(--sky-bottom) 55%, #000);
+  stroke-width: 1.4;
+}
+.skyline__lights {
+  fill: var(--cat-brand-a);
+  opacity: calc((1 - var(--daylight, 0)) * 0.85);
+}
+.phone__home-scroll {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 10px 20px 12px;
+  gap: 14px;
+  padding: calc(var(--phone-status-height) + 2px) var(--phone-gutter) 12px;
   overflow-y: auto;
   scrollbar-width: none;
-  background:
-    radial-gradient(120% 55% at 0% 0%, rgba(226, 174, 74, 0.16), transparent 60%),
-    radial-gradient(110% 60% at 100% 100%, rgba(10, 132, 255, 0.14), transparent 60%), #050506;
+  overscroll-behavior: contain;
 }
-.phone__home > * {
+.phone__home-scroll > * {
   flex-shrink: 0;
 }
+/* Heute: Wochentag und Spieltag links, Wetter rechts */
 .phone__today {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   padding: 0 4px;
 }
 .phone__today-date {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.phone__today-day {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: var(--font-weight-black);
+  letter-spacing: -0.02em;
+  line-height: 34px;
+}
+.phone__today-sub {
+  font-size: var(--type-subhead);
+  color: var(--home-label-2);
 }
 .phone__today-extra {
-  font-size: 15px;
-  color: var(--ios-label-2);
+  display: flex;
+  align-items: center;
+  flex: none;
 }
-/* Widgets: Glasflächen mit Radius 22 wie auf dem iOS-Homescreen */
-.phone__home .next-step,
-.phone__stats,
-.phone__widgets .weather-widget {
-  background: rgba(44, 44, 46, 0.72);
-  backdrop-filter: blur(20px);
+.phone .hud-weather {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: 0 var(--space-4);
   border: 0;
-  border-radius: 22px;
+  border-radius: var(--radius-round);
+  background: var(--home-glass);
+  box-shadow: inset 0 0 0 0.5px var(--home-glass-edge);
+  backdrop-filter: var(--phone-blur);
+  color: var(--home-label);
+  cursor: pointer;
 }
-.phone__home .next-step {
-  padding: 14px 16px;
-  border-left: 0;
+.phone .hud-weather__icon {
+  font-size: 22px;
+  color: var(--cat-sky-a);
+  filter: brightness(1.5);
 }
+.phone .hud-weather.is-warn .hud-weather__icon {
+  color: var(--cat-warn-a);
+  filter: none;
+}
+.phone .hud-weather__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  line-height: 1.15;
+}
+.phone .hud-weather__temp {
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-bold);
+}
+.phone .hud-weather__kind {
+  font-size: var(--type-footnote);
+  color: var(--home-label-2);
+}
+
+/* Nächster Schritt: das eine Signal in Gold auf dem Startbildschirm (Inhalt, flach) */
+.next-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: linear-gradient(120deg, var(--cat-brand-soft), transparent 55%), var(--phone-group);
+  border-radius: var(--radius-group);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat-brand) 40%, transparent);
+  color: var(--phone-label);
+}
+.next-step.is-coaching {
+  animation: coach-glow 2s ease-in-out infinite;
+}
+@keyframes coach-glow {
+  50% {
+    box-shadow: inset 0 0 0 1px var(--cat-brand);
+  }
+}
+.next-step__kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--type-footnote);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-caps);
+  line-height: var(--type-footnote-lh);
+  text-transform: uppercase;
+  color: var(--cat-brand);
+}
+.next-step__kicker::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cat-brand);
+}
+.next-step__body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.next-step__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.next-step__title {
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--type-body-lh);
+}
+.next-step__desc {
+  font-size: var(--type-subhead);
+  line-height: var(--type-subhead-lh);
+  color: var(--phone-label-2);
+}
+.next-step__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.next-step__meta:empty {
+  display: none;
+}
+.next-step__missing {
+  font-size: var(--type-footnote);
+  color: var(--cat-danger);
+}
+.next-step__more {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--phone-label-2);
+  font-size: var(--type-subhead);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.next-step__others {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.next-step__others button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--phone-fill);
+  color: inherit;
+  font-size: var(--type-subhead);
+  text-align: left;
+  cursor: pointer;
+}
+.next-step__others button:hover:not(:disabled) {
+  background: var(--phone-fill-hover);
+}
+.next-step__others button span:first-of-type + span {
+  flex: 1;
+}
+
+/* Kennzahlen: drei Kacheln mit Symbol (Lager, Ruf, Köln) */
 .phone__stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  padding: 12px 6px;
-  overflow: hidden;
+  gap: var(--space-3);
 }
 .phone__stats .hud-pill {
-  display: flex;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "chip label"
+    "value value";
+  align-items: center;
+  gap: 2px var(--space-2);
   min-width: 0;
-  padding: 2px 10px;
-  background: none;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
   border: 0;
+  border-radius: var(--radius-group);
+  background: var(--phone-group);
+  color: var(--phone-label);
   text-align: left;
 }
-.phone__stats .hud-pill + .hud-pill {
-  border-left: 0.5px solid var(--ios-separator);
+.phone__stats .hud-pill.is-button {
+  cursor: pointer;
 }
 .phone__stats .hud-pill.is-button:hover {
-  opacity: 0.8;
+  background: var(--phone-group-2);
 }
-.phone__stats .ui-chip {
-  display: none;
+.phone__stats .hud-pill__chip {
+  grid-area: chip;
+  display: inline-grid;
 }
 .phone__stats .hud-pill__text {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
+  display: contents;
 }
 .phone__stats .hud-pill__label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ios-label-2);
-  white-space: nowrap;
+  grid-area: label;
   overflow: hidden;
+  font-size: var(--type-footnote);
+  font-weight: var(--font-weight-medium);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--phone-label-2);
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .phone__stats .hud-pill__value {
-  font-size: 17px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  grid-area: value;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-body);
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-wrap: balance;
 }
 .phone__stats .hud-pill__value.is-warn {
-  color: var(--ios-orange);
+  color: var(--cat-warn);
 }
 .phone__stats .hud-pill__value.is-bad {
-  color: var(--ios-red);
+  color: var(--cat-danger);
 }
 .phone__stats .hud-pill__value.is-accent {
-  color: var(--ios-green);
+  color: var(--cat-money);
 }
 .phone__widgets {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
 }
 .phone__widgets:empty {
   display: none;
 }
-/* App-Raster: 4 Spalten, Icons ca. 62 pt, Beschriftung 12 pt */
+
+/* App-Raster: 4 Spalten, Kacheln ca. 64 pt, Beschriftung 13 pt */
 .phone__apps {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 22px 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px 4px;
+  padding: 6px 0 0;
 }
 .phone__app {
   position: relative;
@@ -585,66 +889,57 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  min-height: 44px;
   padding: 0;
   border: 0;
   background: transparent;
+  color: var(--home-label);
   cursor: pointer;
 }
-/* Dunkle iOS-Icons: dunkle Kachel, farbige Glyphe. Radius ca. 22,5 % der Kante. */
-.phone__icon {
-  --phone-app-color: var(--color-muted);
-  display: grid;
-  place-items: center;
-  width: min(62px, calc(var(--phone-width) * 0.155));
-  aspect-ratio: 1;
-  border-radius: 22.5%;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 60%),
-    linear-gradient(160deg, color-mix(in srgb, var(--phone-app-color) 26%, #2a2a2e), #141416);
-  box-shadow:
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.14),
-    0 2px 8px rgba(0, 0, 0, 0.4);
-  color: color-mix(in srgb, var(--phone-app-color) 88%, #fff);
-  font-size: min(28px, calc(var(--phone-width) * 0.07));
+.phone__app .phone__tile {
+  --chip-size: min(64px, calc(100cqw * 0.155));
   transition: transform var(--duration-fast) var(--ease-out);
 }
-.phone__icon .ui-icon {
-  stroke-width: 2;
+.phone__app:hover .phone__tile {
+  filter: brightness(1.08);
 }
-.phone__app:active .phone__icon {
+.phone__app:active .phone__tile {
   transform: scale(0.92);
-  filter: brightness(0.8);
+  filter: brightness(0.85);
 }
 .phone__app-name {
   max-width: 100%;
   overflow: hidden;
-  font-size: 12px;
-  font-weight: 500;
-  color: #fff;
+  font-size: var(--type-caption);
+  font-weight: var(--font-weight-medium);
+  line-height: 16px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .phone__app .ui-badge {
   position: absolute;
   top: -6px;
-  left: calc(50% + min(31px, calc(var(--phone-width) * 0.0775)) - 12px);
+  left: calc(50% + min(32px, calc(100cqw * 0.0775)) - 12px);
   min-width: 22px;
   height: 22px;
-  font-size: 13px;
-  font-weight: 600;
-  background: var(--ios-red);
+  box-shadow: 0 0 0 2px var(--sky-bottom);
 }
-/* Dock: Glas, Radius 32, vier Apps ohne Beschriftung */
+/* Dock: Glas über dem Wallpaper (schwebende Ebene), vier Apps ohne Beschriftung */
 .phone__dock {
+  position: relative;
   display: flex;
   justify-content: space-around;
-  position: sticky;
-  bottom: 0;
-  margin: auto -10px 0;
-  padding: 14px 12px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(30px) saturate(160%);
+  flex-shrink: 0;
+  margin: 0 12px var(--phone-home-inset);
+  padding: 12px 10px;
+  background: var(--home-glass);
+  backdrop-filter: var(--phone-blur);
   border-radius: 32px;
+  box-shadow: inset 0 0 0 0.5px var(--home-glass-edge);
+}
+.phone__app.is-dock {
+  min-height: 64px;
 }
 
 /* Weggelegtes Handy am Desktop: Lasche am rechten Rand */
@@ -657,6 +952,7 @@
   flex-direction: column;
   align-items: center;
   gap: var(--space-1);
+  min-height: 44px;
   padding: var(--space-3) var(--space-2);
   background: var(--color-panel-solid);
   border: 1px solid var(--color-line-strong);
@@ -670,8 +966,8 @@
   background: var(--color-surface-hover);
 }
 .phone-tab__time {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-size: var(--type-footnote);
+  font-weight: var(--font-weight-bold);
   font-variant-numeric: tabular-nums;
 }
 .phone-tab .ui-badge {
@@ -688,11 +984,12 @@
 
 /* ---------------------------------------------------------------- App-Seiten */
 .phone-screen {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  animation: screen-in 280ms cubic-bezier(0.32, 0.72, 0, 1);
+  background: var(--phone-bg);
+  animation: screen-in 280ms var(--ease-ios);
 }
 @keyframes screen-in {
   from {
@@ -700,32 +997,44 @@
     transform: translateX(24px);
   }
 }
-/* Navigationsleiste (44 pt): "‹ Zurück" in der Akzentfarbe, Aktionen rechts */
+/*
+ * Navigationsleiste (44 pt unter der Statusleiste): "‹ Zurück" links, Aktionen rechts. Der große Titel steht im
+ * Inhalt; scrollt er aus dem Bild, erscheint der kleine Titel in der Mitte und die Leiste bekommt Glas und eine
+ * Haarlinie (Inhalt läuft darunter durch). Mit Avatar oder inlineTitle steht der kleine Titel von Anfang an.
+ */
 .phone-screen__bar {
-  position: relative;
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 8px;
-  min-height: 44px;
-  padding: 0 12px 0 6px;
+  height: calc(var(--phone-status-height) + var(--phone-nav-height));
+  padding: var(--phone-status-height) 8px 0 4px;
+  border-bottom: 0.5px solid transparent;
+  transition:
+    background var(--duration),
+    border-color var(--duration);
 }
-.phone-screen.is-inline .phone-screen__bar {
-  min-height: 56px;
-  border-bottom: 0.5px solid var(--ios-separator);
-  background: rgba(22, 22, 24, 0.9);
+.phone-screen.is-collapsed .phone-screen__bar {
+  background: var(--phone-glass);
+  backdrop-filter: var(--phone-blur);
+  border-bottom-color: var(--phone-separator);
 }
 .phone-screen__back {
   display: inline-flex;
   align-items: center;
-  gap: 0;
   flex: none;
-  min-height: 44px;
-  padding: 0 6px 0 0;
+  min-width: 44px;
+  min-height: var(--phone-nav-height);
+  padding: 0 8px 0 0;
   border: 0;
   background: transparent;
-  color: var(--ios-tint);
-  font-size: 17px;
+  color: var(--cat-brand);
+  font-size: var(--type-body);
   cursor: pointer;
 }
 .phone-screen__back:hover {
@@ -734,15 +1043,20 @@
 .phone-screen__center {
   position: absolute;
   left: 50%;
-  top: 50%;
+  bottom: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  max-width: 56%;
-  transform: translate(-50%, -50%);
+  max-width: 52%;
+  height: var(--phone-nav-height);
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration);
 }
-.phone-screen__center .ui-avatar {
-  border-radius: 50%;
+.phone-screen.is-collapsed .phone-screen__center {
+  opacity: 1;
 }
 .phone-screen__titles {
   min-width: 0;
@@ -750,33 +1064,39 @@
   flex-direction: column;
   align-items: flex-start;
 }
+.phone-screen.is-inline .phone-screen__titles {
+  align-items: flex-start;
+}
 .phone-screen__title {
   margin: 0;
   max-width: 100%;
   overflow: hidden;
   font-family: var(--font-body);
-  font-size: 17px;
-  font-weight: 600;
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-bold);
+  line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .phone-screen__subtitle {
-  font-size: 13px;
-  color: var(--ios-label-2);
+  font-size: var(--type-footnote);
+  line-height: 16px;
+  color: var(--phone-label-2);
 }
 .phone-screen__subtitle .ui-tag {
   padding: 0;
   background: none;
-  color: var(--ios-label-2);
-  font-weight: 500;
+  color: var(--phone-label-2);
+  line-height: 16px;
 }
 .phone-screen__actions {
   display: flex;
+  align-items: center;
   gap: var(--space-2);
+  min-height: var(--phone-nav-height);
 }
 .phone-screen__actions .ui-button--subtle {
-  --btn-fg: var(--ios-tint);
-  font-size: 15px;
+  --btn-fg: var(--cat-brand);
 }
 .phone-screen__body {
   flex: 1;
@@ -784,13 +1104,14 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 0 16px 24px;
+  padding: calc(var(--phone-status-height) + var(--phone-nav-height)) var(--phone-gutter)
+    calc(24px + var(--phone-home-inset));
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
 }
-.phone-screen.is-inline .phone-screen__body {
-  padding-top: 12px;
+.phone-screen.has-footer .phone-screen__body {
+  padding-bottom: 16px;
 }
 .phone-screen__body > * {
   flex-shrink: 0;
@@ -806,20 +1127,36 @@
 .phone-screen__large {
   margin: 0;
   font-family: var(--font-body);
-  font-size: 34px;
-  font-weight: 700;
+  font-size: var(--type-large-title);
+  font-weight: var(--font-weight-black);
   letter-spacing: -0.02em;
-  line-height: 1.1;
+  line-height: var(--type-large-title-lh);
 }
 .phone-screen__head .phone-screen__subtitle {
-  font-size: 15px;
+  font-size: var(--type-subhead);
+  line-height: var(--type-subhead-lh);
 }
+/* Fußzeile: Blatt aus Glas mit Griff, bleibt unten stehen (z.B. Antwortknöpfe im Chat) */
 .phone-screen__footer {
-  padding: 12px 16px;
-  border-top: 0.5px solid var(--ios-separator);
-  background: rgba(22, 22, 24, 0.94);
-  backdrop-filter: blur(20px);
+  position: relative;
+  flex: none;
+  padding: 20px var(--phone-gutter) var(--phone-home-inset);
+  background: var(--phone-glass);
+  backdrop-filter: var(--phone-blur);
+  border-top: 0.5px solid var(--phone-separator);
+  border-radius: 20px 20px 0 0;
   animation: footer-up var(--duration) var(--ease-out);
+}
+.phone-screen__footer::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--phone-fill-hover);
+  transform: translateX(-50%);
 }
 @keyframes footer-up {
   from {
@@ -828,16 +1165,18 @@
   }
 }
 
-/* Inhalte im Handy: iOS-Gruppen (eingerückt, Radius 12, Zeilen ab 44 pt, Trenner ab dem Text) */
+/* ---------------------------------------------------------------- Inhalte im Handy */
+/* Bausteine im iOS-Stil: eingerückte Gruppen (Radius 16, Zeilen ab 44 pt, Trenner ab dem Text) */
 .phone .ui-card {
-  gap: 10px;
-  padding: 14px 16px;
-  background: var(--ios-grouped);
+  gap: 12px;
+  padding: 16px;
+  background: var(--phone-group);
   border: 0;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-group);
 }
 .phone .ui-card .ui-card {
-  background: var(--ios-grouped-2);
+  background: var(--phone-group-2);
+  border-radius: var(--radius-lg);
 }
 .phone .ui-card--detail {
   padding: 0;
@@ -845,578 +1184,248 @@
 }
 .phone .ui-card__title {
   font-family: var(--font-body);
-  font-size: 17px;
-  font-weight: 600;
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-bold);
+}
+.phone .ui-card--detail > .ui-card__head .ui-card__title {
+  font-size: var(--type-title-2);
 }
 .phone .ui-hint {
-  font-size: 13px;
-  color: var(--ios-label-2);
+  font-size: var(--type-subhead);
+  line-height: var(--type-subhead-lh);
+  color: var(--phone-label-2);
+}
+.phone .ui-empty {
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-4);
+}
+.phone .ui-empty .ui-hint {
+  font-size: var(--type-body);
+  line-height: var(--type-body-lh);
+}
+.phone .ui-empty .ui-chip {
+  color: var(--cat-system);
 }
 .phone .ui-kv {
-  min-height: 36px;
+  min-height: 44px;
   align-items: center;
-  font-size: 15px;
-  border-bottom: 0.5px solid var(--ios-separator);
+  padding: 0;
+  font-size: var(--type-body);
+  border-bottom: 0.5px solid var(--phone-separator);
 }
 .phone .ui-kv__label {
-  color: var(--color-text);
+  color: var(--phone-label);
 }
 .phone .ui-kv__value {
   font-weight: 400;
-  color: var(--ios-label-2);
+  color: var(--phone-label-2);
 }
 .phone .ui-kv__value.is-accent {
-  color: var(--ios-green);
+  color: var(--cat-money);
 }
 .phone .ui-kv__value.is-warn {
-  color: var(--ios-orange);
+  color: var(--cat-warn);
 }
 .phone .ui-kv__value.is-bad {
-  color: var(--ios-red);
+  color: var(--cat-danger);
+}
+.phone .ui-kv__value.is-info {
+  color: var(--cat-place);
 }
 .phone .ui-button {
-  min-height: 36px;
-  border-radius: var(--radius-md);
+  --btn-bg: var(--phone-fill);
+  --btn-hover: var(--phone-fill-hover);
+  --btn-fg: var(--phone-label);
+  min-width: var(--touch-target-phone);
+  min-height: var(--touch-target-phone);
   border-color: transparent;
-  --btn-bg: var(--ios-fill);
-  --btn-hover: rgba(120, 120, 128, 0.36);
-  font-size: 15px;
+  border-radius: var(--radius-lg);
+  font-size: var(--type-body);
 }
 .phone .ui-button--primary {
-  --btn-bg: var(--ios-tint);
+  --btn-bg: var(--color-primary);
   --btn-hover: var(--color-primary-hover);
+  --btn-fg: var(--color-on-primary);
 }
 .phone .ui-button--success {
-  --btn-bg: var(--ios-green);
+  --btn-bg: var(--money);
+  --btn-hover: var(--color-accent-hover);
+  --btn-fg: var(--color-on-accent);
 }
 .phone .ui-button--danger {
-  --btn-bg: rgba(255, 69, 58, 0.16);
-  --btn-fg: var(--ios-red);
+  --btn-bg: var(--cat-danger-soft);
+  --btn-hover: var(--cat-danger-soft);
+  --btn-fg: var(--cat-danger);
 }
 .phone .ui-button--subtle {
   --btn-bg: transparent;
-  --btn-fg: var(--ios-tint);
+  --btn-hover: var(--phone-fill);
+  --btn-fg: var(--cat-brand);
+}
+.phone .ui-button--link {
+  --btn-fg: var(--cat-place);
+  min-height: var(--touch-target-phone);
 }
 .phone .ui-button--small {
-  min-height: 30px;
-  padding: 0 12px;
-  font-size: 14px;
+  min-height: var(--touch-target-phone);
+  padding: 0 var(--space-4);
+  font-size: var(--type-subhead);
+  letter-spacing: 0;
+}
+.phone .ui-button--icon {
+  width: var(--touch-target-phone);
+}
+.phone .ui-button--icon.ui-button--small {
+  width: var(--touch-target-phone);
 }
 .phone .ui-list {
   gap: 0;
-  background: var(--ios-grouped);
+  background: var(--phone-group);
   border: 0;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-group);
 }
 .phone .ui-list__item {
-  min-height: 44px;
+  min-height: 56px;
   padding: 8px 16px;
   background: none;
 }
-.phone .ui-list__item + .ui-list__item {
-  box-shadow:
-    inset 16px 0.5px 0 0 var(--ios-grouped),
-    inset 0 0.5px 0 0 var(--ios-separator);
+.phone .ui-list__item.is-clickable {
+  padding: 0;
+}
+.phone .ui-list__item.is-clickable:hover {
+  background: var(--phone-group-2);
+}
+.phone .ui-list__button {
+  min-height: 56px;
+  padding: 8px 16px;
+}
+.phone .ui-list__text {
+  font-size: var(--type-subhead);
+  color: var(--phone-label-2);
+}
+.phone .ui-list__text strong {
+  font-size: var(--type-body);
+  color: var(--phone-label);
+}
+.phone .ui-list__item {
+  position: relative;
+}
+/* Trenner ab dem Text, nicht bis zum linken Rand */
+.phone .ui-list__item + .ui-list__item::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  border-top: 0.5px solid var(--phone-separator);
+}
+.phone .ui-list__chevron {
+  color: var(--phone-label-3);
 }
 .phone .ui-card .ui-list {
-  background: var(--ios-grouped-2);
+  background: var(--phone-group-2);
 }
 .phone .ui-select select {
+  min-height: var(--touch-target-phone);
   border: 0;
-  background: var(--ios-fill);
+  border-radius: var(--radius-lg);
+  background: var(--phone-fill);
+  font-size: var(--type-body);
 }
 .phone .ui-tabs {
   gap: 2px;
   padding: 2px;
   border: 0;
-  border-radius: 9px;
-  background: var(--ios-fill);
+  border-radius: var(--radius-lg);
+  background: var(--phone-fill);
+  overflow: visible;
 }
 .phone .ui-tabs__tab {
   flex: 1;
   justify-content: center;
-  min-height: 30px;
+  min-height: 40px;
   margin: 0;
   border: 0;
-  border-radius: 7px;
-  font-size: 13px;
+  border-radius: calc(var(--radius-lg) - 2px);
+  font-size: var(--type-subhead);
+  color: var(--phone-label);
 }
 .phone .ui-tabs__tab.is-active {
-  background: #636366;
-  color: #fff;
+  background: var(--phone-thumb);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
-/* Abschnitte eines Listen-Tabs wie die Einstellungen-App: farbige Symbole, Zeilen 44 pt */
+.phone .ui-segmented--joined .ui-button {
+  min-height: var(--touch-target-phone);
+  font-size: var(--type-subhead);
+}
+.phone .ui-segmented--joined .ui-button.is-active {
+  --btn-bg: var(--phone-thumb);
+  --btn-hover: var(--phone-thumb);
+}
+.phone .ui-tag {
+  font-size: var(--type-caption);
+}
+.phone .ui-toggle__hint,
+.phone .ui-slider__value {
+  color: var(--phone-label-2);
+}
+.phone .ui-progress {
+  background: var(--phone-fill-hover);
+}
+/* Abschnitte eines Listen-Tabs wie die Einstellungen-App: Symbol-Kacheln, Zeilen ab 52 pt */
 .phone .section-list {
   border: 0;
-  border-radius: var(--radius-lg);
-  background: var(--ios-grouped);
+  border-radius: var(--radius-group);
+  background: var(--phone-group);
 }
 .phone .ui-row {
-  min-height: 48px;
+  position: relative;
+  min-height: 56px;
   padding: 8px 16px;
   gap: 14px;
   background: none;
   border-bottom: 0;
-  position: relative;
 }
 .phone .ui-row::after {
   content: "";
   position: absolute;
-  left: 59px;
+  left: 58px;
   right: 0;
   bottom: 0;
-  border-bottom: 0.5px solid var(--ios-separator);
+  border-bottom: 0.5px solid var(--phone-separator);
 }
 .phone .section-list > :last-child .ui-row::after {
   display: none;
 }
 .phone .ui-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--phone-group-2);
 }
 .phone .ui-row .ui-chip {
-  --chip-size: 29px;
-  border-radius: 7px;
-  background: var(--chip-tone);
-  color: #fff;
+  --chip-size: 30px;
+  --chip-radius: 8px;
   font-size: 17px;
 }
 .phone .ui-row .ui-chip .ui-status-dot {
-  box-shadow: 0 0 0 2px var(--ios-grouped);
+  box-shadow: 0 0 0 2px var(--phone-group);
 }
 .phone .ui-row__title {
-  font-size: 17px;
+  font-size: var(--type-body);
   font-weight: 400;
 }
 .phone .ui-row__summary {
   font-family: var(--font-body);
-  font-size: 17px;
+  font-size: var(--type-body);
   font-weight: 400;
-  color: var(--ios-label-2);
+  color: var(--phone-label-2);
 }
 .phone .ui-row__chevron {
-  color: var(--ios-label-3);
+  color: var(--phone-label-3);
 }
-.phone .journal__entry {
-  font-size: 15px;
+.phone .ui-status-dot {
+  box-shadow: 0 0 0 2px var(--phone-group);
 }
-
-/* ---------------------------------------------------------------- Nachrichten */
-.msg-filter {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
-}
-.msg-filter button {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-height: 30px;
-  padding: 0 var(--space-3);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-muted);
-  cursor: pointer;
-}
-.msg-filter button[aria-selected="true"] {
-  color: var(--color-text);
-  background: var(--color-surface-active);
-}
-.msg-filter__count {
-  padding: 0 6px;
-  border-radius: var(--radius-round);
-  background: var(--dom);
-  color: #fff;
-  font-size: 11px;
-}
-.msg-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-}
-.msg-list__item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  width: 100%;
-  padding: var(--space-3) var(--space-1);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--color-line);
-  text-align: left;
-  cursor: pointer;
-}
-.msg-list__item:hover {
-  background: var(--color-surface-subtle);
-}
-.msg-list__item.is-unread .msg-list__name {
-  color: var(--color-text);
-}
-.msg-list__item.is-unread .msg-list__preview {
-  color: var(--color-text);
-}
-.msg-list__main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.msg-list__top,
-.msg-list__bottom {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.msg-list__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.msg-list__time {
-  font-size: var(--font-size-xs);
-  color: var(--color-faint);
-  font-variant-numeric: tabular-nums;
-}
-.msg-list__preview {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.msg-reply-sticker {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 6px;
-  color: var(--color-warn);
-  background: var(--color-warn-soft);
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: var(--font-weight-bold);
-}
-.msg-bubbles {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.msg-sep {
-  align-self: center;
-  padding: 2px var(--space-3);
-  font-size: 10px;
-  font-weight: var(--font-weight-bold);
-  text-transform: uppercase;
-  letter-spacing: var(--letter-spacing-caps);
-  color: var(--color-faint);
-}
-.msg-sep--unread {
-  color: var(--color-bad);
-}
-.msg-bubble {
-  position: relative;
-  max-width: 84%;
-  padding: var(--space-2) var(--space-3) 5px;
-  background: var(--color-surface-hover);
-  border-radius: 14px;
-  line-height: 1.38;
-  font-size: var(--font-size-md);
-  animation: bubble-in var(--duration) var(--ease-out);
-}
-@keyframes bubble-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-.msg-bubble p {
-  margin: 0;
-}
-.msg-bubble time {
-  display: block;
-  margin-top: 1px;
-  font-size: 10px;
-  color: var(--color-faint);
-  text-align: right;
-}
-.msg-bubble--contact {
-  align-self: flex-start;
-  border-bottom-left-radius: 4px;
-}
-.msg-bubble--player {
-  align-self: flex-end;
-  background: #2f6d51;
-  border-bottom-right-radius: 4px;
-}
-.msg-bubble--player time {
-  color: rgba(255, 255, 255, 0.55);
-}
-.msg-bubble__stamp {
-  position: absolute;
-  top: -12px;
-  right: -6px;
-}
-.msg-bubble.is-open {
-  box-shadow: 0 0 0 1px var(--gold);
-}
-.msg-expired {
-  display: block;
-  margin-top: 2px;
-  font-size: var(--font-size-xs);
-  color: var(--color-faint);
-}
-/* Kontaktart an einem schmalen Farbstreifen: Gangs rot, Polizei blau, Team gold, Lieferanten violett */
-.msg-bubbles--gang .msg-bubble--contact {
-  box-shadow: inset 2px 0 0 var(--dom);
-}
-.msg-bubbles--police .msg-bubble--contact {
-  box-shadow: inset 2px 0 0 var(--rhine);
-}
-.msg-bubbles--staff .msg-bubble--contact {
-  box-shadow: inset 2px 0 0 var(--gold);
-}
-.msg-bubbles--supplier .msg-bubble--contact {
-  box-shadow: inset 2px 0 0 var(--lila);
-}
-.msg-typing {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  width: fit-content;
-  padding: var(--space-3);
-}
-.msg-typing span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-muted);
-  animation: typing-bounce 1s ease-in-out infinite;
-}
-.msg-typing span:nth-child(2) {
-  animation-delay: 0.15s;
-}
-.msg-typing span:nth-child(3) {
-  animation-delay: 0.3s;
-}
-@keyframes typing-bounce {
-  0%,
-  60%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.4;
-  }
-  30% {
-    transform: translateY(-3px);
-    opacity: 1;
-  }
-}
-.msg-options {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.msg-options .ui-button {
-  justify-content: flex-start;
-  white-space: normal;
-  text-align: left;
-  min-height: 40px;
-  padding: var(--space-2) var(--space-3);
-}
-.msg-deadline {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-muted);
-  font-variant-numeric: tabular-nums;
-}
-.msg-deadline.is-urgent {
-  color: var(--color-bad);
-  background: var(--color-bad-soft);
-}
-
-/* ---------------------------------------------------------------- Musik */
-.music-app {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-.music-app__cover {
-  display: grid;
-  place-items: center;
-  aspect-ratio: 16 / 9;
-  border-radius: var(--radius-lg);
-  font-size: 48px;
-  color: rgba(255, 255, 255, 0.85);
-  background:
-    radial-gradient(circle at 25% 30%, rgba(226, 174, 74, 0.5), transparent 50%),
-    radial-gradient(circle at 75% 70%, rgba(139, 111, 214, 0.55), transparent 55%), #1b1f25;
-}
-.music-app__now {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.music-app__now strong {
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-}
-.music-app__now > span {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-.music-app__time {
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
-}
-.music-app__controls {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-2);
-}
-.music-app__list {
-  list-style: none;
-  margin: var(--space-2) 0 0;
-  padding: 0;
-  font-size: var(--font-size-sm);
-}
-.music-app__list li {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--color-line);
-}
-.music-app__list li.is-playing {
-  color: var(--gold);
-}
-.music-app__moods {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-/* ---------------------------------------------------------------- Benachrichtigung (Banner) */
-.phone-notice {
-  display: flex;
-  align-items: stretch;
-  gap: var(--space-1);
-  background: rgba(38, 43, 51, 0.96);
-  backdrop-filter: var(--blur-panel);
-  border: 1px solid var(--color-line-strong);
-  border-radius: 14px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  animation: notice-in var(--duration-slow) var(--ease-out);
-}
-/* Im offenen Handy: oben über dem Bildschirm */
-.phone-notice.is-inside {
-  position: absolute;
-  z-index: 3;
-  top: var(--space-2);
-  left: var(--space-2);
-  right: var(--space-2);
-}
-/* Handy weggelegt: oben über der Karte */
-.phone-notice.is-floating {
-  position: fixed;
-  z-index: var(--z-notification);
-  top: calc(var(--top) + var(--hud-height) + var(--gap));
-  right: calc(var(--gap) + var(--safe-right));
-  width: min(360px, calc(100% - var(--gap) * 2));
-}
-@keyframes notice-in {
-  from {
-    opacity: 0;
-    transform: translateY(-12px);
-  }
-}
-.phone-notice__main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-.phone-notice__text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.phone-notice__title {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-}
-.phone-notice__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.phone-notice__when {
-  font-size: 11px;
-  color: var(--color-faint);
-}
-.phone-notice__body {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: var(--font-size-sm);
-  line-height: 1.35;
-  color: var(--color-muted);
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.phone-notice__close {
-  align-self: flex-start;
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  margin: 6px 6px 0 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-faint);
-  cursor: pointer;
-}
-.phone-notice__close:hover {
-  color: var(--color-text);
-  background: var(--color-surface-hover);
+.phone .ui-badge {
+  animation: none;
 }
 
 /* ---------------------------------------------------------------- Handy-Bildschirm */
@@ -1429,7 +1438,7 @@
   bottom: calc(var(--gap) + var(--safe-bottom));
   display: flex;
   align-items: stretch;
-  gap: var(--space-2);
+  gap: var(--space-3);
   height: var(--mobile-dock-height);
 }
 .mobile-dock__hint {
@@ -1438,22 +1447,21 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-4) 0 var(--space-3);
   background: var(--color-panel);
   backdrop-filter: var(--blur-panel);
-  border: 1px solid var(--color-line);
-  border-left: 2px solid var(--gold);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-float);
+  border: 0;
+  border-radius: var(--radius-group);
+  box-shadow:
+    inset 0 0 0 1px var(--color-line),
+    var(--shadow-float);
+  color: var(--color-text);
   text-align: left;
-  font-size: 20px;
-  color: var(--color-warn);
   cursor: pointer;
 }
 .mobile-dock__hint--idle {
-  border-left-color: var(--color-line);
   color: var(--color-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--type-subhead);
   cursor: default;
 }
 .mobile-dock__text {
@@ -1464,16 +1472,16 @@
   gap: 2px;
 }
 .mobile-dock__kicker {
-  font-size: 10px;
+  font-size: var(--type-caption-2);
   font-weight: var(--font-weight-bold);
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-caps);
+  color: var(--cat-brand);
 }
 .mobile-dock__title {
   overflow: hidden;
-  font-size: var(--font-size-sm);
+  font-size: var(--type-subhead);
   font-weight: var(--font-weight-bold);
-  color: var(--color-text);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1486,17 +1494,16 @@
   justify-content: center;
   gap: 2px;
   width: 72px;
-  background: var(--gold);
+  background: var(--color-primary);
   color: var(--color-on-primary);
   border: 0;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-group);
   box-shadow: var(--shadow-float);
   font-size: 22px;
   cursor: pointer;
 }
 .mobile-dock__phone span {
-  font-family: var(--font-display);
-  font-size: var(--font-size-sm);
+  font-size: var(--type-footnote);
   font-weight: var(--font-weight-bold);
   font-variant-numeric: tabular-nums;
 }
@@ -1512,6 +1519,56 @@
   animation: phone-shake-b 360ms ease-in-out;
 }
 
+/*
+ * Kleine Fenster: Ist das Handy niedrig (unter ca. 800 px) oder schmal (unter 360 px), wird der Startbildschirm
+ * kompakter, damit die wichtigsten Dinge (Nächster Schritt, Apps, Dock) ohne Scrollen sichtbar bleiben.
+ */
+@container phone (max-height: 800px) {
+  .phone__home-scroll {
+    gap: 10px;
+  }
+  .phone__today-day {
+    font-size: var(--type-title-2);
+    line-height: 28px;
+  }
+  .phone__home .next-step {
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+  }
+  .phone__home .next-step__desc {
+    display: none;
+  }
+  .phone__stats .hud-pill {
+    padding: var(--space-2) var(--space-3);
+  }
+  .phone__apps {
+    gap: 10px 4px;
+    padding-top: 0;
+  }
+  .phone__app .phone__tile {
+    --chip-size: min(56px, calc(100cqw * 0.14));
+  }
+  .phone__dock {
+    padding: 8px 10px;
+  }
+}
+@container phone (max-width: 360px) {
+  .phone__home .next-step__body {
+    flex-wrap: wrap;
+  }
+  .phone__home .next-step__body .ui-button {
+    width: 100%;
+  }
+  .phone__stats .hud-pill__chip {
+    display: none;
+  }
+  .phone__stats .hud-pill {
+    grid-template-areas:
+      "label label"
+      "value value";
+  }
+}
+
 @media (max-width: 760px) {
   .phone {
     top: calc(var(--top) + var(--hud-height) + var(--space-2));
@@ -1524,6 +1581,8 @@
     animation: phone-in-mobile var(--duration-slow) var(--ease-out);
   }
   .phone__device {
+    --phone-corner: 22px;
+    --phone-bezel: 0px;
     padding: 0;
     border-radius: 22px 22px 0 0;
     box-shadow:
@@ -1534,13 +1593,14 @@
   .phone__device::after {
     display: none;
   }
-  .phone__status {
-    height: 50px;
-    padding: 16px 22px 0 26px;
+  .phone__screen {
     border-radius: 22px 22px 0 0;
   }
+  .phone__status {
+    --island-max: min(230px, calc(100cqw - 156px));
+  }
   .island-wrap {
-    top: 7px;
+    top: 11px;
   }
   .island-wrap.is-floating {
     top: calc(var(--top) + var(--hud-height) + var(--space-3));
@@ -1553,20 +1613,13 @@
     width: calc(100vw - 20px);
   }
   .phone__nav {
-    height: calc(28px + var(--safe-bottom));
-    padding-bottom: var(--safe-bottom);
-    border-radius: 0;
+    height: calc(var(--phone-home-inset) + var(--safe-bottom));
   }
-  .phone__close {
-    right: 16px;
-    bottom: calc(4px + var(--safe-bottom));
+  .phone__nav-button {
+    padding-bottom: calc(8px + var(--safe-bottom));
   }
-  .phone__icon {
-    width: 62px;
-    font-size: 28px;
-  }
-  .phone__app .ui-badge {
-    left: calc(50% + 19px);
+  .phone__app .phone__tile {
+    --chip-size: min(64px, calc(100cqw * 0.16));
   }
 }
 @keyframes phone-in-mobile {
@@ -1584,5 +1637,15 @@
   .mobile-dock__phone.is-buzzing-0,
   .mobile-dock__phone.is-buzzing-1 {
     animation: none;
+  }
+  .phone-screen,
+  .phone-screen__footer,
+  .island-minimal {
+    animation: none;
+  }
+  .phone-screen__bar,
+  .phone-screen__center,
+  .island {
+    transition: none;
   }
 }

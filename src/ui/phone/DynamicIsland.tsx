@@ -4,7 +4,8 @@
 // (minimale Darstellung). Aufgeklappt (Maus drüber, Tipp am Touchscreen) stehen alle Aktivitäten untereinander.
 // Neue dringende Aktivitäten (Priorität ab 80) klappen die Island kurz von selbst auf, kurze Auftritte
 // (ui.pulseIsland, z.B. "+120 €") erscheinen für ein paar Sekunden. Maße nach Apples HIG (Live Activities):
-// Radius 44, Innenabstand 14, kräftige Farben auf Schwarz, mindestens mittlere Schriftstärke.
+// Radius 44, Innenabstand 14, kräftige Farben auf Schwarz, mindestens mittlere Schriftstärke. Kompakt höchstens 230 pt
+// breit (Uhrzeit und Symbole der Statusleiste bleiben frei), Restzeiten nur in Stunden (islandModel.ts).
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { formatEuro } from '../../core';
@@ -19,12 +20,7 @@ const ALERT_MS = 4000;
 /** Aufgeklappt höchstens so viele Aktivitäten. */
 const EXPANDED_MAX = 4;
 
-/** Restzeit in Spielminuten, knapp für die Island: "45 Min." oder "2:05 h". */
-export function islandCountdown(minutes: number): string {
-  const m = Math.max(0, Math.round(minutes));
-  if (m < 60) return `${m} Min.`;
-  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')} h`;
-}
+export { islandCountdown } from './islandModel';
 
 function pulseText(pulse: IslandPulse): string {
   if (pulse.amount !== undefined) return `${pulse.amount >= 0 ? '+' : '−'}${formatEuro(Math.abs(pulse.amount))}`;

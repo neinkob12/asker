@@ -3,6 +3,7 @@
 // Die Nachrichten selbst verwaltet der Nachrichtendienst im Kern (src/core/messages.ts).
 
 import { type ContactKind, clock, type GameState, type Message, messages } from '../../core';
+import type { CategoryColor } from '../components';
 
 export const CONTACT_KIND_LABELS: Record<ContactKind, string> = {
   customer: 'Kunde',
@@ -23,6 +24,29 @@ export const CONTACT_KIND_ICONS: Record<ContactKind, string> = {
   other: 'message',
 };
 
+/** Bedeutungsfarbe je Kontaktart (dieselbe wie die App dazu: Gangs rot, Lieferanten braun, Team türkis …). */
+export const CONTACT_KIND_TONES: Record<ContactKind, CategoryColor> = {
+  customer: 'money',
+  supplier: 'goods',
+  gang: 'danger',
+  staff: 'people',
+  police: 'law',
+  other: 'system',
+};
+
+/** Überschrift der Gruppe in der Chat-Liste. */
+export const CONTACT_KIND_PLURALS: Record<ContactKind, string> = {
+  gang: 'Gangs',
+  police: 'Polizei',
+  supplier: 'Lieferanten',
+  staff: 'Team',
+  customer: 'Kunden',
+  other: 'Kontakte',
+};
+
+/** Reihenfolge der Gruppen: erst Bedrohliches, dann Geschäft und Team, dann Kunden. */
+export const CONTACT_KIND_ORDER: readonly ContactKind[] = ['gang', 'police', 'supplier', 'staff', 'customer', 'other'];
+
 export interface ChatListItem {
   contactId: string;
   name: string;
@@ -38,6 +62,35 @@ export interface ChatListItem {
   awaitingAnswer: boolean;
   /** Früheste Antwortfrist unter den offenen Nachrichten. */
   deadline?: number;
+  /** Verbleibende Spielminuten bis zur Frist (nur mit deadline). */
+  deadlineIn?: number;
+}
+
+export interface ChatGroup {
+  kind: ContactKind;
+  label: string;
+  items: ChatListItem[];
+  /** Chats der Gruppe, die auf Antwort warten. */
+  open: number;
+  /** Ungelesene Nachrichten in der Gruppe. */
+  unread: number;
+}
+
+/** Chats nach Kontaktart gruppiert (feste Reihenfolge, leere Gruppen entfallen). Innerhalb bleibt die Reihenfolge. */
+export function groupChats(list: readonly ChatListItem[]): ChatGroup[] {
+  const groups: ChatGroup[] = [];
+  for (const kind of CONTACT_KIND_ORDER) {
+    const items = list.filter((c) => c.kind === kind);
+    if (items.length === 0) continue;
+    groups.push({
+      kind,
+      label: CONTACT_KIND_PLURALS[kind],
+      items,
+      open: items.filter((c) => c.awaitingAnswer).length,
+      unread: items.reduce((sum, c) => sum + c.unread, 0),
+    });
+  }
+  return groups;
 }
 
 export type ChatEntry =
@@ -85,7 +138,10 @@ export function chatList(state: GameState): ChatListItem[] {
       awaitingAnswer: open.length > 0,
     };
     if (thread.contact.avatar) item.avatar = thread.contact.avatar;
-    if (deadlines.length > 0) item.deadline = Math.min(...deadlines);
+    if (deadlines.length > 0) {
+      item.deadline = Math.min(...deadlines);
+      item.deadlineIn = item.deadline - state.time;
+    }
     return item;
   });
 }

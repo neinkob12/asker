@@ -21,7 +21,7 @@ export interface DialogProps {
   class?: string;
 }
 
-const TONE_CHIP: Record<string, ChipColor> = { accent: 'green', warn: 'yellow', bad: 'red', info: 'blue' };
+const TONE_CHIP: Record<string, ChipColor> = { accent: 'money', warn: 'warn', bad: 'danger', info: 'place' };
 
 /** Modaler Dialog mit abgedunkeltem Hintergrund. Am Handy als Blatt von unten. */
 export function Dialog(props: DialogProps) {

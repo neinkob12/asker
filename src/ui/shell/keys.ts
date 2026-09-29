@@ -28,6 +28,8 @@ export function bindKeys(runtime: UiRuntime): void {
       } else if (ui.panel) api.closePanel();
       else if (ui.notification) api.dismissNotification();
       else if (ui.phone.open && ui.section && ui.phone.app === `${TAB_APP_PREFIX}${ui.tab}`) api.openSection(null);
+      // Im Chat geht Esc zuerst zur Chat-Liste, dann nach Hause.
+      else if (ui.phone.open && ui.phone.app && ui.phone.params?.contactId) api.openPhone(ui.phone.app);
       else if (ui.phone.open && ui.phone.app) api.openPhone(null);
       else if (ui.phone.open) api.closePhone();
       return;

@@ -120,8 +120,8 @@ function MenuButton() {
         <button type="button" class="hud-menu__item" onClick={run(() => api.openDialog('core.saves', {}))}>
           <Icon name="save" /> Spielstände
         </button>
-        <button type="button" class="hud-menu__item" onClick={run(() => api.openDialog('core.settings', {}))}>
-          <Icon name="sliders" /> Einstellungen
+        <button type="button" class="hud-menu__item" onClick={run(() => api.openPhone('core.settings'))}>
+          <Icon name="gear" /> Einstellungen
         </button>
         <button type="button" class="hud-menu__item" onClick={() => audio.toggleMute()}>
           <Icon name={muted ? 'volumeOff' : 'volume'} />

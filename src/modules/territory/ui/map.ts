@@ -4,7 +4,7 @@
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import type { GameState } from '../../../core';
-import { ABOVE_LAND, addHtmlMarker, BELOW_BUILDINGS, el, type MapLayer, mixColor } from '../../../map';
+import { ABOVE_LAND, addHtmlMarker, BELOW_BUILDINGS, el, type MapLayer, mapToken, mixColor } from '../../../map';
 import { getHeat, heatLevel } from '../../police';
 import { allVeedel, getBoundary } from '../../veedel';
 import { controllerOf, factionColor, factionName } from '../index';
@@ -22,12 +22,6 @@ const SOURCE = 'territory.veedel';
 const FILL = 'territory.veedel-fill';
 const LINE = 'territory.veedel-line';
 const SELECTED = 'territory.veedel-selected';
-
-/** Farbe eines Design-Tokens (Karten-Layer brauchen echte Farbwerte, keine CSS-Variablen). */
-function token(name: string, fallback: string): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return value || fallback;
-}
 
 type VeedelData = Parameters<GeoJSONSource['setData']>[0];
 
@@ -75,9 +69,9 @@ export const veedelLayer: MapLayer = {
   mount(ctx) {
     const { map } = ctx;
     const heatColors = [
-      muted(token('--color-info-strong', '#4c8fe0'), 0.3),
-      token('--map-heat-warm', '#e2ae4a'),
-      token('--map-heat-hot', '#e5484d'),
+      muted(mapToken('--color-info-strong', '#4c8fe0'), 0.3),
+      mapToken('--map-heat-warm', '#e2ae4a'),
+      mapToken('--map-heat-hot', '#e5484d'),
     ];
     const before = map.getLayer(BELOW_BUILDINGS) ? BELOW_BUILDINGS : undefined;
     // Die Einfärbung liegt nur auf dem Land, Rhein und Parks bleiben klar.
@@ -147,7 +141,7 @@ export const veedelLayer: MapLayer = {
         source: SOURCE,
         filter: ['==', ['get', 'id'], ''],
         layout: { 'line-join': 'round' },
-        paint: { 'line-color': token('--gold', '#e2ae4a'), 'line-width': 2, 'line-opacity': 0.95 },
+        paint: { 'line-color': mapToken('--gold', '#e2ae4a'), 'line-width': 2, 'line-opacity': 0.95 },
       },
       before,
     );

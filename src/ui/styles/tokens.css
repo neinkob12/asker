@@ -2,92 +2,236 @@
  * Design-Tokens: Farben, Abstände, Schriften, Radien, Schatten, Bewegung und Ebenen.
  * Alle Oberflächen (auch die der Module) nutzen nur diese Variablen, damit der Look zentral änderbar ist.
  *
- * Look "Nachtschicht": dunkel und gedämpft wie iOS im Dunkelmodus. Ecken weder rund noch eckig (4–12 px, wie die
- * Knöpfe bei Claude), feine Haarlinien, weiche Schatten. Abstände im 4er-Raster wie bei Apple (Ränder 16 px,
- * Zeilen mindestens 44 px am Touchscreen). Eine Akzentfarbe (Kölsch-Gold) für Hauptaktionen, sonst die
- * iOS-Systemfarben mit Bedeutung: Grün = Geld/gut, Rot = Heat/Gefahr, Orange = Achtung, Blau = Info,
- * Violett = Schwarzgeld. Schrift: San Francisco (Apple-Geräte), sonst Inter, Zahlen mit gleich breiten Ziffern.
+ * Look "Nachtschicht": dunkel und gedämpft wie iOS im Dunkelmodus, Kölsch-Gold als Marke. Farbe hat immer eine
+ * Bedeutung (--cat-*, siehe docs/handy-design.md): Grün = Geld und Gewinn, Violett = Schwarzgeld, Rot = Gefahr,
+ * Orange = Frist und Achtung, Gold = dein Geschäft, Blau = Ort und Info, Braun = Ware, Türkis = Personen,
+ * Mint = Nachrichten, Cyan = Himmel, Indigo = Recht, Rosa = Ton.
  *
- * Die alten Namen der Grundpalette (--ink, --paper, --dom, --money …) bleiben erhalten, zeigen aber auf die
- * gedämpften Farben. --ink ist die dunkelste Fläche (Schrift auf hellen Flächen), nicht mehr die Kontur.
+ * Hell und Dunkel: Farbtokens tragen beide Varianten als light-dark(hell, dunkel). Das Spiel läuft dunkel
+ * (:root { color-scheme: dark }); das Handy lässt sich mit data-appearance="light" oder "auto" hell schalten.
+ * Kontrast (Text 4.5:1, Symbole 3:1) prüft src/ui/styles/contrast.test.ts mit den echten Hex-Werten.
+ *
+ * Die alten Namen der Grundpalette (--money, --dom, --gold …) und der Farben (--color-*) bleiben erhalten und zeigen
+ * auf die Bedeutungsfarben.
  */
 :root {
   color-scheme: dark;
 
-  /* Grundpalette */
+  /*
+   * Bedeutungsfarben. Je Kategorie:
+   *   --cat-x        Text und Symbol auf Flächen (hell | dunkel), mindestens 4.5:1
+   *   --cat-x-soft   getönter Grund dahinter
+   *   --cat-x-a/-b   Verlauf einer App-Kachel (oben, unten), Symbol darauf in --cat-x-on, mindestens 3.5:1
+   */
+  --cat-money: light-dark(#1d7031, #30d158);
+  --cat-money-soft: light-dark(rgba(29, 112, 49, 0.12), rgba(48, 209, 88, 0.16));
+  --cat-money-a: #3a9752;
+  --cat-money-b: #1c6d31;
+  --cat-money-on: #ffffff;
+
+  --cat-dirty: light-dark(#8b41ab, #d891ff);
+  --cat-dirty-soft: light-dark(rgba(139, 65, 171, 0.12), rgba(191, 90, 242, 0.16));
+  --cat-dirty-a: #b462de;
+  --cat-dirty-b: #863faa;
+  --cat-dirty-on: #ffffff;
+
+  --cat-danger: light-dark(#b72a22, #ff7b73);
+  --cat-danger-soft: light-dark(rgba(183, 42, 34, 0.1), rgba(255, 69, 58, 0.14));
+  --cat-danger-a: #ea5249;
+  --cat-danger-b: #b53129;
+  --cat-danger-on: #ffffff;
+
+  --cat-warn: light-dark(#994e00, #ff9f0a);
+  --cat-warn-soft: light-dark(rgba(153, 78, 0, 0.12), rgba(255, 159, 10, 0.16));
+  --cat-warn-a: #ffa53d;
+  --cat-warn-b: #e06a00;
+  --cat-warn-on: #0e1116;
+
+  --cat-brand: light-dark(#835a00, #e2ae4a);
+  --cat-brand-soft: light-dark(rgba(131, 90, 0, 0.12), rgba(226, 174, 74, 0.16));
+  --cat-brand-a: #f2c766;
+  --cat-brand-b: #c9962b;
+  --cat-brand-on: #15120a;
+
+  --cat-place: light-dark(#095fbe, #6ab2ff);
+  --cat-place-soft: light-dark(rgba(9, 95, 190, 0.1), rgba(10, 132, 255, 0.18));
+  --cat-place-a: #2287ed;
+  --cat-place-b: #075fb7;
+  --cat-place-on: #ffffff;
+
+  --cat-goods: light-dark(#755e42, #c8aa85);
+  --cat-goods-soft: light-dark(rgba(117, 94, 66, 0.12), rgba(200, 170, 133, 0.16));
+  --cat-goods-a: #9a8264;
+  --cat-goods-b: #6f5b41;
+  --cat-goods-on: #ffffff;
+
+  --cat-people: light-dark(#1a6b7b, #40c8e0);
+  --cat-people-soft: light-dark(rgba(26, 107, 123, 0.12), rgba(64, 200, 224, 0.16));
+  --cat-people-a: #3a92a2;
+  --cat-people-b: #1c6876;
+  --cat-people-on: #ffffff;
+
+  --cat-chat: light-dark(#006d69, #63e6e2);
+  --cat-chat-soft: light-dark(rgba(0, 109, 105, 0.12), rgba(99, 230, 226, 0.16));
+  --cat-chat-a: #1a958f;
+  --cat-chat-b: #006b66;
+  --cat-chat-on: #ffffff;
+
+  --cat-sky: light-dark(#1e688c, #64d2ff);
+  --cat-sky-soft: light-dark(rgba(30, 104, 140, 0.12), rgba(100, 210, 255, 0.16));
+  --cat-sky-a: #3b8eb5;
+  --cat-sky-b: #1d6587;
+  --cat-sky-on: #ffffff;
+
+  --cat-law: light-dark(#5452cb, #a7a5ff);
+  --cat-law-soft: light-dark(rgba(84, 82, 203, 0.1), rgba(94, 92, 230, 0.2));
+  --cat-law-a: #6e6ce9;
+  --cat-law-b: #4948b3;
+  --cat-law-on: #ffffff;
+
+  --cat-media: light-dark(#b32a49, #ff899f);
+  --cat-media-soft: light-dark(rgba(179, 42, 73, 0.1), rgba(255, 55, 95, 0.16));
+  --cat-media-a: #ef4869;
+  --cat-media-b: #b92845;
+  --cat-media-on: #ffffff;
+
+  --cat-system: light-dark(#5c5c61, #b4b4b9);
+  --cat-system-soft: light-dark(rgba(92, 92, 97, 0.12), rgba(142, 142, 147, 0.2));
+  --cat-system-a: #86868a;
+  --cat-system-b: #5e5e61;
+  --cat-system-on: #ffffff;
+
+  --cat-log: light-dark(#6b6247, #d9d2bf);
+  --cat-log-soft: light-dark(rgba(107, 98, 71, 0.12), rgba(217, 210, 191, 0.14));
+  --cat-log-a: #ddd7c5;
+  --cat-log-b: #a9a495;
+  --cat-log-on: #22201a;
+
+  /* Grundpalette (alte Namen). Fläche und Kante des jeweiligen Akzents. */
   --ink: #0b0d10;
-  --paper: #1b1f25;
-  --paper-deep: #14171c;
-  --dom: #ff453a;
+  --paper: light-dark(#ffffff, #1b1f25);
+  --paper-deep: light-dark(#f2f2f7, #14171c);
+  --dom: light-dark(#d1332b, #ff453a);
   --dom-edge: #d0342b;
-  --money: #30d158;
+  --money: light-dark(#1f7f37, #30d158);
   --money-edge: #24a644;
-  --gold: #e2ae4a;
+  --gold: var(--cat-brand);
   --gold-edge: #b88a33;
-  --rhine: #0a84ff;
+  --rhine: light-dark(#0a6ad6, #0a84ff);
   --rhine-edge: #0868cc;
-  --lila: #bf5af2;
+  --lila: light-dark(#8b41ab, #bf5af2);
   --lila-edge: #9a44c6;
-  --dirty: #bf5af2;
+  --dirty: var(--lila);
   --dirty-edge: #9a44c6;
 
   /* Flächen */
   --color-bg: #000000;
   /* Schwebende Elemente über der Karte (HUD, Kartensteuerung, Handy) */
-  --color-panel: rgba(28, 28, 30, 0.82);
-  --color-panel-solid: #1c1c1e;
-  --color-panel-raised: #1c1c1e;
-  --color-surface: #2c2c2e;
-  --color-surface-hover: #3a3a3c;
-  --color-surface-active: #48484a;
-  --color-surface-subtle: rgba(255, 255, 255, 0.04);
-  --color-line: rgba(84, 84, 88, 0.55);
-  --color-line-strong: rgba(120, 120, 128, 0.6);
+  --color-panel: light-dark(rgba(255, 255, 255, 0.82), rgba(28, 28, 30, 0.82));
+  --color-panel-solid: light-dark(#ffffff, #1c1c1e);
+  --color-panel-raised: light-dark(#ffffff, #1c1c1e);
+  --color-surface: light-dark(#ececf1, #2c2c2e);
+  --color-surface-hover: light-dark(#e2e2e8, #3a3a3c);
+  --color-surface-active: light-dark(#d4d4db, #48484a);
+  --color-surface-subtle: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.04));
+  --color-line: light-dark(rgba(60, 60, 67, 0.29), rgba(84, 84, 88, 0.55));
+  --color-line-strong: light-dark(rgba(60, 60, 67, 0.4), rgba(120, 120, 128, 0.6));
   --color-backdrop: rgba(4, 6, 9, 0.62);
 
-  /* Text */
-  --color-text: #ffffff;
-  --color-muted: rgba(235, 235, 245, 0.6);
-  --color-faint: rgba(235, 235, 245, 0.3);
+  /* Text: primär, sekundär (Text, 4.5:1), tertiär (nur Dekoration wie Pfeile, kein Text) */
+  --color-text: light-dark(#000000, #ffffff);
+  --color-muted: light-dark(#5b5b62, rgba(235, 235, 245, 0.6));
+  --color-faint: light-dark(rgba(60, 60, 67, 0.32), rgba(235, 235, 245, 0.3));
 
-  /* Akzente: Grundname = Textfarbe auf dunkler Fläche, -strong = Fläche, -edge = Kante, -soft = getönter Grund */
-  --color-accent: #30d158;
+  /* Handy: Flächen, Füllungen und Beschriftungen (iOS: systemGrouped, label) */
+  --phone-bg: light-dark(#f2f2f7, #000000);
+  --phone-group: light-dark(#ffffff, #1c1c1e);
+  --phone-group-2: light-dark(#f2f2f7, #2c2c2e);
+  --phone-fill: light-dark(rgba(120, 120, 128, 0.16), rgba(120, 120, 128, 0.24));
+  --phone-fill-hover: light-dark(rgba(120, 120, 128, 0.24), rgba(120, 120, 128, 0.36));
+  --phone-separator: light-dark(rgba(60, 60, 67, 0.29), rgba(84, 84, 88, 0.6));
+  --phone-label: var(--color-text);
+  --phone-label-2: var(--color-muted);
+  --phone-label-3: var(--color-faint);
+  /* Glas für die schwebende Ebene des Handys (Leisten, Dock, Blatt) und die Rückfallfläche ohne Transparenz */
+  --phone-glass: light-dark(rgba(249, 249, 251, 0.72), rgba(28, 28, 30, 0.66));
+  --phone-glass-solid: light-dark(#f9f9fb, #1c1c1e);
+  --phone-glass-edge: light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.1));
+  --phone-blur: blur(24px) saturate(180%);
+
+  /* Chat-Blase der anderen (die eigene ist mint) */
+  --phone-bubble: light-dark(#e5e5ea, #26262a);
+  /* Auswahl in Segmenten (gewählter Abschnitt) */
+  --phone-thumb: light-dark(#ffffff, #636366);
+
+  /* Handy-Hardware: Gehäuse, Rahmen und Island sehen in jedem Schema gleich aus */
+  --hw-black: #000000;
+  --hw-frame: #5a5a5e;
+  --hw-frame-edge: #2a2a2c;
+  --hw-key: #3a3a3d;
+  --hw-key-hi: #6a6a6f;
+  --hw-rim: rgba(255, 255, 255, 0.07);
+  --hw-white: #ffffff;
+
+  /*
+   * Startbildschirm: Hintergrund mit Himmel, der der Spielzeit folgt (Nacht → Tag, Dämmerung wärmer), und die
+   * Schrift darauf. Der Hintergrund ist immer dunkel, die Schrift immer hell (wie ein Wallpaper bei iOS).
+   */
+  --wall-night-top: #05070d;
+  --wall-night-bottom: #101b31;
+  --wall-day-top: #1d3f66;
+  --wall-day-bottom: #3a6390;
+  --wall-twilight: #8a4a3c;
+  --home-label: #ffffff;
+  --home-label-2: rgba(255, 255, 255, 0.8);
+  --home-glass: rgba(255, 255, 255, 0.16);
+  --home-glass-edge: rgba(255, 255, 255, 0.22);
+
+  /* Akzente: Grundname = Text auf der Fläche, -strong = Fläche (Knopf), -soft = getönter Grund, -edge = Kante */
+  --color-accent: var(--cat-money);
   --color-accent-strong: var(--money);
-  --color-accent-hover: #3ddc63;
+  --color-accent-hover: light-dark(#26913f, #3ddc63);
   --color-accent-edge: var(--money-edge);
-  --color-accent-soft: rgba(48, 209, 88, 0.16);
-  --color-warn: #ff9f0a;
-  --color-warn-strong: var(--gold);
+  --color-accent-soft: var(--cat-money-soft);
+  --color-warn: var(--cat-warn);
+  --color-warn-strong: var(--cat-brand-a);
   --color-warn-edge: var(--gold-edge);
-  --color-warn-soft: rgba(255, 159, 10, 0.16);
-  --color-bad: #ff453a;
+  --color-warn-soft: var(--cat-warn-soft);
+  --color-bad: var(--cat-danger);
   --color-bad-strong: var(--dom);
   --color-bad-edge: var(--dom-edge);
-  --color-bad-soft: rgba(255, 69, 58, 0.16);
-  --color-info: #409cff;
+  --color-bad-soft: var(--cat-danger-soft);
+  --color-info: var(--cat-place);
   --color-info-strong: var(--rhine);
   --color-info-edge: var(--rhine-edge);
-  --color-info-soft: rgba(10, 132, 255, 0.18);
-  /* Primär: Kölsch-Gold (Hauptaktionen) */
-  --color-primary: var(--gold);
+  --color-info-soft: var(--cat-place-soft);
+  /* Primär: Kölsch-Gold (Hauptaktionen), Fläche mit dunkler Schrift in beiden Schemata */
+  --color-primary: #e2ae4a;
   --color-primary-hover: #ecbd5e;
   --color-primary-edge: var(--gold-edge);
   --color-on-primary: #15120a;
   /* Geld */
-  --color-dirty: #da8fff;
+  --color-dirty: var(--cat-dirty);
   --color-dirty-strong: var(--dirty);
   --color-dirty-edge: var(--dirty-edge);
-  --color-dirty-soft: rgba(191, 90, 242, 0.16);
+  --color-dirty-soft: var(--cat-dirty-soft);
   --color-clean: var(--color-accent);
   --color-lila: var(--lila);
   --color-lila-edge: var(--lila-edge);
   /* Schrift auf kräftigen Flächen */
-  --color-on-accent: #07140d;
+  --color-on-accent: light-dark(#ffffff, #07140d);
   --color-on-bright: #0b0d10;
   --color-on-warn: #15120a;
-  --color-on-info: #06101c;
+  --color-on-info: light-dark(#ffffff, #06101c);
   --color-on-bad: #ffffff;
   --color-on-dark: #ffffff;
+  /* Schalter an: grüne Spur, auf der der weiße Schieber mindestens 3:1 hat */
+  --color-switch-on: #248a3d;
+  /* Zähler (ungelesen, offen): weiße Zahl auf dunklem Rot, 4.5:1 */
+  --color-badge: var(--cat-danger-b);
+  --color-on-badge: #ffffff;
+  /* Fokus-Ring (sichtbar auf beiden Flächen) */
+  --color-focus: var(--cat-brand);
 
   /* Karte (gedämpfter Look, siehe src/map/README.md) */
   --color-marker-idle: #1c2735;
@@ -126,6 +270,22 @@
   --font-size-lg: 17px;
   --font-size-xl: 22px;
   --font-size-xxl: 34px;
+  /* Textstile (iOS, Standardgröße): Größe / Zeilenhöhe */
+  --type-large-title: 34px;
+  --type-large-title-lh: 41px;
+  --type-title-2: 22px;
+  --type-title-2-lh: 28px;
+  --type-title-3: 20px;
+  --type-title-3-lh: 25px;
+  --type-body: 17px; /* Fließtext, Zeilentitel, Knöpfe */
+  --type-body-lh: 22px;
+  --type-callout: 16px;
+  --type-subhead: 15px; /* Zweitzeilen, Hinweise */
+  --type-subhead-lh: 20px;
+  --type-footnote: 13px; /* Beschriftungen, Abschnittsköpfe */
+  --type-footnote-lh: 18px;
+  --type-caption: 12px;
+  --type-caption-2: 11px; /* kleinste erlaubte Größe */
   --font-weight-medium: 500;
   --font-weight-bold: 600;
   --font-weight-black: 700;
@@ -140,12 +300,14 @@
   --space-6: 24px;
   --space-7: 32px;
 
-  /* Radien: weder rund noch eckig (Knöpfe 8 wie bei Claude, Karten und Gruppen 12) */
+  /* Radien: weich. Knöpfe und Felder 12, Gruppen und Karten 16, App-Kacheln 22,5 % der Kante */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
+  --radius-group: 16px;
+  --radius-tile: 22.5%;
   --radius-round: 999px;
 
   /* Kontur und Schatten: Haarlinie, weicher Schatten, kein Sockel */
@@ -164,6 +326,7 @@
   /* Bewegung */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-spring: cubic-bezier(0.2, 0.9, 0.3, 1.05);
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
   --duration-fast: 100ms;
   --duration: 180ms;
   --duration-slow: 320ms;
@@ -173,9 +336,19 @@
   --dock-width: 0px;
   --sidebar-width: 360px;
   --panel-width: 360px;
-  /* Handy im Seitenverhältnis des iPhone 16 Pro (393 × 852 pt), so hoch wie der Bildschirm erlaubt */
-  --phone-width: min(430px, calc((100dvh - 24px) * 0.4613));
+  /*
+   * Handy: Gehäuse im Verhältnis 0,49 (Breite zu Höhe). Ein iPhone 16 Pro ist als Gerät 71,5 × 149,6 mm, also 0,478;
+   * etwas breiter, damit Listen Luft haben. Der Bildschirm bekommt wie beim iPhone einen Rand von 9 px (Rahmen).
+   * So hoch wie der Bildschirm erlaubt (nie aus dem Fenster), höchstens 440 px breit.
+   */
+  --phone-ratio: 0.49;
+  --phone-width: min(440px, calc((100dvh - 24px) * var(--phone-ratio)));
   --phone-height: 940px;
+  --phone-bezel: 9px;
+  --phone-status-height: 54px;
+  --phone-nav-height: 44px;
+  --phone-home-inset: 44px; /* Platz für den Home-Balken unten */
+  --phone-gutter: 16px;
   --tabbar-height: 0px;
   --mobile-dock-height: 64px;
   --sheet-peek: 58px;
@@ -202,6 +375,25 @@
   --z-toast: 30;
 }
 
+/*
+ * Das Spiel läuft dunkel (Nachtschicht: Karte, HUD und Handy). Die Farbtokens tragen trotzdem Hell-Varianten
+ * (HIG, Color: auch Ein-Modus-Apps liefern beide), damit das Handy ohne Umbau hell werden kann:
+ * .phone[data-appearance="light"] (immer hell) oder "auto" (folgt dem System) schaltet sie ein.
+ */
+.phone {
+  color-scheme: dark;
+}
+.phone[data-appearance="light"] {
+  color-scheme: light;
+}
+.phone[data-appearance="auto"] {
+  color-scheme: light dark;
+}
+/* Die Island ist Hardware (schwarz) und bleibt in beiden Schemata dunkel. */
+.island-wrap {
+  color-scheme: dark;
+}
+
 /* Handy und Touch: größere Ziele. Breite wie MOBILE_BREAKPOINT in src/map/config.ts. */
 @media (max-width: 760px), (pointer: coarse) {
   :root {
@@ -217,7 +409,7 @@
 /* Schmale Desktops: Handy etwas schmaler */
 @media (min-width: 761px) and (max-width: 1100px) {
   :root {
-    --phone-width: min(360px, calc((100dvh - 24px) * 0.4613));
+    --phone-width: min(372px, calc((100dvh - 24px) * var(--phone-ratio)));
   }
 }
 
@@ -228,5 +420,23 @@
     --duration: 1ms;
     --duration-slow: 1ms;
     --ease-spring: linear;
+  }
+}
+
+/* Weniger Transparenz oder mehr Kontrast: Glas wird zur deckenden Fläche. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root {
+    --phone-glass: var(--phone-glass-solid);
+    --phone-blur: none;
+    --blur-panel: none;
+  }
+}
+/* Mehr Kontrast: Trenner und Füllungen deutlicher, sekundäre Schrift heller bzw. dunkler. */
+@media (prefers-contrast: more) {
+  :root {
+    --phone-separator: light-dark(rgba(60, 60, 67, 0.6), rgba(160, 160, 168, 0.75));
+    --phone-fill: light-dark(rgba(120, 120, 128, 0.28), rgba(120, 120, 128, 0.4));
+    --color-line: light-dark(rgba(60, 60, 67, 0.55), rgba(140, 140, 148, 0.7));
+    --color-muted: light-dark(#3c3c43, rgba(235, 235, 245, 0.85));
   }
 }

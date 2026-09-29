@@ -1,9 +1,9 @@
-// Oberfläche des Wetters: Anzeige im HUD, Widget und App im Spiel-Handy, Stimmung und Niederschlag auf der
+// Oberfläche des Wetters: Anzeige in der Heute-Zeile des Handys (Tipp öffnet die App), Wetter-App, Stimmung und Niederschlag auf der
 // Karte, Blitze bei Gewitter und Geräusche (Regen, Sturm, Wind).
 
 import { clock, formatPercent } from '../../../core';
 import { type MapMood, mapEffects, registerMapLayer, setMapMood, setPrecipitation } from '../../../map';
-import { audio, Card, Icon, KeyValue, registerHudItem, registerPhoneApp, registerSlot, useGame } from '../../../ui';
+import { audio, Card, Icon, KeyValue, registerHudItem, registerPhoneApp, useGame, useUi } from '../../../ui';
 import {
   getForecast,
   getWeather,
@@ -32,20 +32,24 @@ function iconFor(kind: WeatherKind, time: number): string {
 
 const temp = (t: number) => `${Math.round(t)}°`;
 
+/** Wetter in der "Heute"-Zeile des Startbildschirms: Symbol, Temperatur, Wetterlage. Ein Tipp öffnet die App. */
 function WeatherHud() {
   const { state } = useGame();
+  const ui = useUi();
   const w = getWeather(state);
   return (
-    <div
+    <button
+      type="button"
       class={`hud-weather ${w.kind === 'storm' || w.kind === 'heat' ? 'is-warn' : ''}`}
       title={`Wetter: ${WEATHER_NAMES[w.kind]}, ${temp(w.temperature)}C`}
+      onClick={() => ui.openPhone('weather.app')}
     >
       <Icon name={iconFor(w.kind, state.time)} class="hud-weather__icon" />
       <span class="hud-weather__text">
-        <span class="hud-weather__kind">{WEATHER_NAMES[w.kind]}</span>
         <span class="hud-weather__temp">{temp(w.temperature)}</span>
+        <span class="hud-weather__kind">{WEATHER_NAMES[w.kind]}</span>
       </span>
-    </div>
+    </button>
   );
 }
 
@@ -125,13 +129,12 @@ function tone(factor: number): 'accent' | 'bad' | undefined {
 
 // Ordnung ab 90: steht fest neben der Uhr, nicht in der wischbaren Leiste.
 registerHudItem({ id: 'weather.now', order: 95, placement: 'time', component: WeatherHud });
-registerSlot('phone.home', { id: 'weather.widget', order: 10, component: WeatherWidget });
 registerPhoneApp({
   id: 'weather.app',
   name: 'Wetter',
-  icon: 'cloud',
+  icon: 'cloudSun',
   order: 60,
-  color: '#1f5fa8',
+  color: 'sky',
   component: WeatherApp,
 });
 

@@ -181,7 +181,7 @@ function CampaignHud() {
   return (
     <HudPill
       icon="flag"
-      color="blue"
+      color="place"
       label="Köln"
       value={progress.won ? 'deins' : `${progress.controlled}/${progress.needed} Veedel`}
       title={`Kampagne "Köln übernehmen": ${progress.controlled} von ${progress.total} Veedeln, ${progress.needed} gewinnen.`}

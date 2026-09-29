@@ -9,24 +9,24 @@ import { PhoneScreen } from '../phone/PhoneScreen';
 import type { Alert, ToastKind } from '../runtime';
 
 export const TOAST_ICONS: Record<ToastKind, string> = { info: 'info', good: 'check', warn: 'alert', bad: 'siren' };
-export const TOAST_CHIPS: Record<ToastKind, 'blue' | 'green' | 'yellow' | 'red'> = {
-  info: 'blue',
-  good: 'green',
-  warn: 'yellow',
-  bad: 'red',
+export const TOAST_CHIPS: Record<ToastKind, 'place' | 'money' | 'warn' | 'danger'> = {
+  info: 'place',
+  good: 'money',
+  warn: 'warn',
+  bad: 'danger',
 };
 
-const GROUPS: { id: string; title: string; kinds: ToastKind[] }[] = [
-  { id: 'bad', title: 'Dringend', kinds: ['bad'] },
-  { id: 'warn', title: 'Achtung', kinds: ['warn'] },
-  { id: 'routine', title: 'Routine', kinds: ['good', 'info'] },
+const GROUPS: { id: string; title: string; kinds: ToastKind[]; icon: string; color: 'danger' | 'warn' | 'system' }[] = [
+  { id: 'bad', title: 'Dringend', kinds: ['bad'], icon: 'siren', color: 'danger' },
+  { id: 'warn', title: 'Achtung', kinds: ['warn'], icon: 'alert', color: 'warn' },
+  { id: 'routine', title: 'Routine', kinds: ['good', 'info'], icon: 'info', color: 'system' },
 ];
 
 function AlertRow(props: { alert: Alert; onZoom: () => void }) {
   const a = props.alert;
   return (
     <li class={`alert-row alert-row--${a.kind} ${a.read ? '' : 'is-new'}`}>
-      <IconChip icon={a.icon ?? TOAST_ICONS[a.kind]} size="sm" color={TOAST_CHIPS[a.kind]} />
+      <IconChip icon={a.icon ?? TOAST_ICONS[a.kind]} size="md" color={TOAST_CHIPS[a.kind]} />
       <span class="alert-row__text">
         {a.text}
         <time>{clock.formatTime(a.time)}</time>
@@ -58,15 +58,17 @@ export function AlertsApp() {
       }
     >
       <div class="alert-center">
-        {ui.alerts.length === 0 && <Empty icon="bell">Alles ruhig in Köln.</Empty>}
+        {ui.alerts.length === 0 && <Empty icon="bell">Alles ruhig in Köln. Neue Meldungen erscheinen hier.</Empty>}
         {GROUPS.map((g) => {
           const list = ui.alerts.filter((a) => g.kinds.includes(a.kind));
           if (list.length === 0) return null;
           return (
             <section key={g.id} class={`alert-group alert-group--${g.id}`}>
-              <h3 class="alert-group__title">
-                {g.title} <span>{list.length}</span>
-              </h3>
+              <header class="alert-group__head">
+                <IconChip icon={g.icon} color={g.color} solid size="xs" />
+                <h3 class="alert-group__title">{g.title}</h3>
+                <span class="alert-group__count">{list.length}</span>
+              </header>
               <ul class="alert-group__list">
                 {list.slice(0, 30).map((a) => (
                   <AlertRow

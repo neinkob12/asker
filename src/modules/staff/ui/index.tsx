@@ -8,6 +8,8 @@ import {
   Card,
   Empty,
   Hint,
+  Icon,
+  IconChip,
   KeyValue,
   List,
   ListItem,
@@ -18,6 +20,7 @@ import {
   registerSearch,
   registerSlot,
   registerTab,
+  SegmentedControl,
   Select,
   useGame,
   useUi,
@@ -43,7 +46,7 @@ import {
   securityAt,
   staffVeedel,
 } from '../index';
-import { Portrait, StatusStamp } from './common';
+import { Portrait, StatusTag } from './common';
 import { StaffProfile } from './Profile';
 import './staff.css';
 
@@ -57,107 +60,145 @@ declare module '../../../ui' {
   }
 }
 
-type RoleFilter = 'all' | 'runner' | 'courier' | 'security' | 'specialist';
-type StatusFilter = 'all' | 'active' | 'injured' | 'jailed' | 'former';
+type StatusFilter = 'all' | 'active' | 'trouble' | 'former';
 
-const ROLE_FILTERS: { value: RoleFilter; label: string }[] = [
-  { value: 'all', label: 'Typ' },
-  { value: 'runner', label: 'Läufer' },
-  { value: 'courier', label: 'Kuriere' },
-  { value: 'security', label: 'Sicherheit' },
-  { value: 'specialist', label: 'Spezialisten' },
-];
-
-const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
-  { value: 'all', label: 'Status' },
-  { value: 'active', label: 'Aktiv' },
-  { value: 'injured', label: 'Verletzt' },
-  { value: 'jailed', label: 'In Haft' },
-  { value: 'former', label: 'Gekündigt' },
+/** Gruppen der Übersicht: eine Rolle (oder alle Spezialisten) pro Gruppe, gleiche Symbole wie im Porträt. */
+const ROLE_GROUPS: { id: string; label: string; icon: string; match: (m: StaffMember) => boolean }[] = [
+  { id: 'runner', label: 'Läufer', icon: 'runner', match: (m) => m.role === 'runner' },
+  { id: 'courier', label: 'Kuriere', icon: 'bike', match: (m) => m.role === 'courier' },
+  { id: 'security', label: 'Sicherheit', icon: 'shield', match: (m) => m.role === 'security' },
+  { id: 'specialist', label: 'Spezialisten', icon: 'scale', match: (m) => isSpecialist(m.role) },
 ];
 
 const NO_VEEDEL = '-';
-
-function matchesRole(m: StaffMember, filter: RoleFilter): boolean {
-  if (filter === 'all') return true;
-  if (filter === 'specialist') return isSpecialist(m.role);
-  return m.role === filter;
-}
 
 export function StaffRow(props: { member: StaffMember }) {
   const { state } = useGame();
   const ui = useUi();
   const m = props.member;
+  const employed = m.leftAt === null;
   return (
     <ListItem onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}>
       <div class="staff-row">
         <Portrait person={m} />
         <div class="staff-row__main">
           <strong>{m.name}</strong>
-          <span class="ui-hint">
-            {roleName(m.role)} · Level {m.level} ·{' '}
-            {m.leftAt === null ? assignmentLabel(state, m.assignment ?? m.returnTo) : 'ausgeschieden'}
+          <span class="staff-row__meta">
+            {roleName(m.role)} · Level {m.level}
+          </span>
+          <span class="staff-row__meta">
+            <Icon name={employed && (m.assignment ?? m.returnTo) ? 'pin' : 'clock'} />
+            {employed ? assignmentLabel(state, m.assignment ?? m.returnTo) : 'ausgeschieden'}
           </span>
         </div>
-        <StatusStamp status={m.status} />
+        <StatusTag status={m.status} />
       </div>
     </ListItem>
   );
 }
 
-/** Personal-Übersicht, filterbar nach Typ, Status und Veedel. */
+/** Übersicht: Kennzahlen, Filter nach Status und Veedel, Gruppen nach Rolle mit Porträt, Rolle und Status. */
 function StaffOverview() {
   const { state } = useGame();
-  const [role, setRole] = useState<RoleFilter>('all');
+  const ui = useUi();
   const [status, setStatus] = useState<StatusFilter>('all');
   const [veedel, setVeedel] = useState('');
   const current = getStaff(state);
+  const trouble = current.filter((m) => m.status === 'injured' || m.status === 'jailed');
   const source =
     status === 'former' ? [...getStaff(state, { status: 'quit' }), ...getStaff(state, { status: 'dead' })] : current;
   const veedelIds = [...new Set(current.map((m) => staffVeedel(state, m)).filter((v): v is string => !!v))].sort();
   const shown = source.filter((m) => {
-    if (!matchesRole(m, role)) return false;
-    if (status !== 'all' && status !== 'former' && m.status !== status) return false;
+    if (status === 'active' && m.status !== 'active') return false;
+    if (status === 'trouble' && m.status !== 'injured' && m.status !== 'jailed') return false;
     if (veedel === NO_VEEDEL && staffVeedel(state, m)) return false;
     if (veedel && veedel !== NO_VEEDEL && staffVeedel(state, m) !== veedel) return false;
     return true;
   });
-  const jailed = current.filter((m) => m.status === 'jailed').length;
+  const groups = ROLE_GROUPS.map((g) => ({ ...g, members: shown.filter(g.match) })).filter((g) => g.members.length > 0);
   return (
-    <Card title="Personal" class="staff-overview">
-      <p class="ui-hint">
-        {current.length} {current.length === 1 ? 'Person' : 'Leute'}
-        {jailed > 0 ? `, ${jailed} in Haft` : ''} · Löhne {formatEuro(dailyWages(state))} pro Tag
-      </p>
-      <div class="staff-filters">
-        <Select label="Typ" value={role} options={ROLE_FILTERS} onChange={setRole} />
-        <Select label="Status" value={status} options={STATUS_FILTERS} onChange={setStatus} />
+    <div class="staff-overview">
+      <div class="staff-summary">
+        <div class="staff-summary__item">
+          <IconChip icon="users" color="people" size="sm" />
+          <strong>{current.length}</strong>
+          <span>Team</span>
+        </div>
+        <div class="staff-summary__item">
+          <IconChip icon="coinEuro" color="money" size="sm" />
+          <strong>{formatEuro(dailyWages(state))}</strong>
+          <span>Lohn/Tag</span>
+        </div>
+        <div class="staff-summary__item">
+          <IconChip
+            icon={trouble.length > 0 ? 'alert' : 'checkCircle'}
+            color={trouble.length > 0 ? 'warn' : 'money'}
+            size="sm"
+          />
+          <strong>{trouble.length}</strong>
+          <span>Ausfälle</span>
+        </div>
+      </div>
+      {current.length > 0 && (
+        <SegmentedControl
+          wide
+          aria-label="Status"
+          options={[
+            { value: 'all' as StatusFilter, label: 'Alle' },
+            { value: 'active' as StatusFilter, label: 'Aktiv' },
+            { value: 'trouble' as StatusFilter, label: 'Ausgefallen', badge: trouble.length },
+            { value: 'former' as StatusFilter, label: 'Ehemalige' },
+          ]}
+          value={status}
+          onChange={setStatus}
+        />
+      )}
+      {veedelIds.length > 1 && (
         <Select
+          wide
           label="Veedel"
           value={veedel}
           options={[
-            { value: '', label: 'Veedel' },
+            { value: '', label: 'Alle Veedel' },
             ...veedelIds.map((id) => ({ value: id, label: veedelName(id) })),
             { value: NO_VEEDEL, label: 'Ohne Einsatz' },
           ]}
           onChange={setVeedel}
         />
-      </div>
-      {shown.length === 0 ? (
-        <Empty>
+      )}
+      {groups.length === 0 ? (
+        <Empty
+          icon="users"
+          action={
+            current.length === 0 ? (
+              <Button variant="primary" onClick={() => ui.openPhone('recruiting.contacts')}>
+                Kontakte öffnen
+              </Button>
+            ) : undefined
+          }
+        >
           {current.length === 0
-            ? 'Noch niemand. Läufer heuerst du direkt am Spot an, Bewerber und Kontakte findest du im Handy.'
+            ? 'Noch niemand im Team. Läufer heuerst du direkt an einem Spot an, Bewerber findest du bei den Kontakten.'
             : 'Niemand passt zum Filter.'}
         </Empty>
       ) : (
-        <List>
-          {shown.map((m) => (
-            <StaffRow key={m.id} member={m} />
-          ))}
-        </List>
+        groups.map((g) => (
+          <section key={g.id} class="staff-group">
+            <header class="staff-group__head">
+              <IconChip icon={g.icon} color="people" solid size="xs" />
+              <h3 class="staff-group__title">{g.label}</h3>
+              <span class="staff-group__count">{g.members.length}</span>
+            </header>
+            <List>
+              {g.members.map((m) => (
+                <StaffRow key={m.id} member={m} />
+              ))}
+            </List>
+          </section>
+        ))
       )}
       <SpecialistBonuses />
-    </Card>
+    </div>
   );
 }
 
@@ -198,7 +239,7 @@ function StaffSummary() {
     <Card
       title="Personal"
       icon="users"
-      color="yellow"
+      color="people"
       status={staff.length === 0 ? 'idle' : active < staff.length ? 'warn' : 'good'}
       summary={staff.length === 0 ? 'niemand' : `${active} aktiv`}
       actions={

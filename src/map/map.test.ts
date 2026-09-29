@@ -4,6 +4,7 @@ import { DAWN, DUSK, daylight, daylightAt, dayPhase, twilight } from './daylight
 import { bearing, formatDms, metersPerPixel, offsetAround, offsetMeters, pathLength, pointAlong } from './geometry';
 import { LANDMARK_ZONES, LANDMARKS, landmarkFeatures } from './landmarks';
 import { combineMoods, computeLook, mixColor, PALETTES, paletteBlend, pastel } from './look';
+import { darkVariant } from './tokens';
 
 const KOELN = { lng: 6.95, lat: 50.94 };
 
@@ -197,5 +198,17 @@ describe('Wahrzeichen', () => {
     expect(bearing(origin, left)).toBeCloseTo(0, 0);
     expect(metersPerPixel(0, 0)).toBeCloseTo(78271.5, 0);
     expect(metersPerPixel(50.94, 14)).toBeLessThan(metersPerPixel(50.94, 13));
+  });
+});
+
+describe('Farben aus Design-Tokens', () => {
+  it('nimmt bei light-dark(hell, dunkel) die Dunkelvariante (die Karte ist immer dunkel)', () => {
+    expect(darkVariant('light-dark(#835a00, #e2ae4a)')).toBe('#e2ae4a');
+    expect(darkVariant(' light-dark(rgba(1, 2, 3, 0.5), rgba(4, 5, 6, 0.7)) ')).toBe('rgba(4, 5, 6, 0.7)');
+  });
+
+  it('lässt normale Werte und leere Werte unverändert', () => {
+    expect(darkVariant('#e2ae4a')).toBe('#e2ae4a');
+    expect(darkVariant('')).toBe('');
   });
 });
