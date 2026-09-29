@@ -8,8 +8,8 @@ export default defineConfig({
   oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
   optimizeDeps: { rolldownOptions: { transform: { jsx: { runtime: 'automatic', importSource: 'preact' } } } },
   build: {
-    // MapLibre allein ist schon ca. 1 MB groß.
-    chunkSizeWarningLimit: 1600,
+    // MapLibre allein ist schon ca. 1 MB groß, das Kölner Straßennetz (src/modules/roads/network.ts) ca. 180 KB.
+    chunkSizeWarningLimit: 1800,
   },
   test: {
     include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.mjs'],
