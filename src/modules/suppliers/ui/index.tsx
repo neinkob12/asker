@@ -43,6 +43,7 @@ import {
   trustLabel,
 } from '../index';
 import { suppliersLayer } from './map';
+import './island';
 import './suppliers.css';
 
 const KIND_NAME: Record<Supplier['kind'], string> = { port: 'Hafen', city: 'Großstadt' };

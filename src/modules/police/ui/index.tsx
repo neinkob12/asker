@@ -31,6 +31,7 @@ import {
   playerHeat,
   RAID_THRESHOLD,
 } from '../index';
+import './island';
 import './police.css';
 
 const TONE = { calm: 'accent', watchful: 'warn', hot: 'bad', manhunt: 'bad' } as const;

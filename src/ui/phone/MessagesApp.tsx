@@ -131,6 +131,7 @@ function Chat(props: { contactId: string }) {
       subtitle={<Tag icon={CONTACT_KIND_ICONS[kind]}>{CONTACT_KIND_LABELS[kind]}</Tag>}
       leading={<Avatar name={name} image={avatarImage(contact?.avatar, kind)} size="sm" color={KIND_COLORS[kind]} />}
       onBack={() => ui.openPhone(APP_ID)}
+      backLabel="Chats"
       footer={
         question?.type === 'message' ? (
           <div class="msg-options">

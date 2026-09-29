@@ -4,8 +4,8 @@ import type { IconName } from './icons';
 import { Badge } from './Layout';
 
 /**
- * default: weißer Sticker, primary: Dom-Rot (Hauptaktion), success: Geld-Grün (kaufen, verdienen),
- * danger: Rot mit Warnung, subtle: flach ohne Sockel, link: wie ein Link.
+ * default: dunkle Fläche mit Haarlinie, primary: Kölsch-Gold (Hauptaktion), success: Geld-Grün (kaufen, verdienen),
+ * danger: Rot mit Warnung, subtle: flach ohne Rahmen, link: wie ein Link.
  */
 export type ButtonVariant = 'default' | 'primary' | 'success' | 'danger' | 'subtle' | 'link';
 

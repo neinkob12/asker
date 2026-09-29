@@ -99,13 +99,14 @@ Wer eine Entscheidung ändert, ändert sie hier.
 ## Optik und Sound
 
 - **Karte:**
-  - Stilisiert und freundlich wie die Snapchat-Map ("Candy-Look"): Pastellflächen, dicke runde Straßen, wenig Details,
-    3D-Gebäude in weichen Farben mit Schatten, Wahrzeichen (Dom, Hohenzollernbrücke, Colonius, Kranhäuser,
-    KölnTriangle) als Toon-Klötze. Vier Tageszeiten, nachts dunkelblau mit glühenden Hauptstraßen.
+  - Gedämpft und übersichtlich ("Nachtschicht"): Grau- und Schieferflächen, runde Straßen, wenig Details,
+    3D-Gebäude in Grautönen mit Schatten, Wahrzeichen (Dom, Hohenzollernbrücke, Colonius, Kranhäuser,
+    KölnTriangle) als schlichte Klötze. Vier Tageszeiten, nachts fast schwarz mit bernsteinfarben glühenden
+    Hauptstraßen. Farbe tragen nur Reviere (feine Grenzen, schwach getönt), Spots und Gangs.
   - Das Überwachungs-Overlay (Scanlines, Koordinaten) gibt es noch als Schalter, standardmäßig aus.
 - **Kamera:** 3D schräg als Standard, per Knopf auf 2D-Draufsicht umschaltbar.
 - **Auf der Karte sichtbar:** 3D-Mini-Fahrzeuge (später auf echten Straßen), Schiffe auf dem Rhein, pulsierende Hotspots wo etwas los ist (keine Figuren), Polizeistreifen, Effekte (Geld-Popups, Blaulicht, Heat-Färbung der Veedel).
-- **Bedienoberfläche:** "Kölsch-Sticker": hell, clean und App-artig, dazu überzeichnet und comichaft (weiße Karten, dicke Konturen, harte Sockel-Schatten, runde Schrift, viele Icons, federnde Animationen). Sie schwebt über der pastelligen Candy-Karte. Spiel-Handy für Chats, Bestellungen und Kontakte. Desktop: Icon-Dock links mit Inspector, Handy: Bottom-Sheet mit Tab-Leiste. Desktop und Handy sind gleichwertig.
+- **Bedienoberfläche:** "Nachtschicht": dunkel, gedämpft, eckig und aufgeräumt (Haarlinien statt dicker Konturen, schmale Tycoon-Zahlen, eine Akzentfarbe Kölsch-Gold, sonst nur Farben mit Bedeutung). Über der Karte stehen nur Geld, Heat und das Spieltempo. **Das Spiel-Handy ist die Schaltzentrale:** alle Bereiche (Geschäft, Reviere, Gangs, Leute …), Details zu Spots und Veedeln, Chats, Bestellungen und Kontakte laufen als Apps darüber. Desktop: Handy rechts fest angedockt (einklappbar), Handy-Bildschirm: Handy bildschirmfüllend, in der Tasche eine Leiste unten. Desktop und Handy sind gleichwertig.
 - **Grafiken:** KI-generierte Illustrationen (z.B. Porträts) plus einfache Icons.
 - **Sound:** Musik und Soundeffekte.
 - **Sprache:** nur Deutsch.

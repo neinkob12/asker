@@ -1,19 +1,18 @@
 .weather-widget {
-  padding: var(--space-4);
+  padding: var(--space-3);
   border-radius: var(--radius-lg);
-  background: #ffffff;
-  border: var(--stroke) solid var(--ink);
-  box-shadow: var(--shadow-pop-sm);
+  background: var(--color-panel-raised);
+  border: 1px solid var(--color-line);
 }
 .weather-widget--rain,
 .weather-widget--storm {
-  background: #dbe7f7;
+  background: linear-gradient(180deg, var(--color-info-soft), transparent 80%), var(--color-panel-raised);
 }
 .weather-widget--snow {
-  background: #eaf3fb;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 80%), var(--color-panel-raised);
 }
 .weather-widget--heat {
-  background: #ffe7b8;
+  background: linear-gradient(180deg, var(--color-warn-soft), transparent 80%), var(--color-panel-raised);
 }
 .weather-widget__now {
   display: flex;
@@ -22,7 +21,7 @@
 }
 .weather-widget__temp {
   font-family: var(--font-display);
-  font-size: 34px;
+  font-size: 28px;
   font-weight: var(--font-weight-bold);
   line-height: 1;
 }
@@ -36,9 +35,9 @@
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-2);
   list-style: none;
-  margin: var(--space-4) 0 0;
-  padding: var(--space-3) 0 0;
-  border-top: var(--stroke-thin) solid var(--color-line);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) 0 0;
+  border-top: 1px solid var(--color-line);
 }
 .weather-forecast li {
   display: flex;

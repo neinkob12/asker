@@ -1,11 +1,10 @@
-// Inhalt des aktiven Tabs, gleich für Desktop (Inspector) und Handy (Bottom-Sheet).
-// Listen-Tabs (layout: 'rows', z.B. "Geschäft") zeigen oben "Nächster Schritt" und jeden Abschnitt als tippbare
-// Zeile; ein Tipp öffnet den Abschnitt (Zurück führt zur Übersicht).
+// Inhalt eines Tabs als App-Seite im Handy.
+// Listen-Tabs (layout: 'rows', z.B. "Geschäft") zeigen jeden Abschnitt als tippbare Zeile; ein Tipp öffnet den
+// Abschnitt, der Zurück-Pfeil des Handys führt zur Übersicht.
 
-import { Button, ErrorBoundary, SectionContext } from '../components';
+import { ErrorBoundary, SectionContext } from '../components';
 import { useRuntime } from '../hooks';
 import { type SidebarTab, slotContributions } from '../registry';
-import { NextStep } from './NextStep';
 import { Slot } from './Slot';
 
 export function TabContent(props: { tab: SidebarTab }) {
@@ -26,9 +25,6 @@ function SectionList(props: { tab: SidebarTab }) {
     const Component = open.component as unknown as () => preact.JSX.Element | null;
     return (
       <div class="section-detail">
-        <Button small icon="back" variant="subtle" class="section-detail__back" onClick={() => api.openSection(null)}>
-          {props.tab.title}
-        </Button>
         <SectionContext.Provider value={{ mode: 'detail', open: () => {} }}>
           <ErrorBoundary key={open.id} name={open.id}>
             <Component />
@@ -39,7 +35,6 @@ function SectionList(props: { tab: SidebarTab }) {
   }
   return (
     <div class="section-list">
-      <NextStep />
       {items.map((item) => {
         const Component = item.component as unknown as () => preact.JSX.Element | null;
         return (

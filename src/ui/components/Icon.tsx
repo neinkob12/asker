@@ -6,7 +6,7 @@ export interface IconProps {
   name: IconName | (string & {});
   /** Kantenlänge in px. Standard: 1em (passt sich der Schrift an). */
   size?: number;
-  /** Strichstärke im 24er-Raster. Standard 2.25 (kräftig, comichaft). */
+  /** Strichstärke im 24er-Raster. Standard 1.75 (fein, clean). */
   strokeWidth?: number;
   /** Beschriftung für Screenreader. Ohne title ist das Icon nur Dekoration. */
   title?: string;
@@ -33,7 +33,7 @@ export function Icon(props: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      stroke-width={props.strokeWidth ?? 2.25}
+      stroke-width={props.strokeWidth ?? 1.75}
       stroke-linecap="round"
       stroke-linejoin="round"
       role={props.title ? 'img' : undefined}
@@ -49,7 +49,7 @@ export function Icon(props: IconProps) {
   );
 }
 
-/** Farben der Icon-Sticker. Tone-Namen gehen auch ('accent' = Grün, 'bad' = Rot …). */
+/** Farben der Icon-Kacheln. Tone-Namen gehen auch ('accent' = Grün, 'bad' = Rot …). */
 export type ChipColor =
   | 'red'
   | 'green'
@@ -69,7 +69,7 @@ const CHIP_ALIASES: Record<string, string> = { accent: 'green', warn: 'yellow', 
 
 export interface IconChipProps {
   icon: IconName | (string & {});
-  /** Farbe des Stickers. Standard: gelb. Eigene CSS-Farbe über style. */
+  /** Farbe der Kachel (getönte Fläche, farbige Glyphe). Standard: gelb. */
   color?: ChipColor;
   /** sm 28 px, md 36 px (Standard), lg 48 px, xl 64 px. */
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
@@ -82,7 +82,7 @@ export interface IconChipProps {
   style?: JSX.CSSProperties;
 }
 
-/** Icon im farbigen Sticker-Kreis mit dunkler Kontur, z.B. vor Zeilen, in Karten und im HUD. */
+/** Icon auf einer getönten, eckigen Kachel, z.B. vor Zeilen und in Karten. */
 export function IconChip(props: IconChipProps) {
   const color = CHIP_ALIASES[props.color ?? ''] ?? props.color ?? 'yellow';
   const cls = [

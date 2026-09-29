@@ -98,7 +98,7 @@
 .delivery-target {
   width: 14px;
   height: 14px;
-  border-radius: var(--radius-round);
+  border-radius: var(--radius-sm);
   background: var(--color-warn);
   border: 3px solid var(--color-marker-bg);
   box-shadow: var(--shadow-marker-soft);

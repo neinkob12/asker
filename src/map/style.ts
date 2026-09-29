@@ -1,4 +1,4 @@
-// Grundkarte im Candy-Look (wie die Snapchat-Map): Pastellflächen, dicke runde Straßen, wenig Details und
+// Grundkarte im gedämpften Look: Grau- und Schieferflächen, runde Straßen, wenig Details und
 // 3D-Gebäude in weichen Farben mit Schatten. Alle Daten kommen aus den OpenFreeMap-Vektorkacheln
 // (OpenMapTiles-Schema, ohne Key). Keine POIs, keine Straßennamen, keine Hausnummern.
 // Die Farben hier sind der Tag; Morgen, Abend, Nacht und Wetter stellt GameMap zur Laufzeit über

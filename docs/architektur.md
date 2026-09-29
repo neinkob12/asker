@@ -170,21 +170,23 @@ Weitere Import-Kanten nur zur Laufzeit (Funktionsaufrufe, kein `dependsOn`): `te
 
 ## Oberfläche (`src/ui/`)
 
-Look "Kölsch-Sticker": hell, App-artig und comichaft (weiße Karten mit dicker Kontur und hartem Sockel-Schatten über der pastelligen Candy-Karte, siehe [`src/map/README.md`](../src/map/README.md)). Details zu Tokens, Bausteinen, Handy und Ton: [`src/ui/README.md`](../src/ui/README.md).
+Look "Nachtschicht": dunkel, gedämpft und eckig (Haarlinien, weiche Schatten, eine Akzentfarbe) über der gedämpften Karte, siehe [`src/map/README.md`](../src/map/README.md). Das Spiel-Handy ist die Schaltzentrale. Details zu Tokens, Bausteinen, Handy und Ton: [`src/ui/README.md`](../src/ui/README.md).
 
-- **Shell** (`shell/`): Karte vollflächig. Darüber schwebende Sticker-Elemente. Desktop: HUD als Pillen
-  oben (Geld, Heat, Mehr-Popover für Lager/Ruf/Köln, Uhr mit Wetter, Tempo, Alarm-Glocke, Handy, Menü), schmales
-  Icon-Dock links (`Navigation.tsx`) mit schwebendem Inspector daneben, Panel rechts, Handy als Fenster unten rechts.
-  Handy: HUD in zwei Reihen, Bottom-Sheet mit drei Rastpunkten (klein, mittel, voll; ziehbar) über einer Tab-Leiste,
-  Panel als Sheet, Handy bildschirmfüllend. Dazu Suche (`Palette.tsx`, Strg/⌘+K), Toasts (einer sichtbar, Rest in der
-  Warteschlange), Alarm-Zentrale, Kartensteuerung, Hinweis beim Karten-Klick. Tastatur in `keys.ts`.
+- **Shell** (`shell/`): Karte vollflächig. Darüber nur eine schmale HUD-Leiste (Geld und Heat links, Warnungen,
+  Spieltempo und Menü rechts; `Hud.tsx`) und die Kartensteuerung. **Alles andere läuft über das Spiel-Handy**
+  (`phone/PhoneFrame.tsx`): Tabs der Module sind Apps (`tab:<id>`), Panels erscheinen als Seite im Handy, dazu die
+  Handy-Apps, Meldungen (`core.alerts`), Nächster Schritt, Kennzahlen (`placement: 'more'`) und Widgets auf dem
+  Startbildschirm. Desktop: Handy rechts fest angedockt, weggelegt eine Lasche am Rand. Handy-Bildschirm: Handy
+  bildschirmfüllend unter dem HUD, in der Tasche eine Leiste unten mit Nächstem Schritt und Handy-Knopf. Dazu Suche
+  (`Palette.tsx`, Strg/⌘+K), Toasts (einer sichtbar, Rest in der Warteschlange), Hinweis beim Karten-Klick.
+  Tastatur in `keys.ts`.
 - **Laufzeit** (`runtime.ts`): `UiRuntime` hält den reinen UI-Zustand (`UiState`: Panel, Dialog, Tab, Handy,
   Tempo, `camera`, `overlay`, `vibration`, `notification`, `picking`) und die `UiApi`. Neuzeichnen nach
   Simulationsschritten, gedrosselt auf ca. 10 Mal pro Sekunde; in der Pause nur bei UI-Änderungen.
 - **Hooks** (`hooks.ts`): `useGame()` → `{ state, dispatch }`, `useUi()` → `UiApi` + `state`, `useSession()`.
 - **UiApi:** `dispatch` (Toast bei Fehler), `openPanel/closePanel`, `openDialog/closeDialog`, `toast(text, kind)`,
-  `notify({ title, text, icon, appId, params, sound })`, `openPhone(appId?, params?)/closePhone`, `selectTab`,
-  `setSheetExpanded`, `setSheet('peek'|'half'|'full')`, `openSection(id)`, `togglePalette`, `setPopover`,
+  `notify({ title, text, icon, appId, params, sound })`, `openPhone(appId?, params?)/closePhone`, `selectTab`
+  (öffnet den Tab als App im Handy), `openSection(id)`, `togglePalette`, `setPopover`,
   `dismissToast`, `markAlertsRead`, `clearAlerts`, `setSpeed`, `togglePause`, `pickLocation(prompt)` (nächster Karten-Klick als Promise),
   `cancelPick`, `flyTo`, `flyToKoeln`, `flyToEuropa`, `setCameraMode`, `toggleCamera`, `setOverlay`,
   `setVibration`, `zoomIn`, `zoomOut`, `resetNorth`.
@@ -192,12 +194,13 @@ Look "Kölsch-Sticker": hell, App-artig und comichaft (weiße Karten mit dicker 
 
 | Funktion | Wofür | Einträge |
 | --- | --- | --- |
-| `registerHudItem({ id, order, placement?, icon?, component })` | Anzeige im HUD (`placement`: `main` dauerhaft, `more` im Popover, `time` in der Uhr-Pille, `alert` als Warnung) | Geld (10, sauberes Geld erst wenn > 0), Lager (20), Heat (30), Ruf (40), Köln-Fortschritt (45), offene Konfrontation (50), Uhr (90), Wetter (95) |
-| `registerTab({ id, title, order, icon?, layout?, shortcut?, component?, badge? })` | Tab im Dock bzw. in der Tab-Leiste; ohne `component` zeigt er den Slot `tab:<id>`; `layout: 'rows'` zeigt jede Card als tippbare Zeile | Geschäft (10), Reviere (20), Leute (30), Gangs, Ereignisse (90) |
+| `registerHudItem({ id, order, placement?, icon?, component })` | Kennzahl (`placement`: `main` in der HUD-Leiste, `more` als Kachel auf dem Handy-Startbildschirm, `time` neben dem Datum auf dem Startbildschirm, `alert` als Warnung im HUD) | Geld (10, sauberes Geld erst wenn > 0), Lager (20), Heat (30), Ruf (40), Köln-Fortschritt (45), offene Konfrontation (50), Wetter (95) |
+| `registerTab({ id, title, order, icon?, layout?, shortcut?, component?, badge? })` | Bereich als App im Handy (`tab:<id>`); ohne `component` zeigt er den Slot `tab:<id>`; `layout: 'rows'` zeigt jede Card als tippbare Zeile | Geschäft (10), Reviere (20), Leute (30), Gangs, Ereignisse (90) |
 | `registerSlot(name, { id, order, component })` | Abschnitt in einem Slot | `tab:business` (Lager, Lieferungen, Spots, Personal, Kundschaft, Ruf, Markt, Geldwäsche), `tab:staff`, `spots.spotPanel` (Kunden, Preise, Läufer, Leutnant), `veedel.veedelPanel` (Revier, Polizei, Leutnant), `staff.profile`, `phone.home` (Widgets), `core.settings` |
-| `registerPanel({ id, title, component })` | Detailansicht, `ui.openPanel(id, props)` | `spots.spot`, `veedel.veedel`, `goods.warehouse`, `staff.profile`, `hierarchy.lieutenant`, `market.overview` |
+| `registerPanel({ id, title, component })` | Detailansicht als Seite im Handy, `ui.openPanel(id, props)` | `spots.spot`, `veedel.veedel`, `goods.warehouse`, `staff.profile`, `hierarchy.lieutenant`, `market.overview` |
 | `registerDialog({ id, component, pausesGame?, dismissable? })` | Dialog, `ui.openDialog(id, props)` | `core.newGame`, `core.saves`, `core.settings`, `core.gameOver`, `core.won`, `encounters.encounter` (pausiert), `gangs.attack`, `gangs.ally` |
-| `registerPhoneApp({ id, name, icon, order, color?, chrome?, component, badge? })` | App im Spiel-Handy | Nachrichten, Lieferanten, Kontakte (Bewerber), Aufträge, Wetter, Musik, Einstellungen |
+| `registerLiveActivity({ id, activities })` | Live-Aktivität in der Dynamic Island des Handys (`LiveActivity`: `priority`, `icon`, `tone`, `leading`, `trailing`, `title`, `detail`, `progress`, `open`) | Überfall, Razzia, Heat, Gang-Vorstoß, Chat-Frist, Auftrag, Kurier, Lieferung, Umsatz heute |
+| `registerPhoneApp({ id, name, icon, order, color?, chrome?, component, badge? })` | App im Spiel-Handy | Nachrichten, Lieferanten, Kontakte (Bewerber), Aufträge, Meldungen, Wetter, Musik, Einstellungen |
 | `onGameEvent(type, id, (payload, ui, state) => …)` | Reaktion auf Ereignisse (Toast, Dialog, Effekt) | Game Over, Sieg, neue Nachricht (Banner), Toasts der Module, Karten-Effekte |
 | `registerAdvisor({ id, advise(state) })` | Empfehlung für die Karte "Nächster Schritt" (`Advice`: priority, icon, title, cost?, action?, highlight?) | Antworten (Kern), Verkauf und Läufer (Spots, Personal), Nachschub (Lieferanten), Geldwäsche, Kampagnenziel |
 | `registerSearch({ id, label, order, items(state) })` | Einträge der Suche (Strg/⌘+K) | Spots, Veedel, Leute, Gangs |
@@ -219,11 +222,11 @@ Look "Kölsch-Sticker": hell, App-artig und comichaft (weiße Karten mit dicker 
 
 Details und Beispiele: [`src/map/README.md`](../src/map/README.md).
 
-- `GameMap.ts`: MapLibre im **Candy-Look** wie die Snapchat-Map (`style.ts`, `look.ts`): Pastellflächen aus den
-  OpenFreeMap-Vektorkacheln, dicke runde Straßen (Nebenstraßen weiß, Hauptstraßen gelb, Autobahnen und Brücken
-  orange), Wasser und Grün gut sichtbar, 3D-Gebäude in vier Höhenbändern mit weichen Schatten, keine POIs und keine
-  Straßennamen. Vier Tageszeit-Paletten nach der Spieluhr (Morgen, Tag, Abend, Nacht) mit weichen Übergängen, Himmel
-  und Nebel ziehen mit. Wahrzeichen als Toon-Klötze (`landmarks.ts`: Dom, Hohenzollernbrücke, Colonius, Kranhäuser,
+- `GameMap.ts`: MapLibre im **gedämpften Look** (`style.ts`, `look.ts`): Grau- und Schieferflächen aus den
+  OpenFreeMap-Vektorkacheln, runde Straßen (Hauptstraßen etwas heller, Autobahnen warm), Wasser und Grün dezent,
+  3D-Gebäude in vier Höhenbändern mit Schatten, keine POIs und keine Straßennamen. Vier Tageszeit-Paletten nach der
+  Spieluhr (Morgen, Tag, Abend, Nacht) mit weichen Übergängen, nachts glühen die Hauptstraßen bernsteinfarben, Himmel
+  und Nebel ziehen mit. Wahrzeichen als schlichte Klötze (`landmarks.ts`: Dom, Hohenzollernbrücke, Colonius, Kranhäuser,
   KölnTriangle). Überwachungs-Overlay (`overlay.ts`) als Schalter, standardmäßig aus. Kamera 3D (50°)/2D,
   Köln/Europa, `pickLocation()`. Beim Platzieren (`pickLocation`) sehen die Klick-Handler der Layer noch
   `ctx.isPicking() === true`, der Klick wird erst danach aufgelöst. Die Layer der Module werden schon nach dem Stil
@@ -235,10 +238,10 @@ Details und Beispiele: [`src/map/README.md`](../src/map/README.md).
 - Stimmung und Niederschlag: `setMapMood(id, mood)`, `setPrecipitation({ kind, intensity, wind })`. Die Stimmung
   legt sich über die Palette (`computeLook`).
 - Werkzeuge: `createVehicle`/`animateVehicle` (3D-Mini-Fahrzeuge und Schiffe, fill-extrusion, weich nachgezogen),
-  `createHotspots` (pulsierende Heatmap-Blobs), `addTargetMarker`/`addHtmlMarker` (runde weiße Marker), Effekte
+  `createHotspots` (pulsierende Heatmap-Blobs in Bernstein), `addTargetMarker`/`addHtmlMarker` (eckige dunkle Marker), Effekte
   `moneyPopup`, `blueLight`, `ping`, `flash` (auch gebunden an die aktive Karte über `mapEffects`), Farbhilfen
   `mixColor`, `pastel`. Figuren und Avatare gibt es auf der Karte nicht mehr.
-- Layer jetzt: `territory.veedel` (Veedel-Flächen in Pastell nach Kontrolle oder Heat, nur auf dem Land, Name nur
+- Layer jetzt: `territory.veedel` (feine Veedel-Grenzen, Flächen schwach getönt nach Kontrolle oder Heat, nur auf dem Land, Name nur
   beim Überfahren), `suppliers.routes` (dezente Route, Lieferanten; Transporter aus Großstädten, Hafenware als Schiff
   über den Rhein bis in den Niehler Hafen, dann Lkw), `goods.warehouses`, `gangs.markers` (Hauptquartiere,
   Vorstöße), `customers.deliveries` (Kurier/Auto zum Kunden), `spots.markers` (Spots und Hotspots nach Kunden,

@@ -1,6 +1,6 @@
 // Ende-zu-Ende-Test im echten Browser (Playwright): neues Spiel, selbst verkaufen, Läufer anheuern, Ware bestellen,
 // speichern, laden und nach dem Neuladen der Seite den Autosave fortsetzen. Bedient die Oberfläche wie ein Mensch
-// (Klicks auf Karte, Panel, Handy, Dialoge); nur zum Vorspulen der Zeit wird die Simulation direkt angestoßen.
+// (Klicks auf Karte, Handy, Dialoge); nur zum Vorspulen der Zeit wird die Simulation direkt angestoßen.
 // Speichert Screenshots nach screenshots/e2e-*.png und schlägt fehl, wenn etwas nicht klappt oder der Browser
 // Fehler meldet.
 //
@@ -118,10 +118,11 @@ async function run() {
   });
 
   await check('Ware im Handy bei den Lieferanten bestellen', async () => {
-    await page.getByRole('button', { name: /^Handy/ }).click();
-    // Mit neuen Nachrichten beginnt das Handy mit dem Sperrbildschirm.
-    if (await page.locator('.phone__unlock').count()) await page.locator('.phone__unlock').click();
-    await page.locator('.phone__app', { hasText: 'Lieferanten' }).click();
+    // Am Desktop ist das Handy angedockt und zeigt noch die Spot-Details: zum Startbildschirm.
+    // Am Handy-Bildschirm liegt es nach dem Anheuern noch offen über der Karte.
+    if (await page.locator('.phone').count()) await page.locator('.phone__nav-button').click();
+    else await page.getByRole('button', { name: /^Handy/ }).click();
+    await page.locator('.phone').getByRole('button', { name: 'Lieferanten', exact: true }).click();
     await page.getByRole('button', { name: /Toni · Frankfurt/ }).click();
     await shot(page, 'lieferant');
     await page.locator('.phone').getByRole('button', { name: 'Kaufen', exact: true }).first().click();

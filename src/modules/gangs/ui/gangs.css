@@ -15,7 +15,7 @@
   place-items: center;
   width: 24px;
   height: 24px;
-  border-radius: var(--radius-round);
+  border-radius: var(--radius-sm);
   background: var(--gang-color, var(--color-surface));
   font-size: var(--font-size-sm);
 }
@@ -50,7 +50,7 @@
 .gang-tag {
   font-size: var(--font-size-xs);
   padding: 1px var(--space-2);
-  border-radius: var(--radius-round);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-line);
   color: var(--color-text);
 }
@@ -150,13 +150,13 @@
 .gang-hq__icon {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-round);
-  background: var(--gang-color);
-  border: 3px solid var(--color-marker-bg);
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--gang-color) 45%, var(--color-marker-bg));
+  border: 1px solid var(--gang-color);
   box-shadow: var(--shadow-marker-soft);
-  font-size: 15px;
+  font-size: 13px;
 }
 .gang-push {
   pointer-events: none;
@@ -166,8 +166,8 @@
   width: 64px;
   height: 64px;
   border-radius: var(--radius-round);
-  border: 3px solid var(--gang-color);
-  background: color-mix(in srgb, var(--gang-color) 18%, transparent);
+  border: 2px solid var(--gang-color);
+  background: color-mix(in srgb, var(--gang-color) 12%, transparent);
   animation: gang-push 1.8s ease-out infinite;
 }
 @keyframes gang-push {

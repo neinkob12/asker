@@ -1,4 +1,4 @@
-// Die Grundkarte: MapLibre im Candy-Look, vier Tageszeit-Paletten nach der Spieluhr, Stimmung der Module
+// Die Grundkarte: MapLibre im gedämpften Look, vier Tageszeit-Paletten nach der Spieluhr, Stimmung der Module
 // (z.B. Wetter), Regen und Schnee, Überwachungs-Overlay (Standard aus), Kamera 3D/2D, Köln/Europa und die
 // angemeldeten Layer der Module.
 

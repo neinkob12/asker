@@ -1,10 +1,10 @@
 /*
- * Karte: gemeinsame Marker-Stile (Candy-Look: rund, weiß, weicher Schatten), Überwachungs-Overlay,
+ * Karte: gemeinsame Marker-Stile (eckig, dunkel, feine Kante, helle Schrift), Überwachungs-Overlay,
  * Niederschlag und Effekte. Farben der Varianten legen die Module selbst fest
  * (z.B. .map-place--warehouse { --map-place-color: … }).
  */
 
-/* Orte (Lager, Hafen …): runder weißer Knopf mit farbigem Kern und Namens-Pille */
+/* Orte (Lager, Hafen …): dunkles Quadrat mit farbigem Kern und Namensschild */
 .map-place {
   --map-place-color: var(--color-info-strong);
   display: flex;
@@ -15,28 +15,30 @@
 }
 .map-place-icon {
   position: relative;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-round);
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
   background: var(--color-marker-bg);
-  box-shadow: var(--shadow-marker-soft);
+  box-shadow:
+    0 0 0 1px var(--color-marker-ring),
+    var(--shadow-marker-soft);
 }
 .map-place-icon::after {
   content: "";
   position: absolute;
-  inset: 5px;
-  border-radius: var(--radius-round);
+  inset: 4px;
+  border-radius: 1px;
   background: var(--map-place-color);
 }
 .map-place-name,
 .map-hover-label__text {
   font-family: var(--font-body);
   font-size: 11px;
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--font-weight-medium);
   color: var(--color-marker-ink);
-  background: var(--color-marker-bg);
-  padding: 2px 8px;
-  border-radius: var(--radius-round);
+  background: var(--color-label-bg);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
   box-shadow: var(--shadow-marker-soft);
   white-space: nowrap;
 }
@@ -53,7 +55,7 @@
   display: none;
 }
 
-/* Zielmarker (addTargetMarker): runder weißer Punkt mit farbigem Kern, daneben eine Pille */
+/* Zielmarker (addTargetMarker): dunkles Quadrat mit farbigem Kern, daneben ein Schild */
 .map-target {
   --map-target-color: var(--color-info-strong);
   position: relative;
@@ -84,34 +86,36 @@ button.map-target {
 }
 .map-target__reticle {
   position: relative;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-round);
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
   background: var(--color-marker-bg);
-  box-shadow: var(--shadow-marker-soft);
+  box-shadow:
+    0 0 0 1px var(--color-marker-ring),
+    var(--shadow-marker-soft);
   transition: transform var(--duration) var(--ease-out);
 }
 .map-target__reticle::after {
   content: "";
   position: absolute;
-  inset: 6px;
-  border-radius: var(--radius-round);
+  inset: 5px;
+  border-radius: 1px;
   background: var(--map-target-color);
 }
 .map-target.is-active .map-target__reticle,
 button.map-target:hover .map-target__reticle {
-  transform: scale(1.18);
+  transform: scale(1.12);
   box-shadow:
-    0 0 0 4px color-mix(in srgb, var(--map-target-color) 35%, transparent),
+    0 0 0 2px var(--map-target-color),
     var(--shadow-marker-soft);
 }
 .map-target__box {
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 3px 10px;
-  background: var(--color-marker-bg);
-  border-radius: var(--radius-md);
+  padding: 2px 7px;
+  background: var(--color-label-bg);
+  border-radius: var(--radius-xs);
   box-shadow: var(--shadow-marker-soft);
   line-height: 1.25;
   text-align: left;
@@ -284,9 +288,9 @@ button.map-target:hover .map-target__reticle {
   font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  color: var(--color-accent-strong);
-  background: var(--color-marker-bg);
-  border-radius: var(--radius-round);
+  color: var(--color-accent);
+  background: var(--color-label-bg);
+  border-radius: var(--radius-xs);
   box-shadow: var(--shadow-marker-soft);
 }
 .map-fx-money--bad .map-fx-money__value {

@@ -34,6 +34,7 @@ import {
   type Participant,
   pendingEncounter,
 } from '../index';
+import './island';
 import './encounters.css';
 
 declare module '../../../ui' {

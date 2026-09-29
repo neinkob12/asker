@@ -130,6 +130,36 @@ export interface Advisor {
   advise: (state: GameState) => Advice | Advice[] | null;
 }
 
+/**
+ * Live-Aktivität für die Dynamic Island des Spiel-Handys (wie bei iOS): laufende Dinge mit Anfang und Ende,
+ * die man auf einen Blick sehen will (Überfall, Lieferung unterwegs, Frist, hohe Heat …).
+ * Kompakt stehen links neben der Kamera `leading` (Icon + kurzes Wort), rechts `trailing` (Wert, z.B. "1:20 h").
+ * Aufgeklappt zeigt die Island Titel, Text und Fortschritt. Ein Tipp führt mit `open` zur passenden Stelle.
+ */
+export interface LiveActivity {
+  /** Eindeutig, z.B. 'suppliers.shipment.12'. */
+  id: string;
+  /** Höher = wichtiger. Richtwerte: 90 Gefahr (Überfall), 70 Frist, 50 Lieferung, 30 Status. */
+  priority: number;
+  icon: string;
+  /** Farbe der Glyphe und des Werts (kräftig auf Schwarz). */
+  tone?: 'accent' | 'warn' | 'bad' | 'info' | 'neutral';
+  /** Sehr kurz, links der Kamera, z.B. 'Lieferung'. */
+  leading: string;
+  /** Sehr kurz, rechts der Kamera, z.B. '1:20 h' oder '+120 €'. */
+  trailing: string;
+  title: string;
+  detail?: string;
+  /** Fortschritt 0–1 (aufgeklappt als Balken). */
+  progress?: number;
+  open?: (ui: UiApi) => void;
+}
+
+export interface LiveActivitySource {
+  id: string;
+  activities: (state: GameState) => LiveActivity | LiveActivity[] | null;
+}
+
 /** Treffer der Suche (⌘K / Strg+K). */
 export interface SearchResult {
   id: string;
@@ -190,6 +220,7 @@ export const panels = new Registry<PanelDefinition>();
 export const dialogs = new Registry<DialogDefinition>();
 export const phoneApps = new Registry<PhoneApp>();
 export const advisors = new Registry<Advisor>();
+export const liveActivitySources = new Registry<LiveActivitySource>();
 export const searchProviders = new Registry<SearchProvider>();
 export const gameStats = new Registry<GameStat>();
 const slots = new Map<string, Registry<SlotContribution>>();
@@ -235,6 +266,26 @@ export function registerPhoneApp(app: PhoneApp): void {
  */
 export function registerAdvisor(advisor: Advisor): void {
   advisors.register(advisor);
+}
+
+/** Live-Aktivitäten für die Dynamic Island des Handys anmelden (siehe LiveActivity). */
+export function registerLiveActivity(source: LiveActivitySource): void {
+  liveActivitySources.register(source);
+}
+
+/** Alle laufenden Live-Aktivitäten, wichtigste zuerst. Fehler einzelner Module werden ignoriert. */
+export function collectLiveActivities(state: GameState): LiveActivity[] {
+  const all: LiveActivity[] = [];
+  for (const source of liveActivitySources.list()) {
+    try {
+      const result = source.activities(state);
+      if (Array.isArray(result)) all.push(...result);
+      else if (result) all.push(result);
+    } catch (error) {
+      console.error(`Live-Aktivität "${source.id}"`, error);
+    }
+  }
+  return all.sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
 }
 
 /** Einträge für die Suche (⌘K / Strg+K) anmelden, z.B. Spots, Veedel, Personen. */

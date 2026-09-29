@@ -3,6 +3,7 @@
 // für die Ereignisse des Kerns.
 
 import { clock, formatEuro, messages, wallet } from '../../core';
+import { islandCountdown } from '../phone/DynamicIsland';
 import { MessagesApp } from '../phone/MessagesApp';
 import { MusicApp } from '../phone/MusicApp';
 import { chatList, messageNotification } from '../phone/messagesModel';
@@ -13,14 +14,19 @@ import {
   registerDialog,
   registerGameStat,
   registerHudItem,
+  registerLiveActivity,
   registerPhoneApp,
   registerTab,
 } from '../registry';
+import { AlertsApp } from '../shell/AlertCenter';
 import { soundOnEvent } from '../sound';
-import { ClockHud, MoneyHud } from './CoreHud';
+import { MoneyHud } from './CoreHud';
 import { GameOverDialog, NewGameDialog, SavesDialog, WonDialog } from './GameDialogs';
 import { JournalTab } from './JournalTab';
 import { SettingsDialog } from './Settings';
+
+/** Ab diesem Betrag erscheint eine Einnahme kurz in der Dynamic Island. */
+const ISLAND_EARN_MIN = 150;
 
 declare module '../registry' {
   interface DialogRegistry {
@@ -30,7 +36,6 @@ declare module '../registry' {
 
 export function registerBuiltins(): void {
   registerHudItem({ id: 'core.money', order: 10, placement: 'main', component: MoneyHud });
-  registerHudItem({ id: 'core.clock', order: 90, placement: 'time', component: ClockHud });
 
   // "Geschäft" sammelt Abschnitte der Module über den Slot 'tab:business'.
   registerTab({ id: 'business', title: 'Geschäft', order: 10, icon: 'briefcase', layout: 'rows' });
@@ -53,11 +58,20 @@ export function registerBuiltins(): void {
     chrome: 'none',
   });
   registerPhoneApp({
+    id: 'core.alerts',
+    name: 'Meldungen',
+    icon: 'bell',
+    order: 50,
+    color: 'var(--color-warn)',
+    component: AlertsApp,
+    chrome: 'none',
+  });
+  registerPhoneApp({
     id: 'core.music',
     name: 'Musik',
     icon: 'music',
     order: 80,
-    color: '#7a3db8',
+    color: 'var(--color-dirty)',
     component: MusicApp,
   });
   registerPhoneApp({
@@ -65,7 +79,7 @@ export function registerBuiltins(): void {
     name: 'Einstellungen',
     icon: 'sliders',
     order: 90,
-    color: '#3a4656',
+    color: 'var(--color-muted)',
     component: SettingsApp,
   });
 
@@ -86,6 +100,25 @@ export function registerBuiltins(): void {
         action: (ui) => ui.openPhone('core.messages', open.length === 1 ? { contactId: first.contactId } : undefined),
       };
     },
+  });
+
+  // Dynamic Island: Chats, deren Antwort eine Frist hat.
+  registerLiveActivity({
+    id: 'core.deadlines',
+    activities: (state) =>
+      chatList(state)
+        .filter((c) => c.awaitingAnswer && c.deadline !== undefined && c.deadline > state.time)
+        .map((c) => ({
+          id: `core.deadline.${c.contactId}`,
+          priority: 75,
+          icon: 'message',
+          tone: 'warn',
+          leading: 'Antwort',
+          trailing: islandCountdown((c.deadline ?? state.time) - state.time),
+          title: `${c.name} wartet auf Antwort`,
+          detail: `Frist bis ${clock.formatTime(c.deadline ?? state.time)}`,
+          open: (ui) => ui.openPhone('core.messages', { contactId: c.contactId }),
+        })),
   });
 
   registerGameStat({
@@ -110,6 +143,20 @@ export function registerBuiltins(): void {
   onGameEvent('message.received', 'core.messageNotification', (payload, ui, state) => {
     const notification = messageNotification(state, payload.messageId);
     if (notification) ui.notify({ ...notification, sound: 'message' });
+  });
+
+  // Große Einnahmen (Deals, Großhandel, Geldwäsche) kurz in der Dynamic Island. Straßenverkäufe zählen in den
+  // Umsatz des Tages (Kundschaft), sonst stünde die Island abends dauernd auf "+… €".
+  onGameEvent('wallet.changed', 'core.islandEarn', (payload, ui) => {
+    if (payload.amount >= ISLAND_EARN_MIN) {
+      ui.pulseIsland({
+        kind: `earn.${payload.kind}`,
+        amount: payload.amount,
+        icon: payload.kind === 'clean' ? 'euro' : 'moneyBag',
+        tone: 'accent',
+        text: '',
+      });
+    }
   });
 
   soundOnEvent('game.over', 'gameOver');

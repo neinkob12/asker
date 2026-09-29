@@ -1,4 +1,4 @@
-/* Spot-Marker im Candy-Look: runder weißer Knopf mit Zahl, farbiger Ring nach Dringlichkeit, Namens-Pille. */
+/* Spot-Marker: dunkles Quadrat mit Zahl, farbige Kante nach Dringlichkeit, Namensschild darunter. */
 .spot-marker {
   --spot-ring: var(--color-marker-ring);
   display: flex;
@@ -12,11 +12,11 @@
 }
 .spot-dot {
   position: relative;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
   background: var(--color-marker-bg);
-  border: 3px solid var(--spot-ring);
+  border: 2px solid var(--spot-ring);
   box-shadow: var(--shadow-marker-soft);
   display: grid;
   place-items: center;
@@ -24,11 +24,12 @@
 }
 .spot-marker:hover .spot-dot,
 .spot-marker.selected .spot-dot {
-  transform: scale(1.2);
+  transform: scale(1.12);
 }
 .spot-badge {
-  font-weight: 800;
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  font-size: 14px;
   color: var(--color-marker-ink);
 }
 .spot-marker[data-urgency="waiting"] {
@@ -42,27 +43,27 @@
 }
 .spot-marker.has-runner .spot-dot {
   box-shadow:
-    0 0 0 3px var(--color-accent-strong),
+    0 0 0 2px var(--color-accent-strong),
     var(--shadow-marker-soft);
 }
 .spot-marker.selected .spot-dot {
-  outline: 2px solid var(--color-marker-bg);
-  outline-offset: 4px;
+  outline: 1px solid var(--color-marker-ink);
+  outline-offset: 3px;
 }
 .spot-name {
-  font-size: 11.5px;
-  font-weight: var(--font-weight-bold);
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
   color: var(--color-marker-ink);
-  background: var(--color-marker-bg);
-  padding: 1px 8px;
-  border-radius: var(--radius-round);
+  background: var(--color-label-bg);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
   box-shadow: var(--shadow-marker-soft);
   white-space: nowrap;
 }
 @keyframes spot-pulse {
   50% {
     box-shadow:
-      0 0 0 8px color-mix(in srgb, var(--color-bad-strong) 30%, transparent),
+      0 0 0 6px color-mix(in srgb, var(--color-bad-strong) 30%, transparent),
       var(--shadow-marker-soft);
   }
 }
@@ -70,10 +71,21 @@
   display: none;
 }
 .spot-marker.is-locked .spot-dot {
-  opacity: 0.75;
+  opacity: 0.8;
+}
+.spot-marker.is-locked .spot-dot {
+  border-color: var(--color-marker-ring);
 }
 .spot-marker.is-locked .spot-badge {
-  font-size: 12px;
+  width: 12px;
+  height: 12px;
+  background: var(--color-marker-muted);
+  -webkit-mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linejoin='round'%3E%3Cpath d='M6 11h12v9.5H6z'/%3E%3Cpath d='M8.5 11V8a3.5 3.5 0 0 1 7 0v3'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linejoin='round'%3E%3Cpath d='M6 11h12v9.5H6z'/%3E%3Cpath d='M8.5 11V8a3.5 3.5 0 0 1 7 0v3'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }
 .spot-marker.is-locked .spot-name {
   color: var(--color-marker-muted);

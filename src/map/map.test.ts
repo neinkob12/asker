@@ -76,15 +76,15 @@ describe('Koordinaten', () => {
   });
 });
 
-describe('Candy-Look nach Tageszeit', () => {
+describe('Karten-Look nach Tageszeit', () => {
   const at = (hour: number, minute = 0) => hour * 60 + minute;
   const mid = (w: { start: number; end: number }) => (w.start + w.end) / 2;
 
   it('zeigt tagsüber, nachts, morgens und abends die Paletten aus dem Prototyp', () => {
     expect(computeLook(at(13)).land).toBe(PALETTES.day.land);
-    expect(computeLook(at(13)).water).toBe('#8ad3f4');
+    expect(computeLook(at(13)).water).toBe(PALETTES.day.water);
     expect(computeLook(at(2)).land).toBe(PALETTES.night.land);
-    expect(computeLook(at(2)).sky).toBe('#141433');
+    expect(computeLook(at(2)).sky).toBe(PALETTES.night.sky);
     expect(computeLook(mid(DAWN)).land).toBe(PALETTES.dawn.land);
     expect(computeLook(mid(DUSK)).major).toBe(PALETTES.dusk.major);
     expect(computeLook(at(2)).phase).toBe('night');
