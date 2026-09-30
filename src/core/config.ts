@@ -1,7 +1,7 @@
 // Einstellbare Werte des Kerns. Werte der Module liegen in deren eigener config.ts.
 
 /** Bei 1x vergehen pro echter Sekunde so viele Spielminuten (= Simulationsschritte). */
-export const GAME_MINUTES_PER_REAL_SECOND = 5;
+export const GAME_MINUTES_PER_REAL_SECOND = 4;
 
 /** Wählbare Tempi. 0 = Pause. */
 export const SPEEDS = [0, 1, 2, 4] as const;

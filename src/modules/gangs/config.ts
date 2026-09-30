@@ -89,9 +89,9 @@ export const PRICE_WAR_HOSTILITY = 50;
 // --- Verhältnis zum Spieler ---------------------------------------------------------------------
 
 /** Verkäufe in ihrem Revier (gleitende Summe) bis hierhin: du bist ein kleiner Fisch, sie ignorieren dich. */
-export const SMALL_FISH_UNITS = 25;
+export const SMALL_FISH_UNITS = 60;
 /** Feindseligkeit pro Einheit über der Schwelle und Stunde (mal Aggression). */
-export const HOSTILITY_PER_UNIT = 0.015;
+export const HOSTILITY_PER_UNIT = 0.01;
 /** Die gleitende Summe verfällt pro Stunde auf diesen Anteil (ca. ein Tag Halbwertszeit). */
 export const TURF_SALES_DECAY = 0.97;
 /** Ohne Anlass kühlt die Feindseligkeit pro Stunde so viel ab. */
@@ -103,11 +103,11 @@ export const ATTACK_AT = 70;
 /** So weit muss die Feindseligkeit unter eine Stufe fallen, bevor sie wieder auslösen kann. */
 export const STAGE_HYSTERESIS = 10;
 /** Dieselbe Stufe wird höchstens so oft per Nachricht angekündigt. */
-export const ANNOUNCE_INTERVAL = DAY;
+export const ANNOUNCE_INTERVAL = 2 * DAY;
 /** Chance pro Stunde auf einen Überfall bei voller Feindseligkeit (mal Aggression). */
-export const ATTACK_CHANCE = 0.035;
+export const ATTACK_CHANCE = 0.02;
 /** Mindestabstand zwischen zwei Überfällen derselben Gang. */
-export const ATTACK_COOLDOWN = 30 * HOUR;
+export const ATTACK_COOLDOWN = 4 * DAY;
 /** Nach einem gelungenen Überfall ist die Gang erst mal zufrieden: so viel weniger Feindseligkeit. */
 export const HOSTILITY_AFTER_LESSON = 30;
 /** Chance, ein Lager statt eines Spots zu überfallen. */
@@ -128,7 +128,7 @@ export const CEASEFIRE_COOLDOWN_AFTER_ATTACK = DAY;
 export const MIN_RELATION_TO_TALK = -60;
 
 /** Schutzgeld zahlen: Grundbetrag plus pro Punkt Feindseligkeit, für eine Woche. */
-export const TRIBUTE_BASE = 400;
+export const TRIBUTE_BASE = 250;
 export const TRIBUTE_PER_HOSTILITY = 10;
 export const TRIBUTE_DURATION = 7 * DAY;
 /** Schutzgeld steigt pro Veedel, das du kontrollierst (wer mehr hat, zahlt mehr). */
