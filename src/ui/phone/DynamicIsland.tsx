@@ -16,7 +16,11 @@ import type { IslandPulse } from '../runtime';
 
 /** Ab dieser Priorität klappt eine neue Aktivität die Island kurz von selbst auf (wie ein Alert bei iOS). */
 const ALERT_PRIORITY = 80;
-const ALERT_MS = 4000;
+const ALERT_MS = 3000;
+/** Hover öffnet/schließt erst nach kurzer Absicht (streifende Maus), aufgeklappt klappt es sonst von selbst wieder zu. */
+const HOVER_OPEN_MS = 250;
+const HOVER_CLOSE_MS = 350;
+const AUTO_COLLAPSE_MS = 7000;
 /** Aufgeklappt höchstens so viele Aktivitäten. */
 const EXPANDED_MAX = 4;
 
@@ -53,24 +57,38 @@ export function DynamicIsland(props: { floating?: boolean }) {
   const { ui, api } = runtime;
   const state = runtime.state;
   const seen = useRef<Set<string> | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout>>();
   const [alertId, setAlertId] = useState<string | null>(null);
   const activities = state ? collectLiveActivities(state) : [];
   const ids = activities.map((a) => a.id).join('|');
 
   // Neue dringende Aktivität: kurz aufklappen. Beim ersten Anzeigen nicht (sonst klappt sie nach dem Laden auf).
   useEffect(() => {
+    // Jede Aktivität alarmiert nur einmal (auch wenn sie kurz verschwindet und wiederkommt).
     const current = new Set(ids ? ids.split('|') : []);
-    if (seen.current) {
-      const fresh = activities.find((a) => a.priority >= ALERT_PRIORITY && !seen.current?.has(a.id));
-      if (fresh) setAlertId(fresh.id);
+    const known = seen.current;
+    if (known) {
+      const fresh = activities.find((a) => a.priority >= ALERT_PRIORITY && !known.has(a.id));
+      if (fresh && !ui.island.expanded) setAlertId(fresh.id);
+      for (const id of current) known.add(id);
+    } else {
+      seen.current = current;
     }
-    seen.current = current;
   }, [ids]);
   useEffect(() => {
     if (!alertId) return;
     const timer = setTimeout(() => setAlertId(null), ALERT_MS);
     return () => clearTimeout(timer);
   }, [alertId]);
+
+  // Aufgeklappt bleibt die Island nicht ewig stehen (Touch kennt kein "Maus weg").
+  const expandedNow = ui.island.expanded;
+  useEffect(() => {
+    if (!expandedNow) return;
+    const timer = setTimeout(() => api.toggleIsland(false), AUTO_COLLAPSE_MS);
+    return () => clearTimeout(timer);
+  }, [expandedNow, ids]);
+  useEffect(() => () => clearTimeout(hoverTimer.current), []);
 
   if (!state) return null;
   const alert = alertId ? activities.find((a) => a.id === alertId) : undefined;
@@ -97,8 +115,16 @@ export function DynamicIsland(props: { floating?: boolean }) {
         role="status"
         aria-live="polite"
         aria-label={top ? `${top.title}: ${top.trailing}` : 'Keine laufenden Aktivitäten'}
-        onMouseEnter={() => hoverable() && activities.length > 0 && api.toggleIsland(true)}
-        onMouseLeave={() => hoverable() && ui.island.expanded && api.toggleIsland(false)}
+        onMouseEnter={() => {
+          if (!hoverable() || activities.length === 0) return;
+          clearTimeout(hoverTimer.current);
+          hoverTimer.current = setTimeout(() => api.toggleIsland(true), HOVER_OPEN_MS);
+        }}
+        onMouseLeave={() => {
+          if (!hoverable()) return;
+          clearTimeout(hoverTimer.current);
+          hoverTimer.current = setTimeout(() => api.toggleIsland(false), HOVER_CLOSE_MS);
+        }}
       >
         {(mode === 'compact' || mode === 'pulse') && (
           <button

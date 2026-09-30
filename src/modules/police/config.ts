@@ -32,9 +32,9 @@ export const HEAT_DECAY_PER_HOUR = 0.7;
 /** Ab diesem Heat gibt es Kontrollen. */
 export const CHECK_THRESHOLD = 30;
 /** Wahrscheinlichkeit pro Stunde bei Heat 100 und Präsenz 1 (darunter anteilig ab der Schwelle). */
-export const CHECK_CHANCE_PER_HOUR = 0.12;
+export const CHECK_CHANCE_PER_HOUR = 0.08;
 /** Nach einer Kontrolle ist im Veedel so lange Ruhe. */
-export const CHECK_COOLDOWN = 6 * 60;
+export const CHECK_COOLDOWN = 12 * 60;
 /** Die Polizei ist erst mal zufrieden: Heat sinkt um so viel. */
 export const CHECK_HEAT_RELIEF = 6;
 /** Beschlagnahmte Ware bei einer Kontrolle (Einheiten). */

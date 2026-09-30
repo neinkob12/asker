@@ -6,13 +6,13 @@ import type { CustomerType } from './index';
 export const CUSTOMER_PATIENCE = 180;
 export const MAX_CUSTOMERS_PER_SPOT = 4;
 /** Mittlerer Abstand zwischen zwei Kunden an einem Spot mit Andrang 1 (bei Richtpreis). */
-export const BASE_SPAWN_INTERVAL = 85;
+export const BASE_SPAWN_INTERVAL = 55;
 
 /**
  * Anlaufphase: Am Anfang kennt dich noch keiner. Die Nachfrage startet bei diesem Anteil und steigt über
- * WARMUP_MINUTES gleichmäßig auf 100 % (1 echte Sekunde sind 5 Spielminuten, 2 Spieltage also knapp 10 Minuten).
+ * WARMUP_MINUTES gleichmäßig auf 100 % (1 echte Sekunde sind 4 Spielminuten, 2 Spieltage also 12 Minuten).
  */
-export const WARMUP_START_DEMAND = 0.3;
+export const WARMUP_START_DEMAND = 0.55;
 export const WARMUP_MINUTES = 2 * 24 * 60;
 
 export function warmupDemandFactor(minutesPlayed: number): number {

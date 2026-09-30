@@ -1,7 +1,7 @@
 // Einstellbare Werte der Logistik. Zeiten in Spielminuten, Geld in Euro, Tempo in Metern pro Spielminute.
 
 /** Liegeplatz im Niehler Hafen: Miete für immer, bezahlt mit sauberem Geld (der Hafen ist legal). */
-export const BERTH_COST = 2000;
+export const BERTH_COST = 4000;
 
 /** So lange steht Ware am Kai, bevor der Zoll neugierig wird. */
 export const CARGO_SAFE_MINUTES = 16 * 60;
