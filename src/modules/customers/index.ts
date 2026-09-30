@@ -174,9 +174,12 @@ export interface CustomersState {
   regulars: Regular[];
   orders: Order[];
   self: SelfSelling;
+  /** Dürfen Kunden dir direkt schreiben (Lieferanfragen)? Aus: nur Großhandelsaufträge kommen. */
+  directOrders: boolean;
 }
 
-type CustomersStateV2 = Omit<CustomersState, 'self'>;
+type CustomersStateV2 = Omit<CustomersState, 'self' | 'directOrders'>;
+type CustomersStateV3 = Omit<CustomersState, 'directOrders'>;
 
 interface CustomersStateV1 {
   waiting: Customer[];
@@ -198,6 +201,8 @@ declare module '../../core' {
     'customers.serveAll': { spotId: string };
     /** Selbst an einen Spot stellen und dort automatisch verkaufen (null = weggehen). */
     'customers.standAt': { spotId: string | null };
+    /** Kunden direkt schreiben lassen (Lieferanfragen) oder nur Großhandel. */
+    'customers.setDirectOrders': { enabled: boolean };
     /** Auftrag annehmen und gleich losschicken: selbst liefern oder einen freien Kurier. */
     'customers.acceptOrder': { orderId: number; by: 'player' | 'courier' };
     'customers.declineOrder': { orderId: number };
@@ -354,7 +359,7 @@ function standAt(ctx: Ctx, spotId: string | null): CommandResult {
 
 export default defineModule({
   id: 'customers',
-  version: 3,
+  version: 4,
   dependsOn: ['spots', 'goods', 'market'],
   init: (ctx) => ({
     waiting: [],
@@ -374,6 +379,7 @@ export default defineModule({
     regulars: [],
     orders: [],
     self: { spotId: null, busyUntil: 0, since: 0 },
+    directOrders: false,
   }),
   tick: (ctx) => {
     streetTick(ctx);
@@ -390,6 +396,10 @@ export default defineModule({
       return { ok: true, data: { served } };
     },
     'customers.standAt': (ctx, { spotId }) => standAt(ctx, spotId),
+    'customers.setDirectOrders': (ctx, { enabled }) => {
+      ctx.state.modules.customers.directOrders = enabled;
+      return { ok: true };
+    },
     'customers.acceptOrder': (ctx, { orderId, by }) => acceptOrder(ctx, orderId, by),
     'customers.declineOrder': (ctx, { orderId }) => declineOrder(ctx, orderId),
   },
@@ -422,6 +432,8 @@ export default defineModule({
       orders: [],
     }),
     // Version 3: Du kannst dich selbst an einen Spot stellen.
-    3: (old: CustomersStateV2): CustomersState => ({ ...old, self: { spotId: null, busyUntil: 0, since: 0 } }),
+    3: (old: CustomersStateV2): CustomersStateV3 => ({ ...old, self: { spotId: null, busyUntil: 0, since: 0 } }),
+    // Version 4: Direktanfragen von Kunden sind abschaltbar, standardmäßig aus.
+    4: (old: CustomersStateV3): CustomersState => ({ ...old, directOrders: false }),
   },
 });

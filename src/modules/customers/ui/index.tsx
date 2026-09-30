@@ -18,6 +18,7 @@ import {
   registerGameStat,
   registerPhoneApp,
   registerSlot,
+  Toggle,
   useGame,
   useUi,
 } from '../../../ui';
@@ -260,7 +261,7 @@ function OfferedOrder(props: { order: Order; state: GameState }) {
 }
 
 function OrdersApp() {
-  const { state } = useGame();
+  const { state, dispatch } = useGame();
   const offered = getOrders(state, { status: 'offered' });
   const enRoute = getOrders(state, { status: 'enRoute' });
   const done = getOrders(state)
@@ -278,9 +279,18 @@ function OrdersApp() {
   return (
     <div class="orders-app">
       <h3 class="orders-app__title">Aufträge</h3>
+      <Toggle
+        label="Kunden dürfen mir schreiben"
+        hint="Aus: Nur größere Großhandelsaufträge kommen aufs Handy."
+        checked={state.modules.customers.directOrders}
+        onChange={(enabled) => dispatch({ type: 'customers.setDirectOrders', payload: { enabled } })}
+      />
       <h4 class="orders-app__section">Anfragen</h4>
       {offered.length === 0 ? (
-        <Empty>Keine offenen Anfragen. Mit gutem Ruf melden sich mehr Leute.</Empty>
+        <Empty>
+          Keine offenen Anfragen. Mit gutem Ruf melden sich mehr Leute (Kunden-Direktanfragen musst du oben
+          einschalten).
+        </Empty>
       ) : (
         <ul class="orders">
           {offered.map((o) => (

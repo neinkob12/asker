@@ -576,11 +576,21 @@ describe('customers: Lieferdienst und Großhandel', () => {
 
   it('Anfragen kommen im Spielverlauf von selbst', () => {
     const sim = createTestGame({ seed: 2 });
+    sim.dispatch({ type: 'customers.setDirectOrders', payload: { enabled: true } });
     changeReputation(sim.ctx('test'), 30);
     store(sim.ctx('test'), { productId: 'weed', amount: 500 });
     const events = recordEvents(sim);
     sim.advance(2 * 24 * 60);
     expect(eventsOfType(events, 'order.received').length).toBeGreaterThan(0);
+  });
+
+  it('ohne Direktanfragen schreiben Kunden nicht von selbst', () => {
+    const sim = createTestGame({ seed: 2 });
+    changeReputation(sim.ctx('test'), 30);
+    store(sim.ctx('test'), { productId: 'weed', amount: 500 });
+    const events = recordEvents(sim);
+    sim.advance(2 * 24 * 60);
+    expect(eventsOfType(events, 'order.received').filter((e) => e.payload.kind === 'delivery')).toEqual([]);
   });
 });
 

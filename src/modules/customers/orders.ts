@@ -163,6 +163,7 @@ function createOrder(
 export function offerDelivery(ctx: Ctx, force = false): Order | null {
   const state = ctx.state;
   const s = state.modules.customers;
+  if (!force && !s.directOrders) return null;
   if (s.orders.filter(isOpen).length >= MAX_OPEN_ORDERS) return null;
   if (getReputation(state) < DELIVERY_MIN_REPUTATION || getStock(state) <= 0) return null;
   const active = s.regulars.filter((r) => r.status === 'active');
