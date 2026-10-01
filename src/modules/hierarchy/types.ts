@@ -122,6 +122,8 @@ export interface RightHandPost {
   spent: number;
   /** Letzte Warnung, dass die Löhne nicht reichen (Spielminute). */
   warnedAt: number | null;
+  /** Ausfälle, um die sie sich schon gekümmert hat (bis die Person zurück ist). */
+  handled: string[];
   log: LogEntry[];
 }
 

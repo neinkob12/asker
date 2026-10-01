@@ -81,6 +81,7 @@ import {
   configureRightHand,
   dismissRightHand,
   onRightHandLeft,
+  onRightHandStatus,
   rightHandDaily,
   rightHandTick,
 } from './righthand';
@@ -109,6 +110,8 @@ export {
 } from './config';
 export { isPortSupplierAllowed, orderRuleLabel, ruleStock, ruleWarehouse } from './orders';
 export {
+  absenceHandled,
+  buildReport,
   canBeRightHand,
   getRightHand,
   isRightHand,
@@ -771,6 +774,7 @@ export default defineModule({
       onRightHandLeft(ctx, staffId);
     },
     'staff.statusChanged': (ctx, { staffId, to }) => {
+      onRightHandStatus(ctx, staffId, to);
       const own = getPost(ctx.state, staffId);
       if (own) {
         const text =

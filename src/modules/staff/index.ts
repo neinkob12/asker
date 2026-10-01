@@ -35,7 +35,7 @@ import {
   type MessageOption,
   messages,
 } from '../../core';
-import { handlesAbsence, teamLeadOf } from '../hierarchy';
+import { absenceHandled, teamLeadOf } from '../hierarchy';
 import { getVeedel, veedelName } from '../veedel';
 import {
   assignCommand,
@@ -233,7 +233,7 @@ function askAboutArrest(ctx: Ctx, m: StaffMember): void {
   const until = m.statusUntil ?? ctx.now;
   const leadId = teamLeadOf(ctx.state, m.id);
   const lead = leadId && leadId !== m.id ? getStaffMember(ctx.state, leadId) : undefined;
-  if (lead && handlesAbsence(ctx.state, lead.id, m.id)) return;
+  if (absenceHandled(ctx.state, m.id)) return;
   const cost = bailCost(ctx.state, m.id);
   const atSpot = m.returnTo?.kind === 'spot' && (m.role === 'runner' || m.role === 'security');
   const options: MessageOption[] = [];

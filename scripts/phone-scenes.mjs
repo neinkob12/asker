@@ -464,6 +464,44 @@ export const SCENES = [
       group?.scrollIntoView({ block: 'start' });
     })()`,
   },
+  // Rechte Hand mit Tagesbericht (spult einen Tag vor, deshalb am Ende)
+  {
+    name: 'rechte-hand',
+    js: `(() => {
+      ${BUSINESS_DAYS};
+      ${LIEUTENANT};
+      const sim = window.koeln.session.sim;
+      const s = sim.state;
+      if (!s.modules.hierarchy.rightHand) {
+        s.wallet.dirty += 6000;
+        const taken = new Set(Object.values(s.modules.hierarchy.posts).flatMap((p) => p.spotIds));
+        const free = s.modules.spots.unlocked.filter((id) => !taken.has(id));
+        for (const spotId of free) sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+        const runners = s.modules.staff.members.filter((m) => m.role === 'runner' && m.status === 'active' && !s.modules.hierarchy.posts[m.id]);
+        const second = runners.find((m) => m.assignment?.kind === 'spot' && free.includes(m.assignment.targetId));
+        if (second) {
+          second.level = Math.max(second.level, 2);
+          sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: second.id, spotIds: [second.assignment.targetId] } });
+        }
+        const boss = runners.find((m) => m.id !== second?.id);
+        if (boss) {
+          boss.level = Math.max(boss.level, 4);
+          boss.stats.loyalty = Math.max(boss.stats.loyalty, 70);
+          sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });
+        }
+        sim.advance(1440);
+      }
+      window.koeln.runtime.api.openPanel('hierarchy.rightHand', {});
+    })()`,
+  },
+  {
+    name: 'tagesbericht',
+    js: `(() => {
+      const s = window.koeln.session.sim.state;
+      const id = s.modules.hierarchy.rightHand?.staffId;
+      window.koeln.runtime.api.openPhone('core.messages', id ? { contactId: 'staff:' + id } : undefined);
+    })()`,
+  },
 ];
 
 /** Öffnet eine frische Sitzung (pausiert, fester Seed) und spult vor. */

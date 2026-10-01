@@ -52,6 +52,7 @@ import {
   teamOf,
 } from '../index';
 import { AppointSheet } from './AppointSheet';
+import { RightHandRow } from './RightHand';
 import { RuleSheet } from './RuleSheet';
 import './hierarchy.css';
 
@@ -122,6 +123,7 @@ function LieutenantsSection() {
       ) : (
         <Group title="Leutnants" icon="crew" color="people" count={posts.length}>
           <List>
+            <RightHandRow />
             {posts.map((post) => (
               <LieutenantRow key={post.staffId} post={post} />
             ))}
