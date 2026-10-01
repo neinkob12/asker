@@ -156,6 +156,7 @@ export function ContextMenu(props: ContextMenuProps) {
     // biome-ignore lint/a11y/noStaticElementInteractions: Hülle ohne eigenen Kasten, reagiert auf ihren Inhalt (langer Druck, Rechtsklick, Kontextmenü-Taste)
     <div
       class={`ui-ctx ${props.class ?? ''} ${open ? 'is-open' : ''}`}
+      role="none"
       ref={wrap}
       onPointerDown={down}
       onContextMenu={(e) => {

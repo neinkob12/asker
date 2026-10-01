@@ -1324,8 +1324,49 @@ html.is-dragging {
   border-radius: var(--radius-lg);
 }
 .phone .ui-card--detail {
+  gap: 16px;
   padding: 0;
   background: none;
+}
+/*
+ * Abschnitt als eigene Seite: Der Inhalt steht ohne Karte auf der Seite. Werte-Zeilen (KeyValue) hintereinander
+ * werden zu einer Gruppe wie in den iOS-Einstellungen, Listen und innere Karten zu eigenen Gruppen.
+ */
+.phone .ui-card--detail > .ui-kv {
+  position: relative;
+  padding: 0 16px;
+  background: var(--phone-group);
+  border-bottom: 0;
+}
+.phone .ui-card--detail > .ui-kv + .ui-kv {
+  margin-top: -16px;
+}
+.phone .ui-card--detail > .ui-kv + .ui-kv::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  border-top: 0.5px solid var(--phone-separator);
+}
+.phone .ui-card--detail > .ui-kv:not(.ui-kv + .ui-kv) {
+  border-top-left-radius: var(--radius-group);
+  border-top-right-radius: var(--radius-group);
+}
+.phone .ui-card--detail > .ui-kv:not(:has(+ .ui-kv)) {
+  border-bottom-left-radius: var(--radius-group);
+  border-bottom-right-radius: var(--radius-group);
+}
+.phone .ui-card--detail > .ui-list,
+.phone .ui-card--detail .ui-card .ui-list {
+  background: var(--phone-group);
+}
+.phone .ui-card--detail .ui-card {
+  background: var(--phone-group);
+  border-radius: var(--radius-group);
+}
+.phone .ui-card--detail > .ui-hint {
+  padding: 0 16px;
 }
 .phone .ui-card__title {
   font-family: var(--font-body);
@@ -1455,14 +1496,20 @@ html.is-dragging {
 .phone .ui-list__item {
   position: relative;
 }
-/* Trenner ab dem Text, nicht bis zum linken Rand */
-.phone .ui-list__item + .ui-list__item::before {
+/* Trenner ab dem Text, nicht bis zum linken Rand (auch wenn Zeilen in Kontextmenü oder Wisch-Zeile stecken) */
+.phone .ui-list > * + .ui-list__item::before,
+.phone .ui-list > * + * .ui-list__item::before {
   content: "";
   position: absolute;
   top: 0;
   left: 16px;
   right: 0;
   border-top: 0.5px solid var(--phone-separator);
+}
+/* Zeilen mit Kachel: Trenner erst ab dem Text (wie in den iOS-Einstellungen) */
+.phone .ui-list > * + .ui-list__item:has(.ui-item)::before,
+.phone .ui-list > * + * .ui-list__item:has(.ui-item)::before {
+  left: 54px;
 }
 .phone .ui-list__chevron {
   color: var(--phone-label-3);
@@ -1510,6 +1557,13 @@ html.is-dragging {
 .phone .ui-tag {
   font-size: var(--type-caption);
 }
+/* Schalter direkt in einer Gruppe (z.B. Einstellung einer App): als eingerückte Zeile */
+.phone .ui-group > .ui-toggle {
+  min-height: 52px;
+  padding: 8px 16px;
+  background: var(--phone-group);
+  border-radius: var(--radius-group);
+}
 .phone .ui-toggle__hint,
 .phone .ui-slider__value {
   color: var(--phone-label-2);
@@ -1544,6 +1598,16 @@ html.is-dragging {
 }
 .phone .ui-row:hover {
   background: var(--phone-group-2);
+}
+/* Aktionszeilen im Handy ohne farbige Kante; gefährliche Aktionen (tone="bad") mit rotem Titel */
+.phone .ui-list__item.is-action {
+  box-shadow: none;
+}
+.phone .ui-list__item.is-action.ui-list__item--bad .ui-item__title {
+  color: var(--cat-danger);
+}
+.phone .ui-list__item.is-action.is-disabled .ui-item__title {
+  color: var(--phone-label-2);
 }
 /* Gedrückte Zeilen und Knöpfe (press.ts): sofort beim Aufsetzen, wie bei iOS */
 .phone :is(.ui-list__button, .ui-row, .msg-row, .set-link).is-pressed {

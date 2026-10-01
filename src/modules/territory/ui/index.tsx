@@ -6,8 +6,10 @@ import { formatNumber, type GameState } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import {
   Card,
+  Group,
   Hint,
   HudPill,
+  ItemContent,
   List,
   ListItem,
   onGameEvent,
@@ -67,27 +69,32 @@ function InfluenceSection(props: { veedelId: string }) {
           ? 'keine, dein Einfluss bröckelt'
           : 'keine';
   return (
-    <Card title="Revier" actions={<FactionName state={state} faction={owner} />}>
-      <div class="territory-influence">
+    <Group
+      title="Revier"
+      icon="flag"
+      color="place"
+      note={`Deine Präsenz: ${presenceText}. Kontrolle ab ${CONTROL_THRESHOLD} Einfluss und mehr als alle anderen, verloren unter ${LOSE_CONTROL_THRESHOLD}. Verkäufe hier drängen die stärkste Gang zurück.`}
+    >
+      <List>
+        <ListItem value={<FactionName state={state} faction={owner} />}>
+          <ItemContent icon="crown" color="place" title="Herrscht" />
+        </ListItem>
         {rows.map((row) => (
-          <div key={row.faction} class="territory-influence__row">
-            <span class="territory-influence__name">{factionName(state, row.faction)}</span>
-            <span class="territory-bar">
-              <span
-                class="territory-bar__fill"
-                style={{ width: `${row.value}%`, background: factionColor(state, row.faction) }}
-              />
-              <span class="territory-bar__threshold" style={{ left: `${CONTROL_THRESHOLD}%` }} />
+          <ListItem key={row.faction} value={formatNumber(row.value)}>
+            <span class="territory-influence__row">
+              <span class="territory-influence__name">{factionName(state, row.faction)}</span>
+              <span class="territory-bar">
+                <span
+                  class="territory-bar__fill"
+                  style={{ width: `${row.value}%`, background: factionColor(state, row.faction) }}
+                />
+                <span class="territory-bar__threshold" style={{ left: `${CONTROL_THRESHOLD}%` }} />
+              </span>
             </span>
-            <span class="territory-influence__value">{formatNumber(row.value)}</span>
-          </div>
+          </ListItem>
         ))}
-      </div>
-      <Hint>
-        Deine Präsenz: {presenceText}. Kontrolle ab {CONTROL_THRESHOLD} Einfluss und mehr als alle anderen, verloren
-        unter {LOSE_CONTROL_THRESHOLD}. Verkäufe hier drängen die stärkste Gang zurück.
-      </Hint>
-    </Card>
+      </List>
+    </Group>
   );
 }
 

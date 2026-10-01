@@ -1,13 +1,15 @@
 // Oberfläche der Polizei: Heat im HUD, Abschnitt "Polizei" im Veedel-Panel (mit Verpfeifen) und Hinweise als Toast.
 
+import { useState } from 'preact/hooks';
 import { clock, formatPercent } from '../../../core';
 import { mapEffects } from '../../../map';
 import {
-  Button,
-  Card,
-  Hint,
+  ActionSheet,
+  Group,
   HudPill,
-  KeyValue,
+  ItemContent,
+  List,
+  ListItem,
   onGameEvent,
   ProgressBar,
   registerHudItem,
@@ -60,9 +62,13 @@ function HeatHud() {
   );
 }
 
-/** Abschnitt im Veedel-Panel: Heat, was droht, Verpfeifen der Gang, die hier herrscht. */
+/**
+ * Abschnitt im Veedel-Panel: Heat, was droht, Verpfeifen der Gang, die hier herrscht. Verpfeifen hat Folgen (die Gang
+ * kann erfahren, wer gesungen hat) und wird deshalb im Aktionsblatt bestätigt.
+ */
 function PoliceSection(props: { veedelId: string }) {
   const { state, dispatch } = useGame();
+  const [confirm, setConfirm] = useState(false);
   const heat = getHeat(state, props.veedelId);
   const level = heatLevel(heat);
   const owner = controllerOf(state, props.veedelId);
@@ -76,32 +82,55 @@ function PoliceSection(props: { veedelId: string }) {
         ? `Kontrollen möglich, Razzien ab ${RAID_THRESHOLD}.`
         : `Ruhig. Kontrollen ab ${CHECK_THRESHOLD}, Razzien ab ${RAID_THRESHOLD}.`;
   return (
-    <Card title="Polizei" actions={<span class={`police-level police-level--${level.id}`}>{level.label}</span>}>
-      <KeyValue label="Heat" value={`${Math.round(heat)} von ${MAX_HEAT}`} />
-      <ProgressBar value={heat / MAX_HEAT} tone={TONE[level.id]} label="Heat" />
-      <Hint>
-        {risk} Verkäufe und Gewalt treiben den Heat, mit der Zeit kühlt es ab. Polizeipräsenz:{' '}
-        {formatPercent(getVeedel(props.veedelId)?.policePresence ?? 1)}.
-      </Hint>
-      {tip && (
-        <Hint>
-          Hinweis gegen {getGang(state, tip.gangId)?.name ?? tip.gangId} läuft bis {clock.format(tip.until)}.
-        </Hint>
+    <Group
+      title="Polizei"
+      icon="siren"
+      color="law"
+      note={`Verkäufe und Gewalt treiben den Heat, mit der Zeit kühlt es ab. Polizeipräsenz: ${formatPercent(getVeedel(props.veedelId)?.policePresence ?? 1)}.`}
+    >
+      <List>
+        <ListItem value={`${Math.round(heat)} von ${MAX_HEAT}`}>
+          <ItemContent icon="flame" color={level.id === 'calm' ? 'money' : 'danger'} title={level.label} meta={risk}>
+            <ProgressBar value={heat / MAX_HEAT} tone={TONE[level.id]} label="Heat" />
+          </ItemContent>
+        </ListItem>
+        {tip && (
+          <ListItem value={`bis ${clock.format(tip.until)}`}>
+            <ItemContent
+              icon="megaphone"
+              color="law"
+              title="Hinweis läuft"
+              meta={`gegen ${getGang(state, tip.gangId)?.name ?? tip.gangId}`}
+            />
+          </ListItem>
+        )}
+        {gang && snitch && (
+          <ListItem action disabled={!snitch.ok} onClick={() => setConfirm(true)}>
+            <ItemContent
+              icon="megaphone"
+              color="danger"
+              title={`${gang.name} verpfeifen`}
+              meta={snitch.ok ? 'Heat und Razzien in allen Veedeln der Gang' : snitch.reason}
+            />
+          </ListItem>
+        )}
+      </List>
+      {gang && (
+        <ActionSheet
+          open={confirm}
+          onClose={() => setConfirm(false)}
+          title={`${gang.name} verpfeifen?`}
+          message="Die Polizei macht Razzien bei der Gang. Gut vernetzte Gangs erfahren eher, wer gesungen hat."
+          actions={[
+            {
+              label: 'Verpfeifen',
+              destructive: true,
+              onSelect: () => dispatch({ type: 'police.snitch', payload: { gangId: gang.id } }),
+            },
+          ]}
+        />
       )}
-      {gang && snitch && (
-        <div class="police-snitch">
-          <Button
-            variant="danger"
-            disabled={!snitch.ok}
-            title={snitch.ok ? 'Heat und Razzien in allen Veedeln der Gang' : snitch.reason}
-            onClick={() => dispatch({ type: 'police.snitch', payload: { gangId: gang.id } })}
-          >
-            {gang.name} verpfeifen
-          </Button>
-          {!snitch.ok && <span class="ui-hint">{snitch.reason}</span>}
-        </div>
-      )}
-    </Card>
+    </Group>
   );
 }
 

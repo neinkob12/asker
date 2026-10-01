@@ -1,15 +1,4 @@
-.laundering-amount {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin: var(--space-3) 0;
-}
-.laundering-amount strong {
-  min-width: 72px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-.laundering-batch {
-  margin-top: var(--space-3);
+/* Geldwäsche: Betrag als Zeile mit Stepper, Vorgaben als Segmente darunter (Gruppen aus den Bausteinen). */
+.ui-group .ui-segmented {
+  margin-top: var(--space-1);
 }

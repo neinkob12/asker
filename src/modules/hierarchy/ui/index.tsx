@@ -7,7 +7,9 @@ import {
   Button,
   Card,
   Empty,
+  Group,
   Hint,
+  ItemContent,
   KeyValue,
   List,
   ListItem,
@@ -281,13 +283,13 @@ function SpotLieutenant(props: { spotId: string }) {
   const m = lt ? getStaffMember(state, lt) : undefined;
   if (!spot || !m) return null;
   return (
-    <p class="ui-hint lt-spot">
-      {veedelName(spot.veedelId)} wird von{' '}
-      <Button variant="link" onClick={() => ui.openPanel('hierarchy.lieutenant', { veedelId: spot.veedelId })}>
-        {m.name}
-      </Button>{' '}
-      geführt.
-    </p>
+    <Group title="Leutnant" icon="crew" color="people">
+      <List>
+        <ListItem onClick={() => ui.openPanel('hierarchy.lieutenant', { veedelId: spot.veedelId })}>
+          <ItemContent icon="crew" color="people" title={m.name} meta={`führt ${veedelName(spot.veedelId)}`} />
+        </ListItem>
+      </List>
+    </Group>
   );
 }
 
@@ -303,48 +305,60 @@ function VeedelLieutenant(props: { veedelId: string }) {
     .sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
   const [choice, setChoice] = useState(eligible[0]?.id ?? '');
   const selected = eligible.find((c) => c.id === choice) ?? eligible[0];
+  const satisfaction = lieutenantSatisfaction(state, props.veedelId) ?? 0;
   return (
-    <Card title="Leutnant">
-      {post && m ? (
-        <>
-          <p class="ui-hint">
-            {m.name} (Level {m.level}) {postSummary(state, post)}.
-          </p>
-          <ProgressBar
-            value={(lieutenantSatisfaction(state, props.veedelId) ?? 0) / 100}
-            tone={satisfactionTone(lieutenantSatisfaction(state, props.veedelId) ?? 0)}
-            label="Zufriedenheit"
-          />
-          <Button wide onClick={() => ui.openPanel('hierarchy.lieutenant', { veedelId: props.veedelId })}>
-            Anweisungen
-          </Button>
-        </>
-      ) : eligible.length > 0 && selected ? (
-        <div class="lt-promote__row">
-          <Select
-            label="Wer"
-            wide
-            value={selected.id}
-            options={eligible.map((c) => ({ value: c.id, label: `${c.name}, Level ${c.level}` }))}
-            onChange={setChoice}
-          />
-          <Button
-            small
-            variant="primary"
-            onClick={() =>
-              dispatch({ type: 'hierarchy.appoint', payload: { staffId: selected.id, veedelId: props.veedelId } })
+    <Group
+      title="Leutnant"
+      icon="crew"
+      color="people"
+      note={people.length === 0 ? 'Keine eigenen Leute hier.' : `${people.length} von deinen Leuten im Einsatz.`}
+    >
+      <List>
+        {post && m ? (
+          <ListItem onClick={() => ui.openPanel('hierarchy.lieutenant', { veedelId: props.veedelId })}>
+            <ItemContent
+              icon="crew"
+              color="people"
+              title={`${m.name} · Level ${m.level}`}
+              meta={`${postSummary(state, post)}. Zufriedenheit ${Math.round(satisfaction)} %`}
+            >
+              <ProgressBar value={satisfaction / 100} tone={satisfactionTone(satisfaction)} label="Zufriedenheit" />
+            </ItemContent>
+          </ListItem>
+        ) : eligible.length > 0 && selected ? (
+          <ListItem
+            aside={
+              <Button
+                small
+                variant="primary"
+                onClick={() =>
+                  dispatch({ type: 'hierarchy.appoint', payload: { staffId: selected.id, veedelId: props.veedelId } })
+                }
+              >
+                Ernennen
+              </Button>
             }
           >
-            Zum Leutnant
-          </Button>
-        </div>
-      ) : (
-        <Hint>Kein Leutnant. Ab Level {LIEUTENANT_MIN_LEVEL} kann jemand aus deinen Leuten das Veedel führen.</Hint>
-      )}
-      <Hint>
-        {people.length === 0 ? 'Keine eigenen Leute hier.' : `${people.length} von deinen Leuten im Einsatz.`}
-      </Hint>
-    </Card>
+            <Select
+              label="Wer wird Leutnant?"
+              wide
+              value={selected.id}
+              options={eligible.map((c) => ({ value: c.id, label: `${c.name}, Level ${c.level}` }))}
+              onChange={setChoice}
+            />
+          </ListItem>
+        ) : (
+          <ListItem>
+            <ItemContent
+              icon="crew"
+              color="system"
+              title="Kein Leutnant"
+              meta={`Ab Level ${LIEUTENANT_MIN_LEVEL} kann jemand aus deinen Leuten das Veedel führen.`}
+            />
+          </ListItem>
+        )}
+      </List>
+    </Group>
   );
 }
 

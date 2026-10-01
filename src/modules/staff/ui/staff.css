@@ -1,31 +1,5 @@
 /* Personal: Übersicht, Akte, Spot-Abschnitt. Nur Tokens aus src/ui/styles/tokens.css. */
 
-.runner-box {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-  padding-top: 10px;
-  border-top: 1px solid var(--color-line);
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-}
-.spot-staff__row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-}
-.spot-staff__row .ui-button {
-  flex-shrink: 0;
-}
-.spot-staff__free {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
-
 /* Übersicht */
 .staff-overview {
   display: flex;

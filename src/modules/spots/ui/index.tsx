@@ -5,9 +5,10 @@
 import { formatEuro, formatPercent } from '../../../core';
 import { mapEffects, registerMapLayer } from '../../../map';
 import {
-  Button,
   Card,
-  Hint,
+  ContextMenu,
+  Group,
+  ItemContent,
   List,
   ListItem,
   onGameEvent,
@@ -16,6 +17,7 @@ import {
   registerSearch,
   registerSlot,
   Slot,
+  SummaryTiles,
   useGame,
   useUi,
 } from '../../../ui';
@@ -46,44 +48,75 @@ declare module '../../../ui' {
   }
 }
 
+/**
+ * Spot-Seite im Handy: oben die Kennzahlen (wer wartet, Preisniveau, Andrang) und wo der Spot liegt, darunter die
+ * Abschnitte der anderen Module als Gruppen (Selbst verkaufen, Kundschaft, Preise, Personal …).
+ */
 function SpotPanel(props: { spotId: string }) {
   const { state, dispatch } = useGame();
+  const ui = useUi();
   const spot = getSpot(state, props.spotId);
   if (!spot) return null;
   const active = isSpotActive(state, spot.id);
+  const waiting = waitingAt(state, spot.id).length;
+  const cost = spot.unlockCost ?? 0;
   return (
     <div class="spot-panel">
-      <p class="ui-hint">
-        {veedelName(spot.veedelId)} · Preisniveau {formatPercent(spot.priceMultiplier)}, Andrang{' '}
-        {formatPercent(spot.demand)}
-        {spot.custom ? ' · eigener Spot' : ''}
-      </p>
+      <SummaryTiles
+        items={[
+          { icon: 'smile', color: waiting > 0 ? 'warn' : 'money', value: waiting, label: 'warten' },
+          { icon: 'tag', color: 'money', value: formatPercent(spot.priceMultiplier), label: 'Preise' },
+          { icon: 'users', color: 'people', value: formatPercent(spot.demand), label: 'Andrang' },
+        ]}
+      />
+      <List>
+        <ListItem onClick={() => ui.openPanel('veedel.veedel', { veedelId: spot.veedelId })}>
+          <ItemContent
+            icon="map"
+            color="place"
+            title={veedelName(spot.veedelId)}
+            meta={spot.custom ? 'Veedel · eigener Spot' : 'Veedel'}
+          />
+        </ListItem>
+      </List>
       {active ? (
         <Slot name="spots.spotPanel" props={{ spotId: spot.id }} />
       ) : (
-        <div class="spot-locked">
-          <p>Hier verkauft noch niemand für dich. Mit ein paar Kontakten vor Ort gehört der Platz dir.</p>
-          <Button
-            variant="primary"
-            wide
-            disabled={state.wallet.dirty < (spot.unlockCost ?? 0)}
-            onClick={() => dispatch({ type: 'spots.unlock', payload: { spotId: spot.id } })}
-          >
-            Freischalten ({formatEuro(spot.unlockCost ?? 0)})
-          </Button>
-        </div>
+        <Group
+          title="Noch nicht deiner"
+          icon="lock"
+          color="brand"
+          note="Hier verkauft noch niemand für dich. Mit ein paar Kontakten vor Ort gehört der Platz dir."
+        >
+          <List>
+            <ListItem
+              action
+              disabled={state.wallet.dirty < cost}
+              value={formatEuro(cost)}
+              onClick={() => dispatch({ type: 'spots.unlock', payload: { spotId: spot.id } })}
+            >
+              <ItemContent
+                icon="unlock"
+                color="brand"
+                title="Freischalten"
+                meta={state.wallet.dirty < cost ? `Dir fehlen ${formatEuro(cost - state.wallet.dirty)}` : undefined}
+              />
+            </ListItem>
+          </List>
+        </Group>
       )}
     </div>
   );
 }
 
 function SpotsSection() {
-  const { state } = useGame();
+  const { state, dispatch } = useGame();
   const ui = useUi();
   const spots = getSpots(state);
   const locked = lockedSpots(state);
   const canFound = customSpots(state).length < MAX_CUSTOM_SPOTS;
   const waiting = spots.reduce((sum, s) => sum + waitingAt(state, s.id).length, 0);
+  const mine = playerSpot(state);
   const found = async () => {
     const pos = await ui.pickLocation(
       `Klick auf die Karte, wo dein neuer Spot hin soll (${formatEuro(FOUND_SPOT_COST)}).`,
@@ -104,27 +137,67 @@ function SpotsSection() {
       status={waiting > 0 ? 'warn' : 'good'}
       summary={waiting > 0 ? `${waiting} warten` : `${spots.length} aktiv`}
     >
+      <Group
+        title="Deine Spots"
+        icon="pin"
+        color="place"
+        count={spots.length}
+        note={
+          locked.length > 0
+            ? `${locked.length} weitere Spots kannst du freischalten (grau auf der Karte, ab ${formatEuro(Math.min(...locked.map((s) => s.unlockCost ?? 0)))}).`
+            : undefined
+        }
+      >
+        <List>
+          {spots.map((s) => {
+            const count = waitingAt(state, s.id).length;
+            return (
+              <ContextMenu
+                key={s.id}
+                label={`Aktionen für ${s.name}`}
+                actions={[
+                  { label: 'Öffnen', icon: 'pin', onSelect: () => ui.openPanel('spots.spot', { spotId: s.id }) },
+                  {
+                    label: mine === s.id ? 'Weggehen' : 'Hier hinstellen',
+                    icon: 'runner',
+                    onSelect: () =>
+                      dispatch({ type: 'customers.standAt', payload: { spotId: mine === s.id ? null : s.id } }),
+                  },
+                  {
+                    label: 'Auf der Karte zeigen',
+                    icon: 'target',
+                    onSelect: () => ui.flyTo({ lng: s.lng, lat: s.lat }, 16),
+                  },
+                ]}
+              >
+                <ListItem onClick={() => ui.openPanel('spots.spot', { spotId: s.id })} value={`${count} warten`}>
+                  <ItemContent
+                    icon={mine === s.id ? 'runner' : 'pin'}
+                    color={mine === s.id ? 'brand' : count > 0 ? 'warn' : 'place'}
+                    title={s.name}
+                    meta={`${veedelName(s.veedelId)}${mine === s.id ? ' · du stehst hier' : ''}`}
+                  />
+                </ListItem>
+              </ContextMenu>
+            );
+          })}
+        </List>
+      </Group>
       <List>
-        {spots.map((s) => (
-          <ListItem
-            key={s.id}
-            onClick={() => ui.openPanel('spots.spot', { spotId: s.id })}
-            aside={<span class="ui-hint">{waitingAt(state, s.id).length} warten</span>}
-          >
-            {s.name} <span class="ui-hint">· {veedelName(s.veedelId)}</span>
-            {playerSpot(state) === s.id && <span class="spot-self"> · du stehst hier</span>}
-          </ListItem>
-        ))}
+        <ListItem
+          action
+          disabled={!canFound || state.wallet.dirty < FOUND_SPOT_COST}
+          value={formatEuro(FOUND_SPOT_COST)}
+          onClick={found}
+        >
+          <ItemContent
+            icon="pinPlus"
+            color="brand"
+            title="Eigenen Spot gründen"
+            meta={canFound ? 'Klick auf die Karte, wo er hin soll' : `Höchstens ${MAX_CUSTOM_SPOTS} eigene Spots`}
+          />
+        </ListItem>
       </List>
-      {locked.length > 0 && (
-        <Hint>
-          {locked.length} weitere Spots kannst du freischalten (grau auf der Karte, ab{' '}
-          {formatEuro(Math.min(...locked.map((s) => s.unlockCost ?? 0)))}).
-        </Hint>
-      )}
-      <Button wide disabled={!canFound || state.wallet.dirty < FOUND_SPOT_COST} onClick={found}>
-        Eigenen Spot gründen ({formatEuro(FOUND_SPOT_COST)})
-      </Button>
     </Card>
   );
 }

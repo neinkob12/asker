@@ -24,17 +24,12 @@ class ContextBridge extends Component<{ context: object; children?: ComponentChi
   }
 }
 
-/** Eigener Kasten im Ziel, in den der Inhalt als eigene Wurzel gezeichnet wird. */
+/**
+ * Eigener Kasten im Ziel, in den der Inhalt als eigene Wurzel gezeichnet wird. Gezeichnet wird schon beim Rendern
+ * (wie createPortal in preact/compat): So steht der Inhalt im DOM, bevor Layout-Effekte der Seite ihn messen.
+ */
 class PortalBox extends Component<{ host: HTMLElement; children?: ComponentChildren }> {
   private box: HTMLElement | null = null;
-
-  componentDidMount() {
-    this.paint();
-  }
-
-  componentDidUpdate() {
-    this.paint();
-  }
 
   componentWillUnmount() {
     if (!this.box) return;
@@ -43,7 +38,7 @@ class PortalBox extends Component<{ host: HTMLElement; children?: ComponentChild
     this.box = null;
   }
 
-  private paint() {
+  render() {
     const host = this.props.host;
     if (this.box?.parentNode !== host) {
       this.box?.remove();
@@ -52,9 +47,6 @@ class PortalBox extends Component<{ host: HTMLElement; children?: ComponentChild
       host.appendChild(this.box);
     }
     render(h(ContextBridge, { context: this.context as object }, this.props.children), this.box);
-  }
-
-  render() {
     return null;
   }
 }

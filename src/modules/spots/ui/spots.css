@@ -97,9 +97,10 @@
 .spot-marker.is-custom .spot-dot {
   border-style: dashed;
 }
-.spot-locked p {
-  margin: var(--space-2) 0;
-  font-size: var(--font-size-sm);
+.spot-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 /* Du stehst selbst am Spot: kleiner Punkt in der Akzentfarbe oben rechts. */

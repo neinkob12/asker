@@ -3,6 +3,7 @@ import { useContext } from 'preact/hooks';
 import { haptic } from '../haptics';
 import { type CategoryColor, type ChipColor, Icon, IconChip } from './Icon';
 import type { IconName } from './icons';
+import { BarActionsContext, Portal } from './Portal';
 import { rememberSectionTitle, SectionContext } from './section';
 
 type IconRef = IconName | (string & {});
@@ -37,6 +38,7 @@ export interface CardProps {
  */
 export function Card(props: CardProps) {
   const section = useContext(SectionContext);
+  const bar = useContext(BarActionsContext);
   const chipColor = props.color ?? (props.tone ? props.tone : undefined);
   if (section?.mode === 'rows' && props.title) {
     if (section.id && typeof props.title === 'string') rememberSectionTitle(section.id, props.title);
@@ -53,6 +55,16 @@ export function Card(props: CardProps) {
   if (props.tone) cls.push(`ui-card--${props.tone}`);
   if (section?.mode === 'detail') cls.push('ui-card--detail');
   if (props.class) cls.push(props.class);
+  // Als eigene Seite im Handy (Abschnitt eines Listen-Tabs): Der Titel ist der Titel der Seite, die Aktionen
+  // stehen rechts in der Navigationsleiste (wie bei iOS), der Inhalt steht ohne Karte auf der Seite.
+  if (section?.mode === 'detail' && bar) {
+    return (
+      <section class={cls.join(' ')}>
+        {props.actions && <Portal host={bar}>{props.actions}</Portal>}
+        {props.children}
+      </section>
+    );
+  }
   return (
     <section class={cls.join(' ')}>
       {(props.title || props.actions) && (
@@ -170,6 +182,15 @@ export interface ListItemProps {
   icon?: IconRef;
   /** Hervorgehoben als ausgewählt. */
   active?: boolean;
+  /** Wert rechts in der Zeile (grau, wie "Bezirk … Innenstadt" in den iOS-Einstellungen). */
+  value?: ComponentChildren;
+  /**
+   * Aktionszeile statt Navigation (mit onClick): Titel in der Markenfarbe, kein Pfeil. Für die Hauptaktion als
+   * "Zeile mit Kachel", z.B. "Alle bedienen".
+   */
+  action?: boolean;
+  /** Nicht tippbar (z.B. zu wenig Geld). */
+  disabled?: boolean;
 }
 
 const LIST_TONE_CHIP: Record<string, ChipColor> = { good: 'money', bad: 'danger', info: 'place', warn: 'warn' };
@@ -179,6 +200,8 @@ export function ListItem(props: ListItemProps) {
   if (props.tone) cls.push(`ui-list__item--${props.tone}`);
   if (props.onClick) cls.push('is-clickable');
   if (props.active) cls.push('is-active');
+  if (props.action) cls.push('is-action');
+  if (props.disabled) cls.push('is-disabled');
   const main = (
     <>
       {props.icon && (
@@ -190,13 +213,14 @@ export function ListItem(props: ListItemProps) {
         />
       )}
       <span class="ui-list__text">{props.children}</span>
-      {props.onClick && !props.aside && <Icon name="chevronRight" class="ui-list__chevron" />}
+      {props.value !== undefined && props.value !== null && <span class="ui-list__value">{props.value}</span>}
+      {props.onClick && !props.aside && !props.action && <Icon name="chevronRight" class="ui-list__chevron" />}
     </>
   );
   return (
     <li class={cls.join(' ')}>
       {props.onClick ? (
-        <button type="button" class="ui-list__main ui-list__button" onClick={props.onClick}>
+        <button type="button" class="ui-list__main ui-list__button" onClick={props.onClick} disabled={props.disabled}>
           {main}
         </button>
       ) : (

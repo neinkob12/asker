@@ -4,12 +4,16 @@
 import { useState } from 'preact/hooks';
 import { formatEuro, formatPercent } from '../../../core';
 import {
+  ActionSheet,
   Button,
   Card,
+  ContextMenu,
   Empty,
+  Group,
   Hint,
   Icon,
   IconChip,
+  ItemContent,
   KeyValue,
   List,
   ListItem,
@@ -74,6 +78,53 @@ const ROLE_GROUPS: { id: string; label: string; icon: string; match: (m: StaffMe
 const NO_VEEDEL = '-';
 
 export function StaffRow(props: { member: StaffMember }) {
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const [confirm, setConfirm] = useState(false);
+  const m = props.member;
+  const employed = m.leftAt === null;
+  const place = m.assignment ? assignmentLabel(state, m.assignment) : null;
+  // Langer Druck (oder Rechtsklick): Akte, Einsatzort; Entlassen nur nach Bestätigung im Aktionsblatt.
+  return (
+    <>
+      <ContextMenu
+        label={`Aktionen für ${m.name}`}
+        disabled={!employed}
+        actions={[
+          { label: 'Akte öffnen', icon: 'idCard', onSelect: () => ui.openPanel('staff.profile', { staffId: m.id }) },
+          ...(m.assignment?.kind === 'spot'
+            ? [
+                {
+                  label: place ?? 'Zum Spot',
+                  icon: 'pin',
+                  onSelect: () =>
+                    m.assignment?.targetId && ui.openPanel('spots.spot', { spotId: m.assignment.targetId }),
+                },
+              ]
+            : []),
+          { label: 'Entlassen …', icon: 'userMinus', destructive: true, onSelect: () => setConfirm(true) },
+        ]}
+      >
+        <StaffRowItem member={m} />
+      </ContextMenu>
+      <ActionSheet
+        open={confirm}
+        onClose={() => setConfirm(false)}
+        title={`${m.name} entlassen?`}
+        message="Die Person geht sofort und kommt nicht wieder."
+        actions={[
+          {
+            label: 'Entlassen',
+            destructive: true,
+            onSelect: () => dispatch({ type: 'staff.fire', payload: { staffId: m.id } }),
+          },
+        ]}
+      />
+    </>
+  );
+}
+
+function StaffRowItem(props: { member: StaffMember }) {
   const { state } = useGame();
   const ui = useUi();
   const m = props.member;
@@ -263,7 +314,7 @@ function StaffSummary() {
   );
 }
 
-/** Läufer und Sicherheit im Spot-Panel. */
+/** Läufer und Sicherheit im Spot-Panel: wer hier arbeitet, Anheuern, freie Leute herholen. */
 function SpotStaff(props: { spotId: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
@@ -276,61 +327,93 @@ function SpotStaff(props: { spotId: string }) {
     getStaff(state, { role, status: 'active' }).filter((m) => !m.assignment);
   const assign = (staffId: string) =>
     dispatch({ type: 'staff.assign', payload: { staffId, assignment: { kind: 'spot', targetId: props.spotId } } });
-  const profile = (m: StaffMember) => (
-    <Button variant="link" onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}>
-      {m.name}
-    </Button>
-  );
+  const open = (m: StaffMember) => ui.openPanel('staff.profile', { staffId: m.id });
   return (
-    <div class="runner-box">
-      {runner ? (
-        <span>
-          {profile(runner)} (Level {runner.level}) bedient hier automatisch.
-        </span>
-      ) : (
-        <>
-          {absent && (
-            <span>
-              {profile(absent)} ist {STATUS_NAMES[absent.status]} und kommt danach zurück, wenn der Spot frei ist.
-            </span>
-          )}
-          <div class="spot-staff__row">
-            <span>{absent ? 'Bis dahin:' : 'Kein Läufer.'}</span>
-            <Button
-              disabled={state.wallet.dirty < hireCost}
-              onClick={() => dispatch({ type: 'staff.hireRunner', payload: { spotId: props.spotId } })}
-            >
-              Anheuern ({formatEuro(hireCost)})
-            </Button>
-          </div>
-          <Hint>Danach {formatEuro(RUNNER_DAILY_WAGE)} Lohn pro Tag. Der Preis hängt vom Spot ab.</Hint>
-        </>
-      )}
-      {!runner && free('runner').length > 0 && (
-        <div class="spot-staff__free">
-          <span>Freie Läufer:</span>
-          {free('runner').map((m) => (
-            <Button key={m.id} small onClick={() => assign(m.id)}>
-              {m.name}
-            </Button>
-          ))}
-        </div>
-      )}
-      {guard ? (
-        <span>Sicherheit: {profile(guard)} passt hier auf.</span>
-      ) : (
-        free('security').length > 0 && (
-          <div class="spot-staff__free">
-            <span>Sicherheit herholen:</span>
-            {free('security').map((m) => (
-              <Button key={m.id} small onClick={() => assign(m.id)}>
-                {m.name}
+    <Group
+      title="Personal"
+      icon="users"
+      color="people"
+      note={
+        runner
+          ? undefined
+          : `Nach dem Anheuern ${formatEuro(RUNNER_DAILY_WAGE)} Lohn pro Tag. Der Preis hängt vom Spot ab.`
+      }
+    >
+      <List>
+        {runner && (
+          <ListItem onClick={() => open(runner)}>
+            <ItemContent
+              icon="runner"
+              color="people"
+              title={runner.name}
+              meta={`Läufer · Level ${runner.level} · bedient hier automatisch`}
+            />
+          </ListItem>
+        )}
+        {absent && (
+          <ListItem onClick={() => open(absent)}>
+            <ItemContent
+              icon="runner"
+              color="warn"
+              title={absent.name}
+              meta={`ist ${STATUS_NAMES[absent.status]}, kommt danach zurück`}
+            />
+          </ListItem>
+        )}
+        {!runner && (
+          <ListItem
+            aside={
+              <Button
+                small
+                variant="primary"
+                disabled={state.wallet.dirty < hireCost}
+                onClick={() => dispatch({ type: 'staff.hireRunner', payload: { spotId: props.spotId } })}
+              >
+                Anheuern ({formatEuro(hireCost)})
               </Button>
-            ))}
-          </div>
-        )
-      )}
-    </div>
+            }
+          >
+            <ItemContent
+              icon="userPlus"
+              color="people"
+              title={absent ? 'Bis dahin' : 'Kein Läufer'}
+              meta="Ein Läufer verkauft hier für dich."
+            />
+          </ListItem>
+        )}
+        {!runner &&
+          free('runner').map((m) => (
+            <ListItem
+              key={m.id}
+              aside={
+                <Button small onClick={() => assign(m.id)}>
+                  Hinstellen
+                </Button>
+              }
+            >
+              <ItemContent icon="runner" color="people" title={m.name} meta={`freier Läufer · Level ${m.level}`} />
+            </ListItem>
+          ))}
+        {guard ? (
+          <ListItem onClick={() => open(guard)}>
+            <ItemContent icon="shield" color="people" title={guard.name} meta="Sicherheit · passt hier auf" />
+          </ListItem>
+        ) : (
+          free('security').map((m) => (
+            <ListItem
+              key={m.id}
+              aside={
+                <Button small onClick={() => assign(m.id)}>
+                  Herholen
+                </Button>
+              }
+            >
+              <ItemContent icon="shield" color="people" title={m.name} meta="freie Sicherheit" />
+            </ListItem>
+          ))
+        )}
+      </List>
+    </Group>
   );
 }
 

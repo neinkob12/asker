@@ -8,6 +8,7 @@ import {
   Button,
   Card,
   Empty,
+  Group,
   Hint,
   ItemContent,
   KeyValue,
@@ -18,6 +19,9 @@ import {
   registerGameStat,
   registerPhoneApp,
   registerSlot,
+  SummaryTiles,
+  SwipeRow,
+  Tag,
   Toggle,
   useGame,
   useUi,
@@ -46,7 +50,7 @@ import './customers.css';
 
 /**
  * Selbst verkaufen ohne Klick auf jeden Kunden: Du stellst dich an den Spot und bedienst dort automatisch, bis du
- * weggehst (oder mit einer Lieferung unterwegs bist).
+ * weggehst (oder mit einer Lieferung unterwegs bist). Eine Zeile mit Kachel, der Knopf rechts (schrumpft nie).
  */
 function StandHere(props: { spotId: string }) {
   const { state, dispatch } = useGame();
@@ -54,41 +58,47 @@ function StandHere(props: { spotId: string }) {
   const elsewhere = playerSpot(state);
   const runner = activeRunnerAt(state, props.spotId);
   const away = isPlayerAway(state);
-  if (here) {
-    return (
-      <div class="customer-stand">
-        <ItemContent
-          icon="runner"
-          color="brand"
-          title="Du stehst hier"
-          meta={away ? 'Gerade unterwegs, danach verkaufst du weiter.' : 'Du bedienst die Kunden automatisch.'}
-        />
-        <Button small onClick={() => dispatch({ type: 'customers.standAt', payload: { spotId: null } })}>
-          Weggehen
-        </Button>
-      </div>
-    );
-  }
+  const stand = (spotId: string | null) => dispatch({ type: 'customers.standAt', payload: { spotId } });
   return (
-    <div class="customer-stand">
-      <ItemContent
-        icon="runner"
-        color={runner ? 'people' : 'brand'}
-        title="Selbst verkaufen"
-        meta={
-          runner
-            ? `${runner.name} verkauft hier, du kannst mithelfen.`
-            : 'Stell dich hin, dann läuft der Verkauf von allein.'
-        }
-      />
-      <Button
-        small
-        variant={runner ? 'default' : 'primary'}
-        onClick={() => dispatch({ type: 'customers.standAt', payload: { spotId: props.spotId } })}
-      >
-        {elsewhere ? 'Hierher wechseln' : 'Hier hinstellen'}
-      </Button>
-    </div>
+    <Group title="Selbst verkaufen" icon="runner" color="brand">
+      <List>
+        {here ? (
+          <ListItem
+            aside={
+              <Button small onClick={() => stand(null)}>
+                Weggehen
+              </Button>
+            }
+          >
+            <ItemContent
+              icon="runner"
+              color="brand"
+              title="Du stehst hier"
+              meta={away ? 'Gerade unterwegs, danach verkaufst du weiter.' : 'Du bedienst die Kunden automatisch.'}
+            />
+          </ListItem>
+        ) : (
+          <ListItem
+            aside={
+              <Button small variant={runner ? 'default' : 'primary'} onClick={() => stand(props.spotId)}>
+                {elsewhere ? 'Hierher wechseln' : 'Hier hinstellen'}
+              </Button>
+            }
+          >
+            <ItemContent
+              icon="runner"
+              color={runner ? 'people' : 'brand'}
+              title={runner ? 'Mithelfen' : 'Selbst verkaufen'}
+              meta={
+                runner
+                  ? `${runner.name} verkauft hier, du kannst mithelfen.`
+                  : 'Stell dich hin, dann läuft der Verkauf von allein.'
+              }
+            />
+          </ListItem>
+        )}
+      </List>
+    </Group>
   );
 }
 
@@ -96,13 +106,25 @@ function SpotCustomers(props: { spotId: string }) {
   const { state, dispatch } = useGame();
   const waiting = waitingAt(state, props.spotId);
   const regulars = getRegulars(state, { spotId: props.spotId, status: 'active' }).length;
+  const total = waiting.reduce((sum, c) => sum + customerRevenue(c), 0);
   return (
-    <Card title="Kundschaft">
+    <>
       <StandHere spotId={props.spotId} />
-      {waiting.length === 0 ? (
-        <Empty>Gerade niemand da.</Empty>
-      ) : (
+      <Group
+        title="Kundschaft"
+        icon="smile"
+        color="money"
+        count={waiting.length}
+        note={
+          regulars > 0 ? `${regulars === 1 ? 'Ein Stammkunde' : `${regulars} Stammkunden`} kaufen hier.` : undefined
+        }
+      >
         <List>
+          {waiting.length === 0 && (
+            <ListItem>
+              <ItemContent icon="inbox" color="system" title="Gerade niemand da" meta="Kunden kommen nach und nach." />
+            </ListItem>
+          )}
           {waiting.map((c) => {
             const patience = Math.max(1, c.expiresAt - c.arrivedAt);
             const left = Math.max(0, (c.expiresAt - state.time) / patience);
@@ -112,6 +134,7 @@ function SpotCustomers(props: { spotId: string }) {
                 key={c.id}
                 aside={
                   <Button
+                    small
                     disabled={!canServe(state, c.id)}
                     onClick={() => dispatch({ type: 'customers.serve', payload: { customerId: c.id } })}
                   >
@@ -119,33 +142,29 @@ function SpotCustomers(props: { spotId: string }) {
                   </Button>
                 }
               >
-                <div class="customer-row">
-                  <strong>
-                    {formatProductAmount(c.productId, c.amount)} {productName(c.productId)}
-                  </strong>
-                  <span class="ui-hint">{formatEuro(customerRevenue(c))}</span>
-                </div>
-                <div class="customer-who ui-hint">
-                  {regular ? <span class="customer-regular">★ {regular.name}</span> : customerTypeName(c.typeId)} ·{' '}
-                  {formatNumber(c.pricePerUnit, 1)} €/{getProduct(c.productId)?.unit ?? 'g'}
-                </div>
-                <ProgressBar value={left} tone={left < 1 / 3 ? 'bad' : 'warn'} label="Geduld" />
+                <ItemContent
+                  icon={regular ? 'star' : 'smile'}
+                  color={regular ? 'brand' : 'money'}
+                  title={`${formatProductAmount(c.productId, c.amount)} ${productName(c.productId)} · ${formatEuro(customerRevenue(c))}`}
+                  meta={`${regular ? regular.name : customerTypeName(c.typeId)} · ${formatNumber(c.pricePerUnit, 1)} €/${getProduct(c.productId)?.unit ?? 'g'}`}
+                >
+                  <ProgressBar value={left} tone={left < 1 / 3 ? 'bad' : 'warn'} label="Geduld" />
+                </ItemContent>
               </ListItem>
             );
           })}
+          {waiting.length > 1 && (
+            <ListItem
+              action
+              value={formatEuro(total)}
+              onClick={() => dispatch({ type: 'customers.serveAll', payload: { spotId: props.spotId } })}
+            >
+              <ItemContent icon="cash" color="brand" title="Alle bedienen" meta={`${waiting.length} Kunden`} />
+            </ListItem>
+          )}
         </List>
-      )}
-      {waiting.length > 0 && (
-        <Button
-          variant="primary"
-          wide
-          onClick={() => dispatch({ type: 'customers.serveAll', payload: { spotId: props.spotId } })}
-        >
-          Alle bedienen
-        </Button>
-      )}
-      {regulars > 0 && <Hint>{regulars === 1 ? 'Ein Stammkunde' : `${regulars} Stammkunden`} kaufen hier.</Hint>}
-    </Card>
+      </Group>
+    </>
   );
 }
 
@@ -191,33 +210,57 @@ function CustomersSection() {
       {missed.length > 0 && (
         <Hint>Gefragt, aber nicht auf Lager: {missed.map(([id, n]) => `${productName(id)} (${n}×)`).join(', ')}</Hint>
       )}
-      <h3 class="customers-sub">Stammkunden ({regulars.length})</h3>
-      {regulars.length === 0 ? (
-        <Empty>Noch keine. Gute Ware zu fairen Preisen spricht sich herum.</Empty>
-      ) : (
-        <ul class="customers-regulars">
-          {regulars
-            .slice()
-            .sort((a, b) => b.visits - a.visits)
-            .slice(0, 6)
-            .map((r) => (
-              <li key={r.id}>
-                <span>
-                  ★ {r.name} <span class="ui-hint">· {productName(r.productId)}</span>
-                </span>
-                <span class={r.satisfaction < 0.4 ? 'customers-mood is-bad' : 'customers-mood'}>
-                  {r.satisfaction >= 0.7 ? 'zufrieden' : r.satisfaction >= 0.4 ? 'geht so' : 'sauer'}
-                </span>
-              </li>
-            ))}
-        </ul>
-      )}
+      <Group title="Stammkunden" icon="star" color="brand" count={regulars.length}>
+        {regulars.length === 0 ? (
+          <Empty>Noch keine. Gute Ware zu fairen Preisen spricht sich herum.</Empty>
+        ) : (
+          <List>
+            {regulars
+              .slice()
+              .sort((a, b) => b.visits - a.visits)
+              .slice(0, 6)
+              .map((r) => {
+                const mood = r.satisfaction >= 0.7 ? 'zufrieden' : r.satisfaction >= 0.4 ? 'geht so' : 'sauer';
+                return (
+                  <ListItem
+                    key={r.id}
+                    aside={
+                      <Tag
+                        category={r.satisfaction < 0.4 ? 'danger' : r.satisfaction < 0.7 ? 'warn' : 'money'}
+                        icon={r.satisfaction < 0.4 ? 'frown' : 'smile'}
+                      >
+                        {mood}
+                      </Tag>
+                    }
+                  >
+                    <ItemContent icon="star" color="brand" title={r.name} meta={productName(r.productId)} />
+                  </ListItem>
+                );
+              })}
+          </List>
+        )}
+      </Group>
     </Card>
   );
 }
 
 const KIND_NAME: Record<Order['kind'], string> = { delivery: 'Lieferung', wholesale: 'Großhandel' };
+const KIND_ICON: Record<Order['kind'], string> = { delivery: 'bike', wholesale: 'boxes' };
 
+const STATUS_TEXT: Record<Order['status'], string> = {
+  offered: 'offen',
+  enRoute: 'unterwegs',
+  contested: 'Deal kippt',
+  done: 'erledigt',
+  declined: 'abgelehnt',
+  expired: 'verpasst',
+  failed: 'geplatzt',
+};
+
+/**
+ * Offene Anfrage als Zeile: wer, was, wohin, für wie viel, bis wann; darunter die Antworten als Knöpfe. Wischen nach
+ * links lehnt ab (ein Knopf dafür steht auch in der Zeile).
+ */
 function OfferedOrder(props: { order: Order; state: GameState }) {
   const { order, state } = props;
   const { dispatch } = useGame();
@@ -226,40 +269,50 @@ function OfferedOrder(props: { order: Order; state: GameState }) {
   const answer = (optionId: string) =>
     dispatch({ type: 'messages.answer', payload: { messageId: order.messageId, optionId } });
   const courier = findAvailable(state, { role: 'courier' });
+  const left = order.expiresAt - state.time;
   return (
-    <li class="order">
-      <div class="order__head">
-        <strong>{order.contactName}</strong>
-        <span class="ui-hint">
-          {KIND_NAME[order.kind]} · noch {clock.formatDuration(order.expiresAt - state.time)}
-        </span>
-      </div>
-      <div>
-        {formatProductAmount(order.productId, order.amount)} {productName(order.productId)} nach{' '}
-        {veedelName(order.veedelId)} für <strong>{formatEuro(order.price)}</strong>
-      </div>
-      {canAnswer && (
-        <div class="order__actions">
-          <Button small disabled={isPlayerDelivering(state)} onClick={() => answer('self')}>
-            Selbst liefern
-          </Button>
-          <Button
-            small
-            disabled={!courier}
-            title={courier ? courier.name : 'Kein freier Kurier'}
-            onClick={() => answer('courier')}
-          >
-            Kurier
-          </Button>
-          <Button small variant="subtle" onClick={() => answer('decline')}>
-            Ablehnen
-          </Button>
-        </div>
-      )}
-    </li>
+    <SwipeRow
+      actions={
+        canAnswer ? [{ label: 'Ablehnen', icon: 'close', color: 'system', onSelect: () => answer('decline') }] : []
+      }
+    >
+      <ListItem value={formatEuro(order.price)}>
+        <ItemContent
+          icon={KIND_ICON[order.kind]}
+          color="money"
+          title={order.contactName}
+          meta={`${KIND_NAME[order.kind]} · ${formatProductAmount(order.productId, order.amount)} ${productName(order.productId)} nach ${veedelName(order.veedelId)}`}
+        >
+          <span class="order__tags">
+            <Tag category={left < 60 ? 'danger' : 'warn'} icon="timer">
+              noch {clock.formatDuration(left)}
+            </Tag>
+          </span>
+          {canAnswer && (
+            <span class="order__actions">
+              <Button small variant="primary" disabled={isPlayerDelivering(state)} onClick={() => answer('self')}>
+                Selbst liefern
+              </Button>
+              <Button
+                small
+                disabled={!courier}
+                title={courier ? courier.name : 'Kein freier Kurier'}
+                onClick={() => answer('courier')}
+              >
+                Kurier
+              </Button>
+              <Button small variant="subtle" onClick={() => answer('decline')}>
+                Ablehnen
+              </Button>
+            </span>
+          )}
+        </ItemContent>
+      </ListItem>
+    </SwipeRow>
   );
 }
 
+/** Handy-App "Aufträge": Anfragen (Lieferdienst, Großhandel), was unterwegs ist und was zuletzt lief. */
 function OrdersApp() {
   const { state, dispatch } = useGame();
   const offered = getOrders(state, { status: 'offered' });
@@ -267,72 +320,84 @@ function OrdersApp() {
   const done = getOrders(state)
     .filter((o) => o.status !== 'offered' && o.status !== 'enRoute')
     .slice(0, 6);
-  const statusText: Record<Order['status'], string> = {
-    offered: 'offen',
-    enRoute: 'unterwegs',
-    contested: 'Deal kippt',
-    done: 'erledigt',
-    declined: 'abgelehnt',
-    expired: 'verpasst',
-    failed: 'geplatzt',
-  };
+  const stats = getSalesStats(state);
   return (
     <div class="orders-app">
-      <h3 class="orders-app__title">Aufträge</h3>
-      <Toggle
-        label="Kunden dürfen mir schreiben"
-        hint="Aus: Nur größere Großhandelsaufträge kommen aufs Handy."
-        checked={state.modules.customers.directOrders}
-        onChange={(enabled) => dispatch({ type: 'customers.setDirectOrders', payload: { enabled } })}
+      <SummaryTiles
+        items={[
+          { icon: 'inbox', color: offered.length > 0 ? 'warn' : 'system', value: offered.length, label: 'Anfragen' },
+          { icon: 'truck', color: 'goods', value: enRoute.length, label: 'Liefern' },
+          { icon: 'handshake', color: 'money', value: stats.deliveries + stats.wholesaleDeals, label: 'Erledigt' },
+        ]}
       />
-      <h4 class="orders-app__section">Anfragen</h4>
-      {offered.length === 0 ? (
-        <Empty>
-          Keine offenen Anfragen. Mit gutem Ruf melden sich mehr Leute (Kunden-Direktanfragen musst du oben
-          einschalten).
-        </Empty>
-      ) : (
-        <ul class="orders">
-          {offered.map((o) => (
-            <OfferedOrder key={o.id} order={o} state={state} />
-          ))}
-        </ul>
-      )}
-      {enRoute.length > 0 && (
-        <>
-          <h4 class="orders-app__section">Unterwegs</h4>
-          <ul class="orders">
-            {enRoute.map((o) => (
-              <li key={o.id} class="order">
-                <div class="order__head">
-                  <strong>{o.contactName}</strong>
-                  <span class="ui-hint">an {clock.formatTime(o.arrivesAt ?? state.time)}</span>
-                </div>
-                <div class="ui-hint">
-                  {o.courierId ? (getStaffMember(state, o.courierId)?.name ?? 'Kurier') : 'Du'} ·{' '}
-                  {formatProductAmount(o.productId, o.amount)} {productName(o.productId)}, {formatEuro(o.price)}
-                </div>
-                <ProgressBar value={orderProgress(state, o)} label="Lieferung" />
-              </li>
+      <Group
+        title="Anfragen"
+        icon="inbox"
+        color="warn"
+        count={offered.length}
+        note="Wischen nach links lehnt eine Anfrage ab."
+      >
+        {offered.length === 0 ? (
+          <Empty icon="inbox">
+            Keine offenen Anfragen. Mit gutem Ruf melden sich mehr Leute (Kunden-Direktanfragen schaltest du unten ein).
+          </Empty>
+        ) : (
+          <List>
+            {offered.map((o) => (
+              <OfferedOrder key={o.id} order={o} state={state} />
             ))}
-          </ul>
-        </>
+          </List>
+        )}
+      </Group>
+      {enRoute.length > 0 && (
+        <Group title="Unterwegs" icon="truck" color="goods" count={enRoute.length}>
+          <List>
+            {enRoute.map((o) => (
+              <ListItem key={o.id} value={`an ${clock.formatTime(o.arrivesAt ?? state.time)}`}>
+                <ItemContent
+                  icon={o.courierId ? 'bike' : 'runner'}
+                  color={o.courierId ? 'goods' : 'brand'}
+                  title={o.contactName}
+                  meta={`${o.courierId ? (getStaffMember(state, o.courierId)?.name ?? 'Kurier') : 'Du'} · ${formatProductAmount(o.productId, o.amount)} ${productName(o.productId)}, ${formatEuro(o.price)}`}
+                >
+                  <ProgressBar value={orderProgress(state, o)} label="Lieferung" />
+                </ItemContent>
+              </ListItem>
+            ))}
+          </List>
+        </Group>
       )}
       {done.length > 0 && (
-        <>
-          <h4 class="orders-app__section">Zuletzt</h4>
-          <ul class="orders orders--done">
+        <Group title="Zuletzt" icon="clock" color="system">
+          <List>
             {done.map((o) => (
-              <li key={o.id} class={`order order--${o.status}`}>
-                <span>
-                  {o.contactName}: {formatProductAmount(o.productId, o.amount)} {productName(o.productId)}
-                </span>
-                <span>{o.status === 'done' ? formatEuro(o.price) : statusText[o.status]}</span>
-              </li>
+              <ListItem
+                key={o.id}
+                value={
+                  <span class={`order-result order-result--${o.status}`}>
+                    {o.status === 'done' ? formatEuro(o.price) : STATUS_TEXT[o.status]}
+                  </span>
+                }
+              >
+                <ItemContent
+                  icon={o.status === 'done' ? 'checkCircle' : 'xCircle'}
+                  color={o.status === 'done' ? 'money' : o.status === 'declined' ? 'system' : 'danger'}
+                  title={o.contactName}
+                  meta={`${formatProductAmount(o.productId, o.amount)} ${productName(o.productId)}`}
+                />
+              </ListItem>
             ))}
-          </ul>
-        </>
+          </List>
+        </Group>
       )}
+      <Group title="Anfragen bekommen" icon="message" color="chat">
+        <Toggle
+          label="Kunden dürfen mir schreiben"
+          hint="Aus: Nur größere Großhandelsaufträge kommen aufs Handy."
+          checked={state.modules.customers.directOrders}
+          onChange={(enabled) => dispatch({ type: 'customers.setDirectOrders', payload: { enabled } })}
+        />
+      </Group>
     </div>
   );
 }

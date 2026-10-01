@@ -21,6 +21,50 @@ const deadlines = (count) => `(() => {
   }
 })()`;
 
+/** JavaScript: synthetische Zeiger-Ereignisse (Maus und Touch gehen über dieselben Pointer Events). */
+const POINTER = `
+  const pointer = (type, target, x, y) => target.dispatchEvent(new PointerEvent(type, {
+    bubbles: true, cancelable: true, clientX: x, clientY: y, pointerId: 7, pointerType: 'touch', isPrimary: true,
+    button: type === 'pointermove' ? -1 : 0, buttons: type === 'pointerup' ? 0 : 1,
+  }));
+  const drag = (target, x0, y0, x1, y1, release) => {
+    pointer('pointerdown', target, x0, y0);
+    for (let i = 1; i <= 8; i++) pointer('pointermove', window, x0 + ((x1 - x0) * i) / 8, y0 + ((y1 - y0) * i) / 8);
+    if (release) pointer('pointerup', window, x1, y1);
+    else window.__sceneCleanup = () => pointer('pointercancel', window, x1, y1);
+  };
+  /** Langsam ziehen (echte Zeitabstände, geringe Geschwindigkeit): Die Geste rastet, statt durchzuschnellen. */
+  const dragSlow = async (target, x0, y0, x1, y1) => {
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    pointer('pointerdown', target, x0, y0);
+    for (let i = 1; i <= 10; i++) {
+      await wait(40);
+      pointer('pointermove', window, x0 + ((x1 - x0) * i) / 10, y0 + ((y1 - y0) * i) / 10);
+    }
+    await wait(160);
+    pointer('pointermove', window, x1, y1);
+    pointer('pointerup', window, x1, y1);
+  };`;
+
+/**
+ * JavaScript für Szenen in mehreren Schritten (als async-Funktion, page.evaluate wartet darauf): `until` wartet, bis
+ * ein Element da ist (Seiten erscheinen erst im nächsten Bild), `sleep` eine feste Zeit, `still` auf das Ende der Federn.
+ */
+const STEPS = `
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const until = async (find, timeout = 6000) => {
+    const start = performance.now();
+    for (;;) {
+      const found = find();
+      if (found || performance.now() - start > timeout) return found;
+      await sleep(50);
+    }
+  };
+  const still = () => until(() => !document.documentElement.hasAttribute('data-moving'));`;
+
+/** Erste Gang (für die Gang-Seite, das Bündnis-Blatt). */
+const FIRST_GANG = 'Object.keys(window.koeln.session.state.modules.gangs.gangs)[0]';
+
 /** Jede Szene: Name und JavaScript, das im Browser läuft (window.koeln = { session, runtime }). */
 export const SCENES = [
   { name: 'home', js: 'window.koeln.runtime.api.openPhone(null)' },
@@ -102,6 +146,49 @@ export const SCENES = [
     })()`,
   },
   { name: 'veedel', js: "window.koeln.runtime.api.openPanel('veedel.veedel', { veedelId: 'neustadt-nord' })" },
+  // Gang als eigene Seite (Lage, Diplomatie, Gegenmaßnahmen) und das Bündnis als Blatt (mittel, dann groß gezogen)
+  {
+    name: 'gang',
+    js: `(() => { const api = window.koeln.runtime.api; api.selectTab('gangs'); api.openPanel('gangs.gang', { gangId: ${FIRST_GANG} }); })()`,
+  },
+  {
+    name: 'blatt-mittel',
+    js: `(async () => {
+      ${STEPS}
+      const api = window.koeln.runtime.api;
+      api.selectTab('gangs');
+      api.openPanel('gangs.gang', { gangId: ${FIRST_GANG} });
+      const row = await until(() =>
+        [...document.querySelectorAll('.phone-page.is-top .ui-list__button')].find((b) => b.textContent.includes('Bündnis')),
+      );
+      await still();
+      row?.click();
+      await until(() => document.querySelector('.ui-sheet'));
+    })()`,
+  },
+  {
+    name: 'blatt-gross',
+    js: `(async () => {
+      ${STEPS}
+      ${POINTER}
+      const api = window.koeln.runtime.api;
+      api.selectTab('gangs');
+      api.openPanel('gangs.gang', { gangId: ${FIRST_GANG} });
+      const row = await until(() =>
+        [...document.querySelectorAll('.phone-page.is-top .ui-list__button')].find((b) => b.textContent.includes('Bündnis')),
+      );
+      await still();
+      row?.click();
+      const head = await until(() => document.querySelector('.ui-sheet__head'));
+      await sleep(100);
+      await still();
+      if (head) {
+        const r = head.getBoundingClientRect();
+        drag(head, r.left + r.width / 2, r.top + 30, r.left + r.width / 2, r.top - 380, true);
+      }
+      await sleep(100);
+    })()`,
+  },
   { name: 'lagerdetail', js: "window.koeln.runtime.api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' })" },
   { name: 'marktdetail', js: "window.koeln.runtime.api.openPanel('market.overview', {})" },
   {
@@ -113,6 +200,102 @@ export const SCENES = [
       const member = sim.state.modules.staff.members[0];
       window.koeln.runtime.api.selectTab('staff');
       if (member) window.koeln.runtime.api.openPanel('staff.profile', { staffId: member.id });
+    })()`,
+  },
+  // Aktionsblatt: Entlassen in der Akte bestätigen
+  {
+    name: 'aktionsblatt',
+    js: `(async () => {
+      ${STEPS}
+      const sim = window.koeln.session.sim;
+      if (sim.state.modules.staff.members.length === 0) {
+        sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: sim.state.modules.spots.unlocked[0] } });
+      }
+      const member = sim.state.modules.staff.members[0];
+      const api = window.koeln.runtime.api;
+      api.selectTab('staff');
+      if (member) api.openPanel('staff.profile', { staffId: member.id });
+      const button = await until(() =>
+        [...document.querySelectorAll('.phone-page.is-top .ui-button--danger')].find((b) => b.textContent.includes('Entlassen')),
+      );
+      await still();
+      button?.click();
+      await until(() => document.querySelector('.ui-action-sheet'));
+    })()`,
+  },
+  // Kontextmenü: langer Druck (hier Rechtsklick) auf die Kachel der Nachrichten
+  {
+    name: 'kontextmenue',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.runtime.api.openPhone(null);
+      const tile = await until(() =>
+        [...document.querySelectorAll('.phone__app')].find((e) => e.dataset.appId === 'core.messages'),
+      );
+      await still();
+      tile?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      await until(() => document.querySelector('.ui-ctx-menu'));
+    })()`,
+  },
+  // Mitteilungszentrale: Banner herunterziehen (hier direkt geöffnet)
+  {
+    name: 'mitteilungen',
+    js: `(() => {
+      const api = window.koeln.runtime.api;
+      api.openPhone(null);
+      api.notify({ title: 'Toni (Frankfurt)', text: 'Ware ist unterwegs, morgen früh da.', icon: 'truck', appId: 'core.messages', sound: null });
+      api.notify({ title: 'Nordstadt Boys', text: 'Halt dich vom Ebertplatz fern.', icon: 'skull', appId: 'core.messages', sound: null });
+      api.toggleNotificationCenter(true);
+    })()`,
+  },
+  // Rand-Wischen zurück, auf halbem Weg festgehalten (Vorseite parallax, Titel wandert)
+  {
+    name: 'rand-wischen',
+    js: `(async () => {
+      ${STEPS}
+      ${POINTER}
+      const api = window.koeln.runtime.api;
+      api.selectTab('business');
+      api.openSection('goods.stock');
+      await until(() => document.querySelector('.phone-page.is-top[data-kind="section"]'));
+      await sleep(100);
+      await still();
+      const screen = document.querySelector('.phone__screen');
+      const r = screen.getBoundingClientRect();
+      const target = document.querySelector('.phone-page.is-top .phone-screen__body') ?? screen;
+      drag(target, r.left + 6, r.top + r.height / 2, r.left + 6 + r.width * 0.5, r.top + r.height / 2 + 8, false);
+    })()`,
+  },
+  // Nachrichten: Suche unter dem großen Titel und eine Zeile mit freigelegter Wisch-Aktion
+  {
+    name: 'suche',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.runtime.api.openPhone('core.messages');
+      const button = await until(() => document.querySelector('.phone-page.is-top .phone-screen__search-button'));
+      await still();
+      button?.click();
+      const input = await until(() => document.querySelector('.phone-page.is-top .phone-screen__search.is-open input'));
+      if (input) {
+        input.value = 'Jan';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      await sleep(300);
+    })()`,
+  },
+  {
+    name: 'wischzeile',
+    js: `(async () => {
+      ${STEPS}
+      ${POINTER}
+      window.koeln.runtime.api.openPhone('core.messages');
+      const row = await until(() => document.querySelector('.phone-page.is-top .ui-swipe .msg-row.is-unread'));
+      await still();
+      if (row) {
+        const r = row.getBoundingClientRect();
+        await dragSlow(row, r.right - 30, r.top + r.height / 2, r.right - 130, r.top + r.height / 2 + 2);
+      }
+      await sleep(100);
     })()`,
   },
   { name: 'ereignisse', js: "window.koeln.runtime.api.selectTab('journal')" },
@@ -154,12 +337,18 @@ export async function openGame(page, base, advance) {
  * zugeklappter Island.
  */
 export async function showScene(page, scene) {
-  await page.evaluate(
-    'window.koeln.runtime.api.openPhone(null); window.koeln.runtime.api.toggleIsland(false); window.koeln.runtime.api.closePhone()',
-  );
+  await page.evaluate(`(() => {
+    window.__sceneCleanup?.();
+    window.__sceneCleanup = undefined;
+    const api = window.koeln.runtime.api;
+    api.toggleNotificationCenter(false);
+    api.openPhone(null);
+    api.toggleIsland(false);
+    api.closePhone();
+  })()`);
   await page.waitForTimeout(100);
   await page.evaluate(scene.js);
-  await page.waitForTimeout(650);
+  await page.waitForTimeout(scene.wait ?? 650);
   await waitForStill(page);
 }
 

@@ -3,7 +3,7 @@
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro } from '../../../core';
-import { Button, Empty, KeyValue, ProgressBar, Select, Slot, useGame, useUi } from '../../../ui';
+import { ActionSheet, Button, Empty, KeyValue, ProgressBar, Select, Slot, Stepper, useGame, useUi } from '../../../ui';
 import { getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
 import {
@@ -132,45 +132,33 @@ function ProfileActions(props: { member: StaffMember }) {
       {canMove && <MoveControl member={m} />}
       <div class="staff-file__row">
         <span>Lohn</span>
-        <span class="staff-file__buttons">
-          <Button
-            small
-            onClick={() => dispatch({ type: 'staff.setWage', payload: { staffId: m.id, wage: m.wage - 10 } })}
-          >
-            −10 €
-          </Button>
-          <strong>{formatEuro(m.wage)}</strong>
-          <Button
-            small
-            onClick={() => dispatch({ type: 'staff.setWage', payload: { staffId: m.id, wage: m.wage + 10 } })}
-          >
-            +10 €
-          </Button>
-        </span>
+        <Stepper
+          label="Lohn"
+          value={m.wage}
+          min={0}
+          step={10}
+          format={(wage) => `${formatEuro(wage)}/Tag`}
+          onChange={(wage) => dispatch({ type: 'staff.setWage', payload: { staffId: m.id, wage } })}
+        />
       </div>
-      {confirmFire ? (
-        <div class="staff-file__row">
-          <span>Wirklich entlassen?</span>
-          <span class="staff-file__buttons">
-            <Button small variant="subtle" onClick={() => setConfirmFire(false)}>
-              Nein
-            </Button>
-            <Button
-              small
-              variant="danger"
-              onClick={() => {
-                if (dispatch({ type: 'staff.fire', payload: { staffId: m.id } }).ok) ui.closePanel();
-              }}
-            >
-              Ja, entlassen
-            </Button>
-          </span>
-        </div>
-      ) : (
-        <Button variant="danger" wide onClick={() => setConfirmFire(true)}>
-          Entlassen
-        </Button>
-      )}
+      <Button variant="danger" wide onClick={() => setConfirmFire(true)}>
+        Entlassen
+      </Button>
+      <ActionSheet
+        open={confirmFire}
+        onClose={() => setConfirmFire(false)}
+        title={`${m.name} entlassen?`}
+        message="Die Person geht sofort und kommt nicht wieder."
+        actions={[
+          {
+            label: 'Entlassen',
+            destructive: true,
+            onSelect: () => {
+              if (dispatch({ type: 'staff.fire', payload: { staffId: m.id } }).ok) ui.closePanel();
+            },
+          },
+        ]}
+      />
     </section>
   );
 }
