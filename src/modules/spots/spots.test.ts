@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { loadSimulation, START_DIRTY_MONEY } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getVeedel, veedelAt } from '../veedel';
-import { FOUND_SPOT_COST, MAX_CUSTOM_SPOTS } from './config';
+import { FOUND_SPOT_COST, MAX_CUSTOM_SPOTS, PRESET_SPOTS, SPOT_LABELS } from './config';
 import {
   canFoundSpotAt,
   customSpots,
@@ -11,6 +11,7 @@ import {
   getSpots,
   isSpotActive,
   lockedSpots,
+  spotLabelPlacement,
   spotsInVeedel,
 } from './index';
 
@@ -106,5 +107,12 @@ describe('spots', () => {
     raw.moduleVersions.spots = 1;
     const loaded = loadSimulation(raw, sim.modules);
     expect(getSpots(loaded.state)).toHaveLength(getAllSpots(loaded.state).length);
+  });
+});
+
+describe('Plaketten auf der Karte', () => {
+  it('hat für jeden vorgegebenen Spot eine Seite, eigene Spots stehen rechts', () => {
+    for (const spot of PRESET_SPOTS) expect(SPOT_LABELS[spot.id], spot.id).toBeDefined();
+    expect(spotLabelPlacement('custom-1')).toEqual({ labelSide: 'right', labelOffsetY: 0 });
   });
 });

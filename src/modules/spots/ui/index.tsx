@@ -35,7 +35,7 @@ import {
   lockedSpots,
   MAX_CUSTOM_SPOTS,
 } from '../index';
-import { recordSaleGlow, spotsLayer } from './map';
+import { recordSaleGlow, recordSpotRaid, spotsLayer } from './map';
 import './spots.css';
 
 declare module '../../../ui' {
@@ -216,6 +216,11 @@ onGameEvent('sale.completed', 'spots.moneyFx', (p, _ui, state) => {
   if (!spot) return;
   recordSaleGlow(spot.id, state.time);
   mapEffects.money(spot, p.revenue, { caption: formatProductAmount(p.productId, p.amount) });
+});
+
+// Nach einer Razzia an einem Spot wird sein Schild eine Weile blau.
+onGameEvent('police.raid', 'spots.raidLook', (p, _ui, state) => {
+  if (p.spotId && !p.empty) recordSpotRaid(p.spotId, state.time);
 });
 
 // Empfehlungen und Suche

@@ -26,6 +26,7 @@ export {
   IconChip,
   type IconChipProps,
   type IconProps,
+  iconElement,
   isChipColor,
   StatusDot,
 } from './Icon';

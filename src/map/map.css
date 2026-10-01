@@ -283,27 +283,33 @@ button.map-target:hover .map-target__reticle {
   animation: map-fx-rise var(--fx-duration) var(--ease-out) forwards;
 }
 .map-fx-money__value {
-  padding: 1px 8px;
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: var(--color-accent);
-  background: var(--color-label-bg);
-  border-radius: var(--radius-xs);
-  box-shadow: var(--shadow-marker-soft);
+  /* Look "Glas": grüne Pille mit dunkler Schrift (Verlust rot), Barlow Condensed */
+  padding: 2px 10px;
+  font-family: var(--font-hud-display);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: var(--map-money-on);
+  background: var(--map-money);
+  border-radius: var(--radius-round);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 .map-fx-money--bad .map-fx-money__value {
-  color: var(--color-bad-strong);
+  color: var(--map-money-loss-on);
+  background: var(--map-money-loss);
 }
 .map-fx-money--info .map-fx-money__value {
-  color: var(--color-info-strong);
+  color: var(--hud-ink);
+  background: var(--hud-glass-strong);
 }
 .map-fx-money__caption {
-  margin-top: 2px;
+  margin-top: 3px;
+  font-family: var(--font-hud);
   font-size: 11px;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-marker-ink);
+  font-weight: 700;
+  color: var(--hud-ink);
   text-shadow:
     0 0 3px var(--color-marker-bg),
     0 0 6px var(--color-marker-bg);
@@ -322,7 +328,7 @@ button.map-target:hover .map-target__reticle {
   }
   100% {
     opacity: 0;
-    transform: translateY(-46px) scale(1);
+    transform: translateY(-40px) scale(1);
   }
 }
 
