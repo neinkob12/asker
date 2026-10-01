@@ -517,7 +517,7 @@ function order(
     }
     rel.debt += price;
     rel.dueAt ??= ctx.now + CREDIT_TERM;
-  } else if (!wallet.pay(ctx, price, 'dirty', `Bestellung ${supplier.name}`)) {
+  } else if (!wallet.pay(ctx, price, 'dirty', `Bestellung ${supplier.name}`, 'goods.purchase')) {
     return { ok: false, reason: 'Nicht genug Geld.' };
   }
 
@@ -584,7 +584,7 @@ function unlock(ctx: Ctx, supplierId: string): CommandResult {
   const supplier = getSupplier(ctx.state, supplierId);
   if (!supplier) return { ok: false, reason: 'Unbekannter Lieferant.' };
   const fee = supplier.unlock?.fee ?? 0;
-  if (fee > 0 && !wallet.pay(ctx, fee, 'dirty', `Vermittlung ${supplier.name}`)) {
+  if (fee > 0 && !wallet.pay(ctx, fee, 'dirty', `Vermittlung ${supplier.name}`, 'expansion')) {
     return { ok: false, reason: `${supplier.contactName} will ${formatEuro(fee)} für den Einstieg.` };
   }
   const s = ctx.state.modules.suppliers;
@@ -632,7 +632,8 @@ function repay(ctx: Ctx, supplierId: string, amount?: number): CommandResult {
   if (rel.debt <= 0) return { ok: false, reason: `Du hast keine Schulden bei ${supplier.contactName}.` };
   const pay = Math.round(Math.min(rel.debt, amount ?? rel.debt));
   if (!(pay > 0)) return { ok: false, reason: 'Ungültiger Betrag.' };
-  if (!wallet.pay(ctx, pay, 'dirty', `Schulden ${supplier.name}`)) return { ok: false, reason: 'Nicht genug Geld.' };
+  if (!wallet.pay(ctx, pay, 'dirty', `Schulden ${supplier.name}`, 'goods.purchase'))
+    return { ok: false, reason: 'Nicht genug Geld.' };
   rel.debt -= pay;
   if (rel.debt <= 0) {
     rel.debt = 0;

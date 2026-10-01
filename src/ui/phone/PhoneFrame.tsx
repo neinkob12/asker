@@ -68,6 +68,7 @@ const DOCK = ['core.messages', `${TAB_APP_PREFIX}business`, 'suppliers.app', `${
 
 /** Reihenfolge der übrigen Apps im Raster: erst das Spiel, dann Information, zuletzt Einstellungen. Unbekannte hinten. */
 const HOME_ORDER = [
+  'finance.app',
   `${TAB_APP_PREFIX}territory`,
   `${TAB_APP_PREFIX}gangs`,
   'customers.orders',

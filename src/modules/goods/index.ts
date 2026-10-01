@@ -391,7 +391,7 @@ export function buyWarehouse(ctx: Ctx, warehouseId: string): CommandResult {
   const site = warehouseSite(warehouseId);
   if (!site) return { ok: false, reason: 'Diesen Standort gibt es nicht.' };
   if (isWarehouseOwned(ctx.state, warehouseId)) return { ok: false, reason: `${site.name} gehört dir schon.` };
-  if (!wallet.pay(ctx, site.cost, 'clean', `Kauf ${site.name}`)) {
+  if (!wallet.pay(ctx, site.cost, 'clean', `Kauf ${site.name}`, 'expansion')) {
     return {
       ok: false,
       reason: `Dafür brauchst du ${formatEuro(site.cost)} sauberes Geld. Wasch vorher Schwarzgeld.`,
@@ -415,7 +415,8 @@ export function cutLot(ctx: Ctx, request: { lotId: number; ratio: number; wareho
   const preview = cutPreview(lot, request.ratio);
   if (preview.added < 1) return { ok: false, reason: 'Zu wenig Ware zum Strecken.' };
   if (preview.cut > MAX_CUT + 1e-9) return { ok: false, reason: 'Mehr Streckmittel verträgt die Ware nicht.' };
-  if (!wallet.pay(ctx, preview.cost, 'dirty', 'Streckmittel')) return { ok: false, reason: 'Nicht genug Geld.' };
+  if (!wallet.pay(ctx, preview.cost, 'dirty', 'Streckmittel', 'goods.purchase'))
+    return { ok: false, reason: 'Nicht genug Geld.' };
   const before = lot.amount;
   lot.amount = preview.amount;
   lot.quality = preview.quality;

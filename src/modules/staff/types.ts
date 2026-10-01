@@ -17,10 +17,11 @@ export type StatKey = keyof StaffStats;
 /**
  * Einsatzort. kind 'spot' → targetId = Spot-ID, 'delivery' → Auftrags-ID, 'warehouse' → Lager-ID,
  * 'veedel' → Veedel-ID (Leutnant, der das Veedel führt; setzt das hierarchy-Modul),
- * 'transport' → Fahrt-ID (Fahrer, der Ware abholt oder umlagert; setzt das logistics-Modul).
+ * 'transport' → Fahrt-ID (Fahrer, der Ware abholt oder umlagert; setzt das logistics-Modul),
+ * 'office' → 'rightHand' (Rechte Hand über den Leutnants, steht an keinem Spot; setzt das hierarchy-Modul).
  */
 export interface StaffAssignment {
-  kind: 'spot' | 'delivery' | 'warehouse' | 'veedel' | 'transport';
+  kind: 'spot' | 'delivery' | 'warehouse' | 'veedel' | 'transport' | 'office';
   targetId: string;
 }
 

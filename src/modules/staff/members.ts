@@ -1,6 +1,6 @@
 // Lese- und Schreib-API des Personals. Lesen mit state, schreiben mit ctx.
 
-import { type Contact, type Ctx, type GameState, journal } from '../../core';
+import { type Contact, type Ctx, type GameState, journal, type MoneyCategory } from '../../core';
 import { getWarehouse } from '../goods';
 import { getSpot, isSpotActive } from '../spots';
 import { veedelAt, veedelName } from '../veedel';
@@ -134,9 +134,24 @@ export function expectedWage(state: GameState, id: string): number {
   return m ? expectedWageFor(m.role, m.level, m.demand) : 0;
 }
 
+/** Kategorie des Lohns in der Kasse: nach Rolle, Leutnants und Rechte Hand extra. */
+export function wageCategory(member: StaffMember): MoneyCategory {
+  const post = member.assignment ?? member.returnTo;
+  if (post?.kind === 'veedel' || post?.kind === 'office') return 'wages.lead';
+  if (member.role === 'runner') return 'wages.runner';
+  if (member.role === 'security') return 'wages.security';
+  if (member.role === 'courier' || member.role === 'driver') return 'wages.transport';
+  return 'wages.specialist';
+}
+
 /** Summe der Tageslöhne aller aktuellen Mitarbeiter. */
 export function dailyWages(state: GameState): number {
   return state.modules.staff.members.reduce((sum, m) => sum + m.wage, 0);
+}
+
+/** Was um Mitternacht an Löhnen fällig wird (Summe über alle aktuellen Mitarbeiter). */
+export function payrollDue(state: GameState): number {
+  return dailyWages(state);
 }
 
 /** So lange braucht die Person für einen Kunden (Tempo und Level). */
@@ -325,6 +340,7 @@ export function assignmentLabel(state: GameState, a: StaffAssignment | null): st
   if (a.kind === 'warehouse') return getWarehouse(state, a.targetId)?.name ?? a.targetId;
   if (a.kind === 'veedel') return `Leutnant in ${veedelName(a.targetId)}`;
   if (a.kind === 'transport') return 'Fahrt';
+  if (a.kind === 'office') return 'Rechte Hand';
   return 'Lieferung';
 }
 

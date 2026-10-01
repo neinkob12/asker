@@ -13,6 +13,7 @@
 // Ereignisse: 'hierarchy.appointed', 'hierarchy.dismissed', 'hierarchy.configured'
 
 import { type CommandResult, type Ctx, defineModule, formatEuro, type GameState, journal, messages } from '../../core';
+import { getSpot } from '../spots';
 import {
   addCareer,
   addLoyalty,
@@ -88,6 +89,11 @@ export function getLieutenant(state: GameState, veedelId: string): string | null
   return state.modules.hierarchy.lieutenants[veedelId] ?? null;
 }
 
+/** Mitarbeiter-IDs aller Leutnants. */
+export function getLieutenantIds(state: GameState): string[] {
+  return Object.values(state.modules.hierarchy.lieutenants);
+}
+
 /** Alle Leutnants als [veedelId, staffId]. */
 export function getLieutenants(state: GameState): [string, string][] {
   return Object.entries(state.modules.hierarchy.lieutenants);
@@ -100,6 +106,24 @@ export function getPost(state: GameState, veedelId: string): LieutenantPost | un
 /** Veedel, das die Person als Leutnant führt, sonst null. */
 export function lieutenantVeedel(state: GameState, staffId: string): string | null {
   return getLieutenants(state).find(([, id]) => id === staffId)?.[0] ?? null;
+}
+
+/** Leutnant, der diesen Spot führt, sonst null. */
+export function lieutenantOfSpot(state: GameState, spotId: string): string | null {
+  const spot = getSpot(state, spotId);
+  return spot ? getLieutenant(state, spot.veedelId) : null;
+}
+
+/**
+ * Zu welchem Leutnant gehört die Person (für Übersicht und Kasse)? Der Leutnant selbst, wer an einem seiner Spots
+ * steht (oder nach Haft dorthin zurückkehrt). Sonst null.
+ */
+export function teamLeadOf(state: GameState, staffId: string): string | null {
+  if (lieutenantVeedel(state, staffId)) return staffId;
+  const m = getStaffMember(state, staffId);
+  const place = m?.assignment ?? m?.returnTo;
+  if (place?.kind === 'spot') return lieutenantOfSpot(state, place.targetId);
+  return null;
 }
 
 /** Kann die Person Leutnant werden? */

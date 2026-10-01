@@ -9,6 +9,7 @@ import {
   type GameState,
   outcome as gameOutcome,
   journal,
+  type MoneyCategory,
   wallet,
 } from '../../core';
 import { allProducts, DEFAULT_PRODUCT, getProduct, getStock, getWarehouses, store, take } from '../goods';
@@ -318,7 +319,7 @@ export function act(ctx: Ctx, encounterId: number, actionId: string): CommandRes
     return { ok: false, reason: 'Das geht gerade nicht.' };
   }
   if (action.costsBribe) {
-    if (!wallet.pay(ctx, encounter.bribeCost, 'dirty', 'Bestechung')) {
+    if (!wallet.pay(ctx, encounter.bribeCost, 'dirty', 'Bestechung', lossCategory(encounter.kind))) {
       return { ok: false, reason: `Nicht genug Schwarzgeld (${formatEuro(encounter.bribeCost)}).` };
     }
     encounter.bribeSpent += encounter.bribeCost;
@@ -482,22 +483,30 @@ function loseGoods(ctx: Ctx, amount: number): number {
   return lost;
 }
 
+/** Kategorie für Geld, das bei einer Konfrontation weggeht (Kasse): Überfall, Polizei oder sonst Konfrontation. */
+function lossCategory(kind: string): MoneyCategory {
+  if (kind === 'raidDefense') return 'loss.theft';
+  if (kind === 'policeChase' || kind === 'vehicleCheck') return 'loss.police';
+  return 'loss.encounter';
+}
+
 function applyEffects(ctx: Ctx, encounter: Encounter, effects: EncounterEffects, result: EncounterResult): void {
   const stakes = encounter.request.stakes ?? {};
   const reason = getKind(encounter.kind)?.name ?? 'Konfrontation';
+  const loss = lossCategory(encounter.kind);
 
   let money = 0;
   if (effects.money !== undefined) money += roll(ctx, effects.money);
   if (effects.stakeMoney) money += Math.round((stakes.money ?? 0) * effects.stakeMoney);
   if (money > 0) {
-    wallet.earn(ctx, money, 'dirty', reason);
+    wallet.earn(ctx, money, 'dirty', reason, 'income.other');
     result.money += money;
   } else if (money < 0) {
-    result.money -= wallet.lose(ctx, -money, 'dirty', reason);
+    result.money -= wallet.lose(ctx, -money, 'dirty', reason, loss);
   }
   if (effects.moneyShare && effects.moneyShare < 0) {
     const share = Math.round(wallet.balance(ctx.state, 'dirty') * -effects.moneyShare);
-    result.money -= wallet.lose(ctx, Math.min(share, effects.moneyShareMax ?? share), 'dirty', reason);
+    result.money -= wallet.lose(ctx, Math.min(share, effects.moneyShareMax ?? share), 'dirty', reason, loss);
   }
 
   let goods = 0;

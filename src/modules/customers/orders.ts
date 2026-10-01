@@ -421,7 +421,10 @@ function complete(ctx: Ctx, order: Order, afterFight = false): void {
   if (!afterFight && dealGoesWrong(ctx, order)) return;
   const s = ctx.state.modules.customers;
   const wholesale = order.kind === 'wholesale';
-  wallet.earn(ctx, order.price, 'dirty', wholesale ? 'Großhandel' : 'Lieferung');
+  wallet.earn(ctx, order.price, 'dirty', wholesale ? 'Großhandel' : 'Lieferung', {
+    category: wholesale ? 'sales.wholesale' : 'sales.delivery',
+    ...(order.courierId ? { staffId: order.courierId } : {}),
+  });
   s.stats.unitsSold += order.amount;
   s.stats.revenue += order.price;
   if (wholesale) s.stats.wholesaleDeals += 1;

@@ -5,9 +5,9 @@ import { messages } from './messages';
 import { defineModule, type ModuleDefinition, sortModules } from './module';
 import { outcome } from './outcome';
 import { Simulation } from './sim';
-import { recordEvents } from './testing';
+import { eventsOfType, recordEvents } from './testing';
 import type { GameEvent } from './types';
-import { wallet } from './wallet';
+import { MONEY_CATEGORIES, wallet } from './wallet';
 
 // Testmodule, nur für diese Datei. Sie erweitern die Kerntypen wie echte Module.
 interface CounterState {
@@ -306,6 +306,23 @@ describe('Geld', () => {
     wallet.earn(ctx, 1000);
     expect(wallet.convert(ctx, 'dirty', 'clean', 1000, 200)).toBe(true);
     expect(sim.state.wallet).toEqual({ dirty: 0, clean: 850 });
+  });
+
+  it('jede Kontobewegung trägt ihre Kategorie, Geldwäsche bucht Gebühr und Umbuchung getrennt', () => {
+    const sim = create();
+    const events = recordEvents(sim);
+    const ctx = sim.ctx('test');
+    wallet.pay(ctx, 80, 'dirty', 'Lohn Murat K.', { category: 'wages.runner', staffId: 's1' });
+    wallet.convert(ctx, 'dirty', 'clean', 500, 100);
+    sim.advance(1);
+    const changes = eventsOfType(events, 'wallet.changed').map((e) => e.payload);
+    expect(changes[0]).toMatchObject({ amount: -80, category: 'wages.runner', staffId: 's1' });
+    expect(changes.slice(1).map((c) => [c.kind, c.amount, c.category])).toEqual([
+      ['dirty', -400, 'transfer'],
+      ['dirty', -100, 'laundering'],
+      ['clean', 400, 'transfer'],
+    ]);
+    expect(MONEY_CATEGORIES['wages.jail'].group).toBe('expense');
   });
 });
 

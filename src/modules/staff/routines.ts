@@ -44,6 +44,7 @@ import {
   setStatus,
   staffContact,
   staffVeedel,
+  wageCategory,
 } from './members';
 import type { BetrayalKind, StaffMember } from './types';
 
@@ -192,7 +193,10 @@ function payWages(ctx: Ctx): void {
   const quitting: StaffMember[] = [];
   let complained = 0;
   for (const m of members) {
-    if (m.wage <= 0 || wallet.pay(ctx, m.wage, 'dirty', `Lohn ${m.name}`)) {
+    if (
+      m.wage <= 0 ||
+      wallet.pay(ctx, m.wage, 'dirty', `Lohn ${m.name}`, { category: wageCategory(m), staffId: m.id })
+    ) {
       paid++;
       total += m.wage;
       m.unpaidDays = 0;
@@ -284,7 +288,7 @@ export function betray(ctx: Ctx, m: StaffMember, kind: BetrayalKind): number {
     addCareer(ctx, m.id, `Hat ${what} Ware mitgehen lassen.`);
   } else if (kind === 'money') {
     const want = Math.min(THEFT_MONEY_MAX, Math.round(ctx.state.wallet.dirty * THEFT_MONEY_SHARE));
-    amount = wallet.lose(ctx, want, 'dirty', `Diebstahl ${m.name}`);
+    amount = wallet.lose(ctx, want, 'dirty', `Diebstahl ${m.name}`, { category: 'loss.betrayal', staffId: m.id });
     if (amount === 0) return betray(ctx, m, 'quit');
     journal.add(ctx, `In der Kasse fehlen ${formatEuro(amount)}. Verdacht: ${m.name}.`, 'bad', { staffId: m.id });
     addCareer(ctx, m.id, `Hat ${formatEuro(amount)} aus der Kasse genommen.`);

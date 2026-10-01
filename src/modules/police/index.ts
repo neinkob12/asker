@@ -383,7 +383,7 @@ function searchWarehouses(ctx: Ctx, veedelId: string): number {
 }
 
 function confiscateMoney(ctx: Ctx, amount: number): number {
-  const lost = wallet.lose(ctx, Math.round(amount), 'dirty', 'Beschlagnahme');
+  const lost = wallet.lose(ctx, Math.round(amount), 'dirty', 'Beschlagnahme', 'loss.police');
   ctx.state.modules.police.stats.confiscatedMoney += lost;
   return lost;
 }

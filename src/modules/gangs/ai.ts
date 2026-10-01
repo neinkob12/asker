@@ -160,7 +160,7 @@ function collectProtection(ctx: Ctx, gang: Gang, s: GangStatus): void {
   const stillStrong = playerPower(ctx.state) >= gangPower(ctx.state, gang.id) * PROTECTION_KEEP_RATIO;
   if (stillStrong && s.money >= amount) {
     s.money -= amount;
-    wallet.earn(ctx, amount, 'dirty', `Schutzgeld von ${gang.name}`);
+    wallet.earn(ctx, amount, 'dirty', `Schutzgeld von ${gang.name}`, 'income.other');
     protection.overdue = false;
     journal.add(ctx, `${gang.name} zahlt dir ${formatEuro(amount)} Schutzgeld.`, 'good');
     return;

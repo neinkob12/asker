@@ -206,10 +206,18 @@ export function serve(ctx: Ctx, customerId: number, sellerId: string | null): Co
   const spot = getSpot(ctx.state, customer.spotId);
   if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
   // Ware aus dem Lager, das dem Spot am nächsten liegt.
-  const { taken, quality, cut } = take(ctx, { productId: customer.productId, amount: customer.amount, near: spot });
+  const { taken, quality, cut, unitCost } = take(ctx, {
+    productId: customer.productId,
+    amount: customer.amount,
+    near: spot,
+  });
   if (taken === 0) return { ok: false, reason: 'Nicht genug im Lager.' };
   const revenue = Math.round(customer.amount * customer.pricePerUnit);
-  wallet.earn(ctx, revenue, 'dirty', 'Verkauf');
+  wallet.earn(ctx, revenue, 'dirty', `Verkauf am ${spot.name}`, {
+    category: 'sales.street',
+    spotId: spot.id,
+    ...(sellerId ? { staffId: sellerId } : {}),
+  });
   state.waiting = state.waiting.filter((c) => c.id !== customer.id);
   state.stats.unitsSold += customer.amount;
   state.stats.revenue += revenue;
@@ -238,6 +246,7 @@ export function serve(ctx: Ctx, customerId: number, sellerId: string | null): Co
     amount: customer.amount,
     quality,
     revenue,
+    goodsCost: Math.round(taken * unitCost),
     sellerId,
     customerId: customer.id,
     ...(regular ? { regularId: regular.id } : {}),

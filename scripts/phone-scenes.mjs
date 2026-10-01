@@ -62,6 +62,25 @@ const STEPS = `
   };
   const still = () => until(() => !document.documentElement.hasAttribute('data-moving'));`;
 
+/**
+ * JavaScript: ein paar Tage Geschäft für die Kasse (zwei Läufer, Nachschub, drei Spieltage vorspulen). Läuft nur
+ * einmal pro Sitzung, spätere Szenen bauen darauf auf.
+ */
+const BUSINESS_DAYS = `(() => {
+  if (window.__businessDays) return;
+  window.__businessDays = true;
+  const sim = window.koeln.session.sim;
+  sim.state.wallet.dirty += 4000;
+  const spots = sim.state.modules.spots.unlocked;
+  for (const spotId of spots.slice(0, 2)) sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+  for (let day = 0; day < 3; day++) {
+    for (const packageId of ['weed50', 'haze50', 'weed50']) {
+      sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'frankfurt', packageId } });
+    }
+    sim.advance(1440);
+  }
+})()`;
+
 /** Erste Gang (für die Gang-Seite, das Bündnis-Blatt). */
 const FIRST_GANG = 'Object.keys(window.koeln.session.state.modules.gangs.gangs)[0]';
 
@@ -320,6 +339,34 @@ export const SCENES = [
       const api = window.koeln.runtime.api;
       api.openPhone(null);
       api.pulseIsland({ kind: 'earn.dirty', amount: 450, icon: 'moneyBag', tone: 'accent', text: '' });
+    })()`,
+  },
+  // Kasse (nach ein paar Tagen Geschäft): heute, 7 Tage, eine Kategorie
+  { name: 'kasse', js: `${BUSINESS_DAYS}; window.koeln.runtime.api.openPhone('finance.app')` },
+  {
+    name: 'kasse-woche',
+    js: `(async () => {
+      ${STEPS}
+      ${BUSINESS_DAYS};
+      window.koeln.runtime.api.openPhone('finance.app');
+      const seg = await until(() => [...document.querySelectorAll('.phone .ui-segmented button')].find((b) => b.textContent.includes('7 Tage')));
+      seg?.click();
+      await sleep(200);
+      document.querySelector('.phone .fin-chart')?.scrollIntoView({ block: 'center' });
+    })()`,
+  },
+  {
+    name: 'kasse-buchungen',
+    js: `${BUSINESS_DAYS}; window.koeln.runtime.api.openPhone('finance.app'); window.koeln.runtime.api.openPanel('finance.category', { category: 'wages.runner', period: 'week' })`,
+  },
+  {
+    name: 'kasse-spots',
+    js: `(async () => {
+      ${STEPS}
+      ${BUSINESS_DAYS};
+      window.koeln.runtime.api.openPhone('finance.app');
+      const group = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Pro Spot')));
+      group?.scrollIntoView({ block: 'start' });
     })()`,
   },
 ];

@@ -340,7 +340,7 @@ export function receiveCargo(
 function buyBerth(ctx: Ctx): CommandResult {
   const s = ctx.state.modules.logistics;
   if (s.berth) return { ok: false, reason: 'Du hast schon einen Liegeplatz.' };
-  if (!wallet.pay(ctx, BERTH_COST, 'clean', 'Liegeplatz Niehler Hafen')) {
+  if (!wallet.pay(ctx, BERTH_COST, 'clean', 'Liegeplatz Niehler Hafen', 'expansion')) {
     return {
       ok: false,
       reason: `Der Hafen will ${formatEuro(BERTH_COST)} sauberes Geld. Wasch vorher Schwarzgeld.`,
