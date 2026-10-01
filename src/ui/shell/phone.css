@@ -959,6 +959,16 @@
   height: 22px;
   box-shadow: 0 0 0 2px var(--sky-bottom);
 }
+/* Vorschau einer App-Kachel im Kontextmenü (langer Druck): Kachel und Name */
+.phone__app-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-3);
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
 /* Dock: Glas über dem Wallpaper (schwebende Ebene), vier Apps ohne Beschriftung */
 .phone__dock {
   position: relative;
@@ -1059,6 +1069,16 @@ html.is-dragging {
   margin: 0;
   pointer-events: none;
   transform-origin: 50% 50%;
+}
+/* Überlagerungen (Blätter, Aktionsblatt, Kontextmenü) über den Seiten, unter Statusleiste und Home-Balken */
+.phone__overlays {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+.phone__overlays:empty {
+  display: none;
 }
 /* Abdunkeln der Seite, die nach hinten rückt (Deckkraft per Feder) */
 .phone-page__dim {
@@ -1177,6 +1197,51 @@ html.is-dragging {
 }
 .phone-screen__actions .ui-button--subtle {
   --btn-fg: var(--cat-brand);
+}
+/* Aktionen aus Abschnitten (Portal in die Leiste): Text in der Markenfarbe wie bei iOS, die Hauptaktion bleibt Gold */
+.phone-screen__actions .ui-portal {
+  display: contents;
+}
+.phone-screen__actions .ui-button:not(.ui-button--primary, .ui-button--danger) {
+  --btn-bg: transparent;
+  --btn-hover: var(--phone-fill);
+  --btn-fg: var(--cat-brand);
+}
+.phone-screen__search-button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-round);
+  background: transparent;
+  color: var(--cat-brand);
+  font-size: 21px;
+  cursor: pointer;
+}
+.phone-screen__search-button:hover {
+  background: var(--phone-fill);
+}
+/* Suchfeld unter dem großen Titel: zu, bis man oben herunterzieht (oder die Lupe tippt) */
+.phone-screen__search {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-top: -20px;
+  opacity: 0;
+  transition:
+    grid-template-rows 240ms var(--ease-ios),
+    margin-top 240ms var(--ease-ios),
+    opacity 160ms var(--ease-out);
+}
+.phone-screen__search > div {
+  min-height: 0;
+  overflow: hidden;
+}
+.phone-screen__search.is-open {
+  grid-template-rows: 1fr;
+  margin-top: -12px;
+  opacity: 1;
 }
 .phone-screen__body {
   flex: 1;

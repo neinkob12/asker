@@ -11,13 +11,33 @@
 // Tab-Leiste: docs/handy-design.md, Abschnitt 5.
 
 import type { ComponentType, JSX } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { clock, type GameState, messages } from '../../core';
 import { daylightAt, twilight } from '../../map/daylight';
-import { Badge, ErrorBoundary, Icon, IconChip } from '../components';
+import {
+  Badge,
+  ContextMenu,
+  ErrorBoundary,
+  Icon,
+  IconChip,
+  type MenuAction,
+  NotificationCenter,
+  type NotificationItem,
+  PortalHostContext,
+} from '../components';
+import { sectionTitle } from '../components/section';
 import { useRuntime } from '../hooks';
-import { hudItems, type PhoneApp, panels, phoneApps, type SidebarTab, sidebarTabs } from '../registry';
-import { TAB_APP_PREFIX, type UiState } from '../runtime';
+import { hasOverlay } from '../overlays';
+import {
+  hudItems,
+  type PhoneApp,
+  panels,
+  phoneApps,
+  type SidebarTab,
+  sidebarTabs,
+  slotContributions,
+} from '../registry';
+import { TAB_APP_PREFIX, type UiApi, type UiState } from '../runtime';
 import { HudItems } from '../shell/Hud';
 import { hudPlacement, tabIcon, tabTint, useIsMobile } from '../shell/layout';
 import { collectAdvice, NextStepWidget } from '../shell/NextStep';
@@ -29,10 +49,12 @@ import {
   EDGE_ZONE,
   edgeSwipeCommits,
   edgeSwipeProgress,
+  FLING,
   homeSwipeCommits,
   homeSwipeOpenness,
   rubberBand,
 } from './gestureModel';
+import { chatList } from './messagesModel';
 import { PhoneNotice } from './Notification';
 import { type NavEntry, top as topEntry } from './navModel';
 import { appIdOf, PageStack, type PageStackHandle } from './PageStack';
@@ -108,30 +130,76 @@ function StatusBar(props: { time: number }) {
   );
 }
 
+/** Schnellaktionen einer App-Kachel (langer Druck): Öffnen, Abschnitte eines Listen-Tabs, offene Chats. */
+function tileActions(app: HomeApp, api: UiApi, state: GameState): MenuAction[] {
+  const actions: MenuAction[] = [{ label: 'Öffnen', icon: app.icon, onSelect: () => api.openPhone(app.id) }];
+  if (app.id.startsWith(TAB_APP_PREFIX)) {
+    const tab = sidebarTabs.get(app.id.slice(TAB_APP_PREFIX.length));
+    if (tab?.layout === 'rows') {
+      for (const item of slotContributions(`tab:${tab.id}`).slice(0, 4)) {
+        const label = sectionTitle(item.id) ?? item.title;
+        if (!label) continue;
+        actions.push({
+          label,
+          onSelect: () => {
+            api.selectTab(tab.id);
+            api.openSection(item.id);
+          },
+        });
+      }
+    }
+  }
+  if (app.id === 'core.messages') {
+    for (const chat of chatList(state)
+      .filter((c) => c.awaitingAnswer)
+      .slice(0, 3)) {
+      actions.push({
+        label: chat.name,
+        icon: 'reply',
+        onSelect: () => api.openPhone('core.messages', { contactId: chat.contactId }),
+      });
+    }
+  }
+  return actions;
+}
+
 function AppTile(props: { app: HomeApp; onOpen: () => void; dock?: boolean }) {
   const { app } = props;
+  const runtime = useRuntime();
   const tile = tileColor(app.color);
+  const state = runtime.state;
   return (
-    <button
-      type="button"
-      class={`phone__app ${props.dock ? 'is-dock' : ''}`}
-      data-app-id={app.id}
-      onClick={props.onOpen}
-      aria-label={app.badge > 0 ? `${app.name}, ${app.badge} neu` : app.name}
-      title={app.name}
+    <ContextMenu
+      label={`Schnellaktionen ${app.name}`}
+      actions={state ? tileActions(app, runtime.api, state) : []}
+      preview={
+        <span class="phone__app-preview">
+          <IconChip icon={app.icon} color={tile.color} style={tile.style} shape="tile" solid size="xl" />
+          <span>{app.name}</span>
+        </span>
+      }
     >
-      <IconChip
-        icon={app.icon}
-        color={tile.color}
-        style={tile.style}
-        shape="tile"
-        solid
-        size="xl"
-        class="phone__tile"
-      />
-      {!props.dock && <span class="phone__app-name">{app.name}</span>}
-      <Badge count={app.badge} />
-    </button>
+      <button
+        type="button"
+        class={`phone__app ${props.dock ? 'is-dock' : ''}`}
+        data-app-id={app.id}
+        onClick={props.onOpen}
+        aria-label={app.badge > 0 ? `${app.name}, ${app.badge} neu` : app.name}
+        title={app.name}
+      >
+        <IconChip
+          icon={app.icon}
+          color={tile.color}
+          style={tile.style}
+          shape="tile"
+          solid
+          size="xl"
+          class="phone__tile"
+        />
+        {!props.dock && <span class="phone__app-name">{app.name}</span>}
+        <Badge count={app.badge} />
+      </button>
+    </ContextMenu>
   );
 }
 
@@ -335,6 +403,9 @@ function MobileDock(props: { state: GameState; unread: number }) {
   );
 }
 
+/** Statusleiste: Herunterziehen in diesem Streifen öffnet die Mitteilungszentrale. */
+const STATUS_PULL_ZONE = 44;
+
 /**
  * Gesten des Bildschirms (Pointer Events, Maus und Touch gleich): Rand-Wischen zurück (Start höchstens 24 px vom
  * linken Rand, die Seite folgt dem Finger) und Hochwischen am Home-Balken (App schrumpft auf ihre Kachel, auf dem
@@ -348,12 +419,26 @@ function usePhoneGestures(screen: { current: HTMLDivElement | null }, stack: { c
     const unbindPress = bindPressFeedback(el);
     const onDown = (e: PointerEvent) => {
       const animator = stack.current?.animator;
-      if (!animator || !e.isPrimary || e.button !== 0) return;
+      if (!animator || !e.isPrimary || e.button !== 0 || hasOverlay()) return;
       const rect = el.getBoundingClientRect();
       const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const target = e.target as Element;
+      if (target.closest('.phone__nav, .phone-notice, .island-wrap')) return;
+      // Statusleiste herunterziehen: Mitteilungszentrale (wie bei iOS von oben)
+      if (y < STATUS_PULL_ZONE && !target.closest('input, textarea')) {
+        startDrag(e, el, {
+          axis: 'y',
+          accept: (_dx, dy) => dy > 0,
+          onMove: () => {},
+          onEnd: ({ dy, vy }, cancelled) => {
+            if (!cancelled && (dy > 40 || vy > FLING)) runtime.api.toggleNotificationCenter(true);
+          },
+        });
+        return;
+      }
       const pages = runtime.ui.phone.stack;
-      if (x > EDGE_ZONE || pages.length < 2 || el.querySelector('[data-modal]')) return;
-      if ((e.target as Element).closest('.phone__nav, .phone-notice, .island-wrap')) return;
+      if (x > EDGE_ZONE || pages.length < 2) return;
       const front = pages[pages.length - 1].key;
       const back = pages[pages.length - 2].key;
       if (e.pointerType === 'mouse') e.preventDefault();
@@ -407,21 +492,53 @@ function usePhoneGestures(screen: { current: HTMLDivElement | null }, stack: { c
 }
 
 /** Bildschirm des offenen Handys: Seitenstapel, Statusleiste, Banner, Home-Balken. */
+/** Mitteilungszentrale: alle Benachrichtigungen, neueste zuerst (Banner oder Statusleiste herunterziehen). */
+function Center(props: { state: GameState }) {
+  const { ui, api } = useRuntime();
+  const items: NotificationItem[] = ui.notifications.map((n) => {
+    const tile = tileColor((n.appId ? phoneApps.get(n.appId)?.color : undefined) ?? 'chat');
+    const item: NotificationItem = { id: n.id, title: n.title, text: n.text, color: tile.color, style: tile.style };
+    if (n.icon) item.icon = n.icon;
+    if (n.time !== undefined) item.time = clock.formatTime(n.time);
+    return item;
+  });
+  return (
+    <NotificationCenter
+      open={ui.notificationCenter}
+      items={items}
+      heading={`${clock.weekdayName(props.state.time)}, Tag ${clock.day(props.state.time)}`}
+      onClose={() => api.toggleNotificationCenter(false)}
+      onClear={api.clearNotifications}
+      onOpen={(item) => {
+        const n = ui.notifications.find((x) => x.id === item.id);
+        api.toggleNotificationCenter(false);
+        if (n) api.openPhone(n.appId ?? null, n.params);
+      }}
+    />
+  );
+}
+
 function PhoneScreenArea(props: { state: GameState; mobile: boolean }) {
   const { ui, api } = useRuntime();
   const screen = useRef<HTMLDivElement>(null);
   const stack = useRef<PageStackHandle | null>(null);
+  // Ziel für Überlagerungen (Blätter, Menüs): über den Seiten, unter Statusleiste und Home-Balken.
+  const [overlays, setOverlays] = useState<HTMLDivElement | null>(null);
   const homeSwipe = usePhoneGestures(screen, stack);
   const atHome = topEntry(ui.phone.stack).kind === 'home';
   return (
     <div class={`phone__screen ${atHome ? 'is-home' : ''}`} ref={screen}>
-      <PageStack
-        stack={ui.phone.stack}
-        render={renderPage}
-        handle={(handle) => {
-          stack.current = handle;
-        }}
-      />
+      <PortalHostContext.Provider value={overlays}>
+        <PageStack
+          stack={ui.phone.stack}
+          render={renderPage}
+          handle={(handle) => {
+            stack.current = handle;
+          }}
+        />
+      </PortalHostContext.Provider>
+      <div class="phone__overlays" ref={setOverlays} />
+      <Center state={props.state} />
       <StatusBar time={props.state.time} />
       <PhoneNotice />
       <nav class="phone__nav">

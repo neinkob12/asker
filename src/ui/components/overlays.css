@@ -1,0 +1,617 @@
+/*
+ * Überlagerungen und neue iOS-Bausteine: Blatt (Sheet), Aktionsblatt, Kontextmenü, Wisch-Zeile, Stepper, Suchfeld,
+ * Mitteilungszentrale. Sie zeichnen sich über den Bildschirm des Handys (Portal in .phone__overlays). Nur Tokens,
+ * Hell und Dunkel über light-dark(); Glas wird bei weniger Transparenz deckend (tokens.css). Bewegung per Feder im
+ * Code (nur transform und opacity), CSS-Animationen nur fürs kurze Einblenden; bei weniger Bewegung aus (base.css).
+ */
+
+.ui-portal--inline {
+  display: contents;
+}
+
+/* ---------------------------------------------------------------- Blatt */
+.ui-sheet-layer,
+.ui-action-layer,
+.ui-ctx-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: auto;
+}
+.ui-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+}
+.ui-sheet {
+  --phone-group: var(--phone-sheet-group);
+  --phone-group-2: var(--phone-sheet-group-2);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(100% - 64px);
+  display: flex;
+  flex-direction: column;
+  background: var(--phone-sheet);
+  border-radius: 14px 14px 0 0;
+  box-shadow:
+    inset 0 0.5px 0 var(--phone-glass-edge),
+    0 -10px 40px rgba(0, 0, 0, 0.35);
+  color: var(--phone-label);
+  transform: translate3d(0, 110%, 0);
+  will-change: transform;
+}
+.ui-sheet__head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 60px;
+  padding: 16px 8px 4px 20px;
+  touch-action: none;
+  cursor: grab;
+}
+.ui-sheet__grabber {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--phone-fill-hover);
+  transform: translateX(-50%);
+}
+.ui-sheet__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-body);
+  font-size: var(--type-title-3);
+  font-weight: var(--font-weight-black);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-sheet__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+.ui-sheet__close {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--phone-label-2);
+  font-size: 15px;
+  cursor: pointer;
+}
+.ui-sheet__close::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  z-index: -1;
+  border-radius: 50%;
+  background: var(--phone-fill);
+}
+.ui-sheet__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 4px var(--phone-gutter, 16px) calc(24px + var(--phone-home-inset, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  touch-action: pan-y;
+}
+.ui-sheet__body > * {
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------- Aktionsblatt */
+.ui-action-sheet {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: max(8px, var(--phone-home-inset, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transform: translate3d(0, 110%, 0);
+  will-change: transform;
+}
+.ui-action-sheet__group,
+.ui-action-sheet__cancel {
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--phone-glass-strong);
+  backdrop-filter: var(--phone-blur);
+  box-shadow: inset 0 0 0 0.5px var(--phone-glass-edge);
+}
+.ui-action-sheet__head {
+  padding: 14px 16px 12px;
+  text-align: center;
+}
+.ui-action-sheet__title {
+  margin: 0;
+  font-size: var(--type-footnote);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--type-footnote-lh);
+  color: var(--phone-label-2);
+}
+.ui-action-sheet__message {
+  margin: 2px 0 0;
+  font-size: var(--type-footnote);
+  line-height: var(--type-footnote-lh);
+  color: var(--phone-label-2);
+}
+.ui-action-sheet__button,
+.ui-action-sheet__cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 56px;
+  padding: 0 16px;
+  border: 0;
+  background: none;
+  color: var(--cat-brand);
+  font-size: var(--type-title-3);
+  cursor: pointer;
+}
+.ui-action-sheet__head + .ui-action-sheet__button,
+.ui-action-sheet__button + .ui-action-sheet__button {
+  border-top: 0.5px solid var(--phone-separator);
+}
+.ui-action-sheet__button.is-destructive {
+  color: var(--cat-danger);
+}
+.ui-action-sheet__button:disabled {
+  color: var(--phone-label-3);
+  cursor: default;
+}
+.ui-action-sheet__button:hover:not(:disabled),
+.ui-action-sheet__button.is-pressed {
+  background: var(--phone-fill);
+}
+.ui-action-sheet__cancel {
+  font-weight: var(--font-weight-bold);
+  background: var(--phone-glass-strong);
+}
+.ui-action-sheet__cancel:hover,
+.ui-action-sheet__cancel.is-pressed {
+  background: var(--phone-glass-strong-solid);
+}
+
+/* ---------------------------------------------------------------- Kontextmenü */
+.ui-ctx {
+  display: contents;
+}
+/* Langer Druck soll weder Text markieren noch das System-Menü des Browsers öffnen */
+.ui-ctx > * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.ui-ctx-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(16px) saturate(140%);
+  animation: ui-ctx-fade 180ms var(--ease-out) both;
+}
+@keyframes ui-ctx-fade {
+  from {
+    opacity: 0;
+  }
+}
+.ui-ctx-preview {
+  position: absolute;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--phone-group);
+  color: var(--phone-label);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  animation: ui-ctx-lift 320ms var(--ease-spring) both;
+}
+.ui-ctx-preview > * {
+  margin: 0;
+}
+@keyframes ui-ctx-lift {
+  from {
+    transform: scale(0.96);
+  }
+  to {
+    transform: scale(1.02);
+  }
+}
+.ui-ctx-menu {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--phone-glass-strong);
+  backdrop-filter: var(--phone-blur);
+  box-shadow:
+    inset 0 0 0 0.5px var(--phone-glass-edge),
+    0 12px 40px rgba(0, 0, 0, 0.35);
+  transform-origin: 24px 0;
+  animation: ui-ctx-menu 280ms var(--ease-spring) both;
+}
+.ui-ctx-menu.is-above {
+  transform-origin: 24px 100%;
+}
+@keyframes ui-ctx-menu {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+}
+.ui-ctx-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: 46px;
+  padding: 0 16px;
+  border: 0;
+  background: none;
+  color: var(--phone-label);
+  font-size: var(--type-body);
+  text-align: left;
+  cursor: pointer;
+}
+.ui-ctx-menu__item + .ui-ctx-menu__item {
+  border-top: 0.5px solid var(--phone-separator);
+}
+.ui-ctx-menu__item .ui-icon {
+  flex: none;
+  font-size: 19px;
+}
+.ui-ctx-menu__item:hover:not(:disabled),
+.ui-ctx-menu__item:focus-visible,
+.ui-ctx-menu__item.is-pressed {
+  background: var(--phone-fill);
+  outline: none;
+}
+.ui-ctx-menu__item.is-destructive {
+  color: var(--cat-danger);
+}
+.ui-ctx-menu__item:disabled {
+  color: var(--phone-label-3);
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------- Wisch-Zeile */
+.ui-swipe {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+.ui-swipe__actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+}
+.ui-swipe__action {
+  --swipe-bg: var(--cat-system-b);
+  --swipe-on: var(--cat-system-on);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 4px;
+  border: 0;
+  background: var(--swipe-bg);
+  color: var(--swipe-on);
+  font-size: var(--type-footnote);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+.ui-swipe__action .ui-icon {
+  font-size: 20px;
+}
+.ui-swipe__action--money {
+  --swipe-bg: var(--cat-money-b);
+  --swipe-on: var(--cat-money-on);
+}
+.ui-swipe__action--danger {
+  --swipe-bg: var(--cat-danger-b);
+  --swipe-on: var(--cat-danger-on);
+}
+.ui-swipe__action--warn {
+  --swipe-bg: var(--cat-warn-b);
+  --swipe-on: var(--cat-warn-on);
+}
+.ui-swipe__action--place {
+  --swipe-bg: var(--cat-place-b);
+  --swipe-on: var(--cat-place-on);
+}
+.ui-swipe__action--people {
+  --swipe-bg: var(--cat-people-b);
+  --swipe-on: var(--cat-people-on);
+}
+.ui-swipe__action--chat {
+  --swipe-bg: var(--cat-chat-b);
+  --swipe-on: var(--cat-chat-on);
+}
+.ui-swipe__action--brand {
+  --swipe-bg: var(--cat-brand-b);
+  --swipe-on: var(--cat-brand-on);
+}
+.ui-swipe__content {
+  position: relative;
+  z-index: 1;
+  background: var(--phone-group, var(--color-panel-solid));
+}
+
+/* ---------------------------------------------------------------- Stepper */
+.ui-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ui-stepper__value {
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ui-stepper__pill {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--phone-fill, var(--color-surface));
+}
+.ui-stepper__button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--phone-label, var(--color-text));
+  font-size: 18px;
+  cursor: pointer;
+}
+/* Trefferfläche 44 pt hoch, ohne die Pille größer zu zeichnen */
+.ui-stepper__button::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+.ui-stepper__button .ui-icon {
+  stroke-width: 2.4;
+}
+.ui-stepper__button:hover:not(:disabled),
+.ui-stepper__button.is-pressed {
+  background: var(--phone-fill-hover, var(--color-surface-hover));
+}
+.ui-stepper__button:disabled {
+  color: var(--phone-label-3, var(--color-faint));
+  cursor: default;
+}
+.ui-stepper__divider {
+  width: 1px;
+  height: 18px;
+  background: var(--phone-separator, var(--color-line));
+}
+
+/* ---------------------------------------------------------------- Suchfeld */
+.ui-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 0 0 10px;
+  color: var(--phone-label-2, var(--color-muted));
+}
+/* Sichtbar ist eine 36 pt hohe Pille, die Trefferfläche ist 44 pt hoch */
+.ui-search::before {
+  content: "";
+  position: absolute;
+  inset: 4px 0;
+  border-radius: 10px;
+  background: var(--phone-fill, var(--color-surface));
+  pointer-events: none;
+}
+.ui-search > * {
+  position: relative;
+}
+.ui-search__icon {
+  flex: none;
+  font-size: 17px;
+}
+.ui-search__input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--phone-label, var(--color-text));
+  font-size: var(--type-body);
+  outline: none;
+}
+.ui-search__input::placeholder {
+  color: var(--phone-label-2, var(--color-muted));
+  opacity: 1;
+}
+.ui-search__input::-webkit-search-cancel-button {
+  display: none;
+}
+/* Der Fokus zeigt sich an der Pille, nicht am Eingabefeld darin */
+.ui-search .ui-search__input:focus-visible {
+  outline: none;
+}
+.ui-search:focus-within::before {
+  box-shadow: 0 0 0 2px var(--color-focus);
+}
+.ui-search__clear {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--phone-label-2, var(--color-muted));
+  font-size: 17px;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- Mitteilungszentrale */
+.ui-center {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: calc(var(--phone-status-height, 54px) + 4px) 10px 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  background: var(--phone-center);
+  backdrop-filter: blur(30px) saturate(160%);
+  color: var(--phone-label);
+  touch-action: pan-y;
+  will-change: transform;
+}
+.ui-center__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 4px 8px 6px;
+}
+.ui-center__title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--type-large-title);
+  font-weight: var(--font-weight-black);
+  letter-spacing: -0.02em;
+  line-height: var(--type-large-title-lh);
+}
+.ui-center__sub {
+  margin: 0;
+  font-size: var(--type-subhead);
+  color: var(--phone-label-2);
+}
+.ui-center__empty {
+  margin: 48px 0 0;
+  text-align: center;
+  font-size: var(--type-body);
+  color: var(--phone-label-2);
+}
+.ui-center__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ui-center__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: 22px;
+  background: var(--phone-glass-strong);
+  box-shadow: inset 0 0 0 0.5px var(--phone-glass-edge);
+  color: var(--phone-label);
+  text-align: left;
+  cursor: pointer;
+}
+.ui-center__item:hover,
+.ui-center__item.is-pressed {
+  background: var(--phone-glass-strong-solid);
+}
+.ui-center__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ui-center__top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.ui-center__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--type-subhead);
+  font-weight: var(--font-weight-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-center__time {
+  font-size: var(--type-footnote);
+  color: var(--phone-label-2);
+  font-variant-numeric: tabular-nums;
+}
+.ui-center__body {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--type-subhead);
+  line-height: var(--type-subhead-lh);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.ui-center__grabber {
+  position: sticky;
+  bottom: 0;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 160px;
+  height: 44px;
+  margin-top: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.ui-center__grabber span {
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--phone-label-3);
+}

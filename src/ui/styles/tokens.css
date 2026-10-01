@@ -158,6 +158,15 @@
   --phone-glass-solid: light-dark(#f9f9fb, #1c1c1e);
   --phone-glass-edge: light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.1));
   --phone-blur: blur(24px) saturate(180%);
+  /* Kräftiges Glas für Menüs, Aktionsblätter und Mitteilungen (Text darauf muss auch ohne Blur lesbar sein) */
+  --phone-glass-strong: light-dark(rgba(249, 249, 251, 0.88), rgba(44, 44, 46, 0.86));
+  --phone-glass-strong-solid: light-dark(#f9f9fb, #2c2c2e);
+  /* Blatt (Sheet): erhöhte Fläche, Gruppen darin eine Stufe heller (iOS: elevated grouped background) */
+  --phone-sheet: light-dark(#f2f2f7, #1c1c1e);
+  --phone-sheet-group: light-dark(#ffffff, #2c2c2e);
+  --phone-sheet-group-2: light-dark(#f2f2f7, #3a3a3c);
+  /* Mitteilungszentrale über der Seite */
+  --phone-center: light-dark(rgba(242, 242, 247, 0.84), rgba(0, 0, 0, 0.68));
 
   /* Chat-Blase der anderen (die eigene ist mint) */
   --phone-bubble: light-dark(#e5e5ea, #26262a);
@@ -427,6 +436,8 @@
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   :root {
     --phone-glass: var(--phone-glass-solid);
+    --phone-glass-strong: var(--phone-glass-strong-solid);
+    --phone-center: var(--phone-bg);
     --phone-blur: none;
     --blur-panel: none;
   }

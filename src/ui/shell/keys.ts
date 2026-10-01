@@ -2,6 +2,7 @@
 // Escape schließt bzw. geht im Handy einen Schritt zurück.
 
 import { SPEEDS } from '../../core';
+import { closeTopOverlay } from '../overlays';
 import { top } from '../phone/navModel';
 import { dialogs, sidebarTabs } from '../registry';
 import type { UiRuntime } from '../runtime';
@@ -26,6 +27,8 @@ export function bindKeys(runtime: UiRuntime): void {
       else if (ui.popover) api.setPopover(null);
       else if (ui.dialog) {
         if (dialogs.get(ui.dialog.id)?.dismissable !== false) api.closeDialog();
+      } else if (closeTopOverlay()) {
+        // Blatt, Aktionsblatt, Kontextmenü oder Mitteilungszentrale geschlossen
       } else if (ui.panel) api.closePanel();
       else if (ui.notification) api.dismissNotification();
       // Im Handy eine Seite zurück (Details, Abschnitt, Chat, App), auf dem Startbildschirm weglegen.

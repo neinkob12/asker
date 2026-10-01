@@ -5,6 +5,7 @@ import { audio } from '../audio';
 import type { Command, CommandResult, GameSession, GameState, KeyValueStorage, LngLat } from '../core';
 import { sectionTitle } from './components/section';
 import { setHapticsEnabled } from './haptics';
+import { closeAllOverlays } from './overlays';
 import type { NavEntry, NavKind } from './phone/navModel';
 import * as nav from './phone/navModel';
 import { type CameraMode, loadPrefs, savePrefs, type UiPrefs } from './prefs';
@@ -38,6 +39,8 @@ export interface PhoneNotification {
   params?: Record<string, unknown>;
   /** Ton (Name aus SOUND_IDS oder registerSound), Standard 'notification'. null = still. */
   sound?: string | null;
+  /** Spielzeit, zu der die Benachrichtigung kam (setzt notify selbst). */
+  time?: number;
 }
 
 /** Kurzer Auftritt in der Dynamic Island (z.B. "+120 €" nach Verkäufen, "Lieferung da"). */
@@ -107,8 +110,10 @@ export interface UiState {
   toasts: Toast[];
   /** Alarm-Zentrale, neueste zuerst. */
   alerts: Alert[];
-  /** Gestapelte Benachrichtigungen fürs Handy (Sperrbildschirm), neueste zuerst. */
+  /** Gestapelte Benachrichtigungen fürs Handy (Mitteilungszentrale), neueste zuerst. */
   notifications: PhoneNotification[];
+  /** Mitteilungszentrale im Handy offen (Banner oder Statusleiste herunterziehen)? */
+  notificationCenter: boolean;
   /** Suche (⌘K / Strg+K) offen? */
   palette: boolean;
   /** Offenes Popover im HUD (z.B. 'more', 'alerts', 'menu'). */
@@ -169,6 +174,10 @@ export interface UiApi {
   /** Banner am Spiel-Handy zeigen (mit Vibrieren). Sound spielt, wer es auslöst (siehe src/audio). */
   notify(notification: Omit<PhoneNotification, 'id'>): void;
   dismissNotification(): void;
+  /** Mitteilungszentrale öffnen oder schließen (ohne Argument umschalten). */
+  toggleNotificationCenter(open?: boolean): void;
+  /** Alle Mitteilungen löschen. */
+  clearNotifications(): void;
   /**
    * Kurzer Auftritt in der Dynamic Island. Mit kind und amount werden Beträge gleicher Art zusammengezählt,
    * z.B. pulseIsland({ kind: 'earn', amount: 35, icon: 'euro', tone: 'accent', text: '' }) → "+35 €".
@@ -258,6 +267,7 @@ export class UiRuntime {
       toasts: [],
       alerts: [],
       notifications: [],
+      notificationCenter: false,
       palette: false,
       popover: null,
       picking: null,
@@ -361,6 +371,8 @@ export class UiRuntime {
   /** Neuen Stapel übernehmen und die abgeleiteten Felder (app, params, panel, tab, section) nachziehen. */
   private setStack(next: NavEntry[]): void {
     const ui = this.ui;
+    // Ein Menü oder Blatt gehört zu seiner Seite: Wechselt die Seite, schließt es.
+    if (nav.top(next).key !== nav.top(ui.phone.stack).key) closeAllOverlays();
     const app = nav.currentApp(next);
     const phone: PhoneState = {
       open: ui.phone.open,
@@ -503,6 +515,7 @@ export class UiRuntime {
       closePhone: () =>
         update(() => {
           ui.phone = { ...ui.phone, open: false };
+          ui.notificationCenter = false;
           this.setStack(nav.withoutPanels(ui.phone.stack));
         }),
       back: () => {
@@ -522,7 +535,7 @@ export class UiRuntime {
             return;
           }
           const id = ++this.notificationId;
-          ui.notification = { ...notification, id };
+          ui.notification = { ...notification, id, time: notification.time ?? session.state?.time ?? 0 };
           ui.notifications = [ui.notification, ...ui.notifications].slice(0, NOTIFICATION_STACK);
           if (notification.sound !== null) audio.play(notification.sound ?? 'notification');
           if (ui.vibration) {
@@ -562,6 +575,15 @@ export class UiRuntime {
       dismissNotification: () =>
         update(() => {
           ui.notification = null;
+        }),
+      toggleNotificationCenter: (open) =>
+        update(() => {
+          ui.notificationCenter = open ?? !ui.notificationCenter;
+          if (ui.notificationCenter) ui.notification = null;
+        }),
+      clearNotifications: () =>
+        update(() => {
+          ui.notifications = [];
         }),
       // Bereiche der Module (Tabs) sind Apps im Handy.
       selectTab: (id) => api.openPhone(`${TAB_APP_PREFIX}${id}`),
