@@ -289,6 +289,8 @@
 /* ---------------------------------------------------------------- Dynamic Island */
 /* Maße nach HIG (Live Activities): kompakt 37 pt hoch, Radius 44, aufgeklappt ca. 371 × 84–160, Rand 14 */
 .island-wrap {
+  /* Die Island ist immer schwarz: Bedeutungsfarben (light-dark) auch im hellen Modus in der dunklen Fassung */
+  color-scheme: dark;
   position: absolute;
   z-index: 8;
   top: 11px;
