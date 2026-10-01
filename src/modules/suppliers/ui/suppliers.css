@@ -70,7 +70,16 @@
 .map-place--port,
 .map-place--city,
 .map-place--harbor {
-  --map-place-color: var(--color-marker-supplier);
+  --map-place-a: var(--cat-goods-a);
+  --map-place-b: var(--cat-goods-b);
+}
+
+/* Lieferant vor Ort (Köln): nur in der Europa-Ansicht (weit herausgezoomt) */
+.map-place--local {
+  display: none;
+}
+.shell-map.zoomed-out .map-place--local {
+  display: flex;
 }
 
 .sup-groups {

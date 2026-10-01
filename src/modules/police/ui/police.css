@@ -19,3 +19,238 @@
   gap: var(--space-2);
   margin-top: var(--space-3);
 }
+
+/* Heat-Pille unter dem Geld im HUD (Look "Glas"): fünf Flammen, gefüllt nach Heat, Farbe nach Stufe */
+.hud-heat-pill {
+  --flame: var(--cat-money);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 32px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-fill);
+  font-family: var(--font-hud);
+}
+.hud-heat-pill.is-warn {
+  --flame: var(--cat-warn);
+}
+.hud-heat-pill.is-danger {
+  --flame: var(--cat-danger);
+}
+.hud-heat-pill__label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--hud-ink-2);
+}
+.hud-heat-pill__flames {
+  display: flex;
+  gap: 1px;
+  font-size: 16px;
+}
+.hud-heat-pill__flame {
+  color: var(--hud-empty);
+  fill: var(--hud-empty);
+}
+.hud-heat-pill__flame.is-on {
+  color: var(--flame);
+  fill: var(--flame);
+}
+.hud-heat-pill__word {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--hud-ink);
+}
+.hud-heat-pill__word.is-warn {
+  color: var(--cat-warn);
+}
+.hud-heat-pill__word.is-bad {
+  color: var(--cat-danger);
+}
+/* Handy-Bildschirm: kompakt neben dem Geld, eine Flamme in der Farbe der Stufe und das Stufenwort */
+@media (max-width: 760px) {
+  .hud-heat-pill {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+  }
+  .hud-heat-pill__label,
+  .hud-heat-pill__flame:not(:first-child) {
+    display: none;
+  }
+  .hud-heat-pill__flame:first-child {
+    color: var(--flame);
+    fill: var(--flame);
+  }
+  .hud-heat-pill__flames {
+    font-size: 18px;
+  }
+  .hud-heat-pill__word {
+    margin-left: 0;
+    font-size: 12px;
+  }
+}
+
+/* ---------------------------------------------------------------- Razzia (Look "Glas") */
+/* Banner oben mittig über der Kartenfläche (unter dem HUD) */
+.raid-banner {
+  position: absolute;
+  top: calc(var(--top) + var(--hud-height) * 2 + var(--gap) * 2);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(520px, calc(100% - var(--gap) * 2));
+  padding: 12px 18px 12px 12px;
+  border-radius: var(--hud-radius);
+  background: var(--raid-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--raid-edge);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  transform: translateX(-50%);
+  animation: raid-in var(--duration-slow) var(--ease-out);
+}
+@keyframes raid-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+}
+.raid-banner__tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--cat-danger-a), var(--cat-danger-b));
+  color: var(--cat-danger-on);
+  font-size: 24px;
+}
+.raid-banner__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.raid-banner__text strong {
+  font-family: var(--font-hud-display);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.raid-banner__text span {
+  font-size: 14px;
+  color: var(--hud-ink-2);
+}
+/* Schein am Rand der Kartenfläche, blau und rot im Wechsel */
+.raid-edge {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 90px 10px var(--color-police-blue);
+  opacity: 0.55;
+  animation: raid-edge 1.1s steps(1, end) infinite;
+}
+@keyframes raid-edge {
+  50% {
+    box-shadow: inset 0 0 90px 10px var(--color-police-red);
+  }
+}
+
+/* Bilanz-Karte */
+.raid-report__kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cat-danger);
+}
+.raid-report__title {
+  margin: 4px 0 14px;
+  font-family: var(--font-hud-display);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.raid-report__rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 16px;
+  margin: 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--hud-glass-line);
+  border-bottom: 1px solid var(--hud-glass-line);
+  font-size: 15px;
+}
+.raid-report__rows dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--hud-ink-2);
+}
+.raid-report__rows dd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+.raid-report__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.raid-report__primary,
+.raid-report__later {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--hud-radius-button);
+  font-family: var(--font-hud);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.raid-report__primary {
+  flex: 1;
+  background: var(--hud-gold);
+  color: var(--hud-gold-on);
+}
+.raid-report__primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.raid-report__later {
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink);
+}
+@media (max-width: 760px) {
+  /* unter der schwebenden Island bzw. dem Banner des weggelegten Handys */
+  .raid-banner {
+    top: calc(var(--top) + var(--hud-height) + 100px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .raid-edge {
+    display: none;
+  }
+  .raid-banner {
+    animation: none;
+  }
+}

@@ -8,7 +8,7 @@ import { ABOVE_LAND, addHtmlMarker, BELOW_BUILDINGS, el, type MapLayer, mapToken
 import { getHeat, heatLevel } from '../../police';
 import { allVeedel, getBoundary } from '../../veedel';
 import { controllerOf, factionColor, factionName } from '../index';
-import { getMapView, MAP_VIEW_OPTIONS, onMapViewChange, setMapView, type VeedelMapView } from './view';
+import { getMapView, onMapViewChange, type VeedelMapView } from './view';
 
 /** Grenzen offener Veedel: dezentes Grau. */
 const NEUTRAL_LINE = '#5a616b';
@@ -168,20 +168,8 @@ export const veedelLayer: MapLayer = {
       label.element.hidden = false;
     };
 
-    // Umschalter Kontrolle/Heat oben links (am Handy im Tab "Reviere").
-    const control = el('div', 'maplibregl-ctrl maplibregl-ctrl-group veedel-view-control');
-    const buttons = MAP_VIEW_OPTIONS.map((option) => {
-      const button = el('button', 'veedel-view-control__button', option.label) as HTMLButtonElement;
-      button.type = 'button';
-      button.addEventListener('click', () => setMapView(option.value));
-      control.appendChild(button);
-      return { option, button };
-    });
-    map.addControl({ onAdd: () => control, onRemove: () => control.remove() }, 'top-left');
-
     const draw = (state: GameState, force = false) => {
       const view = getMapView();
-      for (const { option, button } of buttons) button.classList.toggle('is-active', option.value === view);
       const sig = signature(state, view);
       if (!force && sig === lastSignature) return;
       lastSignature = sig;

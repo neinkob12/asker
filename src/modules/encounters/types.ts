@@ -5,6 +5,15 @@ export type EncounterOutcome = 'success' | 'failure' | 'retreat';
 /** briefing: Spieler entscheidet, ob er selbst hingeht. rounds: Runden laufen. done: vorbei. */
 export type EncounterPhase = 'briefing' | 'rounds' | 'done';
 
+/**
+ * Wie der Spieler im Briefing vorgeht ("Wie gehst du vor?"):
+ *   self     selbst hin (Tod möglich)            crew     die Leute machen lassen
+ *   backup   Verstärkung schicken (kostet)       payoff   sofort freikaufen (Erfolg, Beziehung sinkt)
+ *   tipoff   anonym die Bullen rufen (Rückzug, Heat, etwas Ware weg)
+ *   abandon  Ware retten, Spot räumen (Rückzug, die Kasse ist weg)
+ */
+export type EncounterMode = 'self' | 'crew' | 'backup' | 'payoff' | 'tipoff' | 'abandon';
+
 /** Werte, die in Konfrontationen zählen (Teilmenge der Mitarbeiter-Werte aus staff). */
 export type EncounterStat = 'speed' | 'caution' | 'strength' | 'charisma';
 
@@ -44,6 +53,8 @@ export interface EncounterEffects {
   heat?: number;
   /** Globaler Ruf. */
   reputation?: number;
+  /** Beziehung zur Gegenseite (opponent.factionId, z.B. eine Gang). Wendet das Modul der Gegenseite an. */
+  relation?: number;
   /** Chance pro beteiligtem Mitarbeiter, festgenommen zu werden. */
   arrestChance?: number;
 }
@@ -140,6 +151,8 @@ export interface EncounterResult {
   heat: number;
   influence: number;
   reputation: number;
+  /** Änderung der Beziehung zur Gegenseite (wendet z.B. gangs an). */
+  relation: number;
   /** Zusammenfassung für Journal und Dialog. */
   text: string;
 }
@@ -150,6 +163,8 @@ export interface Encounter {
   request: EncounterRequest;
   startedAt: number;
   phase: EncounterPhase;
+  /** Wie der Spieler vorgeht (Briefing), null solange er nicht entschieden hat bzw. ohne Briefing. */
+  mode: EncounterMode | null;
   situation: string;
   place: string;
   playerPresent: boolean;
@@ -239,6 +254,11 @@ export interface EncounterKind {
   maxRounds: number;
   /** Kann der Spieler dazukommen, wenn der Auslöser ihn fragen lässt (askPlayer)? */
   joinable: boolean;
+  /**
+   * Wege im Briefing ("Wie gehst du vor?"), in dieser Reihenfolge. Standard: selbst hin und Leute machen lassen.
+   * Nicht jeder Anlass hat alle (z.B. bei der Polizei keine Bullen rufen).
+   */
+  briefingOptions?: readonly EncounterMode[];
   /** Ausgang, wenn niemand von euch da ist. Standard: 'failure'. */
   ifNobody?: EncounterOutcome;
   /** Ausgang, wenn nach allen Runden keiner klar vorne liegt. Standard: 'retreat'. */

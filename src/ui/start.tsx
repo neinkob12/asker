@@ -12,6 +12,7 @@ import {
 } from '../core';
 import { dayPhase } from '../map/daylight';
 import { registerBuiltins } from './builtin';
+import { SPRINGS, springEasing } from './phone/spring';
 import { UiRuntime } from './runtime';
 import { App } from './shell/App';
 import { bindKeys } from './shell/keys';
@@ -59,6 +60,7 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
   if (speed !== null) runtime.api.setSpeed(Number(speed));
 
   bindKeys(runtime);
+  applyDockSpring();
   window.addEventListener('beforeunload', () => session.autosave());
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') session.autosave();
@@ -68,6 +70,18 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
   session.loop.start();
   window.koeln = { session, runtime };
   return runtime;
+}
+
+/**
+ * HUD, Kartensteuerung und Overlays über der Karte folgen dem Ein- und Ausklappen des Handys mit derselben Feder wie
+ * das Handy (SPRINGS.app), als CSS-Kurve. Die Tokens --dock-ease/--dock-duration greifen darauf zurück; bei
+ * "Bewegung reduzieren" gilt weiter die kurze Dauer aus tokens.css.
+ */
+function applyDockSpring(): void {
+  const { easing, durationMs } = springEasing(SPRINGS.app);
+  const root = document.documentElement.style;
+  root.setProperty('--spring-dock-ease', easing);
+  root.setProperty('--spring-dock-duration', `${durationMs}ms`);
 }
 
 /** Leises Klicken bei Knöpfen der Oberfläche. */

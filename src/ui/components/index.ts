@@ -17,7 +17,7 @@ export {
 export { ContextMenu, type ContextMenuProps, type MenuAction } from './ContextMenu';
 export { Dialog, type DialogProps } from './Dialog';
 export { ErrorBoundary, type ErrorBoundaryProps } from './ErrorBoundary';
-export { HudPill, type HudPillProps } from './HudPill';
+export { HudPill, type HudPillProps, HudSegments } from './HudPill';
 export {
   type CategoryColor,
   type ChipColor,
@@ -26,6 +26,7 @@ export {
   IconChip,
   type IconChipProps,
   type IconProps,
+  iconElement,
   isChipColor,
   StatusDot,
 } from './Icon';
@@ -75,6 +76,7 @@ export {
   type ToggleProps,
   type Tone,
 } from './Layout';
+export { MapDialog, type MapDialogProps } from './MapDialog';
 export { NotificationCenter, type NotificationCenterProps, type NotificationItem } from './NotificationCenter';
 export { BarActionsContext, Portal, PortalHostContext } from './Portal';
 export { contrastRatio, readableOn } from './readable';

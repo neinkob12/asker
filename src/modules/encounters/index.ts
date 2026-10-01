@@ -2,7 +2,9 @@
 // oder ein Deal, der kippt. Anlässe und Handlungen sind reine Daten (kinds.ts, actions.ts).
 //
 // Ablauf für Aufrufer: startEncounter(ctx, {...}) liefert eine ID. Mit askPlayer (und einem Anlass mit "joinable")
-// entscheidet der Spieler zuerst, ob er selbst hingeht (briefing). Dann laufen Runden, in denen er
+// entscheidet der Spieler zuerst, wie er vorgeht (briefing, 'encounters.join' mit mode): selbst hin, Leute machen
+// lassen, Verstärkung schicken, sofort freikaufen, anonym die Bullen rufen oder Ware retten und den Spot räumen
+// (welche Wege ein Anlass anbietet: briefingOptions in kinds.ts, Werte in config.ts). Dann laufen Runden, in denen er
 // Handlungen wählt ('encounters.act') oder seine Leute machen lässt ('encounters.auto'). Das Ergebnis kommt als
 // Ereignis 'encounter.resolved' (mit derselben ID, dem origin und dem Ergebnis). Ohne Entscheidung (keine
 // Oberfläche, z.B. in Tests) würfeln die Leute nach DECISION_TIMEOUT Spielminuten selbst aus; sofort geht das
@@ -13,6 +15,7 @@
 // Öffentliche API:
 //   startEncounter(ctx, request), getEncounter(state, id), activeEncounters(state), pendingEncounter(state),
 //   availableActions(encounter), actionChance(encounter, actionId), autoResolveEncounter(ctx, id),
+//   briefingOptions(state, encounter) (Wege mit Kosten und ob sie gehen), payoffCost(encounter),
 //   getEncounterAction(kindId, actionId), ENCOUNTER_KINDS, ENCOUNTER_ACTIONS, PLAYER_STATS
 // Befehle: 'encounters.join', 'encounters.act', 'encounters.auto'
 // Ereignisse: 'encounter.started', 'encounter.round', 'encounter.resolved'
@@ -22,6 +25,7 @@ import { act, autoResolve, expireDecisions, getKind, join, resolveAction, start 
 import type {
   Encounter,
   EncounterAction,
+  EncounterMode,
   EncounterOutcome,
   EncounterRequest,
   EncounterResult,
@@ -29,8 +33,25 @@ import type {
 } from './types';
 
 export { ENCOUNTER_ACTIONS } from './actions';
-export { PLAYER_STATS } from './config';
-export { actionChance, activeParticipants, availableActions, PLAYER_ID } from './engine';
+export {
+  ABANDON_CASH_MAX,
+  ABANDON_CASH_SHARE,
+  BACKUP_COST,
+  BACKUP_EDGE_BONUS,
+  BACKUP_MAX_PEOPLE,
+  PAYOFF_RELATION,
+  PLAYER_STATS,
+  TIPOFF_HEAT,
+} from './config';
+export {
+  actionChance,
+  activeParticipants,
+  availableActions,
+  type BriefingOption,
+  briefingOptions,
+  PLAYER_ID,
+  payoffCost,
+} from './engine';
 export { ENCOUNTER_KINDS } from './kinds';
 export type {
   Amount,
@@ -38,6 +59,7 @@ export type {
   EncounterAction,
   EncounterEffects,
   EncounterKind,
+  EncounterMode,
   EncounterOpponentRequest,
   EncounterOutcome,
   EncounterPhase,
@@ -56,8 +78,11 @@ declare module '../../core' {
     encounters: EncountersState;
   }
   interface GameCommands {
-    /** Spieler entscheidet zu Beginn: selbst hingehen (present: true) oder die Leute machen lassen. */
-    'encounters.join': { encounterId: number; present: boolean };
+    /**
+     * Spieler entscheidet im Briefing, wie er vorgeht (mode, siehe EncounterMode). Die alte Form present: true/false
+     * gilt weiter als 'self' bzw. 'crew'.
+     */
+    'encounters.join': { encounterId: number; mode?: EncounterMode; present?: boolean };
     /** Eine Runde mit dieser Handlung spielen. */
     'encounters.act': { encounterId: number; actionId: string };
     /** Die Leute entscheiden selbst, der Rest wird ausgewürfelt. */
@@ -77,6 +102,8 @@ declare module '../../core' {
        * immer; optional, damit andere Module (und Tests) das Ereignis weiter ohne auslösen können.
        */
       result?: EncounterResult;
+      /** Wie der Spieler im Briefing vorgegangen ist (fehlt ohne Briefing). */
+      mode?: EncounterMode;
     };
   }
 }
@@ -132,6 +159,7 @@ function migrateV1(old: EncountersStateV1): EncountersState {
     request: e.request,
     startedAt: e.startedAt,
     phase: 'done',
+    mode: null,
     situation: '',
     place: '',
     playerPresent: !!e.request.playerPresent,
@@ -161,19 +189,31 @@ function migrateV1(old: EncountersStateV1): EncountersState {
   return { active: [], history: [...old.active, ...old.history].map(upgrade) };
 }
 
+/** Version 2 → 3: Weg im Briefing (mode) und Beziehung zur Gegenseite im Ergebnis. */
+function migrateV2(old: EncountersState): EncountersState {
+  const upgrade = (e: Encounter): Encounter => ({
+    ...e,
+    mode: e.mode ?? (e.phase === 'briefing' || e.request.askPlayer !== true ? null : e.playerPresent ? 'self' : 'crew'),
+    result: e.result ? { ...e.result, relation: e.result.relation ?? 0 } : null,
+  });
+  return { active: old.active.map(upgrade), history: old.history.map(upgrade) };
+}
+
 export default defineModule({
   id: 'encounters',
-  version: 2,
+  version: 3,
   init: () => ({ active: [], history: [] }),
   tick: (ctx) => {
     if (ctx.state.modules.encounters.active.length > 0) expireDecisions(ctx);
   },
   commands: {
-    'encounters.join': (ctx, { encounterId, present }) => join(ctx, encounterId, present),
+    'encounters.join': (ctx, { encounterId, mode, present }) =>
+      join(ctx, encounterId, mode ?? (present ? 'self' : 'crew')),
     'encounters.act': (ctx, { encounterId, actionId }) => act(ctx, encounterId, actionId),
     'encounters.auto': (ctx, { encounterId }) => autoResolve(ctx, encounterId),
   },
   migrations: {
     2: migrateV1,
+    3: migrateV2,
   },
 });

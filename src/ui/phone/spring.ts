@@ -116,3 +116,25 @@ export class Spring {
     return Math.abs(this.value - this.target) < REST_DELTA && Math.abs(this.velocity) < REST_SPEED;
   }
 }
+
+/**
+ * Feder als CSS-Kurve (`linear(...)`) mit passender Dauer, für Bewegungen, die CSS selbst übernimmt (z.B. HUD und
+ * Overlays über der Karte, die dem Ein- und Ausklappen des Handys folgen). Von 0 nach 1 ohne Startgeschwindigkeit;
+ * die Dauer endet, sobald die Feder in Ruhe ist. `points` = Stützstellen (mehr = genauer, 40 reichen für ein Nachfedern).
+ */
+export function springEasing(config: SpringConfig, points = 40): { easing: string; durationMs: number } {
+  let t = 0;
+  const dt = 1 / 240;
+  while (t < 4) {
+    const { x, v } = springState(config, -1, 0, t);
+    if (Math.abs(x) < REST_DELTA && Math.abs(v) < REST_SPEED) break;
+    t += dt;
+  }
+  const duration = Math.max(dt, t);
+  const stops: string[] = [];
+  for (let i = 0; i <= points; i++) {
+    const value = i === points ? 1 : 1 + springState(config, -1, 0, (duration * i) / points).x;
+    stops.push(String(Math.round(value * 10000) / 10000));
+  }
+  return { easing: `linear(${stops.join(', ')})`, durationMs: Math.round(duration * 1000) };
+}

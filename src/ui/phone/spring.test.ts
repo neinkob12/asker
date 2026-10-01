@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SPRINGS, Spring, type SpringConfig, springState } from './spring';
+import { SPRINGS, Spring, type SpringConfig, springEasing, springState } from './spring';
 
 const FRAME = 1 / 60;
 
@@ -125,5 +125,30 @@ describe('springState', () => {
     const a = springState(config, 1, 0.5, t - h).x;
     const b = springState(config, 1, 0.5, t + h).x;
     expect(springState(config, 1, 0.5, t).v).toBeCloseTo((b - a) / (2 * h), 4);
+  });
+});
+
+describe('springEasing (Feder als CSS-Kurve)', () => {
+  it('beginnt bei 0, endet bei 1 und dauert so lange wie die Feder braucht', () => {
+    const { easing, durationMs } = springEasing(SPRINGS.app);
+    const stops = easing
+      .replace(/^linear\(|\)$/g, '')
+      .split(', ')
+      .map(Number);
+    expect(stops[0]).toBe(0);
+    expect(stops[stops.length - 1]).toBe(1);
+    expect(durationMs).toBeGreaterThan(300);
+    expect(durationMs).toBeLessThan(2000);
+    // app federt hauchzart nach: kurz über 1
+    expect(Math.max(...stops)).toBeGreaterThan(1);
+    expect(Math.max(...stops)).toBeLessThan(1.05);
+  });
+
+  it('kritisch gedämpft schießt nicht über', () => {
+    const stops = springEasing(SPRINGS.snap)
+      .easing.replace(/^linear\(|\)$/g, '')
+      .split(', ')
+      .map(Number);
+    expect(Math.max(...stops)).toBeLessThanOrEqual(1);
   });
 });

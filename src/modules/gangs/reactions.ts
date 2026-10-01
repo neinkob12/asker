@@ -41,12 +41,16 @@ export function onEncounterResolved(ctx: Ctx, payload: GameEvents['encounter.res
     s.people = Math.max(0, s.people - r.opponentLosses);
     s.goods = Math.max(0, s.goods - r.goods);
     s.money = Math.max(0, s.money - r.money);
+    // Beziehung aus dem Ergebnis, z.B. wenn du dich freigekauft hast (encounters, Weg "payoff").
+    if (r.relation) addRelation(s, r.relation);
   }
 
   const origin = payload.request.origin;
   const [kind] = origin?.module === 'gangs' ? (origin.ref ?? '').split(':') : [''];
   const alive = !payload.playerKilled;
   if (kind === 'raid') {
+    // Freigekauft: Sie haben bekommen, was sie wollten. Kein Sieg für dich, keine neue Wut, keine Nachricht.
+    if (payload.mode === 'payoff') return;
     if (payload.outcome === 'success') {
       addHostility(s, 10);
       addRelation(s, -5);
