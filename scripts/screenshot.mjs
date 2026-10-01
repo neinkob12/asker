@@ -5,6 +5,8 @@
 //   npm run screenshot -- --query="?neu=normal&seed=7" --wait=6000
 //   npm run screenshot -- --eval="window.koeln.session.sim.advance(600)" --name=abend
 //   npm run screenshot -- --click=".spot-marker" --sizes=mobile
+//   npm run screenshot -- --scenes=normal-tag,konfrontation-briefing   (Szenen des Looks "Glas", glass-shots.mjs)
+//   npm run screenshot -- --scenes=alle                                 (alle Szenen nach screenshots/glas/)
 //
 // Optionen:
 //   --query   URL-Parameter (Standard: ?neu=normal&seed=1&tempo=0, also frisches Spiel, pausiert)
@@ -17,10 +19,20 @@
 // Kartenkacheln lädt Node (auch über einen HTTPS_PROXY), dann zeigt die Karte auch in abgeschotteten Umgebungen
 // die echten Vektorkacheln (OpenFreeMap).
 
+import { spawnSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { launchBrowser, restartWithProxySupport, routeExternal, startServer } from './browser.mjs';
 
 restartWithProxySupport();
+
+// Mit --scenes übernimmt das Szenen-Skript des Looks "Glas" (Normalbetrieb Tag/Nacht, Spot-Hover, Konfrontation,
+// Razzia, Lieferung, Veedel übernommen; siehe glass-scenes.mjs).
+const sceneArg = process.argv.find((a) => a.startsWith('--scenes='));
+if (sceneArg) {
+  const rest = process.argv.slice(2).filter((a) => a !== sceneArg || !a.endsWith('=alle'));
+  const result = spawnSync(process.execPath, ['scripts/glass-shots.mjs', ...rest], { stdio: 'inherit' });
+  process.exit(result.status ?? 1);
+}
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {

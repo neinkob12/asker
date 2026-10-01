@@ -185,7 +185,9 @@ registerDialog({
 registerSlot('map.overlay', { id: 'territory.takeoverOpener', order: 40, component: TakeoverOpener });
 registerMapLayer(takeoverLayer);
 
-onGameEvent('territory.controlChanged', 'territory.takeover', (payload, _ui, state) => {
+onGameEvent('territory.controlChanged', 'territory.takeover', (payload, ui, state) => {
   if (payload.to !== PLAYER_FACTION || state.outcome.gameOver) return;
+  // Die Island bleibt die Quelle für das Live-Geschehen: kurzer Auftritt mit dem Veedel.
+  ui.pulseIsland({ icon: 'flag', tone: 'accent', text: `${veedelName(payload.veedelId)} gehört dir` });
   last = { runId: state.meta.runId, at: state.time, veedelId: payload.veedelId, from: payload.from, shown: false };
 });

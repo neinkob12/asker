@@ -19,7 +19,8 @@
   width: var(--phone-width);
   aspect-ratio: var(--phone-ratio);
   max-height: calc(100dvh - var(--top) - var(--gap) - var(--safe-bottom));
-  animation: phone-in var(--duration-slow) var(--ease-out);
+  /* Gleiche Feder wie HUD, Kartensteuerung und Overlays, die ihm beim Ein- und Ausklappen folgen (--dock-*) */
+  animation: phone-in var(--dock-duration) var(--dock-ease);
 }
 /* Gesperrt, solange eine Konfrontation über der Kartenfläche das Spiel pausiert (Look "Glas"). */
 .phone.is-locked {

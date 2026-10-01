@@ -92,7 +92,8 @@ export default defineModule({
 ## Oberfläche eines Moduls
 
 In `src/modules/<id>/ui/index.tsx` (Beispiel in `_template/ui/`): `registerHudItem`, `registerTab`,
-`registerSlot` (z.B. in `'tab:business'` oder `'spots.spotPanel'`), `registerPanel`, `registerDialog`,
+`registerSlot` (z.B. in `'tab:business'`, `'spots.spotPanel'` oder `'map.overlay'` über der Kartenfläche), `registerPanel`,
+`registerDialog` (mit `area: 'map'` nur über der Kartenfläche, dazu `MapDialog`), `registerMapLayerOption` (Menü Ebenen),
 `registerPhoneApp`, `registerLiveActivity` (Dynamic Island), `registerAdvisor` (Karte "Nächster Schritt"), `registerSearch` (Strg/⌘+K), `registerGameStat`
 (Game-Over-Bildschirm), `onGameEvent`, `soundOnEvent` aus `src/ui`, `registerMapLayer` und `mapEffects` aus `src/map`.
 HUD-Anzeigen mit `<HudPill>`, Karten für den Geschäft-Tab mit `icon`, `summary` und `status` (werden dort zu Zeilen).
@@ -101,6 +102,8 @@ Nur Bausteine aus `src/ui/components` (auch `Select`, `Avatar`, `Icon` …) und 
 (Bedeutungsfarben `--cat-*`, Hell und Dunkel, Kontrast geprüft), möglichst keine freien Hex-Werte in Modul-UIs. Eine Karte
 (MapLibre) versteht kein `light-dark()`: dort `mapToken()` aus `src/map`. Details: `src/ui/README.md`, `src/map/README.md`,
 Plan und Prüfung des Handy-Designs: `docs/handy-design.md`.
+Über der Karte gilt der Look „Glas“ (Auftrag 24): dunkles Glas (`--hud-glass*`), Barlow (`--font-hud*`), Tokens und Regeln in
+`src/ui/README.md`, Abschnitt "Über der Karte: Look Glas".
 Komponenten lesen mit `useGame()` und ändern nur mit `dispatch`.
 
 ## Vor jedem Push
@@ -113,6 +116,7 @@ npm run format   # behebt Formatierung und Import-Reihenfolge
 
 Selbst ausprobieren:
 - `npm run screenshot` (Desktop + Handy nach `screenshots/`, meldet Browser-Fehler)
+- `npm run screenshot -- --scenes=alle` (Look Glas: Normalbetrieb in vier Tageszeiten, Konfrontation, Razzia, Lieferung, Übernahme nach `screenshots/glas/`)
 - `npm run screenshot:phone` (alle Handy-Seiten für Desktop und Handy-Bildschirm nach `screenshots/handy/`, mit `--scenes`, `--sizes`, `--appearance=light`)
 - `npm run audit:phone` (misst am laufenden Spiel Zieltreffer ≥ 44 px, Schrift ≥ 11 px und Kontrast; Fehlercode bei Verstößen)
 - `npm run e2e` (Ende-zu-Ende-Test mit Playwright: neues Spiel, verkaufen, anheuern, bestellen, speichern, laden)

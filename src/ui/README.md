@@ -37,9 +37,9 @@ Spielzeit (gleiche Live-Aktivitäten), unten steht statt des Home-Balkens eine L
   Lieferungen mit Restzeit, Ware am Kai (Zeit bis zum Zoll), Fahrten und Verkehrskontrollen, der Spot, an dem du
   selbst stehst, und der Umsatz des Tages.
 
-- **Über der Karte** steht nur das Nötigste: eine schmale HUD-Leiste mit Geld (Schwarzgeld mit Beutel-Symbol, sauberes
-  Geld mit Münze) und Heat (`placement: 'main'`), Warnungen (`'alert'`), rechts Spieltempo und Menü (Meldungen, Suche,
-  Spielstände, Einstellungen, Ton). Dazu die Kartensteuerung.
+- **Über der Karte** steht das HUD im Look **„Glas“** (Abschnitt unten): Geld-Kapsel mit Heat (`placement: 'main'`),
+  Uhr-Kapsel mit Wetter (`'time'`), Tempo und Menü, die Kennzahlen (`'more'`) als Kacheln und Warnungen (`'alert'`).
+  Dazu die Kartensteuerung und die Überlagerungen der Module (Slot `map.overlay`).
 - **Alles andere läuft über das Spiel-Handy** (`phone/PhoneFrame.tsx`):
   - Tabs der Module (`registerTab`) sind Apps mit der ID `tab:<id>`. `ui.selectTab('staff')` öffnet also die App
     "Leute" im Handy.
@@ -55,16 +55,18 @@ Spielzeit (gleiche Live-Aktivitäten), unten steht statt des Home-Balkens eine L
   - **Kleine Fenster:** Ist das Handy niedrig oder schmal, wird der Startbildschirm über Container-Queries kompakter
     (Container `phone`).
 - **Desktop:** Das Handy ist rechts fest angedockt. Weglegen (T, runde Taste links neben dem Gerät) klappt es zu
-  einer Lasche am Rand, der Seitenstapel bleibt gemerkt. HUD, Kartensteuerung und Toasts rücken neben das Handy.
+  einer Lasche am Rand, der Seitenstapel bleibt gemerkt. HUD, Kartensteuerung, Überlagerungen und die Kamera der
+  Karte rücken neben das Handy und folgen ihm mit derselben Feder (`--dock-ease`, `--dock-duration`).
 - **Handy-Bildschirm:** Das Spiel-Handy füllt den Bildschirm unter dem HUD, unten die Leiste „Start“ / „Weglegen“
   (über dem sicheren Bereich, `env(safe-area-inset-*)`). In der Tasche zeigt eine Leiste unten den Nächsten Schritt und
   den Handy-Knopf mit Uhrzeit und ungelesenen Nachrichten.
 - **Tastatur (Desktop):** Leertaste Pause, 1/2/3 Tempo, T Handy, Buchstabe eines Tabs öffnet dessen App (noch
   einmal: zurück zum Startbildschirm), Strg/⌘+K Suche. Esc schließt zuerst ein offenes Blatt oder Menü, geht sonst
   eine Seite zurück und legt am Ende das Handy weg.
-- **Meldungen:** Höchstens ein Toast ist sichtbar, weitere warten. Alles landet in der App **Meldungen**
-  (Dringend, Achtung, Routine; "Hin" springt zum Ort; ungelesene als Zähler am Icon). Fehlermeldungen von Befehlen
-  landen dort nicht.
+- **Meldungen:** Über der Karte gibt es keine Meldungsliste und keine Toasts mehr. `ui.toast` bleibt die API: Die
+  Meldung erscheint als Banner im Handy (bzw. oben rechts, wenn es weggelegt ist; höchstens eine, weitere warten) und
+  landet in der App **Meldungen** (Dringend, Achtung, Routine; "Hin" springt zum Ort; ungelesene als Zähler am Icon).
+  Fehlermeldungen von Befehlen erscheinen als Banner, landen aber nicht in der App.
 - **Benachrichtigungen** erscheinen wie bei iOS oben im Handy (Glas, Kachel in der Farbe der App). Liegt es weg,
   erscheinen sie oben rechts über der Karte.
 - **Nächster Schritt:** kommt aus `registerAdvisor`. In den ersten zwei Spieltagen pulsiert das Ziel (`highlight`)
@@ -84,6 +86,48 @@ Spielzeit (gleiche Live-Aktivitäten), unten steht statt des Home-Balkens eine L
 
 Musik ist keine eigene App mehr, sondern ein Abschnitt der Einstellungen. Ereignisse und Einstellungen sind bewusst
 verschieden gebaut (Zeitachse ohne Kästen gegen Gruppen mit Schaltern und Reglern).
+
+## Über der Karte: Look „Glas“ (Auftrag 24)
+
+Alles außerhalb des Handys (HUD, Kartensteuerung, Marker, Überlagerungen, Dialoge über der Karte) ist dunkles Glas
+über der Karte, auch am Tag; die Karte selbst folgt der Tageszeit. Das Handy behält seinen Look.
+
+- **Schrift:** Barlow (`--font-hud`) für Text, Barlow Condensed (`--font-hud-display`) für Zahlen und Titel. In der
+  Konfrontation (nur dort) Courier Prime (`--font-file`) und DM Serif Display (`--font-file-display`).
+- **Glas:** `--hud-glass` (66 %), `--hud-glass-strong` (86 %, Menüs, Karten), `--hud-glass-solid` (deckend bei
+  weniger Transparenz oder mehr Kontrast), `--hud-glass-edge`, `--hud-glass-fill(-active)`, `--hud-glass-line`,
+  `--hud-blur`, `--hud-radius` 20, `--hud-radius-tile` 16, `--hud-radius-button` 14, `--hud-shadow`. Schrift darauf:
+  `--hud-ink`, `--hud-ink-2`; Gold für Hauptaktionen `--hud-gold` mit `--hud-gold-on`; leere Stufe `--hud-empty`.
+- **Beschriftung:** 11 px, 700, Großbuchstaben, Laufweite 0,1 em, in der Bedeutungsfarbe (`.hud-label.is-dirty`,
+  `.is-money`; Kacheln über `--hud-tint`, das `HudPill` aus `color` setzt).
+- **Spot-Zustände:** `--spot-idle/-waiting/-urgent/-raid` (Füllung), `-on` (Zahl, 4,5:1), `-glow` (Lichtkegel),
+  `-edge` (Mast, Ring, Kante); `--spot-ring`, `--spot-plate`, `--spot-locked(-edge)`, `--spot-shadow`. Rot und Blau
+  sind als Füllung eine Spur dunkler als im Entwurf (#d93025, #1f6cf0), sonst hätte die weiße Zahl nur 3,4:1 bzw. 3,9:1.
+- **Weitere:** Geld-Popup `--map-money(-on)`, `--map-money-loss(-on)`; Vignette `--map-vignette`; Akte `--file-*`,
+  Kräftebalken `--duel-*`; Razzia `--raid-glass`, `--raid-edge`; Übernahme `--takeover-glow`. Bewegung mit dem Handy:
+  `--dock-ease`, `--dock-duration` (Feder `SPRINGS.app` als CSS-Kurve, `springEasing()` in `phone/spring.ts`).
+
+**HUD** (`shell/Hud.tsx`): drei Gruppen links vom Handy (`--map-right` ist die Grenze). Oben links die Geld-Kapsel
+(Kachel mit Beutel, Schwarzgeld 32 px, Haarlinie, Sauber, darunter die Heat-Pille der Polizei mit fünf Flammen), oben in
+der Mitte die Uhr-Kapsel (Wochentag · Tag, Uhrzeit, Wetter, Tempo als Segmente 40 × 36, Menü), oben rechts die
+Kennzahl-Kacheln (Lager, Ruf, Köln mit sieben Segmenten über `HudSegments`). Ist die Kartenfläche schmal (Container-
+Query `hud`, unter 1000 px), rücken die Kacheln unter die Uhr. Am Handy-Bildschirm nur Geld (Heat als eine Flamme
+mit Stufenwort) und Uhr; das Menü steht dort in der Kartensteuerung.
+
+**Kartensteuerung** (`shell/MapControls.tsx`): zwei Glas-Gruppen mit 44-px-Knöpfen: Zoom +/−/Norden, dann 3D/2D
+(gold bei 3D), **Ebenen** und Köln. Das Menü Ebenen füllen Module mit
+`registerMapLayerOption({ id, order, group, label, icon?, toggle?, active(ui), select(api, ui) })`, z.B. Veedel nach
+Kontrolle oder Heat (territory) und das Überwachungs-Overlay (Kern).
+
+**Überlagerungen und Dialoge über der Karte:**
+
+| Baustein | Wofür |
+| --- | --- |
+| `registerSlot('map.overlay', { id, order, component })` | Elemente über der freien Kartenfläche (Razzia-Banner, Tracking-Karte einer Lieferung). Der Bereich reicht bis `--map-right` und folgt dem Handy; Beiträge positionieren sich selbst und setzen `pointer-events` für Knöpfe. |
+| `registerDialog({ …, area: 'map', lockPhone? })` | Dialog nur über der Kartenfläche, das Handy bleibt sichtbar. `lockPhone` (Standard: wie `pausesGame`) dunkelt das Handy ab und macht es `inert` (`dialogLocksPhone`). Konfrontation: gesperrt; Razzia-Bilanz und Übernahme: frei. |
+| `MapDialog({ label, onClose, scrim?, detent?, class? })` | Darstellung dazu: Glas-Karte in der Mitte der Kartenfläche, am Handy-Bildschirm ein Blatt (`Sheet`). |
+| `useIsMobile()` | Handy-Aufbau (≤ 760 px), z.B. um statt einer Akte ein Blatt zu zeigen. |
+| `iconElement(name, { size?, strokeWidth?, class? })` | Icon als DOM-Element für Karten-Marker, die ohne Preact gebaut werden. |
 
 ## Tokens (`styles/tokens.css`)
 
@@ -139,7 +183,8 @@ Nur Variablen verwenden.
 - Keine Emojis als Schmuck.
 
 **Karte:** Sie hat ihren eigenen gedämpften Look (`src/map`).
-- Ihre Marker nutzen `--color-marker-*`, `--color-label-bg` und `--shadow-marker-soft`.
+- Ihre Marker sind Glas (`--spot-plate`, `--hud-*`, siehe "Über der Karte: Look Glas"); ältere Marker nutzen noch
+  `--color-marker-*`, `--color-label-bg` und `--shadow-marker-soft`.
 - Karten-Layer lesen Farbwerte über `mapToken()` (siehe `src/modules/territory/ui/map.ts`).
 
 ## Bausteine (`components/`)
@@ -242,9 +287,13 @@ zeigt den Titel der Seite darunter (bis 14 Zeichen, sonst „Zurück“; neben e
 
 ## Prüfen
 
-- `npm test` prüft u.a. `styles/contrast.test.ts` (Kontrast aller Farbpaare, Hell und Dunkel), `phone/islandModel.test.ts`
+- `npm test` prüft u.a. `styles/contrast.test.ts` (Kontrast aller Farbpaare, Hell und Dunkel, dazu Glas über der hellsten
+  und dunkelsten Kartenfarbe, Zahl auf jeder Spot-Farbe, Akte, Razzia-Banner), `phone/islandModel.test.ts`
   (Stunden statt Minuten), `phone/messagesModel.test.ts`, `builtin/journalModel.test.ts`.
 - `npm run screenshot:phone` (alle Handy-Seiten, Desktop und Handy-Bildschirm, `--appearance=light` für Hell).
+- `npm run screenshot -- --scenes=alle` bzw. `npm run screenshot:glas` (Look Glas: Normalbetrieb in vier Tageszeiten,
+  weggelegt, Spot-Hover, Orte, Konfrontation Briefing/Runde/Ergebnis, Razzia Alarm/Bilanz, Lieferung See/Kai/Lkw,
+  Veedel übernommen; Desktop und Handy-Bildschirm nach `screenshots/glas/`, `--motion=reduce` für weniger Bewegung).
 - `npm run audit:phone` misst am laufenden Spiel Zielgrößen (mindestens 44 px), Schriftgrößen (nie unter 11 px) und
   Textkontrast (4.5:1) in jeder Handy-Seite und endet mit Fehlercode bei Verstößen.
 - `node scripts/phone-gestures.mjs` bedient das Handy mit Maus (Desktop) und Finger (Handy-Bildschirm, Touch) und prüft
