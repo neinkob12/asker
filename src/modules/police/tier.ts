@@ -16,6 +16,7 @@ import {
   DEALER_UP,
   KINGPIN_DOWN_SPOTS,
   KINGPIN_DOWN_VEEDEL,
+  KINGPIN_MIN_PEOPLE,
   KINGPIN_UP_SPOTS,
   KINGPIN_UP_VEEDEL,
   KINGPIN_UP_WAREHOUSES,
@@ -64,13 +65,14 @@ export function operationFacts(state: GameState): OperationFacts {
 
 function isKingpinUp(f: OperationFacts): boolean {
   return (
-    f.veedel >= KINGPIN_UP_VEEDEL || (f.spots >= KINGPIN_UP_SPOTS && f.berth && f.warehouses >= KINGPIN_UP_WAREHOUSES)
+    (f.veedel >= KINGPIN_UP_VEEDEL && f.people >= KINGPIN_MIN_PEOPLE) ||
+    (f.spots >= KINGPIN_UP_SPOTS && f.berth && f.warehouses >= KINGPIN_UP_WAREHOUSES)
   );
 }
 
 function isKingpinStill(f: OperationFacts): boolean {
   return (
-    f.veedel >= KINGPIN_DOWN_VEEDEL ||
+    (f.veedel >= KINGPIN_DOWN_VEEDEL && f.people >= KINGPIN_MIN_PEOPLE - 1) ||
     (f.spots >= KINGPIN_DOWN_SPOTS && f.berth && f.warehouses >= KINGPIN_UP_WAREHOUSES)
   );
 }
@@ -132,7 +134,10 @@ export function nextTierHints(state: GameState, tier: number): { label: string; 
   }
   if (tier === 1) {
     return [
-      { label: `${KINGPIN_UP_VEEDEL} Veedel unter deiner Kontrolle`, value: `${f.veedel} von ${KINGPIN_UP_VEEDEL}` },
+      {
+        label: `${KINGPIN_UP_VEEDEL} Veedel unter deiner Kontrolle und ${KINGPIN_MIN_PEOPLE} Leute im Einsatz`,
+        value: `${f.veedel} Veedel, ${f.people} Leute`,
+      },
       {
         label: `${KINGPIN_UP_SPOTS} Spots plus Liegeplatz und ${KINGPIN_UP_WAREHOUSES} Lager`,
         value: `${f.spots} Spots, ${f.berth ? 'Liegeplatz' : 'kein Liegeplatz'}, ${f.warehouses} Lager`,

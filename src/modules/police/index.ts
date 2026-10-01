@@ -90,6 +90,7 @@ import {
   RAID_SCOPES,
   RAID_THRESHOLD,
   SALE_HEAT_BASE,
+  SALE_HEAT_BY_TIER,
   SALE_HEAT_PER_UNIT,
   SNITCH_COOLDOWN,
   SNITCH_HEAT,
@@ -906,7 +907,8 @@ export default defineModule({
     'sale.completed': (ctx, { veedelId, amount, sellerId }) => {
       const presence = getVeedel(veedelId)?.policePresence;
       if (presence === undefined) return;
-      const heat = (SALE_HEAT_BASE + SALE_HEAT_PER_UNIT * Math.max(0, amount)) * presence;
+      const tier = SALE_HEAT_BY_TIER[ctx.state.modules.police.tier ?? 0];
+      const heat = (SALE_HEAT_BASE + SALE_HEAT_PER_UNIT * Math.max(0, amount)) * presence * tier;
       addHeat(ctx, veedelId, heat * cautionFactor(ctx.state, sellerId));
     },
     'encounter.resolved': (ctx, { kind, outcome, request }) => {

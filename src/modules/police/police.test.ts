@@ -366,12 +366,14 @@ describe('police: Härte nach Größe des Geschäfts (Auftrag 24)', () => {
     expect(nextTier(facts({ spots: 4 }), 0)).toBe(1);
     expect(nextTier(facts({ veedel: 1 }), 0)).toBe(1);
     expect(nextTier(facts({ lieutenants: 1 }), 0)).toBe(1);
-    expect(nextTier(facts({ veedel: 4 }), 1)).toBe(2);
+    expect(nextTier(facts({ veedel: 4, people: 6 }), 1)).toBe(2);
+    // Wer mit drei Leuten viel selbst verkauft und vier Veedel hält, ist noch kein Großhändler.
+    expect(nextTier(facts({ veedel: 4 }), 1)).toBe(1);
     expect(nextTier(facts({ spots: 8, berth: true, warehouses: 2 }), 1)).toBe(2);
     expect(nextTier(facts({ spots: 8, berth: false, warehouses: 2 }), 1)).toBe(1);
     // Zurück erst deutlich darunter.
-    expect(nextTier(facts({ veedel: 3, spots: 4 }), 2)).toBe(2);
-    expect(nextTier(facts({ veedel: 2, spots: 4 }), 2)).toBe(1);
+    expect(nextTier(facts({ veedel: 3, spots: 4, people: 6 }), 2)).toBe(2);
+    expect(nextTier(facts({ veedel: 2, spots: 4, people: 6 }), 2)).toBe(1);
     expect(nextTier(facts({ spots: 3, people: 4, revenue: 5000 }), 1)).toBe(1);
     expect(nextTier(facts({ spots: 3, people: 4, revenue: 3000 }), 1)).toBe(0);
   });

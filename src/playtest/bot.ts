@@ -1,8 +1,9 @@
 // Einfache Bot-Strategie für die Balancing-Simulation (balance.test.ts, `npm run balance`).
 // Der Bot spielt wie ein vernünftiger, aber nicht perfekter Spieler: Er verkauft anfangs selbst an wenigen Spots,
 // bestellt Ware nach, schaltet Lieferanten frei, sobald sie sich melden, wäscht Geld für einen Liegeplatz im Hafen,
-// heuert einen Fahrer an und lässt Schiffsware abholen, heuert Läufer an, schaltet Spots frei, befördert
-// Leutnants, stellt Sicherheit ein, wenn die Gangs ungemütlich werden, antwortet auf Handy-Nachrichten und lässt
+// heuert einen Fahrer an und lässt Schiffsware abholen, heuert Läufer an, schaltet Spots frei, ernennt Leutnants
+// mit bis zu drei Spots (mit einer einfachen Bestellregel) und später eine Rechte Hand, stellt Sicherheit ein,
+// beantwortet die Nachricht nach einer Festnahme (gute Leute per Kaution, sonst ersetzen), wenn die Gangs ungemütlich werden, antwortet auf Handy-Nachrichten und lässt
 // Konfrontationen von seinen Leuten auswürfeln. Er schickt nur Befehle, genau wie die Oberfläche.
 //
 // Liegt außerhalb von src/modules, weil er alle Module zusammen benutzt (wie ein Spieler).
@@ -12,12 +13,18 @@ import { allWaiting, canServe } from '../modules/customers';
 import { activeEncounters } from '../modules/encounters';
 import { ceasefireCost, getGangs, tributeAmount } from '../modules/gangs';
 import { DEFAULT_WAREHOUSE, getStock } from '../modules/goods';
-import { isLieutenant, lieutenantOfSpot, MAX_SPOTS_PER_LIEUTENANT } from '../modules/hierarchy';
+import {
+  canBeRightHand,
+  getRightHand,
+  isLieutenant,
+  lieutenantOfSpot,
+  MAX_SPOTS_PER_LIEUTENANT,
+} from '../modules/hierarchy';
 import { amountInProgress, launderingCapacity } from '../modules/laundering';
 import { BERTH_COST, cargoAmount, freeDrivers, getCargo, hasBerth, inTransitAmount } from '../modules/logistics';
 import { getCandidates } from '../modules/recruiting';
 import { canFoundSpotAt, getSpots, lockedSpots } from '../modules/spots';
-import { dailyWages, getStaff, runnerHireCost, securityAt } from '../modules/staff';
+import { bailCost, dailyWages, getStaff, runnerHireCost, securityAt } from '../modules/staff';
 import {
   availableCredit,
   availablePackages,
@@ -38,7 +45,20 @@ export interface BotOptions {
   attentionEvery: number;
   /** Schläft der Bot nachts (keine eigenen Verkäufe von 3 bis 9 Uhr)? */
   sleeps: boolean;
+  /** Höchstens so viele Läufer (fehlt: beliebig viele). */
+  maxRunners?: number;
+  /** Baut der Bot aus (Spots freischalten und gründen, Leutnants, Hafen)? Fehlt: ja. */
+  expand?: boolean;
 }
+
+/** Ein vorsichtiger Spieler: zwei, drei Spots mit Läufern, kein weiterer Ausbau (zum Messen, ob man ansparen kann). */
+export const CAREFUL_BOT: BotOptions = {
+  personalSpots: 2,
+  attentionEvery: 10,
+  sleeps: true,
+  maxRunners: 2,
+  expand: false,
+};
 
 export const DEFAULT_BOT: BotOptions = { personalSpots: 2, attentionEvery: 10, sleeps: true };
 
@@ -185,8 +205,11 @@ function harbor(sim: Simulation, stats: BotStats): void {
 }
 
 /** Läufer anheuern, Spots freischalten, Leutnants befördern, Sicherheit einstellen. */
-function grow(sim: Simulation, stats: BotStats): void {
+function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
   const state = sim.state;
+  const expand = options.expand !== false;
+  const runnersNow = getStaff(state, { role: 'runner' }).length;
+  const mayHire = options.maxRunners === undefined || runnersNow < options.maxRunners;
   const free = () =>
     getSpots(state).filter(
       (s) => !getStaff(state, { spotId: s.id, status: 'active' }).some((m) => m.role === 'runner'),
@@ -196,6 +219,7 @@ function grow(sim: Simulation, stats: BotStats): void {
   // Bewerber mit Level zuerst, sonst von der Straße.
   const openSpots = free().sort((a, b) => b.demand - a.demand);
   if (
+    mayHire &&
     openSpots.length > 0 &&
     stock > 60 &&
     money(state) > runnerHireCost(state, openSpots[0].id) + reserve(state) + 1000
@@ -216,6 +240,7 @@ function grow(sim: Simulation, stats: BotStats): void {
     }
   }
 
+  if (!expand) return;
   // Freischalten, wenn alle Spots besetzt sind und Geld übrig ist.
   if (free().length === 0) {
     const next = lockedSpots(state).sort((a, b) => (a.unlockCost ?? 0) - (b.unlockCost ?? 0))[0];
@@ -249,6 +274,7 @@ function grow(sim: Simulation, stats: BotStats): void {
   }
 
   appointLieutenants(sim, stats);
+  appointRightHand(sim, stats);
 
   // Sicherheit: eine pro Veedel mit Leuten, sobald eine Gang droht.
   const threatened = getGangs(state).some((g) => (state.modules.gangs.gangs[g.id]?.hostility ?? 0) >= 40);
@@ -303,7 +329,23 @@ function appointLieutenants(sim: Simulation, stats: BotStats): void {
     .sort((a, b) => count(b.veedelId) - count(a.veedelId) || b.demand - a.demand || a.id.localeCompare(b.id))
     .slice(0, MAX_SPOTS_PER_LIEUTENANT)
     .map((s) => s.id);
-  run(sim, stats, { type: 'hierarchy.appoint', payload: { staffId: best.id, spotIds } });
+  if (run(sim, stats, { type: 'hierarchy.appoint', payload: { staffId: best.id, spotIds } })) {
+    // Einfache Bestellregel: alles nach Nachfrage, beim günstigsten Lieferanten, ab 80 Einheiten im Lager seiner Spots.
+    const orderRules = [
+      { id: 'r1', productId: null, supplierId: null, packageId: null, minStock: 80, warehouseId: null, paused: null },
+    ];
+    run(sim, stats, { type: 'hierarchy.configure', payload: { staffId: best.id, settings: { orderRules } } });
+  }
+}
+
+/** Später: eine Rechte Hand, sobald es zwei Leutnants gibt und jemand die Voraussetzungen erfüllt. */
+function appointRightHand(sim: Simulation, stats: BotStats): void {
+  const state = sim.state;
+  if (getRightHand(state) || money(state) <= reserve(state) + 2000) return;
+  const candidate = getStaff(state, { status: 'active' })
+    .filter((m) => canBeRightHand(state, m.id).ok && !isLieutenant(state, m.id))
+    .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id))[0];
+  if (candidate) run(sim, stats, { type: 'hierarchy.appointRightHand', payload: { staffId: candidate.id } });
 }
 
 /**
@@ -324,6 +366,24 @@ function answerMessages(sim: Simulation, stats: BotStats): void {
       if (command.type === 'gangs.ceasefire') return ceasefireCost(state, command.payload.gangId) <= money(state) / 4;
       return true;
     };
+    // Festnahme: gute Leute (ab Level 3) per Kaution raus, wenn es aus der Portokasse geht, sonst ersetzen.
+    const arrest = options.find((o) => o.id === 'replace' || o.id === 'fireReplace');
+    if (arrest) {
+      const bail = options.find((o) => o.id === 'bail')?.command;
+      const staffId = arrest.command?.type === 'staff.replace' ? arrest.command.payload.staffId : null;
+      const member = staffId ? getStaff(state).find((x) => x.id === staffId) : undefined;
+      const order = [
+        ...(bail?.type === 'staff.bail' && member && member.level >= 3 && bailCost(state, member.id) <= money(state) / 4
+          ? ['bail']
+          : []),
+        'replace',
+        'wait',
+      ];
+      for (const optionId of order.filter((id) => options.some((o) => o.id === id))) {
+        if (run(sim, stats, { type: 'messages.answer', payload: { messageId: m.id, optionId } })) break;
+      }
+      continue;
+    }
     const choices = PREFERENCE.filter((p) => options.some((o) => o.id === p) && affordable(p));
     for (const optionId of choices) {
       if (run(sim, stats, { type: 'messages.answer', payload: { messageId: m.id, optionId } })) break;
@@ -360,9 +420,9 @@ export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = 
   sellPersonally(sim, stats, options);
   repay(sim, stats);
   unlockSuppliers(sim, stats);
-  harbor(sim, stats);
+  if (options.expand !== false) harbor(sim, stats);
   restock(sim, stats);
-  grow(sim, stats);
+  grow(sim, stats, options);
 }
 
 /** Lässt den Bot so viele Spielminuten spielen. */

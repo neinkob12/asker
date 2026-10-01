@@ -44,10 +44,12 @@ export const OPERATION_TIERS = [
 export const DEALER_UP = { veedel: 1, spots: 4, people: 5, lieutenants: 1, warehouses: 2, revenue: 6000 } as const;
 export const DEALER_DOWN = { veedel: 0, spots: 3, people: 4, lieutenants: 0, warehouses: 1, revenue: 4500 } as const;
 /**
- * Großhändler: ab KINGPIN_UP_VEEDEL kontrollierten Veedeln oder sehr vielen Spots plus Liegeplatz und mehreren Lagern.
- * Zurück erst unter KINGPIN_DOWN_VEEDEL Veedeln und unter KINGPIN_DOWN_SPOTS Spots.
+ * Großhändler: ab KINGPIN_UP_VEEDEL kontrollierten Veedeln (mit mindestens KINGPIN_MIN_PEOPLE Leuten im Einsatz, wer
+ * mit zwei Läufern viel selbst verkauft, ist noch kein Großhändler) oder sehr vielen Spots plus Liegeplatz und mehreren
+ * Lagern. Zurück erst unter KINGPIN_DOWN_VEEDEL Veedeln und unter KINGPIN_DOWN_SPOTS Spots.
  */
 export const KINGPIN_UP_VEEDEL = 4;
+export const KINGPIN_MIN_PEOPLE = 6;
 export const KINGPIN_UP_SPOTS = 8;
 export const KINGPIN_UP_WAREHOUSES = 2;
 export const KINGPIN_DOWN_VEEDEL = 3;
@@ -101,7 +103,9 @@ export const RAID_LEAD_TIME = 3 * 60;
 export const RAID_COOLDOWN = 24 * 60;
 export const RAID_HEAT_RELIEF = 25;
 /** Razzien je Stufe so viel seltener bzw. häufiger (Kleindealer, Händler, Großhändler). */
-export const RAID_CHANCE_BY_TIER = [0.4, 1, 1] as const;
+export const RAID_CHANCE_BY_TIER = [0.4, 1, 1.5] as const;
+/** Heat pro Verkauf je Stufe: Ein Großhändler fällt mehr auf (Kleindealer, Händler, Großhändler). */
+export const SALE_HEAT_BY_TIER = [1, 1, 1.8] as const;
 /**
  * Beute anteilig statt fester Mengen. goodsShare: Anteil der Ware am Ort (aus dem Lager, das dem Spot bzw. Veedel am
  * nächsten liegt, höchstens goodsMax), warehouseShare: Anteil des Bestands in eigenen Lagern im Veedel (0 = keine
@@ -109,8 +113,8 @@ export const RAID_CHANCE_BY_TIER = [0.4, 1, 1] as const;
  */
 export const RAID_SCOPES = {
   spot: { goodsShare: 0.08, goodsMax: 15, warehouseShare: 0, moneyShare: 0.03, moneyMax: 250, arrest: 0.5 },
-  veedel: { goodsShare: 0.06, goodsMax: 30, warehouseShare: 0.2, moneyShare: 0.06, moneyMax: 1200, arrest: 0.55 },
-  major: { goodsShare: 0.1, goodsMax: 80, warehouseShare: 0.45, moneyShare: 0.15, moneyMax: 8000, arrest: 0.7 },
+  veedel: { goodsShare: 0.1, goodsMax: 35, warehouseShare: 0.25, moneyShare: 0.1, moneyMax: 1000, arrest: 0.55 },
+  major: { goodsShare: 0.15, goodsMax: 150, warehouseShare: 0.5, moneyShare: 0.2, moneyMax: 15000, arrest: 0.75 },
 } as const;
 /** Kompatibilität: Anteil des Lagerbestands bei einer Razzia im Veedel. */
 export const RAID_WAREHOUSE_SHARE = RAID_SCOPES.veedel.warehouseShare;
@@ -120,12 +124,12 @@ export const RAID_ARREST_CHANCE = RAID_SCOPES.veedel.arrest;
 // --- Großrazzia (nur Großhändler) ------------------------------------------------------------------------------
 
 /** Wahrscheinlichkeit pro Stunde, dass die Kripo zuschlägt (bei Heat 100 im Schnitt deiner Veedel, anteilig ab 40). */
-export const MAJOR_RAID_CHANCE_PER_HOUR = 0.02;
-export const MAJOR_RAID_MIN_HEAT = 40;
+export const MAJOR_RAID_CHANCE_PER_HOUR = 0.06;
+export const MAJOR_RAID_MIN_HEAT = 30;
 /** Vorlauf: Die Großrazzia wird so lange vorher geplant (der Polizei-Kontakt warnt dann einen Tag vorher). */
 export const MAJOR_RAID_LEAD_TIME = 24 * 60;
 /** Danach ist so lange Ruhe. */
-export const MAJOR_RAID_COOLDOWN = 5 * 24 * 60;
+export const MAJOR_RAID_COOLDOWN = 3 * 24 * 60;
 /** So viele Veedel trifft sie höchstens (die heißesten mit deinen Leuten, dazu die mit deinen Lagern). */
 export const MAJOR_RAID_VEEDEL = 4;
 /** Razzia gegen eine Gang: so viel Einfluss verliert sie im Veedel. */
