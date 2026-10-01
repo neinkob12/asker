@@ -16,11 +16,17 @@ import { allProducts, DEFAULT_PRODUCT, getProduct, getStock, getWarehouses, stor
 import { addHeat } from '../police';
 import { changeReputation } from '../reputation';
 import { getSpot } from '../spots';
-import { getStaffMember, setStatus } from '../staff';
+import { getStaff, getStaffMember, setStatus } from '../staff';
 import { addInfluence, PLAYER_FACTION } from '../territory';
 import { veedelName } from '../veedel';
 import { ENCOUNTER_ACTIONS } from './actions';
 import {
+  ABANDON_CASH_MAX,
+  ABANDON_CASH_SHARE,
+  BACKUP_COST,
+  BACKUP_EDGE_BONUS,
+  BACKUP_MAX_PEOPLE,
+  BACKUP_ROLES,
   DECISION_TIMEOUT,
   EDGE_CHANCE_DIVISOR,
   EDGE_RETREAT_AFTER_ROUNDS,
@@ -33,6 +39,10 @@ import {
   MAX_CHANCE,
   MIN_CHANCE,
   NUMBERS_BONUS,
+  PAYOFF_FACTOR,
+  PAYOFF_MIN,
+  PAYOFF_RELATION,
+  PAYOFF_REPUTATION,
   PLAYER_FIRST_HIT_LETHAL,
   PLAYER_HIT_WEIGHT,
   PLAYER_LETHAL_CHANCE,
@@ -41,6 +51,8 @@ import {
   PLAYER_STATS,
   STAFF_DEATH_CHANCE,
   STRENGTH_FACTOR_LIMIT,
+  TIPOFF_GOODS,
+  TIPOFF_HEAT,
 } from './config';
 import { ENCOUNTER_KINDS } from './kinds';
 import type {
@@ -49,6 +61,7 @@ import type {
   EncounterAction,
   EncounterEffects,
   EncounterKind,
+  EncounterMode,
   EncounterOutcome,
   EncounterRequest,
   EncounterResult,
@@ -209,20 +222,6 @@ function startEdge(encounter: Encounter): number {
 export function start(ctx: Ctx, request: EncounterRequest): Encounter {
   const kind = getKind(request.kind);
   if (!kind) throw new Error(`Unbekannter Anlass für eine Konfrontation: ${request.kind}`);
-  const participants: Participant[] = [];
-  for (const id of new Set(request.staffIds ?? [])) {
-    const member = getStaffMember(ctx.state, id);
-    if (member?.status !== 'active') continue;
-    const { speed, caution, strength, charisma } = member.stats;
-    participants.push({
-      id,
-      name: member.name,
-      isPlayer: false,
-      stats: { speed, caution, strength, charisma },
-      condition: 'ok',
-      killed: false,
-    });
-  }
   const count = Math.max(1, Math.round(request.opponent?.count ?? roll(ctx, kind.opponent.count)));
   const rawStrength = request.opponent?.strength;
   const strength =
@@ -237,10 +236,11 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
     request: structuredClone(request),
     startedAt: ctx.now,
     phase: 'rounds',
+    mode: null,
     situation: '',
     place: placeOf(ctx.state, request),
     playerPresent: false,
-    participants,
+    participants: [],
     opponent: {
       label: request.opponent?.label ?? kind.opponent.label,
       factionId: request.opponent?.factionId ?? null,
@@ -263,6 +263,7 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
     playerKilled: false,
     result: null,
   };
+  for (const id of new Set(request.staffIds ?? [])) addStaff(ctx.state, encounter, id);
   if (request.playerPresent === true) addPlayer(encounter);
   else if (request.playerPresent === undefined && request.askPlayer && kind.joinable) encounter.phase = 'briefing';
   encounter.situation = fillText(request.situation ?? kind.situation, textVars(encounter));
@@ -288,14 +289,160 @@ function findActive(ctx: Ctx, encounterId: number): Encounter | undefined {
   return ctx.state.modules.encounters.active.find((e) => e.id === encounterId);
 }
 
-/** Spieler entscheidet: selbst hin (mehr Möglichkeiten, bessere Chancen, Todesgefahr) oder die Leute machen lassen. */
-export function join(ctx: Ctx, encounterId: number, present: boolean): CommandResult {
+/** Wege im Briefing eines Anlasses (Standard: selbst hin, Leute machen lassen). */
+export function briefingModes(kind: EncounterKind | undefined): readonly EncounterMode[] {
+  return kind?.briefingOptions ?? ['self', 'crew'];
+}
+
+/** Was "Sofort freikaufen" kostet: mindestens PAYOFF_MIN, sonst die Bestechung des Anlasses mal PAYOFF_FACTOR. */
+export function payoffCost(encounter: Encounter): number {
+  return Math.max(PAYOFF_MIN, Math.round(encounter.bribeCost * PAYOFF_FACTOR));
+}
+
+/** Freie Leute, die als Verstärkung hinfahren könnten (aktiv, ohne Einsatz, noch nicht dabei), Stärkste zuerst. */
+export function backupCandidates(state: GameState, encounter: Encounter): string[] {
+  const roles: readonly string[] = BACKUP_ROLES;
+  const there = new Set(encounter.participants.map((p) => p.id));
+  return getStaff(state)
+    .filter((m) => m.status === 'active' && !m.assignment && roles.includes(m.role) && !there.has(m.id))
+    .sort((a, b) => b.stats.strength - a.stats.strength || a.id.localeCompare(b.id))
+    .slice(0, BACKUP_MAX_PEOPLE)
+    .map((m) => m.id);
+}
+
+export interface BriefingOption {
+  mode: EncounterMode;
+  /** Schwarzgeld, das der Weg sofort kostet (0 = nichts). */
+  cost: number;
+  /** Geht der Weg gerade? Sonst steht in reason, warum nicht. */
+  ok: boolean;
+  reason?: string;
+}
+
+/** Die Wege im Briefing mit Kosten und ob sie gerade gehen (für die Oberfläche und für join). */
+export function briefingOptions(state: GameState, encounter: Encounter): BriefingOption[] {
+  if (encounter.phase !== 'briefing') return [];
+  const money = wallet.balance(state, 'dirty');
+  return briefingModes(getKind(encounter.kind)).map((mode): BriefingOption => {
+    if (mode === 'backup') {
+      const free = backupCandidates(state, encounter).length;
+      if (free === 0) return { mode, cost: BACKUP_COST, ok: false, reason: 'Niemand frei, der hinfahren kann.' };
+      if (money < BACKUP_COST) {
+        return { mode, cost: BACKUP_COST, ok: false, reason: `Nicht genug Schwarzgeld (${formatEuro(BACKUP_COST)}).` };
+      }
+      return { mode, cost: BACKUP_COST, ok: true };
+    }
+    if (mode === 'payoff') {
+      const cost = payoffCost(encounter);
+      if (money < cost) return { mode, cost, ok: false, reason: `Nicht genug Schwarzgeld (${formatEuro(cost)}).` };
+      return { mode, cost, ok: true };
+    }
+    if (mode === 'tipoff' && !encounter.request.veedelId) {
+      return { mode, cost: 0, ok: false, reason: 'Kein Veedel, in das die Polizei kommen könnte.' };
+    }
+    return { mode, cost: 0, ok: true };
+  });
+}
+
+/**
+ * Spieler entscheidet im Briefing, wie er vorgeht (siehe EncounterMode). Die alte Form (present: true/false) gilt als
+ * 'self' bzw. 'crew'. Freikaufen, Bullen rufen und Spot räumen beenden die Konfrontation sofort.
+ */
+export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): CommandResult {
   const encounter = findActive(ctx, encounterId);
   if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
   if (encounter.phase !== 'briefing') return { ok: false, reason: 'Das ist schon entschieden.' };
-  if (present) addPlayer(encounter);
-  enterRounds(ctx, encounter);
+  const option = briefingOptions(ctx.state, encounter).find((o) => o.mode === mode);
+  if (!option) return { ok: false, reason: 'Das geht hier nicht.' };
+  if (!option.ok) return { ok: false, reason: option.reason ?? 'Das geht gerade nicht.' };
+  encounter.mode = mode;
+  const vars = () => textVars(encounter);
+  switch (mode) {
+    case 'self':
+      addPlayer(encounter);
+      enterRounds(ctx, encounter);
+      break;
+    case 'crew':
+      enterRounds(ctx, encounter);
+      break;
+    case 'backup': {
+      if (!wallet.pay(ctx, option.cost, 'dirty', 'Verstärkung'))
+        return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
+      encounter.bribeSpent += option.cost;
+      const ids = backupCandidates(ctx.state, encounter);
+      for (const id of ids) addStaff(ctx.state, encounter, id);
+      // Die Verstärkung gehört dazu (Erfahrung, Loyalität, Verletzungen wie bei allen Beteiligten).
+      encounter.request.staffIds = [...(encounter.request.staffIds ?? []), ...ids];
+      enterRounds(ctx, encounter);
+      if (!encounter.outcome) encounter.edge = Math.min(EDGE_START_MAX, encounter.edge + BACKUP_EDGE_BONUS);
+      break;
+    }
+    case 'payoff': {
+      if (!wallet.pay(ctx, option.cost, 'dirty', 'Freikaufen'))
+        return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
+      encounter.bribeSpent += option.cost;
+      encounter.phase = 'rounds';
+      encounter.log.push({
+        round: 0,
+        actionId: 'payoff',
+        success: true,
+        chance: 1,
+        text: 'Ein Umschlag. Sie ziehen ab.',
+      });
+      finish(ctx, encounter, 'success', {
+        relation: PAYOFF_RELATION,
+        reputation: PAYOFF_REPUTATION,
+        text: fillText('Freigekauft {place}. {opponent} ziehen ab, mit deinem Geld.', vars()),
+      });
+      break;
+    }
+    case 'tipoff':
+      encounter.phase = 'rounds';
+      encounter.log.push({
+        round: 0,
+        actionId: 'tipoff',
+        success: true,
+        chance: 1,
+        text: 'Ein Anruf aus der Telefonzelle. Zehn Minuten später: Blaulicht. Alle rennen.',
+      });
+      finish(ctx, encounter, 'retreat', {
+        heat: TIPOFF_HEAT,
+        goods: TIPOFF_GOODS,
+        text: fillText('Bullen gerufen {place}. {opponent} sind weg, die Polizei ist da.', vars()),
+      });
+      break;
+    case 'abandon':
+      encounter.phase = 'rounds';
+      encounter.log.push({
+        round: 0,
+        actionId: 'abandon',
+        success: true,
+        chance: 1,
+        text: 'Ware in die Tasche, ab durch den Hinterhof. Die Kasse bleibt liegen.',
+      });
+      finish(ctx, encounter, 'retreat', {
+        moneyShare: -ABANDON_CASH_SHARE,
+        moneyShareMax: ABANDON_CASH_MAX,
+        text: fillText('Spot {place} geräumt. Die Ware ist gerettet, die Kasse nicht.', vars()),
+      });
+      break;
+  }
   return { ok: true };
+}
+
+/** Einen Mitarbeiter mit seinen echten Werten dazuholen (nur aktive). */
+function addStaff(state: GameState, encounter: Encounter, id: string): void {
+  const member = getStaffMember(state, id);
+  if (member?.status !== 'active' || encounter.participants.some((p) => p.id === id)) return;
+  const { speed, caution, strength, charisma } = member.stats;
+  encounter.participants.push({
+    id,
+    name: member.name,
+    isPlayer: false,
+    stats: { speed, caution, strength, charisma },
+    condition: 'ok',
+    killed: false,
+  });
 }
 
 function enterRounds(ctx: Ctx, encounter: Encounter): void {
@@ -545,6 +692,8 @@ function applyEffects(ctx: Ctx, encounter: Encounter, effects: EncounterEffects,
     changeReputation(ctx, effects.reputation);
     result.reputation += effects.reputation;
   }
+  // Die Beziehung zur Gegenseite wendet deren Modul an (gangs liest result.relation).
+  if (effects.relation && encounter.opponent.factionId) result.relation += effects.relation;
   if (effects.arrestChance) {
     for (const p of encounter.participants) {
       if (p.isPlayer || p.condition === 'down') continue;
@@ -574,7 +723,8 @@ function describeResult(encounter: Encounter, result: EncounterResult, headline:
   return details.length ? `${headline} (${details.join(', ')})` : headline;
 }
 
-function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome): void {
+/** Konfrontation beenden. override ersetzt die Folgen (z.B. die Wege im Briefing wie Freikaufen). */
+function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome, override?: EncounterEffects): void {
   const kind = getKind(encounter.kind);
   const state = ctx.state.modules.encounters;
   const player = encounter.participants.find((p) => p.isPlayer);
@@ -594,6 +744,7 @@ function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome): void
     heat: 0,
     influence: 0,
     reputation: 0,
+    relation: 0,
     text: '',
   };
   // Verletzungen gelten immer, auch wenn der Auslöser die übrigen Folgen selbst regelt.
@@ -607,9 +758,9 @@ function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome): void
       result.staffInjured.push(p.id);
     }
   }
-  const effects = encounter.request.skipEffects
-    ? undefined
-    : (encounter.request.effects?.[outcome] ?? kind?.outcomes[outcome]);
+  const effects =
+    override ??
+    (encounter.request.skipEffects ? undefined : (encounter.request.effects?.[outcome] ?? kind?.outcomes[outcome]));
   if (effects && !encounter.playerKilled) applyEffects(ctx, encounter, effects, result);
 
   const vars = textVars(encounter);
@@ -638,6 +789,7 @@ function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome): void
     request: encounter.request,
     playerKilled: encounter.playerKilled,
     result,
+    ...(encounter.mode ? { mode: encounter.mode } : {}),
   });
   if (encounter.playerKilled) gameOutcome.gameOver(ctx, 'killed', headline);
 }

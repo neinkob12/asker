@@ -54,6 +54,7 @@ import {
   tripProgress,
 } from '../index';
 import './island';
+import './tracking';
 import { logisticsLayer } from './map';
 import './logistics.css';
 

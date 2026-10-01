@@ -22,7 +22,14 @@ import {
   wallet,
 } from '../../core';
 import { getVeedel, veedelAt, veedelName } from '../veedel';
-import { CUSTOM_SPOT_DEMAND, FOUND_SPOT_COST, MAX_CUSTOM_SPOTS, MIN_SPOT_DISTANCE, PRESET_SPOTS } from './config';
+import {
+  CUSTOM_SPOT_DEMAND,
+  FOUND_SPOT_COST,
+  MAX_CUSTOM_SPOTS,
+  MIN_SPOT_DISTANCE,
+  PRESET_SPOTS,
+  SPOT_LABELS,
+} from './config';
 
 export { FOUND_SPOT_COST, MAX_CUSTOM_SPOTS } from './config';
 
@@ -97,6 +104,11 @@ export function getAllSpots(state: GameState): readonly Spot[] {
 }
 
 /** Spot nach ID, auch gesperrte (für Namen und Veedel). Ob dort verkauft wird: isSpotActive. */
+/** Wo die Plakette eines Spots auf der Karte steht (Seite, Versatz in px). Nur Darstellung. */
+export function spotLabelPlacement(spotId: string): { labelSide: 'left' | 'right'; labelOffsetY: number } {
+  return SPOT_LABELS[spotId] ?? { labelSide: 'right', labelOffsetY: 0 };
+}
+
 export function getSpot(state: GameState, id: string): Spot | undefined {
   return getAllSpots(state).find((s) => s.id === id);
 }

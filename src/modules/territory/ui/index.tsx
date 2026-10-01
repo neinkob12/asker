@@ -9,6 +9,7 @@ import {
   Group,
   Hint,
   HudPill,
+  HudSegments,
   ItemContent,
   List,
   ListItem,
@@ -17,6 +18,7 @@ import {
   registerAdvisor,
   registerGameStat,
   registerHudItem,
+  registerMapLayerOption,
   registerSlot,
   registerTab,
   SegmentedControl,
@@ -39,6 +41,7 @@ import {
   playerPresence,
 } from '../index';
 import { veedelLayer } from './map';
+import './takeover';
 import './territory.css';
 import { getMapView, MAP_VIEW_OPTIONS, onMapViewChange, setMapView, type VeedelMapView } from './view';
 
@@ -190,11 +193,35 @@ function CampaignHud() {
       icon="flag"
       color="place"
       label="Köln"
-      value={progress.won ? 'deins' : `${progress.controlled}/${progress.needed} Veedel`}
+      value={
+        progress.won ? (
+          'deins'
+        ) : (
+          <>
+            {progress.controlled}/{progress.needed}
+            <span class="hud-pill__unit"> Veedel</span>
+          </>
+        )
+      }
       title={`Kampagne "Köln übernehmen": ${progress.controlled} von ${progress.total} Veedeln, ${progress.needed} gewinnen.`}
       onClick={() => ui.selectTab('territory')}
-    />
+    >
+      <HudSegments total={progress.needed} filled={progress.controlled} label="Köln" />
+    </HudPill>
   );
+}
+
+// Menü "Ebenen" der Kartensteuerung: Veedel nach Kontrolle oder nach Heat einfärben.
+for (const [i, option] of MAP_VIEW_OPTIONS.entries()) {
+  registerMapLayerOption({
+    id: `territory.view.${option.value}`,
+    order: 10 + i,
+    group: 'Veedel einfärben',
+    label: option.label,
+    icon: option.value === 'heat' ? 'flame' : 'flag',
+    active: () => getMapView() === option.value,
+    select: () => setMapView(option.value),
+  });
 }
 
 registerHudItem({ id: 'territory.campaign', order: 45, placement: 'more', icon: 'flag', component: CampaignHud });

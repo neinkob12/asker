@@ -8,7 +8,7 @@ import {
   Button,
   Card,
   Group,
-  HudPill,
+  Icon,
   ItemContent,
   List,
   ListItem,
@@ -17,7 +17,6 @@ import {
   registerHudItem,
   registerSearch,
   registerSlot,
-  SegmentMeter,
   soundOnEvent,
   Tag,
   useGame,
@@ -43,31 +42,39 @@ import {
   RAID_THRESHOLD,
 } from '../index';
 import './island';
+import './raid';
 import './police.css';
 
 const TONE = { calm: 'accent', watchful: 'warn', hot: 'bad', manhunt: 'bad' } as const;
 
-/** Heat im HUD: das heißeste Veedel, in dem der Spieler gerade aktiv ist. */
+/** Farbe der Flammen je Stufe: ruhig grün, beobachtet orange, heiß und Fahndung rot. */
+const FLAME_TONE = { calm: 'money', watchful: 'warn', hot: 'danger', manhunt: 'danger' } as const;
+const FLAMES = 5;
+
+/**
+ * Heat im HUD (Look "Glas"): Pille unter dem Geld mit fünf Flammen, gefüllt nach Heat und gefärbt nach Stufe, dazu
+ * das Stufenwort. Gemessen wird das heißeste Veedel, in dem der Spieler gerade aktiv ist.
+ */
 function HeatHud() {
   const { state } = useGame();
   const hottest = playerHeat(state);
   const heat = hottest?.heat ?? 0;
   const level = heatLevel(heat);
+  const share = Math.min(1, Math.max(0, heat / MAX_HEAT));
+  const filled = share <= 0 ? 0 : Math.max(1, Math.ceil(share * FLAMES - 1e-9));
   const title = hottest
-    ? `Heat in ${veedelName(hottest.veedelId)} (heißestes Veedel, in dem du aktiv bist)`
+    ? `Heat in ${veedelName(hottest.veedelId)} (heißestes Veedel, in dem du aktiv bist): ${level.label}`
     : 'Du bist gerade in keinem Veedel aktiv.';
   return (
-    <HudPill
-      class="hud-heat"
-      icon="flame"
-      color={level.id === 'calm' ? 'money' : level.id === 'watchful' ? 'warn' : 'danger'}
-      label="Heat"
-      value={level.label}
-      tone={level.id === 'calm' ? undefined : TONE[level.id]}
-      title={title}
-    >
-      <SegmentMeter value={heat / MAX_HEAT} segments={5} label="Heat" size="sm" />
-    </HudPill>
+    <div class={`hud-heat-pill is-${FLAME_TONE[level.id]}`} title={title}>
+      <span class="hud-heat-pill__label">Heat</span>
+      <span class="hud-heat-pill__flames" role="img" aria-label={`Heat: ${filled} von ${FLAMES} Flammen`}>
+        {Array.from({ length: FLAMES }, (_, i) => (
+          <Icon key={i} name="flame" class={`hud-heat-pill__flame ${i < filled ? 'is-on' : ''}`} />
+        ))}
+      </span>
+      <span class={`hud-heat-pill__word ${level.id === 'calm' ? '' : `is-${TONE[level.id]}`}`}>{level.label}</span>
+    </div>
   );
 }
 

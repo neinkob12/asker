@@ -52,11 +52,147 @@
   flex: 1 1 140px;
 }
 
-/* Hafen-Marker als Knopf (öffnet die Logistik-App). */
-button.map-place--harbor {
+/* Hafen-Marker (Niehler Hafen): Kachel im Verlauf der Ware, Klick öffnet die Logistik-App. */
+.map-place--dock {
+  --map-place-a: var(--cat-goods-a);
+  --map-place-b: var(--cat-goods-b);
+}
+
+/* ---------------------------------------------------------------- Lieferung live (Look "Glas") */
+/* Tracking-Karte unten links über der Kartenfläche */
+.logi-track {
+  --track: var(--cat-goods);
+  position: absolute;
+  left: calc(var(--gap) + var(--safe-left));
+  bottom: calc(var(--gap) + var(--safe-bottom) + 28px);
+  width: min(420px, calc(100% - var(--gap) * 2 - 60px));
+  padding: 14px 16px 14px;
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
   pointer-events: auto;
-  background: none;
+  animation: pop-in var(--duration-slow) var(--ease-out);
+}
+.logi-track.is-warn {
+  --track: var(--cat-warn);
+}
+.logi-track.is-bad {
+  --track: var(--cat-danger);
+}
+.logi-track__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.logi-track__tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--cat-goods-a), var(--cat-goods-b));
+  color: var(--cat-goods-on);
+  font-size: 22px;
+}
+.logi-track__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.logi-track__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cat-goods);
+}
+.logi-track__text strong {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.logi-track__status {
+  font-size: 14px;
+  color: var(--hud-ink-2);
+}
+.logi-track.is-warn .logi-track__status {
+  color: var(--cat-warn);
+}
+.logi-track.is-bad .logi-track__status {
+  color: var(--cat-danger);
+}
+/* Rhein → Kai → Lager: zwei Teile mit dem Kai als Punkt dazwischen */
+.logi-track__way {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+.logi-track__part {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hud-empty);
+  overflow: hidden;
+}
+.logi-track__part > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--cat-goods);
+  transition: width var(--duration-slow) var(--ease-out);
+}
+.logi-track__part.is-road > span {
+  background: var(--hud-gold);
+}
+.logi-track__dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--hud-empty);
+  box-shadow: 0 0 0 2px var(--hud-glass-edge);
+}
+.logi-track__dot.is-on {
+  background: var(--track);
+}
+.logi-track__legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+}
+.logi-track__action {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 12px;
   border: 0;
-  padding: 0;
+  border-radius: var(--hud-radius-button);
+  background: var(--hud-gold);
+  color: var(--hud-gold-on);
+  font-family: var(--font-hud);
+  font-size: 15px;
+  font-weight: 700;
   cursor: pointer;
+}
+.logi-track__action:hover {
+  filter: brightness(1.06);
+}
+@media (prefers-reduced-motion: reduce) {
+  .logi-track {
+    animation: none;
+  }
 }

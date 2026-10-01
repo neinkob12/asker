@@ -386,3 +386,33 @@ Bilder: `npm run screenshot:phone` (neue Szenen `kontextmenue`, `blatt-mittel`, 
 - Gefunden und behoben beim Prüfen: Touch-Wischen vom Rand blätterte im Browser-Verlauf zurück (fehlendes
   `touch-action` auf den Scrollflächen), der Klick beim Loslassen nach einem langen Druck schloss das Kontextmenü
   sofort wieder, wenn man länger als 0,6 s hielt, und die Seite hinter einem großen Blatt blieb bedienbar.
+
+## 8. Über der Karte: Look Glas (Auftrag 24)
+
+Von den vier Richtungen aus Auftrag 22 (A Glas, B Lagebild, C Noir, D Kontor) ist **A „Glas“** umgesetzt, und zwar für
+alles außerhalb des Handys. Das Handy selbst bleibt, wie es ist; neu ist nur, wie es mit der Karte zusammenspielt.
+
+- **Eine Sprache für die Karte:** dunkles Glas (`--hud-glass*`, immer dunkel, auch am Tag), Barlow für Text und Barlow
+  Condensed für Zahlen und Titel, Beschriftungen in 11-px-Versalien in der Bedeutungsfarbe. Damit ist klar getrennt:
+  SF/Inter und iOS-Flächen im Handy, Glas und Barlow über der Karte. Bei weniger Transparenz oder mehr Kontrast wird
+  das Glas deckend (`#16181d`).
+- **HUD in drei Gruppen** links vom Handy (Geld mit Heat, Uhr mit Wetter und Tempo, Kennzahl-Kacheln). Die Kacheln
+  stehen zusätzlich weiter auf dem Startbildschirm des Handys.
+- **Keine Meldungsliste über der Karte:** `ui.toast` landet als Banner im Handy (Glas, Kachel in der Farbe der Meldung,
+  Wischen wie bei Benachrichtigungen) bzw. oben rechts, wenn es weggelegt ist, und in der App Meldungen.
+- **Folgen mit derselben Feder:** HUD, Kartensteuerung, Überlagerungen, Dialoge über der Karte und die Kamera der Karte
+  halten sich an `--map-right` und gleiten beim Ein- und Ausklappen mit `SPRINGS.app` (als CSS-Kurve, `springEasing`);
+  das Handy blendet mit derselben Kurve ein.
+- **Dialoge über der Karte überdecken das Handy nicht** (`registerDialog({ area: 'map' })`). Nur eine Konfrontation, die
+  das Spiel pausiert, dunkelt das Handy ab und sperrt es (`inert`), damit man nicht nebenher weiterspielt. Razzia-Bilanz
+  und „Veedel übernommen“ lassen es bedienbar. Am Handy-Bildschirm sind dieselben Inhalte Blätter (`Sheet`, `MapDialog`).
+- **Klicks auf der Karte** öffnen die passende Seite im Handy als Push mit stimmendem Zurück-Titel: Spot und Veedel
+  (`openPanel`), Gang (`gangs.gang`, neu statt des ganzen Tabs), Lager (`goods.warehouse`), Hafen (`openPhone`).
+- **Island bleibt die Quelle** für das Live-Geschehen (Razzia, Konfrontation, Lieferung; die Übernahme als kurzer
+  Auftritt); die Karte zeigt dieselben Daten groß (Banner, Akte, Tracking-Karte, goldener Schein).
+- **Handy-Bildschirm:** oben nur Geld und Uhr, Spots ohne Plakette (Schild und Striche), Menü in der Kartensteuerung.
+  Nichts liegt unter der echten Statusleiste oder dem Home-Balken (sichere Bereiche über `--top` und `--safe-*`).
+
+Geprüft: Kontrast-Test für alle neuen Tokens (Text auf Glas über der hellsten und dunkelsten Kartenfarbe 4,5:1, Zahl auf
+jeder Spot-Farbe 4,5:1, Akte, Razzia-Banner, Gold-Knöpfe), `npm run audit:phone` ohne Verstöße, Bilder aller Momente in
+vier Tageszeiten (`npm run screenshot -- --scenes=alle`), „Bewegung reduzieren“ ohne Pulse, Sirenenschein und Federn.

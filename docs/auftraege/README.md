@@ -67,6 +67,9 @@ Tagesbericht, Polizei-Härte nach Größe des Geschäfts, mehr Geld im frühen S
 ganzen Code ändern, sofern der Auftrag nichts anderes sagt. Vor jedem Push: `npm run check`, `npm run build`,
 `npm run e2e`.
 
+[Auftrag 24](24-look-glas.md) setzt den Look „Glas“ für alles außerhalb des Handys um (HUD, Spot-Schilder, Marker,
+Konfrontation als Akte mit sechs Wegen, Razzia, Lieferung live, Veedel übernommen).
+
 Geplant: [Auftrag 23](23-mehr-leben-in-koeln.md) (Spot-Arten und Ausbau, Kunden-Anfragen mit automatischem Übergang,
 eigene Stimmen und Methoden der Gangs, Einbruch und Abwerben, Lieferprobleme mit Entscheidungen, Fuhrpark,
 Daueraufträge mit Disponent, Stadt-Events). Baut auf Auftrag 24 auf: Leutnants führen Spots (nicht Veedel), Geld

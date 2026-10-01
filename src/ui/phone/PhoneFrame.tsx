@@ -29,6 +29,7 @@ import { sectionTitle } from '../components/section';
 import { useRuntime } from '../hooks';
 import { hasOverlay } from '../overlays';
 import {
+  dialogLocksPhone,
   hudItems,
   type PhoneApp,
   panels,
@@ -616,6 +617,8 @@ export function PhoneFrame() {
   const device = useIsPhoneDevice();
   if (!state) return null;
   const unread = messages.unreadCount(state);
+  // Eine Konfrontation über der Kartenfläche pausiert das Spiel: Das Handy ist dann abgedunkelt und gesperrt.
+  const locked = dialogLocksPhone(ui.dialog?.id);
   if (!ui.phone.open) {
     return (
       <>
@@ -625,7 +628,11 @@ export function PhoneFrame() {
     );
   }
   return (
-    <section class={`phone ${device ? 'phone--device' : ''}`} aria-label="Handy">
+    <section
+      class={`phone ${device ? 'phone--device' : ''} ${locked ? 'is-locked' : ''}`}
+      aria-label="Handy"
+      inert={locked}
+    >
       <div class={`phone__device ${ui.buzz > 0 ? `is-buzzing-${ui.buzz % 2}` : ''}`}>
         <PhoneScreenArea state={state} mobile={mobile} device={device} />
       </div>

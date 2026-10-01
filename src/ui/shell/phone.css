@@ -19,7 +19,13 @@
   width: var(--phone-width);
   aspect-ratio: var(--phone-ratio);
   max-height: calc(100dvh - var(--top) - var(--gap) - var(--safe-bottom));
-  animation: phone-in var(--duration-slow) var(--ease-out);
+  /* Gleiche Feder wie HUD, Kartensteuerung und Overlays, die ihm beim Ein- und Ausklappen folgen (--dock-*) */
+  animation: phone-in var(--dock-duration) var(--dock-ease);
+}
+/* Gesperrt, solange eine Konfrontation über der Kartenfläche das Spiel pausiert (Look "Glas"). */
+.phone.is-locked {
+  filter: brightness(0.45) saturate(0.6);
+  transition: filter var(--duration-slow) var(--ease-out);
 }
 @keyframes phone-in {
   from {
@@ -304,7 +310,8 @@
 .island-wrap.is-floating {
   position: fixed;
   z-index: var(--z-notification);
-  top: calc(var(--top) + 6px);
+  /* unter der Uhr-Kapsel des HUD (Look "Glas"), sonst lägen Tempo und Menü darunter */
+  top: calc(var(--top) + var(--hud-height) + var(--space-3));
   left: calc((100% - var(--map-right) + var(--gap)) / 2);
 }
 /*

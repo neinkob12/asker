@@ -118,3 +118,21 @@ export const MAX_CUSTOM_SPOTS = 6;
 export const MIN_SPOT_DISTANCE = 200;
 /** Andrang eines eigenen Spots (wird mit der Dichte des Veedels multipliziert). */
 export const CUSTOM_SPOT_DEMAND = 0.8;
+
+/**
+ * Plakette neben dem Spot-Schild auf der Karte (Look "Glas"): Seite und senkrechter Versatz in px (positiv = nach
+ * unten), damit sich in der Innenstadt (Rudolfplatz, Neumarkt, Zülpicher, Friesenplatz) nichts überdeckt. Geprüft
+ * beim Standard-Zoom (13,6) mit allen Spots offen. Eigene Spots und fehlende Einträge: rechts, ohne Versatz.
+ */
+export const SPOT_LABELS: Readonly<Record<string, { labelSide: 'left' | 'right'; labelOffsetY: number }>> = {
+  ebertplatz: { labelSide: 'right', labelOffsetY: 0 },
+  neumarkt: { labelSide: 'right', labelOffsetY: 0 },
+  'aachener-weiher': { labelSide: 'left', labelOffsetY: 0 },
+  zuelpicher: { labelSide: 'left', labelOffsetY: 0 },
+  rudolfplatz: { labelSide: 'right', labelOffsetY: 0 },
+  friesenplatz: { labelSide: 'right', labelOffsetY: 0 },
+  breslauer: { labelSide: 'right', labelOffsetY: 0 },
+  rheinpark: { labelSide: 'right', labelOffsetY: 0 },
+  stadtgarten: { labelSide: 'left', labelOffsetY: 0 },
+  uni: { labelSide: 'left', labelOffsetY: 0 },
+};

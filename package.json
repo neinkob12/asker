@@ -13,6 +13,7 @@
     "check": "npm run typecheck && npm run lint && npm test",
     "screenshot": "node scripts/screenshot.mjs",
     "screenshot:phone": "node scripts/phone-shots.mjs",
+    "screenshot:glas": "node scripts/glass-shots.mjs",
     "audit:phone": "node scripts/phone-audit.mjs",
     "template:smoke": "node scripts/template-smoke.mjs",
     "balance": "BALANCE=1 vitest run src/playtest --silent=false",

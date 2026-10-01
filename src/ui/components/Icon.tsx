@@ -50,6 +50,36 @@ export function Icon(props: IconProps) {
 }
 
 /**
+ * Dasselbe Icon als DOM-Element (ohne Preact), für Karten-Layer, die ihre Marker selbst bauen (Spots, Orte …).
+ * Unbekannte Namen ergeben ein leeres Element.
+ */
+export function iconElement(
+  name: IconName | (string & {}),
+  options: { size?: number; strokeWidth?: number; class?: string } = {},
+): SVGSVGElement {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  const size = options.size === undefined ? '1em' : `${options.size}px`;
+  svg.setAttribute('class', `ui-icon ${options.class ?? ''}`.trim());
+  svg.setAttribute('width', size);
+  svg.setAttribute('height', size);
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', String(options.strokeWidth ?? 1.75));
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  const icon = resolveIcon(name);
+  for (const d of icon ? ICONS[icon] : []) {
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', d);
+    svg.appendChild(path);
+  }
+  return svg;
+}
+
+/**
  * Farben der Icon-Kacheln: die Bedeutungsfarben des Spiels (siehe docs/handy-design.md). Eine Farbe steht für eine
  * Bedeutung: money Geld und Gewinn, dirty Schwarzgeld, danger Gefahr, warn Frist und Achtung, brand dein Geschäft,
  * place Ort und Info, goods Ware, people Personen, chat Nachrichten, sky Himmel, law Recht, media Ton,

@@ -6,6 +6,28 @@ Tageszeiten. Farbe tragen nur Spielinhalte (Reviere, Spots, Gangs, Hotspots). Al
 den OpenFreeMap-Vektorkacheln (OpenMapTiles-Schema, ohne Key). Module importieren alles nur aus
 `src/map/index.ts` und nur aus ihrem `ui/`-Ordner.
 
+## Look „Glas“ (Auftrag 24)
+
+Über der Karte liegt alles als dunkles Glas (Tokens in `src/ui/README.md`, Abschnitt "Über der Karte: Look Glas").
+Für die Karte selbst heißt das:
+
+- **Nacht dunkler, Leuchten ruhiger:** Land `#121519`, Häuser `#1b1f25 / #21262d / #282d35 / #30363f`, Leuchten der
+  Hauptstraßen `glow` 0,6 (vorher 0,7). Tag, Morgen und Abend bleiben.
+- **Vignette** über der freien Kartenfläche (`--map-vignette`, `.shell-vignette` in der Shell), nicht unter dem Handy.
+- **Kamera neben dem Handy:** `GameMap` setzt rechts ein Padding in Handybreite (am Desktop, solange das Handy offen
+  ist) und gleitet beim Ein- und Ausklappen mit; `flyTo`, `flyToKoeln` und der Start zentrieren so auf die freie
+  Fläche. Der Blick auf Köln geht auf `KOELN_VIEW` (etwas westlich der Mitte, dort liegen die meisten Spots).
+- **Marker:** Spots als Achteck-Schild am Mast mit Lichtkegel und Glas-Plakette (`spots/ui`), Orte (Lager, Hafen,
+  Lieferanten) als runde Kachel mit Verlauf und Glas-Pille (`.map-place`, Verlauf über `--map-place-a/-b` im Modul),
+  Gang-Hauptquartiere als Kachel in Gang-Farbe mit Schein. Fahrzeug-Etiketten und Namen beim Überfahren sind Glas.
+- **Geld-Popup** (`mapEffects.money`) ist eine grüne Pille mit dunkler Schrift (Verlust rot), steigt 40 px.
+- **Hotspots** bleiben, aber leiser (die Spots skalieren ihre Stärke mit 0,45): Den Zustand eines Spots zeigt jetzt der
+  Lichtkegel am Schild; die Blobs zeigen nur noch Nachfrage und Verkäufe, die man am Schild nicht sieht.
+- **Strecken** laufender Fahrten gestrichelt: Schiff in der Farbe der Ware, Lkw und Transporter gold
+  (`suppliers.routes`, `logistics.routes`).
+- **Ereignisse auf der Karte:** Nach einer Razzia wird das Veedel rot getönt (`police.raidArea`), nach einer Übernahme
+  leuchtet es gold auf (`territory.takeover`, Übergang über `fill-opacity-transition`).
+
 ## Aufbau
 
 | Datei | Inhalt |
@@ -125,7 +147,8 @@ hotspots.setHotspots([{ position: spot, intensity: 0.8 }]);           // 0 = nic
 hotspots.remove();
 ```
 
-Weicher Farb-Blob (MapLibre-Heatmap), der langsam pulsiert (15 Bilder pro Sekunde, bei "Bewegung reduzieren" still):
+Weicher Farb-Blob (MapLibre-Heatmap), der langsam pulsiert (15 Bilder pro Sekunde, bei "Bewegung reduzieren" still;
+seit dem Look „Glas“ von den Spots deutlich leiser gefüttert, den Zustand zeigt der Lichtkegel am Schild):
 Gelb über Orange und Pink bis Lila, nachts kräftiger. Die Spots füttern ihn aus wartenden Kunden, Verkäufen (klingen
 90 Spielminuten nach) und der aktuellen Nachfrage (`spotDemand` aus `customers`). Figuren und Avatare gibt es auf der
 Karte nicht mehr.
@@ -137,7 +160,7 @@ Karte über `mapEffects` (z.B. in `onGameEvent`-Reaktionen; ohne Karte passiert 
 Effekte sind reine Optik und ändern nie den Spielzustand.
 
 ```ts
-mapEffects.money(spot, 450, { caption: 'Verkauf' });        // Schild "+450 €" steigt auf und verblasst
+mapEffects.money(spot, 450, { caption: 'Verkauf' });        // grüne Pille "+450 €" steigt 40 px auf und verblasst
 mapEffects.money(lager, -1200, { caption: 'Razzia' });      // negativ = rot
 const light = mapEffects.blueLight(pos, { label: 'Razzia', durationMs: 8000 });   // ohne durationMs: bis stop()
 mapEffects.ping(pos, { tone: 'accent' });                   // Ring breitet sich aus
@@ -148,20 +171,24 @@ Konfetti und Blaulicht-Ringe auf der Karte kommen in einem späteren Auftrag.
 
 ## Marker
 
-Marker sind eckig und dunkel mit feiner Kante, Schrift hell, Namen auf kleinen dunklen Schildern (Tokens
-`--color-marker-bg`, `--color-marker-ink`, `--color-marker-muted`, `--color-marker-ring`, `--color-label-bg`,
-`--shadow-marker-soft`), Farben nur aus den Design-Tokens.
+Marker im Look „Glas“: Namen auf Glas-Pillen (`--spot-plate`, `--hud-glass-edge`, Barlow), Orte als runde Kachel mit
+Verlauf und weißem Symbol. Ältere Marker (`addTargetMarker`) sind noch eckig und dunkel (`--color-marker-*`,
+`--color-label-bg`, `--shadow-marker-soft`). Farben nur aus den Design-Tokens. Icons in selbst gebauten Markern:
+`iconElement(name)` aus `src/ui`.
 
 ```ts
 const ziel = addTargetMarker(ctx.map, { position, label: 'Lager Nord', sublabel: 'Gang: Nordstadt', tone: 'bad', onClick });
 ziel.setActive(true);
 
-// Orte (Lager, Lieferanten, Hafen): dunkles Quadrat mit farbigem Kern und Namensschild
+// Orte (Lager, Lieferanten, Hafen): runde Kachel mit Verlauf und Symbol, darunter eine Glas-Pille
+const tile = el('span', 'map-place-icon');
+tile.appendChild(iconElement('warehouse', { strokeWidth: 2.2 }));   // iconElement aus src/ui
 addHtmlMarker(map, {
   position,
-  className: 'map-place map-place--warehouse',   // Farbe im Modul: .map-place--warehouse { --map-place-color: … }
+  className: 'map-place map-place--warehouse',   // Verlauf im Modul: .map-place--warehouse { --map-place-a: …; --map-place-b: … }
   anchor: 'bottom',
-  children: [el('span', 'map-place-icon'), el('span', 'map-place-name', 'Lager Ehrenfeld')],
+  tag: 'button',
+  children: [tile, el('span', 'map-place-name', 'Lager Ehrenfeld · 640 g')],
 });
 ```
 

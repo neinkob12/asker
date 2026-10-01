@@ -1,5 +1,5 @@
-import type { ComponentChildren } from 'preact';
-import { type ChipColor, IconChip } from './Icon';
+import type { ComponentChildren, JSX } from 'preact';
+import { type ChipColor, categoryOf, IconChip } from './Icon';
 import type { IconName } from './icons';
 
 export interface HudPillProps {
@@ -20,10 +20,27 @@ export interface HudPillProps {
 }
 
 /**
+ * Stufen als Segmente (z.B. Köln: 7 Veedel zum Sieg), gold gefüllt. Steht in der Kennzahl-Kachel über der Karte;
+ * auf dem Startbildschirm des Handys ausgeblendet (dort reicht der Wert).
+ */
+export function HudSegments(props: { total: number; filled: number; label: string }) {
+  const filled = Math.max(0, Math.min(props.total, props.filled));
+  return (
+    <span class="hud-segments" role="img" aria-label={`${props.label}: ${filled} von ${props.total}`}>
+      {Array.from({ length: props.total }, (_, i) => (
+        <span key={i} class={`hud-segments__seg ${i < filled ? 'is-on' : ''}`} />
+      ))}
+    </span>
+  );
+}
+
+/**
  * Kennzahl: kleine Beschriftung, großer Wert. placement 'main' steht in der HUD-Leiste, 'more' als Kachel auf dem
- * Startbildschirm des Handys.
+ * Startbildschirm des Handys und (Look "Glas") als Kachel oben rechts über der Karte. Die Beschriftung trägt dort die
+ * Bedeutungsfarbe aus `color` (--hud-tint).
  */
 export function HudPill(props: HudPillProps) {
+  const style = { '--hud-tint': `var(--cat-${categoryOf(props.color ?? 'brand')})` } as JSX.CSSProperties;
   const inner = (
     <>
       <IconChip icon={props.icon} color={props.color ?? 'yellow'} size="sm" class="hud-pill__chip" />
@@ -36,11 +53,11 @@ export function HudPill(props: HudPillProps) {
   );
   const cls = `hud-pill hud-stat ${props.onClick ? 'is-button' : ''} ${props.class ?? ''}`;
   return props.onClick ? (
-    <button type="button" class={cls} title={props.title} onClick={props.onClick}>
+    <button type="button" class={cls} style={style} title={props.title} onClick={props.onClick}>
       {inner}
     </button>
   ) : (
-    <div class={cls} title={props.title}>
+    <div class={cls} style={style} title={props.title}>
       {inner}
     </div>
   );
