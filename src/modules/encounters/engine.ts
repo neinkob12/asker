@@ -366,7 +366,7 @@ export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): Comman
       enterRounds(ctx, encounter);
       break;
     case 'backup': {
-      if (!wallet.pay(ctx, option.cost, 'dirty', 'Verstärkung'))
+      if (!wallet.pay(ctx, option.cost, 'dirty', 'Verstärkung', lossCategory(encounter.kind)))
         return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
       encounter.bribeSpent += option.cost;
       const ids = backupCandidates(ctx.state, encounter);
@@ -378,7 +378,7 @@ export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): Comman
       break;
     }
     case 'payoff': {
-      if (!wallet.pay(ctx, option.cost, 'dirty', 'Freikaufen'))
+      if (!wallet.pay(ctx, option.cost, 'dirty', 'Freikaufen', lossCategory(encounter.kind)))
         return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
       encounter.bribeSpent += option.cost;
       encounter.phase = 'rounds';
