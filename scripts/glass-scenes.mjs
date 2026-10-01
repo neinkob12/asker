@@ -25,6 +25,22 @@ export const PRELUDE = `
     sim.advance(50);
   };
   const render = () => k.runtime.requestRender();
+  /** Liegeplatz, Rotterdam frei, ein Container bestellt. */
+  const harbor = () => {
+    rich();
+    run('logistics.buyBerth', {});
+    run('suppliers.unlock', { supplierId: 'rotterdam' });
+    run('suppliers.order', { supplierId: 'rotterdam', packageId: 'medium' });
+  };
+  /** Bis zu diesem Anteil der Lieferzeit vorspulen. */
+  const shipAt = (share) => {
+    const s = state().modules.suppliers.shipments[0];
+    sim.advance(Math.max(0, Math.floor(s.orderedAt + (s.arrivesAt - s.orderedAt) * share - state().time)));
+  };
+  const docked = () => {
+    for (let i = 0; i < 400 && state().modules.logistics.cargo.length === 0; i++) sim.advance(30);
+  };
+  const port = { lng: 6.9712, lat: 50.9862 };
 `;
 
 /** Tageszeiten: Spielminuten ab Start (Tag 1, Freitag 18:00). */
@@ -38,6 +54,31 @@ export const SCENES = [
   { name: 'weggelegt-tag', js: 'sim.advance(' + TIMES.tag + '); busy(); api.closePhone();' },
   { name: 'weggelegt-nacht', js: 'sim.advance(' + TIMES.nacht + '); busy(); api.closePhone();' },
   { name: 'start', js: '' },
+  {
+    name: 'orte',
+    js:
+      'sim.advance(' +
+      TIMES.nacht +
+      '); busy(); run("goods.buyWarehouse", { warehouseId: "nippes" }); run("suppliers.order", { supplierId: "frankfurt", packageId: "weed50" }); sim.advance(20);',
+  },
+  {
+    name: 'lieferung-see',
+    js: 'sim.advance(' + TIMES.tag + '); harbor(); shipAt(0.93); api.flyTo(port, 13);',
+    wait: 4500,
+  },
+  {
+    name: 'lieferung-kai',
+    js: 'sim.advance(' + TIMES.tag + '); harbor(); docked(); api.flyTo(port, 13.2);',
+    wait: 4500,
+  },
+  {
+    name: 'lieferung-lkw',
+    js:
+      'sim.advance(' +
+      TIMES.nacht +
+      '); harbor(); docked(); run("staff.hireDriver", {}); run("logistics.pickup", { by: "driver" }); sim.advance(45); api.flyTo({ lng: 6.95, lat: 50.965 }, 12.6);',
+    wait: 4500,
+  },
   {
     name: 'spot-hover',
     js: 'sim.advance(' + TIMES.nacht + '); busy();',

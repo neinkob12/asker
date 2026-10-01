@@ -4,41 +4,60 @@
  * (z.B. .map-place--warehouse { --map-place-color: … }).
  */
 
-/* Orte (Lager, Hafen …): dunkles Quadrat mit farbigem Kern und Namensschild */
+/*
+ * Orte (Lager, Hafen, Lieferanten) im Look "Glas": runde Kachel (28 px) mit Verlauf und weißem Symbol, darunter eine
+ * Glas-Pille mit dem Namen (bei Lagern mit Bestand). Den Verlauf legen die Module fest
+ * (z.B. .map-place--warehouse { --map-place-a: var(--cat-place-a); --map-place-b: var(--cat-place-b) }).
+ */
 .map-place {
-  --map-place-color: var(--color-info-strong);
+  --map-place-a: var(--cat-place-a);
+  --map-place-b: var(--cat-place-b);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
   pointer-events: none;
+}
+button.map-place {
+  pointer-events: auto;
+  cursor: pointer;
 }
 .map-place-icon {
   position: relative;
-  width: 18px;
-  height: 18px;
-  border-radius: var(--radius-sm);
-  background: var(--color-marker-bg);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, var(--map-place-a), var(--map-place-b));
+  color: var(--color-on-dark);
+  font-size: 15px;
   box-shadow:
-    0 0 0 1px var(--color-marker-ring),
-    var(--shadow-marker-soft);
+    0 0 0 2px rgba(0, 0, 0, 0.35),
+    0 4px 10px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform var(--duration) var(--ease-out);
 }
-.map-place-icon::after {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border-radius: 1px;
-  background: var(--map-place-color);
+button.map-place:hover .map-place-icon,
+button.map-place:focus-visible .map-place-icon {
+  transform: scale(1.1);
 }
 .map-place-name,
 .map-hover-label__text {
-  font-family: var(--font-body);
-  font-size: 11px;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-marker-ink);
-  background: var(--color-label-bg);
-  padding: 1px 6px;
-  border-radius: var(--radius-xs);
+  font-family: var(--font-hud);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--hud-ink);
+  background: var(--spot-plate);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  padding: 3px 9px;
+  border: 1px solid var(--hud-glass-edge);
+  border-radius: var(--radius-round);
   box-shadow: var(--shadow-marker-soft);
   white-space: nowrap;
 }
@@ -408,13 +427,19 @@ button.map-target:hover .map-target__reticle {
   display: none;
 }
 .map-fx-vehicle__label {
+  /* Glas-Etikett über dem Fahrzeug: "Kemal · 500 g" bzw. "500 g Haze · 62 %" */
   display: block;
-  padding: 1px 7px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-marker-ink);
-  background: var(--color-marker-bg);
+  padding: 3px 9px;
+  font-family: var(--font-hud);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-ink);
+  background: var(--spot-plate);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
   border-radius: var(--radius-round);
   box-shadow: var(--shadow-marker-soft);
   white-space: nowrap;

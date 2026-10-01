@@ -11,6 +11,7 @@ import {
   Hint,
   HudPill,
   ItemContent,
+  iconElement,
   List,
   ListItem,
   registerHudItem,
@@ -22,6 +23,7 @@ import {
 import {
   CUT_STEPS,
   cutPreview,
+  DEFAULT_PRODUCT,
   DEFAULT_WAREHOUSE,
   formatProductAmount,
   getLots,
@@ -216,24 +218,39 @@ registerMapLayer({
   id: 'goods.warehouses',
   order: 30,
   mount(ctx) {
-    const shown = new Set<string>();
+    // Eigene Lager: runde Kachel (Ort, blau) und Glas-Pille mit Name und Bestand, z.B. "Lager Ehrenfeld · 640 g".
+    const shown = new Map<string, { name: HTMLElement; text: string }>();
     const draw = () => {
       const state = ctx.getState();
       if (!state) return;
       for (const w of getWarehouses(state)) {
-        if (shown.has(w.id)) continue;
-        shown.add(w.id);
-        addHtmlMarker(ctx.map, {
-          position: w,
-          className: 'map-place map-place--warehouse',
-          anchor: 'bottom',
-          tag: 'button',
-          title: `${w.name} öffnen`,
-          children: [el('span', 'map-place-icon'), el('span', 'map-place-name', w.name)],
-          onClick: () => {
-            if (!ctx.isPicking()) ctx.ui.openPanel('goods.warehouse', { warehouseId: w.id });
-          },
-        });
+        let entry = shown.get(w.id);
+        if (!entry) {
+          const tile = el('span', 'map-place-icon');
+          tile.appendChild(iconElement('warehouse', { strokeWidth: 2.2 }));
+          const name = el('span', 'map-place-name', w.name);
+          addHtmlMarker(ctx.map, {
+            position: w,
+            className: 'map-place map-place--warehouse',
+            anchor: 'bottom',
+            tag: 'button',
+            title: `${w.name} öffnen`,
+            children: [tile, name],
+            onClick: () => {
+              if (!ctx.isPicking()) ctx.ui.openPanel('goods.warehouse', { warehouseId: w.id });
+            },
+          });
+          entry = { name, text: '' };
+          shown.set(w.id, entry);
+        }
+        const rows = stockSummary(state, w.id);
+        const grams = rows.filter((r) => getProduct(r.productId)?.unit === 'g').reduce((sum, r) => sum + r.amount, 0);
+        const other = rows.reduce((sum, r) => sum + r.amount, 0) - grams;
+        const text = `${w.name} · ${formatProductAmount(DEFAULT_PRODUCT, grams)}${other > 0 ? ` +${other}` : ''}`;
+        if (text !== entry.text) {
+          entry.text = text;
+          entry.name.textContent = text;
+        }
       }
     };
     draw();

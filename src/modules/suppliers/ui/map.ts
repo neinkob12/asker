@@ -5,16 +5,18 @@
 // Logistik). Nur alte Lieferungen ohne Liegeplatz werden noch umgeladen und per Lkw ins Lager gefahren.
 
 import type { GeoJSONSource } from 'maplibre-gl';
-import type { GameState, LngLat } from '../../../core';
+import { distanceMeters, type GameState, type LngLat } from '../../../core';
 import {
   addHtmlMarker,
   createVehicle,
   el,
+  KOELN_CENTER,
   type MapLayer,
   mapToken,
   pathLength,
   type VehicleHandle,
 } from '../../../map';
+import { iconElement } from '../../../ui';
 import { formatProductAmount, getWarehouse, getWarehouses, productName } from '../../goods';
 import { roadEntryFrom, roadRoute } from '../../roads';
 import {
@@ -32,6 +34,15 @@ import {
 } from '../index';
 
 const SOURCE = 'suppliers.routes';
+/** Lieferanten näher als das an der Kölner Mitte gelten als "vor Ort" (Marker nur weit herausgezoomt). */
+const LOCAL_RADIUS = 15_000;
+
+/** Runde Kachel eines Orts mit weißem Symbol (Look "Glas", Stil in src/map/map.css). */
+const placeIcon = (icon: string) => {
+  const tile = el('span', 'map-place-icon');
+  tile.appendChild(iconElement(icon, { strokeWidth: 2.2 }));
+  return tile;
+};
 
 const toLngLat = ([lng, lat]: readonly [number, number]): LngLat => ({ lng, lat });
 const RIVER: LngLat[] = RHINE_ROUTE.map(toLngLat);
@@ -66,6 +77,11 @@ function cityProgress(split: number, t: number): number {
     : split + ((t - outsideShare) / CITY_APPROACH_SHARE) * (1 - split);
 }
 
+/** Etikett über Schiff oder Transporter: "500 g Haze · 62 %". */
+function shipmentLabel(s: Shipment, progress: number): string {
+  return `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)} · ${Math.round(progress * 100)} %`;
+}
+
 interface ShownShipment {
   ship: VehicleHandle | null;
   road: VehicleHandle | null;
@@ -85,11 +101,18 @@ export const suppliersLayer: MapLayer = {
       type: 'line',
       source: SOURCE,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
+      // Look "Glas": Schiffsweg in der Farbe der Ware, Lkw und Transporter in Gold, gestrichelt, solange sie fahren.
       paint: {
-        'line-color': '#ffffff',
+        'line-color': [
+          'match',
+          ['get', 'kind'],
+          'ship',
+          mapToken('--cat-goods', '#c8aa85'),
+          mapToken('--hud-gold', '#f2c766'),
+        ] as never,
         'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1, 14, 2.5],
-        'line-dasharray': [0.5, 2.5],
-        'line-opacity': 0.45,
+        'line-dasharray': [1, 2],
+        'line-opacity': 0.75,
       },
     });
 
@@ -100,12 +123,18 @@ export const suppliersLayer: MapLayer = {
       if (!state || placed) return;
       placed = true;
       for (const supplier of getSuppliers(state)) {
-        addHtmlMarker(map, {
+        const { element } = addHtmlMarker(map, {
           position: supplier,
           className: `map-place map-place--${supplier.kind}`,
           anchor: 'bottom',
-          children: [el('span', 'map-place-icon'), el('span', 'map-place-name', supplier.name)],
+          children: [
+            placeIcon(supplier.kind === 'port' ? 'ship' : 'truck'),
+            el('span', 'map-place-name', supplier.name),
+          ],
         });
+        // Der Lieferant in Köln selbst steht nur in der Europa-Ansicht; in der Stadt läge "Köln" mitten zwischen den
+        // Spots (Breslauer Platz) und sagt dort nichts.
+        if (distanceMeters(supplier, KOELN_CENTER) < LOCAL_RADIUS) element.classList.add('map-place--local');
       }
     };
     placeSuppliers();
@@ -120,7 +149,7 @@ export const suppliersLayer: MapLayer = {
       const key = transit.map((s) => `${s.id}:${s.warehouseId}`).join(',');
       if (key === routesKey) return;
       routesKey = key;
-      const lines: LngLat[][] = [];
+      const lines: { kind: 'ship' | 'road'; path: LngLat[] }[] = [];
       let river = false;
       for (const s of transit) {
         const supplier = getSuppliers(state).find((x) => x.id === s.supplierId);
@@ -128,23 +157,23 @@ export const suppliersLayer: MapLayer = {
         if (!supplier || !target) continue;
         if (supplier.kind === 'port') {
           river = true;
-          if (!s.toPort) lines.push(roadRoute(PORT, target).path);
+          if (!s.toPort) lines.push({ kind: 'road', path: roadRoute(PORT, target).path });
         } else {
-          lines.push(cityPath(supplier, target).path);
+          lines.push({ kind: 'road', path: cityPath(supplier, target).path });
         }
       }
-      if (river) lines.push(RIVER);
+      if (river) lines.push({ kind: 'ship', path: RIVER });
       const features = lines.map((line) => ({
         type: 'Feature' as const,
-        properties: {},
-        geometry: { type: 'LineString' as const, coordinates: line.map((p) => [p.lng, p.lat]) },
+        properties: { kind: line.kind },
+        geometry: { type: 'LineString' as const, coordinates: line.path.map((p) => [p.lng, p.lat]) },
       }));
       (map.getSource(SOURCE) as GeoJSONSource).setData({ type: 'FeatureCollection', features });
     };
 
     const create = (s: Shipment, supplier: Supplier, target: LngLat, progress: number): ShownShipment => {
       const title = `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)} aus ${supplier.name}`;
-      const label = formatProductAmount(s.productId, s.amount);
+      const label = shipmentLabel(s, progress);
       const leg = deliveryLeg(supplier, progress, s.toPort);
       if (supplier.kind === 'port') {
         const ship = createVehicle(map, { path: RIVER, kind: 'ship', title, progress: shipFraction(leg.t) });
@@ -189,6 +218,9 @@ export const suppliersLayer: MapLayer = {
             entry = create(s, supplier, target, progress);
             shown.set(s.id, entry);
           }
+          const label = shipmentLabel(s, progress);
+          entry.ship?.setLabel(label);
+          entry.road?.setLabel(label);
           const late = s.problem === 'delayed' && !!s.problemRevealed;
           const color = late ? lateColor : null;
           if (supplier.kind !== 'port') {

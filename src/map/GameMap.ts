@@ -8,7 +8,7 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { clock, type GameState, type LngLat } from '../core';
 import type { CameraMode, MapController, UiApi, UiState } from '../ui/runtime';
 import { currentMood } from './atmosphere';
-import { EUROPA_VIEW, isMobile, KOELN_CENTER, koelnZoom } from './config';
+import { EUROPA_VIEW, isMobile, KOELN_CENTER, KOELN_VIEW, koelnZoom } from './config';
 import { setActiveMap, setEffectsLook } from './effects';
 import { landmarkFeatures } from './landmarks';
 import { computeLook, type MapLook } from './look';
@@ -49,7 +49,7 @@ export class GameMap implements MapController {
     this.map = new MapLibreMap({
       container,
       style: baseStyle,
-      center: [KOELN_CENTER.lng, KOELN_CENTER.lat],
+      center: [KOELN_VIEW.lng, KOELN_VIEW.lat],
       zoom: koelnZoom(),
       pitch: KOELN_PITCH,
       bearing: KOELN_BEARING,
@@ -64,7 +64,10 @@ export class GameMap implements MapController {
     this.overlay = new SurveillanceOverlay(this.map);
     this.precipitation = new PrecipitationLayer(this.map.getCanvasContainer(), this.overlay.element);
     this.applyPadding();
-    window.addEventListener('resize', () => this.applyPadding());
+    window.addEventListener('resize', () => {
+      this.padRight = -1;
+      this.applyPadding();
+    });
     this.map.on('zoom', () => container.classList.toggle('zoomed-out', this.map.getZoom() < 10));
     this.map.on('click', (e) => {
       if (!this.picking) return;
@@ -122,7 +125,9 @@ export class GameMap implements MapController {
 
   /** Nach jedem Neuzeichnen der UI. */
   update(state: GameState, ui: UiState): void {
+    const phoneChanged = this.lastUi?.phone.open !== ui.phone.open;
     this.lastUi = ui;
+    if (phoneChanged || this.padRight < 0) this.applyPadding(this.padRight >= 0);
     if (ui.camera !== this.cameraMode) this.setCameraMode(ui.camera);
     this.overlay.setEnabled(ui.overlay);
     this.overlay.setClock(
@@ -239,13 +244,28 @@ export class GameMap implements MapController {
     }
   }
 
-  // Seitenleiste und HUD liegen über der Karte, also soll die Kamera auf den freien Bereich zentrieren.
-  private applyPadding(): void {
-    // Freier Kartenausschnitt: Am Desktop stehen Dock und Inspector links, am Handy HUD oben und Sheet mit Tab-Leiste
-    // unten. Das Padding bleibt fest, damit die Karte beim Öffnen und Schließen von Panels nicht wandert.
-    this.map.setPadding(
-      isMobile() ? { top: 120, bottom: 170, left: 0, right: 0 } : { top: 80, bottom: 0, left: 440, right: 0 },
-    );
+  // HUD und Handy liegen über der Karte, also soll die Kamera auf den freien Bereich zentrieren.
+  private padRight = -1;
+
+  /**
+   * Freier Kartenausschnitt: Am Desktop steht das Handy rechts (angedockt) und das HUD oben, am Handy-Bildschirm HUD
+   * oben und die Leiste unten. Klappt das Handy ein oder aus, gleitet der Ausschnitt mit (Look "Glas", Auftrag 24).
+   * Panels ändern nichts, damit die Karte beim Blättern im Handy nicht wandert.
+   */
+  private applyPadding(animate = false): void {
+    if (isMobile()) {
+      this.padRight = 0;
+      this.map.setPadding({ top: 120, bottom: 170, left: 0, right: 0 });
+      return;
+    }
+    // offsetLeft statt getBoundingClientRect: Die Einblend-Animation des Handys verschiebt es kurz.
+    const phone = this.lastUi?.phone.open ? document.querySelector<HTMLElement>('.phone') : null;
+    const right = phone ? Math.max(0, Math.round(window.innerWidth - phone.offsetLeft)) : 0;
+    if (right === this.padRight) return;
+    this.padRight = right;
+    const padding = { top: 90, bottom: 0, left: 0, right };
+    if (animate) this.map.easeTo({ padding, duration: 450 });
+    else this.map.setPadding(padding);
   }
 
   private koelnCamera() {
@@ -270,7 +290,7 @@ export class GameMap implements MapController {
   flyToKoeln(): void {
     this.view = 'koeln';
     this.map.flyTo({
-      center: [KOELN_CENTER.lng, KOELN_CENTER.lat],
+      center: [KOELN_VIEW.lng, KOELN_VIEW.lat],
       zoom: koelnZoom(),
       ...this.koelnCamera(),
       duration: 2500,
