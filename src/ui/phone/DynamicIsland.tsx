@@ -124,7 +124,11 @@ function ActivityRow(props: { activity: LiveActivity; onOpen: () => void }) {
   );
 }
 
-export function DynamicIsland(props: { floating?: boolean }) {
+/**
+ * floating: schwebt über der Karte (Handy weggelegt). clock: echtes Handy, keine Kamera-Attrappe: Die Pille zeigt links
+ * die Spielzeit, daneben die wichtigste Aktivität.
+ */
+export function DynamicIsland(props: { floating?: boolean; clock?: string }) {
   const runtime = useRuntime();
   const { ui, api } = runtime;
   const state = runtime.state;
@@ -181,8 +185,12 @@ export function DynamicIsland(props: { floating?: boolean }) {
   const second = activities[1];
   const hoverable = () => window.matchMedia?.('(hover: hover)').matches ?? false;
 
+  const clockText = props.clock ? <span class="island__clock">{props.clock}</span> : null;
+  // Ohne Kamera (echtes Handy) steht statt der Lücke für die Kamera die Spielzeit in der Pille.
+  const cam = clockText ? null : <span class="island__cam" aria-hidden="true" />;
+
   return (
-    <div class={`island-wrap ${props.floating ? 'is-floating' : ''}`}>
+    <div class={`island-wrap ${props.floating ? 'is-floating' : ''} ${clockText ? 'is-pill' : ''}`}>
       <div
         ref={morph.island}
         class={`island is-${mode}`}
@@ -201,6 +209,7 @@ export function DynamicIsland(props: { floating?: boolean }) {
         }}
       >
         <span class="island__shape" ref={morph.shape} aria-hidden="true" />
+        {mode === 'idle' && clockText && <span class="island__idle">{clockText}</span>}
         {(mode === 'compact' || mode === 'pulse') && (
           <button
             type="button"
@@ -210,12 +219,13 @@ export function DynamicIsland(props: { floating?: boolean }) {
               else api.toggleIsland();
             }}
           >
+            {clockText}
             {mode === 'pulse' && pulse ? (
               <>
                 <span class={`island__lead tone-${pulse.tone ?? 'accent'}`}>
                   <Icon name={pulse.icon} />
                 </span>
-                <span class="island__cam" aria-hidden="true" />
+                {cam}
                 <span class={`island__trail tone-${pulse.tone ?? 'accent'}`} key={pulse.amount ?? pulse.text}>
                   {pulseText(pulse)}
                 </span>
@@ -226,7 +236,7 @@ export function DynamicIsland(props: { floating?: boolean }) {
                   <Icon name={top.icon} />
                   <span class="island__lead-text">{top.leading}</span>
                 </span>
-                <span class="island__cam" aria-hidden="true" />
+                {cam}
                 <span class={`island__trail tone-${top.tone ?? 'neutral'}`} key={top.trailing}>
                   {top.trailing}
                 </span>

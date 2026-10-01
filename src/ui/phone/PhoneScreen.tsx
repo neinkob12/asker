@@ -92,6 +92,7 @@ export function PhoneScreen(props: PhoneScreenProps) {
   }, [key, title]);
   const classes = ['phone-screen'];
   if (inline) classes.push('is-inline');
+  if (props.leading) classes.push('has-leading');
   if (collapsed) classes.push('is-collapsed');
   if (props.footer) classes.push('has-footer');
   if (props.class) classes.push(props.class);

@@ -39,7 +39,7 @@ import {
 } from '../registry';
 import { TAB_APP_PREFIX, type UiApi, type UiState } from '../runtime';
 import { HudItems } from '../shell/Hud';
-import { hudPlacement, tabIcon, tabTint, useIsMobile } from '../shell/layout';
+import { hudPlacement, tabIcon, tabTint, useIsMobile, useIsPhoneDevice } from '../shell/layout';
 import { collectAdvice, NextStepWidget } from '../shell/NextStep';
 import { Slot } from '../shell/Slot';
 import { SectionContent, TabContent } from '../shell/TabContent';
@@ -111,6 +111,52 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
     }),
   );
   return [...tabs, ...apps];
+}
+
+/**
+ * Oben auf einem echten Handy: keine zweite Statusleiste (die echte ist ja da), nur die Live-Aktivitäten als
+ * schwebende Pille mit der Spielzeit.
+ */
+function PillBar(props: { time: number }) {
+  return (
+    <header class="phone__status phone__status--pill">
+      <DynamicIsland clock={clock.formatTime(props.time)} />
+    </header>
+  );
+}
+
+/**
+ * Unten im Handy-Bildschirm (schmale Fenster und echte Handys): statt eines gezeichneten Home-Balkens, der unter
+ * dem echten liegen würde, eine Leiste mit "Start" und "Weglegen" (am Startbildschirm nur "Weglegen"). Die erste
+ * Taste verhält sich wie der Home-Balken am Desktop: tippen = Startbildschirm bzw. weglegen, hochwischen ebenso.
+ */
+function PhoneToolbar(props: { atHome: boolean; onHomeDown: (e: PointerEvent) => void }) {
+  const { api } = useRuntime();
+  return (
+    <nav class="phone__toolbar" aria-label="Handy">
+      {!props.atHome && (
+        <button
+          type="button"
+          class="phone__tool phone__nav-button"
+          onPointerDown={(e) => props.onHomeDown(e as unknown as PointerEvent)}
+          onClick={() => api.openPhone(null)}
+        >
+          <Icon name="home" />
+          <span>Start</span>
+        </button>
+      )}
+      <button
+        type="button"
+        class={`phone__tool ${props.atHome ? 'phone__nav-button' : ''}`}
+        onPointerDown={props.atHome ? (e) => props.onHomeDown(e as unknown as PointerEvent) : undefined}
+        onClick={api.closePhone}
+        title="Handy weglegen (T)"
+      >
+        <Icon name="chevronDown" />
+        <span>Weglegen</span>
+      </button>
+    </nav>
+  );
 }
 
 function StatusBar(props: { time: number }) {
@@ -424,7 +470,7 @@ function usePhoneGestures(screen: { current: HTMLDivElement | null }, stack: { c
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
       const target = e.target as Element;
-      if (target.closest('.phone__nav, .phone-notice, .island-wrap')) return;
+      if (target.closest('.phone__nav, .phone__toolbar, .phone-notice, .island-wrap')) return;
       // Statusleiste herunterziehen: Mitteilungszentrale (wie bei iOS von oben)
       if (y < STATUS_PULL_ZONE && !target.closest('input, textarea')) {
         startDrag(e, el, {
@@ -518,7 +564,7 @@ function Center(props: { state: GameState }) {
   );
 }
 
-function PhoneScreenArea(props: { state: GameState; mobile: boolean }) {
+function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boolean }) {
   const { ui, api } = useRuntime();
   const screen = useRef<HTMLDivElement>(null);
   const stack = useRef<PageStackHandle | null>(null);
@@ -539,29 +585,24 @@ function PhoneScreenArea(props: { state: GameState; mobile: boolean }) {
       </PortalHostContext.Provider>
       <div class="phone__overlays" ref={setOverlays} />
       <Center state={props.state} />
-      <StatusBar time={props.state.time} />
+      {props.device ? <PillBar time={props.state.time} /> : <StatusBar time={props.state.time} />}
       <PhoneNotice />
-      <nav class="phone__nav">
-        <button
-          type="button"
-          class="phone__nav-button"
-          onPointerDown={homeSwipe}
-          onClick={() => (atHome ? api.closePhone() : api.openPhone(null))}
-          aria-label={atHome ? 'Handy weglegen' : 'Startbildschirm'}
-          title={atHome ? 'Handy weglegen (T)' : 'Startbildschirm'}
-        >
-          <span class="phone__home-indicator" />
-        </button>
-        <button
-          type="button"
-          class="phone__close"
-          onClick={api.closePhone}
-          aria-label="Handy weglegen"
-          title="Handy weglegen (T)"
-        >
-          <Icon name={props.mobile ? 'close' : 'chevronRight'} />
-        </button>
-      </nav>
+      {props.mobile ? (
+        <PhoneToolbar atHome={atHome} onHomeDown={homeSwipe} />
+      ) : (
+        <nav class="phone__nav">
+          <button
+            type="button"
+            class="phone__nav-button"
+            onPointerDown={homeSwipe}
+            onClick={() => (atHome ? api.closePhone() : api.openPhone(null))}
+            aria-label={atHome ? 'Handy weglegen' : 'Startbildschirm'}
+            title={atHome ? 'Handy weglegen (T)' : 'Startbildschirm'}
+          >
+            <span class="phone__home-indicator" />
+          </button>
+        </nav>
+      )}
     </div>
   );
 }
@@ -571,6 +612,7 @@ export function PhoneFrame() {
   const { ui } = runtime;
   const state = runtime.state;
   const mobile = useIsMobile();
+  const device = useIsPhoneDevice();
   if (!state) return null;
   const unread = messages.unreadCount(state);
   if (!ui.phone.open) {
@@ -582,10 +624,22 @@ export function PhoneFrame() {
     );
   }
   return (
-    <section class="phone" aria-label="Handy">
+    <section class={`phone ${device ? 'phone--device' : ''}`} aria-label="Handy">
       <div class={`phone__device ${ui.buzz > 0 ? `is-buzzing-${ui.buzz % 2}` : ''}`}>
-        <PhoneScreenArea state={state} mobile={mobile} />
+        <PhoneScreenArea state={state} mobile={mobile} device={device} />
       </div>
+      {/* Weglegen am Desktop: neben dem Gerät, damit der Knopf nie über dem Inhalt liegt */}
+      {!mobile && (
+        <button
+          type="button"
+          class="phone__close"
+          onClick={ui.phone.open ? runtime.api.closePhone : undefined}
+          aria-label="Handy weglegen"
+          title="Handy weglegen (T)"
+        >
+          <Icon name="chevronRight" />
+        </button>
+      )}
     </section>
   );
 }

@@ -168,6 +168,10 @@
 .phone__ear--right .phone__battery {
   font-size: 24px;
 }
+/* Echtes Handy: statt der Statusleiste nur die Pille in der Mitte (Uhrzeit, Empfang und Akku zeigt das Gerät) */
+.phone__status--pill {
+  display: block;
+}
 /* Zwei Aktivitäten: Der Kreis der zweiten sitzt neben der Island, Empfang und WLAN weichen, der Akku bleibt. */
 .phone__status:has(.island-minimal) .phone__signal,
 .phone__status:has(.island-minimal) .phone__wifi {
@@ -187,7 +191,7 @@
   height: var(--phone-home-inset);
   pointer-events: none;
 }
-.phone__nav-button {
+.phone__nav > .phone__nav-button {
   touch-action: none;
   display: grid;
   place-items: end center;
@@ -213,11 +217,11 @@
 .phone__nav-button:hover .phone__home-indicator {
   opacity: 1;
 }
-/* Handy weglegen: kleine Glas-Taste rechts unten (Trefferfläche 44 px), damit sie über dem Inhalt lesbar bleibt */
+/* Handy weglegen (Desktop): runde Taste links neben dem Gerät, so liegt sie nie über dem Inhalt */
 .phone__close {
   position: absolute;
-  right: 8px;
-  bottom: 0;
+  left: -56px;
+  bottom: 20px;
   display: grid;
   place-items: center;
   width: 44px;
@@ -225,30 +229,61 @@
   padding: 0;
   border: 0;
   border-radius: var(--radius-round);
-  background: transparent;
-  color: var(--phone-label-2);
-  font-size: 16px;
+  background: var(--color-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow:
+    inset 0 0 0 1px var(--color-line),
+    var(--shadow-float);
+  color: var(--color-text);
+  font-size: 18px;
   cursor: pointer;
-  pointer-events: auto;
-}
-.phone__close::before {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  z-index: -1;
-  border-radius: var(--radius-round);
-  background: var(--phone-glass);
-  backdrop-filter: var(--phone-blur);
-  box-shadow: inset 0 0 0 0.5px var(--phone-glass-edge);
-}
-.phone__screen.is-home .phone__close {
-  color: var(--home-label-2);
 }
 .phone__close:hover {
-  color: var(--phone-label);
+  background: var(--color-surface-hover);
 }
-.phone__screen.is-home .phone__close:hover {
-  color: var(--home-label);
+
+/*
+ * Leiste unten im Handy-Bildschirm (schmale Fenster und echte Handys): "Start" und "Weglegen" statt eines
+ * gezeichneten Home-Balkens (auf einem echten Handy läge er doppelt über dem echten). Glas, Inhalt läuft darunter.
+ */
+.phone__toolbar {
+  position: absolute;
+  z-index: 7;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-start;
+  height: var(--phone-home-inset);
+  padding: 4px max(8px, var(--safe-right)) var(--safe-bottom) max(8px, var(--safe-left));
+  background: var(--phone-glass);
+  backdrop-filter: var(--phone-blur);
+  border-top: 0.5px solid var(--phone-separator);
+}
+.phone__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 120px;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-round);
+  background: transparent;
+  color: var(--cat-brand);
+  font-size: var(--type-subhead);
+  font-weight: var(--font-weight-bold);
+  touch-action: none;
+  cursor: pointer;
+}
+.phone__tool .ui-icon {
+  font-size: 20px;
+}
+.phone__tool:hover,
+.phone__tool.is-pressed {
+  background: var(--phone-fill);
 }
 
 /* ---------------------------------------------------------------- Dynamic Island */
@@ -384,6 +419,20 @@
 .island__lead {
   min-width: 0;
 }
+/* Echtes Handy: keine Kamera-Attrappe, die Pille zeigt links die Spielzeit, daneben die wichtigste Aktivität */
+.island__clock {
+  font-size: var(--type-subhead);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--hw-white);
+}
+.island__idle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 37px;
+  padding: 0 16px;
+}
 /* Im Handy ist wenig Platz: links nur das Symbol, rechts der Wert (HIG: schmal und ausgewogen um die Kamera). */
 .island-wrap:not(.is-floating) .island__lead-text {
   display: none;
@@ -422,6 +471,22 @@
   }
 }
 .is-floating .island__expanded {
+  padding-top: 14px;
+}
+/* Echtes Handy: Die Pille schwebt knapp unter dem oberen Rand, im Ruhezustand so breit wie die Uhrzeit */
+.island-wrap.is-pill {
+  top: 6px;
+}
+.island-wrap.is-pill .island.is-idle {
+  width: auto;
+  min-width: 0;
+}
+.island-wrap.is-pill .island__compact {
+  justify-content: center;
+  gap: 10px;
+  padding: 0 16px;
+}
+.island-wrap.is-pill .island__expanded {
   padding-top: 14px;
 }
 .island__more {
@@ -1140,6 +1205,11 @@ html.is-dragging {
 .phone-screen__back:hover {
   opacity: 0.7;
 }
+/* Mit Bild in der Mitte (Chat) bleibt neben Avatar und Namen kein Platz für den Titel: nur der Pfeil, wie in
+   iOS-Nachrichten. Der Screenreader hört weiter "Zurück zu …". */
+.phone-screen.has-leading .phone-screen__back span {
+  display: none;
+}
 .phone-screen__center {
   position: absolute;
   left: 50%;
@@ -1834,11 +1904,17 @@ html.is-dragging {
   .is-floating .island.is-alert {
     width: calc(100vw - 20px);
   }
-  .phone__nav {
-    height: calc(var(--phone-home-inset) + var(--safe-bottom));
+  /* Unten die Leiste mit "Start" und "Weglegen" (über dem sicheren Bereich des Geräts) */
+  .phone {
+    --phone-home-inset: calc(52px + var(--safe-bottom));
   }
-  .phone__nav-button {
-    padding-bottom: calc(8px + var(--safe-bottom));
+  /* Echtes Handy: keine gezeichnete Statusleiste, nur die Pille; Inhalt seitlich im sicheren Bereich */
+  .phone--device {
+    --phone-status-height: 50px;
+    --phone-gutter: max(16px, var(--safe-left), var(--safe-right));
+  }
+  .phone--device .phone__device {
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
   }
   .phone__app .phone__tile {
     --chip-size: min(64px, calc(100cqw * 0.16));

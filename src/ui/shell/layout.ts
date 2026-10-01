@@ -14,16 +14,31 @@ function matches(query: string): boolean {
   }
 }
 
-/** Handy-Aufbau (Handy bildschirmfüllend, Leiste unten) oder Desktop (Handy rechts angedockt)? */
-export function useIsMobile(): boolean {
-  const [mobile, setMobile] = useState(() => matches(MOBILE_QUERY));
+/** Echtes Handy: schmal und mit dem Finger bedient (dann zeichnet das Spiel keine zweite Statusleiste). */
+const PHONE_DEVICE_QUERY = '(max-width: 760px) and (pointer: coarse)';
+
+function useMediaQuery(query: string): boolean {
+  const [match, setMatch] = useState(() => matches(query));
   useEffect(() => {
-    const mq = window.matchMedia(MOBILE_QUERY);
-    const onChange = () => setMobile(mq.matches);
+    const mq = window.matchMedia(query);
+    const onChange = () => setMatch(mq.matches);
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
-  }, []);
-  return mobile;
+  }, [query]);
+  return match;
+}
+
+/** Handy-Aufbau (Handy bildschirmfüllend, Leiste unten) oder Desktop (Handy rechts angedockt)? */
+export function useIsMobile(): boolean {
+  return useMediaQuery(MOBILE_QUERY);
+}
+
+/**
+ * Läuft das Spiel auf einem echten Handy? Dann hat das Gerät selbst Statusleiste, Kamera und Home-Balken; das
+ * Spiel-Handy zeichnet sie nicht noch einmal (docs/handy-design.md, Abschnitt 7).
+ */
+export function useIsPhoneDevice(): boolean {
+  return useMediaQuery(PHONE_DEVICE_QUERY);
 }
 
 export function isMobileLayout(): boolean {
