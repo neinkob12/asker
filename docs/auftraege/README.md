@@ -68,6 +68,11 @@ Geplant: [Auftrag 23](23-mehr-leben-in-koeln.md) (Spot-Arten und Ausbau, Kunden-
 eigene Stimmen und Methoden der Gangs, Einbruch und Abwerben, Lieferprobleme mit Entscheidungen, Fuhrpark,
 Daueraufträge mit Disponent, Stadt-Events). Startet erst, wenn Auftrag 22 (Handy wie iOS) in `main` ist.
 
+Geplant: [Auftrag 24](24-feinschliff-geld-leutnants-polizei.md) (Kasse mit Gewinn- und Verlustrechnung, kein voller
+Lohn in Haft, Leutnants mit bis zu drei Spots, eigenem Personal und Bestellregeln, Rechte Hand über den Leutnants,
+Polizei-Härte nach Größe des Geschäfts, Geld im frühen Spiel). Läuft nicht gleichzeitig mit Auftrag 23, beide ändern
+dieselben Module.
+
 ## Mergen
 
 - Ein PR wird gemergt, sobald er fertig und die CI grün ist. Die Reihenfolge in Phase 1 ist egal.
