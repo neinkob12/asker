@@ -1,19 +1,25 @@
 // Seiten des Handys als Stapel: Die sichtbare Seite und höchstens zwei darunter bleiben montiert (Scrollposition und
-// Eingaben bleiben beim Zurückgehen erhalten). Nur die oberste Seite wird mit dem Spiel neu gezeichnet; Seiten darunter
-// sind unsichtbar, für Screenreader verborgen und stehen still, bis sie wieder oben liegen (spart Arbeit bei
-// 10 Bildern pro Sekunde). Welche Seite was zeigt, entscheidet `renderPage` (PhoneFrame.tsx).
+// Eingaben bleiben beim Zurückgehen erhalten), dazu der Startbildschirm als Hintergrund. Nur die oberste Seite wird mit
+// dem Spiel neu gezeichnet; Seiten darunter sind unsichtbar, für Screenreader verborgen und stehen still, bis sie
+// wieder oben liegen (spart Arbeit bei 10 Bildern pro Sekunde). Welche Seite was zeigt, entscheidet `render`
+// (PhoneFrame.tsx), wie sie wechseln, der StackAnimator (Federn). Seiten, die den Stapel verlassen, bleiben montiert,
+// bis ihr Übergang fertig ist.
 
 import { Component, type ComponentChildren } from 'preact';
-import { useLayoutEffect, useRef } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ErrorBoundary } from '../components';
-import { mountedEntries, type NavEntry } from './navModel';
+import { TAB_APP_PREFIX } from '../runtime';
+import { mountedEntries, type NavEntry, top, transitionOf } from './navModel';
 import { PageContext } from './page';
+import { StackAnimator, type StackPlan } from './stackAnimator';
 
 interface LayerProps {
   entry: NavEntry;
   below: NavEntry | null;
   /** Oberste Seite: wird mit jedem Bild neu gezeichnet. Darunter stehen Seiten still. */
   live: boolean;
+  /** Zählt hoch, wenn eine stillstehende Seite aufgedeckt wird (dann einmal frisch zeichnen). */
+  revealed: number;
   register: (key: string, element: HTMLElement | null) => void;
   render: (entry: NavEntry) => ComponentChildren;
 }
@@ -22,14 +28,15 @@ interface LayerProps {
 class PageLayer extends Component<LayerProps> {
   private ref = (element: HTMLElement | null) => this.props.register(this.props.entry.key, element);
 
+  // Oben: mit jedem Bild neu. Sonst bleibt die letzte Darstellung stehen (auch auf dem Weg hinaus).
   shouldComponentUpdate(next: LayerProps): boolean {
-    return next.live || next.live !== this.props.live || next.entry.key !== this.props.entry.key;
+    return next.live || next.entry.key !== this.props.entry.key || next.revealed !== this.props.revealed;
   }
 
   render() {
     const { entry, below } = this.props;
     return (
-      <div class="phone-page" data-kind={entry.kind} ref={this.ref}>
+      <div class="phone-page" data-kind={entry.kind} data-key={entry.key} ref={this.ref}>
         <PageContext.Provider value={{ entry, below }}>
           <ErrorBoundary name={entry.title}>{this.props.render(entry)}</ErrorBoundary>
         </PageContext.Provider>
@@ -39,37 +46,121 @@ class PageLayer extends Component<LayerProps> {
   }
 }
 
-/** Sichtbarkeit der montierten Seiten: nur die oberste ist zu sehen und bedienbar. */
-function showOnly(layers: Map<string, HTMLElement>, topKey: string) {
-  for (const [key, element] of layers) {
-    const visible = key === topKey;
-    element.classList.toggle('is-top', visible);
-    element.classList.toggle('is-hidden', !visible);
-    element.inert = !visible;
-    if (visible) element.removeAttribute('aria-hidden');
-    else element.setAttribute('aria-hidden', 'true');
+/** App einer Seite (für die Kachel beim Öffnen und Schließen): 'tab:<id>' oder App-ID, null auf dem Startbildschirm. */
+export function appIdOf(stack: readonly NavEntry[]): string | null {
+  const root = stack[1];
+  if (!root) return null;
+  return root.kind === 'tab' ? `${TAB_APP_PREFIX}${root.id}` : root.kind === 'app' ? root.id : null;
+}
+
+/** Welche Schichten sich bei einem Wechsel bewegen und welche nur noch dafür montiert bleiben. */
+function planOf(before: readonly NavEntry[], after: readonly NavEntry[]): StackPlan | null {
+  let kind = transitionOf(before, after);
+  if (kind === 'none') return null;
+  const from = top(before);
+  const to = top(after);
+  const gone = !after.some((e) => e.key === from.key);
+  // Die alte Seite verschwindet ganz, liegt aber nicht unter der neuen: überblenden statt schieben.
+  if (kind === 'push' && gone) kind = 'replace';
+  const exiting = gone ? [from.key] : [];
+  switch (kind) {
+    case 'push':
+      return { kind, front: to.key, back: from.key, appId: null, exiting };
+    case 'open':
+      return { kind, front: to.key, back: after[0].key, appId: appIdOf(after), exiting };
+    case 'close':
+      return { kind, front: from.key, back: to.key, appId: appIdOf(before), exiting };
+    default:
+      // pop, replace, switch: Die alte Seite liegt oben und gibt die neue frei.
+      return { kind, front: from.key, back: to.key, appId: null, exiting };
   }
 }
 
-export function PageStack(props: { stack: NavEntry[]; render: (entry: NavEntry) => ComponentChildren }) {
-  const layers = useRef(new Map<string, HTMLElement>()).current;
-  const register = useRef((key: string, element: HTMLElement | null) => {
-    if (element) layers.set(key, element);
-    else layers.delete(key);
-  }).current;
-  const mounted = mountedEntries(props.stack);
-  const topKey = mounted[mounted.length - 1].key;
+export interface PageStackHandle {
+  animator: StackAnimator;
+}
 
-  useLayoutEffect(() => showOnly(layers, topKey));
+export function PageStack(props: {
+  stack: NavEntry[];
+  render: (entry: NavEntry) => ComponentChildren;
+  /** Zugriff auf den Animator für Gesten (Rand-Wischen, Home-Balken). */
+  handle?: (handle: PageStackHandle | null) => void;
+}) {
+  const [, setTick] = useState(0);
+  const animator = useRef<StackAnimator | null>(null);
+  if (!animator.current) animator.current = new StackAnimator();
+  const a = animator.current;
+  const register = useRef((key: string, element: HTMLElement | null) => {
+    if (element) a.layers.set(key, element);
+    else a.layers.delete(key);
+  }).current;
+  const previous = useRef(props.stack);
+  const exiting = useRef<NavEntry[]>([]);
+  const pending = useRef<StackPlan | null>(null);
+
+  // Wechsel im Stapel erkennen, während gezeichnet wird: Seiten, die gehen, bleiben für ihren Übergang montiert.
+  const stack = props.stack;
+  if (previous.current !== stack) {
+    const plan = planOf(previous.current, stack);
+    if (plan) {
+      const keep = previous.current.filter((e) => plan.exiting.includes(e.key));
+      exiting.current = keep;
+      pending.current = plan;
+    }
+    previous.current = stack;
+  }
+
+  const revealed = useRef(new Map<string, number>()).current;
+  a.onReveal = (key) => {
+    revealed.set(key, (revealed.get(key) ?? 0) + 1);
+    setTick((t) => t + 1);
+  };
+  a.onSettled = (keys) => {
+    const rest = exiting.current.filter((e) => !keys.includes(e.key));
+    if (rest.length !== exiting.current.length) {
+      exiting.current = rest;
+      setTick((t) => t + 1);
+    }
+  };
+
+  const mounted = mountedEntries(stack);
+  const topKey = mounted[mounted.length - 1].key;
+  const layers = [...mounted, ...exiting.current.filter((e) => !mounted.some((m) => m.key === e.key))];
+  const belowOf = (entry: NavEntry): NavEntry | null => {
+    const list = stack.some((e) => e.key === entry.key) ? stack : previous.current;
+    const i = list.findIndex((e) => e.key === entry.key);
+    return i > 0 ? list[i - 1] : null;
+  };
+
+  useLayoutEffect(() => {
+    props.handle?.({ animator: a });
+    return () => {
+      props.handle?.(null);
+      a.stop();
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    a.layout(topKey);
+    const plan = pending.current;
+    pending.current = null;
+    if (plan) a.start(plan);
+  });
 
   return (
-    <div class="phone-pages">
-      {mounted.map((entry, i) => (
+    <div
+      class="phone-pages"
+      ref={(element) => {
+        a.container = element;
+      }}
+    >
+      {layers.map((entry) => (
         <PageLayer
           key={entry.key}
           entry={entry}
-          below={i > 0 ? mounted[i - 1] : (props.stack[props.stack.length - mounted.length - 1] ?? null)}
+          below={belowOf(entry)}
           live={entry.key === topKey}
+          revealed={revealed.get(entry.key) ?? 0}
           register={register}
           render={props.render}
         />

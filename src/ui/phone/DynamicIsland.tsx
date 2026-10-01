@@ -6,13 +6,16 @@
 // (ui.pulseIsland, z.B. "+120 €") erscheinen für ein paar Sekunden. Maße nach Apples HIG (Live Activities):
 // Radius 44, Innenabstand 14, kräftige Farben auf Schwarz, mindestens mittlere Schriftstärke. Kompakt höchstens 230 pt
 // breit (Uhrzeit und Symbole der Statusleiste bleiben frei), Restzeiten nur in Stunden (islandModel.ts).
+// Wechselt sie die Größe (kompakt ↔ aufgeklappt, Auftritt), wächst sie als eine Form per Feder (useIslandMorph).
 
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { formatEuro } from '../../core';
 import { Icon } from '../components';
 import { useRuntime } from '../hooks';
 import { collectLiveActivities, type LiveActivity } from '../registry';
 import type { IslandPulse } from '../runtime';
+import { animateValue, type Motion, reducedMotion } from './motion';
+import { SPRINGS } from './spring';
 
 /** Ab dieser Priorität klappt eine neue Aktivität die Island kurz von selbst auf (wie ein Alert bei iOS). */
 const ALERT_PRIORITY = 80;
@@ -25,6 +28,75 @@ const AUTO_COLLAPSE_MS = 7000;
 const EXPANDED_MAX = 4;
 
 export { islandCountdown } from './islandModel';
+
+interface Box {
+  w: number;
+  h: number;
+  r: number;
+}
+
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+/**
+ * Island als eine Form: Ändert sich die Größe ihres Kastens, wächst die schwarze Fläche per Feder (Breite, Höhe und
+ * Radius) von der alten zur neuen Form, ohne Layout pro Bild (nur transform und der Radius). Bei weniger Bewegung
+ * springt sie sofort.
+ */
+function useIslandMorph() {
+  const island = useRef<HTMLDivElement>(null);
+  const shape = useRef<HTMLSpanElement>(null);
+  const shown = useRef<Box | null>(null);
+  const target = useRef<Box | null>(null);
+  const motion = useRef<Motion | null>(null);
+
+  useLayoutEffect(() => {
+    const el = island.current;
+    const form = shape.current;
+    if (!el || !form) return;
+    const style = getComputedStyle(el);
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const r = Math.min(Number.parseFloat(style.borderTopLeftRadius) || 0, h / 2, w / 2);
+    const next = { w, h, r };
+    const before = target.current;
+    target.current = next;
+    if (!before || (Math.abs(before.w - w) < 0.5 && Math.abs(before.h - h) < 0.5)) {
+      if (!motion.current?.running) shown.current = next;
+      return;
+    }
+    const from = shown.current ?? before;
+    motion.current?.stop();
+    if (reducedMotion() || w <= 0 || h <= 0) {
+      shown.current = next;
+      el.classList.remove('is-morphing');
+      return;
+    }
+    el.classList.add('is-morphing');
+    const frame = (t: number) => {
+      const box = { w: lerp(from.w, w, t), h: lerp(from.h, h, t), r: lerp(from.r, r, t) };
+      shown.current = box;
+      const sx = Math.max(0.01, box.w / w);
+      const sy = Math.max(0.01, box.h / h);
+      form.style.transform = `scale(${sx},${sy})`;
+      form.style.borderRadius = `${box.r / sx}px / ${box.r / sy}px`;
+    };
+    frame(0);
+    motion.current = animateValue({
+      config: SPRINGS.island,
+      from: 0,
+      to: 1,
+      onFrame: frame,
+      onRest: () => {
+        form.style.transform = '';
+        form.style.borderRadius = '';
+        el.classList.remove('is-morphing');
+        shown.current = next;
+      },
+    }).motion;
+  });
+  useEffect(() => () => motion.current?.stop(), []);
+  return { island, shape };
+}
 
 function pulseText(pulse: IslandPulse): string {
   if (pulse.amount !== undefined) return `${pulse.amount >= 0 ? '+' : '−'}${formatEuro(Math.abs(pulse.amount))}`;
@@ -59,6 +131,7 @@ export function DynamicIsland(props: { floating?: boolean }) {
   const seen = useRef<Set<string> | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>();
   const [alertId, setAlertId] = useState<string | null>(null);
+  const morph = useIslandMorph();
   const activities = state ? collectLiveActivities(state) : [];
   const ids = activities.map((a) => a.id).join('|');
 
@@ -111,6 +184,7 @@ export function DynamicIsland(props: { floating?: boolean }) {
   return (
     <div class={`island-wrap ${props.floating ? 'is-floating' : ''}`}>
       <div
+        ref={morph.island}
         class={`island is-${mode}`}
         role="status"
         aria-live="polite"
@@ -126,6 +200,7 @@ export function DynamicIsland(props: { floating?: boolean }) {
           hoverTimer.current = setTimeout(() => api.toggleIsland(false), HOVER_CLOSE_MS);
         }}
       >
+        <span class="island__shape" ref={morph.shape} aria-hidden="true" />
         {(mode === 'compact' || mode === 'pulse') && (
           <button
             type="button"

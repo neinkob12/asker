@@ -338,7 +338,7 @@ function OrdersApp() {
 }
 
 registerSlot('spots.spotPanel', { id: 'customers.list', order: 10, component: SpotCustomers });
-registerSlot('tab:business', { id: 'customers.stats', order: 30, component: CustomersSection });
+registerSlot('tab:business', { id: 'customers.stats', title: 'Kundschaft', order: 30, component: CustomersSection });
 registerPhoneApp({
   id: 'customers.orders',
   name: 'Aufträge',

@@ -134,7 +134,7 @@ registerPanel({
   title: (props, state) => getSpot(state, props.spotId)?.name ?? 'Spot',
   component: SpotPanel,
 });
-registerSlot('tab:business', { id: 'spots.list', order: 15, component: SpotsSection });
+registerSlot('tab:business', { id: 'spots.list', title: 'Spots', order: 15, component: SpotsSection });
 registerMapLayer(spotsLayer);
 
 // Geld-Popup am Spot bei jedem Straßenverkauf, und der Hotspot leuchtet eine Weile stärker.

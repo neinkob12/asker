@@ -216,9 +216,10 @@ describe('Titel und montierte Seiten', () => {
     expect(stack[2].key).toBe(chat.key);
   });
 
-  it('montiert höchstens zwei Seiten unter der sichtbaren', () => {
+  it('montiert höchstens zwei Seiten unter der sichtbaren, dazu den Startbildschirm', () => {
     const stack = [HOME_ENTRY, entry('tab', 'a'), entry('section', 'b'), entry('panel', 'c'), entry('panel', 'd')];
-    expect(ids(mountedEntries(stack))).toEqual(['b', 'c', 'd']);
+    expect(ids(mountedEntries(stack))).toEqual(['home', 'b', 'c', 'd']);
+    expect(ids(mountedEntries(stack.slice(0, 4)))).toEqual(['home', 'a', 'b', 'c']);
     expect(ids(mountedEntries(stack.slice(0, 2)))).toEqual(['home', 'a']);
     expect(ids(mountedEntries(rootStack()))).toEqual(['home']);
   });

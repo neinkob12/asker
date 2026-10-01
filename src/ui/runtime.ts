@@ -17,6 +17,7 @@ import {
   phoneApps,
   reactionsFor,
   sidebarTabs,
+  slotContributions,
 } from './registry';
 
 /** good/info: Routine (kurz, grau in der Alarm-Zentrale), warn: gelb, bad: rot. */
@@ -333,7 +334,8 @@ export class UiRuntime {
       if (kind === 'tab') return sidebarTabs.get(id)?.title ?? id;
       if (kind === 'section') {
         const tab = typeof params?.tab === 'string' ? sidebarTabs.get(params.tab) : undefined;
-        return sectionTitle(id) ?? tab?.title ?? 'Abschnitt';
+        const registered = tab ? slotContributions(`tab:${tab.id}`).find((c) => c.id === id)?.title : undefined;
+        return sectionTitle(id) ?? registered ?? tab?.title ?? 'Abschnitt';
       }
       if (kind === 'panel') {
         const state = this.session.state;

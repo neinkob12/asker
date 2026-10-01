@@ -197,7 +197,7 @@ function StockSection() {
 }
 
 registerHudItem({ id: 'goods.stock', order: 20, placement: 'more', icon: 'warehouse', component: StockHud });
-registerSlot('tab:business', { id: 'goods.stock', order: 5, component: StockSection });
+registerSlot('tab:business', { id: 'goods.stock', title: 'Lager', order: 5, component: StockSection });
 registerPanel({
   id: 'goods.warehouse',
   title: (props, state) => getWarehouse(state, props.warehouseId)?.name ?? 'Lager',

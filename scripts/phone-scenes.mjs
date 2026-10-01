@@ -149,10 +149,31 @@ export async function openGame(page, base, advance) {
   if (advance > 0) await page.evaluate(`window.koeln.session.sim.advance(${advance})`);
 }
 
-/** Wechselt in die Szene und wartet, bis Animationen durch sind. Jede Szene beginnt auf dem Startbildschirm. */
+/**
+ * Wechselt in die Szene und wartet, bis Animationen durch sind. Jede Szene beginnt auf dem Startbildschirm mit
+ * zugeklappter Island.
+ */
 export async function showScene(page, scene) {
-  await page.evaluate('window.koeln.runtime.api.openPhone(null); window.koeln.runtime.api.closePhone()');
+  await page.evaluate(
+    'window.koeln.runtime.api.openPhone(null); window.koeln.runtime.api.toggleIsland(false); window.koeln.runtime.api.closePhone()',
+  );
   await page.waitForTimeout(100);
   await page.evaluate(scene.js);
   await page.waitForTimeout(650);
+  await waitForStill(page);
+}
+
+/**
+ * Wartet, bis keine Feder im Handy mehr läuft (Übergänge, Island; siehe src/ui/phone/motion.ts), und spult endliche
+ * CSS-Animationen (Einblenden) ans Ende. Ohne GPU zeichnet Chromium so langsam, dass sie sonst auf dem Bild noch
+ * halb durchsichtig sind.
+ */
+export async function waitForStill(page, timeout = 8000) {
+  await page.waitForFunction(() => !document.documentElement.hasAttribute('data-moving'), null, { timeout });
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) {
+      const end = animation.effect?.getComputedTiming().endTime;
+      if (typeof end === 'number' && Number.isFinite(end)) animation.finish();
+    }
+  });
 }

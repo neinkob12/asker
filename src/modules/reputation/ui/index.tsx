@@ -53,4 +53,4 @@ function ReputationSection() {
 }
 
 registerHudItem({ id: 'reputation.value', order: 40, placement: 'more', icon: 'star', component: ReputationHud });
-registerSlot('tab:business', { id: 'reputation.summary', order: 35, component: ReputationSection });
+registerSlot('tab:business', { id: 'reputation.summary', title: 'Ruf', order: 35, component: ReputationSection });

@@ -426,7 +426,7 @@ registerPhoneApp({
     getSuppliers(state).filter((s) => isBlocked(state, s.id) || (!isUnlocked(state, s.id) && canUnlock(state, s.id).ok))
       .length,
 });
-registerSlot('tab:business', { id: 'suppliers.order', order: 10, component: ShipmentsSection });
+registerSlot('tab:business', { id: 'suppliers.order', title: 'Lieferungen', order: 10, component: ShipmentsSection });
 registerMapLayer(suppliersLayer);
 
 onGameEvent('shipment.problem', 'suppliers.problemToast', (payload, ui, state) => {

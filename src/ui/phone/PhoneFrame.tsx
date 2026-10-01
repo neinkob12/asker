@@ -11,6 +11,7 @@
 // Tab-Leiste: docs/handy-design.md, Abschnitt 5.
 
 import type { ComponentType, JSX } from 'preact';
+import { useEffect, useRef } from 'preact/hooks';
 import { clock, type GameState, messages } from '../../core';
 import { daylightAt, twilight } from '../../map/daylight';
 import { Badge, ErrorBoundary, Icon, IconChip } from '../components';
@@ -23,10 +24,20 @@ import { collectAdvice, NextStepWidget } from '../shell/NextStep';
 import { Slot } from '../shell/Slot';
 import { SectionContent, TabContent } from '../shell/TabContent';
 import { DynamicIsland } from './DynamicIsland';
+import { startDrag } from './drag';
+import {
+  EDGE_ZONE,
+  edgeSwipeCommits,
+  edgeSwipeProgress,
+  homeSwipeCommits,
+  homeSwipeOpenness,
+  rubberBand,
+} from './gestureModel';
 import { PhoneNotice } from './Notification';
 import { type NavEntry, top as topEntry } from './navModel';
-import { PageStack } from './PageStack';
+import { appIdOf, PageStack, type PageStackHandle } from './PageStack';
 import { PhoneScreen } from './PhoneScreen';
+import { bindPressFeedback } from './press';
 import { Skyline } from './Skyline';
 import { tileColor } from './tile';
 
@@ -104,6 +115,7 @@ function AppTile(props: { app: HomeApp; onOpen: () => void; dock?: boolean }) {
     <button
       type="button"
       class={`phone__app ${props.dock ? 'is-dock' : ''}`}
+      data-app-id={app.id}
       onClick={props.onOpen}
       aria-label={app.badge > 0 ? `${app.name}, ${app.badge} neu` : app.name}
       title={app.name}
@@ -323,9 +335,123 @@ function MobileDock(props: { state: GameState; unread: number }) {
   );
 }
 
+/**
+ * Gesten des Bildschirms (Pointer Events, Maus und Touch gleich): Rand-Wischen zurück (Start höchstens 24 px vom
+ * linken Rand, die Seite folgt dem Finger) und Hochwischen am Home-Balken (App schrumpft auf ihre Kachel, auf dem
+ * Startbildschirm: Handy weglegen). Beides sind Abkürzungen für Zurück-Knopf, Home-Balken und Esc.
+ */
+function usePhoneGestures(screen: { current: HTMLDivElement | null }, stack: { current: PageStackHandle | null }) {
+  const runtime = useRuntime();
+  useEffect(() => {
+    const el = screen.current;
+    if (!el) return;
+    const unbindPress = bindPressFeedback(el);
+    const onDown = (e: PointerEvent) => {
+      const animator = stack.current?.animator;
+      if (!animator || !e.isPrimary || e.button !== 0) return;
+      const rect = el.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const pages = runtime.ui.phone.stack;
+      if (x > EDGE_ZONE || pages.length < 2 || el.querySelector('[data-modal]')) return;
+      if ((e.target as Element).closest('.phone__nav, .phone-notice, .island-wrap')) return;
+      const front = pages[pages.length - 1].key;
+      const back = pages[pages.length - 2].key;
+      if (e.pointerType === 'mouse') e.preventDefault();
+      startDrag(e, el, {
+        axis: 'x',
+        accept: (dx) => dx > 0,
+        onStart: () => animator.beginGesture('pop', front, back, null),
+        onMove: ({ dx }) => animator.drag(edgeSwipeProgress(dx, rect.width)),
+        onEnd: ({ dx, vx }, cancelled) => {
+          const commit = !cancelled && edgeSwipeCommits(edgeSwipeProgress(dx, rect.width), vx);
+          if (animator.endGesture(commit, (vx * 1000) / rect.width) && commit) runtime.api.back();
+        },
+      });
+    };
+    el.addEventListener('pointerdown', onDown, true);
+    return () => {
+      unbindPress();
+      el.removeEventListener('pointerdown', onDown, true);
+    };
+  }, []);
+
+  /** Home-Balken: hochwischen geht zum Startbildschirm, dort legt es das Handy weg. */
+  return (e: PointerEvent) => {
+    const el = screen.current;
+    const animator = stack.current?.animator;
+    if (!el || !animator || !e.isPrimary || e.button !== 0) return;
+    const rect = el.getBoundingClientRect();
+    const pages = runtime.ui.phone.stack;
+    const atHome = pages.length <= 1;
+    const device = el.closest<HTMLElement>('.phone');
+    startDrag(e, e.currentTarget as HTMLElement, {
+      axis: 'y',
+      accept: (_dx, dy) => dy < 0,
+      onStart: () =>
+        atHome ? true : animator.beginGesture('close', pages[pages.length - 1].key, pages[0].key, appIdOf(pages)),
+      onMove: ({ dy }) => {
+        if (!atHome) animator.drag(homeSwipeOpenness(dy, rect.height));
+        else if (device) device.style.transform = `translateY(${rubberBand(dy, rect.height)}px)`;
+      },
+      onEnd: ({ dy, vy }, cancelled) => {
+        const commit = !cancelled && homeSwipeCommits(dy, rect.height, vy);
+        if (atHome) {
+          if (device) device.style.transform = '';
+          if (commit) runtime.api.closePhone();
+          return;
+        }
+        if (animator.endGesture(commit, (vy * 1000) / (rect.height * 0.6)) && commit) runtime.api.openPhone(null);
+      },
+    });
+  };
+}
+
+/** Bildschirm des offenen Handys: Seitenstapel, Statusleiste, Banner, Home-Balken. */
+function PhoneScreenArea(props: { state: GameState; mobile: boolean }) {
+  const { ui, api } = useRuntime();
+  const screen = useRef<HTMLDivElement>(null);
+  const stack = useRef<PageStackHandle | null>(null);
+  const homeSwipe = usePhoneGestures(screen, stack);
+  const atHome = topEntry(ui.phone.stack).kind === 'home';
+  return (
+    <div class={`phone__screen ${atHome ? 'is-home' : ''}`} ref={screen}>
+      <PageStack
+        stack={ui.phone.stack}
+        render={renderPage}
+        handle={(handle) => {
+          stack.current = handle;
+        }}
+      />
+      <StatusBar time={props.state.time} />
+      <PhoneNotice />
+      <nav class="phone__nav">
+        <button
+          type="button"
+          class="phone__nav-button"
+          onPointerDown={homeSwipe}
+          onClick={() => (atHome ? api.closePhone() : api.openPhone(null))}
+          aria-label={atHome ? 'Handy weglegen' : 'Startbildschirm'}
+          title={atHome ? 'Handy weglegen (T)' : 'Startbildschirm'}
+        >
+          <span class="phone__home-indicator" />
+        </button>
+        <button
+          type="button"
+          class="phone__close"
+          onClick={api.closePhone}
+          aria-label="Handy weglegen"
+          title="Handy weglegen (T)"
+        >
+          <Icon name={props.mobile ? 'close' : 'chevronRight'} />
+        </button>
+      </nav>
+    </div>
+  );
+}
+
 export function PhoneFrame() {
   const runtime = useRuntime();
-  const { ui, api } = runtime;
+  const { ui } = runtime;
   const state = runtime.state;
   const mobile = useIsMobile();
   if (!state) return null;
@@ -338,35 +464,10 @@ export function PhoneFrame() {
       </>
     );
   }
-  const atHome = topEntry(ui.phone.stack).kind === 'home';
   return (
     <section class="phone" aria-label="Handy">
       <div class={`phone__device ${ui.buzz > 0 ? `is-buzzing-${ui.buzz % 2}` : ''}`}>
-        <div class={`phone__screen ${atHome ? 'is-home' : ''}`}>
-          <PageStack stack={ui.phone.stack} render={renderPage} />
-          <StatusBar time={state.time} />
-          <PhoneNotice />
-          <nav class="phone__nav">
-            <button
-              type="button"
-              class="phone__nav-button"
-              onClick={() => (atHome ? api.closePhone() : api.openPhone(null))}
-              aria-label={atHome ? 'Handy weglegen' : 'Startbildschirm'}
-              title={atHome ? 'Handy weglegen (T)' : 'Startbildschirm'}
-            >
-              <span class="phone__home-indicator" />
-            </button>
-            <button
-              type="button"
-              class="phone__close"
-              onClick={api.closePhone}
-              aria-label="Handy weglegen"
-              title="Handy weglegen (T)"
-            >
-              <Icon name={mobile ? 'close' : 'chevronRight'} />
-            </button>
-          </nav>
-        </div>
+        <PhoneScreenArea state={state} mobile={mobile} />
       </div>
     </section>
   );

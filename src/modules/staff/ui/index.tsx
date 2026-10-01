@@ -342,7 +342,7 @@ registerTab({
   badge: (state) => getStaff(state, { status: 'jailed' }).length,
 });
 registerSlot('tab:staff', { id: 'staff.overview', order: 10, component: StaffOverview });
-registerSlot('tab:business', { id: 'staff.runners', order: 20, component: StaffSummary });
+registerSlot('tab:business', { id: 'staff.runners', title: 'Personal', order: 20, component: StaffSummary });
 registerSlot('spots.spotPanel', { id: 'staff.runner', order: 50, component: SpotStaff });
 registerPanel({
   id: 'staff.profile',

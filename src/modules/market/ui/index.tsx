@@ -200,5 +200,5 @@ function MarketSection() {
 }
 
 registerSlot('spots.spotPanel', { id: 'market.prices', order: 20, component: SpotPrices });
-registerSlot('tab:business', { id: 'market.summary', order: 40, component: MarketSection });
+registerSlot('tab:business', { id: 'market.summary', title: 'Markt', order: 40, component: MarketSection });
 registerPanel({ id: 'market.overview', title: () => 'Markt-Übersicht', component: MarketOverview });

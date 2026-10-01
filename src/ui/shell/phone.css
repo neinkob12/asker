@@ -188,6 +188,7 @@
   pointer-events: none;
 }
 .phone__nav-button {
+  touch-action: none;
   display: grid;
   place-items: end center;
   width: 200px;
@@ -261,7 +262,6 @@
   align-items: flex-start;
   gap: 6px;
   transform: translateX(-50%);
-  interpolate-size: allow-keywords;
   pointer-events: auto;
 }
 .island-wrap.is-floating {
@@ -270,8 +270,12 @@
   top: calc(var(--top) + 6px);
   left: calc((100% - var(--map-right) + var(--gap)) / 2);
 }
+/*
+ * Die Island ist eine Form: Wechselt sie zwischen kompakt und aufgeklappt, springt ihr Kasten sofort auf die neue
+ * Größe, und die schwarze Fläche (__shape) wächst oder schrumpft per Feder dorthin (nur transform, dazu der Radius;
+ * DynamicIsland.tsx). Der Inhalt blendet versetzt ein. In Ruhe trägt der Kasten selbst die Fläche.
+ */
 .island {
-  --island-ease: var(--ease-ios);
   position: relative;
   min-width: 126px;
   height: 37px;
@@ -280,15 +284,33 @@
   box-shadow: 0 0 0 1px var(--hw-rim);
   color: var(--hw-white);
   overflow: hidden;
-  transition:
-    width 360ms var(--island-ease),
-    height 360ms var(--island-ease),
-    border-radius 360ms var(--island-ease);
 }
-.is-floating .island {
+.island__shape {
+  position: absolute;
+  inset: 0;
+  display: none;
+  border-radius: inherit;
+  background: var(--hw-black);
+  box-shadow: 0 0 0 1px var(--hw-rim);
+  transform-origin: 50% 0;
+  pointer-events: none;
+}
+.is-floating .island,
+.is-floating .island__shape {
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.1),
     0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.island.is-morphing {
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.island.is-morphing .island__shape {
+  display: block;
+}
+.island > :not(.island__shape) {
+  position: relative;
 }
 .island.is-idle {
   width: 126px;
@@ -383,7 +405,15 @@
   flex-direction: column;
   gap: 4px;
   padding: 44px 14px 14px;
-  animation: island-content 300ms var(--ease-out) 80ms both;
+  animation: island-content 220ms var(--ease-out) 110ms both;
+}
+.island__compact {
+  animation: island-compact 180ms var(--ease-out) 60ms both;
+}
+@keyframes island-compact {
+  from {
+    opacity: 0;
+  }
 }
 @keyframes island-content {
   from {
@@ -898,14 +928,18 @@
 }
 .phone__app .phone__tile {
   --chip-size: min(64px, calc(100cqw * 0.155));
-  transition: transform var(--duration-fast) var(--ease-out);
+  /* Loslassen federt zurück, Drücken reagiert sofort (press.ts setzt .is-pressed beim Aufsetzen) */
+  transition:
+    transform 280ms var(--ease-spring),
+    filter 200ms var(--ease-out);
 }
 .phone__app:hover .phone__tile {
   filter: brightness(1.08);
 }
-.phone__app:active .phone__tile {
-  transform: scale(0.92);
-  filter: brightness(0.85);
+.phone__app:is(:active, .is-pressed) .phone__tile {
+  transform: scale(0.96);
+  filter: brightness(0.82);
+  transition-duration: 90ms;
 }
 .phone__app-name {
   max-width: 100%;
@@ -992,15 +1026,39 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+  background: var(--hw-black);
+  /* Senkrecht scrollt der Browser, waagerecht gehört der Finger den Gesten (Rand-Wischen, Zeilen) */
+  touch-action: pan-y;
 }
+/* Während einer Geste wird kein Text markiert */
+html.is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* Ohne overflow: hidden, damit der wandernde Titel beim Push über die Kante der Seite hinaus darf */
 .phone-page {
   position: absolute;
   inset: 0;
-  overflow: hidden;
   background: var(--phone-bg);
 }
 .phone-page.is-hidden {
   visibility: hidden;
+}
+/* Seite auf dem Weg hinaus: nicht mehr bedienbar */
+.phone-page.is-leaving {
+  pointer-events: none;
+}
+/* Vordere Seite während eines Übergangs: Schatten an der linken Kante (wie bei iOS) */
+.phone-page.is-front {
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.28);
+}
+/* Kopie der App-Kachel über der wachsenden App (stackAnimator.ts) */
+.phone-page__icon {
+  position: absolute;
+  z-index: 30;
+  margin: 0;
+  pointer-events: none;
+  transform-origin: 50% 50%;
 }
 /* Abdunkeln der Seite, die nach hinten rückt (Deckkraft per Feder) */
 .phone-page__dim {
@@ -1422,6 +1480,19 @@
 .phone .ui-row:hover {
   background: var(--phone-group-2);
 }
+/* Gedrückte Zeilen und Knöpfe (press.ts): sofort beim Aufsetzen, wie bei iOS */
+.phone :is(.ui-list__button, .ui-row, .msg-row, .set-link).is-pressed {
+  background: var(--phone-fill-hover);
+}
+.phone .ui-button.is-pressed {
+  filter: brightness(0.85);
+}
+.phone .phone-screen__back.is-pressed {
+  opacity: 0.35;
+}
+.island-row.is-pressed {
+  background: rgba(255, 255, 255, 0.14);
+}
 .phone .ui-row .ui-chip {
   --chip-size: 30px;
   --chip-radius: 8px;
@@ -1665,8 +1736,7 @@
     animation: none;
   }
   .phone-screen__bar,
-  .phone-screen__center,
-  .island {
+  .phone-screen__center {
     transition: none;
   }
 }

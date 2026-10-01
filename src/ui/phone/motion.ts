@@ -15,8 +15,22 @@ export function reducedMotion(): boolean {
 /** Dauer der Überblendung bei weniger Bewegung. */
 export const REDUCED_FADE_MS = 160;
 
-/** Längstes Bild, das eine Feder auf einmal weiterrechnet: Ein langsames erstes Bild verschluckt so nicht die Bewegung. */
-const MAX_FRAME = 1 / 30;
+/**
+ * Längstes erstes Bild einer Bewegung: Dauert das Bild, in dem eine neue Seite erst montiert wird, lange, verschluckt
+ * es so nicht den Anfang der Bewegung. Danach zählt die echte Zeit (die Feder rechnet für jede Bilddauer exakt).
+ */
+const MAX_FIRST_FRAME = 1 / 30;
+
+/** Laufende Bewegungen. Solange eine läuft, trägt <html> das Attribut data-moving (für Tests und Screenshots). */
+let moving = 0;
+function track(delta: number): void {
+  moving = Math.max(0, moving + delta);
+  try {
+    document.documentElement.toggleAttribute('data-moving', moving > 0);
+  } catch {
+    // Ohne DOM (Tests) nichts zu markieren.
+  }
+}
 
 export interface Motion {
   /** Läuft die Bewegung noch? */
@@ -32,21 +46,30 @@ export interface Motion {
 export function runSpring(spring: Spring, onFrame: (value: number) => void, onRest?: () => void): Motion {
   let frame = 0;
   let last = performance.now();
+  let first = true;
   let running = true;
+  const end = () => {
+    if (!running) return;
+    running = false;
+    track(-1);
+  };
   const tick = (now: number) => {
-    const dt = Math.min(MAX_FRAME, Math.max(0, (now - last) / 1000));
+    const elapsed = Math.max(0, (now - last) / 1000);
+    const dt = first ? Math.min(MAX_FIRST_FRAME, elapsed) : elapsed;
+    first = false;
     last = now;
     onFrame(spring.step(dt));
     if (spring.settled) {
-      running = false;
+      end();
       onRest?.();
       return;
     }
     frame = requestAnimationFrame(tick);
   };
+  track(1);
   onFrame(spring.value);
   if (spring.settled) {
-    running = false;
+    end();
     onRest?.();
   } else {
     frame = requestAnimationFrame(tick);
@@ -56,7 +79,7 @@ export function runSpring(spring: Spring, onFrame: (value: number) => void, onRe
       return running;
     },
     stop() {
-      running = false;
+      end();
       cancelAnimationFrame(frame);
     },
   };
@@ -84,17 +107,23 @@ export function animateValue(options: {
     const to = options.to;
     let frame = 0;
     let running = true;
+    const end = () => {
+      if (!running) return;
+      running = false;
+      track(-1);
+    };
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / REDUCED_FADE_MS);
       spring.jump(from + (to - from) * t, to);
       options.onFrame(spring.value);
       if (t >= 1) {
-        running = false;
+        end();
         options.onRest?.();
         return;
       }
       frame = requestAnimationFrame(tick);
     };
+    track(1);
     frame = requestAnimationFrame(tick);
     return {
       spring,
@@ -103,7 +132,7 @@ export function animateValue(options: {
           return running;
         },
         stop() {
-          running = false;
+          end();
           cancelAnimationFrame(frame);
         },
       },

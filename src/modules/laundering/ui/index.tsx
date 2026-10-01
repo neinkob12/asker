@@ -88,7 +88,12 @@ function LaunderingSection() {
   );
 }
 
-registerSlot('tab:business', { id: 'laundering.section', order: 50, component: LaunderingSection });
+registerSlot('tab:business', {
+  id: 'laundering.section',
+  title: 'Geldwäsche',
+  order: 50,
+  component: LaunderingSection,
+});
 onGameEvent('laundering.completed', 'laundering.toast', (payload, ui) =>
   ui.toast(`${formatEuro(payload.amount - payload.fee)} sind jetzt sauber.`, 'good'),
 );

@@ -187,9 +187,13 @@ export function backLabel(below: NavEntry | null | undefined): string {
   return title.length > 0 && title.length <= BACK_TITLE_MAX ? title : 'Zurück';
 }
 
-/** Seiten, die montiert sind: die sichtbare und höchstens MOUNTED_BELOW darunter. */
+/**
+ * Seiten, die montiert sind: die sichtbare und höchstens MOUNTED_BELOW darunter, dazu immer der Startbildschirm.
+ * Er ist bei iOS keine Seite der App, sondern der Hintergrund, aus dem Apps aufgehen und in den sie zurückschrumpfen.
+ */
 export function mountedEntries(stack: NavStack, below = MOUNTED_BELOW): NavEntry[] {
-  return stack.slice(Math.max(0, stack.length - 1 - below));
+  const pages = stack.slice(Math.max(0, stack.length - 1 - below));
+  return stack.length > 0 && pages[0] !== stack[0] ? [stack[0], ...pages] : pages;
 }
 
 /** Titel einer Seite ändern (die Seite meldet ihren echten Titel, z.B. den Namen eines Kontakts). */
