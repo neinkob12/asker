@@ -3,16 +3,19 @@
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro } from '../../../core';
-import { ActionSheet, Button, Empty, KeyValue, ProgressBar, Select, Slot, Stepper, useGame, useUi } from '../../../ui';
+import { Button, Empty, KeyValue, ProgressBar, Select, Slot, Stepper, Toggle, useGame } from '../../../ui';
 import { getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
 import {
   activeRunnerAt,
   assignmentLabel,
   bailCost,
+  effectiveWage,
   expectedWage,
   getStaffMember,
+  isAbsent,
   isEmployed,
+  JAIL_WAGE_FACTOR,
   levelProgress,
   MAX_LEVEL,
   roleName,
@@ -20,6 +23,7 @@ import {
   type StaffMember,
   securityAt,
 } from '../index';
+import { AbsenceSheet } from './absence';
 import { ORIGIN_NAMES, Portrait, StatBars, StatusTag } from './common';
 
 export function StaffProfile(props: { staffId: string }) {
@@ -77,6 +81,7 @@ export function StaffProfile(props: { staffId: string }) {
             </>
           }
         />
+        {employed && isAbsent(m) && <KeyValue label="Kostet gerade" value={`${formatEuro(effectiveWage(m))} / Tag`} />}
       </section>
 
       <section class="staff-file__section">
@@ -110,7 +115,6 @@ export function StaffProfile(props: { staffId: string }) {
 
 function ProfileActions(props: { member: StaffMember }) {
   const { state, dispatch } = useGame();
-  const ui = useUi();
   const m = props.member;
   const [confirmFire, setConfirmFire] = useState(false);
   const isLieutenant = m.assignment?.kind === 'veedel' || m.returnTo?.kind === 'veedel';
@@ -141,24 +145,21 @@ function ProfileActions(props: { member: StaffMember }) {
           onChange={(wage) => dispatch({ type: 'staff.setWage', payload: { staffId: m.id, wage } })}
         />
       </div>
-      <Button variant="danger" wide onClick={() => setConfirmFire(true)}>
-        Entlassen
-      </Button>
-      <ActionSheet
-        open={confirmFire}
-        onClose={() => setConfirmFire(false)}
-        title={`${m.name} entlassen?`}
-        message="Die Person geht sofort und kommt nicht wieder."
-        actions={[
-          {
-            label: 'Entlassen',
-            destructive: true,
-            onSelect: () => {
-              if (dispatch({ type: 'staff.fire', payload: { staffId: m.id } }).ok) ui.closePanel();
-            },
-          },
-        ]}
+      <Toggle
+        icon="jail"
+        label="Stillhaltegeld in Haft"
+        hint={
+          m.jailSupport
+            ? `In Haft kostet ${m.name} ${formatEuro(Math.round(m.wage * JAIL_WAGE_FACTOR))} am Tag und hält dicht.`
+            : 'Kostet in Haft nichts, aber wer nichts kriegt, wird sauer und redet eher.'
+        }
+        checked={m.jailSupport}
+        onChange={(enabled) => dispatch({ type: 'staff.setJailSupport', payload: { staffId: m.id, enabled } })}
       />
+      <Button variant="danger" wide onClick={() => setConfirmFire(true)}>
+        {isAbsent(m) ? 'Ersetzen oder entlassen …' : 'Entlassen …'}
+      </Button>
+      <AbsenceSheet member={m} open={confirmFire} onClose={() => setConfirmFire(false)} />
     </section>
   );
 }

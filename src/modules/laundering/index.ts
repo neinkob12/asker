@@ -107,11 +107,15 @@ function launder(ctx: Ctx, amount: number): CommandResult {
   if (rounded > free) {
     return { ok: false, reason: `Mehr geht gerade nicht, frei sind noch ${formatEuro(Math.max(0, free))}.` };
   }
-  if (!wallet.pay(ctx, rounded, 'dirty', 'Geldwäsche')) return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
+  if (!wallet.canAfford(ctx.state, rounded)) return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
+  const fee = Math.round(rounded * launderingFee(ctx.state));
+  // Die Gebühr ist eine Ausgabe, der Rest nur eine Umbuchung (kommt später als sauberes Geld zurück).
+  wallet.pay(ctx, rounded - fee, 'dirty', 'Geldwäsche', 'transfer');
+  if (fee > 0) wallet.pay(ctx, fee, 'dirty', 'Geldwäsche-Gebühr', 'laundering');
   const batch: LaunderingBatch = {
     id: ctx.nextId(),
     amount: rounded,
-    fee: Math.round(rounded * launderingFee(ctx.state)),
+    fee,
     startedAt: ctx.now,
     readyAt: ctx.now + launderingDuration(rounded),
   };
@@ -130,7 +134,7 @@ function tick(ctx: Ctx): void {
   if (done.length === 0) return;
   s.batches = s.batches.filter((b) => b.readyAt > ctx.now);
   for (const b of done) {
-    wallet.earn(ctx, b.amount - b.fee, 'clean', 'Geldwäsche');
+    wallet.earn(ctx, b.amount - b.fee, 'clean', 'Geldwäsche', 'transfer');
     s.totalLaundered += b.amount;
     s.totalFees += b.fee;
     journal.add(ctx, `${formatEuro(b.amount - b.fee)} sind sauber (Gebühr ${formatEuro(b.fee)}).`, 'good');

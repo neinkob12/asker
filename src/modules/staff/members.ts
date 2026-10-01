@@ -1,6 +1,6 @@
 // Lese- und Schreib-API des Personals. Lesen mit state, schreiben mit ctx.
 
-import { type Contact, type Ctx, type GameState, journal } from '../../core';
+import { type Contact, type Ctx, type GameState, journal, type MoneyCategory } from '../../core';
 import { getWarehouse } from '../goods';
 import { getSpot, isSpotActive } from '../spots';
 import { veedelAt, veedelName } from '../veedel';
@@ -8,9 +8,13 @@ import {
   BAIL_BASE,
   BAIL_PER_LEVEL,
   CAREER_LIMIT,
+  FIRED_TALK_CHANCE,
+  FIRED_TALK_LOYALTY,
   FORMER_LIMIT,
+  INJURED_WAGE_FACTOR,
   INJURY_DURATION,
   JAIL_DURATION,
+  JAIL_WAGE_FACTOR,
   LOYALTY,
   MIN_SERVE_TIME,
   ROLE_INFO,
@@ -20,6 +24,8 @@ import {
   RUNNER_SERVE_TIME,
   SPECIALIST_BONUS,
   STAT_NAMES,
+  UNSUPPORTED_TALK_CHANCE,
+  UNSUPPORTED_TALK_LOYALTY,
 } from './config';
 import { clampStat, expectedWageFor, levelForXp, levelUpGains, STAT_KEYS } from './profile';
 import type {
@@ -134,9 +140,50 @@ export function expectedWage(state: GameState, id: string): number {
   return m ? expectedWageFor(m.role, m.level, m.demand) : 0;
 }
 
+/** Kategorie des Lohns in der Kasse: nach Rolle, Leutnants und Rechte Hand extra. */
+export function wageCategory(member: StaffMember): MoneyCategory {
+  const post = member.assignment ?? member.returnTo;
+  if (post?.kind === 'veedel' || post?.kind === 'office') return 'wages.lead';
+  if (member.role === 'runner') return 'wages.runner';
+  if (member.role === 'security') return 'wages.security';
+  if (member.role === 'courier' || member.role === 'driver') return 'wages.transport';
+  return 'wages.specialist';
+}
+
 /** Summe der Tageslöhne aller aktuellen Mitarbeiter. */
 export function dailyWages(state: GameState): number {
   return state.modules.staff.members.reduce((sum, m) => sum + m.wage, 0);
+}
+
+/**
+ * Was die Person heute Nacht wirklich kostet: in Haft nur Stillhaltegeld (oder nichts, wenn abgestellt), verletzt
+ * den halben Lohn, sonst den vollen.
+ */
+export function effectiveWage(member: StaffMember): number {
+  if (member.status === 'jailed') return member.jailSupport ? Math.round(member.wage * JAIL_WAGE_FACTOR) : 0;
+  if (member.status === 'injured') return Math.round(member.wage * INJURED_WAGE_FACTOR);
+  return member.wage;
+}
+
+/** Was um Mitternacht an Löhnen fällig wird (Summe über alle aktuellen Mitarbeiter, Haft und Verletzung anteilig). */
+export function payrollDue(state: GameState): number {
+  return state.modules.staff.members.reduce((sum, m) => sum + effectiveWage(m), 0);
+}
+
+/**
+ * Wie wahrscheinlich redet die Person, wenn sie jetzt entlassen wird (bzw. ohne Stillhaltegeld aus der Haft kommt)?
+ * 0 = sie hält dicht.
+ */
+export function talkChance(member: StaffMember): number {
+  const unsupported = member.status === 'jailed' && !member.jailSupport;
+  if (unsupported && member.stats.loyalty < UNSUPPORTED_TALK_LOYALTY) return UNSUPPORTED_TALK_CHANCE;
+  if (member.stats.loyalty < FIRED_TALK_LOYALTY) return FIRED_TALK_CHANCE;
+  return 0;
+}
+
+/** Fällt die Person gerade aus (Haft oder verletzt)? */
+export function isAbsent(member: StaffMember): boolean {
+  return member.status === 'jailed' || member.status === 'injured';
 }
 
 /** So lange braucht die Person für einen Kunden (Tempo und Level). */
@@ -273,6 +320,7 @@ export function enlist(ctx: Ctx, profile: RecruitProfile, options: EnlistOptions
     lastIncidentAt: null,
     leftAt: null,
     leftReason: null,
+    jailSupport: true,
   };
   ctx.state.modules.staff.members.push(member);
   addCareer(ctx, member.id, options.note ? `Eingestellt. ${options.note}` : 'Eingestellt.');
@@ -325,6 +373,7 @@ export function assignmentLabel(state: GameState, a: StaffAssignment | null): st
   if (a.kind === 'warehouse') return getWarehouse(state, a.targetId)?.name ?? a.targetId;
   if (a.kind === 'veedel') return `Leutnant in ${veedelName(a.targetId)}`;
   if (a.kind === 'transport') return 'Fahrt';
+  if (a.kind === 'office') return 'Rechte Hand';
   return 'Lieferung';
 }
 

@@ -9,6 +9,8 @@
 //   getStaff(state, filter), getStaffMember(state, id), isEmployed, getStats(state, id),
 //   runnerAt(state, spotId) (egal welcher Status), activeRunnerAt(state, spotId) (arbeitet gerade dort), securityAt(state, { spotId | warehouseId }), findAvailable(state, { role }), staffVeedel(state, member),
 //   expectedWage(state, id), expectedWageFor(role, level, demand), dailyWages(state), serveTime(member),
+//   effectiveWage(member) (in Haft nur Stillhaltegeld, verletzt halber Lohn), payrollDue(state) (heute Nacht fällig),
+//   talkChance(member) (redet beim Entlassen?), isAbsent(member), wageCategory(member) (Kategorie in der Kasse),
 //   speedFactor, riskFactor, combatValue, defenseStrength(state, { spotId | warehouseId | veedelId }),
 //   bonus(state, key), bonusProvider, bailCost, jailDuration, levelProgress, betrayalChance,
 //   isSpecialist, isStatKnown, roleName, assignmentLabel, staffContact, ROLE_INFO, STAT_NAMES, STATUS_NAMES, STAT_KEYS
@@ -16,13 +18,35 @@
 //   assign(ctx, id, assignment), setStatus(ctx, id, status, until?), addXp, addLoyalty, setWage, setDemand,
 //   addCareer, revealStat, enlist(ctx, profile, options), generateProfile(ctx, role, options), randomName(ctx)
 //   isLyingLow(state, veedelId), lieLow(ctx, veedelId, until)
-// Befehle: 'staff.hireRunner', 'staff.hireDriver', 'staff.fire', 'staff.assign', 'staff.setWage', 'staff.bail', 'staff.lieLow'
+// Befehle: 'staff.hireRunner', 'staff.hireDriver', 'staff.fire', 'staff.assign', 'staff.setWage', 'staff.bail', 'staff.lieLow',
+//   'staff.setJailSupport' (Stillhaltegeld), 'staff.replace' (Ausfall am Spot ersetzen, optional entlassen)
+// Nach einer Festnahme fragt der Leutnant (sonst die Person selbst) still per Handy: Kaution, Ersetzen, Entlassen, Abwarten.
 // Ereignisse: 'staff.hired', 'staff.left', 'staff.statusChanged', 'staff.assigned', 'staff.levelUp',
 //   'staff.bailed', 'staff.betrayed', 'staff.raidWarning', 'staff.wentUnderground'
 
-import { type CommandResult, type Ctx, clock, defineModule, formatEuro, type GameState, journal } from '../../core';
+import {
+  type CommandResult,
+  type Ctx,
+  clock,
+  defineModule,
+  formatEuro,
+  type GameState,
+  journal,
+  type MessageOption,
+  messages,
+} from '../../core';
+import { absenceHandled, teamLeadOf } from '../hierarchy';
 import { getVeedel, veedelName } from '../veedel';
-import { assignCommand, bail, fire, hireDriver, hireRunner, setWageCommand } from './commands';
+import {
+  assignCommand,
+  bail,
+  fire,
+  hireDriver,
+  hireRunner,
+  replaceAbsent,
+  setJailSupport,
+  setWageCommand,
+} from './commands';
 import {
   DEFAULT_STATS,
   INJURY_DURATION,
@@ -33,7 +57,7 @@ import {
   XP_PER_SALE,
   XP_PER_SALE_UNIT,
 } from './config';
-import { addLoyalty, addXp, bailCost, getStaff, getStaffMember, setStatus } from './members';
+import { addLoyalty, addXp, bailCost, getStaff, getStaffMember, setStatus, staffContact } from './members';
 import { STAT_KEYS } from './profile';
 import { daily, hourly, lieLow, tick, warnOfRaid } from './routines';
 import type {
@@ -50,6 +74,8 @@ import type {
 export {
   DEFAULT_STATS,
   DRIVER_HIRE_COST,
+  INJURED_WAGE_FACTOR,
+  JAIL_WAGE_FACTOR,
   MAX_LEVEL,
   ROLE_INFO,
   RUNNER_DAILY_WAGE,
@@ -87,6 +113,10 @@ declare module '../../core' {
     'staff.setWage': { staffId: string; wage: number };
     /** Kaution zahlen und jemanden aus der Haft holen. */
     'staff.bail': { staffId: string };
+    /** Stillhaltegeld in Haft an- oder abstellen (ohne kostet die Person nichts, redet aber eher). */
+    'staff.setJailSupport': { staffId: string; enabled: boolean };
+    /** Ausfall (Haft, verletzt) am Spot ersetzen; mit fire die Person gleich entlassen. */
+    'staff.replace': { staffId: string; fire?: boolean };
     /** Alle Leute an den Spots eines Veedels bis until von der Straße holen (z.B. nach einer Razzia-Warnung). */
     'staff.lieLow': { veedelId: string; until: number };
   }
@@ -127,7 +157,7 @@ interface StaffStateV1 {
   members: StaffMemberV1[];
 }
 
-function upgradeMember(m: StaffMemberV1, state: GameState): StaffMember {
+function upgradeMember(m: StaffMemberV1, state: GameState): StaffMemberV3 {
   const away = m.status === 'jailed' || m.status === 'injured';
   const gone = m.status === 'quit' || m.status === 'dead';
   return {
@@ -150,7 +180,9 @@ function upgradeMember(m: StaffMemberV1, state: GameState): StaffMember {
   };
 }
 
-type StaffStateV2 = Omit<StaffState, 'hiding'> & { warnings: Record<string, number> };
+type StaffMemberV3 = Omit<StaffMember, 'jailSupport'>;
+type StaffStateV3 = Omit<StaffState, 'members' | 'former'> & { members: StaffMemberV3[]; former: StaffMemberV3[] };
+type StaffStateV2 = Omit<StaffStateV3, 'hiding'> & { warnings: Record<string, number> };
 
 export function migrateStaffV1(old: StaffStateV1, state: GameState): StaffStateV2 {
   const members = old.members.map((m) => upgradeMember(m, state));
@@ -162,9 +194,18 @@ export function migrateStaffV1(old: StaffStateV1, state: GameState): StaffStateV
 }
 
 /** Version 2 → 3: Die Übergangs-Warnungen fallen weg, dafür gibt es abgetauchte Veedel. */
-export function migrateStaffV2(old: StaffStateV2): StaffState {
+export function migrateStaffV2(old: StaffStateV2): StaffStateV3 {
   const { warnings: _, ...rest } = old;
   return { ...rest, hiding: {} };
+}
+
+/** Version 3 → 4: Stillhaltegeld in Haft (Standard: ja; gezahlt wird jetzt nur noch ein Anteil vom Lohn). */
+export function migrateStaffV3(old: StaffStateV3): StaffState {
+  return {
+    ...old,
+    members: old.members.map((m) => ({ ...m, jailSupport: true })),
+    former: old.former.map((m) => ({ ...m, jailSupport: true })),
+  };
 }
 
 // --- Reaktionen auf andere Module ---
@@ -181,6 +222,56 @@ function onArrest(ctx: Ctx, staffId: string, veedelId: string): void {
   );
   // Angst bei den anderen im selben Veedel.
   for (const other of getStaff(ctx.state, { veedelId })) addLoyalty(ctx, other.id, LOYALTY.arrestNearby);
+  askAboutArrest(ctx, m);
+}
+
+/**
+ * Nach einer Festnahme fragt der Leutnant (sonst die Person selbst über den Anwalt) still per Handy, was passieren
+ * soll: Kaution, Ersetzen, Entlassen und ersetzen oder Abwarten. Regelt der Leutnant Ausfälle selbst, meldet er nur.
+ */
+function askAboutArrest(ctx: Ctx, m: StaffMember): void {
+  const until = m.statusUntil ?? ctx.now;
+  const leadId = teamLeadOf(ctx.state, m.id);
+  const lead = leadId && leadId !== m.id ? getStaffMember(ctx.state, leadId) : undefined;
+  if (absenceHandled(ctx.state, m.id)) return;
+  const cost = bailCost(ctx.state, m.id);
+  const atSpot = m.returnTo?.kind === 'spot' && (m.role === 'runner' || m.role === 'security');
+  const options: MessageOption[] = [];
+  if (atSpot) {
+    options.push({
+      id: 'replace',
+      label: 'Ersetzen',
+      command: { type: 'staff.replace', payload: { staffId: m.id } },
+      reply: 'Stell jemand anderen hin. Wenn er rauskommt, sehen wir weiter.',
+    });
+  }
+  if (ctx.state.wallet.dirty >= cost) {
+    options.push({
+      id: 'bail',
+      label: `Kaution (${formatEuro(cost)})`,
+      command: { type: 'staff.bail', payload: { staffId: m.id } },
+      reply: 'Zahl die Kaution, hol ihn raus.',
+    });
+  }
+  options.push({
+    id: 'fireReplace',
+    label: atSpot ? 'Entlassen und ersetzen' : 'Entlassen',
+    command: atSpot
+      ? { type: 'staff.replace', payload: { staffId: m.id, fire: true } }
+      : { type: 'staff.fire', payload: { staffId: m.id } },
+    reply: 'Der ist raus.',
+  });
+  options.push({ id: 'wait', label: 'Abwarten', reply: 'Wir warten, bis er rauskommt.' });
+  const day = clock.day(until);
+  messages.send(ctx, {
+    contact: staffContact(lead ?? m),
+    text: lead
+      ? `${m.name} sitzt bis Tag ${day}. Kostet jetzt nur Stillhaltegeld. Was machen wir?`
+      : `Ich ruf über den Anwalt an: Die halten mich bis Tag ${day} fest. Was machen wir?`,
+    options,
+    expiresIn: Math.max(60, until - ctx.now),
+    silent: true,
+  });
 }
 
 function lieLowCommand(ctx: Ctx, veedelId: string, until: number, actor: string): CommandResult {
@@ -201,14 +292,16 @@ function lieLowCommand(ctx: Ctx, veedelId: string, until: number, actor: string)
 
 export default defineModule({
   id: 'staff',
-  version: 3,
+  version: 4,
   dependsOn: ['spots', 'customers'],
   init: () => ({ members: [], former: [], hiding: {} }),
   tick,
   commands: {
     'staff.hireRunner': (ctx, { spotId }) => hireRunner(ctx, spotId),
     'staff.hireDriver': (ctx) => hireDriver(ctx),
-    'staff.fire': (ctx, { staffId }) => fire(ctx, staffId),
+    'staff.fire': (ctx, { staffId }, meta) => fire(ctx, staffId, meta),
+    'staff.setJailSupport': (ctx, { staffId, enabled }) => setJailSupport(ctx, staffId, !!enabled),
+    'staff.replace': (ctx, { staffId, fire: fireToo }, meta) => replaceAbsent(ctx, staffId, !!fireToo, meta),
     'staff.assign': (ctx, { staffId, assignment }) => assignCommand(ctx, staffId, assignment),
     'staff.setWage': (ctx, { staffId, wage }) => setWageCommand(ctx, staffId, wage),
     'staff.bail': (ctx, { staffId }, meta) => bail(ctx, staffId, meta),
@@ -218,7 +311,7 @@ export default defineModule({
     'clock.dayStarted': daily,
     'clock.hourStarted': hourly,
     'police.arrest': (ctx, { staffId, veedelId }) => onArrest(ctx, staffId, veedelId),
-    'police.raidPlanned': (ctx, { veedelId, at }) => warnOfRaid(ctx, veedelId, at),
+    'police.raidPlanned': (ctx, { veedelId, at, scope }) => warnOfRaid(ctx, veedelId, at, scope === 'major'),
     'police.raid': (ctx, { veedelId }) => {
       for (const m of getStaff(ctx.state, { veedelId })) addLoyalty(ctx, m.id, LOYALTY.raid);
     },
@@ -237,5 +330,5 @@ export default defineModule({
       }
     },
   },
-  migrations: { 2: migrateStaffV1, 3: migrateStaffV2 },
+  migrations: { 2: migrateStaffV1, 3: migrateStaffV2, 4: migrateStaffV3 },
 });

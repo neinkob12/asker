@@ -48,7 +48,8 @@ export function getCounter(state: GameState): number {
 /** Schreibende Funktionen bekommen `ctx`, damit sie Ereignisse melden und Zufall nutzen können. */
 export function increment(ctx: Ctx, by: number): CommandResult {
   if (!(by > 0)) return { ok: false, reason: 'Nur positive Zahlen.' };
-  if (!wallet.pay(ctx, TEMPLATE_PRICE * by, 'dirty', 'Vorlage')) return { ok: false, reason: 'Nicht genug Geld.' };
+  if (!wallet.pay(ctx, TEMPLATE_PRICE * by, 'dirty', 'Vorlage', 'expense.other'))
+    return { ok: false, reason: 'Nicht genug Geld.' };
   const state = ctx.state.modules.template;
   state.counter += by;
   ctx.emit('template.incremented', { counter: state.counter });

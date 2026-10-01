@@ -79,7 +79,7 @@ export function ceasefire(ctx: Ctx, gangId: string): CommandResult {
     return { ok: false, reason: 'Zu frisch. Nach deinem Angriff redet dort niemand über Frieden.' };
   }
   const cost = ceasefireCost(ctx.state, gangId);
-  if (!wallet.pay(ctx, cost, 'dirty', `Waffenstillstand mit ${gang.name}`)) return notEnoughMoney(cost);
+  if (!wallet.pay(ctx, cost, 'dirty', `Waffenstillstand mit ${gang.name}`, 'tribute')) return notEnoughMoney(cost);
   s.money += cost;
   s.ceasefireUntil = ctx.now + CEASEFIRE_DURATION;
   s.quote = null;
@@ -103,7 +103,7 @@ export function payTribute(ctx: Ctx, gangId: string): CommandResult {
   const { gang, s } = found;
   if (paysTribute(ctx.state, gangId)) return { ok: false, reason: `Du zahlst ${gang.name} schon.` };
   const amount = tributeAmount(ctx.state, gangId);
-  if (!wallet.pay(ctx, amount, 'dirty', `Schutzgeld an ${gang.name}`)) return notEnoughMoney(amount);
+  if (!wallet.pay(ctx, amount, 'dirty', `Schutzgeld an ${gang.name}`, 'tribute')) return notEnoughMoney(amount);
   s.money += amount;
   s.tribute = { amount, until: ctx.now + TRIBUTE_DURATION };
   s.quote = null;
@@ -145,7 +145,7 @@ export function demandProtection(ctx: Ctx, gangId: string): CommandResult {
   const amount = protectionAmount(ctx.state, gangId);
   const paid = Math.min(amount, Math.max(0, s.money));
   s.money -= paid;
-  if (paid > 0) wallet.earn(ctx, paid, 'dirty', `Schutzgeld von ${gang.name}`);
+  if (paid > 0) wallet.earn(ctx, paid, 'dirty', `Schutzgeld von ${gang.name}`, 'income.other');
   s.protection = { amount, nextDueAt: ctx.now + PROTECTION_INTERVAL, overdue: false };
   addHostility(s, 15);
   addRelation(s, -20);
@@ -208,7 +208,8 @@ export function ally(ctx: Ctx, gangId: string, againstGangId: string): CommandRe
     return { ok: false, reason: `${gang.name} traut dir nicht (Beziehung ${s.relation}).` };
   }
   if (s.hostility > ALLIANCE_MAX_HOSTILITY) return { ok: false, reason: `${gang.name} ist zu sauer auf dich.` };
-  if (!wallet.pay(ctx, ALLIANCE_COST, 'dirty', `Bündnis mit ${gang.name}`)) return notEnoughMoney(ALLIANCE_COST);
+  if (!wallet.pay(ctx, ALLIANCE_COST, 'dirty', `Bündnis mit ${gang.name}`, 'tribute'))
+    return notEnoughMoney(ALLIANCE_COST);
   s.money += ALLIANCE_COST;
   s.alliance = { againstGangId, until: ctx.now + ALLIANCE_DURATION };
   addRelation(s, 10);
@@ -295,7 +296,7 @@ export function acceptOffer(ctx: Ctx, gangId: string, offerId: number): CommandR
     });
     return { ok: true };
   }
-  wallet.pay(ctx, offer.price, 'dirty', `Ware von ${gang.name}`);
+  wallet.pay(ctx, offer.price, 'dirty', `Ware von ${gang.name}`, 'goods.purchase');
   store(ctx, {
     productId: DEFAULT_PRODUCT,
     amount: offer.amount,

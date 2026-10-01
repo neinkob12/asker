@@ -13,7 +13,7 @@ import { getSpot } from '../../spots';
 import { bailCost, getStaffMember } from '../../staff';
 import { PLAYER_FACTION } from '../../territory';
 import { getBoundary, veedelName } from '../../veedel';
-import { getHeat, heatLevel } from '../index';
+import { getHeat, heatLevel, type RaidScope } from '../index';
 
 declare module '../../../ui' {
   interface DialogRegistry {
@@ -30,7 +30,11 @@ const REPORT_DELAY_MS = 3500;
 export interface RaidRecord {
   runId: string;
   at: number;
+  /** Razzia an einem Spot, im Veedel oder Großrazzia in mehreren Veedeln (Stufe des Geschäfts, police/tier.ts). */
+  scope: RaidScope;
   veedelId: string;
+  /** Alle betroffenen Veedel (bei der Großrazzia mehrere). */
+  veedelIds: string[];
   spotId?: string;
   goods: number;
   money: number;
@@ -46,12 +50,22 @@ function current(state: GameState, minutes: number): RaidRecord | null {
   return age >= 0 && age < minutes ? lastRaid : null;
 }
 
+/** "Razzia · Neustadt-Süd" bzw. "Großrazzia · Neustadt-Süd, Ehrenfeld". */
+function raidTitle(raid: RaidRecord): string {
+  if (raid.scope === 'major') return `Großrazzia · ${raid.veedelIds.map(veedelName).join(', ')}`;
+  return `Razzia · ${veedelName(raid.veedelId)}`;
+}
+
 function raidLine(state: GameState, raid: RaidRecord): string {
-  const spot = raid.spotId ? getSpot(state, raid.spotId)?.name : undefined;
+  const spot = raid.scope === 'spot' && raid.spotId ? getSpot(state, raid.spotId)?.name : undefined;
   const parts: string[] = [];
   if (raid.goods > 0) parts.push(`${formatAmount(raid.goods)} beschlagnahmt`);
   if (raid.arrested.length > 0) parts.push(`${raid.arrested.length} festgenommen`);
-  const where = spot ? `Zivile Beamte am ${spot}` : 'Die Polizei durchsucht deine Spots und Lager';
+  const where = spot
+    ? `Zivile Beamte am ${spot}`
+    : raid.scope === 'major'
+      ? 'Die Kripo durchsucht deine Spots und Lager in mehreren Veedeln'
+      : 'Die Polizei durchsucht deine Spots und Lager';
   return parts.length > 0 ? `${where}: ${parts.join(', ')}.` : `${where}.`;
 }
 
@@ -68,7 +82,7 @@ function RaidAlert() {
           <Icon name="siren" strokeWidth={2} />
         </span>
         <span class="raid-banner__text">
-          <strong>Razzia · {veedelName(raid.veedelId)}</strong>
+          <strong>{raidTitle(raid)}</strong>
           <span>{raidLine(state, raid)}</span>
         </span>
       </div>
@@ -114,7 +128,7 @@ function RaidReport(props: RaidRecord) {
   const close = () => ui.closeDialog();
   return (
     <MapDialog label="Das hat gekostet" onClose={close} class="raid-report">
-      <p class="raid-report__kicker">Razzia · {veedelName(props.veedelId)}</p>
+      <p class="raid-report__kicker">{raidTitle(props)}</p>
       <h2 class="raid-report__title">Das hat gekostet</h2>
       <dl class="raid-report__rows">
         <dt>
@@ -190,22 +204,18 @@ const raidAreaLayer: MapLayer = {
     return {
       update(state) {
         const raid = current(state, TINT_MINUTES);
-        const key = raid ? `${raid.veedelId}@${raid.at}` : '';
+        const key = raid ? `${raid.veedelIds.join(',')}@${raid.at}` : '';
         if (key !== shown) {
           shown = key;
-          const ring = raid ? getBoundary(raid.veedelId) : [];
+          // Alle betroffenen Veedel rot tönen (bei der Großrazzia mehrere).
+          const rings = (raid?.veedelIds ?? []).map(getBoundary).filter((ring) => ring.length > 0);
           (map.getSource(source) as GeoJSONSource | undefined)?.setData({
             type: 'FeatureCollection',
-            features:
-              ring.length > 0
-                ? [
-                    {
-                      type: 'Feature',
-                      properties: {},
-                      geometry: { type: 'Polygon', coordinates: [ring.map(([lng, lat]) => [lng, lat])] },
-                    },
-                  ]
-                : [],
+            features: rings.map((ring) => ({
+              type: 'Feature' as const,
+              properties: {},
+              geometry: { type: 'Polygon' as const, coordinates: [ring.map(([lng, lat]) => [lng, lat])] },
+            })),
           });
         }
         const next = raid ? Math.round(0.42 * (1 - (state.time - raid.at) / TINT_MINUTES) * 100) / 100 : 0;
@@ -232,7 +242,9 @@ onGameEvent('police.raid', 'police.raidLook', (payload, _ui, state) => {
   lastRaid = {
     runId: state.meta.runId,
     at: state.time,
+    scope: payload.scope ?? 'veedel',
     veedelId: payload.veedelId,
+    veedelIds: payload.veedelIds && payload.veedelIds.length > 0 ? [...payload.veedelIds] : [payload.veedelId],
     ...(payload.spotId ? { spotId: payload.spotId } : {}),
     goods: Math.round(payload.goods ?? 0),
     money: Math.round(payload.money ?? 0),

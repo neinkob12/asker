@@ -151,7 +151,10 @@ export function Sheet(props: SheetProps) {
     if (!page) return;
     page.inert = true;
     page.setAttribute('aria-hidden', 'true');
+    // Merkzeichen für den Seitenstapel, der nach jedem Zeichnen inert neu setzt (stackAnimator.ts: layout).
+    page.setAttribute('data-modal', '');
     return () => {
+      page.removeAttribute('data-modal');
       // Ist inzwischen eine andere Seite oben, gehört der Zustand dem Seitenstapel (stackAnimator.ts).
       if (!page.classList.contains('is-top')) return;
       page.inert = false;

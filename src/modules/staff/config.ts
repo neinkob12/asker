@@ -162,8 +162,9 @@ export const LOYALTY = {
   /** Festnahme der Person selbst und Angst der anderen im selben Veedel. */
   arrest: -12,
   arrestNearby: -2,
-  /** Pro Tag in Haft. */
+  /** Pro Tag in Haft (mit Stillhaltegeld) bzw. ohne. */
   jailDay: -2,
+  jailDayUnsupported: -7,
   injury: -6,
   /** Konfrontation: Gefahr, bei Niederlage zusätzlich. */
   encounter: -3,
@@ -206,10 +207,17 @@ export const TALK_HEAT = 15;
 /** Wer mit wenig Loyalität entlassen wird, redet mit dieser Wahrscheinlichkeit. */
 export const FIRED_TALK_CHANCE = 0.3;
 export const FIRED_TALK_LOYALTY = 40;
+/** Wer in Haft kein Stillhaltegeld bekommt, redet beim Rauskommen oder Entlassen eher (bis zu dieser Loyalität). */
+export const UNSUPPORTED_TALK_CHANCE = 0.6;
+export const UNSUPPORTED_TALK_LOYALTY = 70;
 
 // --- Haft, Kaution, Verletzung ---
 
 export const JAIL_DURATION = 3 * 1440;
+/** In Haft gibt es keinen Lohn, nur Stillhaltegeld (Anteil vom Lohn, pro Person abstellbar). */
+export const JAIL_WAGE_FACTOR = 0.25;
+/** Verletzte bekommen diesen Anteil vom Lohn. */
+export const INJURED_WAGE_FACTOR = 0.5;
 export const INJURY_DURATION = 1.5 * 1440;
 export const BAIL_BASE = 800;
 export const BAIL_PER_LEVEL = 200;

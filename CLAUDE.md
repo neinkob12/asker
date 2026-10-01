@@ -5,7 +5,8 @@ Ausführliche Architektur mit allen Modulen, APIs, Befehlen und Ereignissen: `do
 **Parallele Sessions:** Regeln, Phasen und wer welche Ordner besitzt stehen in `docs/auftraege/README.md`. Lies das zuerst.
 Phase 0 (Fundament), Phase 1 (Aufträge 10–14) und Phase 2 (Integration, Auftrag 20) sind erledigt; alle Systeme
 sind verbunden. Dazu Auftrag 21: echtes Straßennetz (`roads`), Logistik mit Hafen, Fahrern und mehreren Lagern
-(`logistics`), Lieferanten zum Freischalten. Wie alles zusammenspielt: `docs/architektur.md`, Abschnitt
+(`logistics`), Lieferanten zum Freischalten. Auftrag 24: Geldbuch und Kasse (`finance`), Stillhaltegeld in Haft, Leutnants mit bis
+zu drei Spots, Rechte Hand, Polizei-Härte nach Größe des Geschäfts. Wie alles zusammenspielt: `docs/architektur.md`, Abschnitt
 "Zusammenspiel der Systeme".
 
 ## Architektur in Kürze
@@ -75,8 +76,11 @@ export default defineModule({
 - Zustand nur als JSON-Daten (keine Klassen, Maps, Funktionen, `undefined` in Arrays).
 - Befehle kommen vom Spieler, aus Handy-Antworten oder von Leutnants (`ctx.dispatch(cmd, { actor: 'staff:<id>' })`).
 - Ereignisse werden am Ende des Schritts bzw. Befehls in fester Reihenfolge zugestellt.
-- Geld: `wallet.pay/earn/lose/convert` (Schwarzgeld `'dirty'`, sauber `'clean'`; Legales wie Liegeplatz und Lager kostet
-  sauberes Geld). Journal: `journal.add(ctx, text, kind)`.
+- Geld: `wallet.pay(ctx, amount, kind, reason, category)`, ebenso `earn` und `lose`, dazu `convert` (Schwarzgeld
+  `'dirty'`, sauber `'clean'`; Legales wie Liegeplatz und Lager kostet sauberes Geld). **Immer mit Kategorie** aus
+  `MONEY_CATEGORIES` (`src/core/wallet.ts`), z.B. `'wages.runner'`, oder `{ category, spotId, staffId }`, damit die
+  Kasse (`finance`) Gewinn und Verlust pro Spot und Leutnant zeigen kann. Journal: `journal.add(ctx, text, kind)`.
+- Leutnants führen **Spots, nicht Veedel** (bis zu drei, `lieutenantOfSpot`, `lieutenantSpots` aus `hierarchy`).
 - Wege und Fahrzeiten immer über `roads` (`roadRoute`, `travelMinutes`), nie Luftlinie. Das Straßennetz neu erzeugen:
   `src/modules/roads/tools/build-roads.py` (Anleitung im Kopf der Datei).
   Nachrichten: `messages.send(ctx, { contact, text, options, silent? })` – alle Figuren reden per Handy mit dem

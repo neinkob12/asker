@@ -351,7 +351,7 @@ function profileOf(c: Candidate): RecruitProfile {
 function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null, meta: CommandMeta): CommandResult {
   const c = getCandidate(ctx.state, candidateId);
   if (!c || c.expiresAt <= ctx.now) return { ok: false, reason: 'Die Person ist nicht mehr zu haben.' };
-  if (!wallet.pay(ctx, c.hireCost, 'dirty', `Handgeld ${c.name}`)) {
+  if (!wallet.pay(ctx, c.hireCost, 'dirty', `Handgeld ${c.name}`, 'hiring')) {
     return { ok: false, reason: `Nicht genug Geld für das Handgeld (${formatEuro(c.hireCost)}).` };
   }
   const s = ctx.state.modules.recruiting;
@@ -372,7 +372,7 @@ function search(ctx: Ctx): CommandResult {
   if (ctx.now < s.searchReadyAt) {
     return { ok: false, reason: `Du hast gerade erst rumgefragt. Wieder ab ${clock.formatTime(s.searchReadyAt)}.` };
   }
-  if (!wallet.pay(ctx, SEARCH_COST, 'dirty', 'Rumgefragt')) return { ok: false, reason: 'Nicht genug Geld.' };
+  if (!wallet.pay(ctx, SEARCH_COST, 'dirty', 'Rumgefragt', 'hiring')) return { ok: false, reason: 'Nicht genug Geld.' };
   for (let i = 0; i < SEARCH_COUNT; i++) addPoolCandidate(ctx);
   s.searchReadyAt = ctx.now + SEARCH_COOLDOWN;
   journal.add(ctx, `Rumgefragt: ${SEARCH_COUNT} neue Bewerber.`);

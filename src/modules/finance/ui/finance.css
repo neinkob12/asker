@@ -1,0 +1,87 @@
+/*
+ * Kasse im Spiel-Handy, gebaut wie die Apps des Kerns (docs/handy-design.md) aus SummaryTiles, Group, List und
+ * ItemContent. Hier nur, was dazukommt: Beträge in der Bedeutungsfarbe und der Verlauf als Balken. Nur Tokens.
+ */
+
+.fin-app {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.fin-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--phone-label-2, var(--color-muted));
+}
+.fin-amount.is-plus {
+  color: var(--cat-money);
+}
+.fin-amount.is-minus {
+  color: var(--cat-danger);
+}
+.fin-amount.is-strong {
+  font-weight: 700;
+}
+
+/* Verlauf: sieben Spalten, Balken wachsen von der Mittellinie (bei Verlusten) bzw. vom Boden nach oben. */
+.fin-chart {
+  display: grid;
+  grid-template-columns: repeat(var(--fin-cols, 7), minmax(0, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--phone-group, var(--color-panel-raised));
+  border-radius: var(--radius-group);
+}
+.fin-chart__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.fin-chart__plot {
+  position: relative;
+  width: 100%;
+  height: 96px;
+  border-bottom: var(--stroke, 1px) solid var(--phone-separator, var(--color-border));
+}
+.fin-chart.has-loss .fin-chart__plot {
+  border-bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent calc(50% - 0.5px),
+    var(--phone-separator, var(--color-border)) calc(50% - 0.5px),
+    var(--phone-separator, var(--color-border)) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
+}
+.fin-chart__bar {
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  bottom: 0;
+  height: var(--fin-bar, 0%);
+  min-height: 2px;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  background: var(--cat-money);
+}
+.fin-chart.has-loss .fin-chart__bar {
+  height: calc(var(--fin-bar, 0%) / 2);
+}
+.fin-chart.has-loss .fin-chart__bar.is-plus {
+  bottom: 50%;
+}
+.fin-chart__bar.is-minus {
+  background: var(--cat-danger);
+  border-radius: 0 0 var(--radius-xs) var(--radius-xs);
+}
+.fin-chart.has-loss .fin-chart__bar.is-minus {
+  top: 50%;
+  bottom: auto;
+}
+.fin-chart__label {
+  font-size: var(--type-caption-2, 11px);
+  font-variant-numeric: tabular-nums;
+  color: var(--phone-label-2, var(--color-muted));
+}

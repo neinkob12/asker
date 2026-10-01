@@ -9,7 +9,7 @@ export default defineConfig({
   optimizeDeps: { rolldownOptions: { transform: { jsx: { runtime: 'automatic', importSource: 'preact' } } } },
   build: {
     // MapLibre allein ist schon ca. 1 MB groß, das Kölner Straßennetz (src/modules/roads/network.ts) ca. 180 KB.
-    chunkSizeWarningLimit: 1800,
+    chunkSizeWarningLimit: 2000,
   },
   test: {
     include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.mjs'],

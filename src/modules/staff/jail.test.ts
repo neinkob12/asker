@@ -10,7 +10,7 @@ import {
   serializeSave,
 } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { BAIL_BASE, JAIL_DURATION, LOYALTY } from './config';
+import { BAIL_BASE, INJURED_WAGE_FACTOR, JAIL_DURATION, JAIL_WAGE_FACTOR, LOYALTY } from './config';
 import {
   activeRunnerAt,
   bailCost,
@@ -21,10 +21,12 @@ import {
   getStaffMember,
   isLyingLow,
   jailDuration,
+  payrollDue,
   runnerAt,
   type StaffMember,
   type StaffRole,
   setStatus,
+  talkChance,
 } from './index';
 
 function quietGame(): Simulation {
@@ -219,7 +221,7 @@ describe('Kaution', () => {
       pulled: 1,
     });
 
-    sim.state.modules.police.plannedRaids['altstadt-sued'] = at;
+    sim.state.modules.police.plannedRaids['altstadt-sued'] = { at, scope: 'veedel', spotId: null };
     sim.advance(at - sim.state.time + 60);
     const raid = eventsOfType(events, 'police.raid')[0];
     expect(raid.payload).toMatchObject({ target: 'player', empty: true, arrested: [] });
@@ -263,6 +265,93 @@ describe('Spielstände aus dem Fundament', () => {
     expect(b).toMatchObject({ status: 'jailed', assignment: null, returnTo: { kind: 'spot', targetId: 'neumarkt' } });
     expect(b.statusUntil).toBeGreaterThan(loaded.state.time);
     expect(loaded.state.modules.staff.former).toEqual([]);
+    loaded.advance(60);
+  });
+});
+
+describe('Löhne bei Ausfall (Auftrag 24)', () => {
+  const midnight = (sim: Simulation) => sim.advance(1440 - (sim.state.time % 1440));
+
+  it('in Haft nur Stillhaltegeld, verletzt halber Lohn, jeweils mit eigener Kategorie', () => {
+    const sim = quietGame();
+    const events = recordEvents(sim);
+    const jailed = recruit(sim, 'runner', { wage: 100 });
+    const injured = recruit(sim, 'runner', { wage: 100 });
+    const working = recruit(sim, 'runner', { wage: 100 });
+    arrest(sim, jailed.id);
+    setStatus(sim.ctx('staff'), injured.id, 'injured');
+    expect(payrollDue(sim.state)).toBe(
+      Math.round(100 * JAIL_WAGE_FACTOR) + Math.round(100 * INJURED_WAGE_FACTOR) + 100,
+    );
+    midnight(sim);
+    const wages = eventsOfType(events, 'wallet.changed').filter((e) => e.payload.category?.startsWith('wages.'));
+    const byStaff = Object.fromEntries(wages.map((e) => [e.payload.staffId, e.payload]));
+    expect(byStaff[jailed.id]).toMatchObject({ amount: -25, category: 'wages.jail' });
+    expect(byStaff[injured.id]).toMatchObject({ amount: -50, category: 'wages.injured' });
+    expect(byStaff[working.id]).toMatchObject({ amount: -100, category: 'wages.runner' });
+  });
+
+  it('ohne Stillhaltegeld kostet die Haft nichts, aber die Loyalität sinkt schneller', () => {
+    const sim = quietGame();
+    const events = recordEvents(sim);
+    const a = recruit(sim, 'runner', { wage: 100 });
+    const b = recruit(sim, 'runner', { wage: 100 });
+    arrest(sim, a.id);
+    arrest(sim, b.id);
+    expect(sim.dispatch({ type: 'staff.setJailSupport', payload: { staffId: b.id, enabled: false } }).ok).toBe(true);
+    const before = { a: a.stats.loyalty, b: b.stats.loyalty };
+    midnight(sim);
+    const paid = eventsOfType(events, 'wallet.changed').filter((e) => e.payload.staffId === b.id);
+    expect(paid).toEqual([]);
+    expect(before.b - b.stats.loyalty).toBeGreaterThan(before.a - a.stats.loyalty);
+    expect(LOYALTY.jailDayUnsupported).toBeLessThan(LOYALTY.jailDay);
+    // Wer ohne Stillhaltegeld sitzt und wenig loyal ist, redet beim Entlassen eher.
+    b.stats.loyalty = 50;
+    expect(talkChance(b)).toBeGreaterThan(talkChance({ ...b, jailSupport: true }));
+  });
+
+  it('Festnahme: Nachricht mit Kaution, Ersetzen, Entlassen und Abwarten; Ersetzen stellt jemand Neues hin', () => {
+    const sim = quietGame();
+    sim.state.wallet.dirty = 5000;
+    const runner = runnerAtNeumarkt(sim);
+    arrest(sim, runner.id);
+    const message = sim.state.messages.list.find((m) => m.contactId === `staff:${runner.id}`);
+    expect(message?.options?.map((o) => o.id)).toEqual(['replace', 'bail', 'fireReplace', 'wait']);
+    expect(message?.text).toContain('Was machen wir?');
+    const answer = sim.dispatch({
+      type: 'messages.answer',
+      payload: { messageId: message?.id ?? 0, optionId: 'replace' },
+    });
+    expect(answer.ok).toBe(true);
+    const replacement = activeRunnerAt(sim.state, 'neumarkt');
+    expect(replacement && replacement.id !== runner.id).toBe(true);
+    // Nach der Haft kommt Murat in den freien Pool, der Spot bleibt beim Neuen.
+    sim.advance(JAIL_DURATION + 10);
+    expect(getStaffMember(sim.state, runner.id)).toMatchObject({ status: 'active', assignment: null });
+    expect(activeRunnerAt(sim.state, 'neumarkt')?.id).toBe(replacement?.id);
+    expect(getStaff(sim.state, { spotId: 'neumarkt', role: 'runner' })).toHaveLength(1);
+  });
+
+  it('Entlassen und ersetzen: die Person ist weg, ein freier Läufer springt ein', () => {
+    const sim = quietGame();
+    const runner = runnerAtNeumarkt(sim);
+    const free = recruit(sim, 'runner');
+    arrest(sim, runner.id);
+    expect(sim.dispatch({ type: 'staff.replace', payload: { staffId: runner.id, fire: true } }).ok).toBe(true);
+    expect(getStaff(sim.state).some((m) => m.id === runner.id)).toBe(false);
+    expect(activeRunnerAt(sim.state, 'neumarkt')?.id).toBe(free.id);
+    // Wer nicht ausfällt, wird nicht ersetzt.
+    expect(sim.dispatch({ type: 'staff.replace', payload: { staffId: free.id } }).ok).toBe(false);
+  });
+
+  it('Version 3 wird migriert: alle bekommen Stillhaltegeld', () => {
+    const sim = quietGame();
+    const runner = runnerAtNeumarkt(sim);
+    const state = structuredClone(sim.state) as GameState;
+    for (const m of state.modules.staff.members) delete (m as Partial<StaffMember>).jailSupport;
+    state.moduleVersions.staff = 3;
+    const loaded = loadSimulation(state, sim.modules);
+    expect(getStaffMember(loaded.state, runner.id)?.jailSupport).toBe(true);
     loaded.advance(60);
   });
 });

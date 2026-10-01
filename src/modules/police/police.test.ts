@@ -3,20 +3,34 @@ import { loadSimulation, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { startEncounter } from '../encounters';
 import { getStock, store } from '../goods';
-import { runnerAt } from '../staff';
+import { enlist, generateProfile, runnerAt } from '../staff';
 import { controlledBy, getInfluence } from '../territory';
 import { getVeedel } from '../veedel';
 import {
   CHASE_ESCAPED_HEAT,
   GANG_RAID_INFLUENCE_LOSS,
   HEAT_DECAY_PER_HOUR,
+  MAJOR_RAID_LEAD_TIME,
   RAID_LEAD_TIME,
+  RAID_SCOPES,
   SALE_HEAT_BASE,
   SALE_HEAT_PER_UNIT,
   SNITCH_HEAT,
   VIOLENCE_HEAT,
 } from './config';
-import { activeTipOff, addHeat, canSnitch, getHeat, getPoliceStats, heatLevel, plannedRaid, playerHeat } from './index';
+import {
+  activeTipOff,
+  addHeat,
+  canSnitch,
+  getHeat,
+  getPoliceStats,
+  heatLevel,
+  type OperationFacts,
+  operationTier,
+  plannedRaid,
+  playerHeat,
+} from './index';
+import { nextTier } from './tier';
 
 /** Spiel ohne zufällig auftauchende Kunden. */
 function quietGame(seed = 1): Simulation {
@@ -149,7 +163,7 @@ describe('police', () => {
       for (const id of arrests) {
         expect(sim.state.modules.staff.members.find((m) => m.id === id)?.status).toBe('jailed');
       }
-      expect(sim.state.journal.some((e) => e.text.startsWith('Razzia am'))).toBe(true);
+      expect(sim.state.journal.some((e) => /^Razzia (am|in) /.test(e.text))).toBe(true);
       found = arrests.length > 0;
     }
     expect(found).toBe(true);
@@ -167,6 +181,10 @@ describe('police', () => {
       if (!spot.ok) throw new Error(spot.reason);
       const spotId = (spot.data as { spotId: string }).spotId;
       sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+      // Mit vier besetzten Spots ist man Händler: Razzien treffen das Veedel samt Lager.
+      for (const other of ['ebertplatz', 'neumarkt', 'zuelpicher']) {
+        sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: other } });
+      }
       const stock = getStock(sim.state, { warehouseId: 'ehrenfeld' });
       const raids = () => eventsOfType(events, 'police.raid');
       advanceUntil(
@@ -180,7 +198,7 @@ describe('police', () => {
       );
       if (raids().length === 0) continue;
       const raid = raids()[0].payload;
-      expect(raid.veedelId).toBe('ehrenfeld');
+      expect(raid).toMatchObject({ veedelId: 'ehrenfeld', scope: 'veedel' });
       // Mindestens ein Fünftel des Lagers ist weg, mehr als eine normale Razzia.
       expect(raid.goods ?? 0).toBeGreaterThanOrEqual(Math.floor(stock * 0.2));
       // (Der Läufer am neuen Spot verkauft nebenbei auch etwas.)
@@ -321,12 +339,140 @@ describe('police', () => {
     old.modules.police = { heat: { kalk: 70, deutz: 10 } };
     old.moduleVersions.police = 1;
     const loaded = loadSimulation(old, sim.modules);
-    expect(loaded.state.moduleVersions.police).toBe(3);
+    expect(loaded.state.moduleVersions.police).toBe(4);
     expect(loaded.state.modules.police.plannedRaids).toEqual({});
     expect(getHeat(loaded.state, 'kalk')).toBe(70);
     expect(loaded.state.modules.police.level.kalk).toBe(heatLevel(70).index);
     expect(getPoliceStats(loaded.state).raids).toBe(0);
     loaded.advance(60);
     expect(getHeat(loaded.state, 'kalk')).toBeLessThan(70);
+  });
+});
+
+describe('police: Härte nach Größe des Geschäfts (Auftrag 24)', () => {
+  const facts = (patch: Partial<OperationFacts> = {}): OperationFacts => ({
+    veedel: 0,
+    spots: 3,
+    people: 3,
+    lieutenants: 0,
+    warehouses: 1,
+    berth: false,
+    revenue: 1500,
+    ...patch,
+  });
+
+  it('Stufen mit Hysterese: Kleindealer, Händler, Großhändler', () => {
+    expect(nextTier(facts(), 0)).toBe(0);
+    expect(nextTier(facts({ spots: 4 }), 0)).toBe(1);
+    expect(nextTier(facts({ veedel: 1 }), 0)).toBe(1);
+    expect(nextTier(facts({ lieutenants: 1 }), 0)).toBe(1);
+    expect(nextTier(facts({ veedel: 4, people: 6 }), 1)).toBe(2);
+    // Wer mit drei Leuten viel selbst verkauft und vier Veedel hält, ist noch kein Großhändler.
+    expect(nextTier(facts({ veedel: 4 }), 1)).toBe(1);
+    expect(nextTier(facts({ spots: 8, berth: true, warehouses: 2 }), 1)).toBe(2);
+    expect(nextTier(facts({ spots: 8, berth: false, warehouses: 2 }), 1)).toBe(1);
+    // Zurück erst deutlich darunter.
+    expect(nextTier(facts({ veedel: 3, spots: 4, people: 6 }), 2)).toBe(2);
+    expect(nextTier(facts({ veedel: 2, spots: 4, people: 6 }), 2)).toBe(1);
+    expect(nextTier(facts({ spots: 3, people: 4, revenue: 5000 }), 1)).toBe(1);
+    expect(nextTier(facts({ spots: 3, people: 4, revenue: 3000 }), 1)).toBe(0);
+  });
+
+  /** Heat in allen Veedeln mit Präsenz hochhalten und stundenweise spielen. */
+  function hotFor(sim: Simulation, hours: number): void {
+    for (let h = 0; h < hours; h++) {
+      for (const v of ['neustadt-sued', 'altstadt-sued', 'neustadt-nord', 'lindenthal', 'ehrenfeld']) {
+        const heat = getHeat(sim.state, v);
+        if (heat < 90) addHeat(sim.ctx('test'), v, 90 - heat);
+      }
+      sim.advance(60);
+    }
+  }
+
+  it('drei Spots mit drei Läufern bei Heat 90: in zehn Tagen keine Großrazzia und keine Lager-Durchsuchung', () => {
+    const sim = quietGame(4);
+    const events = recordEvents(sim);
+    sim.state.wallet.dirty = 50_000;
+    store(sim.ctx('goods'), { productId: 'weed', amount: 2000 });
+    for (const spotId of ['ebertplatz', 'neumarkt', 'zuelpicher']) {
+      sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+    }
+    hotFor(sim, 10 * 24);
+    expect(operationTier(sim.state).id).toBe('small');
+    const raids = eventsOfType(events, 'police.raid').filter((e) => e.payload.target === 'player');
+    expect(raids.length).toBeGreaterThan(0);
+    expect(raids.every((e) => e.payload.scope === 'spot')).toBe(true);
+    // Höchstens ein Anteil der Ware am Ort, nie ein Lager (Spot-Razzien sind klein).
+    for (const raid of raids) expect(raid.payload.goods ?? 0).toBeLessThanOrEqual(RAID_SCOPES.spot.goodsMax);
+    expect(eventsOfType(events, 'police.raidPlanned').some((e) => e.payload.scope === 'major')).toBe(false);
+    // Festnahmen nur am Spot der Razzia.
+    for (const raid of raids) {
+      for (const id of raid.payload.arrested ?? []) {
+        const m = sim.state.modules.staff.members.find((x) => x.id === id);
+        expect(m?.returnTo).toEqual({ kind: 'spot', targetId: raid.payload.spotId });
+      }
+    }
+  });
+
+  it('als Großhändler: Aufstieg wird gemeldet, Großrazzia mit einem Tag Vorlauf in mehreren Veedeln', () => {
+    const sim = quietGame(2);
+    const events = recordEvents(sim);
+    sim.state.wallet.dirty = 50_000;
+    store(sim.ctx('goods'), { productId: 'weed', amount: 2000 });
+    sim.advance(60);
+    expect(operationTier(sim.state).id).toBe('small');
+    for (const spotId of ['ebertplatz', 'neumarkt', 'zuelpicher', 'uni']) {
+      sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+    }
+    sim.advance(60);
+    expect(operationTier(sim.state).id).toBe('dealer');
+    // Sehr viele Spots plus Liegeplatz und ein zweites Lager.
+    sim.state.wallet.clean = 20_000;
+    sim.state.modules.spots.unlocked.push('rudolfplatz', 'aachener-weiher', 'friesenplatz', 'breslauer');
+    for (const spotId of ['rudolfplatz', 'aachener-weiher', 'friesenplatz', 'breslauer']) {
+      sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+    }
+    expect(sim.dispatch({ type: 'logistics.buyBerth', payload: {} }).ok).toBe(true);
+    expect(sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'nippes' } }).ok).toBe(true);
+    sim.advance(60);
+    expect(operationTier(sim.state).id).toBe('kingpin');
+    expect(eventsOfType(events, 'police.tierChanged').map((e) => e.payload)).toEqual([
+      { from: 0, to: 1 },
+      { from: 1, to: 2 },
+    ]);
+    expect(sim.state.messages.list.some((m) => m.text.includes('Ermittlungsgruppe'))).toBe(true);
+    // Mit Polizei-Kontakt kommt die Warnung einen Tag vorher.
+    const ctx = sim.ctx('staff');
+    const contact = enlist(ctx, generateProfile(ctx, 'policeContact'), { origin: 'pool' });
+    hotFor(sim, 6 * 24);
+    const planned = eventsOfType(events, 'police.raidPlanned').filter((e) => e.payload.scope === 'major');
+    expect(planned.length).toBeGreaterThanOrEqual(2);
+    expect(planned[0].payload.at - planned[0].time).toBe(MAJOR_RAID_LEAD_TIME);
+    expect(
+      sim.state.messages.list.some((m) => m.contactId === `staff:${contact.id}` && m.text.includes('Großrazzia')),
+    ).toBe(true);
+    const majorRaid = () => eventsOfType(events, 'police.raid').find((e) => e.payload.scope === 'major');
+    advanceUntil(sim, () => !!majorRaid(), 30);
+    const major = majorRaid();
+    expect(major).toBeDefined();
+    expect(major?.payload.veedelIds?.length).toBeGreaterThanOrEqual(2);
+    expect(sim.state.journal.some((j) => j.text.startsWith('Großrazzia in'))).toBe(true);
+  });
+
+  it('Version 3 wird migriert: geplante Razzien bekommen ihre Art', () => {
+    const sim = createTestGame();
+    const old = structuredClone(sim.state) as unknown as {
+      modules: { police: Record<string, unknown> };
+      moduleVersions: Record<string, number>;
+    };
+    const { majorRaid: _m, majorReadyAt: _r, tier: _t, ...v3 } = old.modules.police;
+    old.modules.police = { ...v3, plannedRaids: { kalk: 500 } };
+    old.moduleVersions.police = 3;
+    const loaded = loadSimulation(old, sim.modules);
+    expect(plannedRaid(loaded.state, 'kalk')).toBe(500);
+    expect(loaded.state.modules.police.plannedRaids.kalk).toEqual({ at: 500, scope: 'veedel', spotId: null });
+    expect(loaded.state.modules.police.tier).toBeNull();
+    loaded.advance(60);
+    expect(loaded.state.modules.police.tier).toBe(0);
   });
 });

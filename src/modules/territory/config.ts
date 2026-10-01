@@ -44,8 +44,14 @@ export const STAFF_PRESENCE_MAX = 3;
  * Ein Leutnant im Veedel bringt zusätzlich so viel Einfluss pro Stunde (Level 1, Charisma 50), plus so viel pro
  * Level darüber. Charisma wirkt als Faktor 0,75 (0) bis 1,25 (100).
  */
-export const LIEUTENANT_INFLUENCE_PER_HOUR = 0.15;
+export const LIEUTENANT_INFLUENCE_PER_HOUR = 0.08;
 export const LIEUTENANT_INFLUENCE_PER_LEVEL = 0.03;
+/**
+ * Ein Leutnant führt bis zu drei Spots, auch in verschiedenen Veedeln. Sein Einfluss verteilt sich nach der Zahl seiner
+ * Spots dort, und jeder weitere Spot im selben Veedel wirkt um so viel stärker (drei Spots in einem Veedel bringen dort
+ * mehr als drei verstreute zusammen): Anteil × (1 + Bonus × (Spots dort − 1)).
+ */
+export const LIEUTENANT_CLUSTER_BONUS = 0.25;
 /** Verfall pro Stunde ohne Präsenz. */
 export const DECAY_PER_HOUR = 0.15;
 /** Eine Gang, die ein Veedel kontrolliert, baut ihren Einfluss wieder auf (bis zum Startwert des Veedels). */

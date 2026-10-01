@@ -152,7 +152,8 @@ function unlock(ctx: Ctx, spotId: string): CommandResult {
   const state = ctx.state.modules.spots;
   if (state.unlocked.includes(spotId)) return { ok: false, reason: 'Der Spot ist schon offen.' };
   const cost = spot.unlockCost ?? 0;
-  if (!wallet.pay(ctx, cost, 'dirty', `Spot ${spot.name}`)) return { ok: false, reason: 'Nicht genug Geld.' };
+  if (!wallet.pay(ctx, cost, 'dirty', `Spot ${spot.name}`, { category: 'expansion', spotId: spot.id }))
+    return { ok: false, reason: 'Nicht genug Geld.' };
   state.unlocked.push(spotId);
   journal.add(ctx, `${spot.name} freigeschaltet (${formatEuro(cost)}). Hier kannst du jetzt verkaufen.`, 'good', {
     spotId,
@@ -167,7 +168,8 @@ function found(ctx: Ctx, payload: { lng: number; lat: number; name?: string }): 
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return { ok: false, reason: 'Ungültiger Ort.' };
   const check = canFoundSpotAt(ctx.state, lng, lat);
   if (!check.ok) return check;
-  if (!wallet.pay(ctx, FOUND_SPOT_COST, 'dirty', 'Eigener Spot')) return { ok: false, reason: 'Nicht genug Geld.' };
+  if (!wallet.pay(ctx, FOUND_SPOT_COST, 'dirty', 'Eigener Spot', 'expansion'))
+    return { ok: false, reason: 'Nicht genug Geld.' };
   const state = ctx.state.modules.spots;
   const veedel = getVeedel(check.veedelId);
   const count = state.custom.filter((s) => s.veedelId === check.veedelId).length + 1;

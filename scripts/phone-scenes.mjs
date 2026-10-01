@@ -62,6 +62,40 @@ const STEPS = `
   };
   const still = () => until(() => !document.documentElement.hasAttribute('data-moving'));`;
 
+/**
+ * JavaScript: ein paar Tage Geschäft für die Kasse (zwei Läufer, Nachschub, drei Spieltage vorspulen). Läuft nur
+ * einmal pro Sitzung, spätere Szenen bauen darauf auf.
+ */
+const BUSINESS_DAYS = `(() => {
+  if (window.__businessDays) return;
+  window.__businessDays = true;
+  const sim = window.koeln.session.sim;
+  sim.state.wallet.dirty += 4000;
+  const spots = sim.state.modules.spots.unlocked;
+  for (const spotId of spots.slice(0, 2)) sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+  for (let day = 0; day < 3; day++) {
+    for (const packageId of ['weed50', 'haze50', 'weed50']) {
+      sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'frankfurt', packageId } });
+    }
+    sim.advance(1440);
+  }
+})()`;
+
+/** JavaScript: Der erste Läufer wird Leutnant mit drei Spots in zwei Veedeln (einmal pro Sitzung). */
+const LIEUTENANT = `(() => {
+  const sim = window.koeln.session.sim;
+  if (Object.keys(sim.state.modules.hierarchy.posts).length > 0) return;
+  sim.state.wallet.dirty += 3000;
+  for (const spotId of ['zuelpicher', 'uni']) sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+  const runner = sim.state.modules.staff.members.find(
+    (m) => m.role === 'runner' && m.status === 'active' && m.assignment?.targetId === 'zuelpicher',
+  );
+  if (!runner) return;
+  runner.level = Math.max(runner.level, 2);
+  sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: runner.id, spotIds: ['zuelpicher', 'neumarkt', 'uni'] } });
+  sim.advance(180);
+})()`;
+
 /** Erste Gang (für die Gang-Seite, das Bündnis-Blatt). */
 const FIRST_GANG = 'Object.keys(window.koeln.session.state.modules.gangs.gangs)[0]';
 
@@ -124,6 +158,8 @@ export const SCENES = [
     ['markt', 'market.summary'],
     ['geldwaesche', 'laundering.section'],
     ['logistik', 'logistics.overview'],
+    ['bilanz', 'finance.balance'],
+    ['polizei', 'police.tier'],
   ].map(([name, section]) => ({
     name: `geschaeft-${name}`,
     js: `(() => { const api = window.koeln.runtime.api; api.selectTab('business'); api.openSection('${section}'); })()`,
@@ -320,6 +356,166 @@ export const SCENES = [
       const api = window.koeln.runtime.api;
       api.openPhone(null);
       api.pulseIsland({ kind: 'earn.dirty', amount: 450, icon: 'moneyBag', tone: 'accent', text: '' });
+    })()`,
+  },
+  // Ausfälle: ein Läufer in Haft (ohne Stillhaltegeld), einer verletzt, die Nachricht nach der Festnahme
+  {
+    name: 'faellt-aus',
+    js: `(() => {
+      ${BUSINESS_DAYS};
+      const sim = window.koeln.session.sim;
+      if (!window.__absent) {
+        window.__absent = true;
+        const runners = sim.state.modules.staff.members.filter((m) => m.role === 'runner' && m.status === 'active');
+        if (runners[0]) {
+          sim.ctx('police').emit('police.arrest', { staffId: runners[0].id, veedelId: 'altstadt-sued' });
+          sim.step();
+          sim.dispatch({ type: 'staff.setJailSupport', payload: { staffId: runners[0].id, enabled: false } });
+        }
+        if (runners[1]) {
+          runners[1].status = 'injured';
+          runners[1].statusUntil = sim.state.time + 1440;
+          runners[1].returnTo = runners[1].assignment;
+          runners[1].assignment = null;
+        }
+      }
+      window.koeln.runtime.api.selectTab('staff');
+    })()`,
+  },
+  {
+    name: 'festnahme-chat',
+    js: `(() => {
+      const s = window.koeln.session.sim.state;
+      const m = [...s.messages.list].reverse().find((x) => x.options?.some((o) => o.id === 'replace'));
+      window.koeln.runtime.api.openPhone('core.messages', m ? { contactId: m.contactId } : undefined);
+    })()`,
+  },
+  // Leutnant mit drei Spots über zwei Veedel, Ernennen-Fluss und Bestellregel-Blatt
+  {
+    name: 'leutnant',
+    js: `(() => {
+      ${BUSINESS_DAYS};
+      ${LIEUTENANT};
+      window.koeln.runtime.api.openPanel('hierarchy.lieutenant', { staffId: Object.keys(window.koeln.session.sim.state.modules.hierarchy.posts)[0] });
+    })()`,
+  },
+  {
+    name: 'personal-baum',
+    js: `(() => {
+      ${BUSINESS_DAYS};
+      ${LIEUTENANT};
+      window.koeln.runtime.api.selectTab('staff');
+    })()`,
+  },
+  {
+    name: 'leutnant-einkauf',
+    js: `(async () => {
+      ${STEPS}
+      ${BUSINESS_DAYS};
+      ${LIEUTENANT};
+      window.koeln.runtime.api.openPanel('hierarchy.lieutenant', { staffId: Object.keys(window.koeln.session.sim.state.modules.hierarchy.posts)[0] });
+      const group = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Einkauf')));
+      group?.scrollIntoView({ block: 'start' });
+    })()`,
+  },
+  {
+    name: 'bestellregel',
+    js: `(async () => {
+      ${STEPS}
+      ${BUSINESS_DAYS};
+      ${LIEUTENANT};
+      window.koeln.runtime.api.openPanel('hierarchy.lieutenant', { staffId: Object.keys(window.koeln.session.sim.state.modules.hierarchy.posts)[0] });
+      const row = await until(() => [...document.querySelectorAll('.phone .ui-item__title')].find((t) => t.textContent.includes('Nachfrage')));
+      await still();
+      row?.closest('button')?.click();
+      await sleep(500);
+      await still();
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'ernennen',
+    js: `(async () => {
+      ${STEPS}
+      ${BUSINESS_DAYS};
+      ${LIEUTENANT};
+      const sim = window.koeln.session.sim;
+      const other = sim.state.modules.staff.members.find((m) => m.role === 'runner' && !sim.state.modules.hierarchy.posts[m.id]);
+      if (!other) return;
+      other.level = Math.max(other.level, 2);
+      window.koeln.runtime.api.openPanel('staff.profile', { staffId: other.id });
+      const row = await until(() => [...document.querySelectorAll('.phone .ui-item__title')].find((t) => t.textContent.includes('Zum Leutnant')));
+      await still();
+      row?.closest('button')?.click();
+      await sleep(500);
+      await still();
+    })()`,
+    wait: 900,
+  },
+  // Kasse (nach ein paar Tagen Geschäft): heute, 7 Tage, eine Kategorie
+  { name: 'kasse', js: `${BUSINESS_DAYS}; window.koeln.runtime.api.openPhone('finance.app')` },
+  {
+    name: 'kasse-woche',
+    js: `(async () => {
+      ${STEPS}
+      ${BUSINESS_DAYS};
+      window.koeln.runtime.api.openPhone('finance.app');
+      const seg = await until(() => [...document.querySelectorAll('.phone .ui-segmented button')].find((b) => b.textContent.includes('7 Tage')));
+      seg?.click();
+      await sleep(200);
+      document.querySelector('.phone .fin-chart')?.scrollIntoView({ block: 'center' });
+    })()`,
+  },
+  {
+    name: 'kasse-buchungen',
+    js: `${BUSINESS_DAYS}; window.koeln.runtime.api.openPhone('finance.app'); window.koeln.runtime.api.openPanel('finance.category', { category: 'wages.runner', period: 'week' })`,
+  },
+  {
+    name: 'kasse-spots',
+    js: `(async () => {
+      ${STEPS}
+      ${BUSINESS_DAYS};
+      window.koeln.runtime.api.openPhone('finance.app');
+      const group = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Pro Spot')));
+      group?.scrollIntoView({ block: 'start' });
+    })()`,
+  },
+  // Rechte Hand mit Tagesbericht (spult einen Tag vor, deshalb am Ende)
+  {
+    name: 'rechte-hand',
+    js: `(() => {
+      ${BUSINESS_DAYS};
+      ${LIEUTENANT};
+      const sim = window.koeln.session.sim;
+      const s = sim.state;
+      if (!s.modules.hierarchy.rightHand) {
+        s.wallet.dirty += 6000;
+        const taken = new Set(Object.values(s.modules.hierarchy.posts).flatMap((p) => p.spotIds));
+        const free = s.modules.spots.unlocked.filter((id) => !taken.has(id));
+        for (const spotId of free) sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+        const runners = s.modules.staff.members.filter((m) => m.role === 'runner' && m.status === 'active' && !s.modules.hierarchy.posts[m.id]);
+        const second = runners.find((m) => m.assignment?.kind === 'spot' && free.includes(m.assignment.targetId));
+        if (second) {
+          second.level = Math.max(second.level, 2);
+          sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: second.id, spotIds: [second.assignment.targetId] } });
+        }
+        const boss = runners.find((m) => m.id !== second?.id);
+        if (boss) {
+          boss.level = Math.max(boss.level, 4);
+          boss.stats.loyalty = Math.max(boss.stats.loyalty, 70);
+          sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });
+        }
+        sim.advance(1440);
+      }
+      window.koeln.runtime.api.openPanel('hierarchy.rightHand', {});
+    })()`,
+  },
+  {
+    name: 'tagesbericht',
+    js: `(() => {
+      const s = window.koeln.session.sim.state;
+      const id = s.modules.hierarchy.rightHand?.staffId;
+      window.koeln.runtime.api.openPhone('core.messages', id ? { contactId: 'staff:' + id } : undefined);
     })()`,
   },
 ];

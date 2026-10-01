@@ -1,70 +1,32 @@
-/* Hierarchie: Leutnant-Liste, Panel, Beförderung. Nur Tokens aus src/ui/styles/tokens.css. */
+/* Hierarchie: Leutnant-Seite, Blätter (Ernennen, Bestellregel). Gebaut aus den Bausteinen, hier nur Abstände. */
 
-.lt-row {
+.lt-page,
+.lt-sheet {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 28px;
 }
-.lt-row .ui-hint {
-  margin: 0;
+.lt-sheet {
+  gap: var(--space-4);
+  padding-bottom: var(--space-5);
 }
-.lt-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--font-size-sm);
-}
-.lt-title {
-  margin: var(--space-4) 0 var(--space-1);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-muted);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.lt-setting {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin-bottom: var(--space-2);
-}
-.lt-setting .ui-segmented {
-  flex-wrap: wrap;
-}
-.lt-setting .ui-hint {
-  margin: 0;
-}
-.lt-setting--inline {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-}
-.lt-log {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  color: var(--color-muted);
-}
-.lt-log time {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  margin-right: var(--space-2);
-}
-.lt-promote {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.lt-promote__row {
+.lt-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-2);
-  align-items: center;
 }
-.lt-spot {
-  margin-top: var(--space-3);
+.lt-check,
+.lt-uncheck {
+  width: 24px;
+  height: 24px;
+  margin-right: var(--space-3);
+  color: var(--cat-place);
+}
+.lt-uncheck {
+  color: var(--phone-label-3, var(--color-faint));
+}
+.lt-log-text {
+  font-size: var(--type-subhead, 15px);
+  line-height: 1.35;
 }

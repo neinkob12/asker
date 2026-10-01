@@ -45,7 +45,8 @@ export const PRELUDE = `
   const policeRaid = async () => {
     const spots = await import('/src/modules/spots/index.ts');
     const veedelId = spots.getSpot(state(), 'neumarkt').veedelId;
-    state().modules.police.plannedRaids[veedelId] = state().time + 1;
+    // Razzia im ganzen Veedel (wie bei einem Händler), geplante Razzien haben Zeit, Umfang und Spot.
+    state().modules.police.plannedRaids[veedelId] = { at: state().time + 1, scope: 'veedel', spotId: 'neumarkt' };
     for (let i = 0; i < 120 && state().modules.police.plannedRaids[veedelId] !== undefined; i++) sim.advance(1);
   };
   /** Das Veedel des Neumarkts übernehmen: Einfluss hoch, bis zur nächsten vollen Stunde vorspulen. */

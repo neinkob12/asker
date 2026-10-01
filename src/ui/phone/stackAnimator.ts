@@ -147,9 +147,11 @@ export class StackAnimator {
       element.classList.toggle('is-top', key === topKey);
       element.classList.toggle('is-hidden', !visible);
       element.classList.toggle('is-leaving', !!a?.exiting.includes(key));
-      element.inert = key !== topKey;
-      if (key === topKey) element.removeAttribute('aria-hidden');
-      else element.setAttribute('aria-hidden', 'true');
+      // Hinter einem offenen Blatt (data-modal, siehe Sheet.tsx) bleibt auch die oberste Seite inert.
+      const blocked = key !== topKey || element.hasAttribute('data-modal');
+      element.inert = blocked;
+      if (blocked) element.setAttribute('aria-hidden', 'true');
+      else element.removeAttribute('aria-hidden');
     }
   }
 

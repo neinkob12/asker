@@ -8,6 +8,7 @@ import {
   CONTROL_THRESHOLD,
   DECAY_PER_HOUR,
   GANG_REGEN_PER_HOUR,
+  LIEUTENANT_CLUSTER_BONUS,
   LIEUTENANT_INFLUENCE_PER_HOUR,
   LIEUTENANT_INFLUENCE_PER_LEVEL,
   LOSE_CONTROL_THRESHOLD,
@@ -183,22 +184,44 @@ describe('territory', () => {
   it('ein Leutnant bringt zusätzlich Einfluss, bessere Leutnants mehr', () => {
     const sim = quietGame();
     const ctx = sim.ctx('staff');
-    addInfluence(sim.ctx('test'), 'kalk', PLAYER_FACTION, 20);
+    addInfluence(sim.ctx('test'), 'lindenthal', PLAYER_FACTION, 20);
     const lt = enlist(ctx, generateProfile(ctx, 'runner', { level: 3 }), { origin: 'pool' });
     lt.stats.charisma = 50;
-    expect(lieutenantInfluence(sim.state, 'kalk')).toBe(0);
-    expect(sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: lt.id, veedelId: 'kalk' } }).ok).toBe(true);
-    const perHour = lieutenantInfluence(sim.state, 'kalk');
+    expect(lieutenantInfluence(sim.state, 'lindenthal')).toBe(0);
+    expect(sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: lt.id, spotIds: ['uni'] } }).ok).toBe(true);
+    const perHour = lieutenantInfluence(sim.state, 'lindenthal');
     expect(perHour).toBeCloseTo(LIEUTENANT_INFLUENCE_PER_HOUR + 2 * LIEUTENANT_INFLUENCE_PER_LEVEL);
     lt.stats.charisma = 100;
-    expect(lieutenantInfluence(sim.state, 'kalk')).toBeGreaterThan(perHour);
+    expect(lieutenantInfluence(sim.state, 'lindenthal')).toBeGreaterThan(perHour);
     lt.stats.charisma = 50;
-    const before = getInfluence(sim.state, 'kalk', PLAYER_FACTION);
+    const before = getInfluence(sim.state, 'lindenthal', PLAYER_FACTION);
     sim.advance(10 * 60);
     // Leutnant zählt als eine Person vor Ort plus sein eigener Beitrag, statt Verfall.
-    expect(getInfluence(sim.state, 'kalk', PLAYER_FACTION)).toBeGreaterThanOrEqual(
+    expect(getInfluence(sim.state, 'lindenthal', PLAYER_FACTION)).toBeGreaterThanOrEqual(
       before + 10 * (perHour + STAFF_PRESENCE_PER_HOUR) - 1,
     );
+  });
+
+  it('drei Spots in einem Veedel wirken dort stärker als drei verstreute', () => {
+    const sim = quietGame();
+    sim.state.modules.spots.unlocked.push('rudolfplatz', 'aachener-weiher');
+    const ctx = sim.ctx('staff');
+    const a = enlist(ctx, generateProfile(ctx, 'runner', { level: 3 }), { origin: 'pool' });
+    a.stats.charisma = 50;
+    const appoint = (spotIds: string[]) =>
+      sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: a.id, spotIds } }).ok;
+    // Zwei Spots in Neustadt-Süd, einer in der Altstadt.
+    expect(appoint(['zuelpicher', 'rudolfplatz', 'neumarkt'])).toBe(true);
+    const base = LIEUTENANT_INFLUENCE_PER_HOUR + 2 * LIEUTENANT_INFLUENCE_PER_LEVEL;
+    const split = lieutenantInfluence(sim.state, 'neustadt-sued');
+    expect(split).toBeCloseTo(base * (2 / 3) * (1 + LIEUTENANT_CLUSTER_BONUS));
+    expect(lieutenantInfluence(sim.state, 'altstadt-sued')).toBeCloseTo(base / 3);
+    // Alle drei in Neustadt-Süd: dort deutlich mehr als zusammen verstreut.
+    expect(appoint(['zuelpicher', 'rudolfplatz', 'aachener-weiher'])).toBe(true);
+    const together = lieutenantInfluence(sim.state, 'neustadt-sued');
+    expect(together).toBeCloseTo(base * (1 + 2 * LIEUTENANT_CLUSTER_BONUS));
+    expect(together).toBeGreaterThan(split + base / 3);
+    expect(lieutenantInfluence(sim.state, 'altstadt-sued')).toBe(0);
   });
 
   it('ein kürzlicher Verkauf hält den Einfluss, danach sinkt er', () => {

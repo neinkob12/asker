@@ -1,7 +1,8 @@
 // Durchspielen im echten Browser: Der Balancing-Bot (src/playtest/bot.ts) spielt eine Session von etwa 20 Minuten
 // (Standard 8 Spieltage, das sind bei Tempo 2x rund 20 echte Minuten) und hält die wichtigen Momente als Screenshot
 // fest: erster Verkauf, Läufer an den Spots, Drohung einer Gang im Handy, Konfrontation, Warnung vor einer Razzia,
-// Leutnant, eigenes Veedel, Nacht. Am Ende eine Übersicht, welche Systeme vorkamen.
+// Leutnant, Festnahme mit Ersetzen, Kasse, Tagesbericht der Rechten Hand, eigenes Veedel, Nacht. Am Ende eine
+// Übersicht, welche Systeme vorkamen. Die Rechte Hand kommt meist erst nach 10–14 Spieltagen (--days=14).
 //
 //   npm run playthrough
 //   npm run playthrough -- --days=12 --seed=4 --size=mobile --out=docs/integration
@@ -74,10 +75,10 @@ try {
     };
   });
 
-  const shot = async (name) => {
+  const shot = async (name, wait = 600) => {
     if (taken.has(name)) return;
     taken.add(name);
-    await page.waitForTimeout(600);
+    await page.waitForTimeout(wait);
     const file = `${outDir}/session-${String(taken.size).padStart(2, '0')}-${name}-${size}.jpg`;
     await page.screenshot({ path: file, type: 'jpeg', quality: 72 });
     console.log(`  Screenshot: ${file}`);
@@ -98,13 +99,23 @@ try {
       const open = s.modules.encounters.active.find((e) => e.phase !== 'done');
       const gangThreat = s.messages.list.find((m) => m.contactId.startsWith('gang:') && m.options?.length);
       const warning = s.messages.list.find((m) => m.options?.some((o) => o.id === 'lieLow'));
+      // Festnahme mit Ersetzen: deine Antwort "Ersetzen" auf die Frage nach der Festnahme oder die Meldung des
+      // Leutnants bzw. der Rechten Hand, die den Ausfall selbst ersetzt haben.
+      const arrests = s.messages.list.filter((m) => m.options?.some((o) => o.id === 'replace'));
+      const arrest =
+        arrests.find((m) => m.answer === 'replace' || m.answer === 'fireReplace') ??
+        s.messages.list.find((m) => /sitzt.*übernimmt|steht jetzt jemand anderes/.test(m.text)) ??
+        null;
+      const report = s.messages.list.find((m) => m.options?.some((o) => o.id === 'openFinance'));
       return {
         time: s.time,
         hour: Math.floor(s.time / 60) % 24,
         encounter: open?.id ?? null,
         gangThreat: gangThreat?.contactId ?? null,
         warning: warning?.contactId ?? null,
-        lieutenants: Object.keys(s.modules.hierarchy.lieutenants),
+        arrest: arrest?.contactId ?? null,
+        report: report?.contactId ?? null,
+        lieutenants: Object.keys(s.modules.hierarchy.posts),
         runners: s.modules.staff.members.filter((m) => m.role === 'runner' && m.assignment).length,
       };
     });
@@ -138,8 +149,23 @@ try {
       await closeAll();
     }
     if (state.lieutenants.length > 0 && !taken.has('leutnant')) {
-      await ui('openPanel', 'hierarchy.lieutenant', { veedelId: state.lieutenants[0] });
+      await ui('openPanel', 'hierarchy.lieutenant', { staffId: state.lieutenants[0] });
       await shot('leutnant');
+      await closeAll();
+    }
+    if (state.arrest && !taken.has('festnahme-ersetzt')) {
+      await ui('openPhone', 'core.messages', { contactId: state.arrest });
+      await shot('festnahme-ersetzt', 1800);
+      await closeAll();
+    }
+    if (hour >= 2 * 24 + 20 && !taken.has('kasse')) {
+      await ui('openPhone', 'finance.app');
+      await shot('kasse', 1800);
+      await closeAll();
+    }
+    if (state.report && !taken.has('tagesbericht')) {
+      await ui('openPhone', 'core.messages', { contactId: state.report });
+      await shot('tagesbericht', 1800);
       await closeAll();
     }
     if (last.veedel > 0 && !taken.has('reviere')) {
@@ -159,6 +185,10 @@ try {
     'Lieferungen angekommen': seen['shipment.arrived'],
     'Läufer/Leute eingestellt': seen['staff.hired'],
     Leutnants: seen['hierarchy.appointed'],
+    'Rechte Hand': seen['hierarchy.rightHandAppointed'],
+    Tagesberichte: seen['hierarchy.dailyReport'],
+    Festnahmen: seen['police.arrest'],
+    'Polizei-Stufe gewechselt': seen['police.tierChanged'],
     'Einfluss/Kontrollwechsel': seen['territory.controlChanged'],
     'Gang-Eskalationen': seen['gang.escalated'],
     'Gang-Vorstöße': seen['gang.pushStarted'],

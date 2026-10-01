@@ -217,6 +217,8 @@ declare module '../../core' {
       amount: number;
       quality: number;
       revenue: number;
+      /** Einkaufspreis der verkauften Ware (fehlt bei älteren Aufrufern). */
+      goodsCost?: number;
       /** Verkaufender Mitarbeiter (Läufer, Kurier), null = der Spieler selbst. */
       sellerId: string | null;
       customerId: number | null;
