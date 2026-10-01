@@ -781,19 +781,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Aktionszeile: Titel in der Markenfarbe, kein Pfeil */
-.ui-list__item.is-action .ui-item__title,
-.ui-list__item.is-action .ui-list__text > strong {
-  color: var(--cat-brand);
-  font-weight: var(--font-weight-bold);
-}
-.ui-list__item.is-disabled .ui-list__button {
-  cursor: default;
-}
-.ui-list__item.is-disabled .ui-item__title,
-.ui-list__item.is-disabled .ui-list__value {
-  color: var(--phone-label-2, var(--color-muted));
-}
 
 /* Etikett */
 .ui-tag {
@@ -1684,4 +1671,19 @@
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Aktionszeile (ListItem mit action): Titel in der Markenfarbe, kein Pfeil. Steht am Ende, weil es die
+   Grundregeln von ItemContent und Zeilen überschreibt. */
+.ui-list__item.is-action .ui-item__title,
+.ui-list__item.is-action .ui-list__text > strong {
+  color: var(--cat-brand);
+  font-weight: var(--font-weight-bold);
+}
+.ui-list__item.is-disabled .ui-list__button {
+  cursor: default;
+}
+.ui-list__item.is-disabled .ui-item__title,
+.ui-list__item.is-disabled .ui-list__value {
+  color: var(--phone-label-2, var(--color-muted));
 }

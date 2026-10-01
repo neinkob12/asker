@@ -7,6 +7,8 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  /* Waagerechtes Wischen blättert nie im Browser-Verlauf (Rand-Wischen im Handy ist "eine Seite zurück") */
+  overscroll-behavior-x: none;
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-body);

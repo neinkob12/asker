@@ -44,6 +44,27 @@ function swallowNextClick(): void {
   setTimeout(() => window.removeEventListener('click', stop, { capture: true }), 0);
 }
 
+/**
+ * Nach einem langen Druck: Der Klick beim Loslassen gehört noch zur Geste (sonst träfe er sofort, was inzwischen
+ * darüber liegt, z.B. den Hintergrund eines Kontextmenüs). Egal wie lange der Finger danach noch liegt.
+ */
+export function swallowClickAfterRelease(pointerId: number): void {
+  const stop = (e: Event) => {
+    e.stopPropagation();
+    e.preventDefault();
+  };
+  const released = (e: PointerEvent) => {
+    if (e.pointerId !== pointerId) return;
+    window.removeEventListener('pointerup', released, true);
+    window.removeEventListener('pointercancel', released, true);
+    window.addEventListener('click', stop, { capture: true, once: true });
+    // Beim Finger kommt der Klick erst eine Aufgabe später; bleibt er aus, den Wächter wieder entfernen.
+    setTimeout(() => window.removeEventListener('click', stop, { capture: true }), 400);
+  };
+  window.addEventListener('pointerup', released, true);
+  window.addEventListener('pointercancel', released, true);
+}
+
 /** Beginnt das Beobachten eines Zeigers ab pointerdown auf `element`. */
 export function startDrag(down: PointerEvent, element: HTMLElement, options: DragOptions): void {
   const id = down.pointerId;

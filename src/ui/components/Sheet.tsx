@@ -144,6 +144,21 @@ export function Sheet(props: SheetProps) {
     moveTo(props.initial ?? detents[0]);
   }, [mounted]);
 
+  // Das Blatt ist modal: Die Seite dahinter ist für Tastatur und Screenreader weg, solange es da ist.
+  useEffect(() => {
+    if (!mounted) return;
+    const page = behind();
+    if (!page) return;
+    page.inert = true;
+    page.setAttribute('aria-hidden', 'true');
+    return () => {
+      // Ist inzwischen eine andere Seite oben, gehört der Zustand dem Seitenstapel (stackAnimator.ts).
+      if (!page.classList.contains('is-top')) return;
+      page.inert = false;
+      page.removeAttribute('aria-hidden');
+    };
+  }, [mounted]);
+
   useEffect(
     () => () => {
       motion.current?.stop();

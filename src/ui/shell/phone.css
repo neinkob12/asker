@@ -1105,6 +1105,14 @@
   /* Senkrecht scrollt der Browser, waagerecht gehört der Finger den Gesten (Rand-Wischen, Zeilen) */
   touch-action: pan-y;
 }
+/*
+ * touch-action gilt nur bis zum nächsten scrollenden Vorfahren: Die Scroll-Flächen der Seiten brauchen es selbst,
+ * sonst übernimmt der Browser waagerechtes Wischen (und macht daraus "Zurück im Verlauf").
+ */
+.phone-screen__body,
+.phone__home-scroll {
+  touch-action: pan-y;
+}
 /* Während einer Geste wird kein Text markiert */
 html.is-dragging {
   user-select: none;
@@ -1398,46 +1406,6 @@ html.is-dragging {
   padding: 0;
   background: none;
 }
-/*
- * Abschnitt als eigene Seite: Der Inhalt steht ohne Karte auf der Seite. Werte-Zeilen (KeyValue) hintereinander
- * werden zu einer Gruppe wie in den iOS-Einstellungen, Listen und innere Karten zu eigenen Gruppen.
- */
-.phone .ui-card--detail > .ui-kv {
-  position: relative;
-  padding: 0 16px;
-  background: var(--phone-group);
-  border-bottom: 0;
-}
-.phone .ui-card--detail > .ui-kv + .ui-kv {
-  margin-top: -16px;
-}
-.phone .ui-card--detail > .ui-kv + .ui-kv::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 16px;
-  right: 0;
-  border-top: 0.5px solid var(--phone-separator);
-}
-.phone .ui-card--detail > .ui-kv:not(.ui-kv + .ui-kv) {
-  border-top-left-radius: var(--radius-group);
-  border-top-right-radius: var(--radius-group);
-}
-.phone .ui-card--detail > .ui-kv:not(:has(+ .ui-kv)) {
-  border-bottom-left-radius: var(--radius-group);
-  border-bottom-right-radius: var(--radius-group);
-}
-.phone .ui-card--detail > .ui-list,
-.phone .ui-card--detail .ui-card .ui-list {
-  background: var(--phone-group);
-}
-.phone .ui-card--detail .ui-card {
-  background: var(--phone-group);
-  border-radius: var(--radius-group);
-}
-.phone .ui-card--detail > .ui-hint {
-  padding: 0 16px;
-}
 .phone .ui-card__title {
   font-family: var(--font-body);
   font-size: var(--type-body);
@@ -1586,6 +1554,47 @@ html.is-dragging {
 }
 .phone .ui-card .ui-list {
   background: var(--phone-group-2);
+}
+/*
+ * Abschnitt als eigene Seite: Der Inhalt steht ohne Karte auf der Seite. Werte-Zeilen (KeyValue) hintereinander
+ * werden zu einer Gruppe wie in den iOS-Einstellungen, Listen und innere Karten zu eigenen Gruppen. (Steht nach den
+ * Grundregeln für Listen, Hinweise und Werte, die es überschreibt.)
+ */
+.phone .ui-card--detail > .ui-kv {
+  position: relative;
+  padding: 0 16px;
+  background: var(--phone-group);
+  border-bottom: 0;
+}
+.phone .ui-card--detail > .ui-kv + .ui-kv {
+  margin-top: -16px;
+}
+.phone .ui-card--detail > .ui-kv + .ui-kv::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  border-top: 0.5px solid var(--phone-separator);
+}
+.phone .ui-card--detail > .ui-kv:not(.ui-kv + .ui-kv) {
+  border-top-left-radius: var(--radius-group);
+  border-top-right-radius: var(--radius-group);
+}
+.phone .ui-card--detail > .ui-kv:not(:has(+ .ui-kv)) {
+  border-bottom-left-radius: var(--radius-group);
+  border-bottom-right-radius: var(--radius-group);
+}
+.phone .ui-card--detail > .ui-list,
+.phone .ui-card--detail .ui-card .ui-list {
+  background: var(--phone-group);
+}
+.phone .ui-card--detail .ui-card {
+  background: var(--phone-group);
+  border-radius: var(--radius-group);
+}
+.phone .ui-card--detail > .ui-hint {
+  padding: 0 16px;
 }
 .phone .ui-select select {
   min-height: var(--touch-target-phone);

@@ -11,6 +11,7 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { haptic } from '../haptics';
 import { useOverlay } from '../overlays';
+import { swallowClickAfterRelease } from '../phone/drag';
 import { LONG_PRESS_MS, SLOP } from '../phone/gestureModel';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
@@ -104,7 +105,7 @@ export function ContextMenu(props: ContextMenuProps) {
     setOpen(place(target.getBoundingClientRect(), hostRect, props.actions.length));
   };
 
-  // Langer Druck: nach LONG_PRESS_MS ohne nennenswerte Bewegung. Der Klick danach wird verschluckt.
+  // Langer Druck: nach LONG_PRESS_MS ohne nennenswerte Bewegung. Der Klick beim Loslassen wird verschluckt.
   const down = (e: JSX.TargetedPointerEvent<HTMLDivElement>) => {
     if (props.disabled || e.button !== 0) return;
     const x = e.clientX;
@@ -127,12 +128,7 @@ export function ContextMenu(props: ContextMenuProps) {
       cancel();
       haptic('medium');
       show();
-      const swallow = (c: Event) => {
-        c.stopPropagation();
-        c.preventDefault();
-      };
-      window.addEventListener('click', swallow, { capture: true, once: true });
-      setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 600);
+      swallowClickAfterRelease(id);
     }, LONG_PRESS_MS);
   };
 
@@ -153,7 +149,7 @@ export function ContextMenu(props: ContextMenuProps) {
   };
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: Hülle ohne eigenen Kasten, reagiert auf ihren Inhalt (langer Druck, Rechtsklick, Kontextmenü-Taste)
+    // Hülle ohne eigenen Kasten (role="none"), reagiert auf ihren Inhalt: langer Druck, Rechtsklick, Kontextmenü-Taste
     <div
       class={`ui-ctx ${props.class ?? ''} ${open ? 'is-open' : ''}`}
       role="none"
