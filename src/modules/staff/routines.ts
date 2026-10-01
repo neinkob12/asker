@@ -125,13 +125,16 @@ export function lieLow(ctx: Ctx, veedelId: string, until: number): number {
  * Warnung des Polizei-Kontakts: Wenn eine Razzia geplant ist und der Kontakt davon erfährt (bonus 'raidWarning'),
  * schreibt er dem Spieler. Die Antwort "Leute abziehen" lässt das Veedel abtauchen.
  */
-export function warnOfRaid(ctx: Ctx, veedelId: string, at: number): void {
+export function warnOfRaid(ctx: Ctx, veedelId: string, at: number, major = false): void {
   const contact = bonusProvider(ctx.state, 'raidWarning');
-  if (!contact || !ctx.chance(bonus(ctx.state, 'raidWarning'))) return;
-  const time = clock.formatTime(at);
+  // Eine Großrazzia bekommt der Kontakt immer mit (einen Tag Vorlauf), normale Razzien nur mit seinem Bonus.
+  if (!contact || (!major && !ctx.chance(bonus(ctx.state, 'raidWarning')))) return;
+  const time = major ? `${clock.weekdayName(at)}, ${clock.formatTime(at)}` : clock.formatTime(at);
   messages.send(ctx, {
     contact: staffContact(contact),
-    text: `Pass auf: Die Kollegen planen für ${time} eine Razzia in ${veedelName(veedelId)}. Zieh deine Leute ab, wenn du schlau bist.`,
+    text: major
+      ? `Großes Ding: Die Kripo plant für ${time} eine Großrazzia, auch in ${veedelName(veedelId)}. Zieh die Leute dort vorher ab.`
+      : `Pass auf: Die Kollegen planen für ${time} eine Razzia in ${veedelName(veedelId)}. Zieh deine Leute ab, wenn du schlau bist.`,
     options: [
       {
         id: 'lieLow',

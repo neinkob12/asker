@@ -154,6 +154,8 @@ export const SCENES = [
     ['markt', 'market.summary'],
     ['geldwaesche', 'laundering.section'],
     ['logistik', 'logistics.overview'],
+    ['bilanz', 'finance.balance'],
+    ['polizei', 'police.tier'],
   ].map(([name, section]) => ({
     name: `geschaeft-${name}`,
     js: `(() => { const api = window.koeln.runtime.api; api.selectTab('business'); api.openSection('${section}'); })()`,

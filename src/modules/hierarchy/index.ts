@@ -799,6 +799,22 @@ export default defineModule({
         delete post.absences[staffId];
       }
     },
+    // Razzia bei dir: Leutnants mit Spots dort schreiben es ins Protokoll.
+    'police.raid': (ctx, { veedelId, veedelIds, target, scope, spotId, arrested, empty }) => {
+      if (target !== 'player') return;
+      const where = veedelIds ?? [veedelId];
+      for (const post of getLieutenants(ctx.state)) {
+        const hit = lieutenantSpots(ctx.state, post.staffId).filter((s) =>
+          scope === 'spot' ? s.id === spotId : where.includes(s.veedelId),
+        );
+        if (hit.length === 0) continue;
+        const kind = scope === 'major' ? 'Großrazzia' : scope === 'spot' ? 'Razzia am Spot' : 'Razzia';
+        const text = empty
+          ? `${kind} am ${hit[0].name}, aber wir waren weg.`
+          : `${kind} am ${hit[0].name}. ${arrested?.length ? `${arrested.length} festgenommen.` : 'Keiner festgenommen.'}`;
+        post.log.unshift({ time: ctx.now, text });
+      }
+    },
     // Umsatz an seinen Spots zählen, Erfahrung für den Leutnant und Ausbildung seiner Leute.
     'sale.completed': (ctx, { spotId, revenue, sellerId }) => {
       const lead = spotId ? lieutenantOfSpot(ctx.state, spotId) : null;

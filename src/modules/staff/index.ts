@@ -311,7 +311,7 @@ export default defineModule({
     'clock.dayStarted': daily,
     'clock.hourStarted': hourly,
     'police.arrest': (ctx, { staffId, veedelId }) => onArrest(ctx, staffId, veedelId),
-    'police.raidPlanned': (ctx, { veedelId, at }) => warnOfRaid(ctx, veedelId, at),
+    'police.raidPlanned': (ctx, { veedelId, at, scope }) => warnOfRaid(ctx, veedelId, at, scope === 'major'),
     'police.raid': (ctx, { veedelId }) => {
       for (const m of getStaff(ctx.state, { veedelId })) addLoyalty(ctx, m.id, LOYALTY.raid);
     },

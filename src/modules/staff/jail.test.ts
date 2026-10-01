@@ -221,7 +221,7 @@ describe('Kaution', () => {
       pulled: 1,
     });
 
-    sim.state.modules.police.plannedRaids['altstadt-sued'] = at;
+    sim.state.modules.police.plannedRaids['altstadt-sued'] = { at, scope: 'veedel', spotId: null };
     sim.advance(at - sim.state.time + 60);
     const raid = eventsOfType(events, 'police.raid')[0];
     expect(raid.payload).toMatchObject({ target: 'player', empty: true, arrested: [] });

@@ -4,13 +4,54 @@
 /** Heat liegt zwischen 0 und MAX_HEAT. */
 export const MAX_HEAT = 100;
 
-/** Stufen: ab diesen Werten wird es "wachsam" (Kontrollen), "heiß" (Razzien) und "Großeinsatz". */
+/**
+ * Stufen: ab diesen Werten wird es "wachsam" (Kontrollen), "heiß" (Razzien) und "Brennpunkt" (überall Zivis). Die
+ * Großrazzia hängt nicht am Heat, sondern an der Größe deines Geschäfts (OPERATION_TIERS).
+ */
 export const HEAT_LEVELS = [
   { min: 0, id: 'calm', label: 'ruhig' },
   { min: 30, id: 'watchful', label: 'wachsam' },
   { min: 60, id: 'hot', label: 'heiß' },
-  { min: 85, id: 'manhunt', label: 'Großeinsatz' },
+  { min: 85, id: 'manhunt', label: 'Brennpunkt' },
 ] as const;
+
+// --- Größe des Geschäfts -----------------------------------------------------------------------------------------
+
+/**
+ * So sieht dich die Polizei. Die Stufe richtet sich nach der Größe deines Geschäfts (kontrollierte Veedel, Spots,
+ * Leute im Einsatz, Leutnants, Lager, Liegeplatz, Umsatz pro Tag im Schnitt über 7 Tage) und hat eine Hysterese:
+ * Hoch geht es bei den "up"-Werten, zurück erst, wenn alles unter den "down"-Werten liegt.
+ */
+export const OPERATION_TIERS = [
+  {
+    id: 'small',
+    name: 'Kleindealer',
+    hint: 'Nur Kontrollen und höchstens eine Razzia an einem Spot. Lager werden nicht durchsucht.',
+  },
+  {
+    id: 'dealer',
+    name: 'Händler',
+    hint: 'Razzien im ganzen Veedel, Lager dort werden durchsucht. Beschlagnahmt wird ein Anteil, was da ist.',
+  },
+  {
+    id: 'kingpin',
+    name: 'Großhändler',
+    hint: 'Die Kripo ermittelt: Großrazzien in mehreren Veedeln und Lagern zugleich, mit einem Tag Vorlauf.',
+  },
+] as const;
+
+/** Händler wird, wer eines davon erreicht (zurück zum Kleindealer erst unter allen DEALER_DOWN-Werten). */
+export const DEALER_UP = { veedel: 1, spots: 4, people: 5, lieutenants: 1, warehouses: 2, revenue: 6000 } as const;
+export const DEALER_DOWN = { veedel: 0, spots: 3, people: 4, lieutenants: 0, warehouses: 1, revenue: 4500 } as const;
+/**
+ * Großhändler: ab KINGPIN_UP_VEEDEL kontrollierten Veedeln oder sehr vielen Spots plus Liegeplatz und mehreren Lagern.
+ * Zurück erst unter KINGPIN_DOWN_VEEDEL Veedeln und unter KINGPIN_DOWN_SPOTS Spots.
+ */
+export const KINGPIN_UP_VEEDEL = 4;
+export const KINGPIN_UP_SPOTS = 8;
+export const KINGPIN_UP_WAREHOUSES = 2;
+export const KINGPIN_DOWN_VEEDEL = 3;
+export const KINGPIN_DOWN_SPOTS = 6;
 
 // --- Heat -----------------------------------------------------------------------------------------------------
 
@@ -59,14 +100,34 @@ export const RAID_LEAD_TIME = 3 * 60;
 /** Nach einer Razzia ist im Veedel so lange Ruhe. */
 export const RAID_COOLDOWN = 24 * 60;
 export const RAID_HEAT_RELIEF = 25;
-/** Beschlagnahmte Ware bei einer Razzia (Einheiten). */
-export const RAID_GOODS = { min: 10, max: 30 } as const;
-/** Liegt eines deiner Lager im Veedel der Razzia, durchsuchen sie es auch: so viel vom Bestand dort ist weg. */
-export const RAID_WAREHOUSE_SHARE = 0.2;
-/** Beschlagnahmtes Schwarzgeld bei einer Razzia (Euro). */
-export const RAID_MONEY = { min: 200, max: 900 } as const;
+/** Razzien je Stufe so viel seltener bzw. häufiger (Kleindealer, Händler, Großhändler). */
+export const RAID_CHANCE_BY_TIER = [0.4, 1, 1] as const;
+/**
+ * Beute anteilig statt fester Mengen. goodsShare: Anteil der Ware am Ort (aus dem Lager, das dem Spot bzw. Veedel am
+ * nächsten liegt, höchstens goodsMax), warehouseShare: Anteil des Bestands in eigenen Lagern im Veedel (0 = keine
+ * Durchsuchung), moneyShare: Anteil vom Schwarzgeld (höchstens moneyMax), arrest: Festnahme pro Person (Vorsicht 50).
+ */
+export const RAID_SCOPES = {
+  spot: { goodsShare: 0.08, goodsMax: 15, warehouseShare: 0, moneyShare: 0.03, moneyMax: 250, arrest: 0.5 },
+  veedel: { goodsShare: 0.06, goodsMax: 30, warehouseShare: 0.2, moneyShare: 0.06, moneyMax: 1200, arrest: 0.55 },
+  major: { goodsShare: 0.1, goodsMax: 80, warehouseShare: 0.45, moneyShare: 0.15, moneyMax: 8000, arrest: 0.7 },
+} as const;
+/** Kompatibilität: Anteil des Lagerbestands bei einer Razzia im Veedel. */
+export const RAID_WAREHOUSE_SHARE = RAID_SCOPES.veedel.warehouseShare;
 /** Festnahme pro Mitarbeiter im Veedel bei einer Razzia (bei Vorsicht 50). */
-export const RAID_ARREST_CHANCE = 0.55;
+export const RAID_ARREST_CHANCE = RAID_SCOPES.veedel.arrest;
+
+// --- Großrazzia (nur Großhändler) ------------------------------------------------------------------------------
+
+/** Wahrscheinlichkeit pro Stunde, dass die Kripo zuschlägt (bei Heat 100 im Schnitt deiner Veedel, anteilig ab 40). */
+export const MAJOR_RAID_CHANCE_PER_HOUR = 0.02;
+export const MAJOR_RAID_MIN_HEAT = 40;
+/** Vorlauf: Die Großrazzia wird so lange vorher geplant (der Polizei-Kontakt warnt dann einen Tag vorher). */
+export const MAJOR_RAID_LEAD_TIME = 24 * 60;
+/** Danach ist so lange Ruhe. */
+export const MAJOR_RAID_COOLDOWN = 5 * 24 * 60;
+/** So viele Veedel trifft sie höchstens (die heißesten mit deinen Leuten, dazu die mit deinen Lagern). */
+export const MAJOR_RAID_VEEDEL = 4;
 /** Razzia gegen eine Gang: so viel Einfluss verliert sie im Veedel. */
 export const GANG_RAID_INFLUENCE_LOSS = 15;
 
