@@ -104,7 +104,7 @@ try {
         encounter: open?.id ?? null,
         gangThreat: gangThreat?.contactId ?? null,
         warning: warning?.contactId ?? null,
-        lieutenants: Object.keys(s.modules.hierarchy.lieutenants),
+        lieutenants: Object.keys(s.modules.hierarchy.posts),
         runners: s.modules.staff.members.filter((m) => m.role === 'runner' && m.assignment).length,
       };
     });
@@ -138,7 +138,7 @@ try {
       await closeAll();
     }
     if (state.lieutenants.length > 0 && !taken.has('leutnant')) {
-      await ui('openPanel', 'hierarchy.lieutenant', { veedelId: state.lieutenants[0] });
+      await ui('openPanel', 'hierarchy.lieutenant', { staffId: state.lieutenants[0] });
       await shot('leutnant');
       await closeAll();
     }

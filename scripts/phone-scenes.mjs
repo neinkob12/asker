@@ -81,6 +81,17 @@ const BUSINESS_DAYS = `(() => {
   }
 })()`;
 
+/** JavaScript: Der erste Läufer wird Leutnant mit drei Spots in zwei Veedeln (einmal pro Sitzung). */
+const LIEUTENANT = `(() => {
+  const sim = window.koeln.session.sim;
+  if (Object.keys(sim.state.modules.hierarchy.posts).length > 0) return;
+  const runner = sim.state.modules.staff.members.find((m) => m.role === 'runner' && m.status === 'active');
+  if (!runner) return;
+  runner.level = Math.max(runner.level, 2);
+  sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: runner.id, spotIds: ['zuelpicher', 'neumarkt', 'uni'] } });
+  sim.advance(120);
+})()`;
+
 /** Erste Gang (für die Gang-Seite, das Bündnis-Blatt). */
 const FIRST_GANG = 'Object.keys(window.koeln.session.state.modules.gangs.gangs)[0]';
 
@@ -372,6 +383,58 @@ export const SCENES = [
       const m = [...s.messages.list].reverse().find((x) => x.options?.some((o) => o.id === 'replace'));
       window.koeln.runtime.api.openPhone('core.messages', m ? { contactId: m.contactId } : undefined);
     })()`,
+  },
+  // Leutnant mit drei Spots über zwei Veedel, Ernennen-Fluss und Bestellregel-Blatt
+  {
+    name: 'leutnant',
+    js: `(() => {
+      ${BUSINESS_DAYS};
+      ${LIEUTENANT};
+      window.koeln.runtime.api.openPanel('hierarchy.lieutenant', { staffId: Object.keys(window.koeln.session.sim.state.modules.hierarchy.posts)[0] });
+    })()`,
+  },
+  {
+    name: 'leutnant-einkauf',
+    js: `(async () => {
+      ${STEPS}
+      ${BUSINESS_DAYS};
+      ${LIEUTENANT};
+      window.koeln.runtime.api.openPanel('hierarchy.lieutenant', { staffId: Object.keys(window.koeln.session.sim.state.modules.hierarchy.posts)[0] });
+      const group = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Einkauf')));
+      group?.scrollIntoView({ block: 'start' });
+    })()`,
+  },
+  {
+    name: 'bestellregel',
+    js: `(async () => {
+      ${STEPS}
+      ${BUSINESS_DAYS};
+      ${LIEUTENANT};
+      window.koeln.runtime.api.openPanel('hierarchy.lieutenant', { staffId: Object.keys(window.koeln.session.sim.state.modules.hierarchy.posts)[0] });
+      const row = await until(() => [...document.querySelectorAll('.phone .ui-item__title')].find((t) => t.textContent.includes('Nachfrage')));
+      row?.closest('button')?.click();
+      await sleep(500);
+      await still();
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'ernennen',
+    js: `(async () => {
+      ${STEPS}
+      ${BUSINESS_DAYS};
+      ${LIEUTENANT};
+      const sim = window.koeln.session.sim;
+      const other = sim.state.modules.staff.members.find((m) => m.role === 'runner' && !sim.state.modules.hierarchy.posts[m.id]);
+      if (!other) return;
+      other.level = Math.max(other.level, 2);
+      window.koeln.runtime.api.openPanel('staff.profile', { staffId: other.id });
+      const row = await until(() => [...document.querySelectorAll('.phone .ui-item__title')].find((t) => t.textContent.includes('Zum Leutnant')));
+      row?.closest('button')?.click();
+      await sleep(500);
+      await still();
+    })()`,
+    wait: 900,
   },
   // Kasse (nach ein paar Tagen Geschäft): heute, 7 Tage, eine Kategorie
   { name: 'kasse', js: `${BUSINESS_DAYS}; window.koeln.runtime.api.openPhone('finance.app')` },

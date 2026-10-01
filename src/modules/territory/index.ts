@@ -18,7 +18,7 @@
 
 import { type Ctx, defineModule, type GameState, journal, outcome } from '../../core';
 import { getGang, getGangs } from '../gangs';
-import { getLieutenant } from '../hierarchy';
+import { lieutenantSpots, lieutenantSpotsIn, lieutenantsInVeedel } from '../hierarchy';
 import { getStaff, getStaffMember } from '../staff';
 import { allVeedel, getVeedel, neighborsOf, veedelName } from '../veedel';
 import {
@@ -26,6 +26,7 @@ import {
   DECAY_PER_HOUR,
   GANG_PRESSURE_PER_HOUR,
   GANG_REGEN_PER_HOUR,
+  LIEUTENANT_CLUSTER_BONUS,
   LIEUTENANT_INFLUENCE_PER_HOUR,
   LIEUTENANT_INFLUENCE_PER_LEVEL,
   LOSE_CONTROL_THRESHOLD,
@@ -138,14 +139,23 @@ export function playerPresence(state: GameState, veedelId: string): PlayerPresen
   };
 }
 
-/** Zusätzlicher Einfluss pro Stunde durch einen aktiven Leutnant im Veedel (0 ohne Leutnant). */
+/**
+ * Zusätzlicher Einfluss pro Stunde durch aktive Leutnants mit Spots im Veedel (0 ohne Leutnant). Jeder Leutnant
+ * bringt seinen Einfluss anteilig nach der Zahl seiner Spots dort, gebündelte Spots wirken stärker.
+ */
 export function lieutenantInfluence(state: GameState, veedelId: string): number {
-  const staffId = getLieutenant(state, veedelId);
-  const lt = staffId ? getStaffMember(state, staffId) : undefined;
-  if (lt?.status !== 'active' || lt.leftAt !== null) return 0;
-  const charisma = 0.75 + lt.stats.charisma / 200;
-  const value = (LIEUTENANT_INFLUENCE_PER_HOUR + LIEUTENANT_INFLUENCE_PER_LEVEL * (lt.level - 1)) * charisma;
-  return Math.round(value * 1000) / 1000;
+  let total = 0;
+  for (const staffId of lieutenantsInVeedel(state, veedelId)) {
+    const lt = getStaffMember(state, staffId);
+    if (lt?.status !== 'active' || lt.leftAt !== null) continue;
+    const all = lieutenantSpots(state, staffId).length;
+    const here = lieutenantSpotsIn(state, staffId, veedelId);
+    if (all === 0 || here === 0) continue;
+    const charisma = 0.75 + lt.stats.charisma / 200;
+    const value = (LIEUTENANT_INFLUENCE_PER_HOUR + LIEUTENANT_INFLUENCE_PER_LEVEL * (lt.level - 1)) * charisma;
+    total += value * (here / all) * (1 + LIEUTENANT_CLUSTER_BONUS * (here - 1));
+  }
+  return Math.round(total * 1000) / 1000;
 }
 
 /** Hat der Spieler Leute im Veedel oder dort kürzlich verkauft? */

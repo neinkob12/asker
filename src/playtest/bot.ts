@@ -12,7 +12,7 @@ import { allWaiting, canServe } from '../modules/customers';
 import { activeEncounters } from '../modules/encounters';
 import { ceasefireCost, getGangs, tributeAmount } from '../modules/gangs';
 import { DEFAULT_WAREHOUSE, getStock } from '../modules/goods';
-import { getLieutenant } from '../modules/hierarchy';
+import { isLieutenant, lieutenantOfSpot, MAX_SPOTS_PER_LIEUTENANT } from '../modules/hierarchy';
 import { amountInProgress, launderingCapacity } from '../modules/laundering';
 import { BERTH_COST, cargoAmount, freeDrivers, getCargo, hasBerth, inTransitAmount } from '../modules/logistics';
 import { getCandidates } from '../modules/recruiting';
@@ -248,19 +248,7 @@ function grow(sim: Simulation, stats: BotStats): void {
     }
   }
 
-  // Leutnant in Veedeln mit zwei Spots, eigenen Veedeln oder sobald das Team groß genug ist.
-  const byVeedel = new Map<string, number>();
-  for (const s of getSpots(state)) byVeedel.set(s.veedelId, (byVeedel.get(s.veedelId) ?? 0) + 1);
-  for (const [veedelId, count] of byVeedel) {
-    const enough = count >= 2 || controlledBy(state, PLAYER_FACTION).includes(veedelId) || getStaff(state).length >= 4;
-    if (!enough || getLieutenant(state, veedelId)) continue;
-    const best = getStaff(state, { status: 'active', veedelId })
-      .filter((m) => m.role === 'runner' && m.level >= 2)
-      .sort((a, b) => b.level - a.level)[0];
-    if (best && money(state) > reserve(state) + 800) {
-      run(sim, stats, { type: 'hierarchy.appoint', payload: { staffId: best.id, veedelId } });
-    }
-  }
+  appointLieutenants(sim, stats);
 
   // Sicherheit: eine pro Veedel mit Leuten, sobald eine Gang droht.
   const threatened = getGangs(state).some((g) => (state.modules.gangs.gangs[g.id]?.hostility ?? 0) >= 40);
@@ -291,6 +279,31 @@ function grow(sim: Simulation, stats: BotStats): void {
       }
     }
   }
+}
+
+/**
+ * Leutnants: Sobald zwei Spots ohne Leutnant laufen (oder das Team groß genug ist), bekommt der erfahrenste Läufer
+ * bis zu drei davon, möglichst im selben Veedel (gebündelt bringt mehr Einfluss). Er bestellt nach einer einfachen
+ * Regel (alles nach Nachfrage) und heuert selbst an.
+ */
+function appointLieutenants(sim: Simulation, stats: BotStats): void {
+  const state = sim.state;
+  const unled = getSpots(state)
+    .filter((s) => !lieutenantOfSpot(state, s.id))
+    .sort((a, b) => b.demand - a.demand || a.id.localeCompare(b.id));
+  if (unled.length < 2 && !(unled.length >= 1 && getStaff(state).length >= 4)) return;
+  if (money(state) <= reserve(state) + 800) return;
+  const best = getStaff(state, { status: 'active', role: 'runner' })
+    .filter((m) => m.level >= 2 && !isLieutenant(state, m.id))
+    .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id))[0];
+  if (!best) return;
+  // Das Veedel mit den meisten freien Spots zuerst, dann die übrigen nach Andrang.
+  const count = (veedelId: string) => unled.filter((s) => s.veedelId === veedelId).length;
+  const spotIds = [...unled]
+    .sort((a, b) => count(b.veedelId) - count(a.veedelId) || b.demand - a.demand || a.id.localeCompare(b.id))
+    .slice(0, MAX_SPOTS_PER_LIEUTENANT)
+    .map((s) => s.id);
+  run(sim, stats, { type: 'hierarchy.appoint', payload: { staffId: best.id, spotIds } });
 }
 
 /**
@@ -378,7 +391,7 @@ export function snapshot(state: GameState) {
     suppliers: getSuppliers(state).filter((s) => isUnlocked(state, s.id)).length,
     berth: hasBerth(state),
     security: getStaff(state, { role: 'security' }).length,
-    lieutenants: Object.keys(state.modules.hierarchy.lieutenants).length,
+    lieutenants: Object.keys(state.modules.hierarchy.posts).length,
     spots: getSpots(state).length,
     veedel: controlledBy(state, PLAYER_FACTION).length,
     reputation: Math.round(state.modules.reputation.value),

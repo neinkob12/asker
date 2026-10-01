@@ -1,19 +1,39 @@
-// Hierarchie: Boss → Leutnants pro Veedel → Läufer.
-// Der Spieler befördert einen Mitarbeiter (ab Level 2) zum Leutnant eines Veedels. Der Leutnant führt es
-// selbstständig (siehe ai.ts): Läufer und Sicherheit verteilen, Preis-Anweisungen, Bestand halten, selbst
-// verkaufen, bei Heat abtauchen. Er handelt nur über ctx.dispatch(...) mit actor 'staff:<id>', wie der Spieler.
-// Leutnants haben höhere Ansprüche (Lohn); ihre Zufriedenheit wirkt auf ihre Loyalität und die ihrer Leute.
+// Hierarchie: Boss → (Rechte Hand) → Leutnants → Läufer.
+// Der Spieler befördert einen Mitarbeiter (ab Level 2) zum Leutnant und gibt ihm bis zu drei Spots, frei gewählt und
+// auch über Veedel-Grenzen (ein Spot hat höchstens einen Leutnant). Der Leutnant führt sie selbstständig (ai.ts):
+// Läufer und Sicherheit verteilen, anheuern (mit Tagesbudget), Ausfälle ersetzen und Abwesende entlassen, Preise,
+// Einkauf nach Bestellregeln (Ware, Lieferant, Paket, Mindestbestand im Ziel-Lager), selbst verkaufen, bei Heat
+// abtauchen (pro Veedel). Er handelt nur über ctx.dispatch(...) mit actor 'staff:<id>', wie der Spieler.
+// Über den Leutnants kann eine Rechte Hand stehen (righthand.ts): Tagesbericht, Koordination, Lohnsicherung.
+// Leutnants haben höhere Ansprüche (Lohn, mit der Zahl ihrer Spots); ihre Zufriedenheit wirkt auf ihre Loyalität.
 //
 // Öffentliche API:
-//   getLieutenant(state, veedelId), getLieutenants(state), getPost(state, veedelId),
-//   lieutenantVeedel(state, staffId), canBeLieutenant(state, staffId), lieutenantSatisfaction(state, veedelId),
-//   lieutenantCapacity(member), actionInterval(member), managedSpots(state, veedelId, member), postSummary,
-//   DEFAULT_SETTINGS, PRICE_LEVELS, CAUTION_LEVELS, MIN_STOCK_OPTIONS, RESERVE_OPTIONS
-// Befehle: 'hierarchy.appoint', 'hierarchy.dismiss', 'hierarchy.configure'
-// Ereignisse: 'hierarchy.appointed', 'hierarchy.dismissed', 'hierarchy.configured'
+//   getPost(state, staffId), getLieutenants(state), getLieutenantIds(state), isLieutenant(state, staffId),
+//   lieutenantOfSpot(state, spotId), lieutenantSpots(state, staffId), lieutenantVeedels(state, staffId),
+//   lieutenantsInVeedel(state, veedelId), getLieutenant(state, veedelId) (Kompatibilität: ein Leutnant mit Spot dort),
+//   lieutenantVeedel(state, staffId) (Veedel mit den meisten seiner Spots), teamOf(state, staffId),
+//   teamLeadOf(state, staffId), handlesAbsence(state, lieutenantId, staffId), canBeLieutenant(state, staffId),
+//   checkSpots(state, staffId, spotIds), lieutenantDemand(spotCount), lieutenantSatisfaction(state, staffId),
+//   homeWarehouse(state, staffId), postSummary(state, post), actionInterval(member), heatThreshold(caution, member)
+//   Rechte Hand: getRightHand, canBeRightHand, rightHandOffered, … (siehe righthand.ts)
+// Befehle: 'hierarchy.appoint' ({ staffId, spotIds } oder alt { staffId, veedelId }), 'hierarchy.setSpots',
+//   'hierarchy.dismiss' ({ staffId } oder alt { veedelId }), 'hierarchy.configure' ({ staffId | veedelId, settings }),
+//   'hierarchy.appointRightHand', 'hierarchy.dismissRightHand', 'hierarchy.configureRightHand'
+// Ereignisse: 'hierarchy.appointed', 'hierarchy.dismissed', 'hierarchy.configured', 'hierarchy.spotsChanged',
+//   'hierarchy.rightHandAppointed', 'hierarchy.rightHandDismissed', 'hierarchy.dailyReport'
 
-import { type CommandResult, type Ctx, defineModule, formatEuro, type GameState, journal, messages } from '../../core';
-import { getSpot } from '../spots';
+import {
+  type CommandMeta,
+  type CommandResult,
+  type Ctx,
+  defineModule,
+  formatEuro,
+  type GameState,
+  journal,
+  messages,
+} from '../../core';
+import { nearestWarehouse, type Warehouse } from '../goods';
+import { getSpot, isSpotActive, type Spot, spotsInVeedel } from '../spots';
 import {
   addCareer,
   addLoyalty,
@@ -25,21 +45,26 @@ import {
   isEmployed,
   isSpecialist,
   roleName,
+  type StaffMember,
   setDemand,
   setWage,
   staffContact,
 } from '../staff';
 import { getVeedel, veedelName } from '../veedel';
-import { onRaidWarning, tick } from './ai';
+import { tick as lieutenantTick, onRaidWarning } from './ai';
 import {
+  ABSENT_DAYS_OPTIONS,
+  ABSENT_POLICIES,
   CAUTION_LEVELS,
   COMPLAINT_COOLDOWN,
   DEFAULT_SETTINGS,
   DEMOTION_LOYALTY,
   HIDE_AFTER_RAID,
-  LIEUTENANT_DEMAND,
+  LIEUTENANT_DEMAND_BY_SPOTS,
   LIEUTENANT_MIN_LEVEL,
   LIEUTENANT_XP_PER_SALE,
+  MAX_ORDER_RULES,
+  MAX_SPOTS_PER_LIEUTENANT,
   PRICE_LEVELS,
   PROMOTION_LOYALTY,
   SATISFACTION_HIGH,
@@ -50,34 +75,84 @@ import {
   TICK_EVERY,
   TRAINING_XP,
 } from './config';
-import type { HierarchyState, LieutenantPost, LieutenantSettings } from './types';
+import { checkOrderRule } from './orders';
+import {
+  appointRightHand,
+  configureRightHand,
+  dismissRightHand,
+  onRightHandLeft,
+  rightHandDaily,
+  rightHandTick,
+} from './righthand';
+import type { HierarchyState, LieutenantPost, LieutenantSettings, OrderRule, RightHandSettings } from './types';
 
-export { actionInterval, heatThreshold, lieutenantCapacity, managedSpots, postSummary } from './ai';
+export { actionInterval, heatThreshold, postSummary } from './ai';
 export {
+  ABSENT_DAYS_OPTIONS,
+  ABSENT_POLICIES,
   CAUTION_LEVELS,
+  DEFAULT_RIGHT_HAND_SETTINGS,
   DEFAULT_SETTINGS,
+  HIRE_BUDGET_OPTIONS,
   LIEUTENANT_MIN_LEVEL,
+  MAX_ORDER_RULES,
+  MAX_SPOTS_PER_LIEUTENANT,
   MIN_STOCK_OPTIONS,
+  PAYROLL_RESERVE_DAYS,
   PRICE_LEVELS,
   RESERVE_OPTIONS,
+  RIGHT_HAND_BUDGET_OPTIONS,
+  RIGHT_HAND_DEMAND,
+  RIGHT_HAND_MIN_LEVEL,
+  RIGHT_HAND_MIN_LIEUTENANTS,
+  RIGHT_HAND_MIN_LOYALTY,
 } from './config';
+export { isPortSupplierAllowed, orderRuleLabel, ruleStock, ruleWarehouse } from './orders';
+export {
+  canBeRightHand,
+  getRightHand,
+  isRightHand,
+  payrollReserve,
+  rightHandBudgetLeft,
+  rightHandOffered,
+  rightHandSatisfaction,
+} from './righthand';
 export type * from './types';
+
+/** Settings-Änderung: wie die Einstellungen, dazu der alte Mindestbestand (wird zur Regel "automatisch"). */
+export type SettingsPatch = Partial<LieutenantSettings> & { minStock?: number };
 
 declare module '../../core' {
   interface ModuleStates {
     hierarchy: HierarchyState;
   }
   interface GameCommands {
-    /** Mitarbeiter zum Leutnant eines Veedels befördern (oder als Leutnant dorthin versetzen). */
-    'hierarchy.appoint': { staffId: string; veedelId: string };
-    'hierarchy.dismiss': { veedelId: string };
-    /** Delegations-Einstellungen eines Leutnants ändern. */
-    'hierarchy.configure': { veedelId: string; settings: Partial<LieutenantSettings> };
+    /**
+     * Mitarbeiter zum Leutnant machen (oder einem Leutnant andere Spots geben). spotIds: bis zu drei Spots. Alte Form
+     * mit veedelId: die Spots dieses Veedels mit dem meisten Andrang, die noch keinen Leutnant haben.
+     */
+    'hierarchy.appoint': { staffId: string; spotIds?: string[]; veedelId?: string };
+    /** Spots eines Leutnants ändern (bis zu drei). */
+    'hierarchy.setSpots': { staffId: string; spotIds: string[] };
+    /** Leutnant abberufen (alte Form: der Leutnant im Veedel). */
+    'hierarchy.dismiss': { staffId?: string; veedelId?: string };
+    /** Delegations-Einstellungen eines Leutnants ändern (alte Form mit veedelId und minStock geht weiter). */
+    'hierarchy.configure': { staffId?: string; veedelId?: string; settings: SettingsPatch };
+    /** Rechte Hand ernennen (genau eine Person über den Leutnants). */
+    'hierarchy.appointRightHand': { staffId: string };
+    'hierarchy.dismissRightHand': Record<string, never>;
+    'hierarchy.configureRightHand': { settings: Partial<RightHandSettings> };
   }
   interface GameEvents {
-    'hierarchy.appointed': { staffId: string; veedelId: string };
+    /** veedelId: Veedel mit den meisten seiner Spots (für ältere Zuhörer). */
+    'hierarchy.appointed': { staffId: string; veedelId: string; spotIds: string[] };
     'hierarchy.dismissed': { staffId: string; veedelId: string };
     'hierarchy.configured': { staffId: string; veedelId: string };
+    'hierarchy.spotsChanged': { staffId: string; spotIds: string[] };
+    'hierarchy.rightHandAppointed': { staffId: string };
+    'hierarchy.rightHandDismissed': { staffId: string };
+    /** Tagesbericht der Rechten Hand (Zahlen von gestern). */
+    'hierarchy.dailyReport': { staffId: string; day: number; profit: number; problems: number };
   }
 }
 
@@ -85,57 +160,115 @@ const NOT_EMPLOYED = 'Diese Person arbeitet nicht für dich.';
 
 // --- Lesen ---
 
-export function getLieutenant(state: GameState, veedelId: string): string | null {
-  return state.modules.hierarchy.lieutenants[veedelId] ?? null;
+export function getPost(state: GameState, staffId: string): LieutenantPost | undefined {
+  return state.modules.hierarchy.posts[staffId];
+}
+
+/** Alle Leutnant-Posten, nach Mitarbeiter-ID sortiert. */
+export function getLieutenants(state: GameState): LieutenantPost[] {
+  const posts = state.modules.hierarchy.posts;
+  return Object.keys(posts)
+    .sort()
+    .map((id) => posts[id]);
 }
 
 /** Mitarbeiter-IDs aller Leutnants. */
 export function getLieutenantIds(state: GameState): string[] {
-  return Object.values(state.modules.hierarchy.lieutenants);
+  return Object.keys(state.modules.hierarchy.posts).sort();
 }
 
-/** Alle Leutnants als [veedelId, staffId]. */
-export function getLieutenants(state: GameState): [string, string][] {
-  return Object.entries(state.modules.hierarchy.lieutenants);
-}
-
-export function getPost(state: GameState, veedelId: string): LieutenantPost | undefined {
-  return state.modules.hierarchy.posts[veedelId];
-}
-
-/** Veedel, das die Person als Leutnant führt, sonst null. */
-export function lieutenantVeedel(state: GameState, staffId: string): string | null {
-  return getLieutenants(state).find(([, id]) => id === staffId)?.[0] ?? null;
+export function isLieutenant(state: GameState, staffId: string): boolean {
+  return !!state.modules.hierarchy.posts[staffId];
 }
 
 /** Leutnant, der diesen Spot führt, sonst null. */
 export function lieutenantOfSpot(state: GameState, spotId: string): string | null {
-  const spot = getSpot(state, spotId);
-  return spot ? getLieutenant(state, spot.veedelId) : null;
-}
-
-/**
- * Zu welchem Leutnant gehört die Person (für Übersicht und Kasse)? Der Leutnant selbst, wer an einem seiner Spots
- * steht (oder nach Haft dorthin zurückkehrt). Sonst null.
- */
-export function teamLeadOf(state: GameState, staffId: string): string | null {
-  if (lieutenantVeedel(state, staffId)) return staffId;
-  const m = getStaffMember(state, staffId);
-  const place = m?.assignment ?? m?.returnTo;
-  if (place?.kind === 'spot') return lieutenantOfSpot(state, place.targetId);
+  for (const post of getLieutenants(state)) if (post.spotIds.includes(spotId)) return post.staffId;
   return null;
 }
 
+/** Offene Spots, die der Leutnant führt. */
+export function lieutenantSpots(state: GameState, staffId: string): Spot[] {
+  const post = getPost(state, staffId);
+  if (!post) return [];
+  return post.spotIds
+    .filter((id) => isSpotActive(state, id))
+    .map((id) => getSpot(state, id))
+    .filter((s): s is Spot => !!s);
+}
+
+/** Veedel, in denen der Leutnant Spots führt, das mit den meisten zuerst. */
+export function lieutenantVeedels(state: GameState, staffId: string): string[] {
+  const counts = new Map<string, number>();
+  for (const spot of lieutenantSpots(state, staffId)) counts.set(spot.veedelId, (counts.get(spot.veedelId) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([id]) => id);
+}
+
+/** Wie viele seiner Spots liegen in diesem Veedel? */
+export function lieutenantSpotsIn(state: GameState, staffId: string, veedelId: string): number {
+  return lieutenantSpots(state, staffId).filter((s) => s.veedelId === veedelId).length;
+}
+
+/** Leutnants mit mindestens einem Spot im Veedel (die mit den meisten Spots dort zuerst). */
+export function lieutenantsInVeedel(state: GameState, veedelId: string): string[] {
+  return getLieutenantIds(state)
+    .map((id) => ({ id, n: lieutenantSpotsIn(state, id, veedelId) }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n || a.id.localeCompare(b.id))
+    .map((x) => x.id);
+}
+
+/** Kompatibilität: ein Leutnant mit Spot in diesem Veedel (der mit den meisten Spots dort), sonst null. */
+export function getLieutenant(state: GameState, veedelId: string): string | null {
+  return lieutenantsInVeedel(state, veedelId)[0] ?? null;
+}
+
+/** Veedel mit den meisten seiner Spots, sonst null (kein Leutnant oder keine offenen Spots). */
+export function lieutenantVeedel(state: GameState, staffId: string): string | null {
+  return lieutenantVeedels(state, staffId)[0] ?? null;
+}
+
+/**
+ * Sein Team: wer an seinen Spots steht (oder nach Haft dorthin zurückkehrt) und wen er selbst angeheuert hat.
+ * Ohne ihn selbst.
+ */
+export function teamOf(state: GameState, staffId: string): StaffMember[] {
+  const post = getPost(state, staffId);
+  if (!post) return [];
+  return getStaff(state).filter((m) => {
+    if (m.id === staffId) return false;
+    const place = m.assignment ?? m.returnTo;
+    if (place?.kind === 'spot' && post.spotIds.includes(place.targetId)) return true;
+    return post.team.includes(m.id);
+  });
+}
+
+/** Zu welchem Leutnant gehört die Person (für Übersicht und Kasse)? Der Leutnant selbst gehört zu sich. */
+export function teamLeadOf(state: GameState, staffId: string): string | null {
+  if (isLieutenant(state, staffId)) return staffId;
+  const m = getStaffMember(state, staffId);
+  const place = m?.assignment ?? m?.returnTo;
+  if (place?.kind === 'spot') {
+    const lead = lieutenantOfSpot(state, place.targetId);
+    if (lead) return lead;
+  }
+  return getLieutenants(state).find((p) => p.team.includes(staffId))?.staffId ?? null;
+}
+
 /** Kümmert sich der Leutnant selbst um den Ausfall dieser Person (dann fragt niemand den Spieler)? */
-export function handlesAbsence(_state: GameState, _lieutenantId: string, _staffId: string): boolean {
-  return false;
+export function handlesAbsence(state: GameState, lieutenantId: string, staffId: string): boolean {
+  const post = getPost(state, lieutenantId);
+  const lt = getStaffMember(state, lieutenantId);
+  if (!post || lt?.status !== 'active' || post.settings.onAbsent === 'wait') return false;
+  return teamOf(state, lieutenantId).some((m) => m.id === staffId);
 }
 
 /** Kann die Person Leutnant werden? */
 export function canBeLieutenant(state: GameState, staffId: string): CommandResult {
   const m = getStaffMember(state, staffId);
   if (!m || !isEmployed(state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
-  if (isSpecialist(m.role)) return { ok: false, reason: `${roleName(m.role)} führen kein Veedel.` };
+  if (isSpecialist(m.role)) return { ok: false, reason: `${roleName(m.role)} führen keine Spots.` };
+  if (m.assignment?.kind === 'office') return { ok: false, reason: `${m.name} ist deine Rechte Hand.` };
   if (m.status !== 'active') return { ok: false, reason: `${m.name} ist gerade nicht einsatzbereit.` };
   if (m.level < LIEUTENANT_MIN_LEVEL) {
     return { ok: false, reason: `${m.name} braucht mindestens Level ${LIEUTENANT_MIN_LEVEL}.` };
@@ -143,12 +276,47 @@ export function canBeLieutenant(state: GameState, staffId: string): CommandResul
   return { ok: true };
 }
 
+/** Prüft eine Spot-Auswahl für einen Leutnant: offen, höchstens drei, keiner gehört einem anderen Leutnant. */
+export function checkSpots(state: GameState, staffId: string, spotIds: readonly string[]): CommandResult {
+  if (!Array.isArray(spotIds) || spotIds.length === 0) return { ok: false, reason: 'Wähle mindestens einen Spot.' };
+  if (new Set(spotIds).size !== spotIds.length) return { ok: false, reason: 'Ein Spot ist doppelt gewählt.' };
+  if (spotIds.length > MAX_SPOTS_PER_LIEUTENANT) {
+    return { ok: false, reason: `Ein Leutnant führt höchstens ${MAX_SPOTS_PER_LIEUTENANT} Spots.` };
+  }
+  for (const spotId of spotIds) {
+    const spot = getSpot(state, spotId);
+    if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
+    if (!isSpotActive(state, spotId)) return { ok: false, reason: `Der ${spot.name} ist noch nicht freigeschaltet.` };
+    const other = lieutenantOfSpot(state, spotId);
+    if (other && other !== staffId) {
+      const name = getStaffMember(state, other)?.name ?? 'einem anderen Leutnant';
+      return { ok: false, reason: `Den ${spot.name} führt schon ${name}.` };
+    }
+  }
+  return { ok: true };
+}
+
+/** Lohnanspruch eines Leutnants mit so vielen Spots (Faktor auf den üblichen Lohn). */
+export function lieutenantDemand(spotCount: number): number {
+  const i = Math.max(0, Math.min(LIEUTENANT_DEMAND_BY_SPOTS.length - 1, spotCount));
+  return LIEUTENANT_DEMAND_BY_SPOTS[i];
+}
+
+/** Lager, aus dem seine Spots verkaufen (das nächste zur Mitte seiner Spots). */
+export function homeWarehouse(state: GameState, staffId: string): Warehouse | undefined {
+  const spots = lieutenantSpots(state, staffId);
+  if (spots.length === 0) return undefined;
+  const lng = spots.reduce((sum, s) => sum + s.lng, 0) / spots.length;
+  const lat = spots.reduce((sum, s) => sum + s.lat, 0) / spots.length;
+  return nearestWarehouse(state, { lng, lat });
+}
+
 /**
- * Zufriedenheit eines Leutnants (0–100): Loyalität, Lohn im Verhältnis zu seinen höheren Ansprüchen und
- * wie gut das Veedel gestern lief. Unter 35 beschwert er sich, ab 70 hält er auch seine Leute bei Laune.
+ * Zufriedenheit eines Leutnants (0–100): Loyalität, Lohn im Verhältnis zu seinen höheren Ansprüchen und wie gut
+ * seine Spots gestern liefen. Unter 35 beschwert er sich, ab 70 hält er auch seine Leute bei Laune.
  */
-export function lieutenantSatisfaction(state: GameState, veedelId: string): number | null {
-  const post = getPost(state, veedelId);
+export function lieutenantSatisfaction(state: GameState, staffId: string): number | null {
+  const post = getPost(state, staffId);
   const m = post ? getStaffMember(state, post.staffId) : undefined;
   if (!post || !m) return null;
   const expected = expectedWage(state, m.id);
@@ -160,157 +328,288 @@ export function lieutenantSatisfaction(state: GameState, veedelId: string): numb
 
 // --- Schreiben ---
 
-function newPost(staffId: string, now: number, settings: LieutenantSettings = DEFAULT_SETTINGS): LieutenantPost {
+function cloneRules(rules: readonly OrderRule[]): OrderRule[] {
+  return rules.map((r) => ({ ...r, paused: null }));
+}
+
+function newPost(ctx: Ctx, staffId: string, spotIds: string[], settings?: LieutenantSettings): LieutenantPost {
+  const template = ctx.state.modules.hierarchy.orderTemplate;
+  const base = settings ?? {
+    ...DEFAULT_SETTINGS,
+    orderRules: cloneRules(template ?? DEFAULT_SETTINGS.orderRules),
+  };
   return {
     staffId,
-    appointedAt: now,
-    settings: { ...settings },
-    nextActionAt: now,
-    busyUntil: now,
-    lyingLow: false,
+    spotIds: [...spotIds],
+    appointedAt: ctx.now,
+    settings: { ...base, orderRules: cloneRules(base.orderRules) },
+    nextActionAt: ctx.now,
+    busyUntil: ctx.now,
+    lyingLow: [],
     revenueToday: 0,
     revenueYesterday: 0,
     salesTotal: 0,
     revenueTotal: 0,
     complainedAt: null,
+    team: [],
+    spentDay: 0,
+    hireSpent: 0,
+    absences: {},
     log: [],
   };
 }
 
-function removePost(ctx: Ctx, veedelId: string): LieutenantPost | undefined {
-  const h = ctx.state.modules.hierarchy;
-  const post = h.posts[veedelId];
-  delete h.posts[veedelId];
-  delete h.lieutenants[veedelId];
-  return post;
+/** Spot-Namen für Texte: "Neumarkt, Zülpicher Platz und Uni-Wiese". */
+export function spotList(state: GameState, spotIds: readonly string[]): string {
+  const names = spotIds.map((id) => getSpot(state, id)?.name ?? id);
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} und ${names[names.length - 1]}`;
 }
 
-/** Leutnant eines Veedels abberufen. Er wird wieder normaler Mitarbeiter ohne Einsatz. */
-function demote(ctx: Ctx, veedelId: string): string | null {
-  const staffId = getLieutenant(ctx.state, veedelId);
-  if (!staffId) return null;
-  removePost(ctx, veedelId);
+/** Einsatz (Veedel mit den meisten Spots) und Anspruch zur Zahl der Spots passend halten. */
+function syncLieutenant(ctx: Ctx, post: LieutenantPost): void {
+  const m = getStaffMember(ctx.state, post.staffId);
+  if (!m) return;
+  const veedelId = lieutenantVeedel(ctx.state, post.staffId);
+  const target = m.status === 'active' ? m.assignment : m.returnTo;
+  if (veedelId && (target?.kind !== 'veedel' || target.targetId !== veedelId)) {
+    assign(ctx, m.id, { kind: 'veedel', targetId: veedelId });
+  }
+  const demand = lieutenantDemand(post.spotIds.length);
+  if (m.demand !== demand) setDemand(ctx, m.id, demand);
+}
+
+/** Leutnant abberufen. Er wird wieder normaler Mitarbeiter ohne Einsatz. */
+function demote(ctx: Ctx, staffId: string): CommandResult {
+  const post = getPost(ctx.state, staffId);
+  if (!post) return { ok: false, reason: 'Diese Person ist kein Leutnant.' };
+  const veedelId = lieutenantVeedel(ctx.state, staffId) ?? '';
+  delete ctx.state.modules.hierarchy.posts[staffId];
   const m = getStaffMember(ctx.state, staffId);
   if (m && isEmployed(ctx.state, staffId)) {
     assign(ctx, staffId, null);
     setDemand(ctx, staffId, 1);
     addLoyalty(ctx, staffId, DEMOTION_LOYALTY);
-    addCareer(ctx, staffId, `Als Leutnant von ${veedelName(veedelId)} abberufen.`);
-    journal.add(ctx, `${m.name} ist nicht mehr Leutnant in ${veedelName(veedelId)}.`, 'info', { veedelId, staffId });
+    addCareer(ctx, staffId, 'Als Leutnant abberufen.');
+    journal.add(ctx, `${m.name} ist nicht mehr Leutnant.`, 'info', { staffId });
   }
   ctx.emit('hierarchy.dismissed', { staffId, veedelId });
-  return staffId;
-}
-
-function appoint(ctx: Ctx, staffId: string, veedelId: string): CommandResult {
-  if (!getVeedel(veedelId)) return { ok: false, reason: 'Unbekanntes Veedel.' };
-  const check = canBeLieutenant(ctx.state, staffId);
-  if (!check.ok) return check;
-  const m = getStaffMember(ctx.state, staffId) as NonNullable<ReturnType<typeof getStaffMember>>;
-  const current = getLieutenant(ctx.state, veedelId);
-  if (current === staffId) return { ok: false, reason: `${m.name} führt ${veedelName(veedelId)} schon.` };
-
-  // Schon Leutnant woanders: wird versetzt und nimmt seine Einstellungen mit.
-  const previousVeedel = lieutenantVeedel(ctx.state, staffId);
-  const previous = previousVeedel ? removePost(ctx, previousVeedel) : undefined;
-  if (previousVeedel) ctx.emit('hierarchy.dismissed', { staffId, veedelId: previousVeedel });
-  if (current) demote(ctx, veedelId);
-
-  const h = ctx.state.modules.hierarchy;
-  h.lieutenants[veedelId] = staffId;
-  h.posts[veedelId] = newPost(staffId, ctx.now, previous?.settings);
-  assign(ctx, staffId, { kind: 'veedel', targetId: veedelId });
-  setDemand(ctx, staffId, LIEUTENANT_DEMAND);
-  if (previousVeedel) {
-    addCareer(ctx, staffId, `Als Leutnant nach ${veedelName(veedelId)} versetzt.`);
-    journal.add(ctx, `${m.name} führt jetzt ${veedelName(veedelId)}.`, 'info', { veedelId, staffId });
-  } else {
-    // Beförderung: mehr Lohn (auf den neuen Anspruch) und ein Loyalitätsschub.
-    setWage(ctx, staffId, Math.max(m.wage, expectedWage(ctx.state, staffId)));
-    addLoyalty(ctx, staffId, PROMOTION_LOYALTY);
-    addCareer(ctx, staffId, `Zum Leutnant von ${veedelName(veedelId)} befördert.`);
-    journal.add(
-      ctx,
-      `${m.name} ist jetzt dein Leutnant in ${veedelName(veedelId)} (${formatEuro(m.wage)} pro Tag).`,
-      'good',
-      { veedelId, staffId },
-    );
-  }
-  ctx.emit('hierarchy.appointed', { staffId, veedelId });
   return { ok: true };
 }
 
-function configure(ctx: Ctx, veedelId: string, settings: Partial<LieutenantSettings>): CommandResult {
-  const post = getPost(ctx.state, veedelId);
+/** Alte Form: freie Spots eines Veedels mit dem meisten Andrang. */
+function spotsForVeedel(state: GameState, staffId: string, veedelId: string): string[] {
+  return [...spotsInVeedel(state, veedelId)]
+    .filter((s) => {
+      const lt = lieutenantOfSpot(state, s.id);
+      return !lt || lt === staffId;
+    })
+    .sort((a, b) => b.demand - a.demand || a.id.localeCompare(b.id))
+    .slice(0, MAX_SPOTS_PER_LIEUTENANT)
+    .map((s) => s.id);
+}
+
+function appoint(ctx: Ctx, staffId: string, spotIds: string[] | undefined, veedelId?: string): CommandResult {
+  let chosen = spotIds;
+  if (!chosen) {
+    if (!veedelId || !getVeedel(veedelId)) return { ok: false, reason: 'Wähle die Spots, die er führen soll.' };
+    chosen = spotsForVeedel(ctx.state, staffId, veedelId);
+    if (chosen.length === 0) {
+      const lead = getLieutenant(ctx.state, veedelId);
+      const name = lead ? getStaffMember(ctx.state, lead)?.name : null;
+      return {
+        ok: false,
+        reason: name
+          ? `Die Spots in ${veedelName(veedelId)} führt schon ${name}.`
+          : `In ${veedelName(veedelId)} gibt es keinen offenen Spot.`,
+      };
+    }
+  }
+  if (isLieutenant(ctx.state, staffId)) return setSpots(ctx, staffId, chosen, true);
+  const check = canBeLieutenant(ctx.state, staffId);
+  if (!check.ok) return check;
+  const spots = checkSpots(ctx.state, staffId, chosen);
+  if (!spots.ok) return spots;
+  const m = getStaffMember(ctx.state, staffId) as StaffMember;
+  // Wer bisher an einem Spot stand, räumt ihn: Er führt jetzt, statt selbst zu stehen (Einsatz 'veedel').
+  const post = newPost(ctx, staffId, chosen);
+  ctx.state.modules.hierarchy.posts[staffId] = post;
+  syncLieutenant(ctx, post);
+  // Beförderung: mehr Lohn (auf den neuen Anspruch) und ein Loyalitätsschub.
+  setWage(ctx, staffId, Math.max(m.wage, expectedWage(ctx.state, staffId)));
+  addLoyalty(ctx, staffId, PROMOTION_LOYALTY);
+  const where = spotList(ctx.state, chosen);
+  addCareer(ctx, staffId, `Zum Leutnant befördert: ${where}.`);
+  journal.add(ctx, `${m.name} ist jetzt dein Leutnant: ${where} (${formatEuro(m.wage)} pro Tag).`, 'good', {
+    staffId,
+  });
+  post.log.unshift({ time: ctx.now, text: `Übernimmt ${where}.` });
+  ctx.emit('hierarchy.appointed', { staffId, veedelId: lieutenantVeedel(ctx.state, staffId) ?? '', spotIds: chosen });
+  return { ok: true };
+}
+
+function setSpots(ctx: Ctx, staffId: string, spotIds: string[], fromAppoint = false): CommandResult {
+  const post = getPost(ctx.state, staffId);
+  if (!post) return { ok: false, reason: 'Diese Person ist kein Leutnant.' };
+  const check = checkSpots(ctx.state, staffId, spotIds);
+  if (!check.ok) return check;
+  const m = getStaffMember(ctx.state, staffId) as StaffMember;
+  if (post.spotIds.length === spotIds.length && post.spotIds.every((id, i) => id === spotIds[i])) {
+    return fromAppoint ? { ok: false, reason: `${m.name} führt diese Spots schon.` } : { ok: true };
+  }
+  post.spotIds = [...spotIds];
+  post.lyingLow = [];
+  post.nextActionAt = Math.min(post.nextActionAt, ctx.now + 1);
+  syncLieutenant(ctx, post);
+  const where = spotList(ctx.state, spotIds);
+  post.log.unshift({ time: ctx.now, text: `Führt jetzt ${where}.` });
+  addCareer(ctx, staffId, `Führt jetzt ${where}.`);
+  journal.add(ctx, `${m.name} führt jetzt ${where}.`, 'info', { staffId });
+  ctx.emit('hierarchy.spotsChanged', { staffId, spotIds: [...spotIds] });
+  if (fromAppoint) {
+    ctx.emit('hierarchy.appointed', { staffId, veedelId: lieutenantVeedel(ctx.state, staffId) ?? '', spotIds });
+  }
+  return { ok: true };
+}
+
+function resolveStaffId(state: GameState, payload: { staffId?: string; veedelId?: string }): string | null {
+  if (payload.staffId) return payload.staffId;
+  return payload.veedelId ? getLieutenant(state, payload.veedelId) : null;
+}
+
+function configure(ctx: Ctx, staffId: string | null, patch: SettingsPatch, meta: CommandMeta): CommandResult {
+  const post = staffId ? getPost(ctx.state, staffId) : undefined;
   if (!post) return { ok: false, reason: 'Dort gibt es keinen Leutnant.' };
-  const next = { ...post.settings };
-  if (settings.minStock !== undefined) {
-    if (!Number.isInteger(settings.minStock) || settings.minStock < 0 || settings.minStock > 5000) {
+  const next: LieutenantSettings = { ...post.settings, orderRules: cloneRulesKeepPause(post.settings.orderRules) };
+  if (patch.minStock !== undefined) {
+    if (!Number.isInteger(patch.minStock) || patch.minStock < 0 || patch.minStock > 5000) {
       return { ok: false, reason: 'Ungültiger Mindestbestand.' };
     }
-    next.minStock = settings.minStock;
+    // Alte Form: Mindestbestand für die erste automatische Regel (oder eine neue).
+    const auto = next.orderRules.find((r) => !r.productId && !r.supplierId);
+    if (auto) auto.minStock = patch.minStock;
+    else
+      next.orderRules.push({
+        ...DEFAULT_SETTINGS.orderRules[0],
+        id: nextRuleId(next.orderRules),
+        minStock: patch.minStock,
+      });
   }
-  if (settings.reserve !== undefined) {
-    if (!(settings.reserve >= 0 && settings.reserve <= 1_000_000)) return { ok: false, reason: 'Ungültige Rücklage.' };
-    next.reserve = Math.round(settings.reserve);
+  if (patch.reserve !== undefined) {
+    if (!(patch.reserve >= 0 && patch.reserve <= 1_000_000)) return { ok: false, reason: 'Ungültige Rücklage.' };
+    next.reserve = Math.round(patch.reserve);
   }
-  if (settings.priceLevel !== undefined) {
-    if (!(settings.priceLevel in PRICE_LEVELS)) return { ok: false, reason: 'Unbekanntes Preisniveau.' };
-    next.priceLevel = settings.priceLevel;
+  if (patch.hireBudgetPerDay !== undefined) {
+    if (!(patch.hireBudgetPerDay >= 0 && patch.hireBudgetPerDay <= 100_000)) {
+      return { ok: false, reason: 'Ungültiges Budget.' };
+    }
+    next.hireBudgetPerDay = Math.round(patch.hireBudgetPerDay);
   }
-  if (settings.caution !== undefined) {
-    if (!(settings.caution in CAUTION_LEVELS)) return { ok: false, reason: 'Unbekannte Vorsicht.' };
-    next.caution = settings.caution;
+  if (patch.priceLevel !== undefined) {
+    if (!(patch.priceLevel in PRICE_LEVELS)) return { ok: false, reason: 'Unbekanntes Preisniveau.' };
+    next.priceLevel = patch.priceLevel;
   }
-  if (settings.mayHire !== undefined) next.mayHire = !!settings.mayHire;
-  if (settings.mayOrder !== undefined) next.mayOrder = !!settings.mayOrder;
+  if (patch.caution !== undefined) {
+    if (!(patch.caution in CAUTION_LEVELS)) return { ok: false, reason: 'Unbekannte Vorsicht.' };
+    next.caution = patch.caution;
+  }
+  if (patch.onAbsent !== undefined) {
+    if (!(patch.onAbsent in ABSENT_POLICIES)) return { ok: false, reason: 'Unbekannte Regel für Ausfälle.' };
+    next.onAbsent = patch.onAbsent;
+  }
+  if (patch.absentDays !== undefined) {
+    if (!ABSENT_DAYS_OPTIONS.includes(patch.absentDays)) return { ok: false, reason: 'Ungültige Zahl an Tagen.' };
+    next.absentDays = patch.absentDays;
+  }
+  if (patch.mayHire !== undefined) next.mayHire = !!patch.mayHire;
+  if (patch.mayOrder !== undefined) next.mayOrder = !!patch.mayOrder;
+  if (patch.orderRules !== undefined) {
+    if (!Array.isArray(patch.orderRules) || patch.orderRules.length > MAX_ORDER_RULES) {
+      return { ok: false, reason: `Höchstens ${MAX_ORDER_RULES} Bestellregeln.` };
+    }
+    const rules: OrderRule[] = [];
+    for (const raw of patch.orderRules) {
+      const rule: OrderRule = {
+        id: raw.id || nextRuleId(rules),
+        productId: raw.productId ?? null,
+        supplierId: raw.supplierId ?? null,
+        packageId: raw.packageId ?? null,
+        minStock: raw.minStock,
+        warehouseId: raw.warehouseId ?? null,
+        paused: null,
+      };
+      if (rules.some((r) => r.id === rule.id)) rule.id = nextRuleId(rules);
+      const check = checkOrderRule(ctx.state, rule);
+      if (!check.ok) return check;
+      rules.push(rule);
+    }
+    next.orderRules = rules;
+    // Die letzte Einstellung des Spielers ist die Vorlage für neue Leutnants.
+    if (meta.actor === 'player') ctx.state.modules.hierarchy.orderTemplate = cloneRules(rules);
+  }
   post.settings = next;
   // Neue Anweisungen setzt er gleich in der nächsten Runde um.
   post.nextActionAt = Math.min(post.nextActionAt, ctx.now + 1);
   post.log.unshift({ time: ctx.now, text: 'Neue Anweisungen vom Boss.' });
-  ctx.emit('hierarchy.configured', { staffId: post.staffId, veedelId });
+  ctx.emit('hierarchy.configured', {
+    staffId: post.staffId,
+    veedelId: lieutenantVeedel(ctx.state, post.staffId) ?? '',
+  });
   return { ok: true };
 }
 
-/** Um Mitternacht: Zufriedenheit auswerten, Beschwerden, Umsatz-Zähler weiterschieben. */
+function cloneRulesKeepPause(rules: readonly OrderRule[]): OrderRule[] {
+  return rules.map((r) => ({ ...r }));
+}
+
+function nextRuleId(rules: readonly OrderRule[]): string {
+  let n = rules.length + 1;
+  while (rules.some((r) => r.id === `r${n}`)) n++;
+  return `r${n}`;
+}
+
+/** Um Mitternacht: Spots aufräumen, Zufriedenheit auswerten, Beschwerden, Umsatz-Zähler weiterschieben. */
 function daily(ctx: Ctx): void {
   const h = ctx.state.modules.hierarchy;
-  for (const veedelId of Object.keys(h.posts).sort()) {
-    const post = h.posts[veedelId];
-    const m = getStaffMember(ctx.state, post.staffId);
+  for (const staffId of Object.keys(h.posts).sort()) {
+    const post = h.posts[staffId];
+    const m = getStaffMember(ctx.state, staffId);
     if (!m || !isEmployed(ctx.state, m.id)) {
-      removePost(ctx, veedelId);
+      delete h.posts[staffId];
       continue;
     }
-    syncLieutenant(ctx, veedelId, post);
+    // Geschlossene Spots fallen raus, Leute im Team, die weg sind, auch.
+    post.spotIds = post.spotIds.filter((id) => isSpotActive(ctx.state, id));
+    post.team = post.team.filter((id) => isEmployed(ctx.state, id));
+    for (const id of Object.keys(post.absences)) if (!isEmployed(ctx.state, id)) delete post.absences[id];
+    syncLieutenant(ctx, post);
     post.revenueYesterday = post.revenueToday;
     post.revenueToday = 0;
-    const satisfaction = lieutenantSatisfaction(ctx.state, veedelId) ?? 50;
+    const satisfaction = lieutenantSatisfaction(ctx.state, staffId) ?? 50;
     if (satisfaction < SATISFACTION_LOW) {
       addLoyalty(ctx, m.id, SATISFACTION_LOYALTY_LOW);
       if (post.complainedAt === null || ctx.now - post.complainedAt >= COMPLAINT_COOLDOWN) {
         post.complainedAt = ctx.now;
-        complain(ctx, veedelId, post);
+        complain(ctx, post);
       }
     } else if (satisfaction >= SATISFACTION_HIGH) {
       addLoyalty(ctx, m.id, SATISFACTION_LOYALTY_HIGH);
       // Ein guter Leutnant hält seine Leute bei Laune.
-      if (m.stats.charisma >= 55) {
-        for (const other of getStaff(ctx.state, { veedelId })) {
-          if (other.id !== m.id) addLoyalty(ctx, other.id, TEAM_LOYALTY);
-        }
-      }
+      if (m.stats.charisma >= 55)
+        for (const other of teamOf(ctx.state, staffId)) addLoyalty(ctx, other.id, TEAM_LOYALTY);
     }
   }
+  rightHandDaily(ctx);
 }
 
-function complain(ctx: Ctx, veedelId: string, post: LieutenantPost): void {
+function complain(ctx: Ctx, post: LieutenantPost): void {
   const m = getStaffMember(ctx.state, post.staffId);
   if (!m) return;
   const raise = Math.ceil(Math.max(expectedWage(ctx.state, m.id), m.wage * 1.2) / 10) * 10;
+  const what = post.spotIds.length === 1 ? 'den Spot' : `${post.spotIds.length} Spots`;
   messages.send(ctx, {
     contact: staffContact(m),
-    text: `Chef, ich halte ${veedelName(veedelId)} für dich zusammen und krieg ${formatEuro(m.wage)} am Tag. Das reicht so nicht.`,
+    text: `Chef, ich halte ${what} für dich zusammen und krieg ${formatEuro(m.wage)} am Tag. Das reicht so nicht.`,
     options: [
       {
         id: 'raise',
@@ -324,76 +623,182 @@ function complain(ctx: Ctx, veedelId: string, post: LieutenantPost): void {
   });
 }
 
-/** Hält Einsatz und Anspruch des Leutnants passend (z.B. nach dem Laden alter Spielstände). */
-function syncLieutenant(ctx: Ctx, veedelId: string, post: LieutenantPost): void {
-  const m = getStaffMember(ctx.state, post.staffId);
-  if (!m) return;
-  const target = m.status === 'active' ? m.assignment : m.returnTo;
-  if (target?.kind !== 'veedel' || target.targetId !== veedelId) {
-    assign(ctx, m.id, { kind: 'veedel', targetId: veedelId });
-  }
-  if (m.demand !== LIEUTENANT_DEMAND) setDemand(ctx, m.id, LIEUTENANT_DEMAND);
-}
-
-// --- Migration vom Fundament (Version 1) ---
+// --- Migration ---
 
 interface HierarchyStateV1 {
   lieutenants: Record<string, string>;
 }
 
-export function migrateHierarchyV1(old: HierarchyStateV1, state: GameState): HierarchyState {
-  const posts: Record<string, LieutenantPost> = {};
-  for (const [veedelId, staffId] of Object.entries(old.lieutenants)) posts[veedelId] = newPost(staffId, state.time);
+/** Posten in Version 2 (pro Veedel). */
+interface LieutenantPostV2 {
+  staffId: string;
+  appointedAt: number;
+  settings: {
+    minStock: number;
+    priceLevel: LieutenantSettings['priceLevel'];
+    caution: LieutenantSettings['caution'];
+    mayHire: boolean;
+    mayOrder: boolean;
+    reserve: number;
+  };
+  nextActionAt: number;
+  busyUntil: number;
+  lyingLow: boolean;
+  revenueToday: number;
+  revenueYesterday: number;
+  salesTotal: number;
+  revenueTotal: number;
+  complainedAt: number | null;
+  log: LieutenantPost['log'];
+}
+
+interface HierarchyStateV2 {
+  lieutenants: Record<string, string>;
+  posts: Record<string, LieutenantPostV2>;
+}
+
+export function migrateHierarchyV1(old: HierarchyStateV1, state: GameState): HierarchyStateV2 {
+  const posts: Record<string, LieutenantPostV2> = {};
+  for (const [veedelId, staffId] of Object.entries(old.lieutenants)) {
+    posts[veedelId] = {
+      staffId,
+      appointedAt: state.time,
+      settings: { minStock: 100, priceLevel: 'keep', caution: 'normal', mayHire: false, mayOrder: true, reserve: 500 },
+      nextActionAt: state.time,
+      busyUntil: state.time,
+      lyingLow: false,
+      revenueToday: 0,
+      revenueYesterday: 0,
+      salesTotal: 0,
+      revenueTotal: 0,
+      complainedAt: null,
+      log: [],
+    };
+  }
   return { lieutenants: { ...old.lieutenants }, posts };
+}
+
+/**
+ * Version 2 → 3: Aus jedem Veedel-Posten wird ein Posten pro Leutnant mit den bis zu drei Spots dieses Veedels mit
+ * dem meisten Andrang. Einstellungen (alter Mindestbestand wird eine Regel "automatisch"), Protokoll und Umsatz bleiben.
+ */
+export function migrateHierarchyV2(old: HierarchyStateV2, state: GameState): HierarchyState {
+  const posts: Record<string, LieutenantPost> = {};
+  for (const veedelId of Object.keys(old.posts).sort()) {
+    const p = old.posts[veedelId];
+    if (posts[p.staffId]) continue;
+    const spotIds = [...spotsInVeedel(state, veedelId)]
+      .sort((a, b) => b.demand - a.demand || a.id.localeCompare(b.id))
+      .slice(0, MAX_SPOTS_PER_LIEUTENANT)
+      .map((s) => s.id);
+    const s = p.settings;
+    posts[p.staffId] = {
+      staffId: p.staffId,
+      spotIds,
+      appointedAt: p.appointedAt,
+      settings: {
+        ...DEFAULT_SETTINGS,
+        priceLevel: s.priceLevel,
+        caution: s.caution,
+        mayHire: s.mayHire,
+        mayOrder: s.mayOrder,
+        reserve: s.reserve,
+        orderRules: [{ ...DEFAULT_SETTINGS.orderRules[0], minStock: s.minStock }],
+      },
+      nextActionAt: p.nextActionAt,
+      busyUntil: p.busyUntil,
+      lyingLow: p.lyingLow ? [veedelId] : [],
+      revenueToday: p.revenueToday,
+      revenueYesterday: p.revenueYesterday,
+      salesTotal: p.salesTotal,
+      revenueTotal: p.revenueTotal,
+      complainedAt: p.complainedAt,
+      team: [],
+      spentDay: 0,
+      hireSpent: 0,
+      absences: {},
+      log: p.log,
+    };
+  }
+  return { posts, rightHand: null, orderTemplate: null };
 }
 
 export default defineModule({
   id: 'hierarchy',
-  version: 2,
+  version: 3,
   dependsOn: ['staff'],
-  init: () => ({ lieutenants: {}, posts: {} }),
-  tick,
+  init: () => ({ posts: {}, rightHand: null, orderTemplate: null }),
+  tick: (ctx) => {
+    lieutenantTick(ctx);
+    rightHandTick(ctx);
+  },
   tickEvery: TICK_EVERY,
   commands: {
-    'hierarchy.appoint': (ctx, { staffId, veedelId }) => appoint(ctx, staffId, veedelId),
-    'hierarchy.dismiss': (ctx, { veedelId }) =>
-      demote(ctx, veedelId) ? { ok: true } : { ok: false, reason: 'Dort gibt es keinen Leutnant.' },
-    'hierarchy.configure': (ctx, { veedelId, settings }) => configure(ctx, veedelId, settings),
+    'hierarchy.appoint': (ctx, { staffId, spotIds, veedelId }) => appoint(ctx, staffId, spotIds, veedelId),
+    'hierarchy.setSpots': (ctx, { staffId, spotIds }) => setSpots(ctx, staffId, spotIds),
+    'hierarchy.dismiss': (ctx, payload) => {
+      const staffId = resolveStaffId(ctx.state, payload);
+      return staffId ? demote(ctx, staffId) : { ok: false, reason: 'Dort gibt es keinen Leutnant.' };
+    },
+    'hierarchy.configure': (ctx, payload, meta) =>
+      configure(ctx, resolveStaffId(ctx.state, payload), payload.settings, meta),
+    'hierarchy.appointRightHand': (ctx, { staffId }) => appointRightHand(ctx, staffId),
+    'hierarchy.dismissRightHand': (ctx) => dismissRightHand(ctx),
+    'hierarchy.configureRightHand': (ctx, { settings }) => configureRightHand(ctx, settings),
   },
   on: {
     'clock.dayStarted': daily,
-    // Der Polizei-Kontakt warnt vor einer Razzia: Der Leutnant im Veedel zieht seine Leute ab.
+    // Der Polizei-Kontakt warnt vor einer Razzia: Leutnants mit Spots im Veedel ziehen ihre Leute dort ab.
     'staff.raidWarning': (ctx, { veedelId, at }) => {
-      const post = getPost(ctx.state, veedelId);
-      if (post) onRaidWarning(ctx, veedelId, post, at + HIDE_AFTER_RAID);
-    },
-    // Wer geht, ist auch kein Leutnant mehr.
-    'staff.left': (ctx, { staffId }) => {
-      for (const [veedelId, id] of getLieutenants(ctx.state)) {
-        if (id !== staffId) continue;
-        removePost(ctx, veedelId);
-        journal.add(ctx, `${veedelName(veedelId)} hat keinen Leutnant mehr.`, 'bad', { veedelId });
-        ctx.emit('hierarchy.dismissed', { staffId, veedelId });
+      for (const staffId of lieutenantsInVeedel(ctx.state, veedelId)) {
+        const post = getPost(ctx.state, staffId);
+        if (post) onRaidWarning(ctx, veedelId, post, at + HIDE_AFTER_RAID);
       }
     },
-    'staff.statusChanged': (ctx, { staffId, to }) => {
-      const veedelId = lieutenantVeedel(ctx.state, staffId);
-      const post = veedelId ? getPost(ctx.state, veedelId) : undefined;
-      if (!post) return;
-      const text =
-        to === 'jailed'
-          ? 'Sitzt in Haft. Das Veedel läuft ohne ihn.'
-          : to === 'injured'
-            ? 'Ist verletzt und fällt aus.'
-            : to === 'active'
-              ? 'Ist zurück und übernimmt wieder.'
-              : '';
-      if (text) post.log.unshift({ time: ctx.now, text });
-      if (to === 'active') post.nextActionAt = ctx.now;
+    // Wer geht, ist auch kein Leutnant (bzw. keine Rechte Hand) mehr und fällt aus jedem Team.
+    'staff.left': (ctx, { staffId }) => {
+      const h = ctx.state.modules.hierarchy;
+      for (const post of Object.values(h.posts)) {
+        post.team = post.team.filter((id) => id !== staffId);
+        delete post.absences[staffId];
+      }
+      if (h.posts[staffId]) {
+        const veedelId = lieutenantVeedel(ctx.state, staffId) ?? '';
+        delete h.posts[staffId];
+        journal.add(ctx, 'Ein Leutnant ist weg, seine Spots laufen ohne ihn.', 'bad', { staffId });
+        ctx.emit('hierarchy.dismissed', { staffId, veedelId });
+      }
+      onRightHandLeft(ctx, staffId);
     },
-    // Umsatz im Veedel zählen, Erfahrung für den Leutnant und Ausbildung seiner Leute.
-    'sale.completed': (ctx, { veedelId, revenue, sellerId }) => {
-      const post = getPost(ctx.state, veedelId);
+    'staff.statusChanged': (ctx, { staffId, to }) => {
+      const own = getPost(ctx.state, staffId);
+      if (own) {
+        const text =
+          to === 'jailed'
+            ? 'Sitzt in Haft. Die Spots laufen ohne ihn.'
+            : to === 'injured'
+              ? 'Ist verletzt und fällt aus.'
+              : to === 'active'
+                ? 'Ist zurück und übernimmt wieder.'
+                : '';
+        if (text) own.log.unshift({ time: ctx.now, text });
+        if (to === 'active') own.nextActionAt = ctx.now;
+      }
+      // Ausfälle im Team merken (seit wann), damit der Leutnant nach seinen Regeln handeln kann.
+      const lead = teamLeadOf(ctx.state, staffId);
+      const post = lead && lead !== staffId ? getPost(ctx.state, lead) : undefined;
+      if (!post) return;
+      if (to === 'jailed' || to === 'injured') {
+        post.absences[staffId] ??= { since: ctx.now, replaced: false };
+        post.nextActionAt = Math.min(post.nextActionAt, ctx.now + 1);
+      } else if (to === 'active') {
+        delete post.absences[staffId];
+      }
+    },
+    // Umsatz an seinen Spots zählen, Erfahrung für den Leutnant und Ausbildung seiner Leute.
+    'sale.completed': (ctx, { spotId, revenue, sellerId }) => {
+      const lead = spotId ? lieutenantOfSpot(ctx.state, spotId) : null;
+      const post = lead ? getPost(ctx.state, lead) : undefined;
       if (!post) return;
       post.revenueToday += revenue;
       post.revenueTotal += revenue;
@@ -404,5 +809,5 @@ export default defineModule({
       if (sellerId && sellerId !== lt.id) addXp(ctx, sellerId, TRAINING_XP);
     },
   },
-  migrations: { 2: migrateHierarchyV1 },
+  migrations: { 2: migrateHierarchyV1, 3: migrateHierarchyV2 },
 });
