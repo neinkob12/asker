@@ -4,19 +4,24 @@
 // Mit leading (z.B. Avatar im Chat) oder inlineTitle steht der Titel von Anfang an klein und mittig, wie in der
 // Nachrichten-App. Apps mit chrome: 'none' nutzen es selbst (z.B. für Unterseiten), sonst setzt das Handy es
 // automatisch.
+//
+// Zurück geht eine Seite im Navigationsstapel zurück; der Knopf trägt den Titel der Vorseite (wie bei iOS, lange
+// Titel heißen "Zurück"). Ein Titel als Text wird der Titel dieser Seite im Stapel (für den Zurück-Knopf der nächsten).
 
 import type { ComponentChildren } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../components';
-import { useUi } from '../hooks';
+import { useRuntime } from '../hooks';
+import { backLabel as backTitle } from './navModel';
+import { usePage } from './page';
 
 export interface PhoneScreenProps {
   title: ComponentChildren;
   /** Kleine Zeile unter dem Titel. */
   subtitle?: ComponentChildren;
-  /** Zurück: Standard ist der Startbildschirm. */
+  /** Zurück: Standard ist eine Seite zurück im Stapel des Handys (von der Wurzel einer App zum Startbildschirm). */
   onBack?: () => void;
-  /** Beschriftung neben dem Zurück-Pfeil. Standard "Start" (ohne onBack) bzw. "Zurück". */
+  /** Beschriftung neben dem Zurück-Pfeil. Standard: Titel der Vorseite (kurz), sonst "Zurück". */
   backLabel?: string;
   /** Rechts in der Leiste. */
   actions?: ComponentChildren;
@@ -34,12 +39,19 @@ export interface PhoneScreenProps {
 const COLLAPSE_AT = 30;
 
 export function PhoneScreen(props: PhoneScreenProps) {
-  const ui = useUi();
+  const runtime = useRuntime();
+  const page = usePage();
   const [scrolled, setScrolled] = useState(false);
-  const back = props.onBack ?? (() => ui.openPhone(null));
+  const back = props.onBack ?? runtime.api.back;
   const inline = props.inlineTitle || !!props.leading;
   const collapsed = inline || scrolled;
-  const backLabel = props.backLabel ?? (props.onBack ? 'Zurück' : 'Start');
+  const backLabel = props.backLabel ?? (page ? backTitle(page.below) : 'Zurück');
+  // Titel der Seite im Stapel merken (z.B. Name im Chat), damit die nächste Seite ihn im Zurück-Knopf zeigt.
+  const key = page?.entry.key;
+  const title = typeof props.title === 'string' ? props.title : null;
+  useEffect(() => {
+    if (key && title) runtime.rememberTitle(key, title);
+  }, [key, title]);
   const classes = ['phone-screen'];
   if (inline) classes.push('is-inline');
   if (collapsed) classes.push('is-collapsed');

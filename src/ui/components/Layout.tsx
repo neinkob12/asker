@@ -2,7 +2,7 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useContext } from 'preact/hooks';
 import { type CategoryColor, type ChipColor, Icon, IconChip } from './Icon';
 import type { IconName } from './icons';
-import { SectionContext } from './section';
+import { rememberSectionTitle, SectionContext } from './section';
 
 type IconRef = IconName | (string & {});
 
@@ -38,6 +38,7 @@ export function Card(props: CardProps) {
   const section = useContext(SectionContext);
   const chipColor = props.color ?? (props.tone ? props.tone : undefined);
   if (section?.mode === 'rows' && props.title) {
+    if (section.id && typeof props.title === 'string') rememberSectionTitle(section.id, props.title);
     return (
       <button type="button" class={`ui-row ${props.tone ? `ui-row--${props.tone}` : ''}`} onClick={section.open}>
         <IconChip icon={props.icon ?? 'briefcase'} color={chipColor} status={props.status} solid />

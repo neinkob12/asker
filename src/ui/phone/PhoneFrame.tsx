@@ -5,8 +5,10 @@
 // Kölner Skyline (Himmel folgt der Spielzeit), Heute-Zeile, Nächster Schritt, Kennzahlen, App-Raster und Glas-Dock.
 // Liegt das Handy weg, schwebt die Island oben über der Karte.
 //
-// Navigation: Das Dock gibt es nur auf dem Startbildschirm (wie bei iOS). Apps sind Vollbild; zurück geht es über
-// "‹" oben links, den Home-Balken unten oder Esc. Warum keine Tab-Leiste: docs/handy-design.md, Abschnitt 5.
+// Navigation: Seiten liegen als Stapel übereinander (navModel.ts, PageStack.tsx): Startbildschirm, Wurzel einer App,
+// darüber Abschnitte, Details und Unterseiten. Das Dock gibt es nur auf dem Startbildschirm (wie bei iOS). Apps sind
+// Vollbild; zurück geht es über "‹ Titel der Vorseite" oben links, den Home-Balken unten oder Esc. Warum keine
+// Tab-Leiste: docs/handy-design.md, Abschnitt 5.
 
 import type { ComponentType, JSX } from 'preact';
 import { clock, type GameState, messages } from '../../core';
@@ -19,9 +21,11 @@ import { HudItems } from '../shell/Hud';
 import { hudPlacement, tabIcon, tabTint, useIsMobile } from '../shell/layout';
 import { collectAdvice, NextStepWidget } from '../shell/NextStep';
 import { Slot } from '../shell/Slot';
-import { TabContent } from '../shell/TabContent';
+import { SectionContent, TabContent } from '../shell/TabContent';
 import { DynamicIsland } from './DynamicIsland';
 import { PhoneNotice } from './Notification';
+import { type NavEntry, top as topEntry } from './navModel';
+import { PageStack } from './PageStack';
 import { PhoneScreen } from './PhoneScreen';
 import { Skyline } from './Skyline';
 import { tileColor } from './tile';
@@ -182,41 +186,43 @@ function HomeScreen() {
   );
 }
 
-/** Bereich eines Moduls (Tab) als App-Seite. Zurück führt aus einem Abschnitt zur Übersicht, sonst nach Hause. */
+/** Bereich eines Moduls (Tab) als App-Seite. Zurück führt zum Startbildschirm. */
 function TabScreen(props: { tab: SidebarTab }) {
-  const { ui, api } = useRuntime();
   return (
-    <PhoneScreen
-      title={props.tab.title}
-      onBack={() => (ui.section ? api.openSection(null) : api.openPhone(null))}
-      backLabel={ui.section ? props.tab.title : 'Start'}
-      class="phone-screen--tab"
-    >
+    <PhoneScreen title={props.tab.title} class="phone-screen--tab">
       <TabContent tab={props.tab} />
     </PhoneScreen>
   );
 }
 
+/** Abschnitt eines Listen-Tabs als eigene Seite über der Übersicht. */
+function SectionScreen(props: { entry: NavEntry }) {
+  const tab = props.entry.params?.tab;
+  return (
+    <PhoneScreen title={props.entry.title} class="phone-screen--tab phone-screen--section">
+      <SectionContent sectionId={props.entry.id} tabId={typeof tab === 'string' ? tab : undefined} />
+    </PhoneScreen>
+  );
+}
+
 /** Details (Panel) als Seite über der aktuellen App. Zurück schließt die Details. */
-function PanelScreen() {
+function PanelScreen(props: { entry: NavEntry }) {
   const runtime = useRuntime();
-  const { ui, api } = runtime;
   const state = runtime.state;
-  if (!ui.panel || !state) return null;
-  const definition = panels.get(ui.panel.id);
-  if (!definition) return null;
-  const props = ui.panel.props as never;
-  let title = 'Details';
+  const definition = panels.get(props.entry.id as never);
+  if (!definition || !state) return null;
+  const panelProps = (props.entry.params ?? {}) as never;
+  let title = props.entry.title;
   try {
-    title = definition.title(props, state);
+    title = definition.title(panelProps, state);
   } catch (error) {
     console.error('Panel-Titel', error);
   }
   const Component = definition.component as ComponentType<unknown>;
   return (
-    <PhoneScreen title={title} onBack={api.closePanel} class="phone-screen--panel">
-      <ErrorBoundary key={`${ui.panel.id}:${JSON.stringify(ui.panel.props)}`} name={title}>
-        <Component {...(props as object)} />
+    <PhoneScreen title={title} class="phone-screen--panel">
+      <ErrorBoundary name={title}>
+        <Component {...(panelProps as object)} />
       </ErrorBoundary>
     </PhoneScreen>
   );
@@ -233,6 +239,35 @@ function AppScreen(props: { app: PhoneApp }) {
   );
 }
 
+/** Inhalt einer Seite im Stapel. */
+function renderPage(entry: NavEntry) {
+  switch (entry.kind) {
+    case 'home':
+      return <HomeScreen />;
+    case 'tab': {
+      const tab = sidebarTabs.get(entry.id);
+      return tab ? <TabScreen tab={tab} /> : <MissingPage entry={entry} />;
+    }
+    case 'section':
+      return <SectionScreen entry={entry} />;
+    case 'panel':
+      return <PanelScreen entry={entry} />;
+    case 'app': {
+      const app = phoneApps.get(entry.id);
+      return app ? <AppScreen app={app} /> : <MissingPage entry={entry} />;
+    }
+  }
+}
+
+/** App oder Tab gibt es (nicht mehr), z.B. nach Hot Reload. */
+function MissingPage(props: { entry: NavEntry }) {
+  return (
+    <PhoneScreen title={props.entry.title}>
+      <p class="ui-hint">Diese Seite gibt es nicht mehr.</p>
+    </PhoneScreen>
+  );
+}
+
 /** Weggelegtes Handy am Desktop: schmale Lasche am rechten Rand mit Uhrzeit und ungelesenen Nachrichten. */
 function PhoneTab(props: { time: number; unread: number }) {
   const { api, ui } = useRuntime();
@@ -240,7 +275,7 @@ function PhoneTab(props: { time: number; unread: number }) {
     <button
       type="button"
       class={`phone-tab ${ui.buzz > 0 ? `is-buzzing-${ui.buzz % 2}` : ''}`}
-      onClick={() => api.openPhone(ui.phone.app, ui.phone.params)}
+      onClick={api.showPhone}
       aria-label={props.unread > 0 ? `Handy, ${props.unread} ungelesen` : 'Handy'}
       title="Handy (T)"
     >
@@ -303,26 +338,12 @@ export function PhoneFrame() {
       </>
     );
   }
-  const appId = ui.phone.app;
-  const tab = appId?.startsWith(TAB_APP_PREFIX) ? sidebarTabs.get(appId.slice(TAB_APP_PREFIX.length)) : undefined;
-  const app = appId && !tab ? phoneApps.get(appId) : undefined;
-  const screenKey = ui.panel ? `panel:${ui.panel.id}` : (appId ?? 'home');
-  const atHome = !ui.panel && !tab && !app;
+  const atHome = topEntry(ui.phone.stack).kind === 'home';
   return (
     <section class="phone" aria-label="Handy">
       <div class={`phone__device ${ui.buzz > 0 ? `is-buzzing-${ui.buzz % 2}` : ''}`}>
         <div class={`phone__screen ${atHome ? 'is-home' : ''}`}>
-          <ErrorBoundary key={screenKey} name={app?.name ?? tab?.title ?? 'Startbildschirm'}>
-            {ui.panel ? (
-              <PanelScreen />
-            ) : tab ? (
-              <TabScreen tab={tab} />
-            ) : app ? (
-              <AppScreen app={app} />
-            ) : (
-              <HomeScreen />
-            )}
-          </ErrorBoundary>
+          <PageStack stack={ui.phone.stack} render={renderPage} />
           <StatusBar time={state.time} />
           <PhoneNotice />
           <nav class="phone__nav">

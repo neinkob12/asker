@@ -983,19 +983,41 @@
 }
 
 /* ---------------------------------------------------------------- App-Seiten */
+/*
+ * Seiten als Stapel (PageStack.tsx): jede Seite eine Schicht über die ganze Fläche. Sichtbar ist nur die oberste;
+ * Seiten darunter bleiben montiert (Scrollposition), sind aber unsichtbar und nicht bedienbar. Während eines
+ * Übergangs bewegen Federn die Schichten nur über transform und opacity (phone/stackAnimator.ts).
+ */
+.phone-pages {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.phone-page {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--phone-bg);
+}
+.phone-page.is-hidden {
+  visibility: hidden;
+}
+/* Abdunkeln der Seite, die nach hinten rückt (Deckkraft per Feder) */
+.phone-page__dim {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
 .phone-screen {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
   background: var(--phone-bg);
-  animation: screen-in 280ms var(--ease-ios);
-}
-@keyframes screen-in {
-  from {
-    opacity: 0.4;
-    transform: translateX(24px);
-  }
 }
 /*
  * Navigationsleiste (44 pt unter der Statusleiste): "‹ Zurück" links, Aktionen rechts. Der große Titel steht im
@@ -1638,7 +1660,6 @@
   .mobile-dock__phone.is-buzzing-1 {
     animation: none;
   }
-  .phone-screen,
   .phone-screen__footer,
   .island-minimal {
     animation: none;

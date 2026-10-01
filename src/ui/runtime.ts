@@ -3,6 +3,9 @@
 
 import { audio } from '../audio';
 import type { Command, CommandResult, GameSession, GameState, KeyValueStorage, LngLat } from '../core';
+import { sectionTitle } from './components/section';
+import type { NavEntry, NavKind } from './phone/navModel';
+import * as nav from './phone/navModel';
 import { type CameraMode, loadPrefs, savePrefs, type UiPrefs } from './prefs';
 import {
   type DialogId,
@@ -10,7 +13,10 @@ import {
   dialogs,
   type PanelId,
   type PanelRegistry,
+  panels,
+  phoneApps,
   reactionsFor,
+  sidebarTabs,
 } from './registry';
 
 /** good/info: Routine (kurz, grau in der Alarm-Zentrale), warn: gelb, bad: rot. */
@@ -72,13 +78,28 @@ export interface Alert {
   read: boolean;
 }
 
+export type { NavEntry, NavKind } from './phone/navModel';
+
+/**
+ * Spiel-Handy: offen oder weggelegt und der Navigationsstapel (unten der Startbildschirm, oben die sichtbare Seite,
+ * siehe phone/navModel.ts). `app` und `params` sind die oberste App-Seite des Stapels (z.B. 'core.messages' mit
+ * { contactId }), null auf dem Startbildschirm.
+ */
+export interface PhoneState {
+  open: boolean;
+  app: string | null;
+  params?: Record<string, unknown>;
+  stack: NavEntry[];
+}
+
 export interface UiState {
+  /** Oberste Seite, wenn sie Details (ein Panel) zeigt, sonst null. Folgt dem Stapel des Handys. */
   panel: { id: PanelId; props: unknown } | null;
   dialog: { id: DialogId; props: unknown } | null;
-  phone: { open: boolean; app: string | null; params?: Record<string, unknown> };
+  phone: PhoneState;
   /** Zuletzt geöffneter Tab (als App im Handy: 'tab:<id>'), null = keiner. */
   tab: string | null;
-  /** Geöffneter Abschnitt eines Listen-Tabs (ID des Slot-Beitrags), null = Übersicht. */
+  /** Geöffneter Abschnitt eines Listen-Tabs (ID des Slot-Beitrags), null = Übersicht. Folgt dem Stapel. */
   section: string | null;
   /** Warteschlange: Sichtbar ist nur der erste Eintrag. */
   toasts: Toast[];
@@ -133,9 +154,16 @@ export interface UiApi {
   /** Alarm-Zentrale: alles als gelesen markieren bzw. leeren. */
   markAlertsRead(): void;
   clearAlerts(): void;
-  /** Handy öffnen, optional direkt in einer App, z.B. openPhone('core.messages', { contactId: 'gang:nord' }). */
+  /**
+   * Handy öffnen, optional direkt in einer App, z.B. openPhone('core.messages', { contactId: 'gang:nord' }).
+   * Ohne App: Startbildschirm. Mit Parametern kommt die Unterseite über die Wurzel der App (zurück führt zur Liste).
+   */
   openPhone(appId?: string | null, params?: Record<string, unknown>): void;
+  /** Handy aufnehmen, ohne die Navigation zu ändern (zeigt die zuletzt offene Seite). */
+  showPhone(): void;
   closePhone(): void;
+  /** Im Handy eine Seite zurück (wie der Zurück-Knopf); auf dem Startbildschirm wird das Handy weggelegt. */
+  back(): void;
   /** Banner am Spiel-Handy zeigen (mit Vibrieren). Sound spielt, wer es auslöst (siehe src/audio). */
   notify(notification: Omit<PhoneNotification, 'id'>): void;
   dismissNotification(): void;
@@ -222,7 +250,7 @@ export class UiRuntime {
     this.ui = {
       panel: null,
       dialog: null,
-      phone: { open: desktop, app: null },
+      phone: { open: desktop, app: null, stack: nav.rootStack() },
       tab: null,
       section: null,
       toasts: [],
@@ -290,6 +318,66 @@ export class UiRuntime {
     }, TOAST_MS[current.kind]);
   }
 
+  private navKey = 0;
+
+  /** Neue Seite für den Stapel, mit Titel aus der Registry (die Seite meldet später ihren echten Titel). */
+  private navEntry(kind: NavKind, id: string, params?: Record<string, unknown>): NavEntry {
+    const entry: NavEntry = { kind, id, title: this.titleOf(kind, id, params), key: `${kind}:${++this.navKey}` };
+    if (params && Object.keys(params).length > 0) entry.params = params;
+    return entry;
+  }
+
+  private titleOf(kind: NavKind, id: string, params?: Record<string, unknown>): string {
+    try {
+      if (kind === 'app') return phoneApps.get(id)?.name ?? id;
+      if (kind === 'tab') return sidebarTabs.get(id)?.title ?? id;
+      if (kind === 'section') {
+        const tab = typeof params?.tab === 'string' ? sidebarTabs.get(params.tab) : undefined;
+        return sectionTitle(id) ?? tab?.title ?? 'Abschnitt';
+      }
+      if (kind === 'panel') {
+        const state = this.session.state;
+        const definition = panels.get(id as PanelId);
+        if (definition && state) return definition.title(params as never, state);
+        return 'Details';
+      }
+    } catch (error) {
+      console.error('Titel der Seite', error);
+    }
+    return 'Start';
+  }
+
+  /** Wurzel einer App im Stapel: Tab ('tab:<id>') oder Handy-App. */
+  private appRoot(appId: string): NavEntry {
+    return appId.startsWith(TAB_APP_PREFIX)
+      ? this.navEntry('tab', appId.slice(TAB_APP_PREFIX.length))
+      : this.navEntry('app', appId);
+  }
+
+  /** Neuen Stapel übernehmen und die abgeleiteten Felder (app, params, panel, tab, section) nachziehen. */
+  private setStack(next: NavEntry[]): void {
+    const ui = this.ui;
+    const app = nav.currentApp(next);
+    const phone: PhoneState = {
+      open: ui.phone.open,
+      app: app ? (app.kind === 'tab' ? `${TAB_APP_PREFIX}${app.id}` : app.id) : null,
+      stack: next,
+    };
+    if (app?.params) phone.params = app.params;
+    ui.phone = phone;
+    const current = nav.top(next);
+    ui.panel = current.kind === 'panel' ? { id: current.id as PanelId, props: current.params ?? {} } : null;
+    if (app?.kind === 'tab') ui.tab = app.id;
+    ui.section = nav.currentSection(next)?.id ?? null;
+  }
+
+  /** Eine Seite meldet ihren Titel (z.B. Name im Chat). Kein Neuzeichnen nötig: Er erscheint im nächsten Bild. */
+  rememberTitle(key: string, title: string): void {
+    const stack = this.ui.phone.stack;
+    const next = nav.withTitle(stack, key, title);
+    if (next.some((e, i) => e !== stack[i])) this.ui.phone = { ...this.ui.phone, stack: next };
+  }
+
   private savePrefs(): void {
     const prefs: UiPrefs = { overlay: this.ui.overlay, camera: this.ui.camera, vibration: this.ui.vibration };
     savePrefs(this.storage, prefs);
@@ -313,16 +401,16 @@ export class UiRuntime {
           }
           return result;
         }),
-      // Details (Spot, Veedel, Person …) erscheinen als Seite im Handy.
+      // Details (Spot, Veedel, Person …) erscheinen als Seite im Handy, oben auf dem Stapel.
       openPanel: (id, props) =>
         update(() => {
-          ui.panel = { id, props };
           if (!ui.phone.open) ui.phone = { ...ui.phone, open: true };
+          this.setStack(nav.openPanel(ui.phone.stack, this.navEntry('panel', id, props as Record<string, unknown>)));
           ui.popover = null;
         }),
       closePanel: () =>
         update(() => {
-          ui.panel = null;
+          this.setStack(nav.closePanel(ui.phone.stack));
         }),
       openDialog: (id, props) =>
         update(() => {
@@ -383,13 +471,17 @@ export class UiRuntime {
         }),
       openPhone: (appId = null, params) =>
         update(() => {
-          ui.phone = params ? { open: true, app: appId, params } : { open: true, app: appId };
-          // Eine App wechseln schließt offene Details (die liegen über der App).
-          ui.panel = null;
-          if (appId?.startsWith(TAB_APP_PREFIX)) {
-            const tab = appId.slice(TAB_APP_PREFIX.length);
-            if (ui.tab !== tab) ui.section = null;
-            ui.tab = tab;
+          ui.phone = { ...ui.phone, open: true };
+          const stack = ui.phone.stack;
+          if (!appId) {
+            this.setStack(nav.popToRoot(stack));
+          } else {
+            // Unterseite einer App (z.B. ein Chat) liegt über ihrer Wurzel; Tabs haben keine Unterseiten mit Parametern.
+            const detail =
+              params && Object.keys(params).length > 0 && !appId.startsWith(TAB_APP_PREFIX)
+                ? this.navEntry('app', appId, params)
+                : undefined;
+            this.setStack(nav.openApp(stack, this.appRoot(appId), detail));
           }
           if (ui.notification && (!appId || ui.notification.appId === appId)) ui.notification = null;
           // Geöffnete App: Ihre Benachrichtigungen verschwinden vom Stapel (bei Chats nur die des Chats).
@@ -399,12 +491,21 @@ export class UiRuntime {
             if (ui.notifications.some(same)) ui.notifications = ui.notifications.filter((n) => !same(n));
           }
         }),
-      // Weglegen: Am Desktop klappt das Handy an den Rand, die zuletzt offene App bleibt gemerkt.
+      showPhone: () =>
+        update(() => {
+          ui.phone = { ...ui.phone, open: true };
+        }),
+      // Weglegen: Am Desktop klappt das Handy an den Rand, die zuletzt offene App bleibt gemerkt (Details nicht).
       closePhone: () =>
         update(() => {
           ui.phone = { ...ui.phone, open: false };
-          ui.panel = null;
+          this.setStack(nav.withoutPanels(ui.phone.stack));
         }),
+      back: () => {
+        if (!ui.phone.open) return;
+        if (ui.phone.stack.length <= 1) api.closePhone();
+        else update(() => this.setStack(nav.pop(ui.phone.stack)));
+      },
       notify: (notification) =>
         update(() => {
           // Ist genau diese App (bzw. dieser Chat) offen, braucht es kein Banner.
@@ -462,7 +563,10 @@ export class UiRuntime {
       selectTab: (id) => api.openPhone(`${TAB_APP_PREFIX}${id}`),
       openSection: (id) =>
         update(() => {
-          ui.section = id;
+          const stack = ui.phone.stack;
+          if (id === null) this.setStack(nav.closeSections(stack));
+          else
+            this.setStack(nav.openSection(stack, this.navEntry('section', id, ui.tab ? { tab: ui.tab } : undefined)));
         }),
       togglePalette: (open) =>
         update(() => {
