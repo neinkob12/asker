@@ -11,7 +11,7 @@ import {
   type StaffRole,
 } from '../staff';
 import { getSuppliers, shipmentsInTransit } from '../suppliers';
-import { PAYROLL_RESERVE_DAYS, RIGHT_HAND_DEMAND } from './config';
+import { PAYROLL_RESERVE_DAYS, PAYROLL_RESERVE_DAYS_ORDERS, RIGHT_HAND_DEMAND } from './config';
 import { canBeRightHand, getPost, getRightHand, payrollReserve, rightHandOffered } from './index';
 import { leadSpendingLimit } from './righthand';
 
@@ -98,7 +98,7 @@ describe('Rechte Hand', () => {
     expect(eventsOfType(events, 'hierarchy.dailyReport')).toHaveLength(1);
   });
 
-  it('Lohnsicherung: Leutnants greifen die Löhne für zwei Tage nicht an, sonst warnt sie mit Banner', () => {
+  it('Lohnsicherung: Leutnants greifen die Löhne für zwei Tage (Ware: eine Nacht) nicht an, sonst Banner', () => {
     const sim = quietGame();
     const { a, b, boss } = setup(sim);
     sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });
@@ -107,9 +107,16 @@ describe('Rechte Hand', () => {
     }
     const reserve = payrollReserve(sim.state);
     expect(reserve).toBe(payrollDue(sim.state) * PAYROLL_RESERVE_DAYS);
-    // Genau so viel Geld wie die Rücklage plus etwas: Für ein Paket reicht es nicht mehr.
+    // Für Ware hält sie nur die Löhne einer Nacht zurück, damit die Spots bei knapper Kasse nicht leer laufen.
+    const goodsReserve = payrollReserve(sim.state, 'goods');
+    expect(goodsReserve).toBe(payrollDue(sim.state) * PAYROLL_RESERVE_DAYS_ORDERS);
+    expect(goodsReserve).toBeLessThan(reserve);
     sim.state.wallet.dirty = reserve + 50;
     expect(leadSpendingLimit(sim.state)).toBe(50);
+    expect(leadSpendingLimit(sim.state, 'goods')).toBe(reserve + 50 - goodsReserve);
+    // Genau so viel Geld wie die Rücklage für Ware plus etwas: Für ein Paket reicht es nicht mehr.
+    sim.state.wallet.dirty = goodsReserve + 50;
+    expect(leadSpendingLimit(sim.state, 'goods')).toBe(50);
     sim.advance(10);
     expect(shipmentsInTransit(sim.state)).toHaveLength(0);
     // Reicht es nicht einmal für die Löhne heute Nacht: Warnung mit Banner (nicht still).

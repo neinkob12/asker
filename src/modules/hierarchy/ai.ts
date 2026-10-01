@@ -180,7 +180,7 @@ function budget(turn: Turn, forHiring: boolean): number {
   }
   let left = ctx.state.wallet.dirty - post.settings.reserve;
   if (forHiring) left = Math.min(left, post.settings.hireBudgetPerDay - post.hireSpent);
-  return Math.min(left, leadSpendingLimit(ctx.state));
+  return Math.min(left, leadSpendingLimit(ctx.state, forHiring ? 'staff' : 'goods'));
 }
 
 function spend(turn: Turn, amount: number, hiring: boolean): void {

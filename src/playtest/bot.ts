@@ -49,15 +49,21 @@ export interface BotOptions {
   maxRunners?: number;
   /** Baut der Bot aus (Spots freischalten und gründen, Leutnants, Hafen)? Fehlt: ja. */
   expand?: boolean;
+  /** Holt der Bot gute Leute per Kaution aus der Haft? Fehlt: ja. */
+  bail?: boolean;
 }
 
-/** Ein vorsichtiger Spieler: zwei, drei Spots mit Läufern, kein weiterer Ausbau (zum Messen, ob man ansparen kann). */
+/**
+ * Ein vorsichtiger Spieler: zwei, drei Spots mit Läufern, kein weiterer Ausbau, keine Kaution (wer sitzt, sitzt die
+ * Haft aus; ersetzt wird nur mit freien Leuten). Zum Messen, ob man ansparen kann.
+ */
 export const CAREFUL_BOT: BotOptions = {
   personalSpots: 2,
   attentionEvery: 10,
   sleeps: true,
   maxRunners: 2,
   expand: false,
+  bail: false,
 };
 
 export const DEFAULT_BOT: BotOptions = { personalSpots: 2, attentionEvery: 10, sleeps: true };
@@ -124,7 +130,9 @@ function restock(sim: Simulation, stats: BotStats): void {
   const sellers = getStaff(state, { role: 'runner' }).length + 1;
   const want = 80 + sellers * 70;
   if (stock + incoming >= want) return;
-  const budget = money(state) - reserve(state);
+  // Ware geht vor: Ist fast nichts mehr da, bestellt er auch mit dem Geld, das er sonst für die Löhne zurückhält
+  // (ohne Ware kein Umsatz, dann reicht es für die Löhne erst recht nicht).
+  const budget = money(state) - (stock + incoming < want / 3 ? 0 : reserve(state));
   const have = (productId: string) =>
     getStock(state, { productId }) +
     cargoAmount(state, productId) +
@@ -341,18 +349,25 @@ function appointLieutenants(sim: Simulation, stats: BotStats): void {
 /** Später: eine Rechte Hand, sobald es zwei Leutnants gibt und jemand die Voraussetzungen erfüllt. */
 function appointRightHand(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
-  if (getRightHand(state) || money(state) <= reserve(state) + 2000) return;
+  if (getRightHand(state) || money(state) <= reserve(state) + 500) return;
   const candidate = getStaff(state, { status: 'active' })
     .filter((m) => canBeRightHand(state, m.id).ok && !isLieutenant(state, m.id))
     .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id))[0];
   if (candidate) run(sim, stats, { type: 'hierarchy.appointRightHand', payload: { staffId: candidate.id } });
 }
 
+/** Darf der Bot einen Ausfall ersetzen? Ohne Läufer-Grenze immer, sonst nur unter der Grenze oder mit freien Leuten. */
+function mayReplace(state: GameState, options: BotOptions): boolean {
+  if (options.maxRunners === undefined) return true;
+  const runners = getStaff(state, { role: 'runner' });
+  return runners.length < options.maxRunners || runners.some((m) => m.status === 'active' && !m.assignment);
+}
+
 /**
  * Offene Handy-Nachrichten beantworten. Schutzgeld und Waffenstillstand nur, wenn es aus der Portokasse geht
  * (höchstens ein Viertel des Geldes), sonst ablehnen. Aufträge und Angebote lehnt er ab, Warnungen nimmt er ernst.
  */
-function answerMessages(sim: Simulation, stats: BotStats): void {
+function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions): void {
   const state = sim.state;
   const PREFERENCE = ['tribute', 'ceasefire', 'raise', 'lieLow', 'refuse', 'decline', 'no', 'later', 'ignore'];
   for (const m of [...state.messages.list]) {
@@ -366,17 +381,22 @@ function answerMessages(sim: Simulation, stats: BotStats): void {
       if (command.type === 'gangs.ceasefire') return ceasefireCost(state, command.payload.gangId) <= money(state) / 4;
       return true;
     };
-    // Festnahme: gute Leute (ab Level 3) per Kaution raus, wenn es aus der Portokasse geht, sonst ersetzen.
+    // Festnahme: gute Leute (ab Level 3) per Kaution raus, wenn es aus der Portokasse geht, sonst ersetzen. Der
+    // vorsichtige Bot zahlt keine Kaution und ersetzt nur mit freien Leuten (mehr Läufer will er nicht), sonst wartet er.
     const arrest = options.find((o) => o.id === 'replace' || o.id === 'fireReplace');
     if (arrest) {
       const bail = options.find((o) => o.id === 'bail')?.command;
       const staffId = arrest.command?.type === 'staff.replace' ? arrest.command.payload.staffId : null;
       const member = staffId ? getStaff(state).find((x) => x.id === staffId) : undefined;
       const order = [
-        ...(bail?.type === 'staff.bail' && member && member.level >= 3 && bailCost(state, member.id) <= money(state) / 4
+        ...(botOptions.bail !== false &&
+        bail?.type === 'staff.bail' &&
+        member &&
+        member.level >= 3 &&
+        bailCost(state, member.id) <= money(state) / 4
           ? ['bail']
           : []),
-        'replace',
+        ...(mayReplace(state, botOptions) ? ['replace'] : []),
         'wait',
       ];
       for (const optionId of order.filter((id) => options.some((o) => o.id === id))) {
@@ -416,7 +436,7 @@ function repay(sim: Simulation, stats: BotStats): void {
 export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = DEFAULT_BOT): void {
   if (sim.state.outcome.gameOver) return;
   handleEncounters(sim, stats);
-  answerMessages(sim, stats);
+  answerMessages(sim, stats, options);
   sellPersonally(sim, stats, options);
   repay(sim, stats);
   unlockSuppliers(sim, stats);

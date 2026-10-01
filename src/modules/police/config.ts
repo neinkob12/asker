@@ -113,7 +113,7 @@ export const SALE_HEAT_BY_TIER = [1, 1, 1.8] as const;
  */
 export const RAID_SCOPES = {
   spot: { goodsShare: 0.08, goodsMax: 15, warehouseShare: 0, moneyShare: 0.03, moneyMax: 250, arrest: 0.5 },
-  veedel: { goodsShare: 0.1, goodsMax: 35, warehouseShare: 0.25, moneyShare: 0.1, moneyMax: 1000, arrest: 0.55 },
+  veedel: { goodsShare: 0.08, goodsMax: 25, warehouseShare: 0.25, moneyShare: 0.08, moneyMax: 800, arrest: 0.55 },
   major: { goodsShare: 0.15, goodsMax: 150, warehouseShare: 0.5, moneyShare: 0.2, moneyMax: 15000, arrest: 0.75 },
 } as const;
 /** Kompatibilität: Anteil des Lagerbestands bei einer Razzia im Veedel. */

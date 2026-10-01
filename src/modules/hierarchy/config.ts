@@ -116,8 +116,14 @@ export const RIGHT_HAND_MIN_LOYALTY = 50;
 export const RIGHT_HAND_MIN_LIEUTENANTS = 2;
 /** Lohnanspruch der Rechten Hand. */
 export const RIGHT_HAND_DEMAND = 2.5;
-/** Die Rechte Hand hält immer die Löhne für so viele Tage zurück. */
+/** Die Rechte Hand hält immer die Löhne für so viele Tage zurück (gegen Anheuern und Kaution). */
 export const PAYROLL_RESERVE_DAYS = 2;
+/**
+ * Für Nachschub an Ware hält sie nur die Löhne für so viele Tage zurück: Ware bringt das Geld wieder rein. Mit der
+ * vollen Rücklage würden die Leutnants bei knapper Kasse gar nicht mehr bestellen, die Spots liefen leer und das
+ * Geschäft ginge pleite (Balancing mit 16 Seeds).
+ */
+export const PAYROLL_RESERVE_DAYS_ORDERS = 1;
 /** Uhrzeit des Tagesberichts (Stunde). */
 export const REPORT_HOUR = 8;
 /** So oft schaut die Rechte Hand nach dem Rechten (Spielminuten). */

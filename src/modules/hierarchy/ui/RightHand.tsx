@@ -27,6 +27,7 @@ import {
   canBeRightHand,
   getRightHand,
   PAYROLL_RESERVE_DAYS,
+  PAYROLL_RESERVE_DAYS_ORDERS,
   payrollReserve,
   RIGHT_HAND_MIN_LEVEL,
   RIGHT_HAND_MIN_LIEUTENANTS,
@@ -153,7 +154,7 @@ const TASKS: { key: keyof Omit<RightHandSettings, 'budgetPerDay'>; label: string
   {
     key: 'payrollGuard',
     label: 'Lohnsicherung',
-    hint: `Hält die Löhne für ${PAYROLL_RESERVE_DAYS} Tage zurück, warnt, wenn es nicht reicht.`,
+    hint: `Hält die Löhne für ${PAYROLL_RESERVE_DAYS} Tage zurück (bei Ware für ${PAYROLL_RESERVE_DAYS_ORDERS === 1 ? 'eine Nacht' : `${PAYROLL_RESERVE_DAYS_ORDERS} Tage`}), warnt, wenn es nicht reicht.`,
     icon: 'lock',
   },
   {

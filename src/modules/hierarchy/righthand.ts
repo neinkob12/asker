@@ -4,8 +4,9 @@
 //     von gestern, Kasse, Reichweite der Löhne, bis zu drei Empfehlungen.
 //   - Koordinieren: freie Läufer an leere Spots, auch über Leutnant-Grenzen; gemeinsames Tagesbudget der Leutnants
 //     für Anheuern und Bestellen (doppelte Bestellungen verhindert schon das Zählen pro Lager, siehe orders.ts).
-//   - Lohnsicherung: Die Löhne für PAYROLL_RESERVE_DAYS Tage fasst kein Leutnant an; reicht es trotzdem nicht, warnt
-//     sie mit Banner.
+//   - Lohnsicherung: Die Löhne für PAYROLL_RESERVE_DAYS Tage fasst kein Leutnant an (für Nachschub an Ware nur die für
+//     PAYROLL_RESERVE_DAYS_ORDERS Tage, sonst stünden die Spots bei knapper Kasse leer); reicht es trotzdem nicht,
+//     warnt sie mit Banner.
 //   - Ausfälle: Kaution (nur mit Anwalt und für wertvolle Leute) oder Ersetzen, wenn der Leutnant das nicht tut.
 // Sitzt sie in Haft oder ist weg, laufen die Leutnants allein weiter.
 
@@ -50,6 +51,7 @@ import {
   DEMOTION_LOYALTY,
   LOG_LIMIT,
   PAYROLL_RESERVE_DAYS,
+  PAYROLL_RESERVE_DAYS_ORDERS,
   PROMOTION_LOYALTY,
   REPORT_HOUR,
   RIGHT_HAND_BAIL_MIN_LEVEL,
@@ -116,11 +118,14 @@ export function rightHandSatisfaction(state: GameState): number | null {
   return Math.max(0, Math.min(100, Math.round(m.stats.loyalty * 0.6 + Math.min(1, ratio / 1.1) * 40)));
 }
 
+/** Wofür ein Leutnant Geld ausgibt: Personal (Anheuern, Kaution) oder Ware (Nachschub). */
+export type SpendingPurpose = 'staff' | 'goods';
+
 /** Schwarzgeld, das die Lohnsicherung zurückhält (0 ohne Rechte Hand oder ausgeschaltet). */
-export function payrollReserve(state: GameState): number {
+export function payrollReserve(state: GameState, purpose: SpendingPurpose = 'staff'): number {
   const rh = activeRightHand(state);
   if (!rh?.settings.payrollGuard) return 0;
-  return payrollDue(state) * PAYROLL_RESERVE_DAYS;
+  return payrollDue(state) * (purpose === 'goods' ? PAYROLL_RESERVE_DAYS_ORDERS : PAYROLL_RESERVE_DAYS);
 }
 
 /** Was vom gemeinsamen Tagesbudget heute noch übrig ist (null ohne Rechte Hand oder ohne Koordination). */
@@ -131,10 +136,13 @@ export function rightHandBudgetLeft(state: GameState): number | null {
   return Math.max(0, rh.settings.budgetPerDay - spent);
 }
 
-/** So viel dürfen Leutnants gerade insgesamt noch ausgeben (Lohnsicherung und Budget der Rechten Hand). */
-export function leadSpendingLimit(state: GameState): number {
+/**
+ * So viel dürfen Leutnants gerade insgesamt noch ausgeben (Lohnsicherung und Budget der Rechten Hand). Für Ware
+ * ('goods') ist die Rücklage kleiner als für Personal ('staff': Anheuern, Kaution).
+ */
+export function leadSpendingLimit(state: GameState, purpose: SpendingPurpose = 'staff'): number {
   let limit = Number.POSITIVE_INFINITY;
-  const reserve = payrollReserve(state);
+  const reserve = payrollReserve(state, purpose);
   if (reserve > 0) limit = state.wallet.dirty - reserve;
   const budget = rightHandBudgetLeft(state);
   if (budget !== null) limit = Math.min(limit, budget);

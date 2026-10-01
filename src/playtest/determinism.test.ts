@@ -28,6 +28,8 @@ describe('Determinismus', () => {
     const types = new Set(a.events.map((e) => e.type));
     expect(types.has('wallet.changed')).toBe(true);
     expect(types.has('hierarchy.appointed')).toBe(true);
+    expect(types.has('hierarchy.rightHandAppointed')).toBe(true);
+    expect(types.has('hierarchy.dailyReport')).toBe(true);
     expect(a.sim.state.modules.finance.days.length).toBeGreaterThan(5);
   });
 
