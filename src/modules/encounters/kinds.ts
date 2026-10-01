@@ -15,8 +15,10 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     opponent: { label: 'Die Angreifer', strength: 50, count: [2, 4] },
     maxRounds: 5,
     joinable: true,
+    briefingOptions: ['self', 'crew', 'backup', 'payoff', 'tipoff', 'abandon'],
     actions: ['fight', 'intimidate', 'hold', 'negotiate', 'bribe', 'flee'],
-    remoteActions: ['fight', 'hold', 'flee'],
+    // Per Handy geht fast alles, nur Einschüchtern braucht den Boss vor Ort.
+    remoteActions: ['fight', 'hold', 'negotiate', 'bribe', 'flee'],
     bribe: { base: 300, perOpponent: 150 },
     actionOverrides: {
       bribe: { label: 'Freikaufen', hint: 'Zahlen, damit sie abziehen. Das Geld ist in jedem Fall weg.' },
@@ -43,6 +45,8 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     opponent: { label: 'Die Streife', strength: 55, count: 2 },
     maxRounds: 4,
     joinable: false,
+    // Ohne Briefing (nicht joinable); falls doch: Bullen rufen und Freikaufen ergeben hier keinen Sinn.
+    briefingOptions: ['self', 'crew', 'abandon'],
     // Festnahme, Beschlagnahme und Heat regelt der Auslöser (police), hier nur was die Flucht selbst kostet.
     draw: 'failure',
     lethal: false,
@@ -119,6 +123,7 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     maxRounds: 4,
     joinable: true,
     ifNobody: 'retreat',
+    briefingOptions: ['self', 'crew', 'backup'],
     actions: ['intimidate', 'negotiate', 'fight', 'hold', 'flee'],
     remoteActions: ['negotiate', 'fight', 'flee'],
     actionOverrides: {
@@ -147,6 +152,7 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     maxRounds: 5,
     joinable: true,
     ifNobody: 'retreat',
+    briefingOptions: ['self', 'crew', 'backup', 'tipoff'],
     actions: ['fight', 'intimidate', 'negotiate', 'hold', 'flee'],
     remoteActions: ['fight', 'negotiate', 'flee'],
     outcomes: {
@@ -168,6 +174,7 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     maxRounds: 5,
     joinable: true,
     ifNobody: 'retreat',
+    briefingOptions: ['self', 'crew', 'backup'],
     actions: ['fight', 'intimidate', 'hold', 'flee'],
     remoteActions: ['fight', 'hold', 'flee'],
     outcomes: {

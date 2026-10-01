@@ -63,5 +63,7 @@ export type {
   UiApi,
   UiState,
 } from './runtime';
+/** Handy-Aufbau (≤ 760 px): Module zeigen dann z.B. Blätter statt Dialogen über der Karte. */
+export { useIsMobile } from './shell/layout';
 export { Slot } from './shell/Slot';
 export { type SoundOnEventOptions, soundOnEvent } from './sound';

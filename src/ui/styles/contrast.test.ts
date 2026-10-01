@@ -240,6 +240,8 @@ describe('Über der Karte: Look Glas (immer dunkel)', () => {
       expect(ratio(get(`--cat-${category}`), inner), category).toBeGreaterThanOrEqual(4.5);
     }
     expect(ratio(get('--file-tab-on'), get('--file-tab'))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(get('--file-polaroid-ink'), get('--file-polaroid'))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(get('--file-red'), get('--file-photo-foe-b'))).toBeGreaterThanOrEqual(3);
   });
 
   it('Razzia-Banner: Schrift auf dunkelrotem Glas mindestens 4.5:1', () => {

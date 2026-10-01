@@ -88,6 +88,20 @@ export interface DialogDefinition<K extends DialogId = DialogId> {
   pausesGame?: boolean;
   /** Mit Escape oder Klick daneben schließbar. Standard: true. */
   dismissable?: boolean;
+  /**
+   * Wo der Dialog liegt (Look "Glas"): 'screen' (Standard) über allem, 'map' nur über der Kartenfläche neben dem
+   * angedockten Handy (der Dialog zeichnet sich dann selbst, z.B. als Akte; am Handy-Bildschirm als Blatt).
+   */
+  area?: 'screen' | 'map';
+  /** Handy abdunkeln und sperren (inert), solange ein 'map'-Dialog offen ist. Standard: wie pausesGame. */
+  lockPhone?: boolean;
+}
+
+/** Sperrt der offene Dialog gerade das Handy (Dialog über der Kartenfläche, der das Spiel pausiert)? */
+export function dialogLocksPhone(dialogId: string | null | undefined): boolean {
+  const definition = dialogId ? dialogs.get(dialogId as DialogId) : undefined;
+  if (!definition || definition.area !== 'map') return false;
+  return definition.lockPhone ?? !!definition.pausesGame;
 }
 
 export interface PhoneApp {

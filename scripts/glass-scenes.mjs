@@ -41,18 +41,37 @@ export const PRELUDE = `
     for (let i = 0; i < 400 && state().modules.logistics.cargo.length === 0; i++) sim.advance(30);
   };
   const port = { lng: 6.9712, lat: 50.9862 };
+  /** Überfall der Hafenkolonne auf den Neumarkt, mit Briefing; Läufer vor Ort. Gibt die ID zurück. */
+  const raid = async () => {
+    const enc = await import('/src/modules/encounters/index.ts');
+    const spots = await import('/src/modules/spots/index.ts');
+    rich();
+    run('staff.hireRunner', { spotId: 'neumarkt' });
+    const runner = state().modules.staff.members.find((m) => m.assignment?.targetId === 'neumarkt');
+    const { encounterId } = enc.startEncounter(sim.ctx('gangs'), {
+      kind: 'raidDefense',
+      spotId: 'neumarkt',
+      veedelId: spots.getSpot(state(), 'neumarkt').veedelId,
+      staffIds: [runner.id],
+      askPlayer: true,
+      opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 55, count: 3 },
+      origin: { module: 'gangs', ref: 'raid:nord' },
+    });
+    api.openDialog('encounters.encounter', { encounterId });
+    return encounterId;
+  };
 `;
 
 /** Tageszeiten: Spielminuten ab Start (Tag 1, Freitag 18:00). */
 export const TIMES = { abend: 120, nacht: 300, morgen: 12 * 60, tag: 18 * 60 };
 
 export const SCENES = [
-  { name: 'normal-tag', js: 'sim.advance(' + TIMES.tag + '); busy();' },
-  { name: 'normal-nacht', js: 'sim.advance(' + TIMES.nacht + '); busy();' },
-  { name: 'normal-morgen', js: 'sim.advance(' + TIMES.morgen + '); busy();' },
-  { name: 'normal-abend', js: 'sim.advance(' + TIMES.abend + '); busy();' },
-  { name: 'weggelegt-tag', js: 'sim.advance(' + TIMES.tag + '); busy(); api.closePhone();' },
-  { name: 'weggelegt-nacht', js: 'sim.advance(' + TIMES.nacht + '); busy(); api.closePhone();' },
+  { name: 'normal-tag', js: `sim.advance(${TIMES.tag}); busy();` },
+  { name: 'normal-nacht', js: `sim.advance(${TIMES.nacht}); busy();` },
+  { name: 'normal-morgen', js: `sim.advance(${TIMES.morgen}); busy();` },
+  { name: 'normal-abend', js: `sim.advance(${TIMES.abend}); busy();` },
+  { name: 'weggelegt-tag', js: `sim.advance(${TIMES.tag}); busy(); api.closePhone();` },
+  { name: 'weggelegt-nacht', js: `sim.advance(${TIMES.nacht}); busy(); api.closePhone();` },
   { name: 'start', js: '' },
   {
     name: 'orte',
@@ -63,12 +82,12 @@ export const SCENES = [
   },
   {
     name: 'lieferung-see',
-    js: 'sim.advance(' + TIMES.tag + '); harbor(); shipAt(0.93); api.flyTo(port, 13);',
+    js: `sim.advance(${TIMES.tag}); harbor(); shipAt(0.93); api.flyTo(port, 13);`,
     wait: 4500,
   },
   {
     name: 'lieferung-kai',
-    js: 'sim.advance(' + TIMES.tag + '); harbor(); docked(); api.flyTo(port, 13.2);',
+    js: `sim.advance(${TIMES.tag}); harbor(); docked(); api.flyTo(port, 13.2);`,
     wait: 4500,
   },
   {
@@ -80,8 +99,31 @@ export const SCENES = [
     wait: 4500,
   },
   {
+    name: 'konfrontation-briefing',
+    js: `sim.advance(${TIMES.nacht}); busy(); await raid();`,
+  },
+  {
+    name: 'konfrontation-runde',
+    js:
+      'sim.advance(' +
+      TIMES.tag +
+      '); busy(); const id = await raid(); run("encounters.join", { encounterId: id, mode: "self" }); run("encounters.act", { encounterId: id, actionId: "hold" });',
+  },
+  {
+    name: 'konfrontation-ergebnis',
+    js:
+      'sim.advance(' +
+      TIMES.nacht +
+      '); busy(); const id = await raid(); run("encounters.join", { encounterId: id, mode: "crew" }); run("encounters.auto", { encounterId: id });',
+  },
+  {
+    name: 'konfrontation-weggelegt',
+    js: `sim.advance(${TIMES.tag}); busy(); api.closePhone(); await raid();`,
+    sizes: ['desktop'],
+  },
+  {
     name: 'spot-hover',
-    js: 'sim.advance(' + TIMES.nacht + '); busy();',
+    js: `sim.advance(${TIMES.nacht}); busy();`,
     hover: '.spot-marker[aria-label*="Neumarkt"]',
     sizes: ['desktop'],
   },

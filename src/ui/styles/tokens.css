@@ -332,6 +332,12 @@
   --file-ink: #f1ece2;
   --file-ink-2: rgba(241, 236, 226, 0.72);
   --file-red: #ff7b73;
+  --file-polaroid: #ece6d8;
+  --file-polaroid-ink: #1c160b;
+  --file-photo-a: #2a2f37;
+  --file-photo-b: #14171c;
+  --file-photo-foe-a: #4a1a17;
+  --file-photo-foe-b: #1c0b0a;
   --file-violet: #c99bff;
   --file-backdrop: radial-gradient(ellipse at 50% 45%, rgba(90, 20, 16, 0.35), rgba(4, 5, 7, 0.88) 72%);
   --duel-own-a: #075fb7;

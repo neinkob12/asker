@@ -21,6 +21,11 @@
   max-height: calc(100dvh - var(--top) - var(--gap) - var(--safe-bottom));
   animation: phone-in var(--duration-slow) var(--ease-out);
 }
+/* Gesperrt, solange eine Konfrontation über der Kartenfläche das Spiel pausiert (Look "Glas"). */
+.phone.is-locked {
+  filter: brightness(0.45) saturate(0.6);
+  transition: filter var(--duration-slow) var(--ease-out);
+}
 @keyframes phone-in {
   from {
     opacity: 0;

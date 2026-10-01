@@ -1,321 +1,591 @@
-/* Konfrontations-Dialog als Entscheidungskarte: Lage als Doppelbalken, Optionen als große Karten mit Chips. Nur Tokens. */
+/*
+ * Konfrontation als Akte (Look "Glas" mit leichtem Noir-Anteil). Liegt nur über der Kartenfläche (rechts bis
+ * --map-right), das Handy bleibt sichtbar (abgedunkelt und gesperrt). Am Handy-Bildschirm als Blatt (.enc-sheet).
+ * Schriften: Barlow / Barlow Condensed wie über der Karte, dazu nur hier DM Serif Display und Courier Prime.
+ */
 
-.enc-dialog {
-  animation: enc-pop var(--duration-slow) var(--ease-out);
+/* ---------------------------------------------------------------- Hintergrund über der Kartenfläche */
+.enc-overlay {
+  position: fixed;
+  z-index: var(--z-dialog);
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: max(0px, calc(var(--map-right) - var(--gap)));
+  display: grid;
+  place-items: center;
+  padding: var(--space-6) var(--space-6);
+  overflow-y: auto;
+  background: var(--file-backdrop);
+  -webkit-backdrop-filter: blur(4px) saturate(0.7);
+  backdrop-filter: blur(4px) saturate(0.7);
+  animation: enc-fade var(--duration-slow) var(--ease-out);
+  transition: right var(--dock-duration) var(--dock-ease);
 }
-@keyframes enc-pop {
-  0% {
-    transform: translateY(10px);
+/* Rasterpunkt-Korn (5 %) */
+.enc-overlay::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.9) 0.6px, transparent 0.7px);
+  background-size: 3px 3px;
+  opacity: 0.05;
+  pointer-events: none;
+}
+@keyframes enc-fade {
+  from {
     opacity: 0;
   }
+}
+
+/* ---------------------------------------------------------------- Akte: Rahmen, Reiter, Innenfläche */
+.enc-file {
+  position: relative;
+  width: min(900px, 100%);
+  margin-top: 22px;
+  padding: 10px;
+  border-radius: 26px;
+  background: var(--file-paper);
+  border: 1px solid var(--file-paper-edge);
+  -webkit-backdrop-filter: blur(22px);
+  backdrop-filter: blur(22px);
+  box-shadow: var(--hud-shadow);
+  animation: enc-in var(--duration-slow) var(--ease-out);
+}
+@keyframes enc-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+}
+.enc-file__tab {
+  position: absolute;
+  top: -24px;
+  left: 28px;
+  padding: 5px 14px 6px;
+  border-radius: 10px 10px 0 0;
+  background: var(--file-tab);
+  color: var(--file-tab-on);
+  font-family: var(--font-file);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.enc-file__inner {
+  border-radius: 18px;
+  background: var(--file-inner);
+  color: var(--file-ink);
+  overflow: hidden;
 }
 .enc {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 18px;
+  padding: 24px 26px 22px;
+  font-family: var(--font-hud);
 }
-.enc-meta {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  gap: var(--space-2);
+
+/* ---------------------------------------------------------------- Kopf */
+.enc-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+.enc-head__text {
+  flex: 1;
+  min-width: 0;
+}
+.enc-kicker {
   margin: 0;
-  padding: 2px var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
+  font-family: var(--font-file);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: var(--letter-spacing-caps);
-  color: var(--color-muted);
+  color: var(--file-red);
+}
+.enc-title {
+  margin: 4px 0 6px;
+  font-family: var(--font-hud-display);
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--file-ink);
 }
 .enc-situation {
   margin: 0;
-  padding: var(--space-4);
-  font-size: var(--font-size-md);
-  line-height: 1.45;
-  border-left: 2px solid var(--dom);
-  border-radius: var(--radius-sm);
-  background: var(--color-bad-soft);
-}
-.enc-stakes {
-  margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-warn-soft);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
+  max-width: 52ch;
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--file-ink-2);
 }
 
-.enc-sides {
+/* Polaroids: eigene Seite und Gegner, Porträt als Platzhalter */
+.enc-polaroids {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.enc-polaroid {
+  width: 124px;
+  margin: 0;
+  padding: 7px 7px 9px;
+  border-radius: 3px;
+  background: var(--file-polaroid);
+  color: var(--file-polaroid-ink);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+}
+.enc-polaroid--own {
+  transform: rotate(-3deg);
+}
+.enc-polaroid--foe {
+  transform: rotate(3deg);
+}
+.enc-polaroid__photo {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
+  place-items: center;
+  height: 84px;
+  border-radius: 2px;
+  background: linear-gradient(160deg, var(--file-photo-a), var(--file-photo-b));
+  color: var(--hud-ink-2);
+  font-size: 34px;
 }
-.enc-side {
+.enc-polaroid--foe .enc-polaroid__photo {
+  background: linear-gradient(160deg, var(--file-photo-foe-a), var(--file-photo-foe-b));
+  color: var(--file-red);
+}
+.enc-polaroid__photo .ui-avatar {
+  width: 52px;
+  height: 52px;
+  font-size: 20px;
+}
+.enc-polaroid figcaption {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+  gap: 1px;
+  margin-top: 6px;
+  font-family: var(--font-file);
+  font-size: 11px;
+  line-height: 1.25;
 }
-.enc-side--enemy {
-  background: var(--color-bad-soft);
-  border-color: color-mix(in srgb, var(--dom) 30%, transparent);
-}
-.enc-side__title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  font-size: var(--font-size-sm);
-}
-.enc-side__empty,
-.enc-enemy {
-  margin: 0;
-  font-size: var(--font-size-sm);
-}
-.enc-side .ui-tag {
-  align-self: flex-start;
-}
-.enc-people {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.enc-person {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--font-size-sm);
-}
-.enc-person__main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  line-height: 1.15;
-}
-.enc-person__name {
+.enc-polaroid figcaption strong {
   overflow: hidden;
-  font-weight: var(--font-weight-bold);
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.enc-person__state {
-  font-size: 12px;
-  color: var(--color-accent);
-}
-.enc-person--injured .enc-person__state {
-  color: var(--color-warn);
-}
-.enc-person--down .enc-person__state,
-.enc-person--dead .enc-person__state {
-  color: var(--color-bad);
-}
-.enc-person--dead .enc-person__name {
-  text-decoration: line-through;
-}
-.enc-person__stats {
-  display: none;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-muted);
+.enc-vs {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: 0 -14px;
+  border: 2px solid var(--file-red);
+  border-radius: 50%;
+  background: var(--file-inner);
+  color: var(--file-red);
+  font-family: var(--font-hud-display);
+  font-size: 17px;
+  font-weight: 700;
+  transform: rotate(-10deg);
 }
 
-.enc-edge {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+/* ---------------------------------------------------------------- Kräftebalken */
+.enc-forces__labels {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 700;
 }
-.enc-edge__text {
-  align-self: center;
-  font-family: var(--font-display);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
+.enc-forces__own {
+  color: var(--cat-place);
 }
-
-.enc-choices {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+.enc-forces__edge {
+  font-family: var(--font-file-display);
+  font-size: 17px;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--file-ink);
 }
-.enc-question {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-  text-align: center;
+.enc-forces__foe {
+  text-align: right;
+  color: var(--file-red);
 }
-.enc-card {
+.enc-forces__bar {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--duel-foe-a), var(--duel-foe-b));
+  overflow: hidden;
+}
+.enc-forces__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 5px 0 0 5px;
+  background: linear-gradient(90deg, var(--duel-own-a), var(--duel-own-b));
+  box-shadow: 2px 0 0 var(--file-inner);
+  transition: width var(--duration-slow) var(--ease-out);
+}
+.enc-forces__where {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  width: 100%;
-  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
-  color: var(--color-text);
-  background: var(--color-surface);
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-md);
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--file-ink-2);
+}
+
+/* ---------------------------------------------------------------- Briefing und Runden: Karten im 3er-Raster */
+.enc-question {
+  margin: 0 0 12px;
+  font-family: var(--font-file-display);
+  font-size: 24px;
+  font-style: italic;
+  font-weight: 400;
+}
+.enc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.enc-way,
+.enc-act {
+  --way: var(--file-ink-2);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-height: 132px;
+  padding: 12px 14px 14px;
+  border: 0;
+  border-top: 4px solid var(--way);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--file-ink);
   text-align: left;
   cursor: pointer;
   transition:
     background var(--duration-fast),
-    border-color var(--duration-fast);
+    transform var(--duration-fast);
 }
-.enc-card:hover:not(:disabled) {
-  background: var(--color-surface-hover);
-  border-color: var(--gold);
+.enc-way:hover:not(:disabled),
+.enc-act:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
 }
-.enc-card:active:not(:disabled) {
-  transform: translateY(1px);
+.enc-way:active:not(:disabled),
+.enc-act:active:not(:disabled) {
+  transform: scale(0.98);
 }
-.enc-card:disabled {
+.enc-way:focus-visible,
+.enc-act:focus-visible,
+.enc-close:focus-visible,
+.enc-auto:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 2px;
+}
+.enc-way:disabled,
+.enc-act:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.enc-card--danger {
-  background: var(--color-bad-soft);
+.enc-way.is-danger {
+  --way: var(--cat-danger);
 }
-.enc-card__text {
-  flex: 1;
-  min-width: 0;
+.enc-way.is-money {
+  --way: var(--cat-money);
+}
+.enc-way.is-dirty {
+  --way: var(--file-violet);
+}
+.enc-way.is-place {
+  --way: var(--cat-place);
+}
+.enc-way.is-warn {
+  --way: var(--cat-warn);
+}
+.enc-way__top,
+.enc-act__top {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
-.enc-card__text strong {
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
+.enc-way__icon,
+.enc-act__icon {
+  font-size: 22px;
+  color: var(--way);
+}
+.enc-way__tag {
+  padding: 2px 8px;
+  border-radius: var(--radius-round);
+  border: 1px solid var(--way);
+  color: var(--way);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.enc-way__title,
+.enc-act__title {
+  font-family: var(--font-file-display);
+  font-size: 22px;
+  font-weight: 400;
   line-height: 1.1;
 }
-.enc-card__text small {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-muted);
+.enc-way__text,
+.enc-act__hint {
+  font-family: var(--font-file);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--file-ink-2);
+}
+
+/* Handlungen: Chance gefärbt (grün ab 60 %, rot unter 35 %), 4-px-Balken */
+.enc-act.is-good {
+  --way: var(--cat-money);
+}
+.enc-act.is-mid {
+  --way: var(--cat-warn);
+}
+.enc-act.is-bad {
+  --way: var(--cat-danger);
+}
+.enc-act__chance {
+  font-family: var(--font-hud-display);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--way);
+}
+.enc-act__bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.enc-act__bar span {
+  display: block;
+  height: 100%;
+  background: var(--way);
+}
+.enc-act__cost {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--file-violet);
+}
+.enc-auto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 12px;
+  border: 1px dashed rgba(241, 236, 226, 0.3);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--file-ink-2);
+  font-family: var(--font-hud);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.enc-auto:hover {
+  color: var(--file-ink);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* ---------------------------------------------------------------- Ergebnis: Stempel mit Doppelrand */
+.enc-result {
+  --stamp: var(--cat-money);
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.enc-result.is-retreat {
+  --stamp: var(--cat-warn);
+}
+.enc-result.is-failure {
+  --stamp: var(--cat-danger);
+}
+.enc-stamp {
+  flex: none;
+  padding: 6px 18px 4px;
+  border: 3px solid var(--stamp);
+  border-radius: 8px;
+  outline: 2px solid var(--stamp);
+  outline-offset: 4px;
+  color: var(--stamp);
+  font-family: var(--font-hud-display);
+  font-size: 50px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transform: rotate(-8deg);
+  animation: enc-stamp 360ms var(--ease-spring) both;
+}
+@keyframes enc-stamp {
+  from {
+    opacity: 0;
+    transform: rotate(-8deg) scale(1.6);
+  }
+}
+.enc-result__text {
+  flex: 1;
+  min-width: 0;
+}
+.enc-result__text p {
+  margin: 0 0 14px;
+  font-family: var(--font-file-display);
+  font-size: 22px;
   line-height: 1.3;
 }
-.enc-card__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
+.enc-result__dead {
+  color: var(--file-red);
 }
-.enc-chance {
-  flex: none;
-  min-width: 56px;
-  padding: 4px var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-warn-soft);
-  color: var(--color-warn);
-  font-family: var(--font-display);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+.enc-close {
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: var(--hud-radius-button);
+  background: var(--hud-gold);
+  color: var(--hud-gold-on);
+  font-family: var(--font-hud);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
 }
-.enc-chance.is-good {
-  color: var(--color-accent);
-  background: var(--color-accent-soft);
-}
-.enc-chance.is-bad {
-  color: var(--color-bad);
-  background: var(--color-bad-soft);
+.enc-close:hover {
+  filter: brightness(1.06);
 }
 
-.enc-result {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  text-align: center;
-}
-.enc-result p {
-  margin: 0;
-}
-.enc-result .enc-result__title {
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-}
-.enc-result--success {
-  background: var(--color-accent-soft);
-}
-.enc-result--failure {
-  background: var(--color-bad-soft);
-}
-.enc-result--retreat {
-  background: var(--color-warn-soft);
-}
-
+/* ---------------------------------------------------------------- Verlauf */
 .enc-log {
-  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  max-height: 180px;
-  overflow-y: auto;
-  font-size: var(--font-size-sm);
-}
-.enc-log__entry {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-2) var(--space-3);
-  border-left: 5px solid var(--color-line);
-  border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  line-height: 1.35;
-}
-.enc-log__entry.is-good {
-  border-left-color: var(--money);
-}
-.enc-log__entry.is-bad {
-  border-left-color: var(--dom);
-}
-.enc-log__head {
+  padding: 12px 0 0;
+  border-top: 1px dashed rgba(241, 236, 226, 0.2);
+  list-style: none;
+  font-family: var(--font-file);
   font-size: 12px;
-  font-weight: var(--font-weight-black);
-  color: var(--color-muted);
+  line-height: 1.45;
+  color: var(--file-ink-2);
+}
+.enc-log .is-good::marker,
+.enc-log .is-bad::marker {
+  content: none;
 }
 
-/* Warnung im HUD, solange eine Konfrontation wartet */
+/* ---------------------------------------------------------------- Warnung im HUD */
 .enc-hud {
   animation: enc-hud-pulse 1.3s ease-in-out infinite;
 }
 @keyframes enc-hud-pulse {
   0%,
   100% {
-    box-shadow:
-      var(--shadow-pop-sm),
-      0 0 0 0 rgba(255, 75, 75, 0.7);
+    box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.7);
   }
   60% {
-    box-shadow:
-      var(--shadow-pop-sm),
-      0 0 0 10px rgba(255, 75, 75, 0);
+    box-shadow: 0 0 0 10px rgba(255, 75, 75, 0);
   }
 }
 
-@media (max-width: 760px) {
-  .enc-sides {
-    grid-template-columns: 1fr;
+/* ---------------------------------------------------------------- Schmale Kartenfläche und Handy-Bildschirm */
+@media (max-width: 1180px) {
+  .enc-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .enc-title {
+    font-size: 44px;
+  }
+  .enc-polaroid {
+    width: 96px;
   }
 }
+/* Am Handy-Bildschirm als Blatt: über allem, Akte ohne Rahmen, Kopf untereinander */
+.enc-sheet {
+  position: fixed;
+  /* über der schwebenden Island und den Bannern, unter der Suche */
+  z-index: calc(var(--z-notification) + 1);
+}
+.enc-sheet .ui-sheet {
+  background: var(--hud-glass-solid);
+  color: var(--file-ink);
+}
+.enc-sheet .ui-sheet__title {
+  font-family: var(--font-file);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--file-tab);
+}
+.enc-sheet .enc {
+  padding: 4px 0 0;
+}
+@media (max-width: 760px) {
+  .enc-head {
+    flex-direction: column-reverse;
+    gap: 14px;
+  }
+  .enc-polaroids {
+    align-self: center;
+  }
+  .enc-title {
+    font-size: 40px;
+  }
+  .enc-situation {
+    font-size: 15px;
+  }
+  .enc-forces__labels {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "edge edge"
+      "own foe";
+    row-gap: 2px;
+    font-size: 12px;
+  }
+  .enc-forces__edge {
+    grid-area: edge;
+    text-align: center;
+  }
+  .enc-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .enc-way,
+  .enc-act {
+    min-height: 0;
+  }
+  .enc-result {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+  }
+  .enc-stamp {
+    font-size: 40px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .enc-hud,
-  .enc-dialog {
+  .enc-stamp,
+  .enc-file,
+  .enc-overlay {
     animation: none;
   }
 }
