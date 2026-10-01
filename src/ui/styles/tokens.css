@@ -263,7 +263,95 @@
   --map-heat-warm: #e2ae4a;
   --map-heat-hot: #ff453a;
 
+  /*
+   * Look "Glas" über der Karte (Auftrag 24): HUD, Kartensteuerung, Marker-Plaketten, Overlays. Immer dunkel, auch
+   * am Tag; die Karte folgt der Tageszeit. Bei weniger Transparenz oder mehr Kontrast deckend (unten).
+   * Kontrast prüft contrast.test.ts gegen die hellste Kartenfarbe (Autobahn am Tag).
+   */
+  --hud-glass: rgba(18, 20, 24, 0.66);
+  --hud-glass-strong: rgba(22, 24, 29, 0.86);
+  --hud-glass-solid: #16181d;
+  --hud-glass-edge: rgba(255, 255, 255, 0.09);
+  --hud-glass-fill: rgba(255, 255, 255, 0.08);
+  --hud-glass-fill-active: rgba(255, 255, 255, 0.2);
+  --hud-glass-line: rgba(255, 255, 255, 0.12);
+  --hud-blur: blur(22px) saturate(160%);
+  --hud-radius: 20px;
+  --hud-radius-tile: 16px;
+  --hud-radius-button: 14px;
+  --hud-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  /* Schrift auf Glas: Wert weiß, Nebentext gedämpft (4.5:1 auf Glas über der hellsten Karte) */
+  --hud-ink: #ffffff;
+  --hud-ink-2: rgba(235, 235, 245, 0.72);
+  /* leere Stufe (Heat-Flammen, Köln-Segmente) */
+  --hud-empty: rgba(255, 255, 255, 0.16);
+  /* Leichte Vignette über der Kartenfläche (nicht unter dem Handy) */
+  --map-vignette: radial-gradient(ellipse 60% 70% at 36% 50%, transparent 40%, rgba(0, 0, 0, 0.55));
+
+  /*
+   * Spot-Zustände (Achteck-Schild): Füllung, Zahl darauf (4.5:1) und Lichtkegel am Boden.
+   * Abweichung vom Entwurf: Rot (#ff453a) und Blau (#2f7bff) schaffen mit weißer Zahl nur 3.4:1 bzw. 3.9:1, die
+   * Füllungen sind deshalb eine Spur dunkler; Lichtkegel, Ringe und Kanten behalten die hellen Töne (--spot-*-glow).
+   */
+  --spot-idle: rgba(24, 26, 31, 0.92);
+  --spot-idle-on: #ffffff;
+  --spot-idle-glow: rgba(255, 255, 255, 0.1);
+  --spot-idle-edge: rgba(255, 255, 255, 0.55);
+  --spot-waiting: #ff9f0a;
+  --spot-waiting-on: #1a1004;
+  --spot-waiting-glow: rgba(255, 159, 10, 0.45);
+  --spot-waiting-edge: #ff9f0a;
+  --spot-urgent: #d93025;
+  --spot-urgent-on: #ffffff;
+  --spot-urgent-glow: rgba(255, 69, 58, 0.55);
+  --spot-urgent-edge: #ff453a;
+  --spot-raid: #1f6cf0;
+  --spot-raid-on: #ffffff;
+  --spot-raid-glow: rgba(47, 123, 255, 0.55);
+  --spot-raid-edge: #2f7bff;
+  --spot-ring: rgba(255, 255, 255, 0.75);
+  --spot-plate: rgba(15, 17, 21, 0.86);
+  --spot-locked: #15171b;
+  --spot-locked-edge: rgba(255, 255, 255, 0.22);
+  --spot-shadow: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.7));
+  /* Geld-Popup auf der Karte: grüne Pille, dunkle Schrift */
+  --map-money: rgba(48, 209, 88, 0.95);
+  --map-money-on: #04140a;
+  --map-money-loss: rgba(255, 69, 58, 0.95);
+  --map-money-loss-on: #1a0302;
+  /* Gold für Hauptaktionen und Übernahme über der Karte */
+  --hud-gold: #f2c766;
+  --hud-gold-on: #15120a;
+
+  /* Konfrontation als Akte (nur in diesem Dialog): Papier, Innenfläche, Stempel */
+  --file-paper: rgba(201, 178, 133, 0.16);
+  --file-paper-edge: rgba(201, 178, 133, 0.35);
+  --file-tab: #c9b285;
+  --file-tab-on: #1c160b;
+  --file-inner: rgba(20, 22, 27, 0.94);
+  --file-ink: #f1ece2;
+  --file-ink-2: rgba(241, 236, 226, 0.72);
+  --file-red: #ff7b73;
+  --file-violet: #c99bff;
+  --file-backdrop: radial-gradient(ellipse at 50% 45%, rgba(90, 20, 16, 0.35), rgba(4, 5, 7, 0.88) 72%);
+  --duel-own-a: #075fb7;
+  --duel-own-b: #2287ed;
+  --duel-foe-a: #ea5249;
+  --duel-foe-b: #b53129;
+
+  /* Razzia und Übernahme über der Karte */
+  --raid-glass: rgba(120, 16, 20, 0.78);
+  --raid-edge: rgba(255, 123, 115, 0.5);
+  --takeover-glow: rgba(242, 199, 102, 0.35);
+
   /* Schrift */
+  /* Über der Karte (HUD, Marker, Overlays): Barlow für Text, Barlow Condensed für Zahlen und Titel. Das Handy
+     behält San Francisco bzw. Inter. */
+  --font-hud: "Barlow", var(--font-body);
+  --font-hud-display: "Barlow Condensed", "Barlow", var(--font-display);
+  /* Nur in der Konfrontation (Akte): Schreibmaschine und Serifen-Kursive */
+  --font-file: "Courier Prime", "Courier New", var(--font-mono);
+  --font-file-display: "DM Serif Display", Georgia, "Times New Roman", serif;
   --font-body:
     -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     sans-serif;
@@ -339,6 +427,9 @@
   --duration-fast: 100ms;
   --duration: 180ms;
   --duration-slow: 320ms;
+  /* Ein- und Ausklappen des Handys: Feder SPRINGS.app als CSS-Kurve (start.tsx setzt --spring-dock-*) */
+  --dock-ease: var(--spring-dock-ease, var(--ease-out));
+  --dock-duration: var(--spring-dock-duration, var(--duration-slow));
 
   /* Layout */
   --hud-height: 48px;
@@ -429,6 +520,7 @@
     --duration: 1ms;
     --duration-slow: 1ms;
     --ease-spring: linear;
+    --dock-duration: 1ms;
   }
 }
 
@@ -440,6 +532,10 @@
     --phone-center: var(--phone-bg);
     --phone-blur: none;
     --blur-panel: none;
+    --hud-glass: var(--hud-glass-solid);
+    --hud-glass-strong: var(--hud-glass-solid);
+    --spot-plate: var(--hud-glass-solid);
+    --hud-blur: none;
   }
 }
 /* Mehr Kontrast: Trenner und Füllungen deutlicher, sekundäre Schrift heller bzw. dunkler. */

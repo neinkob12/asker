@@ -182,3 +182,72 @@ describe('Dynamic Island (immer dunkel)', () => {
     expect(ratio(resolve(`--cat-${category}`, 'dark'), black)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe('Über der Karte: Look Glas (immer dunkel)', () => {
+  const get = (name: string) => resolve(name, 'dark');
+  // Hellste Flächen der Karte (src/map/look.ts): Autobahn und hohe Häuser am Tag, Land in der Nacht.
+  const MAP_SURFACES: Rgba[] = ['#7a7362', '#626a75', '#363b42', '#121519'].map((hex) => parseColor(hex, 'dark'));
+  const glasses = ['--hud-glass', '--hud-glass-strong', '--spot-plate'];
+
+  it('Text auf Glas über jeder Kartenfarbe: mindestens 4.5:1', () => {
+    for (const glass of glasses) {
+      for (const map of MAP_SURFACES) {
+        const surface = over(get(glass), map);
+        for (const text of ['--hud-ink', '--hud-ink-2', '--hud-gold']) {
+          expect(ratio(get(text), surface), `${text} auf ${glass}`).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  });
+
+  it.each(['dirty', 'money', 'goods', 'brand', 'place', 'danger', 'warn', 'sky', 'people'])(
+    'Beschriftung %s auf Glas: mindestens 4.5:1',
+    (category) => {
+      for (const map of MAP_SURFACES) {
+        const surface = over(get('--hud-glass'), map);
+        expect(ratio(get(`--cat-${category}`), surface)).toBeGreaterThanOrEqual(4.5);
+      }
+    },
+  );
+
+  it('deckendes Glas (weniger Transparenz): Text mindestens 4.5:1', () => {
+    for (const text of ['--hud-ink', '--hud-ink-2']) {
+      expect(ratio(get(text), get('--hud-glass-solid'))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it.each(['idle', 'waiting', 'urgent', 'raid'])('Zahl auf dem Spot-Schild (%s): mindestens 4.5:1', (state) => {
+    for (const map of MAP_SURFACES) {
+      const fill = over(get(`--spot-${state}`), map);
+      expect(ratio(get(`--spot-${state}-on`), fill), `${state} über Karte`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('Gold-Knopf und Geld-Popup: Schrift mindestens 4.5:1', () => {
+    expect(ratio(get('--hud-gold-on'), get('--hud-gold'))).toBeGreaterThanOrEqual(4.5);
+    for (const map of MAP_SURFACES) {
+      expect(ratio(get('--map-money-on'), over(get('--map-money'), map))).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(get('--map-money-loss-on'), over(get('--map-money-loss'), map))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('Akte: Schrift auf der Innenfläche und dem Reiter mindestens 4.5:1', () => {
+    const inner = over(get('--file-inner'), parseColor('#7a7362', 'dark'));
+    for (const text of ['--file-ink', '--file-ink-2', '--file-red', '--file-violet', '--hud-gold']) {
+      expect(ratio(get(text), inner), text).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const category of ['money', 'warn', 'danger', 'place']) {
+      expect(ratio(get(`--cat-${category}`), inner), category).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(ratio(get('--file-tab-on'), get('--file-tab'))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('Razzia-Banner: Schrift auf dunkelrotem Glas mindestens 4.5:1', () => {
+    for (const map of MAP_SURFACES) {
+      const surface = over(get('--raid-glass'), map);
+      for (const text of ['--hud-ink', '--hud-ink-2']) {
+        expect(ratio(get(text), surface), text).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+});

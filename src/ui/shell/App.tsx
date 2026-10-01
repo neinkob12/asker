@@ -27,6 +27,7 @@ export function App(props: { runtime: UiRuntime }) {
     <RuntimeContext.Provider value={runtime}>
       <div class={classes.join(' ')}>
         <MapView />
+        <div class="shell-vignette" aria-hidden="true" />
         {hasGame && (
           <>
             <ErrorBoundary name="HUD">

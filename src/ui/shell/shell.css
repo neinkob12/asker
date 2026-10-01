@@ -32,7 +32,7 @@
 }
 .shell-map .maplibregl-ctrl-bottom-right {
   right: calc(var(--map-right) - var(--gap));
-  transition: right var(--duration-slow) var(--ease-out);
+  transition: right var(--dock-duration) var(--dock-ease);
 }
 .shell-map .maplibregl-ctrl-top-left {
   top: calc(var(--top) + var(--hud-height) + var(--space-2) - 10px);
@@ -53,6 +53,19 @@
   filter: invert(1) opacity(0.5);
 }
 
+/* Look "Glas": leichte Vignette über der freien Kartenfläche (nicht unter dem Handy), lenkt den Blick zur Mitte. */
+.shell-vignette {
+  position: fixed;
+  z-index: var(--z-map-overlay);
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: max(0px, calc(var(--map-right) - var(--gap)));
+  background: var(--map-vignette);
+  pointer-events: none;
+  transition: right var(--dock-duration) var(--dock-ease);
+}
+
 /* ---------------------------------------------------------------- HUD */
 .hud {
   position: fixed;
@@ -64,7 +77,7 @@
   align-items: flex-start;
   gap: var(--space-3);
   pointer-events: none;
-  transition: right var(--duration-slow) var(--ease-out);
+  transition: right var(--dock-duration) var(--dock-ease);
 }
 .hud > * {
   pointer-events: auto;
@@ -331,7 +344,7 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  transition: right var(--duration-slow) var(--ease-out);
+  transition: right var(--dock-duration) var(--dock-ease);
 }
 .shell-mapctl__group {
   display: flex;

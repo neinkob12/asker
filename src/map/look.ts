@@ -132,7 +132,7 @@ export const PALETTES: Record<DayPhase, Palette> = {
   night: {
     sky: '#0f1216',
     horizon: '#1b2027',
-    land: '#171a1f',
+    land: '#121519',
     park: '#18211c',
     wood: '#161e1a',
     water: '#1c3a57',
@@ -144,10 +144,12 @@ export const PALETTES: Record<DayPhase, Palette> = {
     majorCasing: '#6a522e',
     highway: '#d6a758',
     highwayCasing: '#7a5a2c',
-    buildings: ['#1f2329', '#252a31', '#2c3139', '#343a43'],
+    // Look "Glas" (Auftrag 24): Land und Häuser dunkler, das Leuchten der Hauptstraßen etwas zurückgenommen, damit
+    // Spot-Schilder und Lichtkegel vorne stehen.
+    buildings: ['#1b1f25', '#21262d', '#282d35', '#30363f'],
     shadow: '#000000',
     shadowOpacity: 0.4,
-    glow: 0.7,
+    glow: 0.6,
     light: '#9fb2d0',
     lightIntensity: 0.26,
   },
