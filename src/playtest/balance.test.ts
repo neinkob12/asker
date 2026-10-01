@@ -13,6 +13,8 @@ interface RunReport {
   seed: number;
   days: (ReturnType<typeof snapshot> & { revenue: number })[];
   events: Record<string, number>;
+  /** Geldfluss (Schwarzgeld) der ersten sieben Tage nach Grund, z.B. "Lohn" oder "Verkauf". */
+  flow: Record<string, number>;
 }
 
 function simulate(seed: number, days: number, stopOnWin = false): RunReport {
@@ -26,7 +28,13 @@ function simulate(seed: number, days: number, stopOnWin = false): RunReport {
   sim.onEvent((e: GameEvent) => {
     if (e.type === 'sale.completed') revenue += e.payload.revenue;
   });
-  const report: RunReport = { seed, days: [], events };
+  const flow: Record<string, number> = {};
+  sim.onEvent((e: GameEvent) => {
+    if (e.type !== 'wallet.changed' || e.payload.kind !== 'dirty' || e.time >= 7 * DAY + 18 * 60) return;
+    const key = e.payload.reason.split(' ')[0] || '(ohne)';
+    flow[key] = (flow[key] ?? 0) + e.payload.amount;
+  });
+  const report: RunReport = { seed, days: [], events, flow };
   for (let d = 0; d < days; d++) {
     revenue = 0;
     playFor(sim, DAY, stats, DEFAULT_BOT);
@@ -73,6 +81,18 @@ describe('Balancing', () => {
             ` | Gang-Überfälle ${e('gang.raidStarted')}, Vorstöße ${e('gang.pushStarted')}, Eskalationen ${e('gang.escalated')}` +
             ` | Razzien ${e('police.raidPlanned')}, Kontrollen ${e('police.check')}, Festnahmen ${e('police.arrest')}` +
             ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,
+        );
+        console.log(
+          `  Kontostand (Schwarzgeld) am Ende von Tag 1-7: ${r.days
+            .slice(0, 7)
+            .map((d) => d.dirty)
+            .join(' / ')}`,
+        );
+        console.log(
+          `  Geldfluss Tag 1-7: ${Object.entries(r.flow)
+            .sort((a, b) => a[1] - b[1])
+            .map(([k, v]) => `${k} ${Math.round(v)}`)
+            .join(', ')}`,
         );
         if (verbose) for (const d of r.days) if (d.day % 10 === 0 || d === last) console.log(JSON.stringify(d));
       }
