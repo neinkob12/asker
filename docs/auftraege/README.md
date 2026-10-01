@@ -60,18 +60,18 @@ Was jede Session nach dem Fundament vorfindet und welche Schnittstellen sie nutz
 
 Phase 0, Phase 1 und Phase 2 (Integration, Branch `claude/integration-20`) sind erledigt, dazu
 [Auftrag 21](21-logistik-strassen.md) (Logistik mit echten Straßen, Hafen, Fahrern, mehreren Lagern und
-Lieferanten zum Freischalten). Neue Arbeit kommt als eigene Aufträge (unten), jede Session darf dann wieder den
+Lieferanten zum Freischalten), Auftrag 22 (Handy wie iOS) und
+[Auftrag 24](24-feinschliff-geld-leutnants-polizei.md) (Kasse mit Gewinn- und Verlustrechnung, Stillhaltegeld statt
+vollem Lohn in Haft, Leutnants mit bis zu drei Spots, eigenem Personal und Bestellregeln, Rechte Hand mit
+Tagesbericht, Polizei-Härte nach Größe des Geschäfts, mehr Geld im frühen Spiel; neues Modul `finance`). Neue Arbeit kommt als eigene Aufträge (unten), jede Session darf dann wieder den
 ganzen Code ändern, sofern der Auftrag nichts anderes sagt. Vor jedem Push: `npm run check`, `npm run build`,
 `npm run e2e`.
 
 Geplant: [Auftrag 23](23-mehr-leben-in-koeln.md) (Spot-Arten und Ausbau, Kunden-Anfragen mit automatischem Übergang,
 eigene Stimmen und Methoden der Gangs, Einbruch und Abwerben, Lieferprobleme mit Entscheidungen, Fuhrpark,
-Daueraufträge mit Disponent, Stadt-Events). Startet erst, wenn Auftrag 22 (Handy wie iOS) in `main` ist.
-
-Geplant: [Auftrag 24](24-feinschliff-geld-leutnants-polizei.md) (Kasse mit Gewinn- und Verlustrechnung, kein voller
-Lohn in Haft, Leutnants mit bis zu drei Spots, eigenem Personal und Bestellregeln, Rechte Hand über den Leutnants,
-Polizei-Härte nach Größe des Geschäfts, Geld im frühen Spiel). Läuft nicht gleichzeitig mit Auftrag 23, beide ändern
-dieselben Module.
+Daueraufträge mit Disponent, Stadt-Events). Baut auf Auftrag 24 auf: Leutnants führen Spots (nicht Veedel), Geld
+immer mit Kategorie buchen, Lieferanten mit Liegeplatz für Leutnants über `isPortSupplierAllowed` in
+`src/modules/hierarchy/orders.ts` freigeben, sobald es den Disponenten gibt.
 
 ## Mergen
 

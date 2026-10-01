@@ -297,7 +297,8 @@ App öffnen 5 Layouts (zusammen 11 ms, längstes 6–8 ms, das ist der Aufbau de
 - **Push/Pop:** Die neue Seite kommt von rechts, die alte gleitet um 30 % nach links und wird um 16 % dunkler (Parallaxe).
   Der große Titel der alten Seite wandert in den Zurück-Knopf der neuen (und beim Zurückgehen wieder heraus).
 - **Blätter:** von unten mit Griff, mittel und groß. Bei groß rückt die Seite dahinter zurück (93 %, runde Ecken oben),
-  wie bei iOS-Sheets. Die Seite dahinter ist dann `inert` (modal).
+  wie bei iOS-Sheets. Die Seite dahinter ist dann `inert` (modal) und trägt `data-modal`, damit der Seitenstapel
+  (`stackAnimator.ts`) sie beim nächsten Zeichnen nicht wieder bedienbar macht.
 - **Drücken:** Kacheln schrumpfen auf 96 %, Zeilen werden grau, sofort beim Aufsetzen, Loslassen federt zurück.
 - **Island:** eine einzige Form, die zwischen kompakt, Puls und aufgeklappt morpht (FLIP mit `island`-Feder), statt zwei
   Kästen, die überblenden.

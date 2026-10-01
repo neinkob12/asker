@@ -63,7 +63,11 @@ Wer eine Entscheidung ändert, ändert sie hier.
 - **Typen:** Läufer und Dealer, Kuriere (Lieferdienst) und Fahrer (Abholung am Hafen, Umlagern), Sicherheit, Spezialisten (Anwalt, Buchhalter, Kontakt bei der Polizei).
 - **Tiefe:** Individuen mit Namen, Porträt und Werten (z.B. Tempo, Loyalität, Vorsicht), die im Level aufsteigen.
 - **Loyalität:** Verrat kommt selten vor und hat milde Folgen.
-- **Hierarchie:** Boss → Leutnants pro Veedel → Läufer. Leutnants managen ihr Gebiet selbstständig.
+- **Hierarchie:** Boss → Rechte Hand → Leutnants mit bis zu drei Spots → Läufer und Sicherheit. Leutnants führen
+  ihre Spots selbstständig (Preise, eigenes Personal, Nachbestellen nach Regeln, Ausfälle), die Rechte Hand hält
+  die Löhne zusammen, verteilt Leute und schickt jeden Morgen einen Tagesbericht.
+- **Haft und Ausfälle:** Wer sitzt, bekommt nur Stillhaltegeld (ein Viertel des Lohns), Verletzte den halben Lohn.
+  Ohne Stillhaltegeld redet ein Häftling eher. Ausfälle lassen sich ersetzen, auslösen oder aussitzen.
 - **Rekrutierung:** über Kontakte, Empfehlungen und Aufträge, dazu ein Bewerber-Pool.
 
 ## Gangs, Risiko und Konflikte
@@ -127,8 +131,15 @@ mehrere Lager (mit sauberem Geld gekauft, Umlagern, Razzien durchsuchen Lager im
 Logistik-App im Handy und selbst an einen Spot stellen (automatisch verkaufen ohne Läufer). Sauberes Geld hat damit
 zum ersten Mal einen Zweck (Liegeplatz, Lager).
 
-- **Kampagnenlänge:** laut Balancing-Simulation (`npm run balance`) erstes Veedel nach etwa 8–10 Spieltagen,
-  drei nach 10–26, danach bremsen die Gangs spürbar. Sieg etwa nach 80–120 Spieltagen, das sind bei Tempo 1x
+Mit Auftrag 24 dazu: Geldbuch mit Kategorien und die Kassen-App im Handy (Gewinn und Verlust für Heute, Gestern und
+7 Tage, Verlauf, Ergebnis pro Spot und pro Leutnant, Warnung, wenn die Löhne nicht mehr für zwei Nächte reichen),
+kein voller Lohn mehr in Haft (Stillhaltegeld) und Entscheidungen bei Ausfällen (ersetzen, Kaution, entlassen),
+Leutnants mit bis zu drei Spots statt einem Veedel, mit eigenem Personal-Budget und Bestellregeln, die Rechte Hand
+über den Leutnants mit Tagesbericht, Personal als Baum im Handy und eine Polizei, deren Härte sich nach der Größe
+des Geschäfts richtet (Kleindealer, Händler, Großhändler mit Großrazzien). Im frühen Spiel bleibt mehr Geld übrig.
+
+- **Kampagnenlänge:** laut Balancing-Simulation (`npm run balance`) erstes Veedel nach etwa 7–8 Spieltagen,
+  drei nach 8–12, fünf nach etwa 18–30, danach bremsen die Gangs und die Polizei (als Großhändler) spürbar. Sieg etwa nach 80–120 Spieltagen, das sind bei Tempo 1x
   (4,8 Minuten pro Spieltag) grob 5–10 Stunden.
 - **Session-Länge:** In 20 Minuten (etwa 8 Spieltage bei 2x) kommen Verkauf, Nachschub, Personal, Leutnants,
   Gang-Drohungen, Konfrontationen, Polizei-Kontrollen, Wetter und das erste Veedel vor (`npm run playthrough`,

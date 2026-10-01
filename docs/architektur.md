@@ -95,7 +95,7 @@ sim.on('game.over', (payload) => ...)    // außerhalb (UI, Tests), nur lesen
 
 | Dienst | API | Ereignisse / Befehle |
 | --- | --- | --- |
-| Geld (`wallet.ts`) | `wallet.balance(state, kind?)`, `canAfford`, `earn(ctx, amount, kind, reason)`, `pay` (false, wenn es nicht reicht), `lose` (höchstens was da ist), `convert(ctx, from, to, amount, fee)` | `wallet.changed` |
+| Geld (`wallet.ts`) | `wallet.balance(state, kind?)`, `canAfford`, `earn(ctx, amount, kind, reason, category)`, `pay(ctx, amount, kind, reason, category)` (false, wenn es nicht reicht), `lose` (höchstens was da ist), `convert(ctx, from, to, amount, fee, reason, feeCategory?)`; Kategorien `MONEY_CATEGORIES` (`MoneyCategory`, z.B. `'sales.street'`, `'wages.runner'`, `'loss.police'`), statt einer Kategorie auch `{ category, staffId?, spotId? }` | `wallet.changed` (mit `category`, `staffId`, `spotId`) |
 | Journal (`journal.ts`) | `journal.add(ctx, text, 'info' \| 'good' \| 'bad', ref?)`, `journal.entries(state)` | `journal.added` |
 | Nachrichten (`messages.ts`) | `messages.send(ctx, { contact, text, options?, expiresIn?, silent? })`, `thread`, `threads`, `unreadCount`, `get`, `contact`, `canAnswer` | Befehle `messages.answer`, `messages.markRead`; Ereignisse `message.received`, `message.answered`, `message.expired` |
 | Spielende (`outcome.ts`) | `outcome.gameOver(ctx, 'bankrupt' \| 'killed', detail?)`, `outcome.win(ctx)`, `isOver`, `hasWon` | `game.over`, `campaign.won` |
@@ -110,6 +110,13 @@ sim.on('game.over', (payload) => ...)    // außerhalb (UI, Tests), nur lesen
 (`messages.answer`) wird er als Spieler ausgeführt. Schlägt er fehl, bleibt die Nachricht unbeantwortet.
 `silent: true` stellt still zu (ungelesen, aber ohne Banner), z.B. Lieferanfragen und Meldungen der Leutnants.
 Ältere Nachrichten fallen ab `MESSAGE_LIMIT` weg.
+
+**Geld mit Kategorie:** Jede Buchung trägt eine Kategorie aus `MONEY_CATEGORIES` (`wallet.ts`: Bezeichnung, Gruppe
+`income`/`expense`/`loss`/`transfer`, Symbol). Fehlt sie, landet die Buchung unter "Sonstiges" (`income.other` bzw.
+`expense.other`). Mit `{ category, staffId, spotId }` lässt sich eine Buchung zusätzlich einem Spot oder einer Person
+zuordnen (Verkauf am Spot, Lohn, Kaution), daraus rechnet `finance` die Ergebnisse pro Spot und pro Leutnant.
+Geldwäsche bucht den gewaschenen Betrag als Umbuchung (`transfer`, kein Gewinn und kein Verlust) und die Gebühr
+getrennt (`laundering`).
 
 **Pleite-Regel:** Module können `solvency(state)` angeben ("kann der Spieler dank mir weitermachen?").
 Melden alle `false`, löst der Kern `game.over` mit `bankrupt` aus. Stand jetzt: `goods` (Ware im Lager) und
@@ -158,7 +165,7 @@ defineModule({
 Reine API-Aufrufe zur Laufzeit brauchen es nicht. Aktuelle Reihenfolge:
 
 ```
-encounters → goods → laundering → reputation → roads → suppliers → veedel → gangs → market → spots
+encounters → finance → goods → laundering → reputation → roads → suppliers → veedel → gangs → market → spots
 → customers → staff → hierarchy → logistics → recruiting → territory → police → weather
 ```
 
@@ -166,7 +173,9 @@ Bekannte Kanten, die keinen Zyklus bekommen dürfen: `territory → gangs` (Star
 (Läufer bedienen nach dem Kunden-Tick), `police → territory`, `hierarchy/recruiting → staff`.
 Weitere Import-Kanten nur zur Laufzeit (Funktionsaufrufe, kein `dependsOn`): `territory → hierarchy`
 (Leutnant-Einfluss), `staff → police` (`addHeat`, `getHeat`), `hierarchy → market/recruiting/suppliers/customers`,
-`customers → encounters` (Deals, die kippen), `police → staff` (`riskFactor`, `isLyingLow`), `customers/logistics/
+`customers → encounters` (Deals, die kippen), `police → staff` (`riskFactor`, `isLyingLow`), `police → finance/hierarchy/
+logistics/goods` (Größe des Geschäfts), `finance → hierarchy/staff` (Ergebnis pro Leutnant, fällige Löhne),
+`staff → hierarchy` (Ausfälle, die ein Leutnant oder die Rechte Hand regelt), `customers/logistics/
 suppliers → roads` (Routen), `suppliers ↔ logistics` (Liegeplatz, Ware am Kai), `customers ↔ logistics` (bist du
 unterwegs?), `suppliers → customers/territory/reputation` (Freischalt-Bedingungen). `logistics` hängt per `dependsOn`
 an `goods`, `suppliers` und `staff` (alte Spielstände: Liegeplatz, wenn schon in Rotterdam bestellt wurde).
@@ -216,7 +225,7 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
 | `registerPanel({ id, title, component })` | Detailansicht als Seite im Handy, `ui.openPanel(id, props)` | `spots.spot`, `veedel.veedel`, `goods.warehouse`, `staff.profile`, `hierarchy.lieutenant`, `market.overview` |
 | `registerDialog({ id, component, pausesGame?, dismissable? })` | Dialog, `ui.openDialog(id, props)` | `core.newGame`, `core.saves`, `core.gameOver`, `core.won`, `encounters.encounter` (pausiert), `gangs.attack`, `gangs.ally` |
 | `registerLiveActivity({ id, activities })` | Live-Aktivität in der Dynamic Island des Handys (`LiveActivity`: `priority`, `icon`, `tone`, `leading`, `trailing`, `title`, `detail`, `progress`, `open`) | Überfall, Razzia, Heat, Gang-Vorstoß, Chat-Frist, Auftrag, Kurier, Lieferung, Ware am Kai, Fahrt/Kontrolle, du am Spot, Umsatz heute |
-| `registerPhoneApp({ id, name, icon, order, color?, chrome?, component, badge? })` | App im Spiel-Handy; `color` ist eine Bedeutungsfarbe (`money`, `dirty`, `danger`, `warn`, `place`, `goods`, `people`, `chat`, `sky`, `law`, `media`, `system`, `log`, `brand`) oder eine CSS-Farbe (dann wird die Schrift automatisch lesbar gewählt); `badge(state, ui)` liefert die Zahl auf dem Icon | Nachrichten (Mint), Lieferanten (Waren), Logistik (Waren), Kontakte (Leute), Aufträge, Meldungen (Orange), Wetter (Himmel), Einstellungen (Grau, mit Ton & Musik, Anzeige, Spiel) |
+| `registerPhoneApp({ id, name, icon, order, color?, chrome?, component, badge? })` | App im Spiel-Handy; `color` ist eine Bedeutungsfarbe (`money`, `dirty`, `danger`, `warn`, `place`, `goods`, `people`, `chat`, `sky`, `law`, `media`, `system`, `log`, `brand`) oder eine CSS-Farbe (dann wird die Schrift automatisch lesbar gewählt); `badge(state, ui)` liefert die Zahl auf dem Icon | Kasse (Geld), Nachrichten (Mint), Lieferanten (Waren), Logistik (Waren), Kontakte (Leute), Aufträge, Meldungen (Orange), Wetter (Himmel), Einstellungen (Grau, mit Ton & Musik, Anzeige, Spiel) |
 | `onGameEvent(type, id, (payload, ui, state) => …)` | Reaktion auf Ereignisse (Toast, Dialog, Effekt) | Game Over, Sieg, neue Nachricht (Banner), Toasts der Module, Karten-Effekte |
 | `registerAdvisor({ id, advise(state) })` | Empfehlung für die Karte "Nächster Schritt" (`Advice`: priority, icon, title, cost?, action?, highlight?) | Antworten (Kern), Verkauf (an den Spot stellen oder alle bedienen) und Läufer (Spots, Personal), Nachschub (Lieferanten), Ware am Hafen abholen, Liegeplatz (Logistik), Geldwäsche, Kampagnenziel |
 | `registerSearch({ id, label, order, items(state) })` | Einträge der Suche (Strg/⌘+K) | Spots, Veedel, Leute, Gangs |
@@ -282,7 +291,7 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 | --- | --- | --- | --- | --- |
 | `veedel` | statisch (1): 12 Veedel mit echten Grenzen (Offene Daten Köln), Kaufkraft, Polizeipräsenz, Dichte, Beschreibung, `startInfluence` | `allVeedel`, `getVeedel`, `veedelName`, `veedelAt(lng, lat)` (Punkt in Polygon), `neighborsOf`, `sharesBorder`, `getBoundary`, `veedelLinks` | | |
 | `territory` | `influence`, `controller`, `lastSaleAt` (2) | `PLAYER_FACTION`, `CONTROL_THRESHOLD`, `LOSE_CONTROL_THRESHOLD`, `getInfluence`, `influenceIn`, `addInfluence`, `controllerOf`, `controlledBy`, `factions`, `factionName`, `factionColor`, `playerPresence`, `hasPlayerPresence`, `lieutenantInfluence`, `campaignProgress` | | `territory.controlChanged` |
-| `police` | `heat`, `level`, Sperrzeiten, `tipOffs`, `plannedRaids`, `stats` (3) | `getHeat`, `addHeat`, `reportViolence`, `heatLevel`, `playerHeat`, `hottestVeedel`, `snitchOnGang`, `canSnitch`, `activeTipOff`, `plannedRaid`, `getPoliceStats`, `arrestStaff`, `recordConfiscation` | `police.snitch` | `police.check`, `police.raidPlanned`, `police.raid` (`empty` wenn niemand da war), `police.arrest`, `police.tipOff`, `police.heatLevelChanged` |
+| `police` | `heat`, `level`, Sperrzeiten, `tipOffs`, `plannedRaids` (mit `scope`, `spotId`), `majorRaid`, `majorReadyAt`, `tier`, `stats` (4) | `getHeat`, `addHeat`, `reportViolence`, `heatLevel`, `playerHeat`, `hottestVeedel`, `snitchOnGang`, `canSnitch`, `activeTipOff`, `plannedRaid`, `plannedRaidInfo`, `plannedMajorRaid`, `operationTier`, `operationFacts`, `nextTierHints`, `OPERATION_TIERS`, `RAID_SCOPES`, `getPoliceStats`, `arrestStaff`, `recordConfiscation` | `police.snitch` | `police.check`, `police.raidPlanned` (`scope`), `police.raid` (`scope`: `spot`/`veedel`/`major`, `veedelIds`; `empty` wenn niemand da war), `police.arrest`, `police.tipOff`, `police.heatLevelChanged`, `police.tierChanged` |
 | `gangs` | `gangs[id]` (Geld, Leute, Ware, Feindseligkeit, Beziehung, Abkommen, Vorstoß), `priceFactors` (2) | `getGangs`, `getGang`, `getGangStatus`, `gangVeedel`, `veedelGang`, `gangPower`, `playerPower`, `isAtPeace`, `tributeAmount`, `ceasefireCost`, `protectionAmount`, `gangContact` … | `gangs.ceasefire`, `.payTribute`, `.refuse`, `.demandProtection`, `.collect`, `.releaseProtection`, `.ally`, `.attack`, `.acceptOffer` | `gang.pushStarted`, `gang.pushEnded`, `gang.escalated`, `gang.raidStarted`, `gang.diplomacyChanged`, `gang.busted` |
 | `encounters` | `active`, `history` (2) | `startEncounter(ctx, request)` (mit `askPlayer`, `place`, `situation`, `stakes`, `effects`, `skipEffects`), `getEncounter`, `activeEncounters`, `pendingEncounter`, `availableActions`, `actionChance`, `autoResolveEncounter`, `ENCOUNTER_KINDS`, `ENCOUNTER_ACTIONS`, `PLAYER_STATS` | `encounters.join`, `.act`, `.auto` | `encounter.started`, `encounter.round`, `encounter.resolved` (`result`) |
 | `goods` | Posten pro Lager mit Qualität, Streckanteil, Einkaufspreis, eigene Lager `owned` (3) | `allProducts`, `getProduct`, `productName`, `getWarehouses` (eigene), `warehouseSites` (alle Standorte mit Preis), `isWarehouseOwned`, `nearestWarehouse(state, point, { productId?, amount? })`, `getStock`, `getLots`, `stockSummary`, `averageQuality`, `qualityTier`, `cutPreview`, `store`, `take` (mit `near`: nächstes Lager zuerst; → `taken`, `quality`, `cut`, `unitCost`), `cutLot` | `goods.cut`, `goods.buyWarehouse` (sauberes Geld) | `goods.stored`, `goods.taken`, `goods.cut`, `goods.warehouseBought` |
@@ -292,8 +301,9 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 | `spots` | `unlocked`, `custom` (2) | `getSpots` (aktive), `getAllSpots`, `getSpot`, `isSpotActive`, `spotsInVeedel`, `lockedSpots`, `customSpots`, `canFoundSpotAt`; das Veedel eines Spots kommt aus `veedelAt` | `spots.unlock`, `spots.found` | `spots.unlocked`, `spots.founded` |
 | `reputation` | `value`, `recent` (2) | `getReputation`, `changeReputation(ctx, delta, reason)`, `reputationDemandFactor`, `reputationLabel`, `recentReputationChanges` | | `reputation.changed` |
 | `laundering` | Wäschen mit Dauer (2) | `launderingFee`, `launderingDuration`, `launderingCapacity`, `amountInProgress`, `getBatches`, `batchProgress` | `laundering.launder` | `laundering.started`, `laundering.completed` |
-| `staff` | `members`, `former`, `hiding` (3; Rolle `driver`, Einsatz `transport`) | `getStaff`, `getStaffMember`, `getStats`, `runnerAt`, `activeRunnerAt`, `securityAt`, `findAvailable`, `assign`, `setStatus`, `speedFactor`, `riskFactor`, `combatValue`, `defenseStrength`, `bonus`, `bailCost`, `dailyWages`, `staffContact`, `isLyingLow`, `lieLow`, `DRIVER_HIRE_COST` … | `staff.hireRunner`, `.hireDriver`, `.fire`, `.assign`, `.setWage`, `.bail`, `.lieLow` | `staff.hired`, `.left`, `.statusChanged`, `.assigned`, `.levelUp`, `.bailed`, `.betrayed`, `.raidWarning`, `.wentUnderground` |
-| `hierarchy` | `lieutenants`, `posts` (Einstellungen, Protokoll) (2) | `getLieutenant`, `getLieutenants`, `getPost`, `lieutenantVeedel`, `canBeLieutenant`, `lieutenantSatisfaction`, `lieutenantCapacity`, `managedSpots` | `hierarchy.appoint`, `.dismiss`, `.configure` | `hierarchy.appointed`, `.dismissed`, `.configured` |
+| `staff` | `members` (mit `jailSupport`), `former`, `hiding` (4; Rolle `driver`, Einsatz `transport` und `office`) | `getStaff`, `getStaffMember`, `getStats`, `runnerAt`, `activeRunnerAt`, `securityAt`, `findAvailable`, `assign`, `setStatus`, `speedFactor`, `riskFactor`, `combatValue`, `defenseStrength`, `bonus`, `bailCost`, `dailyWages`, `effectiveWage`, `payrollDue`, `wageCategory`, `isAbsent`, `talkChance`, `staffContact`, `isLyingLow`, `lieLow`, `DRIVER_HIRE_COST`, `JAIL_WAGE_FACTOR`, `INJURED_WAGE_FACTOR` … | `staff.hireRunner`, `.hireDriver`, `.fire`, `.assign`, `.setWage`, `.bail`, `.setJailSupport`, `.replace` (`fire?`), `.lieLow` | `staff.hired`, `.left`, `.statusChanged`, `.assigned`, `.levelUp`, `.bailed`, `.betrayed`, `.raidWarning`, `.wentUnderground` |
+| `hierarchy` | `posts` nach Mitarbeiter (Spots, Einstellungen mit Bestellregeln, Team, Ausfälle, Protokoll), `rightHand` (Einstellungen, Bericht), `orderTemplate` (3) | `getPost`, `getLieutenants`, `getLieutenantIds`, `isLieutenant`, `lieutenantOfSpot`, `lieutenantSpots`, `lieutenantVeedels`, `lieutenantsInVeedel`, `teamOf`, `teamLeadOf`, `handlesAbsence`, `canBeLieutenant`, `checkSpots`, `lieutenantDemand`, `lieutenantSatisfaction`, `homeWarehouse`, `orderRuleLabel`, `ruleStock`, `isPortSupplierAllowed`, `getRightHand`, `canBeRightHand`, `rightHandOffered`, `rightHandSatisfaction`, `payrollReserve`, `rightHandBudgetLeft`, `absenceHandled`, `buildReport`; alt: `getLieutenant(veedelId)`, `lieutenantVeedel` | `hierarchy.appoint` (`staffId`, `spotIds`), `.setSpots`, `.dismiss`, `.configure` (`settings` mit `orderRules`, `onAbsent` …), `.appointRightHand`, `.dismissRightHand`, `.configureRightHand` | `hierarchy.appointed` (`spotIds`), `.dismissed`, `.configured`, `.spotsChanged`, `.rightHandAppointed`, `.rightHandDismissed`, `.dailyReport` |
+| `finance` | `days`: Tagesbücher der letzten 14 Tage (Kategorien, Gründe, pro Spot, pro Leutnant) (1) | `currentDay`, `bookDay`, `dayReport(state, daysAgo)`, `periodReport(state, days)`, `dailyProfits`, `categoryLines`, `spotResult`, `spotResults`, `lieutenantResult`, `wageRunway` | | |
 | `recruiting` | Bewerber-Pool und Kontakte (2) | `getCandidates`, `getCandidate`, `getPool`, `getContacts`, `searchReadyAt` | `recruiting.hire`, `.decline`, `.search` | `recruiting.candidateArrived`, `recruiting.hired` |
 | `weather` | aktuelles Wetter, Vorhersage (2) | `getWeather`, `getForecast`, `weatherDemandFactor(state, channel?)`, `WEATHER_NAMES`, `isPrecipitation` | | `weather.changed` |
 | `roads` | statisch (1): Kölner Straßennetz (`network.ts`, 14.229 Knoten, 19.640 Kanten, ca. 2.200 km, Autobahn bis Wohnstraße, Einbahnstraßen) | `roadRoute(from, to)` (→ `path`, `meters`, `onRoads`; A* nach Fahrzeit, gemerkt), `roadDistance`, `travelMinutes(from, to, metersPerMinute, extra?)`, `roadEntryFrom(far)` (Autobahn-Einfahrt aus Richtung einer fernen Stadt), `nearestRoadPoint`, `networkStats`, `ROAD_SPEEDS` | | |
@@ -314,8 +324,8 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   viel Heat im Ziel-Veedel, seltener mit vorsichtigen Fahrern); fliegt die Ladung auf, ist sie weg, der Fahrer landet
   eventuell in Haft. Weitere Lager kauft man mit sauberem Geld (`goods.buyWarehouse`); Großstadt-Lieferungen gehen in
   ein gewähltes Lager, Umlagern per Fahrt. Straßenverkauf nimmt Ware aus dem Lager am nächsten zum Spot, der
-  Lieferdienst fährt im nächsten Lager mit der Ware los. Eine Razzia durchsucht eigene Lager im Veedel mit (20 % des
-  Bestands dort), Verteilen auf mehrere Lager lohnt sich also.
+  Lieferdienst fährt im nächsten Lager mit der Ware los. Ab Händler durchsucht eine Razzia eigene Lager im Veedel mit
+  (25 % des Bestands dort, bei einer Großrazzia 50 %), Verteilen auf mehrere Lager lohnt sich also.
 - **Selbst verkaufen:** Du kannst dich an einen Spot stellen (`customers.standAt`) und bedienst dort automatisch
   (10 Minuten pro Kunde), bis du weggehst. Während du selbst ausfährst oder abholst, wartet der Spot.
 
@@ -326,19 +336,46 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   Feindseligkeit 50), eskalieren per Handy (Warnung, Drohung mit Forderung), überfallen Spots, Kuriere und Lager
   (Konfrontation `raidDefense`, Verletzte und Tote über `setStatus`), stoßen in Veedel vor und verteidigen ihre.
   Je mehr Veedel du hältst, desto öfter drängen sie in dein Revier und desto teurer wird Schutzgeld.
-- **Leutnants:** führen ihr Veedel über dieselben Befehle wie der Spieler, bringen zusätzlich Einfluss
-  (`lieutenantInfluence`, nach Level und Charisma), melden sich per Handy (still), bestellen, was die Kunden
-  vermissen (`customer.missed`), und tauchen nach einer Razzia-Warnung ab.
+- **Geldbuch** (`finance`): hört auf `wallet.changed` und `sale.completed` und führt pro Tag (Mitternacht gehört zum
+  Vortag) Summen nach Kategorie, die größten Gründe, Umsatz/Wareneinsatz/Löhne pro Spot und pro Leutnant. Die
+  Kassen-App im Handy zeigt daraus Gewinn und Verlust (Heute, Gestern, 7 Tage), den Verlauf, die Ergebnisse pro Spot
+  und Leutnant und ob das Geld für die Löhne heute Nacht reicht (`wageRunway`). Die Polizei liest daraus den
+  Umsatz pro Tag (Größe des Geschäfts), die Rechte Hand ihren Tagesbericht.
+- **Haft und Ausfälle:** Wer sitzt, bekommt Stillhaltegeld (25 % des Lohns, `staff.setJailSupport`, Standard an);
+  ohne verliert er schneller Loyalität und redet beim Rauskommen eher (Heat, Razzia-Gefahr). Verletzte bekommen den
+  halben Lohn. Nach einer Festnahme fragt der Leutnant (oder die Person selbst) per Handy: ersetzen, Kaution,
+  entlassen und ersetzen, abwarten (`staff.replace`, `staff.bail`). Ersetzen nimmt freie Leute oder heuert neu an;
+  der Ausgefallene ist danach frei. Wer einen Leutnant hat, lässt ihn nach seiner Regel entscheiden (`onAbsent`:
+  warten, ersetzen, nach N Tagen entlassen und ersetzen), mit Rechter Hand regelt die das für Leute ohne Leutnant.
+- **Leutnants:** führen bis zu drei Spots (auch in verschiedenen Veedeln, `hierarchy.appoint` mit `spotIds`), nicht
+  mehr ein Veedel. Sie arbeiten über dieselben Befehle wie der Spieler: Preise und Vorsicht pro Spot, Läufer und
+  Sicherheit anheuern (Budget pro Tag, `mayHire`), nachbestellen nach Bestellregeln (Produkt, Lieferant, Paket,
+  Mindestbestand, Lager; ein Lieferant mit Liegeplatz nur, wenn `isPortSupplierAllowed`), Ausfälle regeln, bei
+  Razzia-Warnung abtauchen. Einfluss (`lieutenantInfluence`) verteilen sie auf die Veedel ihrer Spots, mit Bonus, wenn
+  mehrere Spots in einem Veedel liegen. Je mehr Spots, desto höher ihr Anspruch (`lieutenantDemand`). Alte
+  Spielstände: Leutnant eines Veedels → Leutnant seiner (bis zu drei) Spots dort.
+- **Rechte Hand:** Ab zwei Leutnants bietet sich jemand ab Level 4 mit Loyalität 50 an (`hierarchy.appointRightHand`,
+  Einsatz `office`). Sie hält die Lohnreserve für zwei Nächte zurück (Leutnants geben nur aus, was darüber liegt),
+  verteilt freie Leute auf leere Spots, regelt Ausfälle ohne Leutnant (Kaution ab Level 3 im Rahmen ihres Budgets),
+  warnt vor Razzien und schickt jeden Morgen um 8 einen Tagesbericht (`hierarchy.dailyReport`): Ergebnis, Löhne,
+  Ausfälle, Probleme. Mit Antworten "Kasse öffnen" und "Leute öffnen".
 - **Nachfrage:** Uhrzeit, Wochentag (`WEEKDAY_DEMAND` und Kundentypen), Wetter (`weatherDemandFactor`, Straße
   vs. Lieferdienst), Ruf und Preis.
 - **Polizei:** Heat aus Verkäufen und Gewalt; Kontrollen (mit Polizeiflucht), geplante Razzien
-  (`police.raidPlanned` → 3 Stunden später). Der Polizei-Kontakt (staff, Bonus `raidWarning`) warnt per Handy mit
-  der Antwort "Leute abziehen" (`staff.lieLow`); wer abgetaucht ist, verliert bei der Razzia nichts.
+  (`police.raidPlanned` → 3 Stunden später). Wie hart sie durchgreift, hängt an der Größe deines Geschäfts
+  (`operationTier`, mit Hysterese, `police.tierChanged`): **Kleindealer** (seltene Razzien, nur an einem Spot, Lager
+  bleiben unberührt), **Händler** (ab einem Veedel, 4 besetzten Spots, 5 Leuten, einem Leutnant, Liegeplatz, zwei
+  Lagern oder 6.000 € Umsatz am Tag: Razzien im ganzen Veedel mit Lagern), **Großhändler** (ab 4 Veedeln mit 6
+  Leuten oder 8 Spots mit Liegeplatz und zwei Lagern: mehr Heat pro Verkauf, häufigere Razzien und Großrazzien in bis
+  zu vier Veedeln zugleich mit einem Tag Vorlauf). Beute anteilig (`RAID_SCOPES`): Ware am Ort, Lagerbestand,
+  Schwarzgeld. Der Polizei-Kontakt (staff, Bonus `raidWarning`) warnt per Handy mit der Antwort "Leute abziehen"
+  (`staff.lieLow`), vor einer Großrazzia immer; wer abgetaucht ist, verliert bei der Razzia nichts.
 - **Konfrontationen** nutzen die echten Werte der Beteiligten (Tempo, Vorsicht, Stärke, Charisma), bringen
   Erfahrung und kosten Loyalität. Anlässe: Überfall abwehren, Polizeiflucht, Schulden eintreiben, Deal kippt
   (Gang-Angebote und Großhandel), Überfall auf einen Gang-Spot.
 - **Löhne:** Wer um Mitternacht nicht bezahlt werden kann, ist sauer und schreibt; am zweiten Tag ohne Lohn oder
-  unter Loyalität 30 kündigt er.
+  unter Loyalität 30 kündigt er. Fällig ist `payrollDue` (Haft und Verletzung anteilig); die Kasse warnt, wenn das
+  Schwarzgeld nicht mehr für zwei Nächte reicht.
 - **Spielende:** Pleite (Pleite-Regel oben), Tod (nur wer selbst bei einer Konfrontation dabei ist), Sieg bei
   7 von 12 Veedeln (`campaign.won`, danach Endlosmodus). Hardcore löscht bei Game Over alle Stände des Durchgangs.
 
@@ -363,6 +400,15 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   frei, spart ab zwei Läufern in Raten sauberes Geld und hat den Liegeplatz an Tag 10–20, danach holt ein Fahrer die
   Schiffsware ab. Erstes Veedel an Tag 9–12, drei Veedel je nach Seed ab Tag 13–30. Umsatz pro Tag in Tag 16–30
   900–1.900 € (zum Vergleich vor Auftrag 21, 2 Seeds: 580–750 €), keiner der sechs Seeds ging pleite.
+- Nach Auftrag 24 (Stellschrauben: `staff/config.ts` `JAIL_WAGE_FACTOR`, `INJURED_WAGE_FACTOR`;
+  `hierarchy/config.ts` `LIEUTENANT_DEMAND_BY_SPOTS`, `DEFAULT_SETTINGS`; `territory/config.ts`
+  `LIEUTENANT_INFLUENCE_PER_HOUR` 0,08, `LIEUTENANT_CLUSTER_BONUS`; `police/config.ts` `DEALER_UP`, `KINGPIN_*`,
+  `RAID_CHANCE_BY_TIER`, `SALE_HEAT_BY_TIER`, `RAID_SCOPES`, `MAJOR_RAID_*`). `npm run balance` zeigt zusätzlich den
+  Geldfluss nach Kategorie, den Kontostand an Tag 1–7 und einen vorsichtigen Bot (`CAREFUL_BOT`: zwei Läufer, kein
+  Ausbau). 16 Seeds, 50 Tage: erstes/drittes/fünftes Veedel im Median an Tag 7/9/21,5 (vorher 7/12/34, fünf Veedel
+  jetzt bei allen Seeds statt 12 von 16), Umsatz pro Tag in Tag 16–30 im Schnitt 5.650 € (vorher 5.500 €), kein Sieg
+  innerhalb von 50 Tagen (vorher 2), keine Pleite. Der vorsichtige Bot hat an Tag 7 rund 5.000–10.000 € gespart,
+  an Tag 10 noch 2.000–8.000 € (Schutzgeld und Razzien als Händler).
 
 ## Qualität
 
@@ -372,10 +418,11 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 - Kern-Tests: fester Zeitschritt (`loop.test.ts`, `sim.test.ts`), Determinismus, Befehle, Ereignisse,
   Speichern/Laden mit Migration und Hardcore (`persistence.test.ts`), Game Over, Nachrichten.
 - Zusammenspiel (`src/playtest/`): `endings.test.ts` (Pleite, Tod, Sieg, Normal, Hardcore mit allen Modulen),
-  `balance.test.ts` (Bot, siehe oben).
+  `balance.test.ts` (Bot, siehe oben), `determinism.test.ts` (gleicher Seed und Bot = gleiche Ereignisse und gleicher
+  Zustand, Speichern und Laden mitten im Spiel ändert den Verlauf nicht).
 - Browser (`scripts/`, gemeinsame Hilfen in `browser.mjs`: Dev-Server, Chromium, Kartenkacheln über Node):
-  - `npm run e2e`: neues Spiel, selbst verkaufen, Läufer anheuern, im Handy bestellen, speichern, laden,
-    Autosave nach dem Neuladen; Desktop und Handy.
+  - `npm run e2e`: neues Spiel, selbst verkaufen, Läufer anheuern, im Handy bestellen, Kasse öffnen, Leutnant mit
+    zwei Spots ernennen, speichern, laden, Autosave nach dem Neuladen; Desktop und Handy.
   - `npm run playthrough`: Der Bot spielt im Browser eine Session (Standard 8 Spieltage ≈ 20 Minuten bei 2x) und
     macht Screenshots der wichtigen Momente. Belege der Integration liegen in `docs/integration/`.
   - `npm run screenshot`: Desktop und Handy nach `screenshots/`. Mit `--eval="window.koeln.session.sim.advance(480)"`
