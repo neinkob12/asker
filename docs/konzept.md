@@ -138,9 +138,10 @@ Leutnants mit bis zu drei Spots statt einem Veedel, mit eigenem Personal-Budget 
 über den Leutnants mit Tagesbericht, Personal als Baum im Handy und eine Polizei, deren Härte sich nach der Größe
 des Geschäfts richtet (Kleindealer, Händler, Großhändler mit Großrazzien). Im frühen Spiel bleibt mehr Geld übrig.
 
-- **Kampagnenlänge:** laut Balancing-Simulation (`npm run balance`) erstes Veedel nach etwa 7–8 Spieltagen,
-  drei nach 8–12, fünf nach etwa 15–45, danach bremsen die Gangs und die Polizei (als Großhändler) spürbar. Sieg etwa nach 80–120 Spieltagen, das sind bei Tempo 1x
-  (4,8 Minuten pro Spieltag) grob 5–10 Stunden.
+- **Kampagnenlänge:** Köln ist der Einstieg (danach sollen weitere Großstädte folgen). Laut Balancing-Simulation
+  (`npm run balance`) erstes Veedel nach etwa 7 Spieltagen, drei nach 8–10, fünf nach etwa 15–20, Köln übernommen
+  (7 von 12 Veedeln) nach etwa 21–28 Spieltagen, bei Tempo 1x (4,8 Minuten pro Spieltag) grob 2 Stunden. Die Polizei
+  bleibt in den ersten gut zwei Wochen bei 1–2 Flammen und zieht erst als Großhändler an.
 - **Session-Länge:** In 20 Minuten (etwa 8 Spieltage bei 2x) kommen Verkauf, Nachschub, Personal, Leutnants,
   Gang-Drohungen, Konfrontationen, Polizei-Kontrollen, Wetter und das erste Veedel vor (`npm run playthrough`,
   Screenshots in `docs/integration/`).

@@ -6,9 +6,9 @@ export type PriceLevel = 'keep' | 'volume' | 'fair' | 'premium';
 export type CautionLevel = 'bold' | 'normal' | 'careful';
 /**
  * Was er tut, wenn jemand aus seinem Team ausfällt (Haft, verletzt): abwarten, sofort ersetzen (die Person kommt
- * danach in den freien Pool) oder ersetzen und nach absentDays Tagen entlassen.
+ * danach in den freien Pool), ersetzen und nach absentDays Tagen entlassen oder sofort entlassen und ersetzen.
  */
-export type AbsentPolicy = 'wait' | 'replace' | 'fireAndReplace';
+export type AbsentPolicy = 'wait' | 'replace' | 'fireAndReplace' | 'fireNow';
 
 /**
  * Bestellregel: Ware, Lieferant, Paket, Mindestbestand und Ziel-Lager. null heißt jeweils "automatisch" (Ware nach
@@ -75,8 +75,11 @@ export interface LieutenantPost {
   /** Ausgaben fürs Anheuern am Tag spentDay. */
   spentDay: number;
   hireSpent: number;
-  /** Ausfälle seines Teams: seit wann und ob schon ersetzt. */
-  absences: Record<string, { since: number; replaced: boolean }>;
+  /**
+   * Ausfälle seines Teams: seit wann, ob schon ersetzt und ob er dir schon gesagt hat, dass er gerade niemanden
+   * hinstellen kann (dann versucht er es weiter, sobald Leute oder Budget da sind).
+   */
+  absences: Record<string, { since: number; replaced: boolean; stuck?: boolean }>;
   /** Was er zuletzt getan hat, neueste zuerst. */
   log: LogEntry[];
 }

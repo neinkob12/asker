@@ -10,10 +10,12 @@ import {
   CHASE_ESCAPED_HEAT,
   GANG_RAID_INFLUENCE_LOSS,
   HEAT_DECAY_PER_HOUR,
+  HEAT_DECAY_SHARE_PER_HOUR,
   MAJOR_RAID_LEAD_TIME,
   RAID_LEAD_TIME,
   RAID_SCOPES,
   SALE_HEAT_BASE,
+  SALE_HEAT_BY_TIER,
   SALE_HEAT_PER_UNIT,
   SNITCH_HEAT,
   VIOLENCE_HEAT,
@@ -75,7 +77,8 @@ describe('police', () => {
     const sim = quietGame();
     sell(sim, 'altstadt-nord', 4);
     sell(sim, 'bayenthal', 4);
-    const perSale = SALE_HEAT_BASE + 4 * SALE_HEAT_PER_UNIT;
+    // Am Anfang bist du Kleindealer: Verkäufe fallen weniger auf (SALE_HEAT_BY_TIER).
+    const perSale = (SALE_HEAT_BASE + 4 * SALE_HEAT_PER_UNIT) * SALE_HEAT_BY_TIER[0];
     expect(getHeat(sim.state, 'altstadt-nord')).toBeCloseTo(
       perSale * (getVeedel('altstadt-nord')?.policePresence ?? 0),
     );
@@ -83,13 +86,28 @@ describe('police', () => {
     expect(getHeat(sim.state, 'altstadt-nord')).toBeGreaterThan(getHeat(sim.state, 'bayenthal'));
   });
 
-  it('Heat sinkt mit der Zeit', () => {
+  it('Heat sinkt mit der Zeit, hohe Heat schneller (fester Abbau plus Anteil)', () => {
     const sim = quietGame();
     addHeat(sim.ctx('test'), 'lindenthal', 20);
-    sim.advance(10 * 60);
-    expect(getHeat(sim.state, 'lindenthal')).toBeCloseTo(20 - 10 * HEAT_DECAY_PER_HOUR);
+    sim.advance(60);
+    expect(getHeat(sim.state, 'lindenthal')).toBeCloseTo(20 - HEAT_DECAY_PER_HOUR - 20 * HEAT_DECAY_SHARE_PER_HOUR);
+    addHeat(sim.ctx('test'), 'kalk', 80);
+    const before = getHeat(sim.state, 'kalk');
+    sim.advance(60);
+    expect(before - getHeat(sim.state, 'kalk')).toBeGreaterThan(HEAT_DECAY_PER_HOUR + 20 * HEAT_DECAY_SHARE_PER_HOUR);
     sim.advance(3 * 24 * 60);
     expect(getHeat(sim.state, 'lindenthal')).toBe(0);
+  });
+
+  it('gleichmäßiger Verkauf pendelt sich ein, statt bis 100 durchzulaufen', () => {
+    const sim = quietGame();
+    // 60 Verkäufe zu je 3 Einheiten am Tag in der Altstadt (viel Polizei), drei Tage lang.
+    for (let h = 0; h < 72; h++) {
+      for (let i = 0; i < (h % 2 === 0 ? 3 : 2); i++) sell(sim, 'altstadt-nord', 3);
+      sim.advance(60);
+    }
+    expect(getHeat(sim.state, 'altstadt-nord')).toBeLessThan(40);
+    expect(getHeat(sim.state, 'altstadt-nord')).toBeGreaterThan(5);
   });
 
   it('Gewalt im Veedel treibt den Heat', () => {
@@ -366,14 +384,15 @@ describe('police: Härte nach Größe des Geschäfts (Auftrag 24)', () => {
     expect(nextTier(facts({ spots: 4 }), 0)).toBe(1);
     expect(nextTier(facts({ veedel: 1 }), 0)).toBe(1);
     expect(nextTier(facts({ lieutenants: 1 }), 0)).toBe(1);
-    expect(nextTier(facts({ veedel: 4, people: 6 }), 1)).toBe(2);
-    // Wer mit drei Leuten viel selbst verkauft und vier Veedel hält, ist noch kein Großhändler.
-    expect(nextTier(facts({ veedel: 4 }), 1)).toBe(1);
+    expect(nextTier(facts({ veedel: 6, people: 6 }), 1)).toBe(2);
+    // Vier Veedel in Köln machen noch keinen Großhändler, auch nicht, wer mit drei Leuten viel selbst verkauft.
+    expect(nextTier(facts({ veedel: 4, people: 6 }), 1)).toBe(1);
+    expect(nextTier(facts({ veedel: 6 }), 1)).toBe(1);
     expect(nextTier(facts({ spots: 8, berth: true, warehouses: 2 }), 1)).toBe(2);
     expect(nextTier(facts({ spots: 8, berth: false, warehouses: 2 }), 1)).toBe(1);
     // Zurück erst deutlich darunter.
-    expect(nextTier(facts({ veedel: 3, spots: 4, people: 6 }), 2)).toBe(2);
-    expect(nextTier(facts({ veedel: 2, spots: 4, people: 6 }), 2)).toBe(1);
+    expect(nextTier(facts({ veedel: 5, spots: 4, people: 6 }), 2)).toBe(2);
+    expect(nextTier(facts({ veedel: 4, spots: 4, people: 6 }), 2)).toBe(1);
     expect(nextTier(facts({ spots: 3, people: 4, revenue: 5000 }), 1)).toBe(1);
     expect(nextTier(facts({ spots: 3, people: 4, revenue: 3000 }), 1)).toBe(0);
   });

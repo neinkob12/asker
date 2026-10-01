@@ -48,11 +48,11 @@ export const DEALER_DOWN = { veedel: 0, spots: 3, people: 4, lieutenants: 0, war
  * mit zwei Läufern viel selbst verkauft, ist noch kein Großhändler) oder sehr vielen Spots plus Liegeplatz und mehreren
  * Lagern. Zurück erst unter KINGPIN_DOWN_VEEDEL Veedeln und unter KINGPIN_DOWN_SPOTS Spots.
  */
-export const KINGPIN_UP_VEEDEL = 4;
+export const KINGPIN_UP_VEEDEL = 6;
 export const KINGPIN_MIN_PEOPLE = 6;
 export const KINGPIN_UP_SPOTS = 8;
 export const KINGPIN_UP_WAREHOUSES = 2;
-export const KINGPIN_DOWN_VEEDEL = 3;
+export const KINGPIN_DOWN_VEEDEL = 5;
 export const KINGPIN_DOWN_SPOTS = 6;
 
 // --- Heat -----------------------------------------------------------------------------------------------------
@@ -67,8 +67,13 @@ export const VIOLENCE_HEAT = 15;
 export const CHASE_ESCAPED_HEAT = 6;
 /** So viel Heat bekommt jedes Veedel einer verpfiffenen Gang. */
 export const SNITCH_HEAT = 20;
-/** Heat sinkt pro Stunde um so viel. */
-export const HEAT_DECAY_PER_HOUR = 0.7;
+/** Heat sinkt pro Stunde um so viel … */
+export const HEAT_DECAY_PER_HOUR = 0.4;
+/**
+ * … plus diesen Anteil der aktuellen Heat. Dadurch pendelt sich die Heat bei gleichbleibendem Geschäft ein
+ * (Zufluss = Abbau), statt bis 100 durchzulaufen: je mehr Verkäufe im Veedel, desto höher das Gleichgewicht.
+ */
+export const HEAT_DECAY_SHARE_PER_HOUR = 0.04;
 
 // --- Kontrollen -----------------------------------------------------------------------------------------------
 
@@ -104,8 +109,11 @@ export const RAID_COOLDOWN = 24 * 60;
 export const RAID_HEAT_RELIEF = 25;
 /** Razzien je Stufe so viel seltener bzw. häufiger (Kleindealer, Händler, Großhändler). */
 export const RAID_CHANCE_BY_TIER = [0.4, 1, 1.5] as const;
-/** Heat pro Verkauf je Stufe: Ein Großhändler fällt mehr auf (Kleindealer, Händler, Großhändler). */
-export const SALE_HEAT_BY_TIER = [1, 1, 1.8] as const;
+/**
+ * Heat pro Verkauf je Stufe (Kleindealer, Händler, Großhändler): Wer klein anfängt, fällt kaum auf. Köln ist der
+ * Einstieg: Bis etwa Tag 16 soll die Heat bei 1–2 Flammen bleiben, auch als Großhändler pendelt sie sich bei 2–4 ein.
+ */
+export const SALE_HEAT_BY_TIER = [0.4, 0.5, 0.6] as const;
 /**
  * Beute anteilig statt fester Mengen. goodsShare: Anteil der Ware am Ort (aus dem Lager, das dem Spot bzw. Veedel am
  * nächsten liegt, höchstens goodsMax), warehouseShare: Anteil des Bestands in eigenen Lagern im Veedel (0 = keine
