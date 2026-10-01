@@ -4,6 +4,7 @@
 import { audio } from '../audio';
 import type { Command, CommandResult, GameSession, GameState, KeyValueStorage, LngLat } from '../core';
 import { sectionTitle } from './components/section';
+import { setHapticsEnabled } from './haptics';
 import type { NavEntry, NavKind } from './phone/navModel';
 import * as nav from './phone/navModel';
 import { type CameraMode, loadPrefs, savePrefs, type UiPrefs } from './prefs';
@@ -267,6 +268,7 @@ export class UiRuntime {
       buzz: 0,
       island: { expanded: false, pulse: null },
     };
+    setHapticsEnabled(prefs.vibration);
     this.api = this.createApi();
     session.subscribe((change) => {
       if (change === 'frame') {
@@ -617,6 +619,7 @@ export class UiRuntime {
       setVibration: (enabled) =>
         update(() => {
           ui.vibration = enabled;
+          setHapticsEnabled(enabled);
           this.savePrefs();
         }),
       zoomIn: () => this.map?.zoomIn(),

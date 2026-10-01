@@ -151,7 +151,7 @@ export function SettingsApp() {
       <Section icon="gear" color="system" title="Spiel">
         <Toggle
           label="Vibrieren"
-          hint="Das Handy wackelt bei neuen Nachrichten"
+          hint="Wackeln bei neuen Nachrichten, leise Klicks bei Schaltern und Gesten"
           checked={ui.state.vibration}
           onChange={ui.setVibration}
         />

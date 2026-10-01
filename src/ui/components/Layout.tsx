@@ -1,5 +1,6 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { useContext } from 'preact/hooks';
+import { haptic } from '../haptics';
 import { type CategoryColor, type ChipColor, Icon, IconChip } from './Icon';
 import type { IconName } from './icons';
 import { rememberSectionTitle, SectionContext } from './section';
@@ -361,7 +362,10 @@ export function Toggle(props: ToggleProps) {
       aria-checked={props.checked}
       disabled={props.disabled}
       class={`ui-toggle ${props.checked ? 'is-on' : ''}`}
-      onClick={() => props.onChange(!props.checked)}
+      onClick={() => {
+        haptic('selection');
+        props.onChange(!props.checked);
+      }}
     >
       {props.icon && <IconChip icon={props.icon} size="sm" color={props.checked ? 'money' : 'system'} />}
       <span class="ui-toggle__text">
