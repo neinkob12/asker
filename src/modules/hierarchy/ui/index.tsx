@@ -7,7 +7,6 @@ import { clock, formatEuro } from '../../../core';
 import {
   ActionSheet,
   Button,
-  Card,
   Empty,
   Group,
   ItemContent,
@@ -36,7 +35,6 @@ import {
   canBeLieutenant,
   getLieutenants,
   getPost,
-  LIEUTENANT_MIN_LEVEL,
   type LieutenantPost,
   lieutenantSatisfaction,
   lieutenantSpots,
@@ -52,8 +50,9 @@ import {
   teamOf,
 } from '../index';
 import { AppointSheet } from './AppointSheet';
-import { RightHandRow } from './RightHand';
+import './RightHand';
 import { RuleSheet } from './RuleSheet';
+import { StaffTree } from './Tree';
 import './hierarchy.css';
 
 declare module '../../../ui' {
@@ -95,48 +94,6 @@ export function LieutenantRow(props: { post: LieutenantPost }) {
         meta={`${postSummary(state, props.post)} · heute ${formatEuro(today.revenue)} Umsatz`}
       />
     </ListItem>
-  );
-}
-
-/** Leutnants im Tab "Leute" (bis zum Personal-Baum aus Etappe 6). */
-function LieutenantsSection() {
-  const { state } = useGame();
-  const [appointing, setAppointing] = useState(false);
-  const posts = getLieutenants(state);
-  const anyone = state.modules.staff.members.some((m) => canBeLieutenant(state, m.id).ok && !getPost(state, m.id));
-  return (
-    <Card title="Leutnants">
-      {posts.length === 0 ? (
-        <Empty
-          icon="crew"
-          action={
-            anyone ? (
-              <Button variant="primary" onClick={() => setAppointing(true)}>
-                Leutnant ernennen
-              </Button>
-            ) : undefined
-          }
-        >
-          Noch keine Leutnants. Ab Level {LIEUTENANT_MIN_LEVEL} kann jemand bis zu {MAX_SPOTS_PER_LIEUTENANT} Spots für
-          dich führen, einstellen und bestellen.
-        </Empty>
-      ) : (
-        <Group title="Leutnants" icon="crew" color="people" count={posts.length}>
-          <List>
-            <RightHandRow />
-            {posts.map((post) => (
-              <LieutenantRow key={post.staffId} post={post} />
-            ))}
-            {anyone && (
-              <ListItem action onClick={() => setAppointing(true)}>
-                <ItemContent icon="userPlus" color="people" title="Leutnant ernennen" />
-              </ListItem>
-            )}
-          </List>
-        </Group>
-      )}
-      <AppointSheet open={appointing} onClose={() => setAppointing(false)} />
-    </Card>
   );
 }
 
@@ -641,7 +598,7 @@ function VeedelLieutenants(props: { veedelId: string }) {
   );
 }
 
-registerSlot('tab:staff', { id: 'hierarchy.lieutenants', order: 20, component: LieutenantsSection });
+registerSlot('staff.tree', { id: 'hierarchy.tree', order: 10, component: StaffTree });
 registerSlot('staff.profile', { id: 'hierarchy.promote', order: 10, component: PromoteSection });
 registerSlot('veedel.veedelPanel', { id: 'hierarchy.veedel', order: 30, component: VeedelLieutenants });
 registerSlot('spots.spotPanel', { id: 'hierarchy.spotLieutenant', order: 45, component: SpotLieutenant });

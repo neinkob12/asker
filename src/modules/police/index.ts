@@ -780,7 +780,7 @@ function updateTier(ctx: Ctx): void {
   const contact = bonusProvider(ctx.state, 'raidWarning');
   messages.send(ctx, {
     contact: contact ? staffContact(contact) : TICKER,
-    text: contact ? `Hör zu: ${text}` : `Köln-Ticker: ${text}`,
+    text: contact ? `Hör zu: ${text}` : text,
   });
 }
 

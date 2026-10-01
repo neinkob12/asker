@@ -85,11 +85,15 @@ const BUSINESS_DAYS = `(() => {
 const LIEUTENANT = `(() => {
   const sim = window.koeln.session.sim;
   if (Object.keys(sim.state.modules.hierarchy.posts).length > 0) return;
-  const runner = sim.state.modules.staff.members.find((m) => m.role === 'runner' && m.status === 'active');
+  sim.state.wallet.dirty += 3000;
+  for (const spotId of ['zuelpicher', 'uni']) sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+  const runner = sim.state.modules.staff.members.find(
+    (m) => m.role === 'runner' && m.status === 'active' && m.assignment?.targetId === 'zuelpicher',
+  );
   if (!runner) return;
   runner.level = Math.max(runner.level, 2);
   sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: runner.id, spotIds: ['zuelpicher', 'neumarkt', 'uni'] } });
-  sim.advance(120);
+  sim.advance(180);
 })()`;
 
 /** Erste Gang (für die Gang-Seite, das Bündnis-Blatt). */
@@ -396,6 +400,14 @@ export const SCENES = [
     })()`,
   },
   {
+    name: 'personal-baum',
+    js: `(() => {
+      ${BUSINESS_DAYS};
+      ${LIEUTENANT};
+      window.koeln.runtime.api.selectTab('staff');
+    })()`,
+  },
+  {
     name: 'leutnant-einkauf',
     js: `(async () => {
       ${STEPS}
@@ -414,6 +426,7 @@ export const SCENES = [
       ${LIEUTENANT};
       window.koeln.runtime.api.openPanel('hierarchy.lieutenant', { staffId: Object.keys(window.koeln.session.sim.state.modules.hierarchy.posts)[0] });
       const row = await until(() => [...document.querySelectorAll('.phone .ui-item__title')].find((t) => t.textContent.includes('Nachfrage')));
+      await still();
       row?.closest('button')?.click();
       await sleep(500);
       await still();
@@ -432,6 +445,7 @@ export const SCENES = [
       other.level = Math.max(other.level, 2);
       window.koeln.runtime.api.openPanel('staff.profile', { staffId: other.id });
       const row = await until(() => [...document.querySelectorAll('.phone .ui-item__title')].find((t) => t.textContent.includes('Zum Leutnant')));
+      await still();
       row?.closest('button')?.click();
       await sleep(500);
       await still();

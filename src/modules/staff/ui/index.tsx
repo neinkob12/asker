@@ -25,6 +25,8 @@ import {
   registerTab,
   SegmentedControl,
   Select,
+  Slot,
+  SummaryTiles,
   useGame,
   useUi,
 } from '../../../ui';
@@ -62,10 +64,12 @@ declare module '../../../ui' {
   interface SlotRegistry {
     /** Abschnitte im Mitarbeiter-Profil (z.B. Beförderung). */
     'staff.profile': { staffId: string };
+    /** Personal als Baum (Ansicht "Aufbau" im Tab "Leute"): Boss, Rechte Hand, Leutnants, Spots ohne Leutnant. */
+    'staff.tree': Record<string, never>;
   }
 }
 
-type StatusFilter = 'all' | 'active' | 'trouble' | 'former';
+type View = 'tree' | 'all' | 'former';
 
 /** Gruppen der Übersicht: eine Rolle (oder alle Spezialisten) pro Gruppe, gleiche Symbole wie im Porträt. */
 const ROLE_GROUPS: { id: string; label: string; icon: string; match: (m: StaffMember) => boolean }[] = [
@@ -143,113 +147,137 @@ function StaffRowItem(props: { member: StaffMember }) {
   );
 }
 
-/** Übersicht: Kennzahlen, Filter nach Status und Veedel, Gruppen nach Rolle mit Porträt, Rolle und Status. */
+/**
+ * Übersicht: Kennzahlen und drei Ansichten. "Aufbau" zeigt das Personal als Baum (Boss, Rechte Hand, Leutnants mit
+ * Spots, Spots ohne Leutnant: Slot 'staff.tree' der Hierarchie), darunter "Fällt aus", freie Leute, Spezialisten und
+ * Weitere. "Alle" zeigt alle nach Rolle (mit Veedel-Filter), "Ehemalige" wer gegangen ist.
+ */
 function StaffOverview() {
   const { state } = useGame();
   const ui = useUi();
-  const [status, setStatus] = useState<StatusFilter>('all');
+  const [view, setView] = useState<View>('tree');
   const [veedel, setVeedel] = useState('');
   const current = getStaff(state);
-  const trouble = current.filter((m) => m.status === 'injured' || m.status === 'jailed');
-  const source =
-    status === 'former' ? [...getStaff(state, { status: 'quit' }), ...getStaff(state, { status: 'dead' })] : current;
+  const absent = current.filter(isAbsent);
+  const former = [...getStaff(state, { status: 'quit' }), ...getStaff(state, { status: 'dead' })];
   const veedelIds = [...new Set(current.map((m) => staffVeedel(state, m)).filter((v): v is string => !!v))].sort();
+  const source = view === 'former' ? former : current;
   const shown = source.filter((m) => {
-    if (status === 'active' && m.status !== 'active') return false;
-    if (status === 'trouble' && m.status !== 'injured' && m.status !== 'jailed') return false;
+    if (view !== 'all') return true;
     if (veedel === NO_VEEDEL && staffVeedel(state, m)) return false;
     if (veedel && veedel !== NO_VEEDEL && staffVeedel(state, m) !== veedel) return false;
     return true;
   });
-  // Wer ausfällt, steht in der eigenen Gruppe "Fällt aus" (mit Kosten, Rückkehr und Aktionen).
-  const absent = status === 'former' ? [] : shown.filter(isAbsent);
-  const groups = ROLE_GROUPS.map((g) => ({ ...g, members: shown.filter((m) => !isAbsent(m) && g.match(m)) })).filter(
-    (g) => g.members.length > 0,
+  const groups = ROLE_GROUPS.map((g) => ({
+    ...g,
+    members: shown.filter((m) => (view === 'former' || !isAbsent(m)) && g.match(m)),
+  })).filter((g) => g.members.length > 0);
+  // Aufbau: Wer nicht im Baum steht (Leutnants, Rechte Hand, an Spots) und nicht ausfällt.
+  const free = current.filter((m) => m.status === 'active' && !m.assignment && !isSpecialist(m.role));
+  const specialists = current.filter((m) => isSpecialist(m.role) && !isAbsent(m));
+  const others = current.filter(
+    (m) =>
+      !isAbsent(m) &&
+      (m.assignment?.kind === 'warehouse' || m.assignment?.kind === 'delivery' || m.assignment?.kind === 'transport'),
   );
   return (
     <div class="staff-overview">
-      <div class="staff-summary">
-        <div class="staff-summary__item">
-          <IconChip icon="users" color="people" size="sm" />
-          <strong>{current.length}</strong>
-          <span>Team</span>
-        </div>
-        <div class="staff-summary__item">
-          <IconChip icon="coinEuro" color="money" size="sm" />
-          <strong>{formatEuro(payrollDue(state))}</strong>
-          <span>Lohn/Tag</span>
-        </div>
-        <div class="staff-summary__item">
-          <IconChip
-            icon={trouble.length > 0 ? 'alert' : 'checkCircle'}
-            color={trouble.length > 0 ? 'warn' : 'money'}
-            size="sm"
-          />
-          <strong>{trouble.length}</strong>
-          <span>Ausfälle</span>
-        </div>
-      </div>
-      {current.length > 0 && (
+      <SummaryTiles
+        items={[
+          { icon: 'users', color: 'people', value: String(current.length), label: 'Team' },
+          { icon: 'coinEuro', color: 'money', value: formatEuro(payrollDue(state)), label: 'Lohn/Tag' },
+          {
+            icon: absent.length > 0 ? 'alert' : 'checkCircle',
+            color: absent.length > 0 ? 'warn' : 'money',
+            value: String(absent.length),
+            label: 'Ausfälle',
+          },
+        ]}
+      />
+      {(current.length > 0 || former.length > 0) && (
         <SegmentedControl
           wide
-          aria-label="Status"
+          aria-label="Ansicht"
           options={[
-            { value: 'all' as StatusFilter, label: 'Alle' },
-            { value: 'active' as StatusFilter, label: 'Aktiv' },
-            { value: 'trouble' as StatusFilter, label: 'Ausgefallen', badge: trouble.length },
-            { value: 'former' as StatusFilter, label: 'Ehemalige' },
+            { value: 'tree' as View, label: 'Aufbau', badge: absent.length },
+            { value: 'all' as View, label: 'Alle' },
+            { value: 'former' as View, label: 'Ehemalige' },
           ]}
-          value={status}
-          onChange={setStatus}
+          value={view}
+          onChange={setView}
         />
       )}
-      {veedelIds.length > 1 && (
-        <Select
-          wide
-          label="Veedel"
-          value={veedel}
-          options={[
-            { value: '', label: 'Alle Veedel' },
-            ...veedelIds.map((id) => ({ value: id, label: veedelName(id) })),
-            { value: NO_VEEDEL, label: 'Ohne Einsatz' },
-          ]}
-          onChange={setVeedel}
-        />
-      )}
-      <AbsentGroup members={absent} />
-      {groups.length === 0 && absent.length === 0 ? (
+      {current.length === 0 && view !== 'former' ? (
         <Empty
           icon="users"
           action={
-            current.length === 0 ? (
-              <Button variant="primary" onClick={() => ui.openPhone('recruiting.contacts')}>
-                Kontakte öffnen
-              </Button>
-            ) : undefined
+            <Button variant="primary" onClick={() => ui.openPhone('recruiting.contacts')}>
+              Kontakte öffnen
+            </Button>
           }
         >
-          {current.length === 0
-            ? 'Noch niemand im Team. Läufer heuerst du direkt an einem Spot an, Bewerber findest du bei den Kontakten.'
-            : 'Niemand passt zum Filter.'}
+          Noch niemand im Team. Läufer heuerst du direkt an einem Spot an, Bewerber findest du bei den Kontakten.
         </Empty>
+      ) : view === 'tree' ? (
+        <>
+          <Slot name="staff.tree" props={{}} />
+          <AbsentGroup members={absent} />
+          <PeopleGroup title="Frei" icon="user" members={free} note="Ohne Einsatz. Leutnants holen sich freie Leute." />
+          <PeopleGroup title="Spezialisten" icon="scale" members={specialists} />
+          <PeopleGroup title="Weitere" icon="truck" members={others} note="Lager, Lieferungen und Fahrten." />
+          <SpecialistBonuses />
+        </>
       ) : (
-        groups.map((g) => (
-          <section key={g.id} class="staff-group">
-            <header class="staff-group__head">
-              <IconChip icon={g.icon} color="people" solid size="xs" />
-              <h3 class="staff-group__title">{g.label}</h3>
-              <span class="staff-group__count">{g.members.length}</span>
-            </header>
-            <List>
-              {g.members.map((m) => (
-                <StaffRow key={m.id} member={m} />
-              ))}
-            </List>
-          </section>
-        ))
+        <>
+          {view === 'all' && veedelIds.length > 1 && (
+            <Select
+              wide
+              label="Veedel"
+              value={veedel}
+              options={[
+                { value: '', label: 'Alle Veedel' },
+                ...veedelIds.map((id) => ({ value: id, label: veedelName(id) })),
+                { value: NO_VEEDEL, label: 'Ohne Einsatz' },
+              ]}
+              onChange={setVeedel}
+            />
+          )}
+          {view === 'all' && <AbsentGroup members={absent} />}
+          {groups.length === 0 ? (
+            <Empty icon="users">{view === 'former' ? 'Noch niemand ist gegangen.' : 'Niemand passt zum Filter.'}</Empty>
+          ) : (
+            groups.map((g) => (
+              <section key={g.id} class="staff-group">
+                <header class="staff-group__head">
+                  <IconChip icon={g.icon} color="people" solid size="xs" />
+                  <h3 class="staff-group__title">{g.label}</h3>
+                  <span class="staff-group__count">{g.members.length}</span>
+                </header>
+                <List>
+                  {g.members.map((m) => (
+                    <StaffRow key={m.id} member={m} />
+                  ))}
+                </List>
+              </section>
+            ))
+          )}
+        </>
       )}
-      <SpecialistBonuses />
     </div>
+  );
+}
+
+/** Gruppe von Leuten im Aufbau (Frei, Spezialisten, Weitere), leer = nichts. */
+function PeopleGroup(props: { title: string; icon: string; members: StaffMember[]; note?: string }) {
+  if (props.members.length === 0) return null;
+  return (
+    <Group title={props.title} icon={props.icon} color="people" count={props.members.length} note={props.note}>
+      <List>
+        {props.members.map((m) => (
+          <StaffRow key={m.id} member={m} />
+        ))}
+      </List>
+    </Group>
   );
 }
 

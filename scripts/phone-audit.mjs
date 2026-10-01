@@ -122,7 +122,9 @@ function audit() {
       const interactive =
         el.matches('button, a[href], input, select, textarea, [role="switch"], [role="button"], [tabindex]') &&
         !el.disabled &&
-        !el.closest('[aria-hidden="true"]');
+        !el.closest('[aria-hidden="true"]') &&
+        // Hinter einem großen Blatt ist die Seite inert (nicht bedienbar), dort gibt es keine Ziele.
+        !el.closest('[inert]');
       if (interactive && !el.matches('input[type="range"]')) {
         const r = el.getBoundingClientRect();
         // Eine Trefferfläche darf über ::before/::after größer sein als das sichtbare Element (z.B. die Island)
