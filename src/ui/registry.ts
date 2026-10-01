@@ -187,6 +187,22 @@ export interface SearchProvider {
   items: (state: GameState) => SearchResult[];
 }
 
+/**
+ * Eintrag im Menü "Ebenen" der Kartensteuerung (Look "Glas"): z.B. Veedel nach Kontrolle oder nach Heat einfärben.
+ * Einträge derselben Gruppe schließen sich aus (Auswahl), `toggle: true` ist ein Schalter.
+ */
+export interface MapLayerOption {
+  id: string;
+  order: number;
+  /** Überschrift der Gruppe, z.B. "Veedel einfärben". */
+  group: string;
+  label: string;
+  icon?: string;
+  toggle?: boolean;
+  active: (ui: UiState) => boolean;
+  select: (api: UiApi, ui: UiState) => void;
+}
+
 /** Kennzahl für den Ergebnis-Bildschirm (Game Over, Sieg) und die Übersicht. */
 export interface GameStat {
   id: string;
@@ -231,6 +247,7 @@ export const advisors = new Registry<Advisor>();
 export const liveActivitySources = new Registry<LiveActivitySource>();
 export const searchProviders = new Registry<SearchProvider>();
 export const gameStats = new Registry<GameStat>();
+export const mapLayerOptions = new Registry<MapLayerOption>();
 const slots = new Map<string, Registry<SlotContribution>>();
 const reactions = new Map<string, Map<string, EventReaction<EventType>>>();
 
@@ -299,6 +316,11 @@ export function collectLiveActivities(state: GameState): LiveActivity[] {
 /** Einträge für die Suche (⌘K / Strg+K) anmelden, z.B. Spots, Veedel, Personen. */
 export function registerSearch(provider: SearchProvider): void {
   searchProviders.register(provider);
+}
+
+/** Eintrag im Menü "Ebenen" der Kartensteuerung anmelden (z.B. Kontrolle/Heat der Veedel). */
+export function registerMapLayerOption(option: MapLayerOption): void {
+  mapLayerOptions.register(option);
 }
 
 /** Kennzahl für den Ergebnis-Bildschirm anmelden (z.B. Umsatz, Veedel, Leute). */

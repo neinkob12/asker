@@ -432,7 +432,7 @@
   --dock-duration: var(--spring-dock-duration, var(--duration-slow));
 
   /* Layout */
-  --hud-height: 48px;
+  --hud-height: 66px; /* Höhe der oberen HUD-Reihe (Uhr-Kapsel, Kacheln) */
   --dock-width: 0px;
   --sidebar-width: 360px;
   --panel-width: 360px;
