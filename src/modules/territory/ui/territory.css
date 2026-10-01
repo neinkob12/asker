@@ -109,3 +109,161 @@
   font-size: var(--font-size-xs);
   color: var(--color-marker-muted);
 }
+
+/* ---------------------------------------------------------------- Veedel übernommen (Look "Glas") */
+/* Goldener Schein über der ganzen Kartenfläche, darauf Name und Glas-Leiste (MapDialog ohne Karte) */
+.ui-map-dialog:has(.takeover) .ui-map-dialog__scrim {
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 45%, var(--takeover-glow), transparent 75%),
+    radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.75) 80%);
+  animation: ui-fade-in var(--duration-slow) var(--ease-out);
+}
+.ui-map-dialog__card.takeover {
+  width: min(780px, 100%);
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  text-align: center;
+}
+.takeover__glow {
+  position: absolute;
+  inset: -20% -10%;
+  background: radial-gradient(closest-side, var(--takeover-glow), transparent);
+  pointer-events: none;
+}
+.takeover__kicker {
+  position: relative;
+  margin: 0;
+  font-family: var(--font-hud);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--hud-ink);
+}
+.takeover__name {
+  position: relative;
+  margin: 6px 0 4px;
+  font-family: var(--font-hud-display);
+  font-size: 92px;
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--hud-gold);
+  text-shadow:
+    0 0 28px var(--takeover-glow),
+    0 4px 18px rgba(0, 0, 0, 0.6);
+  animation: takeover-in 700ms var(--ease-spring) both;
+}
+@keyframes takeover-in {
+  from {
+    opacity: 0;
+    transform: scale(1.25);
+    letter-spacing: 0.2em;
+  }
+}
+.takeover__line {
+  position: relative;
+  max-width: 54ch;
+  margin: 0 auto 22px;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--hud-ink);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+}
+.takeover__bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 14px 14px 20px;
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass-strong);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  text-align: left;
+}
+.takeover__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.takeover__stat.is-wide {
+  flex: 1;
+}
+.takeover__stat strong {
+  font-family: var(--font-hud-display);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.takeover__stat .hud-segments {
+  display: flex;
+  gap: 3px;
+}
+.takeover__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.takeover__label.is-place {
+  color: var(--cat-place);
+}
+.takeover__label.is-brand {
+  color: var(--cat-brand);
+}
+.takeover__label.is-danger {
+  color: var(--cat-danger);
+}
+.takeover__reaction {
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--hud-ink-2);
+}
+.takeover__next {
+  flex: none;
+  min-height: 44px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: var(--hud-radius-button);
+  background: var(--hud-gold);
+  color: var(--hud-gold-on);
+  font-family: var(--font-hud);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .ui-map-sheet .takeover__name {
+    font-size: 56px;
+  }
+  .ui-map-sheet .takeover__glow,
+  .ui-map-sheet .takeover__kicker {
+    display: none;
+  }
+  .ui-map-sheet .takeover__bar {
+    flex-wrap: wrap;
+  }
+  .ui-map-sheet .takeover__next {
+    width: 100%;
+  }
+  .ui-map-sheet .takeover__kicker,
+  .ui-map-sheet .takeover__name,
+  .ui-map-sheet .takeover__line {
+    text-align: center;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .takeover__name {
+    animation: none;
+  }
+}

@@ -66,6 +66,67 @@
   transition: right var(--dock-duration) var(--dock-ease);
 }
 
+/* Überlagerungen der freien Kartenfläche (Slot map.overlay): Razzia-Banner, Tracking-Karte … */
+.shell-map-overlays {
+  position: fixed;
+  z-index: calc(var(--z-hud) - 1);
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: max(0px, calc(var(--map-right) - var(--gap)));
+  pointer-events: none;
+  transition: right var(--dock-duration) var(--dock-ease);
+}
+.shell-map-overlays > * {
+  pointer-events: none;
+}
+
+/* Dialog über der Kartenfläche (MapDialog): Karte aus Glas in der Mitte, das Handy bleibt frei */
+.ui-map-dialog {
+  position: fixed;
+  z-index: var(--z-dialog);
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: max(0px, calc(var(--map-right) - var(--gap)));
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  overflow-y: auto;
+  transition: right var(--dock-duration) var(--dock-ease);
+}
+.ui-map-dialog__scrim {
+  position: absolute;
+  inset: 0;
+}
+.ui-map-dialog.is-dim .ui-map-dialog__scrim {
+  background: radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.6) 75%);
+  animation: ui-fade-in var(--duration) var(--ease-out);
+}
+.ui-map-dialog__card {
+  position: relative;
+  width: min(560px, 100%);
+  padding: 22px 24px 20px;
+  border-radius: 26px;
+  background: var(--hud-glass-strong);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  animation: pop-in var(--duration-slow) var(--ease-out);
+}
+.ui-map-sheet {
+  position: fixed;
+  z-index: calc(var(--z-notification) + 1);
+}
+.ui-map-sheet .ui-sheet {
+  background: var(--hud-glass-solid);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+}
+
 /* ---------------------------------------------------------------- HUD (Look "Glas") */
 /*
  * Drei Glas-Gruppen in der freien Kartenfläche links vom Handy: Geld-Kapsel (oben links), Uhr-Kapsel (Mitte),

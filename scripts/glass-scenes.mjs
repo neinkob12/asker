@@ -41,6 +41,22 @@ export const PRELUDE = `
     for (let i = 0; i < 400 && state().modules.logistics.cargo.length === 0; i++) sim.advance(30);
   };
   const port = { lng: 6.9712, lat: 50.9862 };
+  /** Razzia im Veedel des Neumarkts (Läufer dort): bis genau zur Razzia vorspulen. */
+  const policeRaid = async () => {
+    const spots = await import('/src/modules/spots/index.ts');
+    const veedelId = spots.getSpot(state(), 'neumarkt').veedelId;
+    state().modules.police.plannedRaids[veedelId] = state().time + 1;
+    for (let i = 0; i < 120 && state().modules.police.plannedRaids[veedelId] !== undefined; i++) sim.advance(1);
+  };
+  /** Das Veedel des Neumarkts übernehmen: Einfluss hoch, bis zur nächsten vollen Stunde vorspulen. */
+  const takeover = async () => {
+    const spots = await import('/src/modules/spots/index.ts');
+    const territory = await import('/src/modules/territory/index.ts');
+    const veedelId = spots.getSpot(state(), 'neumarkt').veedelId;
+    territory.addInfluence(sim.ctx('territory'), veedelId, territory.PLAYER_FACTION, 100);
+    // Ereignisse aus sim.ctx kommen erst mit dem nächsten Schritt an.
+    sim.advance(1);
+  };
   /** Überfall der Hafenkolonne auf den Neumarkt, mit Briefing; Läufer vor Ort. Gibt die ID zurück. */
   const raid = async () => {
     const enc = await import('/src/modules/encounters/index.ts');
@@ -119,6 +135,28 @@ export const SCENES = [
   {
     name: 'konfrontation-weggelegt',
     js: `sim.advance(${TIMES.tag}); busy(); api.closePhone(); await raid();`,
+    sizes: ['desktop'],
+  },
+  {
+    name: 'razzia-alarm',
+    js: `sim.advance(${TIMES.nacht}); busy(); await policeRaid();`,
+    wait: 1500,
+    after: 'api.closeDialog();',
+  },
+  {
+    name: 'razzia-bilanz',
+    js: `sim.advance(${TIMES.tag}); busy(); await policeRaid();`,
+    wait: 5500,
+  },
+  {
+    name: 'uebernahme',
+    js: `sim.advance(${TIMES.nacht}); busy(); await takeover();`,
+    wait: 3000,
+  },
+  {
+    name: 'uebernahme-tag',
+    js: `sim.advance(${TIMES.tag}); busy(); await takeover();`,
+    wait: 3000,
     sizes: ['desktop'],
   },
   {

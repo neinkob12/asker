@@ -76,6 +76,7 @@ export {
   type ToggleProps,
   type Tone,
 } from './Layout';
+export { MapDialog, type MapDialogProps } from './MapDialog';
 export { NotificationCenter, type NotificationCenterProps, type NotificationItem } from './NotificationCenter';
 export { BarActionsContext, Portal, PortalHostContext } from './Portal';
 export { contrastRatio, readableOn } from './readable';

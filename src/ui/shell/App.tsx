@@ -11,6 +11,7 @@ import { MapControls } from './MapControls';
 import { MapView } from './MapView';
 import { CoachHighlight } from './NextStep';
 import { Palette } from './Palette';
+import { Slot } from './Slot';
 
 /**
  * Oberste Komponente: Karte, HUD, Kartensteuerung, Handy (mit allen Bereichen und Details), Suche, Dialoge.
@@ -39,6 +40,9 @@ export function App(props: { runtime: UiRuntime }) {
             <ErrorBoundary name="Kartensteuerung" silent>
               <MapControls />
             </ErrorBoundary>
+            <div class="shell-map-overlays">
+              <Slot name="map.overlay" />
+            </div>
             <ErrorBoundary name="Handy">
               <PhoneFrame />
             </ErrorBoundary>

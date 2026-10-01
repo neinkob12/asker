@@ -41,6 +41,7 @@ import {
   playerPresence,
 } from '../index';
 import { veedelLayer } from './map';
+import './takeover';
 import './territory.css';
 import { getMapView, MAP_VIEW_OPTIONS, onMapViewChange, setMapView, type VeedelMapView } from './view';
 

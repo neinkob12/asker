@@ -23,6 +23,12 @@ export interface SlotRegistry {
   'phone.home': Record<string, never>;
   /** Zusätzliche Abschnitte in den Einstellungen (Dialog und Handy-App). */
   'core.settings': Record<string, never>;
+  /**
+   * Überlagerungen der freien Kartenfläche (Look "Glas"), z.B. Razzia-Banner oder Tracking-Karte einer Lieferung.
+   * Der Bereich reicht bis --map-right (neben dem angedockten Handy) und folgt ihm; die Beiträge positionieren sich
+   * selbst (position: absolute) und sind standardmäßig nicht anklickbar (pointer-events für Knöpfe selbst setzen).
+   */
+  'map.overlay': Record<string, never>;
 }
 
 export type PanelId = keyof PanelRegistry & string;
