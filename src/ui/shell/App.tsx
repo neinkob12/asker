@@ -4,15 +4,19 @@ import { RuntimeContext } from '../hooks';
 import { NotificationBanner } from '../phone/Notification';
 import { PhoneFrame } from '../phone/PhoneFrame';
 import type { UiRuntime } from '../runtime';
-import { DialogHost, PickBanner, Toasts } from './Hosts';
+import { DialogHost, PickBanner } from './Hosts';
 import { Hud } from './Hud';
 import { useIsMobile } from './layout';
 import { MapControls } from './MapControls';
 import { MapView } from './MapView';
 import { CoachHighlight } from './NextStep';
 import { Palette } from './Palette';
+import { Slot } from './Slot';
 
-/** Oberste Komponente: Karte, HUD, Kartensteuerung, Handy (mit allen Bereichen und Details), Suche, Dialoge, Toasts. */
+/**
+ * Oberste Komponente: Karte, HUD, Kartensteuerung, Handy (mit allen Bereichen und Details), Suche, Dialoge.
+ * Meldungen (ui.toast) erscheinen als Banner des Handys (phone/Notification.tsx), nicht über der Karte.
+ */
 export function App(props: { runtime: UiRuntime }) {
   const [, setVersion] = useState(0);
   useEffect(() => props.runtime.subscribe(() => setVersion((v) => v + 1)), [props.runtime]);
@@ -27,6 +31,7 @@ export function App(props: { runtime: UiRuntime }) {
     <RuntimeContext.Provider value={runtime}>
       <div class={classes.join(' ')}>
         <MapView />
+        <div class="shell-vignette" aria-hidden="true" />
         {hasGame && (
           <>
             <ErrorBoundary name="HUD">
@@ -35,6 +40,9 @@ export function App(props: { runtime: UiRuntime }) {
             <ErrorBoundary name="Kartensteuerung" silent>
               <MapControls />
             </ErrorBoundary>
+            <div class="shell-map-overlays">
+              <Slot name="map.overlay" />
+            </div>
             <ErrorBoundary name="Handy">
               <PhoneFrame />
             </ErrorBoundary>
@@ -53,7 +61,6 @@ export function App(props: { runtime: UiRuntime }) {
         <ErrorBoundary name="Dialog">
           <DialogHost />
         </ErrorBoundary>
-        <Toasts />
       </div>
     </RuntimeContext.Provider>
   );

@@ -1,9 +1,14 @@
-// HUD: eine schmale Leiste über der Karte. Links dauerhaft nur das Wichtigste (Geld, Heat: placement 'main') und
-// Warnungen ('alert'), rechts das Spieltempo und das Menü. Alles andere (Lager, Ruf, Köln-Fortschritt, Uhrzeit,
-// Wetter, Meldungen) steht im Spiel-Handy.
+// HUD im Look "Glas": drei Gruppen in der freien Kartenfläche links vom Handy (--map-right ist die Grenze).
+//   oben links   Geld-Kapsel: Geld und Heat (placement 'main'), darunter Warnungen ('alert')
+//   oben Mitte   Uhr-Kapsel: Wochentag, Tag, Uhrzeit, Wetter ('time'), Spieltempo, Menü
+//   oben rechts  Kennzahl-Kacheln Lager, Ruf, Köln ('more'; stehen zusätzlich auf dem Startbildschirm des Handys)
+// Ist die Kartenfläche schmal, rücken die Kacheln unter die Uhr (Container-Query in shell.css). Am Handy-Bildschirm
+// bleiben nur Geld und Uhr kompakt, der Rest steht im Handy. Meldungen gibt es über der Karte nicht mehr: Sie laufen
+// über Banner und Island des Handys und die App Meldungen.
 
 import type { ComponentChildren } from 'preact';
 import { SPEEDS } from '../../core';
+import { ClockHud } from '../builtin/CoreHud';
 import { Badge, ErrorBoundary, Icon } from '../components';
 import { useRuntime } from '../hooks';
 import { type HudItem, hudItems } from '../registry';
@@ -88,7 +93,8 @@ function SpeedControl() {
   );
 }
 
-function MenuButton() {
+/** Menü (Meldungen, Suche, Spielstände, Einstellungen, Ton). Am Handy-Bildschirm steht es in der Kartensteuerung. */
+export function MenuButton(props: { up?: boolean }) {
   const { ui, api } = useRuntime();
   const audio = useAudio();
   const open = ui.popover === 'menu';
@@ -109,7 +115,7 @@ function MenuButton() {
       >
         <Icon name="menu" />
       </button>
-      <Popover id="menu" align="right" class="hud-menu">
+      <Popover id="menu" align="right" class={`hud-menu ${props.up ? 'hud-popover--up' : ''}`}>
         <button type="button" class="hud-menu__item" onClick={run(() => api.openPhone('core.alerts'))}>
           <Icon name="bell" /> Meldungen
           <Badge count={unread} tone="warn" />
@@ -137,19 +143,34 @@ export function Hud() {
   const items = hudItems.list();
   const main = items.filter((i) => hudPlacement(i) === 'main');
   const alerts = items.filter((i) => hudPlacement(i) === 'alert');
+  const time = items.filter((i) => hudPlacement(i) === 'time');
+  const more = items.filter((i) => hudPlacement(i) === 'more');
   return (
-    <header class={`hud ${mobile ? 'hud--mobile' : 'hud--desktop'}`}>
-      <div class="hud__bar hud__bar--main">
-        <HudItems items={main} />
-      </div>
-      {alerts.length > 0 && (
-        <div class="hud__alerts">
-          <HudItems items={alerts} />
+    <header class={`hud hud--glass ${mobile ? 'hud--mobile' : 'hud--desktop'}`}>
+      <div class="hud__grid">
+        <div class="hud-capsule hud-capsule--money">
+          <HudItems items={main} />
         </div>
-      )}
-      <div class="hud__bar hud__bar--controls">
-        <SpeedControl />
-        <MenuButton />
+        <div class="hud-capsule hud-capsule--clock">
+          <ClockHud />
+          {!mobile && time.length > 0 && (
+            <div class="hud-capsule__time">
+              <HudItems items={time} />
+            </div>
+          )}
+          <SpeedControl />
+          {!mobile && <MenuButton />}
+        </div>
+        {!mobile && more.length > 0 && (
+          <div class="hud-tiles">
+            <HudItems items={more} />
+          </div>
+        )}
+        {alerts.length > 0 && (
+          <div class="hud__alerts">
+            <HudItems items={alerts} />
+          </div>
+        )}
       </div>
     </header>
   );

@@ -1,34 +1,38 @@
-// Oberfläche der Konfrontationen: ein Dialog, der sich bei jeder neuen Konfrontation öffnet und das Spiel pausiert.
-// Erst die Entscheidung "selbst hin oder nicht", dann Runden mit Handlungen, am Ende das Ergebnis.
-// Dazu eine Warnung im HUD, falls eine Konfrontation offen ist, der Dialog aber nicht (z.B. nach dem Laden).
+// Oberfläche der Konfrontationen im Look "Glas" mit leichtem Noir-Anteil: eine Akte über der Kartenfläche (nicht
+// über dem Handy; das ist solange abgedunkelt und gesperrt, das Spiel pausiert). Am Handy-Bildschirm dieselbe Akte als
+// Blatt (Sheet, große Höhe). Ablauf: Briefing "Wie gehst du vor?" mit den Wegen des Anlasses (selbst hin, Leute machen
+// lassen, Verstärkung, freikaufen, Bullen rufen, Spot räumen), dann Runden mit Handlungen, am Ende ein Stempel.
+// Dazu eine Warnung im HUD, falls eine Konfrontation offen ist, die Akte aber nicht (z.B. nach dem Laden).
+// Die Schriften DM Serif Display und Courier Prime gibt es nur hier (--font-file*).
 
-import { formatAmount, formatEuro, formatPercent } from '../../../core';
+import type { ComponentChildren } from 'preact';
+import { formatAmount, formatEuro, formatPercent, type GameState } from '../../../core';
 import { mapEffects } from '../../../map';
 import {
   Avatar,
   Button,
-  Dialog,
-  DuelBar,
-  Hint,
   Icon,
-  IconChip,
   onGameEvent,
   registerDialog,
   registerHudItem,
-  Stamp,
+  Sheet,
   soundOnEvent,
-  Tag,
   useGame,
+  useIsMobile,
   useUi,
 } from '../../../ui';
 import { getSpot } from '../../spots';
-import { getVeedel } from '../../veedel';
+import { getVeedel, veedelName } from '../../veedel';
 import {
   actionChance,
   activeEncounters,
   availableActions,
+  BACKUP_MAX_PEOPLE,
+  type BriefingOption,
+  briefingOptions,
   ENCOUNTER_KINDS,
   type Encounter,
+  type EncounterMode,
   getEncounter,
   getEncounterAction,
   type Participant,
@@ -57,137 +61,235 @@ function conditionText(p: Participant): string {
   return 'fit';
 }
 
-function ParticipantRow(props: { p: Participant }) {
-  const { p } = props;
-  const s = p.stats;
-  return (
-    <li class={`enc-person enc-person--${p.killed ? 'dead' : p.condition}`}>
-      <Avatar name={p.isPlayer ? 'Du' : p.name} size="sm" image={p.isPlayer ? 'user' : undefined} />
-      <span class="enc-person__main">
-        <span class="enc-person__name">{p.isPlayer ? 'Du' : p.name}</span>
-        <span class="enc-person__state">{conditionText(p)}</span>
-      </span>
-      <span class="enc-person__stats" title="Kraft · Tempo · Charisma · Vorsicht">
-        K{s.strength} T{s.speed} C{s.charisma} V{s.caution}
-      </span>
-    </li>
-  );
+/** Ort ohne Präposition, z.B. "Neumarkt" statt "am Neumarkt". */
+function placeName(state: GameState, encounter: Encounter): string {
+  const spot = encounter.request.spotId ? getSpot(state, encounter.request.spotId) : undefined;
+  if (spot) return spot.name;
+  if (encounter.request.veedelId) return veedelName(encounter.request.veedelId);
+  return encounter.place.replace(/^(am|an der|in der|im|in|auf der)\s+/i, '');
 }
 
-function Sides(props: { encounter: Encounter }) {
-  const { encounter } = props;
-  const o = encounter.opponent;
-  return (
-    <div class="enc-sides">
-      <section class="enc-side">
-        <h3 class="enc-side__title">
-          <Icon name="shield" /> Deine Seite
-        </h3>
-        {encounter.participants.length === 0 ? (
-          <p class="enc-side__empty">Niemand vor Ort.</p>
-        ) : (
-          <ul class="enc-people">
-            {encounter.participants.map((p) => (
-              <ParticipantRow key={p.id} p={p} />
-            ))}
-          </ul>
-        )}
-      </section>
-      <section class="enc-side enc-side--enemy">
-        <h3 class="enc-side__title">
-          <Icon name="skull" /> {o.label}
-        </h3>
-        <p class="enc-enemy">
-          <strong>{o.count}</strong> von {o.startCount} stehen
-          {o.down > 0 ? `, ${o.down} am Boden` : ''}
-        </p>
-        <Tag tone="bad" icon="fist">
-          Kampfkraft {o.strength}
-        </Tag>
-      </section>
-    </div>
-  );
+/** Reiter der Akte: "Akte 0912 · Neumarkt · Runde 1 von 5". */
+function fileTab(state: GameState, encounter: Encounter): string {
+  const number = String(encounter.id % 10000).padStart(4, '0');
+  const stage =
+    encounter.phase === 'briefing'
+      ? 'Briefing'
+      : encounter.phase === 'done'
+        ? 'Abgeschlossen'
+        : `Runde ${Math.min(encounter.round + 1, encounter.maxRounds)} von ${encounter.maxRounds}`;
+  return `Akte ${number} · ${placeName(state, encounter)} · ${stage}`;
 }
 
-function Stakes(props: { encounter: Encounter }) {
-  const stakes = props.encounter.request.stakes;
+function stakesText(encounter: Encounter): string | null {
+  const stakes = encounter.request.stakes;
   if (!stakes || (!stakes.money && !stakes.goods)) return null;
-  const parts = [];
+  const parts: string[] = [];
   if (stakes.money) parts.push(formatEuro(stakes.money));
   if (stakes.goods) parts.push(formatAmount(stakes.goods));
-  return <p class="enc-stakes">Es geht um: {parts.join(' und ')}</p>;
+  return parts.join(' und ');
 }
 
-function Log(props: { encounter: Encounter }) {
-  const log = props.encounter.log;
-  if (log.length === 0) return null;
+// ---------------------------------------------------------------------------------------------
+// Kopf: Kicker, Titel, Lage, Polaroids
+
+function Polaroid(props: { side: 'own' | 'foe'; name: string; caption: ComponentChildren; avatar: ComponentChildren }) {
   return (
-    <ol class="enc-log" aria-label="Verlauf">
-      {[...log].reverse().map((entry) => {
-        const label = getEncounterAction(props.encounter.kind, entry.actionId)?.label;
-        return (
-          <li key={entry.round} class={`enc-log__entry ${entry.success ? 'is-good' : 'is-bad'}`}>
-            {label && (
-              <span class="enc-log__head">
-                Runde {entry.round}: {label} ({formatPercent(entry.chance)}) {entry.success ? '✓' : '✗'}
-              </span>
-            )}
-            <span>{entry.text}</span>
-          </li>
-        );
-      })}
-    </ol>
+    <figure class={`enc-polaroid enc-polaroid--${props.side}`}>
+      <div class="enc-polaroid__photo">{props.avatar}</div>
+      <figcaption>
+        <strong>{props.name}</strong>
+        <span>{props.caption}</span>
+      </figcaption>
+    </figure>
   );
 }
+
+function Head(props: { encounter: Encounter }) {
+  const { encounter } = props;
+  const kind = ENCOUNTER_KINDS[encounter.kind];
+  const stakes = stakesText(encounter);
+  const lead = encounter.participants.find((p) => p.isPlayer) ?? encounter.participants[0];
+  const others = encounter.participants.length - (lead ? 1 : 0);
+  const o = encounter.opponent;
+  return (
+    <header class="enc-head">
+      <div class="enc-head__text">
+        <p class="enc-kicker">
+          Konfrontation ·{' '}
+          {stakes
+            ? `Einsatz ${stakes}`
+            : encounter.request.veedelId
+              ? veedelName(encounter.request.veedelId)
+              : encounter.place}
+        </p>
+        <h2 class="enc-title" id="enc-title">
+          {kind?.name ?? 'Konfrontation'}
+        </h2>
+        <p class="enc-situation">{encounter.situation}</p>
+      </div>
+      <div class="enc-polaroids">
+        <Polaroid
+          side="own"
+          name={lead ? (lead.isPlayer ? 'Du' : lead.name.split(' ')[0]) : 'Niemand'}
+          avatar={
+            <Avatar name={lead?.isPlayer ? 'Du' : (lead?.name ?? '?')} image={lead?.isPlayer ? 'user' : undefined} />
+          }
+          caption={
+            lead ? (
+              <>
+                {conditionText(lead)} · Kraft {lead.stats.strength}
+                {others > 0 ? ` · +${others}` : ''}
+              </>
+            ) : (
+              'keiner vor Ort'
+            )
+          }
+        />
+        <span class="enc-vs" aria-hidden="true">
+          VS
+        </span>
+        <Polaroid
+          side="foe"
+          name={o.label.replace(/^(Die|Der|Das)\s+/, '')}
+          avatar={<Icon name="skull" />}
+          caption={
+            <>
+              {o.count} von {o.startCount} · Kraft {o.strength}
+            </>
+          }
+        />
+      </div>
+    </header>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Kräftebalken
+
+function Forces(props: { encounter: Encounter }) {
+  const { encounter } = props;
+  const edge = Math.round(encounter.edge);
+  const present = encounter.participants.some((p) => p.isPlayer && p.condition !== 'down');
+  return (
+    <section class="enc-forces" aria-label="Kräfteverhältnis">
+      <div class="enc-forces__labels">
+        <span class="enc-forces__own">Deine Seite {edge} %</span>
+        <span class="enc-forces__edge">{edgeText(edge)}</span>
+        <span class="enc-forces__foe">
+          {encounter.opponent.label} {100 - edge} %
+        </span>
+      </div>
+      <div class="enc-forces__bar" aria-hidden="true">
+        <span class="enc-forces__fill" style={{ width: `${edge}%` }} />
+      </div>
+      {encounter.phase !== 'briefing' && (
+        <p class="enc-forces__where">
+          <Icon name={present ? 'pin' : 'phone'} />
+          {present ? 'Du bist vor Ort' : 'Du gibst Anweisungen per Handy'}
+        </p>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Briefing: Wie gehst du vor?
+
+interface ModeView {
+  icon: string;
+  title: string;
+  tag: (o: BriefingOption) => string;
+  tone: 'danger' | 'money' | 'dirty' | 'place' | 'warn';
+  text: (encounter: Encounter, state: GameState) => string;
+}
+
+const MODES: Record<EncounterMode, ModeView> = {
+  self: {
+    icon: 'swords',
+    title: 'Selbst hin',
+    tag: () => 'Tod möglich',
+    tone: 'danger',
+    text: () => 'Du fährst hin. Bessere Chancen und alle Handlungen, aber es kann dich erwischen.',
+  },
+  crew: {
+    icon: 'shieldCheck',
+    title: 'Leute machen lassen',
+    tag: () => 'Sicher',
+    tone: 'money',
+    text: (e) =>
+      e.participants.length > 0
+        ? 'Du bleibst weg und gibst Anweisungen per Handy. Weniger Handlungen.'
+        : 'Niemand von euch ist dort. Die Sache läuft ohne dich.',
+  },
+  backup: {
+    icon: 'users',
+    title: 'Verstärkung schicken',
+    tag: (o) => `−${formatEuro(o.cost)}`,
+    tone: 'dirty',
+    text: () => `Bis zu ${BACKUP_MAX_PEOPLE} freie Leute fahren hin. Ihr startet stärker, du bleibst weg.`,
+  },
+  payoff: {
+    icon: 'moneyBag',
+    title: 'Sofort freikaufen',
+    tag: (o) => `−${formatEuro(o.cost)}`,
+    tone: 'dirty',
+    text: () => 'Ein Umschlag, sie ziehen ab. Sicher, aber sie nehmen dich danach weniger ernst.',
+  },
+  tipoff: {
+    icon: 'siren',
+    title: 'Anonym die Bullen rufen',
+    tag: () => '+ Heat',
+    tone: 'place',
+    text: (e) =>
+      `Blaulicht ${e.place}, alle rennen. Heat im Veedel steigt, etwas Ware bleibt bei der Durchsuchung liegen.`,
+  },
+  abandon: {
+    icon: 'bag',
+    title: 'Ware retten, Spot räumen',
+    tag: () => 'Ware weg',
+    tone: 'warn',
+    text: () => 'Ihr packt die Ware ein und verschwindet. Die Kasse bleibt liegen.',
+  },
+};
 
 function Briefing(props: { encounter: Encounter }) {
-  const { dispatch } = useGame();
+  const { state, dispatch } = useGame();
   const { encounter } = props;
-  const hasCrew = encounter.participants.length > 0;
-  const join = (present: boolean) =>
-    dispatch({ type: 'encounters.join', payload: { encounterId: encounter.id, present } });
+  const options = briefingOptions(state, encounter);
+  const join = (mode: EncounterMode) =>
+    dispatch({ type: 'encounters.join', payload: { encounterId: encounter.id, mode } });
   return (
-    <div class="enc-choices">
-      <p class="enc-question">Gehst du selbst hin?</p>
-      <button type="button" class="enc-card enc-card--danger" onClick={() => join(true)}>
-        <IconChip icon="swords" color="danger" size="lg" />
-        <span class="enc-card__text">
-          <strong>Selbst hin</strong>
-          <small>Bessere Chancen und mehr Möglichkeiten.</small>
-          <span class="enc-card__chips">
-            <Tag tone="bad" icon="skull">
-              Tod möglich
-            </Tag>
-            <Tag tone="accent" icon="trendUp">
-              Bessere Chancen
-            </Tag>
-          </span>
-        </span>
-      </button>
-      <button type="button" class="enc-card" onClick={() => join(false)}>
-        <IconChip icon="shieldCheck" color="money" size="lg" />
-        <span class="enc-card__text">
-          <strong>{hasCrew ? 'Deine Leute machen lassen' : 'Nicht eingreifen'}</strong>
-          <small>
-            {hasCrew
-              ? 'Du bleibst sicher und gibst Anweisungen per Handy.'
-              : 'Niemand von euch ist dort. Die Sache läuft ohne dich.'}
-          </small>
-          <span class="enc-card__chips">
-            <Tag tone="accent" icon="shieldCheck">
-              Sicher
-            </Tag>
-            {hasCrew && (
-              <Tag tone="warn" icon="trendDown">
-                Weniger Möglichkeiten
-              </Tag>
-            )}
-          </span>
-        </span>
-      </button>
-    </div>
+    <section class="enc-brief">
+      <h3 class="enc-question">Wie gehst du vor?</h3>
+      <div class="enc-grid">
+        {options.map((option) => {
+          const view = MODES[option.mode];
+          return (
+            <button
+              key={option.mode}
+              type="button"
+              class={`enc-way is-${view.tone}`}
+              disabled={!option.ok}
+              onClick={() => join(option.mode)}
+              title={option.ok ? undefined : option.reason}
+            >
+              <span class="enc-way__top">
+                <Icon name={view.icon} class="enc-way__icon" />
+                <span class="enc-way__tag">{view.tag(option)}</span>
+              </span>
+              <strong class="enc-way__title">{view.title}</strong>
+              <span class="enc-way__text">{option.ok ? view.text(encounter, state) : option.reason}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
+
+// ---------------------------------------------------------------------------------------------
+// Runden
 
 const ACTION_ICONS: Record<string, string> = {
   fight: 'fist',
@@ -199,77 +301,108 @@ const ACTION_ICONS: Record<string, string> = {
   dump: 'trash',
 };
 
-function Actions(props: { encounter: Encounter }) {
+function Rounds(props: { encounter: Encounter }) {
   const { state, dispatch } = useGame();
   const { encounter } = props;
   const actions = availableActions(encounter);
   const act = (actionId: string) =>
     dispatch({ type: 'encounters.act', payload: { encounterId: encounter.id, actionId } });
   return (
-    <div class="enc-choices">
-      {!encounter.participants.some((p) => p.isPlayer && p.condition !== 'down') && (
-        <Hint icon="phone">Du bist nicht vor Ort. Deine Leute bekommen deine Anweisungen per Handy.</Hint>
-      )}
-      {actions.map((id) => {
-        const action = getEncounterAction(encounter.kind, id);
-        if (!action) return null;
-        const chance = actionChance(encounter, id);
-        const cost = action.costsBribe ? encounter.bribeCost : 0;
-        const level = chance >= 0.6 ? 'good' : chance < 0.35 ? 'bad' : 'mid';
-        return (
-          <button
-            key={id}
-            type="button"
-            class={`enc-card ${id === 'fight' ? 'enc-card--danger' : ''}`}
-            disabled={cost > state.wallet.dirty}
-            onClick={() => act(id)}
-          >
-            <IconChip icon={ACTION_ICONS[id] ?? 'bolt'} color={id === 'fight' ? 'danger' : 'warn'} size="md" />
-            <span class="enc-card__text">
-              <strong>{action.label}</strong>
-              <small>{action.hint}</small>
-              {cost > 0 && (
-                <span class="enc-card__chips">
-                  <Tag tone={cost > state.wallet.dirty ? 'bad' : 'muted'} icon="moneyBag">
-                    Kostet {formatEuro(cost)}
-                  </Tag>
-                </span>
-              )}
-            </span>
-            <span class={`enc-chance is-${level}`}>{formatPercent(chance)}</span>
-          </button>
-        );
-      })}
+    <section class="enc-rounds">
+      <div class="enc-grid">
+        {actions.map((id) => {
+          const action = getEncounterAction(encounter.kind, id);
+          if (!action) return null;
+          const chance = actionChance(encounter, id);
+          const cost = action.costsBribe ? encounter.bribeCost : 0;
+          const level = chance >= 0.6 ? 'good' : chance < 0.35 ? 'bad' : 'mid';
+          const broke = cost > state.wallet.dirty;
+          return (
+            <button key={id} type="button" class={`enc-act is-${level}`} disabled={broke} onClick={() => act(id)}>
+              <span class="enc-act__top">
+                <Icon name={ACTION_ICONS[id] ?? 'bolt'} class="enc-act__icon" />
+                <span class="enc-act__chance">{formatPercent(chance)}</span>
+              </span>
+              <strong class="enc-act__title">{action.label}</strong>
+              <span class="enc-act__bar" aria-hidden="true">
+                <span style={{ width: `${Math.round(chance * 100)}%` }} />
+              </span>
+              <span class="enc-act__hint">{action.hint}</span>
+              {cost > 0 && <span class="enc-act__cost">Kostet {formatEuro(cost)}</span>}
+            </button>
+          );
+        })}
+      </div>
       {!encounter.playerPresent && (
-        <Button
-          variant="subtle"
-          wide
-          icon="dice"
+        <button
+          type="button"
+          class="enc-auto"
           onClick={() => dispatch({ type: 'encounters.auto', payload: { encounterId: encounter.id } })}
         >
-          Deine Leute entscheiden lassen (auswürfeln)
-        </Button>
+          <Icon name="dice" /> Deine Leute entscheiden lassen (auswürfeln)
+        </button>
       )}
-    </div>
+    </section>
   );
 }
 
-function Result(props: { encounter: Encounter }) {
+// ---------------------------------------------------------------------------------------------
+// Ergebnis und Verlauf
+
+function Result(props: { encounter: Encounter; onClose: () => void }) {
   const { encounter } = props;
   const outcome = encounter.outcome ?? 'failure';
   const stamp =
-    outcome === 'success'
-      ? { text: 'Geschafft', tone: 'accent' as const, icon: 'check' }
-      : outcome === 'retreat'
-        ? { text: 'Rückzug', tone: 'warn' as const, icon: 'runner' }
-        : { text: encounter.playerKilled ? 'Tot' : 'Verloren', tone: 'bad' as const, icon: 'skull' };
+    outcome === 'success' ? 'Erfolg' : outcome === 'retreat' ? 'Rückzug' : encounter.playerKilled ? 'Tot' : 'Verloren';
   return (
-    <div class={`enc-result enc-result--${outcome}`}>
-      <Stamp tone={stamp.tone} icon={stamp.icon} size="lg" rotate={-6}>
-        {stamp.text}
-      </Stamp>
-      {encounter.playerKilled && <p class="enc-result__title">Du bist tot.</p>}
-      <p>{encounter.result?.text}</p>
+    <section class={`enc-result is-${outcome}`}>
+      <span class="enc-stamp" role="img" aria-label={`Ergebnis: ${stamp}`}>
+        {stamp}
+      </span>
+      <div class="enc-result__text">
+        {encounter.playerKilled && <p class="enc-result__dead">Du bist tot.</p>}
+        <p>{encounter.result?.text}</p>
+        <button type="button" class="enc-close" onClick={props.onClose}>
+          Akte schließen
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function Log(props: { encounter: Encounter }) {
+  const log = props.encounter.log;
+  if (log.length === 0) return null;
+  return (
+    <ol class="enc-log" aria-label="Verlauf">
+      {log.map((entry) => {
+        const label = getEncounterAction(props.encounter.kind, entry.actionId)?.label;
+        return (
+          <li key={`${entry.round}-${entry.actionId}`} class={entry.success ? 'is-good' : 'is-bad'}>
+            {label ? (
+              <>
+                Runde {entry.round}, {label} ({formatPercent(entry.chance)}) {entry.success ? '✓' : '✗'}{' '}
+              </>
+            ) : null}
+            {entry.text}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Inhalt der Akte (gleich für die Karte am Desktop und das Blatt am Handy-Bildschirm). */
+function FileBody(props: { encounter: Encounter; onClose: () => void }) {
+  const { encounter } = props;
+  return (
+    <div class={`enc enc--${encounter.phase}`}>
+      <Head encounter={encounter} />
+      <Forces encounter={encounter} />
+      {encounter.phase === 'briefing' && <Briefing encounter={encounter} />}
+      {encounter.phase === 'rounds' && <Rounds encounter={encounter} />}
+      {encounter.phase === 'done' && <Result encounter={encounter} onClose={props.onClose} />}
+      <Log encounter={encounter} />
     </div>
   );
 }
@@ -277,63 +410,50 @@ function Result(props: { encounter: Encounter }) {
 function EncounterDialog(props: { encounterId: number }) {
   const { state } = useGame();
   const ui = useUi();
+  const mobile = useIsMobile();
   const encounter = getEncounter(state, props.encounterId);
   const close = () => {
     const next = activeEncounters(state).find((e) => e.id !== props.encounterId);
     if (next) ui.openDialog('encounters.encounter', { encounterId: next.id });
     else ui.closeDialog();
   };
-  if (!encounter) {
+  if (mobile) {
+    // Am Handy-Bildschirm: Blatt mit großer Höhe. Zuziehen legt die Akte nur weg (Warnung im HUD holt sie zurück).
     return (
-      <Dialog title="Konfrontation" onClose={close}>
-        <p>Diese Konfrontation ist vorbei.</p>
-      </Dialog>
+      <Sheet
+        open
+        onClose={close}
+        detents={['large']}
+        initial="large"
+        class="enc-sheet"
+        title={encounter ? fileTab(state, encounter) : 'Konfrontation'}
+      >
+        {encounter ? <FileBody encounter={encounter} onClose={close} /> : <p>Diese Konfrontation ist vorbei.</p>}
+      </Sheet>
     );
   }
-  const kind = ENCOUNTER_KINDS[encounter.kind];
-  const done = encounter.phase === 'done';
-  const edge = encounter.edge;
   return (
-    <Dialog
-      title={kind?.name ?? 'Konfrontation'}
-      icon="swords"
-      tone="bad"
-      kicker={`Konfrontation · ${encounter.place}`}
-      class="enc-dialog"
-      actions={
-        done ? (
-          <Button variant="primary" onClick={close}>
-            Weiter
-          </Button>
-        ) : undefined
-      }
-    >
-      <div class={`enc enc--${encounter.phase}`}>
-        {(encounter.phase === 'rounds' || (done && encounter.round > 0)) && (
-          <p class="enc-meta">
-            <Icon name="timer" /> Runde {Math.min(encounter.round + (done ? 0 : 1), encounter.maxRounds)} von{' '}
-            {encounter.maxRounds}
-          </p>
-        )}
-        <p class="enc-situation">{encounter.situation}</p>
-        <Stakes encounter={encounter} />
-        <Sides encounter={encounter} />
-        {encounter.phase !== 'briefing' && (
-          <div class="enc-edge">
-            <DuelBar left={edge} right={100 - edge} leftLabel="Ihr" rightLabel={encounter.opponent.label} />
-            <span class="enc-edge__text">{edgeText(edge)}</span>
-          </div>
-        )}
-        {encounter.phase === 'briefing' && <Briefing encounter={encounter} />}
-        {encounter.phase === 'rounds' && <Actions encounter={encounter} />}
-        {done && <Result encounter={encounter} />}
-        <Log encounter={encounter} />
+    <div class="enc-overlay" role="dialog" aria-modal="true" aria-labelledby="enc-title">
+      <div class="enc-file">
+        <div class="enc-file__tab">{encounter ? fileTab(state, encounter) : 'Akte'}</div>
+        <div class="enc-file__inner">
+          {encounter ? (
+            <FileBody encounter={encounter} onClose={close} />
+          ) : (
+            <div class="enc">
+              <p class="enc-situation">Diese Konfrontation ist vorbei.</p>
+              <button type="button" class="enc-close" onClick={close}>
+                Akte schließen
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </Dialog>
+    </div>
   );
 }
 
-/** Warnung im HUD, wenn eine Konfrontation auf dich wartet, der Dialog aber zu ist. */
+/** Warnung im HUD, wenn eine Konfrontation auf dich wartet, die Akte aber zu ist. */
 function PendingHud() {
   const { state } = useGame();
   const ui = useUi();
@@ -351,7 +471,13 @@ function PendingHud() {
   );
 }
 
-registerDialog({ id: 'encounters.encounter', component: EncounterDialog, pausesGame: true, dismissable: false });
+registerDialog({
+  id: 'encounters.encounter',
+  component: EncounterDialog,
+  pausesGame: true,
+  dismissable: false,
+  area: 'map',
+});
 registerHudItem({ id: 'encounters.pending', order: 50, placement: 'alert', component: PendingHud });
 onGameEvent('encounter.started', 'encounters.open', (payload, ui, state) => {
   if (state.outcome.gameOver) return;

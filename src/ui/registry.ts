@@ -23,6 +23,12 @@ export interface SlotRegistry {
   'phone.home': Record<string, never>;
   /** Zusätzliche Abschnitte in den Einstellungen (Dialog und Handy-App). */
   'core.settings': Record<string, never>;
+  /**
+   * Überlagerungen der freien Kartenfläche (Look "Glas"), z.B. Razzia-Banner oder Tracking-Karte einer Lieferung.
+   * Der Bereich reicht bis --map-right (neben dem angedockten Handy) und folgt ihm; die Beiträge positionieren sich
+   * selbst (position: absolute) und sind standardmäßig nicht anklickbar (pointer-events für Knöpfe selbst setzen).
+   */
+  'map.overlay': Record<string, never>;
 }
 
 export type PanelId = keyof PanelRegistry & string;
@@ -88,6 +94,20 @@ export interface DialogDefinition<K extends DialogId = DialogId> {
   pausesGame?: boolean;
   /** Mit Escape oder Klick daneben schließbar. Standard: true. */
   dismissable?: boolean;
+  /**
+   * Wo der Dialog liegt (Look "Glas"): 'screen' (Standard) über allem, 'map' nur über der Kartenfläche neben dem
+   * angedockten Handy (der Dialog zeichnet sich dann selbst, z.B. als Akte; am Handy-Bildschirm als Blatt).
+   */
+  area?: 'screen' | 'map';
+  /** Handy abdunkeln und sperren (inert), solange ein 'map'-Dialog offen ist. Standard: wie pausesGame. */
+  lockPhone?: boolean;
+}
+
+/** Sperrt der offene Dialog gerade das Handy (Dialog über der Kartenfläche, der das Spiel pausiert)? */
+export function dialogLocksPhone(dialogId: string | null | undefined): boolean {
+  const definition = dialogId ? dialogs.get(dialogId as DialogId) : undefined;
+  if (!definition || definition.area !== 'map') return false;
+  return definition.lockPhone ?? !!definition.pausesGame;
 }
 
 export interface PhoneApp {
@@ -187,6 +207,22 @@ export interface SearchProvider {
   items: (state: GameState) => SearchResult[];
 }
 
+/**
+ * Eintrag im Menü "Ebenen" der Kartensteuerung (Look "Glas"): z.B. Veedel nach Kontrolle oder nach Heat einfärben.
+ * Einträge derselben Gruppe schließen sich aus (Auswahl), `toggle: true` ist ein Schalter.
+ */
+export interface MapLayerOption {
+  id: string;
+  order: number;
+  /** Überschrift der Gruppe, z.B. "Veedel einfärben". */
+  group: string;
+  label: string;
+  icon?: string;
+  toggle?: boolean;
+  active: (ui: UiState) => boolean;
+  select: (api: UiApi, ui: UiState) => void;
+}
+
 /** Kennzahl für den Ergebnis-Bildschirm (Game Over, Sieg) und die Übersicht. */
 export interface GameStat {
   id: string;
@@ -231,6 +267,7 @@ export const advisors = new Registry<Advisor>();
 export const liveActivitySources = new Registry<LiveActivitySource>();
 export const searchProviders = new Registry<SearchProvider>();
 export const gameStats = new Registry<GameStat>();
+export const mapLayerOptions = new Registry<MapLayerOption>();
 const slots = new Map<string, Registry<SlotContribution>>();
 const reactions = new Map<string, Map<string, EventReaction<EventType>>>();
 
@@ -299,6 +336,11 @@ export function collectLiveActivities(state: GameState): LiveActivity[] {
 /** Einträge für die Suche (⌘K / Strg+K) anmelden, z.B. Spots, Veedel, Personen. */
 export function registerSearch(provider: SearchProvider): void {
   searchProviders.register(provider);
+}
+
+/** Eintrag im Menü "Ebenen" der Kartensteuerung anmelden (z.B. Kontrolle/Heat der Veedel). */
+export function registerMapLayerOption(option: MapLayerOption): void {
+  mapLayerOptions.register(option);
 }
 
 /** Kennzahl für den Ergebnis-Bildschirm anmelden (z.B. Umsatz, Veedel, Leute). */

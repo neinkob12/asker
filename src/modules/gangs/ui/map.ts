@@ -1,13 +1,23 @@
-// Karte: Hauptquartier jeder Gang im Heimat-Veedel (Emblem in Gang-Farbe, etwas nördlich vom Mittelpunkt, damit es
-// Lager und Spots nicht verdeckt) und ein pulsierender Ring,
-// solange eine Gang in ein Veedel drängt. Klick öffnet den Tab "Gangs". Die Revierfarben zeigt territory.
+// Karte: Hauptquartier jeder Gang im Heimat-Veedel (Look "Glas": Kachel in Gang-Farbe mit weißem Symbol und Schein,
+// Name darunter; etwas versetzt vom Mittelpunkt, damit es Lager und Spots nicht verdeckt) und ein pulsierender Ring,
+// solange eine Gang in ein Veedel drängt. Klick öffnet die Seite der Gang im Handy. Die Revierfarben zeigt territory.
 
 import { addHtmlMarker, el, type MapLayer } from '../../../map';
+import { iconElement } from '../../../ui';
 import { getVeedel } from '../../veedel';
 import { getGangStatus, getGangs } from '../index';
 
 /** Versatz des Hauptquartiers nach Norden (Grad), ca. 800 m. */
 const HQ_OFFSET_LAT = 0.007;
+/**
+ * Eigener Versatz je Gang (Grad), wo der Standard ein Lager verdeckt: Das Venloer Syndikat sitzt in Ehrenfeld direkt
+ * über dem Lager Ehrenfeld (rückt nach Nordwesten), die Hafenkolonne in Nippes auf der Garage Nippes (rückt nach
+ * Nordosten, Richtung Hafen).
+ */
+const HQ_OFFSETS: Record<string, { lng: number; lat: number }> = {
+  west: { lng: -0.012, lat: 0.009 },
+  nord: { lng: 0.016, lat: 0.009 },
+};
 
 export const gangsLayer: MapLayer = {
   id: 'gangs.markers',
@@ -16,8 +26,8 @@ export const gangsLayer: MapLayer = {
     const hq = new Map<string, HTMLElement>();
     const pushes = new Map<string, { marker: { remove(): void }; veedelId: string }>();
 
-    const openTab = () => {
-      if (!ctx.isPicking()) ctx.ui.selectTab('gangs');
+    const openGang = (gangId: string) => {
+      if (!ctx.isPicking()) ctx.ui.openPanel('gangs.gang', { gangId });
     };
 
     const update = () => {
@@ -26,17 +36,19 @@ export const gangsLayer: MapLayer = {
       for (const gang of getGangs(state)) {
         const home = getVeedel(gang.homeVeedelId);
         if (home && !hq.has(gang.id)) {
-          const icon = el('span', 'gang-hq__icon', gang.emblem);
-          icon.style.setProperty('--gang-color', gang.color);
+          const icon = el('span', 'gang-hq__icon');
+          icon.appendChild(iconElement(gang.emblem, { strokeWidth: 2.2 }));
+          const offset = HQ_OFFSETS[gang.id] ?? { lng: 0, lat: HQ_OFFSET_LAT };
           const { element } = addHtmlMarker(ctx.map, {
-            position: { lng: home.center.lng, lat: home.center.lat + HQ_OFFSET_LAT },
+            position: { lng: home.center.lng + offset.lng, lat: home.center.lat + offset.lat },
             className: 'gang-hq',
             tag: 'button',
-            anchor: 'center',
+            anchor: 'top',
             title: `${gang.name} (Hauptquartier)`,
-            children: [icon, el('span', 'map-place-name', gang.name)],
-            onClick: openTab,
+            children: [icon, el('span', 'gang-hq__name', gang.name)],
+            onClick: () => openGang(gang.id),
           });
+          element.style.setProperty('--gang-color', gang.color);
           hq.set(gang.id, element);
         }
         const push = getGangStatus(state, gang.id)?.push ?? null;

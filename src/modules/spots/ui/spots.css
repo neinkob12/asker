@@ -1,119 +1,395 @@
-/* Spot-Marker: dunkles Quadrat mit Zahl, farbige Kante nach Dringlichkeit, Namensschild darunter. */
+/*
+ * Spot-Marker im Look "Glas": Achteck-Schild an einem Mast mit Lichtkegel am Fuß, daneben eine Glas-Plakette.
+ * Aufbau (Anker unten = Spot): Kegel und Punkt am Fuß, Mast 2 × 20 px, Schild 36 × 36 px darüber.
+ * Zustände über data-urgency: idle, waiting, urgent, raid (Tokens --spot-*). Nur Tokens verwenden.
+ */
 .spot-marker {
-  --spot-ring: var(--color-marker-ring);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: 0;
+  --oct: polygon(29.3% 0, 70.7% 0, 100% 29.3%, 100% 70.7%, 70.7% 100%, 29.3% 100%, 0 70.7%, 0 29.3%);
+  --state: var(--spot-idle);
+  --state-on: var(--spot-idle-on);
+  --state-glow: var(--spot-idle-glow);
+  --state-edge: var(--spot-idle-edge);
+  --sign: 36px;
+  --mast: 20px;
+  position: relative;
+  display: block;
+  width: var(--sign);
+  height: calc(var(--sign) + var(--mast) + 3px);
   padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-hud);
   cursor: pointer;
 }
-.spot-dot {
-  position: relative;
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-sm);
-  background: var(--color-marker-bg);
-  border: 2px solid var(--spot-ring);
-  box-shadow: var(--shadow-marker-soft);
-  display: grid;
-  place-items: center;
-  transition: transform 0.15s;
-}
-.spot-marker:hover .spot-dot,
-.spot-marker.selected .spot-dot {
-  transform: scale(1.12);
-}
-.spot-badge {
-  font-family: var(--font-display);
-  font-weight: var(--font-weight-bold);
-  font-size: 14px;
-  color: var(--color-marker-ink);
-}
 .spot-marker[data-urgency="waiting"] {
-  --spot-ring: var(--color-warn-strong);
+  --state: var(--spot-waiting);
+  --state-on: var(--spot-waiting-on);
+  --state-glow: var(--spot-waiting-glow);
+  --state-edge: var(--spot-waiting-edge);
 }
 .spot-marker[data-urgency="urgent"] {
-  --spot-ring: var(--color-bad-strong);
+  --state: var(--spot-urgent);
+  --state-on: var(--spot-urgent-on);
+  --state-glow: var(--spot-urgent-glow);
+  --state-edge: var(--spot-urgent-edge);
 }
-.spot-marker[data-urgency="urgent"] .spot-dot {
-  animation: spot-pulse 0.9s infinite;
+.spot-marker[data-urgency="raid"] {
+  --state: var(--spot-raid);
+  --state-on: var(--spot-raid-on);
+  --state-glow: var(--spot-raid-glow);
+  --state-edge: var(--spot-raid-edge);
 }
-.spot-marker.has-runner .spot-dot {
-  box-shadow:
-    0 0 0 2px var(--color-accent-strong),
-    var(--shadow-marker-soft);
+
+/* Lichtkegel und Fußpunkt am Spot */
+.spot-beam {
+  position: absolute;
+  left: 50%;
+  bottom: -11px;
+  width: 60px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--state-glow), transparent);
+  transform: translateX(-50%);
+  pointer-events: none;
 }
-.spot-marker.selected .spot-dot {
-  outline: 1px solid var(--color-marker-ink);
-  outline-offset: 3px;
+.spot-foot {
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--state-edge);
+  box-shadow: 0 0 0 2px var(--spot-locked);
+  transform: translateX(-50%);
 }
-.spot-name {
-  font-size: 11px;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-marker-ink);
-  background: var(--color-label-bg);
-  padding: 1px 6px;
-  border-radius: var(--radius-xs);
-  box-shadow: var(--shadow-marker-soft);
-  white-space: nowrap;
+.spot-mast {
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  width: 2px;
+  height: var(--mast);
+  background: linear-gradient(to top, transparent, var(--state-edge));
+  transform: translateX(-50%);
+}
+
+/* Schild: weißer Rand (außen), Füllung in der Zustandsfarbe (innen 32 px), Zahl der Wartenden */
+.spot-sign {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--sign);
+  height: var(--sign);
+  filter: var(--spot-shadow);
+  transition: transform var(--duration) var(--ease-out);
+}
+.spot-oct {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  clip-path: var(--oct);
+  background: var(--spot-ring);
+}
+.spot-oct::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  clip-path: var(--oct);
+  background: var(--state);
+}
+.spot-badge {
+  position: relative;
+  font-family: var(--font-hud-display);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--state-on);
+}
+.spot-lock {
+  display: none;
+}
+.spot-marker:hover .spot-sign,
+.spot-marker:focus-visible .spot-sign,
+.spot-marker.selected .spot-sign {
+  transform: scale(1.12);
+}
+.spot-marker:focus-visible {
+  outline: none;
+}
+.spot-marker:focus-visible .spot-oct,
+.spot-marker.selected .spot-oct {
+  background: var(--hud-gold);
+}
+/* Eigene Spots: gestrichelte Kante am Achteck */
+.spot-marker.is-custom .spot-oct {
+  background: repeating-conic-gradient(var(--spot-ring) 0deg 14deg, transparent 14deg 26deg);
+}
+
+/* Pulsierender Ring bei dringend und Razzia */
+.spot-pulse {
+  position: absolute;
+  inset: 0;
+  clip-path: var(--oct);
+  background: var(--state-edge);
+  opacity: 0;
+}
+.spot-marker[data-urgency="urgent"] .spot-pulse,
+.spot-marker[data-urgency="raid"] .spot-pulse {
+  animation: spot-pulse 1.2s var(--ease-out) infinite;
 }
 @keyframes spot-pulse {
-  50% {
-    box-shadow:
-      0 0 0 6px color-mix(in srgb, var(--color-bad-strong) 30%, transparent),
-      var(--shadow-marker-soft);
+  0% {
+    opacity: 0.7;
+    transform: scale(1);
   }
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+/* Hinweis aus "Nächster Schritt": goldener Ring um das Schild statt um den ganzen Marker */
+.spot-marker.is-coach {
+  animation: none;
+}
+.spot-marker.is-coach .spot-pulse {
+  background: var(--hud-gold);
+  animation: spot-pulse 1.6s var(--ease-out) infinite;
+}
+
+/* Plakette: Glas, Kante in der Zustandsfarbe, Name und Personal, darunter sechs Striche */
+.spot-plate {
+  position: absolute;
+  top: calc(var(--sign) / 2 + var(--label-offset, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 9px 7px;
+  border-radius: 8px;
+  background: var(--spot-plate);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  box-shadow:
+    inset 3px 0 0 var(--state-edge),
+    var(--shadow-marker-soft);
+  color: var(--hud-ink);
+  text-align: left;
+  white-space: nowrap;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.spot-marker.is-right .spot-plate {
+  left: calc(var(--sign) + 8px);
+}
+.spot-marker.is-left .spot-plate {
+  right: calc(var(--sign) + 8px);
+}
+.spot-plate__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.spot-name {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--hud-ink);
+}
+.spot-crew {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-round);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.spot-crew[data-kind="runner"] {
+  color: var(--cat-money);
+  background: var(--cat-money-soft);
+}
+.spot-crew[data-kind="self"] {
+  color: var(--hud-gold-on);
+  background: var(--hud-gold);
+}
+.spot-crew[data-kind="free"] {
+  color: var(--hud-ink-2);
+  outline: 1px dashed var(--hud-ink-2);
+  outline-offset: -1px;
+  background: none;
+}
+.spot-crew__icon {
+  display: none;
+  font-size: 12px;
+}
+.spot-crew[data-kind="runner"] .spot-crew__icon {
+  display: inline-block;
+}
+.spot-ticks {
+  display: flex;
+  gap: 3px;
+}
+.spot-tick {
+  width: 9px;
+  height: 4px;
+  border-radius: 1px;
+  background: var(--hud-empty);
+}
+.spot-tick.is-on {
+  background: var(--state-edge);
+}
+
+/* Gesperrt: kleines dunkles Achteck mit Schloss, ohne Plakette und ohne Kegel */
+.spot-marker.is-locked {
+  --sign: 20px;
+  --mast: 12px;
+}
+.spot-marker.is-locked .spot-oct {
+  background: var(--spot-locked-edge);
+}
+.spot-marker.is-locked .spot-oct::before {
+  inset: 1px;
+  background: var(--spot-locked);
+}
+.spot-marker.is-locked .spot-badge,
+.spot-marker.is-locked .spot-plate,
+.spot-marker.is-locked .spot-beam {
+  display: none;
+}
+.spot-marker.is-locked .spot-lock {
+  display: block;
+  position: relative;
+  font-size: 11px;
+  color: var(--hud-ink-2);
+}
+.spot-marker.is-locked .spot-mast {
+  background: linear-gradient(to top, transparent, var(--spot-locked-edge));
+}
+.spot-marker.is-locked .spot-foot {
+  background: var(--spot-locked-edge);
 }
 .shell-map.zoomed-out .spot-marker {
   display: none;
 }
-.spot-marker.is-locked .spot-dot {
-  opacity: 0.8;
+
+/* Hover-Karte (nur Maus): Glas über dem Schild */
+.spot-hover {
+  pointer-events: none;
+  z-index: 3;
 }
-.spot-marker.is-locked .spot-dot {
-  border-color: var(--color-marker-ring);
+.spot-hover__card {
+  width: 230px;
+  margin-bottom: 70px;
+  padding: 14px 16px 12px;
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass-strong);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  animation: spot-hover-in var(--duration) var(--ease-out);
 }
-.spot-marker.is-locked .spot-badge {
-  width: 12px;
-  height: 12px;
-  background: var(--color-marker-muted);
-  -webkit-mask:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linejoin='round'%3E%3Cpath d='M6 11h12v9.5H6z'/%3E%3Cpath d='M8.5 11V8a3.5 3.5 0 0 1 7 0v3'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-  mask:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linejoin='round'%3E%3Cpath d='M6 11h12v9.5H6z'/%3E%3Cpath d='M8.5 11V8a3.5 3.5 0 0 1 7 0v3'/%3E%3C/svg%3E")
-    center / contain no-repeat;
+.spot-hover.is-locked .spot-hover__card {
+  margin-bottom: 44px;
 }
-.spot-marker.is-locked .spot-name {
-  color: var(--color-marker-muted);
+.spot-hover__title {
+  font-family: var(--font-hud-display);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
-/* Aus der Ferne nur die Knöpfe gesperrter Spots, ohne Namen (spots-far setzt der Spot-Layer je nach Zoom). */
-.spots-far .spot-marker.is-locked .spot-name {
-  display: none;
+.spot-hover__sub {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--hud-ink-2);
 }
-.spot-marker.is-custom .spot-dot {
-  border-style: dashed;
+.spot-hover__rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--hud-glass-line);
+  font-size: 13px;
 }
+.spot-hover__label {
+  color: var(--hud-ink-2);
+}
+.spot-hover__value {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+.spot-hover__foot {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hud-glass-line);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--hud-gold);
+}
+@keyframes spot-hover-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* Handy-Bildschirm: keine Plakette, nur ein etwas kleineres Schild und die Striche direkt darunter */
+@media (max-width: 760px) {
+  .spot-marker {
+    --sign: 28px;
+    --mast: 14px;
+  }
+  .spot-badge {
+    font-size: 15px;
+  }
+  .spot-plate {
+    top: calc(var(--sign) + 1px);
+    left: 50% !important;
+    right: auto !important;
+    padding: 2px 3px;
+    border-radius: 3px;
+    background: var(--spot-plate);
+    box-shadow: none;
+    transform: translateX(-50%);
+  }
+  .spot-ticks {
+    gap: 2px;
+  }
+  .spot-plate__head {
+    display: none;
+  }
+  .spot-tick {
+    width: 4px;
+    height: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spot-marker.is-coach .spot-pulse,
+  .spot-pulse,
+  .spot-marker[data-urgency="urgent"] .spot-pulse,
+  .spot-marker[data-urgency="raid"] .spot-pulse {
+    animation: none;
+  }
+  .spot-hover__card {
+    animation: none;
+  }
+}
+
 .spot-panel {
   display: flex;
   flex-direction: column;
   gap: 20px;
-}
-
-/* Du stehst selbst am Spot: kleiner Punkt in der Akzentfarbe oben rechts. */
-.spot-marker.has-self .spot-dot::after {
-  content: "";
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--color-accent-strong);
-  border: 2px solid var(--color-marker-bg);
 }
 .spot-self {
   color: var(--color-accent);

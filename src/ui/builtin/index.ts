@@ -14,6 +14,7 @@ import {
   registerGameStat,
   registerHudItem,
   registerLiveActivity,
+  registerMapLayerOption,
   registerPhoneApp,
   registerTab,
 } from '../registry';
@@ -28,6 +29,17 @@ const ISLAND_EARN_MIN = 150;
 
 export function registerBuiltins(): void {
   registerHudItem({ id: 'core.money', order: 10, placement: 'main', component: MoneyHud });
+  // Menü "Ebenen" der Kartensteuerung: Überwachungs-Overlay als Schalter (pro Gerät gemerkt).
+  registerMapLayerOption({
+    id: 'core.overlay',
+    order: 90,
+    group: 'Anzeige',
+    label: 'Überwachung',
+    icon: 'scan',
+    toggle: true,
+    active: (ui) => ui.overlay,
+    select: (api, ui) => api.setOverlay(!ui.overlay),
+  });
 
   // "Geschäft" sammelt Abschnitte der Module über den Slot 'tab:business'.
   registerTab({ id: 'business', title: 'Geschäft', order: 10, icon: 'briefcase', layout: 'rows' });

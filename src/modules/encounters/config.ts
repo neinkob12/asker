@@ -53,3 +53,29 @@ export const STRENGTH_FACTOR_LIMIT = 5;
 
 /** So viele abgeschlossene Konfrontationen bleiben im Spielstand. */
 export const HISTORY_LIMIT = 20;
+
+// ---------------------------------------------------------------------------------------------
+// Wege im Briefing ("Wie gehst du vor?"). Welche ein Anlass anbietet: briefingOptions in kinds.ts.
+
+/** Verstärkung schicken: kostet Schwarzgeld (Taxi, Werkzeug), so viele freie Leute fahren zusätzlich hin. */
+export const BACKUP_COST = 300;
+export const BACKUP_MAX_PEOPLE = 2;
+/** Wer als Verstärkung infrage kommt (aktiv, ohne Einsatz), die Stärksten zuerst. */
+export const BACKUP_ROLES = ['security', 'runner', 'courier', 'driver'] as const;
+/** Die Lage startet mit Verstärkung so viel besser (zusätzlich zur Überzahl). */
+export const BACKUP_EDGE_BONUS = 10;
+
+/** Sofort freikaufen: mindestens so viel, sonst die Bestechung des Anlasses mal PAYOFF_FACTOR. */
+export const PAYOFF_MIN = 600;
+export const PAYOFF_FACTOR = 1;
+/** Wer zahlt, wird nicht ernst genommen: Beziehung zur Gegenseite und Ruf sinken. */
+export const PAYOFF_RELATION = -8;
+export const PAYOFF_REPUTATION = -1;
+
+/** Anonym die Bullen rufen: Heat im Veedel, und etwas Ware bleibt bei der Durchsuchung auf der Strecke. */
+export const TIPOFF_HEAT = 15;
+export const TIPOFF_GOODS: readonly [number, number] = [-12, -4];
+
+/** Ware retten, Spot räumen: Die Ware bleibt, die Kasse vor Ort ist weg (Anteil am Schwarzgeld, gedeckelt). */
+export const ABANDON_CASH_SHARE = 0.08;
+export const ABANDON_CASH_MAX = 900;
