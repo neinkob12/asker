@@ -64,6 +64,10 @@ Lieferanten zum Freischalten). Neue Arbeit kommt als eigene Aufträge (unten), j
 ganzen Code ändern, sofern der Auftrag nichts anderes sagt. Vor jedem Push: `npm run check`, `npm run build`,
 `npm run e2e`.
 
+Geplant: [Auftrag 23](23-mehr-leben-in-koeln.md) (Spot-Arten und Ausbau, Kunden-Anfragen mit automatischem Übergang,
+eigene Stimmen und Methoden der Gangs, Einbruch und Abwerben, Lieferprobleme mit Entscheidungen, Fuhrpark,
+Daueraufträge mit Disponent, Stadt-Events). Startet erst, wenn Auftrag 22 (Handy wie iOS) in `main` ist.
+
 ## Mergen
 
 - Ein PR wird gemergt, sobald er fertig und die CI grün ist. Die Reihenfolge in Phase 1 ist egal.
