@@ -1,104 +1,27 @@
-.mkt-prices {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-.mkt-price {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--font-size-sm);
-}
-.mkt-price__name {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--space-3);
-}
-.mkt-price__name .ui-hint {
-  margin: 0;
-}
-.mkt-price__edit {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.mkt-price__value {
-  flex: 1;
-  text-align: center;
-  font-weight: var(--font-weight-bold);
-  font-variant-numeric: tabular-nums;
-}
-.mkt-price__value small {
-  margin-left: var(--space-2);
-  font-weight: normal;
-  color: var(--color-muted);
-}
-.mkt-price__value .is-high {
-  color: var(--color-warn);
-}
-.mkt-price__value .is-low {
-  color: var(--color-accent);
-}
-.mkt-price__value.is-loss,
-.mkt-price__warn {
-  color: var(--color-bad);
-}
-.mkt-price__warn {
-  font-size: var(--font-size-xs);
-}
-
-.mkt-products {
+/* Preise am Spot: Zustand unter der Zeile (Abweichung, unter Einkauf) und rot, wenn jeder Verkauf Verlust ist */
+.mkt-price__state {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
-  margin: var(--space-3) 0;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
 }
-.mkt-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-  font-variant-numeric: tabular-nums;
+.mkt-price__state .ui-button--link {
+  padding: 0 var(--space-1);
 }
-.mkt-table th {
-  text-align: left;
-  font-size: var(--font-size-xs);
-  font-weight: normal;
-  color: var(--color-muted);
-  padding: var(--space-1) var(--space-2);
+.mkt-price {
+  color: var(--phone-label, var(--color-text));
+  font-weight: var(--font-weight-bold);
 }
-.mkt-table td {
-  padding: var(--space-1) var(--space-2);
-  border-top: 1px solid var(--color-line);
+.mkt-price--loss {
+  color: var(--cat-danger);
+  font-weight: var(--font-weight-bold);
 }
-.mkt-table .is-up,
-.mkt-hot .is-up {
-  color: var(--color-accent);
+.mkt-price__stepper {
+  margin-top: var(--space-2);
 }
-.mkt-table .is-down {
-  color: var(--color-bad);
-}
-.mkt-hot {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.mkt-overview {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-}
-.mkt-hot__item {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-1) 0;
-  background: none;
-  border: 0;
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  text-align: left;
+  gap: 20px;
 }

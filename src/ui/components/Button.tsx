@@ -1,4 +1,5 @@
 import type { ComponentChildren, JSX } from 'preact';
+import { haptic } from '../haptics';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { Badge } from './Layout';
@@ -113,7 +114,10 @@ export function SegmentedControl<T extends string | number>(props: SegmentedCont
           small
           icon={o.icon}
           active={o.value === props.value}
-          onClick={() => props.onChange(o.value)}
+          onClick={() => {
+            if (o.value !== props.value) haptic('selection');
+            props.onChange(o.value);
+          }}
           aria-label={o.icon && !o.badge ? o.label : undefined}
           title={o.icon ? o.label : undefined}
         >

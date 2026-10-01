@@ -7,8 +7,10 @@ import {
   Button,
   Card,
   Empty,
+  Group,
   Hint,
   HudPill,
+  ItemContent,
   List,
   ListItem,
   registerHudItem,
@@ -164,40 +166,46 @@ function StockSection() {
         </Button>
       }
     >
-      {rows.length === 0 ? (
-        <Empty>Keine Ware mehr. Zeit für Nachschub.</Empty>
-      ) : (
-        <ul class="goods-summary">
-          {rows.map((r) => (
-            <li key={r.productId}>
-              <span>
-                {formatProductAmount(r.productId, r.amount)} {productName(r.productId)}
-              </span>
-              <QualityLabel quality={r.quality} />
-            </li>
-          ))}
-        </ul>
-      )}
-      {warehouses.length > 1 && (
+      <Group title="Bestand" icon="boxes" color="goods">
+        {rows.length === 0 ? (
+          <Empty>Keine Ware mehr. Zeit für Nachschub.</Empty>
+        ) : (
+          <List>
+            {rows.map((r) => (
+              <ListItem key={r.productId} value={formatProductAmount(r.productId, r.amount)}>
+                <ItemContent icon="leaf" color="goods" title={productName(r.productId)}>
+                  <QualityLabel quality={r.quality} />
+                </ItemContent>
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </Group>
+      <Group
+        title="Lager"
+        icon="warehouse"
+        color="goods"
+        count={warehouses.length}
+        note="Weitere Lager kaufst du mit sauberem Geld in der Logistik-App. Umlagern geht dort auch."
+      >
         <List>
           {warehouses.map((w) => (
             <ListItem
               key={w.id}
               onClick={() => ui.openPanel('goods.warehouse', { warehouseId: w.id })}
-              aside={<span class="ui-hint">{getStock(state, { warehouseId: w.id })} Einheiten</span>}
+              value={`${getStock(state, { warehouseId: w.id })} Einheiten`}
             >
-              {w.name}
+              <ItemContent icon="warehouse" color="goods" title={w.name} />
             </ListItem>
           ))}
         </List>
-      )}
-      <Hint>Weitere Lager kaufst du mit sauberem Geld in der Logistik-App. Umlagern geht dort auch.</Hint>
+      </Group>
     </Card>
   );
 }
 
 registerHudItem({ id: 'goods.stock', order: 20, placement: 'more', icon: 'warehouse', component: StockHud });
-registerSlot('tab:business', { id: 'goods.stock', order: 5, component: StockSection });
+registerSlot('tab:business', { id: 'goods.stock', title: 'Lager', order: 5, component: StockSection });
 registerPanel({
   id: 'goods.warehouse',
   title: (props, state) => getWarehouse(state, props.warehouseId)?.name ?? 'Lager',

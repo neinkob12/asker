@@ -168,6 +168,10 @@
 .phone__ear--right .phone__battery {
   font-size: 24px;
 }
+/* Echtes Handy: statt der Statusleiste nur die Pille in der Mitte (Uhrzeit, Empfang und Akku zeigt das Gerät) */
+.phone__status--pill {
+  display: block;
+}
 /* Zwei Aktivitäten: Der Kreis der zweiten sitzt neben der Island, Empfang und WLAN weichen, der Akku bleibt. */
 .phone__status:has(.island-minimal) .phone__signal,
 .phone__status:has(.island-minimal) .phone__wifi {
@@ -187,7 +191,8 @@
   height: var(--phone-home-inset);
   pointer-events: none;
 }
-.phone__nav-button {
+.phone__nav > .phone__nav-button {
+  touch-action: none;
   display: grid;
   place-items: end center;
   width: 200px;
@@ -212,11 +217,11 @@
 .phone__nav-button:hover .phone__home-indicator {
   opacity: 1;
 }
-/* Handy weglegen: kleine Glas-Taste rechts unten (Trefferfläche 44 px), damit sie über dem Inhalt lesbar bleibt */
+/* Handy weglegen (Desktop): runde Taste links neben dem Gerät, so liegt sie nie über dem Inhalt */
 .phone__close {
   position: absolute;
-  right: 8px;
-  bottom: 0;
+  left: -56px;
+  bottom: 20px;
   display: grid;
   place-items: center;
   width: 44px;
@@ -224,30 +229,61 @@
   padding: 0;
   border: 0;
   border-radius: var(--radius-round);
-  background: transparent;
-  color: var(--phone-label-2);
-  font-size: 16px;
+  background: var(--color-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow:
+    inset 0 0 0 1px var(--color-line),
+    var(--shadow-float);
+  color: var(--color-text);
+  font-size: 18px;
   cursor: pointer;
-  pointer-events: auto;
-}
-.phone__close::before {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  z-index: -1;
-  border-radius: var(--radius-round);
-  background: var(--phone-glass);
-  backdrop-filter: var(--phone-blur);
-  box-shadow: inset 0 0 0 0.5px var(--phone-glass-edge);
-}
-.phone__screen.is-home .phone__close {
-  color: var(--home-label-2);
 }
 .phone__close:hover {
-  color: var(--phone-label);
+  background: var(--color-surface-hover);
 }
-.phone__screen.is-home .phone__close:hover {
-  color: var(--home-label);
+
+/*
+ * Leiste unten im Handy-Bildschirm (schmale Fenster und echte Handys): "Start" und "Weglegen" statt eines
+ * gezeichneten Home-Balkens (auf einem echten Handy läge er doppelt über dem echten). Glas, Inhalt läuft darunter.
+ */
+.phone__toolbar {
+  position: absolute;
+  z-index: 7;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-start;
+  height: var(--phone-home-inset);
+  padding: 4px max(8px, var(--safe-right)) var(--safe-bottom) max(8px, var(--safe-left));
+  background: var(--phone-glass);
+  backdrop-filter: var(--phone-blur);
+  border-top: 0.5px solid var(--phone-separator);
+}
+.phone__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 120px;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-round);
+  background: transparent;
+  color: var(--cat-brand);
+  font-size: var(--type-subhead);
+  font-weight: var(--font-weight-bold);
+  touch-action: none;
+  cursor: pointer;
+}
+.phone__tool .ui-icon {
+  font-size: 20px;
+}
+.phone__tool:hover,
+.phone__tool.is-pressed {
+  background: var(--phone-fill);
 }
 
 /* ---------------------------------------------------------------- Dynamic Island */
@@ -261,7 +297,6 @@
   align-items: flex-start;
   gap: 6px;
   transform: translateX(-50%);
-  interpolate-size: allow-keywords;
   pointer-events: auto;
 }
 .island-wrap.is-floating {
@@ -270,8 +305,12 @@
   top: calc(var(--top) + 6px);
   left: calc((100% - var(--map-right) + var(--gap)) / 2);
 }
+/*
+ * Die Island ist eine Form: Wechselt sie zwischen kompakt und aufgeklappt, springt ihr Kasten sofort auf die neue
+ * Größe, und die schwarze Fläche (__shape) wächst oder schrumpft per Feder dorthin (nur transform, dazu der Radius;
+ * DynamicIsland.tsx). Der Inhalt blendet versetzt ein. In Ruhe trägt der Kasten selbst die Fläche.
+ */
 .island {
-  --island-ease: var(--ease-ios);
   position: relative;
   min-width: 126px;
   height: 37px;
@@ -280,15 +319,33 @@
   box-shadow: 0 0 0 1px var(--hw-rim);
   color: var(--hw-white);
   overflow: hidden;
-  transition:
-    width 360ms var(--island-ease),
-    height 360ms var(--island-ease),
-    border-radius 360ms var(--island-ease);
 }
-.is-floating .island {
+.island__shape {
+  position: absolute;
+  inset: 0;
+  display: none;
+  border-radius: inherit;
+  background: var(--hw-black);
+  box-shadow: 0 0 0 1px var(--hw-rim);
+  transform-origin: 50% 0;
+  pointer-events: none;
+}
+.is-floating .island,
+.is-floating .island__shape {
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.1),
     0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.island.is-morphing {
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.island.is-morphing .island__shape {
+  display: block;
+}
+.island > :not(.island__shape) {
+  position: relative;
 }
 .island.is-idle {
   width: 126px;
@@ -362,6 +419,20 @@
 .island__lead {
   min-width: 0;
 }
+/* Echtes Handy: keine Kamera-Attrappe, die Pille zeigt links die Spielzeit, daneben die wichtigste Aktivität */
+.island__clock {
+  font-size: var(--type-subhead);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--hw-white);
+}
+.island__idle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 37px;
+  padding: 0 16px;
+}
 /* Im Handy ist wenig Platz: links nur das Symbol, rechts der Wert (HIG: schmal und ausgewogen um die Kamera). */
 .island-wrap:not(.is-floating) .island__lead-text {
   display: none;
@@ -383,7 +454,15 @@
   flex-direction: column;
   gap: 4px;
   padding: 44px 14px 14px;
-  animation: island-content 300ms var(--ease-out) 80ms both;
+  animation: island-content 220ms var(--ease-out) 110ms both;
+}
+.island__compact {
+  animation: island-compact 180ms var(--ease-out) 60ms both;
+}
+@keyframes island-compact {
+  from {
+    opacity: 0;
+  }
 }
 @keyframes island-content {
   from {
@@ -392,6 +471,22 @@
   }
 }
 .is-floating .island__expanded {
+  padding-top: 14px;
+}
+/* Echtes Handy: Die Pille schwebt knapp unter dem oberen Rand, im Ruhezustand so breit wie die Uhrzeit */
+.island-wrap.is-pill {
+  top: 6px;
+}
+.island-wrap.is-pill .island.is-idle {
+  width: auto;
+  min-width: 0;
+}
+.island-wrap.is-pill .island__compact {
+  justify-content: center;
+  gap: 10px;
+  padding: 0 16px;
+}
+.island-wrap.is-pill .island__expanded {
   padding-top: 14px;
 }
 .island__more {
@@ -898,14 +993,18 @@
 }
 .phone__app .phone__tile {
   --chip-size: min(64px, calc(100cqw * 0.155));
-  transition: transform var(--duration-fast) var(--ease-out);
+  /* Loslassen federt zurück, Drücken reagiert sofort (press.ts setzt .is-pressed beim Aufsetzen) */
+  transition:
+    transform 280ms var(--ease-spring),
+    filter 200ms var(--ease-out);
 }
 .phone__app:hover .phone__tile {
   filter: brightness(1.08);
 }
-.phone__app:active .phone__tile {
-  transform: scale(0.92);
-  filter: brightness(0.85);
+.phone__app:is(:active, .is-pressed) .phone__tile {
+  transform: scale(0.96);
+  filter: brightness(0.82);
+  transition-duration: 90ms;
 }
 .phone__app-name {
   max-width: 100%;
@@ -924,6 +1023,16 @@
   min-width: 22px;
   height: 22px;
   box-shadow: 0 0 0 2px var(--sky-bottom);
+}
+/* Vorschau einer App-Kachel im Kontextmenü (langer Druck): Kachel und Name */
+.phone__app-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-3);
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
 }
 /* Dock: Glas über dem Wallpaper (schwebende Ebene), vier Apps ohne Beschriftung */
 .phone__dock {
@@ -983,19 +1092,83 @@
 }
 
 /* ---------------------------------------------------------------- App-Seiten */
+/*
+ * Seiten als Stapel (PageStack.tsx): jede Seite eine Schicht über die ganze Fläche. Sichtbar ist nur die oberste;
+ * Seiten darunter bleiben montiert (Scrollposition), sind aber unsichtbar und nicht bedienbar. Während eines
+ * Übergangs bewegen Federn die Schichten nur über transform und opacity (phone/stackAnimator.ts).
+ */
+.phone-pages {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--hw-black);
+  /* Senkrecht scrollt der Browser, waagerecht gehört der Finger den Gesten (Rand-Wischen, Zeilen) */
+  touch-action: pan-y;
+}
+/*
+ * touch-action gilt nur bis zum nächsten scrollenden Vorfahren: Die Scroll-Flächen der Seiten brauchen es selbst,
+ * sonst übernimmt der Browser waagerechtes Wischen (und macht daraus "Zurück im Verlauf").
+ */
+.phone-screen__body,
+.phone__home-scroll {
+  touch-action: pan-y;
+}
+/* Während einer Geste wird kein Text markiert */
+html.is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* Ohne overflow: hidden, damit der wandernde Titel beim Push über die Kante der Seite hinaus darf */
+.phone-page {
+  position: absolute;
+  inset: 0;
+  background: var(--phone-bg);
+}
+.phone-page.is-hidden {
+  visibility: hidden;
+}
+/* Seite auf dem Weg hinaus: nicht mehr bedienbar */
+.phone-page.is-leaving {
+  pointer-events: none;
+}
+/* Vordere Seite während eines Übergangs: Schatten an der linken Kante (wie bei iOS) */
+.phone-page.is-front {
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.28);
+}
+/* Kopie der App-Kachel über der wachsenden App (stackAnimator.ts) */
+.phone-page__icon {
+  position: absolute;
+  z-index: 30;
+  margin: 0;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+}
+/* Überlagerungen (Blätter, Aktionsblatt, Kontextmenü) über den Seiten, unter Statusleiste und Home-Balken */
+.phone__overlays {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+.phone__overlays:empty {
+  display: none;
+}
+/* Abdunkeln der Seite, die nach hinten rückt (Deckkraft per Feder) */
+.phone-page__dim {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
 .phone-screen {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
   background: var(--phone-bg);
-  animation: screen-in 280ms var(--ease-ios);
-}
-@keyframes screen-in {
-  from {
-    opacity: 0.4;
-    transform: translateX(24px);
-  }
 }
 /*
  * Navigationsleiste (44 pt unter der Statusleiste): "‹ Zurück" links, Aktionen rechts. Der große Titel steht im
@@ -1039,6 +1212,11 @@
 }
 .phone-screen__back:hover {
   opacity: 0.7;
+}
+/* Mit Bild in der Mitte (Chat) bleibt neben Avatar und Namen kein Platz für den Titel: nur der Pfeil, wie in
+   iOS-Nachrichten. Der Screenreader hört weiter "Zurück zu …". */
+.phone-screen.has-leading .phone-screen__back span {
+  display: none;
 }
 .phone-screen__center {
   position: absolute;
@@ -1097,6 +1275,51 @@
 }
 .phone-screen__actions .ui-button--subtle {
   --btn-fg: var(--cat-brand);
+}
+/* Aktionen aus Abschnitten (Portal in die Leiste): Text in der Markenfarbe wie bei iOS, die Hauptaktion bleibt Gold */
+.phone-screen__actions .ui-portal {
+  display: contents;
+}
+.phone-screen__actions .ui-button:not(.ui-button--primary, .ui-button--danger) {
+  --btn-bg: transparent;
+  --btn-hover: var(--phone-fill);
+  --btn-fg: var(--cat-brand);
+}
+.phone-screen__search-button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-round);
+  background: transparent;
+  color: var(--cat-brand);
+  font-size: 21px;
+  cursor: pointer;
+}
+.phone-screen__search-button:hover {
+  background: var(--phone-fill);
+}
+/* Suchfeld unter dem großen Titel: zu, bis man oben herunterzieht (oder die Lupe tippt) */
+.phone-screen__search {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-top: -20px;
+  opacity: 0;
+  transition:
+    grid-template-rows 240ms var(--ease-ios),
+    margin-top 240ms var(--ease-ios),
+    opacity 160ms var(--ease-out);
+}
+.phone-screen__search > div {
+  min-height: 0;
+  overflow: hidden;
+}
+.phone-screen__search.is-open {
+  grid-template-rows: 1fr;
+  margin-top: -12px;
+  opacity: 1;
 }
 .phone-screen__body {
   flex: 1;
@@ -1179,6 +1402,7 @@
   border-radius: var(--radius-lg);
 }
 .phone .ui-card--detail {
+  gap: 16px;
   padding: 0;
   background: none;
 }
@@ -1310,8 +1534,9 @@
 .phone .ui-list__item {
   position: relative;
 }
-/* Trenner ab dem Text, nicht bis zum linken Rand */
-.phone .ui-list__item + .ui-list__item::before {
+/* Trenner ab dem Text, nicht bis zum linken Rand (auch wenn Zeilen in Kontextmenü oder Wisch-Zeile stecken) */
+.phone .ui-list > * + .ui-list__item::before,
+.phone .ui-list > * + * .ui-list__item::before {
   content: "";
   position: absolute;
   top: 0;
@@ -1319,11 +1544,57 @@
   right: 0;
   border-top: 0.5px solid var(--phone-separator);
 }
+/* Zeilen mit Kachel: Trenner erst ab dem Text (wie in den iOS-Einstellungen) */
+.phone .ui-list > * + .ui-list__item:has(.ui-item)::before,
+.phone .ui-list > * + * .ui-list__item:has(.ui-item)::before {
+  left: 54px;
+}
 .phone .ui-list__chevron {
   color: var(--phone-label-3);
 }
 .phone .ui-card .ui-list {
   background: var(--phone-group-2);
+}
+/*
+ * Abschnitt als eigene Seite: Der Inhalt steht ohne Karte auf der Seite. Werte-Zeilen (KeyValue) hintereinander
+ * werden zu einer Gruppe wie in den iOS-Einstellungen, Listen und innere Karten zu eigenen Gruppen. (Steht nach den
+ * Grundregeln für Listen, Hinweise und Werte, die es überschreibt.)
+ */
+.phone .ui-card--detail > .ui-kv {
+  position: relative;
+  padding: 0 16px;
+  background: var(--phone-group);
+  border-bottom: 0;
+}
+.phone .ui-card--detail > .ui-kv + .ui-kv {
+  margin-top: -16px;
+}
+.phone .ui-card--detail > .ui-kv + .ui-kv::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  border-top: 0.5px solid var(--phone-separator);
+}
+.phone .ui-card--detail > .ui-kv:not(.ui-kv + .ui-kv) {
+  border-top-left-radius: var(--radius-group);
+  border-top-right-radius: var(--radius-group);
+}
+.phone .ui-card--detail > .ui-kv:not(:has(+ .ui-kv)) {
+  border-bottom-left-radius: var(--radius-group);
+  border-bottom-right-radius: var(--radius-group);
+}
+.phone .ui-card--detail > .ui-list,
+.phone .ui-card--detail .ui-card .ui-list {
+  background: var(--phone-group);
+}
+.phone .ui-card--detail .ui-card {
+  background: var(--phone-group);
+  border-radius: var(--radius-group);
+}
+.phone .ui-card--detail > .ui-hint {
+  padding: 0 16px;
 }
 .phone .ui-select select {
   min-height: var(--touch-target-phone);
@@ -1365,6 +1636,13 @@
 .phone .ui-tag {
   font-size: var(--type-caption);
 }
+/* Schalter direkt in einer Gruppe (z.B. Einstellung einer App): als eingerückte Zeile */
+.phone .ui-group > .ui-toggle {
+  min-height: 52px;
+  padding: 8px 16px;
+  background: var(--phone-group);
+  border-radius: var(--radius-group);
+}
 .phone .ui-toggle__hint,
 .phone .ui-slider__value {
   color: var(--phone-label-2);
@@ -1399,6 +1677,29 @@
 }
 .phone .ui-row:hover {
   background: var(--phone-group-2);
+}
+/* Aktionszeilen im Handy ohne farbige Kante; gefährliche Aktionen (tone="bad") mit rotem Titel */
+.phone .ui-list__item.is-action {
+  box-shadow: none;
+}
+.phone .ui-list__item.is-action.ui-list__item--bad .ui-item__title {
+  color: var(--cat-danger);
+}
+.phone .ui-list__item.is-action.is-disabled .ui-item__title {
+  color: var(--phone-label-2);
+}
+/* Gedrückte Zeilen und Knöpfe (press.ts): sofort beim Aufsetzen, wie bei iOS */
+.phone :is(.ui-list__button, .ui-row, .msg-row, .set-link).is-pressed {
+  background: var(--phone-fill-hover);
+}
+.phone .ui-button.is-pressed {
+  filter: brightness(0.85);
+}
+.phone .phone-screen__back.is-pressed {
+  opacity: 0.35;
+}
+.island-row.is-pressed {
+  background: rgba(255, 255, 255, 0.14);
 }
 .phone .ui-row .ui-chip {
   --chip-size: 30px;
@@ -1612,11 +1913,17 @@
   .is-floating .island.is-alert {
     width: calc(100vw - 20px);
   }
-  .phone__nav {
-    height: calc(var(--phone-home-inset) + var(--safe-bottom));
+  /* Unten die Leiste mit "Start" und "Weglegen" (über dem sicheren Bereich des Geräts) */
+  .phone {
+    --phone-home-inset: calc(52px + var(--safe-bottom));
   }
-  .phone__nav-button {
-    padding-bottom: calc(8px + var(--safe-bottom));
+  /* Echtes Handy: keine gezeichnete Statusleiste, nur die Pille; Inhalt seitlich im sicheren Bereich */
+  .phone--device {
+    --phone-status-height: 50px;
+    --phone-gutter: max(16px, var(--safe-left), var(--safe-right));
+  }
+  .phone--device .phone__device {
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
   }
   .phone__app .phone__tile {
     --chip-size: min(64px, calc(100cqw * 0.16));
@@ -1638,14 +1945,12 @@
   .mobile-dock__phone.is-buzzing-1 {
     animation: none;
   }
-  .phone-screen,
   .phone-screen__footer,
   .island-minimal {
     animation: none;
   }
   .phone-screen__bar,
-  .phone-screen__center,
-  .island {
+  .phone-screen__center {
     transition: none;
   }
 }

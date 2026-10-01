@@ -16,7 +16,9 @@ Navigationsleiste "‹ Zurück" mit großen Titeln, Listen als eingerückte Grup
 **Statusleiste** (`phone/PhoneFrame.tsx`): drei Spalten wie bei iOS. Links die Uhrzeit, in der Mitte Platz für die
 Island (so breit wie die größte kompakte Island, 230 pt, auf schmalen Handys schmaler), rechts Empfang, WLAN und Akku.
 Uhrzeit und Symbole werden nie von der Island verdeckt. Bei einer zweiten Aktivität weichen Empfang und WLAN, der
-Akku bleibt.
+Akku bleibt. **Auf einem echten Handy** (schmal und `pointer: coarse`, `useIsPhoneDevice()`) gibt es weder diese
+Statusleiste noch die Kamera-Attrappe: Das Gerät hat beides selbst. Oben schwebt dann nur die Island als Pille mit der
+Spielzeit (gleiche Live-Aktivitäten), unten steht statt des Home-Balkens eine Leiste mit „Start“ und „Weglegen“.
 
 **Dynamic Island** (`phone/DynamicIsland.tsx`): zeigt laufende Live-Aktivitäten der Module.
 - Anmelden mit `registerLiveActivity({ id, activities: (state) => LiveActivity | LiveActivity[] | null })`.
@@ -52,13 +54,14 @@ Akku bleibt.
     (`SegmentedControl`) nahe Ansichten. Begründung in `docs/handy-design.md`, Abschnitt 5.
   - **Kleine Fenster:** Ist das Handy niedrig oder schmal, wird der Startbildschirm über Container-Queries kompakter
     (Container `phone`).
-- **Desktop:** Das Handy ist rechts fest angedockt. Weglegen (T, Pfeil unten rechts) klappt es zu einer Lasche am
-  Rand, die zuletzt offene App bleibt gemerkt. HUD, Kartensteuerung und Toasts rücken neben das Handy.
-- **Handy-Bildschirm:** Das Spiel-Handy füllt den Bildschirm unter dem HUD. In der Tasche zeigt eine Leiste unten den
-  Nächsten Schritt und den Handy-Knopf mit Uhrzeit und ungelesenen Nachrichten.
+- **Desktop:** Das Handy ist rechts fest angedockt. Weglegen (T, runde Taste links neben dem Gerät) klappt es zu
+  einer Lasche am Rand, der Seitenstapel bleibt gemerkt. HUD, Kartensteuerung und Toasts rücken neben das Handy.
+- **Handy-Bildschirm:** Das Spiel-Handy füllt den Bildschirm unter dem HUD, unten die Leiste „Start“ / „Weglegen“
+  (über dem sicheren Bereich, `env(safe-area-inset-*)`). In der Tasche zeigt eine Leiste unten den Nächsten Schritt und
+  den Handy-Knopf mit Uhrzeit und ungelesenen Nachrichten.
 - **Tastatur (Desktop):** Leertaste Pause, 1/2/3 Tempo, T Handy, Buchstabe eines Tabs öffnet dessen App (noch
-  einmal: zurück zum Startbildschirm), Strg/⌘+K Suche. Esc geht einen Schritt zurück (Details, Abschnitt, Chat,
-  App) und legt am Ende das Handy weg.
+  einmal: zurück zum Startbildschirm), Strg/⌘+K Suche. Esc schließt zuerst ein offenes Blatt oder Menü, geht sonst
+  eine Seite zurück und legt am Ende das Handy weg.
 - **Meldungen:** Höchstens ein Toast ist sichtbar, weitere warten. Alles landet in der App **Meldungen**
   (Dringend, Achtung, Routine; "Hin" springt zum Ort; ungelesene als Zähler am Icon). Fehlermeldungen von Befehlen
   landen dort nicht.
@@ -166,7 +169,53 @@ Handy-Startbildschirm).
 gehen nur noch durch die Tabelle `EMOJI_ICONS` (alte Daten wie Gang-Wappen), unbekannte werden als Text gezeigt.
 Neue Icons in `icons.ts` ergänzen (Symbole für Geld: `coinEuro` sauber, `moneyBag` Schwarzgeld).
 
+**Wie bei iOS** (Auftrag 22, alles in `src/ui/components/`, Aussehen in `overlays.css`). Blätter, Menüs und die
+Mitteilungszentrale liegen im Handy in einer eigenen Ebene (`Portal`), Esc schließt immer das oberste
+(`overlays.ts`: `useOverlay(open, onClose)`), jeder Seitenwechsel schließt alle.
+
+| Baustein | Wofür | Wichtigste Props |
+| --- | --- | --- |
+| `Sheet` | Blatt von unten (Bündnis wählen …), Griff zum Ziehen | `open`, `onClose`, `title`, `detents` (`'medium'`, `'large'`), `initial`, `action` |
+| `ActionSheet` | Rückfrage vor Gefährlichem (Entlassen, Verpfeifen), Aktionen unten, „Abbrechen“ extra | `open`, `onClose`, `title`, `message`, `actions: { label, onSelect, destructive?, disabled?, icon? }[]` |
+| `ContextMenu` | Langer Druck (500 ms), Rechtsklick oder Shift+F10 auf eine Zeile oder Kachel: Vorschau und Schnellaktionen | `label`, `actions`, `preview?`, `disabled?`; umschließt das Element |
+| `SwipeRow` | Zeile nach links wischen gibt Aktionen frei (nur für vorhandene Befehle) | `actions: { label, onSelect, icon?, color? }[]`, `fullSwipe` |
+| `Stepper` | − \| + statt zweier loser Knöpfe (Preise, Lohn, Beträge), gedrückt halten wiederholt | `value`, `onChange`, `label`, `min`, `max`, `step`, `format?` |
+| `SearchField` | graue Suchpille mit Lupe und Löschen; im Handy über `PhoneScreen search` | `value`, `onInput`, `placeholder`, `onEscape?` |
+| `NotificationCenter` | Mitteilungszentrale (Banner oder Statusleiste herunterziehen) | `open`, `items`, `onOpen`, `onClear`, `onClose`, `heading` |
+
+- **Gefährliches nie direkt:** Entlassen, Verpfeifen & Co. laufen über ein `ActionSheet` (rote Aktion, „Abbrechen“).
+- **Wischaktionen und Kontextmenüs** bieten nur an, was es schon als Knopf oder Befehl gibt. Sie sind Abkürzungen,
+  nie der einzige Weg.
+- **Haptik:** `haptic(kind)` aus `src/ui` mit `'selection' | 'light' | 'medium' | 'success' | 'warning' | 'error'`
+  (`haptics.ts`). Nutzt `navigator.vibrate`, sonst einen leisen Klick; folgt der Einstellung „Vibrieren“. Schalter,
+  Segmente und Stepper geben `selection`, Rasten von Blättern `light`, langer Druck `medium`.
+- **Drück-Rückmeldung:** Kacheln, Zeilen, Knöpfe werden beim Drücken kurz kleiner bzw. dunkler (`phone/press.ts`).
+  Eigene Elemente bekommen sie mit `data-press`.
+
 ## Spiel-Handy (`phone/`)
+
+**Navigation als Stapel** (`phone/navModel.ts`, reine Funktionen, getestet): `ui.phone.stack` ist eine Liste von
+Seiten `{ kind: 'home' | 'app' | 'tab' | 'section' | 'panel', id, params?, title, key }`, unten immer der
+Startbildschirm. Die bekannte API bildet sich darauf ab: `openPhone(appId, params)` (Wurzel einer App, ist sie schon im
+Stapel, geht es dorthin zurück), `selectTab`, `openSection`, `openPanel` (legt eine Seite oben drauf; dasselbe Panel
+mit anderen Werten ersetzt die oberste), `closePanel`, dazu `ui.back()` (eine Seite zurück). `ui.phone.app`,
+`ui.panel`, `ui.tab` und `ui.section` werden aus dem Stapel abgeleitet. Darunter liegende Seiten bleiben gemountet
+(höchstens zwei, Scrollposition bleibt), nur die oberste wird bei jedem Neuzeichnen aktualisiert. Der Zurück-Knopf
+zeigt den Titel der Seite darunter (bis 14 Zeichen, sonst „Zurück“; neben einem Avatar nur den Pfeil).
+
+**Bewegung** (`phone/spring.ts`, `motion.ts`, `stackAnimator.ts`): gedämpfte Federn wie in SwiftUI
+(`response`/`dampingFraction`, unterbrechbar, Startgeschwindigkeit aus der Geste). `SPRINGS.push` 0,35/0,86,
+`app` 0,45/0,8, `sheet` 0,4/0,85, `island` 0,3/0,7. Bewegt werden nur `transform` und `opacity`; `will-change` und
+`<html data-moving>` nur, solange sich etwas bewegt. Bei „Bewegung reduzieren“ blenden Seiten nur kurz über.
+
+**Gesten** (Pointer Events, Maus und Touch gleich; Regeln in `phone/gestureModel.ts`, getestet):
+- vom linken Rand (≤ 24 px) wischen: eine Seite zurück, die Seite folgt dem Finger (über die Hälfte oder schneller
+  als 0,5 px/ms zählt);
+- am Home-Balken bzw. auf „Start“ hochwischen: App schrumpft auf ihre Kachel, auf dem Startbildschirm: weglegen;
+- Statusleiste oder Banner herunterziehen: Mitteilungszentrale; Banner hoch: weg;
+- Blatt am Griff ziehen (rastet bei mittel/groß, nach unten zu); langer Druck: Kontextmenü; Zeile nach links:
+  Wischaktionen.
+
 
 - `registerPhoneApp({ id, name, icon, order, component, badge?, color?, chrome? })`: `color` ist eine Bedeutungsfarbe
   (`'money'`, `'goods'`, `'people'` … eine Farbe = eine Bedeutung; für alte Module geht auch eine CSS-Farbe, aus der der
@@ -175,6 +224,11 @@ Neue Icons in `icons.ts` ergänzen (Symbole für Geld: `coinEuro` sauber, `money
   und App-Namen darüber.
 - `PhoneScreen`: Navigationsleiste mit Large Title. Der große Titel scrollt mit, dann erscheint der kleine in der Mitte
   und die Leiste bekommt Glas und eine Haarlinie. Mit `leading` (Avatar) oder `inlineTitle` steht er von Anfang an klein.
+  `onBack` und `backLabel` sind optional (Standard: `ui.back()` und der Titel der Seite darunter). Mit
+  `search={{ value, onInput, placeholder }}` steht ein Suchfeld unter dem großen Titel; es erscheint, wenn man oben
+  herunterzieht oder die Lupe antippt.
+- **Abschnitte als eigene Seite:** Ein `Card` in einem Abschnitt (Listen-Tab) zeichnet im Handy keine Karte, ihre
+  `actions` stehen rechts in der Navigationsleiste. Den Seitentitel liefert `registerSlot(…, { title })`.
 - Kein Sperrbildschirm: Das Handy zeigt immer den **Startbildschirm** oder die zuletzt offene App.
 - Tabs der Module erscheinen automatisch als Apps (`tab:<id>`), Panels als Seiten über der aktuellen App.
 - `ui.openPhone(appId, params)` öffnet eine App, z.B. `ui.openPhone('core.messages', { contactId: 'gang:nord' })`.
@@ -193,6 +247,11 @@ Neue Icons in `icons.ts` ergänzen (Symbole für Geld: `coinEuro` sauber, `money
 - `npm run screenshot:phone` (alle Handy-Seiten, Desktop und Handy-Bildschirm, `--appearance=light` für Hell).
 - `npm run audit:phone` misst am laufenden Spiel Zielgrößen (mindestens 44 px), Schriftgrößen (nie unter 11 px) und
   Textkontrast (4.5:1) in jeder Handy-Seite und endet mit Fehlercode bei Verstößen.
+- `node scripts/phone-gestures.mjs` bedient das Handy mit Maus (Desktop) und Finger (Handy-Bildschirm, Touch) und prüft
+  Rand-Wischen (60 % zurück, 20 % bleibt, schnell und kurz zurück), Hochwischen, langen Druck mit Esc und das Blatt.
+  `--trace` schreibt einen Chrome-Trace für App-Öffnen und Rand-Wischen und meldet das Layout darin, `--video` nimmt
+  einen Rundgang durch alle Übergänge auf (`screenshots/handy-videos/`).
+- Tests der Modelle: `phone/navModel.test.ts`, `phone/spring.test.ts`, `phone/gestureModel.test.ts`, `haptics.test.ts`.
 
 ## Ton (`src/audio/`, über `src/ui` erreichbar)
 

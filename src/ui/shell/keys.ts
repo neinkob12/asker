@@ -2,8 +2,10 @@
 // Escape schließt bzw. geht im Handy einen Schritt zurück.
 
 import { SPEEDS } from '../../core';
+import { closeTopOverlay } from '../overlays';
+import { top } from '../phone/navModel';
 import { dialogs, sidebarTabs } from '../registry';
-import { TAB_APP_PREFIX, type UiRuntime } from '../runtime';
+import type { UiRuntime } from '../runtime';
 import { tabShortcuts } from './layout';
 
 export function bindKeys(runtime: UiRuntime): void {
@@ -25,13 +27,12 @@ export function bindKeys(runtime: UiRuntime): void {
       else if (ui.popover) api.setPopover(null);
       else if (ui.dialog) {
         if (dialogs.get(ui.dialog.id)?.dismissable !== false) api.closeDialog();
+      } else if (closeTopOverlay()) {
+        // Blatt, Aktionsblatt, Kontextmenü oder Mitteilungszentrale geschlossen
       } else if (ui.panel) api.closePanel();
       else if (ui.notification) api.dismissNotification();
-      else if (ui.phone.open && ui.section && ui.phone.app === `${TAB_APP_PREFIX}${ui.tab}`) api.openSection(null);
-      // Im Chat geht Esc zuerst zur Chat-Liste, dann nach Hause.
-      else if (ui.phone.open && ui.phone.app && ui.phone.params?.contactId) api.openPhone(ui.phone.app);
-      else if (ui.phone.open && ui.phone.app) api.openPhone(null);
-      else if (ui.phone.open) api.closePhone();
+      // Im Handy eine Seite zurück (Details, Abschnitt, Chat, App), auf dem Startbildschirm weglegen.
+      else if (ui.phone.open) api.back();
       return;
     }
     if (typing || e.metaKey || e.ctrlKey || e.altKey || !runtime.state || ui.dialog || ui.palette) return;
@@ -54,7 +55,8 @@ export function bindKeys(runtime: UiRuntime): void {
     for (const [tabId, letter] of tabShortcuts()) {
       if (letter !== key || !sidebarTabs.get(tabId)) continue;
       // Gleiche Taste noch einmal: zurück zum Startbildschirm.
-      if (ui.phone.open && !ui.panel && ui.phone.app === `${TAB_APP_PREFIX}${tabId}`) api.openPhone(null);
+      const inTab = ui.phone.stack[1]?.kind === 'tab' && ui.phone.stack[1].id === tabId;
+      if (ui.phone.open && inTab && top(ui.phone.stack).kind !== 'panel') api.openPhone(null);
       else api.selectTab(tabId);
       return;
     }

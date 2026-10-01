@@ -3,6 +3,7 @@
 import { createContext } from 'preact';
 import { useContext } from 'preact/hooks';
 import type { Command, CommandResult, GameSession, GameState } from '../core';
+import { PageContext } from './phone/page';
 import type { UiApi, UiRuntime, UiState } from './runtime';
 
 export const RuntimeContext = createContext<UiRuntime | null>(null);
@@ -24,9 +25,22 @@ export function useGame(): { state: GameState; dispatch: (command: Command) => C
   return { state, dispatch: runtime.api.dispatch };
 }
 
+/**
+ * UI-Funktionen und UI-Zustand. In einer Seite des Handys zeigt state.phone.app/params die Parameter dieser Seite:
+ * Chat-Liste und Chat sind dieselbe App, beide bleiben im Stapel montiert und lesen ihre eigenen Parameter.
+ */
 export function useUi(): UiApi & { state: UiState } {
   const runtime = useRuntime();
-  return { ...runtime.api, state: runtime.ui };
+  const page = useContext(PageContext);
+  const ui = runtime.ui;
+  const entry = page?.entry;
+  if (entry?.kind === 'app' && (ui.phone.app !== entry.id || ui.phone.params !== entry.params)) {
+    const phone = { ...ui.phone, app: entry.id };
+    if (entry.params) phone.params = entry.params;
+    else delete phone.params;
+    return { ...runtime.api, state: { ...ui, phone } };
+  }
+  return { ...runtime.api, state: ui };
 }
 
 export function useSession(): GameSession {

@@ -569,7 +569,7 @@ registerPhoneApp({
   component: LogisticsApp,
   badge: (state) => getCargo(state).length + getTrips(state).filter((t) => t.status === 'stopped').length,
 });
-registerSlot('tab:business', { id: 'logistics.overview', order: 12, component: LogisticsCard });
+registerSlot('tab:business', { id: 'logistics.overview', title: 'Logistik', order: 12, component: LogisticsCard });
 registerMapLayer(logisticsLayer);
 
 // Empfehlungen: Ware am Kai abholen, Liegeplatz mieten, wenn das saubere Geld reicht.

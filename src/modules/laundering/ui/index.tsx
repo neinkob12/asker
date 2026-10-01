@@ -5,12 +5,17 @@ import { clock, formatEuro, formatPercent, wallet } from '../../../core';
 import {
   Button,
   Card,
+  Group,
   Hint,
-  KeyValue,
+  ItemContent,
+  List,
+  ListItem,
   onGameEvent,
   ProgressBar,
   registerAdvisor,
   registerSlot,
+  SegmentedControl,
+  Stepper,
   useGame,
 } from '../../../ui';
 import {
@@ -23,8 +28,10 @@ import {
 } from '../index';
 import './laundering.css';
 
-const STEPS = [100, 500, 1000] as const;
+const STEP = 100;
+const PRESETS = [500, 1000, 2000] as const;
 
+/** Geldwäsche: Betrag mit Stepper (oder Vorgabe), was sauber zurückkommt, laufende Wäschen. "Waschen" oben rechts. */
 function LaunderingSection() {
   const { state, dispatch } = useGame();
   const [amount, setAmount] = useState(500);
@@ -34,7 +41,8 @@ function LaunderingSection() {
   const value = Math.min(amount, max);
   const fee = launderingFee(state);
   const batches = getBatches(state);
-  const change = (delta: number) => setAmount(Math.max(0, Math.min(max, value + delta)));
+  const preset = PRESETS.find((p) => p === value) ?? (value === max && max > 0 ? 'max' : null);
+  const wash = () => dispatch({ type: 'laundering.launder', payload: { amount: value } });
   return (
     <Card
       title="Geldwäsche"
@@ -42,53 +50,79 @@ function LaunderingSection() {
       color="dirty"
       status={batches.length > 0 ? 'good' : 'idle'}
       summary={batches.length > 0 ? `${batches.length} läuft` : `${formatEuro(free)} frei`}
+      actions={
+        <Button small variant="primary" disabled={value < STEP} onClick={wash}>
+          Waschen
+        </Button>
+      }
     >
-      <Hint>
-        Schwarzgeld wird über Zeit zu sauberem Geld, das du für Legales brauchst. Gebühr {formatPercent(fee)}, gerade
-        frei: {formatEuro(free)}.
-      </Hint>
-      <div class="laundering-amount">
-        <Button small disabled={value <= 0} onClick={() => change(-100)}>
-          −
-        </Button>
-        <strong>{formatEuro(value)}</strong>
-        <Button small disabled={value >= max} onClick={() => change(100)}>
-          +
-        </Button>
-        {STEPS.map((s) => (
-          <Button key={s} small variant="subtle" disabled={s > max} onClick={() => setAmount(s)}>
-            {formatEuro(s)}
-          </Button>
-        ))}
-        <Button small variant="subtle" disabled={max <= 0} onClick={() => setAmount(max)}>
-          Max
-        </Button>
-      </div>
-      {value > 0 && (
-        <Hint>
-          Du bekommst {formatEuro(value - Math.round(value * fee))} sauber, in ca.{' '}
-          {clock.formatDuration(launderingDuration(value))}.
-        </Hint>
-      )}
-      <Button
-        variant="primary"
-        wide
-        disabled={value < 100}
-        onClick={() => dispatch({ type: 'laundering.launder', payload: { amount: value } })}
+      <Group
+        title="Betrag"
+        icon="moneyBag"
+        color="dirty"
+        note={`Schwarzgeld wird über Zeit zu sauberem Geld, das du für Legales brauchst. Gebühr ${formatPercent(fee)}, gerade frei: ${formatEuro(free)}.`}
       >
-        Waschen
-      </Button>
-      {batches.map((b) => (
-        <div key={b.id} class="laundering-batch">
-          <KeyValue label={`${formatEuro(b.amount)} in der Wäsche`} value={`fertig ${clock.formatTime(b.readyAt)}`} />
-          <ProgressBar value={batchProgress(state, b)} label="Geldwäsche" />
-        </div>
-      ))}
+        <List>
+          <ListItem
+            aside={
+              <Stepper
+                label="Betrag"
+                value={value}
+                min={0}
+                max={max}
+                step={STEP}
+                format={(v) => formatEuro(v)}
+                onChange={setAmount}
+              />
+            }
+          >
+            <ItemContent
+              icon="washing"
+              color="dirty"
+              title="Waschen"
+              meta={
+                value > 0
+                  ? `${formatEuro(value - Math.round(value * fee))} sauber in ca. ${clock.formatDuration(launderingDuration(value))}`
+                  : 'Kein Schwarzgeld frei'
+              }
+            />
+          </ListItem>
+        </List>
+        <SegmentedControl
+          wide
+          aria-label="Betrag wählen"
+          value={preset ?? ''}
+          options={[
+            ...PRESETS.map((p) => ({ value: p as number | string, label: formatEuro(p) })),
+            { value: 'max', label: 'Alles' },
+          ]}
+          onChange={(v) => setAmount(v === 'max' ? max : Number(v))}
+        />
+      </Group>
+      {batches.length > 0 && (
+        <Group title="In der Wäsche" icon="clock" color="dirty" count={batches.length}>
+          <List>
+            {batches.map((b) => (
+              <ListItem key={b.id} value={`fertig ${clock.formatTime(b.readyAt)}`}>
+                <ItemContent icon="washing" color="dirty" title={formatEuro(b.amount)}>
+                  <ProgressBar value={batchProgress(state, b)} label="Geldwäsche" />
+                </ItemContent>
+              </ListItem>
+            ))}
+          </List>
+        </Group>
+      )}
+      {max <= 0 && <Hint>Gerade nichts frei: Erst muss eine Wäsche fertig werden oder Schwarzgeld reinkommen.</Hint>}
     </Card>
   );
 }
 
-registerSlot('tab:business', { id: 'laundering.section', order: 50, component: LaunderingSection });
+registerSlot('tab:business', {
+  id: 'laundering.section',
+  title: 'Geldwäsche',
+  order: 50,
+  component: LaunderingSection,
+});
 onGameEvent('laundering.completed', 'laundering.toast', (payload, ui) =>
   ui.toast(`${formatEuro(payload.amount - payload.fee)} sind jetzt sauber.`, 'good'),
 );

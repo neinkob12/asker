@@ -104,7 +104,8 @@ kennt man von der Karte). Alles andere bleibt ruhig und iOS-typisch.
 ### 3.5 Bewegung
 
 Ein orchestrierter Moment: die Island. Sie klappt bei Gefahr (Priorität ab 80) mit einer Feder auf. Sonst nur kurze
-Übergänge (Seitenwechsel, Large Title, Badge). Bei Reduce Motion alles ohne Bewegung.
+Übergänge (Seitenwechsel, Large Title, Badge). Bei Reduce Motion alles ohne Bewegung. Seit Auftrag 22 laufen alle
+Übergänge über Federn und folgen Gesten (Abschnitt 7).
 
 ## 4. Kritik am Plan (vor der Umsetzung)
 
@@ -240,9 +241,8 @@ dunkel und hell ohne Verstöße):
 - **Hell-Modus** ist in den Tokens vorbereitet und wird getestet (Audit `--appearance=light`), aber nicht angeboten:
   Das Spiel bleibt dunkel wie die Karte. Ein Schalter in "Anzeige" wäre der nächste Schritt.
 - **Tief umgebaut** sind Startbildschirm, Nachrichten, Meldungen, Einstellungen, Ereignisse, Leute, Kontakte,
-  Lieferanten und Logistik.
-  Die übrigen Modul-Oberflächen (Geschäft-Abschnitte, Spot, Veedel, Markt, Gangs, Aufträge) erben Tokens, Zielgrößen,
-  Zeilen-Stil und Farben, haben aber keine eigene Neugestaltung bekommen.
+  Lieferanten und Logistik, mit Auftrag 22 auch Spot, Veedel, Markt, Gangs, Aufträge und die Geschäft-Abschnitte
+  (Gruppen, Zeilen, Kennzahl-Kacheln, Stepper, Blätter; Abschnitt 7).
 - **Sehr niedrige Fenster** (unter ca. 700 px Höhe): Das Handy wird schmal, der Inhalt scrollt.
 - **Neun Apps im Raster:** Mit Logistik hat der Startbildschirm eine dritte Reihe (nur Einstellungen). Das Wetter hat
   zusätzlich den Knopf in der Heute-Zeile; wenn die Skyline mehr Platz braucht, könnte die Wetter-Kachel aus dem
@@ -252,4 +252,136 @@ dunkel und hell ohne Verstöße):
 - **Biome-Warnungen** (`noDescendingSpecificity` in den Handy-Stilen, `!important` in `base.css` für reduzierte
   Bewegung) sind nur Warnungen und ändern das Verhalten nicht.
 - **Kein Test mit echten Geräten** (iPhone Safari, Android): Die Größen und Sicherheitszonen stützen sich auf Chromium
-  und `env(safe-area-inset-*)`.
+  und `env(safe-area-inset-*)`. Ränder wie auf einem iPhone (oben 59 px, unten 34 px) sind nachgestellt geprüft
+  (Abschnitt 7.6), Touch über das DevTools-Protokoll (`scripts/phone-gestures.mjs`).
+
+## 7. Interaktion wie iOS (Auftrag 22)
+
+Bis hier **sah** das Handy aus wie ein iPhone, fühlte sich aber nicht so an: kein einziger Pointer-Handler, Seiten
+tauschten hart, Übergänge waren feste CSS-Kurven, es gab weder Blätter noch Menüs noch Rückmeldung beim Drücken, und am
+echten Handy lag eine gezeichnete Statusleiste unter der echten. Grundlage der Werte: HIG (Gestures, Sheets, Menus,
+Context menus, Playing haptics, Motion) und das Verhalten von UIKit/SwiftUI.
+
+### 7.1 Navigation als Stapel
+
+`ui.phone.stack` (`src/ui/phone/navModel.ts`, reine Funktionen mit Tests): Startbildschirm, App bzw. Tab, Abschnitt,
+Panel. Jede Seite kennt ihren Titel, der Zurück-Knopf zeigt den Titel der Seite darunter („‹ Geschäft“, bis 14 Zeichen,
+sonst „Zurück“). Die alte API (`openPhone`, `selectTab`, `openSection`, `openPanel`, `closePanel`) bleibt und wird auf
+den Stapel abgebildet, Module mussten nichts ändern. Darunter liegende Seiten bleiben gemountet (höchstens zwei, dazu der
+Startbildschirm), deshalb stimmt beim Zurückgehen die Scrollposition, und während einer Geste ist die Vorseite schon da.
+
+### 7.2 Federn
+
+Gedämpfte Federn wie SwiftUI `.spring(response:dampingFraction:)`, geschlossen gerechnet (`phone/spring.ts`, getestet:
+Ankommen, Überschwingen, Startgeschwindigkeit, Umlenken mitten in der Bewegung, lange Bilder).
+
+| Feder | response | dampingFraction | Wofür, warum so |
+| --- | --- | --- | --- |
+| `push` | 0,35 s | 0,86 | Seiten vor und zurück. Fast kritisch: Die Seite darf nicht über den Rand schwingen (sonst blitzt die Vorseite rechts auf). Fühlt sich an wie UINavigationController. |
+| `app` | 0,45 s | 0,8 | App aus der Kachel öffnen und hinein schließen. Größere Fläche, etwas träger, mit ca. 1,5 % Nachfedern („Aufploppen“). |
+| `sheet` | 0,4 s | 0,85 | Blätter, Mitteilungszentrale. Rasten spürbar, aber nicht wackelig. |
+| `island` | 0,3 s | 0,7 | Dynamic Island. Klein und lebendig, ca. 5 % Überschwingen. |
+| `snap` | 0,25 s | 1 | Kleine Rückmeldungen (Zeile, Banner zurück). |
+
+Eine Geste übergibt beim Loslassen ihre Geschwindigkeit, eine laufende Bewegung lässt sich jederzeit umkehren (zweimal
+schnell Zurück und wieder hinein springt nicht). Bewegt werden nur `transform`, `opacity` und `clip-path`;
+`will-change` und `<html data-moving>` gibt es nur, solange sich etwas bewegt. Gemessen mit `--trace` auf Desktop-Größe:
+App öffnen 5 Layouts (zusammen 11 ms, längstes 6–8 ms, das ist der Aufbau der neuen Seite), Rand-Wischen 3 Layouts
+(zusammen 1,6 ms, längstes unter 1 ms). Die Bilder selbst kosten im Test vor allem Rastern ohne Grafikkarte, nicht Layout.
+
+### 7.3 Übergänge
+
+- **App öffnen:** Die App wächst aus ihrer Kachel (Rechteck mit runden Ecken, `clip-path`), eine Kopie des Icons blendet
+  darüber aus, der Startbildschirm weicht zurück (94 %, abgedunkelt). Schließen läuft genau umgekehrt in die Kachel,
+  ohne Kachel (z.B. App aus der Suche) in die Mitte.
+- **Push/Pop:** Die neue Seite kommt von rechts, die alte gleitet um 30 % nach links und wird um 16 % dunkler (Parallaxe).
+  Der große Titel der alten Seite wandert in den Zurück-Knopf der neuen (und beim Zurückgehen wieder heraus).
+- **Blätter:** von unten mit Griff, mittel und groß. Bei groß rückt die Seite dahinter zurück (93 %, runde Ecken oben),
+  wie bei iOS-Sheets. Die Seite dahinter ist dann `inert` (modal).
+- **Drücken:** Kacheln schrumpfen auf 96 %, Zeilen werden grau, sofort beim Aufsetzen, Loslassen federt zurück.
+- **Island:** eine einzige Form, die zwischen kompakt, Puls und aufgeklappt morpht (FLIP mit `island`-Feder), statt zwei
+  Kästen, die überblenden.
+- **Reduzierte Bewegung:** Seiten blenden in 160 ms über, nichts gleitet oder federt.
+
+### 7.4 Gesten
+
+Alle über Pointer Events, Maus und Touch gleich (Regeln in `phone/gestureModel.ts`, getestet). Jede Geste ist eine
+Abkürzung: Es gibt immer auch einen Knopf oder eine Taste.
+
+| Geste | Wo | Zählt, wenn | Ohne Geste |
+| --- | --- | --- | --- |
+| Rand-Wischen zurück | Start höchstens 24 px vom linken Rand | über die Hälfte oder schneller als 0,5 px/ms; die Seite folgt dem Finger | „‹ Titel“, Esc |
+| Hochwischen | Home-Balken (Desktop) bzw. „Start“ (Handy-Bildschirm) | ein Achtel der Höhe oder schnell; die App schrumpft dabei auf ihre Kachel | Antippen, Esc |
+| Herunterziehen | Statusleiste oben, Banner | 40 bzw. 56 px oder schnell | — (Mitteilungen auch in der App „Meldungen“) |
+| Banner hoch | Banner | 24 px oder schnell | verschwindet von selbst |
+| Blatt ziehen | Griff und Kopf des Blatts | rastet bei mittel und groß; mehr als ein Drittel unter „mittel“ (mit Schwung gerechnet): zu | ×, Esc, Tipp daneben |
+| Langer Druck | Kacheln, Chats, Spots, Leute | 500 ms ohne Bewegung (auch Rechtsklick, Shift+F10) | die Aktionen gibt es auf der Seite selbst |
+| Zeile nach links | Chats, Aufträge | Aktion freilegen, ganz durchziehen löst die erste aus | Knopf in der Zeile bzw. auf der Seite |
+
+Gefährliches (Entlassen, eine Gang verpfeifen) läuft nie direkt über eine Geste oder einen Knopf, sondern über ein
+Aktionsblatt mit roter Aktion und „Abbrechen“. Wischaktionen bieten nur Harmloses an, das es schon als Knopf gibt
+(gelesen, Auftrag ablehnen). Innerhalb des Handys gilt `overscroll-behavior: contain`, Gesten halten
+den Zeiger fest (Pointer Capture), und waagerechtes Wischen blättert nie im Browser-Verlauf.
+
+### 7.5 Haptik
+
+`haptic(kind)` (`src/ui/haptics.ts`): `selection` (Schalter, Segmente, Stepper), `light` (Blatt rastet), `medium`
+(langer Druck), `success`, `warning`, `error`. Kurze Muster mit `navigator.vibrate` (6–24 ms, wie die Taptic Engine,
+nie ein Brummen), dazu ein leiser Klick. Folgt der Einstellung „Vibrieren“. iOS Safari kann nicht vibrieren, dort bleibt
+nur der Klick.
+
+### 7.6 Echtes Handy
+
+Auf schmalen Bildschirmen mit Touch (`(max-width: 760px) and (pointer: coarse)`) zeichnet das Spiel keine zweite
+Statusleiste (Uhrzeit, Empfang, Akku) und keine Kamera-Attrappe mehr. Die Island wird eine schwebende Pille mit der
+Spielzeit und denselben Live-Aktivitäten. Statt des gezeichneten Home-Balkens (er läge direkt über dem echten) steht
+unten eine Leiste „Start“ / „Weglegen“ über dem sicheren Bereich; Hochwischen auf „Start“ wirkt wie der Home-Balken.
+Nachgestellt mit iPhone-Rändern (oben 59 px, unten 34 px): HUD, Pille und Leiste bleiben frei von Island und
+Home-Balken. Am Desktop bleibt das Gerät mit Rahmen, Statusleiste und Island; der Knopf zum Weglegen sitzt jetzt neben
+dem Gerät statt über dem Inhalt.
+
+### 7.7 Was bewusst fehlt und warum
+
+- **Sperrbildschirm:** Das Handy ist die Schaltzentrale eines laufenden Spiels. Ein Sperrbildschirm wäre ein Tipp mehr
+  vor jeder Handlung, ohne etwas zu schützen.
+- **App-Umschalter:** Apps sind leicht (ein Tipp vom Startbildschirm, Tastenkürzel am Desktop, Suche mit Strg/⌘+K). Ein
+  Umschalter bräuchte mehrere Stapel nebeneinander und die Halte-Geste am Home-Balken, die am echten Handy dem System
+  gehört.
+- **Kontrollzentrum:** Ton, Musik und Tempo stehen schon im HUD und in den Einstellungen. Oben rechts herunterziehen
+  kollidiert am echten iPhone mit dem echten Kontrollzentrum.
+- **Hell/Dunkel-Schalter:** Das Spiel bleibt dunkel wie die Karte (6.5); die Tokens können beides, das Audit prüft
+  beides.
+- **Blatt am Inhalt ziehen:** Blätter zieht man am Griff und Kopf. Scrollender Inhalt, der am oberen Ende das Blatt
+  übernimmt, wäre wie bei iOS möglich, kostet aber eine zweite Gestenlogik für wenig Gewinn.
+- **Rand-Wischen in Safari:** Im Browser-Tab gehört der linke Rand Safari (Zurück im Verlauf). Als Web-App vom
+  Home-Bildschirm gehört er dem Spiel.
+- **Zoomen im Handy:** Die Scrollflächen erlauben nur senkrechtes Wischen (`touch-action: pan-y`), damit waagerechte
+  Gesten ankommen. Apps auf iOS zoomen auch nicht.
+
+### 7.8 Vorher / Nachher
+
+| | Vorher | Nachher |
+| --- | --- | --- |
+| Navigation | `ui.phone.app` plus einzelnes Panel, Zurück mit festem Text | Stapel mit Titeln, Zurück zeigt die Vorseite, Seiten bleiben gemountet |
+| Übergänge | CSS mit fester Dauer, Seiten tauschen hart | Federn, unterbrechbar, App aus der Kachel, Parallaxe, wandernder Titel |
+| Gesten | keine | Rand-Wischen, Hochwischen, Herunterziehen, Blatt, langer Druck, Wischzeilen |
+| Rückmeldung | keine | Drücken (96 %, grau), Haptik und leiser Klick |
+| Bausteine | Dialoge außerhalb des Handys, zwei lose Knöpfe für Preise | Sheet, ActionSheet, ContextMenu, SwipeRow, Stepper, SearchField, NotificationCenter |
+| Modul-Seiten | Karten in Karten, abgeschnittene Knöpfe, umbrechende Werte, Schließen über dem Inhalt | Gruppen, Zeilen mit Wert rechts, Kennzahl-Kacheln, Aktionen in der Leiste |
+| Echtes Handy | zweite Statusleiste und Kamera im echten Bildschirm, Home-Balken doppelt | Live-Aktivitäts-Pille mit Spielzeit, Leiste „Start“ / „Weglegen“, sichere Bereiche |
+
+Bilder: `npm run screenshot:phone` (neue Szenen `kontextmenue`, `blatt-mittel`, `blatt-gross`, `aktionsblatt`,
+`mitteilungen`, `rand-wischen`, `suche`, `wischzeile`, `spot`, `gang`, `gangs`, `marktdetail`). Videos aller Übergänge:
+`node scripts/phone-gestures.mjs --video`.
+
+### 7.9 Prüfung
+
+- Tests: `navModel` (Stapel, Titel, Zurück-Beschriftung), `spring`, `gestureModel`, `haptics`.
+- `node scripts/phone-gestures.mjs`: Maus (Desktop) und Touch (Handy-Bildschirm) je Rand-Wischen 60 % → zurück,
+  20 % → bleibt, schnell und kurz → zurück, Hochwischen → Startbildschirm, langer Druck → Kontextmenü, Esc schließt es,
+  Blatt nach unten → zu. Alle grün.
+- `npm run audit:phone` (Dunkel und Hell, Desktop und Handy-Bildschirm, mit den neuen Szenen): keine Verstöße.
+- `npm run e2e` unverändert grün (Desktop und Handy-Bildschirm).
+- Gefunden und behoben beim Prüfen: Touch-Wischen vom Rand blätterte im Browser-Verlauf zurück (fehlendes
+  `touch-action` auf den Scrollflächen), der Klick beim Loslassen nach einem langen Druck schloss das Kontextmenü
+  sofort wieder, wenn man länger als 0,6 s hielt, und die Seite hinter einem großen Blatt blieb bedienbar.

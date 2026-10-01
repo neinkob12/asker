@@ -3,7 +3,23 @@
 
 import { useState } from 'preact/hooks';
 import { formatEuro, formatNumber, type GameState } from '../../../core';
-import { Button, Card, Empty, Hint, registerPanel, registerSlot, useGame, useUi } from '../../../ui';
+import {
+  Button,
+  Card,
+  Group,
+  Hint,
+  ItemContent,
+  List,
+  ListItem,
+  registerPanel,
+  registerSlot,
+  Select,
+  Stepper,
+  SummaryTiles,
+  Tag,
+  useGame,
+  useUi,
+} from '../../../ui';
 import { allProducts, getProduct, productName, stockSummary } from '../../goods';
 import { allVeedel, veedelName } from '../../veedel';
 import {
@@ -31,15 +47,24 @@ function deviation(ratio: number): string {
   return pct === 0 ? '±0 %' : `${pct > 0 ? '+' : ''}${pct} %`;
 }
 
-function trend(state: GameState, productId: string, veedelId: string): { arrow: string; cls: string } {
+function trend(state: GameState, productId: string, veedelId: string): 'up' | 'down' | 'flat' {
   const f = supplyDemandFactor(state, productId, veedelId);
-  if (f > 1.03) return { arrow: '▲', cls: 'is-up' };
-  if (f < 0.97) return { arrow: '▼', cls: 'is-down' };
-  return { arrow: '·', cls: '' };
+  if (f > 1.03) return 'up';
+  if (f < 0.97) return 'down';
+  return 'flat';
 }
 
+const TREND_ICON = { up: 'trendUp', down: 'trendDown', flat: 'minus' } as const;
+const TREND_COLOR = { up: 'money', down: 'danger', flat: 'system' } as const;
+const TREND_TEXT = { up: 'gefragt', down: 'gesättigt', flat: 'ausgeglichen' } as const;
+
+/**
+ * Preise am Spot: je Produkt eine Zeile mit Richt- und Einkaufspreis, rechts der eigene Preis mit Stepper (− | +).
+ * Weicht der Preis vom Richtpreis ab, steht darunter, um wie viel, und ein Knopf zurück zum Richtpreis.
+ */
 function SpotPrices(props: { spotId: string }) {
   const { state, dispatch } = useGame();
+  const ui = useUi();
   const stock = stockSummary(state);
   const products = allProducts().filter(
     (p) => stock.some((r) => r.productId === p.id) || hasOwnPrice(state, props.spotId, p.id),
@@ -47,57 +72,81 @@ function SpotPrices(props: { spotId: string }) {
   const set = (productId: string, price: number | null) =>
     dispatch({ type: 'market.setPrice', payload: { spotId: props.spotId, productId, price } });
   return (
-    <Card title="Preise">
-      {products.length === 0 ? (
-        <Empty>Keine Ware auf Lager.</Empty>
-      ) : (
-        <ul class="mkt-prices">
-          {products.map((p) => {
-            const price = getSpotPrice(state, props.spotId, p.id);
-            const ratio = priceRatio(state, props.spotId, p.id);
-            const cost = stock.find((r) => r.productId === p.id)?.unitCost ?? 0;
-            const own = hasOwnPrice(state, props.spotId, p.id);
-            return (
-              <li key={p.id} class="mkt-price">
-                <div class="mkt-price__name">
-                  <strong>{p.name}</strong>
-                  <span class="ui-hint">
-                    Richtpreis {formatNumber(spotReferencePrice(state, props.spotId, p.id), 1)} €
-                    {cost > 0 && ` · Einkauf ${formatNumber(cost, 1)} €`}
+    <Group
+      title="Preise"
+      icon="tag"
+      color="money"
+      note="Zu teuer vertreibt Kunden (Studenten zuerst, Banker zuletzt), billig lockt mehr an."
+    >
+      <List>
+        {products.length === 0 && (
+          <ListItem onClick={() => ui.openPhone('suppliers.app')}>
+            <ItemContent
+              icon="warehouse"
+              color="goods"
+              title="Keine Ware auf Lager"
+              meta="Nachschub bei den Lieferanten"
+            />
+          </ListItem>
+        )}
+        {products.map((p) => {
+          const price = getSpotPrice(state, props.spotId, p.id);
+          const ratio = priceRatio(state, props.spotId, p.id);
+          const cost = stock.find((r) => r.productId === p.id)?.unitCost ?? 0;
+          const own = hasOwnPrice(state, props.spotId, p.id);
+          const reference = spotReferencePrice(state, props.spotId, p.id);
+          const loss = price < cost;
+          return (
+            <ListItem
+              key={p.id}
+              value={
+                <span class={loss ? 'mkt-price--loss' : 'mkt-price'}>
+                  {formatNumber(price, 1)} €/{p.unit}
+                </span>
+              }
+            >
+              <ItemContent
+                icon="leaf"
+                color="goods"
+                title={p.name}
+                meta={`Richtpreis ${formatNumber(reference, 1)} €${cost > 0 ? ` · Einkauf ${formatNumber(cost, 1)} €` : ''}`}
+              >
+                <Stepper
+                  class="mkt-price__stepper"
+                  label={`Preis ${p.name}`}
+                  value={price}
+                  min={STEP}
+                  step={STEP}
+                  onChange={(next) => set(p.id, next)}
+                />
+                {(own || loss) && (
+                  <span class="mkt-price__state">
+                    {loss ? (
+                      <Tag category="danger" icon="alert">
+                        unter Einkauf
+                      </Tag>
+                    ) : (
+                      <Tag category={ratio > 1.05 ? 'warn' : ratio < 0.95 ? 'money' : 'system'} icon="tag">
+                        {deviation(ratio)}
+                      </Tag>
+                    )}
+                    {own && (
+                      <Button variant="link" small onClick={() => set(p.id, null)}>
+                        Richtpreis
+                      </Button>
+                    )}
                   </span>
-                </div>
-                <div class="mkt-price__edit">
-                  <Button small aria-label="Billiger" onClick={() => set(p.id, Math.max(STEP, price - STEP))}>
-                    −
-                  </Button>
-                  <span class={`mkt-price__value ${price < cost ? 'is-loss' : ''}`}>
-                    {formatNumber(price, 1)} €/{p.unit}
-                    <small class={ratio > 1.05 ? 'is-high' : ratio < 0.95 ? 'is-low' : ''}>{deviation(ratio)}</small>
-                  </span>
-                  <Button small aria-label="Teurer" onClick={() => set(p.id, price + STEP)}>
-                    +
-                  </Button>
-                  <Button
-                    small
-                    variant="subtle"
-                    disabled={!own}
-                    title="Zurück zum Richtpreis"
-                    onClick={() => set(p.id, null)}
-                  >
-                    ↺
-                  </Button>
-                </div>
-                {price < cost && <span class="mkt-price__warn">Unter Einkaufspreis: Jeder Verkauf ist Verlust.</span>}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      <Hint>Zu teuer vertreibt Kunden (Studenten zuerst, Banker zuletzt), billig lockt mehr an.</Hint>
-    </Card>
+                )}
+              </ItemContent>
+            </ListItem>
+          );
+        })}
+      </List>
+    </Group>
   );
 }
 
+/** Markt-Übersicht: Richtpreis eines Produkts in allen Veedeln, teuerste zuerst, mit Trend und Konkurrenz. */
 function MarketOverview(props: { productId?: string }) {
   const { state } = useGame();
   const [productId, setProductId] = useState(props.productId ?? allProducts()[0].id);
@@ -105,45 +154,52 @@ function MarketOverview(props: { productId?: string }) {
   const rows = allVeedel()
     .map((v) => ({ veedel: v, price: referencePrice(state, productId, v.id) }))
     .sort((a, b) => b.price - a.price);
+  const prices = rows.map((r) => r.price);
   return (
     <div class="mkt-overview">
-      <div class="mkt-products">
-        {allProducts().map((p) => (
-          <Button key={p.id} small active={p.id === productId} onClick={() => setProductId(p.id)}>
-            {p.name}
-          </Button>
-        ))}
-      </div>
-      <Hint>
-        Richtpreis pro {product?.unit ?? 'Einheit'} ({product?.name}), Grundpreis {formatEuro(product?.basePrice ?? 0)}.
-        ▲ mehr Nachfrage als Ware, ▼ Markt gesättigt.
-      </Hint>
-      <table class="mkt-table">
-        <thead>
-          <tr>
-            <th>Veedel</th>
-            <th>Richtpreis</th>
-            <th>Markt</th>
-            <th>Konkurrenz</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Group title="Produkt" icon="leaf" color="goods">
+        <Select
+          label="Produkt"
+          wide
+          value={productId}
+          options={allProducts().map((p) => ({ value: p.id, label: p.name }))}
+          onChange={setProductId}
+        />
+      </Group>
+      <SummaryTiles
+        items={[
+          { icon: 'tag', color: 'system', value: formatEuro(product?.basePrice ?? 0), label: 'Basis' },
+          { icon: 'trendUp', color: 'money', value: `${formatNumber(Math.max(...prices), 2)} €`, label: 'Höchster' },
+          {
+            icon: 'trendDown',
+            color: 'danger',
+            value: `${formatNumber(Math.min(...prices), 2)} €`,
+            label: 'Tiefster',
+          },
+        ]}
+      />
+      <Group
+        title={`Richtpreis pro ${product?.unit ?? 'Einheit'}`}
+        icon="chart"
+        color="money"
+        note="Gefragt: mehr Nachfrage als Ware. Gesättigt: zu viel Ware im Veedel. Konkurrenz drückt den Preis."
+      >
+        <List>
           {rows.map(({ veedel, price }) => {
             const t = trend(state, productId, veedel.id);
             const competition = getCompetitionFactor(state, veedel.id);
+            const meta =
+              [t === 'flat' ? '' : TREND_TEXT[t], competition === 1 ? '' : `Konkurrenz ${deviation(competition)}`]
+                .filter(Boolean)
+                .join(' · ') || undefined;
             return (
-              <tr key={veedel.id}>
-                <td>{veedel.name}</td>
-                <td>{formatNumber(price, 2)} €</td>
-                <td class={t.cls}>{t.arrow}</td>
-                <td class={competition < 1 ? 'is-down' : competition > 1 ? 'is-up' : ''}>
-                  {competition === 1 ? '–' : deviation(competition)}
-                </td>
-              </tr>
+              <ListItem key={veedel.id} value={`${formatNumber(price, 2)} €`}>
+                <ItemContent icon={TREND_ICON[t]} color={TREND_COLOR[t]} title={veedel.name} meta={meta} />
+              </ListItem>
             );
           })}
-        </tbody>
-      </table>
+        </List>
+      </Group>
     </div>
   );
 }
@@ -180,25 +236,29 @@ function MarketSection() {
       {hot.length === 0 ? (
         <Hint>Gerade keine auffällige Nachfrage. Preise stellst du im Spot-Panel ein.</Hint>
       ) : (
-        <ul class="mkt-hot">
-          {hot.map((h) => (
-            <li key={`${h.veedelId}:${h.productId}`}>
-              <button
-                type="button"
-                class="mkt-hot__item"
+        <Group title="Gefragt" icon="trendUp" color="money" note="Preise stellst du am Spot ein.">
+          <List>
+            {hot.map((h) => (
+              <ListItem
+                key={`${h.veedelId}:${h.productId}`}
+                value={deviation(h.factor)}
                 onClick={() => ui.openPanel('market.overview', { productId: h.productId })}
               >
-                {productName(h.productId)} gefragt in {veedelName(h.veedelId)}
-                <span class="is-up">{deviation(h.factor)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+                <ItemContent
+                  icon="trendUp"
+                  color="money"
+                  title={productName(h.productId)}
+                  meta={veedelName(h.veedelId)}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </Group>
       )}
     </Card>
   );
 }
 
 registerSlot('spots.spotPanel', { id: 'market.prices', order: 20, component: SpotPrices });
-registerSlot('tab:business', { id: 'market.summary', order: 40, component: MarketSection });
+registerSlot('tab:business', { id: 'market.summary', title: 'Markt', order: 40, component: MarketSection });
 registerPanel({ id: 'market.overview', title: () => 'Markt-Übersicht', component: MarketOverview });

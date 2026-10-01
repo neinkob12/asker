@@ -5,7 +5,19 @@
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { clock, messages } from '../../core';
-import { Avatar, Badge, Button, Empty, Icon, IconChip, SegmentedControl, Stamp, Tag } from '../components';
+import {
+  Avatar,
+  Badge,
+  Button,
+  ContextMenu,
+  Empty,
+  Icon,
+  IconChip,
+  SegmentedControl,
+  Stamp,
+  SwipeRow,
+  Tag,
+} from '../components';
 import { useGame, useUi } from '../hooks';
 import {
   CONTACT_KIND_ICONS,
@@ -27,18 +39,33 @@ function avatarImage(avatar: string | undefined, kind: keyof typeof CONTACT_KIND
   return avatar ?? CONTACT_KIND_ICONS[kind];
 }
 
+/** Suche in Namen, Kontaktart und letzter Nachricht (ohne Groß/klein). */
+function matches(chat: ReturnType<typeof chatList>[number], query: string): boolean {
+  const q = query.trim().toLocaleLowerCase('de');
+  if (!q) return true;
+  return [chat.name, chat.kindLabel, chat.preview].some((text) => text.toLocaleLowerCase('de').includes(q));
+}
+
 function ChatList() {
-  const { state } = useGame();
+  const { state, dispatch } = useGame();
   const ui = useUi();
   const all = chatList(state);
   // Wartet etwas auf Antwort, beginnt die Liste mit "Offen".
   const [filter, setFilter] = useState<'all' | 'open'>(() => (all.some((c) => c.awaitingAnswer) ? 'open' : 'all'));
-  const list = filter === 'open' ? all.filter((c) => c.awaitingAnswer || c.unread > 0) : all;
+  const [query, setQuery] = useState('');
+  const list = (filter === 'open' ? all.filter((c) => c.awaitingAnswer || c.unread > 0) : all).filter((c) =>
+    matches(c, query),
+  );
   const groups = groupChats(list);
   const unread = messages.unreadCount(state);
   const openCount = all.filter((c) => c.awaitingAnswer).length;
+  const markRead = (contactId: string) => dispatch({ type: 'messages.markRead', payload: { contactId } });
   return (
-    <PhoneScreen title="Nachrichten" subtitle={unread > 0 ? `${unread} ungelesen` : 'Alles gelesen'}>
+    <PhoneScreen
+      title="Nachrichten"
+      subtitle={unread > 0 ? `${unread} ungelesen` : 'Alles gelesen'}
+      search={{ value: query, onInput: setQuery, placeholder: 'Chats durchsuchen' }}
+    >
       <SegmentedControl
         wide
         aria-label="Filter"
@@ -50,8 +77,12 @@ function ChatList() {
         onChange={setFilter}
       />
       {list.length === 0 && (
-        <Empty icon="message">
-          {filter === 'open' ? 'Nichts Offenes. Alle Chats sind erledigt.' : 'Noch keine Nachrichten.'}
+        <Empty icon={query ? 'search' : 'message'}>
+          {query
+            ? `Kein Chat passt zu „${query.trim()}“.`
+            : filter === 'open'
+              ? 'Nichts Offenes. Alle Chats sind erledigt.'
+              : 'Noch keine Nachrichten.'}
         </Empty>
       )}
       {groups.map((group) => {
@@ -66,32 +97,62 @@ function ChatList() {
             <ul class="msg-list">
               {group.items.map((c) => (
                 <li key={c.contactId}>
-                  <button
-                    type="button"
-                    class={`msg-row ${c.unread > 0 ? 'is-unread' : ''}`}
-                    onClick={() => ui.openPhone(APP_ID, { contactId: c.contactId })}
-                    aria-label={`${c.name}, ${c.kindLabel}${c.unread > 0 ? `, ${c.unread} ungelesen` : ''}${c.awaitingAnswer ? ', wartet auf Antwort' : ''}`}
+                  {/* Wischen: als gelesen markieren (gibt es auch im Kontextmenü, langer Druck oder Rechtsklick) */}
+                  <SwipeRow
+                    actions={
+                      c.unread > 0
+                        ? [{ label: 'Gelesen', icon: 'check', color: 'chat', onSelect: () => markRead(c.contactId) }]
+                        : []
+                    }
+                    fullSwipe
                   >
-                    <Avatar name={c.name} image={avatarImage(c.avatar, c.kind)} tone={tone} />
-                    <span class="msg-row__main">
-                      <span class="msg-row__top">
-                        <span class="msg-row__name">{c.name}</span>
-                        <time class="msg-row__time">{c.timeLabel}</time>
-                      </span>
-                      <span class="msg-row__preview">{c.preview}</span>
-                      {(c.awaitingAnswer || c.unread > 0) && (
-                        <span class="msg-row__status">
-                          {c.awaitingAnswer && (
-                            <Tag tone={c.deadlineIn !== undefined && c.deadlineIn < 30 ? 'bad' : 'warn'} icon="reply">
-                              Antwort
-                              {c.deadlineIn !== undefined ? ` · ${clock.formatDuration(c.deadlineIn)}` : ''}
-                            </Tag>
+                    <ContextMenu
+                      label={`Aktionen für ${c.name}`}
+                      actions={[
+                        {
+                          label: 'Chat öffnen',
+                          icon: 'message',
+                          onSelect: () => ui.openPhone(APP_ID, { contactId: c.contactId }),
+                        },
+                        {
+                          label: 'Als gelesen markieren',
+                          icon: 'check',
+                          disabled: c.unread === 0,
+                          onSelect: () => markRead(c.contactId),
+                        },
+                      ]}
+                    >
+                      <button
+                        type="button"
+                        class={`msg-row ${c.unread > 0 ? 'is-unread' : ''}`}
+                        onClick={() => ui.openPhone(APP_ID, { contactId: c.contactId })}
+                        aria-label={`${c.name}, ${c.kindLabel}${c.unread > 0 ? `, ${c.unread} ungelesen` : ''}${c.awaitingAnswer ? ', wartet auf Antwort' : ''}`}
+                      >
+                        <Avatar name={c.name} image={avatarImage(c.avatar, c.kind)} tone={tone} />
+                        <span class="msg-row__main">
+                          <span class="msg-row__top">
+                            <span class="msg-row__name">{c.name}</span>
+                            <time class="msg-row__time">{c.timeLabel}</time>
+                          </span>
+                          <span class="msg-row__preview">{c.preview}</span>
+                          {(c.awaitingAnswer || c.unread > 0) && (
+                            <span class="msg-row__status">
+                              {c.awaitingAnswer && (
+                                <Tag
+                                  tone={c.deadlineIn !== undefined && c.deadlineIn < 30 ? 'bad' : 'warn'}
+                                  icon="reply"
+                                >
+                                  Antwort
+                                  {c.deadlineIn !== undefined ? ` · ${clock.formatDuration(c.deadlineIn)}` : ''}
+                                </Tag>
+                              )}
+                            </span>
                           )}
                         </span>
-                      )}
-                    </span>
-                    <Badge count={c.unread} />
-                  </button>
+                        <Badge count={c.unread} />
+                      </button>
+                    </ContextMenu>
+                  </SwipeRow>
                 </li>
               ))}
             </ul>
@@ -152,7 +213,6 @@ function Chat(props: { contactId: string }) {
         <Avatar name={name} image={avatarImage(contact?.avatar, kind)} size="sm" tone={CONTACT_KIND_TONES[kind]} />
       }
       onBack={() => ui.openPhone(APP_ID)}
-      backLabel="Chats"
       footer={
         question?.type === 'message' ? (
           <div class="msg-options">

@@ -2,7 +2,9 @@
 // Der Look kommt aus den Design-Tokens (styles/tokens.css) und components.css; Props werden nur erweitert.
 
 import './components.css';
+import './overlays.css';
 
+export { ActionSheet, type ActionSheetProps, type SheetAction } from './ActionSheet';
 export {
   Button,
   type ButtonProps,
@@ -12,6 +14,7 @@ export {
   SegmentedControl,
   type SegmentedControlProps,
 } from './Button';
+export { ContextMenu, type ContextMenuProps, type MenuAction } from './ContextMenu';
 export { Dialog, type DialogProps } from './Dialog';
 export { ErrorBoundary, type ErrorBoundaryProps } from './ErrorBoundary';
 export { HudPill, type HudPillProps } from './HudPill';
@@ -72,6 +75,12 @@ export {
   type ToggleProps,
   type Tone,
 } from './Layout';
+export { NotificationCenter, type NotificationCenterProps, type NotificationItem } from './NotificationCenter';
+export { BarActionsContext, Portal, PortalHostContext } from './Portal';
 export { contrastRatio, readableOn } from './readable';
+export { SearchField, type SearchFieldProps } from './SearchField';
+export { Sheet, type SheetDetent, type SheetProps } from './Sheet';
+export { Stepper, type StepperProps } from './Stepper';
+export { type SwipeAction, SwipeRow, type SwipeRowProps } from './SwipeRow';
 export { SectionContext, type SectionMode } from './section';
 export { type TabItem, Tabs, type TabsProps } from './Tabs';

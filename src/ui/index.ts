@@ -11,6 +11,7 @@ export {
   type SoundId,
 } from '../audio';
 export * from './components';
+export { HAPTIC_PATTERNS, type HapticKind, haptic } from './haptics';
 export { useGame, useSession, useUi } from './hooks';
 export { islandCountdown } from './phone/islandModel';
 export { PhoneScreen, type PhoneScreenProps } from './phone/PhoneScreen';

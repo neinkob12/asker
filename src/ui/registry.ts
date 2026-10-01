@@ -68,6 +68,11 @@ export interface SlotContribution<N extends SlotName = SlotName> {
   id: string;
   order: number;
   component: ComponentType<SlotProps<N>>;
+  /**
+   * Titel des Beitrags, z.B. eines Abschnitts im Geschäft. Das Handy nutzt ihn für Titel und Zurück-Knopf, wenn der
+   * Abschnitt direkt geöffnet wird (ui.openSection), bevor seine Zeile zu sehen war.
+   */
+  title?: string;
 }
 
 export interface PanelDefinition<K extends PanelId = PanelId> {
