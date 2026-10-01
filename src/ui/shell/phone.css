@@ -308,7 +308,8 @@
 .island-wrap.is-floating {
   position: fixed;
   z-index: var(--z-notification);
-  top: calc(var(--top) + 6px);
+  /* unter der Uhr-Kapsel des HUD (Look "Glas"), sonst lägen Tempo und Menü darunter */
+  top: calc(var(--top) + var(--hud-height) + var(--space-3));
   left: calc((100% - var(--map-right) + var(--gap)) / 2);
 }
 /*

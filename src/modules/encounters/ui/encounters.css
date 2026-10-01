@@ -7,7 +7,8 @@
 /* ---------------------------------------------------------------- Hintergrund über der Kartenfläche */
 .enc-overlay {
   position: fixed;
-  z-index: var(--z-dialog);
+  /* über der schwebenden Island (weggelegtes Handy): Das Spiel pausiert ohnehin */
+  z-index: calc(var(--z-notification) + 1);
   top: 0;
   bottom: 0;
   left: 0;
