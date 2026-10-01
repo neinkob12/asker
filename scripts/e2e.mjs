@@ -168,6 +168,44 @@ async function run() {
     if (await page.locator('.phone').count()) await page.locator('.phone__nav-button').click();
   });
 
+  await check('Kasse im Handy: Gewinn- und Verlustrechnung', async () => {
+    await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
+    await page.locator('.phone').getByRole('button', { name: 'Kasse', exact: true }).click();
+    await page.locator('.phone').getByText('Straßenverkauf').first().waitFor();
+    assert.ok(await page.locator('.phone').getByText('Einkauf Ware').first().isVisible(), 'Einkauf als Ausgabe');
+    await page.locator('.phone').getByRole('button', { name: '7 Tage', exact: true }).click();
+    await shot(page, 'kasse');
+  });
+
+  await check('Leutnant mit zwei Spots ernennen', async () => {
+    const staffId = await page.evaluate(() => {
+      const m = window.koeln.session.state.modules.staff.members[0];
+      m.level = 2;
+      window.koeln.runtime.api.openPanel('staff.profile', { staffId: m.id });
+      return m.id;
+    });
+    await page
+      .locator('.phone')
+      .getByRole('button', { name: /Zum Leutnant machen/ })
+      .click();
+    await page
+      .locator('.ui-sheet')
+      .getByRole('button', { name: /Zülpicher Platz/ })
+      .click();
+    await page
+      .locator('.ui-sheet')
+      .getByRole('button', { name: /Neumarkt/ })
+      .click();
+    await page.locator('.ui-sheet').getByRole('button', { name: 'Weiter', exact: true }).click();
+    await page.locator('.ui-sheet').getByRole('button', { name: 'Ernennen', exact: true }).click();
+    const spots = await game(page, (s) => Object.values(s.modules.hierarchy.posts).map((p) => [p.staffId, p.spotIds]));
+    assert.deepEqual(spots, [[staffId, ['zuelpicher', 'neumarkt']]]);
+    await page.evaluate((id) => window.koeln.runtime.api.openPanel('hierarchy.lieutenant', { staffId: id }), staffId);
+    await page.locator('.phone').getByText('Spot zuweisen').first().waitFor();
+    await shot(page, 'leutnant');
+    await page.evaluate(() => window.koeln.runtime.api.closePhone());
+  });
+
   let saved;
   await check('Speichern und Laden', async () => {
     saved = await game(page, (s) => ({ time: s.time, dirty: s.wallet.dirty, staff: s.modules.staff.members.length }));
