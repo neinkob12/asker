@@ -126,6 +126,11 @@ export function teamLeadOf(state: GameState, staffId: string): string | null {
   return null;
 }
 
+/** Kümmert sich der Leutnant selbst um den Ausfall dieser Person (dann fragt niemand den Spieler)? */
+export function handlesAbsence(_state: GameState, _lieutenantId: string, _staffId: string): boolean {
+  return false;
+}
+
 /** Kann die Person Leutnant werden? */
 export function canBeLieutenant(state: GameState, staffId: string): CommandResult {
   const m = getStaffMember(state, staffId);

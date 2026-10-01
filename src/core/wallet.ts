@@ -28,6 +28,7 @@ export type MoneyCategory =
   | 'wages.lead'
   | 'wages.specialist'
   | 'wages.jail'
+  | 'wages.injured'
   | 'hiring'
   | 'bail'
   | 'expansion'
@@ -64,6 +65,7 @@ export const MONEY_CATEGORIES: Record<MoneyCategory, MoneyCategoryInfo> = {
   'wages.lead': { label: 'Löhne Leutnants und Rechte Hand', group: 'expense', icon: 'crew' },
   'wages.specialist': { label: 'Löhne Spezialisten', group: 'expense', icon: 'scale' },
   'wages.jail': { label: 'Stillhaltegeld (Haft)', group: 'expense', icon: 'jail' },
+  'wages.injured': { label: 'Halber Lohn (verletzt)', group: 'expense', icon: 'bandage' },
   hiring: { label: 'Anheuern', group: 'expense', icon: 'userPlus' },
   bail: { label: 'Kaution', group: 'expense', icon: 'scale' },
   expansion: { label: 'Ausbau', group: 'expense', icon: 'building' },

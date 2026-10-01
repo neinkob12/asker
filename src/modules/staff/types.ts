@@ -78,6 +78,8 @@ export interface StaffMember {
   lastIncidentAt: number | null;
   /** Tage in Folge ohne Lohn (fehlt = 0; zwei Tage, dann kündigt die Person). */
   unpaidDays?: number;
+  /** Bekommt die Person in Haft Stillhaltegeld? (Standard ja; ohne redet sie eher.) */
+  jailSupport: boolean;
   /** Nur bei ehemaligen Mitarbeitern gesetzt. */
   leftAt: number | null;
   leftReason: StaffLeaveReason | null;

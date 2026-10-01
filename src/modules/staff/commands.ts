@@ -24,6 +24,7 @@ import {
   enlist,
   expectedWage,
   getStaffMember,
+  isAbsent,
   isEmployed,
   removeMember,
   roleName,
@@ -32,6 +33,7 @@ import {
   setStatus,
   setWage,
   staffVeedel,
+  talkChance,
 } from './members';
 import { generateProfile } from './profile';
 import { afterFired } from './routines';
@@ -78,14 +80,92 @@ export function hireDriver(ctx: Ctx): CommandResult {
   return { ok: true, data: { staffId: member.id } };
 }
 
-export function fire(ctx: Ctx, staffId: string): CommandResult {
+export function fire(ctx: Ctx, staffId: string, meta: CommandMeta = { actor: 'player' }): CommandResult {
   const member = getStaffMember(ctx.state, staffId);
   if (!member || !isEmployed(ctx.state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
-  const veedelId = staffVeedel(ctx.state, member) ?? member.returnTo?.targetId ?? null;
+  const place = member.assignment ?? member.returnTo;
+  const veedelId =
+    staffVeedel(ctx.state, member) ??
+    (place?.kind === 'spot' ? (getSpot(ctx.state, place.targetId)?.veedelId ?? null) : (place?.targetId ?? null));
+  // Vor dem Entlassen bestimmen: Wer in Haft ohne Stillhaltegeld sitzt, redet eher.
+  const chance = talkChance(member);
   removeMember(ctx, staffId, 'fired');
-  journal.add(ctx, `${member.name} entlassen.`, 'info', { staffId });
-  afterFired(ctx, member, veedelId);
+  const by = meta.actor === 'player' ? '' : ` (von ${actorName(ctx, meta.actor)})`;
+  journal.add(ctx, `${member.name} entlassen${by}.`, 'info', { staffId });
+  afterFired(ctx, member, veedelId, chance);
   return { ok: true };
+}
+
+function actorName(ctx: Ctx, actor: string): string {
+  return getStaffMember(ctx.state, actor.replace('staff:', ''))?.name ?? 'deinem Leutnant';
+}
+
+/** Stillhaltegeld in Haft an- oder abstellen. */
+export function setJailSupport(ctx: Ctx, staffId: string, enabled: boolean): CommandResult {
+  const m = getStaffMember(ctx.state, staffId);
+  if (!m || !isEmployed(ctx.state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
+  if (m.jailSupport === enabled) return { ok: true };
+  m.jailSupport = enabled;
+  addCareer(ctx, staffId, enabled ? 'Bekommt in Haft wieder Stillhaltegeld.' : 'Kein Stillhaltegeld mehr in Haft.');
+  journal.add(
+    ctx,
+    enabled
+      ? `${m.name} bekommt in Haft wieder Stillhaltegeld.`
+      : `Kein Stillhaltegeld mehr für ${m.name}. Wer sitzt und nichts kriegt, redet eher.`,
+    'info',
+    { staffId },
+  );
+  return { ok: true };
+}
+
+/**
+ * Ausfall ersetzen: Für jemanden in Haft oder verletzt kommt ein anderer an den Spot (ein freier Läufer bzw. eine
+ * freie Sicherheit, sonst ein Läufer von der Straße). Die ausgefallene Person kommt danach in den freien Pool, mit
+ * fire wird sie gleich entlassen. Spieler, Leutnants und die Rechte Hand schicken denselben Befehl.
+ */
+export function replaceAbsent(ctx: Ctx, staffId: string, fireToo: boolean, meta: CommandMeta): CommandResult {
+  const m = getStaffMember(ctx.state, staffId);
+  if (!m || !isEmployed(ctx.state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
+  if (!isAbsent(m)) return { ok: false, reason: `${m.name} fällt gar nicht aus.` };
+  const spotId = m.returnTo?.kind === 'spot' ? m.returnTo.targetId : null;
+  if (!spotId || (m.role !== 'runner' && m.role !== 'security')) {
+    if (fireToo) return fire(ctx, staffId, meta);
+    return { ok: false, reason: `Für ${m.name} gibt es keinen Platz zu besetzen.` };
+  }
+  const spot = getSpot(ctx.state, spotId);
+  if (!spot || !isSpotActive(ctx.state, spotId)) {
+    m.returnTo = null;
+    return fireToo ? fire(ctx, staffId, meta) : { ok: true };
+  }
+  let replacementId: string | null = null;
+  const occupied = m.role === 'runner' ? activeRunnerAt(ctx.state, spotId) : securityAt(ctx.state, { spotId })[0];
+  if (occupied) {
+    replacementId = occupied.id;
+  } else {
+    const free = ctx.state.modules.staff.members
+      .filter((o) => o.role === m.role && o.status === 'active' && !o.assignment)
+      .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id))[0];
+    if (free) {
+      assign(ctx, free.id, { kind: 'spot', targetId: spotId });
+      replacementId = free.id;
+    } else if (m.role === 'runner') {
+      const hired = hireRunner(ctx, spotId);
+      if (!hired.ok) return hired;
+      replacementId = (hired.data as { staffId: string }).staffId;
+    } else {
+      return { ok: false, reason: 'Keine freie Sicherheit, die einspringen kann.' };
+    }
+  }
+  m.returnTo = null;
+  const replacement = replacementId ? getStaffMember(ctx.state, replacementId) : undefined;
+  addCareer(ctx, staffId, `Am ${spot.name} ersetzt.`);
+  const by = meta.actor === 'player' ? '' : ` (${actorName(ctx, meta.actor)})`;
+  journal.add(ctx, `Für ${m.name} steht jetzt ${replacement?.name ?? 'jemand Neues'} am ${spot.name}${by}.`, 'info', {
+    staffId,
+    spotId,
+  });
+  if (fireToo) fire(ctx, staffId, meta);
+  return { ok: true, data: { staffId: replacementId } };
 }
 
 /** Einsatz ändern (versetzen, abziehen). Prüft, ob Typ und Ort zusammenpassen. */

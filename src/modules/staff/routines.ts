@@ -5,6 +5,7 @@ import { type Ctx, clock, formatEuro, type GameState, journal, messages, wallet 
 import { canServe, waitingAt } from '../customers';
 import { formatProductAmount, stockSummary, take } from '../goods';
 import { addHeat, getHeat } from '../police';
+import { getSpot } from '../spots';
 import { veedelName } from '../veedel';
 import {
   BETRAYAL_COOLDOWN,
@@ -12,8 +13,6 @@ import {
   BETRAYAL_THRESHOLD,
   BETRAYAL_WEIGHTS,
   DANGER_HEAT,
-  FIRED_TALK_CHANCE,
-  FIRED_TALK_LOYALTY,
   HIDE_AFTER_RAID,
   LOYALTY,
   REVEAL_CHANCE,
@@ -36,6 +35,7 @@ import {
   assign,
   bonus,
   bonusProvider,
+  effectiveWage,
   expectedWage,
   isSpecialist,
   removeMember,
@@ -44,6 +44,7 @@ import {
   setStatus,
   staffContact,
   staffVeedel,
+  talkChance,
   wageCategory,
 } from './members';
 import type { BetrayalKind, StaffMember } from './types';
@@ -59,6 +60,12 @@ function releaseDue(ctx: Ctx): void {
     if (m.statusUntil === null || m.statusUntil > ctx.now) continue;
     if (m.status !== 'jailed' && m.status !== 'injured') continue;
     const wasJailed = m.status === 'jailed';
+    // Ohne Stillhaltegeld hat die Person in der Haft eher geredet.
+    if (wasJailed && !m.jailSupport) {
+      const place = m.returnTo;
+      const veedelId = place?.kind === 'spot' ? (getSpot(ctx.state, place.targetId)?.veedelId ?? null) : null;
+      maybeTalk(ctx, m, veedelId, talkChance(m), `${m.name} hat in der Haft kein Geld von dir gesehen und geredet.`);
+    }
     setStatus(ctx, m.id, 'active');
     addCareer(ctx, m.id, wasJailed ? 'Aus der Haft entlassen.' : 'Wieder gesund.');
     journal.add(ctx, `${m.name} ist ${wasJailed ? 'wieder draußen' : 'wieder fit'}.`, 'info', { staffId: m.id });
@@ -193,12 +200,18 @@ function payWages(ctx: Ctx): void {
   const quitting: StaffMember[] = [];
   let complained = 0;
   for (const m of members) {
-    if (
-      m.wage <= 0 ||
-      wallet.pay(ctx, m.wage, 'dirty', `Lohn ${m.name}`, { category: wageCategory(m), staffId: m.id })
-    ) {
+    // In Haft nur Stillhaltegeld, verletzt der halbe Lohn (effectiveWage).
+    const amount = effectiveWage(m);
+    const category = m.status === 'jailed' ? 'wages.jail' : m.status === 'injured' ? 'wages.injured' : wageCategory(m);
+    const reason =
+      m.status === 'jailed'
+        ? `Stillhaltegeld ${m.name}`
+        : m.status === 'injured'
+          ? `Lohn ${m.name} (verletzt)`
+          : `Lohn ${m.name}`;
+    if (amount <= 0 || wallet.pay(ctx, amount, 'dirty', reason, { category, staffId: m.id })) {
       paid++;
-      total += m.wage;
+      total += amount;
       m.unpaidDays = 0;
       continue;
     }
@@ -209,7 +222,7 @@ function payWages(ctx: Ctx): void {
     } else if (complained++ === 0) {
       messages.send(ctx, {
         contact: staffContact(m),
-        text: `Chef, wo bleibt mein Geld? ${formatEuro(m.wage)} für gestern. Noch einen Tag mach ich das nicht mit.`,
+        text: `Chef, wo bleibt mein Geld? ${formatEuro(amount)} für gestern. Noch einen Tag mach ich das nicht mit.`,
       });
     }
   }
@@ -243,7 +256,7 @@ function dailyLoyalty(ctx: Ctx, m: StaffMember): void {
   else if (ratio >= 1) delta += LOYALTY.wageFair;
   else if (ratio < 0.6) delta += LOYALTY.wageBad;
   else if (ratio < 0.85) delta += LOYALTY.wageLow;
-  if (m.status === 'jailed') delta += LOYALTY.jailDay;
+  if (m.status === 'jailed') delta += m.jailSupport ? LOYALTY.jailDay : LOYALTY.jailDayUnsupported;
   const veedelId = staffVeedel(ctx.state, m);
   if (veedelId && getHeat(ctx.state, veedelId) >= DANGER_HEAT) delta += LOYALTY.heatDay;
   if (delta !== 0) addLoyalty(ctx, m.id, delta);
@@ -307,10 +320,19 @@ export function betray(ctx: Ctx, m: StaffMember, kind: BetrayalKind): number {
   return amount;
 }
 
-/** Wer mit Groll entlassen wird, redet manchmal. */
-export function afterFired(ctx: Ctx, m: StaffMember, veedelId: string | null): void {
-  if (m.stats.loyalty >= FIRED_TALK_LOYALTY || !veedelId || !ctx.chance(FIRED_TALK_CHANCE)) return;
+/**
+ * Wer mit Groll entlassen wird, redet manchmal (chance aus talkChance, vor dem Entlassen bestimmt: Wer in Haft kein
+ * Stillhaltegeld bekam, redet eher).
+ */
+export function afterFired(ctx: Ctx, m: StaffMember, veedelId: string | null, chance: number): void {
+  maybeTalk(ctx, m, veedelId, chance, `${m.name} ist sauer über die Entlassung und hat geredet.`);
+}
+
+/** Mit Wahrscheinlichkeit chance redet die Person: Heat im Veedel, Journal, Ereignis 'staff.betrayed'. */
+function maybeTalk(ctx: Ctx, m: StaffMember, veedelId: string | null, chance: number, text: string): boolean {
+  if (chance <= 0 || !veedelId || !ctx.chance(chance)) return false;
   addHeat(ctx, veedelId, TALK_HEAT);
-  journal.add(ctx, `${m.name} ist sauer über die Entlassung und hat geredet.`, 'bad', { staffId: m.id });
+  journal.add(ctx, text, 'bad', { staffId: m.id, veedelId });
   ctx.emit('staff.betrayed', { staffId: m.id, kind: 'talk', amount: TALK_HEAT });
+  return true;
 }

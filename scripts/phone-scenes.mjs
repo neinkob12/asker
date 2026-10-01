@@ -341,6 +341,38 @@ export const SCENES = [
       api.pulseIsland({ kind: 'earn.dirty', amount: 450, icon: 'moneyBag', tone: 'accent', text: '' });
     })()`,
   },
+  // Ausfälle: ein Läufer in Haft (ohne Stillhaltegeld), einer verletzt, die Nachricht nach der Festnahme
+  {
+    name: 'faellt-aus',
+    js: `(() => {
+      ${BUSINESS_DAYS};
+      const sim = window.koeln.session.sim;
+      if (!window.__absent) {
+        window.__absent = true;
+        const runners = sim.state.modules.staff.members.filter((m) => m.role === 'runner' && m.status === 'active');
+        if (runners[0]) {
+          sim.ctx('police').emit('police.arrest', { staffId: runners[0].id, veedelId: 'altstadt-sued' });
+          sim.step();
+          sim.dispatch({ type: 'staff.setJailSupport', payload: { staffId: runners[0].id, enabled: false } });
+        }
+        if (runners[1]) {
+          runners[1].status = 'injured';
+          runners[1].statusUntil = sim.state.time + 1440;
+          runners[1].returnTo = runners[1].assignment;
+          runners[1].assignment = null;
+        }
+      }
+      window.koeln.runtime.api.selectTab('staff');
+    })()`,
+  },
+  {
+    name: 'festnahme-chat',
+    js: `(() => {
+      const s = window.koeln.session.sim.state;
+      const m = [...s.messages.list].reverse().find((x) => x.options?.some((o) => o.id === 'replace'));
+      window.koeln.runtime.api.openPhone('core.messages', m ? { contactId: m.contactId } : undefined);
+    })()`,
+  },
   // Kasse (nach ein paar Tagen Geschäft): heute, 7 Tage, eine Kategorie
   { name: 'kasse', js: `${BUSINESS_DAYS}; window.koeln.runtime.api.openPhone('finance.app')` },
   {

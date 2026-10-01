@@ -4,7 +4,6 @@
 import { useState } from 'preact/hooks';
 import { formatEuro, formatPercent } from '../../../core';
 import {
-  ActionSheet,
   Button,
   Card,
   ContextMenu,
@@ -36,10 +35,11 @@ import {
   assignmentLabel,
   bonus,
   bonusProvider,
-  dailyWages,
   getStaff,
   getStaffMember,
+  isAbsent,
   isSpecialist,
+  payrollDue,
   RUNNER_DAILY_WAGE,
   RUNNER_HIRE_COST,
   roleName,
@@ -50,6 +50,7 @@ import {
   securityAt,
   staffVeedel,
 } from '../index';
+import { AbsenceSheet, AbsentGroup } from './absence';
 import { Portrait, StatusTag } from './common';
 import { StaffProfile } from './Profile';
 import './staff.css';
@@ -78,7 +79,7 @@ const ROLE_GROUPS: { id: string; label: string; icon: string; match: (m: StaffMe
 const NO_VEEDEL = '-';
 
 export function StaffRow(props: { member: StaffMember }) {
-  const { state, dispatch } = useGame();
+  const { state } = useGame();
   const ui = useUi();
   const [confirm, setConfirm] = useState(false);
   const m = props.member;
@@ -102,24 +103,17 @@ export function StaffRow(props: { member: StaffMember }) {
                 },
               ]
             : []),
-          { label: 'Entlassen …', icon: 'userMinus', destructive: true, onSelect: () => setConfirm(true) },
+          {
+            label: isAbsent(m) ? 'Was tun …' : 'Entlassen …',
+            icon: 'userMinus',
+            destructive: !isAbsent(m),
+            onSelect: () => setConfirm(true),
+          },
         ]}
       >
         <StaffRowItem member={m} />
       </ContextMenu>
-      <ActionSheet
-        open={confirm}
-        onClose={() => setConfirm(false)}
-        title={`${m.name} entlassen?`}
-        message="Die Person geht sofort und kommt nicht wieder."
-        actions={[
-          {
-            label: 'Entlassen',
-            destructive: true,
-            onSelect: () => dispatch({ type: 'staff.fire', payload: { staffId: m.id } }),
-          },
-        ]}
-      />
+      <AbsenceSheet member={m} open={confirm} onClose={() => setConfirm(false)} />
     </>
   );
 }
@@ -167,7 +161,11 @@ function StaffOverview() {
     if (veedel && veedel !== NO_VEEDEL && staffVeedel(state, m) !== veedel) return false;
     return true;
   });
-  const groups = ROLE_GROUPS.map((g) => ({ ...g, members: shown.filter(g.match) })).filter((g) => g.members.length > 0);
+  // Wer ausfällt, steht in der eigenen Gruppe "Fällt aus" (mit Kosten, Rückkehr und Aktionen).
+  const absent = status === 'former' ? [] : shown.filter(isAbsent);
+  const groups = ROLE_GROUPS.map((g) => ({ ...g, members: shown.filter((m) => !isAbsent(m) && g.match(m)) })).filter(
+    (g) => g.members.length > 0,
+  );
   return (
     <div class="staff-overview">
       <div class="staff-summary">
@@ -178,7 +176,7 @@ function StaffOverview() {
         </div>
         <div class="staff-summary__item">
           <IconChip icon="coinEuro" color="money" size="sm" />
-          <strong>{formatEuro(dailyWages(state))}</strong>
+          <strong>{formatEuro(payrollDue(state))}</strong>
           <span>Lohn/Tag</span>
         </div>
         <div class="staff-summary__item">
@@ -218,7 +216,8 @@ function StaffOverview() {
           onChange={setVeedel}
         />
       )}
-      {groups.length === 0 ? (
+      <AbsentGroup members={absent} />
+      {groups.length === 0 && absent.length === 0 ? (
         <Empty
           icon="users"
           action={
@@ -307,7 +306,7 @@ function StaffSummary() {
       ) : (
         <>
           <KeyValue label="Leute" value={`${active} aktiv, ${staff.length - active} fallen aus`} />
-          <KeyValue label="Löhne" value={`${formatEuro(dailyWages(state))} pro Tag`} />
+          <KeyValue label="Löhne" value={`${formatEuro(payrollDue(state))} pro Tag`} />
         </>
       )}
     </Card>
