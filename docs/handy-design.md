@@ -286,8 +286,8 @@ Ankommen, Überschwingen, Startgeschwindigkeit, Umlenken mitten in der Bewegung,
 Eine Geste übergibt beim Loslassen ihre Geschwindigkeit, eine laufende Bewegung lässt sich jederzeit umkehren (zweimal
 schnell Zurück und wieder hinein springt nicht). Bewegt werden nur `transform`, `opacity` und `clip-path`;
 `will-change` und `<html data-moving>` gibt es nur, solange sich etwas bewegt. Gemessen mit `--trace` auf Desktop-Größe:
-App öffnen 5 Layouts (zusammen 11 ms, längstes 8 ms, das ist der Aufbau der neuen Seite), Rand-Wischen 3 Layouts
-(zusammen 1,5 ms). Die Bilder selbst kosten im Test vor allem Rastern ohne Grafikkarte, nicht Layout.
+App öffnen 5 Layouts (zusammen 11 ms, längstes 6–8 ms, das ist der Aufbau der neuen Seite), Rand-Wischen 3 Layouts
+(zusammen 1,6 ms, längstes unter 1 ms). Die Bilder selbst kosten im Test vor allem Rastern ohne Grafikkarte, nicht Layout.
 
 ### 7.3 Übergänge
 
