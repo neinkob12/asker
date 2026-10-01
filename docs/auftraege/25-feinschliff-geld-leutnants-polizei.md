@@ -1,12 +1,12 @@
-# Auftrag 24 – Feinschliff: Geld im frühen Spiel, Leutnants mit Spots, Rechte Hand, Bilanz, Polizei nach Größe
+# Auftrag 25 – Feinschliff: Geld im frühen Spiel, Leutnants mit Spots, Rechte Hand, Bilanz, Polizei nach Größe
 
 Prompt für eine eigene Claude-Session (hohe Denkstufe empfohlen, viel Kleinarbeit über mehrere Module). Neue Session auf
 `main` starten und einfügen:
 
 ```
-Setze den Auftrag in docs/auftraege/24-feinschliff-geld-leutnants-polizei.md vollständig um.
-Lies vorher CLAUDE.md, docs/konzept.md, docs/architektur.md, docs/handy-design.md, src/ui/README.md und
-docs/auftraege/README.md.
+Setze den Auftrag in docs/auftraege/25-feinschliff-geld-leutnants-polizei.md vollständig um.
+Lies vorher CLAUDE.md, docs/konzept.md, docs/architektur.md, docs/handy-design.md, src/ui/README.md,
+src/map/README.md, docs/auftraege/24-look-glas.md und docs/auftraege/README.md.
 ```
 
 ## Wunsch aus dem Probespielen (01.10.2026)
@@ -32,6 +32,10 @@ docs/auftraege/README.md.
   - Offener Branch, noch nicht gemergt: **nicht gleichzeitig loslegen**, sondern dem Spieler Bescheid sagen. Beide
     Aufträge ändern `spots`, `staff`, `hierarchy`, `police`, `customers` und den Bot.
   - Weder noch: auf `main` arbeiten. Auftrag 23 baut dann auf diesem Auftrag auf.
+- **Auftrag 24 (Look „Glas“) ist in `main`** und gilt für alles außerhalb des Handys: HUD mit Heat-Pille
+  (`police/ui`), Razzia als Banner mit Bilanz-Karte „Das hat gekostet“ (`police/ui/raid.tsx`), Konfrontation als
+  Akte, Spot-Schilder. Neue Anzeigen über der Karte folgen diesem Look und seinen Tokens (`--hud-glass` …,
+  `--font-hud`); bestehende Teile daraus nur erweitern.
 - **Die Oberfläche aus Auftrag 22 ist der Maßstab:** Navigation als Stapel (`openPanel` = push),
   `Group`/`ListItem`/`ItemContent`/`SummaryTiles`, Werte rechts in der Zeile, keine Karten in Karten, `Sheet` für
   Auswahl und Formulare, `ActionSheet` für alles Gefährliche oder Teure, `Stepper` für Zahlen, `ContextMenu` bei langem
@@ -61,7 +65,7 @@ docs/auftraege/README.md.
 | Polizei | Die Härte richtet sich nach der **Größe deines Geschäfts** (drei Stufen). **Großrazzia nur für Großhändler** (etwa ab vier, fünf kontrollierten Veedeln oder sehr vielen Spots plus Hafen und mehreren Lagern). Beute anteilig statt fester Mengen. |
 | Ziel fürs frühe Spiel | Ein vorsichtiger Spieler mit zwei, drei Spots kann **sichtbar Geld ansparen**. Das mittlere und späte Spiel wird dadurch nicht leichter (Bot-Zahlen ab Tag 16 bleiben im bisherigen Bereich). |
 
-## Ausgangslage (Stand `main` nach #16 und #17; selbst nachprüfen)
+## Ausgangslage (Stand `main` nach #16, #17 und #20; selbst nachprüfen)
 
 - **Leutnant pro Veedel:** `hierarchy` (Zustand Version 2) speichert `lieutenants: Record<veedelId, staffId>` und
   `posts` pro Veedel. `ai.ts: managedSpots` nimmt die Spots im Veedel nach Andrang, `lieutenantCapacity` =
@@ -223,7 +227,11 @@ Reihenfolge = Arbeitsreihenfolge. Jede Etappe bringt Simulation, Tests und ihre 
 - **Meldungen** nennen die Art: Kontrolle, Razzia am Spot, Razzia in Ehrenfeld, Großrazzia. Ereignis `police.raid`
   bekommt ein Feld für die Art (`scope: 'spot' | 'veedel' | 'major'`), Listener (Toast, Ton, Live-Aktivität,
   Leutnant-Protokoll) anpassen.
-- Die Heat-Stufe „Großeinsatz“ ab 85 umbenennen, damit sie nicht mit der Großrazzia verwechselt wird.
+- Die Heat-Stufe „Großeinsatz“ ab 85 umbenennen, damit sie nicht mit der Großrazzia verwechselt wird (auch in der
+  Heat-Pille des HUD aus Auftrag 24).
+- **Razzia-Darstellung aus Auftrag 24** (`police/ui/raid.tsx`: Banner und Bilanz-Karte) nach Art anpassen: Titel
+  „Razzia am Spot · Ebertplatz“, „Razzia · Ehrenfeld“, „Großrazzia · 3 Veedel“; die Großrazzia listet in der
+  Bilanz-Karte alle betroffenen Veedel und Lager. Ihre Verluste erscheinen auch in der Kasse (Etappe 1).
 - Razzien gegen Gangs bleiben, wie sie sind.
 
 ### 6. Oberfläche: Hierarchie übersichtlich
