@@ -112,17 +112,18 @@ Reihenfolge = Arbeitsreihenfolge. Jede Etappe bringt Simulation, Tests und ihre 
 Der Spieler meldet starkes Ruckeln, besonders mit vielen offenen Aufträgen. Die Messung dazu steht in
 [`docs/perf/2026-10-messung.md`](../perf/2026-10-messung.md) (Hotspots mit Datei und Zeile, Vorschläge, wie man misst).
 
-- **Vorher messen** mit den Skripten aus dem Bericht (`node scripts/perf-sim.mjs`, `node scripts/perf-browser.mjs`;
-  falls die Skripte fehlen, nach der Anleitung im Bericht nachbauen und ins Repo legen). Zahlen im PR notieren.
+- **Vorher messen** mit `npm run perf:sim` (Bot, 20 Spieltage, mit `PERF_SAVE` einen Spielstand schreiben) und
+  `npm run perf:browser -- --save=<spielstand>` (Preact pro Neuzeichnen, Layer, Simulation, CPU-Profil, Szenen mit vielen
+  Anfragen). Zahlen im PR notieren.
 - **Die im Bericht als bestätigt markierten Hotspots beheben**, in der dortigen Reihenfolge. Typische Mittel: Arbeit pro
   Tick nicht mit der Zahl der Aufträge, Nachrichten oder Leute quadratisch wachsen lassen; Komponenten nur auf die Teile
   des Zustands hören, die sie zeigen; Karten-Layer nur dann `setData` aufrufen, wenn sich etwas geändert hat; keine
   Kopien des ganzen Zustands pro Schritt; Journal, Nachrichten und Protokolle begrenzt halten.
 - **Nachher messen**, gleiche Skripte, gleicher Seed. Ziel: pro Spieltag im Bot höchstens die Hälfte der Vorher-Zeit, im
   Browser bei Tempo 4× keine Long Tasks über 50 ms im Normalbetrieb mit zehn offenen Aufträgen.
-- **Benchmark als Test festhalten:** ein Vitest (`src/playtest/perf.test.ts`), der ms pro Spieltag über 20 Spieltage
-  misst und bei grober Verschlechterung (Faktor 2 gegenüber einem Richtwert in der Datei) fehlschlägt, ohne auf
-  langsamen CI-Rechnern zu flattern (Richtwert großzügig, mit `BALANCE`-ähnlichem Schalter nur lokal scharf).
+- **Benchmark als Leitplanke:** `src/playtest/perf.bench.test.ts` (läuft nur mit `PERF=1`) um eine Prüfung ergänzen, die
+  bei grober Verschlechterung (Faktor 2 gegenüber einem Richtwert in der Datei) fehlschlägt, ohne auf langsamen
+  CI-Rechnern zu flattern (Richtwert großzügig, nur lokal scharf).
 
 ### 1. Kampagne: Meilenstein bei 7, Köln komplett bei 12
 

@@ -43,8 +43,8 @@ braucht (z.B. Lesefunktionen für wartende Kunden pro Spot).
   - Verkehr und Figuren zusammen höchstens 2 ms pro Bild auf dem Desktop, 4 ms auf dem Handy.
   - Jede Quelle (`GeoJSONSource.setData`) höchstens 20-mal pro Sekunde und nur, wenn sich etwas geändert hat.
   - Alles pausiert bei `document.hidden`, und `prefers-reduced-motion` schaltet Verkehr und Figuren-Bewegung ab.
-  Gemessen mit den Skripten aus [`docs/perf/2026-10-messung.md`](../perf/2026-10-messung.md) (`scripts/perf-*.mjs`), Zahlen
-  vor und nach jeder Etappe im PR.
+  Gemessen mit `npm run perf:browser` (Anleitung in [`docs/perf/2026-10-messung.md`](../perf/2026-10-messung.md); das Skript
+  um die Drossel und eine fps-Messung mit GPU ergänzen), Zahlen vor und nach jeder Etappe im PR.
 - **Design:** Look Glas über der Karte (`src/ui/README.md`, Abschnitt „Über der Karte“), Farben nur über `mapToken()`
   und die Bedeutungsfarben, gedämpfte Karte (Konzept: „Nachtschicht“). Mehr Leben heißt nicht bunter: Verkehr in
   Grautönen mit Scheinwerfern bei Nacht, Figuren klein und ruhig.
@@ -88,7 +88,7 @@ Reihenfolge = Arbeitsreihenfolge.
 
 ### 0. Messen und Karten-Bremsen lösen
 
-- Vorher messen (`scripts/perf-browser.mjs`, Desktop und Handy-Viewport mit Drossel), Zahlen in den PR.
+- Vorher messen (`npm run perf:browser`, Desktop und Handy-Viewport mit Drossel), Zahlen in den PR.
 - Die im Bericht als „Karte“ markierten Hotspots beheben: `update()` der Layer nur bei geändertem Zustand (Zähler oder
   Referenzvergleich pro Layer statt jedes Mal neu bauen), `setData` nur bei Änderung, Marker-DOM nur anfassen, wenn sich
   Text oder Position ändern, Fahrzeug-Geometrie höchstens 20-mal pro Sekunde, Pause bei `document.hidden`.
