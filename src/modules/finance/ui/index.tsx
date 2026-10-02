@@ -13,6 +13,7 @@ import {
   ItemContent,
   List,
   ListItem,
+  onGameEvent,
   registerAdvisor,
   registerPanel,
   registerPhoneApp,
@@ -419,6 +420,15 @@ registerSearch({
       run: openFinance,
     },
   ],
+});
+
+// Reichen die Löhne für heute Nacht nicht mehr, gibt es einmal am Tag ein Banner (das ist dringend).
+let wageWarningDay = -1;
+onGameEvent('clock.hourStarted', 'finance.wageWarning', (payload, ui, state) => {
+  const runway = wageRunway(state);
+  if (!runway.warn || runway.days !== 0 || wageWarningDay === payload.day) return;
+  wageWarningDay = payload.day;
+  ui.toast(`Die Löhne heute Nacht (${formatEuro(runway.due)}) sind nicht gedeckt.`, 'warn', { urgent: true });
 });
 
 registerAdvisor({

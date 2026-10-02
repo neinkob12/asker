@@ -269,7 +269,7 @@ onGameEvent('order.finished', 'customers.orderToast', (payload, ui, state) => {
   const order = state.modules.customers.orders.find((o) => o.id === payload.orderId);
   if (!order) return;
   if (payload.status === 'done') ui.toast(`${order.contactName}: ${formatEuro(order.price)} kassiert.`, 'good');
-  if (payload.status === 'failed') ui.toast(`Lieferung an ${order.contactName} geplatzt.`, 'bad');
+  if (payload.status === 'failed') ui.toast(`Lieferung an ${order.contactName} geplatzt.`, 'bad', { urgent: true });
 });
 onGameEvent('customer.regularGained', 'customers.regularToast', (payload, ui, state) => {
   const regular = getRegular(state, payload.regularId);

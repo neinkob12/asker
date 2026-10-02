@@ -414,13 +414,16 @@ onGameEvent('shipment.problem', 'suppliers.problemToast', (payload, ui, state) =
     badQuality: `Die Ware aus ${name} ist schlechter als versprochen.`,
     seized: `Lieferung aus ${name} beschlagnahmt!`,
   }[payload.kind];
-  ui.toast(text, 'bad');
+  // Nur eine verlorene Lieferung ist ein Banner wert; Verspätung und Qualität stehen im Verlauf.
+  ui.toast(text, 'bad', { urgent: payload.kind === 'seized' });
 });
 soundOnEvent('shipment.arrived', 'delivery');
 onGameEvent('shipment.arrived', 'suppliers.arrivedToast', (payload, ui, state) => {
   // Schiffsware meldet die Logistik (Ware am Kai).
   if (payload.atPort) return;
-  ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.`, 'good');
+  ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.`, 'good', {
+    urgent: true,
+  });
 });
 onGameEvent('supplier.unlocked', 'suppliers.unlockedToast', (payload, ui, state) => {
   const supplier = getSupplier(state, payload.supplierId);

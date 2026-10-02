@@ -156,10 +156,14 @@ export function registerBuiltins(): void {
   onGameEvent('game.over', 'core.gameOver', (_payload, ui) => ui.openDialog('core.gameOver', {}));
   onGameEvent('campaign.won', 'core.won', (_payload, ui) => ui.openDialog('core.won', {}));
 
-  // Neue Nachricht: Banner mit Vibrieren und Ton (ist der Chat gerade offen, nur ein leiser Ton).
+  // Neue Nachricht: Banner mit Vibrieren und Ton nur, wenn eine Antwort mit Frist erwartet wird (Auftrag 26); alles
+  // andere still (Badge an der App, Mitteilungszentrale). Ist der Chat gerade offen, nur ein leiser Ton.
   onGameEvent('message.received', 'core.messageNotification', (payload, ui, state) => {
     const notification = messageNotification(state, payload.messageId);
-    if (notification) ui.notify({ ...notification, sound: 'message' });
+    if (!notification) return;
+    const message = messages.get(state, payload.messageId);
+    const urgent = !!message && messages.canAnswer(state, message) && message.expiresAt !== undefined;
+    ui.notify({ ...notification, sound: 'message', urgent });
   });
 
   // Große Einnahmen (Deals, Großhandel, Geldwäsche) kurz in der Dynamic Island. Straßenverkäufe zählen in den

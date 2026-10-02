@@ -420,11 +420,11 @@ onGameEvent('staff.levelUp', 'staff.levelUp', (payload, ui, state) => {
 onGameEvent('staff.statusChanged', 'staff.status', (payload, ui, state) => {
   const m = getStaffMember(state, payload.staffId);
   if (!m) return;
-  if (payload.to === 'injured') ui.toast(`${m.name} ist verletzt.`, 'bad');
+  if (payload.to === 'injured') ui.toast(`${m.name} ist verletzt.`, 'bad', { urgent: false });
 });
 onGameEvent('staff.betrayed', 'staff.betrayed', (payload, ui, state) => {
   const m = getStaffMember(state, payload.staffId);
-  if (m) ui.toast(`Ärger mit ${m.name}. Schau ins Journal.`, 'bad');
+  if (m) ui.toast(`Ärger mit ${m.name}. Schau in den Verlauf.`, 'bad', { urgent: false });
 });
 
 // Empfehlungen, Suche und Statistik

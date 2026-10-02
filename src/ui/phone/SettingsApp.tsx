@@ -185,6 +185,12 @@ export function SettingsApp() {
 
       <Section icon="gear" color="system" title="Spiel">
         <Toggle
+          label="Mehr Benachrichtigungen"
+          hint="Auch Routine als Banner (Lieferung bestellt, Level-Aufstieg, jede Nachricht). Sonst nur Dringendes."
+          checked={ui.state.moreNotifications}
+          onChange={ui.setMoreNotifications}
+        />
+        <Toggle
           label="Vibrieren"
           hint="Wackeln bei neuen Nachrichten, leise Klicks bei Schaltern und Gesten"
           checked={ui.state.vibration}

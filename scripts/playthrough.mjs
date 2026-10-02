@@ -6,6 +6,7 @@
 //
 //   npm run playthrough
 //   npm run playthrough -- --days=12 --seed=4 --size=mobile --out=docs/integration
+//   npm run playthrough -- --days=4 --banner=alle   (Einstellung "Mehr Benachrichtigungen": zählt Banner wie vor Auftrag 26)
 
 import { mkdirSync } from 'node:fs';
 import { launchBrowser, restartWithProxySupport, routeExternal, startServer } from './browser.mjs';
@@ -45,6 +46,7 @@ try {
   await page.goto(new URL(`?neu=normal&seed=${seed}&tempo=0`, base).toString());
   await page.waitForFunction(() => window.koeln?.session?.state?.time > 0);
   await page.waitForTimeout(4000);
+  if (args.banner === 'alle') await page.evaluate(() => window.koeln.runtime.api.setMoreNotifications(true));
 
   // Bot und Beobachter im Browser laden (der Dev-Server übersetzt TypeScript).
   await page.evaluate(async () => {
@@ -180,6 +182,7 @@ try {
   await shot('ende');
 
   const seen = await page.evaluate(() => window.playtest.seen);
+  const banners = await page.evaluate(() => window.koeln.runtime.stats.banners);
   const systems = {
     'Verkäufe (Straße)': seen['sale.completed'],
     'Lieferungen angekommen': seen['shipment.arrived'],
@@ -200,6 +203,7 @@ try {
     Stammkunden: seen['customer.regularGained'],
   };
   console.log(`\nNach ${days} Spieltagen (Seed ${seed}): ${JSON.stringify(last)}`);
+  console.log(`  Banner im Handy: ${banners} (${(banners / (days * 24)).toFixed(2)} pro Spielstunde)`);
   for (const [name, count] of Object.entries(systems)) console.log(`  ${name}: ${count ?? 0}`);
   await context.close();
 } finally {

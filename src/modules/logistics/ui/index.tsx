@@ -551,6 +551,7 @@ onGameEvent('cargo.docked', 'logistics.dockedToast', (payload, ui) => {
   ui.toast(
     `Schiff im Hafen: ${formatProductAmount(payload.productId, payload.amount)} ${productName(payload.productId)} am Kai.`,
     'good',
+    { urgent: true },
   );
 });
 onGameEvent('cargo.seized', 'logistics.customsToast', (payload, ui) => {
@@ -560,6 +561,7 @@ onGameEvent('transport.arrived', 'logistics.arrivedToast', (payload, ui, state) 
   ui.toast(
     `Fahrt angekommen: ${payload.amount} Einheiten im ${getWarehouse(state, payload.toId)?.name ?? 'Lager'}.`,
     'good',
+    { urgent: true },
   );
 });
 onGameEvent('transport.seized', 'logistics.seizedToast', (payload, ui) => {

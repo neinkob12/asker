@@ -268,7 +268,9 @@ onGameEvent('police.raid', 'police.toast.raid', (payload, ui, state) => {
 });
 onGameEvent('police.tierChanged', 'police.toast.tier', (payload, ui) => {
   const tier = OPERATION_TIERS[payload.to];
-  ui.toast(`Die Polizei sieht dich jetzt als ${tier.name}.`, payload.to > payload.from ? 'bad' : 'good');
+  ui.toast(`Die Polizei sieht dich jetzt als ${tier.name}.`, payload.to > payload.from ? 'bad' : 'good', {
+    urgent: false,
+  });
 });
 // Blaulicht am Ort der Razzia bzw. Kontrolle, Sirene nur, wenn es dich trifft.
 onGameEvent('police.raid', 'police.fx.raid', (payload, _ui, state) => {

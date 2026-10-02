@@ -183,7 +183,7 @@ registerTab({
 onGameEvent('territory.controlChanged', 'territory.toast', (payload, ui) => {
   const name = veedelName(payload.veedelId);
   if (payload.to === PLAYER_FACTION) ui.toast(`${name} gehört jetzt dir.`, 'good');
-  else if (payload.from === PLAYER_FACTION) ui.toast(`Du hast ${name} verloren.`, 'bad');
+  else if (payload.from === PLAYER_FACTION) ui.toast(`Du hast ${name} verloren.`, 'bad', { urgent: true });
 });
 
 /** HUD: Fortschritt beim Kampagnenziel "Köln übernehmen". Klick öffnet den Tab "Reviere". */
