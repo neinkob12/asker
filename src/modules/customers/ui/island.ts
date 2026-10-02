@@ -1,4 +1,5 @@
-// Dynamic Island: Aufträge mit Frist, Kuriere unterwegs, Umsatz des Tages und ein Auftritt bei großen Einnahmen.
+// Dynamic Island: Aufträge mit Frist, Lieferungen unterwegs (du oder die Rechte Hand), Umsatz des Tages und ein
+// Auftritt bei großen Einnahmen.
 
 import { clock, formatEuro } from '../../../core';
 import { islandCountdown, type LiveActivity, registerLiveActivity } from '../../../ui';
@@ -29,9 +30,9 @@ registerLiveActivity({
       (order): LiveActivity => ({
         id: `customers.delivery.${order.id}`,
         priority: 52,
-        icon: 'truck',
+        icon: order.courierId ? 'crown' : 'car',
         tone: 'info',
-        leading: 'Kurier',
+        leading: order.courierId ? 'Rechte Hand' : 'Du',
         trailing: order.arrivesAt !== null ? islandCountdown(order.arrivesAt - state.time) : '…',
         title: `Lieferung an ${order.contactName}`,
         detail: formatEuro(order.price),

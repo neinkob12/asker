@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { loadSimulation, START_DIRTY_MONEY } from '../../core';
+import { distanceMeters, loadSimulation, START_DIRTY_MONEY } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { getVeedel, veedelAt } from '../veedel';
-import { FOUND_SPOT_COST, MAX_CUSTOM_SPOTS, PRESET_SPOTS, SPOT_LABELS } from './config';
+import { nearestRoadPoint } from '../roads';
+import { allVeedel, getVeedel, veedelAt } from '../veedel';
+import { FOUND_SPOT_COST, MAX_CUSTOM_SPOTS, ORIGINAL_SPOT_IDS, PRESET_SPOTS, SPOT_LABELS } from './config';
 import {
   canFoundSpotAt,
   customSpots,
@@ -88,8 +89,8 @@ describe('spots', () => {
       [7.0085, 50.9635],
       [6.9535, 50.9655],
       [6.918, 50.9175],
-      [6.9655, 50.9115],
-      [6.9165, 50.9485],
+      [6.9655, 50.9145],
+      [6.9205, 50.9485],
       [6.9765, 50.9385],
     ];
     const results = places.map(([lng, lat]) => sim.dispatch({ type: 'spots.found', payload: { lng, lat } }).ok);
@@ -97,7 +98,7 @@ describe('spots', () => {
     expect(customSpots(sim.state)).toHaveLength(MAX_CUSTOM_SPOTS);
   });
 
-  it('alte Spielstände (ohne Zustand) behalten alle Spots offen', () => {
+  it('alte Spielstände (ohne Zustand) behalten ihre zehn Spots offen, die neuen sind gesperrt', () => {
     const sim = createTestGame();
     const raw = structuredClone(sim.state) as unknown as {
       modules: Record<string, unknown>;
@@ -106,7 +107,65 @@ describe('spots', () => {
     delete raw.modules.spots;
     raw.moduleVersions.spots = 1;
     const loaded = loadSimulation(raw, sim.modules);
-    expect(getSpots(loaded.state)).toHaveLength(getAllSpots(loaded.state).length);
+    expect(getSpots(loaded.state).map((s) => s.id)).toEqual([...ORIGINAL_SPOT_IDS]);
+    expect(getAllSpots(loaded.state).length).toBeGreaterThan(ORIGINAL_SPOT_IDS.length);
+    expect(isSpotActive(loaded.state, 'wiener-platz')).toBe(false);
+  });
+
+  it('Spielstände der Version 2 bekommen die neuen Spots gesperrt dazu, Unbekanntes fliegt raus', () => {
+    const sim = createTestGame();
+    const raw = structuredClone(sim.state) as unknown as {
+      modules: { spots: { unlocked: string[]; custom: unknown[] } };
+      moduleVersions: Record<string, number>;
+    };
+    raw.modules.spots.unlocked = ['ebertplatz', 'rheinpark', 'gibt-es-nicht'];
+    raw.moduleVersions.spots = 2;
+    const loaded = loadSimulation(raw, sim.modules);
+    expect(getSpots(loaded.state).map((s) => s.id)).toEqual(['ebertplatz', 'rheinpark']);
+    expect(lockedSpots(loaded.state).map((s) => s.id)).toContain('kalk-post');
+    expect(loaded.state.moduleVersions.spots).toBe(3);
+  });
+});
+
+describe('Spots in jedem Veedel (Auftrag 28)', () => {
+  it('jedes Veedel hat mindestens zwei vorgegebene Spots, mindestens einen zum Kaufen', () => {
+    const sim = createTestGame();
+    for (const v of allVeedel()) {
+      const here = getAllSpots(sim.state).filter((s) => s.veedelId === v.id && !s.custom);
+      expect(here.length, v.id).toBeGreaterThanOrEqual(2);
+      expect(
+        here.some((s) => (s.unlockCost ?? 0) > 0),
+        v.id,
+      ).toBe(true);
+    }
+  });
+
+  it('die Schäl Sick und Bayenthal sind Ziele fürs mittlere Spiel (teurer als die Innenstadt)', () => {
+    const sim = createTestGame();
+    const cheapest = (veedelId: string) =>
+      Math.min(
+        ...getAllSpots(sim.state)
+          .filter((s) => s.veedelId === veedelId)
+          .map((s) => s.unlockCost ?? 0),
+      );
+    for (const id of ['kalk', 'muelheim', 'bayenthal']) expect(cheapest(id), id).toBeGreaterThanOrEqual(800);
+    expect(getSpot(sim.state, 'ottoplatz')?.unlockCost).toBeGreaterThanOrEqual(800);
+    expect(cheapest('neustadt-sued')).toBe(0);
+  });
+
+  it('jeder Spot liegt nah an einer Straße und nicht zu nah an einem anderen', () => {
+    const sim = createTestGame();
+    const spots = getAllSpots(sim.state);
+    for (const spot of spots) {
+      const road = nearestRoadPoint(spot);
+      expect(road, spot.id).not.toBeNull();
+      expect(road?.meters ?? Infinity, spot.id).toBeLessThan(200);
+      for (const other of spots) {
+        if (other.id === spot.id) continue;
+        expect(distanceMeters(spot, other), `${spot.id} / ${other.id}`).toBeGreaterThanOrEqual(200);
+      }
+    }
+    expect(new Set(spots.map((s) => s.id)).size).toBe(spots.length);
   });
 });
 

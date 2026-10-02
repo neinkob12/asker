@@ -48,9 +48,10 @@ export const ROLE_INFO: Record<StaffRole, RoleInfo> = {
     specialist: false,
     age: [17, 31],
   },
+  // Altlast (vor Auftrag 28): wird nicht mehr vergeben, alte Spielstände machen aus Kurieren Läufer.
   courier: {
-    name: 'Kurier',
-    plural: 'Kuriere',
+    name: 'Kurier (alt)',
+    plural: 'Kuriere (alt)',
     wage: 100,
     stats: { speed: 60, caution: 50, strength: 40, charisma: 40, loyalty: 55 },
     keyStats: ['speed', 'caution'],

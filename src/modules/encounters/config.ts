@@ -61,7 +61,7 @@ export const HISTORY_LIMIT = 20;
 export const BACKUP_COST = 300;
 export const BACKUP_MAX_PEOPLE = 2;
 /** Wer als Verstärkung infrage kommt (aktiv, ohne Einsatz), die Stärksten zuerst. */
-export const BACKUP_ROLES = ['security', 'runner', 'courier', 'driver'] as const;
+export const BACKUP_ROLES = ['security', 'runner', 'driver'] as const;
 /** Die Lage startet mit Verstärkung so viel besser (zusätzlich zur Überzahl). */
 export const BACKUP_EDGE_BONUS = 10;
 

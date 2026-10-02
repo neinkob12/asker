@@ -212,7 +212,7 @@ export function assignCommand(ctx: Ctx, staffId: string, assignment: StaffAssign
   } else if (assignment.kind === 'transport') {
     return { ok: false, reason: 'Fahrer schickst du über die Logistik los.' };
   } else {
-    return { ok: false, reason: 'Kuriere setzt der Lieferdienst ein.' };
+    return { ok: false, reason: 'Lieferungen fährt nur die Rechte Hand.' };
   }
   assign(ctx, staffId, assignment);
   return { ok: true };

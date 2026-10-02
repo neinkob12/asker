@@ -84,6 +84,9 @@ export interface LieutenantPost {
   log: LogEntry[];
 }
 
+/** Aufgaben der Rechten Hand mit Stufen-Schloss (Auftrag 28), siehe RIGHT_HAND_TASKS in config.ts. */
+export type RightHandTaskKey = 'orders' | 'pickup' | 'restock' | 'staffing' | 'wholesale' | 'laundering';
+
 /** Aufgaben der Rechten Hand, jede einzeln abschaltbar. */
 export interface RightHandSettings {
   /** Tagesbericht jeden Morgen um 8 Uhr. */
@@ -96,6 +99,44 @@ export interface RightHandSettings {
   absences: boolean;
   /** Gemeinsames Tagesbudget der Leutnants für Anheuern und Bestellen. */
   budgetPerDay: number;
+  // --- Aufgaben mit Stufen-Schloss (Auftrag 28) ---
+  /** Aufträge und Handy (Stufe 1): nimmt Lieferanfragen an, antwortet im Chat und fährt selbst aus. */
+  orders: boolean;
+  /** Lieferanfragen nur bis zu diesem Betrag (zusätzlich gilt die Grenze ihrer Stufe). */
+  orderMaxPrice: number;
+  /** Lieferanfragen nur in Veedeln, die dir gehören. */
+  ordersOwnTurfOnly: boolean;
+  /** Hafen abholen (Stufe 1): schickt einen freien Fahrer der Logistik, sobald Ware am Kai liegt. */
+  pickup: boolean;
+  /** Nachbestellen für ganz Köln (Stufe 2) nach Bestellregeln mit eigenem Tagesbudget. */
+  restock: boolean;
+  restockRules: OrderRule[];
+  restockBudgetPerDay: number;
+  /** Personal (Stufe 3): stellt Bewerber für leere Spots ein, ersetzt Ausfälle, bei denen ein Leutnant feststeckt. */
+  staffing: boolean;
+  /** Großhandel (Stufe 4): nimmt Großhandels-Deals bis zu diesem Betrag an und fährt sie. */
+  wholesale: boolean;
+  wholesaleMaxPrice: number;
+  /** Geldwäsche (Stufe 4): Liegt mehr als launderAbove Schwarzgeld da, wäscht sie launderShare des Überschusses. */
+  laundering: boolean;
+  launderAbove: number;
+  launderShare: number;
+}
+
+/** Was die Rechte Hand seit dem letzten Tagesbericht erledigt hat. */
+export interface RightHandDone {
+  /** Lieferungen und Großhandels-Deals, die sie selbst gefahren hat. */
+  deliveries: number;
+  /** Anfragen, die sie dem Spieler überlassen hat (zu teuer, falsches Veedel, unterwegs). */
+  leftToBoss: number;
+  /** Abholungen am Hafen, die sie veranlasst hat. */
+  pickups: number;
+  /** Bestellungen bei Lieferanten. */
+  orders: number;
+  /** Eingestellte und ersetzte Leute. */
+  hires: number;
+  /** Gewaschenes Schwarzgeld in Euro. */
+  laundered: number;
 }
 
 /** Tagesbericht der Rechten Hand (Zahlen vom Vortag). */
@@ -109,6 +150,8 @@ export interface DailyReport {
   runwayDays: number | null;
   /** Bis zu drei Empfehlungen. */
   advice: string[];
+  /** Was sie erledigt hat, z.B. "3 Lieferungen gefahren, 1 Abholung" (fehlt bei alten Berichten). */
+  done?: string;
 }
 
 /** Die Stelle der Rechten Hand über den Leutnants. */
@@ -128,6 +171,15 @@ export interface RightHandPost {
   /** Ausfälle, um die sie sich schon gekümmert hat (bis die Person zurück ist). */
   handled: string[];
   log: LogEntry[];
+  /** Erfahrung als Rechte Hand (Stufe über RIGHT_HAND_RANK_XP), unabhängig vom Level der Person. */
+  xp: number;
+  /** Erledigtes seit dem letzten Tagesbericht. */
+  done: RightHandDone;
+  /** Ausgaben fürs Nachbestellen am Tag restockDay. */
+  restockDay: number;
+  restockSpent: number;
+  /** Anfragen, die sie dem Spieler überlassen hat (bis sie nicht mehr offen sind). */
+  passed: number[];
 }
 
 export interface HierarchyState {

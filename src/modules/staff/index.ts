@@ -1,7 +1,8 @@
 // Personal: Mitarbeiter mit Namen, Alter, Hintergrund, Werten, Level, Loyalität und Laufbahn.
-// Typen: Läufer, Kuriere, Fahrer, Sicherheit und Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt).
-// Läufer bedienen Kunden an Spots über denselben Befehl wie der Spieler, Kuriere holt sich der Lieferdienst
-// (findAvailable + assign), Fahrer die Logistik (Abholung am Hafen, Umlagern), Sicherheit steht an Spots und Lagern, Spezialisten geben Boni (bonus()).
+// Typen: Läufer, Fahrer, Sicherheit und Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt). Kuriere gibt es seit
+// Auftrag 28 nicht mehr: Lieferungen fährt allein die Rechte Hand (hierarchy, Einsatz 'delivery' über assign).
+// Läufer bedienen Kunden an Spots über denselben Befehl wie der Spieler, Fahrer holt sich die Logistik
+// (findAvailable + assign; Abholung am Hafen, Umlagern), Sicherheit steht an Spots und Lagern, Spezialisten geben Boni (bonus()).
 // Arbeit bringt Erfahrung, Level-Aufstiege heben die Werte. Loyalität hängt an Lohn, Gefahr, Haft und
 // Beförderung; wer kaum noch loyal ist, verrät dich manchmal (mild). Festnahmen bringen Haft, Kaution holt raus.
 //
@@ -48,6 +49,7 @@ import {
   setWageCommand,
 } from './commands';
 import {
+  CAREER_LIMIT,
   DEFAULT_STATS,
   INJURY_DURATION,
   JAIL_DURATION,
@@ -208,6 +210,28 @@ export function migrateStaffV3(old: StaffStateV3): StaffState {
   };
 }
 
+/**
+ * Version 4 → 5 (Auftrag 28): Kuriere fallen als Rolle weg, nur die Rechte Hand fährt Aufträge aus. Bestehende
+ * Kuriere werden Läufer ohne Einsatz; wer gerade eine Lieferung fährt, fährt sie noch zu Ende.
+ */
+export function migrateStaffV4(old: StaffState, state: GameState): StaffState {
+  const convert = (m: StaffMember): StaffMember => {
+    if (m.role !== 'courier') return m;
+    const onDelivery = m.assignment?.kind === 'delivery';
+    return {
+      ...m,
+      role: 'runner',
+      assignment: onDelivery ? m.assignment : null,
+      returnTo: m.returnTo?.kind === 'delivery' ? null : m.returnTo,
+      career: [
+        ...m.career,
+        { time: state.time, text: 'Vom Kurier zum Läufer: Aufträge fährt jetzt die Rechte Hand.' },
+      ].slice(-CAREER_LIMIT),
+    };
+  };
+  return { ...old, members: old.members.map(convert), former: old.former.map(convert) };
+}
+
 // --- Reaktionen auf andere Module ---
 
 function onArrest(ctx: Ctx, staffId: string, veedelId: string): void {
@@ -292,7 +316,7 @@ function lieLowCommand(ctx: Ctx, veedelId: string, until: number, actor: string)
 
 export default defineModule({
   id: 'staff',
-  version: 4,
+  version: 5,
   dependsOn: ['spots', 'customers'],
   init: () => ({ members: [], former: [], hiding: {} }),
   tick,
@@ -330,5 +354,5 @@ export default defineModule({
       }
     },
   },
-  migrations: { 2: migrateStaffV1, 3: migrateStaffV2, 4: migrateStaffV3 },
+  migrations: { 2: migrateStaffV1, 3: migrateStaffV2, 4: migrateStaffV3, 5: migrateStaffV4 },
 });

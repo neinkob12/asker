@@ -60,12 +60,17 @@ Wer eine Entscheidung ändert, ändert sie hier.
 
 ## Personal
 
-- **Typen:** Läufer und Dealer, Kuriere (Lieferdienst) und Fahrer (Abholung am Hafen, Umlagern), Sicherheit, Spezialisten (Anwalt, Buchhalter, Kontakt bei der Polizei).
+- **Typen:** Läufer und Dealer, Fahrer (Abholung am Hafen, Umlagern), Sicherheit, Spezialisten (Anwalt, Buchhalter, Kontakt bei der Polizei). Lieferungen fährt die Rechte Hand (keine Kuriere mehr).
 - **Tiefe:** Individuen mit Namen, Porträt und Werten (z.B. Tempo, Loyalität, Vorsicht), die im Level aufsteigen.
 - **Loyalität:** Verrat kommt selten vor und hat milde Folgen.
 - **Hierarchie:** Boss → Rechte Hand → Leutnants mit bis zu drei Spots → Läufer und Sicherheit. Leutnants führen
   ihre Spots selbstständig (Preise, eigenes Personal, Nachbestellen nach Regeln, Ausfälle), die Rechte Hand hält
   die Löhne zusammen, verteilt Leute und schickt jeden Morgen einen Tagesbericht.
+- **Rechte Hand als Auftragsfahrer (Auftrag 28):** Nur sie nimmt Lieferanfragen an, sagt im Chat für dich zu und
+  fährt selbst mit dem Auto aus; Kuriere gibt es nicht mehr. Sie bekommt Aufgaben, jede einzeln schaltbar und nach
+  Stufe frei (Aufträge und Handy, Hafen abholen, Nachbestellen für ganz Köln, Personal, Großhandel, Geldwäsche),
+  steigt mit erledigten Aufgaben und guten Tagesberichten auf und kann Fehler machen (Vorsicht, Loyalität). Mit allen
+  Aufgaben an läuft Köln ohne den Spieler weiter.
 - **Haft und Ausfälle:** Wer sitzt, bekommt nur Stillhaltegeld (ein Viertel des Lohns), Verletzte den halben Lohn.
   Ohne Stillhaltegeld redet ein Häftling eher. Ausfälle lassen sich ersetzen, auslösen oder aussitzen.
 - **Rekrutierung:** über Kontakte, Empfehlungen und Aufträge, dazu ein Bewerber-Pool.
@@ -148,6 +153,25 @@ des Geschäfts richtet (Kleindealer, Händler, Großhändler mit Großrazzien). 
 - **Noch nicht umgesetzt** (spätere Aufträge, siehe `docs/auftraege/README.md`): eigener Charakter und Aufträge von
   Figuren, Stadt-Events, Tarnfirmen, Upgrade-Baum und Rang-Stufen, weitere Immobilien, eigene Fahrzeugflotte (Fahrzeuge
   kaufen, Ladekapazität), Leutnants, die selbst am Hafen abholen lassen, KI-Porträts, Hosting, Multiplayer.
+
+## Später: mehrere Städte
+
+Köln ist der Einstieg und bleibt die Basis. Ziel für spätere Aufträge (noch nichts davon ist gebaut):
+
+- **Köln als Basis und Warenquelle:** Ist Köln übernommen, geht es in eine andere Stadt (Berlin, Frankfurt, Hamburg).
+  Die Ware kommt weiter über den Niehler Hafen und die Kölner Lager und wird logistisch an die anderen Städte
+  weitergeleitet (Fahrten zwischen den Städten, Kontrollen auf der Autobahn, eigene Fahrzeugflotte).
+- **Die Rechte Hand übernimmt eine Stadt:** Mit allen Aufgaben an (Auftrag 28) hält sie Köln ohne den Spieler am
+  Laufen. Hoch genug gestuft managt sie Köln komplett, während der Spieler in der neuen Stadt wieder klein anfängt.
+  Ihr Tagesbericht wird zum Bericht aus Köln.
+- **Neue Herausforderungen pro Stadt:** andere Gangs, andere Polizei, andere Kundschaft und Preise, eigene Veedel
+  und Wahrzeichen; die Kampagne "Stadt übernehmen" wiederholt sich mit höherem Druck.
+- **Am Ende ruft das Kartell:** Wer mehrere Städte hält, bekommt einen Anruf aus Kolumbien: direkte Lieferungen,
+  neue Mengen, neue Gegner.
+
+Was dafür schon steht: Die Rechte Hand handelt nur über Befehle (wie ein Spieler) und ist so gebaut, dass Köln mit
+allen Aufgaben an allein läuft (Test `src/playtest/autopilot.test.ts`); Lieferanten, Logistik und Spots sind pro
+Stadt als Daten angelegt.
 
 ## Offene Punkte
 

@@ -7,7 +7,7 @@ import { activeEncounters, startEncounter } from '../encounters';
 import { DEFAULT_PRODUCT, getStock, getWarehouses } from '../goods';
 import { referencePrice, setCompetitionFactor } from '../market';
 import { getSpot, getSpots } from '../spots';
-import { defenseStrength, getStaff } from '../staff';
+import { defenseStrength, getStaff, getStaffMember } from '../staff';
 import {
   addInfluence,
   controlledBy,
@@ -427,6 +427,7 @@ function escalate(ctx: Ctx, gang: Gang, s: GangStatus): void {
 
 type RaidTarget =
   | { kind: 'spot'; spotId: string; veedelId: string; staffIds: string[] }
+  /** Jemand auf Auftragsfahrt (seit Auftrag 28 nur die Rechte Hand). */
   | { kind: 'courier'; staffId: string; veedelId: string }
   | { kind: 'warehouse'; warehouseId: string; name: string; veedelId: string; staffIds: string[] };
 
@@ -436,9 +437,7 @@ function pickRaidTarget(ctx: Ctx, gang: Gang, s: GangStatus): RaidTarget | null 
   const staffed = getSpots(state).filter(
     (spot) => turf.has(spot.veedelId) && getStaff(state, { spotId: spot.id, status: 'active' }).length > 0,
   );
-  const couriers = getStaff(state, { role: 'courier', status: 'active' }).filter(
-    (m) => m.assignment?.kind === 'delivery',
-  );
+  const couriers = getStaff(state, { status: 'active' }).filter((m) => m.assignment?.kind === 'delivery');
   const warehouses = getWarehouses(state).filter(() => getStock(state) > 0);
   const turfList = [...turf];
   const raidWarehouse = warehouses.length > 0 && ctx.chance(WAREHOUSE_RAID_CHANCE);
@@ -498,16 +497,20 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
       origin,
     }).encounterId;
   } else if (target.kind === 'courier') {
-    journal.add(ctx, `${gang.name} lauert deinem Kurier in ${veedelName(target.veedelId)} auf!`, 'bad', {
-      staffId: target.staffId,
-    });
+    const driver = getStaffMember(ctx.state, target.staffId)?.name ?? 'deiner Rechten Hand';
+    journal.add(
+      ctx,
+      `${gang.name} lauert ${driver} auf der Auftragsfahrt in ${veedelName(target.veedelId)} auf!`,
+      'bad',
+      { staffId: target.staffId },
+    );
     encounterId = startEncounter(ctx, {
       kind: 'raidDefense',
       veedelId: target.veedelId,
       staffIds: [target.staffId],
       playerPresent: false,
       place: `in ${veedelName(target.veedelId)}`,
-      situation: '{opponent} stoppen deinen Kurier {place}. Zwei Autos, kein Fluchtweg. Sie wollen die Ware.',
+      situation: `{opponent} stoppen ${driver} auf der Auftragsfahrt {place}. Zwei Autos, kein Fluchtweg. Sie wollen die Ware.`,
       opponent,
       origin,
       effects: {
@@ -516,9 +519,9 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
           influence: -2,
           opponentInfluence: 2,
           reputation: -2,
-          text: 'Kurier {place} ausgeraubt.',
+          text: 'Auftragsfahrt {place} ausgeraubt.',
         },
-        retreat: { goods: [-8, -3], text: 'Dein Kurier ist {place} entkommen, ein Teil der Ware nicht.' },
+        retreat: { goods: [-8, -3], text: `${driver} ist {place} entkommen, ein Teil der Ware nicht.` },
       },
     }).encounterId;
   } else {

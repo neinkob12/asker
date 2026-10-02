@@ -310,11 +310,16 @@ function Chat(props: { contactId: string }) {
       footer={
         question?.type === 'message' ? (
           <div class="msg-options">
-            {question.deadlineLabel && (
-              <span class={`msg-deadline ${question.urgent ? 'is-urgent' : ''}`}>
-                <Icon name="clock" /> {question.deadlineLabel}
-              </span>
-            )}
+            <span class="msg-question-meta">
+              <Tag icon={question.routine ? 'users' : 'crown'} category={question.routine ? 'people' : 'brand'}>
+                {question.routine ? 'Routine' : 'Chefsache'}
+              </Tag>
+              {question.deadlineLabel && (
+                <span class={`msg-deadline ${question.urgent ? 'is-urgent' : ''}`}>
+                  <Icon name="clock" /> {question.deadlineLabel}
+                </span>
+              )}
+            </span>
             {question.options.map((o, i) => (
               <Button
                 key={o.id}
@@ -350,6 +355,7 @@ function Chat(props: { contactId: string }) {
           }
           return (
             <li key={e.key} class={`msg-bubble msg-bubble--${e.from} ${e.options.length > 0 ? 'is-open' : ''}`}>
+              {e.via && <small class="msg-via">{e.via}</small>}
               <p>{e.message.text}</p>
               <time>{e.time}</time>
               {e.options.length > 0 && (

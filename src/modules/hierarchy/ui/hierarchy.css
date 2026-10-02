@@ -30,3 +30,11 @@
   font-size: var(--type-subhead, 15px);
   line-height: 1.35;
 }
+
+/* Rechte Hand: Aufgabe mit Schalter und darunter ihrer Regel-Zeile (Auftrag 28) */
+.rh-task + .rh-task {
+  margin-top: var(--space-2);
+}
+.rh-task > .ui-list {
+  margin-top: var(--space-1);
+}

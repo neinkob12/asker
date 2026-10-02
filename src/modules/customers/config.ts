@@ -193,22 +193,32 @@ export const REGULAR_NICKNAMES: Readonly<Record<string, readonly string[]>> = {
 
 // Lieferdienst und Großhandel
 
-/** Chance pro Spielstunde auf eine Lieferanfrage (× Ruf-Faktor × Uhrzeit). */
-export const DELIVERY_CHANCE_PER_HOUR = 0.18;
+/**
+ * Chance pro Spielstunde auf eine Lieferanfrage (× Ruf-Faktor × Uhrzeit). Auftrag 28: halbiert (vorher 0,18), damit
+ * der Spieler hinterherkommt; mit der Rechten Hand auf "Aufträge und Handy" kommt etwas mehr (RIGHT_HAND_ORDER_FACTOR).
+ */
+export const DELIVERY_CHANCE_PER_HOUR = 0.09;
+/** Faktor auf die Chance, wenn die Rechte Hand die Aufträge annimmt und ausfährt (sie schafft sie ja). */
+export const RIGHT_HAND_ORDER_FACTOR = 1.5;
 /** Aufschlag auf den Richtpreis für die Lieferung. */
 export const DELIVERY_MARKUP = 1.25;
 export const DELIVERY_MIN_REPUTATION = 15;
-export const MAX_OPEN_ORDERS = 3;
-/** Antwortfrist für Aufträge im Handy. */
-export const ORDER_EXPIRES_IN = 90;
+/** Höchstens so viele offene Aufträge (Anfragen und Lieferungen) gleichzeitig (vorher 3). */
+export const MAX_OPEN_ORDERS = 2;
+/** Antwortfrist für Aufträge im Handy (vorher 90). */
+export const ORDER_EXPIRES_IN = 150;
 /** Übergabe dauert so lange (zusätzlich zur Fahrt). */
 export const HANDOVER_MINUTES = 10;
-/** Tempo in Metern pro Spielminute: der Spieler mit dem Rad (15 km/h), Kuriere je nach Tempo-Wert. */
+/** Tempo in Metern pro Spielminute: der Spieler mit dem Rad (15 km/h). */
 export const PLAYER_SPEED = 250;
 /** Selbst am Spot stehen: So lange brauchst du für einen Kunden (schneller als ein neuer Läufer). */
 export const PLAYER_SERVE_TIME = 10;
-export const COURIER_BASE_SPEED = 200;
-export const COURIER_SPEED_PER_POINT = 3;
+/**
+ * Die Rechte Hand fährt Aufträge mit dem Auto (Auftrag 28): Grundtempo plus Tempo-Wert, mal Faktor ihrer Stufe
+ * (hierarchy). Bei Tempo 60 rund 28 km/h im Stadtverkehr.
+ */
+export const RIGHT_HAND_BASE_SPEED = 320;
+export const RIGHT_HAND_SPEED_PER_POINT = 2.5;
 
 export const WHOLESALE_CHANCE_PER_HOUR = 0.03;
 export const WHOLESALE_MIN_REPUTATION = 30;

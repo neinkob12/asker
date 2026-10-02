@@ -351,6 +351,45 @@ describe('Nachrichten', () => {
     expect(events.map((e) => e.type)).toContain('message.answered');
   });
 
+  it('Routine-Fragen kann jemand im Namen des Spielers beantworten (answerAs), ohne den Befehl erneut auszuführen', () => {
+    const sim = create();
+    const events = recordEvents(sim);
+    const routine = messages.send(sim.ctx('testCounter'), {
+      contact,
+      text: 'Lieferung?',
+      options: [
+        { id: 'yes', label: 'Ja', reply: 'Bin unterwegs.', command: { type: 'testCounter.add', payload: { by: 1 } } },
+      ],
+      routine: true,
+    });
+    const boss = messages.send(sim.ctx('testCounter'), {
+      contact,
+      text: 'Krieg?',
+      options: [{ id: 'no', label: 'Nein' }],
+    });
+    expect(messages.openRoutine(sim.state).map((m) => m.id)).toEqual([routine]);
+    expect(messages.get(sim.state, boss)?.routine).toBeUndefined();
+    expect(messages.answerAs(sim.ctx('testCounter'), { messageId: routine, optionId: 'yes', via: 'Rechte Hand' })).toBe(
+      true,
+    );
+    // Der Befehl der Option läuft nicht noch einmal (der Aufrufer hat ihn selbst ausgeführt).
+    expect(sim.state.modules.testCounter.count).toBe(0);
+    const thread = messages.thread(sim.state, contact.id);
+    expect(thread.at(-1)).toMatchObject({ from: 'player', text: 'Bin unterwegs.', via: 'Rechte Hand', read: true });
+    expect(messages.get(sim.state, routine)?.answer).toBe('yes');
+    expect(messages.openRoutine(sim.state)).toHaveLength(0);
+    sim.step(); // Ereignisse kommen am Ende des Schritts an.
+    expect(eventsOfType(events, 'message.answered')[0].payload).toMatchObject({
+      messageId: routine,
+      via: 'Rechte Hand',
+    });
+    // Beantwortet ist beantwortet, unbekannte Optionen gehen nicht.
+    expect(messages.answerAs(sim.ctx('testCounter'), { messageId: routine, optionId: 'yes', via: 'x' })).toBe(false);
+    expect(messages.answerAs(sim.ctx('testCounter'), { messageId: boss, optionId: 'gibt-es-nicht', via: 'x' })).toBe(
+      false,
+    );
+  });
+
   it('schlägt der Befehl fehl, bleibt die Nachricht offen', () => {
     const sim = create();
     const id = messages.send(sim.ctx('testCounter'), {

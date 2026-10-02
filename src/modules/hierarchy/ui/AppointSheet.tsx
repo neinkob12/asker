@@ -122,7 +122,7 @@ function PersonStep(props: { onPick: (staffId: string) => void }) {
   const candidates = getStaff(state)
     .filter((m) => !isLieutenant(state, m.id) && m.assignment?.kind !== 'office')
     .map((m) => ({ m, check: canBeLieutenant(state, m.id) }))
-    .filter(({ m }) => m.role === 'runner' || m.role === 'security' || m.role === 'courier' || m.role === 'driver')
+    .filter(({ m }) => m.role === 'runner' || m.role === 'security' || m.role === 'driver')
     .sort(
       (a, b) => Number(b.check.ok) - Number(a.check.ok) || b.m.level - a.m.level || a.m.name.localeCompare(b.m.name),
     );

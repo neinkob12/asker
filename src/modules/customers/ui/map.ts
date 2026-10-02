@@ -1,4 +1,4 @@
-// Lieferungen auf der Karte: Kurier (Roller) oder du selbst (Auto) fahren als 3D-Mini-Fahrzeug über echte Straßen
+// Lieferungen auf der Karte: Du oder die Rechte Hand fahren mit dem Auto als 3D-Mini-Fahrzeug über echte Straßen
 // (roads) vom Lager, aus dem die Ware kommt, zum Kunden (Effekt-Werkzeug createVehicle). Das Ziel ist markiert.
 
 import type { Marker } from 'maplibre-gl';
@@ -34,7 +34,7 @@ export const deliveriesLayer: MapLayer = {
             entry = {
               rider: createVehicle(ctx.map, {
                 path: roadRoute(from, order).path,
-                kind: order.deliveredBy === 'player' ? 'car' : 'courier',
+                kind: 'car',
                 label: order.kind === 'wholesale' ? formatProductAmount(order.productId, order.amount) : undefined,
                 title,
                 progress: orderProgress(state, order),

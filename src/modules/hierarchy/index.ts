@@ -26,6 +26,7 @@ import {
   type CommandMeta,
   type CommandResult,
   type Ctx,
+  clock,
   defineModule,
   formatEuro,
   type GameState,
@@ -57,6 +58,7 @@ import {
   ABSENT_POLICIES,
   CAUTION_LEVELS,
   COMPLAINT_COOLDOWN,
+  DEFAULT_RIGHT_HAND_SETTINGS,
   DEFAULT_SETTINGS,
   DEMOTION_LOYALTY,
   HIDE_AFTER_RAID,
@@ -80,12 +82,21 @@ import {
   appointRightHand,
   configureRightHand,
   dismissRightHand,
+  emptyDone,
+  onRightHandAssigned,
   onRightHandLeft,
   onRightHandStatus,
   rightHandDaily,
   rightHandTick,
 } from './righthand';
-import type { HierarchyState, LieutenantPost, LieutenantSettings, OrderRule, RightHandSettings } from './types';
+import type {
+  HierarchyState,
+  LieutenantPost,
+  LieutenantSettings,
+  OrderRule,
+  RightHandPost,
+  RightHandSettings,
+} from './types';
 
 export { actionInterval, heatThreshold, postSummary } from './ai';
 export {
@@ -105,22 +116,45 @@ export {
   RESERVE_OPTIONS,
   RIGHT_HAND_BUDGET_OPTIONS,
   RIGHT_HAND_DEMAND,
+  RIGHT_HAND_LAUNDER_ABOVE_OPTIONS,
+  RIGHT_HAND_LAUNDER_SHARE_OPTIONS,
+  RIGHT_HAND_MAX_RANK,
   RIGHT_HAND_MIN_LEVEL,
   RIGHT_HAND_MIN_LIEUTENANTS,
   RIGHT_HAND_MIN_LOYALTY,
+  RIGHT_HAND_ORDER_LIMIT_BY_RANK,
+  RIGHT_HAND_ORDER_PRICE_OPTIONS,
+  RIGHT_HAND_RANK_XP,
+  RIGHT_HAND_RESTOCK_BUDGET_OPTIONS,
+  RIGHT_HAND_RESTOCK_MIN_STOCK_OPTIONS,
+  RIGHT_HAND_TASKS,
+  RIGHT_HAND_WHOLESALE_PRICE_OPTIONS,
 } from './config';
-export { isPortSupplierAllowed, orderRuleLabel, ruleStock, ruleWarehouse } from './orders';
+export { isPortSupplierAllowed, orderRuleLabel, PORT_SUPPLIER_HINT, ruleStock, ruleWarehouse } from './orders';
 export {
   absenceHandled,
+  activeRightHand,
   buildReport,
   canBeRightHand,
   getRightHand,
   isRightHand,
+  isTaskActive,
+  isTaskUnlocked,
   payrollReserve,
+  rankForXp,
   rightHandBudgetLeft,
+  rightHandDetour,
+  rightHandDriver,
+  rightHandHandlesOrders,
   rightHandOffered,
+  rightHandOrderLimit,
+  rightHandRank,
+  rightHandRankProgress,
   rightHandSatisfaction,
+  rightHandSkim,
+  rightHandSpeedFactor,
 } from './righthand';
+export { describeDone, mainWarehouseId, restockBudgetLeft } from './tasks';
 export type * from './types';
 
 /** Settings-Änderung: wie die Einstellungen, dazu der alte Mindestbestand (wird zur Regel "automatisch"). */
@@ -157,6 +191,8 @@ declare module '../../core' {
     'hierarchy.rightHandDismissed': { staffId: string };
     /** Tagesbericht der Rechten Hand (Zahlen von gestern). */
     'hierarchy.dailyReport': { staffId: string; day: number; profit: number; problems: number };
+    /** Die Rechte Hand hat eine neue Stufe erreicht (Aufgaben mit diesem Rang sind frei). */
+    'hierarchy.rightHandRankUp': { staffId: string; rank: number };
   }
 }
 
@@ -727,9 +763,45 @@ export function migrateHierarchyV2(old: HierarchyStateV2, state: GameState): Hie
   return { posts, rightHand: null, orderTemplate: null };
 }
 
+type RightHandSettingsV3 = Pick<
+  RightHandSettings,
+  'dailyReport' | 'coordinate' | 'payrollGuard' | 'absences' | 'budgetPerDay'
+>;
+type RightHandPostV3 = Omit<RightHandPost, 'settings' | 'xp' | 'done' | 'restockDay' | 'restockSpent' | 'passed'> & {
+  settings: RightHandSettingsV3;
+};
+type HierarchyStateV3 = Omit<HierarchyState, 'rightHand'> & { rightHand: RightHandPostV3 | null };
+
+/**
+ * Version 3 → 4 (Auftrag 28): Die Rechte Hand bekommt Aufgaben mit Stufen-Schloss, Erfahrung und eine Liste des
+ * Erledigten. Bestehende Einstellungen bleiben, die neuen Aufgaben stehen auf den Standardwerten; sie fängt auf
+ * Stufe 1 an.
+ */
+export function migrateHierarchyV3(old: HierarchyStateV3, state: GameState): HierarchyState {
+  const rh = old.rightHand;
+  return {
+    ...old,
+    rightHand: rh
+      ? {
+          ...rh,
+          settings: {
+            ...DEFAULT_RIGHT_HAND_SETTINGS,
+            ...rh.settings,
+            restockRules: cloneRules(DEFAULT_RIGHT_HAND_SETTINGS.restockRules),
+          },
+          xp: 0,
+          done: emptyDone(),
+          restockDay: clock.day(state.time),
+          restockSpent: 0,
+          passed: [],
+        }
+      : null,
+  };
+}
+
 export default defineModule({
   id: 'hierarchy',
-  version: 3,
+  version: 4,
   dependsOn: ['staff'],
   init: () => ({ posts: {}, rightHand: null, orderTemplate: null }),
   tick: (ctx) => {
@@ -774,6 +846,7 @@ export default defineModule({
       }
       onRightHandLeft(ctx, staffId);
     },
+    'staff.assigned': (ctx, { staffId, assignment }) => onRightHandAssigned(ctx, staffId, assignment),
     'staff.statusChanged': (ctx, { staffId, to }) => {
       onRightHandStatus(ctx, staffId, to);
       const own = getPost(ctx.state, staffId);
@@ -830,5 +903,5 @@ export default defineModule({
       if (sellerId && sellerId !== lt.id) addXp(ctx, sellerId, TRAINING_XP);
     },
   },
-  migrations: { 2: migrateHierarchyV1, 3: migrateHierarchyV2 },
+  migrations: { 2: migrateHierarchyV1, 3: migrateHierarchyV2, 4: migrateHierarchyV3 },
 });

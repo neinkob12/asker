@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clock, type Simulation, START_DIRTY_MONEY } from '../../core';
+import { clock, loadSimulation, type Simulation, START_DIRTY_MONEY } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import type { Customer } from '../customers';
 import { LOYALTY, RUNNER_DAILY_WAGE } from './config';
@@ -85,7 +85,7 @@ describe('staff', () => {
       return sum / 30;
     };
     expect(avg('security', 'strength')).toBeGreaterThan(avg('runner', 'strength') + 10);
-    expect(avg('courier', 'speed')).toBeGreaterThan(avg('security', 'speed') + 5);
+    expect(avg('driver', 'speed')).toBeGreaterThan(avg('security', 'speed') + 5);
   });
 
   it('Läufer bedienen Kunden an ihrem Spot automatisch, über denselben Befehl wie der Spieler', () => {
@@ -165,7 +165,7 @@ describe('staff', () => {
     ]);
     const id = getStaff(sim.state)[0].id;
     expect(getStats(sim.state, id)).toMatchObject({ strength: expect.any(Number), loyalty: expect.any(Number) });
-    expect(findAvailable(sim.state, { role: 'courier' })).toBeUndefined();
+    expect(findAvailable(sim.state, { role: 'driver' })).toBeUndefined();
     expect(bonus(sim.state, 'bailDiscount')).toBe(0);
     const guard = recruit(sim, 'security');
     expect(
@@ -178,17 +178,39 @@ describe('staff', () => {
     expect(getStaff(sim.state, { veedelId: 'ehrenfeld' }).map((m) => m.id)).toEqual([guard.id]);
   });
 
-  it('Kuriere findet der Lieferdienst über findAvailable und bindet sie mit assign', () => {
+  it('Fahrer findet die Logistik über findAvailable und bindet sie mit assign; Lieferungen fährt nur die Rechte Hand', () => {
     const sim = quietGame();
-    const courier = recruit(sim, 'courier');
-    expect(findAvailable(sim.state, { role: 'courier' })?.id).toBe(courier.id);
-    // So nutzt Auftrag 12 die Schnittstelle.
-    expect(assign(sim.ctx('customers'), courier.id, { kind: 'delivery', targetId: 'o1' })).toBe(true);
-    expect(findAvailable(sim.state, { role: 'courier' })).toBeUndefined();
-    assign(sim.ctx('customers'), courier.id, null);
-    expect(findAvailable(sim.state, { role: 'courier' })?.id).toBe(courier.id);
+    const driver = recruit(sim, 'driver');
+    expect(findAvailable(sim.state, { role: 'driver' })?.id).toBe(driver.id);
+    expect(assign(sim.ctx('logistics'), driver.id, { kind: 'transport', targetId: 't1' })).toBe(true);
+    expect(findAvailable(sim.state, { role: 'driver' })).toBeUndefined();
+    assign(sim.ctx('logistics'), driver.id, null);
+    expect(findAvailable(sim.state, { role: 'driver' })?.id).toBe(driver.id);
     const toSpot = { kind: 'spot' as const, targetId: 'uni' };
-    expect(sim.dispatch({ type: 'staff.assign', payload: { staffId: courier.id, assignment: toSpot } }).ok).toBe(false);
+    expect(sim.dispatch({ type: 'staff.assign', payload: { staffId: driver.id, assignment: toSpot } }).ok).toBe(false);
+    const toDelivery = { kind: 'delivery' as const, targetId: 'o1' };
+    expect(sim.dispatch({ type: 'staff.assign', payload: { staffId: driver.id, assignment: toDelivery } })).toEqual({
+      ok: false,
+      reason: 'Lieferungen fährt nur die Rechte Hand.',
+    });
+  });
+
+  it('Version 4 → 5 (Auftrag 28): Kuriere werden Läufer ohne Einsatz, laufende Lieferungen fahren zu Ende', () => {
+    const sim = quietGame();
+    const idle = recruit(sim, 'courier');
+    const busy = recruit(sim, 'courier', { assignment: { kind: 'delivery', targetId: '7' } });
+    const gone = recruit(sim, 'courier');
+    sim.dispatch({ type: 'staff.fire', payload: { staffId: gone.id } });
+    const raw = structuredClone(sim.state) as unknown as { moduleVersions: Record<string, number> };
+    raw.moduleVersions.staff = 4;
+    const loaded = loadSimulation(raw, sim.modules);
+    const find = (id: string) => getStaff(loaded.state).find((m) => m.id === id);
+    expect(find(idle.id)).toMatchObject({ role: 'runner', assignment: null });
+    expect(find(busy.id)).toMatchObject({ role: 'runner', assignment: { kind: 'delivery', targetId: '7' } });
+    expect(find(idle.id)?.career.at(-1)?.text).toMatch(/Rechte Hand/);
+    expect(getStaff(loaded.state, { status: 'quit' }).find((m) => m.id === gone.id)?.role).toBe('runner');
+    expect(getStaff(loaded.state, { role: 'courier' })).toHaveLength(0);
+    expect(loaded.state.moduleVersions.staff).toBe(5);
   });
 
   it('versetzen prüft Typ und Ort', () => {

@@ -61,7 +61,7 @@ export const MONEY_CATEGORIES: Record<MoneyCategory, MoneyCategoryInfo> = {
   'goods.purchase': { label: 'Einkauf Ware', group: 'expense', icon: 'truck' },
   'wages.runner': { label: 'Löhne Läufer', group: 'expense', icon: 'runner' },
   'wages.security': { label: 'Löhne Sicherheit', group: 'expense', icon: 'shield' },
-  'wages.transport': { label: 'Löhne Kuriere und Fahrer', group: 'expense', icon: 'truck' },
+  'wages.transport': { label: 'Löhne Fahrer', group: 'expense', icon: 'truck' },
   'wages.lead': { label: 'Löhne Leutnants und Rechte Hand', group: 'expense', icon: 'crew' },
   'wages.specialist': { label: 'Löhne Spezialisten', group: 'expense', icon: 'scale' },
   'wages.jail': { label: 'Stillhaltegeld (Haft)', group: 'expense', icon: 'jail' },

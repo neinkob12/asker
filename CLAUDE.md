@@ -8,7 +8,9 @@ sind verbunden. Dazu Auftrag 21: echtes Straßennetz (`roads`), Logistik mit Haf
 (`logistics`), Lieferanten zum Freischalten. Auftrag 24: Geldbuch und Kasse (`finance`), Stillhaltegeld in Haft, Leutnants mit bis
 zu drei Spots, Rechte Hand, Polizei-Härte nach Größe des Geschäfts. Auftrag 26: Handy aufgeräumt (sechs Apps, vier im Dock,
 schwarzer Startbildschirm, Verlauf und Wetter in den Einstellungen, Chats löschen, Banner nur für Dringendes, HUD mit
-Ruf · Reviere und aufklappbarem Lager). Wie alles zusammenspielt: `docs/architektur.md`, Abschnitt "Zusammenspiel der Systeme".
+Ruf · Reviere und aufklappbarem Lager). Auftrag 28: Spots in jedem Veedel, keine Kuriere mehr, nur die Rechte Hand fährt
+Aufträge aus und hat Aufgaben mit Stufen (`hierarchy/tasks.ts`); Nachrichten tragen `routine` (Rechte Hand darf antworten)
+oder sind Chefsache. Wie alles zusammenspielt: `docs/architektur.md`, Abschnitt "Zusammenspiel der Systeme".
 
 ## Architektur in Kürze
 
@@ -82,6 +84,8 @@ export default defineModule({
   `MONEY_CATEGORIES` (`src/core/wallet.ts`), z.B. `'wages.runner'`, oder `{ category, spotId, staffId }`, damit die
   Kasse (`finance`) Gewinn und Verlust pro Spot und Leutnant zeigen kann. Journal: `journal.add(ctx, text, kind)`.
 - Leutnants führen **Spots, nicht Veedel** (bis zu drei, `lieutenantOfSpot`, `lieutenantSpots` aus `hierarchy`).
+- Lieferungen fährt **nur die Rechte Hand** (`customers.acceptOrder` mit `by: 'rightHand'`, `rightHandDriver`); alles,
+  was sie selbständig tun soll, ist eine Aufgabe in `hierarchy/tasks.ts` und läuft über `ctx.dispatch` mit Actor.
 - Wege und Fahrzeiten immer über `roads` (`roadRoute`, `travelMinutes`), nie Luftlinie. Das Straßennetz neu erzeugen:
   `src/modules/roads/tools/build-roads.py` (Anleitung im Kopf der Datei).
   Nachrichten: `messages.send(ctx, { contact, text, options, expiresIn?, silent? })` – alle Figuren reden per Handy mit

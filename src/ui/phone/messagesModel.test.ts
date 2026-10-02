@@ -72,6 +72,19 @@ describe('Nachrichten-App: Chat-Liste', () => {
       ok: true,
     });
     expect(chatList(sim.state)[0].preview).toBe('Du: Bin unterwegs');
+    // Antwort im Namen der Rechten Hand: Vorschau und Blase nennen sie, die Frage ist Routine.
+    const routine = messages.send(ctx, {
+      contact: lena,
+      text: 'Und morgen?',
+      options: [{ id: 'yes', label: 'Klar', reply: 'Meine Rechte Hand kommt.' }],
+      routine: true,
+    });
+    const openEntry = chatEntries(sim.state, lena.id).find((e) => e.type === 'message' && e.message.id === routine);
+    expect(openEntry).toMatchObject({ type: 'message', routine: true });
+    messages.answerAs(ctx, { messageId: routine, optionId: 'yes', via: 'Rechte Hand' });
+    expect(chatList(sim.state)[0].preview).toBe('Rechte Hand: Meine Rechte Hand kommt.');
+    const last = chatEntries(sim.state, lena.id).at(-1);
+    expect(last).toMatchObject({ type: 'message', from: 'player', via: 'Rechte Hand' });
     const now = clock.at(5, 12);
     expect(timeLabel(clock.at(5, 9, 5), now)).toBe('09:05');
     expect(timeLabel(clock.at(4, 23), now)).toBe('Gestern');

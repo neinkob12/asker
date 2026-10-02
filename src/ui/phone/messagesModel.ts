@@ -111,6 +111,10 @@ export type ChatEntry =
       expired: boolean;
       /** Gewählte Antwort (Beschriftung), falls beantwortet. */
       answeredWith?: string;
+      /** Wer im Namen des Spielers geantwortet hat (z.B. "Rechte Hand"). */
+      via?: string;
+      /** Offene Frage: Routine (die Rechte Hand darf antworten) oder Chefsache. */
+      routine?: boolean;
     };
 
 /** Zeit relativ zu jetzt: heute nur Uhrzeit, gestern "Gestern", sonst Wochentag (diese Woche) oder "Tag n". */
@@ -132,7 +136,7 @@ export function chatList(state: GameState): ChatListItem[] {
       name: thread.contact.name,
       kind: thread.contact.kind,
       kindLabel: CONTACT_KIND_LABELS[thread.contact.kind] ?? 'Kontakt',
-      preview: `${thread.last.from === 'player' ? 'Du: ' : ''}${thread.last.text}`,
+      preview: `${thread.last.from === 'player' ? `${thread.last.via ?? 'Du'}: ` : ''}${thread.last.text}`,
       timeLabel: timeLabel(thread.last.time, state.time),
       unread: thread.unread,
       awaitingAnswer: open.length > 0,
@@ -185,6 +189,8 @@ export function chatEntries(state: GameState, contactId: string, firstUnreadId?:
       entry.deadlineLabel = `Antwort bis ${clock.formatTime(m.expiresAt)} (noch ${clock.formatDuration(remaining)})`;
     }
     if (answered) entry.answeredWith = answered;
+    if (m.via) entry.via = m.via;
+    if (answerable) entry.routine = !!m.routine;
     entries.push(entry);
   }
   return entries;

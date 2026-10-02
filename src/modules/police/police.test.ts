@@ -194,10 +194,10 @@ describe('police', () => {
       const events = recordEvents(sim);
       sim.state.wallet.dirty = 100_000;
       store(sim.ctx('goods'), { productId: 'weed', amount: 1000 });
-      // Eigener Spot mit Läufer in Ehrenfeld, wo auch das Lager steht.
-      const spot = sim.dispatch({ type: 'spots.found', payload: { lng: 6.915, lat: 50.951 } });
+      // Spot mit Läufer in Ehrenfeld, wo auch das Lager steht (seit Auftrag 28 der Bahnhof Ehrenfeld).
+      const spotId = 'venloer';
+      const spot = sim.dispatch({ type: 'spots.unlock', payload: { spotId } });
       if (!spot.ok) throw new Error(spot.reason);
-      const spotId = (spot.data as { spotId: string }).spotId;
       sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
       // Mit vier besetzten Spots ist man Händler: Razzien treffen das Veedel samt Lager.
       for (const other of ['ebertplatz', 'neumarkt', 'zuelpicher']) {
@@ -475,7 +475,8 @@ describe('police: Härte nach Größe des Geschäfts (Auftrag 24)', () => {
     const major = majorRaid();
     expect(major).toBeDefined();
     expect(major?.payload.veedelIds?.length).toBeGreaterThanOrEqual(2);
-    expect(sim.state.journal.some((j) => j.text.startsWith('Großrazzia in'))).toBe(true);
+    const journalTexts = eventsOfType(events, 'journal.added').map((e) => e.payload.entry.text);
+    expect(journalTexts.some((t) => t.startsWith('Großrazzia in'))).toBe(true);
   });
 
   it('Version 3 wird migriert: geplante Razzien bekommen ihre Art', () => {

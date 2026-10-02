@@ -19,6 +19,7 @@ import {
   isLieutenant,
   lieutenantOfSpot,
   MAX_SPOTS_PER_LIEUTENANT,
+  rightHandHandlesOrders,
 } from '../modules/hierarchy';
 import { amountInProgress, launderingCapacity } from '../modules/laundering';
 import { BERTH_COST, cargoAmount, freeDrivers, getCargo, hasBerth, inTransitAmount } from '../modules/logistics';
@@ -346,14 +347,36 @@ function appointLieutenants(sim: Simulation, stats: BotStats): void {
   }
 }
 
-/** Später: eine Rechte Hand, sobald es zwei Leutnants gibt und jemand die Voraussetzungen erfüllt. */
+/**
+ * Später: eine Rechte Hand, sobald es zwei Leutnants gibt und jemand die Voraussetzungen erfüllt. Der Bot gibt ihr
+ * alle Aufgaben (sie laufen an, sobald ihre Stufe reicht): Aufträge fährt sie, den Hafen holt sie ab, bestellt nach,
+ * stellt ein, macht Großhandel bis 10.000 € und wäscht über 8.000 € die Hälfte.
+ */
 function appointRightHand(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
   if (getRightHand(state) || money(state) <= reserve(state) + 500) return;
   const candidate = getStaff(state, { status: 'active' })
     .filter((m) => canBeRightHand(state, m.id).ok && !isLieutenant(state, m.id))
     .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id))[0];
-  if (candidate) run(sim, stats, { type: 'hierarchy.appointRightHand', payload: { staffId: candidate.id } });
+  if (!candidate) return;
+  if (!run(sim, stats, { type: 'hierarchy.appointRightHand', payload: { staffId: candidate.id } })) return;
+  run(sim, stats, {
+    type: 'hierarchy.configureRightHand',
+    payload: {
+      settings: {
+        orders: true,
+        orderMaxPrice: 3000,
+        pickup: true,
+        restock: true,
+        staffing: true,
+        wholesale: true,
+        wholesaleMaxPrice: 10000,
+        laundering: true,
+        launderAbove: 8000,
+        launderShare: 0.5,
+      },
+    },
+  });
 }
 
 /** Darf der Bot einen Ausfall ersetzen? Ohne Läufer-Grenze immer, sonst nur unter der Grenze oder mit freien Leuten. */
@@ -372,6 +395,8 @@ function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions
   const PREFERENCE = ['tribute', 'ceasefire', 'raise', 'lieLow', 'refuse', 'decline', 'no', 'later', 'ignore'];
   for (const m of [...state.messages.list]) {
     if (!messages.canAnswer(state, m)) continue;
+    // Routine (Lieferanfragen, Hafen) überlässt der Bot seiner Rechten Hand, sobald sie das Handy übernimmt.
+    if (m.routine && rightHandHandlesOrders(state)) continue;
     const options = m.options ?? [];
     const affordable = (id: string) => {
       const option = options.find((o) => o.id === id);

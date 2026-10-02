@@ -1,6 +1,7 @@
 // Lieferdienst und Großhandel: Anfragen kommen als Nachricht ins Spiel-Handy. Der Spieler nimmt an (selbst
-// liefern oder einen freien Kurier schicken) oder lehnt ab. Die Ware verlässt beim Annehmen das Lager, bezahlt
-// wird bei der Übergabe.
+// liefern oder die Rechte Hand schicken, die als Einzige Aufträge fährt) oder lehnt ab. Die Rechte Hand nimmt mit der
+// Aufgabe "Aufträge und Handy" auch selbst an (hierarchy, actor 'staff:<id>'). Die Ware verlässt beim Annehmen das
+// Lager, bezahlt wird bei der Übergabe.
 
 import {
   type CommandResult,
@@ -24,16 +25,23 @@ import {
   store,
   take,
 } from '../goods';
+import {
+  getRightHand,
+  isTaskActive,
+  rightHandDetour,
+  rightHandDriver,
+  rightHandHandlesOrders,
+  rightHandSkim,
+  rightHandSpeedFactor,
+} from '../hierarchy';
 import { isPlayerOnTheRoad } from '../logistics';
 import { averageReferencePrice, referencePrice } from '../market';
 import { changeReputation, getReputation, reputationDemandFactor } from '../reputation';
 import { travelMinutes } from '../roads';
 import { getSpot } from '../spots';
-import { assign, findAvailable, getStaffMember, getStats } from '../staff';
+import { assign, getStaffMember } from '../staff';
 import { allVeedel, getVeedel, type Veedel } from '../veedel';
 import {
-  COURIER_BASE_SPEED,
-  COURIER_SPEED_PER_POINT,
   CUSTOMER_TYPES,
   DEALERS,
   DELIVERY_CHANCE_PER_HOUR,
@@ -50,6 +58,9 @@ import {
   REP_ORDER_EXPIRED,
   REP_ORDER_FAILED,
   REP_WHOLESALE_DONE,
+  RIGHT_HAND_BASE_SPEED,
+  RIGHT_HAND_ORDER_FACTOR,
+  RIGHT_HAND_SPEED_PER_POINT,
   WHOLESALE_AMOUNTS,
   WHOLESALE_BETRAYAL_CHANCE,
   WHOLESALE_CHANCE_PER_HOUR,
@@ -82,7 +93,8 @@ function placeIn(ctx: Ctx, veedel: Veedel): { lng: number; lat: number } {
   };
 }
 
-function orderOptions(orderId: number, kind: OrderKind): MessageOption[] {
+/** Antworten auf eine Anfrage: selbst, Rechte Hand (nur wenn es eine gibt) oder ablehnen. */
+function orderOptions(ctx: Ctx, orderId: number, kind: OrderKind): MessageOption[] {
   return [
     {
       id: 'self',
@@ -90,12 +102,16 @@ function orderOptions(orderId: number, kind: OrderKind): MessageOption[] {
       reply: 'Bin unterwegs.',
       command: { type: 'customers.acceptOrder', payload: { orderId, by: 'player' } },
     },
-    {
-      id: 'courier',
-      label: 'Kurier schicken',
-      reply: 'Ich schick dir jemanden.',
-      command: { type: 'customers.acceptOrder', payload: { orderId, by: 'courier' } },
-    },
+    ...(getRightHand(ctx.state)
+      ? [
+          {
+            id: 'rightHand',
+            label: 'Rechte Hand schicken',
+            reply: 'Meine Rechte Hand kommt vorbei.',
+            command: { type: 'customers.acceptOrder' as const, payload: { orderId, by: 'rightHand' as const } },
+          },
+        ]
+      : []),
     {
       id: 'decline',
       label: kind === 'wholesale' ? 'Kein Interesse' : 'Geht gerade nicht',
@@ -126,6 +142,12 @@ function createOrder(
   text: string,
 ): Order {
   const id = ctx.nextId();
+  // Routine (die Rechte Hand darf antworten): Lieferanfragen immer, Großhandel nur, wenn ihre Aufgabe an ist und der
+  // Betrag in ihrem Rahmen liegt. Alles andere ist Chefsache.
+  const rh = getRightHand(ctx.state);
+  const routine =
+    fields.kind === 'delivery' ||
+    (!!rh && isTaskActive(ctx.state, 'wholesale') && fields.price <= rh.settings.wholesaleMaxPrice);
   const messageId = messages.send(ctx, {
     contact: {
       id: fields.contactId,
@@ -133,10 +155,11 @@ function createOrder(
       kind: fields.kind === 'wholesale' ? 'other' : 'customer',
     },
     text,
-    options: orderOptions(id, fields.kind),
+    options: orderOptions(ctx, id, fields.kind),
     expiresIn: ORDER_EXPIRES_IN,
     // Lieferanfragen kommen oft: nur Badge im Handy, kein Banner. Großhandel ist seltener und lohnt sich mehr.
     silent: fields.kind === 'delivery',
+    routine,
   });
   const order: Order = {
     ...fields,
@@ -163,13 +186,16 @@ function createOrder(
 export function offerDelivery(ctx: Ctx, force = false): Order | null {
   const state = ctx.state;
   const s = state.modules.customers;
-  if (!force && !s.directOrders) return null;
+  // Kunden schreiben direkt, wenn du es eingeschaltet hast oder deine Rechte Hand die Aufträge übernimmt.
+  const viaRightHand = rightHandHandlesOrders(state);
+  if (!force && !s.directOrders && !viaRightHand) return null;
   if (s.orders.filter(isOpen).length >= MAX_OPEN_ORDERS) return null;
   if (getReputation(state) < DELIVERY_MIN_REPUTATION || getStock(state) <= 0) return null;
   const active = s.regulars.filter((r) => r.status === 'active');
   const hour = clock.hour(ctx.now);
   const chance =
     DELIVERY_CHANCE_PER_HOUR *
+    (viaRightHand ? RIGHT_HAND_ORDER_FACTOR : 1) *
     reputationDemandFactor(state) *
     (hourDemandMultiplier(hour) / 1.6) *
     (1 + 0.04 * active.length);
@@ -282,22 +308,33 @@ export function offerWholesale(ctx: Ctx, force = false): Order | null {
   );
 }
 
-export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier'): CommandResult {
+/**
+ * Auftrag annehmen: Du fährst selbst (Rad) oder die Rechte Hand fährt mit dem Auto (nur sie, eine Fahrt zur Zeit,
+ * schneller mit Tempo-Wert und Stufe). 'courier' aus alten Spielständen zählt wie 'player'.
+ */
+export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier' | 'rightHand'): CommandResult {
   const order = findOrder(ctx, orderId);
   if (!order) return { ok: false, reason: 'Diesen Auftrag gibt es nicht.' };
   if (order.status !== 'offered') return { ok: false, reason: 'Der Auftrag ist nicht mehr offen.' };
   if (ctx.now > order.expiresAt) return { ok: false, reason: 'Zu spät, der Kunde hat sich was anderes gesucht.' };
   const state = ctx.state;
+  const who: 'player' | 'rightHand' = by === 'rightHand' ? 'rightHand' : 'player';
   let courierId: string | null = null;
-  if (by === 'player') {
+  let speed = PLAYER_SPEED;
+  let detour = false;
+  if (who === 'player') {
     if (state.modules.customers.orders.some((o) => o.status === 'enRoute' && o.deliveredBy === 'player')) {
       return { ok: false, reason: 'Du bist schon mit einer Lieferung unterwegs.' };
     }
     if (isPlayerOnTheRoad(state)) return { ok: false, reason: 'Du bist gerade mit dem Transporter unterwegs.' };
   } else {
-    const courier = findAvailable(state, { role: 'courier' });
-    if (!courier) return { ok: false, reason: 'Kein freier Kurier.' };
-    courierId = courier.id;
+    const driver = rightHandDriver(state);
+    if (!driver.ok) return { ok: false, reason: driver.reason };
+    courierId = driver.member.id;
+    speed = Math.round(
+      (RIGHT_HAND_BASE_SPEED + driver.member.stats.speed * RIGHT_HAND_SPEED_PER_POINT) * rightHandSpeedFactor(state),
+    );
+    detour = rightHandDetour(ctx);
   }
   if (getStock(state, { productId: order.productId }) < order.amount) {
     return { ok: false, reason: 'Nicht genug im Lager.' };
@@ -309,14 +346,13 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier')
   const goods = take(ctx, { productId: order.productId, amount: order.amount, near: warehouse ?? order });
   if (goods.taken === 0) return { ok: false, reason: 'Nicht genug im Lager.' };
 
-  const speed = courierId
-    ? COURIER_BASE_SPEED + (getStats(state, courierId)?.speed ?? 50) * COURIER_SPEED_PER_POINT
-    : PLAYER_SPEED;
   const handover = order.kind === 'wholesale' ? WHOLESALE_HANDOVER_MINUTES : HANDOVER_MINUTES;
-  // Fahrzeit über echte Straßen (roads).
-  const travel = warehouse ? travelMinutes(warehouse, order, speed) : Math.ceil(3000 / speed);
+  // Fahrzeit über echte Straßen (roads); eine unvorsichtige Rechte Hand verfährt sich manchmal.
+  const travel = Math.round(
+    (warehouse ? travelMinutes(warehouse, order, speed) : Math.ceil(3000 / speed)) * (detour ? 1.3 : 1),
+  );
   order.status = 'enRoute';
-  order.deliveredBy = by;
+  order.deliveredBy = who;
   order.courierId = courierId;
   order.fromWarehouseId = warehouse?.id ?? null;
   order.startedAt = ctx.now;
@@ -324,13 +360,14 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier')
   order.quality = goods.quality;
   order.cut = goods.cut;
   if (courierId) assign(ctx, courierId, { kind: 'delivery', targetId: String(order.id) });
-  const who = courierId ? (getStaffMember(state, courierId)?.name ?? 'Der Kurier') : 'Du';
+  const name = courierId ? (getStaffMember(state, courierId)?.name ?? 'Deine Rechte Hand') : 'Du';
   journal.add(
     ctx,
-    `${who} ${courierId ? 'bringt' : 'bringst'} ${formatProductAmount(order.productId, order.amount)} ` +
-      `${productName(order.productId)} zu ${order.contactName}, Ankunft in ca. ${clock.formatDuration(order.arrivesAt - ctx.now)}.`,
+    `${name} ${courierId ? 'bringt' : 'bringst'} ${formatProductAmount(order.productId, order.amount)} ` +
+      `${productName(order.productId)} zu ${order.contactName}, Ankunft in ca. ${clock.formatDuration(order.arrivesAt - ctx.now)}.` +
+      (detour ? ' Hat sich erst mal verfahren.' : ''),
   );
-  ctx.emit('order.accepted', { orderId: order.id, kind: order.kind, by, courierId });
+  ctx.emit('order.accepted', { orderId: order.id, kind: order.kind, by: who, courierId });
   return { ok: true, data: { arrivesAt: order.arrivesAt } };
 }
 
@@ -351,14 +388,15 @@ export function expireOrderMessage(ctx: Ctx, messageId: number): void {
   finish(ctx, order, 'expired');
 }
 
-/** Ein Kurier fällt aus (Haft, verletzt, weg): Seine Lieferung platzt, die Ware ist verloren. */
+/** Wer fährt, fällt aus (Haft, verletzt, weg): Die Lieferung platzt, die Ware ist verloren. */
 export function courierGone(ctx: Ctx, staffId: string, clearAssignment: boolean): void {
   for (const order of ctx.state.modules.customers.orders) {
     if (order.status !== 'enRoute' || order.courierId !== staffId) continue;
     changeReputation(ctx, REP_ORDER_FAILED, 'Lieferung geplatzt');
+    const name = getStaffMember(ctx.state, staffId)?.name ?? 'Deine Rechte Hand';
     journal.add(
       ctx,
-      `Lieferung an ${order.contactName} geplatzt: Der Kurier ist ausgefallen, ` +
+      `Lieferung an ${order.contactName} geplatzt: ${name} ist ausgefallen, ` +
         `${formatProductAmount(order.productId, order.amount)} ${productName(order.productId)} sind weg.`,
       'bad',
     );
@@ -369,7 +407,7 @@ export function courierGone(ctx: Ctx, staffId: string, clearAssignment: boolean)
 
 /**
  * Bei der Übergabe kann ein Großhandels-Deal kippen: Konfrontation "Deal kippt" (encounters). Wer selbst liefert,
- * ist dabei; ein Kurier muss es allein regeln. Das Ergebnis kommt in onDealResolved an.
+ * ist dabei; die Rechte Hand muss es allein regeln. Das Ergebnis kommt in onDealResolved an.
  */
 function dealGoesWrong(ctx: Ctx, order: Order): boolean {
   if (order.kind !== 'wholesale' || !ctx.chance(WHOLESALE_BETRAYAL_CHANCE)) return false;
@@ -429,6 +467,8 @@ function complete(ctx: Ctx, order: Order, afterFight = false): void {
   s.stats.revenue += order.price;
   if (wholesale) s.stats.wholesaleDeals += 1;
   else s.stats.deliveries += 1;
+  // Eine wenig loyale Rechte Hand zweigt manchmal etwas ab (hierarchy entscheidet und bucht).
+  if (order.deliveredBy === 'rightHand' && order.courierId) rightHandSkim(ctx, order.courierId, order.price);
   changeReputation(ctx, wholesale ? REP_WHOLESALE_DONE : REP_DELIVERY_DONE, 'Zuverlässig geliefert');
   if (order.typeId) {
     const rating = rateSale(ctx, {

@@ -101,6 +101,11 @@ Auftrag 27  Handy-Inhalte (Bilanz, Geldwäsche, Personal, Gangs, Optik)
 Auftrag 23 (geplant) überschneidet sich mit 28 (Disponent, Daueraufträge). Wird 23 später gestartet, gilt: Der
 Disponent ist in der Rechten Hand aus Auftrag 28 aufgegangen.
 
+**Stand Auftrag 28:** umgesetzt (Branch `claude/auftrag-28-spots-rechte-hand`). Jedes Veedel hat mindestens zwei
+Spots, Lieferanfragen kommen halb so oft, Kuriere sind weg, die Rechte Hand fährt Aufträge und hat sechs Aufgaben mit
+Stufen (`hierarchy/tasks.ts`); das Ziel "mehrere Städte" steht in `docs/konzept.md`. Die Oberfläche der Aufgaben
+(Regel-Blätter, Optik) ist Sache von Auftrag 27.
+
 ## Mergen
 
 - Ein PR wird gemergt, sobald er fertig und die CI grün ist. Die Reihenfolge in Phase 1 ist egal.
