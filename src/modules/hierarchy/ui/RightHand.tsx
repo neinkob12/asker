@@ -343,7 +343,6 @@ function RightHandPage() {
           { icon: 'medal', color: 'brand', value: `${rank}/${RIGHT_HAND_MAX_RANK}`, label: 'Stufe' },
           { icon: 'smile', color: satisfaction < 35 ? 'danger' : 'money', value: `${satisfaction} %`, label: 'Laune' },
           { icon: 'coinEuro', color: 'money', value: formatEuro(m.wage), label: 'Lohn/Tag' },
-          { icon: 'lock', color: 'dirty', value: formatEuro(payrollReserve(state)), label: 'Rücklage' },
         ]}
       />
       <Group
@@ -440,7 +439,12 @@ function RightHandPage() {
           );
         })}
       </Group>
-      <Group title="Büro" icon="briefcase" color="brand">
+      <Group
+        title="Büro"
+        icon="briefcase"
+        color="brand"
+        note={`Rücklage für die Löhne: ${formatEuro(payrollReserve(state))}.`}
+      >
         {BASE_TASKS.map((t) => (
           <Toggle
             key={t.key}
