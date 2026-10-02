@@ -133,17 +133,96 @@ Beide Aufträge messen damit vorher und nachher.
 - Meldet GitHub nach einem Merge einen Konflikt in einem anderen PR, schreibst du dessen Session: "Merge main in deinen Branch und löse die Konflikte."
 - Konflikte in `package-lock.json` nie von Hand lösen, sondern mit `npm install` neu erzeugen.
 
-## Danach (spätere Aufträge)
+## Fahrplan nach Auftrag 30 und 31 (Entwurf vom 03.10.2026)
 
-Diese Themen aus dem Konzept kommen nach der Integration, jeweils wieder als eigene Aufträge:
+Fünf Aufträge, geschnitten so, dass jeder allein auf `main` laufen kann. Reihenfolge = Empfehlung; 32 und 33 könnten
+parallel laufen (verschiedene Module), alles andere nacheinander. Vor jedem Auftrag eine kurze Fragerunde zu den offenen
+Punkten, dann wird daraus der Prompt wie bei 30 und 31.
 
-- Logistik, zweiter Teil: eigene Fahrzeugflotte (Fahrzeuge kaufen, Ladekapazität), Leutnants organisieren Abholungen
-  (echte Straßenrouten, mehrere Lager und Kontrollen unterwegs sind mit Auftrag 21 da)
-- Tarnfirmen mit eigenem Gameplay und ausgebaute Geldwäsche
-- Kampagne: Charakter-Erstellung; der Anruf des Kartells nach mehreren Städten (Städte selbst: Auftrag 30 und 31)
-- Fortschritt: Upgrade-Baum, Rang-Stufen, Immobilien
-- Stadt-Events und Sonderaufträge
-- Inhalte: KI-Porträts und -Illustrationen, Musik und Sounds
-- Hosting: online mit Passwortschutz für den Freundeskreis
-- Eigener Anbau
-- Multiplayer
+```
+Auftrag 32  Fuhrpark und Fahrer          ─┐  gleichzeitig möglich (logistics/staff gegen quests/encounters/gangs)
+Auftrag 33  Das Kartell ruft             ─┘
+               │  beide mergen
+               ▼
+Auftrag 34  Tarnfirmen
+               │
+               ▼
+Auftrag 35  Gesichter, Geschichte, Rückblick
+               │
+               ▼
+Auftrag 36  Online für Freunde (Hosting, Cloud-Stände, Spielmodi)
+```
+
+### 32: Fuhrpark und Fahrer
+
+- **Ziel:** Die Routen aus Auftrag 30 bekommen echte Fahrzeuge. Logistik wird ein eigenes Spielfeld statt einer Zahl.
+- **Inhalt:** Fahrzeuge kaufen mit sauberem Geld (Transporter, Sprinter, Kastenwagen, Lkw; später Boot für die Elbe),
+  Ladekapazität ersetzt die eine Kapazität je Fahrt, Verschleiß und Werkstatt, Kennzeichen, die die Polizei nach einer
+  Kontrolle wiedererkennt (umlackieren, abmelden), Fahrzeug pro Fahrer und pro Route, Rechte Hand und Leutnants fahren
+  mit dem, was frei ist. Fahrer bekommen Werte für Autobahn (Vorsicht, Tempo) und ein eigenes Profil in der Personal-App.
+  Garage als Lager-Typ (Stellplätze). Fahrzeuge auf der Karte in Art und Farbe des Fuhrparks.
+- **Module:** `logistics` (Fuhrpark, Kapazität, Werkstatt), `staff` (Fahrer-Werte), `goods` (Garage), `police`
+  (Kennzeichen), Karte (`vehicles.ts` Arten).
+- **Offen (Fragerunde):** Wie viele Fahrzeugtypen und Preise; Verschleiß ja oder nein; Kennzeichen-Gedächtnis der Polizei
+  wie hart; Boot auf der Elbe schon hier oder später; Fahrzeuge klaubar durch Gangs.
+
+### 33: Das Kartell ruft (Endspiel)
+
+- **Ziel:** Wer zwei Städte komplett hält, bekommt den Anruf aus Kolumbien. Ein echtes Endspiel mit eigenem Druck statt
+  Endlosmodus.
+- **Inhalt:** Anruf (Mittel aus Auftrag 30), Kartell als Lieferant mit Mengen in Kilo direkt per Container in jede Hafenstadt,
+  Preise weit unter allem, dafür Mindestabnahme pro Woche und Strafen bei Nichterfüllung (Geld, dann Leute, dann du).
+  Neuer Gegner: eine konkurrierende Organisation, die die Kartell-Ware auch will und in beiden Städten gleichzeitig
+  drückt (Gang-KI über Städte hinweg). Bundespolizei und Europol als neue Polizei-Stufe über Großhändler mit
+  Großrazzien in mehreren Städten. Drei Enden: aussteigen (alles übergeben, Abspann), durchhalten (Kartell zufrieden,
+  Pate, Abspann), untergehen. Quest-Kapitel „Das Kartell“ als roter Faden, Abspann im Look Glas mit Zahlen des
+  Durchgangs und Bestenliste.
+- **Module:** `suppliers` (Kartell), `gangs` (Organisation über Städte), `police` (neue Stufe), `quests`, `encounters`
+  (neue Anlässe: Übergabe am Kai kippt, Erpressung), `outcome` (Enden), UI (Abspann).
+- **Offen:** Ab wie vielen Städten der Anruf kommt (zwei oder drei); Mindestabnahme als Stress-Kern ja oder nein; soll
+  Ablehnen des Kartells möglich sein und was folgt; wie hart die neue Polizei-Stufe.
+
+### 34: Tarnfirmen
+
+- **Ziel:** Die drei Wege der Geldwäsche werden Betriebe mit eigenem Gameplay und sichtbarem Aufstieg.
+- **Inhalt:** Betriebe kaufen (Späti, Waschsalon, Shisha-Bar, Werkstatt, Immobilien), jeder mit echtem Umsatz (legal,
+  sauber), Personal (Geschäftsführer mit Loyalität), Waschkapazität pro Tag und Risiko (Betriebsprüfung,
+  Finanzamt, Steuerfahndung als neue Behörde neben der Polizei), Ausbau (Stufen), Bücher fälschen als Entscheidung.
+  Tarnfirmen auf der Karte als Gebäude mit Schild, in der Geldwäsche-App als Seite pro Betrieb, in der Kasse als eigene
+  Spalte. Betriebe als Deckung: Lager hinter einer Werkstatt wird bei Razzien seltener durchsucht.
+- **Module:** `laundering` (Betriebe), `finance` (Sauber-Umsatz), `police` oder neues Modul `tax` (Prüfung), `goods`
+  (Lager mit Deckung), Karte.
+- **Offen:** Wie viele Betriebsarten; Steuerfahndung als eigene Behörde ja oder nein; Betriebe pro Stadt oder überall; soll
+  ein Betrieb pleitegehen können.
+
+### 35: Gesichter, Geschichte, Rückblick
+
+- **Ziel:** Entscheidungen fühlen sich an, weil Menschen dranhängen. Dazu der Blick zurück auf den Durchgang.
+- **Inhalt:** KI-Porträts für Leute, Gangs-Bosse, Lieferanten, Kontakte (einmal erzeugt, als Dateien im Repo, Stil
+  einheitlich düster), Avatar-Baustein nutzt sie. Figuren-Bögen über Städte hinweg (der Hafenarbeiter, Toni, ein
+  überlebender Gangs-Boss, Peter) als Quest-Kapitel mit Dialogen. Verrat mit Folgen: ein Spitzel in der Crew, der
+  Polizei füttert (Hinweise im Tagesbericht, Verhör als Konfrontation). Statistik-Seite: Verlauf von Vermögen, Ruf,
+  Reviere über Tage, Zeitraffer der Karte, Rekorde und Erfolge (Achievements) in den Einstellungen. Musik pro Stadt
+  und Stimmung. Charakter-Erstellung beim ersten Start (Herkunft, Stärke) als kleiner Startbonus.
+- **Module:** `staff`, `gangs`, `suppliers` (Porträt-Felder), `quests`, `encounters`, neues Modul `stats` oder in `finance`,
+  `src/audio`, `src/ui/player.ts`.
+- **Offen:** Porträts erzeugen womit und wie viele; Charakter-Erstellung ja oder nein; welche Figuren Bögen bekommen;
+  Spitzel-Mechanik wie hart.
+
+### 36: Online für Freunde
+
+- **Ziel:** Das Spiel läuft gehostet mit Passwort, Spielstände liegen in der Cloud, Freunde vergleichen sich.
+- **Inhalt:** Passwortschutz (Vercel Middleware, ein geteiltes Passwort oder Einladungslinks), Cloud-Spielstände
+  (Upstash wie die Bestenliste: Autosave hoch, auf jedem Gerät weiterspielen, Konflikt bei zwei Geräten),
+  Spielmodi beim Start („Entspannt“, „Normal“, „Hardcore“, Saisons mit festem Seed für alle), Bestenliste mit Filter
+  pro Saison und Modus, Tutorial-Kapitel als Quest-Kette für Neue, Fehlerberichte aus dem Spiel (ein Knopf schickt
+  Spielstand und Journal). Vorbereitung für Multiplayer: Zeit läuft weiter, wenn der Spieler offline ist, als
+  Experiment im Schlafmodus aus Auftrag 30 (Zusammenfassung pro Tag), ohne echte Interaktion zwischen Spielern.
+- **Module:** `api/` (Vercel), `leaderboard`, `src/core/persistence.ts` und `saves.ts`, `quests`, Einstellungen.
+- **Offen:** Ein Passwort oder Konten; Offline-Zeit ja oder nein; Saisons ja oder nein; welche Modi.
+
+### Was danach bleibt
+
+- Eigener Anbau (Plantage, Strom und Hitze, eigene Sorten), Justiz (Verfahren, Zeugen), Stadt vier.
+- Multiplayer (Crews gegeneinander in derselben Stadt), erst nach 36 und der Entscheidung zur Offline-Zeit.
+- Upgrade-Baum, wenn Fuhrpark, Tarnfirmen und Ränge zeigen, welche Stellschrauben Spieler wirklich wollen.
