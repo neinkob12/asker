@@ -124,8 +124,35 @@ const COLLECT = `(() => {
 const HIT = (index) => `(async () => {
   const el = document.querySelector('[data-monkey="${index}"]');
   if (!el) return { gone: true };
-  // Blätter, Dialoge und Seitenwechsel gleiten mit einer Feder ein: Erst messen, wenn nichts mehr wandert, sonst
-  // steht alles kurz außerhalb des Bildschirms.
+  // Seitenwechsel dauern eine Weile (Feder): Erst messen, wenn die oberste Seite wieder bei 0 liegt. Liegt sie auch nach
+  // drei Sekunden woanders, hängt der Übergang (das wäre ein echter Fehler, kein Messfehler).
+  const pageOffset = () => {
+    const page = document.querySelector('.phone-page.is-top');
+    const screen = document.querySelector('.phone__screen');
+    return page && screen ? Math.round(page.getBoundingClientRect().left - screen.getBoundingClientRect().left) : 0;
+  };
+  const began = performance.now();
+  let restSince = 0;
+  let stuckAt = null;
+  for (;;) {
+    const off = pageOffset();
+    // Federn melden sich mit data-moving am Dokument (motion.ts): Erst wenn nichts mehr läuft und die Seite bei 0 liegt.
+    const quiet = !document.documentElement.hasAttribute('data-moving');
+    if (Math.abs(off) <= 1 && quiet) {
+      restSince = restSince || performance.now();
+      if (performance.now() - restSince > 150) break;
+    } else {
+      restSince = 0;
+    }
+    if (performance.now() - began > 3000) {
+      // Nur eine Seite, die auch nach drei Sekunden noch woanders liegt, ist ein Fund (läuft nur eine Feder weiter, nicht).
+      if (Math.abs(off) > 1) stuckAt = off;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  if (stuckAt !== null) return { stuck: true, offset: stuckAt };
+  // Blätter, Dialoge und Fenster gleiten mit einer Feder ein: Erst messen, wenn das Element nicht mehr wandert.
   let before = '';
   for (let i = 0; i < 30; i++) {
     const box = el.getBoundingClientRect();
@@ -218,6 +245,8 @@ try {
           await page.evaluate(
             'window.koeln.runtime.api.toggleIsland(false); window.koeln.runtime.api.dismissNotification()',
           );
+          // Das Handy liegt am Handy-Bildschirm manchmal in der Tasche (der Klicktest drückt auch "Weglegen"): holen.
+          await page.evaluate('(() => { const r = window.koeln.runtime; if (!r.ui.phone.open) r.api.showPhone(); })()');
           const items = await page.evaluate(COLLECT);
           if (items.length === 0) {
             // Keine Bedienelemente: Sackgasse? Dann muss "zurück" gehen.
@@ -235,6 +264,14 @@ try {
           const pick = items[Math.floor(random() * items.length)];
           const hit = await page.evaluate(HIT(pick.index));
           if (hit.gone) continue;
+          if (hit.stuck) {
+            note(
+              `stuck:${target.id}:${lastLabel}`,
+              `[${where}] Nach „${lastLabel}" liegt die oberste Seite auch nach 3 Sekunden bei x=${hit.offset} (Übergang hängt).`,
+            );
+            await page.evaluate('window.koeln.runtime.api.back(); window.koeln.runtime.api.showPhone()');
+            continue;
+          }
           if (!hit.inView)
             note(
               `off:${target.id}:${pick.label}`,
