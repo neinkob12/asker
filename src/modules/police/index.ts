@@ -75,6 +75,7 @@ import {
   FAILED_CHASE_FACTOR,
   GANG_RAID_INFLUENCE_LOSS,
   HEAT_DECAY_PER_HOUR,
+  HEAT_DECAY_SHARE_PER_HOUR,
   HEAT_LEVELS,
   MAJOR_RAID_CHANCE_PER_HOUR,
   MAJOR_RAID_COOLDOWN,
@@ -841,7 +842,7 @@ function tick(ctx: Ctx): void {
     if (ctx.chance(chance)) planMajorRaid(ctx);
   }
   for (const v of allVeedel()) {
-    const heat = addHeat(ctx, v.id, -HEAT_DECAY_PER_HOUR);
+    const heat = addHeat(ctx, v.id, -(HEAT_DECAY_PER_HOUR + HEAT_DECAY_SHARE_PER_HOUR * getHeat(ctx.state, v.id)));
     const presence = v.policePresence;
     const raidReady =
       ctx.now >= (police.raidReadyAt[v.id] ?? 0) &&

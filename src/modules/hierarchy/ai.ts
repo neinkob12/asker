@@ -189,9 +189,10 @@ function spend(turn: Turn, amount: number, hiring: boolean): void {
 }
 
 /**
- * Ausfälle im Team (Haft, verletzt) nach seinen Regeln: sofort ersetzen ('replace', 'fireAndReplace') und bei
- * 'fireAndReplace' nach absentDays Tagen entlassen. Aktive Leute entlässt er nie. Jede Entscheidung geht still aufs
- * Handy und ins Protokoll.
+ * Ausfälle im Team (Haft, verletzt) nach seinen Regeln: sofort ersetzen ('replace', 'fireAndReplace'), bei
+ * 'fireAndReplace' nach absentDays Tagen entlassen, bei 'fireNow' sofort entlassen und ersetzen. Fehlen gerade Leute
+ * oder Budget, sagt er das einmal und versucht es bei jedem Durchgang wieder. Aktive Leute entlässt er nie. Jede
+ * Entscheidung geht still aufs Handy und ins Protokoll.
  */
 function handleAbsences(turn: Turn): void {
   const { ctx, post, run } = turn;
@@ -211,22 +212,43 @@ function handleAbsences(turn: Turn): void {
     const what = m.status === 'jailed' ? 'sitzt' : 'ist verletzt';
     const until = m.statusUntil !== null ? ` bis Tag ${clock.day(m.statusUntil)}` : '';
     const atMySpot = m.returnTo?.kind === 'spot' && post.spotIds.includes(m.returnTo.targetId);
+    const fireNow = policy === 'fireNow';
     if (!absence.replaced && atMySpot) {
       const spotId = m.returnTo?.targetId ?? '';
       const free = freeStaff(ctx.state, m.role === 'security' ? 'security' : 'runner')[0];
       const cost = free || m.role !== 'runner' ? 0 : runnerHireCost(ctx.state, spotId);
       const canHire = free || (post.settings.mayHire && cost <= budget(turn, true));
-      if (canHire && run({ type: 'staff.replace', payload: { staffId: m.id } })) {
+      if (canHire && run({ type: 'staff.replace', payload: { staffId: m.id, fire: fireNow } })) {
         absence.replaced = true;
         if (cost > 0) spend(turn, cost, true);
         const replacement = activeRunnerAt(ctx.state, spotId) ?? securityAt(ctx.state, { spotId })[0];
         const team = replacement && !post.team.includes(replacement.id) && cost > 0;
         if (team && replacement) post.team.push(replacement.id);
-        note(turn, `${m.name} ${what}${until}. ${replacement?.name ?? 'Jemand Neues'} übernimmt.`, true, true);
-      } else if (!absence.replaced) {
-        note(turn, `${m.name} ${what}${until}. Ich hab niemanden, der einspringt, und kein Budget.`, true, true);
-        absence.replaced = true;
+        const who = replacement?.name ?? 'Jemand Neues';
+        if (fireNow) {
+          delete post.absences[m.id];
+          note(turn, `${m.name} ${what}. Hab ihn rausgeworfen, ${who} übernimmt.`, true, true);
+          continue;
+        }
+        note(turn, `${m.name} ${what}${until}. ${who} übernimmt.`, true, true);
+      } else if (fireNow) {
+        // Sofort raus, auch wenn gerade niemand einspringen kann: Den leeren Spot besetzt er, sobald es geht.
+        if (run({ type: 'staff.fire', payload: { staffId: m.id } })) {
+          delete post.absences[m.id];
+          note(turn, `${m.name} ${what}. Hab ihn rausgeworfen, für den Spot such ich noch wen.`, true, true);
+        }
+        continue;
+      } else if (!absence.stuck) {
+        absence.stuck = true;
+        note(turn, `${m.name} ${what}${until}. Gerade kann niemand einspringen, ich bleib dran.`, true, true);
       }
+    } else if (fireNow && !atMySpot) {
+      // Ausfall ohne Spot (z.B. schon ersetzt): sofort raus.
+      if (run({ type: 'staff.fire', payload: { staffId: m.id } })) {
+        delete post.absences[m.id];
+        note(turn, `${m.name} ${what}. Hab ihn rausgeworfen.`, true, true);
+      }
+      continue;
     }
     // Entlassen nur, wer in Haft sitzt oder lange verletzt ist, nach absentDays Tagen.
     if (policy === 'fireAndReplace' && ctx.now - absence.since >= post.settings.absentDays * 1440) {

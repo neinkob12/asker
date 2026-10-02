@@ -16,6 +16,7 @@ import { getStock } from '../goods';
 import { hasOwnPrice, priceRatio } from '../market';
 import { getCandidates } from '../recruiting';
 import {
+  activeRunnerAt,
   addXp,
   enlist,
   expectedWage,
@@ -518,6 +519,60 @@ describe('hierarchy: Ausfälle im Team', () => {
     expect(getStaff(sim.state).some((m) => m.id === runner.id)).toBe(true);
     expect(getStaffMember(sim.state, runner.id)?.status).toBe('active');
     expect(runnerAt(sim.state, 'uni')?.id).not.toBe(runner.id);
+  });
+
+  it('"Sofort entlassen und ersetzen": raus und jemand Neues an den Spot, ohne zu warten', () => {
+    const sim = quietGame();
+    const { lt, runner } = teamWithRunner(sim);
+    configure(sim, lt.id, { onAbsent: 'fireNow' });
+    const free = recruit(sim, 'runner');
+    sim.ctx('police').emit('police.arrest', { staffId: runner.id, veedelId: 'lindenthal' });
+    sim.step();
+    wake(sim, lt.id);
+    sim.advance(10);
+    expect(getStaffMember(sim.state, runner.id)?.leftReason).toBe('fired');
+    expect(runnerAt(sim.state, 'uni')?.id).toBe(free.id);
+    expect(sim.state.messages.list.some((m) => m.options?.some((o) => o.id === 'replace'))).toBe(false);
+  });
+
+  it('"Sofort entlassen" auch ohne Ersatz und Budget: der Spot wird besetzt, sobald Geld da ist', () => {
+    const sim = quietGame();
+    const { lt, runner } = teamWithRunner(sim);
+    configure(sim, lt.id, { onAbsent: 'fireNow' });
+    sim.state.wallet.dirty = 0;
+    sim.ctx('police').emit('police.arrest', { staffId: runner.id, veedelId: 'lindenthal' });
+    sim.step();
+    wake(sim, lt.id);
+    sim.advance(10);
+    expect(getStaffMember(sim.state, runner.id)?.leftReason).toBe('fired');
+    expect(activeRunnerAt(sim.state, 'uni')).toBeUndefined();
+    sim.state.wallet.dirty = 5000;
+    wake(sim, lt.id);
+    sim.advance(10);
+    expect(activeRunnerAt(sim.state, 'uni')).toBeDefined();
+  });
+
+  it('fehlt beim Ersetzen das Budget, versucht er es weiter und meldet sich nur einmal', () => {
+    const sim = quietGame();
+    const { lt, runner } = teamWithRunner(sim);
+    configure(sim, lt.id, { onAbsent: 'replace' });
+    sim.state.wallet.dirty = 0;
+    sim.ctx('police').emit('police.arrest', { staffId: runner.id, veedelId: 'lindenthal' });
+    sim.step();
+    for (let i = 0; i < 3; i++) {
+      wake(sim, lt.id);
+      sim.advance(10);
+    }
+    expect(activeRunnerAt(sim.state, 'uni')).toBeUndefined();
+    const stuck = (m: { contactId: string; text: string }) =>
+      m.contactId === `staff:${lt.id}` && m.text.includes('ich bleib dran');
+    expect(sim.state.messages.list.filter(stuck)).toHaveLength(1);
+    // Kommt ein freier Läufer dazu, stellt er ihn hin, solange die Person noch sitzt.
+    const free = recruit(sim, 'runner');
+    wake(sim, lt.id);
+    sim.advance(10);
+    expect(runnerAt(sim.state, 'uni')?.id).toBe(free.id);
+    expect(getStaffMember(sim.state, runner.id)?.status).toBe('jailed');
   });
 
   it('"Abwarten" lässt den Platz frei und fragt den Spieler', () => {

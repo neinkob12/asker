@@ -68,6 +68,10 @@ export const ABSENT_POLICIES: Record<AbsentPolicy, { name: string; hint: string 
     name: 'Ersetzen, später entlassen',
     hint: 'Er stellt sofort jemand anderen hin und entlässt Leute, die zu lange ausfallen.',
   },
+  fireNow: {
+    name: 'Sofort entlassen und ersetzen',
+    hint: 'Wer sitzt oder verletzt ist, fliegt sofort raus, und er stellt jemand Neues hin. Wer ohne Stillhaltegeld rausfliegt, redet eher.',
+  },
 };
 
 /**
