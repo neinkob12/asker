@@ -95,8 +95,8 @@ const SCAN = `(() => {
 const COLLECT = `(() => {
   const SKIP = /neues spiel|neustart|zurücksetzen|spielstand|exportieren|importieren|datei|aufgeben|beenden|weglegen/i;
   // Liegt ein Blatt oder Dialog offen, ist alles dahinter (unter der Abdunklung) für den Spieler nicht erreichbar.
-  const layered = !!document.querySelector('.ui-sheet, .ui-dialog');
-  const base = layered ? ['.ui-dialog', '.ui-sheet'] : ['.phone', '.ui-dialog', '.ui-sheet'];
+  const layered = !!document.querySelector('.ui-sheet, .ui-dialog, .ui-action-sheet');
+  const base = layered ? ['.ui-dialog', '.ui-sheet', '.ui-action-sheet'] : ['.phone', '.ui-dialog', '.ui-sheet'];
   const sel = base
     .flatMap((root) => ['button', '[role="button"]', '[role="tab"]', '[role="switch"]', 'select', 'input'].map((k) => root + ' ' + k))
     .join(',');
@@ -134,16 +134,33 @@ const HIT = (index) => `(async () => {
     before = now;
     await new Promise((resolve) => setTimeout(resolve, 60));
   }
-  el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+  // Wie ein Spieler: nur Bereiche scrollen, die sich scrollen lassen (overflow auto oder scroll). scrollIntoView
+  // verschöbe auch Bereiche mit overflow hidden (Handy-Bildschirm, Blätter) und erzeugte Überdeckungen, die es nicht gibt.
+  for (let a = el.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+    const cs = getComputedStyle(a);
+    const canY = /(auto|scroll)/.test(cs.overflowY) && a.scrollHeight > a.clientHeight + 1;
+    const canX = /(auto|scroll)/.test(cs.overflowX) && a.scrollWidth > a.clientWidth + 1;
+    if (!canY && !canX) continue;
+    const box = el.getBoundingClientRect();
+    const view = a.getBoundingClientRect();
+    if (canY && (box.top < view.top || box.bottom > view.bottom)) {
+      a.scrollTop += box.top + box.height / 2 - (view.top + view.height / 2);
+    }
+    if (canX && (box.left < view.left || box.right > view.right)) {
+      a.scrollLeft += box.left + box.width / 2 - (view.left + view.width / 2);
+    }
+  }
   const r = el.getBoundingClientRect();
   const x = r.left + r.width / 2;
   const y = r.top + r.height / 2;
   const inView = x >= 0 && y >= 0 && x <= innerWidth && y <= innerHeight;
   const top = document.elementFromPoint(x, y);
   const ok = !!top && (el === top || el.contains(top) || top.contains(el));
-  const overlay = !!top && !!top.closest('.island, .phone-notice, .ui-sheet-layer, .ui-sheet-backdrop, .ui-dialog-backdrop, .ui-dialog, .ui-menu, .ui-popover, .hud-flyout, .phone-notifications');
+  const overlay = !!top && !!top.closest('.island, .phone-notice, .ui-sheet-layer, .ui-sheet-backdrop, .ui-action-sheet, .ui-dialog-backdrop, .ui-dialog, .ui-menu, .ui-popover, .hud-flyout, .phone-notifications');
   const name = top ? (top.className && top.className.baseVal !== undefined ? top.className.baseVal : String(top.className)).slice(0, 60) || top.tagName : 'nichts';
-  return { x, y, inView, ok, overlay, covered: name, rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], vw: innerWidth, vh: innerHeight };
+  const chain = [];
+  for (let n = el, i = 0; n && i < 4; n = n.parentElement, i++) chain.push(n.tagName.toLowerCase() + '.' + String(n.className?.baseVal ?? n.className).split(' ').filter(Boolean).slice(0, 2).join('.'));
+  return { x, y, inView, ok, overlay, covered: name, chain: chain.join(' < '), rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], vw: innerWidth, vh: innerHeight };
 })()`;
 
 const findings = new Map();
@@ -221,10 +238,13 @@ try {
           if (!hit.inView)
             note(
               `off:${target.id}:${pick.label}`,
-              `[${where}] „${pick.label}" liegt auch nach Scrollen außerhalb des Bildschirms (Rechteck ${hit.rect.join(',')}, Fenster ${hit.vw}×${hit.vh}).`,
+              `[${where}] „${pick.label}" liegt auch nach Scrollen außerhalb des Bildschirms (Rechteck ${hit.rect.join(',')}, Fenster ${hit.vw}×${hit.vh}; ${hit.chain}).`,
             );
           else if (!hit.ok && !hit.overlay)
-            note(`cov:${target.id}:${pick.label}`, `[${where}] „${pick.label}" wird verdeckt von ${hit.covered}.`);
+            note(
+              `cov:${target.id}:${pick.label}`,
+              `[${where}] „${pick.label}" wird verdeckt von ${hit.covered} (${hit.chain}).`,
+            );
           lastLabel = pick.label;
           if (hit.inView) {
             try {
