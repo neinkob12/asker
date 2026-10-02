@@ -57,25 +57,59 @@ function QualityLabel(props: { quality: number }) {
   );
 }
 
+/** Kurzanzeige im HUD: "2,1 kg Gras + 489 Stück Pillen" (die zwei größten Posten), dazu die Aufstellung zum Aufklappen. */
 function StockHud() {
   const { state } = useGame();
   const ui = useUi();
-  const grams = stockSummary(state)
-    .filter((r) => getProduct(r.productId)?.unit === 'g')
-    .reduce((sum, r) => sum + r.amount, 0);
-  const other = getStock(state) - grams;
-  const title = stockSummary(state)
-    .map((r) => `${formatProductAmount(r.productId, r.amount)} ${productName(r.productId)}`)
-    .join(', ');
+  const rows = [...stockSummary(state)].sort((a, b) => b.amount - a.amount);
+  const warehouses = getWarehouses(state);
+  const text = (r: (typeof rows)[number]) =>
+    `${formatProductAmount(r.productId, r.amount)} ${productName(r.productId)}`;
+  const short =
+    rows.length === 0
+      ? 'leer'
+      : rows.length <= 2
+        ? rows.map(text).join(' + ')
+        : `${text(rows[0])} + ${rows.length - 1} weitere`;
   return (
     <HudPill
       icon="warehouse"
       color="goods"
       label="Lager"
-      value={`${formatProductAmount('weed', grams)}${other > 0 ? ` +${other}` : ''}`}
-      title={title || 'Lager leer'}
-      tone={grams + other <= 0 ? 'bad' : undefined}
-      onClick={() => ui.openPanel('goods.warehouse', { warehouseId: DEFAULT_WAREHOUSE })}
+      value={short}
+      title={rows.map(text).join(', ') || 'Lager leer'}
+      tone={rows.length === 0 ? 'bad' : undefined}
+      onClick={() => ui.openPanel('goods.warehouse', { warehouseId: warehouses[0]?.id ?? DEFAULT_WAREHOUSE })}
+      detailsAction="Lager öffnen"
+      details={
+        <div class="goods-flyout">
+          {rows.length === 0 ? (
+            <p class="goods-flyout__empty">Nichts auf Lager. Zeit für Nachschub.</p>
+          ) : (
+            <ul class="goods-flyout__rows">
+              {rows.map((r) => {
+                const inWarehouses = warehouses.filter(
+                  (w) => getStock(state, { warehouseId: w.id, productId: r.productId }) > 0,
+                );
+                return (
+                  <li key={r.productId}>
+                    <strong>{text(r)}</strong>
+                    <span>
+                      {qualityTier(r.quality).name} · {formatPercent(r.quality)}
+                      {warehouses.length > 1 && inWarehouses.length > 0
+                        ? ` · ${inWarehouses.map((w) => w.name.replace(/^(Lager|Garage|Halle|Keller) /, '')).join(', ')}`
+                        : ''}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <button type="button" class="hud-flyout__action is-secondary" onClick={() => ui.openPhone('suppliers.app')}>
+            Bestellen
+          </button>
+        </div>
+      }
     />
   );
 }

@@ -1,10 +1,10 @@
 // HUD im Look "Glas": drei Gruppen in der freien Kartenfläche links vom Handy (--map-right ist die Grenze).
-//   oben links   Geld-Kapsel: Geld und Heat (placement 'main'), darunter Warnungen ('alert')
-//   oben Mitte   Uhr-Kapsel: Wochentag, Tag, Uhrzeit, Wetter ('time'), Spieltempo, Menü
-//   oben rechts  Kennzahl-Kacheln Lager, Ruf, Köln ('more'; stehen zusätzlich auf dem Startbildschirm des Handys)
+//   oben links   Geld-Kapsel: Geld (Klick öffnet die Geldwäsche) und Heat (placement 'main'), darunter Warnungen
+//   oben Mitte   Uhr-Kapsel: Wochentag, Tag, Uhrzeit, Spieltempo, Menü ('time' ist seit Auftrag 26 leer)
+//   oben rechts  Kennzahl-Kacheln Lager und Ruf · Reviere ('more'), jede klappt beim Drüberfahren eine Karte auf
 // Ist die Kartenfläche schmal, rücken die Kacheln unter die Uhr (Container-Query in shell.css). Am Handy-Bildschirm
-// bleiben nur Geld und Uhr kompakt, der Rest steht im Handy. Meldungen gibt es über der Karte nicht mehr: Sie laufen
-// über Banner und Island des Handys und die App Meldungen.
+// stehen Geld und Uhr kompakt nebeneinander, die Kacheln flach darunter. Meldungen gibt es über der Karte nicht mehr:
+// Sie laufen über Banner und Island des Handys und den Verlauf.
 
 import type { ComponentChildren } from 'preact';
 import { SPEEDS } from '../../core';
@@ -161,7 +161,7 @@ export function Hud() {
           <SpeedControl />
           {!mobile && <MenuButton />}
         </div>
-        {!mobile && more.length > 0 && (
+        {more.length > 0 && (
           <div class="hud-tiles">
             <HudItems items={more} />
           </div>

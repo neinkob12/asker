@@ -3,7 +3,7 @@
 
 import { clock, formatPercent } from '../../../core';
 import { type MapMood, mapEffects, registerMapLayer, setMapMood, setPrecipitation } from '../../../map';
-import { audio, Icon, KeyValue, registerHudItem, registerSlot, useGame, useUi } from '../../../ui';
+import { audio, Icon, KeyValue, registerSlot, useGame } from '../../../ui';
 import {
   getForecast,
   getWeather,
@@ -31,27 +31,6 @@ function iconFor(kind: WeatherKind, time: number): string {
 }
 
 const temp = (t: number) => `${Math.round(t)}°`;
-
-/** Wetter in der "Heute"-Zeile des Startbildschirms: Symbol, Temperatur, Wetterlage. Ein Tipp öffnet die App. */
-function WeatherHud() {
-  const { state } = useGame();
-  const ui = useUi();
-  const w = getWeather(state);
-  return (
-    <button
-      type="button"
-      class={`hud-weather ${w.kind === 'storm' || w.kind === 'heat' ? 'is-warn' : ''}`}
-      title={`Wetter: ${WEATHER_NAMES[w.kind]}, ${temp(w.temperature)}C`}
-      onClick={() => ui.openPhone('core.settings')}
-    >
-      <Icon name={iconFor(w.kind, state.time)} class="hud-weather__icon" />
-      <span class="hud-weather__text">
-        <span class="hud-weather__temp">{temp(w.temperature)}</span>
-        <span class="hud-weather__kind">{WEATHER_NAMES[w.kind]}</span>
-      </span>
-    </button>
-  );
-}
 
 function Forecast() {
   const { state } = useGame();
@@ -122,8 +101,6 @@ function tone(factor: number): 'accent' | 'bad' | undefined {
   return undefined;
 }
 
-// Ordnung ab 90: steht fest neben der Uhr, nicht in der wischbaren Leiste.
-registerHudItem({ id: 'weather.now', order: 95, placement: 'time', component: WeatherHud });
 // Seit Auftrag 26 keine eigene App mehr: Das Wetter steht in den Einstellungen.
 registerSlot('core.settings', {
   id: 'weather.forecast',

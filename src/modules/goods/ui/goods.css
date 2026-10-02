@@ -47,3 +47,34 @@
   flex-direction: column;
   gap: 28px;
 }
+
+/* Aufklappbare Aufstellung der Lager-Kachel im HUD */
+.goods-flyout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.goods-flyout__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.goods-flyout__rows li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13px;
+}
+.goods-flyout__rows strong {
+  font-family: var(--font-hud-display);
+  font-size: 17px;
+  font-weight: 600;
+}
+.goods-flyout__rows span,
+.goods-flyout__empty {
+  margin: 0;
+  color: var(--hud-ink-2);
+}

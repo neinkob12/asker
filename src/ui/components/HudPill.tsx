@@ -1,4 +1,5 @@
 import type { ComponentChildren, JSX } from 'preact';
+import { useState } from 'preact/hooks';
 import { type ChipColor, categoryOf, IconChip } from './Icon';
 import type { IconName } from './icons';
 
@@ -17,6 +18,27 @@ export interface HudPillProps {
   class?: string;
   /** Zusätzlicher Inhalt rechts, z.B. eine Anzeige mit Stufen. */
   children?: ComponentChildren;
+  /**
+   * Kleine Karte, die beim Drüberfahren oder Antippen unter der Kachel aufklappt (Look "Glas"), z.B. die Aufstellung
+   * des Lagers nach Produkt. Mit onClick öffnet ein Tipp die Karte, ein zweiter Tipp führt zum Ziel.
+   */
+  details?: ComponentChildren;
+  /** Beschriftung des Knopfs unten in der Karte, der onClick auslöst (z.B. "Öffnen"). */
+  detailsAction?: string;
+}
+
+/** Waagerechte Leiste 0–100 (z.B. Ruf) in der Kennzahl-Kachel. */
+export function HudBar(props: { value: number; max?: number; label: string; marks?: readonly number[] }) {
+  const max = props.max ?? 100;
+  const share = Math.max(0, Math.min(1, props.value / max));
+  return (
+    <span class="hud-bar" role="img" aria-label={`${props.label}: ${Math.round(props.value)} von ${max}`}>
+      <span class="hud-bar__fill" style={{ width: `${share * 100}%` }} />
+      {props.marks?.map((m) => (
+        <span key={m} class="hud-bar__mark" style={{ left: `${(m / max) * 100}%` }} />
+      ))}
+    </span>
+  );
 }
 
 /**
@@ -51,7 +73,48 @@ export function HudPill(props: HudPillProps) {
       {props.children}
     </>
   );
-  const cls = `hud-pill hud-stat ${props.onClick ? 'is-button' : ''} ${props.class ?? ''}`;
+  const cls = `hud-pill hud-stat ${props.onClick || props.details ? 'is-button' : ''} ${props.class ?? ''}`;
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(false);
+  if (props.details) {
+    // Drüberfahren klappt auf (Maus), Antippen schaltet um (Finger); die Karte selbst trägt den Weg zum Ziel.
+    return (
+      <div
+        class={`hud-pill-wrap ${open || hover ? 'is-open' : ''}`}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+      >
+        <button
+          type="button"
+          class={cls}
+          style={style}
+          title={props.title}
+          aria-expanded={open || hover}
+          onClick={() => setOpen(!open)}
+        >
+          {inner}
+        </button>
+        {(open || hover) && (
+          <div class="hud-flyout" role="dialog" aria-label={typeof props.label === 'string' ? props.label : undefined}>
+            {props.details}
+            {props.onClick && (
+              <button
+                type="button"
+                class="hud-flyout__action"
+                onClick={() => {
+                  setOpen(false);
+                  setHover(false);
+                  props.onClick?.();
+                }}
+              >
+                {props.detailsAction ?? 'Öffnen'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
   return props.onClick ? (
     <button type="button" class={cls} style={style} title={props.title} onClick={props.onClick}>
       {inner}

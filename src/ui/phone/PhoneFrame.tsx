@@ -307,8 +307,8 @@ function HomeScreen() {
     const i = HOME_ORDER.indexOf(a.id);
     return i < 0 ? HOME_ORDER.length : i;
   };
-  // Im Raster stehen alle Apps (auch die aus dem Dock), so wie die Tabelle in Auftrag 26 es festlegt.
-  const grid = [...all].sort((a, b) => rank(a) - rank(b));
+  // Im Raster stehen die sechs Apps der Tabelle (Kasse und Personal auch im Dock); Nachrichten und Lieferanten nur im Dock.
+  const grid = all.filter((a) => HOME_ORDER.includes(a.id) || !DOCK.includes(a.id)).sort((a, b) => rank(a) - rank(b));
   const urgent = urgentAdvice(state);
   return (
     <div class="phone__home">

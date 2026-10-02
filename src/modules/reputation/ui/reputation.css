@@ -5,3 +5,64 @@
 .rep-down {
   color: var(--cat-danger);
 }
+
+/* Kachel Ruf · Reviere im HUD: Leiste 0–100 und die Revierzahl daneben */
+.hud-rep {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+.hud-rep .hud-bar {
+  flex: 1;
+}
+.hud-rep__veedel {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-hud-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cat-place);
+}
+/* Aufgeklappte Karte: Stufe jetzt, darüber, darunter, Reviere */
+.rep-flyout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.rep-flyout__now {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--font-hud-display);
+  font-size: 18px;
+}
+.rep-flyout__text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--hud-ink-2);
+}
+.rep-flyout__tiers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--hud-glass-line);
+  border-bottom: 1px solid var(--hud-glass-line);
+  list-style: none;
+}
+.rep-flyout__tiers li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.rep-flyout__dir {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+}

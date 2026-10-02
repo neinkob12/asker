@@ -12,11 +12,11 @@ export const RECENT_LIMIT = 8;
 /** Änderungen mit gleichem Grund innerhalb dieser Spielminuten werden zusammengefasst. */
 export const RECENT_MERGE_MINUTES = 120;
 
-/** Stufen für die Anzeige, beste zuerst. */
-export const REPUTATION_LABELS: readonly { min: number; name: string }[] = [
-  { min: 80, name: 'Legende' },
-  { min: 60, name: 'Gefragt' },
-  { min: 40, name: 'Bekannt' },
-  { min: 20, name: 'Zwielichtig' },
-  { min: 0, name: 'Verbrannt' },
+/** Stufen für die Anzeige, beste zuerst, je mit einem Satz, was die Stufe fürs Geschäft heißt. */
+export const REPUTATION_LABELS: readonly { min: number; name: string; effect: string }[] = [
+  { min: 80, name: 'Legende', effect: 'Jeder in Köln kennt deinen Namen: fast ein Drittel mehr Nachfrage.' },
+  { min: 60, name: 'Gefragt', effect: 'Gute Ware spricht sich herum: mehr Kunden, mehr Stammkunden.' },
+  { min: 40, name: 'Bekannt', effect: 'Normales Geschäft. Kunden kommen, bleiben aber selten treu.' },
+  { min: 20, name: 'Zwielichtig', effect: 'Die Leute reden schlecht über dich: weniger Kunden an den Spots.' },
+  { min: 0, name: 'Verbrannt', effect: 'Kaum noch Kundschaft, fast ein Drittel weniger Nachfrage.' },
 ];

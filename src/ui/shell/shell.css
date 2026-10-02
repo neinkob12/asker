@@ -255,6 +255,13 @@
   min-width: 0;
 }
 .hud-money__row {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -309,36 +316,6 @@
   padding-left: var(--space-4);
   border-left: 1px solid var(--hud-glass-line);
 }
-/* Wetter in der Uhr-Kapsel: Symbol in Himmelfarbe und Temperatur, ohne Wetterlage */
-.hud .hud-weather {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 44px;
-  padding: 0 var(--space-2);
-  border: 0;
-  border-radius: var(--hud-radius-button);
-  background: transparent;
-  color: var(--hud-ink);
-  font-family: var(--font-hud-display);
-  font-size: 20px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.hud .hud-weather:hover {
-  background: var(--hud-glass-fill);
-}
-.hud .hud-weather__icon {
-  font-size: 22px;
-  color: var(--cat-sky);
-}
-.hud .hud-weather.is-warn .hud-weather__icon {
-  color: var(--cat-warn);
-}
-.hud .hud-weather__kind {
-  display: none;
-}
-
 /* Kennzahl-Pillen (allgemein; im Handy überschreibt phone.css, über der Karte die Kacheln unten) */
 .hud-pill {
   position: relative;
@@ -444,6 +421,84 @@
 }
 .hud-segments__seg.is-on {
   background: var(--hud-gold);
+}
+/* Leiste 0–100 (Ruf) mit Marken an den Stufen */
+.hud-bar {
+  position: relative;
+  display: block;
+  height: 6px;
+  min-width: 72px;
+  border-radius: 3px;
+  background: var(--hud-empty);
+  overflow: hidden;
+}
+.hud-bar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  background: var(--hud-gold);
+}
+.hud-bar__mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(0, 0, 0, 0.45);
+}
+/* Kachel mit aufklappbarer Karte (Lager, Ruf · Reviere): Karte darunter, Glas, Knopf zum Ziel */
+.hud-pill-wrap {
+  position: relative;
+}
+.hud-tiles .hud-pill-wrap > .hud-pill {
+  width: 100%;
+}
+.hud-pill-wrap.is-open > .hud-pill {
+  background: var(--hud-glass-strong);
+}
+.hud-flyout {
+  position: absolute;
+  z-index: calc(var(--z-popover) + 1);
+  top: calc(100% + 8px);
+  right: 0;
+  width: 260px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--hud-glass-strong);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  border-radius: var(--hud-radius-tile);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  animation: pop-in var(--duration) var(--ease-out);
+}
+.hud-flyout__action {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  margin-top: var(--space-3);
+  border: 0;
+  border-radius: var(--hud-radius-button);
+  background: var(--hud-gold);
+  color: var(--hud-gold-on);
+  font-family: var(--font-hud);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.hud-flyout__action.is-secondary {
+  margin-top: var(--space-2);
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink);
+}
+.hud-flyout__action:hover {
+  filter: brightness(1.08);
+}
+.hud-label.is-brand {
+  color: var(--cat-brand);
+}
+.hud-label.is-place {
+  color: var(--cat-place);
 }
 
 /* Spieltempo: Segmente 40 × 36, Pause gold, aktiv hell */
@@ -972,9 +1027,38 @@ kbd {
     grid-template-columns: 1fr auto;
     grid-template-areas:
       "money clock"
+      "tiles tiles"
       "alerts alerts";
     column-gap: var(--space-2);
     row-gap: var(--space-2);
+  }
+  /* Lager und Ruf · Reviere als flache Kacheln in einer Reihe (seit Auftrag 26 nicht mehr im Handy) */
+  .hud-tiles {
+    justify-self: stretch;
+    gap: var(--space-2);
+  }
+  .hud-tiles .hud-pill-wrap {
+    flex: 1;
+    min-width: 0;
+  }
+  .hud-tiles .hud-pill {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    gap: 2px;
+    padding: var(--space-2) var(--space-3);
+  }
+  .hud-tiles .hud-pill__value {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 17px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hud-flyout {
+    right: auto;
+    left: 0;
+    width: min(300px, calc(100vw - 2 * var(--gap)));
   }
   .hud-capsule--money {
     flex-direction: row;
