@@ -1,6 +1,7 @@
 // Spots: Orte, an denen auf der Straße verkauft wird. Jeder Spot liegt in einem Veedel.
 // Vorgegebene Spots sind teils von Anfang an offen, die anderen schaltet man frei. Eigene Spots gründet man
-// per Klick auf die Karte (Kosten, Veedel über veedelAt).
+// per Klick auf die Karte (Kosten, Veedel über veedelAt). Jedes Veedel hat mindestens zwei vorgegebene Spots,
+// mindestens einer davon zum Freischalten, damit jedes Veedel übernehmbar ist (Auftrag 28).
 //
 // Öffentliche API:
 //   getSpots(state)       Spots, an denen gerade verkauft werden kann (offen + eigene)
@@ -27,6 +28,7 @@ import {
   FOUND_SPOT_COST,
   MAX_CUSTOM_SPOTS,
   MIN_SPOT_DISTANCE,
+  ORIGINAL_SPOT_IDS,
   PRESET_SPOTS,
   SPOT_LABELS,
 } from './config';
@@ -196,7 +198,7 @@ function found(ctx: Ctx, payload: { lng: number; lat: number; name?: string }): 
 
 export default defineModule({
   id: 'spots',
-  version: 2,
+  version: 3,
   dependsOn: ['veedel'],
   init: () => ({ unlocked: PRESET_SPOTS.filter((s) => !s.unlockCost).map((s) => s.id), custom: [] }),
   commands: {
@@ -204,7 +206,13 @@ export default defineModule({
     'spots.found': (ctx, payload) => found(ctx, payload),
   },
   migrations: {
-    // Version 1 hatte keinen Zustand, alle Spots waren offen. So bleibt es für alte Spielstände.
-    2: (): SpotsState => ({ unlocked: PRESET_SPOTS.map((s) => s.id), custom: [] }),
+    // Version 1 hatte keinen Zustand, alle damaligen Spots waren offen. So bleibt es für alte Spielstände.
+    2: (): SpotsState => ({ unlocked: [...ORIGINAL_SPOT_IDS], custom: [] }),
+    // Version 3 (Auftrag 28): Jedes Veedel hat Spots. Alte Spielstände bekommen die neuen dazu, gesperrt (ein Spot
+    // ist offen, wenn er in unlocked steht); unbekannte IDs fliegen raus.
+    3: (old: SpotsState): SpotsState => ({
+      ...old,
+      unlocked: old.unlocked.filter((id) => PRESET_SPOTS.some((s) => s.id === id)),
+    }),
   },
 });
