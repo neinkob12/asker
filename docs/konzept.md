@@ -20,7 +20,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
 ## Spielgefühl
 
 - **Tonalität:** realistisch und düster.
-- **Kampagne:** Ziel ist, Köln zu übernehmen, also die Mehrheit der Veedel zu kontrollieren. Die Reihenfolge ist frei. Danach geht es im Endlosmodus weiter.
+- **Kampagne:** Ziel ist, Köln komplett zu übernehmen, also alle 12 Veedel zu kontrollieren (Entscheidung vom 02.10.2026, Auftrag 30; bis dahin gilt im Code noch die Mehrheit). 7 von 12 bleibt als Meilenstein „Boss von Köln“. Die Reihenfolge ist frei. Danach ruft der Hamburger Hafen an, und es geht in Hamburg weiter (Abschnitt „Mehrere Städte“); wer bleibt, spielt im Endlosmodus.
 - **Story:** lockere Aufträge von Figuren mit etwas Dialog, keine durchgehende Handlung.
 - **Kampagnenlänge:** 5–10 Stunden.
 - **Session-Länge:** 10–20 Minuten.
@@ -34,7 +34,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
 
 ## Welt
 
-- **Umfang:** nur Köln, dafür detailliert.
+- **Umfang:** Köln detailliert als Einstieg, danach Hamburg (Auftrag 30), später eine dritte Stadt. Jede Stadt mit echten Stadtteilgrenzen und eigenem Charakter.
 - **Veedel:** echte Kölner Veedel mit eigenen Eigenschaften (z.B. Kaufkraft, Polizeipräsenz, Konkurrenz).
 - **Spots:** einige vorgegeben und freischaltbar, zusätzlich eigene per Klick auf die Karte gründen.
 - **Reviere:** Einfluss pro Veedel, auf der Karte sichtbar. Zu Beginn haben die Gangs Köln unter sich aufgeteilt.
@@ -118,7 +118,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
     Hauptstraßen. Farbe tragen nur Reviere (feine Grenzen, schwach getönt), Spots und Gangs.
   - Das Überwachungs-Overlay (Scanlines, Koordinaten) gibt es noch als Schalter, standardmäßig aus.
 - **Kamera:** 3D schräg als Standard, per Knopf auf 2D-Draufsicht umschaltbar.
-- **Auf der Karte sichtbar:** 3D-Mini-Fahrzeuge auf echten Straßen, Schiffe auf dem Rhein, pulsierende Hotspots wo etwas los ist (keine Figuren), Polizeistreifen, Effekte (Geld-Popups, Blaulicht, Heat-Färbung der Veedel).
+- **Auf der Karte sichtbar:** 3D-Mini-Fahrzeuge auf echten Straßen, Schiffe auf dem Rhein (und der Elbe), pulsierende Hotspots wo etwas los ist, Polizeistreifen, Effekte (Geld-Popups, Blaulicht, Heat-Färbung der Veedel). Mit Auftrag 31 dazu: Verkehr als Kulisse (Autos, Lkw, Streifenwagen, rein optisch, mit festem Performance-Budget) und kleine Figuren an Spots (Läufer, wartende Kunden, Streifen); Flüsse und Straßen aus echten Daten. Keine Gang-Fahrzeuge, keine Frachter als Kulisse.
 - **Bedienoberfläche:** "Nachtschicht": dunkel, gedämpft, eckig und aufgeräumt (Haarlinien statt dicker Konturen, schmale Tycoon-Zahlen, eine Akzentfarbe Kölsch-Gold, sonst nur Farben mit Bedeutung). Über der Karte stehen nur Geld, Heat und das Spieltempo. **Das Spiel-Handy ist die Schaltzentrale:** alle Bereiche (Geschäft, Reviere, Gangs, Leute …), Details zu Spots und Veedeln, Chats, Bestellungen und Kontakte laufen als Apps darüber. Desktop: Handy rechts fest angedockt (einklappbar), Handy-Bildschirm: Handy bildschirmfüllend, in der Tasche eine Leiste unten. Desktop und Handy sind gleichwertig.
 - **Grafiken:** KI-generierte Illustrationen (z.B. Porträts) plus einfache Icons.
 - **Sound:** Musik und Soundeffekte.
@@ -163,20 +163,47 @@ ausklappbare Erklärungen, kein Umbruch im Wort).
   Figuren, Stadt-Events, Tarnfirmen, Upgrade-Baum und Rang-Stufen, weitere Immobilien, eigene Fahrzeugflotte (Fahrzeuge
   kaufen, Ladekapazität), Leutnants, die selbst am Hafen abholen lassen, KI-Porträts, Hosting, Multiplayer.
 
-## Später: mehrere Städte
+## Mehrere Städte (Auftrag 30 und 31, geplant)
 
-Köln ist der Einstieg und bleibt die Basis. Ziel für spätere Aufträge (noch nichts davon ist gebaut):
+Köln ist der Einstieg und bleibt die Basis. Entschieden am 02.10.2026 in einer Fragerunde mit 16 Fragen; gebaut wird
+es in [Auftrag 30](auftraege/30-staedte-hamburg.md) (Spiellogik) und [Auftrag 31](auftraege/31-karte-lebt.md) (Karte).
+Solange die beiden nicht gemergt sind, gilt im Code noch der alte Stand (Sieg bei 7 von 12, nur Köln).
 
-- **Köln als Basis und Warenquelle:** Ist Köln übernommen, geht es in eine andere Stadt (Berlin, Frankfurt, Hamburg).
-  Die Ware kommt weiter über den Niehler Hafen und die Kölner Lager und wird logistisch an die anderen Städte
-  weitergeleitet (Fahrten zwischen den Städten, Kontrollen auf der Autobahn, eigene Fahrzeugflotte).
-- **Die Rechte Hand übernimmt eine Stadt:** Mit allen Aufgaben an (Auftrag 28) hält sie Köln ohne den Spieler am
-  Laufen. Hoch genug gestuft managt sie Köln komplett, während der Spieler in der neuen Stadt wieder klein anfängt.
+- **Köln komplett:** Erst mit allen 12 Veedeln ist Köln übernommen. 7 von 12 bleibt als Meilenstein „Boss von Köln“
+  (Titel, Banner, Bestenliste), ist aber kein Sieg mehr.
+- **Der Anruf:** 30 Spielminuten nach „Köln komplett“ ruft ein Hafenarbeiter aus dem Hamburger Hafen an, als
+  Vollbild-Anruf im Handy (Klingeln, Annehmen, Dialog in Sprechblasen, danach als Chat gespeichert). Anrufe sind
+  danach ein allgemeines Mittel (später ruft das Kartell).
+- **Vollmacht der Rechten Hand:** Die Stadt verlassen kann nur, wer seiner Rechten Hand Köln übergibt. Dafür braucht
+  sie Stufe 5 und alle sechs Aufgaben an. Mit Vollmacht macht sie alles, was der Spieler macht (Leutnants ernennen und
+  absetzen, Leute feuern und einstellen, Ware kaufen, Preise setzen, Spots und Lager, Gangs und Chefsache), und
+  bekommt 80 % vom Kölner Tagesgewinn (laut Kasse, um Mitternacht, nur bei Gewinn). Es bleibt ein Konto für alle
+  Städte. Der Spieler darf jederzeit nach Köln schauen und eingreifen; die Vollmacht ist widerrufbar (kostet Loyalität).
   Ihr Tagesbericht wird zum Bericht aus Köln.
-- **Neue Herausforderungen pro Stadt:** andere Gangs, andere Polizei, andere Kundschaft und Preise, eigene Veedel
-  und Wahrzeichen; die Kampagne "Stadt übernehmen" wiederholt sich mit höherem Druck.
-- **Am Ende ruft das Kartell:** Wer mehrere Städte hält, bekommt einen Anruf aus Kolumbien: direkte Lieferungen,
-  neue Mengen, neue Gegner.
+- **Nur eine Stadt läuft voll:** Die Stadt, die auf der Karte zu sehen ist, wird simuliert. Die andere läuft im
+  Schlafmodus: einmal am Tag eine Zusammenfassung (Ergebnis aus den letzten live gespielten Tagen, Anteil der Rechten
+  Hand, Lager bleiben Daten, Gangs und Polizei eingefroren). Umschalten wechselt, welche Stadt live ist. Selbst an
+  einem Spot stehen, selbst fahren und bei Konfrontationen dabei sein geht nur in der Stadt, in der man gerade ist;
+  umziehen ist eine Autofahrt über die A1.
+- **Hamburg:** 12 Stadtteile mit echten Grenzen (St. Pauli, Sternschanze, Altona-Altstadt, Ottensen, St. Georg,
+  HafenCity, Eimsbüttel, Eppendorf, Barmbek-Süd, Wilhelmsburg, Harburg, Blankenese). Besonderheiten: Hafen mit sehr
+  großen Containern direkt am Kai (Hein wird zum Hafen-Großhändler), höhere Preise durch Kaufkraft (dafür teurere Löhne,
+  Lager und Spots), Nachtleben auf Reeperbahn und Schanze (Nachfrage nachts und am Wochenende, mehr Kontrollen),
+  Polizei startet eine Stufe härter, Zoll am Kai und auf der Autobahn. Vier eigene, stärkere Gangs. Startlieferant in
+  Hamburg ist Toni aus Frankfurt (Vertrauen bleibt). Man fängt mit seinem Geld an, aber ohne Spots, Lager und Leute;
+  Leute aus Köln können nachkommen.
+- **Köln:** Stadt-Events (Karneval, FC-Heimspiel, Kölner Lichter mit Wirkung auf Nachfrage, Polizei und Gangs),
+  Kölscher Klüngel (Beziehungen wachsen schneller, Freikaufen und Kaution billiger; Hamburg ist kühl und korrekt),
+  Studenten und Kneipen (Veedel-Kneipen als Spot-Art mit Stammkunden und doppeltem Ruf, Studentenviertel mit viel
+  Volumen zu kleinen Preisen).
+- **Logistik zwischen den Städten:** Fahrer der Logistik bekommen Routen mit Fahrplan (Abfahrt, Ladung, von Lager zu
+  Lager, Rückfracht) über die echte A1 mit Autobahnkontrollen (Zoll). Die Fahrten sind auf der Karte zu sehen, in der
+  Stadt bis zur Einfahrt und in einer Deutschland-Ansicht ganz. Die Ware kann in beide Richtungen fließen; der Niehler
+  Hafen bleibt wie er ist (kein besonderer Vorteil für Köln).
+- **Daten:** pro Stadt ein Straßennetz aus Overture Maps, die A1 als grobe Linie, Rhein und Elbe als echte Wasserwege
+  (Auftrag 31). Mehr Leben auf der Karte: Verkehr und kleine Figuren an Spots, mit festem Performance-Budget.
+- **Nach Hamburg:** Hamburg komplett geht an eine zweite Rechte Hand; eine dritte Stadt (Berlin oder Frankfurt) ist als
+  Datenschablone vorbereitet. Der Anruf des Kartells aus Kolumbien kommt später.
 
 Was dafür schon steht: Die Rechte Hand handelt nur über Befehle (wie ein Spieler) und ist so gebaut, dass Köln mit
 allen Aufgaben an allein läuft (Test `src/playtest/autopilot.test.ts`); Lieferanten, Logistik und Spots sind pro

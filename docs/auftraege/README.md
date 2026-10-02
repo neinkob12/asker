@@ -110,6 +110,23 @@ Stufen (`hierarchy/tasks.ts`); das Ziel "mehrere Städte" steht in `docs/konzept
 **Stand Auftrag 27:** umgesetzt. Offen geblieben (spätere Aufträge): Regel-Blätter für die Aufgaben der Rechten Hand,
 Tarnfirmen mit eigenem Gameplay (die drei Wege der Geldwäsche sind die Vorstufe), Chips im Chat (Routine/Chefsache).
 
+### Nächste Runde: Städte (Fragerunde vom 02.10.2026, 16 Fragen)
+
+```
+Auftrag 30  Köln komplett, Vollmacht, Hamburg, Routen   (Spiellogik, zuerst; Etappe 0 löst die Performance-Bremsen)
+               │  mergen
+               ▼
+Auftrag 31  Die Karte lebt                             (Verkehr, Leute an Spots, Flüsse und Straßen aus Daten, Budget)
+```
+
+| Auftrag | Thema | Wann |
+| --- | --- | --- |
+| [30](30-staedte-hamburg.md) | Sieg erst bei allen 12 Veedeln (7 bleibt Meilenstein „Boss von Köln“), Vollbild-Anruf aus dem Hamburger Hafen, Vollmacht der Rechten Hand (Stufe 5, alle Aufgaben, 80 % vom Kölner Tagesgewinn, Eingreifen jederzeit), Modul `city` mit Schlafmodus (nur die sichtbare Stadt läuft voll), Hamburg mit 12 Stadtteilen, Hafen-Großmengen, höheren Preisen, Reeperbahn, härterer Polizei und Zoll, Toni als Startlieferant, Routen mit Fahrplan über die A1, Charakter der Städte (Köln: Stadt-Events, Klüngel, Studenten und Kneipen), Schablone für Stadt drei | als Nächstes |
+| [31](31-karte-lebt.md) | Verkehr und Leute an Spots als Kulisse mit Performance-Budget, Rhein und Elbe aus Overture-Daten, Prüfskript „Fahrzeuge überall auf der Straße“, Hamburger Wahrzeichen, schöne Deutschland-Ansicht, Quellenangabe im Spiel | nach 30 |
+
+Die Messung zum Ruckeln (Hotspots, Skripte, Zahlen) steht in [`docs/perf/2026-10-messung.md`](../perf/2026-10-messung.md).
+Beide Aufträge messen damit vorher und nachher.
+
 ## Mergen
 
 - Ein PR wird gemergt, sobald er fertig und die CI grün ist. Die Reihenfolge in Phase 1 ist egal.
@@ -123,7 +140,7 @@ Diese Themen aus dem Konzept kommen nach der Integration, jeweils wieder als eig
 - Logistik, zweiter Teil: eigene Fahrzeugflotte (Fahrzeuge kaufen, Ladekapazität), Leutnants organisieren Abholungen
   (echte Straßenrouten, mehrere Lager und Kontrollen unterwegs sind mit Auftrag 21 da)
 - Tarnfirmen mit eigenem Gameplay und ausgebaute Geldwäsche
-- Kampagne: Aufträge von Figuren, Charakter-Erstellung, Siegbedingung "Köln übernehmen" mit Abspann
+- Kampagne: Charakter-Erstellung; der Anruf des Kartells nach mehreren Städten (Städte selbst: Auftrag 30 und 31)
 - Fortschritt: Upgrade-Baum, Rang-Stufen, Immobilien
 - Stadt-Events und Sonderaufträge
 - Inhalte: KI-Porträts und -Illustrationen, Musik und Sounds
