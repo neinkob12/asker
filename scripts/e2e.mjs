@@ -156,7 +156,7 @@ async function run() {
     await page.evaluate(() => window.koeln.runtime.api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' }));
     await page
       .locator('.phone')
-      .getByRole('button', { name: /Niehler Hafen/ })
+      .getByRole('button', { name: /^Niehler Hafen/ })
       .click();
     const berth = page.getByRole('button', { name: /^Liegeplatz mieten/ });
     assert.ok(await berth.isDisabled(), 'ohne sauberes Geld kein Liegeplatz');
@@ -174,7 +174,7 @@ async function run() {
 
   await check('Kasse im Handy: Gewinn- und Verlustrechnung', async () => {
     await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
-    await page.locator('.phone').getByRole('button', { name: 'Kasse', exact: true }).click();
+    await page.locator('.phone').getByRole('button', { name: 'Kasse', exact: true }).first().click();
     await page.locator('.phone').getByText('Straßenverkauf').first().waitFor();
     assert.ok(await page.locator('.phone').getByText('Einkauf Ware').first().isVisible(), 'Einkauf als Ausgabe');
     await page.locator('.phone').getByRole('button', { name: '7 Tage', exact: true }).click();

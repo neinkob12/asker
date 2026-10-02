@@ -67,6 +67,11 @@ Tagesbericht, Polizei-Härte nach Größe des Geschäfts, mehr Geld im frühen S
 ganzen Code ändern, sofern der Auftrag nichts anderes sagt. Vor jedem Push: `npm run check`, `npm run build`,
 `npm run e2e`.
 
+[Auftrag 26](26-handy-aufraeumen.md) ist erledigt: sechs Apps im Raster, vier im Dock, schwarzer Startbildschirm, Wetter und
+Verlauf (Ereignisse, Meldungen, Aufträge) in den Einstellungen, Personal mit „Leute finden“, Geldwäsche als App, Hafen und
+Umlagern auf der Lager- bzw. Hafen-Seite, Nachrichten kompakt mit Löschen, Banner nur für Dringendes, HUD mit Ruf · Reviere
+und aufklappbarem Lager. Auftrag 27 kann starten.
+
 Zwei Aufträge tragen die Nummer 24 (parallel entstanden). [Auftrag 24 „Look Glas“](24-look-glas.md) setzt den Look „Glas“ für alles außerhalb des Handys um (HUD, Spot-Schilder, Marker,
 Konfrontation als Akte mit sechs Wegen, Razzia, Lieferung live, Veedel übernommen).
 
@@ -89,7 +94,7 @@ Auftrag 27  Handy-Inhalte (Bilanz, Geldwäsche, Personal, Gangs, Optik)
 
 | Auftrag | Thema | Wann |
 | --- | --- | --- |
-| [26](26-handy-aufraeumen.md) | Weniger Apps, schwarzer Startbildschirm, Personal und Geldwäsche als Apps, Nachrichten (gelesen, löschen), weniger Banner, HUD (Ruf + Reviere, Lager klappt auf) | sofort |
+| [26](26-handy-aufraeumen.md) | Weniger Apps, schwarzer Startbildschirm, Personal und Geldwäsche als Apps, Nachrichten (gelesen, löschen), weniger Banner, HUD (Ruf + Reviere, Lager klappt auf) | erledigt |
 | [28](28-spots-rechte-hand.md) | Spots in jedem Veedel, weniger Aufträge, Kuriere fallen weg, nur die Rechte Hand nimmt Aufträge an und fährt aus, Rechte Hand mit Aufgaben bis "Köln läuft allein" | sofort, parallel zu 26 |
 | [27](27-handy-inhalte-bilanz.md) | Kasse als Bilanz, Geldwäsche mit drei Wegen, mehr Bewerber, Gangs-Kopf, Chips statt "·", keine Umbrüche im Wort | nach dem Merge von 26 |
 
