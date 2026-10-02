@@ -77,6 +77,7 @@ import {
 } from './config';
 import { getLieutenantIds, getPost, handlesAbsence, isLieutenant, teamLeadOf } from './index';
 import { checkOrderRule } from './orders';
+import { describeDone, pruneTasks, rewardReport, runHourlyTasks, runQuickTasks } from './tasks';
 import type { DailyReport, RightHandDone, RightHandPost, RightHandSettings, RightHandTaskKey } from './types';
 
 const NOT_EMPLOYED = 'Diese Person arbeitet nicht für dich.';
@@ -325,6 +326,7 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
     done: emptyDone(),
     restockDay: clock.day(ctx.now),
     restockSpent: 0,
+    passed: [],
   };
   assign(ctx, staffId, OFFICE);
   setDemand(ctx, staffId, RIGHT_HAND_DEMAND);
@@ -449,17 +451,22 @@ export function onRightHandStatus(ctx: Ctx, staffId: string, to: string): void {
   }
 }
 
-/** Um Mitternacht: erledigte Ausfälle vergessen, wenn die Leute zurück sind. */
+/** Um Mitternacht: erledigte Ausfälle vergessen, wenn die Leute zurück sind; überlassene Anfragen aufräumen. */
 export function rightHandDaily(ctx: Ctx): void {
   const rh = getRightHand(ctx.state);
   if (!rh) return;
+  pruneTasks(ctx.state, rh);
   rh.handled = rh.handled.filter((id) => {
     const m = getStaffMember(ctx.state, id);
     return !!m && isEmployed(ctx.state, id) && isAbsent(m);
   });
 }
 
-/** Alle paar Minuten: Tagesbericht um 8 Uhr, sonst im Abstand RIGHT_HAND_INTERVAL koordinieren und absichern. */
+/**
+ * Alle paar Minuten: Tagesbericht um 8 Uhr, die schnellen Aufgaben (Aufträge, Hafen) jedes Mal, sonst im Abstand
+ * RIGHT_HAND_INTERVAL koordinieren, absichern und die stündlichen Aufgaben (Nachbestellen, Personal, Geldwäsche).
+ * Während sie selbst ausfährt, laufen ihre anderen Aufgaben weiter.
+ */
 export function rightHandTick(ctx: Ctx): void {
   const rh = activeRightHand(ctx.state);
   const m = rh ? getStaffMember(ctx.state, rh.staffId) : undefined;
@@ -470,11 +477,13 @@ export function rightHandTick(ctx: Ctx): void {
     rh.reportDay = today;
     sendReport(ctx, rh);
   }
+  runQuickTasks(ctx, rh, m, actor);
   if (ctx.now < rh.nextActionAt) return;
   rh.nextActionAt = ctx.now + RIGHT_HAND_INTERVAL;
   if (rh.settings.payrollGuard) guardPayroll(ctx, rh);
   if (rh.settings.coordinate) coordinate(ctx, rh, actor);
   if (rh.settings.absences) handleAbsences(ctx, rh, actor);
+  runHourlyTasks(ctx, rh, m, actor);
 }
 
 /** Tagesbericht mit den Zahlen von gestern und bis zu drei Empfehlungen. */
@@ -504,7 +513,10 @@ export function buildReport(state: GameState): DailyReport {
   const hot = playerHeat(state);
   if (hot && hot.heat >= 60) advice.push(`In ${veedelName(hot.veedelId)} ist es heiß (Heat ${Math.round(hot.heat)}).`);
   if (runway.warn) advice.unshift(`Die Löhne reichen nur noch für ${runway.days ?? 0} Tage.`);
+  const rh = getRightHand(state);
+  const done = rh ? describeDone(rh.done) : '';
   return {
+    ...(done ? { done } : {}),
     day: yesterday.from,
     revenue: yesterday.income,
     costs: yesterday.expenses + yesterday.losses,
@@ -525,6 +537,7 @@ function sendReport(ctx: Ctx, rh: RightHandPost): void {
     `Tagesbericht für Tag ${report.day}:`,
     `Umsatz ${formatEuro(report.revenue)}, Kosten ${formatEuro(report.costs)}, ${report.profit >= 0 ? 'Gewinn' : 'Verlust'} ${formatEuro(Math.abs(report.profit))}.`,
     `In der Kasse ${formatEuro(report.cash)}${report.runwayDays !== null ? `, die Löhne reichen ${report.runwayDays} Tage` : ''}.`,
+    ...(report.done ? [`Erledigt: ${report.done}.`] : []),
     ...report.advice,
   ];
   const absent = getStaff(ctx.state).filter(isAbsent);
@@ -544,6 +557,8 @@ function sendReport(ctx: Ctx, rh: RightHandPost): void {
     text: `Tagesbericht: ${report.profit >= 0 ? 'Gewinn' : 'Verlust'} ${formatEuro(report.profit)}.`,
   });
   if (rh.log.length > LOG_LIMIT) rh.log.length = LOG_LIMIT;
+  rh.done = emptyDone();
+  rewardReport(ctx, rh, m, report.profit);
   ctx.emit('hierarchy.dailyReport', { staffId: m.id, day: report.day, profit: report.profit, problems });
 }
 

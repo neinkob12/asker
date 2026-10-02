@@ -28,6 +28,8 @@ import {
   MIN_LAUNDERING_FEE,
 } from './config';
 
+export { LAUNDERING_CAPACITY, MIN_LAUNDERING_AMOUNT } from './config';
+
 export interface LaunderingBatch {
   id: number;
   /** Schwarzgeld, das hineinging. */

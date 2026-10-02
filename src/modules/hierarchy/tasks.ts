@@ -1,0 +1,317 @@
+// Aufgaben der Rechten Hand (Auftrag 28), jede einzeln an- und abschaltbar und nach Stufe freigeschaltet
+// (RIGHT_HAND_TASKS in config.ts). Sie handelt nur über ctx.dispatch(…, { actor: 'staff:<id>' }) mit bestehenden
+// Befehlen anderer Module und antwortet im Chat über messages.answerAs. Was sie erledigt, zählt sie in rh.done
+// (Tagesbericht) und bringt Erfahrung (Stufen).
+//
+//   Schnell (jeder Tick, alle TICK_EVERY Minuten): Aufträge und Handy (Lieferanfragen annehmen und selbst fahren,
+//   Großhandel bis zu ihrem Betrag), Hafen abholen (freien Fahrer schicken).
+//   Stündlich (RIGHT_HAND_INTERVAL): Nachbestellen für ganz Köln, Personal, Geldwäsche.
+
+import { type Actor, type Ctx, clock, formatEuro, type GameState, messages } from '../../core';
+import { getOrders, type Order } from '../customers';
+import { wageRunway } from '../finance';
+import { DEFAULT_WAREHOUSE, getStock, getWarehouses, isWarehouseOwned, productName } from '../goods';
+import { amountInProgress, launderingCapacity, MIN_LAUNDERING_AMOUNT } from '../laundering';
+import { freeDrivers, getCargo } from '../logistics';
+import { getCandidates } from '../recruiting';
+import { getSpots } from '../spots';
+import { activeRunnerAt, getStaff, isLyingLow, runnerAt, runnerHireCost, type StaffMember } from '../staff';
+import { controlledBy, PLAYER_FACTION } from '../territory';
+import { veedelName } from '../veedel';
+import { RIGHT_HAND_RESTOCK_RESERVE, RIGHT_HAND_TASKS, XP_RIGHT_HAND_REPORT, XP_RIGHT_HAND_TASK } from './config';
+import { getLieutenants, lieutenantOfSpot } from './index';
+import { planOrder } from './orders';
+import {
+  getRightHand,
+  isTaskActive,
+  payrollReserve,
+  rankForXp,
+  rightHandDriver,
+  rightHandOrderLimit,
+} from './righthand';
+import type { RightHandDone, RightHandPost } from './types';
+
+const VIA = 'Rechte Hand';
+
+/** Protokoll-Eintrag (ohne Doppelte hintereinander). */
+function log(ctx: Ctx, rh: RightHandPost, text: string): void {
+  if (rh.log[0]?.text === text) {
+    rh.log[0].time = ctx.now;
+    return;
+  }
+  rh.log.unshift({ time: ctx.now, text });
+  if (rh.log.length > 12) rh.log.length = 12;
+}
+
+// --- Erfahrung und Stufen ---
+
+/** Erfahrung als Rechte Hand; steigt die Stufe, sagt sie Bescheid und neue Aufgaben werden frei. */
+export function addRightHandXp(ctx: Ctx, rh: RightHandPost, amount: number, member: StaffMember): void {
+  const before = rankForXp(rh.xp);
+  rh.xp += amount;
+  const after = rankForXp(rh.xp);
+  if (after <= before) return;
+  const unlocked = RIGHT_HAND_TASKS.filter((t) => t.rank === after).map((t) => `"${t.name}"`);
+  const text =
+    `Ich hab dazugelernt, Stufe ${after}.` +
+    (unlocked.length > 0 ? ` Du kannst mir jetzt auch ${unlocked.join(' und ')} überlassen.` : '');
+  log(ctx, rh, `Stufe ${after} erreicht.`);
+  messages.send(ctx, { contact: staffContactOf(member), text, silent: false });
+  ctx.emit('hierarchy.rightHandRankUp', { staffId: member.id, rank: after });
+}
+
+function staffContactOf(member: StaffMember) {
+  return { id: `staff:${member.id}`, name: member.name, kind: 'staff' as const };
+}
+
+/** Erfahrung für einen guten Tagesbericht (kein Verlust). */
+export function rewardReport(ctx: Ctx, rh: RightHandPost, member: StaffMember, profit: number): void {
+  if (profit >= 0) addRightHandXp(ctx, rh, XP_RIGHT_HAND_REPORT, member);
+}
+
+/** Text fürs Erledigte im Tagesbericht, z.B. "3 Lieferungen gefahren, 1 Abholung, 2 Anfragen dir überlassen". */
+export function describeDone(done: RightHandDone): string {
+  const parts: string[] = [];
+  const n = (count: number, one: string, many: string) => (count === 1 ? `1 ${one}` : `${count} ${many}`);
+  if (done.deliveries > 0) parts.push(`${n(done.deliveries, 'Lieferung', 'Lieferungen')} gefahren`);
+  if (done.pickups > 0) parts.push(`${n(done.pickups, 'Abholung', 'Abholungen')} am Hafen`);
+  if (done.orders > 0) parts.push(n(done.orders, 'Bestellung', 'Bestellungen'));
+  if (done.hires > 0) parts.push(`${n(done.hires, 'neue Person', 'neue Leute')} eingestellt`);
+  if (done.laundered > 0) parts.push(`${formatEuro(done.laundered)} gewaschen`);
+  if (done.leftToBoss > 0) parts.push(`${n(done.leftToBoss, 'Anfrage', 'Anfragen')} dir überlassen`);
+  return parts.join(', ');
+}
+
+// --- Schnelle Aufgaben: Aufträge und Handy, Hafen abholen ---
+
+/** Läuft jeden Tick. Eine Lieferung pro Durchgang, damit die Fahrt sauber beginnt. */
+export function runQuickTasks(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
+  handleOrders(ctx, rh, member, actor);
+  handlePickup(ctx, rh, member, actor);
+}
+
+/** Eine Anfrage bleibt beim Spieler: einmal merken und ins Protokoll, nicht jede Runde wieder. */
+function pass(ctx: Ctx, rh: RightHandPost, order: Order, reason: string): void {
+  if (rh.passed.includes(order.id)) return;
+  rh.passed.push(order.id);
+  rh.done.leftToBoss += 1;
+  log(ctx, rh, `Anfrage von ${order.contactName} (${formatEuro(order.price)}) bleibt bei dir: ${reason}.`);
+}
+
+/**
+ * Lieferanfragen (Aufgabe "Aufträge und Handy") und Großhandel (Aufgabe "Großhandel") annehmen und selbst fahren.
+ * Regeln: Betrag bis zu ihrer Grenze, auf Wunsch nur in eigenen Revieren, genug Ware. Ist sie unterwegs, wartet
+ * sie, wenn die Frist das hergibt; sonst bleibt die Anfrage beim Spieler (Chefsache).
+ */
+function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
+  const state = ctx.state;
+  const orders = isTaskActive(state, 'orders');
+  const wholesale = isTaskActive(state, 'wholesale');
+  if (!orders && !wholesale) return;
+  const offered = getOrders(state, { status: 'offered' })
+    .filter((o) => !rh.passed.includes(o.id))
+    .sort((a, b) => a.expiresAt - b.expiresAt || a.id - b.id);
+  for (const order of offered) {
+    const big = order.kind === 'wholesale';
+    if (big ? !wholesale : !orders) continue;
+    const limit = big ? rh.settings.wholesaleMaxPrice : rightHandOrderLimit(state);
+    if (order.price > limit) {
+      pass(ctx, rh, order, `über meiner Grenze von ${formatEuro(limit)}`);
+      continue;
+    }
+    if (!big && rh.settings.ordersOwnTurfOnly && !controlledBy(state, PLAYER_FACTION).includes(order.veedelId)) {
+      pass(ctx, rh, order, `${veedelName(order.veedelId)} ist nicht unser Revier`);
+      continue;
+    }
+    if (getStock(state, { productId: order.productId }) < order.amount) {
+      pass(ctx, rh, order, `nicht genug ${productName(order.productId)} im Lager`);
+      continue;
+    }
+    const driver = rightHandDriver(state);
+    if (!driver.ok) {
+      // Unterwegs: Reicht die Frist, bis sie zurück ist, nimmt sie die Anfrage danach.
+      const current = getOrders(state, { status: 'enRoute' }).find((o) => o.courierId === member.id);
+      if (current?.arrivesAt !== null && current?.arrivesAt !== undefined && current.arrivesAt + 15 < order.expiresAt) {
+        continue;
+      }
+      pass(ctx, rh, order, 'ich bin noch unterwegs und die Frist ist zu knapp');
+      continue;
+    }
+    const result = ctx.dispatch(
+      { type: 'customers.acceptOrder', payload: { orderId: order.id, by: 'rightHand' } },
+      { actor },
+    );
+    if (!result.ok) {
+      pass(ctx, rh, order, result.reason ?? 'ging nicht');
+      continue;
+    }
+    // Im Chat zusagen: mit der Antwort "Rechte Hand schicken", sonst (Anfrage von vor ihrer Ernennung) als "selbst".
+    const reply = big ? 'Meine Rechte Hand bringt die Ware.' : 'Rechte Hand hat zugesagt: Ich komm vorbei.';
+    if (!messages.answerAs(ctx, { messageId: order.messageId, optionId: 'rightHand', via: VIA, reply })) {
+      messages.answerAs(ctx, { messageId: order.messageId, optionId: 'self', via: VIA, reply });
+    }
+    rh.done.deliveries += 1;
+    addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
+    log(
+      ctx,
+      rh,
+      `${big ? 'Großhandel mit' : 'Lieferung an'} ${order.contactName} übernommen (${formatEuro(order.price)}).`,
+    );
+    return;
+  }
+}
+
+/** Hafen abholen: Liegt Ware am Kai und ist ein Fahrer frei, schickt sie ihn los und beantwortet den Hafen-Chat. */
+function handlePickup(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
+  const state = ctx.state;
+  if (!isTaskActive(state, 'pickup') || getCargo(state).length === 0 || freeDrivers(state).length === 0) return;
+  const result = ctx.dispatch({ type: 'logistics.pickup', payload: { by: 'driver' } }, { actor });
+  if (!result.ok) return;
+  for (const m of messages.openRoutine(state)) {
+    if (m.source === 'logistics') messages.answerAs(ctx, { messageId: m.id, optionId: 'driver', via: VIA });
+  }
+  rh.done.pickups += 1;
+  addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
+  log(ctx, rh, 'Fahrer zum Niehler Hafen geschickt, die Ware kommt ins Lager.');
+}
+
+// --- Stündliche Aufgaben: Nachbestellen, Personal, Geldwäsche ---
+
+export function runHourlyTasks(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
+  restock(ctx, rh, member, actor);
+  staffing(ctx, rh, member, actor);
+  launder(ctx, rh, member, actor);
+}
+
+/** Hauptlager für ihre Bestellungen: das Standardlager, sonst das erste eigene. */
+export function mainWarehouseId(state: GameState): string | null {
+  if (isWarehouseOwned(state, DEFAULT_WAREHOUSE)) return DEFAULT_WAREHOUSE;
+  return getWarehouses(state)[0]?.id ?? null;
+}
+
+/** Was sie heute fürs Nachbestellen noch ausgeben darf: Tagesbudget, Lohnsicherung und eine kleine Rücklage. */
+export function restockBudgetLeft(state: GameState): number {
+  const rh = getRightHand(state);
+  if (!rh) return 0;
+  const spent = rh.restockDay === clock.day(state.time) ? rh.restockSpent : 0;
+  return Math.max(
+    0,
+    Math.min(
+      rh.settings.restockBudgetPerDay - spent,
+      state.wallet.dirty - payrollReserve(state, 'goods') - RIGHT_HAND_RESTOCK_RESERVE,
+    ),
+  );
+}
+
+/** Nachbestellen für ganz Köln nach ihren Regeln (wie die Leutnants, aber ins Hauptlager und mit eigenem Budget). */
+function restock(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
+  const state = ctx.state;
+  if (!isTaskActive(state, 'restock')) return;
+  const day = clock.day(ctx.now);
+  if (rh.restockDay !== day) {
+    rh.restockDay = day;
+    rh.restockSpent = 0;
+  }
+  const home = mainWarehouseId(state);
+  for (const rule of rh.settings.restockRules) {
+    const plan = planOrder(state, rule, home, restockBudgetLeft(state));
+    if (plan.kind === 'pause') {
+      if (rule.paused !== plan.reason) {
+        rule.paused = plan.reason;
+        log(ctx, rh, `Bestellung ruht: ${plan.reason}`);
+      }
+      continue;
+    }
+    if (rule.paused) rule.paused = null;
+    if (plan.kind === 'noMoney') {
+      log(ctx, rh, 'Wir brauchen Ware, aber mein Budget reicht gerade nicht.');
+      continue;
+    }
+    if (plan.kind !== 'order') continue;
+    const result = ctx.dispatch(
+      {
+        type: 'suppliers.order',
+        payload: { supplierId: plan.supplier.id, packageId: plan.pkg.id, warehouseId: plan.warehouseId },
+      },
+      { actor },
+    );
+    if (!result.ok) continue;
+    rh.restockSpent += plan.price;
+    rh.done.orders += 1;
+    addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
+    log(ctx, rh, `Nachschub bestellt: ${plan.pkg.label} bei ${plan.supplier.name}.${plan.why}`);
+  }
+}
+
+/**
+ * Personal: Ausfälle, bei denen ein Leutnant feststeckt, ersetzt sie; leere Spots ohne Leutnant besetzt sie mit
+ * einem Bewerber (sonst jemandem von der Straße), eine Einstellung pro Stunde, nie an die Lohnsicherung und nicht,
+ * wenn die Löhne knapp werden. Freie Leute verteilt schon "Koordinieren".
+ */
+function staffing(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
+  const state = ctx.state;
+  if (!isTaskActive(state, 'staffing')) return;
+  for (const post of getLieutenants(state)) {
+    for (const [staffId, absence] of Object.entries(post.absences)) {
+      if (!absence.stuck || absence.replaced) continue;
+      if (ctx.dispatch({ type: 'staff.replace', payload: { staffId } }, { actor }).ok) {
+        rh.done.hires += 1;
+        addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
+        log(ctx, rh, `Ausfall im Team von ${post.staffId} ersetzt, der Leutnant kam nicht weiter.`);
+        return;
+      }
+    }
+  }
+  if (wageRunway(state).warn || getStock(state) <= 0) return;
+  const free = getStaff(state, { role: 'runner', status: 'active' }).some((m) => !m.assignment);
+  if (free) return;
+  const spot = getSpots(state)
+    .filter((s) => !runnerAt(state, s.id) && !activeRunnerAt(state, s.id))
+    .filter((s) => !lieutenantOfSpot(state, s.id) && !isLyingLow(state, s.veedelId))
+    .sort((a, b) => b.demand - a.demand || a.id.localeCompare(b.id))[0];
+  if (!spot) return;
+  const budget = state.wallet.dirty - payrollReserve(state) - RIGHT_HAND_RESTOCK_RESERVE;
+  const candidate = getCandidates(state)
+    .filter((c) => c.role === 'runner' && c.hireCost <= budget && c.expiresAt > ctx.now)
+    .sort((a, b) => a.hireCost - b.hireCost || a.id.localeCompare(b.id))[0];
+  let hired = false;
+  let who = '';
+  if (candidate) {
+    hired = ctx.dispatch(
+      {
+        type: 'recruiting.hire',
+        payload: { candidateId: candidate.id, assignment: { kind: 'spot', targetId: spot.id } },
+      },
+      { actor },
+    ).ok;
+    who = candidate.name;
+  } else if (runnerHireCost(state, spot.id) <= budget) {
+    hired = ctx.dispatch({ type: 'staff.hireRunner', payload: { spotId: spot.id } }, { actor }).ok;
+    who = 'Jemand von der Straße';
+  }
+  if (!hired) return;
+  rh.done.hires += 1;
+  addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
+  log(ctx, rh, `${who} steht jetzt am ${spot.name}.`);
+}
+
+/** Geldwäsche nach Regel: Liegt mehr Schwarzgeld da als ihre Grenze, geht ein Anteil des Überschusses in die Wäsche. */
+function launder(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
+  const state = ctx.state;
+  if (!isTaskActive(state, 'laundering')) return;
+  const excess = state.wallet.dirty - payrollReserve(state) - rh.settings.launderAbove;
+  if (excess <= 0) return;
+  const free = launderingCapacity(state) - amountInProgress(state);
+  const amount = Math.floor(Math.min(excess * rh.settings.launderShare, free) / 50) * 50;
+  if (amount < MIN_LAUNDERING_AMOUNT) return;
+  if (!ctx.dispatch({ type: 'laundering.launder', payload: { amount } }, { actor }).ok) return;
+  rh.done.laundered += amount;
+  addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
+  log(ctx, rh, `${formatEuro(amount)} in die Wäsche gegeben.`);
+}
+
+/** Um Mitternacht: Anfragen vergessen, die nicht mehr offen sind. */
+export function pruneTasks(state: GameState, rh: RightHandPost): void {
+  const open = new Set(getOrders(state, { status: 'offered' }).map((o) => o.id));
+  rh.passed = rh.passed.filter((id) => open.has(id));
+}

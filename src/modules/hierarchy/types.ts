@@ -178,6 +178,8 @@ export interface RightHandPost {
   /** Ausgaben fürs Nachbestellen am Tag restockDay. */
   restockDay: number;
   restockSpent: number;
+  /** Anfragen, die sie dem Spieler überlassen hat (bis sie nicht mehr offen sind). */
+  passed: number[];
 }
 
 export interface HierarchyState {

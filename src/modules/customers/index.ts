@@ -43,6 +43,8 @@ export {
   saleSatisfaction,
   typeDemandWeight,
 } from './decisions';
+// Für Tests und Skripte: eine Anfrage erzwingen (force = true).
+export { offerDelivery, offerWholesale } from './orders';
 export { isPlayerAway } from './street';
 
 export interface CustomerType {

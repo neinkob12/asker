@@ -8,6 +8,7 @@ import { type CommandResult, formatEuro, type GameState } from '../../core';
 import { getSalesStats } from '../customers';
 import { getProduct, getStock, getWarehouse, productName } from '../goods';
 import { getTrips } from '../logistics';
+import { getStaff } from '../staff';
 import {
   availablePackages,
   getSupplier,
@@ -19,15 +20,19 @@ import {
   type SupplierPackage,
   shipmentsInTransit,
 } from '../suppliers';
+import { isTaskActive } from './righthand';
 import type { OrderRule } from './types';
 
-/** Darf ein Leutnant beim Hafen bestellen? Nur wenn jemand die Ware automatisch am Kai abholt (noch niemand). */
-export function isPortSupplierAllowed(_state: GameState): boolean {
-  return false;
+/**
+ * Darf ein Leutnant (oder die Rechte Hand) beim Hafen bestellen? Nur wenn jemand die Ware automatisch am Kai abholt:
+ * die Rechte Hand mit der Aufgabe "Hafen abholen" und mindestens einem Fahrer (Auftrag 28).
+ */
+export function isPortSupplierAllowed(state: GameState): boolean {
+  return isTaskActive(state, 'pickup') && getStaff(state, { role: 'driver' }).length > 0;
 }
 
 export const PORT_SUPPLIER_HINT =
-  'Schiffsware muss jemand am Kai abholen. Das kann noch niemand automatisch, also bestellt der Leutnant dort nicht.';
+  'Schiffsware muss jemand am Kai abholen. Das macht die Rechte Hand mit der Aufgabe "Hafen abholen" und einem Fahrer; solange bestellt dort niemand von selbst.';
 
 /** Prüft eine Regel (für den Befehl und die Oberfläche). */
 export function checkOrderRule(state: GameState, rule: OrderRule): CommandResult {

@@ -116,11 +116,21 @@ export {
   RESERVE_OPTIONS,
   RIGHT_HAND_BUDGET_OPTIONS,
   RIGHT_HAND_DEMAND,
+  RIGHT_HAND_LAUNDER_ABOVE_OPTIONS,
+  RIGHT_HAND_LAUNDER_SHARE_OPTIONS,
+  RIGHT_HAND_MAX_RANK,
   RIGHT_HAND_MIN_LEVEL,
   RIGHT_HAND_MIN_LIEUTENANTS,
   RIGHT_HAND_MIN_LOYALTY,
+  RIGHT_HAND_ORDER_LIMIT_BY_RANK,
+  RIGHT_HAND_ORDER_PRICE_OPTIONS,
+  RIGHT_HAND_RANK_XP,
+  RIGHT_HAND_RESTOCK_BUDGET_OPTIONS,
+  RIGHT_HAND_RESTOCK_MIN_STOCK_OPTIONS,
+  RIGHT_HAND_TASKS,
+  RIGHT_HAND_WHOLESALE_PRICE_OPTIONS,
 } from './config';
-export { isPortSupplierAllowed, orderRuleLabel, ruleStock, ruleWarehouse } from './orders';
+export { isPortSupplierAllowed, orderRuleLabel, PORT_SUPPLIER_HINT, ruleStock, ruleWarehouse } from './orders';
 export {
   absenceHandled,
   activeRightHand,
@@ -144,6 +154,7 @@ export {
   rightHandSkim,
   rightHandSpeedFactor,
 } from './righthand';
+export { describeDone, mainWarehouseId, restockBudgetLeft } from './tasks';
 export type * from './types';
 
 /** Settings-Änderung: wie die Einstellungen, dazu der alte Mindestbestand (wird zur Regel "automatisch"). */
@@ -180,6 +191,8 @@ declare module '../../core' {
     'hierarchy.rightHandDismissed': { staffId: string };
     /** Tagesbericht der Rechten Hand (Zahlen von gestern). */
     'hierarchy.dailyReport': { staffId: string; day: number; profit: number; problems: number };
+    /** Die Rechte Hand hat eine neue Stufe erreicht (Aufgaben mit diesem Rang sind frei). */
+    'hierarchy.rightHandRankUp': { staffId: string; rank: number };
   }
 }
 
@@ -754,7 +767,7 @@ type RightHandSettingsV3 = Pick<
   RightHandSettings,
   'dailyReport' | 'coordinate' | 'payrollGuard' | 'absences' | 'budgetPerDay'
 >;
-type RightHandPostV3 = Omit<RightHandPost, 'settings' | 'xp' | 'done' | 'restockDay' | 'restockSpent'> & {
+type RightHandPostV3 = Omit<RightHandPost, 'settings' | 'xp' | 'done' | 'restockDay' | 'restockSpent' | 'passed'> & {
   settings: RightHandSettingsV3;
 };
 type HierarchyStateV3 = Omit<HierarchyState, 'rightHand'> & { rightHand: RightHandPostV3 | null };
@@ -780,6 +793,7 @@ export function migrateHierarchyV3(old: HierarchyStateV3, state: GameState): Hie
           done: emptyDone(),
           restockDay: clock.day(state.time),
           restockSpent: 0,
+          passed: [],
         }
       : null,
   };

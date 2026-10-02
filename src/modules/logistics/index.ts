@@ -327,6 +327,8 @@ export function receiveCargo(
       },
       { id: 'later', label: 'Später', reply: 'Ich meld mich.' },
     ],
+    // Routine: Die Rechte Hand darf den Fahrer schicken (Aufgabe "Hafen abholen").
+    routine: true,
   });
   ctx.emit('cargo.docked', {
     cargoId: cargo.id,

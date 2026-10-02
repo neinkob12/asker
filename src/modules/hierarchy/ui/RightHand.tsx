@@ -1,9 +1,10 @@
-// Rechte Hand im Handy: Seite mit Aufgaben-Schaltern, Budget, letztem Tagesbericht und Protokoll, Ernennen als Blatt,
-// Abschnitt im Tab "Leute" und Hinweis in "Nächster Schritt", sobald die Stelle angeboten wird. Antworten auf den
-// Tagesbericht führen zur passenden Seite.
+// Rechte Hand im Handy: Seite mit Stufe, Aufgaben-Schaltern (mit Stufen-Schloss und je einer Regel-Zeile), Budget,
+// letztem Tagesbericht und Protokoll, Ernennen als Blatt, Abschnitt im Tab "Leute" und Hinweis in "Nächster Schritt",
+// sobald die Stelle angeboten wird. Antworten auf den Tagesbericht führen zur passenden Seite.
+// Nur das Nötigste (Auftrag 28); Optik übernimmt Auftrag 27.
 
 import { useState } from 'preact/hooks';
-import { clock, formatEuro } from '../../../core';
+import { clock, formatEuro, formatPercent } from '../../../core';
 import {
   ActionSheet,
   Button,
@@ -15,6 +16,7 @@ import {
   onGameEvent,
   registerAdvisor,
   registerPanel,
+  Select,
   Sheet,
   Stepper,
   SummaryTiles,
@@ -26,15 +28,29 @@ import { getStaff, getStaffMember, roleName } from '../../staff';
 import {
   canBeRightHand,
   getRightHand,
+  isTaskUnlocked,
   PAYROLL_RESERVE_DAYS,
   PAYROLL_RESERVE_DAYS_ORDERS,
   payrollReserve,
+  RIGHT_HAND_LAUNDER_ABOVE_OPTIONS,
+  RIGHT_HAND_LAUNDER_SHARE_OPTIONS,
+  RIGHT_HAND_MAX_RANK,
   RIGHT_HAND_MIN_LEVEL,
   RIGHT_HAND_MIN_LIEUTENANTS,
   RIGHT_HAND_MIN_LOYALTY,
+  RIGHT_HAND_ORDER_PRICE_OPTIONS,
+  RIGHT_HAND_RESTOCK_BUDGET_OPTIONS,
+  RIGHT_HAND_RESTOCK_MIN_STOCK_OPTIONS,
+  RIGHT_HAND_TASKS,
+  RIGHT_HAND_WHOLESALE_PRICE_OPTIONS,
   type RightHandSettings,
+  type RightHandTaskKey,
+  restockBudgetLeft,
   rightHandBudgetLeft,
   rightHandOffered,
+  rightHandOrderLimit,
+  rightHandRank,
+  rightHandRankProgress,
   rightHandSatisfaction,
 } from '../index';
 
@@ -58,7 +74,7 @@ export function RightHandSheet(props: { open: boolean; onClose: () => void }) {
           title="Wer hält dir den Rücken frei?"
           icon="crown"
           color="brand"
-          note={`Ab Level ${RIGHT_HAND_MIN_LEVEL} und Loyalität ${RIGHT_HAND_MIN_LOYALTY}. Will etwa das 2,5-Fache vom Lohn, steht an keinem Spot.`}
+          note={`Ab Level ${RIGHT_HAND_MIN_LEVEL} und Loyalität ${RIGHT_HAND_MIN_LOYALTY}. Will etwa das 2,5-Fache vom Lohn, steht an keinem Spot. Nur sie fährt Aufträge aus.`}
         >
           {people.length === 0 ? (
             <Empty icon="users">Niemand im Team.</Empty>
@@ -107,7 +123,7 @@ export function RightHandRow() {
     return (
       <ListItem
         onClick={() => ui.openPanel('hierarchy.rightHand', {})}
-        value={m.status === 'active' ? undefined : 'fällt aus'}
+        value={m.status === 'active' ? `Stufe ${rightHandRank(state)}` : 'fällt aus'}
       >
         <ItemContent
           icon="crown"
@@ -130,7 +146,7 @@ export function RightHandRow() {
           icon="crown"
           color="brand"
           title="Rechte Hand ernennen"
-          meta={`Ab ${RIGHT_HAND_MIN_LIEUTENANTS} Leutnants: Tagesbericht, Koordination, Lohnsicherung`}
+          meta={`Ab ${RIGHT_HAND_MIN_LIEUTENANTS} Leutnants: fährt Aufträge, Tagesbericht, Koordination, Lohnsicherung`}
         />
       </ListItem>
       <RightHandSheet open={open} onClose={() => setOpen(false)} />
@@ -138,7 +154,7 @@ export function RightHandRow() {
   );
 }
 
-const TASKS: {
+const BASE_TASKS: {
   key: 'dailyReport' | 'coordinate' | 'payrollGuard' | 'absences';
   label: string;
   hint: string;
@@ -147,7 +163,7 @@ const TASKS: {
   {
     key: 'dailyReport',
     label: 'Tagesbericht',
-    hint: 'Jeden Morgen um 8 Uhr die Zahlen von gestern.',
+    hint: 'Jeden Morgen um 8 Uhr die Zahlen von gestern und was sie erledigt hat.',
     icon: 'newspaper',
   },
   {
@@ -170,6 +186,142 @@ const TASKS: {
   },
 ];
 
+const euroOptions = (values: readonly number[]) =>
+  values.map((v) => ({ value: String(v), label: `bis ${formatEuro(v)}` }));
+
+/** Regel-Zeile zu einer Aufgabe (eine Auswahl oder ein Schalter), nur wenn die Aufgabe an und frei ist. */
+function TaskRule(props: {
+  task: RightHandTaskKey;
+  settings: RightHandSettings;
+  configure: (patch: Partial<RightHandSettings>) => void;
+}) {
+  const { state } = useGame();
+  const { task, settings, configure } = props;
+  switch (task) {
+    case 'orders': {
+      const limit = rightHandOrderLimit(state);
+      return (
+        <>
+          <ListItem
+            aside={
+              <Select
+                label="Lieferanfragen bis Betrag"
+                value={String(settings.orderMaxPrice)}
+                options={euroOptions(RIGHT_HAND_ORDER_PRICE_OPTIONS)}
+                onChange={(v) => configure({ orderMaxPrice: Number(v) })}
+              />
+            }
+          >
+            <ItemContent
+              icon="coinEuro"
+              color="money"
+              title="Nur bis Betrag"
+              meta={limit < settings.orderMaxPrice ? `Ihre Stufe traut sich bis ${formatEuro(limit)}` : undefined}
+            />
+          </ListItem>
+          <Toggle
+            icon="map"
+            label="Nur eigene Reviere"
+            hint="Anfragen aus fremden Veedeln bleiben bei dir."
+            checked={settings.ordersOwnTurfOnly}
+            onChange={(v) => configure({ ordersOwnTurfOnly: v })}
+          />
+        </>
+      );
+    }
+    case 'restock': {
+      const rule = settings.restockRules[0];
+      const left = restockBudgetLeft(state);
+      return (
+        <>
+          <ListItem
+            aside={
+              <Select
+                label="Budget pro Tag fürs Nachbestellen"
+                value={String(settings.restockBudgetPerDay)}
+                options={euroOptions(RIGHT_HAND_RESTOCK_BUDGET_OPTIONS)}
+                onChange={(v) => configure({ restockBudgetPerDay: Number(v) })}
+              />
+            }
+          >
+            <ItemContent icon="coinEuro" color="money" title="Budget pro Tag" meta={`Heute noch ${formatEuro(left)}`} />
+          </ListItem>
+          {rule && (
+            <ListItem
+              aside={
+                <Select
+                  label="Mindestbestand im Hauptlager"
+                  value={String(rule.minStock)}
+                  options={RIGHT_HAND_RESTOCK_MIN_STOCK_OPTIONS.map((v) => ({ value: String(v), label: `unter ${v}` }))}
+                  onChange={(v) =>
+                    configure({ restockRules: [{ ...rule, minStock: Number(v) }, ...settings.restockRules.slice(1)] })
+                  }
+                />
+              }
+            >
+              <ItemContent
+                icon="boxes"
+                color="goods"
+                title="Bestellt alles nach Nachfrage"
+                meta={rule.paused ?? 'günstigster Lieferant, passendes Paket'}
+              />
+            </ListItem>
+          )}
+        </>
+      );
+    }
+    case 'wholesale':
+      return (
+        <ListItem
+          aside={
+            <Select
+              label="Großhandel bis Betrag"
+              value={String(settings.wholesaleMaxPrice)}
+              options={euroOptions(RIGHT_HAND_WHOLESALE_PRICE_OPTIONS)}
+              onChange={(v) => configure({ wholesaleMaxPrice: Number(v) })}
+            />
+          }
+        >
+          <ItemContent icon="coinEuro" color="money" title="Nur bis Betrag" meta="Darüber bleibt es Chefsache" />
+        </ListItem>
+      );
+    case 'laundering':
+      return (
+        <>
+          <ListItem
+            aside={
+              <Select
+                label="Ab so viel Schwarzgeld"
+                value={String(settings.launderAbove)}
+                options={RIGHT_HAND_LAUNDER_ABOVE_OPTIONS.map((v) => ({
+                  value: String(v),
+                  label: `über ${formatEuro(v)}`,
+                }))}
+                onChange={(v) => configure({ launderAbove: Number(v) })}
+              />
+            }
+          >
+            <ItemContent icon="moneyBag" color="dirty" title="Ab Schwarzgeld" />
+          </ListItem>
+          <ListItem
+            aside={
+              <Select
+                label="Anteil des Überschusses"
+                value={String(settings.launderShare)}
+                options={RIGHT_HAND_LAUNDER_SHARE_OPTIONS.map((v) => ({ value: String(v), label: formatPercent(v) }))}
+                onChange={(v) => configure({ launderShare: Number(v) })}
+              />
+            }
+          >
+            <ItemContent icon="washing" color="money" title="Davon in die Wäsche" />
+          </ListItem>
+        </>
+      );
+    default:
+      return null;
+  }
+}
+
 function RightHandPage() {
   const { state, dispatch } = useGame();
   const ui = useUi();
@@ -182,16 +334,28 @@ function RightHandPage() {
     dispatch({ type: 'hierarchy.configureRightHand', payload: { settings } });
   const left = rightHandBudgetLeft(state);
   const report = rh.lastReport;
+  const rank = rightHandRank(state);
+  const progress = rightHandRankProgress(state);
   return (
     <div class="lt-page">
       <SummaryTiles
         items={[
+          { icon: 'medal', color: 'brand', value: `${rank}/${RIGHT_HAND_MAX_RANK}`, label: 'Stufe' },
           { icon: 'smile', color: satisfaction < 35 ? 'danger' : 'money', value: `${satisfaction} %`, label: 'Laune' },
           { icon: 'coinEuro', color: 'money', value: formatEuro(m.wage), label: 'Lohn/Tag' },
           { icon: 'lock', color: 'dirty', value: formatEuro(payrollReserve(state)), label: 'Rücklage' },
         ]}
       />
-      <Group title="Akte" icon="idCard" color="brand">
+      <Group
+        title="Akte"
+        icon="idCard"
+        color="brand"
+        note={
+          progress
+            ? `Erfahrung ${progress[0]} von ${progress[1]} bis Stufe ${rank + 1}. Jede erledigte Aufgabe und jeder gute Tagesbericht zählen.`
+            : 'Höchste Stufe: Mit allen Aufgaben an läuft Köln ohne dich.'
+        }
+      >
         <List>
           <ListItem onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}>
             <ItemContent
@@ -199,7 +363,11 @@ function RightHandPage() {
               color="brand"
               title={`${m.name} · Level ${m.level}`}
               meta={
-                m.status === 'active' ? 'hält dir den Rücken frei' : 'fällt aus, die Leutnants machen allein weiter'
+                m.status !== 'active'
+                  ? 'fällt aus, die Leutnants machen allein weiter'
+                  : m.assignment?.kind === 'delivery'
+                    ? 'gerade mit einer Lieferung unterwegs'
+                    : 'hält dir den Rücken frei'
               }
             />
           </ListItem>
@@ -209,7 +377,12 @@ function RightHandPage() {
         title="Letzter Tagesbericht"
         icon="newspaper"
         color="brand"
-        note={report ? report.advice.join(' ') || 'Keine Empfehlungen, alles im Griff.' : undefined}
+        note={
+          report
+            ? [report.done ? `Erledigt: ${report.done}.` : '', report.advice.join(' ')].filter(Boolean).join(' ') ||
+              'Keine Empfehlungen, alles im Griff.'
+            : undefined
+        }
       >
         {report ? (
           <List>
@@ -239,8 +412,36 @@ function RightHandPage() {
           <Empty icon="newspaper">Der erste Bericht kommt morgen um 8 Uhr.</Empty>
         )}
       </Group>
-      <Group title="Aufgaben" icon="checkCircle" color="brand">
-        {TASKS.map((t) => (
+      <Group
+        title="Aufgaben"
+        icon="checkCircle"
+        color="brand"
+        note="Jede Aufgabe einzeln. Neue Aufgaben schaltet ihre Stufe frei."
+      >
+        {RIGHT_HAND_TASKS.map((t) => {
+          const unlocked = isTaskUnlocked(state, t.key);
+          const on = rh.settings[t.key];
+          return (
+            <div key={t.key} class="rh-task">
+              <Toggle
+                icon={unlocked ? t.icon : 'lock'}
+                label={t.name}
+                hint={unlocked ? t.hint : `Ab Stufe ${t.rank}. ${t.hint}`}
+                checked={on}
+                disabled={!unlocked}
+                onChange={(v) => configure({ [t.key]: v })}
+              />
+              {unlocked && on && (
+                <List>
+                  <TaskRule task={t.key} settings={rh.settings} configure={configure} />
+                </List>
+              )}
+            </div>
+          );
+        })}
+      </Group>
+      <Group title="Büro" icon="briefcase" color="brand">
+        {BASE_TASKS.map((t) => (
           <Toggle
             key={t.key}
             icon={t.icon}
@@ -297,7 +498,7 @@ function RightHandPage() {
         open={confirm}
         onClose={() => setConfirm(false)}
         title={`${m.name} abberufen?`}
-        message="Die Leutnants arbeiten dann wieder ohne Budget, Bericht und Lohnsicherung."
+        message="Dann fährt niemand mehr Aufträge aus, und die Leutnants arbeiten ohne Budget, Bericht und Lohnsicherung."
         actions={[
           {
             label: 'Abberufen',
@@ -325,7 +526,7 @@ registerAdvisor({
       priority: 35,
       icon: 'crown',
       title: 'Eine Rechte Hand ernennen',
-      text: 'Sie koordiniert die Leutnants, schickt jeden Morgen die Zahlen und sichert die Löhne.',
+      text: 'Sie fährt Aufträge aus, holt den Hafen ab, koordiniert die Leutnants und schickt jeden Morgen die Zahlen.',
       actionLabel: 'Leute',
       action: (ui) => ui.selectTab('staff'),
     };
