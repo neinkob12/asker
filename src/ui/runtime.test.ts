@@ -113,6 +113,38 @@ describe('UiRuntime', () => {
     });
   });
 
+  it('Karte anklicken (Spot gründen) legt das Handy am Handy-Bildschirm weg und holt es danach zurück', async () => {
+    vi.stubGlobal('window', { matchMedia: () => ({ matches: true }) });
+    const { api, ui, runtime } = make();
+    let answer!: (pos: { lng: number; lat: number } | null) => void;
+    runtime.map = {
+      pickLocation: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    } as never;
+    api.openPhone('tab:territory');
+    expect(ui.phone.open).toBe(true);
+    const pending = api.pickLocation('Klick auf die Karte');
+    // Sonst deckt das Handy die Karte zu, auf die man klicken soll.
+    expect(ui.picking).not.toBeNull();
+    expect(ui.phone.open).toBe(false);
+    answer({ lng: 7, lat: 50.9 });
+    expect(await pending).toEqual({ lng: 7, lat: 50.9 });
+    expect(ui.picking).toBeNull();
+    expect(ui.phone.open).toBe(true);
+  });
+
+  it('Karte anklicken am Desktop lässt das Handy, wo es ist (es steht neben der Karte)', async () => {
+    const { api, ui, runtime } = make();
+    runtime.map = { pickLocation: () => Promise.resolve(null) } as never;
+    expect(ui.phone.open).toBe(true);
+    const pending = api.pickLocation('Klick');
+    expect(ui.phone.open).toBe(true);
+    expect(await pending).toBeNull();
+    expect(ui.phone.open).toBe(true);
+  });
+
   it('ein Dialog, der das Spiel anhält, behält seine Pause, das gewünschte Tempo gilt danach', () => {
     const { api, session } = make();
     registerDialog({ id: 'test.haltend' as never, component: () => null, pausesGame: true });

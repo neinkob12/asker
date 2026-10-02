@@ -228,6 +228,42 @@ describe('encounters', () => {
     expect(getHeat(sim.state, 'kalk')).toBe(5);
   });
 
+  it('Verkehrskontrolle: friedlich ohne Heat, "Gewalt gegen Polizei" bringt ihn trotz skipEffects', () => {
+    const request = { kind: 'vehicleCheck', veedelId: 'kalk', playerPresent: true, skipEffects: true } as const;
+    // Ruhig bleiben: Eine Kontrolle ist keine Gewalt im Veedel (die Polizei bekam sonst +15 Heat gemeldet).
+    const calm = createTestGame();
+    const quiet = startEncounter(calm.ctx('logistics'), request).encounterId;
+    playOut(calm, quiet, 'negotiate');
+    calm.advance(1);
+    expect(encounter(calm, quiet).phase).toBe('done');
+    expect(getHeat(calm.state, 'kalk')).toBe(0);
+    // Mit der Faust auf die Streife: Der angekündigte Heat der Handlung gilt, auch wenn der Auslöser die Folgen regelt.
+    const fight = createTestGame();
+    const brawl = startEncounter(fight.ctx('logistics'), request).encounterId;
+    playOut(fight, brawl, 'fight');
+    fight.advance(1);
+    const e = encounter(fight, brawl);
+    expect(e.extraHeat).toBeGreaterThanOrEqual(20);
+    expect(e.result?.heat).toBe(e.extraHeat);
+    expect(getHeat(fight.state, 'kalk')).toBe(Math.min(100, e.extraHeat));
+  });
+
+  it('Ruf aus einer Konfrontation steht mit Grund in der Liste "Zuletzt"', () => {
+    const sim = createTestGame();
+    const effects: EncounterEffects = { reputation: 2 };
+    const { encounterId } = startEncounter(sim.ctx('test'), {
+      kind: 'debtCollection',
+      veedelId: 'kalk',
+      playerPresent: false,
+      effects: { success: effects, failure: effects, retreat: effects },
+    });
+    expect(encounter(sim, encounterId).phase).toBe('done');
+    const recent = sim.state.modules.reputation.recent;
+    expect(recent).toHaveLength(1);
+    expect(recent[0].delta).toBe(2);
+    expect(recent[0].reason).toMatch(/^Schulden eintreiben \((geschafft|verloren|Rückzug)\)$/);
+  });
+
   it('Bestechen kostet Schwarzgeld, ohne Geld geht es nicht', () => {
     const sim = createTestGame();
     const { encounterId } = startEncounter(sim.ctx('police'), { kind: 'policeChase', playerPresent: true });

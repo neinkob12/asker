@@ -35,6 +35,7 @@ import {
   factions,
   getInfluence,
   LOSE_CONTROL_THRESHOLD,
+  lieutenantInfluence,
   PLAYER_FACTION,
   playerPresence,
 } from '../index';
@@ -64,11 +65,13 @@ function InfluenceSection(props: { veedelId: string }) {
   const presenceText =
     presence.staff > 0
       ? `${presence.staff} Mitarbeiter vor Ort`
-      : presence.recentSale
-        ? 'kürzlich hier verkauft'
-        : getInfluence(state, props.veedelId, PLAYER_FACTION) > 0
-          ? 'keine, dein Einfluss bröckelt'
-          : 'keine';
+      : lieutenantInfluence(state, props.veedelId) > 0
+        ? 'ein Leutnant führt hier Spots'
+        : presence.recentSale
+          ? 'kürzlich hier verkauft'
+          : getInfluence(state, props.veedelId, PLAYER_FACTION) > 0
+            ? 'keine, dein Einfluss bröckelt'
+            : 'keine';
   return (
     <Group
       title="Revier"

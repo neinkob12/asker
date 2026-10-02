@@ -1,15 +1,16 @@
-// Dynamic Island: geplante Razzia im eigenen Revier (mit Restzeit) und hohe Heat.
+// Dynamic Island: geplante Razzien im eigenen Revier (jede mit Restzeit, die nächste zuerst) und hohe Heat.
 
-import { islandCountdown, registerLiveActivity } from '../../../ui';
-import { veedelName } from '../../veedel';
-import { heatLevel, plannedMajorRaid, plannedRaid, plannedRaidInfo, playerHeat } from '../index';
+import { islandCountdown, type LiveActivity, registerLiveActivity } from '../../../ui';
+import { allVeedel, veedelName } from '../../veedel';
+import { heatLevel, plannedMajorRaid, plannedRaidInfo, playerHeat } from '../index';
 
 registerLiveActivity({
   id: 'police.status',
   activities: (state) => {
+    const raids: LiveActivity[] = [];
     const major = plannedMajorRaid(state);
     if (major && major.at > state.time) {
-      return {
+      raids.push({
         id: 'police.majorRaid',
         priority: 90,
         icon: 'siren',
@@ -19,28 +20,33 @@ registerLiveActivity({
         title: `Großrazzia in ${major.veedelIds.map(veedelName).join(', ')}`,
         detail: 'Leute abziehen, Ware umlagern',
         open: (ui) => ui.openPanel('veedel.veedel', { veedelId: major.veedelIds[0] }),
-      };
+      });
     }
-    const hot = playerHeat(state);
-    if (!hot) return null;
-    const raid = plannedRaid(state, hot.veedelId);
-    const info = plannedRaidInfo(state, hot.veedelId);
-    if (raid !== null && raid > state.time) {
-      return {
-        id: `police.raid.${hot.veedelId}`,
+    // Jede geplante Razzia bekommt ihren Eintrag, nicht nur die im heißesten Veedel: Auch die anderen lassen sich abwenden.
+    const planned = allVeedel()
+      .map((v) => ({ veedelId: v.id, info: plannedRaidInfo(state, v.id) }))
+      .filter((r) => r.info !== null && r.info.at > state.time)
+      .sort((a, b) => (a.info?.at ?? 0) - (b.info?.at ?? 0));
+    for (const { veedelId, info } of planned) {
+      if (!info) continue;
+      raids.push({
+        id: `police.raid.${veedelId}`,
         priority: 88,
         icon: 'siren',
         tone: 'bad',
         leading: 'Razzia',
-        trailing: islandCountdown(raid - state.time),
+        trailing: islandCountdown(info.at - state.time),
         title:
-          info?.scope === 'spot'
-            ? `Razzia an einem Spot in ${veedelName(hot.veedelId)}`
-            : `Razzia in ${veedelName(hot.veedelId)}`,
+          info.scope === 'spot'
+            ? `Razzia an einem Spot in ${veedelName(veedelId)}`
+            : `Razzia in ${veedelName(veedelId)}`,
         detail: 'Ware und Leute rausholen oder abtauchen',
-        open: (ui) => ui.openPanel('veedel.veedel', { veedelId: hot.veedelId }),
-      };
+        open: (ui) => ui.openPanel('veedel.veedel', { veedelId }),
+      });
     }
+    if (raids.length > 0) return raids;
+    const hot = playerHeat(state);
+    if (!hot) return null;
     const level = heatLevel(hot.heat);
     if (level.index < 2) return null;
     return {

@@ -878,6 +878,9 @@ function tick(ctx: Ctx): void {
   }
 }
 
+/** Anlässe, bei denen die Polizei selbst die Gegenseite ist. */
+const POLICE_ENCOUNTERS: readonly string[] = ['policeChase', 'vehicleCheck'];
+
 function initialState(): PoliceState {
   return {
     heat: Object.fromEntries(allVeedel().map((v) => [v.id, 0])),
@@ -919,8 +922,9 @@ export default defineModule({
         }
         return;
       }
-      // Jede andere Konfrontation im Veedel ist Gewalt, die die Polizei mitbekommt.
-      if (kind !== 'policeChase' && request.veedelId) reportViolence(ctx, request.veedelId);
+      // Jede andere Konfrontation im Veedel ist Gewalt, die die Polizei mitbekommt. Begegnungen mit der Polizei selbst
+      // nicht: Eine friedliche Kontrolle ist keine Gewalt (Heat aus "Gewalt gegen Polizei" kommt aus der Handlung).
+      if (!POLICE_ENCOUNTERS.includes(kind) && request.veedelId) reportViolence(ctx, request.veedelId);
     },
   },
   migrations: {

@@ -689,14 +689,19 @@ export class UiRuntime {
       togglePause: () => api.setSpeed(session.loop.speed === 0 ? this.speedBeforePause : 0),
       pickLocation: async (prompt) => {
         if (!this.map) return null;
+        // Am Handy-Bildschirm füllt das Handy alles unter dem HUD und deckt die Karte zu: Solange du auf die Karte
+        // klickst, liegt es in der Tasche, danach kommt es mit der Seite zurück, von der du kamst.
+        const hidePhone = ui.phone.open && isMobileScreen();
         update(() => {
           ui.picking = { prompt };
+          if (hidePhone) ui.phone = { ...ui.phone, open: false };
         });
         try {
           return await this.map.pickLocation();
         } finally {
           update(() => {
             ui.picking = null;
+            if (hidePhone) ui.phone = { ...ui.phone, open: true };
           });
         }
       },

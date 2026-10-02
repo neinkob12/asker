@@ -37,6 +37,7 @@ import {
   messages,
 } from '../../core';
 import { absenceHandled, teamLeadOf } from '../hierarchy';
+import { PLAYER_FACTION } from '../territory';
 import { getVeedel, veedelName } from '../veedel';
 import {
   assignCommand,
@@ -337,8 +338,13 @@ export default defineModule({
     'clock.hourStarted': hourly,
     'police.arrest': (ctx, { staffId, veedelId }) => onArrest(ctx, staffId, veedelId),
     'police.raidPlanned': (ctx, { veedelId, at, scope }) => warnOfRaid(ctx, veedelId, at, scope === 'major'),
-    'police.raid': (ctx, { veedelId }) => {
-      for (const m of getStaff(ctx.state, { veedelId })) addLoyalty(ctx, m.id, LOYALTY.raid);
+    'police.raid': (ctx, { veedelId, veedelIds, target }) => {
+      // Nur eine Razzia gegen dich verunsichert deine Leute (eine gegen eine Gang nicht). Die Großrazzia trifft
+      // mehrere Veedel.
+      if (target !== PLAYER_FACTION) return;
+      for (const id of veedelIds && veedelIds.length > 0 ? veedelIds : [veedelId]) {
+        for (const m of getStaff(ctx.state, { veedelId: id })) addLoyalty(ctx, m.id, LOYALTY.raid);
+      }
     },
     'sale.completed': (ctx, { sellerId, amount, revenue }) => {
       const m = sellerId ? getStaffMember(ctx.state, sellerId) : undefined;

@@ -5,6 +5,7 @@ import { clock, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getStock, store } from '../goods';
 import { getHeat } from '../police';
+import { getSpot } from '../spots';
 import { BETRAYAL_THRESHOLD, LEVEL_XP, LOYALTY, THEFT_GOODS_MAX, THEFT_MONEY_MAX } from './config';
 import {
   addXp,
@@ -162,6 +163,32 @@ describe('Loyalität', () => {
     expect(getStaffMember(sim.state, b.id)?.stats.loyalty).toBe(
       60 + LOYALTY.arrestNearby + LOYALTY.raid + LOYALTY.encounter + LOYALTY.encounterLost,
     );
+  });
+
+  it('eine Razzia gegen eine Gang verunsichert deine Leute nicht, die Großrazzia trifft alle betroffenen Veedel', () => {
+    const sim = quietGame();
+    sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'zuelpicher' } });
+    sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'ebertplatz' } });
+    const [a, b] = getStaff(sim.state);
+    a.stats.loyalty = 60;
+    b.stats.loyalty = 60;
+    const veedelA = getSpot(sim.state, 'zuelpicher')?.veedelId ?? '';
+    const veedelB = getSpot(sim.state, 'ebertplatz')?.veedelId ?? '';
+    expect(veedelA).not.toBe(veedelB);
+    // Die Polizei räumt eine Gang im Veedel aus: Deine Leute dort bleiben ruhig.
+    sim.ctx('police').emit('police.raid', { veedelId: veedelA, target: 'ost' });
+    sim.step();
+    expect(getStaffMember(sim.state, a.id)?.stats.loyalty).toBe(60);
+    // Großrazzia gegen dich in zwei Veedeln: Beide Seiten spüren sie, nicht nur das erste Veedel.
+    sim.ctx('police').emit('police.raid', {
+      veedelId: veedelA,
+      veedelIds: [veedelA, veedelB],
+      target: 'player',
+      scope: 'major',
+    });
+    sim.step();
+    expect(getStaffMember(sim.state, a.id)?.stats.loyalty).toBe(60 + LOYALTY.raid);
+    expect(getStaffMember(sim.state, b.id)?.stats.loyalty).toBe(60 + LOYALTY.raid);
   });
 
   it('Beförderung zum Leutnant hebt Loyalität und Lohn', () => {

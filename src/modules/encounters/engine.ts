@@ -637,6 +637,12 @@ function lossCategory(kind: string): MoneyCategory {
   return 'loss.encounter';
 }
 
+const OUTCOME_VERDICT: Record<EncounterOutcome, string> = {
+  success: 'geschafft',
+  failure: 'verloren',
+  retreat: 'Rückzug',
+};
+
 function applyEffects(ctx: Ctx, encounter: Encounter, effects: EncounterEffects, result: EncounterResult): void {
   const stakes = encounter.request.stakes ?? {};
   const reason = getKind(encounter.kind)?.name ?? 'Konfrontation';
@@ -689,7 +695,8 @@ function applyEffects(ctx: Ctx, encounter: Encounter, effects: EncounterEffects,
     }
   }
   if (effects.reputation) {
-    changeReputation(ctx, effects.reputation);
+    // Mit Grund, damit die Änderung in Reviere › Ruf › "Zuletzt" steht.
+    changeReputation(ctx, effects.reputation, `${reason} (${OUTCOME_VERDICT[encounter.outcome ?? 'success']})`);
     result.reputation += effects.reputation;
   }
   // Die Beziehung zur Gegenseite wendet deren Modul an (gangs liest result.relation).
@@ -762,6 +769,12 @@ function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome, overr
     override ??
     (encounter.request.skipEffects ? undefined : (encounter.request.effects?.[outcome] ?? kind?.outcomes[outcome]));
   if (effects && !encounter.playerKilled) applyEffects(ctx, encounter, effects, result);
+  else if (!effects && !encounter.playerKilled && encounter.extraHeat > 0 && encounter.request.veedelId) {
+    // Der Auslöser regelt die Folgen selbst (skipEffects, z.B. die Verkehrskontrolle), der Heat aus den Handlungen
+    // ("Gewalt gegen Polizei") gilt trotzdem.
+    addHeat(ctx, encounter.request.veedelId, encounter.extraHeat);
+    result.heat += encounter.extraHeat;
+  }
 
   const vars = textVars(encounter);
   const lastWords = encounter.log.at(-1)?.text ?? 'Du bist nicht mehr aufgestanden.';
