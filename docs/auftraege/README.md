@@ -80,8 +80,8 @@ immer mit Kategorie buchen, Lieferanten mit Liegeplatz für Leutnants über `isP
 
 ```
 Auftrag 26  Handy aufräumen          ─┐  gleichzeitig möglich
-Auftrag 28  Spots, Auftragsfahrer,   ─┘
-            Rechte Hand
+Auftrag 28  Spots, Rechte Hand        ─┘
+            als Auftragsfahrer
                │  26 mergen
                ▼
 Auftrag 27  Handy-Inhalte (Bilanz, Geldwäsche, Personal, Gangs, Optik)
@@ -90,7 +90,7 @@ Auftrag 27  Handy-Inhalte (Bilanz, Geldwäsche, Personal, Gangs, Optik)
 | Auftrag | Thema | Wann |
 | --- | --- | --- |
 | [26](26-handy-aufraeumen.md) | Weniger Apps, schwarzer Startbildschirm, Personal und Geldwäsche als Apps, Nachrichten (gelesen, löschen), weniger Banner, HUD (Ruf + Reviere, Lager klappt auf) | sofort |
-| [28](28-spots-auftragsfahrer-rechte-hand.md) | Spots in jedem Veedel, weniger Aufträge, Kuriere werden Auftragsfahrer, Rechte Hand mit Aufgaben bis "Köln läuft allein" | sofort, parallel zu 26 |
+| [28](28-spots-rechte-hand.md) | Spots in jedem Veedel, weniger Aufträge, Kuriere fallen weg, nur die Rechte Hand nimmt Aufträge an und fährt aus, Rechte Hand mit Aufgaben bis "Köln läuft allein" | sofort, parallel zu 26 |
 | [27](27-handy-inhalte-bilanz.md) | Kasse als Bilanz, Geldwäsche mit drei Wegen, mehr Bewerber, Gangs-Kopf, Chips statt "·", keine Umbrüche im Wort | nach dem Merge von 26 |
 
 Auftrag 23 (geplant) überschneidet sich mit 28 (Disponent, Daueraufträge). Wird 23 später gestartet, gilt: Der
