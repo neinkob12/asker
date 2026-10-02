@@ -1,17 +1,22 @@
-// Nachrichten-App: Chats pro Figur, nach Kontaktart gruppiert (Gangs, Polizei, Lieferanten, Team, Kunden), mit
-// Avatar in der Farbe der Kontaktart, ungelesenen Nachrichten, Fristen und Antwort-Optionen als Knöpfe.
+// Nachrichten-App: oben die zuletzt aktiven Kontakte als Avatare, darunter die Chats pro Figur, nach Kontaktart
+// gruppiert (Gangs, Polizei, Lieferanten, Team, Kunden), kompakt (eine Zeile plus Vorschau), mit Avatar in der
+// Farbe der Kontaktart, ungelesenen Nachrichten und Fristen. "Alle gelesen" in der Leiste, Löschen per Wischen oder
+// Kontextmenü, "Alle löschen" im Menü (Aktionsblatt); bei offener Frist erst eine Rückfrage. Im Chat stehen die
+// Antwort-Optionen als Knöpfe unten.
 // Die Daten kommen aus dem Nachrichtendienst des Kerns; die Aufbereitung steht in messagesModel.ts.
 // Welcher Chat offen ist, steht in ui.phone.params.contactId (so öffnen Benachrichtigungen den Chat direkt).
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { clock, messages } from '../../core';
 import {
+  ActionSheet,
   Avatar,
   Badge,
   Button,
   ContextMenu,
   Empty,
   Icon,
+  IconButton,
   IconChip,
   SegmentedControl,
   Stamp,
@@ -20,6 +25,7 @@ import {
 } from '../components';
 import { useGame, useUi } from '../hooks';
 import {
+  type ChatListItem,
   CONTACT_KIND_ICONS,
   CONTACT_KIND_LABELS,
   CONTACT_KIND_TONES,
@@ -27,6 +33,7 @@ import {
   chatList,
   firstUnread,
   groupChats,
+  recentContacts,
 } from './messagesModel';
 import { PhoneScreen } from './PhoneScreen';
 
@@ -46,6 +53,31 @@ function matches(chat: ReturnType<typeof chatList>[number], query: string): bool
   return [chat.name, chat.kindLabel, chat.preview].some((text) => text.toLocaleLowerCase('de').includes(q));
 }
 
+/** Die zuletzt aktiven Kontakte als Avatare in einer Reihe; ein Tipp öffnet den Chat. */
+function RecentRow(props: { chats: ChatListItem[] }) {
+  const ui = useUi();
+  if (props.chats.length < 2) return null;
+  return (
+    <div class="msg-recent" role="list" aria-label="Zuletzt">
+      {props.chats.map((c) => (
+        <button
+          key={c.contactId}
+          type="button"
+          class="msg-recent__item"
+          role="listitem"
+          onClick={() => ui.openPhone(APP_ID, { contactId: c.contactId })}
+          aria-label={`${c.name}${c.unread > 0 ? `, ${c.unread} ungelesen` : ''}`}
+          title={c.name}
+        >
+          <Avatar name={c.name} image={avatarImage(c.avatar, c.kind)} tone={CONTACT_KIND_TONES[c.kind]} />
+          <span class="msg-recent__name">{c.name.split(' ')[0]}</span>
+          <Badge count={c.unread} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ChatList() {
   const { state, dispatch } = useGame();
   const ui = useUi();
@@ -53,19 +85,42 @@ function ChatList() {
   // Wartet etwas auf Antwort, beginnt die Liste mit "Offen".
   const [filter, setFilter] = useState<'all' | 'open'>(() => (all.some((c) => c.awaitingAnswer) ? 'open' : 'all'));
   const [query, setQuery] = useState('');
+  const [menu, setMenu] = useState(false);
+  const [confirm, setConfirm] = useState<'all' | string | null>(null);
   const list = (filter === 'open' ? all.filter((c) => c.awaitingAnswer || c.unread > 0) : all).filter((c) =>
     matches(c, query),
   );
   const groups = groupChats(list);
   const unread = messages.unreadCount(state);
   const openCount = all.filter((c) => c.awaitingAnswer).length;
+  const withDeadline = all.filter((c) => messages.hasOpenDeadline(state, c.contactId));
   const markRead = (contactId: string) => dispatch({ type: 'messages.markRead', payload: { contactId } });
+  const markAllRead = () => dispatch({ type: 'messages.markAllRead', payload: {} });
+  const remove = (contactId: string) => dispatch({ type: 'messages.delete', payload: { contactId } });
+  const removeAll = () => dispatch({ type: 'messages.deleteAll', payload: {} });
+  // Löschen: Chats mit offener Frist erst nachfragen, alle anderen sofort (es gibt sie nach dem nächsten Schreiben wieder).
+  const askOrRemove = (contactId: string) => {
+    if (messages.hasOpenDeadline(state, contactId)) setConfirm(contactId);
+    else remove(contactId);
+  };
+  const confirmChat = confirm && confirm !== 'all' ? all.find((c) => c.contactId === confirm) : undefined;
   return (
     <PhoneScreen
       title="Nachrichten"
       subtitle={unread > 0 ? `${unread} ungelesen` : 'Alles gelesen'}
       search={{ value: query, onInput: setQuery, placeholder: 'Chats durchsuchen' }}
+      actions={
+        all.length > 0 && (
+          <>
+            <Button small variant="subtle" icon="checkCircle" disabled={unread === 0} onClick={markAllRead}>
+              Alle gelesen
+            </Button>
+            <IconButton icon="more" label="Mehr" onClick={() => setMenu(true)} />
+          </>
+        )
+      }
     >
+      <RecentRow chats={recentContacts(all)} />
       <SegmentedControl
         wide
         aria-label="Filter"
@@ -97,14 +152,21 @@ function ChatList() {
             <ul class="msg-list">
               {group.items.map((c) => (
                 <li key={c.contactId}>
-                  {/* Wischen: als gelesen markieren (gibt es auch im Kontextmenü, langer Druck oder Rechtsklick) */}
+                  {/* Wischen: Löschen und Gelesen (gibt es auch im Kontextmenü, langer Druck oder Rechtsklick) */}
                   <SwipeRow
-                    actions={
-                      c.unread > 0
-                        ? [{ label: 'Gelesen', icon: 'check', color: 'chat', onSelect: () => markRead(c.contactId) }]
-                        : []
-                    }
-                    fullSwipe
+                    actions={[
+                      { label: 'Löschen', icon: 'trash', color: 'danger', onSelect: () => askOrRemove(c.contactId) },
+                      ...(c.unread > 0
+                        ? [
+                            {
+                              label: 'Gelesen',
+                              icon: 'check',
+                              color: 'chat' as const,
+                              onSelect: () => markRead(c.contactId),
+                            },
+                          ]
+                        : []),
+                    ]}
                   >
                     <ContextMenu
                       label={`Aktionen für ${c.name}`}
@@ -120,6 +182,12 @@ function ChatList() {
                           disabled: c.unread === 0,
                           onSelect: () => markRead(c.contactId),
                         },
+                        {
+                          label: 'Chat löschen',
+                          icon: 'trash',
+                          destructive: true,
+                          onSelect: () => askOrRemove(c.contactId),
+                        },
                       ]}
                     >
                       <button
@@ -132,22 +200,14 @@ function ChatList() {
                         <span class="msg-row__main">
                           <span class="msg-row__top">
                             <span class="msg-row__name">{c.name}</span>
+                            {c.awaitingAnswer && (
+                              <Tag tone={c.deadlineIn !== undefined && c.deadlineIn < 30 ? 'bad' : 'warn'} icon="reply">
+                                {c.deadlineIn !== undefined ? clock.formatDuration(c.deadlineIn) : 'Antwort'}
+                              </Tag>
+                            )}
                             <time class="msg-row__time">{c.timeLabel}</time>
                           </span>
                           <span class="msg-row__preview">{c.preview}</span>
-                          {(c.awaitingAnswer || c.unread > 0) && (
-                            <span class="msg-row__status">
-                              {c.awaitingAnswer && (
-                                <Tag
-                                  tone={c.deadlineIn !== undefined && c.deadlineIn < 30 ? 'bad' : 'warn'}
-                                  icon="reply"
-                                >
-                                  Antwort
-                                  {c.deadlineIn !== undefined ? ` · ${clock.formatDuration(c.deadlineIn)}` : ''}
-                                </Tag>
-                              )}
-                            </span>
-                          )}
                         </span>
                         <Badge count={c.unread} />
                       </button>
@@ -159,6 +219,40 @@ function ChatList() {
           </section>
         );
       })}
+      <ActionSheet
+        open={menu}
+        onClose={() => setMenu(false)}
+        title="Nachrichten"
+        actions={[
+          { label: 'Alle als gelesen markieren', icon: 'checkCircle', disabled: unread === 0, onSelect: markAllRead },
+          { label: 'Alle Chats löschen …', icon: 'trash', destructive: true, onSelect: () => setConfirm('all') },
+        ]}
+      />
+      <ActionSheet
+        open={confirm === 'all'}
+        onClose={() => setConfirm(null)}
+        title={`${all.length === 1 ? 'Einen Chat' : `Alle ${all.length} Chats`} löschen?`}
+        message={
+          withDeadline.length > 0
+            ? `${withDeadline.map((c) => c.name).join(', ')} ${withDeadline.length === 1 ? 'wartet' : 'warten'} noch auf eine Antwort mit Frist. Gelöschte Chats kommen wieder, sobald jemand neu schreibt.`
+            : 'Gelöschte Chats kommen wieder, sobald jemand neu schreibt.'
+        }
+        actions={[{ label: 'Alle löschen', icon: 'trash', destructive: true, onSelect: removeAll }]}
+      />
+      <ActionSheet
+        open={!!confirmChat}
+        onClose={() => setConfirm(null)}
+        title={`Chat mit ${confirmChat?.name ?? ''} löschen?`}
+        message="Hier wartet noch eine Frage mit Frist auf deine Antwort. Löschen heißt: keine Antwort."
+        actions={[
+          {
+            label: 'Trotzdem löschen',
+            icon: 'trash',
+            destructive: true,
+            onSelect: () => confirmChat && remove(confirmChat.contactId),
+          },
+        ]}
+      />
     </PhoneScreen>
   );
 }
