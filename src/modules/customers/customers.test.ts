@@ -410,13 +410,23 @@ describe('customers: Stammkunden', () => {
 });
 
 describe('customers: Lieferdienst und Großhandel', () => {
-  function withCourier(sim: Simulation): string {
-    sim.state.wallet.dirty += 1000;
-    sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'uni' } });
-    const member = sim.state.modules.staff.members[sim.state.modules.staff.members.length - 1];
-    member.role = 'courier';
-    member.assignment = null;
-    return member.id;
+  /** Zwei Leutnants und eine Rechte Hand (ohne die Aufgabe "Aufträge und Handy", damit sie hier nicht selbst zugreift). */
+  function withRightHand(sim: Simulation): string {
+    sim.state.wallet.dirty += 5000;
+    const ids: string[] = [];
+    for (const spotId of ['uni', 'zuelpicher', 'ebertplatz']) {
+      sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+      const m = sim.state.modules.staff.members[sim.state.modules.staff.members.length - 1];
+      m.level = 4;
+      m.stats.loyalty = 80;
+      ids.push(m.id);
+    }
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: ids[0], spotIds: ['uni'] } });
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: ids[1], spotIds: ['zuelpicher'] } });
+    const result = sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: ids[2] } });
+    if (!result.ok) throw new Error(result.reason);
+    sim.dispatch({ type: 'hierarchy.configureRightHand', payload: { settings: { orders: false } } });
+    return ids[2];
   }
 
   const answer = (sim: Simulation, messageId: number, optionId: string) =>
@@ -429,7 +439,9 @@ describe('customers: Lieferdienst und Großhandel', () => {
     const order = offerDelivery(sim.ctx('customers'), true);
     if (!order) throw new Error('keine Bestellung');
     const message = messages.get(sim.state, order.messageId);
-    expect(message?.options?.map((o) => o.id)).toEqual(['self', 'courier', 'decline']);
+    // Ohne Rechte Hand fährst nur du: Kuriere gibt es seit Auftrag 28 nicht mehr.
+    expect(message?.options?.map((o) => o.id)).toEqual(['self', 'decline']);
+    expect(message?.routine).toBe(true);
     const stock = getStock(sim.state);
     const money = sim.state.wallet.dirty;
     expect(answer(sim, order.messageId, 'self').ok).toBe(true);
@@ -471,32 +483,75 @@ describe('customers: Lieferdienst und Großhandel', () => {
     }
   });
 
-  it('Kurier ausliefern lassen: freien Kurier über staff finden, danach wieder frei', () => {
+  it('die Rechte Hand fährt aus (nur sie, eine Fahrt zur Zeit, mit dem Auto), danach ist sie wieder frei', () => {
     const sim = quietGame();
     changeReputation(sim.ctx('test'), 40);
+    // Ohne Rechte Hand gibt es die Antwort gar nicht; der Befehl schlägt mit Grund fehl.
+    const before = offerDelivery(sim.ctx('customers'), true);
+    if (!before) throw new Error('keine Bestellung');
+    expect(sim.dispatch({ type: 'customers.acceptOrder', payload: { orderId: before.id, by: 'rightHand' } })).toEqual({
+      ok: false,
+      reason: 'Du hast keine Rechte Hand, die ausfahren könnte.',
+    });
+    sim.dispatch({ type: 'customers.declineOrder', payload: { orderId: before.id } });
+    const rightHandId = withRightHand(sim);
     const order = offerDelivery(sim.ctx('customers'), true);
     if (!order) throw new Error('keine Bestellung');
-    expect(answer(sim, order.messageId, 'courier')).toEqual({ ok: false, reason: 'Kein freier Kurier.' });
-    expect(messages.canAnswer(sim.state, messages.get(sim.state, order.messageId) ?? ({} as never))).toBe(true);
-    const courierId = withCourier(sim);
+    expect(messages.get(sim.state, order.messageId)?.options?.map((o) => o.id)).toEqual([
+      'self',
+      'rightHand',
+      'decline',
+    ]);
     const events = recordEvents(sim);
-    expect(answer(sim, order.messageId, 'courier').ok).toBe(true);
-    expect(sim.state.modules.staff.members.find((m) => m.id === courierId)?.assignment).toEqual({
+    expect(answer(sim, order.messageId, 'rightHand').ok).toBe(true);
+    expect(getOrder(sim.state, order.id)).toMatchObject({
+      status: 'enRoute',
+      deliveredBy: 'rightHand',
+      courierId: rightHandId,
+    });
+    expect(sim.state.modules.staff.members.find((m) => m.id === rightHandId)?.assignment).toEqual({
       kind: 'delivery',
       targetId: String(order.id),
     });
+    // Eine Fahrt zur Zeit.
+    const second = offerDelivery(sim.ctx('customers'), true);
+    if (!second) throw new Error('keine zweite Bestellung');
+    expect(answer(sim, second.messageId, 'rightHand')).toMatchObject({
+      ok: false,
+      reason: expect.stringMatching(/schon mit einer Lieferung unterwegs/),
+    });
     sim.advance((getOrder(sim.state, order.id)?.arrivesAt ?? 0) - sim.state.time);
-    expect(eventsOfType(events, 'sale.completed')[0].payload.sellerId).toBe(courierId);
-    expect(sim.state.modules.staff.members.find((m) => m.id === courierId)?.assignment).toBeNull();
+    expect(eventsOfType(events, 'sale.completed')[0].payload.sellerId).toBe(rightHandId);
+    expect(eventsOfType(events, 'order.accepted')[0].payload).toMatchObject({
+      by: 'rightHand',
+      courierId: rightHandId,
+    });
+    // Zurück im Büro.
+    expect(sim.state.modules.staff.members.find((m) => m.id === rightHandId)?.assignment).toEqual({
+      kind: 'office',
+      targetId: 'rightHand',
+    });
   });
 
-  it('fällt der Kurier aus, platzt die Lieferung', () => {
+  it('die alte Antwort "Kurier" aus alten Spielständen zählt wie selbst liefern', () => {
     const sim = quietGame();
     changeReputation(sim.ctx('test'), 40);
-    const courierId = withCourier(sim);
     const order = offerDelivery(sim.ctx('customers'), true);
     if (!order) throw new Error('keine Bestellung');
-    answer(sim, order.messageId, 'courier');
+    expect(sim.dispatch({ type: 'customers.acceptOrder', payload: { orderId: order.id, by: 'courier' } }).ok).toBe(
+      true,
+    );
+    expect(getOrder(sim.state, order.id)).toMatchObject({ status: 'enRoute', deliveredBy: 'player', courierId: null });
+    expect(isPlayerDelivering(sim.state)).toBe(true);
+  });
+
+  it('fällt die Rechte Hand unterwegs aus, platzt die Lieferung', () => {
+    const sim = quietGame();
+    changeReputation(sim.ctx('test'), 40);
+    const courierId = withRightHand(sim);
+    const order = offerDelivery(sim.ctx('customers'), true);
+    if (!order) throw new Error('keine Bestellung');
+    expect(answer(sim, order.messageId, 'rightHand').ok).toBe(true);
     const reputation = getReputation(sim.state);
     sim.ctx('police').emit('police.arrest', { staffId: courierId, veedelId: 'ehrenfeld' });
     sim.step();

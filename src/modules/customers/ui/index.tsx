@@ -27,7 +27,8 @@ import {
   useUi,
 } from '../../../ui';
 import { formatProductAmount, getProduct, productName } from '../../goods';
-import { activeRunnerAt, findAvailable, getStaffMember } from '../../staff';
+import { rightHandDriver } from '../../hierarchy';
+import { activeRunnerAt, getStaffMember } from '../../staff';
 import { veedelName } from '../../veedel';
 import {
   canServe,
@@ -268,7 +269,9 @@ function OfferedOrder(props: { order: Order; state: GameState }) {
   const canAnswer = message ? messages.canAnswer(state, message) : false;
   const answer = (optionId: string) =>
     dispatch({ type: 'messages.answer', payload: { messageId: order.messageId, optionId } });
-  const courier = findAvailable(state, { role: 'courier' });
+  // Seit Auftrag 28 fährt nur die Rechte Hand Aufträge aus (Antwort gibt es nur, wenn es eine gibt).
+  const driver = rightHandDriver(state);
+  const viaRightHand = !!message?.options?.some((o) => o.id === 'rightHand');
   const left = order.expiresAt - state.time;
   return (
     <SwipeRow
@@ -293,14 +296,16 @@ function OfferedOrder(props: { order: Order; state: GameState }) {
               <Button small variant="primary" disabled={isPlayerDelivering(state)} onClick={() => answer('self')}>
                 Selbst liefern
               </Button>
-              <Button
-                small
-                disabled={!courier}
-                title={courier ? courier.name : 'Kein freier Kurier'}
-                onClick={() => answer('courier')}
-              >
-                Kurier
-              </Button>
+              {viaRightHand && (
+                <Button
+                  small
+                  disabled={!driver.ok}
+                  title={driver.ok ? driver.member.name : driver.reason}
+                  onClick={() => answer('rightHand')}
+                >
+                  Rechte Hand
+                </Button>
+              )}
               <Button small variant="subtle" onClick={() => answer('decline')}>
                 Ablehnen
               </Button>
@@ -355,10 +360,10 @@ function OrdersApp() {
             {enRoute.map((o) => (
               <ListItem key={o.id} value={`an ${clock.formatTime(o.arrivesAt ?? state.time)}`}>
                 <ItemContent
-                  icon={o.courierId ? 'bike' : 'runner'}
-                  color={o.courierId ? 'goods' : 'brand'}
+                  icon={o.courierId ? 'crown' : 'runner'}
+                  color={o.courierId ? 'people' : 'brand'}
                   title={o.contactName}
-                  meta={`${o.courierId ? (getStaffMember(state, o.courierId)?.name ?? 'Kurier') : 'Du'} · ${formatProductAmount(o.productId, o.amount)} ${productName(o.productId)}, ${formatEuro(o.price)}`}
+                  meta={`${o.courierId ? (getStaffMember(state, o.courierId)?.name ?? 'Rechte Hand') : 'Du'} · ${formatProductAmount(o.productId, o.amount)} ${productName(o.productId)}, ${formatEuro(o.price)}`}
                 >
                   <ProgressBar value={orderProgress(state, o)} label="Lieferung" />
                 </ItemContent>

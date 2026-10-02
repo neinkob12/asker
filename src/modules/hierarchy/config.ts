@@ -1,4 +1,11 @@
-import type { AbsentPolicy, CautionLevel, LieutenantSettings, PriceLevel, RightHandSettings } from './types';
+import type {
+  AbsentPolicy,
+  CautionLevel,
+  LieutenantSettings,
+  PriceLevel,
+  RightHandSettings,
+  RightHandTaskKey,
+} from './types';
 
 // Einstellbare Werte der Hierarchie. Zeiten in Spielminuten, Geld in Euro (Schwarzgeld).
 
@@ -143,5 +150,104 @@ export const DEFAULT_RIGHT_HAND_SETTINGS: RightHandSettings = {
   payrollGuard: true,
   absences: true,
   budgetPerDay: 2500,
+  orders: true,
+  orderMaxPrice: 800,
+  ordersOwnTurfOnly: false,
+  pickup: true,
+  restock: false,
+  restockRules: [
+    { id: 'r1', productId: null, supplierId: null, packageId: null, minStock: 100, warehouseId: null, paused: null },
+  ],
+  restockBudgetPerDay: 2500,
+  staffing: false,
+  wholesale: false,
+  wholesaleMaxPrice: 2500,
+  laundering: false,
+  launderAbove: 5000,
+  launderShare: 0.5,
 };
 export const RIGHT_HAND_BUDGET_OPTIONS = [1000, 2500, 5000, 10000];
+
+// --- Rechte Hand: Aufgaben und Stufen (Auftrag 28) ---
+
+/**
+ * Aufgaben mit Stufen-Schloss. Die Stufe (1 bis RIGHT_HAND_MAX_RANK) steigt mit Erfahrung als Rechte Hand
+ * (RIGHT_HAND_RANK_XP), nicht mit dem Level der Person: Beim Antritt hat sie schon Level 4, die Aufgaben soll sie
+ * sich trotzdem erst verdienen. Mit allen Aufgaben an läuft Köln ohne den Spieler weiter.
+ */
+export const RIGHT_HAND_TASKS: readonly {
+  key: RightHandTaskKey;
+  name: string;
+  hint: string;
+  icon: string;
+  rank: number;
+}[] = [
+  {
+    key: 'orders',
+    name: 'Aufträge und Handy',
+    hint: 'Nimmt Lieferanfragen an, sagt im Chat für dich zu und fährt selbst mit dem Auto aus, eine Fahrt zur Zeit. Was sie nicht schafft, bleibt bei dir.',
+    icon: 'car',
+    rank: 1,
+  },
+  {
+    key: 'pickup',
+    name: 'Hafen abholen',
+    hint: 'Schickt einen freien Fahrer der Logistik, sobald Ware am Kai liegt. Leutnants dürfen dann auch beim Hafen bestellen.',
+    icon: 'anchor',
+    rank: 1,
+  },
+  {
+    key: 'restock',
+    name: 'Nachbestellen für ganz Köln',
+    hint: 'Bestellt nach ihren Regeln (Ware, Lieferant, Mindestbestand) mit eigenem Tagesbudget ins Hauptlager.',
+    icon: 'boxes',
+    rank: 2,
+  },
+  {
+    key: 'staffing',
+    name: 'Personal',
+    hint: 'Stellt Bewerber für leere Spots ein und ersetzt Ausfälle, bei denen ein Leutnant nicht weiterkommt.',
+    icon: 'userPlus',
+    rank: 3,
+  },
+  {
+    key: 'wholesale',
+    name: 'Großhandel',
+    hint: 'Nimmt Großhandels-Deals bis zu ihrem Betrag an und fährt sie selbst. Darüber bleibt es Chefsache.',
+    icon: 'handshake',
+    rank: 4,
+  },
+  {
+    key: 'laundering',
+    name: 'Geldwäsche',
+    hint: 'Liegt mehr Schwarzgeld da als ihre Grenze, gibt sie einen Teil des Überschusses in die Wäsche.',
+    icon: 'washing',
+    rank: 4,
+  },
+];
+
+/** Erfahrung als Rechte Hand, ab der eine Stufe erreicht ist (Index 0 = Stufe 1). */
+export const RIGHT_HAND_RANK_XP = [0, 150, 400, 800, 1400];
+export const RIGHT_HAND_MAX_RANK = RIGHT_HAND_RANK_XP.length;
+/** Erfahrung pro erledigter Aufgabe (Lieferung, Abholung, Bestellung, Einstellung, Wäsche) und pro gutem Tagesbericht. */
+export const XP_RIGHT_HAND_TASK = 15;
+export const XP_RIGHT_HAND_REPORT = 30;
+/** Lieferanfragen bis zu diesem Betrag traut sie sich je Stufe zu (zusätzlich zur Grenze des Spielers). */
+export const RIGHT_HAND_ORDER_LIMIT_BY_RANK = [400, 800, 1500, 3000, Number.POSITIVE_INFINITY];
+/** Pro Stufe über der ersten fährt sie so viel schneller (Faktor auf das Tempo). */
+export const RIGHT_HAND_SPEED_PER_RANK = 0.08;
+/** Fehler: Wenig Vorsicht kostet Zeit (Umwege), wenig Loyalität verleitet zum Abzweigen. */
+export const RIGHT_HAND_DETOUR_CHANCE = 0.25;
+export const RIGHT_HAND_DETOUR_FACTOR = 1.3;
+export const RIGHT_HAND_SKIM_LOYALTY = 40;
+export const RIGHT_HAND_SKIM_CHANCE = 0.15;
+export const RIGHT_HAND_SKIM_SHARE = 0.1;
+/** Nachbestellen: so viel Schwarzgeld fasst sie zusätzlich zur Lohnsicherung nie an. */
+export const RIGHT_HAND_RESTOCK_RESERVE = 500;
+/** Auswahl für die Oberfläche. */
+export const RIGHT_HAND_ORDER_PRICE_OPTIONS = [200, 400, 800, 1500, 3000, 6000];
+export const RIGHT_HAND_WHOLESALE_PRICE_OPTIONS = [1000, 2500, 5000, 10000, 20000];
+export const RIGHT_HAND_LAUNDER_ABOVE_OPTIONS = [2000, 5000, 10000, 20000];
+export const RIGHT_HAND_LAUNDER_SHARE_OPTIONS = [0.25, 0.5, 0.75];
+export const RIGHT_HAND_RESTOCK_BUDGET_OPTIONS = [1000, 2500, 5000, 10000];
+export const RIGHT_HAND_RESTOCK_MIN_STOCK_OPTIONS = [50, 100, 200, 400, 800];

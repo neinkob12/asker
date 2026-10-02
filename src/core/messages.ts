@@ -41,6 +41,13 @@ export interface Message {
   expired?: boolean;
   /** Still: nur Badge, kein Banner und kein Vibrieren (z.B. viele kleine Routine-Nachrichten). */
   silent?: boolean;
+  /**
+   * Routine: Die Rechte Hand darf diese Frage für dich beantworten (Aufgabe "Aufträge und Handy"). Fehlt die
+   * Kennzeichnung, ist es Chefsache (Gangs, Polizei, Großhandel über ihrem Limit, Leute mit Frist).
+   */
+  routine?: boolean;
+  /** Antwort im Namen von jemandem (z.B. "Rechte Hand"), nur bei from 'player'. */
+  via?: string;
   /** Modul, das die Nachricht geschickt hat. */
   source: string;
 }
@@ -59,6 +66,18 @@ export interface SendMessage {
   expiresIn?: number;
   /** Still zustellen: ungelesen im Handy, aber ohne Banner (für Routine-Nachrichten). */
   silent?: boolean;
+  /** Routine: Die Rechte Hand darf antworten. Ohne Angabe Chefsache. */
+  routine?: boolean;
+}
+
+/** Antwort im Namen von jemandem (Rechte Hand): Die Option gilt als gewählt, ihr Befehl läuft nicht noch einmal. */
+export interface AnswerAs {
+  messageId: number;
+  optionId: string;
+  /** Wer geantwortet hat, z.B. "Rechte Hand". */
+  via: string;
+  /** Text der Antwort im Chat. Standard: reply bzw. label der Option. */
+  reply?: string;
 }
 
 export interface MessageThread {
@@ -74,7 +93,7 @@ declare module './types' {
   }
   interface GameEvents {
     'message.received': { messageId: number; contactId: string; source: string };
-    'message.answered': { messageId: number; contactId: string; optionId: string; source: string };
+    'message.answered': { messageId: number; contactId: string; optionId: string; source: string; via?: string };
     'message.expired': { messageId: number; contactId: string; source: string };
   }
 }
@@ -100,6 +119,7 @@ export const messages = {
     if (msg.options?.length) message.options = msg.options.map((o) => ({ ...o }));
     if (msg.expiresIn !== undefined) message.expiresAt = ctx.now + msg.expiresIn;
     if (msg.silent) message.silent = true;
+    if (msg.routine) message.routine = true;
     state.list.push(message);
     if (state.list.length > MESSAGE_LIMIT) state.list.splice(0, state.list.length - MESSAGE_LIMIT);
     ctx.emit('message.received', { messageId: message.id, contactId: message.contactId, source: message.source });
@@ -142,6 +162,43 @@ export const messages = {
     return (
       !!message.options?.length && !message.answer && !message.expired && (message.expiresAt ?? Infinity) > state.time
     );
+  },
+
+  /** Offene Fragen, die als Routine gekennzeichnet sind (die Rechte Hand darf sie beantworten). */
+  openRoutine(state: GameState): Message[] {
+    return state.messages.list.filter((m) => m.routine && messages.canAnswer(state, m));
+  },
+
+  /**
+   * Eine offene Frage im Namen von jemandem beantworten (z.B. die Rechte Hand sagt einem Kunden zu). Der Aufrufer hat
+   * den Befehl der Option schon selbst ausgeführt; hier wird nur die Antwort im Chat festgehalten. false, wenn die
+   * Nachricht nicht mehr offen ist oder die Option fehlt.
+   */
+  answerAs(ctx: Ctx, answer: AnswerAs): boolean {
+    const message = messages.get(ctx.state, answer.messageId);
+    if (!message || !messages.canAnswer(ctx.state, message)) return false;
+    const option = message.options?.find((o) => o.id === answer.optionId);
+    if (!option) return false;
+    message.answer = option.id;
+    message.read = true;
+    ctx.state.messages.list.push({
+      id: ctx.nextId(),
+      contactId: message.contactId,
+      time: ctx.now,
+      from: 'player',
+      text: answer.reply ?? option.reply ?? option.label,
+      read: true,
+      via: answer.via,
+      source: 'core',
+    });
+    ctx.emit('message.answered', {
+      messageId: message.id,
+      contactId: message.contactId,
+      optionId: option.id,
+      source: message.source,
+      via: answer.via,
+    });
+    return true;
   },
 };
 

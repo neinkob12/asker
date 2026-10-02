@@ -19,6 +19,7 @@ import {
   type GameState,
   journal,
   messages,
+  wallet,
 } from '../../core';
 import { dayReport, spotResults, wageRunway } from '../finance';
 import { playerHeat } from '../police';
@@ -41,6 +42,7 @@ import {
   roleName,
   runnerAt,
   runnerHireCost,
+  type StaffMember,
   setDemand,
   setWage,
   staffContact,
@@ -50,20 +52,32 @@ import {
   DEFAULT_RIGHT_HAND_SETTINGS,
   DEMOTION_LOYALTY,
   LOG_LIMIT,
+  MAX_ORDER_RULES,
   PAYROLL_RESERVE_DAYS,
   PAYROLL_RESERVE_DAYS_ORDERS,
   PROMOTION_LOYALTY,
   REPORT_HOUR,
   RIGHT_HAND_BAIL_MIN_LEVEL,
   RIGHT_HAND_DEMAND,
+  RIGHT_HAND_DETOUR_CHANCE,
   RIGHT_HAND_INTERVAL,
+  RIGHT_HAND_LAUNDER_SHARE_OPTIONS,
+  RIGHT_HAND_MAX_RANK,
   RIGHT_HAND_MIN_LEVEL,
   RIGHT_HAND_MIN_LIEUTENANTS,
   RIGHT_HAND_MIN_LOYALTY,
+  RIGHT_HAND_ORDER_LIMIT_BY_RANK,
+  RIGHT_HAND_RANK_XP,
+  RIGHT_HAND_SKIM_CHANCE,
+  RIGHT_HAND_SKIM_LOYALTY,
+  RIGHT_HAND_SKIM_SHARE,
+  RIGHT_HAND_SPEED_PER_RANK,
+  RIGHT_HAND_TASKS,
   RIGHT_HAND_WARN_COOLDOWN,
 } from './config';
 import { getLieutenantIds, getPost, handlesAbsence, isLieutenant, teamLeadOf } from './index';
-import type { DailyReport, RightHandPost, RightHandSettings } from './types';
+import { checkOrderRule } from './orders';
+import type { DailyReport, RightHandDone, RightHandPost, RightHandSettings, RightHandTaskKey } from './types';
 
 const NOT_EMPLOYED = 'Diese Person arbeitet nicht für dich.';
 const OFFICE = { kind: 'office' as const, targetId: 'rightHand' };
@@ -79,10 +93,79 @@ export function isRightHand(state: GameState, staffId: string): boolean {
 }
 
 /** Arbeitet die Rechte Hand gerade (eingestellt, aktiv)? */
-function activeRightHand(state: GameState): RightHandPost | null {
+export function activeRightHand(state: GameState): RightHandPost | null {
   const rh = getRightHand(state);
   const m = rh ? getStaffMember(state, rh.staffId) : undefined;
   return rh && m?.status === 'active' && isEmployed(state, m.id) ? rh : null;
+}
+
+export function emptyDone(): RightHandDone {
+  return { deliveries: 0, leftToBoss: 0, pickups: 0, orders: 0, hires: 0, laundered: 0 };
+}
+
+/** Stufe der Rechten Hand (1 bis RIGHT_HAND_MAX_RANK) aus ihrer Erfahrung als Rechte Hand. */
+export function rankForXp(xp: number): number {
+  let rank = 1;
+  for (let i = 1; i < RIGHT_HAND_RANK_XP.length; i++) if (xp >= RIGHT_HAND_RANK_XP[i]) rank = i + 1;
+  return Math.min(RIGHT_HAND_MAX_RANK, rank);
+}
+
+export function rightHandRank(state: GameState): number {
+  const rh = getRightHand(state);
+  return rh ? rankForXp(rh.xp) : 0;
+}
+
+/** Erfahrung bis zur nächsten Stufe: [erreicht, nötig], null auf der höchsten Stufe. */
+export function rightHandRankProgress(state: GameState): [number, number] | null {
+  const rh = getRightHand(state);
+  if (!rh) return null;
+  const rank = rankForXp(rh.xp);
+  if (rank >= RIGHT_HAND_MAX_RANK) return null;
+  return [rh.xp - RIGHT_HAND_RANK_XP[rank - 1], RIGHT_HAND_RANK_XP[rank] - RIGHT_HAND_RANK_XP[rank - 1]];
+}
+
+/** Ist die Aufgabe für ihre Stufe freigeschaltet? */
+export function isTaskUnlocked(state: GameState, key: RightHandTaskKey): boolean {
+  const task = RIGHT_HAND_TASKS.find((t) => t.key === key);
+  return !!task && rightHandRank(state) >= task.rank;
+}
+
+/** Läuft die Aufgabe gerade (Rechte Hand aktiv, Aufgabe an und freigeschaltet)? */
+export function isTaskActive(state: GameState, key: RightHandTaskKey): boolean {
+  const rh = activeRightHand(state);
+  return !!rh && rh.settings[key] && isTaskUnlocked(state, key);
+}
+
+/** Nimmt die Rechte Hand gerade Lieferanfragen an (Aufgabe "Aufträge und Handy")? Dann kommen etwas mehr. */
+export function rightHandHandlesOrders(state: GameState): boolean {
+  return isTaskActive(state, 'orders');
+}
+
+/** Faktor auf ihr Tempo beim Ausfahren: je Stufe schneller. */
+export function rightHandSpeedFactor(state: GameState): number {
+  return 1 + (Math.max(1, rightHandRank(state)) - 1) * RIGHT_HAND_SPEED_PER_RANK;
+}
+
+/** Bis zu welchem Betrag sie Lieferanfragen annimmt: Grenze des Spielers, höchstens die ihrer Stufe. */
+export function rightHandOrderLimit(state: GameState): number {
+  const rh = getRightHand(state);
+  if (!rh) return 0;
+  return Math.min(rh.settings.orderMaxPrice, RIGHT_HAND_ORDER_LIMIT_BY_RANK[rankForXp(rh.xp) - 1]);
+}
+
+/**
+ * Kann die Rechte Hand jetzt eine Lieferung fahren? Nur sie fährt Aufträge aus (Auftrag 28), eine Fahrt zur Zeit.
+ * Gibt sonst den Grund zurück (keine Rechte Hand, fällt aus, schon unterwegs).
+ */
+export function rightHandDriver(state: GameState): { ok: true; member: StaffMember } | { ok: false; reason: string } {
+  const rh = getRightHand(state);
+  const m = rh ? getStaffMember(state, rh.staffId) : undefined;
+  if (!rh || !m || !isEmployed(state, m.id))
+    return { ok: false, reason: 'Du hast keine Rechte Hand, die ausfahren könnte.' };
+  if (m.status !== 'active') return { ok: false, reason: `${m.name} fällt gerade aus.` };
+  if (m.assignment?.kind === 'delivery')
+    return { ok: false, reason: `${m.name} ist schon mit einer Lieferung unterwegs.` };
+  return { ok: true, member: m };
 }
 
 /** Kann die Person Rechte Hand werden? (Level, Loyalität und genug Leutnants, die sie führen kann) */
@@ -168,6 +251,39 @@ export function absenceHandled(state: GameState, staffId: string): boolean {
   return !!activeRightHand(state)?.settings.absences && !isRightHand(state, staffId);
 }
 
+// --- Fehler der Rechten Hand (Vorsicht und Loyalität zählen) ---
+
+/** Verfährt sie sich auf dieser Fahrt? Je weniger Vorsicht, desto öfter (die Fahrt dauert dann länger). */
+export function rightHandDetour(ctx: Ctx): boolean {
+  const rh = getRightHand(ctx.state);
+  const m = rh ? getStaffMember(ctx.state, rh.staffId) : undefined;
+  if (!m) return false;
+  return ctx.chance(RIGHT_HAND_DETOUR_CHANCE * (1 - m.stats.caution / 100));
+}
+
+/**
+ * Zweigt sie von einer Lieferung etwas ab? Nur unter RIGHT_HAND_SKIM_LOYALTY, selten und mild: Ein Anteil des
+ * Erlöses fehlt in der Kasse, im Protokoll steht es. Gibt den Betrag zurück (0 = nichts passiert).
+ */
+export function rightHandSkim(ctx: Ctx, staffId: string, revenue: number): number {
+  const rh = getRightHand(ctx.state);
+  const m = rh?.staffId === staffId ? getStaffMember(ctx.state, staffId) : undefined;
+  if (!rh || !m || m.stats.loyalty >= RIGHT_HAND_SKIM_LOYALTY || !ctx.chance(RIGHT_HAND_SKIM_CHANCE)) return 0;
+  const amount = Math.round(revenue * RIGHT_HAND_SKIM_SHARE);
+  if (amount <= 0) return 0;
+  wallet.lose(ctx, amount, 'dirty', `${m.name} hat abgezweigt`, { category: 'loss.betrayal', staffId });
+  rh.log.unshift({ time: ctx.now, text: `Von der Lieferung fehlen ${formatEuro(amount)}. Die Kasse stimmt nicht.` });
+  journal.add(
+    ctx,
+    `${m.name} hat von einer Lieferung ${formatEuro(amount)} abgezweigt. Ihre Loyalität ist niedrig.`,
+    'bad',
+    {
+      staffId,
+    },
+  );
+  return amount;
+}
+
 // --- Schreiben ---
 
 function note(ctx: Ctx, rh: RightHandPost, text: string, phone = false, silent = true): void {
@@ -205,6 +321,10 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
     warnedAt: null,
     handled: [],
     log: [],
+    xp: 0,
+    done: emptyDone(),
+    restockDay: clock.day(ctx.now),
+    restockSpent: 0,
   };
   assign(ctx, staffId, OFFICE);
   setDemand(ctx, staffId, RIGHT_HAND_DEMAND);
@@ -242,13 +362,46 @@ export function configureRightHand(ctx: Ctx, patch: Partial<RightHandSettings>):
   const rh = getRightHand(ctx.state);
   if (!rh) return { ok: false, reason: 'Du hast keine Rechte Hand.' };
   const next = { ...rh.settings };
-  for (const key of ['dailyReport', 'coordinate', 'payrollGuard', 'absences'] as const) {
-    if (patch[key] !== undefined) next[key] = !!patch[key];
+  const flags = [
+    'dailyReport',
+    'coordinate',
+    'payrollGuard',
+    'absences',
+    'orders',
+    'ordersOwnTurfOnly',
+    'pickup',
+    'restock',
+    'staffing',
+    'wholesale',
+    'laundering',
+  ] as const;
+  for (const key of flags) if (patch[key] !== undefined) next[key] = !!patch[key];
+  const amounts = [
+    'budgetPerDay',
+    'orderMaxPrice',
+    'restockBudgetPerDay',
+    'wholesaleMaxPrice',
+    'launderAbove',
+  ] as const;
+  for (const key of amounts) {
+    const value = patch[key];
+    if (value === undefined) continue;
+    if (!(value >= 0 && value <= 1_000_000)) return { ok: false, reason: 'Ungültiger Betrag.' };
+    next[key] = Math.round(value);
   }
-  if (patch.budgetPerDay !== undefined) {
-    if (!(patch.budgetPerDay >= 0 && patch.budgetPerDay <= 1_000_000))
-      return { ok: false, reason: 'Ungültiges Budget.' };
-    next.budgetPerDay = Math.round(patch.budgetPerDay);
+  if (patch.launderShare !== undefined) {
+    if (!RIGHT_HAND_LAUNDER_SHARE_OPTIONS.includes(patch.launderShare))
+      return { ok: false, reason: 'Ungültiger Anteil.' };
+    next.launderShare = patch.launderShare;
+  }
+  if (patch.restockRules !== undefined) {
+    if (!Array.isArray(patch.restockRules) || patch.restockRules.length > MAX_ORDER_RULES)
+      return { ok: false, reason: 'Ungültige Bestellregeln.' };
+    for (const rule of patch.restockRules) {
+      const check = checkOrderRule(ctx.state, rule);
+      if (!check.ok) return check;
+    }
+    next.restockRules = patch.restockRules.map((r) => ({ ...r, paused: null }));
   }
   rh.settings = next;
   rh.nextActionAt = Math.min(rh.nextActionAt, ctx.now + 1);
@@ -263,6 +416,17 @@ export function onRightHandLeft(ctx: Ctx, staffId: string): void {
   h.rightHand = null;
   journal.add(ctx, 'Deine Rechte Hand ist weg. Die Leutnants machen allein weiter.', 'bad', { staffId });
   ctx.emit('hierarchy.rightHandDismissed', { staffId });
+}
+
+/**
+ * Nach einer Auftragsfahrt (customers räumt den Einsatz 'delivery') geht die Rechte Hand zurück ins Büro. Ohne
+ * Rechte Hand oder in Haft passiert nichts (dismiss räumt den Posten vorher, Rückkehr regelt onRightHandStatus).
+ */
+export function onRightHandAssigned(ctx: Ctx, staffId: string, assignment: { kind: string } | null): void {
+  const rh = getRightHand(ctx.state);
+  if (rh?.staffId !== staffId || assignment !== null) return;
+  const m = getStaffMember(ctx.state, staffId);
+  if (m?.status === 'active' && isEmployed(ctx.state, staffId) && !m.assignment) assign(ctx, staffId, OFFICE);
 }
 
 /** Status der Rechten Hand geändert: Haft und Rückkehr ins Journal. */
@@ -280,6 +444,8 @@ export function onRightHandStatus(ctx: Ctx, staffId: string, to: string): void {
   } else if (to === 'active') {
     rh.log.unshift({ time: ctx.now, text: 'Ist zurück.' });
     rh.nextActionAt = ctx.now;
+    const m = getStaffMember(ctx.state, staffId);
+    if (m && !m.assignment) assign(ctx, staffId, OFFICE);
   }
 }
 

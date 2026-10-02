@@ -26,6 +26,7 @@ import {
   type CommandMeta,
   type CommandResult,
   type Ctx,
+  clock,
   defineModule,
   formatEuro,
   type GameState,
@@ -57,6 +58,7 @@ import {
   ABSENT_POLICIES,
   CAUTION_LEVELS,
   COMPLAINT_COOLDOWN,
+  DEFAULT_RIGHT_HAND_SETTINGS,
   DEFAULT_SETTINGS,
   DEMOTION_LOYALTY,
   HIDE_AFTER_RAID,
@@ -80,12 +82,21 @@ import {
   appointRightHand,
   configureRightHand,
   dismissRightHand,
+  emptyDone,
+  onRightHandAssigned,
   onRightHandLeft,
   onRightHandStatus,
   rightHandDaily,
   rightHandTick,
 } from './righthand';
-import type { HierarchyState, LieutenantPost, LieutenantSettings, OrderRule, RightHandSettings } from './types';
+import type {
+  HierarchyState,
+  LieutenantPost,
+  LieutenantSettings,
+  OrderRule,
+  RightHandPost,
+  RightHandSettings,
+} from './types';
 
 export { actionInterval, heatThreshold, postSummary } from './ai';
 export {
@@ -112,14 +123,26 @@ export {
 export { isPortSupplierAllowed, orderRuleLabel, ruleStock, ruleWarehouse } from './orders';
 export {
   absenceHandled,
+  activeRightHand,
   buildReport,
   canBeRightHand,
   getRightHand,
   isRightHand,
+  isTaskActive,
+  isTaskUnlocked,
   payrollReserve,
+  rankForXp,
   rightHandBudgetLeft,
+  rightHandDetour,
+  rightHandDriver,
+  rightHandHandlesOrders,
   rightHandOffered,
+  rightHandOrderLimit,
+  rightHandRank,
+  rightHandRankProgress,
   rightHandSatisfaction,
+  rightHandSkim,
+  rightHandSpeedFactor,
 } from './righthand';
 export type * from './types';
 
@@ -727,9 +750,44 @@ export function migrateHierarchyV2(old: HierarchyStateV2, state: GameState): Hie
   return { posts, rightHand: null, orderTemplate: null };
 }
 
+type RightHandSettingsV3 = Pick<
+  RightHandSettings,
+  'dailyReport' | 'coordinate' | 'payrollGuard' | 'absences' | 'budgetPerDay'
+>;
+type RightHandPostV3 = Omit<RightHandPost, 'settings' | 'xp' | 'done' | 'restockDay' | 'restockSpent'> & {
+  settings: RightHandSettingsV3;
+};
+type HierarchyStateV3 = Omit<HierarchyState, 'rightHand'> & { rightHand: RightHandPostV3 | null };
+
+/**
+ * Version 3 → 4 (Auftrag 28): Die Rechte Hand bekommt Aufgaben mit Stufen-Schloss, Erfahrung und eine Liste des
+ * Erledigten. Bestehende Einstellungen bleiben, die neuen Aufgaben stehen auf den Standardwerten; sie fängt auf
+ * Stufe 1 an.
+ */
+export function migrateHierarchyV3(old: HierarchyStateV3, state: GameState): HierarchyState {
+  const rh = old.rightHand;
+  return {
+    ...old,
+    rightHand: rh
+      ? {
+          ...rh,
+          settings: {
+            ...DEFAULT_RIGHT_HAND_SETTINGS,
+            ...rh.settings,
+            restockRules: cloneRules(DEFAULT_RIGHT_HAND_SETTINGS.restockRules),
+          },
+          xp: 0,
+          done: emptyDone(),
+          restockDay: clock.day(state.time),
+          restockSpent: 0,
+        }
+      : null,
+  };
+}
+
 export default defineModule({
   id: 'hierarchy',
-  version: 3,
+  version: 4,
   dependsOn: ['staff'],
   init: () => ({ posts: {}, rightHand: null, orderTemplate: null }),
   tick: (ctx) => {
@@ -774,6 +832,7 @@ export default defineModule({
       }
       onRightHandLeft(ctx, staffId);
     },
+    'staff.assigned': (ctx, { staffId, assignment }) => onRightHandAssigned(ctx, staffId, assignment),
     'staff.statusChanged': (ctx, { staffId, to }) => {
       onRightHandStatus(ctx, staffId, to);
       const own = getPost(ctx.state, staffId);
@@ -830,5 +889,5 @@ export default defineModule({
       if (sellerId && sellerId !== lt.id) addXp(ctx, sellerId, TRAINING_XP);
     },
   },
-  migrations: { 2: migrateHierarchyV1, 3: migrateHierarchyV2 },
+  migrations: { 2: migrateHierarchyV1, 3: migrateHierarchyV2, 4: migrateHierarchyV3 },
 });

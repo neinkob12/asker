@@ -49,7 +49,7 @@ export function RightHandSheet(props: { open: boolean; onClose: () => void }) {
   const { state, dispatch } = useGame();
   const people = getStaff(state)
     .map((m) => ({ m, check: canBeRightHand(state, m.id) }))
-    .filter(({ m }) => m.role === 'runner' || m.role === 'security' || m.role === 'courier' || m.role === 'driver')
+    .filter(({ m }) => m.role === 'runner' || m.role === 'security' || m.role === 'driver')
     .sort((a, b) => Number(b.check.ok) - Number(a.check.ok) || b.m.level - a.m.level);
   return (
     <Sheet open={props.open} onClose={props.onClose} title="Rechte Hand ernennen" detents={['large']}>
@@ -138,7 +138,12 @@ export function RightHandRow() {
   );
 }
 
-const TASKS: { key: keyof Omit<RightHandSettings, 'budgetPerDay'>; label: string; hint: string; icon: string }[] = [
+const TASKS: {
+  key: 'dailyReport' | 'coordinate' | 'payrollGuard' | 'absences';
+  label: string;
+  hint: string;
+  icon: string;
+}[] = [
   {
     key: 'dailyReport',
     label: 'Tagesbericht',

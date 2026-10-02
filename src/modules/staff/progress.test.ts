@@ -212,7 +212,7 @@ describe('Verrat', () => {
     const sim = quietGame();
     const events = recordEvents(sim);
     sim.state.wallet.dirty = 100000;
-    const members = [recruit(sim, 'runner'), recruit(sim, 'courier'), recruit(sim, 'security')];
+    const members = [recruit(sim, 'runner'), recruit(sim, 'driver'), recruit(sim, 'security')];
     for (const m of members) {
       m.stats.loyalty = 0;
       m.wage = expectedWage(sim.state, m.id);

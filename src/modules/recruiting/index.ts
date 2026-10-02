@@ -262,7 +262,9 @@ function maybeReferral(ctx: Ctx): void {
   for (const m of loyal) {
     if (!ctx.chance(REFERRAL_CHANCE)) continue;
     // Man empfiehlt Leute, die einem ähnlich sind, manchmal auch was ganz anderes.
-    const role = ctx.chance(0.6) ? m.role : pickWeighted(ctx, POOL_ROLE_WEIGHTS);
+    // Alte Kuriere (vor Auftrag 28) empfehlen Läufer.
+    const own = m.role === 'courier' ? 'runner' : m.role;
+    const role = ctx.chance(0.6) ? own : pickWeighted(ctx, POOL_ROLE_WEIGHTS);
     const c = addContact(ctx, role, 'referral', `Empfohlen von ${m.name}.`, m.id);
     if (c) {
       announce(

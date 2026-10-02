@@ -209,12 +209,16 @@ export const MAX_OPEN_ORDERS = 2;
 export const ORDER_EXPIRES_IN = 150;
 /** Übergabe dauert so lange (zusätzlich zur Fahrt). */
 export const HANDOVER_MINUTES = 10;
-/** Tempo in Metern pro Spielminute: der Spieler mit dem Rad (15 km/h), Kuriere je nach Tempo-Wert. */
+/** Tempo in Metern pro Spielminute: der Spieler mit dem Rad (15 km/h). */
 export const PLAYER_SPEED = 250;
 /** Selbst am Spot stehen: So lange brauchst du für einen Kunden (schneller als ein neuer Läufer). */
 export const PLAYER_SERVE_TIME = 10;
-export const COURIER_BASE_SPEED = 200;
-export const COURIER_SPEED_PER_POINT = 3;
+/**
+ * Die Rechte Hand fährt Aufträge mit dem Auto (Auftrag 28): Grundtempo plus Tempo-Wert, mal Faktor ihrer Stufe
+ * (hierarchy). Bei Tempo 60 rund 28 km/h im Stadtverkehr.
+ */
+export const RIGHT_HAND_BASE_SPEED = 320;
+export const RIGHT_HAND_SPEED_PER_POINT = 2.5;
 
 export const WHOLESALE_CHANCE_PER_HOUR = 0.03;
 export const WHOLESALE_MIN_REPUTATION = 30;

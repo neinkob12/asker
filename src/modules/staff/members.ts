@@ -103,7 +103,7 @@ export function securityAt(state: GameState, target: { spotId?: string; warehous
   );
 }
 
-/** Freier, aktiver Mitarbeiter ohne Einsatz, z.B. ein Kurier für den Lieferdienst. */
+/** Freier, aktiver Mitarbeiter ohne Einsatz, z.B. ein Fahrer für die Logistik. */
 export function findAvailable(state: GameState, filter: { role: StaffRole }): StaffMember | undefined {
   return state.modules.staff.members.find((m) => m.role === filter.role && m.status === 'active' && !m.assignment);
 }
@@ -192,7 +192,7 @@ export function serveTime(member: StaffMember): number {
   return Math.max(MIN_SERVE_TIME, Math.round(RUNNER_SERVE_TIME * factor));
 }
 
-/** Arbeitstempo als Faktor (1 = normal, größer = schneller), z.B. für Kuriere. */
+/** Arbeitstempo als Faktor (1 = normal, größer = schneller), z.B. für Fahrer. */
 export function speedFactor(state: GameState, id: string): number {
   const m = getStaffMember(state, id);
   if (!m) return 1;

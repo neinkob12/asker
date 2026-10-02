@@ -3,7 +3,8 @@
 // Wetter, Ruf und Preis an den Spots auf, wollen ein Produkt ihres Geschmacks und warten eine Weile.
 // Zufriedene Kunden werden manchmal Stammkunden mit Namen, die wiederkommen und sich Preis und Qualität merken.
 // Lieferdienst und Großhandel: Anfragen kommen als Nachricht ins Handy, ausgeliefert wird vom Spieler selbst
-// oder von einem freien Kurier (staff). Jeder Verkauf löst 'sale.completed' aus.
+// oder von der Rechten Hand (hierarchy; seit Auftrag 28 fährt niemand sonst Aufträge, Kuriere gibt es nicht mehr).
+// Jeder Verkauf löst 'sale.completed' aus.
 //
 // Öffentliche API:
 //   waitingAt(state, spotId), allWaiting(state), getCustomer(state, id), canServe(state, customerId),
@@ -130,7 +131,9 @@ export interface Order {
   createdAt: number;
   expiresAt: number;
   messageId: number;
-  deliveredBy: 'player' | 'courier' | null;
+  /** Wer fährt: du selbst oder die Rechte Hand. 'courier' nur in alten Spielständen (vor Auftrag 28). */
+  deliveredBy: 'player' | 'courier' | 'rightHand' | null;
+  /** Mitarbeiter, der fährt (die Rechte Hand; früher ein Kurier), null = du selbst. */
   courierId: string | null;
   startedAt: number | null;
   arrivesAt: number | null;
@@ -203,8 +206,11 @@ declare module '../../core' {
     'customers.standAt': { spotId: string | null };
     /** Kunden direkt schreiben lassen (Lieferanfragen) oder nur Großhandel. */
     'customers.setDirectOrders': { enabled: boolean };
-    /** Auftrag annehmen und gleich losschicken: selbst liefern oder einen freien Kurier. */
-    'customers.acceptOrder': { orderId: number; by: 'player' | 'courier' };
+    /**
+     * Auftrag annehmen und gleich losschicken: selbst liefern ('player') oder die Rechte Hand fährt ('rightHand',
+     * nur sie, eine Fahrt zur Zeit). 'courier' aus alten Spielständen zählt wie 'player'.
+     */
+    'customers.acceptOrder': { orderId: number; by: 'player' | 'courier' | 'rightHand' };
     'customers.declineOrder': { orderId: number };
   }
   interface GameEvents {
@@ -237,7 +243,7 @@ declare module '../../core' {
     'customers.selfMoved': { spotId: string | null };
     'customer.regularLost': { regularId: string; reason: string };
     'order.received': { orderId: number; kind: OrderKind };
-    'order.accepted': { orderId: number; kind: OrderKind; by: 'player' | 'courier'; courierId: string | null };
+    'order.accepted': { orderId: number; kind: OrderKind; by: 'player' | 'rightHand'; courierId: string | null };
     'order.finished': { orderId: number; kind: OrderKind; status: 'done' | 'declined' | 'expired' | 'failed' };
   }
 }

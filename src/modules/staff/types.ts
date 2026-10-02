@@ -1,5 +1,9 @@
 // Typen des Personals. Andere Module importieren sie über '../staff' (index.ts exportiert alles).
 
+/**
+ * Rollen. 'courier' ist eine Altlast aus der Zeit vor Auftrag 28: Kuriere gibt es nicht mehr (Aufträge fährt allein die
+ * Rechte Hand), alte Spielstände machen aus ihnen Läufer. Die ID bleibt im Typ, damit nichts bricht.
+ */
 export type StaffRole = 'runner' | 'courier' | 'driver' | 'security' | 'lawyer' | 'accountant' | 'policeContact';
 export type StaffStatus = 'active' | 'injured' | 'jailed' | 'quit' | 'dead';
 
