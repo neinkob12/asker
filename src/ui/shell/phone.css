@@ -1411,6 +1411,12 @@ html.is-dragging {
   min-height: var(--touch-target-phone);
   font-size: var(--type-subhead);
 }
+/* Fünf Segmente (z.B. Rollenfilter): kleinere Schrift, damit kein Wort abgeschnitten wird */
+.phone .ui-segmented--joined:has(> :nth-child(5)) .ui-button {
+  padding-inline: 2px;
+  font-size: var(--type-caption, 12px);
+  letter-spacing: -0.01em;
+}
 .phone .ui-segmented--joined .ui-button.is-active {
   --btn-bg: var(--phone-thumb);
   --btn-hover: var(--phone-thumb);

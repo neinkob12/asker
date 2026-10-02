@@ -150,3 +150,108 @@
     opacity: 0;
   }
 }
+
+/* Kopf des Gangs-Tabs (Auftrag 27): deine Stärke als Zahl, jede Gang als Balken auf derselben Skala */
+.gangs-power {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--phone-group, var(--color-panel-raised));
+  border: 1px solid var(--phone-separator, var(--color-line));
+  border-radius: var(--radius-group);
+}
+.gangs-power__you {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+.gangs-power__label,
+.gangs-power__hint {
+  font-size: var(--type-footnote, 13px);
+  color: var(--phone-label-2, var(--color-muted));
+}
+.gangs-power__label {
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--cat-brand);
+}
+.gangs-power__number {
+  font-size: var(--type-large-title, 34px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--phone-label, var(--color-text));
+}
+.gangs-power__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.gangs-power__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "emblem name"
+    "emblem bar";
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: 4px;
+}
+.gangs-power__row .ui-avatar {
+  grid-area: emblem;
+}
+.gangs-power__name {
+  grid-area: name;
+  overflow: hidden;
+  font-size: var(--type-subhead, 15px);
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--phone-label, var(--color-text));
+}
+.gangs-power__bar {
+  grid-area: bar;
+  position: relative;
+  display: block;
+  height: 8px;
+  margin-right: 44px;
+  border-radius: var(--radius-round);
+  background: var(--phone-fill, var(--color-surface-active));
+}
+.gangs-power__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--power, 0%);
+  border-radius: var(--radius-round);
+  background: var(--gang-color, var(--cat-danger));
+}
+/* Marke: deine Stärke auf derselben Skala */
+.gangs-power__mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: var(--yours, 0%);
+  width: 2px;
+  margin-left: -1px;
+  background: var(--cat-brand);
+  border-radius: 1px;
+}
+.gangs-power__value {
+  position: absolute;
+  right: 0;
+  grid-area: bar;
+  justify-self: end;
+  font-size: var(--type-subhead, 15px);
+  font-variant-numeric: tabular-nums;
+  color: var(--phone-label-2, var(--color-muted));
+}
+.gangs-power__row.is-stronger .gangs-power__value {
+  color: var(--cat-danger);
+  font-weight: var(--font-weight-bold);
+}
