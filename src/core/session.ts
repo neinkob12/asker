@@ -7,11 +7,11 @@ import { type FrameScheduler, GameLoop } from './loop';
 import type { ModuleDefinition } from './module';
 import { createSaveFile, loadSimulation, parseSaveFile, serializeSave } from './persistence';
 import { randomSeed } from './rng';
-import { AUTOSAVE_SLOT, type KeyValueStorage, type SaveInfo, SaveStore } from './saves';
+import { AUTOSAVE_SLOT, BROKEN_AUTOSAVE_SLOT, type KeyValueStorage, type SaveInfo, SaveStore } from './saves';
 import { Simulation } from './sim';
 import type { Command, CommandMeta, CommandResult, GameEvent, GameMode, GameState } from './types';
 
-export type SessionChange = 'frame' | 'sim' | 'dispatch' | 'speed';
+export type SessionChange = 'frame' | 'sim' | 'dispatch' | 'speed' | 'autosave';
 
 export interface GameSessionOptions {
   modules: readonly ModuleDefinition[];
@@ -33,6 +33,10 @@ export class GameSession {
   private readonly now: () => number;
   /** Wurde der Spielstand wegen Hardcore gelöscht? */
   hardcoreDeleted = false;
+  /** Warum der letzte Autosave nicht geklappt hat (null = alles gut). Ändert er sich, meldet die Sitzung 'autosave'. */
+  autosaveError: string | null = null;
+  /** Warum der Autosave beim Start nicht geladen werden konnte (er wurde dann als "autosave-defekt" gesichert). */
+  loadError: string | null = null;
 
   constructor(options: GameSessionOptions) {
     this.modules = options.modules;
@@ -65,12 +69,21 @@ export class GameSession {
 
   /** Autosave laden, falls vorhanden. Gibt true zurück, wenn ein Spiel geladen wurde. */
   continueAutosave(): boolean {
+    this.loadError = null;
     const file = this.saves.read(AUTOSAVE_SLOT);
-    if (!file) return false;
+    if (!file) {
+      // Es gibt Daten, aber sie sind nicht lesbar (beschädigt)? Sichern, bevor ein neues Spiel sie überschreibt.
+      if (this.saves.backup(AUTOSAVE_SLOT, BROKEN_AUTOSAVE_SLOT)) {
+        this.loadError = 'Der Autosave ist beschädigt.';
+      }
+      return false;
+    }
     try {
       this.setSim(loadSimulation(file.state, this.modules));
       return true;
-    } catch {
+    } catch (error) {
+      this.loadError = error instanceof Error ? error.message : 'Der Autosave ließ sich nicht laden.';
+      this.saves.backup(AUTOSAVE_SLOT, BROKEN_AUTOSAVE_SLOT);
       return false;
     }
   }
@@ -106,7 +119,20 @@ export class GameSession {
     this.sinceAutosave = 0;
     const sim = this.current;
     if (!sim || sim.isOver) return;
-    this.saves.write(AUTOSAVE_SLOT, sim.state, `Autosave, ${defaultLabel(sim.state)}`, this.now());
+    try {
+      this.saves.write(AUTOSAVE_SLOT, sim.state, `Autosave, ${defaultLabel(sim.state)}`, this.now());
+      if (this.autosaveError !== null) {
+        this.autosaveError = null;
+        this.emitChange('autosave');
+      }
+    } catch (error) {
+      // Der Autosave läuft mitten im Spiel: nicht werfen, sondern einmal melden (UI), bis es wieder klappt.
+      const message = error instanceof Error ? error.message : 'Der Autosave hat nicht geklappt.';
+      if (this.autosaveError !== message) {
+        this.autosaveError = message;
+        this.emitChange('autosave');
+      }
+    }
   }
 
   listSaves(): SaveInfo[] {

@@ -2,25 +2,30 @@
 // Gewalt (Überfall auf einen Gang-Spot) und Ware kaufen. Verpfeifen läuft über 'police.snitch' (siehe reactions.ts).
 // Jeder Befehl prüft seine Bedingungen und sagt auf Deutsch, warum etwas nicht geht.
 
-import { type CommandResult, type Ctx, clock, formatAmount, formatEuro, journal, wallet } from '../../core';
+import {
+  type CommandResult,
+  type Ctx,
+  clock,
+  formatAmount,
+  formatEuro,
+  type GameState,
+  journal,
+  wallet,
+} from '../../core';
 import { activeEncounters, ENCOUNTER_KINDS, startEncounter } from '../encounters';
 import { DEFAULT_PRODUCT, store } from '../goods';
-import { getStaffMember } from '../staff';
-import { getInfluence } from '../territory';
+import { getStaff, getStaffMember, type StaffMember } from '../staff';
 import { veedelName } from '../veedel';
-import { addHostility, addRelation, breakAgreements, crewFor, statusOf } from './common';
+import { addHostility, addRelation, breakAgreements, ceasefireBlock, crewFor, statusOf } from './common';
 import {
   ALLIANCE_COST,
   ALLIANCE_DURATION,
   ALLIANCE_MAX_HOSTILITY,
   ALLIANCE_MIN_RELATION,
-  CEASEFIRE_COOLDOWN_AFTER_ATTACK,
   CEASEFIRE_DURATION,
   CEASEFIRE_HOSTILITY_DROP,
   DEAL_BETRAYAL_BASE,
-  GANG_SPOT_MIN_INFLUENCE,
   HOSTILITY_ON_PLAYER_ATTACK,
-  MIN_RELATION_TO_TALK,
   PROTECTION_INTERVAL,
   PROTECTION_POWER_RATIO,
   RAID_LOOT_GOODS_MAX,
@@ -31,7 +36,6 @@ import {
   RELATION_ON_PLAYER_ATTACK,
   TRIBUTE_DURATION,
   TRIBUTE_HOSTILITY_DROP,
-  WARN_AT,
 } from './config';
 import type { Gang } from './data';
 import {
@@ -39,11 +43,12 @@ import {
   type GangStatus,
   gangPower,
   getGang,
-  hasCeasefire,
   isAllied,
+  isGangBroken,
   paysTribute,
   playerPower,
   protectionAmount,
+  raidTargets,
   tributeAmount,
 } from './state';
 
@@ -72,12 +77,8 @@ export function ceasefire(ctx: Ctx, gangId: string): CommandResult {
   const found = find(ctx, gangId);
   if (!isFound(found)) return found;
   const { gang, s } = found;
-  if (hasCeasefire(ctx.state, gangId)) return { ok: false, reason: `Mit ${gang.name} ist schon Waffenstillstand.` };
-  if (s.hostility < WARN_AT) return { ok: false, reason: `${gang.name} hat gar kein Problem mit dir.` };
-  if (s.relation <= MIN_RELATION_TO_TALK) return { ok: false, reason: `${gang.name} redet nicht mehr mit dir.` };
-  if (s.lastPlayerAttackAt !== null && ctx.now - s.lastPlayerAttackAt < CEASEFIRE_COOLDOWN_AFTER_ATTACK) {
-    return { ok: false, reason: 'Zu frisch. Nach deinem Angriff redet dort niemand über Frieden.' };
-  }
+  const blocked = ceasefireBlock(ctx.state, ctx.now, gang, s);
+  if (blocked) return { ok: false, reason: blocked };
   const cost = ceasefireCost(ctx.state, gangId);
   if (!wallet.pay(ctx, cost, 'dirty', `Waffenstillstand mit ${gang.name}`, 'tribute')) return notEnoughMoney(cost);
   s.money += cost;
@@ -134,6 +135,9 @@ export function demandProtection(ctx: Ctx, gangId: string): CommandResult {
   if (!isFound(found)) return found;
   const { gang, s } = found;
   if (s.protection) return { ok: false, reason: `${gang.name} zahlt dir schon.` };
+  if (paysTribute(ctx.state, gangId)) return { ok: false, reason: `Du zahlst ${gang.name} selbst Schutzgeld.` };
+  if (isGangBroken(ctx.state, gangId))
+    return { ok: false, reason: `${gang.name} ist zerschlagen, da ist nichts zu holen.` };
   const mine = Math.round(playerPower(ctx.state));
   const theirs = Math.round(gangPower(ctx.state, gangId));
   if (mine < theirs * PROTECTION_POWER_RATIO) {
@@ -203,6 +207,9 @@ export function ally(ctx: Ctx, gangId: string, againstGangId: string): CommandRe
   const enemy = getGang(ctx.state, againstGangId);
   const enemyStatus = enemy && statusOf(ctx, againstGangId);
   if (!enemy || !enemyStatus || enemy.id === gang.id) return { ok: false, reason: 'Gegen wen denn?' };
+  if (isGangBroken(ctx.state, againstGangId)) {
+    return { ok: false, reason: `${enemy.name} ist schon zerschlagen. Dafür braucht es kein Bündnis.` };
+  }
   if (isAllied(ctx.state, gangId)) return { ok: false, reason: `Du bist schon mit ${gang.name} verbündet.` };
   if (s.relation < ALLIANCE_MIN_RELATION) {
     return { ok: false, reason: `${gang.name} traut dir nicht (Beziehung ${s.relation}).` };
@@ -226,6 +233,21 @@ export function ally(ctx: Ctx, gangId: string, againstGangId: string): CommandRe
 // ---------------------------------------------------------------------------------------------
 // Gewalt: Überfall auf einen Gang-Spot
 
+/**
+ * Wer bei einem Überfall mitgehen darf: aktive Läufer und Sicherheit, die an einem Spot oder Lager stehen oder frei
+ * sind. Nicht die Rechte Hand (Büro, Lieferung), Leutnants, Fahrer auf Fahrt oder Spezialisten.
+ */
+export function canJoinRaid(m: StaffMember): boolean {
+  if (m.status !== 'active' || (m.role !== 'runner' && m.role !== 'security')) return false;
+  const kind = m.assignment?.kind;
+  return kind === undefined || kind === 'spot' || kind === 'warehouse';
+}
+
+/** Alle, die jetzt bei einem Überfall mitgehen dürften (Liste der Oberfläche, "Alle mitnehmen"). */
+export function raidCrew(state: GameState): StaffMember[] {
+  return getStaff(state, { status: 'active' }).filter(canJoinRaid);
+}
+
 export function attack(
   ctx: Ctx,
   gangId: string,
@@ -236,15 +258,21 @@ export function attack(
   const found = find(ctx, gangId);
   if (!isFound(found)) return found;
   const { gang, s } = found;
-  if (getInfluence(ctx.state, veedelId, gangId) < GANG_SPOT_MIN_INFLUENCE) {
+  if (!raidTargets(ctx.state, gangId).includes(veedelId)) {
     return { ok: false, reason: `${gang.name} hat in ${veedelName(veedelId)} keinen Spot.` };
   }
   if (activeEncounters(ctx.state).length > 0) return { ok: false, reason: 'Erst die laufende Konfrontation klären.' };
-  const crew = staffIds.filter((id) => getStaffMember(ctx.state, id)?.status === 'active');
+  // Nur wer mitgehen darf (Läufer und Sicherheit am Spot, im Lager oder ohne Einsatz): nicht die Rechte Hand, Leutnants
+  // oder Fahrer auf einer Fahrt (stirbt oder verletzt sich jemand, wäre dort Lieferung oder Fahrt weg).
+  const crew = staffIds.filter((id) => {
+    const m = getStaffMember(ctx.state, id);
+    return !!m && canJoinRaid(m);
+  });
   if (crew.length === 0 && !playerPresent) return { ok: false, reason: 'Du brauchst Leute oder musst selbst mit.' };
 
-  const money = Math.min(RAID_LOOT_MONEY_MAX, Math.round(s.money * RAID_LOOT_MONEY_SHARE));
-  const goods = Math.min(RAID_LOOT_GOODS_MAX, Math.round(s.goods * RAID_LOOT_GOODS_SHARE));
+  // Eine Gang mit leerer (oder, bis Mitternacht, negativer) Kasse hat nichts zu holen: Die Beute ist nie negativ.
+  const money = Math.min(RAID_LOOT_MONEY_MAX, Math.max(0, Math.round(s.money * RAID_LOOT_MONEY_SHARE)));
+  const goods = Math.min(RAID_LOOT_GOODS_MAX, Math.max(0, Math.round(s.goods * RAID_LOOT_GOODS_SHARE)));
   breakAgreements(ctx, gang, s, 'Überfall');
   addHostility(s, HOSTILITY_ON_PLAYER_ATTACK);
   addRelation(s, RELATION_ON_PLAYER_ATTACK);

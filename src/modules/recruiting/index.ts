@@ -393,7 +393,9 @@ function profileOf(c: Candidate): RecruitProfile {
 function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null, meta: CommandMeta): CommandResult {
   const c = getCandidate(ctx.state, candidateId);
   if (!c || c.expiresAt <= ctx.now) return { ok: false, reason: 'Die Person ist nicht mehr zu haben.' };
-  if (!wallet.pay(ctx, c.hireCost, 'dirty', `Handgeld ${c.name}`, 'hiring')) {
+  // Kommt die Person an einen Spot, gehört das Handgeld zu dessen Kosten (Kasse: Pro Spot und Pro Leutnant).
+  const tag = assignment?.kind === 'spot' ? { category: 'hiring' as const, spotId: assignment.targetId } : 'hiring';
+  if (!wallet.pay(ctx, c.hireCost, 'dirty', `Handgeld ${c.name}`, tag)) {
     return { ok: false, reason: `Nicht genug Geld für das Handgeld (${formatEuro(c.hireCost)}).` };
   }
   const s = ctx.state.modules.recruiting;
@@ -404,6 +406,11 @@ function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null,
     note: c.note,
   });
   if (c.referrerId && isEmployed(ctx.state, c.referrerId)) addLoyalty(ctx, c.referrerId, 3);
+  // Fragen im Chat zu genau diesem Bewerber (Empfehlung, Bewerbung) sind erledigt, auch wenn er über die App kam.
+  messages.retractWhere(
+    ctx,
+    (m) => !!m.options?.some((o) => o.command?.type === 'recruiting.hire' && o.command.payload.candidateId === c.id),
+  );
   ctx.emit('recruiting.hired', { candidateId: c.id, staffId: member.id });
   if (assignment) ctx.dispatch({ type: 'staff.assign', payload: { staffId: member.id, assignment } }, meta);
   return { ok: true, data: { staffId: member.id } };
@@ -466,7 +473,7 @@ export function migrateRecruitingV1(old: RecruitingStateV1, state: GameState): R
 
 export default defineModule({
   id: 'recruiting',
-  version: 2,
+  version: 3,
   dependsOn: ['staff', 'territory', 'reputation'],
   init: (ctx) => {
     const state: RecruitingState = { candidates: [], nextPoolAt: 0, searchReadyAt: 0 };
@@ -500,5 +507,13 @@ export default defineModule({
       if (from === 'jailed' && to === 'active') maybeJailContact(ctx, staffId);
     },
   },
-  migrations: { 2: migrateRecruitingV1 },
+  migrations: {
+    2: migrateRecruitingV1,
+    // Version 3 (Auftrag 28): Kurier-Bewerber gibt es nicht mehr. Wer einen aus einem alten Spielstand einstellte, hatte
+    // jemanden, der nirgends arbeiten kann und trotzdem Lohn kostet.
+    3: (old: RecruitingState): RecruitingState => ({
+      ...old,
+      candidates: old.candidates.filter((c) => c.role !== 'courier'),
+    }),
+  },
 });

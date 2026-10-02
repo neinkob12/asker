@@ -4,6 +4,7 @@
 import { useState } from 'preact/hooks';
 import type { GameState } from '../../../core';
 import {
+  ActionSheet,
   Chip,
   Group,
   Icon,
@@ -101,6 +102,7 @@ function QuestHud() {
   const { state, dispatch } = useGame();
   const ui = useUi();
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [confirmSkip, setConfirmSkip] = useState(false);
   const quest = currentQuest(state);
   if (!quest) return null;
   const [now, target] = questProgress(state);
@@ -158,14 +160,24 @@ function QuestHud() {
         <button type="button" class="quest-hud__link" onClick={() => ui.openPanel('quests.list', {})}>
           Alle Quests
         </button>
-        <button
-          type="button"
-          class="quest-hud__link is-faint"
-          onClick={() => dispatch({ type: 'quests.skip', payload: {} })}
-        >
+        <button type="button" class="quest-hud__link is-faint" onClick={() => setConfirmSkip(true)}>
           Überspringen
         </button>
       </footer>
+      <ActionSheet
+        open={confirmSkip}
+        onClose={() => setConfirmSkip(false)}
+        title="Quest überspringen?"
+        message={`Dann gibt es keine Belohnung (${quest.reward.map(rewardText).join(' + ')}), und die Quest kommt nicht wieder.`}
+        actions={[
+          {
+            label: 'Überspringen',
+            icon: 'skip',
+            destructive: true,
+            onSelect: () => dispatch({ type: 'quests.skip', payload: {} }),
+          },
+        ]}
+      />
     </section>
   );
 }
@@ -258,9 +270,11 @@ onGameEvent('quest.completed', 'quests.toast', (payload, ui) => {
   if (payload.skipped) return;
   const quest = QUESTS.find((x) => x.id === payload.questId);
   if (!quest) return;
+  // Das Journal hat den Eintrag schon (die Quest schreibt ihn selbst): Der Verlauf soll ihn nicht doppelt zeigen.
   ui.toast(`Quest erledigt: ${quest.title}. ${quest.reward.map(rewardText).join(' + ')}`, 'good', {
     urgent: true,
     icon: 'gift',
+    log: false,
   });
 });
 soundOnEvent('quest.completed', 'success', { when: (p) => !p.skipped });

@@ -21,6 +21,11 @@ export function bindKeys(runtime: UiRuntime): void {
     const target = e.target as HTMLElement | null;
     const typing =
       !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+    // Auf einem Knopf, Schalter oder einer Auswahl gehört die Leertaste dem Element (sonst lässt sich nichts per
+    // Tastatur bedienen). Gehaltene Tasten lösen nichts mehrfach aus.
+    const onControl = !!target?.closest(
+      'button, select, summary, a[href], [role="button"], [role="switch"], [role="tab"]',
+    );
     if (e.code === 'Escape') {
       if (ui.picking) api.cancelPick();
       else if (ui.palette) api.togglePalette(false);
@@ -35,8 +40,9 @@ export function bindKeys(runtime: UiRuntime): void {
       else if (ui.phone.open) api.back();
       return;
     }
-    if (typing || e.metaKey || e.ctrlKey || e.altKey || !runtime.state || ui.dialog || ui.palette) return;
+    if (typing || e.repeat || e.metaKey || e.ctrlKey || e.altKey || !runtime.state || ui.dialog || ui.palette) return;
     if (e.code === 'Space') {
+      if (onControl) return;
       e.preventDefault();
       api.togglePause();
       return;

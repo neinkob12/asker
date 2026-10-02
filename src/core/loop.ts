@@ -33,6 +33,8 @@ export class GameLoop {
   }
 
   setSpeed(speed: number): void {
+    // Keine Zahl (z.B. ?tempo=abc): Tempo bleibt, sonst stünde das Spiel mit NaN dauerhaft.
+    if (Number.isNaN(speed)) return;
     this.speed = Math.max(0, speed);
   }
 

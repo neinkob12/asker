@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadSimulation, type Simulation } from '../../core';
+import { clock, loadSimulation, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { startEncounter } from '../encounters';
 import { getStock, store } from '../goods';
@@ -28,6 +28,7 @@ import {
   getPoliceStats,
   heatLevel,
   type OperationFacts,
+  operationFacts,
   operationTier,
   plannedRaid,
   playerHeat,
@@ -395,6 +396,25 @@ describe('police: Härte nach Größe des Geschäfts (Auftrag 24)', () => {
     expect(nextTier(facts({ veedel: 4, spots: 4, people: 6 }), 2)).toBe(1);
     expect(nextTier(facts({ spots: 3, people: 4, revenue: 5000 }), 1)).toBe(1);
     expect(nextTier(facts({ spots: 3, people: 4, revenue: 3000 }), 1)).toBe(0);
+  });
+
+  it('Umsatz pro Tag: Schnitt über volle Tage, der angefangene Tag drückt ihn nicht', () => {
+    const sim = quietGame();
+    const earn = (amount: number) => {
+      wallet.earn(sim.ctx('test'), amount, 'dirty', 'Verkauf', 'sales.street');
+      sim.advance(1);
+    };
+    sim.advance(clock.at(1, 12, 0) - sim.state.time);
+    earn(5000);
+    // Am ersten Tag gibt es noch keinen vollen Tag: Es zählt der laufende.
+    expect(operationFacts(sim.state).revenue).toBe(5000);
+    sim.advance(clock.at(2, 12, 0) - sim.state.time);
+    earn(5000);
+    // Tag 3 ist gerade erst angebrochen: Der Schnitt der zwei vollen Tage bleibt 5.000 (statt 10.000 / 3).
+    sim.advance(clock.at(3, 0, 30) - sim.state.time);
+    expect(operationFacts(sim.state).revenue).toBe(5000);
+    earn(1000);
+    expect(operationFacts(sim.state).revenue).toBe(5000);
   });
 
   /** Heat in allen Veedeln mit Präsenz hochhalten und stundenweise spielen. */

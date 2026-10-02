@@ -1,10 +1,10 @@
 // Oberfläche der Veedel: das Veedel-Panel (öffnet sich beim Klick auf ein Veedel auf der Karte).
 // Das Panel hat den Slot 'veedel.veedelPanel', in den andere Module Abschnitte hängen (Revier, Polizei …).
 
-import { formatPercent } from '../../../core';
+import { formatEuro, formatPercent } from '../../../core';
 import { Group, ItemContent, List, ListItem, registerPanel, registerSearch, Slot, useGame, useUi } from '../../../ui';
 import { waitingAt } from '../../customers';
-import { getSpots } from '../../spots';
+import { getSpots, lockedSpots } from '../../spots';
 import { allVeedel, getVeedel, neighborsOf, sharesBorder, veedelLinks, veedelName } from '../index';
 import './veedel.css';
 
@@ -37,6 +37,9 @@ function VeedelPanel(props: { veedelId: string }) {
   const veedel = getVeedel(props.veedelId);
   if (!veedel) return null;
   const spots = getSpots(state).filter((s) => s.veedelId === veedel.id);
+  // Spots, die du noch freischalten kannst: Ohne sie sähe ein Veedel ohne eigenen Spot leer aus, obwohl dort zwei
+  // zu haben sind (der Kauf ginge sonst nur über graue Marker oder die Suche).
+  const locked = lockedSpots(state).filter((s) => s.veedelId === veedel.id);
   const link = (id: string) =>
     veedelLinks().find((l) => (l.a === veedel.id && l.b === id) || (l.b === veedel.id && l.a === id));
   return (
@@ -61,13 +64,13 @@ function VeedelPanel(props: { veedelId: string }) {
       <Slot name="veedel.veedelPanel" props={{ veedelId: veedel.id }} />
       <Group title="Spots" icon="pin" color="place" count={spots.length}>
         <List>
-          {spots.length === 0 && (
+          {spots.length + locked.length === 0 && (
             <ListItem>
               <ItemContent
                 icon="pin"
                 color="system"
                 title="Noch kein Spot"
-                meta="Eigene Spots gründest du im Geschäft."
+                meta="Eigene Spots gründest du unter Reviere › Spots."
               />
             </ListItem>
           )}
@@ -78,6 +81,20 @@ function VeedelPanel(props: { veedelId: string }) {
               value={`${waitingAt(state, s.id).length} warten`}
             >
               <ItemContent icon="pin" color="place" title={s.name} />
+            </ListItem>
+          ))}
+          {locked.map((s) => (
+            <ListItem
+              key={s.id}
+              onClick={() => ui.openPanel('spots.spot', { spotId: s.id })}
+              value={formatEuro(s.unlockCost ?? 0)}
+            >
+              <ItemContent
+                icon="lock"
+                color="system"
+                title={s.name}
+                tags={[{ label: 'zum Freischalten', icon: 'lock', color: 'brand' }]}
+              />
             </ListItem>
           ))}
         </List>

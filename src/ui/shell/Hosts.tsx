@@ -5,13 +5,14 @@ import { dialogs } from '../registry';
 
 /** Zeigt den offenen Dialog. Die Dialog-Komponente rendert selbst <Dialog> aus den Bausteinen. */
 export function DialogHost() {
-  const { ui } = useRuntime();
+  const { ui, api } = useRuntime();
   if (!ui.dialog) return null;
   const definition = dialogs.get(ui.dialog.id);
   if (!definition) return null;
   const Component = definition.component as ComponentType<unknown>;
   return (
-    <ErrorBoundary key={ui.dialog.id} name={ui.dialog.id}>
+    // Stürzt ein Dialog ab, der sich nicht wegklicken lässt (Konfrontation), hilft sonst nichts: Das Spiel bliebe pausiert.
+    <ErrorBoundary key={ui.dialog.id} name={ui.dialog.id} onClose={api.closeDialog}>
       <Component {...(ui.dialog.props as object)} />
     </ErrorBoundary>
   );

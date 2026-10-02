@@ -38,7 +38,11 @@ const PAGES: readonly IntroPage[] = [
     title: 'Ware rein, Ware raus',
     text: 'Vier Dinge, um die sich alles dreht:',
     points: [
-      { icon: 'truck', color: 'goods', text: 'Ware bei Lieferanten bestellen, sie kommt über den Hafen ins Lager.' },
+      {
+        icon: 'truck',
+        color: 'goods',
+        text: 'Ware bei Lieferanten bestellen, sie kommt ins Lager, später auch per Schiff über den Hafen.',
+      },
       { icon: 'pin', color: 'place', text: 'An Spots auf der Karte verkaufen, erst selbst, dann mit Läufern.' },
       { icon: 'crew', color: 'people', text: 'Leute anheuern: Fahrer, Leutnants und eine Rechte Hand.' },
       { icon: 'flag', color: 'brand', text: 'Veedel übernehmen. Sieben davon, und Köln gehört dir.' },

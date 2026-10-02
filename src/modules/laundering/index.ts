@@ -93,8 +93,13 @@ declare module '../../core' {
 
 // --- Wege ---
 
+/** Weg nach ID, undefined bei einer unbekannten (für Befehle, die von außen kommen). */
+function findChannel(id: string): LaunderingChannel | undefined {
+  return LAUNDERING_CHANNELS.find((c) => c.id === id);
+}
+
 export function getChannel(id: LaunderingChannelId): LaunderingChannel {
-  const channel = LAUNDERING_CHANNELS.find((c) => c.id === id);
+  const channel = findChannel(id);
   if (!channel) throw new Error(`Unbekannter Weg der Geldwäsche: ${id}`);
   return channel;
 }
@@ -215,9 +220,18 @@ function startBatch(ctx: Ctx, channel: LaunderingChannel, amount: number): Laund
   return batch;
 }
 
-/** Verteilt einen Betrag auf freie Wege, billigster zuerst. Liefert null, wenn er nicht hineinpasst. */
+/**
+ * Verteilt einen Betrag auf freie Wege, billigster zuerst (nach der Gebühr, die wirklich gilt, bei gleicher Gebühr der
+ * schnellere: Ein Buchhalter drückt alle Wege auf die Mindestgebühr, dann gehört kleines Geld zum Kiosk). Liefert null,
+ * wenn er nicht hineinpasst.
+ */
 function plan(state: GameState, amount: number): { channel: LaunderingChannel; amount: number }[] | null {
-  const open = LAUNDERING_CHANNELS.filter((c) => isChannelUnlocked(state, c.id)).sort((a, b) => a.fee - b.fee);
+  const open = LAUNDERING_CHANNELS.filter((c) => isChannelUnlocked(state, c.id)).sort(
+    (a, b) =>
+      channelFee(state, a.id) - channelFee(state, b.id) ||
+      channelDuration(a.id, amount) - channelDuration(b.id, amount) ||
+      a.fee - b.fee,
+  );
   // Passt alles in einen Weg, nimm den billigsten davon.
   const whole = open.find((c) => amount >= c.minAmount && amount <= channelFree(state, c.id));
   if (whole) return [{ channel: whole, amount }];
@@ -242,8 +256,9 @@ function launder(ctx: Ctx, amount: number, channelId?: LaunderingChannelId): Com
   }
   if (!wallet.canAfford(ctx.state, rounded)) return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
   let parts: { channel: LaunderingChannel; amount: number }[];
-  if (channelId) {
-    const c = getChannel(channelId);
+  if (channelId !== undefined) {
+    const c = findChannel(channelId);
+    if (!c) return { ok: false, reason: 'Diesen Weg gibt es nicht.' };
     if (!isChannelUnlocked(ctx.state, c.id)) return { ok: false, reason: `${c.name} ist noch nicht freigeschaltet.` };
     if (rounded < c.minAmount) return { ok: false, reason: `${c.name} nimmt erst ab ${formatEuro(c.minAmount)}.` };
     const free = channelFree(ctx.state, c.id);
@@ -270,7 +285,11 @@ function launder(ctx: Ctx, amount: number, channelId?: LaunderingChannelId): Com
 }
 
 function unlock(ctx: Ctx, channelId: LaunderingChannelId, pay: 'clean' | 'dirty'): CommandResult {
-  const c = getChannel(channelId);
+  const c = findChannel(channelId);
+  if (!c) return { ok: false, reason: 'Diesen Weg gibt es nicht.' };
+  // Ohne diese Prüfung wäre der Preis undefined und der Weg gratis.
+  if (pay !== 'clean' && pay !== 'dirty')
+    return { ok: false, reason: 'Bezahlen geht nur mit sauberem Geld oder Schwarzgeld.' };
   const check = canUnlockChannel(ctx.state, channelId);
   if (!check.ok) return check;
   const cost = c.unlock ? c.unlock[pay] : 0;

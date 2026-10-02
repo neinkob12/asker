@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messages, type Simulation, wallet } from '../../core';
+import { loadSimulation, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { allProducts, getStock } from '../goods';
 import { addHeat } from '../police';
@@ -61,7 +61,7 @@ describe('quests', () => {
     expect(sim.dispatch({ type: 'quests.skip', payload: {} }).ok).toBe(true);
     expect(wallet.balance(sim.state, 'dirty')).toBe(money);
     expect(sim.state.modules.quests.skipped).toEqual(['order']);
-    expect(currentQuest(sim.state)?.id).toBe('pickup');
+    expect(currentQuest(sim.state)?.id).toBe('revenue1k');
   });
 
   it('Quests am Zustand: 50.000 € Vermögen geben Titel und sauberes Geld', () => {
@@ -105,5 +105,61 @@ describe('quests', () => {
     }
     // Belohnungen sind abwechslungsreich, nicht nur Ware.
     expect(new Set(QUESTS.flatMap((q) => q.reward.map((r) => r.kind))).size).toBeGreaterThanOrEqual(7);
+  });
+
+  it('Reihenfolge: Jede Quest verlangt nur, was die früheren möglich gemacht haben', () => {
+    const at = (id: string) => QUESTS.findIndex((q) => q.id === id);
+    // Der Liegeplatz im Hafen (4.000 € sauber) und das zweite Lager brauchen sauberes Geld, also erst waschen.
+    expect(at('launder')).toBeLessThan(at('warehouse'));
+    expect(at('launder')).toBeLessThan(at('pickup'));
+    // Die Rechte Hand braucht zwei Leutnants.
+    expect(at('lieutenant')).toBeLessThan(at('rightHand'));
+    expect(at('rightHand')).toBeLessThan(at('rightHandDelivery'));
+    expect(at('rightHand')).toBeLessThan(at('rightHandRank'));
+    // Kapitel wachsen nur.
+    for (let i = 1; i < QUESTS.length; i++) expect(QUESTS[i].chapter).toBeGreaterThanOrEqual(QUESTS[i - 1].chapter);
+  });
+
+  it('eine Aktion, die zwei Ereignisse meldet, erledigt nicht zwei Quests auf einmal', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    jumpTo(sim, 'runner');
+    sim.ctx('staff').emit('staff.hired', { staffId: 's1', role: 'runner', origin: 'pool' } as never);
+    sim.ctx('recruiting').emit('recruiting.hired', { candidateId: 'c1', staffId: 's1' });
+    sim.advance(1);
+    // "Läufer anheuern" ist erledigt, "über Leute finden einstellen" beginnt erst jetzt und zählt das noch nicht mit.
+    expect(sim.state.modules.quests.done).toEqual(['runner']);
+    expect(currentQuest(sim.state)?.id).toBe('recruit');
+    // Der nächste Läufer über "Leute finden" zählt.
+    sim.advance(5);
+    sim.ctx('recruiting').emit('recruiting.hired', { candidateId: 'c2', staffId: 's2' });
+    sim.advance(1);
+    expect(sim.state.modules.quests.done).toEqual(['runner', 'recruit']);
+  });
+
+  it('Migration 1 → 2: Der Index folgt der neuen Reihenfolge, erledigte und übersprungene Quests bleiben', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    const raw = structuredClone(sim.state) as unknown as {
+      modules: { quests: Record<string, unknown> };
+      moduleVersions: Record<string, number>;
+    };
+    // Alter Stand: Kapitel 1 war mit dem Hafen-Pickup an vierter Stelle, 'pickup' war noch offen.
+    raw.modules.quests = {
+      index: 3,
+      progress: 0,
+      done: ['firstSales', 'setPrice', 'order'],
+      skipped: [],
+      title: null,
+    };
+    raw.moduleVersions.quests = 1;
+    const loaded = loadSimulation(raw, sim.modules);
+    // Neu: Nach 'order' folgt 'revenue1k', der Hafen kommt erst später.
+    expect(currentQuest(loaded.state)?.id).toBe('revenue1k');
+    expect(loaded.state.modules.quests.done).toEqual(['firstSales', 'setPrice', 'order']);
+    expect(loaded.state.moduleVersions.quests).toBe(2);
+    // Alles durch: Index am Ende.
+    raw.modules.quests = { index: 26, progress: 0, done: QUESTS.map((q) => q.id), skipped: [], title: 'Boss von Köln' };
+    expect(currentQuest(loadSimulation(raw, sim.modules).state)).toBeNull();
   });
 });

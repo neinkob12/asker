@@ -88,6 +88,22 @@ describe('Speichern und Laden', () => {
     expect(() => loadSimulation(state, [noMigration])).toThrow(/keine Migration/);
   });
 
+  it('legt einen Modulzustand, der in der Datei fehlt, frisch an, statt später in jedem Schritt zu scheitern', () => {
+    const sim = Simulation.create([notesV2], { seed: 1 });
+    const raw = roundTrip(sim.state) as unknown as { modules: Record<string, unknown> };
+    delete raw.modules.testNotes;
+    const loaded = loadSimulation(raw, [notesV2]);
+    expect(loaded.state.modules.testNotes).toEqual({ lines: [], migrated: false });
+    expect(() => loaded.advance(5)).not.toThrow();
+  });
+
+  it('lehnt Spielstände mit unmöglichen Zahlen ab (Zeit, Geld)', () => {
+    const state = roundTrip(Simulation.create([notesV2], { seed: 1 }).state) as unknown as Record<string, unknown>;
+    expect(() => loadSimulation({ ...state, time: -5 }, [notesV2])).toThrow(/beschädigt/);
+    expect(() => loadSimulation({ ...state, wallet: { dirty: 'abc', clean: 0 } }, [notesV2])).toThrow(/Geld/);
+    expect(() => loadSimulation({ ...state, wallet: { dirty: Number.NaN, clean: 0 } }, [notesV2])).toThrow(/Geld/);
+  });
+
   it('erkennt kaputte Dateien', () => {
     expect(() => parseSaveFile('kein json')).toThrow(SaveError);
     expect(() => parseSaveFile('{"format":"anderes-spiel"}')).toThrow(/kein Köln-Tycoon/);
@@ -110,6 +126,48 @@ describe('GameSession: Speicherplätze, Autosave, Export und Hardcore', () => {
     const second = makeSession(storage);
     expect(second.continueAutosave()).toBe(true);
     expect(second.state?.time).toBe(first.state?.time);
+  });
+
+  it('ein Autosave, den das Spiel nicht lesen kann, wird gesichert, bevor ein neues Spiel ihn überschreibt', () => {
+    const storage = memoryStorage();
+    const first = makeSession(storage);
+    first.newGame('normal', 5);
+    // Ein Stand aus der Zukunft (Version des Moduls höher als bekannt).
+    const raw = JSON.parse(storage.getItem('koeln-tycoon:save:autosave') ?? '{}');
+    raw.state.moduleVersions.testNotes = 9;
+    storage.setItem('koeln-tycoon:save:autosave', JSON.stringify(raw));
+    const second = makeSession(storage);
+    expect(second.continueAutosave()).toBe(false);
+    expect(second.loadError).toMatch(/neueren Version/);
+    second.newGame('normal', 6);
+    // Das neue Spiel hat den Autosave überschrieben, die Kopie des alten liegt daneben.
+    expect(storage.getItem('koeln-tycoon:save:autosave-defekt')).toContain('"testNotes":9');
+  });
+
+  it('Speicher voll: Speichern wirft einen verständlichen Fehler, der Autosave meldet ihn einmal statt zu werfen', () => {
+    const memory = memoryStorage();
+    let full = false;
+    const storage = {
+      ...memory,
+      setItem: (k: string, v: string) => {
+        if (full) throw new Error('QuotaExceededError');
+        memory.setItem(k, v);
+      },
+    };
+    const session = makeSession(storage);
+    session.newGame('normal', 5);
+    const changes: string[] = [];
+    session.subscribe((c) => changes.push(c));
+    full = true;
+    expect(() => session.save(MANUAL_SLOTS[0])).toThrow(/Speicher/);
+    expect(() => session.autosave()).not.toThrow();
+    session.autosave();
+    expect(session.autosaveError).toMatch(/Speicher/);
+    expect(changes.filter((c) => c === 'autosave')).toHaveLength(1);
+    full = false;
+    session.autosave();
+    expect(session.autosaveError).toBeNull();
+    expect(changes.filter((c) => c === 'autosave')).toHaveLength(2);
   });
 
   it('speichert und lädt Speicherplätze', () => {

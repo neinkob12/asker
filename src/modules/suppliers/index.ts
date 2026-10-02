@@ -158,6 +158,8 @@ export interface Shipment {
   onCredit?: boolean;
   /** Schiffsware: kommt an den Kai im Niehler Hafen statt ins Lager (logistics holt sie ab). */
   toPort?: boolean;
+  /** Schiffsware: das Lager, für das bestellt wurde (Abholung fährt dorthin, Bestellregeln zählen die Ware dafür mit). */
+  destinationId?: string;
   /** Ausgewürfeltes Lieferproblem, der Spieler erfährt es erst, wenn es passiert. */
   problem?: ShipmentProblem;
   /** Wann das Problem unterwegs auftritt (Verspätung, Beschlagnahme). */
@@ -538,7 +540,10 @@ function order(
     arrivesAt: ctx.now + supplier.deliveryTime,
   };
   if (onCredit) shipment.onCredit = true;
-  if (toPort) shipment.toPort = true;
+  if (toPort) {
+    shipment.toPort = true;
+    if (warehouse) shipment.destinationId = warehouse.id;
+  }
   if (problem) {
     shipment.problem = problem;
     shipment.problemAt = ctx.now + Math.round(supplier.deliveryTime * PROBLEM_AT);
@@ -595,6 +600,12 @@ function unlock(ctx: Ctx, supplierId: string): CommandResult {
     ctx,
     `${supplier.contactName} (${supplier.name}) liefert jetzt an dich${fee > 0 ? ` (${formatEuro(fee)} Vermittlung)` : ''}.`,
     'good',
+  );
+  // Das Angebot des Lieferanten im Chat ist erledigt, auch wenn er über die App freigeschaltet wurde.
+  messages.retractWhere(
+    ctx,
+    (m) =>
+      !!m.options?.some((o) => o.command?.type === 'suppliers.unlock' && o.command.payload.supplierId === supplierId),
   );
   tell(ctx, supplier, 'Abgemacht. Alle Angebote findest du in der Lieferanten-App.');
   ctx.emit('supplier.unlocked', { supplierId, fee });
@@ -696,6 +707,7 @@ function deliver(ctx: Ctx): void {
         amount: s.amount,
         quality: s.quality,
         unitCost: Math.round((s.price / s.amount) * 100) / 100,
+        ...(s.destinationId && getWarehouse(ctx.state, s.destinationId) ? { warehouseId: s.destinationId } : {}),
       });
     } else {
       // Gehört das Ziel-Lager nicht mehr dir, geht die Ware ins nächste eigene.
@@ -780,7 +792,7 @@ function canRestock(state: GameState, supplier: Supplier): boolean {
 
 export default defineModule({
   id: 'suppliers',
-  version: 3,
+  version: 4,
   dependsOn: ['goods'],
   init: (ctx) => {
     const frankfurt = SUPPLIERS.find((s) => s.id === 'frankfurt') ?? SUPPLIERS[0];
@@ -817,6 +829,13 @@ export default defineModule({
     3: (old: SuppliersStateV2): SuppliersState => {
       const known = ['rotterdam', 'frankfurt', 'berlin', 'hamburg'];
       return { ...old, unlocked: [...known], offered: [...known] };
+    },
+    // Version 4: Lieferanten ohne Bedingungen (Köln, Kalle) sind von Anfang an zu haben. Alte Spielstände hatten ihn
+    // nie bekommen, er blieb "bereit" ohne Knopf zum Freischalten.
+    4: (old: SuppliersState): SuppliersState => {
+      const open = openFromStart();
+      const withOpen = (ids: string[]) => [...ids, ...open.filter((id) => !ids.includes(id))];
+      return { ...old, unlocked: withOpen(old.unlocked), offered: withOpen(old.offered) };
     },
   },
   // Pleite-Regel: Wer eine Lieferung erwartet oder sich eine leisten kann (bar oder auf Kredit), macht weiter.

@@ -90,6 +90,7 @@ import {
   getGang,
   isAllied,
   isAtPeace,
+  isGangBroken,
   paysTribute,
   peaceFactor,
   playerPower,
@@ -155,6 +156,13 @@ function upkeepAgreements(ctx: Ctx, gang: Gang, s: GangStatus): void {
 function collectProtection(ctx: Ctx, gang: Gang, s: GangStatus): void {
   const protection = s.protection;
   if (!protection) return;
+  // Eine zerschlagene Gang zahlt nicht mehr und fragt nicht endlos nach: Die Abmachung endet.
+  if (isGangBroken(ctx.state, gang.id)) {
+    s.protection = null;
+    journal.add(ctx, `${gang.name} ist zerschlagen: Das Schutzgeld von dort ist Geschichte.`, 'info');
+    ctx.emit('gang.diplomacyChanged', { gangId: gang.id, kind: 'protection', active: false });
+    return;
+  }
   protection.nextDueAt += PROTECTION_INTERVAL;
   const amount = protection.amount;
   const stillStrong = playerPower(ctx.state) >= gangPower(ctx.state, gang.id) * PROTECTION_KEEP_RATIO;
@@ -578,6 +586,7 @@ function maybeOffer(ctx: Ctx, gang: Gang, s: GangStatus, newDay: boolean): void 
       ),
       { id: 'decline', label: 'Kein Interesse' },
     ],
+    OFFER_DURATION,
   );
 }
 

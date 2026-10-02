@@ -37,6 +37,7 @@ import {
   messages,
 } from '../../core';
 import { absenceHandled, teamLeadOf } from '../hierarchy';
+import { PLAYER_FACTION } from '../territory';
 import { getVeedel, veedelName } from '../veedel';
 import {
   assignCommand,
@@ -58,6 +59,7 @@ import {
   XP_PER_ENCOUNTER,
   XP_PER_SALE,
   XP_PER_SALE_UNIT,
+  XP_SALE_UNITS_MAX,
 } from './config';
 import { addLoyalty, addXp, bailCost, getStaff, getStaffMember, setStatus, staffContact } from './members';
 import { STAT_KEYS } from './profile';
@@ -336,15 +338,20 @@ export default defineModule({
     'clock.hourStarted': hourly,
     'police.arrest': (ctx, { staffId, veedelId }) => onArrest(ctx, staffId, veedelId),
     'police.raidPlanned': (ctx, { veedelId, at, scope }) => warnOfRaid(ctx, veedelId, at, scope === 'major'),
-    'police.raid': (ctx, { veedelId }) => {
-      for (const m of getStaff(ctx.state, { veedelId })) addLoyalty(ctx, m.id, LOYALTY.raid);
+    'police.raid': (ctx, { veedelId, veedelIds, target }) => {
+      // Nur eine Razzia gegen dich verunsichert deine Leute (eine gegen eine Gang nicht). Die Großrazzia trifft
+      // mehrere Veedel.
+      if (target !== PLAYER_FACTION) return;
+      for (const id of veedelIds && veedelIds.length > 0 ? veedelIds : [veedelId]) {
+        for (const m of getStaff(ctx.state, { veedelId: id })) addLoyalty(ctx, m.id, LOYALTY.raid);
+      }
     },
     'sale.completed': (ctx, { sellerId, amount, revenue }) => {
       const m = sellerId ? getStaffMember(ctx.state, sellerId) : undefined;
       if (!m || m.leftAt !== null) return;
       m.record.sales += 1;
       m.record.revenue += revenue;
-      addXp(ctx, m.id, XP_PER_SALE + XP_PER_SALE_UNIT * amount);
+      addXp(ctx, m.id, XP_PER_SALE + XP_PER_SALE_UNIT * Math.min(amount, XP_SALE_UNITS_MAX));
     },
     'encounter.resolved': (ctx, { request, outcome }) => {
       for (const staffId of request.staffIds ?? []) {

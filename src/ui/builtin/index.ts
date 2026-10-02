@@ -25,6 +25,8 @@ import { IntroDialog } from './IntroDialog';
 
 /** Ab diesem Betrag erscheint eine Einnahme kurz in der Dynamic Island. */
 const ISLAND_EARN_MIN = 150;
+/** Eine Frist unter dieser Zahl Spielminuten macht die Antwort dringend (Zeile auf dem Startbildschirm). */
+const URGENT_REPLY_MINUTES = 120;
 
 export function registerBuiltins(): void {
   registerHudItem({ id: 'core.money', order: 10, placement: 'main', component: MoneyHud });
@@ -90,6 +92,17 @@ export function registerBuiltins(): void {
         run: (ui) => ui.openPhone('core.history'),
       },
       {
+        id: 'notifications',
+        title: 'Mitteilungen',
+        subtitle: 'Mitteilungszentrale öffnen (sonst Banner oder Statusleiste herunterziehen)',
+        icon: 'bell',
+        keywords: 'benachrichtigungen banner mitteilungszentrale nachrichten',
+        run: (ui) => {
+          ui.showPhone();
+          ui.toggleNotificationCenter(true);
+        },
+      },
+      {
         id: 'weather',
         title: 'Wetter',
         subtitle: 'Vorhersage in den Einstellungen',
@@ -104,11 +117,15 @@ export function registerBuiltins(): void {
   registerAdvisor({
     id: 'core.answer',
     advise: (state) => {
-      const open = chatList(state).filter((c) => c.awaitingAnswer);
+      // Der Chat mit der frühesten Frist zuerst, dann die ohne Frist.
+      const open = chatList(state)
+        .filter((c) => c.awaitingAnswer)
+        .sort((a, b) => (a.deadline ?? Number.POSITIVE_INFINITY) - (b.deadline ?? Number.POSITIVE_INFINITY));
       if (open.length === 0) return null;
       const first = open[0];
-      // Dringend (Zeile auf dem Startbildschirm) nur mit Frist, sonst ein normaler Rat für die Suche.
-      const urgent = open.some((c) => c.deadline !== undefined);
+      // Dringend (Zeile auf dem Startbildschirm) nur, wenn eine Frist bald abläuft; ein Bewerber mit zwei Tagen Zeit
+      // verdrängt sonst "Ware am Kai gefährdet" oder "Löhne nicht gedeckt".
+      const urgent = open.some((c) => c.deadlineIn !== undefined && c.deadlineIn <= URGENT_REPLY_MINUTES);
       return {
         id: 'core.answer',
         priority: urgent ? 90 : 60,
@@ -121,12 +138,12 @@ export function registerBuiltins(): void {
     },
   });
 
-  // Dynamic Island: Chats, deren Antwort eine Frist hat.
+  // Dynamic Island: Chats, deren Antwort eine Frist hat. Kunden zeigt "Kundschaft" (mit Ware und Preis) schon selbst.
   registerLiveActivity({
     id: 'core.deadlines',
     activities: (state) =>
       chatList(state)
-        .filter((c) => c.awaitingAnswer && c.deadline !== undefined && c.deadline > state.time)
+        .filter((c) => c.kind !== 'customer' && c.awaitingAnswer && c.deadline !== undefined && c.deadline > state.time)
         .map((c) => ({
           id: `core.deadline.${c.contactId}`,
           priority: 75,

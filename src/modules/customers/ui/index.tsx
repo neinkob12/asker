@@ -207,7 +207,7 @@ function CustomersSection() {
         Kunden warten nur eine Weile am Spot. Verkaufst du nicht rechtzeitig (selbst an den Spot stellen, verkaufen oder
         einen Läufer hinstellen) oder ist das Lager leer, gehen sie wieder. Das kostet etwas Ruf.
       </Disclosure>
-      <KeyValue label="Umsatz" value={formatEuro(stats.revenue)} />
+      <KeyValue label="Umsatz seit Spielbeginn" value={formatEuro(stats.revenue)} />
       <KeyValue label="Lieferungen / Großhandel" value={`${stats.deliveries} / ${stats.wholesaleDeals}`} />
       <KeyValue label="Fanden es zu teuer" value={stats.tooExpensive} />
       <KeyValue label="Haben Streckmittel bemerkt" value={stats.cutNoticed} />

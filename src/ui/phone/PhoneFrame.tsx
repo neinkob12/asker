@@ -88,6 +88,16 @@ interface HomeApp {
   badge: number;
 }
 
+/** Zahl am Symbol: Wirft das Modul beim Zählen, bleibt es bei 0, statt den ganzen Startbildschirm abzuräumen. */
+function badgeOf(read: () => number | undefined): number {
+  try {
+    return read() ?? 0;
+  } catch (error) {
+    console.error('Zähler einer App', error);
+    return 0;
+  }
+}
+
 function homeApps(state: GameState, ui: UiState): HomeApp[] {
   const tabs = sidebarTabs
     .list()
@@ -98,7 +108,7 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
         name: t.title,
         icon: tabIcon(t),
         color: tabTint(t),
-        badge: t.badge?.(state) ?? 0,
+        badge: badgeOf(() => t.badge?.(state)),
       }),
     );
   const apps = phoneApps
@@ -110,7 +120,7 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
         name: a.name,
         icon: a.icon,
         color: a.color ?? 'system',
-        badge: a.badge?.(state, ui) ?? 0,
+        badge: badgeOf(() => a.badge?.(state, ui)),
       }),
     );
   return [...tabs, ...apps];
@@ -212,6 +222,17 @@ function tileActions(app: HomeApp, api: UiApi, state: GameState): MenuAction[] {
   return actions;
 }
 
+/**
+ * Kasse und Personal stehen im Raster und im Dock: Die App wächst aus der Kachel, die angetippt wurde (stackAnimator
+ * sucht erst data-tapped, dann irgendeine passende).
+ */
+function markTapped(button: HTMLElement): void {
+  for (const other of button.closest('.phone__home')?.querySelectorAll('[data-tapped]') ?? []) {
+    other.removeAttribute('data-tapped');
+  }
+  button.setAttribute('data-tapped', '');
+}
+
 function AppTile(props: { app: HomeApp; onOpen: () => void; dock?: boolean }) {
   const { app } = props;
   const runtime = useRuntime();
@@ -232,7 +253,10 @@ function AppTile(props: { app: HomeApp; onOpen: () => void; dock?: boolean }) {
         type="button"
         class={`phone__app ${props.dock ? 'is-dock' : ''}`}
         data-app-id={app.id}
-        onClick={props.onOpen}
+        onClick={(e) => {
+          markTapped(e.currentTarget);
+          props.onOpen();
+        }}
         aria-label={app.badge > 0 ? `${app.name}, ${app.badge} neu` : app.name}
         title={app.name}
       >
@@ -252,20 +276,27 @@ function AppTile(props: { app: HomeApp; onOpen: () => void; dock?: boolean }) {
   );
 }
 
-/** Welchen dringenden Rat der Spieler in dieser Sitzung weggewischt hat (kommt erst wieder, wenn ein anderer kommt). */
+/**
+ * Welchen dringenden Rat der Spieler weggewischt hat (kommt erst wieder, wenn ein anderer kommt). Der Schlüssel enthält
+ * den Titel: "core.answer" ist immer dieselbe ID, aber jede Frage (anderer Chat) ein anderer Rat.
+ */
 let dismissedAdvice: string | null = null;
+const adviceKey = (advice: Advice) => `${advice.id}|${advice.title}`;
 
 /**
  * Dringender Rat als eine Zeile ganz oben: Kachel, Titel, Knopf. Nach links wischen (oder ×) blendet ihn aus, bis ein
  * anderer dringender Rat kommt. Alles andere, was die Module empfehlen, steht in der Suche (Strg/⌘+K).
  */
 function UrgentAdvice(props: { advice: Advice }) {
-  const { api } = useRuntime();
+  const runtime = useRuntime();
+  const { api } = runtime;
   const [, redraw] = useState(0);
   const { advice } = props;
   const dismiss = () => {
-    dismissedAdvice = advice.id;
+    dismissedAdvice = adviceKey(advice);
     redraw((n) => n + 1);
+    // Den Startbildschirm zeichnet sonst erst der nächste Spielschritt neu (bei Pause bliebe die Zeile stehen).
+    runtime.requestRender();
   };
   return (
     <SwipeRow actions={[{ label: 'Weg', icon: 'close', color: 'system', onSelect: dismiss }]} fullSwipe>
@@ -293,8 +324,12 @@ function UrgentAdvice(props: { advice: Advice }) {
 /** Der dringende Rat für den Startbildschirm, sofern es einen gibt und er nicht weggewischt wurde. */
 export function urgentAdvice(state: GameState): Advice | null {
   const top = collectAdvice(state)[0];
-  if (!top || top.priority < URGENT_ADVICE) return null;
-  return dismissedAdvice === top.id ? null : top;
+  if (!top || top.priority < URGENT_ADVICE) {
+    // Nichts Dringendes mehr: Kehrt derselbe Rat später zurück, soll er wieder erscheinen.
+    dismissedAdvice = null;
+    return null;
+  }
+  return dismissedAdvice === adviceKey(top) ? null : top;
 }
 
 function HomeScreen() {

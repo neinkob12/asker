@@ -141,19 +141,30 @@ export function SavesDialog() {
       api.closeDialog();
     }, 'Spielstand geladen.');
 
+  const [importError, setImportError] = useState<string | null>(null);
   const onImport = (e: JSX.TargetedEvent<HTMLInputElement>) => {
-    const file = e.currentTarget.files?.[0];
+    const input = e.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
-    file.text().then((text) => {
-      try {
+    setImportError(null);
+    file
+      .text()
+      .then((text) => {
         session.importSave(text);
         api.closePanel();
         api.closeDialog();
         api.toast('Spielstand importiert.', 'good');
-      } catch (error) {
-        api.toast(error instanceof SaveError ? error.message : 'Import fehlgeschlagen.', 'bad');
-      }
-    });
+      })
+      .catch((error) => {
+        // Der Fehler gehört in den Dialog: Das Banner liegt am Desktop unter dem Schleier des Dialogs.
+        const message = error instanceof SaveError ? error.message : 'Import fehlgeschlagen.';
+        setImportError(message);
+        api.toast(message, 'bad');
+      })
+      .finally(() => {
+        // Dieselbe Datei muss sich noch einmal wählen lassen (sonst löst onChange nicht aus).
+        input.value = '';
+      });
   };
 
   return (
@@ -205,6 +216,7 @@ export function SavesDialog() {
           Neues Spiel
         </Button>
       </div>
+      {importError && <Hint icon="alert">{importError}</Hint>}
     </Dialog>
   );
 }

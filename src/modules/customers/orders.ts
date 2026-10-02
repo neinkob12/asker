@@ -316,7 +316,8 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier' 
   const order = findOrder(ctx, orderId);
   if (!order) return { ok: false, reason: 'Diesen Auftrag gibt es nicht.' };
   if (order.status !== 'offered') return { ok: false, reason: 'Der Auftrag ist nicht mehr offen.' };
-  if (ctx.now > order.expiresAt) return { ok: false, reason: 'Zu spät, der Kunde hat sich was anderes gesucht.' };
+  // Wie bei der Nachricht (messages.canAnswer): Zur Fristminute ist es schon zu spät.
+  if (ctx.now >= order.expiresAt) return { ok: false, reason: 'Zu spät, der Kunde hat sich was anderes gesucht.' };
   const state = ctx.state;
   const who: 'player' | 'rightHand' = by === 'rightHand' ? 'rightHand' : 'player';
   let courierId: string | null = null;
@@ -388,6 +389,15 @@ export function expireOrderMessage(ctx: Ctx, messageId: number): void {
   finish(ctx, order, 'expired');
 }
 
+/**
+ * Der Einsatz "Lieferung" endet mit dem Auftrag, aber nur, wenn die Person noch auf genau dieser Fahrt ist. Ist sie
+ * inzwischen woanders eingesetzt (z.B. abberufen und an einen Spot gestellt), bleibt das so.
+ */
+function endDelivery(ctx: Ctx, order: Order): void {
+  const m = order.courierId ? getStaffMember(ctx.state, order.courierId) : undefined;
+  if (m?.assignment?.kind === 'delivery' && m.assignment.targetId === String(order.id)) assign(ctx, m.id, null);
+}
+
 /** Wer fährt, fällt aus (Haft, verletzt, weg): Die Lieferung platzt, die Ware ist verloren. */
 export function courierGone(ctx: Ctx, staffId: string, clearAssignment: boolean): void {
   for (const order of ctx.state.modules.customers.orders) {
@@ -401,7 +411,7 @@ export function courierGone(ctx: Ctx, staffId: string, clearAssignment: boolean)
       'bad',
     );
     finish(ctx, order, 'failed');
-    if (clearAssignment && getStaffMember(ctx.state, staffId)) assign(ctx, staffId, null);
+    if (clearAssignment) endDelivery(ctx, order);
   }
 }
 
@@ -438,7 +448,7 @@ export function onDealResolved(ctx: Ctx, ref: string | undefined, outcome: strin
   const id = Number(ref?.replace('order:', ''));
   const order = ctx.state.modules.customers.orders.find((o) => o.id === id && o.status === 'contested');
   if (!order) return;
-  if (order.courierId && getStaffMember(ctx.state, order.courierId)) assign(ctx, order.courierId, null);
+  endDelivery(ctx, order);
   if (outcome === 'success') {
     complete(ctx, order, true);
     return;
@@ -487,7 +497,7 @@ function complete(ctx: Ctx, order: Order, afterFight = false): void {
       });
     }
   }
-  if (order.courierId && getStaffMember(ctx.state, order.courierId)) assign(ctx, order.courierId, null);
+  endDelivery(ctx, order);
   journal.add(
     ctx,
     `${wholesale ? 'Deal mit' : 'Geliefert an'} ${order.contactName}: ${formatProductAmount(order.productId, order.amount)} ` +
@@ -528,7 +538,7 @@ export function ordersTick(ctx: Ctx): void {
   for (const order of [...s.orders]) {
     if (order.status === 'enRoute' && order.arrivesAt !== null && order.arrivesAt <= ctx.now) complete(ctx, order);
     // Sicherheitsnetz, falls das Ablaufen der Nachricht nicht ankam.
-    else if (order.status === 'offered' && order.expiresAt < ctx.now) {
+    else if (order.status === 'offered' && order.expiresAt <= ctx.now) {
       changeReputation(ctx, REP_ORDER_EXPIRED, 'Anfragen ignoriert');
       finish(ctx, order, 'expired');
     }

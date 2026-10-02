@@ -2,12 +2,12 @@
 // Gezählt wird der Bestand im Ziel-Lager plus alles, was dorthin unterwegs ist (Lieferungen, auch die anderer
 // Leutnants, und Fahrten der Logistik). So bestellen zwei Leutnants mit demselben Lager nicht doppelt.
 // Ein gesperrter oder nicht freigeschalteter Lieferant lässt die Regel ruhen (kein stilles Ausweichen), außer bei
-// "automatisch". Schiffsware nur, wenn jemand sie automatisch am Kai abholt (das kann noch niemand).
+// "automatisch". Schiffsware nur, wenn jemand sie automatisch am Kai abholt (die Rechte Hand mit "Hafen abholen").
 
 import { type Actor, type CommandResult, type Ctx, formatEuro, type GameState } from '../../core';
 import { getSalesStats } from '../customers';
 import { getProduct, getStock, getWarehouse, productName } from '../goods';
-import { getTrips } from '../logistics';
+import { getCargo, getTrips } from '../logistics';
 import { getStaff } from '../staff';
 import {
   availablePackages,
@@ -28,7 +28,7 @@ import type { OrderRule } from './types';
  * die Rechte Hand mit der Aufgabe "Hafen abholen" und mindestens einem Fahrer (Auftrag 28).
  */
 export function isPortSupplierAllowed(state: GameState): boolean {
-  return isTaskActive(state, 'pickup') && getStaff(state, { role: 'driver' }).length > 0;
+  return isTaskActive(state, 'pickup') && getStaff(state, { role: 'driver', status: 'active' }).length > 0;
 }
 
 export const PORT_SUPPLIER_HINT =
@@ -54,6 +54,40 @@ export function checkOrderRule(state: GameState, rule: OrderRule): CommandResult
   return { ok: true };
 }
 
+/** Nächste freie Regel-ID ("r1", "r2" …). */
+export function nextRuleId(rules: readonly OrderRule[]): string {
+  let n = rules.length + 1;
+  while (rules.some((r) => r.id === `r${n}`)) n++;
+  return `r${n}`;
+}
+
+/**
+ * Bestellregeln aus einer Einstellung übernehmen (Leutnant und Rechte Hand): nur bekannte Felder, eindeutige IDs,
+ * keine Pause, jede Regel geprüft. So landen weder Fremdfelder noch doppelte IDs im Spielstand.
+ */
+export function normalizeOrderRules(
+  state: GameState,
+  raw: readonly OrderRule[],
+): { ok: true; rules: OrderRule[] } | { ok: false; reason: string } {
+  const rules: OrderRule[] = [];
+  for (const r of raw) {
+    const rule: OrderRule = {
+      id: r.id || nextRuleId(rules),
+      productId: r.productId ?? null,
+      supplierId: r.supplierId ?? null,
+      packageId: r.packageId ?? null,
+      minStock: r.minStock,
+      warehouseId: r.warehouseId ?? null,
+      paused: null,
+    };
+    if (rules.some((x) => x.id === rule.id)) rule.id = nextRuleId(rules);
+    const check = checkOrderRule(state, rule);
+    if (!check.ok) return check;
+    rules.push(rule);
+  }
+  return { ok: true, rules };
+}
+
 /** Ziel-Lager einer Regel: das gewählte (wenn es noch dir gehört), sonst das Lager seiner Spots. */
 export function ruleWarehouse(state: GameState, rule: OrderRule, home: string | null): string | null {
   if (rule.warehouseId && getWarehouse(state, rule.warehouseId)) return rule.warehouseId;
@@ -67,12 +101,19 @@ export function ruleStock(state: GameState, warehouseId: string, productId: stri
   const shipped = shipmentsInTransit(state)
     .filter((s) => !s.toPort && s.warehouseId === warehouseId && (!product || s.productId === product))
     .reduce((sum, s) => sum + s.amount, 0);
+  // Schiffsware für dieses Lager zählt auf See und am Kai mit, sonst bestellt die Regel bis zur Abholung immer wieder.
+  const atSea = shipmentsInTransit(state)
+    .filter((s) => s.toPort && s.destinationId === warehouseId && (!product || s.productId === product))
+    .reduce((sum, s) => sum + s.amount, 0);
+  const onQuay = getCargo(state)
+    .filter((c) => c.warehouseId === warehouseId && (!product || c.productId === product))
+    .reduce((sum, c) => sum + c.amount, 0);
   const moving = getTrips(state)
     .filter((t) => t.toId === warehouseId)
     .flatMap((t) => t.items)
     .filter((i) => !product || i.productId === product)
     .reduce((sum, i) => sum + i.amount, 0);
-  return stock + shipped + moving;
+  return stock + shipped + atSea + onQuay + moving;
 }
 
 /** Kurztext einer Regel, z.B. "Gras bei Frankfurt, passend, ab 50". */

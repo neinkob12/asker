@@ -4,9 +4,15 @@ import { type Ctx, formatEuro, type GameState, journal, type MessageOption, mess
 import { getSpot } from '../spots';
 import { getStaff } from '../staff';
 import { veedelName } from '../veedel';
-import { MESSAGE_EXPIRY, RELATION_ON_BETRAYAL } from './config';
+import {
+  CEASEFIRE_COOLDOWN_AFTER_ATTACK,
+  MESSAGE_EXPIRY,
+  MIN_RELATION_TO_TALK,
+  RELATION_ON_BETRAYAL,
+  WARN_AT,
+} from './config';
 import type { Gang } from './data';
-import { ceasefireCost, type GangStatus, gangContact, tributeAmount } from './state';
+import { ceasefireCost, type GangStatus, gangContact, hasCeasefire, paysTribute, tributeAmount } from './state';
 import { GANG_TEXTS } from './texts';
 
 export function statusOf(ctx: Ctx, gangId: string): GangStatus | undefined {
@@ -42,27 +48,52 @@ export function commandOption(
   return option;
 }
 
-/** Antwort-Optionen für Forderungen: zahlen, Waffenstillstand, ablehnen. Die genannten Preise gelten bis zur Frist. */
+/**
+ * Warum es gerade keinen Waffenstillstand mit dieser Gang gibt (sonst null). Befehl und Angebote in Nachrichten fragen
+ * dasselbe, sonst bietet eine Nachricht einen Weg an, der nicht geht.
+ */
+export function ceasefireBlock(state: GameState, now: number, gang: Gang, s: GangStatus): string | null {
+  if (hasCeasefire(state, gang.id)) return `Mit ${gang.name} ist schon Waffenstillstand.`;
+  if (s.hostility < WARN_AT) return `${gang.name} hat gar kein Problem mit dir.`;
+  if (s.relation <= MIN_RELATION_TO_TALK) return `${gang.name} redet nicht mehr mit dir.`;
+  if (s.lastPlayerAttackAt !== null && now - s.lastPlayerAttackAt < CEASEFIRE_COOLDOWN_AFTER_ATTACK) {
+    return 'Zu frisch. Nach deinem Angriff redet dort niemand über Frieden.';
+  }
+  return null;
+}
+
+/**
+ * Antwort-Optionen für Forderungen: zahlen, Waffenstillstand, ablehnen. Nur Wege, die jetzt gehen (wer schon zahlt oder
+ * Ruhe hat, bekommt sie nicht noch einmal angeboten). Die genannten Preise gelten bis zur Frist.
+ */
 export function demandOptions(ctx: Ctx, gang: Gang, s: GangStatus): MessageOption[] {
   s.quote = null;
   const tribute = tributeAmount(ctx.state, gang.id);
   const ceasefire = ceasefireCost(ctx.state, gang.id);
   s.quote = { tribute, ceasefire, until: ctx.now + MESSAGE_EXPIRY };
-  return [
-    commandOption(
-      'tribute',
-      `Zahlen (${formatEuro(tribute)})`,
-      { type: 'gangs.payTribute', payload: { gangId: gang.id } },
-      'Okay. Ich zahle.',
-    ),
-    commandOption(
-      'ceasefire',
-      `Waffenstillstand (${formatEuro(ceasefire)})`,
-      { type: 'gangs.ceasefire', payload: { gangId: gang.id } },
-      'Lass uns das ruhig regeln. Ich hab was für dich, und dann ist erst mal Ruhe.',
-    ),
-    commandOption('refuse', 'Verpiss dich.', { type: 'gangs.refuse', payload: { gangId: gang.id } }),
-  ];
+  const options: MessageOption[] = [];
+  if (!paysTribute(ctx.state, gang.id)) {
+    options.push(
+      commandOption(
+        'tribute',
+        `Zahlen (${formatEuro(tribute)})`,
+        { type: 'gangs.payTribute', payload: { gangId: gang.id } },
+        'Okay. Ich zahle.',
+      ),
+    );
+  }
+  if (!ceasefireBlock(ctx.state, ctx.now, gang, s)) {
+    options.push(
+      commandOption(
+        'ceasefire',
+        `Waffenstillstand (${formatEuro(ceasefire)})`,
+        { type: 'gangs.ceasefire', payload: { gangId: gang.id } },
+        'Lass uns das ruhig regeln. Ich hab was für dich, und dann ist erst mal Ruhe.',
+      ),
+    );
+  }
+  options.push(commandOption('refuse', 'Verpiss dich.', { type: 'gangs.refuse', payload: { gangId: gang.id } }));
+  return options;
 }
 
 /** Nachricht des Bosses schicken. */
@@ -72,12 +103,14 @@ export function say(
   key: keyof typeof GANG_TEXTS,
   vars: Record<string, string> = {},
   options?: MessageOption[],
+  /** Antwortfrist der Nachricht; bei Angeboten die des Angebots (sonst gilt "Deal" in der Nachricht länger als das Angebot). */
+  expiresIn = MESSAGE_EXPIRY,
 ): number {
   const text = fill(ctx.pick(GANG_TEXTS[key]), { boss: gang.boss, gang: gang.name, ...vars });
   return messages.send(ctx, {
     contact: gangContact(gang),
     text,
-    ...(options?.length ? { options, expiresIn: MESSAGE_EXPIRY } : {}),
+    ...(options?.length ? { options, expiresIn } : {}),
   });
 }
 

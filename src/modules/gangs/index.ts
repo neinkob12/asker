@@ -40,6 +40,7 @@ import { type GangStage, type GangsState, initialGangsState } from './state';
 
 export { ALLIANCE_COST, GANG_SPOT_MIN_INFLUENCE, WARN_AT } from './config';
 export type { Gang, GangTraits } from './data';
+export { canJoinRaid, raidCrew } from './diplomacy';
 export {
   ceasefireCost,
   type GangAlliance,
@@ -63,6 +64,7 @@ export {
   paysTribute,
   playerPower,
   protectionAmount,
+  raidTargets,
   STAGE_NAMES,
   tributeAmount,
   veedelGang,

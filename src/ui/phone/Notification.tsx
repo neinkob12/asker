@@ -98,6 +98,7 @@ function Notice(props: { class: string; swipe?: boolean }) {
         const to = result === 'dismiss' ? -height - 40 : 0;
         animateValue({
           config: SPRINGS.snap,
+          precision: 0.5,
           from: dy < 0 ? dy : rubberBand(dy, height * 2),
           to,
           velocity: vy * 1000,

@@ -176,6 +176,27 @@ describe('suppliers', () => {
     expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'hamburg' } }).ok).toBe(false);
   });
 
+  it('Schaltet man den Lieferanten über die App frei, ist sein Angebot im Chat erledigt; die Antwort steht vor seiner Reaktion', () => {
+    const sim = createTestGame();
+    sim.state.modules.customers.stats.revenue = 2000;
+    sim.advance(60);
+    const [offer] = messages.thread(sim.state, 'supplier:hamburg');
+    expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'hamburg' } }).ok).toBe(true);
+    const stale = messages.get(sim.state, offer.id);
+    expect(stale && messages.canAnswer(sim.state, stale)).toBe(false);
+    // Über die Antwort im Chat: erst "Deal.", dann die Reaktion des Lieferanten.
+    const other = createTestGame();
+    other.state.modules.customers.stats.revenue = 2000;
+    other.advance(60);
+    const [pitch] = messages.thread(other.state, 'supplier:hamburg');
+    other.dispatch({ type: 'messages.answer', payload: { messageId: pitch.id, optionId: 'unlock' } });
+    const texts = messages
+      .thread(other.state, 'supplier:hamburg')
+      .map((m) => (m.from === 'player' ? `Du: ${m.text}` : m.text));
+    expect(texts[1]).toBe('Du: Deal.');
+    expect(texts[2]).toMatch(/Abgemacht/);
+  });
+
   it('Rotterdam braucht einen Liegeplatz, Berlin ein Veedel', () => {
     const sim = createTestGame();
     expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'rotterdam' } }).ok).toBe(false);
@@ -376,6 +397,23 @@ describe('suppliers', () => {
     expect(isUnlocked(loaded.state, 'berlin')).toBe(true);
     expect(isUnlocked(loaded.state, 'rotterdam')).toBe(true);
     expect(isUnlocked(loaded.state, 'amsterdam')).toBe(false);
+  });
+
+  it('migriert Version 3: Lieferanten ohne Bedingungen (Köln) kommen dazu, schon Freigeschaltetes bleibt', () => {
+    const sim = createTestGame();
+    const raw = structuredClone(sim.state) as unknown as {
+      modules: { suppliers: { unlocked: string[]; offered: string[] } };
+      moduleVersions: Record<string, number>;
+    };
+    raw.modules.suppliers.unlocked = ['rotterdam', 'frankfurt', 'berlin', 'hamburg'];
+    raw.modules.suppliers.offered = ['rotterdam', 'frankfurt', 'berlin', 'hamburg'];
+    raw.moduleVersions.suppliers = 3;
+    const loaded = loadSimulation(raw, sim.modules);
+    expect(isUnlocked(loaded.state, 'koeln')).toBe(true);
+    expect(isUnlocked(loaded.state, 'rotterdam')).toBe(true);
+    expect(isUnlocked(loaded.state, 'amsterdam')).toBe(false);
+    expect(loaded.state.modules.suppliers.offered).toContain('koeln');
+    expect(loaded.state.moduleVersions.suppliers).toBe(4);
   });
 });
 

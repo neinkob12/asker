@@ -37,6 +37,7 @@ import {
   bonusProvider,
   effectiveWage,
   expectedWage,
+  hidingReturn,
   isSpecialist,
   removeMember,
   revealStat,
@@ -190,6 +191,15 @@ export function daily(ctx: Ctx): void {
 }
 
 /**
+ * Spot, zu dem die Person gehört, für die Kasse: auch wer abgetaucht, in Haft oder verletzt ist, kostet dort weiter. Der
+ * Lohn wird um Mitternacht gebucht, die Kasse liest ihn erst später im Schritt (dann kann die Person schon weg sein).
+ */
+function wageSpot(state: GameState, m: StaffMember): string | null {
+  const place = m.assignment ?? m.returnTo ?? hidingReturn(state, m.id);
+  return place?.kind === 'spot' ? place.targetId : null;
+}
+
+/**
  * Löhne pro Person, die Loyalsten zuerst. Wer nicht bezahlt werden kann, ist sauer (Loyalität sinkt) und
  * schreibt dir. Wer dann kaum noch loyal ist oder schon gestern leer ausging, kündigt.
  */
@@ -212,7 +222,9 @@ function payWages(ctx: Ctx): void {
         : m.status === 'injured'
           ? `Lohn ${m.name} (verletzt)`
           : `Lohn ${m.name}`;
-    if (amount <= 0 || wallet.pay(ctx, amount, 'dirty', reason, { category, staffId: m.id })) {
+    const spotId = wageSpot(ctx.state, m);
+    const tag = { category, staffId: m.id, ...(spotId ? { spotId } : {}) };
+    if (amount <= 0 || wallet.pay(ctx, amount, 'dirty', reason, tag)) {
       paid++;
       total += amount;
       m.unpaidDays = 0;

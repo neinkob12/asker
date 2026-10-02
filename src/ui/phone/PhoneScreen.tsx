@@ -107,7 +107,12 @@ export function PhoneScreen(props: PhoneScreenProps) {
   return (
     <div class={classes.join(' ')}>
       <header class="phone-screen__bar">
-        <button type="button" class="phone-screen__back" onClick={back} aria-label={`Zurück zu ${backLabel}`}>
+        <button
+          type="button"
+          class="phone-screen__back"
+          onClick={back}
+          aria-label={backLabel === 'Zurück' ? 'Zurück' : `Zurück zu ${backLabel}`}
+        >
           <Icon name="chevronLeft" size={22} strokeWidth={2.4} />
           <span>{backLabel}</span>
         </button>

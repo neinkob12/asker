@@ -1,7 +1,8 @@
 // Polizei (leicht, "Würze, nicht Kern"): Heat pro Veedel, Kontrollen, Razzien, Festnahmen und Verpfeifen.
 //
-// - Heat steigt durch Verkäufe (sale.completed) und Gewalt (Konfrontationen im Veedel, reportViolence) und sinkt
-//   jede Stunde. Mehr Polizeipräsenz im Veedel: Heat steigt schneller, Kontrollen und Razzien kommen öfter.
+// - Heat steigt durch Verkäufe (sale.completed) und Gewalt (Konfrontationen im Veedel, reportViolence; Begegnungen mit
+//   der Polizei selbst, Verkehrskontrolle und Polizeiflucht, zählen nicht dazu) und sinkt jede Stunde. Mehr
+//   Polizeipräsenz im Veedel: Heat steigt schneller, Kontrollen und Razzien kommen öfter.
 // - Stündlich würfelt jedes Veedel: ab CHECK_THRESHOLD Kontrollen, ab RAID_THRESHOLD Razzien (nur wo der Spieler
 //   präsent ist; Razzien ohne Spieler treffen die Gang, die das Veedel kontrolliert).
 // - Razzien gegen den Spieler werden geplant ('police.raidPlanned') und schlagen RAID_LEAD_TIME später zu. So kann
@@ -878,6 +879,9 @@ function tick(ctx: Ctx): void {
   }
 }
 
+/** Anlässe, bei denen die Polizei selbst die Gegenseite ist. */
+const POLICE_ENCOUNTERS: readonly string[] = ['policeChase', 'vehicleCheck'];
+
 function initialState(): PoliceState {
   return {
     heat: Object.fromEntries(allVeedel().map((v) => [v.id, 0])),
@@ -919,8 +923,9 @@ export default defineModule({
         }
         return;
       }
-      // Jede andere Konfrontation im Veedel ist Gewalt, die die Polizei mitbekommt.
-      if (kind !== 'policeChase' && request.veedelId) reportViolence(ctx, request.veedelId);
+      // Jede andere Konfrontation im Veedel ist Gewalt, die die Polizei mitbekommt. Begegnungen mit der Polizei selbst
+      // nicht: Eine friedliche Kontrolle ist keine Gewalt (Heat aus "Gewalt gegen Polizei" kommt aus der Handlung).
+      if (!POLICE_ENCOUNTERS.includes(kind) && request.veedelId) reportViolence(ctx, request.veedelId);
     },
   },
   migrations: {

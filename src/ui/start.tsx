@@ -55,6 +55,14 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
     const seed = params.get('seed');
     session.newGame(fresh === 'hardcore' ? 'hardcore' : ('normal' as GameMode), seed ? Number(seed) : undefined);
   } else if (!session.continueAutosave()) {
+    // Ließ sich der letzte Spielstand nicht laden, sagen wir es (und dass eine Kopie bleibt), statt still neu anzufangen.
+    if (session.loadError) {
+      runtime.api.toast(
+        `Dein letzter Spielstand ließ sich nicht laden (${session.loadError}) Eine Kopie bleibt im Browser-Speicher.`,
+        'bad',
+        { urgent: true },
+      );
+    }
     // Beim allerersten Start erst das Intro (mit Name), danach die Wahl des Modus.
     if (introSeen()) runtime.api.openDialog('core.newGame', { firstStart: true });
     else runtime.api.openDialog('core.intro', {});

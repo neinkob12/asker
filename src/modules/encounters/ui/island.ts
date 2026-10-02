@@ -1,7 +1,7 @@
 // Dynamic Island: laufende Konfrontationen (Überfall, Kontrolle …) ganz oben, rot.
 
 import { registerLiveActivity } from '../../../ui';
-import { activeEncounters } from '../index';
+import { activeEncounters, ENCOUNTER_KINDS } from '../index';
 
 registerLiveActivity({
   id: 'encounters.active',
@@ -11,7 +11,7 @@ registerLiveActivity({
       priority: 95,
       icon: 'siren',
       tone: 'bad',
-      leading: 'Überfall',
+      leading: ENCOUNTER_KINDS[encounter.kind]?.name ?? 'Konfrontation',
       trailing: encounter.place,
       title: encounter.opponent.label,
       detail: `${encounter.place} · Runde ${Math.min(encounter.round + 1, encounter.maxRounds)} von ${encounter.maxRounds}`,

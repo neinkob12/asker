@@ -32,11 +32,11 @@ import {
   bailCost,
   bonusProvider,
   expectedWage,
+  freeStaff,
   getStaff,
   getStaffMember,
   isAbsent,
   isEmployed,
-  isLyingLow,
   isSpecialist,
   payrollDue,
   roleName,
@@ -75,8 +75,16 @@ import {
   RIGHT_HAND_TASKS,
   RIGHT_HAND_WARN_COOLDOWN,
 } from './config';
-import { getLieutenantIds, getPost, handlesAbsence, isLieutenant, teamLeadOf } from './index';
-import { checkOrderRule } from './orders';
+import {
+  getLieutenantIds,
+  handlesAbsence,
+  isLieutenant,
+  isVeedelHidden,
+  releaseFromTeams,
+  teamLeadOf,
+  waitsForReturn,
+} from './index';
+import { normalizeOrderRules } from './orders';
 import { describeDone, pruneTasks, rewardReport, runHourlyTasks, runQuickTasks } from './tasks';
 import type { DailyReport, RightHandDone, RightHandPost, RightHandSettings, RightHandTaskKey } from './types';
 
@@ -245,11 +253,24 @@ export function recordLeadSpending(ctx: Ctx, amount: number): void {
   rh.spent += amount;
 }
 
+/**
+ * Springt die Rechte Hand bei diesem Ausfall wirklich ein? Läufer und Sicherheit am Spot ersetzt sie (außer der
+ * Leutnant will abwarten), sonst holt sie nur gegen Kaution raus: mit Anwalt und ab einem Level (RIGHT_HAND_BAIL_MIN_LEVEL).
+ * Für alles andere fragt das Handy dich.
+ */
+function rightHandCovers(state: GameState, m: StaffMember): boolean {
+  const rh = activeRightHand(state);
+  if (!rh?.settings.absences || m.id === rh.staffId || waitsForReturn(state, m.id)) return false;
+  if (m.returnTo?.kind === 'spot' && (m.role === 'runner' || m.role === 'security')) return true;
+  return m.status === 'jailed' && !!bonusProvider(state, 'bailDiscount') && m.level >= RIGHT_HAND_BAIL_MIN_LEVEL;
+}
+
 /** Kümmert sich jemand (Leutnant oder Rechte Hand) um den Ausfall, sodass niemand den Spieler fragen muss? */
 export function absenceHandled(state: GameState, staffId: string): boolean {
   const lead = teamLeadOf(state, staffId);
   if (lead && lead !== staffId && handlesAbsence(state, lead, staffId)) return true;
-  return !!activeRightHand(state)?.settings.absences && !isRightHand(state, staffId);
+  const m = getStaffMember(state, staffId);
+  return !!m && rightHandCovers(state, m);
 }
 
 // --- Fehler der Rechten Hand (Vorsicht und Loyalität zählen) ---
@@ -310,10 +331,16 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
     delete h.posts[staffId];
     ctx.emit('hierarchy.dismissed', { staffId, veedelId: '' });
   }
+  // Ein Leutnant, der sie angeheuert hat, darf sie nicht mehr als sein Team behandeln (und bei Ausfall entlassen).
+  releaseFromTeams(ctx.state, staffId);
   h.rightHand = {
     staffId,
     appointedAt: ctx.now,
-    settings: { ...DEFAULT_RIGHT_HAND_SETTINGS },
+    // Tief kopieren: Die Bestellregeln werden später verändert (paused), die Vorgabe darf das nie mitbekommen.
+    settings: {
+      ...DEFAULT_RIGHT_HAND_SETTINGS,
+      restockRules: DEFAULT_RIGHT_HAND_SETTINGS.restockRules.map((r) => ({ ...r, paused: null })),
+    },
     nextActionAt: ctx.now,
     reportDay: clock.day(ctx.now),
     lastReport: null,
@@ -399,11 +426,9 @@ export function configureRightHand(ctx: Ctx, patch: Partial<RightHandSettings>):
   if (patch.restockRules !== undefined) {
     if (!Array.isArray(patch.restockRules) || patch.restockRules.length > MAX_ORDER_RULES)
       return { ok: false, reason: 'Ungültige Bestellregeln.' };
-    for (const rule of patch.restockRules) {
-      const check = checkOrderRule(ctx.state, rule);
-      if (!check.ok) return check;
-    }
-    next.restockRules = patch.restockRules.map((r) => ({ ...r, paused: null }));
+    const normalized = normalizeOrderRules(ctx.state, patch.restockRules);
+    if (!normalized.ok) return normalized;
+    next.restockRules = normalized.rules;
   }
   rh.settings = next;
   rh.nextActionAt = Math.min(rh.nextActionAt, ctx.now + 1);
@@ -579,21 +604,17 @@ function guardPayroll(ctx: Ctx, rh: RightHandPost): void {
 
 /** Freie Läufer an leere Spots, auch über Leutnant-Grenzen. */
 function coordinate(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
-  const free = () =>
-    getStaff(ctx.state, { role: 'runner', status: 'active' })
-      .filter((m) => !m.assignment)
-      .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id));
+  // Nicht in Veedeln, die gerade von der Straße sind (Razzia-Warnung oder Heat), und nicht auf Plätze, die ein
+  // Leutnant für die Rückkehr eines Abwesenden freihält.
   const empty = [...getSpots(ctx.state)]
-    .filter((s) => !activeRunnerAt(ctx.state, s.id) && !isLyingLow(ctx.state, s.veedelId))
+    .filter((s) => !activeRunnerAt(ctx.state, s.id) && !isVeedelHidden(ctx.state, s.veedelId))
     .filter((s) => {
-      // Wer abwarten soll, wartet: Platz eines Abwesenden nicht neu besetzen, wenn sein Leutnant das so will.
       const away = runnerAt(ctx.state, s.id);
-      const lead = away ? teamLeadOf(ctx.state, away.id) : null;
-      return !(away && lead && getPost(ctx.state, lead)?.settings.onAbsent === 'wait');
+      return !(away && waitsForReturn(ctx.state, away.id));
     })
     .sort((a, b) => b.demand - a.demand || a.id.localeCompare(b.id));
   for (const spot of empty) {
-    const runner = free()[0];
+    const runner = freeStaff(ctx.state, 'runner')[0];
     if (!runner) return;
     const ok = ctx.dispatch(
       { type: 'staff.assign', payload: { staffId: runner.id, assignment: { kind: 'spot', targetId: spot.id } } },
@@ -612,6 +633,8 @@ function handleAbsences(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
     if (!isAbsent(m) || m.id === rh.staffId || rh.handled.includes(m.id)) continue;
     const lead = teamLeadOf(ctx.state, m.id);
     if (lead && lead !== m.id && handlesAbsence(ctx.state, lead, m.id)) continue;
+    // Wartet der Leutnant auf die Rückkehr, entscheidest du (die Frage kam aufs Handy): nichts hinter seinem Rücken.
+    if (waitsForReturn(ctx.state, m.id)) continue;
     const lawyer = bonusProvider(ctx.state, 'bailDiscount');
     const cost = m.status === 'jailed' ? bailCost(ctx.state, m.id) : Number.POSITIVE_INFINITY;
     const affordable = cost <= ctx.state.wallet.dirty - payrollReserve(ctx.state);
@@ -625,7 +648,7 @@ function handleAbsences(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
     if (m.returnTo?.kind === 'spot') {
       const spot = getSpot(ctx.state, m.returnTo.targetId)?.name ?? 'Spot';
       // Ersetzen kostet nur, wenn niemand frei ist (Läufer von der Straße): nie an die Lohnsicherung.
-      const freeOne = getStaff(ctx.state, { role: m.role, status: 'active' }).some((o) => !o.assignment);
+      const freeOne = freeStaff(ctx.state, m.role).length > 0;
       const hireCost = m.role === 'runner' ? runnerHireCost(ctx.state, m.returnTo.targetId) : Number.POSITIVE_INFINITY;
       if (!freeOne && hireCost > leadSpendingLimit(ctx.state)) continue;
       if (ctx.dispatch({ type: 'staff.replace', payload: { staffId: m.id } }, { actor }).ok) {

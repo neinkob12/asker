@@ -16,7 +16,6 @@ import {
   Dialog,
   Group,
   Hint,
-  Icon,
   ItemContent,
   List,
   ListItem,
@@ -34,13 +33,10 @@ import {
   useUi,
 } from '../../../ui';
 import { canSnitch } from '../../police';
-import { getStaff } from '../../staff';
-import { getInfluence } from '../../territory';
 import { veedelName } from '../../veedel';
 import {
   ALLIANCE_COST,
   ceasefireCost,
-  GANG_SPOT_MIN_INFLUENCE,
   type Gang,
   gangPower,
   gangVeedel,
@@ -53,6 +49,8 @@ import {
   paysTribute,
   playerPower,
   protectionAmount,
+  raidCrew,
+  raidTargets,
   STAGE_NAMES,
   tributeAmount,
   WARN_AT,
@@ -64,7 +62,6 @@ import './gangs.css';
 declare module '../../../ui' {
   interface DialogRegistry {
     'gangs.attack': { gangId: string };
-    'gangs.ally': { gangId: string };
   }
   interface PanelRegistry {
     /** Eine Gang im Handy: Lage, Abmachungen, Diplomatie und was du gegen sie tun kannst. */
@@ -89,29 +86,41 @@ function relationText(value: number): string {
   return 'Todfeind';
 }
 
-/** Laufende Abmachungen und Aktivitäten einer Gang als kurze Sätze. */
-function statusLines(state: ReturnType<typeof useGame>['state'], gang: Gang): string[] {
+/** Eine Abmachung oder Aktivität: kurzer Titel, dazu Datum oder Gegner in der Meta-Zeile (sonst wird der Satz abgeschnitten). */
+interface StatusLine {
+  title: string;
+  meta?: string;
+}
+
+/** Laufende Abmachungen und Aktivitäten einer Gang. */
+function statusLines(state: ReturnType<typeof useGame>['state'], gang: Gang): StatusLine[] {
   const s = getGangStatus(state, gang.id);
   if (!s) return [];
-  const lines: string[] = [];
+  const lines: StatusLine[] = [];
   if (hasCeasefire(state, gang.id) && s.ceasefireUntil !== null) {
-    lines.push(`Waffenstillstand bis ${clock.format(s.ceasefireUntil)}`);
+    lines.push({ title: 'Waffenstillstand', meta: `bis ${clock.format(s.ceasefireUntil)}` });
   }
   if (paysTribute(state, gang.id) && s.tribute) {
-    lines.push(`Du zahlst ${formatEuro(s.tribute.amount)} Schutzgeld, bis ${clock.format(s.tribute.until)}`);
+    lines.push({
+      title: `Du zahlst ${formatEuro(s.tribute.amount)} Schutzgeld`,
+      meta: `bis ${clock.format(s.tribute.until)}`,
+    });
   }
   if (s.protection) {
     lines.push(
       s.protection.overdue
-        ? `Schuldet dir ${formatEuro(s.protection.amount)} Schutzgeld`
-        : `Zahlt dir ${formatEuro(s.protection.amount)} pro Woche, nächste Zahlung ${clock.format(s.protection.nextDueAt)}`,
+        ? { title: `Schuldet dir ${formatEuro(s.protection.amount)} Schutzgeld` }
+        : {
+            title: `Zahlt dir ${formatEuro(s.protection.amount)} pro Woche`,
+            meta: `nächste Zahlung ${clock.format(s.protection.nextDueAt)}`,
+          },
     );
   }
   if (isAllied(state, gang.id) && s.alliance) {
     const enemy = getGang(state, s.alliance.againstGangId);
-    lines.push(`Verbündet gegen ${enemy?.name ?? '?'}, bis ${clock.format(s.alliance.until)}`);
+    lines.push({ title: `Verbündet gegen ${enemy?.name ?? '?'}`, meta: `bis ${clock.format(s.alliance.until)}` });
   }
-  if (s.push) lines.push(`Drängt nach ${veedelName(s.push.veedelId)}`);
+  if (s.push) lines.push({ title: `Drängt nach ${veedelName(s.push.veedelId)}` });
   return lines;
 }
 
@@ -154,7 +163,7 @@ function GangRow(props: { gang: Gang }) {
         {
           label: 'Spot überfallen …',
           icon: 'swords',
-          disabled: turf.length === 0,
+          disabled: raidTargets(state, gang.id).length === 0,
           onSelect: () => ui.openDialog('gangs.attack', { gangId: gang.id }),
         },
       ]}
@@ -263,6 +272,7 @@ function GangPanel(props: { gangId: string }) {
   if (!gang || !s) return null;
   const gangId = gang.id;
   const turf = gangVeedel(state, gang.id);
+  const noTargets = raidTargets(state, gang.id).length === 0;
   const lines = statusLines(state, gang);
   const hostility = Math.round(s.hostility);
   const power = gangPower(state, gang.id);
@@ -330,8 +340,8 @@ function GangPanel(props: { gangId: string }) {
         <Group title="Abmachungen" icon="clipboard" color="warn">
           <List>
             {lines.map((line) => (
-              <ListItem key={line}>
-                <ItemContent icon="clock" color="warn" title={line} />
+              <ListItem key={line.title}>
+                <ItemContent icon="clock" color="warn" title={line.title} meta={line.meta} />
               </ListItem>
             ))}
           </List>
@@ -410,17 +420,12 @@ function GangPanel(props: { gangId: string }) {
       </Group>
       <Group title="Dagegen" icon="swords" color="danger" note={snitch.ok ? undefined : snitch.reason}>
         <List>
-          <ListItem
-            action
-            tone="bad"
-            disabled={turf.length === 0}
-            onClick={() => ui.openDialog('gangs.attack', { gangId })}
-          >
+          <ListItem action tone="bad" disabled={noTargets} onClick={() => ui.openDialog('gangs.attack', { gangId })}>
             <ItemContent
               icon="swords"
               color="danger"
               title="Spot überfallen …"
-              meta={turf.length === 0 ? 'Die Gang hat keinen Spot, den du erreichen kannst.' : 'Ware und Kasse holen'}
+              meta={noTargets ? 'Die Gang hat keinen Spot, den du erreichen kannst.' : 'Ware und Kasse holen'}
             />
           </ListItem>
           <ListItem action tone="bad" disabled={!snitch.ok} onClick={() => setConfirmSnitch(true)}>
@@ -457,7 +462,7 @@ function GangPanel(props: { gangId: string }) {
 function AllySheet(props: { gang: Gang; open: boolean; onClose: () => void }) {
   const { state, dispatch } = useGame();
   const { gang } = props;
-  const enemies = getGangs(state).filter((g) => g.id !== gang.id);
+  const enemies = getGangs(state).filter((g) => g.id !== gang.id && !isGangBroken(state, g.id));
   return (
     <Sheet open={props.open} onClose={props.onClose} title={`Bündnis mit ${gang.name}`} detents={['medium', 'large']}>
       <p class="gang-sheet__lead">
@@ -509,10 +514,8 @@ function AttackDialog(props: { gangId: string }) {
   const ui = useUi();
   const gang = getGang(state, props.gangId);
   const s = getGangStatus(state, props.gangId);
-  const targets = gangVeedel(state, props.gangId).filter(
-    (v) => getInfluence(state, v, props.gangId) >= GANG_SPOT_MIN_INFLUENCE,
-  );
-  const crew = getStaff(state, { status: 'active' });
+  const targets = raidTargets(state, props.gangId);
+  const crew = raidCrew(state);
   const [veedelId, setVeedelId] = useState<string | null>(targets[0] ?? null);
   const [chosen, setChosen] = useState<string[]>(() => crew.filter((m) => m.role === 'security').map((m) => m.id));
   const [present, setPresent] = useState(false);
@@ -608,48 +611,6 @@ function AttackDialog(props: { gangId: string }) {
   );
 }
 
-function AllyDialog(props: { gangId: string }) {
-  const { state, dispatch } = useGame();
-  const ui = useUi();
-  const gang = getGang(state, props.gangId);
-  if (!gang) return null;
-  const enemies = getGangs(state).filter((g) => g.id !== gang.id);
-  return (
-    <Dialog title={`Bündnis mit ${gang.name}`} onClose={ui.closeDialog}>
-      <p class="gang-dialog__lead">
-        Für {formatEuro(ALLIANCE_COST)} lässt dich {gang.name} in Ruhe und geht gegen eine andere Gang vor. Die bekommt
-        das mit. Braucht eine neutrale Beziehung oder besser.
-      </p>
-      <List>
-        {enemies.map((e) => (
-          <ListItem
-            key={e.id}
-            aside={
-              <Button
-                small
-                onClick={() => {
-                  const result = dispatch({ type: 'gangs.ally', payload: { gangId: gang.id, againstGangId: e.id } });
-                  if (result.ok) ui.closeDialog();
-                }}
-              >
-                Gegen {e.name}
-              </Button>
-            }
-          >
-            <strong class="gang-title" style={{ '--gang-color': e.color, '--gang-on': readableOn(e.color) }}>
-              <span class="gang-emblem" aria-hidden="true">
-                <Icon name={e.emblem} />
-              </span>
-              {e.name}
-            </strong>
-            <div class="ui-hint">Stärke {Math.round(gangPower(state, e.id))}</div>
-          </ListItem>
-        ))}
-      </List>
-    </Dialog>
-  );
-}
-
 registerTab({
   id: 'gangs',
   title: 'Gangs',
@@ -663,7 +624,6 @@ registerPanel({
   component: GangPanel,
 });
 registerDialog({ id: 'gangs.attack', component: AttackDialog, pausesGame: true });
-registerDialog({ id: 'gangs.ally', component: AllyDialog, pausesGame: true });
 registerMapLayer(gangsLayer);
 
 onGameEvent('gang.pushStarted', 'gangs.pushToast', (p, ui, state) => {

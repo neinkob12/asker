@@ -12,6 +12,7 @@ import { getGang, getGangStatus } from '../../gangs';
 import { getReputation, reputationLabel } from '../../reputation';
 import { getBoundary, getVeedel, veedelName } from '../../veedel';
 import { campaignProgress, PLAYER_FACTION } from '../index';
+import { isFirstTakeover, newMemory } from './takeoverModel';
 
 declare module '../../../ui' {
   interface DialogRegistry {
@@ -32,6 +33,8 @@ interface Takeover {
 
 /** Letzte Übernahme (nur Oberfläche). */
 let last: Takeover | null = null;
+/** Welche Veedel schon einen Dialog bekamen (nur Oberfläche): Ein Rückgewinn hält das Spiel nicht noch einmal an. */
+const memory = newMemory();
 
 /** Wie reagiert die Gang, die das Veedel verloren hat? */
 function gangReaction(state: GameState, from: string | null): string {
@@ -189,5 +192,7 @@ onGameEvent('territory.controlChanged', 'territory.takeover', (payload, ui, stat
   if (payload.to !== PLAYER_FACTION || state.outcome.gameOver) return;
   // Die Island bleibt die Quelle für das Live-Geschehen: kurzer Auftritt mit dem Veedel.
   ui.pulseIsland({ icon: 'flag', tone: 'accent', text: `${veedelName(payload.veedelId)} gehört dir` });
-  last = { runId: state.meta.runId, at: state.time, veedelId: payload.veedelId, from: payload.from, shown: false };
+  // Das Aufleuchten auf der Karte gibt es immer, den pausierenden Dialog nur beim ersten Mal in diesem Veedel.
+  const first = isFirstTakeover(memory, state.meta.runId, payload.veedelId);
+  last = { runId: state.meta.runId, at: state.time, veedelId: payload.veedelId, from: payload.from, shown: !first };
 });

@@ -298,6 +298,11 @@ export class UiRuntime {
     setHapticsEnabled(prefs.vibration);
     this.api = this.createApi();
     session.subscribe((change) => {
+      // Neues, geladenes oder importiertes Spiel: Meldungen, Banner und Seiten des alten Spiels gehören nicht mehr dazu.
+      if (change === 'sim') this.resetForNewGame();
+      // Der Autosave klappt nicht (Speicher voll): einmal sagen, sonst geht Fortschritt still verloren.
+      if (change === 'autosave' && session.autosaveError)
+        this.api.toast(session.autosaveError, 'bad', { urgent: true });
       if (change === 'frame') {
         // Nach Simulationsschritten neu zeichnen, höchstens ca. 10 Mal pro Sekunde. Ohne neue Schritte
         // (Pause) nicht: UI-Änderungen fordern das Neuzeichnen selbst an.
@@ -310,8 +315,35 @@ export class UiRuntime {
     session.onEvent((event) => {
       const state = session.state;
       if (!state) return;
-      for (const reaction of reactionsFor(event.type)) reaction(event.payload as never, this.api, state);
+      // Eine Reaktion, die wirft, darf die übrigen und den Rest der Ereignisse dieses Schritts nicht mitreißen (sonst
+      // fehlt z.B. der Game-Over-Dialog und die Simulation steht).
+      for (const reaction of reactionsFor(event.type)) {
+        try {
+          reaction(event.payload as never, this.api, state);
+        } catch (error) {
+          console.error(`Reaktion auf ${event.type}`, error);
+        }
+      }
     });
+  }
+
+  /** Alles, was zum alten Spiel gehörte, weg: Meldungen, Mitteilungen, Banner, Island und alle offenen Seiten. */
+  private resetForNewGame(): void {
+    const ui = this.ui;
+    for (const timer of [this.toastTimer, this.notificationTimer, this.pulseTimer]) if (timer) clearTimeout(timer);
+    this.toastTimer = null;
+    this.notificationTimer = null;
+    this.pulseTimer = null;
+    ui.toasts = [];
+    ui.alerts = [];
+    ui.notifications = [];
+    ui.notification = null;
+    ui.notificationCenter = false;
+    ui.popover = null;
+    ui.palette = false;
+    ui.island = { expanded: false, pulse: null };
+    this.map?.cancelPick();
+    this.setStack(nav.rootStack());
   }
 
   get state(): GameState | null {
@@ -324,6 +356,8 @@ export class UiRuntime {
     this.renderQueued = true;
     queueMicrotask(() => {
       this.renderQueued = false;
+      // Ist ein Banner weg, kann der Toast dahinter seine Zeit bekommen.
+      this.scheduleToast();
       this.lastRender = performance.now();
       this.lastRenderedTime = this.session.state?.time ?? null;
       for (const listener of this.listeners) listener();
@@ -340,6 +374,8 @@ export class UiRuntime {
     if (this.toastTimer) return;
     const current = this.ui.toasts[0];
     if (!current) return;
+    // Ein Banner (Nachricht) hat Vorrang und verdeckt den Toast: Seine Zeit läuft erst, wenn er zu sehen ist.
+    if (this.ui.notification) return;
     this.toastTimer = setTimeout(() => {
       this.toastTimer = null;
       this.ui.toasts = this.ui.toasts.filter((t) => t.id !== current.id);
@@ -553,6 +589,8 @@ export class UiRuntime {
           // Ist genau diese App (bzw. dieser Chat) offen, braucht es kein Banner.
           const here =
             ui.phone.open &&
+            // Liegt eine Detailseite (Spot, Veedel …) über dem Chat, schaut man ihn nicht an.
+            ui.panel === null &&
             ui.phone.app === notification.appId &&
             JSON.stringify(ui.phone.params ?? {}) === JSON.stringify(notification.params ?? {});
           if (here) {
@@ -566,6 +604,11 @@ export class UiRuntime {
           if (notification.urgent === false && !ui.moreNotifications) return;
           this.stats.banners++;
           ui.notification = entry;
+          // Ein Toast, der gerade lief, ist jetzt verdeckt: Seine Zeit beginnt neu, sobald das Banner weg ist.
+          if (this.toastTimer) {
+            clearTimeout(this.toastTimer);
+            this.toastTimer = null;
+          }
           if (notification.sound !== null) audio.play(notification.sound ?? 'notification');
           if (ui.vibration) {
             ui.buzz++;
@@ -635,19 +678,30 @@ export class UiRuntime {
       setSpeed: (speed) =>
         update(() => {
           if (speed > 0) this.speedBeforePause = speed;
+          // Ein Dialog, der das Spiel anhält, behält seine Pause (z.B. "Weiterspielen" in der Suche); das gewünschte
+          // Tempo gilt, sobald er zu ist.
+          if (this.speedBeforeDialog !== null) {
+            if (speed > 0) this.speedBeforeDialog = speed;
+            return;
+          }
           session.setSpeed(speed);
         }),
       togglePause: () => api.setSpeed(session.loop.speed === 0 ? this.speedBeforePause : 0),
       pickLocation: async (prompt) => {
         if (!this.map) return null;
+        // Am Handy-Bildschirm füllt das Handy alles unter dem HUD und deckt die Karte zu: Solange du auf die Karte
+        // klickst, liegt es in der Tasche, danach kommt es mit der Seite zurück, von der du kamst.
+        const hidePhone = ui.phone.open && isMobileScreen();
         update(() => {
           ui.picking = { prompt };
+          if (hidePhone) ui.phone = { ...ui.phone, open: false };
         });
         try {
           return await this.map.pickLocation();
         } finally {
           update(() => {
             ui.picking = null;
+            if (hidePhone) ui.phone = { ...ui.phone, open: true };
           });
         }
       },

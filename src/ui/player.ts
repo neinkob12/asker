@@ -19,11 +19,14 @@ function storage(): Storage | null {
 
 /** Name ohne Steuerzeichen und doppelte Leerzeichen, gekürzt. */
 export function cleanPlayerName(raw: string): string {
-  return raw
-    .replace(/\p{Cc}/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, PLAYER_NAME_MAX);
+  return (
+    raw
+      // Steuerzeichen und unsichtbare Formatzeichen (Zero-Width, Rechts-nach-links): sonst steht eine leere Zeile da.
+      .replace(/[\p{Cc}\p{Cf}]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, PLAYER_NAME_MAX)
+  );
 }
 
 export function getPlayerName(): string {

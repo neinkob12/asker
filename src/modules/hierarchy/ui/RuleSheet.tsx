@@ -6,7 +6,7 @@ import { formatEuro } from '../../../core';
 import { Button, Group, Hint, ItemContent, List, ListItem, Select, Sheet, Stepper, useGame } from '../../../ui';
 import { allProducts, formatProductAmount, getWarehouses, productName } from '../../goods';
 import { availablePackages, getSupplier, getSuppliers, isUnlocked, packagePrice } from '../../suppliers';
-import { homeWarehouse, isPortSupplierAllowed, type OrderRule } from '../index';
+import { homeWarehouse, isPortSupplierAllowed, type OrderRule, PORT_SUPPLIER_HINT } from '../index';
 
 const AUTO = '';
 
@@ -171,11 +171,7 @@ export function RuleSheet(props: RuleSheetProps) {
             </ListItem>
           </List>
         </Group>
-        {!portAllowed && (
-          <Hint icon="ship">
-            Hafen-Lieferanten gehen nicht: Schiffsware muss jemand am Kai abholen, das kann noch niemand automatisch.
-          </Hint>
-        )}
+        {!portAllowed && <Hint icon="ship">Hafen-Lieferanten gehen noch nicht. {PORT_SUPPLIER_HINT}</Hint>}
         {props.rule && props.onDelete && (
           <div class="lt-actions">
             <Button

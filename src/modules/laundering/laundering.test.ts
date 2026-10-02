@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { loadSimulation, START_DIRTY_MONEY } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getHeat } from '../police';
+import { enlist, generateProfile } from '../staff';
 import { LAUNDERING_CHANNELS } from './config';
 import {
   amountInProgress,
@@ -148,5 +149,44 @@ describe('laundering', () => {
     // Eine laufende Wäsche über der Kiosk-Grenze bleibt gültig und läuft zu Ende.
     expect(loaded2.state.modules.laundering.batches).toEqual([{ ...batch, channel: 'kiosk' }]);
     expect(loaded2.state.modules.laundering.unlocked).toEqual(['kiosk']);
+  });
+  it('kaputte Befehle werden abgelehnt: kein Wurf, kein Gratis-Einstieg, kein NaN', () => {
+    const sim = createTestGame();
+    sim.state.wallet.dirty = 10000;
+    const before = structuredClone(sim.state.wallet);
+    // Ein unbekannter Bezahlweg machte den Preis undefined, der Weg war gratis und das Journal schrieb "NaN €".
+    const free = sim.dispatch({
+      type: 'laundering.unlock',
+      payload: { channel: 'laundromat', pay: 'bitcoin' as never },
+    });
+    expect(free.ok).toBe(false);
+    expect(isChannelUnlocked(sim.state, 'laundromat')).toBe(false);
+    expect(sim.state.journal.some((e) => e.text.includes('NaN'))).toBe(false);
+    // Ein unbekannter Weg warf bis zum Aufrufer durch.
+    expect(sim.dispatch({ type: 'laundering.unlock', payload: { channel: 'casino' as never, pay: 'dirty' } }).ok).toBe(
+      false,
+    );
+    expect(sim.dispatch({ type: 'laundering.launder', payload: { amount: 500, channel: 'casino' as never } }).ok).toBe(
+      false,
+    );
+    expect(sim.dispatch({ type: 'laundering.launder', payload: { amount: Number.NaN } }).ok).toBe(false);
+    expect(sim.dispatch({ type: 'laundering.launder', payload: { amount: Number.POSITIVE_INFINITY } }).ok).toBe(false);
+    expect(sim.state.wallet).toEqual(before);
+    expect(getBatches(sim.state)).toHaveLength(0);
+  });
+
+  it('mit Buchhalter kosten alle Wege gleich viel: ohne Wegangabe geht kleines Geld zum schnellen Kiosk', () => {
+    const sim = createTestGame();
+    sim.state.wallet.dirty = 40000;
+    sim.state.modules.laundering.unlocked = ['kiosk', 'laundromat', 'construction'];
+    const ctx = sim.ctx('staff');
+    const accountant = enlist(ctx, generateProfile(ctx, 'accountant', { level: 5 }), { origin: 'pool' });
+    accountant.stats.caution = 50;
+    // Der Rabatt drückt alle drei Wege auf die Mindestgebühr ...
+    expect(new Set(LAUNDERING_CHANNELS.map((c) => channelFee(sim.state, c.id))).size).toBe(1);
+    // ... dann entscheidet die Dauer, nicht die Grundgebühr: Der Bauunternehmer bräuchte über zwölf Stunden und bringt
+    // ab 15.000 € Heat, der Kiosk ist gleich billig, viel schneller und ohne Risiko.
+    expect(sim.dispatch({ type: 'laundering.launder', payload: { amount: 2500 } }).ok).toBe(true);
+    expect(getBatches(sim.state)[0].channel).toBe('kiosk');
   });
 });

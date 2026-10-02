@@ -5,6 +5,7 @@
 // Aufbau wie iOS-Einstellungen: Abschnittskopf mit Symbol, eingerückte Gruppe, Schalter und Regler in den Zeilen.
 
 import type { ComponentChildren, JSX } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
 import { MUSIC_MOOD_NAMES } from '../../audio';
 import { exportSaveFile } from '../builtin/GameDialogs';
 import { HistorySection } from '../builtin/HistoryApp';
@@ -56,6 +57,12 @@ function Section(props: {
 function Player() {
   const audio = useAudio();
   const s = audio.settings;
+  // Die Musik läuft auch bei Pause weiter, das Spiel zeichnet dann aber nicht neu: Zeit und Balken sekündlich nachziehen.
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
   const now = audio.nowPlaying();
   if (!s.musicOn) return null;
   if (!now) {

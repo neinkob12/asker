@@ -163,6 +163,8 @@ function PaletteBox() {
       run(results[current]);
     } else if (e.key === 'Escape') {
       e.preventDefault();
+      // Nicht weiterreichen: Der globale Handler (keys.ts) ginge sonst im Handy noch eine Seite zurück.
+      e.stopPropagation();
       api.togglePalette(false);
     }
   };

@@ -308,6 +308,27 @@ describe('Geld', () => {
     expect(sim.state.wallet).toEqual({ dirty: 0, clean: 850 });
   });
 
+  it('lässt keine Beträge ins Konto, die es verseuchen würden (NaN, Infinity, negativ, Gebühr über Betrag)', () => {
+    const sim = create();
+    const ctx = sim.ctx('test');
+    const before = { ...sim.state.wallet };
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -5]) {
+      expect(() => wallet.earn(ctx, bad)).toThrow();
+      expect(() => wallet.pay(ctx, bad)).toThrow();
+      expect(() => wallet.convert(ctx, 'dirty', 'clean', bad)).toThrow();
+    }
+    expect(() => wallet.lose(ctx, Number.NaN)).toThrow();
+    expect(() => wallet.convert(ctx, 'dirty', 'clean', 500, Number.NaN)).toThrow();
+    expect(() => wallet.convert(ctx, 'dirty', 'clean', 500, -1)).toThrow();
+    // Eine Gebühr über dem Betrag würde Geld erzeugen: abgelehnt, ohne etwas zu buchen.
+    expect(wallet.convert(ctx, 'dirty', 'clean', 500, 600)).toBe(false);
+    expect(sim.state.wallet).toEqual(before);
+    // Ein negativer Verlust verliert nichts, "unendlich" verliert alles, was da ist.
+    expect(wallet.lose(ctx, -50)).toBe(0);
+    expect(wallet.lose(ctx, Number.POSITIVE_INFINITY)).toBe(before.dirty);
+    expect(sim.state.wallet).toEqual({ dirty: 0, clean: before.clean });
+  });
+
   it('jede Kontobewegung trägt ihre Kategorie, Geldwäsche bucht Gebühr und Umbuchung getrennt', () => {
     const sim = create();
     const events = recordEvents(sim);

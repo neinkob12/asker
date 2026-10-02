@@ -139,6 +139,8 @@ export const WAGE_PER_LEVEL = 0.15;
 /** Erfahrung pro Verkauf: fest plus pro Einheit. */
 export const XP_PER_SALE = 3;
 export const XP_PER_SALE_UNIT = 2;
+/** Mehr als so viele Einheiten zählen pro Verkauf nicht (500 g Großhandel sind kein Level-Sprung). */
+export const XP_SALE_UNITS_MAX = 10;
 /** Sicherheit im Einsatz, pro Stunde. */
 export const XP_PER_DUTY_HOUR = 3;
 /** Spezialisten, pro Tag im Dienst. */

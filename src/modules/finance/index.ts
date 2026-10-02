@@ -5,11 +5,11 @@
 // 0 Uhr gezahlt werden, gehören zum Tag davor). Geldwäsche ist eine Umbuchung ('transfer') und zählt nicht als Gewinn.
 //
 // Öffentliche API (lesen):
-//   bookDay(time), currentDay(state), dayReport(state, daysAgo), periodReport(state, days), dailyProfits(state, days),
+//   bookDay(time), currentDay(state), dayReport(state, daysAgo), periodReport(state, days, offset?), dailyProfits(state, days),
 //   categoryLines(state, category, days), spotResult(state, spotId, days), spotResults(state, days),
 //   lieutenantResult(state, staffId, days), wageRunway(state), DAYS_KEPT, RUNWAY_WARN_DAYS
 //   Bilanz (Auftrag 27): PERIODS, periodSpan(period), balance(state, period, filter), balanceHistory(state, period,
-//   filter), explainReport(report), FinanceFilter
+//   filter), explainReport(report), FinanceFilter, filterTargets(state)
 // Keine Befehle, keine eigenen Ereignisse.
 
 import {
@@ -24,8 +24,8 @@ import {
   type MoneyGroup,
   type MoneyKind,
 } from '../../core';
-import { lieutenantOfSpot, teamLeadOf } from '../hierarchy';
-import { getAllSpots } from '../spots';
+import { getLieutenantIds, lieutenantOfSpot, teamLeadOf } from '../hierarchy';
+import { getAllSpots, getSpots, type Spot } from '../spots';
 import { getStaffMember, payrollDue } from '../staff';
 import { DAYS_KEPT, OTHER_REASON, REASON_DAYS_KEPT, REASON_LIMIT, RUNWAY_WARN_DAYS } from './config';
 
@@ -180,10 +180,10 @@ export function dayReport(state: GameState, daysAgo = 0): Report {
   return report(book ? [book] : [], day, day);
 }
 
-/** Gewinn- und Verlustrechnung der letzten days Tage, heute eingeschlossen. */
-export function periodReport(state: GameState, days: number): Report {
-  const today = currentDay(state);
-  return report(booksOf(state, days), Math.max(1, today - days + 1), today);
+/** Gewinn- und Verlustrechnung der letzten days Tage, heute eingeschlossen (mit offset: ab so vielen Tagen zurück). */
+export function periodReport(state: GameState, days: number, offset = 0): Report {
+  const to = currentDay(state) - offset;
+  return report(booksOf(state, days, offset), Math.max(1, to - days + 1), to);
 }
 
 /** Gewinn pro Tag für die letzten days Tage, ältester zuerst (für den Verlauf). Tage vor Spielbeginn fehlen. */
@@ -291,6 +291,23 @@ export type FinanceFilter =
 
 export const ALL_FILTER: FinanceFilter = { kind: 'all' };
 
+/**
+ * Worauf sich die Bilanz filtern lässt: offene Spots (auch selbst gegründete, die nicht in "unlocked" stehen), deren
+ * Veedel und die Leutnants.
+ */
+export function filterTargets(state: GameState): {
+  spots: readonly Spot[];
+  veedelIds: string[];
+  lieutenantIds: string[];
+} {
+  const spots = getSpots(state);
+  return {
+    spots,
+    veedelIds: [...new Set(spots.map((s) => s.veedelId))],
+    lieutenantIds: getLieutenantIds(state),
+  };
+}
+
 /** Spots eines Veedels (auch gesperrte, falls dort früher verkauft wurde). */
 function spotsOfVeedel(state: GameState, veedelId: string): string[] {
   return getAllSpots(state)
@@ -381,7 +398,9 @@ export function balanceHistory(
 export function explainReport(r: Report): string {
   const income = r.rows.filter((x) => x.group === 'income').sort((a, b) => b.amount - a.amount);
   const costs = r.rows.filter((x) => x.group === 'expense' || x.group === 'loss').sort((a, b) => a.amount - b.amount);
-  if (r.rows.length === 0 || (r.income === 0 && r.expenses + r.losses === 0)) return 'Keine Kontobewegung.';
+  if (r.rows.length === 0) return 'Keine Kontobewegung.';
+  // Es gibt nur Umbuchungen (eine Wäsche läuft an oder ist fertig): weder Gewinn noch Verlust.
+  if (r.income === 0 && r.expenses + r.losses === 0) return 'Nur Umbuchung (Geldwäsche), weder Gewinn noch Verlust.';
   const top = costs[0];
   const best = income[0];
   if (r.profit < 0) {
@@ -496,13 +515,19 @@ function onWalletChanged(
 
   const cost = -payload.amount;
   if (category.startsWith('wages.') && payload.staffId) {
-    const spotId = staffSpot(ctx.state, payload.staffId);
+    // Der Spot kommt mit der Buchung (die Löhne wissen, wo jemand arbeitet, auch wenn er abgetaucht ist oder im selben
+    // Schritt kündigt); erst ohne Angabe wird er aus dem Einsatz geschlossen.
+    const spotId = payload.spotId ?? staffSpot(ctx.state, payload.staffId);
     if (spotId) unit(book.spots, spotId).wages += cost;
-    const lead = teamLeadOf(ctx.state, payload.staffId);
+    const lead = teamLeadOf(ctx.state, payload.staffId) ?? (spotId ? lieutenantOfSpot(ctx.state, spotId) : null);
     if (lead) unit(book.lieutenants, lead).wages += cost;
   } else if ((category === 'hiring' || category === 'expansion') && cost > 0) {
     const spotId = payload.spotId ?? (payload.staffId ? staffSpot(ctx.state, payload.staffId) : null);
-    if (spotId) unit(book.spots, spotId).invest += cost;
+    if (spotId) {
+      unit(book.spots, spotId).invest += cost;
+      const lead = lieutenantOfSpot(ctx.state, spotId);
+      if (lead) unit(book.lieutenants, lead).invest += cost;
+    }
   }
 }
 

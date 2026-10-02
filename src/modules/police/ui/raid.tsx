@@ -14,6 +14,7 @@ import { bailCost, getStaffMember } from '../../staff';
 import { PLAYER_FACTION } from '../../territory';
 import { getBoundary, veedelName } from '../../veedel';
 import { getHeat, heatLevel, type RaidScope } from '../index';
+import { newTrack, nextReportStep, RAID_REPORT_DIALOG } from './raidReportModel';
 
 declare module '../../../ui' {
   interface DialogRegistry {
@@ -90,22 +91,31 @@ function RaidAlert() {
   );
 }
 
-/** Öffnet die Bilanz kurz nach der Razzia, sobald kein anderer Dialog (z.B. eine Konfrontation) offen ist. */
+/**
+ * Öffnet die Bilanz kurz nach der Razzia, sobald kein anderer Dialog (z.B. eine Konfrontation) offen ist, und noch
+ * einmal, wenn so ein Dialog sie verdrängt hat (raidReportModel.ts). Erledigt ist sie erst, wenn du sie schließt.
+ */
 function RaidReporter() {
   const ui = useUi();
   const { state } = useGame();
   const raid = lastRaid && !lastRaid.reported && lastRaid.runId === state.meta.runId ? lastRaid : null;
   useEffect(() => {
     if (!raid) return;
-    let timer = window.setTimeout(function tryOpen() {
+    const track = newTrack();
+    let timer = window.setTimeout(function check() {
       if (!lastRaid || lastRaid !== raid || raid.reported) return;
-      if (ui.state.dialog) {
-        timer = window.setTimeout(tryOpen, 1500);
+      const step = nextReportStep(track, ui.state.dialog?.id ?? null);
+      if (step === 'done') {
+        raid.reported = true;
         return;
       }
-      raid.reported = true;
-      const { reported: _, ...record } = raid;
-      ui.openDialog('police.raidReport', record);
+      if (step === 'open') {
+        const { reported: _, ...record } = raid;
+        ui.openDialog(RAID_REPORT_DIALOG, record);
+        track.opened = ui.state.dialog?.id === RAID_REPORT_DIALOG;
+        track.displaced = false;
+      }
+      timer = window.setTimeout(check, step === 'open' ? 500 : 1500);
     }, REPORT_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [raid]);

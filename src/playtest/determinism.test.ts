@@ -31,7 +31,8 @@ describe('Determinismus', () => {
     expect(types.has('hierarchy.rightHandAppointed')).toBe(true);
     expect(types.has('hierarchy.dailyReport')).toBe(true);
     expect(a.sim.state.modules.finance.days.length).toBeGreaterThan(5);
-  });
+    // Zwei Spiele über 14 Tage brauchen je nach Rechner mehr als die 5 Sekunden Standard.
+  }, 120_000);
 
   it('Speichern und Laden mitten im Spiel ändert nichts am weiteren Verlauf', () => {
     const straight = createTestGame({ seed: 4 });
@@ -42,5 +43,5 @@ describe('Determinismus', () => {
     playFor(straight, 4 * DAY, stats, DEFAULT_BOT);
     playFor(resumed, 4 * DAY, newBotStats(), DEFAULT_BOT);
     expect(JSON.stringify(resumed.state)).toBe(JSON.stringify(straight.state));
-  });
+  }, 120_000);
 });

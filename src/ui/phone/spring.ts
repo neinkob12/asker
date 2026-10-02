@@ -73,6 +73,13 @@ export class Spring {
   velocity = 0;
   target: number;
   config: SpringConfig;
+  /**
+   * Ab dieser Auslenkung und Geschwindigkeit ist die Feder in Ruhe. Die Vorgabe passt zu Werten von 0 bis 1; bei
+   * Pixeln ist sie viel zu streng (ein Blatt wäre erst nach über einer Sekunde "fertig", obwohl man es nach 0,3 s
+   * nicht mehr sieht): dort ca. 0,5 setzen (animateValue: precision).
+   */
+  restDelta = REST_DELTA;
+  restSpeed = REST_SPEED;
 
   constructor(config: SpringConfig, value = 0, target = value) {
     this.config = config;
@@ -113,7 +120,7 @@ export class Spring {
 
   /** In Ruhe am Ziel? */
   get settled(): boolean {
-    return Math.abs(this.value - this.target) < REST_DELTA && Math.abs(this.velocity) < REST_SPEED;
+    return Math.abs(this.value - this.target) < this.restDelta && Math.abs(this.velocity) < this.restSpeed;
   }
 }
 

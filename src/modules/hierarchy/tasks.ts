@@ -12,14 +12,22 @@ import { getOrders, type Order } from '../customers';
 import { wageRunway } from '../finance';
 import { DEFAULT_WAREHOUSE, getStock, getWarehouses, isWarehouseOwned, productName } from '../goods';
 import { amountInProgress, launderingCapacity, MIN_LAUNDERING_AMOUNT } from '../laundering';
-import { freeDrivers, getCargo } from '../logistics';
-import { getCandidates } from '../recruiting';
+import { freeDrivers, getCargo, harborQuestions } from '../logistics';
 import { getSpots } from '../spots';
-import { activeRunnerAt, getStaff, isLyingLow, runnerAt, runnerHireCost, type StaffMember } from '../staff';
+import {
+  activeRunnerAt,
+  freeStaff,
+  getStaff,
+  getStaffMember,
+  runnerAt,
+  runnerHireCost,
+  type StaffMember,
+} from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import { veedelName } from '../veedel';
 import { RIGHT_HAND_RESTOCK_RESERVE, RIGHT_HAND_TASKS, XP_RIGHT_HAND_REPORT, XP_RIGHT_HAND_TASK } from './config';
-import { getLieutenants, lieutenantOfSpot } from './index';
+import { hireRunnerFor } from './hire';
+import { getLieutenants, isVeedelHidden, lieutenantOfSpot } from './index';
 import { runRestock } from './orders';
 import {
   getRightHand,
@@ -29,7 +37,7 @@ import {
   rightHandDriver,
   rightHandOrderLimit,
 } from './righthand';
-import type { RightHandDone, RightHandPost } from './types';
+import type { RightHandDone, RightHandPost, RightHandTaskKey } from './types';
 
 const VIA = 'Rechte Hand';
 /** So lange vor Fristende wartet sie noch auf Ware fürs Lager, danach überlässt sie die Anfrage dir. */
@@ -166,14 +174,26 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
   }
 }
 
-/** Hafen abholen: Liegt Ware am Kai und ist ein Fahrer frei, schickt sie ihn los und beantwortet den Hafen-Chat. */
+/**
+ * Hafen abholen: Liegt Ware am Kai und ist ein Fahrer frei, schickt sie ihn los (eine Fahrt pro Ziel-Lager, die älteste
+ * Ware zuerst) und beantwortet die Hafen-Fragen zu dieser Ware.
+ */
 function handlePickup(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
   const state = ctx.state;
   if (!isTaskActive(state, 'pickup') || getCargo(state).length === 0 || freeDrivers(state).length === 0) return;
-  const result = ctx.dispatch({ type: 'logistics.pickup', payload: { by: 'driver' } }, { actor });
+  const first = getCargo(state)[0];
+  const group = getCargo(state).filter((c) => c.warehouseId === first.warehouseId);
+  const cargoIds = group.map((c) => c.id);
+  const result = ctx.dispatch(
+    {
+      type: 'logistics.pickup',
+      payload: { by: 'driver', cargoIds, ...(first.warehouseId ? { warehouseId: first.warehouseId } : {}) },
+    },
+    { actor },
+  );
   if (!result.ok) return;
-  for (const m of messages.openRoutine(state)) {
-    if (m.source === 'logistics') messages.answerAs(ctx, { messageId: m.id, optionId: 'driver', via: VIA });
+  for (const m of harborQuestions(state, cargoIds)) {
+    messages.answerAs(ctx, { messageId: m.id, optionId: 'driver', via: VIA });
   }
   rh.done.pickups += 1;
   addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
@@ -230,17 +250,30 @@ function restock(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor)
   });
 }
 
+/** Was sie fürs Personal ausgeben darf: Schwarzgeld über der Lohnsicherung und einer kleinen Rücklage. */
+function staffingBudget(state: GameState): number {
+  return state.wallet.dirty - payrollReserve(state) - RIGHT_HAND_RESTOCK_RESERVE;
+}
+
 /**
- * Personal: Ausfälle, bei denen ein Leutnant feststeckt, ersetzt sie; leere Spots ohne Leutnant besetzt sie mit
- * einem Bewerber (sonst jemandem von der Straße), eine Einstellung pro Stunde, nie an die Lohnsicherung und nicht,
- * wenn die Löhne knapp werden. Freie Leute verteilt schon "Koordinieren".
+ * Personal: Ausfälle, bei denen ein Leutnant feststeckt, ersetzt sie; leere Spots ohne Leutnant besetzt sie mit einem
+ * freien Läufer (wenn "Koordinieren" aus ist, sonst macht das dieses), einem Bewerber oder jemandem von der Straße
+ * (gemeinsamer Code mit den Leutnants, siehe hire.ts). Eine Maßnahme pro Stunde, nie an die Lohnsicherung und nicht,
+ * wenn die Löhne knapp werden.
  */
 function staffing(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
   const state = ctx.state;
   if (!isTaskActive(state, 'staffing')) return;
+  const budget = staffingBudget(state);
   for (const post of getLieutenants(state)) {
     for (const [staffId, absence] of Object.entries(post.absences)) {
       if (!absence.stuck || absence.replaced) continue;
+      const gone = getStaffMember(state, staffId);
+      const spotId = gone?.returnTo?.kind === 'spot' ? gone.returnTo.targetId : null;
+      if (!gone || !spotId) continue;
+      // Ersetzen kostet nur, wenn niemand frei ist (Läufer von der Straße): dann nie an die Lohnsicherung.
+      const needsHire = gone.role === 'runner' && freeStaff(state, 'runner').length === 0;
+      if (needsHire && runnerHireCost(state, spotId) > budget) continue;
       if (ctx.dispatch({ type: 'staff.replace', payload: { staffId } }, { actor }).ok) {
         rh.done.hires += 1;
         addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
@@ -250,36 +283,27 @@ function staffing(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor
     }
   }
   if (wageRunway(state).warn || getStock(state) <= 0) return;
-  const free = getStaff(state, { role: 'runner', status: 'active' }).some((m) => !m.assignment);
-  if (free) return;
   const spot = getSpots(state)
     .filter((s) => !runnerAt(state, s.id) && !activeRunnerAt(state, s.id))
-    .filter((s) => !lieutenantOfSpot(state, s.id) && !isLyingLow(state, s.veedelId))
+    .filter((s) => !lieutenantOfSpot(state, s.id) && !isVeedelHidden(state, s.veedelId))
     .sort((a, b) => b.demand - a.demand || a.id.localeCompare(b.id))[0];
   if (!spot) return;
-  const budget = state.wallet.dirty - payrollReserve(state) - RIGHT_HAND_RESTOCK_RESERVE;
-  const candidate = getCandidates(state)
-    .filter((c) => c.role === 'runner' && c.hireCost <= budget && c.expiresAt > ctx.now)
-    .sort((a, b) => a.hireCost - b.hireCost || a.id.localeCompare(b.id))[0];
-  let hired = false;
-  let who = '';
-  if (candidate) {
-    hired = ctx.dispatch(
-      {
-        type: 'recruiting.hire',
-        payload: { candidateId: candidate.id, assignment: { kind: 'spot', targetId: spot.id } },
-      },
+  const free = freeStaff(state, 'runner')[0];
+  if (free) {
+    // Freie Leute verteilt "Koordinieren". Ist das aus, stellt sie den besten selbst hin, statt ihn herumstehen zu lassen.
+    if (rh.settings.coordinate) return;
+    const placed = ctx.dispatch(
+      { type: 'staff.assign', payload: { staffId: free.id, assignment: { kind: 'spot', targetId: spot.id } } },
       { actor },
-    ).ok;
-    who = candidate.name;
-  } else if (runnerHireCost(state, spot.id) <= budget) {
-    hired = ctx.dispatch({ type: 'staff.hireRunner', payload: { spotId: spot.id } }, { actor }).ok;
-    who = 'Jemand von der Straße';
+    );
+    if (placed.ok) log(ctx, rh, `${free.name} steht jetzt am ${spot.name}.`);
+    return;
   }
+  const hired = hireRunnerFor(ctx, actor, spot.id, budget);
   if (!hired) return;
   rh.done.hires += 1;
   addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
-  log(ctx, rh, `${who} steht jetzt am ${spot.name}.`);
+  log(ctx, rh, `${hired.name} steht jetzt am ${spot.name}.`);
 }
 
 /** Geldwäsche nach Regel: Liegt mehr Schwarzgeld da als ihre Grenze, geht ein Anteil des Überschusses in die Wäsche. */
@@ -295,6 +319,42 @@ function launder(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor)
   rh.done.laundered += amount;
   addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
   log(ctx, rh, `${formatEuro(amount)} in die Wäsche gegeben.`);
+}
+
+/**
+ * Warum eine eingeschaltete Aufgabe gerade nichts tut (für die Oberfläche), sonst null. Ohne diese Zeile sieht "tut
+ * nichts" aus wie "kaputt", z.B. Hafen abholen ohne Fahrer oder Nachbestellen mit leerem Budget.
+ */
+export function taskIdleReason(state: GameState, key: RightHandTaskKey): string | null {
+  const rh = getRightHand(state);
+  if (!rh) return null;
+  switch (key) {
+    case 'orders':
+    case 'wholesale': {
+      const driver = rightHandDriver(state);
+      return driver.ok ? null : driver.reason;
+    }
+    case 'pickup':
+      if (freeDrivers(state).length > 0) return null;
+      return getStaff(state, { role: 'driver', status: 'active' }).length === 0
+        ? 'Ohne Fahrer holt niemand ab: Heuer einen unter Personal an.'
+        : 'Alle Fahrer sind gerade unterwegs.';
+    case 'restock': {
+      const paused = rh.settings.restockRules.find((r) => r.paused)?.paused;
+      if (paused) return paused;
+      return restockBudgetLeft(state) <= 0 ? 'Das Budget für heute ist aufgebraucht, oder die Löhne gehen vor.' : null;
+    }
+    case 'staffing':
+      return wageRunway(state).warn ? 'Die Löhne sind knapp, deshalb stellt sie niemanden ein.' : null;
+    case 'laundering': {
+      const excess = state.wallet.dirty - payrollReserve(state) - rh.settings.launderAbove;
+      return excess <= 0
+        ? `Wartet auf mehr als ${formatEuro(rh.settings.launderAbove)} Schwarzgeld über den Löhnen.`
+        : null;
+    }
+    default:
+      return null;
+  }
 }
 
 /** Um Mitternacht: Anfragen vergessen, die nicht mehr offen sind. */

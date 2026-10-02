@@ -6,9 +6,19 @@ import { getStock } from '../goods';
 import { getCompetitionFactor } from '../market';
 import { getSpot } from '../spots';
 import { controllerOf, getInfluence } from '../territory';
-import { getVeedel } from '../veedel';
-import { ALLIANCE_COST, ATTACK_AT, SMALL_FISH_UNITS, THREAT_AT, WARN_AT } from './config';
+import { allVeedel, getVeedel } from '../veedel';
+import { demandOptions, say } from './common';
 import {
+  ALLIANCE_COST,
+  ATTACK_AT,
+  GANG_SPOT_MIN_INFLUENCE,
+  OFFER_DURATION,
+  SMALL_FISH_UNITS,
+  THREAT_AT,
+  WARN_AT,
+} from './config';
+import {
+  canJoinRaid,
   type GangStatus,
   gangPower,
   gangVeedel,
@@ -17,8 +27,11 @@ import {
   getGangs,
   hasCeasefire,
   isAtPeace,
+  isGangBroken,
   paysTribute,
   playerPower,
+  raidCrew,
+  raidTargets,
   veedelGang,
 } from './index';
 
@@ -437,5 +450,127 @@ describe('gangs: Spielstände', () => {
     expect(getGangStatus(loaded.state, 'nord')?.people).toBeGreaterThan(0);
     loaded.advance(120);
     expect(loaded.isOver).toBe(false);
+  });
+});
+
+describe('gangs: Überfall und Angebote (Fehler aus der Handy-Prüfung)', () => {
+  it('beim Überfall gehen nur Läufer und Sicherheit mit, nicht Rechte Hand, Leutnants oder Fahrer auf Fahrt', () => {
+    const sim = createTestGame({ seed: 11 });
+    richer(sim, 5000);
+    const runner = hire(sim, 'ebertplatz');
+    const office = hire(sim, 'neumarkt');
+    const lieutenant = hire(sim, 'zuelpicher');
+    const driver = hire(sim, 'uni');
+    const members = sim.state.modules.staff.members;
+    const find = (id: string) => {
+      const m = members.find((x) => x.id === id);
+      if (!m) throw new Error(id);
+      return m;
+    };
+    find(office).assignment = { kind: 'office', targetId: 'rightHand' };
+    find(lieutenant).assignment = { kind: 'veedel', targetId: 'lindenthal' };
+    find(driver).role = 'driver';
+    find(driver).assignment = { kind: 'transport', targetId: '1' };
+    expect(raidCrew(sim.state).map((m) => m.id)).toEqual([runner]);
+    expect(canJoinRaid(find(office))).toBe(false);
+    const s = status(sim, 'ost');
+    s.hostility = 30;
+    const result = sim.dispatch({
+      type: 'gangs.attack',
+      payload: {
+        gangId: 'ost',
+        veedelId: 'kalk',
+        staffIds: [runner, office, lieutenant, driver],
+        playerPresent: false,
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(activeEncounters(sim.state)[0]?.request.staffIds).toEqual([runner]);
+  });
+
+  it('ein Überfall nur mit Leuten, die nicht mitgehen dürfen, geht nicht', () => {
+    const sim = createTestGame({ seed: 11 });
+    const office = hire(sim, 'ebertplatz');
+    const member = sim.state.modules.staff.members.find((m) => m.id === office);
+    if (member) member.assignment = { kind: 'office', targetId: 'rightHand' };
+    const result = sim.dispatch({
+      type: 'gangs.attack',
+      payload: { gangId: 'ost', veedelId: 'kalk', staffIds: [office], playerPresent: false },
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('die Beute ist nie negativ, auch wenn die Kasse der Gang es gerade ist', () => {
+    const sim = createTestGame({ seed: 11 });
+    const runner = hire(sim, 'ebertplatz');
+    const s = status(sim, 'ost');
+    s.money = -700;
+    s.goods = 0;
+    const result = sim.dispatch({
+      type: 'gangs.attack',
+      payload: { gangId: 'ost', veedelId: 'kalk', staffIds: [runner], playerPresent: false },
+    });
+    expect(result.ok).toBe(true);
+    expect(activeEncounters(sim.state)[0]?.request.stakes).toMatchObject({ money: 0, goods: 0 });
+  });
+
+  it('Ziele des Überfalls: dieselbe Liste für Oberfläche und Befehl', () => {
+    const sim = createTestGame({ seed: 11 });
+    const targets = raidTargets(sim.state, 'ost');
+    expect(targets).toContain('kalk');
+    for (const veedelId of allVeedel().map((v) => v.id)) {
+      const hasSpot = getInfluence(sim.state, veedelId, 'ost') >= GANG_SPOT_MIN_INFLUENCE;
+      expect(targets.includes(veedelId)).toBe(hasSpot);
+    }
+  });
+
+  it('Forderungen bieten nur Wege an, die gerade gehen (kein zweites Zahlen, kein Frieden ohne Streit)', () => {
+    const sim = createTestGame({ seed: 11 });
+    const gang = getGang(sim.state, 'ost');
+    const s = status(sim, 'ost');
+    if (!gang) throw new Error('keine Gang');
+    // Tribut läuft, die Feindseligkeit ist weg: bleibt nur "ablehnen".
+    s.tribute = { amount: 300, until: sim.state.time + 1000 };
+    s.hostility = 0;
+    expect(demandOptions(sim.ctx('gangs'), gang, s).map((o) => o.id)).toEqual(['refuse']);
+    // Kein Tribut, aber Streit: Zahlen und Waffenstillstand gehen.
+    s.tribute = null;
+    s.hostility = WARN_AT + 10;
+    s.relation = 0;
+    s.lastPlayerAttackAt = null;
+    expect(demandOptions(sim.ctx('gangs'), gang, s).map((o) => o.id)).toEqual(['tribute', 'ceasefire', 'refuse']);
+  });
+
+  it('die Antwortfrist eines Angebots in der Nachricht ist die des Angebots', () => {
+    const sim = createTestGame({ seed: 11 });
+    const gang = getGang(sim.state, 'ost');
+    if (!gang) throw new Error('keine Gang');
+    const id = say(
+      sim.ctx('gangs'),
+      gang,
+      'offer',
+      { amount: '50 g', price: '100 €', veedel: 'Kalk' },
+      [{ id: 'x', label: 'x' }],
+      OFFER_DURATION,
+    );
+    expect(messages.get(sim.state, id)?.expiresAt).toBe(sim.state.time + OFFER_DURATION);
+  });
+
+  it('keine Bündnisse gegen zerschlagene Gangs', () => {
+    const sim = createTestGame({ seed: 11 });
+    const other = getGangs(sim.state).find((g) => g.id !== 'ost');
+    if (!other) throw new Error('keine zweite Gang');
+    // Zerschlagen: keine Leute und kein Revier mehr.
+    status(sim, other.id).people = 0;
+    for (const veedel of Object.values(sim.state.modules.territory.influence)) delete veedel[other.id];
+    for (const veedelId of Object.keys(sim.state.modules.territory.controller)) {
+      if (sim.state.modules.territory.controller[veedelId] === other.id)
+        sim.state.modules.territory.controller[veedelId] = null;
+    }
+    expect(isGangBroken(sim.state, other.id)).toBe(true);
+    status(sim, 'ost').relation = 60;
+    richer(sim, 5000);
+    const result = sim.dispatch({ type: 'gangs.ally', payload: { gangId: 'ost', againstGangId: other.id } });
+    expect(result.ok).toBe(false);
   });
 });

@@ -186,9 +186,29 @@ export const messages = {
     );
   },
 
+  /**
+   * Eine offene Frage zurückziehen, weil sie sich erledigt hat (z.B. der Container ist längst abgeholt). Sie zeigt dann
+   * "Keine Antwort mehr möglich" und zählt nicht mehr als offen. Kein Ereignis, keine Antwort im Chat.
+   */
+  retract(ctx: Ctx, messageId: number): void {
+    const message = messages.get(ctx.state, messageId);
+    if (message && messages.canAnswer(ctx.state, message)) message.expired = true;
+  },
+
+  /**
+   * Alle offenen Fragen zurückziehen, auf die der Test zutrifft: Die Sache wurde auf anderem Weg erledigt (z.B. ein
+   * Bewerber über die App eingestellt, ein Lieferant freigeschaltet), die Frage im Chat wäre sonst bis zum Ablauf
+   * noch zu sehen und führte ins Leere.
+   */
+  retractWhere(ctx: Ctx, test: (message: Message) => boolean): void {
+    for (const message of ctx.state.messages.list) {
+      if (messages.canAnswer(ctx.state, message) && test(message)) message.expired = true;
+    }
+  },
+
   /** Offene Fragen, die als Routine gekennzeichnet sind (die Rechte Hand darf sie beantworten). */
   openRoutine(state: GameState): Message[] {
-    return state.messages.list.filter((m) => m.routine && messages.canAnswer(state, m));
+    return state.messages.list.filter((m) => m.routine && messages.canAnswer(state, m) && !isHidden(state, m));
   },
 
   /**
@@ -198,7 +218,7 @@ export const messages = {
    */
   answerAs(ctx: Ctx, answer: AnswerAs): boolean {
     const message = messages.get(ctx.state, answer.messageId);
-    if (!message || !messages.canAnswer(ctx.state, message)) return false;
+    if (!message || !messages.canAnswer(ctx.state, message) || isHidden(ctx.state, message)) return false;
     const option = message.options?.find((o) => o.id === answer.optionId);
     if (!option) return false;
     message.answer = option.id;
@@ -232,13 +252,9 @@ export function answerMessage(ctx: Ctx, payload: { messageId: number; optionId: 
   if (!messages.canAnswer(ctx.state, message)) return { ok: false, reason: 'Darauf kannst du nicht mehr antworten.' };
   const option = message.options?.find((o) => o.id === payload.optionId);
   if (!option) return { ok: false, reason: 'Unbekannte Antwort.' };
-  if (option.command) {
-    const result = ctx.dispatch(option.command, { actor: 'player' });
-    if (!result.ok) return result;
-  }
-  message.answer = option.id;
-  message.read = true;
-  ctx.state.messages.list.push({
+  // Die Antwort steht vor dem, was der Befehl auslöst (die Reaktion des Kontakts kommt danach); scheitert er, nimmt
+  // sie nichts mit zurück.
+  const reply: Message = {
     id: ctx.nextId(),
     contactId: message.contactId,
     time: ctx.now,
@@ -246,7 +262,17 @@ export function answerMessage(ctx: Ctx, payload: { messageId: number; optionId: 
     text: option.reply ?? option.label,
     read: true,
     source: 'core',
-  });
+  };
+  ctx.state.messages.list.push(reply);
+  if (option.command) {
+    const result = ctx.dispatch(option.command, { actor: 'player' });
+    if (!result.ok) {
+      ctx.state.messages.list = ctx.state.messages.list.filter((m) => m !== reply);
+      return result;
+    }
+  }
+  message.answer = option.id;
+  message.read = true;
   ctx.emit('message.answered', {
     messageId: message.id,
     contactId: message.contactId,
@@ -266,25 +292,33 @@ export function markAllRead(ctx: Ctx): CommandResult {
   return { ok: true };
 }
 
-/** Chat ausblenden: alles bis zur letzten Nachricht gilt als gelöscht und gelesen. */
-function hideThread(state: GameState, contactId: string): void {
+/**
+ * Chat ausblenden: alles bis zur letzten Nachricht gilt als gelöscht und gelesen. Offene Fragen darin sind erledigt,
+ * ohne Antwort (wie abgelaufen): Sonst lebten sie unsichtbar weiter, mit Auftrag, Island und Zähler, aber ohne Knöpfe.
+ */
+function hideThread(ctx: Ctx, contactId: string): void {
+  const state = ctx.state;
   let last = 0;
   for (const m of state.messages.list) {
     if (m.contactId !== contactId) continue;
     m.read = true;
     if (m.id > last) last = m.id;
+    if (messages.canAnswer(state, m)) {
+      m.expired = true;
+      ctx.emit('message.expired', { messageId: m.id, contactId: m.contactId, source: m.source });
+    }
   }
   if (last > 0) state.messages.hidden[contactId] = last;
 }
 
 export function deleteThread(ctx: Ctx, payload: { contactId: string }): CommandResult {
   if (!ctx.state.messages.contacts[payload.contactId]) return { ok: false, reason: 'Diesen Chat gibt es nicht.' };
-  hideThread(ctx.state, payload.contactId);
+  hideThread(ctx, payload.contactId);
   return { ok: true };
 }
 
 export function deleteAllThreads(ctx: Ctx): CommandResult {
-  for (const contactId of Object.keys(ctx.state.messages.contacts)) hideThread(ctx.state, contactId);
+  for (const contactId of Object.keys(ctx.state.messages.contacts)) hideThread(ctx, contactId);
   return { ok: true };
 }
 

@@ -47,6 +47,13 @@ function presets(free: number, min: number): number[] {
   return [...new Set([round(free / 4), round(free / 2), round(free)])].filter((v) => v >= min && v > 0);
 }
 
+/** "fertig 14:30" heute, "fertig morgen 14:30" am nächsten Tag, sonst mit Spieltag (Wäschen laufen bis zu 28 Stunden). */
+function readyLabel(now: number, readyAt: number): string {
+  const ahead = clock.day(readyAt) - clock.day(now);
+  const when = ahead <= 0 ? '' : ahead === 1 ? 'morgen ' : `Tag ${clock.day(readyAt)}, `;
+  return `fertig ${when}${clock.formatTime(readyAt)}`;
+}
+
 /** Risiko eines Wegs in einem Chip: kein Risiko, oder Heat ab so viel gleichzeitig. */
 function riskChip(c: LaunderingChannel) {
   if (c.heatPer1000 === 0) return { label: 'fast kein Risiko', icon: 'shieldCheck', color: 'money' as const };
@@ -159,7 +166,7 @@ function LockedChannel(props: { channel: LaunderingChannel }) {
       title={c.name}
       icon="lock"
       color="system"
-      value={`Gebühr ${formatPercent(c.fee)}`}
+      value={`Gebühr ${formatPercent(channelFee(state, c.id))}`}
       note={check.ok ? c.how : check.reason}
       more={`${c.who} ${c.how}`}
     >
@@ -239,7 +246,7 @@ function LaunderingApp() {
         >
           <List>
             {batches.map((b) => (
-              <ListItem key={b.id} value={`fertig ${clock.formatTime(b.readyAt)}`}>
+              <ListItem key={b.id} value={readyLabel(state.time, b.readyAt)}>
                 <ItemContent
                   icon={getChannel(b.channel).icon}
                   color="dirty"

@@ -210,6 +210,34 @@ describe('recruiting: Kontakte', () => {
   });
 });
 
+describe('recruiting: Fragen im Chat', () => {
+  const hireQuestions = (sim: Simulation, candidateId: string) =>
+    messages
+      .threads(sim.state)
+      .flatMap((t) => messages.thread(sim.state, t.contact.id))
+      .filter(
+        (m) =>
+          messages.canAnswer(sim.state, m) &&
+          m.options?.some(
+            (o) => o.command?.type === 'recruiting.hire' && o.command.payload.candidateId === candidateId,
+          ),
+      );
+
+  it('Wer über die App eingestellt wird, steht im Chat nicht mehr zur Wahl', () => {
+    let checked = false;
+    for (let seed = 1; seed <= 20 && !checked; seed++) {
+      const sim = quietGame(seed);
+      sim.advance(48 * 60);
+      const contact = getContacts(sim.state).find((c) => hireQuestions(sim, c.id).length > 0);
+      if (!contact) continue;
+      expect(sim.dispatch({ type: 'recruiting.hire', payload: { candidateId: contact.id } }).ok).toBe(true);
+      expect(hireQuestions(sim, contact.id)).toHaveLength(0);
+      checked = true;
+    }
+    expect(checked).toBe(true);
+  });
+});
+
 describe('recruiting: Spielstände aus dem Fundament', () => {
   it('Version 1 (leerer Pool) wird migriert und füllt sich danach', () => {
     const sim = quietGame();
@@ -223,5 +251,20 @@ describe('recruiting: Spielstände aus dem Fundament', () => {
     expect(getCandidate(loaded.state, 'c1')).toMatchObject({ source: 'pool', stats: { speed: 70 } });
     loaded.advance(60);
     expect(getPool(loaded.state).length).toBeGreaterThan(1);
+  });
+
+  it('Version 2 → 3: Kurier-Bewerber aus alten Spielständen fallen weg, alle anderen bleiben', () => {
+    const sim = quietGame();
+    const state = structuredClone(sim.state) as GameState;
+    const pool = getPool(state);
+    const keep = pool[0];
+    const courier = { ...keep, id: 'alt-kurier', role: 'courier' };
+    (state.modules.recruiting as { candidates: unknown[] }).candidates = [courier, keep];
+    state.moduleVersions.recruiting = 2;
+    const file = parseSaveFile(serializeSave(createSaveFile(state, 'alt', 0)));
+    const loaded = loadSimulation(file.state, sim.modules);
+    expect(getCandidate(loaded.state, 'alt-kurier')).toBeUndefined();
+    expect(getCandidate(loaded.state, keep.id)).toBeDefined();
+    expect(loaded.state.moduleVersions.recruiting).toBe(3);
   });
 });

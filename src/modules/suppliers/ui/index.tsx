@@ -24,7 +24,7 @@ import {
   useUi,
 } from '../../../ui';
 import { getStock, getWarehouse, getWarehouses, productName, qualityTier } from '../../goods';
-import { cargoAmount, hasBerth } from '../../logistics';
+import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount } from '../../logistics';
 import {
   assortment,
   availableCredit,
@@ -229,6 +229,7 @@ function LockedSupplier(props: { supplierId: string }) {
 
 function SupplierDetail(props: { supplierId: string }) {
   const { state, dispatch } = useGame();
+  const ui = useUi();
   const supplier = getSupplier(state, props.supplierId);
   const [target, setTarget] = useState('');
   if (!supplier) return null;
@@ -245,8 +246,10 @@ function SupplierDetail(props: { supplierId: string }) {
     );
   }
   const warehouses = getWarehouses(state);
-  const warehouseId = warehouses.some((w) => w.id === target) ? target : undefined;
   const toPort = supplier.kind === 'port';
+  const picked = warehouses.some((w) => w.id === target) ? target : undefined;
+  // Schiffsware: Ohne Wahl zeigt die Auswahl (und bestellt) das Lager, in das die Abholung ohnehin fährt.
+  const warehouseId = toPort && warehouses.length > 1 ? (picked ?? defaultPickupWarehouse(state)) : picked;
   const rel = getRelation(state, supplier.id);
   const limit = creditLimit(state, supplier.id);
   const credit = availableCredit(state, supplier.id);
@@ -275,34 +278,61 @@ function SupplierDetail(props: { supplierId: string }) {
             {rel.dueAt !== null && `, fällig ${clock.formatLong(rel.dueAt)}`}
             {blocked && '. Liefert nicht mehr, bis du zahlst.'}
           </span>
-          <Button
-            small
-            variant="primary"
-            disabled={state.wallet.dirty < rel.debt}
-            onClick={() => dispatch({ type: 'suppliers.repay', payload: { supplierId: supplier.id } })}
-          >
-            Zahlen
-          </Button>
+          <div class="sup-buy">
+            {state.wallet.dirty < rel.debt && state.wallet.dirty >= 1 && (
+              // Reicht das Geld nicht für alles, hilft eine Teilzahlung (die Hälfte der Schuld oder, was da ist).
+              <Button
+                small
+                disabled={state.wallet.dirty < 1}
+                onClick={() =>
+                  dispatch({
+                    type: 'suppliers.repay',
+                    payload: {
+                      supplierId: supplier.id,
+                      amount: Math.min(Math.ceil(rel.debt / 2), Math.floor(state.wallet.dirty)),
+                    },
+                  })
+                }
+              >
+                Teilzahlung {formatEuro(Math.min(Math.ceil(rel.debt / 2), Math.floor(state.wallet.dirty)))}
+              </Button>
+            )}
+            <Button
+              small
+              variant="primary"
+              disabled={state.wallet.dirty < rel.debt}
+              onClick={() => dispatch({ type: 'suppliers.repay', payload: { supplierId: supplier.id } })}
+            >
+              Zahlen
+            </Button>
+          </div>
         </div>
       )}
 
       <h4 class="sup-app__section">Angebot</h4>
-      {toPort ? (
-        <Hint>
+      {toPort && (
+        <Hint icon="ship">
           {hasBerth(state)
-            ? 'Das Schiff legt an deinem Liegeplatz im Niehler Hafen an. Abholen musst du selbst (Logistik-App).'
-            : 'Ohne Liegeplatz im Niehler Hafen kann kein Schiff für dich anlegen (Logistik-App).'}
+            ? 'Das Schiff legt an deinem Liegeplatz im Niehler Hafen an. Abholen muss jemand am Kai, im Hafen (oder die Rechte Hand mit einem Fahrer).'
+            : 'Ohne Liegeplatz im Niehler Hafen kann kein Schiff für dich anlegen.'}
         </Hint>
-      ) : (
-        warehouses.length > 1 && (
-          <Select
-            label="Liefern an"
-            wide
-            value={warehouseId ?? warehouses[0].id}
-            options={warehouses.map((w) => ({ value: w.id, label: `liefern an ${w.name}` }))}
-            onChange={setTarget}
-          />
-        )
+      )}
+      {toPort && (
+        <Button icon="ship" onClick={() => ui.openPanel('logistics.port', {})}>
+          Zum Hafen
+        </Button>
+      )}
+      {warehouses.length > 1 && (
+        <Select
+          label={toPort ? 'Abholen nach' : 'Liefern an'}
+          wide
+          value={warehouseId ?? warehouses[0].id}
+          options={warehouses.map((w) => ({
+            value: w.id,
+            label: `${toPort ? 'abholen nach' : 'liefern an'} ${w.name}`,
+          }))}
+          onChange={setTarget}
+        />
       )}
       <List>
         {supplier.packages.map((p) => {
@@ -446,7 +476,7 @@ onGameEvent('supplier.unlocked', 'suppliers.unlockedToast', (payload, ui, state)
 registerAdvisor({
   id: 'suppliers.restock',
   advise: (state) => {
-    if (shipmentsInTransit(state).length > 0 || cargoAmount(state) > 0) return null;
+    if (shipmentsInTransit(state).length > 0 || cargoAmount(state) > 0 || inTransitAmount(state) > 0) return null;
     const stock = getStock(state);
     if (stock >= 20) return null;
     return {
