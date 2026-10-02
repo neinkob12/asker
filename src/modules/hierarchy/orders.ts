@@ -4,7 +4,7 @@
 // Ein gesperrter oder nicht freigeschalteter Lieferant lässt die Regel ruhen (kein stilles Ausweichen), außer bei
 // "automatisch". Schiffsware nur, wenn jemand sie automatisch am Kai abholt (das kann noch niemand).
 
-import { type CommandResult, formatEuro, type GameState } from '../../core';
+import { type Actor, type CommandResult, type Ctx, formatEuro, type GameState } from '../../core';
 import { getSalesStats } from '../customers';
 import { getProduct, getStock, getWarehouse, productName } from '../goods';
 import { getTrips } from '../logistics';
@@ -152,4 +152,54 @@ export function planOrder(state: GameState, rule: OrderRule, home: string | null
   const covering = pool.filter((o) => o.pkg.amount >= deficit).sort((a, b) => a.price - b.price)[0];
   const choice = covering ?? [...pool].sort((a, b) => b.pkg.amount - a.pkg.amount || a.price - b.price)[0];
   return { kind: 'order', ...choice, warehouseId, why: `${why} (${formatEuro(choice.price)})` };
+}
+
+/** Höchstens so viele Bestellungen pro Regel und Durchgang (große Lücke, kleine Pakete). */
+export const MAX_ORDERS_PER_RULE = 3;
+
+export interface RestockHooks {
+  /** Was noch ausgegeben werden darf (wird vor jeder Bestellung neu gefragt). */
+  budget: () => number;
+  onPause: (rule: OrderRule, reason: string) => void;
+  onResume: (rule: OrderRule) => void;
+  onNoMoney: () => void;
+  onOrdered: (plan: Extract<OrderPlan, { kind: 'order' }>) => void;
+}
+
+/**
+ * Gemeinsamer Einkauf für Leutnants und Rechte Hand: geht alle Regeln durch und bestellt, bis der Mindestbestand
+ * (Lager plus Unterwegs) erreicht ist, höchstens MAX_ORDERS_PER_RULE Pakete pro Regel. Der Bestand wird nach jeder
+ * Bestellung neu gezählt, deshalb bestellt nichts doppelt.
+ */
+export function runRestock(ctx: Ctx, rules: OrderRule[], home: string | null, actor: Actor, hooks: RestockHooks): void {
+  for (const rule of rules) {
+    for (let i = 0; i < MAX_ORDERS_PER_RULE; i++) {
+      const plan = planOrder(ctx.state, rule, home, hooks.budget());
+      if (plan.kind === 'pause') {
+        if (rule.paused !== plan.reason) {
+          rule.paused = plan.reason;
+          hooks.onPause(rule, plan.reason);
+        }
+        break;
+      }
+      if (rule.paused) {
+        rule.paused = null;
+        hooks.onResume(rule);
+      }
+      if (plan.kind === 'noMoney') {
+        hooks.onNoMoney();
+        break;
+      }
+      if (plan.kind !== 'order') break;
+      const result = ctx.dispatch(
+        {
+          type: 'suppliers.order',
+          payload: { supplierId: plan.supplier.id, packageId: plan.pkg.id, warehouseId: plan.warehouseId },
+        },
+        { actor },
+      );
+      if (!result.ok) break;
+      hooks.onOrdered(plan);
+    }
+  }
 }
