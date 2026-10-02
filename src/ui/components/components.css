@@ -1302,7 +1302,13 @@
   gap: var(--space-4);
   padding: var(--space-2) var(--space-5) var(--space-5);
   overflow-y: auto;
+  min-height: 0;
+  overscroll-behavior: contain;
   line-height: 1.45;
+}
+/* Inhalt schrumpft nie zusammen, sondern der Dialog scrollt (lange Listen, z.B. alle Läufer beim Überfall). */
+.ui-dialog__body > * {
+  flex-shrink: 0;
 }
 .ui-dialog__body > p {
   margin: 0;

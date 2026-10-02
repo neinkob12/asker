@@ -544,43 +544,62 @@ function AttackDialog(props: { gangId: string }) {
         Etwa {Math.max(1, Math.min(s.people, 2 + Math.floor(s.people / 8)))} Wachen, Kampfkraft {gang.traits.fighting}.
         Klappt es, gehören dir ein Teil ihrer Ware und Kasse.
       </p>
-      <h3 class="gang-dialog__head">Wo?</h3>
-      {targets.length === 0 ? (
-        <Hint>{gang.name} hat gerade keinen Spot, den du erreichen kannst.</Hint>
-      ) : (
-        <div class="gang-choice">
-          {targets.map((v) => (
-            <Button key={v} small active={v === veedelId} onClick={() => setVeedelId(v)}>
-              {veedelName(v)}
-            </Button>
-          ))}
-        </div>
-      )}
-      <h3 class="gang-dialog__head">Wer geht mit?</h3>
-      {crew.length === 0 ? (
-        <Hint>Du hast keine Leute. Dann nur du selbst.</Hint>
-      ) : (
-        <List>
-          {crew.map((m) => (
-            <ListItem
-              key={m.id}
-              aside={
-                <Button small active={chosen.includes(m.id)} onClick={() => toggle(m.id)}>
-                  {chosen.includes(m.id) ? 'dabei' : 'bleibt'}
-                </Button>
-              }
-            >
-              <strong>{m.name}</strong>
-              <Chips
-                items={[
-                  { label: `Kraft ${m.stats.strength}`, icon: 'fist', color: 'danger' },
-                  { label: `Tempo ${m.stats.speed}`, icon: 'bolt', color: 'people' },
-                ]}
-              />
-            </ListItem>
-          ))}
-        </List>
-      )}
+      <Group title="Wo?" icon="pin" color="place">
+        {targets.length === 0 ? (
+          <Hint>{gang.name} hat gerade keinen Spot, den du erreichen kannst.</Hint>
+        ) : (
+          <div class="gang-choice">
+            {targets.map((v) => (
+              <Button key={v} small active={v === veedelId} onClick={() => setVeedelId(v)}>
+                {veedelName(v)}
+              </Button>
+            ))}
+          </div>
+        )}
+      </Group>
+      <Group
+        title="Wer geht mit?"
+        icon="crew"
+        color="people"
+        value={`${chosen.length} von ${crew.length}`}
+        note={crew.length === 0 ? 'Du hast keine Leute. Dann nur du selbst.' : undefined}
+      >
+        {crew.length > 0 && (
+          <>
+            <div class="gang-choice">
+              <Button small onClick={() => setChosen(crew.map((m) => m.id))}>
+                Alle mitnehmen
+              </Button>
+              <Button small onClick={() => setChosen([])}>
+                Keinen
+              </Button>
+            </div>
+            <List>
+              {crew.map((m) => (
+                <ListItem
+                  key={m.id}
+                  onClick={() => toggle(m.id)}
+                  aside={
+                    <Button small active={chosen.includes(m.id)} onClick={() => toggle(m.id)}>
+                      {chosen.includes(m.id) ? 'dabei' : 'bleibt'}
+                    </Button>
+                  }
+                >
+                  <ItemContent
+                    icon={m.role === 'security' ? 'shield' : 'runner'}
+                    color={chosen.includes(m.id) ? 'danger' : 'people'}
+                    title={m.name}
+                    tags={[
+                      { label: `Kraft ${m.stats.strength}`, icon: 'fist', color: 'danger' },
+                      { label: `Tempo ${m.stats.speed}`, icon: 'bolt', color: 'people' },
+                    ]}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </>
+        )}
+      </Group>
       <Button wide variant={present ? 'danger' : 'default'} active={present} onClick={() => setPresent(!present)}>
         {present ? 'Du gehst selbst mit (Todesgefahr)' : 'Selbst mitgehen?'}
       </Button>
