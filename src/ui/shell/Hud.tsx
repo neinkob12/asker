@@ -1,5 +1,6 @@
 // HUD im Look "Glas": drei Gruppen in der freien Kartenfläche links vom Handy (--map-right ist die Grenze).
-//   oben links   Geld-Kapsel: Geld (Klick öffnet die Geldwäsche) und Heat (placement 'main'), darunter Warnungen
+//   oben links   Geld-Kapsel: Geld (Klick öffnet die Geldwäsche) und Heat (placement 'main'), darunter die Quest
+//                ('below') und Warnungen
 //   oben Mitte   Uhr-Kapsel: Wochentag, Tag, Uhrzeit, Spieltempo, Menü ('time' ist seit Auftrag 26 leer)
 //   oben rechts  Kennzahl-Kacheln Lager und Ruf · Reviere ('more'), jede klappt beim Drüberfahren eine Karte auf
 // Ist die Kartenfläche schmal, rücken die Kacheln unter die Uhr (Container-Query in shell.css). Am Handy-Bildschirm
@@ -145,11 +146,19 @@ export function Hud() {
   const alerts = items.filter((i) => hudPlacement(i) === 'alert');
   const time = items.filter((i) => hudPlacement(i) === 'time');
   const more = items.filter((i) => hudPlacement(i) === 'more');
+  const below = items.filter((i) => hudPlacement(i) === 'below');
   return (
     <header class={`hud hud--glass ${mobile ? 'hud--mobile' : 'hud--desktop'}`}>
       <div class="hud__grid">
-        <div class="hud-capsule hud-capsule--money">
-          <HudItems items={main} />
+        <div class="hud__left">
+          <div class="hud-capsule hud-capsule--money">
+            <HudItems items={main} />
+          </div>
+          {below.length > 0 && (
+            <div class="hud__below">
+              <HudItems items={below} />
+            </div>
+          )}
         </div>
         <div class="hud-capsule hud-capsule--clock">
           <ClockHud />

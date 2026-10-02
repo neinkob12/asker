@@ -72,8 +72,18 @@ async function run() {
     if (m.type() === 'error' && !isTileError(m.text())) errors.push(m.text());
   });
 
-  await check('Neues Spiel über den Start-Dialog', async () => {
+  await check('Intro beim ersten Start, Name für die Bestenliste', async () => {
     await page.goto(base);
+    await page.getByRole('button', { name: 'Weiter' }).click();
+    await page.getByRole('button', { name: 'Zurück' }).click();
+    await page.getByRole('button', { name: 'Überspringen' }).click();
+    await page.getByLabel('Dein Name').fill('E2E Tester');
+    await page.getByRole('button', { name: 'Weiter' }).click();
+    const name = await page.evaluate(() => localStorage.getItem('koeln-tycoon:player-name'));
+    assert.equal(name, 'E2E Tester');
+  });
+
+  await check('Neues Spiel über den Start-Dialog', async () => {
     await page.getByRole('button', { name: "Los geht's" }).click();
     await page.waitForFunction(() => window.koeln?.session?.state?.time > 0);
     // Pause, damit der Test nicht vom Tempo abhängt; die Zeit spulen wir gezielt vor.

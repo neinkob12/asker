@@ -27,6 +27,11 @@ Das Spiel läuft auf Vercel: **https://asker-flax.vercel.app/**. Jeder Push auf 
 jeder PR bekommt einen eigenen Vorschau-Link. Das Spiel läuft komplett im Browser: Jeder spielt sein eigenes Spiel,
 Spielstände liegen im eigenen Browser.
 
+**Bestenliste:** Alle Ergebnisse landen in einer gemeinsamen Bestenliste (`api/leaderboard.ts`, eine Vercel Function).
+Sie braucht einmalig einen Speicher: im Vercel-Projekt unter *Storage* eine **Upstash Redis**-Datenbank anlegen und mit dem
+Projekt verbinden (setzt `KV_REST_API_URL` und `KV_REST_API_TOKEN`), danach einmal neu deployen. Lokal (`npm run dev`) ist
+die Bestenliste aus.
+
 ## So wird gespielt
 
 - **Neues Spiel:** Beim ersten Start wählst du den Modus. *Normal:* Nach einem Game Over darfst du einen älteren

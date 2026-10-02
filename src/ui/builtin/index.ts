@@ -21,6 +21,7 @@ import { soundOnEvent } from '../sound';
 import { MoneyHud } from './CoreHud';
 import { GameOverDialog, NewGameDialog, SavesDialog, WonDialog } from './GameDialogs';
 import { HistoryApp } from './HistoryApp';
+import { IntroDialog } from './IntroDialog';
 
 /** Ab diesem Betrag erscheint eine Einnahme kurz in der Dynamic Island. */
 const ISLAND_EARN_MIN = 150;
@@ -39,6 +40,7 @@ export function registerBuiltins(): void {
     select: (api, ui) => api.setOverlay(!ui.overlay),
   });
 
+  registerDialog({ id: 'core.intro', component: IntroDialog, pausesGame: true, dismissable: false });
   registerDialog({ id: 'core.newGame', component: NewGameDialog, pausesGame: true, dismissable: false });
   registerDialog({ id: 'core.saves', component: SavesDialog, pausesGame: true });
   registerDialog({ id: 'core.gameOver', component: GameOverDialog, dismissable: false });

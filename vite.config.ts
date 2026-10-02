@@ -12,6 +12,6 @@ export default defineConfig({
     chunkSizeWarningLimit: 2000,
   },
   test: {
-    include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.mjs'],
+    include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.mjs', 'api/**/*.test.ts'],
   },
 });

@@ -156,6 +156,8 @@
   grid-template-areas:
     "money clock tiles"
     "money alerts tiles";
+  /* Die letzte Reihe nimmt die Höhe der linken Spalte (Geld und Quest) auf, die Reihen darüber bleiben knapp */
+  grid-template-rows: auto 1fr;
   align-items: start;
   column-gap: var(--space-4);
   row-gap: var(--space-3);
@@ -175,6 +177,21 @@
 }
 .hud-capsule {
   border-radius: var(--hud-radius);
+}
+/* Linke Spalte: Geld-Kapsel, darunter die Quest-Karte (placement 'below') */
+.hud__left {
+  grid-area: money;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.hud__below {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 300px;
 }
 .hud-capsule--money {
   grid-area: money;
@@ -210,6 +227,7 @@
       "money clock"
       "money tiles"
       "money alerts";
+    grid-template-rows: auto auto 1fr;
   }
   .hud-capsule--clock,
   .hud-tiles,
@@ -1037,7 +1055,9 @@ kbd {
     grid-template-areas:
       "money clock"
       "tiles tiles"
+      "below below"
       "alerts alerts";
+    grid-template-rows: auto;
     column-gap: var(--space-2);
     row-gap: var(--space-2);
   }
@@ -1087,6 +1107,14 @@ kbd {
   .hud__alerts {
     justify-self: stretch;
   }
+  /* Handy-Bildschirm: Quest in einer eigenen Reihe über die volle Breite */
+  .hud__left {
+    display: contents;
+  }
+  .hud__below {
+    grid-area: below;
+    max-width: none;
+  }
   .hud-money__tile,
   .hud-money__row--clean {
     display: none;
@@ -1128,4 +1156,52 @@ kbd {
   .is-coach {
     animation: none;
   }
+}
+
+/* ---------------------------------------------------------------- Intro beim ersten Start */
+.intro .ui-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.intro__hero {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-2) 0;
+}
+.intro__text {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+.intro__points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.intro__points li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  line-height: 1.4;
+}
+.intro__dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.intro__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-line);
+  transition: width var(--duration) var(--ease-out);
+}
+.intro__dot.is-on {
+  width: 18px;
+  border-radius: 3px;
+  background: var(--color-accent);
 }

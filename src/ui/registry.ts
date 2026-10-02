@@ -29,6 +29,8 @@ export interface SlotRegistry {
    * selbst (position: absolute) und sind standardmäßig nicht anklickbar (pointer-events für Knöpfe selbst setzen).
    */
   'map.overlay': Record<string, never>;
+  /** Unter den Kennzahlen im Game-Over- bzw. Sieg-Bildschirm, z.B. die Bestenliste. */
+  'core.ending': { kind: 'over' | 'won' };
 }
 
 export type PanelId = keyof PanelRegistry & string;
@@ -43,10 +45,10 @@ export interface HudItem {
   component: ComponentType;
   /**
    * Wo der Eintrag steht: 'main' dauerhaft oben (Geld, Heat), 'time' in der Uhr-Pille (Uhr, Wetter),
-   * 'alert' als auffällige Warnung oben, 'more' im Popover hinter dem Mehr-Knopf (Lager, Ruf, Köln …).
-   * Standard: ab Ordnung 90 'time', sonst 'more'.
+   * 'alert' als auffällige Warnung oben, 'more' im Popover hinter dem Mehr-Knopf (Lager, Ruf, Köln …),
+   * 'below' als eigene Glas-Karte direkt unter der Geld-Kapsel (Quest). Standard: ab Ordnung 90 'time', sonst 'more'.
    */
-  placement?: 'main' | 'more' | 'time' | 'alert';
+  placement?: 'main' | 'more' | 'time' | 'alert' | 'below';
   /** Icon für den Mehr-Knopf (zeigt die Icons der Einträge im Popover). */
   icon?: string;
 }

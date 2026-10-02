@@ -13,6 +13,7 @@ import {
 import { dayPhase } from '../map/daylight';
 import { registerBuiltins } from './builtin';
 import { SPRINGS, springEasing } from './phone/spring';
+import { introSeen } from './player';
 import { UiRuntime } from './runtime';
 import { App } from './shell/App';
 import { bindKeys } from './shell/keys';
@@ -54,7 +55,9 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
     const seed = params.get('seed');
     session.newGame(fresh === 'hardcore' ? 'hardcore' : ('normal' as GameMode), seed ? Number(seed) : undefined);
   } else if (!session.continueAutosave()) {
-    runtime.api.openDialog('core.newGame', { firstStart: true });
+    // Beim allerersten Start erst das Intro (mit Name), danach die Wahl des Modus.
+    if (introSeen()) runtime.api.openDialog('core.newGame', { firstStart: true });
+    else runtime.api.openDialog('core.intro', {});
   }
   const speed = params.get('tempo');
   if (speed !== null) runtime.api.setSpeed(Number(speed));

@@ -16,6 +16,7 @@ import { Button, Confetti, Dialog, Hint, Icon, IconChip, List, ListItem, Stamp }
 import { useRuntime } from '../hooks';
 import { gameStats } from '../registry';
 import type { UiRuntime } from '../runtime';
+import { Slot } from '../shell/Slot';
 
 declare module '../registry' {
   interface DialogRegistry {
@@ -280,6 +281,7 @@ export function GameOverDialog() {
         </Stamp>
         <p class="ending__reason">{over.detail ?? GAME_OVER_TEXT[over.reason]}</p>
         <EndingStats state={session.state} />
+        <Slot name="core.ending" props={{ kind: 'over' }} />
         <Hint>
           {hardcore ? 'Hardcore: Dein Spielstand wurde gelöscht.' : 'Du kannst einen älteren Spielstand laden.'}
         </Hint>
@@ -312,6 +314,7 @@ export function WonDialog() {
           Die Mehrheit der Veedel hört auf dein Kommando. Das Spiel geht im Endlosmodus weiter.
         </p>
         <EndingStats state={session.state} />
+        <Slot name="core.ending" props={{ kind: 'won' }} />
       </div>
     </Dialog>
   );
