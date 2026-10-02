@@ -3,9 +3,9 @@
 // Befehlen anderer Module und antwortet im Chat über messages.answerAs. Was sie erledigt, zählt sie in rh.done
 // (Tagesbericht) und bringt Erfahrung (Stufen).
 //
-//   Schnell (jeder Tick, alle TICK_EVERY Minuten): Aufträge und Handy (Lieferanfragen annehmen und selbst fahren,
+//   Schnell (jeder Tick, alle TICK_EVERY Minuten): Nachbestellen, Aufträge und Handy (Lieferanfragen annehmen und selbst fahren,
 //   Großhandel bis zu ihrem Betrag), Hafen abholen (freien Fahrer schicken).
-//   Stündlich (RIGHT_HAND_INTERVAL): Nachbestellen für ganz Köln, Personal, Geldwäsche.
+//   Stündlich (RIGHT_HAND_INTERVAL): Personal, Geldwäsche.
 
 import { type Actor, type Ctx, clock, formatEuro, type GameState, messages } from '../../core';
 import { getOrders, type Order } from '../customers';
@@ -20,7 +20,7 @@ import { controlledBy, PLAYER_FACTION } from '../territory';
 import { veedelName } from '../veedel';
 import { RIGHT_HAND_RESTOCK_RESERVE, RIGHT_HAND_TASKS, XP_RIGHT_HAND_REPORT, XP_RIGHT_HAND_TASK } from './config';
 import { getLieutenants, lieutenantOfSpot } from './index';
-import { planOrder } from './orders';
+import { runRestock } from './orders';
 import {
   getRightHand,
   isTaskActive,
@@ -32,6 +32,8 @@ import {
 import type { RightHandDone, RightHandPost } from './types';
 
 const VIA = 'Rechte Hand';
+/** So lange vor Fristende wartet sie noch auf Ware fürs Lager, danach überlässt sie die Anfrage dir. */
+const STOCK_WAIT_MINUTES = 30;
 
 /** Protokoll-Eintrag (ohne Doppelte hintereinander). */
 function log(ctx: Ctx, rh: RightHandPost, text: string): void {
@@ -88,6 +90,7 @@ export function describeDone(done: RightHandDone): string {
 export function runQuickTasks(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
   handleOrders(ctx, rh, member, actor);
   handlePickup(ctx, rh, member, actor);
+  restock(ctx, rh, member, actor);
 }
 
 /** Eine Anfrage bleibt beim Spieler: einmal merken und ins Protokoll, nicht jede Runde wieder. */
@@ -124,6 +127,8 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
       continue;
     }
     if (getStock(state, { productId: order.productId }) < order.amount) {
+      // Kommt Ware nach (Bestellung unterwegs), wartet die Anfrage; erst kurz vor Fristende bleibt sie beim Spieler.
+      if (order.expiresAt - ctx.now > STOCK_WAIT_MINUTES) continue;
       pass(ctx, rh, order, `nicht genug ${productName(order.productId)} im Lager`);
       continue;
     }
@@ -175,10 +180,9 @@ function handlePickup(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
   log(ctx, rh, 'Fahrer zum Niehler Hafen geschickt, die Ware kommt ins Lager.');
 }
 
-// --- Stündliche Aufgaben: Nachbestellen, Personal, Geldwäsche ---
+// --- Nachbestellen (jeder Tick), stündlich: Personal, Geldwäsche ---
 
 export function runHourlyTasks(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
-  restock(ctx, rh, member, actor);
   staffing(ctx, rh, member, actor);
   launder(ctx, rh, member, actor);
 }
@@ -212,35 +216,18 @@ function restock(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor)
     rh.restockDay = day;
     rh.restockSpent = 0;
   }
-  const home = mainWarehouseId(state);
-  for (const rule of rh.settings.restockRules) {
-    const plan = planOrder(state, rule, home, restockBudgetLeft(state));
-    if (plan.kind === 'pause') {
-      if (rule.paused !== plan.reason) {
-        rule.paused = plan.reason;
-        log(ctx, rh, `Bestellung ruht: ${plan.reason}`);
-      }
-      continue;
-    }
-    if (rule.paused) rule.paused = null;
-    if (plan.kind === 'noMoney') {
-      log(ctx, rh, 'Wir brauchen Ware, aber mein Budget reicht gerade nicht.');
-      continue;
-    }
-    if (plan.kind !== 'order') continue;
-    const result = ctx.dispatch(
-      {
-        type: 'suppliers.order',
-        payload: { supplierId: plan.supplier.id, packageId: plan.pkg.id, warehouseId: plan.warehouseId },
-      },
-      { actor },
-    );
-    if (!result.ok) continue;
-    rh.restockSpent += plan.price;
-    rh.done.orders += 1;
-    addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
-    log(ctx, rh, `Nachschub bestellt: ${plan.pkg.label} bei ${plan.supplier.name}.${plan.why}`);
-  }
+  runRestock(ctx, rh.settings.restockRules, mainWarehouseId(state), actor, {
+    budget: () => restockBudgetLeft(state),
+    onPause: (_rule, reason) => log(ctx, rh, `Bestellung ruht: ${reason}`),
+    onResume: () => {},
+    onNoMoney: () => log(ctx, rh, 'Wir brauchen Ware, aber mein Budget reicht gerade nicht.'),
+    onOrdered: (plan) => {
+      rh.restockSpent += plan.price;
+      rh.done.orders += 1;
+      addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
+      log(ctx, rh, `Nachschub bestellt: ${plan.pkg.label} bei ${plan.supplier.name}.${plan.why}`);
+    },
+  });
 }
 
 /**

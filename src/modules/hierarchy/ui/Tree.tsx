@@ -70,6 +70,8 @@ function LieutenantBranch(props: { post: LieutenantPost }) {
   if (!m) return null;
   const spots = lieutenantSpots(state, m.id);
   const today = lieutenantResult(state, m.id, 1);
+  const paused = props.post.settings.orderRules.some((r) => r.paused);
+  const last = props.post.log[0]?.text;
   return (
     <Group title={`Leutnant ${m.name}`} icon="crew" color="people" count={spots.length}>
       <List>
@@ -82,7 +84,12 @@ function LieutenantBranch(props: { post: LieutenantPost }) {
             color={m.status === 'active' ? 'people' : 'warn'}
             title={m.name}
             meta={postSummary(state, props.post)}
-            tags={[{ label: `Level ${m.level}` }, { label: 'Ergebnis heute', icon: 'chart', color: 'money' }]}
+            tags={[
+              { label: `Level ${m.level}` },
+              { label: 'Ergebnis heute', icon: 'chart', color: 'money' },
+              paused && { label: 'Bestellung ruht', icon: 'alert', color: 'warn' },
+              !paused && !!last && { label: last ?? '', icon: 'clock' },
+            ]}
           />
         </ListItem>
         {spots.map((spot) => (

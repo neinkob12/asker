@@ -304,14 +304,34 @@ describe('hierarchy: Delegation', () => {
     wake(sim, lt.id);
     sim.advance(5);
     const shipments = shipmentsInTransit(sim.state);
-    expect(shipments).toHaveLength(1);
-    expect(shipments[0]).toMatchObject({ supplierId: 'frankfurt', productId: 'weed', warehouseId: home });
+    // Reicht ein Paket nicht für die Lücke, bestellt er im selben Durchgang nach (höchstens drei Pakete).
+    expect(shipments.length).toBeGreaterThanOrEqual(1);
+    expect(shipments.length).toBeLessThanOrEqual(3);
+    for (const s of shipments) {
+      expect(s).toMatchObject({ supplierId: 'frankfurt', productId: 'weed', warehouseId: home });
+    }
     expect(sim.state.wallet.dirty).toBeGreaterThanOrEqual(500);
     // Solange die Lieferung unterwegs ist, bestellt er nicht doppelt.
     sim.advance(200);
-    expect(shipmentsInTransit(sim.state).length).toBeLessThanOrEqual(2);
+    expect(shipmentsInTransit(sim.state).length).toBeLessThanOrEqual(3);
     const ordered = shipmentsInTransit(sim.state).reduce((sum, s) => sum + s.amount, 0);
     expect(getStock(sim.state, { warehouseId: home, productId: 'weed' }) + ordered).toBeLessThan(100 + 101);
+  });
+
+  it('Bestellregel greift bei jedem Tick, nicht erst in der Ordnungsrunde', () => {
+    const sim = quietGame();
+    openSuppliers(sim);
+    sim.state.wallet.dirty = 3000;
+    const lt = recruit(sim, 'runner', 2);
+    appoint(sim, lt.id, ['uni']);
+    configure(sim, lt.id, {
+      mayHire: false,
+      orderRules: [rule({ productId: 'weed', supplierId: 'frankfurt', minStock: 100 })],
+    });
+    const post = getPost(sim.state, lt.id);
+    if (post) post.nextActionAt = sim.state.time + 1000;
+    sim.advance(5);
+    expect(shipmentsInTransit(sim.state).length).toBeGreaterThanOrEqual(1);
   });
 
   it('zwei Leutnants mit demselben Lager bestellen nicht doppelt', () => {

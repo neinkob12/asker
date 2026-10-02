@@ -38,7 +38,7 @@ import {
   PRICE_TOLERANCE,
 } from './config';
 import { homeWarehouse, lieutenantSpots, spotList, teamOf } from './index';
-import { planOrder } from './orders';
+import { runRestock } from './orders';
 import { leadSpendingLimit, recordLeadSpending } from './righthand';
 import type { CautionLevel, LieutenantPost } from './types';
 
@@ -111,6 +111,8 @@ export function tick(ctx: Ctx): void {
       manage(turnFor(ctx, post, lt));
       post.nextActionAt = ctx.now + actionInterval(lt);
     }
+    // Einkauf bei jedem Tick: Der Mindestbestand soll nicht erst in der nächsten Ordnungsrunde greifen.
+    if (post.settings.mayOrder) restock(turnFor(ctx, post, lt));
     if (ctx.now >= post.busyUntil) serveInPerson(turnFor(ctx, post, lt));
   }
 }
@@ -122,7 +124,6 @@ function manage(turn: Turn): void {
   staffSpots(fresh);
   setPrices(fresh);
   guardSpots(fresh);
-  if (fresh.post.settings.mayOrder) restock(fresh);
 }
 
 /**
@@ -351,39 +352,23 @@ function guardSpots(turn: Turn): void {
 }
 
 /**
- * Einkauf nach Bestellregeln: pro Regel höchstens eine Bestellung pro Runde. Gesperrte Lieferanten lassen die Regel
- * ruhen (Meldung im Protokoll und still aufs Handy, einmal pro Grund).
+ * Einkauf nach Bestellregeln (gemeinsamer Code mit der Rechten Hand, siehe orders.ts). Läuft bei jedem Tick, nicht nur
+ * in seiner Ordnungsrunde, damit Ware rechtzeitig kommt. Gesperrte Lieferanten lassen die Regel ruhen (Meldung im
+ * Protokoll und still aufs Handy, einmal pro Grund).
  */
 function restock(turn: Turn): void {
-  const { ctx, post, run } = turn;
+  const { ctx, post, lt } = turn;
   const home = homeWarehouse(ctx.state, post.staffId)?.id ?? null;
-  for (const rule of post.settings.orderRules) {
-    const plan = planOrder(ctx.state, rule, home, budget(turn, false));
-    if (plan.kind === 'pause') {
-      if (rule.paused !== plan.reason) {
-        rule.paused = plan.reason;
-        note(turn, `Bestellung ruht: ${plan.reason}`, true, true);
-      }
-      continue;
-    }
-    if (rule.paused) {
-      rule.paused = null;
-      note(turn, 'Bestellungen laufen wieder.', false);
-    }
-    if (plan.kind === 'noMoney') {
-      note(turn, 'Wir brauchen Ware, aber das Geld reicht nicht.', true, true);
-      continue;
-    }
-    if (plan.kind !== 'order') continue;
-    const ordered = run({
-      type: 'suppliers.order',
-      payload: { supplierId: plan.supplier.id, packageId: plan.pkg.id, warehouseId: plan.warehouseId },
-    });
-    if (ordered) {
+  runRestock(ctx, post.settings.orderRules, home, `staff:${lt.id}`, {
+    budget: () => budget(turn, false),
+    onPause: (_rule, reason) => note(turn, `Bestellung ruht: ${reason}`, true, true),
+    onResume: () => note(turn, 'Bestellungen laufen wieder.', false),
+    onNoMoney: () => note(turn, 'Wir brauchen Ware, aber das Geld reicht nicht.', true, true),
+    onOrdered: (plan) => {
       spend(turn, plan.price, false);
       note(turn, `Nachschub bestellt: ${plan.pkg.label} bei ${plan.supplier.name}.${plan.why}`);
-    }
-  }
+    },
+  });
 }
 
 /** Der Leutnant verkauft selbst an seinen Spots, an denen gerade kein Läufer steht. */
