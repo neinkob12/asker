@@ -112,7 +112,15 @@ export const SCENES = [
     })()`,
   },
   { name: 'leute', js: "window.koeln.runtime.api.selectTab('staff')" },
-  { name: 'kontakte', js: "window.koeln.runtime.api.openPhone('recruiting.contacts')" },
+  {
+    name: 'leute-finden',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.runtime.api.selectTab('staff');
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Leute finden')));
+      head?.scrollIntoView({ block: 'start' });
+    })()`,
+  },
   { name: 'reviere', js: "window.koeln.runtime.api.selectTab('territory')" },
   { name: 'gangs', js: "window.koeln.runtime.api.selectTab('gangs')" },
   { name: 'lieferanten', js: "window.koeln.runtime.api.openPhone('suppliers.app')" },
@@ -125,10 +133,10 @@ export const SCENES = [
       window.koeln.runtime.api.openPhone('suppliers.app', { supplierId: 'hamburg' });
     })()`,
   },
-  // Logistik: ohne Liegeplatz, dann mit Ware am Kai, Fahrern, zweitem Lager und einer Fahrt unterwegs
-  { name: 'logistik', js: "window.koeln.runtime.api.openPhone('logistics.app')" },
+  // Hafen: ohne Liegeplatz, dann mit Ware am Kai, Fahrern, zweitem Lager und einer Fahrt unterwegs
+  { name: 'hafen', js: "window.koeln.runtime.api.openPanel('logistics.port', {})" },
   {
-    name: 'logistik-hafen',
+    name: 'hafen-ware',
     js: `(() => {
       const sim = window.koeln.session.sim;
       sim.state.wallet.clean = 8000;
@@ -142,7 +150,7 @@ export const SCENES = [
       sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'hash' } });
       sim.advance(600);
       sim.dispatch({ type: 'logistics.transfer', payload: { fromId: 'ehrenfeld', toId: 'nippes', by: 'driver' } });
-      window.koeln.runtime.api.openPhone('logistics.app');
+      window.koeln.runtime.api.openPanel('logistics.port', {});
     })()`,
   },
   // Details (Panels): Spot, Veedel, Lager, Markt, Mitarbeiter-Akte

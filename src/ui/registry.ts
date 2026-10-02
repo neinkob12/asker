@@ -289,7 +289,7 @@ export function registerTab(tab: SidebarTab): void {
   sidebarTabs.register(tab);
 }
 
-/** Inhalt in einen Slot hängen, z.B. registerSlot('tab:business', {...}) oder registerSlot('spots.spotPanel', {...}). */
+/** Inhalt in einen Slot hängen, z.B. registerSlot('tab:territory', {...}) oder registerSlot('spots.spotPanel', {...}). */
 export function registerSlot<N extends SlotName>(name: N, contribution: SlotContribution<N>): void {
   let registry = slots.get(name);
   if (!registry) {

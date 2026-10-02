@@ -171,12 +171,12 @@ try {
     if (last.veedel > 0 && !taken.has('reviere')) {
       await ui('selectTab', 'territory');
       await shot('reviere');
-      await ui('selectTab', 'business');
+      await closeAll();
     }
     if (state.hour === 23 && hour > 24 && !taken.has('nacht')) await shot('nacht');
     if (last.gameOver) break;
   }
-  await ui('selectTab', 'journal');
+  await ui('openPhone', 'core.history');
   await shot('ende');
 
   const seen = await page.evaluate(() => window.playtest.seen);

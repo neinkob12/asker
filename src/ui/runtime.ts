@@ -211,7 +211,7 @@ export interface UiApi {
   resetNorth(): void;
 }
 
-/** App-ID eines Tabs im Handy: 'tab:<id>', z.B. 'tab:business'. */
+/** App-ID eines Tabs im Handy: 'tab:<id>', z.B. 'tab:territory'. */
 export const TAB_APP_PREFIX = 'tab:';
 
 /** Handy-Breite, gleich wie MOBILE_BREAKPOINT in src/map/config.ts und die Media Queries in tokens.css. */

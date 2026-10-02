@@ -76,10 +76,10 @@ export const logisticsLayer: MapLayer = {
       className: 'map-place map-place--dock',
       anchor: 'bottom',
       tag: 'button',
-      title: 'Logistik öffnen',
+      title: 'Hafen öffnen',
       children: [placeIcon('anchor'), name],
       onClick: () => {
-        if (!ctx.isPicking()) ctx.ui.openPhone('logistics.app');
+        if (!ctx.isPicking()) ctx.ui.openPanel('logistics.port', {});
       },
     });
     portMarker.element.hidden = true;

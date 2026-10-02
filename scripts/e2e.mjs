@@ -152,8 +152,12 @@ async function run() {
     await page.locator('.phone__nav-button').click();
   });
 
-  await check('Logistik-App: Liegeplatz im Hafen braucht sauberes Geld', async () => {
-    await page.locator('.phone').getByRole('button', { name: 'Logistik', exact: true }).click();
+  await check('Hafen-Seite (über das Lager): Liegeplatz braucht sauberes Geld', async () => {
+    await page.evaluate(() => window.koeln.runtime.api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' }));
+    await page
+      .locator('.phone')
+      .getByRole('button', { name: /Niehler Hafen/ })
+      .click();
     const berth = page.getByRole('button', { name: /^Liegeplatz mieten/ });
     assert.ok(await berth.isDisabled(), 'ohne sauberes Geld kein Liegeplatz');
     await page.evaluate(() => {
@@ -162,9 +166,9 @@ async function run() {
     await advance(page, 1);
     await berth.click();
     assert.equal(await game(page, (s) => s.modules.logistics.berth !== null), true);
-    await shot(page, 'logistik');
+    await shot(page, 'hafen');
     // Zurück zum Startbildschirm, dann das Handy weglegen.
-    await page.locator('.phone__nav-button').click();
+    await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
     if (await page.locator('.phone').count()) await page.locator('.phone__nav-button').click();
   });
 

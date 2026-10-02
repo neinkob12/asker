@@ -19,7 +19,7 @@ registerLiveActivity({
         trailing: risky ? 'Zoll!' : islandCountdown(cargoRiskFrom(c) - state.time),
         title: `${formatProductAmount(c.productId, c.amount)} ${productName(c.productId)} am Kai`,
         detail: risky ? 'Der Zoll kann sie jederzeit finden' : `Sicher bis ${clock.formatTime(cargoRiskFrom(c))}`,
-        open: (ui) => ui.openPhone('logistics.app'),
+        open: (ui) => ui.openPanel('logistics.port', {}),
       };
     });
     const trips = getTrips(state).map((trip): LiveActivity => {
@@ -35,7 +35,7 @@ registerLiveActivity({
         title: trip.kind === 'pickup' ? `Abholung am Hafen → ${to}` : `Umlagern → ${to}`,
         detail: `${tripAmount(trip)} Einheiten`,
         progress: tripProgress(state, trip).total,
-        open: (ui) => ui.openPhone('logistics.app'),
+        open: (ui) => ui.openPanel('logistics.port', {}),
       };
     });
     return [...cargo, ...trips];

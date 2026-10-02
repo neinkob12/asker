@@ -1,26 +1,12 @@
-// Oberfläche der Rekrutierung: Kontakte-App im Spiel-Handy (Kontakte und Bewerber) und ein Abschnitt im
-// Tab "Personal", der auf die App verweist.
+// Oberfläche der Rekrutierung: Abschnitt "Leute finden" im Personal (Kontakte, die sich melden, und Bewerber zum
+// Einstellen, dazu Rumfragen). Seit Auftrag 26 keine eigene Kontakte-App mehr.
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro } from '../../../core';
-import {
-  Avatar,
-  Button,
-  Card,
-  Empty,
-  Hint,
-  registerPhoneApp,
-  registerSlot,
-  SegmentedControl,
-  Tag,
-  useGame,
-  useUi,
-} from '../../../ui';
+import { Avatar, Button, Empty, Group, registerSlot, SegmentedControl, Tag, useGame } from '../../../ui';
 import { roleName, STAT_KEYS, STAT_NAMES } from '../../staff';
 import { type Candidate, getContacts, getPool, SEARCH_COST, SOURCE_NAMES, searchReadyAt } from '../index';
 import './recruiting.css';
-
-const APP_ID = 'recruiting.contacts';
 
 function CandidateCard(props: { candidate: Candidate }) {
   const { state, dispatch } = useGame();
@@ -87,15 +73,22 @@ function SearchButton() {
   );
 }
 
-/** Kontakte-App im Spiel-Handy. */
-function ContactsApp() {
+/** Abschnitt "Leute finden" im Personal (seit Auftrag 26 statt einer eigenen Kontakte-App): Kontakte und Bewerber. */
+function RecruitingSection() {
   const { state } = useGame();
   const contacts = getContacts(state);
   const pool = getPool(state);
   const [tab, setTab] = useState<'contacts' | 'pool'>(contacts.length > 0 ? 'contacts' : 'pool');
   const list = tab === 'contacts' ? contacts : pool;
   return (
-    <div class="rc-app">
+    <Group
+      title="Leute finden"
+      icon="userPlus"
+      color="people"
+      count={contacts.length + pool.length}
+      note="Vor der Einstellung siehst du nur einen Teil der Werte. Den Rest merkst du mit der Zeit. Loyale Leute, Stammkunden und das Milieu empfehlen dir manchmal wen."
+      class="rc-app"
+    >
       <SegmentedControl
         wide
         aria-label="Ansicht"
@@ -119,44 +112,9 @@ function ContactsApp() {
           ))}
         </ul>
       )}
-      {tab === 'pool' && <SearchButton />}
-      <Hint>Vor der Einstellung siehst du nur einen Teil der Werte. Den Rest merkst du mit der Zeit.</Hint>
-    </div>
-  );
-}
-
-/** Abschnitt im Tab "Personal". */
-function RecruitingSection() {
-  const { state } = useGame();
-  const ui = useUi();
-  const contacts = getContacts(state).length;
-  const pool = getPool(state).length;
-  return (
-    <Card
-      title="Leute finden"
-      actions={
-        <Button small onClick={() => ui.openPhone(APP_ID)}>
-          Kontakte-App
-        </Button>
-      }
-    >
-      <Hint>
-        {pool} {pool === 1 ? 'Bewerber wartet' : 'Bewerber warten'}
-        {contacts > 0 ? `, ${contacts} ${contacts === 1 ? 'Kontakt' : 'Kontakte'} (oft besser)` : ''}.
-      </Hint>
       <SearchButton />
-    </Card>
+    </Group>
   );
 }
 
-registerPhoneApp({
-  id: APP_ID,
-  name: 'Kontakte',
-  icon: 'users',
-  order: 25,
-  color: 'people',
-  component: ContactsApp,
-  badge: (state) => getContacts(state).length,
-  hidden: true,
-});
-registerSlot('tab:staff', { id: 'recruiting.section', order: 30, component: RecruitingSection });
+registerSlot('tab:staff', { id: 'recruiting.section', title: 'Leute finden', order: 30, component: RecruitingSection });

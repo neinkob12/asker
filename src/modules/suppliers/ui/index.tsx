@@ -198,7 +198,7 @@ function LockedSupplier(props: { supplierId: string }) {
       </List>
       <div class="sup-actions">
         {supplier.unlock.requires.berth && !hasBerth(state) && (
-          <Button icon="ship" onClick={() => ui.openPhone('logistics.app')}>
+          <Button icon="ship" onClick={() => ui.openPanel('logistics.port', {})}>
             Zum Hafen
           </Button>
         )}
