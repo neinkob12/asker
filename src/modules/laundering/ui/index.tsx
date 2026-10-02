@@ -1,11 +1,14 @@
-// Oberfläche der Geldwäsche: App "Geldwäsche" im Handy (Betrag wählen, Gebühr und Dauer sehen, laufende Wäschen
-// verfolgen), Hinweis bei fertiger Wäsche, Empfehlung bei viel Schwarzgeld.
+// Oberfläche der Geldwäsche (Auftrag 27): große App "Geldwäsche" im Handy. Oben Schwarzgeld und sauberes Geld
+// nebeneinander, darunter die laufenden Wäschen mit Fortschritt und die drei Wege (Kumpel mit Kiosk, Waschsalon,
+// Bauunternehmer), jeder mit Gebühr, Dauer, Obergrenze und Risiko als Chips, Betrag mit Stepper und Vorgaben oder
+// Freischalten mit sauberem oder Schwarzgeld. Schwarzgeld und sauberes Geld im HUD öffnen diese App.
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro, formatPercent, wallet } from '../../../core';
 import {
+  Chips,
+  Disclosure,
   Group,
-  Hint,
   ItemContent,
   List,
   ListItem,
@@ -19,102 +22,233 @@ import {
   SummaryTiles,
   useGame,
 } from '../../../ui';
+import { veedelName } from '../../veedel';
 import {
   amountInProgress,
   batchProgress,
+  canUnlockChannel,
+  channelDuration,
+  channelFee,
+  channelFree,
   getBatches,
+  getChannel,
+  isChannelUnlocked,
+  LAUNDERING_CHANNELS,
+  type LaunderingChannel,
   launderingCapacity,
-  launderingDuration,
-  launderingFee,
 } from '../index';
 import './laundering.css';
 
 const STEP = 100;
-const PRESETS = [500, 1000, 2000] as const;
 
-/**
- * App "Geldwäsche" (seit Auftrag 26 eine eigene App, groß ausgebaut wird sie in Auftrag 27): oben Schwarzgeld, sauberes
- * Geld und was gerade in der Wäsche ist, darunter der Betrag mit Stepper (oder Vorgabe), was sauber zurückkommt, und
- * die laufenden Wäschen. Schwarzgeld und sauberes Geld im HUD öffnen diese App.
- */
-function LaunderingApp() {
+/** Vorgaben je Weg: ein Viertel, die Hälfte, alles, was frei ist (gerundet auf Hunderter). */
+function presets(free: number, min: number): number[] {
+  const round = (v: number) => Math.floor(v / STEP) * STEP;
+  return [...new Set([round(free / 4), round(free / 2), round(free)])].filter((v) => v >= min && v > 0);
+}
+
+/** Risiko eines Wegs in einem Chip: kein Risiko, oder Heat ab so viel gleichzeitig. */
+function riskChip(c: LaunderingChannel) {
+  if (c.heatPer1000 === 0) return { label: 'fast kein Risiko', icon: 'shieldCheck', color: 'money' as const };
+  const level = c.heatPer1000 >= 2 ? 'Heat' : 'etwas Heat';
+  return { label: `${level} ab ${formatEuro(c.heatAbove)} auf einmal`, icon: 'flame', color: 'danger' as const };
+}
+
+/** Ein freigeschalteter Weg: Kennzahlen als Chips, Betrag, Vorgaben, Waschen. */
+function OpenChannel(props: { channel: LaunderingChannel }) {
   const { state, dispatch } = useGame();
-  const [amount, setAmount] = useState(500);
+  const c = props.channel;
   const dirty = Math.floor(wallet.balance(state, 'dirty'));
-  const free = Math.max(0, launderingCapacity(state) - amountInProgress(state));
+  const free = channelFree(state, c.id);
   const max = Math.min(dirty, free);
+  const [amount, setAmount] = useState(() => Math.min(max, Math.max(c.minAmount, 500)));
   const value = Math.min(amount, max);
-  const fee = launderingFee(state);
+  const fee = channelFee(state, c.id);
+  const ok = value >= c.minAmount;
+  const running = amountInProgress(state, c.id);
+  const wash = () => dispatch({ type: 'laundering.launder', payload: { amount: value, channel: c.id } });
+  const options = presets(max, c.minAmount);
+  return (
+    <Group
+      title={c.name}
+      icon={c.icon}
+      color="dirty"
+      value={`Gebühr ${formatPercent(fee)}`}
+      note={c.how}
+      more={`${c.who} Das Geschäft steht in ${veedelName(c.veedelId)}: Läuft dort zu viel auf einmal, steigt der Heat im Veedel. Kleinster Betrag ${formatEuro(c.minAmount)}, gleichzeitig höchstens ${formatEuro(c.capacity)}.`}
+    >
+      <Chips
+        class="laundering-facts"
+        items={[
+          {
+            label: `Dauer ${clock.formatDuration(channelDuration(c.id, Math.max(value, c.minAmount)))}`,
+            icon: 'clock',
+          },
+          {
+            label:
+              running > 0 ? `${formatEuro(free)} von ${formatEuro(c.capacity)} frei` : `bis ${formatEuro(c.capacity)}`,
+            icon: 'gauge',
+            color: free <= 0 ? 'warn' : 'system',
+          },
+          riskChip(c),
+        ]}
+      />
+      <List>
+        <ListItem
+          aside={
+            <Stepper
+              label={`Betrag ${c.name}`}
+              value={value}
+              min={0}
+              max={max}
+              step={STEP}
+              format={(v) => formatEuro(v)}
+              onChange={setAmount}
+            />
+          }
+        >
+          <ItemContent
+            icon="moneyBag"
+            color="dirty"
+            title="Betrag"
+            meta={
+              ok
+                ? `${formatEuro(value - Math.round(value * fee))} sauber in ca. ${clock.formatDuration(channelDuration(c.id, value))}`
+                : max < c.minAmount
+                  ? free < c.minAmount
+                    ? 'Gerade nichts frei'
+                    : `Zu wenig Schwarzgeld (ab ${formatEuro(c.minAmount)})`
+                  : `Mindestens ${formatEuro(c.minAmount)}`
+            }
+          />
+        </ListItem>
+        <ListItem action disabled={!ok} onClick={wash} value={ok ? formatEuro(value) : undefined}>
+          <ItemContent
+            icon="washing"
+            color="money"
+            title="Jetzt waschen"
+            meta={ok ? `Gebühr ${formatEuro(Math.round(value * fee))}` : `Ab ${formatEuro(c.minAmount)}`}
+          />
+        </ListItem>
+      </List>
+      {options.length > 0 && (
+        <SegmentedControl
+          wide
+          aria-label={`Betrag wählen (${c.name})`}
+          value={options.includes(value) ? value : -1}
+          options={options.map((p, i) => ({
+            value: p,
+            label: i === options.length - 1 && p === max ? `Alles (${formatEuro(p)})` : formatEuro(p),
+          }))}
+          onChange={(v) => setAmount(v)}
+        />
+      )}
+    </Group>
+  );
+}
+
+/** Ein gesperrter Weg: was er bringt, was er kostet, was fehlt. */
+function LockedChannel(props: { channel: LaunderingChannel }) {
+  const { state, dispatch } = useGame();
+  const c = props.channel;
+  const check = canUnlockChannel(state, c.id);
+  const cost = c.unlock ?? { clean: 0, dirty: 0 };
+  const unlock = (pay: 'clean' | 'dirty') => dispatch({ type: 'laundering.unlock', payload: { channel: c.id, pay } });
+  return (
+    <Group
+      title={c.name}
+      icon="lock"
+      color="system"
+      value={`Gebühr ${formatPercent(c.fee)}`}
+      note={check.ok ? c.how : check.reason}
+      more={`${c.who} ${c.how}`}
+    >
+      <Chips
+        class="laundering-facts"
+        items={[
+          { label: `ab ${formatEuro(c.minAmount)}`, icon: 'coins' },
+          { label: `bis ${formatEuro(c.capacity)} auf einmal`, icon: 'gauge' },
+          riskChip(c),
+          c.unlock?.reputation !== undefined && {
+            label: `Ruf ab ${c.unlock.reputation}`,
+            icon: 'star',
+            color: check.ok ? 'money' : 'warn',
+          },
+          c.unlock?.veedel !== undefined && {
+            label: `oder ${c.unlock.veedel} Veedel`,
+            icon: 'flag',
+            color: check.ok ? 'money' : 'warn',
+          },
+        ]}
+      />
+      <List>
+        <ListItem
+          action
+          disabled={!check.ok || state.wallet.clean < cost.clean}
+          value={formatEuro(cost.clean)}
+          onClick={() => unlock('clean')}
+        >
+          <ItemContent
+            icon="coinEuro"
+            color="money"
+            title="Einsteigen mit sauberem Geld"
+            meta="Legal, bleibt unauffällig"
+          />
+        </ListItem>
+        <ListItem
+          action
+          disabled={!check.ok || state.wallet.dirty < cost.dirty}
+          value={formatEuro(cost.dirty)}
+          onClick={() => unlock('dirty')}
+        >
+          <ItemContent icon="moneyBag" color="dirty" title="Einsteigen mit Schwarzgeld" meta="Teurer, dafür sofort" />
+        </ListItem>
+      </List>
+    </Group>
+  );
+}
+
+function LaunderingApp() {
+  const { state } = useGame();
+  const dirty = Math.floor(wallet.balance(state, 'dirty'));
   const batches = getBatches(state);
   const inProgress = amountInProgress(state);
-  const preset = PRESETS.find((p) => p === value) ?? (value === max && max > 0 ? 'max' : null);
-  const wash = () => dispatch({ type: 'laundering.launder', payload: { amount: value } });
+  const open = LAUNDERING_CHANNELS.filter((c) => isChannelUnlocked(state, c.id));
+  const locked = LAUNDERING_CHANNELS.filter((c) => !isChannelUnlocked(state, c.id));
   return (
     <div class="laundering-app">
       <SummaryTiles
         items={[
           { icon: 'moneyBag', color: 'dirty', value: formatEuro(dirty), label: 'Schwarz' },
           { icon: 'coinEuro', color: 'money', value: formatEuro(Math.floor(state.wallet.clean)), label: 'Sauber' },
-          { icon: 'washing', color: 'dirty', value: formatEuro(inProgress), label: 'Wäsche' },
         ]}
       />
-      <Group
-        title="Waschen"
-        icon="washing"
-        color="dirty"
-        note={`Schwarzgeld wird über Zeit zu sauberem Geld, das du für Legales brauchst (Lager, Liegeplatz). Gebühr ${formatPercent(fee)}, gerade frei: ${formatEuro(free)}.`}
-      >
-        <List>
-          <ListItem
-            aside={
-              <Stepper
-                label="Betrag"
-                value={value}
-                min={0}
-                max={max}
-                step={STEP}
-                format={(v) => formatEuro(v)}
-                onChange={setAmount}
-              />
-            }
-          >
-            <ItemContent
-              icon="moneyBag"
-              color="dirty"
-              title="Betrag"
-              meta={
-                value > 0
-                  ? `${formatEuro(value - Math.round(value * fee))} sauber in ca. ${clock.formatDuration(launderingDuration(value))}`
-                  : 'Kein Schwarzgeld frei'
-              }
-            />
-          </ListItem>
-          <ListItem action disabled={value < STEP} onClick={wash} value={value >= STEP ? formatEuro(value) : undefined}>
-            <ItemContent
-              icon="washing"
-              color="money"
-              title="Jetzt waschen"
-              meta={value >= STEP ? `Gebühr ${formatEuro(Math.round(value * fee))}` : `Mindestens ${formatEuro(STEP)}`}
-            />
-          </ListItem>
-        </List>
-        <SegmentedControl
-          wide
-          aria-label="Betrag wählen"
-          value={preset ?? ''}
-          options={[
-            ...PRESETS.map((p) => ({ value: p as number | string, label: formatEuro(p) })),
-            { value: 'max', label: 'Alles' },
-          ]}
-          onChange={(v) => setAmount(v === 'max' ? max : Number(v))}
-        />
-      </Group>
+      <p class="laundering-lead">
+        Schwarzgeld wird über Zeit zu sauberem Geld, das du für Legales brauchst (Lager, Liegeplatz, Einstieg bei
+        Geschäften).
+      </p>
       {batches.length > 0 && (
-        <Group title="In der Wäsche" icon="clock" color="dirty" count={batches.length}>
+        <Group
+          title="In der Wäsche"
+          icon="washing"
+          color="dirty"
+          count={batches.length}
+          value={formatEuro(inProgress)}
+          collapsible
+          note={`Frei über alle Wege: ${formatEuro(launderingCapacity(state) - inProgress)}.`}
+        >
           <List>
             {batches.map((b) => (
               <ListItem key={b.id} value={`fertig ${clock.formatTime(b.readyAt)}`}>
-                <ItemContent icon="washing" color="dirty" title={formatEuro(b.amount)}>
+                <ItemContent
+                  icon={getChannel(b.channel).icon}
+                  color="dirty"
+                  title={formatEuro(b.amount)}
+                  tags={[
+                    { label: getChannel(b.channel).name, icon: getChannel(b.channel).icon, color: 'dirty' },
+                    { label: `${formatEuro(b.amount - b.fee)} sauber`, icon: 'coinEuro', color: 'money' },
+                  ]}
+                >
                   <ProgressBar value={batchProgress(state, b)} label="Geldwäsche" />
                 </ItemContent>
               </ListItem>
@@ -122,7 +256,22 @@ function LaunderingApp() {
           </List>
         </Group>
       )}
-      {max <= 0 && <Hint>Gerade nichts frei: Erst muss eine Wäsche fertig werden oder Schwarzgeld reinkommen.</Hint>}
+      {open.map((c) => (
+        <OpenChannel key={c.id} channel={c} />
+      ))}
+      {locked.map((c) => (
+        <LockedChannel key={c.id} channel={c} />
+      ))}
+      <Disclosure label="Wie funktioniert Geldwäsche?">
+        <p>
+          Jeder Weg hat eine Gebühr, eine Dauer und eine Obergrenze, wie viel gleichzeitig laufen kann. Kleine Wege sind
+          schnell und teuer, große langsam und billig.
+        </p>
+        <p>
+          Läuft über einen Weg zu viel auf einmal, steigt der Heat im Veedel des Geschäfts. Ein Buchhalter senkt die
+          Gebühr auf allen Wegen.
+        </p>
+      </Disclosure>
     </div>
   );
 }
@@ -145,13 +294,16 @@ registerSearch({
       title: 'Geldwäsche',
       subtitle: `${formatEuro(Math.floor(wallet.balance(state, 'dirty')))} Schwarzgeld, ${formatEuro(amountInProgress(state))} in der Wäsche`,
       icon: 'washing',
-      keywords: 'waschen sauber schwarzgeld geld',
+      keywords: 'waschen sauber schwarzgeld geld kiosk waschsalon bauunternehmer',
       run: (ui) => ui.openPhone('laundering.app'),
     },
   ],
 });
 onGameEvent('laundering.completed', 'laundering.toast', (payload, ui) =>
   ui.toast(`${formatEuro(payload.amount - payload.fee)} sind jetzt sauber.`, 'good'),
+);
+onGameEvent('laundering.unlocked', 'laundering.unlockedToast', (payload, ui) =>
+  ui.toast(`${getChannel(payload.channel).name} wäscht jetzt für dich.`, 'good', { urgent: false }),
 );
 
 registerAdvisor({

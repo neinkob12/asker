@@ -1,9 +1,16 @@
-/* Geldwäsche: Betrag als Zeile mit Stepper, Vorgaben als Segmente darunter (Gruppen aus den Bausteinen). */
-.ui-group .ui-segmented {
-  margin-top: var(--space-1);
-}
+/* Geldwäsche (Auftrag 27): Wege als Gruppen mit Kennzahlen als Chips, Betrag als Zeile mit Stepper, Vorgaben als Segmente. */
 .laundering-app {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+}
+.laundering-lead {
+  margin: 0;
+  padding: 0 4px;
+  font-size: var(--type-subhead, 15px);
+  line-height: var(--type-subhead-lh, 20px);
+  color: var(--phone-label-2, var(--color-muted));
+}
+.laundering-facts {
+  padding-top: 2px;
 }
