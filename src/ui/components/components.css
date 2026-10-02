@@ -369,8 +369,8 @@
   white-space: nowrap;
 }
 .ui-segmented--joined:has(> :nth-child(5)) .ui-button {
-  padding-inline: 4px;
-  font-size: var(--type-caption);
+  padding-inline: 2px;
+  font-size: var(--type-caption-2);
   letter-spacing: -0.01em;
 }
 .ui-segmented--joined .ui-button.is-active {

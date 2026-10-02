@@ -33,7 +33,7 @@ function ReputationHud() {
   const ui = useUi();
   const value = getReputation(state);
   const tiers = reputationTiers();
-  const index = tiers.findIndex((t) => t === reputationTier(value));
+  const index = tiers.indexOf(reputationTier(value));
   const tier = tiers[index];
   const below = tiers[index - 1];
   const above = tiers[index + 1];

@@ -448,6 +448,10 @@
 /* Kachel mit aufklappbarer Karte (Lager, Ruf · Reviere): Karte darunter, Glas, Knopf zum Ziel */
 .hud-pill-wrap {
   position: relative;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
 }
 .hud-tiles .hud-pill-wrap > .hud-pill {
   width: 100%;

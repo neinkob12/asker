@@ -58,23 +58,23 @@ function RecentRow(props: { chats: ChatListItem[] }) {
   const ui = useUi();
   if (props.chats.length < 2) return null;
   return (
-    <div class="msg-recent" role="list" aria-label="Zuletzt">
+    <ul class="msg-recent" aria-label="Zuletzt">
       {props.chats.map((c) => (
-        <button
-          key={c.contactId}
-          type="button"
-          class="msg-recent__item"
-          role="listitem"
-          onClick={() => ui.openPhone(APP_ID, { contactId: c.contactId })}
-          aria-label={`${c.name}${c.unread > 0 ? `, ${c.unread} ungelesen` : ''}`}
-          title={c.name}
-        >
-          <Avatar name={c.name} image={avatarImage(c.avatar, c.kind)} tone={CONTACT_KIND_TONES[c.kind]} />
-          <span class="msg-recent__name">{c.name.split(' ')[0]}</span>
-          <Badge count={c.unread} />
-        </button>
+        <li key={c.contactId}>
+          <button
+            type="button"
+            class="msg-recent__item"
+            onClick={() => ui.openPhone(APP_ID, { contactId: c.contactId })}
+            aria-label={`${c.name}${c.unread > 0 ? `, ${c.unread} ungelesen` : ''}`}
+            title={c.name}
+          >
+            <Avatar name={c.name} image={avatarImage(c.avatar, c.kind)} tone={CONTACT_KIND_TONES[c.kind]} />
+            <span class="msg-recent__name">{c.name.split(' ')[0]}</span>
+            <Badge count={c.unread} />
+          </button>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 

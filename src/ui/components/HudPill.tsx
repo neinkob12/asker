@@ -79,8 +79,9 @@ export function HudPill(props: HudPillProps) {
   if (props.details) {
     // Drüberfahren klappt auf (Maus), Antippen schaltet um (Finger); die Karte selbst trägt den Weg zum Ziel.
     return (
-      <div
+      <fieldset
         class={`hud-pill-wrap ${open || hover ? 'is-open' : ''}`}
+        aria-label={typeof props.label === 'string' ? props.label : undefined}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
       >
@@ -112,7 +113,7 @@ export function HudPill(props: HudPillProps) {
             )}
           </div>
         )}
-      </div>
+      </fieldset>
     );
   }
   return props.onClick ? (
