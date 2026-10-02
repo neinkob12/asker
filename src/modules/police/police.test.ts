@@ -475,7 +475,8 @@ describe('police: Härte nach Größe des Geschäfts (Auftrag 24)', () => {
     const major = majorRaid();
     expect(major).toBeDefined();
     expect(major?.payload.veedelIds?.length).toBeGreaterThanOrEqual(2);
-    expect(sim.state.journal.some((j) => j.text.startsWith('Großrazzia in'))).toBe(true);
+    const journalTexts = eventsOfType(events, 'journal.added').map((e) => e.payload.entry.text);
+    expect(journalTexts.some((t) => t.startsWith('Großrazzia in'))).toBe(true);
   });
 
   it('Version 3 wird migriert: geplante Razzien bekommen ihre Art', () => {
