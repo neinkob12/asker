@@ -462,6 +462,35 @@ describe('customers: Lieferdienst und Großhandel', () => {
     expect(getSalesStats(sim.state).deliveries).toBe(1);
   });
 
+  it('Chat löschen mit offener Anfrage: Der Auftrag verfällt sofort, die Frage lebt nicht unsichtbar weiter', () => {
+    const sim = quietGame();
+    changeReputation(sim.ctx('test'), 40);
+    const order = offerDelivery(sim.ctx('customers'), true);
+    if (!order) throw new Error('keine Bestellung');
+    const reputation = getReputation(sim.state);
+    expect(sim.dispatch({ type: 'messages.delete', payload: { contactId: order.contactId } }).ok).toBe(true);
+    // Die Ereignisse des Befehls sind zugestellt: Der Auftrag ist erledigt (ignoriert), nicht mehr offen.
+    expect(getOrder(sim.state, order.id)?.status).toBe('expired');
+    expect(getReputation(sim.state)).toBeLessThan(reputation);
+    const message = messages.get(sim.state, order.messageId);
+    expect(message && messages.canAnswer(sim.state, message)).toBe(false);
+    expect(messages.openRoutine(sim.state)).toHaveLength(0);
+  });
+
+  it('Die Antwort steht im Chat vor dem, was der Befehl auslöst; scheitert er, bleibt sie draußen', () => {
+    const sim = quietGame();
+    changeReputation(sim.ctx('test'), 40);
+    const order = offerDelivery(sim.ctx('customers'), true);
+    if (!order) throw new Error('keine Bestellung');
+    const sent = messages.thread(sim.state, order.contactId).length;
+    // Nicht genug Ware: Der Befehl scheitert, die Antwort darf nicht im Chat stehen bleiben.
+    sim.state.modules.goods.stock.ehrenfeld = [];
+    expect(answer(sim, order.messageId, 'self').ok).toBe(false);
+    expect(messages.thread(sim.state, order.contactId)).toHaveLength(sent);
+    const open = messages.get(sim.state, order.messageId);
+    expect(open && messages.canAnswer(sim.state, open)).toBe(true);
+  });
+
   it('Lieferungen starten im nächsten Lager mit der Ware und fahren über die Straßen', () => {
     const sim = quietGame();
     changeReputation(sim.ctx('test'), 40);

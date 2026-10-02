@@ -586,6 +586,8 @@ export class UiRuntime {
           // Ist genau diese App (bzw. dieser Chat) offen, braucht es kein Banner.
           const here =
             ui.phone.open &&
+            // Liegt eine Detailseite (Spot, Veedel …) über dem Chat, schaut man ihn nicht an.
+            ui.panel === null &&
             ui.phone.app === notification.appId &&
             JSON.stringify(ui.phone.params ?? {}) === JSON.stringify(notification.params ?? {});
           if (here) {

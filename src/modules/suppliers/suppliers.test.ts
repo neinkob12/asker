@@ -176,6 +176,27 @@ describe('suppliers', () => {
     expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'hamburg' } }).ok).toBe(false);
   });
 
+  it('Schaltet man den Lieferanten über die App frei, ist sein Angebot im Chat erledigt; die Antwort steht vor seiner Reaktion', () => {
+    const sim = createTestGame();
+    sim.state.modules.customers.stats.revenue = 2000;
+    sim.advance(60);
+    const [offer] = messages.thread(sim.state, 'supplier:hamburg');
+    expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'hamburg' } }).ok).toBe(true);
+    const stale = messages.get(sim.state, offer.id);
+    expect(stale && messages.canAnswer(sim.state, stale)).toBe(false);
+    // Über die Antwort im Chat: erst "Deal.", dann die Reaktion des Lieferanten.
+    const other = createTestGame();
+    other.state.modules.customers.stats.revenue = 2000;
+    other.advance(60);
+    const [pitch] = messages.thread(other.state, 'supplier:hamburg');
+    other.dispatch({ type: 'messages.answer', payload: { messageId: pitch.id, optionId: 'unlock' } });
+    const texts = messages
+      .thread(other.state, 'supplier:hamburg')
+      .map((m) => (m.from === 'player' ? `Du: ${m.text}` : m.text));
+    expect(texts[1]).toBe('Du: Deal.');
+    expect(texts[2]).toMatch(/Abgemacht/);
+  });
+
   it('Rotterdam braucht einen Liegeplatz, Berlin ein Veedel', () => {
     const sim = createTestGame();
     expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'rotterdam' } }).ok).toBe(false);

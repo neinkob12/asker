@@ -404,6 +404,11 @@ function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null,
     note: c.note,
   });
   if (c.referrerId && isEmployed(ctx.state, c.referrerId)) addLoyalty(ctx, c.referrerId, 3);
+  // Fragen im Chat zu genau diesem Bewerber (Empfehlung, Bewerbung) sind erledigt, auch wenn er über die App kam.
+  messages.retractWhere(
+    ctx,
+    (m) => !!m.options?.some((o) => o.command?.type === 'recruiting.hire' && o.command.payload.candidateId === c.id),
+  );
   ctx.emit('recruiting.hired', { candidateId: c.id, staffId: member.id });
   if (assignment) ctx.dispatch({ type: 'staff.assign', payload: { staffId: member.id, assignment } }, meta);
   return { ok: true, data: { staffId: member.id } };

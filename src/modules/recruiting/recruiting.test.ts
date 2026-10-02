@@ -210,6 +210,34 @@ describe('recruiting: Kontakte', () => {
   });
 });
 
+describe('recruiting: Fragen im Chat', () => {
+  const hireQuestions = (sim: Simulation, candidateId: string) =>
+    messages
+      .threads(sim.state)
+      .flatMap((t) => messages.thread(sim.state, t.contact.id))
+      .filter(
+        (m) =>
+          messages.canAnswer(sim.state, m) &&
+          m.options?.some(
+            (o) => o.command?.type === 'recruiting.hire' && o.command.payload.candidateId === candidateId,
+          ),
+      );
+
+  it('Wer über die App eingestellt wird, steht im Chat nicht mehr zur Wahl', () => {
+    let checked = false;
+    for (let seed = 1; seed <= 20 && !checked; seed++) {
+      const sim = quietGame(seed);
+      sim.advance(48 * 60);
+      const contact = getContacts(sim.state).find((c) => hireQuestions(sim, c.id).length > 0);
+      if (!contact) continue;
+      expect(sim.dispatch({ type: 'recruiting.hire', payload: { candidateId: contact.id } }).ok).toBe(true);
+      expect(hireQuestions(sim, contact.id)).toHaveLength(0);
+      checked = true;
+    }
+    expect(checked).toBe(true);
+  });
+});
+
 describe('recruiting: Spielstände aus dem Fundament', () => {
   it('Version 1 (leerer Pool) wird migriert und füllt sich danach', () => {
     const sim = quietGame();

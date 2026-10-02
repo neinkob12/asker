@@ -601,6 +601,12 @@ function unlock(ctx: Ctx, supplierId: string): CommandResult {
     `${supplier.contactName} (${supplier.name}) liefert jetzt an dich${fee > 0 ? ` (${formatEuro(fee)} Vermittlung)` : ''}.`,
     'good',
   );
+  // Das Angebot des Lieferanten im Chat ist erledigt, auch wenn er über die App freigeschaltet wurde.
+  messages.retractWhere(
+    ctx,
+    (m) =>
+      !!m.options?.some((o) => o.command?.type === 'suppliers.unlock' && o.command.payload.supplierId === supplierId),
+  );
   tell(ctx, supplier, 'Abgemacht. Alle Angebote findest du in der Lieferanten-App.');
   ctx.emit('supplier.unlocked', { supplierId, fee });
   return { ok: true };

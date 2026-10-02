@@ -155,10 +155,21 @@ try {
         if (/Failed to load resource|tile|net::ERR|WebGL|maplibre|font/i.test(text)) return;
         note(`log:${text}`, `[${where}] Konsole: ${text.split('\n')[0].slice(0, 200)}`);
       });
-      await page.goto(new URL(`?neu=normal&seed=${seed}&tempo=0`, base).toString());
-      await page.waitForSelector('.shell-map', { timeout: 20000 });
-      await page.waitForTimeout(1500);
-      await page.evaluate(SETUP);
+      const enter = async (target) => {
+        // Frisch ins Spiel (auch nach einem Neuladen, das selbst noch einmal nachlädt): ein paar Versuche.
+        for (let attempt = 0; attempt < 4; attempt++) {
+          try {
+            await target.goto(new URL(`?neu=normal&seed=${seed}&tempo=0`, base).toString());
+            await target.waitForSelector('.shell-map', { timeout: 20000 });
+            await target.waitForTimeout(1500);
+            await target.evaluate(SETUP);
+            return;
+          } catch (error) {
+            if (attempt === 3) throw error;
+          }
+        }
+      };
+      await enter(page);
       const random = rng(seed * 7919 + target.id.length);
       let depthStuck = 0;
       let lastLabel = '';
@@ -237,10 +248,7 @@ try {
           // Ein Klick hat die Seite neu geladen (oder der Browser ist weg): als Fund melden und neu einsteigen.
           if (!/Execution context was destroyed|navigation/i.test(String(error))) throw error;
           note(`reload:${lastLabel}`, `[${where}] „${lastLabel}" hat die Seite neu geladen.`);
-          await page.waitForLoadState('load');
-          await page.waitForSelector('.shell-map', { timeout: 20000 });
-          await page.waitForTimeout(1500);
-          await page.evaluate(SETUP);
+          await enter(page);
         }
       }
       await page.close();

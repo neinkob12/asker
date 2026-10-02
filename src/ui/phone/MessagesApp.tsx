@@ -104,6 +104,10 @@ function ChatList() {
     else remove(contactId);
   };
   const confirmChat = confirm && confirm !== 'all' ? all.find((c) => c.contactId === confirm) : undefined;
+  // Beim Ausblenden des Blatts sind Chat und Anzahl schon weg: Der Titel darf nicht zu "Alle 0 Chats" umspringen.
+  const confirmCopy = useRef({ count: all.length, name: '' });
+  if (confirm === 'all') confirmCopy.current.count = all.length;
+  else if (confirmChat) confirmCopy.current.name = confirmChat.name;
   return (
     <PhoneScreen
       title="Nachrichten"
@@ -231,7 +235,7 @@ function ChatList() {
       <ActionSheet
         open={confirm === 'all'}
         onClose={() => setConfirm(null)}
-        title={`${all.length === 1 ? 'Einen Chat' : `Alle ${all.length} Chats`} löschen?`}
+        title={`${confirmCopy.current.count === 1 ? 'Einen Chat' : `Alle ${confirmCopy.current.count} Chats`} löschen?`}
         message={
           withDeadline.length > 0
             ? `${withDeadline.map((c) => c.name).join(', ')} ${withDeadline.length === 1 ? 'wartet' : 'warten'} noch auf eine Antwort mit Frist. Gelöschte Chats kommen wieder, sobald jemand neu schreibt.`
@@ -242,7 +246,7 @@ function ChatList() {
       <ActionSheet
         open={!!confirmChat}
         onClose={() => setConfirm(null)}
-        title={`Chat mit ${confirmChat?.name ?? ''} löschen?`}
+        title={`Chat mit ${confirmCopy.current.name} löschen?`}
         message="Hier wartet noch eine Frage mit Frist auf deine Antwort. Löschen heißt: keine Antwort."
         actions={[
           {
@@ -294,8 +298,15 @@ function Chat(props: { contactId: string }) {
     bottom.current?.scrollIntoView({ block: 'end' });
   }, [shown.length, hiddenKey]);
 
-  // Die offene Frage steht unten als Antwort-Blatt, nicht mitten im Verlauf.
-  const question = [...shown].reverse().find((e) => e.type === 'message' && e.options.length > 0);
+  // Die offene Frage steht unten als Antwort-Blatt, nicht mitten im Verlauf. Sind es mehrere, kommt die mit der frühesten
+  // Frist zuerst (sonst läuft die ältere ab, während man die neuere beantwortet).
+  const openQuestions = shown.filter((e) => e.type === 'message' && e.options.length > 0);
+  const question = [...openQuestions].sort(
+    (a, b) =>
+      (a.type === 'message' ? (a.message.expiresAt ?? Number.POSITIVE_INFINITY) : 0) -
+        (b.type === 'message' ? (b.message.expiresAt ?? Number.POSITIVE_INFINITY) : 0) ||
+      (b.type === 'message' ? b.message.id : 0) - (a.type === 'message' ? a.message.id : 0),
+  )[0];
   const name = contact?.name ?? contactId;
   const kind = contact?.kind ?? 'other';
   return (
@@ -306,7 +317,8 @@ function Chat(props: { contactId: string }) {
       leading={
         <Avatar name={name} image={avatarImage(contact?.avatar, kind)} size="sm" tone={CONTACT_KIND_TONES[kind]} />
       }
-      onBack={() => ui.openPhone(APP_ID)}
+      // Eine Seite zurück zur Liste: openPhone(APP_ID) räumte nebenbei alle Nachrichten-Mitteilungen weg.
+      onBack={() => ui.back()}
       footer={
         question?.type === 'message' ? (
           <div class="msg-options">
@@ -319,6 +331,7 @@ function Chat(props: { contactId: string }) {
                   <Icon name="clock" /> {question.deadlineLabel}
                 </span>
               )}
+              {openQuestions.length > 1 && <span class="msg-deadline">{openQuestions.length - 1} weitere offen</span>}
             </span>
             {question.options.map((o, i) => (
               <Button
