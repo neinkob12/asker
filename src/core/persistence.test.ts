@@ -60,6 +60,16 @@ describe('Speichern und Laden', () => {
     expect(loaded.state.moduleVersions.testNotes).toBe(2);
   });
 
+  it('migriert die Kernfelder: Spielstände ohne gelöschte Chats bekommen messages.hidden', () => {
+    const sim = Simulation.create([notesV2], { seed: 1 });
+    const old = roundTrip(sim.state) as unknown as Record<string, unknown>;
+    old.schema = 1;
+    delete (old.messages as Record<string, unknown>).hidden;
+    const loaded = loadSimulation(old, [notesV2]);
+    expect(loaded.state.schema).toBe(2);
+    expect(loaded.state.messages.hidden).toEqual({});
+  });
+
   it('legt Module, die im Spielstand fehlen, frisch an', () => {
     const old = Simulation.create([notesV2], { seed: 1 });
     const loaded = loadSimulation(roundTrip(old.state), [notesV2, extra]);

@@ -150,6 +150,11 @@ export function chatList(state: GameState): ChatListItem[] {
   });
 }
 
+/** Die zuletzt aktiven Kontakte (höchstens `limit`) für die Reihe oben in der Liste, neueste zuerst. */
+export function recentContacts(list: readonly ChatListItem[], limit = 5): ChatListItem[] {
+  return list.slice(0, limit);
+}
+
 /**
  * Verlauf eines Chats. firstUnreadId: erste ungelesene Nachricht beim Öffnen (davor kommt ein
  * "Neu"-Trenner); die App merkt sie sich, weil der Chat beim Öffnen sofort als gelesen markiert wird.

@@ -23,7 +23,7 @@ registerLiveActivity({
         trailing: islandCountdown(order.expiresAt - state.time),
         title: `${order.contactName}: ${formatProductAmount(order.productId, order.amount)} ${productName(order.productId)}`,
         detail: `${formatEuro(order.price)} · Antwort bis ${clock.formatTime(order.expiresAt)}`,
-        open: (ui) => ui.openPhone('customers.orders'),
+        open: (ui) => ui.openPhone('core.messages', { contactId: order.contactId }),
       }),
     );
     const enRoute = getOrders(state, { status: 'enRoute' }).map(
@@ -37,7 +37,7 @@ registerLiveActivity({
         title: `Lieferung an ${order.contactName}`,
         detail: formatEuro(order.price),
         progress: orderProgress(state, order),
-        open: (ui) => ui.openPhone('customers.orders'),
+        open: (ui) => ui.openPhone('core.messages', { contactId: order.contactId }),
       }),
     );
     const day = clock.day(state.time);
@@ -56,7 +56,7 @@ registerLiveActivity({
               trailing: `+${formatEuro(Math.round(today))}`,
               title: 'Umsatz heute',
               detail: `${clock.weekdayName(state.time)}, Tag ${day}`,
-              open: (ui) => ui.selectTab('business'),
+              open: (ui) => ui.openPhone('finance.app'),
             },
           ]
         : [];

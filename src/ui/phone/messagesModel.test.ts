@@ -8,6 +8,7 @@ import {
   firstUnread,
   groupChats,
   messageNotification,
+  recentContacts,
   timeLabel,
 } from './messagesModel';
 
@@ -224,5 +225,19 @@ describe('Nachrichten-App: Gruppen nach Kontaktart', () => {
     for (const kind of kinds) expect(CONTACT_KIND_TONES[kind]).toBeTruthy();
     // Eine Farbe, eine Bedeutung: keine zwei Kontaktarten teilen sich eine Farbe.
     expect(new Set(kinds.map((k) => CONTACT_KIND_TONES[k])).size).toBe(kinds.length);
+  });
+
+  it('zeigt oben die zuletzt aktiven Kontakte, neueste zuerst, höchstens fünf', () => {
+    const sim = Simulation.create([phoneTest], { seed: 1 });
+    for (let i = 0; i < 7; i++) {
+      messages.send(sim.ctx('phoneTest'), {
+        contact: { id: `other:${i}`, name: `Kontakt ${i}`, kind: 'other' },
+        text: 'Hi',
+      });
+      sim.advance(1);
+    }
+    const recent = recentContacts(chatList(sim.state));
+    expect(recent.map((c) => c.contactId)).toEqual(['other:6', 'other:5', 'other:4', 'other:3', 'other:2']);
+    expect(recentContacts(chatList(sim.state), 2)).toHaveLength(2);
   });
 });

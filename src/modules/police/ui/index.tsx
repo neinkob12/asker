@@ -233,7 +233,7 @@ function PoliceCard() {
   );
 }
 
-registerSlot('tab:business', { id: 'police.tier', title: 'Polizei', order: 60, component: PoliceCard });
+registerSlot('tab:territory', { id: 'police.tier', title: 'Polizei', order: 30, component: PoliceCard });
 registerSearch({
   id: 'police.search',
   label: 'Polizei',
@@ -245,10 +245,7 @@ registerSearch({
       subtitle: `So sieht dich die Polizei: ${operationTier(state).name}`,
       icon: 'siren',
       keywords: 'Razzia Großrazzia Heat Kripo Stufe',
-      run: (ui) => {
-        ui.selectTab('business');
-        ui.openSection('police.tier');
-      },
+      run: (ui) => ui.selectTab('territory'),
     },
   ],
 });
@@ -271,7 +268,9 @@ onGameEvent('police.raid', 'police.toast.raid', (payload, ui, state) => {
 });
 onGameEvent('police.tierChanged', 'police.toast.tier', (payload, ui) => {
   const tier = OPERATION_TIERS[payload.to];
-  ui.toast(`Die Polizei sieht dich jetzt als ${tier.name}.`, payload.to > payload.from ? 'bad' : 'good');
+  ui.toast(`Die Polizei sieht dich jetzt als ${tier.name}.`, payload.to > payload.from ? 'bad' : 'good', {
+    urgent: false,
+  });
 });
 // Blaulicht am Ort der Razzia bzw. Kontrolle, Sirene nur, wenn es dich trifft.
 onGameEvent('police.raid', 'police.fx.raid', (payload, _ui, state) => {

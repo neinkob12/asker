@@ -1,7 +1,8 @@
-// Oberfläche der Kunden: Kundenliste im Spot-Panel (selbst verkaufen), Kunden-Abschnitt im Tab "Geschäft",
-// Handy-App "Aufträge" (Lieferdienst, Großhandel) und Lieferungen auf der Karte.
+// Oberfläche der Kunden: Kundenliste im Spot-Panel (selbst verkaufen), Kunden-Abschnitt unten in der Kasse,
+// Lieferungen auf der Karte. Die App "Aufträge" steht seit Auftrag 26 nicht mehr auf dem Startbildschirm: Offene
+// Anfragen kommen als Chat, die Historie steht im Verlauf (Einstellungen).
 
-import { clock, formatEuro, formatNumber, type GameState, messages } from '../../../core';
+import { formatEuro, formatNumber } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import {
   Badge,
@@ -17,19 +18,14 @@ import {
   onGameEvent,
   ProgressBar,
   registerGameStat,
-  registerPhoneApp,
   registerSlot,
-  SummaryTiles,
-  SwipeRow,
   Tag,
   Toggle,
   useGame,
   useUi,
 } from '../../../ui';
 import { formatProductAmount, getProduct, productName } from '../../goods';
-import { rightHandDriver } from '../../hierarchy';
-import { activeRunnerAt, getStaffMember } from '../../staff';
-import { veedelName } from '../../veedel';
+import { activeRunnerAt } from '../../staff';
 import {
   canServe,
   customerRevenue,
@@ -39,9 +35,6 @@ import {
   getRegulars,
   getSalesStats,
   isPlayerAway,
-  isPlayerDelivering,
-  type Order,
-  orderProgress,
   playerSpot,
   waitingAt,
 } from '../index';
@@ -187,10 +180,12 @@ function CustomersSection() {
       status={waitingNow > 0 || offered > 0 ? 'warn' : 'good'}
       summary={waitingNow > 0 ? `${waitingNow} warten` : `${stats.customersServed} bedient`}
       actions={
-        <Button small onClick={() => ui.openPhone('customers.orders')}>
-          Aufträge
-          <Badge count={offered} />
-        </Button>
+        offered > 0 && (
+          <Button small onClick={() => ui.openPhone('core.messages')}>
+            Anfragen
+            <Badge count={offered} />
+          </Button>
+        )
       }
     >
       <KeyValue label="Wartet gerade an deinen Spots" value={waitingNow} tone={waitingNow > 0 ? 'warn' : undefined} />
@@ -245,178 +240,28 @@ function CustomersSection() {
   );
 }
 
-const KIND_NAME: Record<Order['kind'], string> = { delivery: 'Lieferung', wholesale: 'Großhandel' };
-const KIND_ICON: Record<Order['kind'], string> = { delivery: 'bike', wholesale: 'boxes' };
-
-const STATUS_TEXT: Record<Order['status'], string> = {
-  offered: 'offen',
-  enRoute: 'unterwegs',
-  contested: 'Deal kippt',
-  done: 'erledigt',
-  declined: 'abgelehnt',
-  expired: 'verpasst',
-  failed: 'geplatzt',
-};
-
-/**
- * Offene Anfrage als Zeile: wer, was, wohin, für wie viel, bis wann; darunter die Antworten als Knöpfe. Wischen nach
- * links lehnt ab (ein Knopf dafür steht auch in der Zeile).
- */
-function OfferedOrder(props: { order: Order; state: GameState }) {
-  const { order, state } = props;
-  const { dispatch } = useGame();
-  const message = messages.get(state, order.messageId);
-  const canAnswer = message ? messages.canAnswer(state, message) : false;
-  const answer = (optionId: string) =>
-    dispatch({ type: 'messages.answer', payload: { messageId: order.messageId, optionId } });
-  // Seit Auftrag 28 fährt nur die Rechte Hand Aufträge aus (Antwort gibt es nur, wenn es eine gibt).
-  const driver = rightHandDriver(state);
-  const viaRightHand = !!message?.options?.some((o) => o.id === 'rightHand');
-  const left = order.expiresAt - state.time;
-  return (
-    <SwipeRow
-      actions={
-        canAnswer ? [{ label: 'Ablehnen', icon: 'close', color: 'system', onSelect: () => answer('decline') }] : []
-      }
-    >
-      <ListItem value={formatEuro(order.price)}>
-        <ItemContent
-          icon={KIND_ICON[order.kind]}
-          color="money"
-          title={order.contactName}
-          meta={`${KIND_NAME[order.kind]} · ${formatProductAmount(order.productId, order.amount)} ${productName(order.productId)} nach ${veedelName(order.veedelId)}`}
-        >
-          <span class="order__tags">
-            <Tag category={left < 60 ? 'danger' : 'warn'} icon="timer">
-              noch {clock.formatDuration(left)}
-            </Tag>
-          </span>
-          {canAnswer && (
-            <span class="order__actions">
-              <Button small variant="primary" disabled={isPlayerDelivering(state)} onClick={() => answer('self')}>
-                Selbst liefern
-              </Button>
-              {viaRightHand && (
-                <Button
-                  small
-                  disabled={!driver.ok}
-                  title={driver.ok ? driver.member.name : driver.reason}
-                  onClick={() => answer('rightHand')}
-                >
-                  Rechte Hand
-                </Button>
-              )}
-              <Button small variant="subtle" onClick={() => answer('decline')}>
-                Ablehnen
-              </Button>
-            </span>
-          )}
-        </ItemContent>
-      </ListItem>
-    </SwipeRow>
-  );
-}
-
-/** Handy-App "Aufträge": Anfragen (Lieferdienst, Großhandel), was unterwegs ist und was zuletzt lief. */
-function OrdersApp() {
+/** Einstellungen › Anfragen: ob Kunden dir direkt schreiben dürfen (Spielzustand, nicht pro Gerät). */
+function OrderSettings() {
   const { state, dispatch } = useGame();
-  const offered = getOrders(state, { status: 'offered' });
-  const enRoute = getOrders(state, { status: 'enRoute' });
-  const done = getOrders(state)
-    .filter((o) => o.status !== 'offered' && o.status !== 'enRoute')
-    .slice(0, 6);
-  const stats = getSalesStats(state);
   return (
-    <div class="orders-app">
-      <SummaryTiles
-        items={[
-          { icon: 'inbox', color: offered.length > 0 ? 'warn' : 'system', value: offered.length, label: 'Anfragen' },
-          { icon: 'truck', color: 'goods', value: enRoute.length, label: 'Liefern' },
-          { icon: 'handshake', color: 'money', value: stats.deliveries + stats.wholesaleDeals, label: 'Erledigt' },
-        ]}
-      />
-      <Group
-        title="Anfragen"
-        icon="inbox"
-        color="warn"
-        count={offered.length}
-        note="Wischen nach links lehnt eine Anfrage ab."
-      >
-        {offered.length === 0 ? (
-          <Empty icon="inbox">
-            Keine offenen Anfragen. Mit gutem Ruf melden sich mehr Leute (Kunden-Direktanfragen schaltest du unten ein).
-          </Empty>
-        ) : (
-          <List>
-            {offered.map((o) => (
-              <OfferedOrder key={o.id} order={o} state={state} />
-            ))}
-          </List>
-        )}
-      </Group>
-      {enRoute.length > 0 && (
-        <Group title="Unterwegs" icon="truck" color="goods" count={enRoute.length}>
-          <List>
-            {enRoute.map((o) => (
-              <ListItem key={o.id} value={`an ${clock.formatTime(o.arrivesAt ?? state.time)}`}>
-                <ItemContent
-                  icon={o.courierId ? 'crown' : 'runner'}
-                  color={o.courierId ? 'people' : 'brand'}
-                  title={o.contactName}
-                  meta={`${o.courierId ? (getStaffMember(state, o.courierId)?.name ?? 'Rechte Hand') : 'Du'} · ${formatProductAmount(o.productId, o.amount)} ${productName(o.productId)}, ${formatEuro(o.price)}`}
-                >
-                  <ProgressBar value={orderProgress(state, o)} label="Lieferung" />
-                </ItemContent>
-              </ListItem>
-            ))}
-          </List>
-        </Group>
-      )}
-      {done.length > 0 && (
-        <Group title="Zuletzt" icon="clock" color="system">
-          <List>
-            {done.map((o) => (
-              <ListItem
-                key={o.id}
-                value={
-                  <span class={`order-result order-result--${o.status}`}>
-                    {o.status === 'done' ? formatEuro(o.price) : STATUS_TEXT[o.status]}
-                  </span>
-                }
-              >
-                <ItemContent
-                  icon={o.status === 'done' ? 'checkCircle' : 'xCircle'}
-                  color={o.status === 'done' ? 'money' : o.status === 'declined' ? 'system' : 'danger'}
-                  title={o.contactName}
-                  meta={`${formatProductAmount(o.productId, o.amount)} ${productName(o.productId)}`}
-                />
-              </ListItem>
-            ))}
-          </List>
-        </Group>
-      )}
-      <Group title="Anfragen bekommen" icon="message" color="chat">
-        <Toggle
-          label="Kunden dürfen mir schreiben"
-          hint="Aus: Nur größere Großhandelsaufträge kommen aufs Handy."
-          checked={state.modules.customers.directOrders}
-          onChange={(enabled) => dispatch({ type: 'customers.setDirectOrders', payload: { enabled } })}
-        />
-      </Group>
-    </div>
+    <Toggle
+      label="Kunden dürfen mir schreiben"
+      hint="Aus: Nur größere Großhandelsaufträge kommen aufs Handy."
+      checked={state.modules.customers.directOrders}
+      onChange={(enabled) => dispatch({ type: 'customers.setDirectOrders', payload: { enabled } })}
+    />
   );
 }
 
 registerSlot('spots.spotPanel', { id: 'customers.list', order: 10, component: SpotCustomers });
-registerSlot('tab:business', { id: 'customers.stats', title: 'Kundschaft', order: 30, component: CustomersSection });
-registerPhoneApp({
+registerSlot('finance.app', { id: 'customers.stats', title: 'Kundschaft', order: 10, component: CustomersSection });
+registerSlot('core.settings', {
   id: 'customers.orders',
-  name: 'Aufträge',
+  title: 'Anfragen',
   icon: 'package',
-  order: 30,
   color: 'money',
-  component: OrdersApp,
-  badge: (state) => getOrders(state, { status: 'offered' }).length,
+  order: 30,
+  component: OrderSettings,
 });
 registerMapLayer(deliveriesLayer);
 
@@ -424,7 +269,7 @@ onGameEvent('order.finished', 'customers.orderToast', (payload, ui, state) => {
   const order = state.modules.customers.orders.find((o) => o.id === payload.orderId);
   if (!order) return;
   if (payload.status === 'done') ui.toast(`${order.contactName}: ${formatEuro(order.price)} kassiert.`, 'good');
-  if (payload.status === 'failed') ui.toast(`Lieferung an ${order.contactName} geplatzt.`, 'bad');
+  if (payload.status === 'failed') ui.toast(`Lieferung an ${order.contactName} geplatzt.`, 'bad', { urgent: true });
 });
 onGameEvent('customer.regularGained', 'customers.regularToast', (payload, ui, state) => {
   const regular = getRegular(state, payload.regularId);

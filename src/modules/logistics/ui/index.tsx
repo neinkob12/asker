@@ -1,22 +1,21 @@
-// Oberfläche der Logistik: Handy-App "Logistik" (Hafen, Fahrten, Lager, Fahrer), Abschnitt im Tab "Geschäft",
-// Fahrzeuge auf der Karte, Live-Aktivitäten, Empfehlungen und Hinweise.
+// Oberfläche der Logistik (seit Auftrag 26 ohne eigene App): die Hafen-Seite (Liegeplatz, Ware am Kai abholen,
+// Fahrten, Zuletzt) als Panel, auf der Lager-Seite der Weg zum Hafen, Umlagern und Lager kaufen (Slot
+// 'goods.warehouse'), Fahrzeuge auf der Karte, Live-Aktivitäten, Empfehlungen und Hinweise. Fahrer stehen im Personal.
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro, type GameState } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import {
   Button,
-  Card,
   Empty,
   Group,
   ItemContent,
-  KeyValue,
   List,
   ListItem,
   onGameEvent,
   ProgressBar,
   registerAdvisor,
-  registerPhoneApp,
+  registerPanel,
   registerSlot,
   Select,
   SummaryTiles,
@@ -35,7 +34,7 @@ import {
   stockSummary,
   warehouseSites,
 } from '../../goods';
-import { DRIVER_HIRE_COST, getStaff, getStaffMember, STATUS_NAMES } from '../../staff';
+import { getStaff, getStaffMember } from '../../staff';
 import {
   BERTH_COST,
   cargoRisk,
@@ -149,7 +148,7 @@ function PortSection() {
         title="Niehler Hafen"
         note={
           short
-            ? `Du hast ${formatEuro(state.wallet.clean)} sauberes Geld. Waschen kannst du im Geschäft unter Geldwäsche.`
+            ? `Du hast ${formatEuro(state.wallet.clean)} sauberes Geld. Waschen kannst du in der App Geldwäsche.`
             : undefined
         }
       >
@@ -164,16 +163,7 @@ function PortSection() {
               >
                 Liegeplatz mieten · {formatEuro(BERTH_COST)}
               </Button>
-              {short && (
-                <Button
-                  onClick={() => {
-                    ui.selectTab('business');
-                    ui.openSection('laundering.section');
-                  }}
-                >
-                  Geldwäsche
-                </Button>
-              )}
+              {short && <Button onClick={() => ui.openPhone('laundering.app')}>Geldwäsche</Button>}
             </div>
           }
         >
@@ -280,21 +270,23 @@ function PortSection() {
   );
 }
 
-/** Lager: Bestand pro Lager, Umlagern, neue Standorte kaufen. */
-function WarehouseSection() {
+/** Auf der Lager-Seite: der Weg zum Hafen mit Stand, Fahrten unterwegs, Umlagern aus diesem Lager, Lager kaufen. */
+function WarehouseLogistics(props: { warehouseId: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
   const owned = getWarehouses(state);
-  const [fromId, setFromId] = useState('');
   const [toId, setToId] = useState('');
   const [productId, setProductId] = useState('');
-  const from = owned.find((w) => w.id === fromId) ?? owned[0];
+  const from = owned.find((w) => w.id === props.warehouseId) ?? owned[0];
   const targets = owned.filter((w) => w.id !== from?.id);
   const to = targets.find((w) => w.id === toId) ?? targets[0];
   const rows = from ? stockSummary(state, from.id) : [];
   const product = rows.some((r) => r.productId === productId) ? productId : '';
   const drivers = freeDrivers(state);
   const busy = playerBusyReason(state);
+  const cargo = getCargo(state);
+  const trips = getTrips(state);
+  const risky = cargo.some((c) => cargoRisk(state, c) === 'risky');
   const transfer = (by: 'player' | 'driver') =>
     from &&
     to &&
@@ -305,47 +297,53 @@ function WarehouseSection() {
   const forSale = warehouseSites().filter((w) => !owned.some((o) => o.id === w.id));
   return (
     <>
-      <Group icon="warehouse" color="goods" title="Lager" count={owned.length}>
+      <Group icon="ship" color="goods" title="Hafen">
         <List>
-          {owned.map((w) => {
-            const stock = stockSummary(state, w.id);
-            return (
-              <ListItem key={w.id} onClick={() => ui.openPanel('goods.warehouse', { warehouseId: w.id })}>
-                <ItemContent
-                  icon="warehouse"
-                  color="goods"
-                  title={w.name}
-                  meta={
-                    stock.length === 0
-                      ? 'leer'
-                      : stock
-                          .slice(0, 2)
-                          .map((r) => `${formatProductAmount(r.productId, r.amount)} ${productName(r.productId)}`)
-                          .join(', ')
-                  }
-                />
-              </ListItem>
-            );
-          })}
+          <ListItem
+            onClick={() => ui.openPanel('logistics.port', {})}
+            aside={
+              risky ? (
+                <Tag category="danger" icon="alert">
+                  Zoll
+                </Tag>
+              ) : cargo.length > 0 ? (
+                <Tag category="warn" icon="ship">
+                  {cargo.length} am Kai
+                </Tag>
+              ) : undefined
+            }
+          >
+            <ItemContent
+              icon="anchor"
+              color={risky ? 'danger' : 'goods'}
+              title="Niehler Hafen"
+              meta={
+                hasBerth(state)
+                  ? cargo.length > 0
+                    ? 'Ware am Kai wartet auf die Abholung'
+                    : 'Liegeplatz Kai 7, nichts am Kai'
+                  : 'Noch kein Liegeplatz. Mit einem liefert Rotterdam per Schiff.'
+              }
+            />
+          </ListItem>
         </List>
-        {owned.length > 1 && from && to && (
+      </Group>
+      {trips.length > 0 && <TripsGroup trips={trips} />}
+      {from && to && (
+        <Group
+          icon="route"
+          color="goods"
+          title={`Umlagern aus ${from.name}`}
+          note="Mehrere Lager: kürzere Wege für Lieferungen, und eine Razzia trifft nicht alles auf einmal."
+        >
           <div class="logi-form">
-            <div class="logi-form__row">
-              <Select
-                label="Von"
-                wide
-                value={from.id}
-                options={owned.map((w) => ({ value: w.id, label: `von ${w.name}` }))}
-                onChange={setFromId}
-              />
-              <Select
-                label="Nach"
-                wide
-                value={to.id}
-                options={targets.map((w) => ({ value: w.id, label: `nach ${w.name}` }))}
-                onChange={setToId}
-              />
-            </div>
+            <Select
+              label="Nach"
+              wide
+              value={to.id}
+              options={targets.map((w) => ({ value: w.id, label: `nach ${w.name}` }))}
+              onChange={setToId}
+            />
             <Select
               label="Ware"
               wide
@@ -378,14 +376,18 @@ function WarehouseSection() {
               </Button>
             </div>
           </div>
-        )}
-      </Group>
+        </Group>
+      )}
       {forSale.length > 0 && (
         <Group
           icon="building"
           color="money"
           title="Zu kaufen · sauberes Geld"
-          note="Mehrere Lager: kürzere Wege für Lieferungen, und eine Razzia trifft nicht alles auf einmal."
+          note={
+            owned.length > 1
+              ? undefined
+              : 'Mehrere Lager: kürzere Wege für Lieferungen, und eine Razzia trifft nicht alles auf einmal.'
+          }
         >
           <List>
             {forSale.map((w) => (
@@ -418,82 +420,49 @@ function WarehouseSection() {
   );
 }
 
-function DriverSection() {
-  const { state, dispatch } = useGame();
-  const drivers = getStaff(state, { role: 'driver' });
-  const ui = useUi();
-  const hire = (
-    <Button
-      variant={drivers.length === 0 ? 'primary' : 'default'}
-      icon="userPlus"
-      disabled={state.wallet.dirty < DRIVER_HIRE_COST}
-      onClick={() => dispatch({ type: 'staff.hireDriver', payload: {} })}
-    >
-      Fahrer anheuern · {formatEuro(DRIVER_HIRE_COST)}
-    </Button>
-  );
+/** Fahrten unterwegs (Abholungen und Umlagern) mit Fortschritt. */
+function TripsGroup(props: { trips: readonly Trip[] }) {
   return (
-    <Group icon="truck" color="people" title="Fahrer" count={drivers.length}>
-      {drivers.length === 0 ? (
-        <Empty icon="truck" action={hire}>
-          Noch keine Fahrer. Ohne Fahrer musst du jede Abholung selbst machen.
-        </Empty>
-      ) : (
-        <>
-          <List>
-            {drivers.map((d) => {
-              const status =
-                d.status !== 'active'
-                  ? { category: 'danger' as const, icon: 'alert', text: STATUS_NAMES[d.status] }
-                  : d.assignment
-                    ? { category: 'goods' as const, icon: 'truck', text: 'unterwegs' }
-                    : { category: 'money' as const, icon: 'check', text: 'frei' };
-              return (
-                <ListItem
-                  key={d.id}
-                  onClick={() => ui.openPanel('staff.profile', { staffId: d.id })}
-                  aside={
-                    <Tag category={status.category} icon={status.icon}>
-                      {status.text}
-                    </Tag>
-                  }
-                >
-                  <ItemContent
-                    icon="truck"
-                    color="people"
-                    title={d.name}
-                    meta={`Level ${d.level} · ${formatEuro(d.wage)} am Tag`}
-                  />
-                </ListItem>
-              );
-            })}
-          </List>
-          <div class="logi-actions">{hire}</div>
-        </>
-      )}
+    <Group icon="truck" color="goods" title="Unterwegs" count={props.trips.length}>
+      <List>
+        {props.trips.map((t) => (
+          <TripRow key={t.id} trip={t} />
+        ))}
+      </List>
     </Group>
   );
 }
 
-function LogisticsApp() {
+/** Hafen-Seite (Panel): Kennzahlen, Kai, Fahrten unterwegs, was zuletzt lief. */
+function PortPanel() {
   const { state } = useGame();
+  const ui = useUi();
   const trips = getTrips(state);
   const log = getLogisticsLog(state).slice(0, 4);
+  const drivers = getStaff(state, { role: 'driver' }).length;
   return (
     <div class="logi-app">
       <Summary />
       <PortSection />
-      {trips.length > 0 && (
-        <Group icon="truck" color="goods" title="Unterwegs" count={trips.length}>
-          <List>
-            {trips.map((t) => (
-              <TripRow key={t.id} trip={t} />
-            ))}
-          </List>
-        </Group>
-      )}
-      <WarehouseSection />
-      <DriverSection />
+      {trips.length > 0 && <TripsGroup trips={trips} />}
+      <Group
+        icon="users"
+        color="people"
+        title="Fahrer"
+        count={drivers}
+        note={drivers === 0 ? 'Ohne Fahrer musst du jede Abholung selbst machen.' : undefined}
+      >
+        <List>
+          <ListItem onClick={() => ui.selectTab('staff')}>
+            <ItemContent
+              icon="truck"
+              color="goods"
+              title={drivers === 0 ? 'Fahrer anheuern' : `${freeDrivers(state).length} von ${drivers} frei`}
+              meta="Im Personal"
+            />
+          </ListItem>
+        </List>
+      </Group>
       {log.length > 0 && (
         <Group icon="clock" color="system" title="Zuletzt">
           <List>
@@ -525,52 +494,15 @@ function LogisticsApp() {
   );
 }
 
-function LogisticsCard() {
-  const { state } = useGame();
-  const ui = useUi();
-  const cargo = getCargo(state);
-  const trips = getTrips(state);
-  const risky = cargo.some((c) => cargoRisk(state, c) === 'risky');
-  const summary =
-    cargo.length > 0
-      ? `${cargo.length} am Kai`
-      : trips.length > 0
-        ? `${trips.length} unterwegs`
-        : hasBerth(state)
-          ? 'Hafen frei'
-          : 'kein Hafen';
-  return (
-    <Card
-      title="Logistik"
-      icon="route"
-      color="goods"
-      status={risky || trips.some((t) => t.status === 'stopped') ? 'bad' : cargo.length > 0 ? 'warn' : 'good'}
-      summary={summary}
-      actions={
-        <Button small onClick={() => ui.openPhone('logistics.app')}>
-          Öffnen
-        </Button>
-      }
-    >
-      <KeyValue label="Liegeplatz im Hafen" value={hasBerth(state) ? 'ja, Kai 7' : 'keiner'} />
-      <KeyValue label="Ware am Kai" value={cargo.length} tone={cargo.length > 0 ? 'warn' : undefined} />
-      <KeyValue label="Fahrten unterwegs" value={trips.length} />
-      <KeyValue label="Lager" value={getWarehouses(state).length} />
-      <KeyValue label="Freie Fahrer" value={freeDrivers(state).length} />
-    </Card>
-  );
+declare module '../../../ui' {
+  interface PanelRegistry {
+    /** Hafen-Seite: Liegeplatz, Ware am Kai, Fahrten. */
+    'logistics.port': Record<string, never>;
+  }
 }
 
-registerPhoneApp({
-  id: 'logistics.app',
-  name: 'Logistik',
-  icon: 'route',
-  order: 22,
-  color: 'goods',
-  component: LogisticsApp,
-  badge: (state) => getCargo(state).length + getTrips(state).filter((t) => t.status === 'stopped').length,
-});
-registerSlot('tab:business', { id: 'logistics.overview', title: 'Logistik', order: 12, component: LogisticsCard });
+registerPanel({ id: 'logistics.port', title: () => 'Niehler Hafen', component: PortPanel });
+registerSlot('goods.warehouse', { id: 'logistics.warehouse', order: 20, component: WarehouseLogistics });
 registerMapLayer(logisticsLayer);
 
 // Empfehlungen: Ware am Kai abholen, Liegeplatz mieten, wenn das saubere Geld reicht.
@@ -592,11 +524,11 @@ registerAdvisor({
           : busy
             ? 'Kein Fahrer frei, und du bist unterwegs.'
             : 'Kein Fahrer frei. Fahr selbst oder heuer einen an.',
-        actionLabel: driver ? 'Fahrer schicken' : busy ? 'Logistik' : 'Selbst abholen',
+        actionLabel: driver ? 'Fahrer schicken' : busy ? 'Hafen' : 'Selbst abholen',
         action: (ui) => {
           if (driver) ui.dispatch({ type: 'logistics.pickup', payload: { by: 'driver', driverId: driver.id } });
           else if (!busy) ui.dispatch({ type: 'logistics.pickup', payload: { by: 'player' } });
-          else ui.openPhone('logistics.app');
+          else ui.openPanel('logistics.port', {});
         },
       };
     }
@@ -608,7 +540,7 @@ registerAdvisor({
         title: 'Liegeplatz im Hafen mieten',
         text: 'Dann liefert Rotterdam große Mengen per Schiff, viel billiger als die Großstädte.',
         actionLabel: 'Ansehen',
-        action: (ui) => ui.openPhone('logistics.app'),
+        action: (ui) => ui.openPanel('logistics.port', {}),
       };
     }
     return null;
@@ -619,6 +551,7 @@ onGameEvent('cargo.docked', 'logistics.dockedToast', (payload, ui) => {
   ui.toast(
     `Schiff im Hafen: ${formatProductAmount(payload.productId, payload.amount)} ${productName(payload.productId)} am Kai.`,
     'good',
+    { urgent: true },
   );
 });
 onGameEvent('cargo.seized', 'logistics.customsToast', (payload, ui) => {
@@ -628,6 +561,7 @@ onGameEvent('transport.arrived', 'logistics.arrivedToast', (payload, ui, state) 
   ui.toast(
     `Fahrt angekommen: ${payload.amount} Einheiten im ${getWarehouse(state, payload.toId)?.name ?? 'Lager'}.`,
     'good',
+    { urgent: true },
   );
 });
 onGameEvent('transport.seized', 'logistics.seizedToast', (payload, ui) => {

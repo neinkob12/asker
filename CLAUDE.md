@@ -6,10 +6,11 @@ Ausführliche Architektur mit allen Modulen, APIs, Befehlen und Ereignissen: `do
 Phase 0 (Fundament), Phase 1 (Aufträge 10–14) und Phase 2 (Integration, Auftrag 20) sind erledigt; alle Systeme
 sind verbunden. Dazu Auftrag 21: echtes Straßennetz (`roads`), Logistik mit Hafen, Fahrern und mehreren Lagern
 (`logistics`), Lieferanten zum Freischalten. Auftrag 24: Geldbuch und Kasse (`finance`), Stillhaltegeld in Haft, Leutnants mit bis
-zu drei Spots, Rechte Hand, Polizei-Härte nach Größe des Geschäfts. Auftrag 28: Spots in jedem Veedel, keine Kuriere
-mehr, nur die Rechte Hand fährt Aufträge aus und hat Aufgaben mit Stufen (`hierarchy/tasks.ts`); Nachrichten tragen
-`routine` (Rechte Hand darf antworten) oder sind Chefsache. Wie alles zusammenspielt: `docs/architektur.md`, Abschnitt
-"Zusammenspiel der Systeme".
+zu drei Spots, Rechte Hand, Polizei-Härte nach Größe des Geschäfts. Auftrag 26: Handy aufgeräumt (sechs Apps, vier im Dock,
+schwarzer Startbildschirm, Verlauf und Wetter in den Einstellungen, Chats löschen, Banner nur für Dringendes, HUD mit
+Ruf · Reviere und aufklappbarem Lager). Auftrag 28: Spots in jedem Veedel, keine Kuriere mehr, nur die Rechte Hand fährt
+Aufträge aus und hat Aufgaben mit Stufen (`hierarchy/tasks.ts`); Nachrichten tragen `routine` (Rechte Hand darf antworten)
+oder sind Chefsache. Wie alles zusammenspielt: `docs/architektur.md`, Abschnitt "Zusammenspiel der Systeme".
 
 ## Architektur in Kürze
 
@@ -87,8 +88,11 @@ export default defineModule({
   was sie selbständig tun soll, ist eine Aufgabe in `hierarchy/tasks.ts` und läuft über `ctx.dispatch` mit Actor.
 - Wege und Fahrzeiten immer über `roads` (`roadRoute`, `travelMinutes`), nie Luftlinie. Das Straßennetz neu erzeugen:
   `src/modules/roads/tools/build-roads.py` (Anleitung im Kopf der Datei).
-  Nachrichten: `messages.send(ctx, { contact, text, options, silent? })` – alle Figuren reden per Handy mit dem
-  Spieler, Routine-Meldungen still (`silent: true`). Spielende: `outcome.gameOver(ctx, 'killed')`, `outcome.win(ctx)`.
+  Nachrichten: `messages.send(ctx, { contact, text, options, expiresIn?, silent? })` – alle Figuren reden per Handy mit
+  dem Spieler. Ein Banner mit Ton gibt es nur für Nachrichten mit Antwortfrist (`options` + `expiresIn`), alles andere
+  zählt still am Badge (`silent` ist damit nur noch für die Mitteilungszentrale relevant). Gelöschte Chats bleiben im
+  Zustand (`messages.hidden`) und kommen wieder, sobald die Figur neu schreibt. Spielende: `outcome.gameOver(ctx, 'killed')`,
+  `outcome.win(ctx)`.
 
 ## Migrationen
 
@@ -100,11 +104,18 @@ export default defineModule({
 ## Oberfläche eines Moduls
 
 In `src/modules/<id>/ui/index.tsx` (Beispiel in `_template/ui/`): `registerHudItem`, `registerTab`,
-`registerSlot` (z.B. in `'tab:business'`, `'spots.spotPanel'` oder `'map.overlay'` über der Kartenfläche), `registerPanel`,
+`registerSlot` (z.B. in `'tab:territory'`, `'tab:staff'`, `'spots.spotPanel'`, `'goods.warehouse'` (Lager-Seite), `'finance.app'`
+(unten in der Kasse), `'core.settings'` (eigener Abschnitt in den Einstellungen mit `title`, `icon`, `color`) oder `'map.overlay'`
+über der Kartenfläche), `registerPanel`,
 `registerDialog` (mit `area: 'map'` nur über der Kartenfläche, dazu `MapDialog`), `registerMapLayerOption` (Menü Ebenen),
 `registerPhoneApp`, `registerLiveActivity` (Dynamic Island), `registerAdvisor` (Karte "Nächster Schritt"), `registerSearch` (Strg/⌘+K), `registerGameStat`
 (Game-Over-Bildschirm), `onGameEvent`, `soundOnEvent` aus `src/ui`, `registerMapLayer` und `mapEffects` aus `src/map`.
-HUD-Anzeigen mit `<HudPill>`, Karten für den Geschäft-Tab mit `icon`, `summary` und `status` (werden dort zu Zeilen).
+HUD-Anzeigen mit `<HudPill>` (mit `details` klappt beim Drüberfahren eine Glas-Karte auf). **Das Handy hat seit Auftrag 26 genau
+sechs Apps** (Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen) und vier im Dock (Nachrichten, Lieferanten, Personal,
+Kasse): Neues hängt sich als Abschnitt oder Seite an eine davon (Slots oben, `registerPanel`), eine neue App braucht einen Grund;
+`hidden: true` hält eine App vom Startbildschirm fern, `ui.openPhone(id)` öffnet sie trotzdem. **Banner nur für Dringendes:**
+`ui.toast(text, kind, { urgent })` erscheint als Banner nur bei `'bad'`/`'warn'` oder `urgent: true` (Lieferung da, Löhne nicht
+gedeckt), Routine landet still im Verlauf (Einstellungen › Verlauf, Seite `core.history`).
 Nur Bausteine aus `src/ui/components` (auch `Select`, `Avatar`, `Icon` …) und Design-Tokens (`var(--color-…)`,
 `var(--space-…)`) verwenden. **Farben tragen Bedeutung**: `color="money" | "dirty" | "danger" | "warn" | "place" | "goods" | "people" | "chat" | "law" …`
 (Bedeutungsfarben `--cat-*`, Hell und Dunkel, Kontrast geprüft), möglichst keine freien Hex-Werte in Modul-UIs. Eine Karte

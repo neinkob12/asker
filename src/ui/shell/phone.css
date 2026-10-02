@@ -645,64 +645,17 @@
 
 /* ---------------------------------------------------------------- Startbildschirm */
 /*
- * Wallpaper: Himmel aus Nacht und Tag (--daylight 0–1 aus der Spielzeit) mit Abendrot (--twilight 0–1) und die
- * Kölner Skyline. Alles darauf ist Schrift in Weiß (immer 4.5:1, siehe contrast.test.ts).
+ * Ruhig und schwarz (Auftrag 26): keine Skyline, keine Heute-Zeile, keine Kennzahlen. Nur das Raster, das Dock und
+ * ganz oben, wenn es sein muss, ein dringender Rat. Schrift in Weiß (siehe contrast.test.ts, --home-label).
  */
 .phone__home {
-  --sky-top: color-mix(in srgb, var(--wall-night-top), var(--wall-day-top) calc(var(--daylight, 0) * 100%));
-  --sky-bottom: color-mix(
-    in srgb,
-    color-mix(in srgb, var(--wall-night-bottom), var(--wall-day-bottom) calc(var(--daylight, 0) * 100%)),
-    var(--wall-twilight) calc(var(--twilight, 0) * 60%)
-  );
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, var(--sky-top), var(--sky-bottom));
+  background: var(--hw-black);
   color: var(--home-label);
   overflow: hidden;
-}
-.phone__sky {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  pointer-events: none;
-}
-/* Die Skyline ist breiter als der Bildschirm (Dom in der Mitte), darunter läuft der Boden bis zum Rand weiter. */
-.skyline {
-  display: block;
-  flex: none;
-  width: 136%;
-  max-width: none;
-  height: auto;
-  margin-left: -18%;
-}
-.phone__sky::after {
-  content: "";
-  flex: none;
-  height: calc(var(--phone-home-inset) + 52px);
-  background: color-mix(in srgb, var(--sky-bottom) 32%, #000);
-}
-.skyline__far {
-  fill: color-mix(in srgb, var(--sky-bottom) 68%, #000);
-}
-.skyline__near,
-.skyline__ground {
-  fill: color-mix(in srgb, var(--sky-bottom) 32%, #000);
-}
-.skyline__bridge {
-  fill: none;
-  stroke: color-mix(in srgb, var(--sky-bottom) 55%, #000);
-  stroke-width: 1.4;
-}
-.skyline__lights {
-  fill: var(--cat-brand-a);
-  opacity: calc((1 - var(--daylight, 0)) * 0.85);
 }
 .phone__home-scroll {
   position: relative;
@@ -719,256 +672,76 @@
 .phone__home-scroll > * {
   flex-shrink: 0;
 }
-/* Heute: Wochentag und Spieltag links, Wetter rechts */
-.phone__today {
+/* Dringender Rat: eine Zeile ganz oben, nach links wischen oder × blendet sie aus */
+.phone__urgent {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: 0 4px;
-}
-.phone__today-date {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.phone__today-day {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: var(--font-weight-black);
-  letter-spacing: -0.02em;
-  line-height: 34px;
-}
-.phone__today-sub {
-  font-size: var(--type-subhead);
-  color: var(--home-label-2);
-}
-.phone__today-extra {
-  display: flex;
-  align-items: center;
-  flex: none;
-}
-.phone .hud-weather {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 44px;
-  padding: 0 var(--space-4);
-  border: 0;
-  border-radius: var(--radius-round);
-  background: var(--home-glass);
-  box-shadow: inset 0 0 0 0.5px var(--home-glass-edge);
-  backdrop-filter: var(--phone-blur);
-  color: var(--home-label);
-  cursor: pointer;
-}
-.phone .hud-weather__icon {
-  font-size: 22px;
-  color: var(--cat-sky-a);
-  filter: brightness(1.5);
-}
-.phone .hud-weather.is-warn .hud-weather__icon {
-  color: var(--cat-warn-a);
-  filter: none;
-}
-.phone .hud-weather__text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
-  line-height: 1.15;
-}
-.phone .hud-weather__temp {
-  font-size: var(--type-body);
-  font-weight: var(--font-weight-bold);
-}
-.phone .hud-weather__kind {
-  font-size: var(--type-footnote);
-  color: var(--home-label-2);
-}
-
-/* Nächster Schritt: das eine Signal in Gold auf dem Startbildschirm (Inhalt, flach) */
-.next-step {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  background: linear-gradient(120deg, var(--cat-brand-soft), transparent 55%), var(--phone-group);
+  align-items: stretch;
+  background: var(--phone-group);
   border-radius: var(--radius-group);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat-brand) 40%, transparent);
-  color: var(--phone-label);
+  overflow: hidden;
 }
-.next-step.is-coaching {
-  animation: coach-glow 2s ease-in-out infinite;
-}
-@keyframes coach-glow {
-  50% {
-    box-shadow: inset 0 0 0 1px var(--cat-brand);
-  }
-}
-.next-step__kicker {
+.phone__urgent-main {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: var(--type-footnote);
+  gap: var(--space-3);
+  min-height: 60px;
+  padding: 8px 4px 8px 12px;
+  border: 0;
+  background: none;
+  color: var(--phone-label);
+  text-align: left;
+  cursor: pointer;
+}
+.phone__urgent-main:hover {
+  background: var(--phone-group-2);
+}
+.phone__urgent-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.phone__urgent-kicker {
+  font-size: var(--type-caption-2);
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--letter-spacing-caps);
-  line-height: var(--type-footnote-lh);
   text-transform: uppercase;
   color: var(--cat-brand);
 }
-.next-step__kicker::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--cat-brand);
-}
-.next-step__body {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-.next-step__text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.next-step__title {
-  font-size: var(--type-body);
-  font-weight: var(--font-weight-bold);
-  line-height: var(--type-body-lh);
-}
-.next-step__desc {
-  font-size: var(--type-subhead);
-  line-height: var(--type-subhead-lh);
-  color: var(--phone-label-2);
-}
-.next-step__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-.next-step__meta:empty {
-  display: none;
-}
-.next-step__missing {
-  font-size: var(--type-footnote);
-  color: var(--cat-danger);
-}
-.next-step__more {
-  align-self: flex-start;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--phone-label-2);
-  font-size: var(--type-subhead);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-.next-step__others {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.next-step__others button {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  width: 100%;
-  min-height: 44px;
-  padding: 0 var(--space-3);
-  border: 0;
-  border-radius: var(--radius-lg);
-  background: var(--phone-fill);
-  color: inherit;
-  font-size: var(--type-subhead);
-  text-align: left;
-  cursor: pointer;
-}
-.next-step__others button:hover:not(:disabled) {
-  background: var(--phone-fill-hover);
-}
-.next-step__others button span:first-of-type + span {
-  flex: 1;
-}
-
-/* Kennzahlen: drei Kacheln mit Symbol (Lager, Ruf, Köln) */
-.phone__stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-.phone__stats .hud-pill {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-areas:
-    "chip label"
-    "value value";
-  align-items: center;
-  gap: 2px var(--space-2);
-  min-width: 0;
-  min-height: 44px;
-  padding: var(--space-3) var(--space-4);
-  border: 0;
-  border-radius: var(--radius-group);
-  background: var(--phone-group);
-  color: var(--phone-label);
-  text-align: left;
-}
-.phone__stats .hud-pill.is-button {
-  cursor: pointer;
-}
-.phone__stats .hud-pill.is-button:hover {
-  background: var(--phone-group-2);
-}
-.phone__stats .hud-pill__chip {
-  grid-area: chip;
-  display: inline-grid;
-}
-.phone__stats .hud-pill__text {
-  display: contents;
-}
-.phone__stats .hud-pill__label {
-  grid-area: label;
+.phone__urgent-title {
   overflow: hidden;
-  font-size: var(--type-footnote);
-  font-weight: var(--font-weight-medium);
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--phone-label-2);
+  font-size: var(--type-subhead);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--type-subhead-lh);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.phone__stats .hud-pill__value {
-  grid-area: value;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font-family: var(--font-body);
-  font-size: var(--type-body);
+.phone__urgent-action {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: var(--radius-round);
+  background: var(--cat-brand);
+  color: var(--cat-brand-on, #1a1200);
+  font-size: var(--type-footnote);
   font-weight: var(--font-weight-bold);
-  line-height: 1.2;
-  letter-spacing: 0;
-  text-wrap: balance;
 }
-.phone__stats .hud-pill__value.is-warn {
-  color: var(--cat-warn);
+.phone__urgent-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  border: 0;
+  background: none;
+  color: var(--phone-label-2);
+  font-size: 18px;
+  cursor: pointer;
 }
-.phone__stats .hud-pill__value.is-bad {
-  color: var(--cat-danger);
-}
-.phone__stats .hud-pill__value.is-accent {
-  color: var(--cat-money);
+.phone__urgent-close:hover {
+  color: var(--phone-label);
 }
 .phone__widgets {
   display: flex;
@@ -1031,7 +804,7 @@
   left: calc(50% + min(32px, calc(100cqw * 0.0775)) - 12px);
   min-width: 22px;
   height: 22px;
-  box-shadow: 0 0 0 2px var(--sky-bottom);
+  box-shadow: 0 0 0 2px var(--hw-black);
 }
 /* Vorschau einer App-Kachel im Kontextmenü (langer Druck): Kachel und Name */
 .phone__app-preview {
@@ -1837,20 +1610,6 @@ html.is-dragging {
   .phone__home-scroll {
     gap: 10px;
   }
-  .phone__today-day {
-    font-size: var(--type-title-2);
-    line-height: 28px;
-  }
-  .phone__home .next-step {
-    gap: var(--space-2);
-    padding: var(--space-3) var(--space-4);
-  }
-  .phone__home .next-step__desc {
-    display: none;
-  }
-  .phone__stats .hud-pill {
-    padding: var(--space-2) var(--space-3);
-  }
   .phone__apps {
     gap: 10px 4px;
     padding-top: 0;
@@ -1860,22 +1619,6 @@ html.is-dragging {
   }
   .phone__dock {
     padding: 8px 10px;
-  }
-}
-@container phone (max-width: 360px) {
-  .phone__home .next-step__body {
-    flex-wrap: wrap;
-  }
-  .phone__home .next-step__body .ui-button {
-    width: 100%;
-  }
-  .phone__stats .hud-pill__chip {
-    display: none;
-  }
-  .phone__stats .hud-pill {
-    grid-template-areas:
-      "label label"
-      "value value";
   }
 }
 

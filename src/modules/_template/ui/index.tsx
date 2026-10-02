@@ -4,7 +4,7 @@
 // Möglichkeiten (alle aus '../../../ui' bzw. '../../../map'):
 //   registerHudItem    Kennzahl (mit <HudPill>; placement: 'main' im HUD, 'more' als Kachel auf dem Handy-Startbildschirm)
 //   registerTab        eigener Bereich, erscheint als App im Spiel-Handy
-//   registerSlot       Abschnitt in einem vorhandenen Tab ('tab:business') oder Panel ('spots.spotPanel')
+//   registerSlot       Abschnitt in einem vorhandenen Tab ('tab:territory') oder Panel ('spots.spotPanel')
 //   registerPanel      Detailansicht (Seite im Handy), öffnen mit ui.openPanel(id, props)
 //   registerDialog     Dialog, öffnen mit ui.openDialog(id, props)
 //   registerPhoneApp   App im Spiel-Handy
@@ -45,6 +45,6 @@ function TemplateDialog(props: { counter: number }) {
   );
 }
 
-registerSlot('tab:business', { id: 'template.section', order: 100, component: TemplateSection });
+registerSlot('tab:territory', { id: 'template.section', order: 100, component: TemplateSection });
 registerDialog({ id: 'template.info', component: TemplateDialog });
 onGameEvent('template.incremented', 'template.toast', (payload, ui) => ui.toast(`Zähler: ${payload.counter}`));

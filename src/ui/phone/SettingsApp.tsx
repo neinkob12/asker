@@ -1,25 +1,29 @@
-// Einstellungen: eine App mit drei Abschnitten. "Ton & Musik" (Lautstärken, Musik, kleiner Player), "Anzeige"
-// (Karte und Kamera), "Spiel" (Vibration, Spielstände). Musik ist keine eigene App mehr: Sie ist eine Einstellung mit
-// Player. Module hängen eigene Abschnitte in den Slot 'core.settings'. Alles gilt nur für dieses Gerät.
+// Einstellungen: eine App mit Abschnitten. "Ton & Musik" (Lautstärken, Musik, kleiner Player), "Anzeige" (Karte und
+// Kamera), die Abschnitte der Module aus dem Slot 'core.settings' (z.B. Wetter mit Vorhersage, Anfragen der Kunden),
+// "Verlauf" (Ereignisse, Meldungen, Aufträge, Spielstand exportieren) und "Spiel" (Vibration, Spielstände). Musik
+// ist keine eigene App mehr: Sie ist eine Einstellung mit Player. Ton, Anzeige und Spiel gelten nur für dieses Gerät.
 // Aufbau wie iOS-Einstellungen: Abschnittskopf mit Symbol, eingerückte Gruppe, Schalter und Regler in den Zeilen.
 
 import type { ComponentChildren, JSX } from 'preact';
 import { MUSIC_MOOD_NAMES } from '../../audio';
+import { exportSaveFile } from '../builtin/GameDialogs';
+import { HistorySection } from '../builtin/HistoryApp';
 import {
   Button,
   type ChipColor,
   categoryOf,
+  ErrorBoundary,
   Icon,
   IconChip,
+  isChipColor,
   ProgressBar,
   SegmentedControl,
   Slider,
   Tag,
   Toggle,
 } from '../components';
-import { useUi } from '../hooks';
+import { useRuntime, useUi } from '../hooks';
 import { slotContributions } from '../registry';
-import { Slot } from '../shell/Slot';
 import { useAudio } from '../useAudio';
 
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
@@ -31,17 +35,19 @@ function Section(props: {
   title: string;
   children: ComponentChildren;
   note?: ComponentChildren;
+  /** Ohne die graue Gruppenfläche (für Beiträge, die eigene Gruppen mitbringen, z.B. den Verlauf). */
+  plain?: boolean;
 }) {
   return (
     <section
-      class="set-section"
+      class={`set-section ${props.plain ? 'set-section--plain' : ''}`}
       style={{ '--slider-tone': `var(--cat-${categoryOf(props.color)})` } as JSX.CSSProperties}
     >
       <header class="set-section__head">
         <IconChip icon={props.icon} color={props.color} solid size="sm" />
         <h3 class="set-section__title">{props.title}</h3>
       </header>
-      <div class="set-group">{props.children}</div>
+      {props.plain ? props.children : <div class="set-group">{props.children}</div>}
       {props.note && <p class="set-section__note">{props.note}</p>}
     </section>
   );
@@ -89,12 +95,35 @@ function Player() {
   );
 }
 
+/** Abschnitte der Module (Slot 'core.settings'): jeder mit eigenem Kopf aus Titel, Symbol und Farbe des Beitrags. */
+function ModuleSections() {
+  return (
+    <>
+      {slotContributions('core.settings').map((item) => {
+        const Component = item.component as unknown as () => JSX.Element | null;
+        return (
+          <Section
+            key={item.id}
+            icon={item.icon ?? 'sliders'}
+            color={item.color && isChipColor(item.color) ? item.color : 'system'}
+            title={item.title ?? 'Weitere'}
+          >
+            <ErrorBoundary name={item.id}>
+              <Component />
+            </ErrorBoundary>
+          </Section>
+        );
+      })}
+    </>
+  );
+}
+
 /** Einstellungen als App im Spiel-Handy. */
 export function SettingsApp() {
   const ui = useUi();
+  const runtime = useRuntime();
   const audio = useAudio();
   const s = audio.settings;
-  const hasModuleSettings = slotContributions('core.settings').length > 0;
   return (
     <div class="settings">
       <Section icon="volume" color="media" title="Ton & Musik">
@@ -148,7 +177,19 @@ export function SettingsApp() {
         </div>
       </Section>
 
+      <ModuleSections />
+
+      <Section icon="journal" color="log" title="Verlauf" plain>
+        <HistorySection />
+      </Section>
+
       <Section icon="gear" color="system" title="Spiel">
+        <Toggle
+          label="Mehr Benachrichtigungen"
+          hint="Auch Routine als Banner (Lieferung bestellt, Level-Aufstieg, jede Nachricht). Sonst nur Dringendes."
+          checked={ui.state.moreNotifications}
+          onChange={ui.setMoreNotifications}
+        />
         <Toggle
           label="Vibrieren"
           hint="Wackeln bei neuen Nachrichten, leise Klicks bei Schaltern und Gesten"
@@ -162,15 +203,16 @@ export function SettingsApp() {
           </span>
           <Icon name="chevronRight" class="set-link__chevron" />
         </button>
+        <button type="button" class="set-link" onClick={() => exportSaveFile(runtime)}>
+          <span class="set-link__text">
+            <span class="set-link__label">Spielstand exportieren</span>
+            <span class="set-link__hint">Als Datei herunterladen, zum Weitergeben oder Sichern</span>
+          </span>
+          <Icon name="download" class="set-link__chevron" />
+        </button>
       </Section>
 
-      {hasModuleSettings && (
-        <Section icon="sliders" color="system" title="Weitere">
-          <Slot name="core.settings" />
-        </Section>
-      )}
-
-      <p class="set-foot">Diese Einstellungen gelten nur für dieses Gerät.</p>
+      <p class="set-foot">Ton, Anzeige und Spiel gelten nur für dieses Gerät.</p>
     </div>
   );
 }

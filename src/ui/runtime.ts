@@ -41,6 +41,11 @@ export interface PhoneNotification {
   sound?: string | null;
   /** Spielzeit, zu der die Benachrichtigung kam (setzt notify selbst). */
   time?: number;
+  /**
+   * Dringend (Standard): Banner, Ton, Vibrieren. Nicht dringend: nur in die Mitteilungszentrale, kein Banner,
+   * außer die Einstellung "Mehr Benachrichtigungen" ist an (Auftrag 26: nur das Allerwichtigste stört).
+   */
+  urgent?: boolean;
 }
 
 /** Kurzer Auftritt in der Dynamic Island (z.B. "+120 €" nach Verkäufen, "Lieferung da"). */
@@ -61,6 +66,12 @@ export interface ToastOptions {
   icon?: string;
   /** In der Alarm-Zentrale festhalten? Standard: ja (Fehlermeldungen von Befehlen nicht). */
   log?: boolean;
+  /**
+   * Als Banner zeigen? Standard: nur 'bad' und 'warn'. Routine ('good', 'info') landet still im Verlauf, außer die
+   * Einstellung "Mehr Benachrichtigungen" ist an. Mit true erzwingen (z.B. "Lieferung ist da"), mit false
+   * unterdrücken (z.B. Ärger, der nur ins Journal gehört).
+   */
+  urgent?: boolean;
 }
 
 export interface Toast {
@@ -126,6 +137,8 @@ export interface UiState {
   overlay: boolean;
   /** Handy vibriert bei Benachrichtigungen. Pro Gerät gemerkt. */
   vibration: boolean;
+  /** Auch Routine als Banner zeigen (sonst nur Dringendes). Pro Gerät gemerkt. */
+  moreNotifications: boolean;
   /** Aktuelles Banner des Spiel-Handys. */
   notification: PhoneNotification | null;
   /** Zählt jedes Vibrieren hoch (für die Animation). */
@@ -206,12 +219,13 @@ export interface UiApi {
   toggleCamera(): void;
   setOverlay(enabled: boolean): void;
   setVibration(enabled: boolean): void;
+  setMoreNotifications(enabled: boolean): void;
   zoomIn(): void;
   zoomOut(): void;
   resetNorth(): void;
 }
 
-/** App-ID eines Tabs im Handy: 'tab:<id>', z.B. 'tab:business'. */
+/** App-ID eines Tabs im Handy: 'tab:<id>', z.B. 'tab:territory'. */
 export const TAB_APP_PREFIX = 'tab:';
 
 /** Handy-Breite, gleich wie MOBILE_BREAKPOINT in src/map/config.ts und die Media Queries in tokens.css. */
@@ -236,6 +250,8 @@ export class UiRuntime {
   readonly ui: UiState;
   readonly api: UiApi;
   map: MapController | null = null;
+  /** Zähler für Tests und das Durchspielen: wie viele Banner (Meldungen und Benachrichtigungen) erschienen sind. */
+  readonly stats = { banners: 0 };
 
   private readonly listeners = new Set<() => void>();
   private lastRender = 0;
@@ -274,6 +290,7 @@ export class UiRuntime {
       camera: prefs.camera,
       overlay: prefs.overlay,
       vibration: prefs.vibration,
+      moreNotifications: prefs.moreNotifications,
       notification: null,
       buzz: 0,
       island: { expanded: false, pulse: null },
@@ -395,7 +412,12 @@ export class UiRuntime {
   }
 
   private savePrefs(): void {
-    const prefs: UiPrefs = { overlay: this.ui.overlay, camera: this.ui.camera, vibration: this.ui.vibration };
+    const prefs: UiPrefs = {
+      overlay: this.ui.overlay,
+      camera: this.ui.camera,
+      vibration: this.ui.vibration,
+      moreNotifications: this.ui.moreNotifications,
+    };
     savePrefs(this.storage, prefs);
   }
 
@@ -452,8 +474,11 @@ export class UiRuntime {
           const toast: Toast = { id, text, kind };
           if (options.icon) toast.icon = options.icon;
           if (options.target) toast.target = options.target;
+          // Banner nur für Dringendes (Razzia, Festnahme, Lieferung …); Routine landet still im Verlauf.
+          const urgent = options.urgent ?? (kind === 'bad' || kind === 'warn');
           // Gleicher Text schon in der Schlange: nicht doppelt zeigen.
-          if (!ui.toasts.some((t) => t.text === text)) {
+          if ((urgent || ui.moreNotifications) && !ui.toasts.some((t) => t.text === text)) {
+            this.stats.banners++;
             let queue = [...ui.toasts, toast];
             // Zu voll: Routine-Meldungen (nicht die sichtbare) fliegen zuerst raus.
             while (queue.length > TOAST_QUEUE) {
@@ -535,8 +560,12 @@ export class UiRuntime {
             return;
           }
           const id = ++this.notificationId;
-          ui.notification = { ...notification, id, time: notification.time ?? session.state?.time ?? 0 };
-          ui.notifications = [ui.notification, ...ui.notifications].slice(0, NOTIFICATION_STACK);
+          const entry: PhoneNotification = { ...notification, id, time: notification.time ?? session.state?.time ?? 0 };
+          ui.notifications = [entry, ...ui.notifications].slice(0, NOTIFICATION_STACK);
+          // Nicht dringend: still in die Mitteilungszentrale (Badge an der App), kein Banner, kein Ton.
+          if (notification.urgent === false && !ui.moreNotifications) return;
+          this.stats.banners++;
+          ui.notification = entry;
           if (notification.sound !== null) audio.play(notification.sound ?? 'notification');
           if (ui.vibration) {
             ui.buzz++;
@@ -642,6 +671,11 @@ export class UiRuntime {
         update(() => {
           ui.vibration = enabled;
           setHapticsEnabled(enabled);
+          this.savePrefs();
+        }),
+      setMoreNotifications: (enabled) =>
+        update(() => {
+          ui.moreNotifications = enabled;
           this.savePrefs();
         }),
       zoomIn: () => this.map?.zoomIn(),

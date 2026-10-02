@@ -37,18 +37,22 @@ Spielzeit (gleiche Live-Aktivitäten), unten steht statt des Home-Balkens eine L
   Lieferungen mit Restzeit, Ware am Kai (Zeit bis zum Zoll), Fahrten und Verkehrskontrollen, der Spot, an dem du
   selbst stehst, und der Umsatz des Tages.
 
-- **Über der Karte** steht das HUD im Look **„Glas“** (Abschnitt unten): Geld-Kapsel mit Heat (`placement: 'main'`),
-  Uhr-Kapsel mit Wetter (`'time'`), Tempo und Menü, die Kennzahlen (`'more'`) als Kacheln und Warnungen (`'alert'`).
-  Dazu die Kartensteuerung und die Überlagerungen der Module (Slot `map.overlay`).
+- **Über der Karte** steht das HUD im Look **„Glas“** (Abschnitt unten): Geld-Kapsel mit Heat (`placement: 'main'`;
+  Schwarzgeld und sauberes Geld öffnen per Klick die Geldwäsche), Uhr-Kapsel mit Tempo und Menü (`'time'` ist seit
+  Auftrag 26 leer), die Kennzahlen (`'more'`) als Kacheln (Lager, Ruf · Reviere; beide klappen beim Drüberfahren oder
+  Antippen eine Karte auf, `HudPill` mit `details`) und Warnungen (`'alert'`). Dazu die Kartensteuerung und die
+  Überlagerungen der Module (Slot `map.overlay`).
 - **Alles andere läuft über das Spiel-Handy** (`phone/PhoneFrame.tsx`):
   - Tabs der Module (`registerTab`) sind Apps mit der ID `tab:<id>`. `ui.selectTab('staff')` öffnet also die App
     "Leute" im Handy.
   - Panels (`ui.openPanel`, z.B. ein Spot oder ein Veedel) erscheinen als Seite über der aktuellen App. Zurück
     schließt sie.
-  - Der Startbildschirm zeigt die **Heute-Zeile** (Wochentag, Spieltag, Tageszeit und das Wetter als Knopf), den
-    **Nächsten Schritt**, die Kennzahlen (`placement: 'more'`, z.B. Lager, Ruf, Köln) als drei Kacheln, die Widgets
-    (`phone.home`), das App-Raster (4 Spalten) und unten das **Dock** (Nachrichten, Geschäft, Lieferanten, Leute).
-    Der Hintergrund ist die **Kölner Skyline**, deren Himmel der Spielzeit folgt (`phone/Skyline.tsx`).
+  - Der Startbildschirm ist seit Auftrag 26 **schwarz und ruhig**: sechs Apps im Raster (Kasse, Reviere, Gangs,
+    Personal, Geldwäsche, Einstellungen; `HOME_ORDER`), unten das **Dock** (Nachrichten, Lieferanten, Personal, Kasse;
+    `DOCK`), dazwischen die Widgets (`phone.home`, derzeit keine). Keine Heute-Zeile, keine Kennzahlen, keine Skyline.
+    Nur ein **dringender Rat** (`registerAdvisor`, Priorität ab 80, z.B. Chat mit Frist, Ware alle) steht als
+    wegwischbare Zeile ganz oben; alle Empfehlungen stehen in der Suche (Strg/⌘+K). Apps und Tabs mit `hidden: true`
+    (Verlauf, Lieferanten-Detail …) fehlen im Raster und in der Suche, `ui.openPhone(id)` öffnet sie trotzdem.
   - **Dock ja, Tab-Leiste nein:** Das Dock gibt es nur auf dem Startbildschirm (wie bei iOS). Apps sind Vollbild,
     zurück geht es über "‹" oben links, den Home-Balken unten oder Esc. Innerhalb einer App teilen Segmente
     (`SegmentedControl`) nahe Ansichten. Begründung in `docs/handy-design.md`, Abschnitt 5.
@@ -63,29 +67,37 @@ Spielzeit (gleiche Live-Aktivitäten), unten steht statt des Home-Balkens eine L
 - **Tastatur (Desktop):** Leertaste Pause, 1/2/3 Tempo, T Handy, Buchstabe eines Tabs öffnet dessen App (noch
   einmal: zurück zum Startbildschirm), Strg/⌘+K Suche. Esc schließt zuerst ein offenes Blatt oder Menü, geht sonst
   eine Seite zurück und legt am Ende das Handy weg.
-- **Meldungen:** Über der Karte gibt es keine Meldungsliste und keine Toasts mehr. `ui.toast` bleibt die API: Die
-  Meldung erscheint als Banner im Handy (bzw. oben rechts, wenn es weggelegt ist; höchstens eine, weitere warten) und
-  landet in der App **Meldungen** (Dringend, Achtung, Routine; "Hin" springt zum Ort; ungelesene als Zähler am Icon).
-  Fehlermeldungen von Befehlen erscheinen als Banner, landen aber nicht in der App.
+- **Meldungen und Banner (Auftrag 26: nur das Allerwichtigste stört):** `ui.toast(text, kind, { urgent? })` bleibt
+  die API. Als Banner im Handy (bzw. oben rechts, wenn es weggelegt ist; höchstens eines, weitere warten) erscheint
+  eine Meldung nur, wenn sie dringend ist: Standard bei `'bad'` und `'warn'` (Razzia, Kontrolle, Festnahme,
+  Lieferung verloren), erzwingbar mit `urgent: true` (Lieferung ist da, Fahrt angekommen, Löhne nicht gedeckt),
+  unterdrückbar mit `urgent: false` (Ärger, der nur ins Journal gehört). Alles landet im **Verlauf** (Einstellungen ›
+  Verlauf bzw. Seite `core.history`: Journal, Meldungen und Auftrags-Historie mit Filter). Fehlermeldungen von
+  Befehlen erscheinen als Banner, landen aber nicht im Verlauf. `ui.notify({ …, urgent? })` ebenso: Nachrichten
+  vibrieren nur mit Antwortfrist, der Rest zählt still am Badge und steht in der Mitteilungszentrale. Die Einstellung
+  **„Mehr Benachrichtigungen“** (pro Gerät, `UiState.moreNotifications`) holt das alte Verhalten zurück.
+  `runtime.stats.banners` zählt die Banner (das Durchspielen gibt die Zahl aus).
 - **Benachrichtigungen** erscheinen wie bei iOS oben im Handy (Glas, Kachel in der Farbe der App). Liegt es weg,
   erscheinen sie oben rechts über der Karte.
 - **Nächster Schritt:** kommt aus `registerAdvisor`. In den ersten zwei Spieltagen pulsiert das Ziel (`highlight`)
-  sanft. Es wird nichts gesperrt.
-- **Listen-Tabs** (`layout: 'rows'`, z.B. "Geschäft"): Jede `Card` mit `title` wird zu einer Zeile einer Liste
-  (`icon` als Kachel in der Bedeutungsfarbe, `summary`, `status`). Ein Tipp öffnet den Abschnitt, der Zurück-Pfeil des
-  Handys führt zur Übersicht.
+  sanft. Es wird nichts gesperrt. Auf dem Startbildschirm steht nur ein dringender Rat (ab Priorität 80), am
+  Handy-Bildschirm der wichtigste in der Leiste unten, alle in der Suche.
+- **Listen-Tabs** (`layout: 'rows'`): Jede `Card` mit `title` wird zu einer Zeile einer Liste (`icon` als Kachel in
+  der Bedeutungsfarbe, `summary`, `status`). Ein Tipp öffnet den Abschnitt. Seit Auftrag 26 gibt es keinen solchen Tab
+  mehr (das Geschäft ist aufgelöst), der Mechanismus bleibt.
 
 ### Apps des Kerns
 
 | App | Farbe | Inhalt |
 | --- | --- | --- |
-| Nachrichten (`core.messages`) | Mint | Chats nach Kontaktart gruppiert (Gangs, Polizei, Lieferanten, Team, Kunden, Kontakte), Avatar in der Farbe der Art, Fristen, ungelesen; Chat mit Antwortblatt |
-| Meldungen (`core.alerts`) | Orange | Dringend, Achtung, Routine |
-| Ereignisse (Tab `journal`) | Papier | Journal als Zeitachse nach Tagen, Filter Alle/Gutes/Ärger |
-| Einstellungen (`core.settings`) | Grau | Abschnitte **Ton & Musik** (Lautstärken, Musik, kleiner Player), **Anzeige** (Overlay, Kamera), **Spiel** (Vibrieren, Spielstände) und Beiträge der Module (Slot `core.settings`) |
+| Nachrichten (`core.messages`) | Mint | Oben die fünf zuletzt aktiven Kontakte als Avatare, darunter die Chats kompakt nach Kontaktart gruppiert (Gangs, Polizei, Lieferanten, Team, Kunden, Kontakte), Avatar in der Farbe der Art, Fristen, ungelesen; „Alle gelesen“, Löschen per Wischen oder Kontextmenü, „Alle löschen“ im Menü (Aktionsblatt, Rückfrage bei offener Frist); Chat mit Antwortblatt |
+| Einstellungen (`core.settings`) | Grau | Abschnitte **Ton & Musik** (Lautstärken, Musik, kleiner Player), **Anzeige** (Overlay, Kamera), die Abschnitte der Module (Slot `core.settings` mit `title`, `icon`, `color`: **Wetter** mit Vorhersage, **Anfragen** der Kunden), **Verlauf** (Journal, Meldungen, Aufträge mit Filter; Spielstand exportieren) und **Spiel** (Mehr Benachrichtigungen, Vibrieren, Spielstände, Export) |
+| Verlauf (`core.history`, versteckt) | Papier | Die ganze Zeitachse nach Tagen mit Filter (Alles, Geld, Leute, Polizei, Gangs, Aufträge) und Export; öffnet sich aus den Einstellungen, dem Menü über der Karte, Banner-Meldungen und der Suche (`builtin/historyModel.ts`, getestet) |
 
-Musik ist keine eigene App mehr, sondern ein Abschnitt der Einstellungen. Ereignisse und Einstellungen sind bewusst
-verschieden gebaut (Zeitachse ohne Kästen gegen Gruppen mit Schaltern und Reglern).
+Musik ist keine eigene App mehr, sondern ein Abschnitt der Einstellungen. Meldungen, Ereignisse, Wetter, Aufträge,
+Kontakte und Logistik sind seit Auftrag 26 keine Apps mehr: Sie sind in Verlauf, Einstellungen, Personal, Lager- und
+Hafen-Seite aufgegangen. Verlauf und Einstellungen sind bewusst verschieden gebaut (Zeitachse ohne Kästen gegen
+Gruppen mit Schaltern und Reglern).
 
 ## Über der Karte: Look „Glas“ (Auftrag 24)
 
@@ -108,11 +120,15 @@ Alles außerhalb des Handys (HUD, Kartensteuerung, Marker, Überlagerungen, Dial
   `--dock-ease`, `--dock-duration` (Feder `SPRINGS.app` als CSS-Kurve, `springEasing()` in `phone/spring.ts`).
 
 **HUD** (`shell/Hud.tsx`): drei Gruppen links vom Handy (`--map-right` ist die Grenze). Oben links die Geld-Kapsel
-(Kachel mit Beutel, Schwarzgeld 32 px, Haarlinie, Sauber, darunter die Heat-Pille der Polizei mit fünf Flammen), oben in
-der Mitte die Uhr-Kapsel (Wochentag · Tag, Uhrzeit, Wetter, Tempo als Segmente 40 × 36, Menü), oben rechts die
-Kennzahl-Kacheln (Lager, Ruf, Köln mit sieben Segmenten über `HudSegments`). Ist die Kartenfläche schmal (Container-
-Query `hud`, unter 1000 px), rücken die Kacheln unter die Uhr. Am Handy-Bildschirm nur Geld (Heat als eine Flamme
-mit Stufenwort) und Uhr; das Menü steht dort in der Kartensteuerung.
+(Kachel mit Beutel, Schwarzgeld 32 px, Haarlinie, Sauber; beide Zeilen sind Knöpfe und öffnen die Geldwäsche; darunter
+die Heat-Pille der Polizei mit fünf Flammen), oben in der Mitte die Uhr-Kapsel (Wochentag · Tag, Uhrzeit, Tempo als
+Segmente 40 × 36, Menü mit Verlauf, Suche, Spielständen, Einstellungen, Ton), oben rechts die Kennzahl-Kacheln:
+**Lager** („40 g Gras + 2 weitere“, Karte mit Aufstellung nach Produkt, Qualität und Lager, Knopf „Bestellen“) und
+**Ruf · Reviere** (Leiste 0–100 über `HudBar` mit Marken an den Stufen, Revierzahl „4/7“; Karte mit der Stufe, der
+darunter und darüber mit je einem Satz, und den eigenen Veedeln). Die Karte klappt beim Drüberfahren oder Antippen auf
+(`HudPill` mit `details`, `detailsAction`). Ist die Kartenfläche schmal (Container-Query `hud`, unter 1000 px), rücken
+die Kacheln unter die Uhr. Am Handy-Bildschirm stehen Geld (Heat als eine Flamme mit Stufenwort) und Uhr kompakt
+nebeneinander, die Kacheln flach darunter; das Menü steht dort in der Kartensteuerung.
 
 **Kartensteuerung** (`shell/MapControls.tsx`): zwei Glas-Gruppen mit 44-px-Knöpfen: Zoom +/−/Norden, dann 3D/2D
 (gold bei 3D), **Ebenen** und Köln. Das Menü Ebenen füllen Module mit
@@ -262,7 +278,7 @@ zeigt den Titel der Seite darunter (bis 14 Zeichen, sonst „Zurück“; neben e
   Wischaktionen.
 
 
-- `registerPhoneApp({ id, name, icon, order, component, badge?, color?, chrome? })`: `color` ist eine Bedeutungsfarbe
+- `registerPhoneApp({ id, name, icon, order, component, badge?, color?, chrome?, hidden? })`: `color` ist eine Bedeutungsfarbe
   (`'money'`, `'goods'`, `'people'` … eine Farbe = eine Bedeutung; für alte Module geht auch eine CSS-Farbe, aus der der
   Verlauf abgeleitet wird), `badge(state, ui)` liefert den Zähler am Icon, `chrome: 'none'` heißt, die App zeichnet
   ihre Kopfleiste selbst mit `<PhoneScreen title onBack actions footer>`. Sonst setzt das Handy eine Leiste mit Zurück
@@ -278,8 +294,9 @@ zeigt den Titel der Seite darunter (bis 14 Zeichen, sonst „Zurück“; neben e
 - Tabs der Module erscheinen automatisch als Apps (`tab:<id>`), Panels als Seiten über der aktuellen App.
 - `ui.openPhone(appId, params)` öffnet eine App, z.B. `ui.openPhone('core.messages', { contactId: 'gang:nord' })`.
 - Widgets auf dem Startbildschirm: `registerSlot('phone.home', { id, order, component })`.
-- `ui.notify({ title, text, icon, appId, params, sound })` zeigt ein Banner, lässt das Handy vibrieren und spielt
-  einen Ton. Neue Nachrichten lösen das automatisch aus.
+- `ui.notify({ title, text, icon, appId, params, sound, urgent? })` zeigt ein Banner, lässt das Handy vibrieren und
+  spielt einen Ton; mit `urgent: false` nur still in die Mitteilungszentrale. Neue Nachrichten lösen das automatisch
+  aus (Banner nur mit Antwortfrist).
 - **Nachrichten:** Kontakte "tippen" (drei Punkte, nur Optik) bevor eine neue Nachricht erscheint. Kontaktart und Farbe:
   Gang rot, Polizei indigo, Team türkis, Lieferant braun, Kunde grün (Avatar, Gruppenkopf, Streifen an der Blase).
   Offene Fragen tragen den Stempel "Antwort!", die Antwortknöpfe stehen als Glasblatt unten (erster Knopf Gold). Die
@@ -289,7 +306,7 @@ zeigt den Titel der Seite darunter (bis 14 Zeichen, sonst „Zurück“; neben e
 
 - `npm test` prüft u.a. `styles/contrast.test.ts` (Kontrast aller Farbpaare, Hell und Dunkel, dazu Glas über der hellsten
   und dunkelsten Kartenfarbe, Zahl auf jeder Spot-Farbe, Akte, Razzia-Banner), `phone/islandModel.test.ts`
-  (Stunden statt Minuten), `phone/messagesModel.test.ts`, `builtin/journalModel.test.ts`.
+  (Stunden statt Minuten), `phone/messagesModel.test.ts`, `builtin/historyModel.test.ts`.
 - `npm run screenshot:phone` (alle Handy-Seiten, Desktop und Handy-Bildschirm, `--appearance=light` für Hell).
 - `npm run screenshot -- --scenes=alle` bzw. `npm run screenshot:glas` (Look Glas: Normalbetrieb in vier Tageszeiten,
   weggelegt, Spot-Hover, Orte, Konfrontation Briefing/Runde/Ergebnis, Razzia Alarm/Bilanz, Lieferung See/Kai/Lkw,
@@ -319,4 +336,5 @@ Gerät (Einstellungen › Ton & Musik). Ton startet erst nach der ersten Interak
 
 ## Einstellungen pro Gerät
 
-`UiState.overlay`, `camera`, `vibration` (`prefs.ts`, `localStorage` `koeln-tycoon:ui`), Ton unter `koeln-tycoon:audio`.
+`UiState.overlay`, `camera`, `vibration`, `moreNotifications` (`prefs.ts`, `localStorage` `koeln-tycoon:ui`), Ton unter
+`koeln-tycoon:audio`.

@@ -1,19 +1,16 @@
 // Oberfläche des Personals: Tab "Personal" mit filterbarer Übersicht, Mitarbeiter-Profil (Akte) als Panel,
-// Kurzfassung im Tab "Geschäft", Läufer und Sicherheit im Spot-Panel, Hinweise bei Level-Aufstieg, Haft, Verrat.
+// Läufer und Sicherheit im Spot-Panel, Hinweise bei Level-Aufstieg, Haft, Verrat.
 
 import { useState } from 'preact/hooks';
 import { formatEuro, formatPercent } from '../../../core';
 import {
   Button,
-  Card,
   ContextMenu,
   Empty,
   Group,
   Hint,
   Icon,
-  IconChip,
   ItemContent,
-  KeyValue,
   List,
   ListItem,
   onGameEvent,
@@ -24,19 +21,18 @@ import {
   registerSlot,
   registerTab,
   SegmentedControl,
-  Select,
   Slot,
   SummaryTiles,
   useGame,
   useUi,
 } from '../../../ui';
 import { getSpots } from '../../spots';
-import { veedelName } from '../../veedel';
 import {
   activeRunnerAt,
   assignmentLabel,
   bonus,
   bonusProvider,
+  DRIVER_HIRE_COST,
   getStaff,
   getStaffMember,
   isAbsent,
@@ -50,7 +46,6 @@ import {
   STATUS_NAMES,
   type StaffMember,
   securityAt,
-  staffVeedel,
 } from '../index';
 import { AbsenceSheet, AbsentGroup } from './absence';
 import { Portrait, StatusTag } from './common';
@@ -69,17 +64,24 @@ declare module '../../../ui' {
   }
 }
 
-type View = 'tree' | 'all' | 'former';
+/** Filter oben: alle (als Aufbau) oder eine Rolle. */
+type RoleFilter = 'all' | 'runner' | 'driver' | 'security' | 'specialist';
 
-/** Gruppen der Übersicht: eine Rolle (oder alle Spezialisten) pro Gruppe, gleiche Symbole wie im Porträt. */
-const ROLE_GROUPS: { id: string; label: string; icon: string; match: (m: StaffMember) => boolean }[] = [
-  { id: 'runner', label: 'Läufer', icon: 'runner', match: (m) => m.role === 'runner' },
+const ROLE_FILTERS: { value: RoleFilter; label: string }[] = [
+  { value: 'all', label: 'Alle' },
+  { value: 'runner', label: 'Läufer' },
+  { value: 'driver', label: 'Fahrer' },
+  { value: 'security', label: 'Sicherheit' },
+  { value: 'specialist', label: 'Spezialisten' },
+];
+
+/** Gruppen je Rolle (oder alle Spezialisten), gleiche Symbole wie im Porträt. */
+const ROLE_GROUPS: { id: RoleFilter; label: string; icon: string; match: (m: StaffMember) => boolean }[] = [
+  { id: 'runner', label: 'Läufer', icon: 'runner', match: (m) => m.role === 'runner' || m.role === 'courier' },
   { id: 'driver', label: 'Fahrer', icon: 'truck', match: (m) => m.role === 'driver' },
   { id: 'security', label: 'Sicherheit', icon: 'shield', match: (m) => m.role === 'security' },
   { id: 'specialist', label: 'Spezialisten', icon: 'scale', match: (m) => isSpecialist(m.role) },
 ];
-
-const NO_VEEDEL = '-';
 
 export function StaffRow(props: { member: StaffMember }) {
   const { state } = useGame();
@@ -147,30 +149,18 @@ function StaffRowItem(props: { member: StaffMember }) {
 }
 
 /**
- * Übersicht: Kennzahlen und drei Ansichten. "Aufbau" zeigt das Personal als Baum (Boss, Rechte Hand, Leutnants mit
- * Spots, Spots ohne Leutnant: Slot 'staff.tree' der Hierarchie), darunter "Fällt aus", freie Leute, Spezialisten und
- * Weitere. "Alle" zeigt alle nach Rolle (mit Veedel-Filter), "Ehemalige" wer gegangen ist.
+ * Übersicht: Kennzahlen, darunter ein Filter als Segment (Alle, Läufer, Fahrer, Sicherheit, Spezialisten). "Alle"
+ * zeigt das Personal als Aufbau (Boss, Rechte Hand, Leutnants mit Spots, Spots ohne Leutnant: Slot 'staff.tree' der
+ * Hierarchie), darunter "Fällt aus", freie Leute, Spezialisten, Weitere, Anheuern und Ehemalige. Eine Rolle zeigt
+ * nur ihre Leute. Darunter hängt "Leute finden" (recruiting, Slot 'tab:staff').
  */
 function StaffOverview() {
   const { state } = useGame();
-  const ui = useUi();
-  const [view, setView] = useState<View>('tree');
-  const [veedel, setVeedel] = useState('');
+  const [filter, setFilter] = useState<RoleFilter>('all');
   const current = getStaff(state);
   const absent = current.filter(isAbsent);
   const former = [...getStaff(state, { status: 'quit' }), ...getStaff(state, { status: 'dead' })];
-  const veedelIds = [...new Set(current.map((m) => staffVeedel(state, m)).filter((v): v is string => !!v))].sort();
-  const source = view === 'former' ? former : current;
-  const shown = source.filter((m) => {
-    if (view !== 'all') return true;
-    if (veedel === NO_VEEDEL && staffVeedel(state, m)) return false;
-    if (veedel && veedel !== NO_VEEDEL && staffVeedel(state, m) !== veedel) return false;
-    return true;
-  });
-  const groups = ROLE_GROUPS.map((g) => ({
-    ...g,
-    members: shown.filter((m) => (view === 'former' || !isAbsent(m)) && g.match(m)),
-  })).filter((g) => g.members.length > 0);
+  const group = ROLE_GROUPS.find((g) => g.id === filter);
   // Aufbau: Wer nicht im Baum steht (Leutnants, Rechte Hand, an Spots) und nicht ausfällt.
   const free = current.filter((m) => m.status === 'active' && !m.assignment && !isSpecialist(m.role));
   const specialists = current.filter((m) => isSpecialist(m.role) && !isAbsent(m));
@@ -193,31 +183,24 @@ function StaffOverview() {
           },
         ]}
       />
-      {(current.length > 0 || former.length > 0) && (
-        <SegmentedControl
-          wide
-          aria-label="Ansicht"
-          options={[
-            { value: 'tree' as View, label: 'Aufbau', badge: absent.length },
-            { value: 'all' as View, label: 'Alle' },
-            { value: 'former' as View, label: 'Ehemalige' },
-          ]}
-          value={view}
-          onChange={setView}
-        />
-      )}
-      {current.length === 0 && view !== 'former' ? (
-        <Empty
-          icon="users"
-          action={
-            <Button variant="primary" onClick={() => ui.openPhone('recruiting.contacts')}>
-              Kontakte öffnen
-            </Button>
-          }
-        >
-          Noch niemand im Team. Läufer heuerst du direkt an einem Spot an, Bewerber findest du bei den Kontakten.
+      <SegmentedControl wide aria-label="Rolle" options={ROLE_FILTERS} value={filter} onChange={setFilter} />
+      {current.length === 0 && filter === 'all' ? (
+        <Empty icon="users">
+          Noch niemand im Team. Läufer heuerst du direkt an einem Spot an, Bewerber findest du unten unter „Leute
+          finden“.
         </Empty>
-      ) : view === 'tree' ? (
+      ) : group ? (
+        <>
+          <PeopleGroup
+            title={group.label}
+            icon={group.icon}
+            members={current.filter(group.match)}
+            empty={`Niemand mit der Rolle ${group.label}.`}
+          />
+          {group.id === 'driver' && <HireGroup />}
+          <PeopleGroup title="Ehemalige" icon="clock" members={former.filter(group.match)} />
+        </>
+      ) : (
         <>
           <Slot name="staff.tree" props={{}} />
           <AbsentGroup members={absent} />
@@ -225,57 +208,62 @@ function StaffOverview() {
           <PeopleGroup title="Spezialisten" icon="scale" members={specialists} />
           <PeopleGroup title="Weitere" icon="truck" members={others} note="Lager, Lieferungen und Fahrten." />
           <SpecialistBonuses />
-        </>
-      ) : (
-        <>
-          {view === 'all' && veedelIds.length > 1 && (
-            <Select
-              wide
-              label="Veedel"
-              value={veedel}
-              options={[
-                { value: '', label: 'Alle Veedel' },
-                ...veedelIds.map((id) => ({ value: id, label: veedelName(id) })),
-                { value: NO_VEEDEL, label: 'Ohne Einsatz' },
-              ]}
-              onChange={setVeedel}
-            />
-          )}
-          {view === 'all' && <AbsentGroup members={absent} />}
-          {groups.length === 0 ? (
-            <Empty icon="users">{view === 'former' ? 'Noch niemand ist gegangen.' : 'Niemand passt zum Filter.'}</Empty>
-          ) : (
-            groups.map((g) => (
-              <section key={g.id} class="staff-group">
-                <header class="staff-group__head">
-                  <IconChip icon={g.icon} color="people" solid size="xs" />
-                  <h3 class="staff-group__title">{g.label}</h3>
-                  <span class="staff-group__count">{g.members.length}</span>
-                </header>
-                <List>
-                  {g.members.map((m) => (
-                    <StaffRow key={m.id} member={m} />
-                  ))}
-                </List>
-              </section>
-            ))
-          )}
+          <HireGroup />
+          <PeopleGroup title="Ehemalige" icon="clock" members={former} />
         </>
       )}
     </div>
   );
 }
 
-/** Gruppe von Leuten im Aufbau (Frei, Spezialisten, Weitere), leer = nichts. */
-function PeopleGroup(props: { title: string; icon: string; members: StaffMember[]; note?: string }) {
-  if (props.members.length === 0) return null;
+/** Anheuern ohne Bewerber: Fahrer für Hafen und Umlagern (die Logistik braucht sie), Läufer am Spot. */
+function HireGroup() {
+  const { state, dispatch } = useGame();
+  const drivers = getStaff(state, { role: 'driver' }).length;
+  return (
+    <Group
+      title="Anheuern"
+      icon="userPlus"
+      color="people"
+      note="Läufer heuerst du am Spot an, Sicherheit und Spezialisten über die Bewerber unten."
+    >
+      <List>
+        <ListItem
+          action
+          disabled={state.wallet.dirty < DRIVER_HIRE_COST}
+          value={formatEuro(DRIVER_HIRE_COST)}
+          onClick={() => dispatch({ type: 'staff.hireDriver', payload: {} })}
+        >
+          <ItemContent
+            icon="truck"
+            color="goods"
+            title="Fahrer anheuern"
+            meta={
+              drivers === 0
+                ? 'Holt Schiffsware am Hafen ab und lagert um. Ohne Fahrer fährst du selbst.'
+                : `${drivers} ${drivers === 1 ? 'Fahrer' : 'Fahrer'} im Team`
+            }
+          />
+        </ListItem>
+      </List>
+    </Group>
+  );
+}
+
+/** Gruppe von Leuten (Frei, Spezialisten, Weitere, eine Rolle …); leer = nichts, außer ein Leertext ist gewünscht. */
+function PeopleGroup(props: { title: string; icon: string; members: StaffMember[]; note?: string; empty?: string }) {
+  if (props.members.length === 0 && !props.empty) return null;
   return (
     <Group title={props.title} icon={props.icon} color="people" count={props.members.length} note={props.note}>
-      <List>
-        {props.members.map((m) => (
-          <StaffRow key={m.id} member={m} />
-        ))}
-      </List>
+      {props.members.length === 0 ? (
+        <Empty icon="users">{props.empty}</Empty>
+      ) : (
+        <List>
+          {props.members.map((m) => (
+            <StaffRow key={m.id} member={m} />
+          ))}
+        </List>
+      )}
     </Group>
   );
 }
@@ -304,39 +292,6 @@ function SpecialistBonuses() {
         <Hint key={l}>{l}</Hint>
       ))}
     </div>
-  );
-}
-
-/** Kurzfassung im Tab "Geschäft". */
-function StaffSummary() {
-  const { state } = useGame();
-  const ui = useUi();
-  const staff = getStaff(state);
-  const active = staff.filter((m) => m.status === 'active').length;
-  return (
-    <Card
-      title="Personal"
-      icon="users"
-      color="people"
-      status={staff.length === 0 ? 'idle' : active < staff.length ? 'warn' : 'good'}
-      summary={staff.length === 0 ? 'niemand' : `${active} aktiv`}
-      actions={
-        <Button small onClick={() => ui.selectTab('staff')}>
-          Öffnen
-        </Button>
-      }
-    >
-      {staff.length === 0 ? (
-        <Empty>
-          Noch keine Leute. Klick auf einen Spot, um dort einen Läufer anzuheuern. Was er kostet, hängt vom Spot ab.
-        </Empty>
-      ) : (
-        <>
-          <KeyValue label="Leute" value={`${active} aktiv, ${staff.length - active} fallen aus`} />
-          <KeyValue label="Löhne" value={`${formatEuro(payrollDue(state))} pro Tag`} />
-        </>
-      )}
-    </Card>
   );
 }
 
@@ -445,13 +400,11 @@ function SpotStaff(props: { spotId: string }) {
 
 registerTab({
   id: 'staff',
-  // Kurz, damit alle Tabs in die Seitenleiste passen.
-  title: 'Leute',
+  title: 'Personal',
   order: 30,
   badge: (state) => getStaff(state, { status: 'jailed' }).length,
 });
 registerSlot('tab:staff', { id: 'staff.overview', order: 10, component: StaffOverview });
-registerSlot('tab:business', { id: 'staff.runners', title: 'Personal', order: 20, component: StaffSummary });
 registerSlot('spots.spotPanel', { id: 'staff.runner', order: 50, component: SpotStaff });
 registerPanel({
   id: 'staff.profile',
@@ -467,11 +420,11 @@ onGameEvent('staff.levelUp', 'staff.levelUp', (payload, ui, state) => {
 onGameEvent('staff.statusChanged', 'staff.status', (payload, ui, state) => {
   const m = getStaffMember(state, payload.staffId);
   if (!m) return;
-  if (payload.to === 'injured') ui.toast(`${m.name} ist verletzt.`, 'bad');
+  if (payload.to === 'injured') ui.toast(`${m.name} ist verletzt.`, 'bad', { urgent: false });
 });
 onGameEvent('staff.betrayed', 'staff.betrayed', (payload, ui, state) => {
   const m = getStaffMember(state, payload.staffId);
-  if (m) ui.toast(`Ärger mit ${m.name}. Schau ins Journal.`, 'bad');
+  if (m) ui.toast(`Ärger mit ${m.name}. Schau in den Verlauf.`, 'bad', { urgent: false });
 });
 
 // Empfehlungen, Suche und Statistik
@@ -499,7 +452,7 @@ registerAdvisor({
 
 registerSearch({
   id: 'staff.search',
-  label: 'Leute',
+  label: 'Personal',
   order: 30,
   items: (state) =>
     getStaff(state).map((m) => ({

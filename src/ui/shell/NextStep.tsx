@@ -1,10 +1,10 @@
-// "Nächster Schritt": die wichtigste Empfehlung der Module (registerAdvisor) als Widget auf dem Startbildschirm
-// des Handys, in der Leiste unten am Handy-Bildschirm und als sanfter, pulsierender Hinweis (Onboarding) am Ziel.
-// Nichts wird gesperrt: Die Karte schlägt nur vor.
+// "Nächster Schritt": die Empfehlungen der Module (registerAdvisor). Seit Auftrag 26 gibt es kein festes Widget mehr
+// auf dem Startbildschirm: Nur ein dringender Rat erscheint dort als Zeile (PhoneFrame.tsx), alle Empfehlungen stehen
+// in der Suche (Strg/⌘+K), die wichtigste in der Leiste unten am Handy-Bildschirm, dazu der sanfte, pulsierende
+// Hinweis (Onboarding) am Ziel. Nichts wird gesperrt: Die Karte schlägt nur vor.
 
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import { clock, formatEuro, type GameState, wallet } from '../../core';
-import { Button, IconChip, Tag } from '../components';
 import { useRuntime } from '../hooks';
 import { type Advice, advisors } from '../registry';
 
@@ -36,72 +36,6 @@ export function missingFor(state: GameState, advice: Advice): string | null {
 /** Sanfte Hinweise nur am Anfang (die ersten beiden Spieltage). */
 export function coachingActive(state: GameState): boolean {
   return clock.day(state.time) <= 2;
-}
-
-/** Widget auf dem Startbildschirm des Handys. */
-export function NextStepWidget() {
-  const runtime = useRuntime();
-  const state = runtime.state;
-  const [expanded, setExpanded] = useState(false);
-  if (!state) return null;
-  const list = collectAdvice(state);
-  const top = list[0];
-  if (!top) return null;
-  const others = list.slice(1, 4);
-  return (
-    <section class={`next-step ${coachingActive(state) && top.priority >= 50 ? 'is-coaching' : ''}`}>
-      <div class="next-step__kicker">Nächster Schritt</div>
-      <AdviceBody advice={top} state={state} />
-      {others.length > 0 && (
-        <>
-          <button type="button" class="next-step__more" onClick={() => setExpanded(!expanded)}>
-            {expanded ? 'Weniger' : `${others.length} weitere ${others.length === 1 ? 'Idee' : 'Ideen'}`}
-          </button>
-          {expanded && (
-            <ul class="next-step__others">
-              {others.map((a) => (
-                <li key={a.id}>
-                  <button type="button" onClick={() => a.action?.(runtime.api)} disabled={!a.action}>
-                    <IconChip icon={a.icon} size="xs" color="paper" />
-                    <span>{a.title}</span>
-                    {a.cost !== undefined && <Tag>{formatEuro(a.cost)}</Tag>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-function AdviceBody(props: { advice: Advice; state: GameState }) {
-  const { api } = useRuntime();
-  const { advice, state } = props;
-  const missing = missingFor(state, advice);
-  return (
-    <div class="next-step__body">
-      <IconChip icon={advice.icon} color="yellow" size="md" shape="square" />
-      <div class="next-step__text">
-        <strong class="next-step__title">{advice.title}</strong>
-        {advice.text && <span class="next-step__desc">{advice.text}</span>}
-        <span class="next-step__meta">
-          {advice.cost !== undefined && (
-            <Tag tone={missing ? 'muted' : 'accent'} icon="moneyBag">
-              {formatEuro(advice.cost)}
-            </Tag>
-          )}
-          {missing && <span class="next-step__missing">{missing}</span>}
-        </span>
-      </div>
-      {advice.action && (
-        <Button variant="primary" small onClick={() => advice.action?.(api)}>
-          {advice.actionLabel ?? 'Los'}
-        </Button>
-      )}
-    </div>
-  );
 }
 
 /** Setzt den pulsierenden Hinweis (Klasse is-coach) an das Ziel der wichtigsten Empfehlung. */
