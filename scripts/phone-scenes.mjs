@@ -111,12 +111,10 @@ export const SCENES = [
       window.koeln.runtime.api.openPhone('core.messages', c ? { contactId: c } : undefined);
     })()`,
   },
-  { name: 'geschaeft', js: "window.koeln.runtime.api.selectTab('business')" },
   { name: 'leute', js: "window.koeln.runtime.api.selectTab('staff')" },
   { name: 'kontakte', js: "window.koeln.runtime.api.openPhone('recruiting.contacts')" },
   { name: 'reviere', js: "window.koeln.runtime.api.selectTab('territory')" },
   { name: 'gangs', js: "window.koeln.runtime.api.selectTab('gangs')" },
-  { name: 'auftraege', js: "window.koeln.runtime.api.openPhone('customers.orders')" },
   { name: 'lieferanten', js: "window.koeln.runtime.api.openPhone('suppliers.app')" },
   // Gesperrter Lieferant (Bedingungen mit Stand) und einer, der sich freischalten lässt
   { name: 'lieferant-gesperrt', js: "window.koeln.runtime.api.openPhone('suppliers.app', { supplierId: 'berlin' })" },
@@ -147,23 +145,6 @@ export const SCENES = [
       window.koeln.runtime.api.openPhone('logistics.app');
     })()`,
   },
-  // Abschnitte des Geschäfts (jede Zeile der Liste öffnet einen)
-  ...[
-    ['lager', 'goods.stock'],
-    ['lieferungen', 'suppliers.order'],
-    ['spots', 'spots.list'],
-    ['personal', 'staff.runners'],
-    ['kundschaft', 'customers.stats'],
-    ['ruf', 'reputation.summary'],
-    ['markt', 'market.summary'],
-    ['geldwaesche', 'laundering.section'],
-    ['logistik', 'logistics.overview'],
-    ['bilanz', 'finance.balance'],
-    ['polizei', 'police.tier'],
-  ].map(([name, section]) => ({
-    name: `geschaeft-${name}`,
-    js: `(() => { const api = window.koeln.runtime.api; api.selectTab('business'); api.openSection('${section}'); })()`,
-  })),
   // Details (Panels): Spot, Veedel, Lager, Markt, Mitarbeiter-Akte
   {
     name: 'spot',
@@ -291,9 +272,9 @@ export const SCENES = [
       ${STEPS}
       ${POINTER}
       const api = window.koeln.runtime.api;
-      api.selectTab('business');
-      api.openSection('goods.stock');
-      await until(() => document.querySelector('.phone-page.is-top[data-kind="section"]'));
+      api.selectTab('territory');
+      api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' });
+      await until(() => document.querySelector('.phone-page.is-top[data-kind="panel"]'));
       await sleep(100);
       await still();
       const screen = document.querySelector('.phone__screen');
@@ -334,10 +315,18 @@ export const SCENES = [
       await sleep(100);
     })()`,
   },
-  { name: 'ereignisse', js: "window.koeln.runtime.api.selectTab('journal')" },
   { name: 'einstellungen', js: "window.koeln.runtime.api.openPhone('core.settings')" },
-  { name: 'wetter', js: "window.koeln.runtime.api.openPhone('weather.app')" },
-  { name: 'meldungen', js: "window.koeln.runtime.api.openPhone('core.alerts')" },
+  {
+    name: 'einstellungen-verlauf',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.runtime.api.openPhone('core.settings');
+      const head = await until(() => [...document.querySelectorAll('.phone .set-section__title')].find((h) => h.textContent.includes('Verlauf')));
+      head?.scrollIntoView({ block: 'start' });
+    })()`,
+  },
+  { name: 'verlauf', js: "window.koeln.runtime.api.openPhone('core.history')" },
+  { name: 'geldwaesche', js: "window.koeln.runtime.api.openPhone('laundering.app')" },
   {
     name: 'island-kompakt',
     js: `${deadlines(1)}; window.koeln.runtime.api.openPhone(null)`,

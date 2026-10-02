@@ -93,7 +93,7 @@ function SpeedControl() {
   );
 }
 
-/** Menü (Meldungen, Suche, Spielstände, Einstellungen, Ton). Am Handy-Bildschirm steht es in der Kartensteuerung. */
+/** Menü (Verlauf, Suche, Spielstände, Einstellungen, Ton). Am Handy-Bildschirm steht es in der Kartensteuerung. */
 export function MenuButton(props: { up?: boolean }) {
   const { ui, api } = useRuntime();
   const audio = useAudio();
@@ -116,8 +116,8 @@ export function MenuButton(props: { up?: boolean }) {
         <Icon name="menu" />
       </button>
       <Popover id="menu" align="right" class={`hud-menu ${props.up ? 'hud-popover--up' : ''}`}>
-        <button type="button" class="hud-menu__item" onClick={run(() => api.openPhone('core.alerts'))}>
-          <Icon name="bell" /> Meldungen
+        <button type="button" class="hud-menu__item" onClick={run(() => api.openPhone('core.history'))}>
+          <Icon name="journal" /> Verlauf
           <Badge count={unread} tone="warn" />
         </button>
         <button type="button" class="hud-menu__item" onClick={run(() => api.togglePalette(true))}>

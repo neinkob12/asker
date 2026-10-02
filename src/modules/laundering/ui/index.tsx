@@ -55,7 +55,7 @@ function LaunderingApp() {
         items={[
           { icon: 'moneyBag', color: 'dirty', value: formatEuro(dirty), label: 'Schwarz' },
           { icon: 'coinEuro', color: 'money', value: formatEuro(Math.floor(state.wallet.clean)), label: 'Sauber' },
-          { icon: 'washing', color: 'dirty', value: formatEuro(inProgress), label: 'In der Wäsche' },
+          { icon: 'washing', color: 'dirty', value: formatEuro(inProgress), label: 'Wäsche' },
         ]}
       />
       <Group

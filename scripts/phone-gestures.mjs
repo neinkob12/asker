@@ -125,8 +125,8 @@ async function openSection(page) {
       const api = window.koeln.runtime.api;
       api.toggleNotificationCenter(false);
       api.openPhone(null);
-      api.selectTab('business');
-      api.openSection('goods.stock');
+      api.selectTab('territory');
+      api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' });
     })()`,
   );
   await page.waitForSelector('.phone-page.is-top[data-kind="section"]');
@@ -305,10 +305,10 @@ async function tour(page, input) {
   await run(page, 'window.koeln.runtime.api.openPhone(null)');
   await settle(page);
   await pause();
-  await page.locator('.phone__app[data-app-id="tab:business"]').click();
+  await page.locator('.phone__app[data-app-id="tab:territory"]').click();
   await settle(page);
   await pause();
-  await page.locator('.phone-page.is-top .ui-row', { hasText: 'Lager' }).first().click();
+  await page.locator('.phone-page.is-top .ui-list__button', { hasText: 'Altstadt-Nord' }).first().click();
   await settle(page);
   await pause();
   const r = await screenRect(page);

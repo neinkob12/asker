@@ -15,6 +15,7 @@ import {
 import { Button, Confetti, Dialog, Hint, Icon, IconChip, List, ListItem, Stamp } from '../components';
 import { useRuntime } from '../hooks';
 import { gameStats } from '../registry';
+import type { UiRuntime } from '../runtime';
 
 declare module '../registry' {
   interface DialogRegistry {
@@ -87,6 +88,16 @@ export function NewGameDialog(props: { firstStart?: boolean }) {
       )}
     </Dialog>
   );
+}
+
+/** Spielstand als Datei herunterladen (Spielstände-Dialog und Einstellungen › Verlauf). */
+export function exportSaveFile(runtime: UiRuntime): void {
+  try {
+    const file = runtime.session.exportSave();
+    download(file.filename, file.content);
+  } catch (error) {
+    runtime.api.toast(error instanceof Error ? error.message : 'Das hat nicht geklappt.', 'bad', { log: false });
+  }
 }
 
 function download(filename: string, content: string): void {
@@ -182,13 +193,7 @@ export function SavesDialog() {
         })}
       </List>
       <div class="saves-actions">
-        <Button
-          disabled={!session.state}
-          onClick={() => {
-            const file = session.exportSave();
-            download(file.filename, file.content);
-          }}
-        >
+        <Button disabled={!session.state} onClick={() => exportSaveFile(runtime)}>
           Exportieren
         </Button>
         <label class="ui-button">

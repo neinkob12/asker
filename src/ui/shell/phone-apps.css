@@ -696,3 +696,20 @@
   color: var(--phone-label);
   background: var(--phone-fill);
 }
+
+/* ---------------------------------------------------------------- Verlauf (in den Einstellungen und als Seite) */
+.set-section--plain .history-section,
+.history-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.history-section__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+/* Im Abschnitt der Einstellungen bleiben die Tagesmarken im Fluss (die Seite scrollt als Ganzes) */
+.history-section .journal__day-head {
+  position: static;
+}

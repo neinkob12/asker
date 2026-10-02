@@ -81,6 +81,9 @@ export interface SlotContribution<N extends SlotName = SlotName> {
    * Abschnitt direkt geöffnet wird (ui.openSection), bevor seine Zeile zu sehen war.
    */
   title?: string;
+  /** Symbol und Bedeutungsfarbe des Beitrags, z.B. für den Abschnittskopf in den Einstellungen. */
+  icon?: string;
+  color?: string;
 }
 
 export interface PanelDefinition<K extends PanelId = PanelId> {

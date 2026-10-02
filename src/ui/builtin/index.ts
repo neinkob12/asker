@@ -1,6 +1,5 @@
-// Oberflächen des Kerns: Geld und Uhr im HUD, Tabs "Geschäft" und "Ereignisse", Spielstand-Dialoge, die
-// Handy-Apps Nachrichten, Meldungen und Einstellungen (mit Ton und Musik), Benachrichtigungen und Sounds
-// für die Ereignisse des Kerns.
+// Oberflächen des Kerns: Geld und Uhr im HUD, Spielstand-Dialoge, die Handy-Apps Nachrichten und Einstellungen
+// (mit Ton und Musik, Wetter, Verlauf), die Verlauf-Seite, Benachrichtigungen und Sounds für die Ereignisse des Kerns.
 
 import { clock, formatEuro, messages, wallet } from '../../core';
 import { islandCountdown } from '../phone/islandModel';
@@ -16,13 +15,12 @@ import {
   registerLiveActivity,
   registerMapLayerOption,
   registerPhoneApp,
-  registerTab,
+  registerSearch,
 } from '../registry';
-import { AlertsApp } from '../shell/AlertCenter';
 import { soundOnEvent } from '../sound';
 import { MoneyHud } from './CoreHud';
 import { GameOverDialog, NewGameDialog, SavesDialog, WonDialog } from './GameDialogs';
-import { JournalTab } from './JournalTab';
+import { HistoryApp } from './HistoryApp';
 
 /** Ab diesem Betrag erscheint eine Einnahme kurz in der Dynamic Island. */
 const ISLAND_EARN_MIN = 150;
@@ -41,16 +39,6 @@ export function registerBuiltins(): void {
     select: (api, ui) => api.setOverlay(!ui.overlay),
   });
 
-  // Ereignisse: keine App mehr auf dem Startbildschirm (Auftrag 26), der Verlauf steht in den Einstellungen.
-  registerTab({
-    id: 'journal',
-    title: 'Ereignisse',
-    order: 90,
-    component: JournalTab,
-    icon: 'newspaper',
-    hidden: true,
-  });
-
   registerDialog({ id: 'core.newGame', component: NewGameDialog, pausesGame: true, dismissable: false });
   registerDialog({ id: 'core.saves', component: SavesDialog, pausesGame: true });
   registerDialog({ id: 'core.gameOver', component: GameOverDialog, dismissable: false });
@@ -66,14 +54,14 @@ export function registerBuiltins(): void {
     badge: (state) => messages.unreadCount(state),
     chrome: 'none',
   });
+  // Verlauf (Journal, Meldungen, Aufträge): Abschnitt in den Einstellungen, als ganze Seite nur per openPhone.
   registerPhoneApp({
-    id: 'core.alerts',
-    name: 'Meldungen',
-    icon: 'bell',
-    order: 50,
-    color: 'warn',
-    component: AlertsApp,
-    badge: (_state, ui) => ui.alerts.filter((a) => !a.read).length,
+    id: 'core.history',
+    name: 'Verlauf',
+    icon: 'journal',
+    order: 80,
+    color: 'log',
+    component: HistoryApp,
     chrome: 'none',
     hidden: true,
   });
@@ -84,6 +72,30 @@ export function registerBuiltins(): void {
     order: 90,
     color: 'system',
     component: SettingsApp,
+    badge: (_state, ui) => ui.alerts.filter((a) => !a.read).length,
+  });
+  registerSearch({
+    id: 'core.settings',
+    label: 'Einstellungen',
+    order: 90,
+    items: () => [
+      {
+        id: 'history',
+        title: 'Verlauf',
+        subtitle: 'Ereignisse, Meldungen und Aufträge, dazu Spielstand exportieren',
+        icon: 'journal',
+        keywords: 'ereignisse meldungen journal historie log export',
+        run: (ui) => ui.openPhone('core.history'),
+      },
+      {
+        id: 'weather',
+        title: 'Wetter',
+        subtitle: 'Vorhersage in den Einstellungen',
+        icon: 'cloudSun',
+        keywords: 'regen sonne vorhersage',
+        run: (ui) => ui.openPhone('core.settings'),
+      },
+    ],
   });
 
   // Wartet ein Chat auf Antwort, ist das die dringendste Empfehlung.
