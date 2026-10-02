@@ -94,11 +94,12 @@ const SCAN = `(() => {
 /** Läuft im Browser: alle sichtbaren Bedienelemente im Handy und in Dialogen/Blättern. */
 const COLLECT = `(() => {
   const SKIP = /neues spiel|neustart|zurücksetzen|spielstand|exportieren|importieren|datei|aufgeben|beenden|weglegen/i;
-  const sel = [
-    '.phone button', '.phone [role="button"]', '.phone [role="tab"]', '.phone [role="switch"]', '.phone select',
-    '.phone input', '.ui-dialog button', '.ui-dialog [role="button"]', '.ui-sheet button', '.ui-sheet [role="button"]',
-    '.ui-sheet [role="switch"]', '.ui-dialog [role="switch"]',
-  ].join(',');
+  // Liegt ein Blatt oder Dialog offen, ist alles dahinter (unter der Abdunklung) für den Spieler nicht erreichbar.
+  const layered = !!document.querySelector('.ui-sheet, .ui-dialog');
+  const base = layered ? ['.ui-dialog', '.ui-sheet'] : ['.phone', '.ui-dialog', '.ui-sheet'];
+  const sel = base
+    .flatMap((root) => ['button', '[role="button"]', '[role="tab"]', '[role="switch"]', 'select', 'input'].map((k) => root + ' ' + k))
+    .join(',');
   const out = [];
   document.querySelectorAll(sel).forEach((el, index) => {
     if (el.disabled || el.getAttribute('aria-disabled') === 'true') return;
@@ -120,17 +121,27 @@ const COLLECT = `(() => {
  * Läuft im Browser: liegt der Mittelpunkt des Elements (nach Scrollen) wirklich auf ihm? Verdeckt es nur eine
  * vorübergehende Ebene (Island, Banner, Blatt, Dialog), ist das kein Fund (overlay).
  */
-const HIT = (index) => `(() => {
+const HIT = (index) => `(async () => {
   const el = document.querySelector('[data-monkey="${index}"]');
   if (!el) return { gone: true };
-  el.scrollIntoView({ block: 'center', inline: 'center' });
+  // Blätter, Dialoge und Seitenwechsel gleiten mit einer Feder ein: Erst messen, wenn nichts mehr wandert, sonst
+  // steht alles kurz außerhalb des Bildschirms.
+  let before = '';
+  for (let i = 0; i < 30; i++) {
+    const box = el.getBoundingClientRect();
+    const now = [box.left, box.top, box.width, box.height].map(Math.round).join(',');
+    if (now === before) break;
+    before = now;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+  }
+  el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
   const r = el.getBoundingClientRect();
   const x = r.left + r.width / 2;
   const y = r.top + r.height / 2;
   const inView = x >= 0 && y >= 0 && x <= innerWidth && y <= innerHeight;
   const top = document.elementFromPoint(x, y);
   const ok = !!top && (el === top || el.contains(top) || top.contains(el));
-  const overlay = !!top && !!top.closest('.island, .phone-notice, .ui-sheet-layer, .ui-dialog-backdrop, .ui-dialog, .ui-menu, .ui-popover, .hud-flyout, .phone-notifications');
+  const overlay = !!top && !!top.closest('.island, .phone-notice, .ui-sheet-layer, .ui-sheet-backdrop, .ui-dialog-backdrop, .ui-dialog, .ui-menu, .ui-popover, .hud-flyout, .phone-notifications');
   const name = top ? (top.className && top.className.baseVal !== undefined ? top.className.baseVal : String(top.className)).slice(0, 60) || top.tagName : 'nichts';
   return { x, y, inView, ok, overlay, covered: name, rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], vw: innerWidth, vh: innerHeight };
 })()`;
@@ -240,6 +251,8 @@ try {
             }
           }
           await page.waitForTimeout(90);
+          // "Spot gründen" wartet auf einen Klick auf die Karte: Abbrechen, wie es ein Spieler mit Esc täte.
+          await page.evaluate('(() => { const r = window.koeln.runtime; if (r.ui.picking) r.api.cancelPick(); })()');
           if (random() < 0.12)
             await page.evaluate('window.koeln.runtime.api.back(); window.koeln.runtime.api.showPhone()');
           if (step % 20 === 19) {
