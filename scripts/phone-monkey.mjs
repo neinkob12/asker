@@ -102,6 +102,8 @@ const COLLECT = `(() => {
   const out = [];
   document.querySelectorAll(sel).forEach((el, index) => {
     if (el.disabled || el.getAttribute('aria-disabled') === 'true') return;
+    // Seiten unter der obersten (inert/versteckt) und Wisch-Aktionen hinter einer Zeile sind für den Spieler nicht da.
+    if (el.closest('[inert], .is-hidden, [aria-hidden="true"]')) return;
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return;
     const cs = getComputedStyle(el);
