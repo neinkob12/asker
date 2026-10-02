@@ -362,6 +362,48 @@ describe('Nachrichten', () => {
     expect(messages.get(sim.state, id)?.answer).toBeUndefined();
   });
 
+  it('alle gelesen, Chat löschen, alle löschen; gelöschte Chats tauchen mit neuen Nachrichten wieder auf', () => {
+    const sim = create();
+    const other = { id: 'other:zwei', name: 'Zweite', kind: 'other' as const };
+    const first = messages.send(sim.ctx('testCounter'), { contact, text: 'Eins' });
+    messages.send(sim.ctx('testCounter'), { contact: other, text: 'Zwei', options: [{ id: 'ok', label: 'Ok' }] });
+    expect(messages.unreadCount(sim.state)).toBe(2);
+    expect(sim.dispatch({ type: 'messages.markAllRead', payload: {} }).ok).toBe(true);
+    expect(messages.unreadCount(sim.state)).toBe(0);
+    expect(messages.threads(sim.state)).toHaveLength(2);
+
+    expect(sim.dispatch({ type: 'messages.delete', payload: { contactId: contact.id } }).ok).toBe(true);
+    expect(messages.threads(sim.state).map((t) => t.contact.id)).toEqual([other.id]);
+    expect(messages.thread(sim.state, contact.id)).toEqual([]);
+    // Die Nachricht bleibt im Zustand (nur ausgeblendet), unbekannte Chats lassen sich nicht löschen.
+    expect(messages.get(sim.state, first)?.text).toBe('Eins');
+    expect(sim.dispatch({ type: 'messages.delete', payload: { contactId: 'other:nix' } }).ok).toBe(false);
+
+    // Schreibt die Figur neu, ist der Chat wieder da, nur mit der neuen Nachricht.
+    messages.send(sim.ctx('testCounter'), { contact, text: 'Drei' });
+    expect(messages.thread(sim.state, contact.id).map((m) => m.text)).toEqual(['Drei']);
+    expect(messages.unreadCount(sim.state, contact.id)).toBe(1);
+
+    expect(sim.dispatch({ type: 'messages.deleteAll', payload: {} }).ok).toBe(true);
+    expect(messages.threads(sim.state)).toEqual([]);
+    expect(messages.unreadCount(sim.state)).toBe(0);
+    // Die offene Frage im gelöschten Chat zählt nicht mehr als offen.
+    expect(messages.hasOpenDeadline(sim.state, other.id)).toBe(false);
+  });
+
+  it('erkennt offene Fragen mit Frist (Rückfrage vor dem Löschen)', () => {
+    const sim = create();
+    messages.send(sim.ctx('testCounter'), {
+      contact,
+      text: 'Schnell?',
+      options: [{ id: 'ok', label: 'Ok' }],
+      expiresIn: 60,
+    });
+    expect(messages.hasOpenDeadline(sim.state, contact.id)).toBe(true);
+    sim.advance(61);
+    expect(messages.hasOpenDeadline(sim.state, contact.id)).toBe(false);
+  });
+
   it('Antwortfristen laufen ab', () => {
     const sim = create();
     const events = recordEvents(sim);

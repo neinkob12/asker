@@ -67,7 +67,7 @@ function bannerContent(ui: ReturnType<typeof useRuntime>['ui'], api: UiApi): Ban
     open: () => {
       api.dismissToast();
       if (t.target) api.flyTo(t.target, 15.5);
-      else api.openPhone('core.alerts');
+      else api.openPhone('core.history');
     },
     dismiss: api.dismissToast,
   };

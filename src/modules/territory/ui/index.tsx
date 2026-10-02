@@ -8,8 +8,6 @@ import {
   Card,
   Group,
   Hint,
-  HudPill,
-  HudSegments,
   ItemContent,
   List,
   ListItem,
@@ -17,11 +15,11 @@ import {
   ProgressBar,
   registerAdvisor,
   registerGameStat,
-  registerHudItem,
   registerMapLayerOption,
   registerSlot,
   registerTab,
   SegmentedControl,
+  Slot,
   useGame,
   useUi,
 } from '../../../ui';
@@ -107,7 +105,7 @@ function useMapView(): VeedelMapView {
   return view;
 }
 
-/** Tab "Reviere": Kampagnenziel, Kartenansicht, alle Veedel auf einen Blick. */
+/** Tab "Reviere": Kampagnenziel, Kartenansicht, alle Veedel auf einen Blick, darunter Spots, Ruf und Polizei. */
 function TerritoryTab() {
   const { state } = useGame();
   const ui = useUi();
@@ -164,6 +162,8 @@ function TerritoryTab() {
             : 'Rechts: dein Einfluss. Klick auf ein Veedel zeigt Details.'}
         </Hint>
       </Card>
+      {/* Spots, Ruf und Polizei-Stufe (seit Auftrag 26 hier statt im Geschäft) */}
+      <Slot name="tab:territory" />
     </>
   );
 }
@@ -180,36 +180,8 @@ registerTab({
 onGameEvent('territory.controlChanged', 'territory.toast', (payload, ui) => {
   const name = veedelName(payload.veedelId);
   if (payload.to === PLAYER_FACTION) ui.toast(`${name} gehört jetzt dir.`, 'good');
-  else if (payload.from === PLAYER_FACTION) ui.toast(`Du hast ${name} verloren.`, 'bad');
+  else if (payload.from === PLAYER_FACTION) ui.toast(`Du hast ${name} verloren.`, 'bad', { urgent: true });
 });
-
-/** HUD: Fortschritt beim Kampagnenziel "Köln übernehmen". Klick öffnet den Tab "Reviere". */
-function CampaignHud() {
-  const { state } = useGame();
-  const ui = useUi();
-  const progress = campaignProgress(state);
-  return (
-    <HudPill
-      icon="flag"
-      color="place"
-      label="Köln"
-      value={
-        progress.won ? (
-          'deins'
-        ) : (
-          <>
-            {progress.controlled}/{progress.needed}
-            <span class="hud-pill__unit"> Veedel</span>
-          </>
-        )
-      }
-      title={`Kampagne "Köln übernehmen": ${progress.controlled} von ${progress.total} Veedeln, ${progress.needed} gewinnen.`}
-      onClick={() => ui.selectTab('territory')}
-    >
-      <HudSegments total={progress.needed} filled={progress.controlled} label="Köln" />
-    </HudPill>
-  );
-}
 
 // Menü "Ebenen" der Kartensteuerung: Veedel nach Kontrolle oder nach Heat einfärben.
 for (const [i, option] of MAP_VIEW_OPTIONS.entries()) {
@@ -223,8 +195,6 @@ for (const [i, option] of MAP_VIEW_OPTIONS.entries()) {
     select: () => setMapView(option.value),
   });
 }
-
-registerHudItem({ id: 'territory.campaign', order: 45, placement: 'more', icon: 'flag', component: CampaignHud });
 
 registerAdvisor({
   id: 'territory.goal',

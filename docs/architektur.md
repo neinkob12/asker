@@ -1,6 +1,7 @@
 # Architektur
 
-Stand: nach der Integration (Auftrag 20) und Logistik mit echten Straßen (Auftrag 21). Kurzfassung und Regeln in
+Stand: nach der Integration (Auftrag 20), Logistik mit echten Straßen (Auftrag 21), Kasse und Rechte Hand (Auftrag 24)
+und dem aufgeräumten Handy (Auftrag 26). Kurzfassung und Regeln in
 [`CLAUDE.md`](../CLAUDE.md), Phasenplan in [`docs/auftraege/README.md`](auftraege/README.md). Wer eine Schnittstelle
 erweitert, ergänzt sie hier.
 
@@ -41,7 +42,7 @@ interface GameState {
   rng: Record<string, number>;    // Zufallszustand, ein Strom pro Modul
   wallet: { dirty, clean };
   journal: JournalEntry[];
-  messages: { contacts, list };
+  messages: { contacts, list, hidden };   // hidden: gelöschte Chats (Kontakt → letzte ausgeblendete Nachricht)
   outcome: { gameOver, won };
   modules: ModuleStates;          // state.modules.<id>, je Modul ein Bereich
   moduleVersions: Record<string, number>;
@@ -97,7 +98,7 @@ sim.on('game.over', (payload) => ...)    // außerhalb (UI, Tests), nur lesen
 | --- | --- | --- |
 | Geld (`wallet.ts`) | `wallet.balance(state, kind?)`, `canAfford`, `earn(ctx, amount, kind, reason, category)`, `pay(ctx, amount, kind, reason, category)` (false, wenn es nicht reicht), `lose` (höchstens was da ist), `convert(ctx, from, to, amount, fee, reason, feeCategory?)`; Kategorien `MONEY_CATEGORIES` (`MoneyCategory`, z.B. `'sales.street'`, `'wages.runner'`, `'loss.police'`), statt einer Kategorie auch `{ category, staffId?, spotId? }` | `wallet.changed` (mit `category`, `staffId`, `spotId`) |
 | Journal (`journal.ts`) | `journal.add(ctx, text, 'info' \| 'good' \| 'bad', ref?)`, `journal.entries(state)` | `journal.added` |
-| Nachrichten (`messages.ts`) | `messages.send(ctx, { contact, text, options?, expiresIn?, silent? })`, `thread`, `threads`, `unreadCount`, `get`, `contact`, `canAnswer` | Befehle `messages.answer`, `messages.markRead`; Ereignisse `message.received`, `message.answered`, `message.expired` |
+| Nachrichten (`messages.ts`) | `messages.send(ctx, { contact, text, options?, expiresIn?, silent? })`, `thread`, `threads`, `unreadCount`, `get`, `contact`, `canAnswer`, `hasOpenDeadline` | Befehle `messages.answer`, `messages.markRead`, `messages.markAllRead`, `messages.delete`, `messages.deleteAll`; Ereignisse `message.received`, `message.answered`, `message.expired` |
 | Spielende (`outcome.ts`) | `outcome.gameOver(ctx, 'bankrupt' \| 'killed', detail?)`, `outcome.win(ctx)`, `isOver`, `hasWon` | `game.over`, `campaign.won` |
 | Uhr (`clock.ts`) | siehe oben | `clock.hourStarted`, `clock.dayStarted` |
 | Format (`format.ts`) | `formatEuro`, `formatAmount`, `formatNumber`, `formatPercent` | |
@@ -108,8 +109,11 @@ sim.on('game.over', (payload) => ...)    // außerhalb (UI, Tests), nur lesen
 `customer:<Stammkunde>`, `customer:area-<veedel>`, `dealer:<id>`. Kontaktarten (`ContactKind`): `customer`,
 `supplier`, `gang`, `staff`, `police`, `other`. Eine Antwort-Option kann einen `command` tragen; beim Antworten
 (`messages.answer`) wird er als Spieler ausgeführt. Schlägt er fehl, bleibt die Nachricht unbeantwortet.
-`silent: true` stellt still zu (ungelesen, aber ohne Banner), z.B. Lieferanfragen und Meldungen der Leutnants.
-Ältere Nachrichten fallen ab `MESSAGE_LIMIT` weg.
+`silent: true` stellt still zu (ungelesen, ohne Eintrag in der Mitteilungszentrale). Ein Banner mit Ton gibt es seit
+Auftrag 26 ohnehin nur für Nachrichten mit Antwortfrist, der Rest zählt still am Badge. Gelöschte Chats bleiben im
+Zustand: `messages.hidden[contactId]` ist die ID der letzten ausgeblendeten Nachricht; `thread`, `threads` und
+`unreadCount` lassen alles bis dahin weg, und schreibt die Figur neu, ist der Chat wieder da (Kernschema 2, Migration
+in `persistence.ts`). Ältere Nachrichten fallen ab `MESSAGE_LIMIT` weg.
 
 **Geld mit Kategorie:** Jede Buchung trägt eine Kategorie aus `MONEY_CATEGORIES` (`wallet.ts`: Bezeichnung, Gruppe
 `income`/`expense`/`loss`/`transfer`, Symbol). Fehlt sie, landet die Buchung unter "Sonstiges" (`income.other` bzw.
@@ -193,18 +197,18 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
   und Menü, Kennzahl-Kacheln; `Hud.tsx`), die Kartensteuerung (Zoom/Norden, 3D, Ebenen, Köln) und die
   Überlagerungen der Module (Slot `map.overlay`). **Alles andere läuft über das Spiel-Handy**
   (`phone/PhoneFrame.tsx`): Tabs der Module sind Apps (`tab:<id>`), Panels erscheinen als Seite im Handy, dazu die
-  Handy-Apps, Meldungen (`core.alerts`), Nächster Schritt, Kennzahlen (`placement: 'more'`) und Widgets auf dem
-  Startbildschirm. Desktop: Handy rechts fest angedockt, weggelegt eine Lasche am Rand. Handy-Bildschirm: Handy
+  Handy-Apps, der Verlauf (`core.history`) und ein dringender Rat auf dem Startbildschirm. Desktop: Handy rechts fest angedockt, weggelegt eine Lasche am Rand. Handy-Bildschirm: Handy
   bildschirmfüllend unter dem HUD, in der Tasche eine Leiste unten mit Nächstem Schritt und Handy-Knopf. Dazu Suche
   (`Palette.tsx`, Strg/⌘+K) und der Hinweis beim Karten-Klick. Meldungen (`ui.toast`) erscheinen als Banner im Handy
   (einer sichtbar, Rest in der Warteschlange), nicht mehr über der Karte.
   Tastatur in `keys.ts`. Größe des Handys: `min(440px, (100dvh − 24px) × Seitenverhältnis)`, es fällt also nie aus
   dem Fenster; in kleinen Fenstern verkleinern Container-Queries (`container: phone`) Abstände und Kacheln.
-- **Startbildschirm** (`phone/PhoneFrame.tsx`): Statusleiste, Zeile "Heute" (Tag, Uhrzeit, Tagesphase, Wetter-Knopf),
-  Skyline als Signature (`phone/Skyline.tsx`, Dom, Groß St. Martin, Kranhäuser, KölnTriangle; nachts leuchten die
-  Fenster), Karte "Nächster Schritt", Kennzahlen (`placement: 'more'`), App-Raster (`HOME_ORDER`) und ein **Dock** mit
-  den vier wichtigsten Apps (Nachrichten, Geschäft, Lieferanten, Leute). Ein Tab-Bar-Muster gibt es bewusst nicht:
-  jede App ist eine eigene Seite mit Zurück-Knopf, das Dock ersetzt die Tab-Leiste (Begründung in `handy-design.md`).
+- **Startbildschirm** (`phone/PhoneFrame.tsx`, seit Auftrag 26): schwarz, Statusleiste, ganz oben höchstens ein
+  dringender Rat (`registerAdvisor` ab Priorität 80, wegwischbar), das App-Raster mit genau sechs Apps (`HOME_ORDER`:
+  Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen) und ein **Dock** (`DOCK`: Nachrichten, Lieferanten,
+  Personal, Kasse). Keine Heute-Zeile, keine Kennzahlen, keine Skyline mehr. Apps und Tabs mit `hidden: true` fehlen im
+  Raster und in der Suche, bleiben aber per `openPhone` erreichbar. Ein Tab-Bar-Muster gibt es bewusst nicht: jede App
+  ist eine eigene Seite mit Zurück-Knopf, das Dock ersetzt die Tab-Leiste (Begründung in `handy-design.md`).
 - **Statusleiste und Island:** `phone/PhoneFrame.tsx` (`StatusBar`, Grid mit drei Spalten: Uhrzeit | Island | Symbole)
   hält die Sicherheitszone ein, die Island verdeckt nichts. Die Island zeigt Fristen nur in Stunden
   (`islandCountdown(minutes)` in `phone/islandModel.ts`: "2 Std.", unter einer Stunde "< 1 Std.").
@@ -212,29 +216,33 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
   (`is-collapsed`), Zurück-Knopf als Glas-Taste, Fußleiste mit Aktionen als Glas-Blatt. Zieltreffer sind im Handy
   mindestens 44 × 44 px.
 - **Laufzeit** (`runtime.ts`): `UiRuntime` hält den reinen UI-Zustand (`UiState`: Panel, Dialog, Tab, Handy,
-  Tempo, `camera`, `overlay`, `vibration`, `notification`, `picking`) und die `UiApi`. Neuzeichnen nach
+  Tempo, `camera`, `overlay`, `vibration`, `moreNotifications`, `notification`, `picking`) und die `UiApi`.
+  Banner-Regel (Auftrag 26): `toast(text, kind, { urgent? })` erscheint als Banner nur bei `'bad'`/`'warn'` oder
+  `urgent: true`, Routine landet still in `ui.alerts` (Verlauf); `notify({ …, urgent: false })` geht nur in die
+  Mitteilungszentrale. „Mehr Benachrichtigungen“ (pro Gerät) schaltet alles wieder auf Banner. `runtime.stats.banners`
+  zählt. Neuzeichnen nach
   Simulationsschritten, gedrosselt auf ca. 10 Mal pro Sekunde; in der Pause nur bei UI-Änderungen.
 - **Hooks** (`hooks.ts`): `useGame()` → `{ state, dispatch }`, `useUi()` → `UiApi` + `state`, `useSession()`.
-- **UiApi:** `dispatch` (Toast bei Fehler), `openPanel/closePanel`, `openDialog/closeDialog`, `toast(text, kind)`,
-  `notify({ title, text, icon, appId, params, sound })`, `openPhone(appId?, params?)/closePhone`, `selectTab`
+- **UiApi:** `dispatch` (Toast bei Fehler), `openPanel/closePanel`, `openDialog/closeDialog`, `toast(text, kind, options)`,
+  `notify({ title, text, icon, appId, params, sound, urgent })`, `openPhone(appId?, params?)/closePhone`, `selectTab`
   (öffnet den Tab als App im Handy), `openSection(id)`, `togglePalette`, `setPopover`,
   `dismissToast`, `markAlertsRead`, `clearAlerts`, `setSpeed`, `togglePause`, `pickLocation(prompt)` (nächster Karten-Klick als Promise),
   `cancelPick`, `flyTo`, `flyToKoeln`, `flyToEuropa`, `setCameraMode`, `toggleCamera`, `setOverlay`,
-  `setVibration`, `zoomIn`, `zoomOut`, `resetNorth`.
+  `setVibration`, `setMoreNotifications`, `zoomIn`, `zoomOut`, `resetNorth`.
 - **Registries** (`registry.ts`, alle über `src/ui/index.ts`):
 
 | Funktion | Wofür | Einträge |
 | --- | --- | --- |
-| `registerHudItem({ id, order, placement?, icon?, component })` | Kennzahl (`placement`: `main` in der Geld-Kapsel des HUD, `more` als Kachel oben rechts über der Karte und auf dem Handy-Startbildschirm, `time` in der Uhr-Kapsel und neben dem Datum auf dem Startbildschirm, `alert` als Warnung im HUD) | Geld (10, sauberes Geld erst wenn > 0), Lager (20), Heat (30), Ruf (40), Köln-Fortschritt (45), offene Konfrontation (50), Wetter (95) |
-| `registerTab({ id, title, order, icon?, layout?, shortcut?, component?, badge? })` | Bereich als App im Handy (`tab:<id>`); ohne `component` zeigt er den Slot `tab:<id>`; `layout: 'rows'` zeigt jede Card als tippbare Zeile | Geschäft (10), Reviere (20), Leute (30), Gangs, Ereignisse (90) |
-| `registerSlot(name, { id, order, component })` | Abschnitt in einem Slot | `map.overlay` (über der freien Kartenfläche: Razzia-Banner, Tracking-Karte der Lieferung), `tab:business` (Lager, Lieferungen, Logistik, Spots, Personal, Kundschaft, Ruf, Markt, Geldwäsche), `tab:staff`, `spots.spotPanel` (Kunden mit „Hier hinstellen“, Preise, Läufer, Leutnant), `veedel.veedelPanel` (Revier, Polizei, Leutnant), `staff.profile`, `phone.home` (Widgets), `core.settings` (Abschnitt in der App Einstellungen) |
-| `registerPanel({ id, title, component })` | Detailansicht als Seite im Handy, `ui.openPanel(id, props)` | `spots.spot`, `veedel.veedel`, `goods.warehouse`, `staff.profile`, `hierarchy.lieutenant`, `market.overview` |
+| `registerHudItem({ id, order, placement?, icon?, component })` | Kennzahl (`placement`: `main` in der Geld-Kapsel des HUD, `more` als Kachel oben rechts über der Karte (am Handy-Bildschirm flach unter Geld und Uhr), `time` in der Uhr-Kapsel, `alert` als Warnung im HUD). `HudPill` mit `details` klappt beim Drüberfahren eine Glas-Karte auf | Geld (10, Klick öffnet die Geldwäsche), Lager (20, mit Aufstellung und „Bestellen“), Heat (30), Ruf · Reviere (40, Leiste 0–100 mit Stufen und Revierzahl), offene Konfrontation (50) |
+| `registerTab({ id, title, order, icon?, layout?, shortcut?, component?, badge?, hidden? })` | Bereich als App im Handy (`tab:<id>`); ohne `component` zeigt er den Slot `tab:<id>`; `layout: 'rows'` zeigt jede Card als tippbare Zeile; `hidden` hält ihn vom Startbildschirm fern | Reviere (20, mit Slot `tab:territory` für Spots, Ruf, Polizei), Personal (30, mit Slot `tab:staff` für „Leute finden“), Gangs |
+| `registerSlot(name, { id, order, component, title?, icon?, color? })` | Abschnitt in einem Slot | `map.overlay` (über der freien Kartenfläche: Razzia-Banner, Tracking-Karte der Lieferung), `tab:territory` (Spots, Ruf, Polizei), `tab:staff` (Leute finden), `spots.spotPanel` (Kunden mit „Hier hinstellen“, Preise, Läufer, Leutnant), `veedel.veedelPanel` (Revier, Polizei, Leutnant), `staff.profile`, `goods.warehouse` (Lager-Seite: Hafen, Umlagern, Lager kaufen, Markt), `finance.app` (unten in der Kasse: Kundschaft), `phone.home` (Widgets), `core.settings` (eigener Abschnitt in den Einstellungen mit `title`, `icon`, `color`: Wetter, Anfragen) |
+| `registerPanel({ id, title, component })` | Detailansicht als Seite im Handy, `ui.openPanel(id, props)` | `spots.spot`, `veedel.veedel`, `goods.warehouse`, `logistics.port` (Hafen), `staff.profile`, `hierarchy.lieutenant`, `hierarchy.rightHand`, `market.overview`, `finance.category` |
 | `registerDialog({ id, component, pausesGame?, dismissable?, area?, lockPhone? })` | Dialog, `ui.openDialog(id, props)`; `area: 'map'` liegt nur über der Kartenfläche (Darstellung mit `MapDialog`, am Handy-Bildschirm ein Blatt), `lockPhone` (Standard wie `pausesGame`) dunkelt das Handy ab und sperrt es | `core.newGame`, `core.saves`, `core.gameOver`, `core.won`, `encounters.encounter` (Karte, pausiert, sperrt das Handy), `police.raidReport` (Karte), `territory.takeover` (Karte, pausiert), `gangs.attack`, `gangs.ally` |
 | `registerMapLayerOption({ id, order, group, label, icon?, toggle?, active, select })` | Eintrag im Menü „Ebenen“ der Kartensteuerung | Veedel nach Kontrolle oder Heat (territory), Überwachung (Kern) |
 | `registerLiveActivity({ id, activities })` | Live-Aktivität in der Dynamic Island des Handys (`LiveActivity`: `priority`, `icon`, `tone`, `leading`, `trailing`, `title`, `detail`, `progress`, `open`) | Überfall, Razzia, Heat, Gang-Vorstoß, Chat-Frist, Auftrag, Kurier, Lieferung, Ware am Kai, Fahrt/Kontrolle, du am Spot, Umsatz heute |
-| `registerPhoneApp({ id, name, icon, order, color?, chrome?, component, badge? })` | App im Spiel-Handy; `color` ist eine Bedeutungsfarbe (`money`, `dirty`, `danger`, `warn`, `place`, `goods`, `people`, `chat`, `sky`, `law`, `media`, `system`, `log`, `brand`) oder eine CSS-Farbe (dann wird die Schrift automatisch lesbar gewählt); `badge(state, ui)` liefert die Zahl auf dem Icon | Kasse (Geld), Nachrichten (Mint), Lieferanten (Waren), Logistik (Waren), Kontakte (Leute), Aufträge, Meldungen (Orange), Wetter (Himmel), Einstellungen (Grau, mit Ton & Musik, Anzeige, Spiel) |
+| `registerPhoneApp({ id, name, icon, order, color?, chrome?, component, badge?, hidden? })` | App im Spiel-Handy; `color` ist eine Bedeutungsfarbe (`money`, `dirty`, `danger`, `warn`, `place`, `goods`, `people`, `chat`, `sky`, `law`, `media`, `system`, `log`, `brand`) oder eine CSS-Farbe (dann wird die Schrift automatisch lesbar gewählt); `badge(state, ui)` liefert die Zahl auf dem Icon; `hidden` nur per `openPhone` | Nachrichten (Mint), Lieferanten (Waren), Kasse (Geld), Geldwäsche (Geld), Einstellungen (Grau: Ton & Musik, Anzeige, Wetter, Anfragen, Verlauf, Spiel), Verlauf (Papier, versteckt) |
 | `onGameEvent(type, id, (payload, ui, state) => …)` | Reaktion auf Ereignisse (Toast, Dialog, Effekt) | Game Over, Sieg, neue Nachricht (Banner), Toasts der Module, Karten-Effekte |
-| `registerAdvisor({ id, advise(state) })` | Empfehlung für die Karte "Nächster Schritt" (`Advice`: priority, icon, title, cost?, action?, highlight?) | Antworten (Kern), Verkauf (an den Spot stellen oder alle bedienen) und Läufer (Spots, Personal), Nachschub (Lieferanten), Ware am Hafen abholen, Liegeplatz (Logistik), Geldwäsche, Kampagnenziel |
+| `registerAdvisor({ id, advise(state) })` | Empfehlung (`Advice`: priority, icon, title, cost?, action?, highlight?): ab Priorität 80 als dringende Zeile auf dem Startbildschirm, sonst in der Suche und in der Leiste am Handy-Bildschirm | Antworten (Kern, 90 nur mit Frist), Verkauf (an den Spot stellen oder alle bedienen) und Läufer (Spots, Personal), Nachschub (Lieferanten), Ware am Hafen abholen, Liegeplatz (Logistik), Geldwäsche, Löhne (Kasse), Rechte Hand, Kampagnenziel |
 | `registerSearch({ id, label, order, items(state) })` | Einträge der Suche (Strg/⌘+K) | Spots, Veedel, Leute, Gangs |
 | `registerGameStat({ id, order, icon, label, value(state) })` | Kennzahl auf dem Game-Over- und Sieg-Bildschirm | Tage, Schwarzgeld, Veedel, Kunden, Team |
 | `soundOnEvent(type, sound, { when?, throttleMs?, volume? })` | Ton zu einem Ereignis | Kasse, Nachricht, Sirene bei Razzia/Kontrolle, Warnton bei Konfrontation, Lieferung, Game Over, Sieg |
@@ -307,7 +315,7 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 | `suppliers` | `shipments` (`toPort` bei Schiffsware), `relations` (Vertrauen, Schulden), `unlocked`, `offered` (3) | `getSuppliers`, `getSupplier`, `isUnlocked`, `unlockRequirements` (Stand der Bedingungen), `canUnlock`, `shipmentsInTransit`, `shipmentProgress`, `deliveryLeg` (Schiff/Umladen/Straße, nur Darstellung), `RHINE_ROUTE`, `UNLOADING_PORT`, `CITY_APPROACH_SHARE`, `expectedArrival`, `cheapestPackagePrice`, `getRelation`, `supplierDiscount`, `creditLimit`, `availableCredit`, `isBlocked`, `availablePackages` (leer, solange gesperrt), `packagePrice` | `suppliers.order` (`onCredit`, `warehouseId`), `suppliers.repay`, `suppliers.unlock` | `shipment.ordered`, `shipment.arrived` (`atPort`), `shipment.problem`, `supplier.trustChanged`, `supplier.repaid`, `supplier.overdue`, `supplier.unlocked` |
 | `customers` | `waiting`, `nextSpawnAt`, `stats`, `regulars`, `orders` (mit `fromWarehouseId`), `self` (Spot, an dem du stehst) (3; Auftragsstatus zusätzlich `contested`) | `waitingAt`, `allWaiting`, `spotDemand` (aktuelle Nachfrage), `canServe`, `getSalesStats`, `getRegulars`, `getOrders`, `orderProgress`, `isPlayerDelivering`, `playerSpot`, `isPlayerAway`, Kundenentscheidung als reine Funktionen | `customers.serve` (`sellerId`), `.serveAll`, `.standAt`, `.acceptOrder`, `.declineOrder` | `sale.completed` (`street`/`delivery`/`wholesale`), `customer.arrived`, `customer.left`, `customer.missed`, `customer.regularGained/Lost`, `customers.selfMoved`, `order.received/accepted/finished` |
 | `spots` | `unlocked`, `custom` (2) | `getSpots` (aktive), `getAllSpots`, `getSpot`, `isSpotActive`, `spotsInVeedel`, `lockedSpots`, `customSpots`, `canFoundSpotAt`; das Veedel eines Spots kommt aus `veedelAt` | `spots.unlock`, `spots.found` | `spots.unlocked`, `spots.founded` |
-| `reputation` | `value`, `recent` (2) | `getReputation`, `changeReputation(ctx, delta, reason)`, `reputationDemandFactor`, `reputationLabel`, `recentReputationChanges` | | `reputation.changed` |
+| `reputation` | `value`, `recent` (2) | `getReputation`, `changeReputation(ctx, delta, reason)`, `reputationDemandFactor`, `reputationLabel`, `reputationTier`, `reputationTiers`, `recentReputationChanges` | | `reputation.changed` |
 | `laundering` | Wäschen mit Dauer (2) | `launderingFee`, `launderingDuration`, `launderingCapacity`, `amountInProgress`, `getBatches`, `batchProgress` | `laundering.launder` | `laundering.started`, `laundering.completed` |
 | `staff` | `members` (mit `jailSupport`), `former`, `hiding` (4; Rolle `driver`, Einsatz `transport` und `office`) | `getStaff`, `getStaffMember`, `getStats`, `runnerAt`, `activeRunnerAt`, `securityAt`, `findAvailable`, `assign`, `setStatus`, `speedFactor`, `riskFactor`, `combatValue`, `defenseStrength`, `bonus`, `bailCost`, `dailyWages`, `effectiveWage`, `payrollDue`, `wageCategory`, `isAbsent`, `talkChance`, `staffContact`, `isLyingLow`, `lieLow`, `DRIVER_HIRE_COST`, `JAIL_WAGE_FACTOR`, `INJURED_WAGE_FACTOR` … | `staff.hireRunner`, `.hireDriver`, `.fire`, `.assign`, `.setWage`, `.bail`, `.setJailSupport`, `.replace` (`fire?`), `.lieLow` | `staff.hired`, `.left`, `.statusChanged`, `.assigned`, `.levelUp`, `.bailed`, `.betrayed`, `.raidWarning`, `.wentUnderground` |
 | `hierarchy` | `posts` nach Mitarbeiter (Spots, Einstellungen mit Bestellregeln, Team, Ausfälle, Protokoll), `rightHand` (Einstellungen, Bericht), `orderTemplate` (3) | `getPost`, `getLieutenants`, `getLieutenantIds`, `isLieutenant`, `lieutenantOfSpot`, `lieutenantSpots`, `lieutenantVeedels`, `lieutenantsInVeedel`, `teamOf`, `teamLeadOf`, `handlesAbsence`, `canBeLieutenant`, `checkSpots`, `lieutenantDemand`, `lieutenantSatisfaction`, `homeWarehouse`, `orderRuleLabel`, `ruleStock`, `isPortSupplierAllowed`, `getRightHand`, `canBeRightHand`, `rightHandOffered`, `rightHandSatisfaction`, `payrollReserve`, `rightHandBudgetLeft`, `absenceHandled`, `buildReport`; alt: `getLieutenant(veedelId)`, `lieutenantVeedel` | `hierarchy.appoint` (`staffId`, `spotIds`), `.setSpots`, `.dismiss`, `.configure` (`settings` mit `orderRules`, `onAbsent` …), `.appointRightHand`, `.dismissRightHand`, `.configureRightHand` | `hierarchy.appointed` (`spotIds`), `.dismissed`, `.configured`, `.spotsChanged`, `.rightHandAppointed`, `.rightHandDismissed`, `.dailyReport` |
@@ -452,13 +460,14 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   - `npm run e2e`: neues Spiel, selbst verkaufen, Läufer anheuern, im Handy bestellen, Kasse öffnen, Leutnant mit
     zwei Spots ernennen, speichern, laden, Autosave nach dem Neuladen; Desktop und Handy.
   - `npm run playthrough`: Der Bot spielt im Browser eine Session (Standard 8 Spieltage ≈ 20 Minuten bei 2x) und
-    macht Screenshots der wichtigen Momente. Belege der Integration liegen in `docs/integration/`.
+    macht Screenshots der wichtigen Momente, am Ende steht die Zahl der Banner im Handy (`--banner=alle` zählt wie vor
+    Auftrag 26). Belege der Integration liegen in `docs/integration/`.
   - `npm run screenshot`: Desktop und Handy nach `screenshots/`. Mit `--eval="window.koeln.session.sim.advance(480)"`
     springt die Uhr z.B. in die Nacht (Start 18 Uhr). Mit `--scenes=alle` (oder Namen) die Szenen des Looks „Glas“
     (`scripts/glass-scenes.mjs`: Normalbetrieb in vier Tageszeiten, weggelegt, Spot-Hover, Orte, Konfrontation,
     Razzia, Lieferung, Übernahme) nach `screenshots/glas/`, auch als `npm run screenshot:glas`.
-  - `npm run screenshot:phone`: alle Handy-Seiten (Startbildschirm, Nachrichten, Chat, Leute, Kontakte, Einstellungen,
-    Ereignisse, Meldungen, Geschäft, Panels, Island-Zustände) für Desktop und Handy-Bildschirm nach
+  - `npm run screenshot:phone`: alle Handy-Seiten (Startbildschirm, Nachrichten, Chat, Personal mit Leute finden,
+    Reviere, Hafen, Geldwäsche, Einstellungen mit Verlauf, Panels, Island-Zustände) für Desktop und Handy-Bildschirm nach
     `screenshots/handy/`, mit festem Seed und pausiert (Vorher/Nachher vergleichbar). Optionen `--out`, `--scenes`,
     `--sizes`, `--time`, `--appearance=light|dark`. Szenen und Ansichten stehen in `scripts/phone-scenes.mjs`.
   - `npm run audit:phone`: misst dieselben Seiten am laufenden Spiel: Zieltreffer ≥ 44 × 44 px, Schrift ≥ 11 px,

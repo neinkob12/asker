@@ -1,6 +1,5 @@
-// Oberflächen des Kerns: Geld und Uhr im HUD, Tabs "Geschäft" und "Ereignisse", Spielstand-Dialoge, die
-// Handy-Apps Nachrichten, Meldungen und Einstellungen (mit Ton und Musik), Benachrichtigungen und Sounds
-// für die Ereignisse des Kerns.
+// Oberflächen des Kerns: Geld und Uhr im HUD, Spielstand-Dialoge, die Handy-Apps Nachrichten und Einstellungen
+// (mit Ton und Musik, Wetter, Verlauf), die Verlauf-Seite, Benachrichtigungen und Sounds für die Ereignisse des Kerns.
 
 import { clock, formatEuro, messages, wallet } from '../../core';
 import { islandCountdown } from '../phone/islandModel';
@@ -16,13 +15,12 @@ import {
   registerLiveActivity,
   registerMapLayerOption,
   registerPhoneApp,
-  registerTab,
+  registerSearch,
 } from '../registry';
-import { AlertsApp } from '../shell/AlertCenter';
 import { soundOnEvent } from '../sound';
 import { MoneyHud } from './CoreHud';
 import { GameOverDialog, NewGameDialog, SavesDialog, WonDialog } from './GameDialogs';
-import { JournalTab } from './JournalTab';
+import { HistoryApp } from './HistoryApp';
 
 /** Ab diesem Betrag erscheint eine Einnahme kurz in der Dynamic Island. */
 const ISLAND_EARN_MIN = 150;
@@ -41,10 +39,6 @@ export function registerBuiltins(): void {
     select: (api, ui) => api.setOverlay(!ui.overlay),
   });
 
-  // "Geschäft" sammelt Abschnitte der Module über den Slot 'tab:business'.
-  registerTab({ id: 'business', title: 'Geschäft', order: 10, icon: 'briefcase', layout: 'rows' });
-  registerTab({ id: 'journal', title: 'Ereignisse', order: 90, component: JournalTab, icon: 'newspaper' });
-
   registerDialog({ id: 'core.newGame', component: NewGameDialog, pausesGame: true, dismissable: false });
   registerDialog({ id: 'core.saves', component: SavesDialog, pausesGame: true });
   registerDialog({ id: 'core.gameOver', component: GameOverDialog, dismissable: false });
@@ -60,15 +54,16 @@ export function registerBuiltins(): void {
     badge: (state) => messages.unreadCount(state),
     chrome: 'none',
   });
+  // Verlauf (Journal, Meldungen, Aufträge): Abschnitt in den Einstellungen, als ganze Seite nur per openPhone.
   registerPhoneApp({
-    id: 'core.alerts',
-    name: 'Meldungen',
-    icon: 'bell',
-    order: 50,
-    color: 'warn',
-    component: AlertsApp,
-    badge: (_state, ui) => ui.alerts.filter((a) => !a.read).length,
+    id: 'core.history',
+    name: 'Verlauf',
+    icon: 'journal',
+    order: 80,
+    color: 'log',
+    component: HistoryApp,
     chrome: 'none',
+    hidden: true,
   });
   registerPhoneApp({
     id: 'core.settings',
@@ -77,6 +72,30 @@ export function registerBuiltins(): void {
     order: 90,
     color: 'system',
     component: SettingsApp,
+    badge: (_state, ui) => ui.alerts.filter((a) => !a.read).length,
+  });
+  registerSearch({
+    id: 'core.settings',
+    label: 'Einstellungen',
+    order: 90,
+    items: () => [
+      {
+        id: 'history',
+        title: 'Verlauf',
+        subtitle: 'Ereignisse, Meldungen und Aufträge, dazu Spielstand exportieren',
+        icon: 'journal',
+        keywords: 'ereignisse meldungen journal historie log export',
+        run: (ui) => ui.openPhone('core.history'),
+      },
+      {
+        id: 'weather',
+        title: 'Wetter',
+        subtitle: 'Vorhersage in den Einstellungen',
+        icon: 'cloudSun',
+        keywords: 'regen sonne vorhersage',
+        run: (ui) => ui.openPhone('core.settings'),
+      },
+    ],
   });
 
   // Wartet ein Chat auf Antwort, ist das die dringendste Empfehlung.
@@ -86,9 +105,11 @@ export function registerBuiltins(): void {
       const open = chatList(state).filter((c) => c.awaitingAnswer);
       if (open.length === 0) return null;
       const first = open[0];
+      // Dringend (Zeile auf dem Startbildschirm) nur mit Frist, sonst ein normaler Rat für die Suche.
+      const urgent = open.some((c) => c.deadline !== undefined);
       return {
         id: 'core.answer',
-        priority: 90,
+        priority: urgent ? 90 : 60,
         icon: 'message',
         title: open.length === 1 ? `${first.name} wartet auf Antwort` : `${open.length} Chats warten auf Antwort`,
         text: 'Manche Antworten haben eine Frist.',
@@ -135,10 +156,14 @@ export function registerBuiltins(): void {
   onGameEvent('game.over', 'core.gameOver', (_payload, ui) => ui.openDialog('core.gameOver', {}));
   onGameEvent('campaign.won', 'core.won', (_payload, ui) => ui.openDialog('core.won', {}));
 
-  // Neue Nachricht: Banner mit Vibrieren und Ton (ist der Chat gerade offen, nur ein leiser Ton).
+  // Neue Nachricht: Banner mit Vibrieren und Ton nur, wenn eine Antwort mit Frist erwartet wird (Auftrag 26); alles
+  // andere still (Badge an der App, Mitteilungszentrale). Ist der Chat gerade offen, nur ein leiser Ton.
   onGameEvent('message.received', 'core.messageNotification', (payload, ui, state) => {
     const notification = messageNotification(state, payload.messageId);
-    if (notification) ui.notify({ ...notification, sound: 'message' });
+    if (!notification) return;
+    const message = messages.get(state, payload.messageId);
+    const urgent = !!message && messages.canAnswer(state, message) && message.expiresAt !== undefined;
+    ui.notify({ ...notification, sound: 'message', urgent });
   });
 
   // Große Einnahmen (Deals, Großhandel, Geldwäsche) kurz in der Dynamic Island. Straßenverkäufe zählen in den

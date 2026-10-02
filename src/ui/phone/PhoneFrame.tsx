@@ -1,8 +1,9 @@
 // Das Spiel-Handy ist die Schaltzentrale: Alle Bereiche der Module (Tabs) und die Handy-Apps laufen hier, dazu
 // die Details von Spots, Veedeln und Personen (Panels). Am Desktop ist es rechts fest angedockt (weglegen klappt
 // es an den Rand), am Handy füllt es den Bildschirm unter dem HUD. Look: iPhone (Pro) mit Dynamic Island.
-// Statusleiste in drei Spalten (Uhrzeit links, Island Mitte, Empfang/WLAN/Akku rechts), Startbildschirm mit
-// Kölner Skyline (Himmel folgt der Spielzeit), Heute-Zeile, Nächster Schritt, Kennzahlen, App-Raster und Glas-Dock.
+// Statusleiste in drei Spalten (Uhrzeit links, Island Mitte, Empfang/WLAN/Akku rechts). Der Startbildschirm ist
+// bewusst ruhig (Auftrag 26): schwarzer Hintergrund, sechs Apps im Raster, vier im Glas-Dock, kein Widget. Nur ein
+// dringender Rat (Priorität ab 80, z.B. ein Chat mit Frist) erscheint als eine wegwischbare Zeile ganz oben.
 // Liegt das Handy weg, schwebt die Island oben über der Karte.
 //
 // Navigation: Seiten liegen als Stapel übereinander (navModel.ts, PageStack.tsx): Startbildschirm, Wurzel einer App,
@@ -10,10 +11,9 @@
 // Vollbild; zurück geht es über "‹ Titel der Vorseite" oben links, den Home-Balken unten oder Esc. Warum keine
 // Tab-Leiste: docs/handy-design.md, Abschnitt 5.
 
-import type { ComponentType, JSX } from 'preact';
+import type { ComponentType } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { clock, type GameState, messages } from '../../core';
-import { daylightAt, twilight } from '../../map/daylight';
 import {
   Badge,
   ContextMenu,
@@ -24,13 +24,14 @@ import {
   NotificationCenter,
   type NotificationItem,
   PortalHostContext,
+  SwipeRow,
 } from '../components';
 import { sectionTitle } from '../components/section';
 import { useRuntime } from '../hooks';
 import { hasOverlay } from '../overlays';
 import {
+  type Advice,
   dialogLocksPhone,
-  hudItems,
   type PhoneApp,
   panels,
   phoneApps,
@@ -39,9 +40,8 @@ import {
   slotContributions,
 } from '../registry';
 import { TAB_APP_PREFIX, type UiApi, type UiState } from '../runtime';
-import { HudItems } from '../shell/Hud';
-import { hudPlacement, tabIcon, tabTint, useIsMobile, useIsPhoneDevice } from '../shell/layout';
-import { collectAdvice, NextStepWidget } from '../shell/NextStep';
+import { tabIcon, tabTint, useIsMobile, useIsPhoneDevice } from '../shell/layout';
+import { collectAdvice } from '../shell/NextStep';
 import { Slot } from '../shell/Slot';
 import { SectionContent, TabContent } from '../shell/TabContent';
 import { DynamicIsland } from './DynamicIsland';
@@ -61,28 +61,23 @@ import { type NavEntry, top as topEntry } from './navModel';
 import { appIdOf, PageStack, type PageStackHandle } from './PageStack';
 import { PhoneScreen } from './PhoneScreen';
 import { bindPressFeedback } from './press';
-import { Skyline } from './Skyline';
 import { tileColor } from './tile';
 
-/** Apps im Dock unten auf dem Startbildschirm (sofern vorhanden). */
-const DOCK = ['core.messages', `${TAB_APP_PREFIX}business`, 'suppliers.app', `${TAB_APP_PREFIX}staff`];
+/** Apps im Dock unten auf dem Startbildschirm: Nachrichten, Lieferanten, Personal, Kasse (sofern vorhanden). */
+const DOCK = ['core.messages', 'suppliers.app', `${TAB_APP_PREFIX}staff`, 'finance.app'];
 
-/** Reihenfolge der übrigen Apps im Raster: erst das Spiel, dann Information, zuletzt Einstellungen. Unbekannte hinten. */
+/** Reihenfolge der Apps im Raster: Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen. Unbekannte hinten. */
 const HOME_ORDER = [
   'finance.app',
   `${TAB_APP_PREFIX}territory`,
   `${TAB_APP_PREFIX}gangs`,
-  'customers.orders',
-  'logistics.app',
-  'recruiting.contacts',
-  `${TAB_APP_PREFIX}journal`,
-  'core.alerts',
-  'weather.app',
+  `${TAB_APP_PREFIX}staff`,
+  'laundering.app',
   'core.settings',
 ];
 
-/** Kurze Tageszeit für die Heute-Zeile. */
-const PHASE_NAMES = { night: 'Nacht', dawn: 'Morgen', day: 'Tag', dusk: 'Abend' } as const;
+/** Ab dieser Priorität steht ein Rat als Zeile oben auf dem Startbildschirm (z.B. Chat mit Frist, Ware alle). */
+export const URGENT_ADVICE = 80;
 
 /** Eine Kachel auf dem Startbildschirm: Tab eines Moduls oder Handy-App. */
 interface HomeApp {
@@ -94,24 +89,30 @@ interface HomeApp {
 }
 
 function homeApps(state: GameState, ui: UiState): HomeApp[] {
-  const tabs = sidebarTabs.list().map(
-    (t): HomeApp => ({
-      id: `${TAB_APP_PREFIX}${t.id}`,
-      name: t.title,
-      icon: tabIcon(t),
-      color: tabTint(t),
-      badge: t.badge?.(state) ?? 0,
-    }),
-  );
-  const apps = phoneApps.list().map(
-    (a): HomeApp => ({
-      id: a.id,
-      name: a.name,
-      icon: a.icon,
-      color: a.color ?? 'system',
-      badge: a.badge?.(state, ui) ?? 0,
-    }),
-  );
+  const tabs = sidebarTabs
+    .list()
+    .filter((t) => !t.hidden)
+    .map(
+      (t): HomeApp => ({
+        id: `${TAB_APP_PREFIX}${t.id}`,
+        name: t.title,
+        icon: tabIcon(t),
+        color: tabTint(t),
+        badge: t.badge?.(state) ?? 0,
+      }),
+    );
+  const apps = phoneApps
+    .list()
+    .filter((a) => !a.hidden)
+    .map(
+      (a): HomeApp => ({
+        id: a.id,
+        name: a.name,
+        icon: a.icon,
+        color: a.color ?? 'system',
+        badge: a.badge?.(state, ui) ?? 0,
+      }),
+    );
   return [...tabs, ...apps];
 }
 
@@ -251,6 +252,51 @@ function AppTile(props: { app: HomeApp; onOpen: () => void; dock?: boolean }) {
   );
 }
 
+/** Welchen dringenden Rat der Spieler in dieser Sitzung weggewischt hat (kommt erst wieder, wenn ein anderer kommt). */
+let dismissedAdvice: string | null = null;
+
+/**
+ * Dringender Rat als eine Zeile ganz oben: Kachel, Titel, Knopf. Nach links wischen (oder ×) blendet ihn aus, bis ein
+ * anderer dringender Rat kommt. Alles andere, was die Module empfehlen, steht in der Suche (Strg/⌘+K).
+ */
+function UrgentAdvice(props: { advice: Advice }) {
+  const { api } = useRuntime();
+  const [, redraw] = useState(0);
+  const { advice } = props;
+  const dismiss = () => {
+    dismissedAdvice = advice.id;
+    redraw((n) => n + 1);
+  };
+  return (
+    <SwipeRow actions={[{ label: 'Weg', icon: 'close', color: 'system', onSelect: dismiss }]} fullSwipe>
+      <div class="phone__urgent" role="status">
+        <button
+          type="button"
+          class="phone__urgent-main"
+          onClick={() => (advice.action ? advice.action(api) : api.togglePalette(true))}
+        >
+          <IconChip icon={advice.icon} color="brand" solid size="md" shape="tile" />
+          <span class="phone__urgent-text">
+            <span class="phone__urgent-kicker">Dringend</span>
+            <span class="phone__urgent-title">{advice.title}</span>
+          </span>
+          {advice.action && <span class="phone__urgent-action">{advice.actionLabel ?? 'Los'}</span>}
+        </button>
+        <button type="button" class="phone__urgent-close" onClick={dismiss} aria-label="Ausblenden">
+          <Icon name="close" />
+        </button>
+      </div>
+    </SwipeRow>
+  );
+}
+
+/** Der dringende Rat für den Startbildschirm, sofern es einen gibt und er nicht weggewischt wurde. */
+export function urgentAdvice(state: GameState): Advice | null {
+  const top = collectAdvice(state)[0];
+  if (!top || top.priority < URGENT_ADVICE) return null;
+  return dismissedAdvice === top.id ? null : top;
+}
+
 function HomeScreen() {
   const runtime = useRuntime();
   const state = runtime.state;
@@ -261,39 +307,13 @@ function HomeScreen() {
     const i = HOME_ORDER.indexOf(a.id);
     return i < 0 ? HOME_ORDER.length : i;
   };
-  const grid = all.filter((a) => !dock.includes(a)).sort((a, b) => rank(a) - rank(b));
-  const items = hudItems.list();
-  const status = items.filter((i) => hudPlacement(i) === 'more');
-  const time = items.filter((i) => hudPlacement(i) === 'time');
-  const hasAdvice = collectAdvice(state).length > 0;
-  const phase = clock.dayPhase(state.time);
-  const sky = {
-    '--daylight': daylightAt(state.time).toFixed(3),
-    '--twilight': twilight(clock.minuteOfDay(state.time)).toFixed(3),
-  } as JSX.CSSProperties;
+  // Im Raster stehen die sechs Apps der Tabelle (Kasse und Personal auch im Dock); Nachrichten und Lieferanten nur im Dock.
+  const grid = all.filter((a) => HOME_ORDER.includes(a.id) || !DOCK.includes(a.id)).sort((a, b) => rank(a) - rank(b));
+  const urgent = urgentAdvice(state);
   return (
-    <div class="phone__home" style={sky} data-phase={phase}>
-      <div class="phone__sky" aria-hidden="true">
-        <Skyline />
-      </div>
+    <div class="phone__home">
       <div class="phone__home-scroll">
-        <header class="phone__today">
-          <div class="phone__today-date">
-            <h2 class="phone__today-day">{clock.weekdayName(state.time)}</h2>
-            <span class="phone__today-sub">
-              Tag {clock.day(state.time)} · {PHASE_NAMES[phase]}
-            </span>
-          </div>
-          <div class="phone__today-extra">
-            <HudItems items={time} />
-          </div>
-        </header>
-        {hasAdvice && <NextStepWidget />}
-        {status.length > 0 && (
-          <div class="phone__stats">
-            <HudItems items={status} />
-          </div>
-        )}
+        {urgent && <UrgentAdvice key={urgent.id} advice={urgent} />}
         <div class="phone__widgets">
           <Slot name="phone.home" />
         </div>

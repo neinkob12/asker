@@ -1,6 +1,9 @@
 // Nachrichten: Handy-Nachrichten von Figuren (Kunden, Lieferanten, Gangs, Mitarbeiter).
 // Module schicken sie mit messages.send(), die Handy-App (src/ui/phone) zeigt sie an.
 // Antwort-Optionen lösen Befehle aus: Der Spieler antwortet über den Befehl 'messages.answer'.
+// Gelöschte Chats (Befehle 'messages.delete', 'messages.deleteAll') bleiben im Spielstand, sind aber ausgeblendet:
+// `hidden` merkt sich pro Kontakt die letzte ausgeblendete Nachricht. Schreibt die Figur neu, taucht der Chat mit
+// den neuen Nachrichten wieder auf.
 
 import { MESSAGE_LIMIT } from './config';
 import type { Command, CommandResult, Ctx, GameState } from './types';
@@ -49,6 +52,8 @@ export interface MessagesState {
   contacts: Record<string, Contact>;
   /** Älteste zuerst. */
   list: Message[];
+  /** Gelöschte Chats: Kontakt → ID der letzten ausgeblendeten Nachricht (alles bis dahin ist weg). */
+  hidden: Record<string, number>;
 }
 
 export interface SendMessage {
@@ -71,6 +76,11 @@ declare module './types' {
   interface GameCommands {
     'messages.answer': { messageId: number; optionId: string };
     'messages.markRead': { contactId: string };
+    /** Alle Chats als gelesen markieren. */
+    'messages.markAllRead': Record<string, never>;
+    /** Chat löschen (ausblenden). Offene Fragen darin gelten als erledigt, ohne Antwort. */
+    'messages.delete': { contactId: string };
+    'messages.deleteAll': Record<string, never>;
   }
   interface GameEvents {
     'message.received': { messageId: number; contactId: string; source: string };
@@ -80,7 +90,12 @@ declare module './types' {
 }
 
 export function createMessagesState(): MessagesState {
-  return { contacts: {}, list: [] };
+  return { contacts: {}, list: [], hidden: {} };
+}
+
+/** Ist die Nachricht in einem gelöschten Chat (ausgeblendet)? */
+function isHidden(state: GameState, m: Message): boolean {
+  return m.id <= (state.messages.hidden[m.contactId] ?? 0);
 }
 
 export const messages = {
@@ -114,17 +129,17 @@ export const messages = {
     return state.messages.contacts[contactId];
   },
 
-  /** Alle Nachrichten mit einer Figur, älteste zuerst. */
+  /** Alle sichtbaren Nachrichten mit einer Figur, älteste zuerst (ohne die eines gelöschten Chats). */
   thread(state: GameState, contactId: string): Message[] {
-    return state.messages.list.filter((m) => m.contactId === contactId);
+    return state.messages.list.filter((m) => m.contactId === contactId && !isHidden(state, m));
   },
 
-  /** Chats, neueste zuerst. */
+  /** Chats, neueste zuerst (gelöschte nur, wenn die Figur danach wieder geschrieben hat). */
   threads(state: GameState): MessageThread[] {
     const byContact = new Map<string, MessageThread>();
     for (const m of state.messages.list) {
       const contact = state.messages.contacts[m.contactId];
-      if (!contact) continue;
+      if (!contact || isHidden(state, m)) continue;
       const t = byContact.get(m.contactId) ?? { contact, last: m, unread: 0 };
       t.last = m;
       if (!m.read) t.unread++;
@@ -134,7 +149,14 @@ export const messages = {
   },
 
   unreadCount(state: GameState, contactId?: string): number {
-    return state.messages.list.filter((m) => !m.read && (!contactId || m.contactId === contactId)).length;
+    return state.messages.list.filter(
+      (m) => !m.read && (!contactId || m.contactId === contactId) && !isHidden(state, m),
+    ).length;
+  },
+
+  /** Wartet in diesem Chat eine Frage mit Frist auf Antwort? (Für die Rückfrage vor dem Löschen.) */
+  hasOpenDeadline(state: GameState, contactId: string): boolean {
+    return messages.thread(state, contactId).some((m) => messages.canAnswer(state, m) && m.expiresAt !== undefined);
   },
 
   /** Kann auf diese Nachricht noch geantwortet werden? */
@@ -179,6 +201,33 @@ export function answerMessage(ctx: Ctx, payload: { messageId: number; optionId: 
 
 export function markThreadRead(ctx: Ctx, payload: { contactId: string }): CommandResult {
   for (const m of ctx.state.messages.list) if (m.contactId === payload.contactId) m.read = true;
+  return { ok: true };
+}
+
+export function markAllRead(ctx: Ctx): CommandResult {
+  for (const m of ctx.state.messages.list) m.read = true;
+  return { ok: true };
+}
+
+/** Chat ausblenden: alles bis zur letzten Nachricht gilt als gelöscht und gelesen. */
+function hideThread(state: GameState, contactId: string): void {
+  let last = 0;
+  for (const m of state.messages.list) {
+    if (m.contactId !== contactId) continue;
+    m.read = true;
+    if (m.id > last) last = m.id;
+  }
+  if (last > 0) state.messages.hidden[contactId] = last;
+}
+
+export function deleteThread(ctx: Ctx, payload: { contactId: string }): CommandResult {
+  if (!ctx.state.messages.contacts[payload.contactId]) return { ok: false, reason: 'Diesen Chat gibt es nicht.' };
+  hideThread(ctx.state, payload.contactId);
+  return { ok: true };
+}
+
+export function deleteAllThreads(ctx: Ctx): CommandResult {
+  for (const contactId of Object.keys(ctx.state.messages.contacts)) hideThread(ctx.state, contactId);
   return { ok: true };
 }
 

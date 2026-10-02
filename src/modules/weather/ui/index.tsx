@@ -1,9 +1,9 @@
-// Oberfläche des Wetters: Anzeige in der Heute-Zeile des Handys (Tipp öffnet die App), Wetter-App, Stimmung und Niederschlag auf der
-// Karte, Blitze bei Gewitter und Geräusche (Regen, Sturm, Wind).
+// Oberfläche des Wetters: Abschnitt in den Einstellungen (jetzt, Vorhersage, Auswirkung aufs Geschäft), Stimmung
+// und Niederschlag auf der Karte, Blitze bei Gewitter und Geräusche (Regen, Sturm, Wind).
 
 import { clock, formatPercent } from '../../../core';
 import { type MapMood, mapEffects, registerMapLayer, setMapMood, setPrecipitation } from '../../../map';
-import { audio, Card, Icon, KeyValue, registerHudItem, registerPhoneApp, useGame, useUi } from '../../../ui';
+import { audio, Icon, KeyValue, registerSlot, useGame } from '../../../ui';
 import {
   getForecast,
   getWeather,
@@ -31,27 +31,6 @@ function iconFor(kind: WeatherKind, time: number): string {
 }
 
 const temp = (t: number) => `${Math.round(t)}°`;
-
-/** Wetter in der "Heute"-Zeile des Startbildschirms: Symbol, Temperatur, Wetterlage. Ein Tipp öffnet die App. */
-function WeatherHud() {
-  const { state } = useGame();
-  const ui = useUi();
-  const w = getWeather(state);
-  return (
-    <button
-      type="button"
-      class={`hud-weather ${w.kind === 'storm' || w.kind === 'heat' ? 'is-warn' : ''}`}
-      title={`Wetter: ${WEATHER_NAMES[w.kind]}, ${temp(w.temperature)}C`}
-      onClick={() => ui.openPhone('weather.app')}
-    >
-      <Icon name={iconFor(w.kind, state.time)} class="hud-weather__icon" />
-      <span class="hud-weather__text">
-        <span class="hud-weather__temp">{temp(w.temperature)}</span>
-        <span class="hud-weather__kind">{WEATHER_NAMES[w.kind]}</span>
-      </span>
-    </button>
-  );
-}
 
 function Forecast() {
   const { state } = useGame();
@@ -87,36 +66,31 @@ function WeatherWidget() {
 
 const pct = (f: number) => `${f >= 1 ? '+' : '−'}${formatPercent(Math.abs(f - 1))}`;
 
-function WeatherApp() {
+/** Abschnitt "Wetter" in den Einstellungen: jetzt und Vorhersage, Auswirkung aufs Geschäft. */
+function WeatherSettings() {
   const { state } = useGame();
   const w = getWeather(state);
   return (
-    <div class="weather-app">
+    <div class="weather-settings">
       <WeatherWidget />
-      <Card title="Auswirkung aufs Geschäft" icon="briefcase">
-        <KeyValue
-          label="Straßenverkauf"
-          value={pct(weatherDemandFactor(state, 'street'))}
-          tone={tone(weatherDemandFactor(state, 'street'))}
-        />
-        <KeyValue
-          label="Lieferdienst"
-          value={pct(weatherDemandFactor(state, 'delivery'))}
-          tone={tone(weatherDemandFactor(state, 'delivery'))}
-        />
-        <p class="ui-hint">
-          {isPrecipitation(w.kind)
-            ? 'Bei dem Wetter bleiben die Leute drinnen und bestellen lieber.'
-            : w.kind === 'heat'
-              ? 'Parks und Rheinufer sind voll, die Nachfrage draußen steigt.'
-              : 'Normales Wetter, normales Geschäft.'}
-        </p>
-      </Card>
-      <Card title="Seit" icon="clock">
-        <p class="ui-hint">
-          {WEATHER_NAMES[w.kind]} seit {clock.formatTime(w.since)} Uhr ({clock.formatDuration(state.time - w.since)}).
-        </p>
-      </Card>
+      <KeyValue
+        label="Straßenverkauf"
+        value={pct(weatherDemandFactor(state, 'street'))}
+        tone={tone(weatherDemandFactor(state, 'street'))}
+      />
+      <KeyValue
+        label="Lieferdienst"
+        value={pct(weatherDemandFactor(state, 'delivery'))}
+        tone={tone(weatherDemandFactor(state, 'delivery'))}
+      />
+      <p class="ui-hint">
+        {isPrecipitation(w.kind)
+          ? 'Bei dem Wetter bleiben die Leute drinnen und bestellen lieber.'
+          : w.kind === 'heat'
+            ? 'Parks und Rheinufer sind voll, die Nachfrage draußen steigt.'
+            : 'Normales Wetter, normales Geschäft.'}{' '}
+        {WEATHER_NAMES[w.kind]} seit {clock.formatTime(w.since)} Uhr ({clock.formatDuration(state.time - w.since)}).
+      </p>
     </div>
   );
 }
@@ -127,15 +101,14 @@ function tone(factor: number): 'accent' | 'bad' | undefined {
   return undefined;
 }
 
-// Ordnung ab 90: steht fest neben der Uhr, nicht in der wischbaren Leiste.
-registerHudItem({ id: 'weather.now', order: 95, placement: 'time', component: WeatherHud });
-registerPhoneApp({
-  id: 'weather.app',
-  name: 'Wetter',
+// Seit Auftrag 26 keine eigene App mehr: Das Wetter steht in den Einstellungen.
+registerSlot('core.settings', {
+  id: 'weather.forecast',
+  title: 'Wetter',
   icon: 'cloudSun',
-  order: 60,
   color: 'sky',
-  component: WeatherApp,
+  order: 10,
+  component: WeatherSettings,
 });
 
 // ---------------------------------------------------------------------------------------------

@@ -1,13 +1,11 @@
 // Oberfläche des Markts: eigene Preise im Spot-Panel, Markt-Übersicht (Richtpreise pro Veedel) als Panel und
-// ein kurzer Markt-Abschnitt im Tab "Geschäft".
+// ein kurzer Markt-Abschnitt auf der Lager-Seite.
 
 import { useState } from 'preact/hooks';
 import { formatEuro, formatNumber, type GameState } from '../../../core';
 import {
   Button,
-  Card,
   Group,
-  Hint,
   ItemContent,
   List,
   ListItem,
@@ -216,49 +214,41 @@ function hotSpots(state: GameState): { productId: string; veedelId: string; fact
   return result.sort((a, b) => b.factor - a.factor).slice(0, 3);
 }
 
+/** Auf der Lager-Seite: wo etwas besonders gefragt ist, und der Weg zur Markt-Übersicht. */
 function MarketSection() {
   const { state } = useGame();
   const ui = useUi();
   const hot = hotSpots(state);
   return (
-    <Card
-      title="Markt"
-      icon="chart"
-      color="money"
-      status={hot.length > 0 ? 'warn' : 'idle'}
-      summary={hot.length > 0 ? `${hot.length} gefragt` : 'ruhig'}
-      actions={
-        <Button small onClick={() => ui.openPanel('market.overview', {})}>
-          Übersicht
-        </Button>
-      }
-    >
-      {hot.length === 0 ? (
-        <Hint>Gerade keine auffällige Nachfrage. Preise stellst du im Spot-Panel ein.</Hint>
-      ) : (
-        <Group title="Gefragt" icon="trendUp" color="money" note="Preise stellst du am Spot ein.">
-          <List>
-            {hot.map((h) => (
-              <ListItem
-                key={`${h.veedelId}:${h.productId}`}
-                value={deviation(h.factor)}
-                onClick={() => ui.openPanel('market.overview', { productId: h.productId })}
-              >
-                <ItemContent
-                  icon="trendUp"
-                  color="money"
-                  title={productName(h.productId)}
-                  meta={veedelName(h.veedelId)}
-                />
-              </ListItem>
-            ))}
-          </List>
-        </Group>
-      )}
-    </Card>
+    <Group title="Markt" icon="chart" color="money" note="Preise stellst du am Spot ein.">
+      <List>
+        {hot.map((h) => (
+          <ListItem
+            key={`${h.veedelId}:${h.productId}`}
+            value={deviation(h.factor)}
+            onClick={() => ui.openPanel('market.overview', { productId: h.productId })}
+          >
+            <ItemContent
+              icon="trendUp"
+              color="money"
+              title={`${productName(h.productId)} gefragt`}
+              meta={veedelName(h.veedelId)}
+            />
+          </ListItem>
+        ))}
+        <ListItem onClick={() => ui.openPanel('market.overview', {})}>
+          <ItemContent
+            icon="chart"
+            color="money"
+            title="Markt-Übersicht"
+            meta={hot.length === 0 ? 'Gerade keine auffällige Nachfrage' : 'Richtpreise pro Veedel'}
+          />
+        </ListItem>
+      </List>
+    </Group>
   );
 }
 
 registerSlot('spots.spotPanel', { id: 'market.prices', order: 20, component: SpotPrices });
-registerSlot('tab:business', { id: 'market.summary', title: 'Markt', order: 40, component: MarketSection });
+registerSlot('goods.warehouse', { id: 'market.summary', title: 'Markt', order: 50, component: MarketSection });
 registerPanel({ id: 'market.overview', title: () => 'Markt-Übersicht', component: MarketOverview });

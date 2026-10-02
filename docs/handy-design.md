@@ -38,7 +38,7 @@ die Schnittstellen in [`architektur.md`](architektur.md).
 | `materials.md`, `liquid-glass.md` | Glas nur für die schwebende Ebene (Leisten, Island, Dock), sparsam, Fallback bei reduzierter Transparenz | Glas: Navigationsleiste beim Scrollen, Dock, Antwortblatt, Banner. Karten und Zeilen bleiben flach. |
 | `motion.md` | Kurz, abbrechbar, nicht bei häufigen Aktionen, optional | Federn nur für Island und Seitenwechsel, sonst 100–180 ms, alles aus bei Reduce Motion |
 | `writing.md` | Klare Verben, konsistente Großschreibung, leere Zustände zeigen den nächsten Schritt | Beschriftungen "Antworten", "Öffnen", "Rumfragen"; Leerzustände mit Aktion |
-| `branding.md` | Marke weicht dem Inhalt, eine Akzentfarbe, Logo nicht überall | Gold nur für Hauptaktion und "Nächster Schritt"; Skyline nur auf dem Startbildschirm |
+| `branding.md` | Marke weicht dem Inhalt, eine Akzentfarbe, Logo nicht überall | Gold nur für Hauptaktion und den dringenden Rat; die Skyline ist mit Auftrag 26 gewichen (Abschnitt 9) |
 | `notifications.md` | Badge nur für Ungelesenes; kurze Titel | Rote Zähler nur für Ungelesenes/Offenes, Banner zeigt Absender und Text |
 
 ## 3. Plan
@@ -416,3 +416,23 @@ alles außerhalb des Handys. Das Handy selbst bleibt, wie es ist; neu ist nur, w
 Geprüft: Kontrast-Test für alle neuen Tokens (Text auf Glas über der hellsten und dunkelsten Kartenfarbe 4,5:1, Zahl auf
 jeder Spot-Farbe 4,5:1, Akte, Razzia-Banner, Gold-Knöpfe), `npm run audit:phone` ohne Verstöße, Bilder aller Momente in
 vier Tageszeiten (`npm run screenshot -- --scenes=alle`), „Bewegung reduzieren“ ohne Pulse, Sirenenschein und Federn.
+
+## 9. Aufräumen (Auftrag 26)
+
+Beim Probespielen (02.10.2026) war das Handy zu voll: zehn Apps, ein Widget, das fast immer da war, drei Kennzahlen,
+die Skyline, und zu viele Banner. Die Regel aus `design-principles.md` („every element earning its place“) galt jetzt
+noch einmal für das ganze Handy, nicht nur für die einzelnen Seiten.
+
+| | Vorher | Nachher |
+| --- | --- | --- |
+| Startbildschirm | Skyline, Heute-Zeile mit Wetter, „Nächster Schritt“, drei Kennzahlen, zehn Apps, Dock mit Geschäft | Schwarz. Sechs Apps (Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen), Dock mit Nachrichten, Lieferanten, Personal, Kasse. Nur ein dringender Rat (ab Priorität 80) als wegwischbare Zeile oben; alles andere in der Suche |
+| Apps, die weg sind | Geschäft, Ereignisse, Meldungen, Wetter, Aufträge, Kontakte, Logistik | Nichts ist verloren, es ist umgezogen: Spots, Ruf und Polizei in die Reviere; Kundschaft in die Kasse; Markt, Hafen, Umlagern und Lager kaufen auf die Lager-Seite (der Hafen als eigene Seite); Fahrer und Bewerber ins Personal („Leute finden“); Wetter, Anfragen und der Verlauf (Ereignisse, Meldungen, Aufträge mit Filter, Export) in die Einstellungen |
+| Nachrichten | Zwei Zeilen Vorschau, Gruppen, nur „Gelesen“ per Wischen | Oben die fünf zuletzt aktiven Kontakte als Avatare, kompakte Zeilen, „Alle gelesen“, Löschen per Wischen und Kontextmenü, „Alle löschen“ im Aktionsblatt, Rückfrage bei offener Frist. Gelöschte Chats sind Spielzustand und kommen mit der nächsten Nachricht wieder |
+| Banner | Jede nicht-stille Nachricht, jede Meldung | Nur Dringendes: Antwort mit Frist, Razzia, Kontrolle, Festnahme, Lieferung angekommen oder verloren, Löhne nicht gedeckt. Alles andere still (Badge, Verlauf). Einstellung „Mehr Benachrichtigungen“ für das alte Verhalten. Gemessen mit dem Bot (5 Spieltage, Seed 2): 81 Banner vorher, 15 nachher (0,13 pro Spielstunde) |
+| HUD | Wetter in der Uhr, Kacheln Lager („2,1 kg + 489“), Ruf, Köln | Kein Wetter. Lager sagt, was da ist („40 g Gras + 2 weitere“) und klappt die Aufstellung mit „Bestellen“ auf. Ruf · Reviere in einer Kachel: Leiste 0–100 mit den Stufen, Revierzahl, aufgeklappt die Stufe darunter und darüber mit je einem Satz und die eigenen Veedel. Schwarzgeld und sauberes Geld öffnen die Geldwäsche |
+
+Was dabei an Regeln hinzukam: Eine neue App braucht einen Grund, Neues hängt sich an eine der sechs (`registerSlot`,
+`registerPanel`, `hidden`); jede Meldung sagt, ob sie dringend ist (`urgent`); von der Karte kommt man mit einem Schritt
+an die richtige Stelle im Handy (Geld → Geldwäsche, Lager → Lager-Seite, Ruf → Reviere, Hafen-Marker → Hafen-Seite).
+Die Signature (Abschnitt 3.4) ist damit bewusst weg: Der Spieler wollte einen schwarzen Startbildschirm, Köln steht
+auf der Karte. Geprüft wie bisher: `npm run audit:phone` ohne Verstöße, `npm run e2e`, Bilder in `screenshots/handy/`.

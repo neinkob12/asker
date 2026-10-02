@@ -4,7 +4,7 @@
 //
 // Öffentliche API:
 //   getReputation(state), changeReputation(ctx, delta, reason?), reputationDemandFactor(state),
-//   reputationLabel(value), recentReputationChanges(state), START_REPUTATION
+//   reputationLabel(value), reputationTier(value), reputationTiers(), recentReputationChanges(state), START_REPUTATION
 // Ereignisse: 'reputation.changed'
 
 import { type Ctx, defineModule, type GameState } from '../../core';
@@ -57,7 +57,24 @@ export function reputationDemandFactor(state: GameState): number {
 
 /** Bezeichnung für einen Rufwert, z.B. "Bekannt". */
 export function reputationLabel(value: number): string {
-  return (REPUTATION_LABELS.find((l) => value >= l.min) ?? REPUTATION_LABELS[REPUTATION_LABELS.length - 1]).name;
+  return reputationTier(value).name;
+}
+
+export interface ReputationTier {
+  min: number;
+  name: string;
+  /** Ein Satz, was die Stufe fürs Geschäft heißt. */
+  effect: string;
+}
+
+/** Stufe zu einem Rufwert. */
+export function reputationTier(value: number): ReputationTier {
+  return REPUTATION_LABELS.find((l) => value >= l.min) ?? REPUTATION_LABELS[REPUTATION_LABELS.length - 1];
+}
+
+/** Alle Stufen, schlechteste zuerst (für Anzeigen mit "darunter" und "darüber"). */
+export function reputationTiers(): readonly ReputationTier[] {
+  return [...REPUTATION_LABELS].reverse();
 }
 
 export function recentReputationChanges(state: GameState): readonly ReputationChange[] {

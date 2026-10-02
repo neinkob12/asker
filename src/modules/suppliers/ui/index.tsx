@@ -6,8 +6,6 @@ import { clock, formatEuro, formatPercent, type GameState } from '../../../core'
 import { registerMapLayer } from '../../../map';
 import {
   Button,
-  Card,
-  Empty,
   Group,
   Hint,
   ItemContent,
@@ -19,7 +17,6 @@ import {
   ProgressBar,
   registerAdvisor,
   registerPhoneApp,
-  registerSlot,
   Select,
   soundOnEvent,
   Tag,
@@ -127,8 +124,22 @@ function SupplierList(props: { onSelect: (id: string) => void }) {
   const { state } = useGame();
   const open = getSuppliers(state).filter((s) => isUnlocked(state, s.id));
   const locked = getSuppliers(state).filter((s) => !isUnlocked(state, s.id));
+  const shipments = shipmentsInTransit(state);
+  const debts = getSuppliers(state).filter((s) => getRelation(state, s.id).debt > 0);
   return (
     <div class="sup-groups">
+      {shipments.length > 0 && (
+        <Group icon="route" color="goods" title="Unterwegs" count={shipments.length}>
+          {shipments.map((s) => (
+            <ShipmentRow key={s.id} state={state} shipment={s} showSupplier />
+          ))}
+        </Group>
+      )}
+      {debts.map((s) => (
+        <p key={s.id} class={isBlocked(state, s.id) ? 'sup-debt is-overdue' : 'sup-debt'}>
+          Schulden bei {s.name}: {formatEuro(getRelation(state, s.id).debt)}
+        </p>
+      ))}
       <Group icon="truck" color="goods" title="Liefern an dich" count={open.length}>
         <List>
           {open.map((s) => (
@@ -187,7 +198,7 @@ function LockedSupplier(props: { supplierId: string }) {
       </List>
       <div class="sup-actions">
         {supplier.unlock.requires.berth && !hasBerth(state) && (
-          <Button icon="ship" onClick={() => ui.openPhone('logistics.app')}>
+          <Button icon="ship" onClick={() => ui.openPanel('logistics.port', {})}>
             Zum Hafen
           </Button>
         )}
@@ -381,38 +392,6 @@ function SuppliersApp() {
   );
 }
 
-function ShipmentsSection() {
-  const { state } = useGame();
-  const ui = useUi();
-  const shipments = shipmentsInTransit(state);
-  const debts = getSuppliers(state).filter((s) => getRelation(state, s.id).debt > 0);
-  return (
-    <Card
-      title="Lieferungen"
-      icon="truck"
-      color="goods"
-      status={debts.length > 0 ? 'warn' : shipments.length > 0 ? 'good' : 'idle'}
-      summary={shipments.length === 0 ? 'keine' : `${shipments.length} unterwegs`}
-      actions={
-        <Button small onClick={() => ui.openPhone('suppliers.app')}>
-          Bestellen
-        </Button>
-      }
-    >
-      {shipments.length === 0 ? (
-        <Empty>Keine Lieferung unterwegs. Bestellen kannst du über die Lieferanten-App im Handy.</Empty>
-      ) : (
-        shipments.map((s) => <ShipmentRow key={s.id} state={state} shipment={s} showSupplier />)
-      )}
-      {debts.map((s) => (
-        <p key={s.id} class={isBlocked(state, s.id) ? 'sup-debt is-overdue' : 'sup-debt'}>
-          Schulden bei {s.name}: {formatEuro(getRelation(state, s.id).debt)}
-        </p>
-      ))}
-    </Card>
-  );
-}
-
 registerPhoneApp({
   id: APP_ID,
   name: 'Lieferanten',
@@ -426,7 +405,6 @@ registerPhoneApp({
     getSuppliers(state).filter((s) => isBlocked(state, s.id) || (!isUnlocked(state, s.id) && canUnlock(state, s.id).ok))
       .length,
 });
-registerSlot('tab:business', { id: 'suppliers.order', title: 'Lieferungen', order: 10, component: ShipmentsSection });
 registerMapLayer(suppliersLayer);
 
 onGameEvent('shipment.problem', 'suppliers.problemToast', (payload, ui, state) => {
@@ -436,13 +414,16 @@ onGameEvent('shipment.problem', 'suppliers.problemToast', (payload, ui, state) =
     badQuality: `Die Ware aus ${name} ist schlechter als versprochen.`,
     seized: `Lieferung aus ${name} beschlagnahmt!`,
   }[payload.kind];
-  ui.toast(text, 'bad');
+  // Nur eine verlorene Lieferung ist ein Banner wert; Verspätung und Qualität stehen im Verlauf.
+  ui.toast(text, 'bad', { urgent: payload.kind === 'seized' });
 });
 soundOnEvent('shipment.arrived', 'delivery');
 onGameEvent('shipment.arrived', 'suppliers.arrivedToast', (payload, ui, state) => {
   // Schiffsware meldet die Logistik (Ware am Kai).
   if (payload.atPort) return;
-  ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.`, 'good');
+  ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.`, 'good', {
+    urgent: true,
+  });
 });
 onGameEvent('supplier.unlocked', 'suppliers.unlockedToast', (payload, ui, state) => {
   const supplier = getSupplier(state, payload.supplierId);

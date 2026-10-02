@@ -58,3 +58,18 @@
   flex-direction: column;
   gap: var(--space-3);
 }
+
+/* Abschnitt in den Einstellungen: Widget und Auswirkung in der Gruppenfläche */
+.weather-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 12px 0;
+}
+.weather-settings .weather-widget {
+  background: var(--phone-group-2, var(--color-panel-raised));
+  border: 0;
+}
+.weather-settings .ui-hint {
+  margin: 0;
+}

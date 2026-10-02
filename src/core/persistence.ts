@@ -22,7 +22,13 @@ export interface SaveFile {
 export class SaveError extends Error {}
 
 /** Migrationen der Kernfelder. Schlüssel = Zielversion von CORE_SCHEMA_VERSION. */
-const CORE_MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<string, unknown>> = {};
+const CORE_MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<string, unknown>> = {
+  // 2: Gelöschte Chats (messages.hidden), Auftrag 26.
+  2: (state) => {
+    const messages = isRecord(state.messages) ? state.messages : {};
+    return { ...state, messages: { ...messages, hidden: isRecord(messages.hidden) ? messages.hidden : {} } };
+  },
+};
 
 export function createSaveFile(state: GameState, label: string, savedAt: number): SaveFile {
   return { format: SAVE_FORMAT, formatVersion: SAVE_FORMAT_VERSION, savedAt, label, state };

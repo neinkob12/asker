@@ -597,7 +597,12 @@ registerMapLayer(gangsLayer);
 
 onGameEvent('gang.pushStarted', 'gangs.pushToast', (p, ui, state) => {
   const gang = getGang(state, p.gangId);
-  if (gang) ui.toast(`${gang.name} drängt nach ${veedelName(p.veedelId)}`, p.against === 'player' ? 'bad' : 'info');
+  // Vorstöße zeigt die Island live; hier nur der Eintrag für den Verlauf.
+  if (gang) {
+    ui.toast(`${gang.name} drängt nach ${veedelName(p.veedelId)}`, p.against === 'player' ? 'bad' : 'info', {
+      urgent: false,
+    });
+  }
 });
 onGameEvent('gang.pushEnded', 'gangs.pushEndToast', (p, ui, state) => {
   const gang = getGang(state, p.gangId);
@@ -605,7 +610,8 @@ onGameEvent('gang.pushEnded', 'gangs.pushEndToast', (p, ui, state) => {
 });
 onGameEvent('gang.escalated', 'gangs.escalationToast', (p, ui, state) => {
   const gang = getGang(state, p.gangId);
-  if (gang) ui.toast(`${gang.name} ${STAGE_NAMES[p.stage]}`, 'bad');
+  // Die Drohung kommt als Chat mit Frist (das ist das Banner); hier nur der Verlauf.
+  if (gang) ui.toast(`${gang.name} ${STAGE_NAMES[p.stage]}`, 'bad', { urgent: false });
 });
 onGameEvent('gang.busted', 'gangs.bustedToast', (p, ui, state) => {
   const gang = getGang(state, p.gangId);
