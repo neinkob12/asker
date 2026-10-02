@@ -136,6 +136,7 @@ registerPhoneApp({
   order: 60,
   color: 'sky',
   component: WeatherApp,
+  hidden: true,
 });
 
 // ---------------------------------------------------------------------------------------------

@@ -41,9 +41,15 @@ export function registerBuiltins(): void {
     select: (api, ui) => api.setOverlay(!ui.overlay),
   });
 
-  // "Geschäft" sammelt Abschnitte der Module über den Slot 'tab:business'.
-  registerTab({ id: 'business', title: 'Geschäft', order: 10, icon: 'briefcase', layout: 'rows' });
-  registerTab({ id: 'journal', title: 'Ereignisse', order: 90, component: JournalTab, icon: 'newspaper' });
+  // Ereignisse: keine App mehr auf dem Startbildschirm (Auftrag 26), der Verlauf steht in den Einstellungen.
+  registerTab({
+    id: 'journal',
+    title: 'Ereignisse',
+    order: 90,
+    component: JournalTab,
+    icon: 'newspaper',
+    hidden: true,
+  });
 
   registerDialog({ id: 'core.newGame', component: NewGameDialog, pausesGame: true, dismissable: false });
   registerDialog({ id: 'core.saves', component: SavesDialog, pausesGame: true });
@@ -69,6 +75,7 @@ export function registerBuiltins(): void {
     component: AlertsApp,
     badge: (_state, ui) => ui.alerts.filter((a) => !a.read).length,
     chrome: 'none',
+    hidden: true,
   });
   registerPhoneApp({
     id: 'core.settings',
@@ -86,9 +93,11 @@ export function registerBuiltins(): void {
       const open = chatList(state).filter((c) => c.awaitingAnswer);
       if (open.length === 0) return null;
       const first = open[0];
+      // Dringend (Zeile auf dem Startbildschirm) nur mit Frist, sonst ein normaler Rat für die Suche.
+      const urgent = open.some((c) => c.deadline !== undefined);
       return {
         id: 'core.answer',
-        priority: 90,
+        priority: urgent ? 90 : 60,
         icon: 'message',
         title: open.length === 1 ? `${first.name} wartet auf Antwort` : `${open.length} Chats warten auf Antwort`,
         text: 'Manche Antworten haben eine Frist.',

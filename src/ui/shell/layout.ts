@@ -78,7 +78,7 @@ const RESERVED = new Set(['T', 'K']);
 export function tabShortcuts(): Map<string, string> {
   const used = new Set(RESERVED);
   const result = new Map<string, string>();
-  const tabs = sidebarTabs.list();
+  const tabs = sidebarTabs.list().filter((t) => !t.hidden);
   for (const tab of tabs) {
     const own = tab.shortcut?.toUpperCase();
     if (own && !used.has(own)) {

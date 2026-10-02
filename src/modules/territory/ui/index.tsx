@@ -22,6 +22,7 @@ import {
   registerSlot,
   registerTab,
   SegmentedControl,
+  Slot,
   useGame,
   useUi,
 } from '../../../ui';
@@ -107,7 +108,7 @@ function useMapView(): VeedelMapView {
   return view;
 }
 
-/** Tab "Reviere": Kampagnenziel, Kartenansicht, alle Veedel auf einen Blick. */
+/** Tab "Reviere": Kampagnenziel, Kartenansicht, alle Veedel auf einen Blick, darunter Spots, Ruf und Polizei. */
 function TerritoryTab() {
   const { state } = useGame();
   const ui = useUi();
@@ -164,6 +165,8 @@ function TerritoryTab() {
             : 'Rechts: dein Einfluss. Klick auf ein Veedel zeigt Details.'}
         </Hint>
       </Card>
+      {/* Spots, Ruf und Polizei-Stufe (seit Auftrag 26 hier statt im Geschäft) */}
+      <Slot name="tab:territory" />
     </>
   );
 }

@@ -1,26 +1,24 @@
 // Oberfläche der Kasse: Handy-App "Kasse" mit Gewinn- und Verlustrechnung (heute, gestern, 7 Tage), Verlauf,
-// Ergebnis pro Spot und pro Leutnant und Reichweite der Löhne. Dazu eine Zeile "Bilanz heute" im Tab "Geschäft",
-// ein Eintrag in der Suche und ein Hinweis in "Nächster Schritt", wenn die Löhne bald nicht mehr reichen.
+// Ergebnis pro Spot und pro Leutnant und Reichweite der Löhne. Unten hängen andere Module Abschnitte an (Slot
+// 'finance.app', z.B. die Kundschaft). Dazu ein Eintrag in der Suche und ein Hinweis in "Nächster Schritt", wenn die
+// Löhne bald nicht mehr reichen.
 
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import { formatEuro, type GameState, MONEY_CATEGORIES, type MoneyCategory, type MoneyGroup } from '../../../core';
 import {
-  Button,
-  Card,
   Empty,
   Group,
   Hint,
   ItemContent,
-  KeyValue,
   List,
   ListItem,
   registerAdvisor,
   registerPanel,
   registerPhoneApp,
   registerSearch,
-  registerSlot,
   SegmentedControl,
+  Slot,
   SummaryTiles,
   Tag,
   type UiApi,
@@ -49,6 +47,10 @@ export type Period = 'today' | 'yesterday' | 'week';
 declare module '../../../ui' {
   interface PanelRegistry {
     'finance.category': { category: MoneyCategory; period: Period };
+  }
+  interface SlotRegistry {
+    /** Weitere Abschnitte unten in der Kasse (z.B. Kundschaft). */
+    'finance.app': Record<string, never>;
   }
 }
 
@@ -336,6 +338,7 @@ function FinanceApp() {
       <History />
       <PerSpot period={period} />
       <PerLieutenant period={period} />
+      <Slot name="finance.app" />
     </div>
   );
 }
@@ -383,39 +386,6 @@ function CategoryPanel(props: { category: MoneyCategory; period: Period }) {
   );
 }
 
-/** Zeile "Bilanz heute" im Tab "Geschäft". */
-function BalanceCard() {
-  const { state } = useGame();
-  const ui = useUi();
-  const today = dayReport(state, 0);
-  const runway = wageRunway(state);
-  return (
-    <Card
-      title="Bilanz heute"
-      icon="chart"
-      color="money"
-      status={runway.warn ? 'warn' : today.profit < 0 ? 'bad' : 'good'}
-      summary={<Amount value={today.profit} />}
-      actions={
-        <Button small onClick={() => openFinance(ui)}>
-          Kasse öffnen
-        </Button>
-      }
-    >
-      <KeyValue label="Einnahmen" value={formatEuro(today.income)} />
-      <KeyValue label="Ausgaben und Verluste" value={formatEuro(today.expenses + today.losses)} />
-      <KeyValue label="Ergebnis" value={<Amount value={today.profit} />} />
-      {runway.days !== null && (
-        <KeyValue
-          label="Löhne heute Nacht"
-          value={`${formatEuro(runway.due)}, reicht ${runway.days === 1 ? '1 Tag' : `${runway.days} Tage`}`}
-          tone={runway.warn ? 'warn' : undefined}
-        />
-      )}
-    </Card>
-  );
-}
-
 function openFinance(ui: UiApi): void {
   ui.openPhone('finance.app');
 }
@@ -434,7 +404,6 @@ registerPanel({
   title: (props) => MONEY_CATEGORIES[props.category].label,
   component: CategoryPanel,
 });
-registerSlot('tab:business', { id: 'finance.balance', title: 'Bilanz heute', order: 5, component: BalanceCard });
 
 registerSearch({
   id: 'finance.search',

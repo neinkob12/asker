@@ -6,18 +6,15 @@ import { clock, formatEuro, type GameState } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import {
   Button,
-  Card,
   Empty,
   Group,
   ItemContent,
-  KeyValue,
   List,
   ListItem,
   onGameEvent,
   ProgressBar,
   registerAdvisor,
   registerPhoneApp,
-  registerSlot,
   Select,
   SummaryTiles,
   soundOnEvent,
@@ -149,7 +146,7 @@ function PortSection() {
         title="Niehler Hafen"
         note={
           short
-            ? `Du hast ${formatEuro(state.wallet.clean)} sauberes Geld. Waschen kannst du im Geschäft unter Geldwäsche.`
+            ? `Du hast ${formatEuro(state.wallet.clean)} sauberes Geld. Waschen kannst du in der App Geldwäsche.`
             : undefined
         }
       >
@@ -164,16 +161,7 @@ function PortSection() {
               >
                 Liegeplatz mieten · {formatEuro(BERTH_COST)}
               </Button>
-              {short && (
-                <Button
-                  onClick={() => {
-                    ui.selectTab('business');
-                    ui.openSection('laundering.section');
-                  }}
-                >
-                  Geldwäsche
-                </Button>
-              )}
+              {short && <Button onClick={() => ui.openPhone('laundering.app')}>Geldwäsche</Button>}
             </div>
           }
         >
@@ -525,42 +513,6 @@ function LogisticsApp() {
   );
 }
 
-function LogisticsCard() {
-  const { state } = useGame();
-  const ui = useUi();
-  const cargo = getCargo(state);
-  const trips = getTrips(state);
-  const risky = cargo.some((c) => cargoRisk(state, c) === 'risky');
-  const summary =
-    cargo.length > 0
-      ? `${cargo.length} am Kai`
-      : trips.length > 0
-        ? `${trips.length} unterwegs`
-        : hasBerth(state)
-          ? 'Hafen frei'
-          : 'kein Hafen';
-  return (
-    <Card
-      title="Logistik"
-      icon="route"
-      color="goods"
-      status={risky || trips.some((t) => t.status === 'stopped') ? 'bad' : cargo.length > 0 ? 'warn' : 'good'}
-      summary={summary}
-      actions={
-        <Button small onClick={() => ui.openPhone('logistics.app')}>
-          Öffnen
-        </Button>
-      }
-    >
-      <KeyValue label="Liegeplatz im Hafen" value={hasBerth(state) ? 'ja, Kai 7' : 'keiner'} />
-      <KeyValue label="Ware am Kai" value={cargo.length} tone={cargo.length > 0 ? 'warn' : undefined} />
-      <KeyValue label="Fahrten unterwegs" value={trips.length} />
-      <KeyValue label="Lager" value={getWarehouses(state).length} />
-      <KeyValue label="Freie Fahrer" value={freeDrivers(state).length} />
-    </Card>
-  );
-}
-
 registerPhoneApp({
   id: 'logistics.app',
   name: 'Logistik',
@@ -569,8 +521,8 @@ registerPhoneApp({
   color: 'goods',
   component: LogisticsApp,
   badge: (state) => getCargo(state).length + getTrips(state).filter((t) => t.status === 'stopped').length,
+  hidden: true,
 });
-registerSlot('tab:business', { id: 'logistics.overview', title: 'Logistik', order: 12, component: LogisticsCard });
 registerMapLayer(logisticsLayer);
 
 // Empfehlungen: Ware am Kai abholen, Liegeplatz mieten, wenn das saubere Geld reicht.

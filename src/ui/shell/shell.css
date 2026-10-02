@@ -1032,7 +1032,6 @@ kbd {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .next-step.is-coaching,
   .is-coach {
     animation: none;
   }

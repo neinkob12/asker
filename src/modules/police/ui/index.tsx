@@ -233,7 +233,7 @@ function PoliceCard() {
   );
 }
 
-registerSlot('tab:business', { id: 'police.tier', title: 'Polizei', order: 60, component: PoliceCard });
+registerSlot('tab:territory', { id: 'police.tier', title: 'Polizei', order: 30, component: PoliceCard });
 registerSearch({
   id: 'police.search',
   label: 'Polizei',
@@ -245,10 +245,7 @@ registerSearch({
       subtitle: `So sieht dich die Polizei: ${operationTier(state).name}`,
       icon: 'siren',
       keywords: 'Razzia Großrazzia Heat Kripo Stufe',
-      run: (ui) => {
-        ui.selectTab('business');
-        ui.openSection('police.tier');
-      },
+      run: (ui) => ui.selectTab('territory'),
     },
   ],
 });

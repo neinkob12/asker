@@ -6,6 +6,7 @@ import { useRuntime } from '../hooks';
 import { phoneApps, searchProviders, sidebarTabs } from '../registry';
 import type { UiRuntime } from '../runtime';
 import { tabIcon } from './layout';
+import { collectAdvice, missingFor } from './NextStep';
 
 interface Entry {
   id: string;
@@ -26,6 +27,19 @@ function collect(runtime: UiRuntime): Entry[] {
   const add = (e: Omit<Entry, 'haystack'> & { keywords?: string }) =>
     entries.push({ ...e, haystack: normalize(`${e.title} ${e.subtitle ?? ''} ${e.keywords ?? ''} ${e.group}`) });
   if (state) {
+    // Was die Module gerade raten (seit Auftrag 26 nur hier und als dringende Zeile auf dem Startbildschirm).
+    for (const advice of collectAdvice(state).slice(0, 6)) {
+      const missing = missingFor(state, advice);
+      add({
+        id: `advice:${advice.id}`,
+        group: 'Nächster Schritt',
+        title: advice.title,
+        subtitle: missing ?? advice.text,
+        icon: advice.icon,
+        keywords: 'rat tipp empfehlung nächster schritt',
+        run: () => advice.action?.(api),
+      });
+    }
     for (const provider of searchProviders.list()) {
       try {
         for (const item of provider.items(state)) {
@@ -45,6 +59,7 @@ function collect(runtime: UiRuntime): Entry[] {
     }
   }
   for (const tab of sidebarTabs.list()) {
+    if (tab.hidden) continue;
     add({
       id: `tab:${tab.id}`,
       group: 'Bereiche',
@@ -54,6 +69,7 @@ function collect(runtime: UiRuntime): Entry[] {
     });
   }
   for (const app of phoneApps.list()) {
+    if (app.hidden) continue;
     add({
       id: `app:${app.id}`,
       group: 'Handy',

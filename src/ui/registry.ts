@@ -68,6 +68,8 @@ export interface SidebarTab {
   layout?: 'stack' | 'rows';
   /** Tastenkürzel (ein Buchstabe) am Desktop. Standard: erster freier Buchstabe des Titels. */
   shortcut?: string;
+  /** Nicht als App auf dem Startbildschirm, in der Suche und bei den Tastenkürzeln zeigen (nur per selectTab erreichbar). */
+  hidden?: boolean;
 }
 
 export interface SlotContribution<N extends SlotName = SlotName> {
@@ -129,6 +131,11 @@ export interface PhoneApp {
    * 'none': Die App zeichnet ihre Leiste selbst (z.B. mit <PhoneScreen>).
    */
   chrome?: 'default' | 'none';
+  /**
+   * Nicht auf dem Startbildschirm und nicht in der Suche zeigen. Die App bleibt angemeldet und lässt sich weiter mit
+   * ui.openPhone(id) öffnen (z.B. eine Unterseite, die andere Stellen verlinken).
+   */
+  hidden?: boolean;
 }
 
 /** Empfehlung für die Karte "Nächster Schritt" (und den sanften Hinweis beim Einstieg). */

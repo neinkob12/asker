@@ -157,5 +157,6 @@ registerPhoneApp({
   color: 'people',
   component: ContactsApp,
   badge: (state) => getContacts(state).length,
+  hidden: true,
 });
 registerSlot('tab:staff', { id: 'recruiting.section', order: 30, component: RecruitingSection });

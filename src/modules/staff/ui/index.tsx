@@ -1,11 +1,10 @@
 // Oberfläche des Personals: Tab "Personal" mit filterbarer Übersicht, Mitarbeiter-Profil (Akte) als Panel,
-// Kurzfassung im Tab "Geschäft", Läufer und Sicherheit im Spot-Panel, Hinweise bei Level-Aufstieg, Haft, Verrat.
+// Läufer und Sicherheit im Spot-Panel, Hinweise bei Level-Aufstieg, Haft, Verrat.
 
 import { useState } from 'preact/hooks';
 import { formatEuro, formatPercent } from '../../../core';
 import {
   Button,
-  Card,
   ContextMenu,
   Empty,
   Group,
@@ -13,7 +12,6 @@ import {
   Icon,
   IconChip,
   ItemContent,
-  KeyValue,
   List,
   ListItem,
   onGameEvent,
@@ -308,39 +306,6 @@ function SpecialistBonuses() {
   );
 }
 
-/** Kurzfassung im Tab "Geschäft". */
-function StaffSummary() {
-  const { state } = useGame();
-  const ui = useUi();
-  const staff = getStaff(state);
-  const active = staff.filter((m) => m.status === 'active').length;
-  return (
-    <Card
-      title="Personal"
-      icon="users"
-      color="people"
-      status={staff.length === 0 ? 'idle' : active < staff.length ? 'warn' : 'good'}
-      summary={staff.length === 0 ? 'niemand' : `${active} aktiv`}
-      actions={
-        <Button small onClick={() => ui.selectTab('staff')}>
-          Öffnen
-        </Button>
-      }
-    >
-      {staff.length === 0 ? (
-        <Empty>
-          Noch keine Leute. Klick auf einen Spot, um dort einen Läufer anzuheuern. Was er kostet, hängt vom Spot ab.
-        </Empty>
-      ) : (
-        <>
-          <KeyValue label="Leute" value={`${active} aktiv, ${staff.length - active} fallen aus`} />
-          <KeyValue label="Löhne" value={`${formatEuro(payrollDue(state))} pro Tag`} />
-        </>
-      )}
-    </Card>
-  );
-}
-
 /** Läufer und Sicherheit im Spot-Panel: wer hier arbeitet, Anheuern, freie Leute herholen. */
 function SpotStaff(props: { spotId: string }) {
   const { state, dispatch } = useGame();
@@ -452,7 +417,6 @@ registerTab({
   badge: (state) => getStaff(state, { status: 'jailed' }).length,
 });
 registerSlot('tab:staff', { id: 'staff.overview', order: 10, component: StaffOverview });
-registerSlot('tab:business', { id: 'staff.runners', title: 'Personal', order: 20, component: StaffSummary });
 registerSlot('spots.spotPanel', { id: 'staff.runner', order: 50, component: SpotStaff });
 registerPanel({
   id: 'staff.profile',

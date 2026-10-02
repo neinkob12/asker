@@ -1,5 +1,6 @@
-// Oberfläche der Kunden: Kundenliste im Spot-Panel (selbst verkaufen), Kunden-Abschnitt im Tab "Geschäft",
-// Handy-App "Aufträge" (Lieferdienst, Großhandel) und Lieferungen auf der Karte.
+// Oberfläche der Kunden: Kundenliste im Spot-Panel (selbst verkaufen), Kunden-Abschnitt unten in der Kasse,
+// Lieferungen auf der Karte. Die App "Aufträge" steht seit Auftrag 26 nicht mehr auf dem Startbildschirm: Offene
+// Anfragen kommen als Chat, die Historie steht im Verlauf (Einstellungen).
 
 import { clock, formatEuro, formatNumber, type GameState, messages } from '../../../core';
 import { registerMapLayer } from '../../../map';
@@ -186,10 +187,12 @@ function CustomersSection() {
       status={waitingNow > 0 || offered > 0 ? 'warn' : 'good'}
       summary={waitingNow > 0 ? `${waitingNow} warten` : `${stats.customersServed} bedient`}
       actions={
-        <Button small onClick={() => ui.openPhone('customers.orders')}>
-          Aufträge
-          <Badge count={offered} />
-        </Button>
+        offered > 0 && (
+          <Button small onClick={() => ui.openPhone('core.messages')}>
+            Anfragen
+            <Badge count={offered} />
+          </Button>
+        )
       }
     >
       <KeyValue label="Wartet gerade an deinen Spots" value={waitingNow} tone={waitingNow > 0 ? 'warn' : undefined} />
@@ -403,7 +406,7 @@ function OrdersApp() {
 }
 
 registerSlot('spots.spotPanel', { id: 'customers.list', order: 10, component: SpotCustomers });
-registerSlot('tab:business', { id: 'customers.stats', title: 'Kundschaft', order: 30, component: CustomersSection });
+registerSlot('finance.app', { id: 'customers.stats', title: 'Kundschaft', order: 10, component: CustomersSection });
 registerPhoneApp({
   id: 'customers.orders',
   name: 'Aufträge',
@@ -412,6 +415,7 @@ registerPhoneApp({
   color: 'money',
   component: OrdersApp,
   badge: (state) => getOrders(state, { status: 'offered' }).length,
+  hidden: true,
 });
 registerMapLayer(deliveriesLayer);
 

@@ -1,4 +1,4 @@
-// Oberfläche des Rufs: Anzeige im HUD und ein Abschnitt mit den letzten Gründen im Tab "Geschäft".
+// Oberfläche des Rufs: Anzeige im HUD und ein Abschnitt mit den letzten Gründen im Tab "Reviere".
 
 import { formatNumber } from '../../../core';
 import {
@@ -81,4 +81,4 @@ function ReputationSection() {
 }
 
 registerHudItem({ id: 'reputation.value', order: 40, placement: 'more', icon: 'star', component: ReputationHud });
-registerSlot('tab:business', { id: 'reputation.summary', title: 'Ruf', order: 35, component: ReputationSection });
+registerSlot('tab:territory', { id: 'reputation.summary', title: 'Ruf', order: 20, component: ReputationSection });
