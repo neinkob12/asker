@@ -64,7 +64,8 @@ function WeatherWidget() {
   );
 }
 
-const pct = (f: number) => `${f >= 1 ? '+' : '−'}${formatPercent(Math.abs(f - 1))}`;
+const pct = (f: number) =>
+  Math.abs(f - 1) < 0.005 ? 'unverändert' : `${f >= 1 ? '+' : '−'}${formatPercent(Math.abs(f - 1))}`;
 
 /** Abschnitt "Wetter" in den Einstellungen: jetzt und Vorhersage, Auswirkung aufs Geschäft. */
 function WeatherSettings() {

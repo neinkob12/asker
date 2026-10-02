@@ -40,7 +40,12 @@ export interface QuestsState {
   skipped: string[];
   /** Titel für die Bestenliste (letzte Quest). */
   title: string | null;
+  /** Wann die aktive Quest begann (Spielminute): Ereignisse aus demselben Schritt zählen nicht für sie. */
+  startedAt: number;
 }
+
+/** Zustand in Version 1 (ohne startedAt). */
+type QuestsStateV1 = Omit<QuestsState, 'startedAt'>;
 
 declare module '../../core' {
   interface ModuleStates {
@@ -165,6 +170,7 @@ function finish(ctx: Ctx, skipped: boolean): void {
   }
   q.index += 1;
   q.progress = 0;
+  q.startedAt = ctx.now;
   ctx.emit('quest.completed', { questId: quest.id, skipped });
   const next = currentQuest(ctx.state);
   if (!skipped && (!next || next.chapter !== quest.chapter)) {
@@ -192,6 +198,9 @@ function onEvent<K extends keyof GameEvents>(type: K) {
     const quest = currentQuest(ctx.state);
     const counter = quest?.count?.[type] as ((p: GameEvents[K], s: GameState) => number) | undefined;
     if (!quest || !counter) return;
+    // Was im selben Schritt geschah, in dem die Quest begann, gehört noch zur vorigen (ein Läufer über "Leute finden"
+    // meldet staff.hired und recruiting.hired: Das darf nicht zwei Quests auf einmal erledigen).
+    if (ctx.state.modules.quests.startedAt === ctx.now) return;
     const delta = counter(payload, ctx.state);
     if (!(delta > 0)) return;
     ctx.state.modules.quests.progress += delta;
@@ -212,9 +221,9 @@ const COUNTED: (keyof GameEvents)[] = [
 
 export default defineModule({
   id: 'quests',
-  version: 1,
+  version: 2,
   dependsOn: ['goods', 'staff', 'territory', 'police', 'reputation', 'leaderboard'],
-  init: () => ({ index: 0, progress: 0, done: [], skipped: [], title: null }),
+  init: () => ({ index: 0, progress: 0, done: [], skipped: [], title: null, startedAt: -1 }),
   tickEvery: QUEST_CHECK_EVERY,
   tick: (ctx) => {
     // Beim ersten Schritt schickt Peter die erste Quest.
@@ -241,5 +250,15 @@ export default defineModule({
       check(ctx);
     },
   },
-  migrations: {},
+  migrations: {
+    // Version 2: Die Quests haben eine neue Reihenfolge (der Hafen und die Rechte Hand kamen vor dem, was sie brauchen).
+    // Der Index zählt die Liste, also neu bestimmen: die erste Quest in der neuen Reihenfolge, die noch nicht erledigt
+    // oder übersprungen ist. Fortschritt bleibt nur, wenn es dieselbe Stelle ist.
+    2: (old: QuestsStateV1): QuestsState => {
+      const finished = new Set([...old.done, ...old.skipped]);
+      const found = QUESTS.findIndex((q) => !finished.has(q.id));
+      const index = found < 0 ? QUESTS.length : found;
+      return { ...old, index, progress: index === old.index ? old.progress : 0, startedAt: -1 };
+    },
+  },
 });

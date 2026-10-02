@@ -300,6 +300,9 @@ export class UiRuntime {
     session.subscribe((change) => {
       // Neues, geladenes oder importiertes Spiel: Meldungen, Banner und Seiten des alten Spiels gehören nicht mehr dazu.
       if (change === 'sim') this.resetForNewGame();
+      // Der Autosave klappt nicht (Speicher voll): einmal sagen, sonst geht Fortschritt still verloren.
+      if (change === 'autosave' && session.autosaveError)
+        this.api.toast(session.autosaveError, 'bad', { urgent: true });
       if (change === 'frame') {
         // Nach Simulationsschritten neu zeichnen, höchstens ca. 10 Mal pro Sekunde. Ohne neue Schritte
         // (Pause) nicht: UI-Änderungen fordern das Neuzeichnen selbst an.

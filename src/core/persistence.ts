@@ -73,16 +73,24 @@ export function loadSimulation(rawState: unknown, modules: readonly ModuleDefini
   for (const key of ['meta', 'wallet', 'messages', 'outcome', 'modules', 'moduleVersions', 'rng'] as const) {
     if (!isRecord(raw[key])) throw new SaveError(`Der Spielstand ist beschädigt (${key} fehlt).`);
   }
-  if (typeof raw.time !== 'number' || !Array.isArray(raw.journal))
+  if (typeof raw.time !== 'number' || !Number.isFinite(raw.time) || raw.time < 0 || !Array.isArray(raw.journal))
     throw new SaveError('Der Spielstand ist beschädigt.');
+  const wallet = raw.wallet as Record<string, unknown>;
+  for (const key of ['dirty', 'clean'] as const) {
+    if (typeof wallet[key] !== 'number' || !Number.isFinite(wallet[key])) {
+      throw new SaveError(`Der Spielstand ist beschädigt (Geld: ${key}).`);
+    }
+  }
 
   const state = raw as unknown as GameState;
   const sim = new Simulation(modules, state);
   const moduleStates = state.modules as unknown as Record<string, unknown>;
   for (const m of sim.modules) {
     const saved = state.moduleVersions[m.id];
-    if (saved === undefined) {
-      // Modul ist neu dazugekommen: frisch anlegen.
+    // Fehlt der Zustand eines Moduls (neu dazugekommen oder in der Datei verloren), wird er frisch angelegt; ein
+    // Spielstand mit Version, aber ohne Zustand lief sonst in jedem Schritt in einen Fehler.
+    // (Bei älterer Version bekommt die Migration den fehlenden Zustand als undefined: Das ist erlaubt.)
+    if (saved === undefined || (saved === m.version && m.init && !isRecord(moduleStates[m.id]))) {
       sim.initModule(m);
       continue;
     }

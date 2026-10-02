@@ -60,33 +60,48 @@ function enabled(): boolean {
   return forced || !(host === 'localhost' || host === '127.0.0.1' || host === '' || host.endsWith('.local'));
 }
 
-/** Letzte Übermittlung pro Durchgang, damit der Bildschirm darauf warten kann. */
-const pending = new Map<string, Promise<void>>();
+/** Wie lange die Bestenliste auf eine Antwort wartet: Ohne Antwort zeigt der Bildschirm sonst ewig "lädt …". */
+const TIMEOUT_MS = 10_000;
+const timeout = () =>
+  typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(TIMEOUT_MS) : undefined;
+
+/** Übermittlungen, die gerade laufen (der Bildschirm wartet darauf), und was zuletzt ankam (nichts doppelt schicken). */
+const inFlight = new Map<string, Promise<void>>();
+const lastSent = new Map<string, string>();
 
 function submit(state: GameState): Promise<void> {
   if (!enabled()) return Promise.resolve();
   const summary = runSummary(state);
-  const body = {
+  const runId = summary.runId;
+  // Game Over meldet über die Reaktion und über den Bildschirm: Läuft schon eine Übermittlung, wartet der zweite darauf.
+  const running = inFlight.get(runId);
+  if (running) return running;
+  const body = JSON.stringify({
     ...summary,
     name: getPlayerName(),
     title: questTitle(state),
     quests: completedQuests(state).length,
-  };
+  });
+  if (lastSent.get(runId) === body) return Promise.resolve();
   const request = fetch(ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body,
     keepalive: true,
+    signal: timeout(),
   })
-    .then(() => undefined)
-    .catch(() => undefined);
-  pending.set(summary.runId, request);
+    .then((response) => {
+      if (response.ok) lastSent.set(runId, body);
+    })
+    .catch(() => undefined)
+    .finally(() => inFlight.delete(runId));
+  inFlight.set(runId, request);
   return request;
 }
 
 async function load(runId: string): Promise<Board> {
-  await pending.get(runId);
-  const response = await fetch(`${ENDPOINT}?runId=${encodeURIComponent(runId)}`);
+  await inFlight.get(runId);
+  const response = await fetch(`${ENDPOINT}?runId=${encodeURIComponent(runId)}`, { signal: timeout() });
   if (!response.ok) throw new Error(String(response.status));
   return (await response.json()) as Board;
 }

@@ -6,6 +6,8 @@
 
 import { clock, defineModule, type GameState, wallet } from '../../core';
 import { getLots, getProduct } from '../goods';
+import { getBatches } from '../laundering';
+import { getRelation, getSuppliers } from '../suppliers';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 
 export interface LeaderboardState {
@@ -32,11 +34,17 @@ export interface RunSummary {
   outcome: 'bankrupt' | 'killed' | 'won' | 'running';
 }
 
-/** Vermögen: Schwarzgeld, sauberes Geld und Ware im Lager (zum Grundpreis). */
+/**
+ * Vermögen: Schwarzgeld, sauberes Geld, Geld in der Wäsche (schon abgebucht, kommt sauber zurück) und Ware im Lager
+ * (zum Grundpreis), abzüglich der Schulden bei Lieferanten (sonst treibt ein Kredit die Zahl).
+ */
 export function netWorth(state: GameState): number {
   let goods = 0;
   for (const lot of getLots(state)) goods += lot.amount * (getProduct(lot.productId)?.basePrice ?? 0);
-  return Math.round(wallet.balance(state, 'dirty') + wallet.balance(state, 'clean') + goods);
+  let washing = 0;
+  for (const batch of getBatches(state)) washing += batch.amount - batch.fee;
+  const debt = getSuppliers(state).reduce((sum, s) => sum + getRelation(state, s.id).debt, 0);
+  return Math.round(wallet.balance(state, 'dirty') + wallet.balance(state, 'clean') + washing + goods - debt);
 }
 
 export function getRecord(state: GameState): LeaderboardState {
@@ -65,7 +73,7 @@ function update(state: GameState): void {
 export default defineModule({
   id: 'leaderboard',
   version: 1,
-  dependsOn: ['goods', 'territory'],
+  dependsOn: ['goods', 'territory', 'laundering', 'suppliers'],
   init: (ctx) => ({ peakWorth: netWorth(ctx.state), peakVeedel: 0 }),
   tickEvery: 30,
   tick: (ctx) => update(ctx.state),

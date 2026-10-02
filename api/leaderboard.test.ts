@@ -41,8 +41,15 @@ describe('api/leaderboard: Eintrag prüfen', () => {
     expect(parseEntry({ ...valid, outcome: 'cheat' }, 0)).toBeNull();
   });
 
-  it('begrenzt absurde Werte', () => {
-    expect(parseEntry({ ...valid, score: 1e12 }, 0)?.score).toBe(100_000_000);
+  it('begrenzt absurde Werte, auch gemessen an den gespielten Tagen', () => {
+    // Vier Tage: Mehr als 2 Mio. € pro Tag ist nicht möglich.
+    expect(parseEntry({ ...valid, score: 1e12 }, 0)?.score).toBe(8_000_000);
+    expect(parseEntry({ ...valid, days: 50_000, score: 1e12 }, 0)?.score).toBe(100_000_000);
     expect(parseEntry({ ...valid, score: -5 }, 0)?.score).toBe(0);
+  });
+
+  it('unsichtbare Formatzeichen im Namen fliegen raus (sonst steht eine leere Zeile da)', () => {
+    expect(parseEntry({ ...valid, name: '\u200B\u202E' }, 0)?.name).toBe('Anonym');
+    expect(parseEntry({ ...valid, name: 'Ja\u200Bkob' }, 0)?.name).toBe('Jakob');
   });
 });

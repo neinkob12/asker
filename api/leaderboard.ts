@@ -11,6 +11,10 @@
 const BOARD = 'kt:lb';
 const RUNS = 'kt:runs';
 const LIMIT = 50;
+/** So viele Einträge bleiben gespeichert (die Liste zeigt nur LIMIT): Wer spammt, füllt den Speicher nicht endlos. */
+const KEEP = 500;
+/** Mehr Vermögen als so viel pro gespieltem Tag ist nicht möglich: Der Wert wird darauf gekappt. */
+const MAX_SCORE_PER_DAY = 2_000_000;
 
 export interface Entry {
   runId: string;
@@ -37,7 +41,7 @@ function clampInt(value: unknown, min: number, max: number): number | null {
 function cleanText(value: unknown, max: number): string {
   return typeof value === 'string'
     ? value
-        .replace(/\p{Cc}/gu, '')
+        .replace(/[\p{Cc}\p{Cf}]/gu, '')
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, max)
@@ -50,11 +54,12 @@ export function parseEntry(body: unknown, now: number): Entry | null {
   const b = body as Record<string, unknown>;
   const runId = cleanText(b.runId, 64);
   if (!/^[A-Za-z0-9_-]{4,64}$/.test(runId)) return null;
-  const score = clampInt(b.score, 0, 100_000_000);
   const days = clampInt(b.days, 1, 100_000);
   const veedel = clampInt(b.veedel, 0, 50);
   const quests = clampInt(b.quests ?? 0, 0, 100);
-  if (score === null || days === null || veedel === null || quests === null) return null;
+  if (days === null || veedel === null || quests === null) return null;
+  const score = clampInt(b.score, 0, Math.min(100_000_000, MAX_SCORE_PER_DAY * days));
+  if (score === null) return null;
   const outcome = OUTCOMES.find((o) => o === b.outcome);
   if (!outcome) return null;
   const title = cleanText(b.title, 40);
@@ -103,6 +108,12 @@ function json(data: unknown, status = 200): Response {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 }
 
+/** Fehler des Speichers: ins Log, nach außen nur ein allgemeiner Text (keine Interna des Dienstes). */
+function failure(error: unknown): Response {
+  console.error('Bestenliste', error);
+  return json({ error: 'Die Bestenliste ist gerade nicht erreichbar.' }, 503);
+}
+
 function parseStored(raw: unknown): Entry | null {
   if (typeof raw !== 'string') return null;
   try {
@@ -127,7 +138,7 @@ export async function GET(request: Request): Promise<Response> {
     const me = typeof rank === 'number' ? { rank: rank + 1, entry: parseStored(own) } : null;
     return json({ entries, total: Number(total) || 0, me });
   } catch (error) {
-    return json({ error: (error as Error).message }, 503);
+    return failure(error);
   }
 }
 
@@ -150,12 +161,20 @@ export async function POST(request: Request): Promise<Response> {
         ['HSET', RUNS, entry.runId, JSON.stringify(entry)],
       ]);
     }
+    // Alles unterhalb der besten KEEP Einträge wegwerfen (auch die Details).
+    const [outside] = await redis([['ZRANGE', BOARD, 0, -(KEEP + 1)]]);
+    if (Array.isArray(outside) && outside.length > 0) {
+      await redis([
+        ['ZREM', BOARD, ...(outside as string[])],
+        ['HDEL', RUNS, ...(outside as string[])],
+      ]);
+    }
     const [rank, total] = await redis([
       ['ZREVRANK', BOARD, entry.runId],
       ['ZCARD', BOARD],
     ]);
     return json({ rank: Number(rank) + 1, total: Number(total) || 0 });
   } catch (error) {
-    return json({ error: (error as Error).message }, 503);
+    return failure(error);
   }
 }
