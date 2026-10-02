@@ -128,6 +128,39 @@ describe('springState', () => {
   });
 });
 
+describe('Spring bei Pixeln', () => {
+  /** Zeit in Sekunden, bis die Feder als in Ruhe gilt. */
+  function settleTime(spring: Spring): number {
+    let t = 0;
+    while (!spring.settled && t < 5) {
+      spring.step(FRAME);
+      t += FRAME;
+    }
+    return t;
+  }
+
+  it('mit der Genauigkeit für Pixel ist ein Blatt fertig, kurz nachdem man es nicht mehr sieht', () => {
+    // Ein Blatt fährt über 800 px: Mit der Vorgabe für Werte von 0 bis 1 dauert die Ruhe über eine Sekunde.
+    const strict = settleTime(new Spring(SPRINGS.sheet, 800, 0));
+    const pixels = new Spring(SPRINGS.sheet, 800, 0);
+    pixels.restDelta = 0.5;
+    pixels.restSpeed = 5;
+    const loose = settleTime(pixels);
+    expect(strict).toBeGreaterThan(0.9);
+    expect(loose).toBeLessThan(0.7);
+    expect(loose).toBeLessThan(strict - 0.3);
+  });
+
+  it('kommt auch mit der groben Genauigkeit genau am Ziel an', () => {
+    const spring = new Spring(SPRINGS.sheet, 800, 0);
+    spring.restDelta = 0.5;
+    spring.restSpeed = 5;
+    settleTime(spring);
+    expect(spring.value).toBe(0);
+    expect(spring.velocity).toBe(0);
+  });
+});
+
 describe('springEasing (Feder als CSS-Kurve)', () => {
   it('beginnt bei 0, endet bei 1 und dauert so lange wie die Feder braucht', () => {
     const { easing, durationMs } = springEasing(SPRINGS.app);

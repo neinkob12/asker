@@ -107,6 +107,7 @@ export function Sheet(props: SheetProps) {
     closing.current = target === 'closed';
     motion.current = animateValue({
       config: SPRINGS.sheet,
+      precision: 0.5,
       from: spring.current.value,
       to: g.offsets[target],
       velocity,

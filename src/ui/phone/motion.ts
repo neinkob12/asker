@@ -95,11 +95,17 @@ export function animateValue(options: {
   to: number;
   velocity?: number;
   spring?: Spring;
+  /** Genauigkeit in Einheiten des Werts (Ruhe, wenn näher am Ziel): 0,5 für Pixel, kleiner für Werte von 0 bis 1. */
+  precision?: number;
   onFrame: (value: number) => void;
   onRest?: () => void;
 }): { motion: Motion; spring: Spring } {
   const spring = options.spring ?? new Spring(options.config, options.from);
   spring.config = options.config;
+  if (options.precision !== undefined) {
+    spring.restDelta = options.precision;
+    spring.restSpeed = options.precision * 10;
+  }
   if (reducedMotion()) {
     // Weniger Bewegung: kurzer gleichmäßiger Übergang, keine Federn, kein Nachschwingen.
     const start = performance.now();

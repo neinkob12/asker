@@ -8,6 +8,8 @@ export interface ErrorBoundaryProps {
   children?: ComponentChildren;
   /** Ohne Hinweis-Karte: Der Bereich verschwindet still (z.B. für kleine Teile im HUD). */
   silent?: boolean;
+  /** Ausweg bei einem Absturz (z.B. ein Dialog, der sich nicht schließen lässt): zeigt einen Schließen-Knopf. */
+  onClose?: () => void;
 }
 
 interface ErrorBoundaryState {
@@ -41,6 +43,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         <Button small onClick={() => this.setState({ error: null })}>
           Nochmal versuchen
         </Button>
+        {this.props.onClose && (
+          <Button small onClick={this.props.onClose}>
+            Schließen
+          </Button>
+        )}
       </Card>
     );
   }

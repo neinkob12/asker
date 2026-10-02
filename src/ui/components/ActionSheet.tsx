@@ -53,6 +53,7 @@ export function ActionSheet(props: ActionSheetProps) {
     motion.current?.stop();
     motion.current = animateValue({
       config: SPRINGS.sheet,
+      precision: 0.004,
       from: spring.current.value,
       to,
       spring: spring.current,

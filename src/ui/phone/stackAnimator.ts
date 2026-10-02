@@ -164,7 +164,9 @@ export class StackAnimator {
       // (Rand-Wischen an der Wurzel einer App schiebt die Seite zum Startbildschirm, statt zu schrumpfen.)
       if (!prev.gesture) prev.kind = plan.kind;
       prev.exiting = plan.exiting;
-      if (!prev.interactive) this.run(prev, RANGE[plan.kind][1]);
+      // Das Ziel gehört zur Art des Übergangs, der läuft: Eine Geste bleibt beim Rand-Wischen "pop" (Seite nach rechts
+      // hinausschieben), auch wenn der Stapel danach "close" meldet. Mit plan.kind wäre sie zurückgefedert und dann weg.
+      if (!prev.interactive) this.run(prev, RANGE[prev.kind][1]);
       this.layout(this.topKey);
       return;
     }
@@ -276,7 +278,9 @@ export class StackAnimator {
   /** Kachel der App auf dem Startbildschirm (sofern sichtbar), relativ zur Fläche der Seiten. */
   private findTile(appId: string | null, home: HTMLElement, container: HTMLElement): Tile | null {
     if (!appId) return null;
-    const button = home.querySelector<HTMLElement>(`[data-app-id="${CSS.escape(appId)}"]`);
+    const selector = `[data-app-id="${CSS.escape(appId)}"]`;
+    const button =
+      home.querySelector<HTMLElement>(`${selector}[data-tapped]`) ?? home.querySelector<HTMLElement>(selector);
     const tile = button?.querySelector<HTMLElement>('.phone__tile') ?? null;
     if (!tile) return null;
     const r = relativeRect(tile, container);

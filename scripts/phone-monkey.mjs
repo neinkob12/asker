@@ -114,7 +114,10 @@ const COLLECT = `(() => {
   return out;
 })()`;
 
-/** Läuft im Browser: liegt der Mittelpunkt des Elements (nach Scrollen) wirklich auf ihm? */
+/**
+ * Läuft im Browser: liegt der Mittelpunkt des Elements (nach Scrollen) wirklich auf ihm? Verdeckt es nur eine
+ * vorübergehende Ebene (Island, Banner, Blatt, Dialog), ist das kein Fund (overlay).
+ */
 const HIT = (index) => `(() => {
   const el = document.querySelector('[data-monkey="${index}"]');
   if (!el) return { gone: true };
@@ -125,7 +128,9 @@ const HIT = (index) => `(() => {
   const inView = x >= 0 && y >= 0 && x <= innerWidth && y <= innerHeight;
   const top = document.elementFromPoint(x, y);
   const ok = !!top && (el === top || el.contains(top) || top.contains(el));
-  return { x, y, inView, ok, covered: top ? top.className?.toString().slice(0, 60) || top.tagName : 'nichts' };
+  const overlay = !!top && !!top.closest('.island, .phone-notice, .ui-sheet-layer, .ui-dialog-backdrop, .ui-dialog, .ui-menu, .ui-popover, .hud-flyout, .phone-notifications');
+  const name = top ? (top.className && top.className.baseVal !== undefined ? top.className.baseVal : String(top.className)).slice(0, 60) || top.tagName : 'nichts';
+  return { x, y, inView, ok, overlay, covered: name, rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], vw: innerWidth, vh: innerHeight };
 })()`;
 
 const findings = new Map();
@@ -156,69 +161,86 @@ try {
       await page.evaluate(SETUP);
       const random = rng(seed * 7919 + target.id.length);
       let depthStuck = 0;
+      let lastLabel = '';
       for (let step = 0; step < steps; step++) {
-        // Immer wieder frisch in die App einsteigen, damit nicht alles in einer Unterseite hängen bleibt.
-        if (step % 25 === 0) {
-          await page.evaluate(`(() => {
+        try {
+          // Immer wieder frisch in die App einsteigen, damit nicht alles in einer Unterseite hängen bleibt.
+          if (step % 25 === 0) {
+            await page.evaluate(`(() => {
             const api = window.koeln.runtime.api;
             api.closeDialog(); api.closePanel(); api.toggleNotificationCenter(false); api.openPhone(null);
             ${target.kind === 'tab' ? `api.selectTab('${target.id}')` : `api.openPhone('${target.id}')`};
           })()`);
-          await page.waitForTimeout(500);
-        }
-        if (step % 10 === 0) await page.evaluate('window.koeln.session.sim.advance(25)');
-        const items = await page.evaluate(COLLECT);
-        if (items.length === 0) {
-          // Keine Bedienelemente: Sackgasse? Dann muss "zurück" gehen.
-          if (++depthStuck > 2) {
-            note(
-              `dead:${target.id}`,
-              `[${where}] Keine Bedienelemente mehr sichtbar (Sackgasse?) nach ${step} Schritten.`,
-            );
-            await page.evaluate('window.koeln.runtime.api.back(); window.koeln.runtime.api.showPhone()');
+            await page.waitForTimeout(500);
           }
-          await page.waitForTimeout(200);
-          continue;
-        }
-        depthStuck = 0;
-        const pick = items[Math.floor(random() * items.length)];
-        const hit = await page.evaluate(HIT(pick.index));
-        if (hit.gone) continue;
-        if (!hit.inView)
-          note(
-            `off:${target.id}:${pick.label}`,
-            `[${where}] „${pick.label}" liegt auch nach Scrollen außerhalb des Bildschirms.`,
+          if (step % 10 === 0) await page.evaluate('window.koeln.session.sim.advance(25)');
+          await page.evaluate(
+            'window.koeln.runtime.api.toggleIsland(false); window.koeln.runtime.api.dismissNotification()',
           );
-        else if (!hit.ok)
-          note(`cov:${target.id}:${pick.label}`, `[${where}] „${pick.label}" wird verdeckt von ${hit.covered}.`);
-        if (hit.inView) {
-          try {
-            if (pick.tag === 'select') {
-              const options = await page.$$eval(`[data-monkey="${pick.index}"] option`, (os) => os.map((o) => o.value));
-              if (options.length)
-                await page.selectOption(
-                  `[data-monkey="${pick.index}"]`,
-                  options[Math.floor(random() * options.length)],
-                );
-            } else if (pick.tag === 'input') {
-              await page.fill(
-                `[data-monkey="${pick.index}"]`,
-                random() < 0.5 ? '' : String(Math.floor(random() * 5000) - 100),
-                { timeout: 1000 },
+          const items = await page.evaluate(COLLECT);
+          if (items.length === 0) {
+            // Keine Bedienelemente: Sackgasse? Dann muss "zurück" gehen.
+            if (++depthStuck > 2) {
+              note(
+                `dead:${target.id}`,
+                `[${where}] Keine Bedienelemente mehr sichtbar (Sackgasse?) nach ${step} Schritten.`,
               );
-            } else {
-              await page.mouse.click(hit.x, hit.y);
+              await page.evaluate('window.koeln.runtime.api.back(); window.koeln.runtime.api.showPhone()');
             }
-          } catch {
-            // Element verschwunden: kein Fund.
+            await page.waitForTimeout(200);
+            continue;
           }
-        }
-        await page.waitForTimeout(90);
-        if (random() < 0.12)
-          await page.evaluate('window.koeln.runtime.api.back(); window.koeln.runtime.api.showPhone()');
-        if (step % 20 === 19) {
-          const bad = await page.evaluate(SCAN);
-          if (bad.length) note(`nan:${bad[0]}`, `[${where}] Ungültige Zahl im Spielstand: ${bad.join(', ')}`);
+          depthStuck = 0;
+          const pick = items[Math.floor(random() * items.length)];
+          const hit = await page.evaluate(HIT(pick.index));
+          if (hit.gone) continue;
+          if (!hit.inView)
+            note(
+              `off:${target.id}:${pick.label}`,
+              `[${where}] „${pick.label}" liegt auch nach Scrollen außerhalb des Bildschirms (Rechteck ${hit.rect.join(',')}, Fenster ${hit.vw}×${hit.vh}).`,
+            );
+          else if (!hit.ok && !hit.overlay)
+            note(`cov:${target.id}:${pick.label}`, `[${where}] „${pick.label}" wird verdeckt von ${hit.covered}.`);
+          lastLabel = pick.label;
+          if (hit.inView) {
+            try {
+              if (pick.tag === 'select') {
+                const options = await page.$$eval(`[data-monkey="${pick.index}"] option`, (os) =>
+                  os.map((o) => o.value),
+                );
+                if (options.length)
+                  await page.selectOption(
+                    `[data-monkey="${pick.index}"]`,
+                    options[Math.floor(random() * options.length)],
+                  );
+              } else if (pick.tag === 'input') {
+                await page.fill(
+                  `[data-monkey="${pick.index}"]`,
+                  random() < 0.5 ? '' : String(Math.floor(random() * 5000) - 100),
+                  { timeout: 1000 },
+                );
+              } else {
+                await page.mouse.click(hit.x, hit.y);
+              }
+            } catch {
+              // Element verschwunden: kein Fund.
+            }
+          }
+          await page.waitForTimeout(90);
+          if (random() < 0.12)
+            await page.evaluate('window.koeln.runtime.api.back(); window.koeln.runtime.api.showPhone()');
+          if (step % 20 === 19) {
+            const bad = await page.evaluate(SCAN);
+            if (bad.length) note(`nan:${bad[0]}`, `[${where}] Ungültige Zahl im Spielstand: ${bad.join(', ')}`);
+          }
+        } catch (error) {
+          // Ein Klick hat die Seite neu geladen (oder der Browser ist weg): als Fund melden und neu einsteigen.
+          if (!/Execution context was destroyed|navigation/i.test(String(error))) throw error;
+          note(`reload:${lastLabel}`, `[${where}] „${lastLabel}" hat die Seite neu geladen.`);
+          await page.waitForLoadState('load');
+          await page.waitForSelector('.shell-map', { timeout: 20000 });
+          await page.waitForTimeout(1500);
+          await page.evaluate(SETUP);
         }
       }
       await page.close();

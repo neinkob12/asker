@@ -50,6 +50,7 @@ export function SwipeRow(props: SwipeRowProps) {
     motion.current?.stop();
     motion.current = animateValue({
       config: SPRINGS.snap,
+      precision: 0.5,
       from: spring.current.value,
       to: x,
       velocity,
@@ -63,7 +64,10 @@ export function SwipeRow(props: SwipeRowProps) {
       openRow = closeThis;
     } else if (openRow === closeThis) openRow = null;
   };
-  const closeThis = () => settle(0);
+  // Dieselbe Funktion in jedem Bild (sonst hält "ist diese Zeile die offene?" nie und sie schließt sich selbst).
+  const settleRef = useRef(settle);
+  settleRef.current = settle;
+  const closeThis = useRef(() => settleRef.current(0)).current;
   useEffect(
     () => () => {
       motion.current?.stop();
