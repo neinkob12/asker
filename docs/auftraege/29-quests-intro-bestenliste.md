@@ -4,7 +4,7 @@ Damit Freunde das Spiel online spielen und sich vergleichen können.
 
 ## Umgesetzt
 
-- **Quests von Peter** (Modul `quests`): 26 Quests in fünf Kapiteln (Ankommen, Dein Team, Wachsen, Die Straße,
+- **Quests von Peter** (Modul `quests`): 29 Quests in fünf Kapiteln (Ankommen, Dein Team, Wachsen, Die Straße,
   Boss von Köln), immer eine aktiv, Karte direkt unter Geld und Heat (HUD-Platz `'below'`), einklappbar, Tipp führt
   zur passenden Stelle, Übersicht als Handy-Seite. Belohnungen: Ware (auch Premium), Schwarzgeld, sauberes Geld, Ruf,
   weniger Heat, Erfahrung und Loyalität fürs Team, Einfluss, Titel "Boss von Köln". Überspringen geht ohne Belohnung.
