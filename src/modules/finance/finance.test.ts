@@ -4,13 +4,16 @@ import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { DEFAULT_BOT, newBotStats, playFor } from '../../playtest/bot';
 import { getSpots } from '../spots';
 import { getStaff } from '../staff';
-import { DAYS_KEPT } from './config';
+import { DAYS_KEPT, REASON_DAYS_KEPT } from './config';
 import {
+  balance,
+  balanceHistory,
   bookDay,
   categoryLines,
   currentDay,
   dailyProfits,
   dayReport,
+  explainReport,
   lieutenantResult,
   periodReport,
   spotResult,
@@ -56,6 +59,40 @@ describe('Kasse', () => {
     expect(sim.state.modules.finance.days.length).toBeLessThanOrEqual(DAYS_KEPT + 1);
     expect(dayReport(sim.state, 1).profit).toBe(0);
     expect(dailyProfits(sim.state, 7)).toHaveLength(7);
+    // 30 Tage Tageswerte, einzelne Buchungstexte nur für die jüngsten Tage.
+    expect(DAYS_KEPT).toBe(30);
+    const old = sim.state.modules.finance.days.filter((d) => d.day < currentDay(sim.state) - REASON_DAYS_KEPT);
+    expect(old.length).toBeGreaterThan(0);
+    expect(old.every((d) => Object.keys(d.reasons).length === 0)).toBe(true);
+    // Tag 1 (70 €) und Tag 2 (−50 €) stehen nach 20 Tagen noch im Buch, dazu die 10 € von heute.
+    expect(dayReport(sim.state, 21).profit).toBe(70);
+    expect(dayReport(sim.state, 20).profit).toBe(-50);
+    expect(balance(sim.state, 'month').profit).toBe(30);
+  });
+
+  it('Bilanz nach Zeitraum und Filter mit einem Satz, warum', () => {
+    const sim = createTestGame();
+    const spot = getSpots(sim.state)[0];
+    expect(sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: spot.id } }).ok).toBe(true);
+    playFor(sim, 1440, newBotStats(), { ...DEFAULT_BOT, personalSpots: 0 });
+    const all = balance(sim.state, 'week');
+    expect(all.rows.some((r) => r.category === 'sales.street')).toBe(true);
+    expect(explainReport(all)).toMatch(/Straßenverkauf|Löhne|Einkauf|Anheuern/);
+    const bySpot = balance(sim.state, 'week', { kind: 'spot', spotId: spot.id });
+    expect(bySpot.income).toBe(spotResult(sim.state, spot.id, 7).revenue);
+    expect(bySpot.rows.find((r) => r.category === 'wages.runner')?.amount).toBe(
+      -spotResult(sim.state, spot.id, 7).wages,
+    );
+    const byVeedel = balance(sim.state, 'week', { kind: 'veedel', veedelId: spot.veedelId });
+    expect(byVeedel.income).toBeGreaterThanOrEqual(bySpot.income);
+    expect(balance(sim.state, 'week', { kind: 'lieutenant', staffId: 'niemand' }).rows).toEqual([]);
+    expect(balanceHistory(sim.state, 'month').length).toBeLessThanOrEqual(30);
+    expect(balanceHistory(sim.state, 'week', { kind: 'spot', spotId: spot.id }).at(-1)?.profit).toBe(
+      balance(sim.state, 'today', { kind: 'spot', spotId: spot.id }).profit,
+    );
+    expect(explainReport({ ...all, rows: [], income: 0, expenses: 0, losses: 0, profit: 0 })).toBe(
+      'Keine Kontobewegung.',
+    );
   });
 
   it('Geldwäsche ist eine Umbuchung, nur die Gebühr ist eine Ausgabe', () => {

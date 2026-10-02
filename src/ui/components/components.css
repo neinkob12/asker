@@ -1911,3 +1911,7 @@
 .ui-list__item.is-disabled .ui-list__value {
   color: var(--phone-label-2, var(--color-muted));
 }
+/* Ein einzelner Chip unter dem Zeilentitel bleibt so breit wie sein Text */
+.ui-item__main > .ui-tag {
+  align-self: flex-start;
+}

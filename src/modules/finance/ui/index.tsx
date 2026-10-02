@@ -1,15 +1,18 @@
-// Oberfläche der Kasse: Handy-App "Kasse" mit Gewinn- und Verlustrechnung (heute, gestern, 7 Tage), Verlauf,
-// Ergebnis pro Spot und pro Leutnant und Reichweite der Löhne. Unten hängen andere Module Abschnitte an (Slot
-// 'finance.app', z.B. die Kundschaft). Dazu ein Eintrag in der Suche und ein Hinweis in "Nächster Schritt", wenn die
-// Löhne bald nicht mehr reichen.
+// Oberfläche der Kasse (Auftrag 27): Handy-App "Kasse" als Bilanz. Oben der Gewinn groß mit einem Satz, warum, dazu
+// Zeitraum (Heute, Gestern, 7 Tage, 30 Tage) und Filter (ganz Köln, Veedel, Spot, Leutnant). Darunter Einnahmen,
+// Ausgaben und Verluste als aufklappbare Gruppen mit Summen, ein Tipp auf eine Kategorie zeigt die größten Posten.
+// Dann der Verlauf (Balken je Tag), Pro Spot und Pro Leutnant (ein Tipp setzt den Filter) und die Reichweite der
+// Löhne. Unten hängen andere Module Abschnitte an (Slot 'finance.app', z.B. die Kundschaft). Dazu ein Eintrag in der
+// Suche und ein Hinweis in "Nächster Schritt", wenn die Löhne bald nicht mehr reichen.
 
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import { formatEuro, type GameState, MONEY_CATEGORIES, type MoneyCategory, type MoneyGroup } from '../../../core';
 import {
+  Chip,
+  Disclosure,
   Empty,
   Group,
-  Hint,
   ItemContent,
   List,
   ListItem,
@@ -19,6 +22,8 @@ import {
   registerPhoneApp,
   registerSearch,
   SegmentedControl,
+  Select,
+  type SelectOption,
   Slot,
   SummaryTiles,
   Tag,
@@ -26,16 +31,22 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { getLieutenantIds, lieutenantVeedel } from '../../hierarchy';
-import { getSpot } from '../../spots';
+import { getLieutenantIds } from '../../hierarchy';
+import { getAllSpots, getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
+import { veedelName } from '../../veedel';
 import {
+  ALL_FILTER,
+  balance,
+  balanceHistory,
   type CategoryRow,
   categoryLines,
-  dailyProfits,
-  dayReport,
+  explainReport,
+  type FinanceFilter,
   lieutenantResult,
-  periodReport,
+  PERIODS,
+  type Period,
+  periodSpan,
   type Report,
   spotResults,
   type UnitResult,
@@ -43,7 +54,7 @@ import {
 } from '../index';
 import './finance.css';
 
-export type Period = 'today' | 'yesterday' | 'week';
+export type { Period } from '../index';
 
 declare module '../../../ui' {
   interface PanelRegistry {
@@ -55,31 +66,12 @@ declare module '../../../ui' {
   }
 }
 
-const PERIODS: { value: Period; label: string }[] = [
-  { value: 'today', label: 'Heute' },
-  { value: 'yesterday', label: 'Gestern' },
-  { value: 'week', label: '7 Tage' },
-];
-
-/** Tage und Versatz eines Zeitraums (für die Lese-Funktionen der Kasse). */
-function span(period: Period): { days: number; offset: number } {
-  if (period === 'yesterday') return { days: 1, offset: 1 };
-  if (period === 'week') return { days: 7, offset: 0 };
-  return { days: 1, offset: 0 };
-}
-
-function reportFor(state: GameState, period: Period): Report {
-  if (period === 'today') return dayReport(state, 0);
-  if (period === 'yesterday') return dayReport(state, 1);
-  return periodReport(state, 7);
-}
-
 /** Betrag mit Vorzeichen in der Bedeutungsfarbe (Gewinn grün, Verlust rot). */
-export function Amount(props: { value: number; strong?: boolean }) {
+export function Amount(props: { value: number; strong?: boolean; big?: boolean }) {
   const sign = props.value > 0 ? '+' : props.value < 0 ? '−' : '';
   const cls = props.value > 0 ? 'is-plus' : props.value < 0 ? 'is-minus' : '';
   return (
-    <span class={`fin-amount ${cls} ${props.strong ? 'is-strong' : ''}`}>
+    <span class={`fin-amount ${cls} ${props.strong ? 'is-strong' : ''} ${props.big ? 'is-big' : ''}`}>
       {sign}
       {formatEuro(Math.abs(props.value))}
     </span>
@@ -99,7 +91,51 @@ const ROW_COLOR: Record<MoneyGroup, 'money' | 'warn' | 'danger' | 'system'> = {
   transfer: 'system',
 };
 
-function CategoryList(props: { rows: CategoryRow[]; period: Period }) {
+const PERIOD_LABEL: Record<Period, string> = { today: 'heute', yesterday: 'gestern', week: '7 Tage', month: '30 Tage' };
+
+// --- Filter: ganz Köln, Veedel, Spot, Leutnant (als eine Auswahl, Wert als Text kodiert) ---
+
+function encodeFilter(f: FinanceFilter): string {
+  if (f.kind === 'veedel') return `veedel:${f.veedelId}`;
+  if (f.kind === 'spot') return `spot:${f.spotId}`;
+  if (f.kind === 'lieutenant') return `lieutenant:${f.staffId}`;
+  return 'all';
+}
+
+function decodeFilter(value: string): FinanceFilter {
+  const [kind, id] = value.split(':', 2);
+  if (kind === 'veedel' && id) return { kind, veedelId: id };
+  if (kind === 'spot' && id) return { kind, spotId: id };
+  if (kind === 'lieutenant' && id) return { kind, staffId: id };
+  return ALL_FILTER;
+}
+
+function filterOptions(state: GameState): SelectOption[] {
+  const spots = getAllSpots(state).filter((s) => state.modules.spots.unlocked.includes(s.id));
+  const veedel = [...new Set(spots.map((s) => s.veedelId))].sort((a, b) => veedelName(a).localeCompare(veedelName(b)));
+  const lieutenants = getLieutenantIds(state);
+  return [
+    { value: 'all', label: 'Ganz Köln' },
+    ...veedel.map((id) => ({ value: `veedel:${id}`, label: `Veedel ${veedelName(id)}` })),
+    ...[...spots]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((s) => ({ value: `spot:${s.id}`, label: `Spot ${s.name}` })),
+    ...lieutenants.map((id) => ({
+      value: `lieutenant:${id}`,
+      label: `Leutnant ${getStaffMember(state, id)?.name ?? id}`,
+    })),
+  ];
+}
+
+function filterLabel(state: GameState, f: FinanceFilter): string {
+  if (f.kind === 'veedel') return veedelName(f.veedelId);
+  if (f.kind === 'spot') return getSpot(state, f.spotId)?.name ?? 'Spot';
+  if (f.kind === 'lieutenant') return getStaffMember(state, f.staffId)?.name ?? 'Leutnant';
+  return 'Ganz Köln';
+}
+
+/** Zeilen einer Gruppe (Einnahmen, Ausgaben, Verluste); ein Tipp öffnet die größten Posten (nur für ganz Köln). */
+function CategoryList(props: { rows: CategoryRow[]; period: Period; clickable: boolean }) {
   const ui = useUi();
   return (
     <List>
@@ -107,13 +143,23 @@ function CategoryList(props: { rows: CategoryRow[]; period: Period }) {
         <ListItem
           key={row.category}
           value={<Amount value={row.amount} />}
-          onClick={() => ui.openPanel('finance.category', { category: row.category, period: props.period })}
+          onClick={
+            props.clickable
+              ? () => ui.openPanel('finance.category', { category: row.category, period: props.period })
+              : undefined
+          }
         >
           <ItemContent
             icon={row.icon}
             color={ROW_COLOR[row.group]}
             title={row.label}
-            meta={row.clean !== 0 ? `davon ${formatEuro(Math.abs(row.clean))} sauber` : undefined}
+            tags={[
+              row.clean !== 0 && {
+                label: `${formatEuro(Math.abs(row.clean))} sauber`,
+                icon: 'coinEuro',
+                color: 'money',
+              },
+            ]}
           />
         </ListItem>
       ))}
@@ -121,8 +167,25 @@ function CategoryList(props: { rows: CategoryRow[]; period: Period }) {
   );
 }
 
-/** Gewinn- und Verlustrechnung: Einnahmen, Ausgaben, Verluste, Ergebnis. */
-function ProfitAndLoss(props: { report: Report; period: Period }) {
+/** Kopf der Bilanz: Gewinn groß, darunter ein Satz, warum. */
+function Hero(props: { report: Report; period: Period; filter: FinanceFilter }) {
+  const { state } = useGame();
+  const { report } = props;
+  const tone = report.profit > 0 ? 'is-plus' : report.profit < 0 ? 'is-minus' : '';
+  return (
+    <section class={`fin-hero ${tone}`}>
+      <span class="fin-hero__label">
+        {report.profit < 0 ? 'Verlust' : 'Gewinn'} {PERIOD_LABEL[props.period]}
+        {props.filter.kind === 'all' ? '' : `, ${filterLabel(state, props.filter)}`}
+      </span>
+      <Amount value={report.profit} strong big />
+      <p class="fin-hero__why">{explainReport(report)}</p>
+    </section>
+  );
+}
+
+/** Einnahmen, Ausgaben, Verluste als aufklappbare Gruppen mit Summe. */
+function ProfitAndLoss(props: { report: Report; period: Period; filter: FinanceFilter }) {
   const { report, period } = props;
   const transfers = report.rows.filter((r) => r.group === 'transfer' && r.dirty !== 0);
   if (report.rows.length === 0) {
@@ -137,65 +200,54 @@ function ProfitAndLoss(props: { report: Report; period: Period }) {
       {GROUPS.map((g) => {
         const rows = report.rows.filter((r) => r.group === g.group);
         if (rows.length === 0) return null;
+        const sum = rows.reduce((s, r) => s + r.amount, 0);
         return (
-          <Group key={g.group} title={g.title} icon={g.icon} color={g.color}>
-            <CategoryList rows={rows} period={period} />
+          <Group
+            key={g.group}
+            title={g.title}
+            icon={g.icon}
+            color={g.color}
+            collapsible
+            open={g.group !== 'loss' || rows.length > 0}
+            value={<Amount value={sum} strong />}
+            note={
+              g.group === 'expense' && transfers.length > 0
+                ? `Geldwäsche ist kein Verlust: ${formatEuro(Math.abs(transfers[0].dirty))} Schwarzgeld wurden zu sauberem Geld (ohne Gebühr).`
+                : undefined
+            }
+          >
+            <CategoryList rows={rows} period={period} clickable={props.filter.kind === 'all'} />
           </Group>
         );
       })}
-      <Group
-        title="Ergebnis"
-        icon="chart"
-        color={report.profit >= 0 ? 'money' : 'danger'}
-        note={
-          transfers.length > 0
-            ? `Geldwäsche ist kein Verlust: ${formatEuro(Math.abs(transfers[0].dirty))} Schwarzgeld wurden zu sauberem Geld (ohne Gebühr).`
-            : undefined
-        }
-      >
-        <List>
-          <ListItem value={<Amount value={report.income} />}>
-            <ItemContent icon="trendUp" color="money" title="Einnahmen" />
-          </ListItem>
-          <ListItem value={<Amount value={-(report.expenses + report.losses)} />}>
-            <ItemContent icon="trendDown" color="danger" title="Ausgaben und Verluste" />
-          </ListItem>
-          <ListItem value={<Amount value={report.profit} strong />}>
-            <ItemContent
-              icon={report.profit >= 0 ? 'checkCircle' : 'alertCircle'}
-              color={report.profit >= 0 ? 'money' : 'danger'}
-              title={report.profit >= 0 ? 'Gewinn' : 'Verlust'}
-              meta={report.income > 0 ? `${Math.round((report.profit / report.income) * 100)} % vom Umsatz` : undefined}
-            />
-          </ListItem>
-        </List>
-      </Group>
     </>
   );
 }
 
 /** Verlauf: ein Balken je Tag (Gewinn nach oben, Verlust nach unten). */
-function History() {
+function History(props: { period: Period; filter: FinanceFilter }) {
   const { state } = useGame();
-  const days = dailyProfits(state, 7);
+  const days = balanceHistory(state, props.period, props.filter);
   const max = Math.max(1, ...days.map((d) => Math.abs(d.profit)));
   const hasLoss = days.some((d) => d.profit < 0);
+  const many = days.length > 10;
   return (
     <Group title="Verlauf" icon="chart" color="money" note="Gewinn bzw. Verlust je Spieltag, heute bis jetzt.">
       <div
-        class={`fin-chart ${hasLoss ? 'has-loss' : ''}`}
+        class={`fin-chart ${hasLoss ? 'has-loss' : ''} ${many ? 'is-dense' : ''}`}
         style={{ '--fin-cols': days.length } as JSX.CSSProperties}
         role="img"
         aria-label={days.map((d) => `Tag ${d.day}: ${formatEuro(d.profit)}`).join(', ')}
       >
-        {days.map((d) => {
+        {days.map((d, i) => {
           const style = { '--fin-bar': `${Math.round((Math.abs(d.profit) / max) * 100)}%` } as JSX.CSSProperties;
+          const showLabel = !many || i === 0 || i === days.length - 1 || d.day % 5 === 0;
           return (
             <div key={d.day} class="fin-chart__col">
               <div class="fin-chart__plot">
                 <span class={`fin-chart__bar ${d.profit < 0 ? 'is-minus' : 'is-plus'}`} style={style} />
               </div>
-              <span class="fin-chart__label">T{d.day}</span>
+              <span class="fin-chart__label">{showLabel ? `T${d.day}` : ''}</span>
             </div>
           );
         })}
@@ -204,19 +256,23 @@ function History() {
   );
 }
 
-function unitMeta(r: UnitResult): string {
-  const parts = [`Umsatz ${formatEuro(r.revenue)}`];
-  if (r.goodsCost > 0) parts.push(`Ware ${formatEuro(r.goodsCost)}`);
-  if (r.wages > 0) parts.push(`Löhne ${formatEuro(r.wages)}`);
-  return parts.join(' · ');
+function unitTags(r: UnitResult) {
+  return [
+    { label: `Umsatz ${formatEuro(r.revenue)}`, icon: 'cash', color: 'money' as const },
+    r.goodsCost > 0 && { label: `Ware ${formatEuro(r.goodsCost)}`, icon: 'package', color: 'goods' as const },
+    r.wages > 0 && { label: `Löhne ${formatEuro(r.wages)}`, icon: 'users', color: 'people' as const },
+  ];
 }
 
-/** Ergebnis pro Spot: Umsatz, Wareneinsatz und Löhne der Leute dort. Wer Verlust macht, ist markiert. */
-function PerSpot(props: { period: Period }) {
+/** Ergebnis pro Spot: Umsatz, Wareneinsatz und Löhne der Leute dort. Ein Tipp setzt den Filter auf den Spot. */
+function PerSpot(props: { period: Period; filter: FinanceFilter; onPick: (f: FinanceFilter) => void }) {
   const { state } = useGame();
-  const ui = useUi();
-  const { days, offset } = span(props.period);
-  const rows = spotResults(state, days, offset).filter((r) => r.revenue > 0 || r.wages > 0);
+  const { days, offset } = periodSpan(props.period);
+  let rows = spotResults(state, days, offset).filter((r) => r.revenue > 0 || r.wages > 0);
+  if (props.filter.kind === 'veedel') {
+    const veedelId = props.filter.veedelId;
+    rows = rows.filter((r) => getSpot(state, r.spotId)?.veedelId === veedelId);
+  }
   if (rows.length === 0) return null;
   const worst = rows.find((r) => r.result < 0 && r.wages > 0);
   const worstName = worst ? (getSpot(state, worst.spotId)?.name ?? worst.spotId) : null;
@@ -233,13 +289,15 @@ function PerSpot(props: { period: Period }) {
           <ListItem
             key={r.spotId}
             value={<Amount value={r.result} />}
-            onClick={() => ui.openPanel('spots.spot', { spotId: r.spotId })}
+            active={props.filter.kind === 'spot' && props.filter.spotId === r.spotId}
+            onClick={() => props.onPick({ kind: 'spot', spotId: r.spotId })}
           >
             <ItemContent
               icon={r.result < 0 ? 'alertCircle' : 'pin'}
               color={r.result < 0 ? 'danger' : 'place'}
               title={getSpot(state, r.spotId)?.name ?? r.spotId}
-              meta={unitMeta(r)}
+              meta={veedelName(getSpot(state, r.spotId)?.veedelId ?? '')}
+              tags={unitTags(r)}
             />
           </ListItem>
         ))}
@@ -248,10 +306,9 @@ function PerSpot(props: { period: Period }) {
   );
 }
 
-function PerLieutenant(props: { period: Period }) {
+function PerLieutenant(props: { period: Period; filter: FinanceFilter; onPick: (f: FinanceFilter) => void }) {
   const { state } = useGame();
-  const ui = useUi();
-  const { days, offset } = span(props.period);
+  const { days, offset } = periodSpan(props.period);
   const rows = getLieutenantIds(state)
     .map((staffId) => ({ staffId, ...lieutenantResult(state, staffId, days, offset) }))
     .sort((a, b) => b.result - a.result);
@@ -268,16 +325,14 @@ function PerLieutenant(props: { period: Period }) {
           <ListItem
             key={r.staffId}
             value={<Amount value={r.result} />}
-            onClick={() => {
-              const veedelId = lieutenantVeedel(state, r.staffId);
-              if (veedelId) ui.openPanel('hierarchy.lieutenant', { veedelId });
-            }}
+            active={props.filter.kind === 'lieutenant' && props.filter.staffId === r.staffId}
+            onClick={() => props.onPick({ kind: 'lieutenant', staffId: r.staffId })}
           >
             <ItemContent
               icon="crew"
               color={r.result < 0 ? 'danger' : 'people'}
               title={getStaffMember(state, r.staffId)?.name ?? 'Leutnant'}
-              meta={unitMeta(r)}
+              tags={unitTags(r)}
             />
           </ListItem>
         ))}
@@ -318,37 +373,61 @@ function Runway() {
 function FinanceApp() {
   const { state } = useGame();
   const [period, setPeriod] = useState<Period>('today');
-  const today = dayReport(state, 0);
+  const [filter, setFilter] = useState<FinanceFilter>(ALL_FILTER);
+  const options = filterOptions(state);
+  const encoded = encodeFilter(filter);
+  // Ein Filter auf etwas, das es nicht mehr gibt (gelöschter Spot), fällt auf ganz Köln zurück.
+  const current = options.some((o) => o.value === encoded) ? filter : ALL_FILTER;
+  const report = balance(state, period, current);
   return (
     <div class="fin-app">
       <SummaryTiles
         items={[
           { icon: 'moneyBag', color: 'dirty', value: formatEuro(state.wallet.dirty), label: 'Schwarz' },
           { icon: 'coinEuro', color: 'money', value: formatEuro(state.wallet.clean), label: 'Sauber' },
-          {
-            icon: today.profit >= 0 ? 'trendUp' : 'trendDown',
-            color: today.profit >= 0 ? 'money' : 'danger',
-            value: <Amount value={today.profit} />,
-            label: 'Heute',
-          },
         ]}
       />
+      <div class="fin-controls">
+        <SegmentedControl wide aria-label="Zeitraum" options={[...PERIODS]} value={period} onChange={setPeriod} />
+        <Select
+          wide
+          label="Bilanz für"
+          value={encodeFilter(current)}
+          options={options}
+          onChange={(v) => setFilter(decodeFilter(v))}
+        />
+      </div>
+      <Hero report={report} period={period} filter={current} />
+      {current.kind !== 'all' && (
+        <Disclosure label="Was zählt hier?">
+          Für ein Veedel, einen Spot oder einen Leutnant zeigt die Bilanz den Straßenverkauf dort, den Einkaufspreis der
+          verkauften Ware, die Löhne der Leute vor Ort und einmalige Kosten (Anheuern, Freischalten). Schutzgeld,
+          Gebühren und Verluste bucht die Kasse nur für ganz Köln.
+        </Disclosure>
+      )}
+      <ProfitAndLoss report={report} period={period} filter={current} />
+      <History period={period} filter={current} />
+      <PerSpot
+        period={period}
+        filter={current}
+        onPick={(f) => setFilter(f.kind === current.kind && encodeFilter(f) === encoded ? ALL_FILTER : f)}
+      />
+      <PerLieutenant
+        period={period}
+        filter={current}
+        onPick={(f) => setFilter(encodeFilter(f) === encoded ? ALL_FILTER : f)}
+      />
       <Runway />
-      <SegmentedControl wide aria-label="Zeitraum" options={PERIODS} value={period} onChange={setPeriod} />
-      <ProfitAndLoss report={reportFor(state, period)} period={period} />
-      <History />
-      <PerSpot period={period} />
-      <PerLieutenant period={period} />
       <Slot name="finance.app" />
     </div>
   );
 }
 
-/** Buchungen einer Kategorie im Zeitraum (zusammengefasst nach Buchungstext). */
+/** Buchungen einer Kategorie im Zeitraum (zusammengefasst nach Buchungstext, größte zuerst). */
 function CategoryPanel(props: { category: MoneyCategory; period: Period }) {
   const { state } = useGame();
   const info = MONEY_CATEGORIES[props.category];
-  const { days, offset } = span(props.period);
+  const { days, offset } = periodSpan(props.period);
   const lines = categoryLines(state, props.category, days, offset);
   const total = lines.reduce((sum, l) => sum + l.amount, 0);
   const label = PERIODS.find((p) => p.value === props.period)?.label ?? '';
@@ -361,27 +440,34 @@ function CategoryPanel(props: { category: MoneyCategory; period: Period }) {
         ]}
       />
       {lines.length === 0 ? (
-        <Empty icon={info.icon}>Keine Buchungen in diesem Zeitraum.</Empty>
+        <Empty icon={info.icon}>
+          {props.period === 'month'
+            ? 'Keine einzelnen Buchungen mehr: Die Kasse merkt sich Buchungstexte nur sieben Tage.'
+            : 'Keine Buchungen in diesem Zeitraum.'}
+        </Empty>
       ) : (
-        <Group title="Buchungen" icon={info.icon} color={ROW_COLOR[info.group]} count={lines.length}>
+        <Group
+          title="Größte Posten"
+          icon={info.icon}
+          color={ROW_COLOR[info.group]}
+          count={lines.length}
+          note={props.period === 'month' ? 'Einzelne Buchungen gibt es nur für die letzten sieben Tage.' : undefined}
+        >
           <List>
             {lines.map((l) => (
               <ListItem key={l.reason} value={<Amount value={l.amount} />}>
-                <ItemContent
-                  icon={info.icon}
-                  color={ROW_COLOR[info.group]}
-                  title={l.reason}
-                  meta={l.count === 1 ? 'einmal' : `${l.count}-mal`}
-                />
+                <ItemContent icon={info.icon} color={ROW_COLOR[info.group]} title={l.reason}>
+                  <Chip icon="refresh">{l.count === 1 ? 'einmal' : `${l.count}-mal`}</Chip>
+                </ItemContent>
               </ListItem>
             ))}
           </List>
         </Group>
       )}
       {props.category === 'wages.jail' && (
-        <Hint icon="jail">
+        <Disclosure label="Was ist Stillhaltegeld?" icon="jail">
           Stillhaltegeld zahlst du, damit Leute in Haft den Mund halten. Abstellen geht in ihrer Akte.
-        </Hint>
+        </Disclosure>
       )}
     </div>
   );
@@ -414,9 +500,9 @@ registerSearch({
     {
       id: 'finance.app',
       title: 'Kasse',
-      subtitle: 'Gewinn- und Verlustrechnung, Löhne, Ergebnis pro Spot',
+      subtitle: 'Bilanz: Gewinn, Einnahmen, Ausgaben, pro Veedel, Spot und Leutnant',
       icon: 'cash',
-      keywords: 'Bilanz Gewinn Verlust Umsatz Löhne Geld Ausgaben Einnahmen',
+      keywords: 'Bilanz Gewinn Verlust Umsatz Löhne Geld Ausgaben Einnahmen Tagesbilanz Wochenbilanz',
       run: openFinance,
     },
   ],
