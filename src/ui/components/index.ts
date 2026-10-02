@@ -90,3 +90,4 @@ export { Stepper, type StepperProps } from './Stepper';
 export { type SwipeAction, SwipeRow, type SwipeRowProps } from './SwipeRow';
 export { SectionContext, type SectionMode } from './section';
 export { type TabItem, Tabs, type TabsProps } from './Tabs';
+export { TextField, type TextFieldProps } from './TextField';

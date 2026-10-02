@@ -12,8 +12,10 @@ Ruf · Reviere und aufklappbarem Lager). Auftrag 28: Spots in jedem Veedel, kein
 Aufträge aus und hat Aufgaben mit Stufen (`hierarchy/tasks.ts`); Nachrichten tragen `routine` (Rechte Hand darf antworten)
 oder sind Chefsache. Auftrag 27: Kasse als Bilanz (Zeitraum, Filter Köln/Veedel/Spot/Leutnant, `balance`), Geldwäsche mit
 drei Wegen (`laundering/config.ts`), mehr Bewerber und Rumfragen mit Rollenwahl, Gangs-Kopf mit Stärke, Optik-Regeln in den
-Bausteinen (Chips statt „a · b“, Gruppen mit Unterlage, `Disclosure`, kein Umbruch im Wort). Wie alles zusammenspielt:
-`docs/architektur.md`, Abschnitt "Zusammenspiel der Systeme".
+Bausteinen (Chips statt „a · b“, Gruppen mit Unterlage, `Disclosure`, kein Umbruch im Wort). Auftrag 29: Quests von Peter
+(`quests`, Karte unter Geld und Heat im HUD, HUD-Platz `'below'`), Intro mit Spielername beim ersten Start (`src/ui/player.ts`),
+gemeinsame Bestenliste (`leaderboard`, Server `api/leaderboard.ts` auf Vercel mit Upstash Redis, lokal aus).
+Wie alles zusammenspielt: `docs/architektur.md`, Abschnitt "Zusammenspiel der Systeme".
 
 ## Architektur in Kürze
 

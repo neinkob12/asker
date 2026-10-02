@@ -1,0 +1,60 @@
+/* Bestenliste: im Game-Over-Bildschirm und als Seite im Handy. */
+
+.lb {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+.lb__me {
+  margin: 0;
+  text-align: center;
+  color: var(--color-muted);
+}
+.lb__me strong {
+  color: var(--color-accent);
+  font-size: 1.2em;
+}
+.lb__loading {
+  margin: 0;
+  text-align: center;
+  color: var(--color-muted);
+}
+.lb__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.lb__rank {
+  flex: none;
+  width: 2ch;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+  text-align: right;
+  color: var(--color-muted);
+}
+.lb__row.is-me .lb__rank,
+.lb__row.is-me .ui-item__title {
+  color: var(--color-accent);
+}
+.lb-ending {
+  width: 100%;
+}
+.lb-ending__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+.lb-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.lb-settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

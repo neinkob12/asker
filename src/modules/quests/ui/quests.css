@@ -1,0 +1,219 @@
+/* Quest-Karte unter Geld und Heat (Look "Glas"): dunkles Glas, Barlow, Gold für die Quest. */
+
+.quest-hud {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 300px;
+  max-width: 100%;
+  padding: var(--space-3) var(--space-4) var(--space-3);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  animation: pop-in var(--duration-slow) var(--ease-out);
+}
+
+.hud-label.is-quest {
+  color: var(--hud-gold);
+}
+
+.quest-hud__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 24px;
+}
+
+.quest-hud__icon-btn,
+.quest-hud__main,
+.quest-hud__link,
+.quest-hud--mini {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.quest-hud__icon-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-right: -6px;
+  border-radius: 50%;
+  color: var(--hud-ink-2);
+}
+.quest-hud__icon-btn:hover {
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink);
+}
+
+.quest-hud__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: left;
+  border-radius: var(--hud-radius-button);
+}
+
+.quest-hud__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.quest-hud__title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  hyphens: none;
+}
+
+.quest-hud__hint {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--hud-ink-2);
+}
+
+.quest-hud__go {
+  flex: none;
+  color: var(--hud-ink-2);
+  transition:
+    transform var(--duration) var(--ease-out),
+    color var(--duration) var(--ease-out);
+}
+.quest-hud__main:hover .quest-hud__go {
+  transform: translateX(2px);
+  color: var(--hud-gold);
+}
+
+.quest-hud__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.quest-hud__bar {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hud-empty);
+  overflow: hidden;
+}
+
+.quest-hud__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--hud-gold);
+  transition: width var(--duration-slow) var(--ease-out);
+}
+
+.quest-hud__count {
+  font-family: var(--font-hud-display);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.quest-hud__reward {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--hud-radius-button);
+  background: var(--hud-glass-fill);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hud-gold);
+}
+
+.quest-hud__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.quest-hud__link {
+  min-height: 28px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--hud-ink);
+}
+.quest-hud__link.is-faint {
+  color: var(--hud-ink-2);
+}
+.quest-hud__link:hover {
+  text-decoration: underline;
+}
+
+/* Eingeklappt: eine Zeile mit Ziel und Stand */
+.quest-hud--mini {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 300px;
+  min-height: 40px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  font-size: 13px;
+  font-weight: 600;
+}
+.quest-hud--mini > .ui-icon:first-child {
+  color: var(--hud-gold);
+}
+.quest-hud__mini-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Handy-Bildschirm: volle Breite, kompakter */
+@media (max-width: 760px) {
+  .quest-hud,
+  .quest-hud--mini {
+    width: 100%;
+    max-width: none;
+  }
+  .quest-hud {
+    gap: 6px;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--hud-radius-tile);
+  }
+  .quest-hud__hint,
+  .quest-hud__foot {
+    display: none;
+  }
+}
+
+.quest-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.quest-list__title {
+  display: flex;
+  justify-content: center;
+}

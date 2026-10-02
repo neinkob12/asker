@@ -15,6 +15,8 @@ export { HAPTIC_PATTERNS, type HapticKind, haptic } from './haptics';
 export { useGame, useSession, useUi } from './hooks';
 export { islandCountdown } from './phone/islandModel';
 export { PhoneScreen, type PhoneScreenProps } from './phone/PhoneScreen';
+/** Handy-Aufbau (≤ 760 px): Module zeigen dann z.B. Blätter statt Dialogen über der Karte. */
+export { cleanPlayerName, getPlayerName, PLAYER_NAME_MAX, setPlayerName } from './player';
 export {
   type Advice,
   type Advisor,
@@ -63,7 +65,6 @@ export type {
   UiApi,
   UiState,
 } from './runtime';
-/** Handy-Aufbau (≤ 760 px): Module zeigen dann z.B. Blätter statt Dialogen über der Karte. */
 export { useIsMobile } from './shell/layout';
 export { Slot } from './shell/Slot';
 export { type SoundOnEventOptions, soundOnEvent } from './sound';

@@ -1921,3 +1921,29 @@
 .ui-item__main > .ui-tag {
   align-self: flex-start;
 }
+
+/* Textfeld (TextField) */
+.ui-textfield {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.ui-textfield__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-muted);
+}
+.ui-textfield__input {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 17px;
+}
+.ui-textfield__input:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
