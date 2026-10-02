@@ -466,7 +466,7 @@ export function migrateRecruitingV1(old: RecruitingStateV1, state: GameState): R
 
 export default defineModule({
   id: 'recruiting',
-  version: 2,
+  version: 3,
   dependsOn: ['staff', 'territory', 'reputation'],
   init: (ctx) => {
     const state: RecruitingState = { candidates: [], nextPoolAt: 0, searchReadyAt: 0 };
@@ -500,5 +500,13 @@ export default defineModule({
       if (from === 'jailed' && to === 'active') maybeJailContact(ctx, staffId);
     },
   },
-  migrations: { 2: migrateRecruitingV1 },
+  migrations: {
+    2: migrateRecruitingV1,
+    // Version 3 (Auftrag 28): Kurier-Bewerber gibt es nicht mehr. Wer einen aus einem alten Spielstand einstellte, hatte
+    // jemanden, der nirgends arbeiten kann und trotzdem Lohn kostet.
+    3: (old: RecruitingState): RecruitingState => ({
+      ...old,
+      candidates: old.candidates.filter((c) => c.role !== 'courier'),
+    }),
+  },
 });

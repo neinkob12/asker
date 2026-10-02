@@ -118,7 +118,13 @@ function ProfileActions(props: { member: StaffMember }) {
   const m = props.member;
   const [confirmFire, setConfirmFire] = useState(false);
   const isLieutenant = m.assignment?.kind === 'veedel' || m.returnTo?.kind === 'veedel';
-  const canMove = (m.role === 'runner' || m.role === 'security') && m.status === 'active' && !isLieutenant;
+  // Die Rechte Hand (Büro, auch auf einer Lieferung) und wer gerade auf Fahrt ist, wird nicht versetzt.
+  const busy =
+    m.assignment?.kind === 'office' ||
+    m.returnTo?.kind === 'office' ||
+    m.assignment?.kind === 'delivery' ||
+    m.assignment?.kind === 'transport';
+  const canMove = (m.role === 'runner' || m.role === 'security') && m.status === 'active' && !isLieutenant && !busy;
   const cost = m.status === 'jailed' ? bailCost(state, m.id) : 0;
   return (
     <section class="staff-file__section staff-file__actions">

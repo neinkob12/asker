@@ -58,6 +58,7 @@ import {
   XP_PER_ENCOUNTER,
   XP_PER_SALE,
   XP_PER_SALE_UNIT,
+  XP_SALE_UNITS_MAX,
 } from './config';
 import { addLoyalty, addXp, bailCost, getStaff, getStaffMember, setStatus, staffContact } from './members';
 import { STAT_KEYS } from './profile';
@@ -344,7 +345,7 @@ export default defineModule({
       if (!m || m.leftAt !== null) return;
       m.record.sales += 1;
       m.record.revenue += revenue;
-      addXp(ctx, m.id, XP_PER_SALE + XP_PER_SALE_UNIT * amount);
+      addXp(ctx, m.id, XP_PER_SALE + XP_PER_SALE_UNIT * Math.min(amount, XP_SALE_UNITS_MAX));
     },
     'encounter.resolved': (ctx, { request, outcome }) => {
       for (const staffId of request.staffIds ?? []) {

@@ -23,9 +23,11 @@ import {
   bonusProvider,
   enlist,
   expectedWage,
+  freeStaff,
   getStaffMember,
   isAbsent,
   isEmployed,
+  placeVeedel,
   removeMember,
   roleName,
   runnerHireCost,
@@ -80,19 +82,25 @@ export function hireDriver(ctx: Ctx): CommandResult {
   return { ok: true, data: { staffId: member.id } };
 }
 
-export function fire(ctx: Ctx, staffId: string, meta: CommandMeta = { actor: 'player' }): CommandResult {
+/**
+ * Entlassen. Wer redet, macht Heat in seinem Veedel: dem des Einsatzes, sonst dem des Platzes, an den er zurückkehrt
+ * (Haft, verletzt) oder dem übergebenen (veedelId, wenn der Platz schon neu besetzt wurde).
+ */
+export function fire(
+  ctx: Ctx,
+  staffId: string,
+  meta: CommandMeta = { actor: 'player' },
+  veedelId: string | null = null,
+): CommandResult {
   const member = getStaffMember(ctx.state, staffId);
   if (!member || !isEmployed(ctx.state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
-  const place = member.assignment ?? member.returnTo;
-  const veedelId =
-    staffVeedel(ctx.state, member) ??
-    (place?.kind === 'spot' ? (getSpot(ctx.state, place.targetId)?.veedelId ?? null) : (place?.targetId ?? null));
+  const talkVeedel = veedelId ?? staffVeedel(ctx.state, member) ?? placeVeedel(ctx.state, member.returnTo);
   // Vor dem Entlassen bestimmen: Wer in Haft ohne Stillhaltegeld sitzt, redet eher.
   const chance = talkChance(member);
   removeMember(ctx, staffId, 'fired');
   const by = meta.actor === 'player' ? '' : ` (von ${actorName(ctx, meta.actor)})`;
   journal.add(ctx, `${member.name} entlassen${by}.`, 'info', { staffId });
-  afterFired(ctx, member, veedelId, chance);
+  afterFired(ctx, member, talkVeedel, chance);
   return { ok: true };
 }
 
@@ -135,16 +143,14 @@ export function replaceAbsent(ctx: Ctx, staffId: string, fireToo: boolean, meta:
   const spot = getSpot(ctx.state, spotId);
   if (!spot || !isSpotActive(ctx.state, spotId)) {
     m.returnTo = null;
-    return fireToo ? fire(ctx, staffId, meta) : { ok: true };
+    return fireToo ? fire(ctx, staffId, meta, spot?.veedelId ?? null) : { ok: true };
   }
   let replacementId: string | null = null;
   const occupied = m.role === 'runner' ? activeRunnerAt(ctx.state, spotId) : securityAt(ctx.state, { spotId })[0];
   if (occupied) {
     replacementId = occupied.id;
   } else {
-    const free = ctx.state.modules.staff.members
-      .filter((o) => o.role === m.role && o.status === 'active' && !o.assignment)
-      .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id))[0];
+    const free = freeStaff(ctx.state, m.role)[0];
     if (free) {
       assign(ctx, free.id, { kind: 'spot', targetId: spotId });
       replacementId = free.id;
@@ -164,7 +170,8 @@ export function replaceAbsent(ctx: Ctx, staffId: string, fireToo: boolean, meta:
     staffId,
     spotId,
   });
-  if (fireToo) fire(ctx, staffId, meta);
+  // Das Veedel kommt vom Spot: returnTo ist schon geleert, und wer rausfliegt, redet eher.
+  if (fireToo) fire(ctx, staffId, meta, spot.veedelId);
   return { ok: true, data: { staffId: replacementId } };
 }
 
@@ -180,6 +187,10 @@ export function assignCommand(ctx: Ctx, staffId: string, assignment: StaffAssign
   }
   if (m.status === 'jailed') return { ok: false, reason: `${m.name} sitzt in Haft.` };
   if (m.status === 'injured') return { ok: false, reason: `${m.name} ist verletzt.` };
+  // Auf einer Fahrt oder Lieferung wird niemand abgezogen oder versetzt (sonst fährt er doppelt oder die Ladung ist weg).
+  if (m.assignment?.kind === 'delivery' || m.assignment?.kind === 'transport') {
+    return { ok: false, reason: `${m.name} ist gerade unterwegs.` };
+  }
   if (!assignment) {
     if (!m.assignment) return { ok: true };
     assign(ctx, staffId, null);
@@ -245,7 +256,7 @@ export function bail(ctx: Ctx, staffId: string, meta: CommandMeta): CommandResul
   addCareer(ctx, staffId, `Gegen ${formatEuro(cost)} Kaution rausgeholt.`);
   const lawyer = bonusProvider(ctx.state, 'bailDiscount');
   if (lawyer) addXp(ctx, lawyer.id, XP_PER_BAIL);
-  const by = meta.actor === 'player' ? '' : ' (vom Leutnant bezahlt)';
+  const by = meta.actor === 'player' ? '' : ` (${actorName(ctx, meta.actor)} hat gezahlt)`;
   journal.add(ctx, `${m.name} gegen ${formatEuro(cost)} Kaution rausgeholt${by}.`, 'good', { staffId });
   ctx.emit('staff.bailed', { staffId, cost });
   return { ok: true, data: { cost } };

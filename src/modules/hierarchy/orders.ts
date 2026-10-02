@@ -54,6 +54,40 @@ export function checkOrderRule(state: GameState, rule: OrderRule): CommandResult
   return { ok: true };
 }
 
+/** Nächste freie Regel-ID ("r1", "r2" …). */
+export function nextRuleId(rules: readonly OrderRule[]): string {
+  let n = rules.length + 1;
+  while (rules.some((r) => r.id === `r${n}`)) n++;
+  return `r${n}`;
+}
+
+/**
+ * Bestellregeln aus einer Einstellung übernehmen (Leutnant und Rechte Hand): nur bekannte Felder, eindeutige IDs,
+ * keine Pause, jede Regel geprüft. So landen weder Fremdfelder noch doppelte IDs im Spielstand.
+ */
+export function normalizeOrderRules(
+  state: GameState,
+  raw: readonly OrderRule[],
+): { ok: true; rules: OrderRule[] } | { ok: false; reason: string } {
+  const rules: OrderRule[] = [];
+  for (const r of raw) {
+    const rule: OrderRule = {
+      id: r.id || nextRuleId(rules),
+      productId: r.productId ?? null,
+      supplierId: r.supplierId ?? null,
+      packageId: r.packageId ?? null,
+      minStock: r.minStock,
+      warehouseId: r.warehouseId ?? null,
+      paused: null,
+    };
+    if (rules.some((x) => x.id === rule.id)) rule.id = nextRuleId(rules);
+    const check = checkOrderRule(state, rule);
+    if (!check.ok) return check;
+    rules.push(rule);
+  }
+  return { ok: true, rules };
+}
+
 /** Ziel-Lager einer Regel: das gewählte (wenn es noch dir gehört), sonst das Lager seiner Spots. */
 export function ruleWarehouse(state: GameState, rule: OrderRule, home: string | null): string | null {
   if (rule.warehouseId && getWarehouse(state, rule.warehouseId)) return rule.warehouseId;

@@ -108,17 +108,39 @@ export function findAvailable(state: GameState, filter: { role: StaffRole }): St
   return state.modules.staff.members.find((m) => m.role === filter.role && m.status === 'active' && !m.assignment);
 }
 
-/** Veedel, in dem jemand eingesetzt ist (Spot, Lager oder als Leutnant), sonst null. */
-export function staffVeedel(state: GameState, member: StaffMember): string | null {
-  const a = member.assignment;
-  if (!a) return null;
-  if (a.kind === 'spot') return getSpot(state, a.targetId)?.veedelId ?? null;
-  if (a.kind === 'veedel') return a.targetId;
-  if (a.kind === 'warehouse') {
-    const w = getWarehouse(state, a.targetId);
+/** Wer nach dem Abtauchen an seinen Platz zurück soll, steht anderen nicht zur Verfügung (sonst fehlt er dort später). */
+function reservedForReturn(state: GameState): Set<string> {
+  const ids = new Set<string>();
+  for (const hiding of Object.values(state.modules.staff.hiding)) for (const r of hiding.returns) ids.add(r.staffId);
+  return ids;
+}
+
+/**
+ * Freie Leute einer Rolle für Spots (aktiv, ohne Einsatz, nicht fürs Zurückkehren nach dem Abtauchen vorgemerkt), die
+ * besten zuerst. Eine Stelle für alle, die jemanden hinstellen: Spieler, Leutnants, Rechte Hand, Ersatz bei Ausfall.
+ */
+export function freeStaff(state: GameState, role: StaffRole): StaffMember[] {
+  const reserved = reservedForReturn(state);
+  return state.modules.staff.members
+    .filter((m) => m.role === role && m.status === 'active' && !m.assignment && !reserved.has(m.id))
+    .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id));
+}
+
+/** Veedel eines Einsatzortes (Spot, Lager oder Veedel eines Leutnants), sonst null (Büro, Fahrt, Lieferung). */
+export function placeVeedel(state: GameState, place: StaffAssignment | null | undefined): string | null {
+  if (!place) return null;
+  if (place.kind === 'spot') return getSpot(state, place.targetId)?.veedelId ?? null;
+  if (place.kind === 'veedel') return place.targetId;
+  if (place.kind === 'warehouse') {
+    const w = getWarehouse(state, place.targetId);
     return w ? (veedelAt(w.lng, w.lat)?.id ?? null) : null;
   }
   return null;
+}
+
+/** Veedel, in dem jemand eingesetzt ist (Spot, Lager oder als Leutnant), sonst null. */
+export function staffVeedel(state: GameState, member: StaffMember): string | null {
+  return placeVeedel(state, member.assignment);
 }
 
 export function isSpecialist(role: StaffRole): boolean {
@@ -143,7 +165,8 @@ export function expectedWage(state: GameState, id: string): number {
 /** Kategorie des Lohns in der Kasse: nach Rolle, Leutnants und Rechte Hand extra. */
 export function wageCategory(member: StaffMember): MoneyCategory {
   const post = member.assignment ?? member.returnTo;
-  if (post?.kind === 'veedel' || post?.kind === 'office') return 'wages.lead';
+  // Lieferungen fährt nur die Rechte Hand: Ihr Lohn bleibt auch auf der Fahrt ein Lohn der Führung.
+  if (post?.kind === 'veedel' || post?.kind === 'office' || post?.kind === 'delivery') return 'wages.lead';
   if (member.role === 'runner') return 'wages.runner';
   if (member.role === 'security') return 'wages.security';
   if (member.role === 'courier' || member.role === 'driver') return 'wages.transport';

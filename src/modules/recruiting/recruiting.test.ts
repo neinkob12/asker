@@ -224,4 +224,19 @@ describe('recruiting: Spielstände aus dem Fundament', () => {
     loaded.advance(60);
     expect(getPool(loaded.state).length).toBeGreaterThan(1);
   });
+
+  it('Version 2 → 3: Kurier-Bewerber aus alten Spielständen fallen weg, alle anderen bleiben', () => {
+    const sim = quietGame();
+    const state = structuredClone(sim.state) as GameState;
+    const pool = getPool(state);
+    const keep = pool[0];
+    const courier = { ...keep, id: 'alt-kurier', role: 'courier' };
+    (state.modules.recruiting as { candidates: unknown[] }).candidates = [courier, keep];
+    state.moduleVersions.recruiting = 2;
+    const file = parseSaveFile(serializeSave(createSaveFile(state, 'alt', 0)));
+    const loaded = loadSimulation(file.state, sim.modules);
+    expect(getCandidate(loaded.state, 'alt-kurier')).toBeUndefined();
+    expect(getCandidate(loaded.state, keep.id)).toBeDefined();
+    expect(loaded.state.moduleVersions.recruiting).toBe(3);
+  });
 });

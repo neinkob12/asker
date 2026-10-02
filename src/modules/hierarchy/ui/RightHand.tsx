@@ -10,6 +10,7 @@ import {
   Button,
   Empty,
   Group,
+  Hint,
   ItemContent,
   List,
   ListItem,
@@ -52,6 +53,7 @@ import {
   rightHandRank,
   rightHandRankProgress,
   rightHandSatisfaction,
+  taskIdleReason,
 } from '../index';
 
 declare module '../../../ui' {
@@ -429,6 +431,7 @@ function RightHandPage() {
         {RIGHT_HAND_TASKS.map((t) => {
           const unlocked = isTaskUnlocked(state, t.key);
           const on = rh.settings[t.key];
+          const idle = unlocked && on ? taskIdleReason(state, t.key) : null;
           return (
             <div key={t.key} class="rh-task">
               <Toggle
@@ -439,6 +442,7 @@ function RightHandPage() {
                 disabled={!unlocked}
                 onChange={(v) => configure({ [t.key]: v })}
               />
+              {unlocked && on && idle && <Hint icon="clock">{idle}</Hint>}
               {unlocked && on && (
                 <List>
                   <TaskRule task={t.key} settings={rh.settings} configure={configure} />

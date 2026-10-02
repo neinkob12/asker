@@ -44,6 +44,7 @@ import {
   getStaff,
   getStaffMember,
   isEmployed,
+  isLyingLow,
   isSpecialist,
   roleName,
   type StaffMember,
@@ -77,12 +78,13 @@ import {
   TICK_EVERY,
   TRAINING_XP,
 } from './config';
-import { checkOrderRule } from './orders';
+import { nextRuleId, normalizeOrderRules } from './orders';
 import {
   appointRightHand,
   configureRightHand,
   dismissRightHand,
   emptyDone,
+  isRightHand,
   onRightHandAssigned,
   onRightHandLeft,
   onRightHandStatus,
@@ -154,7 +156,7 @@ export {
   rightHandSkim,
   rightHandSpeedFactor,
 } from './righthand';
-export { describeDone, mainWarehouseId, restockBudgetLeft } from './tasks';
+export { describeDone, mainWarehouseId, restockBudgetLeft, taskIdleReason } from './tasks';
 export type * from './types';
 
 /** Settings-Änderung: wie die Einstellungen, dazu der alte Mindestbestand (wird zur Regel "automatisch"). */
@@ -279,13 +281,37 @@ export function teamOf(state: GameState, staffId: string): StaffMember[] {
     if (m.id === staffId) return false;
     const place = m.assignment ?? m.returnTo;
     if (place?.kind === 'spot' && post.spotIds.includes(place.targetId)) return true;
-    return post.team.includes(m.id);
+    // Wen er selbst angeheuert hat, solange die Person nicht selbst führt (Leutnant, Rechte Hand).
+    return post.team.includes(m.id) && !isLieutenant(state, m.id) && !isRightHand(state, m.id);
   });
+}
+
+/** Wer selbst führt (Leutnant, Rechte Hand), gehört zu keinem Team mehr, und kein Leutnant behandelt seinen Ausfall. */
+export function releaseFromTeams(state: GameState, staffId: string): void {
+  for (const post of Object.values(state.modules.hierarchy.posts)) {
+    post.team = post.team.filter((id) => id !== staffId);
+    delete post.absences[staffId];
+  }
+}
+
+/**
+ * Ist das Veedel gerade von der Straße? Entweder nach einer Warnung vor einer Razzia (staff) oder weil ein Leutnant
+ * es wegen Heat geräumt hat. Wer jemanden an einen Spot dort stellen will, fragt hier.
+ */
+export function isVeedelHidden(state: GameState, veedelId: string): boolean {
+  return isLyingLow(state, veedelId) || getLieutenants(state).some((p) => p.lyingLow.includes(veedelId));
+}
+
+/** Wartet der Leutnant dieser Person auf ihre Rückkehr (dann bleibt ihr Platz frei und der Spieler wird gefragt)? */
+export function waitsForReturn(state: GameState, staffId: string): boolean {
+  const lead = teamLeadOf(state, staffId);
+  return !!lead && lead !== staffId && getPost(state, lead)?.settings.onAbsent === 'wait';
 }
 
 /** Zu welchem Leutnant gehört die Person (für Übersicht und Kasse)? Der Leutnant selbst gehört zu sich. */
 export function teamLeadOf(state: GameState, staffId: string): string | null {
   if (isLieutenant(state, staffId)) return staffId;
+  if (isRightHand(state, staffId)) return null;
   const m = getStaffMember(state, staffId);
   const place = m?.assignment ?? m?.returnTo;
   if (place?.kind === 'spot') {
@@ -308,7 +334,10 @@ export function canBeLieutenant(state: GameState, staffId: string): CommandResul
   const m = getStaffMember(state, staffId);
   if (!m || !isEmployed(state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
   if (isSpecialist(m.role)) return { ok: false, reason: `${roleName(m.role)} führen keine Spots.` };
-  if (m.assignment?.kind === 'office') return { ok: false, reason: `${m.name} ist deine Rechte Hand.` };
+  // Auch auf einer Lieferfahrt (Einsatz 'delivery') bleibt sie die Rechte Hand.
+  if (m.assignment?.kind === 'office' || isRightHand(state, staffId)) {
+    return { ok: false, reason: `${m.name} ist deine Rechte Hand.` };
+  }
   if (m.status !== 'active') return { ok: false, reason: `${m.name} ist gerade nicht einsatzbereit.` };
   if (m.level < LIEUTENANT_MIN_LEVEL) {
     return { ok: false, reason: `${m.name} braucht mindestens Level ${LIEUTENANT_MIN_LEVEL}.` };
@@ -474,6 +503,8 @@ function appoint(ctx: Ctx, staffId: string, spotIds: string[] | undefined, veede
   // Wer bisher an einem Spot stand, räumt ihn: Er führt jetzt, statt selbst zu stehen (Einsatz 'veedel').
   const post = newPost(ctx, staffId, chosen);
   ctx.state.modules.hierarchy.posts[staffId] = post;
+  // Er gehörte vielleicht zum Team eines anderen Leutnants (angeheuert): Der darf ihn nicht mehr entlassen.
+  releaseFromTeams(ctx.state, staffId);
   syncLieutenant(ctx, post);
   // Beförderung: mehr Lohn (auf den neuen Anspruch) und ein Loyalitätsschub.
   setWage(ctx, staffId, Math.max(m.wage, expectedWage(ctx.state, staffId)));
@@ -546,15 +577,15 @@ function configure(ctx: Ctx, staffId: string | null, patch: SettingsPatch, meta:
     next.hireBudgetPerDay = Math.round(patch.hireBudgetPerDay);
   }
   if (patch.priceLevel !== undefined) {
-    if (!(patch.priceLevel in PRICE_LEVELS)) return { ok: false, reason: 'Unbekanntes Preisniveau.' };
+    if (!Object.hasOwn(PRICE_LEVELS, patch.priceLevel)) return { ok: false, reason: 'Unbekanntes Preisniveau.' };
     next.priceLevel = patch.priceLevel;
   }
   if (patch.caution !== undefined) {
-    if (!(patch.caution in CAUTION_LEVELS)) return { ok: false, reason: 'Unbekannte Vorsicht.' };
+    if (!Object.hasOwn(CAUTION_LEVELS, patch.caution)) return { ok: false, reason: 'Unbekannte Vorsicht.' };
     next.caution = patch.caution;
   }
   if (patch.onAbsent !== undefined) {
-    if (!(patch.onAbsent in ABSENT_POLICIES)) return { ok: false, reason: 'Unbekannte Regel für Ausfälle.' };
+    if (!Object.hasOwn(ABSENT_POLICIES, patch.onAbsent)) return { ok: false, reason: 'Unbekannte Regel für Ausfälle.' };
     next.onAbsent = patch.onAbsent;
   }
   if (patch.absentDays !== undefined) {
@@ -567,22 +598,9 @@ function configure(ctx: Ctx, staffId: string | null, patch: SettingsPatch, meta:
     if (!Array.isArray(patch.orderRules) || patch.orderRules.length > MAX_ORDER_RULES) {
       return { ok: false, reason: `Höchstens ${MAX_ORDER_RULES} Bestellregeln.` };
     }
-    const rules: OrderRule[] = [];
-    for (const raw of patch.orderRules) {
-      const rule: OrderRule = {
-        id: raw.id || nextRuleId(rules),
-        productId: raw.productId ?? null,
-        supplierId: raw.supplierId ?? null,
-        packageId: raw.packageId ?? null,
-        minStock: raw.minStock,
-        warehouseId: raw.warehouseId ?? null,
-        paused: null,
-      };
-      if (rules.some((r) => r.id === rule.id)) rule.id = nextRuleId(rules);
-      const check = checkOrderRule(ctx.state, rule);
-      if (!check.ok) return check;
-      rules.push(rule);
-    }
+    const normalized = normalizeOrderRules(ctx.state, patch.orderRules);
+    if (!normalized.ok) return normalized;
+    const rules = normalized.rules;
     next.orderRules = rules;
     // Die letzte Einstellung des Spielers ist die Vorlage für neue Leutnants.
     if (meta.actor === 'player') ctx.state.modules.hierarchy.orderTemplate = cloneRules(rules);
@@ -600,12 +618,6 @@ function configure(ctx: Ctx, staffId: string | null, patch: SettingsPatch, meta:
 
 function cloneRulesKeepPause(rules: readonly OrderRule[]): OrderRule[] {
   return rules.map((r) => ({ ...r }));
-}
-
-function nextRuleId(rules: readonly OrderRule[]): string {
-  let n = rules.length + 1;
-  while (rules.some((r) => r.id === `r${n}`)) n++;
-  return `r${n}`;
 }
 
 /** Um Mitternacht: Spots aufräumen, Zufriedenheit auswerten, Beschwerden, Umsatz-Zähler weiterschieben. */
@@ -834,10 +846,7 @@ export default defineModule({
     // Wer geht, ist auch kein Leutnant (bzw. keine Rechte Hand) mehr und fällt aus jedem Team.
     'staff.left': (ctx, { staffId }) => {
       const h = ctx.state.modules.hierarchy;
-      for (const post of Object.values(h.posts)) {
-        post.team = post.team.filter((id) => id !== staffId);
-        delete post.absences[staffId];
-      }
+      releaseFromTeams(ctx.state, staffId);
       if (h.posts[staffId]) {
         const veedelId = lieutenantVeedel(ctx.state, staffId) ?? '';
         delete h.posts[staffId];
@@ -862,6 +871,8 @@ export default defineModule({
         if (text) own.log.unshift({ time: ctx.now, text });
         if (to === 'active') own.nextActionAt = ctx.now;
       }
+      // Wer zurück ist, ist kein Ausfall mehr, auch wenn er inzwischen woanders steht (sonst gilt später der alte Eintrag).
+      if (to === 'active') for (const p of getLieutenants(ctx.state)) delete p.absences[staffId];
       // Ausfälle im Team merken (seit wann), damit der Leutnant nach seinen Regeln handeln kann.
       const lead = teamLeadOf(ctx.state, staffId);
       const post = lead && lead !== staffId ? getPost(ctx.state, lead) : undefined;
@@ -869,8 +880,6 @@ export default defineModule({
       if (to === 'jailed' || to === 'injured') {
         post.absences[staffId] ??= { since: ctx.now, replaced: false };
         post.nextActionAt = Math.min(post.nextActionAt, ctx.now + 1);
-      } else if (to === 'active') {
-        delete post.absences[staffId];
       }
     },
     // Razzia bei dir: Leutnants mit Spots dort schreiben es ins Protokoll.
