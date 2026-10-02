@@ -23,10 +23,9 @@ Mit `npm run dev` ist das Spiel auch für Freunde im selben WLAN erreichbar (die
 
 ## Online spielen (für Freunde)
 
-Jeder Push auf `main` stellt das Spiel automatisch online: **https://neinkob12.github.io/asker/**
-(Workflow `.github/workflows/pages.yml`). Einmalig muss im Repo unter *Settings › Pages › Source* „GitHub Actions“
-gewählt sein. Das Spiel läuft komplett im Browser: Jeder spielt sein eigenes Spiel, Spielstände liegen im eigenen
-Browser (nichts wird geteilt, kein Server nötig, beliebig viele Leute gleichzeitig).
+Das Spiel läuft auf Vercel: **https://asker-flax.vercel.app/**. Jeder Push auf `main` geht automatisch online,
+jeder PR bekommt einen eigenen Vorschau-Link. Das Spiel läuft komplett im Browser: Jeder spielt sein eigenes Spiel,
+Spielstände liegen im eigenen Browser.
 
 ## So wird gespielt
 
