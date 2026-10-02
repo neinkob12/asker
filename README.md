@@ -21,6 +21,13 @@ npm run dev
 Dann die angezeigte Adresse im Browser öffnen (meist http://localhost:5173).
 Mit `npm run dev` ist das Spiel auch für Freunde im selben WLAN erreichbar (die "Network"-Adresse aus der Konsole).
 
+## Online spielen (für Freunde)
+
+Jeder Push auf `main` stellt das Spiel automatisch online: **https://neinkob12.github.io/asker/**
+(Workflow `.github/workflows/pages.yml`). Einmalig muss im Repo unter *Settings › Pages › Source* „GitHub Actions“
+gewählt sein. Das Spiel läuft komplett im Browser: Jeder spielt sein eigenes Spiel, Spielstände liegen im eigenen
+Browser (nichts wird geteilt, kein Server nötig, beliebig viele Leute gleichzeitig).
+
 ## So wird gespielt
 
 - **Neues Spiel:** Beim ersten Start wählst du den Modus. *Normal:* Nach einem Game Over darfst du einen älteren
