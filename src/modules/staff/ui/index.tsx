@@ -130,23 +130,27 @@ function StaffRowItem(props: { member: StaffMember }) {
   const m = props.member;
   const employed = m.leftAt === null;
   return (
-    <ListItem onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}>
+    <ListItem
+      onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}
+      value={employed ? `${formatEuro(m.wage)}/Tag` : undefined}
+    >
       <div class="staff-row">
         <Portrait person={m} />
         <div class="staff-row__main">
           <strong>{m.name}</strong>
+          <span class="staff-row__meta">
+            <Icon name={employed && (m.assignment ?? m.returnTo) ? 'pin' : 'clock'} />
+            {employed ? assignmentLabel(state, m.assignment ?? m.returnTo) : 'ausgeschieden'}
+          </span>
           <Chips
             items={[
               { label: roleName(m.role), icon: ROLE_ICONS[m.role], color: ROLE_TONES[m.role] },
               { label: `Level ${m.level}` },
             ]}
-          />
-          <span class="staff-row__meta">
-            <Icon name={employed && (m.assignment ?? m.returnTo) ? 'pin' : 'clock'} />
-            {employed ? assignmentLabel(state, m.assignment ?? m.returnTo) : 'ausgeschieden'}
-          </span>
+          >
+            {m.status !== 'active' && <StatusTag status={m.status} />}
+          </Chips>
         </div>
-        <StatusTag status={m.status} />
       </div>
     </ListItem>
   );
@@ -187,12 +191,11 @@ function StaffOverview() {
           },
         ]}
       />
-      <SegmentedControl wide aria-label="Rolle" options={ROLE_FILTERS} value={filter} onChange={setFilter} />
+      <Group title="Dein Team" icon="users" color="people" count={current.length}>
+        <SegmentedControl wide aria-label="Rolle" options={ROLE_FILTERS} value={filter} onChange={setFilter} />
+      </Group>
       {current.length === 0 && filter === 'all' ? (
-        <Empty icon="users">
-          Noch niemand im Team. Läufer heuerst du direkt an einem Spot an, Bewerber findest du unten unter „Leute
-          finden“.
-        </Empty>
+        <Empty icon="users">Noch niemand im Team. Läufer heuerst du am Spot an oder stellst unten jemanden ein.</Empty>
       ) : group ? (
         <>
           <PeopleGroup
@@ -229,7 +232,7 @@ function HireGroup() {
       title="Anheuern"
       icon="userPlus"
       color="people"
-      note="Läufer heuerst du am Spot an, Sicherheit und Spezialisten über die Bewerber unten."
+      note="Läufer heuerst du am Spot an, alle anderen unten bei „Könntest du einstellen“."
     >
       <List>
         <ListItem

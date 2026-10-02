@@ -6,9 +6,9 @@
 //
 // Öffentliche API:
 //   getCandidates(state), getCandidate(state, id), getPool(state), getContacts(state), searchReadyAt(state),
-//   SOURCE_NAMES, SEARCH_COST
-// Befehle: 'recruiting.hire', 'recruiting.decline', 'recruiting.search'
-// Ereignisse: 'recruiting.candidateArrived', 'recruiting.hired'
+//   poolMax(state), searchPreview(state, role?), SOURCE_NAMES, SEARCH_COST, SEARCH_ROLES
+// Befehle: 'recruiting.hire', 'recruiting.decline', 'recruiting.search' (mit role: gezielt nach einer Rolle)
+// Ereignisse: 'recruiting.candidateArrived', 'recruiting.hired', 'recruiting.candidateLeft'
 
 import {
   type CommandMeta,
@@ -24,6 +24,7 @@ import {
   wallet,
 } from '../../core';
 import { getRegular } from '../customers';
+import { getReputation } from '../reputation';
 import { getSpot } from '../spots';
 import {
   addLoyalty,
@@ -43,6 +44,7 @@ import {
   type StatKey,
   staffContact,
 } from '../staff';
+import { controlledBy, PLAYER_FACTION } from '../territory';
 import {
   CANDIDATE_LIFETIME,
   CONTACT_HIRE_COST_DAYS,
@@ -55,9 +57,14 @@ import {
   EVENT_ROLE_WEIGHTS,
   HIRE_COST_DAYS,
   JAIL_CONTACT_CHANCE,
+  POOL_ARRIVALS,
   POOL_INTERVAL,
   POOL_LEVEL_2_CHANCE,
   POOL_MAX,
+  POOL_MAX_LIMIT,
+  POOL_MAX_PER_VEEDEL,
+  POOL_MAX_REPUTATION,
+  POOL_MAX_REPUTATION_BONUS,
   POOL_ROLE_WEIGHTS,
   POOL_START,
   REFERRAL_CHANCE,
@@ -66,10 +73,13 @@ import {
   SEARCH_COOLDOWN,
   SEARCH_COST,
   SEARCH_COUNT,
+  SEARCH_ROLE_SHARE,
+  SEARCH_ROLES,
+  type SearchRole,
   VISIBLE_STATS,
 } from './config';
 
-export { SEARCH_COST, SOURCE_NAMES } from './config';
+export { SEARCH_COST, SEARCH_COUNT, SEARCH_ROLES, type SearchRole, SOURCE_NAMES } from './config';
 
 /** Woher ein Kandidat kommt: Pool (Bewerbung) oder Kontakt (Empfehlung, Stammkunde, Ereignis). */
 export type CandidateSource = 'pool' | 'referral' | 'regular' | 'event';
@@ -117,12 +127,14 @@ declare module '../../core' {
     /** Kandidaten einstellen (Handgeld zahlen). Optional direkt einsetzen. */
     'recruiting.hire': { candidateId: string; assignment?: StaffAssignment | null };
     'recruiting.decline': { candidateId: string };
-    /** Rumfragen: kostet Geld, bringt sofort neue Bewerber. */
-    'recruiting.search': Record<string, never>;
+    /** Rumfragen: kostet Geld, bringt sofort neue Bewerber; mit role meist welche in dieser Rolle. */
+    'recruiting.search': { role?: SearchRole };
   }
   interface GameEvents {
     'recruiting.candidateArrived': { candidateId: string; source: CandidateSource };
     'recruiting.hired': { candidateId: string; staffId: string };
+    /** Ein Bewerber oder Kontakt ist abgelaufen (still, nur eine Notiz im Verlauf). */
+    'recruiting.candidateLeft': { candidateId: string; name: string; role: StaffRole; source: CandidateSource };
   }
 }
 
@@ -149,6 +161,24 @@ export function getContacts(state: GameState): Candidate[] {
 
 export function searchReadyAt(state: GameState): number {
   return state.modules.recruiting.searchReadyAt;
+}
+
+/** Wie viele Bewerber gleichzeitig warten: mehr mit eigenen Veedeln und gutem Ruf. */
+export function poolMax(state: GameState): number {
+  const veedel = state.modules.territory ? controlledBy(state, PLAYER_FACTION).length : 0;
+  const reputation = state.modules.reputation ? getReputation(state) : 0;
+  const bonus = reputation >= POOL_MAX_REPUTATION ? POOL_MAX_REPUTATION_BONUS : 0;
+  return Math.min(POOL_MAX_LIMIT, POOL_MAX + veedel * POOL_MAX_PER_VEEDEL + bonus);
+}
+
+/** Was Rumfragen kostet und bringt (für die Oberfläche, bevor man es tut). */
+export function searchPreview(
+  state: GameState,
+  role?: SearchRole,
+): { cost: number; count: number; readyAt: number; waiting: boolean; roleLabel: string } {
+  const readyAt = searchReadyAt(state);
+  const roleLabel = role ? (ROLE_INFO[role].plural ?? roleName(role)) : 'gemischt, meist Läufer';
+  return { cost: SEARCH_COST, count: SEARCH_COUNT, readyAt, waiting: readyAt > state.time, roleLabel };
 }
 
 // --- Kandidaten erzeugen ---
@@ -210,10 +240,11 @@ function addCandidate(ctx: Ctx, role: StaffRole, source: CandidateSource, option
   return candidate;
 }
 
-function addPoolCandidate(ctx: Ctx): Candidate {
-  const role = pickWeighted(ctx, POOL_ROLE_WEIGHTS);
+function addPoolCandidate(ctx: Ctx, wanted?: SearchRole): Candidate {
+  const role = wanted && ctx.chance(SEARCH_ROLE_SHARE) ? wanted : pickWeighted(ctx, POOL_ROLE_WEIGHTS);
   const level = ctx.chance(POOL_LEVEL_2_CHANCE) ? 2 : 1;
-  return addCandidate(ctx, role, 'pool', { level, note: 'Hat sich auf deinen Aushang gemeldet.' });
+  const note = wanted ? `Hat gehört, dass du ${roleName(wanted)} suchst.` : 'Hat sich auf deinen Aushang gemeldet.';
+  return addCandidate(ctx, role, 'pool', { level, note });
 }
 
 /** Kontakte sind besser als der Durchschnitt und haben schon Erfahrung. */
@@ -330,10 +361,19 @@ function maybeJailContact(ctx: Ctx, staffId: string): void {
 
 function tick(ctx: Ctx): void {
   const s = ctx.state.modules.recruiting;
-  s.candidates = s.candidates.filter((c) => c.expiresAt > ctx.now);
+  const gone = s.candidates.filter((c) => c.expiresAt <= ctx.now);
+  if (gone.length > 0) {
+    s.candidates = s.candidates.filter((c) => c.expiresAt > ctx.now);
+    // Wer abläuft, verschwindet mit einer stillen Notiz im Verlauf.
+    for (const c of gone) {
+      journal.add(ctx, `${c.name} (${roleName(c.role)}) hat sich anderweitig umgesehen.`);
+      ctx.emit('recruiting.candidateLeft', { candidateId: c.id, name: c.name, role: c.role, source: c.source });
+    }
+  }
   if (ctx.now < s.nextPoolAt) return;
-  const count = ctx.randomInt(1, 2);
-  for (let i = 0; i < count && getPool(ctx.state).length < POOL_MAX; i++) addPoolCandidate(ctx);
+  const count = ctx.randomInt(POOL_ARRIVALS[0], POOL_ARRIVALS[1]);
+  const max = poolMax(ctx.state);
+  for (let i = 0; i < count && getPool(ctx.state).length < max; i++) addPoolCandidate(ctx);
   s.nextPoolAt = ctx.now + ctx.randomInt(POOL_INTERVAL[0], POOL_INTERVAL[1]);
 }
 
@@ -369,16 +409,24 @@ function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null,
   return { ok: true, data: { staffId: member.id } };
 }
 
-function search(ctx: Ctx): CommandResult {
+function search(ctx: Ctx, role?: SearchRole): CommandResult {
   const s = ctx.state.modules.recruiting;
+  if (role && !SEARCH_ROLES.some((r) => r.value === role)) return { ok: false, reason: 'Diese Rolle gibt es nicht.' };
   if (ctx.now < s.searchReadyAt) {
     return { ok: false, reason: `Du hast gerade erst rumgefragt. Wieder ab ${clock.formatTime(s.searchReadyAt)}.` };
   }
   if (!wallet.pay(ctx, SEARCH_COST, 'dirty', 'Rumgefragt', 'hiring')) return { ok: false, reason: 'Nicht genug Geld.' };
-  for (let i = 0; i < SEARCH_COUNT; i++) addPoolCandidate(ctx);
+  const added: Candidate[] = [];
+  for (let i = 0; i < SEARCH_COUNT; i++) added.push(addPoolCandidate(ctx, role));
   s.searchReadyAt = ctx.now + SEARCH_COOLDOWN;
-  journal.add(ctx, `Rumgefragt: ${SEARCH_COUNT} neue Bewerber.`);
-  return { ok: true };
+  const hits = role ? added.filter((c) => c.role === role).length : 0;
+  journal.add(
+    ctx,
+    role
+      ? `Rumgefragt nach ${ROLE_INFO[role].plural ?? roleName(role)}: ${SEARCH_COUNT} neue Bewerber, davon ${hits} passend.`
+      : `Rumgefragt: ${SEARCH_COUNT} neue Bewerber.`,
+  );
+  return { ok: true, data: { candidateIds: added.map((c) => c.id) } };
 }
 
 // --- Migration vom Fundament (Version 1) ---
@@ -419,7 +467,7 @@ export function migrateRecruitingV1(old: RecruitingStateV1, state: GameState): R
 export default defineModule({
   id: 'recruiting',
   version: 2,
-  dependsOn: ['staff'],
+  dependsOn: ['staff', 'territory', 'reputation'],
   init: (ctx) => {
     const state: RecruitingState = { candidates: [], nextPoolAt: 0, searchReadyAt: 0 };
     // Die ersten Bewerber warten schon (addCandidate schreibt in den eigenen Zustand).
@@ -438,7 +486,7 @@ export default defineModule({
       s.candidates = s.candidates.filter((c) => c.id !== candidateId);
       return { ok: true };
     },
-    'recruiting.search': (ctx) => search(ctx),
+    'recruiting.search': (ctx, { role }) => search(ctx, role),
   },
   on: {
     'clock.dayStarted': (ctx) => {
