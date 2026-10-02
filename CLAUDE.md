@@ -87,7 +87,9 @@ export default defineModule({
 - Geld: `wallet.pay(ctx, amount, kind, reason, category)`, ebenso `earn` und `lose`, dazu `convert` (Schwarzgeld
   `'dirty'`, sauber `'clean'`; Legales wie Liegeplatz und Lager kostet sauberes Geld). **Immer mit Kategorie** aus
   `MONEY_CATEGORIES` (`src/core/wallet.ts`), z.B. `'wages.runner'`, oder `{ category, spotId, staffId }`, damit die
-  Kasse (`finance`) Gewinn und Verlust pro Spot und Leutnant zeigen kann. Journal: `journal.add(ctx, text, kind)`.
+  Kasse (`finance`) Gewinn und Verlust pro Spot und Leutnant zeigen kann (Löhne und Handgeld geben den Spot schon bei der
+  Buchung mit: Die Kasse liest sie erst später im Schritt, dann kann die Person schon abgetaucht oder weg sein). Beträge sind
+  endliche Zahlen ab 0, sonst wirft der Kern (NaN im Konto machte jeden Vergleich falsch). Journal: `journal.add(ctx, text, kind)`.
 - Leutnants führen **Spots, nicht Veedel** (bis zu drei, `lieutenantOfSpot`, `lieutenantSpots` aus `hierarchy`).
 - Lieferungen fährt **nur die Rechte Hand** (`customers.acceptOrder` mit `by: 'rightHand'`, `rightHandDriver`); alles,
   was sie selbständig tun soll, ist eine Aufgabe in `hierarchy/tasks.ts` und läuft über `ctx.dispatch` mit Actor.
@@ -146,6 +148,7 @@ Selbst ausprobieren:
 - `npm run screenshot -- --scenes=alle` (Look Glas: Normalbetrieb in vier Tageszeiten, Konfrontation, Razzia, Lieferung, Übernahme nach `screenshots/glas/`)
 - `npm run screenshot:phone` (alle Handy-Seiten für Desktop und Handy-Bildschirm nach `screenshots/handy/`, mit `--scenes`, `--sizes`, `--appearance=light`)
 - `npm run audit:phone` (misst am laufenden Spiel Zieltreffer ≥ 44 px, Schrift ≥ 11 px und Kontrast; Fehlercode bei Verstößen)
+- `npm run monkey:phone` (klickt zufällig, mit festem Seed, durch jede Handy-App und meldet Browser-Fehler, verdeckte oder nicht erreichbare Bedienelemente, ungültige Zahlen im Spielstand und Sackgassen; mit `--apps`, `--sizes`, `--steps`, `--seed`)
 - `npm run e2e` (Ende-zu-Ende-Test mit Playwright: neues Spiel, verkaufen, anheuern, bestellen, speichern, laden)
 - `npm run playthrough` (der Bot spielt ~20 Minuten im Browser, Screenshots der wichtigen Momente)
 - `npm run balance` (Balancing-Bericht über mehrere Seeds, siehe `docs/architektur.md`, Abschnitt "Balancing")

@@ -92,6 +92,17 @@ export function registerBuiltins(): void {
         run: (ui) => ui.openPhone('core.history'),
       },
       {
+        id: 'notifications',
+        title: 'Mitteilungen',
+        subtitle: 'Mitteilungszentrale öffnen (sonst Banner oder Statusleiste herunterziehen)',
+        icon: 'bell',
+        keywords: 'benachrichtigungen banner mitteilungszentrale nachrichten',
+        run: (ui) => {
+          ui.showPhone();
+          ui.toggleNotificationCenter(true);
+        },
+      },
+      {
         id: 'weather',
         title: 'Wetter',
         subtitle: 'Vorhersage in den Einstellungen',
