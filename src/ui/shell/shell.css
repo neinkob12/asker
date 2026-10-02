@@ -53,17 +53,16 @@
   filter: invert(1) opacity(0.5);
 }
 
-/* Look "Glas": leichte Vignette über der freien Kartenfläche (nicht unter dem Handy), lenkt den Blick zur Mitte. */
+/*
+ * Look "Glas": leichte Vignette über der ganzen Karte, auch hinter dem Handy (sie liegt unter dem Handy), damit die
+ * Karte rechts neben dem Handy nicht heller ist als links. Die helle Mitte sitzt in der freien Kartenfläche.
+ */
 .shell-vignette {
   position: fixed;
   z-index: var(--z-map-overlay);
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: max(0px, calc(var(--map-right) - var(--gap)));
+  inset: 0;
   background: var(--map-vignette);
   pointer-events: none;
-  transition: right var(--dock-duration) var(--dock-ease);
 }
 
 /* Überlagerungen der freien Kartenfläche (Slot map.overlay): Razzia-Banner, Tracking-Karte … */
@@ -81,10 +80,14 @@
   pointer-events: none;
 }
 
-/* Dialog über der Kartenfläche (MapDialog): Karte aus Glas in der Mitte, das Handy bleibt frei */
+/*
+ * Dialog über der Kartenfläche (MapDialog): Karte aus Glas in der Mitte, das Handy bleibt frei. Der Schleier liegt
+ * über der ganzen Karte und dem HUD, aber hinter dem Handy (eigene Ebene unter --z-phone).
+ */
 .ui-map-dialog {
   position: fixed;
   z-index: var(--z-dialog);
+  pointer-events: none;
   top: 0;
   bottom: 0;
   left: 0;
@@ -96,15 +99,17 @@
   transition: right var(--dock-duration) var(--dock-ease);
 }
 .ui-map-dialog__scrim {
-  position: absolute;
+  position: fixed;
+  z-index: calc(var(--z-phone) - 1);
   inset: 0;
 }
-.ui-map-dialog.is-dim .ui-map-dialog__scrim {
-  background: radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.6) 75%);
+.ui-map-dialog__scrim.is-dim {
+  background: radial-gradient(ellipse at 36% 45%, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.6) 75%);
   animation: ui-fade-in var(--duration) var(--ease-out);
 }
 .ui-map-dialog__card {
   position: relative;
+  pointer-events: auto;
   width: min(560px, 100%);
   padding: 22px 24px 20px;
   border-radius: 26px;

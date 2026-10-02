@@ -112,10 +112,10 @@
 
 /* ---------------------------------------------------------------- Veedel übernommen (Look "Glas") */
 /* Goldener Schein über der ganzen Kartenfläche, darauf Name und Glas-Leiste (MapDialog ohne Karte) */
-.ui-map-dialog:has(.takeover) .ui-map-dialog__scrim {
+.ui-map-dialog__scrim:has(+ .ui-map-dialog .takeover) {
   background:
-    radial-gradient(ellipse 70% 60% at 50% 45%, var(--takeover-glow), transparent 75%),
-    radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.75) 80%);
+    radial-gradient(ellipse 50% 60% at 36% 45%, var(--takeover-glow), transparent 75%),
+    radial-gradient(ellipse at 36% 45%, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.75) 80%);
   animation: ui-fade-in var(--duration-slow) var(--ease-out);
 }
 .ui-map-dialog__card.takeover {

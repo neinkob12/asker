@@ -40,13 +40,16 @@ export function MapDialog(props: MapDialogProps) {
     );
   }
   return (
-    <div class={`ui-map-dialog is-${props.scrim ?? 'dim'}`}>
+    <>
+      {/* Schleier über Karte und HUD, aber hinter dem Handy (eigene Ebene, siehe shell.css) */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: Hintergrund, Tastatur über Escape */}
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: Hintergrund, Tastatur über Escape */}
-      <div class="ui-map-dialog__scrim" onClick={props.onClose} />
-      <div class={`ui-map-dialog__card ${props.class ?? ''}`} role="dialog" aria-label={props.label}>
-        {props.children}
+      <div class={`ui-map-dialog__scrim is-${props.scrim ?? 'dim'}`} onClick={props.onClose} />
+      <div class={`ui-map-dialog is-${props.scrim ?? 'dim'}`}>
+        <div class={`ui-map-dialog__card ${props.class ?? ''}`} role="dialog" aria-label={props.label}>
+          {props.children}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
