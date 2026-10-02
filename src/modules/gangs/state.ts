@@ -176,6 +176,16 @@ export function gangVeedel(state: GameState, id: string): string[] {
     .filter((v) => veedelGang(state, v) === id);
 }
 
+/**
+ * Veedel, in denen die Gang einen Spot hat, den du überfallen kannst: überall, wo sie genug Einfluss hat (auch ohne
+ * dort das Revier zu halten). Die Oberfläche und der Befehl gangs.attack fragen hier dasselbe.
+ */
+export function raidTargets(state: GameState, id: string): string[] {
+  return allVeedel()
+    .map((v) => v.id)
+    .filter((v) => getInfluence(state, v, id) >= GANG_SPOT_MIN_INFLUENCE);
+}
+
 /** Stärke als eine Zahl: Leute, Geld und Ware. */
 export function gangPower(state: GameState, id: string): number {
   const s = getGangStatus(state, id);
