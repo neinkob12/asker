@@ -58,7 +58,7 @@ export function RuleSheet(props: RuleSheetProps) {
     { value: AUTO, label: 'Passend zur Lücke' },
     ...packages.map((p) => ({
       value: p.id,
-      label: `${p.label} · ${formatEuro(packagePrice(state, supplier?.id ?? '', p.id))}${available.includes(p.id) ? '' : ' (noch nicht)'}`,
+      label: `${p.label} (${formatEuro(packagePrice(state, supplier?.id ?? '', p.id))})${available.includes(p.id) ? '' : ' (noch nicht)'}`,
     })),
   ];
   const home = homeWarehouse(state, props.staffId);

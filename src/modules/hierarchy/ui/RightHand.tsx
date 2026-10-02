@@ -74,7 +74,8 @@ export function RightHandSheet(props: { open: boolean; onClose: () => void }) {
           title="Wer hält dir den Rücken frei?"
           icon="crown"
           color="brand"
-          note={`Ab Level ${RIGHT_HAND_MIN_LEVEL} und Loyalität ${RIGHT_HAND_MIN_LOYALTY}. Will etwa das 2,5-Fache vom Lohn, steht an keinem Spot. Nur sie fährt Aufträge aus.`}
+          note={`Ab Level ${RIGHT_HAND_MIN_LEVEL} und Loyalität ${RIGHT_HAND_MIN_LOYALTY}.`}
+          more="Die Rechte Hand will etwa das 2,5-Fache vom Lohn und steht an keinem Spot. Nur sie nimmt Aufträge an und fährt sie aus; mit ihren Aufgaben hält sie Köln am Laufen."
         >
           {people.length === 0 ? (
             <Empty icon="users">Niemand im Team.</Empty>
@@ -98,8 +99,15 @@ export function RightHandSheet(props: { open: boolean; onClose: () => void }) {
                     icon="user"
                     color={check.ok ? 'brand' : 'system'}
                     title={m.name}
-                    meta={
-                      check.ok ? `${roleName(m.role)} · Level ${m.level} · Loyalität ${m.stats.loyalty}` : check.reason
+                    meta={check.ok ? undefined : check.reason}
+                    tags={
+                      check.ok
+                        ? [
+                            { label: roleName(m.role), icon: 'user', color: 'people' },
+                            { label: `Level ${m.level}` },
+                            { label: `Loyalität ${m.stats.loyalty}`, icon: 'heart', color: 'brand' },
+                          ]
+                        : []
                     }
                   />
                 </ListItem>
@@ -360,7 +368,8 @@ function RightHandPage() {
             <ItemContent
               icon="crown"
               color="brand"
-              title={`${m.name} · Level ${m.level}`}
+              title={m.name}
+              tags={[{ label: `Level ${m.level}` }]}
               meta={
                 m.status !== 'active'
                   ? 'fällt aus, die Leutnants machen allein weiter'

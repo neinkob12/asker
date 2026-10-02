@@ -1419,11 +1419,26 @@ html.is-dragging {
   font-size: var(--type-caption);
 }
 /* Schalter direkt in einer Gruppe (z.B. Einstellung einer App): als eingerückte Zeile */
-.phone .ui-group > .ui-toggle {
+.phone .ui-group__body > .ui-toggle {
   min-height: 52px;
+  margin: 0;
   padding: 8px 16px;
-  background: var(--phone-group);
-  border-radius: var(--radius-group);
+}
+/* Gruppen mit Unterlage (Auftrag 27): die Liste liegt direkt auf der Unterlage, kein eigener Kasten */
+.phone .ui-group__body > .ui-list {
+  background: none;
+  border-radius: 0;
+}
+.phone .ui-group__body > .ui-list .ui-list__item.is-clickable:hover {
+  background: var(--phone-group-2);
+}
+.phone .ui-group__body > .ui-empty {
+  padding: var(--space-4) var(--space-3);
+}
+/* Nie mitten im Wort umbrechen, Namen und Werte bleiben auf einer Zeile */
+.phone {
+  overflow-wrap: normal;
+  hyphens: manual;
 }
 .phone .ui-toggle__hint,
 .phone .ui-slider__value {

@@ -762,7 +762,9 @@
   font-size: var(--font-size-sm);
   line-height: 1.35;
   color: var(--color-muted);
-  overflow-wrap: anywhere;
+  /* Auftrag 27: nie mitten im Wort umbrechen, nur an Wortgrenzen */
+  overflow-wrap: normal;
+  hyphens: manual;
 }
 .ui-list__text strong {
   font-weight: var(--font-weight-bold);
@@ -883,6 +885,31 @@
 .ui-tag--cat-log {
   background: var(--cat-log-soft);
   color: var(--cat-log);
+}
+
+/* Chip (Auftrag 27): eine Eigenschaft als kleine Fläche in der Bedeutungsfarbe, bricht nie um */
+.ui-tag--chip {
+  padding: 0 7px;
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-tag--chip .ui-icon {
+  flex: none;
+  font-size: 12px;
+}
+/* Reihe von Chips: bricht zwischen den Chips um */
+.ui-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.ui-item__tags {
+  margin-top: 2px;
 }
 
 /* Porträt: Kreis in der Bedeutungsfarbe (Verlauf, Initialen oder Symbol darauf) */
@@ -1584,37 +1611,218 @@
 }
 
 /* ---------------------------------------------------------------- Gruppe, Zeile mit Kachel, Kennzahl-Kacheln */
-/* Abschnitt wie in den iOS-Einstellungen (Kopf mit Kachel, Titel in Großbuchstaben, Fußnote). */
+/* Abschnitt (Auftrag 27): sichtbare Unterlage mit Rand, farbige Kopfzeile in der Bedeutungsfarbe, Fußnote, "Mehr dazu". */
 .ui-group {
+  --group-tint: var(--cat-system);
+  --group-tint-soft: var(--cat-system-soft);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  min-width: 0;
+  background: var(--phone-group, var(--color-panel-raised));
+  border: 1px solid var(--phone-separator, var(--color-line));
+  border-radius: var(--radius-group);
+  overflow: hidden;
+}
+.ui-group--money {
+  --group-tint: var(--cat-money);
+  --group-tint-soft: var(--cat-money-soft);
+}
+.ui-group--dirty {
+  --group-tint: var(--cat-dirty);
+  --group-tint-soft: var(--cat-dirty-soft);
+}
+.ui-group--danger {
+  --group-tint: var(--cat-danger);
+  --group-tint-soft: var(--cat-danger-soft);
+}
+.ui-group--warn {
+  --group-tint: var(--cat-warn);
+  --group-tint-soft: var(--cat-warn-soft);
+}
+.ui-group--brand {
+  --group-tint: var(--cat-brand);
+  --group-tint-soft: var(--cat-brand-soft);
+}
+.ui-group--place {
+  --group-tint: var(--cat-place);
+  --group-tint-soft: var(--cat-place-soft);
+}
+.ui-group--goods {
+  --group-tint: var(--cat-goods);
+  --group-tint-soft: var(--cat-goods-soft);
+}
+.ui-group--people {
+  --group-tint: var(--cat-people);
+  --group-tint-soft: var(--cat-people-soft);
+}
+.ui-group--chat {
+  --group-tint: var(--cat-chat);
+  --group-tint-soft: var(--cat-chat-soft);
+}
+.ui-group--sky {
+  --group-tint: var(--cat-sky);
+  --group-tint-soft: var(--cat-sky-soft);
+}
+.ui-group--law {
+  --group-tint: var(--cat-law);
+  --group-tint-soft: var(--cat-law-soft);
+}
+.ui-group--media {
+  --group-tint: var(--cat-media);
+  --group-tint-soft: var(--cat-media-soft);
+}
+.ui-group--log {
+  --group-tint: var(--cat-log);
+  --group-tint-soft: var(--cat-log-soft);
 }
 .ui-group__head {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 0 4px;
+  min-height: 40px;
+  padding: 6px 12px;
+  background: var(--group-tint-soft);
+  border-bottom: 1px solid var(--phone-separator, var(--color-line));
 }
 .ui-group__title {
+  flex: 1;
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
   font-family: var(--font-body);
   font-size: var(--type-footnote, 13px);
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--letter-spacing-caps);
   line-height: var(--type-footnote-lh, 18px);
+  text-overflow: ellipsis;
   text-transform: uppercase;
-  color: var(--phone-label-2, var(--color-muted));
+  white-space: nowrap;
+  color: var(--group-tint);
 }
-.ui-group__count,
+.ui-group__count {
+  flex: none;
+  padding: 0 7px;
+  border-radius: var(--radius-round);
+  background: var(--phone-group, var(--color-panel-raised));
+  font-size: var(--type-caption, 12px);
+  font-weight: var(--font-weight-bold);
+  line-height: 18px;
+  color: var(--group-tint);
+}
+.ui-group__value {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  font-size: var(--type-subhead, 15px);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--phone-label, var(--color-text));
+}
+.ui-group__chevron {
+  flex: none;
+  font-size: 16px;
+  color: var(--group-tint);
+  transition: transform var(--duration-fast, 150ms) var(--ease-out, ease-out);
+}
+/* Auf- und zuklappen: Kopf ist ein <summary> ohne Standard-Marker */
+.ui-group--collapsible > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.ui-group--collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+.ui-group--collapsible:not([open]) > .ui-group__head {
+  border-bottom: 0;
+}
+.ui-group--collapsible:not([open]) .ui-group__chevron {
+  transform: rotate(-90deg);
+}
+.ui-group__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+/* Alles außer Listen bekommt Rand zur Unterlage */
+.ui-group__body > :not(.ui-list) {
+  margin-left: 12px;
+  margin-right: 12px;
+}
+.ui-group__body > :first-child:not(.ui-list) {
+  margin-top: 12px;
+}
+.ui-group__body > :last-child:not(.ui-list) {
+  margin-bottom: 12px;
+}
+.ui-group__body > .ui-list {
+  border: 0;
+  border-radius: 0;
+}
 .ui-group__note {
+  margin: 0;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--phone-separator, var(--color-line));
   font-size: var(--type-footnote, 13px);
   line-height: var(--type-footnote-lh, 18px);
   color: var(--phone-label-2, var(--color-muted));
 }
-.ui-group__note {
-  margin: 0;
-  padding: 0 16px;
+.ui-group__more {
+  border-top: 1px solid var(--phone-separator, var(--color-line));
+}
+
+/* Ausklappbare Erklärung "Mehr dazu" (Auftrag 27) */
+.ui-disclosure {
+  min-width: 0;
+}
+.ui-disclosure__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 12px;
+  list-style: none;
+  cursor: pointer;
+  font-size: var(--type-subhead, 15px);
+  color: var(--phone-label-2, var(--color-muted));
+}
+.ui-disclosure__summary::-webkit-details-marker {
+  display: none;
+}
+.ui-disclosure__icon {
+  flex: none;
+  font-size: 16px;
+}
+.ui-disclosure__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-disclosure__chevron {
+  flex: none;
+  font-size: 16px;
+  transition: transform var(--duration-fast, 150ms) var(--ease-out, ease-out);
+}
+.ui-disclosure[open] .ui-disclosure__chevron {
+  transform: rotate(180deg);
+}
+.ui-disclosure__body {
+  padding: 0 12px 12px;
+  font-size: var(--type-subhead, 15px);
+  line-height: var(--type-subhead-lh, 20px);
+  color: var(--phone-label-2, var(--color-muted));
+  overflow-wrap: normal;
+  hyphens: manual;
+}
+.ui-disclosure__body > p {
+  margin: 0 0 var(--space-2);
+}
+.ui-disclosure__body > p:last-child {
+  margin-bottom: 0;
 }
 /* Zeileninhalt: Kachel, Titel, Zweitzeile */
 .ui-item {
@@ -1633,14 +1841,19 @@
   min-width: 0;
 }
 .ui-item__title {
+  overflow: hidden;
   font-size: var(--type-body, 17px);
   font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--phone-label, var(--color-text));
 }
 .ui-item__meta {
   font-size: var(--type-subhead, 15px);
   line-height: var(--type-subhead-lh, 20px);
   color: var(--phone-label-2, var(--color-muted));
+  overflow-wrap: normal;
+  hyphens: manual;
 }
 .ui-item__main .ui-progress {
   margin-top: var(--space-1);

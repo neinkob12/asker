@@ -75,7 +75,8 @@ function SpotPanel(props: { spotId: string }) {
             icon="map"
             color="place"
             title={veedelName(spot.veedelId)}
-            meta={spot.custom ? 'Veedel · eigener Spot' : 'Veedel'}
+            meta="Veedel"
+            tags={[spot.custom && { label: 'eigener Spot', icon: 'pinPlus', color: 'brand' }]}
           />
         </ListItem>
       </List>
@@ -175,7 +176,8 @@ function SpotsSection() {
                     icon={mine === s.id ? 'runner' : 'pin'}
                     color={mine === s.id ? 'brand' : count > 0 ? 'warn' : 'place'}
                     title={s.name}
-                    meta={`${veedelName(s.veedelId)}${mine === s.id ? ' · du stehst hier' : ''}`}
+                    meta={veedelName(s.veedelId)}
+                    tags={[mine === s.id && { label: 'du stehst hier', icon: 'runner', color: 'brand' }]}
                   />
                 </ListItem>
               </ContextMenu>

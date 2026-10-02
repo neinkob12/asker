@@ -98,7 +98,11 @@ function TripRow(props: { trip: Trip }) {
         icon={stopped ? 'siren' : trip.driverId ? 'truck' : 'car'}
         color={stopped ? 'danger' : 'goods'}
         title={trip.kind === 'pickup' ? `Hafen → ${to}` : `${from} → ${to}`}
-        meta={`${who(state, trip.driverId)} · ${legText(trip, progress.leg)} · ${tripAmount(trip)} Einheiten`}
+        meta={legText(trip, progress.leg)}
+        tags={[
+          { label: who(state, trip.driverId), icon: 'user', color: 'people' },
+          { label: `${tripAmount(trip)} Einheiten`, icon: 'package', color: 'goods' },
+        ]}
       >
         <ProgressBar value={progress.total} tone={stopped ? 'bad' : 'accent'} label="Fahrt" />
       </ItemContent>
@@ -161,7 +165,7 @@ function PortSection() {
                 disabled={short}
                 onClick={() => dispatch({ type: 'logistics.buyBerth', payload: {} })}
               >
-                Liegeplatz mieten · {formatEuro(BERTH_COST)}
+                Liegeplatz mieten ({formatEuro(BERTH_COST)})
               </Button>
               {short && <Button onClick={() => ui.openPhone('laundering.app')}>Geldwäsche</Button>}
             </div>
@@ -175,7 +179,7 @@ function PortSection() {
   }
   if (cargo.length === 0) {
     return (
-      <Group icon="ship" color="goods" title="Niehler Hafen · Kai 7">
+      <Group icon="ship" color="goods" title="Niehler Hafen, Kai 7">
         <Empty
           icon="ship"
           action={<Button onClick={() => ui.openPhone('suppliers.app', { supplierId: 'rotterdam' })}>Zu Jansen</Button>}
@@ -192,9 +196,10 @@ function PortSection() {
     <Group
       icon="ship"
       color="goods"
-      title="Niehler Hafen · Kai 7"
+      title="Niehler Hafen, Kai 7"
       count={cargo.length}
-      note="Ware am Kai ist ein paar Stunden sicher, dann wird der Zoll neugierig. Mit Ware an Bord kann es eine Verkehrskontrolle geben, vor allem bei viel Heat im Ziel-Veedel."
+      note="Ware am Kai ist ein paar Stunden sicher, dann wird der Zoll neugierig."
+      more="Mit Ware an Bord kann es unterwegs eine Verkehrskontrolle geben, vor allem bei viel Heat im Ziel-Veedel. Ein Fahrer holt ab, oder du fährst selbst."
     >
       <List>
         {cargo.map((c) => {
@@ -218,7 +223,10 @@ function PortSection() {
                 icon="package"
                 color="goods"
                 title={`${formatProductAmount(c.productId, c.amount)} ${productName(c.productId)}`}
-                meta={`${qualityTier(c.quality).name} · am Kai seit ${clock.formatTime(c.arrivedAt)}`}
+                tags={[
+                  { label: qualityTier(c.quality).name, icon: 'star', color: 'goods' },
+                  { label: `am Kai seit ${clock.formatTime(c.arrivedAt)}`, icon: 'clock' },
+                ]}
               />
             </ListItem>
           );
@@ -382,7 +390,7 @@ function WarehouseLogistics(props: { warehouseId: string }) {
         <Group
           icon="building"
           color="money"
-          title="Zu kaufen · sauberes Geld"
+          title="Zu kaufen (sauberes Geld)"
           note={
             owned.length > 1
               ? undefined

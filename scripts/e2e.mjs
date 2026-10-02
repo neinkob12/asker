@@ -136,7 +136,7 @@ async function run() {
     if (await page.locator('.phone').count()) await page.locator('.phone__nav-button').click();
     else await page.getByRole('button', { name: /^Handy/ }).click();
     await page.locator('.phone').getByRole('button', { name: 'Lieferanten', exact: true }).click();
-    await page.getByRole('button', { name: /Toni · Frankfurt/ }).click();
+    await page.getByRole('button', { name: /Toni.*Frankfurt/ }).click();
     await shot(page, 'lieferant');
     await page.locator('.phone').getByRole('button', { name: 'Kaufen', exact: true }).first().click();
     const shipments = await game(page, (s) => s.modules.suppliers.shipments.map((x) => x.supplierId));
@@ -148,7 +148,7 @@ async function run() {
     // Gesperrte Lieferanten zeigen, was noch fehlt.
     if (!(await page.locator('.phone').count())) await page.getByRole('button', { name: /^Handy/ }).click();
     await page.locator('.phone').getByRole('button', { name: 'Lieferanten', exact: true }).click();
-    assert.ok(await page.getByRole('button', { name: /Jansen · Hafen Rotterdam.*Liegeplatz/ }).isVisible());
+    assert.ok(await page.getByRole('button', { name: /Jansen.*Hafen Rotterdam.*Liegeplatz/ }).isVisible());
     await page.locator('.phone__nav-button').click();
   });
 

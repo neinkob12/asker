@@ -6,6 +6,9 @@ import { formatEuro, formatPercent } from '../../../core';
 import { addHtmlMarker, el, registerMapLayer } from '../../../map';
 import {
   Button,
+  type CategoryColor,
+  Chip,
+  Chips,
   Empty,
   Group,
   HudPill,
@@ -47,13 +50,22 @@ declare module '../../../ui' {
   }
 }
 
-/** "62 % · Gut" */
+/** Farbe der Qualitätsstufe (gut grün, schwach orange, Dreck rot). */
+const TIER_COLOR: Record<string, CategoryColor> = {
+  premium: 'money',
+  good: 'money',
+  solid: 'system',
+  weak: 'warn',
+  trash: 'danger',
+};
+
+/** Qualität als Chip: "Gut 62 %". */
 function QualityLabel(props: { quality: number }) {
   const tier = qualityTier(props.quality);
   return (
-    <span class={`goods-quality goods-quality--${tier.id}`} title={`Qualität ${formatPercent(props.quality)}`}>
-      {tier.name} · {formatPercent(props.quality)}
-    </span>
+    <Chip color={TIER_COLOR[tier.id] ?? 'system'} icon="star" title={`Qualität ${formatPercent(props.quality)}`}>
+      {tier.name} {formatPercent(props.quality)}
+    </Chip>
   );
 }
 
@@ -95,9 +107,9 @@ function StockHud() {
                   <li key={r.productId}>
                     <strong>{text(r)}</strong>
                     <span>
-                      {qualityTier(r.quality).name} · {formatPercent(r.quality)}
+                      {qualityTier(r.quality).name} {formatPercent(r.quality)}
                       {warehouses.length > 1 && inWarehouses.length > 0
-                        ? ` · ${inWarehouses.map((w) => w.name.replace(/^(Lager|Garage|Halle|Keller) /, '')).join(', ')}`
+                        ? ` (${inWarehouses.map((w) => w.name.replace(/^(Lager|Garage|Halle|Keller) /, '')).join(', ')})`
                         : ''}
                     </span>
                   </li>
@@ -158,7 +170,7 @@ function WarehousePanel(props: { warehouseId: string }) {
         icon="boxes"
         color="goods"
         count={lots.length}
-        note={
+        more={
           lots.length > 0
             ? `Strecken macht aus wenig mehr, senkt aber die Qualität. Kenner merken das, und das kostet Ruf. Höchstens ${formatPercent(MAX_CUT)} Streckmittel pro Posten.`
             : undefined
@@ -180,10 +192,13 @@ function WarehousePanel(props: { warehouseId: string }) {
                     </strong>
                     <QualityLabel quality={lot.quality} />
                   </div>
-                  <div class="goods-lot__meta ui-hint">
-                    Einkauf {formatEuro(lot.unitCost)}/{product?.unit ?? 'g'}
-                    {lot.cut > 0 && <span class="goods-lot__cut"> · {formatPercent(lot.cut)} gestreckt</span>}
-                  </div>
+                  <Chips
+                    class="goods-lot__meta"
+                    items={[
+                      { label: `Einkauf ${formatEuro(lot.unitCost)}/${product?.unit ?? 'g'}`, icon: 'cart' },
+                      lot.cut > 0 && { label: `${formatPercent(lot.cut)} gestreckt`, icon: 'flask', color: 'warn' },
+                    ]}
+                  />
                   {product?.cuttable ? (
                     <div class="goods-lot__actions">
                       <span class="ui-hint">Strecken:</span>

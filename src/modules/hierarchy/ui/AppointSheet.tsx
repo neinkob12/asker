@@ -6,9 +6,9 @@ import { useEffect, useState } from 'preact/hooks';
 import { formatEuro } from '../../../core';
 import {
   Button,
+  Disclosure,
   Empty,
   Group,
-  Hint,
   haptic,
   Icon,
   ItemContent,
@@ -134,7 +134,8 @@ function PersonStep(props: { onPick: (staffId: string) => void }) {
       title="Wer soll führen?"
       icon="crew"
       color="people"
-      note={`Ab Level ${LIEUTENANT_MIN_LEVEL}. Ein Leutnant will mehr Lohn und führt seine Spots dann allein.`}
+      note={`Ab Level ${LIEUTENANT_MIN_LEVEL}.`}
+      more="Ein Leutnant will mehr Lohn und führt seine Spots dann allein: Preise, eigenes Personal, Nachbestellen nach Regeln."
     >
       <List>
         {candidates.map(({ m, check }) => (
@@ -143,7 +144,12 @@ function PersonStep(props: { onPick: (staffId: string) => void }) {
               icon="user"
               color={check.ok ? 'people' : 'system'}
               title={m.name}
-              meta={check.ok ? `${roleName(m.role)} · Level ${m.level}` : check.reason}
+              meta={check.ok ? undefined : check.reason}
+              tags={
+                check.ok
+                  ? [{ label: roleName(m.role), icon: 'user', color: 'people' }, { label: `Level ${m.level}` }]
+                  : []
+              }
             />
           </ListItem>
         ))}
@@ -175,7 +181,8 @@ function SpotsStep(props: { staffId: string; value: string[]; onChange: (spotIds
       title={`Spots wählen (${props.value.length}/${MAX_SPOTS_PER_LIEUTENANT})`}
       icon="pin"
       color="place"
-      note="Spots im selben Veedel bringen dort mehr Einfluss als verstreute. Ein Spot hat höchstens einen Leutnant."
+      note="Spots im selben Veedel bringen dort mehr Einfluss."
+      more="Ein Spot hat höchstens einen Leutnant. Verstreute Spots bringen weniger Einfluss pro Veedel, und die Wege zwischen ihnen kosten Zeit."
     >
       <List>
         {spots.map((spot) => {
@@ -183,14 +190,6 @@ function SpotsStep(props: { staffId: string; value: string[]; onChange: (spotIds
           const taken = owner && owner !== props.staffId ? getStaffMember(state, owner)?.name : null;
           const selected = props.value.includes(spot.id);
           const travel = selected ? null : nearestTravel(spot, chosen);
-          const meta = [
-            veedelName(spot.veedelId),
-            `Andrang ${Math.round(spot.demand * 100)} %`,
-            travel !== null ? `${travel} Min. zum nächsten` : null,
-            taken ? `führt ${taken}` : null,
-          ]
-            .filter(Boolean)
-            .join(' · ');
           return (
             <ListItem
               key={spot.id}
@@ -201,7 +200,17 @@ function SpotsStep(props: { staffId: string; value: string[]; onChange: (spotIds
                 <Icon name={selected ? 'checkCircle' : 'plusCircle'} class={selected ? 'lt-check' : 'lt-uncheck'} />
               }
             >
-              <ItemContent icon="pin" color={selected ? 'place' : 'system'} title={spot.name} meta={meta} />
+              <ItemContent
+                icon="pin"
+                color={selected ? 'place' : 'system'}
+                title={spot.name}
+                meta={veedelName(spot.veedelId)}
+                tags={[
+                  { label: `Andrang ${Math.round(spot.demand * 100)} %`, icon: 'users', color: 'people' },
+                  travel !== null && { label: `${travel} Min. zum nächsten`, icon: 'route' },
+                  !!taken && { label: `führt ${taken}`, icon: 'crew', color: 'warn' },
+                ]}
+              />
             </ListItem>
           );
         })}
@@ -244,10 +253,10 @@ function ConfirmStep(props: { staffId: string; spotIds: string[]; onBack: () => 
           })}
         </List>
       </Group>
-      <Hint icon="info">
+      <Disclosure label="Was macht ein Leutnant?">
         {m.name} heuert an (Tagesbudget {formatEuro(DEFAULT_SETTINGS.hireBudgetPerDay)}), ersetzt Ausfälle und bestellt
         nach seinen Regeln. Ändern kannst du das auf seiner Seite.
-      </Hint>
+      </Disclosure>
       <div class="lt-actions">
         <Button onClick={props.onBack}>Zurück zu den Spots</Button>
       </div>
