@@ -192,6 +192,13 @@ Nur Variablen verwenden.
 - **Hardware und Wallpaper:** `--hw-*` (Gehäuse, Island), `--wall-*` und `--home-*` (Himmel und Schrift des
   Startbildschirms, immer dunkel bzw. hell).
 
+**Optik-Regeln (Auftrag 27):**
+- Nie mitten im Wort umbrechen: Zeilentitel (`.ui-item__title`) bleiben auf einer Zeile und werden mit „…“ gekürzt,
+  Fließtext bricht nur an Wortgrenzen (`overflow-wrap: normal`, `hyphens: manual`, im ganzen Handy).
+- Mehrere Eigenschaften stehen als Chips (`ItemContent tags`), nicht als „a · b · c“. Status immer mit Symbol und Wort.
+- Höchstens ein kurzer Satz Erklärung pro Abschnitt sichtbar (`Group note`), alles Weitere in `Group more` oder
+  `Disclosure`.
+
 **Farbe sparsam:**
 - Farbe steht in Kacheln (`IconChip`), Zeichen und Etiketten, nie als Vollfläche im Inhalt. Jede Farbe kommt mit Symbol
   oder Beschriftung, nie allein.
@@ -205,8 +212,11 @@ Nur Variablen verwenden.
 
 ## Bausteine (`components/`)
 
-`Group` (Abschnitt wie in den iOS-Einstellungen: Kachel, Titel in Großbuchstaben, Zähler, Fußnote), `ItemContent`
-(Zeileninhalt in einem `ListItem`: Kachel in der Bedeutungsfarbe, Titel, Zweitzeile, darunter z.B. ein Fortschritt),
+`Group` (Abschnitt mit sichtbarer Unterlage und farbiger Kopfzeile nach Bedeutung: Kachel, Titel in Großbuchstaben,
+Zähler, `value` rechts, Fußnote `note` (ein Satz), `more` zum Ausklappen, `collapsible`), `ItemContent`
+(Zeileninhalt in einem `ListItem`: Kachel in der Bedeutungsfarbe, Titel, Zweitzeile, `tags` als Chips, darunter z.B. ein
+Fortschritt), `Chip`/`Chips` (Eigenschaft als kleine Fläche in der Bedeutungsfarbe, nie „a · b · c“ als Text),
+`Disclosure` („Mehr dazu“, ausklappbar, merkt sich nichts),
 `SummaryTiles` (zwei oder drei Kennzahlen als Kacheln oben auf einer Seite),
 `Button` (`variant`: default, primary, success, danger, subtle, link; `icon`, `badge`, `big`), `IconButton`,
 `SegmentedControl` (`wide`, Segmente mit `badge`), `Card` (`icon`, `color`, `tone`, `summary`, `status`), `Hint`,

@@ -70,7 +70,9 @@ ganzen Code ändern, sofern der Auftrag nichts anderes sagt. Vor jedem Push: `np
 [Auftrag 26](26-handy-aufraeumen.md) ist erledigt: sechs Apps im Raster, vier im Dock, schwarzer Startbildschirm, Wetter und
 Verlauf (Ereignisse, Meldungen, Aufträge) in den Einstellungen, Personal mit „Leute finden“, Geldwäsche als App, Hafen und
 Umlagern auf der Lager- bzw. Hafen-Seite, Nachrichten kompakt mit Löschen, Banner nur für Dringendes, HUD mit Ruf · Reviere
-und aufklappbarem Lager. Auftrag 27 kann starten.
+und aufklappbarem Lager. [Auftrag 27](27-handy-inhalte-bilanz.md) ist erledigt: Optik-Regeln in den Bausteinen (Chips statt
+„a · b“, Gruppen mit Unterlage und farbiger Kopfzeile, „Mehr dazu“ statt langer Hinweise, kein Umbruch im Wort), Kasse als
+Bilanz mit Zeitraum und Filter, Geldwäsche mit drei Wegen, mehr Bewerber und Rumfragen mit Rollenwahl, Gangs-Kopf mit Stärke.
 
 Zwei Aufträge tragen die Nummer 24 (parallel entstanden). [Auftrag 24 „Look Glas“](24-look-glas.md) setzt den Look „Glas“ für alles außerhalb des Handys um (HUD, Spot-Schilder, Marker,
 Konfrontation als Akte mit sechs Wegen, Razzia, Lieferung live, Veedel übernommen).
@@ -95,16 +97,18 @@ Auftrag 27  Handy-Inhalte (Bilanz, Geldwäsche, Personal, Gangs, Optik)
 | Auftrag | Thema | Wann |
 | --- | --- | --- |
 | [26](26-handy-aufraeumen.md) | Weniger Apps, schwarzer Startbildschirm, Personal und Geldwäsche als Apps, Nachrichten (gelesen, löschen), weniger Banner, HUD (Ruf + Reviere, Lager klappt auf) | erledigt |
-| [28](28-spots-rechte-hand.md) | Spots in jedem Veedel, weniger Aufträge, Kuriere fallen weg, nur die Rechte Hand nimmt Aufträge an und fährt aus, Rechte Hand mit Aufgaben bis "Köln läuft allein" | sofort, parallel zu 26 |
-| [27](27-handy-inhalte-bilanz.md) | Kasse als Bilanz, Geldwäsche mit drei Wegen, mehr Bewerber, Gangs-Kopf, Chips statt "·", keine Umbrüche im Wort | nach dem Merge von 26 |
+| [28](28-spots-rechte-hand.md) | Spots in jedem Veedel, weniger Aufträge, Kuriere fallen weg, nur die Rechte Hand nimmt Aufträge an und fährt aus, Rechte Hand mit Aufgaben bis "Köln läuft allein" | erledigt |
+| [27](27-handy-inhalte-bilanz.md) | Kasse als Bilanz, Geldwäsche mit drei Wegen, mehr Bewerber, Gangs-Kopf, Chips statt "·", keine Umbrüche im Wort | erledigt |
 
 Auftrag 23 (geplant) überschneidet sich mit 28 (Disponent, Daueraufträge). Wird 23 später gestartet, gilt: Der
 Disponent ist in der Rechten Hand aus Auftrag 28 aufgegangen.
 
-**Stand Auftrag 28:** umgesetzt (Branch `claude/auftrag-28-spots-rechte-hand`). Jedes Veedel hat mindestens zwei
+**Stand Auftrag 28:** umgesetzt und gemergt. Jedes Veedel hat mindestens zwei
 Spots, Lieferanfragen kommen halb so oft, Kuriere sind weg, die Rechte Hand fährt Aufträge und hat sechs Aufgaben mit
-Stufen (`hierarchy/tasks.ts`); das Ziel "mehrere Städte" steht in `docs/konzept.md`. Die Oberfläche der Aufgaben
-(Regel-Blätter, Optik) ist Sache von Auftrag 27.
+Stufen (`hierarchy/tasks.ts`); das Ziel "mehrere Städte" steht in `docs/konzept.md`.
+
+**Stand Auftrag 27:** umgesetzt. Offen geblieben (spätere Aufträge): Regel-Blätter für die Aufgaben der Rechten Hand,
+Tarnfirmen mit eigenem Gameplay (die drei Wege der Geldwäsche sind die Vorstufe), Chips im Chat (Routine/Chefsache).
 
 ## Mergen
 

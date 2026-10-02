@@ -10,7 +10,10 @@ zu drei Spots, Rechte Hand, Polizei-Härte nach Größe des Geschäfts. Auftrag 
 schwarzer Startbildschirm, Verlauf und Wetter in den Einstellungen, Chats löschen, Banner nur für Dringendes, HUD mit
 Ruf · Reviere und aufklappbarem Lager). Auftrag 28: Spots in jedem Veedel, keine Kuriere mehr, nur die Rechte Hand fährt
 Aufträge aus und hat Aufgaben mit Stufen (`hierarchy/tasks.ts`); Nachrichten tragen `routine` (Rechte Hand darf antworten)
-oder sind Chefsache. Wie alles zusammenspielt: `docs/architektur.md`, Abschnitt "Zusammenspiel der Systeme".
+oder sind Chefsache. Auftrag 27: Kasse als Bilanz (Zeitraum, Filter Köln/Veedel/Spot/Leutnant, `balance`), Geldwäsche mit
+drei Wegen (`laundering/config.ts`), mehr Bewerber und Rumfragen mit Rollenwahl, Gangs-Kopf mit Stärke, Optik-Regeln in den
+Bausteinen (Chips statt „a · b“, Gruppen mit Unterlage, `Disclosure`, kein Umbruch im Wort). Wie alles zusammenspielt:
+`docs/architektur.md`, Abschnitt "Zusammenspiel der Systeme".
 
 ## Architektur in Kürze
 
@@ -110,6 +113,9 @@ In `src/modules/<id>/ui/index.tsx` (Beispiel in `_template/ui/`): `registerHudIt
 `registerDialog` (mit `area: 'map'` nur über der Kartenfläche, dazu `MapDialog`), `registerMapLayerOption` (Menü Ebenen),
 `registerPhoneApp`, `registerLiveActivity` (Dynamic Island), `registerAdvisor` (Karte "Nächster Schritt"), `registerSearch` (Strg/⌘+K), `registerGameStat`
 (Game-Over-Bildschirm), `onGameEvent`, `soundOnEvent` aus `src/ui`, `registerMapLayer` und `mapEffects` aus `src/map`.
+**Optik-Regeln (Auftrag 27):** Eigenschaften in Listen als Chips (`ItemContent tags`, `Chip`/`Chips`), nie als „a · b · c“;
+Abschnitte als `Group` (Unterlage, farbige Kopfzeile, `value`, `collapsible`); höchstens ein Satz Erklärung sichtbar, mehr in
+`Disclosure` oder `Group more`; Namen und Werte brechen nie im Wort um.
 HUD-Anzeigen mit `<HudPill>` (mit `details` klappt beim Drüberfahren eine Glas-Karte auf). **Das Handy hat seit Auftrag 26 genau
 sechs Apps** (Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen) und vier im Dock (Nachrichten, Lieferanten, Personal,
 Kasse): Neues hängt sich als Abschnitt oder Seite an eine davon (Slots oben, `registerPanel`), eine neue App braucht einen Grund;
