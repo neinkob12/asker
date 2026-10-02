@@ -1,6 +1,7 @@
 // Größe deines Geschäfts aus Sicht der Polizei: Kleindealer, Händler, Großhändler (mit Hysterese).
 // Gerechnet aus kontrollierten Veedeln, Spots, Leuten im Einsatz, Leutnants, Lagern, Liegeplatz und dem Umsatz pro Tag
-// (Schnitt über 7 Tage aus der Kasse). Die Stufe bestimmt, wie hart die Polizei durchgreift (index.ts).
+// (Schnitt über die letzten bis zu 7 vollen Tage aus der Kasse). Die Stufe bestimmt, wie hart die Polizei durchgreift
+// (index.ts).
 
 import type { GameState } from '../../core';
 import { playerSpot } from '../customers';
@@ -36,7 +37,7 @@ export interface OperationFacts {
   /** Eigene Lager. */
   warehouses: number;
   berth: boolean;
-  /** Umsatz pro Tag, Schnitt über die letzten 7 Tage. */
+  /** Umsatz pro Tag, Schnitt über die letzten (bis zu 7) vollen Tage. */
   revenue: number;
 }
 
@@ -49,8 +50,11 @@ export interface OperationTier {
 }
 
 export function operationFacts(state: GameState): OperationFacts {
-  const days = Math.min(7, currentDay(state));
-  const report = periodReport(state, days);
+  // Nur volle Tage zählen: Der angefangene Tag würde den Schnitt drücken (früh am Tag fast um die Hälfte). Erst am
+  // ersten Spieltag gibt es noch keinen vollen, dann zählt der laufende.
+  const full = Math.min(7, currentDay(state) - 1);
+  const days = Math.max(1, full);
+  const report = periodReport(state, days, full >= 1 ? 1 : 0);
   const sales = report.rows.filter((r) => r.category.startsWith('sales.')).reduce((sum, r) => sum + r.amount, 0);
   return {
     veedel: controlledBy(state, PLAYER_FACTION).length,

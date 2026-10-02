@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { clock, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { DEFAULT_BOT, newBotStats, playFor } from '../../playtest/bot';
-import { getSpots } from '../spots';
-import { getStaff } from '../staff';
+import { getPool } from '../recruiting';
+import { customSpots, getSpots } from '../spots';
+import { enlist, generateProfile, getStaff } from '../staff';
 import { DAYS_KEPT, REASON_DAYS_KEPT } from './config';
 import {
   balance,
@@ -14,11 +15,31 @@ import {
   dailyProfits,
   dayReport,
   explainReport,
+  filterTargets,
   lieutenantResult,
   periodReport,
   spotResult,
   wageRunway,
 } from './index';
+
+/** Ein Spiel, in dem niemand von selbst kauft: Es bewegt sich nur das Geld, das der Test bewegt. */
+function quietGame(seed = 1) {
+  const sim = createTestGame({ seed });
+  for (const key of Object.keys(sim.state.modules.customers.nextSpawnAt)) {
+    sim.state.modules.customers.nextSpawnAt[key] = Infinity;
+  }
+  sim.state.wallet.dirty = 40000;
+  return sim;
+}
+
+/** Läufer mit Stufe 2 und guten Werten (wird Leutnant). */
+function recruitRunner(sim: ReturnType<typeof quietGame>, level = 2) {
+  const ctx = sim.ctx('staff');
+  const member = enlist(ctx, generateProfile(ctx, 'runner', { level }), { origin: 'pool' });
+  member.stats.loyalty = 80;
+  member.stats.caution = 90;
+  return member;
+}
 
 describe('Kasse', () => {
   it('jede Kontobewegung im Bot-Lauf hat eine Kategorie', () => {
@@ -135,5 +156,100 @@ describe('Kasse', () => {
     wallet.lose(sim.ctx('test'), sim.state.wallet.dirty, 'dirty', 'Weg', 'loss.theft');
     sim.advance(1);
     expect(wageRunway(sim.state).warn).toBe(true);
+  });
+  it('der Bilanz-Filter kennt auch selbst gegründete Spots und ihr Veedel', () => {
+    const sim = createTestGame();
+    expect(sim.dispatch({ type: 'spots.found', payload: { lng: 7.0035, lat: 50.9385 } }).ok).toBe(true);
+    const [own] = customSpots(sim.state);
+    // Eigene Spots stehen nicht in "unlocked": Sie dürfen im Filter trotzdem nicht fehlen (sonst tut der Tipp auf
+    // "Pro Spot" nichts, weil der Filter sofort auf "Ganz Köln" zurückfällt).
+    expect(sim.state.modules.spots.unlocked).not.toContain(own.id);
+    const targets = filterTargets(sim.state);
+    expect(targets.spots.map((s) => s.id)).toContain(own.id);
+    expect(targets.veedelIds).toContain(own.veedelId);
+    expect(targets.spots.map((s) => s.id).sort()).toEqual(
+      getSpots(sim.state)
+        .map((s) => s.id)
+        .sort(),
+    );
+  });
+
+  it('Handgeld eines Bewerbers zählt zu den einmaligen Kosten seines Spots und seines Leutnants', () => {
+    const sim = quietGame();
+    const lieutenant = recruitRunner(sim);
+    expect(sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: lieutenant.id, spotIds: ['uni'] } }).ok).toBe(
+      true,
+    );
+    const candidate = getPool(sim.state)[0];
+    candidate.role = 'runner';
+    expect(
+      sim.dispatch({
+        type: 'recruiting.hire',
+        payload: { candidateId: candidate.id, assignment: { kind: 'spot', targetId: 'uni' } },
+      }).ok,
+    ).toBe(true);
+    expect(spotResult(sim.state, 'uni', 1).invest).toBe(candidate.hireCost);
+    expect(lieutenantResult(sim.state, lieutenant.id, 1).invest).toBe(candidate.hireCost);
+    // Der Filter für den Leutnant zeigt die Kosten (die Erklärung verspricht "Anheuern, Freischalten").
+    const filtered = balance(sim.state, 'today', { kind: 'lieutenant', staffId: lieutenant.id });
+    expect(filtered.rows.find((r) => r.category === 'hiring')?.amount).toBe(-candidate.hireCost);
+  });
+
+  it('der Lohn eines Abgetauchten zählt weiter für seinen Spot und seinen Leutnant', () => {
+    const sim = quietGame();
+    const lieutenant = recruitRunner(sim);
+    expect(sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: lieutenant.id, spotIds: ['uni'] } }).ok).toBe(
+      true,
+    );
+    expect(sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'uni' } }).ok).toBe(true);
+    const runner = getStaff(sim.state, { spotId: 'uni' })[0];
+    // Kurz vor Mitternacht taucht das Veedel ab: Der Läufer hat keinen Einsatz mehr, wenn der Lohn gebucht wird und die
+    // Kasse die Buchung liest.
+    sim.advance(clock.at(2, 0, 0) - 5 - sim.state.time);
+    const veedelId = getSpots(sim.state).find((s) => s.id === 'uni')?.veedelId ?? '';
+    expect(sim.dispatch({ type: 'staff.lieLow', payload: { veedelId, until: sim.state.time + 600 } }).ok).toBe(true);
+    expect(runner.assignment).toBeNull();
+    sim.advance(10);
+    expect(sim.state.modules.staff.hiding[veedelId]).toBeDefined();
+    expect(spotResult(sim.state, 'uni', 2).wages).toBe(runner.wage);
+    expect(lieutenantResult(sim.state, lieutenant.id, 2).wages).toBe(runner.wage + lieutenant.wage);
+  });
+
+  it('der Lohn trägt den Spot der Person schon bei der Buchung (die Kasse liest ihn erst später im Schritt)', () => {
+    const sim = quietGame();
+    const events = recordEvents(sim);
+    expect(sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'uni' } }).ok).toBe(true);
+    const runner = getStaff(sim.state, { spotId: 'uni' })[0];
+    sim.advance(clock.at(2, 0, 0) + 1 - sim.state.time);
+    const wage = eventsOfType(events, 'wallet.changed').find((e) => e.payload.category === 'wages.runner');
+    expect(wage?.payload).toMatchObject({ staffId: runner.id, spotId: 'uni', amount: -runner.wage });
+  });
+
+  it('eine Bilanz mit nur einer Umbuchung sagt das, statt "Keine Kontobewegung"', () => {
+    const sim = quietGame();
+    // Kurz vor Mitternacht anfangen: Die Wäsche läuft über die Tagesgrenze, der neue Tag hat nur die Umbuchung.
+    sim.advance(clock.at(2, 0, 0) - 30 - sim.state.time);
+    expect(sim.dispatch({ type: 'laundering.launder', payload: { amount: 2000, channel: 'kiosk' } }).ok).toBe(true);
+    sim.advance(clock.at(2, 3, 0) - sim.state.time);
+    const today = balance(sim.state, 'today');
+    expect(today.rows.map((r) => r.category)).toEqual(['transfer']);
+    expect(today.rows[0].clean).toBeGreaterThan(0);
+    expect(today.profit).toBe(0);
+    expect(explainReport(today)).toMatch(/Umbuchung/);
+    expect(explainReport(today)).not.toMatch(/Keine Kontobewegung/);
+  });
+
+  it('30-Tage-Summe einer Kategorie ist mehr als die Summe der Buchungstexte (das Panel nimmt die Bilanz, nicht die Texte)', () => {
+    const sim = quietGame();
+    const ctx = sim.ctx('test');
+    for (let day = 0; day < 12; day++) {
+      wallet.pay(ctx, 100, 'dirty', `Einkauf ${day}`, 'goods.purchase');
+      sim.advance(1440);
+    }
+    const month = balance(sim.state, 'month').rows.find((r) => r.category === 'goods.purchase');
+    expect(month?.amount).toBe(-1200);
+    // Texte gibt es nur für die jüngsten Tage: Aus ihnen allein wäre die Summe zu klein.
+    const fromTexts = categoryLines(sim.state, 'goods.purchase', 30).reduce((sum, l) => sum + l.amount, 0);
+    expect(fromTexts).toBeGreaterThan(-1200);
   });
 });

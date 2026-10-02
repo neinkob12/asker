@@ -294,7 +294,8 @@ export function cutPreview(
     quality: roundQuality(lot.quality * Math.max(0, 1 - ratio * CUT_QUALITY_LOSS)),
     cut: round3(1 - (1 - lot.cut) * share),
     unitCost: round2(lot.unitCost * share + CUT_AGENT_COST * (1 - share)),
-    cost: round2(added * CUT_AGENT_COST),
+    // Ganze Euro: Cent-Beträge im Konto würden in den Apps (HUD, Kasse, Geldwäsche) unterschiedlich gerundet.
+    cost: Math.max(1, Math.round(added * CUT_AGENT_COST)),
   };
 }
 

@@ -393,7 +393,9 @@ function profileOf(c: Candidate): RecruitProfile {
 function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null, meta: CommandMeta): CommandResult {
   const c = getCandidate(ctx.state, candidateId);
   if (!c || c.expiresAt <= ctx.now) return { ok: false, reason: 'Die Person ist nicht mehr zu haben.' };
-  if (!wallet.pay(ctx, c.hireCost, 'dirty', `Handgeld ${c.name}`, 'hiring')) {
+  // Kommt die Person an einen Spot, gehört das Handgeld zu dessen Kosten (Kasse: Pro Spot und Pro Leutnant).
+  const tag = assignment?.kind === 'spot' ? { category: 'hiring' as const, spotId: assignment.targetId } : 'hiring';
+  if (!wallet.pay(ctx, c.hireCost, 'dirty', `Handgeld ${c.name}`, tag)) {
     return { ok: false, reason: `Nicht genug Geld für das Handgeld (${formatEuro(c.hireCost)}).` };
   }
   const s = ctx.state.modules.recruiting;

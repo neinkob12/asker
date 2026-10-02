@@ -7,6 +7,7 @@ import { CUT_AGENT_COST, CUT_QUALITY_LOSS, START_QUALITY, START_STOCK } from './
 import {
   allProducts,
   averageQuality,
+  cutPreview,
   getLots,
   getProduct,
   getStock,
@@ -105,6 +106,16 @@ describe('goods', () => {
     expect(eventsOfType(events, 'goods.cut')[0].payload).toMatchObject({ added: 10, productId: 'weed' });
     // Die gestreckte Ware verrät sich beim Verkauf über den Streckanteil.
     expect(take(sim.ctx('test'), { productId: 'weed', amount: 5 }).cut).toBeCloseTo(0.2);
+  });
+
+  it('Streckmittel kostet ganze Euro, mindestens einen (keine Cent im Konto, die Apps runden verschieden)', () => {
+    const sim = createTestGame();
+    const [lot] = getLots(sim.state);
+    // 11 g Streckmittel wären 3,30 €: Gezahlt werden 3 €.
+    expect(cutPreview({ ...lot, amount: 45 }, 0.25)).toMatchObject({ added: 11, cost: 3 });
+    expect(cutPreview({ ...lot, amount: 3 }, 0.34)).toMatchObject({ added: 1, cost: 1 });
+    expect(sim.dispatch({ type: 'goods.cut', payload: { lotId: lot.id, ratio: 0.28 } }).ok).toBe(true);
+    expect(Number.isInteger(sim.state.wallet.dirty)).toBe(true);
   });
 
   it('Strecken hat Grenzen: nicht zu viel, nicht bei abgepackter Ware', () => {

@@ -108,6 +108,15 @@ export function findAvailable(state: GameState, filter: { role: StaffRole }): St
   return state.modules.staff.members.find((m) => m.role === filter.role && m.status === 'active' && !m.assignment);
 }
 
+/** Wohin die Person nach dem Abtauchen zurückgeht (null, wenn sie nicht abgetaucht ist). */
+export function hidingReturn(state: GameState, staffId: string): StaffAssignment | null {
+  for (const hiding of Object.values(state.modules.staff.hiding)) {
+    const entry = hiding.returns.find((r) => r.staffId === staffId);
+    if (entry) return entry.assignment;
+  }
+  return null;
+}
+
 /** Wer nach dem Abtauchen an seinen Platz zurück soll, steht anderen nicht zur Verfügung (sonst fehlt er dort später). */
 function reservedForReturn(state: GameState): Set<string> {
   const ids = new Set<string>();

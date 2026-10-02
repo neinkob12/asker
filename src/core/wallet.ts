@@ -106,6 +106,16 @@ declare module './types' {
   }
 }
 
+/**
+ * Ein Betrag ist eine endliche Zahl ab 0. NaN darf nie ins Konto: Danach wäre jeder Vergleich falsch (alles "bezahlbar"),
+ * und das Speichern macht daraus null.
+ */
+function checkAmount(fn: string, amount: number): void {
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new Error(`wallet.${fn}: Betrag muss eine endliche Zahl ab 0 sein (war ${amount})`);
+  }
+}
+
 function change(ctx: Ctx, kind: MoneyKind, amount: number, reason: string, tag?: MoneyCategory | MoneyTag): void {
   if (amount === 0) return;
   ctx.state.wallet[kind] += amount;
@@ -133,20 +143,24 @@ export const wallet = {
 
   /** Einnahme verbuchen. */
   earn(ctx: Ctx, amount: number, kind: MoneyKind = 'dirty', reason = '', category?: MoneyCategory | MoneyTag): void {
-    if (amount < 0) throw new Error('wallet.earn: Betrag muss positiv sein');
+    checkAmount('earn', amount);
     change(ctx, kind, amount, reason, category);
   },
 
   /** Bezahlen. Gibt false zurück und ändert nichts, wenn das Geld nicht reicht. */
   pay(ctx: Ctx, amount: number, kind: MoneyKind = 'dirty', reason = '', category?: MoneyCategory | MoneyTag): boolean {
-    if (amount < 0) throw new Error('wallet.pay: Betrag muss positiv sein');
+    checkAmount('pay', amount);
     if (ctx.state.wallet[kind] < amount) return false;
     change(ctx, kind, -amount, reason, category);
     return true;
   },
 
-  /** Geld verlieren (Beschlagnahme, Diebstahl): höchstens so viel, wie da ist. Gibt den verlorenen Betrag zurück. */
+  /**
+   * Geld verlieren (Beschlagnahme, Diebstahl): höchstens so viel, wie da ist (auch Infinity = alles). Gibt den
+   * verlorenen Betrag zurück; ein negativer Betrag verliert nichts.
+   */
   lose(ctx: Ctx, amount: number, kind: MoneyKind = 'dirty', reason = '', category?: MoneyCategory | MoneyTag): number {
+    if (Number.isNaN(amount)) throw new Error('wallet.lose: Betrag ist keine Zahl');
     const lost = Math.max(0, Math.min(amount, ctx.state.wallet[kind]));
     change(ctx, kind, -lost, reason, category);
     return lost;
@@ -165,7 +179,10 @@ export const wallet = {
     reason = '',
     feeCategory: MoneyCategory = 'laundering',
   ): boolean {
-    if (ctx.state.wallet[from] < amount) return false;
+    // Die Gebühr kann nicht größer sein als der Betrag, sonst entstünde Geld aus dem Nichts.
+    checkAmount('convert', amount);
+    checkAmount('convert', fee);
+    if (fee > amount || ctx.state.wallet[from] < amount) return false;
     change(ctx, from, -(amount - fee), reason, 'transfer');
     if (fee > 0) change(ctx, from, -fee, reason, feeCategory);
     change(ctx, to, amount - fee, reason, 'transfer');
