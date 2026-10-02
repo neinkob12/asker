@@ -25,6 +25,7 @@ import {
   type GameState,
   journal,
   type LngLat,
+  type Message,
   messages,
   wallet,
 } from '../../core';
@@ -81,6 +82,8 @@ export interface PortCargo {
   /** Einkaufspreis pro Einheit. */
   unitCost: number;
   arrivedAt: number;
+  /** Lager, für das bestellt wurde: Die Abholung fährt dorthin, wenn nichts anderes gewählt wird. */
+  warehouseId?: string;
 }
 
 export type TripKind = 'pickup' | 'transfer';
@@ -301,7 +304,14 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 /** Schiffsware kommt am Kai an (ruft suppliers auf, wenn ein Schiff anlegt). Gibt die ID zurück. */
 export function receiveCargo(
   ctx: Ctx,
-  item: { supplierId: string; productId: string; amount: number; quality: number; unitCost: number },
+  item: {
+    supplierId: string;
+    productId: string;
+    amount: number;
+    quality: number;
+    unitCost: number;
+    warehouseId?: string;
+  },
 ): number {
   const cargo: PortCargo = { id: ctx.nextId(), ...item, arrivedAt: ctx.now };
   ctx.state.modules.logistics.cargo.push(cargo);
@@ -435,6 +445,13 @@ function itemsText(items: readonly TripItem[]): string {
   return parts.length <= 2 ? parts.join(' und ') : `${parts.slice(0, 2).join(', ')} und mehr`;
 }
 
+/** Wofür die Ware bestellt wurde: das gemeinsame Ziel-Lager, wenn alle dasselbe wollen und es dir noch gehört. */
+function wishedWarehouse(state: GameState, cargo: readonly PortCargo[]) {
+  const wanted = new Set(cargo.map((c) => c.warehouseId));
+  const [id] = [...wanted];
+  return wanted.size === 1 && id ? getWarehouse(state, id) : undefined;
+}
+
 function pickup(
   ctx: Ctx,
   payload: { by: 'player' | 'driver'; driverId?: string; warehouseId?: string; cargoIds?: number[] },
@@ -444,7 +461,9 @@ function pickup(
   const cargo = s.cargo.filter((c) => !payload.cargoIds || payload.cargoIds.includes(c.id));
   if (cargo.length === 0) return { ok: false, reason: 'Am Kai wartet nichts auf dich.' };
   const port = portPlace();
-  const warehouse = payload.warehouseId ? getWarehouse(state, payload.warehouseId) : nearestWarehouse(state, port);
+  const warehouse = payload.warehouseId
+    ? getWarehouse(state, payload.warehouseId)
+    : (wishedWarehouse(state, cargo) ?? nearestWarehouse(state, port));
   if (!warehouse) return { ok: false, reason: 'Dieses Lager gehört dir nicht.' };
   let driverId: string | null = null;
   if (payload.by === 'player') {
@@ -691,6 +710,33 @@ function driverGone(ctx: Ctx, staffId: string): void {
   }
 }
 
+/** Container, auf die sich eine Hafen-Frage bezieht (steht in den Abhol-Optionen). */
+function questionCargoIds(message: Message): number[] {
+  return (message.options ?? []).flatMap((o) =>
+    o.command?.type === 'logistics.pickup' ? (o.command.payload.cargoIds ?? []) : [],
+  );
+}
+
+/** Offene Fragen des Hafenmeisters zu diesen Containern (z.B. damit die Rechte Hand sie beantworten kann). */
+export function harborQuestions(state: GameState, cargoIds: readonly number[]): Message[] {
+  return state.messages.list.filter(
+    (m) =>
+      m.contactId === HARBOR_CONTACT.id &&
+      messages.canAnswer(state, m) &&
+      questionCargoIds(m).some((id) => cargoIds.includes(id)),
+  );
+}
+
+/** Fragen zu Containern, die nicht mehr am Kai stehen (abgeholt, vom Zoll geholt), haben sich erledigt. */
+function retractStaleQuestions(ctx: Ctx): void {
+  const onQuay = new Set(ctx.state.modules.logistics.cargo.map((c) => c.id));
+  for (const m of ctx.state.messages.list) {
+    if (m.contactId !== HARBOR_CONTACT.id || !messages.canAnswer(ctx.state, m)) continue;
+    const ids = questionCargoIds(m);
+    if (ids.length > 0 && !ids.some((id) => onQuay.has(id))) messages.retract(ctx, m.id);
+  }
+}
+
 /** Zoll am Kai: Ware, die zu lange steht, kann jede Stunde gefunden werden. */
 function customs(ctx: Ctx): void {
   const s = ctx.state.modules.logistics;
@@ -717,6 +763,7 @@ function tick(ctx: Ctx): void {
     else if (trip.arrivesAt <= ctx.now) arrive(ctx, trip);
   }
   if (ctx.now % 60 === 0) customs(ctx);
+  retractStaleQuestions(ctx);
 }
 
 export default defineModule({

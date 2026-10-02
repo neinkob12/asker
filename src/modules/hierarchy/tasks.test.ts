@@ -178,7 +178,8 @@ describe('Rechte Hand: Aufgaben (Auftrag 28)', () => {
     expect(isPortSupplierAllowed(sim.state)).toBe(false); // noch kein Fahrer
     recruit(sim, 'driver');
     expect(isPortSupplierAllowed(sim.state)).toBe(true);
-    const cargoId = receiveCargo(sim.ctx('logistics'), {
+    // Wie im Spiel: Das Schiff legt im Schritt der Lieferanten an, die Frage kommt also von "suppliers".
+    const cargoId = receiveCargo(sim.ctx('suppliers'), {
       supplierId: 'rotterdam',
       productId: 'weed',
       amount: 200,
@@ -186,7 +187,7 @@ describe('Rechte Hand: Aufgaben (Auftrag 28)', () => {
       unitCost: 3,
     });
     expect(getCargo(sim.state).map((c) => c.id)).toEqual([cargoId]);
-    const harbor = messages.openRoutine(sim.state).find((m) => m.source === 'logistics');
+    const harbor = messages.openRoutine(sim.state).find((m) => m.contactId === 'other:harbor');
     expect(harbor).toBeDefined();
     sim.advance(5);
     expect(getCargo(sim.state)).toHaveLength(0);

@@ -377,6 +377,23 @@ describe('suppliers', () => {
     expect(isUnlocked(loaded.state, 'rotterdam')).toBe(true);
     expect(isUnlocked(loaded.state, 'amsterdam')).toBe(false);
   });
+
+  it('migriert Version 3: Lieferanten ohne Bedingungen (Köln) kommen dazu, schon Freigeschaltetes bleibt', () => {
+    const sim = createTestGame();
+    const raw = structuredClone(sim.state) as unknown as {
+      modules: { suppliers: { unlocked: string[]; offered: string[] } };
+      moduleVersions: Record<string, number>;
+    };
+    raw.modules.suppliers.unlocked = ['rotterdam', 'frankfurt', 'berlin', 'hamburg'];
+    raw.modules.suppliers.offered = ['rotterdam', 'frankfurt', 'berlin', 'hamburg'];
+    raw.moduleVersions.suppliers = 3;
+    const loaded = loadSimulation(raw, sim.modules);
+    expect(isUnlocked(loaded.state, 'koeln')).toBe(true);
+    expect(isUnlocked(loaded.state, 'rotterdam')).toBe(true);
+    expect(isUnlocked(loaded.state, 'amsterdam')).toBe(false);
+    expect(loaded.state.modules.suppliers.offered).toContain('koeln');
+    expect(loaded.state.moduleVersions.suppliers).toBe(4);
+  });
 });
 
 describe('suppliers: Darstellung der Hafenlieferung', () => {

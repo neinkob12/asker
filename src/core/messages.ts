@@ -186,6 +186,15 @@ export const messages = {
     );
   },
 
+  /**
+   * Eine offene Frage zurückziehen, weil sie sich erledigt hat (z.B. der Container ist längst abgeholt). Sie zeigt dann
+   * "Keine Antwort mehr möglich" und zählt nicht mehr als offen. Kein Ereignis, keine Antwort im Chat.
+   */
+  retract(ctx: Ctx, messageId: number): void {
+    const message = messages.get(ctx.state, messageId);
+    if (message && messages.canAnswer(ctx.state, message)) message.expired = true;
+  },
+
   /** Offene Fragen, die als Routine gekennzeichnet sind (die Rechte Hand darf sie beantworten). */
   openRoutine(state: GameState): Message[] {
     return state.messages.list.filter((m) => m.routine && messages.canAnswer(state, m));

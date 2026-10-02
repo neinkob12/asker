@@ -12,7 +12,7 @@ import { getOrders, type Order } from '../customers';
 import { wageRunway } from '../finance';
 import { DEFAULT_WAREHOUSE, getStock, getWarehouses, isWarehouseOwned, productName } from '../goods';
 import { amountInProgress, launderingCapacity, MIN_LAUNDERING_AMOUNT } from '../laundering';
-import { freeDrivers, getCargo } from '../logistics';
+import { freeDrivers, getCargo, harborQuestions } from '../logistics';
 import { getCandidates } from '../recruiting';
 import { getSpots } from '../spots';
 import { activeRunnerAt, getStaff, isLyingLow, runnerAt, runnerHireCost, type StaffMember } from '../staff';
@@ -166,14 +166,26 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
   }
 }
 
-/** Hafen abholen: Liegt Ware am Kai und ist ein Fahrer frei, schickt sie ihn los und beantwortet den Hafen-Chat. */
+/**
+ * Hafen abholen: Liegt Ware am Kai und ist ein Fahrer frei, schickt sie ihn los (eine Fahrt pro Ziel-Lager, die älteste
+ * Ware zuerst) und beantwortet die Hafen-Fragen zu dieser Ware.
+ */
 function handlePickup(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
   const state = ctx.state;
   if (!isTaskActive(state, 'pickup') || getCargo(state).length === 0 || freeDrivers(state).length === 0) return;
-  const result = ctx.dispatch({ type: 'logistics.pickup', payload: { by: 'driver' } }, { actor });
+  const first = getCargo(state)[0];
+  const group = getCargo(state).filter((c) => c.warehouseId === first.warehouseId);
+  const cargoIds = group.map((c) => c.id);
+  const result = ctx.dispatch(
+    {
+      type: 'logistics.pickup',
+      payload: { by: 'driver', cargoIds, ...(first.warehouseId ? { warehouseId: first.warehouseId } : {}) },
+    },
+    { actor },
+  );
   if (!result.ok) return;
-  for (const m of messages.openRoutine(state)) {
-    if (m.source === 'logistics') messages.answerAs(ctx, { messageId: m.id, optionId: 'driver', via: VIA });
+  for (const m of harborQuestions(state, cargoIds)) {
+    messages.answerAs(ctx, { messageId: m.id, optionId: 'driver', via: VIA });
   }
   rh.done.pickups += 1;
   addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);

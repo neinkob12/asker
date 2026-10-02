@@ -313,7 +313,11 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
   h.rightHand = {
     staffId,
     appointedAt: ctx.now,
-    settings: { ...DEFAULT_RIGHT_HAND_SETTINGS },
+    // Tief kopieren: Die Bestellregeln werden später verändert (paused), die Vorgabe darf das nie mitbekommen.
+    settings: {
+      ...DEFAULT_RIGHT_HAND_SETTINGS,
+      restockRules: DEFAULT_RIGHT_HAND_SETTINGS.restockRules.map((r) => ({ ...r, paused: null })),
+    },
     nextActionAt: ctx.now,
     reportDay: clock.day(ctx.now),
     lastReport: null,
