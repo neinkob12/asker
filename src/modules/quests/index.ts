@@ -31,8 +31,11 @@ import { CHAPTERS, PETER, QUEST_CHECK_EVERY, QUESTS, type QuestDef, type QuestRe
 export { CHAPTERS, PETER, QUESTS, type QuestDef, type QuestGoTo, type QuestReward } from './config';
 
 export interface QuestsState {
-  /** Index der aktiven Quest in QUESTS (= QUESTS.length, wenn alle durch sind). */
-  index: number;
+  /**
+   * Quest, zu der progress gehört und die Peter zuletzt geschickt hat. Aktiv ist immer die erste Quest in QUESTS, die
+   * weder erledigt noch übersprungen ist; weicht sie ab (neue Reihenfolge nach einem Update), schickt Peter sie neu.
+   */
+  activeId: string | null;
   /** Zähler bzw. Serie der aktiven Quest. */
   progress: number;
   /** Erledigte Quests (IDs), übersprungene stehen in skipped. */
@@ -59,14 +62,17 @@ declare module '../../core' {
 // Lesen
 
 export function currentQuest(state: GameState): QuestDef | null {
-  return QUESTS[state.modules.quests.index] ?? null;
+  const q = state.modules.quests;
+  return QUESTS.find((x) => !q.done.includes(x.id) && !q.skipped.includes(x.id)) ?? null;
 }
 
 /** Fortschritt der aktiven Quest: [jetzt, Ziel]. */
 export function questProgress(state: GameState): [number, number] {
   const quest = currentQuest(state);
   if (!quest) return [0, 0];
-  const now = quest.measure ? quest.measure(state) : state.modules.quests.progress;
+  const q = state.modules.quests;
+  const counted = q.activeId === quest.id ? q.progress : 0;
+  const now = quest.measure ? quest.measure(state) : counted;
   return [Math.min(quest.target, Math.max(0, now)), quest.target];
 }
 
@@ -143,9 +149,13 @@ function grant(ctx: Ctx, reward: QuestReward): void {
   }
 }
 
-/** Peter schickt die aktive Quest. */
-function announce(ctx: Ctx): void {
+/** Peter schickt die aktive Quest, wenn sie neu ist (Zähler beginnt bei 0). */
+function sync(ctx: Ctx): void {
+  const q = ctx.state.modules.quests;
   const quest = currentQuest(ctx.state);
+  if ((quest?.id ?? null) === q.activeId) return;
+  q.activeId = quest?.id ?? null;
+  q.progress = 0;
   if (!quest) return;
   const rewards = quest.reward.map(rewardText).join(', ');
   messages.send(ctx, { contact: PETER, text: `${quest.task}\n\nDafür gibt's von mir: ${rewards}.` });
@@ -163,8 +173,6 @@ function finish(ctx: Ctx, skipped: boolean): void {
     for (const reward of quest.reward) grant(ctx, reward);
     journal.add(ctx, `Quest erledigt: ${quest.title}. Belohnung: ${quest.reward.map(rewardText).join(', ')}.`, 'good');
   }
-  q.index += 1;
-  q.progress = 0;
   ctx.emit('quest.completed', { questId: quest.id, skipped });
   const next = currentQuest(ctx.state);
   if (!skipped && (!next || next.chapter !== quest.chapter)) {
@@ -175,7 +183,7 @@ function finish(ctx: Ctx, skipped: boolean): void {
         : 'Das war alles, was ich dir beibringen kann. Köln gehört jetzt dir, Boss.',
     });
   }
-  announce(ctx);
+  sync(ctx);
   // Die nächste Quest kann schon erfüllt sein (z.B. Rechte Hand gab es schon).
   check(ctx);
 }
@@ -194,6 +202,7 @@ function onEvent<K extends keyof GameEvents>(type: K) {
     if (!quest || !counter) return;
     const delta = counter(payload, ctx.state);
     if (!(delta > 0)) return;
+    sync(ctx);
     ctx.state.modules.quests.progress += delta;
     check(ctx);
   };
@@ -205,6 +214,44 @@ export function skipQuest(ctx: Ctx): CommandResult {
   return { ok: true };
 }
 
+interface QuestsStateV1 {
+  index: number;
+  progress: number;
+  done: string[];
+  skipped: string[];
+  title: string | null;
+}
+
+/** Reihenfolge der Quests in Version 1 (für die Migration). */
+const QUESTS_V1 = [
+  'firstSales',
+  'setPrice',
+  'order',
+  'pickup',
+  'revenue1k',
+  'runner',
+  'recruit',
+  'regular',
+  'driver',
+  'rightHand',
+  'rightHandDelivery',
+  'newSpot',
+  'warehouse',
+  'lieutenant',
+  'launder',
+  'cut',
+  'revenue10k',
+  'encounter',
+  'lowHeat',
+  'supplier',
+  'gangDeal',
+  'rightHandRank',
+  'firstVeedel',
+  'team10',
+  'threeVeedel',
+  'worth50k',
+];
+
 /** Alle Ereignisse, auf die irgendeine Quest hört. */
 const COUNTED: (keyof GameEvents)[] = [
   ...new Set(QUESTS.flatMap((q) => Object.keys(q.count ?? {}) as (keyof GameEvents)[])),
@@ -212,20 +259,19 @@ const COUNTED: (keyof GameEvents)[] = [
 
 export default defineModule({
   id: 'quests',
-  version: 1,
+  version: 2,
   dependsOn: ['goods', 'staff', 'territory', 'police', 'reputation', 'leaderboard'],
-  init: () => ({ index: 0, progress: 0, done: [], skipped: [], title: null }),
+  init: () => ({ activeId: null, progress: 0, done: [], skipped: [], title: null }),
   tickEvery: QUEST_CHECK_EVERY,
   tick: (ctx) => {
-    // Beim ersten Schritt schickt Peter die erste Quest.
-    const q = ctx.state.modules.quests;
-    if (q.index === 0 && q.done.length === 0 && q.skipped.length === 0 && !ctx.state.messages.contacts[PETER.id]) {
+    // Beim ersten Schritt stellt Peter sich vor.
+    if (!ctx.state.messages.contacts[PETER.id]) {
       messages.send(ctx, {
         contact: PETER,
         text: "Ey, ich bin's, Peter. Hab gehört, du willst in Köln groß rauskommen. Ich zeig dir, wie das läuft. Mach, was ich sag, dann gibt's auch was für dich.",
       });
-      announce(ctx);
     }
+    sync(ctx);
     if (currentQuest(ctx.state)?.measure) check(ctx);
   },
   commands: {
@@ -236,10 +282,21 @@ export default defineModule({
     'clock.hourStarted': (ctx) => {
       const quest = currentQuest(ctx.state);
       if (!quest?.streak) return;
+      sync(ctx);
       const q = ctx.state.modules.quests;
       q.progress = quest.streak(ctx.state) ? q.progress + 1 : 0;
       check(ctx);
     },
   },
-  migrations: {},
+  migrations: {
+    // Version 1 merkte sich die Position in der alten Reihenfolge. Jetzt zählt die ID; der Zähler der damals aktiven
+    // Quest bleibt, wenn sie es weiter ist.
+    2: (old: QuestsStateV1): QuestsState => ({
+      activeId: QUESTS_V1[old.index] ?? null,
+      progress: old.progress,
+      done: old.done,
+      skipped: old.skipped,
+      title: old.title,
+    }),
+  },
 });
