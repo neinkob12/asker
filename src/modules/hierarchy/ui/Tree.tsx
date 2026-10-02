@@ -31,12 +31,6 @@ function SpotRow(props: { spot: Spot }) {
   const away = runner ? undefined : runnerAt(state, spot.id);
   const guard = securityAt(state, { spotId: spot.id })[0];
   const today = spotResult(state, spot.id, 1);
-  const people = [
-    runner?.name ?? (away ? `${away.name} (${STATUS_NAMES[away.status]})` : 'kein Läufer'),
-    guard ? `Sicherheit ${guard.name}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
   return (
     <ListItem
       onClick={() => ui.openPanel('spots.spot', { spotId: spot.id })}
@@ -54,7 +48,15 @@ function SpotRow(props: { spot: Spot }) {
         icon="pin"
         color={runner ? 'place' : 'warn'}
         title={spot.name}
-        meta={`${veedelName(spot.veedelId)} · ${people}`}
+        meta={veedelName(spot.veedelId)}
+        tags={[
+          runner
+            ? { label: runner.name, icon: 'runner', color: 'people' }
+            : away
+              ? { label: `${away.name} ${STATUS_NAMES[away.status]}`, icon: 'clock', color: 'warn' }
+              : { label: 'kein Läufer', icon: 'alert', color: 'warn' },
+          guard && { label: guard.name, icon: 'shield', color: 'danger' },
+        ]}
       />
     </ListItem>
   );
@@ -78,8 +80,9 @@ function LieutenantBranch(props: { post: LieutenantPost }) {
           <ItemContent
             icon="crew"
             color={m.status === 'active' ? 'people' : 'warn'}
-            title={`${m.name} · Level ${m.level}`}
-            meta={`${postSummary(state, props.post)} · Ergebnis heute`}
+            title={m.name}
+            meta={postSummary(state, props.post)}
+            tags={[{ label: `Level ${m.level}` }, { label: 'Ergebnis heute', icon: 'chart', color: 'money' }]}
           />
         </ListItem>
         {spots.map((spot) => (
@@ -109,7 +112,19 @@ export function StaffTree() {
               icon="user"
               color="brand"
               title="Du"
-              meta={`${posts.length === 0 ? 'Keine Leutnants' : posts.length === 1 ? 'Ein Leutnant' : `${posts.length} Leutnants`} · Ergebnis heute`}
+              meta="Ergebnis heute"
+              tags={[
+                {
+                  label:
+                    posts.length === 0
+                      ? 'Keine Leutnants'
+                      : posts.length === 1
+                        ? 'Ein Leutnant'
+                        : `${posts.length} Leutnants`,
+                  icon: 'crew',
+                  color: 'people',
+                },
+              ]}
             />
           </ListItem>
           {(rh || rightHandOffered(state)) && <RightHandRow />}

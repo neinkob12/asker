@@ -74,7 +74,8 @@ function InfluenceSection(props: { veedelId: string }) {
       title="Revier"
       icon="flag"
       color="place"
-      note={`Deine Präsenz: ${presenceText}. Kontrolle ab ${CONTROL_THRESHOLD} Einfluss und mehr als alle anderen, verloren unter ${LOSE_CONTROL_THRESHOLD}. Verkäufe hier drängen die stärkste Gang zurück.`}
+      note={`Deine Präsenz: ${presenceText}.`}
+      more={`Kontrolle ab ${CONTROL_THRESHOLD} Einfluss und mehr als alle anderen, verloren unter ${LOSE_CONTROL_THRESHOLD}. Verkäufe hier drängen die stärkste Gang zurück.`}
     >
       <List>
         <ListItem value={<FactionName state={state} faction={owner} />}>

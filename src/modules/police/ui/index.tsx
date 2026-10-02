@@ -102,7 +102,8 @@ function PoliceSection(props: { veedelId: string }) {
       title="Polizei"
       icon="siren"
       color="law"
-      note={`Verkäufe und Gewalt treiben den Heat, mit der Zeit kühlt es ab. Polizeipräsenz: ${formatPercent(getVeedel(props.veedelId)?.policePresence ?? 1)}.`}
+      note={`Polizeipräsenz hier: ${formatPercent(getVeedel(props.veedelId)?.policePresence ?? 1)}.`}
+      more="Verkäufe und Gewalt treiben den Heat, mit der Zeit kühlt es ab. Ab einer Schwelle gibt es Kontrollen, darüber Razzien; ein Polizei-Kontakt warnt vorher."
     >
       <List>
         <TierRow />

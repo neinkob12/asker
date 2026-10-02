@@ -107,7 +107,10 @@ function SpotPrices(props: { spotId: string }) {
                 icon="leaf"
                 color="goods"
                 title={p.name}
-                meta={`Richtpreis ${formatNumber(reference, 1)} €${cost > 0 ? ` · Einkauf ${formatNumber(cost, 1)} €` : ''}`}
+                tags={[
+                  { label: `Richtpreis ${formatNumber(reference, 1)} €`, icon: 'chart', color: 'money' },
+                  cost > 0 && { label: `Einkauf ${formatNumber(cost, 1)} €`, icon: 'cart', color: 'goods' },
+                ]}
               >
                 <Stepper
                   class="mkt-price__stepper"
@@ -180,19 +183,27 @@ function MarketOverview(props: { productId?: string }) {
         title={`Richtpreis pro ${product?.unit ?? 'Einheit'}`}
         icon="chart"
         color="money"
-        note="Gefragt: mehr Nachfrage als Ware. Gesättigt: zu viel Ware im Veedel. Konkurrenz drückt den Preis."
+        more="Gefragt heißt: mehr Nachfrage als Ware, der Preis steigt. Gesättigt: zu viel Ware im Veedel, der Preis fällt. Konkurrenz durch Gangs drückt den Preis zusätzlich."
       >
         <List>
           {rows.map(({ veedel, price }) => {
             const t = trend(state, productId, veedel.id);
             const competition = getCompetitionFactor(state, veedel.id);
-            const meta =
-              [t === 'flat' ? '' : TREND_TEXT[t], competition === 1 ? '' : `Konkurrenz ${deviation(competition)}`]
-                .filter(Boolean)
-                .join(' · ') || undefined;
             return (
               <ListItem key={veedel.id} value={`${formatNumber(price, 2)} €`}>
-                <ItemContent icon={TREND_ICON[t]} color={TREND_COLOR[t]} title={veedel.name} meta={meta} />
+                <ItemContent
+                  icon={TREND_ICON[t]}
+                  color={TREND_COLOR[t]}
+                  title={veedel.name}
+                  tags={[
+                    t !== 'flat' && { label: TREND_TEXT[t], icon: TREND_ICON[t], color: TREND_COLOR[t] },
+                    competition !== 1 && {
+                      label: `Konkurrenz ${deviation(competition)}`,
+                      icon: 'skull',
+                      color: 'danger',
+                    },
+                  ]}
+                />
               </ListItem>
             );
           })}

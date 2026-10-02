@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { useContext } from 'preact/hooks';
 import { haptic } from '../haptics';
-import { type CategoryColor, type ChipColor, Icon, IconChip } from './Icon';
+import { type CategoryColor, type ChipColor, categoryOf, Icon, IconChip } from './Icon';
 import type { IconName } from './icons';
 import { BarActionsContext, Portal } from './Portal';
 import { rememberSectionTitle, SectionContext } from './section';
@@ -232,8 +232,10 @@ export function ListItem(props: ListItemProps) {
 }
 
 /**
- * Abschnitt einer Handy-Seite wie in den iOS-Einstellungen: Kachel in der Bedeutungsfarbe, Titel in Großbuchstaben,
- * optional ein Zähler, darunter der Inhalt (meist eine `List`) und eine Fußnote.
+ * Abschnitt einer Handy-Seite wie in den iOS-Einstellungen, seit Auftrag 27 mit sichtbarer Unterlage (Fläche und Rand)
+ * und farbiger Kopfzeile in der Bedeutungsfarbe: Kachel, Titel in Großbuchstaben, optional ein Zähler und rechts ein
+ * Wert (z.B. die Summe), darunter der Inhalt (meist eine `List`), eine kurze Fußnote (ein Satz) und ausklappbar alles
+ * Weitere (`more`). Mit `collapsible` klappt der ganze Abschnitt am Kopf auf und zu (merkt sich nichts).
  */
 export function Group(props: {
   title: ComponentChildren;
@@ -241,40 +243,138 @@ export function Group(props: {
   color?: ChipColor;
   /** Zahl neben dem Titel (0 = keine). */
   count?: number;
+  /** Wert rechts in der Kopfzeile, z.B. eine Summe. */
+  value?: ComponentChildren;
+  /** Ein kurzer Satz unter dem Inhalt. Längere Erklärungen gehören in `more`. */
   note?: ComponentChildren;
+  /** Erklärung, die erst nach einem Tipp auf "Mehr dazu" erscheint. */
+  more?: ComponentChildren;
+  /** Der Kopf klappt den Inhalt auf und zu. */
+  collapsible?: boolean;
+  /** Anfangs aufgeklappt (nur mit collapsible, Standard ja). */
+  open?: boolean;
   children?: ComponentChildren;
   class?: string;
 }) {
-  return (
-    <section class={`ui-group ${props.class ?? ''}`}>
-      <header class="ui-group__head">
-        {props.icon && <IconChip icon={props.icon} color={props.color ?? 'system'} solid size="sm" />}
-        <h3 class="ui-group__title">{props.title}</h3>
-        {props.count !== undefined && props.count > 0 && <span class="ui-group__count">{props.count}</span>}
-      </header>
-      {props.children}
+  const color = categoryOf(props.color ?? 'system');
+  const cls = `ui-group ui-group--${color} ${props.collapsible ? 'ui-group--collapsible' : ''} ${props.class ?? ''}`;
+  const head = (
+    <>
+      {props.icon && <IconChip icon={props.icon} color={color} solid size="sm" />}
+      <h3 class="ui-group__title">{props.title}</h3>
+      {props.count !== undefined && props.count > 0 && <span class="ui-group__count">{props.count}</span>}
+      {props.value !== undefined && props.value !== null && <span class="ui-group__value">{props.value}</span>}
+      {props.collapsible && <Icon name="chevronDown" class="ui-group__chevron" />}
+    </>
+  );
+  const body = (
+    <>
+      <div class="ui-group__body">{props.children}</div>
       {props.note && <p class="ui-group__note">{props.note}</p>}
+      {props.more && <Disclosure class="ui-group__more">{props.more}</Disclosure>}
+    </>
+  );
+  if (props.collapsible) {
+    return (
+      <details class={cls} open={props.open ?? true}>
+        <summary class="ui-group__head">{head}</summary>
+        {body}
+      </details>
+    );
+  }
+  return (
+    <section class={cls}>
+      <header class="ui-group__head">{head}</header>
+      {body}
     </section>
+  );
+}
+
+/** Eine Eigenschaft als Chip in einer Zeile (`ItemContent tags`). */
+export interface ChipSpec {
+  label: ComponentChildren;
+  color?: CategoryColor;
+  icon?: IconRef;
+  title?: string;
+}
+
+/**
+ * Kleine Fläche in einer Bedeutungsfarbe für eine Eigenschaft oder einen Status ("greift an" rot, "Level 3" grau).
+ * Bricht nie um. Mehrere Chips stehen in `Chips` nebeneinander, statt "a · b · c" als Text.
+ */
+export function Chip(props: Partial<ChipSpec> & { children?: ComponentChildren }) {
+  return (
+    <span class={`ui-tag ui-tag--cat ui-tag--cat-${props.color ?? 'system'} ui-tag--chip`} title={props.title}>
+      {props.icon && <Icon name={props.icon} />}
+      {props.children ?? props.label}
+    </span>
+  );
+}
+
+/** Reihe von Chips (bricht zwischen den Chips um, nie im Chip). */
+export function Chips(props: {
+  /** Leere Einträge (null, false) werden übersprungen. */
+  items?: readonly (ChipSpec | null | false | undefined)[];
+  children?: ComponentChildren;
+  class?: string;
+}) {
+  const items = props.items?.filter((c): c is ChipSpec => !!c) ?? [];
+  return (
+    <span class={`ui-chips ${props.class ?? ''}`}>
+      {items.map((c, i) => (
+        <Chip key={typeof c.label === 'string' ? c.label : i} {...c} />
+      ))}
+      {props.children}
+    </span>
+  );
+}
+
+/**
+ * Ausklappbare Erklärung ("Mehr dazu"): Was nicht in einen Satz passt, steht hier, bis man es braucht. Merkt sich
+ * nichts, ist beim nächsten Öffnen der Seite wieder zu.
+ */
+export function Disclosure(props: {
+  label?: ComponentChildren;
+  icon?: IconRef;
+  children?: ComponentChildren;
+  class?: string;
+  /** Anfangs offen. */
+  open?: boolean;
+}) {
+  return (
+    <details class={`ui-disclosure ${props.class ?? ''}`} open={props.open}>
+      <summary class="ui-disclosure__summary">
+        <Icon name={props.icon ?? 'info'} class="ui-disclosure__icon" />
+        <span class="ui-disclosure__label">{props.label ?? 'Mehr dazu'}</span>
+        <Icon name="chevronDown" class="ui-disclosure__chevron" />
+      </summary>
+      <div class="ui-disclosure__body">{props.children}</div>
+    </details>
   );
 }
 
 /**
  * Inhalt einer Listenzeile mit Kachel in der Bedeutungsfarbe, Titel und Zweitzeile, wie in den iOS-Einstellungen.
- * Weiteres (z.B. ein Fortschritt) kommt als children unter die Zweitzeile. In `ListItem` verwenden.
+ * Eigenschaften (Rolle, Level, Status …) kommen als `tags` und stehen als Chips unter dem Titel, nicht als "a · b"
+ * in der Zweitzeile. Weiteres (z.B. ein Fortschritt) kommt als children darunter. In `ListItem` verwenden.
  */
 export function ItemContent(props: {
   icon: IconRef;
   color?: ChipColor;
   title: ComponentChildren;
   meta?: ComponentChildren;
+  /** Eigenschaften als Chips (leere Einträge werden übersprungen). */
+  tags?: readonly (ChipSpec | null | false | undefined)[];
   children?: ComponentChildren;
 }) {
+  const tags = props.tags?.filter((t): t is ChipSpec => !!t) ?? [];
   return (
     <span class="ui-item">
       <IconChip icon={props.icon} color={props.color ?? 'system'} size="sm" />
       <span class="ui-item__main">
         <span class="ui-item__title">{props.title}</span>
         {props.meta && <span class="ui-item__meta">{props.meta}</span>}
+        {tags.length > 0 && <Chips items={tags} class="ui-item__tags" />}
         {props.children}
       </span>
     </span>

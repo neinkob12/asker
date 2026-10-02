@@ -11,8 +11,8 @@ import {
 } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { enlist, generateProfile, getStaff, getStaffMember, runnerAt, STAT_KEYS, type StaffMember } from '../staff';
-import { POOL_MAX, POOL_START, SEARCH_COST } from './config';
-import { type Candidate, getCandidate, getCandidates, getContacts, getPool } from './index';
+import { POOL_START, SEARCH_COST, SEARCH_COUNT } from './config';
+import { type Candidate, getCandidate, getCandidates, getContacts, getPool, poolMax, searchPreview } from './index';
 
 function quietGame(seed = 1): Simulation {
   const sim = createTestGame({ seed });
@@ -46,7 +46,10 @@ describe('recruiting: Bewerber-Pool', () => {
     sim.advance(3 * 1440);
     const arrived = eventsOfType(events, 'recruiting.candidateArrived').filter((e) => e.payload.source === 'pool');
     expect(arrived.length).toBeGreaterThanOrEqual(4);
-    expect(getPool(sim.state).length).toBeLessThanOrEqual(POOL_MAX);
+    expect(getPool(sim.state).length).toBeLessThanOrEqual(poolMax(sim.state));
+    // Abgelaufene gehen mit einer stillen Notiz.
+    expect(eventsOfType(events, 'recruiting.candidateLeft').length).toBeGreaterThan(0);
+    expect(sim.state.journal.some((e) => e.text.includes('anderweitig umgesehen'))).toBe(true);
     expect(getPool(sim.state).some((c) => first.includes(c.id))).toBe(false);
     // Die Bewerber sind unterschiedlich.
     const stats = new Set(getCandidates(sim.state).map((c) => JSON.stringify(c.stats)));
@@ -100,11 +103,30 @@ describe('recruiting: Bewerber-Pool', () => {
     const before = getPool(sim.state).length;
     const money = sim.state.wallet.dirty;
     expect(sim.dispatch({ type: 'recruiting.search', payload: {} }).ok).toBe(true);
-    expect(getPool(sim.state).length).toBe(before + 2);
+    expect(getPool(sim.state).length).toBe(before + SEARCH_COUNT);
     expect(sim.state.wallet.dirty).toBe(money - SEARCH_COST);
     expect(sim.dispatch({ type: 'recruiting.search', payload: {} }).ok).toBe(false);
+    expect(searchPreview(sim.state).waiting).toBe(true);
     sim.advance(12 * 60);
     expect(sim.dispatch({ type: 'recruiting.search', payload: {} }).ok).toBe(true);
+  });
+
+  it('rumfragen nach einer Rolle bringt meist Leute in dieser Rolle', () => {
+    let drivers = 0;
+    let total = 0;
+    for (const seed of [1, 2, 3, 4]) {
+      const sim = quietGame(seed);
+      const before = new Set(getPool(sim.state).map((c) => c.id));
+      expect(sim.dispatch({ type: 'recruiting.search', payload: { role: 'driver' } }).ok).toBe(true);
+      const fresh = getPool(sim.state).filter((c) => !before.has(c.id));
+      expect(fresh).toHaveLength(SEARCH_COUNT);
+      total += fresh.length;
+      drivers += fresh.filter((c) => c.role === 'driver').length;
+    }
+    expect(drivers / total).toBeGreaterThan(0.5);
+    const sim = quietGame();
+    expect(searchPreview(sim.state, 'security').roleLabel).toMatch(/Sicherheit/);
+    expect(poolMax(sim.state)).toBeGreaterThanOrEqual(POOL_START);
   });
 });
 

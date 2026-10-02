@@ -5,6 +5,7 @@ import { useState } from 'preact/hooks';
 import { formatEuro, formatPercent } from '../../../core';
 import {
   Button,
+  Chips,
   ContextMenu,
   Empty,
   Group,
@@ -48,7 +49,7 @@ import {
   securityAt,
 } from '../index';
 import { AbsenceSheet, AbsentGroup } from './absence';
-import { Portrait, StatusTag } from './common';
+import { Portrait, ROLE_ICONS, ROLE_TONES, StatusTag } from './common';
 import { StaffProfile } from './Profile';
 import './staff.css';
 
@@ -129,20 +130,27 @@ function StaffRowItem(props: { member: StaffMember }) {
   const m = props.member;
   const employed = m.leftAt === null;
   return (
-    <ListItem onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}>
+    <ListItem
+      onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}
+      value={employed ? `${formatEuro(m.wage)}/Tag` : undefined}
+    >
       <div class="staff-row">
         <Portrait person={m} />
         <div class="staff-row__main">
           <strong>{m.name}</strong>
           <span class="staff-row__meta">
-            {roleName(m.role)} · Level {m.level}
-          </span>
-          <span class="staff-row__meta">
             <Icon name={employed && (m.assignment ?? m.returnTo) ? 'pin' : 'clock'} />
             {employed ? assignmentLabel(state, m.assignment ?? m.returnTo) : 'ausgeschieden'}
           </span>
+          <Chips
+            items={[
+              { label: roleName(m.role), icon: ROLE_ICONS[m.role], color: ROLE_TONES[m.role] },
+              { label: `Level ${m.level}` },
+            ]}
+          >
+            {m.status !== 'active' && <StatusTag status={m.status} />}
+          </Chips>
         </div>
-        <StatusTag status={m.status} />
       </div>
     </ListItem>
   );
@@ -183,12 +191,11 @@ function StaffOverview() {
           },
         ]}
       />
-      <SegmentedControl wide aria-label="Rolle" options={ROLE_FILTERS} value={filter} onChange={setFilter} />
+      <Group title="Dein Team" icon="users" color="people" count={current.length}>
+        <SegmentedControl wide aria-label="Rolle" options={ROLE_FILTERS} value={filter} onChange={setFilter} />
+      </Group>
       {current.length === 0 && filter === 'all' ? (
-        <Empty icon="users">
-          Noch niemand im Team. Läufer heuerst du direkt an einem Spot an, Bewerber findest du unten unter „Leute
-          finden“.
-        </Empty>
+        <Empty icon="users">Noch niemand im Team. Läufer heuerst du am Spot an oder stellst unten jemanden ein.</Empty>
       ) : group ? (
         <>
           <PeopleGroup
@@ -204,7 +211,7 @@ function StaffOverview() {
         <>
           <Slot name="staff.tree" props={{}} />
           <AbsentGroup members={absent} />
-          <PeopleGroup title="Frei" icon="user" members={free} note="Ohne Einsatz. Leutnants holen sich freie Leute." />
+          <PeopleGroup title="Frei" icon="user" members={free} note="Ohne Einsatz, Leutnants holen sich freie Leute." />
           <PeopleGroup title="Spezialisten" icon="scale" members={specialists} />
           <PeopleGroup title="Weitere" icon="truck" members={others} note="Lager, Lieferungen und Fahrten." />
           <SpecialistBonuses />
@@ -225,7 +232,7 @@ function HireGroup() {
       title="Anheuern"
       icon="userPlus"
       color="people"
-      note="Läufer heuerst du am Spot an, Sicherheit und Spezialisten über die Bewerber unten."
+      note="Läufer heuerst du am Spot an, alle anderen unten bei „Könntest du einstellen“."
     >
       <List>
         <ListItem
@@ -327,7 +334,8 @@ function SpotStaff(props: { spotId: string }) {
               icon="runner"
               color="people"
               title={runner.name}
-              meta={`Läufer · Level ${runner.level} · bedient hier automatisch`}
+              meta="bedient hier automatisch"
+              tags={[{ label: 'Läufer', icon: 'runner', color: 'people' }, { label: `Level ${runner.level}` }]}
             />
           </ListItem>
         )}
@@ -372,12 +380,23 @@ function SpotStaff(props: { spotId: string }) {
                 </Button>
               }
             >
-              <ItemContent icon="runner" color="people" title={m.name} meta={`freier Läufer · Level ${m.level}`} />
+              <ItemContent
+                icon="runner"
+                color="people"
+                title={m.name}
+                tags={[{ label: 'freier Läufer', icon: 'runner', color: 'people' }, { label: `Level ${m.level}` }]}
+              />
             </ListItem>
           ))}
         {guard ? (
           <ListItem onClick={() => open(guard)}>
-            <ItemContent icon="shield" color="people" title={guard.name} meta="Sicherheit · passt hier auf" />
+            <ItemContent
+              icon="shield"
+              color="people"
+              title={guard.name}
+              meta="passt hier auf"
+              tags={[{ label: 'Sicherheit', icon: 'shield', color: 'danger' }]}
+            />
           </ListItem>
         ) : (
           free('security').map((m) => (
@@ -458,7 +477,7 @@ registerSearch({
     getStaff(state).map((m) => ({
       id: m.id,
       title: m.name,
-      subtitle: `${roleName(m.role)} · Level ${m.level}`,
+      subtitle: `${roleName(m.role)}, Level ${m.level}`,
       icon: 'user',
       run: (ui) => ui.openPanel('staff.profile', { staffId: m.id }),
     })),

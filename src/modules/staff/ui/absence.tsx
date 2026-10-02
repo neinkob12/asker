@@ -28,7 +28,7 @@ export function absenceText(m: StaffMember): string {
         ? `${formatEuro(cost)} Stillhaltegeld pro Tag`
         : 'kein Stillhaltegeld'
       : `${formatEuro(cost)} pro Tag (halber Lohn)`;
-  return [m.status === 'jailed' ? `In Haft ${until}` : `Verletzt ${until}`, costText].join(' · ');
+  return `${m.status === 'jailed' ? `In Haft ${until}` : `Verletzt ${until}`}, ${costText}`;
 }
 
 /** Hinweis fürs Entlassen: Könnte die Person reden? */

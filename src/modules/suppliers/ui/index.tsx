@@ -87,10 +87,20 @@ function SupplierRow(props: { supplier: Supplier; onSelect: (id: string) => void
   const missing = unlockRequirements(state, s.id).find((r) => !r.done);
   const blocked = isBlocked(state, s.id);
   const meta = unlocked
-    ? `${KIND_NAME[s.kind]} · ${clock.formatDuration(s.deliveryTime)} · ${trustLabel(rel.trust)}`
+    ? undefined
     : ready
       ? `Bereit: ${s.unlock && s.unlock.fee > 0 ? `${formatEuro(s.unlock.fee)} Vermittlung` : 'ohne Gebühr'}`
       : `Fehlt: ${missing?.label ?? '…'}`;
+  const tags = [
+    { label: s.name, icon: 'pin', color: 'place' as const },
+    ...(unlocked
+      ? [
+          { label: KIND_NAME[s.kind], icon: s.kind === 'port' ? 'ship' : 'truck', color: 'goods' as const },
+          { label: clock.formatDuration(s.deliveryTime), icon: 'clock' },
+          { label: trustLabel(rel.trust), icon: 'handshake', color: 'money' as const },
+        ]
+      : []),
+  ];
   const tag = blocked ? (
     <Tag category="danger" icon="alert">
       Schulden
@@ -113,8 +123,9 @@ function SupplierRow(props: { supplier: Supplier; onSelect: (id: string) => void
       <ItemContent
         icon={unlocked ? (s.kind === 'port' ? 'ship' : 'truck') : ready ? 'unlock' : 'lock'}
         color={unlocked ? 'goods' : ready ? 'money' : 'system'}
-        title={`${s.contactName} · ${s.name}`}
+        title={s.contactName}
         meta={meta}
+        tags={tags}
       />
     </ListItem>
   );
@@ -153,7 +164,8 @@ function SupplierList(props: { onSelect: (id: string) => void }) {
           color="system"
           title="Noch kein Geschäft"
           count={locked.length}
-          note="Mit mehr Umsatz, eigenen Veedeln und einem Liegeplatz im Hafen melden sich die anderen per Handy. Großstädte liefern schnell kleine Mengen, der Hafen günstig große."
+          note="Mit mehr Umsatz, eigenen Veedeln und einem Liegeplatz melden sie sich per Handy."
+          more="Großstädte liefern schnell kleine Mengen, der Hafen günstig große. Jeder Lieferant hat eigene Bedingungen; was fehlt, steht in der Zeile."
         >
           <List>
             {locked.map((s) => (
@@ -208,7 +220,7 @@ function LockedSupplier(props: { supplierId: string }) {
           disabled={!ready || state.wallet.dirty < fee}
           onClick={() => dispatch({ type: 'suppliers.unlock', payload: { supplierId: supplier.id } })}
         >
-          {fee > 0 ? `Einsteigen · ${formatEuro(fee)}` : 'Geschäfte machen'}
+          {fee > 0 ? `Einsteigen (${formatEuro(fee)})` : 'Geschäfte machen'}
         </Button>
       </div>
     </Group>
@@ -380,7 +392,7 @@ function SuppliersApp() {
   const supplier = supplierId ? getSupplier(state, supplierId) : undefined;
   if (supplier) {
     return (
-      <PhoneScreen title={`${supplier.contactName} · ${supplier.name}`} onBack={() => ui.openPhone(APP_ID)}>
+      <PhoneScreen title={`${supplier.contactName} (${supplier.name})`} onBack={() => ui.openPhone(APP_ID)}>
         <SupplierDetail key={supplier.id} supplierId={supplier.id} />
       </PhoneScreen>
     );

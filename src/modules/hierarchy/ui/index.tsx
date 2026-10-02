@@ -91,7 +91,8 @@ export function LieutenantRow(props: { post: LieutenantPost }) {
         icon="crew"
         color={m.status === 'active' ? 'people' : 'warn'}
         title={m.name}
-        meta={`${postSummary(state, props.post)} · heute ${formatEuro(today.revenue)} Umsatz`}
+        meta={postSummary(state, props.post)}
+        tags={[{ label: `heute ${formatEuro(today.revenue)} Umsatz`, icon: 'cash', color: 'money' }]}
       />
     </ListItem>
   );
@@ -131,8 +132,17 @@ function LieutenantPage(props: { staffId?: string; veedelId?: string }) {
             <ItemContent
               icon="crew"
               color="people"
-              title={`${m.name} · Level ${m.level}`}
-              meta={`${postSummary(state, post)}. Gestern: Umsatz ${formatEuro(yesterday.revenue)}, Ergebnis ${formatEuro(yesterday.result)}.`}
+              title={m.name}
+              meta={postSummary(state, post)}
+              tags={[
+                { label: `Level ${m.level}` },
+                { label: `Gestern ${formatEuro(yesterday.revenue)} Umsatz`, icon: 'cash', color: 'money' },
+                {
+                  label: `Ergebnis ${formatEuro(yesterday.result)}`,
+                  icon: yesterday.result < 0 ? 'trendDown' : 'trendUp',
+                  color: yesterday.result < 0 ? 'danger' : 'money',
+                },
+              ]}
             />
           </ListItem>
         </List>
@@ -182,13 +192,14 @@ function SpotsGroup(props: { post: LieutenantPost; onEdit: () => void }) {
           const away = runner ? undefined : runnerAt(state, spot.id);
           const guard = securityAt(state, { spotId: spot.id })[0];
           const hiding = props.post.lyingLow.includes(spot.veedelId);
-          const meta = [
-            veedelName(spot.veedelId),
-            runner ? runner.name : away ? `${away.name} ${STATUS_NAMES[away.status]}` : 'kein Läufer',
-            guard ? `Sicherheit ${guard.name}` : null,
-          ]
-            .filter(Boolean)
-            .join(' · ');
+          const tags = [
+            runner
+              ? { label: runner.name, icon: 'runner', color: 'people' as const }
+              : away
+                ? { label: `${away.name} ${STATUS_NAMES[away.status]}`, icon: 'clock', color: 'warn' as const }
+                : { label: 'kein Läufer', icon: 'alert', color: 'warn' as const },
+            guard ? { label: guard.name, icon: 'shield', color: 'danger' as const } : null,
+          ];
           return (
             <ListItem
               key={spot.id}
@@ -209,7 +220,7 @@ function SpotsGroup(props: { post: LieutenantPost; onEdit: () => void }) {
                 )
               }
             >
-              <ItemContent icon="pin" color="place" title={spot.name} meta={meta} />
+              <ItemContent icon="pin" color="place" title={spot.name} meta={veedelName(spot.veedelId)} tags={tags} />
             </ListItem>
           );
         })}
@@ -252,7 +263,11 @@ function TeamGroup(props: { post: LieutenantPost }) {
               icon={t.role === 'security' ? 'shield' : 'runner'}
               color="people"
               title={t.name}
-              meta={`Level ${t.level} · ${formatEuro(t.wage)} am Tag${props.post.team.includes(t.id) ? ' · von ihm angeheuert' : ''}`}
+              tags={[
+                { label: `Level ${t.level}` },
+                { label: `${formatEuro(t.wage)} am Tag`, icon: 'coinEuro', color: 'money' },
+                props.post.team.includes(t.id) && { label: 'von ihm angeheuert', icon: 'userPlus', color: 'people' },
+              ]}
             />
           </ListItem>
         ))}

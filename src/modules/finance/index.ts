@@ -1,4 +1,4 @@
-// Kasse: Buch über Einnahmen und Ausgaben pro Spieltag (heute plus die letzten 14 Tage).
+// Kasse: Buch über Einnahmen und Ausgaben pro Spieltag (heute plus die letzten 30 Tage, Auftrag 27).
 // Hört auf jede Kontobewegung ('wallet.changed', mit Kategorie aus dem Kern) und jeden Verkauf ('sale.completed') und
 // führt daraus eine Gewinn- und Verlustrechnung: Summen je Kategorie und Geldart, Buchungstexte, Umsatz und Löhne pro
 // Spot und pro Leutnant. Eine Buchung genau um Mitternacht zählt noch zum Tag, der gerade endet (die Löhne, die um
@@ -8,12 +8,15 @@
 //   bookDay(time), currentDay(state), dayReport(state, daysAgo), periodReport(state, days), dailyProfits(state, days),
 //   categoryLines(state, category, days), spotResult(state, spotId, days), spotResults(state, days),
 //   lieutenantResult(state, staffId, days), wageRunway(state), DAYS_KEPT, RUNWAY_WARN_DAYS
+//   Bilanz (Auftrag 27): PERIODS, periodSpan(period), balance(state, period, filter), balanceHistory(state, period,
+//   filter), explainReport(report), FinanceFilter
 // Keine Befehle, keine eigenen Ereignisse.
 
 import {
   type Ctx,
   clock,
   defineModule,
+  formatEuro,
   type GameState,
   MONEY_CATEGORIES,
   MONEY_CATEGORY_IDS,
@@ -22,10 +25,11 @@ import {
   type MoneyKind,
 } from '../../core';
 import { lieutenantOfSpot, teamLeadOf } from '../hierarchy';
+import { getAllSpots } from '../spots';
 import { getStaffMember, payrollDue } from '../staff';
-import { DAYS_KEPT, OTHER_REASON, REASON_LIMIT, RUNWAY_WARN_DAYS } from './config';
+import { DAYS_KEPT, OTHER_REASON, REASON_DAYS_KEPT, REASON_LIMIT, RUNWAY_WARN_DAYS } from './config';
 
-export { DAYS_KEPT, RUNWAY_WARN_DAYS } from './config';
+export { DAYS_KEPT, REASON_DAYS_KEPT, RUNWAY_WARN_DAYS } from './config';
 
 export interface MoneySplit {
   dirty: number;
@@ -258,6 +262,153 @@ export function lieutenantResult(state: GameState, staffId: string, days: number
   );
 }
 
+// --- Bilanz (Auftrag 27): Zeitraum und Filter ---
+
+/** Zeiträume der Bilanz. */
+export type Period = 'today' | 'yesterday' | 'week' | 'month';
+
+export const PERIODS: readonly { value: Period; label: string }[] = [
+  { value: 'today', label: 'Heute' },
+  { value: 'yesterday', label: 'Gestern' },
+  { value: 'week', label: '7 Tage' },
+  { value: 'month', label: '30 Tage' },
+];
+
+/** Tage und Versatz eines Zeitraums (für die Lese-Funktionen der Kasse). */
+export function periodSpan(period: Period): { days: number; offset: number } {
+  if (period === 'yesterday') return { days: 1, offset: 1 };
+  if (period === 'week') return { days: 7, offset: 0 };
+  if (period === 'month') return { days: 30, offset: 0 };
+  return { days: 1, offset: 0 };
+}
+
+/** Worauf die Bilanz schaut: ganz Köln, ein Veedel, ein Spot oder ein Leutnant. */
+export type FinanceFilter =
+  | { kind: 'all' }
+  | { kind: 'veedel'; veedelId: string }
+  | { kind: 'spot'; spotId: string }
+  | { kind: 'lieutenant'; staffId: string };
+
+export const ALL_FILTER: FinanceFilter = { kind: 'all' };
+
+/** Spots eines Veedels (auch gesperrte, falls dort früher verkauft wurde). */
+function spotsOfVeedel(state: GameState, veedelId: string): string[] {
+  return getAllSpots(state)
+    .filter((s) => s.veedelId === veedelId)
+    .map((s) => s.id);
+}
+
+/** Tagesbuch einer Einheit (Spot, Veedel, Leutnant) als Zeilen einer Bilanz. */
+function unitReport(units: UnitBook[], from: number, to: number): Report {
+  const sum = sumUnits(units);
+  const rows: CategoryRow[] = [];
+  const push = (category: MoneyCategory, label: string, amount: number) => {
+    if (amount === 0) return;
+    const info = MONEY_CATEGORIES[category];
+    const dirty = Math.round(amount);
+    rows.push({ category, label, group: info.group, icon: info.icon, amount: dirty, dirty, clean: 0 });
+  };
+  push('sales.street', 'Straßenverkauf', sum.revenue);
+  push('goods.purchase', 'Einkauf der verkauften Ware', -sum.goodsCost);
+  push('wages.runner', 'Löhne der Leute dort', -sum.wages);
+  push('hiring', 'Anheuern und Ausbau', -sum.invest);
+  const income = sum.revenue;
+  const expenses = sum.goodsCost + sum.wages + sum.invest;
+  return {
+    from,
+    to,
+    rows,
+    income,
+    expenses,
+    losses: 0,
+    profit: income - expenses,
+    net: { dirty: income - expenses, clean: 0 },
+    wages: sum.wages,
+  };
+}
+
+function unitsOf(state: GameState, filter: FinanceFilter, books: DayBook[]): UnitBook[] {
+  if (filter.kind === 'spot') return books.flatMap((b) => (b.spots[filter.spotId] ? [b.spots[filter.spotId]] : []));
+  if (filter.kind === 'lieutenant') {
+    return books.flatMap((b) => (b.lieutenants[filter.staffId] ? [b.lieutenants[filter.staffId]] : []));
+  }
+  if (filter.kind === 'veedel') {
+    const ids = spotsOfVeedel(state, filter.veedelId);
+    return books.flatMap((b) => ids.flatMap((id) => (b.spots[id] ? [b.spots[id]] : [])));
+  }
+  return [];
+}
+
+/**
+ * Bilanz eines Zeitraums: ganz Köln mit allen Kategorien, sonst Umsatz, Wareneinsatz, Löhne und einmalige Kosten der
+ * Spots bzw. des Leutnants (die Kasse kennt Löhne und Verkäufe pro Spot, aber keine Gebühren pro Veedel).
+ */
+export function balance(state: GameState, period: Period, filter: FinanceFilter = ALL_FILTER): Report {
+  const { days, offset } = periodSpan(period);
+  const today = currentDay(state);
+  const to = today - offset;
+  const from = Math.max(1, to - days + 1);
+  const books = booksOf(state, days, offset);
+  if (filter.kind === 'all') return report(books, from, to);
+  return unitReport(unitsOf(state, filter, books), from, to);
+}
+
+/** Gewinn je Tag im Zeitraum (ältester zuerst) für den Verlauf; Heute und Gestern zeigen die letzte Woche. */
+export function balanceHistory(
+  state: GameState,
+  period: Period,
+  filter: FinanceFilter = ALL_FILTER,
+): { day: number; profit: number }[] {
+  const days = period === 'month' ? 30 : 7;
+  const today = currentDay(state);
+  const result: { day: number; profit: number }[] = [];
+  for (let day = Math.max(1, today - days + 1); day <= today; day++) {
+    const book = findDay(state, day);
+    if (!book) {
+      result.push({ day, profit: 0 });
+      continue;
+    }
+    const profit =
+      filter.kind === 'all'
+        ? report([book], day, day).profit
+        : unitReport(unitsOf(state, filter, [book]), day, day).profit;
+    result.push({ day, profit });
+  }
+  return result;
+}
+
+/** Ein Satz, warum der Zeitraum Gewinn oder Verlust gemacht hat (größter Posten). */
+export function explainReport(r: Report): string {
+  const income = r.rows.filter((x) => x.group === 'income').sort((a, b) => b.amount - a.amount);
+  const costs = r.rows.filter((x) => x.group === 'expense' || x.group === 'loss').sort((a, b) => a.amount - b.amount);
+  if (r.rows.length === 0 || (r.income === 0 && r.expenses + r.losses === 0)) return 'Keine Kontobewegung.';
+  const top = costs[0];
+  const best = income[0];
+  if (r.profit < 0) {
+    if (top && best && -top.amount > best.amount) {
+      return `${top.label} (${formatEuro(-top.amount)}) ${plural(top.label)} höher als ${bestPhrase(best)}.`;
+    }
+    if (top)
+      return `Die Ausgaben übersteigen die Einnahmen, größter Posten: ${top.label} (${formatEuro(-top.amount)}).`;
+    return 'Verlust ohne Einnahmen.';
+  }
+  if (best && top) {
+    return `${best.label} ${plural(best.label) === 'sind' ? 'bringen' : 'bringt'} ${formatEuro(best.amount)}, größter Posten bei den Ausgaben: ${top.label} (${formatEuro(-top.amount)}).`;
+  }
+  if (best)
+    return `${best.label} ${plural(best.label) === 'sind' ? 'bringen' : 'bringt'} ${formatEuro(best.amount)}, keine Ausgaben.`;
+  return 'Ausgeglichen.';
+}
+
+/** "Löhne Läufer sind" vs. "Einkauf Ware ist". */
+function plural(label: string): 'sind' | 'ist' {
+  return /^(Löhne|Konfrontationen|Überfälle|Lieferaufträge|Sonstige)/.test(label) ? 'sind' : 'ist';
+}
+
+function bestPhrase(best: CategoryRow): string {
+  return `${best.label === 'Straßenverkauf' ? 'der Umsatz' : best.label} (${formatEuro(best.amount)})`;
+}
+
 export interface WageRunway {
   /** Löhne, die heute Nacht fällig werden. */
   due: number;
@@ -295,6 +446,10 @@ function today(ctx: Ctx): DayBook {
   // Fehlende Tage (ohne Buchung) leer nachtragen, damit der Verlauf stimmt.
   for (let d = latest ? Math.max(latest.day + 1, day - DAYS_KEPT) : day; d <= day; d++) f.days.unshift(emptyDay(d));
   if (f.days.length > DAYS_KEPT + 1) f.days.length = DAYS_KEPT + 1;
+  // Einzelne Buchungstexte nur für die jüngsten Tage, ältere behalten nur ihre Tageswerte.
+  for (const book of f.days) {
+    if (book.day < day - REASON_DAYS_KEPT && Object.keys(book.reasons).length > 0) book.reasons = {};
+  }
   return f.days[0];
 }
 

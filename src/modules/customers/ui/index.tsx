@@ -8,6 +8,7 @@ import {
   Badge,
   Button,
   Card,
+  Disclosure,
   Empty,
   Group,
   Hint,
@@ -139,8 +140,15 @@ function SpotCustomers(props: { spotId: string }) {
                 <ItemContent
                   icon={regular ? 'star' : 'smile'}
                   color={regular ? 'brand' : 'money'}
-                  title={`${formatProductAmount(c.productId, c.amount)} ${productName(c.productId)} · ${formatEuro(customerRevenue(c))}`}
-                  meta={`${regular ? regular.name : customerTypeName(c.typeId)} · ${formatNumber(c.pricePerUnit, 1)} €/${getProduct(c.productId)?.unit ?? 'g'}`}
+                  title={`${formatProductAmount(c.productId, c.amount)} ${productName(c.productId)}`}
+                  meta={regular ? regular.name : customerTypeName(c.typeId)}
+                  tags={[
+                    { label: formatEuro(customerRevenue(c)), icon: 'cash', color: 'money' },
+                    {
+                      label: `${formatNumber(c.pricePerUnit, 1)} €/${getProduct(c.productId)?.unit ?? 'g'}`,
+                      icon: 'tag',
+                    },
+                  ]}
                 >
                   <ProgressBar value={left} tone={left < 1 / 3 ? 'bad' : 'warn'} label="Geduld" />
                 </ItemContent>
@@ -195,10 +203,10 @@ function CustomersSection() {
         value={stats.customersLost}
         tone={stats.customersLost > 0 ? 'bad' : undefined}
       />
-      <Hint>
+      <Disclosure label="Warum gehen Kunden?">
         Kunden warten nur eine Weile am Spot. Verkaufst du nicht rechtzeitig (selbst an den Spot stellen, verkaufen oder
         einen Läufer hinstellen) oder ist das Lager leer, gehen sie wieder. Das kostet etwas Ruf.
-      </Hint>
+      </Disclosure>
       <KeyValue label="Umsatz" value={formatEuro(stats.revenue)} />
       <KeyValue label="Lieferungen / Großhandel" value={`${stats.deliveries} / ${stats.wholesaleDeals}`} />
       <KeyValue label="Fanden es zu teuer" value={stats.tooExpensive} />

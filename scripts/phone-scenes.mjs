@@ -334,7 +334,16 @@ export const SCENES = [
     })()`,
   },
   { name: 'verlauf', js: "window.koeln.runtime.api.openPhone('core.history')" },
-  { name: 'geldwaesche', js: "window.koeln.runtime.api.openPhone('laundering.app')" },
+  {
+    name: 'geldwaesche',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      sim.state.wallet.dirty = Math.max(sim.state.wallet.dirty, 9000);
+      sim.dispatch({ type: 'laundering.unlock', payload: { channel: 'laundromat', pay: 'dirty' } });
+      sim.dispatch({ type: 'laundering.launder', payload: { amount: 1200, channel: 'kiosk' } });
+      window.koeln.runtime.api.openPhone('laundering.app');
+    })()`,
+  },
   {
     name: 'island-kompakt',
     js: `${deadlines(1)}; window.koeln.runtime.api.openPhone(null)`,

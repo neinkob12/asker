@@ -1,6 +1,8 @@
-// Oberfläche der Gangs: Tab "Gangs" mit Stärke, Revier, Beziehung und Diplomatie-Aktionen je Gang,
+// Oberfläche der Gangs: Tab "Gangs" mit deiner Stärke als Zahl und jeder Gang als Balken im Vergleich (Auftrag 27),
+// darunter die Gangs als Liste mit Haltung als Chip; Seite je Gang mit Lage, Beziehung und Diplomatie-Aktionen,
 // Dialoge für Überfall und Bündnis, Hinweise auf der Karte und Toasts, wenn die Gangs etwas tun.
 
+import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import { clock, formatAmount, formatEuro } from '../../../core';
 import { registerMapLayer } from '../../../map';
@@ -9,6 +11,7 @@ import {
   Avatar,
   Button,
   type CategoryColor,
+  Chips,
   ContextMenu,
   Dialog,
   Group,
@@ -161,9 +164,13 @@ function GangRow(props: { gang: Gang }) {
           <Emblem gang={gang} size="sm" />
           <span class="ui-item__main">
             <span class="ui-item__title">{gang.name}</span>
-            <span class="ui-item__meta">
-              Stärke {Math.round(gangPower(state, gang.id))} · {turf.length} Veedel
-            </span>
+            <Chips
+              class="ui-item__tags"
+              items={[
+                { label: `Stärke ${Math.round(gangPower(state, gang.id))}`, icon: 'fist', color: 'danger' },
+                { label: `${turf.length} Veedel`, icon: 'flag', color: 'place' },
+              ]}
+            />
           </span>
         </span>
       </ListItem>
@@ -171,27 +178,69 @@ function GangRow(props: { gang: Gang }) {
   );
 }
 
+/**
+ * Kopf des Gangs-Tabs: deine Stärke als Zahl, darunter jede Gang mit ihrer Stärke als Balken auf derselben Skala;
+ * die Marke im Balken ist deine Stärke, so sieht man auf einen Blick, wer stärker ist als du.
+ */
+function PowerHeader() {
+  const { state } = useGame();
+  const gangs = getGangs(state);
+  const mine = playerPower(state);
+  const max = Math.max(1, mine, ...gangs.map((g) => gangPower(state, g.id)));
+  const stronger = gangs.filter((g) => gangPower(state, g.id) > mine).length;
+  return (
+    <section class="gangs-power" aria-label="Stärke im Vergleich">
+      <div class="gangs-power__you">
+        <span class="gangs-power__label">Deine Stärke</span>
+        <strong class="gangs-power__number">{Math.round(mine)}</strong>
+        <span class="gangs-power__hint">
+          {stronger === 0
+            ? 'Keine Gang ist stärker als du.'
+            : stronger === 1
+              ? 'Eine Gang ist stärker als du.'
+              : `${stronger} Gangs sind stärker als du.`}
+        </span>
+      </div>
+      <ul class="gangs-power__rows">
+        {gangs.map((g) => {
+          const power = gangPower(state, g.id);
+          const style = {
+            '--gang-color': g.color,
+            '--gang-on': readableOn(g.color),
+            '--power': `${Math.round((power / max) * 100)}%`,
+            '--yours': `${Math.round((mine / max) * 100)}%`,
+          } as JSX.CSSProperties;
+          return (
+            <li key={g.id} class={`gangs-power__row ${power > mine ? 'is-stronger' : ''}`} style={style}>
+              <Emblem gang={g} size="sm" />
+              <span class="gangs-power__name">{g.name}</span>
+              <span class="gangs-power__bar" aria-hidden="true">
+                <span class="gangs-power__fill" />
+                <span class="gangs-power__mark" title="deine Stärke" />
+              </span>
+              <strong class="gangs-power__value">{Math.round(power)}</strong>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 /** Tab "Gangs": deine Stärke im Vergleich und die Gangs als Liste; Details als eigene Seite. */
 function GangsTab() {
   const { state } = useGame();
   const gangs = getGangs(state);
-  const hostile = gangs.filter((g) => (getGangStatus(state, g.id)?.stage ?? 0) >= 2).length;
-  const strongest = Math.max(0, ...gangs.map((g) => gangPower(state, g.id)));
   return (
     <div class="gangs-tab">
-      <SummaryTiles
-        items={[
-          { icon: 'fist', color: 'brand', value: Math.round(playerPower(state)), label: 'Du' },
-          { icon: 'skull', color: 'danger', value: Math.round(strongest), label: 'Stärkste' },
-          { icon: 'alert', color: hostile > 0 ? 'danger' : 'money', value: hostile, label: 'Drohen' },
-        ]}
-      />
+      <PowerHeader />
       <Group
         title="Gangs"
         icon="skull"
         color="danger"
         count={gangs.length}
-        note="Verkaufen im Revier einer Gang kostet sie Einfluss und macht sie wütend. Gegen sie hilft Gewalt, Geld, die Polizei oder Diplomatie."
+        note="Verkaufen im Revier einer Gang macht sie wütend."
+        more="Verkaufen im Revier einer Gang kostet sie Einfluss. Gegen eine Gang hilft Gewalt (Spot überfallen), Geld (Schutzgeld), die Polizei (verpfeifen) oder Diplomatie (Waffenstillstand, Bündnis). Deine Stärke zählt Leute, Veedel, Schwarzgeld und Ware."
       >
         <List>
           {gangs.map((g) => (
@@ -522,9 +571,12 @@ function AttackDialog(props: { gangId: string }) {
               }
             >
               <strong>{m.name}</strong>
-              <div class="ui-hint">
-                Kraft {m.stats.strength} · Tempo {m.stats.speed}
-              </div>
+              <Chips
+                items={[
+                  { label: `Kraft ${m.stats.strength}`, icon: 'fist', color: 'danger' },
+                  { label: `Tempo ${m.stats.speed}`, icon: 'bolt', color: 'people' },
+                ]}
+              />
             </ListItem>
           ))}
         </List>

@@ -55,7 +55,11 @@ Wer eine Entscheidung ändert, ändert sie hier.
 - **Geld:**
   - Alles Illegale wird mit Schwarzgeld bezahlt.
   - Für Legales (Lagerhallen, Autos usw.) muss Geld gewaschen werden.
-- **Tarnfirmen:** Späti, Waschsalon, Shisha-Bar, Werkstatt usw. mit eigenem Gameplay (Umsatz, Personal, Upgrades).
+- **Geldwäsche (Auftrag 27):** drei Wege, die man nach und nach freischaltet: Kumpel mit Kiosk (klein, teuer,
+  schnell, kein Risiko), Waschsalon und Shisha-Bar (mittel, Einstieg mit sauberem oder Schwarzgeld), Bauunternehmer
+  (groß, billig, langsam, braucht Ruf oder Reviere, zu viel auf einmal bringt Heat).
+- **Tarnfirmen:** Späti, Waschsalon, Shisha-Bar, Werkstatt usw. mit eigenem Gameplay (Umsatz, Personal, Upgrades);
+  die Wege der Geldwäsche sind die Vorstufe.
 - **Vertrieb:** Straßenverkauf an Spots, Lieferdienst per Spiel-Handy, Großhandel an andere Dealer. Kein Darknet.
 
 ## Personal
@@ -142,6 +146,11 @@ kein voller Lohn mehr in Haft (Stillhaltegeld) und Entscheidungen bei Ausfällen
 Leutnants mit bis zu drei Spots statt einem Veedel, mit eigenem Personal-Budget und Bestellregeln, die Rechte Hand
 über den Leutnants mit Tagesbericht, Personal als Baum im Handy und eine Polizei, deren Härte sich nach der Größe
 des Geschäfts richtet (Kleindealer, Händler, Großhändler mit Großrazzien). Im frühen Spiel bleibt mehr Geld übrig.
+
+Mit Auftrag 27 dazu: die Kasse als Bilanz (Heute, Gestern, 7 und 30 Tage; ganz Köln, ein Veedel, ein Spot oder ein
+Leutnant; ein Satz, warum es Gewinn oder Verlust gab), Geldwäsche mit drei Wegen, mehr Bewerber und gezieltes
+Rumfragen, der Gangs-Kopf mit deiner Stärke im Vergleich und klare Optik im Handy (Chips, Gruppen mit Unterlage,
+ausklappbare Erklärungen, kein Umbruch im Wort).
 
 - **Kampagnenlänge:** Köln ist der Einstieg (danach sollen weitere Großstädte folgen). Laut Balancing-Simulation
   (`npm run balance`) erstes Veedel nach etwa 7 Spieltagen, drei nach 8–10, fünf nach etwa 15–20, Köln übernommen

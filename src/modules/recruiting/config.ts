@@ -3,11 +3,17 @@ import type { CandidateSource } from './index';
 
 // Einstellbare Werte der Rekrutierung. Zeiten in Spielminuten, Geld in Euro (Schwarzgeld).
 
-/** Neue Bewerber kommen alle 6 bis 12 Spielstunden, höchstens so viele warten gleichzeitig. */
-export const POOL_INTERVAL: [number, number] = [6 * 60, 12 * 60];
-export const POOL_MAX = 6;
+/** Neue Bewerber kommen alle 4 bis 8 Spielstunden (je 1 bis 3), höchstens so viele warten gleichzeitig (Auftrag 27). */
+export const POOL_INTERVAL: [number, number] = [4 * 60, 8 * 60];
+export const POOL_ARRIVALS: [number, number] = [1, 3];
+/** Grundgröße des Pools; je eigenem Veedel einer mehr, mit gutem Ruf noch mehr, bis zur Obergrenze. */
+export const POOL_MAX = 8;
+export const POOL_MAX_PER_VEEDEL = 1;
+export const POOL_MAX_REPUTATION = 60;
+export const POOL_MAX_REPUTATION_BONUS = 2;
+export const POOL_MAX_LIMIT = 14;
 /** So viele Bewerber warten zu Spielbeginn. */
-export const POOL_START = 3;
+export const POOL_START = 5;
 /** So lange bleibt ein Bewerber verfügbar (von, bis). */
 export const CANDIDATE_LIFETIME: [number, number] = [1440, 2.5 * 1440];
 export const CONTACT_LIFETIME: [number, number] = [1440, 2 * 1440];
@@ -62,8 +68,18 @@ export const CONTACT_MAX = 3;
 
 /** Rumfragen: kostet Geld, bringt sofort neue Bewerber, danach eine Weile nicht wieder. */
 export const SEARCH_COST = 150;
-export const SEARCH_COUNT = 2;
+export const SEARCH_COUNT = 3;
 export const SEARCH_COOLDOWN = 12 * 60;
+/** Mit Rollenwahl kommt jeder Neue mit dieser Wahrscheinlichkeit in der gewünschten Rolle. */
+export const SEARCH_ROLE_SHARE = 0.75;
+
+/** Rollen, nach denen man gezielt rumfragen kann. */
+export type SearchRole = 'runner' | 'driver' | 'security';
+export const SEARCH_ROLES: readonly { value: SearchRole; label: string }[] = [
+  { value: 'runner', label: 'Läufer suchen' },
+  { value: 'driver', label: 'Fahrer suchen' },
+  { value: 'security', label: 'Sicherheit suchen' },
+];
 
 export const SOURCE_NAMES: Record<CandidateSource, string> = {
   pool: 'Bewerbung',
