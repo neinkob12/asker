@@ -1413,9 +1413,9 @@ html.is-dragging {
 }
 /* Fünf Segmente (z.B. Rollenfilter): kleinere Schrift, damit kein Wort abgeschnitten wird */
 .phone .ui-segmented--joined:has(> :nth-child(5)) .ui-button {
-  padding-inline: 2px;
-  font-size: var(--type-caption, 12px);
-  letter-spacing: -0.01em;
+  padding-inline: 1px;
+  font-size: var(--type-caption-2, 11px);
+  letter-spacing: -0.02em;
 }
 .phone .ui-segmented--joined .ui-button.is-active {
   --btn-bg: var(--phone-thumb);

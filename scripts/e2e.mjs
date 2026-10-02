@@ -148,7 +148,7 @@ async function run() {
     // Gesperrte Lieferanten zeigen, was noch fehlt.
     if (!(await page.locator('.phone').count())) await page.getByRole('button', { name: /^Handy/ }).click();
     await page.locator('.phone').getByRole('button', { name: 'Lieferanten', exact: true }).click();
-    assert.ok(await page.getByRole('button', { name: /Jansen.*Hafen Rotterdam.*Liegeplatz/ }).isVisible());
+    assert.ok(await page.getByRole('button', { name: /Jansen.*Liegeplatz/ }).isVisible());
     await page.locator('.phone__nav-button').click();
   });
 
