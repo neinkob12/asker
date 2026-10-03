@@ -132,7 +132,8 @@ async function run() {
       dirty: s.wallet.dirty,
       served: s.modules.customers.stats.customersServed,
     }));
-    await page.locator('.spot-marker', { hasText: 'Zülpicher Platz' }).click();
+    // Die Plakette zeigt seit #41 nur Symbole: Der Name steht im aria-label des Markers.
+    await page.locator('.spot-marker[aria-label*="Zülpicher Platz"]').click();
     await page.getByRole('button', { name: 'Verkaufen', exact: true }).first().click();
     const after = await game(page, (s) => ({
       dirty: s.wallet.dirty,
