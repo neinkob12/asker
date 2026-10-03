@@ -183,9 +183,10 @@
   top: calc(var(--sign) / 2 + var(--label-offset, 0px));
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 6px 9px 7px;
-  border-radius: 8px;
+  gap: 3px;
+  padding: 3px 6px 4px;
+  max-width: 96px;
+  border-radius: 6px;
   background: var(--spot-plate);
   -webkit-backdrop-filter: var(--hud-blur);
   backdrop-filter: var(--hud-blur);
@@ -207,10 +208,13 @@
 .spot-plate__head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 .spot-name {
-  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.1;
   color: var(--hud-ink);
@@ -218,11 +222,11 @@
 .spot-crew {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  min-height: 18px;
-  padding: 0 6px;
+  gap: 2px;
+  min-height: 14px;
+  padding: 0 4px;
   border-radius: var(--radius-round);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1;
 }
@@ -249,11 +253,11 @@
 }
 .spot-ticks {
   display: flex;
-  gap: 3px;
+  gap: 2px;
 }
 .spot-tick {
-  width: 9px;
-  height: 4px;
+  width: 5px;
+  height: 3px;
   border-radius: 1px;
   background: var(--hud-empty);
 }
