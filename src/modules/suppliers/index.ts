@@ -9,9 +9,9 @@
 // (roads) ins gewählte Lager. Hafenware kommt per Schiff über den Rhein an deinen Liegeplatz im Niehler Hafen und
 // wartet dort, bis jemand sie abholt (logistics).
 // Städte (Auftrag 30): Jeder Lieferant liefert in bestimmte Städte (cities, Standard Köln), mit eigener Lieferzeit
-// (deliveryTimes) und Aufschlag (priceFactors); in einer Stadt kann er anders auftreten (inCity: Hein ist in Hamburg
-// Hafen-Großhändler). Bestellt wird für die Stadt des Ziel-Lagers, ohne Lager für die aktive. Freigeschaltete
-// Lieferanten und Vertrauen gelten in allen Städten. Hein schaltet sich mit dem Hamburger Liegeplatz frei.
+// (deliveryTimes) und Aufschlag (priceFactors); in einer Stadt kann er anders auftreten (inCity, z.B. ein Hafen-Großhändler
+// in einer Stadt). Bestellt wird für die Stadt des Ziel-Lagers, ohne Lager für die aktive. Freigeschaltete
+// Lieferanten und Vertrauen gelten in allen Städten. Hein schaltet sich mit Hamburg frei.
 //
 // Öffentliche API:
 //   getSuppliers(state, cityId?), getSupplier(state, id), supplierIn(supplier, cityId), deliversTo(supplier, cityId),
@@ -652,10 +652,10 @@ function defaultWarehouse(state: GameState, cityId: string): string | null {
 }
 
 /**
- * Hamburger Liegeplatz: Hein wird dort Hafen-Großhändler. Kennt ihr euch noch nicht, ist er ab jetzt dabei (ohne
- * Vermittlung), sonst meldet er sich mit seinen Containern.
+ * Hamburg betreten: Hein sitzt dort. Kennt ihr euch noch nicht, ist er ab jetzt dabei (ohne Vermittlung), sonst meldet
+ * er sich nur kurz.
  */
-function onBerthBought(ctx: Ctx, cityId: string): void {
+function onCityUnlocked(ctx: Ctx, cityId: string): void {
   const hein = getSupplier(ctx.state, 'hamburg');
   if (cityId !== 'hamburg' || !hein) return;
   const s = ctx.state.modules.suppliers;
@@ -665,12 +665,10 @@ function onBerthBought(ctx: Ctx, cityId: string): void {
     relationFor(ctx, hein.id);
     ctx.emit('supplier.unlocked', { supplierId: hein.id, fee: 0 });
   }
-  journal.add(ctx, 'Hein liefert dir jetzt Container direkt an den Kai im Hamburger Hafen.', 'good');
   tell(
     ctx,
     hein,
-    'Moin. Du hast jetzt Platz am Kai, hab ich gehört. Dann hab ich was für dich: Container, kiloweise, sechs ' +
-      'Stunden. Alles in der Lieferanten-App.',
+    'Moin. Du bist jetzt in Hamburg, hab ich gehört. Such dir ein Lager, dann liefer ich dir direkt hin.',
   );
 }
 
@@ -917,7 +915,7 @@ export default defineModule({
     'suppliers.unlock': (ctx, { supplierId }) => unlock(ctx, supplierId),
   },
   on: {
-    'logistics.berthBought': (ctx, { cityId }) => onBerthBought(ctx, cityId ?? 'koeln'),
+    'city.unlocked': (ctx, { cityId }) => onCityUnlocked(ctx, cityId),
   },
   migrations: {
     2: (old: SuppliersStateV1): SuppliersStateV2 => ({ shipments: old.shipments, relations: initialRelations() }),

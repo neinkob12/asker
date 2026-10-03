@@ -37,6 +37,7 @@ import {
   productName,
   qualityTier,
   stockSummary,
+  warehouseSites,
 } from '../index';
 import './goods.css';
 import { activeCity } from '../../city';
@@ -91,10 +92,14 @@ function StockHud() {
       icon="warehouse"
       color="goods"
       label="Lager"
-      value={short}
+      value={warehouses.length === 0 ? 'kein Lager' : short}
       title={rows.map(text).join(', ') || 'Lager leer'}
       tone={rows.length === 0 ? 'bad' : undefined}
-      onClick={() => ui.openPanel('goods.warehouse', { warehouseId: warehouses[0]?.id ?? DEFAULT_WAREHOUSE })}
+      onClick={() =>
+        ui.openPanel('goods.warehouse', {
+          warehouseId: warehouses[0]?.id ?? warehouseSites(cityId)[0]?.id ?? DEFAULT_WAREHOUSE,
+        })
+      }
       detailsAction="Lager öffnen"
       details={
         <div class="goods-flyout">
