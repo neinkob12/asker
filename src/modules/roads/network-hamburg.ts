@@ -38,4 +38,45 @@ export const ROAD_EDGES =
  * Autobahn-Zufahrten: Nummer, wohin sie führt, und der Weg vom Rand des Ausschnitts bis zum ersten Knoten im Netz
  * (Polyline-Format, erster Punkt absolut, dann Abstände).
  */
-export const ROAD_APPROACHES: readonly { ref: string; toward: string; path: string }[] = [];
+export const ROAD_APPROACHES: readonly { ref: string; toward: string; path: string }[] = [
+  {
+    ref: 'A1',
+    toward: 'Bremen, Osnabrück, Köln',
+    path: 'mce|@u_ieIQkB_@e@oA[kBB',
+  },
+  {
+    ref: 'A1',
+    toward: 'Lübeck',
+    path: 'y{o|@isqeI~GM|Nu@bl@{FhRaAhLShkBqAtQa@j^UrEMhDc@vC{@vGmDrE}DdGiH',
+  },
+  {
+    ref: 'A7',
+    toward: 'Hannover, Kassel, Frankfurt',
+    path: 'k|p{@oideIfG}G`DsFdBaErAaGZwCJaEUeFg@oDgAmEqBwEiB}CuCqDkEoEaS}O{FyFiB_CeB_D}AqEq@sEKcCZeGl@}CtIeXMsAaAyAmAeEMuJ',
+  },
+  {
+    ref: 'A7',
+    toward: 'Neumünster, Kiel, Flensburg',
+    path: 'iaq{@cbjfIlFnUpDtIjDxFdDbExGlGtVfRnDbEbBnDfBzBrAt@vAX|BH|BQbCu@pPqI',
+  },
+  {
+    ref: 'A23',
+    toward: 'Pinneberg, Itzehoe, Heide',
+    path: 'off{@mqifI{BjAa@v@Nf@lBzA',
+  },
+  {
+    ref: 'A24',
+    toward: 'Schwerin, Berlin',
+    path: 'yym|@m{{eIp@N',
+  },
+  {
+    ref: 'A25',
+    toward: 'Bergedorf, Geesthacht',
+    path: 'ocp|@{eqeIpCwDpAgHl@mA|AgAzD}@fBKxBBtLvAzFH|HU~QqBzIm@hPi@prB{AtQa@j^UrEMhDc@vC{@vGmDrE}DdGiH',
+  },
+  {
+    ref: 'A26',
+    toward: 'Buxtehude, Stade',
+    path: 'wxtz@o}meIyNoCsNeD',
+  },
+];

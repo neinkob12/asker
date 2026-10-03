@@ -40,6 +40,8 @@ registerCityViews({
     center: c.view.center,
     zoom: c.view.zoom,
     mobileZoom: c.view.mobileZoom,
+    pitch: c.view.pitch,
+    bearing: c.view.bearing,
   })),
   deutschland: DEUTSCHLAND_VIEW,
   active: (state) => activeCity(state),

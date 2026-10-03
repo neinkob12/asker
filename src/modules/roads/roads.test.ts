@@ -168,6 +168,25 @@ describe('Straßennetz', () => {
     expect(roadEntryFrom({ lng: 8.682, lat: 50.111 }, 'A3')).toEqual(frankfurt?.path.at(-1));
   });
 
+  it('In Hamburg kommen Kuriere über A7, A24 und A1 herein', () => {
+    const refs = roadApproaches('hamburg').map((a) => a.ref);
+    for (const ref of ['A1', 'A7', 'A23', 'A24', 'A25', 'A26']) expect(refs).toContain(ref);
+    const altona = { lng: 9.935, lat: 53.552 };
+    const frankfurt = roadApproach({ lng: 8.682, lat: 50.111 }, 'A7', altona);
+    const berlin = roadApproach({ lng: 13.405, lat: 52.52 }, 'A24', altona);
+    const amsterdam = roadApproach({ lng: 4.904, lat: 52.37 }, 'A1', altona);
+    const koeln = roadApproach({ lng: 6.958, lat: 50.938 }, 'A1', altona);
+    expect(frankfurt?.toward).toContain('Hannover');
+    expect(berlin?.toward).toContain('Berlin');
+    expect(amsterdam?.toward).toContain('Bremen');
+    expect(koeln).toBe(amsterdam);
+    for (const approach of [frankfurt, berlin, amsterdam]) {
+      const path = approach?.path ?? [];
+      expect(nearestRoadPoint(path[path.length - 1])?.meters ?? 99).toBeLessThan(2);
+      expect(roadRoute(path[path.length - 1], altona).onRoads).toBe(true);
+    }
+  });
+
   it('Schiffe fahren auf echten Wasserwegen (Overture): Rhein ab Rotterdam, Elbe ab Cuxhaven', () => {
     const length = (path: LngLat[]) => path.slice(1).reduce((sum, p, i) => sum + distanceMeters(path[i], p), 0) / 1000;
     const rhein = shipRoute('koeln');

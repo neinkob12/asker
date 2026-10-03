@@ -167,6 +167,9 @@ export interface MapCamera {
   mobileZoom: number;
   /** Schräge Kamera (3D) wie in der Stadt; sonst Draufsicht. */
   tilt: boolean;
+  /** Neigung und Drehung der schrägen Kamera in Grad (Standard wie Köln). */
+  pitch?: number;
+  bearing?: number;
 }
 
 /** Schnittstelle der Karte für die UI (implementiert in src/map/GameMap.ts). */
@@ -783,6 +786,8 @@ export class UiRuntime {
           zoom: camera.zoom,
           mobileZoom: camera.mobileZoom,
           tilt: true,
+          pitch: camera.pitch,
+          bearing: camera.bearing,
         });
       },
       flyHome: () => {

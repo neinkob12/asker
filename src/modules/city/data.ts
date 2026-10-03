@@ -9,8 +9,11 @@ export interface CityDef {
   name: string;
   /** Mittelpunkt (Stadt-Chip, Deutschland-Ansicht). */
   center: LngLat;
-  /** Kamera der Stadtansicht: Blickpunkt und Zoom am Desktop bzw. am Handy-Bildschirm. */
-  view: { center: LngLat; zoom: number; mobileZoom: number };
+  /**
+   * Kamera der Stadtansicht: Blickpunkt und Zoom am Desktop bzw. am Handy-Bildschirm, Neigung und Drehung der
+   * schrägen Kamera in Grad (Auftrag 31; Drehung 0 = Blick nach Norden).
+   */
+  view: { center: LngLat; zoom: number; mobileZoom: number; pitch: number; bearing: number };
   /** Rahmen um alle Veedel [West, Süd, Ost, Nord]. */
   bounds: readonly [number, number, number, number];
   /** Straßennetz in roads (Auftrag 30, Etappe 6). */
@@ -39,7 +42,7 @@ export const CITIES: readonly CityDef[] = [
     id: 'koeln',
     name: 'Köln',
     center: { lng: 6.958, lat: 50.938 },
-    view: { center: { lng: 6.9445, lat: 50.9395 }, zoom: 13.6, mobileZoom: 12.4 },
+    view: { center: { lng: 6.9445, lat: 50.9395 }, zoom: 13.6, mobileZoom: 12.4, pitch: 50, bearing: -20 },
     bounds: [6.83, 50.87, 7.07, 51.02],
     roadsNetworkId: 'koeln',
     portId: 'niehl',
@@ -54,7 +57,8 @@ export const CITIES: readonly CityDef[] = [
     id: 'hamburg',
     name: 'Hamburg',
     center: { lng: 9.98, lat: 53.555 },
-    view: { center: { lng: 9.975, lat: 53.553 }, zoom: 12.6, mobileZoom: 11.6 },
+    // Blick nach Norden über die Elbe: Hafen und Landungsbrücken vorn, Kiez und Alster dahinter.
+    view: { center: { lng: 9.975, lat: 53.553 }, zoom: 12.6, mobileZoom: 11.6, pitch: 50, bearing: 0 },
     bounds: [9.75, 53.44, 10.08, 53.61],
     roadsNetworkId: 'hamburg',
     portId: 'hamburg-hafen',
@@ -72,7 +76,7 @@ export const CITIES: readonly CityDef[] = [
     id: 'berlin',
     name: 'Berlin',
     center: { lng: 13.405, lat: 52.52 },
-    view: { center: { lng: 13.405, lat: 52.52 }, zoom: 12.2, mobileZoom: 11.2 },
+    view: { center: { lng: 13.405, lat: 52.52 }, zoom: 12.2, mobileZoom: 11.2, pitch: 50, bearing: -20 },
     bounds: [13.2, 52.42, 13.6, 52.62],
     roadsNetworkId: 'berlin',
     portId: null,

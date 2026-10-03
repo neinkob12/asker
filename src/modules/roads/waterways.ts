@@ -6,9 +6,9 @@
 // Mittellinien mit subtype river oder canal, kürzester Weg über Wegpunkte im Hauptfahrwasser, vereinfacht auf
 // 30 m (in der Stadt 8 m), jeder Punkt höchstens 300 m von der Linie.
 // Rotterdam – Köln: 306 km, 443 Punkte.
-//   die letzten 3 Punkte bis zum Liegeplatz von Hand (Hafenbecken haben keine Mittellinie), alle in einer Wasserfläche.
-// Nordsee – Hamburg: 104 km, 61 Punkte.
-//   die letzten 1 Punkte bis zum Liegeplatz von Hand (Hafenbecken haben keine Mittellinie), alle in einer Wasserfläche.
+//   die letzten 3 Punkte bis zum Liegeplatz von Hand (Hafenbecken haben keine Mittellinie), ganz im Wasser.
+// Nordsee – Hamburg: 107 km, 71 Punkte.
+//   die letzten 4 Punkte bis zum Liegeplatz von Hand (Hafenbecken haben keine Mittellinie), ganz im Wasser.
 //
 // Format: Weg vom Meer bzw. von Rotterdam bis zum Liegeplatz, Polyline-Format (1e-5 Grad, erster Punkt absolut, dann
 // Abstände, wie ROAD_APPROACHES in network.ts).
@@ -21,7 +21,7 @@ export const WATERWAYS: Readonly<Record<string, { name: string; km: number; path
   },
   hamburg: {
     name: 'Nordsee – Hamburg',
-    km: 103.7,
-    path: 'myet@eyygIm}B`xA_jAtj@efBht@sbChb@{mClIg|CjCymEkFoqRov@q`BaJcbBcP_uPaoC_pBsNiuNeN_gD|F}_E~YccCvc@k}Cjd@wbDnyA_kFjqCyy@rw@_Xzf@m]jfAmtDzcHsX|P}tCvsAosC|x@qgAjc@shBthAuaApcA{Wly@ae@t|@{Q~e@mv@rlCkN|\\ku@lfA_w@bh@cpAps@qd@xS}|EzaBozDtoBecCtu@ct@tNowHd_@{kLhc@kt@jFi~A`QcfBzSklFjg@e|AlKu\\lB{h@jB{oBjBqaBv@kzEPyGUqUqBm]kGaKaAmNw@m{@_A',
+    km: 106.6,
+    path: 'myet@eyygIm}B`xA_jAtj@efBht@sbChb@{mClIg|CjCymEkFoqRov@q`BaJcbBcP_uPaoC_pBsNiuNeN_gD|F}_E~YccCvc@k}Cjd@wbDnyA_kFjqCyy@rw@_Xzf@m]jfAmtDzcHsX|P}tCvsAosC|x@qgAjc@shBthAuaApcA{Wly@ae@t|@{Q~e@mv@rlCkN|\\ku@lfA_w@bh@cpAps@qd@xS}|EzaBozDtoBecCtu@ct@tNowHd_@{kLhc@kt@jFi~A`QcfBzSklFjg@e|AlKu\\lB{h@jB{oBjBqaBv@kzEPyGUqUqBm]kGaKaAmNw@k`@i@gTRsJbAwM~Bet@tOuc@dMcYzCuCpNkFfHci@vUs@tL',
   },
 };

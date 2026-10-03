@@ -361,13 +361,16 @@ export function registerMapLayerOption(option: MapLayerOption): void {
   mapLayerOptions.register(option);
 }
 
-/** Kamera einer Stadt (Auftrag 30): Blickpunkt, Zoom am Desktop und am Handy-Bildschirm. */
+/** Kamera einer Stadt (Auftrag 30): Blickpunkt, Zoom am Desktop und am Handy-Bildschirm, Neigung und Drehung (3D). */
 export interface CityCamera {
   id: string;
   name: string;
   center: LngLat;
   zoom: number;
   mobileZoom: number;
+  /** Neigung und Drehung der schrägen Kamera in Grad (Standard wie Köln). */
+  pitch?: number;
+  bearing?: number;
 }
 
 /** Städte für Karte und Oberfläche: Kameras, Deutschland-Ansicht und welche Stadt gerade aktiv ist. */

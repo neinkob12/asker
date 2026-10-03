@@ -21,7 +21,7 @@ import {
 import { iconElement } from '../../../ui';
 import { playableCities } from '../../city';
 import { formatProductAmount, getWarehouse, getWarehouses, productName } from '../../goods';
-import { roadApproach, roadEntryFrom, roadRoute, shipRoute } from '../../roads';
+import { roadApproach, roadEntryFrom, roadNetworkAt, roadRoute, shipRoute } from '../../roads';
 import {
   CITY_APPROACH_SHARE,
   deliveryLeg,
@@ -30,6 +30,7 @@ import {
   type Supplier,
   shipmentProgress,
   shipmentsInTransit,
+  supplierVia,
   UNLOADING_PORT,
 } from '../index';
 
@@ -80,9 +81,10 @@ function cityPath(
   supplier: Supplier,
   target: LngLat,
 ): { path: LngLat[]; split: number; walk: [LngLat, LngLat] | null } {
-  // In eine Stadt ohne Zufahrten (Hamburg) über den nächsten Autobahn-Knoten ihres Netzes.
-  const approach = roadApproach(supplier, supplier.via, target);
-  const ramp = approach?.path ?? [roadEntryFrom(supplier, supplier.via, target)];
+  // Die Autobahn des Kuriers in die Stadt des Ziels (ohne Zufahrten: der nächste Autobahn-Knoten ihres Netzes).
+  const via = supplierVia(supplier, roadNetworkAt(target) ?? 'koeln');
+  const approach = roadApproach(supplier, via, target);
+  const ramp = approach?.path ?? [roadEntryFrom(supplier, via, target)];
   const entry = ramp[ramp.length - 1];
   const route = roadRoute(entry, target);
   const city = [...ramp, ...route.drive];

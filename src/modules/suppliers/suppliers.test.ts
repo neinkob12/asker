@@ -3,7 +3,7 @@ import { distanceMeters, loadSimulation, messages, type Simulation, START_DIRTY_
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getLots, getStock } from '../goods';
 import { getCargo } from '../logistics';
-import { shipRoute } from '../roads';
+import { roadApproaches, shipRoute } from '../roads';
 import { CREDIT_TERM, ROTTERDAM_DELIVERY_TIME, START_TRUST, SUPPLIERS, TRUST_LATE_PENALTY } from './config';
 import {
   availableCredit,
@@ -194,6 +194,18 @@ describe('suppliers', () => {
       .map((m) => (m.from === 'player' ? `Du: ${m.text}` : m.text));
     expect(texts[1]).toBe('Du: Deal.');
     expect(texts[2]).toMatch(/Abgemacht/);
+  });
+
+  it('Kuriere kommen in jeder Stadt über eine Autobahn herein, die es dort als Zufahrt gibt', () => {
+    for (const supplier of SUPPLIERS) {
+      for (const [cityId, ref] of Object.entries(supplier.via ?? {})) {
+        expect(supplier.cities ?? ['koeln'], `${supplier.id} liefert nach ${cityId}`).toContain(cityId);
+        expect(
+          roadApproaches(cityId).map((a) => a.ref),
+          `${supplier.id}: ${ref} in ${cityId}`,
+        ).toContain(ref);
+      }
+    }
   });
 
   it('Rotterdam braucht einen Liegeplatz, Berlin ein Veedel', () => {

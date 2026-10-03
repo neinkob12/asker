@@ -22,10 +22,11 @@ import { BASE_LAYERS, baseStyle, LANDMARK_SOURCE } from './style';
 
 setWorkerUrl(workerUrl);
 
+/** Schräge Kamera in der Stadt (Köln; andere Städte bringen eigene Werte über ihre Kamera mit). */
 const KOELN_PITCH = 50;
+const KOELN_BEARING = -20;
 /** Straßennetz, Wasserwege und Autobahn-Zufahrten kommen aus Overture Maps (abgeleitet von OpenStreetMap, ODbL). */
 export const ATTRIBUTION = '©\u00a0OpenStreetMap-Mitwirkende, Overture Maps Foundation';
-const KOELN_BEARING = -20;
 const MAX_PIXEL_RATIO = 1.5;
 
 type PaintValue = string | number;
@@ -307,8 +308,11 @@ export class GameMap implements MapController {
     else this.map.setPadding(padding);
   }
 
+  /** Neigung und Drehung der aktuellen Stadt (flyToCamera merkt sie sich), für 3D zurück aus der Draufsicht. */
+  private tilt = { pitch: KOELN_PITCH, bearing: KOELN_BEARING };
+
   private koelnCamera() {
-    return this.cameraMode === '2d' ? { pitch: 0, bearing: 0 } : { pitch: KOELN_PITCH, bearing: KOELN_BEARING };
+    return this.cameraMode === '2d' ? { pitch: 0, bearing: 0 } : { ...this.tilt };
   }
 
   setCameraMode(mode: CameraMode): void {
@@ -321,13 +325,14 @@ export class GameMap implements MapController {
     } else {
       for (const h of handlers) h.enable();
       this.map.touchZoomRotate.enableRotation();
-      if (this.view.startsWith('city:')) this.map.easeTo({ pitch: KOELN_PITCH, bearing: KOELN_BEARING, duration: 900 });
+      if (this.view.startsWith('city:')) this.map.easeTo({ ...this.tilt, duration: 900 });
     }
     this.container.classList.toggle('is-2d', mode === '2d');
   }
 
   flyToKoeln(): void {
     this.view = 'city:koeln';
+    this.tilt = { pitch: KOELN_PITCH, bearing: KOELN_BEARING };
     this.viewLabel = 'CAM 01 · KÖLN';
     this.map.flyTo({
       center: [KOELN_VIEW.lng, KOELN_VIEW.lat],
@@ -353,6 +358,7 @@ export class GameMap implements MapController {
   flyToCamera(camera: MapCamera): void {
     this.view = camera.view;
     this.viewLabel = camera.label;
+    if (camera.tilt) this.tilt = { pitch: camera.pitch ?? KOELN_PITCH, bearing: camera.bearing ?? KOELN_BEARING };
     this.map.flyTo({
       center: [camera.center.lng, camera.center.lat],
       zoom: isMobile() ? camera.mobileZoom : camera.zoom,

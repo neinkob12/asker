@@ -78,7 +78,17 @@ CITIES = {
         'out': 'network-hamburg.ts',
         'lat0': 53.53,
         'extra_areas': [],
-        'approaches': [],
+        # Autobahn-Zufahrten wie in Köln; die Rand-Punkte sind dort, wo die Autobahn den Ausschnitt schneidet.
+        'approaches': [
+            ('A1', ['A 1'], 'Bremen, Osnabrück, Köln', (10.0305, 53.44)),
+            ('A1', ['A 1'], 'Lübeck', (10.08, 53.5072)),
+            ('A7', ['A 7'], 'Hannover, Kassel, Frankfurt', (9.921, 53.44)),
+            ('A7', ['A 7'], 'Neumünster, Kiel, Flensburg', (9.9223, 53.63)),
+            ('A23', ['A 23'], 'Pinneberg, Itzehoe, Heide', (9.867, 53.63)),
+            ('A24', ['A 24'], 'Schwerin, Berlin', (10.08, 53.5622)),
+            ('A25', ['A 25'], 'Bergedorf, Geesthacht', (10.08, 53.5083)),
+            ('A26', ['A 26'], 'Buxtehude, Stade', (9.78, 53.4889)),
+        ],
     },
 }
 # Autobahn zwischen zwei Städten: Endpunkte (lng, lat) in den Städten und Wegpunkte des Korridors dazwischen.
