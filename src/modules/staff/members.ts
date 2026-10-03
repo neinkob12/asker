@@ -1,7 +1,7 @@
 // Lese- und Schreib-API des Personals. Lesen mit state, schreiben mit ctx.
 
 import { type Contact, type Ctx, type GameState, journal, type MoneyCategory } from '../../core';
-import { activeCity, getCity, isCityLive } from '../city';
+import { activeCity, cityName, getCity, isCityLive } from '../city';
 import { getWarehouse } from '../goods';
 import { getSpot, isSpotActive } from '../spots';
 import { veedelAt, veedelName } from '../veedel';
@@ -413,7 +413,7 @@ export function assign(ctx: Ctx, staffId: string, assignment: StaffAssignment | 
   }
   member.assignment = next;
   // Lieferungen und Fahrten sind kurz, die kommen nicht in die Laufbahn.
-  if (next && next.kind !== 'delivery' && next.kind !== 'transport') {
+  if (next && next.kind !== 'delivery' && next.kind !== 'transport' && next.kind !== 'travel') {
     addCareer(ctx, staffId, `Eingesetzt: ${assignmentLabel(ctx.state, next)}.`);
   }
   ctx.emit('staff.assigned', { staffId, assignment: member.assignment });
@@ -427,6 +427,7 @@ export function assignmentLabel(state: GameState, a: StaffAssignment | null): st
   if (a.kind === 'warehouse') return getWarehouse(state, a.targetId)?.name ?? a.targetId;
   if (a.kind === 'veedel') return `Leutnant in ${veedelName(a.targetId)}`;
   if (a.kind === 'transport') return 'Fahrt';
+  if (a.kind === 'travel') return `Unterwegs nach ${cityName(a.targetId)}`;
   if (a.kind === 'office') return 'Rechte Hand';
   return 'Lieferung';
 }

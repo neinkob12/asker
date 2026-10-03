@@ -151,3 +151,107 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+
+/* Deine Fahrt zwischen den Städten: Karte über der Kartenfläche (Look "Glas"). */
+.city-travel {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-6);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(360px, calc(100% - 2 * var(--space-4)));
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  pointer-events: auto;
+}
+
+.city-travel__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.city-travel__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.city-travel__text strong {
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.city-travel__hint {
+  font-size: 13px;
+  color: var(--hud-ink-2);
+  white-space: nowrap;
+}
+
+.city-travel__bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--hud-glass-edge);
+  overflow: hidden;
+}
+
+.city-travel__fill {
+  display: block;
+  height: 100%;
+  background: var(--cat-place);
+}
+
+.city-travel__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Das eigene Auto auf der Karte (auch weit herausgezoomt sichtbar). */
+.city-car {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  pointer-events: none;
+}
+
+.city-car__icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--cat-place);
+  color: var(--color-on-dark);
+  box-shadow: var(--hud-shadow);
+}
+
+.city-car__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.city-car__label {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--hud-glass);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.city-menu__note {
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+  color: var(--hud-ink-2);
+}

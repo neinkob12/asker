@@ -20,6 +20,7 @@
 //   addCareer, revealStat, enlist(ctx, profile, options), generateProfile(ctx, role, options), randomName(ctx)
 //   isLyingLow(state, veedelId), lieLow(ctx, veedelId, until)
 // Befehle: 'staff.hireRunner', 'staff.hireDriver', 'staff.fire', 'staff.assign', 'staff.setWage', 'staff.bail', 'staff.lieLow',
+//   'staff.relocate' (in eine andere Stadt, Auftrag 30),
 //   'staff.setJailSupport' (Stillhaltegeld), 'staff.replace' (Ausfall am Spot ersetzen, optional entlassen)
 // Nach einer Festnahme fragt der Leutnant (sonst die Person selbst) still per Handy: Kaution, Ersetzen, Entlassen, Abwarten.
 // Ereignisse: 'staff.hired', 'staff.left', 'staff.statusChanged', 'staff.assigned', 'staff.levelUp',
@@ -45,6 +46,7 @@ import {
   fire,
   hireDriver,
   hireRunner,
+  relocate,
   replaceAbsent,
   setJailSupport,
   setWageCommand,
@@ -123,6 +125,8 @@ declare module '../../core' {
     'staff.replace': { staffId: string; fire?: boolean };
     /** Alle Leute an den Spots eines Veedels bis until von der Straße holen (z.B. nach einer Razzia-Warnung). */
     'staff.lieLow': { veedelId: string; until: number };
+    /** Jemanden in eine andere Stadt schicken (Fahrt über die A1, Auftrag 30). */
+    'staff.relocate': { staffId: string; cityId: string };
   }
   interface GameEvents {
     'staff.hired': { staffId: string; role: StaffRole };
@@ -137,6 +141,8 @@ declare module '../../core' {
     'staff.raidWarning': { veedelId: string; staffId: string; heat: number; at: number };
     /** Die Leute in einem Veedel sind abgetaucht (pulled = so viele von der Straße geholt). */
     'staff.wentUnderground': { veedelId: string; until: number; pulled: number };
+    /** Jemand ist in einer anderen Stadt angekommen. */
+    'staff.relocated': { staffId: string; from: string; to: string };
   }
 }
 
@@ -335,6 +341,7 @@ export default defineModule({
     'staff.setWage': (ctx, { staffId, wage }) => setWageCommand(ctx, staffId, wage),
     'staff.bail': (ctx, { staffId }, meta) => bail(ctx, staffId, meta),
     'staff.lieLow': (ctx, { veedelId, until }, meta) => lieLowCommand(ctx, veedelId, until, meta.actor),
+    'staff.relocate': (ctx, { staffId, cityId }, meta) => relocate(ctx, staffId, cityId, meta),
   },
   on: {
     'clock.dayStarted': daily,

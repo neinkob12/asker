@@ -229,8 +229,11 @@ export interface RightHandPost {
 export interface HierarchyState {
   /** Mitarbeiter-ID → Posten. */
   posts: Record<string, LieutenantPost>;
-  /** Rechte Hand, sonst null. */
-  rightHand: RightHandPost | null;
+  /**
+   * Rechte Hand pro Stadt (Auftrag 30): Stadt → Posten. Jede Stadt kann ihre eigene haben (Vollmacht pro Stadt); die
+   * Stadt ist die, in der die Person ist.
+   */
+  rightHands: Record<string, RightHandPost>;
   /** Vorlage für die Bestellregeln neuer Leutnants (letzte Einstellung des Spielers), sonst null. */
   orderTemplate: OrderRule[] | null;
 }

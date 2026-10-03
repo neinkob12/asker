@@ -12,14 +12,15 @@ import {
   type MoneyCategory,
   wallet,
 } from '../../core';
-import { activeCity } from '../city';
+import { activeCity, cityName, isPlayerIn } from '../city';
 import { allProducts, DEFAULT_PRODUCT, getProduct, getStock, getWarehouses, store, take } from '../goods';
+import { hasFullPower } from '../hierarchy';
 import { addHeat } from '../police';
 import { changeReputation } from '../reputation';
 import { getSpot } from '../spots';
 import { getStaff, getStaffMember, setStatus } from '../staff';
 import { addInfluence, PLAYER_FACTION } from '../territory';
-import { veedelName } from '../veedel';
+import { veedelCity, veedelName } from '../veedel';
 import { ENCOUNTER_ACTIONS } from './actions';
 import {
   ABANDON_CASH_MAX,
@@ -265,7 +266,8 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
     result: null,
   };
   for (const id of new Set(request.staffIds ?? [])) addStaff(ctx.state, encounter, id);
-  if (request.playerPresent === true) addPlayer(encounter);
+  // Dabei sein kannst du nur in der Stadt, in der du bist (Auftrag 30).
+  if (request.playerPresent === true && playerCanBeThere(ctx.state, encounter)) addPlayer(encounter);
   else if (request.playerPresent === undefined && request.askPlayer && kind.joinable) encounter.phase = 'briefing';
   encounter.situation = fillText(request.situation ?? kind.situation, textVars(encounter));
   encounter.edge = startEdge(encounter);
@@ -341,8 +343,34 @@ export function briefingOptions(state: GameState, encounter: Encounter): Briefin
     if (mode === 'tipoff' && !encounter.request.veedelId) {
       return { mode, cost: 0, ok: false, reason: 'Kein Veedel, in das die Polizei kommen könnte.' };
     }
+    if (mode === 'self' && !playerCanBeThere(state, encounter)) {
+      return { mode, cost: 0, ok: false, reason: `Du bist nicht in ${cityName(encounterCity(encounter))}.` };
+    }
     return { mode, cost: 0, ok: true };
   });
+}
+
+/** Stadt einer Konfrontation (über ihr Veedel; ohne Veedel die aktive Stadt). */
+function encounterCity(encounter: Encounter, state?: GameState): string {
+  const veedelId = encounter.request.veedelId;
+  return veedelId ? veedelCity(veedelId) : state ? activeCity(state) : 'koeln';
+}
+
+/** Kannst du selbst hin? Nur in der Stadt, in der du bist (und nicht unterwegs zwischen den Städten). */
+function playerCanBeThere(state: GameState, encounter: Encounter): boolean {
+  return isPlayerIn(state, encounterCity(encounter, state));
+}
+
+/**
+ * In einer Stadt, in der du nicht bist: Hat die Rechte Hand dort Vollmacht, entscheidet sie sofort (ihre Leute machen),
+ * sonst bleibt es beim Standardweg (Frist, dann entscheiden die Leute selbst).
+ */
+export function delegateAbsent(ctx: Ctx): void {
+  for (const encounter of [...ctx.state.modules.encounters.active]) {
+    if (encounter.phase !== 'briefing' || playerCanBeThere(ctx.state, encounter)) continue;
+    if (!hasFullPower(ctx.state, encounterCity(encounter, ctx.state))) continue;
+    join(ctx, encounter.id, 'crew');
+  }
 }
 
 /**

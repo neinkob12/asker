@@ -14,7 +14,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, cityAt, cityOfSpot } from '../city';
+import { activeCity, cityAt, cityName, cityOfSpot, isPlayerIn } from '../city';
 import { startEncounter } from '../encounters';
 import {
   allProducts,
@@ -335,7 +335,9 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier' 
     if (state.modules.customers.orders.some((o) => o.status === 'enRoute' && o.deliveredBy === 'player')) {
       return { ok: false, reason: 'Du bist schon mit einer Lieferung unterwegs.' };
     }
-    if (isPlayerOnTheRoad(state)) return { ok: false, reason: 'Du bist gerade mit dem Transporter unterwegs.' };
+    if (isPlayerOnTheRoad(state)) return { ok: false, reason: 'Du bist gerade unterwegs.' };
+    const city = cityAt(order.lng, order.lat);
+    if (!isPlayerIn(state, city)) return { ok: false, reason: `Du bist nicht in ${cityName(city)}.` };
   } else {
     const driver = rightHandDriver(state);
     if (!driver.ok) return { ok: false, reason: driver.reason };

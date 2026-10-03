@@ -32,6 +32,8 @@ export interface RunSummary {
   days: number;
   veedel: number;
   outcome: 'bankrupt' | 'killed' | 'won' | 'running';
+  /** Komplett übernommene Städte (Auftrag 30). */
+  cities: number;
 }
 
 /**
@@ -61,6 +63,8 @@ export function runSummary(state: GameState): RunSummary {
     days: clock.day(state.time),
     veedel: Math.max(record.peakVeedel, controlledBy(state, PLAYER_FACTION).length),
     outcome: over ? over.reason : state.outcome.won ? 'won' : 'running',
+    // Alte Spielstände mit Sieg ohne Städte-Liste: damals war es Köln.
+    cities: state.outcome.won ? (state.outcome.won.cities?.length ?? 1) : 0,
   };
 }
 

@@ -49,3 +49,19 @@ export const SLEEP_FACTOR_MAX = 1.15;
 
 /** Welche Stadt nach der Übergabe einer Stadt an die Rechte Hand frei wird (Auftrag 30: Köln → Hamburg). */
 export const NEXT_CITY: Readonly<Record<string, string>> = { koeln: 'hamburg' };
+
+/** Dein Auto auf der A1 (Stadttempo bis zur Autobahn, wie bei der Logistik "du selbst"). */
+export const PLAYER_CITY_SPEED = 380;
+
+/** Fiete nach deiner ersten Ankunft in Hamburg (Chat): was zuerst zu tun ist. */
+export const WELCOME_TEXTS: Readonly<Record<string, readonly string[]>> = {
+  hamburg: [
+    'Moin. Da bist du ja. Willkommen an der Elbe.',
+    'So fängst du hier an: Erst ein Lager, sonst hast du nichts, wo die Ware hinkommt. Ottensen, St. Georg, ' +
+      'Wilhelmsburg, Barmbek oder Harburg, such dir was aus.',
+    'Dann ein Spot. Auf dem Kiez ist am meisten los, aber da steht an jeder Tür einer von der Neonkrone. In der Schanze ' +
+      'oder in Altona fällst du weniger auf.',
+    'Wenn das läuft: Liegeplatz bei uns im Hafen. Zwölftausend, sauber. Dann bestellst du bei Hein Container, ' +
+      'kiloweise, direkt an den Kai. Bis dahin liefert dir Toni aus Frankfurt.',
+  ],
+};

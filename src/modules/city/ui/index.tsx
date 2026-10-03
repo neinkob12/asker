@@ -5,7 +5,7 @@
 // zum Ausprobieren unter window.koeln.dev (Köln komplett, Rechte Hand bereit, Hamburg frei).
 
 import { useEffect } from 'preact/hooks';
-import { formatEuro, type Simulation } from '../../../core';
+import { clock, formatEuro, type Simulation } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import { HudPill, Icon, IconChip, registerCityViews, registerHudItem, registerSlot, useGame, useUi } from '../../../ui';
 import { cityReport } from '../../finance';
@@ -19,13 +19,17 @@ import {
   CITIES,
   citiesUnlocked,
   cityName,
+  cityTravel,
   DEUTSCHLAND_VIEW,
   HARBOR_CALLER,
   hamburgMissing,
   type OfferStatus,
   offerStatus,
+  presentCity,
+  travelMinutesBetween,
 } from '../index';
 import { citiesLayer } from './map';
+import { travelLayer } from './travel';
 import './city.css';
 
 registerCityViews({
@@ -41,6 +45,7 @@ registerCityViews({
 });
 
 registerMapLayer(citiesLayer);
+registerMapLayer(travelLayer);
 
 const WAITING: Partial<Record<OfferStatus, string>> = {
   house: 'Hamburg wartet: erst das Haus in Ordnung bringen',
@@ -104,6 +109,8 @@ function CityChip() {
   const unlocked = citiesUnlocked(state);
   if (unlocked.length < 2) return null;
   const active = activeCity(state);
+  const present = presentCity(state);
+  const travel = cityTravel(state);
   return (
     <HudPill
       icon="building"
@@ -140,6 +147,24 @@ function CityChip() {
             <Icon name="map" />
             <span class="city-menu__name">Deutschland</span>
           </button>
+          {travel ? (
+            <span class="city-menu__note">Unterwegs nach {cityName(travel.to)}</span>
+          ) : (
+            unlocked
+              .filter((id) => id !== present)
+              .map((id) => (
+                <button
+                  key={`travel-${id}`}
+                  type="button"
+                  class="city-menu__item"
+                  onClick={() => dispatch({ type: 'city.travel', payload: { cityId: id } })}
+                >
+                  <Icon name="car" />
+                  <span class="city-menu__name">Nach {cityName(id)} fahren</span>
+                  <span class="city-menu__meta">{clock.formatDuration(travelMinutesBetween(present, id))}</span>
+                </button>
+              ))
+          )}
         </div>
       }
     />

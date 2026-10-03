@@ -107,7 +107,7 @@ describe('logistics: Fahrten', () => {
     const cargoId = withCargo(sim);
     expect(sim.dispatch({ type: 'logistics.pickup', payload: { by: 'driver' } })).toEqual({
       ok: false,
-      reason: 'Kein freier Fahrer. Heuer einen an (Logistik-App oder Leute).',
+      reason: 'Kein freier Fahrer in Köln. Heuer einen an (Logistik-App oder Leute).',
     });
     const driverId = hireDriver(sim);
     expect(freeDrivers(sim.state).map((m) => m.id)).toEqual([driverId]);

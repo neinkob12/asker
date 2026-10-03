@@ -92,9 +92,36 @@ describe('quests', () => {
     for (const id of ids.slice(7)) addInfluence(ctx, id, PLAYER_FACTION, 100);
     sim.advance(10);
     expect(completedQuests(sim.state)).toEqual(expect.arrayContaining(['nineVeedel', 'allVeedel']));
-    expect(currentQuest(sim.state)).toBeNull();
+    // Danach geht es mit Kapitel 7 in Hamburg weiter (Auftrag 30).
+    expect(currentQuest(sim.state)?.id).toBe('hhWarehouse');
     const texts = messages.thread(sim.state, PETER.id).map((m) => m.text);
     expect(texts.some((t) => t.includes('Telefon'))).toBe(true);
+  });
+
+  it('Kapitel 7 "Moin Hamburg": Lager, Spot, erster Verkauf, Liegeplatz in Hamburg', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    jumpTo(sim, 'hhWarehouse');
+    sim.state.wallet.clean = 30000;
+    sim.state.wallet.dirty = 30000;
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+    // Ein Kölner Lager zählt nicht.
+    sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'nippes' } });
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('hhWarehouse');
+    sim.dispatch({ type: 'city.switch', payload: { cityId: 'hamburg' } });
+    expect(sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'keller-st-georg' } }).ok).toBe(true);
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('hhSpot');
+    expect(sim.dispatch({ type: 'spots.unlock', payload: { spotId: 'hansaplatz' } }).ok).toBe(true);
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('hhFirstSale');
+    expect(QUESTS.filter((q) => q.chapter === 6).map((q) => q.id)).toEqual([
+      'hhWarehouse',
+      'hhSpot',
+      'hhFirstSale',
+      'hhBerth',
+    ]);
   });
 
   it('Serie: Heat einen Tag lang niedrig, eine heiße Stunde setzt zurück', () => {

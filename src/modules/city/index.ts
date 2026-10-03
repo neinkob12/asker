@@ -20,10 +20,16 @@
 // Öffentliche API: offerStatus(state), hamburgMissing(state), HARBOR_CALLER, CITIES, DEUTSCHLAND_VIEW, getCity(id),
 //   cityName(id), activeCity(state), presentCity(state), citiesUnlocked(state), isCityUnlocked(state, id),
 //   isCityLive(state, id), cityOf(veedelId), cityOfSpot(state, spotId), isVeedelLive(state, veedelId),
-//   liveVeedel(state), sleepInfo(state, cityId), playableCities(), cityAt(lng, lat)
-// Befehle: 'city.answerOffer', 'city.switch', 'city.unlock' (intern), 'city.travel' (Etappe 5)
+//   liveVeedel(state), sleepInfo(state, cityId), playableCities(), cityAt(lng, lat), isPlayerTraveling(state),
+//   isPlayerIn(state, cityId), cityTravel(state), travelMinutesBetween(from, to)
+// Ankommen (Etappe 5): 'city.travel' fährt dich selbst über die A1 (Weg und Zeit aus roads.interCityRoute); unterwegs
+// bist du in keiner Stadt (isPlayerTraveling, logistics.isPlayerOnTheRoad). Bei der Ankunft wird die Zielstadt aktiv
+// und live; beim ersten Mal in Hamburg schreibt Fiete, wie man anfängt. Selbst am Spot stehen, selbst ausfahren,
+// selbst abholen und bei Konfrontationen dabei sein geht nur in der Stadt, in der du bist (isPlayerIn).
+//
+// Befehle: 'city.answerOffer', 'city.switch', 'city.unlock' (intern), 'city.travel'
 // Ereignisse: 'city.offerAnswered', 'city.offerAccepted', 'city.switched', 'city.unlocked', 'city.slept',
-//   'city.arrived' (Etappe 5)
+//   'city.travelStarted', 'city.arrived'
 
 import {
   type CommandMeta,
@@ -38,10 +44,13 @@ import {
   messages,
   wallet,
 } from '../../core';
+import { isPlayerDelivering, playerSpot } from '../customers';
 import { activeEncounters } from '../encounters';
 import { bookDay, cityDayProfit } from '../finance';
 import { fullPowerMissing } from '../hierarchy';
+import { getTrips } from '../logistics';
 import { restHeat } from '../police';
+import { interCityMinutes } from '../roads';
 import { getSpot } from '../spots';
 import { campaignProgress } from '../territory';
 import { allVeedel, type Veedel, veedelAt, veedelCity } from '../veedel';
@@ -52,9 +61,11 @@ import {
   OFFER_LINES,
   OFFER_REMINDER_DAYS,
   OFFER_TEXTS,
+  PLAYER_CITY_SPEED,
   SLEEP_AVERAGE_DAYS,
   SLEEP_FACTOR_MAX,
   SLEEP_FACTOR_MIN,
+  WELCOME_TEXTS,
 } from './config';
 import { CITIES, type CityDef } from './data';
 
@@ -104,7 +115,12 @@ export interface CityState {
   travel: CityTravel | null;
   /** Schlafmodus pro freigeschalteter Stadt. */
   sleep: Record<string, CitySleep>;
+  /** Städte, in denen du schon warst (die erste Ankunft bringt Fietes Begrüßung). */
+  visited: string[];
 }
+
+/** Zustand in Version 2 (Etappe 4, ohne besuchte Städte). */
+type CityStateV2 = Omit<CityState, 'visited'>;
 
 /** Zustand in Version 1 (Etappe 2, nur das Angebot). */
 type CityStateV1 = Pick<CityState, 'offer'>;
@@ -120,6 +136,8 @@ declare module '../../core' {
     'city.switch': { cityId: string };
     /** Stadt freischalten. Intern (nach der Übergabe an die Rechte Hand), nicht für den Spieler. */
     'city.unlock': { cityId: string };
+    /** Selbst in eine andere Stadt fahren (über die A1). */
+    'city.travel': { cityId: string };
   }
   interface GameEvents {
     'city.offerAnswered': { choice: OfferChoice; ready: boolean };
@@ -129,8 +147,10 @@ declare module '../../core' {
     'city.unlocked': { cityId: string };
     /** Tageszusammenfassung einer schlafenden Stadt (gebucht als income.city bzw. expense.city). */
     'city.slept': { cityId: string; day: number; amount: number };
-    /** Du bist in einer Stadt angekommen (Etappe 5). */
-    'city.arrived': { cityId: string };
+    /** Du fährst los (unterwegs bist du in keiner Stadt). */
+    'city.travelStarted': { from: string; to: string; arrivesAt: number };
+    /** Du bist in einer Stadt angekommen; first beim ersten Mal. */
+    'city.arrived': { cityId: string; first?: boolean };
   }
 }
 
@@ -221,6 +241,29 @@ export function isVeedelLive(state: GameState, veedelId: string): boolean {
 /** Veedel der Stadt, die gerade live ist. */
 export function liveVeedel(state: GameState): readonly Veedel[] {
   return allVeedel(activeCity(state));
+}
+
+/** Deine Fahrt zwischen zwei Städten, sonst null. */
+export function cityTravel(state: GameState): CityTravel | null {
+  return (state.modules.city as CityState | undefined)?.travel ?? null;
+}
+
+/** Bist du gerade selbst zwischen zwei Städten unterwegs? */
+export function isPlayerTraveling(state: GameState): boolean {
+  return cityTravel(state) !== null;
+}
+
+/** Bist du selbst in dieser Stadt (und nicht unterwegs)? Nur dort stehst du am Spot, fährst aus, holst ab. */
+export function isPlayerIn(state: GameState, cityId: string): boolean {
+  return !isPlayerTraveling(state) && presentCity(state) === cityId;
+}
+
+/** Fahrzeit mit dem eigenen Auto zwischen zwei Städten (über roads). */
+export function travelMinutesBetween(from: string, to: string): number {
+  const a = getCity(from);
+  const b = getCity(to);
+  if (!a || !b) return 0;
+  return interCityMinutes(a.center, b.center, PLAYER_CITY_SPEED);
 }
 
 /** Schlafmodus einer Stadt (null, wenn sie nicht freigeschaltet ist). */
@@ -322,6 +365,47 @@ function newSleep(live: boolean, now: number): CitySleep {
   return { results: [], liveToday: live, since: live ? null : now, last: null };
 }
 
+/** Selbst in eine andere Stadt fahren. */
+export function travelTo(ctx: Ctx, cityId: string): CommandResult {
+  const c = ctx.state.modules.city;
+  const def = getCity(cityId);
+  if (!def || def.template) return { ok: false, reason: 'Diese Stadt gibt es im Spiel noch nicht.' };
+  if (!c.unlocked.includes(cityId)) return { ok: false, reason: `${def.name} ist noch nicht frei.` };
+  if (c.travel) return { ok: false, reason: `Du bist schon auf dem Weg nach ${cityName(c.travel.to)}.` };
+  if (c.present === cityId) return { ok: false, reason: `Du bist schon in ${def.name}.` };
+  if (isPlayerDelivering(ctx.state)) return { ok: false, reason: 'Erst die Lieferung zu Ende fahren.' };
+  if (getTrips(ctx.state).some((t) => t.driverId === null)) {
+    return { ok: false, reason: 'Du bist gerade mit dem Transporter unterwegs.' };
+  }
+  // Wer losfährt, steht nicht mehr am Spot.
+  if (playerSpot(ctx.state)) ctx.dispatch({ type: 'customers.standAt', payload: { spotId: null } });
+  const from = c.present;
+  const minutes = travelMinutesBetween(from, cityId);
+  c.travel = { from, to: cityId, departedAt: ctx.now, arrivesAt: ctx.now + minutes };
+  journal.add(ctx, `Du fährst über die A1 nach ${def.name}. Ankunft in ca. ${clock.formatDuration(minutes)}.`, 'info');
+  ctx.emit('city.travelStarted', { from, to: cityId, arrivesAt: c.travel.arrivesAt });
+  return { ok: true, data: { arrivesAt: c.travel.arrivesAt } };
+}
+
+/** Angekommen: Du bist in der Stadt, sie wird aktiv und live. */
+function arrive(ctx: Ctx): void {
+  const c = ctx.state.modules.city;
+  const travel = c.travel;
+  if (!travel) return;
+  c.travel = null;
+  c.present = travel.to;
+  const first = !c.visited.includes(travel.to);
+  if (first) c.visited.push(travel.to);
+  if (c.active !== travel.to) switchCity(ctx, travel.to);
+  journal.add(ctx, `Angekommen in ${cityName(travel.to)}.`, 'good');
+  ctx.emit('city.arrived', first ? { cityId: travel.to, first } : { cityId: travel.to });
+  if (first) {
+    for (const text of WELCOME_TEXTS[travel.to] ?? []) {
+      messages.send(ctx, { contact: HARBOR_CALLER, text, silent: true });
+    }
+  }
+}
+
 /** Stadt live schalten: Karte und Handy wechseln, die bisherige Stadt schläft. */
 export function switchCity(ctx: Ctx, cityId: string): CommandResult {
   const c = ctx.state.modules.city;
@@ -412,6 +496,8 @@ function schedule(ctx: Ctx): void {
 function tick(ctx: Ctx): void {
   const state = ctx.state;
   if (ctx.now > 0 && ctx.now % MINUTES_PER_DAY === 0) closeDay(ctx);
+  const travel = state.modules.city.travel;
+  if (travel && ctx.now >= travel.arrivesAt) arrive(ctx);
   const offer = state.modules.city.offer;
   // Alte Spielstände, die Köln schon komplett haben (ohne das Ereignis), kommen auch dran.
   if (offer.status === 'none' && campaignProgress(state, 'koeln').complete) schedule(ctx);
@@ -439,6 +525,7 @@ function initialState(): CityState {
     unlocked: [FIRST_CITY],
     travel: null,
     sleep: { [FIRST_CITY]: newSleep(true, 0) },
+    visited: [FIRST_CITY],
   };
 }
 
@@ -449,7 +536,7 @@ function playerOnly(meta: CommandMeta): CommandResult | null {
 
 export default defineModule({
   id: 'city',
-  version: 2,
+  version: 3,
   dependsOn: ['territory', 'hierarchy'],
   init: () => initialState(),
   tickEvery: 5,
@@ -459,6 +546,7 @@ export default defineModule({
     'city.switch': (ctx, { cityId }, meta) => playerOnly(meta) ?? switchCity(ctx, cityId),
     'city.unlock': (ctx, { cityId }, meta) =>
       meta.actor === 'system' ? unlockCity(ctx, cityId) : { ok: false, reason: 'Städte werden im Spiel frei.' },
+    'city.travel': (ctx, { cityId }, meta) => playerOnly(meta) ?? travelTo(ctx, cityId),
   },
   on: {
     'campaign.won': (ctx, { cityId }) => {
@@ -472,6 +560,11 @@ export default defineModule({
   },
   migrations: {
     // Version 2 (Etappe 4): aktive Stadt, Aufenthalt, freigeschaltete Städte, Schlafmodus. Alles bisher war Köln.
-    2: (old: CityStateV1): CityState => ({ ...initialState(), offer: old.offer }),
+    2: (old: CityStateV1): CityStateV2 => {
+      const { visited: _, ...fresh } = initialState();
+      return { ...fresh, offer: old.offer };
+    },
+    // Version 3 (Etappe 5): besuchte Städte. Wer schon irgendwo war, war dort.
+    3: (old: CityStateV2): CityState => ({ ...old, visited: [...new Set([FIRST_CITY, old.present])] }),
   },
 });

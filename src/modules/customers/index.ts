@@ -23,7 +23,7 @@
 //   'customer.regularGained', 'customer.regularLost', 'order.received', 'order.accepted', 'order.finished'
 
 import { type CommandResult, type Ctx, defineModule, type GameState, journal } from '../../core';
-import { cityOfSpot } from '../city';
+import { cityName, cityOfSpot, isPlayerIn } from '../city';
 import { getStock } from '../goods';
 import { getSpot, getSpots, isSpotActive } from '../spots';
 import { CUSTOMER_TYPES } from './config';
@@ -350,6 +350,11 @@ function standAt(ctx: Ctx, spotId: string | null): CommandResult {
   }
   const spot = getSpot(ctx.state, spotId);
   if (!spot || !isSpotActive(ctx.state, spotId)) return { ok: false, reason: 'Hier kannst du noch nicht verkaufen.' };
+  // Selbst verkaufen geht nur in der Stadt, in der du bist (Auftrag 30).
+  const city = cityOfSpot(ctx.state, spotId);
+  if (!isPlayerIn(ctx.state, city)) {
+    return { ok: false, reason: `Du bist nicht in ${cityName(city)}. Dort verkaufen deine Leute.` };
+  }
   if (self.spotId === spotId) return { ok: true };
   self.spotId = spotId;
   self.since = ctx.now;

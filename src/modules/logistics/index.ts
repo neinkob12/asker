@@ -34,7 +34,16 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, cityAt, cityName, HARBOR_CALLER, isCityLive, isCityUnlocked } from '../city';
+import {
+  activeCity,
+  cityAt,
+  cityName,
+  HARBOR_CALLER,
+  isCityLive,
+  isCityUnlocked,
+  isPlayerIn,
+  isPlayerTraveling,
+} from '../city';
 import { isPlayerDelivering } from '../customers';
 import { startEncounter } from '../encounters';
 import {
@@ -275,14 +284,14 @@ export function tripAmount(trip: Pick<Trip, 'items'>): number {
   return trip.items.reduce((sum, i) => sum + i.amount, 0);
 }
 
-/** Bist du selbst gerade mit einer Fahrt unterwegs? */
+/** Bist du selbst gerade unterwegs (Fahrt mit dem Transporter oder zwischen den Städten, Auftrag 30)? */
 export function isPlayerOnTheRoad(state: GameState): boolean {
-  return getTrips(state).some((t) => t.driverId === null);
+  return isPlayerTraveling(state) || getTrips(state).some((t) => t.driverId === null);
 }
 
-/** Fahrer ohne Einsatz, die sofort losfahren können. */
-export function freeDrivers(state: GameState): StaffMember[] {
-  return getStaff(state, { role: 'driver', status: 'active' }).filter((m) => !m.assignment);
+/** Fahrer ohne Einsatz in einer Stadt (Standard: die aktive), die sofort losfahren können. */
+export function freeDrivers(state: GameState, cityId: string = activeCity(state)): StaffMember[] {
+  return getStaff(state, { role: 'driver', status: 'active', cityId }).filter((m) => !m.assignment);
 }
 
 export function getLogisticsLog(state: GameState): readonly TripLogEntry[] {
@@ -446,20 +455,26 @@ function buyBerth(ctx: Ctx, cityId: string): CommandResult {
 }
 
 /** Fahrer für eine Fahrt aussuchen: der gewünschte oder der erste freie. */
-function pickDriver(ctx: Ctx, driverId: string | undefined): StaffMember | string {
+function pickDriver(ctx: Ctx, driverId: string | undefined, cityId: string): StaffMember | string {
   if (driverId) {
     const m = getStaffMember(ctx.state, driverId);
     if (!m || m.leftAt !== null) return 'Diesen Fahrer gibt es nicht.';
     if (m.role !== 'driver') return `${m.name} ist ${roleName(m.role)}, kein Fahrer.`;
     if (m.status !== 'active') return `${m.name} kann gerade nicht fahren.`;
     if (m.assignment) return `${m.name} ist schon unterwegs.`;
+    if (m.cityId !== cityId) return `${m.name} ist in ${cityName(m.cityId)}.`;
     return m;
   }
-  return freeDrivers(ctx.state)[0] ?? 'Kein freier Fahrer. Heuer einen an (Logistik-App oder Leute).';
+  return (
+    freeDrivers(ctx.state, cityId)[0] ??
+    `Kein freier Fahrer in ${cityName(cityId)}. Heuer einen an (Logistik-App oder Leute).`
+  );
 }
 
-function playerBusy(state: GameState): string | null {
+function playerBusy(state: GameState, cityId?: string): string | null {
+  if (isPlayerTraveling(state)) return 'Du bist gerade zwischen den Städten unterwegs.';
   if (isPlayerOnTheRoad(state)) return 'Du bist schon mit einer Fahrt unterwegs.';
+  if (cityId && !isPlayerIn(state, cityId)) return `Du bist nicht in ${cityName(cityId)}. Schick einen Fahrer.`;
   if (isPlayerDelivering(state)) return 'Du bist gerade mit einer Lieferung unterwegs.';
   return null;
 }
@@ -553,10 +568,10 @@ function pickup(
   if (warehouseCity(warehouse.id) !== cityId) return { ok: false, reason: 'Das Lager liegt in einer anderen Stadt.' };
   let driverId: string | null = null;
   if (payload.by === 'player') {
-    const busy = playerBusy(state);
+    const busy = playerBusy(state, cityId);
     if (busy) return { ok: false, reason: busy };
   } else {
-    const driver = pickDriver(ctx, payload.driverId);
+    const driver = pickDriver(ctx, payload.driverId, cityId);
     if (typeof driver === 'string') return { ok: false, reason: driver };
     driverId = driver.id;
   }
@@ -615,10 +630,10 @@ function transfer(
   if (payload.amount !== undefined && !payload.productId) return { ok: false, reason: 'Welche Ware?' };
   let driverId: string | null = null;
   if (payload.by === 'player') {
-    const busy = playerBusy(state);
+    const busy = playerBusy(state, from.cityId);
     if (busy) return { ok: false, reason: busy };
   } else {
-    const driver = pickDriver(ctx, payload.driverId);
+    const driver = pickDriver(ctx, payload.driverId, from.cityId);
     if (typeof driver === 'string') return { ok: false, reason: driver };
     driverId = driver.id;
   }

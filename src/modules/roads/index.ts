@@ -8,11 +8,13 @@
 //   travelMinutes(from, to, metersPerMinute, extra?)  Fahrzeit in ganzen Spielminuten
 //   roadEntryFrom(far)        Autobahn-Einfahrt nach Köln aus Richtung eines weit entfernten Orts (z.B. Frankfurt)
 //   nearestRoadPoint(point)   nächster Punkt auf einer Straße, networkSize(), ROAD_SPEEDS
+//   interCityRoute(from, to)  Weg zwischen zwei Städten über die Autobahn (Auftrag 30): Punkte, Meter, Autobahn-Meter
+//   interCityMinutes(from, to, cityMetersPerMinute)  Fahrzeit dafür (Autobahn mit ROAD_SPEEDS.motorway)
 //
 // Routen werden gemerkt (gleiche Punkte = gleiche Route), die Rechnung ist deterministisch.
 
 import { defineModule, distanceMeters, type LngLat } from '../../core';
-import { findRoute, nearestMotorwayNode, networkSize, pointsToLngLat, snapToRoad } from './graph';
+import { findRoute, nearestMotorwayNode, networkSize, pointsToLngLat, ROAD_SPEEDS, snapToRoad } from './graph';
 
 export { networkSize, ROAD_SPEEDS, type RoadClass } from './graph';
 
@@ -84,6 +86,51 @@ export function nearestRoadPoint(point: LngLat): { point: LngLat; meters: number
   if (!snap) return null;
   const [p] = pointsToLngLat([[snap.x, snap.y]]);
   return { point: p, meters: Math.round(snap.distance) };
+}
+
+/** Umweg der Autobahn gegenüber der Luftlinie, solange es die echte A1 noch nicht im Netz gibt (Etappe 6). */
+const INTERCITY_DETOUR = 1.18;
+/** Minuten für Stadt-Anfahrt und Stadt-Zufahrt zusammen (bis zur Autobahn und von ihr runter). */
+const INTERCITY_ACCESS_MINUTES = 20;
+
+export interface InterCityRoute extends RoadRoute {
+  /** Davon auf der Autobahn (Rest: Anfahrt und Zufahrt in den Städten). */
+  motorwayMeters: number;
+}
+
+const interCityCache = new Map<string, InterCityRoute>();
+
+/**
+ * Weg zwischen zwei Städten (Auftrag 30): Stadt-Anfahrt, Autobahn, Stadt-Zufahrt. Bis die A1 als Linie im Netz liegt
+ * (Etappe 6), ist der Weg die Luftlinie mit dem üblichen Umweg einer Autobahn.
+ */
+export function interCityRoute(from: LngLat, to: LngLat): InterCityRoute {
+  const id = `${key(from)}>${key(to)}`;
+  const known = interCityCache.get(id);
+  if (known) return known;
+  const meters = Math.round(distanceMeters(from, to) * INTERCITY_DETOUR);
+  const route: InterCityRoute = {
+    path: [
+      { lng: from.lng, lat: from.lat },
+      { lng: to.lng, lat: to.lat },
+    ],
+    meters,
+    motorwayMeters: meters,
+    onRoads: false,
+  };
+  interCityCache.set(id, route);
+  return route;
+}
+
+/** Fahrzeit zwischen zwei Städten: Autobahn mit ROAD_SPEEDS.motorway, Anfahrt und Zufahrt im Stadttempo. */
+export function interCityMinutes(from: LngLat, to: LngLat, cityMetersPerMinute: number): number {
+  const route = interCityRoute(from, to);
+  const motorway = (ROAD_SPEEDS.motorway * 1000) / 60;
+  const city = route.meters - route.motorwayMeters;
+  return Math.max(
+    1,
+    Math.ceil(route.motorwayMeters / motorway + city / Math.max(1, cityMetersPerMinute) + INTERCITY_ACCESS_MINUTES),
+  );
 }
 
 /** Anzahl Knoten, Kanten und Kilometer (für die Oberfläche). */

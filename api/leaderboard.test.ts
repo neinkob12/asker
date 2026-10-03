@@ -31,6 +31,10 @@ describe('api/leaderboard: Eintrag prüfen', () => {
 
   it('ohne Namen heißt man Anonym, zu lange Namen werden gekürzt', () => {
     expect(parseEntry({ ...valid, name: '' }, 0)?.name).toBe('Anonym');
+    // Städte (Auftrag 30) sind optional: ältere Spielstände schicken sie nicht.
+    expect(parseEntry(valid, 0)).not.toHaveProperty('cities');
+    expect(parseEntry({ ...valid, cities: 2 }, 0)?.cities).toBe(2);
+    expect(parseEntry({ ...valid, cities: 999 }, 0)?.cities).toBe(20);
     expect(parseEntry({ ...valid, name: 'x'.repeat(50) }, 0)?.name).toHaveLength(20);
   });
 

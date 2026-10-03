@@ -2,7 +2,7 @@
 // angelegt in Vercel unter Storage (setzt KV_REST_API_URL und KV_REST_API_TOKEN bzw. UPSTASH_REDIS_REST_*).
 //
 //   GET  /api/leaderboard?runId=…   → { entries: Entry[] (beste zuerst), total, me: { rank, entry } | null }
-//   POST /api/leaderboard           ← { runId, name, score, days, veedel, outcome, mode, title?, quests }
+//   POST /api/leaderboard           ← { runId, name, score, days, veedel, outcome, mode, title?, quests, cities? }
 //                                   → { rank, total }
 //
 // Ein Durchgang (runId) steht nur einmal in der Liste, mit seinem besten Ergebnis. Grobe Plausibilitätsprüfung,
@@ -26,6 +26,8 @@ export interface Entry {
   mode: 'normal' | 'hardcore';
   title: string | null;
   quests: number;
+  /** Komplett übernommene Städte (Auftrag 30, optional: ältere Spielstände schicken es nicht). */
+  cities?: number;
   /** Zeitpunkt des Eintrags (ms seit 1970). */
   at: number;
 }
@@ -63,6 +65,7 @@ export function parseEntry(body: unknown, now: number): Entry | null {
   const outcome = OUTCOMES.find((o) => o === b.outcome);
   if (!outcome) return null;
   const title = cleanText(b.title, 40);
+  const cities = b.cities === undefined ? null : clampInt(b.cities, 0, 20);
   return {
     runId,
     name: cleanText(b.name, 20) || 'Anonym',
@@ -73,6 +76,7 @@ export function parseEntry(body: unknown, now: number): Entry | null {
     mode: b.mode === 'hardcore' ? 'hardcore' : 'normal',
     title: title || null,
     quests,
+    ...(cities !== null ? { cities } : {}),
     at: now,
   };
 }

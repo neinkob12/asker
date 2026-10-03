@@ -2,6 +2,7 @@
 // Werte zeigen sich mit der Zeit, seltener Verrat und die Warnung des Polizei-Kontakts.
 
 import { type Ctx, clock, formatEuro, type GameState, journal, messages, wallet } from '../../core';
+import { cityName } from '../city';
 import { canServe, waitingAt } from '../customers';
 import { formatProductAmount, stockSummary, take } from '../goods';
 import { addHeat, getHeat } from '../police';
@@ -54,7 +55,22 @@ import type { BetrayalKind, StaffMember } from './types';
 /** Jede Spielminute: Haft und Verletzung ablaufen lassen, Läufer bedienen Kunden. */
 export function tick(ctx: Ctx): void {
   releaseDue(ctx);
+  arriveFromTravel(ctx);
   serveCustomers(ctx);
+}
+
+/** Wer in eine andere Stadt gefahren ist (staff.relocate), kommt an: Er ist dort, ohne Einsatz. */
+function arriveFromTravel(ctx: Ctx): void {
+  for (const m of ctx.state.modules.staff.members) {
+    if (m.assignment?.kind !== 'travel' || m.busyUntil > ctx.now) continue;
+    const from = m.cityId;
+    const to = m.assignment.targetId;
+    m.cityId = to;
+    assign(ctx, m.id, null);
+    addCareer(ctx, m.id, `Nach ${cityName(to)} gegangen.`);
+    journal.add(ctx, `${m.name} ist in ${cityName(to)} angekommen.`, 'good', { staffId: m.id });
+    ctx.emit('staff.relocated', { staffId: m.id, from, to });
+  }
 }
 
 function releaseDue(ctx: Ctx): void {

@@ -4,6 +4,7 @@
 import { useState } from 'preact/hooks';
 import { clock, formatEuro } from '../../../core';
 import { Button, Empty, KeyValue, ProgressBar, Select, Slot, Stepper, Toggle, useGame } from '../../../ui';
+import { citiesUnlocked, cityName, travelMinutesBetween } from '../../city';
 import { getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
 import {
@@ -123,7 +124,8 @@ function ProfileActions(props: { member: StaffMember }) {
     m.assignment?.kind === 'office' ||
     m.returnTo?.kind === 'office' ||
     m.assignment?.kind === 'delivery' ||
-    m.assignment?.kind === 'transport';
+    m.assignment?.kind === 'transport' ||
+    m.assignment?.kind === 'travel';
   const canMove = (m.role === 'runner' || m.role === 'security') && m.status === 'active' && !isLieutenant && !busy;
   const cost = m.status === 'jailed' ? bailCost(state, m.id) : 0;
   return (
@@ -140,6 +142,7 @@ function ProfileActions(props: { member: StaffMember }) {
         </Button>
       )}
       {canMove && <MoveControl member={m} />}
+      <RelocateControl member={m} />
       <div class="staff-file__row">
         <span>Lohn</span>
         <Stepper
@@ -167,6 +170,39 @@ function ProfileActions(props: { member: StaffMember }) {
       </Button>
       <AbsenceSheet member={m} open={confirmFire} onClose={() => setConfirmFire(false)} />
     </section>
+  );
+}
+
+/**
+ * In eine andere Stadt schicken (Auftrag 30): Fahrt über die A1, der Lohn läuft weiter. Nur ab zwei freien Städten und
+ * für Leute ohne Führungsposten; unterwegs steht, wann sie ankommt.
+ */
+function RelocateControl(props: { member: StaffMember }) {
+  const { state, dispatch } = useGame();
+  const m = props.member;
+  if (m.assignment?.kind === 'travel') {
+    return (
+      <p class="ui-hint">
+        Unterwegs nach {cityName(m.assignment.targetId)}, Ankunft {clock.formatTime(m.busyUntil)}.
+      </p>
+    );
+  }
+  const targets = citiesUnlocked(state).filter((id) => id !== m.cityId);
+  const leads = m.assignment?.kind === 'veedel' || m.assignment?.kind === 'office';
+  if (targets.length === 0 || leads || m.status !== 'active') return null;
+  return (
+    <>
+      {targets.map((cityId) => (
+        <Button
+          key={cityId}
+          wide
+          icon="car"
+          onClick={() => dispatch({ type: 'staff.relocate', payload: { staffId: m.id, cityId } })}
+        >
+          {`Nach ${cityName(cityId)} schicken (ca. ${clock.formatDuration(travelMinutesBetween(m.cityId, cityId))})`}
+        </Button>
+      ))}
+    </>
   );
 }
 

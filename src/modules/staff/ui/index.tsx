@@ -180,7 +180,10 @@ function StaffOverview() {
   const others = current.filter(
     (m) =>
       !isAbsent(m) &&
-      (m.assignment?.kind === 'warehouse' || m.assignment?.kind === 'delivery' || m.assignment?.kind === 'transport'),
+      (m.assignment?.kind === 'warehouse' ||
+        m.assignment?.kind === 'delivery' ||
+        m.assignment?.kind === 'transport' ||
+        m.assignment?.kind === 'travel'),
   );
   return (
     <div class="staff-overview">

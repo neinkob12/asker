@@ -59,7 +59,7 @@ import {
   REVOKE_LOYALTY,
 } from './config';
 import { canBeLieutenant, getLieutenantIds, getPost, isLieutenant, lieutenantOfSpot } from './index';
-import { activeRightHand, fullPowerMissing, getRightHand, isRightHand } from './righthand';
+import { activeRightHand, allRightHands, fullPowerMissing, getRightHand, isRightHand } from './righthand';
 import type { FullPowerDone, FullPowerTaskKey, RightHandPost } from './types';
 
 const VIA = 'Rechte Hand';
@@ -89,7 +89,7 @@ export function describeFullPowerDone(done: FullPowerDone): string {
 
 /** Führt die Rechte Hand diese Stadt mit Vollmacht? */
 export function hasFullPower(state: GameState, cityId = 'koeln'): boolean {
-  return getRightHand(state)?.fullPower?.cityId === cityId;
+  return getRightHand(state, cityId)?.fullPower?.cityId === cityId;
 }
 
 function isFullPowerTaskActive(rh: RightHandPost, key: FullPowerTaskKey): boolean {
@@ -111,7 +111,8 @@ function note(ctx: Ctx, rh: RightHandPost, text: string): void {
 /** Vollmacht geben (Chefsache, nur vom Spieler). */
 export function grantFullPower(ctx: Ctx, cityId: string, meta: CommandMeta): CommandResult {
   if (meta.actor !== 'player') return { ok: false, reason: 'Vollmacht gibt nur der Boss.' };
-  const rh = getRightHand(ctx.state);
+  // Die Rechte Hand dieser Stadt (eine pro Stadt).
+  const rh = getRightHand(ctx.state, cityId);
   if (rh?.fullPower) return { ok: false, reason: `Sie führt schon ${cityLabel(rh.fullPower.cityId)}.` };
   const missing = fullPowerMissing(ctx.state, cityId);
   if (missing.length > 0 || !rh) return { ok: false, reason: missing[0] ?? 'Du hast keine Rechte Hand.' };
@@ -147,9 +148,12 @@ export function grantFullPower(ctx: Ctx, cityId: string, meta: CommandMeta): Com
 }
 
 /** Vollmacht zurückziehen: Sie ist verstimmt (Loyalität, Laune), behält Stufe und Aufgaben. */
-export function revokeFullPower(ctx: Ctx, meta: CommandMeta): CommandResult {
+export function revokeFullPower(ctx: Ctx, meta: CommandMeta, cityId?: string): CommandResult {
   if (meta.actor !== 'player') return { ok: false, reason: 'Das entscheidet nur der Boss.' };
-  const rh = getRightHand(ctx.state);
+  // Ohne Stadt: die aktive, sonst die einzige mit Vollmacht.
+  const rh =
+    (cityId ? getRightHand(ctx.state, cityId) : getRightHand(ctx.state)) ??
+    (cityId ? null : (allRightHands(ctx.state).find((r) => r.post.fullPower)?.post ?? null));
   const fp = rh?.fullPower;
   if (!rh || !fp) return { ok: false, reason: 'Deine Rechte Hand hat keine Vollmacht.' };
   const m = getStaffMember(ctx.state, rh.staffId);
@@ -421,6 +425,6 @@ function diplomacy(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
 }
 
 /** Ist die Rechte Hand gerade mit Vollmacht im Dienst (aktiv)? */
-export function fullPowerActive(state: GameState): boolean {
-  return !!activeRightHand(state)?.fullPower;
+export function fullPowerActive(state: GameState, cityId?: string): boolean {
+  return !!activeRightHand(state, cityId)?.fullPower;
 }
