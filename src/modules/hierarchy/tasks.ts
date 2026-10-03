@@ -11,7 +11,15 @@ import { type Actor, type Ctx, clock, formatEuro, type GameState, messages } fro
 import { activeCity } from '../city';
 import { getOrders, type Order } from '../customers';
 import { wageRunway } from '../finance';
-import { DEFAULT_WAREHOUSE, getStock, getWarehouses, isWarehouseOwned, productName, warehouseCity } from '../goods';
+import {
+  allProducts,
+  DEFAULT_WAREHOUSE,
+  getStock,
+  getWarehouses,
+  isWarehouseOwned,
+  productName,
+  warehouseCity,
+} from '../goods';
 import { amountInProgress, launderingCapacity, MIN_LAUNDERING_AMOUNT } from '../laundering';
 import { freeDrivers, getCargo, harborQuestions, portName } from '../logistics';
 import { getSpots } from '../spots';
@@ -24,9 +32,18 @@ import {
   runnerHireCost,
   type StaffMember,
 } from '../staff';
+import { availablePackages, getSuppliers, isUnlocked } from '../suppliers';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import { veedelName } from '../veedel';
-import { RIGHT_HAND_RESTOCK_RESERVE, RIGHT_HAND_TASKS, XP_RIGHT_HAND_REPORT, XP_RIGHT_HAND_TASK } from './config';
+import {
+  FP_RESTOCK_BUDGET_PER_DAY,
+  FP_STOCK_GRAMS,
+  FP_STOCK_PIECES,
+  RIGHT_HAND_RESTOCK_RESERVE,
+  RIGHT_HAND_TASKS,
+  XP_RIGHT_HAND_REPORT,
+  XP_RIGHT_HAND_TASK,
+} from './config';
 import { hireRunnerFor } from './hire';
 import { getLieutenants, isVeedelHidden, lieutenantOfSpot } from './index';
 import { runRestock } from './orders';
@@ -38,7 +55,7 @@ import {
   rightHandDriver,
   rightHandOrderLimit,
 } from './righthand';
-import type { RightHandDone, RightHandPost, RightHandTaskKey } from './types';
+import type { OrderRule, RightHandDone, RightHandPost, RightHandTaskKey } from './types';
 
 const VIA = 'Rechte Hand';
 /** So lange vor Fristende wartet sie noch auf Ware fürs Lager, danach überlässt sie die Anfrage dir. */
@@ -225,19 +242,29 @@ export function restockBudgetLeft(state: GameState): number {
   return Math.max(
     0,
     Math.min(
-      rh.settings.restockBudgetPerDay - spent,
+      Math.max(rh.settings.restockBudgetPerDay, rh.fullPower ? FP_RESTOCK_BUDGET_PER_DAY : 0) - spent,
       state.wallet.dirty - payrollReserve(state, 'goods') - RIGHT_HAND_RESTOCK_RESERVE,
     ),
   );
 }
 
-/**
- * Mindestbestand für die ganze Stadt: Mit Vollmacht führt sie alle Spots, da reicht die Einstellung für einen Spot
- * nicht (sie ließ das Lager fast leer und verkaufte dann nichts). Pro Spot der Stadt derselbe Wert.
- */
-function restockTarget(state: GameState, minStock: number, fullPower: boolean): number {
-  if (!fullPower) return minStock;
-  return minStock * Math.max(1, getSpots(state, activeCity(state)).length);
+/** Je Ware eine Regel (nur Waren, die ein freigeschalteter Lieferant der Stadt gerade anbietet). */
+function fullPowerRules(state: GameState): OrderRule[] {
+  return allProducts()
+    .filter((p) =>
+      getSuppliers(state, activeCity(state)).some(
+        (sup) => isUnlocked(state, sup.id) && availablePackages(state, sup.id).some((pkg) => pkg.productId === p.id),
+      ),
+    )
+    .map((p) => ({
+      id: `fp-${p.id}`,
+      productId: p.id,
+      supplierId: null,
+      packageId: null,
+      minStock: p.unit === 'Stück' ? FP_STOCK_PIECES : FP_STOCK_GRAMS,
+      warehouseId: null,
+      paused: null,
+    }));
 }
 
 /** Nachbestellen für ganz Köln nach ihren Regeln (wie die Leutnants, aber ins Hauptlager und mit eigenem Budget). */
@@ -249,10 +276,13 @@ function restock(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor)
     rh.restockDay = day;
     rh.restockSpent = 0;
   }
-  runRestock(ctx, rh.settings.restockRules, mainWarehouseId(state), actor, {
+  // Mit Vollmacht hält sie von jeder Ware, die es zu kaufen gibt, ein Kilo (bzw. FP_STOCK_PIECES Stück) auf Lager.
+  const rules = rh.fullPower ? fullPowerRules(state) : rh.settings.restockRules;
+  runRestock(ctx, rules, mainWarehouseId(state), actor, {
     budget: () => restockBudgetLeft(state),
-    minStock: (rule) => restockTarget(state, rule.minStock, !!rh.fullPower),
-    onPause: (_rule, reason) => log(ctx, rh, `Bestellung ruht: ${reason}`),
+    onPause: (_rule, reason) => {
+      if (!rh.fullPower) log(ctx, rh, `Bestellung ruht: ${reason}`);
+    },
     onResume: () => {},
     onNoMoney: () => log(ctx, rh, 'Wir brauchen Ware, aber mein Budget reicht gerade nicht.'),
     onOrdered: (plan) => {
