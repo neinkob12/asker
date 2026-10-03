@@ -5,6 +5,7 @@
 import type { ComponentType } from 'preact';
 import type { EventType, GameEvents, GameState, LngLat } from '../core';
 import type { UiApi, UiState } from './runtime';
+import { memoState } from './stateMemo';
 
 /** Panels (Detailansichten, z.B. ein Spot): ID → Props. Module erweitern das per Declaration Merging. */
 // biome-ignore lint/suspicious/noEmptyInterface: wird per Declaration Merging gefüllt
@@ -330,8 +331,13 @@ export function registerLiveActivity(source: LiveActivitySource): void {
   liveActivitySources.register(source);
 }
 
-/** Alle laufenden Live-Aktivitäten, wichtigste zuerst. Fehler einzelner Module werden ignoriert. */
-export function collectLiveActivities(state: GameState): LiveActivity[] {
+/**
+ * Alle laufenden Live-Aktivitäten, wichtigste zuerst. Fehler einzelner Module werden ignoriert. Einmal pro Spielstand
+ * gerechnet (Island im Handy und über der Karte fragen beide), nicht verändern.
+ */
+export const collectLiveActivities: (state: GameState) => LiveActivity[] = memoState(computeLiveActivities);
+
+function computeLiveActivities(state: GameState): LiveActivity[] {
   const all: LiveActivity[] = [];
   for (const source of liveActivitySources.list()) {
     try {

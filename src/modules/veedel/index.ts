@@ -67,14 +67,28 @@ function inRing(lng: number, lat: number, ring: readonly LngLatTuple[]): boolean
   return inside;
 }
 
+// Gefragt wird meist nach denselben Punkten (Spots, Lager): Ergebnis gemerkt, begrenzt, damit Klicks auf die Karte
+// den Speicher nicht füllen.
+const AT_CACHE_LIMIT = 4096;
+const atCache = new Map<string, Veedel | null>();
+
 /** In welchem Veedel liegt der Punkt? Echte Punkt-in-Polygon-Prüfung, null außerhalb der Veedel im Spiel. */
 export function veedelAt(lng: number, lat: number): Veedel | null {
+  const key = `${lng},${lat}`;
+  const cached = atCache.get(key);
+  if (cached !== undefined) return cached;
+  let found: Veedel | null = null;
   for (const v of VEEDEL) {
     const shape = SHAPES[v.id];
     if (!shape || lng < shape.minLng || lng > shape.maxLng || lat < shape.minLat || lat > shape.maxLat) continue;
-    if (inRing(lng, lat, shape.ring)) return v;
+    if (inRing(lng, lat, shape.ring)) {
+      found = v;
+      break;
+    }
   }
-  return null;
+  if (atCache.size >= AT_CACHE_LIMIT) atCache.clear();
+  atCache.set(key, found);
+  return found;
 }
 
 /** Grenze des Veedels als Ring [lng, lat] (ohne Wiederholung des Startpunkts), leer für unbekannte IDs. */

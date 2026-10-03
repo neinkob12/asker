@@ -21,6 +21,7 @@ import {
   sidebarTabs,
   slotContributions,
 } from './registry';
+import { bumpStateRevision, enableStateMemo } from './stateMemo';
 
 /** good/info: Routine (kurz, grau in der Alarm-Zentrale), warn: gelb, bad: rot. */
 export type ToastKind = 'info' | 'good' | 'warn' | 'bad';
@@ -256,6 +257,7 @@ export class UiRuntime {
   private readonly listeners = new Set<() => void>();
   private lastRender = 0;
   private lastRenderedTime: number | null = null;
+  private lastSeenTime: number | null = null;
   private renderQueued = false;
   private toastId = 0;
   private speedBeforePause = 1;
@@ -297,7 +299,15 @@ export class UiRuntime {
     };
     setHapticsEnabled(prefs.vibration);
     this.api = this.createApi();
+    enableStateMemo();
     session.subscribe((change) => {
+      // Gemerkte Auszüge des Zustands (stateMemo.ts) gelten nur bis zur nächsten Änderung: neue Spielzeit, Befehl,
+      // neues Spiel. Tempo und Autosave ändern den Zustand nicht.
+      const time = session.state?.time ?? null;
+      if (change === 'sim' || change === 'dispatch' || (change === 'frame' && time !== this.lastSeenTime)) {
+        bumpStateRevision();
+      }
+      this.lastSeenTime = time;
       // Neues, geladenes oder importiertes Spiel: Meldungen, Banner und Seiten des alten Spiels gehören nicht mehr dazu.
       if (change === 'sim') this.resetForNewGame();
       // Der Autosave klappt nicht (Speicher voll): einmal sagen, sonst geht Fortschritt still verloren.

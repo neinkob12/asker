@@ -7,7 +7,7 @@
 // der Spieler. Direkt ändert er nur den eigenen Zustand (state.modules.hierarchy) und das Journal.
 
 import { type Actor, type Command, type Ctx, clock, type GameState, journal, messages } from '../../core';
-import { canServe, waitingAt } from '../customers';
+import { allWaiting, canServe, waitingAt } from '../customers';
 import { stockSummary } from '../goods';
 import { getSpotPrice, hasOwnPrice, priceRatio, roundPrice, spotReferencePrice } from '../market';
 import { getHeat } from '../police';
@@ -85,12 +85,17 @@ function note(turn: Turn, text: string, toJournal = true, phone = false): void {
 function turnFor(ctx: Ctx, post: LieutenantPost, lt: StaffMember): Turn {
   const actor: Actor = `staff:${lt.id}`;
   const hiding = (spot: Spot) => post.lyingLow.includes(spot.veedelId) || isLyingLow(ctx.state, spot.veedelId);
+  // Die Spots erst ausrechnen, wenn jemand fragt (der Einkauf bei jedem Tick braucht sie nicht).
+  let spots: Spot[] | null = null;
   return {
     ctx,
     post,
     lt,
     run: (command) => ctx.dispatch(command, { actor }).ok,
-    spots: byDemand(lieutenantSpots(ctx.state, post.staffId).filter((s) => !hiding(s))),
+    get spots() {
+      spots ??= byDemand(lieutenantSpots(ctx.state, post.staffId).filter((s) => !hiding(s)));
+      return spots;
+    },
   };
 }
 
@@ -105,9 +110,11 @@ export function tick(ctx: Ctx): void {
       manage(turnFor(ctx, post, lt));
       post.nextActionAt = ctx.now + actionInterval(lt);
     }
-    // Einkauf bei jedem Tick: Der Mindestbestand soll nicht erst in der nächsten Ordnungsrunde greifen.
-    if (post.settings.mayOrder) restock(turnFor(ctx, post, lt));
-    if (ctx.now >= post.busyUntil) serveInPerson(turnFor(ctx, post, lt));
+    // Einkauf bei jedem Tick: Der Mindestbestand soll nicht erst in der nächsten Ordnungsrunde greifen. Einkauf und
+    // Verkauf teilen sich einen Zug (der Einkauf fragt nicht nach den Spots, die werden erst beim Verkauf gerechnet).
+    const turn = turnFor(ctx, post, lt);
+    if (post.settings.mayOrder) restock(turn);
+    if (ctx.now >= post.busyUntil) serveInPerson(turn);
   }
 }
 
@@ -345,7 +352,8 @@ function guardSpots(turn: Turn): void {
  */
 function restock(turn: Turn): void {
   const { ctx, post, lt } = turn;
-  const home = homeWarehouse(ctx.state, post.staffId)?.id ?? null;
+  if (post.settings.orderRules.length === 0) return;
+  const home = () => homeWarehouse(ctx.state, post.staffId)?.id ?? null;
   runRestock(ctx, post.settings.orderRules, home, `staff:${lt.id}`, {
     budget: () => budget(turn, false),
     onPause: (_rule, reason) => note(turn, `Bestellung ruht: ${reason}`, true, true),
@@ -361,6 +369,8 @@ function restock(turn: Turn): void {
 /** Der Leutnant verkauft selbst an seinen Spots, an denen gerade kein Läufer steht. */
 function serveInPerson(turn: Turn): void {
   const { ctx, post, lt, run } = turn;
+  // Wartet an keinem seiner Spots jemand, gibt es nichts zu tun (spart das Sortieren seiner Spots).
+  if (!allWaiting(ctx.state).some((c) => post.spotIds.includes(c.spotId))) return;
   for (const spot of turn.spots) {
     if (activeRunnerAt(ctx.state, spot.id)) continue;
     const customer = waitingAt(ctx.state, spot.id).find((c) => canServe(ctx.state, c.id));

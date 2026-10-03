@@ -4,6 +4,7 @@
 
 import { type ContactKind, clock, type GameState, type Message, messages } from '../../core';
 import type { CategoryColor } from '../components';
+import { memoState } from '../stateMemo';
 
 export const CONTACT_KIND_LABELS: Record<ContactKind, string> = {
   customer: 'Kunde',
@@ -126,7 +127,13 @@ export function timeLabel(time: number, now: number): string {
   return `Tag ${clock.day(time)}`;
 }
 
-export function chatList(state: GameState): ChatListItem[] {
+/**
+ * Chat-Liste, neueste zuerst. Einmal pro Spielstand gerechnet (Nachrichten-App, Empfehlung "Antworten",
+ * Island-Fristen und Menü fragen alle), nicht verändern.
+ */
+export const chatList: (state: GameState) => ChatListItem[] = memoState(computeChatList);
+
+function computeChatList(state: GameState): ChatListItem[] {
   return messages.threads(state).map((thread) => {
     const history = messages.thread(state, thread.contact.id);
     const open = history.filter((m) => messages.canAnswer(state, m));

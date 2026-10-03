@@ -117,6 +117,59 @@ function isHidden(state: GameState, m: Message): boolean {
   return m.id <= (state.messages.hidden[m.contactId] ?? 0);
 }
 
+/**
+ * Sichtbare Nachrichten nach Kontakt, gemerkt pro Stand der Liste. Die Oberfläche fragt zehnmal pro Sekunde nach allen
+ * Chats; ohne Index filterte jede Frage die ganze Liste (Kontakte × Nachrichten). Die Liste wächst nur hinten und
+ * verliert vorne (MESSAGE_LIMIT), deshalb erkennt man eine Änderung an Länge, erster und letzter ID; gelöschte Chats
+ * an `hidden`. Gelesen, beantwortet und abgelaufen stehen in den Nachrichten selbst und werden live gelesen.
+ */
+interface MessageIndex {
+  list: Message[];
+  length: number;
+  first: number;
+  last: number;
+  hiddenCount: number;
+  hiddenSum: number;
+  byContact: Map<string, Message[]>;
+}
+
+const indexes = new WeakMap<MessagesState, MessageIndex>();
+
+function messageIndex(state: GameState): MessageIndex {
+  const s = state.messages;
+  const list = s.list;
+  let hiddenCount = 0;
+  let hiddenSum = 0;
+  for (const id in s.hidden) {
+    hiddenCount++;
+    hiddenSum += s.hidden[id];
+  }
+  const first = list[0]?.id ?? 0;
+  const last = list[list.length - 1]?.id ?? 0;
+  const cached = indexes.get(s);
+  if (
+    cached &&
+    cached.list === list &&
+    cached.length === list.length &&
+    cached.first === first &&
+    cached.last === last &&
+    cached.hiddenCount === hiddenCount &&
+    cached.hiddenSum === hiddenSum
+  ) {
+    return cached;
+  }
+  const byContact = new Map<string, Message[]>();
+  for (const m of list) {
+    if (isHidden(state, m)) continue;
+    const thread = byContact.get(m.contactId);
+    if (thread) thread.push(m);
+    else byContact.set(m.contactId, [m]);
+  }
+  const index = { list, length: list.length, first, last, hiddenCount, hiddenSum, byContact };
+  indexes.set(s, index);
+  return index;
+}
+
 export const messages = {
   /** Nachricht an den Spieler schicken. Gibt die Nachrichten-ID zurück. */
   send(ctx: Ctx, msg: SendMessage): number {
@@ -151,32 +204,37 @@ export const messages = {
 
   /** Alle sichtbaren Nachrichten mit einer Figur, älteste zuerst (ohne die eines gelöschten Chats). */
   thread(state: GameState, contactId: string): Message[] {
-    return state.messages.list.filter((m) => m.contactId === contactId && !isHidden(state, m));
+    return [...(messageIndex(state).byContact.get(contactId) ?? [])];
   },
 
   /** Chats, neueste zuerst (gelöschte nur, wenn die Figur danach wieder geschrieben hat). */
   threads(state: GameState): MessageThread[] {
-    const byContact = new Map<string, MessageThread>();
-    for (const m of state.messages.list) {
-      const contact = state.messages.contacts[m.contactId];
-      if (!contact || isHidden(state, m)) continue;
-      const t = byContact.get(m.contactId) ?? { contact, last: m, unread: 0 };
-      t.last = m;
-      if (!m.read) t.unread++;
-      byContact.set(m.contactId, t);
+    const result: MessageThread[] = [];
+    for (const [contactId, list] of messageIndex(state).byContact) {
+      const contact = state.messages.contacts[contactId];
+      if (!contact) continue;
+      let unread = 0;
+      for (const m of list) if (!m.read) unread++;
+      result.push({ contact, last: list[list.length - 1], unread });
     }
-    return [...byContact.values()].sort((a, b) => b.last.time - a.last.time || b.last.id - a.last.id);
+    return result.sort((a, b) => b.last.time - a.last.time || b.last.id - a.last.id);
   },
 
   unreadCount(state: GameState, contactId?: string): number {
-    return state.messages.list.filter(
-      (m) => !m.read && (!contactId || m.contactId === contactId) && !isHidden(state, m),
-    ).length;
+    const index = messageIndex(state);
+    let unread = 0;
+    if (contactId) {
+      for (const m of index.byContact.get(contactId) ?? []) if (!m.read) unread++;
+      return unread;
+    }
+    for (const list of index.byContact.values()) for (const m of list) if (!m.read) unread++;
+    return unread;
   },
 
   /** Wartet in diesem Chat eine Frage mit Frist auf Antwort? (Für die Rückfrage vor dem Löschen.) */
   hasOpenDeadline(state: GameState, contactId: string): boolean {
-    return messages.thread(state, contactId).some((m) => messages.canAnswer(state, m) && m.expiresAt !== undefined);
+    const list = messageIndex(state).byContact.get(contactId) ?? [];
+    return list.some((m) => messages.canAnswer(state, m) && m.expiresAt !== undefined);
   },
 
   /** Kann auf diese Nachricht noch geantwortet werden? */
@@ -323,10 +381,27 @@ export function deleteAllThreads(ctx: Ctx): CommandResult {
 }
 
 /** Abgelaufene Antwortfristen markieren. Läuft jeden Schritt. */
+// Fristen laufen selten ab, geprüft wird aber jede Spielminute: Gemerkt wird die nächste Frist, solange sich die
+// Liste nicht ändert (neue Nachrichten, siehe messageIndex). Nur eine Abkürzung, das Ergebnis bleibt dasselbe.
+const nextExpiry = new WeakMap<MessagesState, { list: Message[]; length: number; last: number; at: number }>();
+
 export function expireMessages(ctx: Ctx): void {
-  for (const m of ctx.state.messages.list) {
-    if (m.expired || m.answer || m.expiresAt === undefined || m.expiresAt > ctx.now) continue;
+  const s = ctx.state.messages;
+  const list = s.list;
+  const last = list[list.length - 1]?.id ?? 0;
+  const known = nextExpiry.get(s);
+  if (known && known.list === list && known.length === list.length && known.last === last && known.at > ctx.now) {
+    return;
+  }
+  let at = Number.POSITIVE_INFINITY;
+  for (const m of list) {
+    if (m.expired || m.answer || m.expiresAt === undefined) continue;
+    if (m.expiresAt > ctx.now) {
+      at = Math.min(at, m.expiresAt);
+      continue;
+    }
     m.expired = true;
     ctx.emit('message.expired', { messageId: m.id, contactId: m.contactId, source: m.source });
   }
+  nextExpiry.set(s, { list, length: list.length, last, at });
 }

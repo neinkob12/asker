@@ -219,10 +219,14 @@ function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
   const expand = options.expand !== false;
   const runnersNow = getStaff(state, { role: 'runner' }).length;
   const mayHire = options.maxRunners === undefined || runnersNow < options.maxRunners;
-  const free = () =>
-    getSpots(state).filter(
-      (s) => !getStaff(state, { spotId: s.id, status: 'active' }).some((m) => m.role === 'runner'),
-    );
+  // Spots ohne aktiven Läufer (ein Durchgang über die Leute statt einer Suche pro Spot).
+  const free = () => {
+    const manned = new Set<string>();
+    for (const m of getStaff(state, { status: 'active', role: 'runner' })) {
+      if (m.assignment?.kind === 'spot') manned.add(m.assignment.targetId);
+    }
+    return getSpots(state).filter((s) => !manned.has(s.id));
+  };
   const stock = getStock(state);
 
   // Bewerber mit Level zuerst, sonst von der Straße.

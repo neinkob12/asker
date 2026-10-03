@@ -267,6 +267,12 @@ export function getStock(state: GameState, filter: StockFilter = {}): number {
   return getLots(state, filter).reduce((sum, lot) => sum + lot.amount, 0);
 }
 
+/** Liegt irgendwo Ware? Bricht beim ersten Posten ab (die Pleite-Regel fragt das jede Spielminute). */
+function hasAnyStock(state: GameState): boolean {
+  for (const lots of Object.values(state.modules.goods.stock)) for (const lot of lots) if (lot.amount > 0) return true;
+  return false;
+}
+
 /** Mittlere Qualität des Bestands (nach Menge), 0 ohne Bestand. */
 export function averageQuality(state: GameState, filter: StockFilter = {}): number {
   return weighted(getLots(state, filter)).quality;
@@ -511,5 +517,5 @@ export default defineModule({
     }),
   },
   // Pleite-Regel: Wer noch Ware hat, kann weitermachen.
-  solvency: (state) => getStock(state) > 0,
+  solvency: (state) => hasAnyStock(state),
 });

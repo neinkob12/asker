@@ -727,9 +727,18 @@ export function harborQuestions(state: GameState, cargoIds: readonly number[]): 
   );
 }
 
+// Die Suche nach erledigten Fragen lohnt nur, wenn sich am Kai oder bei den Nachrichten etwas getan hat. Gemerkt pro
+// Zustand (ein geladener Spielstand fängt neu an); nur eine Abkürzung, das Ergebnis bleibt dasselbe.
+const staleCheckKey = new WeakMap<LogisticsState, string>();
+
 /** Fragen zu Containern, die nicht mehr am Kai stehen (abgeholt, vom Zoll geholt), haben sich erledigt. */
 function retractStaleQuestions(ctx: Ctx): void {
-  const onQuay = new Set(ctx.state.modules.logistics.cargo.map((c) => c.id));
+  const s = ctx.state.modules.logistics;
+  const list = ctx.state.messages.list;
+  const key = `${s.cargo.map((c) => c.id).join(',')}|${list.length}|${list[list.length - 1]?.id ?? 0}`;
+  if (staleCheckKey.get(s) === key) return;
+  staleCheckKey.set(s, key);
+  const onQuay = new Set(s.cargo.map((c) => c.id));
   for (const m of ctx.state.messages.list) {
     if (m.contactId !== HARBOR_CONTACT.id || !messages.canAnswer(ctx.state, m)) continue;
     const ids = questionCargoIds(m);

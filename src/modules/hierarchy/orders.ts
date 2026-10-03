@@ -142,11 +142,18 @@ function wanted(state: GameState, productId: string): number {
  * Entscheidet für eine Regel, ob und was bestellt wird. budget = was er ausgeben darf (Rücklage, Lohnsicherung und
  * Budget der Rechten Hand sind schon abgezogen).
  */
-export function planOrder(state: GameState, rule: OrderRule, home: string | null, budget: number): OrderPlan {
+export function planOrder(
+  state: GameState,
+  rule: OrderRule,
+  home: string | null,
+  budgetOrLookup: number | (() => number),
+): OrderPlan {
   const warehouseId = ruleWarehouse(state, rule, home);
   if (!warehouseId) return { kind: 'pause', reason: 'Kein Lager für die Ware.' };
   const deficit = rule.minStock - ruleStock(state, warehouseId, rule.productId);
   if (deficit <= 0) return { kind: 'none' };
+  // Das Budget erst jetzt (es rechnet die Lohnsicherung über alle Leute): Meist fehlt ja nichts.
+  const budget = typeof budgetOrLookup === 'function' ? budgetOrLookup() : budgetOrLookup;
 
   let suppliers: Supplier[];
   if (rule.supplierId) {
@@ -212,10 +219,23 @@ export interface RestockHooks {
  * (Lager plus Unterwegs) erreicht ist, höchstens MAX_ORDERS_PER_RULE Pakete pro Regel. Der Bestand wird nach jeder
  * Bestellung neu gezählt, deshalb bestellt nichts doppelt.
  */
-export function runRestock(ctx: Ctx, rules: OrderRule[], home: string | null, actor: Actor, hooks: RestockHooks): void {
+export function runRestock(
+  ctx: Ctx,
+  rules: OrderRule[],
+  home: string | null | (() => string | null),
+  actor: Actor,
+  hooks: RestockHooks,
+): void {
+  // Das Hauptlager erst bestimmen, wenn eine Regel es braucht (es kostet eine Suche über Spots und Lager).
+  let homeId: string | null | undefined = typeof home === 'function' ? undefined : home;
+  const resolveHome = (): string | null => {
+    if (homeId === undefined) homeId = typeof home === 'function' ? home() : home;
+    return homeId;
+  };
   for (const rule of rules) {
     for (let i = 0; i < MAX_ORDERS_PER_RULE; i++) {
-      const plan = planOrder(ctx.state, rule, home, hooks.budget());
+      const own = ruleWarehouse(ctx.state, rule, null);
+      const plan = planOrder(ctx.state, rule, own ? null : resolveHome(), hooks.budget);
       if (plan.kind === 'pause') {
         if (rule.paused !== plan.reason) {
           rule.paused = plan.reason;

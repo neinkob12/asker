@@ -29,7 +29,8 @@ export interface MenuAction {
 export interface ContextMenuProps {
   /** Name für Screenreader, z.B. "Aktionen für Dragan". */
   label: string;
-  actions: readonly MenuAction[];
+  /** Aktionen, oder eine Funktion, die sie erst beim Öffnen liefert (spart Arbeit bei jedem Neuzeichnen). */
+  actions: readonly MenuAction[] | (() => readonly MenuAction[]);
   /** Vorschau oben im Menü. Standard: der Inhalt selbst. */
   preview?: ComponentChildren;
   children?: ComponentChildren;
@@ -80,6 +81,8 @@ function place(trigger: DOMRect, host: DOMRect, rows: number): Placement {
 
 export function ContextMenu(props: ContextMenuProps) {
   const [open, setOpen] = useState<Placement | null>(null);
+  const actionsNow = (): readonly MenuAction[] =>
+    typeof props.actions === 'function' ? props.actions() : props.actions;
   const wrap = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const menu = useRef<HTMLDivElement>(null);
@@ -98,11 +101,12 @@ export function ContextMenu(props: ContextMenuProps) {
   const show = () => {
     const el = wrap.current;
     const host = el?.closest('.phone__screen');
-    if (!el || props.disabled || props.actions.length === 0) return;
+    const count = el && !props.disabled ? actionsNow().length : 0;
+    if (!el || count === 0) return;
     const hostRect = (host ?? document.body).getBoundingClientRect();
     // Die Hülle hat selbst keinen Kasten (display: contents): gemessen wird ihr Inhalt.
     const target = el.firstElementChild ?? el;
-    setOpen(place(target.getBoundingClientRect(), hostRect, props.actions.length));
+    setOpen(place(target.getBoundingClientRect(), hostRect, count));
   };
 
   // Langer Druck: nach LONG_PRESS_MS ohne nennenswerte Bewegung. Der Klick beim Loslassen wird verschluckt.
@@ -192,7 +196,7 @@ export function ContextMenu(props: ContextMenuProps) {
               onKeyDown={menuKeys}
               style={{ top: `${open.menu.top}px`, left: `${open.menu.left}px`, width: `${open.menu.width}px` }}
             >
-              {props.actions.map((action) => (
+              {actionsNow().map((action) => (
                 <button
                   key={action.label}
                   type="button"

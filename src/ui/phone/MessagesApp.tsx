@@ -6,6 +6,7 @@
 // Die Daten kommen aus dem Nachrichtendienst des Kerns; die Aufbereitung steht in messagesModel.ts.
 // Welcher Chat offen ist, steht in ui.phone.params.contactId (so öffnen Benachrichtigungen den Chat direkt).
 
+import { memo } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { clock, messages } from '../../core';
 import {
@@ -13,6 +14,7 @@ import {
   Avatar,
   Badge,
   Button,
+  type CategoryColor,
   ContextMenu,
   Empty,
   Icon,
@@ -78,6 +80,92 @@ function RecentRow(props: { chats: ChatListItem[] }) {
   );
 }
 
+interface RowActions {
+  open: (contactId: string) => void;
+  markRead: (contactId: string) => void;
+  askOrRemove: (contactId: string) => void;
+}
+
+/** Felder einer Chat-Zeile, die man sieht: Nur wenn sich eines davon ändert, wird die Zeile neu gezeichnet. */
+const ROW_FIELDS = [
+  'contactId',
+  'name',
+  'kind',
+  'kindLabel',
+  'preview',
+  'timeLabel',
+  'unread',
+  'awaitingAnswer',
+  'deadlineIn',
+  'avatar',
+] as const satisfies readonly (keyof ChatListItem)[];
+
+/**
+ * Eine Zeile der Chat-Liste mit Wischaktionen und Kontextmenü. Memoisiert: Die Liste wird bei jedem Neuzeichnen
+ * (zehnmal pro Sekunde) neu berechnet, die meisten Zeilen ändern sich dabei nicht.
+ */
+const ChatRow = memo(
+  function ChatRow(props: { chat: ChatListItem; tone: CategoryColor; actions: { current: RowActions } }) {
+    const c = props.chat;
+    const act = () => props.actions.current;
+    return (
+      /* Wischen: Löschen und Gelesen (gibt es auch im Kontextmenü, langer Druck oder Rechtsklick) */
+      <SwipeRow
+        actions={[
+          { label: 'Löschen', icon: 'trash', color: 'danger', onSelect: () => act().askOrRemove(c.contactId) },
+          ...(c.unread > 0
+            ? [
+                {
+                  label: 'Gelesen',
+                  icon: 'check',
+                  color: 'chat' as const,
+                  onSelect: () => act().markRead(c.contactId),
+                },
+              ]
+            : []),
+        ]}
+      >
+        <ContextMenu
+          label={`Aktionen für ${c.name}`}
+          actions={[
+            { label: 'Chat öffnen', icon: 'message', onSelect: () => act().open(c.contactId) },
+            {
+              label: 'Als gelesen markieren',
+              icon: 'check',
+              disabled: c.unread === 0,
+              onSelect: () => act().markRead(c.contactId),
+            },
+            { label: 'Chat löschen', icon: 'trash', destructive: true, onSelect: () => act().askOrRemove(c.contactId) },
+          ]}
+        >
+          <button
+            type="button"
+            class={`msg-row ${c.unread > 0 ? 'is-unread' : ''}`}
+            onClick={() => act().open(c.contactId)}
+            aria-label={`${c.name}, ${c.kindLabel}${c.unread > 0 ? `, ${c.unread} ungelesen` : ''}${c.awaitingAnswer ? ', wartet auf Antwort' : ''}`}
+          >
+            <Avatar name={c.name} image={avatarImage(c.avatar, c.kind)} tone={props.tone} />
+            <span class="msg-row__main">
+              <span class="msg-row__top">
+                <span class="msg-row__name">{c.name}</span>
+                {c.awaitingAnswer && (
+                  <Tag tone={c.deadlineIn !== undefined && c.deadlineIn < 30 ? 'bad' : 'warn'} icon="reply">
+                    {c.deadlineIn !== undefined ? clock.formatDuration(c.deadlineIn) : 'Antwort'}
+                  </Tag>
+                )}
+                <time class="msg-row__time">{c.timeLabel}</time>
+              </span>
+              <span class="msg-row__preview">{c.preview}</span>
+            </span>
+            <Badge count={c.unread} />
+          </button>
+        </ContextMenu>
+      </SwipeRow>
+    );
+  },
+  (a, b) => a.tone === b.tone && a.actions === b.actions && ROW_FIELDS.every((k) => a.chat[k] === b.chat[k]),
+);
+
 function ChatList() {
   const { state, dispatch } = useGame();
   const ui = useUi();
@@ -102,6 +190,13 @@ function ChatList() {
   const askOrRemove = (contactId: string) => {
     if (messages.hasOpenDeadline(state, contactId)) setConfirm(contactId);
     else remove(contactId);
+  };
+  // Für die Zeilen (memoisiert, siehe ChatRow): immer dieselbe Hülle, die Funktionen darin sind die aktuellen.
+  const rowActions = useRef<RowActions>({ open: () => {}, markRead, askOrRemove });
+  rowActions.current = {
+    open: (contactId) => ui.openPhone(APP_ID, { contactId }),
+    markRead,
+    askOrRemove,
   };
   const confirmChat = confirm && confirm !== 'all' ? all.find((c) => c.contactId === confirm) : undefined;
   // Beim Ausblenden des Blatts sind Chat und Anzahl schon weg: Der Titel darf nicht zu "Alle 0 Chats" umspringen.
@@ -156,67 +251,7 @@ function ChatList() {
             <ul class="msg-list">
               {group.items.map((c) => (
                 <li key={c.contactId}>
-                  {/* Wischen: Löschen und Gelesen (gibt es auch im Kontextmenü, langer Druck oder Rechtsklick) */}
-                  <SwipeRow
-                    actions={[
-                      { label: 'Löschen', icon: 'trash', color: 'danger', onSelect: () => askOrRemove(c.contactId) },
-                      ...(c.unread > 0
-                        ? [
-                            {
-                              label: 'Gelesen',
-                              icon: 'check',
-                              color: 'chat' as const,
-                              onSelect: () => markRead(c.contactId),
-                            },
-                          ]
-                        : []),
-                    ]}
-                  >
-                    <ContextMenu
-                      label={`Aktionen für ${c.name}`}
-                      actions={[
-                        {
-                          label: 'Chat öffnen',
-                          icon: 'message',
-                          onSelect: () => ui.openPhone(APP_ID, { contactId: c.contactId }),
-                        },
-                        {
-                          label: 'Als gelesen markieren',
-                          icon: 'check',
-                          disabled: c.unread === 0,
-                          onSelect: () => markRead(c.contactId),
-                        },
-                        {
-                          label: 'Chat löschen',
-                          icon: 'trash',
-                          destructive: true,
-                          onSelect: () => askOrRemove(c.contactId),
-                        },
-                      ]}
-                    >
-                      <button
-                        type="button"
-                        class={`msg-row ${c.unread > 0 ? 'is-unread' : ''}`}
-                        onClick={() => ui.openPhone(APP_ID, { contactId: c.contactId })}
-                        aria-label={`${c.name}, ${c.kindLabel}${c.unread > 0 ? `, ${c.unread} ungelesen` : ''}${c.awaitingAnswer ? ', wartet auf Antwort' : ''}`}
-                      >
-                        <Avatar name={c.name} image={avatarImage(c.avatar, c.kind)} tone={tone} />
-                        <span class="msg-row__main">
-                          <span class="msg-row__top">
-                            <span class="msg-row__name">{c.name}</span>
-                            {c.awaitingAnswer && (
-                              <Tag tone={c.deadlineIn !== undefined && c.deadlineIn < 30 ? 'bad' : 'warn'} icon="reply">
-                                {c.deadlineIn !== undefined ? clock.formatDuration(c.deadlineIn) : 'Antwort'}
-                              </Tag>
-                            )}
-                            <time class="msg-row__time">{c.timeLabel}</time>
-                          </span>
-                          <span class="msg-row__preview">{c.preview}</span>
-                        </span>
-                        <Badge count={c.unread} />
-                      </button>
-                    </ContextMenu>
-                  </SwipeRow>
+                  <ChatRow chat={c} tone={tone} actions={rowActions} />
                 </li>
               ))}
             </ul>

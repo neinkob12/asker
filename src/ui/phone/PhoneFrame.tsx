@@ -241,7 +241,7 @@ function AppTile(props: { app: HomeApp; onOpen: () => void; dock?: boolean }) {
   return (
     <ContextMenu
       label={`Schnellaktionen ${app.name}`}
-      actions={state ? tileActions(app, runtime.api, state) : []}
+      actions={() => (state ? tileActions(app, runtime.api, state) : [])}
       preview={
         <span class="phone__app-preview">
           <IconChip icon={app.icon} color={tile.color} style={tile.style} shape="tile" solid size="xl" />

@@ -78,6 +78,7 @@ declare module '../../core' {
 }
 
 let presets: readonly Spot[] | null = null;
+let presetIndex: Map<string, Spot> | null = null;
 
 /**
  * Vorgegebene Spots mit ihrem Veedel. Das Veedel kommt aus der echten Grenze (veedelAt), nicht aus einer Tabelle.
@@ -90,14 +91,50 @@ function presetSpots(): readonly Spot[] {
       if (!veedel) throw new Error(`Spot ${s.id} liegt in keinem Veedel.`);
       return { ...s, veedelId: veedel.id };
     });
+    presetIndex = new Map(presets.map((s) => [s.id, s]));
   }
   return presets;
 }
 
+function presetById(id: string): Spot | undefined {
+  presetSpots();
+  return presetIndex?.get(id);
+}
+
+// Die aktiven Spots werden viele Male pro Spielminute gefragt (Leutnants, Kunden, Läufer, Karte). Gemerkt pro
+// Zustand, solange sich die Listen nicht ändern (freigeschaltet und gegründet wird nur angehängt).
+interface ActiveCache {
+  unlocked: readonly string[];
+  unlockedCount: number;
+  custom: readonly Spot[];
+  customCount: number;
+  spots: readonly Spot[];
+}
+const activeCache = new WeakMap<SpotsState, ActiveCache>();
+
 /** Alle Spots, an denen gerade verkauft werden kann (freigeschaltet oder selbst gegründet). */
 export function getSpots(state: GameState): readonly Spot[] {
-  const unlocked = state.modules.spots.unlocked;
-  return [...presetSpots().filter((s) => unlocked.includes(s.id)), ...state.modules.spots.custom];
+  const s = state.modules.spots;
+  const cached = activeCache.get(s);
+  if (
+    cached &&
+    cached.unlocked === s.unlocked &&
+    cached.unlockedCount === s.unlocked.length &&
+    cached.custom === s.custom &&
+    cached.customCount === s.custom.length
+  ) {
+    return cached.spots;
+  }
+  const unlocked = s.unlocked;
+  const spots = Object.freeze([...presetSpots().filter((p) => unlocked.includes(p.id)), ...s.custom]);
+  activeCache.set(s, {
+    unlocked,
+    unlockedCount: unlocked.length,
+    custom: s.custom,
+    customCount: s.custom.length,
+    spots,
+  });
+  return spots;
 }
 
 /** Alle bekannten Spots, auch die noch gesperrten. */
@@ -112,11 +149,12 @@ export function spotLabelPlacement(spotId: string): { labelSide: 'left' | 'right
 }
 
 export function getSpot(state: GameState, id: string): Spot | undefined {
-  return getAllSpots(state).find((s) => s.id === id);
+  return presetById(id) ?? state.modules.spots.custom.find((s) => s.id === id);
 }
 
 export function isSpotActive(state: GameState, id: string): boolean {
-  return getSpots(state).some((s) => s.id === id);
+  if (presetById(id)) return state.modules.spots.unlocked.includes(id);
+  return state.modules.spots.custom.some((s) => s.id === id);
 }
 
 export function lockedSpots(state: GameState): Spot[] {
