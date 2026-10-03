@@ -509,8 +509,8 @@ class FleetLayer implements CustomLayerInterface {
             slot.y1,
             slot.h0,
             slot.h1,
-            box.f0 + 0.5,
-            box.f1 + 0.5,
+            box.f0,
+            box.f1,
             box.w,
             box.base,
             box.top,
@@ -624,11 +624,18 @@ class FleetLayer implements CustomLayerInterface {
     }
     gl.bindVertexArray(null);
     mapPerf.end('frame', `fleet:${this.id}`, t0);
-    // Weiterzeichnen, solange etwas gleitet, wächst oder schrumpft; danach steht die Karte still.
-    const growing = [...this.slots.values()].some(
-      (s) => sec - s.birth < GROW_SECONDS || (s.death < 1e9 && s.death > sec - 0.05),
-    );
-    if (u < 1 || growing) map.triggerRepaint();
+    // Weiterzeichnen, solange etwas gleitet, wächst oder schrumpft; danach steht die Karte still. Ganz
+    // weggeschrumpfte fliegen raus (auch wenn keine neuen Stellungen mehr kommen, z.B. Verkehr aus).
+    let growing = false;
+    for (const slot of this.slots.values()) {
+      if (slot.death < sec - 0.1) {
+        this.slots.delete(slot.id);
+        this.dirty = true;
+      } else if (sec - slot.birth < GROW_SECONDS || slot.death < 1e9) {
+        growing = true;
+      }
+    }
+    if (u < 1 || growing || this.dirty) map.triggerRepaint();
   }
 }
 

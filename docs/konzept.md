@@ -114,11 +114,12 @@ Wer eine Entscheidung ändert, ändert sie hier.
 - **Karte:**
   - Gedämpft und übersichtlich ("Nachtschicht"): Grau- und Schieferflächen, runde Straßen, wenig Details,
     3D-Gebäude in Grautönen mit Schatten, Wahrzeichen (Dom, Hohenzollernbrücke, Colonius, Kranhäuser,
-    KölnTriangle) als schlichte Klötze. Vier Tageszeiten, nachts fast schwarz mit bernsteinfarben glühenden
+    KölnTriangle; in Hamburg Elbphilharmonie, Michel, Heinrich-Hertz-Turm, Köhlbrandbrücke, Landungsbrücken,
+    Elbbrücken) als schlichte Klötze. Vier Tageszeiten, nachts fast schwarz mit bernsteinfarben glühenden
     Hauptstraßen. Farbe tragen nur Reviere (feine Grenzen, schwach getönt), Spots und Gangs.
   - Das Überwachungs-Overlay (Scanlines, Koordinaten) gibt es noch als Schalter, standardmäßig aus.
 - **Kamera:** 3D schräg als Standard, per Knopf auf 2D-Draufsicht umschaltbar.
-- **Auf der Karte sichtbar:** 3D-Mini-Fahrzeuge auf echten Straßen, Schiffe auf dem Rhein (und der Elbe), pulsierende Hotspots wo etwas los ist, Polizeistreifen, Effekte (Geld-Popups, Blaulicht, Heat-Färbung der Veedel). Mit Auftrag 31 dazu: Verkehr als Kulisse (Autos, Lkw, Streifenwagen, rein optisch, mit festem Performance-Budget) und kleine Figuren an Spots (Läufer, wartende Kunden, Streifen); Flüsse und Straßen aus echten Daten. Keine Gang-Fahrzeuge, keine Frachter als Kulisse.
+- **Auf der Karte sichtbar:** 3D-Mini-Fahrzeuge auf echten Straßen (sie halten an der Straße, die letzten Meter sind ein gepunkteter Fußweg; Kuriere kommen über die Autobahn ihrer Richtung herein), Schiffe auf den echten Wasserwegen (Rhein ab Rotterdam über Waal und Merwede, Elbe ab Cuxhaven, aus Overture-Daten), pulsierende Hotspots wo etwas los ist, Effekte (Geld-Popups, Blaulicht, Heat-Färbung der Veedel). Seit Auftrag 31: **Verkehr als Kulisse** (Autos, Transporter, Lkw, Streifenwagen in Grautönen, nachts mit Scheinwerfern, rein optisch, Einstellung aus/wenig/normal) und **kleine Figuren an Spots** (Läufer und Sicherheit, bis zu vier wartende Kunden, eine Streife in Veedeln mit hoher Heat); alles mit festem Performance-Budget und ohne Einfluss auf die Simulation. Keine Gang-Fahrzeuge, keine Frachter als Kulisse.
 - **Bedienoberfläche:** "Nachtschicht": dunkel, gedämpft, eckig und aufgeräumt (Haarlinien statt dicker Konturen, schmale Tycoon-Zahlen, eine Akzentfarbe Kölsch-Gold, sonst nur Farben mit Bedeutung). Über der Karte stehen nur Geld, Heat und das Spieltempo. **Das Spiel-Handy ist die Schaltzentrale:** alle Bereiche (Geschäft, Reviere, Gangs, Leute …), Details zu Spots und Veedeln, Chats, Bestellungen und Kontakte laufen als Apps darüber. Desktop: Handy rechts fest angedockt (einklappbar), Handy-Bildschirm: Handy bildschirmfüllend, in der Tasche eine Leiste unten. Desktop und Handy sind gleichwertig.
 - **Grafiken:** KI-generierte Illustrationen (z.B. Porträts) plus einfache Icons.
 - **Sound:** Musik und Soundeffekte.
@@ -212,5 +213,5 @@ Stadt als Daten angelegt.
 ## Offene Punkte
 
 1. **Offline im Multiplayer:** In der Multiplayer-Welt läuft die Zeit durch. Was passiert mit deinem Imperium, während du offline bist? Führen die Leutnants weiter? Gibt es einen Schutz vor Angriffen? Muss erst entschieden werden, wenn Multiplayer drankommt.
-2. **Straßenrouten:** Gelöst (Auftrag 21): Das Straßennetz liegt als Daten im Repo (`src/modules/roads/network.ts`, erzeugt aus Overture Maps / OpenStreetMap, ODbL), Routen rechnet das Spiel selbst (A*). Vor einer Veröffentlichung die Quellenangabe „© OpenStreetMap-Mitwirkende, Overture Maps Foundation“ auch im Spiel zeigen.
+2. **Straßenrouten:** Gelöst (Auftrag 21): Das Straßennetz liegt als Daten im Repo (`src/modules/roads/network.ts`, erzeugt aus Overture Maps / OpenStreetMap, ODbL), Routen rechnet das Spiel selbst (A*). Die Quellenangabe „© OpenStreetMap-Mitwirkende, Overture Maps Foundation“ steht seit Auftrag 31 im Spiel (unten rechts auf der Karte und in Einstellungen › Über), dort auch die Wasserwege.
 3. **Kartenlizenz:** Die Esri-Satellitenbilder sind raus. Die OpenFreeMap-Kacheln (OpenStreetMap-Daten, ODbL) brauchen nur die Quellenangabe, die unten rechts steht. Vor einer Veröffentlichung trotzdem kurz prüfen, ob OpenFreeMap die erwartete Last trägt.
