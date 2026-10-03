@@ -171,6 +171,15 @@ function WarehousePanel(props: { warehouseId: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
   const lots = getLots(state, { warehouseId: props.warehouseId });
+  // Noch kein Lager in dieser Stadt (z.B. frisch in Hamburg): kein leerer Bestand, der Kauf steht oben (Slot).
+  const hasWarehouse = getWarehouses(state, activeCity(state)).length > 0;
+  if (!hasWarehouse) {
+    return (
+      <div class="goods-panel">
+        <Slot name="goods.warehouse" props={{ warehouseId: props.warehouseId }} />
+      </div>
+    );
+  }
   return (
     <div class="goods-panel">
       <Group

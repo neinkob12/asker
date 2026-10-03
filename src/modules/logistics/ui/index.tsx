@@ -322,8 +322,51 @@ function WarehouseLogistics(props: { warehouseId: string }) {
       payload: { fromId: from.id, toId: to.id, by, ...(product ? { productId: product } : {}) },
     });
   const forSale = warehouseSites(activeCity(state)).filter((w) => !owned.some((o) => o.id === w.id));
+  const buyList = (
+    <>
+      {forSale.length > 0 && (
+        <Group
+          icon="building"
+          color="money"
+          title="Zu kaufen (sauberes Geld)"
+          note={
+            owned.length > 1
+              ? undefined
+              : 'Mehrere Lager: kürzere Wege für Lieferungen, und eine Razzia trifft nicht alles auf einmal.'
+          }
+        >
+          <List>
+            {forSale.map((w) => (
+              <ListItem
+                key={w.id}
+                aside={
+                  <Button
+                    small
+                    disabled={state.wallet.clean < w.cost}
+                    onClick={() => dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: w.id } })}
+                  >
+                    {formatEuro(w.cost)}
+                  </Button>
+                }
+              >
+                <button
+                  type="button"
+                  class="logi-item-button"
+                  onClick={() => ui.flyTo(w, 15)}
+                  title="Auf der Karte zeigen"
+                >
+                  <ItemContent icon="building" color="money" title={w.name} meta={w.description} />
+                </button>
+              </ListItem>
+            ))}
+          </List>
+        </Group>
+      )}
+    </>
+  );
   return (
     <>
+      {owned.length === 0 && buyList}
       <Group icon="ship" color="goods" title="Hafen">
         <List>
           <ListItem
@@ -406,44 +449,7 @@ function WarehouseLogistics(props: { warehouseId: string }) {
           </div>
         </Group>
       )}
-      {forSale.length > 0 && (
-        <Group
-          icon="building"
-          color="money"
-          title="Zu kaufen (sauberes Geld)"
-          note={
-            owned.length > 1
-              ? undefined
-              : 'Mehrere Lager: kürzere Wege für Lieferungen, und eine Razzia trifft nicht alles auf einmal.'
-          }
-        >
-          <List>
-            {forSale.map((w) => (
-              <ListItem
-                key={w.id}
-                aside={
-                  <Button
-                    small
-                    disabled={state.wallet.clean < w.cost}
-                    onClick={() => dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: w.id } })}
-                  >
-                    {formatEuro(w.cost)}
-                  </Button>
-                }
-              >
-                <button
-                  type="button"
-                  class="logi-item-button"
-                  onClick={() => ui.flyTo(w, 15)}
-                  title="Auf der Karte zeigen"
-                >
-                  <ItemContent icon="building" color="money" title={w.name} meta={w.description} />
-                </button>
-              </ListItem>
-            ))}
-          </List>
-        </Group>
-      )}
+      {owned.length > 0 && buyList}
     </>
   );
 }
