@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check . && node scripts/check-boundaries.mjs",
+    "lint": "biome check . && node scripts/check-boundaries.mjs && node scripts/check-roads.mjs",
     "format": "biome check --write .",
     "check": "npm run typecheck && npm run lint && npm test",
     "screenshot": "node scripts/screenshot.mjs",

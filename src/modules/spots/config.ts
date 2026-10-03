@@ -32,8 +32,9 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'aachener-weiher',
     name: 'Aachener Weiher',
-    lng: 6.9282,
-    lat: 50.9356,
+    // Am Nordufer, damit der Spot höchstens 60 m von einer Straße liegt (Richard-Wagner-Straße, check-roads).
+    lng: 6.92821,
+    lat: 50.93605,
     demand: 1.1,
     priceMultiplier: 1.1,
     unlockCost: 450,
@@ -92,8 +93,9 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'stadtgarten',
     name: 'Stadtgarten',
-    lng: 6.933,
-    lat: 50.9422,
+    // Höchstens 60 m von der Ludolf-Camphausen-Straße (check-roads).
+    lng: 6.93287,
+    lat: 50.94224,
     demand: 0.8,
     priceMultiplier: 1.1,
     unlockCost: 400,
@@ -315,8 +317,8 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'schanzenpark',
     name: 'Schanzenpark',
-    lng: 9.9705,
-    lat: 53.565,
+    lng: 9.96995,
+    lat: 53.56444,
     demand: 1.1,
     priceMultiplier: 0.95,
     unlockCost: 750,
@@ -325,8 +327,8 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'fischmarkt',
     name: 'Fischmarkt',
-    lng: 9.9535,
-    lat: 53.5445,
+    lng: 9.95312,
+    lat: 53.5451,
     demand: 1.2,
     priceMultiplier: 1.1,
     unlockCost: 900,
@@ -395,8 +397,8 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'elbphilharmonie',
     name: 'Elbphilharmonie-Plaza',
-    lng: 9.984,
-    lat: 53.5413,
+    lng: 9.98476,
+    lat: 53.54135,
     demand: 0.9,
     priceMultiplier: 1.35,
     unlockCost: 1950,
@@ -571,8 +573,8 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
     id: 'kiezbar',
     name: 'Kiez-Bar Hamburger Berg',
     kind: 'kneipe',
-    lng: 9.9572,
-    lat: 53.5508,
+    lng: 9.95748,
+    lat: 53.55103,
     demand: 0.85,
     priceMultiplier: 1.15,
     unlockCost: 1800,

@@ -4,38 +4,53 @@
 // Daten neu erzeugen: tools/build-roads.py (Details in network.ts).
 //
 // Öffentliche API:
-//   roadRoute(from, to)       Route über die Straßen: { path (LngLat[], Start und Ziel inklusive), meters }. Das Netz
-//                             wählt roads nach dem Ausschnitt, in dem Start und Ziel liegen; liegen sie in verschiedenen
-//                             Städten, ist es die Route über die Autobahn (interCityRoute).
+//   roadRoute(from, to)       Route über die Straßen: { path (LngLat[], Start und Ziel inklusive), meters, drive
+//                             (nur der Teil auf der Straße, dort fährt das Fahrzeug), walkFrom, walkTo (Fußwege) }.
+//                             Das Netz wählt roads nach dem Ausschnitt, in dem Start und Ziel liegen; liegen sie in
+//                             verschiedenen Städten, ist es die Route über die Autobahn (interCityRoute).
 //   roadDistance(from, to)    nur die Länge in Metern
 //   travelMinutes(from, to, metersPerMinute, extra?)  Fahrzeit in ganzen Spielminuten (zwischen Städten: Autobahn
 //                             mit ROAD_SPEEDS.motorway, siehe interCityMinutes)
-//   roadEntryFrom(far, into?) Autobahn-Einfahrt in die Stadt von into (Standard Köln) aus Richtung eines weit
-//                             entfernten Orts (z.B. Frankfurt)
+//   roadEntryFrom(far, via?, into?)  Autobahn-Einfahrt in die Stadt von into (Standard Köln) aus Richtung eines weit
+//                             entfernten Orts (z.B. Frankfurt), optional über eine bestimmte Autobahn ('A3');
+//                             roadApproach(far, via?, into?) mit dem ganzen Weg vom Rand des Ausschnitts bis dorthin,
+//                             roadApproaches(cityId?) alle Zufahrten einer Stadt
 //   nearestRoadPoint(point)   nächster Punkt auf einer Straße, networkSize(id?), networkStats(id?), ROAD_SPEEDS
 //   roadNetworkAt(point)      Stadt, in deren Netz der Punkt liegt (null = außerhalb)
 //   interCityRoute(from, to)  Weg zwischen zwei Städten (Auftrag 30): Stadt-Anfahrt, A1, Stadt-Zufahrt
-//                             ({ path, meters, motorwayMeters, onRoads })
+//                             ({ path, meters, motorwayMeters, onRoads, drive, walkFrom, walkTo })
 //   interCityMinutes(from, to, cityMetersPerMinute)  Fahrzeit dafür
 //   autobahnBetween(a, b)     die Autobahn zwischen zwei Städten als Linie (für die Karte), null wenn keine
+//   shipRoute(cityId)         Weg eines Schiffs von außen bis zum Kai ('koeln': Rotterdam über Waal und Rhein,
+//                             'hamburg': Elbe ab Cuxhaven), aus Overture-Daten (waterways.ts, tools/build-water.py)
+//   shipMinutes(cityId)       Fahrzeit dieses Wegs mit SHIP_SPEED (nur zur Anzeige, die Lieferzeit kommt aus suppliers)
+//   roadGraph(cityId?)        Lesesicht auf den Graphen einer Stadt (Knoten, Kanten, Nachbarn in Metern), z.B. für
+//                             den Verkehr
 //
 // Routen werden gemerkt (gleiche Punkte = gleiche Route), die Rechnung ist deterministisch.
 
 import { defineModule, distanceMeters, type LngLat } from '../../core';
 import { AUTOBAHNEN } from './autobahn';
+import { SHIP_SPEED } from './config';
 import {
-  decodeInts,
+  decodeApproaches,
+  decodeLine,
   findRoute,
+  type GraphRoute,
   nearestMotorwayNode,
   nearestNetwork,
   networkAt,
+  networkCenter,
   networkSize,
   ROAD_SPEEDS,
   snapToLngLat,
   snapToRoad,
 } from './graph';
 
-export { networkSize, ROAD_SPEEDS, type RoadClass } from './graph';
+import { WATERWAYS } from './waterways';
+
+export { SHIP_SPEED } from './config';
+export { graphView as roadGraph, networkSize, ROAD_SPEEDS, type RoadClass, type RoadGraphView } from './graph';
 
 export interface RoadRoute {
   /** Weg vom Start über die Straßen zum Ziel (mindestens zwei Punkte). */
@@ -44,6 +59,14 @@ export interface RoadRoute {
   meters: number;
   /** false, wenn es keine Straße in der Nähe gab und die Route Luftlinie ist. */
   onRoads: boolean;
+  /**
+   * Nur der Teil auf der Straße (mindestens zwei Punkte): Hier fährt ein Fahrzeug und hält an der Straße, die letzten
+   * Meter geht man zu Fuß (walkFrom, walkTo). Ohne Straße die Luftlinie.
+   */
+  drive: LngLat[];
+  /** Fußweg vom Start zur Straße und von der Straße zum Ziel, null = liegt auf der Straße. */
+  walkFrom: [LngLat, LngLat] | null;
+  walkTo: [LngLat, LngLat] | null;
 }
 
 /** So viele Routen bleiben im Speicher. */
@@ -65,6 +88,34 @@ function networksOf(from: LngLat, to: LngLat): [string, string] {
   return [a ?? fallback, b ?? fallback];
 }
 
+/** Ergebnis der Suche als RoadRoute: Fahrweg und Fußwege getrennt, ohne Straße die Luftlinie. */
+function toRoadRoute(found: GraphRoute | null, from: LngLat, to: LngLat): RoadRoute {
+  if (found) {
+    const path = found.path;
+    const drive = path.slice(found.roadStart, found.roadEnd + 1);
+    return {
+      path,
+      meters: Math.round(found.meters),
+      onRoads: true,
+      drive: drive.length >= 2 ? drive : [drive[0] ?? path[0], drive[0] ?? path[0]],
+      walkFrom: found.roadStart > 0 ? [path[0], path[found.roadStart]] : null,
+      walkTo: found.roadEnd < path.length - 1 ? [path[found.roadEnd], path[path.length - 1]] : null,
+    };
+  }
+  const path = [
+    { lng: from.lng, lat: from.lat },
+    { lng: to.lng, lat: to.lat },
+  ];
+  return {
+    path,
+    meters: Math.round(distanceMeters(from, to)),
+    onRoads: false,
+    drive: path,
+    walkFrom: null,
+    walkTo: null,
+  };
+}
+
 /**
  * Route über das Straßennetz. Liegt ein Punkt weit weg von jeder Straße, gibt es die Luftlinie; liegen Start und Ziel
  * in verschiedenen Städten, geht es über die Autobahn (interCityRoute).
@@ -75,17 +126,7 @@ export function roadRoute(from: LngLat, to: LngLat): RoadRoute {
   const id = `${key(from)}>${key(to)}`;
   const known = cache.get(id);
   if (known) return known;
-  const found = findRoute(from, to, netFrom);
-  const route: RoadRoute = found
-    ? { path: found.path, meters: Math.round(found.meters), onRoads: true }
-    : {
-        path: [
-          { lng: from.lng, lat: from.lat },
-          { lng: to.lng, lat: to.lat },
-        ],
-        meters: Math.round(distanceMeters(from, to)),
-        onRoads: false,
-      };
+  const route = toRoadRoute(findRoute(from, to, netFrom), from, to);
   if (cache.size >= CACHE_SIZE) cache.delete(cache.keys().next().value as string);
   cache.set(id, route);
   return route;
@@ -108,19 +149,102 @@ export function travelMinutes(from: LngLat, to: LngLat, metersPerMinute: number,
 
 const entries = new Map<string, LngLat>();
 
+export interface RoadApproach {
+  /** Autobahn, z.B. 'A3'. */
+  ref: string;
+  /** Wohin sie führt, z.B. "Siegburg, Frankfurt". */
+  toward: string;
+  /** Weg über die Autobahn vom Rand des Ausschnitts bis zum ersten Knoten im Netz (dort geht roadRoute weiter). */
+  path: LngLat[];
+}
+
+const approachLists = new Map<string, RoadApproach[]>();
+
+/** Alle Autobahn-Zufahrten einer Stadt (Standard Köln; aus network.ts, erzeugt von tools/build-roads.py). */
+export function roadApproaches(cityId = 'koeln'): readonly RoadApproach[] {
+  let list = approachLists.get(cityId);
+  if (!list) {
+    list = decodeApproaches(cityId).filter((a) => a.path.length >= 2);
+    approachLists.set(cityId, list);
+  }
+  return list;
+}
+
+/** Netz der Stadt, in der into liegt (Standard Köln). */
+const networkInto = (into?: LngLat) => (into && (networkAt(into) ?? nearestNetwork(into))) || 'koeln';
+
+/** Kompassrichtung von a nach b in Grad (flach gerechnet, reicht für den Vergleich von Richtungen). */
+function heading(a: LngLat, b: LngLat): number {
+  const dx = (b.lng - a.lng) * Math.cos((a.lat * Math.PI) / 180);
+  return ((Math.atan2(dx, b.lat - a.lat) * 180) / Math.PI + 360) % 360;
+}
+
 /**
- * Wo eine Lieferung von weit her (Frankfurt, Berlin …) auf das Netz einer Stadt trifft: der Autobahn-Knoten im Netz
- * der Stadt von into (Standard Köln), der am nächsten zu diesem Ort liegt. Ohne Autobahnen der Ort selbst.
+ * Zufahrt für eine Lieferung von weit her in die Stadt von into (Standard Köln): die Autobahn via (z.B. 'A3' aus
+ * Frankfurt, 'A57' aus Amsterdam, 'A1' aus Hamburg und Berlin), deren Rand-Punkt am besten in Richtung des fernen Orts
+ * liegt. Ohne via die beste Richtung überhaupt; null, wenn das Netz keine Zufahrten hat.
  */
-export function roadEntryFrom(far: LngLat, into?: LngLat): LngLat {
-  const network = (into && (networkAt(into) ?? nearestNetwork(into))) || 'koeln';
-  const id = `${network}:${key(far)}`;
+export function roadApproach(far: LngLat, via?: string, into?: LngLat): RoadApproach | null {
+  const network = networkInto(into);
+  const all = roadApproaches(network);
+  const pool = via ? all.filter((a) => a.ref === via) : all;
+  const list = pool.length > 0 ? pool : all;
+  if (list.length === 0) return null;
+  const center = networkCenter(network);
+  const want = heading(center, far);
+  let best: RoadApproach | null = null;
+  let bestDiff = Infinity;
+  for (const a of list) {
+    const diff = Math.abs(((heading(center, a.path[0]) - want + 540) % 360) - 180);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = a;
+    }
+  }
+  return best;
+}
+
+/**
+ * Wo eine Lieferung von weit her (Frankfurt, Berlin …) auf das Netz der Stadt von into (Standard Köln) trifft: das
+ * Ende der passenden Autobahn-Zufahrt (roadApproach). Ohne Zufahrten der nächste Autobahn-Knoten im Netz der Stadt,
+ * ohne Autobahnen der Ort selbst.
+ */
+export function roadEntryFrom(far: LngLat, via?: string, into?: LngLat): LngLat {
+  const network = networkInto(into);
+  const id = `${network}:${key(far)}|${via ?? ''}`;
   let entry = entries.get(id);
   if (!entry) {
-    entry = nearestMotorwayNode(far, network) ?? { lng: far.lng, lat: far.lat };
+    const approach = roadApproach(far, via, into);
+    entry = approach
+      ? approach.path[approach.path.length - 1]
+      : (nearestMotorwayNode(far, network) ?? { lng: far.lng, lat: far.lat });
     entries.set(id, entry);
   }
   return entry;
+}
+
+const shipRoutes = new Map<string, LngLat[]>();
+
+/**
+ * Weg eines Schiffs von außen bis zum Kai der Stadt: 'koeln' von Rotterdam über Nieuwe Maas, Noord, Merwede, Waal und
+ * Rhein bis zum Liegeplatz im Niehler Hafen, 'hamburg' die Elbe hinauf ab Cuxhaven. Leer für Städte ohne Wasserweg.
+ */
+export function shipRoute(cityId: string): LngLat[] {
+  let route = shipRoutes.get(cityId);
+  if (!route) {
+    const data = WATERWAYS[cityId];
+    route = data ? decodeLine(data.path) : [];
+    shipRoutes.set(cityId, route);
+  }
+  return route;
+}
+
+/** Fahrzeit des Schiffs über shipRoute in ganzen Spielminuten (SHIP_SPEED), 0 ohne Wasserweg. */
+export function shipMinutes(cityId: string): number {
+  const route = shipRoute(cityId);
+  let meters = 0;
+  for (let i = 1; i < route.length; i++) meters += distanceMeters(route[i - 1], route[i]);
+  return route.length < 2 ? 0 : Math.ceil(meters / SHIP_SPEED);
 }
 
 /** Nächster Punkt auf einer Straße und der Abstand dorthin (null = keine Straße in der Nähe). */
@@ -150,19 +274,6 @@ interface Autobahn {
 }
 
 let autobahnLines: Autobahn[] | null = null;
-
-function decodeLine(text: string): LngLat[] {
-  const ints = decodeInts(text);
-  const out: LngLat[] = [];
-  let x = 0;
-  let y = 0;
-  for (let i = 0; i + 1 < ints.length; i += 2) {
-    x += ints[i];
-    y += ints[i + 1];
-    out.push({ lng: x / 1e5, lat: y / 1e5 });
-  }
-  return out;
-}
 
 /** Die Autobahn zwischen zwei Städten (Punkte in Fahrtrichtung von a nach b), null wenn es keine gibt. */
 export function autobahnBetween(a: string, b: string): { ref: string; meters: number; path: LngLat[] } | null {
@@ -200,18 +311,17 @@ export function interCityRoute(from: LngLat, to: LngLat): InterCityRoute {
       meters: access.meters + autobahn.meters + egress.meters,
       motorwayMeters: autobahn.meters,
       onRoads: access.onRoads && egress.onRoads,
+      drive: [...access.drive, ...autobahn.path.slice(1, -1), ...egress.drive],
+      walkFrom: access.walkFrom,
+      walkTo: egress.walkTo,
     };
   } else {
     const meters = Math.round(distanceMeters(from, to) * INTERCITY_DETOUR);
-    route = {
-      path: [
-        { lng: from.lng, lat: from.lat },
-        { lng: to.lng, lat: to.lat },
-      ],
-      meters,
-      motorwayMeters: meters,
-      onRoads: false,
-    };
+    const path = [
+      { lng: from.lng, lat: from.lat },
+      { lng: to.lng, lat: to.lat },
+    ];
+    route = { path, meters, motorwayMeters: meters, onRoads: false, drive: path, walkFrom: null, walkTo: null };
   }
   if (interCityCache.size >= CACHE_SIZE) interCityCache.delete(interCityCache.keys().next().value as string);
   interCityCache.set(id, route);

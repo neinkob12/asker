@@ -68,8 +68,8 @@ export const PORTS: Readonly<Record<string, PortConfig>> = {
   hamburg: {
     placeId: 'port:hamburg',
     name: 'Hamburger Hafen',
-    lng: 10.0045,
-    lat: 53.5282,
+    lng: 9.99978,
+    lat: 53.52789,
     berthCost: 12000,
     safeMinutes: 10 * 60,
     customsChancePerHour: 0.08,

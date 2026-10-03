@@ -21,7 +21,7 @@
 //   cheapestPackagePrice(state), getRelation(state, id), trustLabel(trust), supplierDiscount(state, id),
 //   supplierQualityBonus(state, id), creditLimit(state, id), availableCredit(state, id), isBlocked(state, id),
 //   availablePackages(state, id), packagePrice(state, supplierId, packageId), rollShipmentProblem(...),
-//   deliveryLeg(supplier, progress, toPort?) (Darstellung: Schiff, Umladen oder Straße; Hafen: RHINE_ROUTE,
+//   deliveryLeg(supplier, progress, toPort?) (Darstellung: Schiff, Umladen oder Straße; Weg: roads.shipRoute,
 //   UNLOADING_PORT)
 // Befehle: 'suppliers.order' (onCredit für Kredit, warehouseId als Ziel), 'suppliers.repay', 'suppliers.unlock'
 // Ereignisse: 'shipment.ordered', 'shipment.arrived' (atPort bei Schiffsware), 'shipment.problem',
@@ -81,15 +81,7 @@ import {
   UNLOADING_SHARE,
 } from './config';
 
-export {
-  CITY_APPROACH_SHARE,
-  RHINE_APPROACH_FROM,
-  RHINE_APPROACH_SHARE,
-  RHINE_ROUTE,
-  SHIP_SHARE,
-  UNLOADING_PORT,
-  UNLOADING_SHARE,
-} from './config';
+export { CITY_APPROACH_SHARE, SHIP_SHARE, UNLOADING_PORT, UNLOADING_SHARE } from './config';
 
 export interface SupplierPackage {
   id: string;
@@ -151,6 +143,8 @@ export interface Supplier {
   priceFactors?: Readonly<Record<string, number>>;
   /** Anderes Auftreten in einer Stadt (Art, Sortiment, Beschreibung). */
   inCity?: Readonly<Record<string, Partial<Pick<Supplier, 'kind' | 'packages' | 'description' | 'priceLevel'>>>>;
+  /** Autobahn, über die der Kurier nach Köln hereinkommt (roads: roadApproach), nur für die Karte. */
+  via?: string;
 }
 
 export type ShipmentProblem = 'delayed' | 'badQuality' | 'seized';

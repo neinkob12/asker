@@ -328,6 +328,16 @@ export const SCENES = [
   },
   { name: 'einstellungen', js: "window.koeln.runtime.api.openPhone('core.settings')" },
   {
+    // Auftrag 31: Abschnitt "Über" mit der Quellenangabe der Daten, ganz unten in den Einstellungen.
+    name: 'einstellungen-ueber',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.runtime.api.openPhone('core.settings');
+      const list = await until(() => document.querySelector('.phone .set-sources'));
+      list?.scrollIntoView({ block: 'center' });
+    })()`,
+  },
+  {
     name: 'einstellungen-verlauf',
     js: `(async () => {
       ${STEPS}

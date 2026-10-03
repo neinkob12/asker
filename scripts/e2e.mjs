@@ -32,6 +32,24 @@ const { server, base } = await startServer(5191);
 const browser = await launchBrowser();
 const errors = [];
 const isTileError = (text) => text.includes('AJAXError') || text.includes('Failed to load resource');
+/**
+ * Kachel-Fehler kommen bei MapLibre aus dem Worker als AJAXError ohne Stack; die Konsole zeigt dann nur den
+ * (minifizierten) Klassennamen, z.B. "xn". Darum am Objekt prüfen: status, statusText und eine fremde url.
+ */
+const isForeignAjaxError = (arg) =>
+  arg
+    .evaluate(
+      (e) =>
+        !!e &&
+        typeof e === 'object' &&
+        'status' in e &&
+        'statusText' in e &&
+        typeof e.url === 'string' &&
+        !e.url.startsWith(location.origin),
+    )
+    .catch(() => false);
+/** Noch laufende Prüfungen von Konsolen-Fehlern (vor dem Schließen des Browsers abwarten). */
+const pendingChecks = [];
 let step = 0;
 
 /** Zustand aus dem Spiel lesen (nur lesen, wie die Oberfläche). */
@@ -69,7 +87,12 @@ async function run() {
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {
-    if (m.type() === 'error' && !isTileError(m.text())) errors.push(m.text());
+    if (m.type() !== 'error' || isTileError(m.text())) return;
+    pendingChecks.push(
+      Promise.all(m.args().map(isForeignAjaxError)).then((tile) => {
+        if (!tile.some(Boolean)) errors.push(m.text());
+      }),
+    );
   });
 
   await check('Intro beim ersten Start, Name für die Bestenliste', async () => {
@@ -314,6 +337,7 @@ try {
   console.error(`\nFehlgeschlagen: ${error.message}`);
   process.exitCode = 1;
 } finally {
+  await Promise.all(pendingChecks);
   await browser.close();
   await server.close();
 }

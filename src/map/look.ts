@@ -163,7 +163,8 @@ const smoothstep = (t: number) => {
   return x * x * (3 - 2 * x);
 };
 
-function parseHex(hex: string): [number, number, number] {
+/** Hex-Farbe (#rgb oder #rrggbb) als [r, g, b] mit 0–255. */
+export function parseHex(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
   const full = h.length === 3 ? [...h].map((c) => c + c).join('') : h;
   const n = Number.parseInt(full.slice(0, 6), 16);

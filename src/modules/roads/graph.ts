@@ -30,17 +30,27 @@ interface NetworkData {
   lat0: number;
   nodes: string;
   edges: string;
+  /** Autobahn-Zufahrten (ROAD_APPROACHES). */
+  approaches: readonly { ref: string; toward: string; path: string }[];
 }
 
 /** Die Netze der Städte. Eine neue Stadt: Netz mit tools/build-roads.py --city erzeugen und hier eintragen. */
 const NETWORKS: readonly NetworkData[] = [
-  { id: 'koeln', box: koeln.ROAD_BOX, lat0: koeln.ROAD_LAT0, nodes: koeln.ROAD_NODES, edges: koeln.ROAD_EDGES },
+  {
+    id: 'koeln',
+    box: koeln.ROAD_BOX,
+    lat0: koeln.ROAD_LAT0,
+    nodes: koeln.ROAD_NODES,
+    edges: koeln.ROAD_EDGES,
+    approaches: koeln.ROAD_APPROACHES,
+  },
   {
     id: 'hamburg',
     box: hamburg.ROAD_BOX,
     lat0: hamburg.ROAD_LAT0,
     nodes: hamburg.ROAD_NODES,
     edges: hamburg.ROAD_EDGES,
+    approaches: hamburg.ROAD_APPROACHES,
   },
 ];
 
@@ -273,6 +283,55 @@ function getGraph(networkId: string): Graph {
   return g;
 }
 
+/**
+ * Lesesicht auf den Graphen (z.B. für den Verkehr als Kulisse in roads/ui): Knoten und Kanten in Metern einer lokalen
+ * Projektion, Nachbarschaft als CSR (adjStart/adjEdge/adjDir, dir 1 = vorwärts). Nur lesen!
+ */
+export interface RoadGraphView {
+  nodeX: Float64Array;
+  nodeY: Float64Array;
+  edgeFrom: Int32Array;
+  edgeTo: Int32Array;
+  edgeOneway: Uint8Array;
+  edgeClass: Uint8Array;
+  edgeLength: Float64Array;
+  shapeStart: Int32Array;
+  shapeX: Float64Array;
+  shapeY: Float64Array;
+  shapeDist: Float64Array;
+  adjStart: Int32Array;
+  adjEdge: Int32Array;
+  adjDir: Uint8Array;
+  /** Straßenart je Code (edgeClass). */
+  classes: readonly RoadClass[];
+  toLngLat(x: number, y: number): LngLat;
+  toMeters(point: LngLat): [number, number];
+}
+
+/** Lesesicht auf das Netz einer Stadt (Standard Köln). */
+export function graphView(networkId = NETWORKS[0].id): RoadGraphView {
+  const g = getGraph(networkId);
+  return {
+    nodeX: g.nodeX,
+    nodeY: g.nodeY,
+    edgeFrom: g.edgeFrom,
+    edgeTo: g.edgeTo,
+    edgeOneway: g.edgeOneway,
+    edgeClass: g.edgeClass,
+    edgeLength: g.edgeLength,
+    shapeStart: g.shapeStart,
+    shapeX: g.shapeX,
+    shapeY: g.shapeY,
+    shapeDist: g.shapeDist,
+    adjStart: g.adjStart,
+    adjEdge: g.adjEdge,
+    adjDir: g.adjDir,
+    classes: ROAD_CLASSES,
+    toLngLat: (x, y) => toLngLat(g, x, y),
+    toMeters: (p) => [toX(g, p.lng), toY(p.lat)],
+  };
+}
+
 /** Größe eines Netzes (für Tests und die Doku). */
 export function networkSize(networkId = NETWORKS[0].id): { nodes: number; edges: number; meters: number } {
   const g = getGraph(networkId);
@@ -424,6 +483,9 @@ export interface GraphRoute {
   roadMeters: number;
   /** Gesamtlänge inklusive der Wege vom Punkt zur Straße und von der Straße zum Ziel. */
   meters: number;
+  /** Index des ersten und letzten Punkts auf der Straße (davor und danach: zu Fuß zur Straße). */
+  roadStart: number;
+  roadEnd: number;
 }
 
 /**
@@ -528,23 +590,65 @@ function finish(g: Graph, road: [number, number][], fromPoint: LngLat, toPoint: 
     if (!last || Math.hypot(last[0] - p[0], last[1] - p[1]) > 0.5) points.push(p);
   };
   add([toX(g, fromPoint.lng), toY(fromPoint.lat)]);
+  // Liegt der Start (fast) auf der Straße, fällt der erste Straßenpunkt mit ihm zusammen.
+  const roadStart = road.length > 0 && Math.hypot(points[0][0] - road[0][0], points[0][1] - road[0][1]) > 0.5 ? 1 : 0;
   let roadMeters = 0;
   for (let i = 0; i < road.length; i++) {
     if (i > 0) roadMeters += Math.hypot(road[i][0] - road[i - 1][0], road[i][1] - road[i - 1][1]);
     add(road[i]);
   }
+  const roadEnd = points.length - 1;
   add([toX(g, toPoint.lng), toY(toPoint.lat)]);
   let meters = 0;
   for (let i = 1; i < points.length; i++) {
     meters += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
   }
   if (points.length === 1) points.push(points[0]);
-  return { path: points.map(([x, y]) => toLngLat(g, x, y)), roadMeters, meters };
+  return {
+    path: points.map(([x, y]) => toLngLat(g, x, y)),
+    roadMeters,
+    meters,
+    roadStart,
+    roadEnd: Math.max(roadStart, roadEnd),
+  };
 }
 
 /** Punkt auf der Straße als Grad (zu snapToRoad). */
 export function snapToLngLat(snap: Snap, networkId: string): LngLat {
   return toLngLat(getGraph(networkId), snap.x, snap.y);
+}
+
+/** Mitte eines Netzes (Mittelwert aller Knoten), z.B. um die Richtung einer Autobahn-Zufahrt zu bestimmen. */
+export function networkCenter(networkId: string): LngLat {
+  const g = getGraph(networkId);
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i < g.nodeX.length; i++) {
+    x += g.nodeX[i];
+    y += g.nodeY[i];
+  }
+  const n = Math.max(1, g.nodeX.length);
+  return toLngLat(g, x / n, y / n);
+}
+
+/** Linie im Polyline-Format (erster Punkt absolut, dann Abstände, 1e-5 Grad) als Punkte. */
+export function decodeLine(text: string): LngLat[] {
+  const ints = decodeInts(text);
+  const path: LngLat[] = [];
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i + 1 < ints.length; i += 2) {
+    x += ints[i];
+    y += ints[i + 1];
+    path.push({ lng: x / 1e5, lat: y / 1e5 });
+  }
+  return path;
+}
+
+/** Autobahn-Zufahrten eines Netzes: Weg vom Rand des Ausschnitts bis zum ersten Knoten im Netz. */
+export function decodeApproaches(networkId: string): { ref: string; toward: string; path: LngLat[] }[] {
+  const net = NETWORKS.find((n) => n.id === networkId) ?? NETWORKS[0];
+  return net.approaches.map((a) => ({ ref: a.ref, toward: a.toward, path: decodeLine(a.path) }));
 }
 
 /** Knoten an Autobahnen eines Netzes (Einfahrt für Lieferungen von außerhalb), der dem Punkt am nächsten liegt. */

@@ -8,7 +8,7 @@ import { setHapticsEnabled } from './haptics';
 import { closeAllOverlays } from './overlays';
 import type { NavEntry, NavKind } from './phone/navModel';
 import * as nav from './phone/navModel';
-import { type CameraMode, loadPrefs, savePrefs, type UiPrefs } from './prefs';
+import { type CameraMode, loadPrefs, savePrefs, type TrafficLevel, type UiPrefs } from './prefs';
 import {
   type DialogId,
   type DialogRegistry,
@@ -27,7 +27,7 @@ import { bumpStateRevision, enableStateMemo } from './stateMemo';
 /** good/info: Routine (kurz, grau in der Alarm-Zentrale), warn: gelb, bad: rot. */
 export type ToastKind = 'info' | 'good' | 'warn' | 'bad';
 
-export type { CameraMode } from './prefs';
+export type { CameraMode, TrafficLevel } from './prefs';
 
 /** Benachrichtigung, die oben aus dem Spiel-Handy herausragt (Banner). Klick öffnet die App. */
 export interface PhoneNotification {
@@ -137,6 +137,8 @@ export interface UiState {
   camera: CameraMode;
   /** Überwachungs-Overlay auf der Karte an? Pro Gerät gemerkt. */
   overlay: boolean;
+  /** Verkehr als Kulisse auf der Karte: aus, wenig, normal. Pro Gerät gemerkt. */
+  traffic: TrafficLevel;
   /** Handy vibriert bei Benachrichtigungen. Pro Gerät gemerkt. */
   vibration: boolean;
   /** Auch Routine als Banner zeigen (sonst nur Dringendes). Pro Gerät gemerkt. */
@@ -253,6 +255,8 @@ export interface UiApi {
   /** Zwischen 3D schräg und 2D-Draufsicht wechseln. */
   toggleCamera(): void;
   setOverlay(enabled: boolean): void;
+  /** Verkehr auf der Karte: 'off', 'low' oder 'normal'. */
+  setTraffic(level: TrafficLevel): void;
   setVibration(enabled: boolean): void;
   setMoreNotifications(enabled: boolean): void;
   zoomIn(): void;
@@ -325,6 +329,7 @@ export class UiRuntime {
       picking: null,
       camera: prefs.camera,
       overlay: prefs.overlay,
+      traffic: prefs.traffic,
       vibration: prefs.vibration,
       moreNotifications: prefs.moreNotifications,
       notification: null,
@@ -497,6 +502,7 @@ export class UiRuntime {
     const prefs: UiPrefs = {
       overlay: this.ui.overlay,
       camera: this.ui.camera,
+      traffic: this.ui.traffic,
       vibration: this.ui.vibration,
       moreNotifications: this.ui.moreNotifications,
     };
@@ -808,6 +814,11 @@ export class UiRuntime {
       setOverlay: (enabled) =>
         update(() => {
           ui.overlay = enabled;
+          this.savePrefs();
+        }),
+      setTraffic: (level) =>
+        update(() => {
+          ui.traffic = level;
           this.savePrefs();
         }),
       setVibration: (enabled) =>

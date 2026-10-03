@@ -6,6 +6,16 @@
 // die Szenen noch einmal (Nachrichten-App offen, Chat offen, Handy zu).
 //
 //   node scripts/perf-browser.mjs [--save=pfad.json] [--days=3] [--seconds=25] [--speed=4] [--width=700 --height=500]
+//     [--mobile] [--throttle=4] [--gpu] [--reduced-motion] [--traffic=off|low|normal] [--hour=8] [--scenes=ui,karte]
+//
+// Karte (Auftrag 31): --scenes=karte misst den Normalbetrieb auf der Karte (zehn offene Aufträge, eine laufende
+// Lieferung, Tempo --speed, Zoom 14,5 an den Ringen) über die Messhilfe aus src/map/perf.ts (?perf=1): Bilder pro
+// Sekunde, Arbeit pro Bild in den Animationen (Fahrzeuge, Verkehr, Figuren, Hotspots), Zeit pro Layer-update,
+// setData-Aufrufe pro Quelle und Sekunde (Mittel und Spitze), Long Tasks. --mobile nimmt den iPhone-Viewport
+// (390 × 844, Touch), --throttle=4 drosselt die CPU über CDP (Emulation.setCPUThrottlingRate), --gpu startet Chromium
+// mit Fenster und echter GPU statt SwiftShader (nur auf einem Rechner mit Grafikkarte und Bildschirm sinnvoll; ohne
+// GPU sind die Bilder pro Sekunde durch die Software-Grafik begrenzt, die Arbeit pro Bild und setData nicht).
+// --hour=8 spult vor der Szene bis zur nächsten vollen Stunde 8 vor (Berufsverkehr: volle Zahl an Fahrzeugen).
 //
 // --save: Spielstand aus `PERF=1 PERF_SAVE=/tmp/perf.json npm run perf:sim` (Bot, Tag 20). Ohne --save wird ein
 // frisches Spiel mit Seed 11 um --days Spieltage vorgespult (ohne Spieler passiert dabei wenig, die Nachrichten und
@@ -14,7 +24,8 @@
 // Bericht und Hotspots: docs/perf/2026-10-messung.md.
 
 import { readFileSync } from 'node:fs';
-import { launchBrowser, restartWithProxySupport, routeExternal, startServer } from './browser.mjs';
+import { chromium } from 'playwright-core';
+import { findChromium, launchBrowser, restartWithProxySupport, routeExternal, startServer } from './browser.mjs';
 
 restartWithProxySupport();
 
@@ -26,14 +37,35 @@ const args = Object.fromEntries(
 );
 const SECONDS = Number(args.seconds ?? 25);
 const SPEED = Number(args.speed ?? 4);
-const WIDTH = Number(args.width ?? 700);
-const HEIGHT = Number(args.height ?? 500);
+const MOBILE = 'mobile' in args;
+const WIDTH = Number(args.width ?? (MOBILE ? 390 : 700));
+const HEIGHT = Number(args.height ?? (MOBILE ? 844 : 500));
 const DAYS = Number(args.days ?? 3);
+const THROTTLE = Number(args.throttle ?? 1);
+const SCENES = new Set((args.scenes || 'ui,karte').split(','));
+const TRAFFIC = args.traffic || null;
+const HOUR = args.hour === undefined ? null : Number(args.hour);
 
 const { server, base } = await startServer();
-const browser = await launchBrowser();
-const context = await browser.newContext({ viewport: { width: WIDTH, height: HEIGHT } });
+const browser =
+  'gpu' in args
+    ? await chromium.launch({ executablePath: findChromium(), headless: false, args: ['--ignore-gpu-blocklist'] })
+    : await launchBrowser();
+const context = await browser.newContext({
+  viewport: { width: WIDTH, height: HEIGHT },
+  ...(MOBILE ? { isMobile: true, hasTouch: true, deviceScaleFactor: 3 } : {}),
+  ...('reduced-motion' in args ? { reducedMotion: 'reduce' } : {}),
+});
 await routeExternal(context, base);
+if (TRAFFIC) {
+  // Einstellung "Verkehr" (Einstellungen › Karte) vor dem Start setzen.
+  await context.addInitScript((level) => {
+    try {
+      const prefs = JSON.parse(localStorage.getItem('koeln-tycoon:ui') || '{}');
+      localStorage.setItem('koeln-tycoon:ui', JSON.stringify({ ...prefs, traffic: level }));
+    } catch {}
+  }, TRAFFIC);
+}
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
@@ -41,7 +73,7 @@ page.on('console', (m) => {
   if (m.type() === 'error' && !/AJAXError|Failed to load resource/.test(m.text())) errors.push(m.text());
 });
 
-await page.goto(new URL('?neu=normal&seed=11&tempo=0', base).toString());
+await page.goto(new URL('?neu=normal&seed=11&tempo=0&perf=1', base).toString());
 await page.waitForSelector('.shell-map', { timeout: 20000 });
 await page.waitForTimeout(6000);
 
@@ -117,9 +149,10 @@ await page.evaluate(async () => {
       if (d > p.mapMax) p.mapMax = d;
     };
     const ids = registry.mapLayers().map((l) => l.id);
-    (map.instances ?? []).forEach((inst, i) => {
+    (map.instances ?? []).forEach((entry, i) => {
+      const inst = entry.instance ?? entry;
       if (!inst.update) return;
-      const id = ids[i] ?? `#${i}`;
+      const id = entry.id ?? ids[i] ?? `#${i}`;
       const u = inst.update.bind(inst);
       inst.update = (s, ui) => {
         const t0 = performance.now();
@@ -147,6 +180,7 @@ await page.evaluate(async () => {
 });
 
 const cdp = await context.newCDPSession(page);
+if (THROTTLE > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: THROTTLE });
 await cdp.send('Profiler.enable');
 await cdp.send('Profiler.setSamplingInterval', { interval: 500 });
 
@@ -291,7 +325,7 @@ async function measure(label) {
     `${label.padEnd(48)} | ${(info.uiMs / Math.max(1, info.ui)).toFixed(1).padStart(5)} ms (max ${info.uiMax.toFixed(1).padStart(5)}) | ${String(Math.round(info.renders / Math.max(1, info.ui))).padStart(4)} Renders | Karte ${(info.mapMs / Math.max(1, info.map)).toFixed(1)} ms | DOM ${info.dom} | Long Tasks ${lt.length} (max ${Math.max(0, ...lt).toFixed(0)} ms) | Sim ${(info.stepMs / Math.max(1, info.steps)).toFixed(2)} ms/Schritt, ${info.steps} Schritte | CPU ${(a.busy / 1000).toFixed(0)} ms`,
   );
   const out = [
-    `\n######## "${label}" (${SECONDS} s, ${SPEED}x, ${WIDTH}x${HEIGHT}) ########`,
+    `\n######## "${label}" (${SECONDS} s, ${SPEED}x, ${WIDTH}x${HEIGHT}${MOBILE ? ' Handy' : ''}${THROTTLE > 1 ? `, CPU ${THROTTLE}x gedrosselt` : ''}) ########`,
     `Zustand: msgs=${info.msgs} offene Orders=${info.open} Handy=${info.phone} Dialog=${info.dialog} DOM=${info.dom}`,
     `Frames: ${info.frames} (${(info.frames / SECONDS).toFixed(1)} fps) | Long Tasks: ${lt.length}, Summe ${ltSum.toFixed(0)} ms, max ${Math.max(0, ...lt).toFixed(0)} ms`,
     `Simulation: ${info.steps} Schritte, ${info.stepMs.toFixed(0)} ms = ${(info.stepMs / Math.max(1, info.steps)).toFixed(3)} ms/Schritt, max Block ${info.stepMax.toFixed(1)} ms`,
@@ -363,56 +397,190 @@ await page.waitForTimeout(2500);
 await closeDialogs();
 await page.waitForTimeout(1000);
 
-await measure('Handy Startbildschirm');
-await page.evaluate(() => {
-  window.koeln.runtime.api.openPhone('core.messages');
-  window.koeln.runtime.requestRender();
-});
-await page.waitForTimeout(1500);
-await measure('Nachrichten-App offen');
-await micro('normal');
+if (SCENES.has('ui')) {
+  await measure('Handy Startbildschirm');
+  await page.evaluate(() => {
+    window.koeln.runtime.api.openPhone('core.messages');
+    window.koeln.runtime.requestRender();
+  });
+  await page.waitForTimeout(1500);
+  await measure('Nachrichten-App offen');
+  await micro('normal');
 
-// Viele offene Anfragen erzeugen (umgeht MAX_OPEN_ORDERS, indem die Liste kurz geleert wird).
-const made = await page.evaluate(async () => {
-  const orders = await import('/src/modules/customers/orders.ts');
-  const sim = window.koeln.session.sim;
-  const ctx = sim.ctx('customers');
-  const s = sim.state.modules.customers;
-  const saved = s.orders;
-  const created = [];
-  for (let i = 0; i < 20; i++) {
-    s.orders = [];
-    const o = (i % 3 === 0 ? orders.offerWholesale : orders.offerDelivery)(ctx, true);
-    if (o) created.push(o);
+  // Viele offene Anfragen erzeugen (umgeht MAX_OPEN_ORDERS, indem die Liste kurz geleert wird).
+  const made = await page.evaluate(async () => {
+    const orders = await import('/src/modules/customers/orders.ts');
+    const sim = window.koeln.session.sim;
+    const ctx = sim.ctx('customers');
+    const s = sim.state.modules.customers;
+    const saved = s.orders;
+    const created = [];
+    for (let i = 0; i < 20; i++) {
+      s.orders = [];
+      const o = (i % 3 === 0 ? orders.offerWholesale : orders.offerDelivery)(ctx, true);
+      if (o) created.push(o);
+    }
+    s.orders = [...saved, ...created];
+    // Die Anfragen sollen während aller folgenden Szenen offen bleiben (bei 4x laufen sonst nach gut 7 s die Fristen ab).
+    for (const o of created) {
+      o.expiresAt += 3000;
+      const m = sim.state.messages.list.find((x) => x.id === o.messageId);
+      if (m?.expiresAt !== undefined) m.expiresAt += 3000;
+    }
+    sim.step();
+    window.koeln.runtime.requestRender();
+    return { erzeugt: created.length, offen: s.orders.filter((o) => o.status === 'offered').length };
+  });
+  console.log('Anfragen erzeugt:', JSON.stringify(made));
+  await page.waitForTimeout(1500);
+  await measure('Viele offene Anfragen, Nachrichten-App offen');
+  await micro('viele Anfragen');
+  await page.evaluate(() => {
+    const open = window.koeln.session.state.modules.customers.orders.find((o) => o.status === 'offered');
+    if (open) window.koeln.runtime.api.openPhone('core.messages', { contactId: open.contactId });
+    window.koeln.runtime.requestRender();
+  });
+  await page.waitForTimeout(1500);
+  await measure('Viele offene Anfragen, ein Chat mit Frist offen');
+  await page.evaluate(() => {
+    window.koeln.runtime.api.closePhone();
+    window.koeln.runtime.requestRender();
+  });
+  await page.waitForTimeout(1500);
+  await measure('Viele offene Anfragen, Handy zu');
+}
+
+/** Karte im Normalbetrieb: Zahlen der Messhilfe (src/map/perf.ts) über SECONDS Sekunden bei Tempo SPEED. */
+async function measureMap(label) {
+  await closeDialogs();
+  await page.evaluate(() => window.__ktMapPerf?.reset());
+  await page.evaluate(() => window.__perf.reset());
+  await page.evaluate((s) => window.koeln.runtime.api.setSpeed(s), SPEED);
+  // Begegnungen und Übernahmen öffnen Dialoge, die das Spiel anhalten: während der Messung gleich wieder zu.
+  for (let i = 0; i < SECONDS; i++) {
+    await page.waitForTimeout(1000);
+    await closeDialogs();
   }
-  s.orders = [...saved, ...created];
-  // Die Anfragen sollen während aller folgenden Szenen offen bleiben (bei 4x laufen sonst nach gut 7 s die Fristen ab).
-  for (const o of created) {
-    o.expiresAt += 3000;
-    const m = sim.state.messages.list.find((x) => x.id === o.messageId);
-    if (m?.expiresAt !== undefined) m.expiresAt += 3000;
+  const info = await page.evaluate(() => {
+    const stats = window.__ktMapPerf?.stats() ?? null;
+    const p = window.__perf;
+    const s = window.koeln.session.state;
+    const map = window.koeln.runtime.map?.map;
+    return {
+      stats,
+      longTasks: p.longTasks,
+      steps: p.steps,
+      stepMs: p.stepMs,
+      uiMs: p.uiMs,
+      ui: p.ui,
+      zoom: map?.getZoom() ?? 0,
+      open: s.modules.customers.orders.filter((o) => o.status === 'offered' || o.status === 'enRoute').length,
+      enRoute: s.modules.customers.orders.filter((o) => o.status === 'enRoute').length,
+      phone: window.koeln.runtime.ui.phone.open,
+      dialog: window.koeln.runtime.ui.dialog?.id ?? null,
+      speed: window.koeln.session.loop.speed,
+    };
+  });
+  await page.evaluate(() => window.koeln.runtime.api.setSpeed(0));
+  const st = info.stats;
+  if (!st) {
+    console.log(`\n######## "${label}": keine Messhilfe (?perf=1 nur im Dev-Build) ########`);
+    return;
   }
-  sim.step();
-  window.koeln.runtime.requestRender();
-  return { erzeugt: created.length, offen: s.orders.filter((o) => o.status === 'offered').length };
-});
-console.log('Anfragen erzeugt:', JSON.stringify(made));
-await page.waitForTimeout(1500);
-await measure('Viele offene Anfragen, Nachrichten-App offen');
-await micro('viele Anfragen');
-await page.evaluate(() => {
-  const open = window.koeln.session.state.modules.customers.orders.find((o) => o.status === 'offered');
-  if (open) window.koeln.runtime.api.openPhone('core.messages', { contactId: open.contactId });
-  window.koeln.runtime.requestRender();
-});
-await page.waitForTimeout(1500);
-await measure('Viele offene Anfragen, ein Chat mit Frist offen');
-await page.evaluate(() => {
-  window.koeln.runtime.api.closePhone();
-  window.koeln.runtime.requestRender();
-});
-await page.waitForTimeout(1500);
-await measure('Viele offene Anfragen, Handy zu');
+  const lt = info.longTasks;
+  const perSecond = (n) => (n / Math.max(0.001, st.seconds)).toFixed(1);
+  const work = Object.entries(st.work)
+    .sort((a, b) => b[1].ms - a[1].ms)
+    .map(([k, v]) => `${k} ${(v.ms / Math.max(1, st.frames)).toFixed(2)} ms/Bild (max ${v.max.toFixed(1)})`);
+  const layers = Object.entries(st.layers)
+    .sort((a, b) => b[1].ms - a[1].ms)
+    .slice(0, 8)
+    .map(([k, v]) => `${k} ${(v.ms / v.calls).toFixed(2)} ms × ${perSecond(v.calls)}/s`);
+  const sources = Object.entries(st.setData)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${k} ${perSecond(v)}/s (Spitze ${st.setDataPeakPerSecond[k] ?? 0})`);
+  console.log(
+    [
+      `\n######## "${label}" (${SECONDS} s, ${SPEED}x, ${WIDTH}x${HEIGHT}${MOBILE ? ' Handy' : ''}${THROTTLE > 1 ? `, CPU ${THROTTLE}x gedrosselt` : ''}${'reduced-motion' in args ? ', Bewegung reduziert' : ''}${TRAFFIC ? `, Verkehr ${TRAFFIC}` : ''}) ########`,
+      `Zustand: offene Aufträge ${info.open} (unterwegs ${info.enRoute}), Zoom ${info.zoom.toFixed(1)}, Handy ${info.phone ? 'offen' : 'zu'}, Tempo ${info.speed}${info.dialog ? `, Dialog ${info.dialog}` : ''}`,
+      `Bilder: ${st.fps.toFixed(1)} fps, längster Abstand ${st.maxInterval.toFixed(0)} ms, ${st.slowFrames} Bilder über 50 ms`,
+      `Bild-Arbeit Karte (Animationen): ${st.frameMs.toFixed(2)} ms/Bild im Mittel, schlimmstes Bild ${st.maxFrameMs.toFixed(1)} ms`,
+      `MapLibre zeichnen: ${st.maplibre ? `${(st.maplibre.ms / Math.max(1, st.maplibre.calls)).toFixed(2)} ms/Bild im Mittel, schlimmstes ${st.maplibre.max.toFixed(1)} ms` : '–'}`,
+      `Anzahl: ${
+        Object.entries(st.counts ?? {})
+          .map(([k, c]) => `${k} ${c.mean.toFixed(0)} im Mittel (höchstens ${c.max})`)
+          .join(' | ') || '–'
+      }`,
+      `  ${work.join(' | ') || '–'}`,
+      `Layer-update: ${layers.join(' | ') || '–'}`,
+      `setData: ${sources.join(' | ') || '–'}`,
+      `Long Tasks: ${lt.length}, max ${Math.max(0, ...lt).toFixed(0)} ms (über 50 ms: ${lt.filter((d) => d > 50).length})`,
+      `Simulation ${(info.stepMs / Math.max(1, info.steps)).toFixed(3)} ms/Schritt | UI ${(info.uiMs / Math.max(1, info.ui)).toFixed(1)} ms/Neuzeichnen`,
+    ].join('\n'),
+  );
+}
+
+if (SCENES.has('karte')) {
+  if (HOUR !== null) {
+    const time = await page.evaluate((hour) => {
+      const sim = window.koeln.session.sim;
+      const t = sim.state.time;
+      let target = Math.floor(t / 1440) * 1440 + hour * 60;
+      if (target <= t) target += 1440;
+      sim.advance(target - t);
+      window.koeln.runtime.requestRender();
+      return sim.state.time;
+    }, HOUR);
+    console.log(`Vorgespult bis ${String(Math.floor(time / 60) % 24).padStart(2, '0')}:00`);
+    // Was beim Vorspulen passiert ist (z.B. eine Übernahme), öffnet seinen Dialog kurz danach; der hielte das Spiel an.
+    await page.waitForTimeout(1500);
+    await closeDialogs();
+  }
+  // Zehn offene Aufträge, einer davon unterwegs (Lieferung als Fahrzeug auf der Karte), Kamera an den Ringen.
+  const made = await page.evaluate(async () => {
+    const orders = await import('/src/modules/customers/orders.ts');
+    const sim = window.koeln.session.sim;
+    const ctx = sim.ctx('customers');
+    const s = sim.state.modules.customers;
+    const saved = s.orders.filter((o) => o.status === 'offered' || o.status === 'enRoute').slice(0, 10);
+    const created = [];
+    for (let i = 0; created.length + saved.length < 10 && i < 40; i++) {
+      s.orders = [];
+      const o = (i % 3 === 0 ? orders.offerWholesale : orders.offerDelivery)(ctx, true);
+      if (o) created.push(o);
+    }
+    s.orders = [...saved, ...created];
+    // Die Anfragen bleiben während der Messung offen (sonst laufen sie bei Tempo 4 nach Minuten ab).
+    // Die Rechte Hand soll die Anfragen nicht abarbeiten: Aufgabe "Aufträge" für die Messung aus.
+    const rh = sim.state.modules.hierarchy.rightHands.koeln;
+    if (rh?.settings) rh.settings.orders = false;
+    const later = sim.state.time + 100000;
+    for (const o of s.orders) if (o.status === 'offered') o.expiresAt = later;
+    for (const m of sim.state.messages.list)
+      if (m.options && !m.answer && m.expiresAt !== undefined) m.expiresAt = later;
+    const delivery = s.orders.find((o) => o.status === 'offered');
+    if (delivery && !s.orders.some((o) => o.status === 'enRoute')) {
+      Object.assign(delivery, {
+        status: 'enRoute',
+        deliveredBy: 'player',
+        courierId: null,
+        fromWarehouseId: null,
+        startedAt: sim.state.time,
+        arrivesAt: sim.state.time + 240,
+        expiresAt: sim.state.time + 600,
+      });
+    }
+    sim.step();
+    window.koeln.runtime.api.closeDialog?.();
+    window.koeln.runtime.map?.map.jumpTo({ center: [6.9385, 50.9335], zoom: 14.5 });
+    window.koeln.runtime.requestRender();
+    return s.orders.filter((o) => o.status === 'offered' || o.status === 'enRoute').length;
+  });
+  console.log(`Karte: ${made} offene Aufträge`);
+  await closeDialogs();
+  await page.waitForTimeout(3000);
+  await measureMap('Karte Normalbetrieb, zehn offene Aufträge, eine Lieferung');
+}
 
 console.log(`\n######## Zusammenfassung ########\n${summary.join('\n')}`);
 console.log(`\nBrowser-Fehler: ${errors.length}${errors.length ? `\n${errors.slice(0, 5).join('\n')}` : ''}`);

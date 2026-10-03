@@ -1,15 +1,18 @@
 // Logistik auf der Karte: dein Liegeplatz im Hafen jeder Stadt (Klick öffnet die Hafen-Seite) und die Fahrten als
 // 3D-Mini-Fahrzeuge über echte Straßen (roads): erst leer vom Lager zum Hafen, dann mit Ware zurück. Routen zwischen
-// den Städten fahren über die A1 (Deutschland-Ansicht und in beiden Städten bis zur Auffahrt). Bei einer Kontrolle
-// steht das Fahrzeug mit Blaulicht.
+// den Städten fahren über die A1 (Deutschland-Ansicht und in beiden Städten bis zur Auffahrt). Das Fahrzeug hält an
+// der Straße, die letzten Meter zu Lager und Kai sind ein gepunkteter Fußweg. Bei einer Kontrolle steht das Fahrzeug
+// mit Blaulicht.
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import type { GameState, LngLat } from '../../../core';
 import {
+  addFootpath,
   addHtmlMarker,
   createVehicle,
   type EffectHandle,
   el,
+  type FootpathHandle,
   type MapLayer,
   mapEffects,
   mapToken,
@@ -43,7 +46,9 @@ import {
 interface ShownTrip {
   vehicle: VehicleHandle;
   leg: 'approach' | 'delivery';
+  /** Nur die Teile auf der Straße (drive); die Enden sind Fußwege (walks). */
   paths: { approach: LngLat[] | null; delivery: LngLat[] };
+  walks: FootpathHandle[];
   light: EffectHandle | null;
 }
 
@@ -105,7 +110,10 @@ export const logisticsLayer: MapLayer = {
     });
 
     const create = (state: GameState, trip: Trip): ShownTrip => {
-      const paths = tripRoute(state, trip);
+      const { routes } = tripRoute(state, trip);
+      const paths = { approach: routes.approach?.drive ?? null, delivery: routes.delivery.drive };
+      // Beide Enden der Fahrt (Lager und Hafen bzw. Ziellager) zu Fuß; die Anfahrt hat dieselben Enden.
+      const walks = [addFootpath(map, routes.delivery.walkFrom), addFootpath(map, routes.delivery.walkTo)];
       const progress = tripProgress(state, trip);
       const leg = progress.leg === 'toPickup' && paths.approach ? 'approach' : 'delivery';
       const vehicle = createVehicle(map, {
@@ -114,7 +122,7 @@ export const logisticsLayer: MapLayer = {
         title: trip.kind === 'pickup' ? 'Abholung am Hafen' : trip.kind === 'route' ? 'Route' : 'Umlagern',
         progress: leg === 'approach' ? progress.t : progress.leg === 'delivering' ? progress.t : 0,
       });
-      return { vehicle, leg, paths, light: null };
+      return { vehicle, leg, paths, walks, light: null };
     };
 
     return {
@@ -122,7 +130,9 @@ export const logisticsLayer: MapLayer = {
         for (const p of ports) {
           const cargo = getCargo(state, p.cityId).length;
           const shipping = shipmentsInTransit(state).some((s) => s.toPort && (s.cityId ?? 'koeln') === p.cityId);
-          p.element.hidden = !(hasBerth(state, p.cityId) || cargo > 0 || shipping);
+          // DOM nur anfassen, wenn sich Text oder Sichtbarkeit ändern.
+          const hidden = !(hasBerth(state, p.cityId) || cargo > 0 || shipping);
+          if (p.element.hidden !== hidden) p.element.hidden = hidden;
           const label = cargo > 0 ? `${p.port.name} · ${cargo} am Kai` : p.port.name;
           if (p.name.textContent !== label) p.name.textContent = label;
         }
@@ -133,6 +143,7 @@ export const logisticsLayer: MapLayer = {
           if (ids.has(id)) continue;
           entry.vehicle.remove();
           entry.light?.stop();
+          for (const walk of entry.walks) walk.remove();
           shown.delete(id);
         }
         for (const trip of trips) {
@@ -187,6 +198,7 @@ export const logisticsLayer: MapLayer = {
         for (const entry of shown.values()) {
           entry.vehicle.remove();
           entry.light?.stop();
+          for (const walk of entry.walks) walk.remove();
         }
         shown.clear();
         for (const p of ports) p.marker.remove();

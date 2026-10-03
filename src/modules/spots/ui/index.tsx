@@ -42,6 +42,7 @@ import {
   spotCity,
 } from '../index';
 import { recordSaleGlow, recordSpotRaid, spotsLayer } from './map';
+import { peopleLayer } from './people';
 import './spots.css';
 
 declare module '../../../ui' {
@@ -227,6 +228,7 @@ registerPanel({
 });
 registerSlot('tab:territory', { id: 'spots.list', title: 'Spots', order: 10, component: SpotsSection });
 registerMapLayer(spotsLayer);
+registerMapLayer(peopleLayer);
 
 // Geld-Popup am Spot bei jedem Straßenverkauf, und der Hotspot leuchtet eine Weile stärker.
 onGameEvent('sale.completed', 'spots.moneyFx', (p, _ui, state) => {

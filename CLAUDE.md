@@ -19,6 +19,12 @@ Auftrag 30: Köln komplett erst bei 12 Veedeln (7 = Meilenstein „Boss von Köl
 Vollmacht der Rechten Hand (80 % vom Tagesgewinn), zweite Stadt Hamburg (Modul `city`: aktive Stadt live, die andere
 schläft mit Tagesergebnis; `present`, Fahrt über die A1), Rechte Hand pro Stadt, Straßennetz pro Stadt plus A1
 (`roads`), Routen mit Fahrplan und Zoll (`logistics/routes.ts`), Stadt-Events (`events`), Klüngel, Kneipen.
+Auftrag 31 (Karte lebt): Verkehr als Kulisse (`roads.traffic`, `createFleet`: eine WebGL-Ebene, eigener Zufall, Einstellung
+Verkehr aus/wenig/normal), Leute an Spots (`spots.people`, SDF-Figur), Fahrzeuge halten an der Straße (`roadRoute(…).drive`,
+Fußweg `addFootpath`), Autobahn-Zufahrten (`roadApproach`, `Supplier.via`), Rhein und Elbe aus Overture (`shipRoute`,
+`tools/build-water.py`), Hamburger Wahrzeichen, Quellenangabe im Spiel, Prüfskript `scripts/check-roads.mjs` in `npm run lint`.
+Optik liest nur und nutzt nie `ctx.random()`; Layer bekommen `update()` nur bei Änderungen; Animationen hängen am gemeinsamen
+Takt `onMapFrame` (Pause bei Tempo 0). Budget und Messhilfe `?perf=1`: `src/map/README.md`, Abschnitt "Performance-Budget".
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
@@ -107,8 +113,10 @@ export default defineModule({
 - Lieferungen fährt **nur die Rechte Hand** (`customers.acceptOrder` mit `by: 'rightHand'`, `rightHandDriver`); alles,
   was sie selbständig tun soll, ist eine Aufgabe in `hierarchy/tasks.ts` und läuft über `ctx.dispatch` mit Actor.
 - Wege und Fahrzeiten immer über `roads` (`roadRoute`, `travelMinutes`), nie Luftlinie; zwischen zwei Städten nehmen
-  beide von selbst die A1 (`interCityRoute`). Straßennetze neu erzeugen: `src/modules/roads/tools/build-roads.py`
-  (`--city <id>`, `--autobahn <a> <b>`, Anleitung im Kopf der Datei).
+  beide von selbst die A1 (`interCityRoute`). Fahrzeuge auf der Karte fahren `roadRoute(…).drive` und zeigen die letzten
+  Meter mit `addFootpath`. Straßennetze neu erzeugen: `src/modules/roads/tools/build-roads.py` (`--city <id>`,
+  `--autobahn <a> <b>`), die Wasserwege `tools/build-water.py` (Anleitung im Kopf der Dateien). Neue Spots, Lager oder
+  Häfen müssen `scripts/check-roads.mjs` bestehen (höchstens 60 m bis zur nächsten Straße).
   Nachrichten: `messages.send(ctx, { contact, text, options, expiresIn?, silent? })` – alle Figuren reden per Handy mit
   dem Spieler. Ein Banner mit Ton gibt es nur für Nachrichten mit Antwortfrist (`options` + `expiresIn`), alles andere
   zählt still am Badge (`silent` ist damit nur noch für die Mitteilungszentrale relevant). Gelöschte Chats bleiben im
