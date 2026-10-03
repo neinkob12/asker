@@ -4,7 +4,7 @@
 // Kamera fliegt in die Zielstadt (CitySync, weil sie dort aktiv wird).
 
 import { clock, SPEEDS } from '../../../core';
-import { addHtmlMarker, el, type MapLayer, pointAlong } from '../../../map';
+import { addHtmlMarker, createVehicle, el, FAR_ZOOM, type MapLayer, pointAlong } from '../../../map';
 import {
   Button,
   IconChip,
@@ -23,6 +23,13 @@ import { cityName, cityTravel, getCity } from '../index';
 
 /** Tempo vor "Fahrt überspringen", damit es nach der Ankunft wieder gilt (pro Durchgang). */
 let skipped: { runId: string; speed: number } | null = null;
+
+/** Kamera klebt am Auto (nah, schräg, hinter ihm); Ziehen an der Karte löst sie, "Folgen" holt sie zurück. */
+let following = true;
+
+/** So nah fährt die Kamera hinter dem Auto her (Straßenhöhe) und so schräg schaut sie. */
+const FOLLOW_ZOOM = 15.6;
+const FOLLOW_PITCH = 62;
 
 function travelProgress(now: number, departedAt: number, arrivesAt: number): number {
   return Math.min(1, Math.max(0, (now - departedAt) / Math.max(1, arrivesAt - departedAt)));
@@ -88,12 +95,16 @@ registerLiveActivity({
       title: `Unterwegs nach ${cityName(travel.to)}`,
       detail: `Ankunft ${clock.formatTime(travel.arrivesAt)}`,
       progress: travelProgress(state.time, travel.departedAt, travel.arrivesAt),
-      open: (ui) => ui.flyToDeutschland(),
+      open: () => {
+        following = true;
+      },
     };
   },
 });
 
-onGameEvent('city.travelStarted', 'city.travel.camera', (_payload, ui) => ui.flyToDeutschland());
+onGameEvent('city.travelStarted', 'city.travel.camera', () => {
+  following = true;
+});
 
 onGameEvent('city.arrived', 'city.travel.arrived', (payload, ui, state) => {
   ui.toast(`Angekommen in ${cityName(payload.cityId)}.`, 'good', { urgent: true });
@@ -120,31 +131,67 @@ export const travelLayer: MapLayer = {
       children: [icon, label],
     });
     element.hidden = true;
+    // Das 3D-Auto fährt die echte A1 (wie alle anderen Fahrzeuge); der HTML-Marker bleibt nur für die Deutschland-Ansicht.
+    let car: ReturnType<typeof createVehicle> | null = null;
+    let carKey = '';
     let followedAt = 0;
+    let travelling = false;
+    const syncMarker = () => {
+      element.hidden = !travelling || map.getZoom() > FAR_ZOOM;
+    };
+    // Wer selbst an der Karte zieht, will nicht mehr verfolgt werden.
+    const onDrag = (e: { originalEvent?: unknown }) => {
+      if (e.originalEvent) following = false;
+    };
+    map.on('zoomend', syncMarker);
+    map.on('dragstart', onDrag);
     return {
       update(state) {
         const travel = cityTravel(state);
         const from = travel ? getCity(travel.from) : undefined;
         const to = travel ? getCity(travel.to) : undefined;
         if (!travel || !from || !to) {
+          travelling = false;
           element.hidden = true;
+          car?.remove();
+          car = null;
+          carKey = '';
           return;
         }
+        travelling = true;
         const route = interCityRoute(from.center, to.center);
+        const key = `${travel.from}>${travel.to}@${travel.departedAt}`;
+        if (!car || key !== carKey) {
+          car?.remove();
+          car = createVehicle(map, { path: route.path, kind: 'car', title: `Du · ${cityName(travel.to)}` });
+          car.setLabel('Du');
+          carKey = key;
+        }
         const t = travelProgress(state.time, travel.departedAt, travel.arrivesAt);
-        const { position } = pointAlong(route.path, t);
+        car.setProgress(t);
+        const { position, bearing: heading } = pointAlong(route.path, t);
         marker.setLngLat([position.lng, position.lat]);
-        element.hidden = false;
+        syncMarker();
         const text = `Du · ${cityName(travel.to)}`;
         if (label.textContent !== text) label.textContent = text;
-        // Kamera folgt (nur in der Deutschland-Ansicht und nicht öfter als alle zwei Sekunden).
+        // Kamera folgt dem Auto nah an der Straße, mit Blick in Fahrtrichtung (nicht öfter als einmal pro Sekunde).
         const now = performance.now();
-        if (ctx.ui.mapView() === 'deutschland' && now - followedAt > 2000 && !map.isMoving()) {
+        if (following && ctx.ui.mapView() !== 'deutschland' && now - followedAt > 1000) {
           followedAt = now;
-          map.easeTo({ center: [position.lng, position.lat], duration: 1500 });
+          map.easeTo({
+            center: [position.lng, position.lat],
+            zoom: FOLLOW_ZOOM,
+            pitch: FOLLOW_PITCH,
+            bearing: heading,
+            duration: 1400,
+            easing: (x) => x,
+          });
         }
       },
       destroy() {
+        map.off('zoomend', syncMarker);
+        map.off('dragstart', onDrag);
+        car?.remove();
         marker.remove();
       },
     };
