@@ -36,7 +36,9 @@ import {
   FULL_POWER_TASKS,
   fullPowerMissing,
   getRightHand,
+  isTaskUnlocked,
   RIGHT_HAND_MAX_RANK,
+  RIGHT_HAND_TASKS,
   type RightHandSettings,
   rightHandRank,
 } from '../index';
@@ -180,6 +182,8 @@ export function FullPowerSection(props: { offered: boolean }) {
   if (!fp) {
     if (!props.offered) return null;
     const missing = fullPowerMissing(state, 'koeln');
+    // Aufgaben, die schon frei sind, aber aus: für die Vollmacht mit einem Tipp alle an.
+    const off = RIGHT_HAND_TASKS.filter((t) => !rh.settings[t.key] && isTaskUnlocked(state, t.key));
     return (
       <Group
         title="Vollmacht"
@@ -192,6 +196,16 @@ export function FullPowerSection(props: { offered: boolean }) {
         }
       >
         <List>
+          {off.length > 0 && (
+            <ListItem onClick={() => configure(Object.fromEntries(off.map((t) => [t.key, true])))}>
+              <ItemContent
+                icon="checkCircle"
+                color="brand"
+                title={off.length === 1 ? `${off[0].name} einschalten` : 'Alle Aufgaben einschalten'}
+                meta="Für die Vollmacht muss alles laufen"
+              />
+            </ListItem>
+          )}
           <ListItem onClick={() => ui.openDialog('hierarchy.handover', { cityId: 'koeln' })}>
             <ItemContent icon="crown" color="brand" title="Köln übergeben …" meta="Übergabe ansehen" />
           </ListItem>

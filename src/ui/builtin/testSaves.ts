@@ -16,7 +16,7 @@ export const TEST_SAVE_FILES: readonly TestSaveInfo[] = [
   {
     id: 'koeln-komplett',
     title: 'Köln fast komplett',
-    text: '50.000 € Schwarzgeld, 11 von 12 Veedeln, Rechte Hand auf höchster Stufe. Das zwölfte Veedel fällt gleich nach dem Laden.',
+    text: '50.000 € Schwarzgeld, 11 von 12 Veedeln, Rechte Hand auf höchster Stufe (Geldwäsche aus). Das zwölfte Veedel fällt gleich nach dem Laden.',
   },
 ];
 

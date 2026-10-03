@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { loadSimulation, parseSaveFile } from '../core';
 import { discoverModules } from '../core/discover';
-import { recordEvents } from '../core/testing';
+import { eventsOfType, recordEvents } from '../core/testing';
+import { hamburgMissing, offerStatus } from '../modules/city';
 import { fullPowerMissing, getRightHand } from '../modules/hierarchy';
 import { TEST_SAVE_FILES } from '../ui/builtin/testSaves';
 import { KOELN_KOMPLETT_DIRTY, ownedInKoeln, TEST_SAVES } from './testSaves';
@@ -42,5 +43,34 @@ describe('Test-Spielstände', () => {
     // Eine halbe Stunde später ruft Fiete aus Hamburg an.
     sim.advance(40);
     expect(events.some((e) => e.type === 'call.ringing')).toBe(true);
+  });
+
+  it('Köln fast komplett: Zusagen, Geldwäsche einschalten, Fiete ruft wieder an, dann ist Köln zu übergeben', () => {
+    const sim = loadFile('koeln-komplett');
+    const events = recordEvents(sim);
+    const answerCall = () => {
+      const ring = eventsOfType(events, 'call.ringing').at(-1);
+      if (!ring) throw new Error('Kein Anruf.');
+      const messageId = ring.payload.messageId;
+      expect(sim.dispatch({ type: 'messages.acceptCall', payload: { messageId } }).ok).toBe(true);
+      sim.advance(2);
+      expect(sim.dispatch({ type: 'messages.answer', payload: { messageId, optionId: 'come' } }).ok).toBe(true);
+    };
+    sim.advance(40);
+    answerCall();
+    // Erst das Haus in Ordnung bringen: Es fehlt nur die Geldwäsche (die Karte "Hamburg wartet" führt zur Rechten Hand).
+    expect(offerStatus(sim.state)).toBe('house');
+    expect(hamburgMissing(sim.state)).toEqual(['Diese Aufgaben sind aus: Geldwäsche.']);
+    const rings = eventsOfType(events, 'call.ringing').length;
+    expect(sim.dispatch({ type: 'hierarchy.configureRightHand', payload: { settings: { laundering: true } } }).ok).toBe(
+      true,
+    );
+    expect(hamburgMissing(sim.state)).toEqual([]);
+    // Zur nächsten vollen Stunde meldet er sich, eine halbe Stunde später klingelt es.
+    sim.advance(60 + 35);
+    expect(eventsOfType(events, 'call.ringing').length).toBe(rings + 1);
+    answerCall();
+    expect(offerStatus(sim.state)).toBe('accepted');
+    expect(eventsOfType(events, 'city.offerAccepted')).toHaveLength(1);
   });
 });

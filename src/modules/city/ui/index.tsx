@@ -1,5 +1,6 @@
 // Oberfläche der Städte (Auftrag 30). Bis zur Übergabe: eine Glas-Karte unter Geld und Heat (wie die Quest-Karte),
-// solange Hamburg wartet: was noch fehlt, und ein Tipp öffnet Fietes Chat. Ab zwei freien Städten: der Stadt-Chip
+// solange Hamburg wartet: was noch fehlt, und ein Tipp führt dorthin, wo man es erledigt (Rechte Hand, Personal,
+// Reviere; ist alles bereit, Fietes Chat bzw. die Übergabe). Ab zwei freien Städten: der Stadt-Chip
 // oben rechts (Köln ▾) mit Köln, Hamburg und Deutschland; die Kamera folgt der aktiven Stadt (registerCityViews), in
 // der Deutschland-Ansicht stehen die Städte als Glas-Karten auf der Karte (map.ts). Dazu im Dev-Build Abkürzungen
 // zum Ausprobieren unter window.koeln.dev (Köln komplett, Rechte Hand bereit, Hamburg frei).
@@ -54,6 +55,17 @@ const WAITING: Partial<Record<OfferStatus, string>> = {
   declined: 'Angebot aus Hamburg steht',
 };
 
+/** Wohin ein Tipp auf die Karte führt: dorthin, wo man das Fehlende erledigt. */
+type WaitTarget = 'handover' | 'rightHand' | 'staff' | 'territory' | 'chat';
+
+const TARGET_LABEL: Record<WaitTarget, string> = {
+  handover: 'Übergabe öffnen',
+  rightHand: 'Zur Rechten Hand',
+  staff: 'Zum Personal',
+  territory: 'Zu den Revieren',
+  chat: `Chat mit ${HARBOR_CALLER.name}`,
+};
+
 /** Karte unter Geld und Heat, solange das Angebot aus Hamburg offen ist. */
 function HamburgWaits() {
   const { state } = useGame();
@@ -64,31 +76,46 @@ function HamburgWaits() {
   const title = handover ? 'Köln übergeben, dann nach Hamburg' : WAITING[status];
   if (!title) return null;
   const missing = hamburgMissing(state);
-  const open = () =>
-    handover
-      ? ui.openDialog('hierarchy.handover', { cityId: 'koeln' })
-      : ui.openPhone('core.messages', { contactId: HARBOR_CALLER.id });
+  // Fehlen nur Veedel, geht es in die Reviere; sonst liegt es an der Rechten Hand (Stufe, Aufgaben) oder es gibt keine.
+  const veedelMissing = !campaignProgress(state, 'koeln').complete;
+  const target: WaitTarget = handover
+    ? 'handover'
+    : missing.length === 0
+      ? 'chat'
+      : !getRightHand(state, 'koeln')
+        ? 'staff'
+        : missing.length > (veedelMissing ? 1 : 0)
+          ? 'rightHand'
+          : 'territory';
+  const open = () => {
+    if (target === 'handover') ui.openDialog('hierarchy.handover', { cityId: 'koeln' });
+    else if (target === 'rightHand') ui.openPanel('hierarchy.rightHand', {});
+    else if (target === 'staff' || target === 'territory') ui.selectTab(target);
+    else ui.openPhone('core.messages', { contactId: HARBOR_CALLER.id });
+  };
   return (
-    <button
-      type="button"
-      class="city-hud"
-      onClick={open}
-      aria-label={handover ? `${title}. Übergabe öffnen` : `${title}. Chat mit ${HARBOR_CALLER.name} öffnen`}
-    >
+    <button type="button" class="city-hud" onClick={open} aria-label={`${title}. ${TARGET_LABEL[target]}`}>
       <span class="hud-label is-city">Fiete · Hamburger Hafen</span>
       <span class="city-hud__main">
         <IconChip icon="anchor" color="place" size="md" />
         <span class="city-hud__text">
           <strong>{title}</strong>
           {missing.length > 0 ? (
-            <ul class="city-hud__missing">
-              {missing.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
+            <>
+              <ul class="city-hud__missing">
+                {missing.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              <span class="city-hud__action">{TARGET_LABEL[target]}</span>
+            </>
           ) : (
             <span class="city-hud__hint">
-              {handover ? 'Deine Rechte Hand ist bereit.' : 'Alles bereit. Sag ihm im Chat zu.'}
+              {handover
+                ? 'Deine Rechte Hand ist bereit.'
+                : status === 'house'
+                  ? 'Alles bereit. Er meldet sich gleich und ruft dich an.'
+                  : 'Alles bereit. Sag ihm im Chat zu.'}
             </span>
           )}
         </span>
