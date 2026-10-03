@@ -262,6 +262,8 @@
   /* Heat-Flächen der Veedel auf der Karte */
   --map-heat-warm: #e2ae4a;
   --map-heat-hot: #ff453a;
+  /* Fußweg der letzten Meter von der Straße zum Ziel (gepunktet, Auftrag 31) */
+  --map-footpath: #d8dce2;
 
   /*
    * Look "Glas" über der Karte (Auftrag 24): HUD, Kartensteuerung, Marker-Plaketten, Overlays. Immer dunkel, auch

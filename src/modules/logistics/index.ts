@@ -43,7 +43,7 @@ import {
   take,
 } from '../goods';
 import { addHeat, arrestStaff, getHeat, recordConfiscation } from '../police';
-import { roadRoute, travelMinutes } from '../roads';
+import { type RoadRoute, roadRoute, travelMinutes } from '../roads';
 import { addXp, assign, getStaff, getStaffMember, riskFactor, roleName, type StaffMember } from '../staff';
 import { UNLOADING_PORT } from '../suppliers';
 import { veedelAt, veedelName } from '../veedel';
@@ -280,14 +280,19 @@ export function tripProgress(state: GameState, trip: Trip): { leg: TripLeg; t: n
   return { ...result, total };
 }
 
-/** Wege einer Fahrt über die Straßen: Anfahrt (leer, nur bei Abholung) und Lieferung (mit Ware). */
-export function tripRoute(state: GameState, trip: Trip): { approach: LngLat[] | null; delivery: LngLat[] } {
+/**
+ * Wege einer Fahrt über die Straßen: Anfahrt (leer, nur bei Abholung) und Lieferung (mit Ware). routes hat die ganzen
+ * Routen mit dem Teil auf der Straße (drive) und den Fußwegen an den Enden (für die Karte).
+ */
+export function tripRoute(
+  state: GameState,
+  trip: Trip,
+): { approach: LngLat[] | null; delivery: LngLat[]; routes: { approach: RoadRoute | null; delivery: RoadRoute } } {
   const from = placeOf(state, trip.fromId) ?? portPlace();
   const to = placeOf(state, trip.toId) ?? from;
-  return {
-    approach: trip.kind === 'pickup' ? roadRoute(to, from).path : null,
-    delivery: roadRoute(from, to).path,
-  };
+  const approach = trip.kind === 'pickup' ? roadRoute(to, from) : null;
+  const delivery = roadRoute(from, to);
+  return { approach: approach?.path ?? null, delivery: delivery.path, routes: { approach, delivery } };
 }
 
 /** Ankunft am Abholort: bei der Abholung am Hafen vor dem Laden, beim Umlagern sofort (Laden im Startlager). */

@@ -40,7 +40,7 @@ export const PRELUDE = `
   const docked = () => {
     for (let i = 0; i < 400 && state().modules.logistics.cargo.length === 0; i++) sim.advance(30);
   };
-  const port = { lng: 6.9712, lat: 50.9862 };
+  const port = { lng: 6.9679, lat: 50.98527 };
   /** Razzia im Veedel des Neumarkts (Läufer dort): bis genau zur Razzia vorspulen. */
   const policeRaid = async () => {
     const spots = await import('/src/modules/spots/index.ts');
@@ -113,6 +113,27 @@ export const SCENES = [
       'sim.advance(' +
       TIMES.nacht +
       '); harbor(); docked(); run("staff.hireDriver", {}); run("logistics.pickup", { by: "driver" }); sim.advance(45); api.flyTo({ lng: 6.95, lat: 50.965 }, 12.6);',
+    wait: 4500,
+  },
+  {
+    // Auftrag 31: Das Auto hält an der Straße, die letzten Meter zum Kunden sind ein gepunkteter Fußweg.
+    name: 'lieferung-fussweg',
+    js:
+      'sim.advance(' +
+      TIMES.tag +
+      '); busy(); const orders = await import("/src/modules/customers/orders.ts"); state().modules.customers.orders = [];' +
+      ' const o = orders.offerDelivery(sim.ctx("customers"), true); run("customers.acceptOrder", { orderId: o.id, by: "player" });' +
+      ' sim.advance(o.arrivesAt - 3 - state().time); api.flyTo(o, 16.5);',
+    wait: 4500,
+  },
+  {
+    // Auftrag 31: Der Kurier aus Frankfurt kommt über die A3-Zufahrt herein (roads: roadApproach).
+    name: 'kurier-a3',
+    js:
+      'sim.advance(' +
+      TIMES.tag +
+      '); rich(); run("suppliers.order", { supplierId: "frankfurt", packageId: "weed50" }); const s = state().modules.suppliers.shipments[0];' +
+      ' sim.advance(Math.floor((s.arrivesAt - s.orderedAt) * 0.74)); api.flyTo({ lng: 7.065, lat: 50.925 }, 13.4);',
     wait: 4500,
   },
   {

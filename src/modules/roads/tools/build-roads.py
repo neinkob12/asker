@@ -11,12 +11,15 @@
 # HTTP-Range-Anfragen direkt aus dem öffentlichen S3-Bucket, ohne Zugangsdaten.
 #
 # Was das Skript macht:
-#   1. Nimmt nur Straßen, auf denen Autos fahren (CLASSES), keine Wohnstraßen, Wege oder Schienen.
+#   1. Nimmt nur Straßen, auf denen Autos fahren (CLASSES), keine Wege oder Schienen. In wenigen Gegenden
+#      (EXTRA_AREAS) kommen Zufahrten (service) dazu, damit jeder Spot an einer Straße liegt (scripts/check-roads.mjs).
 #   2. Teilt jedes Segment an seinen Knotenpunkten (Overture "connectors") in Kanten.
 #   3. Einbahnstraßen (access_restrictions: gesperrt in einer Richtung) bleiben Einbahnstraßen.
 #   4. Behält nur den größten Teil des Netzes, in dem man von überall überall hinkommt (stark zusammenhängend).
 #   5. Fasst Knoten ohne Abzweigung zusammen und vereinfacht die Linien (Douglas-Peucker, TOLERANCE_METERS).
 #   6. Schreibt alles als eine Zahlenfolge im Polyline-Format (Google) in network.ts.
+#   7. Autobahn-Zufahrten (APPROACHES): Weg vom Rand des Ausschnitts über die Autobahn bis ins Netz (die Stücke am Rand
+#      fallen in Schritt 4 weg, weil sie Sackgassen sind). Damit kommen Lieferungen aus Frankfurt über die A3 usw.
 
 import io
 import json
@@ -38,11 +41,31 @@ BASE = 'https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/'
 PREFIX = f'release/{RELEASE}/theme=transportation/type=segment/'
 # Köln mit Rand: alle Veedel, der Niehler Hafen und die Autobahnen drumherum. xmin, xmax, ymin, ymax
 BOX = (6.83, 7.07, 50.87, 51.02)
-COLUMNS = ['id', 'subtype', 'class', 'connectors', 'geometry', 'bbox', 'access_restrictions', 'road_flags']
+COLUMNS = ['id', 'subtype', 'class', 'connectors', 'geometry', 'bbox', 'access_restrictions', 'road_flags', 'routes']
 
 # Straßenarten im Spiel (Reihenfolge = Code in network.ts) und ihr Tempo in km/h für die Routenwahl.
 CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street']
+# Zusätzliche Straßenarten nur in einem Umkreis (Mitte lng/lat, Radius in Metern), Code wie die nächstkleinere Art.
+# Grund steht dabei; scripts/check-roads.mjs prüft, dass jeder Spot höchstens 60 m von einer Straße liegt.
+EXTRA_AREAS = [
+    # Rheinpark (Deutz): Parkzufahrten, sonst liegt der Spot 172 m von der nächsten Straße (Auenweg).
+    {'center': (6.979, 50.9468), 'radius': 450, 'classes': ['service'], 'as': 'living_street'},
+]
 TOLERANCE_METERS = 4
+
+# Autobahn-Zufahrten: Nummer im Spiel, Nummern in Overture (routes.ref; die A57 trägt dort nur die Europastraße E 31),
+# wohin sie führt, und ein Punkt am Rand des Ausschnitts, an dem sie hereinkommt.
+APPROACHES = [
+    ('A1', ['A 1'], 'Leverkusen, Dortmund, Bremen, Hamburg, Berlin', (6.9445, 51.0249)),
+    ('A1', ['A 1'], 'Euskirchen, Trier', (6.8191, 50.8904)),
+    ('A3', ['A 3'], 'Leverkusen, Oberhausen, Arnheim', (7.0123, 51.0213)),
+    ('A3', ['A 3'], 'Siegburg, Frankfurt', (7.1003, 50.9163)),
+    ('A4', ['A 4'], 'Aachen', (6.8143, 50.9297)),
+    ('A4', ['A 4'], 'Bergisch Gladbach, Olpe', (7.0925, 50.9505)),
+    ('A57', ['A 57', 'E 31'], 'Dormagen, Krefeld, Venlo, Amsterdam', (6.8525, 51.024)),
+    ('A555', ['A 555'], 'Bonn', (6.9692, 50.8636)),
+    ('A59', ['A 59'], 'Porz, Bonn-Beuel', (7.0768, 50.902)),
+]
 OUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'network.ts')
 
 # Lokale Projektion in Meter (für Köln genau genug).
@@ -241,18 +264,35 @@ def simplify(coords):
     return keep
 
 
+def road_class(row, geom):
+    """Code der Straßenart im Spiel oder None (nicht dabei). EXTRA_AREAS nehmen weitere Arten im Umkreis auf."""
+    if row['class'] in CLASSES:
+        return CLASSES.index(row['class'])
+    for area in EXTRA_AREAS:
+        if row['class'] not in area['classes']:
+            continue
+        cx, cy = to_m(*area['center'])
+        line = shapely.LineString([to_m(x, y) for x, y in geom.coords])
+        if line.distance(shapely.Point(cx, cy)) <= area['radius']:
+            return CLASSES.index(area['as'])
+    return None
+
+
 def build(table):
     rows = table.select(['id', 'subtype', 'class', 'connectors', 'geometry', 'access_restrictions']).to_pylist()
     edges = []  # [a, b, klasse, richtung, punkte]
     for row in rows:
-        if row['subtype'] != 'road' or row['class'] not in CLASSES:
+        if row['subtype'] != 'road':
             continue
         geom = shapely.from_wkb(row['geometry'])
         if geom.geom_type != 'LineString':
             continue
+        cls = road_class(row, geom)
+        if cls is None:
+            continue
         direction = oneway(row['access_restrictions'])
         for a, b, pts in split_at_connectors(list(geom.coords), row['connectors']):
-            edges.append([a, b, CLASSES.index(row['class']), direction, pts])
+            edges.append([a, b, cls, direction, pts])
     print(f'{len(edges)} Kanten aus {len(rows)} Segmenten', file=sys.stderr)
 
     # Größte stark zusammenhängende Komponente.
@@ -313,7 +353,82 @@ def build(table):
             a, b, pts, d = b, a, list(reversed(pts)), 1
         out_edges.append((number[a], number[b], cls, d, pts[1:-1]))
     out_edges.sort(key=lambda e: (e[0], e[1], e[2]))
-    return [coords[n] for n in order], out_edges
+    return [coords[n] for n in order], out_edges, coords
+
+
+def approaches(table, coords):
+    """Weg je Zufahrt: von der Autobahn am Rand (vor dem Zusammenhangs-Filter) bis zum ersten Knoten im Netz.
+
+    coords: Knoten des fertigen Netzes (Connector-ID -> lng, lat). Gibt [(nummer, wohin, punkte)] zurück.
+    """
+    import heapq
+
+    rows = table.select(['subtype', 'class', 'connectors', 'geometry', 'access_restrictions', 'routes']).to_pylist()
+    graph = defaultdict(list)  # connector -> [(nach, meter, punkte)]
+    refs_at = defaultdict(set)  # connector -> Autobahn-Nummern der Segmente daran
+    where = {}
+    for row in rows:
+        if row['subtype'] != 'road' or row['class'] not in ('motorway', 'trunk'):
+            continue
+        geom = shapely.from_wkb(row['geometry'])
+        if geom.geom_type != 'LineString':
+            continue
+        refs = {r.get('ref') for r in row['routes'] or [] if r.get('ref')}
+        direction = oneway(row['access_restrictions'])
+        for a, b, pts in split_at_connectors(list(geom.coords), row['connectors']):
+            line = [to_m(x, y) for x, y in pts]
+            meters = sum(math.hypot(x1 - x0, y1 - y0) for (x0, y0), (x1, y1) in zip(line, line[1:]))
+            where[a], where[b] = pts[0], pts[-1]
+            refs_at[a] |= refs
+            refs_at[b] |= refs
+            if direction >= 0:
+                graph[a].append((b, meters, pts))
+            if direction <= 0:
+                graph[b].append((a, meters, list(reversed(pts))))
+    found = []
+    for name, refs, toward, edge in APPROACHES:
+        ex, ey = to_m(*edge)
+        starts = sorted(
+            (math.hypot(to_m(*where[c])[0] - ex, to_m(*where[c])[1] - ey), c)
+            for c in where
+            if refs_at[c] & set(refs)
+        )
+        path = None
+        for _, start in starts[:12]:
+            # Dijkstra in Fahrtrichtung bis zum ersten Knoten des Netzes.
+            best = {start: 0.0}
+            prev = {}
+            heap = [(0.0, start)]
+            while heap:
+                d, c = heapq.heappop(heap)
+                if d > best.get(c, math.inf):
+                    continue
+                if c in coords and c != start:
+                    pts = []
+                    node = c
+                    while node != start:
+                        parent, piece = prev[node]
+                        pts = piece + pts[1:] if pts else piece
+                        node = parent
+                    path = pts
+                    break
+                for nxt, meters, piece in graph[c]:
+                    nd = d + meters
+                    if nd < best.get(nxt, math.inf):
+                        best[nxt] = nd
+                        prev[nxt] = (c, piece)
+                        heapq.heappush(heap, (nd, nxt))
+            if path:
+                break
+        if not path:
+            print(f'Zufahrt {name} ({toward}) nicht gefunden', file=sys.stderr)
+            continue
+        found.append((name, toward, simplify(path)))
+        km = sum(
+            math.hypot((x1 - x0) * M_LNG, (y1 - y0) * M_LAT) for (x0, y0), (x1, y1) in zip(path, path[1:])
+        ) / 1000
+        print(f'Zufahrt {name} ({toward}): {km:.1f} km bis ins Netz', file=sys.stderr)
+    return found
 
 
 # --- Schreiben -------------------------------------------------------------------------------------------------
@@ -340,7 +455,25 @@ def q(x):
     return int(round(x * 1e5))
 
 
-def write(nodes, edges, source):
+def extra_note():
+    parts = [
+        f"{'/'.join(a['classes'])} im Umkreis von {a['radius']} m um {a['center'][0]}, {a['center'][1]} (als {a['as']})"
+        for a in EXTRA_AREAS
+    ]
+    return ''.join(f'\n// Dazu {p}.' for p in parts)
+
+
+def encode_line(pts):
+    """Linie als Zahlenfolge: erster Punkt absolut, dann Abstände (1e-5 Grad)."""
+    ints = []
+    px = py = 0
+    for x, y in pts:
+        ints += [q(x) - px, q(y) - py]
+        px, py = q(x), q(y)
+    return encode_ints(ints)
+
+
+def write(nodes, edges, source, entries=()):
     node_ints = []
     px = py = 0
     for x, y in nodes:
@@ -367,7 +500,7 @@ def write(nodes, edges, source):
 //   Overture Maps Foundation, Thema "transportation" (https://docs.overturemaps.org), abgeleitet von OpenStreetMap.
 // Lizenz: ODbL 1.0 (https://opendatacommons.org/licenses/odbl/). © OpenStreetMap-Mitwirkende, © Overture Maps Foundation.
 // Ausschnitt {BOX[0]}–{BOX[1]} °O, {BOX[2]}–{BOX[3]} °N.
-// Straßenarten: {', '.join(CLASSES)}.
+// Straßenarten: {', '.join(CLASSES)}.{extra_note()}
 // {len(nodes)} Knoten, {len(edges)} Kanten, {length_km:.0f} km Straße, Linien vereinfacht auf {TOLERANCE_METERS} m.
 //
 // Format (Zahlen im Polyline-Format, 1e-5 Grad, siehe decodeInts in graph.ts):
@@ -384,6 +517,13 @@ export const ROAD_NODES =
 
 export const ROAD_EDGES =
   {ts_string(encode_ints(edge_ints))};
+
+/**
+ * Autobahn-Zufahrten: Nummer, wohin sie führt, und der Weg vom Rand des Ausschnitts bis zum ersten Knoten im Netz
+ * (Polyline-Format, erster Punkt absolut, dann Abstände).
+ */
+export const ROAD_APPROACHES: readonly {{ ref: string; toward: string; path: string }}[] = [
+{''.join(f"  {{{chr(10)}    ref: '{name}',{chr(10)}    toward: '{toward}',{chr(10)}    path: {ts_string(encode_line(pts))},{chr(10)}  }},{chr(10)}" for name, toward, pts in entries)}];
 """
     with open(OUT_FILE, 'w', encoding='utf-8') as f:
         f.write(text)
@@ -395,5 +535,5 @@ if __name__ == '__main__':
         table = pq.read_table(sys.argv[1])
     else:
         table = download()
-    nodes, edges = build(table)
-    write(nodes, edges, f'Overture Maps, Release {RELEASE}')
+    nodes, edges, coords = build(table)
+    write(nodes, edges, f'Overture Maps, Release {RELEASE}', approaches(table, coords))

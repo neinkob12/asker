@@ -137,6 +137,8 @@ export interface Supplier {
   packages: SupplierPackage[];
   /** Fehlt: von Anfang an zu haben. */
   unlock?: SupplierUnlock;
+  /** Autobahn, über die der Kurier nach Köln hereinkommt (roads: roadApproach), nur für die Karte. */
+  via?: string;
 }
 
 export type ShipmentProblem = 'delayed' | 'badQuality' | 'seized';

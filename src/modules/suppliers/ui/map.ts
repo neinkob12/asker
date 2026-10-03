@@ -1,15 +1,18 @@
 // Lieferungen auf der Karte: 3D-Mini-Fahrzeuge (createVehicle). Aus einer Großstadt kommt ein Transporter, erst
-// über die Autobahn bis an den Kölner Stadtrand (grob, man sieht ihn nur weit herausgezoomt), dann über echte Straßen
-// (roads) bis ins Ziel-Lager; den letzten Teil der Lieferzeit (CITY_APPROACH_SHARE) fährt er durch Köln.
+// bis an den Rand des Kölner Straßennetzes (grob, man sieht ihn nur weit herausgezoomt), dann über die passende
+// Autobahn-Zufahrt (Supplier.via, roads: roadApproach) und echte Straßen bis vor das Ziel-Lager; den letzten Teil der
+// Lieferzeit (CITY_APPROACH_SHARE) fährt er durch Köln. Die letzten Meter ins Lager sind ein gepunkteter Fußweg.
 // Hafenware kommt als Schiff den Rhein hinauf und legt am Liegeplatz im Niehler Hafen an (den Hafen zeigt die
 // Logistik). Nur alte Lieferungen ohne Liegeplatz werden noch umgeladen und per Lkw ins Lager gefahren.
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import { distanceMeters, type GameState, type LngLat } from '../../../core';
 import {
+  addFootpath,
   addHtmlMarker,
   createVehicle,
   el,
+  type FootpathHandle,
   KOELN_CENTER,
   type MapLayer,
   mapToken,
@@ -18,7 +21,7 @@ import {
 } from '../../../map';
 import { iconElement } from '../../../ui';
 import { formatProductAmount, getWarehouse, getWarehouses, productName } from '../../goods';
-import { roadEntryFrom, roadRoute } from '../../roads';
+import { roadApproach, roadRoute } from '../../roads';
 import {
   CITY_APPROACH_SHARE,
   deliveryLeg,
@@ -59,15 +62,22 @@ const shipFraction = (() => {
 })();
 
 /**
- * Weg eines Transporters: Autobahn bis an den Stadtrand, dann echte Straßen. split = Anteil der Weglänge, ab dem er
- * in Köln ist; der Fortschritt wird so umgerechnet, dass er die letzten CITY_APPROACH_SHARE der Zeit in Köln fährt.
+ * Weg eines Transporters: bis an den Rand des Netzes, über die Autobahn-Zufahrt seiner Richtung und echte Straßen bis
+ * vor das Ziel. split = Anteil der Weglänge, ab dem er in Köln ist; der Fortschritt wird so umgerechnet, dass er die
+ * letzten CITY_APPROACH_SHARE der Zeit in Köln fährt. walk = Fußweg von der Straße ins Lager.
  */
-function cityPath(supplier: Supplier, target: LngLat): { path: LngLat[]; split: number } {
-  const entry = roadEntryFrom(supplier);
-  const city = roadRoute(entry, target).path;
-  const outside = pathLength([supplier, entry]);
+function cityPath(
+  supplier: Supplier,
+  target: LngLat,
+): { path: LngLat[]; split: number; walk: [LngLat, LngLat] | null } {
+  const approach = roadApproach(supplier, supplier.via);
+  const ramp = approach?.path ?? [];
+  const entry = ramp[ramp.length - 1] ?? supplier;
+  const route = roadRoute(entry, target);
+  const city = [...ramp, ...route.drive];
+  const outside = pathLength([supplier, city[0]]);
   const inside = pathLength(city);
-  return { path: [supplier, ...city], split: outside / Math.max(1, outside + inside) };
+  return { path: [supplier, ...city], split: outside / Math.max(1, outside + inside), walk: route.walkTo };
 }
 
 function cityProgress(split: number, t: number): number {
@@ -86,6 +96,7 @@ interface ShownShipment {
   ship: VehicleHandle | null;
   road: VehicleHandle | null;
   split: number;
+  walks: FootpathHandle[];
 }
 
 export const suppliersLayer: MapLayer = {
@@ -157,7 +168,7 @@ export const suppliersLayer: MapLayer = {
         if (!supplier || !target) continue;
         if (supplier.kind === 'port') {
           river = true;
-          if (!s.toPort) lines.push({ kind: 'road', path: roadRoute(PORT, target).path });
+          if (!s.toPort) lines.push({ kind: 'road', path: roadRoute(PORT, target).drive });
         } else {
           lines.push({ kind: 'road', path: cityPath(supplier, target).path });
         }
@@ -179,21 +190,23 @@ export const suppliersLayer: MapLayer = {
         const ship = createVehicle(map, { path: RIVER, kind: 'ship', title, progress: shipFraction(leg.t) });
         ship.setLabel(label);
         // Alte Lieferungen ohne Liegeplatz: Lkw vom Hafen ins Lager.
-        const road = s.toPort
-          ? null
-          : createVehicle(map, {
-              path: roadRoute(PORT, target).path,
+        const truckRoute = s.toPort ? null : roadRoute(PORT, target);
+        const road = truckRoute
+          ? createVehicle(map, {
+              path: truckRoute.drive,
               kind: 'truck',
               title,
               progress: leg.stage === 'road' ? leg.t : 0,
-            });
+            })
+          : null;
         road?.setLabel(label);
-        return { ship, road, split: 0 };
+        const walks = truckRoute ? [addFootpath(map, truckRoute.walkFrom), addFootpath(map, truckRoute.walkTo)] : [];
+        return { ship, road, split: 0, walks };
       }
-      const { path, split } = cityPath(supplier, target);
+      const { path, split, walk } = cityPath(supplier, target);
       const road = createVehicle(map, { path, kind: 'van', title, progress: cityProgress(split, progress) });
       road.setLabel(label);
-      return { ship: null, road, split };
+      return { ship: null, road, split, walks: [addFootpath(map, walk)] };
     };
 
     return {
@@ -206,6 +219,7 @@ export const suppliersLayer: MapLayer = {
           if (active.has(id)) continue;
           entry.ship?.remove();
           entry.road?.remove();
+          for (const walk of entry.walks) walk.remove();
           shown.delete(id);
         }
         for (const s of transit) {
@@ -245,6 +259,7 @@ export const suppliersLayer: MapLayer = {
         for (const entry of shown.values()) {
           entry.ship?.remove();
           entry.road?.remove();
+          for (const walk of entry.walks) walk.remove();
         }
         shown.clear();
       },

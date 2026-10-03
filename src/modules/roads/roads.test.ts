@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { distanceMeters, type LngLat } from '../../core';
 import { decodeInts } from './graph';
-import { nearestRoadPoint, networkStats, roadDistance, roadEntryFrom, roadRoute, travelMinutes } from './index';
+import {
+  nearestRoadPoint,
+  networkStats,
+  roadApproach,
+  roadApproaches,
+  roadDistance,
+  roadEntryFrom,
+  roadRoute,
+  travelMinutes,
+} from './index';
 
 const EHRENFELD: LngLat = { lng: 6.918, lat: 50.948 };
-const NIEHLER_HAFEN: LngLat = { lng: 6.9712, lat: 50.9862 };
+const NIEHLER_HAFEN: LngLat = { lng: 6.9679, lat: 50.98527 };
 const NEUMARKT: LngLat = { lng: 6.9476, lat: 50.9362 };
 const DEUTZ: LngLat = { lng: 6.975, lat: 50.936 };
 const KALK: LngLat = { lng: 7.003, lat: 50.938 };
@@ -103,6 +112,47 @@ describe('Straßennetz', () => {
     expect(frankfurt.lat).toBeLessThan(center.lat);
     expect(hamburg.lat).toBeGreaterThan(center.lat);
     expect(roadRoute(frankfurt, EHRENFELD).onRoads).toBe(true);
+  });
+
+  it('trennt Fahrstrecke und Fußweg: das Fahrzeug hält an der Straße', () => {
+    // Aachener Weiher liegt im Park, etwa 55 m von der Richard-Wagner-Straße.
+    const weiher = { lng: 6.92821, lat: 50.93605 };
+    const route = roadRoute(EHRENFELD, weiher);
+    expect(route.onRoads).toBe(true);
+    expect(route.walkTo).not.toBeNull();
+    const [road, goal] = route.walkTo as [LngLat, LngLat];
+    expect(goal).toEqual(route.path[route.path.length - 1]);
+    expect(road).toEqual(route.drive[route.drive.length - 1]);
+    expect(distanceMeters(road, goal)).toBeGreaterThan(30);
+    expect(distanceMeters(road, goal)).toBeLessThan(61);
+    // Das Ende der Fahrstrecke liegt auf der Straße.
+    expect(nearestRoadPoint(road)?.meters ?? 99).toBeLessThan(2);
+    // Start und Ziel direkt auf der Straße: kein Fußweg.
+    const onRoad = nearestRoadPoint(NEUMARKT)?.point as LngLat;
+    const direct = roadRoute(onRoad, nearestRoadPoint(DEUTZ)?.point as LngLat);
+    expect(direct.walkFrom).toBeNull();
+    expect(direct.walkTo).toBeNull();
+    expect(direct.drive).toEqual(direct.path);
+  });
+
+  it('Kuriere kommen über die Autobahn ihrer Richtung herein', () => {
+    const refs = roadApproaches().map((a) => a.ref);
+    for (const ref of ['A1', 'A3', 'A4', 'A57']) expect(refs).toContain(ref);
+    const frankfurt = roadApproach({ lng: 8.682, lat: 50.111 }, 'A3');
+    const amsterdam = roadApproach({ lng: 4.904, lat: 52.37 }, 'A57');
+    const berlin = roadApproach({ lng: 13.405, lat: 52.52 }, 'A1');
+    const hamburg = roadApproach({ lng: 9.993, lat: 53.551 }, 'A1');
+    expect(frankfurt?.toward).toContain('Frankfurt');
+    expect(amsterdam?.toward).toContain('Amsterdam');
+    expect(berlin?.toward).toContain('Hamburg');
+    expect(hamburg).toBe(berlin);
+    for (const approach of [frankfurt, amsterdam, hamburg]) {
+      const path = approach?.path ?? [];
+      // Der Weg endet im Netz und geht von dort über Straßen weiter.
+      expect(nearestRoadPoint(path[path.length - 1])?.meters ?? 99).toBeLessThan(2);
+      expect(roadRoute(path[path.length - 1], EHRENFELD).onRoads).toBe(true);
+    }
+    expect(roadEntryFrom({ lng: 8.682, lat: 50.111 }, 'A3')).toEqual(frankfurt?.path.at(-1));
   });
 
   it('rechnet schnell genug für die Simulation', () => {

@@ -3,7 +3,7 @@
 // Kosten = Fahrzeit (Länge geteilt durch das Tempo der Straßenart), Ergebnis = Weg und Länge in Metern.
 
 import type { LngLat } from '../../core';
-import { ROAD_CLASSES, ROAD_EDGES, ROAD_NODES } from './network';
+import { ROAD_APPROACHES, ROAD_CLASSES, ROAD_EDGES, ROAD_NODES } from './network';
 
 export type RoadClass = (typeof ROAD_CLASSES)[number];
 
@@ -355,6 +355,9 @@ export interface GraphRoute {
   roadMeters: number;
   /** Gesamtlänge inklusive der Wege vom Punkt zur Straße und von der Straße zum Ziel. */
   meters: number;
+  /** Index des ersten und letzten Punkts auf der Straße (davor und danach: zu Fuß zur Straße). */
+  roadStart: number;
+  roadEnd: number;
 }
 
 /** Route zwischen zwei Punkten über das Straßennetz. null, wenn einer der Punkte zu weit weg von jeder Straße ist. */
@@ -456,23 +459,55 @@ function finish(road: [number, number][], fromPoint: LngLat, toPoint: LngLat): G
     if (!last || Math.hypot(last[0] - p[0], last[1] - p[1]) > 0.5) points.push(p);
   };
   add([toX(fromPoint.lng), toY(fromPoint.lat)]);
+  // Liegt der Start (fast) auf der Straße, fällt der erste Straßenpunkt mit ihm zusammen.
+  const roadStart = road.length > 0 && Math.hypot(points[0][0] - road[0][0], points[0][1] - road[0][1]) > 0.5 ? 1 : 0;
   let roadMeters = 0;
   for (let i = 0; i < road.length; i++) {
     if (i > 0) roadMeters += Math.hypot(road[i][0] - road[i - 1][0], road[i][1] - road[i - 1][1]);
     add(road[i]);
   }
+  const roadEnd = points.length - 1;
   add([toX(toPoint.lng), toY(toPoint.lat)]);
   let meters = 0;
   for (let i = 1; i < points.length; i++) {
     meters += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
   }
   if (points.length === 1) points.push(points[0]);
-  return { points, roadMeters, meters };
+  return { points, roadMeters, meters, roadStart, roadEnd: Math.max(roadStart, roadEnd) };
 }
 
 /** Meter-Koordinaten zurück in Grad. */
 export function pointsToLngLat(points: readonly [number, number][]): LngLat[] {
   return points.map(([x, y]) => toLngLat(x, y));
+}
+
+/** Mitte des Netzes (Mittelwert aller Knoten), z.B. um die Richtung einer Autobahn-Zufahrt zu bestimmen. */
+export function networkCenter(): LngLat {
+  const g = getGraph();
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i < g.nodeX.length; i++) {
+    x += g.nodeX[i];
+    y += g.nodeY[i];
+  }
+  const n = Math.max(1, g.nodeX.length);
+  return toLngLat(x / n, y / n);
+}
+
+/** Autobahn-Zufahrten aus network.ts: Weg vom Rand des Ausschnitts bis zum ersten Knoten im Netz. */
+export function decodeApproaches(): { ref: string; toward: string; path: LngLat[] }[] {
+  return ROAD_APPROACHES.map((a) => {
+    const ints = decodeInts(a.path);
+    const path: LngLat[] = [];
+    let x = 0;
+    let y = 0;
+    for (let i = 0; i + 1 < ints.length; i += 2) {
+      x += ints[i];
+      y += ints[i + 1];
+      path.push({ lng: x / 1e5, lat: y / 1e5 });
+    }
+    return { ref: a.ref, toward: a.toward, path };
+  });
 }
 
 /** Knoten an Autobahnen (Einfahrt für Lieferungen von außerhalb), der dem Punkt am nächsten liegt. */

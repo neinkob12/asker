@@ -25,6 +25,7 @@ export {
   moneyPopup,
   ping,
 } from './effects';
+export { addFootpath, type FootpathHandle } from './footpaths';
 export {
   bearing,
   formatDms,
