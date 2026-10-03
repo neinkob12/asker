@@ -88,10 +88,11 @@ WATERWAYS = {
             ('Elbe', 9.80, 53.556),  # Blankenese
             ('Norderelbe', 9.95, 53.5435),  # bei Övelgönne
             ('Norderelbe', 9.965, 53.544),  # vor den Landungsbrücken
+            ('Norderelbe', 9.9905, 53.5377),  # vor der Einfahrt in den Hansahafen
         ],
-        # Vorläufiger Liegeplatz in der Norderelbe an den Landungsbrücken. Wird an den Hafen aus CITIES (Auftrag 30,
-        # portId) angepasst, sobald es ihn gibt.
-        'bridge': [(9.969, 53.5446)],
+        # In den Hansahafen bis an den Liegeplatz am O'Swaldkai (logistics/config.ts, PORTS.hamburg, liegt im Becken).
+        # Die Mittellinie des Hansahafens hängt in den Daten nicht an der Norderelbe, darum dieses Stück von Hand.
+        'bridge': [(9.9916, 53.5352), (9.99278, 53.53372), (9.99952, 53.53008), (9.99978, 53.52789)],
     },
 }
 

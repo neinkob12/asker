@@ -1,5 +1,5 @@
 // Szenen für die Bilder des Looks "Glas" (Auftrag 24): Karte, HUD, Spots, Konfrontation, Razzia, Lieferung,
-// Veedel übernommen; seit Auftrag 30 auch Anruf, Übergabe, Deutschland-Ansicht und Hamburg bei Nacht. Jede Szene startet ein frisches Spiel (fester Seed, pausiert) und bereitet es per JavaScript vor
+// Veedel übernommen; seit Auftrag 30 auch Anruf, Übergabe, Deutschland-Ansicht und Hamburg bei Nacht, seit Auftrag 31 Kölner Lichter und Hafengeburtstag. Jede Szene startet ein frisches Spiel (fester Seed, pausiert) und bereitet es per JavaScript vor
 // (window.koeln = { session, runtime }). Genutzt von glass-shots.mjs.
 
 /** Hilfen, die in jeder Szene im Browser bereitstehen. */
@@ -242,6 +242,22 @@ export const SCENES = [
     name: 'hamburg-nacht',
     js: `sim.advance(${TIMES.nacht}); await hamburg(); render();`,
     wait: 4500,
+  },
+  // Auftrag 31: Events auf der Karte. Die Uhr springt direkt auf den Event-Tag (nur für das Bild).
+  {
+    name: 'lichter',
+    js:
+      'busy(); state().time = (60 - 1) * 1440 + 21 * 60 + 40; sim.step(); render(); api.setSpeed(1); ' +
+      'k.runtime.map.map.jumpTo({ center: [6.9672, 50.9372], zoom: 14.8 });',
+    wait: 2600,
+    live: true,
+  },
+  {
+    name: 'hafengeburtstag',
+    js:
+      'await hamburg(); state().time = (50 - 1) * 1440 + 15 * 60; sim.step(); render(); ' +
+      'k.runtime.map.map.jumpTo({ center: [9.95, 53.5445], zoom: 14 });',
+    wait: 4000,
   },
   {
     name: 'spot-hover',

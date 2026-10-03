@@ -25,6 +25,10 @@ Fußweg `addFootpath`), Autobahn-Zufahrten (`roadApproach`, `Supplier.via`), Rhe
 `tools/build-water.py`), Hamburger Wahrzeichen, Quellenangabe im Spiel, Prüfskript `scripts/check-roads.mjs` in `npm run lint`.
 Optik liest nur und nutzt nie `ctx.random()`; Layer bekommen `update()` nur bei Änderungen; Animationen hängen am gemeinsamen
 Takt `onMapFrame` (Pause bei Tempo 0). Budget und Messhilfe `?perf=1`: `src/map/README.md`, Abschnitt "Performance-Budget".
+Nach Auftrag 30: Zufahrten auch in Hamburg (`Supplier.via` pro Stadt, `supplierVia`), Elbe bis zum Liegeplatz, Kamera pro
+Stadt (`CITIES` `view.pitch`/`bearing`), Verkehr in der aktiven Stadt, Deutschland-Ansicht (Marker der Stadt mit
+`addHtmlMarker({ near: true })` sind unter `FAR_ZOOM` aus, Wechsel beim Zoomen, A1 in Gold während einer Fahrt), Kneipen
+mit Bierglas, Kölner Lichter und Hafengeburtstag auf der Karte (`events/ui/map.ts`, Effekt `firework`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

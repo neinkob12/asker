@@ -122,35 +122,27 @@ Auftrag 31  Die Karte lebt                             (Verkehr, Leute an Spots,
 | Auftrag | Thema | Wann |
 | --- | --- | --- |
 | [30](30-staedte-hamburg.md) | Sieg erst bei allen 12 Veedeln (7 bleibt Meilenstein „Boss von Köln“), Vollbild-Anruf aus dem Hamburger Hafen, Vollmacht der Rechten Hand (Stufe 5, alle Aufgaben, 80 % vom Kölner Tagesgewinn, Eingreifen jederzeit), Modul `city` mit Schlafmodus (nur die sichtbare Stadt läuft voll), Hamburg mit 12 Stadtteilen, Hafen-Großmengen, höheren Preisen, Reeperbahn, härterer Polizei und Zoll, Toni als Startlieferant, Routen mit Fahrplan über die A1, Charakter der Städte (Köln: Stadt-Events, Klüngel, Studenten und Kneipen), Schablone für Stadt drei | umgesetzt (PR #32) |
-| [31](31-karte-lebt.md) | Verkehr und Leute an Spots als Kulisse mit Performance-Budget, Rhein und Elbe aus Overture-Daten, Prüfskript „Fahrzeuge überall auf der Straße“, Hamburger Wahrzeichen, schöne Deutschland-Ansicht, Quellenangabe im Spiel | alles ohne Auftrag 30 fertig (PR #33), der Rest folgt jetzt auf Grundlage von 30 |
+| [31](31-karte-lebt.md) | Verkehr und Leute an Spots als Kulisse mit Performance-Budget, Rhein und Elbe aus Overture-Daten, Prüfskript „Fahrzeuge überall auf der Straße“, Hamburger Wahrzeichen, schöne Deutschland-Ansicht, Quellenangabe im Spiel | umgesetzt (PR #33 ohne 30, PR #36 der Rest auf Grundlage von 30) |
 
 **Stand Auftrag 30:** umgesetzt in neun Etappen (PR #32). Neu: Modul `city` (aktive Stadt, Aufenthalt, Schlafmodus,
 Fahrt über die A1), Modul `events` (Stadt-Events), Hamburg als zweite Stadt mit eigenem Straßennetz, Routen mit
 Fahrplan zwischen den Städten, Vollmacht und Rechte Hand pro Stadt, Anrufe im Handy, Klüngel und Kneipen. Beim Merge mit
 Auftrag 31: `roads` hat jetzt Zufahrten pro Stadt (`roadApproaches(cityId)`, Hamburg noch ohne), `roadEntryFrom(far, via?,
-into?)` und `roadGraph(cityId?)`. Für den Rest von Auftrag 31 offen (neben der Liste unten): Kneipen mit eigenem Symbol,
-Events auf der Karte (Feuerwerk, Schiffe), die schwebende Island verdeckt am Handy-Bildschirm die Kachelreihe unter dem
-HUD (Stadt, Lager, Ruf), sobald eine Live-Aktivität läuft. Später: größere Fahrzeuge für Routen (Fuhrpark), eine dritte
+into?)` und `roadGraph(cityId?)`. Später: größere Fahrzeuge für Routen (Fuhrpark), eine dritte
 Stadt (Schablone Berlin steht, Checkliste in `docs/architektur.md`, Abschnitt „Städte“), das Kartell.
 
 Die Messung zum Ruckeln (Hotspots, Skripte, Zahlen) steht in [`docs/perf/2026-10-messung.md`](../perf/2026-10-messung.md).
 Beide Aufträge messen damit vorher und nachher.
 
-**Stand Auftrag 31** (Branch `claude/karte-lebt-31`, PR 33): Auftrag 31 wurde parallel zu 30 gestartet. Fertig ist alles,
-was ohne 30 geht:
-- Etappe 0: Karten-Bremsen gelöst, Messhilfe `?perf=1`, `perf:browser` mit Drossel und Szene `karte`.
-- Etappe 1 für Köln: `check-roads`, Daten repariert, Fußwege, Autobahn-Zufahrten.
-- Etappe 2: Rhein und Elbe aus Overture.
-- Etappe 3: Verkehr.
-- Etappe 4: Leute an Spots.
-- Etappe 5: Hamburger Wahrzeichen und Quellenangabe.
-
-Nach dem Merge von 30 folgen:
-- `check-roads` und Zufahrten für Hamburg.
-- Fahrten auf der A1 in Stadt- und Deutschland-Ansicht.
-- Verkehr nur in der aktiven Stadt.
-- Die schöne Deutschland-Ansicht.
-- Die Hamburg-Kamera und die Elbe bis zum `portId` aus `CITIES`.
+**Stand Auftrag 31:** umgesetzt in zwei PRs. PR #33 (parallel zu 30): Karten-Bremsen gelöst und Messhilfe `?perf=1`,
+`check-roads` mit Fußwegen und Autobahn-Zufahrten, Rhein und Elbe aus Overture, Verkehr, Leute an Spots, Hamburger
+Wahrzeichen, Quellenangabe. PR #36 (nach 30):
+- Zufahrten in Hamburg und `Supplier.via` pro Stadt.
+- Elbe bis zum Liegeplatz, Kamera pro Stadt.
+- Verkehr in der aktiven Stadt.
+- Deutschland-Ansicht: Marker der Stadt aus, Wechsel beim Zoomen, A1 in Gold während einer Fahrt, Ausschnitt nach den
+  freien Städten.
+- Kneipen mit Bierglas, Island am Handy ohne verdeckte Kacheln, Kölner Lichter und Hafengeburtstag auf der Karte.
 
 ## Mergen
 

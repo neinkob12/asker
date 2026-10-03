@@ -15,6 +15,7 @@
 //
 // Öffentliche API:
 //   getSuppliers(state, cityId?), getSupplier(state, id), supplierIn(supplier, cityId), deliversTo(supplier, cityId),
+//   supplierVia(supplier, cityId) (Autobahn des Kuriers in die Stadt, nur Karte),
 //   deliveryTimeTo(supplier, cityId), supplierContactId(id), assortment(supplier),
 //   isUnlocked(state, id), unlockRequirements(state, id), canUnlock(state, id),
 //   shipmentsInTransit(state), shipmentProgress(state, shipment), expectedArrival(shipment),
@@ -143,8 +144,16 @@ export interface Supplier {
   priceFactors?: Readonly<Record<string, number>>;
   /** Anderes Auftreten in einer Stadt (Art, Sortiment, Beschreibung). */
   inCity?: Readonly<Record<string, Partial<Pick<Supplier, 'kind' | 'packages' | 'description' | 'priceLevel'>>>>;
-  /** Autobahn, über die der Kurier nach Köln hereinkommt (roads: roadApproach), nur für die Karte. */
-  via?: string;
+  /**
+   * Autobahn pro Stadt, über die der Kurier hereinkommt (roads: roadApproach), nur für die Karte, z.B. Frankfurt
+   * { koeln: 'A3', hamburg: 'A7' }. Fehlt die Stadt, nimmt roads die Zufahrt in der besten Richtung.
+   */
+  via?: Readonly<Record<string, string>>;
+}
+
+/** Autobahn, über die der Kurier in die Stadt kommt (supplier.via), oder undefined. */
+export function supplierVia(supplier: Supplier, cityId: string): string | undefined {
+  return supplier.via?.[cityId];
 }
 
 export type ShipmentProblem = 'delayed' | 'badQuality' | 'seized';

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { loadSimulation, messages, type Simulation } from '../../core';
+import { distanceMeters, loadSimulation, messages, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { activeEncounters } from '../encounters';
 import { getStock, store } from '../goods';
-import { roadDistance } from '../roads';
+import { roadDistance, shipRoute } from '../roads';
 import { getStaff, getStaffMember } from '../staff';
 import { BERTH_COST, CARGO_SAFE_MINUTES, DRIVER_BASE_SPEED, DRIVER_SPEED_PER_POINT, LOAD_MINUTES } from './config';
 import {
@@ -52,6 +52,13 @@ function noChecks(sim: Simulation): void {
 }
 
 describe('logistics: Hafen', () => {
+  it('Das Schiff fährt bis an den Liegeplatz jeder Stadt (Rhein bis Niehl, Elbe bis zum O’Swaldkai)', () => {
+    for (const cityId of ['koeln', 'hamburg']) {
+      const route = shipRoute(cityId);
+      expect(distanceMeters(route[route.length - 1], portPlace(cityId)), cityId).toBeLessThan(60);
+    }
+  });
+
   it('den Liegeplatz mietet man mit sauberem Geld', () => {
     const sim = quietGame();
     const events = recordEvents(sim);

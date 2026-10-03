@@ -48,8 +48,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     name: 'Frankfurt',
     contactName: 'Toni',
     kind: 'city',
-    // Kommt über die A3 aus Süden in Köln an (nur Karte).
-    via: 'A3',
+    // Kommt über die A3 aus Süden in Köln an, in Hamburg über die A7 (nur Karte).
+    via: { koeln: 'A3', hamburg: 'A7' },
     lng: 8.682,
     lat: 50.111,
     deliveryTime: 180,
@@ -76,8 +76,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     name: 'Berlin',
     contactName: 'Mirko',
     kind: 'city',
-    // Kommt über die A2 und die A1 aus Norden in Köln an (nur Karte).
-    via: 'A1',
+    // Kommt über die A2 und die A1 aus Norden in Köln an, in Hamburg über die A24 (nur Karte).
+    via: { koeln: 'A1', hamburg: 'A24' },
     lng: 13.405,
     lat: 52.52,
     deliveryTime: 300,
@@ -108,7 +108,7 @@ export const SUPPLIERS: readonly Supplier[] = [
     contactName: 'Hein',
     kind: 'city',
     // Kommt über die A1 aus Norden in Köln an (nur Karte).
-    via: 'A1',
+    via: { koeln: 'A1' },
     lng: 9.993,
     lat: 53.551,
     deliveryTime: 270,
@@ -158,8 +158,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     name: 'Amsterdam',
     contactName: 'Daan',
     kind: 'city',
-    // Kommt über die A57 aus Nordwesten in Köln an (nur Karte).
-    via: 'A57',
+    // Kommt über die A57 aus Nordwesten in Köln an, in Hamburg über die A1 aus Bremen (nur Karte).
+    via: { koeln: 'A57', hamburg: 'A1' },
     lng: 4.904,
     lat: 52.368,
     deliveryTime: 240,

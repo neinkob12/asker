@@ -42,6 +42,7 @@ export const gangsLayer: MapLayer = {
           const { element } = addHtmlMarker(ctx.map, {
             position: { lng: home.center.lng + offset.lng, lat: home.center.lat + offset.lat },
             className: 'gang-hq',
+            near: true,
             tag: 'button',
             anchor: 'top',
             title: `${gang.name} (Hauptquartier)`,
@@ -64,6 +65,7 @@ export const gangsLayer: MapLayer = {
           const { marker } = addHtmlMarker(ctx.map, {
             position: target.center,
             className: 'gang-push',
+            near: true,
             anchor: 'center',
             title: `${gang.name} drängt nach ${target.name}`,
             children: [ring],

@@ -30,7 +30,7 @@ import {
   presentCity,
   travelMinutesBetween,
 } from '../index';
-import { citiesLayer } from './map';
+import { autobahnLayer, citiesLayer } from './map';
 import { travelLayer } from './travel';
 import './city.css';
 
@@ -41,12 +41,26 @@ registerCityViews({
     center: c.view.center,
     zoom: c.view.zoom,
     mobileZoom: c.view.mobileZoom,
+    pitch: c.view.pitch,
+    bearing: c.view.bearing,
   })),
   deutschland: DEUTSCHLAND_VIEW,
+  // Rahmen um die Mitten der freien Städte (eine Stadt allein: etwas Land drumherum).
+  deutschlandBounds: (state) => {
+    const centers = citiesUnlocked(state).flatMap((id) => {
+      const city = CITIES.find((c) => c.id === id);
+      return city ? [city.center] : [];
+    });
+    const lngs = centers.map((c) => c.lng);
+    const lats = centers.map((c) => c.lat);
+    const pad = centers.length > 1 ? 0.2 : 1.5;
+    return [Math.min(...lngs) - pad, Math.min(...lats) - pad, Math.max(...lngs) + pad, Math.max(...lats) + pad];
+  },
   active: (state) => activeCity(state),
 });
 
 registerMapLayer(citiesLayer);
+registerMapLayer(autobahnLayer);
 registerMapLayer(travelLayer);
 
 const WAITING: Partial<Record<OfferStatus, string>> = {

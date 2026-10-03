@@ -86,7 +86,8 @@ try {
       if (scene.hover) await page.hover(scene.hover, { force: true });
       if (scene.after) await page.evaluate(`(async () => { ${PRELUDE}\n${scene.after}\n render(); })()`);
       await page.waitForTimeout(500);
-      await waitForStill(page);
+      // live: laufende Animationen (z.B. Feuerwerk) im Bild lassen, statt sie ans Ende zu spulen.
+      if (!scene.live) await waitForStill(page);
       const file = `${outDir}/${scene.name}-${size}.png`;
       await page.screenshot({ path: file });
       console.log(`Screenshot: ${file}`);

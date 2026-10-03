@@ -92,6 +92,7 @@ export const logisticsLayer: MapLayer = {
       const marker = addHtmlMarker(map, {
         position: port,
         className: 'map-place map-place--dock',
+        near: true,
         anchor: 'bottom',
         tag: 'button',
         title: 'Hafen öffnen',

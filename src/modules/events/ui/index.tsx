@@ -3,6 +3,7 @@
 // Charakter der Stadt (Klüngel bzw. kühl und korrekt).
 
 import { clock, type GameState, MINUTES_PER_DAY } from '../../../core';
+import { registerMapLayer } from '../../../map';
 import {
   Card,
   type ChipSpec,
@@ -22,6 +23,7 @@ import { activeCity, bribeFactor, cityName, relationFactor } from '../../city';
 import { saleInfluenceFactor } from '../../territory';
 import { activeEvents, type CityEventDef, eventEnd, getEventDef, upcomingEvents } from '../index';
 import './events.css';
+import { eventsLayer } from './map';
 
 const percent = (factor: number) => `${factor > 1 ? '+' : '−'}${Math.round(Math.abs(factor - 1) * 100)} %`;
 
@@ -158,3 +160,5 @@ registerSlot('tab:territory', { id: 'events.cityLife', title: 'Stadtleben', orde
 onGameEvent('events.started', 'events.startedToast', (payload, ui) => {
   ui.toast(`${getEventDef(payload.eventId)?.name ?? 'Event'} in ${cityName(payload.cityId)}.`, 'info');
 });
+
+registerMapLayer(eventsLayer);

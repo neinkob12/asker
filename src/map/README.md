@@ -192,7 +192,25 @@ Knoten im Ausschnitt plus Rand, fahren als Zufallsweg über die Kanten (geradeau
 (Einstellungen › Karte: Verkehr aus, wenig, normal; Schalter im Menü Ebenen), Dichte nach Uhrzeit (7–9 und 16–19 Uhr
 × 1,5, 23–5 Uhr × 0,3), Tempo nach Spieltempo (Wurzel, bei 0 steht alles). Zufall nur aus dem eigenen Generator
 (`mulberry32` mit Spiel-Seed und Spieltag), nie aus der Simulation: Der Spielstand bleibt unberührt. Farben als Tokens
-(`--map-traffic-*`, Grautöne), Streifenwagen mit Dach in `--cat-law`.
+(`--map-traffic-*`, Grautöne), Streifenwagen mit Dach in `--cat-law`. Der Verkehr fährt im Netz der **aktiven Stadt**
+(`roadGraph(cityId)`, ein eigener Zufallsweg pro Stadt); wechselt die Stadt, verschwindet die Kulisse der alten.
+
+## Städte und Deutschland-Ansicht (Auftrag 30 und 31)
+
+- **Kamera pro Stadt:** `CITIES` (`city/data.ts`) gibt `view` mit Blickpunkt, Zoom am Desktop und am Handy sowie
+  `pitch` und `bearing` vor (Hamburg schaut nach Norden über die Elbe). Die Karte merkt sich die Neigung der Stadt,
+  auch für den Wechsel aus der Draufsicht zurück in 3D.
+- **Weit draußen (`FAR_ZOOM` = 9):** GameMap setzt die Klasse `is-far`; Marker mit `addHtmlMarker({ near: true })`
+  (Lager, Häfen, Gang-Quartiere, Lieferziele, Veedel-Namen) sind dann aus, damit die Glas-Karten der Städte frei liegen.
+  Neue Marker, die nur in der Stadt Sinn ergeben, bekommen `near: true`.
+- **Wechsel beim Zoomen:** Zoomt man aus einer Stadt unter `FAR_ZOOM`, wird daraus die Deutschland-Ansicht (flach),
+  zoomt man über einer freien Stadt wieder hinein, deren Stadtansicht (`city/ui/map.ts`, `ui.enterView(view)`, auf
+  der Karte `settleView`: Ausschnitt bleibt, nur Neigung und Drehung gleiten).
+- **Ausschnitt:** `flyToDeutschland` passt sich dem Rahmen um die freien Städte an (`deutschlandBounds`,
+  `cameraForBounds`), am Handy mit Platz für die Karte unter Geld und Heat.
+- **A1 in Gold:** Layer `city.autobahn` zeigt die Autobahn zwischen den freien Städten (`roads.autobahnBetween`) als
+  feine goldene Linie, nur weit draußen und nur, solange eine Fahrt darauf läuft (du selbst, eine Route oder ein
+  Kurier von Stadt zu Stadt). Kuriere zwischen Köln und Hamburg fahren `interCityRoute`, Schiffe den Fluss ihrer Stadt.
 
 ## Leute an Spots (Auftrag 31)
 
@@ -255,9 +273,12 @@ mapEffects.money(lager, -1200, { caption: 'Razzia' });      // negativ = rot
 const light = mapEffects.blueLight(pos, { label: 'Razzia', durationMs: 8000 });   // ohne durationMs: bis stop()
 mapEffects.ping(pos, { tone: 'accent' });                   // Ring breitet sich aus
 mapEffects.flash({ strength: 0.5 });                        // Blitz über der Karte (Gewitter, Schuss)
+mapEffects.firework(pos, { color: '#f2c766', size: 46 });   // Feuerwerk-Schlag (Kölner Lichter), nur CSS
 ```
 
-Konfetti und Blaulicht-Ringe auf der Karte kommen in einem späteren Auftrag.
+Bei „Bewegung reduzieren“ gibt es keinen Blitz und kein Feuerwerk. Die Stadt-Events auf der Karte (Kölner Lichter mit
+Feuerwerk über dem Rhein ab 21 Uhr, Hafengeburtstag mit Schiffen auf der Elbe) zeichnet das Modul `events`
+(`events/ui/map.ts`). Konfetti und Blaulicht-Ringe auf der Karte kommen in einem späteren Auftrag.
 
 ## Marker
 

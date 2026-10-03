@@ -519,6 +519,8 @@
 @media (max-width: 760px) {
   :root {
     --hud-height: 52px;
+    /* Platz unter Geld und Uhr für die schwebende Dynamic Island (37 px hoch, mit Luft), siehe shell.css */
+    --island-gap: 45px;
     --gutter: 8px;
   }
 }

@@ -13,7 +13,7 @@ import { playableCities } from '../../city';
 import { warehouseSites } from '../../goods';
 import { portPlace } from '../../logistics';
 import { getAllSpots, spotCity } from '../../spots';
-import { getSuppliers } from '../../suppliers';
+import { getSuppliers, supplierVia } from '../../suppliers';
 import { nearestRoadPoint, roadEntryFrom, roadRoute } from '../index';
 
 export const MAX_SNAP_METERS = 60;
@@ -91,7 +91,7 @@ function checkCity(
   const problems: RoadProblem[] = [];
   const entries: Place[] = getSuppliers(state, cityId)
     .filter((s) => s.kind === 'city' && distanceMeters(s, center) > LOCAL_RADIUS)
-    .map((s) => ({ name: `Autobahn-Einfahrt aus ${s.name}`, ...roadEntryFrom(s, s.via, center) }));
+    .map((s) => ({ name: `Autobahn-Einfahrt aus ${s.name}`, ...roadEntryFrom(s, supplierVia(s, cityId), center) }));
   // Orte, die schon zu weit weg liegen, nicht noch einmal in jeder Route melden.
   const far = new Set<string>();
   for (const place of [...spots, ...warehouses, port, ...entries]) {
