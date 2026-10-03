@@ -26,16 +26,21 @@ export {
   moneyPopup,
   ping,
 } from './effects';
+export { ensureFigureImage, FIGURE_IMAGE, FIGURE_SIZE, figureSdf } from './figure';
 export { createFleet, type FleetHandle, type FleetKind, type FleetOptions, type FleetPose } from './fleet';
 export { addFootpath, type FootpathHandle } from './footpaths';
 export {
   bearing,
   formatDms,
+  type MeasuredPath,
+  measurePath,
   metersPerPixel,
   offsetAround,
   offsetMeters,
   pathLength,
   pointAlong,
+  pointAtDistance,
+  smoothBearing,
 } from './geometry';
 export { createHotspots, type Hotspot, type HotspotsHandle, type HotspotsOptions } from './hotspots';
 export { LANDMARKS } from './landmarks';

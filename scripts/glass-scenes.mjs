@@ -97,6 +97,12 @@ export const SCENES = [
     wait: 2500,
   },
   {
+    // Auftrag 31: Leute an Spots: Läufer am Neumarkt, wartende Kunden, eine Streife im Veedel mit hoher Heat.
+    name: 'leute-spots',
+    js: `sim.advance(${TIMES.tag}); busy(); const spots = await import('/src/modules/spots/index.ts'); state().modules.police.heat[spots.getSpot(state(), 'neumarkt').veedelId] = 70; sim.advance(30); api.closePhone(); api.flyTo({ lng: 6.9476, lat: 50.9362 }, 16.4); api.setSpeed(1); await sleep(4000); api.setSpeed(0);`,
+    wait: 2500,
+  },
+  {
     name: 'verkehr-nacht',
     js: `sim.advance(${TIMES.nacht}); busy(); api.closePhone(); api.flyTo({ lng: 6.9405, lat: 50.9345 }, 15.2); api.setSpeed(1); await sleep(5000); api.setSpeed(0);`,
     wait: 2500,
