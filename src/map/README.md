@@ -24,7 +24,7 @@ Für die Karte selbst heißt das:
 - **Hotspots** bleiben, aber leiser (die Spots skalieren ihre Stärke mit 0,45): Den Zustand eines Spots zeigt jetzt der
   Lichtkegel am Schild; die Blobs zeigen nur noch Nachfrage und Verkäufe, die man am Schild nicht sieht.
 - **Strecken** laufender Fahrten gestrichelt: Schiff in der Farbe der Ware, Lkw und Transporter gold
-  (`suppliers.routes`, `logistics.routes`).
+  (`suppliers.routes`, `logistics.routes`); die letzten Meter zu Fuß gepunktet (`addFootpath`).
 - **Ereignisse auf der Karte:** Nach einer Razzia wird das Veedel rot getönt (`police.raidArea`), nach einer Übernahme
   leuchtet es gold auf (`territory.takeover`, Übergang über `fill-opacity-transition`).
 
@@ -37,6 +37,11 @@ Für die Karte selbst heißt das:
 | `look.ts` | vier Tageszeit-Paletten (`PALETTES`), weiche Übergänge (`paletteBlend`), Stimmung darüber (`computeLook`), Farbhilfen `mixColor`, `pastel` (getestet) |
 | `landmarks.ts` | Wahrzeichen als gestapelte Klötze mit echten Koordinaten (`LANDMARKS`, `landmarkFeatures`) (getestet) |
 | `vehicles.ts` | 3D-Mini-Fahrzeuge und Schiffe (`createVehicle`, `animateVehicle`) |
+| `fleet.ts` | viele Kulissen-Fahrzeuge in einer WebGL-Ebene (`createFleet`, Verkehr, Auftrag 31) |
+| `figure.ts` | kleine Figur als SDF-Sprite für Symbol-Ebenen (`ensureFigureImage`, Leute an Spots) |
+| `footpaths.ts` | gepunktete Fußwege der letzten Meter (`addFootpath`) |
+| `animation.ts` | gemeinsamer Takt der Animationen (`onMapFrame`) und Bewegungs-Zustand (`motion`: Tempo, Pause, Bewegung reduzieren) |
+| `perf.ts` | Messhilfe `?perf=1` (nur Dev-Build): Bild-Arbeit, Layer-Zeiten, `setData` pro Quelle, Overlay |
 | `hotspots.ts` | pulsierende Farb-Blobs (`createHotspots`) |
 | `daylight.ts` | Tag-Nacht-Kurve nach der Spieluhr: `daylight`, `twilight`, `dayPhase` (getestet) |
 | `atmosphere.ts` | Stimmung der Module (`setMapMood`) und Niederschlag (`setPrecipitation`) |
@@ -44,7 +49,7 @@ Für die Karte selbst heißt das:
 | `precipitation.ts` | Regen und Schnee als Canvas über der Karte |
 | `effects.ts` | Effekt-Werkzeuge (Geld-Popup, Blaulicht, Ping, Blitz) und `mapEffects` |
 | `markers.ts` | `addHtmlMarker`, `addTargetMarker`, `el` |
-| `geometry.ts` | `pointAlong`, `pathLength`, `bearing`, `offsetAround`, `offsetMeters`, `metersPerPixel`, `formatDms` (getestet) |
+| `geometry.ts` | `pointAlong`, `pathLength`, `bearing`, `offsetAround`, `offsetMeters`, `metersPerPixel`, `formatDms`, `measurePath`, `pointAtDistance`, `smoothBearing` (getestet) |
 
 Ebenen der Grundkarte stehen in `BASE_LAYERS`. Eigene Ebenen mit Modul-Präfix anlegen und einsortieren:
 
@@ -122,20 +127,29 @@ mapEffects.animateVehicle({ path: route, kind: 'police', durationMs: 20000, loop
 ```
 
 `kind`: `'van' | 'truck' | 'courier' | 'car' | 'police' | 'ship'`. Jedes Fahrzeug ist ein kleiner Klotz mit Kabine
-(fill-extrusion), einheitlich in der Flottenfarbe (`VEHICLE_COLORS`), dreht sich in Fahrtrichtung, hat einen weichen
-Schatten und nachts Scheinwerferlicht. Damit man es auf jeder Zoomstufe sieht, hat es eine feste Größe in Pixeln
-(nie kleiner als in echt). `progress` beim Anlegen setzt die Startposition, sonst fährt es vom Anfang der Strecke los.
-`title` zeigt einen Namen beim Überfahren, `onClick` macht es klickbar. Alle Fahrzeuge einer Karte teilen sich eine
-GeoJSON-Quelle; neue Geometrie gibt es nur, solange sich etwas bewegt (höchstens 40 Mal pro Sekunde).
-`path` kann eine Luftlinie oder eine echte Route (viele Punkte) sein; `pointAlong` verteilt gleichmäßig nach Metern.
-Fahrzeuge der Module fahren über echte Straßen: Den Weg liefert das Modul `roads` (`roadRoute(from, to).path`) im
-`ui/`-Ordner des Moduls, die Karte selbst kennt keine Module.
-Echte Straßenrouten gibt es noch nicht (siehe Konzept, "Logistik").
+(fill-extrusion), einheitlich in der Flottenfarbe (`VEHICLE_COLORS`), dreht sich in Fahrtrichtung (über eine
+Fahrzeuglänge gemittelt, `smoothBearing`: an Ecken biegt es weich ab), hat einen weichen Schatten und nachts
+Scheinwerferlicht. Damit man es auf jeder Zoomstufe sieht, hat es eine feste Größe in Pixeln (nie kleiner als in echt).
+`progress` beim Anlegen setzt die Startposition, sonst fährt es vom Anfang der Strecke los. `title` zeigt einen Namen
+beim Überfahren, `onClick` macht es klickbar. Alle Fahrzeuge einer Karte teilen sich eine GeoJSON-Quelle; neue
+Geometrie gibt es höchstens 20-mal pro Sekunde und nur, wenn sich eines um mindestens 0,35 Pixel bewegt hat. Die
+Scheinwerfer-Quelle bleibt tagsüber leer. `path` kann eine Luftlinie oder eine echte Route (viele Punkte) sein; die
+Längen werden einmal vorberechnet (`measurePath`). Fahrzeuge der Module fahren über echte Straßen: Den Weg liefert das
+Modul `roads` im `ui/`-Ordner des Moduls, die Karte selbst kennt keine Module.
 
-**Hafenlieferungen:** Ware aus Rotterdam kommt als Schiff den Rhein hinauf (`RHINE_ROUTE` in
-`src/modules/suppliers/config.ts`, in Köln langsamer), wird im Niehler Hafen umgeladen und fährt als Lkw zum Lager.
-Die Aufteilung der Lieferzeit (`SHIP_SHARE`, `UNLOADING_SHARE`) rechnet `deliveryLeg(supplier, progress)`; die
-Lieferzeit in der Simulation bleibt gleich.
+**Auf der Straße bleiben (Auftrag 31):** `roadRoute(from, to)` liefert neben `path` den Teil auf der Straße (`drive`)
+und die Fußwege an den Enden (`walkFrom`, `walkTo`). Fahrzeuge fahren `drive` und halten an der Straße, die letzten
+Meter zeigt `addFootpath(map, route.walkTo)` als gepunktete Linie (eine gemeinsame Quelle, ab Zoom 12,5). So fährt
+nichts quer über Häuser. `scripts/check-roads.mjs` (in `npm run lint`) prüft, dass jeder Spot, jedes Lager, der Hafen und
+jede Autobahn-Einfahrt höchstens 60 m von einer Straße liegt und Routen kein gerades Stück über 80 m neben der Straße
+haben. Kuriere aus anderen Städten kommen über die Autobahn-Zufahrt ihrer Richtung (`roadApproach(far, via)`,
+`Supplier.via`: Frankfurt A3, Amsterdam A57, Berlin und Hamburg A1).
+
+**Hafenlieferungen:** Ware aus Rotterdam kommt als Schiff den echten Rhein hinauf (`shipRoute('koeln')` aus `roads`,
+Overture-Wasserdaten: Nieuwe Maas, Noord, Merwede, Waal, Rhein, 306 km, in Köln langsamer) und legt am Liegeplatz am
+Westkai des Niehler Hafens an; alte Lieferungen ohne Liegeplatz werden umgeladen und fahren als Lkw zum Lager. Die
+Aufteilung der Lieferzeit (`SHIP_SHARE`, `UNLOADING_SHARE`) rechnet `deliveryLeg(supplier, progress)`; die Lieferzeit
+in der Simulation bleibt der Wert aus `suppliers/config.ts`. `shipRoute('hamburg')` ist die Elbe ab Cuxhaven (104 km).
 
 ## Hotspots
 
@@ -147,11 +161,77 @@ hotspots.setHotspots([{ position: spot, intensity: 0.8 }]);           // 0 = nic
 hotspots.remove();
 ```
 
-Weicher Farb-Blob (MapLibre-Heatmap), der langsam pulsiert (15 Bilder pro Sekunde, bei "Bewegung reduzieren" still;
-seit dem Look „Glas“ von den Spots deutlich leiser gefüttert, den Zustand zeigt der Lichtkegel am Schild):
-Gelb über Orange und Pink bis Lila, nachts kräftiger. Die Spots füttern ihn aus wartenden Kunden, Verkäufen (klingen
-90 Spielminuten nach) und der aktuellen Nachfrage (`spotDemand` aus `customers`). Figuren und Avatare gibt es auf der
-Karte nicht mehr.
+Weicher Farb-Blob (MapLibre-Heatmap), der langsam pulsiert (nur die Stärke, 6 Bilder pro Sekunde im gemeinsamen Takt;
+bei Pause, verstecktem Tab und "Bewegung reduzieren" still; seit dem Look „Glas“ von den Spots deutlich leiser
+gefüttert, den Zustand zeigt der Lichtkegel am Schild): Gelb über Orange und Pink bis Lila, nachts kräftiger. Die
+Spots füttern ihn aus wartenden Kunden, Verkäufen (klingen 90 Spielminuten nach) und der aktuellen Nachfrage
+(`spotDemand` aus `customers`).
+
+## Verkehr als Kulisse (Auftrag 31)
+
+```ts
+import { createFleet } from '../../../map';
+
+const fleet = createFleet(ctx.map, { id: 'roads.traffic', minZoom: 12.5, lights: 12 });
+fleet.update([{ id: 1, lng, lat, heading: 90, kind: 'car', color: '#7d838c' }], performance.now() + 50);
+fleet.setNight(0.8);   // macht GameMap über die Effekte
+fleet.remove();
+```
+
+`createFleet` zeichnet viele Fahrzeuge in **einer** WebGL-Ebene (MapLibre `custom`, `renderingMode: '3d'`, Tiefe mit den
+Gebäuden): ein Puffer mit einem Kasten pro Bauteil (Formen wie die Spiel-Fahrzeuge, `KINDS` aus `vehicles.ts`, etwas
+kleiner), ein Zeichenaufruf. Neue Stellungen kommen gebündelt (`update`, höchstens 20-mal pro Sekunde), dazwischen
+schiebt der Shader die Fahrzeuge weich weiter (nur eine Uniform pro Bild). Neue wachsen kurz auf, fehlende schrumpfen
+weg. Nachts Scheinwerfer nur für die nächsten `lights` Fahrzeuge zur Kartenmitte, unter `minZoom` nichts. Keine
+GeoJSON-Quelle, kein Worker, keine Marker, keine Klick-Ziele. Steht nichts mehr still, ruht auch die Karte.
+
+Den Verkehr selbst macht das Modul `roads` (`roads/ui/traffic.ts` und Layer `roads.traffic`): Fahrzeuge erscheinen an
+Knoten im Ausschnitt plus Rand, fahren als Zufallsweg über die Kanten (geradeaus bevorzugt, Einbahn beachtet), nach
+3 km oder außerhalb des Ausschnitts sind sie weg. Tempo nach Straßenart (`ROAD_SPEEDS` × 0,8 bis 1,1), Arten 70 % Auto,
+15 % Transporter, 10 % Lkw, 5 % Streifenwagen (mit der Heat der sichtbaren Veedel mehr), Anzahl Desktop 40, Handy 14
+(Einstellungen › Karte: Verkehr aus, wenig, normal; Schalter im Menü Ebenen), Dichte nach Uhrzeit (7–9 und 16–19 Uhr
+× 1,5, 23–5 Uhr × 0,3), Tempo nach Spieltempo (Wurzel, bei 0 steht alles). Zufall nur aus dem eigenen Generator
+(`mulberry32` mit Spiel-Seed und Spieltag), nie aus der Simulation: Der Spielstand bleibt unberührt. Farben als Tokens
+(`--map-traffic-*`, Grautöne), Streifenwagen mit Dach in `--cat-law`.
+
+## Leute an Spots (Auftrag 31)
+
+Layer `spots.people` (`spots/ui/people.ts`, Planung in `peopleModel.ts`): kleine Figuren am Fuß der Spot-Schilder.
+Läufer und Sicherheit in `--cat-people`, bis zu vier wartende Kunden in `--cat-goods` (gehen beim Kauf, das Geld-Popup
+kommt wie bisher), dazu eine Streife in `--cat-law`, die in Veedeln mit Heat über `CHECK_THRESHOLD` über die Straßen von
+Spot zu Spot geht. Symbol-Ebene mit der SDF-Figur aus `figure.ts` (`ensureFigureImage`, Farbe über `icon-color`,
+Rand über `icon-halo`), keine HTML-Marker. Versatz in Bildschirm-Einheiten (`icon-offset`), Personal links und Kunden
+rechts unterhalb von Schild und Strichen, damit auch am Handy nichts verdeckt wird. Ruhiges Pendeln mit höchstens 10
+Stellungen pro Sekunde, nur im Ausschnitt, unter Zoom 14 unsichtbar, höchstens 60 Figuren. Antippen öffnet das
+Spot-Blatt.
+
+## Gemeinsamer Takt und Bewegung
+
+```ts
+import { motion, onMapFrame, onMotionChange } from '../../../map';
+
+const stop = onMapFrame((now, dt) => { … }, 'mein-layer');   // dt in echten Sekunden, höchstens 0,1
+motion.speed; motion.running; motion.reduced;               // Spieltempo, läuft gerade etwas, Bewegung reduzieren
+```
+
+Alle Animationen der Karte (Verkehr, Figuren, Hotspot-Puls) hängen an **einer** `requestAnimationFrame`-Schleife, die
+nur läuft, solange jemand zuhört, das Spiel nicht pausiert ist und der Tab sichtbar ist. Das Spieltempo setzt `GameMap`
+(`setSpeed`, aus `MapView`). Bei "Bewegung reduzieren" (`prefers-reduced-motion`) gibt es keinen Verkehr und kein Pendeln.
+
+## Performance-Budget (Auftrag 31)
+
+- Desktop 60 Bilder pro Sekunde, Handy 30 (iPhone-Viewport, 4× CPU-Drossel) im Normalbetrieb mit Verkehr, Figuren und
+  einer laufenden Lieferung; keine Long Task über 50 ms bei Tempo 4× mit zehn offenen Aufträgen.
+- Verkehr und Figuren zusammen höchstens 2 ms pro Bild (Handy 4 ms), Verkehr allein 1,5 ms bei 40 Fahrzeugen.
+- Jede Quelle (`setData`) höchstens 20-mal pro Sekunde und nur bei Änderung.
+- Layer bekommen `update()` nur, wenn sich Spielzeit, ein Befehl, das offene Panel, Handy, Kamera, Overlay oder die
+  Verkehrs-Einstellung geändert haben (`GameMap.update`, `invalidate`). Marker-DOM nur bei neuem Text (`setText`).
+
+Messen: `?perf=1` im Dev-Build zeigt oben links Bilder pro Sekunde, Bild-Arbeit der Animationen, Zeit pro Layer-Update,
+`setData` pro Quelle und Long Tasks neben dem Budget (`perf.ts`, `mapPerf.begin()`/`mapPerf.end('frame' | 'layer', name,
+t0)`); `npm run perf:browser -- --scenes=karte [--mobile --throttle=4] [--reduced-motion] [--traffic=off]` liest
+dieselben Zahlen über `window.__ktMapPerf`. Ohne GPU (Headless, SwiftShader) sind Bilder pro Sekunde und Long Tasks durch
+die Software-Grafik begrenzt; Bild-Arbeit und `setData` nicht. Mit `--gpu` auf einem Rechner mit Grafikkarte messen.
 
 ## Weitere Effekt-Werkzeuge
 

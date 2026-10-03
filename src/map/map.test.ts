@@ -172,6 +172,26 @@ describe('Wahrzeichen', () => {
     expect(Math.max(...(colonius?.parts.map((p) => p.height) ?? []))).toBe(266);
   });
 
+  it('Hamburg hat eigene Wahrzeichen an echten Orten (Lage aus Overture)', () => {
+    const height = (id: string) => Math.max(...(LANDMARKS.find((l) => l.id === id)?.parts.map((p) => p.height) ?? []));
+    const hamburg = LANDMARKS.filter((l) => l.city === 'hamburg').map((l) => l.id);
+    expect(hamburg).toEqual([
+      'elbphilharmonie',
+      'michel',
+      'heinrich-hertz-turm',
+      'koehlbrandbruecke',
+      'landungsbruecken',
+      'elbbruecken',
+    ]);
+    expect(height('elbphilharmonie')).toBe(110);
+    expect(height('michel')).toBe(132);
+    expect(height('heinrich-hertz-turm')).toBe(279);
+    expect(height('koehlbrandbruecke')).toBe(135);
+    const elphi = LANDMARKS.find((l) => l.id === 'elbphilharmonie');
+    expect(distanceMeters(elphi?.center ?? KOELN, { lng: 9.9842, lat: 53.5413 })).toBeLessThan(50);
+    expect(LANDMARKS.filter((l) => l.city === 'koeln').length).toBe(7);
+  });
+
   it('liefern GeoJSON mit geschlossenen Ringen und Farben für Tag und Nacht', () => {
     const day = landmarkFeatures(0);
     const night = landmarkFeatures(1);
@@ -180,10 +200,10 @@ describe('Wahrzeichen', () => {
       const ring = f.geometry.coordinates[0];
       expect(ring[0]).toEqual(ring[ring.length - 1]);
       expect(f.properties.height).toBeGreaterThan(f.properties.base);
-      // Nichts liegt weiter als 400 m von seinem Wahrzeichen entfernt.
+      // Nichts liegt weiter als 800 m von seinem Wahrzeichen entfernt (die Köhlbrandbrücke ist das längste).
       const landmark = LANDMARKS.find((l) => l.id === f.properties.id);
       const [lng, lat] = ring[0];
-      expect(distanceMeters(landmark?.center ?? KOELN, { lng, lat })).toBeLessThan(400);
+      expect(distanceMeters(landmark?.center ?? KOELN, { lng, lat })).toBeLessThan(800);
     }
     expect(night.features[0].properties.color).not.toBe(day.features[0].properties.color);
     expect(LANDMARK_ZONES.features).toHaveLength(LANDMARKS.length);
