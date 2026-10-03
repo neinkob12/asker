@@ -18,6 +18,7 @@ import {
   Tag,
   useGame,
 } from '../../../ui';
+import { activeCity } from '../../city';
 import { travelMinutes } from '../../roads';
 import { getSpot, getSpots, type Spot } from '../../spots';
 import { expectedWageFor, getStaff, getStaffMember, roleName } from '../../staff';
@@ -169,7 +170,7 @@ function SpotsStep(props: { staffId: string; value: string[]; onChange: (spotIds
   const { state } = useGame();
   const chosen = props.value.map((id) => getSpot(state, id)).filter((s): s is Spot => !!s);
   const full = props.value.length >= MAX_SPOTS_PER_LIEUTENANT;
-  const spots = [...getSpots(state)].sort(
+  const spots = [...getSpots(state, activeCity(state))].sort(
     (a, b) => veedelName(a.veedelId).localeCompare(veedelName(b.veedelId)) || b.demand - a.demand,
   );
   const toggle = (id: string) => {

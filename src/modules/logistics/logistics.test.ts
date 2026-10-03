@@ -30,7 +30,7 @@ function quietGame(seed = 1): Simulation {
 }
 
 function withCargo(sim: Simulation, amount = 500): number {
-  sim.state.modules.logistics.berth = { since: sim.state.time };
+  sim.state.modules.logistics.berths.koeln = { since: sim.state.time };
   return receiveCargo(sim.ctx('suppliers'), {
     supplierId: 'rotterdam',
     productId: 'hash',
@@ -62,7 +62,7 @@ describe('logistics: Hafen', () => {
     expect(buy().ok).toBe(true);
     expect(sim.state.wallet.clean).toBe(0);
     expect(hasBerth(sim.state)).toBe(true);
-    expect(buy()).toEqual({ ok: false, reason: 'Du hast schon einen Liegeplatz.' });
+    expect(buy()).toEqual({ ok: false, reason: 'Du hast dort schon einen Liegeplatz.' });
     expect(eventsOfType(events, 'logistics.berthBought')).toHaveLength(1);
     expect(messages.thread(sim.state, 'other:harbor')).toHaveLength(1);
   });
@@ -107,7 +107,7 @@ describe('logistics: Fahrten', () => {
     const cargoId = withCargo(sim);
     expect(sim.dispatch({ type: 'logistics.pickup', payload: { by: 'driver' } })).toEqual({
       ok: false,
-      reason: 'Kein freier Fahrer. Heuer einen an (Logistik-App oder Leute).',
+      reason: 'Kein freier Fahrer in Köln. Heuer einen an (Logistik-App oder Leute).',
     });
     const driverId = hireDriver(sim);
     expect(freeDrivers(sim.state).map((m) => m.id)).toEqual([driverId]);

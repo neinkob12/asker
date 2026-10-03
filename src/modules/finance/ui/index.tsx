@@ -31,6 +31,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { citiesUnlocked, cityName, cityOfSpot } from '../../city';
 import { getLieutenantIds, lieutenantOfSpot } from '../../hierarchy';
 import { getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
@@ -94,9 +95,10 @@ const ROW_COLOR: Record<MoneyGroup, 'money' | 'warn' | 'danger' | 'system'> = {
 
 const PERIOD_LABEL: Record<Period, string> = { today: 'heute', yesterday: 'gestern', week: '7 Tage', month: '30 Tage' };
 
-// --- Filter: ganz Köln, Veedel, Spot, Leutnant (als eine Auswahl, Wert als Text kodiert) ---
+// --- Filter: alles, Stadt, Veedel, Spot, Leutnant (als eine Auswahl, Wert als Text kodiert) ---
 
 function encodeFilter(f: FinanceFilter): string {
+  if (f.kind === 'city') return `city:${f.cityId}`;
   if (f.kind === 'veedel') return `veedel:${f.veedelId}`;
   if (f.kind === 'spot') return `spot:${f.spotId}`;
   if (f.kind === 'lieutenant') return `lieutenant:${f.staffId}`;
@@ -105,6 +107,7 @@ function encodeFilter(f: FinanceFilter): string {
 
 function decodeFilter(value: string): FinanceFilter {
   const [kind, id] = value.split(':', 2);
+  if (kind === 'city' && id) return { kind, cityId: id };
   if (kind === 'veedel' && id) return { kind, veedelId: id };
   if (kind === 'spot' && id) return { kind, spotId: id };
   if (kind === 'lieutenant' && id) return { kind, staffId: id };
@@ -114,8 +117,11 @@ function decodeFilter(value: string): FinanceFilter {
 function filterOptions(state: GameState): SelectOption[] {
   const { spots, veedelIds, lieutenantIds } = filterTargets(state);
   const veedel = [...veedelIds].sort((a, b) => veedelName(a).localeCompare(veedelName(b)));
+  // Ab zwei Städten (Auftrag 30): "Alle Städte" und je Stadt ein Eintrag.
+  const cities = citiesUnlocked(state);
   return [
-    { value: 'all', label: 'Ganz Köln' },
+    { value: 'all', label: cities.length > 1 ? 'Alle Städte' : 'Ganz Köln' },
+    ...(cities.length > 1 ? cities.map((id) => ({ value: `city:${id}`, label: `Stadt ${cityName(id)}` })) : []),
     ...veedel.map((id) => ({ value: `veedel:${id}`, label: `Veedel ${veedelName(id)}` })),
     ...[...spots]
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -128,6 +134,7 @@ function filterOptions(state: GameState): SelectOption[] {
 }
 
 function filterLabel(state: GameState, f: FinanceFilter): string {
+  if (f.kind === 'city') return cityName(f.cityId);
   if (f.kind === 'veedel') return veedelName(f.veedelId);
   if (f.kind === 'spot') return getSpot(state, f.spotId)?.name ?? 'Spot';
   if (f.kind === 'lieutenant') return getStaffMember(state, f.staffId)?.name ?? 'Leutnant';
@@ -303,7 +310,10 @@ function PerSpot(props: { period: Period; filter: FinanceFilter; onPick: (f: Fin
   const { state } = useGame();
   const { days, offset } = periodSpan(props.period);
   let rows = spotResults(state, days, offset).filter((r) => r.revenue > 0 || r.wages > 0 || r.invest > 0);
-  if (props.filter.kind === 'veedel') {
+  if (props.filter.kind === 'city') {
+    const cityId = props.filter.cityId;
+    rows = rows.filter((r) => cityOfSpot(state, r.spotId) === cityId);
+  } else if (props.filter.kind === 'veedel') {
     const veedelId = props.filter.veedelId;
     rows = rows.filter((r) => getSpot(state, r.spotId)?.veedelId === veedelId);
   } else if (props.filter.kind === 'lieutenant') {

@@ -28,6 +28,21 @@ const CORE_MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record
     const messages = isRecord(state.messages) ? state.messages : {};
     return { ...state, messages: { ...messages, hidden: isRecord(messages.hidden) ? messages.hidden : {} } };
   },
+  // 3: Anrufe (messages.calls mit klingelnden Anrufen und Rückrufen), Auftrag 30.
+  3: (state) => {
+    const messages = isRecord(state.messages) ? state.messages : {};
+    const calls = isRecord(messages.calls) ? messages.calls : {};
+    return {
+      ...state,
+      messages: {
+        ...messages,
+        calls: {
+          ringing: Array.isArray(calls.ringing) ? calls.ringing : [],
+          retries: Array.isArray(calls.retries) ? calls.retries : [],
+        },
+      },
+    };
+  },
 };
 
 export function createSaveFile(state: GameState, label: string, savedAt: number): SaveFile {

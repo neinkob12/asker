@@ -1,4 +1,5 @@
 import type { ComponentChildren, JSX } from 'preact';
+import { memo } from 'preact/compat';
 import { useContext } from 'preact/hooks';
 import { haptic } from '../haptics';
 import { type CategoryColor, type ChipColor, categoryOf, Icon, IconChip } from './Icon';
@@ -118,10 +119,10 @@ export function KeyValue(props: { label: ComponentChildren; value: ComponentChil
 }
 
 /** Kleine Zahl in einem Kreis, z.B. ungelesene Nachrichten. Bei 0 unsichtbar. */
-export function Badge(props: { count: number; tone?: Tone }) {
+export const Badge = memo(function Badge(props: { count: number; tone?: Tone }) {
   if (props.count <= 0) return null;
   return <span class={`ui-badge ui-badge--${props.tone ?? 'bad'}`}>{props.count > 99 ? '99+' : props.count}</span>;
-}
+});
 
 /** Anzeige "BESCHRIFTUNG / Wert", z.B. im HUD. */
 export function Stat(props: {
@@ -302,14 +303,14 @@ export interface ChipSpec {
  * Kleine Fläche in einer Bedeutungsfarbe für eine Eigenschaft oder einen Status ("greift an" rot, "Level 3" grau).
  * Bricht nie um. Mehrere Chips stehen in `Chips` nebeneinander, statt "a · b · c" als Text.
  */
-export function Chip(props: Partial<ChipSpec> & { children?: ComponentChildren }) {
+export const Chip = memo(function Chip(props: Partial<ChipSpec> & { children?: ComponentChildren }) {
   return (
     <span class={`ui-tag ui-tag--cat ui-tag--cat-${props.color ?? 'system'} ui-tag--chip`} title={props.title}>
       {props.icon && <Icon name={props.icon} />}
       {props.children ?? props.label}
     </span>
   );
-}
+});
 
 /** Reihe von Chips (bricht zwischen den Chips um, nie im Chip). */
 export function Chips(props: {
@@ -404,7 +405,7 @@ export function SummaryTiles(props: { items: readonly SummaryTile[] }) {
 }
 
 /** Kleines Etikett, z.B. "Gang", "Neu", "Hoch". Mit category in der Bedeutungsfarbe (Symbol immer dabei zeigen). */
-export function Tag(props: {
+export const Tag = memo(function Tag(props: {
   children?: ComponentChildren;
   tone?: Tone | 'muted';
   category?: CategoryColor;
@@ -417,7 +418,7 @@ export function Tag(props: {
       {props.children}
     </span>
   );
-}
+});
 
 export interface AvatarProps {
   /** Name der Figur: ohne Bild werden die Initialen gezeigt. */
@@ -440,7 +441,7 @@ function nameTone(name: string): CategoryColor {
 }
 
 /** Kreis mit Porträt, Icon oder Initialen. Für Kontakte, Mitarbeiter, Gangs. */
-export function Avatar(props: AvatarProps) {
+export const Avatar = memo(function Avatar(props: AvatarProps) {
   const image = props.image;
   const custom = props.color !== undefined;
   const tone = props.tone ?? nameTone(props.name);
@@ -454,7 +455,7 @@ export function Avatar(props: AvatarProps) {
       {image ? <Icon name={image} /> : initials(props.name)}
     </span>
   );
-}
+});
 
 /** Initialen aus einem Namen, z.B. "Dragan K." → "DK". */
 export function initials(name: string): string {

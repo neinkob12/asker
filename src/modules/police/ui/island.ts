@@ -1,6 +1,7 @@
 // Dynamic Island: geplante Razzien im eigenen Revier (jede mit Restzeit, die nächste zuerst) und hohe Heat.
 
 import { islandCountdown, type LiveActivity, registerLiveActivity } from '../../../ui';
+import { activeCity } from '../../city';
 import { allVeedel, veedelName } from '../../veedel';
 import { heatLevel, plannedMajorRaid, plannedRaidInfo, playerHeat } from '../index';
 
@@ -23,7 +24,7 @@ registerLiveActivity({
       });
     }
     // Jede geplante Razzia bekommt ihren Eintrag, nicht nur die im heißesten Veedel: Auch die anderen lassen sich abwenden.
-    const planned = allVeedel()
+    const planned = allVeedel(activeCity(state))
       .map((v) => ({ veedelId: v.id, info: plannedRaidInfo(state, v.id) }))
       .filter((r) => r.info !== null && r.info.at > state.time)
       .sort((a, b) => (a.info?.at ?? 0) - (b.info?.at ?? 0));

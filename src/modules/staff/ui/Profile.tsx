@@ -4,6 +4,7 @@
 import { useState } from 'preact/hooks';
 import { clock, formatEuro } from '../../../core';
 import { Button, Empty, KeyValue, ProgressBar, Select, Slot, Stepper, Toggle, useGame } from '../../../ui';
+import { bribeFactor, citiesUnlocked, cityName, travelMinutesBetween } from '../../city';
 import { getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
 import {
@@ -123,7 +124,8 @@ function ProfileActions(props: { member: StaffMember }) {
     m.assignment?.kind === 'office' ||
     m.returnTo?.kind === 'office' ||
     m.assignment?.kind === 'delivery' ||
-    m.assignment?.kind === 'transport';
+    m.assignment?.kind === 'transport' ||
+    m.assignment?.kind === 'travel';
   const canMove = (m.role === 'runner' || m.role === 'security') && m.status === 'active' && !isLieutenant && !busy;
   const cost = m.status === 'jailed' ? bailCost(state, m.id) : 0;
   return (
@@ -139,7 +141,15 @@ function ProfileActions(props: { member: StaffMember }) {
           Kaution zahlen ({formatEuro(cost)})
         </Button>
       )}
+      {m.status === 'jailed' && bribeFactor(m.cityId) !== 1 && (
+        <p class="ui-hint">
+          {bribeFactor(m.cityId) < 1
+            ? `In ${cityName(m.cityId)} kennt man sich: Kaution ein Viertel günstiger.`
+            : `In ${cityName(m.cityId)} gibt es nichts geschenkt: Kaution 20 % teurer.`}
+        </p>
+      )}
       {canMove && <MoveControl member={m} />}
+      <RelocateControl member={m} />
       <div class="staff-file__row">
         <span>Lohn</span>
         <Stepper
@@ -170,12 +180,46 @@ function ProfileActions(props: { member: StaffMember }) {
   );
 }
 
+/**
+ * In eine andere Stadt schicken (Auftrag 30): Fahrt über die A1, der Lohn läuft weiter. Nur ab zwei freien Städten und
+ * für Leute ohne Führungsposten; unterwegs steht, wann sie ankommt.
+ */
+function RelocateControl(props: { member: StaffMember }) {
+  const { state, dispatch } = useGame();
+  const m = props.member;
+  if (m.assignment?.kind === 'travel') {
+    return (
+      <p class="ui-hint">
+        Unterwegs nach {cityName(m.assignment.targetId)}, Ankunft {clock.formatTime(m.busyUntil)}.
+      </p>
+    );
+  }
+  const targets = citiesUnlocked(state).filter((id) => id !== m.cityId);
+  const leads = m.assignment?.kind === 'veedel' || m.assignment?.kind === 'office';
+  if (targets.length === 0 || leads || m.status !== 'active') return null;
+  return (
+    <>
+      {targets.map((cityId) => (
+        <Button
+          key={cityId}
+          wide
+          icon="car"
+          onClick={() => dispatch({ type: 'staff.relocate', payload: { staffId: m.id, cityId } })}
+        >
+          {`Nach ${cityName(cityId)} schicken (ca. ${clock.formatDuration(travelMinutesBetween(m.cityId, cityId))})`}
+        </Button>
+      ))}
+    </>
+  );
+}
+
 /** Versetzen: Läufer an Spots, Sicherheit an Spots oder in Lager. */
 function MoveControl(props: { member: StaffMember }) {
   const { state, dispatch } = useGame();
   const m = props.member;
   const targets: { key: string; label: string; assignment: StaffAssignment }[] = [];
-  for (const spot of getSpots(state)) {
+  // Versetzen nur innerhalb der Stadt, in der die Person ist (Auftrag 30).
+  for (const spot of getSpots(state, m.cityId)) {
     const other = m.role === 'runner' ? activeRunnerAt(state, spot.id) : securityAt(state, { spotId: spot.id })[0];
     const taken = other && other.id !== m.id ? ` (${other.name})` : '';
     targets.push({
@@ -185,7 +229,7 @@ function MoveControl(props: { member: StaffMember }) {
     });
   }
   if (m.role === 'security') {
-    for (const w of getWarehouses(state)) {
+    for (const w of getWarehouses(state, m.cityId)) {
       targets.push({ key: `warehouse:${w.id}`, label: w.name, assignment: { kind: 'warehouse', targetId: w.id } });
     }
   }

@@ -3,7 +3,9 @@
 // Alles deterministisch über ctx.random().
 
 import { type Ctx, clock, formatAmount, formatEuro, journal, wallet } from '../../core';
+import { activeCity, liveVeedel } from '../city';
 import { activeEncounters, startEncounter } from '../encounters';
+import { eventFactor } from '../events';
 import { DEFAULT_PRODUCT, getStock, getWarehouses } from '../goods';
 import { referencePrice, setCompetitionFactor } from '../market';
 import { getSpot, getSpots } from '../spots';
@@ -109,7 +111,10 @@ const ALLIANCE_OFFER_MIN_RELATION = 10;
 
 export function gangsTick(ctx: Ctx): void {
   const newDay = clock.hour(ctx.now) === 0;
+  // Nur die Gangs der Stadt, die live ist (Auftrag 30): Die schlafende Stadt ist eingefroren.
+  const city = activeCity(ctx.state);
   for (const gang of GANGS) {
+    if (gang.cityId !== city) continue;
     const s = statusOf(ctx, gang.id);
     if (!s) continue;
     upkeepAgreements(ctx, gang, s);
@@ -291,7 +296,8 @@ function pickTarget(ctx: Ctx, gang: Gang, s: GangStatus): string | null {
   const candidates = new Set<string>();
   if (own.size === 0) return gang.homeVeedelId;
   for (const v of own) for (const n of neighborsOf(v)) if (!own.has(n)) candidates.add(n);
-  for (const v of allVeedel()) if (!own.has(v.id) && controllerOf(state, v.id) === null) candidates.add(v.id);
+  for (const v of allVeedel(gang.cityId))
+    if (!own.has(v.id) && controllerOf(state, v.id) === null) candidates.add(v.id);
   const myPower = gangPower(state, gang.id);
   const enemy = isAllied(state, gang.id) ? s.alliance?.againstGangId : undefined;
   let best: string | null = null;
@@ -410,7 +416,9 @@ function reactToPlayer(ctx: Ctx, gang: Gang, s: GangStatus): void {
   if (s.stage < 3 || isAtPeace(ctx.state, gang.id) || s.people < 2) return;
   if (activeEncounters(ctx.state).length > 0) return;
   if (s.lastAttackAt !== null && ctx.now - s.lastAttackAt < ATTACK_COOLDOWN) return;
-  const chance = ATTACK_CHANCE * gang.traits.aggression * Math.min(1, (s.hostility - 60) / 40);
+  // Stadt-Events (Auftrag 30, Etappe 7): Beim FC-Heimspiel sind die Gangs öfter unterwegs.
+  const event = eventFactor(ctx.state, 'gangRaids', { cityId: gang.cityId });
+  const chance = ATTACK_CHANCE * gang.traits.aggression * Math.min(1, (s.hostility - 60) / 40) * event;
   if (ctx.chance(chance)) launchRaid(ctx, gang, s);
 }
 
@@ -442,11 +450,13 @@ type RaidTarget =
 function pickRaidTarget(ctx: Ctx, gang: Gang, s: GangStatus): RaidTarget | null {
   const state = ctx.state;
   const turf = new Set(gangVeedel(state, gang.id));
-  const staffed = getSpots(state).filter(
+  const staffed = getSpots(state, gang.cityId).filter(
     (spot) => turf.has(spot.veedelId) && getStaff(state, { spotId: spot.id, status: 'active' }).length > 0,
   );
-  const couriers = getStaff(state, { status: 'active' }).filter((m) => m.assignment?.kind === 'delivery');
-  const warehouses = getWarehouses(state).filter(() => getStock(state) > 0);
+  const couriers = getStaff(state, { status: 'active', cityId: gang.cityId }).filter(
+    (m) => m.assignment?.kind === 'delivery',
+  );
+  const warehouses = getWarehouses(state, gang.cityId).filter(() => getStock(state, { cityId: gang.cityId }) > 0);
   const turfList = [...turf];
   const raidWarehouse = warehouses.length > 0 && ctx.chance(WAREHOUSE_RAID_CHANCE);
   if (staffed.length > 0 && !raidWarehouse) {
@@ -621,7 +631,7 @@ function maybeOfferAlliance(ctx: Ctx, gang: Gang, s: GangStatus): void {
 
 function applyPrices(ctx: Ctx): void {
   const factors = ctx.state.modules.gangs.priceFactors;
-  for (const v of allVeedel()) {
+  for (const v of liveVeedel(ctx.state)) {
     const owner = veedelGang(ctx.state, v.id);
     const gang = owner ? getGang(ctx.state, owner) : undefined;
     const s = gang ? statusOf(ctx, gang.id) : undefined;

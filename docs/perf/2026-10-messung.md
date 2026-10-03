@@ -155,3 +155,49 @@ liegt im Rauschen der UI-Reaktionen; in Node bleibt es bei etwa 0,1 ms).
    „Performance-Budget“, und der PR zu Auftrag 31.
 3. **Vorher und nachher** immer mit gleichem Seed, gleicher Dauer und gleichem Fenster vergleichen; die Zahlen gehören in den
    PR-Text des jeweiligen Auftrags.
+
+## Ergebnis nach Auftrag 30, Etappe 0
+
+Gleiche Skripte, gleicher Seed, gleicher Spielstand (`PERF_SAVE` aus `npm run perf:sim`, Tag 20), Vergleich abwechselnd
+gegen einen Checkout von `main` auf derselben Maschine. Das Skript `perf-browser.mjs` schließt jetzt während der Messung
+Dialoge, die das Spiel anhalten (Konfrontation, Übernahme), hält die erzeugten Anfragen über alle Szenen offen, gibt am
+Ende eine Zusammenfassung aus und ordnet jeden Long Task den Funktionen zu, die in seinem Zeitfenster liefen.
+
+**Browser (Tempo 4×, 700 × 500, je 25 s):**
+
+| Szene | Preact pro Neuzeichnen vorher → nachher | Komponenten pro Neuzeichnen | Simulation ms/Schritt |
+| --- | --- | --- | --- |
+| Handy Startbildschirm | 3,7 → 1,5 ms | 65 → 38 | 0,79 → 0,59 |
+| Nachrichten-App offen (68 Chats) | 4,3 → 1,6 ms | 218 → 55 | 0,54 → 0,38 |
+| 20 offene Anfragen, Nachrichten-App | 5,1 → 1,9 ms | 263 → 77 | 0,49 → 0,32 |
+| 20 offene Anfragen, Chat mit Frist | 3,0 → 1,5 ms | 84 → 49 | 0,43 → 0,28 |
+| 20 offene Anfragen, Handy zu | 2,3 → 1,0 ms | 64 → 38 | 0,32 → 0,25 |
+
+`get offsetWidth` (Dynamic Island) fiel von 9 bis 12 % auf unter 2 % der beschäftigten Zeit, `formatNumber` aus der
+Liste der teuersten Funktionen. Die verbliebenen Long Tasks (einzelne mit 100 bis 600 ms, vorher wie nachher) liegen in
+`getUniformBlockIndex` und `getProgramParameter`: Shader-Kompilierung von MapLibre in SwiftShader (Headless ohne GPU),
+also Karte, nicht Oberfläche oder Simulation (Auftrag 31). In den Szenen mit offenen Anfragen und geöffnetem Handy
+gab es keine Long Tasks.
+
+**Simulation (`npm run perf:sim`, Bot, Seed 11, 20 Tage, je dreimal abwechselnd gemessen):** 114 bis 123 ms pro Spieltag
+vorher, 86 bis 92 nachher (etwa −25 %), bei identischem Spielverlauf (gleiche Zahl an Bot-Befehlen, alle Tests gleich).
+Die Hälfte ist das nicht: Was bleibt, ist echte Arbeit, verteilt über viele Stellen (A*-Routen beim Annehmen von
+Aufträgen, Bestellregeln der Leutnants, Kunden am Spot, Bot selbst etwa 20 %, dazu Speicherbereinigung und die
+Modul-Bindungen des Test-Runners). Ein weiterer Schritt wäre ein Index der Leute nach Einsatzort im Modul `staff`;
+er braucht eine Versionszählung aller Änderungen an Einsätzen und lohnt sich erst mit deutlich mehr Leuten.
+
+Was geändert wurde:
+
+- **Simulation:** `formatNumber`/`formatEuro` mit einem `Intl.NumberFormat` je Nachkommastellen; `getSpots` gemerkt
+  pro Zustand, `getSpot` und `isSpotActive` über eine Tabelle der vorgegebenen Spots; `veedelAt` merkt sich Punkte;
+  Leutnant-Tick rechnet seine Spots nur, wenn er sie braucht (Einkauf braucht sie nicht, Verkauf nur, wenn jemand
+  wartet), Hauptlager und Budget erst, wenn eine Regel wirklich bestellt; Pleite-Prüfung bricht beim ersten Posten ab;
+  Liste der tickenden Module einmal bestimmt; erledigte Hafen-Fragen und abgelaufene Fristen nur prüfen, wenn sich etwas
+  geändert hat. Nachrichten haben einen Index nach Kontakt (`thread`, `threads`, `unreadCount`, `hasOpenDeadline` ohne
+  Kontakte × Nachrichten).
+- **Oberfläche:** `chatList`, `collectLiveActivities` und `collectAdvice` werden einmal pro Spielstand gerechnet
+  (`src/ui/stateMemo.ts`, Revision der `UiRuntime`); Chat-Zeilen sind memoisiert (`ChatRow`), ebenso `Icon`,
+  `IconChip`, `Badge`, `Avatar`, `Tag` und `Chip`; die Dynamic Island misst ihre Größe nur, wenn sich ihr Inhalt ändert;
+  Kontextmenüs der App-Kacheln rechnen ihre Aktionen erst beim Öffnen.
+- **Leitplanke:** `src/playtest/perf.bench.test.ts` schlägt fehl, wenn ein Spieltag mehr als doppelt so lange dauert wie
+  der Richtwert (90 ms).

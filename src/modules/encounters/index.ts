@@ -21,7 +21,7 @@
 // Ereignisse: 'encounter.started', 'encounter.round', 'encounter.resolved'
 
 import { type Ctx, defineModule, type GameState } from '../../core';
-import { act, autoResolve, expireDecisions, getKind, join, resolveAction, start } from './engine';
+import { act, autoResolve, delegateAbsent, expireDecisions, getKind, join, resolveAction, start } from './engine';
 import type {
   Encounter,
   EncounterAction,
@@ -204,7 +204,10 @@ export default defineModule({
   version: 3,
   init: () => ({ active: [], history: [] }),
   tick: (ctx) => {
-    if (ctx.state.modules.encounters.active.length > 0) expireDecisions(ctx);
+    if (ctx.state.modules.encounters.active.length > 0) {
+      delegateAbsent(ctx);
+      expireDecisions(ctx);
+    }
   },
   commands: {
     'encounters.join': (ctx, { encounterId, mode, present }) =>

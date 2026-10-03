@@ -45,7 +45,8 @@ describe('veedel', () => {
 
   it('jedes Veedel hat eine Grenze, und sein Mittelpunkt liegt darin', () => {
     for (const v of allVeedel()) {
-      expect(getBoundary(v.id).length, v.id).toBeGreaterThan(20);
+      // Hamburg ist gröber vereinfacht (kleinere Stadtteile, Overture statt Offene Daten).
+      expect(getBoundary(v.id).length, v.id).toBeGreaterThan(v.cityId === 'koeln' ? 20 : 10);
       expect(veedelAt(v.center.lng, v.center.lat)?.id, v.id).toBe(v.id);
     }
     expect(getBoundary('gibtsnicht')).toEqual([]);
@@ -109,16 +110,27 @@ describe('veedel', () => {
     expect(neighborsOf('nippes')).toContain('muelheim'); // Mülheimer Brücke
     for (const link of veedelLinks()) expect(sharesBorder(link.a, link.b), link.via).toBe(false);
 
-    const reached = new Set(['altstadt-nord']);
-    const queue = ['altstadt-nord'];
-    while (queue.length > 0) {
-      for (const n of neighborsOf(queue.shift() ?? '')) {
-        if (!reached.has(n)) {
-          reached.add(n);
-          queue.push(n);
+    // Jede Stadt hängt in sich zusammen, und Nachbarn liegen immer in derselben Stadt.
+    for (const [start, cityId] of [
+      ['altstadt-nord', 'koeln'],
+      ['st-pauli', 'hamburg'],
+    ]) {
+      const reached = new Set([start]);
+      const queue = [start];
+      while (queue.length > 0) {
+        for (const n of neighborsOf(queue.shift() ?? '')) {
+          expect(getVeedel(n)?.cityId, n).toBe(cityId);
+          if (!reached.has(n)) {
+            reached.add(n);
+            queue.push(n);
+          }
         }
       }
+      expect(reached.size, cityId).toBe(allVeedel(cityId).length);
     }
-    expect(reached.size).toBe(allVeedel().length);
+    expect(allVeedel('koeln')).toHaveLength(12);
+    expect(allVeedel('hamburg')).toHaveLength(12);
+    expect(neighborsOf('st-pauli')).toContain('wilhelmsburg'); // Elbbrücken und Alter Elbtunnel
+    expect(neighborsOf('ottensen')).toContain('blankenese'); // Elbchaussee
   });
 });

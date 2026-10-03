@@ -85,6 +85,7 @@ await page.evaluate(async () => {
   p.reset = () =>
     Object.assign(p, {
       longTasks: [],
+      longTaskSpans: [],
       renders: 0,
       byComp: {},
       frames: 0,
@@ -101,7 +102,10 @@ await page.evaluate(async () => {
     });
   p.reset();
   new PerformanceObserver((list) => {
-    for (const e of list.getEntries()) p.longTasks.push(e.duration);
+    for (const e of list.getEntries()) {
+      p.longTasks.push(e.duration);
+      p.longTaskSpans.push([e.startTime, e.duration]);
+    }
   }).observe({ type: 'longtask' });
   const preactUrl = performance
     .getEntriesByType('resource')
@@ -221,6 +225,39 @@ function analyze(profile) {
   return { total, busy, fn: top(byFn, 22), cat: top(byCat, 10) };
 }
 
+/**
+ * Ordnet jeden Long Task den Funktionen zu, die in seinem Zeitfenster liefen (Self-Zeit aus dem CPU-Profil). Die
+ * Profil-Zeit (µs, eigene Uhr) wird über den Start der Messung auf performance.now() der Seite umgerechnet (auf ein
+ * paar Millisekunden genau, reicht für Aufgaben ab 50 ms).
+ */
+function blameLongTasks(profile, spans, pageStart) {
+  const nodes = new Map(profile.nodes.map((n) => [n.id, n]));
+  const out = [];
+  for (const [start, duration] of spans) {
+    let t = profile.startTime;
+    const from = profile.startTime + (start - pageStart) * 1000;
+    const to = from + duration * 1000;
+    const byFn = new Map();
+    for (let i = 0; i < profile.samples.length; i++) {
+      t += profile.timeDeltas[i] ?? 0;
+      if (t < from || t > to) continue;
+      const cf = nodes.get(profile.samples[i]).callFrame;
+      const fn = cf.functionName || '(anonym)';
+      if (fn === '(idle)' || fn === '(root)') continue;
+      const url = cf.url.replace(/^https?:\/\/[^/]+/, '').replace(/\?.*$/, '');
+      const key = `${fn} ${url.split('/').pop()}:${cf.lineNumber + 1}`;
+      byFn.set(key, (byFn.get(key) ?? 0) + (profile.timeDeltas[i] ?? 0));
+    }
+    const top = [...byFn.entries()]
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, 4)
+      .map(([k, v]) => `${k} ${(v / 1000).toFixed(0)} ms`)
+      .join(' | ');
+    out.push(`${duration.toFixed(0).padStart(5)} ms bei ${((start - pageStart) / 1000).toFixed(1)} s: ${top}`);
+  }
+  return out;
+}
+
 async function closeDialogs() {
   return page.evaluate(() => {
     const k = window.koeln;
@@ -233,15 +270,31 @@ async function closeDialogs() {
   });
 }
 
+const summary = [];
+
 async function measure(label) {
+  await closeDialogs();
   await page.evaluate(() => {
     window.__perf.wrapMap();
     window.__perf.reset();
+    // Normalbetrieb: Konfrontationen und andere Dialoge, die das Spiel anhalten, werden während der Messung sofort
+    // ausgewürfelt bzw. geschlossen, sonst steht die Simulation und es gibt nichts zu messen.
+    window.__perf.closer = setInterval(() => {
+      const k = window.koeln;
+      const dialog = k.runtime.ui.dialog;
+      if (!dialog) return;
+      if (dialog.id === 'encounters.encounter') k.session.dispatch({ type: 'encounters.auto', payload: {} });
+      k.runtime.api.closeDialog();
+    }, 250);
   });
   await cdp.send('Profiler.start');
+  const pageStart = await page.evaluate(() => performance.now());
   await page.evaluate((s) => window.koeln.runtime.api.setSpeed(s), SPEED);
   await page.waitForTimeout(SECONDS * 1000);
-  await page.evaluate(() => window.koeln.runtime.api.setSpeed(0));
+  await page.evaluate(() => {
+    window.koeln.runtime.api.setSpeed(0);
+    clearInterval(window.__perf.closer);
+  });
   const { profile } = await cdp.send('Profiler.stop');
   const info = await page.evaluate(() => {
     const p = window.__perf;
@@ -250,6 +303,7 @@ async function measure(label) {
       ...p,
       wrapMap: undefined,
       reset: undefined,
+      closer: undefined,
       byComp: Object.entries(p.byComp)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 12),
@@ -265,7 +319,11 @@ async function measure(label) {
   });
   const a = analyze(profile);
   const lt = info.longTasks;
+  const blame = blameLongTasks(profile, info.longTaskSpans, pageStart);
   const ltSum = lt.reduce((x, y) => x + y, 0);
+  summary.push(
+    `${label.padEnd(48)} | ${(info.uiMs / Math.max(1, info.ui)).toFixed(1).padStart(5)} ms (max ${info.uiMax.toFixed(1).padStart(5)}) | ${String(Math.round(info.renders / Math.max(1, info.ui))).padStart(4)} Renders | Karte ${(info.mapMs / Math.max(1, info.map)).toFixed(1)} ms | DOM ${info.dom} | Long Tasks ${lt.length} (max ${Math.max(0, ...lt).toFixed(0)} ms) | Sim ${(info.stepMs / Math.max(1, info.steps)).toFixed(2)} ms/Schritt, ${info.steps} Schritte | CPU ${(a.busy / 1000).toFixed(0)} ms`,
+  );
   const out = [
     `\n######## "${label}" (${SECONDS} s, ${SPEED}x, ${WIDTH}x${HEIGHT}${MOBILE ? ' Handy' : ''}${THROTTLE > 1 ? `, CPU ${THROTTLE}x gedrosselt` : ''}) ########`,
     `Zustand: msgs=${info.msgs} offene Orders=${info.open} Handy=${info.phone} Dialog=${info.dialog} DOM=${info.dom}`,
@@ -278,6 +336,7 @@ async function measure(label) {
     ...a.cat,
     '--- Top-22 Funktionen (Self) ---',
     ...a.fn,
+    ...(blame.length > 0 ? ['--- Long Tasks: was lief (Self-Zeit im Zeitfenster) ---', ...blame] : []),
   ];
   console.log(out.join('\n'));
 }
@@ -362,6 +421,12 @@ if (SCENES.has('ui')) {
       if (o) created.push(o);
     }
     s.orders = [...saved, ...created];
+    // Die Anfragen sollen während aller folgenden Szenen offen bleiben (bei 4x laufen sonst nach gut 7 s die Fristen ab).
+    for (const o of created) {
+      o.expiresAt += 3000;
+      const m = sim.state.messages.list.find((x) => x.id === o.messageId);
+      if (m?.expiresAt !== undefined) m.expiresAt += 3000;
+    }
     sim.step();
     window.koeln.runtime.requestRender();
     return { erzeugt: created.length, offen: s.orders.filter((o) => o.status === 'offered').length };
@@ -487,7 +552,7 @@ if (SCENES.has('karte')) {
     s.orders = [...saved, ...created];
     // Die Anfragen bleiben während der Messung offen (sonst laufen sie bei Tempo 4 nach Minuten ab).
     // Die Rechte Hand soll die Anfragen nicht abarbeiten: Aufgabe "Aufträge" für die Messung aus.
-    const rh = sim.state.modules.hierarchy.rightHand;
+    const rh = sim.state.modules.hierarchy.rightHands.koeln;
     if (rh?.settings) rh.settings.orders = false;
     const later = sim.state.time + 100000;
     for (const o of s.orders) if (o.status === 'offered') o.expiresAt = later;
@@ -517,6 +582,7 @@ if (SCENES.has('karte')) {
   await measureMap('Karte Normalbetrieb, zehn offene Aufträge, eine Lieferung');
 }
 
+console.log(`\n######## Zusammenfassung ########\n${summary.join('\n')}`);
 console.log(`\nBrowser-Fehler: ${errors.length}${errors.length ? `\n${errors.slice(0, 5).join('\n')}` : ''}`);
 await browser.close();
 await server.close();

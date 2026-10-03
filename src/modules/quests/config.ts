@@ -2,11 +2,15 @@
 // Peter (dein alter Kontakt) schickt jede Quest per Handy und meldet sich, wenn sie erledigt ist.
 
 import type { GameEvents, GameState, MoneyKind } from '../../core';
+import { getWarehouses } from '../goods';
 import { getLieutenants, getRightHand } from '../hierarchy';
 import { netWorth } from '../leaderboard';
+import { hasBerth } from '../logistics';
 import { hottestVeedel } from '../police';
+import { getSpots } from '../spots';
 import { getStaff } from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
+import { veedelCity } from '../veedel';
 
 export const PETER = { id: 'quest:peter', name: 'Peter', kind: 'other' as const, avatar: '🧢' };
 
@@ -65,11 +69,27 @@ export interface QuestDef {
   euro?: boolean;
   goTo?: QuestGoTo;
   reward: QuestReward[];
+  /** Was Peter schreibt, wenn die Quest erledigt ist (sonst nur der Kapitel-Abschluss). */
+  doneText?: string;
 }
 
-export const CHAPTERS: readonly string[] = ['Ankommen', 'Dein Team', 'Wachsen', 'Die Straße', 'Boss von Köln'];
+export const CHAPTERS: readonly string[] = [
+  'Ankommen',
+  'Dein Team',
+  'Wachsen',
+  'Die Straße',
+  'Boss von Köln',
+  'Ganz Köln',
+  'Moin Hamburg',
+];
+
+/** Titel für die Bestenliste, sobald die Mehrheit der Kölner Veedel dir gehört (Meilenstein, Auftrag 30). */
+export const MILESTONE_TITLE = 'Boss von Köln';
 
 const one = () => 1;
+/** Kontrollierte Veedel in Köln (Hamburg zählt für die Kölner Quests nicht mit). */
+const koelnVeedel = (state: GameState) =>
+  controlledBy(state, PLAYER_FACTION).filter((id) => veedelCity(id) === 'koeln').length;
 const activeStaff = (state: GameState) => getStaff(state, { status: 'active' }).length;
 
 export const QUESTS: readonly QuestDef[] = [
@@ -360,7 +380,7 @@ export const QUESTS: readonly QuestDef[] = [
     task: 'Jetzt holst du dir ein ganzes Veedel. Mehr Einfluss als alle anderen, dann gehört es dir.',
     hint: 'Reviere-App zeigt, wo du kurz davor bist.',
     target: 1,
-    measure: (state) => controlledBy(state, PLAYER_FACTION).length,
+    measure: koelnVeedel,
     goTo: 'territory',
     reward: [
       { kind: 'goods', productId: 'weed', amount: 100 },
@@ -387,7 +407,7 @@ export const QUESTS: readonly QuestDef[] = [
     task: 'Drei Veedel, dann nimmt dich in Köln jeder ernst.',
     hint: 'Einfluss wächst mit Spots, Leutnants und Verkäufen.',
     target: 3,
-    measure: (state) => controlledBy(state, PLAYER_FACTION).length,
+    measure: koelnVeedel,
     goTo: 'territory',
     reward: [
       { kind: 'heat', amount: 20 },
@@ -405,9 +425,91 @@ export const QUESTS: readonly QuestDef[] = [
     euro: true,
     measure: netWorth,
     goTo: 'finance',
+    // Der Titel "Boss von Köln" kommt seit Auftrag 30 mit der Mehrheit der Veedel (Meilenstein), nicht mehr hier.
+    reward: [{ kind: 'money', money: 'clean', amount: 2500 }],
+  },
+
+  // --- Kapitel 6: Ganz Köln ---
+  {
+    id: 'nineVeedel',
+    chapter: 5,
+    icon: 'map',
+    title: 'Kontrolliere 9 Veedel',
+    task: 'Die Mehrheit hast du. Jetzt wird es zäh: Die Gangs halten ihre letzten Veedel mit allem, was sie haben. Hol dir neun.',
+    hint: 'Leutnants mit mehreren Spots in einem Veedel bringen am meisten Einfluss.',
+    target: 9,
+    measure: koelnVeedel,
+    goTo: 'territory',
     reward: [
-      { kind: 'title', title: 'Boss von Köln' },
-      { kind: 'money', money: 'clean', amount: 2500 },
+      { kind: 'influence', amount: 10 },
+      { kind: 'money', money: 'dirty', amount: 15000 },
     ],
+  },
+  {
+    id: 'allVeedel',
+    chapter: 5,
+    icon: 'crown',
+    title: 'Übernimm alle 12 Veedel',
+    task: 'Alle zwölf. Erst dann gehört dir Köln wirklich. Und wer Köln hat, auf den werden andere aufmerksam.',
+    hint: 'Reviere-App: Wo fehlt dir noch Einfluss?',
+    target: 12,
+    measure: koelnVeedel,
+    goTo: 'territory',
+    reward: [],
+    doneText: 'Ganz Köln. Hätte ich nicht gedacht, ehrlich. Pass auf dein Telefon auf, das klingelt gleich.',
+  },
+  // --- Kapitel 7: Moin Hamburg (Auftrag 30) ---
+  {
+    id: 'hhWarehouse',
+    chapter: 6,
+    icon: 'warehouse',
+    title: 'Kauf ein Lager in Hamburg',
+    task:
+      'Hamburg also. Ich war da nie, ehrlich gesagt. Aber eins weiß ich: Ohne Lager geht nichts. Wenn du da bist, kauf ' +
+      'dir eins. Ist teurer als bei uns, gezahlt wird sauber.',
+    hint: 'Lager-Seite in Hamburg: Werkstatt Ottensen, Keller St. Georg, Garage Barmbek …',
+    target: 1,
+    measure: (state) => (getWarehouses(state, 'hamburg').length > 0 ? 1 : 0),
+    goTo: 'warehouse',
+    reward: [{ kind: 'goods', productId: 'weed', amount: 50, quality: 0.7 }],
+  },
+  {
+    id: 'hhSpot',
+    chapter: 6,
+    icon: 'pin',
+    title: 'Schalte einen Spot in Hamburg frei',
+    task: 'Jetzt brauchst du eine Ecke. Auf dem Kiez ist am meisten los, aber da guckt jeder hin.',
+    hint: 'Tipp auf einen gesperrten Spot auf der Karte.',
+    target: 1,
+    measure: (state) => (getSpots(state, 'hamburg').length > 0 ? 1 : 0),
+    goTo: 'spot',
+    reward: [{ kind: 'money', money: 'dirty', amount: 1500 }],
+  },
+  {
+    id: 'hhFirstSale',
+    chapter: 6,
+    icon: 'cart',
+    title: 'Verkauf in Hamburg',
+    task: 'Und dann: verkaufen. Der erste Kunde an der Elbe. Die zahlen da mehr, sagt man.',
+    hint: 'Stell dich an deinen Spot oder schick einen Läufer hin.',
+    target: 1,
+    count: { 'sale.completed': (p) => (veedelCity(p.veedelId) === 'hamburg' ? 1 : 0) },
+    goTo: 'spot',
+    reward: [{ kind: 'reputation', amount: 3 }],
+  },
+  {
+    id: 'hhBerth',
+    chapter: 6,
+    icon: 'ship',
+    title: 'Liegeplatz im Hamburger Hafen',
+    task:
+      'Fiete sagt, ohne Platz am Kai bist du in Hamburg nur ein Tourist. Miet dir einen Liegeplatz, dann liefert Hein ' +
+      'Container, kiloweise.',
+    hint: 'Logistik-App, Hafen: Liegeplatz mieten (12.000 € sauber).',
+    target: 1,
+    measure: (state) => (hasBerth(state, 'hamburg') ? 1 : 0),
+    goTo: 'port',
+    reward: [{ kind: 'money', money: 'clean', amount: 3000 }],
+    doneText: 'Moin Hamburg. Du hast es echt geschafft, zwei Städte. Ab jetzt brauchst du mich nicht mehr.',
   },
 ];

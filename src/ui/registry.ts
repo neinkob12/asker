@@ -5,6 +5,7 @@
 import type { ComponentType } from 'preact';
 import type { EventType, GameEvents, GameState, LngLat } from '../core';
 import type { UiApi, UiState } from './runtime';
+import { memoState } from './stateMemo';
 
 /** Panels (Detailansichten, z.B. ein Spot): ID → Props. Module erweitern das per Declaration Merging. */
 // biome-ignore lint/suspicious/noEmptyInterface: wird per Declaration Merging gefüllt
@@ -330,8 +331,13 @@ export function registerLiveActivity(source: LiveActivitySource): void {
   liveActivitySources.register(source);
 }
 
-/** Alle laufenden Live-Aktivitäten, wichtigste zuerst. Fehler einzelner Module werden ignoriert. */
-export function collectLiveActivities(state: GameState): LiveActivity[] {
+/**
+ * Alle laufenden Live-Aktivitäten, wichtigste zuerst. Fehler einzelner Module werden ignoriert. Einmal pro Spielstand
+ * gerechnet (Island im Handy und über der Karte fragen beide), nicht verändern.
+ */
+export const collectLiveActivities: (state: GameState) => LiveActivity[] = memoState(computeLiveActivities);
+
+function computeLiveActivities(state: GameState): LiveActivity[] {
   const all: LiveActivity[] = [];
   for (const source of liveActivitySources.list()) {
     try {
@@ -353,6 +359,34 @@ export function registerSearch(provider: SearchProvider): void {
 /** Eintrag im Menü "Ebenen" der Kartensteuerung anmelden (z.B. Kontrolle/Heat der Veedel). */
 export function registerMapLayerOption(option: MapLayerOption): void {
   mapLayerOptions.register(option);
+}
+
+/** Kamera einer Stadt (Auftrag 30): Blickpunkt, Zoom am Desktop und am Handy-Bildschirm. */
+export interface CityCamera {
+  id: string;
+  name: string;
+  center: LngLat;
+  zoom: number;
+  mobileZoom: number;
+}
+
+/** Städte für Karte und Oberfläche: Kameras, Deutschland-Ansicht und welche Stadt gerade aktiv ist. */
+export interface CityViews {
+  cameras: readonly CityCamera[];
+  deutschland: { center: LngLat; zoom: number };
+  active(state: GameState): string;
+}
+
+let cityViews: CityViews | null = null;
+
+/** Städte anmelden (macht das Modul city). Ohne Anmeldung kennt die Karte nur Köln. */
+export function registerCityViews(views: CityViews): void {
+  cityViews = views;
+  version++;
+}
+
+export function getCityViews(): CityViews | null {
+  return cityViews;
 }
 
 /** Kennzahl für den Ergebnis-Bildschirm anmelden (z.B. Umsatz, Veedel, Leute). */

@@ -2,14 +2,24 @@
 // ms pro Spieltag, Zeit pro Modul-Tick, pro Ereignis-Handler und pro Befehl. Läuft nur mit PERF=1, weil Zeitmessung
 // auf CI-Rechnern flattert. Umgebung: PERF_DAYS (Standard 20), PERF_SEED (11), PERF_SAVE=<pfad> schreibt den Endstand
 // als Spielstand-Datei für `npm run perf:browser`. Bericht und Hotspots: docs/perf/2026-10-messung.md.
+// Leitplanke: Mit den Standardwerten schlägt die Messung fehl, wenn ein Spieltag mehr als doppelt so lange dauert wie
+// der Richtwert unten (Auftrag 30, Etappe 0).
 
 import { writeFileSync } from 'node:fs';
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createSaveFile, serializeSave } from '../core/persistence';
 import { createTestGame } from '../core/testing';
 import { newBotStats, playFor, snapshot } from './bot';
 
 const DAY = 1440;
+
+/**
+ * Richtwert: ms pro Spieltag im Mittel (Bot, Seed 11, 20 Tage), gemessen nach Auftrag 30, Etappe 0 (vorher etwa 120,
+ * nachher etwa 86 auf der Entwicklungsmaschine). Die Messung schlägt fehl, wenn es mehr als doppelt so lange dauert: Das
+ * ist eine grobe Verschlechterung, kein Rauschen. Läuft nur mit PERF=1 (lokal), CI-Rechner messen zu unruhig.
+ */
+const REFERENCE_MS_PER_DAY = 90;
+const ALLOWED_FACTOR = 2;
 
 type Timed = (...args: unknown[]) => unknown;
 interface Bucket {
@@ -100,6 +110,14 @@ describe('Performance der Simulation', () => {
       out.push(...table('Ereignis-Handler, Top 15', handlers, 15));
       out.push(...table('Befehle, Top 12', commands, 12));
       console.log(out.join('\n'));
+
+      // Leitplanke: nur für die Standard-Messung (20 Tage, Seed 11), sonst passt der Richtwert nicht.
+      if (days === 20 && (process.env.PERF_SEED ?? '11') === '11') {
+        expect(
+          avg(perDay),
+          `Simulation langsamer als ${ALLOWED_FACTOR}× Richtwert (${REFERENCE_MS_PER_DAY} ms/Tag)`,
+        ).toBeLessThan(REFERENCE_MS_PER_DAY * ALLOWED_FACTOR);
+      }
 
       if (process.env.PERF_SAVE) {
         writeFileSync(process.env.PERF_SAVE, serializeSave(createSaveFile(sim.state, 'perf', 0)));

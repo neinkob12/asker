@@ -3,8 +3,12 @@
 // per Klick auf die Karte (Kosten, Veedel über veedelAt). Jedes Veedel hat mindestens zwei vorgegebene Spots,
 // mindestens einer davon zum Freischalten, damit jedes Veedel übernehmbar ist (Auftrag 28).
 //
+// Seit Auftrag 30 gibt es Spots in Köln und Hamburg; die Stadt ergibt sich aus dem Veedel (spotCity). Hamburg hat
+// keine offenen Spots (dort fängst du ohne an), freischalten kostet dort das 1,5-Fache (in der Tabelle eingerechnet).
+//
 // Öffentliche API:
-//   getSpots(state)       Spots, an denen gerade verkauft werden kann (offen + eigene)
+//   getSpots(state, cityId?)  Spots, an denen gerade verkauft werden kann (offen + eigene), mit Stadt nur die dort
+//   spotCity(spot)            Stadt eines Spots
 //   getAllSpots(state)    auch die noch gesperrten
 //   getSpot(state, id)    sucht in allen Spots (auch gesperrten), isSpotActive(state, id)
 //   spotsInVeedel(state, veedelId), lockedSpots(state), customSpots(state), canFoundSpotAt(state, lng, lat)
@@ -15,17 +19,21 @@
 import {
   type CommandResult,
   type Ctx,
+  clock,
   defineModule,
   distanceMeters,
   formatEuro,
   type GameState,
   journal,
+  MINUTES_PER_DAY,
   wallet,
 } from '../../core';
-import { getVeedel, veedelAt, veedelName } from '../veedel';
+import { isCityUnlocked } from '../city';
+import { getVeedel, veedelAt, veedelCity, veedelName } from '../veedel';
 import {
   CUSTOM_SPOT_DEMAND,
   FOUND_SPOT_COST,
+  KNEIPE,
   MAX_CUSTOM_SPOTS,
   MIN_SPOT_DISTANCE,
   ORIGINAL_SPOT_IDS,
@@ -33,7 +41,7 @@ import {
   SPOT_LABELS,
 } from './config';
 
-export { FOUND_SPOT_COST, MAX_CUSTOM_SPOTS } from './config';
+export { FOUND_SPOT_COST, KNEIPE, MAX_CUSTOM_SPOTS } from './config';
 
 export interface Spot {
   id: string;
@@ -53,6 +61,11 @@ export interface Spot {
   custom?: boolean;
   /** Gründungszeitpunkt (eigene Spots). */
   foundedAt?: number;
+  /**
+   * Art (Auftrag 30, Etappe 7): 'kneipe' = Veedel-Kneipe, offen KNEIPE.from bis KNEIPE.to Uhr, weniger Laufkundschaft,
+   * doppelt so viele Stammkunden, der Ruf zählt doppelt, die Gäste schauen weniger auf den Preis. Ohne: Straße.
+   */
+  kind?: 'kneipe';
 }
 
 export interface SpotsState {
@@ -78,6 +91,7 @@ declare module '../../core' {
 }
 
 let presets: readonly Spot[] | null = null;
+let presetIndex: Map<string, Spot> | null = null;
 
 /**
  * Vorgegebene Spots mit ihrem Veedel. Das Veedel kommt aus der echten Grenze (veedelAt), nicht aus einer Tabelle.
@@ -90,14 +104,74 @@ function presetSpots(): readonly Spot[] {
       if (!veedel) throw new Error(`Spot ${s.id} liegt in keinem Veedel.`);
       return { ...s, veedelId: veedel.id };
     });
+    presetIndex = new Map(presets.map((s) => [s.id, s]));
   }
   return presets;
 }
 
-/** Alle Spots, an denen gerade verkauft werden kann (freigeschaltet oder selbst gegründet). */
-export function getSpots(state: GameState): readonly Spot[] {
-  const unlocked = state.modules.spots.unlocked;
-  return [...presetSpots().filter((s) => unlocked.includes(s.id)), ...state.modules.spots.custom];
+function presetById(id: string): Spot | undefined {
+  presetSpots();
+  return presetIndex?.get(id);
+}
+
+// Die aktiven Spots werden viele Male pro Spielminute gefragt (Leutnants, Kunden, Läufer, Karte). Gemerkt pro
+// Zustand, solange sich die Listen nicht ändern (freigeschaltet und gegründet wird nur angehängt).
+interface ActiveCache {
+  unlocked: readonly string[];
+  unlockedCount: number;
+  custom: readonly Spot[];
+  customCount: number;
+  spots: readonly Spot[];
+  /** Dieselbe Liste pro Stadt. */
+  byCity: Map<string, readonly Spot[]>;
+}
+const activeCache = new WeakMap<SpotsState, ActiveCache>();
+
+/** Stadt eines Spots (über sein Veedel). */
+export function spotCity(spot: Pick<Spot, 'veedelId'>): string {
+  return veedelCity(spot.veedelId);
+}
+
+/**
+ * Alle Spots, an denen gerade verkauft werden kann (freigeschaltet oder selbst gegründet); mit Stadt nur die in dieser
+ * Stadt.
+ */
+export function getSpots(state: GameState, cityId?: string): readonly Spot[] {
+  const all = activeSpots(state);
+  if (cityId === undefined) return all;
+  const cached = activeCache.get(state.modules.spots);
+  if (!cached) return all.filter((s) => spotCity(s) === cityId);
+  let list = cached.byCity.get(cityId);
+  if (!list) {
+    list = Object.freeze(all.filter((s) => spotCity(s) === cityId));
+    cached.byCity.set(cityId, list);
+  }
+  return list;
+}
+
+function activeSpots(state: GameState): readonly Spot[] {
+  const s = state.modules.spots;
+  const cached = activeCache.get(s);
+  if (
+    cached &&
+    cached.unlocked === s.unlocked &&
+    cached.unlockedCount === s.unlocked.length &&
+    cached.custom === s.custom &&
+    cached.customCount === s.custom.length
+  ) {
+    return cached.spots;
+  }
+  const unlocked = s.unlocked;
+  const spots = Object.freeze([...presetSpots().filter((p) => unlocked.includes(p.id)), ...s.custom]);
+  activeCache.set(s, {
+    unlocked,
+    unlockedCount: unlocked.length,
+    custom: s.custom,
+    customCount: s.custom.length,
+    spots,
+    byCity: new Map(),
+  });
+  return spots;
 }
 
 /** Alle bekannten Spots, auch die noch gesperrten. */
@@ -106,17 +180,39 @@ export function getAllSpots(state: GameState): readonly Spot[] {
 }
 
 /** Spot nach ID, auch gesperrte (für Namen und Veedel). Ob dort verkauft wird: isSpotActive. */
+
+/** Ist der Spot eine Kneipe (Etappe 7)? */
+export function isKneipe(spot: Pick<Spot, 'kind'> | undefined): boolean {
+  return spot?.kind === 'kneipe';
+}
+
+/** Hat der Spot gerade offen? Straßen-Spots immer, Kneipen von KNEIPE.from bis KNEIPE.to Uhr. */
+export function isSpotOpen(spot: Pick<Spot, 'kind'>, time: number): boolean {
+  if (spot.kind !== 'kneipe') return true;
+  const hour = clock.hour(time);
+  return KNEIPE.from > KNEIPE.to ? hour >= KNEIPE.from || hour < KNEIPE.to : hour >= KNEIPE.from && hour < KNEIPE.to;
+}
+
+/** Nächste Öffnung ab time (time selbst, wenn offen). */
+export function nextSpotOpening(spot: Pick<Spot, 'kind'>, time: number): number {
+  if (isSpotOpen(spot, time)) return time;
+  const dayStart = time - clock.minuteOfDay(time);
+  const today = dayStart + KNEIPE.from * 60;
+  return today > time ? today : today + MINUTES_PER_DAY;
+}
+
 /** Wo die Plakette eines Spots auf der Karte steht (Seite, Versatz in px). Nur Darstellung. */
 export function spotLabelPlacement(spotId: string): { labelSide: 'left' | 'right'; labelOffsetY: number } {
   return SPOT_LABELS[spotId] ?? { labelSide: 'right', labelOffsetY: 0 };
 }
 
 export function getSpot(state: GameState, id: string): Spot | undefined {
-  return getAllSpots(state).find((s) => s.id === id);
+  return presetById(id) ?? state.modules.spots.custom.find((s) => s.id === id);
 }
 
 export function isSpotActive(state: GameState, id: string): boolean {
-  return getSpots(state).some((s) => s.id === id);
+  if (presetById(id)) return state.modules.spots.unlocked.includes(id);
+  return state.modules.spots.custom.some((s) => s.id === id);
 }
 
 export function lockedSpots(state: GameState): Spot[] {
@@ -142,7 +238,8 @@ export function canFoundSpotAt(
     return { ok: false, reason: `Mehr als ${MAX_CUSTOM_SPOTS} eigene Spots kannst du nicht halten.` };
   }
   const veedel = veedelAt(lng, lat);
-  if (!veedel) return { ok: false, reason: 'Da ist kein Veedel. Such dir eine Stelle in Köln.' };
+  if (!veedel) return { ok: false, reason: 'Da ist kein Veedel. Such dir eine Stelle in einem Veedel im Spiel.' };
+  if (!isCityUnlocked(state, veedel.cityId)) return { ok: false, reason: 'In dieser Stadt bist du noch nicht.' };
   const tooClose = getAllSpots(state).find((s) => distanceMeters(s, { lng, lat }) < MIN_SPOT_DISTANCE);
   if (tooClose) return { ok: false, reason: `Zu nah am ${tooClose.name}.` };
   return { ok: true, veedelId: veedel.id };
@@ -151,6 +248,7 @@ export function canFoundSpotAt(
 function unlock(ctx: Ctx, spotId: string): CommandResult {
   const spot = presetSpots().find((s) => s.id === spotId);
   if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
+  if (!isCityUnlocked(ctx.state, spotCity(spot))) return { ok: false, reason: 'In dieser Stadt bist du noch nicht.' };
   const state = ctx.state.modules.spots;
   if (state.unlocked.includes(spotId)) return { ok: false, reason: 'Der Spot ist schon offen.' };
   const cost = spot.unlockCost ?? 0;

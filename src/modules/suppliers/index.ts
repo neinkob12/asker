@@ -8,9 +8,14 @@
 // ausgewürfelt und zeigen sich unterwegs bzw. bei der Ankunft. Transporter fahren auf der Karte über echte Straßen
 // (roads) ins gewählte Lager. Hafenware kommt per Schiff über den Rhein an deinen Liegeplatz im Niehler Hafen und
 // wartet dort, bis jemand sie abholt (logistics).
+// Städte (Auftrag 30): Jeder Lieferant liefert in bestimmte Städte (cities, Standard Köln), mit eigener Lieferzeit
+// (deliveryTimes) und Aufschlag (priceFactors); in einer Stadt kann er anders auftreten (inCity: Hein ist in Hamburg
+// Hafen-Großhändler). Bestellt wird für die Stadt des Ziel-Lagers, ohne Lager für die aktive. Freigeschaltete
+// Lieferanten und Vertrauen gelten in allen Städten. Hein schaltet sich mit dem Hamburger Liegeplatz frei.
 //
 // Öffentliche API:
-//   getSuppliers(state), getSupplier(state, id), supplierContactId(id), assortment(supplier),
+//   getSuppliers(state, cityId?), getSupplier(state, id), supplierIn(supplier, cityId), deliversTo(supplier, cityId),
+//   deliveryTimeTo(supplier, cityId), supplierContactId(id), assortment(supplier),
 //   isUnlocked(state, id), unlockRequirements(state, id), canUnlock(state, id),
 //   shipmentsInTransit(state), shipmentProgress(state, shipment), expectedArrival(shipment),
 //   cheapestPackagePrice(state), getRelation(state, id), trustLabel(trust), supplierDiscount(state, id),
@@ -33,6 +38,7 @@ import {
   messages,
   wallet,
 } from '../../core';
+import { activeCity, cityName, getCity, relationFactor } from '../city';
 import { getSalesStats } from '../customers';
 import {
   DEFAULT_WAREHOUSE,
@@ -43,7 +49,7 @@ import {
   productName,
   store,
 } from '../goods';
-import { hasBerth, receiveCargo } from '../logistics';
+import { hasBerth, portName, receiveCargo } from '../logistics';
 import { getReputation } from '../reputation';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import {
@@ -129,6 +135,14 @@ export interface Supplier {
   packages: SupplierPackage[];
   /** Fehlt: von Anfang an zu haben. */
   unlock?: SupplierUnlock;
+  /** Städte, in die geliefert wird (Auftrag 30). Fehlt: nur Köln. */
+  cities?: readonly string[];
+  /** Lieferzeit pro Stadt; fehlt eine Stadt, gilt deliveryTime. */
+  deliveryTimes?: Readonly<Record<string, number>>;
+  /** Aufschlag auf die Preise pro Stadt (1,1 = zehn Prozent mehr). */
+  priceFactors?: Readonly<Record<string, number>>;
+  /** Anderes Auftreten in einer Stadt (Art, Sortiment, Beschreibung). */
+  inCity?: Readonly<Record<string, Partial<Pick<Supplier, 'kind' | 'packages' | 'description' | 'priceLevel'>>>>;
   /** Autobahn, über die der Kurier nach Köln hereinkommt (roads: roadApproach), nur für die Karte. */
   via?: string;
 }
@@ -154,6 +168,8 @@ export interface Shipment {
   toPort?: boolean;
   /** Schiffsware: das Lager, für das bestellt wurde (Abholung fährt dorthin, Bestellregeln zählen die Ware dafür mit). */
   destinationId?: string;
+  /** Stadt, für die bestellt wurde (Auftrag 30; fehlt: Köln). */
+  cityId?: string;
   /** Ausgewürfeltes Lieferproblem, der Spieler erfährt es erst, wenn es passiert. */
   problem?: ShipmentProblem;
   /** Wann das Problem unterwegs auftritt (Verspätung, Beschlagnahme). */
@@ -236,8 +252,33 @@ declare module '../../core' {
 // ---------------------------------------------------------------------------------------------
 // Lesen
 
-export function getSuppliers(_state: GameState): readonly Supplier[] {
-  return SUPPLIERS;
+/** Alle Lieferanten, mit Stadt nur die, die dorthin liefern (so, wie sie dort auftreten). */
+export function getSuppliers(_state: GameState, cityId?: string): readonly Supplier[] {
+  if (cityId === undefined) return SUPPLIERS;
+  return SUPPLIERS.filter((s) => deliversTo(s, cityId)).map((s) => supplierIn(s, cityId));
+}
+
+/** Liefert der Lieferant in diese Stadt? */
+export function deliversTo(supplier: Supplier, cityId: string): boolean {
+  return (supplier.cities ?? ['koeln']).includes(cityId);
+}
+
+/** Lieferzeit in eine Stadt. */
+export function deliveryTimeTo(supplier: Supplier, cityId: string): number {
+  return supplier.deliveryTimes?.[cityId] ?? supplier.deliveryTime;
+}
+
+const inCityCache = new Map<string, Supplier>();
+
+/** Der Lieferant, wie er in einer Stadt auftritt (Art, Sortiment, Lieferzeit). */
+export function supplierIn(supplier: Supplier, cityId: string): Supplier {
+  const key = `${supplier.id}|${cityId}`;
+  let found = inCityCache.get(key);
+  if (!found) {
+    found = { ...supplier, ...supplier.inCity?.[cityId], deliveryTime: deliveryTimeTo(supplier, cityId) };
+    inCityCache.set(key, found);
+  }
+  return found;
 }
 
 export function getSupplier(state: GameState, id: string): Supplier | undefined {
@@ -287,7 +328,7 @@ export function unlockRequirements(
     });
   }
   if (requires.berth) {
-    const berth = hasBerth(state);
+    const berth = hasBerth(state, 'koeln');
     rows.push({ label: 'Eigener Liegeplatz im Niehler Hafen', done: berth, progress: berth ? 1 : 0 });
   }
   return rows;
@@ -409,19 +450,31 @@ export function isBlocked(state: GameState, supplierId: string): boolean {
  * Pakete, die der Lieferant dir bei deinem Vertrauen anbietet. Leer, solange er noch nicht freigeschaltet ist (und
  * beim Hafen ohne eigenen Liegeplatz).
  */
-export function availablePackages(state: GameState, supplierId: string): SupplierPackage[] {
-  const supplier = getSupplier(state, supplierId);
-  if (!supplier || !isUnlocked(state, supplierId)) return [];
-  if (supplier.kind === 'port' && !hasBerth(state)) return [];
+export function availablePackages(
+  state: GameState,
+  supplierId: string,
+  cityId: string = activeCity(state),
+): SupplierPackage[] {
+  const base = getSupplier(state, supplierId);
+  if (!base || !isUnlocked(state, supplierId) || !deliversTo(base, cityId)) return [];
+  const supplier = supplierIn(base, cityId);
+  if (supplier.kind === 'port' && !hasBerth(state, cityId)) return [];
   const { trust } = getRelation(state, supplierId);
   return supplier.packages.filter((p) => (p.minTrust ?? 0) <= trust);
 }
 
-/** Preis nach Rabatt. */
-export function packagePrice(state: GameState, supplierId: string, packageId: string): number {
-  const pkg = getSupplier(state, supplierId)?.packages.find((p) => p.id === packageId);
-  if (!pkg) return Number.POSITIVE_INFINITY;
-  return Math.round(pkg.price * (1 - supplierDiscount(state, supplierId)));
+/** Preis nach Rabatt (und Aufschlag der Stadt, Standard: die aktive). */
+export function packagePrice(
+  state: GameState,
+  supplierId: string,
+  packageId: string,
+  cityId: string = activeCity(state),
+): number {
+  const base = getSupplier(state, supplierId);
+  const pkg = base ? supplierIn(base, cityId).packages.find((p) => p.id === packageId) : undefined;
+  if (!base || !pkg) return Number.POSITIVE_INFINITY;
+  const factor = base.priceFactors?.[cityId] ?? 1;
+  return Math.round(pkg.price * factor * (1 - supplierDiscount(state, supplierId)));
 }
 
 /**
@@ -452,9 +505,11 @@ function relationFor(ctx: Ctx, supplierId: string): SupplierRelation {
   return relations[supplierId];
 }
 
-function addTrust(ctx: Ctx, supplierId: string, delta: number): void {
+function addTrust(ctx: Ctx, supplierId: string, raw: number): void {
   const rel = relationFor(ctx, supplierId);
   const before = rel.trust;
+  // Kölscher Klüngel (Auftrag 30): Vertrauen wächst je nach Stadt schneller (Köln) oder langsamer (Hamburg).
+  const delta = raw > 0 ? raw * relationFactor(activeCity(ctx.state)) : raw;
   rel.trust = Math.round(Math.min(100, Math.max(0, rel.trust + delta)) * 10) / 10;
   if (rel.trust !== before) {
     ctx.emit('supplier.trustChanged', {
@@ -484,18 +539,25 @@ function order(
   onCredit: boolean,
   warehouseId: string | undefined,
 ): CommandResult {
-  const supplier = getSupplier(ctx.state, supplierId);
+  const base = getSupplier(ctx.state, supplierId);
+  const warehouse = warehouseId ? getWarehouse(ctx.state, warehouseId) : undefined;
+  if (warehouseId && !warehouse) return { ok: false, reason: 'Dieses Lager gehört dir nicht.' };
+  // Bestellt wird für die Stadt des Ziel-Lagers, ohne Lager für die aktive Stadt.
+  const cityId = warehouse?.cityId ?? activeCity(ctx.state);
+  const supplier = base ? supplierIn(base, cityId) : undefined;
   const pkg = supplier?.packages.find((p) => p.id === packageId);
-  if (!supplier || !pkg) return { ok: false, reason: 'Unbekanntes Paket.' };
+  if (!base || !supplier || !pkg) return { ok: false, reason: 'Unbekanntes Paket.' };
   if (!isUnlocked(ctx.state, supplierId)) {
     return { ok: false, reason: `${supplier.contactName} macht noch keine Geschäfte mit dir.` };
   }
+  if (!deliversTo(base, cityId))
+    return { ok: false, reason: `${supplier.contactName} liefert nicht nach ${cityName(cityId)}.` };
   const toPort = supplier.kind === 'port';
-  if (toPort && !hasBerth(ctx.state)) {
-    return { ok: false, reason: 'Ohne eigenen Liegeplatz im Niehler Hafen kann kein Schiff für dich anlegen.' };
+  if (toPort && !hasBerth(ctx.state, cityId)) {
+    return { ok: false, reason: `Ohne eigenen Liegeplatz im ${portName(cityId)} kann kein Schiff für dich anlegen.` };
   }
-  const warehouse = warehouseId ? getWarehouse(ctx.state, warehouseId) : undefined;
-  if (warehouseId && !warehouse) return { ok: false, reason: 'Dieses Lager gehört dir nicht.' };
+  const target = toPort ? null : (warehouse?.id ?? defaultWarehouse(ctx.state, cityId));
+  if (!toPort && !target) return { ok: false, reason: `In ${cityName(cityId)} hast du noch kein Lager.` };
   const rel = relationFor(ctx, supplierId);
   if ((pkg.minTrust ?? 0) > rel.trust) {
     return { ok: false, reason: `Dafür vertraut dir ${supplier.contactName} noch nicht genug.` };
@@ -503,7 +565,7 @@ function order(
   if (isBlocked(ctx.state, supplierId)) {
     return { ok: false, reason: `${supplier.contactName} liefert erst wieder, wenn du deine Schulden bezahlt hast.` };
   }
-  const price = packagePrice(ctx.state, supplierId, packageId);
+  const price = packagePrice(ctx.state, supplierId, packageId, cityId);
   if (onCredit) {
     if (creditLimit(ctx.state, supplierId) === 0) {
       return { ok: false, reason: `${supplier.contactName} gibt dir noch keinen Kredit.` };
@@ -528,11 +590,12 @@ function order(
     productId: pkg.productId,
     amount: pkg.amount,
     quality,
-    warehouseId: toPort ? 'port' : (warehouse?.id ?? defaultWarehouse(ctx.state)),
+    warehouseId: target ?? 'port',
     price,
     orderedAt: ctx.now,
     arrivesAt: ctx.now + supplier.deliveryTime,
   };
+  if (cityId !== 'koeln') shipment.cityId = cityId;
   if (onCredit) shipment.onCredit = true;
   if (toPort) {
     shipment.toPort = true;
@@ -572,9 +635,34 @@ function order(
   return { ok: true, data: { shipmentId: shipment.id } };
 }
 
-/** Lager, in das Lieferungen ohne Angabe gehen: das Standardlager, sonst das erste eigene. */
-function defaultWarehouse(state: GameState): string {
-  return getWarehouse(state, DEFAULT_WAREHOUSE)?.id ?? getWarehouses(state)[0]?.id ?? DEFAULT_WAREHOUSE;
+/** Lager, in das Lieferungen ohne Angabe gehen: in Köln das Standardlager, sonst das erste eigene der Stadt. */
+function defaultWarehouse(state: GameState, cityId: string): string | null {
+  const standard = getWarehouse(state, DEFAULT_WAREHOUSE);
+  if (standard && standard.cityId === cityId) return standard.id;
+  return getWarehouses(state, cityId)[0]?.id ?? null;
+}
+
+/**
+ * Hamburger Liegeplatz: Hein wird dort Hafen-Großhändler. Kennt ihr euch noch nicht, ist er ab jetzt dabei (ohne
+ * Vermittlung), sonst meldet er sich mit seinen Containern.
+ */
+function onBerthBought(ctx: Ctx, cityId: string): void {
+  const hein = getSupplier(ctx.state, 'hamburg');
+  if (cityId !== 'hamburg' || !hein) return;
+  const s = ctx.state.modules.suppliers;
+  if (!s.unlocked.includes(hein.id)) {
+    s.unlocked.push(hein.id);
+    if (!s.offered.includes(hein.id)) s.offered.push(hein.id);
+    relationFor(ctx, hein.id);
+    ctx.emit('supplier.unlocked', { supplierId: hein.id, fee: 0 });
+  }
+  journal.add(ctx, 'Hein liefert dir jetzt Container direkt an den Kai im Hamburger Hafen.', 'good');
+  tell(
+    ctx,
+    hein,
+    'Moin. Du hast jetzt Platz am Kai, hab ich gehört. Dann hab ich was für dich: Container, kiloweise, sechs ' +
+      'Stunden. Alles in der Lieferanten-App.',
+  );
 }
 
 function unlock(ctx: Ctx, supplierId: string): CommandResult {
@@ -701,12 +789,14 @@ function deliver(ctx: Ctx): void {
         amount: s.amount,
         quality: s.quality,
         unitCost: Math.round((s.price / s.amount) * 100) / 100,
+        cityId: s.cityId ?? 'koeln',
         ...(s.destinationId && getWarehouse(ctx.state, s.destinationId) ? { warehouseId: s.destinationId } : {}),
       });
     } else {
       // Gehört das Ziel-Lager nicht mehr dir, geht die Ware ins nächste eigene.
       const warehouse =
-        getWarehouse(ctx.state, s.warehouseId) ?? (supplier ? nearestWarehouse(ctx.state, supplier) : undefined);
+        getWarehouse(ctx.state, s.warehouseId) ??
+        nearestWarehouse(ctx.state, getCity(s.cityId ?? 'koeln')?.center ?? supplier ?? { lng: 0, lat: 0 });
       store(ctx, {
         productId: s.productId,
         amount: s.amount,
@@ -816,6 +906,9 @@ export default defineModule({
       order(ctx, supplierId, packageId, !!onCredit, warehouseId),
     'suppliers.repay': (ctx, { supplierId, amount }) => repay(ctx, supplierId, amount),
     'suppliers.unlock': (ctx, { supplierId }) => unlock(ctx, supplierId),
+  },
+  on: {
+    'logistics.berthBought': (ctx, { cityId }) => onBerthBought(ctx, cityId ?? 'koeln'),
   },
   migrations: {
     2: (old: SuppliersStateV1): SuppliersStateV2 => ({ shipments: old.shipments, relations: initialRelations() }),

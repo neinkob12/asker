@@ -1,8 +1,20 @@
 // Befehle des Personals. Spieler und Leutnants schicken dieselben Befehle.
 
-import { type CommandMeta, type CommandResult, type Ctx, formatEuro, journal, wallet } from '../../core';
+import {
+  type CommandMeta,
+  type CommandResult,
+  type Ctx,
+  clock,
+  formatEuro,
+  journal,
+  messages,
+  wallet,
+} from '../../core';
+import { activeCity, cityName, getCity, isCityUnlocked, travelMinutesBetween } from '../city';
 import { getWarehouse } from '../goods';
+import { getRightHand } from '../hierarchy';
 import { getSpot, isSpotActive } from '../spots';
+import { veedelCity } from '../veedel';
 import {
   DRIVER_HIRE_COST,
   LOYALTY,
@@ -21,6 +33,7 @@ import {
   assign,
   bailCost,
   bonusProvider,
+  cityWageFactor,
   enlist,
   expectedWage,
   freeStaff,
@@ -34,6 +47,7 @@ import {
   securityAt,
   setStatus,
   setWage,
+  staffContact,
   staffVeedel,
   talkChance,
 } from './members';
@@ -53,10 +67,12 @@ export function hireRunner(ctx: Ctx, spotId: string): CommandResult {
   if (!wallet.pay(ctx, cost, 'dirty', 'Läufer angeheuert', { category: 'hiring', spotId }))
     return { ok: false, reason: `Nicht genug Geld (${formatEuro(cost)}).` };
   const profile = generateProfile(ctx, 'runner');
-  // Von der Straße: Lohn wie im Prototyp, man weiß fast nichts über die Person.
-  profile.wage = RUNNER_DAILY_WAGE;
+  const cityId = veedelCity(spot.veedelId);
+  // Von der Straße: Lohn wie im Prototyp (mal dem Lohnniveau der Stadt), man weiß fast nichts über die Person.
+  profile.wage = Math.round(RUNNER_DAILY_WAGE * cityWageFactor(cityId));
   const member = enlist(ctx, profile, {
     origin: 'street',
+    cityId,
     knownStats: ['speed'],
     assignment: { kind: 'spot', targetId: spotId },
     note: `Von der Straße, am ${spot.name}.`,
@@ -71,7 +87,7 @@ export function hireDriver(ctx: Ctx): CommandResult {
     return { ok: false, reason: `Nicht genug Geld (${formatEuro(DRIVER_HIRE_COST)}).` };
   }
   const profile = generateProfile(ctx, 'driver');
-  profile.wage = ROLE_INFO.driver.wage;
+  profile.wage = Math.round(ROLE_INFO.driver.wage * cityWageFactor(activeCity(ctx.state)));
   const member = enlist(ctx, profile, {
     origin: 'street',
     knownStats: ['caution'],
@@ -188,7 +204,7 @@ export function assignCommand(ctx: Ctx, staffId: string, assignment: StaffAssign
   if (m.status === 'jailed') return { ok: false, reason: `${m.name} sitzt in Haft.` };
   if (m.status === 'injured') return { ok: false, reason: `${m.name} ist verletzt.` };
   // Auf einer Fahrt oder Lieferung wird niemand abgezogen oder versetzt (sonst fährt er doppelt oder die Ladung ist weg).
-  if (m.assignment?.kind === 'delivery' || m.assignment?.kind === 'transport') {
+  if (m.assignment?.kind === 'delivery' || m.assignment?.kind === 'transport' || m.assignment?.kind === 'travel') {
     return { ok: false, reason: `${m.name} ist gerade unterwegs.` };
   }
   if (!assignment) {
@@ -197,6 +213,11 @@ export function assignCommand(ctx: Ctx, staffId: string, assignment: StaffAssign
     return { ok: true };
   }
   if (m.assignment?.kind === assignment.kind && m.assignment.targetId === assignment.targetId) return { ok: true };
+  // Eingesetzt wird nur, wo die Person gerade ist (Auftrag 30; nach Hamburg fährt sie erst, Etappe 5).
+  const place = placeVeedel(ctx.state, assignment);
+  if (place && veedelCity(place) !== (m.cityId ?? 'koeln')) {
+    return { ok: false, reason: `${m.name} ist in ${cityName(m.cityId ?? 'koeln')}.` };
+  }
   if (assignment.kind === 'spot') {
     if (!getSpot(ctx.state, assignment.targetId)) return { ok: false, reason: 'Unbekannter Spot.' };
     if (!isSpotActive(ctx.state, assignment.targetId)) {
@@ -222,6 +243,8 @@ export function assignCommand(ctx: Ctx, staffId: string, assignment: StaffAssign
     return { ok: false, reason: 'Die Rechte Hand ernennst du in der Hierarchie.' };
   } else if (assignment.kind === 'transport') {
     return { ok: false, reason: 'Fahrer schickst du über die Logistik los.' };
+  } else if (assignment.kind === 'travel') {
+    return { ok: false, reason: 'In eine andere Stadt schickst du jemanden über sein Profil.' };
   } else {
     return { ok: false, reason: 'Lieferungen fährt nur die Rechte Hand.' };
   }
@@ -260,4 +283,44 @@ export function bail(ctx: Ctx, staffId: string, meta: CommandMeta): CommandResul
   journal.add(ctx, `${m.name} gegen ${formatEuro(cost)} Kaution rausgeholt${by}.`, 'good', { staffId });
   ctx.emit('staff.bailed', { staffId, cost });
   return { ok: true, data: { cost } };
+}
+
+/**
+ * Jemanden in eine andere Stadt schicken (Auftrag 30): Fahrt über die A1, der Lohn läuft weiter, danach ist die Person
+ * dort ohne Einsatz. Hat die Rechte Hand der Stadt Vollmacht, muss sie die Person freigeben: Wer an einem Spot steht,
+ * bleibt (der Spot stünde sonst leer); sie antwortet im Chat.
+ */
+export function relocate(ctx: Ctx, staffId: string, cityId: string, meta: CommandMeta): CommandResult {
+  const m = getStaffMember(ctx.state, staffId);
+  if (!m || !isEmployed(ctx.state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
+  if (!isCityUnlocked(ctx.state, cityId) || !getCity(cityId))
+    return { ok: false, reason: 'Diese Stadt ist noch nicht frei.' };
+  if (m.cityId === cityId) return { ok: false, reason: `${m.name} ist schon in ${cityName(cityId)}.` };
+  if (m.status !== 'active') return { ok: false, reason: `${m.name} kann gerade nicht fahren.` };
+  if (m.assignment?.kind === 'veedel' || m.assignment?.kind === 'office') {
+    return { ok: false, reason: `${m.name} führt hier. Erst abberufen, dann schicken.` };
+  }
+  if (m.assignment?.kind === 'delivery' || m.assignment?.kind === 'transport' || m.assignment?.kind === 'travel') {
+    return { ok: false, reason: `${m.name} ist gerade unterwegs.` };
+  }
+  const rh = getRightHand(ctx.state, m.cityId);
+  if (meta.actor === 'player' && rh?.fullPower) {
+    const boss = getStaffMember(ctx.state, rh.staffId);
+    const spot = m.assignment?.kind === 'spot' ? getSpot(ctx.state, m.assignment.targetId) : undefined;
+    const reply = spot
+      ? `${m.name} bleibt. Ohne ${m.name.split(' ')[0]} steht der ${spot.name} leer, und das kostet uns beide.`
+      : `Geht klar, ich geb ${m.name.split(' ')[0]} frei.`;
+    if (boss) messages.send(ctx, { contact: staffContact(boss), text: reply, silent: true });
+    if (spot) return { ok: false, reason: `${boss?.name ?? 'Deine Rechte Hand'} gibt ${m.name} nicht frei.` };
+  }
+  const minutes = travelMinutesBetween(m.cityId, cityId);
+  assign(ctx, staffId, { kind: 'travel', targetId: cityId });
+  m.busyUntil = ctx.now + minutes;
+  journal.add(
+    ctx,
+    `${m.name} fährt nach ${cityName(cityId)}, Ankunft in ca. ${clock.formatDuration(minutes)}.`,
+    'info',
+    { staffId },
+  );
+  return { ok: true, data: { arrivesAt: m.busyUntil } };
 }

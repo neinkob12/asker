@@ -12,13 +12,15 @@ import {
   type MoneyCategory,
   wallet,
 } from '../../core';
+import { activeCity, bribeFactor, cityName, isPlayerIn } from '../city';
 import { allProducts, DEFAULT_PRODUCT, getProduct, getStock, getWarehouses, store, take } from '../goods';
+import { hasFullPower } from '../hierarchy';
 import { addHeat } from '../police';
 import { changeReputation } from '../reputation';
 import { getSpot } from '../spots';
 import { getStaff, getStaffMember, setStatus } from '../staff';
 import { addInfluence, PLAYER_FACTION } from '../territory';
-import { veedelName } from '../veedel';
+import { veedelCity, veedelName } from '../veedel';
 import { ENCOUNTER_ACTIONS } from './actions';
 import {
   ABANDON_CASH_MAX,
@@ -253,7 +255,13 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
     round: 0,
     maxRounds: kind.maxRounds,
     log: [],
-    bribeCost: kind.bribe ? kind.bribe.base + kind.bribe.perOpponent * count : 0,
+    // Freikaufen kostet je nach Stadt mehr oder weniger (Kölscher Klüngel, Auftrag 30).
+    bribeCost: kind.bribe
+      ? Math.round(
+          (kind.bribe.base + kind.bribe.perOpponent * count) *
+            bribeFactor(request.veedelId ? veedelCity(request.veedelId) : activeCity(ctx.state)),
+        )
+      : 0,
     extraHeat: 0,
     goodsDropped: 0,
     bribeSpent: 0,
@@ -264,7 +272,8 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
     result: null,
   };
   for (const id of new Set(request.staffIds ?? [])) addStaff(ctx.state, encounter, id);
-  if (request.playerPresent === true) addPlayer(encounter);
+  // Dabei sein kannst du nur in der Stadt, in der du bist (Auftrag 30).
+  if (request.playerPresent === true && playerCanBeThere(ctx.state, encounter)) addPlayer(encounter);
   else if (request.playerPresent === undefined && request.askPlayer && kind.joinable) encounter.phase = 'briefing';
   encounter.situation = fillText(request.situation ?? kind.situation, textVars(encounter));
   encounter.edge = startEdge(encounter);
@@ -340,8 +349,34 @@ export function briefingOptions(state: GameState, encounter: Encounter): Briefin
     if (mode === 'tipoff' && !encounter.request.veedelId) {
       return { mode, cost: 0, ok: false, reason: 'Kein Veedel, in das die Polizei kommen könnte.' };
     }
+    if (mode === 'self' && !playerCanBeThere(state, encounter)) {
+      return { mode, cost: 0, ok: false, reason: `Du bist nicht in ${cityName(encounterCity(encounter))}.` };
+    }
     return { mode, cost: 0, ok: true };
   });
+}
+
+/** Stadt einer Konfrontation (über ihr Veedel; ohne Veedel die aktive Stadt). */
+function encounterCity(encounter: Encounter, state?: GameState): string {
+  const veedelId = encounter.request.veedelId;
+  return veedelId ? veedelCity(veedelId) : state ? activeCity(state) : 'koeln';
+}
+
+/** Kannst du selbst hin? Nur in der Stadt, in der du bist (und nicht unterwegs zwischen den Städten). */
+function playerCanBeThere(state: GameState, encounter: Encounter): boolean {
+  return isPlayerIn(state, encounterCity(encounter, state));
+}
+
+/**
+ * In einer Stadt, in der du nicht bist: Hat die Rechte Hand dort Vollmacht, entscheidet sie sofort (ihre Leute machen),
+ * sonst bleibt es beim Standardweg (Frist, dann entscheiden die Leute selbst).
+ */
+export function delegateAbsent(ctx: Ctx): void {
+  for (const encounter of [...ctx.state.modules.encounters.active]) {
+    if (encounter.phase !== 'briefing' || playerCanBeThere(ctx.state, encounter)) continue;
+    if (!hasFullPower(ctx.state, encounterCity(encounter, ctx.state))) continue;
+    join(ctx, encounter.id, 'crew');
+  }
 }
 
 /**
@@ -366,7 +401,7 @@ export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): Comman
       enterRounds(ctx, encounter);
       break;
     case 'backup': {
-      if (!wallet.pay(ctx, option.cost, 'dirty', 'Verstärkung', lossCategory(encounter.kind)))
+      if (!wallet.pay(ctx, option.cost, 'dirty', 'Verstärkung', lossCategory(encounter)))
         return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
       encounter.bribeSpent += option.cost;
       const ids = backupCandidates(ctx.state, encounter);
@@ -378,7 +413,7 @@ export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): Comman
       break;
     }
     case 'payoff': {
-      if (!wallet.pay(ctx, option.cost, 'dirty', 'Freikaufen', lossCategory(encounter.kind)))
+      if (!wallet.pay(ctx, option.cost, 'dirty', 'Freikaufen', lossCategory(encounter)))
         return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
       encounter.bribeSpent += option.cost;
       encounter.phase = 'rounds';
@@ -466,7 +501,7 @@ export function act(ctx: Ctx, encounterId: number, actionId: string): CommandRes
     return { ok: false, reason: 'Das geht gerade nicht.' };
   }
   if (action.costsBribe) {
-    if (!wallet.pay(ctx, encounter.bribeCost, 'dirty', 'Bestechung', lossCategory(encounter.kind))) {
+    if (!wallet.pay(ctx, encounter.bribeCost, 'dirty', 'Bestechung', lossCategory(encounter))) {
       return { ok: false, reason: `Nicht genug Schwarzgeld (${formatEuro(encounter.bribeCost)}).` };
     }
     encounter.bribeSpent += encounter.bribeCost;
@@ -619,7 +654,8 @@ export function expireDecisions(ctx: Ctx): void {
 function loseGoods(ctx: Ctx, amount: number): number {
   let left = Math.max(0, Math.round(amount));
   let lost = 0;
-  for (const warehouse of getWarehouses(ctx.state)) {
+  // Was bei einer Konfrontation verloren geht, liegt in der Stadt, in der sie spielt (die aktive).
+  for (const warehouse of getWarehouses(ctx.state, activeCity(ctx.state))) {
     for (const product of allProducts()) {
       if (left <= 0) return lost;
       const { taken } = take(ctx, { productId: product.id, amount: left, warehouseId: warehouse.id, partial: true });
@@ -630,8 +666,13 @@ function loseGoods(ctx: Ctx, amount: number): number {
   return lost;
 }
 
-/** Kategorie für Geld, das bei einer Konfrontation weggeht (Kasse): Überfall, Polizei oder sonst Konfrontation. */
-function lossCategory(kind: string): MoneyCategory {
+/**
+ * Kategorie für Geld, das bei einer Konfrontation weggeht (Kasse): wie in der Anfrage angegeben (z.B. Zoll), sonst
+ * Überfall, Polizei oder sonst Konfrontation.
+ */
+function lossCategory(encounter: Pick<Encounter, 'kind' | 'request'>): MoneyCategory {
+  if (encounter.request.lossCategory) return encounter.request.lossCategory;
+  const kind = encounter.kind;
   if (kind === 'raidDefense') return 'loss.theft';
   if (kind === 'policeChase' || kind === 'vehicleCheck') return 'loss.police';
   return 'loss.encounter';
@@ -646,7 +687,7 @@ const OUTCOME_VERDICT: Record<EncounterOutcome, string> = {
 function applyEffects(ctx: Ctx, encounter: Encounter, effects: EncounterEffects, result: EncounterResult): void {
   const stakes = encounter.request.stakes ?? {};
   const reason = getKind(encounter.kind)?.name ?? 'Konfrontation';
-  const loss = lossCategory(encounter.kind);
+  const loss = lossCategory(encounter);
 
   let money = 0;
   if (effects.money !== undefined) money += roll(ctx, effects.money);

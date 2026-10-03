@@ -45,6 +45,8 @@ interface Entry {
   mode: 'normal' | 'hardcore';
   title: string | null;
   quests: number;
+  /** Komplett übernommene Städte (Auftrag 30, fehlt bei älteren Einträgen). */
+  cities?: number;
 }
 
 interface Board {
@@ -119,6 +121,7 @@ function entryTags(e: Entry): ChipSpec[] {
     { label: `${e.veedel} Veedel`, color: 'place', icon: 'flag' },
     OUTCOME[e.outcome],
   ];
+  if ((e.cities ?? 0) > 1) tags.push({ label: `${e.cities} Städte`, color: 'place', icon: 'building' });
   if (e.mode === 'hardcore') tags.push({ label: 'Hardcore', color: 'danger', icon: 'skull' });
   if (e.title) tags.push({ label: e.title, color: 'brand', icon: 'crown' });
   return tags;

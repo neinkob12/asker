@@ -137,7 +137,8 @@ describe('Kaution', () => {
     runner.stats.loyalty = 50;
     arrest(sim, runner.id);
     const cost = bailCost(sim.state, runner.id);
-    expect(cost).toBe(BAIL_BASE);
+    // In Köln ein Viertel günstiger (Klüngel, Auftrag 30).
+    expect(cost).toBe(BAIL_BASE * 0.75);
     const money = sim.state.wallet.dirty;
     expect(sim.dispatch({ type: 'staff.bail', payload: { staffId: runner.id } })).toEqual({ ok: true, data: { cost } });
     expect(sim.state.wallet.dirty).toBe(money - cost);

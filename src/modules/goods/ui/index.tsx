@@ -39,6 +39,7 @@ import {
   stockSummary,
 } from '../index';
 import './goods.css';
+import { activeCity } from '../../city';
 
 declare module '../../../ui' {
   interface PanelRegistry {
@@ -73,8 +74,10 @@ function QualityLabel(props: { quality: number }) {
 function StockHud() {
   const { state } = useGame();
   const ui = useUi();
-  const rows = [...stockSummary(state)].sort((a, b) => b.amount - a.amount);
-  const warehouses = getWarehouses(state);
+  // Lager der aktiven Stadt (Auftrag 30): In Hamburg zählt nur, was dort liegt.
+  const cityId = activeCity(state);
+  const rows = [...stockSummary(state, undefined, cityId)].sort((a, b) => b.amount - a.amount);
+  const warehouses = getWarehouses(state, cityId);
   const text = (r: (typeof rows)[number]) =>
     `${formatProductAmount(r.productId, r.amount)} ${productName(r.productId)}`;
   const short =
@@ -130,7 +133,7 @@ function StockHud() {
 function WarehouseList(props: { warehouseId: string }) {
   const { state } = useGame();
   const ui = useUi();
-  const warehouses = getWarehouses(state);
+  const warehouses = getWarehouses(state, activeCity(state));
   return (
     <Group title="Deine Lager" icon="warehouse" color="goods" count={warehouses.length}>
       <List>

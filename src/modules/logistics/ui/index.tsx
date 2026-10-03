@@ -24,6 +24,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity } from '../../city';
 import { isPlayerDelivering } from '../../customers';
 import {
   formatProductAmount,
@@ -36,7 +37,7 @@ import {
 } from '../../goods';
 import { getStaff, getStaffMember } from '../../staff';
 import {
-  BERTH_COST,
+  berthCost,
   cargoRisk,
   cargoRiskFrom,
   defaultPickupWarehouse,
@@ -45,21 +46,26 @@ import {
   getLogisticsLog,
   getTrips,
   hasBerth,
+  isInterCityTrip,
   isPlayerOnTheRoad,
+  PORTS,
   placeOf,
+  portName,
   type Trip,
   type TripLeg,
   tripAmount,
   tripProgress,
 } from '../index';
 import './island';
+import { LogisticsLinks } from './routes';
 import './tracking';
 import { logisticsLayer } from './map';
 import './logistics.css';
 
 /** Was die Fahrt gerade tut (beim Umlagern wird im Lager geladen, nicht am Kai). */
-function legText(trip: Trip, leg: TripLeg): string {
-  if (leg === 'stopped') return 'Verkehrskontrolle';
+function legText(trip: Trip, leg: TripLeg, interCity = false): string {
+  if (leg === 'stopped') return interCity ? 'Zollkontrolle' : 'Verkehrskontrolle';
+  if (trip.kind === 'route' && leg === 'delivering') return interCity ? 'auf der A1' : 'Route';
   if (leg === 'toPickup') return 'fährt zum Hafen';
   if (leg === 'loading') return trip.kind === 'pickup' ? 'lädt am Kai' : 'lädt ein';
   return 'bringt die Ware';
@@ -98,7 +104,7 @@ function TripRow(props: { trip: Trip }) {
         icon={stopped ? 'siren' : trip.driverId ? 'truck' : 'car'}
         color={stopped ? 'danger' : 'goods'}
         title={trip.kind === 'pickup' ? `Hafen → ${to}` : `${from} → ${to}`}
-        meta={legText(trip, progress.leg)}
+        meta={legText(trip, progress.leg, isInterCityTrip(state, trip))}
         tags={[
           { label: who(state, trip.driverId), icon: 'user', color: 'people' },
           { label: `${tripAmount(trip)} Einheiten`, icon: 'package', color: 'goods' },
@@ -139,17 +145,22 @@ function PortSection() {
   const { state, dispatch } = useGame();
   const ui = useUi();
   const cargo = getCargo(state);
-  const warehouses = getWarehouses(state);
+  const warehouses = getWarehouses(state, activeCity(state));
   const drivers = freeDrivers(state);
   const [target, setTarget] = useState('');
   const [driverId, setDriverId] = useState('');
+  const cityId = activeCity(state);
+  const port = portName(cityId);
+  const cost = berthCost(cityId);
+  const quay = PORTS[cityId]?.quay ?? 'Kai 7';
+  const hamburg = cityId === 'hamburg';
   if (!hasBerth(state)) {
-    const short = state.wallet.clean < BERTH_COST;
+    const short = state.wallet.clean < cost;
     return (
       <Group
         icon="ship"
         color="goods"
-        title="Niehler Hafen"
+        title={port}
         note={
           short
             ? `Du hast ${formatEuro(state.wallet.clean)} sauberes Geld. Waschen kannst du in der App Geldwäsche.`
@@ -165,26 +176,34 @@ function PortSection() {
                 disabled={short}
                 onClick={() => dispatch({ type: 'logistics.buyBerth', payload: {} })}
               >
-                Liegeplatz mieten ({formatEuro(BERTH_COST)})
+                Liegeplatz mieten ({formatEuro(cost)})
               </Button>
               {short && <Button onClick={() => ui.openPhone('laundering.app')}>Geldwäsche</Button>}
             </div>
           }
         >
-          Mit eigenem Liegeplatz liefert Rotterdam große Mengen per Schiff, viel billiger als die Großstädte. Der Hafen
-          ist legal, gezahlt wird mit sauberem Geld.
+          {hamburg
+            ? 'Mit eigenem Liegeplatz liefert dir Hein Container direkt an den Kai: kiloweise, in sechs Stunden. Der Zoll hier ist wacher als in Köln.'
+            : 'Mit eigenem Liegeplatz liefert Rotterdam große Mengen per Schiff, viel billiger als die Großstädte.'}{' '}
+          Der Hafen ist legal, gezahlt wird mit sauberem Geld.
         </Empty>
       </Group>
     );
   }
   if (cargo.length === 0) {
     return (
-      <Group icon="ship" color="goods" title="Niehler Hafen, Kai 7">
+      <Group icon="ship" color="goods" title={`${port}, ${quay}`}>
         <Empty
           icon="ship"
-          action={<Button onClick={() => ui.openPhone('suppliers.app', { supplierId: 'rotterdam' })}>Zu Jansen</Button>}
+          action={
+            <Button onClick={() => ui.openPhone('suppliers.app', { supplierId: hamburg ? 'hamburg' : 'rotterdam' })}>
+              {hamburg ? 'Zu Hein' : 'Zu Jansen'}
+            </Button>
+          }
         >
-          Am Kai wartet nichts. Schiffsware bestellst du bei Jansen (Rotterdam).
+          {hamburg
+            ? 'Am Kai wartet nichts. Container bestellst du bei Hein.'
+            : 'Am Kai wartet nichts. Schiffsware bestellst du bei Jansen (Rotterdam).'}
         </Empty>
       </Group>
     );
@@ -196,7 +215,7 @@ function PortSection() {
     <Group
       icon="ship"
       color="goods"
-      title="Niehler Hafen, Kai 7"
+      title={`${port}, ${quay}`}
       count={cargo.length}
       note="Ware am Kai ist ein paar Stunden sicher, dann wird der Zoll neugierig."
       more="Mit Ware an Bord kann es unterwegs eine Verkehrskontrolle geben, vor allem bei viel Heat im Ziel-Veedel. Ein Fahrer holt ab, oder du fährst selbst."
@@ -282,7 +301,7 @@ function PortSection() {
 function WarehouseLogistics(props: { warehouseId: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
-  const owned = getWarehouses(state);
+  const owned = getWarehouses(state, activeCity(state));
   const [toId, setToId] = useState('');
   const [productId, setProductId] = useState('');
   const from = owned.find((w) => w.id === props.warehouseId) ?? owned[0];
@@ -302,7 +321,7 @@ function WarehouseLogistics(props: { warehouseId: string }) {
       type: 'logistics.transfer',
       payload: { fromId: from.id, toId: to.id, by, ...(product ? { productId: product } : {}) },
     });
-  const forSale = warehouseSites().filter((w) => !owned.some((o) => o.id === w.id));
+  const forSale = warehouseSites(activeCity(state)).filter((w) => !owned.some((o) => o.id === w.id));
   return (
     <>
       <Group icon="ship" color="goods" title="Hafen">
@@ -324,16 +343,17 @@ function WarehouseLogistics(props: { warehouseId: string }) {
             <ItemContent
               icon="anchor"
               color={risky ? 'danger' : 'goods'}
-              title="Niehler Hafen"
+              title={portName(activeCity(state))}
               meta={
                 hasBerth(state)
                   ? cargo.length > 0
                     ? 'Ware am Kai wartet auf die Abholung'
-                    : 'Liegeplatz Kai 7, nichts am Kai'
-                  : 'Noch kein Liegeplatz. Mit einem liefert Rotterdam per Schiff.'
+                    : 'Liegeplatz, nichts am Kai'
+                  : 'Noch kein Liegeplatz. Mit einem liefern Schiffe große Mengen.'
               }
             />
           </ListItem>
+          <LogisticsLinks />
         </List>
       </Group>
       {trips.length > 0 && <TripsGroup trips={trips} />}
@@ -444,7 +464,6 @@ function TripsGroup(props: { trips: readonly Trip[] }) {
 /** Hafen-Seite (Panel): Kennzahlen, Kai, Fahrten unterwegs, was zuletzt lief. */
 function PortPanel() {
   const { state } = useGame();
-  const ui = useUi();
   const trips = getTrips(state);
   const log = getLogisticsLog(state).slice(0, 4);
   const drivers = getStaff(state, { role: 'driver' }).length;
@@ -454,21 +473,13 @@ function PortPanel() {
       <PortSection />
       {trips.length > 0 && <TripsGroup trips={trips} />}
       <Group
-        icon="users"
-        color="people"
-        title="Fahrer"
-        count={drivers}
+        icon="route"
+        color="goods"
+        title="Fahrer und Routen"
         note={drivers === 0 ? 'Ohne Fahrer musst du jede Abholung selbst machen.' : undefined}
       >
         <List>
-          <ListItem onClick={() => ui.selectTab('staff')}>
-            <ItemContent
-              icon="truck"
-              color="goods"
-              title={drivers === 0 ? 'Fahrer anheuern' : `${freeDrivers(state).length} von ${drivers} frei`}
-              meta="Im Personal"
-            />
-          </ListItem>
+          <LogisticsLinks />
         </List>
       </Group>
       {log.length > 0 && (
@@ -490,7 +501,7 @@ function PortPanel() {
                 <ItemContent
                   icon={entry.result === 'done' ? 'checkCircle' : 'xCircle'}
                   color={entry.result === 'done' ? 'money' : 'danger'}
-                  title={`${who(state, entry.driverId)} → ${getWarehouse(state, entry.toId)?.name ?? 'Lager'}`}
+                  title={`${who(state, entry.driverId)} → ${placeOf(state, entry.toId)?.name ?? 'Lager'}`}
                   meta={clock.formatTime(entry.at)}
                 />
               </ListItem>
@@ -509,7 +520,33 @@ declare module '../../../ui' {
   }
 }
 
-registerPanel({ id: 'logistics.port', title: () => 'Niehler Hafen', component: PortPanel });
+registerPanel({ id: 'logistics.port', title: () => 'Hafen', component: PortPanel });
+
+/** In der Lieferanten-App (Dock): Hafen, Routen und Fahrer, damit die Logistik schnell erreichbar ist. */
+function SupplierLogistics() {
+  const { state } = useGame();
+  const ui = useUi();
+  const cityId = activeCity(state);
+  const cargo = getCargo(state).length;
+  return (
+    <Group icon="truck" color="goods" title="Logistik">
+      <List>
+        {PORTS[cityId] && (
+          <ListItem onClick={() => ui.openPanel('logistics.port', {})}>
+            <ItemContent
+              icon="anchor"
+              color="goods"
+              title={portName(cityId)}
+              meta={hasBerth(state) ? (cargo > 0 ? `${cargo} am Kai` : 'Liegeplatz') : 'Noch kein Liegeplatz'}
+            />
+          </ListItem>
+        )}
+        <LogisticsLinks />
+      </List>
+    </Group>
+  );
+}
+registerSlot('suppliers.list', { id: 'logistics.links', order: 10, component: SupplierLogistics });
 registerSlot('goods.warehouse', { id: 'logistics.warehouse', order: 20, component: WarehouseLogistics });
 registerMapLayer(logisticsLayer);
 
@@ -540,13 +577,17 @@ registerAdvisor({
         },
       };
     }
-    if (!hasBerth(state) && state.wallet.clean >= BERTH_COST) {
+    const cityId = activeCity(state);
+    if (!hasBerth(state) && PORTS[cityId] && state.wallet.clean >= berthCost(cityId)) {
       return {
         id: 'logistics.berth',
         priority: 45,
         icon: 'ship',
-        title: 'Liegeplatz im Hafen mieten',
-        text: 'Dann liefert Rotterdam große Mengen per Schiff, viel billiger als die Großstädte.',
+        title: `Liegeplatz im ${portName(cityId)} mieten`,
+        text:
+          cityId === 'hamburg'
+            ? 'Dann liefert Hein Container direkt an den Kai, kiloweise.'
+            : 'Dann liefert Rotterdam große Mengen per Schiff, viel billiger als die Großstädte.',
         actionLabel: 'Ansehen',
         action: (ui) => ui.openPanel('logistics.port', {}),
       };
@@ -566,11 +607,16 @@ onGameEvent('cargo.seized', 'logistics.customsToast', (payload, ui) => {
   ui.toast(`Zoll im Hafen: ${formatProductAmount(payload.productId, payload.amount)} beschlagnahmt!`, 'bad');
 });
 onGameEvent('transport.arrived', 'logistics.arrivedToast', (payload, ui, state) => {
-  ui.toast(
-    `Fahrt angekommen: ${payload.amount} Einheiten im ${getWarehouse(state, payload.toId)?.name ?? 'Lager'}.`,
-    'good',
-    { urgent: true },
-  );
+  if (payload.amount === 0) return;
+  const place = getWarehouse(state, payload.toId)?.name ?? 'Lager';
+  // Routen in derselben Stadt sind Routine (still im Verlauf); eine Ankunft über die A1 ist ein Banner wert.
+  const routine = payload.kind === 'route' && !payload.interCity;
+  ui.toast(`Fahrt angekommen: ${payload.amount} Einheiten im ${place}.`, 'good', { urgent: !routine });
+});
+onGameEvent('transport.stopped', 'logistics.customsStopToast', (payload, ui, state) => {
+  const trip = getTrips(state).find((t) => t.id === payload.tripId);
+  if (trip && isInterCityTrip(state, trip))
+    ui.toast(`Zoll auf der A1: ${who(state, trip.driverId)} wird kontrolliert!`, 'bad');
 });
 onGameEvent('transport.seized', 'logistics.seizedToast', (payload, ui) => {
   ui.toast(`Ladung aufgeflogen${payload.arrested ? ', Fahrer festgenommen' : ''}!`, 'bad');

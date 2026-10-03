@@ -15,6 +15,7 @@
 // Ereignisse: 'market.competitionChanged', 'market.priceSet'
 
 import { type CommandResult, type Ctx, defineModule, formatEuro, type GameState } from '../../core';
+import { activeCity, isVeedelLive } from '../city';
 import { getProduct } from '../goods';
 import { getSpot } from '../spots';
 import { allVeedel, getVeedel } from '../veedel';
@@ -91,9 +92,9 @@ export function referencePrice(state: GameState, productId: string, veedelId: st
   );
 }
 
-/** Mittlerer Richtpreis über alle Veedel (z.B. für den Großhandel). */
-export function averageReferencePrice(state: GameState, productId: string): number {
-  const veedel = allVeedel();
+/** Mittlerer Richtpreis über alle Veedel einer Stadt (Standard: die aktive; z.B. für den Großhandel). */
+export function averageReferencePrice(state: GameState, productId: string, cityId: string = activeCity(state)): number {
+  const veedel = allVeedel(cityId);
   if (veedel.length === 0) return getProduct(productId)?.basePrice ?? 0;
   return veedel.reduce((sum, v) => sum + referencePrice(state, productId, v.id), 0) / veedel.length;
 }
@@ -174,6 +175,8 @@ function shiftPressure(ctx: Ctx, veedelId: string, productId: string, amount: nu
 function decay(ctx: Ctx): void {
   const pressure = ctx.state.modules.market.pressure;
   for (const [veedelId, products] of Object.entries(pressure)) {
+    // Die schlafende Stadt ist eingefroren (Auftrag 30).
+    if (!isVeedelLive(ctx.state, veedelId)) continue;
     for (const [productId, value] of Object.entries(products)) {
       const next = Math.round(value * PRESSURE_DECAY * 10000) / 10000;
       if (Math.abs(next) < 0.001) delete products[productId];

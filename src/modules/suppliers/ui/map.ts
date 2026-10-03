@@ -13,15 +13,15 @@ import {
   createVehicle,
   el,
   type FootpathHandle,
-  KOELN_CENTER,
   type MapLayer,
   mapToken,
   pathLength,
   type VehicleHandle,
 } from '../../../map';
 import { iconElement } from '../../../ui';
+import { playableCities } from '../../city';
 import { formatProductAmount, getWarehouse, getWarehouses, productName } from '../../goods';
-import { roadApproach, roadRoute, shipRoute } from '../../roads';
+import { roadApproach, roadEntryFrom, roadRoute, shipRoute } from '../../roads';
 import {
   CITY_APPROACH_SHARE,
   deliveryLeg,
@@ -80,9 +80,10 @@ function cityPath(
   supplier: Supplier,
   target: LngLat,
 ): { path: LngLat[]; split: number; walk: [LngLat, LngLat] | null } {
-  const approach = roadApproach(supplier, supplier.via);
-  const ramp = approach?.path ?? [];
-  const entry = ramp[ramp.length - 1] ?? supplier;
+  // In eine Stadt ohne Zufahrten (Hamburg) über den nächsten Autobahn-Knoten ihres Netzes.
+  const approach = roadApproach(supplier, supplier.via, target);
+  const ramp = approach?.path ?? [roadEntryFrom(supplier, supplier.via, target)];
+  const entry = ramp[ramp.length - 1];
   const route = roadRoute(entry, target);
   const city = [...ramp, ...route.drive];
   const outside = pathLength([supplier, city[0]]);
@@ -153,9 +154,11 @@ export const suppliersLayer: MapLayer = {
             el('span', 'map-place-name', supplier.name),
           ],
         });
-        // Der Lieferant in Köln selbst steht nur in der Europa-Ansicht; in der Stadt läge "Köln" mitten zwischen den
-        // Spots (Breslauer Platz) und sagt dort nichts.
-        if (distanceMeters(supplier, KOELN_CENTER) < LOCAL_RADIUS) element.classList.add('map-place--local');
+        // Lieferanten in einer Stadt im Spiel (Kalle in Köln, Hein in Hamburg) stehen nur weit herausgezoomt; in der
+        // Stadt lägen sie mitten zwischen den Spots und sagen dort nichts.
+        if (playableCities().some((c) => distanceMeters(supplier, c.center) < LOCAL_RADIUS)) {
+          element.classList.add('map-place--local');
+        }
       }
     };
     placeSuppliers();

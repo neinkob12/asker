@@ -14,6 +14,7 @@ import {
   messages,
   wallet,
 } from '../../core';
+import { activeCity, cityAt, cityName, cityOfSpot, isPlayerIn } from '../city';
 import { startEncounter } from '../encounters';
 import {
   allProducts,
@@ -40,7 +41,7 @@ import { changeReputation, getReputation, reputationDemandFactor } from '../repu
 import { travelMinutes } from '../roads';
 import { getSpot } from '../spots';
 import { assign, getStaffMember } from '../staff';
-import { allVeedel, getVeedel, type Veedel } from '../veedel';
+import { allVeedel, getVeedel, type Veedel, veedelCity } from '../veedel';
 import {
   CUSTOMER_TYPES,
   DEALERS,
@@ -190,8 +191,10 @@ export function offerDelivery(ctx: Ctx, force = false): Order | null {
   const viaRightHand = rightHandHandlesOrders(state);
   if (!force && !s.directOrders && !viaRightHand) return null;
   if (s.orders.filter(isOpen).length >= MAX_OPEN_ORDERS) return null;
-  if (getReputation(state) < DELIVERY_MIN_REPUTATION || getStock(state) <= 0) return null;
-  const active = s.regulars.filter((r) => r.status === 'active');
+  // Anfragen kommen aus der Stadt, die live ist, und nur für Ware, die dort im Lager liegt (Auftrag 30).
+  const cityId = activeCity(state);
+  if (getReputation(state) < DELIVERY_MIN_REPUTATION || getStock(state, { cityId }) <= 0) return null;
+  const active = s.regulars.filter((r) => r.status === 'active' && cityOfSpot(state, r.spotId) === cityId);
   const hour = clock.hour(ctx.now);
   const chance =
     DELIVERY_CHANCE_PER_HOUR *
@@ -202,7 +205,9 @@ export function offerDelivery(ctx: Ctx, force = false): Order | null {
   if (!force && !ctx.chance(chance)) return null;
 
   const candidates = active.filter(
-    (r) => getStock(state, { productId: r.productId }) > 0 && !s.orders.some((o) => isOpen(o) && o.regularId === r.id),
+    (r) =>
+      getStock(state, { productId: r.productId, cityId }) > 0 &&
+      !s.orders.some((o) => isOpen(o) && o.regularId === r.id),
   );
   let regular: Regular | null = null;
   if (candidates.length > 0 && ctx.chance(0.4)) regular = ctx.pick(candidates);
@@ -216,7 +221,7 @@ export function offerDelivery(ctx: Ctx, force = false): Order | null {
     // Nur wer bei dir etwas Passendes bekommt, fragt an.
     const weekday = clock.weekday(ctx.now);
     const inStock = CUSTOMER_TYPES.map((t) =>
-      productsFor(t.id, allProducts()).filter((p) => getStock(state, { productId: p.id }) > 0),
+      productsFor(t.id, allProducts()).filter((p) => getStock(state, { productId: p.id, cityId }) > 0),
     );
     const weights = CUSTOMER_TYPES.map((t, i) =>
       inStock[i].length > 0 ? typeDemandWeight(t, undefined, hour, weekday) : 0,
@@ -234,10 +239,10 @@ export function offerDelivery(ctx: Ctx, force = false): Order | null {
   if (!product) return null;
   const type = customerType(typeId);
   const [, max] = product.typicalAmount;
-  const stock = getStock(state, { productId });
+  const stock = getStock(state, { productId, cityId });
   const amount = Math.min(stock, Math.max(1, Math.round(ctx.randomInt(max, max * 2) * type.amountFactor)));
   const regularSpot = regular ? getSpot(state, regular.spotId) : undefined;
-  const veedel = (regularSpot && getVeedel(regularSpot.veedelId)) || ctx.pick(allVeedel());
+  const veedel = (regularSpot && getVeedel(regularSpot.veedelId)) || ctx.pick(allVeedel(cityId));
   const place = placeIn(ctx, veedel);
   const price = Math.round(amount * referencePrice(state, productId, veedel.id) * DELIVERY_MARKUP);
   const goods = `${formatProductAmount(productId, amount)} ${product.name}`;
@@ -270,23 +275,26 @@ export function offerWholesale(ctx: Ctx, force = false): Order | null {
   if (s.orders.filter(isOpen).length >= MAX_OPEN_ORDERS) return null;
   if (getReputation(state) < WHOLESALE_MIN_REPUTATION) return null;
   if (!force && !ctx.chance(WHOLESALE_CHANCE_PER_HOUR * reputationDemandFactor(state))) return null;
+  const cityId = activeCity(state);
   const options = allProducts()
     .map((p) => ({
       product: p,
-      amounts: (WHOLESALE_AMOUNTS[p.unit] ?? []).filter((a) => a <= getStock(state, { productId: p.id })),
+      amounts: (WHOLESALE_AMOUNTS[p.unit] ?? []).filter((a) => a <= getStock(state, { productId: p.id, cityId })),
     }))
     .filter((o) => o.amounts.length > 0);
   if (options.length === 0) return null;
   const { product, amounts } = ctx.pick(options);
   const amount = ctx.pick(amounts);
-  const dealer = ctx.pick(DEALERS);
+  const dealers = DEALERS.filter((d) => veedelCity(d.veedelId) === cityId);
+  if (dealers.length === 0) return null;
+  const dealer = ctx.pick(dealers);
   const [min, max] = WHOLESALE_DISCOUNT;
   const discount = min + ctx.random() * (max - min);
   const price = Math.max(
     10,
     Math.round((amount * averageReferencePrice(state, product.id) * (1 - discount)) / 10) * 10,
   );
-  const veedel = getVeedel(dealer.veedelId) ?? ctx.pick(allVeedel());
+  const veedel = getVeedel(dealer.veedelId) ?? ctx.pick(allVeedel(cityId));
   const place = placeIn(ctx, veedel);
   const goods = `${formatProductAmount(product.id, amount)} ${product.name}`;
   const perUnit = formatNumber(price / amount, 2);
@@ -327,7 +335,9 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier' 
     if (state.modules.customers.orders.some((o) => o.status === 'enRoute' && o.deliveredBy === 'player')) {
       return { ok: false, reason: 'Du bist schon mit einer Lieferung unterwegs.' };
     }
-    if (isPlayerOnTheRoad(state)) return { ok: false, reason: 'Du bist gerade mit dem Transporter unterwegs.' };
+    if (isPlayerOnTheRoad(state)) return { ok: false, reason: 'Du bist gerade unterwegs.' };
+    const city = cityAt(order.lng, order.lat);
+    if (!isPlayerIn(state, city)) return { ok: false, reason: `Du bist nicht in ${cityName(city)}.` };
   } else {
     const driver = rightHandDriver(state);
     if (!driver.ok) return { ok: false, reason: driver.reason };
@@ -337,7 +347,7 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier' 
     );
     detour = rightHandDetour(ctx);
   }
-  if (getStock(state, { productId: order.productId }) < order.amount) {
+  if (getStock(state, { productId: order.productId, cityId: cityAt(order.lng, order.lat) }) < order.amount) {
     return { ok: false, reason: 'Nicht genug im Lager.' };
   }
   // Losgefahren wird im nächsten Lager, das genug davon hat (sonst im nächsten mit etwas davon).

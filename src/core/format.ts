@@ -1,11 +1,24 @@
 // Formatierung für Texte in Journal, Nachrichten und UI.
 
+// Ein Intl.NumberFormat je Nachkommastellen, einmal angelegt: toLocaleString baut bei jedem Aufruf intern ein neues
+// (das kostete im Spiel ein paar Prozent der Rechenzeit, HUD-Zähler und Listen formatieren ständig).
+const FORMATS: Intl.NumberFormat[] = [];
+
+function numberFormat(digits: number): Intl.NumberFormat {
+  let format = FORMATS[digits];
+  if (!format) {
+    format = new Intl.NumberFormat('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    FORMATS[digits] = format;
+  }
+  return format;
+}
+
 export function formatEuro(amount: number): string {
-  return `${Math.round(amount).toLocaleString('de-DE')} €`;
+  return `${numberFormat(0).format(Math.round(amount))} €`;
 }
 
 export function formatNumber(value: number, digits = 0): string {
-  return value.toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return numberFormat(digits).format(value);
 }
 
 /** Menge mit Einheit, z.B. "40 g" oder "1,5 kg". */

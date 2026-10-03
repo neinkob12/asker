@@ -7,9 +7,15 @@ import { useEffect, useRef } from 'preact/hooks';
 import { clock, formatEuro, type GameState, wallet } from '../../core';
 import { useRuntime } from '../hooks';
 import { type Advice, advisors } from '../registry';
+import { memoState } from '../stateMemo';
 
-/** Alle Empfehlungen, wichtigste zuerst. Fehler einzelner Module werden ignoriert. */
-export function collectAdvice(state: GameState): Advice[] {
+/**
+ * Alle Empfehlungen, wichtigste zuerst. Fehler einzelner Module werden ignoriert. Einmal pro Spielstand gerechnet
+ * (Startbildschirm, Leiste, Suche und Hinweis fragen alle), nicht verändern.
+ */
+export const collectAdvice: (state: GameState) => Advice[] = memoState(computeAdvice);
+
+function computeAdvice(state: GameState): Advice[] {
   const all: Advice[] = [];
   for (const advisor of advisors.list()) {
     try {

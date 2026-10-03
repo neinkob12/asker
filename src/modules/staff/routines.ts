@@ -2,11 +2,12 @@
 // Werte zeigen sich mit der Zeit, seltener Verrat und die Warnung des Polizei-Kontakts.
 
 import { type Ctx, clock, formatEuro, type GameState, journal, messages, wallet } from '../../core';
+import { cityName, raidWarningBonus } from '../city';
 import { canServe, waitingAt } from '../customers';
 import { formatProductAmount, stockSummary, take } from '../goods';
 import { addHeat, getHeat } from '../police';
 import { getSpot } from '../spots';
-import { veedelName } from '../veedel';
+import { veedelCity, veedelName } from '../veedel';
 import {
   BETRAYAL_COOLDOWN,
   BETRAYAL_MAX_CHANCE,
@@ -38,6 +39,7 @@ import {
   effectiveWage,
   expectedWage,
   hidingReturn,
+  isMemberLive,
   isSpecialist,
   removeMember,
   revealStat,
@@ -53,12 +55,29 @@ import type { BetrayalKind, StaffMember } from './types';
 /** Jede Spielminute: Haft und Verletzung ablaufen lassen, Läufer bedienen Kunden. */
 export function tick(ctx: Ctx): void {
   releaseDue(ctx);
+  arriveFromTravel(ctx);
   serveCustomers(ctx);
+}
+
+/** Wer in eine andere Stadt gefahren ist (staff.relocate), kommt an: Er ist dort, ohne Einsatz. */
+function arriveFromTravel(ctx: Ctx): void {
+  for (const m of ctx.state.modules.staff.members) {
+    if (m.assignment?.kind !== 'travel' || m.busyUntil > ctx.now) continue;
+    const from = m.cityId;
+    const to = m.assignment.targetId;
+    m.cityId = to;
+    assign(ctx, m.id, null);
+    addCareer(ctx, m.id, `Nach ${cityName(to)} gegangen.`);
+    journal.add(ctx, `${m.name} ist in ${cityName(to)} angekommen.`, 'good', { staffId: m.id });
+    ctx.emit('staff.relocated', { staffId: m.id, from, to });
+  }
 }
 
 function releaseDue(ctx: Ctx): void {
   for (const m of [...ctx.state.modules.staff.members]) {
     if (m.statusUntil === null || m.statusUntil > ctx.now) continue;
+    // Schlafende Stadt: keine Haft-Ereignisse, entlassen wird beim Aufwachen.
+    if (!isMemberLive(ctx.state, m)) continue;
     if (m.status !== 'jailed' && m.status !== 'injured') continue;
     const wasJailed = m.status === 'jailed';
     // Ohne Stillhaltegeld hat die Person in der Haft eher geredet.
@@ -77,6 +96,7 @@ function releaseDue(ctx: Ctx): void {
 function serveCustomers(ctx: Ctx): void {
   for (const member of [...ctx.state.modules.staff.members]) {
     if (member.role !== 'runner' || member.status !== 'active' || member.assignment?.kind !== 'spot') continue;
+    if (!isMemberLive(ctx.state, member)) continue;
     if (member.busyUntil > ctx.now) continue;
     const customer = waitingAt(ctx.state, member.assignment.targetId).find((c) => canServe(ctx.state, c.id));
     if (!customer) continue;
@@ -129,7 +149,9 @@ export function lieLow(ctx: Ctx, veedelId: string, until: number): number {
 export function warnOfRaid(ctx: Ctx, veedelId: string, at: number, major = false): void {
   const contact = bonusProvider(ctx.state, 'raidWarning');
   // Eine Großrazzia bekommt der Kontakt immer mit (einen Tag Vorlauf), normale Razzien nur mit seinem Bonus.
-  if (!contact || (!major && !ctx.chance(bonus(ctx.state, 'raidWarning')))) return;
+  // In Köln kennt man sich (Klüngel, Auftrag 30): Der Kontakt warnt öfter.
+  const chance = Math.min(1, bonus(ctx.state, 'raidWarning') + raidWarningBonus(veedelCity(veedelId)));
+  if (!contact || (!major && !ctx.chance(chance))) return;
   const time = major ? `${clock.weekdayName(at)}, ${clock.formatTime(at)}` : clock.formatTime(at);
   messages.send(ctx, {
     contact: staffContact(contact),
@@ -183,11 +205,13 @@ function returnFromHiding(ctx: Ctx): void {
 export function daily(ctx: Ctx): void {
   payWages(ctx);
   for (const m of [...ctx.state.modules.staff.members]) {
+    // Schlafende Stadt: keine Loyalitätsverluste, kein Verrat (die Löhne stecken im Tagesergebnis).
+    if (!isMemberLive(ctx.state, m)) continue;
     dailyLoyalty(ctx, m);
     if (ctx.chance(REVEAL_CHANCE)) revealStat(ctx, m.id);
     if (isSpecialist(m.role) && m.status === 'active') addXp(ctx, m.id, XP_PER_SPECIALIST_DAY);
   }
-  for (const m of [...ctx.state.modules.staff.members]) maybeBetray(ctx, m);
+  for (const m of [...ctx.state.modules.staff.members]) if (isMemberLive(ctx.state, m)) maybeBetray(ctx, m);
 }
 
 /**
@@ -204,9 +228,10 @@ function wageSpot(state: GameState, m: StaffMember): string | null {
  * schreibt dir. Wer dann kaum noch loyal ist oder schon gestern leer ausging, kündigt.
  */
 function payWages(ctx: Ctx): void {
-  const members = [...ctx.state.modules.staff.members].sort(
-    (a, b) => b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id),
-  );
+  // Nur die Leute in der Stadt, die live ist: In einer schlafenden Stadt stecken die Löhne im Tagesergebnis (city).
+  const members = ctx.state.modules.staff.members
+    .filter((m) => isMemberLive(ctx.state, m))
+    .sort((a, b) => b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id));
   if (members.length === 0) return;
   let paid = 0;
   let total = 0;

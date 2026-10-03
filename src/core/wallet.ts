@@ -2,7 +2,7 @@
 // Alles Illegale wird mit Schwarzgeld bezahlt, für Legales braucht man gewaschenes (sauberes) Geld.
 // Jede Kontobewegung bekommt eine Kategorie (MoneyCategory), damit die Kasse (Modul finance) eine Gewinn- und
 // Verlustrechnung führen kann: wallet.pay(ctx, 80, 'dirty', 'Lohn Murat K.', 'wages.runner').
-// Statt der Kategorie geht auch ein Etikett mit Bezug ({ category, staffId?, spotId? }), z.B. für Löhne pro Spot.
+// Statt der Kategorie geht auch ein Etikett mit Bezug ({ category, staffId?, spotId?, cityId? }), z.B. für Löhne pro Spot.
 
 import type { Ctx, GameState } from './types';
 
@@ -20,6 +20,7 @@ export type MoneyCategory =
   | 'sales.delivery'
   | 'sales.wholesale'
   | 'income.other'
+  | 'income.city'
   // Ausgaben
   | 'goods.purchase'
   | 'wages.runner'
@@ -35,11 +36,14 @@ export type MoneyCategory =
   | 'tribute'
   | 'laundering'
   | 'expense.other'
+  | 'share.righthand'
+  | 'expense.city'
   // Verluste
   | 'loss.police'
   | 'loss.theft'
   | 'loss.betrayal'
   | 'loss.encounter'
+  | 'loss.customs'
   // Umbuchung (Geldwäsche: Schwarzgeld wird sauberes Geld, zählt nicht als Gewinn oder Verlust)
   | 'transfer';
 
@@ -72,10 +76,16 @@ export const MONEY_CATEGORIES: Record<MoneyCategory, MoneyCategoryInfo> = {
   tribute: { label: 'Schutzgeld und Tribut', group: 'expense', icon: 'handshake' },
   laundering: { label: 'Geldwäsche-Gebühr', group: 'expense', icon: 'washing' },
   'expense.other': { label: 'Sonstige Ausgaben', group: 'expense', icon: 'cart' },
+  // Auftrag 30: Städte. Die Rechte Hand mit Vollmacht bekommt ihren Anteil am Tagesgewinn, eine schlafende Stadt bucht
+  // ihr Tagesergebnis als Ganzes.
+  'share.righthand': { label: 'Anteil Rechte Hand', group: 'expense', icon: 'crown' },
+  'income.city': { label: 'Ergebnis einer Stadt im Schlafmodus (Rechte Hand)', group: 'income', icon: 'building' },
+  'expense.city': { label: 'Verlust einer Stadt im Schlafmodus', group: 'expense', icon: 'building' },
   'loss.police': { label: 'Polizei', group: 'loss', icon: 'siren' },
   'loss.theft': { label: 'Überfälle und Diebstahl', group: 'loss', icon: 'alert' },
   'loss.betrayal': { label: 'Verrat', group: 'loss', icon: 'userMinus' },
   'loss.encounter': { label: 'Konfrontationen', group: 'loss', icon: 'swords' },
+  'loss.customs': { label: 'Zoll (Autobahn und Kai)', group: 'loss', icon: 'anchor' },
   transfer: { label: 'Umbuchung', group: 'transfer', icon: 'refresh' },
 };
 
@@ -86,6 +96,11 @@ export interface MoneyTag {
   category: MoneyCategory;
   staffId?: string;
   spotId?: string;
+  /**
+   * Stadt, zu der die Buchung gehört (Auftrag 30). Fehlt sie, leitet die Kasse sie aus spotId oder staffId ab, sonst
+   * zählt die aktive Stadt.
+   */
+  cityId?: string;
 }
 
 declare module './types' {
@@ -102,6 +117,7 @@ declare module './types' {
       category?: MoneyCategory;
       staffId?: string;
       spotId?: string;
+      cityId?: string;
     };
   }
 }
@@ -128,6 +144,7 @@ function change(ctx: Ctx, kind: MoneyKind, amount: number, reason: string, tag?:
     ...(t ? { category: t.category } : {}),
     ...(t?.staffId ? { staffId: t.staffId } : {}),
     ...(t?.spotId ? { spotId: t.spotId } : {}),
+    ...(t?.cityId ? { cityId: t.cityId } : {}),
   });
 }
 

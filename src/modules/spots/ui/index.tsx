@@ -7,6 +7,7 @@ import { mapEffects, registerMapLayer } from '../../../map';
 import {
   Card,
   ContextMenu,
+  Disclosure,
   Group,
   ItemContent,
   List,
@@ -21,6 +22,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity } from '../../city';
 import { getSalesStats, isPlayerAway, playerSpot, waitingAt } from '../../customers';
 import { formatProductAmount } from '../../goods';
 import { activeRunnerAt } from '../../staff';
@@ -31,9 +33,13 @@ import {
   getAllSpots,
   getSpot,
   getSpots,
+  isKneipe,
   isSpotActive,
+  isSpotOpen,
+  KNEIPE,
   lockedSpots,
   MAX_CUSTOM_SPOTS,
+  spotCity,
 } from '../index';
 import { recordSaleGlow, recordSpotRaid, spotsLayer } from './map';
 import { peopleLayer } from './people';
@@ -77,10 +83,20 @@ function SpotPanel(props: { spotId: string }) {
             color="place"
             title={veedelName(spot.veedelId)}
             meta="Veedel"
-            tags={[spot.custom && { label: 'eigener Spot', icon: 'pinPlus', color: 'brand' }]}
+            tags={[
+              spot.custom && { label: 'eigener Spot', icon: 'pinPlus', color: 'brand' },
+              isKneipe(spot) && { label: `Kneipe ${KNEIPE.from}–${KNEIPE.to} Uhr`, icon: 'beer', color: 'goods' },
+              isKneipe(spot) && !isSpotOpen(spot, state.time) && { label: 'zu', color: 'system' },
+            ]}
           />
         </ListItem>
       </List>
+      {isKneipe(spot) && (
+        <Disclosure label="Was ist anders in der Kneipe?" icon="beer">
+          Offen von {KNEIPE.from} bis {KNEIPE.to} Uhr. Weniger Laufkundschaft, dafür werden Gäste doppelt so oft zu
+          Stammkunden, und sie schauen weniger auf den Preis. Der Ruf zählt hier doppelt, im Guten wie im Schlechten.
+        </Disclosure>
+      )}
       {active ? (
         <Slot name="spots.spotPanel" props={{ spotId: spot.id }} />
       ) : (
@@ -114,8 +130,8 @@ function SpotPanel(props: { spotId: string }) {
 function SpotsSection() {
   const { state, dispatch } = useGame();
   const ui = useUi();
-  const spots = getSpots(state);
-  const locked = lockedSpots(state);
+  const spots = getSpots(state, activeCity(state));
+  const locked = lockedSpots(state).filter((s) => spotCity(s) === activeCity(state));
   const canFound = customSpots(state).length < MAX_CUSTOM_SPOTS;
   const waiting = spots.reduce((sum, s) => sum + waitingAt(state, s.id).length, 0);
   const mine = playerSpot(state);

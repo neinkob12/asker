@@ -27,6 +27,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity, cityOfSpot } from '../../city';
 import { getSpots } from '../../spots';
 import {
   activeRunnerAt,
@@ -165,7 +166,11 @@ function StaffRowItem(props: { member: StaffMember }) {
 function StaffOverview() {
   const { state } = useGame();
   const [filter, setFilter] = useState<RoleFilter>('all');
-  const current = getStaff(state);
+  // Das Personal folgt der aktiven Stadt (Auftrag 30); wer in einer anderen Stadt ist, steht unten extra.
+  const city = activeCity(state);
+  const everyone = getStaff(state);
+  const current = everyone.filter((m) => m.cityId === city);
+  const elsewhere = everyone.filter((m) => m.cityId !== city);
   const absent = current.filter(isAbsent);
   const former = [...getStaff(state, { status: 'quit' }), ...getStaff(state, { status: 'dead' })];
   const group = ROLE_GROUPS.find((g) => g.id === filter);
@@ -175,7 +180,10 @@ function StaffOverview() {
   const others = current.filter(
     (m) =>
       !isAbsent(m) &&
-      (m.assignment?.kind === 'warehouse' || m.assignment?.kind === 'delivery' || m.assignment?.kind === 'transport'),
+      (m.assignment?.kind === 'warehouse' ||
+        m.assignment?.kind === 'delivery' ||
+        m.assignment?.kind === 'transport' ||
+        m.assignment?.kind === 'travel'),
   );
   return (
     <div class="staff-overview">
@@ -216,6 +224,14 @@ function StaffOverview() {
           <PeopleGroup title="Weitere" icon="truck" members={others} note="Lager, Lieferungen und Fahrten." />
           <SpecialistBonuses />
           <HireGroup />
+          {elsewhere.length > 0 && (
+            <PeopleGroup
+              title="In anderen Städten"
+              icon="building"
+              members={elsewhere}
+              note="Arbeiten dort weiter; einsetzen kannst du sie nur in ihrer Stadt."
+            />
+          )}
           <PeopleGroup title="Ehemalige" icon="clock" members={former} />
         </>
       )}
@@ -312,7 +328,7 @@ function SpotStaff(props: { spotId: string }) {
   const guard = securityAt(state, { spotId: props.spotId })[0];
   const hireCost = runnerHireCost(state, props.spotId);
   const free = (role: 'runner' | 'security') =>
-    getStaff(state, { role, status: 'active' }).filter((m) => !m.assignment);
+    getStaff(state, { role, status: 'active', cityId: cityOfSpot(state, props.spotId) }).filter((m) => !m.assignment);
   const assign = (staffId: string) =>
     dispatch({ type: 'staff.assign', payload: { staffId, assignment: { kind: 'spot', targetId: props.spotId } } });
   const open = (m: StaffMember) => ui.openPanel('staff.profile', { staffId: m.id });
@@ -450,7 +466,7 @@ onGameEvent('staff.betrayed', 'staff.betrayed', (payload, ui, state) => {
 registerAdvisor({
   id: 'staff.hireRunner',
   advise: (state) => {
-    const spot = getSpots(state)[0];
+    const spot = getSpots(state, activeCity(state))[0];
     if (!spot || getStaff(state).length > 0) return null;
     return {
       id: 'staff.firstRunner',

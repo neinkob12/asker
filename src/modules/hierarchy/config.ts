@@ -1,6 +1,7 @@
 import type {
   AbsentPolicy,
   CautionLevel,
+  FullPowerTaskKey,
   LieutenantSettings,
   PriceLevel,
   RightHandSettings,
@@ -165,6 +166,10 @@ export const DEFAULT_RIGHT_HAND_SETTINGS: RightHandSettings = {
   laundering: false,
   launderAbove: 5000,
   launderShare: 0.5,
+  fullPowerTasks: { lieutenants: true, pricing: true, hr: true, expansion: true, diplomacy: true },
+  protectionMax: 3000,
+  dealMax: 6000,
+  expansionBudgetPerDay: 4000,
 };
 export const RIGHT_HAND_BUDGET_OPTIONS = [1000, 2500, 5000, 10000];
 
@@ -251,3 +256,60 @@ export const RIGHT_HAND_LAUNDER_ABOVE_OPTIONS = [2000, 5000, 10000, 20000];
 export const RIGHT_HAND_LAUNDER_SHARE_OPTIONS = [0.25, 0.5, 0.75];
 export const RIGHT_HAND_RESTOCK_BUDGET_OPTIONS = [1000, 2500, 5000, 10000];
 export const RIGHT_HAND_RESTOCK_MIN_STOCK_OPTIONS = [50, 100, 200, 400, 800];
+
+// --- Vollmacht (Auftrag 30): Die Rechte Hand führt eine Stadt allein ---
+
+/** Ihr Anteil am Tagesgewinn der Stadt (laut Kasse, nur bei Gewinn). */
+export const FULL_POWER_SHARE = 0.8;
+/** Widerruf: so viel Loyalität weniger, und so lange ist sie verstimmt (Zufriedenheit). */
+export const REVOKE_LOYALTY = -20;
+export const REVOKE_GRUDGE_DAYS = 7;
+export const REVOKE_SATISFACTION = 25;
+/** Leutnants ernennt sie ab diesem Level und dieser Loyalität. */
+export const FP_LIEUTENANT_MIN_LEVEL = 3;
+export const FP_LIEUTENANT_MIN_LOYALTY = 45;
+/** Leutnants setzt sie ab: zwei Tage Verlust an ihren Spots oder Loyalität darunter. */
+export const FP_DISMISS_LOSS_DAYS = 2;
+export const FP_DISMISS_LOYALTY = 30;
+/** Personal: Wer darunter liegt oder seit so vielen Tagen keinen Einsatz hatte, fliegt, wenn die Löhne drücken. */
+export const FP_FIRE_LOYALTY = 25;
+export const FP_FIRE_IDLE_DAYS = 3;
+/** Ausbau nur, wenn die Kasse so viele Tage Löhne deckt. */
+export const FP_EXPANSION_RUNWAY_DAYS = 14;
+/** Preise: Ziel im Verhältnis zum Richtpreis, je nach Lage. */
+export const FP_PRICE_PRICE_WAR = 0.92;
+export const FP_PRICE_GOOD_REPUTATION = 1.06;
+export const FP_PRICE_DEFAULT = 1;
+/** Aufgaben mit Vollmacht für die Oberfläche. */
+export const FULL_POWER_TASKS: readonly { key: FullPowerTaskKey; name: string; hint: string; icon: string }[] = [
+  {
+    key: 'lieutenants',
+    name: 'Leutnants',
+    hint: 'Ernennt Leutnants für Spots ohne Leutnant (ab Level 3, loyal) und setzt ab, wer zwei Tage Verlust macht oder untreu wird.',
+    icon: 'crew',
+  },
+  {
+    key: 'pricing',
+    name: 'Preise',
+    hint: 'Setzt die Preise an Spots ohne Leutnant um den Richtpreis, billiger im Preiskrieg, teurer bei gutem Ruf.',
+    icon: 'tag',
+  },
+  {
+    key: 'hr',
+    name: 'Personal führen',
+    hint: 'Entlässt Untreue und Leute ohne Einsatz, wenn die Löhne drücken.',
+    icon: 'userMinus',
+  },
+  {
+    key: 'expansion',
+    name: 'Ausbau',
+    hint: 'Schaltet Spots frei und kauft Lager, wenn das Tagesbudget es hergibt und die Kasse zwei Wochen Löhne deckt.',
+    icon: 'building',
+  },
+  {
+    key: 'diplomacy',
+    name: 'Gangs und Chefsache',
+    hint: 'Beantwortet Forderungen und Angebote der Gangs: zahlt Schutzgeld bis zu ihrem Betrag, sonst lehnt sie ab; Deals bis zu ihrem Betrag.',
+    icon: 'handshake',
+  },
+];

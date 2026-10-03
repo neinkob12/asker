@@ -157,6 +157,28 @@ export function registerBuiltins(): void {
         })),
   });
 
+  // Anrufe (Auftrag 30): Klingelt es, klappt das Handy auf (das Klingeln selbst zeigt CallScreen im Handy).
+  onGameEvent('call.ringing', 'core.callRinging', (_payload, ui) => ui.showPhone());
+  registerLiveActivity({
+    id: 'core.call',
+    activities: (state) =>
+      messages.ringingCalls(state).map((m) => {
+        const name = messages.contact(state, m.contactId)?.name ?? m.contactId;
+        return {
+          id: `core.call.${m.id}`,
+          // Unter 80: Die Island klappt nicht von selbst auf (sie würde den Namen im Anruf-Bildschirm verdecken).
+          priority: 79,
+          icon: 'call',
+          tone: 'accent',
+          leading: 'Anruf',
+          trailing: name.split(' ')[0],
+          title: `${name} ruft an`,
+          detail: m.text,
+          open: (ui) => ui.showPhone(),
+        };
+      }),
+  });
+
   registerGameStat({
     id: 'core.days',
     order: 10,
@@ -173,14 +195,21 @@ export function registerBuiltins(): void {
   });
 
   onGameEvent('game.over', 'core.gameOver', (_payload, ui) => ui.openDialog('core.gameOver', {}));
-  onGameEvent('campaign.won', 'core.won', (_payload, ui) => ui.openDialog('core.won', {}));
+  onGameEvent('campaign.won', 'core.won', (payload, ui) => {
+    const props: { cityName?: string; next?: string } = {};
+    if (payload.cityName) props.cityName = payload.cityName;
+    if (payload.next) props.next = payload.next;
+    ui.openDialog('core.won', props);
+  });
 
   // Neue Nachricht: Banner mit Vibrieren und Ton nur, wenn eine Antwort mit Frist erwartet wird (Auftrag 26); alles
   // andere still (Badge an der App, Mitteilungszentrale). Ist der Chat gerade offen, nur ein leiser Ton.
   onGameEvent('message.received', 'core.messageNotification', (payload, ui, state) => {
+    const message = messages.get(state, payload.messageId);
+    // Anrufe kommen nicht als Banner, sondern bildschirmfüllend (CallScreen, siehe call.ringing).
+    if (message?.call) return;
     const notification = messageNotification(state, payload.messageId);
     if (!notification) return;
-    const message = messages.get(state, payload.messageId);
     const urgent = !!message && messages.canAnswer(state, message) && message.expiresAt !== undefined;
     ui.notify({ ...notification, sound: 'message', urgent });
   });

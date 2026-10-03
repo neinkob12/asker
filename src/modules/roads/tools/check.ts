@@ -5,12 +5,14 @@
 //   2. roadRoute zwischen allen Lagern und Spots (beide Richtungen) und zwischen Hafen und Lagern hat kein gerades Stück
 //      über MAX_STRAIGHT_METERS, das nicht auf einer Straße liegt (Luftlinie), und findet überhaupt eine Straße.
 //
-// Fehler nennen Ort und Abstand. Neue Städte (Auftrag 30) bekommen hier eine eigene Liste von Orten.
+// Jede Stadt (Auftrag 30) für sich: Routen nur zwischen Orten derselben Stadt (zwischen den Städten fährt man über
+// die A1, interCityRoute). Fehler nennen Ort und Abstand.
 
 import { distanceMeters, type GameState, type LngLat } from '../../../core';
+import { playableCities } from '../../city';
 import { warehouseSites } from '../../goods';
 import { portPlace } from '../../logistics';
-import { getAllSpots } from '../../spots';
+import { getAllSpots, spotCity } from '../../spots';
 import { getSuppliers } from '../../suppliers';
 import { nearestRoadPoint, roadEntryFrom, roadRoute } from '../index';
 
@@ -36,14 +38,25 @@ export interface RoadProblem {
 const fmt = (p: LngLat) => `${p.lng.toFixed(5)}, ${p.lat.toFixed(5)}`;
 
 /** Orte einer Stadt, die das Netz erreichen muss (Spots und Lager auch gesperrt bzw. noch nicht gekauft). */
-function cityPlaces(state: GameState): { spots: Place[]; warehouses: Place[]; port: Place; center: LngLat } {
-  const port = portPlace();
+function cityPlaces(
+  state: GameState,
+  cityId: string,
+  center: LngLat,
+): { spots: Place[]; warehouses: Place[]; port: Place; center: LngLat } {
+  const port = portPlace(cityId);
   return {
-    spots: getAllSpots(state).map((s) => ({ name: `Spot ${s.name}`, lng: s.lng, lat: s.lat })),
-    warehouses: warehouseSites().map((w) => ({ name: `Lager ${w.name}`, lng: w.lng, lat: w.lat })),
+    spots: getAllSpots(state)
+      .filter((s) => spotCity(s) === cityId)
+      .map((s) => ({ name: `Spot ${s.name}`, lng: s.lng, lat: s.lat })),
+    warehouses: warehouseSites(cityId).map((w) => ({ name: `Lager ${w.name}`, lng: w.lng, lat: w.lat })),
     port: { name: `Hafen ${port.name}`, lng: port.lng, lat: port.lat },
-    center: { lng: 6.949, lat: 50.939 },
+    center,
   };
+}
+
+/** Orte aller Städte im Spiel. */
+function allPlaces(state: GameState) {
+  return playableCities().map((c) => ({ cityId: c.id, ...cityPlaces(state, c.id, c.center) }));
 }
 
 /** Erstes gerades Stück der Route, das nicht auf einer Straße liegt (Luftlinie), oder null. */
@@ -67,11 +80,18 @@ function offRoadPiece(path: readonly LngLat[]): { at: LngLat; meters: number } |
 /** Alle Probleme für einen frischen Spielstand (Spots, Lager, Hafen, Lieferanten wie bei Spielbeginn). */
 export function checkRoads(state: GameState): RoadProblem[] {
   const problems: RoadProblem[] = [];
-  const { spots, warehouses, port, center } = cityPlaces(state);
+  for (const city of allPlaces(state)) problems.push(...checkCity(state, city));
+  return problems;
+}
 
-  const entries: Place[] = getSuppliers(state)
+function checkCity(
+  state: GameState,
+  { cityId, spots, warehouses, port, center }: ReturnType<typeof allPlaces>[number],
+): RoadProblem[] {
+  const problems: RoadProblem[] = [];
+  const entries: Place[] = getSuppliers(state, cityId)
     .filter((s) => s.kind === 'city' && distanceMeters(s, center) > LOCAL_RADIUS)
-    .map((s) => ({ name: `Autobahn-Einfahrt aus ${s.name}`, ...roadEntryFrom(s, s.via) }));
+    .map((s) => ({ name: `Autobahn-Einfahrt aus ${s.name}`, ...roadEntryFrom(s, s.via, center) }));
   // Orte, die schon zu weit weg liegen, nicht noch einmal in jeder Route melden.
   const far = new Set<string>();
   for (const place of [...spots, ...warehouses, port, ...entries]) {
@@ -117,10 +137,12 @@ export function checkRoads(state: GameState): RoadProblem[] {
 
 /** Wie viele Orte und Routen geprüft werden (für die Meldung des Skripts). */
 export function checkedCounts(state: GameState): { places: number; routes: number } {
-  const { spots, warehouses } = cityPlaces(state);
-  const cities = getSuppliers(state).filter((s) => s.kind === 'city').length;
-  return {
-    places: spots.length + warehouses.length + 1 + cities,
-    routes: warehouses.length * (spots.length * 2 + 2),
-  };
+  let places = 0;
+  let routes = 0;
+  for (const { cityId, spots, warehouses } of allPlaces(state)) {
+    places +=
+      spots.length + warehouses.length + 1 + getSuppliers(state, cityId).filter((s) => s.kind === 'city').length;
+    routes += warehouses.length * (spots.length * 2 + 2);
+  }
+  return { places, routes };
 }

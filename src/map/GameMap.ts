@@ -6,7 +6,7 @@ import { type GeoJSONSource, Map as MapLibreMap, setWorkerUrl } from 'maplibre-g
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { clock, type GameState, type LngLat } from '../core';
-import type { CameraMode, MapController, UiApi, UiState } from '../ui/runtime';
+import type { CameraMode, MapCamera, MapController, UiApi, UiState } from '../ui/runtime';
 import { setMotionSpeed } from './animation';
 import { currentMood } from './atmosphere';
 import { EUROPA_VIEW, isMobile, KOELN_CENTER, KOELN_VIEW, koelnZoom } from './config';
@@ -43,7 +43,9 @@ export class GameMap implements MapController {
   private lastLight = '';
   private lastSky = '';
   private cameraMode: CameraMode = '3d';
-  private view: 'koeln' | 'europa' = 'koeln';
+  /** Ansicht: 'city:<id>' (schräg, Stadt), 'deutschland' oder 'europa' (Draufsicht). */
+  private view = 'city:koeln';
+  private viewLabel = 'CAM 01 · KÖLN';
   /** Zählt Befehle und neue Spiele (invalidate), damit update() erkennt, ob sich etwas geändert hat. */
   private revision = 0;
   private lastKey = '';
@@ -149,7 +151,7 @@ export class GameMap implements MapController {
    * Befehl oder neues Spiel (invalidate), das offene Panel, Handy, Kamera, Overlay oder Verkehr.
    */
   update(state: GameState, ui: UiState): void {
-    const key = `${state.time}|${this.revision}|${ui.phone.open}|${ui.camera}|${ui.overlay}|${ui.traffic}|${this.loaded}`;
+    const key = `${state.time}|${this.revision}|${this.view}|${ui.phone.open}|${ui.camera}|${ui.overlay}|${ui.traffic}|${this.loaded}`;
     if (key === this.lastKey && state === this.lastState && ui.panel === this.lastPanel) {
       this.precipitation.sync();
       return;
@@ -165,7 +167,7 @@ export class GameMap implements MapController {
     this.overlay.setClock(
       `${clock.weekdayName(state.time, true).toUpperCase()} ${clock.formatTime(state.time)} · TAG ${clock.day(state.time)}`,
     );
-    this.overlay.setLabel(this.view === 'europa' ? 'SAT 02 · EUROPA' : 'CAM 01 · KÖLN');
+    this.overlay.setLabel(this.viewLabel);
     for (const { id, instance } of this.instances) {
       if (!instance.update) continue;
       const t0 = mapPerf.begin();
@@ -319,13 +321,14 @@ export class GameMap implements MapController {
     } else {
       for (const h of handlers) h.enable();
       this.map.touchZoomRotate.enableRotation();
-      if (this.view === 'koeln') this.map.easeTo({ pitch: KOELN_PITCH, bearing: KOELN_BEARING, duration: 900 });
+      if (this.view.startsWith('city:')) this.map.easeTo({ pitch: KOELN_PITCH, bearing: KOELN_BEARING, duration: 900 });
     }
     this.container.classList.toggle('is-2d', mode === '2d');
   }
 
   flyToKoeln(): void {
-    this.view = 'koeln';
+    this.view = 'city:koeln';
+    this.viewLabel = 'CAM 01 · KÖLN';
     this.map.flyTo({
       center: [KOELN_VIEW.lng, KOELN_VIEW.lat],
       zoom: koelnZoom(),
@@ -336,6 +339,7 @@ export class GameMap implements MapController {
 
   flyToEuropa(): void {
     this.view = 'europa';
+    this.viewLabel = 'SAT 02 · EUROPA';
     this.map.flyTo({
       center: [EUROPA_VIEW.center.lng, EUROPA_VIEW.center.lat],
       zoom: EUROPA_VIEW.zoom,
@@ -343,6 +347,22 @@ export class GameMap implements MapController {
       bearing: 0,
       duration: 2500,
     });
+  }
+
+  /** Kamera auf eine Ansicht (Stadt oder Deutschland, Auftrag 30). */
+  flyToCamera(camera: MapCamera): void {
+    this.view = camera.view;
+    this.viewLabel = camera.label;
+    this.map.flyTo({
+      center: [camera.center.lng, camera.center.lat],
+      zoom: isMobile() ? camera.mobileZoom : camera.zoom,
+      ...(camera.tilt ? this.koelnCamera() : { pitch: 0, bearing: 0 }),
+      duration: 2500,
+    });
+  }
+
+  currentView(): string {
+    return this.view;
   }
 
   flyTo(target: LngLat, zoom?: number): void {

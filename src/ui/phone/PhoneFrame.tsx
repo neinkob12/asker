@@ -44,6 +44,7 @@ import { tabIcon, tabTint, useIsMobile, useIsPhoneDevice } from '../shell/layout
 import { collectAdvice } from '../shell/NextStep';
 import { Slot } from '../shell/Slot';
 import { SectionContent, TabContent } from '../shell/TabContent';
+import { CallScreen } from './CallScreen';
 import { DynamicIsland } from './DynamicIsland';
 import { startDrag } from './drag';
 import {
@@ -241,7 +242,7 @@ function AppTile(props: { app: HomeApp; onOpen: () => void; dock?: boolean }) {
   return (
     <ContextMenu
       label={`Schnellaktionen ${app.name}`}
-      actions={state ? tileActions(app, runtime.api, state) : []}
+      actions={() => (state ? tileActions(app, runtime.api, state) : [])}
       preview={
         <span class="phone__app-preview">
           <IconChip icon={app.icon} color={tile.color} style={tile.style} shape="tile" solid size="xl" />
@@ -623,6 +624,7 @@ function Center(props: { state: GameState }) {
 
 function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boolean }) {
   const { ui, api } = useRuntime();
+  const inCall = messages.ringingCalls(props.state).length > 0 || ui.call !== null;
   const screen = useRef<HTMLDivElement>(null);
   const stack = useRef<PageStackHandle | null>(null);
   // Ziel für Überlagerungen (Blätter, Menüs): über den Seiten, unter Statusleiste und Home-Balken.
@@ -641,9 +643,13 @@ function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boo
         />
       </PortalHostContext.Provider>
       <div class="phone__overlays" ref={setOverlays} />
+      <ErrorBoundary name="Anruf" silent>
+        <CallScreen state={props.state} />
+      </ErrorBoundary>
       <Center state={props.state} />
       {props.device ? <PillBar time={props.state.time} /> : <StatusBar time={props.state.time} />}
-      <PhoneNotice />
+      {/* Wie beim iPhone: Während eines Anrufs keine Banner über dem Anrufer (sie bleiben in der Mitteilungszentrale). */}
+      {!inCall && <PhoneNotice />}
       {props.mobile ? (
         <PhoneToolbar atHome={atHome} onHomeDown={homeSwipe} />
       ) : (

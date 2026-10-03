@@ -1,4 +1,4 @@
-import type { Product, QualityTier, Warehouse } from './index';
+import type { Product, ProductCategory, QualityTier, Warehouse } from './index';
 
 /**
  * Produkte mit Grundpreis (pro Einheit auf der Straße), Einheit und Zielgruppen (IDs der Kundentypen aus
@@ -80,6 +80,18 @@ export const PRODUCTS: readonly Product[] = [
 export const DEFAULT_PRODUCT = 'weed';
 
 /**
+ * Gewicht pro Einheit in Gramm nach Warenart (Auftrag 30: Ladung einer Fahrt zwischen den Städten, INTERCITY_CAPACITY
+ * in logistics): Gras und Hasch pro Gramm, ein Edible 5 g, ein Vape-Pen 20 g, Öl 1 g je ml.
+ */
+export const UNIT_WEIGHT_GRAMS: Readonly<Record<ProductCategory, number>> = {
+  flower: 1,
+  hash: 1,
+  edible: 5,
+  vape: 20,
+  oil: 1,
+};
+
+/**
  * Lager-Standorte. Das erste hast du von Anfang an, die anderen kaufst du mit sauberem Geld (Immobilien sind legal,
  * das Geld muss also vorher gewaschen werden). Mehrere Lager: kürzere Wege für Lieferungen, und eine Razzia oder
  * ein Überfall trifft nicht alles auf einmal.
@@ -87,6 +99,7 @@ export const DEFAULT_PRODUCT = 'weed';
 export const WAREHOUSES: readonly Warehouse[] = [
   {
     id: 'ehrenfeld',
+    cityId: 'koeln',
     name: 'Lager Ehrenfeld',
     lng: 6.918,
     lat: 50.948,
@@ -95,6 +108,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
   },
   {
     id: 'nippes',
+    cityId: 'koeln',
     name: 'Garage Nippes',
     lng: 6.9555,
     lat: 50.964,
@@ -103,6 +117,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
   },
   {
     id: 'suelz',
+    cityId: 'koeln',
     name: 'Keller Sülz',
     lng: 6.92,
     lat: 50.9215,
@@ -111,6 +126,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
   },
   {
     id: 'kalk',
+    cityId: 'koeln',
     name: 'Halle Kalk',
     lng: 7.006,
     lat: 50.9395,
@@ -119,6 +135,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
   },
   {
     id: 'muelheim',
+    cityId: 'koeln',
     name: 'Werkstatt Mülheim',
     lng: 7.0105,
     lat: 50.962,
@@ -127,11 +144,59 @@ export const WAREHOUSES: readonly Warehouse[] = [
   },
   {
     id: 'bayenthal',
+    cityId: 'koeln',
     name: 'Bootshaus Bayenthal',
     lng: 6.97,
     lat: 50.91,
     cost: 3200,
     description: 'Bootshaus am Rhein im Süden. Teuer, aber diskret.',
+  },
+  // Hamburg (Auftrag 30): fünf Standorte zum Kaufen, kein kostenloses (dort fängst du ohne Team an). Preise wie
+  // vergleichbare Kölner Standorte mal dem Immobilien-Faktor der Stadt (1,5).
+  {
+    id: 'werkstatt-ottensen',
+    cityId: 'hamburg',
+    name: 'Werkstatt Ottensen',
+    lng: 9.9285,
+    lat: 53.5535,
+    cost: 4200,
+    description: 'Hinterhofwerkstatt zwischen Bio-Laden und Agentur. Kurze Wege nach Altona und auf den Kiez.',
+  },
+  {
+    id: 'keller-st-georg',
+    cityId: 'hamburg',
+    name: 'Keller St. Georg',
+    lng: 10.0145,
+    lat: 53.5585,
+    cost: 3300,
+    description: 'Gewölbekeller unter einem Kiosk an der Langen Reihe. Hauptbahnhof um die Ecke.',
+  },
+  {
+    id: 'halle-wilhelmsburg',
+    cityId: 'hamburg',
+    name: 'Halle Wilhelmsburg',
+    lng: 9.995,
+    lat: 53.508,
+    cost: 3750,
+    description: 'Alte Lagerhalle am Reiherstieg. Viel Platz, Container vor der Tür, der Hafen ist nah.',
+  },
+  {
+    id: 'garage-barmbek',
+    cityId: 'hamburg',
+    name: 'Garage Barmbek',
+    lng: 10.0335,
+    lat: 53.5765,
+    cost: 3000,
+    description: 'Sammelgarage hinter einem Backsteinblock. Unauffällig und günstig, für Hamburger Verhältnisse.',
+  },
+  {
+    id: 'bootshaus-harburg',
+    cityId: 'hamburg',
+    name: 'Bootshaus Harburg',
+    lng: 9.9829,
+    lat: 53.46529,
+    cost: 4800,
+    description: 'Bootshaus am Harburger Binnenhafen. Teuer, aber wer kommt hier schon vorbei.',
   },
 ];
 

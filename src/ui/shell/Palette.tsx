@@ -111,7 +111,7 @@ function collect(runtime: UiRuntime): Entry[] {
     icon: 'cube',
     run: api.toggleCamera,
   });
-  add({ id: 'cmd:koeln', group: 'Befehle', title: 'Zurück nach Köln', icon: 'pin', run: api.flyToKoeln });
+  add({ id: 'cmd:koeln', group: 'Befehle', title: 'Zurück zur Stadt', icon: 'pin', run: api.flyHome });
   return entries;
 }
 

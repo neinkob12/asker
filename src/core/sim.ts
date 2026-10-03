@@ -4,13 +4,16 @@
 import { clock, MINUTES_PER_DAY, MINUTES_PER_HOUR } from './clock';
 import { START_CLEAN_MONEY, START_DIRTY_MONEY, START_TIME } from './config';
 import {
+  acceptCall,
   answerMessage,
   createMessagesState,
+  declineCall,
   deleteAllThreads,
   deleteThread,
   expireMessages,
   markAllRead,
   markThreadRead,
+  processCalls,
 } from './messages';
 import type { ModuleDefinition } from './module';
 import { sortModules } from './module';
@@ -29,7 +32,7 @@ import type {
 } from './types';
 
 /** Version des Kern-Formats im Spielstand. Hochzählen, wenn sich die Kernfelder ändern, und in persistence.ts migrieren. */
-export const CORE_SCHEMA_VERSION = 2;
+export const CORE_SCHEMA_VERSION = 3;
 
 /** ID des Kerns, z.B. als Quelle von Journal-Einträgen. */
 export const CORE_ID = 'core';
@@ -64,6 +67,8 @@ const CORE_COMMANDS: Record<string, AnyCommandHandler> = {
   'messages.markAllRead': markAllRead as AnyCommandHandler,
   'messages.delete': deleteThread as AnyCommandHandler,
   'messages.deleteAll': deleteAllThreads as AnyCommandHandler,
+  'messages.acceptCall': acceptCall as AnyCommandHandler,
+  'messages.declineCall': declineCall as AnyCommandHandler,
 };
 
 export class Simulation {
@@ -77,6 +82,10 @@ export class Simulation {
   private queue: GameEvent[] = [];
   private delivered: GameEvent[] = [];
   private depth = 0;
+  /** Module mit Pleite-Prüfung (einmal bestimmt, die Prüfung läuft jede Spielminute). */
+  private solvencyChecks: readonly ModuleDefinition[] | null = null;
+  /** Module mit tick und ihr Kontext (einmal bestimmt, läuft jede Spielminute). */
+  private tickers: { module: ModuleDefinition; ctx: Ctx }[] | null = null;
 
   /** Erwartet einen fertigen (ggf. migrierten) Zustand. Für neue Spiele: Simulation.create(). */
   constructor(modules: readonly ModuleDefinition[], state: GameState) {
@@ -162,10 +171,13 @@ export class Simulation {
       if (state.time % MINUTES_PER_DAY === 0) {
         core.emit('clock.dayStarted', { day: clock.day(state.time), weekday: clock.weekday(state.time) });
       }
-      for (const m of this.modules) {
-        if (m.tick && state.time % (m.tickEvery ?? 1) === 0) m.tick(this.ctx(m.id));
+      this.tickers ??= this.modules.filter((m) => m.tick).map((module) => ({ module, ctx: this.ctx(module.id) }));
+      for (const { module, ctx } of this.tickers) {
+        // module.tick erst hier lesen (Messungen umhüllen es nachträglich, siehe perf.bench.test.ts).
+        if (state.time % (module.tickEvery ?? 1) === 0) module.tick?.(ctx);
       }
       expireMessages(core);
+      processCalls(core);
       this.flush();
       this.checkSolvency();
     });
@@ -255,7 +267,8 @@ export class Simulation {
   /** Pleite-Regel: Melden alle Module mit solvency-Prüfung false, ist das Spiel verloren. */
   private checkSolvency(): void {
     if (this.isOver) return;
-    const checks = this.modules.filter((m) => m.solvency);
+    this.solvencyChecks ??= this.modules.filter((m) => m.solvency);
+    const checks = this.solvencyChecks;
     if (checks.length === 0) return;
     if (checks.some((m) => m.solvency?.(this.state))) return;
     outcome.gameOver(this.ctx(CORE_ID), 'bankrupt');

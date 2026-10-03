@@ -2,10 +2,11 @@
 // hier liegt, was sich im Spiel ändert: Stärke, Verhältnis zum Spieler, Abkommen, laufende Vorstöße.
 
 import { type Contact, type GameState, wallet } from '../../core';
+import { activeCity } from '../city';
 import { getStock } from '../goods';
 import { getStaff } from '../staff';
 import { controlledBy, controllerOf, getInfluence, PLAYER_FACTION } from '../territory';
-import { allVeedel } from '../veedel';
+import { allVeedel, veedelCity } from '../veedel';
 import {
   ALLIANCE_HOSTILITY_FACTOR,
   ATTACK_AT,
@@ -131,9 +132,25 @@ export function initialGangsState(): GangsState {
   return { gangs, priceFactors: {} };
 }
 
-/** Alle Gangs. Nimmt den Zustand, weil Gangs später entstehen und verschwinden können. */
-export function getGangs(_state: GameState): readonly Gang[] {
-  return GANGS;
+const GANGS_BY_CITY = new Map<string, readonly Gang[]>();
+
+/**
+ * Alle Gangs, mit Stadt nur die dort (Auftrag 30). Nimmt den Zustand, weil Gangs später entstehen und verschwinden
+ * können.
+ */
+export function getGangs(_state: GameState, cityId?: string): readonly Gang[] {
+  if (cityId === undefined) return GANGS;
+  let list = GANGS_BY_CITY.get(cityId);
+  if (!list) {
+    list = GANGS.filter((g) => g.cityId === cityId);
+    GANGS_BY_CITY.set(cityId, list);
+  }
+  return list;
+}
+
+/** Stadt einer Gang (unbekannte: Köln). */
+export function gangCity(state: GameState, id: string): string {
+  return getGang(state, id)?.cityId ?? 'koeln';
 }
 
 export function getGang(state: GameState, id: string): Gang | undefined {
@@ -159,7 +176,7 @@ export function veedelGang(state: GameState, veedelId: string): string | null {
   if (controller !== null) return controller === PLAYER_FACTION ? null : controller;
   let best: string | null = null;
   let bestInfluence = GANG_SPOT_MIN_INFLUENCE - 0.001;
-  for (const gang of getGangs(state)) {
+  for (const gang of getGangs(state, veedelCity(veedelId))) {
     const influence = getInfluence(state, veedelId, gang.id);
     if (influence > bestInfluence) {
       best = gang.id;
@@ -169,9 +186,9 @@ export function veedelGang(state: GameState, veedelId: string): string | null {
   return best;
 }
 
-/** Revier der Gang: Veedel, die sie kontrolliert oder in denen sie die stärkste Gang ist. */
+/** Revier der Gang: Veedel ihrer Stadt, die sie kontrolliert oder in denen sie die stärkste Gang ist. */
 export function gangVeedel(state: GameState, id: string): string[] {
-  return allVeedel()
+  return allVeedel(gangCity(state, id))
     .map((v) => v.id)
     .filter((v) => veedelGang(state, v) === id);
 }
@@ -181,7 +198,7 @@ export function gangVeedel(state: GameState, id: string): string[] {
  * dort das Revier zu halten). Die Oberfläche und der Befehl gangs.attack fragen hier dasselbe.
  */
 export function raidTargets(state: GameState, id: string): string[] {
-  return allVeedel()
+  return allVeedel(gangCity(state, id))
     .map((v) => v.id)
     .filter((v) => getInfluence(state, v, id) >= GANG_SPOT_MIN_INFLUENCE);
 }
@@ -194,15 +211,17 @@ export function gangPower(state: GameState, id: string): number {
 }
 
 /** Stärke des Spielers auf derselben Skala: Leute (ohne Spezialisten), Veedel, Schwarzgeld, Ware. */
-export function playerPower(state: GameState): number {
-  const people = getStaff(state, { status: 'active' }).filter(
+export function playerPower(state: GameState, cityId: string = activeCity(state)): number {
+  // Pro Stadt (Auftrag 30): Leute, Veedel und Ware dort zählen; das Geld ist ein Konto für alle Städte.
+  const people = getStaff(state, { status: 'active', cityId }).filter(
     (m) => m.role === 'runner' || m.role === 'courier' || m.role === 'security',
   ).length;
+  const veedel = controlledBy(state, PLAYER_FACTION).filter((id) => veedelCity(id) === cityId).length;
   return (
     people * PEOPLE_POWER +
-    controlledBy(state, PLAYER_FACTION).length * VEEDEL_POWER +
+    veedel * VEEDEL_POWER +
     wallet.balance(state, 'dirty') / MONEY_PER_POWER +
-    getStock(state) / GOODS_PER_POWER
+    getStock(state, { cityId }) / GOODS_PER_POWER
   );
 }
 

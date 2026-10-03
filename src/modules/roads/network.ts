@@ -3,7 +3,7 @@
 // Quelle: Overture Maps, Release 2026-09-23.1
 //   Overture Maps Foundation, Thema "transportation" (https://docs.overturemaps.org), abgeleitet von OpenStreetMap.
 // Lizenz: ODbL 1.0 (https://opendatacommons.org/licenses/odbl/). © OpenStreetMap-Mitwirkende, © Overture Maps Foundation.
-// Ausschnitt 6.83–7.07 °O, 50.87–51.02 °N.
+// Ausschnitt 6.83–7.07 °O, 50.87–51.02 °N (lokale Projektion bei 50.94 °N).
 // Straßenarten: motorway, trunk, primary, secondary, tertiary, unclassified, residential, living_street.
 // Dazu service im Umkreis von 450 m um 6.979, 50.9468 (als living_street).
 // 14377 Knoten, 19840 Kanten, 2245 km Straße, Linien vereinfacht auf 4 m.
@@ -12,6 +12,10 @@
 //   ROAD_NODES: je Knoten lng, lat als Abstand zum vorigen Knoten.
 //   ROAD_EDGES: je Kante Start (Abstand zum Start der vorigen Kante), Ziel (Abstand zum Start), Art × 2 + Einbahn
 //     (1 = nur von Start nach Ziel), Zahl der Zwischenpunkte, dann die Zwischenpunkte als Abstand zum vorigen Punkt.
+
+/** Ausschnitt [West, Süd, Ost, Nord] und Breite der lokalen Projektion (roads wählt das Netz nach dem Ausschnitt). */
+export const ROAD_BOX = [6.83, 50.87, 7.07, 51.02] as const;
+export const ROAD_LAT0 = 50.94;
 
 /** Straßenarten in der Reihenfolge ihrer Codes. */
 export const ROAD_CLASSES = [

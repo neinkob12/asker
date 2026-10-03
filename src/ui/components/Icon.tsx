@@ -1,4 +1,5 @@
 import type { JSX } from 'preact';
+import { memo } from 'preact/compat';
 import { ICONS, type IconName, resolveIcon } from './icons';
 
 export interface IconProps {
@@ -13,8 +14,11 @@ export interface IconProps {
   class?: string;
 }
 
-/** Icon aus dem einheitlichen Set, in der aktuellen Textfarbe. */
-export function Icon(props: IconProps) {
+/**
+ * Icon aus dem einheitlichen Set, in der aktuellen Textfarbe. Memoisiert (wie die anderen kleinen Bausteine): Die
+ * Oberfläche zeichnet zehnmal pro Sekunde neu, Icons machten ein Drittel aller Komponenten-Aufrufe aus.
+ */
+export const Icon = memo(function Icon(props: IconProps) {
   const size = props.size === undefined ? '1em' : `${props.size}px`;
   const cls = `ui-icon ${props.class ?? ''}`;
   const icon = resolveIcon(props.name);
@@ -47,7 +51,7 @@ export function Icon(props: IconProps) {
       ))}
     </svg>
   );
-}
+});
 
 /**
  * Dasselbe Icon als DOM-Element (ohne Preact), für Karten-Layer, die ihre Marker selbst bauen (Spots, Orte …).
@@ -177,7 +181,7 @@ export interface IconChipProps {
 }
 
 /** Symbol auf einer Kachel in einer Bedeutungsfarbe, z.B. vor Zeilen und in Karten. Mit solid als App-Icon. */
-export function IconChip(props: IconChipProps) {
+export const IconChip = memo(function IconChip(props: IconChipProps) {
   const color = categoryOf(props.color);
   const shape = props.shape === 'square' || props.shape === 'tile' ? 'tile' : 'round';
   const cls = [
@@ -194,7 +198,7 @@ export function IconChip(props: IconChipProps) {
       {props.status && <span class={`ui-chip__status ui-status-dot ui-status-dot--${props.status}`} />}
     </span>
   );
-}
+});
 
 const STATUS_LABELS = { good: 'in Ordnung', warn: 'Achtung', bad: 'Problem', idle: 'ruhig' } as const;
 

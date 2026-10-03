@@ -18,8 +18,9 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity, cityName } from '../../city';
 import { campaignProgress, controlledBy, PLAYER_FACTION } from '../../territory';
-import { veedelName } from '../../veedel';
+import { veedelCity, veedelName } from '../../veedel';
 import { getReputation, recentReputationChanges, reputationLabel, reputationTier, reputationTiers } from '../index';
 import './reputation.css';
 
@@ -37,8 +38,13 @@ function ReputationHud() {
   const tier = tiers[index];
   const below = tiers[index - 1];
   const above = tiers[index + 1];
-  const progress = campaignProgress(state);
-  const mine = controlledBy(state, PLAYER_FACTION).map(veedelName).sort();
+  const cityId = activeCity(state);
+  const city = cityName(cityId);
+  const progress = campaignProgress(state, cityId);
+  const mine = controlledBy(state, PLAYER_FACTION)
+    .filter((id) => veedelCity(id) === cityId)
+    .map(veedelName)
+    .sort();
   return (
     <HudPill
       icon="star"
@@ -46,7 +52,7 @@ function ReputationHud() {
       label="Ruf · Reviere"
       value={`${Math.round(value)} ${tier.name}`}
       tone={value < 20 ? 'bad' : value < 40 ? 'warn' : undefined}
-      title={`Ruf ${Math.round(value)} von 100: ${tier.name}. ${progress.controlled} von ${progress.total} Veedeln, ${progress.needed} zum Sieg.`}
+      title={`Ruf ${Math.round(value)} von 100: ${tier.name}. ${progress.controlled} von ${progress.total} Veedeln.`}
       onClick={() => ui.selectTab('territory')}
       detailsAction="Reviere öffnen"
       details={
@@ -79,8 +85,12 @@ function ReputationHud() {
           <div class="rep-flyout__now">
             <span class="hud-label is-place">Reviere</span>
             <strong>
-              {progress.controlled}/{progress.needed}
-              {progress.won ? ' · Köln gehört dir' : ' zum Sieg'}
+              {progress.controlled}/{progress.total}
+              {progress.complete
+                ? ` · ${city} komplett`
+                : progress.majorityReached
+                  ? ` · Boss von ${city}`
+                  : ` · ab ${progress.majority} Boss`}
             </strong>
           </div>
           <p class="rep-flyout__text">
@@ -93,7 +103,7 @@ function ReputationHud() {
         <HudBar value={value} label="Ruf" marks={tiers.slice(1).map((t) => t.min)} />
         <span class="hud-rep__veedel" title={`${progress.controlled} von ${progress.total} Veedeln`}>
           <Icon name="flag" />
-          {progress.controlled}/{progress.needed}
+          {progress.controlled}/{progress.total}
         </span>
       </span>
     </HudPill>

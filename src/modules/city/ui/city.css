@@ -1,0 +1,257 @@
+/* Karte "Hamburg wartet" unter Geld und Heat (Look "Glas", wie die Quest-Karte). */
+
+.city-hud {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 300px;
+  max-width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font: inherit;
+  font-family: var(--font-hud);
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.hud-label.is-city {
+  color: var(--cat-place);
+}
+
+.city-hud__main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.city-hud__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.city-hud__text strong {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.city-hud__hint,
+.city-hud__missing {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--hud-ink-2);
+}
+
+.city-hud__missing {
+  margin: 2px 0 0;
+  padding-left: 1.1em;
+}
+
+.city-hud__go {
+  align-self: center;
+  color: var(--hud-ink-2);
+}
+
+/* Stadt-Chip: Menü in der Glas-Karte unter der Kachel. */
+.city-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 220px;
+}
+
+.city-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--hud-ink);
+  font: inherit;
+  font-family: var(--font-hud);
+  text-align: left;
+  cursor: pointer;
+}
+
+.city-menu__item:hover,
+.city-menu__item:focus-visible {
+  background: var(--hud-glass-edge);
+}
+
+.city-menu__item.is-active {
+  color: var(--cat-place);
+}
+
+.city-menu__name {
+  flex: 1;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.city-menu__meta {
+  font-size: 13px;
+  color: var(--hud-ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Deutschland-Ansicht: die Städte als Glas-Karten auf der Karte. */
+.city-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  text-align: left;
+  cursor: pointer;
+}
+
+.city-card.is-active {
+  border-color: var(--cat-place);
+}
+
+.city-card__name {
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.city-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.city-card__stat {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--hud-glass-edge);
+  font-size: 13px;
+  color: var(--hud-ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Deine Fahrt zwischen den Städten: Karte über der Kartenfläche (Look "Glas"). */
+.city-travel {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-6);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(360px, calc(100% - 2 * var(--space-4)));
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  pointer-events: auto;
+}
+
+.city-travel__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.city-travel__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.city-travel__text strong {
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.city-travel__hint {
+  font-size: 13px;
+  color: var(--hud-ink-2);
+  white-space: nowrap;
+}
+
+.city-travel__bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--hud-glass-edge);
+  overflow: hidden;
+}
+
+.city-travel__fill {
+  display: block;
+  height: 100%;
+  background: var(--cat-place);
+}
+
+.city-travel__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Das eigene Auto auf der Karte (auch weit herausgezoomt sichtbar). */
+.city-car {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  pointer-events: none;
+}
+
+.city-car__icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--cat-place);
+  color: var(--color-on-dark);
+  box-shadow: var(--hud-shadow);
+}
+
+.city-car__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.city-car__label {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--hud-glass);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.city-menu__note {
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+  color: var(--hud-ink-2);
+}

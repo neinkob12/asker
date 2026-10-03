@@ -24,6 +24,13 @@ export const JOURNAL_LIMIT = 60;
 /** So viele Handy-Nachrichten bleiben im Spielstand, ältere fallen weg. */
 export const MESSAGE_LIMIT = 300;
 
+/** Anrufe (Auftrag 30): So viele Spielminuten klingelt es (bei 1x etwa 30 Sekunden), dann gilt er als verpasst. */
+export const CALL_RING_MINUTES = 120;
+/** Nach einem verpassten Anruf ruft die Figur so viele Spielminuten später noch einmal an. */
+export const CALL_RETRY_MINUTES = 360;
+/** So oft klingelt es höchstens; danach bleibt nur der Chat mit denselben Antworten. */
+export const CALL_MAX_ATTEMPTS = 3;
+
 /** Autosave alle so viele echte Sekunden, solange gespielt wird. */
 export const AUTOSAVE_INTERVAL_SECONDS = 10;
 

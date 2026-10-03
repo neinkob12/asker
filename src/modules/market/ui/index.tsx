@@ -18,6 +18,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity } from '../../city';
 import { allProducts, getProduct, productName, stockSummary } from '../../goods';
 import { allVeedel, veedelName } from '../../veedel';
 import {
@@ -152,7 +153,7 @@ function MarketOverview(props: { productId?: string }) {
   const { state } = useGame();
   const [productId, setProductId] = useState(props.productId ?? allProducts()[0].id);
   const product = getProduct(productId);
-  const rows = allVeedel()
+  const rows = allVeedel(activeCity(state))
     .map((v) => ({ veedel: v, price: referencePrice(state, productId, v.id) }))
     .sort((a, b) => b.price - a.price);
   const prices = rows.map((r) => r.price);

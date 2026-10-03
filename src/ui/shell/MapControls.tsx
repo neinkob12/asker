@@ -47,7 +47,7 @@ export function MapControls() {
             <LayerMenu />
           </Popover>
         </div>
-        <IconButton icon="pin" label="Zurück nach Köln" onClick={api.flyToKoeln} />
+        <IconButton icon="pin" label="Zurück zur Stadt" onClick={api.flyHome} />
       </div>
       {mobile && (
         <div class="shell-mapctl__group">

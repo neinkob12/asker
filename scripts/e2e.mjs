@@ -198,7 +198,7 @@ async function run() {
     });
     await advance(page, 1);
     await berth.click();
-    assert.equal(await game(page, (s) => s.modules.logistics.berth !== null), true);
+    assert.equal(await game(page, (s) => s.modules.logistics.berths.koeln != null), true);
     await shot(page, 'hafen');
     // Zurück zum Startbildschirm, dann das Handy weglegen.
     await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
@@ -243,6 +243,49 @@ async function run() {
     await page.evaluate(() => window.koeln.runtime.api.closePhone());
   });
 
+  await check('Stadt wechseln: Hamburg frei, Stadt-Chip, Hamburg aktiv, zurück nach Köln', async () => {
+    assert.equal(await page.locator('.hud-pill', { hasText: 'Köln ▾' }).count(), 0, 'kein Stadt-Chip mit einer Stadt');
+    await page.evaluate(() => {
+      window.koeln.session.sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+      window.koeln.runtime.requestRender();
+    });
+    const chip = page.locator('.hud-pill', { hasText: 'Köln ▾' }).first();
+    // Am linken Rand antippen: Am Handy-Bildschirm kann die schwebende Island die Mitte der Kachelreihe verdecken.
+    await chip.click({ position: { x: 14, y: 20 } });
+    await page.locator('.city-menu__item', { hasText: 'Hamburg' }).first().click();
+    assert.equal(await game(page, (s) => s.modules.city.active), 'hamburg');
+    await page.waitForFunction(() => window.koeln.runtime.api.mapView() === 'city:hamburg', null, { timeout: 15000 });
+    await shot(page, 'hamburg');
+    await page.evaluate(() => window.koeln.runtime.api.dispatch({ type: 'city.switch', payload: { cityId: 'koeln' } }));
+    assert.equal(await game(page, (s) => s.modules.city.active), 'koeln');
+  });
+
+  await check('Route Köln → Hamburg im Blatt anlegen', async () => {
+    await page.evaluate(() => {
+      const api = window.koeln.runtime.api;
+      window.koeln.session.state.wallet.clean = 20000;
+      window.koeln.session.state.wallet.dirty = 20000;
+      api.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'werkstatt-ottensen' } });
+      api.dispatch({ type: 'staff.hireDriver', payload: {} });
+      api.openPanel('logistics.routes', {});
+    });
+    await page.locator('.phone').getByRole('button', { name: 'Neue Route', exact: true }).click();
+    const sheet = page.locator('.ui-sheet');
+    await sheet.getByLabel('Startlager').selectOption('ehrenfeld');
+    await sheet.getByLabel('Ziellager').selectOption('werkstatt-ottensen');
+    const driverId = await game(page, (s) => s.modules.staff.members.find((m) => m.role === 'driver')?.id);
+    await sheet.getByLabel('Fahrer', { exact: true }).selectOption(driverId);
+    await shot(page, 'route-blatt');
+    await sheet.getByRole('button', { name: 'Sichern', exact: true }).click();
+    const routes = await game(page, (s) =>
+      s.modules.logistics.routes.map((r) => [r.fromId, r.toId, r.driverId, r.items.length]),
+    );
+    assert.deepEqual(routes, [['ehrenfeld', 'werkstatt-ottensen', driverId, 1]]);
+    await page.locator('.phone').getByText('Köln → Hamburg').first().waitFor();
+    await shot(page, 'routen');
+    await page.evaluate(() => window.koeln.runtime.api.closePhone());
+  });
+
   let saved;
   await check('Speichern und Laden', async () => {
     saved = await game(page, (s) => ({ time: s.time, dirty: s.wallet.dirty, staff: s.modules.staff.members.length }));
@@ -275,7 +318,7 @@ async function run() {
     const resumed = await game(page, (s) => ({ time: s.time, staff: s.modules.staff.members.length }));
     // Nach dem Laden kann die Uhr schon wieder ein paar Minuten gelaufen sein.
     assert.ok(resumed.time >= before && resumed.time < before + 60, `Zeit ${resumed.time} statt ${before}`);
-    assert.equal(resumed.staff, 1);
+    assert.equal(resumed.staff, saved.staff);
     assert.equal(await page.getByRole('button', { name: "Los geht's" }).count(), 0, 'kein Neues-Spiel-Dialog');
     await shot(page, 'fortgesetzt');
   });

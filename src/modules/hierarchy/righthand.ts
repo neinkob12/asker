@@ -21,7 +21,8 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { dayReport, spotResults, wageRunway } from '../finance';
+import { activeCity, cityName } from '../city';
+import { cityReport, dayReport, spotResults, wageRunway } from '../finance';
 import { playerHeat } from '../police';
 import { getSpot, getSpots } from '../spots';
 import {
@@ -37,6 +38,7 @@ import {
   getStaffMember,
   isAbsent,
   isEmployed,
+  isMemberLive,
   isSpecialist,
   payrollDue,
   roleName,
@@ -47,16 +49,19 @@ import {
   setWage,
   staffContact,
 } from '../staff';
+import { campaignProgress } from '../territory';
 import { veedelName } from '../veedel';
 import {
   DEFAULT_RIGHT_HAND_SETTINGS,
   DEMOTION_LOYALTY,
+  FULL_POWER_TASKS,
   LOG_LIMIT,
   MAX_ORDER_RULES,
   PAYROLL_RESERVE_DAYS,
   PAYROLL_RESERVE_DAYS_ORDERS,
   PROMOTION_LOYALTY,
   REPORT_HOUR,
+  REVOKE_SATISFACTION,
   RIGHT_HAND_BAIL_MIN_LEVEL,
   RIGHT_HAND_DEMAND,
   RIGHT_HAND_DETOUR_CHANCE,
@@ -75,6 +80,7 @@ import {
   RIGHT_HAND_TASKS,
   RIGHT_HAND_WARN_COOLDOWN,
 } from './config';
+import { cityLabel, describeFullPowerDone, emptyFullPowerDone, payShare, runFullPowerTasks } from './fullpower';
 import {
   getLieutenantIds,
   handlesAbsence,
@@ -93,17 +99,32 @@ const OFFICE = { kind: 'office' as const, targetId: 'rightHand' };
 
 // --- Lesen ---
 
-export function getRightHand(state: GameState): RightHandPost | null {
-  return state.modules.hierarchy.rightHand;
+/**
+ * Rechte Hand einer Stadt (Auftrag 30: eine pro Stadt), Standard: die aktive Stadt. null, wenn die Stadt keine hat.
+ */
+export function getRightHand(state: GameState, cityId: string = activeCity(state)): RightHandPost | null {
+  return state.modules.hierarchy.rightHands?.[cityId] ?? null;
+}
+
+/** Alle Rechten Hände mit ihrer Stadt, nach Stadt sortiert. */
+export function allRightHands(state: GameState): { cityId: string; post: RightHandPost }[] {
+  return Object.entries(state.modules.hierarchy.rightHands ?? {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([cityId, post]) => ({ cityId, post }));
+}
+
+/** Stadt, deren Rechte Hand die Person ist (null, wenn sie keine ist). */
+export function rightHandCityOf(state: GameState, staffId: string): string | null {
+  return allRightHands(state).find((r) => r.post.staffId === staffId)?.cityId ?? null;
 }
 
 export function isRightHand(state: GameState, staffId: string): boolean {
-  return getRightHand(state)?.staffId === staffId;
+  return rightHandCityOf(state, staffId) !== null;
 }
 
-/** Arbeitet die Rechte Hand gerade (eingestellt, aktiv)? */
-export function activeRightHand(state: GameState): RightHandPost | null {
-  const rh = getRightHand(state);
+/** Arbeitet die Rechte Hand der Stadt (Standard: aktive) gerade (eingestellt, aktiv)? */
+export function activeRightHand(state: GameState, cityId: string = activeCity(state)): RightHandPost | null {
+  const rh = getRightHand(state, cityId);
   const m = rh ? getStaffMember(state, rh.staffId) : undefined;
   return rh && m?.status === 'active' && isEmployed(state, m.id) ? rh : null;
 }
@@ -119,18 +140,48 @@ export function rankForXp(xp: number): number {
   return Math.min(RIGHT_HAND_MAX_RANK, rank);
 }
 
-export function rightHandRank(state: GameState): number {
-  const rh = getRightHand(state);
+export function rightHandRank(state: GameState, cityId: string = activeCity(state)): number {
+  const rh = getRightHand(state, cityId);
   return rh ? rankForXp(rh.xp) : 0;
 }
 
 /** Erfahrung bis zur nächsten Stufe: [erreicht, nötig], null auf der höchsten Stufe. */
-export function rightHandRankProgress(state: GameState): [number, number] | null {
-  const rh = getRightHand(state);
+export function rightHandRankProgress(state: GameState, cityId: string = activeCity(state)): [number, number] | null {
+  const rh = getRightHand(state, cityId);
   if (!rh) return null;
   const rank = rankForXp(rh.xp);
   if (rank >= RIGHT_HAND_MAX_RANK) return null;
   return [rh.xp - RIGHT_HAND_RANK_XP[rank - 1], RIGHT_HAND_RANK_XP[rank] - RIGHT_HAND_RANK_XP[rank - 1]];
+}
+
+/**
+ * Was fehlt, damit die Rechte Hand eine Stadt mit voller Macht übernehmen kann (Auftrag 30)? Leer = alles da. Sie
+ * braucht die höchste Stufe und alle Aufgaben an, und alle Veedel der Stadt müssen dir gehören.
+ */
+export function fullPowerMissing(state: GameState, cityId = 'koeln'): string[] {
+  const missing: string[] = [];
+  const rh = activeRightHand(state, cityId);
+  if (!rh) {
+    missing.push(
+      getRightHand(state, cityId)
+        ? 'Deine Rechte Hand fällt gerade aus.'
+        : cityId === 'koeln'
+          ? 'Du hast keine Rechte Hand.'
+          : `Du hast in ${cityName(cityId)} keine Rechte Hand.`,
+    );
+  } else {
+    const name = getStaffMember(state, rh.staffId)?.name ?? 'Deine Rechte Hand';
+    const rank = rankForXp(rh.xp);
+    if (rank < RIGHT_HAND_MAX_RANK)
+      missing.push(`${name} ist auf Stufe ${rank}, sie braucht Stufe ${RIGHT_HAND_MAX_RANK}.`);
+    const off = RIGHT_HAND_TASKS.filter((t) => !rh.settings[t.key]).map((t) => t.name);
+    if (off.length > 0) missing.push(`Diese Aufgaben sind aus: ${off.join(', ')}.`);
+  }
+  const progress = campaignProgress(state, cityId);
+  if (progress.controlled < progress.total) {
+    missing.push(`Du hältst ${progress.controlled} von ${progress.total} Veedeln, es müssen alle sein.`);
+  }
+  return missing;
 }
 
 /** Ist die Aufgabe für ihre Stufe freigeschaltet? */
@@ -188,7 +239,10 @@ export function canBeRightHand(state: GameState, staffId: string): CommandResult
   if (m.stats.loyalty < RIGHT_HAND_MIN_LOYALTY) {
     return { ok: false, reason: `${m.name} ist dir nicht treu genug (Loyalität ab ${RIGHT_HAND_MIN_LOYALTY}).` };
   }
-  const others = getLieutenantIds(state).filter((id) => id !== staffId).length;
+  // Leutnants in ihrer Stadt (Auftrag 30: eine Rechte Hand pro Stadt).
+  const others = getLieutenantIds(state).filter(
+    (id) => id !== staffId && getStaffMember(state, id)?.cityId === m.cityId,
+  ).length;
   if (others < RIGHT_HAND_MIN_LIEUTENANTS) {
     return { ok: false, reason: `Eine Rechte Hand lohnt sich erst ab ${RIGHT_HAND_MIN_LIEUTENANTS} Leutnants.` };
   }
@@ -197,17 +251,21 @@ export function canBeRightHand(state: GameState, staffId: string): CommandResult
 
 /** Bietet das Handy die Stelle an? (genug Leutnants, noch keine Rechte Hand) */
 export function rightHandOffered(state: GameState): boolean {
-  return !getRightHand(state) && getLieutenantIds(state).length >= RIGHT_HAND_MIN_LIEUTENANTS;
+  const city = activeCity(state);
+  const lieutenants = getLieutenantIds(state).filter((id) => getStaffMember(state, id)?.cityId === city);
+  return !getRightHand(state, city) && lieutenants.length >= RIGHT_HAND_MIN_LIEUTENANTS;
 }
 
 /** Zufriedenheit der Rechten Hand (0–100): Loyalität und Lohn im Verhältnis zum hohen Anspruch. */
-export function rightHandSatisfaction(state: GameState): number | null {
-  const rh = getRightHand(state);
+export function rightHandSatisfaction(state: GameState, cityId: string = activeCity(state)): number | null {
+  const rh = getRightHand(state, cityId);
   const m = rh ? getStaffMember(state, rh.staffId) : undefined;
   if (!m) return null;
   const expected = expectedWage(state, m.id);
   const ratio = expected > 0 ? m.wage / expected : 1;
-  return Math.max(0, Math.min(100, Math.round(m.stats.loyalty * 0.6 + Math.min(1, ratio / 1.1) * 40)));
+  // Nach einem Widerruf der Vollmacht ist sie eine Weile verstimmt.
+  const grudge = rh?.grudgeUntil !== null && (rh?.grudgeUntil ?? 0) > state.time ? REVOKE_SATISFACTION : 0;
+  return Math.max(0, Math.min(100, Math.round(m.stats.loyalty * 0.6 + Math.min(1, ratio / 1.1) * 40) - grudge));
 }
 
 /** Wofür ein Leutnant Geld ausgibt: Personal (Anheuern, Kaution) oder Ware (Nachschub). */
@@ -288,7 +346,8 @@ export function rightHandDetour(ctx: Ctx): boolean {
  * Erlöses fehlt in der Kasse, im Protokoll steht es. Gibt den Betrag zurück (0 = nichts passiert).
  */
 export function rightHandSkim(ctx: Ctx, staffId: string, revenue: number): number {
-  const rh = getRightHand(ctx.state);
+  const city = rightHandCityOf(ctx.state, staffId);
+  const rh = city ? getRightHand(ctx.state, city) : null;
   const m = rh?.staffId === staffId ? getStaffMember(ctx.state, staffId) : undefined;
   if (!rh || !m || m.stats.loyalty >= RIGHT_HAND_SKIM_LOYALTY || !ctx.chance(RIGHT_HAND_SKIM_CHANCE)) return 0;
   const amount = Math.round(revenue * RIGHT_HAND_SKIM_SHARE);
@@ -323,9 +382,11 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
   const check = canBeRightHand(ctx.state, staffId);
   if (!check.ok) return check;
   const h = ctx.state.modules.hierarchy;
-  if (h.rightHand) dismissRightHand(ctx);
   const m = getStaffMember(ctx.state, staffId);
   if (!m) return { ok: false, reason: NOT_EMPLOYED };
+  // Eine Rechte Hand pro Stadt: die der Stadt, in der die Person ist (Auftrag 30).
+  const cityId = m.cityId ?? 'koeln';
+  if (h.rightHands[cityId]) dismissRightHand(ctx, cityId);
   // Ein Leutnant, der aufsteigt, gibt seine Spots ab.
   if (isLieutenant(ctx.state, staffId)) {
     delete h.posts[staffId];
@@ -333,7 +394,7 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
   }
   // Ein Leutnant, der sie angeheuert hat, darf sie nicht mehr als sein Team behandeln (und bei Ausfall entlassen).
   releaseFromTeams(ctx.state, staffId);
-  h.rightHand = {
+  h.rightHands[cityId] = {
     staffId,
     appointedAt: ctx.now,
     // Tief kopieren: Die Bestellregeln werden später verändert (paused), die Vorgabe darf das nie mitbekommen.
@@ -354,6 +415,8 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
     restockDay: clock.day(ctx.now),
     restockSpent: 0,
     passed: [],
+    fullPower: null,
+    grudgeUntil: null,
   };
   assign(ctx, staffId, OFFICE);
   setDemand(ctx, staffId, RIGHT_HAND_DEMAND);
@@ -370,11 +433,11 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
   return { ok: true };
 }
 
-export function dismissRightHand(ctx: Ctx): CommandResult {
+export function dismissRightHand(ctx: Ctx, cityId: string = activeCity(ctx.state)): CommandResult {
   const h = ctx.state.modules.hierarchy;
-  const rh = h.rightHand;
+  const rh = h.rightHands[cityId];
   if (!rh) return { ok: false, reason: 'Du hast keine Rechte Hand.' };
-  h.rightHand = null;
+  delete h.rightHands[cityId];
   const m = getStaffMember(ctx.state, rh.staffId);
   if (m && isEmployed(ctx.state, m.id)) {
     assign(ctx, m.id, null);
@@ -387,8 +450,12 @@ export function dismissRightHand(ctx: Ctx): CommandResult {
   return { ok: true };
 }
 
-export function configureRightHand(ctx: Ctx, patch: Partial<RightHandSettings>): CommandResult {
-  const rh = getRightHand(ctx.state);
+export function configureRightHand(
+  ctx: Ctx,
+  patch: Partial<RightHandSettings>,
+  cityId: string = activeCity(ctx.state),
+): CommandResult {
+  const rh = getRightHand(ctx.state, cityId);
   if (!rh) return { ok: false, reason: 'Du hast keine Rechte Hand.' };
   const next = { ...rh.settings };
   const flags = [
@@ -405,12 +472,23 @@ export function configureRightHand(ctx: Ctx, patch: Partial<RightHandSettings>):
     'laundering',
   ] as const;
   for (const key of flags) if (patch[key] !== undefined) next[key] = !!patch[key];
+  if (patch.fullPowerTasks !== undefined) {
+    const tasks = { ...next.fullPowerTasks };
+    for (const task of FULL_POWER_TASKS) {
+      const value = patch.fullPowerTasks[task.key];
+      if (value !== undefined) tasks[task.key] = !!value;
+    }
+    next.fullPowerTasks = tasks;
+  }
   const amounts = [
     'budgetPerDay',
     'orderMaxPrice',
     'restockBudgetPerDay',
     'wholesaleMaxPrice',
     'launderAbove',
+    'protectionMax',
+    'dealMax',
+    'expansionBudgetPerDay',
   ] as const;
   for (const key of amounts) {
     const value = patch[key];
@@ -439,8 +517,9 @@ export function configureRightHand(ctx: Ctx, patch: Partial<RightHandSettings>):
 /** Die Rechte Hand ist gegangen (entlassen, gekündigt, tot). */
 export function onRightHandLeft(ctx: Ctx, staffId: string): void {
   const h = ctx.state.modules.hierarchy;
-  if (h.rightHand?.staffId !== staffId) return;
-  h.rightHand = null;
+  const city = rightHandCityOf(ctx.state, staffId);
+  if (!city) return;
+  delete h.rightHands[city];
   journal.add(ctx, 'Deine Rechte Hand ist weg. Die Leutnants machen allein weiter.', 'bad', { staffId });
   ctx.emit('hierarchy.rightHandDismissed', { staffId });
 }
@@ -450,16 +529,16 @@ export function onRightHandLeft(ctx: Ctx, staffId: string): void {
  * Rechte Hand oder in Haft passiert nichts (dismiss räumt den Posten vorher, Rückkehr regelt onRightHandStatus).
  */
 export function onRightHandAssigned(ctx: Ctx, staffId: string, assignment: { kind: string } | null): void {
-  const rh = getRightHand(ctx.state);
-  if (rh?.staffId !== staffId || assignment !== null) return;
+  if (!isRightHand(ctx.state, staffId) || assignment !== null) return;
   const m = getStaffMember(ctx.state, staffId);
   if (m?.status === 'active' && isEmployed(ctx.state, staffId) && !m.assignment) assign(ctx, staffId, OFFICE);
 }
 
 /** Status der Rechten Hand geändert: Haft und Rückkehr ins Journal. */
 export function onRightHandStatus(ctx: Ctx, staffId: string, to: string): void {
-  const rh = getRightHand(ctx.state);
-  if (rh?.staffId !== staffId) return;
+  const city = rightHandCityOf(ctx.state, staffId);
+  const rh = city ? getRightHand(ctx.state, city) : null;
+  if (!rh) return;
   if (to === 'jailed' || to === 'injured') {
     rh.log.unshift({ time: ctx.now, text: to === 'jailed' ? 'Sitzt in Haft.' : 'Ist verletzt.' });
     journal.add(
@@ -478,13 +557,13 @@ export function onRightHandStatus(ctx: Ctx, staffId: string, to: string): void {
 
 /** Um Mitternacht: erledigte Ausfälle vergessen, wenn die Leute zurück sind; überlassene Anfragen aufräumen. */
 export function rightHandDaily(ctx: Ctx): void {
-  const rh = getRightHand(ctx.state);
-  if (!rh) return;
-  pruneTasks(ctx.state, rh);
-  rh.handled = rh.handled.filter((id) => {
-    const m = getStaffMember(ctx.state, id);
-    return !!m && isEmployed(ctx.state, id) && isAbsent(m);
-  });
+  for (const { post: rh } of allRightHands(ctx.state)) {
+    pruneTasks(ctx.state, rh);
+    rh.handled = rh.handled.filter((id) => {
+      const m = getStaffMember(ctx.state, id);
+      return !!m && isEmployed(ctx.state, id) && isAbsent(m);
+    });
+  }
 }
 
 /**
@@ -493,15 +572,24 @@ export function rightHandDaily(ctx: Ctx): void {
  * Während sie selbst ausfährt, laufen ihre anderen Aufgaben weiter.
  */
 export function rightHandTick(ctx: Ctx): void {
-  const rh = activeRightHand(ctx.state);
+  for (const { cityId } of allRightHands(ctx.state)) rightHandTurn(ctx, cityId);
+}
+
+/** Zug der Rechten Hand einer Stadt. In einer schlafenden Stadt nur Bericht und Anteil. */
+function rightHandTurn(ctx: Ctx, cityId: string): void {
+  const rh = activeRightHand(ctx.state, cityId);
   const m = rh ? getStaffMember(ctx.state, rh.staffId) : undefined;
   if (!rh || !m) return;
   const actor: Actor = `staff:${m.id}`;
   const today = clock.day(ctx.now);
   if (rh.settings.dailyReport && clock.hour(ctx.now) >= REPORT_HOUR && rh.reportDay !== today) {
     rh.reportDay = today;
-    sendReport(ctx, rh);
+    sendReport(ctx, rh, cityId);
   }
+  // Vollmacht: ihr Anteil am Tagesgewinn, sobald ein Buchungstag abgeschlossen ist (auch aus der schlafenden Stadt).
+  if (rh.fullPower) payShare(ctx, rh, m);
+  // Schläft ihre Stadt, arbeitet sie im Tagesergebnis (city), nicht Zug um Zug.
+  if (!isMemberLive(ctx.state, m)) return;
   runQuickTasks(ctx, rh, m, actor);
   if (ctx.now < rh.nextActionAt) return;
   rh.nextActionAt = ctx.now + RIGHT_HAND_INTERVAL;
@@ -509,11 +597,16 @@ export function rightHandTick(ctx: Ctx): void {
   if (rh.settings.coordinate) coordinate(ctx, rh, actor);
   if (rh.settings.absences) handleAbsences(ctx, rh, actor);
   runHourlyTasks(ctx, rh, m, actor);
+  if (rh.fullPower) runFullPowerTasks(ctx, rh, m, actor);
 }
 
-/** Tagesbericht mit den Zahlen von gestern und bis zu drei Empfehlungen. */
-export function buildReport(state: GameState): DailyReport {
-  const yesterday = dayReport(state, 1);
+/**
+ * Tagesbericht mit den Zahlen von gestern und bis zu drei Empfehlungen. Mit Vollmacht nur die Zahlen ihrer Stadt
+ * (Auftrag 30).
+ */
+export function buildReport(state: GameState, cityId: string = activeCity(state)): DailyReport {
+  const city = getRightHand(state, cityId)?.fullPower?.cityId;
+  const yesterday = city ? cityReport(state, city, 1, 1) : dayReport(state, 1);
   const runway = wageRunway(state);
   const advice: string[] = [];
   if (yesterday.profit < 0) {
@@ -538,7 +631,7 @@ export function buildReport(state: GameState): DailyReport {
   const hot = playerHeat(state);
   if (hot && hot.heat >= 60) advice.push(`In ${veedelName(hot.veedelId)} ist es heiß (Heat ${Math.round(hot.heat)}).`);
   if (runway.warn) advice.unshift(`Die Löhne reichen nur noch für ${runway.days ?? 0} Tage.`);
-  const rh = getRightHand(state);
+  const rh = getRightHand(state, cityId);
   const done = rh ? describeDone(rh.done) : '';
   return {
     ...(done ? { done } : {}),
@@ -552,19 +645,31 @@ export function buildReport(state: GameState): DailyReport {
   };
 }
 
-function sendReport(ctx: Ctx, rh: RightHandPost): void {
+function sendReport(ctx: Ctx, rh: RightHandPost, cityId: string): void {
   const m = getStaffMember(ctx.state, rh.staffId);
   if (!m) return;
-  const report = buildReport(ctx.state);
+  const report = buildReport(ctx.state, cityId);
   rh.lastReport = report;
   const problems = (report.profit < 0 ? 1 : 0) + (wageRunway(ctx.state).warn ? 1 : 0);
+  // Mit Vollmacht wird der Tagesbericht zum Bericht aus der Stadt: Ergebnis, ihr Anteil, Erledigtes, Probleme.
+  const fp = rh.fullPower;
+  const fpDone = fp ? describeFullPowerDone(fp.done) : '';
   const lines = [
-    `Tagesbericht für Tag ${report.day}:`,
+    fp ? `Bericht aus ${cityLabel(fp.cityId)}, Tag ${report.day}:` : `Tagesbericht für Tag ${report.day}:`,
     `Umsatz ${formatEuro(report.revenue)}, Kosten ${formatEuro(report.costs)}, ${report.profit >= 0 ? 'Gewinn' : 'Verlust'} ${formatEuro(Math.abs(report.profit))}.`,
+    ...(fp
+      ? [
+          fp.done.share > 0
+            ? `Mein Anteil: ${formatEuro(fp.done.share)}, der Rest gehört dir.`
+            : 'Kein Gewinn, also kein Anteil für mich.',
+        ]
+      : []),
     `In der Kasse ${formatEuro(report.cash)}${report.runwayDays !== null ? `, die Löhne reichen ${report.runwayDays} Tage` : ''}.`,
     ...(report.done ? [`Erledigt: ${report.done}.`] : []),
+    ...(fpDone ? [`Mit Vollmacht: ${fpDone}.`] : []),
     ...report.advice,
   ];
+  if (fp) fp.done = emptyFullPowerDone();
   const absent = getStaff(ctx.state).filter(isAbsent);
   messages.send(ctx, {
     contact: staffContact(m),

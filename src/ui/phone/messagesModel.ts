@@ -4,6 +4,7 @@
 
 import { type ContactKind, clock, type GameState, type Message, messages } from '../../core';
 import type { CategoryColor } from '../components';
+import { memoState } from '../stateMemo';
 
 export const CONTACT_KIND_LABELS: Record<ContactKind, string> = {
   customer: 'Kunde',
@@ -33,6 +34,11 @@ export const CONTACT_KIND_TONES: Record<ContactKind, CategoryColor> = {
   police: 'law',
   other: 'system',
 };
+
+/** Bild des Kontakts: eigenes Bild oder Emoji, sonst das Symbol seiner Art. */
+export function contactAvatar(avatar: string | undefined, kind: ContactKind): string {
+  return avatar ?? CONTACT_KIND_ICONS[kind];
+}
 
 /** Überschrift der Gruppe in der Chat-Liste. */
 export const CONTACT_KIND_PLURALS: Record<ContactKind, string> = {
@@ -115,6 +121,11 @@ export type ChatEntry =
       via?: string;
       /** Offene Frage: Routine (die Rechte Hand darf antworten) oder Chefsache. */
       routine?: boolean;
+      /**
+       * Anruf (Auftrag 30): Kopfzeile ("Anruf, 3 Min.", "Verpasster Anruf") und was gesagt wurde (angenommen) bzw. was
+       * auf der Mailbox steht (abgelehnt oder zuletzt verpasst); null, solange es noch klingelt oder ein Rückruf kommt.
+       */
+      call?: { label: string; icon: string; tone: 'ok' | 'missed'; lines: string[] | null; mailbox: boolean };
     };
 
 /** Zeit relativ zu jetzt: heute nur Uhrzeit, gestern "Gestern", sonst Wochentag (diese Woche) oder "Tag n". */
@@ -126,7 +137,13 @@ export function timeLabel(time: number, now: number): string {
   return `Tag ${clock.day(time)}`;
 }
 
-export function chatList(state: GameState): ChatListItem[] {
+/**
+ * Chat-Liste, neueste zuerst. Einmal pro Spielstand gerechnet (Nachrichten-App, Empfehlung "Antworten",
+ * Island-Fristen und Menü fragen alle), nicht verändern.
+ */
+export const chatList: (state: GameState) => ChatListItem[] = memoState(computeChatList);
+
+function computeChatList(state: GameState): ChatListItem[] {
   return messages.threads(state).map((thread) => {
     const history = messages.thread(state, thread.contact.id);
     const open = history.filter((m) => messages.canAnswer(state, m));
@@ -191,9 +208,28 @@ export function chatEntries(state: GameState, contactId: string, firstUnreadId?:
     if (answered) entry.answeredWith = answered;
     if (m.via) entry.via = m.via;
     if (answerable) entry.routine = !!m.routine;
+    if (m.call) entry.call = callEntry(m);
     entries.push(entry);
   }
   return entries;
+}
+
+/** Wie ein Anruf im Chat erscheint. */
+export function callEntry(m: Message): NonNullable<Extract<ChatEntry, { type: 'message' }>['call']> {
+  const call = m.call;
+  const lines = call?.lines ?? [];
+  switch (call?.state) {
+    case 'accepted':
+      return { label: 'Anruf', icon: 'call', tone: 'ok', lines, mailbox: false };
+    case 'declined':
+      return { label: 'Abgelehnter Anruf', icon: 'callEnd', tone: 'missed', lines, mailbox: true };
+    case 'missed':
+      return call.final
+        ? { label: 'Verpasster Anruf', icon: 'callEnd', tone: 'missed', lines, mailbox: true }
+        : { label: 'Verpasster Anruf', icon: 'callEnd', tone: 'missed', lines: null, mailbox: false };
+    default:
+      return { label: 'Anruf …', icon: 'call', tone: 'ok', lines: null, mailbox: false };
+  }
 }
 
 /** Erste ungelesene Nachricht eines Chats (für den "Neu"-Trenner). */

@@ -78,6 +78,7 @@ import {
   TICK_EVERY,
   TRAINING_XP,
 } from './config';
+import { grantFullPower, revokeFullPower } from './fullpower';
 import { nextRuleId, normalizeOrderRules } from './orders';
 import {
   appointRightHand,
@@ -107,6 +108,8 @@ export {
   CAUTION_LEVELS,
   DEFAULT_RIGHT_HAND_SETTINGS,
   DEFAULT_SETTINGS,
+  FULL_POWER_SHARE,
+  FULL_POWER_TASKS,
   HIRE_BUDGET_OPTIONS,
   LIEUTENANT_MIN_LEVEL,
   MAX_ORDER_RULES,
@@ -132,12 +135,20 @@ export {
   RIGHT_HAND_TASKS,
   RIGHT_HAND_WHOLESALE_PRICE_OPTIONS,
 } from './config';
+export {
+  cityLabel,
+  describeFullPowerDone,
+  fullPowerActive,
+  hasFullPower,
+} from './fullpower';
 export { isPortSupplierAllowed, orderRuleLabel, PORT_SUPPLIER_HINT, ruleStock, ruleWarehouse } from './orders';
 export {
   absenceHandled,
   activeRightHand,
+  allRightHands,
   buildReport,
   canBeRightHand,
+  fullPowerMissing,
   getRightHand,
   isRightHand,
   isTaskActive,
@@ -145,6 +156,7 @@ export {
   payrollReserve,
   rankForXp,
   rightHandBudgetLeft,
+  rightHandCityOf,
   rightHandDetour,
   rightHandDriver,
   rightHandHandlesOrders,
@@ -180,8 +192,14 @@ declare module '../../core' {
     'hierarchy.configure': { staffId?: string; veedelId?: string; settings: SettingsPatch };
     /** Rechte Hand ernennen (genau eine Person über den Leutnants). */
     'hierarchy.appointRightHand': { staffId: string };
-    'hierarchy.dismissRightHand': Record<string, never>;
-    'hierarchy.configureRightHand': { settings: Partial<RightHandSettings> };
+    /** Rechte Hand abberufen (ohne Stadt: die der aktiven Stadt). */
+    'hierarchy.dismissRightHand': { cityId?: string };
+    /** Rechte Hand einstellen (ohne Stadt: die der aktiven Stadt). */
+    'hierarchy.configureRightHand': { settings: Partial<RightHandSettings>; cityId?: string };
+    /** Vollmacht (Auftrag 30, Chefsache): Die Rechte Hand führt die Stadt allein, gegen 80 % vom Tagesgewinn. */
+    'hierarchy.grantFullPower': { cityId?: string };
+    /** Vollmacht zurückziehen: kostet Loyalität und Laune, Stufe und Aufgaben bleiben. */
+    'hierarchy.revokeFullPower': { cityId?: string };
   }
   interface GameEvents {
     /** veedelId: Veedel mit den meisten seiner Spots (für ältere Zuhörer). */
@@ -195,6 +213,10 @@ declare module '../../core' {
     'hierarchy.dailyReport': { staffId: string; day: number; profit: number; problems: number };
     /** Die Rechte Hand hat eine neue Stufe erreicht (Aufgaben mit diesem Rang sind frei). */
     'hierarchy.rightHandRankUp': { staffId: string; rank: number };
+    'hierarchy.fullPowerGranted': { staffId: string; cityId: string };
+    'hierarchy.fullPowerRevoked': { staffId: string; cityId: string };
+    /** Ihr Anteil am Gewinn eines abgeschlossenen Tages ist gebucht. */
+    'hierarchy.shareTaken': { staffId: string; cityId: string; day: number; profit: number; amount: number };
   }
 }
 
@@ -734,7 +756,7 @@ export function migrateHierarchyV1(old: HierarchyStateV1, state: GameState): Hie
  * Version 2 → 3: Aus jedem Veedel-Posten wird ein Posten pro Leutnant mit den bis zu drei Spots dieses Veedels mit
  * dem meisten Andrang. Einstellungen (alter Mindestbestand wird eine Regel "automatisch"), Protokoll und Umsatz bleiben.
  */
-export function migrateHierarchyV2(old: HierarchyStateV2, state: GameState): HierarchyState {
+export function migrateHierarchyV2(old: HierarchyStateV2, state: GameState): HierarchyStateV5 {
   const posts: Record<string, LieutenantPost> = {};
   for (const veedelId of Object.keys(old.posts).sort()) {
     const p = old.posts[veedelId];
@@ -775,6 +797,9 @@ export function migrateHierarchyV2(old: HierarchyStateV2, state: GameState): Hie
   return { posts, rightHand: null, orderTemplate: null };
 }
 
+/** Zustand bis Version 5: eine Rechte Hand für alles (Köln). */
+type HierarchyStateV5 = Omit<HierarchyState, 'rightHands'> & { rightHand: RightHandPost | null };
+
 type RightHandSettingsV3 = Pick<
   RightHandSettings,
   'dailyReport' | 'coordinate' | 'payrollGuard' | 'absences' | 'budgetPerDay'
@@ -782,14 +807,14 @@ type RightHandSettingsV3 = Pick<
 type RightHandPostV3 = Omit<RightHandPost, 'settings' | 'xp' | 'done' | 'restockDay' | 'restockSpent' | 'passed'> & {
   settings: RightHandSettingsV3;
 };
-type HierarchyStateV3 = Omit<HierarchyState, 'rightHand'> & { rightHand: RightHandPostV3 | null };
+type HierarchyStateV3 = Omit<HierarchyStateV5, 'rightHand'> & { rightHand: RightHandPostV3 | null };
 
 /**
  * Version 3 → 4 (Auftrag 28): Die Rechte Hand bekommt Aufgaben mit Stufen-Schloss, Erfahrung und eine Liste des
  * Erledigten. Bestehende Einstellungen bleiben, die neuen Aufgaben stehen auf den Standardwerten; sie fängt auf
  * Stufe 1 an.
  */
-export function migrateHierarchyV3(old: HierarchyStateV3, state: GameState): HierarchyState {
+export function migrateHierarchyV3(old: HierarchyStateV3, state: GameState): HierarchyStateV5 {
   const rh = old.rightHand;
   return {
     ...old,
@@ -811,11 +836,45 @@ export function migrateHierarchyV3(old: HierarchyStateV3, state: GameState): Hie
   };
 }
 
+/**
+ * Version 5 (Auftrag 30): Vollmacht. Die Rechte Hand bekommt fullPower (aus) und grudgeUntil, ihre Einstellungen die
+ * Aufgaben mit Vollmacht und deren Beträge (Standardwerte).
+ */
+export function migrateHierarchyV4(old: HierarchyStateV4): HierarchyStateV5 {
+  const rh = old.rightHand;
+  return {
+    ...old,
+    rightHand: rh
+      ? {
+          ...rh,
+          settings: {
+            ...rh.settings,
+            fullPowerTasks: { ...DEFAULT_RIGHT_HAND_SETTINGS.fullPowerTasks },
+            protectionMax: DEFAULT_RIGHT_HAND_SETTINGS.protectionMax,
+            dealMax: DEFAULT_RIGHT_HAND_SETTINGS.dealMax,
+            expansionBudgetPerDay: DEFAULT_RIGHT_HAND_SETTINGS.expansionBudgetPerDay,
+          },
+          fullPower: null,
+          grudgeUntil: null,
+        }
+      : null,
+  };
+}
+
+/** Zustand in Version 4 (vor der Vollmacht). */
+type RightHandSettingsV4 = Omit<
+  RightHandSettings,
+  'fullPowerTasks' | 'protectionMax' | 'dealMax' | 'expansionBudgetPerDay'
+>;
+interface HierarchyStateV4 extends Omit<HierarchyStateV5, 'rightHand'> {
+  rightHand: (Omit<RightHandPost, 'fullPower' | 'grudgeUntil' | 'settings'> & { settings: RightHandSettingsV4 }) | null;
+}
+
 export default defineModule({
   id: 'hierarchy',
-  version: 4,
+  version: 6,
   dependsOn: ['staff'],
-  init: () => ({ posts: {}, rightHand: null, orderTemplate: null }),
+  init: () => ({ posts: {}, rightHands: {}, orderTemplate: null }),
   tick: (ctx) => {
     lieutenantTick(ctx);
     rightHandTick(ctx);
@@ -831,8 +890,10 @@ export default defineModule({
     'hierarchy.configure': (ctx, payload, meta) =>
       configure(ctx, resolveStaffId(ctx.state, payload), payload.settings, meta),
     'hierarchy.appointRightHand': (ctx, { staffId }) => appointRightHand(ctx, staffId),
-    'hierarchy.dismissRightHand': (ctx) => dismissRightHand(ctx),
-    'hierarchy.configureRightHand': (ctx, { settings }) => configureRightHand(ctx, settings),
+    'hierarchy.dismissRightHand': (ctx, payload) => dismissRightHand(ctx, payload?.cityId),
+    'hierarchy.configureRightHand': (ctx, { settings, cityId }) => configureRightHand(ctx, settings, cityId),
+    'hierarchy.grantFullPower': (ctx, { cityId }, meta) => grantFullPower(ctx, cityId ?? 'koeln', meta),
+    'hierarchy.revokeFullPower': (ctx, payload, meta) => revokeFullPower(ctx, meta, payload?.cityId),
   },
   on: {
     'clock.dayStarted': daily,
@@ -912,5 +973,15 @@ export default defineModule({
       if (sellerId && sellerId !== lt.id) addXp(ctx, sellerId, TRAINING_XP);
     },
   },
-  migrations: { 2: migrateHierarchyV1, 3: migrateHierarchyV2, 4: migrateHierarchyV3 },
+  migrations: {
+    2: migrateHierarchyV1,
+    3: migrateHierarchyV2,
+    4: migrateHierarchyV3,
+    5: migrateHierarchyV4,
+    // Version 6 (Auftrag 30, Etappe 5): Rechte Hand pro Stadt. Die bisherige war die von Köln.
+    6: (old: HierarchyStateV5): HierarchyState => {
+      const { rightHand, ...rest } = old;
+      return { ...rest, rightHands: rightHand ? { koeln: rightHand } : {} };
+    },
+  },
 });

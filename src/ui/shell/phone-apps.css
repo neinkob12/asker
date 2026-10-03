@@ -443,6 +443,8 @@
 }
 .msg-bubble p {
   margin: 0;
+  /* Absätze und Aufzählungen in Nachrichten ("\n") bleiben stehen */
+  white-space: pre-line;
 }
 .msg-bubble time {
   display: block;
@@ -771,6 +773,212 @@
 /* Im Abschnitt der Einstellungen bleiben die Tagesmarken im Fluss (die Seite scrollt als Ganzes) */
 .history-section .journal__day-head {
   position: static;
+}
+
+/* ---------------------------------------------------------------- Anrufe (Auftrag 30) */
+/*
+ * Klingelnder Anruf und Gespräch füllen den Bildschirm des Handys (über den Seiten, unter Statusleiste und
+ * Home-Balken), wie bei iOS. Ablehnen und Annehmen als große runde Tasten (72 px), rot und grün mit Symbol und Wort.
+ */
+.call-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--phone-status-height) + var(--space-4)) var(--space-4)
+    calc(var(--phone-home-inset) + var(--space-3));
+  background:
+    radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--cat-chat) 26%, transparent) 0%, transparent 70%),
+    var(--phone-bg);
+  color: var(--phone-label);
+  animation: call-in var(--duration) var(--ease-out);
+}
+@keyframes call-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+.call-screen__who {
+  text-align: center;
+}
+.call-screen__kicker {
+  margin: 0;
+  font-size: var(--type-subhead);
+  color: var(--phone-label-2);
+  animation: call-pulse 1.6s ease-in-out infinite;
+}
+@keyframes call-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+.call-screen__name {
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-large-title);
+  font-weight: 600;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.call-screen__role {
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-subhead);
+  color: var(--phone-label-2);
+}
+.call-screen__avatar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.call-screen__avatar .ui-avatar {
+  width: 112px;
+  height: 112px;
+  font-size: 46px;
+}
+.call-screen__actions {
+  display: flex;
+  justify-content: space-around;
+  padding-bottom: var(--space-3);
+}
+.call-screen__action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-footnote);
+  color: var(--phone-label);
+}
+.call-button {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border: 0;
+  border-radius: 50%;
+  font-size: 32px;
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+.call-button:active {
+  transform: scale(0.94);
+}
+.call-button.is-accept {
+  background: var(--cat-money-b);
+  color: var(--cat-money-on);
+}
+/* Nur das Symbol wackelt, der Knopf bleibt still (ruhiges Ziel zum Antippen) */
+.call-button.is-accept .ui-icon {
+  animation: call-wiggle 1.6s ease-in-out infinite;
+}
+.call-button.is-decline {
+  background: var(--cat-danger-b);
+  color: var(--cat-danger-on);
+}
+@keyframes call-wiggle {
+  0%,
+  70%,
+  100% {
+    transform: rotate(0);
+  }
+  78% {
+    transform: rotate(-10deg);
+  }
+  86% {
+    transform: rotate(10deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-screen,
+  .call-screen__kicker,
+  .call-button.is-accept .ui-icon {
+    animation: none;
+  }
+}
+/* Im Gespräch: Kopf mit Name und Dauer, darunter die Sprechblasen, unten Antworten und Auflegen */
+.call-screen.is-active {
+  padding-top: var(--phone-status-height);
+}
+.call-screen__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0 var(--space-3);
+  border-bottom: var(--stroke) solid var(--phone-separator);
+}
+.call-screen__bar-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.call-screen__bar-text strong {
+  font-size: var(--type-body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.call-screen__bar-text span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--type-footnote);
+  color: var(--cat-money);
+  font-variant-numeric: tabular-nums;
+}
+.call-screen__talk {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3) 0;
+}
+.call-screen__skip {
+  margin: var(--space-3) 0 0;
+  text-align: center;
+  font-size: var(--type-footnote);
+  color: var(--phone-label-2);
+}
+.call-screen__footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+.call-screen__footer .msg-options {
+  align-self: stretch;
+}
+/* Anruf im Chat: Kopfzeile, darunter das Gespräch bzw. die Mailbox */
+.msg-call-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-self: stretch;
+}
+.msg-call {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px var(--space-3);
+  border-radius: var(--radius-round);
+  background: var(--phone-fill);
+  font-size: var(--type-footnote);
+  font-weight: 600;
+}
+.msg-call.is-ok {
+  color: var(--cat-money);
+}
+.msg-call.is-missed {
+  color: var(--cat-danger);
+}
+.msg-call time {
+  color: var(--phone-label-2);
+  font-weight: 400;
+}
+.msg-call__talk.is-mailbox .msg-bubble {
+  font-style: italic;
 }
 
 /* Einstellungen › Über: Quellenangabe der Daten (Auftrag 31) */

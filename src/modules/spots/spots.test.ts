@@ -90,7 +90,7 @@ describe('spots', () => {
       [6.9535, 50.9655],
       [6.918, 50.9175],
       [6.9655, 50.9145],
-      [6.9205, 50.9485],
+      [6.9105, 50.9525],
       [6.9765, 50.9385],
     ];
     const results = places.map(([lng, lat]) => sim.dispatch({ type: 'spots.found', payload: { lng, lat } }).ok);

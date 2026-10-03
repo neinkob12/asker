@@ -42,7 +42,7 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
  * Radius) von der alten zur neuen Form, ohne Layout pro Bild (nur transform und der Radius). Bei weniger Bewegung
  * springt sie sofort.
  */
-function useIslandMorph() {
+function useIslandMorph(contentKey: string) {
   const island = useRef<HTMLDivElement>(null);
   const shape = useRef<HTMLSpanElement>(null);
   const shown = useRef<Box | null>(null);
@@ -93,9 +93,32 @@ function useIslandMorph() {
         shown.current = next;
       },
     }).motion;
-  });
+    // Nur messen, wenn sich der Inhalt geändert hat: getComputedStyle und offsetWidth erzwingen ein Layout, und das bei
+    // jedem Neuzeichnen kostete 8 bis 9 % der Rechenzeit (docs/perf/2026-10-messung.md, Hotspot 2).
+  }, [contentKey]);
   useEffect(() => () => motion.current?.stop(), []);
   return { island, shape };
+}
+
+/** Alles, was die Größe der Island ändern kann (Modus und sichtbarer Inhalt). Ändert es sich, wird neu gemessen. */
+function islandContentKey(
+  activities: readonly LiveActivity[],
+  alertId: string | null,
+  expanded: boolean,
+  pulse: IslandPulse | null,
+  clockText: string | undefined,
+): string {
+  const top = activities[0];
+  const alert = alertId ? activities.find((a) => a.id === alertId) : undefined;
+  const row = (a: LiveActivity) => `${a.id}|${a.icon}|${a.title}|${a.detail ?? ''}|${a.trailing}`;
+  if (expanded && activities.length > 0) {
+    return `expanded#${activities.length}#${activities.slice(0, EXPANDED_MAX).map(row).join('/')}`;
+  }
+  if (alert) return `alert#${row(alert)}`;
+  const clockPart = clockText ?? '';
+  if (pulse) return `pulse#${pulse.icon}|${pulseText(pulse)}#${clockPart}`;
+  if (top) return `compact#${top.icon}|${top.leading}|${top.trailing}#${activities.length > 1}#${clockPart}`;
+  return `idle#${clockPart}`;
 }
 
 function pulseText(pulse: IslandPulse): string {
@@ -135,9 +158,9 @@ export function DynamicIsland(props: { floating?: boolean; clock?: string }) {
   const seen = useRef<Set<string> | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>();
   const [alertId, setAlertId] = useState<string | null>(null);
-  const morph = useIslandMorph();
   const activities = state ? collectLiveActivities(state) : [];
   const ids = activities.map((a) => a.id).join('|');
+  const morph = useIslandMorph(islandContentKey(activities, alertId, ui.island.expanded, ui.island.pulse, props.clock));
 
   // Neue dringende Aktivität: kurz aufklappen. Beim ersten Anzeigen nicht (sonst klappt sie nach dem Laden auf).
   useEffect(() => {

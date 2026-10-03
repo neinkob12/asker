@@ -23,12 +23,21 @@
 //   'customer.regularGained', 'customer.regularLost', 'order.received', 'order.accepted', 'order.finished'
 
 import { type CommandResult, type Ctx, defineModule, type GameState, journal } from '../../core';
+import { cityName, cityOfSpot, isPlayerIn } from '../city';
 import { getStock } from '../goods';
 import { getSpot, getSpots, isSpotActive } from '../spots';
 import { CUSTOMER_TYPES, HANDOVER_MINUTES, WHOLESALE_HANDOVER_MINUTES } from './config';
 import { customerType } from './decisions';
 import { acceptOrder, courierGone, declineOrder, expireOrderMessage, onDealResolved, ordersTick } from './orders';
-import { demandRate, initialSpawn, isPlayerAway, serve, streetTick } from './street';
+import {
+  demandRate,
+  initialSpawn,
+  isPlayerAway,
+  onCityEventChanged,
+  onCitySwitched,
+  serve,
+  streetTick,
+} from './street';
 
 export { CUSTOMER_PATIENCE } from './config';
 export {
@@ -45,7 +54,7 @@ export {
 } from './decisions';
 // Für Tests und Skripte: eine Anfrage erzwingen (force = true).
 export { offerDelivery, offerWholesale } from './orders';
-export { isPlayerAway } from './street';
+export { isPlayerAway, rateSale } from './street';
 
 export interface CustomerType {
   id: string;
@@ -278,7 +287,7 @@ export function getCustomer(state: GameState, id: number): Customer | undefined 
 /** Reicht die Ware für diesen Kunden? */
 export function canServe(state: GameState, customerId: number): boolean {
   const c = getCustomer(state, customerId);
-  return !!c && getStock(state, { productId: c.productId }) >= c.amount;
+  return !!c && getStock(state, { productId: c.productId, cityId: cityOfSpot(state, c.spotId) }) >= c.amount;
 }
 
 export function customerRevenue(customer: Pick<Customer, 'amount' | 'pricePerUnit'>): number {
@@ -360,6 +369,11 @@ function standAt(ctx: Ctx, spotId: string | null): CommandResult {
   }
   const spot = getSpot(ctx.state, spotId);
   if (!spot || !isSpotActive(ctx.state, spotId)) return { ok: false, reason: 'Hier kannst du noch nicht verkaufen.' };
+  // Selbst verkaufen geht nur in der Stadt, in der du bist (Auftrag 30).
+  const city = cityOfSpot(ctx.state, spotId);
+  if (!isPlayerIn(ctx.state, city)) {
+    return { ok: false, reason: `Du bist nicht in ${cityName(city)}. Dort verkaufen deine Leute.` };
+  }
   if (self.spotId === spotId) return { ok: true };
   self.spotId = spotId;
   self.since = ctx.now;
@@ -428,6 +442,10 @@ export default defineModule({
     'message.expired': (ctx, { messageId, source }) => {
       if (source === 'customers') expireOrderMessage(ctx, messageId);
     },
+    'city.switched': (ctx, { from, to }) => onCitySwitched(ctx, from, to),
+    // Stadt-Events (Etappe 7): Die Laufkundschaft passt sich sofort der neuen Nachfrage an.
+    'events.started': (ctx, { cityId }) => onCityEventChanged(ctx, cityId),
+    'events.ended': (ctx, { cityId }) => onCityEventChanged(ctx, cityId),
     'staff.statusChanged': (ctx, { staffId, to }) => {
       if (to !== 'active') courierGone(ctx, staffId, true);
     },

@@ -14,6 +14,7 @@ import {
   weatherDemandFactor,
 } from '../index';
 import './weather.css';
+import { activeCity, cityName } from '../../city';
 
 const ICONS: Record<WeatherKind, string> = {
   clear: 'sun',
@@ -56,7 +57,8 @@ function WeatherWidget() {
         <Icon name={iconFor(w.kind, state.time)} size={34} />
         <div>
           <div class="weather-widget__temp">{temp(w.temperature)}</div>
-          <div class="weather-widget__name">{WEATHER_NAMES[w.kind]} · Köln</div>
+          <div class="weather-widget__name">{WEATHER_NAMES[w.kind]}</div>
+          <div class="weather-widget__name">{cityName(activeCity(state))}</div>
         </div>
       </div>
       <Forecast />

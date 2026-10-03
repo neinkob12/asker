@@ -6,6 +6,7 @@ import { clock, formatEuro, formatPercent, type GameState } from '../../../core'
 import { registerMapLayer } from '../../../map';
 import {
   Button,
+  Disclosure,
   Group,
   Hint,
   ItemContent,
@@ -18,19 +19,22 @@ import {
   registerAdvisor,
   registerPhoneApp,
   Select,
+  Slot,
   soundOnEvent,
   Tag,
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity, cityName, relationFactor } from '../../city';
 import { getStock, getWarehouse, getWarehouses, productName, qualityTier } from '../../goods';
-import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount } from '../../logistics';
+import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount, portName } from '../../logistics';
 import {
   assortment,
   availableCredit,
   availablePackages,
   canUnlock,
   creditLimit,
+  deliversTo,
   expectedArrival,
   getRelation,
   getSupplier,
@@ -43,6 +47,7 @@ import {
   shipmentProgress,
   shipmentsInTransit,
   supplierDiscount,
+  supplierIn,
   trustLabel,
   unlockRequirements,
 } from '../index';
@@ -133,10 +138,10 @@ function SupplierRow(props: { supplier: Supplier; onSelect: (id: string) => void
 
 function SupplierList(props: { onSelect: (id: string) => void }) {
   const { state } = useGame();
-  const open = getSuppliers(state).filter((s) => isUnlocked(state, s.id));
-  const locked = getSuppliers(state).filter((s) => !isUnlocked(state, s.id));
+  const open = getSuppliers(state, activeCity(state)).filter((s) => isUnlocked(state, s.id));
+  const locked = getSuppliers(state, activeCity(state)).filter((s) => !isUnlocked(state, s.id));
   const shipments = shipmentsInTransit(state);
-  const debts = getSuppliers(state).filter((s) => getRelation(state, s.id).debt > 0);
+  const debts = getSuppliers(state, activeCity(state)).filter((s) => getRelation(state, s.id).debt > 0);
   return (
     <div class="sup-groups">
       {shipments.length > 0 && (
@@ -174,8 +179,16 @@ function SupplierList(props: { onSelect: (id: string) => void }) {
           </List>
         </Group>
       )}
+      <Slot name="suppliers.list" props={{}} />
     </div>
   );
+}
+
+declare module '../../../ui' {
+  interface SlotRegistry {
+    /** Abschnitte unten in der Liste der Lieferanten-App (z.B. Hafen, Routen und Fahrer aus der Logistik). */
+    'suppliers.list': Record<string, never>;
+  }
 }
 
 /** Noch gesperrt: Bedingungen mit Stand, Freischalten, sobald alles erfüllt ist. */
@@ -230,9 +243,20 @@ function LockedSupplier(props: { supplierId: string }) {
 function SupplierDetail(props: { supplierId: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
-  const supplier = getSupplier(state, props.supplierId);
+  // So, wie der Lieferant in der aktiven Stadt auftritt (Lieferzeit, Sortiment; Hein in Hamburg am Kai).
+  const cityId = activeCity(state);
+  const base = getSupplier(state, props.supplierId);
+  const supplier = base ? supplierIn(base, cityId) : undefined;
   const [target, setTarget] = useState('');
-  if (!supplier) return null;
+  if (!supplier || !base) return null;
+  if (!deliversTo(base, cityId)) {
+    return (
+      <div class="sup-app">
+        <p class="ui-hint">{supplier.description}</p>
+        <Hint icon="pin">{`${supplier.contactName} liefert nicht nach ${cityName(cityId)}.`}</Hint>
+      </div>
+    );
+  }
   if (!isUnlocked(state, supplier.id)) {
     return (
       <div class="sup-app">
@@ -245,7 +269,7 @@ function SupplierDetail(props: { supplierId: string }) {
       </div>
     );
   }
-  const warehouses = getWarehouses(state);
+  const warehouses = getWarehouses(state, activeCity(state));
   const toPort = supplier.kind === 'port';
   const picked = warehouses.some((w) => w.id === target) ? target : undefined;
   // Schiffsware: Ohne Wahl zeigt die Auswahl (und bestellt) das Lager, in das die Abholung ohnehin fährt.
@@ -269,6 +293,14 @@ function SupplierDetail(props: { supplierId: string }) {
 
       <h4 class="sup-app__section">Beziehung: {trustLabel(rel.trust)}</h4>
       <ProgressBar value={rel.trust / 100} label="Vertrauen" />
+      <Disclosure
+        label={relationFactor(activeCity(state)) > 1 ? 'Kölscher Klüngel' : 'Kühl und korrekt'}
+        icon="handshake"
+      >
+        {relationFactor(activeCity(state)) > 1
+          ? `In ${cityName(activeCity(state))} kennt man sich: Vertrauen wächst hier anderthalbmal so schnell.`
+          : `In ${cityName(activeCity(state))} gibt es nichts geschenkt: Vertrauen wächst hier langsamer.`}
+      </Disclosure>
       <KeyValue label="Rabatt" value={formatPercent(discount)} />
       <KeyValue label="Kredit" value={limit > 0 ? `${formatEuro(credit)} von ${formatEuro(limit)}` : 'noch keiner'} />
       {rel.debt > 0 && (
@@ -313,8 +345,8 @@ function SupplierDetail(props: { supplierId: string }) {
       {toPort && (
         <Hint icon="ship">
           {hasBerth(state)
-            ? 'Das Schiff legt an deinem Liegeplatz im Niehler Hafen an. Abholen muss jemand am Kai, im Hafen (oder die Rechte Hand mit einem Fahrer).'
-            : 'Ohne Liegeplatz im Niehler Hafen kann kein Schiff für dich anlegen.'}
+            ? `Die Ware kommt an deinen Liegeplatz im ${portName(cityId)}. Abholen muss jemand am Kai, im Hafen (oder die Rechte Hand mit einem Fahrer).`
+            : `Ohne Liegeplatz im ${portName(cityId)} kann kein Schiff für dich anlegen.`}
         </Hint>
       )}
       {toPort && (
@@ -444,8 +476,9 @@ registerPhoneApp({
   component: SuppliersApp,
   // Gesperrt wegen Schulden oder bereit zum Freischalten.
   badge: (state) =>
-    getSuppliers(state).filter((s) => isBlocked(state, s.id) || (!isUnlocked(state, s.id) && canUnlock(state, s.id).ok))
-      .length,
+    getSuppliers(state, activeCity(state)).filter(
+      (s) => isBlocked(state, s.id) || (!isUnlocked(state, s.id) && canUnlock(state, s.id).ok),
+    ).length,
 });
 registerMapLayer(suppliersLayer);
 

@@ -77,12 +77,29 @@ function sellHours(sim: Simulation, spotId: string, perHour: number, hours: numb
 }
 
 describe('gangs: Identität und Stärke', () => {
-  it('vier frei erfundene Gangs mit Boss, Heimat, Farbe, Stil und Stärken', () => {
+  it('je vier frei erfundene Gangs in Köln und Hamburg mit Boss, Heimat, Farbe, Stil und Stärken', () => {
     const sim = createTestGame();
+    expect(getGangs(sim.state, 'koeln').map((g) => g.id)).toEqual(['nord', 'west', 'ost', 'sued']);
+    expect(getGangs(sim.state, 'hamburg').map((g) => g.id)).toEqual([
+      'hh-kiez',
+      'hh-hafen',
+      'hh-schanze',
+      'hh-elbchaussee',
+    ]);
     const gangs = getGangs(sim.state);
-    expect(gangs.map((g) => g.id)).toEqual(['nord', 'west', 'ost', 'sued']);
-    expect(new Set(gangs.map((g) => g.color)).size).toBe(4);
-    expect(new Set(gangs.map((g) => g.homeVeedelId)).size).toBe(4);
+    expect(new Set(gangs.map((g) => g.color)).size).toBe(8);
+    expect(new Set(gangs.map((g) => g.homeVeedelId)).size).toBe(8);
+    for (const g of gangs) expect(getVeedel(g.homeVeedelId)?.cityId, g.id).toBe(g.cityId);
+    // Hamburg ist härter: mehr Kampfkraft, Geld und Leute als Köln im Schnitt (etwa ein Viertel).
+    const avg = (city: string, f: (g: (typeof gangs)[number]) => number) =>
+      getGangs(sim.state, city).reduce((s, g) => s + f(g), 0) / 4;
+    for (const f of [
+      (g: (typeof gangs)[number]) => g.traits.fighting,
+      (g: (typeof gangs)[number]) => g.traits.start.money,
+      (g: (typeof gangs)[number]) => g.traits.start.people,
+    ]) {
+      expect(avg('hamburg', f)).toBeGreaterThan(avg('koeln', f) * 1.15);
+    }
     for (const g of gangs) {
       expect(getVeedel(g.homeVeedelId)).toBeDefined();
       expect(g.name && g.boss && g.style && g.crew).toBeTruthy();
@@ -446,7 +463,8 @@ describe('gangs: Spielstände', () => {
     delete state.modules.gangs;
     state.moduleVersions.gangs = 1;
     const loaded = loadSimulation(state as unknown as typeof sim.state, sim.modules);
-    expect(loaded.state.moduleVersions.gangs).toBe(2);
+    expect(loaded.state.moduleVersions.gangs).toBe(3);
+    expect(getGangStatus(loaded.state, 'hh-kiez')?.people).toBeGreaterThan(0);
     expect(getGangStatus(loaded.state, 'nord')?.people).toBeGreaterThan(0);
     loaded.advance(120);
     expect(loaded.isOver).toBe(false);
@@ -518,7 +536,7 @@ describe('gangs: Überfall und Angebote (Fehler aus der Handy-Prüfung)', () => 
     const sim = createTestGame({ seed: 11 });
     const targets = raidTargets(sim.state, 'ost');
     expect(targets).toContain('kalk');
-    for (const veedelId of allVeedel().map((v) => v.id)) {
+    for (const veedelId of allVeedel('koeln').map((v) => v.id)) {
       const hasSpot = getInfluence(sim.state, veedelId, 'ost') >= GANG_SPOT_MIN_INFLUENCE;
       expect(targets.includes(veedelId)).toBe(hasSpot);
     }

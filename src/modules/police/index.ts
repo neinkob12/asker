@@ -17,11 +17,16 @@
 //   heatLevel(heat), playerHeat(state), hottestVeedel(state), snitchOnGang(ctx, gangId), canSnitch(state, gangId),
 //   activeTipOff(state, veedelId), plannedRaid(state, veedelId), plannedRaidInfo, plannedMajorRaid(state),
 //   getPoliceStats(state), arrestStaff(ctx, staffId, veedelId), recordConfiscation(ctx, goods),
-//   operationTier(state) (Kleindealer, Händler, Großhändler), operationFacts(state), nextTierHints(state),
+//   operationTier(state, cityId?) (Kleindealer, Händler, Großhändler), operationFacts(state, cityId?),
+//   nextTierHints(state, tier, cityId?), restHeat(ctx, cityId),
 //   MAX_HEAT, CHECK_THRESHOLD, RAID_THRESHOLD, HEAT_LEVELS, OPERATION_TIERS
 // Befehle: 'police.snitch'
 // Ereignisse: 'police.check', 'police.raidPlanned', 'police.raid' (scope: spot, veedel, major), 'police.arrest',
 //   'police.tipOff', 'police.heatLevelChanged', 'police.tierChanged'
+//
+// Städte (Auftrag 30): Heat und Razzien laufen nur in der Stadt, die live ist; die Stufe gilt pro Stadt (tiers, Hamburg
+// mindestens Händler, Kontrollen dort × 1,3, nachts mal Nachtleben). Eine schlafende Stadt kühlt einmal am Tag ab
+// (restHeat, aufgerufen von city).
 //
 // Härte nach Größe (Auftrag 24, tier.ts): Ein Kleindealer erlebt Kontrollen und höchstens eine Razzia an einem Spot
 // (keine Lager-Durchsuchung, Festnahmen nur dort), ein Händler Razzien im ganzen Veedel, erst ein Großhändler die
@@ -39,7 +44,9 @@ import {
   messages,
   wallet,
 } from '../../core';
+import { activeCity, isVeedelLive, liveVeedel } from '../city';
 import { startEncounter } from '../encounters';
+import { eventFactor, raidsAllowed } from '../events';
 import { getGang } from '../gangs';
 import { allProducts, getLots, getWarehouses, nearestWarehouse, take } from '../goods';
 import { getSpot, spotsInVeedel } from '../spots';
@@ -62,13 +69,14 @@ import {
   hasPlayerPresence,
   PLAYER_FACTION,
 } from '../territory';
-import { allVeedel, getVeedel, veedelAt, veedelName } from '../veedel';
+import { allVeedel, getVeedel, veedelAt, veedelCity, veedelName } from '../veedel';
 import {
   CHASE_CHANCE,
   CHASE_ESCAPED_HEAT,
   CHECK_ARREST_CHANCE,
   CHECK_CHANCE_PER_HOUR,
   CHECK_COOLDOWN,
+  CHECK_FACTOR_BY_CITY,
   CHECK_GOODS,
   CHECK_HEAT_RELIEF,
   CHECK_MONEY,
@@ -84,6 +92,8 @@ import {
   MAJOR_RAID_MIN_HEAT,
   MAJOR_RAID_VEEDEL,
   MAX_HEAT,
+  MIN_TIER_BY_CITY,
+  NIGHT_HOURS,
   RAID_CHANCE_BY_TIER,
   RAID_CHANCE_PER_HOUR,
   RAID_COOLDOWN,
@@ -96,6 +106,7 @@ import {
   SALE_HEAT_PER_UNIT,
   SNITCH_COOLDOWN,
   SNITCH_HEAT,
+  TICKERS,
   TIP_OFF_DURATION,
   TIP_OFF_RAID_CHANCE_PER_HOUR,
   VIOLENCE_HEAT,
@@ -164,13 +175,16 @@ export interface PoliceState {
   /** Geplante Großrazzia, sonst null. Danach ist bis majorReadyAt Ruhe. */
   majorRaid: MajorRaid | null;
   majorReadyAt: number;
-  /** So sieht dich die Polizei: 0 Kleindealer, 1 Händler, 2 Großhändler (null = noch nicht bestimmt). */
-  tier: number | null;
+  /** So sieht dich die Polizei pro Stadt: 0 Kleindealer, 1 Händler, 2 Großhändler (fehlt = noch nicht bestimmt). */
+  tiers: Record<string, number>;
   stats: PoliceStats;
 }
 
+/** Zustand in Version 4 (eine Stufe für alles, das war Köln). */
+type PoliceStateV4 = Omit<PoliceState, 'tiers'> & { tier: number | null };
+
 /** Zustand in Version 3 (geplante Razzien nur als Zeitpunkt, keine Stufen). */
-type PoliceStateV3 = Omit<PoliceState, 'plannedRaids' | 'majorRaid' | 'majorReadyAt' | 'tier'> & {
+type PoliceStateV3 = Omit<PoliceStateV4, 'plannedRaids' | 'majorRaid' | 'majorReadyAt' | 'tier'> & {
   plannedRaids: Record<string, number>;
 };
 
@@ -224,8 +238,8 @@ declare module '../../core' {
      * Großrazzia kommt das Ereignis für jedes betroffene Veedel (scope 'major').
      */
     'police.raidPlanned': { veedelId: string; at: number; scope?: RaidScope };
-    /** Die Polizei sieht dich anders: 0 Kleindealer, 1 Händler, 2 Großhändler. */
-    'police.tierChanged': { from: number; to: number };
+    /** Die Polizei sieht dich anders: 0 Kleindealer, 1 Händler, 2 Großhändler (cityId fehlt nur bei alten Zuhörern). */
+    'police.tierChanged': { from: number; to: number; cityId?: string };
     /** Ein Mitarbeiter wurde festgenommen. Den Haft-Status setzt das staff-Modul. */
     'police.arrest': { staffId: string; veedelId: string };
     /** Eine Gang wurde verpfiffen. */
@@ -252,7 +266,7 @@ export function heatLevel(heat: number): HeatLevel {
 /** Heißestes Veedel, in dem der Spieler präsent ist (Leute vor Ort oder kürzlich verkauft). null = nirgends. */
 export function playerHeat(state: GameState): { veedelId: string; heat: number } | null {
   let best: { veedelId: string; heat: number } | null = null;
-  for (const v of allVeedel()) {
+  for (const v of liveVeedel(state)) {
     if (!hasPlayerPresence(state, v.id)) continue;
     const heat = getHeat(state, v.id);
     if (!best || heat > best.heat) best = { veedelId: v.id, heat };
@@ -260,10 +274,11 @@ export function playerHeat(state: GameState): { veedelId: string; heat: number }
   return best;
 }
 
-/** Heißestes Veedel überhaupt. */
+/** Heißestes Veedel der Stadt, die live ist. */
 export function hottestVeedel(state: GameState): { veedelId: string; heat: number } {
-  let best = { veedelId: allVeedel()[0].id, heat: -1 };
-  for (const v of allVeedel()) {
+  const veedel = liveVeedel(state);
+  let best = { veedelId: veedel[0].id, heat: -1 };
+  for (const v of veedel) {
     const heat = getHeat(state, v.id);
     if (heat > best.heat) best = { veedelId: v.id, heat };
   }
@@ -295,10 +310,32 @@ export function plannedMajorRaid(state: GameState): MajorRaid | null {
   return state.modules.police.majorRaid;
 }
 
-/** So sieht dich die Polizei gerade (Stufe mit Hysterese, siehe tier.ts). */
-export function operationTier(state: GameState): OperationTier {
-  const stored = state.modules.police.tier;
-  return tierInfo(stored ?? nextTier(operationFacts(state), 0));
+/** Gespeicherte Stufe einer Stadt (0 ohne, aber mindestens MIN_TIER_BY_CITY). */
+function tierOf(state: GameState, cityId: string): number {
+  return Math.max(state.modules.police.tiers[cityId] ?? 0, MIN_TIER_BY_CITY[cityId] ?? 0);
+}
+
+/** So sieht dich die Polizei gerade in einer Stadt (Standard: die aktive; Stufe mit Hysterese, siehe tier.ts). */
+export function operationTier(state: GameState, cityId: string = activeCity(state)): OperationTier {
+  const stored = state.modules.police.tiers[cityId];
+  const min = MIN_TIER_BY_CITY[cityId] ?? 0;
+  return tierInfo(Math.max(min, stored ?? nextTier(operationFacts(state, cityId), min)));
+}
+
+/**
+ * Schlafmodus (city): Die Heat einer schlafenden Stadt kühlt einmal am Tag so weit ab wie in 24 Stunden ohne Geschäft.
+ * Keine Kontrollen, keine Razzien, keine Meldungen.
+ */
+export function restHeat(ctx: Ctx, cityId: string): void {
+  const police = ctx.state.modules.police;
+  for (const v of allVeedel(cityId)) {
+    let heat = police.heat[v.id] ?? 0;
+    for (let hour = 0; hour < 24 && heat > 0; hour++) {
+      heat = Math.max(0, heat - (HEAT_DECAY_PER_HOUR + HEAT_DECAY_SHARE_PER_HOUR * heat));
+    }
+    police.heat[v.id] = Math.round(heat * 1000) / 1000;
+    police.level[v.id] = Math.min(police.level[v.id] ?? 0, heatLevel(heat).index);
+  }
 }
 
 export function getPoliceStats(state: GameState): PoliceStats {
@@ -613,7 +650,7 @@ function raidSpot(state: GameState, veedelId: string): string | null {
 function planRaid(ctx: Ctx, veedelId: string): void {
   const police = ctx.state.modules.police;
   const at = ctx.now + RAID_LEAD_TIME;
-  const small = (police.tier ?? 0) === 0;
+  const small = tierOf(ctx.state, veedelCity(veedelId)) === 0;
   const scope = small ? 'spot' : 'veedel';
   police.plannedRaids[veedelId] = { at, scope, spotId: small ? raidSpot(ctx.state, veedelId) : null };
   police.raidReadyAt[veedelId] = at;
@@ -707,11 +744,12 @@ function raidPlayer(ctx: Ctx, veedelId: string, plan: PlannedRaid): void {
 function planMajorRaid(ctx: Ctx): void {
   const state = ctx.state;
   const police = state.modules.police;
-  const present = allVeedel()
+  const city = activeCity(state);
+  const present = liveVeedel(state)
     .filter((v) => hasPlayerPresence(state, v.id))
     .sort((a, b) => getHeat(state, b.id) - getHeat(state, a.id) || a.id.localeCompare(b.id))
     .map((v) => v.id);
-  const stores = getWarehouses(state)
+  const stores = getWarehouses(state, city)
     .map((w) => veedelAt(w.lng, w.lat)?.id)
     .filter((id): id is string => !!id);
   const veedelIds = [...new Set([...present.slice(0, MAJOR_RAID_VEEDEL - 1), ...stores, ...present])].slice(
@@ -758,19 +796,24 @@ function majorRaid(ctx: Ctx, raid: MajorRaid): void {
   });
 }
 
-/** Stufe neu bestimmen; steigt sie, erfährst du es (Polizei-Kontakt oder Lokal-Ticker) und es steht im Journal. */
+/**
+ * Stufe der Stadt, die live ist, neu bestimmen; steigt sie, erfährst du es (Polizei-Kontakt oder Lokal-Ticker) und es
+ * steht im Journal.
+ */
 function updateTier(ctx: Ctx): void {
   const police = ctx.state.modules.police;
-  const current = police.tier;
-  const next = nextTier(operationFacts(ctx.state), current ?? 0);
-  if (current === null) {
-    police.tier = next;
+  const cityId = activeCity(ctx.state);
+  const min = MIN_TIER_BY_CITY[cityId] ?? 0;
+  const current = police.tiers[cityId];
+  const next = Math.max(min, nextTier(operationFacts(ctx.state, cityId), current ?? min));
+  if (current === undefined) {
+    police.tiers[cityId] = next;
     return;
   }
   if (next === current) return;
-  police.tier = next;
+  police.tiers[cityId] = next;
   const info = tierInfo(next);
-  ctx.emit('police.tierChanged', { from: current, to: next });
+  ctx.emit('police.tierChanged', { from: current, to: next, cityId });
   if (next < current) {
     journal.add(ctx, `Die Polizei hat dich nicht mehr so im Blick: Für sie bist du jetzt ${info.name}.`, 'good');
     return;
@@ -781,13 +824,12 @@ function updateTier(ctx: Ctx): void {
       : 'Die Polizei hat dich auf dem Schirm: Für die bist du jetzt ein Händler. Razzien treffen ganze Veedel und deine Lager dort.';
   journal.add(ctx, `${text} (Stufe: ${info.name})`, 'bad');
   const contact = bonusProvider(ctx.state, 'raidWarning');
+  const ticker = TICKERS[cityId] ?? TICKERS.koeln;
   messages.send(ctx, {
-    contact: contact ? staffContact(contact) : TICKER,
+    contact: contact ? staffContact(contact) : { ...ticker, kind: 'other' as const },
     text: contact ? `Hör zu: ${text}` : text,
   });
 }
-
-const TICKER = { id: 'other:koeln-ticker', name: 'Köln-Ticker', kind: 'other' as const };
 
 /** Razzia gegen eine Gang: Sie verliert Einfluss im Veedel. */
 function raidGang(ctx: Ctx, veedelId: string, gangId: string, tippedOff: boolean): void {
@@ -825,24 +867,38 @@ function tick(ctx: Ctx): void {
   }
   updateTier(ctx);
   for (const [veedelId, plan] of Object.entries(police.plannedRaids).sort()) {
-    if (plan.at > ctx.now) continue;
+    // In einer schlafenden Stadt wartet die Razzia, bis du wieder hinschaust; im Karneval auch (Etappe 7).
+    if (plan.at > ctx.now || !isVeedelLive(state, veedelId) || !raidsAllowed(state, veedelCity(veedelId))) continue;
     delete police.plannedRaids[veedelId];
     raidPlayer(ctx, veedelId, plan);
   }
-  if (police.majorRaid && police.majorRaid.at <= ctx.now) {
+  if (
+    police.majorRaid &&
+    police.majorRaid.at <= ctx.now &&
+    isVeedelLive(state, police.majorRaid.veedelIds[0]) &&
+    raidsAllowed(state, veedelCity(police.majorRaid.veedelIds[0]))
+  ) {
     const raid = police.majorRaid;
     police.majorRaid = null;
     majorRaid(ctx, raid);
   }
+  const city = activeCity(state);
+  const tier = tierOf(state, city);
+  // Stadt-Events (Etappe 7): Im Karneval plant die Polizei keine Razzien gegen dich.
+  const raidsOn = raidsAllowed(state, city);
   // Großrazzia nur gegen Großhändler: je heißer deine Veedel im Schnitt, desto eher.
-  if ((police.tier ?? 0) >= 2 && !police.majorRaid && ctx.now >= police.majorReadyAt) {
-    const mine = allVeedel().filter((v) => hasPlayerPresence(state, v.id));
+  if (raidsOn && tier >= 2 && !police.majorRaid && ctx.now >= police.majorReadyAt) {
+    const mine = liveVeedel(state).filter((v) => hasPlayerPresence(state, v.id));
     const heat = mine.length > 0 ? mine.reduce((sum, v) => sum + getHeat(state, v.id), 0) / mine.length : 0;
     const chance =
       MAJOR_RAID_CHANCE_PER_HOUR * Math.max(0, (heat - MAJOR_RAID_MIN_HEAT) / (MAX_HEAT - MAJOR_RAID_MIN_HEAT));
     if (ctx.chance(chance)) planMajorRaid(ctx);
   }
-  for (const v of allVeedel()) {
+  // Kontrollen: in manchen Städten öfter, nachts mal Nachtleben des Veedels.
+  const hour = clock.hour(ctx.now);
+  const night = hour >= NIGHT_HOURS.from || hour < NIGHT_HOURS.to;
+  const cityChecks = CHECK_FACTOR_BY_CITY[city] ?? 1;
+  for (const v of liveVeedel(state)) {
     const heat = addHeat(ctx, v.id, -(HEAT_DECAY_PER_HOUR + HEAT_DECAY_SHARE_PER_HOUR * getHeat(ctx.state, v.id)));
     const presence = v.policePresence;
     const raidReady =
@@ -861,10 +917,10 @@ function tick(ctx: Ctx): void {
 
     const playerThere = hasPlayerPresence(state, v.id);
     const owner = controllerOf(state, v.id);
-    const raidTarget = playerThere ? PLAYER_FACTION : owner !== PLAYER_FACTION ? owner : null;
+    const raidTarget = playerThere ? (raidsOn ? PLAYER_FACTION : null) : owner !== PLAYER_FACTION ? owner : null;
     if (raidReady && raidTarget !== null) {
       // Gegen dich je nach Größe seltener (Kleindealer) oder wie gehabt.
-      const factor = raidTarget === PLAYER_FACTION ? RAID_CHANCE_BY_TIER[police.tier ?? 0] : 1;
+      const factor = raidTarget === PLAYER_FACTION ? RAID_CHANCE_BY_TIER[tier] : 1;
       const chance = rampedChance(heat, RAID_THRESHOLD, RAID_CHANCE_PER_HOUR) * presence * factor;
       if (ctx.chance(chance)) {
         if (raidTarget === PLAYER_FACTION) planRaid(ctx, v.id);
@@ -874,7 +930,10 @@ function tick(ctx: Ctx): void {
     }
 
     if (playerThere && ctx.now >= (police.checkReadyAt[v.id] ?? 0)) {
-      if (ctx.chance(rampedChance(heat, CHECK_THRESHOLD, CHECK_CHANCE_PER_HOUR) * presence)) runCheck(ctx, v.id);
+      const factor = cityChecks * (night ? (v.nightlife ?? 1) : 1) * eventFactor(state, 'checks', { veedelId: v.id });
+      if (ctx.chance(rampedChance(heat, CHECK_THRESHOLD, CHECK_CHANCE_PER_HOUR) * presence * factor)) {
+        runCheck(ctx, v.id);
+      }
     }
   }
 }
@@ -893,14 +952,14 @@ function initialState(): PoliceState {
     plannedRaids: {},
     majorRaid: null,
     majorReadyAt: 0,
-    tier: null,
+    tiers: {},
     stats: { checks: 0, raids: 0, gangRaids: 0, arrests: 0, confiscatedGoods: 0, confiscatedMoney: 0 },
   };
 }
 
 export default defineModule({
   id: 'police',
-  version: 4,
+  version: 5,
   dependsOn: ['veedel', 'territory'],
   init: () => initialState(),
   tickEvery: 60,
@@ -912,9 +971,21 @@ export default defineModule({
     'sale.completed': (ctx, { veedelId, amount, sellerId }) => {
       const presence = getVeedel(veedelId)?.policePresence;
       if (presence === undefined) return;
-      const tier = SALE_HEAT_BY_TIER[ctx.state.modules.police.tier ?? 0];
+      const tier = SALE_HEAT_BY_TIER[tierOf(ctx.state, veedelCity(veedelId))];
       const heat = (SALE_HEAT_BASE + SALE_HEAT_PER_UNIT * Math.max(0, amount)) * presence * tier;
-      addHeat(ctx, veedelId, heat * cautionFactor(ctx.state, sellerId));
+      const event = eventFactor(ctx.state, 'heatPerSale', { veedelId });
+      addHeat(ctx, veedelId, heat * event * cautionFactor(ctx.state, sellerId));
+    },
+    // Stadt-Events (Etappe 7): Fängt ein Fest ohne Razzien an, wartet eine geplante Razzia bis danach.
+    'events.started': (ctx, { cityId, endsAt }) => {
+      if (raidsAllowed(ctx.state, cityId)) return;
+      const police = ctx.state.modules.police;
+      for (const [veedelId, plan] of Object.entries(police.plannedRaids)) {
+        if (veedelCity(veedelId) === cityId && plan.at < endsAt) plan.at = endsAt + RAID_LEAD_TIME;
+      }
+      if (police.majorRaid && veedelCity(police.majorRaid.veedelIds[0]) === cityId && police.majorRaid.at < endsAt) {
+        police.majorRaid.at = endsAt + RAID_LEAD_TIME;
+      }
     },
     'encounter.resolved': (ctx, { kind, outcome, request }) => {
       if (request.origin?.module === 'police') {
@@ -930,7 +1001,7 @@ export default defineModule({
   },
   migrations: {
     2: (old: PoliceStateV1): PoliceStateV2 => {
-      const { plannedRaids: _, majorRaid: _m, majorReadyAt: _r, tier: _t, ...fresh } = initialState();
+      const { plannedRaids: _, majorRaid: _m, majorReadyAt: _r, tiers: _t, ...fresh } = initialState();
       return {
         ...fresh,
         heat: { ...old.heat },
@@ -939,7 +1010,7 @@ export default defineModule({
     },
     3: (old: PoliceStateV2): PoliceStateV3 => ({ ...old, plannedRaids: {} }),
     // Version 4: geplante Razzien mit Art (alte zählen als Razzia im Veedel), Großrazzia, Stufe (wird neu bestimmt).
-    4: (old: PoliceStateV3): PoliceState => ({
+    4: (old: PoliceStateV3): PoliceStateV4 => ({
       ...old,
       plannedRaids: Object.fromEntries(
         Object.entries(old.plannedRaids).map(([id, at]) => [id, { at, scope: 'veedel' as const, spotId: null }]),
@@ -948,5 +1019,10 @@ export default defineModule({
       majorReadyAt: 0,
       tier: null,
     }),
+    // Version 5 (Auftrag 30): Stufe pro Stadt; die bisherige war Köln. Hamburgs Heat fehlt und zählt als 0.
+    5: (old: PoliceStateV4): PoliceState => {
+      const { tier, ...rest } = old;
+      return { ...rest, tiers: tier === null ? {} : { koeln: tier } };
+    },
   },
 });

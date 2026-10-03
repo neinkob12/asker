@@ -15,13 +15,17 @@ drei Wegen (`laundering/config.ts`), mehr Bewerber und Rumfragen mit Rollenwahl,
 Bausteinen (Chips statt „a · b“, Gruppen mit Unterlage, `Disclosure`, kein Umbruch im Wort). Auftrag 29: Quests von Peter
 (`quests`, Karte unter Geld und Heat im HUD, HUD-Platz `'below'`), Intro mit Spielername beim ersten Start (`src/ui/player.ts`),
 gemeinsame Bestenliste (`leaderboard`, Server `api/leaderboard.ts` auf Vercel mit Upstash Redis, lokal aus).
+Auftrag 30: Köln komplett erst bei 12 Veedeln (7 = Meilenstein „Boss von Köln“), Anrufe im Handy (`messages.call`),
+Vollmacht der Rechten Hand (80 % vom Tagesgewinn), zweite Stadt Hamburg (Modul `city`: aktive Stadt live, die andere
+schläft mit Tagesergebnis; `present`, Fahrt über die A1), Rechte Hand pro Stadt, Straßennetz pro Stadt plus A1
+(`roads`), Routen mit Fahrplan und Zoll (`logistics/routes.ts`), Stadt-Events (`events`), Klüngel, Kneipen.
 Auftrag 31 (Karte lebt): Verkehr als Kulisse (`roads.traffic`, `createFleet`: eine WebGL-Ebene, eigener Zufall, Einstellung
 Verkehr aus/wenig/normal), Leute an Spots (`spots.people`, SDF-Figur), Fahrzeuge halten an der Straße (`roadRoute(…).drive`,
 Fußweg `addFootpath`), Autobahn-Zufahrten (`roadApproach`, `Supplier.via`), Rhein und Elbe aus Overture (`shipRoute`,
 `tools/build-water.py`), Hamburger Wahrzeichen, Quellenangabe im Spiel, Prüfskript `scripts/check-roads.mjs` in `npm run lint`.
 Optik liest nur und nutzt nie `ctx.random()`; Layer bekommen `update()` nur bei Änderungen; Animationen hängen am gemeinsamen
 Takt `onMapFrame` (Pause bei Tempo 0). Budget und Messhilfe `?perf=1`: `src/map/README.md`, Abschnitt "Performance-Budget".
-Wie alles zusammenspielt: `docs/architektur.md`, Abschnitt "Zusammenspiel der Systeme".
+Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
 
@@ -97,12 +101,22 @@ export default defineModule({
   Buchung mit: Die Kasse liest sie erst später im Schritt, dann kann die Person schon abgetaucht oder weg sein). Beträge sind
   endliche Zahlen ab 0, sonst wirft der Kern (NaN im Konto machte jeden Vergleich falsch). Journal: `journal.add(ctx, text, kind)`.
 - Leutnants führen **Spots, nicht Veedel** (bis zu drei, `lieutenantOfSpot`, `lieutenantSpots` aus `hierarchy`).
+- **Städte (Auftrag 30):** Alles, was an einem Ort hängt, gehört zu einer Stadt (`cityId` an Veedel, Lager, Gangs,
+  Leuten, Ware am Kai; Spots über ihr Veedel, `spotCity`). Lesefunktionen bekommen eine Stadt (`getSpots(state, cityId)`,
+  `getStaff(state, { cityId })` …), ohne Angabe meint man die aktive (`activeCity`). Ticks arbeiten nur für die Stadt,
+  die live ist (`isCityLive`, `liveVeedel`); die schlafende bekommt um Mitternacht ein Tagesergebnis von `city`, ihre
+  Lager bleiben, Fahrten dort fahren zu Ende. Wer selbst handelt (am Spot stehen, abholen, Konfrontationen), muss in
+  der Stadt sein (`isPlayerIn`). Geld für eine bestimmte Stadt mit `{ category, cityId }` buchen. Werte pro Stadt als
+  Daten (`CITIES` in `city/data.ts` oder `…_BY_CITY` in der eigenen `config.ts`), nie `if (cityId === 'hamburg')` im
+  Ablauf. Die Rechte Hand gibt es pro Stadt (`getRightHand(state, cityId?)`). Neue Felder im Zustand mit Stadt brauchen
+  eine Migration, die alte Stände auf `'koeln'` setzt.
 - Lieferungen fährt **nur die Rechte Hand** (`customers.acceptOrder` mit `by: 'rightHand'`, `rightHandDriver`); alles,
   was sie selbständig tun soll, ist eine Aufgabe in `hierarchy/tasks.ts` und läuft über `ctx.dispatch` mit Actor.
-- Wege und Fahrzeiten immer über `roads` (`roadRoute`, `travelMinutes`), nie Luftlinie. Fahrzeuge auf der Karte fahren
-  `roadRoute(…).drive` und zeigen die letzten Meter mit `addFootpath`. Das Straßennetz neu erzeugen:
-  `src/modules/roads/tools/build-roads.py`, die Wasserwege `tools/build-water.py` (Anleitung im Kopf der Dateien). Neue
-  Spots, Lager oder Häfen müssen `scripts/check-roads.mjs` bestehen (höchstens 60 m bis zur nächsten Straße).
+- Wege und Fahrzeiten immer über `roads` (`roadRoute`, `travelMinutes`), nie Luftlinie; zwischen zwei Städten nehmen
+  beide von selbst die A1 (`interCityRoute`). Fahrzeuge auf der Karte fahren `roadRoute(…).drive` und zeigen die letzten
+  Meter mit `addFootpath`. Straßennetze neu erzeugen: `src/modules/roads/tools/build-roads.py` (`--city <id>`,
+  `--autobahn <a> <b>`), die Wasserwege `tools/build-water.py` (Anleitung im Kopf der Dateien). Neue Spots, Lager oder
+  Häfen müssen `scripts/check-roads.mjs` bestehen (höchstens 60 m bis zur nächsten Straße).
   Nachrichten: `messages.send(ctx, { contact, text, options, expiresIn?, silent? })` – alle Figuren reden per Handy mit
   dem Spieler. Ein Banner mit Ton gibt es nur für Nachrichten mit Antwortfrist (`options` + `expiresIn`), alles andere
   zählt still am Badge (`silent` ist damit nur noch für die Mitteilungszentrale relevant). Gelöschte Chats bleiben im

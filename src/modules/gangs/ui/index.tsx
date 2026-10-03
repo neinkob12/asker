@@ -32,6 +32,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity, cityName, relationFactor } from '../../city';
 import { canSnitch } from '../../police';
 import { veedelName } from '../../veedel';
 import {
@@ -193,7 +194,7 @@ function GangRow(props: { gang: Gang }) {
  */
 function PowerHeader() {
   const { state } = useGame();
-  const gangs = getGangs(state);
+  const gangs = getGangs(state, activeCity(state));
   const mine = playerPower(state);
   const max = Math.max(1, mine, ...gangs.map((g) => gangPower(state, g.id)));
   const stronger = gangs.filter((g) => gangPower(state, g.id) > mine).length;
@@ -239,7 +240,7 @@ function PowerHeader() {
 /** Tab "Gangs": deine Stärke im Vergleich und die Gangs als Liste; Details als eigene Seite. */
 function GangsTab() {
   const { state } = useGame();
-  const gangs = getGangs(state);
+  const gangs = getGangs(state, activeCity(state));
   return (
     <div class="gangs-tab">
       <PowerHeader />
@@ -249,7 +250,7 @@ function GangsTab() {
         color="danger"
         count={gangs.length}
         note="Verkaufen im Revier einer Gang macht sie wütend."
-        more="Verkaufen im Revier einer Gang kostet sie Einfluss. Gegen eine Gang hilft Gewalt (Spot überfallen), Geld (Schutzgeld), die Polizei (verpfeifen) oder Diplomatie (Waffenstillstand, Bündnis). Deine Stärke zählt Leute, Veedel, Schwarzgeld und Ware."
+        more={`Verkaufen im Revier einer Gang kostet sie Einfluss. Gegen eine Gang hilft Gewalt (Spot überfallen), Geld (Schutzgeld), die Polizei (verpfeifen) oder Diplomatie (Waffenstillstand, Bündnis). Deine Stärke zählt Leute, Veedel, Schwarzgeld und Ware. ${relationFactor(activeCity(state)) > 1 ? 'In Köln hilft der Klüngel: Deals und Waffenstillstand bringen mehr Beziehung.' : `In ${cityName(activeCity(state))} bringen Deals und Waffenstillstand weniger Beziehung.`}`}
       >
         <List>
           {gangs.map((g) => (
@@ -462,7 +463,7 @@ function GangPanel(props: { gangId: string }) {
 function AllySheet(props: { gang: Gang; open: boolean; onClose: () => void }) {
   const { state, dispatch } = useGame();
   const { gang } = props;
-  const enemies = getGangs(state).filter((g) => g.id !== gang.id && !isGangBroken(state, g.id));
+  const enemies = getGangs(state, activeCity(state)).filter((g) => g.id !== gang.id && !isGangBroken(state, g.id));
   return (
     <Sheet open={props.open} onClose={props.onClose} title={`Bündnis mit ${gang.name}`} detents={['medium', 'large']}>
       <p class="gang-sheet__lead">
@@ -616,7 +617,8 @@ registerTab({
   title: 'Gangs',
   order: 30,
   component: GangsTab,
-  badge: (state) => getGangs(state).filter((g) => (getGangStatus(state, g.id)?.stage ?? 0) >= 2).length,
+  badge: (state) =>
+    getGangs(state, activeCity(state)).filter((g) => (getGangStatus(state, g.id)?.stage ?? 0) >= 2).length,
 });
 registerPanel({
   id: 'gangs.gang',
@@ -658,7 +660,7 @@ registerSearch({
   label: 'Gangs',
   order: 40,
   items: (state) =>
-    getGangs(state).map((g) => ({
+    getGangs(state, activeCity(state)).map((g) => ({
       id: g.id,
       title: g.name,
       subtitle: `Boss: ${g.boss}`,
