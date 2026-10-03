@@ -38,3 +38,115 @@
 .rh-task > .ui-list {
   margin-top: var(--space-1);
 }
+
+/* ---------------------------------------------------------------- Übergabe einer Stadt (Auftrag 30, Look "Glas") */
+.handover {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.handover__kicker {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--hud-gold);
+}
+.handover__title {
+  margin: -6px 0 2px;
+  font-family: var(--font-hud-display);
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--hud-ink);
+}
+.handover__who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.handover__who-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.handover__who-text strong {
+  font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.handover__done,
+.handover__deal-text,
+.handover__note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--hud-ink-2);
+}
+.handover__deal {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 16px;
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass-fill);
+  border: 1px solid var(--hud-glass-line);
+}
+.handover__deal-part {
+  display: flex;
+  flex-direction: column;
+}
+.handover__deal-part strong {
+  font-family: var(--font-hud-display);
+  font-size: 30px;
+  line-height: 1;
+}
+.handover__label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+}
+.handover__label.is-brand {
+  color: var(--hud-gold);
+}
+.handover__label.is-money {
+  color: var(--cat-money);
+}
+.handover__missing {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--cat-warn);
+}
+.handover__missing li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.handover__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+@media (max-width: 520px) {
+  .handover__deal {
+    grid-template-columns: auto auto;
+  }
+  .handover__deal-text {
+    grid-column: 1 / -1;
+  }
+}

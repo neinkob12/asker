@@ -125,7 +125,9 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
   for (const order of offered) {
     const big = order.kind === 'wholesale';
     if (big ? !wholesale : !orders) continue;
-    const limit = big ? rh.settings.wholesaleMaxPrice : rightHandOrderLimit(state);
+    // Mit Vollmacht nimmt sie Großhandel bis zu ihrem Betrag für Deals an (Gangs und Chefsache).
+    const dealLimit = rh.fullPower && rh.settings.fullPowerTasks.diplomacy ? rh.settings.dealMax : 0;
+    const limit = big ? Math.max(rh.settings.wholesaleMaxPrice, dealLimit) : rightHandOrderLimit(state);
     if (order.price > limit) {
       pass(ctx, rh, order, `über meiner Grenze von ${formatEuro(limit)}`);
       continue;

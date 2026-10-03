@@ -349,7 +349,8 @@ describe('Rechte Hand: Aufgaben (Auftrag 28)', () => {
     };
     const old = raw.modules.hierarchy.rightHand;
     old.settings = { dailyReport: true, coordinate: false, payrollGuard: true, absences: true, budgetPerDay: 5000 };
-    for (const key of ['xp', 'done', 'restockDay', 'restockSpent', 'passed']) delete old[key];
+    for (const key of ['xp', 'done', 'restockDay', 'restockSpent', 'passed', 'fullPower', 'grudgeUntil'])
+      delete old[key];
     raw.moduleVersions.hierarchy = 3;
     const loaded = loadSimulation(raw, sim.modules);
     const post = getRightHand(loaded.state);
@@ -358,7 +359,9 @@ describe('Rechte Hand: Aufgaben (Auftrag 28)', () => {
     expect(post?.xp).toBe(0);
     expect(post?.done.deliveries).toBe(0);
     expect(post?.passed).toEqual([]);
-    expect(loaded.state.moduleVersions.hierarchy).toBe(4);
+    // Danach gleich weiter auf Version 5 (Vollmacht, Auftrag 30): aus.
+    expect(post?.fullPower).toBeNull();
+    expect(loaded.state.moduleVersions.hierarchy).toBe(5);
     expect(getStaffMember(loaded.state, boss.id)?.assignment).toEqual({ kind: 'office', targetId: 'rightHand' });
     expect(getStock(loaded.state)).toBe(getStock(sim.state));
   });

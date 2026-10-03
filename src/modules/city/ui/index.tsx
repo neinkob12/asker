@@ -4,7 +4,8 @@
 
 import type { Simulation } from '../../../core';
 import { Icon, IconChip, registerHudItem, useGame, useUi } from '../../../ui';
-import { getRightHand, RIGHT_HAND_RANK_XP } from '../../hierarchy';
+import { getRightHand, hasFullPower, lieutenantOfSpot, RIGHT_HAND_RANK_XP } from '../../hierarchy';
+import { getSpots } from '../../spots';
 import { enlist, generateProfile } from '../../staff';
 import { addInfluence, factions, PLAYER_FACTION } from '../../territory';
 import { allVeedel } from '../../veedel';
@@ -22,15 +23,21 @@ function HamburgWaits() {
   const { state } = useGame();
   const ui = useUi();
   const status = offerStatus(state);
-  const title = WAITING[status];
+  // Zugesagt, aber noch nicht übergeben ("Später" in der Übergabe): Die Karte führt zur Übergabe.
+  const handover = status === 'accepted' && !hasFullPower(state, 'koeln');
+  const title = handover ? 'Köln übergeben, dann nach Hamburg' : WAITING[status];
   if (!title) return null;
   const missing = hamburgMissing(state);
+  const open = () =>
+    handover
+      ? ui.openDialog('hierarchy.handover', { cityId: 'koeln' })
+      : ui.openPhone('core.messages', { contactId: HARBOR_CALLER.id });
   return (
     <button
       type="button"
       class="city-hud"
-      onClick={() => ui.openPhone('core.messages', { contactId: HARBOR_CALLER.id })}
-      aria-label={`${title}. Chat mit ${HARBOR_CALLER.name} öffnen`}
+      onClick={open}
+      aria-label={handover ? `${title}. Übergabe öffnen` : `${title}. Chat mit ${HARBOR_CALLER.name} öffnen`}
     >
       <span class="hud-label is-city">Fiete · Hamburger Hafen</span>
       <span class="city-hud__main">
@@ -44,7 +51,9 @@ function HamburgWaits() {
               ))}
             </ul>
           ) : (
-            <span class="city-hud__hint">Alles bereit. Sag ihm im Chat zu.</span>
+            <span class="city-hud__hint">
+              {handover ? 'Deine Rechte Hand ist bereit.' : 'Alles bereit. Sag ihm im Chat zu.'}
+            </span>
           )}
         </span>
         <Icon name="chevronRight" class="city-hud__go" />
@@ -80,6 +89,14 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
       const s = sim();
       if (!getRightHand(s.state)) {
         const ctx = s.ctx('dev');
+        s.state.wallet.dirty = Math.max(s.state.wallet.dirty, 20000);
+        // Eine Rechte Hand gibt es erst ab zwei Leutnants.
+        for (const spot of getSpots(s.state).slice(0, 2)) {
+          if (lieutenantOfSpot(s.state, spot.id)) continue;
+          const lt = enlist(ctx, generateProfile(ctx, 'runner', { level: 3 }), { origin: 'pool' });
+          lt.stats.loyalty = 80;
+          s.dispatch({ type: 'hierarchy.appoint', payload: { staffId: lt.id, spotIds: [spot.id] } });
+        }
         const boss = enlist(ctx, generateProfile(ctx, 'runner', { level: 5 }), { origin: 'pool' });
         boss.stats.loyalty = 90;
         s.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });

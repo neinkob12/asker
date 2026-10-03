@@ -121,6 +121,46 @@ export interface RightHandSettings {
   laundering: boolean;
   launderAbove: number;
   launderShare: number;
+  // --- Aufgaben mit Vollmacht (Auftrag 30), nur wenn sie die Stadt führt ---
+  /** Welche Aufgaben mit Vollmacht laufen (einzeln abschaltbar). */
+  fullPowerTasks: Record<FullPowerTaskKey, boolean>;
+  /** Schutzgeld, Tribut oder Waffenstillstand zahlt sie bis zu diesem Betrag, sonst lehnt sie ab. */
+  protectionMax: number;
+  /** Deals (Gang-Angebote, Großhandel) nimmt sie bis zu diesem Betrag an. */
+  dealMax: number;
+  /** Was sie pro Tag für Ausbau (Spots, Lager) ausgeben darf. */
+  expansionBudgetPerDay: number;
+}
+
+/** Aufgaben, die die Rechte Hand nur mit Vollmacht übernimmt (Auftrag 30, fullpower.ts). */
+export type FullPowerTaskKey = 'lieutenants' | 'pricing' | 'hr' | 'expansion' | 'diplomacy';
+
+/** Vollmacht: Die Rechte Hand führt eine Stadt allein und bekommt einen Anteil am Tagesgewinn (Auftrag 30). */
+export interface FullPower {
+  since: number;
+  cityId: string;
+  /** Ihr Anteil am Tagesgewinn (0,8 = 80 %). */
+  share: number;
+  /** Letzter Buchungstag, für den sie ihren Anteil bekommen hat. */
+  paidDay: number;
+  /** Ausbau-Ausgaben am Tag spentDay. */
+  spentDay: number;
+  spent: number;
+  /** Was sie mit Vollmacht seit dem letzten Bericht getan hat. */
+  done: FullPowerDone;
+  /** Wer seit wann ohne Einsatz ist (Personal führen). */
+  idleSince?: Record<string, number>;
+}
+
+export interface FullPowerDone {
+  appointed: number;
+  dismissed: number;
+  repriced: number;
+  fired: number;
+  expanded: number;
+  answered: number;
+  /** Anteil, den sie zuletzt bekommen hat (Euro). */
+  share: number;
 }
 
 /** Was die Rechte Hand seit dem letzten Tagesbericht erledigt hat. */
@@ -180,6 +220,10 @@ export interface RightHandPost {
   restockSpent: number;
   /** Anfragen, die sie dem Spieler überlassen hat (bis sie nicht mehr offen sind). */
   passed: number[];
+  /** Vollmacht für eine Stadt (Auftrag 30), sonst null. */
+  fullPower: FullPower | null;
+  /** Nach einem Widerruf der Vollmacht ist sie bis dahin verstimmt (Zufriedenheit sinkt). */
+  grudgeUntil: number | null;
 }
 
 export interface HierarchyState {

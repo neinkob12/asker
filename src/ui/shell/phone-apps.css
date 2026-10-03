@@ -443,6 +443,8 @@
 }
 .msg-bubble p {
   margin: 0;
+  /* Absätze und Aufzählungen in Nachrichten ("\n") bleiben stehen */
+  white-space: pre-line;
 }
 .msg-bubble time {
   display: block;
@@ -867,6 +869,9 @@
 .call-button.is-accept {
   background: var(--cat-money-b);
   color: var(--cat-money-on);
+}
+/* Nur das Symbol wackelt, der Knopf bleibt still (ruhiges Ziel zum Antippen) */
+.call-button.is-accept .ui-icon {
   animation: call-wiggle 1.6s ease-in-out infinite;
 }
 .call-button.is-decline {
@@ -889,7 +894,7 @@
 @media (prefers-reduced-motion: reduce) {
   .call-screen,
   .call-screen__kicker,
-  .call-button.is-accept {
+  .call-button.is-accept .ui-icon {
     animation: none;
   }
 }

@@ -25,9 +25,11 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { offerStatus } from '../../city';
 import { getStaff, getStaffMember, roleName } from '../../staff';
 import {
   canBeRightHand,
+  cityLabel,
   getRightHand,
   isTaskUnlocked,
   PAYROLL_RESERVE_DAYS,
@@ -55,6 +57,8 @@ import {
   rightHandSatisfaction,
   taskIdleReason,
 } from '../index';
+
+import { FullPowerSection } from './FullPower';
 
 declare module '../../../ui' {
   interface PanelRegistry {
@@ -377,7 +381,9 @@ function RightHandPage() {
                   ? 'fällt aus, die Leutnants machen allein weiter'
                   : m.assignment?.kind === 'delivery'
                     ? 'gerade mit einer Lieferung unterwegs'
-                    : 'hält dir den Rücken frei'
+                    : rh.fullPower
+                      ? `führt ${cityLabel(rh.fullPower.cityId)} mit voller Macht`
+                      : 'hält dir den Rücken frei'
               }
             />
           </ListItem>
@@ -452,6 +458,7 @@ function RightHandPage() {
           );
         })}
       </Group>
+      <FullPowerSection offered={offerStatus(state) !== 'none'} />
       <Group
         title="Büro"
         icon="briefcase"

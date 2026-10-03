@@ -78,6 +78,7 @@ import {
   TICK_EVERY,
   TRAINING_XP,
 } from './config';
+import { grantFullPower, revokeFullPower } from './fullpower';
 import { nextRuleId, normalizeOrderRules } from './orders';
 import {
   appointRightHand,
@@ -107,6 +108,8 @@ export {
   CAUTION_LEVELS,
   DEFAULT_RIGHT_HAND_SETTINGS,
   DEFAULT_SETTINGS,
+  FULL_POWER_SHARE,
+  FULL_POWER_TASKS,
   HIRE_BUDGET_OPTIONS,
   LIEUTENANT_MIN_LEVEL,
   MAX_ORDER_RULES,
@@ -132,6 +135,12 @@ export {
   RIGHT_HAND_TASKS,
   RIGHT_HAND_WHOLESALE_PRICE_OPTIONS,
 } from './config';
+export {
+  cityLabel,
+  describeFullPowerDone,
+  fullPowerActive,
+  hasFullPower,
+} from './fullpower';
 export { isPortSupplierAllowed, orderRuleLabel, PORT_SUPPLIER_HINT, ruleStock, ruleWarehouse } from './orders';
 export {
   absenceHandled,
@@ -183,6 +192,10 @@ declare module '../../core' {
     'hierarchy.appointRightHand': { staffId: string };
     'hierarchy.dismissRightHand': Record<string, never>;
     'hierarchy.configureRightHand': { settings: Partial<RightHandSettings> };
+    /** Vollmacht (Auftrag 30, Chefsache): Die Rechte Hand führt die Stadt allein, gegen 80 % vom Tagesgewinn. */
+    'hierarchy.grantFullPower': { cityId?: string };
+    /** Vollmacht zurückziehen: kostet Loyalität und Laune, Stufe und Aufgaben bleiben. */
+    'hierarchy.revokeFullPower': Record<string, never>;
   }
   interface GameEvents {
     /** veedelId: Veedel mit den meisten seiner Spots (für ältere Zuhörer). */
@@ -196,6 +209,10 @@ declare module '../../core' {
     'hierarchy.dailyReport': { staffId: string; day: number; profit: number; problems: number };
     /** Die Rechte Hand hat eine neue Stufe erreicht (Aufgaben mit diesem Rang sind frei). */
     'hierarchy.rightHandRankUp': { staffId: string; rank: number };
+    'hierarchy.fullPowerGranted': { staffId: string; cityId: string };
+    'hierarchy.fullPowerRevoked': { staffId: string; cityId: string };
+    /** Ihr Anteil am Gewinn eines abgeschlossenen Tages ist gebucht. */
+    'hierarchy.shareTaken': { staffId: string; cityId: string; day: number; profit: number; amount: number };
   }
 }
 
@@ -812,9 +829,43 @@ export function migrateHierarchyV3(old: HierarchyStateV3, state: GameState): Hie
   };
 }
 
+/**
+ * Version 5 (Auftrag 30): Vollmacht. Die Rechte Hand bekommt fullPower (aus) und grudgeUntil, ihre Einstellungen die
+ * Aufgaben mit Vollmacht und deren Beträge (Standardwerte).
+ */
+export function migrateHierarchyV4(old: HierarchyStateV4): HierarchyState {
+  const rh = old.rightHand;
+  return {
+    ...old,
+    rightHand: rh
+      ? {
+          ...rh,
+          settings: {
+            ...rh.settings,
+            fullPowerTasks: { ...DEFAULT_RIGHT_HAND_SETTINGS.fullPowerTasks },
+            protectionMax: DEFAULT_RIGHT_HAND_SETTINGS.protectionMax,
+            dealMax: DEFAULT_RIGHT_HAND_SETTINGS.dealMax,
+            expansionBudgetPerDay: DEFAULT_RIGHT_HAND_SETTINGS.expansionBudgetPerDay,
+          },
+          fullPower: null,
+          grudgeUntil: null,
+        }
+      : null,
+  };
+}
+
+/** Zustand in Version 4 (vor der Vollmacht). */
+type RightHandSettingsV4 = Omit<
+  RightHandSettings,
+  'fullPowerTasks' | 'protectionMax' | 'dealMax' | 'expansionBudgetPerDay'
+>;
+interface HierarchyStateV4 extends Omit<HierarchyState, 'rightHand'> {
+  rightHand: (Omit<RightHandPost, 'fullPower' | 'grudgeUntil' | 'settings'> & { settings: RightHandSettingsV4 }) | null;
+}
+
 export default defineModule({
   id: 'hierarchy',
-  version: 4,
+  version: 5,
   dependsOn: ['staff'],
   init: () => ({ posts: {}, rightHand: null, orderTemplate: null }),
   tick: (ctx) => {
@@ -834,6 +885,8 @@ export default defineModule({
     'hierarchy.appointRightHand': (ctx, { staffId }) => appointRightHand(ctx, staffId),
     'hierarchy.dismissRightHand': (ctx) => dismissRightHand(ctx),
     'hierarchy.configureRightHand': (ctx, { settings }) => configureRightHand(ctx, settings),
+    'hierarchy.grantFullPower': (ctx, { cityId }, meta) => grantFullPower(ctx, cityId ?? 'koeln', meta),
+    'hierarchy.revokeFullPower': (ctx, _payload, meta) => revokeFullPower(ctx, meta),
   },
   on: {
     'clock.dayStarted': daily,
@@ -913,5 +966,5 @@ export default defineModule({
       if (sellerId && sellerId !== lt.id) addXp(ctx, sellerId, TRAINING_XP);
     },
   },
-  migrations: { 2: migrateHierarchyV1, 3: migrateHierarchyV2, 4: migrateHierarchyV3 },
+  migrations: { 2: migrateHierarchyV1, 3: migrateHierarchyV2, 4: migrateHierarchyV3, 5: migrateHierarchyV4 },
 });

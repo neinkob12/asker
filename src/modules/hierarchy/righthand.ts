@@ -52,12 +52,14 @@ import { veedelName } from '../veedel';
 import {
   DEFAULT_RIGHT_HAND_SETTINGS,
   DEMOTION_LOYALTY,
+  FULL_POWER_TASKS,
   LOG_LIMIT,
   MAX_ORDER_RULES,
   PAYROLL_RESERVE_DAYS,
   PAYROLL_RESERVE_DAYS_ORDERS,
   PROMOTION_LOYALTY,
   REPORT_HOUR,
+  REVOKE_SATISFACTION,
   RIGHT_HAND_BAIL_MIN_LEVEL,
   RIGHT_HAND_DEMAND,
   RIGHT_HAND_DETOUR_CHANCE,
@@ -76,6 +78,7 @@ import {
   RIGHT_HAND_TASKS,
   RIGHT_HAND_WARN_COOLDOWN,
 } from './config';
+import { cityLabel, describeFullPowerDone, emptyFullPowerDone, payShare, runFullPowerTasks } from './fullpower';
 import {
   getLieutenantIds,
   handlesAbsence,
@@ -232,7 +235,9 @@ export function rightHandSatisfaction(state: GameState): number | null {
   if (!m) return null;
   const expected = expectedWage(state, m.id);
   const ratio = expected > 0 ? m.wage / expected : 1;
-  return Math.max(0, Math.min(100, Math.round(m.stats.loyalty * 0.6 + Math.min(1, ratio / 1.1) * 40)));
+  // Nach einem Widerruf der Vollmacht ist sie eine Weile verstimmt.
+  const grudge = rh?.grudgeUntil !== null && (rh?.grudgeUntil ?? 0) > state.time ? REVOKE_SATISFACTION : 0;
+  return Math.max(0, Math.min(100, Math.round(m.stats.loyalty * 0.6 + Math.min(1, ratio / 1.1) * 40) - grudge));
 }
 
 /** Wofür ein Leutnant Geld ausgibt: Personal (Anheuern, Kaution) oder Ware (Nachschub). */
@@ -379,6 +384,8 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
     restockDay: clock.day(ctx.now),
     restockSpent: 0,
     passed: [],
+    fullPower: null,
+    grudgeUntil: null,
   };
   assign(ctx, staffId, OFFICE);
   setDemand(ctx, staffId, RIGHT_HAND_DEMAND);
@@ -430,12 +437,23 @@ export function configureRightHand(ctx: Ctx, patch: Partial<RightHandSettings>):
     'laundering',
   ] as const;
   for (const key of flags) if (patch[key] !== undefined) next[key] = !!patch[key];
+  if (patch.fullPowerTasks !== undefined) {
+    const tasks = { ...next.fullPowerTasks };
+    for (const task of FULL_POWER_TASKS) {
+      const value = patch.fullPowerTasks[task.key];
+      if (value !== undefined) tasks[task.key] = !!value;
+    }
+    next.fullPowerTasks = tasks;
+  }
   const amounts = [
     'budgetPerDay',
     'orderMaxPrice',
     'restockBudgetPerDay',
     'wholesaleMaxPrice',
     'launderAbove',
+    'protectionMax',
+    'dealMax',
+    'expansionBudgetPerDay',
   ] as const;
   for (const key of amounts) {
     const value = patch[key];
@@ -528,12 +546,15 @@ export function rightHandTick(ctx: Ctx): void {
     sendReport(ctx, rh);
   }
   runQuickTasks(ctx, rh, m, actor);
+  // Vollmacht: ihr Anteil am Tagesgewinn, sobald ein Buchungstag abgeschlossen ist.
+  if (rh.fullPower) payShare(ctx, rh, m);
   if (ctx.now < rh.nextActionAt) return;
   rh.nextActionAt = ctx.now + RIGHT_HAND_INTERVAL;
   if (rh.settings.payrollGuard) guardPayroll(ctx, rh);
   if (rh.settings.coordinate) coordinate(ctx, rh, actor);
   if (rh.settings.absences) handleAbsences(ctx, rh, actor);
   runHourlyTasks(ctx, rh, m, actor);
+  if (rh.fullPower) runFullPowerTasks(ctx, rh, m, actor);
 }
 
 /** Tagesbericht mit den Zahlen von gestern und bis zu drei Empfehlungen. */
@@ -583,13 +604,25 @@ function sendReport(ctx: Ctx, rh: RightHandPost): void {
   const report = buildReport(ctx.state);
   rh.lastReport = report;
   const problems = (report.profit < 0 ? 1 : 0) + (wageRunway(ctx.state).warn ? 1 : 0);
+  // Mit Vollmacht wird der Tagesbericht zum Bericht aus der Stadt: Ergebnis, ihr Anteil, Erledigtes, Probleme.
+  const fp = rh.fullPower;
+  const fpDone = fp ? describeFullPowerDone(fp.done) : '';
   const lines = [
-    `Tagesbericht für Tag ${report.day}:`,
+    fp ? `Bericht aus ${cityLabel(fp.cityId)}, Tag ${report.day}:` : `Tagesbericht für Tag ${report.day}:`,
     `Umsatz ${formatEuro(report.revenue)}, Kosten ${formatEuro(report.costs)}, ${report.profit >= 0 ? 'Gewinn' : 'Verlust'} ${formatEuro(Math.abs(report.profit))}.`,
+    ...(fp
+      ? [
+          fp.done.share > 0
+            ? `Mein Anteil: ${formatEuro(fp.done.share)}, der Rest gehört dir.`
+            : 'Kein Gewinn, also kein Anteil für mich.',
+        ]
+      : []),
     `In der Kasse ${formatEuro(report.cash)}${report.runwayDays !== null ? `, die Löhne reichen ${report.runwayDays} Tage` : ''}.`,
     ...(report.done ? [`Erledigt: ${report.done}.`] : []),
+    ...(fpDone ? [`Mit Vollmacht: ${fpDone}.`] : []),
     ...report.advice,
   ];
+  if (fp) fp.done = emptyFullPowerDone();
   const absent = getStaff(ctx.state).filter(isAbsent);
   messages.send(ctx, {
     contact: staffContact(m),

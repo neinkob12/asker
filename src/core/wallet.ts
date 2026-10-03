@@ -20,6 +20,7 @@ export type MoneyCategory =
   | 'sales.delivery'
   | 'sales.wholesale'
   | 'income.other'
+  | 'income.city'
   // Ausgaben
   | 'goods.purchase'
   | 'wages.runner'
@@ -35,11 +36,14 @@ export type MoneyCategory =
   | 'tribute'
   | 'laundering'
   | 'expense.other'
+  | 'share.righthand'
+  | 'expense.city'
   // Verluste
   | 'loss.police'
   | 'loss.theft'
   | 'loss.betrayal'
   | 'loss.encounter'
+  | 'loss.customs'
   // Umbuchung (Geldwäsche: Schwarzgeld wird sauberes Geld, zählt nicht als Gewinn oder Verlust)
   | 'transfer';
 
@@ -72,10 +76,16 @@ export const MONEY_CATEGORIES: Record<MoneyCategory, MoneyCategoryInfo> = {
   tribute: { label: 'Schutzgeld und Tribut', group: 'expense', icon: 'handshake' },
   laundering: { label: 'Geldwäsche-Gebühr', group: 'expense', icon: 'washing' },
   'expense.other': { label: 'Sonstige Ausgaben', group: 'expense', icon: 'cart' },
+  // Auftrag 30: Städte. Die Rechte Hand mit Vollmacht bekommt ihren Anteil am Tagesgewinn, eine schlafende Stadt bucht
+  // ihr Tagesergebnis als Ganzes.
+  'share.righthand': { label: 'Anteil Rechte Hand', group: 'expense', icon: 'crown' },
+  'income.city': { label: 'Ergebnis einer Stadt im Schlafmodus (Rechte Hand)', group: 'income', icon: 'building' },
+  'expense.city': { label: 'Verlust einer Stadt im Schlafmodus', group: 'expense', icon: 'building' },
   'loss.police': { label: 'Polizei', group: 'loss', icon: 'siren' },
   'loss.theft': { label: 'Überfälle und Diebstahl', group: 'loss', icon: 'alert' },
   'loss.betrayal': { label: 'Verrat', group: 'loss', icon: 'userMinus' },
   'loss.encounter': { label: 'Konfrontationen', group: 'loss', icon: 'swords' },
+  'loss.customs': { label: 'Zoll (Autobahn und Kai)', group: 'loss', icon: 'anchor' },
   transfer: { label: 'Umbuchung', group: 'transfer', icon: 'refresh' },
 };
 
