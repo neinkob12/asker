@@ -15,7 +15,8 @@ export type SoundId =
   | 'gameOver'
   | 'win'
   | 'vibrate'
-  | 'delivery';
+  | 'delivery'
+  | 'ring';
 
 export const SOUND_IDS: readonly SoundId[] = [
   'message',
@@ -32,6 +33,7 @@ export const SOUND_IDS: readonly SoundId[] = [
   'win',
   'vibrate',
   'delivery',
+  'ring',
 ];
 
 export type AmbienceId = 'rain' | 'storm' | 'wind';
@@ -393,6 +395,15 @@ export function playSound(core: SynthCore, out: AudioNode, id: SoundId, t: numbe
     case 'delivery':
       blip(core, out, 392, t, 0.16, 'sine', 0.18, 0.2);
       blip(core, out, 523.25, t + 0.15, 0.28, 'sine', 0.16, 0.2);
+      break;
+    case 'ring':
+      // Klingelton eines Handys (etwa 1,6 s): zweimal ein schnelles Trillern aus zwei Tönen, wie ein altes Telefon.
+      for (const burst of [0, 0.8]) {
+        for (let k = 0; k < 10; k++) {
+          const at = t + burst + k * 0.05;
+          blip(core, out, k % 2 === 0 ? 1318.5 : 1046.5, at, 0.05, 'triangle', 0.09, 0.08);
+        }
+      }
       break;
   }
 }

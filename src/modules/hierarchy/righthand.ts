@@ -47,6 +47,7 @@ import {
   setWage,
   staffContact,
 } from '../staff';
+import { campaignProgress } from '../territory';
 import { veedelName } from '../veedel';
 import {
   DEFAULT_RIGHT_HAND_SETTINGS,
@@ -131,6 +132,30 @@ export function rightHandRankProgress(state: GameState): [number, number] | null
   const rank = rankForXp(rh.xp);
   if (rank >= RIGHT_HAND_MAX_RANK) return null;
   return [rh.xp - RIGHT_HAND_RANK_XP[rank - 1], RIGHT_HAND_RANK_XP[rank] - RIGHT_HAND_RANK_XP[rank - 1]];
+}
+
+/**
+ * Was fehlt, damit die Rechte Hand eine Stadt mit voller Macht übernehmen kann (Auftrag 30)? Leer = alles da. Sie
+ * braucht die höchste Stufe und alle Aufgaben an, und alle Veedel der Stadt müssen dir gehören.
+ */
+export function fullPowerMissing(state: GameState, cityId = 'koeln'): string[] {
+  const missing: string[] = [];
+  const rh = activeRightHand(state);
+  if (!rh) {
+    missing.push(getRightHand(state) ? 'Deine Rechte Hand fällt gerade aus.' : 'Du hast keine Rechte Hand.');
+  } else {
+    const name = getStaffMember(state, rh.staffId)?.name ?? 'Deine Rechte Hand';
+    const rank = rankForXp(rh.xp);
+    if (rank < RIGHT_HAND_MAX_RANK)
+      missing.push(`${name} ist auf Stufe ${rank}, sie braucht Stufe ${RIGHT_HAND_MAX_RANK}.`);
+    const off = RIGHT_HAND_TASKS.filter((t) => !rh.settings[t.key]).map((t) => t.name);
+    if (off.length > 0) missing.push(`Diese Aufgaben sind aus: ${off.join(', ')}.`);
+  }
+  const progress = campaignProgress(state, cityId);
+  if (progress.controlled < progress.total) {
+    missing.push(`Du hältst ${progress.controlled} von ${progress.total} Veedeln, es müssen alle sein.`);
+  }
+  return missing;
 }
 
 /** Ist die Aufgabe für ihre Stufe freigeschaltet? */

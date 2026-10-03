@@ -4,13 +4,16 @@
 import { clock, MINUTES_PER_DAY, MINUTES_PER_HOUR } from './clock';
 import { START_CLEAN_MONEY, START_DIRTY_MONEY, START_TIME } from './config';
 import {
+  acceptCall,
   answerMessage,
   createMessagesState,
+  declineCall,
   deleteAllThreads,
   deleteThread,
   expireMessages,
   markAllRead,
   markThreadRead,
+  processCalls,
 } from './messages';
 import type { ModuleDefinition } from './module';
 import { sortModules } from './module';
@@ -29,7 +32,7 @@ import type {
 } from './types';
 
 /** Version des Kern-Formats im Spielstand. Hochzählen, wenn sich die Kernfelder ändern, und in persistence.ts migrieren. */
-export const CORE_SCHEMA_VERSION = 2;
+export const CORE_SCHEMA_VERSION = 3;
 
 /** ID des Kerns, z.B. als Quelle von Journal-Einträgen. */
 export const CORE_ID = 'core';
@@ -64,6 +67,8 @@ const CORE_COMMANDS: Record<string, AnyCommandHandler> = {
   'messages.markAllRead': markAllRead as AnyCommandHandler,
   'messages.delete': deleteThread as AnyCommandHandler,
   'messages.deleteAll': deleteAllThreads as AnyCommandHandler,
+  'messages.acceptCall': acceptCall as AnyCommandHandler,
+  'messages.declineCall': declineCall as AnyCommandHandler,
 };
 
 export class Simulation {
@@ -172,6 +177,7 @@ export class Simulation {
         if (state.time % (module.tickEvery ?? 1) === 0) module.tick?.(ctx);
       }
       expireMessages(core);
+      processCalls(core);
       this.flush();
       this.checkSolvency();
     });

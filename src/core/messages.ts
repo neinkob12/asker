@@ -4,8 +4,13 @@
 // Gelöschte Chats (Befehle 'messages.delete', 'messages.deleteAll') bleiben im Spielstand, sind aber ausgeblendet:
 // `hidden` merkt sich pro Kontakt die letzte ausgeblendete Nachricht. Schreibt die Figur neu, taucht der Chat mit
 // den neuen Nachrichten wieder auf.
+// Anrufe (Auftrag 30, messages.call): eine Nachricht mit `call` (Zeilen des Gesprächs, klingelt/angenommen/verpasst/
+// abgelehnt). Angenommen ('messages.acceptCall') kommen die Zeilen und danach die Antworten (wie jede Frage über
+// 'messages.answer'). Klingelt es CALL_RING_MINUTES ohne Annahme, ist er verpasst: Die Figur schreibt kurz und ruft
+// CALL_RETRY_MINUTES später noch einmal an, höchstens CALL_MAX_ATTEMPTS-mal; danach (oder nach 'messages.declineCall')
+// bleibt der Chat mit denselben Antworten. Klingelnde Anrufe und Rückrufe stehen in `calls` (Kernschema 3).
 
-import { MESSAGE_LIMIT } from './config';
+import { CALL_MAX_ATTEMPTS, CALL_RETRY_MINUTES, CALL_RING_MINUTES, MESSAGE_LIMIT } from './config';
 import type { Command, CommandResult, Ctx, GameState } from './types';
 
 export type ContactKind = 'customer' | 'supplier' | 'gang' | 'staff' | 'police' | 'other';
@@ -51,7 +56,36 @@ export interface Message {
   routine?: boolean;
   /** Antwort im Namen von jemandem (z.B. "Rechte Hand"), nur bei from 'player'. */
   via?: string;
+  /** Anruf statt Textnachricht (Auftrag 30). text ist dann eine kurze Zusammenfassung für die Chat-Liste. */
+  call?: CallInfo;
   /** Modul, das die Nachricht geschickt hat. */
+  source: string;
+}
+
+export type CallStatus = 'ringing' | 'accepted' | 'missed' | 'declined';
+
+export interface CallInfo {
+  /** Was die Figur am Telefon sagt, Zeile für Zeile (erscheint als Sprechblasen). */
+  lines: string[];
+  state: CallStatus;
+  /** Bis wann es klingelt (Spielminute). */
+  ringUntil: number;
+  /** Der wievielte Versuch (ab 1). */
+  attempt: number;
+  /** Letzter Versuch: Verpasst bleibt er als Chat mit Antworten stehen. */
+  final: boolean;
+  /** Antwortfrist nach dem Gespräch (Spielminuten), siehe PlaceCall. */
+  expiresIn?: number;
+  missedText?: string;
+  gaveUpText?: string;
+}
+
+/** Ein Rückruf, der noch aussteht (nach einem verpassten Anruf). */
+export interface CallRetry {
+  at: number;
+  attempt: number;
+  call: PlaceCall;
+  /** Modul, das angerufen hat. */
   source: string;
 }
 
@@ -61,6 +95,25 @@ export interface MessagesState {
   list: Message[];
   /** Gelöschte Chats: Kontakt → ID der letzten ausgeblendeten Nachricht (alles bis dahin ist weg). */
   hidden: Record<string, number>;
+  /** Anrufe: welche gerade klingeln (Nachrichten-IDs) und welche Rückrufe ausstehen. */
+  calls: { ringing: number[]; retries: CallRetry[] };
+}
+
+/** Anruf einer Figur (messages.call). */
+export interface PlaceCall {
+  contact: Contact;
+  /** Das Gespräch, Zeile für Zeile. */
+  lines: string[];
+  /** Antworten am Ende des Gesprächs (wie bei einer Frage im Chat). */
+  options?: MessageOption[];
+  /** Antwortfrist nach Gesprächsende in Spielminuten (ohne: keine Frist). */
+  expiresIn?: number;
+  /** Kurz für die Chat-Liste, Standard "Anruf". */
+  summary?: string;
+  /** Was die Figur nach einem verpassten Anruf schreibt. */
+  missedText?: string;
+  /** Was sie schreibt, wenn sie es aufgibt (letzter Versuch verpasst). */
+  gaveUpText?: string;
 }
 
 export interface SendMessage {
@@ -100,16 +153,79 @@ declare module './types' {
     /** Chat löschen (ausblenden). Offene Fragen darin gelten als erledigt, ohne Antwort. */
     'messages.delete': { contactId: string };
     'messages.deleteAll': Record<string, never>;
+    /** Klingelnden Anruf annehmen (danach kommen die Zeilen und die Antworten). */
+    'messages.acceptCall': { messageId: number };
+    /** Klingelnden Anruf ablehnen: Die Figur ruft nicht noch einmal an, die Antworten bleiben im Chat. */
+    'messages.declineCall': { messageId: number };
   }
   interface GameEvents {
     'message.received': { messageId: number; contactId: string; source: string };
     'message.answered': { messageId: number; contactId: string; optionId: string; source: string; via?: string };
     'message.expired': { messageId: number; contactId: string; source: string };
+    /** Ein Anruf klingelt (auch ein Rückruf). */
+    'call.ringing': { messageId: number; contactId: string; source: string; attempt: number };
+    'call.accepted': { messageId: number; contactId: string; source: string };
+    'call.declined': { messageId: number; contactId: string; source: string };
+    /** Nicht angenommen. final: Es kommt kein Rückruf mehr. */
+    'call.missed': { messageId: number; contactId: string; source: string; final: boolean };
   }
 }
 
 export function createMessagesState(): MessagesState {
-  return { contacts: {}, list: [], hidden: {} };
+  return { contacts: {}, list: [], hidden: {}, calls: { ringing: [], retries: [] } };
+}
+
+const MISSED_TEXT = 'Hab versucht dich zu erreichen. Ich ruf später nochmal an.';
+const GAVE_UP_TEXT = 'Ich erreich dich nicht. Lies das hier, wenn du Zeit hast.';
+
+/** Einen Anruf klingeln lassen (Versuch attempt). Gibt die Nachrichten-ID zurück. */
+function ring(ctx: Ctx, call: PlaceCall, attempt: number, source: string): number {
+  const state = ctx.state.messages;
+  state.contacts[call.contact.id] = { ...call.contact };
+  const message: Message = {
+    id: ctx.nextId(),
+    contactId: call.contact.id,
+    time: ctx.now,
+    from: 'contact',
+    text: call.summary ?? 'Anruf',
+    read: false,
+    silent: true,
+    source,
+    call: {
+      lines: [...call.lines],
+      state: 'ringing',
+      ringUntil: ctx.now + CALL_RING_MINUTES,
+      attempt,
+      final: attempt >= CALL_MAX_ATTEMPTS,
+    },
+  };
+  const info = message.call as CallInfo;
+  if (call.expiresIn !== undefined) info.expiresIn = call.expiresIn;
+  if (call.missedText) info.missedText = call.missedText;
+  if (call.gaveUpText) info.gaveUpText = call.gaveUpText;
+  if (call.options?.length) message.options = call.options.map((o) => ({ ...o }));
+  state.list.push(message);
+  if (state.list.length > MESSAGE_LIMIT) state.list.splice(0, state.list.length - MESSAGE_LIMIT);
+  state.calls.ringing.push(message.id);
+  ctx.emit('message.received', { messageId: message.id, contactId: message.contactId, source });
+  ctx.emit('call.ringing', { messageId: message.id, contactId: message.contactId, source, attempt });
+  return message.id;
+}
+
+/** Alles, um einen Anruf noch einmal zu machen (Rückruf), steht in der Nachricht selbst. */
+function planOf(state: GameState, message: Message): PlaceCall {
+  const contact = state.messages.contacts[message.contactId] ?? {
+    id: message.contactId,
+    name: message.contactId,
+    kind: 'other' as const,
+  };
+  const call = message.call;
+  const plan: PlaceCall = { contact, lines: [...(call?.lines ?? [])], summary: message.text };
+  if (message.options) plan.options = message.options.map((o) => ({ ...o }));
+  if (call?.expiresIn !== undefined) plan.expiresIn = call.expiresIn;
+  if (call?.missedText) plan.missedText = call.missedText;
+  if (call?.gaveUpText) plan.gaveUpText = call.gaveUpText;
+  return plan;
 }
 
 /** Ist die Nachricht in einem gelöschten Chat (ausgeblendet)? */
@@ -194,6 +310,20 @@ export const messages = {
     return message.id;
   },
 
+  /**
+   * Eine Figur ruft an (Auftrag 30). Es klingelt CALL_RING_MINUTES; angenommen kommen die Zeilen und danach die
+   * Antworten, verpasst ruft sie später noch einmal an (siehe oben). Gibt die Nachrichten-ID zurück.
+   */
+  call(ctx: Ctx, call: PlaceCall): number {
+    return ring(ctx, call, 1, ctx.moduleId);
+  },
+
+  /** Klingelt gerade ein Anruf? (der älteste zuerst) */
+  ringingCalls(state: GameState): Message[] {
+    const ids = state.messages.calls?.ringing ?? [];
+    return ids.map((id) => messages.get(state, id)).filter((m): m is Message => m?.call?.state === 'ringing');
+  },
+
   get(state: GameState, messageId: number): Message | undefined {
     return state.messages.list.find((m) => m.id === messageId);
   },
@@ -237,11 +367,16 @@ export const messages = {
     return list.some((m) => messages.canAnswer(state, m) && m.expiresAt !== undefined);
   },
 
-  /** Kann auf diese Nachricht noch geantwortet werden? */
+  /**
+   * Kann auf diese Nachricht noch geantwortet werden? Bei einem Anruf erst, wenn er angenommen oder abgelehnt ist bzw.
+   * der letzte Versuch verpasst wurde (vorher klingelt es, oder es kommt noch ein Rückruf).
+   */
   canAnswer(state: GameState, message: Message): boolean {
-    return (
-      !!message.options?.length && !message.answer && !message.expired && (message.expiresAt ?? Infinity) > state.time
-    );
+    if (!message.options?.length || message.answer || message.expired) return false;
+    if ((message.expiresAt ?? Infinity) <= state.time) return false;
+    const call = message.call;
+    if (!call) return true;
+    return call.state === 'accepted' || call.state === 'declined' || (call.state === 'missed' && call.final);
   },
 
   /**
@@ -381,6 +516,94 @@ export function deleteAllThreads(ctx: Ctx): CommandResult {
 }
 
 /** Abgelaufene Antwortfristen markieren. Läuft jeden Schritt. */
+/** Das Gespräch ist zu Ende (angenommen, abgelehnt, zuletzt verpasst): ab jetzt läuft die Antwortfrist. */
+function openAnswers(ctx: Ctx, message: Message): void {
+  const expiresIn = message.call?.expiresIn;
+  if (expiresIn !== undefined && message.options?.length) message.expiresAt = ctx.now + expiresIn;
+}
+
+function stopRinging(state: GameState, messageId: number): void {
+  const calls = state.messages.calls;
+  calls.ringing = calls.ringing.filter((id) => id !== messageId);
+}
+
+export function acceptCall(ctx: Ctx, payload: { messageId: number }): CommandResult {
+  const message = messages.get(ctx.state, payload.messageId);
+  if (message?.call?.state !== 'ringing') return { ok: false, reason: 'Da klingelt nichts mehr.' };
+  message.call.state = 'accepted';
+  message.read = true;
+  stopRinging(ctx.state, message.id);
+  openAnswers(ctx, message);
+  ctx.emit('call.accepted', { messageId: message.id, contactId: message.contactId, source: message.source });
+  return { ok: true };
+}
+
+export function declineCall(ctx: Ctx, payload: { messageId: number }): CommandResult {
+  const message = messages.get(ctx.state, payload.messageId);
+  if (message?.call?.state !== 'ringing') return { ok: false, reason: 'Da klingelt nichts mehr.' };
+  message.call.state = 'declined';
+  stopRinging(ctx.state, message.id);
+  openAnswers(ctx, message);
+  ctx.emit('call.declined', { messageId: message.id, contactId: message.contactId, source: message.source });
+  return { ok: true };
+}
+
+/**
+ * Jede Spielminute: Anrufe, die zu lange klingeln, sind verpasst (Figur schreibt kurz, ruft später noch einmal an,
+ * höchstens CALL_MAX_ATTEMPTS-mal), fällige Rückrufe klingeln. Läuft nur über die Listen in `calls`, nicht über alle
+ * Nachrichten.
+ */
+export function processCalls(ctx: Ctx): void {
+  const calls = ctx.state.messages.calls;
+  if (!calls || (calls.ringing.length === 0 && calls.retries.length === 0)) return;
+  for (const id of [...calls.ringing]) {
+    const message = messages.get(ctx.state, id);
+    if (message?.call?.state !== 'ringing') {
+      stopRinging(ctx.state, id);
+      continue;
+    }
+    if (message.call.ringUntil > ctx.now) continue;
+    const call = message.call;
+    call.state = 'missed';
+    stopRinging(ctx.state, id);
+    const plan = planOf(ctx.state, message);
+    const contact = plan.contact;
+    const send = (text: string) => {
+      const reply: Message = {
+        id: ctx.nextId(),
+        contactId: contact.id,
+        time: ctx.now,
+        from: 'contact',
+        text,
+        read: false,
+        silent: true,
+        source: message.source,
+      };
+      ctx.state.messages.list.push(reply);
+      ctx.emit('message.received', { messageId: reply.id, contactId: contact.id, source: message.source });
+    };
+    if (call.final) {
+      openAnswers(ctx, message);
+      send(call.gaveUpText ?? GAVE_UP_TEXT);
+    } else {
+      calls.retries.push({
+        at: ctx.now + CALL_RETRY_MINUTES,
+        attempt: call.attempt + 1,
+        call: plan,
+        source: message.source,
+      });
+      send(call.missedText ?? MISSED_TEXT);
+    }
+    const list = ctx.state.messages.list;
+    if (list.length > MESSAGE_LIMIT) list.splice(0, list.length - MESSAGE_LIMIT);
+    ctx.emit('call.missed', { messageId: id, contactId: contact.id, source: message.source, final: call.final });
+  }
+  const due = calls.retries.filter((r) => r.at <= ctx.now);
+  if (due.length === 0) return;
+  calls.retries = calls.retries.filter((r) => r.at > ctx.now);
+  for (const retry of due) ring(ctx, retry.call, retry.attempt, retry.source);
+}
+
 // Fristen laufen selten ab, geprüft wird aber jede Spielminute: Gemerkt wird die nächste Frist, solange sich die
 // Liste nicht ändert (neue Nachrichten, siehe messageIndex). Nur eine Abkürzung, das Ergebnis bleibt dasselbe.
 const nextExpiry = new WeakMap<MessagesState, { list: Message[]; length: number; last: number; at: number }>();

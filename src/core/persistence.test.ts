@@ -65,9 +65,23 @@ describe('Speichern und Laden', () => {
     const old = roundTrip(sim.state) as unknown as Record<string, unknown>;
     old.schema = 1;
     delete (old.messages as Record<string, unknown>).hidden;
+    delete (old.messages as Record<string, unknown>).calls;
     const loaded = loadSimulation(old, [notesV2]);
-    expect(loaded.state.schema).toBe(2);
+    expect(loaded.state.schema).toBe(3);
     expect(loaded.state.messages.hidden).toEqual({});
+    expect(loaded.state.messages.calls).toEqual({ ringing: [], retries: [] });
+  });
+
+  it('migriert die Kernfelder: Spielstände von Auftrag 29 (Schema 2) bekommen messages.calls', () => {
+    const sim = Simulation.create([notesV2], { seed: 1 });
+    const old = roundTrip(sim.state) as unknown as Record<string, unknown>;
+    old.schema = 2;
+    delete (old.messages as Record<string, unknown>).calls;
+    const loaded = loadSimulation(old, [notesV2]);
+    expect(loaded.state.schema).toBe(3);
+    expect(loaded.state.messages.calls).toEqual({ ringing: [], retries: [] });
+    // Und es läuft weiter (die Anruf-Prüfung jede Minute fasst die leeren Listen an).
+    loaded.advance(10);
   });
 
   it('legt Module, die im Spielstand fehlen, frisch an', () => {

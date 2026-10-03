@@ -44,6 +44,7 @@ import { tabIcon, tabTint, useIsMobile, useIsPhoneDevice } from '../shell/layout
 import { collectAdvice } from '../shell/NextStep';
 import { Slot } from '../shell/Slot';
 import { SectionContent, TabContent } from '../shell/TabContent';
+import { CallScreen } from './CallScreen';
 import { DynamicIsland } from './DynamicIsland';
 import { startDrag } from './drag';
 import {
@@ -641,6 +642,9 @@ function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boo
         />
       </PortalHostContext.Provider>
       <div class="phone__overlays" ref={setOverlays} />
+      <ErrorBoundary name="Anruf" silent>
+        <CallScreen state={props.state} />
+      </ErrorBoundary>
       <Center state={props.state} />
       {props.device ? <PillBar time={props.state.time} /> : <StatusBar time={props.state.time} />}
       <PhoneNotice />

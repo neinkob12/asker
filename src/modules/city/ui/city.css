@@ -1,0 +1,63 @@
+/* Karte "Hamburg wartet" unter Geld und Heat (Look "Glas", wie die Quest-Karte). */
+
+.city-hud {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 300px;
+  max-width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font: inherit;
+  font-family: var(--font-hud);
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.hud-label.is-city {
+  color: var(--cat-place);
+}
+
+.city-hud__main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.city-hud__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.city-hud__text strong {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.city-hud__hint,
+.city-hud__missing {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--hud-ink-2);
+}
+
+.city-hud__missing {
+  margin: 2px 0 0;
+  padding-left: 1.1em;
+}
+
+.city-hud__go {
+  align-self: center;
+  color: var(--hud-ink-2);
+}

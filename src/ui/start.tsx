@@ -28,8 +28,11 @@ import.meta.glob(['../modules/*/ui/index.ts', '../modules/*/ui/index.tsx', '!../
 
 declare global {
   interface Window {
-    /** Zum Ausprobieren in der Konsole und für Playwright: window.koeln.session, window.koeln.runtime. */
-    koeln?: { session: GameSession; runtime: UiRuntime };
+    /**
+     * Zum Ausprobieren in der Konsole und für Playwright: window.koeln.session, window.koeln.runtime. Im Dev-Build
+     * hängen Module unter dev Abkürzungen an (z.B. window.koeln.dev.koelnKomplett(), siehe src/modules/city/ui).
+     */
+    koeln?: { session: GameSession; runtime: UiRuntime; dev?: Record<string, () => void> };
   }
 }
 
@@ -79,7 +82,7 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
 
   render(<App runtime={runtime} />, root);
   session.loop.start();
-  window.koeln = { session, runtime };
+  window.koeln = { ...window.koeln, session, runtime };
   return runtime;
 }
 

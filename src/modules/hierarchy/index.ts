@@ -138,6 +138,7 @@ export {
   activeRightHand,
   buildReport,
   canBeRightHand,
+  fullPowerMissing,
   getRightHand,
   isRightHand,
   isTaskActive,

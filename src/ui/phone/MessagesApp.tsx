@@ -33,6 +33,7 @@ import {
   CONTACT_KIND_TONES,
   chatEntries,
   chatList,
+  contactAvatar,
   firstUnread,
   groupChats,
   recentContacts,
@@ -44,9 +45,7 @@ const APP_ID = 'core.messages';
 /** Wie lange ein Kontakt "tippt", bevor die Nachricht erscheint (nur Optik, der Spielzustand steht schon fest). */
 const typingMs = (text: string) => Math.min(2200, Math.max(700, 450 + text.length * 22));
 
-function avatarImage(avatar: string | undefined, kind: keyof typeof CONTACT_KIND_ICONS): string {
-  return avatar ?? CONTACT_KIND_ICONS[kind];
-}
+const avatarImage = contactAvatar;
 
 /** Suche in Namen, Kontaktart und letzter Nachricht (ohne Groß/klein). */
 function matches(chat: ReturnType<typeof chatList>[number], query: string): boolean {
@@ -398,6 +397,38 @@ function Chat(props: { contactId: string }) {
             return (
               <li key={e.key} class="msg-sep msg-sep--unread">
                 Neu
+              </li>
+            );
+          }
+          if (e.call) {
+            const call = e.call;
+            const lines = call.lines ?? [];
+            return (
+              <li key={e.key} class="msg-call-wrap">
+                <div class={`msg-call is-${call.tone}`}>
+                  <Icon name={call.icon} />
+                  <span>{call.label}</span>
+                  <time>{e.time}</time>
+                </div>
+                {lines.length > 0 && (
+                  <ol class={`msg-bubbles msg-call__talk ${call.mailbox ? 'is-mailbox' : ''}`}>
+                    {call.mailbox && <li class="msg-sep">Mailbox</li>}
+                    {lines.map((line, i) => (
+                      <li
+                        key={`${e.key}-${i}`}
+                        class={`msg-bubble msg-bubble--contact ${i === lines.length - 1 && e.options.length > 0 ? 'is-open' : ''}`}
+                      >
+                        <p>{line}</p>
+                        {i === lines.length - 1 && e.options.length > 0 && (
+                          <Stamp size="sm" tone="bad" rotate={-8} class="msg-bubble__stamp">
+                            Antwort!
+                          </Stamp>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {e.expired && <em class="msg-expired">Keine Antwort mehr möglich.</em>}
               </li>
             );
           }

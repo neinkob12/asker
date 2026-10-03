@@ -146,6 +146,11 @@ export interface UiState {
   buzz: number;
   /** Dynamic Island: aufgeklappt (alle Live-Aktivitäten) und aktueller kurzer Auftritt. */
   island: { expanded: boolean; pulse: IslandPulse | null };
+  /**
+   * Laufendes Gespräch im Handy (Auftrag 30): Nachricht des angenommenen Anrufs. Das Handy zeigt dann das Gespräch
+   * bildschirmfüllend, bis aufgelegt wird. Ein klingelnder Anruf braucht das nicht (der steht im Spielzustand).
+   */
+  call: { messageId: number } | null;
 }
 
 /** Schnittstelle der Karte für die UI (implementiert in src/map/GameMap.ts). */
@@ -197,6 +202,10 @@ export interface UiApi {
    * z.B. pulseIsland({ kind: 'earn', amount: 35, icon: 'euro', tone: 'accent', text: '' }) → "+35 €".
    */
   pulseIsland(pulse: Omit<IslandPulse, 'id'>): void;
+  /** Gespräch eines angenommenen Anrufs im Handy zeigen (öffnet das Handy). */
+  openCall(messageId: number): void;
+  /** Auflegen: Das Gespräch bleibt als Chat beim Kontakt. */
+  endCall(): void;
   /** Dynamic Island auf- oder zuklappen (ohne Argument umschalten). */
   toggleIsland(expanded?: boolean): void;
   /** Tab (Bereich eines Moduls) als App im Handy öffnen. */
@@ -296,6 +305,7 @@ export class UiRuntime {
       notification: null,
       buzz: 0,
       island: { expanded: false, pulse: null },
+      call: null,
     };
     setHapticsEnabled(prefs.vibration);
     this.api = this.createApi();
@@ -352,6 +362,7 @@ export class UiRuntime {
     ui.popover = null;
     ui.palette = false;
     ui.island = { expanded: false, pulse: null };
+    ui.call = null;
     this.map?.cancelPick();
     this.setStack(nav.rootStack());
   }
@@ -649,6 +660,15 @@ export class UiRuntime {
             ui.island = { ...ui.island, pulse: null };
             this.requestRender();
           }, ISLAND_PULSE_MS);
+        }),
+      openCall: (messageId) =>
+        update(() => {
+          ui.call = { messageId };
+          ui.phone = { ...ui.phone, open: true };
+        }),
+      endCall: () =>
+        update(() => {
+          ui.call = null;
         }),
       toggleIsland: (expanded) =>
         update(() => {
