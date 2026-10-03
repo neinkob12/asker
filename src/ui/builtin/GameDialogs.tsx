@@ -17,6 +17,7 @@ import { useRuntime } from '../hooks';
 import { gameStats } from '../registry';
 import type { UiRuntime } from '../runtime';
 import { Slot } from '../shell/Slot';
+import { loadTestSave, TEST_SAVE_FILES } from './testSaves';
 
 declare module '../registry' {
   interface DialogRegistry {
@@ -143,6 +144,23 @@ export function SavesDialog() {
     }, 'Spielstand geladen.');
 
   const [importError, setImportError] = useState<string | null>(null);
+  const [loadingTest, setLoadingTest] = useState<string | null>(null);
+  const onTestSave = (id: string) => {
+    setImportError(null);
+    setLoadingTest(id);
+    loadTestSave(session, id)
+      .then((info) => {
+        api.closePanel();
+        api.closeDialog();
+        api.toast(`Test-Spielstand "${info.title}" geladen.`, 'good');
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : 'Laden fehlgeschlagen.';
+        setImportError(message);
+        api.toast(message, 'bad');
+      })
+      .finally(() => setLoadingTest(null));
+  };
   const onImport = (e: JSX.TargetedEvent<HTMLInputElement>) => {
     const input = e.currentTarget;
     const file = input.files?.[0];
@@ -205,6 +223,25 @@ export function SavesDialog() {
           );
         })}
       </List>
+      <h3 class="saves-heading">Test-Spielstände</h3>
+      <List>
+        {TEST_SAVE_FILES.map((t) => (
+          <ListItem
+            key={t.id}
+            aside={
+              <Button small disabled={loadingTest !== null} onClick={() => onTestSave(t.id)}>
+                {loadingTest === t.id ? 'Lädt …' : 'Laden'}
+              </Button>
+            }
+          >
+            <strong>{t.title}</strong>
+            <div class="ui-hint">{t.text}</div>
+          </ListItem>
+        ))}
+      </List>
+      <Hint>
+        Vom Bot gespielt, zum Ausprobieren. Laden überschreibt den Autosave und zählt nicht für die Bestenliste.
+      </Hint>
       <div class="saves-actions">
         <Button disabled={!session.state} onClick={() => exportSaveFile(runtime)}>
           Exportieren

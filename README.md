@@ -47,7 +47,9 @@ die Bestenliste aus.
 - **Geld:** Verkäufe bringen Schwarzgeld. Sauberes Geld brauchst du später für Legales.
 - **Handy:** Nachrichten von Figuren, teils mit Antwort-Knöpfen.
 - **Game Over:** kein Geld, keine Ware und keine Lieferung unterwegs.
-- **Spielstände** (Knopf "Menü"): Autosave, drei Speicherplätze, Export und Import als Datei.
+- **Spielstände** (Knopf "Menü"): Autosave, drei Speicherplätze, Export und Import als Datei. Dazu Test-Spielstände
+  zum Ausprobieren, z.B. *Köln fast komplett* (50.000 € Schwarzgeld, das zwölfte Veedel fällt gleich nach dem Laden),
+  auch direkt über die Adresse: `?spielstand=koeln-komplett`. Sie zählen nicht für die Bestenliste.
 
 ## Anpassen
 

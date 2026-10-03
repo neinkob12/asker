@@ -34,6 +34,8 @@ export interface GameMeta {
   seed: number;
   /** Echte Zeit beim Anlegen (ms seit 1970), nur zur Anzeige. */
   createdAt: number;
+  /** Test-Spielstand aus einer Vorlage (z.B. 'koeln-komplett', src/playtest/testSaves.ts): nicht in die Bestenliste. */
+  scenario?: string;
 }
 
 /**

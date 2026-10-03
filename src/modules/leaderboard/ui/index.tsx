@@ -72,7 +72,8 @@ const inFlight = new Map<string, Promise<void>>();
 const lastSent = new Map<string, string>();
 
 function submit(state: GameState): Promise<void> {
-  if (!enabled()) return Promise.resolve();
+  // Test-Spielstände (meta.scenario) hat der Bot gespielt: Sie kommen nicht in die Bestenliste.
+  if (!enabled() || state.meta.scenario) return Promise.resolve();
   const summary = runSummary(state);
   const runId = summary.runId;
   // Game Over meldet über die Reaktion und über den Bildschirm: Läuft schon eine Übermittlung, wartet der zweite darauf.
@@ -185,9 +186,11 @@ function BoardView(props: { limit?: number; submitFirst?: boolean }) {
 }
 
 function EndingBoard() {
+  const { state } = useGame();
   return (
     <div class="lb-ending">
       <h3 class="lb-ending__title">Bestenliste</h3>
+      {state.meta.scenario && <Hint>Test-Spielstand: Dieses Ergebnis kommt nicht in die Bestenliste.</Hint>}
       <BoardView limit={10} submitFirst />
     </div>
   );

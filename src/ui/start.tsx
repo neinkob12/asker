@@ -12,6 +12,7 @@ import {
 } from '../core';
 import { dayPhase } from '../map/daylight';
 import { registerBuiltins } from './builtin';
+import { loadTestSave } from './builtin/testSaves';
 import { SPRINGS, springEasing } from './phone/spring';
 import { introSeen } from './player';
 import { UiRuntime } from './runtime';
@@ -51,10 +52,27 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
   });
   bindClickSound();
 
-  // ?neu=normal|hardcore&seed=123 startet sofort ein frisches Spiel (praktisch für Screenshots und Tests).
+  // ?neu=normal|hardcore&seed=123 startet sofort ein frisches Spiel (praktisch für Screenshots und Tests),
+  // ?spielstand=koeln-komplett lädt einen Test-Spielstand (builtin/testSaves.ts).
   const params = new URLSearchParams(window.location.search);
   const fresh = params.get('neu');
-  if (fresh !== null) {
+  const testSave = params.get('spielstand');
+  if (testSave !== null) {
+    // Bis die Datei da ist, läuft der Autosave weiter (oder das Intro beim ersten Start).
+    if (!session.continueAutosave() && !introSeen()) runtime.api.openDialog('core.intro', {});
+    loadTestSave(session, testSave)
+      .then((info) => {
+        runtime.api.closeDialog();
+        runtime.api.toast(`Test-Spielstand "${info.title}" geladen.`, 'good');
+        // Neu laden spielt dann weiter, statt den Test-Spielstand noch einmal über den Autosave zu legen.
+        const url = new URL(window.location.href);
+        url.searchParams.delete('spielstand');
+        window.history.replaceState(null, '', url);
+      })
+      .catch((error) =>
+        runtime.api.toast(error instanceof Error ? error.message : 'Laden fehlgeschlagen.', 'bad', { urgent: true }),
+      );
+  } else if (fresh !== null) {
     const seed = params.get('seed');
     session.newGame(fresh === 'hardcore' ? 'hardcore' : ('normal' as GameMode), seed ? Number(seed) : undefined);
   } else if (!session.continueAutosave()) {

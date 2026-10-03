@@ -323,6 +323,22 @@ async function run() {
     await shot(page, 'fortgesetzt');
   });
 
+  await check('Test-Spielstand "Köln fast komplett" im Spielstände-Dialog laden', async () => {
+    await page.evaluate(() => {
+      window.koeln.runtime.api.setSpeed(0);
+      window.koeln.runtime.api.openDialog('core.saves', {});
+    });
+    const item = page.locator('.ui-dialog li', { hasText: 'Köln fast komplett' });
+    await item.getByRole('button', { name: 'Laden', exact: true }).click();
+    await page.waitForFunction(() => window.koeln.session.state?.meta.scenario === 'koeln-komplett', null, {
+      timeout: 15000,
+    });
+    const loaded = await game(page, (s) => ({ dirty: s.wallet.dirty, won: s.outcome.won }));
+    assert.equal(loaded.dirty, 50000);
+    assert.equal(loaded.won, null);
+    await shot(page, 'test-spielstand');
+  });
+
   await context.close();
 }
 
