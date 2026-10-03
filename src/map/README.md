@@ -201,9 +201,15 @@ Läufer und Sicherheit in `--cat-people`, bis zu vier wartende Kunden in `--cat-
 kommt wie bisher), dazu eine Streife in `--cat-law`, die in Veedeln mit Heat über `CHECK_THRESHOLD` über die Straßen von
 Spot zu Spot geht. Symbol-Ebene mit der SDF-Figur aus `figure.ts` (`ensureFigureImage`, Farbe über `icon-color`,
 Rand über `icon-halo`), keine HTML-Marker. Versatz in Bildschirm-Einheiten (`icon-offset`), Personal links und Kunden
-rechts unterhalb von Schild und Strichen, damit auch am Handy nichts verdeckt wird. Ruhiges Pendeln mit höchstens 10
-Stellungen pro Sekunde, nur im Ausschnitt, unter Zoom 14 unsichtbar, höchstens 60 Figuren. Antippen öffnet das
-Spot-Blatt.
+rechts unterhalb von Schild und Strichen, damit auch am Handy nichts verdeckt wird. Nur im Ausschnitt, unter Zoom 14
+unsichtbar, höchstens 60 Figuren. Antippen öffnet das Spot-Blatt.
+
+**Symbol-Ebenen sparsam füttern:** Jedes `setData` einer Symbol-Ebene lässt MapLibre die Symbole neu einsortieren und
+die Deckkraft aller Beschriftungen der Karte neu rechnen; mit 10 Aufrufen pro Sekunde gab das am Handy mit Drossel
+deutlich mehr Long Tasks. Darum stehen die Figuren fest in ihrer Quelle (neu nur, wenn jemand kommt oder geht), das
+Pendeln läuft über `icon-translate` (Paint-Eigenschaft, ohne Übergang) in drei Gruppen mit eigener Phase, und nur die
+Streife bekommt neue Stellungen (eigene Quelle, höchstens 10-mal pro Sekunde, erst nach einem Pixel Weg). Bewegte
+Dinge in großer Zahl gehören in eine eigene WebGL-Ebene wie die Flotte.
 
 ## Gemeinsamer Takt und Bewegung
 

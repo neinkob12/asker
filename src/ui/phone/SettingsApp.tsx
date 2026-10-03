@@ -239,9 +239,9 @@ export function SettingsApp() {
         </p>
         <dl class="set-sources">
           <dt>Karte</dt>
-          <dd>© OpenFreeMap, © OpenMapTiles, © OpenStreetMap-Mitwirkende (ODbL)</dd>
+          <dd>{'©\u00a0OpenFreeMap, ©\u00a0OpenMapTiles, ©\u00a0OpenStreetMap-Mitwirkende (ODbL)'}</dd>
           <dt>Straßen, Flüsse, Autobahnen</dt>
-          <dd>© OpenStreetMap-Mitwirkende, Overture Maps Foundation (ODbL)</dd>
+          <dd>{'©\u00a0OpenStreetMap-Mitwirkende, Overture Maps Foundation (ODbL)'}</dd>
           <dt>Veedel-Grenzen</dt>
           <dd>Stadt Köln, Offene Daten Köln (Datenlizenz Deutschland Zero 2.0)</dd>
         </dl>

@@ -24,7 +24,7 @@ setWorkerUrl(workerUrl);
 
 const KOELN_PITCH = 50;
 /** Straßennetz, Wasserwege und Autobahn-Zufahrten kommen aus Overture Maps (abgeleitet von OpenStreetMap, ODbL). */
-export const ATTRIBUTION = '© OpenStreetMap-Mitwirkende, Overture Maps Foundation';
+export const ATTRIBUTION = '©\u00a0OpenStreetMap-Mitwirkende, Overture Maps Foundation';
 const KOELN_BEARING = -20;
 const MAX_PIXEL_RATIO = 1.5;
 
