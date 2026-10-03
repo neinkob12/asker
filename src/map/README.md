@@ -226,11 +226,15 @@ nur läuft, solange jemand zuhört, das Spiel nicht pausiert ist und der Tab sic
 - Jede Quelle (`setData`) höchstens 20-mal pro Sekunde und nur bei Änderung.
 - Layer bekommen `update()` nur, wenn sich Spielzeit, ein Befehl, das offene Panel, Handy, Kamera, Overlay oder die
   Verkehrs-Einstellung geändert haben (`GameMap.update`, `invalidate`). Marker-DOM nur bei neuem Text (`setText`).
+- In einem Bild (`onMapFrame`, `render`) nichts lesen, was ein Layout erzwingt: kein `clientWidth`,
+  `getBoundingClientRect` und auch kein `window.innerWidth` (also kein `isMobile()`), sondern in `update()` merken oder
+  die Canvas-Attribute nehmen. `isMobile()` pro Bild kostete den Verkehr am Handy mit Drossel 1,5 ms pro Bild.
 
 Messen: `?perf=1` im Dev-Build zeigt oben links Bilder pro Sekunde, Bild-Arbeit der Animationen, Zeit pro Layer-Update,
 `setData` pro Quelle und Long Tasks neben dem Budget (`perf.ts`, `mapPerf.begin()`/`mapPerf.end('frame' | 'layer', name,
-t0)`); `npm run perf:browser -- --scenes=karte [--mobile --throttle=4] [--reduced-motion] [--traffic=off]` liest
-dieselben Zahlen über `window.__ktMapPerf`. Ohne GPU (Headless, SwiftShader) sind Bilder pro Sekunde und Long Tasks durch
+t0)`, Anzahlen mit `mapPerf.count`); `npm run perf:browser -- --save=<spielstand> --scenes=karte --hour=8 --width=1440
+--height=900` (Berufsverkehr, volle 40 Fahrzeuge; unter 760 px Breite gilt die Handy-Zahl 14), dazu `--mobile
+--throttle=4`, `--reduced-motion` und `--traffic=off`, liest dieselben Zahlen über `window.__ktMapPerf`. Ohne GPU (Headless, SwiftShader) sind Bilder pro Sekunde und Long Tasks durch
 die Software-Grafik begrenzt; Bild-Arbeit und `setData` nicht. Mit `--gpu` auf einem Rechner mit Grafikkarte messen.
 
 ## Weitere Effekt-Werkzeuge

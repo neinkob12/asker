@@ -440,6 +440,7 @@ async function measureMap(label) {
       `Zustand: offene Aufträge ${info.open} (unterwegs ${info.enRoute}), Zoom ${info.zoom.toFixed(1)}, Handy ${info.phone ? 'offen' : 'zu'}, Tempo ${info.speed}${info.dialog ? `, Dialog ${info.dialog}` : ''}`,
       `Bilder: ${st.fps.toFixed(1)} fps, längster Abstand ${st.maxInterval.toFixed(0)} ms, ${st.slowFrames} Bilder über 50 ms`,
       `Bild-Arbeit Karte (Animationen): ${st.frameMs.toFixed(2)} ms/Bild im Mittel, schlimmstes Bild ${st.maxFrameMs.toFixed(1)} ms`,
+      `MapLibre zeichnen: ${st.maplibre ? `${(st.maplibre.ms / Math.max(1, st.maplibre.calls)).toFixed(2)} ms/Bild im Mittel, schlimmstes ${st.maplibre.max.toFixed(1)} ms` : '–'}`,
       `Anzahl: ${
         Object.entries(st.counts ?? {})
           .map(([k, c]) => `${k} ${c.mean.toFixed(0)} im Mittel (höchstens ${c.max})`)

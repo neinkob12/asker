@@ -46,6 +46,8 @@ export interface MapPerfStats {
   setDataPeakPerSecond: Record<string, number>;
   longTasks: number;
   longTaskMax: number;
+  /** MapLibre selbst: Zeit pro Zeichnen der Karte (Map._render, Hauptthread, ohne GPU). */
+  maplibre: Entry;
   /** Gezählte Größen (z.B. Fahrzeuge einer Flotte): Mittel und Höchstwert über die Meldungen. */
   counts: Record<string, { mean: number; max: number }>;
 }
@@ -79,6 +81,7 @@ let layers: Record<string, Entry> = {};
 let setData: Record<string, number> = {};
 let peak: Record<string, number> = {};
 let counts: Record<string, { sum: number; n: number; max: number }> = {};
+let drawing: Entry = { calls: 0, ms: 0, max: 0 };
 let current = freshWindow(0);
 let shown = freshWindow(0);
 let overlay: HTMLElement | null = null;
@@ -105,6 +108,7 @@ function reset(): void {
   setData = {};
   peak = {};
   counts = {};
+  drawing = { calls: 0, ms: 0, max: 0 };
   current = freshWindow(since);
 }
 
@@ -124,6 +128,7 @@ function stats(): MapPerfStats {
     setDataPeakPerSecond: peak,
     longTasks,
     longTaskMax,
+    maplibre: drawing,
     counts: Object.fromEntries(
       Object.entries(counts).map(([k, c]) => [k, { mean: c.sum / Math.max(1, c.n), max: c.max }]),
     ),
@@ -249,6 +254,20 @@ export const mapPerf = {
       if (countSources(map)) map.off('styledata', start);
     };
     map.on('styledata', start);
+    // Zeichnen der Karte messen (nur hier, im Dev-Build mit ?perf=1; Map._render ist intern).
+    const inner = map as unknown as { _render: (time?: number) => unknown };
+    const render = inner._render;
+    if (typeof render === 'function') {
+      inner._render = function (this: unknown, time?: number) {
+        const t0 = performance.now();
+        const result = render.call(this, time);
+        const ms = performance.now() - t0;
+        drawing.calls++;
+        drawing.ms += ms;
+        if (ms > drawing.max) drawing.max = ms;
+        return result;
+      };
+    }
     if (overlay) return;
     overlay = document.createElement('pre');
     overlay.className = 'map-perf';
