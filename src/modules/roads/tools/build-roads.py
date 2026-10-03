@@ -1,14 +1,23 @@
-# Erzeugt src/modules/roads/network.ts: das Kölner Straßennetz (Hauptstraßen) als kompakter Graph für Routen.
+# Erzeugt die Straßennetze der Städte als kompakte Graphen für Routen (Köln: network.ts, Hamburg: network-hamburg.ts)
+# und die Autobahn zwischen zwei Städten als Linie (autobahn.ts, Auftrag 30).
 #
 # Aufruf (aus dem Repo-Root, braucht Python 3.10+ mit pyarrow und shapely):
 #   python3 -m venv .venv-roads && .venv-roads/bin/pip install pyarrow shapely
-#   .venv-roads/bin/python src/modules/roads/tools/build-roads.py              lädt die Daten (ca. 1 Minute)
-#   .venv-roads/bin/python src/modules/roads/tools/build-roads.py segs.parquet nimmt schon geladene Segmente
+#   .venv-roads/bin/python src/modules/roads/tools/build-roads.py                   Köln (lädt die Daten, ca. 1 Minute)
+#   .venv-roads/bin/python src/modules/roads/tools/build-roads.py --city hamburg    Hamburg
+#   .venv-roads/bin/python src/modules/roads/tools/build-roads.py --autobahn koeln hamburg   die A1 dazwischen
+#   … build-roads.py [--city …] segs.parquet      nimmt schon geladene Segmente (fehlt die Datei, wird sie angelegt)
 #
 # Quelle: Overture Maps Foundation, Thema "transportation", Typ "segment" (https://docs.overturemaps.org),
 # abgeleitet von OpenStreetMap. Lizenz: ODbL 1.0 (https://opendatacommons.org/licenses/odbl/),
 # © OpenStreetMap-Mitwirkende, © Overture Maps Foundation. Geladen wird nur der Ausschnitt um Köln (BOX) per
-# HTTP-Range-Anfragen direkt aus dem öffentlichen S3-Bucket, ohne Zugangsdaten.
+# HTTP-Range-Anfragen direkt aus dem öffentlichen S3-Bucket, ohne Zugangsdaten (für die Autobahn nur ein Korridor
+# aus kleinen Kästen entlang der Strecke).
+#
+# Autobahn (--autobahn A B): Segmente der Klasse motorway im Korridor; Abschnitte ohne Routen-Angabe "A 1" (routes.ref)
+# zählen OFF_ROUTE_FACTOR-mal so lang. Kürzester Weg (Einbahn beachtet) von den A1-Knoten um START (ENDPOINT_RADIUS) in
+# der ersten zu denen um END in der zweiten Stadt, vereinfacht mit AUTOBAHN_TOLERANCE_METERS. Anfang und Ende liegen im Netz der
+# jeweiligen Stadt, roads verbindet dort (interCityRoute).
 #
 # Was das Skript macht:
 #   1. Nimmt nur Straßen, auf denen Autos fahren (CLASSES), keine Wohnstraßen, Wege oder Schienen.
@@ -36,19 +45,66 @@ import shapely
 RELEASE = '2026-09-23.1'
 BASE = 'https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/'
 PREFIX = f'release/{RELEASE}/theme=transportation/type=segment/'
-# Köln mit Rand: alle Veedel, der Niehler Hafen und die Autobahnen drumherum. xmin, xmax, ymin, ymax
-BOX = (6.83, 7.07, 50.87, 51.02)
+# Städte: Ausschnitt (xmin, xmax, ymin, ymax) mit Rand, Datei und Breite der lokalen Projektion.
+CITIES = {
+    # Köln: alle Veedel, der Niehler Hafen und die Autobahnen drumherum.
+    'koeln': {'box': (6.83, 7.07, 50.87, 51.02), 'out': 'network.ts', 'lat0': 50.94},
+    # Hamburg: alle Stadtteile im Spiel (Blankenese bis Harburg), der Hafen und die A1 bei Wilhelmsburg.
+    'hamburg': {'box': (9.78, 10.08, 53.44, 53.63), 'out': 'network-hamburg.ts', 'lat0': 53.53},
+}
+# Autobahn zwischen zwei Städten: Endpunkte (lng, lat) in den Städten und Wegpunkte des Korridors dazwischen.
+AUTOBAHNEN = {
+    ('koeln', 'hamburg'): {
+        'ref': 'A 1',
+        'start': (6.897, 51.0),  # A1 am Kreuz Köln-Nord
+        'end': (10.04, 53.505),  # A1 bei Hamburg-Wilhelmsburg, Richtung Norderelbbrücken
+        'via': [
+            (6.897, 51.0),
+            (7.05, 51.10),
+            (7.20, 51.27),
+            (7.50, 51.42),
+            (7.65, 51.60),
+            (7.63, 51.92),
+            (7.93, 52.28),
+            (8.23, 52.89),
+            (8.75, 53.03),
+            (8.98, 53.07),
+            (9.50, 53.28),
+            (10.06, 53.40),
+            (10.04, 53.505),
+        ],
+        'out': 'autobahn.ts',
+    },
+}
+CORRIDOR_MARGIN = 0.12
+AUTOBAHN_TOLERANCE_METERS = 50
+OFF_ROUTE_FACTOR = 3.0
+ENDPOINT_RADIUS = 2000
+BOX = CITIES['koeln']['box']
+BOXES = [BOX]
 COLUMNS = ['id', 'subtype', 'class', 'connectors', 'geometry', 'bbox', 'access_restrictions', 'road_flags']
+EXTRA_COLUMNS = ['routes']
 
 # Straßenarten im Spiel (Reihenfolge = Code in network.ts) und ihr Tempo in km/h für die Routenwahl.
 CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street']
 TOLERANCE_METERS = 4
-OUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'network.ts')
+ROADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+OUT_FILE = os.path.join(ROADS_DIR, 'network.ts')
 
-# Lokale Projektion in Meter (für Köln genau genug).
+# Lokale Projektion in Meter (für eine Stadt genau genug; configure() setzt die Breite der Stadt).
 LAT0 = 50.94
 M_LAT = 111_320.0
 M_LNG = 111_320.0 * math.cos(math.radians(LAT0))
+
+
+def configure(city):
+    global BOX, BOXES, OUT_FILE, LAT0, M_LNG
+    conf = CITIES[city]
+    BOX = conf['box']
+    BOXES = [BOX]
+    OUT_FILE = os.path.join(ROADS_DIR, conf['out'])
+    LAT0 = conf['lat0']
+    M_LNG = 111_320.0 * math.cos(math.radians(LAT0))
 
 
 def to_m(lng, lat):
@@ -105,11 +161,14 @@ def _overlaps(rg):
             stats[c.path_in_schema] = (c.statistics.min, c.statistics.max)
     if len(stats) < 4:
         return True
-    return not (
-        stats['bbox.xmin'][0] > BOX[1]
-        or stats['bbox.xmax'][1] < BOX[0]
-        or stats['bbox.ymin'][0] > BOX[3]
-        or stats['bbox.ymax'][1] < BOX[2]
+    return any(
+        not (
+            stats['bbox.xmin'][0] > box[1]
+            or stats['bbox.xmax'][1] < box[0]
+            or stats['bbox.ymin'][0] > box[3]
+            or stats['bbox.ymax'][1] < box[2]
+        )
+        for box in BOXES
     )
 
 
@@ -120,29 +179,46 @@ def _scan(key_size):
     for i in range(pf.metadata.num_row_groups):
         if not _overlaps(pf.metadata.row_group(i)):
             continue
-        t = pf.read_row_group(i, columns=COLUMNS)
+        names = set(pf.schema_arrow.names)
+        t = pf.read_row_group(i, columns=COLUMNS + [c for c in EXTRA_COLUMNS if c in names])
         b = t.column('bbox').combine_chunks()
-        mask = (
-            (b.field('xmax').to_numpy() >= BOX[0])
-            & (b.field('xmin').to_numpy() <= BOX[1])
-            & (b.field('ymax').to_numpy() >= BOX[2])
-            & (b.field('ymin').to_numpy() <= BOX[3])
-        )
+        xmin, xmax = b.field('xmin').to_numpy(), b.field('xmax').to_numpy()
+        ymin, ymax = b.field('ymin').to_numpy(), b.field('ymax').to_numpy()
+        mask = None
+        for box in BOXES:
+            hit = (xmax >= box[0]) & (xmin <= box[1]) & (ymax >= box[2]) & (ymin <= box[3])
+            mask = hit if mask is None else mask | hit
+        if MOTORWAY_ONLY:
+            cls = t.column('class').to_pylist()
+            mask = mask & pa.array([c == 'motorway' for c in cls]).to_numpy(zero_copy_only=False)
         t = t.filter(pa.array(mask))
         if t.num_rows:
             tables.append(t)
     return tables
 
 
+MOTORWAY_ONLY = False
+
+
 def download():
     xml = _opener.open(BASE + f'?list-type=2&prefix={PREFIX}').read().decode()
     keys = list(zip(re.findall(r'<Key>(.*?)</Key>', xml), map(int, re.findall(r'<Size>(.*?)</Size>', xml))))
-    print(f'{len(keys)} Dateien im Release {RELEASE}, suche den Köln-Ausschnitt …', file=sys.stderr)
+    print(f'{len(keys)} Dateien im Release {RELEASE}, suche {len(BOXES)} Ausschnitt(e) …', file=sys.stderr)
     tables = []
     with cf.ThreadPoolExecutor(16) as ex:
         for found in ex.map(_scan, keys):
             tables += found
-    return pa.concat_tables(tables)
+    return pa.concat_tables(tables, promote_options='default')
+
+
+def load(path):
+    """Segmente aus einer Parquet-Datei; fehlt sie, wird geladen und dort gespeichert (für den nächsten Lauf)."""
+    if path and os.path.exists(path):
+        return pq.read_table(path)
+    table = download()
+    if path:
+        pq.write_table(table, path)
+    return table
 
 
 # --- Aufbereiten -----------------------------------------------------------------------------------------------
@@ -366,7 +442,7 @@ def write(nodes, edges, source):
 // Quelle: {source}
 //   Overture Maps Foundation, Thema "transportation" (https://docs.overturemaps.org), abgeleitet von OpenStreetMap.
 // Lizenz: ODbL 1.0 (https://opendatacommons.org/licenses/odbl/). © OpenStreetMap-Mitwirkende, © Overture Maps Foundation.
-// Ausschnitt {BOX[0]}–{BOX[1]} °O, {BOX[2]}–{BOX[3]} °N.
+// Ausschnitt {BOX[0]}–{BOX[1]} °O, {BOX[2]}–{BOX[3]} °N (lokale Projektion bei {LAT0} °N).
 // Straßenarten: {', '.join(CLASSES)}.
 // {len(nodes)} Knoten, {len(edges)} Kanten, {length_km:.0f} km Straße, Linien vereinfacht auf {TOLERANCE_METERS} m.
 //
@@ -374,6 +450,10 @@ def write(nodes, edges, source):
 //   ROAD_NODES: je Knoten lng, lat als Abstand zum vorigen Knoten.
 //   ROAD_EDGES: je Kante Start (Abstand zum Start der vorigen Kante), Ziel (Abstand zum Start), Art × 2 + Einbahn
 //     (1 = nur von Start nach Ziel), Zahl der Zwischenpunkte, dann die Zwischenpunkte als Abstand zum vorigen Punkt.
+
+/** Ausschnitt [West, Süd, Ost, Nord] und Breite der lokalen Projektion (roads wählt das Netz nach dem Ausschnitt). */
+export const ROAD_BOX = [{BOX[0]}, {BOX[2]}, {BOX[1]}, {BOX[3]}] as const;
+export const ROAD_LAT0 = {LAT0};
 
 /** Straßenarten in der Reihenfolge ihrer Codes. */
 export const ROAD_CLASSES = [
@@ -390,10 +470,168 @@ export const ROAD_EDGES =
     print(f'{OUT_FILE}: {len(text) // 1024} KB, {len(nodes)} Knoten, {len(edges)} Kanten, {length_km:.0f} km', file=sys.stderr)
 
 
+# --- Autobahn zwischen zwei Städten ------------------------------------------------------------------------------
+
+
+def corridor(via):
+    """Kleine Kästen entlang der Wegpunkte (je Abschnitt einer mit Rand)."""
+    boxes = []
+    for (x0, y0), (x1, y1) in zip(via, via[1:]):
+        boxes.append(
+            (
+                min(x0, x1) - CORRIDOR_MARGIN,
+                max(x0, x1) + CORRIDOR_MARGIN,
+                min(y0, y1) - CORRIDOR_MARGIN,
+                max(y0, y1) + CORRIDOR_MARGIN,
+            )
+        )
+    return boxes
+
+
+def has_ref(routes, ref):
+    for r in routes or []:
+        if (r.get('ref') or '').replace(' ', '') == ref.replace(' ', ''):
+            return True
+    return False
+
+
+def geo_meters(p0, p1):
+    """Abstand in Metern mit der Breite des Abschnitts (die Autobahn reicht über mehrere Breitengrade)."""
+    m_lng = 111_320.0 * math.cos(math.radians((p0[1] + p1[1]) / 2))
+    return math.hypot((p1[0] - p0[0]) * m_lng, (p1[1] - p0[1]) * M_LAT)
+
+
+def build_autobahn(table, conf):
+    import heapq
+
+    rows = table.to_pylist()
+    with_ref = sum(1 for r in rows if has_ref(r.get('routes'), conf['ref']))
+    print(f'{len(rows)} Autobahn-Segmente im Korridor, {with_ref} mit {conf["ref"]}', file=sys.stderr)
+    # Alle Autobahnen sind befahrbar, Abschnitte ohne die gesuchte Nummer zählen aber länger (OFF_ROUTE_FACTOR).
+    # So bleibt der Weg auf der A 1 und überbrückt Lücken in den Routen-Angaben.
+    pos = {}
+    adj = defaultdict(list)
+    on_route = set()
+    for row in rows:
+        geom = shapely.from_wkb(row['geometry'])
+        if geom.geom_type != 'LineString':
+            continue
+        d = oneway(row['access_restrictions'])
+        factor = 1.0 if has_ref(row.get('routes'), conf['ref']) else OFF_ROUTE_FACTOR
+        for a, b, pts in split_at_connectors(list(geom.coords), row['connectors']):
+            pos[a] = pts[0]
+            pos[b] = pts[-1]
+            if factor == 1.0:
+                on_route.update((a, b))
+            length = sum(geo_meters(p0, p1) for p0, p1 in zip(pts, pts[1:]))
+            if d >= 0:
+                adj[a].append((b, length, factor, pts))
+            if d <= 0:
+                adj[b].append((a, length, factor, list(reversed(pts))))
+
+    def near(point):
+        """Knoten der gesuchten Autobahn im Umkreis (beide Fahrbahnen), sonst der nächste Autobahnknoten."""
+        found = sorted(n for n in on_route if geo_meters(pos[n], point) <= ENDPOINT_RADIUS)
+        return found or [min(pos, key=lambda n: (geo_meters(pos[n], point), n))]
+
+    # Mehrere Start- und Zielknoten: Die Dijkstra-Suche nimmt so von selbst die Fahrbahn in der richtigen Richtung.
+    starts, targets = near(conf['start']), set(near(conf['end']))
+    cost = {n: 0.0 for n in starts}
+    meters = {n: 0.0 for n in starts}
+    prev = {}
+    heap = [(0.0, n) for n in starts]
+    heapq.heapify(heap)
+    end = None
+    while heap:
+        c, node = heapq.heappop(heap)
+        if c > cost.get(node, math.inf):
+            continue
+        if node in targets:
+            end = node
+            break
+        for nxt, length, factor, pts in adj[node]:
+            nc = c + length * factor
+            if nc < cost.get(nxt, math.inf):
+                cost[nxt] = nc
+                meters[nxt] = meters[node] + length
+                prev[nxt] = (node, pts)
+                heapq.heappush(heap, (nc, nxt))
+    if end is None:
+        raise SystemExit('Kein Weg über die Autobahn gefunden.')
+    parts = []
+    node = end
+    while node in prev:
+        node, pts = prev[node][0], prev[node][1]
+        parts.append(pts)
+    line = []
+    for pts in reversed(parts):
+        line += pts if not line else pts[1:]
+    simple = shapely.LineString([to_m(x, y) for x, y in line]).simplify(AUTOBAHN_TOLERANCE_METERS)
+    points = [(x / M_LNG, y / M_LAT) for x, y in simple.coords]
+    print(f'Weg: {meters[end] / 1000:.0f} km, {len(line)} → {len(points)} Punkte', file=sys.stderr)
+    return points, meters[end]
+
+
+def write_autobahn(points, meters, a, b, conf):
+    ints = []
+    px = py = 0
+    for x, y in points:
+        ints += [q(x) - px, q(y) - py]
+        px, py = q(x), q(y)
+    text = f"""// Automatisch erzeugt von tools/build-roads.py --autobahn {a} {b}. Nicht von Hand ändern.
+//
+// Quelle: Overture Maps, Release {RELEASE}, Thema "transportation", Segmente der Klasse motorway mit {conf['ref']}
+//   (routes.ref), kürzester Weg von {conf['start']} nach {conf['end']}, vereinfacht auf {AUTOBAHN_TOLERANCE_METERS} m.
+// Lizenz: ODbL 1.0 (https://opendatacommons.org/licenses/odbl/). © OpenStreetMap-Mitwirkende, © Overture Maps Foundation.
+// {len(points)} Punkte, {meters / 1000:.0f} km.
+//
+// Format: Punkte lng, lat im Polyline-Format (1e-5 Grad, Abstand zum vorigen Punkt, siehe decodeInts in graph.ts).
+
+export interface AutobahnLine {{
+  /** Städte an den Enden (Richtung der Punkte). */
+  from: string;
+  to: string;
+  ref: string;
+  meters: number;
+  points: string;
+}}
+
+export const AUTOBAHNEN: readonly AutobahnLine[] = [
+  {{
+    from: '{a}',
+    to: '{b}',
+    ref: '{conf['ref']}',
+    meters: {round(meters)},
+    points:
+      {ts_string(encode_ints(ints))},
+  }},
+];
+"""
+    out = os.path.join(ROADS_DIR, conf['out'])
+    with open(out, 'w', encoding='utf-8') as f:
+        f.write(text)
+    print(f'{out}: {len(text) // 1024} KB, {len(points)} Punkte', file=sys.stderr)
+
+
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        table = pq.read_table(sys.argv[1])
-    else:
-        table = download()
+    args = sys.argv[1:]
+    if args[:1] == ['--autobahn']:
+        a, b = args[1], args[2]
+        conf = AUTOBAHNEN[(a, b)]
+        # Projektion in der Mitte des Korridors.
+        LAT0 = (conf['start'][1] + conf['end'][1]) / 2
+        M_LNG = 111_320.0 * math.cos(math.radians(LAT0))
+        BOXES = corridor(conf['via'])
+        MOTORWAY_ONLY = True
+        table = load(args[3] if len(args) > 3 else None)
+        points, meters = build_autobahn(table, conf)
+        write_autobahn(points, meters, a, b, conf)
+        sys.exit(0)
+    city = 'koeln'
+    if args[:1] == ['--city']:
+        city = args[1]
+        args = args[2:]
+    configure(city)
+    table = load(args[0] if args else None)
     nodes, edges = build(table)
     write(nodes, edges, f'Overture Maps, Release {RELEASE}')

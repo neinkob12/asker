@@ -9,6 +9,7 @@ import { clock, formatEuro, type Simulation } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import { HudPill, Icon, IconChip, registerCityViews, registerHudItem, registerSlot, useGame, useUi } from '../../../ui';
 import { cityReport } from '../../finance';
+import { store } from '../../goods';
 import { getRightHand, hasFullPower, lieutenantOfSpot, RIGHT_HAND_RANK_XP } from '../../hierarchy';
 import { getSpots } from '../../spots';
 import { enlist, generateProfile } from '../../staff';
@@ -238,6 +239,36 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
     hamburgFrei: () => {
       const s = sim();
       s.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+    },
+    /**
+     * Route Köln → Hamburg zum Ansehen (Etappe 6): Hamburg frei, ein Lager in Ottensen, ein Fahrer, 2 kg Gras in
+     * Ehrenfeld, tägliche Route mit Rückfahrt, sofort los.
+     */
+    routeNachHamburg: () => {
+      const s = sim();
+      s.state.wallet.clean = Math.max(s.state.wallet.clean, 20000);
+      s.state.wallet.dirty = Math.max(s.state.wallet.dirty, 20000);
+      s.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+      s.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'werkstatt-ottensen' } });
+      const hired = s.dispatch({ type: 'staff.hireDriver', payload: {} });
+      const driverId = hired.ok ? (hired.data as { staffId: string }).staffId : null;
+      store(s.ctx('dev'), { productId: 'weed', amount: 2000, warehouseId: 'ehrenfeld', quality: 0.8 });
+      const added = s.dispatch({
+        type: 'logistics.addRoute',
+        payload: {
+          driverId,
+          fromId: 'ehrenfeld',
+          toId: 'werkstatt-ottensen',
+          items: [{ productId: 'weed', amount: 1500 }],
+          departure: 6 * 60,
+          roundTrip: true,
+          returnItems: [{ productId: 'hash', amount: 300 }],
+        },
+      });
+      if (added.ok) {
+        const routeId = (added.data as { routeId: number }).routeId;
+        s.dispatch({ type: 'logistics.runRouteNow', payload: { routeId } });
+      }
     },
   };
   // window.koeln setzt start.tsx erst nach dem Laden der Module; bis dahin wartet die Abkürzung hier.

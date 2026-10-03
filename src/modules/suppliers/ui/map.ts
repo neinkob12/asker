@@ -63,7 +63,7 @@ const shipFraction = (() => {
  * in Köln ist; der Fortschritt wird so umgerechnet, dass er die letzten CITY_APPROACH_SHARE der Zeit in Köln fährt.
  */
 function cityPath(supplier: Supplier, target: LngLat): { path: LngLat[]; split: number } {
-  const entry = roadEntryFrom(supplier);
+  const entry = roadEntryFrom(supplier, target);
   const city = roadRoute(entry, target).path;
   const outside = pathLength([supplier, entry]);
   const inside = pathLength(city);

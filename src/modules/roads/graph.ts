@@ -1,15 +1,18 @@
-// Straßengraph: dekodiert network.ts, findet die nächste Straße zu einem Punkt (Raster-Index) und sucht Routen
-// mit A*. Reine Rechnung ohne Zufall und ohne DOM, damit Simulation und Karte dieselben Routen bekommen.
-// Kosten = Fahrzeit (Länge geteilt durch das Tempo der Straßenart), Ergebnis = Weg und Länge in Metern.
+// Straßengraphen: dekodiert die Netze der Städte (network.ts, network-hamburg.ts), findet die nächste Straße zu einem
+// Punkt (Raster-Index) und sucht Routen mit A*. Reine Rechnung ohne Zufall und ohne DOM, damit Simulation und Karte
+// dieselben Routen bekommen. Kosten = Fahrzeit (Länge geteilt durch das Tempo der Straßenart), Ergebnis = Weg und
+// Länge in Metern. Jede Stadt hat ihr eigenes Netz (Auftrag 30); es wird erst beim ersten Gebrauch dekodiert.
 
 import type { LngLat } from '../../core';
-import { ROAD_CLASSES, ROAD_EDGES, ROAD_NODES } from './network';
+import * as koeln from './network';
+import * as hamburg from './network-hamburg';
 
-export type RoadClass = (typeof ROAD_CLASSES)[number];
+export type RoadClass = (typeof koeln.ROAD_CLASSES)[number];
+const ROAD_CLASSES: readonly RoadClass[] = koeln.ROAD_CLASSES;
 
 /** Tempo pro Straßenart in km/h (nur für die Routenwahl: große Straßen werden bevorzugt). */
 export const ROAD_SPEEDS: Record<RoadClass, number> = {
-  motorway: 90,
+  motorway: 110,
   trunk: 70,
   primary: 50,
   secondary: 45,
@@ -19,10 +22,60 @@ export const ROAD_SPEEDS: Record<RoadClass, number> = {
   living_street: 10,
 };
 
-// Lokale Projektion in Meter (für Köln genau genug, wie im Werkzeug).
-const LAT0 = 50.94;
+interface NetworkData {
+  /** Kennung der Stadt (wie im Modul city). */
+  id: string;
+  /** Ausschnitt [West, Süd, Ost, Nord]. */
+  box: readonly [number, number, number, number];
+  lat0: number;
+  nodes: string;
+  edges: string;
+}
+
+/** Die Netze der Städte. Eine neue Stadt: Netz mit tools/build-roads.py --city erzeugen und hier eintragen. */
+const NETWORKS: readonly NetworkData[] = [
+  { id: 'koeln', box: koeln.ROAD_BOX, lat0: koeln.ROAD_LAT0, nodes: koeln.ROAD_NODES, edges: koeln.ROAD_EDGES },
+  {
+    id: 'hamburg',
+    box: hamburg.ROAD_BOX,
+    lat0: hamburg.ROAD_LAT0,
+    nodes: hamburg.ROAD_NODES,
+    edges: hamburg.ROAD_EDGES,
+  },
+];
+
+/** Netz, in dessen Ausschnitt der Punkt liegt (null = außerhalb aller Städte). */
+export function networkAt(point: LngLat): string | null {
+  for (const net of NETWORKS) {
+    const [w, s, e, n] = net.box;
+    if (point.lng >= w && point.lng <= e && point.lat >= s && point.lat <= n) return net.id;
+  }
+  return null;
+}
+
+/** Netz mit dem nächsten Ausschnitt (für Punkte außerhalb aller Städte). */
+export function nearestNetwork(point: LngLat): string {
+  let best = NETWORKS[0].id;
+  let bestDist = Infinity;
+  for (const net of NETWORKS) {
+    const [w, s, e, n] = net.box;
+    const dx = Math.max(w - point.lng, 0, point.lng - e);
+    const dy = Math.max(s - point.lat, 0, point.lat - n);
+    const d = dx * dx + dy * dy;
+    if (d < bestDist) {
+      bestDist = d;
+      best = net.id;
+    }
+  }
+  return best;
+}
+
+/** Kennungen aller Netze. */
+export function networkIds(): string[] {
+  return NETWORKS.map((n) => n.id);
+}
+
 const M_LAT = 111_320;
-const M_LNG = 111_320 * Math.cos((LAT0 * Math.PI) / 180);
 /** Rastergröße des Index in Metern. */
 const CELL = 150;
 /** Weiter als so weit von einer Straße wird nicht gesucht (dann Luftlinie). */
@@ -49,6 +102,9 @@ export function decodeInts(text: string): number[] {
 }
 
 interface Graph {
+  id: string;
+  /** Meter pro Grad Länge in der lokalen Projektion dieses Netzes. */
+  mLng: number;
   nodeX: Float64Array;
   nodeY: Float64Array;
   edgeFrom: Int32Array;
@@ -72,18 +128,20 @@ interface Graph {
   grid: Map<number, number[]>;
 }
 
-let graph: Graph | null = null;
+const graphs = new Map<string, Graph>();
 
-const toX = (lng: number) => lng * M_LNG;
+const cellKey = (cx: number, cy: number) => cx * 100_000 + cy;
+const toX = (g: Graph, lng: number) => lng * g.mLng;
 const toY = (lat: number) => lat * M_LAT;
-const toLngLat = (x: number, y: number): LngLat => ({
-  lng: Math.round((x / M_LNG) * 1e6) / 1e6,
+const toLngLat = (g: Graph, x: number, y: number): LngLat => ({
+  lng: Math.round((x / g.mLng) * 1e6) / 1e6,
   lat: Math.round((y / M_LAT) * 1e6) / 1e6,
 });
-const cellKey = (cx: number, cy: number) => cx * 100_000 + cy;
 
-function build(): Graph {
-  const nodeInts = decodeInts(ROAD_NODES);
+function build(net: NetworkData): Graph {
+  const mLng = 111_320 * Math.cos((net.lat0 * Math.PI) / 180);
+  const toX = (lng: number) => lng * mLng;
+  const nodeInts = decodeInts(net.nodes);
   const n = nodeInts.length / 2;
   const nodeX = new Float64Array(n);
   const nodeY = new Float64Array(n);
@@ -96,7 +154,7 @@ function build(): Graph {
     nodeY[i] = toY(qy / 1e5);
   }
 
-  const ints = decodeInts(ROAD_EDGES);
+  const ints = decodeInts(net.edges);
   const from: number[] = [];
   const to: number[] = [];
   const oneway: number[] = [];
@@ -104,7 +162,7 @@ function build(): Graph {
   const shapeStart: number[] = [];
   const sx: number[] = [];
   const sy: number[] = [];
-  const nodeQ = (i: number) => [Math.round((nodeX[i] / M_LNG) * 1e5), Math.round((nodeY[i] / M_LAT) * 1e5)];
+  const nodeQ = (i: number) => [Math.round((nodeX[i] / mLng) * 1e5), Math.round((nodeY[i] / M_LAT) * 1e5)];
   let pos = 0;
   let a = 0;
   while (pos < ints.length) {
@@ -183,6 +241,8 @@ function build(): Graph {
   }
 
   return {
+    id: net.id,
+    mLng,
     nodeX,
     nodeY,
     edgeFrom: Int32Array.from(from),
@@ -202,14 +262,20 @@ function build(): Graph {
   };
 }
 
-function getGraph(): Graph {
-  graph ??= build();
-  return graph;
+function getGraph(networkId: string): Graph {
+  let g = graphs.get(networkId);
+  if (!g) {
+    const net = NETWORKS.find((n) => n.id === networkId) ?? NETWORKS[0];
+    g = graphs.get(net.id) ?? build(net);
+    graphs.set(net.id, g);
+    graphs.set(networkId, g);
+  }
+  return g;
 }
 
-/** Größe des Netzes (für Tests und die Doku). */
-export function networkSize(): { nodes: number; edges: number; meters: number } {
-  const g = getGraph();
+/** Größe eines Netzes (für Tests und die Doku). */
+export function networkSize(networkId = NETWORKS[0].id): { nodes: number; edges: number; meters: number } {
+  const g = getGraph(networkId);
   return { nodes: g.nodeX.length, edges: g.edgeFrom.length, meters: g.edgeLength.reduce((a, b) => a + b, 0) };
 }
 
@@ -224,9 +290,12 @@ export interface Snap {
 }
 
 /** Nächster Punkt auf dem Straßennetz, null wenn weiter als MAX_SNAP entfernt. */
-export function snapToRoad(point: LngLat): Snap | null {
-  const g = getGraph();
-  const px = toX(point.lng);
+export function snapToRoad(point: LngLat, networkId = networkAt(point) ?? nearestNetwork(point)): Snap | null {
+  return snapIn(getGraph(networkId), point);
+}
+
+function snapIn(g: Graph, point: LngLat): Snap | null {
+  const px = toX(g, point.lng);
   const py = toY(point.lat);
   const cx = Math.floor(px / CELL);
   const cy = Math.floor(py / CELL);
@@ -349,19 +418,22 @@ class Heap {
 }
 
 export interface GraphRoute {
-  /** Weg in Metern-Koordinaten, vom Startpunkt über die Straßen zum Ziel. */
-  points: [number, number][];
+  /** Weg vom Startpunkt über die Straßen zum Ziel. */
+  path: LngLat[];
   /** Länge auf der Straße (ohne die Wege zur Straße hin). */
   roadMeters: number;
   /** Gesamtlänge inklusive der Wege vom Punkt zur Straße und von der Straße zum Ziel. */
   meters: number;
 }
 
-/** Route zwischen zwei Punkten über das Straßennetz. null, wenn einer der Punkte zu weit weg von jeder Straße ist. */
-export function findRoute(fromPoint: LngLat, toPoint: LngLat): GraphRoute | null {
-  const g = getGraph();
-  const s = snapToRoad(fromPoint);
-  const t = snapToRoad(toPoint);
+/**
+ * Route zwischen zwei Punkten über das Straßennetz einer Stadt. null, wenn einer der Punkte zu weit weg von jeder
+ * Straße dieses Netzes ist.
+ */
+export function findRoute(fromPoint: LngLat, toPoint: LngLat, networkId: string): GraphRoute | null {
+  const g = getGraph(networkId);
+  const s = snapIn(g, fromPoint);
+  const t = snapIn(g, toPoint);
   if (!s || !t) return null;
   const n = g.nodeX.length;
   const target = n; // virtueller Zielknoten
@@ -422,7 +494,7 @@ export function findRoute(fromPoint: LngLat, toPoint: LngLat): GraphRoute | null
     const points: [number, number][] = [[s.x, s.y]];
     slice(g, se, s.offset, t.offset, points);
     points.push([t.x, t.y]);
-    return finish(points, fromPoint, toPoint);
+    return finish(g, points, fromPoint, toPoint);
   }
   let node = lastDir ? g.edgeFrom[lastEdge] : g.edgeTo[lastEdge];
   for (;;) {
@@ -446,39 +518,39 @@ export function findRoute(fromPoint: LngLat, toPoint: LngLat): GraphRoute | null
   }
   slice(g, te, lastDir ? 0 : g.edgeLength[te], t.offset, points);
   points.push([t.x, t.y]);
-  return finish(points, fromPoint, toPoint);
+  return finish(g, points, fromPoint, toPoint);
 }
 
-function finish(road: [number, number][], fromPoint: LngLat, toPoint: LngLat): GraphRoute {
+function finish(g: Graph, road: [number, number][], fromPoint: LngLat, toPoint: LngLat): GraphRoute {
   const points: [number, number][] = [];
   const add = (p: [number, number]) => {
     const last = points[points.length - 1];
     if (!last || Math.hypot(last[0] - p[0], last[1] - p[1]) > 0.5) points.push(p);
   };
-  add([toX(fromPoint.lng), toY(fromPoint.lat)]);
+  add([toX(g, fromPoint.lng), toY(fromPoint.lat)]);
   let roadMeters = 0;
   for (let i = 0; i < road.length; i++) {
     if (i > 0) roadMeters += Math.hypot(road[i][0] - road[i - 1][0], road[i][1] - road[i - 1][1]);
     add(road[i]);
   }
-  add([toX(toPoint.lng), toY(toPoint.lat)]);
+  add([toX(g, toPoint.lng), toY(toPoint.lat)]);
   let meters = 0;
   for (let i = 1; i < points.length; i++) {
     meters += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
   }
   if (points.length === 1) points.push(points[0]);
-  return { points, roadMeters, meters };
+  return { path: points.map(([x, y]) => toLngLat(g, x, y)), roadMeters, meters };
 }
 
-/** Meter-Koordinaten zurück in Grad. */
-export function pointsToLngLat(points: readonly [number, number][]): LngLat[] {
-  return points.map(([x, y]) => toLngLat(x, y));
+/** Punkt auf der Straße als Grad (zu snapToRoad). */
+export function snapToLngLat(snap: Snap, networkId: string): LngLat {
+  return toLngLat(getGraph(networkId), snap.x, snap.y);
 }
 
-/** Knoten an Autobahnen (Einfahrt für Lieferungen von außerhalb), der dem Punkt am nächsten liegt. */
-export function nearestMotorwayNode(point: LngLat): LngLat | null {
-  const g = getGraph();
-  const px = toX(point.lng);
+/** Knoten an Autobahnen eines Netzes (Einfahrt für Lieferungen von außerhalb), der dem Punkt am nächsten liegt. */
+export function nearestMotorwayNode(point: LngLat, networkId: string): LngLat | null {
+  const g = getGraph(networkId);
+  const px = toX(g, point.lng);
   const py = toY(point.lat);
   const motorway = ROAD_CLASSES.indexOf('motorway');
   let best = -1;
@@ -493,5 +565,5 @@ export function nearestMotorwayNode(point: LngLat): LngLat | null {
       }
     }
   }
-  return best >= 0 ? toLngLat(g.nodeX[best], g.nodeY[best]) : null;
+  return best >= 0 ? toLngLat(g, g.nodeX[best], g.nodeY[best]) : null;
 }

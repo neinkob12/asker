@@ -1,5 +1,7 @@
 // Typen der Konfrontationen. Reine Daten (JSON), damit sie im Spielstand liegen können.
 
+import type { MoneyCategory } from '../../core';
+
 export type EncounterOutcome = 'success' | 'failure' | 'retreat';
 
 /** briefing: Spieler entscheidet, ob er selbst hingeht. rounds: Runden laufen. done: vorbei. */
@@ -100,6 +102,8 @@ export interface EncounterRequest {
   effects?: Partial<Record<EncounterOutcome, EncounterEffects>>;
   /** true: Keine Folgen aus den Daten anwenden, der Aufrufer kümmert sich selbst (Verletzungen gelten trotzdem). */
   skipEffects?: boolean;
+  /** Kategorie für Geld, das dabei weggeht (Bestechung, Verstärkung …), z.B. 'loss.customs'. Standard nach Anlass. */
+  lossCategory?: MoneyCategory;
 }
 
 export type ParticipantCondition = 'ok' | 'injured' | 'down';

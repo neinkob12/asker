@@ -1,4 +1,4 @@
-import type { Product, QualityTier, Warehouse } from './index';
+import type { Product, ProductCategory, QualityTier, Warehouse } from './index';
 
 /**
  * Produkte mit Grundpreis (pro Einheit auf der Straße), Einheit und Zielgruppen (IDs der Kundentypen aus
@@ -78,6 +78,18 @@ export const PRODUCTS: readonly Product[] = [
 ];
 
 export const DEFAULT_PRODUCT = 'weed';
+
+/**
+ * Gewicht pro Einheit in Gramm nach Warenart (Auftrag 30: Ladung einer Fahrt zwischen den Städten, INTERCITY_CAPACITY
+ * in logistics): Gras und Hasch pro Gramm, ein Edible 5 g, ein Vape-Pen 20 g, Öl 1 g je ml.
+ */
+export const UNIT_WEIGHT_GRAMS: Readonly<Record<ProductCategory, number>> = {
+  flower: 1,
+  hash: 1,
+  edible: 5,
+  vape: 20,
+  oil: 1,
+};
 
 /**
  * Lager-Standorte. Das erste hast du von Anfang an, die anderen kaufst du mit sauberem Geld (Immobilien sind legal,

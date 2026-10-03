@@ -395,7 +395,7 @@ export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): Comman
       enterRounds(ctx, encounter);
       break;
     case 'backup': {
-      if (!wallet.pay(ctx, option.cost, 'dirty', 'Verstärkung', lossCategory(encounter.kind)))
+      if (!wallet.pay(ctx, option.cost, 'dirty', 'Verstärkung', lossCategory(encounter)))
         return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
       encounter.bribeSpent += option.cost;
       const ids = backupCandidates(ctx.state, encounter);
@@ -407,7 +407,7 @@ export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): Comman
       break;
     }
     case 'payoff': {
-      if (!wallet.pay(ctx, option.cost, 'dirty', 'Freikaufen', lossCategory(encounter.kind)))
+      if (!wallet.pay(ctx, option.cost, 'dirty', 'Freikaufen', lossCategory(encounter)))
         return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
       encounter.bribeSpent += option.cost;
       encounter.phase = 'rounds';
@@ -495,7 +495,7 @@ export function act(ctx: Ctx, encounterId: number, actionId: string): CommandRes
     return { ok: false, reason: 'Das geht gerade nicht.' };
   }
   if (action.costsBribe) {
-    if (!wallet.pay(ctx, encounter.bribeCost, 'dirty', 'Bestechung', lossCategory(encounter.kind))) {
+    if (!wallet.pay(ctx, encounter.bribeCost, 'dirty', 'Bestechung', lossCategory(encounter))) {
       return { ok: false, reason: `Nicht genug Schwarzgeld (${formatEuro(encounter.bribeCost)}).` };
     }
     encounter.bribeSpent += encounter.bribeCost;
@@ -660,8 +660,13 @@ function loseGoods(ctx: Ctx, amount: number): number {
   return lost;
 }
 
-/** Kategorie für Geld, das bei einer Konfrontation weggeht (Kasse): Überfall, Polizei oder sonst Konfrontation. */
-function lossCategory(kind: string): MoneyCategory {
+/**
+ * Kategorie für Geld, das bei einer Konfrontation weggeht (Kasse): wie in der Anfrage angegeben (z.B. Zoll), sonst
+ * Überfall, Polizei oder sonst Konfrontation.
+ */
+function lossCategory(encounter: Pick<Encounter, 'kind' | 'request'>): MoneyCategory {
+  if (encounter.request.lossCategory) return encounter.request.lossCategory;
+  const kind = encounter.kind;
   if (kind === 'raidDefense') return 'loss.theft';
   if (kind === 'policeChase' || kind === 'vehicleCheck') return 'loss.police';
   return 'loss.encounter';
@@ -676,7 +681,7 @@ const OUTCOME_VERDICT: Record<EncounterOutcome, string> = {
 function applyEffects(ctx: Ctx, encounter: Encounter, effects: EncounterEffects, result: EncounterResult): void {
   const stakes = encounter.request.stakes ?? {};
   const reason = getKind(encounter.kind)?.name ?? 'Konfrontation';
-  const loss = lossCategory(encounter.kind);
+  const loss = lossCategory(encounter);
 
   let money = 0;
   if (effects.money !== undefined) money += roll(ctx, effects.money);

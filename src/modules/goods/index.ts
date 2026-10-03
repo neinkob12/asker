@@ -38,6 +38,7 @@ import {
   START_QUALITY,
   START_STOCK,
   START_UNIT_COST,
+  UNIT_WEIGHT_GRAMS,
   WAREHOUSES,
 } from './config';
 
@@ -196,6 +197,12 @@ export function getProduct(id: string): Product | undefined {
 
 export function productName(id: string): string {
   return getProduct(id)?.name ?? id;
+}
+
+/** Gewicht einer Einheit in Gramm (für die Ladung einer Fahrt zwischen den Städten). */
+export function unitWeight(productId: string): number {
+  const product = getProduct(productId);
+  return product ? UNIT_WEIGHT_GRAMS[product.category] : 1;
 }
 
 /** Menge mit der Einheit des Produkts, z.B. "5 g" oder "2 Stück". */

@@ -76,3 +76,35 @@ export const PORTS: Readonly<Record<string, PortConfig>> = {
     quay: 'Schuppen 52 am O’Swaldkai',
   },
 };
+
+// --- Routen mit Fahrplan (Auftrag 30, Etappe 6) ---------------------------------------------------------------
+
+/** Ladung einer Fahrt auf einer Route in Gramm (Gewicht pro Einheit: UNIT_WEIGHT_GRAMS in goods). */
+export const INTERCITY_CAPACITY = 5000;
+/** Laden im Startlager (und vor der Rückfahrt im Ziellager). */
+export const ROUTE_LOAD_MINUTES = 20;
+/** So viele Routen kann man anlegen. */
+export const ROUTE_LIMIT = 12;
+
+/** Zoll auf der Autobahn: Chance pro Fahrt zwischen den Städten (× Heat-Faktor der Zielstadt × Vorsicht). */
+export const AUTOBAHN_CHECK_CHANCE = 0.15;
+/** So lange hält eine Zollkontrolle die Fahrt auf (zusätzlich zur Dauer der Konfrontation). */
+export const AUTOBAHN_CHECK_DELAY = 60;
+/** Auf der Autobahn landet der Fahrer eher in Haft: Faktor auf SEIZE_ARREST_CHANCE. */
+export const AUTOBAHN_ARREST_FACTOR = 1.4;
+/** Die Gegenseite bei der Zollkontrolle. */
+export const CUSTOMS_OPPONENT = { label: 'Der Zoll', strength: 62, count: 3 };
+
+/** Orte an der A1 für die Texte ("auf der A1 bei Münster"), von Köln nach Hamburg. */
+export const A1_PLACES: readonly { name: string; lng: number; lat: number }[] = [
+  { name: 'Leverkusen', lng: 7.0, lat: 51.06 },
+  { name: 'Wuppertal', lng: 7.2, lat: 51.27 },
+  { name: 'Schwerte', lng: 7.56, lat: 51.44 },
+  { name: 'Kamen', lng: 7.66, lat: 51.59 },
+  { name: 'Münster', lng: 7.63, lat: 51.92 },
+  { name: 'Osnabrück', lng: 8.05, lat: 52.28 },
+  { name: 'Vechta', lng: 8.29, lat: 52.73 },
+  { name: 'Bremen', lng: 8.8, lat: 53.05 },
+  { name: 'Sittensen', lng: 9.5, lat: 53.28 },
+  { name: 'Harburg', lng: 9.98, lat: 53.43 },
+];

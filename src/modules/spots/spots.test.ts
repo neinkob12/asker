@@ -12,7 +12,6 @@ import {
   getSpots,
   isSpotActive,
   lockedSpots,
-  spotCity,
   spotLabelPlacement,
   spotsInVeedel,
 } from './index';
@@ -158,12 +157,9 @@ describe('Spots in jedem Veedel (Auftrag 28)', () => {
     const sim = createTestGame();
     const spots = getAllSpots(sim.state);
     for (const spot of spots) {
-      // Das Hamburger Straßennetz kommt mit Etappe 6 (Auftrag 30).
-      if (spotCity(spot) === 'koeln') {
-        const road = nearestRoadPoint(spot);
-        expect(road, spot.id).not.toBeNull();
-        expect(road?.meters ?? Infinity, spot.id).toBeLessThan(200);
-      }
+      const road = nearestRoadPoint(spot);
+      expect(road, spot.id).not.toBeNull();
+      expect(road?.meters ?? Infinity, spot.id).toBeLessThan(200);
       for (const other of spots) {
         if (other.id === spot.id) continue;
         expect(distanceMeters(spot, other), `${spot.id} / ${other.id}`).toBeGreaterThanOrEqual(200);

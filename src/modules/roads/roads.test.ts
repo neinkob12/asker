@@ -1,13 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { distanceMeters, type LngLat } from '../../core';
 import { decodeInts } from './graph';
-import { nearestRoadPoint, networkStats, roadDistance, roadEntryFrom, roadRoute, travelMinutes } from './index';
+import {
+  autobahnBetween,
+  interCityMinutes,
+  interCityRoute,
+  nearestRoadPoint,
+  networkStats,
+  roadDistance,
+  roadEntryFrom,
+  roadNetworkAt,
+  roadRoute,
+  travelMinutes,
+} from './index';
 
 const EHRENFELD: LngLat = { lng: 6.918, lat: 50.948 };
 const NIEHLER_HAFEN: LngLat = { lng: 6.9712, lat: 50.9862 };
 const NEUMARKT: LngLat = { lng: 6.9476, lat: 50.9362 };
 const DEUTZ: LngLat = { lng: 6.975, lat: 50.936 };
 const KALK: LngLat = { lng: 7.003, lat: 50.938 };
+const KOELN_DOM: LngLat = { lng: 6.9583, lat: 50.9413 };
+const ST_PAULI: LngLat = { lng: 9.9637, lat: 53.5496 };
+const WILHELMSBURG: LngLat = { lng: 10.0067, lat: 53.4986 };
+const HAMBURG_RATHAUS: LngLat = { lng: 9.9937, lat: 53.5511 };
+/** Fahrer mit durchschnittlichem Tempo in der Stadt (logistics: 300 + 50 × 2 Meter pro Spielminute). */
+const DRIVER_SPEED = 400;
 
 /** Kleinster Abstand von p zur Linie a-b in Metern (Näherung, reicht für Köln). */
 function nearLine(p: LngLat, path: LngLat[]): number {
@@ -114,5 +131,62 @@ describe('Straßennetz', () => {
       );
     }
     expect((performance.now() - started) / 30).toBeLessThan(50);
+  });
+});
+
+describe('Mehrere Städte (Auftrag 30)', () => {
+  it('hat ein eigenes Netz für Hamburg und wählt es nach dem Ausschnitt', () => {
+    const stats = networkStats('hamburg');
+    expect(stats.nodes).toBeGreaterThan(5000);
+    expect(stats.km).toBeGreaterThan(1000);
+    expect(roadNetworkAt(ST_PAULI)).toBe('hamburg');
+    expect(roadNetworkAt(KALK)).toBe('koeln');
+    expect(roadNetworkAt({ lng: 8.68, lat: 50.11 })).toBeNull();
+    // Über die Elbbrücken nach Wilhelmsburg, auf Hamburger Straßen.
+    const route = roadRoute(ST_PAULI, WILHELMSBURG);
+    expect(route.onRoads).toBe(true);
+    expect(route.meters).toBeGreaterThan(distanceMeters(ST_PAULI, WILHELMSBURG));
+    expect(route.meters).toBeLessThan(distanceMeters(ST_PAULI, WILHELMSBURG) * 2);
+    for (const p of route.path.slice(1, -1)) expect(nearestRoadPoint(p)?.meters ?? 999).toBeLessThan(3);
+  });
+
+  it('Lieferungen von weit her kommen am Rand der Stadt an, in die sie gehen', () => {
+    const fromBerlin = roadEntryFrom({ lng: 13.4, lat: 52.52 }, ST_PAULI);
+    expect(roadNetworkAt(fromBerlin)).toBe('hamburg');
+    expect(fromBerlin.lng).toBeGreaterThan(ST_PAULI.lng);
+    expect(roadRoute(fromBerlin, ST_PAULI).onRoads).toBe(true);
+  });
+
+  it('Köln–Hamburg über die A1: etwa 400 bis 450 km, mit Fahrer 4 bis 5 Stunden', () => {
+    const route = interCityRoute(KOELN_DOM, HAMBURG_RATHAUS);
+    expect(route.onRoads).toBe(true);
+    expect(route.meters).toBeGreaterThan(400_000);
+    expect(route.meters).toBeLessThan(450_000);
+    expect(route.motorwayMeters).toBeGreaterThan(380_000);
+    expect(route.path[0]).toEqual(KOELN_DOM);
+    expect(route.path[route.path.length - 1]).toEqual(HAMBURG_RATHAUS);
+    // Die A1 führt an Münster und Bremen vorbei.
+    for (const place of [
+      { lng: 7.63, lat: 51.93 },
+      { lng: 8.8, lat: 53.07 },
+    ]) {
+      expect(Math.min(...route.path.map((p) => distanceMeters(p, place)))).toBeLessThan(15_000);
+    }
+    const minutes = interCityMinutes(KOELN_DOM, HAMBURG_RATHAUS, DRIVER_SPEED);
+    expect(minutes).toBeGreaterThanOrEqual(4 * 60);
+    expect(minutes).toBeLessThanOrEqual(5 * 60);
+    // roadRoute und travelMinutes erkennen von selbst, dass es zwischen zwei Städten geht.
+    expect(roadRoute(KOELN_DOM, HAMBURG_RATHAUS)).toBe(route);
+    expect(travelMinutes(KOELN_DOM, HAMBURG_RATHAUS, DRIVER_SPEED, 20)).toBe(minutes + 20);
+  });
+
+  it('fährt zurück auf der Gegenfahrbahn, gleich lang', () => {
+    const there = interCityRoute(KOELN_DOM, HAMBURG_RATHAUS);
+    const back = interCityRoute(HAMBURG_RATHAUS, KOELN_DOM);
+    expect(Math.abs(back.meters - there.meters)).toBeLessThan(there.meters * 0.05);
+    const line = autobahnBetween('hamburg', 'koeln');
+    expect(line?.path[0].lat).toBeGreaterThan(53.4);
+    expect(line?.path[line.path.length - 1].lat).toBeLessThan(51.1);
+    expect(autobahnBetween('koeln', 'berlin')).toBeNull();
   });
 });

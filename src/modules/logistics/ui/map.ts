@@ -1,6 +1,7 @@
-// Logistik auf der Karte: dein Liegeplatz im Niehler Hafen (Klick öffnet die Logistik-App) und die Fahrten als
-// 3D-Mini-Fahrzeuge über echte Straßen (roads): erst leer vom Lager zum Hafen, dann mit Ware zurück. Bei einer
-// Verkehrskontrolle steht das Fahrzeug mit Blaulicht.
+// Logistik auf der Karte: dein Liegeplatz im Hafen jeder Stadt (Klick öffnet die Hafen-Seite) und die Fahrten als
+// 3D-Mini-Fahrzeuge über echte Straßen (roads): erst leer vom Lager zum Hafen, dann mit Ware zurück. Routen zwischen
+// den Städten fahren über die A1 (Deutschland-Ansicht und in beiden Städten bis zur Auffahrt). Bei einer Kontrolle
+// steht das Fahrzeug mit Blaulicht.
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import type { GameState, LngLat } from '../../../core';
@@ -110,7 +111,7 @@ export const logisticsLayer: MapLayer = {
       const vehicle = createVehicle(map, {
         path: leg === 'approach' && paths.approach ? paths.approach : paths.delivery,
         kind: trip.driverId ? 'van' : 'car',
-        title: trip.kind === 'pickup' ? 'Abholung am Hafen' : 'Umlagern',
+        title: trip.kind === 'pickup' ? 'Abholung am Hafen' : trip.kind === 'route' ? 'Route' : 'Umlagern',
         progress: leg === 'approach' ? progress.t : progress.leg === 'delivering' ? progress.t : 0,
       });
       return { vehicle, leg, paths, light: null };

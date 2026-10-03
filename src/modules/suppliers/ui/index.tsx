@@ -18,6 +18,7 @@ import {
   registerAdvisor,
   registerPhoneApp,
   Select,
+  Slot,
   soundOnEvent,
   Tag,
   useGame,
@@ -177,8 +178,16 @@ function SupplierList(props: { onSelect: (id: string) => void }) {
           </List>
         </Group>
       )}
+      <Slot name="suppliers.list" props={{}} />
     </div>
   );
+}
+
+declare module '../../../ui' {
+  interface SlotRegistry {
+    /** Abschnitte unten in der Liste der Lieferanten-App (z.B. Hafen, Routen und Fahrer aus der Logistik). */
+    'suppliers.list': Record<string, never>;
+  }
 }
 
 /** Noch gesperrt: Bedingungen mit Stand, Freischalten, sobald alles erfüllt ist. */

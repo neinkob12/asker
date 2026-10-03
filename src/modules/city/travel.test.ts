@@ -102,7 +102,7 @@ describe('Ankommen in Hamburg (Auftrag 30)', () => {
     for (const text of WELCOME_TEXTS.hamburg) expect(fiete).toContain(text);
     // Zurück nach Köln und wieder hin: Fiete begrüßt nur einmal.
     expect(sim.dispatch({ type: 'city.travel', payload: { cityId: 'koeln' } }).ok).toBe(true);
-    sim.advance(minutes + 5);
+    sim.advance(travelMinutesBetween('hamburg', 'koeln') + 5);
     expect(activeCity(sim.state)).toBe('koeln');
     arriveInHamburg(sim);
     expect(eventsOfType(events, 'city.arrived').filter((e) => e.payload.first)).toHaveLength(1);

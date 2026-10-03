@@ -46,6 +46,7 @@ import {
   getLogisticsLog,
   getTrips,
   hasBerth,
+  isInterCityTrip,
   isPlayerOnTheRoad,
   PORTS,
   placeOf,
@@ -56,13 +57,15 @@ import {
   tripProgress,
 } from '../index';
 import './island';
+import { LogisticsLinks } from './routes';
 import './tracking';
 import { logisticsLayer } from './map';
 import './logistics.css';
 
 /** Was die Fahrt gerade tut (beim Umlagern wird im Lager geladen, nicht am Kai). */
-function legText(trip: Trip, leg: TripLeg): string {
-  if (leg === 'stopped') return 'Verkehrskontrolle';
+function legText(trip: Trip, leg: TripLeg, interCity = false): string {
+  if (leg === 'stopped') return interCity ? 'Zollkontrolle' : 'Verkehrskontrolle';
+  if (trip.kind === 'route' && leg === 'delivering') return interCity ? 'auf der A1' : 'Route';
   if (leg === 'toPickup') return 'fährt zum Hafen';
   if (leg === 'loading') return trip.kind === 'pickup' ? 'lädt am Kai' : 'lädt ein';
   return 'bringt die Ware';
@@ -101,7 +104,7 @@ function TripRow(props: { trip: Trip }) {
         icon={stopped ? 'siren' : trip.driverId ? 'truck' : 'car'}
         color={stopped ? 'danger' : 'goods'}
         title={trip.kind === 'pickup' ? `Hafen → ${to}` : `${from} → ${to}`}
-        meta={legText(trip, progress.leg)}
+        meta={legText(trip, progress.leg, isInterCityTrip(state, trip))}
         tags={[
           { label: who(state, trip.driverId), icon: 'user', color: 'people' },
           { label: `${tripAmount(trip)} Einheiten`, icon: 'package', color: 'goods' },
@@ -350,6 +353,7 @@ function WarehouseLogistics(props: { warehouseId: string }) {
               }
             />
           </ListItem>
+          <LogisticsLinks />
         </List>
       </Group>
       {trips.length > 0 && <TripsGroup trips={trips} />}
@@ -460,7 +464,6 @@ function TripsGroup(props: { trips: readonly Trip[] }) {
 /** Hafen-Seite (Panel): Kennzahlen, Kai, Fahrten unterwegs, was zuletzt lief. */
 function PortPanel() {
   const { state } = useGame();
-  const ui = useUi();
   const trips = getTrips(state);
   const log = getLogisticsLog(state).slice(0, 4);
   const drivers = getStaff(state, { role: 'driver' }).length;
@@ -470,21 +473,13 @@ function PortPanel() {
       <PortSection />
       {trips.length > 0 && <TripsGroup trips={trips} />}
       <Group
-        icon="users"
-        color="people"
-        title="Fahrer"
-        count={drivers}
+        icon="route"
+        color="goods"
+        title="Fahrer und Routen"
         note={drivers === 0 ? 'Ohne Fahrer musst du jede Abholung selbst machen.' : undefined}
       >
         <List>
-          <ListItem onClick={() => ui.selectTab('staff')}>
-            <ItemContent
-              icon="truck"
-              color="goods"
-              title={drivers === 0 ? 'Fahrer anheuern' : `${freeDrivers(state).length} von ${drivers} frei`}
-              meta="Im Personal"
-            />
-          </ListItem>
+          <LogisticsLinks />
         </List>
       </Group>
       {log.length > 0 && (
@@ -506,7 +501,7 @@ function PortPanel() {
                 <ItemContent
                   icon={entry.result === 'done' ? 'checkCircle' : 'xCircle'}
                   color={entry.result === 'done' ? 'money' : 'danger'}
-                  title={`${who(state, entry.driverId)} → ${getWarehouse(state, entry.toId)?.name ?? 'Lager'}`}
+                  title={`${who(state, entry.driverId)} → ${placeOf(state, entry.toId)?.name ?? 'Lager'}`}
                   meta={clock.formatTime(entry.at)}
                 />
               </ListItem>
@@ -526,6 +521,32 @@ declare module '../../../ui' {
 }
 
 registerPanel({ id: 'logistics.port', title: () => 'Hafen', component: PortPanel });
+
+/** In der Lieferanten-App (Dock): Hafen, Routen und Fahrer, damit die Logistik schnell erreichbar ist. */
+function SupplierLogistics() {
+  const { state } = useGame();
+  const ui = useUi();
+  const cityId = activeCity(state);
+  const cargo = getCargo(state).length;
+  return (
+    <Group icon="truck" color="goods" title="Logistik">
+      <List>
+        {PORTS[cityId] && (
+          <ListItem onClick={() => ui.openPanel('logistics.port', {})}>
+            <ItemContent
+              icon="anchor"
+              color="goods"
+              title={portName(cityId)}
+              meta={hasBerth(state) ? (cargo > 0 ? `${cargo} am Kai` : 'Liegeplatz') : 'Noch kein Liegeplatz'}
+            />
+          </ListItem>
+        )}
+        <LogisticsLinks />
+      </List>
+    </Group>
+  );
+}
+registerSlot('suppliers.list', { id: 'logistics.links', order: 10, component: SupplierLogistics });
 registerSlot('goods.warehouse', { id: 'logistics.warehouse', order: 20, component: WarehouseLogistics });
 registerMapLayer(logisticsLayer);
 
@@ -586,11 +607,16 @@ onGameEvent('cargo.seized', 'logistics.customsToast', (payload, ui) => {
   ui.toast(`Zoll im Hafen: ${formatProductAmount(payload.productId, payload.amount)} beschlagnahmt!`, 'bad');
 });
 onGameEvent('transport.arrived', 'logistics.arrivedToast', (payload, ui, state) => {
-  ui.toast(
-    `Fahrt angekommen: ${payload.amount} Einheiten im ${getWarehouse(state, payload.toId)?.name ?? 'Lager'}.`,
-    'good',
-    { urgent: true },
-  );
+  if (payload.amount === 0) return;
+  const place = getWarehouse(state, payload.toId)?.name ?? 'Lager';
+  // Routen in derselben Stadt sind Routine (still im Verlauf); eine Ankunft über die A1 ist ein Banner wert.
+  const routine = payload.kind === 'route' && !payload.interCity;
+  ui.toast(`Fahrt angekommen: ${payload.amount} Einheiten im ${place}.`, 'good', { urgent: !routine });
+});
+onGameEvent('transport.stopped', 'logistics.customsStopToast', (payload, ui, state) => {
+  const trip = getTrips(state).find((t) => t.id === payload.tripId);
+  if (trip && isInterCityTrip(state, trip))
+    ui.toast(`Zoll auf der A1: ${who(state, trip.driverId)} wird kontrolliert!`, 'bad');
 });
 onGameEvent('transport.seized', 'logistics.seizedToast', (payload, ui) => {
   ui.toast(`Ladung aufgeflogen${payload.arrested ? ', Fahrer festgenommen' : ''}!`, 'bad');

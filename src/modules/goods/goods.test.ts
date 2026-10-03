@@ -175,8 +175,7 @@ describe('goods', () => {
   it('alle Lager-Standorte liegen in einem Veedel und auf der Karte nah an einer Straße', () => {
     for (const site of warehouseSites()) {
       expect(veedelAt(site.lng, site.lat)?.cityId, site.id).toBe(site.cityId);
-      // Das Hamburger Straßennetz kommt mit Etappe 6 (Auftrag 30).
-      if (site.cityId === 'koeln') expect(nearestRoadPoint(site)?.meters ?? 999, site.id).toBeLessThan(150);
+      expect(nearestRoadPoint(site)?.meters ?? 999, site.id).toBeLessThan(150);
     }
     expect(warehouseSites('hamburg')).toHaveLength(5);
     expect(warehouseSites('hamburg').every((w) => w.cost > 0)).toBe(true);

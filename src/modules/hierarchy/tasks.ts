@@ -13,7 +13,7 @@ import { getOrders, type Order } from '../customers';
 import { wageRunway } from '../finance';
 import { DEFAULT_WAREHOUSE, getStock, getWarehouses, isWarehouseOwned, productName, warehouseCity } from '../goods';
 import { amountInProgress, launderingCapacity, MIN_LAUNDERING_AMOUNT } from '../laundering';
-import { freeDrivers, getCargo, harborQuestions } from '../logistics';
+import { freeDrivers, getCargo, harborQuestions, portName } from '../logistics';
 import { getSpots } from '../spots';
 import {
   activeRunnerAt,
@@ -200,7 +200,7 @@ function handlePickup(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
   }
   rh.done.pickups += 1;
   addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
-  log(ctx, rh, 'Fahrer zum Niehler Hafen geschickt, die Ware kommt ins Lager.');
+  log(ctx, rh, `Fahrer zum ${portName(first.cityId)} geschickt, die Ware kommt ins Lager.`);
 }
 
 // --- Nachbestellen (jeder Tick), stündlich: Personal, Geldwäsche ---
