@@ -47,6 +47,11 @@ export function addHtmlMarker(map: MapLibreMap, options: HtmlMarkerOptions): { m
   return { marker, element };
 }
 
+/** Text eines Elements setzen, aber nur, wenn er sich ändert (textContent ersetzt sonst jedes Mal den Knoten). */
+export function setText(node: HTMLElement, text: string): void {
+  if (node.textContent !== text) node.textContent = text;
+}
+
 /** Kleines DOM-Element mit Klasse und Text. */
 export function el(tag: string, className: string, text = ''): HTMLElement {
   const node = document.createElement(tag);

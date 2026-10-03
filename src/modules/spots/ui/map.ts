@@ -11,13 +11,13 @@
 
 import type { Marker } from 'maplibre-gl';
 import { formatEuro, type GameState } from '../../../core';
-import { addHtmlMarker, createHotspots, el, type Hotspot, type MapLayer } from '../../../map';
+import { addHtmlMarker, createHotspots, el, type Hotspot, type MapLayer, setText } from '../../../map';
 import { iconElement } from '../../../ui';
-import { CUSTOMER_PATIENCE, playerSpot, spotDemand, waitingAt } from '../../customers';
+import { allWaiting, CUSTOMER_PATIENCE, type Customer, playerSpot, spotDemand, waitingAt } from '../../customers';
 import { activeEncounters } from '../../encounters';
 import { DEFAULT_PRODUCT } from '../../goods';
 import { getSpotPrice } from '../../market';
-import { runnerAt } from '../../staff';
+import { getStaff, type StaffMember } from '../../staff';
 import { veedelName } from '../../veedel';
 import { getAllSpots, isSpotActive, type Spot, spotLabelPlacement } from '../index';
 
@@ -61,20 +61,39 @@ function saleGlow(spotId: string, now: number): number {
   return glow;
 }
 
+/** Wartende Kunden aller Spots in einem Durchlauf, je Spot dringendste zuerst (statt waitingAt pro Spot). */
+export function waitingBySpot(state: GameState): Map<string, Customer[]> {
+  const bySpot = new Map<string, Customer[]>();
+  for (const c of allWaiting(state)) {
+    const list = bySpot.get(c.spotId);
+    if (list) list.push(c);
+    else bySpot.set(c.spotId, [c]);
+  }
+  for (const list of bySpot.values()) list.sort((a, b) => a.expiresAt - b.expiresAt);
+  return bySpot;
+}
+
 /** Wie viel an einem Spot los ist (0 = nichts, 1 = viel, bis 1,5). Offene Spots glimmen immer etwas. */
-export function spotActivity(state: GameState, spotId: string): number {
+export function spotActivity(
+  state: GameState,
+  spotId: string,
+  waitingList: readonly Customer[] = waitingAt(state, spotId),
+): number {
   if (!isSpotActive(state, spotId)) return 0;
   const demand = spotDemand(state, spotId);
-  const waiting = waitingAt(state, spotId).length;
+  const waiting = waitingList.length;
   return Math.min(1.5, 0.3 + demand * 0.15 + waiting * 0.16 + saleGlow(spotId, state.time) * 0.25);
 }
 
 /** Zustand des Schilds: Razzia/Überfall vor allem anderen, dann dringend (Kunden gehen bald), wartend, ruhig. */
-export function spotLook(state: GameState, spotId: string): SpotLook {
+export function spotLook(
+  state: GameState,
+  spotId: string,
+  waiting: readonly Customer[] = waitingAt(state, spotId),
+): SpotLook {
   const raidAt = recentRaids.get(spotId);
   if (raidAt !== undefined && state.time - raidAt >= 0 && state.time - raidAt < RAID_SHOW_MINUTES) return 'raid';
   if (activeEncounters(state).some((e) => e.request.spotId === spotId && e.phase !== 'done')) return 'raid';
-  const waiting = waitingAt(state, spotId);
   if (waiting.length === 0) return 'idle';
   const minLeft = waiting.reduce((m, c) => Math.min(m, c.expiresAt - state.time), Infinity);
   return minLeft < CUSTOMER_PATIENCE / 3 ? 'urgent' : 'waiting';
@@ -87,10 +106,32 @@ const LOOK_TEXT: Record<SpotLook, string> = {
   raid: 'Razzia oder Überfall',
 };
 
+/**
+ * Läufer je Spot in einem Durchlauf (wie runnerAt aus staff: zuerst wer dort aktiv eingesetzt ist, sonst wer dorthin
+ * zurückkehrt), statt für jeden Spot über alle Leute zu laufen.
+ */
+function runnersBySpot(state: GameState): Map<string, StaffMember> {
+  const working = new Map<string, StaffMember>();
+  const returning = new Map<string, StaffMember>();
+  for (const m of getStaff(state, { role: 'runner' })) {
+    if (m.assignment?.kind === 'spot' && m.status === 'active') {
+      if (!working.has(m.assignment.targetId)) working.set(m.assignment.targetId, m);
+    } else if (m.returnTo?.kind === 'spot' && !returning.has(m.returnTo.targetId)) {
+      returning.set(m.returnTo.targetId, m);
+    }
+  }
+  for (const [spotId, m] of returning) if (!working.has(spotId)) working.set(spotId, m);
+  return working;
+}
+
 /** Wer am Spot verkauft: Läufer (Vorname), du, oder niemand. */
-function seller(state: GameState, spotId: string): { kind: 'runner' | 'self' | 'free'; name: string } {
+function seller(
+  state: GameState,
+  spotId: string,
+  runners: Map<string, StaffMember> = runnersBySpot(state),
+): { kind: 'runner' | 'self' | 'free'; name: string } {
   if (playerSpot(state) === spotId) return { kind: 'self', name: 'du' };
-  const runner = runnerAt(state, spotId);
+  const runner = runners.get(spotId);
   if (runner && runner.status === 'active') return { kind: 'runner', name: runner.name.split(' ')[0] };
   return { kind: 'free', name: 'frei' };
 }
@@ -146,10 +187,14 @@ export const spotsLayer: MapLayer = {
       hoverCard.element.hidden = false;
     };
 
-    const drawHotspots = (state: GameState) => {
+    let lastTime = -1;
+    const drawHotspots = (state: GameState, waiting: Map<string, Customer[]>) => {
+      // Nachfrage und Verkäufe ändern sich nur mit der Spielzeit.
+      if (state.time === lastTime) return;
+      lastTime = state.time;
       const list: Hotspot[] = getAllSpots(state).map((spot) => ({
         position: spot,
-        intensity: Math.round(spotActivity(state, spot.id) * HOTSPOT_SCALE * 20) / 20,
+        intensity: Math.round(spotActivity(state, spot.id, waiting.get(spot.id) ?? []) * HOTSPOT_SCALE * 20) / 20,
       }));
       const key = list.map((h) => h.intensity).join(',');
       if (key === lastHotspots) return;
@@ -221,15 +266,19 @@ export const spotsLayer: MapLayer = {
     return {
       update(state, ui) {
         ensureMarkers();
-        drawHotspots(state);
+        // Einmal pro Aktualisierung gruppieren statt pro Spot über alle Kunden zu laufen.
+        const waitingMap = waitingBySpot(state);
+        const runners = runnersBySpot(state);
+        drawHotspots(state, waitingMap);
         const selected = ui.panel?.id === 'spots.spot' ? (ui.panel.props as { spotId: string }).spotId : null;
         for (const spot of getAllSpots(state)) {
           const entry = markers.get(spot.id);
           if (!entry) continue;
           const active = isSpotActive(state, spot.id);
-          const look = active ? spotLook(state, spot.id) : 'idle';
-          const waiting = active ? waitingAt(state, spot.id).length : 0;
-          const who = active ? seller(state, spot.id) : { kind: 'free', name: '' };
+          const queue = waitingMap.get(spot.id) ?? [];
+          const look = active ? spotLook(state, spot.id, queue) : 'idle';
+          const waiting = active ? queue.length : 0;
+          const who = active ? seller(state, spot.id, runners) : { kind: 'free', name: '' };
           const key = `${active}|${look}|${waiting}|${who.kind}|${who.name}|${spot.custom ? 1 : 0}|${spot.id === selected}`;
           if (key === entry.key) continue;
           entry.key = key;
@@ -289,17 +338,17 @@ function buildHoverCard(): HoverCard {
 
 function fillHoverCard(card: HoverCard, state: GameState, spot: Spot): void {
   const active = isSpotActive(state, spot.id);
-  card.title.textContent = spot.name;
-  card.sub.textContent = `${veedelName(spot.veedelId)} · ${active ? LOOK_TEXT[spotLook(state, spot.id)] : 'gesperrt'}`;
+  setText(card.title, spot.name);
+  setText(card.sub, `${veedelName(spot.veedelId)} · ${active ? LOOK_TEXT[spotLook(state, spot.id)] : 'gesperrt'}`);
   if (!active) {
-    card.waiting.textContent = '–';
-    card.seller.textContent = '–';
-    card.price.textContent = '–';
+    setText(card.waiting, '–');
+    setText(card.seller, '–');
+    setText(card.price, '–');
     return;
   }
   const waiting = waitingAt(state, spot.id).length;
   const who = seller(state, spot.id);
-  card.waiting.textContent = waiting === 1 ? '1 Kunde' : `${waiting} Kunden`;
-  card.seller.textContent = who.kind === 'runner' ? who.name : who.kind === 'self' ? 'dir selbst' : 'niemandem';
-  card.price.textContent = `${formatEuro(getSpotPrice(state, spot.id, DEFAULT_PRODUCT))} / g`;
+  setText(card.waiting, waiting === 1 ? '1 Kunde' : `${waiting} Kunden`);
+  setText(card.seller, who.kind === 'runner' ? who.name : who.kind === 'self' ? 'dir selbst' : 'niemandem');
+  setText(card.price, `${formatEuro(getSpotPrice(state, spot.id, DEFAULT_PRODUCT))} / g`);
 }

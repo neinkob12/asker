@@ -4,6 +4,7 @@
 
 import type { GeoJSONSource, Map as MapLibreMap } from 'maplibre-gl';
 import type { LngLat } from '../core';
+import { motion, onMapFrame, onMotionChange } from './animation';
 
 export interface Hotspot {
   position: LngLat;
@@ -24,10 +25,12 @@ export interface HotspotsOptions {
 }
 
 const PULSE_MS = 2600;
-/** Der Puls zeichnet die Karte neu; langsam und weich reicht eine niedrige Rate (spart Akku). */
-const FPS = 15;
-
-const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+/**
+ * Der Puls zeichnet die Karte neu (setPaintProperty); langsam und weich reicht eine niedrige Rate (spart Akku). Nur die
+ * Stärke pulsiert, der Radius bleibt: Seine Zoom-Kurve neu zu setzen kostet mehr. Bei Pause, verstecktem Tab und
+ * "Bewegung reduzieren" steht der Puls.
+ */
+const FPS = 6;
 
 let night = 0;
 const handles = new Set<{ applyNight(): void }>();
@@ -39,8 +42,8 @@ export function setHotspotNight(value: number): void {
   for (const h of handles) h.applyNight();
 }
 
-function radius(size: number, pulse: number) {
-  const k = size * pulse;
+function radius(size: number) {
+  const k = size;
   return ['interpolate', ['exponential', 1.6], ['zoom'], 9, 14 * k, 12, 40 * k, 14, 90 * k, 16, 240 * k, 18, 700 * k];
 }
 
@@ -55,7 +58,7 @@ export function createHotspots(map: MapLibreMap, id: string, options: HotspotsOp
       source: id,
       paint: {
         'heatmap-weight': ['get', 'weight'],
-        'heatmap-radius': radius(size, 1) as never,
+        'heatmap-radius': radius(size) as never,
         'heatmap-intensity': 1.2,
         'heatmap-opacity': 0.5,
         // Durchsichtig → gedämpftes Bernstein → warmes Orange (wie Straßenlicht).
@@ -80,25 +83,32 @@ export function createHotspots(map: MapLibreMap, id: string, options: HotspotsOp
   );
 
   let count = 0;
-  let frame = 0;
   let last = 0;
+  let stopFrames: (() => void) | null = null;
   const start = performance.now();
-  const animate = (now: number) => {
-    frame = 0;
-    if (count === 0 || !map.getLayer(id)) return;
-    if (now - last >= 1000 / FPS) {
-      last = now;
-      const wave = (Math.sin(((now - start) / PULSE_MS) * 2 * Math.PI) + 1) / 2;
-      map.setPaintProperty(id, 'heatmap-radius', radius(size, 0.9 + wave * 0.2) as never);
-      map.setPaintProperty(id, 'heatmap-intensity', 1.05 + wave * 0.3 + night * 0.2);
-    }
-    frame = requestAnimationFrame(animate);
+  const steady = () => map.getLayer(id) && map.setPaintProperty(id, 'heatmap-intensity', 1.2 + night * 0.2);
+  const pulse = (now: number) => {
+    if (now - last < 1000 / FPS || !map.getLayer(id)) return;
+    last = now;
+    const wave = (Math.sin(((now - start) / PULSE_MS) * 2 * Math.PI) + 1) / 2;
+    map.setPaintProperty(id, 'heatmap-intensity', Math.round((1.05 + wave * 0.3 + night * 0.2) * 100) / 100);
   };
+  /** Puls an, solange es Hotspots gibt und Bewegung erlaubt ist. */
+  const sync = () => {
+    const animate = count > 0 && !motion.reduced;
+    if (animate && !stopFrames) stopFrames = onMapFrame(pulse, 'hotspots');
+    if (!animate && stopFrames) {
+      stopFrames();
+      stopFrames = null;
+      steady();
+    }
+  };
+  const offMotion = onMotionChange(sync);
   const entry = {
     applyNight() {
       if (!map.getLayer(id)) return;
       map.setPaintProperty(id, 'heatmap-opacity', 0.45 + night * 0.25);
-      if (reducedMotion()) map.setPaintProperty(id, 'heatmap-intensity', 1.2 + night * 0.2);
+      if (!stopFrames) steady();
     },
   };
   handles.add(entry);
@@ -115,10 +125,12 @@ export function createHotspots(map: MapLibreMap, id: string, options: HotspotsOp
         }));
       count = features.length;
       (map.getSource(id) as GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features });
-      if (count > 0 && !frame && !reducedMotion()) frame = requestAnimationFrame(animate);
+      sync();
     },
     remove() {
-      cancelAnimationFrame(frame);
+      stopFrames?.();
+      stopFrames = null;
+      offMotion();
       handles.delete(entry);
       if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(id)) map.removeSource(id);

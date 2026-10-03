@@ -1,14 +1,24 @@
 // 3D-Mini-Fahrzeuge: kleine Klötze mit Kabine (fill-extrusion), die entlang einer Linie fahren und sich in
-// Fahrtrichtung drehen. Alle Fahrzeuge einer Karte teilen sich eine GeoJSON-Quelle; ihr Grundriss wird bei
-// jeder Bewegung neu berechnet. Damit man sie auf jeder Zoomstufe sieht, wachsen sie beim Herauszoomen mit
+// Fahrtrichtung drehen (über ein Stück der Strecke gemittelt, damit sie an Ecken weich abbiegen). Alle Fahrzeuge einer
+// Karte teilen sich eine GeoJSON-Quelle; ihr Grundriss wird höchstens 20-mal pro Sekunde neu berechnet und nur, wenn
+// sich eines sichtbar bewegt hat. Damit man sie auf jeder Zoomstufe sieht, wachsen sie beim Herauszoomen mit
 // (feste Größe in Pixeln, nie kleiner als in echt). Nachts werfen sie Scheinwerferlicht auf die Straße.
+// Viele Fahrzeuge als Kulisse (Verkehr) zeichnet createFleet (fleet.ts) in einer eigenen WebGL-Ebene.
 // Reine Optik: Die Position kommt von außen (setProgress, z.B. aus dem Lieferfortschritt der Simulation) und
 // wird weich nachgezogen, damit das Fahrzeug fährt statt zu springen.
 
 import type { GeoJSONSource, MapLayerMouseEvent, Map as MapLibreMap, Marker } from 'maplibre-gl';
 import type { LngLat } from '../core';
-import { metersPerPixel, offsetMeters, pointAlong } from './geometry';
+import {
+  type MeasuredPath,
+  measurePath,
+  metersPerPixel,
+  offsetMeters,
+  pointAtDistance,
+  smoothBearing,
+} from './geometry';
 import { addHtmlMarker, el } from './markers';
+import { mapPerf } from './perf';
 
 export type VehicleKind = 'car' | 'van' | 'truck' | 'police' | 'courier' | 'ship';
 
@@ -142,19 +152,25 @@ const LIGHTS_LAYER = 'kt-vehicle-lights';
 /** Zeitkonstante fürs Nachziehen der Position in ms. */
 const FOLLOW_MS = 280;
 /** Höchstens so oft pro Sekunde neue Geometrie an die Karte. */
-const MAX_FPS = 40;
+const MAX_FPS = 20;
+/** Neu zeichnen erst, wenn sich ein Fahrzeug um mindestens so viele Pixel bewegt hat. */
+const MIN_MOVE_PX = 0.35;
+/** Unter dieser Dunkelheit gibt es kein Scheinwerferlicht (dann bleibt die Licht-Quelle leer). */
+const LIGHTS_FROM_NIGHT = 0.05;
 
 interface Vehicle {
   id: number;
-  path: LngLat[];
+  path: MeasuredPath;
   kind: VehicleKind;
   color: string | null;
   title: string;
   onClick?: () => void;
   target: number;
   shown: number;
+  /** Fortschritt beim letzten Zeichnen (für "hat sich sichtbar bewegt?"). */
+  drawn: number;
   visible: boolean;
-  label: { marker: Marker; element: HTMLElement; text: HTMLElement } | null;
+  label: { marker: Marker; element: HTMLElement; text: HTMLElement; value: string } | null;
 }
 
 type Feature = {
@@ -172,6 +188,7 @@ class Fleet {
   private lastDraw = 0;
   private dirty = false;
   private night = 0;
+  private lightsShown = false;
   private hover: { marker: Marker; element: HTMLElement; text: HTMLElement } | null = null;
 
   constructor(private readonly map: MapLibreMap) {
@@ -236,13 +253,14 @@ class Fleet {
     const start = Math.min(1, Math.max(0, options.progress ?? 0));
     const vehicle: Vehicle = {
       id: this.nextId++,
-      path: options.path,
+      path: measurePath(options.path),
       kind: options.kind ?? 'van',
       color: options.color ?? null,
       title: options.title ?? '',
       onClick: options.onClick,
       target: start,
       shown: start,
+      drawn: -1,
       visible: true,
       label: null,
     };
@@ -264,26 +282,30 @@ class Fleet {
       vehicle.label = null;
       return;
     }
+    if (vehicle.label?.value === text) return;
     if (!vehicle.label) {
       const textEl = el('span', 'map-fx-vehicle__label', text);
       const { marker, element } = addHtmlMarker(this.map, {
-        position: pointAlong(vehicle.path, vehicle.shown).position,
+        position: pointAtDistance(vehicle.path, vehicle.shown * vehicle.path.length),
         className: 'map-fx-vehicle-tag',
         anchor: 'bottom',
         children: [textEl],
       });
       // Über dem Fahrzeug, das auf dem Bildschirm etwa KINDS[kind].pixels lang ist.
       marker.setOffset([0, -Math.round(KINDS[vehicle.kind].pixels * 0.55 + 6)]);
-      vehicle.label = { marker, element, text: textEl };
+      vehicle.label = { marker, element, text: textEl, value: text };
     }
+    vehicle.label.value = text;
     vehicle.label.text.textContent = text;
     vehicle.label.element.hidden = !vehicle.visible;
   }
 
   setNight(night: number): void {
     if (Math.abs(night - this.night) < 0.02) return;
+    const lightsBefore = this.night >= LIGHTS_FROM_NIGHT;
     this.night = night;
     if (this.map.getLayer(LIGHTS_LAYER)) this.map.setPaintProperty(LIGHTS_LAYER, 'circle-opacity', night * 0.85);
+    if (lightsBefore !== night >= LIGHTS_FROM_NIGHT) this.schedule(true);
   }
 
   /** Neu zeichnen lassen; force = auch ohne Bewegung (Zoom, Farbe, neue Fahrzeuge). */
@@ -295,6 +317,7 @@ class Fleet {
 
   private tick(now: number): void {
     this.frame = 0;
+    const t0 = mapPerf.begin();
     const dt = this.lastFrame ? Math.min(100, now - this.lastFrame) : 16;
     this.lastFrame = now;
     let moving = false;
@@ -308,15 +331,25 @@ class Fleet {
       v.shown += diff * follow;
       moving = true;
     }
-    if ((moving || this.dirty) && now - this.lastDraw >= 1000 / MAX_FPS) {
+    const due = now - this.lastDraw >= 1000 / MAX_FPS;
+    if (due && (this.dirty || (moving && this.movedVisibly()))) {
       this.draw();
       this.lastDraw = now;
       this.dirty = false;
-    } else if (moving) {
-      this.dirty = true;
     }
     if (moving || this.dirty) this.schedule();
     else this.lastFrame = 0;
+    mapPerf.end('frame', 'vehicles', t0);
+  }
+
+  /** Hat sich seit dem letzten Zeichnen ein Fahrzeug um mehr als MIN_MOVE_PX bewegt? */
+  private movedVisibly(): boolean {
+    const mpp = metersPerPixel(this.map.getCenter().lat, this.map.getZoom());
+    for (const v of this.vehicles.values()) {
+      if (!v.visible) continue;
+      if (v.drawn < 0 || (Math.abs(v.shown - v.drawn) * v.path.length) / mpp >= MIN_MOVE_PX) return true;
+    }
+    return false;
   }
 
   private draw(): void {
@@ -329,15 +362,20 @@ class Fleet {
     const lights = this.map.getSource(LIGHTS_SOURCE) as GeoJSONSource | undefined;
     if (!source || !lights) return;
     const zoom = this.map.getZoom();
+    const withLights = this.night >= LIGHTS_FROM_NIGHT;
     const features: Feature[] = [];
     const lightFeatures: Feature[] = [];
     for (const v of this.vehicles.values()) {
+      v.drawn = v.shown;
       if (!v.visible) continue;
-      const { position, bearing } = pointAlong(v.path, v.shown);
-      v.label?.marker.setLngLat([position.lng, position.lat]);
+      const along = v.shown * v.path.length;
+      const position = pointAtDistance(v.path, along);
       const spec = KINDS[v.kind];
       const mpp = metersPerPixel(position.lat, zoom);
       const length = Math.max(spec.meters, spec.pixels * mpp);
+      // Richtung über eine Fahrzeuglänge gemittelt: An Ecken dreht es weich.
+      const bearing = smoothBearing(v.path, along, Math.max(4, spec.meters * 0.8));
+      v.label?.marker.setLngLat([position.lng, position.lat]);
       for (const box of spec.boxes) {
         features.push({
           type: 'Feature',
@@ -350,7 +388,7 @@ class Fleet {
           geometry: { type: 'Polygon', coordinates: [boxRing(position, bearing, box, length)] },
         });
       }
-      if (spec.lights) {
+      if (spec.lights && withLights) {
         const front = offsetMeters(position, bearing, length * 0.95, 0);
         lightFeatures.push({
           type: 'Feature',
@@ -360,7 +398,11 @@ class Fleet {
       }
     }
     source.setData({ type: 'FeatureCollection', features } as never);
-    lights.setData({ type: 'FeatureCollection', features: lightFeatures } as never);
+    // Tagsüber keine Lichter: die Quelle nur einmal leeren statt bei jeder Bewegung neu zu setzen.
+    if (withLights || this.lightsShown) {
+      lights.setData({ type: 'FeatureCollection', features: lightFeatures } as never);
+      this.lightsShown = withLights;
+    }
   }
 
   private find(e: MapLayerMouseEvent): Vehicle | undefined {
@@ -475,7 +517,7 @@ export function createVehicle(map: MapLibreMap, options: VehicleOptions): Vehicl
       fleet.schedule(true);
     },
     setPath(path) {
-      vehicle.path = path;
+      vehicle.path = measurePath(path);
       fleet.schedule(true);
     },
     setLabel(label) {

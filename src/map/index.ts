@@ -43,6 +43,7 @@ export {
   el,
   type HtmlMarkerOptions,
   type MarkerTone,
+  setText,
   type TargetMarker,
   type TargetMarkerOptions,
 } from './markers';

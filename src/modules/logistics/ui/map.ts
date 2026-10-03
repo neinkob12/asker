@@ -101,8 +101,11 @@ export const logisticsLayer: MapLayer = {
       update(state) {
         const cargo = getCargo(state).length;
         const shipping = shipmentsInTransit(state).some((s) => getSupplier(state, s.supplierId)?.kind === 'port');
-        portMarker.element.hidden = !(hasBerth(state) || cargo > 0 || shipping);
-        name.textContent = cargo > 0 ? `${port.name} · ${cargo} am Kai` : port.name;
+        // DOM nur anfassen, wenn sich Text oder Sichtbarkeit ändern.
+        const hidden = !(hasBerth(state) || cargo > 0 || shipping);
+        if (portMarker.element.hidden !== hidden) portMarker.element.hidden = hidden;
+        const portText = cargo > 0 ? `${port.name} · ${cargo} am Kai` : port.name;
+        if (name.textContent !== portText) name.textContent = portText;
 
         const trips = getTrips(state);
         const ids = new Set(trips.map((t) => t.id));
