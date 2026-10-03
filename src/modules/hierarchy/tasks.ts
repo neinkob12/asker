@@ -231,6 +231,15 @@ export function restockBudgetLeft(state: GameState): number {
   );
 }
 
+/**
+ * Mindestbestand für die ganze Stadt: Mit Vollmacht führt sie alle Spots, da reicht die Einstellung für einen Spot
+ * nicht (sie ließ das Lager fast leer und verkaufte dann nichts). Pro Spot der Stadt derselbe Wert.
+ */
+function restockTarget(state: GameState, minStock: number, fullPower: boolean): number {
+  if (!fullPower) return minStock;
+  return minStock * Math.max(1, getSpots(state, activeCity(state)).length);
+}
+
 /** Nachbestellen für ganz Köln nach ihren Regeln (wie die Leutnants, aber ins Hauptlager und mit eigenem Budget). */
 function restock(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
   const state = ctx.state;
@@ -242,6 +251,7 @@ function restock(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor)
   }
   runRestock(ctx, rh.settings.restockRules, mainWarehouseId(state), actor, {
     budget: () => restockBudgetLeft(state),
+    minStock: (rule) => restockTarget(state, rule.minStock, !!rh.fullPower),
     onPause: (_rule, reason) => log(ctx, rh, `Bestellung ruht: ${reason}`),
     onResume: () => {},
     onNoMoney: () => log(ctx, rh, 'Wir brauchen Ware, aber mein Budget reicht gerade nicht.'),
