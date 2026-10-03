@@ -11,11 +11,22 @@ import {
   wallet,
 } from '../../core';
 import { activeCity, cityOfSpot } from '../city';
+import { eventFactor } from '../events';
 import { allProducts, getProduct, getStock, take } from '../goods';
 import { isPlayerOnTheRoad } from '../logistics';
 import { getSpotPrice, priceRatio, spotReferencePrice } from '../market';
 import { changeReputation, reputationDemandFactor } from '../reputation';
-import { getSpot, getSpots, isSpotActive, type Spot, spotCity } from '../spots';
+import {
+  getSpot,
+  getSpots,
+  isKneipe,
+  isSpotActive,
+  isSpotOpen,
+  KNEIPE,
+  nextSpotOpening,
+  type Spot,
+  spotCity,
+} from '../spots';
 import { nightlifeOf } from '../veedel';
 import { weatherDemandFactor } from '../weather';
 import {
@@ -75,12 +86,15 @@ export function pickWeighted<T>(ctx: Ctx, items: readonly T[], weights: readonly
 
 /**
  * Aktuelle Nachfrage an einem Spot (1 = ein Kunde alle BASE_SPAWN_INTERVAL Minuten): Andrang, Uhrzeit,
- * Wochentag, Wetter, Ruf, Anlaufphase und Kundenmix. Ohne Zufall, auch für die Karte (Hotspots).
+ * Wochentag, Wetter, Ruf, Anlaufphase, Kundenmix und Stadt-Events (Auftrag 30). Eine Kneipe hat außerhalb ihrer
+ * Öffnungszeit keine Nachfrage. Ohne Zufall, auch für die Karte (Hotspots).
  */
 export function demandRate(state: GameState, spot: Spot, time: number): number {
+  if (!isSpotOpen(spot, time)) return 0;
   const mix = typeWeights(spot, time).reduce((a, b) => a + b, 0) / TYPE_NORM;
   return (
     spot.demand *
+    eventFactor(state, 'demand', { spotId: spot.id, veedelId: spot.veedelId }) *
     nightlifeFactor(spot.veedelId, time) *
     hourDemandMultiplier(clock.hour(time)) *
     WEEKDAY_DEMAND[clock.weekday(time)] *
@@ -109,8 +123,24 @@ export function nightlifeFactor(veedelId: string, time: number): number {
 
 /** Zeit bis zum nächsten Interessenten an einem Spot (exponentialverteilt, damit es unregelmäßig wirkt). */
 function spawnInterval(ctx: Ctx, spot: Spot, time: number): number {
+  // Eine geschlossene Kneipe zählt ab der Öffnung (streetTick wartet bis dahin).
+  if (!isSpotOpen(spot, time)) return Math.max(1, nextSpotOpening(spot, time) - time);
   const mean = BASE_SPAWN_INTERVAL / Math.max(0.01, demandRate(ctx.state, spot, time));
   return -Math.log(1 - ctx.random() * 0.999) * mean;
+}
+
+/**
+ * Ein Stadt-Event fängt an oder hört auf (Auftrag 30): Die Laufkundschaft an den Spots der Stadt richtet sich sofort
+ * nach der neuen Nachfrage (der nächste Interessent wird neu ausgewürfelt).
+ */
+export function onCityEventChanged(ctx: Ctx, cityId: string): void {
+  if (activeCity(ctx.state) !== cityId) return;
+  const s = ctx.state.modules.customers;
+  for (const spot of getSpots(ctx.state, cityId)) {
+    const current = s.nextSpawnAt[spot.id];
+    if (current === undefined || !Number.isFinite(current)) continue;
+    s.nextSpawnAt[spot.id] = Math.min(current, ctx.now + spawnInterval(ctx, spot, ctx.now));
+  }
 }
 
 /**
@@ -146,7 +176,9 @@ function arrive(ctx: Ctx, spot: Spot, at: number): void {
   if (!wanted) return;
   const considered = productId ?? wanted;
   const ratio = priceRatio(ctx.state, spot.id, considered);
-  if (!acceptsPrice(ratio, type.priceSensitivity, ctx.random())) {
+  // In der Kneipe schauen die Gäste weniger auf den Preis (Etappe 7).
+  const sensitivity = type.priceSensitivity * (isKneipe(spot) ? KNEIPE.priceSensitivity : 1);
+  if (!acceptsPrice(ratio, sensitivity, ctx.random())) {
     // Beim Richtpreis springt auch mal einer ab; als "zu teuer" zählt nur, wer über dem Richtpreis abspringt.
     if (productId && ratio > 1.02) state.stats.tooExpensive += 1;
     return;
@@ -208,9 +240,18 @@ function addCustomer(
  */
 export function rateSale(
   ctx: Ctx,
-  sale: { typeId: string | undefined; quality: number; cut: number; priceRatio: number; where: string },
+  sale: {
+    typeId: string | undefined;
+    quality: number;
+    cut: number;
+    priceRatio: number;
+    where: string;
+    /** Spot des Verkaufs: In einer Kneipe zählt der Ruf doppelt (Etappe 7). */
+    spotId?: string;
+  },
 ): { satisfaction: number; noticedCut: boolean } {
   const type = customerType(sale.typeId);
+  const weight = sale.spotId && isKneipe(getSpot(ctx.state, sale.spotId)) ? KNEIPE.reputationFactor : 1;
   const noticedCut = sale.cut > 0 && ctx.chance(cutNoticeChance(sale.cut, type.expertise));
   const satisfaction = saleSatisfaction({
     quality: sale.quality,
@@ -221,13 +262,13 @@ export function rateSale(
   if (satisfaction !== 0) {
     changeReputation(
       ctx,
-      satisfaction * REP_PER_SATISFACTION,
+      satisfaction * REP_PER_SATISFACTION * weight,
       satisfaction > 0 ? 'Zufriedene Kundschaft' : 'Unzufriedene Kundschaft',
     );
   }
   if (noticedCut) {
     ctx.state.modules.customers.stats.cutNoticed += 1;
-    changeReputation(ctx, REP_CUT_NOTICED, 'Gestreckte Ware bemerkt');
+    changeReputation(ctx, REP_CUT_NOTICED * weight, 'Gestreckte Ware bemerkt');
     journal.add(ctx, `${type.name} ${sale.where} hat gemerkt, dass dein Zeug gestreckt ist.`, 'bad');
   }
   return { satisfaction, noticedCut };
@@ -265,6 +306,7 @@ export function serve(ctx: Ctx, customerId: number, sellerId: string | null): Co
     cut,
     priceRatio: reference > 0 ? customer.pricePerUnit / reference : 1,
     where: `am ${spot.name}`,
+    spotId: spot.id,
   });
   const regular = customer.regularId ? state.regulars.find((r) => r.id === customer.regularId) : undefined;
   if (regular) {
@@ -310,7 +352,8 @@ function maybeBecomeRegular(ctx: Ctx, customer: Customer, spot: Spot, quality: n
   const state = ctx.state.modules.customers;
   if (activeRegulars(ctx).length >= MAX_REGULARS) return;
   const type = customerType(customer.typeId);
-  if (!ctx.chance(REGULAR_CHANCE * type.loyalty * reputationDemandFactor(ctx.state))) return;
+  const kneipe = isKneipe(spot) ? KNEIPE.regularFactor : 1;
+  if (!ctx.chance(REGULAR_CHANCE * kneipe * type.loyalty * reputationDemandFactor(ctx.state))) return;
   const taken = new Set(state.regulars.map((r) => r.name));
   let name = '';
   for (let i = 0; i < 5 && (!name || taken.has(name)); i++) {
@@ -452,7 +495,7 @@ function expireCustomers(ctx: Ctx): void {
         spotId: c.spotId,
       });
     }
-    changeReputation(ctx, REP_CUSTOMER_LOST, 'Kunden warten lassen');
+    changeReputation(ctx, REP_CUSTOMER_LOST * (isKneipe(spot) ? KNEIPE.reputationFactor : 1), 'Kunden warten lassen');
     ctx.emit('customer.left', {
       customerId: c.id,
       spotId: c.spotId,
@@ -499,6 +542,11 @@ export function streetTick(ctx: Ctx): void {
   for (const spot of getSpots(ctx.state, activeCity(ctx.state))) {
     let next = state.nextSpawnAt[spot.id] ?? now;
     while (next <= now) {
+      // Kneipe zu: Der nächste Gast kommt frühestens zur Öffnung.
+      if (!isSpotOpen(spot, next)) {
+        next = Math.max(next + 1, nextSpotOpening(spot, next) + ctx.random() * BASE_SPAWN_INTERVAL);
+        continue;
+      }
       const waiting = state.waiting.filter((c) => c.spotId === spot.id).length;
       if (waiting < MAX_CUSTOMERS_PER_SPOT) arrive(ctx, spot, next);
       next += spawnInterval(ctx, spot, next);

@@ -32,7 +32,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity } from '../../city';
+import { activeCity, cityName, relationFactor } from '../../city';
 import { canSnitch } from '../../police';
 import { veedelName } from '../../veedel';
 import {
@@ -250,7 +250,7 @@ function GangsTab() {
         color="danger"
         count={gangs.length}
         note="Verkaufen im Revier einer Gang macht sie wütend."
-        more="Verkaufen im Revier einer Gang kostet sie Einfluss. Gegen eine Gang hilft Gewalt (Spot überfallen), Geld (Schutzgeld), die Polizei (verpfeifen) oder Diplomatie (Waffenstillstand, Bündnis). Deine Stärke zählt Leute, Veedel, Schwarzgeld und Ware."
+        more={`Verkaufen im Revier einer Gang kostet sie Einfluss. Gegen eine Gang hilft Gewalt (Spot überfallen), Geld (Schutzgeld), die Polizei (verpfeifen) oder Diplomatie (Waffenstillstand, Bündnis). Deine Stärke zählt Leute, Veedel, Schwarzgeld und Ware. ${relationFactor(activeCity(state)) > 1 ? 'In Köln hilft der Klüngel: Deals und Waffenstillstand bringen mehr Beziehung.' : `In ${cityName(activeCity(state))} bringen Deals und Waffenstillstand weniger Beziehung.`}`}
       >
         <List>
           {gangs.map((g) => (

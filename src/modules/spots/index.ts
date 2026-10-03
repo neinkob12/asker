@@ -19,11 +19,13 @@
 import {
   type CommandResult,
   type Ctx,
+  clock,
   defineModule,
   distanceMeters,
   formatEuro,
   type GameState,
   journal,
+  MINUTES_PER_DAY,
   wallet,
 } from '../../core';
 import { isCityUnlocked } from '../city';
@@ -31,6 +33,7 @@ import { getVeedel, veedelAt, veedelCity, veedelName } from '../veedel';
 import {
   CUSTOM_SPOT_DEMAND,
   FOUND_SPOT_COST,
+  KNEIPE,
   MAX_CUSTOM_SPOTS,
   MIN_SPOT_DISTANCE,
   ORIGINAL_SPOT_IDS,
@@ -38,7 +41,7 @@ import {
   SPOT_LABELS,
 } from './config';
 
-export { FOUND_SPOT_COST, MAX_CUSTOM_SPOTS } from './config';
+export { FOUND_SPOT_COST, KNEIPE, MAX_CUSTOM_SPOTS } from './config';
 
 export interface Spot {
   id: string;
@@ -58,6 +61,11 @@ export interface Spot {
   custom?: boolean;
   /** Gründungszeitpunkt (eigene Spots). */
   foundedAt?: number;
+  /**
+   * Art (Auftrag 30, Etappe 7): 'kneipe' = Veedel-Kneipe, offen KNEIPE.from bis KNEIPE.to Uhr, weniger Laufkundschaft,
+   * doppelt so viele Stammkunden, der Ruf zählt doppelt, die Gäste schauen weniger auf den Preis. Ohne: Straße.
+   */
+  kind?: 'kneipe';
 }
 
 export interface SpotsState {
@@ -172,6 +180,27 @@ export function getAllSpots(state: GameState): readonly Spot[] {
 }
 
 /** Spot nach ID, auch gesperrte (für Namen und Veedel). Ob dort verkauft wird: isSpotActive. */
+
+/** Ist der Spot eine Kneipe (Etappe 7)? */
+export function isKneipe(spot: Pick<Spot, 'kind'> | undefined): boolean {
+  return spot?.kind === 'kneipe';
+}
+
+/** Hat der Spot gerade offen? Straßen-Spots immer, Kneipen von KNEIPE.from bis KNEIPE.to Uhr. */
+export function isSpotOpen(spot: Pick<Spot, 'kind'>, time: number): boolean {
+  if (spot.kind !== 'kneipe') return true;
+  const hour = clock.hour(time);
+  return KNEIPE.from > KNEIPE.to ? hour >= KNEIPE.from || hour < KNEIPE.to : hour >= KNEIPE.from && hour < KNEIPE.to;
+}
+
+/** Nächste Öffnung ab time (time selbst, wenn offen). */
+export function nextSpotOpening(spot: Pick<Spot, 'kind'>, time: number): number {
+  if (isSpotOpen(spot, time)) return time;
+  const dayStart = time - clock.minuteOfDay(time);
+  const today = dayStart + KNEIPE.from * 60;
+  return today > time ? today : today + MINUTES_PER_DAY;
+}
+
 /** Wo die Plakette eines Spots auf der Karte steht (Seite, Versatz in px). Nur Darstellung. */
 export function spotLabelPlacement(spotId: string): { labelSide: 'left' | 'right'; labelOffsetY: number } {
   return SPOT_LABELS[spotId] ?? { labelSide: 'right', labelOffsetY: 0 };

@@ -12,7 +12,7 @@ import {
   type MoneyCategory,
   wallet,
 } from '../../core';
-import { activeCity, cityName, isPlayerIn } from '../city';
+import { activeCity, bribeFactor, cityName, isPlayerIn } from '../city';
 import { allProducts, DEFAULT_PRODUCT, getProduct, getStock, getWarehouses, store, take } from '../goods';
 import { hasFullPower } from '../hierarchy';
 import { addHeat } from '../police';
@@ -255,7 +255,13 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
     round: 0,
     maxRounds: kind.maxRounds,
     log: [],
-    bribeCost: kind.bribe ? kind.bribe.base + kind.bribe.perOpponent * count : 0,
+    // Freikaufen kostet je nach Stadt mehr oder weniger (Kölscher Klüngel, Auftrag 30).
+    bribeCost: kind.bribe
+      ? Math.round(
+          (kind.bribe.base + kind.bribe.perOpponent * count) *
+            bribeFactor(request.veedelId ? veedelCity(request.veedelId) : activeCity(ctx.state)),
+        )
+      : 0,
     extraHeat: 0,
     goodsDropped: 0,
     bribeSpent: 0,

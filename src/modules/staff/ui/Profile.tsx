@@ -4,7 +4,7 @@
 import { useState } from 'preact/hooks';
 import { clock, formatEuro } from '../../../core';
 import { Button, Empty, KeyValue, ProgressBar, Select, Slot, Stepper, Toggle, useGame } from '../../../ui';
-import { citiesUnlocked, cityName, travelMinutesBetween } from '../../city';
+import { bribeFactor, citiesUnlocked, cityName, travelMinutesBetween } from '../../city';
 import { getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
 import {
@@ -140,6 +140,13 @@ function ProfileActions(props: { member: StaffMember }) {
         >
           Kaution zahlen ({formatEuro(cost)})
         </Button>
+      )}
+      {m.status === 'jailed' && bribeFactor(m.cityId) !== 1 && (
+        <p class="ui-hint">
+          {bribeFactor(m.cityId) < 1
+            ? `In ${cityName(m.cityId)} kennt man sich: Kaution ein Viertel günstiger.`
+            : `In ${cityName(m.cityId)} gibt es nichts geschenkt: Kaution 20 % teurer.`}
+        </p>
       )}
       {canMove && <MoveControl member={m} />}
       <RelocateControl member={m} />

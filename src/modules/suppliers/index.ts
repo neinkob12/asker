@@ -38,7 +38,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, cityName, getCity } from '../city';
+import { activeCity, cityName, getCity, relationFactor } from '../city';
 import { getSalesStats } from '../customers';
 import {
   DEFAULT_WAREHOUSE,
@@ -511,9 +511,11 @@ function relationFor(ctx: Ctx, supplierId: string): SupplierRelation {
   return relations[supplierId];
 }
 
-function addTrust(ctx: Ctx, supplierId: string, delta: number): void {
+function addTrust(ctx: Ctx, supplierId: string, raw: number): void {
   const rel = relationFor(ctx, supplierId);
   const before = rel.trust;
+  // Kölscher Klüngel (Auftrag 30): Vertrauen wächst je nach Stadt schneller (Köln) oder langsamer (Hamburg).
+  const delta = raw > 0 ? raw * relationFactor(activeCity(ctx.state)) : raw;
   rel.trust = Math.round(Math.min(100, Math.max(0, rel.trust + delta)) * 10) / 10;
   if (rel.trust !== before) {
     ctx.emit('supplier.trustChanged', {

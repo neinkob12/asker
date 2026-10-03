@@ -21,7 +21,8 @@
 //   cityName(id), activeCity(state), presentCity(state), citiesUnlocked(state), isCityUnlocked(state, id),
 //   isCityLive(state, id), cityOf(veedelId), cityOfSpot(state, spotId), isVeedelLive(state, veedelId),
 //   liveVeedel(state), sleepInfo(state, cityId), playableCities(), cityAt(lng, lat), isPlayerTraveling(state),
-//   isPlayerIn(state, cityId), cityTravel(state), travelMinutesBetween(from, to)
+//   isPlayerIn(state, cityId), cityTravel(state), travelMinutesBetween(from, to),
+//   relationFactor(cityId), bribeFactor(cityId), raidWarningBonus(cityId) (Charakter, Etappe 7)
 // Ankommen (Etappe 5): 'city.travel' fährt dich selbst über die A1 (Weg und Zeit aus roads.interCityRoute); unterwegs
 // bist du in keiner Stadt (isPlayerTraveling, logistics.isPlayerOnTheRoad). Bei der Ankunft wird die Zielstadt aktiv
 // und live; beim ersten Mal in Hamburg schreibt Fiete, wie man anfängt. Selbst am Spot stehen, selbst ausfahren,
@@ -168,6 +169,24 @@ export function getCity(id: string): CityDef | undefined {
 
 export function cityName(id: string): string {
   return CITY_BY_ID.get(id)?.name ?? id;
+}
+
+/**
+ * Charakter einer Stadt (Etappe 7): Faktor auf wachsende Beziehungen (Lieferanten-Vertrauen, Gang-Beziehung bei Deals
+ * und Waffenstillstand). Köln 1,5 (Klüngel), Hamburg 0,8 (kühl und korrekt).
+ */
+export function relationFactor(cityId: string): number {
+  return CITY_BY_ID.get(cityId)?.relationFactor ?? 1;
+}
+
+/** Faktor auf Freikaufen in Konfrontationen und Kaution. Köln 0,75, Hamburg 1,2. */
+export function bribeFactor(cityId: string): number {
+  return CITY_BY_ID.get(cityId)?.bribeFactor ?? 1;
+}
+
+/** Zusatz auf die Warnung des Polizei-Kontakts vor einer Razzia. Köln +0,1. */
+export function raidWarningBonus(cityId: string): number {
+  return CITY_BY_ID.get(cityId)?.raidWarningBonus ?? 0;
 }
 
 /** Städte mit Inhalt (ohne Schablonen). */

@@ -6,26 +6,33 @@
 // beantwortet die Nachricht nach einer Festnahme (gute Leute per Kaution, sonst ersetzen), wenn die Gangs ungemütlich werden, antwortet auf Handy-Nachrichten und lässt
 // Konfrontationen von seinen Leuten auswürfeln. Er schickt nur Befehle, genau wie die Oberfläche.
 //
+// Städte (Auftrag 30): Der Bot spielt immer die aktive Stadt (Spots, Lager, Leute, Lieferanten, Hafen und Gangs dort).
+// Gehören ihm alle Veedel einer Stadt und erfüllt die Rechte Hand alles, erteilt er ihr die Vollmacht und zieht in die
+// nächste freie Stadt (city.travel). In einer neuen Stadt kauft er zuerst ein Lager (sauberes Geld, notfalls gewaschen).
+//
 // Liegt außerhalb von src/modules, weil er alle Module zusammen benutzt (wie ein Spieler).
 
 import { type Command, type GameState, messages, type Simulation } from '../core';
+import { activeCity, citiesUnlocked, isPlayerIn, isPlayerTraveling, presentCity } from '../modules/city';
 import { allWaiting, canServe } from '../modules/customers';
 import { activeEncounters } from '../modules/encounters';
 import { ceasefireCost, getGangs, tributeAmount } from '../modules/gangs';
-import { DEFAULT_WAREHOUSE, getStock } from '../modules/goods';
+import { getStock, getWarehouses, warehouseSites } from '../modules/goods';
 import {
   canBeRightHand,
+  fullPowerMissing,
   getRightHand,
+  hasFullPower,
   isLieutenant,
   lieutenantOfSpot,
   MAX_SPOTS_PER_LIEUTENANT,
   rightHandHandlesOrders,
 } from '../modules/hierarchy';
 import { amountInProgress, launderingCapacity } from '../modules/laundering';
-import { BERTH_COST, cargoAmount, freeDrivers, getCargo, hasBerth, inTransitAmount } from '../modules/logistics';
+import { berthCost, cargoAmount, freeDrivers, getCargo, hasBerth, inTransitAmount, PORTS } from '../modules/logistics';
 import { getCandidates } from '../modules/recruiting';
-import { canFoundSpotAt, getSpots, lockedSpots } from '../modules/spots';
-import { bailCost, dailyWages, getStaff, runnerHireCost, securityAt } from '../modules/staff';
+import { canFoundSpotAt, getSpots, lockedSpots, spotCity } from '../modules/spots';
+import { bailCost, getStaff, runnerHireCost, securityAt } from '../modules/staff';
 import {
   availableCredit,
   availablePackages,
@@ -36,7 +43,7 @@ import {
   packagePrice,
   shipmentsInTransit,
 } from '../modules/suppliers';
-import { controlledBy, PLAYER_FACTION } from '../modules/territory';
+import { campaignProgress, controlledBy, PLAYER_FACTION } from '../modules/territory';
 import { allVeedel, neighborsOf } from '../modules/veedel';
 
 export interface BotOptions {
@@ -87,9 +94,10 @@ function run(sim: Simulation, stats: BotStats, command: Command): boolean {
   return result.ok;
 }
 
-/** Laufende Kosten für einen Tag: Löhne plus Puffer. */
+/** Laufende Kosten für einen Tag: Löhne der Leute in der aktiven Stadt plus Puffer (die schlafende zahlt ihre selbst). */
 function reserve(state: GameState): number {
-  return Math.round(dailyWages(state) * 1.5) + 500;
+  const wages = getStaff(state, { cityId: activeCity(state) }).reduce((sum, m) => sum + m.wage, 0);
+  return Math.round(wages * 1.5) + 500;
 }
 
 /** Selbst verkaufen: an den Spots ohne Läufer mit den meisten Wartenden. */
@@ -97,6 +105,7 @@ function sellPersonally(sim: Simulation, stats: BotStats, options: BotOptions): 
   const state = sim.state;
   const hour = Math.floor((state.time % 1440) / 60);
   if (options.sleeps && hour >= 3 && hour < 9) return;
+  if (!isPlayerIn(state, activeCity(state))) return;
   const staffed = new Set(
     getStaff(state, { role: 'runner', status: 'active' })
       .filter((m) => m.assignment?.kind === 'spot')
@@ -125,7 +134,9 @@ const PRODUCT_MIX: Record<string, number> = { weed: 0.35, hash: 0.2, haze: 0.15,
  */
 function restock(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
-  const stock = getStock(state);
+  const city = activeCity(state);
+  if (getWarehouses(state, city).length === 0) return;
+  const stock = getStock(state, { cityId: city });
   const incoming =
     shipmentsInTransit(state).reduce((sum, s) => sum + s.amount, 0) + cargoAmount(state) + inTransitAmount(state);
   const sellers = getStaff(state, { role: 'runner' }).length + 1;
@@ -135,7 +146,7 @@ function restock(sim: Simulation, stats: BotStats): void {
   // (ohne Ware kein Umsatz, dann reicht es für die Löhne erst recht nicht).
   const budget = money(state) - (stock + incoming < want / 3 ? 0 : reserve(state));
   const have = (productId: string) =>
-    getStock(state, { productId }) +
+    getStock(state, { productId, cityId: city }) +
     cargoAmount(state, productId) +
     inTransitAmount(state, productId) +
     shipmentsInTransit(state)
@@ -146,7 +157,7 @@ function restock(sim: Simulation, stats: BotStats): void {
   );
   for (const productId of products) {
     let best: { supplierId: string; packageId: string; price: number; perUnit: number } | null = null;
-    for (const supplier of getSuppliers(state)) {
+    for (const supplier of getSuppliers(state, city)) {
       for (const pkg of availablePackages(state, supplier.id)) {
         if (pkg.productId !== productId) continue;
         const price = packagePrice(state, supplier.id, pkg.id);
@@ -164,7 +175,7 @@ function restock(sim: Simulation, stats: BotStats): void {
   }
   // Kein Geld mehr: auf Kredit, wenn ein Lieferant welchen gibt.
   if (stock + incoming > 0) return;
-  for (const supplier of getSuppliers(state)) {
+  for (const supplier of getSuppliers(state, city)) {
     const pkg = availablePackages(state, supplier.id)
       .filter((p) => packagePrice(state, supplier.id, p.id) <= availableCredit(state, supplier.id))
       .sort((a, b) => packagePrice(state, supplier.id, a.id) - packagePrice(state, supplier.id, b.id))[0];
@@ -177,7 +188,7 @@ function restock(sim: Simulation, stats: BotStats): void {
 /** Lieferanten freischalten, sobald es geht und die Gebühr aus der Portokasse kommt. */
 function unlockSuppliers(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
-  for (const supplier of getSuppliers(state)) {
+  for (const supplier of getSuppliers(state, activeCity(state))) {
     if (isUnlocked(state, supplier.id) || !canUnlock(state, supplier.id).ok) continue;
     if ((supplier.unlock?.fee ?? 0) > (money(state) - reserve(state)) / 2) continue;
     run(sim, stats, { type: 'suppliers.unlock', payload: { supplierId: supplier.id } });
@@ -188,23 +199,33 @@ function unlockSuppliers(sim: Simulation, stats: BotStats): void {
  * Hafen: Ist genug Geld übrig, wäscht der Bot Geld für den Liegeplatz und mietet ihn. Danach heuert er einen Fahrer
  * an und lässt Schiffsware abholen, sobald sie am Kai steht.
  */
+/** Sauberes Geld für einen Kauf (Liegeplatz, Lager) in Raten waschen. */
+function launderFor(sim: Simulation, stats: BotStats, cost: number): void {
+  const state = sim.state;
+  if (amountInProgress(state) > 0) return;
+  const needed = Math.ceil((cost - state.wallet.clean) / 0.8) + 50;
+  const spare = money(state) - reserve(state) - 400;
+  const amount = Math.min(Math.max(needed, 150), spare, launderingCapacity(state));
+  if (amount >= Math.min(needed, 300)) run(sim, stats, { type: 'laundering.launder', payload: { amount } });
+}
+
 function harbor(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
+  const city = activeCity(state);
+  if (!PORTS[city] || getWarehouses(state, city).length === 0) return;
   if (!hasBerth(state)) {
-    if (state.wallet.clean >= BERTH_COST) {
+    const cost = berthCost(city);
+    if (state.wallet.clean >= cost) {
       run(sim, stats, { type: 'logistics.buyBerth', payload: {} });
       return;
     }
     // Sparen in Raten: Sobald das Geschäft läuft (zwei Läufer, Lager voll genug), geht übriges Geld in die Wäsche.
-    const runners = getStaff(state, { role: 'runner' }).length;
-    if (amountInProgress(state) > 0 || getStock(state) < 150 || runners < 2) return;
-    const needed = Math.ceil((BERTH_COST - state.wallet.clean) / 0.8) + 50;
-    const spare = money(state) - reserve(state) - 400;
-    const amount = Math.min(Math.max(needed, 150), spare, launderingCapacity(state));
-    if (amount >= Math.min(needed, 300)) run(sim, stats, { type: 'laundering.launder', payload: { amount } });
+    const runners = getStaff(state, { role: 'runner', cityId: city }).length;
+    if (getStock(state, { cityId: city }) < 150 || runners < 2) return;
+    launderFor(sim, stats, cost);
     return;
   }
-  const drivers = getStaff(state, { role: 'driver' }).length;
+  const drivers = getStaff(state, { role: 'driver', cityId: city }).length;
   if (drivers === 0 && money(state) > reserve(state) + 800) {
     run(sim, stats, { type: 'staff.hireDriver', payload: {} });
   }
@@ -216,18 +237,30 @@ function harbor(sim: Simulation, stats: BotStats): void {
 /** Läufer anheuern, Spots freischalten, Leutnants befördern, Sicherheit einstellen. */
 function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
   const state = sim.state;
+  const city = activeCity(state);
   const expand = options.expand !== false;
-  const runnersNow = getStaff(state, { role: 'runner' }).length;
+  // Neue Stadt ohne Lager: erst ein Lager (das günstigste), sonst geht nichts.
+  if (getWarehouses(state, city).length === 0) {
+    const site = [...warehouseSites(city)].sort((a, b) => a.cost - b.cost)[0];
+    if (!site) return;
+    if (state.wallet.clean >= site.cost)
+      run(sim, stats, { type: 'goods.buyWarehouse', payload: { warehouseId: site.id } });
+    else launderFor(sim, stats, site.cost);
+    return;
+  }
+  const home = getWarehouses(state, city)[0].id;
+  const runnersNow = getStaff(state, { role: 'runner', cityId: city }).length;
   const mayHire = options.maxRunners === undefined || runnersNow < options.maxRunners;
   // Spots ohne aktiven Läufer (ein Durchgang über die Leute statt einer Suche pro Spot).
   const free = () => {
     const manned = new Set<string>();
-    for (const m of getStaff(state, { status: 'active', role: 'runner' })) {
+    for (const m of getStaff(state, { status: 'active', role: 'runner', cityId: city })) {
       if (m.assignment?.kind === 'spot') manned.add(m.assignment.targetId);
     }
-    return getSpots(state).filter((s) => !manned.has(s.id));
+    return getSpots(state, city).filter((s) => !manned.has(s.id));
   };
-  const stock = getStock(state);
+  const stock = getStock(state, { cityId: city });
+  const locked = () => lockedSpots(state).filter((s) => spotCity(s) === city);
 
   // Bewerber mit Level zuerst, sonst von der Straße.
   const openSpots = free().sort((a, b) => b.demand - a.demand);
@@ -256,17 +289,17 @@ function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
   if (!expand) return;
   // Freischalten, wenn alle Spots besetzt sind und Geld übrig ist.
   if (free().length === 0) {
-    const next = lockedSpots(state).sort((a, b) => (a.unlockCost ?? 0) - (b.unlockCost ?? 0))[0];
+    const next = locked().sort((a, b) => (a.unlockCost ?? 0) - (b.unlockCost ?? 0))[0];
     if (next && money(state) > (next.unlockCost ?? 0) + reserve(state) + runnerHireCost(state, next.id) + 600) {
       run(sim, stats, { type: 'spots.unlock', payload: { spotId: next.id } });
     }
   }
 
   // Später: eigene Spots in Nachbar-Veedeln gründen, um weiter zu wachsen (Köln übernehmen).
-  if (lockedSpots(state).length === 0 && free().length === 0 && money(state) > reserve(state) + 3000) {
+  if (locked().length === 0 && free().length === 0 && money(state) > reserve(state) + 3000) {
     const mine = new Set(controlledBy(state, PLAYER_FACTION));
-    const withSpot = new Set(getSpots(state).map((s) => s.veedelId));
-    const target = allVeedel()
+    const withSpot = new Set(getSpots(state, city).map((s) => s.veedelId));
+    const target = allVeedel(city)
       .filter((v) => !mine.has(v.id) && !withSpot.has(v.id) && neighborsOf(v.id).some((n) => mine.has(n)))
       .sort((a, b) => b.purchasingPower - a.purchasingPower || a.id.localeCompare(b.id))[0];
     if (target) {
@@ -290,10 +323,10 @@ function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
   appointRightHand(sim, stats);
 
   // Sicherheit: eine pro Veedel mit Leuten, sobald eine Gang droht.
-  const threatened = getGangs(state).some((g) => (state.modules.gangs.gangs[g.id]?.hostility ?? 0) >= 40);
+  const threatened = getGangs(state, city).some((g) => (state.modules.gangs.gangs[g.id]?.hostility ?? 0) >= 40);
   if (threatened) {
-    const guards = getStaff(state, { role: 'security' }).length;
-    const runners = getStaff(state, { role: 'runner' }).length;
+    const guards = getStaff(state, { role: 'security', cityId: city }).length;
+    const runners = getStaff(state, { role: 'runner', cityId: city }).length;
     if (guards < Math.ceil(runners / 3) + 1) {
       const candidate = getCandidates(state)
         .filter(
@@ -304,12 +337,12 @@ function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
         )
         .sort((a, b) => a.wage - b.wage || b.level - a.level)[0];
       // Erst das Lager, dann die Spots mit dem meisten Andrang.
-      const warehouseGuarded = securityAt(state, { warehouseId: DEFAULT_WAREHOUSE }).length > 0;
-      const spot = getSpots(state)
+      const warehouseGuarded = securityAt(state, { warehouseId: home }).length > 0;
+      const spot = getSpots(state, city)
         .filter((s) => getStaff(state, { spotId: s.id, role: 'security' }).length === 0)
         .sort((a, b) => b.demand - a.demand)[0];
       const assignment = !warehouseGuarded
-        ? { kind: 'warehouse' as const, targetId: DEFAULT_WAREHOUSE }
+        ? { kind: 'warehouse' as const, targetId: home }
         : spot
           ? { kind: 'spot' as const, targetId: spot.id }
           : null;
@@ -327,12 +360,13 @@ function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
  */
 function appointLieutenants(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
-  const unled = getSpots(state)
+  const city = activeCity(state);
+  const unled = getSpots(state, city)
     .filter((s) => !lieutenantOfSpot(state, s.id))
     .sort((a, b) => b.demand - a.demand || a.id.localeCompare(b.id));
-  if (unled.length < 2 && !(unled.length >= 1 && getStaff(state).length >= 4)) return;
+  if (unled.length < 2 && !(unled.length >= 1 && getStaff(state, { cityId: city }).length >= 4)) return;
   if (money(state) <= reserve(state) + 800) return;
-  const best = getStaff(state, { status: 'active', role: 'runner' })
+  const best = getStaff(state, { status: 'active', role: 'runner', cityId: city })
     .filter((m) => m.level >= 2 && !isLieutenant(state, m.id))
     .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id))[0];
   if (!best) return;
@@ -359,7 +393,7 @@ function appointLieutenants(sim: Simulation, stats: BotStats): void {
 function appointRightHand(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
   if (getRightHand(state) || money(state) <= reserve(state) + 500) return;
-  const candidate = getStaff(state, { status: 'active' })
+  const candidate = getStaff(state, { status: 'active', cityId: activeCity(state) })
     .filter((m) => canBeRightHand(state, m.id).ok && !isLieutenant(state, m.id))
     .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id))[0];
   if (!candidate) return;
@@ -461,9 +495,38 @@ function repay(sim: Simulation, stats: BotStats): void {
   }
 }
 
+/**
+ * Städte (Auftrag 30): Gehört dir die ganze Stadt und erfüllt die Rechte Hand alles, bekommt sie die Vollmacht (das
+ * macht die nächste Stadt frei). Danach fährt der Bot in die nächste freie Stadt ohne Vollmacht und spielt dort.
+ */
+function moveOn(sim: Simulation, stats: BotStats): void {
+  const state = sim.state;
+  if (isPlayerTraveling(state)) return;
+  const here = presentCity(state);
+  if (here === null) return;
+  const progress = campaignProgress(state, here);
+  if (
+    !hasFullPower(state, here) &&
+    progress.controlled >= progress.total &&
+    fullPowerMissing(state, here).length === 0
+  ) {
+    run(sim, stats, { type: 'hierarchy.grantFullPower', payload: { cityId: here } });
+  }
+  if (!hasFullPower(state, here)) return;
+  const next = citiesUnlocked(state).find((c) => c !== here && !hasFullPower(state, c));
+  if (next) run(sim, stats, { type: 'city.travel', payload: { cityId: next } });
+}
+
 /** Ein Blick aufs Spiel. */
 export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = DEFAULT_BOT): void {
   if (sim.state.outcome.gameOver) return;
+  moveOn(sim, stats);
+  // Unterwegs zwischen den Städten: nur das Nötigste (Handy, Konfrontationen).
+  if (isPlayerTraveling(sim.state)) {
+    handleEncounters(sim, stats);
+    answerMessages(sim, stats, options);
+    return;
+  }
   handleEncounters(sim, stats);
   answerMessages(sim, stats, options);
   sellPersonally(sim, stats, options);
@@ -503,6 +566,10 @@ export function snapshot(state: GameState) {
     lieutenants: Object.keys(state.modules.hierarchy.posts).length,
     spots: getSpots(state).length,
     veedel: controlledBy(state, PLAYER_FACTION).length,
+    /** Aktive Stadt und Veedel pro Stadt (Auftrag 30). */
+    city: activeCity(state),
+    koeln: campaignProgress(state, 'koeln').controlled,
+    hamburg: campaignProgress(state, 'hamburg').controlled,
     reputation: Math.round(state.modules.reputation.value),
     maxHostility: Math.round(Math.max(...Object.values(gangs.gangs).map((s) => s.hostility))),
     gameOver: state.outcome.gameOver?.reason ?? null,

@@ -1,7 +1,7 @@
 // Lese- und Schreib-API des Personals. Lesen mit state, schreiben mit ctx.
 
 import { type Contact, type Ctx, type GameState, journal, type MoneyCategory } from '../../core';
-import { activeCity, cityName, getCity, isCityLive } from '../city';
+import { activeCity, bribeFactor, cityName, getCity, isCityLive } from '../city';
 import { getWarehouse } from '../goods';
 import { getSpot, isSpotActive } from '../spots';
 import { veedelAt, veedelName } from '../veedel';
@@ -317,7 +317,7 @@ export function bonusProvider(state: GameState, key: StaffBonus): StaffMember | 
 export function bailCost(state: GameState, id: string): number {
   const m = getStaffMember(state, id);
   if (!m) return 0;
-  const base = BAIL_BASE + BAIL_PER_LEVEL * (m.level - 1);
+  const base = (BAIL_BASE + BAIL_PER_LEVEL * (m.level - 1)) * bribeFactor(m.cityId);
   return Math.round((base * (1 - bonus(state, 'bailDiscount'))) / 10) * 10;
 }
 

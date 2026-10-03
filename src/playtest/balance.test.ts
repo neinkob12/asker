@@ -7,6 +7,7 @@ import type { GameEvent } from '../core';
 import { MONEY_CATEGORIES } from '../core';
 import { createTestGame } from '../core/testing';
 import { type BotOptions, CAREFUL_BOT, DEFAULT_BOT, newBotStats, playFor, snapshot } from './bot';
+import { koelnKomplett } from './scenario';
 
 const DAY = 1440;
 
@@ -45,7 +46,63 @@ function simulate(seed: number, days: number, stopOnWin = false, options: BotOpt
   return report;
 }
 
+interface HamburgReport {
+  seed: number;
+  /** Tag der Ankunft in Hamburg (Spieltag). */
+  arrived: number | null;
+  days: (ReturnType<typeof snapshot> & { revenue: number; koelnIncome: number })[];
+  events: Record<string, number>;
+}
+
+/**
+ * Hamburg nach "Köln komplett" (Auftrag 30): Der Bot spielt koelnDays Tage Köln, dann ist Köln komplett und die Rechte
+ * Hand bereit; der Bot erteilt die Vollmacht, fährt nach Hamburg und spielt dort hamburgDays Tage.
+ */
+function simulateHamburg(seed: number, koelnDays: number, hamburgDays: number, money?: number): HamburgReport {
+  const sim = createTestGame({ seed });
+  const stats = newBotStats();
+  const events: Record<string, number> = {};
+  let arrived: number | null = null;
+  let revenue = 0;
+  let koelnIncome = 0;
+  sim.onEvent((e: GameEvent) => {
+    events[e.type] = (events[e.type] ?? 0) + 1;
+    if (e.type === 'city.arrived' && e.payload.cityId === 'hamburg') arrived = Math.floor(e.time / DAY) + 1;
+    if (e.type === 'sale.completed' && e.payload.veedelId && arrived !== null) revenue += e.payload.revenue;
+    if (e.type === 'wallet.changed' && e.payload.cityId === 'koeln' && e.payload.category === 'income.city') {
+      koelnIncome += e.payload.amount;
+    }
+  });
+  for (let d = 0; d < koelnDays; d++) playFor(sim, DAY, stats);
+  if (money !== undefined) {
+    sim.state.wallet.dirty = Math.max(sim.state.wallet.dirty, money);
+    sim.state.wallet.clean = Math.max(sim.state.wallet.clean, money / 4);
+  }
+  koelnKomplett(sim);
+  const report: HamburgReport = { seed, arrived: null, days: [], events };
+  for (let d = 0; d < hamburgDays; d++) {
+    revenue = 0;
+    koelnIncome = 0;
+    playFor(sim, DAY, stats);
+    report.days.push({ ...snapshot(sim.state), revenue: Math.round(revenue), koelnIncome: Math.round(koelnIncome) });
+    if (sim.state.outcome.gameOver) break;
+  }
+  report.arrived = arrived;
+  return report;
+}
+
 describe('Balancing', () => {
+  it('nach Köln komplett erteilt der Bot die Vollmacht, zieht nach Hamburg und fängt dort an', () => {
+    const r = simulateHamburg(1, 0, 4, 30_000);
+    const last = r.days[r.days.length - 1];
+    expect(r.events['hierarchy.fullPowerGranted']).toBe(1);
+    expect(r.arrived).not.toBeNull();
+    expect(last.city).toBe('hamburg');
+    expect(last.gameOver).toBeNull();
+    expect(r.events['goods.warehouseBought'] ?? 0).toBeGreaterThanOrEqual(1);
+    expect(r.days.some((d) => d.revenue > 0)).toBe(true);
+  }, 120_000);
+
   it('der Bot übersteht die ersten 10 Tage, verdient Geld und spürt die Gangs', () => {
     for (const seed of [1, 2]) {
       const r = simulate(seed, 10);
@@ -103,6 +160,40 @@ describe('Balancing', () => {
         console.log(
           `  Vorsichtig (2 Läufer, kein Ausbau): Kontostand Tag 1-10 ${careful.days.map((d) => d.dirty).join(' / ')}` +
             ` | Plus pro Tag ${profit.join(' / ')} | Umsatz/Tag T3-10 ${Math.round(careful.days.slice(2, 10).reduce((s, d) => s + d.revenue, 0) / 8)}`,
+        );
+      }
+    },
+    3_600_000,
+  );
+
+  it.skipIf(!process.env.BALANCE)(
+    'Bericht: Hamburg nach Köln komplett',
+    () => {
+      const seeds = (process.env.BALANCE_SEEDS ?? '1,2,3').split(',').map(Number);
+      const koelnDays = Number(process.env.BALANCE_KOELN_DAYS ?? 25);
+      const hamburgDays = Number(process.env.BALANCE_HAMBURG_DAYS ?? 20);
+      for (const seed of seeds) {
+        const started = Date.now();
+        const r = simulateHamburg(seed, koelnDays, hamburgDays);
+        const last = r.days[r.days.length - 1];
+        const arrived = r.arrived ?? 0;
+        const firstDay = (n: number) => {
+          const day = r.days.find((d) => d.hamburg >= n)?.day;
+          return day ? `${day - arrived}` : '-';
+        };
+        const e = (k: string) => r.events[k] ?? 0;
+        console.log(
+          `Hamburg Seed ${seed}: Köln ${koelnDays} Tage gespielt, dann komplett | Ankunft Tag ${r.arrived ?? '-'}` +
+            ` | Hamburger Veedel 1/3/5 nach ${firstDay(1)}/${firstDay(3)}/${firstDay(5)} Tagen` +
+            ` | am Ende ${last.hamburg}/12 Veedel, ${last.spots} Spots gesamt, ${last.runners} Läufer` +
+            ` | ${last.gameOver ? `Game Over (${last.gameOver})` : 'keine Pleite'}` +
+            ` | Liegeplatz ${last.berth ? 'ja' : 'nein'} | Razzien ${e('police.raidPlanned')}, Gang-Überfälle ${e('gang.raidStarted')}` +
+            ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,
+        );
+        console.log(
+          `  Schwarzgeld je Tag: ${r.days.map((d) => d.dirty).join(' / ')}` +
+            `\n  Umsatz Hamburg je Tag: ${r.days.map((d) => d.revenue).join(' / ')}` +
+            `\n  Ergebnis Köln (schläft) je Tag: ${r.days.map((d) => d.koelnIncome).join(' / ')}`,
         );
       }
     },

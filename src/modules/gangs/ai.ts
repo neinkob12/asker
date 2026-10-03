@@ -5,6 +5,7 @@
 import { type Ctx, clock, formatAmount, formatEuro, journal, wallet } from '../../core';
 import { activeCity, liveVeedel } from '../city';
 import { activeEncounters, startEncounter } from '../encounters';
+import { eventFactor } from '../events';
 import { DEFAULT_PRODUCT, getStock, getWarehouses } from '../goods';
 import { referencePrice, setCompetitionFactor } from '../market';
 import { getSpot, getSpots } from '../spots';
@@ -415,7 +416,9 @@ function reactToPlayer(ctx: Ctx, gang: Gang, s: GangStatus): void {
   if (s.stage < 3 || isAtPeace(ctx.state, gang.id) || s.people < 2) return;
   if (activeEncounters(ctx.state).length > 0) return;
   if (s.lastAttackAt !== null && ctx.now - s.lastAttackAt < ATTACK_COOLDOWN) return;
-  const chance = ATTACK_CHANCE * gang.traits.aggression * Math.min(1, (s.hostility - 60) / 40);
+  // Stadt-Events (Auftrag 30, Etappe 7): Beim FC-Heimspiel sind die Gangs öfter unterwegs.
+  const event = eventFactor(ctx.state, 'gangRaids', { cityId: gang.cityId });
+  const chance = ATTACK_CHANCE * gang.traits.aggression * Math.min(1, (s.hostility - 60) / 40) * event;
   if (ctx.chance(chance)) launchRaid(ctx, gang, s);
 }
 

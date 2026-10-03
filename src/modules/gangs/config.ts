@@ -197,6 +197,8 @@ export const OFFER_DURATION = 4 * HOUR;
 export const DEAL_BETRAYAL_BASE = 0.12;
 /** Beziehung nach einem sauberen Deal. */
 export const RELATION_ON_DEAL = 5;
+/** So viel besser wird die Beziehung mit einem Waffenstillstand (beides mal relationFactor der Stadt, Auftrag 30). */
+export const CEASEFIRE_RELATION = 5;
 
 // --- Nachrichten ------------------------------------------------------------------------------
 

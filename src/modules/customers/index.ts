@@ -29,7 +29,15 @@ import { getSpot, getSpots, isSpotActive } from '../spots';
 import { CUSTOMER_TYPES } from './config';
 import { customerType } from './decisions';
 import { acceptOrder, courierGone, declineOrder, expireOrderMessage, onDealResolved, ordersTick } from './orders';
-import { demandRate, initialSpawn, isPlayerAway, onCitySwitched, serve, streetTick } from './street';
+import {
+  demandRate,
+  initialSpawn,
+  isPlayerAway,
+  onCityEventChanged,
+  onCitySwitched,
+  serve,
+  streetTick,
+} from './street';
 
 export { CUSTOMER_PATIENCE } from './config';
 export {
@@ -46,7 +54,7 @@ export {
 } from './decisions';
 // Für Tests und Skripte: eine Anfrage erzwingen (force = true).
 export { offerDelivery, offerWholesale } from './orders';
-export { isPlayerAway } from './street';
+export { isPlayerAway, rateSale } from './street';
 
 export interface CustomerType {
   id: string;
@@ -424,6 +432,9 @@ export default defineModule({
       if (source === 'customers') expireOrderMessage(ctx, messageId);
     },
     'city.switched': (ctx, { from, to }) => onCitySwitched(ctx, from, to),
+    // Stadt-Events (Etappe 7): Die Laufkundschaft passt sich sofort der neuen Nachfrage an.
+    'events.started': (ctx, { cityId }) => onCityEventChanged(ctx, cityId),
+    'events.ended': (ctx, { cityId }) => onCityEventChanged(ctx, cityId),
     'staff.statusChanged': (ctx, { staffId, to }) => {
       if (to !== 'active') courierGone(ctx, staffId, true);
     },

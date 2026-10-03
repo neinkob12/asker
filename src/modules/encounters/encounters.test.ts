@@ -268,10 +268,11 @@ describe('encounters', () => {
     const sim = createTestGame();
     const { encounterId } = startEncounter(sim.ctx('police'), { kind: 'policeChase', playerPresent: true });
     const e = encounter(sim, encounterId);
-    expect(e.bribeCost).toBe(900);
+    // 500 + 2 × 200, in Köln ein Viertel günstiger (Klüngel, Auftrag 30).
+    expect(e.bribeCost).toBe(675);
     const before = wallet.balance(sim.state, 'dirty');
     expect(sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId: 'bribe' } }).ok).toBe(true);
-    expect(wallet.balance(sim.state, 'dirty')).toBe(before - 900);
+    expect(wallet.balance(sim.state, 'dirty')).toBe(before - 675);
     if (encounter(sim, encounterId).phase !== 'done') {
       const result = sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId: 'bribe' } });
       expect(result).toEqual({ ok: false, reason: 'Nicht genug Schwarzgeld (900 €).' });

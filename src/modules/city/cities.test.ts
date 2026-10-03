@@ -196,8 +196,12 @@ describe('Städte (Auftrag 30)', () => {
     }
     // Hamburg hat nichts damit zu tun.
     expect(cityReport(sim.state, 'hamburg', 7).rows.some((r) => r.category === 'share.righthand')).toBe(false);
-    // Lager und Leute bleiben, keine Einzel-Löhne in Köln.
-    expect(getStock(sim.state, { cityId: 'koeln' })).toBe(stock);
+    // Lager und Leute bleiben (nur Lieferungen, die vor dem Umschalten bestellt waren, kommen noch an), keine
+    // Einzel-Löhne in Köln.
+    const delivered = eventsOfType(events, 'shipment.arrived')
+      .filter((e) => !e.payload.atPort)
+      .reduce((sum, e) => sum + e.payload.amount, 0);
+    expect(getStock(sim.state, { cityId: 'koeln' })).toBe(stock + delivered);
     expect(getStaff(sim.state).length).toBe(staff);
     expect(week.rows.some((r) => r.category.startsWith('wages.'))).toBe(false);
     // Die schlafenden Tage zählen nicht als eigenes Geschäft (sonst würde der Schnitt sich selbst füttern).

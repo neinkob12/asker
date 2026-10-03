@@ -2,12 +2,12 @@
 // Werte zeigen sich mit der Zeit, seltener Verrat und die Warnung des Polizei-Kontakts.
 
 import { type Ctx, clock, formatEuro, type GameState, journal, messages, wallet } from '../../core';
-import { cityName } from '../city';
+import { cityName, raidWarningBonus } from '../city';
 import { canServe, waitingAt } from '../customers';
 import { formatProductAmount, stockSummary, take } from '../goods';
 import { addHeat, getHeat } from '../police';
 import { getSpot } from '../spots';
-import { veedelName } from '../veedel';
+import { veedelCity, veedelName } from '../veedel';
 import {
   BETRAYAL_COOLDOWN,
   BETRAYAL_MAX_CHANCE,
@@ -149,7 +149,9 @@ export function lieLow(ctx: Ctx, veedelId: string, until: number): number {
 export function warnOfRaid(ctx: Ctx, veedelId: string, at: number, major = false): void {
   const contact = bonusProvider(ctx.state, 'raidWarning');
   // Eine Großrazzia bekommt der Kontakt immer mit (einen Tag Vorlauf), normale Razzien nur mit seinem Bonus.
-  if (!contact || (!major && !ctx.chance(bonus(ctx.state, 'raidWarning')))) return;
+  // In Köln kennt man sich (Klüngel, Auftrag 30): Der Kontakt warnt öfter.
+  const chance = Math.min(1, bonus(ctx.state, 'raidWarning') + raidWarningBonus(veedelCity(veedelId)));
+  if (!contact || (!major && !ctx.chance(chance))) return;
   const time = major ? `${clock.weekdayName(at)}, ${clock.formatTime(at)}` : clock.formatTime(at);
   messages.send(ctx, {
     contact: staffContact(contact),

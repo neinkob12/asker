@@ -1,0 +1,26 @@
+/* Stadt-Events (Auftrag 30): Glas-Karte unter dem Event-Chip über der Karte. Nur Tokens. */
+.events-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 300px;
+}
+.events-card__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.events-card__item strong {
+  font-family: var(--font-hud, inherit);
+  white-space: nowrap;
+}
+.events-card__time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-muted, var(--color-muted));
+}
+.events-card__item p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}

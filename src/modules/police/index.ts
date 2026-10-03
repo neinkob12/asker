@@ -46,6 +46,7 @@ import {
 } from '../../core';
 import { activeCity, isVeedelLive, liveVeedel } from '../city';
 import { startEncounter } from '../encounters';
+import { eventFactor, raidsAllowed } from '../events';
 import { getGang } from '../gangs';
 import { allProducts, getLots, getWarehouses, nearestWarehouse, take } from '../goods';
 import { getSpot, spotsInVeedel } from '../spots';
@@ -866,20 +867,27 @@ function tick(ctx: Ctx): void {
   }
   updateTier(ctx);
   for (const [veedelId, plan] of Object.entries(police.plannedRaids).sort()) {
-    // In einer schlafenden Stadt wartet die Razzia, bis du wieder hinschaust.
-    if (plan.at > ctx.now || !isVeedelLive(state, veedelId)) continue;
+    // In einer schlafenden Stadt wartet die Razzia, bis du wieder hinschaust; im Karneval auch (Etappe 7).
+    if (plan.at > ctx.now || !isVeedelLive(state, veedelId) || !raidsAllowed(state, veedelCity(veedelId))) continue;
     delete police.plannedRaids[veedelId];
     raidPlayer(ctx, veedelId, plan);
   }
-  if (police.majorRaid && police.majorRaid.at <= ctx.now && isVeedelLive(state, police.majorRaid.veedelIds[0])) {
+  if (
+    police.majorRaid &&
+    police.majorRaid.at <= ctx.now &&
+    isVeedelLive(state, police.majorRaid.veedelIds[0]) &&
+    raidsAllowed(state, veedelCity(police.majorRaid.veedelIds[0]))
+  ) {
     const raid = police.majorRaid;
     police.majorRaid = null;
     majorRaid(ctx, raid);
   }
   const city = activeCity(state);
   const tier = tierOf(state, city);
+  // Stadt-Events (Etappe 7): Im Karneval plant die Polizei keine Razzien gegen dich.
+  const raidsOn = raidsAllowed(state, city);
   // Großrazzia nur gegen Großhändler: je heißer deine Veedel im Schnitt, desto eher.
-  if (tier >= 2 && !police.majorRaid && ctx.now >= police.majorReadyAt) {
+  if (raidsOn && tier >= 2 && !police.majorRaid && ctx.now >= police.majorReadyAt) {
     const mine = liveVeedel(state).filter((v) => hasPlayerPresence(state, v.id));
     const heat = mine.length > 0 ? mine.reduce((sum, v) => sum + getHeat(state, v.id), 0) / mine.length : 0;
     const chance =
@@ -909,7 +917,7 @@ function tick(ctx: Ctx): void {
 
     const playerThere = hasPlayerPresence(state, v.id);
     const owner = controllerOf(state, v.id);
-    const raidTarget = playerThere ? PLAYER_FACTION : owner !== PLAYER_FACTION ? owner : null;
+    const raidTarget = playerThere ? (raidsOn ? PLAYER_FACTION : null) : owner !== PLAYER_FACTION ? owner : null;
     if (raidReady && raidTarget !== null) {
       // Gegen dich je nach Größe seltener (Kleindealer) oder wie gehabt.
       const factor = raidTarget === PLAYER_FACTION ? RAID_CHANCE_BY_TIER[tier] : 1;
@@ -922,7 +930,7 @@ function tick(ctx: Ctx): void {
     }
 
     if (playerThere && ctx.now >= (police.checkReadyAt[v.id] ?? 0)) {
-      const factor = cityChecks * (night ? (v.nightlife ?? 1) : 1);
+      const factor = cityChecks * (night ? (v.nightlife ?? 1) : 1) * eventFactor(state, 'checks', { veedelId: v.id });
       if (ctx.chance(rampedChance(heat, CHECK_THRESHOLD, CHECK_CHANCE_PER_HOUR) * presence * factor)) {
         runCheck(ctx, v.id);
       }
@@ -965,7 +973,19 @@ export default defineModule({
       if (presence === undefined) return;
       const tier = SALE_HEAT_BY_TIER[tierOf(ctx.state, veedelCity(veedelId))];
       const heat = (SALE_HEAT_BASE + SALE_HEAT_PER_UNIT * Math.max(0, amount)) * presence * tier;
-      addHeat(ctx, veedelId, heat * cautionFactor(ctx.state, sellerId));
+      const event = eventFactor(ctx.state, 'heatPerSale', { veedelId });
+      addHeat(ctx, veedelId, heat * event * cautionFactor(ctx.state, sellerId));
+    },
+    // Stadt-Events (Etappe 7): Fängt ein Fest ohne Razzien an, wartet eine geplante Razzia bis danach.
+    'events.started': (ctx, { cityId, endsAt }) => {
+      if (raidsAllowed(ctx.state, cityId)) return;
+      const police = ctx.state.modules.police;
+      for (const [veedelId, plan] of Object.entries(police.plannedRaids)) {
+        if (veedelCity(veedelId) === cityId && plan.at < endsAt) plan.at = endsAt + RAID_LEAD_TIME;
+      }
+      if (police.majorRaid && veedelCity(police.majorRaid.veedelIds[0]) === cityId && police.majorRaid.at < endsAt) {
+        police.majorRaid.at = endsAt + RAID_LEAD_TIME;
+      }
     },
     'encounter.resolved': (ctx, { kind, outcome, request }) => {
       if (request.origin?.module === 'police') {

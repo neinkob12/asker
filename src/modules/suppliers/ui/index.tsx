@@ -6,6 +6,7 @@ import { clock, formatEuro, formatPercent, type GameState } from '../../../core'
 import { registerMapLayer } from '../../../map';
 import {
   Button,
+  Disclosure,
   Group,
   Hint,
   ItemContent,
@@ -24,7 +25,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName } from '../../city';
+import { activeCity, cityName, relationFactor } from '../../city';
 import { getStock, getWarehouse, getWarehouses, productName, qualityTier } from '../../goods';
 import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount, portName } from '../../logistics';
 import {
@@ -292,6 +293,14 @@ function SupplierDetail(props: { supplierId: string }) {
 
       <h4 class="sup-app__section">Beziehung: {trustLabel(rel.trust)}</h4>
       <ProgressBar value={rel.trust / 100} label="Vertrauen" />
+      <Disclosure
+        label={relationFactor(activeCity(state)) > 1 ? 'Kölscher Klüngel' : 'Kühl und korrekt'}
+        icon="handshake"
+      >
+        {relationFactor(activeCity(state)) > 1
+          ? `In ${cityName(activeCity(state))} kennt man sich: Vertrauen wächst hier anderthalbmal so schnell.`
+          : `In ${cityName(activeCity(state))} gibt es nichts geschenkt: Vertrauen wächst hier langsamer.`}
+      </Disclosure>
       <KeyValue label="Rabatt" value={formatPercent(discount)} />
       <KeyValue label="Kredit" value={limit > 0 ? `${formatEuro(credit)} von ${formatEuro(limit)}` : 'noch keiner'} />
       {rel.debt > 0 && (

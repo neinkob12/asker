@@ -27,6 +27,8 @@ export interface CityDef {
    */
   relationFactor: number;
   bribeFactor: number;
+  /** Zusatz auf die Chance, dass dein Polizei-Kontakt vor einer Razzia warnt. */
+  raidWarningBonus: number;
   description: string;
   /** Schablone: Daten da, Inhalt fehlt noch, im Spiel gesperrt. */
   template?: boolean;
@@ -45,6 +47,7 @@ export const CITIES: readonly CityDef[] = [
     propertyFactor: 1,
     relationFactor: 1.5,
     bribeFactor: 0.75,
+    raidWarningBonus: 0.1,
     description: 'Der Rhein, zwölf Veedel, Kölscher Klüngel: Hier kennt jeder jeden, und das hilft.',
   },
   {
@@ -59,6 +62,7 @@ export const CITIES: readonly CityDef[] = [
     propertyFactor: 1.5,
     relationFactor: 0.8,
     bribeFactor: 1.2,
+    raidWarningBonus: 0,
     description:
       'Der Hafen, die Elbe, die Reeperbahn. Mehr Geld auf der Straße, mehr Augen am Kai. Kühl und korrekt: Gefallen ' +
       'gibt es hier nur gegen Bezahlung.',
@@ -76,6 +80,7 @@ export const CITIES: readonly CityDef[] = [
     propertyFactor: 1.3,
     relationFactor: 1,
     bribeFactor: 1,
+    raidWarningBonus: 0,
     description: 'Noch nicht im Spiel.',
     template: true,
   },

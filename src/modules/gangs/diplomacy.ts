@@ -12,6 +12,7 @@ import {
   journal,
   wallet,
 } from '../../core';
+import { relationFactor } from '../city';
 import { activeEncounters, ENCOUNTER_KINDS, startEncounter } from '../encounters';
 import { DEFAULT_PRODUCT, store } from '../goods';
 import { getStaff, getStaffMember, type StaffMember } from '../staff';
@@ -24,6 +25,7 @@ import {
   ALLIANCE_MIN_RELATION,
   CEASEFIRE_DURATION,
   CEASEFIRE_HOSTILITY_DROP,
+  CEASEFIRE_RELATION,
   DEAL_BETRAYAL_BASE,
   HOSTILITY_ON_PLAYER_ATTACK,
   PROTECTION_INTERVAL,
@@ -85,7 +87,8 @@ export function ceasefire(ctx: Ctx, gangId: string): CommandResult {
   s.ceasefireUntil = ctx.now + CEASEFIRE_DURATION;
   s.quote = null;
   addHostility(s, -CEASEFIRE_HOSTILITY_DROP);
-  addRelation(s, 5);
+  // Kölscher Klüngel (Etappe 7): Die Beziehung wächst je nach Stadt schneller oder langsamer.
+  addRelation(s, CEASEFIRE_RELATION * relationFactor(gang.cityId));
   journal.add(
     ctx,
     `Waffenstillstand mit ${gang.name} für ${formatEuro(cost)}, bis ${clock.format(s.ceasefireUntil)}.`,
@@ -334,7 +337,7 @@ export function acceptOffer(ctx: Ctx, gangId: string, offerId: number): CommandR
   });
   s.money += offer.price;
   s.goods = Math.max(0, s.goods - offer.amount);
-  addRelation(s, RELATION_ON_DEAL);
+  addRelation(s, RELATION_ON_DEAL * relationFactor(gang.cityId));
   journal.add(ctx, `Deal mit ${gang.name}: ${formatAmount(offer.amount)} für ${formatEuro(offer.price)}.`, 'good');
   return { ok: true };
 }

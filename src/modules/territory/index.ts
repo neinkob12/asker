@@ -13,6 +13,7 @@
 //   PLAYER_FACTION, CONTROL_THRESHOLD, getInfluence(state, veedelId, faction), influenceIn(state, veedelId),
 //   addInfluence(ctx, veedelId, faction, delta), controllerOf(state, veedelId), controlledBy(state, faction),
 //   factions(state), factionName(state, faction), factionColor(state, faction), playerPresence(state, veedelId),
+//   saleInfluenceFactor(cityId) (Auftrag 30: in Hamburg bringt ein Verkauf weniger Einfluss),
 //   hasPlayerPresence(state, veedelId), lieutenantInfluence(state, veedelId), campaignProgress(state, cityId?),
 //   cityMilestones(state, cityId?)
 // Kampagne (Auftrag 30): Die Mehrheit der Veedel einer Stadt ist ein Meilenstein ('campaign.milestone', "Boss von
@@ -41,6 +42,7 @@ import {
   PLAYER_COLOR,
   SALE_DISPLACEMENT,
   SALE_INFLUENCE_BASE,
+  SALE_INFLUENCE_FACTOR_BY_CITY,
   SALE_INFLUENCE_MAX,
   SALE_INFLUENCE_PER_UNIT,
   SALE_PRESENCE_MINUTES,
@@ -269,10 +271,17 @@ function updateController(ctx: Ctx, veedelId: string): void {
 }
 
 /** Eigener Verkauf: Einfluss für den Spieler, die stärkste Gang im Veedel wird zurückgedrängt. */
+/** Einfluss pro Verkauf in einer Stadt (1 = wie in Köln; Hamburg weniger, die Gangs sitzen fester). */
+export function saleInfluenceFactor(cityId: string): number {
+  return SALE_INFLUENCE_FACTOR_BY_CITY[cityId] ?? 1;
+}
+
 function onSale(ctx: Ctx, veedelId: string, amount: number): void {
   if (!getVeedel(veedelId)) return;
   ctx.state.modules.territory.lastSaleAt[veedelId] = ctx.now;
-  const gain = Math.min(SALE_INFLUENCE_MAX, SALE_INFLUENCE_BASE + SALE_INFLUENCE_PER_UNIT * Math.max(0, amount));
+  const cityFactor = saleInfluenceFactor(veedelCity(veedelId));
+  const gain =
+    Math.min(SALE_INFLUENCE_MAX, SALE_INFLUENCE_BASE + SALE_INFLUENCE_PER_UNIT * Math.max(0, amount)) * cityFactor;
   changeInfluence(ctx.state, veedelId, PLAYER_FACTION, gain);
   const rival = strongestGang(ctx.state, veedelId);
   if (rival) changeInfluence(ctx.state, veedelId, rival, -gain * SALE_DISPLACEMENT);

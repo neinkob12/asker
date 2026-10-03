@@ -7,6 +7,7 @@ import { mapEffects, registerMapLayer } from '../../../map';
 import {
   Card,
   ContextMenu,
+  Disclosure,
   Group,
   ItemContent,
   List,
@@ -32,7 +33,10 @@ import {
   getAllSpots,
   getSpot,
   getSpots,
+  isKneipe,
   isSpotActive,
+  isSpotOpen,
+  KNEIPE,
   lockedSpots,
   MAX_CUSTOM_SPOTS,
   spotCity,
@@ -78,10 +82,20 @@ function SpotPanel(props: { spotId: string }) {
             color="place"
             title={veedelName(spot.veedelId)}
             meta="Veedel"
-            tags={[spot.custom && { label: 'eigener Spot', icon: 'pinPlus', color: 'brand' }]}
+            tags={[
+              spot.custom && { label: 'eigener Spot', icon: 'pinPlus', color: 'brand' },
+              isKneipe(spot) && { label: `Kneipe ${KNEIPE.from}–${KNEIPE.to} Uhr`, icon: 'beer', color: 'goods' },
+              isKneipe(spot) && !isSpotOpen(spot, state.time) && { label: 'zu', color: 'system' },
+            ]}
           />
         </ListItem>
       </List>
+      {isKneipe(spot) && (
+        <Disclosure label="Was ist anders in der Kneipe?" icon="beer">
+          Offen von {KNEIPE.from} bis {KNEIPE.to} Uhr. Weniger Laufkundschaft, dafür werden Gäste doppelt so oft zu
+          Stammkunden, und sie schauen weniger auf den Preis. Der Ruf zählt hier doppelt, im Guten wie im Schlechten.
+        </Disclosure>
+      )}
       {active ? (
         <Slot name="spots.spotPanel" props={{ spotId: spot.id }} />
       ) : (

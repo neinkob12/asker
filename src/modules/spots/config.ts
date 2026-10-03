@@ -5,7 +5,8 @@ export type PresetSpot = Omit<Spot, 'veedelId'>;
 
 /**
  * Vorgegebene Spots. Die mit unlockCost 0 sind von Anfang an offen, die anderen muss man freischalten
- * (Schwarzgeld für Kontakte vor Ort). audience: wie stark ein Kundentyp hier vertreten ist (1 = normal).
+ * (Schwarzgeld für Kontakte vor Ort). audience: wie stark ein Kundentyp hier vertreten ist (1 = normal). In Sülz,
+ * Lindenthal und Neustadt-Süd gibt es seit Auftrag 30 mehr Studenten (zahlen weniger, kommen oft).
  */
 export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
@@ -36,7 +37,7 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
     demand: 1.1,
     priceMultiplier: 1.1,
     unlockCost: 450,
-    audience: { student: 1.5, stoner: 1.3 },
+    audience: { student: 1.8, stoner: 1.3 },
   },
   {
     id: 'zuelpicher',
@@ -46,7 +47,7 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
     demand: 1.5,
     priceMultiplier: 1.05,
     unlockCost: 0,
-    audience: { student: 1.5, party: 1.8 },
+    audience: { student: 1.8, party: 1.8 },
   },
   {
     id: 'rudolfplatz',
@@ -106,7 +107,7 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
     demand: 1.0,
     priceMultiplier: 1.0,
     unlockCost: 0,
-    audience: { student: 2.5, banker: 0.3 },
+    audience: { student: 2.8, banker: 0.3 },
   },
   // --- Auftrag 28: Jedes Veedel hat mindestens zwei Spots, mindestens einen zum Kaufen. Die Schäl Sick (Deutz,
   // Kalk, Mülheim) und Bayenthal sind Ziele fürs mittlere Spiel: teurer im Freischalten, dafür lohnend. ---
@@ -168,7 +169,7 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
     demand: 0.7,
     priceMultiplier: 1.25,
     unlockCost: 650,
-    audience: { banker: 1.3, student: 1.0, stoner: 1.0 },
+    audience: { banker: 1.3, student: 1.3, stoner: 1.0 },
   },
   {
     id: 'berrenrather',
@@ -178,7 +179,7 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
     demand: 1.0,
     priceMultiplier: 1.15,
     unlockCost: 750,
-    audience: { banker: 1.2, student: 1.1, stoner: 0.8 },
+    audience: { banker: 1.2, student: 1.4, stoner: 0.8 },
   },
   {
     id: 'hermeskeiler',
@@ -188,7 +189,7 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
     demand: 0.8,
     priceMultiplier: 1.2,
     unlockCost: 600,
-    audience: { banker: 1.3, stoner: 1.0, party: 0.6 },
+    audience: { banker: 1.3, stoner: 1.0, party: 0.6, student: 1.2 },
   },
   {
     id: 'wilhelmplatz',
@@ -521,6 +522,62 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
     unlockCost: 1100,
     audience: { banker: 1.6, tourist: 1.6, stoner: 0.3 },
   },
+  // Veedel-Kneipen (Auftrag 30, Etappe 7): zum Kaufen, offen 17 bis 1 Uhr, weniger Laufkundschaft, viele Stammgäste.
+  {
+    id: 'kneipe-severin',
+    name: 'Kneipe Severinstraße',
+    kind: 'kneipe',
+    lng: 6.9588,
+    lat: 50.9262,
+    demand: 0.75,
+    priceMultiplier: 1.1,
+    unlockCost: 1100,
+    audience: { stoner: 1.3, party: 1.2, student: 1.0, tourist: 0.4 },
+  },
+  {
+    id: 'kneipe-koerner',
+    name: 'Kneipe Körnerstraße',
+    kind: 'kneipe',
+    lng: 6.9196,
+    lat: 50.9478,
+    demand: 0.75,
+    priceMultiplier: 1.05,
+    unlockCost: 1000,
+    audience: { student: 1.4, stoner: 1.3, party: 1.1, banker: 0.5 },
+  },
+  {
+    id: 'kneipe-nippes',
+    name: 'Kneipe Neusser Straße',
+    kind: 'kneipe',
+    lng: 6.9565,
+    lat: 50.9625,
+    demand: 0.7,
+    priceMultiplier: 1.0,
+    unlockCost: 900,
+    audience: { stoner: 1.4, party: 1.0, banker: 0.6, tourist: 0.3 },
+  },
+  {
+    id: 'kneipe-suelz',
+    name: 'Kneipe Sülzburgstraße',
+    kind: 'kneipe',
+    lng: 6.9215,
+    lat: 50.918,
+    demand: 0.7,
+    priceMultiplier: 1.1,
+    unlockCost: 1000,
+    audience: { student: 1.6, banker: 1.0, stoner: 0.9, tourist: 0.3 },
+  },
+  {
+    id: 'kiezbar',
+    name: 'Kiez-Bar Hamburger Berg',
+    kind: 'kneipe',
+    lng: 9.9572,
+    lat: 53.5508,
+    demand: 0.85,
+    priceMultiplier: 1.15,
+    unlockCost: 1800,
+    audience: { party: 1.6, stoner: 1.3, tourist: 1.0 },
+  },
 ];
 
 /**
@@ -539,6 +596,13 @@ export const ORIGINAL_SPOT_IDS: readonly string[] = [
   'stadtgarten',
   'uni',
 ];
+
+/**
+ * Veedel-Kneipen (Auftrag 30, Etappe 7): offen von 17 bis 1 Uhr, weniger Laufkundschaft (niedriger demand im Preset),
+ * Stammkunden regularFactor-mal so oft, Ruf-Änderungen dort reputationFactor-fach, Preisempfindlichkeit der Gäste mal
+ * priceSensitivity (sie schauen weniger auf den Preis).
+ */
+export const KNEIPE = { from: 17, to: 1, regularFactor: 2, reputationFactor: 2, priceSensitivity: 0.7 } as const;
 
 /** Eigenen Spot gründen kostet so viel Schwarzgeld. */
 export const FOUND_SPOT_COST = 800;
@@ -581,8 +645,13 @@ export const SPOT_LABELS: Readonly<Record<string, { labelSide: 'left' | 'right';
   'muelheimer-hafen': { labelSide: 'left', labelOffsetY: 0 },
   suedpark: { labelSide: 'left', labelOffsetY: 0 },
   'rheinufer-bayenthal': { labelSide: 'right', labelOffsetY: 0 },
+  'kneipe-severin': { labelSide: 'right', labelOffsetY: 0 },
+  'kneipe-koerner': { labelSide: 'left', labelOffsetY: 0 },
+  'kneipe-nippes': { labelSide: 'right', labelOffsetY: 0 },
+  'kneipe-suelz': { labelSide: 'left', labelOffsetY: 0 },
   // Hamburg: Nachbarn nah beieinander bekommen Plaketten auf verschiedenen Seiten.
   spielbudenplatz: { labelSide: 'right', labelOffsetY: 0 },
+  kiezbar: { labelSide: 'left', labelOffsetY: -22 },
   'hans-albers-platz': { labelSide: 'left', labelOffsetY: 0 },
   landungsbruecken: { labelSide: 'right', labelOffsetY: 0 },
   schulterblatt: { labelSide: 'left', labelOffsetY: 0 },
