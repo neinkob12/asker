@@ -233,6 +233,20 @@ export function SettingsApp() {
         </button>
       </Section>
 
+      <Section icon="info" color="system" title="Über">
+        <p class="set-note">
+          Köln Tycoon ist ein Spiel. Alle Personen, Gangs und Geschäfte sind frei erfunden, die Orte sind echt.
+        </p>
+        <dl class="set-sources">
+          <dt>Karte</dt>
+          <dd>© OpenFreeMap, © OpenMapTiles, © OpenStreetMap-Mitwirkende (ODbL)</dd>
+          <dt>Straßen, Flüsse, Autobahnen</dt>
+          <dd>© OpenStreetMap-Mitwirkende, Overture Maps Foundation (ODbL)</dd>
+          <dt>Veedel-Grenzen</dt>
+          <dd>Stadt Köln, Offene Daten Köln (Datenlizenz Deutschland Zero 2.0)</dd>
+        </dl>
+      </Section>
+
       <p class="set-foot">Ton, Karte und Spiel gelten nur für dieses Gerät.</p>
     </div>
   );

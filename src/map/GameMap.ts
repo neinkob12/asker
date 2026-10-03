@@ -23,6 +23,8 @@ import { BASE_LAYERS, baseStyle, LANDMARK_SOURCE } from './style';
 setWorkerUrl(workerUrl);
 
 const KOELN_PITCH = 50;
+/** Straßennetz, Wasserwege und Autobahn-Zufahrten kommen aus Overture Maps (abgeleitet von OpenStreetMap, ODbL). */
+export const ATTRIBUTION = '© OpenStreetMap-Mitwirkende, Overture Maps Foundation';
 const KOELN_BEARING = -20;
 const MAX_PIXEL_RATIO = 1.5;
 
@@ -61,7 +63,8 @@ export class GameMap implements MapController {
       pitch: KOELN_PITCH,
       bearing: KOELN_BEARING,
       maxPitch: 75,
-      attributionControl: { compact: true },
+      // Quellenangabe unten rechts: Kacheln aus dem Stil, dazu Straßen, Flüsse und Wege aus Overture (Auftrag 31).
+      attributionControl: { compact: true, customAttribution: ATTRIBUTION },
       fadeDuration: 200,
       // Retina-Bildschirme zeichnen sonst mit doppelter Auflösung. Das kostet viel Grafikspeicher, und Safari
       // lädt die Seite neu, wenn er ausgeht (weißer Bildschirm).
