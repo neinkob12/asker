@@ -24,12 +24,11 @@ import { cityName, cityTravel, getCity } from '../index';
 /** Tempo vor "Fahrt überspringen", damit es nach der Ankunft wieder gilt (pro Durchgang). */
 let skipped: { runId: string; speed: number } | null = null;
 
-/** Kamera klebt am Auto (nah, schräg, hinter ihm); Ziehen an der Karte löst sie, "Folgen" holt sie zurück. */
+/** Kamera klebt am Auto (Draufsicht); Ziehen an der Karte löst sie, "Folgen" holt sie zurück. */
 let following = true;
 
-/** So nah fährt die Kamera hinter dem Auto her (Straßenhöhe) und so schräg schaut sie. */
-const FOLLOW_ZOOM = 15.6;
-const FOLLOW_PITCH = 62;
+/** Draufsicht (2D, Norden oben) und weiter weg, damit die Fahrt auf der A1 nicht so schnell wirkt. */
+const FOLLOW_ZOOM = 13.2;
 
 function travelProgress(now: number, departedAt: number, arrivesAt: number): number {
   return Math.min(1, Math.max(0, (now - departedAt) / Math.max(1, arrivesAt - departedAt)));
@@ -169,20 +168,20 @@ export const travelLayer: MapLayer = {
         }
         const t = travelProgress(state.time, travel.departedAt, travel.arrivesAt);
         car.setProgress(t);
-        const { position, bearing: heading } = pointAlong(route.path, t);
+        const { position } = pointAlong(route.path, t);
         marker.setLngLat([position.lng, position.lat]);
         syncMarker();
         const text = `Du · ${cityName(travel.to)}`;
         if (label.textContent !== text) label.textContent = text;
-        // Kamera folgt dem Auto nah an der Straße, mit Blick in Fahrtrichtung (nicht öfter als einmal pro Sekunde).
+        // Kamera folgt dem Auto in der Draufsicht (nicht öfter als einmal pro Sekunde).
         const now = performance.now();
         if (following && ctx.ui.mapView() !== 'deutschland' && now - followedAt > 1000) {
           followedAt = now;
           map.easeTo({
             center: [position.lng, position.lat],
             zoom: FOLLOW_ZOOM,
-            pitch: FOLLOW_PITCH,
-            bearing: heading,
+            pitch: 0,
+            bearing: 0,
             duration: 1400,
             easing: (x) => x,
           });
