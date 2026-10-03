@@ -19,7 +19,7 @@ import { DEFAULT_PRODUCT } from '../../goods';
 import { getSpotPrice } from '../../market';
 import { getStaff, type StaffMember } from '../../staff';
 import { veedelName } from '../../veedel';
-import { getAllSpots, isSpotActive, type Spot, spotLabelPlacement } from '../index';
+import { getAllSpots, isKneipe, isSpotActive, type Spot, spotLabelPlacement } from '../index';
 
 /** Unter dieser Zoomstufe zeigen gesperrte Spots keinen Namen (sonst drängeln sich die Pillen). */
 const NAMES_ZOOM = 13;
@@ -227,6 +227,12 @@ export const spotsLayer: MapLayer = {
       octagon.append(badge, lock);
       const sign = el('span', 'spot-sign');
       sign.append(el('span', 'spot-pulse'), octagon);
+      // Kneipen (Auftrag 30, Etappe 7) tragen ein Bierglas am Schild.
+      if (isKneipe(spot)) {
+        const kind = el('span', 'spot-kind');
+        kind.appendChild(iconElement('beer', { strokeWidth: 2.4 }));
+        sign.append(kind);
+      }
 
       const name = el('span', 'spot-name', spot.name);
       const crewText = el('span', 'spot-crew__text');

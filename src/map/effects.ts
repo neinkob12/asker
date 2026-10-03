@@ -115,6 +115,32 @@ export function ping(
   window.setTimeout(() => marker.remove(), 1700);
 }
 
+/** Funken, die bei einem Feuerwerk aus einem Punkt fliegen. */
+const FIREWORK_SPARKS = 14;
+const FIREWORK_MS = 1700;
+
+/**
+ * Ein Feuerwerk-Schlag über einem Punkt (z.B. Kölner Lichter über dem Rhein): Funken fliegen kreisförmig auseinander
+ * und verglühen, nur CSS (transform und opacity). color: Farbe der Funken, size: Radius in Pixeln (Standard 46).
+ * Bei "Bewegung reduzieren" passiert nichts.
+ */
+export function firework(map: MapLibreMap, position: LngLat, options: { color?: string; size?: number } = {}): void {
+  if (reducedMotion()) return;
+  const sparks = Array.from({ length: FIREWORK_SPARKS }, (_, i) => {
+    const spark = el('span', 'map-fx-firework__spark');
+    spark.style.setProperty('--fx-angle', `${Math.round((360 / FIREWORK_SPARKS) * i)}deg`);
+    return spark;
+  });
+  const { marker, element } = addHtmlMarker(map, {
+    position,
+    className: 'map-fx-firework',
+    children: [el('span', 'map-fx-firework__glow'), ...sparks],
+  });
+  element.style.setProperty('--fx-firework-color', options.color ?? '#f2c766');
+  element.style.setProperty('--fx-firework-size', `${options.size ?? 46}px`);
+  window.setTimeout(() => marker.remove(), FIREWORK_MS + 100);
+}
+
 /** Heller Blitz über der ganzen Karte (Gewitter, Schuss, Explosion). strength 0–1. */
 export function flash(
   map: MapLibreMap,
@@ -161,4 +187,6 @@ export const mapEffects = {
     withMap((map) => ping(map, position, options)),
   flash: (options?: { color?: string; strength?: number; durationMs?: number }) =>
     withMap((map) => flash(map, options)),
+  firework: (position: LngLat, options?: { color?: string; size?: number }) =>
+    withMap((map) => firework(map, position, options)),
 };

@@ -190,6 +190,15 @@ export function DynamicIsland(props: { floating?: boolean; clock?: string }) {
   }, [expandedNow, ids]);
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
 
+  // Schwebt die Island (Handy weggelegt), macht das HUD am Handy-Bildschirm ihr Platz unter Geld und Uhr, statt dass
+  // sie die Kacheln Stadt, Lager und Ruf verdeckt (Klasse am body, Regel in shell.css).
+  const floatingShown = !!props.floating && !!state && (activities.length > 0 || !!ui.island.pulse || !!alertId);
+  useEffect(() => {
+    if (!props.floating) return;
+    document.body.classList.toggle('has-floating-island', floatingShown);
+    return () => document.body.classList.remove('has-floating-island');
+  }, [floatingShown]);
+
   if (!state) return null;
   const alert = alertId ? activities.find((a) => a.id === alertId) : undefined;
   const pulse = ui.island.pulse;

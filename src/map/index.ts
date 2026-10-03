@@ -3,7 +3,7 @@
 //   registerMapLayer({ id, order, mount(ctx) { ...; return { update(state, ui) {}, destroy() {} } } })
 //   addHtmlMarker(map, { position, className, children, onClick })   el(tag, className, text)
 //   addTargetMarker(map, { position, label, sublabel, tone })           runder weißer Marker mit Label
-//   Effekte: moneyPopup, blueLight, ping, flash bzw. gebunden an die aktive Karte: mapEffects.money(pos, 450) …
+//   Effekte: moneyPopup, blueLight, ping, flash, firework bzw. gebunden an die aktive Karte: mapEffects.money(pos, 450) …
 //   3D-Mini-Fahrzeuge: createVehicle(map, { path, kind }), animateVehicle; Hotspots: createHotspots(map, id)
 //   Stimmung: setMapMood(id, { darken, tint, … }), setPrecipitation({ kind: 'rain', intensity })
 //   Tag/Nacht: daylight(minuteOfDay), dayPhase(minuteOfDay), daylightAt(time)
@@ -20,6 +20,7 @@ export {
   type BlueLightOptions,
   blueLight,
   type EffectHandle,
+  firework,
   flash,
   type MoneyPopupOptions,
   mapEffects,
