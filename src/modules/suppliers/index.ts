@@ -30,6 +30,7 @@
 
 import {
   type CommandResult,
+  type Contact,
   type Ctx,
   clock,
   defineModule,
@@ -73,6 +74,7 @@ import {
   SEIZE_FACTOR,
   SHIP_SHARE,
   START_TRUST,
+  SUPPLIER_LOOKS,
   SUPPLIERS,
   TRUST_CASH_BONUS,
   TRUST_LATE_PENALTY,
@@ -529,11 +531,14 @@ function addTrust(ctx: Ctx, supplierId: string, raw: number): void {
   }
 }
 
-function contactOf(supplier: Supplier) {
+function contactOf(supplier: Supplier): Contact {
   return {
     id: supplierContactId(supplier.id),
     name: `${supplier.contactName} (${supplier.name})`,
-    kind: 'supplier' as const,
+    kind: 'supplier',
+    role: `Lieferant aus ${supplier.name}`,
+    about: supplier.description,
+    look: SUPPLIER_LOOKS[supplier.id] ?? {},
   };
 }
 

@@ -159,6 +159,20 @@ export function SettingsApp() {
           onChange={(v) => audio.update({ sfx: v })}
           disabled={s.muted}
         />
+        <Toggle
+          label="Stimmen im Anruf"
+          hint={
+            audio.canSpeakAtAll
+              ? 'Figuren sprechen am Telefon mit eigener Stimme. Aus: nur Untertitel.'
+              : 'Dieser Browser hat keine Sprachausgabe, Anrufe laufen mit Untertiteln.'
+          }
+          checked={s.voices}
+          onChange={(on) => {
+            if (!on) audio.stopSpeaking();
+            audio.update({ voices: on });
+          }}
+          disabled={s.muted}
+        />
         <Player />
       </Section>
 

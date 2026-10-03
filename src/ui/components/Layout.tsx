@@ -1,7 +1,9 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { memo } from 'preact/compat';
 import { useContext } from 'preact/hooks';
+import type { Look } from '../../core';
 import { haptic } from '../haptics';
+import { Face } from './Face';
 import { type CategoryColor, type ChipColor, categoryOf, Icon, IconChip } from './Icon';
 import type { IconName } from './icons';
 import { BarActionsContext, Portal } from './Portal';
@@ -425,11 +427,14 @@ export interface AvatarProps {
   name: string;
   /** Bild-URL, Emoji oder Icon-Name. */
   image?: string;
-  size?: 'sm' | 'md' | 'lg';
+  /** xl: großes Porträt (Profil, Anruf). */
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   /** Bedeutungsfarbe des Kreises (z.B. Kontaktart). Standard: aus dem Namen abgeleitet. */
   tone?: CategoryColor;
   /** Eigene Hintergrundfarbe (CSS-Farbe), z.B. die Farbe einer Gang. Vorrang vor tone. */
   color?: string;
+  /** Aussehen einer Person: gezeichnetes Porträt statt Initialen (ein Bild-URL hat Vorrang). */
+  look?: Look | null;
 }
 
 const AVATAR_TONES: CategoryColor[] = ['place', 'money', 'people', 'brand', 'media', 'chat', 'goods', 'law'];
@@ -449,6 +454,13 @@ export const Avatar = memo(function Avatar(props: AvatarProps) {
   const cls = `ui-avatar ui-avatar--${props.size ?? 'md'} ${custom ? 'ui-avatar--custom' : `ui-avatar--${tone}`}`;
   if (image && /^(https?:|data:|\/|\.\/)/.test(image)) {
     return <img class={cls} src={image} alt="" style={style} />;
+  }
+  if (props.look) {
+    return (
+      <span class={`${cls} ui-avatar--face`} style={style} aria-hidden="true">
+        <Face look={props.look} />
+      </span>
+    );
   }
   return (
     <span class={cls} style={style} aria-hidden="true">

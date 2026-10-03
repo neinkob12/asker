@@ -11,6 +11,7 @@
 // bleibt der Chat mit denselben Antworten. Klingelnde Anrufe und Rückrufe stehen in `calls` (Kernschema 3).
 
 import { CALL_MAX_ATTEMPTS, CALL_RETRY_MINUTES, CALL_RING_MINUTES, MESSAGE_LIMIT } from './config';
+import { type Look, lookFor, personLook, type VoiceSpec, voiceFor } from './looks';
 import type { Command, CommandResult, Ctx, GameState } from './types';
 
 export type ContactKind = 'customer' | 'supplier' | 'gang' | 'staff' | 'police' | 'other';
@@ -20,8 +21,36 @@ export interface Contact {
   id: string;
   name: string;
   kind: ContactKind;
-  /** Bild-URL oder Emoji, optional. */
+  /** Bild-URL oder Emoji, optional. Ohne Bild zeigt das Handy bei Personen ein gezeichnetes Porträt (look). */
   avatar?: string;
+  /** Wer das ist, kurz, z.B. "Hamburger Hafen" (Profil, Anruf). Standard: die Art des Kontakts. */
+  role?: string;
+  /** Ein, zwei Sätze über die Figur (Profil im Handy). */
+  about?: string;
+  /**
+   * Aussehen fürs Porträt, auch nur teilweise (der Rest kommt fest aus der ID, siehe lookFor). Ein leeres Objekt heißt:
+   * eine Person mit Gesicht, auch wenn die Art (z.B. 'other') sonst keins bekäme.
+   */
+  look?: Partial<Look>;
+  /** Stimme im Anruf, auch nur teilweise (Rest passend zum Aussehen, siehe voiceFor). */
+  voice?: Partial<VoiceSpec>;
+}
+
+/** Arten, die immer Personen sind (Gesicht auch ohne eigenes Aussehen). Gangs und 'other' nur mit look. */
+const PERSON_KINDS: ReadonlySet<ContactKind> = new Set(['customer', 'supplier', 'staff', 'police']);
+
+/** Aussehen eines Kontakts, null für Nicht-Personen (Gangs, Ticker) und Kontakte mit eigenem Bild. */
+export function contactLook(contact: Contact | undefined): Look | null {
+  if (!contact) return null;
+  if (!contact.look && (contact.avatar || !PERSON_KINDS.has(contact.kind))) return null;
+  // Ohne eigenes Aussehen über den Namen wie im Personal (personLook), sonst über die ID.
+  return contact.look ? lookFor(contact.id, contact.name, contact.look) : personLook(contact.name);
+}
+
+/** Stimme eines Kontakts im Anruf (auch für Nicht-Personen, dann neutral aus der ID). */
+export function contactVoice(contact: Contact | undefined, contactId = contact?.id ?? ''): VoiceSpec {
+  const look = contactLook(contact) ?? lookFor(contactId, contact?.name ?? '', contact?.look);
+  return voiceFor(contactId, look, contact?.voice);
 }
 
 export interface MessageOption {

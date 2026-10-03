@@ -306,7 +306,7 @@ function unlock(ctx: Ctx, channelId: LaunderingChannelId, pay: 'clean' | 'dirty'
     'good',
   );
   messages.send(ctx, {
-    contact: { id: `laundering:${c.id}`, name: c.name, kind: 'other' },
+    contact: { id: `laundering:${c.id}`, name: c.name, kind: 'other', role: 'Geldwäsche', look: {} },
     text: `Alles klar, wir sind im Geschäft. Bis ${formatEuro(c.capacity)} auf einmal, Gebühr ${Math.round(c.fee * 100)} %. Übertreib es nicht.`,
     silent: true,
   });

@@ -1,7 +1,7 @@
 // Einstellbare Werte der Quests: Kapitel, die Quests der Reihe nach und ihre Belohnungen.
 // Peter (dein alter Kontakt) schickt jede Quest per Handy und meldet sich, wenn sie erledigt ist.
 
-import type { GameEvents, GameState, MoneyKind } from '../../core';
+import type { Contact, GameEvents, GameState, MoneyKind } from '../../core';
 import { getWarehouses } from '../goods';
 import { getLieutenants, getRightHand } from '../hierarchy';
 import { netWorth } from '../leaderboard';
@@ -12,7 +12,28 @@ import { getStaff } from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import { veedelCity } from '../veedel';
 
-export const PETER = { id: 'quest:peter', name: 'Peter', kind: 'other' as const, avatar: '🧢' };
+export const PETER: Contact = {
+  id: 'quest:peter',
+  name: 'Peter',
+  kind: 'other',
+  role: 'Dein alter Kontakt',
+  about:
+    'Kennt dich noch von früher aus Kalk. Hat selbst lange vertickt, heute zieht er lieber die Fäden und sagt dir, was als Nächstes dran ist.',
+  look: {
+    feminine: false,
+    age: 41,
+    skin: 2,
+    hair: 'short',
+    hairColor: 1,
+    beard: 'stubble',
+    glasses: 'none',
+    hat: 'cap',
+    top: 'tracksuit',
+    topColor: 1,
+    extra: 'chain',
+  },
+  voice: { pitch: 0.92, rate: 1.06 },
+};
 
 /** Alle so viele Spielminuten prüft das Modul Quests, die am Zustand hängen. */
 export const QUEST_CHECK_EVERY = 5;

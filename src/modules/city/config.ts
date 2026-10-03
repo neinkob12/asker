@@ -7,7 +7,23 @@ export const HARBOR_CALLER: Contact = {
   id: 'other:hamburg-harbor',
   name: 'Fiete Lührs',
   kind: 'other',
-  avatar: '⚓',
+  role: 'Hamburger Hafen',
+  about:
+    'Vorarbeiter am Burchardkai, seit dreißig Jahren im Hafen. Kennt jeden Zöllner beim Vornamen und jeden Container, der nicht aufgemacht wird.',
+  look: {
+    feminine: false,
+    age: 58,
+    skin: 1,
+    hair: 'short',
+    hairColor: 5,
+    beard: 'full',
+    glasses: 'none',
+    hat: 'skipper',
+    top: 'raincoat',
+    topColor: 0,
+    extra: 'none',
+  },
+  voice: { pitch: 0.7, rate: 0.88 },
 };
 
 /** So viele Spielminuten nach "Köln komplett" ruft er an (nicht während einer Konfrontation, sonst danach). */
@@ -32,7 +48,15 @@ export const OFFER_TEXTS = {
   summary: 'Anruf aus dem Hamburger Hafen',
   missed: 'Fiete hier, Hamburger Hafen. Ich ruf nochmal an. Geh ran.',
   gaveUp: 'Ich hab dir alles gesagt. Wenn du willst: Du weißt, wo du mich findest.',
-  ready: 'Gut. Regel die Übergabe in Köln. Dann sehen wir uns am Kai.',
+  ready: 'Gut. Dann gib Köln ab, am besten gleich. Du hast doch jemanden dafür.',
+  /** Nach "ready", mit Namen der Rechten Hand ({name}): was die Übergabe bedeutet. */
+  handoverDeal:
+    '{name}, hab ich gehört. Köln läuft dann ohne dich: achtzig Prozent vom Tagesgewinn für {name}, der Rest für dich. Und du kannst jederzeit zurück.',
+  handoverAsk: 'Also: Übergibst du jetzt und kommst rüber?',
+  /** Übergeben und losgefahren. */
+  handoverDone: 'Sauber. Fahr über die A1, ich warte am Kai. Und fahr anständig, die blitzen gern hinter Bremen.',
+  /** "Ich regel vorher noch was": Die Übergabe geht dann über die Karte unter Geld und Heat. */
+  handoverLater: 'Mach. Aber lass mich nicht ewig warten. Wenn du so weit bist, regel die Übergabe und komm.',
   notReady: 'Langsam. Bring erst dein Haus in Ordnung. Ich schreib dir, was mir fehlt.',
   later: 'Überleg es dir. Ich meld mich.',
   stay: 'Schade. Das Angebot steht. Schreib mir, wenn du es dir anders überlegst.',

@@ -931,6 +931,16 @@
   object-fit: cover;
   overflow: hidden;
 }
+.ui-avatar--face {
+  overflow: hidden;
+  /* Gesicht etwas tiefer, damit Schultern und Kinn im Kreis sitzen. */
+  align-items: end;
+}
+.ui-avatar--face .ui-face {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 .ui-avatar--custom {
   color: var(--color-on-bright);
 }
@@ -952,6 +962,14 @@
 }
 .ui-avatar--lg .ui-icon {
   font-size: 32px;
+}
+.ui-avatar--xl {
+  width: 112px;
+  height: 112px;
+  font-size: 40px;
+}
+.ui-avatar--xl .ui-icon {
+  font-size: 56px;
 }
 .ui-avatar--money {
   --av-a: var(--cat-money-a);

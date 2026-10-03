@@ -1,6 +1,7 @@
 // Gemeinsame Bausteine der Personal-Oberfläche: Porträt (Platzhalter), Status-Stempel, Werte-Balken.
 
 import type { JSX } from 'preact';
+import { personLook } from '../../../core';
 import { Avatar, type CategoryColor, Icon, ProgressBar, Tag } from '../../../ui';
 import {
   ROLE_INFO,
@@ -55,9 +56,12 @@ const STATUS_TAGS: Record<StaffStatus, { tone: CategoryColor; icon: string }> = 
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-/** Porträt. Solange es keine Bilder gibt (portrait = null), ein Kreis in der Farbe der Rolle mit Initialen. */
+/**
+ * Porträt. Ohne Bild (portrait = null) ein gezeichnetes Gesicht aus Name und Alter (personLook, dasselbe wie im Chat),
+ * im Kreis in der Farbe der Rolle.
+ */
 export function Portrait(props: {
-  person: { name: string; role: StaffRole; portrait: string | null };
+  person: { name: string; role: StaffRole; portrait: string | null; age?: number };
   size?: 'sm' | 'lg';
 }) {
   const { person } = props;
@@ -66,7 +70,13 @@ export function Portrait(props: {
   const cls = `staff-portrait staff-portrait--${size}`;
   return (
     <div class={cls} role="img" aria-label={`Porträt ${person.name}`}>
-      <Avatar name={person.name} tone={tone} size={size === 'lg' ? 'lg' : 'md'} image={person.portrait ?? undefined} />
+      <Avatar
+        name={person.name}
+        tone={tone}
+        size={size === 'lg' ? 'lg' : 'md'}
+        image={person.portrait ?? undefined}
+        look={personLook(person.name, person.age)}
+      />
       <span
         class="staff-portrait__role"
         style={{ '--role-tone': `var(--cat-${tone})` } as JSX.CSSProperties}

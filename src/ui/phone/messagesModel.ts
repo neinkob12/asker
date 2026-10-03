@@ -2,7 +2,16 @@
 // Chat-Liste, Verlauf eines Chats mit Tagestrennern, Antwort-Optionen und Fristen, Benachrichtigungen.
 // Die Nachrichten selbst verwaltet der Nachrichtendienst im Kern (src/core/messages.ts).
 
-import { type ContactKind, clock, type GameState, type Message, messages } from '../../core';
+import {
+  type Contact,
+  type ContactKind,
+  clock,
+  contactLook,
+  type GameState,
+  type Look,
+  type Message,
+  messages,
+} from '../../core';
 import type { CategoryColor } from '../components';
 import { memoState } from '../stateMemo';
 
@@ -40,6 +49,20 @@ export function contactAvatar(avatar: string | undefined, kind: ContactKind): st
   return avatar ?? CONTACT_KIND_ICONS[kind];
 }
 
+/** Porträts pro Kontakt-Objekt gemerkt: Die Liste wird oft neu berechnet, das Aussehen ändert sich nur mit dem Kontakt. */
+const looks = new WeakMap<Contact, Look | null>();
+
+/** Aussehen einer Figur fürs Porträt (null: Gang, Ticker oder eigenes Bild). Gleiches Objekt, solange der Kontakt gleich ist. */
+export function lookOf(contact: Contact | undefined): Look | null {
+  if (!contact) return null;
+  let look = looks.get(contact);
+  if (look === undefined) {
+    look = contactLook(contact);
+    looks.set(contact, look);
+  }
+  return look;
+}
+
 /** Überschrift der Gruppe in der Chat-Liste. */
 export const CONTACT_KIND_PLURALS: Record<ContactKind, string> = {
   gang: 'Gangs',
@@ -59,6 +82,8 @@ export interface ChatListItem {
   kind: ContactKind;
   kindLabel: string;
   avatar?: string;
+  /** Aussehen fürs Porträt (Personen). */
+  look?: Look;
   /** Vorschau der letzten Nachricht, eigene mit "Du: ". */
   preview: string;
   /** Zeit der letzten Nachricht: heute "21:34", sonst Wochentag oder "Tag 3". */
@@ -159,6 +184,8 @@ function computeChatList(state: GameState): ChatListItem[] {
       awaitingAnswer: open.length > 0,
     };
     if (thread.contact.avatar) item.avatar = thread.contact.avatar;
+    const look = lookOf(thread.contact);
+    if (look) item.look = look;
     if (deadlines.length > 0) {
       item.deadline = Math.min(...deadlines);
       item.deadlineIn = item.deadline - state.time;
