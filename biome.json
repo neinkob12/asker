@@ -1,8 +1,19 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "files": {
-    "includes": ["**", "!**/dist", "!**/screenshots", "!**/package-lock.json", "!**/public/spielstaende"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/screenshots",
+      "!**/package-lock.json",
+      "!**/public/spielstaende",
+      "!**/src/audio/piper/vendor"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -19,7 +30,9 @@
     }
   },
   "css": {
-    "formatter": { "enabled": true }
+    "formatter": {
+      "enabled": true
+    }
   },
   "linter": {
     "enabled": true,
@@ -29,6 +42,10 @@
   },
   "assist": {
     "enabled": true,
-    "actions": { "source": { "organizeImports": "on" } }
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
   }
 }

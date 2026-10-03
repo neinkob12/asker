@@ -27,6 +27,10 @@ Das Spiel läuft auf Vercel: **https://asker-flax.vercel.app/**. Jeder Push auf 
 jeder PR bekommt einen eigenen Vorschau-Link. Das Spiel läuft komplett im Browser: Jeder spielt sein eigenes Spiel,
 Spielstände liegen im eigenen Browser.
 
+**Stimmen im Anruf:** Die Figuren sprechen mit dem Sprachmodell [Piper](https://github.com/rhasspy/piper), das komplett im
+Browser läuft (WebAssembly). Die beiden Modelle (je gut 60 MB) lädt der Browser beim ersten Anruf einmalig von Hugging
+Face und behält sie; Einstellungen › Ton & Musik zeigt, lädt und löscht sie. Der Server braucht dafür nichts.
+
 **Bestenliste:** Alle Ergebnisse landen in einer gemeinsamen Bestenliste (`api/leaderboard.ts`, eine Vercel Function).
 Sie braucht einmalig einen Speicher: im Vercel-Projekt unter *Storage* eine **Upstash Redis**-Datenbank anlegen und mit dem
 Projekt verbinden (setzt `KV_REST_API_URL` und `KV_REST_API_TOKEN`), danach einmal neu deployen. Lokal (`npm run dev`) ist

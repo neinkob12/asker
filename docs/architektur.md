@@ -267,6 +267,16 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
   MapLibre auf.
 - **Ton** (`src/audio/`, für Module über `src/ui`): selbst erzeugte Musik nach Tageszeit, 14 Effekte,
   Geräusch-Schleifen (Regen, Sturm, Wind), Lautstärken pro Gerät. Startet nach der ersten Interaktion.
+  Stimmen im Anruf (`src/audio/piper/`): das Sprachmodell Piper läuft in einem Worker im Browser (ONNX Runtime Web,
+  espeak-ng als Phonemizer, beides WebAssembly aus dem Build; `vendor/` hält die espeak-Daten auf Deutsch eingedampft,
+  `tools/trim-espeak-data.mjs`). Zwei Modelle (`PIPER_VOICES`: Männerstimme „Thorsten“, Frauenstimme „Kerstin“, je gut
+  60 MB) kommen einmalig von Hugging Face in den Cache des Browsers (Cache API), laden beim ersten Klingeln von selbst
+  (nicht im Datensparmodus) und stehen in Einstellungen › Ton zum Laden und Entfernen. Tonhöhe und Tempo einer Figur
+  (`VoiceSpec` aus dem Kern) werden Wiedergabe-Tempo und `length_scale` (`piperParams`). Ablauf: Text in Sätze
+  (`text.ts`), Satz zu Phonemen, Reparatur des espeak-Fehlers bei „ur“ („Hamburg“), IDs des Modells, ein Lauf pro Satz,
+  Wiedergabe Satz für Satz (`playback.ts`), fertige Zeilen bleiben im Speicher (`engine.ts`). Läuft das Modell nicht
+  (alter Browser, Download gescheitert), spricht die Sprachausgabe des Browsers (`voice.ts`). Im Gespräch
+  (`audio.setCall`) sind Musik, Effekte und Geräusche aus, nur die Stimme bleibt (`busLevels`).
 - **Start** (`start.tsx`): Registriert die Kern-Oberflächen, lädt alle `src/modules/*/ui/index.ts(x)`, setzt den
   Autosave fort oder öffnet "Neues Spiel". URL-Parameter: `?neu=normal|hardcore&seed=123&tempo=0`.
   `window.koeln = { session, runtime }` zum Ausprobieren und für Playwright.

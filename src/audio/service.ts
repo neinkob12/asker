@@ -1,9 +1,15 @@
 // Der Audio-Dienst: Musik-Playlist nach Tageszeit, Soundeffekte, Geräusche (Regen …), Lautstärke und
 // Stummschalten (pro Gerät gemerkt). Startet erst nach der ersten Nutzerinteraktion (Browser-Regel):
 // Vorher sind alle Aufrufe erlaubt, spielen aber nichts.
+// Stimmen im Anruf: Figuren sprechen mit dem Sprachmodell Piper im Browser (piper/), die Sprachausgabe des Browsers
+// (voice.ts) ist nur die Notlösung, wenn das Modell nicht läuft. Während eines Gesprächs (setCall) sind Musik,
+// Effekte und Geräusche aus, nur die Stimme ist zu hören.
 
 import type { KeyValueStorage, VoiceSpec } from '../core';
 import { FilePlayer, MusicPlayer, type TrackPlayer } from './music';
+import { PiperEngine, type SynthJob, type VoiceModelState } from './piper/engine';
+import { SpeechPlayback } from './piper/playback';
+import { type PiperVoice, type PiperVoiceId, piperParams, piperVoiceFor } from './piper/voices';
 import { type AudioSettings, DEFAULT_AUDIO_SETTINGS, loadAudioSettings, saveAudioSettings } from './settings';
 import { Ambience, type AmbienceId, playSound, type SoundId, SynthCore } from './synth';
 import { type MusicMood, pickTrack, TRACKS, type Track } from './tracks';
@@ -41,8 +47,36 @@ const NEIGHBORS: Record<MusicMood, MusicMood[]> = {
 export interface AudioServiceOptions {
   /** Erzeugt den AudioContext. Standard: window.AudioContext. In Tests null. */
   createContext?: () => AudioContext | null;
-  /** Sprachausgabe für Stimmen im Anruf. Standard: die des Browsers. */
+  /** Sprachausgabe des Browsers (Notlösung im Anruf). Standard: die des Browsers. */
   speaker?: Speaker;
+  /** Sprachmodell (Piper im Worker). Standard: eines mit dem Worker des Browsers; null = ohne Modell (Tests). */
+  createEngine?: () => PiperEngine | null;
+}
+
+/** Lautstärke der Busse aus den Einstellungen und der Lage: Im Gespräch bleibt nur die Stimme übrig. */
+export function busLevels(
+  s: AudioSettings,
+  state: { speaking: boolean; inCall: boolean },
+): { master: number; music: number; sfx: number; ambience: number; voice: number } {
+  const call = state.inCall ? 0 : 1;
+  return {
+    master: s.muted ? 0 : s.master,
+    // Spricht jemand (Profil "Stimme anhören"), tritt die Musik zurück; im Anruf ist sie ganz aus.
+    music: s.music * 2.2 * (state.speaking ? 0.3 : 1) * call,
+    sfx: s.sfx * call,
+    ambience: s.sfx * call,
+    voice: Math.max(0.6, s.sfx),
+  };
+}
+
+/** So lange wartet ein Satz auf das Modell (Download beim ersten Anruf), dann spricht der Browser. */
+const READY_TIMEOUT_MS = 90_000;
+
+/** Datensparmodus des Geräts: Dann lädt das Spiel das Modell nicht von selbst (nur aus dem Cache). */
+function dataSaver(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const nav = navigator as Navigator & { connection?: { saveData?: boolean } };
+  return nav.connection?.saveData === true;
 }
 
 export class AudioService {
@@ -70,9 +104,18 @@ export class AudioService {
   private speakerInstance: Speaker | null;
   /** Wie viele Sätze gerade gesprochen werden (Musik so lange leiser). */
   private speaking = 0;
+  private voiceBus: GainNode | null = null;
+  private readonly createEngine: () => PiperEngine | null;
+  /** undefined: noch nicht angelegt, null: dieser Browser kann kein Sprachmodell. */
+  private piperEngine: PiperEngine | null | undefined = undefined;
+  /** Läuft gerade ein Gespräch? Dann sind Musik, Effekte und Geräusche aus. */
+  private callActive = false;
+  /** Abbrechen-Funktionen der laufenden Sätze (stopSpeaking). */
+  private readonly activeSpeech = new Set<() => void>();
 
   constructor(options: AudioServiceOptions = {}) {
     this.speakerInstance = options.speaker ?? null;
+    this.createEngine = options.createEngine ?? (() => new PiperEngine());
     this.createContext =
       options.createContext ??
       (() => {
@@ -147,6 +190,8 @@ export class AudioService {
     this.sfxBus.connect(this.master);
     this.ambienceBus = ctx.createGain();
     this.ambienceBus.connect(this.master);
+    this.voiceBus = ctx.createGain();
+    this.voiceBus.connect(this.master);
     this.core = new SynthCore(ctx, this.musicBus);
     this.ambience = new Ambience(this.core, this.ambienceBus);
     this.applyVolumes(true);
@@ -171,6 +216,8 @@ export class AudioService {
   play(id: SoundId | (string & {}), options: PlayOptions = {}): void {
     const ctx = this.ctx;
     if (!ctx || !this.core || !this.sfxBus || this.status !== 'running' || this.settings.muted) return;
+    // Im Gespräch gibt es nur die Stimme.
+    if (this.callActive) return;
     const t = ctx.currentTime + 0.01 + (options.delay ?? 0);
     const out = ctx.createGain();
     out.gain.value = options.volume ?? 1;
@@ -311,16 +358,31 @@ export class AudioService {
   private applyVolumes(immediate: boolean): void {
     const ctx = this.ctx;
     if (!ctx || !this.master || !this.musicBus || !this.sfxBus || !this.ambienceBus) return;
-    const s = this.settings;
+    const levels = busLevels(this.settings, { speaking: this.speaking > 0, inCall: this.callActive });
     const set = (param: AudioParam, value: number) => {
       if (immediate) param.setValueAtTime(value, ctx.currentTime);
       else param.setTargetAtTime(value, ctx.currentTime, 0.08);
     };
-    set(this.master.gain, s.muted ? 0 : s.master);
-    // Spricht jemand im Anruf, tritt die Musik zurück.
-    set(this.musicBus.gain, s.music * 2.2 * (this.speaking > 0 ? 0.3 : 1));
-    set(this.sfxBus.gain, s.sfx);
-    set(this.ambienceBus.gain, s.sfx);
+    set(this.master.gain, levels.master);
+    set(this.musicBus.gain, levels.music);
+    set(this.sfxBus.gain, levels.sfx);
+    set(this.ambienceBus.gain, levels.ambience);
+    if (this.voiceBus) set(this.voiceBus.gain, levels.voice);
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Gespräch
+
+  /** Gespräch läuft (angenommener Anruf): Musik, Effekte und Geräusche aus, bis es vorbei ist. */
+  setCall(active: boolean): void {
+    if (this.callActive === active) return;
+    this.callActive = active;
+    this.applyVolumes(false);
+    this.emit();
+  }
+
+  get inCall(): boolean {
+    return this.callActive;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -331,52 +393,220 @@ export class AudioService {
     return this.speakerInstance;
   }
 
-  /** Kann dieser Browser überhaupt sprechen (unabhängig von der Einstellung)? */
+  /** Das Sprachmodell, beim ersten Zugriff angelegt; null, wenn der Browser es nicht kann. */
+  private engine(): PiperEngine | null {
+    if (this.piperEngine !== undefined) return this.piperEngine;
+    let engine: PiperEngine | null = null;
+    try {
+      engine = this.createEngine();
+    } catch {
+      engine = null;
+    }
+    this.piperEngine = engine?.supported ? engine : null;
+    if (this.piperEngine) {
+      this.piperEngine.subscribe(() => this.emit());
+      this.piperEngine.refreshStatus();
+    }
+    return this.piperEngine;
+  }
+
+  /** Kann dieser Browser überhaupt sprechen (Sprachmodell oder Sprachausgabe des Browsers)? */
   get canSpeakAtAll(): boolean {
-    return this.speaker.available;
+    return this.engine() !== null || this.speaker.available;
   }
 
   /** Sprechen Figuren im Anruf? (Einstellung an, nicht stumm, Browser kann es.) */
   get canSpeak(): boolean {
-    return this.settings.voices && !this.settings.muted && this.speaker.available;
+    return this.settings.voices && !this.settings.muted && this.canSpeakAtAll;
+  }
+
+  /** Womit die Figuren sprechen: das Sprachmodell, die Stimme des Browsers (Notlösung) oder gar nicht. */
+  get voiceEngine(): 'model' | 'browser' | 'none' {
+    if (!this.canSpeak) return 'none';
+    const engine = this.engine();
+    if (engine?.models.some((m) => m.state.kind !== 'error')) return 'model';
+    return this.speaker.available ? 'browser' : 'none';
+  }
+
+  /** Alle Sprachmodelle mit Stand (Einstellungen › Ton). Leer, wenn der Browser keins ausführen kann. */
+  get voiceModels(): { voice: PiperVoice; state: VoiceModelState }[] {
+    return this.engine()?.models ?? [];
+  }
+
+  /** Stand des Modells, das diese Figur spricht; null ohne Sprachmodell (dann spricht der Browser). */
+  voiceState(spec: VoiceSpec): VoiceModelState | null {
+    const engine = this.engine();
+    return engine ? engine.state(piperVoiceFor(spec).id) : null;
+  }
+
+  /** Modell laden, auch nach einem Fehler noch einmal (Einstellungen). */
+  loadVoiceModel(id: PiperVoiceId): void {
+    void this.engine()?.load(id, { retry: true });
+  }
+
+  /** Modell vom Gerät löschen (Einstellungen). */
+  removeVoiceModel(id: PiperVoiceId): void {
+    this.engine()?.remove(id);
+  }
+
+  /** Darf das Modell für diese Figur gerade sprechen (läuft, lädt oder darf laden)? */
+  private modelAllowed(engine: PiperEngine, spec: VoiceSpec): boolean {
+    const state = engine.state(piperVoiceFor(spec).id);
+    if (state.kind === 'error') return false;
+    if (state.kind === 'idle') return state.cached === true || !dataSaver();
+    return true;
+  }
+
+  /**
+   * Modell einer Figur schon einmal laden, wenn ihr Anruf klingelt: aus dem Cache in Sekunden, sonst als Download
+   * (einmalig, bleibt im Browser), außer das Gerät spart Daten.
+   */
+  prepareVoice(spec: VoiceSpec): void {
+    if (!this.settings.voices) return;
+    const engine = this.engine();
+    if (!engine || !this.modelAllowed(engine, spec)) return;
+    void engine.load(piperVoiceFor(spec).id);
+  }
+
+  /** Zeilen eines Gesprächs vorrechnen lassen, damit sie ohne Wartezeit kommen (sobald das Modell da ist). */
+  prepareSpeech(texts: readonly string[], spec: VoiceSpec): void {
+    if (!this.canSpeak) return;
+    const engine = this.engine();
+    if (!engine || !this.modelAllowed(engine, spec)) return;
+    const voice = piperVoiceFor(spec);
+    const params = piperParams(spec);
+    void engine.ready(voice.id, READY_TIMEOUT_MS).then((ok) => {
+      if (!ok || !this.settings.voices) return;
+      for (const text of texts) engine.prepare(voice.id, text, params);
+    });
   }
 
   /**
    * Einen Satz mit der Stimme einer Figur sprechen. onEnd kommt genau einmal (fertig, Fehler oder Sicherheitsnetz).
    * Kann nicht gesprochen werden, kommt nichts (dann zeigt der Anruf die Zeile im eigenen Tempo). Gibt eine Funktion
-   * zum Abbrechen zurück. Die Musik ist so lange leiser.
+   * zum Abbrechen zurück. Die Musik ist so lange leiser. Erst das Sprachmodell; läuft es nicht, der Browser.
    */
   speak(text: string, voice: VoiceSpec, onEnd: () => void): (() => void) | null {
     if (!this.canSpeak) return null;
-    const volume = this.settings.master * Math.max(0.6, this.settings.sfx);
-    let done = false;
-    const release = () => {
-      if (done) return;
-      done = true;
+    const engine = this.engine();
+    const ctx = this.ctx;
+    const bus = this.voiceBus;
+    if (engine && ctx && bus && this.status === 'running' && this.modelAllowed(engine, voice))
+      return this.speakWithModel(engine, ctx, bus, text, voice, onEnd);
+    return this.speakWithBrowser(text, voice, onEnd);
+  }
+
+  private get browserVolume(): number {
+    return this.settings.master * Math.max(0.6, this.settings.sfx);
+  }
+
+  /** Mitzählen, wer spricht (Musik leiser), und die Abbrechen-Funktion für stopSpeaking merken. */
+  private track(cancel: () => void): () => void {
+    this.speaking++;
+    this.applyVolumes(false);
+    this.activeSpeech.add(cancel);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.activeSpeech.delete(cancel);
       this.speaking = Math.max(0, this.speaking - 1);
       this.applyVolumes(false);
     };
-    this.speaking++;
-    this.applyVolumes(false);
-    const cancel = this.speaker.speak(text, voice, volume, () => {
+  }
+
+  private speakWithBrowser(text: string, voice: VoiceSpec, onEnd: () => void): (() => void) | null {
+    if (!this.speaker.available) return null;
+    let done = false;
+    const cancel = () => {
+      if (done) return;
+      done = true;
+      stop();
+      release();
+    };
+    const release = this.track(cancel);
+    const stop = this.speaker.speak(text, voice, this.browserVolume, () => {
+      if (done) return;
+      done = true;
       release();
       onEnd();
     });
-    return () => {
-      cancel();
+    return cancel;
+  }
+
+  private speakWithModel(
+    engine: PiperEngine,
+    ctx: AudioContext,
+    bus: GainNode,
+    text: string,
+    voice: VoiceSpec,
+    onEnd: () => void,
+  ): () => void {
+    const model = piperVoiceFor(voice);
+    const params = piperParams(voice);
+    let cancelled = false;
+    let finished = false;
+    let job: SynthJob | null = null;
+    let browserStop: (() => void) | null = null;
+    let sentences = 0;
+    const cancel = () => {
+      if (cancelled || finished) return;
+      cancelled = true;
+      playback.stop();
+      job?.cancel();
+      browserStop?.();
       release();
     };
+    const release = this.track(cancel);
+    const finish = () => {
+      if (finished || cancelled) return;
+      finished = true;
+      release();
+      onEnd();
+    };
+    const playback = new SpeechPlayback(ctx, bus, params.playbackRate, finish);
+    // Notlösung: Modell nicht da, dann die Stimme des Browsers; geht auch das nicht, ist der Satz gleich "fertig".
+    const fallback = () => {
+      if (cancelled || finished) return;
+      const stop = this.speaker.available ? this.speaker.speak(text, voice, this.browserVolume, finish) : null;
+      if (stop) browserStop = stop;
+      else finish();
+    };
+    void (async () => {
+      const ok = await engine.ready(model.id, READY_TIMEOUT_MS);
+      if (cancelled) return;
+      if (!ok) {
+        fallback();
+        return;
+      }
+      job = engine.synthesize(model.id, text, params, (chunk) => {
+        if (cancelled) return;
+        sentences++;
+        playback.add(chunk.pcm, chunk.sampleRate);
+      });
+      try {
+        await job.promise;
+        if (!cancelled) playback.end();
+      } catch {
+        if (cancelled) return;
+        if (sentences > 0) playback.end();
+        else fallback();
+      }
+    })();
+    return cancel;
   }
 
-  /** Sprachausgabe freigeben (aus einem Tippen heraus, z.B. Anruf annehmen). */
+  /** Sprachausgabe des Browsers freigeben (aus einem Tippen heraus, z.B. Anruf annehmen): Safari will das so. */
   primeSpeech(): void {
-    if (this.settings.voices) this.speaker.prime();
+    if (this.settings.voices && this.speaker.available) this.speaker.prime();
   }
 
-  /** Alle Stimmen verstummen lassen (Auflegen). */
+  /** Alle Stimmen verstummen lassen (Auflegen, Überspringen); vorgerechnete Zeilen, die noch rechnen, fallen weg. */
   stopSpeaking(): void {
-    if (!this.speakerInstance) return;
-    this.speakerInstance.stop();
+    for (const cancel of [...this.activeSpeech]) cancel();
+    this.activeSpeech.clear();
+    this.piperEngine?.cancelAll();
+    this.speakerInstance?.stop();
     this.speaking = 0;
     this.applyVolumes(false);
   }

@@ -25,7 +25,9 @@
     "perf:browser": "node scripts/perf-browser.mjs"
   },
   "dependencies": {
+    "@diffusionstudio/piper-wasm": "^1.0.0",
     "maplibre-gl": "^6.11.2",
+    "onnxruntime-web": "^1.30.0",
     "preact": "^10.29.8"
   },
   "devDependencies": {

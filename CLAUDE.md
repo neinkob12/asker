@@ -29,9 +29,13 @@ Nach Auftrag 30: Zufahrten auch in Hamburg (`Supplier.via` pro Stadt, `supplierV
 Stadt (`CITIES` `view.pitch`/`bearing`), Verkehr in der aktiven Stadt, Deutschland-Ansicht (Marker der Stadt mit
 `addHtmlMarker({ near: true })` sind unter `FAR_ZOOM` aus, Wechsel beim Zoomen, A1 in Gold während einer Fahrt), Kneipen
 mit Bierglas, Kölner Lichter und Hafengeburtstag auf der Karte (`events/ui/map.ts`, Effekt `firework`).
-Anrufe mit Stimme und Figuren mit Gesicht: Im Anruf spricht die Figur ihre Zeilen (`audio.speak`, Sprachausgabe des
-Browsers, abschaltbar in Einstellungen › Ton und im Gespräch); was danach kommt (Reaktion, Rückfrage), wird noch im
-Gespräch beantwortet, und ist nichts mehr offen, legt die Figur auf. Fietes Übergabe läuft im Anruf (`city.handOver`).
+Anrufe mit Stimme und Figuren mit Gesicht: Im Anruf spricht die Figur ihre Zeilen (`audio.speak`) mit dem Sprachmodell
+Piper im Browser (`src/audio/piper/`: Worker mit ONNX Runtime Web und espeak-ng als WebAssembly, Modelle „Thorsten“ und
+„Kerstin“ einmalig von Hugging Face in den Cache, Einstellungen › Ton zeigt und löscht sie; die Sprachausgabe des
+Browsers ist nur die Notlösung); abschaltbar in Einstellungen › Ton und im Gespräch. Im Gespräch sind Musik, Effekte
+und Geräusche aus (`audio.setCall`), klingelt es, lädt das Modell schon (`audio.prepareVoice`), die Zeilen werden
+vorgerechnet (`audio.prepareSpeech`). Was danach kommt (Reaktion, Rückfrage), wird noch im Gespräch beantwortet, und
+ist nichts mehr offen, legt die Figur auf. Fietes Übergabe läuft im Anruf (`city.handOver`).
 Kontakte tragen `role`, `about`, `look` (Aussehen, auch teilweise) und `voice`; Personen ohne eigenes Aussehen bekommen
 eines fest aus dem Namen (`personLook`, `src/core/looks.ts`), gezeichnet von `Face` bzw. `<Avatar look>`. Antippen des
 Porträts im Chat öffnet das Profil (`core.contact`).
