@@ -6,7 +6,7 @@
 // die Szenen noch einmal (Nachrichten-App offen, Chat offen, Handy zu).
 //
 //   node scripts/perf-browser.mjs [--save=pfad.json] [--days=3] [--seconds=25] [--speed=4] [--width=700 --height=500]
-//     [--mobile] [--throttle=4] [--gpu] [--reduced-motion] [--traffic=off|low|normal] [--scenes=ui,karte]
+//     [--mobile] [--throttle=4] [--gpu] [--reduced-motion] [--traffic=off|low|normal] [--hour=8] [--scenes=ui,karte]
 //
 // Karte (Auftrag 31): --scenes=karte misst den Normalbetrieb auf der Karte (zehn offene Aufträge, eine laufende
 // Lieferung, Tempo --speed, Zoom 14,5 an den Ringen) über die Messhilfe aus src/map/perf.ts (?perf=1): Bilder pro
@@ -15,6 +15,7 @@
 // (390 × 844, Touch), --throttle=4 drosselt die CPU über CDP (Emulation.setCPUThrottlingRate), --gpu startet Chromium
 // mit Fenster und echter GPU statt SwiftShader (nur auf einem Rechner mit Grafikkarte und Bildschirm sinnvoll; ohne
 // GPU sind die Bilder pro Sekunde durch die Software-Grafik begrenzt, die Arbeit pro Bild und setData nicht).
+// --hour=8 spult vor der Szene bis zur nächsten vollen Stunde 8 vor (Berufsverkehr: volle Zahl an Fahrzeugen).
 //
 // --save: Spielstand aus `PERF=1 PERF_SAVE=/tmp/perf.json npm run perf:sim` (Bot, Tag 20). Ohne --save wird ein
 // frisches Spiel mit Seed 11 um --days Spieltage vorgespult (ohne Spieler passiert dabei wenig, die Nachrichten und
@@ -43,6 +44,7 @@ const DAYS = Number(args.days ?? 3);
 const THROTTLE = Number(args.throttle ?? 1);
 const SCENES = new Set((args.scenes || 'ui,karte').split(','));
 const TRAFFIC = args.traffic || null;
+const HOUR = args.hour === undefined ? null : Number(args.hour);
 
 const { server, base } = await startServer();
 const browser =
@@ -385,10 +387,15 @@ if (SCENES.has('ui')) {
 
 /** Karte im Normalbetrieb: Zahlen der Messhilfe (src/map/perf.ts) über SECONDS Sekunden bei Tempo SPEED. */
 async function measureMap(label) {
+  await closeDialogs();
   await page.evaluate(() => window.__ktMapPerf?.reset());
   await page.evaluate(() => window.__perf.reset());
   await page.evaluate((s) => window.koeln.runtime.api.setSpeed(s), SPEED);
-  await page.waitForTimeout(SECONDS * 1000);
+  // Begegnungen und Übernahmen öffnen Dialoge, die das Spiel anhalten: während der Messung gleich wieder zu.
+  for (let i = 0; i < SECONDS; i++) {
+    await page.waitForTimeout(1000);
+    await closeDialogs();
+  }
   const info = await page.evaluate(() => {
     const stats = window.__ktMapPerf?.stats() ?? null;
     const p = window.__perf;
@@ -405,6 +412,8 @@ async function measureMap(label) {
       open: s.modules.customers.orders.filter((o) => o.status === 'offered' || o.status === 'enRoute').length,
       enRoute: s.modules.customers.orders.filter((o) => o.status === 'enRoute').length,
       phone: window.koeln.runtime.ui.phone.open,
+      dialog: window.koeln.runtime.ui.dialog?.id ?? null,
+      speed: window.koeln.session.loop.speed,
     };
   });
   await page.evaluate(() => window.koeln.runtime.api.setSpeed(0));
@@ -428,9 +437,14 @@ async function measureMap(label) {
   console.log(
     [
       `\n######## "${label}" (${SECONDS} s, ${SPEED}x, ${WIDTH}x${HEIGHT}${MOBILE ? ' Handy' : ''}${THROTTLE > 1 ? `, CPU ${THROTTLE}x gedrosselt` : ''}${'reduced-motion' in args ? ', Bewegung reduziert' : ''}${TRAFFIC ? `, Verkehr ${TRAFFIC}` : ''}) ########`,
-      `Zustand: offene Aufträge ${info.open} (unterwegs ${info.enRoute}), Zoom ${info.zoom.toFixed(1)}, Handy ${info.phone ? 'offen' : 'zu'}`,
+      `Zustand: offene Aufträge ${info.open} (unterwegs ${info.enRoute}), Zoom ${info.zoom.toFixed(1)}, Handy ${info.phone ? 'offen' : 'zu'}, Tempo ${info.speed}${info.dialog ? `, Dialog ${info.dialog}` : ''}`,
       `Bilder: ${st.fps.toFixed(1)} fps, längster Abstand ${st.maxInterval.toFixed(0)} ms, ${st.slowFrames} Bilder über 50 ms`,
       `Bild-Arbeit Karte (Animationen): ${st.frameMs.toFixed(2)} ms/Bild im Mittel, schlimmstes Bild ${st.maxFrameMs.toFixed(1)} ms`,
+      `Anzahl: ${
+        Object.entries(st.counts ?? {})
+          .map(([k, c]) => `${k} ${c.mean.toFixed(0)} im Mittel (höchstens ${c.max})`)
+          .join(' | ') || '–'
+      }`,
       `  ${work.join(' | ') || '–'}`,
       `Layer-update: ${layers.join(' | ') || '–'}`,
       `setData: ${sources.join(' | ') || '–'}`,
@@ -441,6 +455,21 @@ async function measureMap(label) {
 }
 
 if (SCENES.has('karte')) {
+  if (HOUR !== null) {
+    const time = await page.evaluate((hour) => {
+      const sim = window.koeln.session.sim;
+      const t = sim.state.time;
+      let target = Math.floor(t / 1440) * 1440 + hour * 60;
+      if (target <= t) target += 1440;
+      sim.advance(target - t);
+      window.koeln.runtime.requestRender();
+      return sim.state.time;
+    }, HOUR);
+    console.log(`Vorgespult bis ${String(Math.floor(time / 60) % 24).padStart(2, '0')}:00`);
+    // Was beim Vorspulen passiert ist (z.B. eine Übernahme), öffnet seinen Dialog kurz danach; der hielte das Spiel an.
+    await page.waitForTimeout(1500);
+    await closeDialogs();
+  }
   // Zehn offene Aufträge, einer davon unterwegs (Lieferung als Fahrzeug auf der Karte), Kamera an den Ringen.
   const made = await page.evaluate(async () => {
     const orders = await import('/src/modules/customers/orders.ts');

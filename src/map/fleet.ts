@@ -419,6 +419,7 @@ class FleetLayer implements CustomLayerInterface {
   }
 
   update(poses: readonly FleetPose[], at: number): void {
+    mapPerf.count(`fleet:${this.id}`, poses.length);
     const now = performance.now();
     const u = this.progress(now);
     const sec = this.seconds(now);

@@ -56,6 +56,8 @@ const trafficLayer: MapLayer = {
     const traffic = new Traffic(graph, palette);
     let fleet: FleetHandle | null = null;
     let level: TrafficLevel = 'normal';
+    // Einmal pro update gelesen, nicht pro Bild: window.innerWidth kann ein Layout erzwingen.
+    let mobile = isMobile();
     let hour = 12;
     let share = policeShare(0);
     let seedDay = '';
@@ -101,7 +103,7 @@ const trafficLayer: MapLayer = {
         return;
       }
       traffic.step(step, {
-        target: trafficTarget(level, isMobile(), hour),
+        target: trafficTarget(level, mobile, hour),
         area: area(),
         policeShare: share,
         random,
@@ -143,6 +145,7 @@ const trafficLayer: MapLayer = {
     return {
       update(state, ui) {
         level = ui.traffic;
+        mobile = isMobile();
         hour = clock.hour(state.time);
         share = heatShare(state);
         // Eigener Zufall: gleicher Spiel-Seed und Spieltag = gleiche Folge.

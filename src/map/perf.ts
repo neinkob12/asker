@@ -46,6 +46,8 @@ export interface MapPerfStats {
   setDataPeakPerSecond: Record<string, number>;
   longTasks: number;
   longTaskMax: number;
+  /** Gezählte Größen (z.B. Fahrzeuge einer Flotte): Mittel und Höchstwert über die Meldungen. */
+  counts: Record<string, { mean: number; max: number }>;
 }
 
 const enabled =
@@ -76,6 +78,7 @@ let work: Record<string, Entry> = {};
 let layers: Record<string, Entry> = {};
 let setData: Record<string, number> = {};
 let peak: Record<string, number> = {};
+let counts: Record<string, { sum: number; n: number; max: number }> = {};
 let current = freshWindow(0);
 let shown = freshWindow(0);
 let overlay: HTMLElement | null = null;
@@ -101,6 +104,7 @@ function reset(): void {
   layers = {};
   setData = {};
   peak = {};
+  counts = {};
   current = freshWindow(since);
 }
 
@@ -120,6 +124,9 @@ function stats(): MapPerfStats {
     setDataPeakPerSecond: peak,
     longTasks,
     longTaskMax,
+    counts: Object.fromEntries(
+      Object.entries(counts).map(([k, c]) => [k, { mean: c.sum / Math.max(1, c.n), max: c.max }]),
+    ),
   };
 }
 
@@ -225,6 +232,15 @@ export const mapPerf = {
     add(work, name, ms);
     current.work[name] = (current.work[name] ?? 0) + ms;
     thisFrame += ms;
+  },
+  /** Eine Größe melden (z.B. wie viele Fahrzeuge eine Flotte gerade zeigt). */
+  count(name: string, value: number): void {
+    if (!enabled) return;
+    const c = counts[name] ?? { sum: 0, n: 0, max: 0 };
+    c.sum += value;
+    c.n++;
+    if (value > c.max) c.max = value;
+    counts[name] = c;
   },
   /** Für GameMap: Overlay anlegen und setData zählen, sobald der Stil geladen ist. */
   attach(map: MapLibreMap): void {
