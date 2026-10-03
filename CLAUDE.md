@@ -146,8 +146,8 @@ In `src/modules/<id>/ui/index.tsx` (Beispiel in `_template/ui/`): `registerHudIt
 **Optik-Regeln (Auftrag 27):** Eigenschaften in Listen als Chips (`ItemContent tags`, `Chip`/`Chips`), nie als „a · b · c“;
 Abschnitte als `Group` (Unterlage, farbige Kopfzeile, `value`, `collapsible`); höchstens ein Satz Erklärung sichtbar, mehr in
 `Disclosure` oder `Group more`; Namen und Werte brechen nie im Wort um.
-HUD-Anzeigen mit `<HudPill>` (mit `details` klappt beim Drüberfahren eine Glas-Karte auf). **Das Handy hat seit Auftrag 26 genau
-sechs Apps** (Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen) und vier im Dock (Nachrichten, Lieferanten, Personal,
+HUD-Anzeigen mit `<HudPill>` (mit `details` klappt beim Drüberfahren eine Glas-Karte auf). **Das Handy hat seit Auftrag 26 sechs Apps**
+(Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen), dazu seit dem Hamburger Lager-Kauf die App „Lager“ (`goods.app`: eigene Lager, Standorte kaufen) und vier im Dock (Nachrichten, Lieferanten, Personal,
 Kasse): Neues hängt sich als Abschnitt oder Seite an eine davon (Slots oben, `registerPanel`), eine neue App braucht einen Grund;
 `hidden: true` hält eine App vom Startbildschirm fern, `ui.openPhone(id)` öffnet sie trotzdem. **Banner nur für Dringendes:**
 `ui.toast(text, kind, { urgent })` erscheint als Banner nur bei `'bad'`/`'warn'` oder `urgent: true` (Lieferung da, Löhne nicht
