@@ -226,6 +226,12 @@ export function SettingsApp() {
           onChange={ui.setMoreNotifications}
         />
         <Toggle
+          label="Ruhiger Modus"
+          hint="Banner nur für Schlimmes (Razzia, Festnahme), höchstens eins alle 15 Sekunden. Alles andere bleibt im Verlauf und am Badge."
+          checked={ui.state.quietNotifications}
+          onChange={ui.setQuietNotifications}
+        />
+        <Toggle
           label="Vibrieren"
           hint="Wackeln bei neuen Nachrichten, leise Klicks bei Schaltern und Gesten"
           checked={ui.state.vibration}

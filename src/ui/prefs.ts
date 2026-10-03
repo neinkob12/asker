@@ -18,6 +18,8 @@ export interface UiPrefs {
   vibration: boolean;
   /** Auch Routine als Banner (altes Verhalten). Standard: nur Dringendes, der Rest still (Badge, Verlauf). */
   moreNotifications: boolean;
+  /** Ruhig: Banner nur für Schlimmes ('bad') und höchstens eins alle paar Sekunden, der Rest still (Badge, Verlauf). */
+  quietNotifications: boolean;
 }
 
 export const DEFAULT_PREFS: UiPrefs = {
@@ -26,6 +28,7 @@ export const DEFAULT_PREFS: UiPrefs = {
   traffic: 'normal',
   vibration: true,
   moreNotifications: false,
+  quietNotifications: false,
 };
 
 const KEY = 'koeln-tycoon:ui';
@@ -46,6 +49,8 @@ export function loadPrefs(storage: KeyValueStorage | null): UiPrefs {
       vibration: typeof data.vibration === 'boolean' ? data.vibration : DEFAULT_PREFS.vibration,
       moreNotifications:
         typeof data.moreNotifications === 'boolean' ? data.moreNotifications : DEFAULT_PREFS.moreNotifications,
+      quietNotifications:
+        typeof data.quietNotifications === 'boolean' ? data.quietNotifications : DEFAULT_PREFS.quietNotifications,
     };
   } catch {
     return { ...DEFAULT_PREFS };

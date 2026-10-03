@@ -143,6 +143,8 @@ export interface UiState {
   vibration: boolean;
   /** Auch Routine als Banner zeigen (sonst nur Dringendes). Pro Gerät gemerkt. */
   moreNotifications: boolean;
+  /** Nur Wichtiges als Banner, höchstens eins alle QUIET_GAP_MS. Pro Gerät gemerkt. */
+  quietNotifications: boolean;
   /** Aktuelles Banner des Spiel-Handys. */
   notification: PhoneNotification | null;
   /** Zählt jedes Vibrieren hoch (für die Animation). */
@@ -274,6 +276,7 @@ export interface UiApi {
   setTraffic(level: TrafficLevel): void;
   setVibration(enabled: boolean): void;
   setMoreNotifications(enabled: boolean): void;
+  setQuietNotifications(enabled: boolean): void;
   zoomIn(): void;
   zoomOut(): void;
   resetNorth(): void;
@@ -297,6 +300,8 @@ const TOAST_QUEUE = 5;
 const ALERT_LIMIT = 60;
 const NOTIFICATION_STACK = 12;
 const NOTIFICATION_MS = 5000;
+/** Im ruhigen Modus: Mindestabstand zwischen zwei Bannern (echte Millisekunden). */
+const QUIET_GAP_MS = 15000;
 const ISLAND_PULSE_MS = 2600;
 const RENDER_INTERVAL_MS = 100;
 
@@ -316,6 +321,7 @@ export class UiRuntime {
   private speedBeforePause = 1;
   private speedBeforeDialog: number | null = null;
   private notificationId = 0;
+  private lastQuietBanner = 0;
   private notificationTimer: ReturnType<typeof setTimeout> | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private alertId = 0;
@@ -347,6 +353,7 @@ export class UiRuntime {
       traffic: prefs.traffic,
       vibration: prefs.vibration,
       moreNotifications: prefs.moreNotifications,
+      quietNotifications: prefs.quietNotifications,
       notification: null,
       buzz: 0,
       island: { expanded: false, pulse: null },
@@ -450,6 +457,14 @@ export class UiRuntime {
     }, TOAST_MS[current.kind]);
   }
 
+  /** Ruhiger Modus: Darf jetzt ein Banner erscheinen? Merkt sich den Zeitpunkt, wenn ja. */
+  private quietBannerAllowed(): boolean {
+    const now = performance.now();
+    if (now - this.lastQuietBanner < QUIET_GAP_MS) return false;
+    this.lastQuietBanner = now;
+    return true;
+  }
+
   private navKey = 0;
 
   /** Neue Seite für den Stapel, mit Titel aus der Registry (die Seite meldet später ihren echten Titel). */
@@ -520,6 +535,7 @@ export class UiRuntime {
       traffic: this.ui.traffic,
       vibration: this.ui.vibration,
       moreNotifications: this.ui.moreNotifications,
+      quietNotifications: this.ui.quietNotifications,
     };
     savePrefs(this.storage, prefs);
   }
@@ -578,9 +594,11 @@ export class UiRuntime {
           if (options.icon) toast.icon = options.icon;
           if (options.target) toast.target = options.target;
           // Banner nur für Dringendes (Razzia, Festnahme, Lieferung …); Routine landet still im Verlauf.
-          const urgent = options.urgent ?? (kind === 'bad' || kind === 'warn');
+          let urgent = options.urgent ?? (kind === 'bad' || kind === 'warn');
+          // Ruhig: nur Schlimmes, und nicht im Sekundentakt (der Rest bleibt im Verlauf).
+          if (ui.quietNotifications && urgent) urgent = kind === 'bad' && this.quietBannerAllowed();
           // Gleicher Text schon in der Schlange: nicht doppelt zeigen.
-          if ((urgent || ui.moreNotifications) && !ui.toasts.some((t) => t.text === text)) {
+          if ((urgent || (ui.moreNotifications && !ui.quietNotifications)) && !ui.toasts.some((t) => t.text === text)) {
             this.stats.banners++;
             let queue = [...ui.toasts, toast];
             // Zu voll: Routine-Meldungen (nicht die sichtbare) fliegen zuerst raus.
@@ -669,6 +687,7 @@ export class UiRuntime {
           ui.notifications = [entry, ...ui.notifications].slice(0, NOTIFICATION_STACK);
           // Nicht dringend: still in die Mitteilungszentrale (Badge an der App), kein Banner, kein Ton.
           if (notification.urgent === false && !ui.moreNotifications) return;
+          if (ui.quietNotifications && !this.quietBannerAllowed()) return;
           this.stats.banners++;
           ui.notification = entry;
           // Ein Toast, der gerade lief, ist jetzt verdeckt: Seine Zeit beginnt neu, sobald das Banner weg ist.
@@ -861,6 +880,11 @@ export class UiRuntime {
       setMoreNotifications: (enabled) =>
         update(() => {
           ui.moreNotifications = enabled;
+          this.savePrefs();
+        }),
+      setQuietNotifications: (enabled) =>
+        update(() => {
+          ui.quietNotifications = enabled;
           this.savePrefs();
         }),
       zoomIn: () => this.map?.zoomIn(),
