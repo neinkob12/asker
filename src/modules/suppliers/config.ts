@@ -218,8 +218,8 @@ export const PROBLEM_AT = 0.45;
 /** Qualität schwankt pro Lieferung um ± so viel. */
 export const QUALITY_SPREAD = 0.05;
 
-// Hafenlieferungen auf der Karte: Das Schiff kommt aus Rotterdam den Rhein hinauf in den Niehler Hafen und legt
-// an deinem Liegeplatz an (die ganze Lieferzeit auf dem Schiff). Nur alte Lieferungen aus Spielständen von vor dem
+// Hafenlieferungen auf der Karte: Das Schiff kommt aus Rotterdam den echten Rhein hinauf (roads: shipRoute, aus
+// Overture-Daten) in den Niehler Hafen und legt an deinem Liegeplatz an (die ganze Lieferzeit auf dem Schiff). Nur alte Lieferungen aus Spielständen von vor dem
 // Liegeplatz werden noch umgeladen und per Lkw ins Lager gefahren (SHIP_SHARE, UNLOADING_SHARE).
 /** Großstadt-Lieferungen: Anteil der Lieferzeit, in dem der Transporter durch Köln fährt (damit man ihn sieht). */
 export const CITY_APPROACH_SHARE = 0.3;
@@ -230,53 +230,6 @@ export const CITY_APPROACH_SHARE = 0.3;
  */
 export const UNLOADING_PORT = { name: 'Niehler Hafen', lng: 6.9679, lat: 50.98527 } as const;
 
-/**
- * Weg des Schiffs von Rotterdam den Rhein hinauf bis in den Niehler Hafen, [lng, lat] von Norden nach Süden
- * (ungefähr, außerhalb Kölns grob). Ab RHINE_APPROACH_FROM ist das Schiff in Köln und fährt langsamer ein.
- */
-export const RHINE_ROUTE: readonly (readonly [number, number])[] = [
-  [4.4, 51.9],
-  [4.48, 51.905],
-  [4.56, 51.885],
-  [4.63, 51.84],
-  [4.7, 51.815],
-  [4.85, 51.82],
-  [4.98, 51.83],
-  [5.15, 51.81],
-  [5.3, 51.81],
-  [5.45, 51.885],
-  [5.62, 51.885],
-  [5.86, 51.853],
-  [6.05, 51.855],
-  [6.12, 51.86],
-  [6.25, 51.83],
-  [6.4, 51.77],
-  [6.55, 51.68],
-  [6.63, 51.65],
-  [6.7, 51.56],
-  [6.73, 51.46],
-  [6.72, 51.37],
-  [6.76, 51.29],
-  [6.765, 51.235],
-  [6.745, 51.2],
-  [6.79, 51.17],
-  [6.85, 51.13],
-  [6.86, 51.1],
-  [6.9, 51.075],
-  [6.93, 51.058],
-  [6.955, 51.04],
-  [6.97, 51.022],
-  [6.983, 51.006],
-  [6.99, 50.995],
-  [6.9885, 50.987],
-  [6.982, 50.9845],
-  [6.976, 50.985],
-  [UNLOADING_PORT.lng, UNLOADING_PORT.lat],
-];
-/** Ab diesem Punkt der Route (Leverkusener Brücke) fährt das Schiff in Köln ein. */
-export const RHINE_APPROACH_FROM = 30;
-/** Anteil der Schiffszeit für die Einfahrt in Köln, damit man das Schiff auf dem Rhein sieht. */
-export const RHINE_APPROACH_SHARE = 0.35;
 /** Anteil der Lieferzeit auf dem Schiff, danach fürs Umladen im Hafen; den Rest fährt der Lkw. */
 export const SHIP_SHARE = 0.78;
 export const UNLOADING_SHARE = 0.05;

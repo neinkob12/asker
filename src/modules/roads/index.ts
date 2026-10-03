@@ -11,12 +11,17 @@
 //                             optional über eine bestimmte Autobahn ('A3'); roadApproach(far, via?) mit dem ganzen
 //                             Weg vom Rand des Ausschnitts bis dorthin, roadApproaches() alle Zufahrten
 //   nearestRoadPoint(point)   nächster Punkt auf einer Straße, networkSize(), ROAD_SPEEDS
+//   shipRoute(cityId)         Weg eines Schiffs von außen bis zum Kai ('koeln': Rotterdam über Waal und Rhein,
+//                             'hamburg': Elbe ab Cuxhaven), aus Overture-Daten (waterways.ts, tools/build-water.py)
+//   shipMinutes(cityId)       Fahrzeit dieses Wegs mit SHIP_SPEED (nur zur Anzeige, die Lieferzeit kommt aus suppliers)
 //
 // Routen werden gemerkt (gleiche Punkte = gleiche Route), die Rechnung ist deterministisch.
 
 import { defineModule, distanceMeters, type LngLat } from '../../core';
+import { SHIP_SPEED } from './config';
 import {
   decodeApproaches,
+  decodeLine,
   findRoute,
   nearestMotorwayNode,
   networkCenter,
@@ -25,6 +30,9 @@ import {
   snapToRoad,
 } from './graph';
 
+import { WATERWAYS } from './waterways';
+
+export { SHIP_SPEED } from './config';
 export { networkSize, ROAD_SPEEDS, type RoadClass } from './graph';
 
 export interface RoadRoute {
@@ -161,6 +169,30 @@ export function roadEntryFrom(far: LngLat, via?: string): LngLat {
     entries.set(id, entry);
   }
   return entry;
+}
+
+const shipRoutes = new Map<string, LngLat[]>();
+
+/**
+ * Weg eines Schiffs von außen bis zum Kai der Stadt: 'koeln' von Rotterdam über Nieuwe Maas, Noord, Merwede, Waal und
+ * Rhein bis zum Liegeplatz im Niehler Hafen, 'hamburg' die Elbe hinauf ab Cuxhaven. Leer für Städte ohne Wasserweg.
+ */
+export function shipRoute(cityId: string): LngLat[] {
+  let route = shipRoutes.get(cityId);
+  if (!route) {
+    const data = WATERWAYS[cityId];
+    route = data ? decodeLine(data.path) : [];
+    shipRoutes.set(cityId, route);
+  }
+  return route;
+}
+
+/** Fahrzeit des Schiffs über shipRoute in ganzen Spielminuten (SHIP_SPEED), 0 ohne Wasserweg. */
+export function shipMinutes(cityId: string): number {
+  const route = shipRoute(cityId);
+  let meters = 0;
+  for (let i = 1; i < route.length; i++) meters += distanceMeters(route[i - 1], route[i]);
+  return route.length < 2 ? 0 : Math.ceil(meters / SHIP_SPEED);
 }
 
 /** Nächster Punkt auf einer Straße und der Abstand dorthin (null = keine Straße in der Nähe). */

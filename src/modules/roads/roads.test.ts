@@ -9,6 +9,9 @@ import {
   roadDistance,
   roadEntryFrom,
   roadRoute,
+  SHIP_SPEED,
+  shipMinutes,
+  shipRoute,
   travelMinutes,
 } from './index';
 
@@ -153,6 +156,28 @@ describe('Straßennetz', () => {
       expect(roadRoute(path[path.length - 1], EHRENFELD).onRoads).toBe(true);
     }
     expect(roadEntryFrom({ lng: 8.682, lat: 50.111 }, 'A3')).toEqual(frankfurt?.path.at(-1));
+  });
+
+  it('Schiffe fahren auf echten Wasserwegen (Overture): Rhein ab Rotterdam, Elbe ab Cuxhaven', () => {
+    const length = (path: LngLat[]) => path.slice(1).reduce((sum, p, i) => sum + distanceMeters(path[i], p), 0) / 1000;
+    const rhein = shipRoute('koeln');
+    const elbe = shipRoute('hamburg');
+    expect(length(rhein)).toBeGreaterThan(250);
+    expect(length(rhein)).toBeLessThan(320);
+    expect(length(elbe)).toBeGreaterThan(100);
+    expect(length(elbe)).toBeLessThan(140);
+    // Rotterdam im Westen, Ende am Niehler Hafen; Cuxhaven im Nordwesten, Ende im Hamburger Hafen.
+    expect(rhein[0].lng).toBeLessThan(4.5);
+    expect(distanceMeters(rhein[rhein.length - 1], NIEHLER_HAFEN)).toBeLessThan(100);
+    expect(elbe[0].lng).toBeLessThan(8.8);
+    expect(elbe[elbe.length - 1].lat).toBeGreaterThan(53.5);
+    // Keine großen Sprünge: Gerade Stücke gibt es nur, wo der Fluss gerade ist (vereinfacht auf 30 m).
+    for (const path of [rhein, elbe]) {
+      for (let i = 1; i < path.length; i++) expect(distanceMeters(path[i - 1], path[i])).toBeLessThan(8000);
+    }
+    expect(shipMinutes('koeln')).toBe(Math.ceil((length(rhein) * 1000) / SHIP_SPEED));
+    expect(shipRoute('berlin')).toEqual([]);
+    expect(shipMinutes('berlin')).toBe(0);
   });
 
   it('rechnet schnell genug für die Simulation', () => {

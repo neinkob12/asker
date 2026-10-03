@@ -494,20 +494,23 @@ export function networkCenter(): LngLat {
   return toLngLat(x / n, y / n);
 }
 
+/** Linie im Polyline-Format (erster Punkt absolut, dann Abstände, 1e-5 Grad) als Punkte. */
+export function decodeLine(text: string): LngLat[] {
+  const ints = decodeInts(text);
+  const path: LngLat[] = [];
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i + 1 < ints.length; i += 2) {
+    x += ints[i];
+    y += ints[i + 1];
+    path.push({ lng: x / 1e5, lat: y / 1e5 });
+  }
+  return path;
+}
+
 /** Autobahn-Zufahrten aus network.ts: Weg vom Rand des Ausschnitts bis zum ersten Knoten im Netz. */
 export function decodeApproaches(): { ref: string; toward: string; path: LngLat[] }[] {
-  return ROAD_APPROACHES.map((a) => {
-    const ints = decodeInts(a.path);
-    const path: LngLat[] = [];
-    let x = 0;
-    let y = 0;
-    for (let i = 0; i + 1 < ints.length; i += 2) {
-      x += ints[i];
-      y += ints[i + 1];
-      path.push({ lng: x / 1e5, lat: y / 1e5 });
-    }
-    return { ref: a.ref, toward: a.toward, path };
-  });
+  return ROAD_APPROACHES.map((a) => ({ ref: a.ref, toward: a.toward, path: decodeLine(a.path) }));
 }
 
 /** Knoten an Autobahnen (Einfahrt für Lieferungen von außerhalb), der dem Punkt am nächsten liegt. */

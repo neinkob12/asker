@@ -2,8 +2,8 @@
 // bis an den Rand des Kölner Straßennetzes (grob, man sieht ihn nur weit herausgezoomt), dann über die passende
 // Autobahn-Zufahrt (Supplier.via, roads: roadApproach) und echte Straßen bis vor das Ziel-Lager; den letzten Teil der
 // Lieferzeit (CITY_APPROACH_SHARE) fährt er durch Köln. Die letzten Meter ins Lager sind ein gepunkteter Fußweg.
-// Hafenware kommt als Schiff den Rhein hinauf und legt am Liegeplatz im Niehler Hafen an (den Hafen zeigt die
-// Logistik). Nur alte Lieferungen ohne Liegeplatz werden noch umgeladen und per Lkw ins Lager gefahren.
+// Hafenware kommt als Schiff den echten Rhein hinauf (roads: shipRoute, aus Overture-Daten) und legt am Liegeplatz im
+// Niehler Hafen an (den Hafen zeigt die Logistik); in Köln fährt es langsamer, damit man es sieht. Nur alte Lieferungen ohne Liegeplatz werden noch umgeladen und per Lkw ins Lager gefahren.
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import { distanceMeters, type GameState, type LngLat } from '../../../core';
@@ -21,14 +21,11 @@ import {
 } from '../../../map';
 import { iconElement } from '../../../ui';
 import { formatProductAmount, getWarehouse, getWarehouses, productName } from '../../goods';
-import { roadApproach, roadRoute } from '../../roads';
+import { roadApproach, roadRoute, shipRoute } from '../../roads';
 import {
   CITY_APPROACH_SHARE,
   deliveryLeg,
   getSuppliers,
-  RHINE_APPROACH_FROM,
-  RHINE_APPROACH_SHARE,
-  RHINE_ROUTE,
   type Shipment,
   type Supplier,
   shipmentProgress,
@@ -47,19 +44,32 @@ const placeIcon = (icon: string) => {
   return tile;
 };
 
-const toLngLat = ([lng, lat]: readonly [number, number]): LngLat => ({ lng, lat });
-const RIVER: LngLat[] = RHINE_ROUTE.map(toLngLat);
 const PORT: LngLat = { lng: UNLOADING_PORT.lng, lat: UNLOADING_PORT.lat };
+/** Die letzten so viele Meter des Wasserwegs gelten als "in Köln" (ab der Leverkusener Brücke). */
+const CITY_RIVER_METERS = 14_000;
+/** Anteil der Schiffszeit für die Einfahrt in Köln, damit man das Schiff auf dem Rhein sieht. */
+const CITY_RIVER_SHARE = 0.35;
 
-/** Anteil der Strecke (nach Metern), bis zu dem das Schiff bei Anteil u seiner Fahrzeit gekommen ist. */
-const shipFraction = (() => {
-  const outer = pathLength(RIVER.slice(0, RHINE_APPROACH_FROM + 1));
-  const inner = pathLength(RIVER.slice(RHINE_APPROACH_FROM));
-  const total = outer + inner;
-  const split = 1 - RHINE_APPROACH_SHARE;
-  return (u: number) =>
-    u < split ? ((u / split) * outer) / total : (outer + ((u - split) / RHINE_APPROACH_SHARE) * inner) / total;
-})();
+let riverCache: { path: LngLat[]; fraction: (u: number) => number } | null = null;
+
+/**
+ * Wasserweg nach Köln und der Anteil der Strecke (nach Metern), bis zu dem das Schiff bei Anteil u seiner Fahrzeit
+ * gekommen ist: die lange Strecke ab Rotterdam schnell, die letzten CITY_RIVER_METERS in Köln langsam.
+ */
+function riverRoute(): { path: LngLat[]; fraction: (u: number) => number } {
+  if (riverCache) return riverCache;
+  const path = shipRoute('koeln');
+  const total = Math.max(1, pathLength(path));
+  const inner = Math.min(total, CITY_RIVER_METERS);
+  const outer = total - inner;
+  const split = 1 - CITY_RIVER_SHARE;
+  riverCache = {
+    path,
+    fraction: (u) =>
+      u < split ? ((u / split) * outer) / total : (outer + ((u - split) / CITY_RIVER_SHARE) * inner) / total,
+  };
+  return riverCache;
+}
 
 /**
  * Weg eines Transporters: bis an den Rand des Netzes, über die Autobahn-Zufahrt seiner Richtung und echte Straßen bis
@@ -173,7 +183,7 @@ export const suppliersLayer: MapLayer = {
           lines.push({ kind: 'road', path: cityPath(supplier, target).path });
         }
       }
-      if (river) lines.push({ kind: 'ship', path: RIVER });
+      if (river) lines.push({ kind: 'ship', path: riverRoute().path });
       const features = lines.map((line) => ({
         type: 'Feature' as const,
         properties: { kind: line.kind },
@@ -187,7 +197,8 @@ export const suppliersLayer: MapLayer = {
       const label = shipmentLabel(s, progress);
       const leg = deliveryLeg(supplier, progress, s.toPort);
       if (supplier.kind === 'port') {
-        const ship = createVehicle(map, { path: RIVER, kind: 'ship', title, progress: shipFraction(leg.t) });
+        const { path: riverPath, fraction } = riverRoute();
+        const ship = createVehicle(map, { path: riverPath, kind: 'ship', title, progress: fraction(leg.t) });
         ship.setLabel(label);
         // Alte Lieferungen ohne Liegeplatz: Lkw vom Hafen ins Lager.
         const truckRoute = s.toPort ? null : roadRoute(PORT, target);
@@ -245,7 +256,7 @@ export const suppliersLayer: MapLayer = {
           const leg = deliveryLeg(supplier, progress, s.toPort);
           if (entry.ship) {
             entry.ship.setVisible(leg.stage !== 'road');
-            entry.ship.setProgress(leg.stage === 'ship' ? shipFraction(leg.t) : 1);
+            entry.ship.setProgress(leg.stage === 'ship' ? riverRoute().fraction(leg.t) : 1);
             entry.ship.setColor(color);
           }
           if (entry.road) {

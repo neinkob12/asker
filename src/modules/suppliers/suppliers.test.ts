@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { loadSimulation, messages, type Simulation, START_DIRTY_MONEY } from '../../core';
+import { distanceMeters, loadSimulation, messages, type Simulation, START_DIRTY_MONEY } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getLots, getStock } from '../goods';
 import { getCargo } from '../logistics';
+import { shipRoute } from '../roads';
 import { CREDIT_TERM, ROTTERDAM_DELIVERY_TIME, START_TRUST, SUPPLIERS, TRUST_LATE_PENALTY } from './config';
 import {
   availableCredit,
@@ -16,8 +17,6 @@ import {
   isBlocked,
   isUnlocked,
   packagePrice,
-  RHINE_APPROACH_FROM,
-  RHINE_ROUTE,
   rollShipmentProblem,
   type Shipment,
   shipmentProgress,
@@ -436,14 +435,12 @@ describe('suppliers: Darstellung der Hafenlieferung', () => {
     }
   });
 
-  it('das Schiff fährt von Rotterdam den Rhein hinauf in den Niehler Hafen', () => {
+  it('das Schiff fährt von Rotterdam den echten Rhein hinauf an den Liegeplatz im Niehler Hafen', () => {
     const rotterdam = getSupplier(createTestGame().state, 'rotterdam');
-    const [firstLng, firstLat] = RHINE_ROUTE[0];
-    expect(firstLng).toBeCloseTo(rotterdam?.lng ?? 0);
-    expect(firstLat).toBeCloseTo(rotterdam?.lat ?? 0);
-    expect(RHINE_ROUTE[RHINE_ROUTE.length - 1]).toEqual([UNLOADING_PORT.lng, UNLOADING_PORT.lat]);
-    // Von Norden: Die Einfahrt nach Köln liegt nördlich des Hafens.
-    expect(RHINE_ROUTE[RHINE_APPROACH_FROM][1]).toBeGreaterThan(UNLOADING_PORT.lat);
-    expect(RHINE_APPROACH_FROM).toBeLessThan(RHINE_ROUTE.length - 1);
+    const route = shipRoute('koeln');
+    expect(route.length).toBeGreaterThan(100);
+    // Start im Rotterdamer Hafen, Ende im Wasser direkt am Liegeplatz (an Land daneben).
+    expect(distanceMeters(route[0], rotterdam ?? route[0])).toBeLessThan(3000);
+    expect(distanceMeters(route[route.length - 1], UNLOADING_PORT)).toBeLessThan(50);
   });
 });

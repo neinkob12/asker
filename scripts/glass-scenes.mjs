@@ -103,6 +103,12 @@ export const SCENES = [
     wait: 4500,
   },
   {
+    // Auftrag 31: Das Schiff fährt auf dem echten Rhein (Overture-Daten), hier in der Europa-Ansicht bei Nijmegen.
+    name: 'schiff-rhein',
+    js: `sim.advance(${TIMES.tag}); harbor(); shipAt(0.28); api.flyToEuropa();`,
+    wait: 4500,
+  },
+  {
     name: 'lieferung-kai',
     js: `sim.advance(${TIMES.tag}); harbor(); docked(); api.flyTo(port, 13.2);`,
     wait: 4500,
