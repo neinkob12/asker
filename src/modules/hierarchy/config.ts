@@ -313,3 +313,8 @@ export const FULL_POWER_TASKS: readonly { key: FullPowerTaskKey; name: string; h
     icon: 'handshake',
   },
 ];
+
+/** Mit Vollmacht hält die Rechte Hand von jeder Ware so viel auf Lager (Gramm bzw. ml, Stück) und darf dafür bis zu so viel am Tag ausgeben. */
+export const FP_STOCK_GRAMS = 1000;
+export const FP_STOCK_PIECES = 300;
+export const FP_RESTOCK_BUDGET_PER_DAY = 15000;

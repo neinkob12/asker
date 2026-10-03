@@ -6,6 +6,7 @@ import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { dayReport } from '../finance';
 import { getGangs } from '../gangs';
 import { enlist, generateProfile, getStaffMember, type StaffMember } from '../staff';
+import { getSuppliers } from '../suppliers';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
 import { FULL_POWER_SHARE, REVOKE_LOYALTY, RIGHT_HAND_RANK_XP } from './config';
@@ -104,7 +105,7 @@ describe('Vollmacht der Rechten Hand (Auftrag 30)', () => {
     const events = recordEvents(sim);
     // Bis zur nächsten Mitternacht: ein guter Tag (Einnahme), dann abschließen lassen.
     sim.advance(DAY - (sim.state.time % DAY) - 60);
-    wallet.earn(sim.ctx('test'), 20000, 'dirty', 'Test', 'sales.street');
+    wallet.earn(sim.ctx('test'), 60000, 'dirty', 'Test', 'sales.street');
     const today = dayReport(sim.state, 0);
     sim.advance(60 + 10);
     const taken = eventsOfType(events, 'hierarchy.shareTaken');
@@ -127,6 +128,21 @@ describe('Vollmacht der Rechten Hand (Auftrag 30)', () => {
     sim.advance(9 * 60);
     const report = messages.thread(sim.state, `staff:${boss.id}`).find((m) => m.text.startsWith('Bericht aus Köln'));
     expect(report).toBeDefined();
+  });
+
+  it('Nachschub: mit Vollmacht bestellt sie von jeder Ware kiloweise, nicht Kleinkram', () => {
+    const sim = quietGame();
+    withRightHand(sim);
+    allKoeln(sim);
+    expect(sim.dispatch({ type: 'hierarchy.grantFullPower', payload: {} }).ok).toBe(true);
+    sim.state.wallet.dirty = 100000;
+    sim.state.modules.suppliers.unlocked = getSuppliers(sim.state).map((x) => x.id);
+    sim.advance(6 * 60);
+    const orders = sim.state.modules.suppliers.shipments;
+    expect(new Set(orders.map((o) => o.productId)).size).toBeGreaterThanOrEqual(2);
+    expect(orders.filter((o) => o.productId === 'weed' || o.productId === 'haze').every((o) => o.amount >= 100)).toBe(
+      true,
+    );
   });
 
   it('Widerruf: Loyalität sinkt, Laune sinkt, sie behält Stufe und Aufgaben; danach entscheidest du wieder', () => {

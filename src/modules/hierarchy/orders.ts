@@ -147,10 +147,11 @@ export function planOrder(
   rule: OrderRule,
   home: string | null,
   budgetOrLookup: number | (() => number),
+  minStock: number = rule.minStock,
 ): OrderPlan {
   const warehouseId = ruleWarehouse(state, rule, home);
   if (!warehouseId) return { kind: 'pause', reason: 'Kein Lager für die Ware.' };
-  const deficit = rule.minStock - ruleStock(state, warehouseId, rule.productId);
+  const deficit = minStock - ruleStock(state, warehouseId, rule.productId);
   if (deficit <= 0) return { kind: 'none' };
   // Das Budget erst jetzt (es rechnet die Lohnsicherung über alle Leute): Meist fehlt ja nichts.
   const budget = typeof budgetOrLookup === 'function' ? budgetOrLookup() : budgetOrLookup;
@@ -186,19 +187,23 @@ export function planOrder(
   if (affordable.length === 0) {
     return { kind: 'noMoney', needed: Math.min(...offers.map((o) => o.price)) };
   }
-  // Ohne feste Ware: was die Kunden vermissen, zuerst; sonst irgendwas Günstiges.
+  // Ohne feste Ware: erst eine Ware wählen (was die Kunden vermissen, sonst die mit dem kleinsten Bestand), damit die
+  // Pakete vergleichbar sind (Gramm und Stück lassen sich nicht mischen).
   let pool = affordable;
   let why = '';
   if (!rule.productId) {
-    const top = [...affordable].sort((a, b) => wanted(state, b.pkg.productId) - wanted(state, a.pkg.productId))[0];
-    if (wanted(state, top.pkg.productId) > 0) {
-      pool = affordable.filter((o) => o.pkg.productId === top.pkg.productId);
-      why = ' Die Kunden fragen danach.';
-    }
+    const products = [...new Set(affordable.map((o) => o.pkg.productId))];
+    const stock = (id: string) => getStock(state, { warehouseId, productId: id });
+    const top = products.sort((a, b) => wanted(state, b) - wanted(state, a) || stock(a) - stock(b))[0];
+    pool = affordable.filter((o) => o.pkg.productId === top);
+    if (wanted(state, top) > 0) why = ' Die Kunden fragen danach.';
   }
-  // Passendes Paket: das günstigste, das die Lücke füllt, sonst das größte bezahlbare (pro Einheit günstig).
-  const covering = pool.filter((o) => o.pkg.amount >= deficit).sort((a, b) => a.price - b.price)[0];
-  const choice = covering ?? [...pool].sort((a, b) => b.pkg.amount - a.pkg.amount || a.price - b.price)[0];
+  // Passendes Paket: der beste Preis pro Einheit unter denen, die nicht viel mehr als die Lücke bringen (kleine
+  // Pakete beim teuren Kurier nur, wenn nichts Größeres bezahlbar ist). So wird nicht jeden Tag Kleinkram gekauft.
+  const unit = (o: (typeof pool)[number]) => o.price / o.pkg.amount;
+  const fitting = pool.filter((o) => o.pkg.amount <= Math.max(deficit * 2, 1));
+  const best = (list: typeof pool) => [...list].sort((a, b) => unit(a) - unit(b) || b.pkg.amount - a.pkg.amount)[0];
+  const choice = best(fitting.length > 0 ? fitting : [...pool].sort((a, b) => a.pkg.amount - b.pkg.amount).slice(0, 1));
   return { kind: 'order', ...choice, warehouseId, why: `${why} (${formatEuro(choice.price)})` };
 }
 
@@ -208,6 +213,8 @@ export const MAX_ORDERS_PER_RULE = 3;
 export interface RestockHooks {
   /** Was noch ausgegeben werden darf (wird vor jeder Bestellung neu gefragt). */
   budget: () => number;
+  /** Mindestbestand einer Regel, wenn er vom eingestellten abweicht (z.B. nach Größe der Stadt). */
+  minStock?: (rule: OrderRule) => number;
   onPause: (rule: OrderRule, reason: string) => void;
   onResume: (rule: OrderRule) => void;
   onNoMoney: () => void;
@@ -235,7 +242,7 @@ export function runRestock(
   for (const rule of rules) {
     for (let i = 0; i < MAX_ORDERS_PER_RULE; i++) {
       const own = ruleWarehouse(ctx.state, rule, null);
-      const plan = planOrder(ctx.state, rule, own ? null : resolveHome(), hooks.budget);
+      const plan = planOrder(ctx.state, rule, own ? null : resolveHome(), hooks.budget, hooks.minStock?.(rule));
       if (plan.kind === 'pause') {
         if (rule.paused !== plan.reason) {
           rule.paused = plan.reason;
