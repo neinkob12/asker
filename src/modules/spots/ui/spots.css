@@ -177,58 +177,46 @@
   animation: spot-pulse 1.6s var(--ease-out) infinite;
 }
 
-/* Plakette: Glas, Kante in der Zustandsfarbe, Name und Personal, darunter sechs Striche */
+/* Plakette: nur Symbole auf kleinem Glas, Kante in der Zustandsfarbe. Läufer (grün) / du (gold), Leutnant (blau). */
 .spot-plate {
   position: absolute;
   top: calc(var(--sign) / 2 + var(--label-offset, 0px));
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 3px;
-  padding: 3px 6px 4px;
-  max-width: 96px;
-  border-radius: 6px;
+  padding: 3px 5px;
+  border-radius: var(--radius-round);
   background: var(--spot-plate);
   -webkit-backdrop-filter: var(--hud-blur);
   backdrop-filter: var(--hud-blur);
   box-shadow:
-    inset 3px 0 0 var(--state-edge),
+    inset 0 0 0 1px var(--state-edge),
     var(--shadow-marker-soft);
-  color: var(--hud-ink);
-  text-align: left;
-  white-space: nowrap;
   transform: translateY(-50%);
   pointer-events: none;
 }
+.spot-plate[hidden],
+.spot-plate [hidden] {
+  display: none;
+}
 .spot-marker.is-right .spot-plate {
-  left: calc(var(--sign) + 8px);
+  left: calc(var(--sign) + 6px);
 }
 .spot-marker.is-left .spot-plate {
-  right: calc(var(--sign) + 8px);
+  right: calc(var(--sign) + 6px);
 }
-.spot-plate__head {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.spot-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.1;
-  color: var(--hud-ink);
-}
-.spot-crew {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  min-height: 14px;
-  padding: 0 4px;
+.spot-crew,
+.spot-boss {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
   border-radius: var(--radius-round);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
+}
+.spot-crew svg,
+.spot-boss svg {
+  width: 11px;
+  height: 11px;
 }
 .spot-crew[data-kind="runner"] {
   color: var(--cat-money);
@@ -238,31 +226,9 @@
   color: var(--hud-gold-on);
   background: var(--hud-gold);
 }
-.spot-crew[data-kind="free"] {
-  color: var(--hud-ink-2);
-  outline: 1px dashed var(--hud-ink-2);
-  outline-offset: -1px;
-  background: none;
-}
-.spot-crew__icon {
-  display: none;
-  font-size: 12px;
-}
-.spot-crew[data-kind="runner"] .spot-crew__icon {
-  display: inline-block;
-}
-.spot-ticks {
-  display: flex;
-  gap: 2px;
-}
-.spot-tick {
-  width: 5px;
-  height: 3px;
-  border-radius: 1px;
-  background: var(--hud-empty);
-}
-.spot-tick.is-on {
-  background: var(--state-edge);
+.spot-boss {
+  color: var(--cat-people);
+  background: var(--cat-people-soft);
 }
 
 /* Gesperrt: kleines dunkles Achteck mit Schloss, ohne Plakette und ohne Kegel */
@@ -378,21 +344,7 @@
     top: calc(var(--sign) + 1px);
     left: 50% !important;
     right: auto !important;
-    padding: 2px 3px;
-    border-radius: 3px;
-    background: var(--spot-plate);
-    box-shadow: none;
     transform: translateX(-50%);
-  }
-  .spot-ticks {
-    gap: 2px;
-  }
-  .spot-plate__head {
-    display: none;
-  }
-  .spot-tick {
-    width: 4px;
-    height: 3px;
   }
 }
 

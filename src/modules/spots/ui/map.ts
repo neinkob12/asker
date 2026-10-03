@@ -16,6 +16,7 @@ import { iconElement } from '../../../ui';
 import { allWaiting, CUSTOMER_PATIENCE, type Customer, playerSpot, spotDemand, waitingAt } from '../../customers';
 import { activeEncounters } from '../../encounters';
 import { DEFAULT_PRODUCT } from '../../goods';
+import { lieutenantOfSpot } from '../../hierarchy';
 import { getSpotPrice } from '../../market';
 import { getStaff, type StaffMember } from '../../staff';
 import { veedelName } from '../../veedel';
@@ -27,8 +28,6 @@ const NAMES_ZOOM = 13;
 const SALE_GLOW_MINUTES = 90;
 /** So lange zeigt ein Spot nach einer Razzia den Zustand "Razzia" (Spielminuten). */
 const RAID_SHOW_MINUTES = 120;
-/** Striche für wartende Kunden in der Plakette. */
-const TICKS = 6;
 /** Hotspots leiser als früher: Den Zustand zeigt jetzt der Lichtkegel. */
 const HOTSPOT_SCALE = 0.45;
 
@@ -140,10 +139,9 @@ interface SpotMarker {
   marker: Marker;
   element: HTMLElement;
   badge: HTMLElement;
-  name: HTMLElement;
+  plate: HTMLElement;
   crew: HTMLElement;
-  crewText: HTMLElement;
-  ticks: HTMLElement[];
+  boss: HTMLElement;
   key: string;
 }
 
@@ -234,17 +232,13 @@ export const spotsLayer: MapLayer = {
         sign.append(kind);
       }
 
-      const name = el('span', 'spot-name', spot.name);
-      const crewText = el('span', 'spot-crew__text');
+      // Plakette nur als Symbole: Läufer (oder du selbst) und Leutnant, der den Spot versorgt.
       const crew = el('span', 'spot-crew');
-      crew.append(iconElement('runner', { class: 'spot-crew__icon', strokeWidth: 2.2 }), crewText);
-      const head = el('span', 'spot-plate__head');
-      head.append(name, crew);
-      const tickRow = el('span', 'spot-ticks');
-      const ticks = Array.from({ length: TICKS }, () => el('span', 'spot-tick'));
-      tickRow.append(...ticks);
+      crew.append(iconElement('runner', { strokeWidth: 2.4 }));
+      const boss = el('span', 'spot-boss');
+      boss.append(iconElement('crew', { strokeWidth: 2.4 }));
       const plate = el('span', 'spot-plate');
-      plate.append(head, tickRow);
+      plate.append(crew, boss);
       plate.style.setProperty('--label-offset', `${placement.labelOffsetY}px`);
 
       const { marker, element } = addHtmlMarker(ctx.map, {
@@ -265,7 +259,7 @@ export const spotsLayer: MapLayer = {
         element.addEventListener('mouseenter', () => showCard(spot.id));
         element.addEventListener('mouseleave', () => showCard(null));
       }
-      return { marker, element, badge, name, crew, crewText, ticks, key: '' };
+      return { marker, element, badge, plate, crew, boss, key: '' };
     };
     ensureMarkers();
 
@@ -285,7 +279,8 @@ export const spotsLayer: MapLayer = {
           const look = active ? spotLook(state, spot.id, queue) : 'idle';
           const waiting = active ? queue.length : 0;
           const who = active ? seller(state, spot.id, runners) : { kind: 'free', name: '' };
-          const key = `${active}|${look}|${waiting}|${who.kind}|${who.name}|${spot.custom ? 1 : 0}|${spot.id === selected}`;
+          const lieutenant = active ? lieutenantOfSpot(state, spot.id) : null;
+          const key = `${active}|${look}|${waiting}|${who.kind}|${lieutenant ?? ''}|${spot.custom ? 1 : 0}|${spot.id === selected}`;
           if (key === entry.key) continue;
           entry.key = key;
           entry.element.classList.toggle('is-locked', !active);
@@ -294,10 +289,9 @@ export const spotsLayer: MapLayer = {
           entry.element.dataset.urgency = look;
           entry.badge.textContent = active ? String(waiting) : '';
           entry.crew.dataset.kind = who.kind;
-          entry.crewText.textContent = who.name;
-          entry.ticks.forEach((tick, i) => {
-            tick.classList.toggle('is-on', i < waiting);
-          });
+          entry.boss.hidden = !lieutenant;
+          entry.crew.hidden = who.kind === 'free';
+          entry.plate.hidden = who.kind === 'free' && !lieutenant;
         }
         if (hovered && !hoverCard.element.hidden) {
           const spot = getAllSpots(state).find((s) => s.id === hovered);
