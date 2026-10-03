@@ -57,6 +57,15 @@
   padding-left: 1.1em;
 }
 
+/* Wohin der Tipp führt (z.B. "Zur Rechten Hand"): Dort erledigt man, was fehlt. */
+.city-hud__action {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cat-place);
+  white-space: nowrap;
+}
+
 .city-hud__go {
   align-self: center;
   color: var(--hud-ink-2);

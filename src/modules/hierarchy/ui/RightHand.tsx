@@ -203,6 +203,13 @@ const BASE_TASKS: {
 const euroOptions = (values: readonly number[]) =>
   values.map((v) => ({ value: String(v), label: `bis ${formatEuro(v)}` }));
 
+/**
+ * Auswahl-Werte, dazu der aktuelle, falls er nicht dabei ist (z.B. vom Bot oder aus einem älteren Spielstand): Sonst
+ * bliebe die Auswahl leer.
+ */
+const withCurrent = (values: readonly number[], current: number): readonly number[] =>
+  values.includes(current) ? values : [...values, current].sort((a, b) => a - b);
+
 /** Regel-Zeile zu einer Aufgabe (eine Auswahl oder ein Schalter), nur wenn die Aufgabe an und frei ist. */
 function TaskRule(props: {
   task: RightHandTaskKey;
@@ -221,7 +228,7 @@ function TaskRule(props: {
               <Select
                 label="Lieferanfragen bis Betrag"
                 value={String(settings.orderMaxPrice)}
-                options={euroOptions(RIGHT_HAND_ORDER_PRICE_OPTIONS)}
+                options={euroOptions(withCurrent(RIGHT_HAND_ORDER_PRICE_OPTIONS, settings.orderMaxPrice))}
                 onChange={(v) => configure({ orderMaxPrice: Number(v) })}
               />
             }
@@ -253,7 +260,7 @@ function TaskRule(props: {
               <Select
                 label="Budget pro Tag fürs Nachbestellen"
                 value={String(settings.restockBudgetPerDay)}
-                options={euroOptions(RIGHT_HAND_RESTOCK_BUDGET_OPTIONS)}
+                options={euroOptions(withCurrent(RIGHT_HAND_RESTOCK_BUDGET_OPTIONS, settings.restockBudgetPerDay))}
                 onChange={(v) => configure({ restockBudgetPerDay: Number(v) })}
               />
             }
@@ -266,7 +273,10 @@ function TaskRule(props: {
                 <Select
                   label="Mindestbestand im Hauptlager"
                   value={String(rule.minStock)}
-                  options={RIGHT_HAND_RESTOCK_MIN_STOCK_OPTIONS.map((v) => ({ value: String(v), label: `unter ${v}` }))}
+                  options={withCurrent(RIGHT_HAND_RESTOCK_MIN_STOCK_OPTIONS, rule.minStock).map((v) => ({
+                    value: String(v),
+                    label: `unter ${v}`,
+                  }))}
                   onChange={(v) =>
                     configure({ restockRules: [{ ...rule, minStock: Number(v) }, ...settings.restockRules.slice(1)] })
                   }
@@ -291,7 +301,7 @@ function TaskRule(props: {
             <Select
               label="Großhandel bis Betrag"
               value={String(settings.wholesaleMaxPrice)}
-              options={euroOptions(RIGHT_HAND_WHOLESALE_PRICE_OPTIONS)}
+              options={euroOptions(withCurrent(RIGHT_HAND_WHOLESALE_PRICE_OPTIONS, settings.wholesaleMaxPrice))}
               onChange={(v) => configure({ wholesaleMaxPrice: Number(v) })}
             />
           }
@@ -307,7 +317,7 @@ function TaskRule(props: {
               <Select
                 label="Ab so viel Schwarzgeld"
                 value={String(settings.launderAbove)}
-                options={RIGHT_HAND_LAUNDER_ABOVE_OPTIONS.map((v) => ({
+                options={withCurrent(RIGHT_HAND_LAUNDER_ABOVE_OPTIONS, settings.launderAbove).map((v) => ({
                   value: String(v),
                   label: `über ${formatEuro(v)}`,
                 }))}
@@ -322,7 +332,10 @@ function TaskRule(props: {
               <Select
                 label="Anteil des Überschusses"
                 value={String(settings.launderShare)}
-                options={RIGHT_HAND_LAUNDER_SHARE_OPTIONS.map((v) => ({ value: String(v), label: formatPercent(v) }))}
+                options={withCurrent(RIGHT_HAND_LAUNDER_SHARE_OPTIONS, settings.launderShare).map((v) => ({
+                  value: String(v),
+                  label: formatPercent(v),
+                }))}
                 onChange={(v) => configure({ launderShare: Number(v) })}
               />
             }
