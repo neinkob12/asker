@@ -6,7 +6,8 @@
 // die Szenen noch einmal (Nachrichten-App offen, Chat offen, Handy zu).
 //
 //   node scripts/perf-browser.mjs [--save=pfad.json] [--days=3] [--seconds=25] [--speed=4] [--width=700 --height=500]
-//     [--mobile] [--throttle=4] [--gpu] [--reduced-motion] [--traffic=off|low|normal] [--hour=8] [--scenes=ui,karte]
+//     [--mobile] [--throttle=4] [--gpu] [--reduced-motion] [--traffic=off|low|normal] [--hour=8] [--city=hamburg]
+//     [--scenes=ui,karte]
 //
 // Karte (Auftrag 31): --scenes=karte misst den Normalbetrieb auf der Karte (zehn offene Aufträge, eine laufende
 // Lieferung, Tempo --speed, Zoom 14,5 an den Ringen) über die Messhilfe aus src/map/perf.ts (?perf=1): Bilder pro
@@ -45,6 +46,8 @@ const THROTTLE = Number(args.throttle ?? 1);
 const SCENES = new Set((args.scenes || 'ui,karte').split(','));
 const TRAFFIC = args.traffic || null;
 const HOUR = args.hour === undefined ? null : Number(args.hour);
+/** --city=hamburg: Szene karte in Hamburg (Hamburg frei, aktiv, Kamera an den Landungsbrücken). */
+const CITY = args.city || 'koeln';
 
 const { server, base } = await startServer();
 const browser =
@@ -521,6 +524,17 @@ async function measureMap(label) {
 }
 
 if (SCENES.has('karte')) {
+  if (CITY !== 'koeln') {
+    await page.evaluate((city) => {
+      const k = window.koeln;
+      k.dev.hamburgFrei();
+      k.session.sim.dispatch({ type: 'city.switch', payload: { cityId: city } });
+      k.session.state.modules.city.present = city;
+      k.runtime.requestRender();
+    }, CITY);
+    await page.waitForTimeout(3500);
+    console.log(`Stadt: ${CITY}`);
+  }
   if (HOUR !== null) {
     const time = await page.evaluate((hour) => {
       const sim = window.koeln.session.sim;
@@ -572,7 +586,8 @@ if (SCENES.has('karte')) {
     }
     sim.step();
     window.koeln.runtime.api.closeDialog?.();
-    window.koeln.runtime.map?.map.jumpTo({ center: [6.9385, 50.9335], zoom: 14.5 });
+    const center = window.koeln.session.state.modules.city?.active === 'hamburg' ? [9.965, 53.551] : [6.9385, 50.9335];
+    window.koeln.runtime.map?.map.jumpTo({ center, zoom: 14.5 });
     window.koeln.runtime.requestRender();
     return s.orders.filter((o) => o.status === 'offered' || o.status === 'enRoute').length;
   });
