@@ -18,6 +18,7 @@ import {
   ListItem,
   registerHudItem,
   registerPanel,
+  registerPhoneApp,
   Slot,
   useGame,
   useUi,
@@ -259,6 +260,72 @@ function WarehousePanel(props: { warehouseId: string }) {
   );
 }
 
+/** Handy-App "Lager": deine Lager in der aktiven Stadt (Tipp öffnet die Lager-Seite) und die Standorte zum Kaufen. */
+function WarehouseApp() {
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const cityId = activeCity(state);
+  const owned = getWarehouses(state, cityId);
+  const forSale = warehouseSites(cityId).filter((w) => !owned.some((o) => o.id === w.id));
+  return (
+    <div class="goods-panel">
+      {owned.length > 0 && (
+        <Group title="Deine Lager" icon="warehouse" color="goods" count={owned.length}>
+          <List>
+            {owned.map((w) => {
+              const rows = stockSummary(state, w.id);
+              const meta =
+                rows.length === 0
+                  ? 'leer'
+                  : rows
+                      .slice(0, 2)
+                      .map((r) => `${formatProductAmount(r.productId, r.amount)} ${productName(r.productId)}`)
+                      .join(', ');
+              return (
+                <ListItem key={w.id} onClick={() => ui.openPanel('goods.warehouse', { warehouseId: w.id })}>
+                  <ItemContent icon="warehouse" color="goods" title={w.name} meta={meta} />
+                </ListItem>
+              );
+            })}
+          </List>
+        </Group>
+      )}
+      <Group title="Zu kaufen (sauberes Geld)" icon="building" color="money" count={forSale.length}>
+        {forSale.length === 0 ? (
+          <Empty icon="building">Hier gibt es keinen Standort mehr zu kaufen.</Empty>
+        ) : (
+          <List>
+            {forSale.map((w) => (
+              <ListItem
+                key={w.id}
+                aside={
+                  <Button
+                    small
+                    disabled={state.wallet.clean < w.cost}
+                    onClick={() => dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: w.id } })}
+                  >
+                    {formatEuro(w.cost)}
+                  </Button>
+                }
+              >
+                <ItemContent icon="building" color="money" title={w.name} meta={w.description} />
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </Group>
+    </div>
+  );
+}
+
+registerPhoneApp({
+  id: 'goods.app',
+  name: 'Lager',
+  icon: 'warehouse',
+  order: 25,
+  color: 'goods',
+  component: WarehouseApp,
+});
 registerHudItem({ id: 'goods.stock', order: 20, placement: 'more', icon: 'warehouse', component: StockHud });
 registerPanel({
   id: 'goods.warehouse',
