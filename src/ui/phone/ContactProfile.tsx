@@ -1,5 +1,6 @@
 // Profil einer Figur im Handy (Seite 'core.contact', aus dem Kopf eines Chats): großes Porträt, Name, wer das ist,
-// ein paar Sätze über die Person, ihr Aussehen als Chips und "Stimme anhören" (so klingt sie im Anruf).
+// ein paar Sätze über die Person, ihr Aussehen als Chips und "Stimme anhören" (so klingt sie im Anruf, mit dem
+// Sprachmodell; lädt es noch, steht das am Knopf).
 // Gangs und Ticker haben kein Gesicht, dort steht das Wappen bzw. Symbol.
 
 import { useEffect, useState } from 'preact/hooks';
@@ -8,6 +9,7 @@ import { contactVoice, lookTraits, messages } from '../../core';
 import { Avatar, Button, Chip, Chips, Empty, Group } from '../components';
 import { useGame, useUi } from '../hooks';
 import { registerPanel } from '../registry';
+import { useAudio } from '../useAudio';
 import { CONTACT_KIND_ICONS, CONTACT_KIND_LABELS, CONTACT_KIND_TONES, contactAvatar, lookOf } from './messagesModel';
 
 declare module '../registry' {
@@ -31,6 +33,7 @@ function ContactProfile(props: { contactId: string }) {
   const ui = useUi();
   const [speaking, setSpeaking] = useState(false);
   const contact = messages.contact(state, props.contactId);
+  useAudio();
   useEffect(() => () => audio.stopSpeaking(), []);
   if (!contact) return <Empty icon="user">Diesen Kontakt gibt es nicht mehr.</Empty>;
   const look = lookOf(contact);
@@ -47,8 +50,10 @@ function ContactProfile(props: { contactId: string }) {
       setSpeaking(false),
     );
     if (stop) setSpeaking(true);
-    else ui.toast('Stimmen sind aus oder der Browser kann nicht sprechen (Einstellungen › Ton).', 'info');
+    else ui.toast('Stimmen sind aus oder der Browser kann nicht sprechen (Einstellungen › Ton & Musik).', 'info');
   };
+  const model = audio.voiceState(contactVoice(contact));
+  const loading = speaking && model?.kind === 'loading';
   return (
     <div class="contact-profile">
       <div class="contact-profile__head">
@@ -82,7 +87,7 @@ function ContactProfile(props: { contactId: string }) {
       )}
       <div class="contact-profile__actions">
         <Button icon={speaking ? 'pause' : 'volume'} onClick={listen}>
-          {speaking ? 'Stopp' : 'Stimme anhören'}
+          {loading ? 'Stimme wird geladen …' : speaking ? 'Stopp' : 'Stimme anhören'}
         </Button>
       </div>
     </div>

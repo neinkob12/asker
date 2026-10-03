@@ -6,7 +6,7 @@
 
 import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { MUSIC_MOOD_NAMES } from '../../audio';
+import { formatMegabytes, MUSIC_MOOD_NAMES, type PiperVoice, type VoiceModelState } from '../../audio';
 import { exportSaveFile } from '../builtin/GameDialogs';
 import { HistorySection } from '../builtin/HistoryApp';
 import {
@@ -51,6 +51,70 @@ function Section(props: {
       {props.plain ? props.children : <div class="set-group">{props.children}</div>}
       {props.note && <p class="set-section__note">{props.note}</p>}
     </section>
+  );
+}
+
+/** Stand eines Sprachmodells in einem Satz. */
+function voiceStateText(state: VoiceModelState, voice: PiperVoice): string {
+  const size = formatMegabytes(voice.bytes);
+  switch (state.kind) {
+    case 'ready':
+      return `Bereit · ${size} auf diesem Gerät`;
+    case 'loading':
+      return state.phase === 'init'
+        ? 'Wird vorbereitet …'
+        : `Lädt … ${Math.round((state.loaded / Math.max(1, state.total)) * 100)} % von ${size}`;
+    case 'error':
+      return state.message;
+    default:
+      return state.cached ? `${size} auf diesem Gerät` : `Nicht geladen · ${size}, einmalig von Hugging Face`;
+  }
+}
+
+/** Die Sprachmodelle (eine Männer-, eine Frauenstimme): Stand, Laden, Entfernen. */
+function VoiceModels() {
+  const audio = useAudio();
+  const models = audio.voiceModels;
+  if (models.length === 0)
+    return (
+      <p class="set-voices__note">
+        Dieser Browser kann das Sprachmodell nicht ausführen. Anrufe nutzen die Sprachausgabe des Browsers.
+      </p>
+    );
+  return (
+    <div class="set-voices">
+      {models.map(({ voice, state }) => {
+        const onDevice = state.kind === 'ready' || (state.kind === 'idle' && state.cached === true);
+        return (
+          <div key={voice.id} class="set-voice">
+            <div class="set-voice__text">
+              <span class="set-voice__label">
+                {voice.feminine ? 'Frauenstimme' : 'Männerstimme'} „{voice.name}“
+              </span>
+              <span class={`set-voice__hint ${state.kind === 'error' ? 'is-bad' : ''}`}>
+                {voiceStateText(state, voice)}
+              </span>
+              {state.kind === 'loading' && (
+                <ProgressBar value={state.loaded / Math.max(1, state.total)} label={`${voice.name} lädt`} />
+              )}
+            </div>
+            {state.kind === 'loading' ? null : onDevice ? (
+              <Button small icon="trash" onClick={() => audio.removeVoiceModel(voice.id)}>
+                Entfernen
+              </Button>
+            ) : (
+              <Button small icon="download" onClick={() => audio.loadVoiceModel(voice.id)}>
+                {state.kind === 'error' ? 'Noch mal' : 'Laden'}
+              </Button>
+            )}
+          </div>
+        );
+      })}
+      <p class="set-voices__note">
+        Die Stimmen rechnet das Sprachmodell Piper auf diesem Gerät; die Modelle kommen einmalig von Hugging Face und
+        bleiben im Browser. Beim ersten Anruf laden sie von selbst (nicht im Datensparmodus).
+      </p>
+    </div>
   );
 }
 
@@ -163,7 +227,7 @@ export function SettingsApp() {
           label="Stimmen im Anruf"
           hint={
             audio.canSpeakAtAll
-              ? 'Figuren sprechen am Telefon mit eigener Stimme. Aus: nur Untertitel.'
+              ? 'Figuren sprechen am Telefon mit eigener Stimme; im Gespräch ist alles andere still. Aus: nur Untertitel.'
               : 'Dieser Browser hat keine Sprachausgabe, Anrufe laufen mit Untertiteln.'
           }
           checked={s.voices}
@@ -173,6 +237,7 @@ export function SettingsApp() {
           }}
           disabled={s.muted}
         />
+        {s.voices && !s.muted && <VoiceModels />}
         <Player />
       </Section>
 
@@ -264,6 +329,11 @@ export function SettingsApp() {
           <dd>{'©\u00a0OpenStreetMap-Mitwirkende, Overture Maps Foundation (ODbL)'}</dd>
           <dt>Veedel-Grenzen</dt>
           <dd>Stadt Köln, Offene Daten Köln (Datenlizenz Deutschland Zero 2.0)</dd>
+          <dt>Stimmen</dt>
+          <dd>
+            Piper (Rhasspy, MIT) mit espeak-ng (GPL-3.0) und ONNX Runtime (Microsoft, MIT); Stimme „Thorsten“ aus
+            Thorsten-Voice (CC0), Stimme „Kerstin“ aus Piper Voices (Hugging Face)
+          </dd>
         </dl>
       </Section>
 

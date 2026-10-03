@@ -344,6 +344,13 @@ soundOnEvent('police.raid', 'siren');                 // Sound an ein Ereignis b
 Musik: selbst erzeugte Playlist, Stimmung nach Tageszeit. Lautstärke, Stummschalten und Musik an/aus merkt sich jedes
 Gerät (Einstellungen › Ton & Musik). Ton startet erst nach der ersten Interaktion.
 
+Stimmen im Anruf (`src/audio/piper/`): `audio.speak(text, contactVoice(contact), onEnd)` spricht mit dem Sprachmodell
+Piper im Browser (Worker, Modelle einmalig von Hugging Face in den Cache), die Sprachausgabe des Browsers ist nur die
+Notlösung. `audio.prepareVoice(voice)` lädt das Modell schon beim Klingeln, `audio.prepareSpeech(lines, voice)` rechnet
+die Zeilen eines Gesprächs vor, `audio.setCall(true)` schaltet Musik, Effekte und Geräusche aus, solange gesprochen
+wird. Stand der Modelle: `audio.voiceModels`, `audio.voiceState(voice)` (Einstellungen › Ton & Musik zeigt Fortschritt,
+Laden und Entfernen; `CallScreen` zeigt „Stimme wird geladen …“ unter dem Namen).
+
 ## Einstellungen pro Gerät
 
 `UiState.overlay`, `camera`, `vibration`, `moreNotifications` (`prefs.ts`, `localStorage` `koeln-tycoon:ui`), Ton unter

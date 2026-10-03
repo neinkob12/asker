@@ -1,14 +1,15 @@
 // Anrufe im Spiel-Handy (Auftrag 30): Klingelt ein Anruf (messages.call), füllt er den Bildschirm des Handys wie bei
 // iOS: Porträt, Name, wer anruft, unten Ablehnen und Annehmen als große runde Tasten. Klingelton und Vibrieren laufen,
-// solange es klingelt. Angenommen kommt das Gespräch: Die Figur spricht ihre Zeilen mit eigener Stimme (audio.speak,
-// abschaltbar oben rechts und in den Einstellungen), dazu erscheinen sie als Untertitel; ohne Stimme im Tempo wie
-// Tippen. Antippen zeigt alles. Am Ende die Antworten. Was danach kommt (ihre Reaktion, eine Rückfrage wie Fietes
+// solange es klingelt; das Sprachmodell der Figur lädt derweil schon (audio.prepareVoice). Angenommen kommt das
+// Gespräch: Musik, Effekte und Geräusche sind aus (audio.setCall), die Figur spricht ihre Zeilen mit eigener Stimme
+// (audio.speak, Sprachmodell Piper im Browser, abschaltbar oben rechts und in den Einstellungen), dazu erscheinen sie
+// als Untertitel; ohne Stimme im Tempo wie Tippen. Lädt das Modell noch, steht das unter dem Namen. Antippen zeigt alles. Am Ende die Antworten. Was danach kommt (ihre Reaktion, eine Rückfrage wie Fietes
 // "Übergibst du jetzt?"), gehört noch zum Gespräch und wird dort beantwortet. Ist nichts mehr offen, legt die Figur auf
 // und der Bildschirm geht von selbst zu. Auflegen geht immer; alles bleibt als Chat beim Kontakt stehen.
 // Ob es klingelt, steht im Spielzustand; welches Gespräch offen ist, in UiState.call.
 
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { audio } from '../../audio';
+import { audio, type VoiceModelState } from '../../audio';
 import { clock, contactVoice, type GameState, type Message, messages, type VoiceSpec } from '../../core';
 import { Avatar, Button, Icon } from '../components';
 import { haptic } from '../haptics';
@@ -48,6 +49,9 @@ function IncomingCall(props: { message: Message; state: GameState }) {
   const name = contact?.name ?? m.contactId;
   const kind = contact?.kind ?? 'other';
   useRingtone(m.id, ui.vibration);
+  // Solange es klingelt, lädt das Sprachmodell der Figur (aus dem Cache in Sekunden, sonst einmalig als Download).
+  const voice = useMemo(() => contactVoice(contact, m.contactId), [contact, m.contactId]);
+  useEffect(() => audio.prepareVoice(voice), [voice.feminine]);
   const attempt = m.call?.attempt ?? 1;
   return (
     <section class="call-screen is-incoming" aria-label={`Anruf von ${name}`} role="alertdialog">
@@ -162,6 +166,13 @@ function useTalk(talk: TalkEntry[], voice: VoiceSpec) {
   return { shown, speaking, done: shown >= talk.length && !speaking, skip };
 }
 
+/** Was unter dem Namen steht, solange das Sprachmodell noch lädt (sonst nichts). */
+function voiceNote(state: VoiceModelState | null): string | null {
+  if (state?.kind !== 'loading') return null;
+  if (state.phase === 'init') return 'Stimme wird vorbereitet …';
+  return `Stimme wird geladen … ${Math.round((state.loaded / Math.max(1, state.total)) * 100)} %`;
+}
+
 function ActiveCall(props: { message: Message; state: GameState }) {
   const { api } = useRuntime();
   const sound = useAudio().settings;
@@ -179,6 +190,7 @@ function ActiveCall(props: { message: Message; state: GameState }) {
     ...after.map((x) => ({ key: `m${x.id}`, from: x.from, text: x.text, via: x.via, time: x.time })),
   ];
   const { shown, speaking, done, skip } = useTalk(talk, voice);
+  const note = sound.voices && !sound.muted ? voiceNote(audio.voiceState(voice)) : null;
   // Offene Frage im Gespräch: die des Anrufs selbst oder eine Rückfrage danach (z.B. Fiete: "Übergibst du jetzt?").
   const question = done
     ? [m, ...after].filter((x) => x.from === 'contact' && messages.canAnswer(props.state, x)).pop()
@@ -194,7 +206,15 @@ function ActiveCall(props: { message: Message; state: GameState }) {
     const timer = setTimeout(() => api.endCall(), HANG_UP_MS);
     return () => clearTimeout(timer);
   }, [ended]);
-  useEffect(() => () => audio.stopSpeaking(), []);
+  // Im Gespräch ist alles andere still; die Zeilen rechnet das Sprachmodell schon vor. Auflegen räumt auf.
+  useEffect(() => {
+    audio.setCall(true);
+    audio.prepareSpeech(m.call?.lines ?? [], voice);
+    return () => {
+      audio.setCall(false);
+      audio.stopSpeaking();
+    };
+  }, []);
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: 'end' });
   }, [shown, !!question]);
@@ -216,6 +236,10 @@ function ActiveCall(props: { message: Message; state: GameState }) {
           <strong>{name}</strong>
           {ended ? (
             <span class="is-ended">{first} hat aufgelegt</span>
+          ) : note ? (
+            <span class="call-screen__note">
+              <Icon name="download" /> {note}
+            </span>
           ) : (
             <span>
               <Icon name="call" /> {duration}
