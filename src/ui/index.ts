@@ -62,6 +62,7 @@ export type {
   Toast,
   ToastKind,
   ToastOptions,
+  TrafficLevel,
   UiApi,
   UiState,
 } from './runtime';

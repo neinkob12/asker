@@ -146,7 +146,12 @@ liegt im Rauschen der UI-Reaktionen; in Node bleibt es bei etwa 0,1 ms).
    Simulationsschritte, Long Tasks, DOM, CPU-Profil (CDP `Profiler`) und Mikro-Benchmarks; dann erzeugt es 20 Anfragen
    über `offerDelivery` und `offerWholesale` (umgeht `MAX_OPEN_ORDERS`) und misst Nachrichten-App offen, Chat offen und
    Handy zu. Headless mit SwiftShader liefert nur 2 bis 5 Bilder pro Sekunde; für echte fps und Long Tasks auf einem
-   Rechner mit GPU `chromium.launch({ headless: false })` in `scripts/browser.mjs` setzen und `?perf=1` aus Auftrag 31
-   nutzen, sobald es das gibt.
+   Rechner mit GPU `--gpu` anhängen (Fenster mit echter Grafik) oder im Spiel `?perf=1` nutzen.
+   **Karte (seit Auftrag 31):** `--scenes=karte` misst den Normalbetrieb auf der Karte (zehn offene Aufträge, eine
+   Lieferung, Zoom 14,5) über die Messhilfe `?perf=1` (`src/map/perf.ts`): Bild-Arbeit der Animationen, Layer-Updates,
+   `setData` pro Quelle, Anzahl der Fahrzeuge. `--hour=8` spult in den Berufsverkehr vor, `--width=1440 --height=900`
+   für den Desktop (unter 760 px gilt die Handy-Zahl an Fahrzeugen), `--mobile --throttle=4` für das Handy mit 4× CPU-
+   Drossel, dazu `--reduced-motion` und `--traffic=off`. Budget und Messwerte: `src/map/README.md`, Abschnitt
+   „Performance-Budget“, und der PR zu Auftrag 31.
 3. **Vorher und nachher** immer mit gleichem Seed, gleicher Dauer und gleichem Fenster vergleichen; die Zahlen gehören in den
    PR-Text des jeweiligen Auftrags.

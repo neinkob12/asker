@@ -40,7 +40,7 @@ export const PRELUDE = `
   const docked = () => {
     for (let i = 0; i < 400 && state().modules.logistics.cargo.length === 0; i++) sim.advance(30);
   };
-  const port = { lng: 6.9712, lat: 50.9862 };
+  const port = { lng: 6.9679, lat: 50.98527 };
   /** Razzia im Veedel des Neumarkts (Läufer dort): bis genau zur Razzia vorspulen. */
   const policeRaid = async () => {
     const spots = await import('/src/modules/spots/index.ts');
@@ -90,6 +90,23 @@ export const SCENES = [
   { name: 'weggelegt-tag', js: `sim.advance(${TIMES.tag}); busy(); api.closePhone();` },
   { name: 'weggelegt-nacht', js: `sim.advance(${TIMES.nacht}); busy(); api.closePhone();` },
   { name: 'start', js: '' },
+  // Auftrag 31: Verkehr als Kulisse (läuft ein paar Sekunden mit Tempo 1, dann Pause für das Bild).
+  {
+    name: 'verkehr-tag',
+    js: `sim.advance(${TIMES.tag}); busy(); api.closePhone(); api.flyTo({ lng: 6.9405, lat: 50.9345 }, 15.2); api.setSpeed(1); await sleep(5000); api.setSpeed(0);`,
+    wait: 2500,
+  },
+  {
+    // Auftrag 31: Leute an Spots: Läufer am Neumarkt, wartende Kunden, eine Streife im Veedel mit hoher Heat.
+    name: 'leute-spots',
+    js: `sim.advance(${TIMES.tag}); busy(); const spots = await import('/src/modules/spots/index.ts'); state().modules.police.heat[spots.getSpot(state(), 'neumarkt').veedelId] = 70; sim.advance(30); api.closePhone(); api.flyTo({ lng: 6.9476, lat: 50.9362 }, 16.4); api.setSpeed(1); await sleep(4000); api.setSpeed(0);`,
+    wait: 2500,
+  },
+  {
+    name: 'verkehr-nacht',
+    js: `sim.advance(${TIMES.nacht}); busy(); api.closePhone(); api.flyTo({ lng: 6.9405, lat: 50.9345 }, 15.2); api.setSpeed(1); await sleep(5000); api.setSpeed(0);`,
+    wait: 2500,
+  },
   {
     name: 'orte',
     js:
@@ -103,6 +120,12 @@ export const SCENES = [
     wait: 4500,
   },
   {
+    // Auftrag 31: Das Schiff fährt auf dem echten Rhein (Overture-Daten), hier in der Europa-Ansicht bei Nijmegen.
+    name: 'schiff-rhein',
+    js: `sim.advance(${TIMES.tag}); harbor(); shipAt(0.28); api.flyToEuropa();`,
+    wait: 4500,
+  },
+  {
     name: 'lieferung-kai',
     js: `sim.advance(${TIMES.tag}); harbor(); docked(); api.flyTo(port, 13.2);`,
     wait: 4500,
@@ -113,6 +136,27 @@ export const SCENES = [
       'sim.advance(' +
       TIMES.nacht +
       '); harbor(); docked(); run("staff.hireDriver", {}); run("logistics.pickup", { by: "driver" }); sim.advance(45); api.flyTo({ lng: 6.95, lat: 50.965 }, 12.6);',
+    wait: 4500,
+  },
+  {
+    // Auftrag 31: Das Auto hält an der Straße, die letzten Meter zum Kunden sind ein gepunkteter Fußweg.
+    name: 'lieferung-fussweg',
+    js:
+      'sim.advance(' +
+      TIMES.tag +
+      '); busy(); const orders = await import("/src/modules/customers/orders.ts"); state().modules.customers.orders = [];' +
+      ' const o = orders.offerDelivery(sim.ctx("customers"), true); run("customers.acceptOrder", { orderId: o.id, by: "player" });' +
+      ' sim.advance(o.arrivesAt - 3 - state().time); api.flyTo(o, 16.5);',
+    wait: 4500,
+  },
+  {
+    // Auftrag 31: Der Kurier aus Frankfurt kommt über die A3-Zufahrt herein (roads: roadApproach).
+    name: 'kurier-a3',
+    js:
+      'sim.advance(' +
+      TIMES.tag +
+      '); rich(); run("suppliers.order", { supplierId: "frankfurt", packageId: "weed50" }); const s = state().modules.suppliers.shipments[0];' +
+      ' sim.advance(Math.floor((s.arrivesAt - s.orderedAt) * 0.74)); api.flyTo({ lng: 7.065, lat: 50.925 }, 13.4);',
     wait: 4500,
   },
   {

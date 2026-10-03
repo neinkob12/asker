@@ -122,10 +122,26 @@ Auftrag 31  Die Karte lebt                             (Verkehr, Leute an Spots,
 | Auftrag | Thema | Wann |
 | --- | --- | --- |
 | [30](30-staedte-hamburg.md) | Sieg erst bei allen 12 Veedeln (7 bleibt Meilenstein „Boss von Köln“), Vollbild-Anruf aus dem Hamburger Hafen, Vollmacht der Rechten Hand (Stufe 5, alle Aufgaben, 80 % vom Kölner Tagesgewinn, Eingreifen jederzeit), Modul `city` mit Schlafmodus (nur die sichtbare Stadt läuft voll), Hamburg mit 12 Stadtteilen, Hafen-Großmengen, höheren Preisen, Reeperbahn, härterer Polizei und Zoll, Toni als Startlieferant, Routen mit Fahrplan über die A1, Charakter der Städte (Köln: Stadt-Events, Klüngel, Studenten und Kneipen), Schablone für Stadt drei | als Nächstes |
-| [31](31-karte-lebt.md) | Verkehr und Leute an Spots als Kulisse mit Performance-Budget, Rhein und Elbe aus Overture-Daten, Prüfskript „Fahrzeuge überall auf der Straße“, Hamburger Wahrzeichen, schöne Deutschland-Ansicht, Quellenangabe im Spiel | nach 30 |
+| [31](31-karte-lebt.md) | Verkehr und Leute an Spots als Kulisse mit Performance-Budget, Rhein und Elbe aus Overture-Daten, Prüfskript „Fahrzeuge überall auf der Straße“, Hamburger Wahrzeichen, schöne Deutschland-Ansicht, Quellenangabe im Spiel | parallel zu 30 begonnen (PR 33): alles ohne Auftrag 30 fertig, Rest nach dem Merge von 30 |
 
 Die Messung zum Ruckeln (Hotspots, Skripte, Zahlen) steht in [`docs/perf/2026-10-messung.md`](../perf/2026-10-messung.md).
 Beide Aufträge messen damit vorher und nachher.
+
+**Stand Auftrag 31** (Branch `claude/karte-lebt-31`, PR 33): Auftrag 31 wurde parallel zu 30 gestartet. Fertig ist alles,
+was ohne 30 geht:
+- Etappe 0: Karten-Bremsen gelöst, Messhilfe `?perf=1`, `perf:browser` mit Drossel und Szene `karte`.
+- Etappe 1 für Köln: `check-roads`, Daten repariert, Fußwege, Autobahn-Zufahrten.
+- Etappe 2: Rhein und Elbe aus Overture.
+- Etappe 3: Verkehr.
+- Etappe 4: Leute an Spots.
+- Etappe 5: Hamburger Wahrzeichen und Quellenangabe.
+
+Nach dem Merge von 30 folgen:
+- `check-roads` und Zufahrten für Hamburg.
+- Fahrten auf der A1 in Stadt- und Deutschland-Ansicht.
+- Verkehr nur in der aktiven Stadt.
+- Die schöne Deutschland-Ansicht.
+- Die Hamburg-Kamera und die Elbe bis zum `portId` aus `CITIES`.
 
 ## Mergen
 

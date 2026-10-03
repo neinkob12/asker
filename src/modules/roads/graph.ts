@@ -3,7 +3,7 @@
 // Kosten = Fahrzeit (Länge geteilt durch das Tempo der Straßenart), Ergebnis = Weg und Länge in Metern.
 
 import type { LngLat } from '../../core';
-import { ROAD_CLASSES, ROAD_EDGES, ROAD_NODES } from './network';
+import { ROAD_APPROACHES, ROAD_CLASSES, ROAD_EDGES, ROAD_NODES } from './network';
 
 export type RoadClass = (typeof ROAD_CLASSES)[number];
 
@@ -207,6 +207,54 @@ function getGraph(): Graph {
   return graph;
 }
 
+/**
+ * Lesesicht auf den Graphen (z.B. für den Verkehr als Kulisse in roads/ui): Knoten und Kanten in Metern einer lokalen
+ * Projektion, Nachbarschaft als CSR (adjStart/adjEdge/adjDir, dir 1 = vorwärts). Nur lesen!
+ */
+export interface RoadGraphView {
+  nodeX: Float64Array;
+  nodeY: Float64Array;
+  edgeFrom: Int32Array;
+  edgeTo: Int32Array;
+  edgeOneway: Uint8Array;
+  edgeClass: Uint8Array;
+  edgeLength: Float64Array;
+  shapeStart: Int32Array;
+  shapeX: Float64Array;
+  shapeY: Float64Array;
+  shapeDist: Float64Array;
+  adjStart: Int32Array;
+  adjEdge: Int32Array;
+  adjDir: Uint8Array;
+  /** Straßenart je Code (edgeClass). */
+  classes: readonly RoadClass[];
+  toLngLat(x: number, y: number): LngLat;
+  toMeters(point: LngLat): [number, number];
+}
+
+export function graphView(): RoadGraphView {
+  const g = getGraph();
+  return {
+    nodeX: g.nodeX,
+    nodeY: g.nodeY,
+    edgeFrom: g.edgeFrom,
+    edgeTo: g.edgeTo,
+    edgeOneway: g.edgeOneway,
+    edgeClass: g.edgeClass,
+    edgeLength: g.edgeLength,
+    shapeStart: g.shapeStart,
+    shapeX: g.shapeX,
+    shapeY: g.shapeY,
+    shapeDist: g.shapeDist,
+    adjStart: g.adjStart,
+    adjEdge: g.adjEdge,
+    adjDir: g.adjDir,
+    classes: ROAD_CLASSES,
+    toLngLat: (x, y) => ({ lng: x / M_LNG, lat: y / M_LAT }),
+    toMeters: (p) => [toX(p.lng), toY(p.lat)],
+  };
+}
+
 /** Größe des Netzes (für Tests und die Doku). */
 export function networkSize(): { nodes: number; edges: number; meters: number } {
   const g = getGraph();
@@ -355,6 +403,9 @@ export interface GraphRoute {
   roadMeters: number;
   /** Gesamtlänge inklusive der Wege vom Punkt zur Straße und von der Straße zum Ziel. */
   meters: number;
+  /** Index des ersten und letzten Punkts auf der Straße (davor und danach: zu Fuß zur Straße). */
+  roadStart: number;
+  roadEnd: number;
 }
 
 /** Route zwischen zwei Punkten über das Straßennetz. null, wenn einer der Punkte zu weit weg von jeder Straße ist. */
@@ -456,23 +507,58 @@ function finish(road: [number, number][], fromPoint: LngLat, toPoint: LngLat): G
     if (!last || Math.hypot(last[0] - p[0], last[1] - p[1]) > 0.5) points.push(p);
   };
   add([toX(fromPoint.lng), toY(fromPoint.lat)]);
+  // Liegt der Start (fast) auf der Straße, fällt der erste Straßenpunkt mit ihm zusammen.
+  const roadStart = road.length > 0 && Math.hypot(points[0][0] - road[0][0], points[0][1] - road[0][1]) > 0.5 ? 1 : 0;
   let roadMeters = 0;
   for (let i = 0; i < road.length; i++) {
     if (i > 0) roadMeters += Math.hypot(road[i][0] - road[i - 1][0], road[i][1] - road[i - 1][1]);
     add(road[i]);
   }
+  const roadEnd = points.length - 1;
   add([toX(toPoint.lng), toY(toPoint.lat)]);
   let meters = 0;
   for (let i = 1; i < points.length; i++) {
     meters += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
   }
   if (points.length === 1) points.push(points[0]);
-  return { points, roadMeters, meters };
+  return { points, roadMeters, meters, roadStart, roadEnd: Math.max(roadStart, roadEnd) };
 }
 
 /** Meter-Koordinaten zurück in Grad. */
 export function pointsToLngLat(points: readonly [number, number][]): LngLat[] {
   return points.map(([x, y]) => toLngLat(x, y));
+}
+
+/** Mitte des Netzes (Mittelwert aller Knoten), z.B. um die Richtung einer Autobahn-Zufahrt zu bestimmen. */
+export function networkCenter(): LngLat {
+  const g = getGraph();
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i < g.nodeX.length; i++) {
+    x += g.nodeX[i];
+    y += g.nodeY[i];
+  }
+  const n = Math.max(1, g.nodeX.length);
+  return toLngLat(x / n, y / n);
+}
+
+/** Linie im Polyline-Format (erster Punkt absolut, dann Abstände, 1e-5 Grad) als Punkte. */
+export function decodeLine(text: string): LngLat[] {
+  const ints = decodeInts(text);
+  const path: LngLat[] = [];
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i + 1 < ints.length; i += 2) {
+    x += ints[i];
+    y += ints[i + 1];
+    path.push({ lng: x / 1e5, lat: y / 1e5 });
+  }
+  return path;
+}
+
+/** Autobahn-Zufahrten aus network.ts: Weg vom Rand des Ausschnitts bis zum ersten Knoten im Netz. */
+export function decodeApproaches(): { ref: string; toward: string; path: LngLat[] }[] {
+  return ROAD_APPROACHES.map((a) => ({ ref: a.ref, toward: a.toward, path: decodeLine(a.path) }));
 }
 
 /** Knoten an Autobahnen (Einfahrt für Lieferungen von außerhalb), der dem Punkt am nächsten liegt. */

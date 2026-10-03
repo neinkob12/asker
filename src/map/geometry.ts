@@ -53,6 +53,58 @@ export function pointAlong(path: readonly LngLat[], t: number): { position: LngL
   return { position: { ...path[path.length - 1] }, bearing: 0 };
 }
 
+/** Strecke mit vorberechneten Längen: schnelle Punkte nach Metern (Binärsuche statt jedes Mal neu messen). */
+export interface MeasuredPath {
+  points: readonly LngLat[];
+  /** Länge bis zu jedem Punkt in Metern (erster Punkt 0). */
+  cumulative: Float64Array;
+  /** Gesamtlänge in Metern. */
+  length: number;
+}
+
+export function measurePath(points: readonly LngLat[]): MeasuredPath {
+  const cumulative = new Float64Array(Math.max(1, points.length));
+  for (let i = 1; i < points.length; i++) cumulative[i] = cumulative[i - 1] + distanceMeters(points[i - 1], points[i]);
+  return { points, cumulative, length: points.length > 1 ? cumulative[points.length - 1] : 0 };
+}
+
+/** Punkt nach so vielen Metern auf der Strecke (vor dem Anfang der Anfang, nach dem Ende das Ende). */
+export function pointAtDistance(path: MeasuredPath, meters: number): LngLat {
+  const { points, cumulative } = path;
+  if (points.length === 0) return { lng: 0, lat: 0 };
+  if (points.length === 1 || meters <= 0) return { lng: points[0].lng, lat: points[0].lat };
+  if (meters >= path.length) {
+    const last = points[points.length - 1];
+    return { lng: last.lng, lat: last.lat };
+  }
+  let lo = 0;
+  let hi = points.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (cumulative[mid] <= meters) lo = mid;
+    else hi = mid;
+  }
+  const span = cumulative[hi] - cumulative[lo];
+  const f = span > 0 ? (meters - cumulative[lo]) / span : 0;
+  const a = points[lo];
+  const b = points[hi];
+  return { lng: a.lng + (b.lng - a.lng) * f, lat: a.lat + (b.lat - a.lat) * f };
+}
+
+/**
+ * Richtung an einer Stelle der Strecke, gemittelt über ein Fenster (window Meter davor bis danach): An Ecken dreht
+ * ein Fahrzeug so weich, statt zu springen. Am Anfang und Ende wird das Fenster kürzer.
+ */
+export function smoothBearing(path: MeasuredPath, meters: number, window: number): number {
+  if (path.points.length < 2 || path.length === 0) return 0;
+  const half = Math.min(window, path.length / 2);
+  const from = Math.max(0, Math.min(path.length - 2 * half, meters - half));
+  const a = pointAtDistance(path, from);
+  const b = pointAtDistance(path, from + 2 * half);
+  if (a.lng === b.lng && a.lat === b.lat) return 0;
+  return bearing(a, b);
+}
+
 /**
  * Punkt im Kreis um einen Mittelpunkt, z.B. um mehrere Marker an einem Ort nebeneinander zu stellen.
  * index von count, Abstand in Metern.

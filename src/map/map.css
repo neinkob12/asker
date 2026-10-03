@@ -523,3 +523,25 @@ button.map-target:hover .map-target__reticle {
     animation-duration: 3s;
   }
 }
+
+/* Messhilfe (nur Dev-Build mit ?perf=1, src/map/perf.ts): Zahlen der letzten Sekunde neben den Budgets. */
+.map-perf {
+  position: fixed;
+  top: calc(var(--space-2) + env(safe-area-inset-top));
+  left: var(--space-2);
+  z-index: 9999;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  max-width: calc(100vw - 2 * var(--space-2));
+  border: 1px solid var(--hud-glass-edge);
+  border-radius: var(--radius-md);
+  background: var(--hud-glass-strong);
+  color: var(--color-text);
+  font: 11px / 1.35 var(--font-mono);
+  white-space: pre;
+  pointer-events: none;
+}
+
+.map-perf.is-over {
+  border-color: var(--color-bad);
+}

@@ -7,6 +7,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { clock, type GameState, type LngLat } from '../core';
 import type { CameraMode, MapController, UiApi, UiState } from '../ui/runtime';
+import { setMotionSpeed } from './animation';
 import { currentMood } from './atmosphere';
 import { EUROPA_VIEW, isMobile, KOELN_CENTER, KOELN_VIEW, koelnZoom } from './config';
 import { setActiveMap, setEffectsLook } from './effects';
@@ -14,6 +15,7 @@ import { landmarkFeatures } from './landmarks';
 import { computeLook, type MapLook } from './look';
 import { addHtmlMarker, el } from './markers';
 import { SurveillanceOverlay } from './overlay';
+import { mapPerf } from './perf';
 import { PrecipitationLayer } from './precipitation';
 import { type MapLayerInstance, mapLayers } from './registry';
 import { BASE_LAYERS, baseStyle, LANDMARK_SOURCE } from './style';
@@ -21,6 +23,8 @@ import { BASE_LAYERS, baseStyle, LANDMARK_SOURCE } from './style';
 setWorkerUrl(workerUrl);
 
 const KOELN_PITCH = 50;
+/** Straßennetz, Wasserwege und Autobahn-Zufahrten kommen aus Overture Maps (abgeleitet von OpenStreetMap, ODbL). */
+export const ATTRIBUTION = '©\u00a0OpenStreetMap-Mitwirkende, Overture Maps Foundation';
 const KOELN_BEARING = -20;
 const MAX_PIXEL_RATIO = 1.5;
 
@@ -28,7 +32,7 @@ type PaintValue = string | number;
 
 export class GameMap implements MapController {
   readonly map: MapLibreMap;
-  private readonly instances: MapLayerInstance[] = [];
+  private readonly instances: { id: string; instance: MapLayerInstance }[] = [];
   private picking: ((result: LngLat | null) => void) | null = null;
   private loaded = false;
   private lastUi: UiState | null = null;
@@ -40,6 +44,11 @@ export class GameMap implements MapController {
   private lastSky = '';
   private cameraMode: CameraMode = '3d';
   private view: 'koeln' | 'europa' = 'koeln';
+  /** Zählt Befehle und neue Spiele (invalidate), damit update() erkennt, ob sich etwas geändert hat. */
+  private revision = 0;
+  private lastKey = '';
+  private lastState: GameState | null = null;
+  private lastPanel: UiState['panel'] = null;
 
   constructor(
     private readonly container: HTMLElement,
@@ -54,7 +63,8 @@ export class GameMap implements MapController {
       pitch: KOELN_PITCH,
       bearing: KOELN_BEARING,
       maxPitch: 75,
-      attributionControl: { compact: true },
+      // Quellenangabe unten rechts: Kacheln aus dem Stil, dazu Straßen, Flüsse und Wege aus Overture (Auftrag 31).
+      attributionControl: { compact: true, customAttribution: ATTRIBUTION },
       fadeDuration: 200,
       // Retina-Bildschirme zeichnen sonst mit doppelter Auflösung. Das kostet viel Grafikspeicher, und Safari
       // lädt die Seite neu, wenn er ausgeht (weißer Bildschirm).
@@ -87,10 +97,11 @@ export class GameMap implements MapController {
     this.map.on('load', () => this.mountLayers());
     this.bindLandmarkHover();
     setActiveMap(this.map);
+    mapPerf.attach(this.map);
   }
 
   destroy(): void {
-    for (const instance of this.instances) instance.destroy?.();
+    for (const { instance } of this.instances) instance.destroy?.();
     this.precipitation.destroy();
     setActiveMap(null);
     this.map.remove();
@@ -101,14 +112,13 @@ export class GameMap implements MapController {
     this.loaded = true;
     for (const layer of mapLayers()) {
       try {
-        this.instances.push(
-          layer.mount({
-            map: this.map,
-            ui: this.ui,
-            getState: this.getState,
-            isPicking: () => this.picking !== null,
-          }),
-        );
+        const instance = layer.mount({
+          map: this.map,
+          ui: this.ui,
+          getState: this.getState,
+          isPicking: () => this.picking !== null,
+        });
+        this.instances.push({ id: layer.id, instance });
       } catch (error) {
         console.error(`Karten-Layer ${layer.id} konnte nicht geladen werden`, error);
       }
@@ -120,11 +130,33 @@ export class GameMap implements MapController {
     this.landmarkNight = -1;
     if (this.lastUi) this.overlay.setEnabled(this.lastUi.overlay, true);
     const state = this.getState();
+    this.lastKey = '';
     if (state && this.lastUi) this.update(state, this.lastUi);
   }
 
-  /** Nach jedem Neuzeichnen der UI. */
+  /** Der Zustand hat sich ohne neue Spielzeit geändert (Befehl, neues oder geladenes Spiel). */
+  invalidate(): void {
+    this.revision++;
+  }
+
+  /** Spieltempo (0 = Pause): Verkehr, Figuren und Puls halten bei Pause an. */
+  setSpeed(speed: number): void {
+    setMotionSpeed(speed);
+  }
+
+  /**
+   * Nach jedem Neuzeichnen der UI. Die Layer bekommen update() nur, wenn sich etwas geändert hat: Spielzeit, ein
+   * Befehl oder neues Spiel (invalidate), das offene Panel, Handy, Kamera, Overlay oder Verkehr.
+   */
   update(state: GameState, ui: UiState): void {
+    const key = `${state.time}|${this.revision}|${ui.phone.open}|${ui.camera}|${ui.overlay}|${ui.traffic}|${this.loaded}`;
+    if (key === this.lastKey && state === this.lastState && ui.panel === this.lastPanel) {
+      this.precipitation.sync();
+      return;
+    }
+    this.lastKey = key;
+    this.lastState = state;
+    this.lastPanel = ui.panel;
     const phoneChanged = this.lastUi?.phone.open !== ui.phone.open;
     this.lastUi = ui;
     if (phoneChanged || this.padRight < 0) this.applyPadding(this.padRight >= 0);
@@ -134,7 +166,12 @@ export class GameMap implements MapController {
       `${clock.weekdayName(state.time, true).toUpperCase()} ${clock.formatTime(state.time)} · TAG ${clock.day(state.time)}`,
     );
     this.overlay.setLabel(this.view === 'europa' ? 'SAT 02 · EUROPA' : 'CAM 01 · KÖLN');
-    for (const instance of this.instances) instance.update?.(state, ui);
+    for (const { id, instance } of this.instances) {
+      if (!instance.update) continue;
+      const t0 = mapPerf.begin();
+      instance.update(state, ui);
+      mapPerf.end('layer', id, t0);
+    }
     // Nach den Layern: die setzen Stimmung und Niederschlag (z.B. das Wetter).
     if (this.loaded) this.applyLook(state);
     this.precipitation.sync();

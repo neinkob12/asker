@@ -31,8 +31,9 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'aachener-weiher',
     name: 'Aachener Weiher',
-    lng: 6.9282,
-    lat: 50.9356,
+    // Am Nordufer, damit der Spot höchstens 60 m von einer Straße liegt (Richard-Wagner-Straße, check-roads).
+    lng: 6.92821,
+    lat: 50.93605,
     demand: 1.1,
     priceMultiplier: 1.1,
     unlockCost: 450,
@@ -91,8 +92,9 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'stadtgarten',
     name: 'Stadtgarten',
-    lng: 6.933,
-    lat: 50.9422,
+    // Höchstens 60 m von der Ludolf-Camphausen-Straße (check-roads).
+    lng: 6.93287,
+    lat: 50.94224,
     demand: 0.8,
     priceMultiplier: 1.1,
     unlockCost: 400,

@@ -25,7 +25,7 @@
 import { type CommandResult, type Ctx, defineModule, type GameState, journal } from '../../core';
 import { getStock } from '../goods';
 import { getSpot, getSpots, isSpotActive } from '../spots';
-import { CUSTOMER_TYPES } from './config';
+import { CUSTOMER_TYPES, HANDOVER_MINUTES, WHOLESALE_HANDOVER_MINUTES } from './config';
 import { customerType } from './decisions';
 import { acceptOrder, courierGone, declineOrder, expireOrderMessage, onDealResolved, ordersTick } from './orders';
 import { demandRate, initialSpawn, isPlayerAway, serve, streetTick } from './street';
@@ -319,6 +319,17 @@ export function orderProgress(state: GameState, order: Order): number {
   if (order.startedAt === null || order.arrivesAt === null) return order.status === 'done' ? 1 : 0;
   const total = order.arrivesAt - order.startedAt;
   return total <= 0 ? 1 : Math.min(1, Math.max(0, (state.time - order.startedAt) / total));
+}
+
+/**
+ * Wie weit das Lieferauto auf der Straße ist (0–1, für die Karte): Es fährt bis zur Übergabe und steht dann an der
+ * Straße, während die Ware übergeben wird (HANDOVER_MINUTES, beim Großhandel WHOLESALE_HANDOVER_MINUTES).
+ */
+export function orderDriveProgress(state: GameState, order: Order): number {
+  if (order.startedAt === null || order.arrivesAt === null) return order.status === 'done' ? 1 : 0;
+  const handover = order.kind === 'wholesale' ? WHOLESALE_HANDOVER_MINUTES : HANDOVER_MINUTES;
+  const drive = order.arrivesAt - handover - order.startedAt;
+  return drive <= 0 ? 1 : Math.min(1, Math.max(0, (state.time - order.startedAt) / drive));
 }
 
 /** Ist der Spieler gerade selbst mit einer Lieferung unterwegs? */
