@@ -270,6 +270,7 @@ registerMapLayer({
           addHtmlMarker(ctx.map, {
             position: w,
             className: 'map-place map-place--warehouse',
+            near: true,
             anchor: 'bottom',
             tag: 'button',
             title: `${w.name} öffnen`,

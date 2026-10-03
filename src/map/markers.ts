@@ -19,12 +19,17 @@ export interface HtmlMarkerOptions {
   alignment?: 'map' | 'viewport';
   /** Drehung in Grad (mit alignment 'map' relativ zu Norden). */
   rotation?: number;
+  /**
+   * Nur in der Stadt: weit herausgezoomt (Deutschland-Ansicht, Zoom unter FAR_ZOOM) ausgeblendet, damit Spots, Lager
+   * und Gangs nicht über den Stadt-Karten liegen (Klasse map-near, GameMap setzt is-far).
+   */
+  near?: boolean;
 }
 
 /** Marker mit eigenem HTML-Element anlegen und zur Karte hinzufügen. */
 export function addHtmlMarker(map: MapLibreMap, options: HtmlMarkerOptions): { marker: Marker; element: HTMLElement } {
   const element = document.createElement(options.tag ?? 'div');
-  element.className = options.className;
+  element.className = options.near ? `${options.className} map-near` : options.className;
   if (options.tag === 'button') (element as HTMLButtonElement).type = 'button';
   if (options.title) element.title = options.title;
   for (const child of options.children ?? []) element.appendChild(child);

@@ -64,6 +64,10 @@ button.map-place:focus-visible .map-place-icon {
 .shell-map.zoomed-out .map-place-name {
   display: none;
 }
+/* Deutschland-Ansicht: Marker, die nur in der Stadt Sinn ergeben (addHtmlMarker near), liegen sonst auf den Stadt-Karten. */
+.shell-map.is-far .map-near {
+  display: none;
+}
 
 /* Name beim Überfahren (Wahrzeichen, Fahrzeuge) */
 .map-hover-label {

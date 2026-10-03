@@ -1,9 +1,10 @@
 // Oberfläche des Straßen-Moduls: Verkehr als Kulisse auf der Karte (Layer 'roads.traffic', Auftrag 31) und der Schalter
 // "Verkehr" im Menü Ebenen. Autos, Transporter, Lkw und Streifenwagen fahren als Zufallsweg über das echte Straßennetz
-// (traffic.ts) und werden von einer Flotte gezeichnet (createFleet: eine WebGL-Ebene, Stellungen 20-mal pro Sekunde,
-// dazwischen interpoliert). Reine Optik: eigener Zufall (mulberry32 aus Spiel-Seed und Spieltag), kein Einfluss auf
-// den Spielstand. Anzahl nach Gerät und Einstellung (Einstellungen › Karte), Dichte nach Uhrzeit, Streifen nach Heat,
-// bei Tempo 0, verstecktem Tab und "Bewegung reduzieren" steht bzw. fehlt alles, unter Zoom 12,5 ist nichts zu sehen.
+// der aktiven Stadt (traffic.ts; wechselt die Stadt, fängt der Verkehr dort neu an) und werden von einer Flotte
+// gezeichnet (createFleet: eine WebGL-Ebene, Stellungen 20-mal pro Sekunde, dazwischen interpoliert). Reine Optik:
+// eigener Zufall (mulberry32 aus Spiel-Seed und Spieltag), kein Einfluss auf den Spielstand. Anzahl nach Gerät und
+// Einstellung (Einstellungen › Karte), Dichte nach Uhrzeit, Streifen nach Heat, bei Tempo 0, verstecktem Tab und
+// "Bewegung reduzieren" steht bzw. fehlt alles, unter Zoom 12,5 ist nichts zu sehen.
 
 import { clock, type GameState } from '../../../core';
 import {
@@ -19,6 +20,7 @@ import {
   registerMapLayer,
 } from '../../../map';
 import { registerMapLayerOption, type TrafficLevel } from '../../../ui';
+import { activeCity, getCity } from '../../city';
 import { getHeat } from '../../police';
 import { allVeedel } from '../../veedel';
 import { roadGraph } from '../index';
@@ -44,7 +46,9 @@ const trafficLayer: MapLayer = {
   order: 15,
   mount(ctx) {
     const { map } = ctx;
-    const graph = roadGraph();
+    // Netz der aktiven Stadt; jede Stadt hat ihren eigenen Verkehr (angelegt beim ersten Besuch).
+    let network = 'koeln';
+    let graph = roadGraph(network);
     const palette: Record<TrafficKind, string[]> = {
       car: ['--map-traffic-1', '--map-traffic-2', '--map-traffic-3', '--map-traffic-4'].map((t) =>
         mapToken(t, '#8d939c'),
@@ -53,7 +57,16 @@ const trafficLayer: MapLayer = {
       truck: [mapToken('--map-traffic-truck', '#50555d')],
       police: [mapToken('--map-traffic-cabin', '#c9cdd3')],
     };
-    const traffic = new Traffic(graph, palette);
+    const traffics = new Map<string, Traffic>();
+    const trafficFor = (id: string): Traffic => {
+      let known = traffics.get(id);
+      if (!known) {
+        known = new Traffic(roadGraph(id), palette);
+        traffics.set(id, known);
+      }
+      return known;
+    };
+    let traffic = trafficFor(network);
     let fleet: FleetHandle | null = null;
     let level: TrafficLevel = 'normal';
     // Einmal pro update gelesen, nicht pro Bild: window.innerWidth kann ein Layout erzwingen.
@@ -144,6 +157,15 @@ const trafficLayer: MapLayer = {
 
     return {
       update(state, ui) {
+        const next = getCity(activeCity(state))?.roadsNetworkId ?? 'koeln';
+        if (next !== network) {
+          // Andere Stadt: Die Kulisse der alten verschwindet, die neue füllt sich von selbst.
+          traffic.clear();
+          fleet?.update([], performance.now());
+          network = next;
+          graph = roadGraph(network);
+          traffic = trafficFor(network);
+        }
         level = ui.traffic;
         mobile = isMobile();
         hour = clock.hour(state.time);

@@ -170,6 +170,8 @@ export interface MapCamera {
   /** Neigung und Drehung der schrägen Kamera in Grad (Standard wie Köln). */
   pitch?: number;
   bearing?: number;
+  /** Rahmen [West, Süd, Ost, Nord], der ganz zu sehen sein soll (statt center und zoom, Deutschland-Ansicht). */
+  bounds?: readonly [number, number, number, number];
 }
 
 /** Schnittstelle der Karte für die UI (implementiert in src/map/GameMap.ts). */
@@ -177,6 +179,11 @@ export interface MapController {
   flyToKoeln(): void;
   flyToEuropa(): void;
   flyToCamera(camera: MapCamera): void;
+  /**
+   * Ansicht wechseln, ohne hinzufliegen (Auftrag 31, beim Zoomen): Ausschnitt bleibt, Neigung und Drehung gleiten zur
+   * Ansicht (tilt null = Draufsicht).
+   */
+  settleView(view: string, label: string, tilt: { pitch: number; bearing: number } | null): void;
   /** Aktuelle Ansicht: 'city:<id>', 'deutschland' oder 'europa'. */
   currentView(): string;
   flyTo(target: LngLat, zoom?: number): void;
@@ -252,6 +259,11 @@ export interface UiApi {
   flyHome(): void;
   /** Deutschland-Ansicht: alle Städte und die Autobahn dazwischen. */
   flyToDeutschland(): void;
+  /**
+   * In eine Ansicht wechseln, ohne die Kamera zu versetzen (z.B. beim Herauszoomen aus der Stadt in 'deutschland', beim
+   * Hineinzoomen zurück in 'city:<id>').
+   */
+  enterView(view: string): void;
   /** Aktuelle Ansicht der Karte ('city:<id>', 'deutschland', 'europa'). */
   mapView(): string;
   setCameraMode(mode: CameraMode): void;
@@ -799,6 +811,7 @@ export class UiRuntime {
       flyToDeutschland: () => {
         const views = getCityViews();
         if (!views) return;
+        const state = this.session.state;
         this.map?.flyToCamera({
           view: 'deutschland',
           label: 'SAT 01 · DEUTSCHLAND',
@@ -806,6 +819,19 @@ export class UiRuntime {
           zoom: views.deutschland.zoom,
           mobileZoom: views.deutschland.zoom - 0.9,
           tilt: false,
+          bounds: state ? views.deutschlandBounds?.(state) : undefined,
+        });
+      },
+      enterView: (view) => {
+        if (view === 'deutschland') {
+          this.map?.settleView(view, 'SAT 01 · DEUTSCHLAND', null);
+          return;
+        }
+        const camera = getCityViews()?.cameras.find((c) => `city:${c.id}` === view);
+        if (!camera) return;
+        this.map?.settleView(view, `CAM 01 · ${camera.name.toUpperCase()}`, {
+          pitch: camera.pitch ?? 50,
+          bearing: camera.bearing ?? -20,
         });
       },
       mapView: () => this.map?.currentView() ?? 'city:koeln',

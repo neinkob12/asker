@@ -152,6 +152,7 @@ export const veedelLayer: MapLayer = {
     const label = addHtmlMarker(map, {
       position: allVeedel()[0]?.center ?? { lng: 0, lat: 0 },
       className: 'veedel-label',
+      near: true,
       children: [hoverName, hoverDetail],
     });
     label.element.hidden = true;

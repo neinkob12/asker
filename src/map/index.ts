@@ -14,7 +14,7 @@
 
 export { motion, onMapFrame, onMotionChange } from './animation';
 export { currentMood, type Precipitation, type PrecipitationKind, setMapMood, setPrecipitation } from './atmosphere';
-export { EUROPA_VIEW, isMobile, KOELN_CENTER } from './config';
+export { EUROPA_VIEW, FAR_ZOOM, isMobile, KOELN_CENTER } from './config';
 export { DAY_PHASE_NAMES, type DayPhase, daylight, daylightAt, dayPhase, twilight } from './daylight';
 export {
   type BlueLightOptions,

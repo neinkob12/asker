@@ -9,7 +9,7 @@ import { clock, type GameState, type LngLat } from '../core';
 import type { CameraMode, MapCamera, MapController, UiApi, UiState } from '../ui/runtime';
 import { setMotionSpeed } from './animation';
 import { currentMood } from './atmosphere';
-import { EUROPA_VIEW, isMobile, KOELN_CENTER, KOELN_VIEW, koelnZoom } from './config';
+import { EUROPA_VIEW, FAR_ZOOM, isMobile, KOELN_CENTER, KOELN_VIEW, koelnZoom } from './config';
 import { setActiveMap, setEffectsLook } from './effects';
 import { landmarkFeatures } from './landmarks';
 import { computeLook, type MapLook } from './look';
@@ -81,7 +81,14 @@ export class GameMap implements MapController {
       this.padRight = -1;
       this.applyPadding();
     });
-    this.map.on('zoom', () => container.classList.toggle('zoomed-out', this.map.getZoom() < 10));
+    // Weit draußen: Marker der Stadt aus (zoomed-out ab 10: Schilder und Namen, is-far ab FAR_ZOOM: alles mit near).
+    const onZoom = () => {
+      const zoom = this.map.getZoom();
+      container.classList.toggle('zoomed-out', zoom < 10);
+      container.classList.toggle('is-far', zoom <= FAR_ZOOM);
+    };
+    this.map.on('zoom', onZoom);
+    onZoom();
     this.map.on('click', (e) => {
       if (!this.picking) return;
       const resolve = this.picking;
@@ -359,12 +366,46 @@ export class GameMap implements MapController {
     this.view = camera.view;
     this.viewLabel = camera.label;
     if (camera.tilt) this.tilt = { pitch: camera.pitch ?? KOELN_PITCH, bearing: camera.bearing ?? KOELN_BEARING };
+    if (camera.bounds) {
+      // Rahmen ganz zeigen, mit Platz für die Stadt-Karten (über dem Punkt, halb so breit wie eine Karte) und am Handy
+      // für die Karte unter Geld und Heat.
+      const [w, s, e, n] = camera.bounds;
+      const padding = isMobile()
+        ? { top: 220, bottom: 40, left: 125, right: 125 }
+        : { top: 110, bottom: 60, left: 140, right: 140 };
+      const fit = this.map.cameraForBounds(
+        [
+          [w, s],
+          [e, n],
+        ],
+        { padding, bearing: 0 },
+      );
+      if (fit?.center) {
+        this.map.flyTo({
+          center: fit.center,
+          zoom: Math.min(fit.zoom ?? camera.zoom, FAR_ZOOM - 0.5),
+          pitch: 0,
+          bearing: 0,
+          duration: 2500,
+        });
+        return;
+      }
+    }
     this.map.flyTo({
       center: [camera.center.lng, camera.center.lat],
       zoom: isMobile() ? camera.mobileZoom : camera.zoom,
       ...(camera.tilt ? this.koelnCamera() : { pitch: 0, bearing: 0 }),
       duration: 2500,
     });
+  }
+
+  settleView(view: string, label: string, tilt: { pitch: number; bearing: number } | null): void {
+    if (view === this.view) return;
+    this.view = view;
+    this.viewLabel = label;
+    if (tilt) this.tilt = { ...tilt };
+    this.overlay.setLabel(label);
+    this.map.easeTo({ ...(tilt ? this.koelnCamera() : { pitch: 0, bearing: 0 }), duration: 900 });
   }
 
   currentView(): string {

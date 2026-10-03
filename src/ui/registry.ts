@@ -377,6 +377,8 @@ export interface CityCamera {
 export interface CityViews {
   cameras: readonly CityCamera[];
   deutschland: { center: LngLat; zoom: number };
+  /** Rahmen [West, Süd, Ost, Nord] um die freien Städte: Die Deutschland-Ansicht passt sich ihm an (Auftrag 31). */
+  deutschlandBounds?(state: GameState): readonly [number, number, number, number];
   active(state: GameState): string;
 }
 

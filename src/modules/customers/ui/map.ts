@@ -50,7 +50,8 @@ export const deliveriesLayer: MapLayer = {
                 title,
                 progress: orderDriveProgress(state, order),
               }),
-              target: addHtmlMarker(ctx.map, { position: order, className: 'delivery-target', title }).marker,
+              target: addHtmlMarker(ctx.map, { position: order, className: 'delivery-target', near: true, title })
+                .marker,
             };
             shown.set(order.id, entry);
           }
