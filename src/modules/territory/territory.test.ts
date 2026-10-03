@@ -71,7 +71,15 @@ describe('territory', () => {
     }
     expect(controlledBy(sim.state, PLAYER_FACTION)).toEqual([]);
     expect(factions(sim.state)).toEqual([PLAYER_FACTION, ...gangIds]);
-    expect(campaignProgress(sim.state)).toEqual({ controlled: 0, needed: 7, total: 12, won: false });
+    expect(campaignProgress(sim.state)).toEqual({
+      controlled: 0,
+      needed: 12,
+      majority: 7,
+      total: 12,
+      won: false,
+      majorityReached: false,
+      complete: false,
+    });
   });
 
   it('Einfluss ist begrenzt, Kontrollwechsel werden gemeldet', () => {
@@ -246,29 +254,76 @@ describe('territory', () => {
     expect(getInfluence(sim.state, 'kalk', owner)).toBe(start);
   });
 
-  it('Siegbedingung: Mehrheit der Veedel → campaign.won, danach geht es weiter', () => {
+  it('Meilenstein bei der Mehrheit (kein Sieg), Köln komplett erst mit allen Veedeln, danach geht es weiter', () => {
     const sim = quietGame();
     const events = recordEvents(sim);
     const ctx = sim.ctx('test');
     const ids = allVeedel().map((v) => v.id);
     for (const id of ids.slice(0, 6)) addInfluence(ctx, id, PLAYER_FACTION, 100);
     sim.step();
-    expect(campaignProgress(sim.state)).toMatchObject({ controlled: 6, needed: 7, won: false });
-    expect(eventsOfType(events, 'campaign.won')).toHaveLength(0);
+    expect(campaignProgress(sim.state)).toMatchObject({ controlled: 6, needed: 12, majority: 7, won: false });
+    expect(eventsOfType(events, 'campaign.milestone')).toHaveLength(0);
 
+    // 7 von 12: Meilenstein "Boss von Köln", aber kein Sieg.
     addInfluence(ctx, ids[6], PLAYER_FACTION, 100);
     sim.step();
-    expect(eventsOfType(events, 'campaign.won')).toHaveLength(1);
-    expect(sim.state.outcome.won).not.toBeNull();
-    expect(campaignProgress(sim.state)).toMatchObject({ controlled: 7, won: true });
+    expect(eventsOfType(events, 'campaign.milestone').map((e) => e.payload)).toEqual([
+      { kind: 'majority', cityId: 'koeln', controlled: 7, total: 12 },
+    ]);
+    expect(eventsOfType(events, 'campaign.won')).toHaveLength(0);
+    expect(sim.state.outcome.won).toBeNull();
+    expect(campaignProgress(sim.state)).toMatchObject({ controlled: 7, won: false, majorityReached: true });
+
+    // Ein Veedel verlieren und wiedergewinnen: Der Meilenstein kommt nicht noch einmal.
+    addInfluence(ctx, ids[6], PLAYER_FACTION, -100);
+    sim.advance(60);
+    addInfluence(ctx, ids[6], PLAYER_FACTION, 100);
+    sim.step();
+    expect(eventsOfType(events, 'campaign.milestone')).toHaveLength(1);
+
+    // Alle 12: Köln komplett.
+    for (const id of ids.slice(7)) addInfluence(ctx, id, PLAYER_FACTION, 100);
+    sim.step();
+    expect(eventsOfType(events, 'campaign.won').map((e) => e.payload)).toEqual([
+      expect.objectContaining({ cityId: 'koeln', cityName: 'Köln', next: expect.stringContaining('Telefon') }),
+    ]);
+    expect(sim.state.outcome.won).toMatchObject({ cities: ['koeln'] });
+    expect(campaignProgress(sim.state)).toMatchObject({ controlled: 12, won: true, complete: true });
 
     // Endlosmodus: Das Spiel läuft weiter, ein zweiter Sieg wird nicht gemeldet.
     addInfluence(ctx, ids[6], PLAYER_FACTION, -100);
-    addInfluence(ctx, ids[7], PLAYER_FACTION, 100);
+    sim.advance(60);
     addInfluence(ctx, ids[6], PLAYER_FACTION, 100);
     sim.advance(60);
     expect(sim.isOver).toBe(false);
     expect(eventsOfType(events, 'campaign.won')).toHaveLength(1);
+  });
+
+  it('alter Spielstand mit Sieg bei 7 von 12 behält den Sieg, bekommt den Meilenstein und später Köln komplett', () => {
+    const sim = quietGame();
+    const ctx = sim.ctx('test');
+    const ids = allVeedel().map((v) => v.id);
+    for (const id of ids.slice(0, 7)) addInfluence(ctx, id, PLAYER_FACTION, 100);
+    sim.step();
+    // So sah ein Stand nach Auftrag 29 aus: gewonnen bei 7, Territory in Version 2, Sieg ohne Städte-Liste.
+    const old = structuredClone(sim.state) as unknown as {
+      outcome: { won: unknown };
+      modules: { territory: Record<string, unknown> };
+      moduleVersions: Record<string, number>;
+    };
+    old.outcome.won = { time: sim.state.time };
+    delete old.modules.territory.milestones;
+    old.moduleVersions.territory = 2;
+    const loaded = loadSimulation(old, sim.modules);
+    expect(loaded.state.outcome.won).toEqual({ time: sim.state.time });
+    expect(loaded.state.modules.territory.milestones).toEqual({ koeln: { majority: sim.state.time, complete: null } });
+    expect(campaignProgress(loaded.state)).toMatchObject({ controlled: 7, won: true, majorityReached: true });
+    const events = recordEvents(loaded);
+    for (const id of ids.slice(7)) addInfluence(loaded.ctx('test'), id, PLAYER_FACTION, 100);
+    loaded.step();
+    expect(eventsOfType(events, 'campaign.milestone')).toHaveLength(0);
+    expect(eventsOfType(events, 'campaign.won')).toHaveLength(1);
+    expect(loaded.state.outcome.won).toMatchObject({ time: sim.state.time, cities: ['koeln'] });
   });
 
   it('lädt Spielstände aus Version 1 (ohne lastSaleAt)', () => {
@@ -282,7 +337,8 @@ describe('territory', () => {
     const loaded = loadSimulation(old, sim.modules);
     expect(loaded.state.modules.territory.lastSaleAt).toEqual({});
     expect(loaded.state.modules.territory.controller).toEqual(sim.state.modules.territory.controller);
-    expect(loaded.state.moduleVersions.territory).toBe(2);
+    expect(loaded.state.moduleVersions.territory).toBe(3);
+    expect(loaded.state.modules.territory.milestones).toEqual({ koeln: { majority: null, complete: null } });
     sell(loaded, 'kalk');
     expect(getInfluence(loaded.state, 'kalk', PLAYER_FACTION)).toBeGreaterThan(0);
   });

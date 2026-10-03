@@ -65,9 +65,21 @@ export interface QuestDef {
   euro?: boolean;
   goTo?: QuestGoTo;
   reward: QuestReward[];
+  /** Was Peter schreibt, wenn die Quest erledigt ist (sonst nur der Kapitel-Abschluss). */
+  doneText?: string;
 }
 
-export const CHAPTERS: readonly string[] = ['Ankommen', 'Dein Team', 'Wachsen', 'Die Straße', 'Boss von Köln'];
+export const CHAPTERS: readonly string[] = [
+  'Ankommen',
+  'Dein Team',
+  'Wachsen',
+  'Die Straße',
+  'Boss von Köln',
+  'Ganz Köln',
+];
+
+/** Titel für die Bestenliste, sobald die Mehrheit der Kölner Veedel dir gehört (Meilenstein, Auftrag 30). */
+export const MILESTONE_TITLE = 'Boss von Köln';
 
 const one = () => 1;
 const activeStaff = (state: GameState) => getStaff(state, { status: 'active' }).length;
@@ -405,9 +417,37 @@ export const QUESTS: readonly QuestDef[] = [
     euro: true,
     measure: netWorth,
     goTo: 'finance',
+    // Der Titel "Boss von Köln" kommt seit Auftrag 30 mit der Mehrheit der Veedel (Meilenstein), nicht mehr hier.
+    reward: [{ kind: 'money', money: 'clean', amount: 2500 }],
+  },
+
+  // --- Kapitel 6: Ganz Köln ---
+  {
+    id: 'nineVeedel',
+    chapter: 5,
+    icon: 'map',
+    title: 'Kontrolliere 9 Veedel',
+    task: 'Die Mehrheit hast du. Jetzt wird es zäh: Die Gangs halten ihre letzten Veedel mit allem, was sie haben. Hol dir neun.',
+    hint: 'Leutnants mit mehreren Spots in einem Veedel bringen am meisten Einfluss.',
+    target: 9,
+    measure: (state) => controlledBy(state, PLAYER_FACTION).length,
+    goTo: 'territory',
     reward: [
-      { kind: 'title', title: 'Boss von Köln' },
-      { kind: 'money', money: 'clean', amount: 2500 },
+      { kind: 'influence', amount: 10 },
+      { kind: 'money', money: 'dirty', amount: 15000 },
     ],
+  },
+  {
+    id: 'allVeedel',
+    chapter: 5,
+    icon: 'crown',
+    title: 'Übernimm alle 12 Veedel',
+    task: 'Alle zwölf. Erst dann gehört dir Köln wirklich. Und wer Köln hat, auf den werden andere aufmerksam.',
+    hint: 'Reviere-App: Wo fehlt dir noch Einfluss?',
+    target: 12,
+    measure: (state) => controlledBy(state, PLAYER_FACTION).length,
+    goTo: 'territory',
+    reward: [],
+    doneText: 'Ganz Köln. Hätte ich nicht gedacht, ehrlich. Pass auf dein Telefon auf, das klingelt gleich.',
   },
 ];

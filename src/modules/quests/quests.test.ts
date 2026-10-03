@@ -3,8 +3,10 @@ import { loadSimulation, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { allProducts, getStock } from '../goods';
 import { addHeat } from '../police';
+import { addInfluence, PLAYER_FACTION } from '../territory';
+import { allVeedel } from '../veedel';
 import { CHAPTERS, PETER, QUESTS } from './config';
-import { currentQuest, questProgress, questTitle, rewardText } from './index';
+import { completedQuests, currentQuest, questProgress, questTitle, rewardText } from './index';
 
 function jumpTo(sim: Simulation, questId: string): void {
   sim.state.modules.quests.index = QUESTS.findIndex((q) => q.id === questId);
@@ -64,16 +66,35 @@ describe('quests', () => {
     expect(currentQuest(sim.state)?.id).toBe('revenue1k');
   });
 
-  it('Quests am Zustand: 50.000 € Vermögen geben Titel und sauberes Geld', () => {
+  it('Quests am Zustand: 50.000 € Vermögen geben sauberes Geld, danach kommt Kapitel 6', () => {
     const sim = createTestGame();
     sim.advance(10);
     jumpTo(sim, 'worth50k');
     wallet.earn(sim.ctx('test'), 60000, 'dirty', 'Test', 'income.other');
     sim.advance(10);
-    expect(questTitle(sim.state)).toBe('Boss von Köln');
+    // Der Titel kommt nicht mehr vom Vermögen, sondern mit der Mehrheit der Veedel.
+    expect(questTitle(sim.state)).toBeNull();
     expect(wallet.balance(sim.state, 'clean')).toBe(2500);
+    expect(currentQuest(sim.state)?.id).toBe('nineVeedel');
+    expect(messages.thread(sim.state, PETER.id).some((m) => m.text.includes('Ganz Köln'))).toBe(true);
+  });
+
+  it('Meilenstein Mehrheit gibt den Titel "Boss von Köln", alle 12 Veedel schließen Kapitel 6 ab', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    jumpTo(sim, 'nineVeedel');
+    const ctx = sim.ctx('test');
+    const ids = allVeedel().map((v) => v.id);
+    for (const id of ids.slice(0, 7)) addInfluence(ctx, id, PLAYER_FACTION, 100);
+    sim.advance(10);
+    expect(questTitle(sim.state)).toBe('Boss von Köln');
+    expect(currentQuest(sim.state)?.id).toBe('nineVeedel');
+    for (const id of ids.slice(7)) addInfluence(ctx, id, PLAYER_FACTION, 100);
+    sim.advance(10);
+    expect(completedQuests(sim.state)).toEqual(expect.arrayContaining(['nineVeedel', 'allVeedel']));
     expect(currentQuest(sim.state)).toBeNull();
-    expect(messages.thread(sim.state, PETER.id).at(-1)?.text).toContain('Boss');
+    const texts = messages.thread(sim.state, PETER.id).map((m) => m.text);
+    expect(texts.some((t) => t.includes('Telefon'))).toBe(true);
   });
 
   it('Serie: Heat einen Tag lang niedrig, eine heiße Stunde setzt zurück', () => {
@@ -97,7 +118,8 @@ describe('quests', () => {
       expect(q.chapter).toBeLessThan(CHAPTERS.length);
       expect(q.target).toBeGreaterThan(0);
       expect(Boolean(q.measure) || Boolean(q.count) || Boolean(q.streak)).toBe(true);
-      expect(q.reward.length).toBeGreaterThan(0);
+      // Ohne Belohnung nur mit einem Satz von Peter (die letzte Quest eines Kapitels, z.B. "Ganz Köln").
+      expect(q.reward.length > 0 || Boolean(q.doneText)).toBe(true);
       for (const r of q.reward) {
         if (r.kind === 'goods') expect(products.has(r.productId)).toBe(true);
         expect(rewardText(r).length).toBeGreaterThan(0);

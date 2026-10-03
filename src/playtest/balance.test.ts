@@ -76,8 +76,9 @@ describe('Balancing', () => {
             r.days.slice(from, to).reduce((sum, d) => sum + d.revenue, 0) / Math.max(1, r.days.slice(from, to).length),
           );
         console.log(
-          `Seed ${seed}: ${last.won ? `Sieg an Tag ${last.won}` : last.gameOver ? `Game Over (${last.gameOver}) an Tag ${last.day}` : `Tag ${last.day}, ${last.veedel} Veedel`}` +
-            ` | Veedel 1/3/5/7 ab Tag ${firstDay(1)}/${firstDay(3)}/${firstDay(5)}/${firstDay(7)}` +
+          `Seed ${seed}: ${last.won ? `Köln komplett an Tag ${last.won}` : last.gameOver ? `Game Over (${last.gameOver}) an Tag ${last.day}` : `Tag ${last.day}, ${last.veedel} Veedel`}` +
+            ` | Boss von Köln (7) an Tag ${last.boss ?? '-'}` +
+            ` | Veedel 1/3/5/7/9/12 ab Tag ${firstDay(1)}/${firstDay(3)}/${firstDay(5)}/${firstDay(7)}/${firstDay(9)}/${firstDay(12)}` +
             ` | Umsatz/Tag T1-5 ${avg(0, 5)}, T6-15 ${avg(5, 15)}, T16-30 ${avg(15, 30)}, danach ${avg(30, r.days.length)}` +
             ` | Gang-Überfälle ${e('gang.raidStarted')}, Vorstöße ${e('gang.pushStarted')}, Eskalationen ${e('gang.escalated')}` +
             ` | Razzien ${e('police.raidPlanned')}, Kontrollen ${e('police.check')}, Festnahmen ${e('police.arrest')}` +

@@ -73,13 +73,18 @@ describe('Spielende', () => {
     expect(deaths).toBeGreaterThan(0);
   }, 60_000);
 
-  it('Sieg: Wer die Mehrheit der Veedel kontrolliert, hat Köln übernommen, danach geht es weiter', () => {
+  it('Sieg: Wer alle Veedel kontrolliert, hat Köln komplett übernommen, danach geht es weiter', () => {
     const sim = createTestGame({ seed: 4 });
     const events = recordEvents(sim);
     const ctx = sim.ctx('test');
-    const needed = campaignProgress(sim.state).needed;
-    expect(needed).toBe(Math.floor(allVeedel().length / 2) + 1);
-    for (const v of allVeedel().slice(0, needed)) addInfluence(ctx, v.id, PLAYER_FACTION, 100);
+    const { needed, majority } = campaignProgress(sim.state);
+    expect(needed).toBe(allVeedel().length);
+    // Die Mehrheit ist nur ein Meilenstein.
+    for (const v of allVeedel().slice(0, majority)) addInfluence(ctx, v.id, PLAYER_FACTION, 100);
+    sim.step();
+    expect(eventsOfType(events, 'campaign.milestone')).toHaveLength(1);
+    expect(eventsOfType(events, 'campaign.won')).toHaveLength(0);
+    for (const v of allVeedel().slice(majority)) addInfluence(ctx, v.id, PLAYER_FACTION, 100);
     sim.step();
     expect(controlledBy(sim.state, PLAYER_FACTION)).toHaveLength(needed);
     expect(eventsOfType(events, 'campaign.won')).toHaveLength(1);

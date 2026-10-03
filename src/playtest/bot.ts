@@ -506,6 +506,11 @@ export function snapshot(state: GameState) {
     reputation: Math.round(state.modules.reputation.value),
     maxHostility: Math.round(Math.max(...Object.values(gangs.gangs).map((s) => s.hostility))),
     gameOver: state.outcome.gameOver?.reason ?? null,
+    /** Tag, an dem Köln komplett war (alle Veedel, Auftrag 30). */
     won: state.outcome.won ? Math.floor(state.outcome.won.time / 1440) + 1 : null,
+    /** Tag des Meilensteins "Boss von Köln" (Mehrheit der Veedel). */
+    boss: state.modules.territory.milestones?.koeln?.majority
+      ? Math.floor(state.modules.territory.milestones.koeln.majority / 1440) + 1
+      : null,
   };
 }

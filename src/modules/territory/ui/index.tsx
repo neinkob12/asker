@@ -20,6 +20,7 @@ import {
   registerTab,
   SegmentedControl,
   Slot,
+  soundOnEvent,
   useGame,
   useUi,
 } from '../../../ui';
@@ -27,6 +28,7 @@ import { getHeat, heatLevel } from '../../police';
 import { allVeedel, veedelName } from '../../veedel';
 import {
   CONTROL_THRESHOLD,
+  type CampaignProgress,
   campaignProgress,
   controllerOf,
   type FactionId,
@@ -43,6 +45,15 @@ import { veedelLayer } from './map';
 import './takeover';
 import './territory.css';
 import { getMapView, MAP_VIEW_OPTIONS, onMapViewChange, setMapView, type VeedelMapView } from './view';
+
+/** Ein Satz zum Kampagnenziel: Meilenstein bei der Mehrheit, Ziel sind alle Veedel. */
+export function campaignHint(progress: CampaignProgress): string {
+  const { controlled, total, majority } = progress;
+  if (progress.complete) return `Köln gehört dir ganz. Du hältst ${controlled} von ${total} Veedeln.`;
+  if (progress.majorityReached)
+    return `Boss von Köln: ${controlled} von ${total} Veedeln. Für Köln komplett brauchst du alle ${total}.`;
+  return `Du kontrollierst ${controlled} von ${total} Veedeln. Ab ${majority} bist du Boss von Köln, mit allen ${total} gehört dir die Stadt.`;
+}
 
 function FactionName(props: { state: GameState; faction: FactionId | null }) {
   return (
@@ -117,13 +128,9 @@ function TerritoryTab() {
   const progress = campaignProgress(state);
   return (
     <>
-      <Card title="Köln übernehmen">
-        <ProgressBar value={progress.controlled / progress.needed} label="Kampagnenfortschritt" />
-        <Hint>
-          {progress.won
-            ? `Köln gehört dir. Du hältst ${progress.controlled} von ${progress.total} Veedeln, das Spiel läuft weiter.`
-            : `Du kontrollierst ${progress.controlled} von ${progress.total} Veedeln. Für die Übernahme brauchst du ${progress.needed}.`}
-        </Hint>
+      <Card title={progress.complete ? 'Köln komplett' : 'Köln übernehmen'}>
+        <ProgressBar value={progress.controlled / progress.total} label="Kampagnenfortschritt" />
+        <Hint>{campaignHint(progress)}</Hint>
       </Card>
       <Card
         title="Veedel"
@@ -210,7 +217,7 @@ registerAdvisor({
       priority: 20,
       icon: 'flag',
       title: 'Ziel: Köln übernehmen',
-      text: `${progress.needed} von ${progress.total} Veedeln musst du kontrollieren. Schau dir die Reviere an.`,
+      text: `Ab ${progress.majority} Veedeln bist du Boss von Köln, mit allen ${progress.total} gehört dir die Stadt.`,
       actionLabel: 'Reviere',
       action: (ui) => ui.selectTab('territory'),
     };
@@ -227,3 +234,14 @@ registerGameStat({
     return `${p.controlled} von ${p.total}`;
   },
 });
+
+// Meilenstein "Boss von Köln" (Mehrheit der Veedel, Auftrag 30): Banner mit Ton, kein Sieg-Bildschirm.
+onGameEvent('campaign.milestone', 'territory.milestone', (payload, ui) => {
+  if (payload.kind !== 'majority') return;
+  ui.toast(
+    `Boss von Köln: ${payload.controlled} von ${payload.total} Veedeln gehören dir. Jetzt den Rest der Stadt.`,
+    'good',
+    { urgent: true },
+  );
+});
+soundOnEvent('campaign.milestone', 'success');

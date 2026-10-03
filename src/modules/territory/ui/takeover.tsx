@@ -64,9 +64,9 @@ function TakeoverDialog(props: { veedelId: string; from: string | null }) {
         <div class="takeover__stat">
           <span class="takeover__label is-place">Köln</span>
           <strong>
-            {progress.controlled}/{progress.needed}
+            {progress.controlled}/{progress.total}
           </strong>
-          <HudSegments total={progress.needed} filled={progress.controlled} label="Köln" />
+          <HudSegments total={progress.total} filled={progress.controlled} label="Köln" />
         </div>
         <div class="takeover__stat">
           <span class="takeover__label is-brand">Ruf</span>

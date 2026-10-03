@@ -23,7 +23,8 @@ declare module '../registry' {
     'core.newGame': { firstStart?: boolean };
     'core.saves': Record<string, never>;
     'core.gameOver': Record<string, never>;
-    'core.won': Record<string, never>;
+    /** Eine Stadt ist komplett übernommen (Auftrag 30). Ohne Angaben: Köln. */
+    'core.won': { cityName?: string; next?: string };
   }
 }
 
@@ -302,28 +303,29 @@ export function GameOverDialog() {
   );
 }
 
-export function WonDialog() {
+export function WonDialog(props: { cityName?: string; next?: string }) {
   const { api, session } = useRuntime();
+  const city = props.cityName ?? 'Köln';
   return (
     <Dialog
-      title="Köln gehört dir"
+      title={`${city} komplett`}
       icon="crown"
-      kicker="Kampagne gewonnen"
+      kicker="Stadt übernommen"
       class="ui-dialog--won"
       onClose={api.closeDialog}
       actions={
         <Button variant="success" icon="play" onClick={api.closeDialog}>
-          Weiterspielen
+          Weiter
         </Button>
       }
     >
       <Confetti />
       <div class="ending">
         <Stamp tone="accent" size="lg" rotate={-5} icon="crown" class="ending__stamp">
-          Gewonnen
+          Komplett
         </Stamp>
         <p class="ending__reason">
-          Die Mehrheit der Veedel hört auf dein Kommando. Das Spiel geht im Endlosmodus weiter.
+          Alle Veedel in {city} hören auf dein Kommando. {props.next ?? 'Das Spiel geht im Endlosmodus weiter.'}
         </p>
         <EndingStats state={session.state} />
         <Slot name="core.ending" props={{ kind: 'won' }} />

@@ -173,7 +173,12 @@ export function registerBuiltins(): void {
   });
 
   onGameEvent('game.over', 'core.gameOver', (_payload, ui) => ui.openDialog('core.gameOver', {}));
-  onGameEvent('campaign.won', 'core.won', (_payload, ui) => ui.openDialog('core.won', {}));
+  onGameEvent('campaign.won', 'core.won', (payload, ui) => {
+    const props: { cityName?: string; next?: string } = {};
+    if (payload.cityName) props.cityName = payload.cityName;
+    if (payload.next) props.next = payload.next;
+    ui.openDialog('core.won', props);
+  });
 
   // Neue Nachricht: Banner mit Vibrieren und Ton nur, wenn eine Antwort mit Frist erwartet wird (Auftrag 26); alles
   // andere still (Badge an der App, Mitteilungszentrale). Ist der Chat gerade offen, nur ein leiser Ton.

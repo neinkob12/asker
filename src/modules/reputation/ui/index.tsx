@@ -46,7 +46,7 @@ function ReputationHud() {
       label="Ruf · Reviere"
       value={`${Math.round(value)} ${tier.name}`}
       tone={value < 20 ? 'bad' : value < 40 ? 'warn' : undefined}
-      title={`Ruf ${Math.round(value)} von 100: ${tier.name}. ${progress.controlled} von ${progress.total} Veedeln, ${progress.needed} zum Sieg.`}
+      title={`Ruf ${Math.round(value)} von 100: ${tier.name}. ${progress.controlled} von ${progress.total} Veedeln.`}
       onClick={() => ui.selectTab('territory')}
       detailsAction="Reviere öffnen"
       details={
@@ -79,8 +79,12 @@ function ReputationHud() {
           <div class="rep-flyout__now">
             <span class="hud-label is-place">Reviere</span>
             <strong>
-              {progress.controlled}/{progress.needed}
-              {progress.won ? ' · Köln gehört dir' : ' zum Sieg'}
+              {progress.controlled}/{progress.total}
+              {progress.complete
+                ? ' · Köln komplett'
+                : progress.majorityReached
+                  ? ' · Boss von Köln'
+                  : ` · ab ${progress.majority} Boss`}
             </strong>
           </div>
           <p class="rep-flyout__text">
@@ -93,7 +97,7 @@ function ReputationHud() {
         <HudBar value={value} label="Ruf" marks={tiers.slice(1).map((t) => t.min)} />
         <span class="hud-rep__veedel" title={`${progress.controlled} von ${progress.total} Veedeln`}>
           <Icon name="flag" />
-          {progress.controlled}/{progress.needed}
+          {progress.controlled}/{progress.total}
         </span>
       </span>
     </HudPill>
