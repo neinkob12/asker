@@ -310,7 +310,7 @@ describe('Hamburger Hafen und Lieferanten (Auftrag 30)', () => {
     return sim;
   }
 
-  it('Liegeplatz in Hamburg: 12.000 € sauber, eigener Kai; Hein wird Hafen-Großhändler', () => {
+  it('Liegeplatz in Hamburg: 12.000 € sauber, eigener Kai; Daan wird Hafen-Großhändler', () => {
     const sim = inHamburg();
     const events = recordEvents(sim);
     expect(hasBerth(sim.state, 'hamburg')).toBe(false);
@@ -324,9 +324,12 @@ describe('Hamburger Hafen und Lieferanten (Auftrag 30)', () => {
       { cost: 12000, cityId: 'hamburg' },
     ]);
     expect(isUnlocked(sim.state, 'hamburg')).toBe(true);
-    const hein = availablePackages(sim.state, 'hamburg', 'hamburg');
-    expect(hein.map((p) => p.id)).toContain('hh-weed2kg');
-    expect(supplierIn(getSuppliers(sim.state)[3], 'hamburg').kind).toBe('port');
+    // Hein liefert in Hamburg wie in Köln aus der Stadt ins Lager, Amsterdam ist der Hafen mit den großen Mengen.
+    expect(supplierIn(getSuppliers(sim.state)[3], 'hamburg').kind).toBe('city');
+    expect(supplierIn(getSuppliers(sim.state)[4], 'hamburg').kind).toBe('port');
+    sim.state.modules.suppliers.unlocked.push('amsterdam');
+    const daan = availablePackages(sim.state, 'amsterdam', 'hamburg');
+    expect(daan.map((p) => p.id)).toContain('hh-haze1kg');
     // Rotterdam und Kalle liefern nicht nach Hamburg.
     expect(getSuppliers(sim.state, 'hamburg').map((s) => s.id)).toEqual([
       'frankfurt',
@@ -342,8 +345,9 @@ describe('Hamburger Hafen und Lieferanten (Auftrag 30)', () => {
   it('Container am Hamburger Kai: sicher 10 Stunden, dann findet der Zoll sie mit 8 % pro Stunde', () => {
     const sim = inHamburg();
     sim.dispatch({ type: 'logistics.buyBerth', payload: {} });
+    sim.state.modules.suppliers.unlocked.push('amsterdam');
     expect(
-      sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'hamburg', packageId: 'hh-weed1kg' } }).ok,
+      sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'amsterdam', packageId: 'hh-haze1kg' } }).ok,
     ).toBe(true);
     const shipment = sim.state.modules.suppliers.shipments[0];
     expect(shipment.cityId).toBe('hamburg');

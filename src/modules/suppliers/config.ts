@@ -116,27 +116,10 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.6,
     reliability: 0.9,
     description: 'Hanseatisch korrekt. Solide Ware, fast nie Ärger.',
-    // In Hamburg ist Hein Hafen-Großhändler: Container direkt am Kai, doppelt so große Pakete wie Rotterdam, etwa zehn
-    // Prozent teurer, sechs Stunden. Freigeschaltet mit dem Hamburger Liegeplatz.
+    // In Hamburg liefert Hein aus der Stadt selbst, mit denselben Mengen wie in Köln, direkt ins Lager (kein Hafen).
+    // Die großen Mengen gibt es nur im Hafen (Amsterdam, Rotterdam).
     cities: ['koeln', 'hamburg'],
-    deliveryTimes: { hamburg: 360 },
-    inCity: {
-      hamburg: {
-        kind: 'port',
-        priceLevel: 0.37,
-        description:
-          'Hein am Kai: Container direkt im Hamburger Hafen. Große Mengen, sechs Stunden, abholen musst du selbst.',
-        packages: [
-          { id: 'hh-weed1kg', label: '1 kg Gras', productId: 'weed', amount: 1000, price: 3220 },
-          { id: 'hh-weed2kg', label: '2 kg Gras', productId: 'weed', amount: 2000, price: 6350 },
-          { id: 'hh-weed5kg', label: '5 kg Gras', productId: 'weed', amount: 5000, price: 15600, minTrust: 30 },
-          { id: 'hh-hash1kg', label: '1 kg Hasch', productId: 'hash', amount: 1000, price: 3135 },
-          { id: 'hh-edibles500', label: '500 Edibles', productId: 'edibles', amount: 500, price: 1300 },
-          { id: 'hh-vape200', label: '200 Vape-Pens', productId: 'vape', amount: 200, price: 2240 },
-          { id: 'hh-oil500', label: '500 ml Öl', productId: 'oil', amount: 500, price: 3740 },
-        ],
-      },
-    },
+    deliveryTimes: { hamburg: 60 },
     unlock: {
       requires: { revenue: 1500 },
       fee: 250,
@@ -167,8 +150,26 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.82,
     reliability: 0.85,
     description: 'Großhändler für Coffeeshops. Die beste Ware, kommt über die A57. Redet nur mit großen Leuten.',
+    // In Hamburg kauft man bei Daan im Hafen: Container direkt am Kai, kiloweise, günstig, sechs Stunden, abholen
+    // musst du selbst (braucht den Hamburger Liegeplatz).
     cities: ['koeln', 'hamburg'],
     deliveryTimes: { hamburg: 360 },
+    inCity: {
+      hamburg: {
+        kind: 'port',
+        priceLevel: 0.3,
+        description:
+          'Daan im Hafen: Container direkt im Hamburger Hafen. Riesige Mengen zum besten Preis, sechs Stunden, abholen musst du selbst.',
+        packages: [
+          { id: 'hh-haze1kg', label: '1 kg Amnesia Haze', productId: 'haze', amount: 1000, price: 4100 },
+          { id: 'hh-haze2kg', label: '2 kg Amnesia Haze', productId: 'haze', amount: 2000, price: 8000, minTrust: 20 },
+          { id: 'hh-kush1kg', label: '1 kg OG Kush', productId: 'kush', amount: 1000, price: 4950 },
+          { id: 'hh-kush2kg', label: '2 kg OG Kush', productId: 'kush', amount: 2000, price: 9600, minTrust: 30 },
+          { id: 'hh-edibles500', label: '500 Edibles', productId: 'edibles', amount: 500, price: 1100 },
+          { id: 'hh-vape200', label: '200 Vape-Pens', productId: 'vape', amount: 200, price: 1850 },
+        ],
+      },
+    },
     unlock: {
       requires: { veedel: 3, revenue: 15000 },
       fee: 1500,
