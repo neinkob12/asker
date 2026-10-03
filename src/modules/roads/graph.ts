@@ -207,6 +207,54 @@ function getGraph(): Graph {
   return graph;
 }
 
+/**
+ * Lesesicht auf den Graphen (z.B. für den Verkehr als Kulisse in roads/ui): Knoten und Kanten in Metern einer lokalen
+ * Projektion, Nachbarschaft als CSR (adjStart/adjEdge/adjDir, dir 1 = vorwärts). Nur lesen!
+ */
+export interface RoadGraphView {
+  nodeX: Float64Array;
+  nodeY: Float64Array;
+  edgeFrom: Int32Array;
+  edgeTo: Int32Array;
+  edgeOneway: Uint8Array;
+  edgeClass: Uint8Array;
+  edgeLength: Float64Array;
+  shapeStart: Int32Array;
+  shapeX: Float64Array;
+  shapeY: Float64Array;
+  shapeDist: Float64Array;
+  adjStart: Int32Array;
+  adjEdge: Int32Array;
+  adjDir: Uint8Array;
+  /** Straßenart je Code (edgeClass). */
+  classes: readonly RoadClass[];
+  toLngLat(x: number, y: number): LngLat;
+  toMeters(point: LngLat): [number, number];
+}
+
+export function graphView(): RoadGraphView {
+  const g = getGraph();
+  return {
+    nodeX: g.nodeX,
+    nodeY: g.nodeY,
+    edgeFrom: g.edgeFrom,
+    edgeTo: g.edgeTo,
+    edgeOneway: g.edgeOneway,
+    edgeClass: g.edgeClass,
+    edgeLength: g.edgeLength,
+    shapeStart: g.shapeStart,
+    shapeX: g.shapeX,
+    shapeY: g.shapeY,
+    shapeDist: g.shapeDist,
+    adjStart: g.adjStart,
+    adjEdge: g.adjEdge,
+    adjDir: g.adjDir,
+    classes: ROAD_CLASSES,
+    toLngLat: (x, y) => ({ lng: x / M_LNG, lat: y / M_LAT }),
+    toMeters: (p) => [toX(p.lng), toY(p.lat)],
+  };
+}
+
 /** Größe des Netzes (für Tests und die Doku). */
 export function networkSize(): { nodes: number; edges: number; meters: number } {
   const g = getGraph();

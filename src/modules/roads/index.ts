@@ -14,6 +14,7 @@
 //   shipRoute(cityId)         Weg eines Schiffs von außen bis zum Kai ('koeln': Rotterdam über Waal und Rhein,
 //                             'hamburg': Elbe ab Cuxhaven), aus Overture-Daten (waterways.ts, tools/build-water.py)
 //   shipMinutes(cityId)       Fahrzeit dieses Wegs mit SHIP_SPEED (nur zur Anzeige, die Lieferzeit kommt aus suppliers)
+//   roadGraph()               Lesesicht auf den Graphen (Knoten, Kanten, Nachbarn in Metern), z.B. für den Verkehr
 //
 // Routen werden gemerkt (gleiche Punkte = gleiche Route), die Rechnung ist deterministisch.
 
@@ -33,7 +34,7 @@ import {
 import { WATERWAYS } from './waterways';
 
 export { SHIP_SPEED } from './config';
-export { networkSize, ROAD_SPEEDS, type RoadClass } from './graph';
+export { graphView as roadGraph, networkSize, ROAD_SPEEDS, type RoadClass, type RoadGraphView } from './graph';
 
 export interface RoadRoute {
   /** Weg vom Start über die Straßen zum Ziel (mindestens zwei Punkte). */

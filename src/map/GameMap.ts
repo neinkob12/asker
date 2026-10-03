@@ -143,10 +143,10 @@ export class GameMap implements MapController {
 
   /**
    * Nach jedem Neuzeichnen der UI. Die Layer bekommen update() nur, wenn sich etwas geändert hat: Spielzeit, ein
-   * Befehl oder neues Spiel (invalidate), das offene Panel, Handy, Kamera oder Overlay.
+   * Befehl oder neues Spiel (invalidate), das offene Panel, Handy, Kamera, Overlay oder Verkehr.
    */
   update(state: GameState, ui: UiState): void {
-    const key = `${state.time}|${this.revision}|${ui.phone.open}|${ui.camera}|${ui.overlay}|${this.loaded}`;
+    const key = `${state.time}|${this.revision}|${ui.phone.open}|${ui.camera}|${ui.overlay}|${ui.traffic}|${this.loaded}`;
     if (key === this.lastKey && state === this.lastState && ui.panel === this.lastPanel) {
       this.precipitation.sync();
       return;

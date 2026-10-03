@@ -59,7 +59,7 @@ export const VEHICLE_COLORS = {
   cargo: ['#b99a5e', '#5e7a93', '#7d6ea8'],
 } as const;
 
-interface Box {
+export interface Box {
   /** Vorne/hinten und links/rechts als Anteil der Länge (Mitte = 0). */
   f0: number;
   f1: number;
@@ -71,7 +71,7 @@ interface Box {
   bow?: boolean;
 }
 
-interface KindSpec {
+export interface KindSpec {
   /** Echte Länge in Metern (kleiner wird es nie). */
   meters: number;
   /** Länge auf dem Bildschirm in Pixeln. */
@@ -80,8 +80,8 @@ interface KindSpec {
   lights: boolean;
 }
 
-// Maße als Anteil der Länge, bewusst etwas spielzeughaft (breit und hoch).
-const KINDS: Record<VehicleKind, KindSpec> = {
+// Maße als Anteil der Länge, bewusst etwas spielzeughaft (breit und hoch). Auch für die Flotte (fleet.ts).
+export const KINDS: Record<VehicleKind, KindSpec> = {
   courier: {
     meters: 2.2,
     pixels: 13,

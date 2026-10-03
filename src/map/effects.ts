@@ -9,6 +9,7 @@
 
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { formatEuro, type LngLat } from '../core';
+import { setFleetNight } from './fleet';
 import { setHotspotNight } from './hotspots';
 import type { MapLook } from './look';
 import { addHtmlMarker, el } from './markers';
@@ -141,6 +142,7 @@ export function setActiveMap(map: MapLibreMap | null): void {
 /** Tageszeit an die Effekte weitergeben (Scheinwerfer, Leuchten der Hotspots). Setzt GameMap. */
 export function setEffectsLook(look: Pick<MapLook, 'night'>): void {
   setHotspotNight(look.night);
+  setFleetNight(look.night);
   if (activeMap) setVehicleNight(activeMap, look.night);
 }
 

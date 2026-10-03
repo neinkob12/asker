@@ -12,6 +12,7 @@
 // Klick auf die Karte für eigene Aktionen: ui.pickLocation('Text') (siehe UiApi), nie selbst den
 // nächsten Klick abfangen, sonst kommen sich Module in die Quere.
 
+export { motion, onMapFrame, onMotionChange } from './animation';
 export { currentMood, type Precipitation, type PrecipitationKind, setMapMood, setPrecipitation } from './atmosphere';
 export { EUROPA_VIEW, isMobile, KOELN_CENTER } from './config';
 export { DAY_PHASE_NAMES, type DayPhase, daylight, daylightAt, dayPhase, twilight } from './daylight';
@@ -25,6 +26,7 @@ export {
   moneyPopup,
   ping,
 } from './effects';
+export { createFleet, type FleetHandle, type FleetKind, type FleetOptions, type FleetPose } from './fleet';
 export { addFootpath, type FootpathHandle } from './footpaths';
 export {
   bearing,

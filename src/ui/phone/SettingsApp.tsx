@@ -1,7 +1,7 @@
-// Einstellungen: eine App mit Abschnitten. "Ton & Musik" (Lautstärken, Musik, kleiner Player), "Anzeige" (Karte und
-// Kamera), die Abschnitte der Module aus dem Slot 'core.settings' (z.B. Wetter mit Vorhersage, Anfragen der Kunden),
+// Einstellungen: eine App mit Abschnitten. "Ton & Musik" (Lautstärken, Musik, kleiner Player), "Karte" (Overlay,
+// Kamera, Verkehr), die Abschnitte der Module aus dem Slot 'core.settings' (z.B. Wetter mit Vorhersage, Anfragen der Kunden),
 // "Verlauf" (Ereignisse, Meldungen, Aufträge, Spielstand exportieren) und "Spiel" (Vibration, Spielstände). Musik
-// ist keine eigene App mehr: Sie ist eine Einstellung mit Player. Ton, Anzeige und Spiel gelten nur für dieses Gerät.
+// ist keine eigene App mehr: Sie ist eine Einstellung mit Player. Ton, Karte und Spiel gelten nur für dieses Gerät.
 // Aufbau wie iOS-Einstellungen: Abschnittskopf mit Symbol, eingerückte Gruppe, Schalter und Regler in den Zeilen.
 
 import type { ComponentChildren, JSX } from 'preact';
@@ -162,7 +162,7 @@ export function SettingsApp() {
         <Player />
       </Section>
 
-      <Section icon="map" color="place" title="Anzeige">
+      <Section icon="map" color="place" title="Karte">
         <Toggle
           label="Überwachungs-Overlay"
           hint="Raster, Scanlines und Koordinaten auf der Karte"
@@ -180,6 +180,20 @@ export function SettingsApp() {
             ]}
             value={ui.state.camera}
             onChange={ui.setCameraMode}
+          />
+        </div>
+        <div class="set-choice">
+          <span class="set-choice__label">Verkehr</span>
+          <SegmentedControl
+            wide
+            aria-label="Verkehr auf der Karte"
+            options={[
+              { value: 'off', label: 'Aus' },
+              { value: 'low', label: 'Wenig' },
+              { value: 'normal', label: 'Normal' },
+            ]}
+            value={ui.state.traffic}
+            onChange={ui.setTraffic}
           />
         </div>
       </Section>
@@ -219,7 +233,7 @@ export function SettingsApp() {
         </button>
       </Section>
 
-      <p class="set-foot">Ton, Anzeige und Spiel gelten nur für dieses Gerät.</p>
+      <p class="set-foot">Ton, Karte und Spiel gelten nur für dieses Gerät.</p>
     </div>
   );
 }

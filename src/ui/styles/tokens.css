@@ -264,6 +264,14 @@
   --map-heat-hot: #ff453a;
   /* Fußweg der letzten Meter von der Straße zum Ziel (gepunktet, Auftrag 31) */
   --map-footpath: #d8dce2;
+  /* Verkehr als Kulisse (Auftrag 31): Grautöne, Kabinen hell, Transporter heller, Lkw dunkler */
+  --map-traffic-1: #7d838c;
+  --map-traffic-2: #949aa3;
+  --map-traffic-3: #5f656e;
+  --map-traffic-4: #8a8f97;
+  --map-traffic-van: #a4a8ae;
+  --map-traffic-truck: #50555d;
+  --map-traffic-cabin: #9da2a9;
 
   /*
    * Look "Glas" über der Karte (Auftrag 24): HUD, Kartensteuerung, Marker-Plaketten, Overlays. Immer dunkel, auch

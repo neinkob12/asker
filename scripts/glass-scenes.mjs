@@ -90,6 +90,17 @@ export const SCENES = [
   { name: 'weggelegt-tag', js: `sim.advance(${TIMES.tag}); busy(); api.closePhone();` },
   { name: 'weggelegt-nacht', js: `sim.advance(${TIMES.nacht}); busy(); api.closePhone();` },
   { name: 'start', js: '' },
+  // Auftrag 31: Verkehr als Kulisse (läuft ein paar Sekunden mit Tempo 1, dann Pause für das Bild).
+  {
+    name: 'verkehr-tag',
+    js: `sim.advance(${TIMES.tag}); busy(); api.closePhone(); api.flyTo({ lng: 6.9405, lat: 50.9345 }, 15.2); api.setSpeed(1); await sleep(5000); api.setSpeed(0);`,
+    wait: 2500,
+  },
+  {
+    name: 'verkehr-nacht',
+    js: `sim.advance(${TIMES.nacht}); busy(); api.closePhone(); api.flyTo({ lng: 6.9405, lat: 50.9345 }, 15.2); api.setSpeed(1); await sleep(5000); api.setSpeed(0);`,
+    wait: 2500,
+  },
   {
     name: 'orte',
     js:
