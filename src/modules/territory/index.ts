@@ -17,13 +17,16 @@
 //   cityMilestones(state, cityId?)
 // Kampagne (Auftrag 30): Die Mehrheit der Veedel einer Stadt ist ein Meilenstein ('campaign.milestone', "Boss von
 // Köln"), erst alle Veedel sind der Sieg ("Köln komplett", outcome.win mit Stadt). Jeder Meilenstein nur einmal.
+// Städte (Auftrag 30, Etappe 4): Jede Stadt hat ihre Gangs und ihre Startverteilung; stündlich ändert sich der Einfluss
+// nur in der Stadt, die live ist (city.liveVeedel), die schlafende ist eingefroren.
 // Ereignisse: 'territory.controlChanged'
 
 import { type Ctx, defineModule, type GameState, journal, outcome } from '../../core';
+import { activeCity, cityName, liveVeedel } from '../city';
 import { getGang, getGangs } from '../gangs';
 import { lieutenantSpots, lieutenantSpotsIn, lieutenantsInVeedel } from '../hierarchy';
 import { getStaff, getStaffMember } from '../staff';
-import { allVeedel, getVeedel, neighborsOf, veedelName } from '../veedel';
+import { allVeedel, getVeedel, neighborsOf, veedelCity, veedelName } from '../veedel';
 import {
   CONTROL_THRESHOLD,
   DECAY_PER_HOUR,
@@ -103,11 +106,8 @@ export interface CampaignProgress {
   complete: boolean;
 }
 
-/** Die Stadt der Kampagne, solange es nur Köln gibt (Auftrag 30, Etappe 4 bringt das Modul city). */
+/** Standard-Stadt der Kampagne für alte Aufrufer ohne Stadt (Köln, der Einstieg). */
 export const DEFAULT_CITY = 'koeln';
-
-/** Namen der Städte für Texte der Kampagne. */
-const CITY_NAMES: Record<string, string> = { koeln: 'Köln', hamburg: 'Hamburg' };
 
 /** Was nach "Köln komplett" passiert (Hinweis im Sieg-Bildschirm und im Journal). */
 const AFTER_COMPLETE: Record<string, string> = {
@@ -201,8 +201,8 @@ export function hasPlayerPresence(state: GameState, veedelId: string): boolean {
 }
 
 /** Veedel einer Stadt. */
-function cityVeedel(_cityId: string): readonly { id: string }[] {
-  return allVeedel();
+function cityVeedel(cityId: string): readonly { id: string }[] {
+  return allVeedel(cityId);
 }
 
 /** Meilensteine einer Stadt (leer, solange nichts erreicht ist). */
@@ -294,7 +294,7 @@ function tick(ctx: Ctx): void {
   const state = ctx.state;
   const controllers = { ...state.modules.territory.controller };
   const homes = new Map(getGangs(state).map((g) => [g.id, g.homeVeedelId]));
-  for (const v of allVeedel()) {
+  for (const v of liveVeedel(state)) {
     const row = state.modules.territory.influence[v.id] ?? {};
     const owner = controllers[v.id] ?? null;
     for (const [faction, value] of Object.entries(row)) {
@@ -324,7 +324,7 @@ function tick(ctx: Ctx): void {
     updateController(ctx, v.id);
   }
   // Meilensteine auch ohne Kontrollwechsel (alte Spielstände, die schon alles halten).
-  checkMilestones(ctx, DEFAULT_CITY);
+  checkMilestones(ctx, activeCity(state));
 }
 
 /** Journal und Siegbedingung nach einem Kontrollwechsel. */
@@ -342,7 +342,7 @@ function onControlChanged(ctx: Ctx, veedelId: string, from: FactionId | null, to
   } else if (from !== null) {
     journal.add(ctx, `${factionName(state, from)} hat ${name} nicht mehr im Griff. Das Veedel ist offen.`, 'info', ref);
   }
-  if (to === PLAYER_FACTION) checkMilestones(ctx, DEFAULT_CITY);
+  if (to === PLAYER_FACTION) checkMilestones(ctx, veedelCity(veedelId));
 }
 
 /**
@@ -355,7 +355,7 @@ function checkMilestones(ctx: Ctx, cityId: string): void {
   t.milestones ??= {};
   t.milestones[cityId] ??= { majority: null, complete: null };
   const m = t.milestones[cityId];
-  const name = CITY_NAMES[cityId] ?? cityId;
+  const name = cityName(cityId);
   if (m.majority === null && progress.controlled >= progress.majority) {
     m.majority = ctx.now;
     journal.add(
@@ -378,15 +378,16 @@ function checkMilestones(ctx: Ctx, cityId: string): void {
 }
 
 /**
- * Startverteilung: Jedes Veedel gehört der Gang, deren Heimat-Veedel am nächsten liegt (erst Nachbarschaftsschritte,
- * dann Luftlinie). Die Gang bekommt den Startwert aus den Veedel-Daten, der Spieler startet überall bei 0.
+ * Startverteilung: Jedes Veedel gehört der Gang seiner Stadt, deren Heimat-Veedel am nächsten liegt (erst
+ * Nachbarschaftsschritte, dann Luftlinie). Die Gang bekommt den Startwert aus den Veedel-Daten, der Spieler startet
+ * überall bei 0.
  */
 function initialState(state: GameState): TerritoryState {
-  const gangs = getGangs(state);
   const influence: TerritoryState['influence'] = {};
   const controller: TerritoryState['controller'] = {};
-  const hops = new Map(gangs.map((g) => [g.id, graphDistances(g.homeVeedelId)]));
+  const hops = new Map(getGangs(state).map((g) => [g.id, graphDistances(g.homeVeedelId)]));
   for (const v of allVeedel()) {
+    const gangs = getGangs(state, v.cityId);
     let owner: string | null = null;
     let best: [number, number] = [Infinity, Infinity];
     for (const g of gangs) {
@@ -425,7 +426,7 @@ function graphDistances(start: string): Map<string, number> {
 
 export default defineModule({
   id: 'territory',
-  version: 3,
+  version: 4,
   dependsOn: ['veedel', 'gangs'],
   init: (ctx) => initialState(ctx.state),
   tickEvery: 60,
@@ -440,10 +441,23 @@ export default defineModule({
     // Mehrheit), behält den Sieg und hat den Meilenstein "Boss von Köln" zur Zeit des Siegs. Köln komplett kommt noch.
     3: (old: TerritoryStateV2, state: GameState): TerritoryState => {
       const controlled = Object.values(old.controller).filter((f) => f === PLAYER_FACTION).length;
-      const total = allVeedel().length;
+      const total = allVeedel(DEFAULT_CITY).length;
       const majority = state.outcome.won?.time ?? (controlled >= Math.floor(total / 2) + 1 ? state.time : null);
       // Wer schon alle Veedel hat, bekommt "Köln komplett" beim nächsten stündlichen Tick (mit Sieg-Bildschirm).
       return { ...old, milestones: { [DEFAULT_CITY]: { majority, complete: null } } };
+    },
+    // Version 4 (Auftrag 30, Etappe 4): Hamburg kommt dazu. Seine Veedel bekommen Einfluss und Herren wie bei einem
+    // neuen Spiel; alles Bestehende bleibt (es war Köln).
+    4: (old: TerritoryState, state: GameState): TerritoryState => {
+      const fresh = initialState(state);
+      const influence = { ...old.influence };
+      const controller = { ...old.controller };
+      for (const v of allVeedel()) {
+        if (influence[v.id]) continue;
+        influence[v.id] = fresh.influence[v.id];
+        controller[v.id] = fresh.controller[v.id];
+      }
+      return { ...old, influence, controller };
     },
   },
 });

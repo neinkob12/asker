@@ -40,7 +40,7 @@ function hire(sim: Simulation, level: number, loyalty: number): StaffMember {
 
 function allKoeln(sim: Simulation): void {
   const ctx = sim.ctx('test');
-  for (const v of allVeedel()) {
+  for (const v of allVeedel('koeln')) {
     for (const f of factions(sim.state)) if (f !== PLAYER_FACTION) addInfluence(ctx, v.id, f, -100);
     addInfluence(ctx, v.id, PLAYER_FACTION, 100);
   }

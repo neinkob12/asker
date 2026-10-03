@@ -1,4 +1,5 @@
-// Die Gangs, die Köln zu Beginn unter sich aufgeteilt haben. Alle frei erfunden.
+// Die Gangs, die die Städte zu Beginn unter sich aufgeteilt haben: vier in Köln, seit Auftrag 30 vier in Hamburg
+// (Präfix hh-, etwa ein Viertel stärker: Kampfkraft, Geld, Leute). Alle frei erfunden, keine echten Gruppen.
 // IDs und Heimat-Veedel bleiben stabil (territory verteilt danach die Veedel, andere Module nutzen die IDs).
 
 export interface GangTraits {
@@ -24,6 +25,8 @@ export interface GangTraits {
 
 export interface Gang {
   id: string;
+  /** Stadt der Gang (Auftrag 30). Sie handelt nur dort und nur, wenn die Stadt live ist. */
+  cityId: string;
   name: string;
   /** Farbe auf der Karte (CSS-Farbe). */
   color: string;
@@ -47,6 +50,7 @@ export interface Gang {
 export const GANGS: readonly Gang[] = [
   {
     id: 'nord',
+    cityId: 'koeln',
     name: 'Hafenkolonne',
     color: '#c0392b',
     homeVeedelId: 'nippes',
@@ -70,6 +74,7 @@ export const GANGS: readonly Gang[] = [
   },
   {
     id: 'west',
+    cityId: 'koeln',
     name: 'Venloer Syndikat',
     color: '#2e86de',
     homeVeedelId: 'ehrenfeld',
@@ -93,6 +98,7 @@ export const GANGS: readonly Gang[] = [
   },
   {
     id: 'ost',
+    cityId: 'koeln',
     name: 'Schäl Sick',
     color: '#d68910',
     homeVeedelId: 'kalk',
@@ -116,6 +122,7 @@ export const GANGS: readonly Gang[] = [
   },
   {
     id: 'sued',
+    cityId: 'koeln',
     name: 'Marienburger Kreis',
     color: '#8e44ad',
     homeVeedelId: 'bayenthal',
@@ -135,6 +142,103 @@ export const GANGS: readonly Gang[] = [
       goodsQuality: 0.8,
       dealing: 0.5,
       start: { money: 70000, people: 10, goods: 600 },
+    },
+  },
+  // --- Hamburg (Auftrag 30) ---
+  {
+    id: 'hh-kiez',
+    cityId: 'hamburg',
+    name: 'Neonkrone',
+    color: '#e84393',
+    homeVeedelId: 'st-pauli',
+    boss: 'Rocco Brandt, genannt „der Portier“',
+    crew: 'Türsteher der Neonkrone',
+    emblem: '🌹',
+    style: 'Kiez-Kartell zwischen Reeperbahn und Hamburger Berg. Jede Tür, jede Bar, jede Ecke zahlt an sie.',
+    strengths: ['Türsteher', 'Nachtgeschäft'],
+    weakness: 'zu viele Augen auf dem Kiez',
+    traits: {
+      aggression: 1.3,
+      expansion: 1.0,
+      fighting: 72,
+      network: 0.55,
+      priceFactor: 0.95,
+      goodsCost: 4.8,
+      goodsQuality: 0.7,
+      dealing: 0.6,
+      start: { money: 65000, people: 20, goods: 1600 },
+    },
+  },
+  {
+    id: 'hh-hafen',
+    cityId: 'hamburg',
+    name: 'Containerjungs',
+    color: '#16a085',
+    homeVeedelId: 'wilhelmsburg',
+    boss: 'Hinnerk „Brecher“ Matthiesen',
+    crew: 'Leute der Containerjungs',
+    emblem: '⛓',
+    style: 'Hafenarbeiter von der Insel bis Harburg. Was aus dem Container fällt, gehört ihnen. Grob und laut.',
+    strengths: ['brutal', 'viel Ware'],
+    weakness: 'kaum Freunde bei den Behörden',
+    traits: {
+      aggression: 1.5,
+      expansion: 1.2,
+      fighting: 76,
+      network: 0.25,
+      priceFactor: 0.85,
+      goodsCost: 3.6,
+      goodsQuality: 0.55,
+      dealing: 1.3,
+      start: { money: 30000, people: 22, goods: 3500 },
+    },
+  },
+  {
+    id: 'hh-schanze',
+    cityId: 'hamburg',
+    name: 'Das Kollektiv',
+    color: '#27ae60',
+    homeVeedelId: 'sternschanze',
+    boss: 'Merle Asmussen, genannt „die Kassenwartin“',
+    crew: 'Leute vom Kollektiv',
+    emblem: '✊',
+    style: 'Vernetzt bis in jede WG der Schanze. Wenn die Polizei kommt, wissen sie es eine Stunde vorher.',
+    strengths: ['bestens vernetzt', 'gute Ware'],
+    weakness: 'zerstritten, sobald es ums Geld geht',
+    traits: {
+      aggression: 0.8,
+      expansion: 1.0,
+      fighting: 56,
+      network: 0.92,
+      priceFactor: 0.9,
+      goodsCost: 4.4,
+      goodsQuality: 0.75,
+      dealing: 0.8,
+      start: { money: 45000, people: 17, goods: 1500 },
+    },
+  },
+  {
+    id: 'hh-elbchaussee',
+    cityId: 'hamburg',
+    name: 'Elbchaussee-Club',
+    color: '#d4ac0d',
+    homeVeedelId: 'blankenese',
+    boss: 'Frederik Brodersen-Lüth',
+    crew: 'Leute des Elbchaussee-Clubs',
+    emblem: '⛵',
+    style: 'Reiche Söhne aus Blankenese und Eppendorf, mit Segelboot und Anwalt. Teure Ware, teure Preise.',
+    strengths: ['viel Geld', 'Anwälte'],
+    weakness: 'wenig Leute, die sich die Hände schmutzig machen',
+    traits: {
+      aggression: 0.9,
+      expansion: 0.9,
+      fighting: 64,
+      network: 0.8,
+      priceFactor: 1.05,
+      goodsCost: 5.5,
+      goodsQuality: 0.9,
+      dealing: 0.4,
+      start: { money: 100000, people: 13, goods: 800 },
     },
   },
 ];

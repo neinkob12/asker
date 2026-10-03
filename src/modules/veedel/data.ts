@@ -5,6 +5,8 @@
 
 export interface Veedel {
   id: string;
+  /** Stadt, zu der das Veedel gehört (Auftrag 30: 'koeln', 'hamburg'). */
+  cityId: string;
   name: string;
   /** Stadtbezirk, zu dem das Veedel gehört. */
   district: string;
@@ -20,11 +22,17 @@ export interface Veedel {
   description: string;
   /** Einfluss der Gang, der das Veedel zu Spielbeginn gehört: wie fest sie es im Griff hat (über der Kontrollschwelle). */
   startInfluence: number;
+  /**
+   * Nachtleben (Auftrag 30), 1 = normal: Nachfrage zwischen 22 und 4 Uhr mal diesem Wert (Freitag und Samstag noch
+   * einmal mehr), Kontrollen nachts ebenso. Fehlt = 1.
+   */
+  nightlife?: number;
 }
 
 export const VEEDEL: readonly Veedel[] = [
   {
     id: 'altstadt-nord',
+    cityId: 'koeln',
     name: 'Altstadt-Nord',
     district: 'Innenstadt',
     center: { lng: 6.9555, lat: 50.9395 },
@@ -38,6 +46,7 @@ export const VEEDEL: readonly Veedel[] = [
   },
   {
     id: 'altstadt-sued',
+    cityId: 'koeln',
     name: 'Altstadt-Süd',
     district: 'Innenstadt',
     center: { lng: 6.952, lat: 50.9325 },
@@ -51,6 +60,7 @@ export const VEEDEL: readonly Veedel[] = [
   },
   {
     id: 'neustadt-nord',
+    cityId: 'koeln',
     name: 'Neustadt-Nord',
     district: 'Innenstadt',
     center: { lng: 6.944, lat: 50.9475 },
@@ -64,6 +74,7 @@ export const VEEDEL: readonly Veedel[] = [
   },
   {
     id: 'neustadt-sued',
+    cityId: 'koeln',
     name: 'Neustadt-Süd',
     district: 'Innenstadt',
     center: { lng: 6.935, lat: 50.933 },
@@ -74,9 +85,11 @@ export const VEEDEL: readonly Veedel[] = [
       'Kwartier Latäng, Zülpicher, Ringe. Studenten, Kneipen, Nachfrage ohne Ende. Freitags steht die Wanne an der ' +
       'Zülpicher Straße, samstags auch.',
     startInfluence: 60,
+    nightlife: 1.4,
   },
   {
     id: 'deutz',
+    cityId: 'koeln',
     name: 'Deutz',
     district: 'Innenstadt',
     center: { lng: 6.9765, lat: 50.9385 },
@@ -90,6 +103,7 @@ export const VEEDEL: readonly Veedel[] = [
   },
   {
     id: 'ehrenfeld',
+    cityId: 'koeln',
     name: 'Ehrenfeld',
     district: 'Ehrenfeld',
     center: { lng: 6.909, lat: 50.9504 },
@@ -103,6 +117,7 @@ export const VEEDEL: readonly Veedel[] = [
   },
   {
     id: 'lindenthal',
+    cityId: 'koeln',
     name: 'Lindenthal',
     district: 'Lindenthal',
     center: { lng: 6.92, lat: 50.926 },
@@ -116,6 +131,7 @@ export const VEEDEL: readonly Veedel[] = [
   },
   {
     id: 'suelz',
+    cityId: 'koeln',
     name: 'Sülz',
     district: 'Lindenthal',
     center: { lng: 6.918, lat: 50.9175 },
@@ -129,6 +145,7 @@ export const VEEDEL: readonly Veedel[] = [
   },
   {
     id: 'nippes',
+    cityId: 'koeln',
     name: 'Nippes',
     district: 'Nippes',
     center: { lng: 6.9535, lat: 50.9655 },
@@ -142,6 +159,7 @@ export const VEEDEL: readonly Veedel[] = [
   },
   {
     id: 'kalk',
+    cityId: 'koeln',
     name: 'Kalk',
     district: 'Kalk',
     center: { lng: 7.0035, lat: 50.9385 },
@@ -155,6 +173,7 @@ export const VEEDEL: readonly Veedel[] = [
   },
   {
     id: 'muelheim',
+    cityId: 'koeln',
     name: 'Mülheim',
     district: 'Mülheim',
     center: { lng: 7.0085, lat: 50.9635 },
@@ -168,6 +187,7 @@ export const VEEDEL: readonly Veedel[] = [
   },
   {
     id: 'bayenthal',
+    cityId: 'koeln',
     name: 'Bayenthal',
     district: 'Rodenkirchen',
     center: { lng: 6.9655, lat: 50.9115 },

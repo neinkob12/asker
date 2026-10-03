@@ -10,26 +10,56 @@
 //     later: Er meldet sich alle OFFER_REMINDER_DAYS Spieltage per Chat (mit denselben Antworten).
 //     stay:  Endlosmodus; er schreibt einmal, dass das Angebot steht (zusagen geht über seinen Chat).
 //
-// Öffentliche API: offerStatus(state), hamburgMissing(state), HARBOR_CALLER
-// Befehle: 'city.answerOffer'
-// Ereignisse: 'city.offerAnswered', 'city.offerAccepted'
+// Städte als Grundlage (Etappe 4): Nur eine Stadt ist live (die aktive, die Karte und Handy zeigen); die anderen
+// freigeschalteten Städte schlafen. Module ticken nur für die aktive Stadt (isCityLive, isVeedelLive, liveVeedel).
+// Für jede schlafende Stadt bucht city um Mitternacht eine Tageszusammenfassung: Schnitt der letzten
+// SLEEP_AVERAGE_DAYS live gespielten Tage dieser Stadt aus der Kasse mal 0,85 bis 1,15 ('income.city' bzw.
+// 'expense.city'), die Heat fällt auf den Ruhewert (police.restHeat), Löhne sind im Ergebnis drin. Den Anteil der
+// Rechten Hand nimmt hierarchy danach aus dem Buch der Stadt. Beim Aufwachen wird nichts nachgerechnet.
+//
+// Öffentliche API: offerStatus(state), hamburgMissing(state), HARBOR_CALLER, CITIES, DEUTSCHLAND_VIEW, getCity(id),
+//   cityName(id), activeCity(state), presentCity(state), citiesUnlocked(state), isCityUnlocked(state, id),
+//   isCityLive(state, id), cityOf(veedelId), cityOfSpot(state, spotId), isVeedelLive(state, veedelId),
+//   liveVeedel(state), sleepInfo(state, cityId), playableCities(), cityAt(lng, lat)
+// Befehle: 'city.answerOffer', 'city.switch', 'city.unlock' (intern), 'city.travel' (Etappe 5)
+// Ereignisse: 'city.offerAnswered', 'city.offerAccepted', 'city.switched', 'city.unlocked', 'city.slept',
+//   'city.arrived' (Etappe 5)
 
 import {
+  type CommandMeta,
   type CommandResult,
   type Ctx,
   clock,
   defineModule,
+  formatEuro,
   type GameState,
   journal,
   MINUTES_PER_DAY,
   messages,
+  wallet,
 } from '../../core';
 import { activeEncounters } from '../encounters';
+import { bookDay, cityDayProfit } from '../finance';
 import { fullPowerMissing } from '../hierarchy';
+import { restHeat } from '../police';
+import { getSpot } from '../spots';
 import { campaignProgress } from '../territory';
-import { HARBOR_CALLER, OFFER_CALL_DELAY, OFFER_LINES, OFFER_REMINDER_DAYS, OFFER_TEXTS } from './config';
+import { allVeedel, type Veedel, veedelAt, veedelCity } from '../veedel';
+import {
+  HARBOR_CALLER,
+  NEXT_CITY,
+  OFFER_CALL_DELAY,
+  OFFER_LINES,
+  OFFER_REMINDER_DAYS,
+  OFFER_TEXTS,
+  SLEEP_AVERAGE_DAYS,
+  SLEEP_FACTOR_MAX,
+  SLEEP_FACTOR_MIN,
+} from './config';
+import { CITIES, type CityDef } from './data';
 
-export { HARBOR_CALLER, OFFER_LINES } from './config';
+export { HARBOR_CALLER, OFFER_LINES, SLEEP_AVERAGE_DAYS } from './config';
+export { CITIES, type CityDef, DEUTSCHLAND_VIEW } from './data';
 
 export type OfferStatus = 'none' | 'scheduled' | 'calling' | 'house' | 'later' | 'declined' | 'accepted';
 export type OfferChoice = 'come' | 'later' | 'stay';
@@ -42,10 +72,42 @@ export interface OfferState {
   remindAt: number | null;
 }
 
+/** Schlafmodus einer Stadt. */
+export interface CitySleep {
+  /** Ergebnisse der letzten live gespielten Tage (ältester zuerst, höchstens SLEEP_AVERAGE_DAYS). */
+  results: number[];
+  /** War heute live (dann zählt der Tag zu den Ergebnissen statt einer Zusammenfassung). */
+  liveToday: boolean;
+  /** Schläft seit (Spielminute), null = live. */
+  since: number | null;
+  /** Letzte Tageszusammenfassung. */
+  last: { day: number; amount: number } | null;
+}
+
+/** Deine eigene Fahrt zwischen zwei Städten (Etappe 5). */
+export interface CityTravel {
+  from: string;
+  to: string;
+  departedAt: number;
+  arrivesAt: number;
+}
+
 export interface CityState {
   /** Das Angebot aus Hamburg. */
   offer: OfferState;
+  /** Stadt, die gerade live ist: Karte und Handy zeigen sie, die Module ticken für sie. */
+  active: string;
+  /** Wo du selbst gerade bist (Etappe 5). */
+  present: string;
+  /** Freigeschaltete Städte, Köln zuerst. */
+  unlocked: string[];
+  travel: CityTravel | null;
+  /** Schlafmodus pro freigeschalteter Stadt. */
+  sleep: Record<string, CitySleep>;
 }
+
+/** Zustand in Version 1 (Etappe 2, nur das Angebot). */
+type CityStateV1 = Pick<CityState, 'offer'>;
 
 declare module '../../core' {
   interface ModuleStates {
@@ -54,16 +116,117 @@ declare module '../../core' {
   interface GameCommands {
     /** Antwort auf Fietes Angebot (aus dem Anruf oder seinem Chat). Chefsache. */
     'city.answerOffer': { choice: OfferChoice };
+    /** Andere Stadt live schalten (Karte und Handy wechseln, die bisherige schläft). Nur freigeschaltete Städte. */
+    'city.switch': { cityId: string };
+    /** Stadt freischalten. Intern (nach der Übergabe an die Rechte Hand), nicht für den Spieler. */
+    'city.unlock': { cityId: string };
   }
   interface GameEvents {
     'city.offerAnswered': { choice: OfferChoice; ready: boolean };
     /** Zusage mit bereiter Rechter Hand: Die Übergabe von Köln kann beginnen. */
     'city.offerAccepted': Record<string, never>;
+    'city.switched': { from: string; to: string };
+    'city.unlocked': { cityId: string };
+    /** Tageszusammenfassung einer schlafenden Stadt (gebucht als income.city bzw. expense.city). */
+    'city.slept': { cityId: string; day: number; amount: number };
+    /** Du bist in einer Stadt angekommen (Etappe 5). */
+    'city.arrived': { cityId: string };
   }
 }
 
 // ---------------------------------------------------------------------------------------------
 // Lesen
+
+const CITY_BY_ID = new Map(CITIES.map((c) => [c.id, c]));
+
+/** Die Stadt, mit der alles beginnt (und zu der alte Spielstände gehören). */
+export const FIRST_CITY = 'koeln';
+
+export function getCity(id: string): CityDef | undefined {
+  return CITY_BY_ID.get(id);
+}
+
+export function cityName(id: string): string {
+  return CITY_BY_ID.get(id)?.name ?? id;
+}
+
+/** Städte mit Inhalt (ohne Schablonen). */
+export function playableCities(): readonly CityDef[] {
+  return CITIES.filter((c) => !c.template);
+}
+
+/**
+ * Die Stadt, die gerade live ist. Vor dem Anlegen des Moduls (init anderer Module) und in alten Ständen: Köln.
+ * Der Zustand kann hier fehlen, obwohl der Typ ihn verspricht (init-Reihenfolge).
+ */
+export function activeCity(state: GameState): string {
+  return (state.modules.city as CityState | undefined)?.active ?? FIRST_CITY;
+}
+
+/** Wo du selbst gerade bist. */
+export function presentCity(state: GameState): string {
+  return (state.modules.city as CityState | undefined)?.present ?? FIRST_CITY;
+}
+
+export function citiesUnlocked(state: GameState): readonly string[] {
+  return (state.modules.city as CityState | undefined)?.unlocked ?? [FIRST_CITY];
+}
+
+export function isCityUnlocked(state: GameState, cityId: string): boolean {
+  return citiesUnlocked(state).includes(cityId);
+}
+
+/** Läuft die Stadt gerade voll (statt im Schlafmodus)? */
+export function isCityLive(state: GameState, cityId: string): boolean {
+  return activeCity(state) === cityId;
+}
+
+/** Stadt eines Veedels. */
+export function cityOf(veedelId: string): string {
+  return veedelCity(veedelId);
+}
+
+/** Stadt eines Spots (über sein Veedel; unbekannte Spots zählen zu Köln). */
+export function cityOfSpot(state: GameState, spotId: string): string {
+  const spot = getSpot(state, spotId);
+  return spot ? veedelCity(spot.veedelId) : FIRST_CITY;
+}
+
+/**
+ * Zu welcher Stadt gehört ein Punkt? Erst über das Veedel, dann über den Rahmen der Stadt (Hafen, Autobahn-Einfahrt),
+ * sonst die Stadt mit dem nächsten Mittelpunkt.
+ */
+export function cityAt(lng: number, lat: number): string {
+  const veedel = veedelAt(lng, lat);
+  if (veedel) return veedel.cityId;
+  let best = FIRST_CITY;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const c of CITIES) {
+    if (c.template) continue;
+    const [w, s, e, n] = c.bounds;
+    if (lng >= w && lng <= e && lat >= s && lat <= n) return c.id;
+    const d = (c.center.lng - lng) ** 2 + (c.center.lat - lat) ** 2;
+    if (d < bestDistance) {
+      best = c.id;
+      bestDistance = d;
+    }
+  }
+  return best;
+}
+
+export function isVeedelLive(state: GameState, veedelId: string): boolean {
+  return veedelCity(veedelId) === activeCity(state);
+}
+
+/** Veedel der Stadt, die gerade live ist. */
+export function liveVeedel(state: GameState): readonly Veedel[] {
+  return allVeedel(activeCity(state));
+}
+
+/** Schlafmodus einer Stadt (null, wenn sie nicht freigeschaltet ist). */
+export function sleepInfo(state: GameState, cityId: string): CitySleep | null {
+  return (state.modules.city as CityState | undefined)?.sleep?.[cityId] ?? null;
+}
 
 export function offerStatus(state: GameState): OfferStatus {
   return state.modules.city.offer.status;
@@ -155,6 +318,89 @@ export function answerOffer(ctx: Ctx, choice: OfferChoice): CommandResult {
   return { ok: true };
 }
 
+function newSleep(live: boolean, now: number): CitySleep {
+  return { results: [], liveToday: live, since: live ? null : now, last: null };
+}
+
+/** Stadt live schalten: Karte und Handy wechseln, die bisherige Stadt schläft. */
+export function switchCity(ctx: Ctx, cityId: string): CommandResult {
+  const c = ctx.state.modules.city;
+  const def = getCity(cityId);
+  if (!def || def.template) return { ok: false, reason: 'Diese Stadt gibt es im Spiel noch nicht.' };
+  if (!c.unlocked.includes(cityId)) return { ok: false, reason: `${def.name} ist noch nicht frei.` };
+  if (c.active === cityId) return { ok: true };
+  const from = c.active;
+  c.active = cityId;
+  c.sleep[from] ??= newSleep(false, ctx.now);
+  c.sleep[from].since = ctx.now;
+  c.sleep[cityId] ??= newSleep(true, ctx.now);
+  c.sleep[cityId].since = null;
+  c.sleep[cityId].liveToday = true;
+  journal.add(ctx, `Du schaust jetzt auf ${def.name}. ${cityName(from)} läuft im Hintergrund weiter.`, 'info');
+  ctx.emit('city.switched', { from, to: cityId });
+  return { ok: true };
+}
+
+/** Stadt freischalten (intern). */
+export function unlockCity(ctx: Ctx, cityId: string): CommandResult {
+  const c = ctx.state.modules.city;
+  const def = getCity(cityId);
+  if (!def || def.template) return { ok: false, reason: 'Diese Stadt gibt es im Spiel noch nicht.' };
+  if (c.unlocked.includes(cityId)) return { ok: true };
+  c.unlocked.push(cityId);
+  c.sleep[cityId] ??= newSleep(c.active === cityId, ctx.now);
+  journal.add(ctx, `${def.name} ist frei. Oben in der Leiste wechselst du zwischen den Städten.`, 'good');
+  ctx.emit('city.unlocked', { cityId });
+  return { ok: true };
+}
+
+/**
+ * Mitternacht: Für jede Stadt endet ein Buchungstag. War sie live, zählt ihr Ergebnis zum Schnitt; hat sie den ganzen
+ * Tag geschlafen, bucht die Zusammenfassung das geschätzte Ergebnis.
+ */
+function closeDay(ctx: Ctx): void {
+  const c = ctx.state.modules.city;
+  const day = bookDay(ctx.now);
+  for (const cityId of c.unlocked) {
+    c.sleep[cityId] ??= newSleep(c.active === cityId, ctx.now);
+    const rec = c.sleep[cityId];
+    if (rec.liveToday) {
+      const profit = cityDayProfit(ctx.state, cityId, day);
+      if (profit !== null) {
+        rec.results.push(Math.round(profit));
+        if (rec.results.length > SLEEP_AVERAGE_DAYS) rec.results.splice(0, rec.results.length - SLEEP_AVERAGE_DAYS);
+      }
+    } else {
+      sleepSummary(ctx, cityId, day, rec);
+    }
+    rec.liveToday = c.active === cityId;
+  }
+}
+
+function sleepSummary(ctx: Ctx, cityId: string, day: number, rec: CitySleep): void {
+  const name = cityName(cityId);
+  const average = rec.results.length > 0 ? rec.results.reduce((a, b) => a + b, 0) / rec.results.length : 0;
+  const factor = SLEEP_FACTOR_MIN + ctx.random() * (SLEEP_FACTOR_MAX - SLEEP_FACTOR_MIN);
+  let amount = Math.round(average * factor);
+  if (amount > 0) {
+    wallet.earn(ctx, amount, 'dirty', `Ergebnis ${name} (Rechte Hand)`, { category: 'income.city', cityId });
+  } else if (amount < 0) {
+    amount = -wallet.lose(ctx, -amount, 'dirty', `Verlust ${name}`, { category: 'expense.city', cityId });
+  }
+  rec.last = { day, amount };
+  restHeat(ctx, cityId);
+  if (amount !== 0) {
+    journal.add(
+      ctx,
+      amount > 0
+        ? `${name} im Hintergrund: Tag ${day} brachte ${formatEuro(amount)}.`
+        : `${name} im Hintergrund: Tag ${day} kostete ${formatEuro(-amount)}.`,
+      amount > 0 ? 'good' : 'bad',
+    );
+  }
+  ctx.emit('city.slept', { cityId, day, amount });
+}
+
 /** Köln komplett: Er ruft OFFER_CALL_DELAY Spielminuten später an (einmal). */
 function schedule(ctx: Ctx): void {
   const offer = ctx.state.modules.city.offer;
@@ -165,6 +411,7 @@ function schedule(ctx: Ctx): void {
 
 function tick(ctx: Ctx): void {
   const state = ctx.state;
+  if (ctx.now > 0 && ctx.now % MINUTES_PER_DAY === 0) closeDay(ctx);
   const offer = state.modules.city.offer;
   // Alte Spielstände, die Köln schon komplett haben (ohne das Ereignis), kommen auch dran.
   if (offer.status === 'none' && campaignProgress(state, 'koeln').complete) schedule(ctx);
@@ -184,19 +431,47 @@ function tick(ctx: Ctx): void {
   }
 }
 
+function initialState(): CityState {
+  return {
+    offer: { status: 'none', callAt: null, remindAt: null },
+    active: FIRST_CITY,
+    present: FIRST_CITY,
+    unlocked: [FIRST_CITY],
+    travel: null,
+    sleep: { [FIRST_CITY]: newSleep(true, 0) },
+  };
+}
+
+/** Nur der Spieler wechselt die Stadt; freischalten tut das Spiel selbst. */
+function playerOnly(meta: CommandMeta): CommandResult | null {
+  return meta.actor === 'player' ? null : { ok: false, reason: 'Das entscheidest du selbst.' };
+}
+
 export default defineModule({
   id: 'city',
-  version: 1,
+  version: 2,
   dependsOn: ['territory', 'hierarchy'],
-  init: () => ({ offer: { status: 'none', callAt: null, remindAt: null } }),
+  init: () => initialState(),
   tickEvery: 5,
   tick,
   commands: {
     'city.answerOffer': (ctx, { choice }) => answerOffer(ctx, choice),
+    'city.switch': (ctx, { cityId }, meta) => playerOnly(meta) ?? switchCity(ctx, cityId),
+    'city.unlock': (ctx, { cityId }, meta) =>
+      meta.actor === 'system' ? unlockCity(ctx, cityId) : { ok: false, reason: 'Städte werden im Spiel frei.' },
   },
   on: {
     'campaign.won': (ctx, { cityId }) => {
-      if ((cityId ?? 'koeln') === 'koeln') schedule(ctx);
+      if ((cityId ?? FIRST_CITY) === FIRST_CITY) schedule(ctx);
     },
+    // Übergabe an die Rechte Hand: Die nächste Stadt wird frei (Köln → Hamburg).
+    'hierarchy.fullPowerGranted': (ctx, { cityId }) => {
+      const next = NEXT_CITY[cityId];
+      if (next) unlockCity(ctx, next);
+    },
+  },
+  migrations: {
+    // Version 2 (Etappe 4): aktive Stadt, Aufenthalt, freigeschaltete Städte, Schlafmodus. Alles bisher war Köln.
+    2: (old: CityStateV1): CityState => ({ ...initialState(), offer: old.offer }),
   },
 });

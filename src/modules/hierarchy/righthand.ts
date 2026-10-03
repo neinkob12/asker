@@ -21,7 +21,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { dayReport, spotResults, wageRunway } from '../finance';
+import { cityReport, dayReport, spotResults, wageRunway } from '../finance';
 import { playerHeat } from '../police';
 import { getSpot, getSpots } from '../spots';
 import {
@@ -37,6 +37,7 @@ import {
   getStaffMember,
   isAbsent,
   isEmployed,
+  isMemberLive,
   isSpecialist,
   payrollDue,
   roleName,
@@ -545,9 +546,11 @@ export function rightHandTick(ctx: Ctx): void {
     rh.reportDay = today;
     sendReport(ctx, rh);
   }
-  runQuickTasks(ctx, rh, m, actor);
-  // Vollmacht: ihr Anteil am Tagesgewinn, sobald ein Buchungstag abgeschlossen ist.
+  // Vollmacht: ihr Anteil am Tagesgewinn, sobald ein Buchungstag abgeschlossen ist (auch aus der schlafenden Stadt).
   if (rh.fullPower) payShare(ctx, rh, m);
+  // Schläft ihre Stadt, arbeitet sie im Tagesergebnis (city), nicht Zug um Zug.
+  if (!isMemberLive(ctx.state, m)) return;
+  runQuickTasks(ctx, rh, m, actor);
   if (ctx.now < rh.nextActionAt) return;
   rh.nextActionAt = ctx.now + RIGHT_HAND_INTERVAL;
   if (rh.settings.payrollGuard) guardPayroll(ctx, rh);
@@ -557,9 +560,13 @@ export function rightHandTick(ctx: Ctx): void {
   if (rh.fullPower) runFullPowerTasks(ctx, rh, m, actor);
 }
 
-/** Tagesbericht mit den Zahlen von gestern und bis zu drei Empfehlungen. */
+/**
+ * Tagesbericht mit den Zahlen von gestern und bis zu drei Empfehlungen. Mit Vollmacht nur die Zahlen ihrer Stadt
+ * (Auftrag 30).
+ */
 export function buildReport(state: GameState): DailyReport {
-  const yesterday = dayReport(state, 1);
+  const city = getRightHand(state)?.fullPower?.cityId;
+  const yesterday = city ? cityReport(state, city, 1, 1) : dayReport(state, 1);
   const runway = wageRunway(state);
   const advice: string[] = [];
   if (yesterday.profit < 0) {

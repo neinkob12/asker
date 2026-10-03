@@ -207,6 +207,7 @@ export function ally(ctx: Ctx, gangId: string, againstGangId: string): CommandRe
   const enemy = getGang(ctx.state, againstGangId);
   const enemyStatus = enemy && statusOf(ctx, againstGangId);
   if (!enemy || !enemyStatus || enemy.id === gang.id) return { ok: false, reason: 'Gegen wen denn?' };
+  if (enemy.cityId !== gang.cityId) return { ok: false, reason: `${enemy.name} ist nicht in ${gang.name}s Stadt.` };
   if (isGangBroken(ctx.state, againstGangId)) {
     return { ok: false, reason: `${enemy.name} ist schon zerschlagen. Dafür braucht es kein Bündnis.` };
   }

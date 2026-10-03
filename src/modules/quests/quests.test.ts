@@ -84,7 +84,7 @@ describe('quests', () => {
     sim.advance(10);
     jumpTo(sim, 'nineVeedel');
     const ctx = sim.ctx('test');
-    const ids = allVeedel().map((v) => v.id);
+    const ids = allVeedel('koeln').map((v) => v.id);
     for (const id of ids.slice(0, 7)) addInfluence(ctx, id, PLAYER_FACTION, 100);
     sim.advance(10);
     expect(questTitle(sim.state)).toBe('Boss von Köln');

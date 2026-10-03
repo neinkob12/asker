@@ -1,4 +1,5 @@
-// Gangs: die Hauptgegner, die Köln zu Beginn unter sich aufgeteilt haben. Vier frei erfundene Gangs mit Boss,
+// Gangs: die Hauptgegner, die jede Stadt zu Beginn unter sich aufgeteilt haben (je vier in Köln und Hamburg, Auftrag
+// 30; sie handeln nur, wenn ihre Stadt live ist). Frei erfundene Gangs mit Boss,
 // Heimat-Veedel, Stil und Stärken (data.ts). Jede hat Geld, Leute und Ware und eine KI, die stündlich tickt:
 // Sie verteidigt und erweitert ihr Revier, drückt die Preise, ignoriert dich als kleinen Fisch und wird
 // feindseliger, je mehr du in ihren Veedeln verkaufst: erst Warnung, dann Drohung, dann Überfälle.
@@ -9,7 +10,8 @@
 // Handy-Nachricht, die Antworten lösen die Befehle aus.
 //
 // Öffentliche API:
-//   getGangs(state), getGang(state, id), getGangStatus(state, id), gangVeedel(state, id), veedelGang(state, veedelId),
+//   getGangs(state, cityId?), getGang(state, id), gangCity(state, id), getGangStatus(state, id), gangVeedel(state, id),
+//   veedelGang(state, veedelId),
 //   gangPower(state, id),
 //   playerPower(state), isGangBroken, hasCeasefire, paysTribute, isAllied, isAtPeace, ceasefireCost,
 //   tributeAmount, protectionAmount, gangContact(gang), STAGE_NAMES, GANG_SPOT_MIN_INFLUENCE, ALLIANCE_COST, WARN_AT
@@ -51,6 +53,7 @@ export {
   type GangStatus,
   type GangsState,
   type GangTribute,
+  gangCity,
   gangContact,
   gangPower,
   gangVeedel,
@@ -110,7 +113,7 @@ declare module '../../core' {
 
 export default defineModule({
   id: 'gangs',
-  version: 2,
+  version: 3,
   dependsOn: ['veedel'],
   init: () => initialGangsState(),
   tickEvery: 60,
@@ -137,5 +140,7 @@ export default defineModule({
   migrations: {
     // Version 1 (Fundament) hatte keinen Zustand.
     2: (): GangsState => initialGangsState(),
+    // Version 3 (Auftrag 30): Die Hamburger Gangs kommen dazu, wie bei einem neuen Spiel.
+    3: (old: GangsState): GangsState => ({ ...old, gangs: { ...initialGangsState().gangs, ...old.gangs } }),
   },
 });

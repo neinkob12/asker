@@ -23,12 +23,13 @@
 //   'customer.regularGained', 'customer.regularLost', 'order.received', 'order.accepted', 'order.finished'
 
 import { type CommandResult, type Ctx, defineModule, type GameState, journal } from '../../core';
+import { cityOfSpot } from '../city';
 import { getStock } from '../goods';
 import { getSpot, getSpots, isSpotActive } from '../spots';
 import { CUSTOMER_TYPES } from './config';
 import { customerType } from './decisions';
 import { acceptOrder, courierGone, declineOrder, expireOrderMessage, onDealResolved, ordersTick } from './orders';
-import { demandRate, initialSpawn, isPlayerAway, serve, streetTick } from './street';
+import { demandRate, initialSpawn, isPlayerAway, onCitySwitched, serve, streetTick } from './street';
 
 export { CUSTOMER_PATIENCE } from './config';
 export {
@@ -278,7 +279,7 @@ export function getCustomer(state: GameState, id: number): Customer | undefined 
 /** Reicht die Ware für diesen Kunden? */
 export function canServe(state: GameState, customerId: number): boolean {
   const c = getCustomer(state, customerId);
-  return !!c && getStock(state, { productId: c.productId }) >= c.amount;
+  return !!c && getStock(state, { productId: c.productId, cityId: cityOfSpot(state, c.spotId) }) >= c.amount;
 }
 
 export function customerRevenue(customer: Pick<Customer, 'amount' | 'pricePerUnit'>): number {
@@ -417,6 +418,7 @@ export default defineModule({
     'message.expired': (ctx, { messageId, source }) => {
       if (source === 'customers') expireOrderMessage(ctx, messageId);
     },
+    'city.switched': (ctx, { from, to }) => onCitySwitched(ctx, from, to),
     'staff.statusChanged': (ctx, { staffId, to }) => {
       if (to !== 'active') courierGone(ctx, staffId, true);
     },

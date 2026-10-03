@@ -184,7 +184,10 @@ function upgradeMember(m: StaffMemberV1, state: GameState): StaffMemberV3 {
   };
 }
 
-type StaffMemberV3 = Omit<StaffMember, 'jailSupport'>;
+/** Person bis Version 5 (ohne Stadt). */
+type StaffMemberV5 = Omit<StaffMember, 'cityId'>;
+type StaffStateV5 = Omit<StaffState, 'members' | 'former'> & { members: StaffMemberV5[]; former: StaffMemberV5[] };
+type StaffMemberV3 = Omit<StaffMemberV5, 'jailSupport'>;
 type StaffStateV3 = Omit<StaffState, 'members' | 'former'> & { members: StaffMemberV3[]; former: StaffMemberV3[] };
 type StaffStateV2 = Omit<StaffStateV3, 'hiding'> & { warnings: Record<string, number> };
 
@@ -204,7 +207,7 @@ export function migrateStaffV2(old: StaffStateV2): StaffStateV3 {
 }
 
 /** Version 3 → 4: Stillhaltegeld in Haft (Standard: ja; gezahlt wird jetzt nur noch ein Anteil vom Lohn). */
-export function migrateStaffV3(old: StaffStateV3): StaffState {
+export function migrateStaffV3(old: StaffStateV3): StaffStateV5 {
   return {
     ...old,
     members: old.members.map((m) => ({ ...m, jailSupport: true })),
@@ -216,8 +219,8 @@ export function migrateStaffV3(old: StaffStateV3): StaffState {
  * Version 4 → 5 (Auftrag 28): Kuriere fallen als Rolle weg, nur die Rechte Hand fährt Aufträge aus. Bestehende
  * Kuriere werden Läufer ohne Einsatz; wer gerade eine Lieferung fährt, fährt sie noch zu Ende.
  */
-export function migrateStaffV4(old: StaffState, state: GameState): StaffState {
-  const convert = (m: StaffMember): StaffMember => {
+export function migrateStaffV4(old: StaffStateV5, state: GameState): StaffStateV5 {
+  const convert = (m: StaffMemberV5): StaffMemberV5 => {
     if (m.role !== 'courier') return m;
     const onDelivery = m.assignment?.kind === 'delivery';
     return {
@@ -318,7 +321,7 @@ function lieLowCommand(ctx: Ctx, veedelId: string, until: number, actor: string)
 
 export default defineModule({
   id: 'staff',
-  version: 5,
+  version: 6,
   dependsOn: ['spots', 'customers'],
   init: () => ({ members: [], former: [], hiding: {} }),
   tick,
@@ -361,5 +364,15 @@ export default defineModule({
       }
     },
   },
-  migrations: { 2: migrateStaffV1, 3: migrateStaffV2, 4: migrateStaffV3, 5: migrateStaffV4 },
+  migrations: {
+    2: migrateStaffV1,
+    3: migrateStaffV2,
+    4: migrateStaffV3,
+    5: migrateStaffV4,
+    // Version 6 (Auftrag 30): Jede Person ist in einer Stadt; bis dahin waren alle in Köln.
+    6: (old: StaffStateV5): StaffState => {
+      const inKoeln = (m: StaffMemberV5): StaffMember => ({ ...m, cityId: 'koeln' });
+      return { ...old, members: old.members.map(inKoeln), former: old.former.map(inKoeln) };
+    },
+  },
 });

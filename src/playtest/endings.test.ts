@@ -78,13 +78,13 @@ describe('Spielende', () => {
     const events = recordEvents(sim);
     const ctx = sim.ctx('test');
     const { needed, majority } = campaignProgress(sim.state);
-    expect(needed).toBe(allVeedel().length);
+    expect(needed).toBe(allVeedel('koeln').length);
     // Die Mehrheit ist nur ein Meilenstein.
-    for (const v of allVeedel().slice(0, majority)) addInfluence(ctx, v.id, PLAYER_FACTION, 100);
+    for (const v of allVeedel('koeln').slice(0, majority)) addInfluence(ctx, v.id, PLAYER_FACTION, 100);
     sim.step();
     expect(eventsOfType(events, 'campaign.milestone')).toHaveLength(1);
     expect(eventsOfType(events, 'campaign.won')).toHaveLength(0);
-    for (const v of allVeedel().slice(majority)) addInfluence(ctx, v.id, PLAYER_FACTION, 100);
+    for (const v of allVeedel('koeln').slice(majority)) addInfluence(ctx, v.id, PLAYER_FACTION, 100);
     sim.step();
     expect(controlledBy(sim.state, PLAYER_FACTION)).toHaveLength(needed);
     expect(eventsOfType(events, 'campaign.won')).toHaveLength(1);

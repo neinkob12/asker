@@ -1,16 +1,46 @@
 // Oberfläche der Städte (Auftrag 30). Bis zur Übergabe: eine Glas-Karte unter Geld und Heat (wie die Quest-Karte),
-// solange Hamburg wartet: was noch fehlt, und ein Tipp öffnet Fietes Chat. Dazu im Dev-Build Abkürzungen zum
-// Ausprobieren unter window.koeln.dev (Köln komplett, Rechte Hand bereit).
+// solange Hamburg wartet: was noch fehlt, und ein Tipp öffnet Fietes Chat. Ab zwei freien Städten: der Stadt-Chip
+// oben rechts (Köln ▾) mit Köln, Hamburg und Deutschland; die Kamera folgt der aktiven Stadt (registerCityViews), in
+// der Deutschland-Ansicht stehen die Städte als Glas-Karten auf der Karte (map.ts). Dazu im Dev-Build Abkürzungen
+// zum Ausprobieren unter window.koeln.dev (Köln komplett, Rechte Hand bereit, Hamburg frei).
 
-import type { Simulation } from '../../../core';
-import { Icon, IconChip, registerHudItem, useGame, useUi } from '../../../ui';
+import { useEffect } from 'preact/hooks';
+import { formatEuro, type Simulation } from '../../../core';
+import { registerMapLayer } from '../../../map';
+import { HudPill, Icon, IconChip, registerCityViews, registerHudItem, registerSlot, useGame, useUi } from '../../../ui';
+import { cityReport } from '../../finance';
 import { getRightHand, hasFullPower, lieutenantOfSpot, RIGHT_HAND_RANK_XP } from '../../hierarchy';
 import { getSpots } from '../../spots';
 import { enlist, generateProfile } from '../../staff';
-import { addInfluence, factions, PLAYER_FACTION } from '../../territory';
+import { addInfluence, campaignProgress, factions, PLAYER_FACTION } from '../../territory';
 import { allVeedel } from '../../veedel';
-import { HARBOR_CALLER, hamburgMissing, type OfferStatus, offerStatus } from '../index';
+import {
+  activeCity,
+  CITIES,
+  citiesUnlocked,
+  cityName,
+  DEUTSCHLAND_VIEW,
+  HARBOR_CALLER,
+  hamburgMissing,
+  type OfferStatus,
+  offerStatus,
+} from '../index';
+import { citiesLayer } from './map';
 import './city.css';
+
+registerCityViews({
+  cameras: CITIES.filter((c) => !c.template).map((c) => ({
+    id: c.id,
+    name: c.name,
+    center: c.view.center,
+    zoom: c.view.zoom,
+    mobileZoom: c.view.mobileZoom,
+  })),
+  deutschland: DEUTSCHLAND_VIEW,
+  active: (state) => activeCity(state),
+});
+
+registerMapLayer(citiesLayer);
 
 const WAITING: Partial<Record<OfferStatus, string>> = {
   house: 'Hamburg wartet: erst das Haus in Ordnung bringen',
@@ -64,6 +94,74 @@ function HamburgWaits() {
 
 registerHudItem({ id: 'city.hamburgWaits', order: 45, placement: 'below', icon: 'anchor', component: HamburgWaits });
 
+/**
+ * Stadt-Chip ("Köln ▾"), nur ab zwei freien Städten: wechselt die Stadt (sie wird live, die andere schläft) oder
+ * zeigt Deutschland.
+ */
+function CityChip() {
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const unlocked = citiesUnlocked(state);
+  if (unlocked.length < 2) return null;
+  const active = activeCity(state);
+  return (
+    <HudPill
+      icon="building"
+      color="place"
+      label="Stadt"
+      value={`${cityName(active)} ▾`}
+      title="Stadt wechseln"
+      details={
+        <div class="city-menu">
+          {unlocked.map((id) => {
+            const progress = campaignProgress(state, id);
+            const today = cityReport(state, id, 1).profit;
+            return (
+              <button
+                key={id}
+                type="button"
+                class={`city-menu__item ${id === active ? 'is-active' : ''}`}
+                aria-pressed={id === active}
+                onClick={() => dispatch({ type: 'city.switch', payload: { cityId: id } })}
+              >
+                <Icon name={id === active ? 'check' : 'building'} />
+                <span class="city-menu__name">{cityName(id)}</span>
+                <span class="city-menu__meta">
+                  {progress.controlled}/{progress.total}
+                </span>
+                <span class="city-menu__meta">
+                  {today >= 0 ? '+' : ''}
+                  {formatEuro(today)}
+                </span>
+              </button>
+            );
+          })}
+          <button type="button" class="city-menu__item" onClick={() => ui.flyToDeutschland()}>
+            <Icon name="map" />
+            <span class="city-menu__name">Deutschland</span>
+          </button>
+        </div>
+      }
+    />
+  );
+}
+
+registerHudItem({ id: 'city.chip', order: 5, placement: 'more', icon: 'building', component: CityChip });
+
+/** Die Kamera folgt der aktiven Stadt: nach dem Laden eines Spielstands und beim Umschalten. */
+function CitySync() {
+  const { state } = useGame();
+  const ui = useUi();
+  const active = activeCity(state);
+  const runId = state.meta.runId;
+  useEffect(() => {
+    if (ui.mapView() !== `city:${active}`) ui.flyToCity(active);
+  }, [active, runId]);
+  return null;
+}
+
+registerSlot('map.overlay', { id: 'city.sync', order: 1, component: CitySync });
+
 // ---------------------------------------------------------------------------------------------
 // Nur im Dev-Build: Abkürzungen zum Ausprobieren (z.B. in der Konsole window.koeln.dev.koelnKomplett()).
 
@@ -78,7 +176,7 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
     koelnKomplett: () => {
       const s = sim();
       const ctx = s.ctx('dev');
-      for (const v of allVeedel()) {
+      for (const v of allVeedel('koeln')) {
         for (const f of factions(s.state)) if (f !== PLAYER_FACTION) addInfluence(ctx, v.id, f, -100);
         addInfluence(ctx, v.id, PLAYER_FACTION, 100);
       }
@@ -110,6 +208,11 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
           settings: { orders: true, pickup: true, restock: true, staffing: true, wholesale: true, laundering: true },
         },
       });
+    },
+    /** Hamburg frei (ohne Übergabe), z.B. um die Stadt anzuschauen. */
+    hamburgFrei: () => {
+      const s = sim();
+      s.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
     },
   };
   // window.koeln setzt start.tsx erst nach dem Laden der Module; bis dahin wartet die Abkürzung hier.

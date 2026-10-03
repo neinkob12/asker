@@ -12,6 +12,7 @@ import {
   type MoneyCategory,
   wallet,
 } from '../../core';
+import { activeCity } from '../city';
 import { allProducts, DEFAULT_PRODUCT, getProduct, getStock, getWarehouses, store, take } from '../goods';
 import { addHeat } from '../police';
 import { changeReputation } from '../reputation';
@@ -619,7 +620,8 @@ export function expireDecisions(ctx: Ctx): void {
 function loseGoods(ctx: Ctx, amount: number): number {
   let left = Math.max(0, Math.round(amount));
   let lost = 0;
-  for (const warehouse of getWarehouses(ctx.state)) {
+  // Was bei einer Konfrontation verloren geht, liegt in der Stadt, in der sie spielt (die aktive).
+  for (const warehouse of getWarehouses(ctx.state, activeCity(ctx.state))) {
     for (const product of allProducts()) {
       if (left <= 0) return lost;
       const { taken } = take(ctx, { productId: product.id, amount: left, warehouseId: warehouse.id, partial: true });

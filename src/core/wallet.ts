@@ -2,7 +2,7 @@
 // Alles Illegale wird mit Schwarzgeld bezahlt, für Legales braucht man gewaschenes (sauberes) Geld.
 // Jede Kontobewegung bekommt eine Kategorie (MoneyCategory), damit die Kasse (Modul finance) eine Gewinn- und
 // Verlustrechnung führen kann: wallet.pay(ctx, 80, 'dirty', 'Lohn Murat K.', 'wages.runner').
-// Statt der Kategorie geht auch ein Etikett mit Bezug ({ category, staffId?, spotId? }), z.B. für Löhne pro Spot.
+// Statt der Kategorie geht auch ein Etikett mit Bezug ({ category, staffId?, spotId?, cityId? }), z.B. für Löhne pro Spot.
 
 import type { Ctx, GameState } from './types';
 
@@ -96,6 +96,11 @@ export interface MoneyTag {
   category: MoneyCategory;
   staffId?: string;
   spotId?: string;
+  /**
+   * Stadt, zu der die Buchung gehört (Auftrag 30). Fehlt sie, leitet die Kasse sie aus spotId oder staffId ab, sonst
+   * zählt die aktive Stadt.
+   */
+  cityId?: string;
 }
 
 declare module './types' {
@@ -112,6 +117,7 @@ declare module './types' {
       category?: MoneyCategory;
       staffId?: string;
       spotId?: string;
+      cityId?: string;
     };
   }
 }
@@ -138,6 +144,7 @@ function change(ctx: Ctx, kind: MoneyKind, amount: number, reason: string, tag?:
     ...(t ? { category: t.category } : {}),
     ...(t?.staffId ? { staffId: t.staffId } : {}),
     ...(t?.spotId ? { spotId: t.spotId } : {}),
+    ...(t?.cityId ? { cityId: t.cityId } : {}),
   });
 }
 

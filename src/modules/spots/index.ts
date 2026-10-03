@@ -3,8 +3,12 @@
 // per Klick auf die Karte (Kosten, Veedel über veedelAt). Jedes Veedel hat mindestens zwei vorgegebene Spots,
 // mindestens einer davon zum Freischalten, damit jedes Veedel übernehmbar ist (Auftrag 28).
 //
+// Seit Auftrag 30 gibt es Spots in Köln und Hamburg; die Stadt ergibt sich aus dem Veedel (spotCity). Hamburg hat
+// keine offenen Spots (dort fängst du ohne an), freischalten kostet dort das 1,5-Fache (in der Tabelle eingerechnet).
+//
 // Öffentliche API:
-//   getSpots(state)       Spots, an denen gerade verkauft werden kann (offen + eigene)
+//   getSpots(state, cityId?)  Spots, an denen gerade verkauft werden kann (offen + eigene), mit Stadt nur die dort
+//   spotCity(spot)            Stadt eines Spots
 //   getAllSpots(state)    auch die noch gesperrten
 //   getSpot(state, id)    sucht in allen Spots (auch gesperrten), isSpotActive(state, id)
 //   spotsInVeedel(state, veedelId), lockedSpots(state), customSpots(state), canFoundSpotAt(state, lng, lat)
@@ -22,7 +26,8 @@ import {
   journal,
   wallet,
 } from '../../core';
-import { getVeedel, veedelAt, veedelName } from '../veedel';
+import { isCityUnlocked } from '../city';
+import { getVeedel, veedelAt, veedelCity, veedelName } from '../veedel';
 import {
   CUSTOM_SPOT_DEMAND,
   FOUND_SPOT_COST,
@@ -109,11 +114,34 @@ interface ActiveCache {
   custom: readonly Spot[];
   customCount: number;
   spots: readonly Spot[];
+  /** Dieselbe Liste pro Stadt. */
+  byCity: Map<string, readonly Spot[]>;
 }
 const activeCache = new WeakMap<SpotsState, ActiveCache>();
 
-/** Alle Spots, an denen gerade verkauft werden kann (freigeschaltet oder selbst gegründet). */
-export function getSpots(state: GameState): readonly Spot[] {
+/** Stadt eines Spots (über sein Veedel). */
+export function spotCity(spot: Pick<Spot, 'veedelId'>): string {
+  return veedelCity(spot.veedelId);
+}
+
+/**
+ * Alle Spots, an denen gerade verkauft werden kann (freigeschaltet oder selbst gegründet); mit Stadt nur die in dieser
+ * Stadt.
+ */
+export function getSpots(state: GameState, cityId?: string): readonly Spot[] {
+  const all = activeSpots(state);
+  if (cityId === undefined) return all;
+  const cached = activeCache.get(state.modules.spots);
+  if (!cached) return all.filter((s) => spotCity(s) === cityId);
+  let list = cached.byCity.get(cityId);
+  if (!list) {
+    list = Object.freeze(all.filter((s) => spotCity(s) === cityId));
+    cached.byCity.set(cityId, list);
+  }
+  return list;
+}
+
+function activeSpots(state: GameState): readonly Spot[] {
   const s = state.modules.spots;
   const cached = activeCache.get(s);
   if (
@@ -133,6 +161,7 @@ export function getSpots(state: GameState): readonly Spot[] {
     custom: s.custom,
     customCount: s.custom.length,
     spots,
+    byCity: new Map(),
   });
   return spots;
 }
@@ -180,7 +209,8 @@ export function canFoundSpotAt(
     return { ok: false, reason: `Mehr als ${MAX_CUSTOM_SPOTS} eigene Spots kannst du nicht halten.` };
   }
   const veedel = veedelAt(lng, lat);
-  if (!veedel) return { ok: false, reason: 'Da ist kein Veedel. Such dir eine Stelle in Köln.' };
+  if (!veedel) return { ok: false, reason: 'Da ist kein Veedel. Such dir eine Stelle in einem Veedel im Spiel.' };
+  if (!isCityUnlocked(state, veedel.cityId)) return { ok: false, reason: 'In dieser Stadt bist du noch nicht.' };
   const tooClose = getAllSpots(state).find((s) => distanceMeters(s, { lng, lat }) < MIN_SPOT_DISTANCE);
   if (tooClose) return { ok: false, reason: `Zu nah am ${tooClose.name}.` };
   return { ok: true, veedelId: veedel.id };
@@ -189,6 +219,7 @@ export function canFoundSpotAt(
 function unlock(ctx: Ctx, spotId: string): CommandResult {
   const spot = presetSpots().find((s) => s.id === spotId);
   if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
+  if (!isCityUnlocked(ctx.state, spotCity(spot))) return { ok: false, reason: 'In dieser Stadt bist du noch nicht.' };
   const state = ctx.state.modules.spots;
   if (state.unlocked.includes(spotId)) return { ok: false, reason: 'Der Spot ist schon offen.' };
   const cost = spot.unlockCost ?? 0;

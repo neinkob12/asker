@@ -24,6 +24,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity, cityName } from '../../city';
 import { getHeat, heatLevel } from '../../police';
 import { allVeedel, veedelName } from '../../veedel';
 import {
@@ -46,13 +47,13 @@ import './takeover';
 import './territory.css';
 import { getMapView, MAP_VIEW_OPTIONS, onMapViewChange, setMapView, type VeedelMapView } from './view';
 
-/** Ein Satz zum Kampagnenziel: Meilenstein bei der Mehrheit, Ziel sind alle Veedel. */
-export function campaignHint(progress: CampaignProgress): string {
+/** Ein Satz zum Kampagnenziel einer Stadt: Meilenstein bei der Mehrheit, Ziel sind alle Veedel. */
+export function campaignHint(progress: CampaignProgress, city = 'Köln'): string {
   const { controlled, total, majority } = progress;
-  if (progress.complete) return `Köln gehört dir ganz. Du hältst ${controlled} von ${total} Veedeln.`;
+  if (progress.complete) return `${city} gehört dir ganz. Du hältst ${controlled} von ${total} Veedeln.`;
   if (progress.majorityReached)
-    return `Boss von Köln: ${controlled} von ${total} Veedeln. Für Köln komplett brauchst du alle ${total}.`;
-  return `Du kontrollierst ${controlled} von ${total} Veedeln. Ab ${majority} bist du Boss von Köln, mit allen ${total} gehört dir die Stadt.`;
+    return `Boss von ${city}: ${controlled} von ${total} Veedeln. Für ${city} komplett brauchst du alle ${total}.`;
+  return `Du kontrollierst ${controlled} von ${total} Veedeln. Ab ${majority} bist du Boss von ${city}, mit allen ${total} gehört dir die Stadt.`;
 }
 
 function FactionName(props: { state: GameState; faction: FactionId | null }) {
@@ -125,12 +126,14 @@ function TerritoryTab() {
   const { state } = useGame();
   const ui = useUi();
   const view = useMapView();
-  const progress = campaignProgress(state);
+  const cityId = activeCity(state);
+  const city = cityName(cityId);
+  const progress = campaignProgress(state, cityId);
   return (
     <>
-      <Card title={progress.complete ? 'Köln komplett' : 'Köln übernehmen'}>
+      <Card title={progress.complete ? `${city} komplett` : `${city} übernehmen`}>
         <ProgressBar value={progress.controlled / progress.total} label="Kampagnenfortschritt" />
-        <Hint>{campaignHint(progress)}</Hint>
+        <Hint>{campaignHint(progress, city)}</Hint>
       </Card>
       <Card
         title="Veedel"
@@ -139,7 +142,7 @@ function TerritoryTab() {
         }
       >
         <List>
-          {allVeedel().map((v) => {
+          {allVeedel(activeCity(state)).map((v) => {
             const heat = getHeat(state, v.id);
             const mine = getInfluence(state, v.id, PLAYER_FACTION);
             return (
@@ -239,7 +242,7 @@ registerGameStat({
 onGameEvent('campaign.milestone', 'territory.milestone', (payload, ui) => {
   if (payload.kind !== 'majority') return;
   ui.toast(
-    `Boss von Köln: ${payload.controlled} von ${payload.total} Veedeln gehören dir. Jetzt den Rest der Stadt.`,
+    `Boss von ${cityName(payload.cityId)}: ${payload.controlled} von ${payload.total} Veedeln gehören dir. Jetzt den Rest der Stadt.`,
     'good',
     { urgent: true },
   );

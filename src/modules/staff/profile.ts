@@ -2,6 +2,7 @@
 // Nutzt nur den Zufall des übergebenen Kontexts, damit alles deterministisch bleibt.
 
 import type { Ctx } from '../../core';
+import { activeCity, getCity } from '../city';
 import {
   BACKGROUNDS,
   FIRST_NAMES,
@@ -80,7 +81,9 @@ export function generateProfile(ctx: Ctx, role: StaffRole, options: GenerateOpti
       stats[key as StatKey] = clampStat(stats[key as StatKey] + (gain ?? 0));
     }
   }
-  const wage = roundTo5(expectedWageFor(role, level) * (0.9 + ctx.random() * 0.3));
+  // Lohnniveau der Stadt, in der angeheuert wird (Auftrag 30: Hamburg × 1,25).
+  const city = getCity(activeCity(ctx.state))?.wageFactor ?? 1;
+  const wage = roundTo5(expectedWageFor(role, level) * city * (0.9 + ctx.random() * 0.3));
   return {
     name: randomName(ctx),
     role,

@@ -1,19 +1,37 @@
-// Veedel: die Kölner Stadtteile mit echten Grenzen, Eigenschaften und Nachbarschaft.
-// Statische Daten, kein eigener Spielzustand. Grenzen: Offene Daten Köln, Datenlizenz Deutschland – Zero – 2.0
-// (Details in boundaries.ts und tools/build-boundaries.mjs).
+// Veedel: die Stadtteile der Städte im Spiel (Köln, seit Auftrag 30 auch Hamburg) mit echten Grenzen, Eigenschaften
+// und Nachbarschaft. Statische Daten, kein eigener Spielzustand. Grenzen: Köln aus den Offenen Daten Köln (Datenlizenz
+// Deutschland – Zero – 2.0), Hamburg aus Overture Maps / OpenStreetMap (ODbL), Details in boundaries*.ts und tools/.
 //
 // Öffentliche API:
-//   allVeedel(), getVeedel(id), veedelName(id), veedelAt(lng, lat), neighborsOf(id), sharesBorder(a, b),
-//   getBoundary(id), veedelLinks()
+//   allVeedel(cityId?) (ohne Stadt: alle Städte), getVeedel(id), veedelName(id), veedelCity(id), veedelAt(lng, lat),
+//   neighborsOf(id), sharesBorder(a, b), getBoundary(id), veedelLinks(), nightlifeOf(id)
 
 import { defineModule } from '../../core';
-import { BOUNDARY_COORDINATES, SHARED_BORDERS } from './boundaries';
-import { LINKS, VEEDEL, type Veedel } from './data';
+import { SHARED_BORDERS as KOELN_BORDERS, BOUNDARY_COORDINATES as KOELN_BOUNDARIES } from './boundaries';
+import { SHARED_BORDERS as HAMBURG_BORDERS, BOUNDARY_COORDINATES as HAMBURG_BOUNDARIES } from './boundaries-hamburg';
+import { LINKS as KOELN_LINKS, VEEDEL as KOELN_VEEDEL, type Veedel } from './data';
+import { LINKS_HAMBURG, VEEDEL_HAMBURG } from './data-hamburg';
 
 export type { Veedel } from './data';
 
 /** Punkt als [lng, lat], wie in GeoJSON. */
 export type LngLatTuple = readonly [number, number];
+
+/** Alle Veedel aller Städte, Köln zuerst. */
+const VEEDEL: readonly Veedel[] = [...KOELN_VEEDEL, ...VEEDEL_HAMBURG];
+const BOUNDARY_COORDINATES: Record<string, readonly number[]> = { ...KOELN_BOUNDARIES, ...HAMBURG_BOUNDARIES };
+const SHARED_BORDERS: Record<string, readonly string[]> = { ...KOELN_BORDERS, ...HAMBURG_BORDERS };
+const LINKS: readonly { a: string; b: string; via: string }[] = [
+  ...KOELN_LINKS,
+  ...LINKS_HAMBURG.map((l) => ({ a: l.a, b: l.b, via: l.why })),
+];
+const BY_ID = new Map(VEEDEL.map((v) => [v.id, v]));
+const BY_CITY = new Map<string, Veedel[]>();
+for (const v of VEEDEL) {
+  const list = BY_CITY.get(v.cityId) ?? [];
+  list.push(v);
+  BY_CITY.set(v.cityId, list);
+}
 
 interface Shape {
   ring: LngLatTuple[];
@@ -44,12 +62,24 @@ for (const { a, b } of LINKS) {
 }
 for (const list of Object.values(NEIGHBORS)) list.sort();
 
-export function allVeedel(): readonly Veedel[] {
-  return VEEDEL;
+/** Veedel einer Stadt, ohne Stadt alle Veedel aller Städte (Köln zuerst). */
+export function allVeedel(cityId?: string): readonly Veedel[] {
+  if (cityId === undefined) return VEEDEL;
+  return BY_CITY.get(cityId) ?? [];
+}
+
+/** Stadt eines Veedels ('koeln' für unbekannte IDs, so verhalten sich alte Daten wie bisher). */
+export function veedelCity(id: string): string {
+  return BY_ID.get(id)?.cityId ?? 'koeln';
+}
+
+/** Nachtleben eines Veedels (1 = normal). */
+export function nightlifeOf(id: string): number {
+  return BY_ID.get(id)?.nightlife ?? 1;
 }
 
 export function getVeedel(id: string): Veedel | undefined {
-  return VEEDEL.find((v) => v.id === id);
+  return BY_ID.get(id);
 }
 
 export function veedelName(id: string): string {

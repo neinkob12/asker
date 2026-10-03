@@ -21,6 +21,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity } from '../../city';
 import { getSalesStats, isPlayerAway, playerSpot, waitingAt } from '../../customers';
 import { formatProductAmount } from '../../goods';
 import { activeRunnerAt } from '../../staff';
@@ -34,6 +35,7 @@ import {
   isSpotActive,
   lockedSpots,
   MAX_CUSTOM_SPOTS,
+  spotCity,
 } from '../index';
 import { recordSaleGlow, recordSpotRaid, spotsLayer } from './map';
 import './spots.css';
@@ -113,8 +115,8 @@ function SpotPanel(props: { spotId: string }) {
 function SpotsSection() {
   const { state, dispatch } = useGame();
   const ui = useUi();
-  const spots = getSpots(state);
-  const locked = lockedSpots(state);
+  const spots = getSpots(state, activeCity(state));
+  const locked = lockedSpots(state).filter((s) => spotCity(s) === activeCity(state));
   const canFound = customSpots(state).length < MAX_CUSTOM_SPOTS;
   const waiting = spots.reduce((sum, s) => sum + waitingAt(state, s.id).length, 0);
   const mine = playerSpot(state);

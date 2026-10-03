@@ -1,6 +1,7 @@
 // Lese- und Schreib-API des Personals. Lesen mit state, schreiben mit ctx.
 
 import { type Contact, type Ctx, type GameState, journal, type MoneyCategory } from '../../core';
+import { activeCity, getCity, isCityLive } from '../city';
 import { getWarehouse } from '../goods';
 import { getSpot, isSpotActive } from '../spots';
 import { veedelAt, veedelName } from '../veedel';
@@ -53,6 +54,7 @@ export function getStaff(state: GameState, filter: StaffFilter = {}): StaffMembe
     if (filter.status && m.status !== filter.status) return false;
     if (filter.spotId && !(m.assignment?.kind === 'spot' && m.assignment.targetId === filter.spotId)) return false;
     if (filter.veedelId && staffVeedel(state, m) !== filter.veedelId) return false;
+    if (filter.cityId && (m.cityId ?? 'koeln') !== filter.cityId) return false;
     return true;
   });
 }
@@ -104,8 +106,12 @@ export function securityAt(state: GameState, target: { spotId?: string; warehous
 }
 
 /** Freier, aktiver Mitarbeiter ohne Einsatz, z.B. ein Fahrer für die Logistik. */
-export function findAvailable(state: GameState, filter: { role: StaffRole }): StaffMember | undefined {
-  return state.modules.staff.members.find((m) => m.role === filter.role && m.status === 'active' && !m.assignment);
+/** Freie Person dieser Rolle in der Stadt, die live ist (oder der angegebenen). */
+export function findAvailable(state: GameState, filter: { role: StaffRole; cityId?: string }): StaffMember | undefined {
+  const city = filter.cityId ?? activeCity(state);
+  return state.modules.staff.members.find(
+    (m) => m.role === filter.role && m.status === 'active' && !m.assignment && (m.cityId ?? 'koeln') === city,
+  );
 }
 
 /** Wohin die Person nach dem Abtauchen zurückgeht (null, wenn sie nicht abgetaucht ist). */
@@ -128,10 +134,13 @@ function reservedForReturn(state: GameState): Set<string> {
  * Freie Leute einer Rolle für Spots (aktiv, ohne Einsatz, nicht fürs Zurückkehren nach dem Abtauchen vorgemerkt), die
  * besten zuerst. Eine Stelle für alle, die jemanden hinstellen: Spieler, Leutnants, Rechte Hand, Ersatz bei Ausfall.
  */
+/** Freie Leute dieser Rolle in der Stadt, die live ist (die besten zuerst). */
 export function freeStaff(state: GameState, role: StaffRole): StaffMember[] {
   const reserved = reservedForReturn(state);
+  const city = activeCity(state);
   return state.modules.staff.members
     .filter((m) => m.role === role && m.status === 'active' && !m.assignment && !reserved.has(m.id))
+    .filter((m) => (m.cityId ?? 'koeln') === city)
     .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id));
 }
 
@@ -168,7 +177,17 @@ export function isStatKnown(member: StaffMember, stat: StatKey): boolean {
 /** Lohn, den die Person erwartet (Typ, Level, Anspruch). */
 export function expectedWage(state: GameState, id: string): number {
   const m = getStaffMember(state, id);
-  return m ? expectedWageFor(m.role, m.level, m.demand) : 0;
+  return m ? Math.round(expectedWageFor(m.role, m.level, m.demand) * cityWageFactor(m.cityId)) : 0;
+}
+
+/** Lohnniveau der Stadt (Auftrag 30, CITIES.wageFactor; Köln 1). */
+export function cityWageFactor(cityId: string | undefined): number {
+  return getCity(cityId ?? 'koeln')?.wageFactor ?? 1;
+}
+
+/** Ist die Person in der Stadt, die gerade live ist? (Schlafende Städte: keine Einzel-Löhne, keine Ereignisse.) */
+export function isMemberLive(state: GameState, member: StaffMember): boolean {
+  return isCityLive(state, member.cityId ?? 'koeln');
 }
 
 /** Kategorie des Lohns in der Kasse: nach Rolle, Leutnants und Rechte Hand extra. */
@@ -199,7 +218,7 @@ export function effectiveWage(member: StaffMember): number {
 
 /** Was um Mitternacht an Löhnen fällig wird (Summe über alle aktuellen Mitarbeiter, Haft und Verletzung anteilig). */
 export function payrollDue(state: GameState): number {
-  return state.modules.staff.members.reduce((sum, m) => sum + effectiveWage(m), 0);
+  return state.modules.staff.members.reduce((sum, m) => sum + (isMemberLive(state, m) ? effectiveWage(m) : 0), 0);
 }
 
 /**
@@ -323,6 +342,8 @@ export interface EnlistOptions {
   assignment?: StaffAssignment | null;
   /** Journal-Text statt des Standardtexts, '' = kein Eintrag. */
   journalText?: string;
+  /** Stadt, in der die Person anfängt. Standard: die aktive Stadt. */
+  cityId?: string;
 }
 
 /** Jemanden einstellen (z.B. einen Bewerber aus recruiting). Meldet 'staff.hired'. */
@@ -353,6 +374,7 @@ export function enlist(ctx: Ctx, profile: RecruitProfile, options: EnlistOptions
     leftAt: null,
     leftReason: null,
     jailSupport: true,
+    cityId: options.cityId ?? activeCity(ctx.state),
   };
   ctx.state.modules.staff.members.push(member);
   addCareer(ctx, member.id, options.note ? `Eingestellt. ${options.note}` : 'Eingestellt.');

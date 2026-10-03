@@ -13,7 +13,7 @@ import {
 } from './config';
 import type { Gang } from './data';
 import { ceasefireCost, type GangStatus, gangContact, hasCeasefire, paysTribute, tributeAmount } from './state';
-import { GANG_TEXTS } from './texts';
+import { GANG_TEXTS, GANG_VOICES } from './texts';
 
 export function statusOf(ctx: Ctx, gangId: string): GangStatus | undefined {
   return ctx.state.modules.gangs.gangs[gangId];
@@ -106,7 +106,8 @@ export function say(
   /** Antwortfrist der Nachricht; bei Angeboten die des Angebots (sonst gilt "Deal" in der Nachricht länger als das Angebot). */
   expiresIn = MESSAGE_EXPIRY,
 ): number {
-  const text = fill(ctx.pick(GANG_TEXTS[key]), { boss: gang.boss, gang: gang.name, ...vars });
+  const variants = GANG_VOICES[gang.id]?.[key] ?? GANG_TEXTS[key];
+  const text = fill(ctx.pick(variants), { boss: gang.boss, gang: gang.name, ...vars });
   return messages.send(ctx, {
     contact: gangContact(gang),
     text,

@@ -1,8 +1,10 @@
 // Befehle des Personals. Spieler und Leutnants schicken dieselben Befehle.
 
 import { type CommandMeta, type CommandResult, type Ctx, formatEuro, journal, wallet } from '../../core';
+import { activeCity, cityName } from '../city';
 import { getWarehouse } from '../goods';
 import { getSpot, isSpotActive } from '../spots';
+import { veedelCity } from '../veedel';
 import {
   DRIVER_HIRE_COST,
   LOYALTY,
@@ -21,6 +23,7 @@ import {
   assign,
   bailCost,
   bonusProvider,
+  cityWageFactor,
   enlist,
   expectedWage,
   freeStaff,
@@ -53,10 +56,12 @@ export function hireRunner(ctx: Ctx, spotId: string): CommandResult {
   if (!wallet.pay(ctx, cost, 'dirty', 'Läufer angeheuert', { category: 'hiring', spotId }))
     return { ok: false, reason: `Nicht genug Geld (${formatEuro(cost)}).` };
   const profile = generateProfile(ctx, 'runner');
-  // Von der Straße: Lohn wie im Prototyp, man weiß fast nichts über die Person.
-  profile.wage = RUNNER_DAILY_WAGE;
+  const cityId = veedelCity(spot.veedelId);
+  // Von der Straße: Lohn wie im Prototyp (mal dem Lohnniveau der Stadt), man weiß fast nichts über die Person.
+  profile.wage = Math.round(RUNNER_DAILY_WAGE * cityWageFactor(cityId));
   const member = enlist(ctx, profile, {
     origin: 'street',
+    cityId,
     knownStats: ['speed'],
     assignment: { kind: 'spot', targetId: spotId },
     note: `Von der Straße, am ${spot.name}.`,
@@ -71,7 +76,7 @@ export function hireDriver(ctx: Ctx): CommandResult {
     return { ok: false, reason: `Nicht genug Geld (${formatEuro(DRIVER_HIRE_COST)}).` };
   }
   const profile = generateProfile(ctx, 'driver');
-  profile.wage = ROLE_INFO.driver.wage;
+  profile.wage = Math.round(ROLE_INFO.driver.wage * cityWageFactor(activeCity(ctx.state)));
   const member = enlist(ctx, profile, {
     origin: 'street',
     knownStats: ['caution'],
@@ -197,6 +202,11 @@ export function assignCommand(ctx: Ctx, staffId: string, assignment: StaffAssign
     return { ok: true };
   }
   if (m.assignment?.kind === assignment.kind && m.assignment.targetId === assignment.targetId) return { ok: true };
+  // Eingesetzt wird nur, wo die Person gerade ist (Auftrag 30; nach Hamburg fährt sie erst, Etappe 5).
+  const place = placeVeedel(ctx.state, assignment);
+  if (place && veedelCity(place) !== (m.cityId ?? 'koeln')) {
+    return { ok: false, reason: `${m.name} ist in ${cityName(m.cityId ?? 'koeln')}.` };
+  }
   if (assignment.kind === 'spot') {
     if (!getSpot(ctx.state, assignment.targetId)) return { ok: false, reason: 'Unbekannter Spot.' };
     if (!isSpotActive(ctx.state, assignment.targetId)) {

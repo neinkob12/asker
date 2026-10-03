@@ -13,6 +13,7 @@ import {
   type DialogId,
   type DialogRegistry,
   dialogs,
+  getCityViews,
   type PanelId,
   type PanelRegistry,
   panels,
@@ -153,10 +154,26 @@ export interface UiState {
   call: { messageId: number } | null;
 }
 
+/** Kamera-Ziel einer Ansicht (Stadt oder Deutschland, Auftrag 30). */
+export interface MapCamera {
+  /** 'city:<id>', 'deutschland' oder 'europa'. */
+  view: string;
+  /** Beschriftung im Überwachungs-Overlay, z.B. "CAM 01 · HAMBURG". */
+  label: string;
+  center: LngLat;
+  zoom: number;
+  mobileZoom: number;
+  /** Schräge Kamera (3D) wie in der Stadt; sonst Draufsicht. */
+  tilt: boolean;
+}
+
 /** Schnittstelle der Karte für die UI (implementiert in src/map/GameMap.ts). */
 export interface MapController {
   flyToKoeln(): void;
   flyToEuropa(): void;
+  flyToCamera(camera: MapCamera): void;
+  /** Aktuelle Ansicht: 'city:<id>', 'deutschland' oder 'europa'. */
+  currentView(): string;
   flyTo(target: LngLat, zoom?: number): void;
   pickLocation(): Promise<LngLat | null>;
   cancelPick(): void;
@@ -224,6 +241,14 @@ export interface UiApi {
   flyTo(target: LngLat, zoom?: number): void;
   flyToKoeln(): void;
   flyToEuropa(): void;
+  /** Kamera auf eine Stadt (Auftrag 30, Kameras aus registerCityViews). */
+  flyToCity(cityId: string): void;
+  /** Zurück zur Stadt, die gerade aktiv ist. */
+  flyHome(): void;
+  /** Deutschland-Ansicht: alle Städte und die Autobahn dazwischen. */
+  flyToDeutschland(): void;
+  /** Aktuelle Ansicht der Karte ('city:<id>', 'deutschland', 'europa'). */
+  mapView(): string;
   setCameraMode(mode: CameraMode): void;
   /** Zwischen 3D schräg und 2D-Draufsicht wechseln. */
   toggleCamera(): void;
@@ -739,6 +764,40 @@ export class UiRuntime {
       flyTo: (target, zoom) => this.map?.flyTo(target, zoom),
       flyToKoeln: () => this.map?.flyToKoeln(),
       flyToEuropa: () => this.map?.flyToEuropa(),
+      flyToCity: (cityId) => {
+        const camera = getCityViews()?.cameras.find((c) => c.id === cityId);
+        if (!camera) {
+          this.map?.flyToKoeln();
+          return;
+        }
+        this.map?.flyToCamera({
+          view: `city:${camera.id}`,
+          label: `CAM 01 · ${camera.name.toUpperCase()}`,
+          center: camera.center,
+          zoom: camera.zoom,
+          mobileZoom: camera.mobileZoom,
+          tilt: true,
+        });
+      },
+      flyHome: () => {
+        const views = getCityViews();
+        const state = this.session.state;
+        if (views && state) api.flyToCity(views.active(state));
+        else this.map?.flyToKoeln();
+      },
+      flyToDeutschland: () => {
+        const views = getCityViews();
+        if (!views) return;
+        this.map?.flyToCamera({
+          view: 'deutschland',
+          label: 'SAT 01 · DEUTSCHLAND',
+          center: views.deutschland.center,
+          zoom: views.deutschland.zoom,
+          mobileZoom: views.deutschland.zoom - 0.9,
+          tilt: false,
+        });
+      },
+      mapView: () => this.map?.currentView() ?? 'city:koeln',
       setCameraMode: (mode) =>
         update(() => {
           ui.camera = mode;

@@ -10,11 +10,13 @@ import {
   START_TIME,
   wallet,
 } from '../../core';
+import { activeCity, cityOfSpot } from '../city';
 import { allProducts, getProduct, getStock, take } from '../goods';
 import { isPlayerOnTheRoad } from '../logistics';
 import { getSpotPrice, priceRatio, spotReferencePrice } from '../market';
 import { changeReputation, reputationDemandFactor } from '../reputation';
-import { getSpot, getSpots, isSpotActive, type Spot } from '../spots';
+import { getSpot, getSpots, isSpotActive, type Spot, spotCity } from '../spots';
+import { nightlifeOf } from '../veedel';
 import { weatherDemandFactor } from '../weather';
 import {
   BASE_SPAWN_INTERVAL,
@@ -25,6 +27,8 @@ import {
   MAX_CHEAP_BOOST,
   MAX_CUSTOMERS_PER_SPOT,
   MAX_REGULARS,
+  NIGHTLIFE_HOURS,
+  NIGHTLIFE_WEEKEND,
   PLAYER_SERVE_TIME,
   REGULAR_CHANCE,
   REGULAR_LOST_BELOW,
@@ -77,6 +81,7 @@ export function demandRate(state: GameState, spot: Spot, time: number): number {
   const mix = typeWeights(spot, time).reduce((a, b) => a + b, 0) / TYPE_NORM;
   return (
     spot.demand *
+    nightlifeFactor(spot.veedelId, time) *
     hourDemandMultiplier(clock.hour(time)) *
     WEEKDAY_DEMAND[clock.weekday(time)] *
     weatherDemandFactor(state) *
@@ -87,10 +92,39 @@ export function demandRate(state: GameState, spot: Spot, time: number): number {
   );
 }
 
+/**
+ * Nachtleben (Auftrag 30): zwischen NIGHTLIFE_HOURS die Nachfrage mal nightlife des Veedels, in Nächten auf Samstag
+ * und Sonntag in Veedeln mit Nachtleben noch einmal mal NIGHTLIFE_WEEKEND.
+ */
+export function nightlifeFactor(veedelId: string, time: number): number {
+  const nightlife = nightlifeOf(veedelId);
+  if (nightlife === 1) return 1;
+  const hour = clock.hour(time);
+  if (hour < NIGHTLIFE_HOURS.from && hour >= NIGHTLIFE_HOURS.to) return 1;
+  // Die Nacht gehört zum Tag, an dem sie anfängt: 2 Uhr am Samstag ist Freitagnacht.
+  const startDay = hour < NIGHTLIFE_HOURS.to ? (clock.weekday(time) + 6) % 7 : clock.weekday(time);
+  const weekend = nightlife > 1 && (startDay === 4 || startDay === 5);
+  return nightlife * (weekend ? NIGHTLIFE_WEEKEND : 1);
+}
+
 /** Zeit bis zum nächsten Interessenten an einem Spot (exponentialverteilt, damit es unregelmäßig wirkt). */
 function spawnInterval(ctx: Ctx, spot: Spot, time: number): number {
   const mean = BASE_SPAWN_INTERVAL / Math.max(0.01, demandRate(ctx.state, spot, time));
   return -Math.log(1 - ctx.random() * 0.999) * mean;
+}
+
+/**
+ * Umschalten der Städte (Auftrag 30): Wer in der Stadt wartet, die jetzt schläft, geht still (eingefroren, keine
+ * Folgen); in der Stadt, die aufwacht, kommt die Laufkundschaft neu in Gang, ohne die Lücke nachzuholen.
+ */
+export function onCitySwitched(ctx: Ctx, from: string, to: string): void {
+  const s = ctx.state.modules.customers;
+  s.waiting = s.waiting.filter((c) => cityOfSpot(ctx.state, c.spotId) !== from);
+  for (const spot of getSpots(ctx.state, to)) {
+    const current = s.nextSpawnAt[spot.id];
+    if (current !== undefined && !Number.isFinite(current)) continue;
+    s.nextSpawnAt[spot.id] = ctx.now + ctx.random() * spawnInterval(ctx, spot, ctx.now);
+  }
 }
 
 export function initialSpawn(ctx: Ctx, spots: readonly Spot[]): Record<string, number> {
@@ -100,7 +134,8 @@ export function initialSpawn(ctx: Ctx, spots: readonly Spot[]): Record<string, n
 }
 
 function stockOf(ctx: Ctx) {
-  return (productId: string) => getStock(ctx.state, { productId });
+  const cityId = activeCity(ctx.state);
+  return (productId: string) => getStock(ctx.state, { productId, cityId });
 }
 
 /** Ein Interessent kommt an einen Spot. Er kauft nur, was da ist, und nur, wenn ihm der Preis passt. */
@@ -336,12 +371,13 @@ function visitRegulars(ctx: Ctx): void {
   for (const regular of [...state.regulars]) {
     if (regular.status !== 'active' || regular.nextVisitAt > ctx.now) continue;
     const spot = getSpot(ctx.state, regular.spotId);
-    if (!spot || !isSpotActive(ctx.state, spot.id)) {
+    // Stammkunden in der schlafenden Stadt kommen wieder, wenn sie aufwacht (keine Abwanderung im Schlaf).
+    if (!spot || !isSpotActive(ctx.state, spot.id) || spotCity(spot) !== activeCity(ctx.state)) {
       scheduleVisit(ctx, regular, ctx.now);
       continue;
     }
     const type = customerType(regular.typeId);
-    const stock = getStock(ctx.state, { productId: regular.productId });
+    const stock = getStock(ctx.state, { productId: regular.productId, cityId: spotCity(spot) });
     const price = getSpotPrice(ctx.state, spot.id, regular.productId);
     const verdict = regularVerdict(regular, type, { price, available: stock > 0 });
     regular.satisfaction = verdict.satisfaction;
@@ -459,7 +495,8 @@ export function streetTick(ctx: Ctx): void {
   const state = ctx.state.modules.customers;
   const now = ctx.now;
   expireCustomers(ctx);
-  for (const spot of getSpots(ctx.state)) {
+  // Kunden nur in der Stadt, die live ist (Auftrag 30); die schlafende ist eingefroren.
+  for (const spot of getSpots(ctx.state, activeCity(ctx.state))) {
     let next = state.nextSpawnAt[spot.id] ?? now;
     while (next <= now) {
       const waiting = state.waiting.filter((c) => c.spotId === spot.id).length;

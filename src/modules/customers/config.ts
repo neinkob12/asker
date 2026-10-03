@@ -240,7 +240,19 @@ export const DEALERS: readonly { id: string; name: string; veedelId: string }[] 
   { id: 'hollaender', name: 'Der Holländer', veedelId: 'deutz' },
   { id: 'jacky', name: 'Jacky (Nippes)', veedelId: 'nippes' },
   { id: 'sven', name: 'Sven vom Ring', veedelId: 'altstadt-sued' },
+  // Hamburg (Auftrag 30)
+  { id: 'jojo', name: 'Jojo vom Kiez', veedelId: 'st-pauli' },
+  { id: 'kemal', name: 'Kemal (St. Georg)', veedelId: 'st-georg' },
+  { id: 'ole', name: 'Ole (Wilhelmsburg)', veedelId: 'wilhelmsburg' },
+  { id: 'malte', name: 'Malte (Harburg)', veedelId: 'harburg' },
 ];
 
 /** Abgeschlossene Aufträge, die in der Liste bleiben. */
 export const ORDER_HISTORY = 15;
+
+/**
+ * Nachtleben (Auftrag 30): In diesen Stunden zählt das Nachtleben eines Veedels (veedel.nightlife, z.B. St. Pauli 2),
+ * in Nächten auf Samstag und Sonntag noch einmal mal NIGHTLIFE_WEEKEND.
+ */
+export const NIGHTLIFE_HOURS = { from: 22, to: 4 } as const;
+export const NIGHTLIFE_WEEKEND = 1.3;

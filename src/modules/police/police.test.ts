@@ -358,7 +358,7 @@ describe('police', () => {
     old.modules.police = { heat: { kalk: 70, deutz: 10 } };
     old.moduleVersions.police = 1;
     const loaded = loadSimulation(old, sim.modules);
-    expect(loaded.state.moduleVersions.police).toBe(4);
+    expect(loaded.state.moduleVersions.police).toBe(5);
     expect(loaded.state.modules.police.plannedRaids).toEqual({});
     expect(getHeat(loaded.state, 'kalk')).toBe(70);
     expect(loaded.state.modules.police.level.kalk).toBe(heatLevel(70).index);
@@ -476,8 +476,8 @@ describe('police: Härte nach Größe des Geschäfts (Auftrag 24)', () => {
     sim.advance(60);
     expect(operationTier(sim.state).id).toBe('kingpin');
     expect(eventsOfType(events, 'police.tierChanged').map((e) => e.payload)).toEqual([
-      { from: 0, to: 1 },
-      { from: 1, to: 2 },
+      { from: 0, to: 1, cityId: 'koeln' },
+      { from: 1, to: 2, cityId: 'koeln' },
     ]);
     expect(sim.state.messages.list.some((m) => m.text.includes('Ermittlungsgruppe'))).toBe(true);
     // Mit Polizei-Kontakt kommt die Warnung einen Tag vorher.
@@ -511,8 +511,8 @@ describe('police: Härte nach Größe des Geschäfts (Auftrag 24)', () => {
     const loaded = loadSimulation(old, sim.modules);
     expect(plannedRaid(loaded.state, 'kalk')).toBe(500);
     expect(loaded.state.modules.police.plannedRaids.kalk).toEqual({ at: 500, scope: 'veedel', spotId: null });
-    expect(loaded.state.modules.police.tier).toBeNull();
+    expect(loaded.state.modules.police.tiers).toEqual({});
     loaded.advance(60);
-    expect(loaded.state.modules.police.tier).toBe(0);
+    expect(loaded.state.modules.police.tiers.koeln).toBe(0);
   });
 });

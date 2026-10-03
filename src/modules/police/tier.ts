@@ -4,14 +4,16 @@
 // (index.ts).
 
 import type { GameState } from '../../core';
+import { activeCity } from '../city';
 import { playerSpot } from '../customers';
-import { currentDay, periodReport } from '../finance';
+import { cityReport, currentDay } from '../finance';
 import { getWarehouses } from '../goods';
 import { getLieutenantIds } from '../hierarchy';
 import { hasBerth } from '../logistics';
 import { getSpots } from '../spots';
-import { getStaff, runnerAt } from '../staff';
+import { getStaff, getStaffMember, runnerAt } from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
+import { veedelCity } from '../veedel';
 import {
   DEALER_DOWN,
   DEALER_UP,
@@ -49,20 +51,21 @@ export interface OperationTier {
   hint: string;
 }
 
-export function operationFacts(state: GameState): OperationFacts {
+/** Zahlen deines Geschäfts in einer Stadt (Standard: die aktive; Auftrag 30). */
+export function operationFacts(state: GameState, cityId: string = activeCity(state)): OperationFacts {
   // Nur volle Tage zählen: Der angefangene Tag würde den Schnitt drücken (früh am Tag fast um die Hälfte). Erst am
   // ersten Spieltag gibt es noch keinen vollen, dann zählt der laufende.
   const full = Math.min(7, currentDay(state) - 1);
   const days = Math.max(1, full);
-  const report = periodReport(state, days, full >= 1 ? 1 : 0);
+  const report = cityReport(state, cityId, days, full >= 1 ? 1 : 0);
   const sales = report.rows.filter((r) => r.category.startsWith('sales.')).reduce((sum, r) => sum + r.amount, 0);
   return {
-    veedel: controlledBy(state, PLAYER_FACTION).length,
-    spots: getSpots(state).filter((s) => runnerAt(state, s.id) || playerSpot(state) === s.id).length,
-    people: getStaff(state, { status: 'active' }).filter((m) => m.assignment).length,
-    lieutenants: getLieutenantIds(state).length,
-    warehouses: getWarehouses(state).length,
-    berth: hasBerth(state),
+    veedel: controlledBy(state, PLAYER_FACTION).filter((id) => veedelCity(id) === cityId).length,
+    spots: getSpots(state, cityId).filter((s) => runnerAt(state, s.id) || playerSpot(state) === s.id).length,
+    people: getStaff(state, { status: 'active', cityId }).filter((m) => m.assignment).length,
+    lieutenants: getLieutenantIds(state).filter((id) => getStaffMember(state, id)?.cityId === cityId).length,
+    warehouses: getWarehouses(state, cityId).length,
+    berth: hasBerth(state, cityId),
     revenue: Math.round(sales / Math.max(1, days)),
   };
 }
@@ -121,8 +124,12 @@ export function tierInfo(index: number): OperationTier {
 }
 
 /** Was zur nächsten Stufe führt (für das Polizei-Panel): Bedingungen mit Stand, jede reicht allein. */
-export function nextTierHints(state: GameState, tier: number): { label: string; value: string }[] {
-  const f = operationFacts(state);
+export function nextTierHints(
+  state: GameState,
+  tier: number,
+  cityId: string = activeCity(state),
+): { label: string; value: string }[] {
+  const f = operationFacts(state, cityId);
   if (tier === 0) {
     return [
       { label: 'ein Veedel unter deiner Kontrolle', value: `${f.veedel} von ${DEALER_UP.veedel}` },

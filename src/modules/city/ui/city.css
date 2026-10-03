@@ -61,3 +61,93 @@
   align-self: center;
   color: var(--hud-ink-2);
 }
+
+/* Stadt-Chip: Menü in der Glas-Karte unter der Kachel. */
+.city-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 220px;
+}
+
+.city-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--hud-ink);
+  font: inherit;
+  font-family: var(--font-hud);
+  text-align: left;
+  cursor: pointer;
+}
+
+.city-menu__item:hover,
+.city-menu__item:focus-visible {
+  background: var(--hud-glass-edge);
+}
+
+.city-menu__item.is-active {
+  color: var(--cat-place);
+}
+
+.city-menu__name {
+  flex: 1;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.city-menu__meta {
+  font-size: 13px;
+  color: var(--hud-ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Deutschland-Ansicht: die Städte als Glas-Karten auf der Karte. */
+.city-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  text-align: left;
+  cursor: pointer;
+}
+
+.city-card.is-active {
+  border-color: var(--cat-place);
+}
+
+.city-card__name {
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.city-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.city-card__stat {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--hud-glass-edge);
+  font-size: 13px;
+  color: var(--hud-ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

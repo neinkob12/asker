@@ -4,9 +4,10 @@
 // Standardlager.
 //
 // Öffentliche API:
-//   allProducts(), getProduct(id), productName(id), getWarehouses(state) (eigene), getWarehouse(state, id) (eigene),
-//   warehouseSites() (alle Standorte), warehouseSite(id), isWarehouseOwned(state, id), nearestWarehouse(state, point,
-//   { productId?, amount? }), getStock(state, filter), getLots(state, filter), stockSummary(state, warehouseId?),
+//   allProducts(), getProduct(id), productName(id), getWarehouses(state, cityId?) (eigene), getWarehouse(state, id)
+//   (eigene), warehouseSites(cityId?) (alle Standorte), warehouseSite(id), isWarehouseOwned(state, id),
+//   nearestWarehouse(state, point, { productId?, amount? }) (nur Lager in der Stadt des Punkts), getStock(state, filter),
+//   getLots(state, filter) (filter mit cityId), stockSummary(state, warehouseId?),
 //   averageQuality(state, filter), qualityTier(quality), cutPreview(lot, ratio), store(ctx, {...}), take(ctx, {...}),
 //   cutLot(ctx, {...}), QUALITY_TIERS, CUT_STEPS, MAX_CUT, DEFAULT_PRODUCT, DEFAULT_WAREHOUSE, STANDARD_QUALITY
 // Befehle: 'goods.cut', 'goods.buyWarehouse'
@@ -24,6 +25,7 @@ import {
   type LngLat,
   wallet,
 } from '../../core';
+import { activeCity, cityAt, isCityUnlocked } from '../city';
 import {
   CUT_AGENT_COST,
   CUT_QUALITY_LOSS,
@@ -61,6 +63,8 @@ export interface Product {
 
 export interface Warehouse {
   id: string;
+  /** Stadt des Lagers (Auftrag 30). */
+  cityId: string;
   name: string;
   lng: number;
   lat: number;
@@ -107,6 +111,8 @@ interface GoodsStateV1 {
 export interface StockFilter {
   productId?: string;
   warehouseId?: string;
+  /** Nur Lager in dieser Stadt (Auftrag 30). */
+  cityId?: string;
 }
 
 export interface StoreRequest {
@@ -121,7 +127,10 @@ export interface StoreRequest {
 export interface TakeRequest {
   productId: string;
   amount: number;
-  /** Ohne Angabe: erst das Lager am nächsten zu near, ohne near erst das Standardlager, dann die übrigen. */
+  /**
+   * Ohne Angabe: erst das Lager am nächsten zu near, ohne near erst das Standardlager, dann die übrigen; immer nur Lager
+   * in derselben Stadt (die von near, sonst die aktive).
+   */
   warehouseId?: string;
   /** Ort, für den die Ware gebraucht wird (z.B. ein Spot): das nächste Lager zuerst. */
   near?: LngLat;
@@ -194,19 +203,26 @@ export function formatProductAmount(productId: string, amount: number): string {
   return formatAmount(amount, getProduct(productId)?.unit ?? 'g');
 }
 
-/** Alle Lager-Standorte, auch die noch nicht gekauften. */
-export function warehouseSites(): readonly Warehouse[] {
-  return WAREHOUSES;
+/** Alle Lager-Standorte, auch die noch nicht gekauften (mit Stadt: nur dort). */
+export function warehouseSites(cityId?: string): readonly Warehouse[] {
+  return cityId === undefined ? WAREHOUSES : WAREHOUSES.filter((w) => w.cityId === cityId);
 }
+
+/** Stadt eines Lagers (unbekannte: Köln). */
+export function warehouseCity(id: string): string {
+  return warehouseSite(id)?.cityId ?? 'koeln';
+}
+
+const SITE_BY_ID = new Map(WAREHOUSES.map((w) => [w.id, w]));
 
 export function warehouseSite(id: string): Warehouse | undefined {
-  return WAREHOUSES.find((w) => w.id === id);
+  return SITE_BY_ID.get(id);
 }
 
-/** Eigene Lager (Standardlager zuerst, dann in der Reihenfolge der Standorte). */
-export function getWarehouses(state: GameState): readonly Warehouse[] {
+/** Eigene Lager (Standardlager zuerst, dann in der Reihenfolge der Standorte); mit Stadt nur die dort. */
+export function getWarehouses(state: GameState, cityId?: string): readonly Warehouse[] {
   const owned = state.modules.goods.owned;
-  return WAREHOUSES.filter((w) => owned.includes(w.id));
+  return WAREHOUSES.filter((w) => owned.includes(w.id) && (cityId === undefined || w.cityId === cityId));
 }
 
 /** Eigenes Lager nach ID (undefined, wenn es dir nicht gehört). */
@@ -219,8 +235,8 @@ export function isWarehouseOwned(state: GameState, id: string): boolean {
 }
 
 /**
- * Eigenes Lager, das am nächsten zu point liegt. Mit productId (und amount) nur Lager, die genug davon haben.
- * Bei gleichem Abstand das frühere in der Liste.
+ * Eigenes Lager, das am nächsten zu point liegt, in derselben Stadt (Auftrag 30). Mit productId (und amount) nur
+ * Lager, die genug davon haben. Bei gleichem Abstand das frühere in der Liste.
  */
 export function nearestWarehouse(
   state: GameState,
@@ -229,7 +245,7 @@ export function nearestWarehouse(
 ): Warehouse | undefined {
   let best: Warehouse | undefined;
   let bestDistance = Number.POSITIVE_INFINITY;
-  for (const w of getWarehouses(state)) {
+  for (const w of getWarehouses(state, cityAt(point.lng, point.lat))) {
     if (
       filter.productId &&
       getStock(state, { productId: filter.productId, warehouseId: w.id }) < (filter.amount ?? 1)
@@ -255,6 +271,7 @@ export function getLots(state: GameState, filter: StockFilter = {}): StockLot[] 
   const result: StockLot[] = [];
   for (const [warehouseId, lots] of Object.entries(state.modules.goods.stock)) {
     if (filter.warehouseId && warehouseId !== filter.warehouseId) continue;
+    if (filter.cityId && warehouseCity(warehouseId) !== filter.cityId) continue;
     for (const lot of lots) {
       if (lot.amount > 0 && (!filter.productId || lot.productId === filter.productId)) result.push(lot);
     }
@@ -278,10 +295,10 @@ export function averageQuality(state: GameState, filter: StockFilter = {}): numb
   return weighted(getLots(state, filter)).quality;
 }
 
-/** Bestand pro Produkt (Reihenfolge wie allProducts), nur Produkte mit Bestand. */
-export function stockSummary(state: GameState, warehouseId?: string): StockSummaryRow[] {
+/** Bestand pro Produkt (Reihenfolge wie allProducts), nur Produkte mit Bestand; optional nur in einer Stadt. */
+export function stockSummary(state: GameState, warehouseId?: string, cityId?: string): StockSummaryRow[] {
   return PRODUCTS.map((p) => {
-    const w = weighted(getLots(state, { productId: p.id, warehouseId }));
+    const w = weighted(getLots(state, { productId: p.id, warehouseId, cityId }));
     return { productId: p.id, amount: w.amount, quality: w.quality, cut: w.cut, unitCost: w.unitCost };
   }).filter((row) => row.amount > 0);
 }
@@ -340,7 +357,13 @@ export function store(ctx: Ctx, item: StoreRequest): number | null {
 /** Ware entnehmen (Verkauf, Diebstahl, Beschlagnahme). Älteste Posten zuerst. */
 export function take(ctx: Ctx, request: TakeRequest): TakeResult {
   const stock = ctx.state.modules.goods.stock;
-  const warehouseIds = request.warehouseId ? [request.warehouseId] : warehouseOrder(Object.keys(stock), request.near);
+  const city = request.near ? cityAt(request.near.lng, request.near.lat) : activeCity(ctx.state);
+  const warehouseIds = request.warehouseId
+    ? [request.warehouseId]
+    : warehouseOrder(
+        Object.keys(stock).filter((id) => warehouseCity(id) === city),
+        request.near,
+      );
   const matches = (lot: StockLot) =>
     lot.productId === request.productId && lot.amount > 0 && (request.lotId === undefined || lot.id === request.lotId);
   const available = warehouseIds.reduce(
@@ -381,7 +404,9 @@ export function take(ctx: Ctx, request: TakeRequest): TakeResult {
 
 /** Reihenfolge der Lager beim Entnehmen: nach Abstand zu near, sonst Standardlager zuerst. */
 function warehouseOrder(ids: string[], near: LngLat | undefined): string[] {
-  const sorted = [DEFAULT_WAREHOUSE, ...ids.filter((id) => id !== DEFAULT_WAREHOUSE).sort()];
+  const sorted = ids.includes(DEFAULT_WAREHOUSE)
+    ? [DEFAULT_WAREHOUSE, ...ids.filter((id) => id !== DEFAULT_WAREHOUSE).sort()]
+    : [...ids].sort();
   if (!near) return sorted;
   const distance = (id: string) => {
     const site = warehouseSite(id);
@@ -398,6 +423,7 @@ export function buyWarehouse(ctx: Ctx, warehouseId: string): CommandResult {
   const site = warehouseSite(warehouseId);
   if (!site) return { ok: false, reason: 'Diesen Standort gibt es nicht.' };
   if (isWarehouseOwned(ctx.state, warehouseId)) return { ok: false, reason: `${site.name} gehört dir schon.` };
+  if (!isCityUnlocked(ctx.state, site.cityId)) return { ok: false, reason: 'In dieser Stadt bist du noch nicht.' };
   if (!wallet.pay(ctx, site.cost, 'clean', `Kauf ${site.name}`, 'expansion')) {
     return {
       ok: false,

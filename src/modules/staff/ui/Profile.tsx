@@ -175,7 +175,8 @@ function MoveControl(props: { member: StaffMember }) {
   const { state, dispatch } = useGame();
   const m = props.member;
   const targets: { key: string; label: string; assignment: StaffAssignment }[] = [];
-  for (const spot of getSpots(state)) {
+  // Versetzen nur innerhalb der Stadt, in der die Person ist (Auftrag 30).
+  for (const spot of getSpots(state, m.cityId)) {
     const other = m.role === 'runner' ? activeRunnerAt(state, spot.id) : securityAt(state, { spotId: spot.id })[0];
     const taken = other && other.id !== m.id ? ` (${other.name})` : '';
     targets.push({
@@ -185,7 +186,7 @@ function MoveControl(props: { member: StaffMember }) {
     });
   }
   if (m.role === 'security') {
-    for (const w of getWarehouses(state)) {
+    for (const w of getWarehouses(state, m.cityId)) {
       targets.push({ key: `warehouse:${w.id}`, label: w.name, assignment: { kind: 'warehouse', targetId: w.id } });
     }
   }

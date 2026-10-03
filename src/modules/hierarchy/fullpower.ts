@@ -23,12 +23,13 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { dayReport, lieutenantResult, wageRunway } from '../finance';
+import { activeCity } from '../city';
+import { cityReport, lieutenantResult, wageRunway } from '../finance';
 import { getGangStatus, tributeAmount } from '../gangs';
 import { getWarehouses, isWarehouseOwned, stockSummary, warehouseSites } from '../goods';
 import { getCompetitionFactor, getSpotPrice, hasOwnPrice, priceRatio, roundPrice, spotReferencePrice } from '../market';
 import { getReputation } from '../reputation';
-import { getSpots, lockedSpots, type Spot } from '../spots';
+import { getSpots, lockedSpots, type Spot, spotCity } from '../spots';
 import {
   addCareer,
   addLoyalty,
@@ -182,7 +183,8 @@ export function payShare(ctx: Ctx, rh: RightHandPost, member: StaffMember): void
   if (closed <= fp.paidDay) return;
   const today = Math.max(1, clock.day(ctx.now - 1));
   for (let day = fp.paidDay + 1; day <= closed; day++) {
-    const report = dayReport(ctx.state, today - day);
+    // Nur ihre Stadt (Auftrag 30): eigenes Geschäft, im Schlafmodus das Tagesergebnis (income.city).
+    const report = cityReport(ctx.state, fp.cityId, 1, today - day);
     const ownShare = report.rows.find((r) => r.category === 'share.righthand')?.amount ?? 0;
     const profit = report.profit - ownShare;
     fp.paidDay = day;
@@ -195,6 +197,7 @@ export function payShare(ctx: Ctx, rh: RightHandPost, member: StaffMember): void
     wallet.pay(ctx, amount, 'dirty', `Anteil ${member.name} (${cityLabel(fp.cityId)})`, {
       category: 'share.righthand',
       staffId: member.id,
+      cityId: fp.cityId,
     });
     fp.done.share += amount;
     note(ctx, rh, `Tag ${day}: Gewinn ${formatEuro(profit)}, mein Anteil ${formatEuro(amount)}.`);
@@ -217,9 +220,9 @@ export function runFullPowerTasks(ctx: Ctx, rh: RightHandPost, member: StaffMemb
   if (isFullPowerTaskActive(rh, 'expansion') && hour === 12) expand(ctx, rh, actor);
 }
 
-/** Spots, um die sie sich kümmert (ihre Stadt; bis es Städte gibt: alle). */
+/** Spots, um die sie sich kümmert: die ihrer Stadt (sie arbeitet nur, wenn die Stadt live ist). */
 function citySpots(state: GameState): readonly Spot[] {
-  return getSpots(state);
+  return getSpots(state, activeCity(state));
 }
 
 /** Leutnants: Spots ohne Leutnant bekommen jemanden (höchstens einen pro Stunde). */
@@ -229,7 +232,7 @@ function appointLieutenants(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
     .filter((s) => !lieutenantOfSpot(state, s.id))
     .sort((a, b) => b.demand - a.demand || a.id.localeCompare(b.id));
   if (unled.length === 0) return;
-  const candidates = getStaff(state, { status: 'active', role: 'runner' })
+  const candidates = getStaff(state, { status: 'active', role: 'runner', cityId: activeCity(state) })
     .filter((m) => m.level >= FP_LIEUTENANT_MIN_LEVEL && m.stats.loyalty >= FP_LIEUTENANT_MIN_LOYALTY)
     .filter((m) => !isLieutenant(state, m.id) && !isRightHand(state, m.id) && canBeLieutenant(state, m.id).ok)
     .sort((a, b) => b.level - a.level || b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id));
@@ -322,7 +325,7 @@ function manageStaff(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Ac
   fp.idleSince ??= {};
   const idle = fp.idleSince;
   const present = new Set<string>();
-  for (const m of getStaff(state, { status: 'active' })) {
+  for (const m of getStaff(state, { status: 'active', cityId: activeCity(state) })) {
     if (m.id === member.id || isSpecialist(m.role) || m.role === 'driver') continue;
     present.add(m.id);
     if (m.assignment) delete idle[m.id];
@@ -357,7 +360,9 @@ function expand(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
   const due = payrollDue(state);
   if (due > 0 && state.wallet.dirty / due < FP_EXPANSION_RUNWAY_DAYS) return;
   const budget = rh.settings.expansionBudgetPerDay - fp.spent;
+  const city = activeCity(state);
   const spot = lockedSpots(state)
+    .filter((s) => spotCity(s) === city)
     .filter((s) => (s.unlockCost ?? 0) <= budget && (s.unlockCost ?? 0) <= state.wallet.dirty - due * 2)
     .sort((a, b) => (a.unlockCost ?? 0) - (b.unlockCost ?? 0) || b.demand - a.demand || a.id.localeCompare(b.id))[0];
   if (spot && ctx.dispatch({ type: 'spots.unlock', payload: { spotId: spot.id } }, { actor }).ok) {
@@ -367,8 +372,8 @@ function expand(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
     return;
   }
   // Ein zweites Lager, wenn es nur eins gibt und sauberes Geld da ist.
-  if (getWarehouses(state).length >= 2) return;
-  const site = warehouseSites()
+  if (getWarehouses(state, city).length >= 2) return;
+  const site = warehouseSites(city)
     .filter((w) => !isWarehouseOwned(state, w.id) && w.cost <= state.wallet.clean)
     .sort((a, b) => a.cost - b.cost || a.id.localeCompare(b.id))[0];
   if (site && ctx.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: site.id } }, { actor }).ok) {
@@ -395,12 +400,15 @@ function diplomacy(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
     const tribute = has('tribute');
     const ceasefire = has('ceasefire');
     const accept = has('accept');
-    if (tribute && tributeAmount(state, gangId) <= rh.settings.protectionMax) choice = 'tribute';
-    else if (ceasefire && (getGangStatus(state, gangId)?.quote?.ceasefire ?? Infinity) <= rh.settings.protectionMax)
-      choice = 'ceasefire';
+    // Sie zahlt nur, was die Löhne heute Nacht nicht gefährdet (sonst laufen ihr die Leute weg).
+    const spare = Math.max(0, state.wallet.dirty - payrollDue(state));
+    const tributeCost = tributeAmount(state, gangId);
+    const ceasefireCost = getGangStatus(state, gangId)?.quote?.ceasefire ?? Infinity;
+    const dealCost = getGangStatus(state, gangId)?.offer?.price ?? Infinity;
+    if (tribute && tributeCost <= rh.settings.protectionMax && tributeCost <= spare) choice = 'tribute';
+    else if (ceasefire && ceasefireCost <= rh.settings.protectionMax && ceasefireCost <= spare) choice = 'ceasefire';
     else if (has('refuse')) choice = 'refuse';
-    else if (accept && (getGangStatus(state, gangId)?.offer?.price ?? Infinity) <= rh.settings.dealMax)
-      choice = 'accept';
+    else if (accept && dealCost <= rh.settings.dealMax && dealCost <= spare) choice = 'accept';
     else if (accept && has('decline')) choice = 'decline';
     if (!choice) continue;
     const option = options.find((o) => o.id === choice);

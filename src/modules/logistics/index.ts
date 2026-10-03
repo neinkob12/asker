@@ -1,4 +1,7 @@
-// Logistik: Hafen, Abholung und Fahrten zwischen den Lagern.
+// Logistik: Hafen, Abholung und Fahrten zwischen den Lagern. Seit Auftrag 30 hat jede Stadt ihren Hafen (PORTS in
+// config.ts: Köln der Niehler Hafen, Hamburg der Hamburger Hafen mit teurerem Liegeplatz und wacherem Zoll); Liegeplatz,
+// Ware am Kai und Zoll gelten pro Stadt. Lesefunktionen ohne Stadt meinen die aktive Stadt. Ware am Kai einer
+// schlafenden Stadt wartet (kein Zoll), Fahrten dort fahren zu Ende (ohne Kontrollen).
 // - Liegeplatz im Niehler Hafen ('logistics.buyBerth', sauberes Geld). Ohne ihn liefert kein Schiff (suppliers).
 // - Schiffsware kommt nicht mehr von selbst ins Lager: Sie steht am Kai (cargo), bis ein Fahrer oder du selbst sie
 //   abholst ('logistics.pickup'). Steht sie zu lange, findet sie der Zoll.
@@ -8,16 +11,18 @@
 //   eventuell in Haft (police). Du selbst kommst nie in Haft.
 //
 // Öffentliche API:
-//   hasBerth(state), getCargo(state), cargoAmount(state, productId?), getTrips(state), getTrip(state, id),
+//   hasBerth(state, cityId?), getCargo(state, cityId?), cargoAmount(state, productId?, cityId?), getTrips(state),
+//   getTrip(state, id), portPlace(cityId?), portName(cityId?), berthCost(cityId?), portContact(cityId),
 //   tripProgress(state, trip) (Abschnitt und Fortschritt), tripRoute(state, trip) (Punkte für die Karte),
 //   inTransitAmount(state, productId?), isPlayerOnTheRoad(state), freeDrivers(state), cargoRisk(state, cargo),
-//   getLogisticsLog(state), portPlace(), receiveCargo(ctx, {...}) (für suppliers), BERTH_COST
+//   getLogisticsLog(state), receiveCargo(ctx, {...}) (für suppliers), BERTH_COST, PORTS, tripCity(state, trip)
 // Befehle: 'logistics.buyBerth', 'logistics.pickup', 'logistics.transfer'
 // Ereignisse: 'logistics.berthBought', 'cargo.docked', 'cargo.seized', 'transport.started', 'transport.stopped',
 //   'transport.arrived', 'transport.seized', 'transport.lost'
 
 import {
   type CommandResult,
+  type Contact,
   type Ctx,
   clock,
   defineModule,
@@ -29,6 +34,7 @@ import {
   messages,
   wallet,
 } from '../../core';
+import { activeCity, cityAt, cityName, HARBOR_CALLER, isCityLive, isCityUnlocked } from '../city';
 import { isPlayerDelivering } from '../customers';
 import { startEncounter } from '../encounters';
 import {
@@ -41,6 +47,7 @@ import {
   store,
   type TakeResult,
   take,
+  warehouseCity,
 } from '../goods';
 import { addHeat, arrestStaff, getHeat, recordConfiscation } from '../police';
 import { roadRoute, travelMinutes } from '../roads';
@@ -48,12 +55,9 @@ import { addXp, assign, getStaff, getStaffMember, riskFactor, roleName, type Sta
 import { UNLOADING_PORT } from '../suppliers';
 import { veedelAt, veedelName } from '../veedel';
 import {
-  BERTH_COST,
-  CARGO_SAFE_MINUTES,
   CHECK_CHANCE,
   CHECK_DELAY,
   CHECK_HEAT_DIVISOR,
-  CUSTOMS_CHANCE_PER_HOUR,
   DRIVER_BASE_SPEED,
   DRIVER_SPEED_PER_POINT,
   ESCAPE_HEAT,
@@ -61,15 +65,17 @@ import {
   LOAD_MINUTES,
   LOG_LIMIT,
   PLAYER_DRIVE_SPEED,
+  PORTS,
+  type PortConfig,
   SEIZE_ARREST_CHANCE,
   SEIZE_HEAT,
   TRANSFER_LOAD_MINUTES,
   XP_PER_TRIP,
 } from './config';
 
-export { BERTH_COST, CARGO_SAFE_MINUTES } from './config';
+export { BERTH_COST, CARGO_SAFE_MINUTES, PORTS } from './config';
 
-/** ID des Hafens als Abholort einer Fahrt. */
+/** ID des Kölner Hafens als Abholort einer Fahrt (andere Städte: PORTS[cityId].placeId, z.B. 'port:hamburg'). */
 export const PORT_ID = 'port';
 
 /** Ware, die am Kai auf die Abholung wartet. */
@@ -84,6 +90,8 @@ export interface PortCargo {
   arrivedAt: number;
   /** Lager, für das bestellt wurde: Die Abholung fährt dorthin, wenn nichts anderes gewählt wird. */
   warehouseId?: string;
+  /** Stadt des Hafens (Auftrag 30; alte Stände: Köln). */
+  cityId: string;
 }
 
 export type TripKind = 'pickup' | 'transfer';
@@ -137,8 +145,8 @@ export interface LogisticsStats {
 }
 
 export interface LogisticsState {
-  /** Eigener Liegeplatz im Niehler Hafen (seit wann), null = keiner. */
-  berth: { since: number } | null;
+  /** Eigene Liegeplätze pro Stadt (seit wann). */
+  berths: Record<string, { since: number }>;
   cargo: PortCargo[];
   trips: Trip[];
   /** Die letzten abgeschlossenen Fahrten, neueste zuerst. */
@@ -146,13 +154,19 @@ export interface LogisticsState {
   stats: LogisticsStats;
 }
 
+/** Zustand in Version 1: ein Liegeplatz (Köln), Ware am Kai ohne Stadt. */
+type LogisticsStateV1 = Omit<LogisticsState, 'berths' | 'cargo'> & {
+  berth: { since: number } | null;
+  cargo: Omit<PortCargo, 'cityId'>[];
+};
+
 declare module '../../core' {
   interface ModuleStates {
     logistics: LogisticsState;
   }
   interface GameCommands {
-    /** Liegeplatz im Niehler Hafen mieten (sauberes Geld). */
-    'logistics.buyBerth': Record<string, never>;
+    /** Liegeplatz im Hafen einer Stadt mieten (sauberes Geld). Ohne Stadt: die aktive. */
+    'logistics.buyBerth': { cityId?: string };
     /**
      * Ware am Kai abholen: durch einen Fahrer (driverId oder der erste freie) oder selbst. Ohne warehouseId ins
      * Lager, das dem Hafen am nächsten liegt. Ohne cargoIds alles, was wartet.
@@ -169,7 +183,7 @@ declare module '../../core' {
     };
   }
   interface GameEvents {
-    'logistics.berthBought': { cost: number };
+    'logistics.berthBought': { cost: number; cityId?: string };
     /** Schiffsware liegt am Kai. */
     'cargo.docked': { cargoId: number; supplierId: string; productId: string; amount: number };
     /** Der Zoll hat Ware am Kai gefunden. */
@@ -188,22 +202,55 @@ declare module '../../core' {
 // ---------------------------------------------------------------------------------------------
 // Lesen
 
-/** Ort des Hafens (Niehler Hafen), wie bei den Lieferanten. */
-export function portPlace(): { name: string; lng: number; lat: number } {
-  return UNLOADING_PORT;
+function portOf(cityId: string): PortConfig {
+  return PORTS[cityId] ?? PORTS.koeln;
 }
 
-export function hasBerth(state: GameState): boolean {
-  return state.modules.logistics?.berth != null;
+/** Ort des Hafens einer Stadt (Köln: Niehler Hafen, wie bei den Lieferanten). */
+export function portPlace(cityId = 'koeln'): { name: string; lng: number; lat: number } {
+  const port = portOf(cityId);
+  if (port.lng === undefined || port.lat === undefined) return UNLOADING_PORT;
+  return { name: port.name, lng: port.lng, lat: port.lat };
 }
 
-/** Ware am Kai, älteste zuerst. */
-export function getCargo(state: GameState): readonly PortCargo[] {
-  return state.modules.logistics?.cargo ?? [];
+export function portName(cityId = 'koeln'): string {
+  return portOf(cityId).name;
 }
 
-export function cargoAmount(state: GameState, productId?: string): number {
-  return getCargo(state)
+/** Liegeplatz in sauberem Geld. */
+export function berthCost(cityId = 'koeln'): number {
+  return portOf(cityId).berthCost;
+}
+
+/** Wer im Hafen dieser Stadt schreibt (Köln: der Hafenmeister, Hamburg: Fiete). */
+export function portContact(cityId: string): Contact {
+  return cityId === 'hamburg' ? HARBOR_CALLER : HARBOR_CONTACT;
+}
+
+/** Ort einer Fahrt am Hafen ('port', 'port:hamburg' …), null für Lager. */
+function portCityOf(id: string): string | null {
+  if (id === PORT_ID) return 'koeln';
+  for (const [cityId, port] of Object.entries(PORTS)) if (port.placeId === id) return cityId;
+  return null;
+}
+
+/** Abholort am Hafen einer Stadt. */
+export function portPlaceId(cityId: string): string {
+  return portOf(cityId).placeId;
+}
+
+export function hasBerth(state: GameState, cityId: string = activeCity(state)): boolean {
+  return state.modules.logistics?.berths?.[cityId] != null;
+}
+
+/** Ware am Kai einer Stadt (Standard: die aktive), älteste zuerst. */
+export function getCargo(state: GameState, cityId: string = activeCity(state)): readonly PortCargo[] {
+  const cargo = state.modules.logistics?.cargo ?? [];
+  return cargo.every((c) => c.cityId === cityId) ? cargo : cargo.filter((c) => c.cityId === cityId);
+}
+
+export function cargoAmount(state: GameState, productId?: string, cityId?: string): number {
+  return getCargo(state, cityId)
     .filter((c) => !productId || c.productId === productId)
     .reduce((sum, c) => sum + c.amount, 0);
 }
@@ -242,20 +289,30 @@ export function getLogisticsLog(state: GameState): readonly TripLogEntry[] {
   return state.modules.logistics?.log ?? [];
 }
 
-/** Ab wann der Zoll bei dieser Ware neugierig wird. */
-export function cargoRiskFrom(cargo: Pick<PortCargo, 'arrivedAt'>): number {
-  return cargo.arrivedAt + CARGO_SAFE_MINUTES;
+/** Ab wann der Zoll bei dieser Ware neugierig wird (nach dem Hafen ihrer Stadt). */
+export function cargoRiskFrom(cargo: Pick<PortCargo, 'arrivedAt'> & { cityId?: string }): number {
+  return cargo.arrivedAt + portOf(cargo.cityId ?? 'koeln').safeMinutes;
 }
 
 /** Gefahr für Ware am Kai: 'safe' (noch sicher), 'risky' (Zoll kann sie jede Stunde finden). */
-export function cargoRisk(state: GameState, cargo: Pick<PortCargo, 'arrivedAt'>): 'safe' | 'risky' {
+export function cargoRisk(
+  state: GameState,
+  cargo: Pick<PortCargo, 'arrivedAt'> & { cityId?: string },
+): 'safe' | 'risky' {
   return state.time >= cargoRiskFrom(cargo) ? 'risky' : 'safe';
 }
 
 /** Ort eines Abhol- oder Zielpunkts (Hafen oder Lager). */
 export function placeOf(state: GameState, id: string): (LngLat & { name: string }) | undefined {
-  if (id === PORT_ID) return portPlace();
+  const portCity = portCityOf(id);
+  if (portCity) return portPlace(portCity);
   return getWarehouse(state, id);
+}
+
+/** Stadt einer Fahrt (nach ihrem Ziel). */
+export function tripCity(state: GameState, trip: Pick<Trip, 'toId' | 'fromId'>): string {
+  const place = placeOf(state, trip.toId) ?? placeOf(state, trip.fromId);
+  return place ? cityAt(place.lng, place.lat) : 'koeln';
 }
 
 export type TripLeg = 'toPickup' | 'loading' | 'delivering' | 'stopped';
@@ -282,7 +339,7 @@ export function tripProgress(state: GameState, trip: Trip): { leg: TripLeg; t: n
 
 /** Wege einer Fahrt über die Straßen: Anfahrt (leer, nur bei Abholung) und Lieferung (mit Ware). */
 export function tripRoute(state: GameState, trip: Trip): { approach: LngLat[] | null; delivery: LngLat[] } {
-  const from = placeOf(state, trip.fromId) ?? portPlace();
+  const from = placeOf(state, trip.fromId) ?? portPlace(tripCity(state, trip));
   const to = placeOf(state, trip.toId) ?? from;
   return {
     approach: trip.kind === 'pickup' ? roadRoute(to, from).path : null,
@@ -311,16 +368,26 @@ export function receiveCargo(
     quality: number;
     unitCost: number;
     warehouseId?: string;
+    /** Hafen dieser Stadt (Standard: Köln). */
+    cityId?: string;
   },
 ): number {
-  const cargo: PortCargo = { id: ctx.nextId(), ...item, arrivedAt: ctx.now };
+  const cityId = item.cityId ?? 'koeln';
+  const cargo: PortCargo = { id: ctx.nextId(), ...item, cityId, arrivedAt: ctx.now };
   ctx.state.modules.logistics.cargo.push(cargo);
+  const port = portOf(cityId);
   const goods = `${formatProductAmount(item.productId, item.amount)} ${productName(item.productId)}`;
-  journal.add(ctx, `Schiff im Niehler Hafen: ${goods} stehen am Kai und warten auf die Abholung.`, 'good');
+  journal.add(
+    ctx,
+    cityId === 'koeln'
+      ? `Schiff im Niehler Hafen: ${goods} stehen am Kai und warten auf die Abholung.`
+      : `Container im ${port.name}: ${goods} stehen am Kai und warten auf die Abholung.`,
+    'good',
+  );
   messages.send(ctx, {
-    contact: HARBOR_CONTACT,
+    contact: portContact(cityId),
     text:
-      `Dein Container ist da: ${goods}. Hol ihn in den nächsten ${clock.formatDuration(CARGO_SAFE_MINUTES)} ab, ` +
+      `Dein Container ist da: ${goods}. Hol ihn in den nächsten ${clock.formatDuration(port.safeMinutes)} ab, ` +
       'danach schaut der Zoll genauer hin.',
     options: [
       {
@@ -349,26 +416,32 @@ export function receiveCargo(
   return cargo.id;
 }
 
-function buyBerth(ctx: Ctx): CommandResult {
+function buyBerth(ctx: Ctx, cityId: string): CommandResult {
   const s = ctx.state.modules.logistics;
-  if (s.berth) return { ok: false, reason: 'Du hast schon einen Liegeplatz.' };
-  if (!wallet.pay(ctx, BERTH_COST, 'clean', 'Liegeplatz Niehler Hafen', 'expansion')) {
+  if (!PORTS[cityId]) return { ok: false, reason: 'Diese Stadt hat keinen Hafen im Spiel.' };
+  if (!isCityUnlocked(ctx.state, cityId)) return { ok: false, reason: 'In dieser Stadt bist du noch nicht.' };
+  if (s.berths[cityId]) return { ok: false, reason: 'Du hast dort schon einen Liegeplatz.' };
+  const port = portOf(cityId);
+  if (!wallet.pay(ctx, port.berthCost, 'clean', `Liegeplatz ${port.name}`, { category: 'expansion', cityId })) {
     return {
       ok: false,
-      reason: `Der Hafen will ${formatEuro(BERTH_COST)} sauberes Geld. Wasch vorher Schwarzgeld.`,
+      reason: `Der Hafen will ${formatEuro(port.berthCost)} sauberes Geld. Wasch vorher Schwarzgeld.`,
     };
   }
-  s.berth = { since: ctx.now };
+  s.berths[cityId] = { since: ctx.now };
   journal.add(
     ctx,
-    `Liegeplatz im Niehler Hafen gemietet (${formatEuro(BERTH_COST)}). Jetzt können Schiffe für dich anlegen.`,
+    `Liegeplatz im ${port.name} gemietet (${formatEuro(port.berthCost)}). Jetzt können Schiffe für dich anlegen.`,
     'good',
   );
   messages.send(ctx, {
-    contact: HARBOR_CONTACT,
-    text: 'Willkommen im Hafen. Dein Platz ist Kai 7. Was da ankommt, holst du ab. Ich seh nix, ich hör nix.',
+    contact: portContact(cityId),
+    text:
+      cityId === 'koeln'
+        ? 'Willkommen im Hafen. Dein Platz ist Kai 7. Was da ankommt, holst du ab. Ich seh nix, ich hör nix.'
+        : `Moin. Dein Platz ist ${port.quay}. Was da ankommt, holst du ab, und zwar zügig. Der Zoll hier schläft nicht.`,
   });
-  ctx.emit('logistics.berthBought', { cost: BERTH_COST });
+  ctx.emit('logistics.berthBought', { cost: port.berthCost, cityId });
   return { ok: true };
 }
 
@@ -458,13 +531,26 @@ function pickup(
 ): CommandResult {
   const state = ctx.state;
   const s = state.modules.logistics;
-  const cargo = s.cargo.filter((c) => !payload.cargoIds || payload.cargoIds.includes(c.id));
+  // Ohne Angabe alles am Kai der aktiven Stadt; mit Angabe die Container, aber nur aus einem Hafen.
+  const chosen = payload.cargoIds
+    ? s.cargo.filter((c) => payload.cargoIds?.includes(c.id))
+    : s.cargo.filter((c) => c.cityId === activeCity(state));
+  const cityId = chosen[0]?.cityId ?? activeCity(state);
+  const cargo = chosen.filter((c) => c.cityId === cityId);
   if (cargo.length === 0) return { ok: false, reason: 'Am Kai wartet nichts auf dich.' };
-  const port = portPlace();
+  const port = portPlace(cityId);
   const warehouse = payload.warehouseId
     ? getWarehouse(state, payload.warehouseId)
     : (wishedWarehouse(state, cargo) ?? nearestWarehouse(state, port));
-  if (!warehouse) return { ok: false, reason: 'Dieses Lager gehört dir nicht.' };
+  if (!warehouse) {
+    return {
+      ok: false,
+      reason: payload.warehouseId
+        ? 'Dieses Lager gehört dir nicht.'
+        : `In ${cityName(cityId)} hast du noch kein Lager.`,
+    };
+  }
+  if (warehouseCity(warehouse.id) !== cityId) return { ok: false, reason: 'Das Lager liegt in einer anderen Stadt.' };
   let driverId: string | null = null;
   if (payload.by === 'player') {
     const busy = playerBusy(state);
@@ -482,7 +568,7 @@ function pickup(
   const trip = startTrip(ctx, {
     kind: 'pickup',
     driverId,
-    fromId: PORT_ID,
+    fromId: portPlaceId(cityId),
     toId: warehouse.id,
     items: cargo.map((c) => ({
       productId: c.productId,
@@ -498,7 +584,7 @@ function pickup(
   const who = driverLabel(state, driverId);
   journal.add(
     ctx,
-    `${who} ${driverId ? 'holt' : 'holst'} ${itemsText(trip.items)} am Niehler Hafen ab, ` +
+    `${who} ${driverId ? 'holt' : 'holst'} ${itemsText(trip.items)} am ${portName(cityId)} ab, ` +
       `im ${warehouse.name} in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}.`,
   );
   return { ok: true, data: { tripId: trip.id, arrivesAt: trip.arrivesAt } };
@@ -520,6 +606,8 @@ function transfer(
   const to = getWarehouse(state, payload.toId);
   if (!from || !to) return { ok: false, reason: 'Beide Lager müssen dir gehören.' };
   if (from.id === to.id) return { ok: false, reason: 'Start und Ziel sind dasselbe Lager.' };
+  // Zwischen den Städten fahren Routen über die Autobahn (Auftrag 30, Etappe 6), nicht das Umlagern.
+  if (from.cityId !== to.cityId) return { ok: false, reason: 'Die Lager liegen in verschiedenen Städten.' };
   const lots = getLots(state, { warehouseId: from.id, productId: payload.productId });
   const available = lots.reduce((sum, l) => sum + l.amount, 0);
   if (available <= 0) return { ok: false, reason: `Im ${from.name} liegt davon nichts.` };
@@ -595,7 +683,8 @@ function removeTrip(ctx: Ctx, trip: Trip): void {
 function arrive(ctx: Ctx, trip: Trip): void {
   const warehouse = getWarehouse(ctx.state, trip.toId);
   // Wurde das Ziel-Lager inzwischen aufgegeben, landet die Ware im nächsten eigenen Lager.
-  const target = warehouse ?? nearestWarehouse(ctx.state, placeOf(ctx.state, trip.fromId) ?? portPlace());
+  const target =
+    warehouse ?? nearestWarehouse(ctx.state, placeOf(ctx.state, trip.fromId) ?? portPlace(tripCity(ctx.state, trip)));
   for (const item of trip.items) {
     store(ctx, {
       productId: item.productId,
@@ -710,6 +799,11 @@ function driverGone(ctx: Ctx, staffId: string): void {
   }
 }
 
+/** Schreibt dieser Kontakt für einen Hafen? */
+function isPortContact(contactId: string): boolean {
+  return contactId === HARBOR_CONTACT.id || contactId === HARBOR_CALLER.id;
+}
+
 /** Container, auf die sich eine Hafen-Frage bezieht (steht in den Abhol-Optionen). */
 function questionCargoIds(message: Message): number[] {
   return (message.options ?? []).flatMap((o) =>
@@ -721,7 +815,7 @@ function questionCargoIds(message: Message): number[] {
 export function harborQuestions(state: GameState, cargoIds: readonly number[]): Message[] {
   return state.messages.list.filter(
     (m) =>
-      m.contactId === HARBOR_CONTACT.id &&
+      isPortContact(m.contactId) &&
       messages.canAnswer(state, m) &&
       questionCargoIds(m).some((id) => cargoIds.includes(id)),
   );
@@ -740,24 +834,26 @@ function retractStaleQuestions(ctx: Ctx): void {
   staleCheckKey.set(s, key);
   const onQuay = new Set(s.cargo.map((c) => c.id));
   for (const m of ctx.state.messages.list) {
-    if (m.contactId !== HARBOR_CONTACT.id || !messages.canAnswer(ctx.state, m)) continue;
+    if (!isPortContact(m.contactId) || !messages.canAnswer(ctx.state, m)) continue;
     const ids = questionCargoIds(m);
     if (ids.length > 0 && !ids.some((id) => onQuay.has(id))) messages.retract(ctx, m.id);
   }
 }
 
-/** Zoll am Kai: Ware, die zu lange steht, kann jede Stunde gefunden werden. */
+/** Zoll am Kai: Ware, die zu lange steht, kann jede Stunde gefunden werden (nur in der Stadt, die live ist). */
 function customs(ctx: Ctx): void {
   const s = ctx.state.modules.logistics;
   for (const cargo of [...s.cargo]) {
-    if (ctx.now < cargoRiskFrom(cargo) || !ctx.chance(CUSTOMS_CHANCE_PER_HOUR)) continue;
+    if (!isCityLive(ctx.state, cargo.cityId)) continue;
+    const port = portOf(cargo.cityId);
+    if (ctx.now < cargoRiskFrom(cargo) || !ctx.chance(port.customsChancePerHour)) continue;
     s.cargo = s.cargo.filter((c) => c.id !== cargo.id);
     s.stats.seized += cargo.amount;
     recordConfiscation(ctx, cargo.amount);
     const goods = `${formatProductAmount(cargo.productId, cargo.amount)} ${productName(cargo.productId)}`;
-    journal.add(ctx, `Der Zoll hat deinen Container im Niehler Hafen geöffnet: ${goods} beschlagnahmt.`, 'bad');
+    journal.add(ctx, `Der Zoll hat deinen Container im ${port.name} geöffnet: ${goods} beschlagnahmt.`, 'bad');
     messages.send(ctx, {
-      contact: HARBOR_CONTACT,
+      contact: portContact(cargo.cityId),
       text: `Zu spät. Der Zoll war an deinem Container, ${goods} sind weg. Ich hab dir gesagt, hol das Zeug ab.`,
     });
     ctx.emit('cargo.seized', { cargoId: cargo.id, productId: cargo.productId, amount: cargo.amount });
@@ -768,6 +864,10 @@ function tick(ctx: Ctx): void {
   const s = ctx.state.modules.logistics;
   for (const trip of [...s.trips]) {
     if (trip.status !== 'enRoute') continue;
+    // In einer schlafenden Stadt fährt die Fahrt ohne Kontrolle zu Ende.
+    if (trip.checkAt !== null && trip.checkAt <= ctx.now && !isCityLive(ctx.state, tripCity(ctx.state, trip))) {
+      trip.checkAt = null;
+    }
     if (trip.checkAt !== null && trip.checkAt <= ctx.now) stopForCheck(ctx, trip);
     else if (trip.arrivesAt <= ctx.now) arrive(ctx, trip);
   }
@@ -777,11 +877,13 @@ function tick(ctx: Ctx): void {
 
 export default defineModule({
   id: 'logistics',
-  version: 1,
+  version: 2,
   dependsOn: ['goods', 'suppliers', 'staff'],
   init: (ctx) => ({
     // Alte Spielstände: Wer schon am Hafen bestellt hat, behält seinen Zugang (Bestandsschutz).
-    berth: (ctx.state.modules.suppliers?.relations?.rotterdam?.orders ?? 0) > 0 ? { since: ctx.now } : null,
+    berths: ((ctx.state.modules.suppliers?.relations?.rotterdam?.orders ?? 0) > 0
+      ? { koeln: { since: ctx.now } }
+      : {}) as LogisticsState['berths'],
     cargo: [],
     trips: [],
     log: [],
@@ -789,7 +891,7 @@ export default defineModule({
   }),
   tick,
   commands: {
-    'logistics.buyBerth': (ctx) => buyBerth(ctx),
+    'logistics.buyBerth': (ctx, payload) => buyBerth(ctx, payload?.cityId ?? activeCity(ctx.state)),
     'logistics.pickup': (ctx, payload) => pickup(ctx, payload),
     'logistics.transfer': (ctx, payload) => transfer(ctx, payload),
   },
@@ -802,16 +904,27 @@ export default defineModule({
       if (to !== 'active') driverGone(ctx, staffId);
     },
   },
-  // Pleite-Regel: Ware am Kai oder unterwegs zählt wie Ware im Lager.
-  solvency: (state) => getCargo(state).length > 0 || getTrips(state).length > 0,
+  // Pleite-Regel: Ware am Kai (in jeder Stadt) oder unterwegs zählt wie Ware im Lager.
+  solvency: (state) => state.modules.logistics.cargo.length > 0 || getTrips(state).length > 0,
+  migrations: {
+    // Version 2 (Auftrag 30): Liegeplätze und Ware am Kai pro Stadt. Bis dahin war alles Köln.
+    2: (old: LogisticsStateV1): LogisticsState => {
+      const { berth, ...rest } = old;
+      return {
+        ...rest,
+        berths: berth ? { koeln: berth } : {},
+        cargo: old.cargo.map((c) => ({ ...c, cityId: 'koeln' })),
+      };
+    },
+  },
 });
 
-/** Für Tests und die Oberfläche: Warenwert am Kai zum Einkaufspreis. */
+/** Für Tests und die Oberfläche: Warenwert am Kai zum Einkaufspreis (alle Städte). */
 export function cargoValue(state: GameState): number {
-  return Math.round(getCargo(state).reduce((sum, c) => sum + c.amount * c.unitCost, 0));
+  return Math.round(state.modules.logistics.cargo.reduce((sum, c) => sum + c.amount * c.unitCost, 0));
 }
 
-/** Lager, in das eine Abholung ohne Angabe geht (am nächsten zum Hafen). */
-export function defaultPickupWarehouse(state: GameState): string | undefined {
-  return nearestWarehouse(state, portPlace())?.id ?? getWarehouses(state)[0]?.id;
+/** Lager, in das eine Abholung ohne Angabe geht (am nächsten zum Hafen der Stadt, Standard: die aktive). */
+export function defaultPickupWarehouse(state: GameState, cityId: string = activeCity(state)): string | undefined {
+  return nearestWarehouse(state, portPlace(cityId))?.id ?? getWarehouses(state, cityId)[0]?.id;
 }

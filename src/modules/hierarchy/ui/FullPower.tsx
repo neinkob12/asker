@@ -63,6 +63,8 @@ function HandoverDialog(props: { cityId: string }) {
   const handOver = () => {
     if (!dispatch({ type: 'hierarchy.grantFullPower', payload: { cityId: props.cityId } }).ok) return;
     close();
+    // Mit der Übergabe ist Hamburg frei: Karte und Handy wechseln dorthin (die Fahrt über die A1 kommt mit Etappe 5).
+    dispatch({ type: 'city.switch', payload: { cityId: 'hamburg' } });
   };
   return (
     <MapDialog label={`${city} übergeben`} onClose={close} class="handover" detent="large">

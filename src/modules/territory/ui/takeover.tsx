@@ -8,9 +8,10 @@ import { useEffect } from 'preact/hooks';
 import type { GameState } from '../../../core';
 import { type MapLayer, mapToken, registerMapLayer } from '../../../map';
 import { HudSegments, MapDialog, onGameEvent, registerDialog, registerSlot, useGame, useUi } from '../../../ui';
+import { cityName } from '../../city';
 import { getGang, getGangStatus } from '../../gangs';
 import { getReputation, reputationLabel } from '../../reputation';
-import { getBoundary, getVeedel, veedelName } from '../../veedel';
+import { getBoundary, getVeedel, veedelCity, veedelName } from '../../veedel';
 import { campaignProgress, PLAYER_FACTION } from '../index';
 import { isFirstTakeover, newMemory } from './takeoverModel';
 
@@ -51,7 +52,9 @@ function TakeoverDialog(props: { veedelId: string; from: string | null }) {
   const { state } = useGame();
   const ui = useUi();
   const veedel = getVeedel(props.veedelId);
-  const progress = campaignProgress(state);
+  const cityId = veedelCity(props.veedelId);
+  const progress = campaignProgress(state, cityId);
+  const city = cityName(cityId);
   const reputation = getReputation(state);
   const close = () => ui.closeDialog();
   return (
@@ -62,11 +65,11 @@ function TakeoverDialog(props: { veedelId: string; from: string | null }) {
       <p class="takeover__line">{veedel?.description ?? 'Ab jetzt gehört das Veedel dir.'}</p>
       <div class="takeover__bar">
         <div class="takeover__stat">
-          <span class="takeover__label is-place">Köln</span>
+          <span class="takeover__label is-place">{city}</span>
           <strong>
             {progress.controlled}/{progress.total}
           </strong>
-          <HudSegments total={progress.total} filled={progress.controlled} label="Köln" />
+          <HudSegments total={progress.total} filled={progress.controlled} label={city} />
         </div>
         <div class="takeover__stat">
           <span class="takeover__label is-brand">Ruf</span>

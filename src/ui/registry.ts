@@ -361,6 +361,34 @@ export function registerMapLayerOption(option: MapLayerOption): void {
   mapLayerOptions.register(option);
 }
 
+/** Kamera einer Stadt (Auftrag 30): Blickpunkt, Zoom am Desktop und am Handy-Bildschirm. */
+export interface CityCamera {
+  id: string;
+  name: string;
+  center: LngLat;
+  zoom: number;
+  mobileZoom: number;
+}
+
+/** Städte für Karte und Oberfläche: Kameras, Deutschland-Ansicht und welche Stadt gerade aktiv ist. */
+export interface CityViews {
+  cameras: readonly CityCamera[];
+  deutschland: { center: LngLat; zoom: number };
+  active(state: GameState): string;
+}
+
+let cityViews: CityViews | null = null;
+
+/** Städte anmelden (macht das Modul city). Ohne Anmeldung kennt die Karte nur Köln. */
+export function registerCityViews(views: CityViews): void {
+  cityViews = views;
+  version++;
+}
+
+export function getCityViews(): CityViews | null {
+  return cityViews;
+}
+
 /** Kennzahl für den Ergebnis-Bildschirm anmelden (z.B. Umsatz, Veedel, Leute). */
 export function registerGameStat(stat: GameStat): void {
   gameStats.register(stat);

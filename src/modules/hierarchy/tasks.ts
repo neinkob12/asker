@@ -8,9 +8,10 @@
 //   Stündlich (RIGHT_HAND_INTERVAL): Personal, Geldwäsche.
 
 import { type Actor, type Ctx, clock, formatEuro, type GameState, messages } from '../../core';
+import { activeCity } from '../city';
 import { getOrders, type Order } from '../customers';
 import { wageRunway } from '../finance';
-import { DEFAULT_WAREHOUSE, getStock, getWarehouses, isWarehouseOwned, productName } from '../goods';
+import { DEFAULT_WAREHOUSE, getStock, getWarehouses, isWarehouseOwned, productName, warehouseCity } from '../goods';
 import { amountInProgress, launderingCapacity, MIN_LAUNDERING_AMOUNT } from '../laundering';
 import { freeDrivers, getCargo, harborQuestions } from '../logistics';
 import { getSpots } from '../spots';
@@ -209,10 +210,11 @@ export function runHourlyTasks(ctx: Ctx, rh: RightHandPost, member: StaffMember,
   launder(ctx, rh, member, actor);
 }
 
-/** Hauptlager für ihre Bestellungen: das Standardlager, sonst das erste eigene. */
+/** Hauptlager für ihre Bestellungen in der Stadt, die live ist: das Standardlager, sonst das erste eigene dort. */
 export function mainWarehouseId(state: GameState): string | null {
-  if (isWarehouseOwned(state, DEFAULT_WAREHOUSE)) return DEFAULT_WAREHOUSE;
-  return getWarehouses(state)[0]?.id ?? null;
+  const city = activeCity(state);
+  if (isWarehouseOwned(state, DEFAULT_WAREHOUSE) && warehouseCity(DEFAULT_WAREHOUSE) === city) return DEFAULT_WAREHOUSE;
+  return getWarehouses(state, city)[0]?.id ?? null;
 }
 
 /** Was sie heute fürs Nachbestellen noch ausgeben darf: Tagesbudget, Lohnsicherung und eine kleine Rücklage. */
@@ -284,8 +286,8 @@ function staffing(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor
       }
     }
   }
-  if (wageRunway(state).warn || getStock(state) <= 0) return;
-  const spot = getSpots(state)
+  if (wageRunway(state).warn || getStock(state, { cityId: activeCity(state) }) <= 0) return;
+  const spot = getSpots(state, activeCity(state))
     .filter((s) => !runnerAt(state, s.id) && !activeRunnerAt(state, s.id))
     .filter((s) => !lieutenantOfSpot(state, s.id) && !isVeedelHidden(state, s.veedelId))
     .sort((a, b) => b.demand - a.demand || a.id.localeCompare(b.id))[0];

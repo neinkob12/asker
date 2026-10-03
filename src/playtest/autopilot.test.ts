@@ -98,7 +98,7 @@ describe('Köln läuft allein', () => {
     readyRightHand(sim);
     // Köln komplett (sonst gibt es keine Vollmacht): alle Veedel für den Spieler.
     const ctx = sim.ctx('test');
-    for (const v of allVeedel()) {
+    for (const v of allVeedel('koeln')) {
       for (const f of factions(sim.state)) if (f !== PLAYER_FACTION) addInfluence(ctx, v.id, f, -100);
       addInfluence(ctx, v.id, PLAYER_FACTION, 100);
     }
@@ -129,7 +129,7 @@ describe('Köln läuft allein', () => {
     expect(after.dirty + after.clean, info).toBeGreaterThan(0);
     expect(events['sale.completed'] ?? 0, info).toBeGreaterThan(100);
     // Der Bericht kommt aus Köln.
-    expect(getRightHand(sim.state)?.fullPower?.cityId).toBe('koeln');
+    expect(getRightHand(sim.state)?.fullPower?.cityId, info).toBe('koeln');
   }, 180_000);
 });
 

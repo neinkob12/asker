@@ -20,12 +20,12 @@ import {
   messages,
   wallet,
 } from '../../core';
+import { activeCity, liveVeedel } from '../city';
 import { DEFAULT_WAREHOUSE, getWarehouses, productName, store } from '../goods';
 import { addHeat } from '../police';
 import { changeReputation } from '../reputation';
 import { addLoyalty, addXp, getStaff } from '../staff';
 import { addInfluence, hasPlayerPresence, PLAYER_FACTION } from '../territory';
-import { allVeedel } from '../veedel';
 import { CHAPTERS, MILESTONE_TITLE, PETER, QUEST_CHECK_EVERY, QUESTS, type QuestDef, type QuestReward } from './config';
 
 export { CHAPTERS, MILESTONE_TITLE, PETER, QUESTS, type QuestDef, type QuestGoTo, type QuestReward } from './config';
@@ -116,7 +116,7 @@ export function rewardText(reward: QuestReward): string {
 function grant(ctx: Ctx, reward: QuestReward): void {
   switch (reward.kind) {
     case 'goods': {
-      const owned = getWarehouses(ctx.state);
+      const owned = getWarehouses(ctx.state, activeCity(ctx.state));
       const warehouseId = owned.some((w) => w.id === DEFAULT_WAREHOUSE) ? DEFAULT_WAREHOUSE : owned[0]?.id;
       if (warehouseId)
         store(ctx, { warehouseId, productId: reward.productId, amount: reward.amount, quality: reward.quality });
@@ -129,7 +129,7 @@ function grant(ctx: Ctx, reward: QuestReward): void {
       changeReputation(ctx, reward.amount, 'Quest');
       return;
     case 'heat':
-      for (const v of allVeedel()) addHeat(ctx, v.id, -reward.amount);
+      for (const v of liveVeedel(ctx.state)) addHeat(ctx, v.id, -reward.amount);
       return;
     case 'teamXp':
       for (const m of getStaff(ctx.state, { status: 'active' })) addXp(ctx, m.id, reward.amount);
@@ -138,7 +138,7 @@ function grant(ctx: Ctx, reward: QuestReward): void {
       for (const m of getStaff(ctx.state, { status: 'active' })) addLoyalty(ctx, m.id, reward.amount);
       return;
     case 'influence':
-      for (const v of allVeedel()) {
+      for (const v of liveVeedel(ctx.state)) {
         if (hasPlayerPresence(ctx.state, v.id)) addInfluence(ctx, v.id, PLAYER_FACTION, reward.amount);
       }
       return;

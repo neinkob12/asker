@@ -18,7 +18,7 @@ import {
 import { iconElement } from '../../../ui';
 import { formatProductAmount, getProduct } from '../../goods';
 import { getStaffMember } from '../../staff';
-import { getSupplier, shipmentsInTransit } from '../../suppliers';
+import { shipmentsInTransit } from '../../suppliers';
 
 /** Runde Kachel eines Orts mit weißem Symbol (Look "Glas", Stil in src/map/map.css). */
 const placeIcon = (icon: string) => {
@@ -27,7 +27,17 @@ const placeIcon = (icon: string) => {
   return tile;
 };
 
-import { getCargo, getTrips, hasBerth, portPlace, type Trip, tripAmount, tripProgress, tripRoute } from '../index';
+import {
+  getCargo,
+  getTrips,
+  hasBerth,
+  PORTS,
+  portPlace,
+  type Trip,
+  tripAmount,
+  tripProgress,
+  tripRoute,
+} from '../index';
 
 interface ShownTrip {
   vehicle: VehicleHandle;
@@ -69,20 +79,29 @@ export const logisticsLayer: MapLayer = {
       },
     });
     let routesKey = '';
-    const port = portPlace();
-    const name = el('span', 'map-place-name', port.name);
-    const portMarker = addHtmlMarker(map, {
-      position: port,
-      className: 'map-place map-place--dock',
-      anchor: 'bottom',
-      tag: 'button',
-      title: 'Hafen öffnen',
-      children: [placeIcon('anchor'), name],
-      onClick: () => {
-        if (!ctx.isPicking()) ctx.ui.openPanel('logistics.port', {});
-      },
+    // Ein Hafen pro Stadt (Auftrag 30); ein Klick macht seine Stadt aktiv und öffnet die Hafen-Seite.
+    const ports = Object.keys(PORTS).map((cityId) => {
+      const port = portPlace(cityId);
+      const name = el('span', 'map-place-name', port.name);
+      const marker = addHtmlMarker(map, {
+        position: port,
+        className: 'map-place map-place--dock',
+        anchor: 'bottom',
+        tag: 'button',
+        title: 'Hafen öffnen',
+        children: [placeIcon('anchor'), name],
+        onClick: () => {
+          if (ctx.isPicking()) return;
+          const state = ctx.getState();
+          if (state && state.modules.city.active !== cityId) {
+            ctx.ui.dispatch({ type: 'city.switch', payload: { cityId } });
+          }
+          ctx.ui.openPanel('logistics.port', {});
+        },
+      });
+      marker.element.hidden = true;
+      return { cityId, port, name, element: marker.element, marker: marker.marker };
     });
-    portMarker.element.hidden = true;
 
     const create = (state: GameState, trip: Trip): ShownTrip => {
       const paths = tripRoute(state, trip);
@@ -99,10 +118,13 @@ export const logisticsLayer: MapLayer = {
 
     return {
       update(state) {
-        const cargo = getCargo(state).length;
-        const shipping = shipmentsInTransit(state).some((s) => getSupplier(state, s.supplierId)?.kind === 'port');
-        portMarker.element.hidden = !(hasBerth(state) || cargo > 0 || shipping);
-        name.textContent = cargo > 0 ? `${port.name} · ${cargo} am Kai` : port.name;
+        for (const p of ports) {
+          const cargo = getCargo(state, p.cityId).length;
+          const shipping = shipmentsInTransit(state).some((s) => s.toPort && (s.cityId ?? 'koeln') === p.cityId);
+          p.element.hidden = !(hasBerth(state, p.cityId) || cargo > 0 || shipping);
+          const label = cargo > 0 ? `${p.port.name} · ${cargo} am Kai` : p.port.name;
+          if (p.name.textContent !== label) p.name.textContent = label;
+        }
 
         const trips = getTrips(state);
         const ids = new Set(trips.map((t) => t.id));
@@ -166,7 +188,7 @@ export const logisticsLayer: MapLayer = {
           entry.light?.stop();
         }
         shown.clear();
-        portMarker.marker.remove();
+        for (const p of ports) p.marker.remove();
         if (map.getLayer(ROUTES)) map.removeLayer(ROUTES);
         if (map.getSource(ROUTES)) map.removeSource(ROUTES);
       },

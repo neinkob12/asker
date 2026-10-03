@@ -21,6 +21,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity } from '../../city';
 import { DEFAULT_WAREHOUSE, getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
 import { CHAPTERS, chapterName, currentQuest, QUESTS, type QuestGoTo, questProgress, rewardText } from '../index';
@@ -54,7 +55,7 @@ function writeCollapsed(value: boolean): void {
 export function goTo(ui: UiApi, state: GameState, target: QuestGoTo | undefined): void {
   switch (target) {
     case 'spot': {
-      const spot = getSpots(state)[0];
+      const spot = getSpots(state, activeCity(state))[0];
       if (!spot) return;
       ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
       ui.openPanel('spots.spot', { spotId: spot.id });
@@ -67,7 +68,9 @@ export function goTo(ui: UiApi, state: GameState, target: QuestGoTo | undefined)
       ui.openPanel('logistics.port', {});
       return;
     case 'warehouse':
-      ui.openPanel('goods.warehouse', { warehouseId: getWarehouses(state)[0]?.id ?? DEFAULT_WAREHOUSE });
+      ui.openPanel('goods.warehouse', {
+        warehouseId: getWarehouses(state, activeCity(state))[0]?.id ?? DEFAULT_WAREHOUSE,
+      });
       return;
     case 'staff':
       ui.selectTab('staff');

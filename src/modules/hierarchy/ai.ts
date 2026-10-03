@@ -20,6 +20,7 @@ import {
   isAbsent,
   isEmployed,
   isLyingLow,
+  isMemberLive,
   runnerAt,
   runnerHireCost,
   type StaffMember,
@@ -106,6 +107,8 @@ export function tick(ctx: Ctx): void {
     const post = h.posts[staffId];
     const lt = getStaffMember(ctx.state, staffId);
     if (!lt || !isEmployed(ctx.state, lt.id) || lt.status !== 'active') continue;
+    // Leutnants in einer schlafenden Stadt ruhen (Auftrag 30): Ihr Geschäft steckt im Tagesergebnis.
+    if (!isMemberLive(ctx.state, lt)) continue;
     if (ctx.now >= post.nextActionAt) {
       manage(turnFor(ctx, post, lt));
       post.nextActionAt = ctx.now + actionInterval(lt);

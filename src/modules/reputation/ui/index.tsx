@@ -18,8 +18,9 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity, cityName } from '../../city';
 import { campaignProgress, controlledBy, PLAYER_FACTION } from '../../territory';
-import { veedelName } from '../../veedel';
+import { veedelCity, veedelName } from '../../veedel';
 import { getReputation, recentReputationChanges, reputationLabel, reputationTier, reputationTiers } from '../index';
 import './reputation.css';
 
@@ -37,8 +38,13 @@ function ReputationHud() {
   const tier = tiers[index];
   const below = tiers[index - 1];
   const above = tiers[index + 1];
-  const progress = campaignProgress(state);
-  const mine = controlledBy(state, PLAYER_FACTION).map(veedelName).sort();
+  const cityId = activeCity(state);
+  const city = cityName(cityId);
+  const progress = campaignProgress(state, cityId);
+  const mine = controlledBy(state, PLAYER_FACTION)
+    .filter((id) => veedelCity(id) === cityId)
+    .map(veedelName)
+    .sort();
   return (
     <HudPill
       icon="star"
@@ -81,9 +87,9 @@ function ReputationHud() {
             <strong>
               {progress.controlled}/{progress.total}
               {progress.complete
-                ? ' · Köln komplett'
+                ? ` · ${city} komplett`
                 : progress.majorityReached
-                  ? ' · Boss von Köln'
+                  ? ` · Boss von ${city}`
                   : ` · ab ${progress.majority} Boss`}
             </strong>
           </div>

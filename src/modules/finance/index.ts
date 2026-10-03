@@ -1,7 +1,8 @@
 // Kasse: Buch über Einnahmen und Ausgaben pro Spieltag (heute plus die letzten 30 Tage, Auftrag 27).
 // Hört auf jede Kontobewegung ('wallet.changed', mit Kategorie aus dem Kern) und jeden Verkauf ('sale.completed') und
 // führt daraus eine Gewinn- und Verlustrechnung: Summen je Kategorie und Geldart, Buchungstexte, Umsatz und Löhne pro
-// Spot und pro Leutnant. Eine Buchung genau um Mitternacht zählt noch zum Tag, der gerade endet (die Löhne, die um
+// Spot und pro Leutnant, dazu seit Auftrag 30 Summen je Kategorie pro Stadt (Filter "Stadt", Anteil der Rechten Hand,
+// Schlafmodus). Eine Buchung genau um Mitternacht zählt noch zum Tag, der gerade endet (die Löhne, die um
 // 0 Uhr gezahlt werden, gehören zum Tag davor). Geldwäsche ist eine Umbuchung ('transfer') und zählt nicht als Gewinn.
 //
 // Öffentliche API (lesen):
@@ -10,6 +11,7 @@
 //   lieutenantResult(state, staffId, days), wageRunway(state), DAYS_KEPT, RUNWAY_WARN_DAYS
 //   Bilanz (Auftrag 27): PERIODS, periodSpan(period), balance(state, period, filter), balanceHistory(state, period,
 //   filter), explainReport(report), FinanceFilter, filterTargets(state)
+//   Städte (Auftrag 30): cityReport(state, cityId, days, offset?), cityDayProfit(state, cityId, day), bookingCity(state, …)
 // Keine Befehle, keine eigenen Ereignisse.
 
 import {
@@ -24,6 +26,7 @@ import {
   type MoneyGroup,
   type MoneyKind,
 } from '../../core';
+import { activeCity, cityOfSpot } from '../city';
 import { getLieutenantIds, lieutenantOfSpot, teamLeadOf } from '../hierarchy';
 import { getAllSpots, getSpots, type Spot } from '../spots';
 import { getStaffMember, payrollDue } from '../staff';
@@ -54,10 +57,14 @@ export interface UnitBook {
   invest: number;
 }
 
+type CategorySums = Partial<Record<MoneyCategory, MoneySplit>>;
+
 export interface DayBook {
   /** Spieltag (ab 1). */
   day: number;
-  categories: Partial<Record<MoneyCategory, MoneySplit>>;
+  categories: CategorySums;
+  /** Dieselben Summen pro Stadt (Auftrag 30). Ihre Summe ergibt categories. */
+  cities: Record<string, CategorySums>;
   reasons: Partial<Record<MoneyCategory, Record<string, ReasonLine>>>;
   spots: Record<string, UnitBook>;
   lieutenants: Record<string, UnitBook>;
@@ -67,6 +74,9 @@ export interface FinanceState {
   /** Neuester Tag zuerst, höchstens DAYS_KEPT + 1. */
   days: DayBook[];
 }
+
+/** Tagesbuch in Version 1 (ohne Städte). */
+type DayBookV1 = Omit<DayBook, 'cities'>;
 
 declare module '../../core' {
   interface ModuleStates {
@@ -129,10 +139,12 @@ export interface Report {
   wages: number;
 }
 
-function report(books: DayBook[], from: number, to: number): Report {
+function report(books: DayBook[], from: number, to: number, cityId?: string): Report {
   const sums = new Map<MoneyCategory, MoneySplit>();
   for (const book of books) {
-    for (const [category, split] of Object.entries(book.categories) as [MoneyCategory, MoneySplit][]) {
+    const categories = cityId === undefined ? book.categories : book.cities?.[cityId];
+    if (!categories) continue;
+    for (const [category, split] of Object.entries(categories) as [MoneyCategory, MoneySplit][]) {
       const sum = sums.get(category) ?? { dirty: 0, clean: 0 };
       sum.dirty += split.dirty;
       sum.clean += split.clean;
@@ -282,9 +294,10 @@ export function periodSpan(period: Period): { days: number; offset: number } {
   return { days: 1, offset: 0 };
 }
 
-/** Worauf die Bilanz schaut: ganz Köln, ein Veedel, ein Spot oder ein Leutnant. */
+/** Worauf die Bilanz schaut: alles, eine Stadt, ein Veedel, ein Spot oder ein Leutnant. */
 export type FinanceFilter =
   | { kind: 'all' }
+  | { kind: 'city'; cityId: string }
   | { kind: 'veedel'; veedelId: string }
   | { kind: 'spot'; spotId: string }
   | { kind: 'lieutenant'; staffId: string };
@@ -367,6 +380,7 @@ export function balance(state: GameState, period: Period, filter: FinanceFilter 
   const from = Math.max(1, to - days + 1);
   const books = booksOf(state, days, offset);
   if (filter.kind === 'all') return report(books, from, to);
+  if (filter.kind === 'city') return report(books, from, to, filter.cityId);
   return unitReport(unitsOf(state, filter, books), from, to);
 }
 
@@ -388,10 +402,42 @@ export function balanceHistory(
     const profit =
       filter.kind === 'all'
         ? report([book], day, day).profit
-        : unitReport(unitsOf(state, filter, [book]), day, day).profit;
+        : filter.kind === 'city'
+          ? report([book], day, day, filter.cityId).profit
+          : unitReport(unitsOf(state, filter, [book]), day, day).profit;
     result.push({ day, profit });
   }
   return result;
+}
+
+// --- Städte (Auftrag 30) ---
+
+/** Gewinn- und Verlustrechnung einer Stadt über die letzten days Tage (mit offset: ab so vielen Tagen zurück). */
+export function cityReport(state: GameState, cityId: string, days: number, offset = 0): Report {
+  const to = currentDay(state) - offset;
+  return report(booksOf(state, days, offset), Math.max(1, to - days + 1), to, cityId);
+}
+
+/** Kategorien, die nicht zum eigenen Ergebnis einer Stadt zählen (Anteil der Rechten Hand, Schlafmodus). */
+const NOT_OPERATING: readonly MoneyCategory[] = ['share.righthand', 'income.city', 'expense.city'];
+
+/**
+ * Ergebnis einer Stadt an einem Buchungstag aus dem eigenen Geschäft, ohne den Anteil der Rechten Hand und ohne
+ * Ergebnisse aus dem Schlafmodus (für den Schnitt der Tageszusammenfassung). null, wenn der Tag nicht im Buch steht.
+ */
+export function cityDayProfit(state: GameState, cityId: string, day: number): number | null {
+  const book = findDay(state, day);
+  if (!book) return null;
+  const r = report([book], day, day, cityId);
+  return r.profit - r.rows.filter((row) => NOT_OPERATING.includes(row.category)).reduce((s, row) => s + row.amount, 0);
+}
+
+/** Zu welcher Stadt eine Buchung gehört: angegeben, sonst über den Spot oder die Person, sonst die aktive Stadt. */
+export function bookingCity(state: GameState, payload: { cityId?: string; spotId?: string; staffId?: string }): string {
+  if (payload.cityId) return payload.cityId;
+  if (payload.spotId) return cityOfSpot(state, payload.spotId);
+  const member = payload.staffId ? getStaffMember(state, payload.staffId) : undefined;
+  return member?.cityId ?? activeCity(state);
 }
 
 /** Ein Satz, warum der Zeitraum Gewinn oder Verlust gemacht hat (größter Posten). */
@@ -448,7 +494,7 @@ export function wageRunway(state: GameState): WageRunway {
 // --- Schreiben (nur über Ereignisse) ---
 
 function emptyDay(day: number): DayBook {
-  return { day, categories: {}, reasons: {}, spots: {}, lieutenants: {} };
+  return { day, categories: {}, cities: {}, reasons: {}, spots: {}, lieutenants: {} };
 }
 
 function emptyUnit(): UnitBook {
@@ -505,12 +551,19 @@ function onWalletChanged(
     category?: MoneyCategory;
     staffId?: string;
     spotId?: string;
+    cityId?: string;
   },
 ): void {
   const book = today(ctx);
   const category = payload.category ?? (payload.amount > 0 ? 'income.other' : 'expense.other');
   book.categories[category] ??= { dirty: 0, clean: 0 };
   (book.categories[category] as MoneySplit)[payload.kind] += payload.amount;
+  const cityId = bookingCity(ctx.state, payload);
+  book.cities ??= {};
+  book.cities[cityId] ??= {};
+  const city = book.cities[cityId];
+  city[category] ??= { dirty: 0, clean: 0 };
+  (city[category] as MoneySplit)[payload.kind] += payload.amount;
   addReason(book, category, payload.reason, payload.amount);
 
   const cost = -payload.amount;
@@ -552,8 +605,14 @@ function onSale(
 
 export default defineModule({
   id: 'finance',
-  version: 1,
+  version: 2,
   init: (ctx) => ({ days: [emptyDay(currentDay(ctx.state))] }),
+  migrations: {
+    // Version 2 (Auftrag 30): Summen pro Stadt. Bis dahin war alles Köln.
+    2: (old: { days: DayBookV1[] }): FinanceState => ({
+      days: old.days.map((d) => ({ ...d, cities: { koeln: structuredClone(d.categories) } })),
+    }),
+  },
   on: {
     'wallet.changed': onWalletChanged,
     'sale.completed': onSale,

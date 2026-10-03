@@ -38,6 +38,7 @@ import {
   effectiveWage,
   expectedWage,
   hidingReturn,
+  isMemberLive,
   isSpecialist,
   removeMember,
   revealStat,
@@ -59,6 +60,8 @@ export function tick(ctx: Ctx): void {
 function releaseDue(ctx: Ctx): void {
   for (const m of [...ctx.state.modules.staff.members]) {
     if (m.statusUntil === null || m.statusUntil > ctx.now) continue;
+    // Schlafende Stadt: keine Haft-Ereignisse, entlassen wird beim Aufwachen.
+    if (!isMemberLive(ctx.state, m)) continue;
     if (m.status !== 'jailed' && m.status !== 'injured') continue;
     const wasJailed = m.status === 'jailed';
     // Ohne Stillhaltegeld hat die Person in der Haft eher geredet.
@@ -77,6 +80,7 @@ function releaseDue(ctx: Ctx): void {
 function serveCustomers(ctx: Ctx): void {
   for (const member of [...ctx.state.modules.staff.members]) {
     if (member.role !== 'runner' || member.status !== 'active' || member.assignment?.kind !== 'spot') continue;
+    if (!isMemberLive(ctx.state, member)) continue;
     if (member.busyUntil > ctx.now) continue;
     const customer = waitingAt(ctx.state, member.assignment.targetId).find((c) => canServe(ctx.state, c.id));
     if (!customer) continue;
@@ -183,11 +187,13 @@ function returnFromHiding(ctx: Ctx): void {
 export function daily(ctx: Ctx): void {
   payWages(ctx);
   for (const m of [...ctx.state.modules.staff.members]) {
+    // Schlafende Stadt: keine Loyalitätsverluste, kein Verrat (die Löhne stecken im Tagesergebnis).
+    if (!isMemberLive(ctx.state, m)) continue;
     dailyLoyalty(ctx, m);
     if (ctx.chance(REVEAL_CHANCE)) revealStat(ctx, m.id);
     if (isSpecialist(m.role) && m.status === 'active') addXp(ctx, m.id, XP_PER_SPECIALIST_DAY);
   }
-  for (const m of [...ctx.state.modules.staff.members]) maybeBetray(ctx, m);
+  for (const m of [...ctx.state.modules.staff.members]) if (isMemberLive(ctx.state, m)) maybeBetray(ctx, m);
 }
 
 /**
@@ -204,9 +210,10 @@ function wageSpot(state: GameState, m: StaffMember): string | null {
  * schreibt dir. Wer dann kaum noch loyal ist oder schon gestern leer ausging, kündigt.
  */
 function payWages(ctx: Ctx): void {
-  const members = [...ctx.state.modules.staff.members].sort(
-    (a, b) => b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id),
-  );
+  // Nur die Leute in der Stadt, die live ist: In einer schlafenden Stadt stecken die Löhne im Tagesergebnis (city).
+  const members = ctx.state.modules.staff.members
+    .filter((m) => isMemberLive(ctx.state, m))
+    .sort((a, b) => b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id));
   if (members.length === 0) return;
   let paid = 0;
   let total = 0;

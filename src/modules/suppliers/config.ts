@@ -25,6 +25,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     reliability: 0.72,
     description:
       'Container per Schiff bis in den Niehler Hafen. Große Mengen, billig, aber es dauert, und abholen musst du selbst.',
+    // Rotterdam liefert nur nach Köln (über den Rhein), Hamburg hat Hein am Kai.
+    cities: ['koeln'],
     unlock: {
       requires: { berth: true },
       fee: 0,
@@ -53,6 +55,10 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.62,
     reliability: 0.88,
     description: 'Kurierfahrer über die A3. Schnell und zuverlässig, dafür teuer.',
+    // Toni ist in Hamburg dein Startlieferant per Kurier: länger unterwegs, zehn Prozent Aufschlag.
+    cities: ['koeln', 'hamburg'],
+    deliveryTimes: { hamburg: 330 },
+    priceFactors: { hamburg: 1.1 },
     packages: [
       { id: 'weed25', label: '25 g Gras', productId: 'weed', amount: 25, price: 140 },
       { id: 'weed50', label: '50 g Gras', productId: 'weed', amount: 50, price: 255 },
@@ -75,6 +81,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.74,
     reliability: 0.7,
     description: 'Gute Ware aus der Hauptstadt, Edibles und Vapes. Nicht immer pünktlich.',
+    cities: ['koeln', 'hamburg'],
+    deliveryTimes: { hamburg: 180 },
     unlock: {
       requires: { veedel: 1 },
       fee: 600,
@@ -102,6 +110,27 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.6,
     reliability: 0.9,
     description: 'Hanseatisch korrekt. Solide Ware, fast nie Ärger.',
+    // In Hamburg ist Hein Hafen-Großhändler: Container direkt am Kai, doppelt so große Pakete wie Rotterdam, etwa zehn
+    // Prozent teurer, sechs Stunden. Freigeschaltet mit dem Hamburger Liegeplatz.
+    cities: ['koeln', 'hamburg'],
+    deliveryTimes: { hamburg: 360 },
+    inCity: {
+      hamburg: {
+        kind: 'port',
+        priceLevel: 0.37,
+        description:
+          'Hein am Kai: Container direkt im Hamburger Hafen. Große Mengen, sechs Stunden, abholen musst du selbst.',
+        packages: [
+          { id: 'hh-weed1kg', label: '1 kg Gras', productId: 'weed', amount: 1000, price: 3220 },
+          { id: 'hh-weed2kg', label: '2 kg Gras', productId: 'weed', amount: 2000, price: 6350 },
+          { id: 'hh-weed5kg', label: '5 kg Gras', productId: 'weed', amount: 5000, price: 15600, minTrust: 30 },
+          { id: 'hh-hash1kg', label: '1 kg Hasch', productId: 'hash', amount: 1000, price: 3135 },
+          { id: 'hh-edibles500', label: '500 Edibles', productId: 'edibles', amount: 500, price: 1300 },
+          { id: 'hh-vape200', label: '200 Vape-Pens', productId: 'vape', amount: 200, price: 2240 },
+          { id: 'hh-oil500', label: '500 ml Öl', productId: 'oil', amount: 500, price: 3740 },
+        ],
+      },
+    },
     unlock: {
       requires: { revenue: 1500 },
       fee: 250,
@@ -130,6 +159,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.82,
     reliability: 0.85,
     description: 'Großhändler für Coffeeshops. Die beste Ware, kommt über die A57. Redet nur mit großen Leuten.',
+    cities: ['koeln', 'hamburg'],
+    deliveryTimes: { hamburg: 360 },
     unlock: {
       requires: { veedel: 3, revenue: 15000 },
       fee: 1500,
@@ -158,6 +189,7 @@ export const SUPPLIERS: readonly Supplier[] = [
     reliability: 0.85,
     description:
       'Kalle aus Kalk, ein Kontakt aus der Nachbarschaft. Kleine Mengen, in unter einer Stunde da, dafür nicht billig.',
+    cities: ['koeln'],
     packages: [
       { id: 'weed10', label: '10 g Gras', productId: 'weed', amount: 10, price: 60 },
       { id: 'weed25', label: '25 g Gras', productId: 'weed', amount: 25, price: 145 },

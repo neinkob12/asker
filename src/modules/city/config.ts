@@ -39,3 +39,13 @@ export const OFFER_TEXTS = {
   reminder: 'Fiete hier. Hamburg wartet nicht ewig. Was ist nun?',
   houseReady: 'Wie ich höre, ist dein Haus jetzt in Ordnung. Ich ruf dich gleich an.',
 } as const;
+
+/** Schlafmodus: So viele live gespielte Tage gehen in den Schnitt der Tageszusammenfassung. */
+export const SLEEP_AVERAGE_DAYS = 7;
+
+/** Schlafmodus: Das Ergebnis schwankt um den Schnitt, zwischen diesen Faktoren (ctx.random). */
+export const SLEEP_FACTOR_MIN = 0.85;
+export const SLEEP_FACTOR_MAX = 1.15;
+
+/** Welche Stadt nach der Übergabe einer Stadt an die Rechte Hand frei wird (Auftrag 30: Köln → Hamburg). */
+export const NEXT_CITY: Readonly<Record<string, string>> = { koeln: 'hamburg' };

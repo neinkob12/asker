@@ -21,7 +21,7 @@ function quietGame(seed = 1): Simulation {
 /** Alle Kölner Veedel für den Spieler, dann bis zum Anruf vorspulen. */
 function completeKoeln(sim: Simulation): void {
   const ctx = sim.ctx('test');
-  for (const v of allVeedel()) {
+  for (const v of allVeedel('koeln')) {
     for (const faction of factions(sim.state)) if (faction !== PLAYER_FACTION) addInfluence(ctx, v.id, faction, -100);
     addInfluence(ctx, v.id, PLAYER_FACTION, 100);
   }

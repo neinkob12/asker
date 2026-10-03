@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { formatEuro } from '../../../core';
 import { Button, Group, Hint, ItemContent, List, ListItem, Select, Sheet, Stepper, useGame } from '../../../ui';
+import { activeCity } from '../../city';
 import { allProducts, formatProductAmount, getWarehouses, productName } from '../../goods';
 import { availablePackages, getSupplier, getSuppliers, isUnlocked, packagePrice } from '../../suppliers';
 import { homeWarehouse, isPortSupplierAllowed, type OrderRule, PORT_SUPPLIER_HINT } from '../index';
@@ -41,7 +42,7 @@ export function RuleSheet(props: RuleSheetProps) {
   const portAllowed = isPortSupplierAllowed(state);
   const supplierOptions = [
     { value: AUTO, label: 'Automatisch: günstigster' },
-    ...getSuppliers(state).map((s) => {
+    ...getSuppliers(state, activeCity(state)).map((s) => {
       const blocked = s.kind === 'port' && !portAllowed;
       const locked = !isUnlocked(state, s.id);
       return {
@@ -64,7 +65,7 @@ export function RuleSheet(props: RuleSheetProps) {
   const home = homeWarehouse(state, props.staffId);
   const warehouseOptions = [
     { value: AUTO, label: `Lager seiner Spots${home ? ` (${home.name})` : ''}` },
-    ...getWarehouses(state).map((w) => ({ value: w.id, label: w.name })),
+    ...getWarehouses(state, activeCity(state)).map((w) => ({ value: w.id, label: w.name })),
   ];
   const unit = draft.productId ? formatProductAmount(draft.productId, draft.minStock) : `${draft.minStock} Einheiten`;
 

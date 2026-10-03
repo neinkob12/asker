@@ -87,6 +87,8 @@ export interface StaffMember {
   /** Nur bei ehemaligen Mitarbeitern gesetzt. */
   leftAt: number | null;
   leftReason: StaffLeaveReason | null;
+  /** Stadt, in der die Person gerade ist (Auftrag 30; alte Stände: Köln). */
+  cityId: string;
 }
 
 export interface StaffState {
@@ -121,6 +123,8 @@ export interface StaffFilter {
   spotId?: string;
   /** Wer im Veedel eingesetzt ist: an einem Spot, im Lager dort oder als Leutnant. */
   veedelId?: string;
+  /** Wer in dieser Stadt ist (Auftrag 30). */
+  cityId?: string;
 }
 
 /** Arten von Verrat. */

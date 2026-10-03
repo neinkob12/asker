@@ -60,7 +60,7 @@ describe('territory', () => {
   it('zu Beginn haben die Gangs Köln unter sich aufgeteilt, der Spieler hat nichts', () => {
     const sim = createTestGame();
     const gangIds = getGangs(sim.state).map((g) => g.id);
-    for (const v of allVeedel()) {
+    for (const v of allVeedel('koeln')) {
       const owner = controllerOf(sim.state, v.id);
       expect(gangIds).toContain(owner);
       expect(getInfluence(sim.state, v.id, owner ?? '')).toBe(v.startInfluence);
@@ -258,7 +258,7 @@ describe('territory', () => {
     const sim = quietGame();
     const events = recordEvents(sim);
     const ctx = sim.ctx('test');
-    const ids = allVeedel().map((v) => v.id);
+    const ids = allVeedel('koeln').map((v) => v.id);
     for (const id of ids.slice(0, 6)) addInfluence(ctx, id, PLAYER_FACTION, 100);
     sim.step();
     expect(campaignProgress(sim.state)).toMatchObject({ controlled: 6, needed: 12, majority: 7, won: false });
@@ -302,7 +302,7 @@ describe('territory', () => {
   it('alter Spielstand mit Sieg bei 7 von 12 behält den Sieg, bekommt den Meilenstein und später Köln komplett', () => {
     const sim = quietGame();
     const ctx = sim.ctx('test');
-    const ids = allVeedel().map((v) => v.id);
+    const ids = allVeedel('koeln').map((v) => v.id);
     for (const id of ids.slice(0, 7)) addInfluence(ctx, id, PLAYER_FACTION, 100);
     sim.step();
     // So sah ein Stand nach Auftrag 29 aus: gewonnen bei 7, Territory in Version 2, Sieg ohne Städte-Liste.
@@ -337,7 +337,7 @@ describe('territory', () => {
     const loaded = loadSimulation(old, sim.modules);
     expect(loaded.state.modules.territory.lastSaleAt).toEqual({});
     expect(loaded.state.modules.territory.controller).toEqual(sim.state.modules.territory.controller);
-    expect(loaded.state.moduleVersions.territory).toBe(3);
+    expect(loaded.state.moduleVersions.territory).toBe(4);
     expect(loaded.state.modules.territory.milestones).toEqual({ koeln: { majority: null, complete: null } });
     sell(loaded, 'kalk');
     expect(getInfluence(loaded.state, 'kalk', PLAYER_FACTION)).toBeGreaterThan(0);

@@ -1,19 +1,26 @@
-// Erzeugt src/modules/veedel/boundaries.ts aus den amtlichen Stadtteilgrenzen der Stadt Köln.
+// Erzeugt die Grenzen der Veedel bzw. Stadtteile einer Stadt (Köln: boundaries.ts, Hamburg: boundaries-hamburg.ts).
 //
 // Aufruf (aus dem Repo-Root):
-//   node src/modules/veedel/tools/build-boundaries.mjs                 lädt die Daten aus dem Geoportal
-//   node src/modules/veedel/tools/build-boundaries.mjs stadtteile.json nimmt eine schon geladene GeoJSON-Datei
+//   node src/modules/veedel/tools/build-boundaries.mjs                 Köln: lädt die Daten aus dem Geoportal
+//   node src/modules/veedel/tools/build-boundaries.mjs stadtteile.json Köln: nimmt eine schon geladene GeoJSON-Datei
+//   node src/modules/veedel/tools/build-boundaries.mjs --city hamburg hamburg.geojson
+//                                                                      Hamburg: GeoJSON aus tools/fetch-divisions.py
 //   npm run format                                                     danach, damit Biome zufrieden ist
 //
-// Quelle: Offene Daten Köln, Datensatz "Stadtteile Köln" (https://www.offenedaten-koeln.de/dataset/stadtteile-koeln),
-// Lizenz: Datenlizenz Deutschland – Zero – Version 2.0 (https://www.govdata.de/dl-de/zero-2-0).
+// Quellen:
+//   Köln: Offene Daten Köln, Datensatz "Stadtteile Köln" (https://www.offenedaten-koeln.de/dataset/stadtteile-koeln),
+//     Lizenz: Datenlizenz Deutschland – Zero – Version 2.0 (https://www.govdata.de/dl-de/zero-2-0).
+//   Hamburg (Auftrag 30): Overture Maps, Thema "divisions" (Stadtteile aus OpenStreetMap, ODbL 1.0), geladen mit
+//     tools/fetch-divisions.py. Die Verwaltungsgrenzen des LGV Hamburg (WFS) waren aus der Entwicklungsumgebung nicht
+//     erreichbar.
 //
 // Was das Skript macht:
-//   1. Nimmt nur die Stadtteile, die im Spiel Veedel sind (VEEDEL unten).
+//   1. Nimmt nur die Stadtteile, die im Spiel Veedel sind (names in CITIES unten). Bei Flächen mit Löchern oder mehreren
+//      Teilen zählt der äußere Ring des größten Teils (Seen und kleine Inseln spielen keine Rolle).
 //   2. Vereinfacht die Grenzen mit Douglas-Peucker. Gemeinsame Grenzen zweier Veedel werden nur einmal vereinfacht,
 //      damit keine Lücken oder Überlappungen entstehen (Punkte, an denen sich die Nachbarschaft ändert, bleiben fest).
 //   3. Grenzkorrektur: Einige Plätze im Spiel liegen genau auf einer Stadtteilgrenze (Ringe, Zoobrücke). Die Grenze
-//      wird dort um wenige Meter verschoben, damit der Platz im Veedel liegt, zu dem er im Spiel gehört (ANCHORS).
+//      wird dort um wenige Meter verschoben, damit der Platz im Veedel liegt, zu dem er im Spiel gehört (anchors).
 //   4. Leitet aus den Originaldaten ab, welche Veedel eine gemeinsame Grenze haben.
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -24,41 +31,90 @@ const SOURCE_URL =
   'https://geoportal.stadt-koeln.de/arcgis/rest/services/Basiskarten/kgg/MapServer/3/query' +
   '?where=objectid+is+not+null&outFields=nummer,name,stadtbezirk&returnGeometry=true&outSR=4326&f=geojson';
 
-/** Stadtteil-Name in den Daten → Veedel-ID im Spiel. */
-const VEEDEL = {
-  'Altstadt/Nord': 'altstadt-nord',
-  'Altstadt/Süd': 'altstadt-sued',
-  'Neustadt/Nord': 'neustadt-nord',
-  'Neustadt/Süd': 'neustadt-sued',
-  Deutz: 'deutz',
-  Ehrenfeld: 'ehrenfeld',
-  Lindenthal: 'lindenthal',
-  Sülz: 'suelz',
-  Nippes: 'nippes',
-  Kalk: 'kalk',
-  Mülheim: 'muelheim',
-  Bayenthal: 'bayenthal',
+/** Pro Stadt: Name in den Daten → Veedel-ID, Plätze auf Grenzlinien, Ausgabe und Quellenangabe. */
+const CITIES = {
+  koeln: {
+    sourceUrl: SOURCE_URL,
+    lat0: 50.94,
+    outFile: 'boundaries.ts',
+    names: {
+      'Altstadt/Nord': 'altstadt-nord',
+      'Altstadt/Süd': 'altstadt-sued',
+      'Neustadt/Nord': 'neustadt-nord',
+      'Neustadt/Süd': 'neustadt-sued',
+      Deutz: 'deutz',
+      Ehrenfeld: 'ehrenfeld',
+      Lindenthal: 'lindenthal',
+      Sülz: 'suelz',
+      Nippes: 'nippes',
+      Kalk: 'kalk',
+      Mülheim: 'muelheim',
+      Bayenthal: 'bayenthal',
+    },
+    anchors: [
+      { name: 'Ebertplatz', veedelId: 'neustadt-nord', lng: 6.9575, lat: 50.9497 },
+      { name: 'Rudolfplatz', veedelId: 'neustadt-sued', lng: 6.9392, lat: 50.9366 },
+      { name: 'Rheinpark (Nordrand an der Zoobrücke)', veedelId: 'deutz', lng: 6.979, lat: 50.9468 },
+    ],
+    header: [
+      '// Quelle: Stadt Köln, Offene Daten Köln, Datensatz "Stadtteile Köln"',
+      '//   https://www.offenedaten-koeln.de/dataset/stadtteile-koeln',
+      '// Lizenz: Datenlizenz Deutschland – Zero – Version 2.0 (dl-de/zero-2-0, https://www.govdata.de/dl-de/zero-2-0).',
+      '//   Nutzung ohne Einschränkungen und ohne Pflicht zur Quellenangabe; wir nennen die Quelle trotzdem.',
+    ],
+  },
+  hamburg: {
+    sourceUrl: null,
+    lat0: 53.55,
+    outFile: 'boundaries-hamburg.ts',
+    names: {
+      'St. Pauli': 'st-pauli',
+      Sternschanze: 'sternschanze',
+      'Altona-Altstadt': 'altona-altstadt',
+      Ottensen: 'ottensen',
+      'St. Georg': 'st-georg',
+      HafenCity: 'hafencity',
+      Eimsbüttel: 'eimsbuettel',
+      Eppendorf: 'eppendorf',
+      'Barmbek-Süd': 'barmbek-sued',
+      Wilhelmsburg: 'wilhelmsburg',
+      Harburg: 'harburg',
+      Blankenese: 'blankenese',
+    },
+    anchors: [],
+    header: [
+      '// Quelle: Overture Maps Foundation, Thema "divisions", Typ "division_area" (Release 2026-09-23.1), Stadtteile',
+      '//   (admin_level 10) aus OpenStreetMap, Landflächen ohne Elbe und Hafenbecken. Geladen mit tools/fetch-divisions.py.',
+      '// Lizenz: ODbL 1.0 (https://opendatacommons.org/licenses/odbl/), © OpenStreetMap-Mitwirkende,',
+      '//   © Overture Maps Foundation.',
+    ],
+  },
 };
+
+const args = process.argv.slice(2);
+const cityFlag = args.indexOf('--city');
+const CITY_ID = cityFlag >= 0 ? args[cityFlag + 1] : 'koeln';
+const FILE_ARG = args.filter((_a, i) => i !== cityFlag && i !== cityFlag + 1)[0];
+const CITY = CITIES[CITY_ID];
+if (!CITY) throw new Error(`Unbekannte Stadt: ${CITY_ID}`);
+/** Stadtteil-Name in den Daten → Veedel-ID im Spiel. */
+const VEEDEL = CITY.names;
 
 /** Größte Abweichung der vereinfachten von der echten Grenze. */
 const TOLERANCE_METERS = 20;
 
 /** Plätze auf einer Grenzlinie und das Veedel, zu dem sie im Spiel gehören. */
-const ANCHORS = [
-  { name: 'Ebertplatz', veedelId: 'neustadt-nord', lng: 6.9575, lat: 50.9497 },
-  { name: 'Rudolfplatz', veedelId: 'neustadt-sued', lng: 6.9392, lat: 50.9366 },
-  { name: 'Rheinpark (Nordrand an der Zoobrücke)', veedelId: 'deutz', lng: 6.979, lat: 50.9468 },
-];
+const ANCHORS = CITY.anchors;
 /** Weiter als so viel wird eine Grenze für einen Platz nicht verschoben. */
 const MAX_CORRECTION_METERS = 30;
 /** So weit hinter dem Platz verläuft die korrigierte Grenze. */
 const CORRECTION_MARGIN_METERS = 8;
 
 const DECIMALS = 5;
-const OUT_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', 'boundaries.ts');
+const OUT_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', CITY.outFile);
 
-// Lokale Projektion in Meter (für Köln genau genug).
-const LAT0 = 50.94;
+// Lokale Projektion in Meter (für eine Stadt genau genug).
+const LAT0 = CITY.lat0;
 const KX = 111320 * Math.cos((LAT0 * Math.PI) / 180);
 const KY = 110540;
 const toXY = ([lng, lat]) => [lng * KX, lat * KY];
@@ -66,9 +122,10 @@ const round = (n) => Math.round(n * 10 ** DECIMALS) / 10 ** DECIMALS;
 const key = (p) => `${p[0]},${p[1]}`;
 
 async function loadSource() {
-  const file = process.argv[2];
+  const file = FILE_ARG;
   if (file) return JSON.parse(readFileSync(file, 'utf8'));
-  const response = await fetch(SOURCE_URL);
+  if (!CITY.sourceUrl) throw new Error(`Für ${CITY_ID} bitte eine GeoJSON-Datei angeben (tools/fetch-divisions.py).`);
+  const response = await fetch(CITY.sourceUrl);
   if (!response.ok) throw new Error(`Download fehlgeschlagen: ${response.status}`);
   return response.json();
 }
@@ -246,10 +303,18 @@ async function main() {
   for (const feature of source.features) {
     const id = VEEDEL[feature.properties.name];
     if (!id) continue;
-    if (feature.geometry.type !== 'Polygon' || feature.geometry.coordinates.length !== 1) {
-      throw new Error(`${feature.properties.name}: nur einfache Polygone ohne Löcher werden unterstützt.`);
-    }
-    const ring = feature.geometry.coordinates[0].map(([lng, lat]) => [lng, lat]);
+    // Äußerer Ring des größten Teils (Löcher und kleine Inseln spielen keine Rolle).
+    const polygons =
+      feature.geometry.type === 'Polygon'
+        ? [feature.geometry.coordinates]
+        : feature.geometry.type === 'MultiPolygon'
+          ? feature.geometry.coordinates
+          : [];
+    if (polygons.length === 0) throw new Error(`${feature.properties.name}: keine Fläche.`);
+    const area = (r) =>
+      Math.abs(r.reduce((sum, p, i) => sum + p[0] * r[(i + 1) % r.length][1] - r[(i + 1) % r.length][0] * p[1], 0));
+    const outer = polygons.map((poly) => poly[0]).sort((a, b) => area(b) - area(a))[0];
+    const ring = outer.map(([lng, lat]) => [lng, lat]);
     if (key(ring[0]) === key(ring[ring.length - 1])) ring.pop();
     rings[id] = ring;
   }
@@ -271,12 +336,9 @@ async function main() {
   const before = Object.values(rings).reduce((sum, r) => sum + r.length, 0);
   const after = Object.values(simplified).reduce((sum, r) => sum + r.length, 0);
   const lines = [
-    '// Automatisch erzeugt von tools/build-boundaries.mjs. Nicht von Hand ändern, sondern das Skript anpassen.',
+    `// Automatisch erzeugt von tools/build-boundaries.mjs${CITY_ID === 'koeln' ? '' : ` --city ${CITY_ID}`}. Nicht von Hand ändern, sondern das Skript anpassen.`,
     '//',
-    '// Quelle: Stadt Köln, Offene Daten Köln, Datensatz "Stadtteile Köln"',
-    '//   https://www.offenedaten-koeln.de/dataset/stadtteile-koeln',
-    '// Lizenz: Datenlizenz Deutschland – Zero – Version 2.0 (dl-de/zero-2-0, https://www.govdata.de/dl-de/zero-2-0).',
-    '//   Nutzung ohne Einschränkungen und ohne Pflicht zur Quellenangabe; wir nennen die Quelle trotzdem.',
+    ...CITY.header,
     `// Vereinfacht mit Douglas-Peucker (Toleranz ${TOLERANCE_METERS} m, ${before} → ${after} Punkte). Gemeinsame Grenzen`,
     '// sind deckungsgleich, es gibt also keine Lücken zwischen benachbarten Veedeln.',
     `// Grenzkorrektur (höchstens ${MAX_CORRECTION_METERS} m) für Plätze auf der Grenzlinie: ${corrected.join(', ') || 'keine'}.`,

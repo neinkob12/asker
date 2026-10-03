@@ -24,6 +24,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity } from '../../city';
 import { isPlayerDelivering } from '../../customers';
 import {
   formatProductAmount,
@@ -36,7 +37,7 @@ import {
 } from '../../goods';
 import { getStaff, getStaffMember } from '../../staff';
 import {
-  BERTH_COST,
+  berthCost,
   cargoRisk,
   cargoRiskFrom,
   defaultPickupWarehouse,
@@ -46,7 +47,9 @@ import {
   getTrips,
   hasBerth,
   isPlayerOnTheRoad,
+  PORTS,
   placeOf,
+  portName,
   type Trip,
   type TripLeg,
   tripAmount,
@@ -139,17 +142,22 @@ function PortSection() {
   const { state, dispatch } = useGame();
   const ui = useUi();
   const cargo = getCargo(state);
-  const warehouses = getWarehouses(state);
+  const warehouses = getWarehouses(state, activeCity(state));
   const drivers = freeDrivers(state);
   const [target, setTarget] = useState('');
   const [driverId, setDriverId] = useState('');
+  const cityId = activeCity(state);
+  const port = portName(cityId);
+  const cost = berthCost(cityId);
+  const quay = PORTS[cityId]?.quay ?? 'Kai 7';
+  const hamburg = cityId === 'hamburg';
   if (!hasBerth(state)) {
-    const short = state.wallet.clean < BERTH_COST;
+    const short = state.wallet.clean < cost;
     return (
       <Group
         icon="ship"
         color="goods"
-        title="Niehler Hafen"
+        title={port}
         note={
           short
             ? `Du hast ${formatEuro(state.wallet.clean)} sauberes Geld. Waschen kannst du in der App Geldwäsche.`
@@ -165,26 +173,34 @@ function PortSection() {
                 disabled={short}
                 onClick={() => dispatch({ type: 'logistics.buyBerth', payload: {} })}
               >
-                Liegeplatz mieten ({formatEuro(BERTH_COST)})
+                Liegeplatz mieten ({formatEuro(cost)})
               </Button>
               {short && <Button onClick={() => ui.openPhone('laundering.app')}>Geldwäsche</Button>}
             </div>
           }
         >
-          Mit eigenem Liegeplatz liefert Rotterdam große Mengen per Schiff, viel billiger als die Großstädte. Der Hafen
-          ist legal, gezahlt wird mit sauberem Geld.
+          {hamburg
+            ? 'Mit eigenem Liegeplatz liefert dir Hein Container direkt an den Kai: kiloweise, in sechs Stunden. Der Zoll hier ist wacher als in Köln.'
+            : 'Mit eigenem Liegeplatz liefert Rotterdam große Mengen per Schiff, viel billiger als die Großstädte.'}{' '}
+          Der Hafen ist legal, gezahlt wird mit sauberem Geld.
         </Empty>
       </Group>
     );
   }
   if (cargo.length === 0) {
     return (
-      <Group icon="ship" color="goods" title="Niehler Hafen, Kai 7">
+      <Group icon="ship" color="goods" title={`${port}, ${quay}`}>
         <Empty
           icon="ship"
-          action={<Button onClick={() => ui.openPhone('suppliers.app', { supplierId: 'rotterdam' })}>Zu Jansen</Button>}
+          action={
+            <Button onClick={() => ui.openPhone('suppliers.app', { supplierId: hamburg ? 'hamburg' : 'rotterdam' })}>
+              {hamburg ? 'Zu Hein' : 'Zu Jansen'}
+            </Button>
+          }
         >
-          Am Kai wartet nichts. Schiffsware bestellst du bei Jansen (Rotterdam).
+          {hamburg
+            ? 'Am Kai wartet nichts. Container bestellst du bei Hein.'
+            : 'Am Kai wartet nichts. Schiffsware bestellst du bei Jansen (Rotterdam).'}
         </Empty>
       </Group>
     );
@@ -196,7 +212,7 @@ function PortSection() {
     <Group
       icon="ship"
       color="goods"
-      title="Niehler Hafen, Kai 7"
+      title={`${port}, ${quay}`}
       count={cargo.length}
       note="Ware am Kai ist ein paar Stunden sicher, dann wird der Zoll neugierig."
       more="Mit Ware an Bord kann es unterwegs eine Verkehrskontrolle geben, vor allem bei viel Heat im Ziel-Veedel. Ein Fahrer holt ab, oder du fährst selbst."
@@ -282,7 +298,7 @@ function PortSection() {
 function WarehouseLogistics(props: { warehouseId: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
-  const owned = getWarehouses(state);
+  const owned = getWarehouses(state, activeCity(state));
   const [toId, setToId] = useState('');
   const [productId, setProductId] = useState('');
   const from = owned.find((w) => w.id === props.warehouseId) ?? owned[0];
@@ -302,7 +318,7 @@ function WarehouseLogistics(props: { warehouseId: string }) {
       type: 'logistics.transfer',
       payload: { fromId: from.id, toId: to.id, by, ...(product ? { productId: product } : {}) },
     });
-  const forSale = warehouseSites().filter((w) => !owned.some((o) => o.id === w.id));
+  const forSale = warehouseSites(activeCity(state)).filter((w) => !owned.some((o) => o.id === w.id));
   return (
     <>
       <Group icon="ship" color="goods" title="Hafen">
@@ -324,13 +340,13 @@ function WarehouseLogistics(props: { warehouseId: string }) {
             <ItemContent
               icon="anchor"
               color={risky ? 'danger' : 'goods'}
-              title="Niehler Hafen"
+              title={portName(activeCity(state))}
               meta={
                 hasBerth(state)
                   ? cargo.length > 0
                     ? 'Ware am Kai wartet auf die Abholung'
-                    : 'Liegeplatz Kai 7, nichts am Kai'
-                  : 'Noch kein Liegeplatz. Mit einem liefert Rotterdam per Schiff.'
+                    : 'Liegeplatz, nichts am Kai'
+                  : 'Noch kein Liegeplatz. Mit einem liefern Schiffe große Mengen.'
               }
             />
           </ListItem>
@@ -509,7 +525,7 @@ declare module '../../../ui' {
   }
 }
 
-registerPanel({ id: 'logistics.port', title: () => 'Niehler Hafen', component: PortPanel });
+registerPanel({ id: 'logistics.port', title: () => 'Hafen', component: PortPanel });
 registerSlot('goods.warehouse', { id: 'logistics.warehouse', order: 20, component: WarehouseLogistics });
 registerMapLayer(logisticsLayer);
 
@@ -540,13 +556,17 @@ registerAdvisor({
         },
       };
     }
-    if (!hasBerth(state) && state.wallet.clean >= BERTH_COST) {
+    const cityId = activeCity(state);
+    if (!hasBerth(state) && PORTS[cityId] && state.wallet.clean >= berthCost(cityId)) {
       return {
         id: 'logistics.berth',
         priority: 45,
         icon: 'ship',
-        title: 'Liegeplatz im Hafen mieten',
-        text: 'Dann liefert Rotterdam große Mengen per Schiff, viel billiger als die Großstädte.',
+        title: `Liegeplatz im ${portName(cityId)} mieten`,
+        text:
+          cityId === 'hamburg'
+            ? 'Dann liefert Hein Container direkt an den Kai, kiloweise.'
+            : 'Dann liefert Rotterdam große Mengen per Schiff, viel billiger als die Großstädte.',
         actionLabel: 'Ansehen',
         action: (ui) => ui.openPanel('logistics.port', {}),
       };

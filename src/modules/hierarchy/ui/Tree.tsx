@@ -5,6 +5,7 @@
 import { useState } from 'preact/hooks';
 import { formatEuro } from '../../../core';
 import { Group, ItemContent, List, ListItem, Tag, useGame, useUi } from '../../../ui';
+import { activeCity } from '../../city';
 import { dayReport, lieutenantResult, spotResult } from '../../finance';
 import { getSpots, type Spot } from '../../spots';
 import { activeRunnerAt, getStaff, getStaffMember, runnerAt, STATUS_NAMES, securityAt } from '../../staff';
@@ -106,7 +107,7 @@ export function StaffTree() {
   const [appointing, setAppointing] = useState(false);
   const posts = getLieutenants(state);
   const led = new Set(posts.flatMap((p) => p.spotIds));
-  const unled = getSpots(state).filter((s) => !led.has(s.id));
+  const unled = getSpots(state, activeCity(state)).filter((s) => !led.has(s.id));
   const today = dayReport(state, 0);
   const anyone = getStaff(state).some((m) => canBeLieutenant(state, m.id).ok && !isLieutenant(state, m.id));
   const rh = getRightHand(state);
