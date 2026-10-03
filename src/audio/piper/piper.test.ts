@@ -357,7 +357,10 @@ describe('Phonemizer-Daten (vendor/)', () => {
     const js = readFileSync(new URL('piper_phonemize.js', dir), 'utf8');
     const match = js.match(/loadPackage\((\{"files":\[.*?\],"remote_package_size":\d+\})\)/s);
     expect(match).not.toBeNull();
-    const meta = JSON.parse(match?.[1] ?? '{}') as { files: { filename: string; start: number; end: number }[]; remote_package_size: number };
+    const meta = JSON.parse(match?.[1] ?? '{}') as {
+      files: { filename: string; start: number; end: number }[];
+      remote_package_size: number;
+    };
     expect(meta.remote_package_size).toBe(statSync(new URL('piper_phonemize.data', dir)).size);
     const names = meta.files.map((f) => f.filename);
     for (const needed of ['/espeak-ng-data/de_dict', '/espeak-ng-data/phontab', '/espeak-ng-data/lang/gmw/de'])

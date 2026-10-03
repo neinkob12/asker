@@ -38,7 +38,11 @@ vorgerechnet (`audio.prepareSpeech`). Was danach kommt (Reaktion, Rückfrage), w
 ist nichts mehr offen, legt die Figur auf. Fietes Übergabe läuft im Anruf (`city.handOver`).
 Kontakte tragen `role`, `about`, `look` (Aussehen, auch teilweise) und `voice`; Personen ohne eigenes Aussehen bekommen
 eines fest aus dem Namen (`personLook`, `src/core/looks.ts`), gezeichnet von `Face` bzw. `<Avatar look>`. Antippen des
-Porträts im Chat öffnet das Profil (`core.contact`).
+Porträts im Chat öffnet das Profil (`core.contact`). Die Porträts sind Kiez: `Look` hat neben Frisur, Bart, Brille,
+Kopfbedeckung und Oberteil (Fade, Cornrows, Dreads, Cap nach hinten, Durag, Bandana, Sturmhaube nur für `gang:`-Seeds,
+Daunen-, Leder-, Bomberjacke …) auch Kopfform, Brauen, Augen, Mund, Narbe, Veilchen, Tattoo, Goldzahn/Grill, Zigarette,
+Ohrringe, Kette und Maske; jedes Merkmal würfelt fest aus Seed und Merkmalsname (`roll`), gewichtet nach Alter,
+Geschlecht und einem Straßen-Faktor. Das alte Feld `extra` bleibt als Eingabe gültig, `lookTraits` beschreibt alles.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

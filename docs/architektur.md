@@ -552,6 +552,15 @@ welche frei sind und was die schlafenden Städte zuletzt erwirtschaftet haben. S
 - **Oberfläche**: Kameras pro Stadt über `registerCityViews`, Ansichten `city:<id>` und `deutschland`
   (`UiApi.flyToCity`, `flyHome`, `flyToDeutschland`, `mapView`), Stadt-Chip ab zwei freien Städten, Apps zeigen die
   aktive Stadt, Nachrichten bleiben global.
+- **Porträts** (`src/core/looks.ts`, `src/ui/components/Face.tsx`): `lookFor(seed, name, partial)` würfelt jedes
+  Merkmal fest aus Seed und Merkmalsname (kein `ctx.random`), gewichtet nach Alter, Geschlecht, Hautton und einem
+  Straßen-Faktor (jung mehr Straße; Anzug und Öljacke dämpfen). Merkmale: Kopfform, Frisur (auch Fade, Cornrows,
+  Undercut, Dreads, Braids, Vokuhila), Bart, Brauen, Augen (schwere Lider, Augenringe), Mund (hart, Grinsen, schief,
+  müde), Brille, Kopfbedeckung (Cap vorn/hinten, Beanie, Bucket, Durag, Bandana, Kapuze mit Kordeln, Sturmhaube nur bei
+  `gang:`/`stranger:`-Seeds), Oberteil (Hoodie, Jogginganzug, Daunen-, Leder-, Bomberjacke, Muskelshirt, offenes Hemd,
+  Anzug, Öljacke), Narbe, Veilchen, Tattoo (Hals, Träne, drei Punkte), Goldzahn/Grill, Zigarette/Joint/Zahnstocher,
+  Ohrringe, Kette (dünn, dick, Anhänger), Maske (FFP, Schlauchschal). Das alte Eingabefeld `extra` wird übersetzt.
+  `Face` zeichnet daraus ein SVG im 64er-Raster mit Schattierung (höchstens ~70 Elemente), lesbar ab 28 px.
 - **Anruf und Übergabe** (nach Auftrag 30): Nach „Ich komme nach Hamburg“ mit bereiter Rechter Hand fragt Fiete noch
   im selben Gespräch, ob du Köln jetzt übergibst. „Köln an <Name> übergeben und losfahren“ ist der Befehl
   `city.handOver` (Vollmacht, Hamburg frei, Abfahrt über die A1 in einem Rutsch; vorher wird geprüft, ob du losfahren

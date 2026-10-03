@@ -5,12 +5,12 @@
 
 import ortWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 import * as ort from 'onnxruntime-web/wasm';
-import phonemizerDataUrl from './vendor/piper_phonemize.data?url';
-import phonemizerSource from './vendor/piper_phonemize.js?raw';
-import phonemizerWasmUrl from './vendor/piper_phonemize.wasm?url';
 import type { WorkerRequest, WorkerResponse } from './protocol';
 import { synthesizeSentences } from './synthesize';
 import { type PiperConfig, parseConfig } from './text';
+import phonemizerDataUrl from './vendor/piper_phonemize.data?url';
+import phonemizerSource from './vendor/piper_phonemize.js?raw';
+import phonemizerWasmUrl from './vendor/piper_phonemize.wasm?url';
 import type { PiperVoiceId, VoiceFiles } from './voices';
 
 const scope = self as unknown as {

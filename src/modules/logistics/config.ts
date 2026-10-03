@@ -54,6 +54,11 @@ export const HARBOR_CONTACT: Contact = {
     hat: 'none',
     top: 'jacket',
     topColor: 5,
+    face: 'round',
+    brows: 'heavy',
+    eyes: 'heavy',
+    mouth: 'hard',
+    mouthItem: 'cigarette',
     extra: 'none',
   },
 };
