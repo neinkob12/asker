@@ -121,8 +121,16 @@ Auftrag 31  Die Karte lebt                             (Verkehr, Leute an Spots,
 
 | Auftrag | Thema | Wann |
 | --- | --- | --- |
-| [30](30-staedte-hamburg.md) | Sieg erst bei allen 12 Veedeln (7 bleibt Meilenstein „Boss von Köln“), Vollbild-Anruf aus dem Hamburger Hafen, Vollmacht der Rechten Hand (Stufe 5, alle Aufgaben, 80 % vom Kölner Tagesgewinn, Eingreifen jederzeit), Modul `city` mit Schlafmodus (nur die sichtbare Stadt läuft voll), Hamburg mit 12 Stadtteilen, Hafen-Großmengen, höheren Preisen, Reeperbahn, härterer Polizei und Zoll, Toni als Startlieferant, Routen mit Fahrplan über die A1, Charakter der Städte (Köln: Stadt-Events, Klüngel, Studenten und Kneipen), Schablone für Stadt drei | als Nächstes |
-| [31](31-karte-lebt.md) | Verkehr und Leute an Spots als Kulisse mit Performance-Budget, Rhein und Elbe aus Overture-Daten, Prüfskript „Fahrzeuge überall auf der Straße“, Hamburger Wahrzeichen, schöne Deutschland-Ansicht, Quellenangabe im Spiel | nach 30 |
+| [30](30-staedte-hamburg.md) | Sieg erst bei allen 12 Veedeln (7 bleibt Meilenstein „Boss von Köln“), Vollbild-Anruf aus dem Hamburger Hafen, Vollmacht der Rechten Hand (Stufe 5, alle Aufgaben, 80 % vom Kölner Tagesgewinn, Eingreifen jederzeit), Modul `city` mit Schlafmodus (nur die sichtbare Stadt läuft voll), Hamburg mit 12 Stadtteilen, Hafen-Großmengen, höheren Preisen, Reeperbahn, härterer Polizei und Zoll, Toni als Startlieferant, Routen mit Fahrplan über die A1, Charakter der Städte (Köln: Stadt-Events, Klüngel, Studenten und Kneipen), Schablone für Stadt drei | umgesetzt (PR #32) |
+| [31](31-karte-lebt.md) | Verkehr und Leute an Spots als Kulisse mit Performance-Budget, Rhein und Elbe aus Overture-Daten, Prüfskript „Fahrzeuge überall auf der Straße“, Hamburger Wahrzeichen, schöne Deutschland-Ansicht, Quellenangabe im Spiel | als Nächstes |
+
+**Stand Auftrag 30:** umgesetzt in neun Etappen (PR #32). Neu: Modul `city` (aktive Stadt, Aufenthalt, Schlafmodus,
+Fahrt über die A1), Modul `events` (Stadt-Events), Hamburg als zweite Stadt mit eigenem Straßennetz, Routen mit
+Fahrplan zwischen den Städten, Vollmacht und Rechte Hand pro Stadt, Anrufe im Handy, Klüngel und Kneipen. Für Auftrag 31
+offen: die Deutschland-Ansicht schöner (bisher Glas-Karten und die A1 als Fahrweg), Kneipen mit eigenem Symbol, Events
+auf der Karte (Feuerwerk, Schiffe), die schwebende Island verdeckt am Handy-Bildschirm die Kachelreihe unter dem HUD
+(Stadt, Lager, Ruf), sobald eine Live-Aktivität läuft. Später: größere Fahrzeuge für Routen (Fuhrpark), eine dritte
+Stadt (Schablone Berlin steht, Checkliste in `docs/architektur.md`, Abschnitt „Städte“), das Kartell.
 
 Die Messung zum Ruckeln (Hotspots, Skripte, Zahlen) steht in [`docs/perf/2026-10-messung.md`](../perf/2026-10-messung.md).
 Beide Aufträge messen damit vorher und nachher.

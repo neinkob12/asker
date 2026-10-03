@@ -15,7 +15,11 @@ drei Wegen (`laundering/config.ts`), mehr Bewerber und Rumfragen mit Rollenwahl,
 Bausteinen (Chips statt „a · b“, Gruppen mit Unterlage, `Disclosure`, kein Umbruch im Wort). Auftrag 29: Quests von Peter
 (`quests`, Karte unter Geld und Heat im HUD, HUD-Platz `'below'`), Intro mit Spielername beim ersten Start (`src/ui/player.ts`),
 gemeinsame Bestenliste (`leaderboard`, Server `api/leaderboard.ts` auf Vercel mit Upstash Redis, lokal aus).
-Wie alles zusammenspielt: `docs/architektur.md`, Abschnitt "Zusammenspiel der Systeme".
+Auftrag 30: Köln komplett erst bei 12 Veedeln (7 = Meilenstein „Boss von Köln“), Anrufe im Handy (`messages.call`),
+Vollmacht der Rechten Hand (80 % vom Tagesgewinn), zweite Stadt Hamburg (Modul `city`: aktive Stadt live, die andere
+schläft mit Tagesergebnis; `present`, Fahrt über die A1), Rechte Hand pro Stadt, Straßennetz pro Stadt plus A1
+(`roads`), Routen mit Fahrplan und Zoll (`logistics/routes.ts`), Stadt-Events (`events`), Klüngel, Kneipen.
+Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
 
@@ -91,10 +95,20 @@ export default defineModule({
   Buchung mit: Die Kasse liest sie erst später im Schritt, dann kann die Person schon abgetaucht oder weg sein). Beträge sind
   endliche Zahlen ab 0, sonst wirft der Kern (NaN im Konto machte jeden Vergleich falsch). Journal: `journal.add(ctx, text, kind)`.
 - Leutnants führen **Spots, nicht Veedel** (bis zu drei, `lieutenantOfSpot`, `lieutenantSpots` aus `hierarchy`).
+- **Städte (Auftrag 30):** Alles, was an einem Ort hängt, gehört zu einer Stadt (`cityId` an Veedel, Lager, Gangs,
+  Leuten, Ware am Kai; Spots über ihr Veedel, `spotCity`). Lesefunktionen bekommen eine Stadt (`getSpots(state, cityId)`,
+  `getStaff(state, { cityId })` …), ohne Angabe meint man die aktive (`activeCity`). Ticks arbeiten nur für die Stadt,
+  die live ist (`isCityLive`, `liveVeedel`); die schlafende bekommt um Mitternacht ein Tagesergebnis von `city`, ihre
+  Lager bleiben, Fahrten dort fahren zu Ende. Wer selbst handelt (am Spot stehen, abholen, Konfrontationen), muss in
+  der Stadt sein (`isPlayerIn`). Geld für eine bestimmte Stadt mit `{ category, cityId }` buchen. Werte pro Stadt als
+  Daten (`CITIES` in `city/data.ts` oder `…_BY_CITY` in der eigenen `config.ts`), nie `if (cityId === 'hamburg')` im
+  Ablauf. Die Rechte Hand gibt es pro Stadt (`getRightHand(state, cityId?)`). Neue Felder im Zustand mit Stadt brauchen
+  eine Migration, die alte Stände auf `'koeln'` setzt.
 - Lieferungen fährt **nur die Rechte Hand** (`customers.acceptOrder` mit `by: 'rightHand'`, `rightHandDriver`); alles,
   was sie selbständig tun soll, ist eine Aufgabe in `hierarchy/tasks.ts` und läuft über `ctx.dispatch` mit Actor.
-- Wege und Fahrzeiten immer über `roads` (`roadRoute`, `travelMinutes`), nie Luftlinie. Das Straßennetz neu erzeugen:
-  `src/modules/roads/tools/build-roads.py` (Anleitung im Kopf der Datei).
+- Wege und Fahrzeiten immer über `roads` (`roadRoute`, `travelMinutes`), nie Luftlinie; zwischen zwei Städten nehmen
+  beide von selbst die A1 (`interCityRoute`). Straßennetze neu erzeugen: `src/modules/roads/tools/build-roads.py`
+  (`--city <id>`, `--autobahn <a> <b>`, Anleitung im Kopf der Datei).
   Nachrichten: `messages.send(ctx, { contact, text, options, expiresIn?, silent? })` – alle Figuren reden per Handy mit
   dem Spieler. Ein Banner mit Ton gibt es nur für Nachrichten mit Antwortfrist (`options` + `expiresIn`), alles andere
   zählt still am Badge (`silent` ist damit nur noch für die Mitteilungszentrale relevant). Gelöschte Chats bleiben im

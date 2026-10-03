@@ -24,7 +24,7 @@ const steps = Number(args.steps ?? 120);
 const seed = Number(args.seed ?? 1);
 const sizes = (args.sizes ?? 'mobile,desktop').split(',');
 
-/** Jede Seite, die ein Spieler erreichen kann: Apps (openPhone) und Tabs (selectTab). */
+/** Jede Seite, die ein Spieler erreichen kann: Apps (openPhone), Tabs (selectTab) und Seiten (openPanel). */
 const TARGETS = [
   { kind: 'phone', id: 'core.messages' },
   { kind: 'phone', id: 'finance.app' },
@@ -35,6 +35,10 @@ const TARGETS = [
   { kind: 'tab', id: 'territory' },
   { kind: 'tab', id: 'gangs' },
   { kind: 'tab', id: 'staff' },
+  // Auftrag 30: Seiten der Logistik (Routen mit Blatt, Fahrer, Hafen).
+  { kind: 'panel', id: 'logistics.routes' },
+  { kind: 'panel', id: 'logistics.drivers' },
+  { kind: 'panel', id: 'logistics.port' },
 ];
 const wanted = args.apps ? args.apps.split(',') : TARGETS.map((t) => t.id);
 
@@ -68,6 +72,8 @@ const SETUP = `(() => {
   for (const r of runners) r.level = Math.max(r.level, 3);
   if (runners[0]) sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: runners[0].id, spotIds: spots.slice(0, 2) } });
   if (runners[1]) sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: runners[1].id } });
+  // Zweite Stadt mit Lager, Fahrer und einer Route über die A1 (Auftrag 30).
+  window.koeln.dev?.routeNachHamburg?.();
   sim.advance(240);
 })()`;
 
@@ -237,7 +243,13 @@ try {
             await page.evaluate(`(() => {
             const api = window.koeln.runtime.api;
             api.closeDialog(); api.closePanel(); api.toggleNotificationCenter(false); api.openPhone(null);
-            ${target.kind === 'tab' ? `api.selectTab('${target.id}')` : `api.openPhone('${target.id}')`};
+            ${
+              target.kind === 'tab'
+                ? `api.selectTab('${target.id}')`
+                : target.kind === 'panel'
+                  ? `api.openPanel('${target.id}', {})`
+                  : `api.openPhone('${target.id}')`
+            };
           })()`);
             await page.waitForTimeout(500);
           }

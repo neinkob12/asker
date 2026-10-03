@@ -624,6 +624,7 @@ function Center(props: { state: GameState }) {
 
 function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boolean }) {
   const { ui, api } = useRuntime();
+  const inCall = messages.ringingCalls(props.state).length > 0 || ui.call !== null;
   const screen = useRef<HTMLDivElement>(null);
   const stack = useRef<PageStackHandle | null>(null);
   // Ziel für Überlagerungen (Blätter, Menüs): über den Seiten, unter Statusleiste und Home-Balken.
@@ -647,7 +648,8 @@ function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boo
       </ErrorBoundary>
       <Center state={props.state} />
       {props.device ? <PillBar time={props.state.time} /> : <StatusBar time={props.state.time} />}
-      <PhoneNotice />
+      {/* Wie beim iPhone: Während eines Anrufs keine Banner über dem Anrufer (sie bleiben in der Mitteilungszentrale). */}
+      {!inCall && <PhoneNotice />}
       {props.mobile ? (
         <PhoneToolbar atHome={atHome} onHomeDown={homeSwipe} />
       ) : (

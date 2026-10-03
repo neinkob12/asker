@@ -50,6 +50,9 @@ const POINTER = `
  * JavaScript für Szenen in mehreren Schritten (als async-Funktion, page.evaluate wartet darauf): `until` wartet, bis
  * ein Element da ist (Seiten erscheinen erst im nächsten Bild), `sleep` eine feste Zeit, `still` auf das Ende der Federn.
  */
+/** Route Köln → Hamburg (Auftrag 30), nur einmal pro Sitzung (Dev-Abkürzung aus src/modules/city/ui). */
+const ROUTE = 'if (!window.koeln.session.state.modules.logistics.routes.length) window.koeln.dev.routeNachHamburg()';
+
 const STEPS = `
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const until = async (find, timeout = 6000) => {
@@ -486,6 +489,44 @@ export const SCENES = [
       group?.scrollIntoView({ block: 'start' });
     })()`,
   },
+  // Auftrag 30: Kasse mit Filter Stadt, Routen (Seite, Blatt), Fahrer
+  {
+    name: 'kasse-stadt',
+    js: `(async () => {
+      ${STEPS}
+      ${BUSINESS_DAYS};
+      ${ROUTE};
+      window.koeln.runtime.api.openPhone('finance.app');
+      const select = await until(() => [...document.querySelectorAll('.phone select')].find((x) => [...x.options].some((o) => o.value === 'city:koeln')));
+      if (select) {
+        select.value = 'city:koeln';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      await sleep(300);
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'routen',
+    js: `${ROUTE}; window.koeln.runtime.api.openPanel('logistics.routes', {})`,
+  },
+  {
+    name: 'route-blatt',
+    js: `(async () => {
+      ${STEPS}
+      ${ROUTE};
+      window.koeln.runtime.api.openPanel('logistics.routes', {});
+      const edit = await until(() => [...document.querySelectorAll('.phone button')].find((b) => b.textContent.trim() === 'Ändern'));
+      edit?.click();
+      await sleep(600);
+      await still();
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'fahrer',
+    js: `${ROUTE}; window.koeln.runtime.api.openPanel('logistics.drivers', {})`,
+  },
   // Rechte Hand mit Tagesbericht (spult einen Tag vor, deshalb am Ende)
   {
     name: 'rechte-hand',
@@ -494,7 +535,7 @@ export const SCENES = [
       ${LIEUTENANT};
       const sim = window.koeln.session.sim;
       const s = sim.state;
-      if (!s.modules.hierarchy.rightHand) {
+      if (!s.modules.hierarchy.rightHands?.koeln) {
         s.wallet.dirty += 6000;
         const taken = new Set(Object.values(s.modules.hierarchy.posts).flatMap((p) => p.spotIds));
         const free = s.modules.spots.unlocked.filter((id) => !taken.has(id));
@@ -520,9 +561,24 @@ export const SCENES = [
     name: 'tagesbericht',
     js: `(() => {
       const s = window.koeln.session.sim.state;
-      const id = s.modules.hierarchy.rightHand?.staffId;
+      const id = s.modules.hierarchy.rightHands?.koeln?.staffId;
       window.koeln.runtime.api.openPhone('core.messages', id ? { contactId: 'staff:' + id } : undefined);
     })()`,
+  },
+  // Der Anruf aus Hamburg (macht Köln komplett, deshalb ganz am Ende)
+  {
+    name: 'anruf',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.dev.koelnKomplett();
+      window.koeln.runtime.api.closeDialog();
+      window.koeln.session.sim.advance(45);
+      window.koeln.runtime.requestRender();
+      await sleep(800);
+      window.koeln.runtime.api.closeDialog();
+      window.koeln.runtime.api.showPhone?.();
+    })()`,
+    wait: 1500,
   },
 ];
 

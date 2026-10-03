@@ -253,6 +253,10 @@
   .ui-map-sheet .takeover__bar {
     flex-wrap: wrap;
   }
+  /* Mit 12 Segmenten (Auftrag 30) passt die Gang-Reaktion nicht mehr daneben: eigene Zeile. */
+  .ui-map-sheet .takeover__stat.is-wide {
+    flex: 1 1 100%;
+  }
   .ui-map-sheet .takeover__next {
     width: 100%;
   }

@@ -1,5 +1,5 @@
 // Szenen für die Bilder des Looks "Glas" (Auftrag 24): Karte, HUD, Spots, Konfrontation, Razzia, Lieferung,
-// Veedel übernommen. Jede Szene startet ein frisches Spiel (fester Seed, pausiert) und bereitet es per JavaScript vor
+// Veedel übernommen; seit Auftrag 30 auch Anruf, Übergabe, Deutschland-Ansicht und Hamburg bei Nacht. Jede Szene startet ein frisches Spiel (fester Seed, pausiert) und bereitet es per JavaScript vor
 // (window.koeln = { session, runtime }). Genutzt von glass-shots.mjs.
 
 /** Hilfen, die in jeder Szene im Browser bereitstehen. */
@@ -76,6 +76,20 @@ export const PRELUDE = `
     });
     api.openDialog('encounters.encounter', { encounterId });
     return encounterId;
+  };
+  /** Hamburg (Auftrag 30): frei, aktiv, du bist dort; Lager in Ottensen, drei Spots auf dem Kiez, Läufer, Ware. */
+  const hamburg = async () => {
+    const goods = await import('/src/modules/goods/index.ts');
+    rich();
+    k.dev.hamburgFrei();
+    run('city.switch', { cityId: 'hamburg' });
+    state().modules.city.present = 'hamburg';
+    run('goods.buyWarehouse', { warehouseId: 'werkstatt-ottensen' });
+    goods.store(sim.ctx('goods'), { productId: 'weed', amount: 800, warehouseId: 'werkstatt-ottensen', quality: 0.8 });
+    for (const id of ['spielbudenplatz', 'hans-albers-platz', 'landungsbruecken', 'kiezbar']) run('spots.unlock', { spotId: id });
+    run('staff.hireRunner', { spotId: 'spielbudenplatz' });
+    run('customers.standAt', { spotId: 'hans-albers-platz' });
+    sim.advance(60);
   };
 `;
 
@@ -159,6 +173,31 @@ export const SCENES = [
     js: `sim.advance(${TIMES.tag}); busy(); await takeover();`,
     wait: 3000,
     sizes: ['desktop'],
+  },
+  // Auftrag 30: der Anruf aus Hamburg, die Übergabe an die Rechte Hand, Deutschland mit einer Route über die A1,
+  // Hamburg bei Nacht (Kiez, Nachtleben).
+  {
+    name: 'anruf',
+    js: `sim.advance(${TIMES.tag}); busy(); k.dev.koelnKomplett(); api.closeDialog(); sim.advance(45); render(); await sleep(800); api.closeDialog(); render();`,
+    wait: 2500,
+  },
+  {
+    name: 'uebergabe',
+    js:
+      'sim.advance(' +
+      TIMES.tag +
+      "); busy(); k.dev.koelnKomplett(); api.closeDialog(); k.dev.rechteHandBereit(); sim.advance(45); run('messages.acceptCall', { messageId: state().messages.calls.ringing[0] }); run('city.answerOffer', { choice: 'come' }); render();",
+    wait: 2500,
+  },
+  {
+    name: 'deutschland',
+    js: `sim.advance(${TIMES.tag}); busy(); k.dev.routeNachHamburg(); sim.advance(150); render(); api.flyToDeutschland();`,
+    wait: 5000,
+  },
+  {
+    name: 'hamburg-nacht',
+    js: `sim.advance(${TIMES.nacht}); await hamburg(); render();`,
+    wait: 4500,
   },
   {
     name: 'spot-hover',

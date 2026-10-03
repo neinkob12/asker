@@ -20,7 +20,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
 ## Spielgefühl
 
 - **Tonalität:** realistisch und düster.
-- **Kampagne:** Ziel ist, Köln komplett zu übernehmen, also alle 12 Veedel zu kontrollieren (Entscheidung vom 02.10.2026, Auftrag 30; bis dahin gilt im Code noch die Mehrheit). 7 von 12 bleibt als Meilenstein „Boss von Köln“. Die Reihenfolge ist frei. Danach ruft der Hamburger Hafen an, und es geht in Hamburg weiter (Abschnitt „Mehrere Städte“); wer bleibt, spielt im Endlosmodus.
+- **Kampagne:** Ziel ist, Köln komplett zu übernehmen, also alle 12 Veedel zu kontrollieren (Entscheidung vom 02.10.2026, gebaut in Auftrag 30). 7 von 12 bleibt als Meilenstein „Boss von Köln“. Die Reihenfolge ist frei. Danach ruft der Hamburger Hafen an, und es geht in Hamburg weiter (Abschnitt „Mehrere Städte“); wer bleibt, spielt im Endlosmodus.
 - **Story:** lockere Aufträge von Figuren mit etwas Dialog, keine durchgehende Handlung.
 - **Kampagnenlänge:** 5–10 Stunden.
 - **Session-Länge:** 10–20 Minuten.
@@ -152,22 +152,31 @@ Leutnant; ein Satz, warum es Gewinn oder Verlust gab), Geldwäsche mit drei Wege
 Rumfragen, der Gangs-Kopf mit deiner Stärke im Vergleich und klare Optik im Handy (Chips, Gruppen mit Unterlage,
 ausklappbare Erklärungen, kein Umbruch im Wort).
 
-- **Kampagnenlänge:** Köln ist der Einstieg (danach sollen weitere Großstädte folgen). Laut Balancing-Simulation
-  (`npm run balance`) erstes Veedel nach etwa 7 Spieltagen, drei nach 8–10, fünf nach etwa 15–20, Köln übernommen
-  (7 von 12 Veedeln) nach etwa 21–28 Spieltagen, bei Tempo 1x (4,8 Minuten pro Spieltag) grob 2 Stunden. Die Polizei
-  bleibt in den ersten gut zwei Wochen bei 1–2 Flammen und zieht erst als Großhändler an.
+Mit Auftrag 30 dazu: Köln komplett erst mit allen 12 Veedeln (7 ist der Meilenstein „Boss von Köln“), Anrufe im
+Handy, die Vollmacht der Rechten Hand, Hamburg als zweite Stadt (eigene Stadtteile, Spots, Lager, Gangs, Hafen,
+Straßennetz), nur eine Stadt läuft live (die andere schläft mit Tagesergebnis), die Fahrt über die A1, Routen mit
+Fahrplan zwischen den Lagern beider Städte mit Zoll auf der Autobahn, Stadt-Events (Karneval, FC, Kölner Lichter;
+Hafengeburtstag, Schlagermove, Dom), Kölscher Klüngel gegen hanseatisch kühl, Veedel-Kneipen und mehr Studenten.
+
+- **Kampagnenlänge:** Köln ist der Einstieg, Hamburg die zweite Stadt. Laut Balancing-Simulation (`npm run balance`)
+  erstes Veedel nach etwa 7 Spieltagen, drei nach etwa 8, fünf nach 13–17, „Boss von Köln“ (7 von 12) nach 17–20,
+  Köln komplett nach 22–27 Spieltagen, bei Tempo 1x (4,8 Minuten pro Spieltag) grob 2 Stunden. In Hamburg fällt das
+  erste Stadtteil-Revier etwa eine Woche nach der Ankunft. Die Polizei bleibt in den ersten gut zwei Wochen bei
+  1–2 Flammen und zieht erst als Großhändler an.
 - **Session-Länge:** In 20 Minuten (etwa 8 Spieltage bei 2x) kommen Verkauf, Nachschub, Personal, Leutnants,
   Gang-Drohungen, Konfrontationen, Polizei-Kontrollen, Wetter und das erste Veedel vor (`npm run playthrough`,
   Screenshots in `docs/integration/`).
 - **Noch nicht umgesetzt** (spätere Aufträge, siehe `docs/auftraege/README.md`): eigener Charakter und Aufträge von
-  Figuren, Stadt-Events, Tarnfirmen, Upgrade-Baum und Rang-Stufen, weitere Immobilien, eigene Fahrzeugflotte (Fahrzeuge
-  kaufen, Ladekapazität), Leutnants, die selbst am Hafen abholen lassen, KI-Porträts, Hosting, Multiplayer.
+  Figuren, Tarnfirmen, Upgrade-Baum und Rang-Stufen, weitere Immobilien, eigene Fahrzeugflotte (größere Fahrzeuge
+  für Routen), Leutnants, die selbst am Hafen abholen lassen, eine dritte Stadt (Daten-Schablone steht), das Kartell,
+  die lebendige Karte (Auftrag 31), KI-Porträts, Multiplayer.
 
-## Mehrere Städte (Auftrag 30 und 31, geplant)
+## Mehrere Städte (Auftrag 30 gebaut, Auftrag 31 für die Karte)
 
-Köln ist der Einstieg und bleibt die Basis. Entschieden am 02.10.2026 in einer Fragerunde mit 16 Fragen; gebaut wird
-es in [Auftrag 30](auftraege/30-staedte-hamburg.md) (Spiellogik) und [Auftrag 31](auftraege/31-karte-lebt.md) (Karte).
-Solange die beiden nicht gemergt sind, gilt im Code noch der alte Stand (Sieg bei 7 von 12, nur Köln).
+Köln ist der Einstieg und bleibt die Basis. Entschieden am 02.10.2026 in einer Fragerunde mit 16 Fragen; die
+Spiellogik ist mit [Auftrag 30](auftraege/30-staedte-hamburg.md) gebaut, die lebendige Karte (Wasserwege, Verkehr,
+schönere Deutschland-Ansicht) kommt mit [Auftrag 31](auftraege/31-karte-lebt.md). Wie es technisch zusammenhängt:
+`docs/architektur.md`, Abschnitt „Städte“.
 
 - **Köln komplett:** Erst mit allen 12 Veedeln ist Köln übernommen. 7 von 12 bleibt als Meilenstein „Boss von Köln“
   (Titel, Banner, Bestenliste), ist aber kein Sieg mehr.
@@ -200,14 +209,16 @@ Solange die beiden nicht gemergt sind, gilt im Code noch der alte Stand (Sieg be
   Lager, Rückfracht) über die echte A1 mit Autobahnkontrollen (Zoll). Die Fahrten sind auf der Karte zu sehen, in der
   Stadt bis zur Einfahrt und in einer Deutschland-Ansicht ganz. Die Ware kann in beide Richtungen fließen; der Niehler
   Hafen bleibt wie er ist (kein besonderer Vorteil für Köln).
-- **Daten:** pro Stadt ein Straßennetz aus Overture Maps, die A1 als grobe Linie, Rhein und Elbe als echte Wasserwege
-  (Auftrag 31). Mehr Leben auf der Karte: Verkehr und kleine Figuren an Spots, mit festem Performance-Budget.
+- **Daten:** pro Stadt ein Straßennetz aus Overture Maps und die A1 als Linie (409 km, gebaut); Rhein und Elbe als
+  echte Wasserwege und mehr Leben auf der Karte (Verkehr, kleine Figuren an Spots, festes Performance-Budget) kommen
+  mit Auftrag 31.
 - **Nach Hamburg:** Hamburg komplett geht an eine zweite Rechte Hand; eine dritte Stadt (Berlin oder Frankfurt) ist als
   Datenschablone vorbereitet. Der Anruf des Kartells aus Kolumbien kommt später.
 
-Was dafür schon steht: Die Rechte Hand handelt nur über Befehle (wie ein Spieler) und ist so gebaut, dass Köln mit
-allen Aufgaben an allein läuft (Test `src/playtest/autopilot.test.ts`); Lieferanten, Logistik und Spots sind pro
-Stadt als Daten angelegt.
+Gebaut mit Auftrag 30 genau so wie oben, mit diesen Werten: Hamburg-Fahrt 4,5 bis 5 Spielstunden, Route mit Fahrer
+etwa 4 Stunden 45 Minuten, höchstens 5 kg je Fahrt; Karneval ab Tag 30 alle 90 Tage, FC jeden zweiten Samstag,
+Kölner Lichter an Tag 60; Klüngel × 1,5 (Hamburg × 0,8), Freikaufen und Kaution −25 % (Hamburg +20 %); in Hamburg
+bringt ein Verkauf 60 % Einfluss. Die Rechte Hand plant keine Routen (das macht der Fahrer nach Fahrplan).
 
 ## Offene Punkte
 
