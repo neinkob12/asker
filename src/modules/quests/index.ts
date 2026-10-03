@@ -26,15 +26,7 @@ import { changeReputation } from '../reputation';
 import { addLoyalty, addXp, getStaff } from '../staff';
 import { addInfluence, hasPlayerPresence, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
-import {
-  CHAPTERS,
-  MILESTONE_TITLE,
-  PETER,
-  QUEST_CHECK_EVERY,
-  QUESTS,
-  type QuestDef,
-  type QuestReward,
-} from './config';
+import { CHAPTERS, MILESTONE_TITLE, PETER, QUEST_CHECK_EVERY, QUESTS, type QuestDef, type QuestReward } from './config';
 
 export { CHAPTERS, MILESTONE_TITLE, PETER, QUESTS, type QuestDef, type QuestGoTo, type QuestReward } from './config';
 

@@ -27,8 +27,8 @@ import {
 import { getHeat, heatLevel } from '../../police';
 import { allVeedel, veedelName } from '../../veedel';
 import {
-  CONTROL_THRESHOLD,
   type CampaignProgress,
+  CONTROL_THRESHOLD,
   campaignProgress,
   controllerOf,
   type FactionId,

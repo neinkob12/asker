@@ -353,7 +353,8 @@ function checkMilestones(ctx: Ctx, cityId: string): void {
   const progress = campaignProgress(ctx.state, cityId);
   const t = ctx.state.modules.territory;
   t.milestones ??= {};
-  const m = (t.milestones[cityId] ??= { majority: null, complete: null });
+  t.milestones[cityId] ??= { majority: null, complete: null };
+  const m = t.milestones[cityId];
   const name = CITY_NAMES[cityId] ?? cityId;
   if (m.majority === null && progress.controlled >= progress.majority) {
     m.majority = ctx.now;
@@ -362,7 +363,12 @@ function checkMilestones(ctx: Ctx, cityId: string): void {
       `Boss von ${name}: ${progress.controlled} von ${progress.total} Veedeln hören auf dich. Jetzt den Rest.`,
       'good',
     );
-    ctx.emit('campaign.milestone', { kind: 'majority', cityId, controlled: progress.controlled, total: progress.total });
+    ctx.emit('campaign.milestone', {
+      kind: 'majority',
+      cityId,
+      controlled: progress.controlled,
+      total: progress.total,
+    });
   }
   if (m.complete === null && progress.controlled >= progress.total) {
     m.complete = ctx.now;
