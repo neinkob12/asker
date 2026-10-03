@@ -29,6 +29,12 @@ Nach Auftrag 30: Zufahrten auch in Hamburg (`Supplier.via` pro Stadt, `supplierV
 Stadt (`CITIES` `view.pitch`/`bearing`), Verkehr in der aktiven Stadt, Deutschland-Ansicht (Marker der Stadt mit
 `addHtmlMarker({ near: true })` sind unter `FAR_ZOOM` aus, Wechsel beim Zoomen, A1 in Gold während einer Fahrt), Kneipen
 mit Bierglas, Kölner Lichter und Hafengeburtstag auf der Karte (`events/ui/map.ts`, Effekt `firework`).
+Anrufe mit Stimme und Figuren mit Gesicht: Im Anruf spricht die Figur ihre Zeilen (`audio.speak`, Sprachausgabe des
+Browsers, abschaltbar in Einstellungen › Ton und im Gespräch); was danach kommt (Reaktion, Rückfrage), wird noch im
+Gespräch beantwortet, und ist nichts mehr offen, legt die Figur auf. Fietes Übergabe läuft im Anruf (`city.handOver`).
+Kontakte tragen `role`, `about`, `look` (Aussehen, auch teilweise) und `voice`; Personen ohne eigenes Aussehen bekommen
+eines fest aus dem Namen (`personLook`, `src/core/looks.ts`), gezeichnet von `Face` bzw. `<Avatar look>`. Antippen des
+Porträts im Chat öffnet das Profil (`core.contact`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
@@ -122,7 +128,8 @@ export default defineModule({
   `--autobahn <a> <b>`), die Wasserwege `tools/build-water.py` (Anleitung im Kopf der Dateien). Neue Spots, Lager oder
   Häfen müssen `scripts/check-roads.mjs` bestehen (höchstens 60 m bis zur nächsten Straße).
   Nachrichten: `messages.send(ctx, { contact, text, options, expiresIn?, silent? })` – alle Figuren reden per Handy mit
-  dem Spieler. Ein Banner mit Ton gibt es nur für Nachrichten mit Antwortfrist (`options` + `expiresIn`), alles andere
+  dem Spieler. Benannte Figuren geben im Kontakt Aussehen und Stimme mit (`look`, `voice`, `role`, `about`), nie ein
+  Emoji als Gesicht. Ein Banner mit Ton gibt es nur für Nachrichten mit Antwortfrist (`options` + `expiresIn`), alles andere
   zählt still am Badge (`silent` ist damit nur noch für die Mitteilungszentrale relevant). Gelöschte Chats bleiben im
   Zustand (`messages.hidden`) und kommen wieder, sobald die Figur neu schreibt. Spielende: `outcome.gameOver(ctx, 'killed')`,
   `outcome.win(ctx)`.

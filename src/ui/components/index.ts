@@ -17,6 +17,7 @@ export {
 export { ContextMenu, type ContextMenuProps, type MenuAction } from './ContextMenu';
 export { Dialog, type DialogProps } from './Dialog';
 export { ErrorBoundary, type ErrorBoundaryProps } from './ErrorBoundary';
+export { Face } from './Face';
 export { HudBar, HudPill, type HudPillProps, HudSegments } from './HudPill';
 export {
   type CategoryColor,

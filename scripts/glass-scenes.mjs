@@ -230,8 +230,17 @@ export const SCENES = [
     js:
       'sim.advance(' +
       TIMES.tag +
-      "); busy(); k.dev.koelnKomplett(); api.closeDialog(); k.dev.rechteHandBereit(); sim.advance(45); run('messages.acceptCall', { messageId: state().messages.calls.ringing[0] }); run('city.answerOffer', { choice: 'come' }); render();",
+      "); busy(); k.dev.koelnKomplett(); api.closeDialog(); k.dev.rechteHandBereit(); sim.advance(45); run('messages.acceptCall', { messageId: state().messages.calls.ringing[0] }); run('city.answerOffer', { choice: 'come' }); api.openDialog('hierarchy.handover', { cityId: 'koeln' }); render();",
     wait: 2500,
+  },
+  // Nach der Zusage fragt Fiete noch im Gespräch, ob du Köln jetzt übergibst (Antworten im Anruf).
+  {
+    name: 'anruf-uebergabe',
+    js:
+      'sim.advance(' +
+      TIMES.tag +
+      "); busy(); k.dev.koelnKomplett(); api.closeDialog(); k.dev.rechteHandBereit(); sim.advance(45); const id = state().messages.calls.ringing[0]; run('messages.acceptCall', { messageId: id }); api.openCall(id); run('messages.answer', { messageId: id, optionId: 'come' }); render();",
+    wait: 4000,
   },
   {
     name: 'deutschland',

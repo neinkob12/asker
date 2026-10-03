@@ -12,6 +12,8 @@ export interface AudioSettings {
   muted: boolean;
   /** Musik abspielen? (Effekte laufen trotzdem.) */
   musicOn: boolean;
+  /** Stimmen im Anruf (Sprachausgabe des Browsers). Aus: nur Untertitel. */
+  voices: boolean;
 }
 
 export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
@@ -20,6 +22,7 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   sfx: 0.8,
   muted: false,
   musicOn: true,
+  voices: true,
 };
 
 export const AUDIO_SETTINGS_KEY = 'koeln-tycoon:audio';
@@ -39,6 +42,7 @@ export function loadAudioSettings(storage: KeyValueStorage | null): AudioSetting
       sfx: volume(data.sfx, d.sfx),
       muted: typeof data.muted === 'boolean' ? data.muted : d.muted,
       musicOn: typeof data.musicOn === 'boolean' ? data.musicOn : d.musicOn,
+      voices: typeof data.voices === 'boolean' ? data.voices : d.voices,
     };
   } catch {
     return { ...d };

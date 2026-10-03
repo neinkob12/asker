@@ -1,16 +1,20 @@
 // Anrufe im Spiel-Handy (Auftrag 30): Klingelt ein Anruf (messages.call), füllt er den Bildschirm des Handys wie bei
-// iOS: Avatar, Name, wer anruft, unten Ablehnen und Annehmen als große runde Tasten. Klingelton und Vibrieren laufen,
-// solange es klingelt. Angenommen kommt das Gespräch: Die Zeilen erscheinen nacheinander als Sprechblasen (Tempo wie
-// Tippen, Antippen zeigt alles), am Ende die Antworten. Auflegen lässt alles als Chat beim Kontakt stehen.
+// iOS: Porträt, Name, wer anruft, unten Ablehnen und Annehmen als große runde Tasten. Klingelton und Vibrieren laufen,
+// solange es klingelt. Angenommen kommt das Gespräch: Die Figur spricht ihre Zeilen mit eigener Stimme (audio.speak,
+// abschaltbar oben rechts und in den Einstellungen), dazu erscheinen sie als Untertitel; ohne Stimme im Tempo wie
+// Tippen. Antippen zeigt alles. Am Ende die Antworten. Was danach kommt (ihre Reaktion, eine Rückfrage wie Fietes
+// "Übergibst du jetzt?"), gehört noch zum Gespräch und wird dort beantwortet. Ist nichts mehr offen, legt die Figur auf
+// und der Bildschirm geht von selbst zu. Auflegen geht immer; alles bleibt als Chat beim Kontakt stehen.
 // Ob es klingelt, steht im Spielzustand; welches Gespräch offen ist, in UiState.call.
 
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { audio } from '../../audio';
-import { clock, type GameState, type Message, messages } from '../../core';
+import { clock, contactVoice, type GameState, type Message, messages, type VoiceSpec } from '../../core';
 import { Avatar, Button, Icon } from '../components';
 import { haptic } from '../haptics';
 import { useRuntime } from '../hooks';
-import { CONTACT_KIND_LABELS, CONTACT_KIND_TONES, contactAvatar } from './messagesModel';
+import { useAudio } from '../useAudio';
+import { CONTACT_KIND_LABELS, CONTACT_KIND_TONES, contactAvatar, lookOf } from './messagesModel';
 
 /** So schnell erscheinen die Zeilen: wie Tippen, etwas langsamer als im Chat (man hört ja zu). */
 export const lineMs = (text: string) => Math.min(3200, Math.max(1100, 600 + text.length * 30));
@@ -50,10 +54,16 @@ function IncomingCall(props: { message: Message; state: GameState }) {
       <div class="call-screen__who">
         <p class="call-screen__kicker">{attempt > 1 ? `ruft wieder an (${attempt}. Versuch)` : 'ruft an …'}</p>
         <h2 class="call-screen__name">{name}</h2>
-        <p class="call-screen__role">{m.text || CONTACT_KIND_LABELS[kind]}</p>
+        <p class="call-screen__role">{m.text || contact?.role || CONTACT_KIND_LABELS[kind]}</p>
       </div>
       <div class="call-screen__avatar">
-        <Avatar name={name} image={contactAvatar(contact?.avatar, kind)} tone={CONTACT_KIND_TONES[kind]} size="lg" />
+        <Avatar
+          name={name}
+          image={contactAvatar(contact?.avatar, kind)}
+          look={lookOf(contact)}
+          tone={CONTACT_KIND_TONES[kind]}
+          size="xl"
+        />
       </div>
       <div class="call-screen__actions">
         <span class="call-screen__action">
@@ -77,6 +87,8 @@ function IncomingCall(props: { message: Message; state: GameState }) {
             aria-label="Annehmen"
             onClick={() => {
               haptic('success');
+              // Safari spricht nur, wenn die Sprachausgabe einmal aus einem Tippen heraus gestartet wurde.
+              audio.primeSpeech();
               if (api.dispatch({ type: 'messages.acceptCall', payload: { messageId: m.id } }).ok) api.openCall(m.id);
             }}
           >
@@ -89,82 +101,180 @@ function IncomingCall(props: { message: Message; state: GameState }) {
   );
 }
 
+/** Ein Satz im Gespräch: Zeilen des Anrufs und alles, was danach im Chat kam (deine Antwort, seine Reaktion). */
+interface TalkEntry {
+  key: string;
+  from: 'contact' | 'player';
+  text: string;
+  via?: string;
+  time?: number;
+}
+
+/** So lange steht "Anruf beendet", bevor der Bildschirm zugeht. */
+const HANG_UP_MS = 2400;
+/** Kurze Pause zwischen zwei Sätzen der Figur. */
+const PAUSE_MS = 280;
+
+/**
+ * Spricht die Sätze der Figur nacheinander (Stimme, sonst im Tempo wie Tippen). shown: wie viele Einträge schon zu
+ * sehen sind; speaking: der letzte gezeigte Satz wird noch gesprochen. Deine Antworten erscheinen sofort.
+ */
+function useTalk(talk: TalkEntry[], voice: VoiceSpec) {
+  const [shown, setShown] = useState(0);
+  const [speaking, setSpeaking] = useState(false);
+  const next = talk[shown];
+  useEffect(() => {
+    if (speaking || !next) return;
+    const timer = setTimeout(
+      () => {
+        setShown(shown + 1);
+        if (next.from === 'contact') setSpeaking(true);
+      },
+      next.from === 'player' ? 0 : shown === 0 ? 500 : PAUSE_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [shown, speaking, next?.key]);
+  useEffect(() => {
+    if (!speaking) return;
+    const line = talk[shown - 1];
+    if (!line) {
+      setSpeaking(false);
+      return;
+    }
+    let active = true;
+    const finish = () => {
+      if (active) setSpeaking(false);
+    };
+    const stop = audio.speak(line.text, voice, finish);
+    const timer = stop ? undefined : setTimeout(finish, lineMs(line.text));
+    return () => {
+      active = false;
+      stop?.();
+      clearTimeout(timer);
+    };
+  }, [speaking, shown]);
+  /** Antippen: alles sofort zeigen, die Stimme verstummt. */
+  const skip = () => {
+    audio.stopSpeaking();
+    setShown(talk.length);
+    setSpeaking(false);
+  };
+  return { shown, speaking, done: shown >= talk.length && !speaking, skip };
+}
+
 function ActiveCall(props: { message: Message; state: GameState }) {
   const { api } = useRuntime();
+  const sound = useAudio().settings;
   const m = props.message;
   const contact = messages.contact(props.state, m.contactId);
   const name = contact?.name ?? m.contactId;
   const kind = contact?.kind ?? 'other';
-  const lines = m.call?.lines ?? [];
-  const [shown, setShown] = useState(0);
+  const voice = useMemo(() => contactVoice(contact, m.contactId), [contact, m.contactId]);
   const [seconds, setSeconds] = useState(0);
   const bottom = useRef<HTMLDivElement>(null);
-  const done = shown >= lines.length;
-  useEffect(() => {
-    if (done) return;
-    const timer = setTimeout(() => setShown((n) => n + 1), lineMs(lines[shown] ?? ''));
-    return () => clearTimeout(timer);
-  }, [shown, done]);
+  // Was danach im Chat kam (deine Antwort, seine Reaktion, eine Rückfrage), gehört noch zum Gespräch.
+  const after = messages.thread(props.state, m.contactId).filter((x) => x.id > m.id && !x.call);
+  const talk: TalkEntry[] = [
+    ...(m.call?.lines ?? []).map((text, i) => ({ key: `l${i}`, from: 'contact' as const, text })),
+    ...after.map((x) => ({ key: `m${x.id}`, from: x.from, text: x.text, via: x.via, time: x.time })),
+  ];
+  const { shown, speaking, done, skip } = useTalk(talk, voice);
+  // Offene Frage im Gespräch: die des Anrufs selbst oder eine Rückfrage danach (z.B. Fiete: "Übergibst du jetzt?").
+  const question = done
+    ? [m, ...after].filter((x) => x.from === 'contact' && messages.canAnswer(props.state, x)).pop()
+    : undefined;
+  // Nichts mehr zu sagen und nichts zu antworten: Die Figur legt auf, kurz danach geht der Bildschirm zu.
+  const ended = done && !question;
   useEffect(() => {
     const timer = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(timer);
   }, []);
-  // Was danach im Chat kam (deine Antwort, seine Reaktion), gehört noch zum Gespräch.
-  const after = messages.thread(props.state, m.contactId).filter((x) => x.id > m.id && !x.call);
+  useEffect(() => {
+    if (!ended) return;
+    const timer = setTimeout(() => api.endCall(), HANG_UP_MS);
+    return () => clearTimeout(timer);
+  }, [ended]);
+  useEffect(() => () => audio.stopSpeaking(), []);
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: 'end' });
-  }, [shown, after.length]);
-  const answerable = done && messages.canAnswer(props.state, m);
+  }, [shown, !!question]);
   const duration = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  const first = name.split(/[\s(]/)[0] || name;
   return (
     <section class="call-screen is-active" aria-label={`Gespräch mit ${name}`}>
       <header class="call-screen__bar">
-        <Avatar name={name} image={contactAvatar(contact?.avatar, kind)} tone={CONTACT_KIND_TONES[kind]} size="sm" />
+        <span class={`call-screen__speaker ${speaking ? 'is-speaking' : ''}`}>
+          <Avatar
+            name={name}
+            image={contactAvatar(contact?.avatar, kind)}
+            look={lookOf(contact)}
+            tone={CONTACT_KIND_TONES[kind]}
+            size="md"
+          />
+        </span>
         <span class="call-screen__bar-text">
           <strong>{name}</strong>
-          <span>
-            <Icon name="call" /> {duration}
-          </span>
+          {ended ? (
+            <span class="is-ended">{first} hat aufgelegt</span>
+          ) : (
+            <span>
+              <Icon name="call" /> {duration}
+            </span>
+          )}
         </span>
+        <button
+          type="button"
+          class={`call-screen__voice ${sound.voices ? 'is-on' : ''}`}
+          aria-pressed={sound.voices}
+          aria-label={sound.voices ? 'Stimme aus (nur Untertitel)' : 'Stimme an'}
+          title={sound.voices ? 'Stimme aus (nur Untertitel)' : 'Stimme an'}
+          onClick={() => {
+            haptic('selection');
+            if (sound.voices) audio.stopSpeaking();
+            audio.update({ voices: !sound.voices });
+          }}
+        >
+          <Icon name={sound.voices && !sound.muted ? 'volume' : 'volumeOff'} />
+        </button>
       </header>
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: Antippen überspringt nur das Tempo, alles ist auch so lesbar */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: siehe oben */}
-      <div class="call-screen__talk" onClick={() => setShown(lines.length)}>
+      <div class="call-screen__talk" onClick={done ? undefined : skip}>
         <ol class={`msg-bubbles msg-bubbles--${kind}`}>
-          {lines.slice(0, shown).map((line, i) => (
-            <li key={`l${i}`} class="msg-bubble msg-bubble--contact">
-              <p>{line}</p>
+          {talk.slice(0, shown).map((x, i) => (
+            <li
+              key={x.key}
+              class={`msg-bubble msg-bubble--${x.from} ${speaking && i === shown - 1 ? 'is-speaking' : ''}`}
+            >
+              {x.via && <small class="msg-via">{x.via}</small>}
+              <p>{x.text}</p>
+              {x.time !== undefined && <time>{clock.formatTime(x.time)}</time>}
             </li>
           ))}
-          {!done && (
+          {shown === 0 && (
             <li class="msg-bubble msg-bubble--contact msg-typing" aria-label={`${name} spricht`}>
               <span />
               <span />
               <span />
             </li>
           )}
-          {done &&
-            after.map((x) => (
-              <li key={x.id} class={`msg-bubble msg-bubble--${x.from}`}>
-                {x.via && <small class="msg-via">{x.via}</small>}
-                <p>{x.text}</p>
-                <time>{clock.formatTime(x.time)}</time>
-              </li>
-            ))}
         </ol>
-        {!done && <p class="call-screen__skip">Antippen, um alles zu hören</p>}
+        {!done && <p class="call-screen__skip">Antippen, um alles zu lesen</p>}
+        {ended && <p class="call-screen__skip">Das Gespräch steht im Chat.</p>}
         <div ref={bottom} />
       </div>
       <footer class="call-screen__footer">
-        {answerable && (
+        {question && (
           <div class="msg-options">
-            {(m.options ?? []).map((o, i) => (
+            {(question.options ?? []).map((o, i) => (
               <Button
                 key={o.id}
                 wide
                 big
                 variant={i === 0 ? 'primary' : 'default'}
-                onClick={() => api.dispatch({ type: 'messages.answer', payload: { messageId: m.id, optionId: o.id } })}
+                onClick={() =>
+                  api.dispatch({ type: 'messages.answer', payload: { messageId: question.id, optionId: o.id } })
+                }
               >
                 {o.label}
               </Button>
@@ -178,6 +288,7 @@ function ActiveCall(props: { message: Message; state: GameState }) {
             aria-label="Auflegen"
             onClick={() => {
               haptic('light');
+              audio.stopSpeaking();
               api.endCall();
             }}
           >

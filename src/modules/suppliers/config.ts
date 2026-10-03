@@ -1,3 +1,4 @@
+import type { Look } from '../../core';
 import type { Supplier } from './index';
 
 /**
@@ -266,3 +267,91 @@ export const UNLOADING_PORT = { name: 'Niehler Hafen', lng: 6.9679, lat: 50.9852
 /** Anteil der Lieferzeit auf dem Schiff, danach fürs Umladen im Hafen; den Rest fährt der Lkw. */
 export const SHIP_SHARE = 0.78;
 export const UNLOADING_SHARE = 0.05;
+
+/** Wie die Ansprechpartner aussehen (Porträt im Handy) und klingen (Anruf). Fehlendes kommt fest aus dem Namen. */
+export const SUPPLIER_LOOKS: Readonly<Record<string, Partial<Look>>> = {
+  // Jansen, Rotterdam: Spediteur, korrekt, kühl.
+  rotterdam: {
+    feminine: false,
+    age: 49,
+    skin: 0,
+    hair: 'side',
+    hairColor: 3,
+    beard: 'none',
+    glasses: 'square',
+    hat: 'none',
+    top: 'suit',
+    topColor: 2,
+    extra: 'none',
+  },
+  // Toni, Frankfurt: Kurierfahrer, immer unterwegs.
+  frankfurt: {
+    feminine: false,
+    age: 31,
+    skin: 2,
+    hair: 'slick',
+    hairColor: 0,
+    beard: 'stubble',
+    glasses: 'sun',
+    hat: 'none',
+    top: 'jacket',
+    topColor: 1,
+    extra: 'chain',
+  },
+  // Mirko, Berlin: Kreuzberg, Vapes und Edibles.
+  berlin: {
+    feminine: false,
+    age: 27,
+    skin: 1,
+    hair: 'curly',
+    hairColor: 4,
+    beard: 'goatee',
+    glasses: 'round',
+    hat: 'beanie',
+    top: 'hoodie',
+    topColor: 3,
+    extra: 'earring',
+  },
+  // Hein, Hamburg: hanseatisch korrekt.
+  hamburg: {
+    feminine: false,
+    age: 61,
+    skin: 0,
+    hair: 'short',
+    hairColor: 6,
+    beard: 'full',
+    glasses: 'none',
+    hat: 'none',
+    top: 'raincoat',
+    topColor: 7,
+    extra: 'none',
+  },
+  // Daan, Amsterdam: Großhändler, redet nur mit großen Leuten.
+  amsterdam: {
+    feminine: false,
+    age: 44,
+    skin: 3,
+    hair: 'buzz',
+    hairColor: 0,
+    beard: 'full',
+    glasses: 'none',
+    hat: 'none',
+    top: 'suit',
+    topColor: 1,
+    extra: 'none',
+  },
+  // Kalle aus Kalk: Nachbarschaft.
+  koeln: {
+    feminine: false,
+    age: 36,
+    skin: 1,
+    hair: 'short',
+    hairColor: 2,
+    beard: 'stubble',
+    glasses: 'none',
+    hat: 'cap',
+    top: 'tracksuit',
+    topColor: 4,
+    extra: 'tattoo',
+  },
+};

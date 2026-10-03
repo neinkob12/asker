@@ -154,6 +154,8 @@ function createOrder(
       id: fields.contactId,
       name: fields.contactName,
       kind: fields.kind === 'wholesale' ? 'other' : 'customer',
+      // Großhändler sind auch Menschen: Porträt aus dem Namen.
+      ...(fields.kind === 'wholesale' ? { role: 'Großhandel', look: {} } : {}),
     },
     text,
     options: orderOptions(ctx, id, fields.kind),

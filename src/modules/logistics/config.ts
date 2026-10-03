@@ -1,4 +1,5 @@
 // Einstellbare Werte der Logistik. Zeiten in Spielminuten, Geld in Euro, Tempo in Metern pro Spielminute.
+import type { Contact } from '../../core';
 
 /** Liegeplatz im Niehler Hafen: Miete für immer, bezahlt mit sauberem Geld (der Hafen ist legal). */
 export const BERTH_COST = 4000;
@@ -36,7 +37,26 @@ export const XP_PER_TRIP = 20;
 export const LOG_LIMIT = 8;
 
 /** Kontakt im Handy für Nachrichten vom Hafen. */
-export const HARBOR_CONTACT = { id: 'other:harbor', name: 'Kalle (Hafenmeister)', kind: 'other' as const };
+export const HARBOR_CONTACT: Contact = {
+  id: 'other:harbor',
+  name: 'Kalle (Hafenmeister)',
+  kind: 'other',
+  role: 'Niehler Hafen',
+  about: 'Hafenmeister in Niehl. Sieht viel, sagt wenig, und für den richtigen Preis sieht er auch mal weg.',
+  look: {
+    feminine: false,
+    age: 52,
+    skin: 1,
+    hair: 'bald',
+    hairColor: 5,
+    beard: 'moustache',
+    glasses: 'square',
+    hat: 'none',
+    top: 'jacket',
+    topColor: 5,
+    extra: 'none',
+  },
+};
 
 /** Hafen einer Stadt (Auftrag 30): Liegeplatz, Kai und Zoll sind pro Stadt. */
 export interface PortConfig {

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { CALL_RETRY_MINUTES, CALL_RING_MINUTES, MINUTES_PER_DAY, messages, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { getRightHand, RIGHT_HAND_RANK_XP } from '../hierarchy';
+import { getRightHand, hasFullPower, RIGHT_HAND_RANK_XP } from '../hierarchy';
 import { enlist, generateProfile } from '../staff';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
 import { HARBOR_CALLER, OFFER_CALL_DELAY, OFFER_REMINDER_DAYS } from './config';
-import { hamburgMissing, offerStatus } from './index';
+import { cityTravel, hamburgMissing, isCityUnlocked, offerStatus } from './index';
 
 /** Spiel ohne Laufkundschaft, damit nichts dazwischenkommt. */
 function quietGame(seed = 1): Simulation {
@@ -112,6 +112,53 @@ describe('Der Anruf aus Hamburg', () => {
     acceptAndAnswer(sim, 'come');
     expect(offerStatus(sim.state)).toBe('accepted');
     expect(eventsOfType(events, 'city.offerAccepted')).toHaveLength(1);
+  });
+
+  it('"Ich komme" mit bereiter Rechter Hand: Übergabe und Abfahrt noch im selben Gespräch', () => {
+    const sim = quietGame();
+    completeKoeln(sim);
+    readyRightHand(sim);
+    sim.advance(OFFER_CALL_DELAY + 5);
+    const call = ringing(sim);
+    acceptAndAnswer(sim, 'come');
+    expect(offerStatus(sim.state)).toBe('accepted');
+    // Fiete fragt nach der Übergabe, mit dem Namen der Rechten Hand.
+    const thread = messages.thread(sim.state, HARBOR_CALLER.id);
+    const question = thread.find((m) => m.id > (call?.id ?? 0) && messages.canAnswer(sim.state, m));
+    expect(question?.options?.map((o) => o.id)).toEqual(['handover', 'handoverLater']);
+    const rh = getRightHand(sim.state);
+    const name = rh ? sim.state.modules.staff.members.find((m) => m.id === rh.staffId)?.name : undefined;
+    expect(question?.options?.[0].label).toContain(name ?? '?');
+    expect(
+      sim.dispatch({ type: 'messages.answer', payload: { messageId: question?.id ?? 0, optionId: 'handover' } }).ok,
+    ).toBe(true);
+    expect(hasFullPower(sim.state, 'koeln')).toBe(true);
+    expect(isCityUnlocked(sim.state, 'hamburg')).toBe(true);
+    expect(cityTravel(sim.state)?.to).toBe('hamburg');
+    // Er verabschiedet sich; keine offene Frage mehr bei ihm.
+    const after = messages.thread(sim.state, HARBOR_CALLER.id);
+    expect(after[after.length - 1].text).toContain('A1');
+    expect(after.some((m) => messages.canAnswer(sim.state, m))).toBe(false);
+  });
+
+  it('"Ich regel vorher noch was": er gibt dir Zeit, die Übergabe geht später über den Dialog', () => {
+    const sim = quietGame();
+    completeKoeln(sim);
+    readyRightHand(sim);
+    sim.advance(OFFER_CALL_DELAY + 5);
+    acceptAndAnswer(sim, 'come');
+    const question = messages.thread(sim.state, HARBOR_CALLER.id).find((m) => messages.canAnswer(sim.state, m));
+    expect(
+      sim.dispatch({ type: 'messages.answer', payload: { messageId: question?.id ?? 0, optionId: 'handoverLater' } })
+        .ok,
+    ).toBe(true);
+    expect(hasFullPower(sim.state, 'koeln')).toBe(false);
+    expect(cityTravel(sim.state)).toBeNull();
+    const thread = messages.thread(sim.state, HARBOR_CALLER.id);
+    expect(thread[thread.length - 1].from).toBe('contact');
+    // Übergabe wie im Dialog: Vollmacht, dann losfahren.
+    expect(sim.dispatch({ type: 'hierarchy.grantFullPower', payload: { cityId: 'koeln' } }).ok).toBe(true);
+    expect(sim.dispatch({ type: 'city.travel', payload: { cityId: 'hamburg' } }).ok).toBe(true);
   });
 
   it('"Ich brauch noch Zeit": alle 7 Tage per Chat, zusagen geht dort', () => {

@@ -2,8 +2,8 @@
 // Andere Module hängen eigene Abschnitte über den Slot 'staff.profile' an (z.B. Beförderung zum Leutnant).
 
 import { useState } from 'preact/hooks';
-import { clock, formatEuro } from '../../../core';
-import { Button, Empty, KeyValue, ProgressBar, Select, Slot, Stepper, Toggle, useGame } from '../../../ui';
+import { clock, formatEuro, lookTraits, personLook } from '../../../core';
+import { Button, Chip, Chips, Empty, KeyValue, ProgressBar, Select, Slot, Stepper, Toggle, useGame } from '../../../ui';
 import { bribeFactor, citiesUnlocked, cityName, travelMinutesBetween } from '../../city';
 import { getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
@@ -59,6 +59,14 @@ export function StaffProfile(props: { staffId: string }) {
       </header>
 
       {m.background && <p class="staff-file__background">{m.background}</p>}
+      {/* Aussehen wie im Porträt (ohne das Alter, das steht oben schon) */}
+      <Chips class="staff-file__look">
+        {lookTraits(personLook(m.name, m.age))
+          .slice(1)
+          .map((trait) => (
+            <Chip key={trait}>{trait}</Chip>
+          ))}
+      </Chips>
 
       <section class="staff-file__section">
         <KeyValue label="Herkunft" value={ORIGIN_NAMES[m.origin]} />

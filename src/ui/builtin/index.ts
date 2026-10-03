@@ -2,6 +2,7 @@
 // (mit Ton und Musik, Wetter, Verlauf), die Verlauf-Seite, Benachrichtigungen und Sounds für die Ereignisse des Kerns.
 
 import { clock, formatEuro, messages, wallet } from '../../core';
+import { registerContactProfile } from '../phone/ContactProfile';
 import { islandCountdown } from '../phone/islandModel';
 import { MessagesApp } from '../phone/MessagesApp';
 import { chatList, messageNotification } from '../phone/messagesModel';
@@ -48,6 +49,7 @@ export function registerBuiltins(): void {
   registerDialog({ id: 'core.gameOver', component: GameOverDialog, dismissable: false });
   registerDialog({ id: 'core.won', component: WonDialog, pausesGame: true });
 
+  registerContactProfile();
   registerPhoneApp({
     id: 'core.messages',
     name: 'Nachrichten',

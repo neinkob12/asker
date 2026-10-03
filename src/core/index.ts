@@ -7,6 +7,7 @@ export * from './config';
 export * from './format';
 export * from './geo';
 export * from './journal';
+export * from './looks';
 export * from './loop';
 export * from './messages';
 export * from './module';

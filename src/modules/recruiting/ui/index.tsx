@@ -4,7 +4,7 @@
 // Rollenwahl, das vorher sagt, was es kostet und was es bringt.
 
 import { useState } from 'preact/hooks';
-import { clock, formatEuro } from '../../../core';
+import { clock, formatEuro, personLook } from '../../../core';
 import {
   Avatar,
   Button,
@@ -68,7 +68,13 @@ function CandidateRow(props: { candidate: Candidate; onOpen: () => void }) {
   return (
     <ListItem onClick={props.onOpen} value={`${formatEuro(c.wage)}/Tag`}>
       <span class="ui-item">
-        <Avatar name={c.name} image={c.portrait ?? undefined} tone={look.color} size="md" />
+        <Avatar
+          name={c.name}
+          image={c.portrait ?? undefined}
+          look={personLook(c.name, c.age)}
+          tone={look.color}
+          size="md"
+        />
         <span class="ui-item__main">
           <span class="ui-item__title">{c.name}</span>
           <Chips
@@ -97,7 +103,13 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
       {c && (
         <div class="rc-sheet">
           <header class="rc-sheet__head">
-            <Avatar name={c.name} image={c.portrait ?? undefined} tone={look.color} size="lg" />
+            <Avatar
+              name={c.name}
+              image={c.portrait ?? undefined}
+              look={personLook(c.name, c.age)}
+              tone={look.color}
+              size="lg"
+            />
             <Chips
               items={[
                 { label: roleName(c.role), icon: look.icon, color: look.color },

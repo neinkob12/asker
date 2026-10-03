@@ -36,6 +36,7 @@ import {
   contactAvatar,
   firstUnread,
   groupChats,
+  lookOf,
   recentContacts,
 } from './messagesModel';
 import { PhoneScreen } from './PhoneScreen';
@@ -69,7 +70,12 @@ function RecentRow(props: { chats: ChatListItem[] }) {
             aria-label={`${c.name}${c.unread > 0 ? `, ${c.unread} ungelesen` : ''}`}
             title={c.name}
           >
-            <Avatar name={c.name} image={avatarImage(c.avatar, c.kind)} tone={CONTACT_KIND_TONES[c.kind]} />
+            <Avatar
+              name={c.name}
+              image={avatarImage(c.avatar, c.kind)}
+              look={c.look}
+              tone={CONTACT_KIND_TONES[c.kind]}
+            />
             <span class="msg-recent__name">{c.name.split(' ')[0]}</span>
             <Badge count={c.unread} />
           </button>
@@ -97,6 +103,7 @@ const ROW_FIELDS = [
   'awaitingAnswer',
   'deadlineIn',
   'avatar',
+  'look',
 ] as const satisfies readonly (keyof ChatListItem)[];
 
 /**
@@ -143,7 +150,7 @@ const ChatRow = memo(
             onClick={() => act().open(c.contactId)}
             aria-label={`${c.name}, ${c.kindLabel}${c.unread > 0 ? `, ${c.unread} ungelesen` : ''}${c.awaitingAnswer ? ', wartet auf Antwort' : ''}`}
           >
-            <Avatar name={c.name} image={avatarImage(c.avatar, c.kind)} tone={props.tone} />
+            <Avatar name={c.name} image={avatarImage(c.avatar, c.kind)} look={c.look} tone={props.tone} />
             <span class="msg-row__main">
               <span class="msg-row__top">
                 <span class="msg-row__name">{c.name}</span>
@@ -347,9 +354,23 @@ function Chat(props: { contactId: string }) {
     <PhoneScreen
       class="msg-chat"
       title={name}
-      subtitle={<Tag icon={CONTACT_KIND_ICONS[kind]}>{CONTACT_KIND_LABELS[kind]}</Tag>}
+      subtitle={<Tag icon={CONTACT_KIND_ICONS[kind]}>{contact?.role ?? CONTACT_KIND_LABELS[kind]}</Tag>}
+      // Antippen öffnet das Profil der Figur (Porträt, wer sie ist, Aussehen, Stimme).
       leading={
-        <Avatar name={name} image={avatarImage(contact?.avatar, kind)} size="sm" tone={CONTACT_KIND_TONES[kind]} />
+        <button
+          type="button"
+          class="msg-chat__who"
+          aria-label={`Profil von ${name}`}
+          onClick={() => ui.openPanel('core.contact', { contactId })}
+        >
+          <Avatar
+            name={name}
+            image={avatarImage(contact?.avatar, kind)}
+            look={lookOf(contact)}
+            size="sm"
+            tone={CONTACT_KIND_TONES[kind]}
+          />
+        </button>
       }
       // Eine Seite zurück zur Liste: openPhone(APP_ID) räumte nebenbei alle Nachrichten-Mitteilungen weg.
       onBack={() => ui.back()}

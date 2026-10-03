@@ -6,6 +6,7 @@
 //   audio.setAmbience('rain', 0.7)                  Geräusch-Schleife (rain, storm, wind), 0 = aus
 //   audio.registerSound('gangs.shot', { kind: 'file', url: 'audio/sfx/shot.ogg' })
 //   soundOnEvent('sale.completed', 'cash', { throttleMs: 400 })   Sound an ein Spielereignis binden
+//   audio.speak(text, contactVoice(contact), onEnd)  Satz mit der Stimme einer Figur (Anruf), null = geht gerade nicht
 //
 // Musik, Lautstärke und Stummschalten regelt der Spieler (HUD, Einstellungen, Musik-App im Handy).
 
@@ -16,6 +17,7 @@ export { AudioService } from './service';
 export { type AudioSettings, DEFAULT_AUDIO_SETTINGS } from './settings';
 export { type AmbienceId, SOUND_IDS, type SoundId } from './synth';
 export { type MusicMood, TRACKS, type Track, trackDuration } from './tracks';
+export { Speaker, type SpeechLike, speechMs } from './voice';
 
 /** Der Audio-Dienst der laufenden Seite. */
 export const audio = new AudioService();

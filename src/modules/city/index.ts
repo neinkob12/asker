@@ -5,7 +5,10 @@
 // Ablauf des Angebots (offer.status):
 //   none → scheduled (30 Spielminuten nach "Köln komplett", nicht während einer Konfrontation) → calling (Anruf, siehe
 //   messages.call) → Antwort über 'city.answerOffer':
-//     come:  Rechte Hand bereit → accepted (Ereignis city.offerAccepted, die Oberfläche öffnet die Übergabe).
+//     come:  Rechte Hand bereit → accepted (Ereignis city.offerAccepted). Fiete fragt noch im selben Gespräch, ob du
+//            Köln jetzt übergibst: "Köln an <Name> übergeben und losfahren" ('city.handOver': Vollmacht, Hamburg frei,
+//            du fährst los, er verabschiedet sich und das Gespräch endet) oder "Ich regel vorher noch was" (dann über
+//            die Karte unter Geld und Heat bzw. die Seite der Rechten Hand).
 //            Sonst → house: Er schreibt, was fehlt, und ruft von selbst wieder an, sobald es passt.
 //     later: Er meldet sich alle OFFER_REMINDER_DAYS Spieltage per Chat (mit denselben Antworten).
 //     stay:  Endlosmodus; er schreibt einmal, dass das Angebot steht (zusagen geht über seinen Chat).
@@ -28,7 +31,7 @@
 // und live; beim ersten Mal in Hamburg schreibt Fiete, wie man anfängt. Selbst am Spot stehen, selbst ausfahren,
 // selbst abholen und bei Konfrontationen dabei sein geht nur in der Stadt, in der du bist (isPlayerIn).
 //
-// Befehle: 'city.answerOffer', 'city.switch', 'city.unlock' (intern), 'city.travel'
+// Befehle: 'city.answerOffer', 'city.handOver', 'city.switch', 'city.unlock' (intern), 'city.travel'
 // Ereignisse: 'city.offerAnswered', 'city.offerAccepted', 'city.switched', 'city.unlocked', 'city.slept',
 //   'city.travelStarted', 'city.arrived'
 
@@ -48,11 +51,12 @@ import {
 import { isPlayerDelivering, playerSpot } from '../customers';
 import { activeEncounters } from '../encounters';
 import { bookDay, cityDayProfit } from '../finance';
-import { fullPowerMissing } from '../hierarchy';
+import { fullPowerMissing, getRightHand } from '../hierarchy';
 import { getTrips } from '../logistics';
 import { restHeat } from '../police';
 import { interCityMinutes } from '../roads';
 import { getSpot } from '../spots';
+import { getStaffMember } from '../staff';
 import { campaignProgress } from '../territory';
 import { allVeedel, type Veedel, veedelAt, veedelCity } from '../veedel';
 import {
@@ -133,6 +137,11 @@ declare module '../../core' {
   interface GameCommands {
     /** Antwort auf Fietes Angebot (aus dem Anruf oder seinem Chat). Chefsache. */
     'city.answerOffer': { choice: OfferChoice };
+    /**
+     * Köln an die Rechte Hand übergeben (Vollmacht) und sofort über die A1 in die nächste Stadt fahren. Aus Fietes
+     * Frage nach der Zusage (im Anruf oder Chat). Chefsache.
+     */
+    'city.handOver': { cityId?: string };
     /** Andere Stadt live schalten (Karte und Handy wechseln, die bisherige schläft). Nur freigeschaltete Städte. */
     'city.switch': { cityId: string };
     /** Stadt freischalten. Intern (nach der Übergabe an die Rechte Hand), nicht für den Spieler. */
@@ -354,8 +363,8 @@ export function answerOffer(ctx: Ctx, choice: OfferChoice): CommandResult {
     if (ready) {
       offer.status = 'accepted';
       offer.remindAt = null;
-      tell(ctx, OFFER_TEXTS.ready);
-      journal.add(ctx, 'Du hast Fiete zugesagt: Hamburg. Jetzt die Übergabe in Köln regeln.', 'good');
+      askHandover(ctx);
+      journal.add(ctx, 'Du hast Fiete zugesagt: Hamburg. Jetzt Köln übergeben.', 'good');
       ctx.emit('city.offerAccepted', {});
     } else {
       offer.status = 'house';
@@ -380,6 +389,65 @@ export function answerOffer(ctx: Ctx, choice: OfferChoice): CommandResult {
   return { ok: true };
 }
 
+/** Name der Rechten Hand in einer Stadt (für Fietes Sätze). */
+function rightHandName(state: GameState, cityId: string): string {
+  const rh = getRightHand(state, cityId);
+  return (rh && getStaffMember(state, rh.staffId)?.name) || 'Deine Rechte Hand';
+}
+
+/** Nach der Zusage: Fiete fragt (noch im Gespräch), ob du Köln jetzt übergibst. */
+function askHandover(ctx: Ctx): void {
+  const name = rightHandName(ctx.state, FIRST_CITY);
+  messages.send(ctx, { contact: HARBOR_CALLER, text: OFFER_TEXTS.ready });
+  messages.send(ctx, { contact: HARBOR_CALLER, text: OFFER_TEXTS.handoverDeal.replaceAll('{name}', name) });
+  messages.send(ctx, {
+    contact: HARBOR_CALLER,
+    text: OFFER_TEXTS.handoverAsk,
+    options: [
+      {
+        id: HANDOVER_NOW,
+        label: `Köln an ${name} übergeben und losfahren`,
+        reply: `${name} übernimmt Köln. Ich fahr los.`,
+        command: { type: 'city.handOver', payload: { cityId: FIRST_CITY } },
+      },
+      { id: HANDOVER_LATER, label: 'Ich regel vorher noch was', reply: 'Ich regel vorher noch was in Köln.' },
+    ],
+  });
+}
+
+const HANDOVER_NOW = 'handover';
+const HANDOVER_LATER = 'handoverLater';
+
+/** Warum du gerade nicht in eine andere Stadt fahren kannst (null = nichts). */
+function travelBlocker(state: GameState): string | null {
+  const c = state.modules.city;
+  if (c.travel) return `Du bist schon auf dem Weg nach ${cityName(c.travel.to)}.`;
+  if (isPlayerDelivering(state)) return 'Erst die Lieferung zu Ende fahren.';
+  if (getTrips(state).some((t) => t.driverId === null)) return 'Du bist gerade mit dem Transporter unterwegs.';
+  return null;
+}
+
+/**
+ * Stadt an die Rechte Hand übergeben und in die nächste fahren, in einem Rutsch (aus Fietes Frage). Erst prüfen, ob du
+ * überhaupt losfahren kannst, damit die Übergabe nicht ohne Fahrt passiert.
+ */
+export function handOver(ctx: Ctx, cityId: string): CommandResult {
+  const next = NEXT_CITY[cityId];
+  if (!next) return { ok: false, reason: `Aus ${cityName(cityId)} geht es noch nicht weiter.` };
+  const blocked = travelBlocker(ctx.state);
+  if (blocked) return { ok: false, reason: blocked };
+  const granted = ctx.dispatch({ type: 'hierarchy.grantFullPower', payload: { cityId } }, { actor: 'player' });
+  if (!granted.ok) return granted;
+  // Das Ereignis der Übergabe kommt erst nach diesem Befehl an; die Stadt muss aber jetzt frei sein, um loszufahren.
+  unlockCity(ctx, next);
+  if (ctx.state.modules.city.present !== next) {
+    const travel = travelTo(ctx, next);
+    if (!travel.ok) return travel;
+  }
+  messages.send(ctx, { contact: HARBOR_CALLER, text: OFFER_TEXTS.handoverDone });
+  return { ok: true };
+}
+
 function newSleep(live: boolean, now: number): CitySleep {
   return { results: [], liveToday: live, since: live ? null : now, last: null };
 }
@@ -392,10 +460,8 @@ export function travelTo(ctx: Ctx, cityId: string): CommandResult {
   if (!c.unlocked.includes(cityId)) return { ok: false, reason: `${def.name} ist noch nicht frei.` };
   if (c.travel) return { ok: false, reason: `Du bist schon auf dem Weg nach ${cityName(c.travel.to)}.` };
   if (c.present === cityId) return { ok: false, reason: `Du bist schon in ${def.name}.` };
-  if (isPlayerDelivering(ctx.state)) return { ok: false, reason: 'Erst die Lieferung zu Ende fahren.' };
-  if (getTrips(ctx.state).some((t) => t.driverId === null)) {
-    return { ok: false, reason: 'Du bist gerade mit dem Transporter unterwegs.' };
-  }
+  const blocked = travelBlocker(ctx.state);
+  if (blocked) return { ok: false, reason: blocked };
   // Wer losfährt, steht nicht mehr am Spot.
   if (playerSpot(ctx.state)) ctx.dispatch({ type: 'customers.standAt', payload: { spotId: null } });
   const from = c.present;
@@ -562,6 +628,7 @@ export default defineModule({
   tick,
   commands: {
     'city.answerOffer': (ctx, { choice }) => answerOffer(ctx, choice),
+    'city.handOver': (ctx, payload, meta) => playerOnly(meta) ?? handOver(ctx, payload?.cityId ?? FIRST_CITY),
     'city.switch': (ctx, { cityId }, meta) => playerOnly(meta) ?? switchCity(ctx, cityId),
     'city.unlock': (ctx, { cityId }, meta) =>
       meta.actor === 'system' ? unlockCity(ctx, cityId) : { ok: false, reason: 'Städte werden im Spiel frei.' },
@@ -575,6 +642,12 @@ export default defineModule({
     'hierarchy.fullPowerGranted': (ctx, { cityId }) => {
       const next = NEXT_CITY[cityId];
       if (next) unlockCity(ctx, next);
+      // Übergeben (auch über den Dialog): Fietes Frage danach hat sich erledigt.
+      retractOpenQuestions(ctx);
+    },
+    // "Ich regel vorher noch was": Fiete gibt dir Zeit.
+    'message.answered': (ctx, { contactId, optionId }) => {
+      if (contactId === HARBOR_CALLER.id && optionId === HANDOVER_LATER) tell(ctx, OFFER_TEXTS.handoverLater);
     },
   },
   migrations: {

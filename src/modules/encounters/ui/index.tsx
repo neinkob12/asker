@@ -6,7 +6,7 @@
 // Die Schriften DM Serif Display und Courier Prime gibt es nur hier (--font-file*).
 
 import type { ComponentChildren } from 'preact';
-import { formatAmount, formatEuro, formatPercent, type GameState } from '../../../core';
+import { formatAmount, formatEuro, formatPercent, type GameState, personLook } from '../../../core';
 import { mapEffects } from '../../../map';
 import {
   Avatar,
@@ -22,6 +22,7 @@ import {
   useUi,
 } from '../../../ui';
 import { getSpot } from '../../spots';
+import { getStaffMember } from '../../staff';
 import { getVeedel, veedelName } from '../../veedel';
 import {
   actionChance,
@@ -106,6 +107,7 @@ function Polaroid(props: { side: 'own' | 'foe'; name: string; caption: Component
 }
 
 function Head(props: { encounter: Encounter }) {
+  const { state } = useGame();
   const { encounter } = props;
   const kind = ENCOUNTER_KINDS[encounter.kind];
   const stakes = stakesText(encounter);
@@ -133,7 +135,11 @@ function Head(props: { encounter: Encounter }) {
           side="own"
           name={lead ? (lead.isPlayer ? 'Du' : lead.name.split(' ')[0]) : 'Niemand'}
           avatar={
-            <Avatar name={lead?.isPlayer ? 'Du' : (lead?.name ?? '?')} image={lead?.isPlayer ? 'user' : undefined} />
+            <Avatar
+              name={lead?.isPlayer ? 'Du' : (lead?.name ?? '?')}
+              image={lead?.isPlayer ? 'user' : undefined}
+              look={lead && !lead.isPlayer ? personLook(lead.name, getStaffMember(state, lead.id)?.age) : null}
+            />
           }
           caption={
             lead ? (

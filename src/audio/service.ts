@@ -2,11 +2,12 @@
 // Stummschalten (pro Gerät gemerkt). Startet erst nach der ersten Nutzerinteraktion (Browser-Regel):
 // Vorher sind alle Aufrufe erlaubt, spielen aber nichts.
 
-import type { KeyValueStorage } from '../core';
+import type { KeyValueStorage, VoiceSpec } from '../core';
 import { FilePlayer, MusicPlayer, type TrackPlayer } from './music';
 import { type AudioSettings, DEFAULT_AUDIO_SETTINGS, loadAudioSettings, saveAudioSettings } from './settings';
 import { Ambience, type AmbienceId, playSound, type SoundId, SynthCore } from './synth';
 import { type MusicMood, pickTrack, TRACKS, type Track } from './tracks';
+import { Speaker } from './voice';
 
 export type AudioStatus = 'locked' | 'running' | 'suspended' | 'unsupported';
 
@@ -40,6 +41,8 @@ const NEIGHBORS: Record<MusicMood, MusicMood[]> = {
 export interface AudioServiceOptions {
   /** Erzeugt den AudioContext. Standard: window.AudioContext. In Tests null. */
   createContext?: () => AudioContext | null;
+  /** Sprachausgabe für Stimmen im Anruf. Standard: die des Browsers. */
+  speaker?: Speaker;
 }
 
 export class AudioService {
@@ -64,8 +67,12 @@ export class AudioService {
   private readonly lastPlayed = new Map<string, number>();
   private readonly ambienceLevels = new Map<AmbienceId, number>();
   private readonly createContext: () => AudioContext | null;
+  private speakerInstance: Speaker | null;
+  /** Wie viele Sätze gerade gesprochen werden (Musik so lange leiser). */
+  private speaking = 0;
 
   constructor(options: AudioServiceOptions = {}) {
+    this.speakerInstance = options.speaker ?? null;
     this.createContext =
       options.createContext ??
       (() => {
@@ -310,9 +317,68 @@ export class AudioService {
       else param.setTargetAtTime(value, ctx.currentTime, 0.08);
     };
     set(this.master.gain, s.muted ? 0 : s.master);
-    set(this.musicBus.gain, s.music * 2.2);
+    // Spricht jemand im Anruf, tritt die Musik zurück.
+    set(this.musicBus.gain, s.music * 2.2 * (this.speaking > 0 ? 0.3 : 1));
     set(this.sfxBus.gain, s.sfx);
     set(this.ambienceBus.gain, s.sfx);
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Stimmen im Anruf
+
+  private get speaker(): Speaker {
+    this.speakerInstance ??= new Speaker();
+    return this.speakerInstance;
+  }
+
+  /** Kann dieser Browser überhaupt sprechen (unabhängig von der Einstellung)? */
+  get canSpeakAtAll(): boolean {
+    return this.speaker.available;
+  }
+
+  /** Sprechen Figuren im Anruf? (Einstellung an, nicht stumm, Browser kann es.) */
+  get canSpeak(): boolean {
+    return this.settings.voices && !this.settings.muted && this.speaker.available;
+  }
+
+  /**
+   * Einen Satz mit der Stimme einer Figur sprechen. onEnd kommt genau einmal (fertig, Fehler oder Sicherheitsnetz).
+   * Kann nicht gesprochen werden, kommt nichts (dann zeigt der Anruf die Zeile im eigenen Tempo). Gibt eine Funktion
+   * zum Abbrechen zurück. Die Musik ist so lange leiser.
+   */
+  speak(text: string, voice: VoiceSpec, onEnd: () => void): (() => void) | null {
+    if (!this.canSpeak) return null;
+    const volume = this.settings.master * Math.max(0.6, this.settings.sfx);
+    let done = false;
+    const release = () => {
+      if (done) return;
+      done = true;
+      this.speaking = Math.max(0, this.speaking - 1);
+      this.applyVolumes(false);
+    };
+    this.speaking++;
+    this.applyVolumes(false);
+    const cancel = this.speaker.speak(text, voice, volume, () => {
+      release();
+      onEnd();
+    });
+    return () => {
+      cancel();
+      release();
+    };
+  }
+
+  /** Sprachausgabe freigeben (aus einem Tippen heraus, z.B. Anruf annehmen). */
+  primeSpeech(): void {
+    if (this.settings.voices) this.speaker.prime();
+  }
+
+  /** Alle Stimmen verstummen lassen (Auflegen). */
+  stopSpeaking(): void {
+    if (!this.speakerInstance) return;
+    this.speakerInstance.stop();
+    this.speaking = 0;
+    this.applyVolumes(false);
   }
 
   // -------------------------------------------------------------------------------------------

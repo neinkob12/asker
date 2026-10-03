@@ -1,12 +1,13 @@
 // Vollmacht der Rechten Hand im Handy und über der Karte (Auftrag 30):
 //   - Übergabe-Dialog über der Kartenfläche (Look "Glas"): die Rechte Hand mit Stufe und Erledigtem, der Deal (80 % für
 //     sie, 20 % für dich, täglich um Mitternacht, nur bei Gewinn), was sie ab jetzt zusätzlich tut, dass du jederzeit
-//     zurückkommen kannst, und "Köln übergeben und nach Hamburg fahren". Er öffnet sich nach der Zusage an Fiete, sobald
-//     das Gespräch vorbei ist und kein anderer Dialog offen ist; sonst über die Seite der Rechten Hand.
+//     zurückkommen kannst, und "Köln übergeben und nach Hamburg fahren". Nach der Zusage an Fiete fragt er selbst im
+//     Gespräch, ob du übergibst ('city.handOver'); wer erst noch etwas regeln will, kommt über die Karte unter Geld und
+//     Heat oder die Seite der Rechten Hand hierher.
 //   - Abschnitt "Vollmacht" auf der Seite der Rechten Hand: Aufgaben mit Vollmacht als Schalter, Beträge, Widerruf.
 
-import { useEffect, useState } from 'preact/hooks';
-import { formatEuro } from '../../../core';
+import { useState } from 'preact/hooks';
+import { formatEuro, personLook } from '../../../core';
 import {
   ActionSheet,
   Avatar,
@@ -19,9 +20,7 @@ import {
   List,
   ListItem,
   MapDialog,
-  onGameEvent,
   registerDialog,
-  registerSlot,
   Stepper,
   Toggle,
   useGame,
@@ -74,7 +73,7 @@ function HandoverDialog(props: { cityId: string }) {
       <h2 class="handover__title">{city} übergeben</h2>
       {m && rh ? (
         <div class="handover__who">
-          <Avatar name={m.name} tone="brand" size="lg" />
+          <Avatar name={m.name} look={personLook(m.name, m.age)} tone="brand" size="lg" />
           <div class="handover__who-text">
             <strong>{m.name}</strong>
             <Chips>
@@ -142,32 +141,6 @@ registerDialog({
   pausesGame: true,
   lockPhone: false,
 });
-
-/** Zusage an Fiete: Die Übergabe öffnet sich, sobald das Gespräch vorbei und kein anderer Dialog offen ist. */
-let pendingHandover: { runId: string; cityId: string } | null = null;
-
-onGameEvent('city.offerAccepted', 'hierarchy.handover', (_payload, _ui, state) => {
-  pendingHandover = { runId: state.meta.runId, cityId: 'koeln' };
-});
-
-function HandoverOpener() {
-  const { state } = useGame();
-  const ui = useUi();
-  const pending = pendingHandover && pendingHandover.runId === state.meta.runId ? pendingHandover : null;
-  const busy = !!ui.state.dialog || !!ui.state.call;
-  useEffect(() => {
-    if (!pending || busy) return;
-    const timer = window.setTimeout(() => {
-      if (pendingHandover !== pending) return;
-      pendingHandover = null;
-      ui.openDialog('hierarchy.handover', { cityId: pending.cityId });
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [pending, busy]);
-  return null;
-}
-
-registerSlot('map.overlay', { id: 'hierarchy.handoverOpener', order: 99, component: HandoverOpener });
 
 /** Abschnitt "Vollmacht" auf der Seite der Rechten Hand. */
 export function FullPowerSection(props: { offered: boolean }) {

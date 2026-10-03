@@ -1,6 +1,6 @@
 // Lese- und Schreib-API des Personals. Lesen mit state, schreiben mit ctx.
 
-import { type Contact, type Ctx, type GameState, journal, type MoneyCategory } from '../../core';
+import { type Contact, type Ctx, type GameState, journal, type MoneyCategory, personLook } from '../../core';
 import { activeCity, bribeFactor, cityName, getCity, isCityLive } from '../city';
 import { getWarehouse } from '../goods';
 import { getSpot, isSpotActive } from '../spots';
@@ -328,7 +328,14 @@ export function jailDuration(state: GameState): number {
 
 /** Kontakt fürs Handy, z.B. für Nachrichten von dieser Person. */
 export function staffContact(member: StaffMember): Contact {
-  return { id: `staff:${member.id}`, name: member.name, kind: member.role === 'policeContact' ? 'police' : 'staff' };
+  return {
+    id: `staff:${member.id}`,
+    name: member.name,
+    kind: member.role === 'policeContact' ? 'police' : 'staff',
+    role: ROLE_INFO[member.role].name,
+    about: member.background,
+    look: personLook(member.name, member.age),
+  };
 }
 
 // --- Schreiben ---
