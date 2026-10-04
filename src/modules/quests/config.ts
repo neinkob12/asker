@@ -58,7 +58,9 @@ export type QuestReward =
   /** Einfluss in allen Veedeln, in denen du schon präsent bist. */
   | { kind: 'influence'; amount: number }
   /** Titel für die Bestenliste. */
-  | { kind: 'title'; title: string };
+  | { kind: 'title'; title: string }
+  /** Vertrauen bei einem Lieferanten (Wochenverträge, Auftrag 32). */
+  | { kind: 'trust'; supplierId: string; amount: number };
 
 /** Zuwachs pro Ereignis (0 = zählt nicht). */
 export type QuestCounter = { [K in keyof GameEvents]?: (payload: GameEvents[K], state: GameState) => number };

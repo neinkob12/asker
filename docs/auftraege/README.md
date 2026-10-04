@@ -184,6 +184,9 @@ eigenen Abschnitt.
 Gangs, Lieferanten, Personal, Leutnants und Hafen, Gang-Methoden mit Einbruch, Abwerben, Einschüchtern, Polizei-Tipp,
 Erpressung und Chancen, Lieferprobleme mit Gründen und Entscheidungen, Spot-Arten mit Bekanntheit, Ausbau, Verlegen,
 Umbenennen und Aufgeben. Kunden-Anfragen (Etappe 4) bewusst nicht umgebaut: Seit Auftrag 28 regelt das die Rechte Hand.
+**Stand Auftrag 32:** umgesetzt in fünf Etappen (PR #54): Preisindex pro Ware und Stadt (`market`), Rabatt-Aktionen
+(`suppliers`), Marktereignisse (`events`), Marktbericht am Montag, Preisgrenze in Bestellregeln (`hierarchy`, klein),
+Qualität treibt Nachfrage (`customers/quality.ts`), Wochenverträge (`quests/contracts.ts`), Bot und Balancing.
 
 **Prüf-Loop:** Die Planungs-Session startet jede Welle als eigene Cloud-Sessions (je ein Branch `claude/auftrag-<nr>-…`
 und ein Draft-PR), schaut stündlich nach, prüft fertige PRs gegen ihren Auftrag (Checkliste „Fertig, wenn“, CI, Review

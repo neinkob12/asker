@@ -217,3 +217,31 @@
   display: flex;
   justify-content: center;
 }
+
+/* Wochenverträge (Auftrag 32): gleiche Glas-Karte, Grün statt Gold. */
+.hud-label.is-contract {
+  color: var(--map-money);
+}
+.quest-hud--contract .quest-hud__fill {
+  background: var(--map-money);
+}
+.quest-contract {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.quest-contract__main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.quest-contract__title {
+  font-weight: 600;
+}
+.quest-contract__meta {
+  color: var(--color-muted);
+  font-size: var(--type-subhead);
+}

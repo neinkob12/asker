@@ -147,3 +147,80 @@ export const CITY_EVENTS: readonly CityEventDef[] = [
     announce: 'Ab morgen ist wieder Dom auf dem Heiligengeistfeld. Vier Wochen lang.',
   },
 ];
+
+// ---------------------------------------------------------------------------------------------
+// Marktereignisse (Auftrag 32): ohne Gebiet, wirken auf den Preisindex einer Ware in einer Stadt (market.priceIndex).
+// Ausgewürfelt um Mitternacht in jeder freien Stadt; die Hälfte treibt die Preise (Chance für den Verkauf), die andere
+// Hälfte drückt sie (Problem). Ein Satz pro Ereignis, {product} wird durch die Ware ersetzt.
+
+export interface MarketEventDef {
+  id: string;
+  name: string;
+  icon: string;
+  /** Eine davon wird gewürfelt. */
+  products: readonly string[];
+  /** Faktor auf den Index (über 1 teurer). */
+  factor: number;
+  /** Ein Satz, was passiert. */
+  text: string;
+}
+
+export const MARKET_EVENTS: readonly MarketEventDef[] = [
+  // --- Preise steigen (Chance) ---
+  {
+    id: 'customsSeizure',
+    name: 'Zollfund in Rotterdam',
+    icon: 'ship',
+    products: ['weed', 'hash'],
+    factor: 1.12,
+    text: 'Der Zoll hat in Rotterdam einen ganzen Container {product} gefunden. Die Ware wird knapp, die Preise ziehen an.',
+  },
+  {
+    id: 'gangBust',
+    name: 'Großrazzia bei einer Gang',
+    icon: 'siren',
+    products: ['weed', 'kush', 'haze'],
+    factor: 1.1,
+    text: 'Die Polizei hat eine Gang hochgenommen, deren {product} ist vom Markt. Wer jetzt liefern kann, verdient.',
+  },
+  {
+    id: 'semester',
+    name: 'Semesterstart',
+    icon: 'users',
+    products: ['weed', 'edibles'],
+    factor: 1.08,
+    text: 'Die Studis sind zurück und wollen {product}. Die Nachfrage treibt die Preise.',
+  },
+  // --- Preise fallen (Problem) ---
+  {
+    id: 'harvest',
+    name: 'Gute Ernte in den Niederlanden',
+    icon: 'leaf',
+    products: ['haze', 'kush'],
+    factor: 0.9,
+    text: 'Gute Ernte in den Niederlanden: Überall gibt es {product}, die Preise fallen.',
+  },
+  {
+    id: 'hashFlood',
+    name: 'Schwemme aus Marokko',
+    icon: 'boxes',
+    products: ['hash'],
+    factor: 0.9,
+    text: 'Eine große Ladung {product} aus Marokko ist durchgekommen. Die Straße ist voll, die Preise sacken ab.',
+  },
+  {
+    id: 'onlineShops',
+    name: 'Billigware aus dem Netz',
+    icon: 'phone',
+    products: ['vape', 'oil', 'edibles'],
+    factor: 0.92,
+    text: 'Online-Shops verschicken {product} billig per Post. Die Kundschaft vergleicht Preise.',
+  },
+];
+
+/** Chance pro Stadt und Tag, dass ein Marktereignis beginnt. */
+export const MARKET_EVENT_CHANCE = 0.18;
+/** Höchstens so viele gleichzeitig pro Stadt. */
+export const MAX_MARKET_EVENTS = 2;
+/** Dauer in Tagen [von, bis]. */
+export const MARKET_EVENT_DAYS: readonly [number, number] = [2, 5];

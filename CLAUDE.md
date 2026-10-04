@@ -48,6 +48,11 @@ Auftrag 23: Texte mit Varianten über den Text-Helfer `texts.pick(ctx, '<art>:<w
 (`gangs/texts.ts`, `traits.methods`, `gangs/methods.ts` mit Vorfällen und `gangs.respond`), Lieferprobleme Gründe und
 Entscheidungen (`suppliers/problems.ts`, `troubles.ts`, `suppliers.resolveProblem`), Spots Arten, Bekanntheit und Ausbau
 (`spots/kinds.ts`, `spotDemandFactor`, `spotModifiers`).
+Auftrag 32 (Markt und Verträge): Preisindex pro Ware und Stadt (`market.priceIndex`, Richtpreis ganz, Einkauf über
+`purchaseIndex` zur Hälfte), Rabatt-Aktionen (`suppliers.getDeals`), Marktereignisse ohne Gebiet (`events.marketEvents`),
+Marktbericht montags, Bestellregel mit `maxIndex`, Qualität treibt Nachfrage am Spot (`customers/quality.ts`),
+Wochenverträge (`quests/contracts.ts`, Befehl `quests.acceptContract`, Belohnung `trust`). Neue Zufallswürfe ändern die
+Würfelfolge eines Moduls: Szenario-Tests mit festem Seed können dann kippen (Autopilot läuft deshalb mit Seed 12).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

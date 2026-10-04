@@ -388,3 +388,19 @@ export const LUCK_EARLY = 0.25;
 export const LUCK_BONUS: readonly [number, number] = [0.1, 0.2];
 /** Bessere Qualität (+ [von, bis]). */
 export const LUCK_QUALITY: readonly [number, number] = [0.05, 0.1];
+// ---------------------------------------------------------------------------------------------
+// Rabatt-Aktionen (Auftrag 32): Ein Lieferant gibt ein Paket für ein paar Tage billiger her und sagt es per Handy
+// (still, ohne Banner). Um Mitternacht pro freier Stadt ausgewürfelt, solange dort keine Aktion läuft.
+
+/** Chance pro Stadt und Tag, solange dort keine Aktion läuft (mit der Dauer etwa einmal pro Woche). */
+export const DEAL_CHANCE_PER_DAY = 0.2;
+/** Rabatt [von, bis] als Anteil. */
+export const DEAL_DISCOUNT: readonly [number, number] = [0.1, 0.25];
+/** Dauer in Tagen [von, bis]. */
+export const DEAL_DAYS: readonly [number, number] = [3, 5];
+/** Was der Lieferant schreibt: {package}, {discount} und {until} werden ersetzt. */
+export const DEAL_PITCHES: readonly string[] = [
+  'Hab zu viel da: {package} gibt es bis {until} {discount} billiger. Wer zuerst kommt.',
+  'Kleine Aktion unter Freunden: {package} bis {until} {discount} günstiger.',
+  'Muss Platz schaffen. {package}, {discount} runter, gilt bis {until}.',
+];
