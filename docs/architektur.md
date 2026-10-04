@@ -344,7 +344,7 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 | `territory` | `influence`, `controller`, `lastSaleAt` (2) | `PLAYER_FACTION`, `CONTROL_THRESHOLD`, `LOSE_CONTROL_THRESHOLD`, `getInfluence`, `influenceIn`, `addInfluence`, `controllerOf`, `controlledBy`, `factions`, `factionName`, `factionColor`, `playerPresence`, `hasPlayerPresence`, `lieutenantInfluence`, `campaignProgress` | | `territory.controlChanged` |
 | `police` | `heat`, `level`, Sperrzeiten, `tipOffs`, `plannedRaids` (mit `scope`, `spotId`), `majorRaid`, `majorReadyAt`, `tier`, `stats` (4) | `getHeat`, `addHeat`, `reportViolence`, `heatLevel`, `playerHeat`, `hottestVeedel`, `snitchOnGang`, `canSnitch`, `activeTipOff`, `plannedRaid`, `plannedRaidInfo`, `plannedMajorRaid`, `operationTier`, `operationFacts`, `nextTierHints`, `OPERATION_TIERS`, `RAID_SCOPES`, `getPoliceStats`, `arrestStaff`, `recordConfiscation` | `police.snitch` | `police.check`, `police.raidPlanned` (`scope`), `police.raid` (`scope`: `spot`/`veedel`/`major`, `veedelIds`; `empty` wenn niemand da war), `police.arrest`, `police.tipOff`, `police.heatLevelChanged`, `police.tierChanged` |
 | `gangs` | `gangs[id]` (Geld, Leute, Ware, Feindseligkeit, Beziehung, Abkommen, Vorstoß), `priceFactors` (2) | `getGangs`, `getGang`, `getGangStatus`, `gangVeedel`, `veedelGang`, `gangPower`, `playerPower`, `isAtPeace`, `tributeAmount`, `ceasefireCost`, `protectionAmount`, `gangContact` … | `gangs.ceasefire`, `.payTribute`, `.refuse`, `.demandProtection`, `.collect`, `.releaseProtection`, `.ally`, `.attack`, `.acceptOffer` | `gang.pushStarted`, `gang.pushEnded`, `gang.escalated`, `gang.raidStarted`, `gang.diplomacyChanged`, `gang.busted` |
-| `encounters` | `active`, `history`, je Konfrontation `mode` (3) | `startEncounter(ctx, request)` (mit `askPlayer`, `place`, `situation`, `stakes`, `effects`, `skipEffects`), `getEncounter`, `activeEncounters`, `pendingEncounter`, `availableActions`, `actionChance`, `briefingOptions` (Wege mit Kosten, ob sie gehen), `payoffCost`, `autoResolveEncounter`, `ENCOUNTER_KINDS` (mit `briefingOptions`), `ENCOUNTER_ACTIONS`, `PLAYER_STATS` | `encounters.join` (`mode`: self, crew, backup, payoff, tipoff, abandon; alt `present`), `.act`, `.auto` | `encounter.started`, `encounter.round`, `encounter.resolved` (`result` mit `relation`, `mode`) |
+| `encounters` | `active`, `history`, je Konfrontation `mode`, Zeiger `aggression`/`resolve`, Polizei-Uhr `clock`, `intent`, `foes` (Rollen), `stakes` (Schaden), `protect`, `brawl` (4) | `startEncounter(ctx, request)` (mit `askPlayer`, `place`, `situation`, `setting`, `stakes`, `effects`, `skipEffects`), `getEncounter`, `activeEncounters`, `pendingEncounter`, `availableActions`, `availableMoves`, `previewShift` (Pfeile vor dem Tippen), `actionChance` (Stärke 0–1), `briefingOptions`, `payoffCost`, `crewCandidates`, `suggestedCrew`, `specialMoves(member)` (Haken für Auftrag 34), `rightHandAdvice`, `chooseAuto`/`chooseMove` (Strategie), `autoResolveEncounter`, `ENCOUNTER_KINDS`, `ENCOUNTER_ACTIONS`, `ENCOUNTER_INTENTS`, `SPECIAL_MOVES`, `ADVICE_RULES`, `PLAYER_STATS` | `encounters.join` (`mode`: self, crew, backup, payoff, tipoff, abandon; alt `present`; `crew` bis zu drei), `.act` (`protect`), `.protect`, `.special`, `.auto` | `encounter.started`, `encounter.round` (Zeiger, Uhr), `encounter.resolved` (`result` mit `relation`, `parts`, `ending`, `mode`) |
 | `goods` | Posten pro Lager mit Qualität, Streckanteil, Einkaufspreis, eigene Lager `owned` (3) | `allProducts`, `getProduct`, `productName`, `getWarehouses` (eigene), `warehouseSites` (alle Standorte mit Preis), `isWarehouseOwned`, `nearestWarehouse(state, point, { productId?, amount? })`, `getStock`, `getLots`, `stockSummary`, `averageQuality`, `qualityTier`, `cutPreview`, `store`, `take` (mit `near`: nächstes Lager zuerst; → `taken`, `quality`, `cut`, `unitCost`), `cutLot` | `goods.cut`, `goods.buyWarehouse` (sauberes Geld) | `goods.stored`, `goods.taken`, `goods.cut`, `goods.warehouseBought` |
 | `market` | `competition`, `pressure`, `prices` (2) | `referencePrice`, `averageReferencePrice`, `purchasingPowerFactor`, `supplyDemandFactor`, `getPressure`, `getCompetitionFactor`, `setCompetitionFactor`, `spotReferencePrice`, `getSpotPrice`, `hasOwnPrice`, `priceRatio`, `roundPrice` | `market.setPrice` | `market.competitionChanged`, `market.priceSet` |
 | `suppliers` | `shipments` (`toPort` bei Schiffsware), `relations` (Vertrauen, Schulden), `unlocked`, `offered` (3) | `getSuppliers`, `getSupplier`, `isUnlocked`, `unlockRequirements` (Stand der Bedingungen), `canUnlock`, `shipmentsInTransit`, `shipmentProgress`, `deliveryLeg` (Schiff/Umladen/Straße, nur Darstellung; Weg des Schiffs: `roads.shipRoute`), `UNLOADING_PORT`, `CITY_APPROACH_SHARE`, `expectedArrival`, `cheapestPackagePrice`, `getRelation`, `supplierDiscount`, `creditLimit`, `availableCredit`, `isBlocked`, `availablePackages` (leer, solange gesperrt), `packagePrice`, `supplierVia(supplier, cityId)` (Autobahn des Kuriers in die Stadt, nur Karte) | `suppliers.order` (`onCredit`, `warehouseId`), `suppliers.repay`, `suppliers.unlock` | `shipment.ordered`, `shipment.arrived` (`atPort`), `shipment.problem`, `supplier.trustChanged`, `supplier.repaid`, `supplier.overdue`, `supplier.unlocked` |
@@ -445,12 +445,33 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   zu vier Veedeln zugleich mit einem Tag Vorlauf). Beute anteilig (`RAID_SCOPES`): Ware am Ort, Lagerbestand,
   Schwarzgeld. Der Polizei-Kontakt (staff, Bonus `raidWarning`) warnt per Handy mit der Antwort "Leute abziehen"
   (`staff.lieLow`), vor einer Großrazzia immer; wer abgetaucht ist, verliert bei der Razzia nichts.
-- **Konfrontationen** nutzen die echten Werte der Beteiligten (Tempo, Vorsicht, Stärke, Charisma), bringen
-  Erfahrung und kosten Loyalität. Anlässe: Überfall abwehren, Polizeiflucht, Schulden eintreiben, Deal kippt
-  (Gang-Angebote und Großhandel), Überfall auf einen Gang-Spot. Im Briefing wählt der Spieler einen Weg (je Anlass
-  `briefingOptions`): selbst hin, Leute machen lassen, Verstärkung (freie Leute fahren hin, Start-Lage besser),
-  sofort freikaufen (Erfolg, Beziehung zur Gang sinkt, gangs wendet `result.relation` an), anonym die Bullen rufen
-  (Rückzug, Heat, etwas Ware weg) oder Ware retten und den Spot räumen (Rückzug, die Kasse ist weg).
+- **Konfrontationen** (Auftrag 35) zeigen, was als Nächstes passiert, und lassen den Spieler darauf antworten. Jede
+  Runde steht die **Absicht** der Gegenseite als Chip im Dialog (`encounters/intents.ts`, gewürfelt nach den Zeigern):
+  „Sie gehen auf die Kasse“, „Der Anführer will reden“, „Einer zieht ein Messer“, „Sie suchen den Ausgang“ … Zwei
+  **Zeiger** 0–100: Aggression (ab `AGGRESSION_FIGHT` 70 Schlägerei, beide Seiten schlagen zu) und Entschlossenheit
+  (die Bereitschaft zu bleiben; unter `RETREAT_AT` 30 zieht die Gegenseite ab bzw. gibt nach). Jede Handlung verschiebt
+  beide (`actions.ts`), die echten Werte der Beteiligten (Tempo, Vorsicht, Stärke, Charisma) und die Absicht verstärken
+  oder dämpfen; der **Würfel entscheidet nur die Stärke** (Gutes mal M, Schlechtes mal 2 − M, `tactics.ts`), der
+  Dialog zeigt die Spanne vorher als Pfeile. Die **Polizei-Uhr** zählt Runden bis zur Streife (aus Polizeipräsenz und
+  Heat, „Bullen rufen“ stellt sie auf 1); läuft sie ab, verlieren beide (Festnahme-Chance, Ware weg, Heat), bei
+  Polizei und Zoll kommt deren Verstärkung. **Einsätze** Ware, Kasse, Leute, Spot, Lärm: pro Runde schützt man einen
+  (nimmt nur `PROTECT_FACTOR` des Schadens), die passende Handlung wendet eine Absicht ganz ab (`counters`); haben sie
+  genug erbeutet (`lootLimit`), ziehen sie mit der Beute ab. Das Ergebnis ist eine Mischung (`result.parts`): Verluste
+  aus `effects` zählen anteilig zum Schaden des Einsatzes, Gewinne schrumpfen damit, `effects` der Aufrufer bleiben
+  gültig. **Gegner mit Rollen** (Anführer, Nervöser, Schläger; `roles` je Anlass): den Anführer einschüchtern (nur als
+  Boss vor Ort), den Nervösen bearbeiten (geht), Schläger heizen jede Runde ein. Im Briefing wählt der Spieler einen
+  Weg (je Anlass `briefingOptions`: selbst hin, Leute machen lassen, Verstärkung, sofort freikaufen, anonym die Bullen
+  rufen, Ware retten und den Spot räumen) und eine **Crew** aus bis zu drei Leuten (`crew.ts`: wer vor Ort ist plus
+  freie Leute der Stadt mit Taxi, Vorschlag vorbelegt). Jede Person bringt einen **Spezialzug** (einmal pro
+  Konfrontation, `SPECIAL_MOVE_RULES`): Sicherheit fängt einen Treffer ab, Fahrer machen die Flucht sicher, hohes
+  Charisma gibt eine zweite Verhandlung, hohes Tempo bringt die halbe Ware weg; `specialMoves(member)` ist der Haken
+  für Eigenschaften aus Auftrag 34. Ist eine **Rechte Hand** in der Stadt, kommentiert sie die Lage in einem Satz
+  (`advice.ts`, Regeln als Daten). Ohne Boss entscheiden die Leute mit einer einfachen Strategie (`strategy.ts`,
+  `autoResolveEncounter`), der Bot spielt mit der klugen. Anlässe: Überfall abwehren, Polizeiflucht,
+  Verkehrskontrolle, **Zollkontrolle** (`customsCheck`, Autobahn und Hafen: Papiere zeigen, bestechen, ablenken,
+  Ladung aufgeben), Schulden eintreiben, Deal kippt, Überfall auf einen Gang-Spot, je mit mindestens vier
+  Situationstexten nach Ort (`request.setting`), Tageszeit und Wetter. Konfrontationen bringen Erfahrung und kosten
+  Loyalität.
 - **Löhne:** Wer um Mitternacht nicht bezahlt werden kann, ist sauer und schreibt; am zweiten Tag ohne Lohn oder
   unter Loyalität 30 kündigt er. Fällig ist `payrollDue` (Haft und Verletzung anteilig); die Kasse warnt, wenn das
   Schwarzgeld nicht mehr für zwei Nächte reicht.
@@ -466,7 +487,8 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   (`police/config.ts`: `HEAT_DECAY_PER_HOUR`, `CHECK_*`, `RAID_LEAD_TIME`).
 - Simulation: `src/playtest/bot.ts` spielt wie ein vorsichtiger Spieler (verkauft an zwei Spots selbst, bestellt
   nach Produktmix, heuert an, befördert Leutnants, stellt Sicherheit ein, zahlt Schutzgeld nur aus der
-  Portokasse, lässt Konfrontationen auswürfeln, geht nie selbst hin). `npm test` prüft 10 Tage mit 2 Seeds,
+  Portokasse, schickt bei Konfrontationen die vorgeschlagene Crew und gibt per Handy kluge Anweisungen, geht nie
+  selbst hin). `npm test` prüft 10 Tage mit 2 Seeds,
   `npm run balance` gibt einen Bericht über mehrere Seeds aus (`BALANCE_DAYS`, `BALANCE_SEEDS`,
   `BALANCE_VERBOSE`).
 - Stand (160 Tage, 8 Seeds): erstes Veedel an Tag 8–10, drei Veedel an Tag 10–26, danach machen die Gangs
@@ -520,6 +542,21 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   Hamburger Veedel nach 7/5/7 Tagen, keine Pleite, Köln bringt im Schlaf 7.500–11.000 € am Tag. Stellschrauben:
   `territory/config.ts` `SALE_INFLUENCE_FACTOR_BY_CITY` (Hamburg 0,6), `city/data.ts` (`relationFactor`,
   `bribeFactor`, `raidWarningBonus`, `wageFactor`, `propertyFactor`), `events/config.ts`, `spots/config.ts` `KNEIPE`.
+
+- Auftrag 35 (Konfrontationen neu; 30 Tage, 3 Seeds, vorher = Stand vor Auftrag 35): Gezielt gemessen wie in Auftrag 24
+  (`src/playtest/encounters.measure.test.ts`, läuft mit `npm run balance`: 300 Überfälle der Hafenkolonne auf einen
+  Spot, ein Läufer vor Ort, 2–4 Angreifer): **ausgewürfelt** (Leute ohne Boss, einfache Strategie) Erfolg 56 → 74,
+  Rückzug 128 → 125, verloren 116 → 101, Verletzte oder Tote in 136 → 77 Fällen. Neu verglichen: **zufällig getippt**
+  20 / 175 / 105, Verletzte 138; **gut gespielt** (Absicht abwenden, Einsatz der Absicht schützen, Aggression unter 70
+  halten, Spezialzüge; `chooseAuto(…, true)`) 155 / 145 / 0, Verletzte 12. Rückzug heißt jetzt meist „Polizei-Uhr
+  abgelaufen“ (beide verlieren). Bot (schickt die Crew, spielt gut): Köln komplett an Tag 24/23/26 → 23/22/22, „Boss
+  von Köln“ an Tag 19/17/20 → 17/16/17, erstes Veedel unverändert an Tag 7/7/8, Umsatz pro Tag Tag 6–15
+  7.764/9.059/7.789 € → 7.934/11.291/9.234 €, Tag 16–30 22.164/23.805/21.856 € → 23.582/23.450/21.636 €, keine Pleite.
+  Hamburg (nach Köln komplett, 20 Tage): erste drei Stadtteile nach 13/18/–, 6/19/–, 12/–/– → 6/6/–, 12/–/–, 10/23/–
+  Tagen, keine Pleite (die Kontrolle der Hamburger Stadtteile kippt in beiden Ständen oft hin und her).
+  Stellschrauben: `encounters/config.ts` (`AGGRESSION_FIGHT`, `RETREAT_AT`, `PROTECT_FACTOR`, `CLOCK_*`, `BRAWL_*`,
+  `STAT_FACTOR_*`, `CREW_*`), `kinds.ts` (`gauges`, `clock`, `lootLimit`), `intents.ts` (`damage`, `weight`),
+  `actions.ts` (`shift`).
 
 ## Städte (Auftrag 30)
 

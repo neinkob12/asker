@@ -63,7 +63,7 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     gauges: { aggression: 45, resolve: 70 },
     clock: 6,
     stakes: ['goods', 'cash', 'people', 'spot', 'noise'],
-    lootLimit: 80,
+    lootLimit: 70,
     intents: [...GANG_INTENTS, 'wreck'],
     maxRounds: 10,
     joinable: true,
