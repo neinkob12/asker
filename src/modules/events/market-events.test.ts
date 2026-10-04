@@ -36,7 +36,8 @@ describe('events: Marktereignisse', () => {
     expect(up).toBeGreaterThan(0);
     expect(down).toBeGreaterThan(0);
     expect(Math.abs(up - down) / (up + down)).toBeLessThan(0.4);
-  });
+    // 4 Seeds × 60 Tage: braucht allein gut 2 s, unter Last im vollen Lauf mehr als das Standard-Limit von 5 s.
+  }, 30_000);
 
   it('schieben den Index der Ware in ihrer Stadt, innerhalb der Grenzen', () => {
     const sim = createTestGame();
