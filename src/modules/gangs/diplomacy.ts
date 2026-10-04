@@ -12,11 +12,11 @@ import {
   journal,
   wallet,
 } from '../../core';
-import { relationFactor } from '../city';
+import { activeCity, relationFactor } from '../city';
 import { activeEncounters, ENCOUNTER_KINDS, startEncounter } from '../encounters';
 import { DEFAULT_PRODUCT, store } from '../goods';
 import { getStaff, getStaffMember, type StaffMember } from '../staff';
-import { veedelName } from '../veedel';
+import { veedelCity, veedelName } from '../veedel';
 import { addHostility, addRelation, breakAgreements, ceasefireBlock, crewFor, statusOf } from './common';
 import {
   ALLIANCE_COST,
@@ -172,7 +172,7 @@ export function collect(ctx: Ctx, gangId: string, staffIds?: string[], playerPre
   const { gang, s } = found;
   if (!s.protection?.overdue) return { ok: false, reason: `${gang.name} schuldet dir gerade nichts.` };
   if (activeEncounters(ctx.state).length > 0) return { ok: false, reason: 'Erst die laufende Konfrontation klären.' };
-  const crew = staffIds ?? crewFor(ctx.state, {});
+  const crew = staffIds ?? crewFor(ctx.state, { cityId: gang.cityId });
   const request = {
     kind: 'debtCollection',
     veedelId: gang.homeVeedelId,
@@ -241,15 +241,17 @@ export function ally(ctx: Ctx, gangId: string, againstGangId: string): CommandRe
  * Wer bei einem Überfall mitgehen darf: aktive Läufer und Sicherheit, die an einem Spot oder Lager stehen oder frei
  * sind. Nicht die Rechte Hand (Büro, Lieferung), Leutnants, Fahrer auf Fahrt oder Spezialisten.
  */
-export function canJoinRaid(m: StaffMember): boolean {
+export function canJoinRaid(m: StaffMember, cityId?: string): boolean {
   if (m.status !== 'active' || (m.role !== 'runner' && m.role !== 'security')) return false;
+  // Nur wer in der Stadt des Überfalls ist (nicht aus der schlafenden Stadt).
+  if (cityId !== undefined && (m.cityId ?? 'koeln') !== cityId) return false;
   const kind = m.assignment?.kind;
   return kind === undefined || kind === 'spot' || kind === 'warehouse';
 }
 
-/** Alle, die jetzt bei einem Überfall mitgehen dürften (Liste der Oberfläche, "Alle mitnehmen"). */
-export function raidCrew(state: GameState): StaffMember[] {
-  return getStaff(state, { status: 'active' }).filter(canJoinRaid);
+/** Alle, die jetzt bei einem Überfall mitgehen dürften (Liste der Oberfläche, "Alle mitnehmen"), in der Stadt (Standard: die aktive). */
+export function raidCrew(state: GameState, cityId: string = activeCity(state)): StaffMember[] {
+  return getStaff(state, { status: 'active', cityId }).filter((m) => canJoinRaid(m, cityId));
 }
 
 export function attack(
@@ -270,7 +272,7 @@ export function attack(
   // oder Fahrer auf einer Fahrt (stirbt oder verletzt sich jemand, wäre dort Lieferung oder Fahrt weg).
   const crew = staffIds.filter((id) => {
     const m = getStaffMember(ctx.state, id);
-    return !!m && canJoinRaid(m);
+    return !!m && canJoinRaid(m, veedelCity(veedelId));
   });
   if (crew.length === 0 && !playerPresent) return { ok: false, reason: 'Du brauchst Leute oder musst selbst mit.' };
 
@@ -315,7 +317,7 @@ export function acceptOffer(ctx: Ctx, gangId: string, offerId: number): CommandR
     startEncounter(ctx, {
       kind: 'dealGoneWrong',
       veedelId: gang.homeVeedelId,
-      staffIds: crewFor(ctx.state, {}),
+      staffIds: crewFor(ctx.state, { cityId: gang.cityId }),
       askPlayer: true,
       opponent: { factionId: gang.id, label: gang.crew, strength: gang.traits.fighting, count: ctx.randomInt(2, 3) },
       stakes: { money: offer.price, goods: offer.amount },

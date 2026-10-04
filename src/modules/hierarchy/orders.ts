@@ -6,7 +6,7 @@
 
 import { type Actor, type CommandResult, type Ctx, formatEuro, type GameState } from '../../core';
 import { getSalesStats } from '../customers';
-import { getProduct, getStock, getWarehouse, productName } from '../goods';
+import { getProduct, getStock, getWarehouse, productName, warehouseCity } from '../goods';
 import { getCargo, getTrips } from '../logistics';
 import { getStaff } from '../staff';
 import {
@@ -34,8 +34,11 @@ export function isPortSupplierAllowed(state: GameState): boolean {
 export const PORT_SUPPLIER_HINT =
   'Schiffsware muss jemand am Kai abholen. Das macht die Rechte Hand mit der Aufgabe "Hafen abholen" und einem Fahrer; solange bestellt dort niemand von selbst.';
 
-/** Prüft eine Regel (für den Befehl und die Oberfläche). */
-export function checkOrderRule(state: GameState, rule: OrderRule): CommandResult {
+/**
+ * Prüft eine Regel (für den Befehl und die Oberfläche). Mit cityId (Stadt des Leutnants bzw. der Rechten Hand) muss ein
+ * gewähltes Lager in dieser Stadt liegen.
+ */
+export function checkOrderRule(state: GameState, rule: OrderRule, cityId?: string): CommandResult {
   if (!Number.isInteger(rule.minStock) || rule.minStock < 0 || rule.minStock > 5000) {
     return { ok: false, reason: 'Ungültiger Mindestbestand.' };
   }
@@ -51,6 +54,9 @@ export function checkOrderRule(state: GameState, rule: OrderRule): CommandResult
       return { ok: false, reason: 'Das Paket passt nicht zur Ware.' };
   }
   if (rule.warehouseId && !getWarehouse(state, rule.warehouseId)) return { ok: false, reason: 'Unbekanntes Lager.' };
+  if (rule.warehouseId && cityId && warehouseCity(rule.warehouseId) !== cityId) {
+    return { ok: false, reason: 'Das Lager liegt in einer anderen Stadt.' };
+  }
   return { ok: true };
 }
 
@@ -68,6 +74,7 @@ export function nextRuleId(rules: readonly OrderRule[]): string {
 export function normalizeOrderRules(
   state: GameState,
   raw: readonly OrderRule[],
+  cityId?: string,
 ): { ok: true; rules: OrderRule[] } | { ok: false; reason: string } {
   const rules: OrderRule[] = [];
   for (const r of raw) {
@@ -81,16 +88,23 @@ export function normalizeOrderRules(
       paused: null,
     };
     if (rules.some((x) => x.id === rule.id)) rule.id = nextRuleId(rules);
-    const check = checkOrderRule(state, rule);
+    const check = checkOrderRule(state, rule, cityId);
     if (!check.ok) return check;
     rules.push(rule);
   }
   return { ok: true, rules };
 }
 
-/** Ziel-Lager einer Regel: das gewählte (wenn es noch dir gehört), sonst das Lager seiner Spots. */
-export function ruleWarehouse(state: GameState, rule: OrderRule, home: string | null): string | null {
-  if (rule.warehouseId && getWarehouse(state, rule.warehouseId)) return rule.warehouseId;
+/**
+ * Ziel-Lager einer Regel: das gewählte (wenn es noch dir gehört und in der Stadt des Bestellers liegt), sonst das Lager
+ * seiner Spots. Die Stadt ist cityId, ohne Angabe die des Heimat-Lagers; ein Lager aus einer anderen Stadt (z.B. aus der
+ * kopierten Vorlage) wird ignoriert.
+ */
+export function ruleWarehouse(state: GameState, rule: OrderRule, home: string | null, cityId?: string): string | null {
+  if (rule.warehouseId && getWarehouse(state, rule.warehouseId)) {
+    const city = cityId ?? (home ? warehouseCity(home) : undefined);
+    if (!city || warehouseCity(rule.warehouseId) === city) return rule.warehouseId;
+  }
   return home;
 }
 
@@ -148,9 +162,12 @@ export function planOrder(
   home: string | null,
   budgetOrLookup: number | (() => number),
   minStock: number = rule.minStock,
+  cityId?: string,
 ): OrderPlan {
-  const warehouseId = ruleWarehouse(state, rule, home);
+  const warehouseId = ruleWarehouse(state, rule, home, cityId);
   if (!warehouseId) return { kind: 'pause', reason: 'Kein Lager für die Ware.' };
+  // Geplant wird mit Angebot und Preisen der Stadt des Lagers, denn dort bucht suppliers.order.
+  const city = warehouseCity(warehouseId);
   const deficit = minStock - ruleStock(state, warehouseId, rule.productId);
   if (deficit <= 0) return { kind: 'none' };
   // Das Budget erst jetzt (es rechnet die Lohnsicherung über alle Leute): Meist fehlt ja nichts.
@@ -168,15 +185,15 @@ export function planOrder(
     if (supplier.kind === 'port' && !isPortSupplierAllowed(state)) return { kind: 'pause', reason: PORT_SUPPLIER_HINT };
     suppliers = [supplier];
   } else {
-    suppliers = getSuppliers(state).filter(
+    suppliers = getSuppliers(state, city).filter(
       (s) => isUnlocked(state, s.id) && !isBlocked(state, s.id) && (s.kind !== 'port' || isPortSupplierAllowed(state)),
     );
   }
   const offers = suppliers.flatMap((supplier) =>
-    availablePackages(state, supplier.id)
+    availablePackages(state, supplier.id, city)
       .filter((pkg) => !rule.productId || pkg.productId === rule.productId)
       .filter((pkg) => !rule.packageId || pkg.id === rule.packageId)
-      .map((pkg) => ({ supplier, pkg, price: packagePrice(state, supplier.id, pkg.id) })),
+      .map((pkg) => ({ supplier, pkg, price: packagePrice(state, supplier.id, pkg.id, city) })),
   );
   if (offers.length === 0) {
     if (rule.packageId) return { kind: 'pause', reason: 'Das Paket gibt es gerade nicht.' };
@@ -211,6 +228,8 @@ export function planOrder(
 export const MAX_ORDERS_PER_RULE = 3;
 
 export interface RestockHooks {
+  /** Stadt des Bestellers (Leutnant bzw. Rechte Hand): Lager aus anderen Städten zählen nicht. */
+  cityId?: string;
   /** Was noch ausgegeben werden darf (wird vor jeder Bestellung neu gefragt). */
   budget: () => number;
   /** Mindestbestand einer Regel, wenn er vom eingestellten abweicht (z.B. nach Größe der Stadt). */
@@ -241,8 +260,15 @@ export function runRestock(
   };
   for (const rule of rules) {
     for (let i = 0; i < MAX_ORDERS_PER_RULE; i++) {
-      const own = ruleWarehouse(ctx.state, rule, null);
-      const plan = planOrder(ctx.state, rule, own ? null : resolveHome(), hooks.budget, hooks.minStock?.(rule));
+      const own = ruleWarehouse(ctx.state, rule, null, hooks.cityId);
+      const plan = planOrder(
+        ctx.state,
+        rule,
+        own ? null : resolveHome(),
+        hooks.budget,
+        hooks.minStock?.(rule),
+        hooks.cityId,
+      );
       if (plan.kind === 'pause') {
         if (rule.paused !== plan.reason) {
           rule.paused = plan.reason;

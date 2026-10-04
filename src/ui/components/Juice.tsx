@@ -25,26 +25,61 @@ export interface CountUpProps {
   class?: string;
 }
 
-/** Zahl, die bei Änderungen animiert hoch- bzw. runterzählt und kurz pulsiert (grün hoch, rot runter). */
+/**
+ * Zahl, die bei Änderungen animiert hoch- bzw. runterzählt und kurz pulsiert (grün hoch, rot runter).
+ *
+ * Die Zahl läuft am Browser vorbei am Render: Der Text des Wurzel-`<span>` wird pro Bild direkt gesetzt (kein
+ * `setState`, kein Neuzeichnen von Preact), der Puls ist eine CSS-Klasse. Ein neuer Puls startet die Animation neu,
+ * indem zwischen zwei gleichen Keyframes (`ui-pulse-up` und `ui-pulse-up-b`) gewechselt wird; das braucht kein
+ * erzwungenes Layout und baut das Element nicht neu.
+ */
 export function CountUp(props: CountUpProps) {
   const format = props.format ?? ((v: number) => String(Math.round(v)));
-  const [shown, setShown] = useState(props.value);
-  const [pulse, setPulse] = useState<{ dir: 'up' | 'down'; n: number } | null>(null);
+  const root = useRef<HTMLSpanElement>(null);
+  // Der Anfangstext steht fest im vnode; danach schreibt nur noch `write` in den Textknoten.
+  const initial = useRef<string | null>(null);
+  if (initial.current === null) initial.current = format(props.value);
+  const shownText = useRef(initial.current);
   const from = useRef(props.value);
   const target = useRef(props.value);
   const frame = useRef(0);
+  const running = useRef(false);
+  const flip = useRef(false);
+  const formatRef = useRef(format);
+  formatRef.current = format;
+
+  const write = (value: number) => {
+    const text = formatRef.current(value);
+    if (text === shownText.current) return;
+    shownText.current = text;
+    const node = root.current?.firstChild;
+    if (node && node.nodeType === 3) (node as Text).data = text;
+    else if (root.current) root.current.textContent = text;
+  };
 
   useEffect(() => {
-    if (props.value === target.current) return;
-    const dir = props.value > target.current ? 'up' : 'down';
-    target.current = props.value;
-    setPulse((p) => ({ dir, n: (p?.n ?? 0) + 1 }));
-    cancelAnimationFrame(frame.current);
-    if (prefersReducedMotion()) {
-      from.current = props.value;
-      setShown(props.value);
+    if (props.value === target.current) {
+      // Anzeige nachziehen, falls sich nur `format` geändert hat.
+      if (!running.current) write(props.value);
       return;
     }
+    const dir = props.value > target.current ? 'up' : 'down';
+    target.current = props.value;
+    const el = root.current;
+    if (el) {
+      flip.current = !flip.current;
+      el.classList.remove(dir === 'up' ? 'is-down' : 'is-up');
+      el.classList.add(dir === 'up' ? 'is-up' : 'is-down');
+      el.classList.toggle('is-alt', flip.current);
+    }
+    cancelAnimationFrame(frame.current);
+    if (prefersReducedMotion()) {
+      running.current = false;
+      from.current = props.value;
+      write(props.value);
+      return;
+    }
+    running.current = true;
     const start = performance.now();
     const begin = from.current;
     const end = props.value;
@@ -54,20 +89,18 @@ export function CountUp(props: CountUpProps) {
       const eased = 1 - (1 - t) ** 3;
       const v = begin + (end - begin) * eased;
       from.current = v;
-      setShown(v);
+      write(v);
       if (t < 1) frame.current = requestAnimationFrame(step);
+      else running.current = false;
     };
     frame.current = requestAnimationFrame(step);
-  }, [props.value, props.duration]);
+  }, [props.value, props.duration, props.format]);
 
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
   return (
-    <span
-      key={pulse ? `${pulse.dir}${pulse.n}` : 'still'}
-      class={`ui-countup ${pulse ? `is-${pulse.dir}` : ''} ${props.class ?? ''}`}
-    >
-      {format(shown)}
+    <span ref={root} class={`ui-countup ${props.class ?? ''}`}>
+      {initial.current}
     </span>
   );
 }
@@ -93,6 +126,16 @@ export interface FloatingNumberProps {
 export function FloatingNumber(props: FloatingNumberProps) {
   const last = useRef(props.value);
   const [items, setItems] = useState<Floater[]>([]);
+  // Entfern-Timer pro Eintrag: Ein neuer Wert darf den Timer des vorigen nicht abbrechen (sonst blieben dessen
+  // Elemente im DOM stehen); aufgeräumt wird nur beim Ausblenden der ganzen Komponente.
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  useEffect(
+    () => () => {
+      for (const timer of timers.current.values()) clearTimeout(timer);
+      timers.current.clear();
+    },
+    [],
+  );
   useEffect(() => {
     const delta = props.value - last.current;
     last.current = props.value;
@@ -101,8 +144,13 @@ export function FloatingNumber(props: FloatingNumberProps) {
     const text = props.format ? props.format(delta) : `${sign}${Math.round(Math.abs(delta))}`;
     const item = { id: ++floaterId, text, up: delta > 0 };
     setItems((list) => [...list.slice(-3), item]);
-    const timer = setTimeout(() => setItems((list) => list.filter((f) => f.id !== item.id)), 1300);
-    return () => clearTimeout(timer);
+    timers.current.set(
+      item.id,
+      setTimeout(() => {
+        timers.current.delete(item.id);
+        setItems((list) => list.filter((f) => f.id !== item.id));
+      }, 1300),
+    );
   }, [props.value]);
   return (
     <span class={`ui-floaters ${props.class ?? ''}`} aria-hidden="true">

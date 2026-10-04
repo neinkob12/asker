@@ -1,6 +1,7 @@
+import { memo } from 'preact/compat';
 import { clock, formatEuro, wallet } from '../../core';
 import { CountUp, FloatingNumber, Icon } from '../components';
-import { useGame, useUi } from '../hooks';
+import { useGameSelector, useRuntime } from '../hooks';
 
 const euro = (v: number) => formatEuro(Math.round(v));
 const delta = (d: number) => `${d > 0 ? '+' : '−'}${euro(Math.abs(d))}`;
@@ -10,12 +11,12 @@ const delta = (d: number) => `${d > 0 ? '+' : '−'}${euro(Math.abs(d))}`;
  * das saubere Geld kleiner. Zahlen zählen und Änderungen fliegen auf. Ein Klick auf Schwarzgeld oder sauberes Geld
  * öffnet die Geldwäsche (Auftrag 26). Darunter hängt die Heat-Pille der Polizei (eigener HUD-Eintrag, gleiche Kapsel).
  */
-export function MoneyHud() {
-  const { state } = useGame();
-  const ui = useUi();
-  const dirty = wallet.balance(state, 'dirty');
-  const clean = wallet.balance(state, 'clean');
-  const openLaundering = () => ui.openPhone('laundering.app');
+export const MoneyHud = memo(function MoneyHud() {
+  // Liest nur über Selektoren und ist ohne Props: wird nur neu gezeichnet, wenn sich ein Kontostand ändert.
+  const { api } = useRuntime();
+  const dirty = useGameSelector((state) => wallet.balance(state, 'dirty'));
+  const clean = useGameSelector((state) => wallet.balance(state, 'clean'));
+  const openLaundering = () => api.openPhone('laundering.app');
   return (
     <div class="hud-money">
       <span class="hud-money__tile" aria-hidden="true">
@@ -49,17 +50,18 @@ export function MoneyHud() {
       </div>
     </div>
   );
-}
+});
 
 /** Uhr über der Karte: "Sa · Tag 9" über der Uhrzeit. */
-export function ClockHud() {
-  const { state } = useGame();
+export const ClockHud = memo(function ClockHud() {
+  // Nur beim Minutenwechsel neu zeichnen (Spielzeit kann zwischen den Minuten Bruchteile haben).
+  const time = useGameSelector((state) => Math.floor(state.time));
   return (
-    <div class="hud-clock" title={clock.formatLong(state.time)}>
+    <div class="hud-clock" title={clock.formatLong(time)}>
       <span class="hud-label">
-        {clock.weekdayName(state.time, true)} · Tag {clock.day(state.time)}
+        {clock.weekdayName(time, true)} · Tag {clock.day(time)}
       </span>
-      <time class="hud-clock__time">{clock.formatTime(state.time)}</time>
+      <time class="hud-clock__time">{clock.formatTime(time)}</time>
     </div>
   );
-}
+});

@@ -46,11 +46,13 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
   // Ton: Einstellungen laden, Start nach der ersten Interaktion, Musik-Stimmung folgt der Spieluhr.
   audio.init(storage);
   audio.attach(document);
-  runtime.subscribe(() => {
+  const offMood = runtime.subscribe(() => {
     const state = runtime.state;
     if (state) audio.setMood(dayPhase(clock.minuteOfDay(state.time)));
   });
-  bindClickSound();
+  // Alles, was global hängt (document, window), meldet sich hier ab, wenn das Modul im Entwicklungsserver ersetzt wird.
+  const disposers: Array<() => void> = [bindClickSound()];
+  disposers.push(bindPauseMarker(runtime), offMood);
 
   // ?neu=normal|hardcore&seed=123 startet sofort ein frisches Spiel (praktisch für Screenshots und Tests),
   // ?spielstand=koeln-komplett lädt einen Test-Spielstand (builtin/testSaves.ts).
@@ -91,17 +93,48 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
   const speed = params.get('tempo');
   if (speed !== null) runtime.api.setSpeed(Number(speed));
 
-  bindKeys(runtime);
+  disposers.push(bindKeys(runtime));
   applyDockSpring();
-  window.addEventListener('beforeunload', () => session.autosave());
-  document.addEventListener('visibilitychange', () => {
+  const saveOnUnload = () => session.autosave();
+  const saveOnHide = () => {
     if (document.visibilityState === 'hidden') session.autosave();
-  });
+  };
+  window.addEventListener('beforeunload', saveOnUnload);
+  document.addEventListener('visibilitychange', saveOnHide);
+  disposers.push(
+    () => window.removeEventListener('beforeunload', saveOnUnload),
+    () => document.removeEventListener('visibilitychange', saveOnHide),
+  );
 
   render(<App runtime={runtime} />, root);
   session.loop.start();
   window.koeln = { ...window.koeln, session, runtime, audio };
+
+  // Wird dieses Modul im Entwicklungsserver ersetzt, laufen sonst die alten Listener neben den neuen weiter.
+  import.meta.hot?.dispose(() => {
+    for (const dispose of disposers.splice(0)) dispose();
+    session.loop.stop();
+    render(null, root);
+  });
   return runtime;
+}
+
+/**
+ * Setzt `data-paused` am Wurzelelement, solange das Spiel steht (Tempo 0, z.B. Pause oder ein Dialog, der es anhält):
+ * Endlos-Animationen der Karte und des Handys halten dann an (styles/base.css), statt weiter Strom zu verbrauchen.
+ */
+function bindPauseMarker(runtime: UiRuntime): () => void {
+  const root = document.documentElement;
+  const update = () => {
+    const paused = runtime.session.loop.speed === 0 || runtime.ui.dialog !== null;
+    if (paused !== root.hasAttribute('data-paused')) root.toggleAttribute('data-paused', paused);
+  };
+  update();
+  const off = runtime.subscribe(update);
+  return () => {
+    off();
+    root.removeAttribute('data-paused');
+  };
 }
 
 /**
@@ -116,15 +149,13 @@ function applyDockSpring(): void {
   root.setProperty('--spring-dock-duration', `${durationMs}ms`);
 }
 
-/** Leises Klicken bei Knöpfen der Oberfläche. */
-function bindClickSound(): void {
-  document.addEventListener(
-    'click',
-    (e) => {
-      const target = (e.target as HTMLElement | null)?.closest?.('button');
-      if (!target || target.disabled) return;
-      audio.play(target.closest('.phone') ? 'tap' : 'click', { volume: 0.35 });
-    },
-    true,
-  );
+/** Leises Klicken bei Knöpfen der Oberfläche. Gibt die Abmeldung zurück. */
+function bindClickSound(): () => void {
+  const onClick = (e: MouseEvent) => {
+    const target = (e.target as HTMLElement | null)?.closest?.('button');
+    if (!target || target.disabled) return;
+    audio.play(target.closest('.phone') ? 'tap' : 'click', { volume: 0.35 });
+  };
+  document.addEventListener('click', onClick, true);
+  return () => document.removeEventListener('click', onClick, true);
 }

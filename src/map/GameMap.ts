@@ -77,10 +77,7 @@ export class GameMap implements MapController {
     this.overlay = new SurveillanceOverlay(this.map);
     this.precipitation = new PrecipitationLayer(this.map.getCanvasContainer(), this.overlay.element);
     this.applyPadding();
-    window.addEventListener('resize', () => {
-      this.padRight = -1;
-      this.applyPadding();
-    });
+    window.addEventListener('resize', this.onResize);
     // Weit draußen: Marker der Stadt aus (zoomed-out ab 10: Schilder und Namen, is-far ab FAR_ZOOM: alles mit near).
     const onZoom = () => {
       const zoom = this.map.getZoom();
@@ -110,11 +107,37 @@ export class GameMap implements MapController {
     mapPerf.attach(this.map);
   }
 
+  private readonly onResize = () => {
+    this.padRight = -1;
+    this.applyPadding();
+  };
+
+  /** Layer-Fehler einmal pro Layer und Meldung ausgeben, damit ein werfender Layer die Konsole nicht flutet. */
+  private readonly reported = new Set<string>();
+  private report(id: string, phase: string, error: unknown): void {
+    const key = `${id}|${phase}|${error instanceof Error ? error.message : String(error)}`;
+    if (this.reported.has(key)) return;
+    this.reported.add(key);
+    console.error(`Karten-Layer ${id}: Fehler in ${phase}`, error);
+  }
+
   destroy(): void {
-    for (const { instance } of this.instances) instance.destroy?.();
-    this.precipitation.destroy();
-    setActiveMap(null);
-    this.map.remove();
+    window.removeEventListener('resize', this.onResize);
+    // Ein werfender Layer darf das Aufräumen der übrigen nicht verhindern.
+    for (const { id, instance } of this.instances) {
+      try {
+        instance.destroy?.();
+      } catch (error) {
+        this.report(id, 'destroy', error);
+      }
+    }
+    this.instances.length = 0;
+    try {
+      this.precipitation.destroy();
+    } finally {
+      setActiveMap(null);
+      this.map.remove();
+    }
   }
 
   private mountLayers(): void {
@@ -179,7 +202,12 @@ export class GameMap implements MapController {
     for (const { id, instance } of this.instances) {
       if (!instance.update) continue;
       const t0 = mapPerf.begin();
-      instance.update(state, ui);
+      // Ein werfender Layer darf die übrigen und den Look nicht abbrechen.
+      try {
+        instance.update(state, ui);
+      } catch (error) {
+        this.report(id, 'update', error);
+      }
       mapPerf.end('layer', id, t0);
     }
     // Nach den Layern: die setzen Stimmung und Niederschlag (z.B. das Wetter).

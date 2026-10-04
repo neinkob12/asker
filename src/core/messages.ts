@@ -486,14 +486,24 @@ export function answerMessage(ctx: Ctx, payload: { messageId: number; optionId: 
     source: 'core',
   };
   ctx.state.messages.list.push(reply);
+  // Beantwortet gilt die Frage schon, während der Befehl läuft: Zieht er sie selbst zurück (retractWhere, z.B.
+  // einstellen oder freischalten), darf sie nicht zugleich beantwortet und abgelaufen sein.
+  message.answer = option.id;
   if (option.command) {
-    const result = ctx.dispatch(option.command, { actor: 'player' });
+    let result: CommandResult;
+    try {
+      result = ctx.dispatch(option.command, { actor: 'player' });
+    } catch (error) {
+      delete message.answer;
+      ctx.state.messages.list = ctx.state.messages.list.filter((m) => m !== reply);
+      throw error;
+    }
     if (!result.ok) {
+      delete message.answer;
       ctx.state.messages.list = ctx.state.messages.list.filter((m) => m !== reply);
       return result;
     }
   }
-  message.answer = option.id;
   message.read = true;
   ctx.emit('message.answered', {
     messageId: message.id,
@@ -521,10 +531,19 @@ export function markAllRead(ctx: Ctx): CommandResult {
 function hideThread(ctx: Ctx, contactId: string): void {
   const state = ctx.state;
   let last = 0;
+  // Ausstehende Rückrufe dieser Figur entfallen: Sonst klingelte es aus einem gelöschten Chat wieder.
+  const calls = state.messages.calls;
+  if (calls) calls.retries = calls.retries.filter((r) => r.call.contact.id !== contactId);
   for (const m of state.messages.list) {
     if (m.contactId !== contactId) continue;
     m.read = true;
     if (m.id > last) last = m.id;
+    // Ein klingelnder Anruf endet wie ein abgelehnter (kein Rückruf); die Antworten darin erledigen sich unten.
+    if (m.call?.state === 'ringing') {
+      m.call.state = 'declined';
+      stopRinging(state, m.id);
+      ctx.emit('call.declined', { messageId: m.id, contactId: m.contactId, source: m.source });
+    }
     if (messages.canAnswer(state, m)) {
       m.expired = true;
       ctx.emit('message.expired', { messageId: m.id, contactId: m.contactId, source: m.source });
@@ -544,11 +563,18 @@ export function deleteAllThreads(ctx: Ctx): CommandResult {
   return { ok: true };
 }
 
-/** Abgelaufene Antwortfristen markieren. Läuft jeden Schritt. */
+// Fristen laufen selten ab, geprüft wird aber jede Spielminute: Gemerkt wird die nächste Frist, solange sich die
+// Liste nicht ändert (neue Nachrichten, siehe messageIndex). Nur eine Abkürzung, das Ergebnis bleibt dasselbe.
+const nextExpiry = new WeakMap<MessagesState, { list: Message[]; length: number; last: number; at: number }>();
+
 /** Das Gespräch ist zu Ende (angenommen, abgelehnt, zuletzt verpasst): ab jetzt läuft die Antwortfrist. */
 function openAnswers(ctx: Ctx, message: Message): void {
   const expiresIn = message.call?.expiresIn;
-  if (expiresIn !== undefined && message.options?.length) message.expiresAt = ctx.now + expiresIn;
+  if (expiresIn !== undefined && message.options?.length) {
+    message.expiresAt = ctx.now + expiresIn;
+    // Die neue Frist kann vor der gemerkten nächsten liegen: Merkzettel von expireMessages verwerfen.
+    nextExpiry.delete(ctx.state.messages);
+  }
 }
 
 function stopRinging(state: GameState, messageId: number): void {
@@ -633,10 +659,7 @@ export function processCalls(ctx: Ctx): void {
   for (const retry of due) ring(ctx, retry.call, retry.attempt, retry.source);
 }
 
-// Fristen laufen selten ab, geprüft wird aber jede Spielminute: Gemerkt wird die nächste Frist, solange sich die
-// Liste nicht ändert (neue Nachrichten, siehe messageIndex). Nur eine Abkürzung, das Ergebnis bleibt dasselbe.
-const nextExpiry = new WeakMap<MessagesState, { list: Message[]; length: number; last: number; at: number }>();
-
+/** Abgelaufene Antwortfristen markieren. Läuft jeden Schritt. */
 export function expireMessages(ctx: Ctx): void {
   const s = ctx.state.messages;
   const list = s.list;

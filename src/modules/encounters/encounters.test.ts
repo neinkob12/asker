@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { loadSimulation, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { getStock } from '../goods';
+import { getStock, store } from '../goods';
 import { getHeat } from '../police';
 import { getStaffMember } from '../staff';
 import { getInfluence, PLAYER_FACTION } from '../territory';
 import { DECISION_TIMEOUT } from './config';
+import { backupCandidates } from './engine';
 import {
   ABANDON_CASH_MAX,
   ABANDON_CASH_SHARE,
@@ -523,5 +524,69 @@ describe('Wege im Briefing', () => {
       return results;
     };
     expect(run()).toEqual(run());
+  });
+});
+
+describe('Ware und Leute nach Stadt', () => {
+  /** Köln ist aktiv, in Hamburg liegt Ware in zwei Lagern (eins davon wird überfallen). */
+  function twoCities(): Simulation {
+    const sim = createTestGame({ seed: 3 });
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+    sim.state.modules.goods.owned.push('werkstatt-ottensen');
+    const ctx = sim.ctx('test');
+    store(ctx, { productId: 'weed', amount: 400, warehouseId: 'werkstatt-ottensen' });
+    return sim;
+  }
+  const halve: EncounterEffects = { goodsShare: -0.5 };
+
+  it('Überfall auf ein Lager: Ware geht nur aus diesem Lager, der Anteil gilt für dessen Bestand', () => {
+    const sim = twoCities();
+    const koeln = getStock(sim.state, { cityId: 'koeln' });
+    expect(koeln).toBeGreaterThan(0);
+    const { encounterId } = startEncounter(sim.ctx('gangs'), {
+      kind: 'raidDefense',
+      veedelId: 'st-pauli',
+      warehouseId: 'werkstatt-ottensen',
+      playerPresent: false,
+      effects: { failure: halve },
+    });
+    expect(encounter(sim, encounterId).outcome).toBe('failure');
+    expect(getStock(sim.state, { warehouseId: 'werkstatt-ottensen' })).toBe(200);
+    expect(encounter(sim, encounterId).result?.goods).toBe(-200);
+    expect(getStock(sim.state, { cityId: 'koeln' })).toBe(koeln);
+  });
+
+  it('Konfrontation in Hamburg bei aktivem Köln: Anteil und Verlust nur über die Hamburger Lager', () => {
+    const sim = twoCities();
+    const koeln = getStock(sim.state, { cityId: 'koeln' });
+    const { encounterId } = startEncounter(sim.ctx('gangs'), {
+      kind: 'raidDefense',
+      veedelId: 'st-pauli',
+      playerPresent: false,
+      effects: { failure: halve },
+    });
+    expect(encounter(sim, encounterId).result?.goods).toBe(-200);
+    expect(getStock(sim.state, { cityId: 'hamburg' })).toBe(200);
+    expect(getStock(sim.state, { cityId: 'koeln' })).toBe(koeln);
+  });
+
+  it('Verstärkung kommt aus der Stadt der Konfrontation, nicht aus der schlafenden', () => {
+    const sim = createTestGame({ seed: 4 });
+    sim.state.wallet.dirty = 10_000;
+    const runner = hireRunner(sim, 'ebertplatz');
+    const extra = [hireRunner(sim, 'neumarkt'), hireRunner(sim, 'zuelpicher')];
+    for (const id of extra) sim.dispatch({ type: 'staff.assign', payload: { staffId: id, assignment: null } });
+    const { encounterId } = startEncounter(sim.ctx('gangs'), {
+      kind: 'raidDefense',
+      spotId: 'ebertplatz',
+      veedelId: 'neustadt-nord',
+      staffIds: [runner],
+      askPlayer: true,
+    });
+    expect(backupCandidates(sim.state, encounter(sim, encounterId)).sort()).toEqual([...extra].sort());
+    const away = getStaffMember(sim.state, extra[0]);
+    if (!away) throw new Error('Person fehlt');
+    away.cityId = 'hamburg';
+    expect(backupCandidates(sim.state, encounter(sim, encounterId))).toEqual([extra[1]]);
   });
 });

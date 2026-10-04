@@ -41,7 +41,8 @@ import {
   MAX_CUSTOM_SPOTS,
   spotCity,
 } from '../index';
-import { recordSaleGlow, recordSpotRaid, spotsLayer } from './map';
+import { recordSaleGlow, recordSpotRaid, syncSpotGlow } from './glow';
+import { spotsLayer } from './map';
 import { peopleLayer } from './people';
 import './spots.css';
 
@@ -234,13 +235,16 @@ registerMapLayer(peopleLayer);
 onGameEvent('sale.completed', 'spots.moneyFx', (p, _ui, state) => {
   const spot = p.spotId ? getSpot(state, p.spotId) : undefined;
   if (!spot) return;
+  syncSpotGlow(state);
   recordSaleGlow(spot.id, state.time);
   mapEffects.money(spot, p.revenue, { caption: formatProductAmount(p.productId, p.amount) });
 });
 
 // Nach einer Razzia an einem Spot wird sein Marker eine Weile blau.
 onGameEvent('police.raid', 'spots.raidLook', (p, _ui, state) => {
-  if (p.spotId && !p.empty) recordSpotRaid(p.spotId, state.time);
+  if (!p.spotId || p.empty) return;
+  syncSpotGlow(state);
+  recordSpotRaid(p.spotId, state.time);
 });
 
 // Empfehlungen und Suche

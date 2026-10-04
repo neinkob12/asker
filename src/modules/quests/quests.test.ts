@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadSimulation, messages, type Simulation, wallet } from '../../core';
+import { journal, loadSimulation, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { allProducts, getStock } from '../goods';
 import { addHeat } from '../police';
@@ -53,6 +53,34 @@ describe('quests', () => {
     expect(getStock(sim.state, { productId: 'weed' })).toBe(before + 10);
     expect(currentQuest(sim.state)?.id).toBe('setPrice');
     expect(eventsOfType(events, 'quest.completed')[0].payload).toEqual({ questId: 'firstSales', skipped: false });
+  });
+
+  it('Ware-Belohnung ohne Lager in der aktiven Stadt landet im anderen eigenen Lager (und der Text sagt es)', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    // Nur ein Hamburger Lager, aktiv ist Köln.
+    sim.state.modules.goods.owned = ['keller-st-georg'];
+    jumpTo(sim, 'firstSales');
+    sim.state.modules.quests.progress = 2;
+    sale(sim);
+    sim.advance(1);
+    expect(sim.state.modules.quests.done).toContain('firstSales');
+    expect(getStock(sim.state, { productId: 'weed', warehouseId: 'keller-st-georg' })).toBe(10);
+    expect(journal.entries(sim.state)[0].text).toContain('im Lager');
+  });
+
+  it('Ware-Belohnung ohne jedes Lager verpufft nicht still: Journal sagt, dass sie verfallen ist', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    sim.state.modules.goods.owned = [];
+    const before = getStock(sim.state, { productId: 'weed' });
+    jumpTo(sim, 'firstSales');
+    sim.state.modules.quests.progress = 2;
+    sale(sim);
+    sim.advance(1);
+    expect(sim.state.modules.quests.done).toContain('firstSales');
+    expect(getStock(sim.state, { productId: 'weed' })).toBe(before);
+    expect(journal.entries(sim.state).some((e) => e.text.includes('verfallen'))).toBe(true);
   });
 
   it('überspringen geht ohne Belohnung', () => {

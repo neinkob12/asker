@@ -288,6 +288,33 @@ describe('police', () => {
     expect(runnerAt(sim.state, 'uni')?.status).toBe('jailed');
   });
 
+  it('gescheiterte Flucht in Hamburg beschlagnahmt aus Hamburger Lagern, in Köln aus Kölner', () => {
+    const sim = quietGame();
+    sim.state.modules.goods.owned.push('werkstatt-ottensen');
+    store(sim.ctx('goods'), { productId: 'weed', amount: 1000 });
+    store(sim.ctx('goods'), { productId: 'weed', amount: 1000, warehouseId: 'werkstatt-ottensen' });
+    const koeln = () => getStock(sim.state, { cityId: 'koeln' });
+    const hamburg = () => getStock(sim.state, { cityId: 'hamburg' });
+    const lost = (veedelId: string) => {
+      sim.ctx('encounters').emit('encounter.resolved', {
+        encounterId: 1,
+        kind: 'policeChase',
+        outcome: 'failure',
+        request: { kind: 'policeChase', veedelId, staffIds: [], origin: { module: 'police', ref: 'check' } },
+        playerKilled: false,
+      });
+      sim.step();
+    };
+    const [k0, h0] = [koeln(), hamburg()];
+    lost('st-pauli');
+    expect(hamburg()).toBeLessThan(h0);
+    expect(koeln()).toBe(k0);
+    const h1 = hamburg();
+    lost('altstadt-nord');
+    expect(koeln()).toBeLessThan(k0);
+    expect(hamburg()).toBe(h1);
+  });
+
   it('Kontrollen können eine Polizeiflucht über encounters starten', () => {
     const sim = quietGame(2);
     const events = recordEvents(sim);

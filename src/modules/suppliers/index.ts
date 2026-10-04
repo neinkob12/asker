@@ -516,11 +516,11 @@ function relationFor(ctx: Ctx, supplierId: string): SupplierRelation {
   return relations[supplierId];
 }
 
-function addTrust(ctx: Ctx, supplierId: string, raw: number): void {
+function addTrust(ctx: Ctx, supplierId: string, raw: number, cityId: string = activeCity(ctx.state)): void {
   const rel = relationFor(ctx, supplierId);
   const before = rel.trust;
   // Kölscher Klüngel (Auftrag 30): Vertrauen wächst je nach Stadt schneller (Köln) oder langsamer (Hamburg).
-  const delta = raw > 0 ? raw * relationFactor(activeCity(ctx.state)) : raw;
+  const delta = raw > 0 ? raw * relationFactor(cityId) : raw;
   rel.trust = Math.round(Math.min(100, Math.max(0, rel.trust + delta)) * 10) / 10;
   if (rel.trust !== before) {
     ctx.emit('supplier.trustChanged', {
@@ -588,7 +588,8 @@ function order(
       return { ok: false, reason: `So viel Kredit gibt dir ${supplier.contactName} nicht.` };
     }
     rel.debt += price;
-    rel.dueAt ??= ctx.now + CREDIT_TERM;
+    // Ein neuer Kredit schiebt die Frist hinaus: Er erbt nicht die der ältesten offenen Schuld (sonst wäre er sofort fällig).
+    rel.dueAt = Math.max(rel.dueAt ?? 0, ctx.now + CREDIT_TERM);
   } else if (!wallet.pay(ctx, price, 'dirty', `Bestellung ${supplier.name}`, 'goods.purchase')) {
     return { ok: false, reason: 'Nicht genug Geld.' };
   }
@@ -633,7 +634,12 @@ function order(
 
   rel.orders += 1;
   rel.spent += price;
-  addTrust(ctx, supplierId, TRUST_PER_ORDER + (price / 1000) * TRUST_PER_1000_EUR + (onCredit ? 0 : TRUST_CASH_BONUS));
+  addTrust(
+    ctx,
+    supplierId,
+    TRUST_PER_ORDER + (price / 1000) * TRUST_PER_1000_EUR + (onCredit ? 0 : TRUST_CASH_BONUS),
+    cityId,
+  );
   journal.add(
     ctx,
     `${pkg.label} bei ${supplier.name} bestellt (${formatEuro(price)}${onCredit ? ' auf Kredit' : ''}).`,

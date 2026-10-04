@@ -79,6 +79,8 @@ export interface EncounterRequest {
   kind: string;
   veedelId?: string;
   spotId?: string;
+  /** Überfallenes oder betroffenes Lager: Ware geht nur aus diesem Lager verloren (und der Anteil gilt für dessen Bestand). */
+  warehouseId?: string;
   /** Beteiligte eigene Leute (staff-IDs). Nur aktive Mitarbeiter machen mit. */
   staffIds?: string[];
   /** Ist der Spieler selbst dabei? Ohne Angabe nicht (wie beim Stub), außer askPlayer fragt ihn. */

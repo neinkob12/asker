@@ -16,9 +16,11 @@
 // Städte als Grundlage (Etappe 4): Nur eine Stadt ist live (die aktive, die Karte und Handy zeigen); die anderen
 // freigeschalteten Städte schlafen. Module ticken nur für die aktive Stadt (isCityLive, isVeedelLive, liveVeedel).
 // Für jede schlafende Stadt bucht city um Mitternacht eine Tageszusammenfassung: Schnitt der letzten
-// SLEEP_AVERAGE_DAYS live gespielten Tage dieser Stadt aus der Kasse mal 0,85 bis 1,15 ('income.city' bzw.
-// 'expense.city'), die Heat fällt auf den Ruhewert (police.restHeat), Löhne sind im Ergebnis drin. Den Anteil der
-// Rechten Hand nimmt hierarchy danach aus dem Buch der Stadt. Beim Aufwachen wird nichts nachgerechnet.
+// SLEEP_AVERAGE_DAYS ganz live gespielten Tage dieser Stadt aus der Kasse mal 0,85 bis 1,15 ('income.city' bzw.
+// 'expense.city'), die Heat fällt auf den Ruhewert (police.restHeat). Die Löhne sind im Ergebnis drin, weil ein live
+// gespielter Tag erst fünf Minuten nach Mitternacht in den Schnitt kommt (dann sind die Löhne dieses Tages gebucht).
+// Teiltage (Umschalten mitten am Tag) zählen weder für den Schnitt noch bekommen sie eine Zusammenfassung. Den Anteil
+// der Rechten Hand nimmt hierarchy danach aus dem Buch der Stadt. Beim Aufwachen wird nichts nachgerechnet.
 //
 // Öffentliche API: offerStatus(state), hamburgMissing(state), HARBOR_CALLER, CITIES, DEUTSCHLAND_VIEW, getCity(id),
 //   cityName(id), activeCity(state), presentCity(state), citiesUnlocked(state), isCityUnlocked(state, id),
@@ -92,7 +94,7 @@ export interface OfferState {
 export interface CitySleep {
   /** Ergebnisse der letzten live gespielten Tage (ältester zuerst, höchstens SLEEP_AVERAGE_DAYS). */
   results: number[];
-  /** War heute live (dann zählt der Tag zu den Ergebnissen statt einer Zusammenfassung). */
+  /** War den ganzen laufenden Tag live (dann zählt der Tag zu den Ergebnissen statt einer Zusammenfassung). */
   liveToday: boolean;
   /** Schläft seit (Spielminute), null = live. */
   since: number | null;
@@ -504,7 +506,9 @@ export function switchCity(ctx: Ctx, cityId: string): CommandResult {
   c.sleep[from].since = ctx.now;
   c.sleep[cityId] ??= newSleep(true, ctx.now);
   c.sleep[cityId].since = null;
-  c.sleep[cityId].liveToday = true;
+  // Wer mitten am Tag umschaltet, hat von diesem Tag nur einen Teil gespielt: Er zählt nicht (siehe closeLiveDay).
+  c.sleep[from].liveToday = false;
+  c.sleep[cityId].liveToday = false;
   journal.add(ctx, `Du schaust jetzt auf ${def.name}. ${cityName(from)} läuft im Hintergrund weiter.`, 'info');
   ctx.emit('city.switched', { from, to: cityId });
   return { ok: true };
@@ -523,24 +527,42 @@ export function unlockCity(ctx: Ctx, cityId: string): CommandResult {
   return { ok: true };
 }
 
+/** Minute nach Mitternacht, in der die Ergebnisse der live gespielten Städte für den Vortag eingetragen werden. */
+const LIVE_CLOSE_MINUTE = 5;
+
 /**
- * Mitternacht: Für jede Stadt endet ein Buchungstag. War sie live, zählt ihr Ergebnis zum Schnitt; hat sie den ganzen
- * Tag geschlafen, bucht die Zusammenfassung das geschätzte Ergebnis.
+ * Mitternacht: Für jede Stadt, die den ganzen Buchungstag geschlafen hat, bucht die Zusammenfassung das geschätzte
+ * Ergebnis. Städte, die nur einen Teil des Tages live waren (Umschalten mitten am Tag), bekommen für diesen Tag weder
+ * Zusammenfassung noch Eintrag: Der Teil davor steht schon echt in der Kasse, der Rest ist nicht gespielt.
  */
-function closeDay(ctx: Ctx): void {
+function closeSleepers(ctx: Ctx): void {
   const c = ctx.state.modules.city;
   const day = bookDay(ctx.now);
+  const dayStart = clock.at(day);
   for (const cityId of c.unlocked) {
     c.sleep[cityId] ??= newSleep(c.active === cityId, ctx.now);
     const rec = c.sleep[cityId];
-    if (rec.liveToday) {
+    if (rec.since !== null && rec.since <= dayStart) sleepSummary(ctx, cityId, day, rec);
+  }
+}
+
+/**
+ * Kurz nach Mitternacht: Für jede Stadt, die den ganzen Vortag live war, zählt ihr Ergebnis zum Schnitt. Erst jetzt,
+ * denn die Löhne des Tages werden im Ereignis clock.dayStarted gezahlt und von der Kasse erst danach gebucht (zum
+ * Vortag): Um Mitternacht selbst stünde der Tag noch brutto im Buch. Danach beginnt ein neuer Tag für alle.
+ */
+function closeLiveDay(ctx: Ctx): void {
+  const c = ctx.state.modules.city;
+  const day = bookDay(ctx.now) - 1;
+  for (const cityId of c.unlocked) {
+    c.sleep[cityId] ??= newSleep(c.active === cityId, ctx.now);
+    const rec = c.sleep[cityId];
+    if (rec.liveToday && day >= 1) {
       const profit = cityDayProfit(ctx.state, cityId, day);
       if (profit !== null) {
         rec.results.push(Math.round(profit));
         if (rec.results.length > SLEEP_AVERAGE_DAYS) rec.results.splice(0, rec.results.length - SLEEP_AVERAGE_DAYS);
       }
-    } else {
-      sleepSummary(ctx, cityId, day, rec);
     }
     rec.liveToday = c.active === cityId;
   }
@@ -580,7 +602,8 @@ function schedule(ctx: Ctx): void {
 
 function tick(ctx: Ctx): void {
   const state = ctx.state;
-  if (ctx.now > 0 && ctx.now % MINUTES_PER_DAY === 0) closeDay(ctx);
+  if (ctx.now > 0 && ctx.now % MINUTES_PER_DAY === 0) closeSleepers(ctx);
+  if (ctx.now % MINUTES_PER_DAY === LIVE_CLOSE_MINUTE) closeLiveDay(ctx);
   const travel = state.modules.city.travel;
   if (travel && ctx.now >= travel.arrivesAt) arrive(ctx);
   const offer = state.modules.city.offer;

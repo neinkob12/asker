@@ -68,7 +68,8 @@ export class FilePlayer implements TrackPlayer {
     destination: AudioNode,
     readonly track: Track,
     buffer: Promise<AudioBuffer | null>,
-    onEnded: (player: FilePlayer) => void,
+    /** failed: Die Datei lief nicht (nicht geladen oder nicht lesbar), nicht: das Stück ist zu Ende. */
+    onEnded: (player: FilePlayer, failed?: boolean) => void,
   ) {
     this.output = ctx.createGain();
     this.output.gain.value = 0.0001;
@@ -76,7 +77,7 @@ export class FilePlayer implements TrackPlayer {
     buffer.then((data) => {
       if (this.stopped) return;
       if (!data) {
-        onEnded(this);
+        onEnded(this, true);
         return;
       }
       const src = ctx.createBufferSource();

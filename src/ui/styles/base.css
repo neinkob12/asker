@@ -57,6 +57,40 @@ h4 {
   outline-offset: 2px;
 }
 
+/* Dialog und Blatt nehmen den Fokus selbst auf (tabindex -1): kein Rahmen um die ganze Karte. */
+[role="dialog"][tabindex="-1"]:focus {
+  outline: none;
+}
+
+/* Nur für Screenreader (z.B. dauerhafte Live-Regionen): unsichtbar, aber im Baum. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Spiel steht (Pause, Dialog; start.tsx setzt data-paused): Endlos-Animationen der Kulisse halten an, statt bei
+ * stehender Welt weiter zu zeichnen. Nur das, was zur Spielwelt gehört: Hinweise der Oberfläche (Coach, Anruf)
+ * laufen weiter. !important, weil die Regeln der Module `animation:` als Kurzform setzen und später geladen werden.
+ */
+:root[data-paused] .spot-pulse,
+:root[data-paused] .raid-edge,
+:root[data-paused] .gang-push__ring,
+:root[data-paused] .map-surveillance__rec::before,
+:root[data-paused] .map-surveillance__scanlines::after,
+:root[data-paused] .map-fx-bluelight__glow,
+:root[data-paused] .map-fx-bluelight__core,
+:root[data-paused] .msg-typing span {
+  animation-play-state: paused !important;
+}
+
 /* Weniger Bewegung: keine Endlos-Animationen und keine Sprünge. */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -37,6 +37,23 @@ describe('Aussehen von Figuren', () => {
     expect(new Set(looks.map((l) => JSON.stringify(l))).size).toBe(looks.length);
   });
 
+  it('personLook liefert dasselbe Objekt für Name und Alter, bitgleich zu lookFor, und ist eingefroren', () => {
+    const a = personLook('Kevin K.', 24);
+    expect(personLook('Kevin K.', 24)).toBe(a);
+    expect(personLook('Kevin K.', 25)).not.toBe(a);
+    expect(personLook('Kevin K.')).not.toBe(a);
+    expect(a).toEqual(lookFor('person:Kevin K.', 'Kevin K.', { age: 24 }));
+    expect(JSON.stringify(a)).toBe(JSON.stringify(lookFor('person:Kevin K.', 'Kevin K.', { age: 24 })));
+    expect(personLook('Kevin K.')).toEqual(lookFor('person:Kevin K.', 'Kevin K.', {}));
+    expect(Object.isFrozen(a)).toBe(true);
+  });
+
+  it('personLook bleibt auch nach vielen verschiedenen Namen (Cache-Überlauf) gleich', () => {
+    const first = JSON.stringify(personLook('Erster E.', 30));
+    for (let i = 0; i < 700; i++) personLook(`Name ${i}`, 20 + (i % 40));
+    expect(JSON.stringify(personLook('Erster E.', 30))).toBe(first);
+  });
+
   it('nimmt eigene Angaben vor dem Abgeleiteten und kennt weibliche Vornamen', () => {
     const look = lookFor('x', 'Fiete', { hat: 'skipper', beard: 'full', age: 58 });
     expect(look.hat).toBe('skipper');

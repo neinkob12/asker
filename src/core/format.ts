@@ -13,12 +13,17 @@ function numberFormat(digits: number): Intl.NumberFormat {
   return format;
 }
 
+/** Negative Null ("-0", "-0,0") gibt es nicht: -0,4 € wird als "0 €" gezeigt, nicht als "-0 €". */
+const NEGATIVE_ZERO = /^[-\u2212]([0,.]+)$/;
+
 export function formatEuro(amount: number): string {
-  return `${numberFormat(0).format(Math.round(amount))} €`;
+  return `${formatNumber(Math.round(amount) || 0)} €`;
 }
 
 export function formatNumber(value: number, digits = 0): string {
-  return numberFormat(digits).format(value);
+  const text = numberFormat(digits).format(value);
+  const match = NEGATIVE_ZERO.exec(text);
+  return match ? match[1] : text;
 }
 
 /** Menge mit Einheit, z.B. "40 g" oder "1,5 kg". */

@@ -36,6 +36,7 @@ import {
   decodeApproaches,
   decodeLine,
   findRoute,
+  findRouteMeters,
   type GraphRoute,
   nearestMotorwayNode,
   nearestNetwork,
@@ -71,7 +72,26 @@ export interface RoadRoute {
 
 /** So viele Routen bleiben im Speicher. */
 const CACHE_SIZE = 600;
+/** So viele reine Längen (ohne Weg) bleiben im Speicher, sie sind klein. */
+const DISTANCE_CACHE_SIZE = 4000;
 const cache = new Map<string, RoadRoute>();
+const distances = new Map<string, number>();
+
+/** Wert aus einem Cache holen und als zuletzt benutzt markieren (die Map merkt sich die Reihenfolge des Einfügens). */
+function lruGet<V>(map: Map<string, V>, id: string): V | undefined {
+  const value = map.get(id);
+  if (value !== undefined) {
+    map.delete(id);
+    map.set(id, value);
+  }
+  return value;
+}
+
+/** Wert in einen Cache legen; ist er voll, fliegt der am längsten unbenutzte raus. */
+function lruSet<V>(map: Map<string, V>, id: string, value: V, size: number): void {
+  if (map.size >= size) map.delete(map.keys().next().value as string);
+  map.set(id, value);
+}
 
 const key = (p: LngLat) => `${Math.round(p.lng * 1e5)},${Math.round(p.lat * 1e5)}`;
 
@@ -124,17 +144,29 @@ export function roadRoute(from: LngLat, to: LngLat): RoadRoute {
   const [netFrom, netTo] = networksOf(from, to);
   if (netFrom !== netTo) return interCityRoute(from, to);
   const id = `${key(from)}>${key(to)}`;
-  const known = cache.get(id);
+  const known = lruGet(cache, id);
   if (known) return known;
   const route = toRoadRoute(findRoute(from, to, netFrom), from, to);
-  if (cache.size >= CACHE_SIZE) cache.delete(cache.keys().next().value as string);
-  cache.set(id, route);
+  lruSet(cache, id, route, CACHE_SIZE);
   return route;
 }
 
-/** Länge der Route über die Straßen in Metern. */
+/**
+ * Länge der Route über die Straßen in Metern. Wie roadRoute(...).meters, aber ohne den Weg zu bauen, wenn die Route
+ * noch nicht gemerkt ist (Fahrzeiten brauchen nur die Meter).
+ */
 export function roadDistance(from: LngLat, to: LngLat): number {
-  return roadRoute(from, to).meters;
+  const [netFrom, netTo] = networksOf(from, to);
+  if (netFrom !== netTo) return interCityRoute(from, to).meters;
+  const id = `${key(from)}>${key(to)}`;
+  const route = lruGet(cache, id);
+  if (route) return route.meters;
+  const known = lruGet(distances, id);
+  if (known !== undefined) return known;
+  const found = findRouteMeters(from, to, netFrom);
+  const meters = Math.round(found ?? distanceMeters(from, to));
+  lruSet(distances, id, meters, DISTANCE_CACHE_SIZE);
+  return meters;
 }
 
 /**
@@ -296,7 +328,7 @@ const interCityCache = new Map<string, InterCityRoute>();
  */
 export function interCityRoute(from: LngLat, to: LngLat): InterCityRoute {
   const id = `${key(from)}>${key(to)}`;
-  const known = interCityCache.get(id);
+  const known = lruGet(interCityCache, id);
   if (known) return known;
   const [netFrom, netTo] = networksOf(from, to);
   const autobahn = netFrom !== netTo ? autobahnBetween(netFrom, netTo) : null;
@@ -323,8 +355,7 @@ export function interCityRoute(from: LngLat, to: LngLat): InterCityRoute {
     ];
     route = { path, meters, motorwayMeters: meters, onRoads: false, drive: path, walkFrom: null, walkTo: null };
   }
-  if (interCityCache.size >= CACHE_SIZE) interCityCache.delete(interCityCache.keys().next().value as string);
-  interCityCache.set(id, route);
+  lruSet(interCityCache, id, route, CACHE_SIZE);
   return route;
 }
 

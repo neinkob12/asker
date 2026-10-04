@@ -1,5 +1,6 @@
 // Oberfläche der Polizei: Heat im HUD, Abschnitt "Polizei" im Veedel-Panel (mit Verpfeifen) und Hinweise als Toast.
 
+import { memo } from 'preact/compat';
 import { useState } from 'preact/hooks';
 import { clock, formatPercent } from '../../../core';
 import { mapEffects } from '../../../map';
@@ -12,14 +13,17 @@ import {
   ItemContent,
   List,
   ListItem,
+  memoState,
   onGameEvent,
   ProgressBar,
   registerHudItem,
   registerSearch,
   registerSlot,
+  shallowEqual,
   soundOnEvent,
   Tag,
   useGame,
+  useGameSelector,
   useUi,
 } from '../../../ui';
 import { getGang } from '../../gangs';
@@ -51,32 +55,41 @@ const TONE = { calm: 'accent', watchful: 'warn', hot: 'bad', manhunt: 'bad' } as
 const FLAME_TONE = { calm: 'money', watchful: 'warn', hot: 'danger', manhunt: 'danger' } as const;
 const FLAMES = 5;
 
+/** Heißestes Veedel mit Spieler-Präsenz (O(Veedel × Personal)): einmal pro Spielstand rechnen, nicht pro Komponente. */
+const hottestPresent = memoState((state) => playerHeat(state));
+
 /**
  * Heat im HUD (Look "Glas"): Pille unter dem Geld mit fünf Flammen, gefüllt nach Heat und gefärbt nach Stufe, dazu
  * das Stufenwort. Gemessen wird das heißeste Veedel, in dem der Spieler gerade aktiv ist.
  */
-function HeatHud() {
-  const { state } = useGame();
-  const hottest = playerHeat(state);
-  const heat = hottest?.heat ?? 0;
-  const level = heatLevel(heat);
-  const share = Math.min(1, Math.max(0, heat / MAX_HEAT));
-  const filled = share <= 0 ? 0 : Math.max(1, Math.ceil(share * FLAMES - 1e-9));
-  const title = hottest
-    ? `Heat in ${veedelName(hottest.veedelId)} (heißestes Veedel, in dem du aktiv bist): ${level.label}`
+const HeatHud = memo(function HeatHud() {
+  // Nur ein kleiner Auszug (Veedel, Stufe, gefüllte Flammen): Die Pille zeichnet nicht bei jeder Heat-Nachkommastelle neu.
+  const { veedelId, levelId, levelLabel, filled } = useGameSelector((state) => {
+    const hottest = hottestPresent(state);
+    const level = heatLevel(hottest?.heat ?? 0);
+    const share = Math.min(1, Math.max(0, (hottest?.heat ?? 0) / MAX_HEAT));
+    return {
+      veedelId: hottest?.veedelId ?? null,
+      levelId: level.id,
+      levelLabel: level.label,
+      filled: share <= 0 ? 0 : Math.max(1, Math.ceil(share * FLAMES - 1e-9)),
+    };
+  }, shallowEqual);
+  const title = veedelId
+    ? `Heat in ${veedelName(veedelId)} (heißestes Veedel, in dem du aktiv bist): ${levelLabel}`
     : 'Du bist gerade in keinem Veedel aktiv.';
   return (
-    <div class={`hud-heat-pill is-${FLAME_TONE[level.id]}`} title={title}>
+    <div class={`hud-heat-pill is-${FLAME_TONE[levelId]}`} title={title}>
       <span class="hud-heat-pill__label">Heat</span>
       <span class="hud-heat-pill__flames" role="img" aria-label={`Heat: ${filled} von ${FLAMES} Flammen`}>
         {Array.from({ length: FLAMES }, (_, i) => (
           <Icon key={i} name="flame" class={`hud-heat-pill__flame ${i < filled ? 'is-on' : ''}`} />
         ))}
       </span>
-      <span class={`hud-heat-pill__word ${level.id === 'calm' ? '' : `is-${TONE[level.id]}`}`}>{level.label}</span>
+      <span class={`hud-heat-pill__word ${levelId === 'calm' ? '' : `is-${TONE[levelId]}`}`}>{levelLabel}</span>
     </div>
   );
-}
+});
 
 /**
  * Abschnitt im Veedel-Panel: Heat, was droht, Verpfeifen der Gang, die hier herrscht. Verpfeifen hat Folgen (die Gang
@@ -177,7 +190,7 @@ function PoliceCard() {
   const ui = useUi();
   const tier = operationTier(state);
   const hints = nextTierHints(state, tier.index);
-  const hot = playerHeat(state);
+  const hot = hottestPresent(state);
   const major = plannedMajorRaid(state);
   return (
     <Card

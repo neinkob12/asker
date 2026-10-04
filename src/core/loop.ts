@@ -33,8 +33,9 @@ export class GameLoop {
   }
 
   setSpeed(speed: number): void {
-    // Keine Zahl (z.B. ?tempo=abc): Tempo bleibt, sonst stünde das Spiel mit NaN dauerhaft.
-    if (Number.isNaN(speed)) return;
+    // Keine endliche Zahl (z.B. ?tempo=abc oder ?tempo=Infinity): Tempo bleibt, sonst stünde das Spiel
+    // mit NaN bzw. unendlich vielen Schritten dauerhaft.
+    if (!Number.isFinite(speed)) return;
     this.speed = Math.max(0, speed);
   }
 
@@ -43,12 +44,21 @@ export class GameLoop {
    * Bruchteile werden ins nächste Bild übertragen, damit kein Schritt verloren geht.
    */
   advanceReal(dtSeconds: number): number {
-    const dt = Math.min(MAX_FRAME_SECONDS, Math.max(0, dtSeconds));
+    // NaN (Math.max/min geben NaN weiter) zählt als keine Zeit, sonst wäre carry für immer NaN.
+    const dt = Number.isFinite(dtSeconds) ? Math.min(MAX_FRAME_SECONDS, Math.max(0, dtSeconds)) : 0;
     if (this.speed === 0) return 0;
-    this.carry += dt * this.minutesPerSecond * this.speed;
+    const gained = dt * this.minutesPerSecond * this.speed;
+    this.carry = Number.isFinite(this.carry + gained) ? this.carry + gained : 0;
     const steps = Math.min(MAX_STEPS_PER_FRAME, Math.floor(this.carry + 1e-9));
     this.carry = Math.max(0, this.carry - steps);
-    if (steps > 0) this.options.step(steps);
+    if (steps > 0) {
+      // Wirft ein Schritt, bleibt das Spiel nicht hängen: Fehler melden, das Bild (UI, Autosave) läuft weiter.
+      try {
+        this.options.step(steps);
+      } catch (error) {
+        console.error('Fehler in der Simulation', error);
+      }
+    }
     return steps;
   }
 
@@ -61,8 +71,12 @@ export class GameLoop {
       this.handle = scheduler.request(frame);
       const dt = this.last === null ? 0 : (now - this.last) / 1000;
       this.last = now;
-      this.advanceReal(dt);
-      this.options.frame?.(Math.min(MAX_FRAME_SECONDS, dt));
+      try {
+        this.advanceReal(dt);
+      } finally {
+        // Auch wenn die Simulation wirft: Anzeige und Autosave im selben Bild nicht auslassen.
+        this.options.frame?.(Number.isFinite(dt) ? Math.min(MAX_FRAME_SECONDS, Math.max(0, dt)) : 0);
+      }
     };
     this.handle = scheduler.request(frame);
   }

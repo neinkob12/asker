@@ -358,6 +358,7 @@ function restock(turn: Turn): void {
   if (post.settings.orderRules.length === 0) return;
   const home = () => homeWarehouse(ctx.state, post.staffId)?.id ?? null;
   runRestock(ctx, post.settings.orderRules, home, `staff:${lt.id}`, {
+    cityId: lt.cityId ?? 'koeln',
     budget: () => budget(turn, false),
     onPause: (_rule, reason) => note(turn, `Bestellung ruht: ${reason}`, true, true),
     onResume: () => note(turn, 'Bestellungen laufen wieder.', false),

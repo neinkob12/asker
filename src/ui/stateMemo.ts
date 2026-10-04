@@ -46,3 +46,33 @@ export function memoState<R>(fn: (state: GameState) => R): (state: GameState) =>
     return value;
   };
 }
+
+/**
+ * Wie memoState, aber für Lesefunktionen mit Argumenten (Zeitraum, Filter): Je Schlüssel (`keyOf`) wird das Ergebnis
+ * bis zur nächsten Änderung des Zustands gemerkt. Die Argumente müssen allein durch den Schlüssel bestimmt sein.
+ */
+export function memoStateKeyed<A extends unknown[], R>(
+  fn: (state: GameState, ...args: A) => R,
+  keyOf: (...args: A) => string,
+): (state: GameState, ...args: A) => R {
+  let lastState: GameState | null = null;
+  let lastRevision = -1;
+  let lastTime = -1;
+  let lastNextId = -1;
+  let values = new Map<string, R>();
+  return (state, ...args) => {
+    if (!enabled) return fn(state, ...args);
+    if (state !== lastState || revision !== lastRevision || state.time !== lastTime || state.nextId !== lastNextId) {
+      values = new Map();
+      lastState = state;
+      lastRevision = revision;
+      lastTime = state.time;
+      lastNextId = state.nextId;
+    }
+    const key = keyOf(...args);
+    if (values.has(key)) return values.get(key) as R;
+    const value = fn(state, ...args);
+    values.set(key, value);
+    return value;
+  };
+}

@@ -333,6 +333,9 @@ class FleetLayer implements CustomLayerInterface {
   onAdd(map: MapLibreMap, gl: WebGL2RenderingContext): void {
     this.map = map;
     this.gl = gl;
+    // Nach einem Kontextverlust ist alles neu: Uniform-Orte des alten Kontexts gelten nicht mehr.
+    this.uniforms.clear();
+    this.dirty = true;
     this.boxProgram = compile(gl, BOX_VS, COLOR_FS);
     this.lightProgram = compile(gl, LIGHT_VS, LIGHT_FS);
     this.cube = gl.createBuffer();
@@ -654,15 +657,21 @@ export function createFleet(map: MapLibreMap, options: FleetOptions): FleetHandl
   const layer = new FleetLayer(options);
   fleets.add(layer);
   layer.setNight(fleetNight);
+  // Nach einem WebGL-Kontextverlust baut MapLibre den Stil neu auf, stellt eigene (Custom-)Ebenen aber nicht wieder her.
+  // Darum bei jedem style.load und nach webglcontextrestored prüfen, ob die Ebene fehlt, und sie neu anlegen.
+  let removed = false;
   const add = () => {
-    if (map.getLayer(options.id)) return;
-    map.addLayer(layer, options.beforeId && map.getLayer(options.beforeId) ? options.beforeId : undefined);
+    if (removed) return;
+    try {
+      if (map.getLayer(options.id)) return;
+      map.addLayer(layer, options.beforeId && map.getLayer(options.beforeId) ? options.beforeId : undefined);
+    } catch {
+      // Stil noch nicht geladen: der nächste style.load versucht es wieder.
+    }
   };
-  try {
-    add();
-  } catch {
-    map.once('style.load', add);
-  }
+  add();
+  map.on('style.load', add);
+  map.on('webglcontextrestored', add);
   return {
     update: (poses, at) => layer.update(poses, at),
     setNight: (night) => layer.setNight(night),
@@ -670,6 +679,9 @@ export function createFleet(map: MapLibreMap, options: FleetOptions): FleetHandl
       return layer.size;
     },
     remove() {
+      removed = true;
+      map.off('style.load', add);
+      map.off('webglcontextrestored', add);
       fleets.delete(layer);
       layer.clear();
       if (map.getLayer(options.id)) map.removeLayer(options.id);

@@ -552,8 +552,22 @@ export function lookFor(seed: string, name = '', partial: Partial<Look> = {}): L
  * Bewerber nach dem Anheuern (neue ID) gleich aussieht wie vorher und im Chat wie im Personal.
  */
 export function personLook(name: string, age?: number): Look {
-  return lookFor(`person:${name}`, name, age === undefined ? {} : { age });
+  const key = `${name}|${age ?? ''}`;
+  const known = PERSON_LOOKS.get(key);
+  if (known) return known;
+  const look = Object.freeze(lookFor(`person:${name}`, name, age === undefined ? {} : { age }));
+  // Begrenzt: Bewerber kommen und gehen. Beim Überlauf fliegt der älteste Eintrag raus (Map merkt die Einfügereihenfolge).
+  if (PERSON_LOOKS.size >= PERSON_LOOK_LIMIT) PERSON_LOOKS.delete(PERSON_LOOKS.keys().next().value as string);
+  PERSON_LOOKS.set(key, look);
+  return look;
 }
+
+/**
+ * Gemerkte Porträts pro Name und Alter: Das Aussehen ist fest, aber ca. 30 Würfe teuer, und mit demselben Objekt
+ * überspringt memo() bei Avatar und Face das Neuzeichnen. Die Objekte sind eingefroren, weil sie geteilt werden.
+ */
+const PERSON_LOOKS = new Map<string, Look>();
+const PERSON_LOOK_LIMIT = 500;
 
 /** Stimme passend zum Aussehen, eigene Angaben (partial) haben Vorrang. */
 export function voiceFor(seed: string, look: Look, partial: Partial<VoiceSpec> = {}): VoiceSpec {

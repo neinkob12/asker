@@ -76,6 +76,21 @@ describe('spots', () => {
     expect(sim.state.modules.customers.nextSpawnAt[spot.id]).toBeDefined();
   });
 
+  it('Gründen in Hamburg bucht die Kosten auf Hamburg, auch wenn Köln die aktive Stadt ist', () => {
+    const sim = createTestGame();
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+    const events = recordEvents(sim);
+    const center = getVeedel('st-pauli')?.center;
+    if (!center) throw new Error('st-pauli');
+    const candidates = [0, 0.001, -0.001, 0.002, -0.002].map((d) => ({ lng: center.lng + d, lat: center.lat - d / 2 }));
+    const free = candidates.find((p) => canFoundSpotAt(sim.state, p.lng, p.lat).ok);
+    if (!free) throw new Error('keine freie Stelle in St. Pauli');
+    expect(sim.dispatch({ type: 'spots.found', payload: { lng: free.lng, lat: free.lat } }).ok).toBe(true);
+    const paid = eventsOfType(events, 'wallet.changed').filter((e) => e.payload.category === 'expansion');
+    expect(paid).toHaveLength(1);
+    expect(paid[0].payload.cityId).toBe('hamburg');
+  });
+
   it('nicht außerhalb von Köln, nicht zu nah an anderen Spots, nicht unbegrenzt', () => {
     const sim = createTestGame();
     sim.state.wallet.dirty = 1e6;

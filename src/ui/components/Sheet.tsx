@@ -7,7 +7,7 @@
 //   <Sheet open={open} onClose={() => setOpen(false)} title="Bestellen" detents={['medium', 'large']}>…</Sheet>
 
 import type { ComponentChildren } from 'preact';
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { haptic } from '../haptics';
 import { useOverlay } from '../overlays';
 import { startDrag } from '../phone/drag';
@@ -73,6 +73,9 @@ export function Sheet(props: SheetProps) {
   const closing = useRef(false);
   const onClose = useRef(props.onClose);
   onClose.current = props.onClose;
+  const titleId = useId();
+  /** Was vor dem Öffnen den Fokus hatte: Dorthin geht er beim Schließen zurück. */
+  const opener = useRef<HTMLElement | null>(null);
 
   useOverlay(props.open, props.onClose);
 
@@ -143,6 +146,12 @@ export function Sheet(props: SheetProps) {
     spring.current.jump(geo.current.offsets.closed);
     paint(geo.current.offsets.closed);
     moveTo(props.initial ?? detents[0]);
+    // Fokus ins Blatt (sonst bliebe er auf dem Knopf dahinter, der gleich gesperrt ist). Ein Feld mit autofocus gewinnt.
+    const el = sheet.current;
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (el && !el.contains(document.activeElement)) {
+      (el.querySelector<HTMLElement>('[autofocus], [data-autofocus]') ?? el).focus({ preventScroll: true });
+    }
   }, [mounted]);
 
   // Das Blatt ist modal: Die Seite dahinter ist für Tastatur und Screenreader weg, solange es da ist.
@@ -157,9 +166,18 @@ export function Sheet(props: SheetProps) {
     return () => {
       page.removeAttribute('data-modal');
       // Ist inzwischen eine andere Seite oben, gehört der Zustand dem Seitenstapel (stackAnimator.ts).
-      if (!page.classList.contains('is-top')) return;
-      page.inert = false;
-      page.removeAttribute('aria-hidden');
+      if (page.classList.contains('is-top')) {
+        page.inert = false;
+        page.removeAttribute('aria-hidden');
+      }
+      // Fokus zurück, erst nach dem Freigeben der Seite (ein gesperrtes Element nimmt ihn nicht an). Liegt er noch im
+      // Blatt oder nirgends, sonst hat der Nutzer schon woanders weitergemacht.
+      const back = opener.current;
+      opener.current = null;
+      const active = document.activeElement;
+      if (back?.isConnected && (active === document.body || !active || sheet.current?.contains(active))) {
+        back.focus({ preventScroll: true });
+      }
     };
   }, [mounted]);
 
@@ -215,12 +233,18 @@ export function Sheet(props: SheetProps) {
           ref={sheet}
           role="dialog"
           aria-modal="true"
-          aria-label={typeof props.title === 'string' ? props.title : 'Blatt'}
+          aria-labelledby={props.title ? titleId : undefined}
+          aria-label={props.title ? undefined : 'Blatt'}
+          tabIndex={-1}
           style={{ height: geo.current ? `${geo.current.height}px` : undefined }}
         >
           <header class="ui-sheet__head" onPointerDown={grab}>
             <span class="ui-sheet__grabber" aria-hidden="true" />
-            {props.title && <h2 class="ui-sheet__title">{props.title}</h2>}
+            {props.title && (
+              <h2 class="ui-sheet__title" id={titleId}>
+                {props.title}
+              </h2>
+            )}
             <div class="ui-sheet__actions">
               {props.action}
               <button type="button" class="ui-sheet__close" onClick={close} aria-label="Schließen">
