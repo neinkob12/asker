@@ -63,6 +63,11 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     gauges: { aggression: 45, resolve: 70 },
     clock: 6,
     stakes: ['goods', 'cash', 'people', 'spot', 'noise'],
+    // Im Lager gibt es keinen Spot, auf der Auftragsfahrt (Straße) auch keine Kasse.
+    stakesBySetting: {
+      warehouse: ['goods', 'cash', 'people', 'noise'],
+      street: ['goods', 'people', 'noise'],
+    },
     lootLimit: 70,
     intents: [...GANG_INTENTS, 'wreck'],
     maxRounds: 10,
@@ -86,7 +91,12 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
         reputation: -3,
         text: '{opponent} haben dich {place} ausgenommen.',
       },
-      retreat: { goods: [-12, -5], influence: -1, text: 'Rückzug {place}. Ein Teil der Ware ist weg.' },
+      retreat: {
+        goods: [-12, -5],
+        influence: -3,
+        opponentInfluence: 2,
+        text: 'Rückzug {place}. Ein Teil der Ware ist weg.',
+      },
     },
   },
 
@@ -119,6 +129,8 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     clock: 4,
     // Läuft die Uhr ab, ist die zweite Streife da: gefasst.
     clockOutcome: 'failure',
+    // Kein Fluchtwagen und kein Wegbringen: Wer der Polizei davonfährt, ist nicht "sicher raus".
+    moves: ['block', 'secondTalk'],
     stakes: ['goods', 'people', 'noise'],
     intents: ['search', 'radio', 'askPapers', 'grab', 'hesitate'],
     maxRounds: 8,
@@ -172,9 +184,11 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     ],
     opponent: { label: 'Die Streife', strength: 50, count: 2 },
     roles: { leader: 1, nervous: 1 },
-    gauges: { aggression: 20, resolve: 60 },
-    clock: 4,
+    gauges: { aggression: 20, resolve: 72 },
+    clock: 3,
     clockOutcome: 'failure',
+    // Kein Fluchtwagen und kein Wegbringen: Wer der Polizei davonfährt, ist nicht "sicher raus".
+    moves: ['block', 'secondTalk'],
     stakes: ['goods', 'people', 'noise'],
     stakeLabels: { goods: 'Ladung' },
     intents: ['searchVan', 'radio', 'askPapers', 'grab', 'hesitate'],
@@ -248,6 +262,8 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     gauges: { aggression: 15, resolve: 65 },
     clock: 5,
     clockOutcome: 'failure',
+    // Kein Fluchtwagen und kein Wegbringen: Wer der Polizei davonfährt, ist nicht "sicher raus".
+    moves: ['block', 'secondTalk'],
     stakes: ['goods', 'people'],
     stakeLabels: { goods: 'Ladung' },
     intents: ['dog', 'tarp', 'deliveryNote', 'callOffice', 'hesitate'],

@@ -378,3 +378,70 @@ describe('Situationstexte nach Wetter', () => {
     expect(get(sim, id).situation).toMatch(/Schnee/);
   });
 });
+
+describe('Review: Rückzug ohne Sprung, Teil-Ergebnisse aus Gebuchtem, Einsätze nach Ort', () => {
+  it('Abhauen: etwas Runden-Schaden an der Kasse kostet wenig, nicht gleich den ganzen Niederlage-Verlust', () => {
+    const lostCash = (damage: number) => {
+      const { sim, id } = raid(13);
+      wallet.earn(sim.ctx('test'), 10000, 'dirty', 'Test', 'income.other');
+      const e = get(sim, id);
+      const cash = e.stakes.find((s) => s.id === 'cash');
+      if (!cash) throw new Error('keine Kasse');
+      cash.damage = damage;
+      act(sim, id, 'flee', 'cash');
+      return Math.max(0, -(get(sim, id).result?.money ?? 0));
+    };
+    const none = lostCash(0);
+    const little = lostCash(1);
+    expect(none).toBe(0);
+    expect(little).toBeLessThan(50);
+  });
+
+  it('Teil-Ergebnisse zeigen nur Gebuchtes: Rückzug ohne Kassenverlust heißt „gehalten“', () => {
+    const { sim, id } = raid(14);
+    act(sim, id, 'flee', 'goods');
+    const cash = get(sim, id).result?.parts?.find((p) => p.stake === 'cash');
+    expect(cash).toEqual({ stake: 'cash', state: 'kept', text: 'gehalten' });
+  });
+
+  it('Überfall auf einen Gang-Spot, Rückzug: die Beute heißt „nicht erbeutet“', () => {
+    const sim = createTestGame();
+    const id = startEncounter(sim.ctx('gangs'), {
+      kind: 'gangSpotRaid',
+      veedelId: 'kalk',
+      staffIds: [hireRunner(sim)],
+      playerPresent: false,
+      stakes: { money: 500, goods: 40 },
+    }).encounterId;
+    act(sim, id, 'flee');
+    const parts = get(sim, id).result?.parts ?? [];
+    expect(parts.find((p) => p.stake === 'goods')).toMatchObject({ state: 'lost', text: 'nicht erbeutet' });
+    expect(parts.find((p) => p.stake === 'cash')).toMatchObject({ state: 'lost', text: 'nicht erbeutet' });
+  });
+
+  it('Überfall auf einer Auftragsfahrt: kein Spot und keine Kasse, keine Absicht „Spot zerlegen“', () => {
+    const sim = createTestGame();
+    const id = startEncounter(sim.ctx('gangs'), {
+      kind: 'raidDefense',
+      veedelId: 'kalk',
+      staffIds: [hireRunner(sim)],
+      playerPresent: false,
+      place: 'in Kalk',
+    }).encounterId;
+    const e = get(sim, id);
+    expect(e.stakes.map((s) => s.id)).toEqual(['goods', 'people', 'noise']);
+    for (let i = 0; i < 4 && get(sim, id).phase === 'rounds'; i++) {
+      expect(['wreck', 'grabCash']).not.toContain(get(sim, id).intent);
+      act(sim, id, 'hold');
+    }
+  });
+
+  it('ohne Geld für die Bestechung bleibt auch der Schutz, wie er war', () => {
+    const { sim, id } = raid(15);
+    wallet.lose(sim.ctx('test'), wallet.balance(sim.state, 'dirty'), 'dirty', 'Test', 'loss.encounter');
+    const before = get(sim, id).protect;
+    const result = act(sim, id, 'bribe', before === 'spot' ? 'cash' : 'spot');
+    expect(result.ok).toBe(false);
+    expect(get(sim, id).protect).toBe(before);
+  });
+});

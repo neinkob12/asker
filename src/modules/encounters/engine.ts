@@ -272,15 +272,21 @@ function setupRounds(ctx: Ctx, encounter: Encounter, kind: EncounterKind): void 
   encounter.resolve = gauges.resolve;
   encounter.edge = edgeOf(encounter);
   encounter.intent = rollIntent(ctx, encounter, kind);
-  encounter.protect = defaultProtect(encounter, kind);
+  encounter.protect = defaultProtect(encounter);
   encounter.maxRounds = encounter.round + encounter.clock;
 }
 
+/** Einsätze dieser Konfrontation: je nach Ort (stakesBySetting), sonst die des Anlasses. */
+export function stakesFor(kind: EncounterKind, request: EncounterRequest): readonly StakeId[] {
+  return kind.stakesBySetting?.[settingOf(request)] ?? kind.stakes;
+}
+
 /** Was man ohne Wahl schützt: den Einsatz, auf den die Absicht zielt, sonst den ersten des Anlasses. */
-export function defaultProtect(encounter: Encounter, kind: EncounterKind | undefined): StakeId | null {
+export function defaultProtect(encounter: Encounter): StakeId | null {
   const target = getIntent(encounter.intent)?.stake;
-  if (target && kind?.stakes.includes(target)) return target;
-  return encounter.protect ?? kind?.stakes[0] ?? null;
+  const ids = encounter.stakes.map((x) => x.id);
+  if (target && ids.includes(target)) return target;
+  return encounter.protect ?? ids[0] ?? null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -327,7 +333,7 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
     brawl: false,
     intent: null,
     foes: buildFoes(count, kind),
-    stakes: kind.stakes.map((id) => ({ id, damage: 0 })),
+    stakes: stakesFor(kind, request).map((id) => ({ id, damage: 0 })),
     protect: null,
     log: [],
     // Freikaufen kostet je nach Stadt mehr oder weniger (Kölscher Klüngel, Auftrag 30).
@@ -502,7 +508,8 @@ export function join(ctx: Ctx, encounterId: number, mode: EncounterMode, crew?: 
     case 'backup': {
       if (!wallet.pay(ctx, option.cost, 'dirty', 'Verstärkung', lossCategory(encounter)))
         return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
-      encounter.bribeSpent += option.cost;
+      // Fahrtkosten: kein Verlust an die Gegenseite, deshalb nicht in result.money.
+      encounter.travelSpent = (encounter.travelSpent ?? 0) + option.cost;
       const ids = backupCandidates(ctx.state, encounter);
       for (const id of ids) addStaff(ctx.state, encounter, id);
       // Die Verstärkung gehört dazu (Erfahrung, Loyalität, Verletzungen wie bei allen Beteiligten).
@@ -619,7 +626,7 @@ function takeCrew(ctx: Ctx, encounter: Encounter, crew: readonly string[]): Comm
     if (!wallet.pay(ctx, cost, 'dirty', 'Taxi für die Crew', lossCategory(encounter))) {
       return { ok: false, reason: `Nicht genug Schwarzgeld fürs Taxi (${formatEuro(cost)}).` };
     }
-    encounter.bribeSpent += cost;
+    encounter.travelSpent = (encounter.travelSpent ?? 0) + cost;
   }
   encounter.participants = encounter.participants.filter((p) => p.isPlayer);
   for (const id of ids) addStaff(ctx.state, encounter, id);
@@ -661,14 +668,16 @@ export function act(ctx: Ctx, encounterId: number, actionId: string, guard?: Sta
   if (!kind || !action || !availableActions(encounter).includes(actionId)) {
     return { ok: false, reason: 'Das geht gerade nicht.' };
   }
-  if (guard !== undefined) {
-    const result = protect(ctx, encounterId, guard);
-    if (!result.ok) return result;
+  // Erst alles prüfen, dann ändern.
+  if (guard !== undefined && !encounter.stakes.some((s) => s.id === guard)) {
+    return { ok: false, reason: 'Das steht hier nicht auf dem Spiel.' };
   }
+  if (action.costsBribe && wallet.balance(ctx.state, 'dirty') < encounter.bribeCost) {
+    return { ok: false, reason: `Nicht genug Schwarzgeld (${formatEuro(encounter.bribeCost)}).` };
+  }
+  if (guard !== undefined) encounter.protect = guard;
   if (action.costsBribe) {
-    if (!wallet.pay(ctx, encounter.bribeCost, 'dirty', 'Bestechung', lossCategory(encounter))) {
-      return { ok: false, reason: `Nicht genug Schwarzgeld (${formatEuro(encounter.bribeCost)}).` };
-    }
+    wallet.pay(ctx, encounter.bribeCost, 'dirty', 'Bestechung', lossCategory(encounter));
     encounter.bribeSpent += encounter.bribeCost;
   }
   playRound(ctx, encounter, kind, actionId, action);
@@ -1095,8 +1104,10 @@ function endDamage(
     const guarded = encounter.protect === stake.id;
     let amount: number;
     if (ending === 'clock') {
-      if (stake.id !== 'goods') continue;
-      amount = guarded ? CLOCK_GOODS_DAMAGE_PROTECTED : CLOCK_GOODS_DAMAGE;
+      // Die Streife kommt: Die Ware ist zum Teil weg, und der Spot hat Blaulicht vor der Tür (Einfluss).
+      if (stake.id === 'goods') amount = guarded ? CLOCK_GOODS_DAMAGE_PROTECTED : CLOCK_GOODS_DAMAGE;
+      else if (stake.id === 'spot') amount = guarded ? END_DAMAGE_PROTECTED : END_DAMAGE;
+      else continue;
     } else {
       amount = guarded ? END_DAMAGE_PROTECTED : END_DAMAGE;
     }
@@ -1105,6 +1116,9 @@ function endDamage(
   }
   return end;
 }
+
+/** Was pro Einsatz tatsächlich gebucht wurde (für die Teil-Ergebnisse). */
+type Booked = Partial<Record<StakeId, { money: number; goods: number; influence: number }>>;
 
 /**
  * Folgen nach Einsätzen: Verluste eines Einsatzes zählen anteilig zu seinem Schaden (ein unberührter Einsatz kostet
@@ -1118,19 +1132,32 @@ function applyStakeEffects(
   effects: EncounterEffects,
   end: Partial<Record<StakeId, number>>,
   result: EncounterResult,
+  booked: Booked,
 ): void {
-  const stakes = kind.stakes.filter((s) => SCALED_STAKES.includes(s));
+  const stakes = encounter.stakes.map((x) => x.id).filter((s) => SCALED_STAKES.includes(s));
   const outcome = splitEffects(effects, stakes);
   const failure = splitEffects(encounter.request.effects?.failure ?? kind.outcomes.failure, stakes);
   applyEffects(ctx, encounter, outcome.base, result);
   for (const stake of stakes) {
     const cap = stakeCap(encounter, stake) / 100;
     const rounds = stakeDamage(encounter, stake) / 100;
-    const total = Math.min(cap, rounds + (end[stake] ?? 0) / 100);
-    const reference = outcome.losses[stake] ?? (rounds > 0 ? failure.losses[stake] : undefined);
-    if (reference && total > 0) applyEffects(ctx, encounter, scaleEffects(reference, total), result);
+    const before = { money: result.money, goods: result.goods, influence: result.influence };
+    // Verluste aus dem Ausgang zählen mit Runden- und End-Schaden; hat der Ausgang keinen Verlust für diesen Einsatz,
+    // gilt der Verlust bei Niederlage, aber nur mit dem Schaden aus den Runden (sonst springt ein Rückzug).
+    const own = outcome.losses[stake];
+    const scaled = own
+      ? { effects: own, factor: Math.min(cap, rounds + (end[stake] ?? 0) / 100) }
+      : { effects: failure.losses[stake], factor: Math.min(cap, rounds) };
+    if (scaled.effects && scaled.factor > 0) {
+      applyEffects(ctx, encounter, scaleEffects(scaled.effects, scaled.factor), result);
+    }
     const gain = outcome.gains[stake];
     if (gain && rounds < 1) applyEffects(ctx, encounter, scaleEffects(gain, 1 - rounds), result);
+    booked[stake] = {
+      money: result.money - before.money,
+      goods: result.goods - before.goods,
+      influence: result.influence - before.influence,
+    };
   }
 }
 
@@ -1155,14 +1182,34 @@ function describeResult(encounter: Encounter, result: EncounterResult, headline:
   return details.length ? `${headline} (${details.join(', ')})` : headline;
 }
 
-/** Teil-Ergebnisse pro Einsatz für die Ergebnis-Karte. */
-function resultParts(encounter: Encounter, kind: EncounterKind | undefined, result: EncounterResult) {
+/**
+ * Teil-Ergebnisse pro Einsatz für die Ergebnis-Karte, aus dem, was tatsächlich gebucht wurde (nicht aus dem Schaden).
+ * Einsätze, bei denen es etwas zu gewinnen gab (z.B. die Beute beim Überfall auf einen Gang-Spot), heißen ohne Gewinn
+ * "nicht erbeutet".
+ */
+function resultParts(
+  encounter: Encounter,
+  kind: EncounterKind | undefined,
+  result: EncounterResult,
+  booked: Booked,
+): EncounterResultPart[] {
   const parts: EncounterResultPart[] = [];
   const nameOf = (id: string) => encounter.participants.find((p) => p.id === id)?.name ?? id;
-  const level = (damage: number, changed: boolean): EncounterResultPart['state'] =>
-    damage >= 100 ? 'lost' : damage > 0 || changed ? 'partial' : 'kept';
+  const stakeIds = encounter.stakes.map((x) => x.id);
+  const winnable = splitEffects(encounter.request.effects?.success ?? kind?.outcomes.success, stakeIds).gains;
+  const signedPart = (
+    stake: StakeId,
+    value: number,
+    damage: number,
+    format: (v: number) => string,
+  ): EncounterResultPart => {
+    if (value > 0) return { stake, state: 'kept', text: `+${format(value)}` };
+    if (value < 0) return { stake, state: damage >= 100 ? 'lost' : 'partial', text: `−${format(-value)}` };
+    if (winnable[stake] && encounter.outcome !== 'success') return { stake, state: 'lost', text: 'nicht erbeutet' };
+    return { stake, state: 'kept', text: 'gehalten' };
+  };
   for (const stake of encounter.stakes) {
-    const damage = stake.damage;
+    const got = booked[stake.id];
     switch (stake.id) {
       case 'goods': {
         if (encounter.request.skipEffects) {
@@ -1170,17 +1217,16 @@ function resultParts(encounter: Encounter, kind: EncounterKind | undefined, resu
           parts.push({ stake: 'goods', state: lost ? 'lost' : 'kept', text: lost ? 'aufgeflogen' : 'sicher' });
           break;
         }
-        const g = result.goods;
-        const text = g === 0 ? 'gehalten' : `${g > 0 ? '+' : '−'}${formatAmount(Math.abs(g), goodsUnit())}`;
-        parts.push({ stake: 'goods', state: g > 0 ? 'kept' : level(damage, g < 0), text });
+        const value = (got?.goods ?? 0) - encounter.goodsDropped;
+        parts.push(signedPart('goods', value, stake.damage, (v) => formatAmount(v, goodsUnit())));
         break;
       }
-      case 'cash': {
-        const m = result.money;
-        const text = m === 0 ? 'gehalten' : `${m > 0 ? '+' : '−'}${formatEuro(Math.abs(m))}`;
-        parts.push({ stake: 'cash', state: m > 0 ? 'kept' : level(damage, m < 0), text });
+      case 'cash':
+        parts.push(signedPart('cash', got?.money ?? 0, stake.damage, (v) => formatEuro(v)));
         break;
-      }
+      case 'spot':
+        parts.push(signedPart('spot', got?.influence ?? 0, stake.damage, (v) => `Einfluss ${v}`));
+        break;
       case 'people': {
         const hurt = [
           ...(result.playerInjured ? ['du verletzt'] : []),
@@ -1197,15 +1243,6 @@ function resultParts(encounter: Encounter, kind: EncounterKind | undefined, resu
         });
         break;
       }
-      case 'spot': {
-        const inf = result.influence;
-        parts.push({
-          stake: 'spot',
-          state: inf > 0 ? 'kept' : level(damage, inf < 0),
-          text: inf === 0 ? 'gehalten' : `Einfluss ${inf > 0 ? '+' : '−'}${Math.abs(inf)}`,
-        });
-        break;
-      }
       case 'noise': {
         const heat = result.heat;
         parts.push({
@@ -1217,7 +1254,6 @@ function resultParts(encounter: Encounter, kind: EncounterKind | undefined, resu
       }
     }
   }
-  void kind;
   return parts;
 }
 
@@ -1237,6 +1273,7 @@ function finish(
   encounter.resolvedAt = ctx.now;
   encounter.playerKilled = !!player?.killed;
   const end = endDamage(encounter, outcome, ending);
+  const booked: Booked = {};
 
   const result: EncounterResult = {
     money: 0 - encounter.bribeSpent,
@@ -1252,6 +1289,7 @@ function finish(
     relation: 0,
     text: '',
     ending,
+    ...(encounter.travelSpent ? { travel: encounter.travelSpent } : {}),
   };
   // Verletzungen gelten immer, auch wenn der Auslöser die übrigen Folgen selbst regelt.
   for (const p of encounter.participants) {
@@ -1268,8 +1306,14 @@ function finish(
     override ??
     (encounter.request.skipEffects ? undefined : (encounter.request.effects?.[outcome] ?? kind?.outcomes[outcome]));
   if (!encounter.playerKilled) {
-    if (override) applyEffects(ctx, encounter, override, result);
-    else if (effects && kind) applyStakeEffects(ctx, encounter, kind, effects, end, result);
+    if (override) {
+      // Wege im Briefing (freikaufen, räumen …): alles gehört zu den Einsätzen, die es betrifft.
+      const before = { money: result.money, goods: result.goods, influence: result.influence };
+      applyEffects(ctx, encounter, override, result);
+      booked.cash = { money: result.money - before.money, goods: 0, influence: 0 };
+      booked.goods = { money: 0, goods: result.goods - before.goods, influence: 0 };
+      booked.spot = { money: 0, goods: 0, influence: result.influence - before.influence };
+    } else if (effects && kind) applyStakeEffects(ctx, encounter, kind, effects, end, result, booked);
     // Die Polizei-Uhr ist abgelaufen: Wer nicht schnell genug weg ist, wird festgenommen (nicht bei der Polizei selbst,
     // da regelt der Auslöser die Festnahme).
     if (ending === 'clock' && (kind?.clockOutcome ?? 'retreat') !== 'failure') {
@@ -1294,7 +1338,7 @@ function finish(
   for (const stake of encounter.stakes) {
     stake.damage = Math.min(stakeCap(encounter, stake.id), stake.damage + (end[stake.id] ?? 0));
   }
-  result.parts = resultParts(encounter, kind, result);
+  result.parts = resultParts(encounter, kind, result, booked);
   encounter.result = result;
 
   const ref: { veedelId?: string; spotId?: string } = {};
@@ -1323,7 +1367,13 @@ function finish(
 // ---------------------------------------------------------------------------------------------
 // Spezialzüge der Crew (crew.ts)
 
+/** Erlaubt der Anlass diesen Spezialzug? (bei Polizei und Zoll z.B. kein Fluchtwagen) */
+export function moveAllowed(kind: EncounterKind | undefined, move: SpecialMoveId): boolean {
+  return !kind?.moves || kind.moves.includes(move);
+}
+
 function moveUser(encounter: Encounter, move: SpecialMoveId): Participant | undefined {
+  if (!moveAllowed(getKind(encounter.kind), move)) return undefined;
   return encounter.participants.find((p) => p.move === move && !p.moveUsed && p.condition !== 'down');
 }
 
@@ -1342,7 +1392,7 @@ function fledSafely(encounter: Encounter): boolean {
 
 /** Wie viel von einem Einsatz höchstens verloren gehen kann (Ware in Sicherheit gebracht: die Hälfte). */
 function stakeCap(encounter: Encounter, stake: StakeId): number {
-  if (stake === 'goods' && encounter.participants.some((p) => p.move === 'stash' && p.moveUsed)) return STASH_CAP;
+  if (stake === 'goods' && encounter.goodsCap !== undefined) return encounter.goodsCap;
   return 100;
 }
 
@@ -1352,7 +1402,8 @@ export function availableMoves(encounter: Encounter): { participantId: string; m
   const kind = getKind(encounter.kind);
   return encounter.participants.flatMap((p) => {
     if (!p.move || p.moveUsed || p.condition === 'down' || SPECIAL_MOVES[p.move].passive) return [];
-    if (p.move === 'stash' && !kind?.stakes.includes('goods')) return [];
+    if (!moveAllowed(kind, p.move)) return [];
+    if (p.move === 'stash' && !encounter.stakes.some((x) => x.id === 'goods')) return [];
     return [{ participantId: p.id, move: p.move }];
   });
 }
@@ -1375,6 +1426,8 @@ export function special(ctx: Ctx, encounterId: number, participantId: string): C
       finish(ctx, encounter, 'retreat', undefined, 'fled');
       return { ok: true };
     case 'stash':
+      // Was schon weg ist, bleibt weg: Die Grenze gilt ab jetzt.
+      encounter.goodsCap = Math.max(stakeDamage(encounter, 'goods'), STASH_CAP);
       logRound(ctx, encounter, actionId, 1, [`${p.name} schafft die Hälfte der Ware durch den Hinterausgang.`], before);
       return { ok: true };
     case 'secondTalk': {

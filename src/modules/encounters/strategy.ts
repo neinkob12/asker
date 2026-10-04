@@ -18,9 +18,10 @@ export function autoProtect(encounter: Encounter): StakeId | null {
   const kind = getKind(encounter.kind);
   if (!kind) return null;
   const target = getIntent(encounter.intent)?.stake;
-  if (target && kind.stakes.includes(target)) return target;
-  if (encounter.brawl && kind.stakes.includes('people')) return 'people';
-  return encounter.protect ?? kind.stakes[0] ?? null;
+  const ids = encounter.stakes.map((x) => x.id);
+  if (target && ids.includes(target)) return target;
+  if (encounter.brawl && ids.includes('people')) return 'people';
+  return encounter.protect ?? ids[0] ?? null;
 }
 
 /** Bewertung einer Handlung: wie sehr sie die Entschlossenheit senkt, ohne die Aggression über die Kante zu treiben. */
@@ -70,7 +71,7 @@ export function chooseAuto(_state: GameState, encounter: Encounter, smart = fals
   });
   // Ohne Boss schützen die Leute, was sie gerade schützen (am Anfang den ersten Einsatz), nur der gute Spieler
   // schaut auf die Absicht.
-  const protect = smart ? autoProtect(encounter) : (encounter.protect ?? kind.stakes[0] ?? null);
+  const protect = smart ? autoProtect(encounter) : (encounter.protect ?? encounter.stakes[0]?.id ?? null);
   // Aussichtslos: alle verletzt mitten in der Schlägerei, dann lieber abhauen.
   const own = activeOwn(encounter);
   const beaten = own.length > 0 && own.every((p) => p.condition !== 'ok') && encounter.brawl;

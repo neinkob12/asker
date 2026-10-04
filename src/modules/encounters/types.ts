@@ -217,6 +217,8 @@ export interface EncounterResult {
   relation: number;
   /** Zusammenfassung für Journal und Dialog. */
   text: string;
+  /** Fahrtkosten (Taxi der Crew, Verstärkung) in Schwarzgeld: kein Verlust an die Gegenseite, nicht in money. */
+  travel?: number;
   /** Teil-Ergebnisse pro Einsatz (Auftrag 35). Fehlt bei alten Spielständen. */
   parts?: EncounterResultPart[];
   /** Wie es geendet hat: Gegenseite abgezogen, Polizei-Uhr abgelaufen, Ladung aufgegeben … (für Auslöser und Texte). */
@@ -290,6 +292,10 @@ export interface Encounter {
   goodsDropped: number;
   /** Bereits gezahltes Bestechungsgeld. */
   bribeSpent: number;
+  /** Fahrtkosten (Taxi der Crew, Verstärkung), getrennt vom Bestechungsgeld. */
+  travelSpent?: number;
+  /** Ware in Sicherheit gebracht: so viel Prozent Schaden höchstens (beim Spezialzug festgehalten). */
+  goodsCap?: number;
   /** Ab dann entscheiden die Leute selbst (nur ohne Oberfläche relevant, der Dialog pausiert das Spiel). */
   deadline: number;
   outcome: EncounterOutcome | null;
@@ -416,6 +422,10 @@ export interface EncounterKind {
   clockOutcome?: EncounterOutcome;
   /** Was auf dem Spiel steht (Reihenfolge = Anzeige). */
   stakes: readonly StakeId[];
+  /** Andere Einsätze je nach Ort (z.B. auf einer Auftragsfahrt kein Spot und keine Kasse). */
+  stakesBySetting?: Partial<Record<EncounterSetting, readonly StakeId[]>>;
+  /** Erlaubte Spezialzüge (Standard: alle), z.B. bei Polizei und Zoll kein Fluchtwagen. */
+  moves?: readonly SpecialMoveId[];
   /**
    * Beute: Erreicht der Schaden an Ware, Kasse und Spot zusammen so viel, hat die Gegenseite, was sie wollte, und zieht
    * ab (Niederlage, ending 'looted'). Ohne Angabe nie.

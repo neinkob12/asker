@@ -28,7 +28,7 @@
   content: "";
   position: fixed;
   inset: 0;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.9) 0.6px, transparent 0.7px);
+  background-image: radial-gradient(var(--file-grain) 0.6px, transparent 0.7px);
   background-size: 3px 3px;
   opacity: 0.05;
   pointer-events: none;
@@ -140,7 +140,7 @@
   border-radius: 3px;
   background: var(--file-polaroid);
   color: var(--file-polaroid-ink);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 18px var(--file-shadow);
 }
 .enc-polaroid--own {
   transform: rotate(-3deg);
@@ -236,8 +236,8 @@
   white-space: nowrap;
 }
 .enc-intent {
-  background: rgba(255, 123, 115, 0.14);
-  border: 1px solid rgba(255, 123, 115, 0.45);
+  background: var(--file-red-soft);
+  border: 1px solid var(--file-red-line);
   color: var(--file-ink);
   max-width: 100%;
   white-space: normal;
@@ -252,15 +252,15 @@
   white-space: nowrap;
 }
 .enc-intent.is-mood {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: var(--file-surface);
+  border-color: var(--file-line);
   font-family: var(--font-file-display);
   font-style: italic;
   font-weight: 400;
 }
 .enc-clock {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--file-surface);
+  border: 1px solid var(--file-line);
   color: var(--file-ink);
   font-variant-numeric: tabular-nums;
 }
@@ -319,7 +319,7 @@
   color: var(--file-ink);
   white-space: nowrap;
 }
-.enc-gauge__shift .ui-icon {
+.enc-ico-sm {
   width: 14px;
   height: 14px;
 }
@@ -327,7 +327,7 @@
   position: relative;
   height: 10px;
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--file-surface-2);
   overflow: hidden;
 }
 .enc-gauge__fill {
@@ -341,7 +341,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.85) 0 2px, rgba(255, 255, 255, 0.25) 2px 4px);
+  background: repeating-linear-gradient(45deg, var(--file-ghost-a) 0 2px, var(--file-ghost-b) 2px 4px);
   border-radius: 2px;
 }
 .enc-gauge__mark {
@@ -370,20 +370,18 @@
   gap: 6px;
   padding: 3px 10px;
   border-radius: 999px;
-  background: rgba(255, 123, 115, 0.1);
+  background: var(--file-red-soft);
   color: var(--file-ink);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
 }
-.enc-foe .ui-icon {
-  width: 14px;
-  height: 14px;
+.enc-foe__icon {
   color: var(--file-red);
 }
 .enc-foe.is-gone,
 .enc-foe.is-down {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--file-surface);
   color: var(--file-ink-2);
   text-decoration: line-through;
 }
@@ -417,9 +415,9 @@
   gap: 6px;
   min-height: 44px;
   padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--file-line);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--file-surface);
   color: var(--file-ink);
   font: inherit;
   font-size: 14px;
@@ -431,7 +429,7 @@
   cursor: default;
 }
 .enc-stake:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--file-surface-2);
 }
 .enc-stake:focus-visible {
   outline: 2px solid var(--hud-gold);
@@ -441,11 +439,11 @@
   border-color: var(--file-red);
 }
 .enc-stake.is-guarded {
-  border-color: var(--cat-money);
-  background: rgba(70, 200, 140, 0.14);
+  border-color: var(--file-good);
+  background: var(--file-good-soft);
 }
 .enc-stake.is-guarded .ui-icon {
-  color: var(--cat-money);
+  color: var(--file-good);
 }
 .enc-stake__damage {
   font-size: 12px;
@@ -466,13 +464,9 @@
   white-space: nowrap;
   color: var(--file-ink-2);
 }
-.enc-act__arrow .ui-icon {
-  width: 14px;
-  height: 14px;
-}
 .enc-act__arrow.is-aggression-down,
 .enc-act__arrow.is-resolve-down {
-  color: var(--cat-money);
+  color: var(--file-good);
 }
 .enc-act__arrow.is-aggression-up,
 .enc-act__arrow.is-resolve-up {
@@ -481,8 +475,8 @@
 .enc-act__answer {
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(70, 200, 140, 0.18);
-  color: var(--cat-money);
+  background: var(--file-good-soft);
+  color: var(--file-good);
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
@@ -496,7 +490,7 @@
   list-style: none;
 }
 .enc-part {
-  --part: var(--cat-money);
+  --part: var(--file-good);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -512,9 +506,7 @@
 .enc-part.is-lost {
   --part: var(--file-red);
 }
-.enc-part .ui-icon {
-  width: 14px;
-  height: 14px;
+.enc-part__icon {
   color: var(--part);
 }
 .enc-part__name {
@@ -533,7 +525,7 @@
   padding: 8px 12px;
   border-left: 3px solid var(--file-tab);
   border-radius: 0 12px 12px 0;
-  background: rgba(201, 178, 133, 0.1);
+  background: var(--file-tab-soft);
 }
 .enc-advice__text {
   margin: 0;
@@ -579,16 +571,16 @@
   width: 100%;
   min-height: 56px;
   padding: 8px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--file-line);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--file-surface);
   color: var(--file-ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 .enc-crew-cand:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--file-surface-2);
 }
 .enc-crew-cand:focus-visible {
   outline: 2px solid var(--hud-gold);
@@ -599,8 +591,8 @@
   cursor: not-allowed;
 }
 .enc-crew-cand.is-on {
-  border-color: var(--cat-money);
-  background: rgba(70, 200, 140, 0.12);
+  border-color: var(--file-good);
+  background: var(--file-good-soft);
 }
 .enc-crew-cand__text {
   display: flex;
@@ -609,7 +601,7 @@
   gap: 4px;
   min-width: 0;
 }
-.enc-crew-cand__text strong {
+.enc-crew-cand__name {
   font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
@@ -625,7 +617,7 @@
   color: var(--file-ink-2);
 }
 .enc-crew-cand.is-on .enc-crew-cand__check {
-  color: var(--cat-money);
+  color: var(--file-good);
 }
 .enc-chip {
   display: inline-flex;
@@ -633,14 +625,14 @@
   gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--file-surface-2);
   color: var(--file-ink-2);
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
 .enc-chip.is-move {
-  background: rgba(201, 155, 255, 0.16);
+  background: var(--file-violet-soft);
   color: var(--file-violet);
 }
 .enc-chip.is-site {
@@ -673,7 +665,7 @@
   color: var(--file-ink-2);
   white-space: nowrap;
 }
-.enc-crew__text strong {
+.enc-crew__name {
   font-size: 14px;
   color: var(--file-ink);
 }
@@ -685,7 +677,7 @@
   padding: 6px 12px;
   border: 1px solid var(--file-violet);
   border-radius: 12px;
-  background: rgba(201, 155, 255, 0.14);
+  background: var(--file-violet-soft);
   color: var(--file-ink);
   font: inherit;
   font-size: 13px;
@@ -694,7 +686,7 @@
   cursor: pointer;
 }
 .enc-move:hover {
-  background: rgba(201, 155, 255, 0.24);
+  background: var(--file-violet-soft-2);
 }
 .enc-move:focus-visible {
   outline: 2px solid var(--hud-gold);
@@ -726,7 +718,7 @@
   border: 0;
   border-top: 4px solid var(--way);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--file-surface);
   color: var(--file-ink);
   text-align: left;
   cursor: pointer;
@@ -736,7 +728,7 @@
 }
 .enc-way:hover:not(:disabled),
 .enc-act:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--file-surface-2);
 }
 .enc-way:active:not(:disabled),
 .enc-act:active:not(:disabled) {
@@ -758,7 +750,7 @@
   --way: var(--cat-danger);
 }
 .enc-way.is-money {
-  --way: var(--cat-money);
+  --way: var(--file-good);
 }
 .enc-way.is-dirty {
   --way: var(--file-violet);
@@ -809,7 +801,7 @@
 
 /* Handlungen: Chance gefärbt (grün ab 60 %, rot unter 35 %), 4-px-Balken */
 .enc-act.is-good {
-  --way: var(--cat-money);
+  --way: var(--file-good);
 }
 .enc-act.is-mid {
   --way: var(--cat-warn);
@@ -830,7 +822,7 @@
   width: 100%;
   min-height: 44px;
   margin-top: 12px;
-  border: 1px dashed rgba(241, 236, 226, 0.3);
+  border: 1px dashed var(--file-rule);
   border-radius: 12px;
   background: transparent;
   color: var(--file-ink-2);
@@ -841,12 +833,12 @@
 }
 .enc-auto:hover {
   color: var(--file-ink);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--file-surface);
 }
 
 /* ---------------------------------------------------------------- Ergebnis: Stempel mit Doppelrand */
 .enc-result {
-  --stamp: var(--cat-money);
+  --stamp: var(--file-good);
   display: flex;
   align-items: center;
   gap: 28px;
@@ -916,7 +908,7 @@
   gap: 4px;
   margin: 0;
   padding: 12px 0 0;
-  border-top: 1px dashed rgba(241, 236, 226, 0.2);
+  border-top: 1px dashed var(--file-rule);
   list-style: none;
   font-family: var(--font-file);
   font-size: 12px;
@@ -935,10 +927,10 @@
 @keyframes enc-hud-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.7);
+    box-shadow: 0 0 0 0 var(--file-alarm);
   }
   60% {
-    box-shadow: 0 0 0 10px rgba(255, 75, 75, 0);
+    box-shadow: 0 0 0 10px var(--file-alarm-0);
   }
 }
 

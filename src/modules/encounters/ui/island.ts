@@ -3,6 +3,11 @@
 import { registerLiveActivity } from '../../../ui';
 import { activeEncounters, ENCOUNTER_KINDS, getIntent } from '../index';
 
+/** Bei Polizei und Zoll bringt die Uhr deren Verstärkung, sonst die Streife (wie im Dialog). */
+function clockWord(kindId: string): string {
+  return (ENCOUNTER_KINDS[kindId]?.clockOutcome ?? 'retreat') === 'failure' ? 'Verstärkung' : 'Streife';
+}
+
 registerLiveActivity({
   id: 'encounters.active',
   activities: (state) =>
@@ -17,7 +22,7 @@ registerLiveActivity({
       // Absicht der Gegenseite und Polizei-Uhr, kompakt (Auftrag 35).
       detail:
         encounter.phase === 'rounds'
-          ? `${getIntent(encounter.intent)?.label ?? encounter.place} · Streife in ${Math.max(0, encounter.clock)}`
+          ? `${getIntent(encounter.intent)?.label ?? encounter.place} · ${clockWord(encounter.kind)} in ${Math.max(0, encounter.clock)}`
           : `${encounter.place} · Wie gehst du vor?`,
       open: (ui) => ui.openDialog('encounters.encounter', { encounterId: encounter.id }),
     })),

@@ -98,6 +98,6 @@ export function rightHandAdvice(state: GameState, encounter: Encounter): Advice 
   if (encounter.phase === 'done') return null;
   const post = getRightHand(state, requestCity(state, encounter.request));
   const member = post ? getStaffMember(state, post.staffId) : undefined;
-  if (!member || member.status !== 'active') return null;
+  if (member?.status !== 'active') return null;
   return { staffId: member.id, name: member.name, text: adviceText(state, encounter) };
 }

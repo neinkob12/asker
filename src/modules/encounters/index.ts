@@ -31,6 +31,7 @@ import {
   protect,
   resolveAction,
   special,
+  stakesFor,
   start,
 } from './engine';
 import { ENCOUNTER_INTENTS } from './intents';
@@ -53,7 +54,6 @@ export {
   ABANDON_CASH_SHARE,
   AGGRESSION_FIGHT,
   BACKUP_COST,
-  BACKUP_EDGE_BONUS,
   BACKUP_MAX_PEOPLE,
   CREW_MAX,
   CREW_TRAVEL_COST,
@@ -313,14 +313,15 @@ export function migrateV3(old: EncountersStateV3): EncountersState {
       brawl: false,
       intent: null,
       foes,
-      stakes: (kind?.stakes ?? []).map((id) => ({ id, damage: 0 })),
+      stakes: (kind ? stakesFor(kind, e.request) : []).map((id) => ({ id, damage: 0 })),
       protect: null,
       participants: (e.participants ?? []).map((p) => ({ ...p, move: p.move ?? null, moveUsed: p.moveUsed ?? false })),
     };
     if (!done && kind) {
       encounter.intent = firstIntent(encounter, kind);
       const target = encounter.intent ? ENCOUNTER_INTENTS[encounter.intent]?.stake : undefined;
-      encounter.protect = target && kind.stakes.includes(target) ? target : (kind.stakes[0] ?? null);
+      const ids = encounter.stakes.map((x) => x.id);
+      encounter.protect = target && ids.includes(target) ? target : (ids[0] ?? null);
       encounter.maxRounds = (e.round ?? 0) + clockLeft;
     }
     return encounter;

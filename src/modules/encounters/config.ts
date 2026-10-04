@@ -8,30 +8,11 @@ export const PLAYER_STATS: EncounterStats = { speed: 55, caution: 50, strength: 
 /** So heißt der Spieler in Texten. */
 export const PLAYER_NAME = 'Du';
 
-/** Bonus auf jede Chance, wenn der Spieler selbst dabei und noch auf den Beinen ist. */
-export const PLAYER_PRESENT_BONUS = 0.1;
-
-/** Bonus bzw. Malus pro Person Über- oder Unterzahl bei Gewalt. */
+/** Überzahl bei Gewalt: pro Person mehr oder weniger so viel Stärke (Faktor, siehe tactics.ts statFactor). */
 export const NUMBERS_BONUS = 0.06;
 
 /** Abzug auf alle Werte eines Verletzten. */
 export const INJURY_PENALTY = 15;
-
-/** Grenzen jeder Chance. Nichts ist sicher. */
-export const MIN_CHANCE = 0.05;
-export const MAX_CHANCE = 0.95;
-
-/** Die Lage verschiebt jede Chance ein wenig: (Lage - 50) / EDGE_CHANCE_DIVISOR. */
-export const EDGE_CHANCE_DIVISOR = 250;
-
-/** Startlage: 50 plus Vorteil durch Überzahl und Stärke, begrenzt. */
-export const EDGE_START = 50;
-export const EDGE_START_MIN = 25;
-export const EDGE_START_MAX = 75;
-
-/** Erreicht die Lage nach den Runden mindestens so viel, gewinnt man; darunter bis RETREAT eine Pattsituation. */
-export const EDGE_WIN_AFTER_ROUNDS = 60;
-export const EDGE_RETREAT_AFTER_ROUNDS = 40;
 
 /** Trifft es den Spieler, obwohl er schon verletzt ist: so wahrscheinlich ist es tödlich. */
 export const PLAYER_LETHAL_CHANCE = 0.6;
@@ -62,8 +43,6 @@ export const BACKUP_COST = 300;
 export const BACKUP_MAX_PEOPLE = 2;
 /** Wer als Verstärkung infrage kommt (aktiv, ohne Einsatz), die Stärksten zuerst. */
 export const BACKUP_ROLES = ['security', 'runner', 'driver'] as const;
-/** Die Lage startet mit Verstärkung so viel besser (zusätzlich zur Überzahl). */
-export const BACKUP_EDGE_BONUS = 10;
 
 /** Sofort freikaufen: mindestens so viel, sonst die Bestechung des Anlasses mal PAYOFF_FACTOR. */
 export const PAYOFF_MIN = 600;
@@ -144,7 +123,7 @@ export const END_DAMAGE = 100;
 export const END_DAMAGE_PROTECTED = 50;
 
 /** Ein geschützter Einsatz nimmt nur so viel vom Schaden einer Absicht (Treffer-Chance ebenso). */
-export const PROTECT_FACTOR = 0.4;
+export const PROTECT_FACTOR = 0.5;
 
 /** Sicherheitsgrenze an Runden, falls die Uhr nicht abläuft. */
 export const ROUND_LIMIT = 12;

@@ -50,7 +50,7 @@ function raid(seed: number, player: Player): Encounter | undefined {
   };
   for (let i = 0; i < 30; i++) {
     const e = getEncounter(sim.state, encounterId);
-    if (!e || e.phase !== 'rounds') break;
+    if (e?.phase !== 'rounds') break;
     const options = availableActions(e).filter((a) => a !== 'bribe');
     if (player === 'random') {
       const actionId = options[Math.floor(rnd() * options.length)];

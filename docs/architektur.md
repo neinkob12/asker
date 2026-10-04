@@ -572,20 +572,19 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   `suppliers/config.ts`, `INDEX_*` und `PURCHASE_INDEX_SHARE` in `market/config.ts`, `MARKET_EVENT_CHANCE` in
   `events/config.ts`.
 
-- Auftrag 35 (Konfrontationen neu; 30 Tage, 3 Seeds, vorher = Stand vor Auftrag 35): Gezielt gemessen wie in Auftrag 24
+- Auftrag 35 (Konfrontationen neu; 30 Tage, 8 Seeds, vorher = `main` nach Auftrag 32): Gezielt gemessen wie in Auftrag 24
   (`src/playtest/encounters.measure.test.ts`, läuft mit `npm run balance`: 300 Überfälle der Hafenkolonne auf einen
-  Spot, ein Läufer vor Ort, 2–4 Angreifer): **ausgewürfelt** (Leute ohne Boss, einfache Strategie) Erfolg 56 → 74,
-  Rückzug 128 → 125, verloren 116 → 101, Verletzte oder Tote in 136 → 77 Fällen. Neu verglichen: **zufällig getippt**
-  20 / 175 / 105, Verletzte 138; **gut gespielt** (Absicht abwenden, Einsatz der Absicht schützen, Aggression unter 70
-  halten, Spezialzüge; `chooseAuto(…, true)`) 155 / 145 / 0, Verletzte 12. Rückzug heißt jetzt meist „Polizei-Uhr
-  abgelaufen“ (beide verlieren). Bot (schickt die Crew, spielt gut): Köln komplett an Tag 24/23/26 → 23/22/22, „Boss
-  von Köln“ an Tag 19/17/20 → 17/16/17, erstes Veedel unverändert an Tag 7/7/8, Umsatz pro Tag Tag 6–15
-  7.764/9.059/7.789 € → 7.934/11.291/9.234 €, Tag 16–30 22.164/23.805/21.856 € → 23.582/23.450/21.636 €, keine Pleite.
-  Hamburg (nach Köln komplett, 20 Tage): erste drei Stadtteile nach 13/18/–, 6/19/–, 12/–/– → 6/6/–, 12/–/–, 10/23/–
-  Tagen, keine Pleite (die Kontrolle der Hamburger Stadtteile kippt in beiden Ständen oft hin und her).
-  Stellschrauben: `encounters/config.ts` (`AGGRESSION_FIGHT`, `RETREAT_AT`, `PROTECT_FACTOR`, `CLOCK_*`, `BRAWL_*`,
-  `STAT_FACTOR_*`, `CREW_*`), `kinds.ts` (`gauges`, `clock`, `lootLimit`), `intents.ts` (`damage`, `weight`),
-  `actions.ts` (`shift`).
+  Spot, ein Läufer vor Ort, 2–4 Angreifer): **ausgewürfelt** (Leute ohne Boss, einfache Strategie) Erfolg 56 → 62,
+  Rückzug 128 → 122, verloren 116 → 116, Verletzte oder Tote in 136 → 117 Fällen. Neu verglichen: **zufällig getippt**
+  16 / 175 / 109, Verletzte 174; **gut gespielt** (Absicht abwenden, Einsatz der Absicht schützen, Aggression unter 70
+  halten, Spezialzüge; `chooseAuto(…, true)`) 147 / 144 / 9, Verletzte 69. Rückzug heißt jetzt meist „Polizei-Uhr
+  abgelaufen“ (beide verlieren: Ware, Einfluss am Spot, Festnahmen). Bot (schickt die Crew, spielt gut): Köln komplett
+  an Tag 23/22/24/23/23/20/22/24 → 22/22/22/23/23/24/19/22, „Boss von Köln“ 15–18, Umsatz pro Tag Tag 16–30
+  21.900–25.800 €, keine Pleite. Hamburg (nach Köln komplett, 20 Tage): keine Pleite, am Ende 0–8 Stadtteile (die
+  Kontrolle der Hamburger Stadtteile kippt in beiden Ständen oft hin und her). Stellschrauben: `encounters/config.ts`
+  (`AGGRESSION_FIGHT`, `RETREAT_AT`, `PROTECT_FACTOR` 0,5, `CLOCK_*`, `BRAWL_*`, `STAT_FACTOR_*`, `CREW_*`),
+  `kinds.ts` (`gauges`, `clock`, `lootLimit`, Rückzug beim Überfall mit Einfluss −3), `intents.ts` (`damage`, `hit`,
+  `weight`), `actions.ts` (`shift`).
 
 ## Städte (Auftrag 30)
 

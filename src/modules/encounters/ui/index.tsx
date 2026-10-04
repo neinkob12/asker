@@ -238,7 +238,7 @@ function Gauge(props: {
           {value}
           {preview && dir !== 'flat' && (
             <span class={`enc-gauge__shift is-${dir}`}>
-              <Icon name={dir === 'down' ? 'arrowDown' : 'arrowUp'} />
+              <Icon name={dir === 'down' ? 'arrowDown' : 'arrowUp'} class="enc-ico-sm" />
               {shiftText(preview)}
             </span>
           )}
@@ -264,7 +264,10 @@ function Foes(props: { encounter: Encounter }) {
     <ul class="enc-foes" aria-label="Gegenseite">
       {foes.map((foe, i) => (
         <li key={`${foe.role}-${i}`} class={`enc-foe is-${foe.state}`}>
-          <Icon name={foe.role === 'leader' ? 'crown' : foe.role === 'nervous' ? 'eye' : 'fist'} />
+          <Icon
+            name={foe.role === 'leader' ? 'crown' : foe.role === 'nervous' ? 'eye' : 'fist'}
+            class="enc-ico-sm enc-foe__icon"
+          />
           {ROLE_NAMES[foe.role]}
           {foe.state !== 'in' && <span class="enc-foe__state">{foe.state === 'down' ? 'am Boden' : 'weg'}</span>}
         </li>
@@ -473,7 +476,7 @@ function CrewPicker(props: { candidates: CrewCandidate[]; chosen: string[]; onTo
               >
                 <Avatar name={c.name} look={personLook(c.name, getStaffMember(state, c.id)?.age)} size="sm" />
                 <span class="enc-crew-cand__text">
-                  <strong>{c.name}</strong>
+                  <strong class="enc-crew-cand__name">{c.name}</strong>
                   <span class="enc-crew-cand__tags">
                     <span class="enc-chip">{roleName(c.role)}</span>
                     <span class="enc-chip">Kraft {c.strength}</span>
@@ -563,7 +566,7 @@ function Crew(props: { encounter: Encounter }) {
               size="sm"
             />
             <span class="enc-crew__text">
-              <strong>{p.isPlayer ? 'Du' : p.name.split(' ')[0]}</strong>
+              <strong class="enc-crew__name">{p.isPlayer ? 'Du' : p.name.split(' ')[0]}</strong>
               <span>{conditionText(p)}</span>
             </span>
             {move &&
@@ -630,7 +633,7 @@ function ActionShift(props: { preview: ShiftPreview }) {
         const dir = range.from + range.to < 0 ? 'down' : 'up';
         return (
           <span key={key} class={`enc-act__arrow is-${key}-${dir}`}>
-            <Icon name={dir === 'down' ? 'arrowDown' : 'arrowUp'} />
+            <Icon name={dir === 'down' ? 'arrowDown' : 'arrowUp'} class="enc-ico-sm" />
             {label} {shiftText(range)}
           </span>
         );
@@ -744,7 +747,7 @@ function ResultParts(props: { encounter: Encounter }) {
     <ul class="enc-parts" aria-label="Teil-Ergebnisse">
       {parts.map((part) => (
         <li key={part.stake} class={`enc-part is-${part.state}`} title={PART_STATE[part.state]}>
-          <Icon name={STAKE_ICONS[part.stake]} />
+          <Icon name={STAKE_ICONS[part.stake]} class="enc-ico-sm enc-part__icon" />
           <span class="enc-part__name">{stakeName(kind, part.stake)}</span>
           <span class="enc-part__text">{part.text}</span>
         </li>

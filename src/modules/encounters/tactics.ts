@@ -187,7 +187,8 @@ export function intentPossible(encounter: Encounter, kind: EncounterKind, id: st
   const intent = ENCOUNTER_INTENTS[id];
   if (!intent) return false;
   if (intent.needs && foesIn(encounter, intent.needs) === 0) return false;
-  if (intent.stake && !kind.stakes.includes(intent.stake)) return false;
+  if (intent.stake && !encounter.stakes.some((s) => s.id === intent.stake)) return false;
+  void kind;
   return true;
 }
 
