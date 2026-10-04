@@ -51,7 +51,7 @@ Würfelfolge eines Moduls: Szenario-Tests mit festem Seed können dann kippen (A
 Auftrag 33: Lager haben Platz in Gramm und Ausbau (`goods.upgradeWarehouse`: Regale, Tresor, Tarnung; `warehouseModifiers`
 fragen `police` und `encounters`). **Lieferungen und Fahrten lagern mit `storeFitting` ein** (nimmt nur, was passt, und meldet
 den Rest); `store` überfüllt (nur für Beute und Rückgaben). Neues Modul `fleet` (Fahrzeuge mit Ladung, Tempo, Kontrollfaktor;
-ohne eigenes das Privatauto mit 5 kg), Fahrten wählen `vehicleId` und `choice` (Autobahn, Landstraße, nachts; `roads` nimmt
+ohne eigenes das Privatauto, in der Stadt ohne Grenze, auf Routen 5 kg), Fahrten wählen `vehicleId` und `choice` (Autobahn, Landstraße, nachts; `roads` nimmt
 `{ weights }` pro Straßenart), Liegeplatz-Stufen (`logistics.upgradeBerth`), Container-Pakete (`container: 'full' | 'shared'`),
 Warenfluss (`goods.usagePerDay`) in der Lager-App, Ebene „Lieferwege“.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".

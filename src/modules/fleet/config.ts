@@ -54,8 +54,8 @@ export const VEHICLE_MODELS: readonly VehicleModel[] = [
 ];
 
 /**
- * Ohne eigenes Fahrzeug fährt der Fahrer (oder du) das eigene Auto: genau so viel Ladung wie die Fahrten bisher
- * (INTERCITY_CAPACITY in logistics), Tempo und Kontrollen wie bisher.
+ * Ohne eigenes Fahrzeug fährt der Fahrer (oder du) das eigene Auto, mit Tempo und Kontrollen wie bisher. Innerhalb einer
+ * Stadt (Abholen, Umlagern) passt alles hinein wie bisher; capacity gilt nur für Routen (INTERCITY_CAPACITY in logistics).
  */
 export const PRIVATE_CAR: VehicleModel = {
   id: 'private',

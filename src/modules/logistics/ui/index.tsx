@@ -692,6 +692,18 @@ onGameEvent('transport.stopped', 'logistics.customsStopToast', (payload, ui, sta
 onGameEvent('transport.seized', 'logistics.seizedToast', (payload, ui) => {
   ui.toast(`Ladung aufgeflogen${payload.arrested ? ', Fahrer festgenommen' : ''}!`, 'bad');
 });
+// Auftrag 33: Rest am Kai und eigene Fahrt am vollen Lager melden (ein Fahrer schreibt selbst per Handy).
+onGameEvent('cargo.leftBehind', 'logistics.leftBehindToast', (payload, ui) => {
+  ui.toast(
+    `${payload.amount} Einheiten bleiben am Kai: ${payload.reason === 'vehicle' ? 'Der Wagen ist voll.' : 'Das Lager ist voll.'}`,
+    'warn',
+  );
+});
+onGameEvent('transport.waiting', 'logistics.waitingToast', (payload, ui, state) => {
+  if (payload.driverId !== null) return;
+  const place = getWarehouse(state, payload.toId)?.name ?? 'Lager';
+  ui.toast(`${place} ist voll: ${payload.rest} Einheiten bleiben in deinem Wagen im Hof.`, 'warn');
+});
 onGameEvent('transport.lost', 'logistics.lostToast', (_payload, ui) => {
   ui.toast('Fahrt geplatzt, die Ladung ist weg.', 'bad');
 });

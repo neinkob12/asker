@@ -575,19 +575,21 @@ export function store(ctx: Ctx, item: StoreRequest): number | null {
 /**
  * Ware einlagern, so weit Platz ist (Auftrag 33): Das Lager nimmt nur, was in seine Kapazität passt, und meldet den
  * Rest zurück ('goods.storeRejected'). Was mit dem Rest passiert, entscheidet der Aufrufer (bleibt am Kai, wartet beim
- * Fahrer, geht in ein anderes Lager).
+ * Fahrer, geht in ein anderes Lager). Mit retry: true (erneuter Versuch derselben Ware, z.B. einer wartenden Fahrt)
+ * zählt der Rest nicht noch einmal als abgelehnt und es gibt keine neue Meldung.
  */
-export function storeFitting(ctx: Ctx, item: StoreRequest): StoreResult {
+export function storeFitting(ctx: Ctx, item: StoreRequest, options: { retry?: boolean } = {}): StoreResult {
   if (!(item.amount > 0)) return { stored: 0, rest: 0, lotId: null };
   const warehouseId = item.warehouseId ?? DEFAULT_WAREHOUSE;
   const stored = fitsInto(ctx.state, warehouseId, item.productId, item.amount);
   const rest = item.amount - stored;
+  const lotId = stored > 0 ? store(ctx, { ...item, warehouseId, amount: stored }) : null;
+  if (options.retry) return { stored, rest, lotId };
   const s = ctx.state.modules.goods;
   s.storage ??= { offered: 0, rejected: 0 };
   const per = unitWeight(item.productId);
   s.storage.offered += item.amount * per;
   s.storage.rejected += rest * per;
-  const lotId = stored > 0 ? store(ctx, { ...item, warehouseId, amount: stored }) : null;
   if (rest > 0) ctx.emit('goods.storeRejected', { warehouseId, productId: item.productId, amount: item.amount, rest });
   return { stored, rest, lotId };
 }

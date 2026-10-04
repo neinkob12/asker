@@ -3,7 +3,7 @@ import { loadSimulation, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { store } from '../goods';
 import { getTrips, receiveCargo, speedOf } from '../logistics';
-import { getVehicles, PRIVATE_CAR, pickVehicle, VEHICLE_MODELS, vehicleSpec, vehicleStatus } from './index';
+import { getVehicles, PRIVATE_CAR, pickVehicle, VEHICLE_MODELS, vehicleSpec } from './index';
 
 function quietGame(seed = 1): Simulation {
   const sim = createTestGame({ seed });
@@ -63,34 +63,76 @@ describe('fleet (Auftrag 33)', () => {
     expect(pickVehicle(sim.state, 'hamburg', 1500)).toBeNull();
   });
 
-  it('Abholung mit dem Transporter: mehr Ladung als das Privatauto, Fahrzeug ist unterwegs und danach wieder frei', () => {
+  it('in der Stadt nimmt das Privatauto alles mit; ein eigenes Fahrzeug begrenzt nur, wenn man es wählt', () => {
     const sim = quietGame();
     sim.state.modules.logistics.berths.koeln = { since: 0, level: 0 };
+    sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'kalk' } });
     receiveCargo(sim.ctx('suppliers'), {
       supplierId: 'rotterdam',
       productId: 'weed',
-      amount: 12000,
+      amount: 7000,
       quality: 0.7,
       unitCost: 2,
     });
-    // Ohne Fahrzeug: höchstens die Ladung des Privatautos, der Rest bleibt am Kai.
-    expect(sim.dispatch({ type: 'logistics.pickup', payload: { by: 'player', vehicleId: 'private' } }).ok).toBe(true);
-    expect(getTrips(sim.state)[0].items[0].amount).toBe(PRIVATE_CAR.capacity);
-    sim.state.modules.logistics.trips = [];
-    sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'kalk' } });
+    const pickup = (vehicleId?: number | 'private') =>
+      sim.dispatch({
+        type: 'logistics.pickup',
+        payload: { by: 'player', warehouseId: 'kalk', ...(vehicleId !== undefined ? { vehicleId } : {}) },
+      });
+    const reset = () => {
+      for (const trip of getTrips(sim.state)) {
+        const vehicle = sim.state.modules.fleet.vehicles.find((v) => v.id === trip.vehicleId);
+        if (vehicle) vehicle.tripId = null;
+      }
+      sim.state.modules.logistics.trips = [];
+      sim.state.modules.logistics.cargo = [];
+      receiveCargo(sim.ctx('suppliers'), {
+        supplierId: 'rotterdam',
+        productId: 'weed',
+        amount: 7000,
+        quality: 0.7,
+        unitCost: 2,
+      });
+    };
+    // Ohne eigenes Fahrzeug wie bisher: alles in einem Rutsch.
+    expect(pickup().ok).toBe(true);
+    expect(getTrips(sim.state)[0]).toMatchObject({ items: [expect.objectContaining({ amount: 7000 })] });
+    expect(getTrips(sim.state)[0].vehicleId).toBeUndefined();
+    // Ein Roller passt nicht: Ohne Wahl fährt trotzdem das Privatauto mit allem.
+    const scooter = buy(sim, 'scooter');
+    sim.state.modules.logistics.cargo = [];
+    receiveCargo(sim.ctx('suppliers'), {
+      supplierId: 'rotterdam',
+      productId: 'weed',
+      amount: 7000,
+      quality: 0.7,
+      unitCost: 2,
+    });
+    reset();
+    expect(pickup().ok).toBe(true);
+    expect(getTrips(sim.state)[0].vehicleId).toBeUndefined();
+    // Wer den Roller wählt, nimmt nur 2 kg mit, der Rest bleibt am Kai.
+    reset();
+    expect(pickup(scooter).ok).toBe(true);
+    expect(getTrips(sim.state)[0].items[0].amount).toBe(2000);
+    expect(sim.state.modules.logistics.cargo[0].amount).toBe(5000);
+    // Ein Transporter, in den alles passt, wird von selbst genommen und ist danach wieder frei.
+    reset();
     const van = buy(sim, 'van');
-    const hired = sim.dispatch({ type: 'staff.hireDriver', payload: {} });
-    expect(hired.ok).toBe(true);
-    expect(sim.dispatch({ type: 'logistics.pickup', payload: { by: 'driver', warehouseId: 'kalk' } }).ok).toBe(true);
+    expect(pickup().ok).toBe(true);
     const [trip] = getTrips(sim.state);
     expect(trip.vehicleId).toBe(van);
-    expect(trip.items[0].amount).toBe(7000);
-    const vehicle = getVehicles(sim.state)[0];
-    expect(vehicleStatus(vehicle)).toBe('busy');
+    const vanNow = () => getVehicles(sim.state).find((v) => v.id === van);
+    expect(vanNow()?.tripId).toBe(trip.id);
     trip.checkAt = null;
     sim.advance(trip.arrivesAt - sim.state.time);
-    expect(getTrips(sim.state)).toHaveLength(0);
-    expect(vehicleStatus(getVehicles(sim.state)[0])).toBe('free');
+    expect(vanNow()?.tripId).toBeNull();
+  });
+
+  it('auf Routen fasst das Privatauto wie bisher 5 kg', () => {
+    const sim = quietGame();
+    expect(PRIVATE_CAR.capacity).toBe(5000);
+    expect(pickVehicle(sim.state, 'koeln', 9000)).toBeNull();
   });
 
   it('ein Fahrzeug, das unterwegs ist, kann man nicht wählen', () => {

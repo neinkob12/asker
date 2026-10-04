@@ -553,7 +553,9 @@ soundOnEvent('shipment.arrived', 'delivery');
 onGameEvent('shipment.arrived', 'suppliers.arrivedToast', (payload, ui, state) => {
   // Schiffsware meldet die Logistik (Ware am Kai).
   if (payload.atPort) return;
-  ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.`, 'good', {
+  // Waren die Lager zu voll, steht im Banner, wo die Ware jetzt liegt (Auftrag 33).
+  const where = payload.placedIn ? ` Lager voll, verteilt: ${payload.placedIn}.` : '';
+  ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.${where}`, 'good', {
     urgent: true,
   });
 });

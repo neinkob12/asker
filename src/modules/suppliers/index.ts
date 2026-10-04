@@ -284,6 +284,8 @@ declare module '../../core' {
       quality?: number;
       /** Schiffsware am Kai im Niehler Hafen (warehouseId ist dann 'port'). */
       atPort?: boolean;
+      /** Lager waren zu voll, die Ware liegt in mehreren (Auftrag 33): "300 g im Lager Ehrenfeld, 200 g im …". */
+      placedIn?: string;
     };
     /** Lieferproblem ist eingetreten. */
     'shipment.problem': { shipmentId: number; supplierId: string; kind: ShipmentProblem };
@@ -767,23 +769,38 @@ function courierRoom(state: GameState, warehouseId: string): number {
 
 /**
  * Kurier-Ware abladen (Auftrag 33): erst ins Ziel-Lager, was dort nicht passt, in die anderen Lager der Stadt (das
- * nächste zuerst). Ist alles voll, stellt der Kurier den Rest trotzdem ab (das Lager ist dann überfüllt). Gibt das Lager
- * zurück, in das das meiste ging.
+ * nächste zuerst). Ist alles voll, stellt der Kurier den Rest trotzdem ab (das Lager ist dann überfüllt). Gibt zurück,
+ * wie viel in welchem Lager landete (für die Meldung).
  */
-function unloadCourier(ctx: Ctx, s: Shipment, first: string, cityId: string): string {
+function unloadCourier(
+  ctx: Ctx,
+  s: Shipment,
+  first: string,
+  cityId: string,
+): { warehouseId: string; amount: number }[] {
   const item = { productId: s.productId, quality: s.quality, unitCost: s.price / s.amount };
-  let rest = storeFitting(ctx, { ...item, amount: s.amount, warehouseId: first }).rest;
-  if (rest <= 0) return first;
+  const placed: { warehouseId: string; amount: number }[] = [];
+  const put = (warehouseId: string, amount: number, retry: boolean) => {
+    const result = storeFitting(ctx, { ...item, amount, warehouseId }, { retry });
+    if (result.stored > 0) placed.push({ warehouseId, amount: result.stored });
+    return result.rest;
+  };
+  let rest = put(first, s.amount, false);
+  if (rest <= 0) return placed;
   const site = getWarehouse(ctx.state, first);
   const others = getWarehouses(ctx.state, cityId)
     .filter((w) => w.id !== first)
     .sort((a, b) => (site ? distance(site, a) - distance(site, b) : 0));
+  // Dieselbe Ware in einem weiteren Lager zählt nicht noch einmal als abgelehnt.
   for (const w of others) {
     if (rest <= 0) break;
-    rest = storeFitting(ctx, { ...item, amount: rest, warehouseId: w.id }).rest;
+    rest = put(w.id, rest, true);
   }
   if (rest > 0) {
     store(ctx, { ...item, amount: rest, warehouseId: first });
+    const same = placed.find((p) => p.warehouseId === first);
+    if (same) same.amount += rest;
+    else placed.push({ warehouseId: first, amount: rest });
     journal.add(
       ctx,
       `Alle Lager sind voll: ${formatProductAmount(s.productId, rest)} ${productName(s.productId)} stehen zusätzlich im ` +
@@ -791,7 +808,14 @@ function unloadCourier(ctx: Ctx, s: Shipment, first: string, cityId: string): st
       'bad',
     );
   }
-  return first;
+  return placed;
+}
+
+/** Wo die Ware einer Lieferung liegt, als Text: "im Lager Ehrenfeld" oder "300 g im Lager Ehrenfeld, 200 g im …". */
+function placedText(state: GameState, productId: string, placed: readonly { warehouseId: string; amount: number }[]) {
+  const name = (id: string) => getWarehouse(state, id)?.name ?? 'Lager';
+  if (placed.length <= 1) return `im ${name(placed[0]?.warehouseId ?? '')}`;
+  return placed.map((p) => `${formatProductAmount(productId, p.amount)} im ${name(p.warehouseId)}`).join(', ');
 }
 
 /** Abstand zweier Orte in Grad (reicht zum Sortieren innerhalb einer Stadt). */
@@ -979,6 +1003,7 @@ function deliver(ctx: Ctx): void {
   const arrived = state.shipments.filter((s) => s.arrivesAt <= ctx.now);
   if (arrived.length === 0) return;
   state.shipments = state.shipments.filter((s) => s.arrivesAt > ctx.now);
+  const placedIn = new Map<number, string>();
   for (const s of arrived) {
     const supplier = getSupplier(ctx.state, s.supplierId);
     if (s.toPort) {
@@ -997,9 +1022,11 @@ function deliver(ctx: Ctx): void {
       const warehouse =
         getWarehouse(ctx.state, s.warehouseId) ??
         nearestWarehouse(ctx.state, getCity(s.cityId ?? 'koeln')?.center ?? supplier ?? { lng: 0, lat: 0 });
-      unloadCourier(ctx, s, warehouse?.id ?? s.warehouseId, s.cityId ?? 'koeln');
+      const placed = unloadCourier(ctx, s, warehouse?.id ?? s.warehouseId, s.cityId ?? 'koeln');
       const goods = `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)}`;
-      journal.add(ctx, `Lieferung angekommen: ${goods} im ${warehouse?.name ?? 'Lager'}.`, 'good');
+      const where = placedText(ctx.state, s.productId, placed);
+      journal.add(ctx, `Lieferung angekommen: ${goods}${placed.length > 1 ? ', verteilt: ' : ' '}${where}.`, 'good');
+      if (placed.length > 1) placedIn.set(s.id, where);
     }
     if (s.problem === 'badQuality' && supplier) {
       s.problemRevealed = true;
@@ -1015,6 +1042,7 @@ function deliver(ctx: Ctx): void {
       warehouseId: s.toPort ? 'port' : s.warehouseId,
       quality: s.quality,
       ...(s.toPort ? { atPort: true } : {}),
+      ...(placedIn.has(s.id) ? { placedIn: placedIn.get(s.id) } : {}),
     });
   }
 }

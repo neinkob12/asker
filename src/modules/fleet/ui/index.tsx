@@ -76,8 +76,10 @@ function FleetGroup() {
       icon="truck"
       color="goods"
       count={vehicles.length}
-      note={vehicles.length === 0 ? 'Ohne eigenes Fahrzeug fährt das Privatauto, höchstens 5 kg.' : undefined}
-      more="Fahrten nehmen das kleinste freie Fahrzeug, in das die Ware passt. Fliegt eine Ladung auf, kann die Polizei das Fahrzeug behalten. Gekauft wird mit sauberem Geld."
+      note={
+        vehicles.length === 0 ? 'Ohne eigenes Fahrzeug fährt das Privatauto, auf Routen höchstens 5 kg.' : undefined
+      }
+      more="Eigene Fahrzeuge sind schneller oder fallen weniger auf. Fahrten nehmen das kleinste freie, in das die Ware passt, sonst das Privatauto. Fliegt eine Ladung auf, kann die Polizei das Fahrzeug behalten. Gekauft wird mit sauberem Geld."
     >
       {vehicles.length > 0 && (
         <List>

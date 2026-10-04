@@ -394,10 +394,12 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   oder alle 30 Minuten neu versuchen). Beute und Rückgaben (`goods.store`) dürfen überfüllen. Ausbau mit sauberem Geld:
   Regale (×1,5/×2/×3), Tresor (`lossFactor`, `encounters` beim Überfall auf ein Lager) und Tarnung (`raidFactor`,
   `police.searchWarehouses`). Fahrzeuge (`fleet`): Roller 2 kg, Kombi 8 kg, Transporter 25 kg, je mit Tempo- und
-  Kontrollfaktor; Fahrten nehmen das kleinste freie Fahrzeug der Stadt, in das die Ware passt, sonst das Privatauto
-  (5 kg = `INTERCITY_CAPACITY`, wie bisher). Fliegt eine Ladung auf, ist das Fahrzeug zur Hälfte beschlagnahmt. Jede Fahrt
+  Kontrollfaktor. Innerhalb einer Stadt (Abholen, Umlagern) passt ins Privatauto alles wie bisher; Fahrten nehmen von
+  selbst das kleinste freie eigene Fahrzeug, in das die Ware ganz passt (Tempo, Tarnung), sonst das Privatauto. Die Ladung
+  eines Fahrzeugs begrenzt nur, wenn man es wählt. Auf Routen fasst das Privatauto 5 kg (`INTERCITY_CAPACITY`, wie
+  bisher). Fliegt eine Ladung auf, ist das Fahrzeug zur Hälfte beschlagnahmt. Jede Fahrt
   mit Ware wählt die Strecke (`ROUTE_CHOICES`): Autobahn wie bisher, Landstraße (`roads` mit `AVOID_MOTORWAY`, mindestens
-  ein Fünftel länger, Kontrollen halb so oft) oder nachts (Abfahrt ab 23 Uhr, ein Drittel der Kontrollen; bis dahin ist die
+  ein Fünftel länger, Kontrollen halb so oft) oder nachts (Abfahrt ab 23 Uhr, ein Drittel der Kontrollen, nur bei Abfahrt in der Nacht; bis dahin ist die
   Fahrt `planned`, Container bleiben am Kai und können dort noch vom Zoll gefunden werden). Der Liegeplatz hat Stufen
   (`BERTH_LEVELS`: Halle am Kai, Kran): Ware länger sicher, weniger Zoll, Laden schneller. Jansen und Daan bieten Container
   (`container: 'full'`, 5 bzw. 6 kg, billig pro Gramm) und halbe Container (`'shared'`, noch billiger, mit 12 % fliegt die
@@ -573,15 +575,15 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 - Auftrag 33 (Lager mit Kapazität und Ausbau, Fahrzeuge, Routenwahl, Hafen-Ausbau, Container, Warenfluss; 30 Tage,
   10 Seeds, vorher = `main` nach Auftrag 32): Köln komplett an Tag 23/22/24/23/23/20/22/24/23/23 → 24/22/24/26/23/21/22/24/
   23/22 (Ø 22,7 → 23,1), „Boss von Köln“ im Median Tag 17 → 17, Umsatz pro Tag Tag 6–15 fast gleich, Tag 16–30 im Schnitt
-  22.989 € → 23.075 €, keine Pleite. Abgewiesene Einlagerungen in Köln 0–2,6 % der Gramm. Hamburg nach Köln komplett
-  (10 Seeds): erstes Hamburger Veedel bei 9 → 10 von 10 Seeds, im Median nach 6 → 7,5 Tagen, Liegeplatz 8 → 8. Mit
-  kleineren Lagern (6 statt 10 kg im Hinterhof) wurden bis 9 % abgewiesen und Hamburg wurde deutlich schwerer. Der Bot
-  kauft Regale nur, wenn ein volles Lager Ware abweist, einen Transporter, wenn mehr als 5 kg am Kai stehen, holt
-  Hafenware nachts ab, wenn sie bis dahin sicher ist, nimmt in einer neuen Stadt das günstigste Lager mit mindestens
-  6 kg Platz und kauft keine Container (auch nicht in Aktionen). Ein Großeinkauf (Container, drei Tage Vorrat) machte ihn
-  langsamer: Das Geld fehlt dann bei Leuten und Spots. Achtung beim Messen von Hamburg: Das schlafende Köln bringt den
-  Schnitt der letzten sieben live gespielten Tage, ein einziger Tag mit großem Einkauf kurz vor dem Umzug macht ihn
-  negativ.
+  22.989 € → 23.085 €, keine Pleite. Abgewiesene Einlagerungen 0–0,4 % der Gramm in Köln, 0–1,3 % in Hamburg (eine am
+  vollen Lager wartende Fahrt zählt nur beim ersten Versuch). Hamburg nach Köln komplett (10 Seeds): erstes Hamburger
+  Veedel bei 9 → 10 von 10 Seeds, im Median nach 6 → 8 Tagen, Liegeplatz 8 → 8. Mit kleineren Lagern (6 statt 10 kg im
+  Hinterhof) wurden bis 9 % abgewiesen und Hamburg wurde deutlich schwerer. Der Bot kauft Regale nur, wenn ein volles
+  Lager Ware abweist, einen Kombi, wenn mehr als 2 kg am Kai stehen (2 von 10 Seeds), holt Hafenware nachts ab, wenn sie
+  bis dahin sicher ist, nimmt in einer neuen Stadt das günstigste Lager mit mindestens 6 kg Platz und kauft keine
+  Container (auch nicht in Aktionen). Ein Großeinkauf (Container, drei Tage Vorrat) machte ihn langsamer: Das Geld fehlt
+  dann bei Leuten und Spots. Achtung beim Messen von Hamburg: Das schlafende Köln bringt den Schnitt der letzten sieben
+  live gespielten Tage, ein einziger Tag mit großem Einkauf kurz vor dem Umzug macht ihn negativ.
 
 ## Städte (Auftrag 30)
 

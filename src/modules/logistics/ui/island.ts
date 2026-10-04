@@ -39,6 +39,8 @@ registerLiveActivity({
       .filter((trip) => trip.status !== 'planned')
       .map((trip): LiveActivity => {
         const stopped = trip.status === 'stopped';
+        // Am vollen Lager steht die Fahrt (Auftrag 33): keine Restzeit, sondern "voll".
+        const waiting = trip.status === 'waiting';
         const to = placeOf(state, trip.toId)?.name ?? 'Lager';
         const interCity = isInterCityTrip(state, trip);
         return {
@@ -47,14 +49,16 @@ registerLiveActivity({
           icon: stopped ? 'siren' : 'truck',
           tone: stopped ? 'bad' : 'info',
           leading: stopped ? (interCity ? 'Zoll' : 'Kontrolle') : interCity ? 'A1' : 'Fahrt',
-          trailing: stopped ? '!' : islandCountdown(trip.arrivesAt - state.time),
+          trailing: stopped ? '!' : waiting ? 'voll' : islandCountdown(trip.arrivesAt - state.time),
           title:
             trip.kind === 'pickup'
               ? `Abholung am Hafen → ${to}`
               : trip.kind === 'route'
                 ? `${interCity ? 'A1' : 'Route'} → ${to}`
                 : `Umlagern → ${to}`,
-          detail: `${tripAmount(trip)} Einheiten`,
+          detail: waiting
+            ? `${tripAmount(trip)} Einheiten warten, das Lager ist voll`
+            : `${tripAmount(trip)} Einheiten`,
           progress: tripProgress(state, trip).total,
           open: (ui) => ui.openPanel(trip.kind === 'route' ? 'logistics.routes' : 'logistics.port', {}),
         };

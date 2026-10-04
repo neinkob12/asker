@@ -1,7 +1,8 @@
 // Fuhrpark (Auftrag 33): Fahrzeuge mit fester Ladung, festem Tempo und Kontrollfaktor, gekauft mit sauberem Geld,
 // jedes in einer Stadt. Fahrten der Logistik (Abholen am Hafen, Umlagern, Routen) nehmen ein freies Fahrzeug der Stadt
 // (useVehicle) und geben es am Ziel wieder frei (releaseVehicle, dann steht es in der Stadt des Ziels). Ohne eigenes
-// Fahrzeug fährt das Privatauto des Fahrers (PRIVATE_CAR) mit der Ladung von bisher. Fliegt eine Ladung auf, ist das
+// Fahrzeug fährt das Privatauto des Fahrers (PRIVATE_CAR): in der Stadt ohne Grenze wie bisher, zwischen den Städten
+// (Routen) mit PRIVATE_CAR.capacity. Fliegt eine Ladung auf, ist das
 // Fahrzeug mit Chance beschlagnahmt (seizeVehicle).
 //
 // Öffentliche API:
@@ -133,15 +134,21 @@ export function vehicleName(state: GameState, vehicleId?: number | null): string
 
 /**
  * Bestes Fahrzeug für eine Ladung von grams Gramm: das kleinste freie, in das alles passt (kleinere fallen weniger
- * auf); passt sie in keins, das größte. Das Privatauto zählt mit; ist es die Wahl, kommt null zurück.
+ * auf); passt sie in keins, das größte. Das Privatauto zählt mit privateCapacity mit (in der Stadt ohne Grenze, zwischen
+ * den Städten PRIVATE_CAR.capacity); ist es die Wahl, kommt null zurück.
  */
-export function pickVehicle(state: GameState, cityId: string, grams: number): number | null {
+export function pickVehicle(
+  state: GameState,
+  cityId: string,
+  grams: number,
+  privateCapacity: number = PRIVATE_CAR.capacity,
+): number | null {
   const options = [
     ...freeVehicles(state, cityId).map((v) => ({
       id: v.id as number | null,
       capacity: vehicleSpec(state, v.id).capacity,
     })),
-    { id: null, capacity: PRIVATE_CAR.capacity },
+    { id: null, capacity: privateCapacity },
   ];
   const fitting = options.filter((o) => o.capacity >= grams).sort((a, b) => a.capacity - b.capacity);
   if (fitting.length > 0) return fitting[0].id;

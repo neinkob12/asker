@@ -6,8 +6,8 @@
 // beantwortet die Nachricht nach einer Festnahme (gute Leute per Kaution, sonst ersetzen), wenn die Gangs ungemütlich werden, antwortet auf Handy-Nachrichten und lässt
 // Konfrontationen von seinen Leuten auswürfeln. Er schickt nur Befehle, genau wie die Oberfläche.
 //
-// Lager und Fahrzeuge (Auftrag 33): Weist ein volles Lager Ware ab, baut der Bot Regale ein; steht mehr am Kai, als ins
-// Privatauto passt, kauft er einen Transporter. Hafenware holt er nachts ab, wenn sie bis dahin sicher am Kai steht. In
+// Lager und Fahrzeuge (Auftrag 33): Weist ein volles Lager Ware ab, baut der Bot Regale ein; stehen mehr als 2 kg am Kai,
+// kauft er einen Kombi (fällt weniger auf). Hafenware holt er nachts ab, wenn sie bis dahin sicher am Kai steht. In
 // einer neuen Stadt nimmt er das günstigste Lager mit genug Platz. Container bestellt er nicht (zu viel Geld auf einmal).
 //
 // Städte (Auftrag 30): Der Bot spielt immer die aktive Stadt (Spots, Lager, Leute, Lieferanten, Hafen und Gangs dort).
@@ -25,12 +25,13 @@ import { activeCity, citiesUnlocked, isPlayerIn, isPlayerTraveling, presentCity 
 import { allWaiting, canServe } from '../modules/customers';
 import { activeEncounters } from '../modules/encounters';
 import { periodReport } from '../modules/finance';
-import { getVehicles, PRIVATE_CAR, VEHICLE_MODELS, vehiclePrice } from '../modules/fleet';
+import { getVehicles, VEHICLE_MODELS, vehiclePrice } from '../modules/fleet';
 import { ceasefireCost, getGangs, tributeAmount } from '../modules/gangs';
 import {
   getStock,
   getWarehouses,
   NEARLY_FULL,
+  stockWeight,
   storageStats,
   upgradeCost,
   warehouseCapacity,
@@ -320,16 +321,20 @@ function harbor(sim: Simulation, stats: BotStats): void {
     const safe = cargo.every((c) => cargoRiskFrom(c, state) > night + 60);
     run(sim, stats, { type: 'logistics.pickup', payload: { by: 'driver', choice: safe ? 'night' : 'autobahn' } });
   }
-  // Mehr am Kai, als ins Privatauto passt: ein Transporter muss her (Auftrag 33).
-  if (getVehicles(state, city).length === 0 && cargoAmount(state, undefined, city) >= PRIVATE_CAR.capacity) {
-    const van = VEHICLE_MODELS.find((m) => m.id === 'van');
-    if (van) {
-      const price = vehiclePrice(van, city);
-      if (state.wallet.clean >= price) run(sim, stats, { type: 'fleet.buy', payload: { model: 'van' } });
+  // Viel Hafenware (ab 2 kg am Kai, nach Gewicht): ein Kombi, der fasst 8 kg und fällt weniger auf als das Privatauto
+  // (Auftrag 33). In der Stadt passt ins Privatauto zwar alles, aber jede Kontrolle kostet die ganze Ladung.
+  if (getVehicles(state, city).length === 0 && stockWeight(getCargo(state, city)) >= BIG_PICKUP_GRAMS) {
+    const kombi = VEHICLE_MODELS.find((m) => m.id === 'kombi');
+    if (kombi) {
+      const price = vehiclePrice(kombi, city);
+      if (state.wallet.clean >= price) run(sim, stats, { type: 'fleet.buy', payload: { model: 'kombi' } });
       else launderFor(sim, stats, price);
     }
   }
 }
+
+/** Ab so viel Hafenware am Kai (Gramm) kauft der Bot einen Kombi (Auftrag 33). */
+const BIG_PICKUP_GRAMS = 2000;
 
 /** Gramm, die bei der letzten Prüfung schon abgewiesen waren (pro Spiel). */
 const rejectedSeen = new WeakMap<GameState['modules']['goods'], number>();

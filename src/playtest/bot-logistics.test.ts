@@ -16,7 +16,7 @@ describe('Bot: Lager, Fahrzeuge, Nachtfahrten (Auftrag 33)', () => {
     expect(upgradeLevel(sim.state, 'ehrenfeld', 'shelves')).toBe(1);
   });
 
-  it('kauft einen Transporter, wenn mehr am Kai steht, als ins Privatauto passt, und holt nachts ab', () => {
+  it('kauft bei viel Hafenware einen Kombi und holt nachts ab', () => {
     const sim = createTestGame({ seed: 2 });
     sim.state.wallet.clean = 30_000;
     sim.state.wallet.dirty = 5_000;
@@ -35,6 +35,6 @@ describe('Bot: Lager, Fahrzeuge, Nachtfahrten (Auftrag 33)', () => {
     const [trip] = getTrips(sim.state);
     expect(trip?.choice).toBe('night');
     expect(trip?.status).toBe('planned');
-    expect(getVehicles(sim.state).map((v) => v.model)).toEqual(['van']);
+    expect(getVehicles(sim.state).map((v) => v.model)).toEqual(['kombi']);
   });
 });

@@ -3,7 +3,7 @@
 // Segmente mit einem Satz darunter.
 
 import { formatAmount, type GameState } from '../../../core';
-import { SegmentedControl, Select } from '../../../ui';
+import { Hint, SegmentedControl, Select } from '../../../ui';
 import { freeVehicles, getVehicles, PRIVATE_CAR, vehicleName, vehicleSpec } from '../../fleet';
 import { ROUTE_CHOICE_ORDER, ROUTE_CHOICES, type RouteChoice, type VehicleChoice } from '../index';
 
@@ -22,17 +22,17 @@ export function VehicleSelect(props: {
   cityId: string;
   value: string;
   onChange: (value: string) => void;
-  /** Bei Routen: auch Fahrzeuge, die gerade unterwegs sind (fest eingeteilt). */
+  /** Bei Routen: auch Fahrzeuge der Startstadt, die gerade unterwegs sind (fest eingeteilt). */
   all?: boolean;
   label?: string;
 }) {
   const vehicles = props.all
-    ? getVehicles(props.state).filter((v) => v.seizedAt === null)
+    ? getVehicles(props.state, props.cityId).filter((v) => v.seizedAt === null)
     : freeVehicles(props.state, props.cityId);
-  if (getVehicles(props.state).length === 0) return null;
+  if (getVehicles(props.state, props.cityId).length === 0) return null;
   const options = [
     { value: AUTO, label: 'Passendes Fahrzeug' },
-    ...(props.all ? [] : [{ value: 'private', label: `${PRIVATE_CAR.name} (${formatAmount(PRIVATE_CAR.capacity)})` }]),
+    ...(props.all ? [] : [{ value: 'private', label: `${PRIVATE_CAR.name} (alles passt rein)` }]),
     ...vehicles.map((v) => ({
       value: String(v.id),
       label: `${vehicleName(props.state, v.id)} (${formatAmount(vehicleSpec(props.state, v.id).capacity)})`,
@@ -53,7 +53,7 @@ export function ChoiceControl(props: { value: RouteChoice; onChange: (value: Rou
         options={ROUTE_CHOICE_ORDER.map((id) => ({ value: id, label: ROUTE_CHOICES[id].name }))}
         onChange={props.onChange}
       />
-      <span class="ui-hint">{ROUTE_CHOICES[props.value].hint}</span>
+      <Hint>{ROUTE_CHOICES[props.value].hint}</Hint>
     </div>
   );
 }

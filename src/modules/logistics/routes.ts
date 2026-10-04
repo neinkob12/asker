@@ -11,7 +11,7 @@
 
 import { type CommandResult, type Ctx, clock, type GameState, journal, wallet } from '../../core';
 import { cityName, isCityLive } from '../city';
-import { getVehicle, vehicleSpec } from '../fleet';
+import { getVehicle, pickVehicle, vehicleSpec } from '../fleet';
 import {
   getProduct,
   getStock,
@@ -209,6 +209,11 @@ export function routeLoadPreview(state: GameState, route: Route): RouteItem[] {
   return planLoad(state, route.fromId, route.toId, route.items, route.fillTo, routeCapacity(state, route)).load;
 }
 
+/** Ladung eines Fahrzeugs auf einer Route: Modell, das Privatauto mit INTERCITY_CAPACITY (wie bisher). */
+function routeVehicleCapacity(state: GameState, vehicleId: number | null): number {
+  return vehicleId === null ? INTERCITY_CAPACITY : vehicleSpec(state, vehicleId).capacity;
+}
+
 /** Ladung einer Route in Gramm: festes Fahrzeug, sonst so viel wie das Privatauto (oder ein größeres freies). */
 export function routeCapacity(state: GameState, route: Pick<Route, 'vehicleId'>): number {
   return route.vehicleId !== null && getVehicle(state, route.vehicleId)
@@ -270,6 +275,11 @@ function normalize(state: GameState, id: number, input: RouteInput, base: Route 
     : [];
   const vehicleId = input.vehicleId ?? null;
   if (vehicleId !== null && !getVehicle(state, vehicleId)) return 'Dieses Fahrzeug gibt es nicht.';
+  // Das feste Fahrzeug muss in der Startstadt stehen (unterwegs auf dieser Route darf es woanders sein).
+  const fixed = vehicleId !== null ? getVehicle(state, vehicleId) : undefined;
+  if (fixed && fixed.tripId === null && fixed.cityId !== from.cityId) {
+    return `Das Fahrzeug steht nicht in ${cityName(from.cityId)}.`;
+  }
   const capacity = vehicleId !== null ? vehicleSpec(state, vehicleId).capacity : INTERCITY_CAPACITY;
   const bad = checkItems(items, 'Ladung', capacity) ?? checkItems(returnItems, 'Rückfracht', capacity);
   if (bad) return bad;
@@ -414,11 +424,13 @@ export function departRoute(ctx: Ctx, routeId: number, why: 'schedule' | 'now'):
     vehicle = getVehicle(state, route.vehicleId) ? chooseVehicle(state, fromCity, route.vehicleId, 0) : null;
     if (typeof vehicle === 'string') return skip(ctx, route, vehicle, why);
   } else {
-    const biggest = chooseVehicle(state, fromCity, undefined, Number.POSITIVE_INFINITY) as number | null;
-    const most = planLoad(state, from.id, to.id, route.items, route.fillTo, vehicleSpec(state, biggest).capacity);
-    vehicle = chooseVehicle(state, fromCity, undefined, routeWeight(most.load)) as number | null;
+    // Ohne festes Fahrzeug: das größte freie (oder das Privatauto mit INTERCITY_CAPACITY) bestimmt, was geladen werden
+    // könnte, dann das kleinste, in das das passt.
+    const biggest = pickVehicle(state, fromCity, Number.POSITIVE_INFINITY, INTERCITY_CAPACITY);
+    const most = planLoad(state, from.id, to.id, route.items, route.fillTo, routeVehicleCapacity(state, biggest));
+    vehicle = pickVehicle(state, fromCity, routeWeight(most.load), INTERCITY_CAPACITY);
   }
-  const plan = planLoad(state, from.id, to.id, route.items, route.fillTo, vehicleSpec(state, vehicle).capacity);
+  const plan = planLoad(state, from.id, to.id, route.items, route.fillTo, routeVehicleCapacity(state, vehicle));
   const needsTour = route.roundTrip && route.returnItems.length > 0;
   if (plan.load.length === 0 && !needsTour) {
     const reason =
@@ -490,8 +502,7 @@ export function routeArrived(ctx: Ctx, trip: Trip, warehouseId: string): void {
   // Dasselbe Fahrzeug fährt zurück, wenn es noch da ist (es steht jetzt in der Zielstadt).
   const vehicle = trip.vehicleId !== undefined ? chooseVehicle(state, cityId, trip.vehicleId, 0) : null;
   const vehicleId = typeof vehicle === 'number' ? vehicle : null;
-  const capacity = vehicleSpec(state, vehicleId).capacity;
-  const plan = planLoad(state, warehouseId, home.id, route.returnItems, [], capacity);
+  const plan = planLoad(state, warehouseId, home.id, route.returnItems, [], routeVehicleCapacity(state, vehicleId));
   const items = loadGoods(ctx, warehouseId, plan.load);
   const loadedAt = ctx.now + (items.length > 0 ? ROUTE_LOAD_MINUTES : 0);
   const back = startTrip(ctx, {
