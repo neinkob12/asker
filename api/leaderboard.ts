@@ -1,20 +1,39 @@
 // Bestenliste für alle Spieler (Vercel Function, Auftrag 29). Speicher: Upstash Redis über die REST-Schnittstelle,
 // angelegt in Vercel unter Storage (setzt KV_REST_API_URL und KV_REST_API_TOKEN bzw. UPSTASH_REDIS_REST_*).
 //
-//   GET  /api/leaderboard?runId=…   → { entries: Entry[] (beste zuerst), total, me: { rank, entry } | null }
-//   POST /api/leaderboard           ← { runId, name, score, days, veedel, outcome, mode, title?, quests, cities? }
-//                                   → { rank, total }
+//   GET  /api/leaderboard?runId=…   → { entries: PublicEntry[] (beste zuerst, ohne runId), total,
+//                                       me: { rank, entry } | null }
+//   POST /api/leaderboard           ← { runId, token, name, score, days, veedel, outcome, mode, title?, quests, cities? }
+//                                   → { rank: number | null, total }   (429 bei zu vielen Anfragen, 403 bei falschem Token)
 //
-// Ein Durchgang (runId) steht nur einmal in der Liste, mit seinem besten Ergebnis. Grobe Plausibilitätsprüfung,
-// mehr nicht: Wer will, kann schummeln, für eine Freundesgruppe reicht das.
+// Ein Durchgang (runId) steht nur einmal in der Liste, mit seinem besten Ergebnis. Schutz, soweit er mit einem
+// Spiel ohne Konten geht:
+//  - Die runId ist geheim (GET liefert sie nicht aus, der eigene Eintrag steht in `me`), und jeder Durchgang hat ein
+//    Token, das der Client beim ersten Eintrag erzeugt. Der Server merkt sich nur dessen SHA-256-Hash; wer eine
+//    runId mit anderem Token schickt, bekommt 403 und kann Name, Titel und Wert nicht überschreiben. Einträge von
+//    vor dieser Änderung haben noch kein Token: Das erste, das kommt, wird übernommen.
+//  - Drosselung pro IP (festes Zeitfenster in Redis), gegen Fluten mit erfundenen Durchgängen.
+//  - Obergrenze fürs Vermögen pro gespieltem Tag. Das beweist nichts (die Tage meldet der Client selbst), begrenzt
+//    aber den Schaden. Wer will, kann schummeln, für eine Freundesgruppe reicht das.
 
 const BOARD = 'kt:lb';
 const RUNS = 'kt:runs';
 const LIMIT = 50;
 /** So viele Einträge bleiben gespeichert (die Liste zeigt nur LIMIT): Wer spammt, füllt den Speicher nicht endlos. */
 const KEEP = 500;
-/** Mehr Vermögen als so viel pro gespieltem Tag ist nicht möglich: Der Wert wird darauf gekappt. */
-const MAX_SCORE_PER_DAY = 2_000_000;
+const TOKENS = 'kt:tokens';
+/**
+ * Mehr Vermögen als so viel pro gespieltem Tag nehmen wir nicht an: Der Wert wird darauf gekappt. Gemessen: Der Bot
+ * kommt in den ersten gut 20 Tagen auf rund 1.000 € Vermögen pro Tag (Test-Spielstand „Köln fast komplett“: 64.000 €
+ * an Tag 23, davon 50.000 € geschenkt), der Umsatz liegt bei 5.000 € pro Tag. Mit 250.000 € pro Tag liegt die Grenze
+ * rund 50-mal darüber: Ein echter Durchgang stößt nie daran, ein erfundener "Tag 1, 100 Mio." schon.
+ */
+export const MAX_SCORE_PER_DAY = 250_000;
+/** Absolute Obergrenze, egal wie viele Tage gemeldet werden. */
+export const MAX_SCORE = 100_000_000;
+/** Drosselung: höchstens so viele Einträge pro IP und Zeitfenster. Ein Spieler schickt höchstens alle ~1,2 Minuten (Tempo 4) einen. */
+export const RATE_LIMIT = 120;
+export const RATE_WINDOW_SECONDS = 600;
 
 export interface Entry {
   runId: string;
@@ -50,6 +69,50 @@ function cleanText(value: unknown, max: number): string {
     : '';
 }
 
+/** Höchstes Vermögen, das für so viele gespielte Tage angenommen wird. */
+export function maxScore(days: number): number {
+  return Math.min(MAX_SCORE, MAX_SCORE_PER_DAY * days);
+}
+
+/** Geheimes Token eines Durchgangs (vom Client erzeugt). null = fehlt oder hat die falsche Form. */
+export function parseToken(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const token = (body as Record<string, unknown>).token;
+  return typeof token === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(token) ? token : null;
+}
+
+/** SHA-256 des Tokens als Hex: Nur das steht in Redis. */
+export async function hashToken(token: string): Promise<string> {
+  const bytes = new TextEncoder().encode(token);
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Eintrag für die Antwort: ohne runId (sonst könnte jeder fremde Durchgänge ansprechen). */
+export type PublicEntry = Omit<Entry, 'runId'>;
+
+export function publicEntry(entry: Entry): PublicEntry {
+  const { runId: _runId, ...rest } = entry;
+  return rest;
+}
+
+/** Rang (1 = Platz eins) aus der Antwort von ZREVRANK; null, wenn der Eintrag nicht (mehr) in der Liste steht. */
+export function toRank(raw: unknown): number | null {
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw + 1 : null;
+}
+
+/** IP des Aufrufers (Vercel setzt x-forwarded-for bzw. x-real-ip selbst). */
+export function clientIp(headers: Headers): string {
+  const forwarded = headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const ip = forwarded || headers.get('x-real-ip')?.trim() || 'unknown';
+  return ip.slice(0, 64);
+}
+
+/** Schlüssel des Zählers: IP + Nummer des Zeitfensters (festes Fenster, läuft von selbst ab). */
+export function rateKey(ip: string, now: number): string {
+  return `kt:rl:${ip}:${Math.floor(now / (RATE_WINDOW_SECONDS * 1000))}`;
+}
+
 /** Prüft und bereinigt einen Eintrag. null = unbrauchbar. */
 export function parseEntry(body: unknown, now: number): Entry | null {
   if (!body || typeof body !== 'object') return null;
@@ -60,7 +123,7 @@ export function parseEntry(body: unknown, now: number): Entry | null {
   const veedel = clampInt(b.veedel, 0, 50);
   const quests = clampInt(b.quests ?? 0, 0, 100);
   if (days === null || veedel === null || quests === null) return null;
-  const score = clampInt(b.score, 0, Math.min(100_000_000, MAX_SCORE_PER_DAY * days));
+  const score = clampInt(b.score, 0, maxScore(days));
   if (score === null) return null;
   const outcome = OUTCOMES.find((o) => o === b.outcome);
   if (!outcome) return null;
@@ -138,8 +201,13 @@ export async function GET(request: Request): Promise<Response> {
     ]);
     const list = Array.isArray(ids) ? (ids as string[]) : [];
     const details = list.length > 0 ? ((await redis([['HMGET', RUNS, ...list]]))[0] as unknown[]) : [];
-    const entries = details.map(parseStored).filter((e): e is Entry => e !== null);
-    const me = typeof rank === 'number' ? { rank: rank + 1, entry: parseStored(own) } : null;
+    const entries = details
+      .map(parseStored)
+      .filter((e): e is Entry => e !== null)
+      .map(publicEntry);
+    const myRank = toRank(rank);
+    const mine = parseStored(own);
+    const me = myRank !== null ? { rank: myRank, entry: mine ? publicEntry(mine) : null } : null;
     return json({ entries, total: Number(total) || 0, me });
   } catch (error) {
     return failure(error);
@@ -147,16 +215,40 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const now = Date.now();
+  try {
+    const key = rateKey(clientIp(request.headers), now);
+    const [count] = await redis([
+      ['INCR', key],
+      ['EXPIRE', key, RATE_WINDOW_SECONDS * 2],
+    ]);
+    if (Number(count) > RATE_LIMIT) {
+      return Response.json(
+        { error: 'Zu viele Einträge, bitte später wieder.' },
+        { status: 429, headers: { 'Cache-Control': 'no-store', 'Retry-After': String(RATE_WINDOW_SECONDS) } },
+      );
+    }
+  } catch (error) {
+    return failure(error);
+  }
   let body: unknown;
   try {
     body = await request.json();
   } catch {
     return json({ error: 'Kein JSON.' }, 400);
   }
-  const entry = parseEntry(body, Date.now());
-  if (!entry) return json({ error: 'Eintrag ungültig.' }, 400);
+  const entry = parseEntry(body, now);
+  const token = parseToken(body);
+  if (!entry || !token) return json({ error: 'Eintrag ungültig.' }, 400);
   try {
-    const [existing] = await redis([['ZSCORE', BOARD, entry.runId]]);
+    const hash = await hashToken(token);
+    // Das erste Token eines Durchgangs wird festgehalten (HSETNX ist atomar); danach muss es passen.
+    const [claimed, stored, existing] = await redis([
+      ['HSETNX', TOKENS, entry.runId, hash],
+      ['HGET', TOKENS, entry.runId],
+      ['ZSCORE', BOARD, entry.runId],
+    ]);
+    if (Number(claimed) !== 1 && stored !== hash) return json({ error: 'Nicht dein Durchgang.' }, 403);
     const old = existing === null || existing === undefined ? null : Number(existing);
     // Derselbe Durchgang: nur verbessern (nach Game Over einen alten Stand laden zählt nicht doppelt).
     if (old === null || entry.score >= old) {
@@ -165,19 +257,21 @@ export async function POST(request: Request): Promise<Response> {
         ['HSET', RUNS, entry.runId, JSON.stringify(entry)],
       ]);
     }
-    // Alles unterhalb der besten KEEP Einträge wegwerfen (auch die Details).
+    // Alles unterhalb der besten KEEP Einträge wegwerfen (auch die Details und Tokens).
     const [outside] = await redis([['ZRANGE', BOARD, 0, -(KEEP + 1)]]);
     if (Array.isArray(outside) && outside.length > 0) {
       await redis([
         ['ZREM', BOARD, ...(outside as string[])],
         ['HDEL', RUNS, ...(outside as string[])],
+        ['HDEL', TOKENS, ...(outside as string[])],
       ]);
     }
     const [rank, total] = await redis([
       ['ZREVRANK', BOARD, entry.runId],
       ['ZCARD', BOARD],
     ]);
-    return json({ rank: Number(rank) + 1, total: Number(total) || 0 });
+    // Wer gerade abgeschnitten wurde, steht nicht mehr in der Liste: dann kein Rang (statt fälschlich Platz 1).
+    return json({ rank: toRank(rank), total: Number(total) || 0 });
   } catch (error) {
     return failure(error);
   }

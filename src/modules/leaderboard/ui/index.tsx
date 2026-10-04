@@ -35,8 +35,8 @@ declare module '../../../ui' {
 
 const ENDPOINT = '/api/leaderboard';
 
+/** Eintrag, wie ihn der Server ausliefert: ohne runId (die bleibt geheim, den eigenen Platz nennt `me`). */
 interface Entry {
-  runId: string;
   name: string;
   score: number;
   days: number;
@@ -53,6 +53,33 @@ interface Board {
   entries: Entry[];
   total: number;
   me: { rank: number } | null;
+}
+
+/** Geheimes Token pro Durchgang: Der Server speichert nur den Hash und lässt nur damit Änderungen am Eintrag zu. */
+const tokens = new Map<string, string>();
+const TOKEN_KEY = 'kt:lb-token:';
+
+function token(runId: string): string {
+  const known = tokens.get(runId);
+  if (known) return known;
+  let value: string | null = null;
+  try {
+    value = window.localStorage.getItem(TOKEN_KEY + runId);
+  } catch {
+    // Kein Speicher (privates Fenster): Das Token gilt dann nur, solange die Seite offen ist.
+  }
+  if (!value) {
+    const bytes = new Uint8Array(24);
+    window.crypto.getRandomValues(bytes);
+    value = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    try {
+      window.localStorage.setItem(TOKEN_KEY + runId, value);
+    } catch {
+      // siehe oben
+    }
+  }
+  tokens.set(runId, value);
+  return value;
 }
 
 /** Nur online (Vercel): lokal gibt es keinen Server, ?bestenliste=1 erzwingt ihn zum Ausprobieren. */
@@ -81,6 +108,7 @@ function submit(state: GameState): Promise<void> {
   if (running) return running;
   const body = JSON.stringify({
     ...summary,
+    token: token(runId),
     name: getPlayerName(),
     title: questTitle(state),
     quests: completedQuests(state).length,
@@ -172,8 +200,8 @@ function BoardView(props: { limit?: number; submitFirst?: boolean }) {
           const rank = i + 1;
           const icon = rankIcon(rank);
           return (
-            <ListItem key={e.runId} value={formatEuro(e.score)}>
-              <span class={`lb__row ${e.runId === runId ? 'is-me' : ''}`}>
+            <ListItem key={rank} value={formatEuro(e.score)}>
+              <span class={`lb__row ${board.me?.rank === rank ? 'is-me' : ''}`}>
                 <span class="lb__rank">{rank}</span>
                 <ItemContent icon={icon.icon} color={icon.color} title={e.name} tags={entryTags(e)} />
               </span>
