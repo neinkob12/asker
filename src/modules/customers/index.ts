@@ -15,6 +15,8 @@
 //   spotDemand(state, spotId) (aktuelle Nachfrage, z.B. für die Hotspots auf der Karte),
 //   Entscheidungen: priceDemandFactor, acceptsPrice, chooseProduct, saleSatisfaction, cutNoticeChance,
 //   regularVerdict, regularAfterSale, typeDemandWeight; CUSTOMER_PATIENCE
+//   Qualität treibt Nachfrage (Auftrag 32): spotQuality(state, spotId, productId), qualityDemandFactor(...),
+//   qualityDemandFor(quality), spotReputation(state, spotId) (Chips "Gras gefragt" / "Gras verschrien")
 // Selbst verkaufen geht auch ohne Klick auf jeden Kunden: Stellst du dich an einen Spot ('customers.standAt'),
 // bedienst du dort automatisch (PLAYER_SERVE_TIME pro Kunde), solange du nicht mit einer Lieferung unterwegs bist.
 // Befehle: 'customers.serve' (auch für Läufer, mit sellerId), 'customers.serveAll', 'customers.standAt',
@@ -54,6 +56,7 @@ export {
 } from './decisions';
 // Für Tests und Skripte: eine Anfrage erzwingen (force = true).
 export { offerDelivery, offerWholesale } from './orders';
+export { qualityDemandFactor, qualityDemandFor, spotQuality, spotReputation } from './quality';
 export { isPlayerAway, rateSale } from './street';
 
 export interface CustomerType {
@@ -192,10 +195,13 @@ export interface CustomersState {
   self: SelfSelling;
   /** Dürfen Kunden dir direkt schreiben (Lieferanfragen)? Aus: nur Großhandelsaufträge kommen. */
   directOrders: boolean;
+  /** Qualität der letzten Straßenverkäufe (gleitender Schnitt): Spot → Ware → 0–1 (Auftrag 32). */
+  quality: Record<string, Record<string, number>>;
 }
 
-type CustomersStateV2 = Omit<CustomersState, 'self' | 'directOrders'>;
-type CustomersStateV3 = Omit<CustomersState, 'directOrders'>;
+type CustomersStateV2 = Omit<CustomersState, 'self' | 'directOrders' | 'quality'>;
+type CustomersStateV3 = Omit<CustomersState, 'directOrders' | 'quality'>;
+type CustomersStateV4 = Omit<CustomersState, 'quality'>;
 
 interface CustomersStateV1 {
   waiting: Customer[];
@@ -409,7 +415,7 @@ function standAt(ctx: Ctx, spotId: string | null): CommandResult {
 
 export default defineModule({
   id: 'customers',
-  version: 4,
+  version: 5,
   dependsOn: ['spots', 'goods', 'market'],
   init: (ctx) => ({
     waiting: [],
@@ -430,6 +436,7 @@ export default defineModule({
     orders: [],
     self: { spotId: null, busyUntil: 0, since: 0 },
     directOrders: false,
+    quality: {},
   }),
   tick: (ctx) => {
     streetTick(ctx);
@@ -488,6 +495,8 @@ export default defineModule({
     // Version 3: Du kannst dich selbst an einen Spot stellen.
     3: (old: CustomersStateV2): CustomersStateV3 => ({ ...old, self: { spotId: null, busyUntil: 0, since: 0 } }),
     // Version 4: Direktanfragen von Kunden sind abschaltbar, standardmäßig aus.
-    4: (old: CustomersStateV3): CustomersState => ({ ...old, directOrders: false }),
+    4: (old: CustomersStateV3): CustomersStateV4 => ({ ...old, directOrders: false }),
+    // Version 5 (Auftrag 32): Qualität der letzten Verkäufe pro Spot und Ware, alte Stände ohne Verlauf.
+    5: (old: CustomersStateV4): CustomersState => ({ ...old, quality: {} }),
   },
 });

@@ -65,6 +65,7 @@ import {
   typeDemandWeight,
 } from './decisions';
 import type { Customer, Regular } from './index';
+import { qualityDemandFactor, recordSaleQuality } from './quality';
 
 const TYPE_NORM = CUSTOMER_TYPES.reduce((sum, t) => sum + t.share, 0);
 
@@ -204,13 +205,22 @@ function arrive(ctx: Ctx, spot: Spot, at: number): void {
     });
     return;
   }
-  addCustomer(ctx, spot, {
+  // Qualität treibt Nachfrage (Auftrag 32): Verschriene Ware lässt Interessenten abdrehen, gefragte bringt welche mit.
+  const quality = qualityDemandFactor(ctx.state, spot.id, productId);
+  if (quality < 1 && !ctx.chance(quality)) return;
+  const customer = {
     productId,
     amount: Math.min(amount, stockOf(ctx)(productId)),
     typeId: type.id,
     at,
     patience: CUSTOMER_PATIENCE * type.patience,
-  });
+  };
+  addCustomer(ctx, spot, customer);
+  if (quality > 1 && ctx.chance(quality - 1)) {
+    const waiting = ctx.state.modules.customers.waiting.filter((c) => c.spotId === spot.id).length;
+    if (waiting < MAX_CUSTOMERS_PER_SPOT && stockOf(ctx)(productId) >= customer.amount * 2)
+      addCustomer(ctx, spot, customer);
+  }
 }
 
 function addCustomer(
@@ -304,6 +314,7 @@ export function serve(ctx: Ctx, customerId: number, sellerId: string | null): Co
   state.stats.revenue += revenue;
   state.stats.customersServed += 1;
 
+  recordSaleQuality(ctx, spot.id, customer.productId, quality);
   const reference = spotReferencePrice(ctx.state, spot.id, customer.productId);
   const rating = rateSale(ctx, {
     typeId: customer.typeId,

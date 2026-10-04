@@ -256,3 +256,21 @@ export const ORDER_HISTORY = 15;
  */
 export const NIGHTLIFE_HOURS = { from: 22, to: 4 } as const;
 export const NIGHTLIFE_WEEKEND = 1.3;
+
+// ---------------------------------------------------------------------------------------------
+// Qualität treibt Nachfrage (Auftrag 32): Pro Spot und Ware ein gleitender Schnitt der Qualität der letzten
+// Straßenverkäufe. Gute Ware spricht sich herum, Dreck auch.
+
+/** Gewicht des neuesten Verkaufs im gleitenden Schnitt (0,2 = etwa die letzten fünf zählen). */
+export const QUALITY_MEMORY = 0.2;
+/** Solide Ware (Schnitt in diesem Bereich) ändert nichts. */
+export const QUALITY_NEUTRAL: readonly [number, number] = [0.45, 0.65];
+/** Ab diesem Schnitt voller Zuschlag (Premium). */
+export const QUALITY_PREMIUM_AT = 0.85;
+/** Bis zu diesem Schnitt voller Abschlag (Dreck). */
+export const QUALITY_TRASH_AT = 0.15;
+/** Faktor auf die Nachfrage nach der Ware am Spot: Premium bis +25 %, Dreck bis −33 %. */
+export const QUALITY_DEMAND_MAX = 1.25;
+export const QUALITY_DEMAND_MIN = 0.67;
+/** Ab dieser Abweichung zeigt der Spot einen Chip ("Gras gefragt" bzw. "Gras verschrien"). */
+export const QUALITY_CHIP_FROM = 0.08;

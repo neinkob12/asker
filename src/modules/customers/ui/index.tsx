@@ -8,6 +8,7 @@ import {
   Badge,
   Button,
   Card,
+  Chips,
   Disclosure,
   Empty,
   Group,
@@ -37,6 +38,7 @@ import {
   getSalesStats,
   isPlayerAway,
   playerSpot,
+  spotReputation,
   waitingAt,
 } from '../index';
 import { deliveriesLayer } from './map';
@@ -97,6 +99,29 @@ function StandHere(props: { spotId: string }) {
   );
 }
 
+/** Ruf der Ware am Spot (Auftrag 32): Chips für gefragte und verschriene Ware, ein Satz Erklärung zum Aufklappen. */
+function SpotQuality(props: { spotId: string }) {
+  const { state } = useGame();
+  const rows = spotReputation(state, props.spotId);
+  if (rows.length === 0) return null;
+  return (
+    <div class="cust-quality">
+      <Chips
+        items={rows.map((r) => ({
+          label: r.label,
+          icon: r.good ? 'trendUp' : 'trendDown',
+          color: r.good ? ('money' as const) : ('danger' as const),
+          title: `Nachfrage ${r.good ? '+' : '−'}${Math.round(Math.abs(r.factor - 1) * 100)} %`,
+        }))}
+      />
+      <Disclosure>
+        Die Kundschaft merkt sich, wie gut die Ware hier zuletzt war: Premium spricht sich herum (bis ein Viertel mehr
+        Nachfrage), Dreck auch (bis ein Drittel weniger).
+      </Disclosure>
+    </div>
+  );
+}
+
 function SpotCustomers(props: { spotId: string }) {
   const { state, dispatch } = useGame();
   const waiting = waitingAt(state, props.spotId);
@@ -114,6 +139,7 @@ function SpotCustomers(props: { spotId: string }) {
           regulars > 0 ? `${regulars === 1 ? 'Ein Stammkunde' : `${regulars} Stammkunden`} kaufen hier.` : undefined
         }
       >
+        <SpotQuality spotId={props.spotId} />
         <List>
           {waiting.length === 0 && (
             <ListItem>
