@@ -299,3 +299,6 @@ export const UPGRADE_KINDS: readonly WarehouseUpgradeKind[] = ['shelves', 'vault
 
 /** Ab diesem Füllstand gilt ein Lager als fast voll (Warnung in der Oberfläche, Bot kauft Regale). */
 export const NEARLY_FULL = 0.85;
+
+/** Warenfluss (Auftrag 33): Reicht die Ware einer Stadt (Bestand und unterwegs) kürzer als so viele Tage, ist es ein Engpass. */
+export const SHORTAGE_DAYS = 2;

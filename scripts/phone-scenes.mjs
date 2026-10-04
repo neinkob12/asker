@@ -252,6 +252,21 @@ export const SCENES = [
       window.koeln.runtime.api.openPhone('suppliers.app');
     })()`,
   },
+  {
+    // Auftrag 33: Warenfluss mit Verbrauch der letzten Tage (Hasch knapp, Gras reicht).
+    name: 'warenfluss',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      const g = sim.state.modules.goods;
+      const spots = sim.state.modules.spots.unlocked.slice(0, 3);
+      const day = { 'c:koeln:weed': 30, 'c:koeln:hash': 60 };
+      spots.forEach((id, i) => { day['s:' + id + ':weed'] = 10; day['s:' + id + ':hash'] = 20 + i; });
+      g.usage = { today: {}, days: [day, day, day] };
+      g.stock.ehrenfeld.push({ id: sim.state.nextId++, productId: 'hash', amount: 70, quality: 0.6, cut: 0, unitCost: 3 });
+      g.stock.ehrenfeld.push({ id: sim.state.nextId++, productId: 'weed', amount: 400, quality: 0.7, cut: 0, unitCost: 3 });
+      window.koeln.runtime.api.openPanel('goods.flow', {});
+    })()`,
+  },
   { name: 'lagerdetail', js: "window.koeln.runtime.api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' })" },
   {
     // Auftrag 33: fast volles Lager mit Regalen (Füllstand, Ausbau mit Preis).

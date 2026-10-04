@@ -14,6 +14,8 @@
 //   warehouseFree(state, id), fitsInto(state, id, productId, amount?), stockWeight(items), warehouseModifiers(state, id)
 //   (Kapazität, Verlust-Faktor für Einbruch und Überfall, Razzia-Faktor), upgradeLevel, upgradeCost, storeFitting(ctx,
 //   {...}) (nimmt nur, was passt, und meldet den Rest), storageStats(state), WAREHOUSE_UPGRADES, UPGRADE_KINDS
+//   Warenfluss (Auftrag 33): usagePerDay(state, { cityId?, productId?, spotId? }) (Verkäufe pro Tag, Schnitt der
+//   letzten sieben Tage), usedProducts(state, cityId), servingWarehouse(state, point, productId)
 // Befehle: 'goods.cut', 'goods.buyWarehouse', 'goods.upgradeWarehouse'
 // Ereignisse: 'goods.stored', 'goods.taken', 'goods.cut', 'goods.warehouseBought', 'goods.warehouseUpgraded',
 //   'goods.storeRejected'
@@ -28,9 +30,11 @@ import {
   type GameState,
   journal,
   type LngLat,
+  MINUTES_PER_DAY,
   wallet,
 } from '../../core';
 import { activeCity, cityAt, getCity, isCityUnlocked } from '../city';
+import { veedelCity } from '../veedel';
 import {
   CUT_AGENT_COST,
   CUT_QUALITY_LOSS,
@@ -55,6 +59,7 @@ export {
   MAX_CUT,
   NEARLY_FULL,
   QUALITY_TIERS,
+  SHORTAGE_DAYS,
   STANDARD_QUALITY,
   UPGRADE_KINDS,
   type UpgradeDef,
@@ -147,10 +152,18 @@ export interface GoodsState {
   upgrades: Record<string, WarehouseUpgrades>;
   /** Einlagern mit Kapazität (storeFitting) in Gramm: angeboten und abgelehnt (für Balancing und Anzeige). */
   storage: { offered: number; rejected: number };
+  /**
+   * Verbrauch für den Warenfluss (Auftrag 33): verkaufte Einheiten heute und an den letzten sieben Tagen (neueste
+   * zuerst), Schlüssel "c:<Stadt>:<Produkt>" und "s:<Spot>:<Produkt>".
+   */
+  usage: { today: Record<string, number>; days: Record<string, number>[] };
 }
 
+/** Zustand bis Version 4: ohne Verbrauch. */
+type GoodsStateV4 = Omit<GoodsState, 'usage'>;
+
 /** Zustand bis Version 3: Lager ohne Kapazität und Ausbau. */
-type GoodsStateV3 = Omit<GoodsState, 'upgrades' | 'storage'>;
+type GoodsStateV3 = Omit<GoodsStateV4, 'upgrades' | 'storage'>;
 
 /** Zustand bis Version 2: nur ein Lager. */
 type GoodsStateV2 = Omit<GoodsStateV3, 'owned'>;
@@ -456,6 +469,69 @@ export function upgradeCost(state: GameState, id: string, kind: WarehouseUpgrade
   return Math.round((next.cost * (getCity(warehouseCity(id))?.propertyFactor ?? 1)) / 50) * 50;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Warenfluss (Auftrag 33)
+
+/** So viele Tage zählt der Verbrauch (Schnitt). */
+const USAGE_DAYS = 7;
+
+const usageKey = (scope: 'c' | 's', id: string, productId: string) => `${scope}:${id}:${productId}`;
+
+/**
+ * Verkäufe pro Tag: Schnitt der letzten (bis zu sieben) ganzen Tage; ohne ganze Tage der heutige Stand hochgerechnet.
+ * Mit spotId der Verbrauch an einem Spot, sonst der einer Stadt (Standard: die aktive), mit productId nur diese Ware.
+ */
+export function usagePerDay(
+  state: GameState,
+  filter: { cityId?: string; productId?: string; spotId?: string } = {},
+): number {
+  const usage = state.modules.goods.usage;
+  if (!usage) return 0;
+  const prefix = filter.spotId ? `s:${filter.spotId}:` : `c:${filter.cityId ?? activeCity(state)}:`;
+  const sum = (map: Record<string, number>) => {
+    if (filter.productId) return map[prefix + filter.productId] ?? 0;
+    let total = 0;
+    for (const [key, n] of Object.entries(map)) if (key.startsWith(prefix)) total += n;
+    return total;
+  };
+  if (usage.days.length > 0) return usage.days.reduce((t, day) => t + sum(day), 0) / usage.days.length;
+  const minute = state.time % MINUTES_PER_DAY;
+  return minute >= 120 ? (sum(usage.today) * MINUTES_PER_DAY) / minute : sum(usage.today);
+}
+
+/** Produkte, die in einer Stadt verkauft werden oder dort liegen (Reihenfolge wie allProducts). */
+export function usedProducts(state: GameState, cityId: string): Product[] {
+  return PRODUCTS.filter(
+    (p) => usagePerDay(state, { cityId, productId: p.id }) > 0 || getStock(state, { cityId, productId: p.id }) > 0,
+  );
+}
+
+/** Lager, aus dem ein Ort (Spot) eine Ware bekommt: das nächste mit Bestand, sonst das nächste überhaupt. */
+export function servingWarehouse(state: GameState, point: LngLat, productId: string): Warehouse | undefined {
+  return nearestWarehouse(state, point, { productId }) ?? nearestWarehouse(state, point);
+}
+
+/** Verkauf zählen (sale.completed). */
+function countSale(ctx: Ctx, cityId: string, spotId: string | null, productId: string, amount: number): void {
+  const s = ctx.state.modules.goods;
+  s.usage ??= { today: {}, days: [] };
+  const today = s.usage.today;
+  const city = usageKey('c', cityId, productId);
+  today[city] = (today[city] ?? 0) + amount;
+  if (spotId) {
+    const spot = usageKey('s', spotId, productId);
+    today[spot] = (today[spot] ?? 0) + amount;
+  }
+}
+
+/** Um Mitternacht: Der Tag wandert in die Liste der letzten Tage. */
+function closeUsageDay(ctx: Ctx): void {
+  const s = ctx.state.modules.goods;
+  s.usage ??= { today: {}, days: [] };
+  s.usage.days = [s.usage.today, ...s.usage.days].slice(0, USAGE_DAYS);
+  s.usage.today = {};
+}
+
 /** Einlagern mit Kapazität, in Gramm: angeboten und abgelehnt (Anteil abgelehnt fürs Balancing). */
 export function storageStats(state: GameState): { offered: number; rejected: number } {
   return state.modules.goods.storage ?? { offered: 0, rejected: 0 };
@@ -678,11 +754,12 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 export default defineModule({
   id: 'goods',
-  version: 4,
+  version: 5,
   init: (ctx) => ({
     owned: [DEFAULT_WAREHOUSE],
     upgrades: {},
     storage: { offered: 0, rejected: 0 },
+    usage: { today: {}, days: [] },
     stock: {
       [DEFAULT_WAREHOUSE]: [
         {
@@ -729,7 +806,18 @@ export default defineModule({
     }),
     // Version 4 (Auftrag 33): Lager haben Kapazität und Ausbau. Alte Lager sind nicht ausgebaut; wer mehr drin hat, als
     // hineinpasst, behält alles (das Lager ist dann voll, bis Ware rausgeht).
-    4: (old: GoodsStateV3): GoodsState => ({ ...old, upgrades: {}, storage: { offered: 0, rejected: 0 } }),
+    4: (old: GoodsStateV3): GoodsStateV4 => ({ ...old, upgrades: {}, storage: { offered: 0, rejected: 0 } }),
+    // Version 5 (Auftrag 33): Verbrauch für den Warenfluss, er zählt ab jetzt.
+    5: (old: GoodsStateV4): GoodsState => ({ ...old, usage: { today: {}, days: [] } }),
+  },
+  // Warenfluss: jeder Verkauf zählt; um Mitternacht rückt der Tag weiter.
+  tick: (ctx) => {
+    if (ctx.now % MINUTES_PER_DAY === 0) closeUsageDay(ctx);
+  },
+  tickEvery: 60,
+  on: {
+    'sale.completed': (ctx, { veedelId, spotId, productId, amount }) =>
+      countSale(ctx, veedelCity(veedelId), spotId, productId, amount),
   },
   // Pleite-Regel: Wer noch Ware hat, kann weitermachen.
   solvency: (state) => hasAnyStock(state),

@@ -56,6 +56,8 @@ import {
   warehouseModifiers,
   warehouseSites,
 } from '../index';
+import { daysText, flowRows } from './flow';
+import { supplyRoutesLayer } from './map';
 import './goods.css';
 import { activeCity } from '../../city';
 
@@ -444,6 +446,37 @@ function WarehousePanel(props: { warehouseId: string }) {
   );
 }
 
+/** Zeile zur Seite Warenfluss: knappste Ware als Chip, Engpass rot. */
+function FlowLink() {
+  const { state } = useGame();
+  const ui = useUi();
+  const rows = flowRows(state).filter((r) => r.perDay > 0);
+  const tightest = [...rows].sort((a, b) => a.days - b.days)[0];
+  const short = rows.filter((r) => r.shortage);
+  return (
+    <Group title="Warenfluss" icon="chart" color={short.length > 0 ? 'danger' : 'goods'}>
+      <List>
+        <ListItem onClick={() => ui.openPanel('goods.flow', {})}>
+          <ItemContent
+            icon="chart"
+            color={short.length > 0 ? 'danger' : 'goods'}
+            title={
+              short.length > 0 ? `Engpass: ${short.map((r) => r.product.name).join(', ')}` : 'Verbrauch und Bestand'
+            }
+            tags={[
+              tightest && {
+                label: `${tightest.product.name} ${daysText(tightest.days)}`,
+                icon: 'clock',
+                color: tightest.shortage ? 'danger' : 'goods',
+              },
+            ]}
+          />
+        </ListItem>
+      </List>
+    </Group>
+  );
+}
+
 /** Handy-App "Lager": deine Lager in der aktiven Stadt (Tipp öffnet die Lager-Seite) und die Standorte zum Kaufen. */
 function WarehouseApp() {
   const { state, dispatch } = useGame();
@@ -480,6 +513,7 @@ function WarehouseApp() {
           </List>
         </Group>
       )}
+      <FlowLink />
       <Slot name="goods.app" props={{}} />
       <Group title="Zu kaufen (sauberes Geld)" icon="building" color="money" count={forSale.length}>
         {forSale.length === 0 ? (
@@ -574,3 +608,5 @@ registerMapLayer({
     return { update: draw };
   },
 });
+
+registerMapLayer(supplyRoutesLayer);
