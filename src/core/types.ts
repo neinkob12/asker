@@ -10,6 +10,7 @@
 import type { JournalEntry } from './journal';
 import type { MessagesState } from './messages';
 import type { OutcomeState } from './outcome';
+import type { TextsState } from './texts';
 import type { WalletState } from './wallet';
 
 /** Wird beim Anlegen des Spielstands gewählt. */
@@ -56,6 +57,8 @@ export interface GameState {
   journal: JournalEntry[];
   messages: MessagesState;
   outcome: OutcomeState;
+  /** Gedächtnis des Text-Helfers: zuletzt benutzte Varianten pro Schlüssel (Auftrag 23). */
+  texts: TextsState;
   modules: ModuleStates;
   /** Version des State-Bereichs pro Modul, für Migrationen. */
   moduleVersions: Record<string, number>;

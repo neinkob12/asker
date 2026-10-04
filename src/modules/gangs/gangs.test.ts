@@ -34,6 +34,7 @@ import {
   raidTargets,
   veedelGang,
 } from './index';
+import { GANG_VOICES } from './texts';
 
 function status(sim: Simulation, gangId: string): GangStatus {
   const s = getGangStatus(sim.state, gangId);
@@ -429,7 +430,8 @@ describe('gangs: Gewalt und Polizei', () => {
       found = true;
       expect(s.relation).toBeLessThan(0);
       expect(hasCeasefire(sim.state, 'west')).toBe(false);
-      expect(messages.thread(sim.state, 'gang:west').at(-1)?.text).toMatch(/gesungen/);
+      const last = messages.thread(sim.state, 'gang:west').at(-1)?.text;
+      expect(GANG_VOICES.west.snitch).toContain(last);
     }
     expect(found).toBe(true);
   });

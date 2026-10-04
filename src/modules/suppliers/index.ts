@@ -38,6 +38,7 @@ import {
   type GameState,
   journal,
   messages,
+  texts,
   wallet,
 } from '../../core';
 import { activeCity, cityName, getCity, relationFactor } from '../city';
@@ -83,8 +84,11 @@ import {
   TRUST_PER_ORDER,
   UNLOADING_SHARE,
 } from './config';
+import { findReason, PROBLEM_REASONS, type ProblemKind, type RouteKind, reasonVars, routeKindOf } from './problems';
+import { type SupplierTextKey, supplierVariants } from './voices';
 
 export { CITY_APPROACH_SHARE, SHIP_SHARE, UNLOADING_PORT, UNLOADING_SHARE } from './config';
+export { PROBLEM_REASONS, type ProblemReason, ROUTE_NAMES, type RouteKind, routeKindOf } from './problems';
 
 export interface SupplierPackage {
   id: string;
@@ -189,6 +193,9 @@ export interface Shipment {
   problemRevealed?: boolean;
   /** Versprochene Qualität, falls die Ware schlechter ankommt. */
   promisedQuality?: number;
+  /** Weg der Lieferung und Grund des Problems (Auftrag 23, problems.ts), gesetzt, sobald es bekannt ist. */
+  route?: RouteKind;
+  reasonId?: string;
 }
 
 export interface SupplierRelation {
@@ -546,6 +553,40 @@ function tell(ctx: Ctx, supplier: Supplier, text: string): void {
   messages.send(ctx, { contact: contactOf(supplier), text });
 }
 
+/** Text in der Stimme des Lieferanten (voices.ts), ohne direkte Wiederholung. */
+function voice(ctx: Ctx, supplier: Supplier, key: SupplierTextKey, vars: Record<string, string> = {}): string {
+  return texts.pick(ctx, `supplier:${supplier.id}:${key}`, supplierVariants(supplier.id, key), vars);
+}
+
+/** Grund für ein Problem auswürfeln (ohne direkte Wiederholung pro Weg) und an der Lieferung merken. */
+function rollReason(ctx: Ctx, s: Shipment, supplier: Supplier, kind: ProblemKind): Record<string, string> {
+  const cityId = s.cityId ?? 'koeln';
+  const route = routeKindOf(supplierIn(supplier, cityId), cityId);
+  const reason = texts.pickItem(ctx, `reason:${route}:${kind}`, PROBLEM_REASONS[route][kind]);
+  s.route = route;
+  s.reasonId = reason.id;
+  const vars = reasonVars(supplier, cityId, cityName(cityId), portName(cityId));
+  return { reason: texts.fill(reason.text, vars), reasonLabel: texts.fill(reason.label, vars) };
+}
+
+/** Autobahn des Kuriers für Texte wie "Freie Bahn auf der {road}". */
+function roadVar(supplier: Supplier, s: Shipment): { road: string } {
+  return { road: supplierVia(supplier, s.cityId ?? 'koeln') ?? 'Autobahn' };
+}
+
+/** Grund eines Lieferproblems als kurzer Text (z.B. "Stau auf der A3"), null ohne bekannten Grund. */
+export function shipmentReason(state: GameState, s: Shipment): string | null {
+  if (!s.problem || !s.route || !s.reasonId) return null;
+  const supplier = getSupplier(state, s.supplierId);
+  if (!supplier) return null;
+  const kind: ProblemKind = s.problem === 'seized' ? 'seize' : s.problem === 'delayed' ? 'delay' : 'badQuality';
+  const cityId = s.cityId ?? 'koeln';
+  return texts.fill(
+    findReason(s.route, kind, s.reasonId).label,
+    reasonVars(supplier, cityId, cityName(cityId), portName(cityId)),
+  );
+}
+
 function order(
   ctx: Ctx,
   supplierId: string,
@@ -707,7 +748,7 @@ function unlock(ctx: Ctx, supplierId: string): CommandResult {
     (m) =>
       !!m.options?.some((o) => o.command?.type === 'suppliers.unlock' && o.command.payload.supplierId === supplierId),
   );
-  tell(ctx, supplier, 'Abgemacht. Alle Angebote findest du in der Lieferanten-App.');
+  tell(ctx, supplier, voice(ctx, supplier, 'unlocked'));
   ctx.emit('supplier.unlocked', { supplierId, fee });
   return { ok: true };
 }
@@ -771,22 +812,14 @@ function revealProblems(ctx: Ctx): void {
     const goods = `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)}`;
     if (s.problem === 'delayed') {
       const delay = clock.formatDuration(s.delayMinutes ?? 0);
-      tell(
-        ctx,
-        supplier,
-        `Kontrolle auf der Strecke, der Fahrer muss warten. Deine ${goods} kommen ca. ${delay} später.`,
-      );
-      journal.add(ctx, `Lieferung von ${supplier.name} verspätet sich um ca. ${delay}.`, 'bad');
+      const why = rollReason(ctx, s, supplier, 'delay');
+      tell(ctx, supplier, voice(ctx, supplier, 'delayed', { ...why, goods, delay, ...roadVar(supplier, s) }));
+      journal.add(ctx, `Lieferung von ${supplier.name} verspätet sich um ca. ${delay} (${why.reasonLabel}).`, 'bad');
     } else {
       state.shipments = state.shipments.filter((x) => x.id !== s.id);
-      tell(
-        ctx,
-        supplier,
-        s.onCredit
-          ? `Scheiße. Die haben den Wagen hochgenommen, deine ${goods} sind weg. Die Schulden bleiben trotzdem.`
-          : `Scheiße. Die haben den Wagen hochgenommen, deine ${goods} sind weg. Pech, so läuft das Geschäft.`,
-      );
-      journal.add(ctx, `Lieferung von ${supplier.name} beschlagnahmt: ${goods} verloren.`, 'bad');
+      const why = rollReason(ctx, s, supplier, 'seize');
+      tell(ctx, supplier, voice(ctx, supplier, s.onCredit ? 'seizedCredit' : 'seized', { ...why, goods }));
+      journal.add(ctx, `Lieferung von ${supplier.name} beschlagnahmt (${why.reasonLabel}): ${goods} verloren.`, 'bad');
     }
     ctx.emit('shipment.problem', { shipmentId: s.id, supplierId: s.supplierId, kind: s.problem });
   }
@@ -827,8 +860,9 @@ function deliver(ctx: Ctx): void {
     }
     if (s.problem === 'badQuality' && supplier) {
       s.problemRevealed = true;
-      tell(ctx, supplier, 'Ich sag es lieber gleich: Die letzte Ladung ist nicht so gut wie versprochen. Kommt vor.');
-      journal.add(ctx, `Die Ware von ${supplier.name} ist schlechter als versprochen.`, 'bad');
+      const why = rollReason(ctx, s, supplier, 'badQuality');
+      tell(ctx, supplier, voice(ctx, supplier, 'badQuality', why));
+      journal.add(ctx, `Die Ware von ${supplier.name} ist schlechter als versprochen (${why.reasonLabel}).`, 'bad');
       ctx.emit('shipment.problem', { shipmentId: s.id, supplierId: s.supplierId, kind: 'badQuality' });
     }
     ctx.emit('shipment.arrived', {
@@ -856,9 +890,7 @@ function checkDebts(ctx: Ctx): void {
     tell(
       ctx,
       supplier,
-      rel.overdue === 1
-        ? `Du schuldest mir ${formatEuro(rel.debt)}. Das Geld war fällig. Ich liefer nichts mehr, bis du zahlst.`
-        : `Ich warte immer noch auf ${formatEuro(rel.debt)}. Meine Geduld ist bald am Ende.`,
+      voice(ctx, supplier, rel.overdue === 1 ? 'overdue' : 'overdueAgain', { debt: formatEuro(rel.debt) }),
     );
     journal.add(ctx, `Schulden bei ${supplier.name} überfällig: ${formatEuro(rel.debt)} inkl. Aufschlag.`, 'bad');
     ctx.emit('supplier.overdue', { supplierId, debt: rel.debt });

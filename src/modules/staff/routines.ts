@@ -1,7 +1,7 @@
 // Abläufe des Personals: Läufer bedienen Kunden, Haft und Verletzung laufen ab, Löhne, Loyalität,
 // Werte zeigen sich mit der Zeit, seltener Verrat und die Warnung des Polizei-Kontakts.
 
-import { type Ctx, clock, formatEuro, type GameState, journal, messages, wallet } from '../../core';
+import { type Ctx, clock, formatEuro, type GameState, journal, messages, texts, wallet } from '../../core';
 import { cityName, raidWarningBonus } from '../city';
 import { canServeCustomer, waitingAt } from '../customers';
 import { formatProductAmount, getStock, stockSummary, take } from '../goods';
@@ -50,6 +50,7 @@ import {
   talkChance,
   wageCategory,
 } from './members';
+import { STAFF_TEXTS } from './texts';
 import type { BetrayalKind, StaffMember } from './types';
 
 /** Jede Spielminute: Haft und Verletzung ablaufen lassen, Läufer bedienen Kunden. */
@@ -172,8 +173,8 @@ export function warnOfRaid(ctx: Ctx, veedelId: string, at: number, major = false
   messages.send(ctx, {
     contact: staffContact(contact),
     text: major
-      ? `Großes Ding: Die Kripo plant für ${time} eine Großrazzia, auch in ${veedelName(veedelId)}. Zieh die Leute dort vorher ab.`
-      : `Pass auf: Die Kollegen planen für ${time} eine Razzia in ${veedelName(veedelId)}. Zieh deine Leute ab, wenn du schlau bist.`,
+      ? texts.pick(ctx, 'staff:majorRaidWarning', STAFF_TEXTS.majorRaidWarning, { time, veedel: veedelName(veedelId) })
+      : texts.pick(ctx, 'staff:raidWarning', STAFF_TEXTS.raidWarning, { time, veedel: veedelName(veedelId) }),
     options: [
       {
         id: 'lieLow',
@@ -278,7 +279,7 @@ function payWages(ctx: Ctx): void {
     } else if (complained++ === 0) {
       messages.send(ctx, {
         contact: staffContact(m),
-        text: `Chef, wo bleibt mein Geld? ${formatEuro(amount)} für gestern. Noch einen Tag mach ich das nicht mit.`,
+        text: texts.pick(ctx, 'staff:wageMissing', STAFF_TEXTS.wageMissing, { amount: formatEuro(amount) }),
       });
     }
   }
@@ -362,7 +363,7 @@ export function betray(ctx: Ctx, m: StaffMember, kind: BetrayalKind): number {
     journal.add(ctx, `In der Kasse fehlen ${formatEuro(amount)}. Verdacht: ${m.name}.`, 'bad', { staffId: m.id });
     addCareer(ctx, m.id, `Hat ${formatEuro(amount)} aus der Kasse genommen.`);
   } else if (kind === 'quit') {
-    messages.send(ctx, { contact: staffContact(m), text: 'Ich bin raus. Such dir wen anders.' });
+    messages.send(ctx, { contact: staffContact(m), text: texts.pick(ctx, 'staff:quit', STAFF_TEXTS.quit) });
     removeMember(ctx, m.id, 'quit');
     journal.add(ctx, `${m.name} hat hingeschmissen.`, 'bad', { staffId: m.id });
   } else {

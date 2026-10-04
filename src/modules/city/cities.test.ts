@@ -390,7 +390,7 @@ describe('Hamburger Hafen und Lieferanten (Auftrag 30)', () => {
     expect(getCargo(sim.state, 'koeln')).toHaveLength(0);
     expect(cargoRiskFrom(cargo[0])).toBe(cargo[0].arrivedAt + 10 * 60);
     // Fiete meldet den Container.
-    expect(messages.thread(sim.state, HARBOR_CALLER.id).some((m) => m.text.includes('Container ist da'))).toBe(true);
+    expect(messages.thread(sim.state, HARBOR_CALLER.id).some((m) => m.options?.some((o) => o.id === 'driver'))).toBe(true);
     // Lange stehen lassen: Irgendwann ist er weg.
     sim.advance(5 * DAY);
     expect(getCargo(sim.state, 'hamburg')).toHaveLength(0);

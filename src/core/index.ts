@@ -17,5 +17,6 @@ export * from './rng';
 export * from './saves';
 export * from './session';
 export * from './sim';
+export * from './texts';
 export * from './types';
 export * from './wallet';

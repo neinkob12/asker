@@ -67,7 +67,7 @@ describe('Speichern und Laden', () => {
     delete (old.messages as Record<string, unknown>).hidden;
     delete (old.messages as Record<string, unknown>).calls;
     const loaded = loadSimulation(old, [notesV2]);
-    expect(loaded.state.schema).toBe(3);
+    expect(loaded.state.schema).toBe(4);
     expect(loaded.state.messages.hidden).toEqual({});
     expect(loaded.state.messages.calls).toEqual({ ringing: [], retries: [] });
   });
@@ -78,9 +78,20 @@ describe('Speichern und Laden', () => {
     old.schema = 2;
     delete (old.messages as Record<string, unknown>).calls;
     const loaded = loadSimulation(old, [notesV2]);
-    expect(loaded.state.schema).toBe(3);
+    expect(loaded.state.schema).toBe(4);
     expect(loaded.state.messages.calls).toEqual({ ringing: [], retries: [] });
     // Und es läuft weiter (die Anruf-Prüfung jede Minute fasst die leeren Listen an).
+    loaded.advance(10);
+  });
+
+  it('migriert die Kernfelder: Spielstände vor Auftrag 23 (Schema 3) bekommen das Gedächtnis des Text-Helfers', () => {
+    const sim = Simulation.create([notesV2], { seed: 1 });
+    const old = roundTrip(sim.state) as unknown as Record<string, unknown>;
+    old.schema = 3;
+    delete old.texts;
+    const loaded = loadSimulation(old, [notesV2]);
+    expect(loaded.state.schema).toBe(4);
+    expect(loaded.state.texts).toEqual({ recent: {} });
     loaded.advance(10);
   });
 
