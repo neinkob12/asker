@@ -137,6 +137,30 @@ describe('Loyalität', () => {
     expect(getStaffMember(sim.state, m.id)?.stats.loyalty).toBeLessThan(40);
   });
 
+  it('Lohn rauf und runter bringt nie Loyalität (kein Hochpumpen in kleinen Schritten)', () => {
+    const sim = quietGame();
+    const m = recruit(sim, 'runner', { wage: 120 });
+    m.stats.loyalty = 50;
+    const wage = (w: number) => sim.dispatch({ type: 'staff.setWage', payload: { staffId: m.id, wage: w } });
+    for (const path of [
+      [122, 121, 120],
+      [124, 122, 120],
+      [126, 123, 120],
+      [132, 126, 121, 120],
+      [140, 130, 125, 120],
+    ]) {
+      for (const w of path) expect(wage(w).ok).toBe(true);
+      expect(m.wage).toBe(120);
+    }
+    expect(getStaffMember(sim.state, m.id)?.stats.loyalty).toBeLessThanOrEqual(50);
+    for (let i = 0; i < 40; i++) {
+      wage(122);
+      wage(121);
+      wage(120);
+    }
+    expect(getStaffMember(sim.state, m.id)?.stats.loyalty).toBeLessThanOrEqual(50);
+  });
+
   it('Gefahr kostet Loyalität: Festnahme, Angst im Veedel, Razzia, Konfrontation', () => {
     const sim = quietGame();
     sim.state.modules.spots.unlocked.push('rudolfplatz');

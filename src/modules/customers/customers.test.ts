@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { clock, loadSimulation, messages, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { activeEncounters as getEncounters } from '../encounters';
-import { allProducts, getProduct, getStock, store } from '../goods';
+import { allProducts, getLots, getProduct, getStock, store, warehouseSites } from '../goods';
 import { getPressure, getSpotPrice, spotReferencePrice, supplyDemandFactor } from '../market';
 import { changeReputation, getReputation } from '../reputation';
 import { roadDistance } from '../roads';
@@ -40,7 +40,7 @@ import {
   typeDemandWeight,
   waitingAt,
 } from './index';
-import { offerDelivery, offerWholesale } from './orders';
+import { offerDelivery, offerWholesale, onDealResolved } from './orders';
 
 function addCustomer(
   sim: Simulation,
@@ -739,5 +739,62 @@ describe('customers: Spielstand', () => {
     expect(getRegulars(loaded.state)).toEqual([]);
     expect(playerSpot(loaded.state)).toBeNull();
     loaded.advance(60);
+  });
+});
+
+describe('customers: Städte und Lager', () => {
+  const hamburgSite = () => warehouseSites('hamburg')[0].id;
+
+  it('selbst am Spot: Ware in Hamburg zählt in Köln nicht, der nächste Kunde kommt trotzdem dran', () => {
+    const sim = quietGame();
+    for (const id of Object.keys(sim.state.modules.goods.stock)) sim.state.modules.goods.stock[id] = [];
+    // Hasch gibt es nur in Hamburg, Weed in Köln.
+    store(sim.ctx('test'), { productId: 'hash', amount: 100, warehouseId: hamburgSite() });
+    store(sim.ctx('test'), { productId: 'weed', amount: 100 });
+    const stuck = addCustomer(sim, 'ebertplatz', 2, 10, { productId: 'hash', expiresAt: sim.state.time + 50 });
+    addCustomer(sim, 'ebertplatz', 3, 10, { expiresAt: sim.state.time + 90 });
+    expect(canServe(sim.state, stuck.id)).toBe(false);
+    expect(sim.dispatch({ type: 'customers.standAt', payload: { spotId: 'ebertplatz' } }).ok).toBe(true);
+    sim.advance(2);
+    expect(waitingAt(sim.state, 'ebertplatz').map((c) => c.id)).toEqual([stuck.id]);
+    expect(getStock(sim.state, { productId: 'hash' })).toBe(100);
+  });
+
+  it('Stadtwechsel: Wer am Spot der verlassenen Stadt stand, steht danach nirgends', () => {
+    const sim = quietGame();
+    const events = recordEvents(sim);
+    sim.dispatch({ type: 'customers.standAt', payload: { spotId: 'ebertplatz' } });
+    expect(playerSpot(sim.state)).toBe('ebertplatz');
+    sim.ctx('city').emit('city.switched', { from: 'koeln', to: 'hamburg' });
+    sim.step();
+    expect(playerSpot(sim.state)).toBeNull();
+    const moved = eventsOfType(events, 'customers.selfMoved').map((e) => e.payload);
+    expect(moved.at(-1)).toEqual({ spotId: null });
+  });
+
+  it('geplatzter Großhandels-Deal (Rückzug): Ware geht ins Herkunftslager zurück, mit Einkaufspreis', () => {
+    const sim = quietGame();
+    changeReputation(sim.ctx('test'), 50);
+    sim.state.wallet.clean = 10000;
+    sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'kalk' } });
+    for (const id of Object.keys(sim.state.modules.goods.stock)) sim.state.modules.goods.stock[id] = [];
+    store(sim.ctx('test'), { productId: 'hash', amount: 600, quality: 0.6, unitCost: 7, warehouseId: 'kalk' });
+    const order = offerWholesale(sim.ctx('customers'), true);
+    if (!order) throw new Error('kein Großhandel');
+    expect(
+      sim.dispatch({ type: 'messages.answer', payload: { messageId: order.messageId, optionId: 'self' } }).ok,
+    ).toBe(true);
+    const accepted = getOrder(sim.state, order.id);
+    expect(accepted?.fromWarehouseId).toBe('kalk');
+    expect(accepted?.unitCost).toBe(7);
+    const amount = accepted?.amount ?? 0;
+    const before = getStock(sim.state, { productId: 'hash', warehouseId: 'kalk' });
+    if (accepted) accepted.status = 'contested';
+    onDealResolved(sim.ctx('customers'), `order:${order.id}`, 'retreat');
+    expect(getOrder(sim.state, order.id)?.status).toBe('failed');
+    expect(getStock(sim.state, { productId: 'hash', warehouseId: 'kalk' })).toBe(before + amount);
+    expect(getStock(sim.state, { productId: 'hash', warehouseId: 'ehrenfeld' })).toBe(0);
+    const lots = getLots(sim.state, { productId: 'hash', warehouseId: 'kalk' });
+    expect(lots.every((l) => l.unitCost === 7)).toBe(true);
   });
 });

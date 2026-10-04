@@ -3,8 +3,8 @@
 
 import { type Ctx, clock, formatEuro, type GameState, journal, messages, wallet } from '../../core';
 import { cityName, raidWarningBonus } from '../city';
-import { canServe, waitingAt } from '../customers';
-import { formatProductAmount, stockSummary, take } from '../goods';
+import { canServeCustomer, waitingAt } from '../customers';
+import { formatProductAmount, getStock, stockSummary, take } from '../goods';
 import { addHeat, getHeat } from '../police';
 import { getSpot } from '../spots';
 import { veedelCity, veedelName } from '../veedel';
@@ -94,17 +94,33 @@ function releaseDue(ctx: Ctx): void {
 
 /** Läufer bedienen die Kunden an ihrem Spot, solange Ware da ist. Sie nutzen denselben Befehl wie der Spieler. */
 function serveCustomers(ctx: Ctx): void {
+  // Bestand pro Stadt und Produkt nur einmal lesen; nach jedem Verkauf ist er veraltet und wird neu gelesen.
+  const stockCache = new Map<string, number>();
+  const stockOf = (productId: string, cityId: string): number => {
+    const key = `${cityId}|${productId}`;
+    let amount = stockCache.get(key);
+    if (amount === undefined) {
+      amount = getStock(ctx.state, { productId, cityId });
+      stockCache.set(key, amount);
+    }
+    return amount;
+  };
   for (const member of [...ctx.state.modules.staff.members]) {
     if (member.role !== 'runner' || member.status !== 'active' || member.assignment?.kind !== 'spot') continue;
     if (!isMemberLive(ctx.state, member)) continue;
     if (member.busyUntil > ctx.now) continue;
-    const customer = waitingAt(ctx.state, member.assignment.targetId).find((c) => canServe(ctx.state, c.id));
+    const customer = waitingAt(ctx.state, member.assignment.targetId).find((c) =>
+      canServeCustomer(ctx.state, c, stockOf),
+    );
     if (!customer) continue;
     const result = ctx.dispatch(
       { type: 'customers.serve', payload: { customerId: customer.id, sellerId: member.id } },
       { actor: `staff:${member.id}` },
     );
-    if (result.ok) member.busyUntil = ctx.now + serveTime(member);
+    if (result.ok) {
+      member.busyUntil = ctx.now + serveTime(member);
+      stockCache.clear();
+    }
   }
 }
 

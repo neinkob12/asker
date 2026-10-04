@@ -7,7 +7,7 @@
 // Jeder Verkauf löst 'sale.completed' aus.
 //
 // Öffentliche API:
-//   waitingAt(state, spotId), allWaiting(state), getCustomer(state, id), canServe(state, customerId),
+//   waitingAt(state, spotId), allWaiting(state), getCustomer(state, id), canServe(state, customerId), canServeCustomer,
 //   customerRevenue(customer), getSalesStats(state), getCustomerTypes(), customerType(id),
 //   getRegulars(state, { spotId?, status? }), getRegular(state, id),
 //   getOrders(state, { status?, kind? }), getOrder(state, id), orderProgress(state, order), isPlayerDelivering(state),
@@ -153,6 +153,8 @@ export interface Order {
   cut: number | null;
   /** Lager, aus dem die Ware kommt (fehlt bei alten Spielständen: Standardlager). */
   fromWarehouseId?: string | null;
+  /** Einkaufspreis je Einheit der mitgenommenen Ware (für den Rückweg bei einem geplatzten Deal; fehlt in alten Ständen). */
+  unitCost?: number;
 }
 
 export interface SalesStats {
@@ -287,7 +289,20 @@ export function getCustomer(state: GameState, id: number): Customer | undefined 
 /** Reicht die Ware für diesen Kunden? */
 export function canServe(state: GameState, customerId: number): boolean {
   const c = getCustomer(state, customerId);
-  return !!c && getStock(state, { productId: c.productId, cityId: cityOfSpot(state, c.spotId) }) >= c.amount;
+  return !!c && canServeCustomer(state, c);
+}
+
+/**
+ * Wie `canServe`, aber mit dem Kundenobjekt (spart die Suche über die Warteliste). Wer viele Kunden prüft, kann den
+ * Bestand mit `stockOf(productId, cityId)` aus einem Zwischenspeicher liefern.
+ */
+export function canServeCustomer(
+  state: GameState,
+  c: Pick<Customer, 'spotId' | 'productId' | 'amount'>,
+  stockOf: (productId: string, cityId: string) => number = (productId, cityId) =>
+    getStock(state, { productId, cityId }),
+): boolean {
+  return stockOf(c.productId, cityOfSpot(state, c.spotId)) >= c.amount;
 }
 
 export function customerRevenue(customer: Pick<Customer, 'amount' | 'pricePerUnit'>): number {
