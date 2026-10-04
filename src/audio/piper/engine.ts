@@ -10,7 +10,8 @@ export type VoiceModelState =
   | { kind: 'idle'; cached: boolean | null }
   | { kind: 'loading'; phase: LoadPhase; loaded: number; total: number }
   | { kind: 'ready' }
-  | { kind: 'error'; message: string };
+  /** permanent: Dieser Browser kann es nie (kein Worker, kein WebAssembly). Sonst darf es später noch einmal versucht werden. */
+  | { kind: 'error'; message: string; permanent?: true };
 
 export interface SpeechChunk {
   index: number;
@@ -71,10 +72,17 @@ interface Deferred {
 /** So viele fertige Texte bleiben im Speicher (ein Anruf hat sechs bis acht Zeilen). */
 const MEMO_LIMIT = 24;
 const UNSUPPORTED = 'Dieser Browser kann das Sprachmodell nicht ausführen.';
+const CRASHED = 'Das Sprachmodell ist abgestürzt. Anrufe laufen mit der Stimme des Browsers.';
+/** Nach so vielen ms gilt ein Fehler (offline, Absturz) nicht mehr: Das Modell darf es noch einmal versuchen. */
+export const ERROR_RETRY_MS = 60_000;
 
 export class PiperEngine {
   private worker: WorkerLike | null = null;
   private crashed = false;
+  /** Wann der Worker abgestürzt ist (ms); danach darf ein neuer starten (ERROR_RETRY_MS). */
+  private crashedAt = 0;
+  /** Wann ein Modell zuletzt in den Fehler lief (ms). */
+  private readonly errorAt = new Map<PiperVoiceId, number>();
   private readonly createWorker: () => WorkerLike | null;
   private readonly customWorker: boolean;
   private readonly states = new Map<PiperVoiceId, VoiceModelState>();
@@ -87,7 +95,20 @@ export class PiperEngine {
   constructor(options: { createWorker?: () => WorkerLike | null } = {}) {
     this.createWorker = options.createWorker ?? createPiperWorker;
     this.customWorker = options.createWorker !== undefined;
+    // Wieder online: Fehler vom Laden (offline) sofort vergessen, ohne ERROR_RETRY_MS abzuwarten.
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function')
+      window.addEventListener('online', () => this.forgetErrors());
   }
+
+  /** Vorübergehende Fehler vergessen (Modelle gehen auf "noch nicht geladen"), z.B. wenn das Netz wieder da ist. */
+  forgetErrors(): void {
+    if (this.crashed && !this.permanentFailure) this.crashed = false;
+    for (const [voiceId, state] of this.states) {
+      if (state.kind === 'error' && !state.permanent) this.setState(voiceId, { kind: 'idle', cached: null });
+    }
+  }
+
+  private permanentFailure = false;
 
   /** Kann dieser Browser das Modell grundsätzlich ausführen (Worker und WebAssembly)? */
   get supported(): boolean {
@@ -97,7 +118,12 @@ export class PiperEngine {
   }
 
   state(voiceId: PiperVoiceId): VoiceModelState {
-    return this.states.get(voiceId) ?? { kind: 'idle', cached: null };
+    const state = this.states.get(voiceId);
+    if (!state) return { kind: 'idle', cached: null };
+    // Ein Fehler (z.B. offline beim ersten Anruf) schaltet das Modell nicht für die ganze Sitzung ab.
+    if (state.kind === 'error' && !state.permanent && Date.now() - (this.errorAt.get(voiceId) ?? 0) >= ERROR_RETRY_MS)
+      return { kind: 'idle', cached: null };
+    return state;
   }
 
   /** Alle Modelle mit Stand (Einstellungen). */
@@ -133,7 +159,8 @@ export class PiperEngine {
     if (pending) return pending.promise;
     const worker = this.ensureWorker();
     if (!worker) {
-      this.setState(voiceId, { kind: 'error', message: UNSUPPORTED });
+      // Kein Worker: endgültig (Browser kann es nicht) oder nur vorläufig (abgestürzt, neuer Versuch später).
+      this.setState(voiceId, this.permanentFailure ? this.failure(UNSUPPORTED) : { kind: 'error', message: CRASHED });
       return Promise.resolve(false);
     }
     const voice = piperVoice(voiceId);
@@ -151,12 +178,12 @@ export class PiperEngine {
   ready(voiceId: PiperVoiceId, timeoutMs: number): Promise<boolean> {
     const load = this.load(voiceId);
     if (!timeoutMs) return load;
-    return Promise.race([
-      load,
-      new Promise<boolean>((resolve) => {
-        setTimeout(() => resolve(false), timeoutMs);
-      }),
-    ]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), timeoutMs);
+    });
+    // Der Timer wird wieder abgeräumt, sobald das Laden fertig ist (sonst bleibt pro Zeile einer stehen).
+    return Promise.race([load, timeout]).finally(() => clearTimeout(timer));
   }
 
   /**
@@ -217,13 +244,21 @@ export class PiperEngine {
     worker.postMessage({ type: 'remove', voice: voiceFiles(piperVoice(voiceId)) });
   }
 
+  /** Fehlerstand: nur "nicht unterstützt" ist endgültig. */
+  private failure(message: string): VoiceModelState {
+    return message === UNSUPPORTED ? { kind: 'error', message, permanent: true } : { kind: 'error', message };
+  }
+
   private ensureWorker(): WorkerLike | null {
     if (this.worker) return this.worker;
+    // Nach einem Absturz darf nach einer Weile ein neuer Worker starten.
+    if (this.crashed && !this.permanentFailure && Date.now() - this.crashedAt >= ERROR_RETRY_MS) this.crashed = false;
     if (this.crashed) return null;
     const worker = this.createWorker();
     if (!worker) {
       this.crashed = true;
-      for (const voice of PIPER_VOICES) this.setState(voice.id, { kind: 'error', message: UNSUPPORTED });
+      this.permanentFailure = true;
+      for (const voice of PIPER_VOICES) this.setState(voice.id, this.failure(UNSUPPORTED));
       return null;
     }
     worker.onmessage = (event) => this.handle(event.data);
@@ -234,7 +269,8 @@ export class PiperEngine {
 
   private crash(): void {
     this.crashed = true;
-    const message = 'Das Sprachmodell ist abgestürzt. Anrufe laufen mit der Stimme des Browsers.';
+    this.crashedAt = Date.now();
+    const message = CRASHED;
     for (const voice of PIPER_VOICES) this.setState(voice.id, { kind: 'error', message });
     for (const [voiceId, load] of this.loads) {
       load.resolve(false);
@@ -300,8 +336,9 @@ export class PiperEngine {
       case 'status': {
         if (!message.supported) {
           this.crashed = true;
+          this.permanentFailure = true;
           for (const voice of PIPER_VOICES)
-            this.setState(voice.id, { kind: 'error', message: message.reason ?? UNSUPPORTED });
+            this.setState(voice.id, { kind: 'error', message: message.reason ?? UNSUPPORTED, permanent: true });
           break;
         }
         for (const voice of PIPER_VOICES) {
@@ -366,6 +403,7 @@ export class PiperEngine {
 
   private setState(voiceId: PiperVoiceId, state: VoiceModelState): void {
     this.states.set(voiceId, state);
+    if (state.kind === 'error') this.errorAt.set(voiceId, Date.now());
     for (const listener of this.listeners) listener();
   }
 }

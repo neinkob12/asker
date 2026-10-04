@@ -22,45 +22,15 @@ import { getSpotPrice } from '../../market';
 import { getStaff, type StaffMember } from '../../staff';
 import { veedelName } from '../../veedel';
 import { getAllSpots, isKneipe, isSpotActive, type Spot, spotLabelPlacement } from '../index';
+import { raidShown, saleGlow, syncSpotGlow } from './glow';
 import { patienceFill } from './ringModel';
 
 /** Unter dieser Zoomstufe zeigen gesperrte Spots keinen Namen (sonst drängeln sich die Pillen). */
 const NAMES_ZOOM = 13;
-/** So viele Spielminuten wirkt ein Verkauf im Hotspot nach (klingt linear ab). */
-const SALE_GLOW_MINUTES = 90;
-/** So lange zeigt ein Spot nach einer Razzia den Zustand "Razzia" (Spielminuten). */
-const RAID_SHOW_MINUTES = 120;
 /** Hotspots leiser als früher: Den Zustand zeigt jetzt der Ring. */
 const HOTSPOT_SCALE = 0.45;
 
 export type SpotLook = 'idle' | 'waiting' | 'urgent' | 'raid';
-
-/** Letzte Verkäufe je Spot (Spielzeit), nur für die Optik. Füllt die Oberfläche über recordSaleGlow. */
-const recentSales = new Map<string, number[]>();
-/** Letzte Razzia je Spot (Spielzeit), nur für die Optik. */
-const recentRaids = new Map<string, number>();
-
-/** Einen Verkauf am Spot für den Hotspot merken. */
-export function recordSaleGlow(spotId: string, time: number): void {
-  const list = recentSales.get(spotId) ?? [];
-  list.push(time);
-  while (list.length > 8) list.shift();
-  recentSales.set(spotId, list);
-}
-
-/** Eine Razzia am Spot merken (der Marker wird eine Weile blau). */
-export function recordSpotRaid(spotId: string, time: number): void {
-  recentRaids.set(spotId, time);
-}
-
-function saleGlow(spotId: string, now: number): number {
-  let glow = 0;
-  for (const at of recentSales.get(spotId) ?? []) {
-    const age = now - at;
-    if (age >= 0 && age < SALE_GLOW_MINUTES) glow += 1 - age / SALE_GLOW_MINUTES;
-  }
-  return glow;
-}
 
 /** Wartende Kunden aller Spots in einem Durchlauf, je Spot dringendste zuerst (statt waitingAt pro Spot). */
 export function waitingBySpot(state: GameState): Map<string, Customer[]> {
@@ -81,6 +51,7 @@ export function spotActivity(
   waitingList: readonly Customer[] = waitingAt(state, spotId),
 ): number {
   if (!isSpotActive(state, spotId)) return 0;
+  syncSpotGlow(state);
   const demand = spotDemand(state, spotId);
   const waiting = waitingList.length;
   return Math.min(1.5, 0.3 + demand * 0.15 + waiting * 0.16 + saleGlow(spotId, state.time) * 0.25);
@@ -92,8 +63,8 @@ export function spotLook(
   spotId: string,
   waiting: readonly Customer[] = waitingAt(state, spotId),
 ): SpotLook {
-  const raidAt = recentRaids.get(spotId);
-  if (raidAt !== undefined && state.time - raidAt >= 0 && state.time - raidAt < RAID_SHOW_MINUTES) return 'raid';
+  syncSpotGlow(state);
+  if (raidShown(spotId, state.time)) return 'raid';
   if (activeEncounters(state).some((e) => e.request.spotId === spotId && e.phase !== 'done')) return 'raid';
   if (waiting.length === 0) return 'idle';
   const minLeft = waiting.reduce((m, c) => Math.min(m, c.expiresAt - state.time), Infinity);

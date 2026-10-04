@@ -69,6 +69,12 @@ export function busLevels(
   };
 }
 
+/** So lange (ms) bleibt eine fehlgeschlagene Audio-Datei im Speicher, bevor ein neuer Versuch erlaubt ist. */
+const BUFFER_RETRY_MS = 30_000;
+/** Wartezeit (ms) nach einem Stück, das nicht lief: 2 s, 4 s, 8 s … höchstens 60 s. */
+const MUSIC_RETRY_MS = 2_000;
+const MUSIC_RETRY_MAX_MS = 60_000;
+
 /** So lange wartet ein Satz auf das Modell (Download beim ersten Anruf), dann spricht der Browser. */
 const READY_TIMEOUT_MS = 90_000;
 
@@ -95,6 +101,9 @@ export class AudioService {
   private player: TrackPlayer | null = null;
   private readonly recent: string[] = [];
   private mismatchSince: number | null = null;
+  /** Wie oft hintereinander ein Stück aus einer Datei nicht lief, und der Timer für den nächsten Versuch. */
+  private musicFailures = 0;
+  private musicRetry: ReturnType<typeof setTimeout> | null = null;
   private readonly custom = new Map<string, CustomSound>();
   private readonly buffers = new Map<string, Promise<AudioBuffer | null>>();
   private readonly listeners = new Set<() => void>();
@@ -110,6 +119,11 @@ export class AudioService {
   private piperEngine: PiperEngine | null | undefined = undefined;
   /** Läuft gerade ein Gespräch? Dann sind Musik, Effekte und Geräusche aus. */
   private callActive = false;
+  /**
+   * Zählt hoch, wenn ein Gespräch endet (stopSpeaking, setCall(false)). Vorrechnen wartet auf das Modell und merkt
+   * sich die Zahl: Ist sie danach eine andere, ist der Anruf vorbei und die Zeilen bleiben ungerechnet.
+   */
+  private speechGeneration = 0;
   /** Abbrechen-Funktionen der laufenden Sätze (stopSpeaking). */
   private readonly activeSpeech = new Set<() => void>();
 
@@ -140,9 +154,11 @@ export class AudioService {
    * Pausiert, wenn der Tab im Hintergrund ist.
    */
   attach(target: Document): void {
+    // Die Listener bleiben dran (außer ohne Web Audio): Ein Kontext kann auch später wieder stehen (Anruf,
+    // Sperrbildschirm, iOS "interrupted") und braucht dann wieder eine Geste. unlock() ist beim laufenden Ton billig.
     const unlock = () => {
       this.unlock();
-      if (this.status === 'running' || this.status === 'unsupported') {
+      if (this.status === 'unsupported') {
         for (const type of ['pointerdown', 'keydown', 'touchend'] as const)
           target.removeEventListener(type, unlock, true);
       }
@@ -151,20 +167,44 @@ export class AudioService {
     target.addEventListener('visibilitychange', () => {
       if (!this.ctx) return;
       if (target.visibilityState === 'hidden') {
-        this.ctx.suspend();
-        this.status = 'suspended';
+        void this.ctx.suspend()?.catch?.(() => {});
       } else {
-        this.ctx.resume();
-        this.status = 'running';
+        this.resumeContext();
       }
-      this.emit();
+      this.syncStatus();
     });
+  }
+
+  /** Kontext fortsetzen und den echten Zustand übernehmen (resume() ist asynchron und kann scheitern). */
+  private resumeContext(): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state === 'running') return;
+    try {
+      void ctx
+        .resume()
+        ?.then(() => this.syncStatus())
+        .catch(() => this.syncStatus());
+    } catch {
+      this.syncStatus();
+    }
+  }
+
+  /** Status aus dem echten Zustand des Kontexts und der Sichtbarkeit des Tabs ableiten. */
+  private syncStatus(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    const next: AudioStatus = !hidden && ctx.state === 'running' ? 'running' : 'suspended';
+    if (next === this.status) return;
+    this.status = next;
+    this.emit();
   }
 
   /** Ton starten (muss aus einer Nutzerinteraktion heraus aufgerufen werden). */
   unlock(): void {
     if (this.ctx) {
-      if (this.ctx.state !== 'running') this.ctx.resume();
+      this.resumeContext();
+      this.syncStatus();
       return;
     }
     let ctx: AudioContext | null = null;
@@ -195,8 +235,10 @@ export class AudioService {
     this.core = new SynthCore(ctx, this.musicBus);
     this.ambience = new Ambience(this.core, this.ambienceBus);
     this.applyVolumes(true);
-    ctx.resume();
-    this.status = 'running';
+    ctx.addEventListener?.('statechange', () => this.syncStatus());
+    this.resumeContext();
+    // Safari startet den Kontext erst nach resume(): Bis der Zustand "running" meldet, bleibt der Status "suspended".
+    this.status = ctx.state === 'running' ? 'running' : 'suspended';
     for (const [id, level] of this.ambienceLevels) this.ambience.set(id, level);
     if (this.settings.musicOn) this.startTrack();
     this.emit();
@@ -257,11 +299,22 @@ export class AudioService {
   private loadBuffer(url: string): Promise<AudioBuffer | null> {
     let promise = this.buffers.get(url);
     if (!promise) {
-      promise = fetch(url)
-        .then((r) => r.arrayBuffer())
+      const created: Promise<AudioBuffer | null> = fetch(url)
+        .then((r) => {
+          if (!r.ok) throw new Error(`Audio-Datei nicht geladen (${r.status}).`);
+          return r.arrayBuffer();
+        })
         .then((data) => this.ctx?.decodeAudioData(data) ?? null)
         .catch(() => null);
-      this.buffers.set(url, promise);
+      promise = created;
+      this.buffers.set(url, created);
+      // Ein Fehlschlag bleibt nicht für immer im Speicher: nach einer Weile darf es noch einmal versucht werden.
+      void created.then((buffer) => {
+        if (buffer !== null) return;
+        setTimeout(() => {
+          if (this.buffers.get(url) === created) this.buffers.delete(url);
+        }, BUFFER_RETRY_MS);
+      });
     }
     return promise;
   }
@@ -317,16 +370,34 @@ export class AudioService {
     const track = pickTrack(TRACKS, this.mood, this.recent, Math.random);
     this.recent.push(track.id);
     if (this.recent.length > 3) this.recent.shift();
+    this.clearMusicRetry();
     this.player?.stop(3);
     this.mismatchSince = null;
-    const onEnded = (ended: TrackPlayer) => {
-      if (ended === this.player) this.startTrack();
+    const onEnded = (ended: TrackPlayer, failed = false) => {
+      if (ended !== this.player) return;
+      if (!failed) {
+        this.musicFailures = 0;
+        this.startTrack();
+        return;
+      }
+      // Datei nicht ladbar (offline, 404): nicht sofort das nächste Stück, sonst dreht sich das im Kreis.
+      const delay = Math.min(MUSIC_RETRY_MAX_MS, MUSIC_RETRY_MS * 2 ** this.musicFailures);
+      this.musicFailures++;
+      this.musicRetry = setTimeout(() => {
+        this.musicRetry = null;
+        if (ended === this.player && this.settings.musicOn) this.startTrack();
+      }, delay);
     };
     this.player =
       track.src && this.ctx
         ? new FilePlayer(this.ctx, this.musicBus, track, this.loadBuffer(track.src), onEnded)
         : new MusicPlayer(this.core, this.musicBus, track, onEnded);
     this.emit();
+  }
+
+  private clearMusicRetry(): void {
+    if (this.musicRetry) clearTimeout(this.musicRetry);
+    this.musicRetry = null;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -340,6 +411,7 @@ export class AudioService {
     if (this.ctx && patch.musicOn !== undefined && patch.musicOn !== before.musicOn) {
       if (patch.musicOn) this.startTrack();
       else {
+        this.clearMusicRetry();
         this.player?.stop(1.5);
         this.player = null;
       }
@@ -377,6 +449,7 @@ export class AudioService {
   setCall(active: boolean): void {
     if (this.callActive === active) return;
     this.callActive = active;
+    if (!active) this.speechGeneration++;
     this.applyVolumes(false);
     this.emit();
   }
@@ -475,8 +548,10 @@ export class AudioService {
     if (!engine || !this.modelAllowed(engine, spec)) return;
     const voice = piperVoiceFor(spec);
     const params = piperParams(spec);
+    const generation = this.speechGeneration;
     void engine.ready(voice.id, READY_TIMEOUT_MS).then((ok) => {
-      if (!ok || !this.settings.voices) return;
+      // Aufgelegt, während das Modell lud: Die Zeilen gehören zu einem Anruf, den es nicht mehr gibt.
+      if (!ok || !this.settings.voices || generation !== this.speechGeneration) return;
       for (const text of texts) engine.prepare(voice.id, text, params);
     });
   }
@@ -603,6 +678,7 @@ export class AudioService {
 
   /** Alle Stimmen verstummen lassen (Auflegen, Überspringen); vorgerechnete Zeilen, die noch rechnen, fallen weg. */
   stopSpeaking(): void {
+    this.speechGeneration++;
     for (const cancel of [...this.activeSpeech]) cancel();
     this.activeSpeech.clear();
     this.piperEngine?.cancelAll();

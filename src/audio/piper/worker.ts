@@ -30,8 +30,52 @@ ort.env.wasm.numThreads = 1;
 ort.env.wasm.wasmPaths = { wasm: ortWasmUrl };
 ort.env.logLevel = 'error';
 
+/** Ohne neue Daten so lange (ms), dann gilt ein Download als hängengeblieben. */
+const DOWNLOAD_IDLE_MS = 30_000;
+
+/** Ein Download hat sich nicht mehr gerührt. */
+class DownloadStalled extends Error {
+  constructor() {
+    super('Der Download hängt: Seit 30 Sekunden kommen keine Daten mehr.');
+  }
+}
+
+/** Fehlertext auf Deutsch; Netzwerkfehler der Browser kommen sonst englisch und je nach Browser anders. */
 function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof DownloadStalled) return error.message;
+  const raw = error instanceof Error ? error.message : String(error);
+  if (error instanceof Error && error.name === 'AbortError') return new DownloadStalled().message;
+  if (/failed to fetch|networkerror|load failed|network request failed|network error/i.test(raw))
+    return 'Keine Verbindung: Das Sprachmodell konnte nicht geladen werden. Es wird später noch einmal versucht.';
+  return raw;
+}
+
+/**
+ * fetch mit Inaktivitäts-Timeout: Kommt DOWNLOAD_IDLE_MS lang nichts (weder die Antwort noch ein Stück davon), bricht
+ * der Download ab. `touch()` nach jedem Stück verlängert die Frist, `done()` räumt den Timer auf.
+ */
+async function guardedFetch(
+  url: string,
+): Promise<{ response: Response; touch: () => void; done: () => void; stalled: () => boolean }> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let wasStalled = false;
+  const touch = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      wasStalled = true;
+      controller.abort();
+    }, DOWNLOAD_IDLE_MS);
+  };
+  const done = () => clearTimeout(timer);
+  touch();
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    return { response, touch, done, stalled: () => wasStalled };
+  } catch (error) {
+    done();
+    throw wasStalled ? new DownloadStalled() : error;
+  }
 }
 
 // -------------------------------------------------------------------------------------------
@@ -45,7 +89,8 @@ let phonemizerPromise: Promise<PhonemizerModule> | null = null;
 let phonemizerOutput: string[] = [];
 
 function loadPhonemizer(): Promise<PhonemizerModule> {
-  phonemizerPromise ??= (async () => {
+  if (phonemizerPromise) return phonemizerPromise;
+  const task = (async () => {
     // Die Emscripten-Datei ist ein klassisches Skript (kein ES-Modul): als Text mitgebaut und hier ausgeführt.
     const factory = new Function(`${phonemizerSource}\nreturn createPiperPhonemize;`)() as (
       options: Record<string, unknown>,
@@ -60,7 +105,12 @@ function loadPhonemizer(): Promise<PhonemizerModule> {
         file.endsWith('.wasm') ? phonemizerWasmUrl : file.endsWith('.data') ? phonemizerDataUrl : file,
     });
   })();
-  return phonemizerPromise;
+  phonemizerPromise = task;
+  // Eine Ablehnung (z.B. Datei nicht geladen) bleibt nicht für immer im Speicher: Der nächste Versuch beginnt neu.
+  task.catch(() => {
+    if (phonemizerPromise === task) phonemizerPromise = null;
+  });
+  return task;
 }
 
 /** Ein Satz zu Phonemen (IPA-Zeichen, eines pro Eintrag). */
@@ -95,19 +145,43 @@ async function isCached(url: string): Promise<boolean> {
   }
 }
 
+async function dropCached(voice: VoiceFiles): Promise<void> {
+  const cache = await openCache();
+  try {
+    await cache?.delete(voice.model);
+    await cache?.delete(voice.config);
+  } catch {
+    // Dann bleibt es eben liegen.
+  }
+}
+
 async function fetchJson(url: string): Promise<unknown> {
   const cache = await openCache();
   const hit = await cache?.match(url).catch(() => undefined);
-  if (hit) return hit.json();
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Konfiguration nicht geladen (${response.status}).`);
-  const text = await response.text();
-  try {
-    await cache?.put(url, new Response(text, { headers: { 'content-type': 'application/json' } }));
-  } catch {
-    // Kein Platz: dann eben beim nächsten Mal wieder laden.
+  if (hit) {
+    try {
+      return await hit.json();
+    } catch {
+      // Kaputter Eintrag (abgebrochenes Schreiben, Speicher geräumt): löschen und neu laden.
+      await cache?.delete(url).catch(() => false);
+    }
   }
-  return JSON.parse(text);
+  const { response, done } = await guardedFetch(url);
+  try {
+    if (!response.ok) throw new Error(`Konfiguration nicht geladen (${response.status}).`);
+    const text = await response.text();
+    const json = JSON.parse(text) as unknown;
+    try {
+      await cache?.put(url, new Response(text, { headers: { 'content-type': 'application/json' } }));
+    } catch {
+      // Kein Platz: dann eben beim nächsten Mal wieder laden.
+    }
+    return json;
+  } catch (error) {
+    throw error instanceof Error && error.name === 'AbortError' ? new DownloadStalled() : error;
+  } finally {
+    done();
+  }
 }
 
 async function fetchModel(
@@ -117,28 +191,40 @@ async function fetchModel(
   const cache = await openCache();
   const hit = await cache?.match(voice.model).catch(() => undefined);
   if (hit) {
-    onProgress(voice.bytes, voice.bytes);
-    return hit.arrayBuffer();
-  }
-  const response = await fetch(voice.model);
-  if (!response.ok) throw new Error(`Download fehlgeschlagen (${response.status}).`);
-  const total = Number(response.headers.get('content-length')) || voice.bytes;
-  const reader = response.body?.getReader();
-  let blob: Blob;
-  if (!reader) {
-    blob = await response.blob();
-    onProgress(blob.size, blob.size);
-  } else {
-    const chunks: BlobPart[] = [];
-    let loaded = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      loaded += value.byteLength;
-      onProgress(loaded, Math.max(total, loaded));
+    try {
+      const data = await hit.arrayBuffer();
+      onProgress(voice.bytes, voice.bytes);
+      return data;
+    } catch {
+      await cache?.delete(voice.model).catch(() => false);
     }
-    blob = new Blob(chunks);
+  }
+  const { response, touch, done, stalled } = await guardedFetch(voice.model);
+  let blob: Blob;
+  try {
+    if (!response.ok) throw new Error(`Download fehlgeschlagen (${response.status}).`);
+    const total = Number(response.headers.get('content-length')) || voice.bytes;
+    const reader = response.body?.getReader();
+    if (!reader) {
+      blob = await response.blob();
+      onProgress(blob.size, blob.size);
+    } else {
+      const chunks: BlobPart[] = [];
+      let loaded = 0;
+      for (;;) {
+        const { done: finished, value } = await reader.read();
+        if (finished) break;
+        touch();
+        chunks.push(value);
+        loaded += value.byteLength;
+        onProgress(loaded, Math.max(total, loaded));
+      }
+      blob = new Blob(chunks);
+    }
+  } catch (error) {
+    throw stalled() || (error instanceof Error && error.name === 'AbortError') ? new DownloadStalled() : error;
+  } finally {
+    done();
   }
   try {
     await cache?.put(
@@ -185,6 +271,7 @@ function ensureLoaded(voice: VoiceFiles): Promise<Loaded> {
   const pending = loading.get(voice.id);
   if (pending) return pending;
   const task = (async () => {
+    let stage: 'download' | 'init' = 'download';
     try {
       let last = 0;
       const progress = (done: number, total: number) => {
@@ -194,6 +281,7 @@ function ensureLoaded(voice: VoiceFiles): Promise<Loaded> {
         post({ type: 'progress', voice: voice.id, phase: 'download', loaded: done, total });
       };
       const [configRaw, data] = await Promise.all([fetchJson(voice.config), fetchModel(voice, progress)]);
+      stage = 'init';
       post({ type: 'progress', voice: voice.id, phase: 'init', loaded: voice.bytes, total: voice.bytes });
       const config = parseConfig(configRaw);
       await loadPhonemizer();
@@ -207,6 +295,9 @@ function ensureLoaded(voice: VoiceFiles): Promise<Loaded> {
       post({ type: 'loaded', voice: voice.id, sampleRate: config.sampleRate });
       return entry;
     } catch (error) {
+      // Das Modell ließ sich nicht starten: Vielleicht liegt ein beschädigter Eintrag im Cache. Löschen, damit der
+      // nächste Versuch neu lädt, statt für immer an derselben Datei zu scheitern.
+      if (stage === 'init') await dropCached(voice);
       post({ type: 'loadError', voice: voice.id, message: describe(error) });
       throw error;
     } finally {
@@ -311,15 +402,21 @@ scope.onmessage = (event) => {
       void status(message.voices);
       break;
     case 'load':
-      enqueue(() =>
-        ensureLoaded(message.voice).then(
-          () => {},
-          () => {},
-        ),
+      // Nicht in der Reihe der Aufträge: Ein langer Download darf Sätze eines schon geladenen Modells nicht aufhalten.
+      ensureLoaded(message.voice).then(
+        () => {},
+        () => {},
       );
       break;
     case 'synth':
-      enqueue(() => synth(message));
+      // Erst auf das Modell warten (außerhalb der Reihe), dann einreihen: Die Reihe hält nur Rechenarbeit.
+      ensureLoaded(message.voice).then(
+        () => enqueue(() => synth(message)),
+        (error) => {
+          cancelled.delete(message.id);
+          post({ type: 'error', id: message.id, message: describe(error) });
+        },
+      );
       break;
     case 'remove':
       enqueue(() => remove(message.voice));

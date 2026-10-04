@@ -188,6 +188,8 @@ class Fleet {
   private lastDraw = 0;
   private dirty = false;
   private night = 0;
+  /** Enthält die Quelle der Fahrzeuge Geometrie? Leer und weiter leer: kein setData. */
+  private sourceEmpty = true;
   private lightsShown = false;
   private hover: { marker: Marker; element: HTMLElement; text: HTMLElement } | null = null;
 
@@ -198,7 +200,10 @@ class Fleet {
     } catch {
       map.once('style.load', () => this.schedule(true));
     }
-    map.on('zoom', () => this.schedule(true));
+    // Zoom ändert nur etwas an der Geometrie, wenn es Fahrzeuge gibt.
+    map.on('zoom', () => {
+      if (this.vehicles.size > 0) this.schedule(true);
+    });
     map.on('click', LAYER, (e) => this.onClick(e));
     map.on('mousemove', LAYER, (e) => this.onHover(e));
     map.on('mouseleave', LAYER, () => this.onHover(null));
@@ -361,6 +366,7 @@ class Fleet {
     const source = this.map.getSource(SOURCE) as GeoJSONSource | undefined;
     const lights = this.map.getSource(LIGHTS_SOURCE) as GeoJSONSource | undefined;
     if (!source || !lights) return;
+    if (this.vehicles.size === 0 && this.sourceEmpty && !this.lightsShown) return;
     const zoom = this.map.getZoom();
     const withLights = this.night >= LIGHTS_FROM_NIGHT;
     const features: Feature[] = [];
@@ -397,11 +403,14 @@ class Fleet {
         });
       }
     }
-    source.setData({ type: 'FeatureCollection', features } as never);
+    if (features.length > 0 || !this.sourceEmpty) {
+      source.setData({ type: 'FeatureCollection', features } as never);
+      this.sourceEmpty = features.length === 0;
+    }
     // Tagsüber keine Lichter: die Quelle nur einmal leeren statt bei jeder Bewegung neu zu setzen.
-    if (withLights || this.lightsShown) {
+    if (lightFeatures.length > 0 || this.lightsShown) {
       lights.setData({ type: 'FeatureCollection', features: lightFeatures } as never);
-      this.lightsShown = withLights;
+      this.lightsShown = lightFeatures.length > 0;
     }
   }
 
