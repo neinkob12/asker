@@ -6,6 +6,13 @@ Es ordnet ein, wo das Spiel im Vergleich zu den großen Tycoon-, Simulations- un
 schlägt vor, was als Nächstes den größten Unterschied macht. Jede Idee nennt ihr Vorbild, warum sie zu Köln Tycoon
 passt, wo sie im Code andockt und wie groß sie ist (S = Tage, M = eine Session wie Auftrag 27, L = ein Auftrag wie 30).
 
+> **Stand nach der Fragerunde vom 04.10.2026:** Dieses Dokument bleibt der Katalog. Entschieden ist: Tycoon vor Drama,
+> fünf Städte in freier Reihenfolge, danach Verkauf des Geschäfts, Lieferant am Hafen für alle, zuletzt eigene Produktion mit
+> dem Ziel ganz Europa. **Drin:** A1 (mild), Qualität treibt Nachfrage (statt A2), A4, C1, C2 (ohne Alter und Kennzeichen),
+> C3, C4, C5, D1, Konfrontationen neu (statt D3), G1, Rechte Hand als Ratgeber (statt G3), Capo und Statthalter, H1, B1 ganz
+> am Ende als Produktion im Ausland. **Raus:** A3, D2, D4, E1, E2, F1 bis F5, G2, H2, H3, I1 bis I3, J1. Der Plan dazu, mit
+> Phasen und Aufträgen 32 bis 42: [`docs/plan.md`](plan.md).
+
 ## Kurzfassung: die zehn Ideen mit der größten Wirkung
 
 | # | Idee | Was sie dem Spiel gibt | Aufwand |

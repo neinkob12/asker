@@ -153,8 +153,9 @@ Wahrzeichen, Quellenangabe. PR #36 (nach 30):
 ## Danach (spätere Aufträge)
 
 Eine Einordnung, was dem Spiel im Vergleich zu den großen Tycoon-, Simulations- und Logistikspielen noch fehlt, mit
-31 Ideen, Vorbildern, Andockpunkten im Code und einem Vorschlag für die Aufträge 32–37, steht in
-[`docs/ideen.md`](../ideen.md).
+31 Ideen, Vorbildern und Andockpunkten im Code, steht in [`docs/ideen.md`](../ideen.md). Was davon nach der Fragerunde
+vom 04.10.2026 gebaut wird, und der Bogen des Spiels (fünf Städte in freier Reihenfolge, Verkauf, Lieferant am Hafen,
+eigene Produktion) mit den Aufträgen 32 bis 42 steht in [`docs/plan.md`](../plan.md).
 
 Diese Themen aus dem Konzept kommen nach der Integration, jeweils wieder als eigene Aufträge:
 
