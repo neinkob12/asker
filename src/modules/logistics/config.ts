@@ -17,6 +17,8 @@ export const PLAYER_DRIVE_SPEED = 380;
 /** Laden am Hafen bzw. im Lager. */
 export const LOAD_MINUTES = 20;
 export const TRANSFER_LOAD_MINUTES = 10;
+/** Am vollen Lager versucht der Fahrer so oft wieder abzuladen (Spielminuten, Auftrag 33). */
+export const UNLOAD_RETRY_MINUTES = 30;
 
 /** Chance auf eine Verkehrskontrolle pro Fahrt mit Ware (× Heat-Faktor × Vorsicht des Fahrers). */
 export const CHECK_CHANCE = 0.08;
@@ -78,7 +80,39 @@ export interface PortConfig {
   customsChancePerHour: number;
   /** Platz am Kai für die Begrüßung. */
   quay: string;
+  /** Ausbau des Liegeplatzes in sauberem Geld (Auftrag 33): Stufe 1 Halle am Kai, Stufe 2 Kran. */
+  upgradeCosts: readonly number[];
+  /** Orte am Wasserweg für den Schiffs-Tracker (vom Meer zum Kai). */
+  shipPlaces: readonly { name: string; lng: number; lat: number }[];
 }
+
+/**
+ * Stufen des Liegeplatzes (Auftrag 33): Kai, Halle am Kai, Kran. Ware steht länger sicher (safeFactor auf
+ * safeMinutes), der Zoll schaut seltener (customsFactor) und das Laden geht schneller (loadFactor auf LOAD_MINUTES).
+ */
+export const BERTH_LEVELS: readonly {
+  name: string;
+  effect: string;
+  safeFactor: number;
+  customsFactor: number;
+  loadFactor: number;
+}[] = [
+  { name: 'Kai', effect: 'Ein Platz am Kai.', safeFactor: 1, customsFactor: 1, loadFactor: 1 },
+  {
+    name: 'Halle am Kai',
+    effect: 'Ware steht unter Dach: länger sicher, der Zoll schaut seltener.',
+    safeFactor: 1.75,
+    customsFactor: 0.7,
+    loadFactor: 0.7,
+  },
+  {
+    name: 'Kran',
+    effect: 'Eigener Kran: Laden in Minuten, die Ware ist noch länger sicher.',
+    safeFactor: 2.5,
+    customsFactor: 0.5,
+    loadFactor: 0.35,
+  },
+];
 
 export const PORTS: Readonly<Record<string, PortConfig>> = {
   koeln: {
@@ -88,6 +122,18 @@ export const PORTS: Readonly<Record<string, PortConfig>> = {
     safeMinutes: CARGO_SAFE_MINUTES,
     customsChancePerHour: CUSTOMS_CHANCE_PER_HOUR,
     quay: 'Kai 7',
+    upgradeCosts: [5000, 12000],
+    shipPlaces: [
+      { name: 'Rotterdam', lng: 4.48, lat: 51.9 },
+      { name: 'Dordrecht', lng: 4.67, lat: 51.81 },
+      { name: 'Nijmegen', lng: 5.86, lat: 51.85 },
+      { name: 'Emmerich', lng: 6.25, lat: 51.83 },
+      { name: 'Wesel', lng: 6.6, lat: 51.66 },
+      { name: 'Duisburg', lng: 6.73, lat: 51.43 },
+      { name: 'Düsseldorf', lng: 6.77, lat: 51.23 },
+      { name: 'Leverkusen', lng: 6.96, lat: 51.04 },
+      { name: 'Niehl', lng: 6.97, lat: 50.99 },
+    ],
   },
   // Hamburg: Container direkt am O'Swaldkai. Teurer, und der Zoll ist wacher.
   hamburg: {
@@ -99,6 +145,16 @@ export const PORTS: Readonly<Record<string, PortConfig>> = {
     safeMinutes: 10 * 60,
     customsChancePerHour: 0.08,
     quay: 'Schuppen 52 am O’Swaldkai',
+    upgradeCosts: [9000, 20000],
+    shipPlaces: [
+      { name: 'Cuxhaven', lng: 8.7, lat: 53.87 },
+      { name: 'Brunsbüttel', lng: 9.14, lat: 53.89 },
+      { name: 'Glückstadt', lng: 9.42, lat: 53.78 },
+      { name: 'Stade', lng: 9.5, lat: 53.62 },
+      { name: 'Wedel', lng: 9.7, lat: 53.57 },
+      { name: 'Finkenwerder', lng: 9.86, lat: 53.54 },
+      { name: 'O’Swaldkai', lng: 10.0, lat: 53.53 },
+    ],
   },
 };
 
@@ -133,3 +189,45 @@ export const A1_PLACES: readonly { name: string; lng: number; lat: number }[] = 
   { name: 'Sittensen', lng: 9.5, lat: 53.28 },
   { name: 'Harburg', lng: 9.98, lat: 53.43 },
 ];
+
+// --- Routenwahl (Auftrag 33) ---------------------------------------------------------------------------------------
+
+/** Wahl der Strecke für eine Fahrt mit Ware. */
+export type RouteChoice = 'autobahn' | 'country' | 'night';
+
+export interface RouteChoiceDef {
+  name: string;
+  /** Ein Satz für die Auswahl. */
+  hint: string;
+  /** Faktor auf die Chance einer Kontrolle. */
+  checkFactor: number;
+  /** Autobahn meiden (länger, roads.AVOID_MOTORWAY). */
+  avoidMotorway: boolean;
+  /** Abfahrt erst nachts (NIGHT_START bis NIGHT_END). */
+  night: boolean;
+}
+
+export const ROUTE_CHOICES: Readonly<Record<RouteChoice, RouteChoiceDef>> = {
+  autobahn: { name: 'Autobahn', hint: 'Schnellster Weg.', checkFactor: 1, avoidMotorway: false, night: false },
+  country: {
+    name: 'Landstraße',
+    hint: 'Länger, halb so viele Kontrollen.',
+    checkFactor: 0.5,
+    avoidMotorway: true,
+    night: false,
+  },
+  night: {
+    name: 'Nachts',
+    hint: 'Abfahrt ab 23 Uhr, ein Drittel der Kontrollen.',
+    checkFactor: 1 / 3,
+    avoidMotorway: false,
+    night: true,
+  },
+};
+
+/** Reihenfolge in der Oberfläche. */
+export const ROUTE_CHOICE_ORDER: readonly RouteChoice[] = ['autobahn', 'country', 'night'];
+
+/** Nachtfahrt: Abfahrt frühestens um 23 Uhr; zwischen 23 und 5 Uhr fährt sie sofort. */
+export const NIGHT_START = 23 * 60;
+export const NIGHT_END = 5 * 60;

@@ -10,8 +10,15 @@
 //   getLots(state, filter) (filter mit cityId), stockSummary(state, warehouseId?),
 //   averageQuality(state, filter), qualityTier(quality), cutPreview(lot, ratio), store(ctx, {...}), take(ctx, {...}),
 //   cutLot(ctx, {...}), QUALITY_TIERS, CUT_STEPS, MAX_CUT, DEFAULT_PRODUCT, DEFAULT_WAREHOUSE, STANDARD_QUALITY
-// Befehle: 'goods.cut', 'goods.buyWarehouse'
-// Ereignisse: 'goods.stored', 'goods.taken', 'goods.cut', 'goods.warehouseBought'
+//   Kapazität und Ausbau (Auftrag 33): warehouseLoad(state, id) (Gramm im Lager), warehouseCapacity(state, id),
+//   warehouseFree(state, id), fitsInto(state, id, productId, amount?), stockWeight(items), warehouseModifiers(state, id)
+//   (Kapazität, Verlust-Faktor für Einbruch und Überfall, Razzia-Faktor), upgradeLevel, upgradeCost, storeFitting(ctx,
+//   {...}) (nimmt nur, was passt, und meldet den Rest), storageStats(state), WAREHOUSE_UPGRADES, UPGRADE_KINDS
+//   Warenfluss (Auftrag 33): usagePerDay(state, { cityId?, productId?, spotId? }) (Verkäufe pro Tag, Schnitt der
+//   letzten sieben Tage), usedProducts(state, cityId), servingWarehouse(state, point, productId)
+// Befehle: 'goods.cut', 'goods.buyWarehouse', 'goods.upgradeWarehouse'
+// Ereignisse: 'goods.stored', 'goods.taken', 'goods.cut', 'goods.warehouseBought', 'goods.warehouseUpgraded',
+//   'goods.storeRejected'
 
 import {
   type CommandResult,
@@ -23,9 +30,11 @@ import {
   type GameState,
   journal,
   type LngLat,
+  MINUTES_PER_DAY,
   wallet,
 } from '../../core';
-import { activeCity, cityAt, isCityUnlocked } from '../city';
+import { activeCity, cityAt, getCity, isCityUnlocked } from '../city';
+import { veedelCity } from '../veedel';
 import {
   CUT_AGENT_COST,
   CUT_QUALITY_LOSS,
@@ -39,10 +48,24 @@ import {
   START_STOCK,
   START_UNIT_COST,
   UNIT_WEIGHT_GRAMS,
+  WAREHOUSE_UPGRADES,
   WAREHOUSES,
 } from './config';
 
-export { CUT_STEPS, DEFAULT_PRODUCT, DEFAULT_WAREHOUSE, MAX_CUT, QUALITY_TIERS, STANDARD_QUALITY } from './config';
+export {
+  CUT_STEPS,
+  DEFAULT_PRODUCT,
+  DEFAULT_WAREHOUSE,
+  MAX_CUT,
+  NEARLY_FULL,
+  QUALITY_TIERS,
+  SHORTAGE_DAYS,
+  STANDARD_QUALITY,
+  UPGRADE_KINDS,
+  type UpgradeDef,
+  type UpgradeLevel,
+  WAREHOUSE_UPGRADES,
+} from './config';
 
 export type ProductCategory = 'flower' | 'hash' | 'edible' | 'oil' | 'vape';
 
@@ -71,7 +94,33 @@ export interface Warehouse {
   lat: number;
   /** Kaufpreis in sauberem Geld (0 = hast du von Anfang an). */
   cost: number;
+  /** Platz ohne Ausbau in Gramm (Auftrag 33). */
+  capacity: number;
   description: string;
+}
+
+/** Ausbau eines Lagers (Auftrag 33): Regale, Tresor, Tarnung. */
+export type WarehouseUpgradeKind = 'shelves' | 'vault' | 'cover';
+
+/** Erreichte Stufe je Ausbau (0 = nicht ausgebaut). */
+export type WarehouseUpgrades = Record<WarehouseUpgradeKind, number>;
+
+/** Was ein Lager kann, mit Ausbau: andere Module (police, gangs, encounters) fragen das zur Laufzeit. */
+export interface WarehouseModifiers {
+  /** Platz in Gramm (mit Regalen). */
+  capacity: number;
+  /** Anteil des Verlusts bei Einbruch und Überfall (1 = ohne Tresor). */
+  lossFactor: number;
+  /** Anteil, den eine Razzia aus diesem Lager mitnimmt, gemessen an der Regel der Polizei (1 = ohne Tarnung). */
+  raidFactor: number;
+  levels: WarehouseUpgrades;
+}
+
+/** Ergebnis von storeFitting: eingelagert und Rest (in Einheiten). */
+export interface StoreResult {
+  stored: number;
+  rest: number;
+  lotId: number | null;
 }
 
 /** Ein Warenposten im Lager. */
@@ -99,10 +148,25 @@ export interface GoodsState {
   stock: Record<string, StockLot[]>;
   /** Eigene Lager (IDs aus WAREHOUSES), in der Reihenfolge des Kaufs. */
   owned: string[];
+  /** Ausbau pro Lager (Auftrag 33), nur ausgebaute Lager stehen drin. */
+  upgrades: Record<string, WarehouseUpgrades>;
+  /** Einlagern mit Kapazität (storeFitting) in Gramm: angeboten und abgelehnt (für Balancing und Anzeige). */
+  storage: { offered: number; rejected: number };
+  /**
+   * Verbrauch für den Warenfluss (Auftrag 33): verkaufte Einheiten heute und an den letzten sieben Tagen (neueste
+   * zuerst), Schlüssel "c:<Stadt>:<Produkt>" und "s:<Spot>:<Produkt>".
+   */
+  usage: { today: Record<string, number>; days: Record<string, number>[] };
 }
 
+/** Zustand bis Version 4: ohne Verbrauch. */
+type GoodsStateV4 = Omit<GoodsState, 'usage'>;
+
+/** Zustand bis Version 3: Lager ohne Kapazität und Ausbau. */
+type GoodsStateV3 = Omit<GoodsStateV4, 'upgrades' | 'storage'>;
+
 /** Zustand bis Version 2: nur ein Lager. */
-type GoodsStateV2 = Omit<GoodsState, 'owned'>;
+type GoodsStateV2 = Omit<GoodsStateV3, 'owned'>;
 
 /** Zustand bis Version 1: Lager-ID → Produkt-ID → Menge. */
 interface GoodsStateV1 {
@@ -168,11 +232,16 @@ declare module '../../core' {
     'goods.cut': { lotId: number; ratio: number; warehouseId?: string };
     /** Lager-Standort kaufen (sauberes Geld). */
     'goods.buyWarehouse': { warehouseId: string };
+    /** Lager um eine Stufe ausbauen: Regale, Tresor oder Tarnung (sauberes Geld, Auftrag 33). */
+    'goods.upgradeWarehouse': { warehouseId: string; kind: WarehouseUpgradeKind };
   }
   interface GameEvents {
     'goods.stored': { warehouseId: string; productId: string; amount: number; quality: number; lotId?: number };
     'goods.taken': { warehouseId: string; productId: string; amount: number; quality?: number };
     'goods.warehouseBought': { warehouseId: string; cost: number };
+    'goods.warehouseUpgraded': { warehouseId: string; kind: WarehouseUpgradeKind; level: number; cost: number };
+    /** Ein Lager war zu voll: rest Einheiten passten nicht hinein (storeFitting). */
+    'goods.storeRejected': { warehouseId: string; productId: string; amount: number; rest: number };
     'goods.cut': {
       warehouseId: string;
       lotId: number;
@@ -339,9 +408,142 @@ export function cutPreview(
 }
 
 // ---------------------------------------------------------------------------------------------
+// Kapazität und Ausbau (Auftrag 33)
+
+const NO_UPGRADES: WarehouseUpgrades = { shelves: 0, vault: 0, cover: 0 };
+
+/** Gewicht einer Menge in Gramm. */
+export function stockWeight(items: readonly { productId: string; amount: number }[]): number {
+  let grams = 0;
+  for (const i of items) grams += i.amount * unitWeight(i.productId);
+  return grams;
+}
+
+/** Gramm im Lager (alle Posten). */
+export function warehouseLoad(state: GameState, id: string): number {
+  return stockWeight(state.modules.goods.stock[id] ?? []);
+}
+
+/** Erreichte Stufe eines Ausbaus (0 = keiner). */
+export function upgradeLevel(state: GameState, id: string, kind: WarehouseUpgradeKind): number {
+  return state.modules.goods.upgrades?.[id]?.[kind] ?? 0;
+}
+
+/** Wirkung der erreichten Stufe (ohne Ausbau 1). */
+function upgradeValue(state: GameState, id: string, kind: WarehouseUpgradeKind): number {
+  const level = upgradeLevel(state, id, kind);
+  return level > 0 ? (WAREHOUSE_UPGRADES[kind].levels[level - 1]?.value ?? 1) : 1;
+}
+
+/** Kapazität, Tresor und Tarnung eines Lagers. Unbekannte Lager: ohne Grenze und ohne Ausbau. */
+export function warehouseModifiers(state: GameState, id: string): WarehouseModifiers {
+  const site = warehouseSite(id);
+  return {
+    capacity: site ? Math.round(site.capacity * upgradeValue(state, id, 'shelves')) : Number.POSITIVE_INFINITY,
+    lossFactor: upgradeValue(state, id, 'vault'),
+    raidFactor: upgradeValue(state, id, 'cover'),
+    levels: { ...NO_UPGRADES, ...state.modules.goods.upgrades?.[id] },
+  };
+}
+
+/** Platz in Gramm (mit Regalen). */
+export function warehouseCapacity(state: GameState, id: string): number {
+  return warehouseModifiers(state, id).capacity;
+}
+
+/** Freier Platz in Gramm (nie unter 0; ein überfülltes Lager hat 0). */
+export function warehouseFree(state: GameState, id: string): number {
+  return Math.max(0, warehouseCapacity(state, id) - warehouseLoad(state, id));
+}
+
+/** Wie viele Einheiten eines Produkts noch hineinpassen (mit amount: höchstens so viele). */
+export function fitsInto(state: GameState, id: string, productId: string, amount = Number.POSITIVE_INFINITY): number {
+  const room = Math.floor(warehouseFree(state, id) / unitWeight(productId));
+  return Math.max(0, Math.min(amount, room));
+}
+
+/** Preis der nächsten Stufe in sauberem Geld (mal Immobilien-Faktor der Stadt), null wenn ausgebaut. */
+export function upgradeCost(state: GameState, id: string, kind: WarehouseUpgradeKind): number | null {
+  const next = WAREHOUSE_UPGRADES[kind].levels[upgradeLevel(state, id, kind)];
+  if (!next) return null;
+  return Math.round((next.cost * (getCity(warehouseCity(id))?.propertyFactor ?? 1)) / 50) * 50;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Warenfluss (Auftrag 33)
+
+/** So viele Tage zählt der Verbrauch (Schnitt). */
+const USAGE_DAYS = 7;
+
+const usageKey = (scope: 'c' | 's', id: string, productId: string) => `${scope}:${id}:${productId}`;
+
+/**
+ * Verkäufe pro Tag: Schnitt der letzten (bis zu sieben) ganzen Tage; ohne ganze Tage der heutige Stand hochgerechnet.
+ * Mit spotId der Verbrauch an einem Spot, sonst der einer Stadt (Standard: die aktive), mit productId nur diese Ware.
+ */
+export function usagePerDay(
+  state: GameState,
+  filter: { cityId?: string; productId?: string; spotId?: string } = {},
+): number {
+  const usage = state.modules.goods.usage;
+  if (!usage) return 0;
+  const prefix = filter.spotId ? `s:${filter.spotId}:` : `c:${filter.cityId ?? activeCity(state)}:`;
+  const sum = (map: Record<string, number>) => {
+    if (filter.productId) return map[prefix + filter.productId] ?? 0;
+    let total = 0;
+    for (const [key, n] of Object.entries(map)) if (key.startsWith(prefix)) total += n;
+    return total;
+  };
+  if (usage.days.length > 0) return usage.days.reduce((t, day) => t + sum(day), 0) / usage.days.length;
+  const minute = state.time % MINUTES_PER_DAY;
+  return minute >= 120 ? (sum(usage.today) * MINUTES_PER_DAY) / minute : sum(usage.today);
+}
+
+/** Produkte, die in einer Stadt verkauft werden oder dort liegen (Reihenfolge wie allProducts). */
+export function usedProducts(state: GameState, cityId: string): Product[] {
+  return PRODUCTS.filter(
+    (p) => usagePerDay(state, { cityId, productId: p.id }) > 0 || getStock(state, { cityId, productId: p.id }) > 0,
+  );
+}
+
+/** Lager, aus dem ein Ort (Spot) eine Ware bekommt: das nächste mit Bestand, sonst das nächste überhaupt. */
+export function servingWarehouse(state: GameState, point: LngLat, productId: string): Warehouse | undefined {
+  return nearestWarehouse(state, point, { productId }) ?? nearestWarehouse(state, point);
+}
+
+/** Verkauf zählen (sale.completed). */
+function countSale(ctx: Ctx, cityId: string, spotId: string | null, productId: string, amount: number): void {
+  const s = ctx.state.modules.goods;
+  s.usage ??= { today: {}, days: [] };
+  const today = s.usage.today;
+  const city = usageKey('c', cityId, productId);
+  today[city] = (today[city] ?? 0) + amount;
+  if (spotId) {
+    const spot = usageKey('s', spotId, productId);
+    today[spot] = (today[spot] ?? 0) + amount;
+  }
+}
+
+/** Um Mitternacht: Der Tag wandert in die Liste der letzten Tage. */
+function closeUsageDay(ctx: Ctx): void {
+  const s = ctx.state.modules.goods;
+  s.usage ??= { today: {}, days: [] };
+  s.usage.days = [s.usage.today, ...s.usage.days].slice(0, USAGE_DAYS);
+  s.usage.today = {};
+}
+
+/** Einlagern mit Kapazität, in Gramm: angeboten und abgelehnt (Anteil abgelehnt fürs Balancing). */
+export function storageStats(state: GameState): { offered: number; rejected: number } {
+  return state.modules.goods.storage ?? { offered: 0, rejected: 0 };
+}
+
+// ---------------------------------------------------------------------------------------------
 // Schreiben
 
-/** Ware einlagern (Lieferung, Beute …). Gleichartige Ware landet im selben Posten. Gibt die Posten-ID zurück. */
+/**
+ * Ware einlagern, ohne Kapazität zu prüfen (Beute, Belohnung, Rückgabe kleiner Mengen). Lieferungen und Fahrten nehmen
+ * storeFitting. Gleichartige Ware landet im selben Posten. Gibt die Posten-ID zurück.
+ */
 export function store(ctx: Ctx, item: StoreRequest): number | null {
   if (!(item.amount > 0)) return null;
   const warehouseId = item.warehouseId ?? DEFAULT_WAREHOUSE;
@@ -368,6 +570,28 @@ export function store(ctx: Ctx, item: StoreRequest): number | null {
   }
   ctx.emit('goods.stored', { warehouseId, productId: item.productId, amount: item.amount, quality, lotId: lot.id });
   return lot.id;
+}
+
+/**
+ * Ware einlagern, so weit Platz ist (Auftrag 33): Das Lager nimmt nur, was in seine Kapazität passt, und meldet den
+ * Rest zurück ('goods.storeRejected'). Was mit dem Rest passiert, entscheidet der Aufrufer (bleibt am Kai, wartet beim
+ * Fahrer, geht in ein anderes Lager). Mit retry: true (erneuter Versuch derselben Ware, z.B. einer wartenden Fahrt)
+ * zählt der Rest nicht noch einmal als abgelehnt und es gibt keine neue Meldung.
+ */
+export function storeFitting(ctx: Ctx, item: StoreRequest, options: { retry?: boolean } = {}): StoreResult {
+  if (!(item.amount > 0)) return { stored: 0, rest: 0, lotId: null };
+  const warehouseId = item.warehouseId ?? DEFAULT_WAREHOUSE;
+  const stored = fitsInto(ctx.state, warehouseId, item.productId, item.amount);
+  const rest = item.amount - stored;
+  const lotId = stored > 0 ? store(ctx, { ...item, warehouseId, amount: stored }) : null;
+  if (options.retry) return { stored, rest, lotId };
+  const s = ctx.state.modules.goods;
+  s.storage ??= { offered: 0, rejected: 0 };
+  const per = unitWeight(item.productId);
+  s.storage.offered += item.amount * per;
+  s.storage.rejected += rest * per;
+  if (rest > 0) ctx.emit('goods.storeRejected', { warehouseId, productId: item.productId, amount: item.amount, rest });
+  return { stored, rest, lotId };
 }
 
 /** Ware entnehmen (Verkauf, Diebstahl, Beschlagnahme). Älteste Posten zuerst. */
@@ -453,6 +677,27 @@ export function buyWarehouse(ctx: Ctx, warehouseId: string): CommandResult {
   return { ok: true };
 }
 
+/** Lager um eine Stufe ausbauen (sauberes Geld, wie der Kauf). */
+export function upgradeWarehouse(ctx: Ctx, warehouseId: string, kind: WarehouseUpgradeKind): CommandResult {
+  const def = WAREHOUSE_UPGRADES[kind];
+  if (!def) return { ok: false, reason: 'Diesen Ausbau gibt es nicht.' };
+  const site = getWarehouse(ctx.state, warehouseId);
+  if (!site) return { ok: false, reason: 'Dieses Lager gehört dir nicht.' };
+  const cost = upgradeCost(ctx.state, warehouseId, kind);
+  if (cost === null) return { ok: false, reason: `${def.name} im ${site.name} sind schon voll ausgebaut.` };
+  if (!wallet.pay(ctx, cost, 'clean', `${def.name} ${site.name}`, { category: 'expansion', cityId: site.cityId })) {
+    return { ok: false, reason: `Dafür brauchst du ${formatEuro(cost)} sauberes Geld. Wasch vorher Schwarzgeld.` };
+  }
+  const s = ctx.state.modules.goods;
+  s.upgrades ??= {};
+  const levels = { ...NO_UPGRADES, ...s.upgrades[warehouseId] };
+  levels[kind] += 1;
+  s.upgrades[warehouseId] = levels;
+  journal.add(ctx, `${site.name}: ${def.name} Stufe ${levels[kind]} (${formatEuro(cost)} sauberes Geld).`, 'good');
+  ctx.emit('goods.warehouseUpgraded', { warehouseId, kind, level: levels[kind], cost });
+  return { ok: true };
+}
+
 /** Einen Posten strecken. ratio = zusätzliche Menge als Anteil (0,25 = +25 %). */
 export function cutLot(ctx: Ctx, request: { lotId: number; ratio: number; warehouseId?: string }): CommandResult {
   const warehouseId = request.warehouseId ?? DEFAULT_WAREHOUSE;
@@ -511,9 +756,12 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 export default defineModule({
   id: 'goods',
-  version: 3,
+  version: 5,
   init: (ctx) => ({
     owned: [DEFAULT_WAREHOUSE],
+    upgrades: {},
+    storage: { offered: 0, rejected: 0 },
+    usage: { today: {}, days: [] },
     stock: {
       [DEFAULT_WAREHOUSE]: [
         {
@@ -530,6 +778,7 @@ export default defineModule({
   commands: {
     'goods.cut': (ctx, payload) => cutLot(ctx, payload),
     'goods.buyWarehouse': (ctx, { warehouseId }) => buyWarehouse(ctx, warehouseId),
+    'goods.upgradeWarehouse': (ctx, { warehouseId, kind }) => upgradeWarehouse(ctx, warehouseId, kind),
   },
   migrations: {
     // Version 1 kannte nur Mengen pro Produkt: daraus werden Posten in Standardqualität.
@@ -550,13 +799,27 @@ export default defineModule({
       return { stock };
     },
     // Version 3: Lager werden gekauft. Wer schon Ware in einem Lager hat, besitzt es.
-    3: (old: GoodsStateV2): GoodsState => ({
+    3: (old: GoodsStateV2): GoodsStateV3 => ({
       stock: old.stock,
       owned: [
         DEFAULT_WAREHOUSE,
         ...WAREHOUSES.map((w) => w.id).filter((id) => id !== DEFAULT_WAREHOUSE && (old.stock[id]?.length ?? 0) > 0),
       ],
     }),
+    // Version 4 (Auftrag 33): Lager haben Kapazität und Ausbau. Alte Lager sind nicht ausgebaut; wer mehr drin hat, als
+    // hineinpasst, behält alles (das Lager ist dann voll, bis Ware rausgeht).
+    4: (old: GoodsStateV3): GoodsStateV4 => ({ ...old, upgrades: {}, storage: { offered: 0, rejected: 0 } }),
+    // Version 5 (Auftrag 33): Verbrauch für den Warenfluss, er zählt ab jetzt.
+    5: (old: GoodsStateV4): GoodsState => ({ ...old, usage: { today: {}, days: [] } }),
+  },
+  // Warenfluss: jeder Verkauf zählt; um Mitternacht rückt der Tag weiter.
+  tick: (ctx) => {
+    if (ctx.now % MINUTES_PER_DAY === 0) closeUsageDay(ctx);
+  },
+  tickEvery: 60,
+  on: {
+    'sale.completed': (ctx, { veedelId, spotId, productId, amount }) =>
+      countSale(ctx, veedelCity(veedelId), spotId, productId, amount),
   },
   // Pleite-Regel: Wer noch Ware hat, kann weitermachen.
   solvency: (state) => hasAnyStock(state),

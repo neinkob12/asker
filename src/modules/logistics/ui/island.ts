@@ -26,34 +26,43 @@ registerLiveActivity({
         icon: 'ship',
         tone: risky ? 'bad' : 'warn',
         leading: 'Hafen',
-        trailing: risky ? 'Zoll!' : islandCountdown(cargoRiskFrom(c) - state.time),
+        trailing: risky ? 'Zoll!' : islandCountdown(cargoRiskFrom(c, state) - state.time),
         title: `${formatProductAmount(c.productId, c.amount)} ${productName(c.productId)} am Kai`,
-        detail: risky ? 'Der Zoll kann sie jederzeit finden' : `Sicher bis ${clock.formatTime(cargoRiskFrom(c))}`,
+        detail: risky
+          ? 'Der Zoll kann sie jederzeit finden'
+          : `Sicher bis ${clock.formatTime(cargoRiskFrom(c, state))}`,
         open: (ui) => ui.openPanel('logistics.port', {}),
       };
     });
-    const trips = getTrips(state).map((trip): LiveActivity => {
-      const stopped = trip.status === 'stopped';
-      const to = placeOf(state, trip.toId)?.name ?? 'Lager';
-      const interCity = isInterCityTrip(state, trip);
-      return {
-        id: `logistics.trip.${trip.id}`,
-        priority: stopped ? 88 : 54,
-        icon: stopped ? 'siren' : 'truck',
-        tone: stopped ? 'bad' : 'info',
-        leading: stopped ? (interCity ? 'Zoll' : 'Kontrolle') : interCity ? 'A1' : 'Fahrt',
-        trailing: stopped ? '!' : islandCountdown(trip.arrivesAt - state.time),
-        title:
-          trip.kind === 'pickup'
-            ? `Abholung am Hafen → ${to}`
-            : trip.kind === 'route'
-              ? `${interCity ? 'A1' : 'Route'} → ${to}`
-              : `Umlagern → ${to}`,
-        detail: `${tripAmount(trip)} Einheiten`,
-        progress: tripProgress(state, trip).total,
-        open: (ui) => ui.openPanel(trip.kind === 'route' ? 'logistics.routes' : 'logistics.port', {}),
-      };
-    });
+    // Geplante Nachtfahrten stehen noch nicht in der Island (Auftrag 33), erst wenn sie losfahren.
+    const trips = getTrips(state)
+      .filter((trip) => trip.status !== 'planned')
+      .map((trip): LiveActivity => {
+        const stopped = trip.status === 'stopped';
+        // Am vollen Lager steht die Fahrt (Auftrag 33): keine Restzeit, sondern "voll".
+        const waiting = trip.status === 'waiting';
+        const to = placeOf(state, trip.toId)?.name ?? 'Lager';
+        const interCity = isInterCityTrip(state, trip);
+        return {
+          id: `logistics.trip.${trip.id}`,
+          priority: stopped ? 88 : 54,
+          icon: stopped ? 'siren' : 'truck',
+          tone: stopped ? 'bad' : 'info',
+          leading: stopped ? (interCity ? 'Zoll' : 'Kontrolle') : interCity ? 'A1' : 'Fahrt',
+          trailing: stopped ? '!' : waiting ? 'voll' : islandCountdown(trip.arrivesAt - state.time),
+          title:
+            trip.kind === 'pickup'
+              ? `Abholung am Hafen → ${to}`
+              : trip.kind === 'route'
+                ? `${interCity ? 'A1' : 'Route'} → ${to}`
+                : `Umlagern → ${to}`,
+          detail: waiting
+            ? `${tripAmount(trip)} Einheiten warten, das Lager ist voll`
+            : `${tripAmount(trip)} Einheiten`,
+          progress: tripProgress(state, trip).total,
+          open: (ui) => ui.openPanel(trip.kind === 'route' ? 'logistics.routes' : 'logistics.port', {}),
+        };
+      });
     return [...cargo, ...trips];
   },
 });
