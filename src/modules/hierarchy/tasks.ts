@@ -8,7 +8,7 @@
 //   Stündlich (RIGHT_HAND_INTERVAL): Personal, Geldwäsche.
 
 import { type Actor, type Ctx, clock, formatEuro, type GameState, messages } from '../../core';
-import { activeCity } from '../city';
+import { activeCity, cityAt } from '../city';
 import { getOrders, type Order } from '../customers';
 import { wageRunway } from '../finance';
 import {
@@ -154,7 +154,8 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
       pass(ctx, rh, order, `${veedelName(order.veedelId)} ist nicht unser Revier`);
       continue;
     }
-    if (getStock(state, { productId: order.productId }) < order.amount) {
+    // Bestand der Stadt des Auftrags, wie ihn customers.acceptOrder prüft (sonst gibt sie ihn nur an den Boss ab).
+    if (getStock(state, { productId: order.productId, cityId: cityAt(order.lng, order.lat) }) < order.amount) {
       // Kommt Ware nach (Bestellung unterwegs), wartet die Anfrage; erst kurz vor Fristende bleibt sie beim Spieler.
       if (order.expiresAt - ctx.now > STOCK_WAIT_MINUTES) continue;
       pass(ctx, rh, order, `nicht genug ${productName(order.productId)} im Lager`);
@@ -248,23 +249,35 @@ export function restockBudgetLeft(state: GameState): number {
   );
 }
 
-/** Je Ware eine Regel (nur Waren, die ein freigeschalteter Lieferant der Stadt gerade anbietet). */
-function fullPowerRules(state: GameState): OrderRule[] {
-  return allProducts()
-    .filter((p) =>
-      getSuppliers(state, activeCity(state)).some(
-        (sup) => isUnlocked(state, sup.id) && availablePackages(state, sup.id).some((pkg) => pkg.productId === p.id),
-      ),
-    )
-    .map((p) => ({
-      id: `fp-${p.id}`,
-      productId: p.id,
-      supplierId: null,
-      packageId: null,
-      minStock: p.unit === 'Stück' ? FP_STOCK_PIECES : FP_STOCK_GRAMS,
-      warehouseId: null,
-      paused: null,
-    }));
+/** Die zuletzt gebauten Vollmacht-Regeln pro Rechte Hand (gleiche Waren, dieselben Objekte; nicht im Spielstand). */
+const fullPowerRulesCache = new WeakMap<RightHandPost, { key: string; rules: OrderRule[] }>();
+
+/**
+ * Je Ware eine Regel (nur Waren, die ein freigeschalteter Lieferant der Stadt gerade anbietet). Läuft jeden Tick: Die
+ * Angebote werden einmal durchgezählt und die Regel-Objekte nur neu gebaut, wenn sich die Warenliste ändert.
+ */
+function fullPowerRules(state: GameState, rh: RightHandPost): OrderRule[] {
+  const city = activeCity(state);
+  const offered = new Set<string>();
+  for (const sup of getSuppliers(state, city)) {
+    if (!isUnlocked(state, sup.id)) continue;
+    for (const pkg of availablePackages(state, sup.id, city)) offered.add(pkg.productId);
+  }
+  const products = allProducts().filter((p) => offered.has(p.id));
+  const key = `${city}|${products.map((p) => p.id).join(',')}`;
+  const cached = fullPowerRulesCache.get(rh);
+  if (cached?.key === key) return cached.rules;
+  const rules = products.map((p) => ({
+    id: `fp-${p.id}`,
+    productId: p.id,
+    supplierId: null,
+    packageId: null,
+    minStock: p.unit === 'Stück' ? FP_STOCK_PIECES : FP_STOCK_GRAMS,
+    warehouseId: null,
+    paused: null,
+  }));
+  fullPowerRulesCache.set(rh, { key, rules });
+  return rules;
 }
 
 /** Nachbestellen für ganz Köln nach ihren Regeln (wie die Leutnants, aber ins Hauptlager und mit eigenem Budget). */
@@ -277,8 +290,9 @@ function restock(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor)
     rh.restockSpent = 0;
   }
   // Mit Vollmacht hält sie von jeder Ware, die es zu kaufen gibt, ein Kilo (bzw. FP_STOCK_PIECES Stück) auf Lager.
-  const rules = rh.fullPower ? fullPowerRules(state) : rh.settings.restockRules;
+  const rules = rh.fullPower ? fullPowerRules(state, rh) : rh.settings.restockRules;
   runRestock(ctx, rules, mainWarehouseId(state), actor, {
+    cityId: activeCity(state),
     budget: () => restockBudgetLeft(state),
     onPause: (_rule, reason) => {
       if (!rh.fullPower) log(ctx, rh, `Bestellung ruht: ${reason}`);

@@ -413,16 +413,16 @@ function projectOnEdge(g: Graph, e: number, px: number, py: number): Snap {
 }
 
 /** Stützpunkte einer Kante zwischen zwei Abständen vom Kantenanfang (auch rückwärts), ohne die Endpunkte. */
-function slice(g: Graph, e: number, fromOffset: number, toOffset: number, out: [number, number][]): void {
+function slice(g: Graph, e: number, fromOffset: number, toOffset: number, emit: (x: number, y: number) => void): void {
   const start = g.shapeStart[e];
   const end = g.shapeStart[e + 1];
   if (fromOffset <= toOffset) {
     for (let k = start; k < end; k++) {
-      if (g.shapeDist[k] > fromOffset && g.shapeDist[k] < toOffset) out.push([g.shapeX[k], g.shapeY[k]]);
+      if (g.shapeDist[k] > fromOffset && g.shapeDist[k] < toOffset) emit(g.shapeX[k], g.shapeY[k]);
     }
   } else {
     for (let k = end - 1; k >= start; k--) {
-      if (g.shapeDist[k] < fromOffset && g.shapeDist[k] > toOffset) out.push([g.shapeX[k], g.shapeY[k]]);
+      if (g.shapeDist[k] < fromOffset && g.shapeDist[k] > toOffset) emit(g.shapeX[k], g.shapeY[k]);
     }
   }
 }
@@ -433,6 +433,11 @@ class Heap {
   private keys: number[] = [];
   get size() {
     return this.ids.length;
+  }
+  /** Leeren, ohne die Arrays neu anzulegen (der Heap wird zwischen Suchen wiederverwendet). */
+  clear(): void {
+    this.ids.length = 0;
+    this.keys.length = 0;
   }
   push(id: number, key: number): void {
     const ids = this.ids;
@@ -489,29 +494,77 @@ export interface GraphRoute {
 }
 
 /**
- * Route zwischen zwei Punkten über das Straßennetz einer Stadt. null, wenn einer der Punkte zu weit weg von jeder
- * Straße dieses Netzes ist.
+ * Arbeitsspeicher der Suche pro Graph, über alle Suchen hinweg wiederverwendet (statt pro Aufruf Map und Set). Ein Eintrag
+ * gilt nur, wenn sein Stempel die aktuelle Suche (generation) trägt; so muss nichts zurückgesetzt werden.
  */
-export function findRoute(fromPoint: LngLat, toPoint: LngLat, networkId: string): GraphRoute | null {
-  const g = getGraph(networkId);
-  const s = snapIn(g, fromPoint);
-  const t = snapIn(g, toPoint);
-  if (!s || !t) return null;
+interface Scratch {
+  generation: number;
+  /** Stempel: gScore, prevEdge und prevDir des Knotens gehören zur aktuellen Suche. */
+  seen: Uint32Array;
+  /** Stempel: Knoten ist abgeschlossen. */
+  closed: Uint32Array;
+  gScore: Float64Array;
+  prevEdge: Int32Array;
+  prevDir: Uint8Array;
+  heap: Heap;
+}
+
+const scratches = new WeakMap<Graph, Scratch>();
+
+function scratchFor(g: Graph): Scratch {
+  const size = g.nodeX.length + 1; // plus virtueller Zielknoten
+  let sc = scratches.get(g);
+  if (!sc) {
+    sc = {
+      generation: 0,
+      seen: new Uint32Array(size),
+      closed: new Uint32Array(size),
+      gScore: new Float64Array(size),
+      prevEdge: new Int32Array(size),
+      prevDir: new Uint8Array(size),
+      heap: new Heap(),
+    };
+    scratches.set(g, sc);
+  }
+  if (sc.generation >= 0xffffffff) {
+    // Zähler läuft über (nach über vier Milliarden Suchen): alle Stempel löschen, von vorn anfangen.
+    sc.seen.fill(0);
+    sc.closed.fill(0);
+    sc.generation = 0;
+  }
+  sc.generation += 1;
+  return sc;
+}
+
+/** Ergebnis der Suche ohne Weg: wie die Kanten aufeinander folgen. */
+type Found =
+  | { kind: 'sameEdge' }
+  | {
+      kind: 'chain';
+      /** Kanten nach der Startkante bis zur Zielkante, in Fahrtrichtung (dir 1 = vorwärts). */
+      chain: { edge: number; dir: number }[];
+      /** Erster Knoten nach der Startkante. */
+      firstNode: number;
+      firstDir: number;
+      /** Fahrtrichtung auf der Zielkante. */
+      lastDir: number;
+    };
+
+/** A* zwischen zwei Punkten auf Kanten. null, wenn es keine Verbindung gibt. */
+function search(g: Graph, s: Snap, t: Snap): Found | null {
   const n = g.nodeX.length;
   const target = n; // virtueller Zielknoten
-  const gScore = new Map<number, number>();
-  const prevEdge = new Map<number, number>();
-  const prevDir = new Map<number, number>();
-  const closed = new Set<number>();
-  const heap = new Heap();
+  const sc = scratchFor(g);
+  const { seen, closed, gScore, prevEdge, prevDir, heap, generation } = sc;
+  heap.clear();
   const h = (node: number) => (node === target ? 0 : Math.hypot(g.nodeX[node] - t.x, g.nodeY[node] - t.y));
 
   const relax = (node: number, cost: number, edge: number, dir: number) => {
-    const old = gScore.get(node);
-    if (old !== undefined && old <= cost) return;
-    gScore.set(node, cost);
-    prevEdge.set(node, edge);
-    prevDir.set(node, dir);
+    if (seen[node] === generation && gScore[node] <= cost) return;
+    seen[node] = generation;
+    gScore[node] = cost;
+    prevEdge[node] = edge;
+    prevDir[node] = dir;
     heap.push(node, cost + h(node));
   };
 
@@ -528,10 +581,10 @@ export function findRoute(fromPoint: LngLat, toPoint: LngLat, networkId: string)
   const te = t.edge;
   while (heap.size > 0) {
     const node = heap.pop();
-    if (closed.has(node)) continue;
-    closed.add(node);
+    if (closed[node] === generation) continue;
+    closed[node] = generation;
     if (node === target) break;
-    const cost = gScore.get(node) as number;
+    const cost = gScore[node];
     // Zielkante: vom Anfang vorwärts, bei zweispurigen auch vom Ende rückwärts.
     if (node === g.edgeFrom[te]) relax(target, cost + t.offset * g.edgeWeight[te], te, 1);
     if (node === g.edgeTo[te] && !g.edgeOneway[te]) {
@@ -541,46 +594,103 @@ export function findRoute(fromPoint: LngLat, toPoint: LngLat, networkId: string)
       const e = g.adjEdge[k];
       const dir = g.adjDir[k];
       const next = dir ? g.edgeTo[e] : g.edgeFrom[e];
-      if (closed.has(next)) continue;
+      if (closed[next] === generation) continue;
       relax(next, cost + g.edgeLength[e] * g.edgeWeight[e], e, dir);
     }
   }
-  if (!closed.has(target)) return null;
+  if (closed[target] !== generation) return null;
 
   // Rückweg: Kanten vom Ziel bis zum Start einsammeln.
+  const lastEdge = prevEdge[target];
+  const lastDir = prevDir[target];
+  if (lastEdge === -2) return { kind: 'sameEdge' }; // Start und Ziel auf derselben Kante.
   const chain: { edge: number; dir: number }[] = [];
-  const lastEdge = prevEdge.get(target) as number;
-  const lastDir = prevDir.get(target) as number;
-  if (lastEdge === -2) {
-    // Start und Ziel auf derselben Kante.
-    const points: [number, number][] = [[s.x, s.y]];
-    slice(g, se, s.offset, t.offset, points);
-    points.push([t.x, t.y]);
-    return finish(g, points, fromPoint, toPoint);
-  }
   let node = lastDir ? g.edgeFrom[lastEdge] : g.edgeTo[lastEdge];
   for (;;) {
-    const edge = prevEdge.get(node) as number;
+    const edge = prevEdge[node];
     if (edge === -1) break;
-    const dir = prevDir.get(node) as number;
+    const dir = prevDir[node];
     chain.push({ edge, dir });
     node = dir ? g.edgeFrom[edge] : g.edgeTo[edge];
   }
   chain.reverse();
   // node ist jetzt der erste Knoten nach der Startkante.
-  const points: [number, number][] = [[s.x, s.y]];
-  const firstDir = prevDir.get(node) as number;
-  slice(g, se, s.offset, firstDir ? g.edgeLength[se] : 0, points);
-  points.push([g.nodeX[node], g.nodeY[node]]);
-  for (const { edge, dir } of chain) {
-    const len = g.edgeLength[edge];
-    slice(g, edge, dir ? 0 : len, dir ? len : 0, points);
-    const end = dir ? g.edgeTo[edge] : g.edgeFrom[edge];
-    points.push([g.nodeX[end], g.nodeY[end]]);
+  return { kind: 'chain', chain, firstNode: node, firstDir: prevDir[node], lastDir };
+}
+
+/**
+ * Punkte der Straße (in Metern) in Fahrtrichtung, vom Startpunkt auf der Straße bis zum Zielpunkt auf der Straße. Wer
+ * nur die Länge braucht, nimmt einen emit, der nichts speichert.
+ */
+function walkRoad(g: Graph, s: Snap, t: Snap, found: Found, emit: (x: number, y: number) => void): void {
+  const se = s.edge;
+  emit(s.x, s.y);
+  if (found.kind === 'sameEdge') {
+    slice(g, se, s.offset, t.offset, emit);
+    emit(t.x, t.y);
+    return;
   }
-  slice(g, te, lastDir ? 0 : g.edgeLength[te], t.offset, points);
-  points.push([t.x, t.y]);
+  slice(g, se, s.offset, found.firstDir ? g.edgeLength[se] : 0, emit);
+  emit(g.nodeX[found.firstNode], g.nodeY[found.firstNode]);
+  for (const { edge, dir } of found.chain) {
+    const len = g.edgeLength[edge];
+    slice(g, edge, dir ? 0 : len, dir ? len : 0, emit);
+    const end = dir ? g.edgeTo[edge] : g.edgeFrom[edge];
+    emit(g.nodeX[end], g.nodeY[end]);
+  }
+  const te = t.edge;
+  slice(g, te, found.lastDir ? 0 : g.edgeLength[te], t.offset, emit);
+  emit(t.x, t.y);
+}
+
+/**
+ * Route zwischen zwei Punkten über das Straßennetz einer Stadt. null, wenn einer der Punkte zu weit weg von jeder
+ * Straße dieses Netzes ist.
+ */
+export function findRoute(fromPoint: LngLat, toPoint: LngLat, networkId: string): GraphRoute | null {
+  const g = getGraph(networkId);
+  const s = snapIn(g, fromPoint);
+  const t = snapIn(g, toPoint);
+  if (!s || !t) return null;
+  const found = search(g, s, t);
+  if (!found) return null;
+  const points: [number, number][] = [];
+  walkRoad(g, s, t, found, (x, y) => points.push([x, y]));
   return finish(g, points, fromPoint, toPoint);
+}
+
+/**
+ * Nur die Länge der Route in Metern (ungerundet), ohne den Weg als Liste zu bauen. Bitgleich mit
+ * findRoute(...).meters: gleiche Punkte, gleiche Reihenfolge der Summanden. null wie bei findRoute.
+ */
+export function findRouteMeters(fromPoint: LngLat, toPoint: LngLat, networkId: string): number | null {
+  const g = getGraph(networkId);
+  const s = snapIn(g, fromPoint);
+  const t = snapIn(g, toPoint);
+  if (!s || !t) return null;
+  const found = search(g, s, t);
+  if (!found) return null;
+  // Wie finish(): Punkte, die weniger als 0,5 m vom letzten behaltenen entfernt sind, entfallen.
+  let meters = 0;
+  let lastX = Number.NaN;
+  let lastY = Number.NaN;
+  let count = 0;
+  const add = (x: number, y: number) => {
+    if (count === 0) {
+      count = 1;
+    } else if (Math.hypot(lastX - x, lastY - y) > 0.5) {
+      meters += Math.hypot(x - lastX, y - lastY);
+      count++;
+    } else {
+      return;
+    }
+    lastX = x;
+    lastY = y;
+  };
+  add(toX(g, fromPoint.lng), toY(fromPoint.lat));
+  walkRoad(g, s, t, found, add);
+  add(toX(g, toPoint.lng), toY(toPoint.lat));
+  return meters;
 }
 
 function finish(g: Graph, road: [number, number][], fromPoint: LngLat, toPoint: LngLat): GraphRoute {
