@@ -212,6 +212,7 @@
   grid-area: tiles;
   display: flex;
   gap: var(--space-3);
+  min-width: 0;
 }
 .hud__alerts {
   grid-area: alerts;
@@ -220,7 +221,7 @@
   gap: var(--space-2);
 }
 /* Schmale Kartenfläche: Kacheln unter die Uhr, rechtsbündig */
-@container hud (max-width: 1000px) {
+@container hud (max-width: 1240px) {
   .hud__grid {
     grid-template-columns: auto 1fr;
     grid-template-areas:
@@ -233,6 +234,12 @@
   .hud-tiles,
   .hud__alerts {
     justify-self: end;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .hud-tiles {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 }
 
