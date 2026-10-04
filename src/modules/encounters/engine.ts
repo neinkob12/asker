@@ -226,7 +226,7 @@ export function settingOf(request: EncounterRequest): EncounterSetting {
 
 /**
  * Situationstext: der Text des Aufrufers, sonst der genaueste passende aus den Situationen des Anlasses (Ort,
- * Tagesabschnitt, Wetter), bei Gleichstand gewürfelt.
+ * Tagesabschnitt, Wetter; Wetter zählt am meisten), bei Gleichstand gewürfelt.
  */
 function pickSituation(ctx: Ctx, kind: EncounterKind, request: EncounterRequest): string {
   if (request.situation) return request.situation;
@@ -240,7 +240,8 @@ function pickSituation(ctx: Ctx, kind: EncounterKind, request: EncounterRequest)
     if (s.settings && !s.settings.includes(setting)) continue;
     if (s.phases && !s.phases.includes(phase)) continue;
     if (s.weather && (!weather || !s.weather.includes(weather))) continue;
-    const score = (s.settings ? 1 : 0) + (s.phases ? 1 : 0) + (s.weather ? 1 : 0);
+    // Wetter ist am seltensten und fällt am meisten auf, der Ort am wenigsten.
+    const score = (s.settings ? 0.5 : 0) + (s.phases ? 1 : 0) + (s.weather ? 1.5 : 0);
     if (score > bestScore) {
       best = [s.text];
       bestScore = score;

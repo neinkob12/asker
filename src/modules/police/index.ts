@@ -939,7 +939,7 @@ function tick(ctx: Ctx): void {
 }
 
 /** Anlässe, bei denen die Polizei selbst die Gegenseite ist. */
-const POLICE_ENCOUNTERS: readonly string[] = ['policeChase', 'vehicleCheck'];
+const POLICE_ENCOUNTERS: readonly string[] = ['policeChase', 'vehicleCheck', 'customsCheck'];
 
 function initialState(): PoliceState {
   return {

@@ -857,8 +857,9 @@ function stopForCheck(ctx: Ctx, trip: Trip): void {
     `${autobahn ? 'Zollkontrolle' : 'Verkehrskontrolle'} ${place}: ${who} ${trip.driverId ? 'wird' : 'wirst'} rausgewunken.`,
     'bad',
   );
+  // Auf der Autobahn der Zoll als eigener Anlass (Auftrag 35: Papiere, bestechen, ablenken, Ladung aufgeben).
   const { encounterId } = startEncounter(ctx, {
-    kind: 'vehicleCheck',
+    kind: autobahn ? 'customsCheck' : 'vehicleCheck',
     ...(veedelId ? { veedelId } : {}),
     staffIds: trip.driverId ? [trip.driverId] : [],
     playerPresent: trip.driverId === null,
@@ -867,13 +868,7 @@ function stopForCheck(ctx: Ctx, trip: Trip): void {
     skipEffects: true,
     origin: { module: 'logistics', ref: `trip:${trip.id}` },
     ...(autobahn
-      ? {
-          opponent: { ...CUSTOMS_OPPONENT },
-          situation:
-            'Zollkontrolle {place}. {opponent} winkt den Transporter auf den Parkplatz: Spürhund, Taschenlampen, ' +
-            'Fragen nach Ladung und Lieferschein. Hinten drin: {stakeGoods} Ware.',
-          lossCategory: 'loss.customs' as const,
-        }
+      ? { opponent: { ...CUSTOMS_OPPONENT }, setting: 'autobahn' as const, lossCategory: 'loss.customs' as const }
       : {}),
   });
   trip.encounterId = encounterId;
@@ -881,7 +876,7 @@ function stopForCheck(ctx: Ctx, trip: Trip): void {
 }
 
 /** Ausgang einer Kontrolle. */
-function onCheckResolved(ctx: Ctx, ref: string | undefined, outcome: string): void {
+function onCheckResolved(ctx: Ctx, ref: string | undefined, outcome: string, ending?: string): void {
   const id = Number(ref?.replace('trip:', ''));
   const trip = ctx.state.modules.logistics.trips.find((t) => t.id === id);
   if (trip?.status !== 'stopped') return;
@@ -915,7 +910,8 @@ function onCheckResolved(ctx: Ctx, ref: string | undefined, outcome: string): vo
   logTrip(ctx, trip, 'seized');
   if (veedelId) addHeat(ctx, veedelId, SEIZE_HEAT);
   let arrested = false;
-  if (trip.driverId) {
+  // Ladung aufgegeben (Zollkontrolle): Die Ware ist weg, dafür kommt niemand mit.
+  if (trip.driverId && ending !== 'surrendered') {
     const m = getStaffMember(ctx.state, trip.driverId);
     const factor = autobahn ? AUTOBAHN_ARREST_FACTOR : 1;
     if (
@@ -1064,8 +1060,8 @@ export default defineModule({
     'logistics.runRouteNow': (ctx, { routeId }) => departRoute(ctx, routeId, 'now'),
   },
   on: {
-    'encounter.resolved': (ctx, { request, outcome }) => {
-      if (request.origin?.module === 'logistics') onCheckResolved(ctx, request.origin.ref, outcome);
+    'encounter.resolved': (ctx, { request, outcome, result }) => {
+      if (request.origin?.module === 'logistics') onCheckResolved(ctx, request.origin.ref, outcome, result?.ending);
     },
     'staff.left': (ctx, { staffId }) => driverGone(ctx, staffId),
     'staff.statusChanged': (ctx, { staffId, to }) => {

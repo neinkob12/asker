@@ -307,3 +307,74 @@ describe('Konfrontationen neu: Migration', () => {
     expect(get(loaded, id).phase).toBe('done');
   });
 });
+
+describe('Anlässe: Situationen und Zoll', () => {
+  it('jeder Anlass hat mindestens vier Situationstexte nach Ort, Tageszeit und Wetter', () => {
+    for (const [id, kind] of Object.entries(ENCOUNTER_KINDS)) {
+      expect(kind.situations?.length ?? 0, id).toBeGreaterThanOrEqual(4);
+      const tagged = (kind.situations ?? []).filter((s) => s.settings || s.phases || s.weather);
+      expect(tagged.length, id).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('die Zollkontrolle spielt am Hafen und auf der Autobahn mit eigenen Texten', () => {
+    const sim = createTestGame();
+    const start = (setting: 'port' | 'autobahn') =>
+      get(
+        sim,
+        startEncounter(sim.ctx('logistics'), {
+          kind: 'customsCheck',
+          setting,
+          place: 'bei Münster',
+          stakes: { goods: 500 },
+          playerPresent: true,
+          skipEffects: true,
+        }).encounterId,
+      );
+    const port = start('port');
+    const autobahn = start('autobahn');
+    expect(port.situation).toMatch(/Kai|Hafen|Container/);
+    expect(autobahn.situation).toMatch(/Transporter/);
+    expect(availableActions(port)).toEqual(['papers', 'distract', 'bribe', 'giveUp']);
+    expect(port.stakes.map((s) => s.id)).toEqual(['goods', 'people']);
+  });
+
+  it('der Text des Aufrufers hat Vorrang vor den Situationen des Anlasses', () => {
+    const sim = createTestGame();
+    const e = get(
+      sim,
+      startEncounter(sim.ctx('gangs'), {
+        kind: 'raidDefense',
+        veedelId: 'kalk',
+        playerPresent: true,
+        situation: 'Eigener Text {place}.',
+      }).encounterId,
+    );
+    expect(e.situation).toBe('Eigener Text in Kalk.');
+  });
+
+  it('Ladung aufgeben beendet die Zollkontrolle sofort (verloren, aufgegeben)', () => {
+    const sim = createTestGame();
+    const id = startEncounter(sim.ctx('logistics'), {
+      kind: 'customsCheck',
+      setting: 'autobahn',
+      playerPresent: true,
+      skipEffects: true,
+    }).encounterId;
+    act(sim, id, 'giveUp');
+    expect(get(sim, id)).toMatchObject({ phase: 'done', outcome: 'failure', result: { ending: 'surrendered' } });
+  });
+});
+
+describe('Situationstexte nach Wetter', () => {
+  it('bei Schnee kommt der Schnee-Text, wenn nichts Genaueres passt', () => {
+    const sim = createTestGame();
+    sim.state.modules.weather.kind = 'snow';
+    const id = startEncounter(sim.ctx('gangs'), {
+      kind: 'raidDefense',
+      veedelId: 'kalk',
+      playerPresent: true,
+    }).encounterId;
+    expect(get(sim, id).situation).toMatch(/Schnee/);
+  });
+});
