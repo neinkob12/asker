@@ -20,6 +20,7 @@ import {
   type VehicleHandle,
 } from '../../../map';
 import { iconElement } from '../../../ui';
+import { vehicleSpec } from '../../fleet';
 import { formatProductAmount, getProduct } from '../../goods';
 import { getStaffMember } from '../../staff';
 import { shipmentsInTransit } from '../../suppliers';
@@ -119,7 +120,8 @@ export const logisticsLayer: MapLayer = {
       const leg = progress.leg === 'toPickup' && paths.approach ? 'approach' : 'delivery';
       const vehicle = createVehicle(map, {
         path: leg === 'approach' && paths.approach ? paths.approach : paths.delivery,
-        kind: trip.driverId ? 'van' : 'car',
+        // Eigenes Fahrzeug: Modell erkennbar (Roller, Kombi, Transporter); Privatauto wie bisher.
+        kind: trip.vehicleId !== undefined ? vehicleSpec(state, trip.vehicleId).mapKind : trip.driverId ? 'van' : 'car',
         title: trip.kind === 'pickup' ? 'Abholung am Hafen' : trip.kind === 'route' ? 'Route' : 'Umlagern',
         progress: leg === 'approach' ? progress.t : progress.leg === 'delivering' ? progress.t : 0,
       });

@@ -26,6 +26,7 @@ import {
 } from '../../../ui';
 import { activeCity } from '../../city';
 import { isPlayerDelivering } from '../../customers';
+import { vehicleName } from '../../fleet';
 import {
   formatProductAmount,
   getWarehouse,
@@ -58,6 +59,7 @@ import {
 } from '../index';
 import './island';
 import { LogisticsLinks } from './routes';
+import { AUTO, VehicleSelect, vehicleChoice } from './vehicles';
 import './tracking';
 import { logisticsLayer } from './map';
 import './logistics.css';
@@ -108,6 +110,7 @@ function TripRow(props: { trip: Trip }) {
         tags={[
           { label: who(state, trip.driverId), icon: 'user', color: 'people' },
           { label: `${tripAmount(trip)} Einheiten`, icon: 'package', color: 'goods' },
+          trip.vehicleId !== undefined && { label: vehicleName(state, trip.vehicleId), icon: 'truck', color: 'goods' },
         ]}
       >
         <ProgressBar value={progress.total} tone={stopped ? 'bad' : 'accent'} label="Fahrt" />
@@ -149,6 +152,7 @@ function PortSection() {
   const drivers = freeDrivers(state);
   const [target, setTarget] = useState('');
   const [driverId, setDriverId] = useState('');
+  const [vehicle, setVehicle] = useState(AUTO);
   const cityId = activeCity(state);
   const port = portName(cityId);
   const cost = berthCost(cityId);
@@ -268,6 +272,7 @@ function PortSection() {
             onChange={setDriverId}
           />
         )}
+        <VehicleSelect state={state} cityId={cityId} value={vehicle} onChange={setVehicle} />
         <div class="logi-actions">
           <Button
             variant="primary"
@@ -277,7 +282,7 @@ function PortSection() {
             onClick={() =>
               dispatch({
                 type: 'logistics.pickup',
-                payload: { by: 'driver', driverId: chosenDriver?.id, warehouseId },
+                payload: { by: 'driver', driverId: chosenDriver?.id, warehouseId, vehicleId: vehicleChoice(vehicle) },
               })
             }
           >
@@ -287,7 +292,12 @@ function PortSection() {
             icon="car"
             disabled={!!busy}
             title={busy ?? 'Du fährst selbst'}
-            onClick={() => dispatch({ type: 'logistics.pickup', payload: { by: 'player', warehouseId } })}
+            onClick={() =>
+              dispatch({
+                type: 'logistics.pickup',
+                payload: { by: 'player', warehouseId, vehicleId: vehicleChoice(vehicle) },
+              })
+            }
           >
             Selbst abholen
           </Button>
@@ -304,6 +314,7 @@ function WarehouseLogistics(props: { warehouseId: string }) {
   const owned = getWarehouses(state, activeCity(state));
   const [toId, setToId] = useState('');
   const [productId, setProductId] = useState('');
+  const [vehicle, setVehicle] = useState(AUTO);
   const from = owned.find((w) => w.id === props.warehouseId) ?? owned[0];
   const targets = owned.filter((w) => w.id !== from?.id);
   const to = targets.find((w) => w.id === toId) ?? targets[0];
@@ -319,7 +330,13 @@ function WarehouseLogistics(props: { warehouseId: string }) {
     to &&
     dispatch({
       type: 'logistics.transfer',
-      payload: { fromId: from.id, toId: to.id, by, ...(product ? { productId: product } : {}) },
+      payload: {
+        fromId: from.id,
+        toId: to.id,
+        by,
+        vehicleId: vehicleChoice(vehicle),
+        ...(product ? { productId: product } : {}),
+      },
     });
   const forSale = warehouseSites(activeCity(state)).filter((w) => !owned.some((o) => o.id === w.id));
   const buyList = (
@@ -428,6 +445,7 @@ function WarehouseLogistics(props: { warehouseId: string }) {
               ]}
               onChange={setProductId}
             />
+            <VehicleSelect state={state} cityId={from.cityId} value={vehicle} onChange={setVehicle} />
             <div class="logi-actions">
               <Button
                 variant="primary"

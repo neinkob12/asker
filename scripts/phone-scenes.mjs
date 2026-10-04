@@ -217,6 +217,19 @@ export const SCENES = [
       await sleep(100);
     })()`,
   },
+  {
+    // Auftrag 33: Lager-App mit Fahrzeugen (frei, unterwegs, beschlagnahmt) und Modellen zum Kaufen.
+    name: 'lager-fahrzeuge',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      sim.state.wallet.clean = 60000;
+      for (const model of ['scooter', 'kombi', 'van']) sim.dispatch({ type: 'fleet.buy', payload: { model } });
+      const [scooter, kombi] = sim.state.modules.fleet.vehicles;
+      kombi.tripId = 1;
+      scooter.seizedAt = sim.state.time;
+      window.koeln.runtime.api.openPhone('goods.app');
+    })()`,
+  },
   { name: 'lagerdetail', js: "window.koeln.runtime.api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' })" },
   {
     // Auftrag 33: fast volles Lager mit Regalen (Füllstand, Ausbau mit Preis).

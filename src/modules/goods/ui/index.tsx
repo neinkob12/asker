@@ -66,6 +66,8 @@ declare module '../../../ui' {
   interface SlotRegistry {
     /** Abschnitte unten auf der Lager-Seite (Hafen, Umlagern, Lager kaufen, Markt). */
     'goods.warehouse': { warehouseId: string };
+    /** Abschnitte in der Lager-App unter den eigenen Lagern (Fahrzeuge, Warenfluss; Auftrag 33). */
+    'goods.app': Record<string, never>;
   }
 }
 
@@ -478,6 +480,7 @@ function WarehouseApp() {
           </List>
         </Group>
       )}
+      <Slot name="goods.app" props={{}} />
       <Group title="Zu kaufen (sauberes Geld)" icon="building" color="money" count={forSale.length}>
         {forSale.length === 0 ? (
           <Empty icon="building">Hier gibt es keinen Standort mehr zu kaufen.</Empty>

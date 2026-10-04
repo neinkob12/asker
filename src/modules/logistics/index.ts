@@ -32,6 +32,7 @@ import {
   clock,
   defineModule,
   formatEuro,
+  type GameCommands,
   type GameState,
   journal,
   type LngLat,
@@ -52,6 +53,16 @@ import {
 } from '../city';
 import { isPlayerDelivering } from '../customers';
 import { startEncounter } from '../encounters';
+import {
+  getVehicle,
+  maybeSeize,
+  pickVehicle,
+  releaseVehicle,
+  useVehicle,
+  vehicleName,
+  vehicleSpec,
+  vehicleStatus,
+} from '../fleet';
 import {
   formatProductAmount,
   getLots,
@@ -197,7 +208,12 @@ export interface Trip {
   leg?: 'out' | 'back';
   /** Schon abgeladene Einheiten, solange die Fahrt am vollen Lager wartet (Auftrag 33). */
   unloaded?: number;
+  /** Eigenes Fahrzeug (fleet), fehlt = Privatauto des Fahrers (Auftrag 33). */
+  vehicleId?: number;
 }
+
+/** Fahrzeugwahl einer Fahrt: eigenes Fahrzeug (ID), 'private' = Privatauto, ohne Angabe das passende freie. */
+export type VehicleChoice = number | 'private';
 
 export interface TripLogEntry {
   id: number;
@@ -232,6 +248,9 @@ export interface LogisticsState {
   restock: RestockDue[];
 }
 
+/** Zustand in Version 3: Routen ohne Fahrzeug. */
+type LogisticsStateV3 = Omit<LogisticsState, 'routes'> & { routes: Omit<Route, 'vehicleId'>[] };
+
 /** Zustand in Version 2: ohne Routen. */
 type LogisticsStateV2 = Omit<LogisticsState, 'routes' | 'restock'>;
 
@@ -252,7 +271,13 @@ declare module '../../core' {
      * Ware am Kai abholen: durch einen Fahrer (driverId oder der erste freie) oder selbst. Ohne warehouseId ins
      * Lager, das dem Hafen am nächsten liegt. Ohne cargoIds alles, was wartet.
      */
-    'logistics.pickup': { by: 'player' | 'driver'; driverId?: string; warehouseId?: string; cargoIds?: number[] };
+    'logistics.pickup': {
+      by: 'player' | 'driver';
+      driverId?: string;
+      warehouseId?: string;
+      cargoIds?: number[];
+      vehicleId?: VehicleChoice;
+    };
     /** Ware von einem Lager ins andere bringen. Ohne productId alles, ohne amount die ganze Menge des Produkts. */
     'logistics.transfer': {
       fromId: string;
@@ -261,6 +286,7 @@ declare module '../../core' {
       amount?: number;
       by: 'player' | 'driver';
       driverId?: string;
+      vehicleId?: VehicleChoice;
     };
     /** Route mit Fahrplan anlegen (Auftrag 30). Ergebnis data.routeId. */
     'logistics.addRoute': RouteInput;
@@ -597,10 +623,33 @@ function playerBusy(state: GameState, cityId?: string): string | null {
   return null;
 }
 
-export function speedOf(state: GameState, driverId: string | null): number {
-  if (!driverId) return PLAYER_DRIVE_SPEED;
+/** Tempo in Metern pro Spielminute: Fahrer (oder du) mal Tempo des Fahrzeugs (Auftrag 33). */
+export function speedOf(state: GameState, driverId: string | null, vehicleId?: number | null): number {
+  const factor = vehicleSpec(state, vehicleId).speed;
+  if (!driverId) return PLAYER_DRIVE_SPEED * factor;
   const m = getStaffMember(state, driverId);
-  return DRIVER_BASE_SPEED + (m?.stats.speed ?? 50) * DRIVER_SPEED_PER_POINT;
+  return (DRIVER_BASE_SPEED + (m?.stats.speed ?? 50) * DRIVER_SPEED_PER_POINT) * factor;
+}
+
+/**
+ * Fahrzeug für eine Fahrt (Auftrag 33): das gewünschte (muss frei sein und in der Stadt stehen), das Privatauto, oder
+ * ohne Angabe das passende freie für grams Gramm. Gibt die ID zurück (null = Privatauto) oder einen Grund.
+ */
+export function chooseVehicle(
+  state: GameState,
+  cityId: string,
+  wanted: VehicleChoice | undefined,
+  grams: number,
+): number | null | string {
+  if (wanted === 'private') return null;
+  if (wanted === undefined) return pickVehicle(state, cityId, grams);
+  const vehicle = getVehicle(state, wanted);
+  if (!vehicle) return 'Dieses Fahrzeug gibt es nicht.';
+  const name = vehicleName(state, wanted);
+  if (vehicleStatus(vehicle) === 'seized') return `${name} ist beschlagnahmt.`;
+  if (vehicleStatus(vehicle) === 'busy') return `${name} ist gerade unterwegs.`;
+  if (vehicle.cityId !== cityId) return `${name} steht in ${cityName(vehicle.cityId)}.`;
+  return vehicle.id;
 }
 
 /** Veedel des Ziels (für Heat und Kontrollen). */
@@ -622,7 +671,8 @@ function cityHeat(state: GameState, cityId: string): number {
  */
 function rollCheck(ctx: Ctx, trip: Trip): void {
   if (trip.items.length === 0) return;
-  const caution = trip.driverId ? riskFactor(ctx.state, trip.driverId) : 1;
+  const caution =
+    (trip.driverId ? riskFactor(ctx.state, trip.driverId) : 1) * vehicleSpec(ctx.state, trip.vehicleId).checkFactor;
   let chance: number;
   if (isInterCityTrip(ctx.state, trip)) {
     const heat = cityHeat(ctx.state, tripCity(ctx.state, trip));
@@ -664,6 +714,8 @@ export function startTrip(ctx: Ctx, trip: Omit<Trip, 'id' | 'checkAt' | 'status'
     stoppedAt: null,
     encounterId: null,
   };
+  // Fahrzeug belegen; ist es doch nicht frei, fährt das Privatauto.
+  if (full.vehicleId !== undefined && !useVehicle(ctx, full.vehicleId, full.id)) delete full.vehicleId;
   rollCheck(ctx, full);
   ctx.state.modules.logistics.trips.push(full);
   if (full.driverId) assign(ctx, full.driverId, { kind: 'transport', targetId: String(full.id) });
@@ -724,10 +776,7 @@ function loadFromQuay(s: LogisticsState, cargo: readonly PortCargo[], grams: num
   return items;
 }
 
-function pickup(
-  ctx: Ctx,
-  payload: { by: 'player' | 'driver'; driverId?: string; warehouseId?: string; cargoIds?: number[] },
-): CommandResult {
+function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandResult {
   const state = ctx.state;
   const s = state.modules.logistics;
   // Ohne Angabe alles am Kai der aktiven Stadt; mit Angabe die Container, aber nur aus einem Hafen.
@@ -748,8 +797,8 @@ function pickup(
     };
   }
   if (warehouseCity(warehouse.id) !== cityId) return { ok: false, reason: 'Das Lager liegt in einer anderen Stadt.' };
-  const room = roomFor(state, warehouse.id);
-  if (room < Math.min(...cargo.map((c) => unitWeight(c.productId)))) {
+  const space = roomFor(state, warehouse.id);
+  if (space < Math.min(...cargo.map((c) => unitWeight(c.productId)))) {
     return {
       ok: false,
       reason: `Im ${warehouse.name} ist kein Platz. Bau Regale ein, lager um oder wähl ein anderes Lager.`,
@@ -764,7 +813,14 @@ function pickup(
     if (typeof driver === 'string') return { ok: false, reason: driver };
     driverId = driver.id;
   }
-  const speed = speedOf(state, driverId);
+  const grams = Math.min(
+    space,
+    cargo.reduce((sum, c) => sum + c.amount * unitWeight(c.productId), 0),
+  );
+  const vehicle = chooseVehicle(state, cityId, payload.vehicleId, grams);
+  if (typeof vehicle === 'string') return { ok: false, reason: vehicle };
+  const room = Math.min(space, vehicleSpec(state, vehicle).capacity);
+  const speed = speedOf(state, driverId, vehicle);
   const approach = travelMinutes(warehouse, port, speed);
   const delivery = travelMinutes(port, warehouse, speed);
   const total = cargo.reduce((sum, c) => sum + c.amount, 0);
@@ -776,6 +832,7 @@ function pickup(
     fromId: portPlaceId(cityId),
     toId: warehouse.id,
     items,
+    ...(vehicle !== null ? { vehicleId: vehicle } : {}),
     startedAt: ctx.now,
     loadedAt: ctx.now + approach + LOAD_MINUTES,
     arrivesAt: ctx.now + approach + LOAD_MINUTES + delivery,
@@ -785,22 +842,14 @@ function pickup(
     ctx,
     `${who} ${driverId ? 'holt' : 'holst'} ${itemsText(trip.items)} am ${portName(cityId)} ab, ` +
       `im ${warehouse.name} in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}.` +
-      (left > 0 ? ` Der Rest passt nicht ins Lager und bleibt am Kai.` : ''),
+      (left > 0
+        ? ` Der Rest passt nicht ${room < space ? `in den ${vehicleName(state, vehicle)}` : 'ins Lager'} und bleibt am Kai.`
+        : ''),
   );
   return { ok: true, data: { tripId: trip.id, arrivesAt: trip.arrivesAt, left } };
 }
 
-function transfer(
-  ctx: Ctx,
-  payload: {
-    fromId: string;
-    toId: string;
-    productId?: string;
-    amount?: number;
-    by: 'player' | 'driver';
-    driverId?: string;
-  },
-): CommandResult {
+function transfer(ctx: Ctx, payload: GameCommands['logistics.transfer']): CommandResult {
   const state = ctx.state;
   const from = getWarehouse(state, payload.fromId);
   const to = getWarehouse(state, payload.toId);
@@ -822,8 +871,17 @@ function transfer(
     if (typeof driver === 'string') return { ok: false, reason: driver };
     driverId = driver.id;
   }
-  // Ware raus aus dem Startlager, pro Produkt als ein Posten, so viel ins Ziel-Lager passt (Auftrag 33).
-  let room = roomFor(state, to.id);
+  // Fahrzeug: das gewünschte, sonst das passende für die Ware im Lager (höchstens so viel, wie ins Ziel passt).
+  const movable = Math.min(
+    roomFor(state, to.id),
+    lots
+      .filter((l) => !payload.productId || l.productId === payload.productId)
+      .reduce((sum, l) => sum + l.amount * unitWeight(l.productId), 0),
+  );
+  const vehicle = chooseVehicle(state, from.cityId, payload.vehicleId, movable);
+  if (typeof vehicle === 'string') return { ok: false, reason: vehicle };
+  // Ware raus aus dem Startlager, pro Produkt als ein Posten, so viel ins Ziel-Lager und ins Fahrzeug passt.
+  let room = Math.min(roomFor(state, to.id), vehicleSpec(state, vehicle).capacity);
   const products = [...new Set(lots.map((l) => l.productId))];
   const items: TripItem[] = [];
   for (const productId of products) {
@@ -842,13 +900,14 @@ function transfer(
       reason: roomFor(state, to.id) <= 0 ? `Im ${to.name} ist kein Platz mehr.` : `Im ${from.name} liegt davon nichts.`,
     };
   }
-  const speed = speedOf(state, driverId);
+  const speed = speedOf(state, driverId, vehicle);
   const trip = startTrip(ctx, {
     kind: 'transfer',
     driverId,
     fromId: from.id,
     toId: to.id,
     items,
+    ...(vehicle !== null ? { vehicleId: vehicle } : {}),
     startedAt: ctx.now,
     loadedAt: ctx.now + TRANSFER_LOAD_MINUTES,
     arrivesAt: ctx.now + TRANSFER_LOAD_MINUTES + travelMinutes(from, to, speed),
@@ -880,6 +939,8 @@ function logTrip(ctx: Ctx, trip: Trip, result: TripLogEntry['result'], amount = 
 function removeTrip(ctx: Ctx, trip: Trip): void {
   const s = ctx.state.modules.logistics;
   s.trips = s.trips.filter((t) => t.id !== trip.id);
+  // Das Fahrzeug steht jetzt in der Stadt des Ziels.
+  if (trip.vehicleId !== undefined) releaseVehicle(ctx, trip.vehicleId, tripCity(ctx.state, trip));
   if (trip.driverId) {
     const m = getStaffMember(ctx.state, trip.driverId);
     const onThisTrip = (a: StaffMember['assignment']) => a?.kind === 'transport' && a.targetId === String(trip.id);
@@ -1000,7 +1061,7 @@ function redirect(ctx: Ctx, payload: { tripId: number; toId: string }): CommandR
   trip.status = 'enRoute';
   trip.startedAt = ctx.now;
   trip.loadedAt = ctx.now;
-  trip.arrivesAt = ctx.now + travelMinutes(from, to, speedOf(ctx.state, trip.driverId));
+  trip.arrivesAt = ctx.now + travelMinutes(from, to, speedOf(ctx.state, trip.driverId, trip.vehicleId));
   rollCheck(ctx, trip);
   journal.add(
     ctx,
@@ -1097,6 +1158,8 @@ function onCheckResolved(ctx: Ctx, ref: string | undefined, outcome: string): vo
     }
   }
   if (trip.routeId !== undefined) routeLost(ctx, trip, 'seized');
+  // Das eigene Fahrzeug ist mit Chance beschlagnahmt (Auftrag 33); das Privatauto des Fahrers zählt nicht.
+  if (trip.vehicleId !== undefined) maybeSeize(ctx, trip.vehicleId);
   journal.add(
     ctx,
     `${autobahn ? 'Der Zoll hat die Ladung gefunden' : 'Ladung aufgeflogen'}: ${itemsText(trip.items)} beschlagnahmt.` +
@@ -1219,8 +1282,8 @@ function tick(ctx: Ctx): void {
 
 export default defineModule({
   id: 'logistics',
-  version: 3,
-  dependsOn: ['goods', 'suppliers', 'staff'],
+  version: 4,
+  dependsOn: ['goods', 'suppliers', 'staff', 'fleet'],
   init: (ctx) => ({
     // Alte Spielstände: Wer schon am Hafen bestellt hat, behält seinen Zugang (Bestandsschutz).
     berths: ((ctx.state.modules.suppliers?.relations?.rotterdam?.orders ?? 0) > 0
@@ -1266,7 +1329,12 @@ export default defineModule({
       };
     },
     // Version 3 (Auftrag 30, Etappe 6): Routen mit Fahrplan und Nachkauf für schlafende Städte.
-    3: (old: LogisticsStateV2): LogisticsState => ({ ...old, routes: [], restock: [] }),
+    3: (old: LogisticsStateV2): LogisticsStateV3 => ({ ...old, routes: [], restock: [] }),
+    // Version 4 (Auftrag 33): Routen fahren mit einem festen Fahrzeug oder dem passenden freien (null).
+    4: (old: LogisticsStateV3): LogisticsState => ({
+      ...old,
+      routes: old.routes.map((r) => ({ ...r, vehicleId: null })),
+    }),
   },
 });
 
