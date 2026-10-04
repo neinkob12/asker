@@ -361,7 +361,7 @@ export function fillContractText(
 }
 
 /** Geld pro Größe des Geschäfts (Grundwert der Belohnung). */
-export const CONTRACT_MONEY: readonly [number, number, number] = [1200, 4000, 10000];
+export const CONTRACT_MONEY: readonly [number, number, number] = [500, 2500, 8000];
 /** Vertrauen beim Lieferanten pro Größe. */
 export const CONTRACT_TRUST: readonly [number, number, number] = [5, 7, 10];
 /** So viele Angebote pro Woche. */
@@ -389,11 +389,11 @@ export function contractRewards(
       break;
     case 'goods':
       rewards.push({ kind: 'money', money: 'dirty', amount: Math.round((money * 0.6) / 50) * 50 });
-      rewards.push({ kind: 'goods', productId: productId ?? 'weed', amount: [50, 150, 400][t], quality: 0.85 });
+      rewards.push({ kind: 'goods', productId: productId ?? 'weed', amount: [25, 100, 300][t], quality: 0.85 });
       break;
     case 'reputation':
       rewards.push({ kind: 'money', money: 'dirty', amount: money });
-      rewards.push({ kind: 'reputation', amount: [4, 6, 8][t] });
+      rewards.push({ kind: 'reputation', amount: [3, 5, 8][t] });
       break;
     case 'heat':
       rewards.push({ kind: 'money', money: 'dirty', amount: money });
@@ -409,7 +409,7 @@ export function contractRewards(
       break;
     case 'influence':
       rewards.push({ kind: 'money', money: 'dirty', amount: money });
-      rewards.push({ kind: 'influence', amount: [5, 8, 10][t] });
+      rewards.push({ kind: 'influence', amount: [3, 6, 10][t] });
       break;
   }
   if (supplierId) rewards.push({ kind: 'trust', supplierId, amount: CONTRACT_TRUST[t] });

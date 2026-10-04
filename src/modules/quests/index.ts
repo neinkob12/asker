@@ -562,6 +562,11 @@ export default defineModule({
         text: 'Sieben Veedel. Du bist jetzt der Boss von Köln, das sagen sie überall. Aber die anderen fünf schlafen nicht.',
       });
     },
+    // "Nein danke" auf ein Vertragsangebot: Das Angebot ist weg.
+    'message.answered': (ctx, { messageId, optionId }) => {
+      const c = ctx.state.modules.quests.contracts;
+      if (optionId === 'no') c.offers = c.offers.filter((o) => o.messageId !== messageId);
+    },
     'clock.hourStarted': (ctx) => {
       contractHour(ctx);
       const quest = currentQuest(ctx.state);
