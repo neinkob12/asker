@@ -152,6 +152,10 @@ Wahrzeichen, Quellenangabe. PR #36 (nach 30):
 
 ## Danach (spätere Aufträge)
 
+Eine Einordnung, was dem Spiel im Vergleich zu den großen Tycoon-, Simulations- und Logistikspielen noch fehlt, mit
+31 Ideen, Vorbildern, Andockpunkten im Code und einem Vorschlag für die Aufträge 32–37, steht in
+[`docs/ideen.md`](../ideen.md).
+
 Diese Themen aus dem Konzept kommen nach der Integration, jeweils wieder als eigene Aufträge:
 
 - Logistik, zweiter Teil: eigene Fahrzeugflotte (Fahrzeuge kaufen, Ladekapazität), Leutnants organisieren Abholungen
