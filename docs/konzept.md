@@ -169,6 +169,14 @@ für 3–5 Tage, etwa einmal pro Woche), Marktereignisse wie Zollfund in Rotterd
 Produkt am Spot beliebter (bis +25 % Nachfrage, Dreck bis −33 %) und Wochenverträge (montags drei Angebote von
 Figuren wie Ali vom Spätkauf oder Marlene aus dem Club, einer wird angenommen, Frist Sonntag).
 
+Mit Auftrag 33 dazu: Lager haben Platz (Keller 4 kg bis Halle 25 kg) und lassen sich ausbauen (Regale, Tresor gegen
+Einbruch und Überfall, Tarnung gegen Razzien); ein volles Lager nimmt keine Lieferung an, der Rest wartet am Kai oder
+beim Fahrer. Eigene Fahrzeuge (Roller, Kombi, Transporter) mit fester Ladung, Tempo und Auffälligkeit, sonst fährt das
+Privatauto wie bisher; die Polizei kann ein Fahrzeug beschlagnahmen. Jede Fahrt mit Ware wählt Autobahn, Landstraße
+(länger, halb so viele Kontrollen) oder nachts (ab 23 Uhr, ein Drittel). Der Liegeplatz wächst zur Halle am Kai und zum
+Kran, bei Jansen und Daan gibt es ganze und geteilte Container. In der Lager-App zeigt der Warenfluss, wie lange die Ware
+reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager kommt.
+
 - **Kampagnenlänge:** Köln ist der Einstieg, Hamburg die zweite Stadt. Laut Balancing-Simulation (`npm run balance`)
   erstes Veedel nach etwa 6–7 Spieltagen, drei nach etwa 8, fünf nach 13–16, „Boss von Köln“ (7 von 12) nach 16–19,
   Köln komplett nach 21–24 Spieltagen (Stand Auftrag 32), bei Tempo 1x (4,8 Minuten pro Spieltag) grob 2 Stunden. In Hamburg fällt das
@@ -185,7 +193,7 @@ Figuren wie Ali vom Spätkauf oder Marlene aus dem Club, einer wird angenommen, 
   Lieferanten, oft mit Entscheidung (Umweg, Teillieferung, Umleiten, Schmieren), dazu kleine Glücksfälle. Eigene
   Spots haben eine Art (Straßenecke, Späti, Club, Park, Bahnhof, Campus), müssen sich erst herumsprechen und lassen
   sich ausbauen (Späher, Versteck, Stammplatz), verlegen, umbenennen und aufgeben.
-- **Noch nicht umgesetzt** (Aufträge 33 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Lager mit Kapazität, Fahrzeuge, Routenwahl, Hafen-Ausbau, Warenfluss, Stammabnehmer, Gangs mit
+- **Noch nicht umgesetzt** (Aufträge 34 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Stammabnehmer, Gangs mit
   Gedächtnis, Leute mit Geschichte, Capo, Konfrontationen neu, freie Reihenfolge der Städte mit Autobahn-Netz, Berlin,
   München, Frankfurt, Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen: Tarnfirmen,
   Charakter-Erstellung, Perks, Besitz, Akte, Korruption.

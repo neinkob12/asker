@@ -425,7 +425,11 @@ function travelBlocker(state: GameState): string | null {
   const c = state.modules.city;
   if (c.travel) return `Du bist schon auf dem Weg nach ${cityName(c.travel.to)}.`;
   if (isPlayerDelivering(state)) return 'Erst die Lieferung zu Ende fahren.';
-  if (getTrips(state).some((t) => t.driverId === null)) return 'Du bist gerade mit dem Transporter unterwegs.';
+  // Eigene Fahrten (Auftrag 33): Ein Wagen, der am vollen Lager im Hof wartet, hält dich nicht auf, eine geplante
+  // Nachtfahrt schon (du musst sie fahren).
+  const own = getTrips(state).filter((t) => t.driverId === null && t.status !== 'waiting');
+  if (own.some((t) => t.status === 'planned')) return 'Du hast heute Nacht noch eine Fahrt geplant.';
+  if (own.length > 0) return 'Du bist gerade mit dem Wagen unterwegs.';
   return null;
 }
 

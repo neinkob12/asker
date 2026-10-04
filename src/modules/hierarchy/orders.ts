@@ -203,6 +203,8 @@ export function planOrder(
     availablePackages(state, supplier.id, city)
       .filter((pkg) => !rule.productId || pkg.productId === rule.productId)
       .filter((pkg) => !rule.packageId || pkg.id === rule.packageId)
+      // Container (Auftrag 33) sind eine Entscheidung des Spielers: nur, wenn die Regel das Paket ausdrücklich nennt.
+      .filter((pkg) => !pkg.container || pkg.id === rule.packageId)
       .map((pkg) => ({ supplier, pkg, price: packagePrice(state, supplier.id, pkg.id, city) })),
   );
   // Preisgrenze (Auftrag 32): Ware, deren Index zu hoch steht, wartet, bis der Markt nachgibt.

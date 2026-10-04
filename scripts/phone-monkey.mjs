@@ -39,6 +39,10 @@ const TARGETS = [
   { kind: 'panel', id: 'logistics.routes' },
   { kind: 'panel', id: 'logistics.drivers' },
   { kind: 'panel', id: 'logistics.port' },
+  // Auftrag 33: Lager-App (Fahrzeuge, Warenfluss), Lager-Seite mit Ausbau, Warenfluss.
+  { kind: 'phone', id: 'goods.app' },
+  { kind: 'panel', id: 'goods.warehouse', params: { warehouseId: 'ehrenfeld' } },
+  { kind: 'panel', id: 'goods.flow' },
 ];
 const wanted = args.apps ? args.apps.split(',') : TARGETS.map((t) => t.id);
 
@@ -247,7 +251,7 @@ try {
               target.kind === 'tab'
                 ? `api.selectTab('${target.id}')`
                 : target.kind === 'panel'
-                  ? `api.openPanel('${target.id}', {})`
+                  ? `api.openPanel('${target.id}', ${JSON.stringify(target.params ?? {})})`
                   : `api.openPhone('${target.id}')`
             };
           })()`);

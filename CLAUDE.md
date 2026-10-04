@@ -53,6 +53,12 @@ Auftrag 32 (Markt und Verträge): Preisindex pro Ware und Stadt (`market.priceIn
 Marktbericht montags, Bestellregel mit `maxIndex`, Qualität treibt Nachfrage am Spot (`customers/quality.ts`),
 Wochenverträge (`quests/contracts.ts`, Befehl `quests.acceptContract`, Belohnung `trust`). Neue Zufallswürfe ändern die
 Würfelfolge eines Moduls: Szenario-Tests mit festem Seed können dann kippen (Autopilot läuft deshalb mit Seed 12).
+Auftrag 33: Lager haben Platz in Gramm und Ausbau (`goods.upgradeWarehouse`: Regale, Tresor, Tarnung; `warehouseModifiers`
+fragen `police` und `encounters`). **Lieferungen und Fahrten lagern mit `storeFitting` ein** (nimmt nur, was passt, und meldet
+den Rest); `store` überfüllt (nur für Beute und Rückgaben). Neues Modul `fleet` (Fahrzeuge mit Ladung, Tempo, Kontrollfaktor;
+ohne eigenes das Privatauto, in der Stadt ohne Grenze, auf Routen 5 kg), Fahrten wählen `vehicleId` und `choice` (Autobahn, Landstraße, nachts; `roads` nimmt
+`{ weights }` pro Straßenart), Liegeplatz-Stufen (`logistics.upgradeBerth`), Container-Pakete (`container: 'full' | 'shared'`),
+Warenfluss (`goods.usagePerDay`) in der Lager-App, Ebene „Lieferwege“.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
@@ -162,7 +168,7 @@ export default defineModule({
 ## Oberfläche eines Moduls
 
 In `src/modules/<id>/ui/index.tsx` (Beispiel in `_template/ui/`): `registerHudItem`, `registerTab`,
-`registerSlot` (z.B. in `'tab:territory'`, `'tab:staff'`, `'spots.spotPanel'`, `'goods.warehouse'` (Lager-Seite), `'finance.app'`
+`registerSlot` (z.B. in `'tab:territory'`, `'tab:staff'`, `'spots.spotPanel'`, `'goods.warehouse'` (Lager-Seite), `'goods.app'` (Lager-App), `'suppliers.top'` (oben in der Lieferanten-App), `'finance.app'`
 (unten in der Kasse), `'core.settings'` (eigener Abschnitt in den Einstellungen mit `title`, `icon`, `color`) oder `'map.overlay'`
 über der Kartenfläche), `registerPanel`,
 `registerDialog` (mit `area: 'map'` nur über der Kartenfläche, dazu `MapDialog`), `registerMapLayerOption` (Menü Ebenen),

@@ -148,11 +148,16 @@ export const SCENES = [
       sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'nippes' } });
       sim.dispatch({ type: 'staff.hireDriver', payload: {} });
       sim.dispatch({ type: 'staff.hireDriver', payload: {} });
+      sim.dispatch({ type: 'staff.hireDriver', payload: {} });
+      sim.state.wallet.clean += 20000;
+      sim.dispatch({ type: 'fleet.buy', payload: { model: 'van' } });
       sim.state.modules.suppliers.unlocked.push('rotterdam');
       sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'small' } });
       sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'hash' } });
       sim.advance(600);
       sim.dispatch({ type: 'logistics.transfer', payload: { fromId: 'ehrenfeld', toId: 'nippes', by: 'driver' } });
+      // Auftrag 33: eine Nachtfahrt ist geplant (steht unter Unterwegs mit Abfahrtszeit).
+      sim.dispatch({ type: 'logistics.pickup', payload: { by: 'driver', choice: 'night', cargoIds: [sim.state.modules.logistics.cargo[0]?.id] } });
       window.koeln.runtime.api.openPanel('logistics.port', {});
     })()`,
   },
@@ -217,7 +222,69 @@ export const SCENES = [
       await sleep(100);
     })()`,
   },
+  {
+    // Auftrag 33: Lager-App mit Fahrzeugen (frei, unterwegs, beschlagnahmt) und Modellen zum Kaufen.
+    name: 'lager-fahrzeuge',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      sim.state.wallet.clean = 60000;
+      for (const model of ['scooter', 'kombi', 'van']) sim.dispatch({ type: 'fleet.buy', payload: { model } });
+      const [scooter, kombi] = sim.state.modules.fleet.vehicles;
+      kombi.tripId = 1;
+      scooter.seizedAt = sim.state.time;
+      window.koeln.runtime.api.openPhone('goods.app');
+    })()`,
+  },
+  {
+    // Auftrag 33: Schiffe unterwegs im Tracker der Lieferanten-App (Container und halber Container).
+    name: 'schiffe',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      sim.state.wallet.clean = 20000;
+      sim.state.wallet.dirty = 30000;
+      sim.dispatch({ type: 'logistics.buyBerth', payload: {} });
+      sim.dispatch({ type: 'logistics.upgradeBerth', payload: {} });
+      sim.state.modules.suppliers.unlocked.push('rotterdam');
+      sim.state.modules.suppliers.relations.rotterdam.trust = 30;
+      sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'container' } });
+      sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'shared' } });
+      // Das erste Schiff ist schon vier Stunden unterwegs (ohne Vorspulen, damit die Island ruhig bleibt).
+      const [first] = sim.state.modules.suppliers.shipments;
+      first.orderedAt -= 240;
+      first.arrivesAt -= 240;
+      if (first.problemAt !== undefined) first.problemAt -= 240;
+      window.koeln.runtime.api.openPhone('suppliers.app');
+    })()`,
+  },
+  {
+    // Auftrag 33: Warenfluss mit Verbrauch der letzten Tage (Hasch knapp, Gras reicht).
+    name: 'warenfluss',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      const g = sim.state.modules.goods;
+      const spots = sim.state.modules.spots.unlocked.slice(0, 3);
+      const day = { 'c:koeln:weed': 30, 'c:koeln:hash': 60 };
+      spots.forEach((id, i) => { day['s:' + id + ':weed'] = 10; day['s:' + id + ':hash'] = 20 + i; });
+      g.usage = { today: {}, days: [day, day, day] };
+      g.stock.ehrenfeld.push({ id: sim.state.nextId++, productId: 'hash', amount: 70, quality: 0.6, cut: 0, unitCost: 3 });
+      g.stock.ehrenfeld.push({ id: sim.state.nextId++, productId: 'weed', amount: 400, quality: 0.7, cut: 0, unitCost: 3 });
+      window.koeln.runtime.api.openPanel('goods.flow', {});
+    })()`,
+  },
   { name: 'lagerdetail', js: "window.koeln.runtime.api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' })" },
+  {
+    // Auftrag 33: fast volles Lager mit Regalen (Füllstand, Ausbau mit Preis).
+    name: 'lager-ausbau',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      sim.state.wallet.clean = 20000;
+      sim.dispatch({ type: 'goods.upgradeWarehouse', payload: { warehouseId: 'ehrenfeld', kind: 'shelves' } });
+      sim.dispatch({ type: 'goods.upgradeWarehouse', payload: { warehouseId: 'ehrenfeld', kind: 'vault' } });
+      const lots = sim.state.modules.goods.stock.ehrenfeld;
+      lots.push({ id: 99001, productId: 'hash', amount: 26000, quality: 0.7, cut: 0, unitCost: 2.8 });
+      window.koeln.runtime.api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' });
+    })()`,
+  },
   { name: 'marktdetail', js: "window.koeln.runtime.api.openPanel('market.overview', {})" },
   // Markt in Bewegung (Auftrag 32): Preisindex, ein Marktereignis, eine Rabatt-Aktion, Qualität am Spot
   {

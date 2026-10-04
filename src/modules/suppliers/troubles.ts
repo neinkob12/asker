@@ -152,6 +152,20 @@ export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier, ask?: b
     });
     return;
   }
+  // Geteilter Container (Auftrag 33): Die fremde Hälfte ist aufgeflogen, da gibt es nichts mehr zu schmieren.
+  if (s.shared) {
+    shipments.shipments = shipments.shipments.filter((x) => x.id !== s.id);
+    const what = `Der Zoll hat die andere Hälfte vom Container gefunden. Deine ${goods} waren mit drin, alles weg.`;
+    tell(ctx, supplier, s.onCredit ? `${what} Die Schulden bleiben trotzdem.` : `${what} Pech, so läuft das Geschäft.`);
+    journal.add(ctx, `Lieferung von ${supplier.name} beschlagnahmt (geteilter Container): ${goods} verloren.`, 'bad');
+    ctx.emit('shipment.problem', {
+      shipmentId: s.id,
+      supplierId: s.supplierId,
+      kind: 'seized',
+      reason: 'geteilter Container',
+    });
+    return;
+  }
   // Beschlagnahme: mit Rückfrage erst eine Drohung (Schmieren), sonst wie vorher sofort weg.
   const why = rollReason(ctx, s, supplier, 'seize');
   const time = Math.min(DECISION_TIME, remaining - 1);

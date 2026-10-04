@@ -48,7 +48,7 @@ import { activeCity, isVeedelLive, liveVeedel } from '../city';
 import { startEncounter } from '../encounters';
 import { eventFactor, raidsAllowed } from '../events';
 import { getGang } from '../gangs';
-import { allProducts, getLots, getWarehouses, nearestWarehouse, take } from '../goods';
+import { allProducts, getLots, getWarehouses, nearestWarehouse, take, warehouseModifiers } from '../goods';
 import { getSpot, spotModifiers, spotsInVeedel } from '../spots';
 import {
   activeRunnerAt,
@@ -497,14 +497,18 @@ function confiscateGoods(ctx: Ctx, amount: number, veedelId: string): number {
   return taken;
 }
 
-/** Eigene Lager im Veedel werden bei einer Razzia mit durchsucht: share jedes Postens ist weg. */
+/**
+ * Eigene Lager im Veedel werden bei einer Razzia mit durchsucht: share jedes Postens ist weg, mit Tarnung weniger
+ * (goods.warehouseModifiers, Auftrag 33).
+ */
 function searchWarehouses(ctx: Ctx, veedelId: string, share: number): number {
   if (share <= 0) return 0;
   let taken = 0;
   for (const warehouse of getWarehouses(ctx.state)) {
     if (veedelAt(warehouse.lng, warehouse.lat)?.id !== veedelId) continue;
+    const found = share * warehouseModifiers(ctx.state, warehouse.id).raidFactor;
     for (const lot of getLots(ctx.state, { warehouseId: warehouse.id })) {
-      const amount = Math.ceil(lot.amount * share);
+      const amount = Math.ceil(lot.amount * found);
       taken += take(ctx, {
         productId: lot.productId,
         amount,

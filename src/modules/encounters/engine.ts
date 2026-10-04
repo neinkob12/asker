@@ -22,6 +22,7 @@ import {
   store,
   take,
   warehouseCity,
+  warehouseModifiers,
 } from '../goods';
 import { hasFullPower } from '../hierarchy';
 import { addHeat } from '../police';
@@ -680,7 +681,9 @@ function goodsScope(state: GameState, request: EncounterRequest): { cityId: stri
 }
 
 function loseGoods(ctx: Ctx, amount: number, request: EncounterRequest): number {
-  let left = Math.max(0, Math.round(amount));
+  // Überfall auf ein Lager: Ein Tresor schützt einen Teil (goods.warehouseModifiers, Auftrag 33).
+  const vault = request.warehouseId ? warehouseModifiers(ctx.state, request.warehouseId).lossFactor : 1;
+  let left = Math.max(0, Math.round(amount * vault));
   let lost = 0;
   const scope = goodsScope(ctx.state, request);
   for (const warehouse of getWarehouses(ctx.state, scope.cityId)) {

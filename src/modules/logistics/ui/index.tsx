@@ -26,6 +26,7 @@ import {
 } from '../../../ui';
 import { activeCity } from '../../city';
 import { isPlayerDelivering } from '../../customers';
+import { vehicleName } from '../../fleet';
 import {
   formatProductAmount,
   getWarehouse,
@@ -51,19 +52,27 @@ import {
   PORTS,
   placeOf,
   portName,
+  ROUTE_CHOICES,
+  type RouteChoice,
+  reservedCargo,
+  roomFor,
   type Trip,
   type TripLeg,
   tripAmount,
   tripProgress,
 } from '../index';
 import './island';
+import { BerthGroup } from './port';
 import { LogisticsLinks } from './routes';
+import { AUTO, ChoiceControl, VehicleSelect, vehicleChoice } from './vehicles';
 import './tracking';
 import { logisticsLayer } from './map';
 import './logistics.css';
 
 /** Was die Fahrt gerade tut (beim Umlagern wird im Lager geladen, nicht am Kai). */
 function legText(trip: Trip, leg: TripLeg, interCity = false): string {
+  if (leg === 'planned') return `fährt um ${clock.formatTime(trip.startedAt)} los`;
+  if (trip.status === 'waiting') return 'wartet am vollen Lager';
   if (leg === 'stopped') return interCity ? 'Zollkontrolle' : 'Verkehrskontrolle';
   if (trip.kind === 'route' && leg === 'delivering') return interCity ? 'auf der A1' : 'Route';
   if (leg === 'toPickup') return 'fährt zum Hafen';
@@ -82,16 +91,38 @@ function playerBusyReason(state: GameState): string | null {
 }
 
 function TripRow(props: { trip: Trip }) {
-  const { state } = useGame();
+  const { state, dispatch } = useGame();
   const { trip } = props;
   const progress = tripProgress(state, trip);
   const from = placeOf(state, trip.fromId)?.name ?? 'Hafen';
   const to = placeOf(state, trip.toId)?.name ?? 'Lager';
   const stopped = trip.status === 'stopped';
+  // Am vollen Lager: Umleiten ins nächste Lager der Stadt mit Platz (Auftrag 33).
+  const here = getWarehouse(state, trip.toId);
+  const elsewhere =
+    trip.status === 'waiting' && here
+      ? getWarehouses(state, here.cityId).find((w) => w.id !== here.id && roomFor(state, w.id) > 0)
+      : undefined;
   return (
     <ListItem
       aside={
-        stopped ? (
+        trip.status === 'waiting' ? (
+          elsewhere ? (
+            <Button
+              small
+              title={`Ins ${elsewhere.name}`}
+              onClick={() => dispatch({ type: 'logistics.redirect', payload: { tripId: trip.id, toId: elsewhere.id } })}
+            >
+              Umleiten
+            </Button>
+          ) : (
+            <Tag category="warn" icon="boxes">
+              Lager voll
+            </Tag>
+          )
+        ) : trip.status === 'planned' ? (
+          <span class="logi-eta">ab {clock.formatTime(trip.startedAt)}</span>
+        ) : stopped ? (
           <Tag category="danger" icon="siren">
             Kontrolle
           </Tag>
@@ -108,6 +139,9 @@ function TripRow(props: { trip: Trip }) {
         tags={[
           { label: who(state, trip.driverId), icon: 'user', color: 'people' },
           { label: `${tripAmount(trip)} Einheiten`, icon: 'package', color: 'goods' },
+          trip.vehicleId !== undefined && { label: vehicleName(state, trip.vehicleId), icon: 'truck', color: 'goods' },
+          trip.choice &&
+            trip.choice !== 'autobahn' && { label: ROUTE_CHOICES[trip.choice].name, icon: 'route', color: 'place' },
         ]}
       >
         <ProgressBar value={progress.total} tone={stopped ? 'bad' : 'accent'} label="Fahrt" />
@@ -149,6 +183,8 @@ function PortSection() {
   const drivers = freeDrivers(state);
   const [target, setTarget] = useState('');
   const [driverId, setDriverId] = useState('');
+  const [vehicle, setVehicle] = useState(AUTO);
+  const [choice, setChoice] = useState<RouteChoice>('autobahn');
   const cityId = activeCity(state);
   const port = portName(cityId);
   const cost = berthCost(cityId);
@@ -209,6 +245,7 @@ function PortSection() {
     );
   }
   const warehouseId = warehouses.some((w) => w.id === target) ? target : (defaultPickupWarehouse(state) ?? '');
+  const reserved = reservedCargo(state);
   const chosenDriver = drivers.find((d) => d.id === driverId) ?? drivers[0];
   const busy = playerBusyReason(state);
   return (
@@ -233,7 +270,7 @@ function PortSection() {
                   </Tag>
                 ) : (
                   <Tag category="warn" icon="timer">
-                    bis {clock.formatTime(cargoRiskFrom(c))}
+                    bis {clock.formatTime(cargoRiskFrom(c, state))}
                   </Tag>
                 )
               }
@@ -243,6 +280,7 @@ function PortSection() {
                 color="goods"
                 title={`${formatProductAmount(c.productId, c.amount)} ${productName(c.productId)}`}
                 tags={[
+                  reserved.has(c.id) && { label: 'heute Nacht', icon: 'moon', color: 'place' },
                   { label: qualityTier(c.quality).name, icon: 'star', color: 'goods' },
                   { label: `am Kai seit ${clock.formatTime(c.arrivedAt)}`, icon: 'clock' },
                 ]}
@@ -268,6 +306,8 @@ function PortSection() {
             onChange={setDriverId}
           />
         )}
+        <VehicleSelect state={state} cityId={cityId} value={vehicle} onChange={setVehicle} />
+        <ChoiceControl value={choice} onChange={setChoice} />
         <div class="logi-actions">
           <Button
             variant="primary"
@@ -277,7 +317,13 @@ function PortSection() {
             onClick={() =>
               dispatch({
                 type: 'logistics.pickup',
-                payload: { by: 'driver', driverId: chosenDriver?.id, warehouseId },
+                payload: {
+                  by: 'driver',
+                  driverId: chosenDriver?.id,
+                  warehouseId,
+                  vehicleId: vehicleChoice(vehicle),
+                  choice,
+                },
               })
             }
           >
@@ -287,7 +333,12 @@ function PortSection() {
             icon="car"
             disabled={!!busy}
             title={busy ?? 'Du fährst selbst'}
-            onClick={() => dispatch({ type: 'logistics.pickup', payload: { by: 'player', warehouseId } })}
+            onClick={() =>
+              dispatch({
+                type: 'logistics.pickup',
+                payload: { by: 'player', warehouseId, vehicleId: vehicleChoice(vehicle), choice },
+              })
+            }
           >
             Selbst abholen
           </Button>
@@ -304,6 +355,8 @@ function WarehouseLogistics(props: { warehouseId: string }) {
   const owned = getWarehouses(state, activeCity(state));
   const [toId, setToId] = useState('');
   const [productId, setProductId] = useState('');
+  const [vehicle, setVehicle] = useState(AUTO);
+  const [choice, setChoice] = useState<RouteChoice>('autobahn');
   const from = owned.find((w) => w.id === props.warehouseId) ?? owned[0];
   const targets = owned.filter((w) => w.id !== from?.id);
   const to = targets.find((w) => w.id === toId) ?? targets[0];
@@ -319,7 +372,14 @@ function WarehouseLogistics(props: { warehouseId: string }) {
     to &&
     dispatch({
       type: 'logistics.transfer',
-      payload: { fromId: from.id, toId: to.id, by, ...(product ? { productId: product } : {}) },
+      payload: {
+        fromId: from.id,
+        toId: to.id,
+        by,
+        vehicleId: vehicleChoice(vehicle),
+        choice,
+        ...(product ? { productId: product } : {}),
+      },
     });
   const forSale = warehouseSites(activeCity(state)).filter((w) => !owned.some((o) => o.id === w.id));
   const buyList = (
@@ -428,6 +488,8 @@ function WarehouseLogistics(props: { warehouseId: string }) {
               ]}
               onChange={setProductId}
             />
+            <VehicleSelect state={state} cityId={from.cityId} value={vehicle} onChange={setVehicle} />
+            <ChoiceControl value={choice} onChange={setChoice} />
             <div class="logi-actions">
               <Button
                 variant="primary"
@@ -477,6 +539,7 @@ function PortPanel() {
     <div class="logi-app">
       <Summary />
       <PortSection />
+      <BerthGroup />
       {trips.length > 0 && <TripsGroup trips={trips} />}
       <Group
         icon="route"
@@ -560,7 +623,9 @@ registerMapLayer(logisticsLayer);
 registerAdvisor({
   id: 'logistics',
   advise: (state) => {
-    const cargo = getCargo(state);
+    // Was eine Nachtfahrt schon holt, braucht keinen Rat mehr.
+    const reserved = reservedCargo(state);
+    const cargo = getCargo(state).filter((c) => !reserved.has(c.id));
     if (cargo.length > 0) {
       const driver = freeDrivers(state)[0];
       const risky = cargo.some((c) => cargoRisk(state, c) === 'risky');
@@ -626,6 +691,18 @@ onGameEvent('transport.stopped', 'logistics.customsStopToast', (payload, ui, sta
 });
 onGameEvent('transport.seized', 'logistics.seizedToast', (payload, ui) => {
   ui.toast(`Ladung aufgeflogen${payload.arrested ? ', Fahrer festgenommen' : ''}!`, 'bad');
+});
+// Auftrag 33: Rest am Kai und eigene Fahrt am vollen Lager melden (ein Fahrer schreibt selbst per Handy).
+onGameEvent('cargo.leftBehind', 'logistics.leftBehindToast', (payload, ui) => {
+  ui.toast(
+    `${payload.amount} Einheiten bleiben am Kai: ${payload.reason === 'vehicle' ? 'Der Wagen ist voll.' : 'Das Lager ist voll.'}`,
+    'warn',
+  );
+});
+onGameEvent('transport.waiting', 'logistics.waitingToast', (payload, ui, state) => {
+  if (payload.driverId !== null) return;
+  const place = getWarehouse(state, payload.toId)?.name ?? 'Lager';
+  ui.toast(`${place} ist voll: ${payload.rest} Einheiten bleiben in deinem Wagen im Hof.`, 'warn');
 });
 onGameEvent('transport.lost', 'logistics.lostToast', (_payload, ui) => {
   ui.toast('Fahrt geplatzt, die Ladung ist weg.', 'bad');

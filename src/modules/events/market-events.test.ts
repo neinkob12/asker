@@ -36,7 +36,7 @@ describe('events: Marktereignisse', () => {
     expect(up).toBeGreaterThan(0);
     expect(down).toBeGreaterThan(0);
     expect(Math.abs(up - down) / (up + down)).toBeLessThan(0.4);
-    // Vier Seeds mit je 60 Spieltagen: lokal etwa 2,5 s, auf dem CI-Runner knapp an den 5 s Standard.
+    // 4 Seeds × 60 Tage: braucht allein gut 2 s, unter Last im vollen Lauf mehr als das Standard-Limit von 5 s.
   }, 30_000);
 
   it('schieben den Index der Ware in ihrer Stadt, innerhalb der Grenzen', () => {

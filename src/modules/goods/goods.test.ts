@@ -141,7 +141,8 @@ describe('goods', () => {
     expect(getLots(loaded.state)).toEqual([
       expect.objectContaining({ productId: 'weed', amount: 25, quality: STANDARD_QUALITY, cut: 0 }),
     ]);
-    expect(loaded.state.moduleVersions.goods).toBe(3);
+    expect(loaded.state.moduleVersions.goods).toBe(5);
+    expect(loaded.state.modules.goods.upgrades).toEqual({});
     expect(getWarehouses(loaded.state).map((w) => w.id)).toEqual(['ehrenfeld']);
   });
 

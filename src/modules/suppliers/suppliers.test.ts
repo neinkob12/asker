@@ -37,7 +37,7 @@ function openGame(): Simulation {
   const sim = createTestGame();
   sim.state.modules.suppliers.unlocked = SUPPLIERS.map((s) => s.id);
   sim.state.modules.suppliers.offered = SUPPLIERS.map((s) => s.id);
-  sim.state.modules.logistics.berths.koeln = { since: sim.state.time };
+  sim.state.modules.logistics.berths.koeln = { since: sim.state.time, level: 0 };
   return sim;
 }
 
@@ -212,7 +212,7 @@ describe('suppliers', () => {
   it('Rotterdam braucht einen Liegeplatz, Berlin ein Veedel', () => {
     const sim = createTestGame();
     expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'rotterdam' } }).ok).toBe(false);
-    sim.state.modules.logistics.berths.koeln = { since: sim.state.time };
+    sim.state.modules.logistics.berths.koeln = { since: sim.state.time, level: 0 };
     expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'rotterdam' } }).ok).toBe(true);
     expect(availablePackages(sim.state, 'rotterdam').length).toBeGreaterThan(0);
     expect(canUnlock(sim.state, 'berlin').ok).toBe(false);
