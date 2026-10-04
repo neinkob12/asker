@@ -223,6 +223,8 @@ export const METHOD_CHANCE = 0.004;
 /** Abstand zwischen zwei Aktionen derselben Gang (Stufe 2) und zwischen zwei Aktionen irgendeiner Gang. */
 export const METHOD_COOLDOWN = 3 * DAY;
 export const METHOD_GLOBAL_GAP = DAY;
+/** Nach einer Methode sinkt die Feindseligkeit der Gang um so viel (nach einem gelungenen Überfall: HOSTILITY_AFTER_LESSON). */
+export const METHOD_HOSTILITY_RELIEF = 20;
 /** Antwortfrist für Nachrichten zu Einbruch, Abwerben, Einschüchtern, Erpressung. */
 export const INCIDENT_EXPIRY = 8 * HOUR;
 

@@ -569,13 +569,14 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   Hamburger Veedel nach 7/5/7 Tagen, keine Pleite, Köln bringt im Schlaf 7.500–11.000 € am Tag. Stellschrauben:
   `territory/config.ts` `SALE_INFLUENCE_FACTOR_BY_CITY` (Hamburg 0,6), `city/data.ts` (`relationFactor`,
   `bribeFactor`, `raidWarningBonus`, `wageFactor`, `propertyFactor`), `events/config.ts`, `spots/config.ts` `KNEIPE`.
-- Auftrag 23 (Gang-Methoden, Lieferprobleme mit Entscheidungen, Spot-Arten; 30 Tage, 8 Seeds, vorher = Stand vor dem
-  Auftrag): erstes Veedel im Schnitt an Tag 7,0 → 6,9, „Boss von Köln“ an Tag 18,3 → 19,0, Köln komplett an Tag 24,0
-  (7 von 8 Seeds) → 25,1 (8 von 8), Umsatz pro Tag Tag 6–15 8.308 → 8.022 €, keine Pleiten. Gang-Überfälle werden
-  seltener (5–10 → 1–3 je Seed), weil die Gangs auch andere Methoden nutzen. Hamburg (8 Seeds, am Ende im Schnitt
-  1,1 → 1,25 Veedel) schwankt stark mit dem Zufall. Stellschrauben: `gangs/config.ts` (`METHOD_CHANCE`,
-  `BURGLARY_*`, `POACH_*`, `INTIMIDATION_*`, `TIPOFF_*`, `BLACKMAIL_*`, `GOOD_TURN_CHANCE`), `suppliers/config.ts`
-  (`DECISION_*`, `DETOUR_*`, `BRIBE_*`, `LUCK_*`), `spots/kinds.ts` (Arten, `AWARENESS_*`, Ausbau).
+- Auftrag 23 (Gang-Methoden, Lieferprobleme mit Entscheidungen, Spot-Arten; 30 Tage, 8 Seeds, vorher = `main` nach
+  Auftrag 32): erstes Veedel im Schnitt an Tag 6,3 → 6,5, „Boss von Köln“ an Tag 17,4 → 17,3, Köln komplett an Tag
+  22,6 → 23,6 (alle 8 Seeds), Umsatz pro Tag Tag 6–15 9.369 → 9.305 €, keine Pleiten; Hamburg am Ende im Schnitt
+  1,1 → 1,0 Veedel (schwankt stark mit dem Zufall). Gang-Überfälle werden seltener, weil die Gangs auch andere Methoden
+  nutzen; nach jeder Methode sinkt ihre Feindseligkeit (`METHOD_HOSTILITY_RELIEF`), sonst blieben sie dauerhaft auf
+  Angriffsstufe und Hamburg wurde deutlich schwerer. Stellschrauben: `gangs/config.ts` (`METHOD_CHANCE`,
+  `METHOD_HOSTILITY_RELIEF`, `BURGLARY_*`, `POACH_*`, `INTIMIDATION_*`, `TIPOFF_*`, `BLACKMAIL_*`, `GOOD_TURN_CHANCE`),
+  `suppliers/config.ts` (`DECISION_*`, `DETOUR_*`, `BRIBE_*`, `LUCK_*`), `spots/kinds.ts` (Arten, `AWARENESS_*`, Ausbau).
 
 - Auftrag 32 (Preisindex, Rabatt-Aktionen, Marktereignisse, Qualität treibt Nachfrage, Wochenverträge; 30 Tage,
   32 Seeds, vorher = `main` nach Auftrag 31): erstes Veedel Ø Tag 6,5 → 6,5, „Boss von Köln“ Ø Tag 17,7 → 16,9, Köln

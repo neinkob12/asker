@@ -46,7 +46,7 @@ import {
   staffContact,
 } from '../staff';
 import { veedelAt, veedelName } from '../veedel';
-import { addRelation, crewFor, say, statusOf } from './common';
+import { addHostility, addRelation, crewFor, say, statusOf } from './common';
 import {
   ACTION_LOG_LIMIT,
   BLACKMAIL_BASE,
@@ -73,6 +73,7 @@ import {
   METHOD_CHANCE,
   METHOD_COOLDOWN,
   METHOD_GLOBAL_GAP,
+  METHOD_HOSTILITY_RELIEF,
   POACH_EXTRA_SHARE,
   POACH_MAX_LOYALTY,
   POACH_MIN_EXTRA,
@@ -333,7 +334,8 @@ export function runMethod(ctx: Ctx, gang: Gang, s: GangStatus, method: GangMetho
   else if (method === 'blackmail') done = blackmail(ctx, gang);
   if (done) {
     ctx.state.modules.gangs.lastMethodAt = ctx.now;
-    s.lastAttackAt = method === 'raid' ? ctx.now : s.lastAttackAt;
+    // Die Gang hat Druck gemacht und ist erst mal zufriedener, wie nach einem gelungenen Überfall (nur schwächer).
+    addHostility(s, -METHOD_HOSTILITY_RELIEF);
   }
   return done;
 }
