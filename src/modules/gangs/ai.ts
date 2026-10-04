@@ -8,7 +8,7 @@ import { activeEncounters, startEncounter } from '../encounters';
 import { eventFactor } from '../events';
 import { DEFAULT_PRODUCT, getStock, getWarehouses } from '../goods';
 import { referencePrice, setCompetitionFactor } from '../market';
-import { getSpot, getSpots } from '../spots';
+import { getSpot, getSpots, spotModifiers } from '../spots';
 import { defenseStrength, getStaff, getStaffMember } from '../staff';
 import {
   addInfluence,
@@ -526,6 +526,8 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
         spotId: target.spotId,
       },
     );
+    // Auftrag 23: Mit Versteck am Spot nehmen sie nur halb so viel Ware mit.
+    const stash = spotModifiers(ctx.state, target.spotId).lossFactor;
     encounterId = startEncounter(ctx, {
       kind: 'raidDefense',
       spotId: target.spotId,
@@ -534,6 +536,22 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
       askPlayer: true,
       opponent,
       origin,
+      ...(stash < 1
+        ? {
+            effects: {
+              failure: {
+                goods: [Math.round(-25 * stash), Math.round(-10 * stash)] as const,
+                moneyShare: -0.1 * stash,
+                moneyShareMax: 1000,
+                influence: -3,
+                opponentInfluence: 3,
+                reputation: -3,
+                text: '{opponent} haben dich {place} ausgenommen. Das Versteck hat das Schlimmste verhindert.',
+              },
+              retreat: { goods: [Math.round(-12 * stash), Math.round(-5 * stash)] as const, influence: -1 },
+            },
+          }
+        : {}),
     }).encounterId;
   } else if (target.kind === 'courier') {
     const driver = getStaffMember(ctx.state, target.staffId)?.name ?? 'deiner Rechten Hand';
