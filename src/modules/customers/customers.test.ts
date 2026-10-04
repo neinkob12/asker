@@ -120,7 +120,8 @@ describe('customers: Straße', () => {
   it('Kunden zahlen den Preis am Spot: Richtpreis oder den eigenen Preis', () => {
     const sim = createTestGame();
     sim.dispatch({ type: 'market.setPrice', payload: { spotId: 'uni', productId: 'weed', price: 8 } });
-    sim.advance(6 * 60);
+    // Vor Mitternacht: Dann macht der Preisindex einen Schritt (Auftrag 32), wartende Kunden behalten ihren Preis.
+    sim.advance(5 * 60 + 50);
     expect(sim.state.modules.customers.waiting.length).toBeGreaterThan(0);
     for (const c of sim.state.modules.customers.waiting) {
       if (c.spotId === 'uni') expect(c.pricePerUnit).toBe(8);

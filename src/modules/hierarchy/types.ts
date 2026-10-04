@@ -22,6 +22,11 @@ export interface OrderRule {
   /** Unter diesem Bestand im Ziel-Lager (plus was dorthin unterwegs ist) bestellt er. */
   minStock: number;
   warehouseId: string | null;
+  /**
+   * Nur bestellen, wenn der Preisindex der Ware (market.priceIndex) unter diesem Wert liegt (Auftrag 32). Fehlt oder
+   * null: immer (Standard, wie vorher).
+   */
+  maxIndex?: number | null;
   /** Warum die Regel gerade ruht (Lieferant gesperrt …), sonst null. */
   paused: string | null;
 }

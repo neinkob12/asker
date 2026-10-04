@@ -1,6 +1,6 @@
 # Köln Tycoon – Konzept
 
-Stand: 04.10.2026 (nach Auftrag 31 und der Fragerunde zum Bogen des Spiels, Plan in [`docs/plan.md`](plan.md)). Grundlage sind die Antworten aus den Fragerunden (50 + 5 Fragen, 16 Fragen zu den Städten, Fragerunde zur Ideensammlung [`docs/ideen.md`](ideen.md)).
+Stand: 04.10.2026 (nach Auftrag 31, Auftrag 32 und der Fragerunde zum Bogen des Spiels, Plan in [`docs/plan.md`](plan.md)). Grundlage sind die Antworten aus den Fragerunden (50 + 5 Fragen, 16 Fragen zu den Städten, Fragerunde zur Ideensammlung [`docs/ideen.md`](ideen.md)).
 Dieses Dokument ist die gemeinsame Referenz für beide im Duo und für alle Claude-Sessions.
 Wer eine Entscheidung ändert, ändert sie hier.
 
@@ -55,7 +55,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
   - Große Mengen werden am Hafen Rotterdam bestellt, kommen per Schiff über den Rhein in den Niehler Hafen und brauchen länger. Dafür braucht man einen eigenen Liegeplatz (mit sauberem Geld gemietet), und die Ware muss am Kai von einem Fahrer oder selbst abgeholt werden, bevor der Zoll neugierig wird.
   - Eigener Anbau kommt ganz am Ende des Bogens, als Produktion im Ausland (Phase 4 im Plan).
 - **Lieferanten:** mehrere, jeweils mit Preis, Qualität, Zuverlässigkeit und Lieferzeit. Nicht alle sind von Anfang an zu haben: Am Anfang liefert nur einer, die anderen melden sich erst mit genug Umsatz, eigenen Veedeln (Einfluss) oder einem Liegeplatz im Hafen und wollen eine Vermittlungsgebühr. Dazu Beziehungen: Vertrauen bringt Rabatt, Kredit und bessere Ware.
-- **Preise:** Der Markt gibt einen Richtwert (Angebot, Nachfrage, Konkurrenz), der Spieler setzt seinen Preis drumherum. Dazu ein milder Preisindex pro Produkt und Stadt (etwa 0,85 bis 1,2, langsame Drift), der auch die Einkaufspreise bewegt, mit Rabatt-Aktionen der Lieferanten über mehrere Tage und seltenen Schocks. Gute Qualität macht ein Produkt an einem Spot beliebter (Entscheidung vom 04.10.2026). Ware altert nicht.
+- **Preise:** Der Markt gibt einen Richtwert (Angebot, Nachfrage, Konkurrenz), der Spieler setzt seinen Preis drumherum. Dazu ein milder Preisindex pro Produkt und Stadt (0,85 bis 1,2, langsame Drift), der auch die Einkaufspreise bewegt (zur Hälfte), mit Rabatt-Aktionen der Lieferanten über drei bis fünf Tage, Marktereignissen über zwei bis fünf Tage und einem Marktbericht am Montag. Gute Qualität macht ein Produkt an einem Spot beliebter (Entscheidung vom 04.10.2026, gebaut mit Auftrag 32). Ware altert nicht.
 - **Logistik:** Fahrzeuge fahren über echte Kölner Straßen, Kontrollen unterwegs, mehrere Lager (kaufen, beliefern lassen, umlagern), Fahrer für Abholungen am Hafen. Dazu (Entscheidung vom 04.10.2026): Lager haben eine Kapazität, die man ausbauen kann; eigene Fahrzeuge mit festen Werten pro Modell (Ladung, Tempo, Zollrisiko, kein Alter, keine Kennzeichen); Routenwahl pro Fahrt (Autobahn, Landstraße, nachts); Hafen-Ausbau mit Liegeplatz-Stufen und Containern; eine Warenfluss-Übersicht.
 - **Geld:**
   - Alles Illegale wird mit Schwarzgeld bezahlt.
@@ -64,7 +64,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
   schnell, kein Risiko), Waschsalon und Shisha-Bar (mittel, Einstieg mit sauberem oder Schwarzgeld), Bauunternehmer
   (groß, billig, langsam, braucht Ruf oder Reviere, zu viel auf einmal bringt Heat).
 - **Tarnfirmen:** entfallen (Entscheidung vom 04.10.2026, zu kompliziert). Die drei Wege der Geldwäsche bleiben.
-- **Vertrieb:** Straßenverkauf an Spots, Lieferdienst per Spiel-Handy, Großhandel an andere Dealer. Kein Darknet. Die Dealer werden Stammabnehmer mit Vertrauen (größere Mengen, Vorkasse, Exklusivität, am Ende Zwischenhändler für ein Veedel). Dazu Wochenverträge: jeden Montag drei Angebote, eins wird angenommen.
+- **Vertrieb:** Straßenverkauf an Spots, Lieferdienst per Spiel-Handy, Großhandel an andere Dealer. Kein Darknet. Die Dealer werden Stammabnehmer mit Vertrauen (größere Mengen, Vorkasse, Exklusivität, am Ende Zwischenhändler für ein Veedel). Dazu Wochenverträge (Auftrag 32): jeden Montag um 8 Uhr drei Angebote von Figuren mit Gesicht, eins wird angenommen, Frist Sonntag 23:59, Ziele nach Größe des Geschäfts, Belohnung plus Vertrauen bei einem Lieferanten.
 
 ## Personal
 
@@ -162,16 +162,22 @@ Straßennetz), nur eine Stadt läuft live (die andere schläft mit Tagesergebnis
 Fahrplan zwischen den Lagern beider Städte mit Zoll auf der Autobahn, Stadt-Events (Karneval, FC, Kölner Lichter;
 Hafengeburtstag, Schlagermove, Dom), Kölscher Klüngel gegen hanseatisch kühl, Veedel-Kneipen und mehr Studenten.
 
+Mit Auftrag 32 dazu: ein milder Preisindex pro Ware und Stadt (0,85 bis 1,2, jeden Tag ein Schritt mit Rückkehr zur
+Mitte; Straßenpreise folgen ganz, der Einkauf zur Hälfte), Rabatt-Aktionen der Lieferanten (ein Paket 10–25 % billiger
+für 3–5 Tage, etwa einmal pro Woche), Marktereignisse wie Zollfund in Rotterdam oder gute Ernte in den Niederlanden
+(2–5 Tage, halb rauf, halb runter), ein Marktbericht am Montag, Bestellregeln mit Preisgrenze, Premium-Ware macht ein
+Produkt am Spot beliebter (bis +25 % Nachfrage, Dreck bis −33 %) und Wochenverträge (montags drei Angebote von
+Figuren wie Ali vom Spätkauf oder Marlene aus dem Club, einer wird angenommen, Frist Sonntag).
+
 - **Kampagnenlänge:** Köln ist der Einstieg, Hamburg die zweite Stadt. Laut Balancing-Simulation (`npm run balance`)
-  erstes Veedel nach etwa 7 Spieltagen, drei nach etwa 8, fünf nach 13–17, „Boss von Köln“ (7 von 12) nach 17–20,
-  Köln komplett nach 22–27 Spieltagen, bei Tempo 1x (4,8 Minuten pro Spieltag) grob 2 Stunden. In Hamburg fällt das
+  erstes Veedel nach etwa 6–7 Spieltagen, drei nach etwa 8, fünf nach 13–16, „Boss von Köln“ (7 von 12) nach 16–19,
+  Köln komplett nach 21–24 Spieltagen (Stand Auftrag 32), bei Tempo 1x (4,8 Minuten pro Spieltag) grob 2 Stunden. In Hamburg fällt das
   erste Stadtteil-Revier etwa eine Woche nach der Ankunft. Die Polizei bleibt in den ersten gut zwei Wochen bei
   1–2 Flammen und zieht erst als Großhändler an.
 - **Session-Länge:** In 20 Minuten (etwa 8 Spieltage bei 2x) kommen Verkauf, Nachschub, Personal, Leutnants,
   Gang-Drohungen, Konfrontationen, Polizei-Kontrollen, Wetter und das erste Veedel vor (`npm run playthrough`,
   Screenshots in `docs/integration/`).
-- **Noch nicht umgesetzt** (Aufträge 32 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Markt in Bewegung,
-  Wochenverträge, Lager mit Kapazität, Fahrzeuge, Routenwahl, Hafen-Ausbau, Warenfluss, Stammabnehmer, Gangs mit
+- **Noch nicht umgesetzt** (Aufträge 33 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Lager mit Kapazität, Fahrzeuge, Routenwahl, Hafen-Ausbau, Warenfluss, Stammabnehmer, Gangs mit
   Gedächtnis, Leute mit Geschichte, Capo, Konfrontationen neu, freie Reihenfolge der Städte mit Autobahn-Netz, Berlin,
   München, Frankfurt, Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen: Tarnfirmen,
   Charakter-Erstellung, Perks, Besitz, Akte, Korruption.
