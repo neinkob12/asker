@@ -165,13 +165,13 @@ Hafengeburtstag, Schlagermove, Dom), Kölscher Klüngel gegen hanseatisch kühl,
 Mit Auftrag 32 dazu: ein milder Preisindex pro Ware und Stadt (0,85 bis 1,2, jeden Tag ein Schritt mit Rückkehr zur
 Mitte; Straßenpreise folgen ganz, der Einkauf zur Hälfte), Rabatt-Aktionen der Lieferanten (ein Paket 10–25 % billiger
 für 3–5 Tage, etwa einmal pro Woche), Marktereignisse wie Zollfund in Rotterdam oder gute Ernte in den Niederlanden
-(2–5 Tage, halb rauf, halb runter), ein Marktbericht am Montag, Bestellregeln mit Preisgrenze, gute Ware macht ein
-Produkt am Spot beliebter (Premium bis +25 %, Dreck bis −33 % Nachfrage) und Wochenverträge (montags drei Angebote von
+(2–5 Tage, halb rauf, halb runter), ein Marktbericht am Montag, Bestellregeln mit Preisgrenze, Premium-Ware macht ein
+Produkt am Spot beliebter (bis +25 % Nachfrage, Dreck bis −33 %) und Wochenverträge (montags drei Angebote von
 Figuren wie Ali vom Spätkauf oder Marlene aus dem Club, einer wird angenommen, Frist Sonntag).
 
 - **Kampagnenlänge:** Köln ist der Einstieg, Hamburg die zweite Stadt. Laut Balancing-Simulation (`npm run balance`)
-  erstes Veedel nach etwa 6 Spieltagen, drei nach etwa 8, fünf nach 12–16, „Boss von Köln“ (7 von 12) nach 15–18,
-  Köln komplett nach 19–23 Spieltagen (Stand Auftrag 32), bei Tempo 1x (4,8 Minuten pro Spieltag) grob 2 Stunden. In Hamburg fällt das
+  erstes Veedel nach etwa 6–7 Spieltagen, drei nach etwa 8, fünf nach 13–16, „Boss von Köln“ (7 von 12) nach 16–19,
+  Köln komplett nach 21–24 Spieltagen (Stand Auftrag 32), bei Tempo 1x (4,8 Minuten pro Spieltag) grob 2 Stunden. In Hamburg fällt das
   erste Stadtteil-Revier etwa eine Woche nach der Ankunft. Die Polizei bleibt in den ersten gut zwei Wochen bei
   1–2 Flammen und zieht erst als Großhändler an.
 - **Session-Länge:** In 20 Minuten (etwa 8 Spieltage bei 2x) kommen Verkauf, Nachschub, Personal, Leutnants,

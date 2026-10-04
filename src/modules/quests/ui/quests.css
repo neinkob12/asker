@@ -245,7 +245,3 @@
   color: var(--color-muted);
   font-size: var(--type-subhead);
 }
-.quest-contract__progress {
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}

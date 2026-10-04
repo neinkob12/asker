@@ -33,7 +33,7 @@ import { activeCity, isVeedelLive, playableCities } from '../city';
 import { marketEventFactor } from '../events';
 import { allProducts, getProduct } from '../goods';
 import { getSpot } from '../spots';
-import { getDeals, getRelation, getSupplier, getSuppliers, isUnlocked, supplierContact } from '../suppliers';
+import { getDeals, getRelation, getSuppliers, isUnlocked, supplierContact } from '../suppliers';
 import { allVeedel, getVeedel, veedelCity } from '../veedel';
 import {
   INDEX_CHIP_FROM,
@@ -231,7 +231,8 @@ export function marketReport(state: GameState, cityId: string = activeCity(state
   ].filter(Boolean);
   const first = parts.length > 0 ? `${parts.join(', ')}.` : 'Der Markt ist ruhig, die Preise stehen normal.';
   const deal = getDeals(state, cityId)[0];
-  const supplier = deal ? getSupplier(state, deal.supplierId) : undefined;
+  // So, wie der Lieferant in der Stadt auftritt (in Hamburg andere Pakete, z.B. Daan am Kai).
+  const supplier = deal ? getSuppliers(state, cityId).find((s) => s.id === deal.supplierId) : undefined;
   const pkg = supplier?.packages.find((p) => p.id === deal?.packageId);
   const second =
     deal && supplier && pkg

@@ -22,6 +22,7 @@ import {
 import {
   activeContract,
   type ContractOffer,
+  canAcceptContract,
   contractHistory,
   contractOffers,
   contractProgress,
@@ -114,25 +115,31 @@ function OfferRow(props: { offer: ContractOffer; active?: boolean }) {
   const { offer } = props;
   const contact = getContractContact(offer.contactId);
   const [now, target] = props.active ? contractProgress(state) : [0, offer.target];
+  const allowed = canAcceptContract(state, offer);
   return (
     <ListItem value={props.active ? progressText(offer, now, target) : undefined}>
       <span class="quest-contract">
         <Avatar name={contact?.name ?? ''} look={contactLook(contact)} size="sm" />
         <span class="quest-contract__main">
           <strong class="quest-contract__title">{offer.title}</strong>
-          <span class="quest-contract__meta">
-            {contact?.name ?? ''}, {deadlineText(state, offer.deadline)}
-          </span>
+          <Chips
+            items={[
+              { label: contact?.name ?? '', icon: 'user', color: 'people' },
+              { label: deadlineText(state, offer.deadline), icon: 'clock' },
+            ]}
+          />
           <Chips items={offer.rewards.map((r) => ({ label: rewardText(r), icon: 'gift', color: 'money' as const }))} />
           {!props.active && (
             <Button
               small
               variant="primary"
+              disabled={!allowed.ok}
               onClick={() => dispatch({ type: 'quests.acceptContract', payload: { offerId: offer.id } })}
             >
               Annehmen
             </Button>
           )}
+          {!props.active && !allowed.ok && <span class="quest-contract__meta">{allowed.reason}</span>}
         </span>
       </span>
     </ListItem>

@@ -29,7 +29,7 @@ import {
 import { activeCity, cityName, relationFactor } from '../../city';
 import { getStock, getWarehouse, getWarehouses, productName, qualityTier } from '../../goods';
 import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount, portName } from '../../logistics';
-import { indexTrend } from '../../market';
+import { indexTrend, purchaseIndex } from '../../market';
 import {
   activeDeal,
   assortment,
@@ -103,12 +103,11 @@ function PackageChips(props: { supplierId: string; packageId: string; productId:
           color: 'money',
         },
         trend && {
-          label: trend.label,
+          // Der Einkauf folgt dem Markt nur zur Hälfte: Der Chip zeigt, was das Paket dadurch kostet.
+          label: `Einkauf ${trend.up ? '↑' : '↓'} ${Math.round(Math.abs(purchaseIndex(state, props.productId) - 1) * 100)} %`,
           icon: trend.up ? 'trendUp' : 'trendDown',
           color: trend.up ? 'warn' : 'money',
-          title: trend.up
-            ? 'Der Markt zieht an, der Einkauf wird teurer.'
-            : 'Der Markt gibt nach, der Einkauf wird billiger.',
+          title: `${trend.label} am Markt, der Einkauf folgt zur Hälfte.`,
         },
       ]}
     />

@@ -11,7 +11,8 @@
 // Öffentliche API: currentQuest(state), questProgress(state), completedQuests(state), questTitle(state),
 //   rewardText(reward), QUESTS, CHAPTERS,
 //   Verträge: contractOffers(state), activeContract(state), contractProgress(state), contractHistory(state),
-//   contractStats(state), contractValue(offer), getContractTemplate(id), getContractContact(id), CONTRACT_TEMPLATES
+//   contractStats(state), contractValue(offer), canAcceptContract(state, offer), getContractTemplate(id),
+//   getContractContact(id), CONTRACT_TEMPLATES
 // Befehle: 'quests.skip', 'quests.acceptContract'
 // Ereignisse: 'quest.started', 'quest.completed', 'contract.offered', 'contract.accepted', 'contract.finished'
 
@@ -190,7 +191,7 @@ function rewardWarehouse(state: GameState): Warehouse | null {
 }
 
 /** Zahlt eine Belohnung aus und gibt den Text zurück, der dem Spieler sagt, was wirklich angekommen ist. */
-function grant(ctx: Ctx, reward: QuestReward): string {
+function grant(ctx: Ctx, reward: QuestReward, reason = 'Belohnung von Peter'): string {
   const text = rewardText(reward);
   switch (reward.kind) {
     case 'goods': {
@@ -206,7 +207,7 @@ function grant(ctx: Ctx, reward: QuestReward): string {
       return warehouse.cityId === activeCity(ctx.state) ? text : `${text} (im Lager ${warehouse.name})`;
     }
     case 'money':
-      wallet.earn(ctx, reward.amount, reward.money, 'Belohnung von Peter', 'income.other');
+      wallet.earn(ctx, reward.amount, reward.money, reason, 'income.other');
       return text;
     case 'reputation':
       changeReputation(ctx, reward.amount, 'Quest');
@@ -338,7 +339,7 @@ function nextMonday(time: number): number {
   return dayStart + daysAhead * 1440;
 }
 
-/** Lieferant, bei dem es Vertrauen gibt: ein freigeschalteter in der Stadt, am liebsten einer mit wenig Vertrauen. */
+/** Lieferant, bei dem es Vertrauen gibt: zufällig einer der freigeschalteten in der Stadt, die noch nicht 100 haben. */
 function trustSupplier(ctx: Ctx, cityId: string): string | null {
   const options = getSuppliers(ctx.state, cityId).filter(
     (s) => isUnlocked(ctx.state, s.id) && getRelation(ctx.state, s.id).trust < 100,
@@ -414,17 +415,53 @@ function retractOffers(ctx: Ctx): void {
   messages.retractWhere(ctx, (m) => !!m.options?.some((o) => o.command?.type === 'quests.acceptContract'));
 }
 
+/**
+ * Lässt sich das Angebot jetzt noch annehmen und schaffen? Serien brauchen genug Stunden bis zur Frist, „Veedel halten“
+ * so viele Veedel wie beim Angebot, Vorlagen mit Bedingung (z.B. „ein Veedel dazugewinnen“) müssen sie noch erfüllen.
+ */
+export function canAcceptContract(state: GameState, offer: ContractOffer): CommandResult {
+  const c = state.modules.quests.contracts;
+  if (c.active) return { ok: false, reason: 'Du hast diese Woche schon einen Vertrag.' };
+  if (state.time >= offer.deadline) return { ok: false, reason: 'Die Woche ist vorbei.' };
+  const template = getContractTemplate(offer.templateId);
+  if (!template) return { ok: false, reason: 'Diesen Vertrag gibt es nicht mehr.' };
+  if (template.streak) {
+    const hours = Math.floor((offer.deadline - state.time) / 60);
+    if (offer.target > hours) return { ok: false, reason: `Bis Sonntag bleiben nur noch ${hours} Stunden.` };
+  }
+  if (template.available && !template.available(state, offer.cityId, offer.tier)) {
+    return { ok: false, reason: 'Das ist gerade nicht mehr zu schaffen.' };
+  }
+  if (template.streak && template.param && offer.param !== undefined) {
+    const now = template.param(state, offer.cityId);
+    if (now < offer.param) return { ok: false, reason: `Du hältst nur noch ${now} Veedel.` };
+  }
+  return { ok: true };
+}
+
 export function acceptContract(ctx: Ctx, offerId: number): CommandResult {
   const c = ctx.state.modules.quests.contracts;
   if (c.active) return { ok: false, reason: 'Du hast diese Woche schon einen Vertrag.' };
   const offer = c.offers.find((o) => o.id === offerId);
   if (!offer) return { ok: false, reason: 'Das Angebot gibt es nicht mehr.' };
-  if (ctx.now >= offer.deadline) return { ok: false, reason: 'Die Woche ist vorbei.' };
+  const allowed = canAcceptContract(ctx.state, offer);
+  if (!allowed.ok) return allowed;
   c.active = { ...offer, progress: 0, acceptedAt: ctx.now };
+  // Der Ausgangswert gilt ab dem Annehmen (z.B. Veedel jetzt), nicht ab dem Angebot am Montag.
+  const template = getContractTemplate(offer.templateId);
+  if (template?.param) {
+    const param = template.param(ctx.state, offer.cityId);
+    c.active.param = param;
+    c.active.title = fillContractText(template.title, template, {
+      target: offer.target,
+      productId: offer.productId,
+      param,
+    });
+  }
   c.offers = [];
   c.stats.accepted += 1;
   retractOffers(ctx);
-  journal.add(ctx, `Vertrag angenommen: ${offer.title}.`, 'info');
+  journal.add(ctx, `Vertrag angenommen: ${c.active.title}.`, 'info');
   ctx.emit('contract.accepted', { offerId: offer.id, templateId: offer.templateId });
   checkContract(ctx);
   return { ok: true };
@@ -439,7 +476,8 @@ function finishContract(ctx: Ctx, result: 'done' | 'failed'): void {
   c.active = null;
   if (result === 'done') {
     c.stats.done += 1;
-    const rewards = active.rewards.map((r) => grant(ctx, r)).join(', ');
+    const reason = `Wochenvertrag: ${getContractContact(active.contactId)?.name.split(' (')[0] ?? active.title}`;
+    const rewards = active.rewards.map((r) => grant(ctx, r, reason)).join(', ');
     journal.add(ctx, `Vertrag erfüllt: ${active.title}.${rewards ? ` Belohnung: ${rewards}.` : ''}`, 'good');
     if (contact && template) messages.send(ctx, { contact, text: template.doneText, silent: true });
   } else {

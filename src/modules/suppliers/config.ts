@@ -361,7 +361,7 @@ export const SUPPLIER_LOOKS: Readonly<Record<string, Partial<Look>>> = {
 // (still, ohne Banner). Um Mitternacht pro freier Stadt ausgewürfelt, solange dort keine Aktion läuft.
 
 /** Chance pro Stadt und Tag, solange dort keine Aktion läuft (mit der Dauer etwa einmal pro Woche). */
-export const DEAL_CHANCE_PER_DAY = 0.25;
+export const DEAL_CHANCE_PER_DAY = 0.2;
 /** Rabatt [von, bis] als Anteil. */
 export const DEAL_DISCOUNT: readonly [number, number] = [0.1, 0.25];
 /** Dauer in Tagen [von, bis]. */

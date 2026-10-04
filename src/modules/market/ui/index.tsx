@@ -11,7 +11,6 @@ import {
   ItemContent,
   List,
   ListItem,
-  onGameEvent,
   registerPanel,
   registerSlot,
   Select,
@@ -356,11 +355,3 @@ function MarketSection() {
 registerSlot('spots.spotPanel', { id: 'market.prices', order: 20, component: SpotPrices });
 registerSlot('goods.warehouse', { id: 'market.summary', title: 'Markt', order: 50, component: MarketSection });
 registerPanel({ id: 'market.overview', title: () => 'Markt-Übersicht', component: MarketOverview });
-
-// Marktereignis beginnt: still in den Verlauf (Routine, die Preise sieht man an den Chips).
-onGameEvent('events.marketStarted', 'market.eventToast', (payload, ui, state) => {
-  if (payload.cityId !== activeCity(state)) return;
-  const name = getMarketEventDef(payload.eventId)?.name ?? 'Marktereignis';
-  const arrow = payload.factor > 1 ? '↑' : '↓';
-  ui.toast(`${name}: ${productName(payload.productId)} ${arrow}`, 'info');
-});

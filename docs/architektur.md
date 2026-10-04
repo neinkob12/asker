@@ -438,7 +438,7 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 - **Nachfrage:** Uhrzeit, Wochentag (`WEEKDAY_DEMAND` und Kundentypen), Wetter (`weatherDemandFactor`, Straße
   vs. Lieferdienst), Ruf und Preis. Seit Auftrag 32 dazu die Qualität der letzten Verkäufe einer Ware am Spot
   (`customers/quality.ts`): Unter 1 dreht ein Interessent mit der Gegenwahrscheinlichkeit ab, über 1 bringt er mit dem
-  Überschuss als Chance noch jemanden mit (Solide = 1, Premium bis 1,25, Dreck bis 0,67).
+  Überschuss als Chance noch jemanden mit (Solide und gute Lieferantenware = 1, Premium ab 0,95 bis 1,25, Dreck bis 0,67).
 - **Markt in Bewegung (Auftrag 32):** `market` würfelt um Mitternacht pro Stadt und Ware einen Schritt des Preisindex
   (Rückkehr zur Mitte `INDEX_REVERSION`, Schritt `INDEX_STEP`, Grenzen `INDEX_MIN`/`INDEX_MAX`), auch für schlafende
   Städte. `events` würfelt Marktereignisse (`MARKET_EVENT_CHANCE` pro Stadt und Tag, höchstens zwei, Faktor auf den
@@ -537,17 +537,18 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   `territory/config.ts` `SALE_INFLUENCE_FACTOR_BY_CITY` (Hamburg 0,6), `city/data.ts` (`relationFactor`,
   `bribeFactor`, `raidWarningBonus`, `wageFactor`, `propertyFactor`), `events/config.ts`, `spots/config.ts` `KNEIPE`.
 
-- Auftrag 32 (Preisindex, Rabatt-Aktionen, Marktereignisse, Qualität treibt Nachfrage, Wochenverträge; 30 Tage, 8 Seeds,
-  vorher = `main` nach Auftrag 31): erstes Veedel an Tag 6–8 → 5–7, „Boss von Köln“ im Schnitt Tag 18,3 → 16,1, Köln
-  komplett bei 7 von 8 Seeds im Schnitt Tag 24,0 → bei 8 von 8 Seeds Tag 21,4, Umsatz pro Tag T1–5 3.090 → 3.170 €,
-  T6–15 8.310 → 11.260 €, T16–30 21.090 → 23.600 €, keine Pleite. Hamburg nach Köln komplett: erstes Veedel bei 6 → 7
-  von 8 Seeds. Neu im Bericht (`npm run balance`, Zeile „Markt“): Index Köln über 30 Tage 0,85–1,20 (Mittel 0,99–1,02),
-  2–8 Marktereignisse und 1–5 Aktionen pro Seed, der Bot nimmt jede Woche einen Vertrag (22 angenommen, 20 erfüllt,
-  1 geplatzt, 91 %). Messungen mit abgeschalteten Teilen: Der größte Teil des Plus T6–15 kommt aus den Belohnungen der
-  Verträge (Kapital in der ersten Woche, deshalb für Kleindealer nur 500 €; `CONTRACT_MONEY`, `CONTRACT_TRUST` in
-  `quests/contracts.ts`), ein kleinerer aus dem Index (bei niedrigem Index kauft der Bot mehr Menge für dasselbe Geld),
-  die Qualität ist neutral. Stellschrauben: `market/config.ts` (`INDEX_*`, `PURCHASE_INDEX_SHARE`),
-  `events/config.ts` (`MARKET_EVENT_CHANCE`), `suppliers/config.ts` (`DEAL_*`), `customers/config.ts` (`QUALITY_*`).
+- Auftrag 32 (Preisindex, Rabatt-Aktionen, Marktereignisse, Qualität treibt Nachfrage, Wochenverträge; 30 Tage,
+  32 Seeds, vorher = `main` nach Auftrag 31): erstes Veedel Ø Tag 6,5 → 6,5, „Boss von Köln“ Ø Tag 17,7 → 16,9, Köln
+  komplett bei 31 → 32 von 32 Seeds, Ø Tag 23,3 → 22,5, Umsatz pro Tag T1–5 3.240 → 3.190 €, T6–15 9.130 → 9.770 €
+  (+7 %), T16–30 22.630 → 23.650 €, keine Pleite. Neu im Bericht (`npm run balance`, Zeile „Markt“): Index Köln über
+  30 Tage zwischen 0,85 und 1,20, der Bot nimmt jede Woche einen Vertrag (95 angenommen, 84 erfüllt, 88 %).
+  Einzeln eingeschaltet gemessen (16 Seeds, alles aus = Köln komplett Ø Tag 24,2): Qualität −1,0 Tage, Index −0,6,
+  Verträge −0,7, Aktionen −0,4. Stellschrauben: Belohnungen `CONTRACT_MONEY` [0, 500, 1.500] und `CONTRACT_TRUST`
+  [3, 4, 5] in `quests/contracts.ts` (Kapital in der ersten Woche wirkt stark, deshalb gibt es für Kleindealer kein
+  Geld), `QUALITY_NEUTRAL` [0,45, 0,8] und `QUALITY_PREMIUM_AT` 0,95 in `customers/config.ts` (normale
+  Lieferantenware bleibt neutral, erst Premium zieht Kundschaft an), `DEAL_CHANCE_PER_DAY` 0,2 in
+  `suppliers/config.ts`, `INDEX_*` und `PURCHASE_INDEX_SHARE` in `market/config.ts`, `MARKET_EVENT_CHANCE` in
+  `events/config.ts`.
 
 ## Städte (Auftrag 30)
 

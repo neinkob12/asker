@@ -7,10 +7,10 @@
 // Hier stehen nur Daten und reine Funktionen (Vorlagen, Figuren, Werte); den Ablauf macht index.ts.
 
 import type { Contact, GameEvents, GameState } from '../../core';
-import { getProduct } from '../goods';
+import { getProduct, QUALITY_TIERS } from '../goods';
 import { hottestVeedel } from '../police';
 import { controlledBy, PLAYER_FACTION } from '../territory';
-import { veedelCity } from '../veedel';
+import { allVeedel, veedelCity } from '../veedel';
 import type { QuestReward } from './config';
 
 /** Ein Angebot, so wie es im Spielstand liegt (nur Daten). */
@@ -135,6 +135,9 @@ export const CONTRACT_CONTACTS: readonly Contact[] = [
   },
 ];
 
+/** Untergrenze der Stufe „Gut“ (goods.QUALITY_TIERS; zur Laufzeit gelesen, keine Top-Level-Nutzung). */
+const goodQuality = () => QUALITY_TIERS.find((t) => t.id === 'good')?.min ?? 0.65;
+
 const inCity = (veedelId: string, offer: ContractOffer) => veedelCity(veedelId) === offer.cityId;
 const controlled = (state: GameState, cityId: string) =>
   controlledBy(state, PLAYER_FACTION).filter((id) => veedelCity(id) === cityId).length;
@@ -178,7 +181,7 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
     pitch:
       'Meine Leute wollen gutes Zeug, kein gestrecktes. Verkauf diese Woche {n} Einheiten mindestens guter Qualität.',
     doneText: 'Alle begeistert. So muss das.',
-    count: { 'sale.completed': (p, _s, o) => (inCity(p.veedelId, o) && p.quality >= 0.65 ? p.amount : 0) },
+    count: { 'sale.completed': (p, _s, o) => (inCity(p.veedelId, o) && p.quality >= goodQuality() ? p.amount : 0) },
     bonus: 'reputation',
     weight: 1.1,
   },
@@ -241,7 +244,7 @@ export const CONTRACT_TEMPLATES: readonly ContractTemplate[] = [
     title: 'Ein Veedel dazugewinnen',
     pitch: 'Da ist noch ein Veedel zu haben. Hol es dir diese Woche, dann bist du für mich der Richtige.',
     doneText: 'So macht man das. Hier, für dich.',
-    available: (state, cityId) => controlled(state, cityId) < 12,
+    available: (state, cityId) => controlled(state, cityId) < allVeedel(cityId).length,
     param: (state, cityId) => controlled(state, cityId),
     measure: (state, o) => controlled(state, o.cityId) - (o.param ?? 0),
     bonus: 'loyalty',
@@ -361,9 +364,9 @@ export function fillContractText(
 }
 
 /** Geld pro Größe des Geschäfts (Grundwert der Belohnung). */
-export const CONTRACT_MONEY: readonly [number, number, number] = [500, 2500, 8000];
+export const CONTRACT_MONEY: readonly [number, number, number] = [0, 500, 1500];
 /** Vertrauen beim Lieferanten pro Größe. */
-export const CONTRACT_TRUST: readonly [number, number, number] = [5, 7, 10];
+export const CONTRACT_TRUST: readonly [number, number, number] = [3, 4, 5];
 /** So viele Angebote pro Woche. */
 export const CONTRACT_OFFERS = 3;
 /** Montag (0) um 8 Uhr kommen die Angebote. */
@@ -413,7 +416,8 @@ export function contractRewards(
       break;
   }
   if (supplierId) rewards.push({ kind: 'trust', supplierId, amount: CONTRACT_TRUST[t] });
-  return rewards;
+  // Kein Geld mit 0 € (Kleindealer bekommen nur Bonus und Vertrauen).
+  return rewards.filter((r) => r.kind !== 'money' || r.amount > 0);
 }
 
 /** Ungefährer Wert einer Belohnung in Euro (zum Vergleichen, z.B. für den Bot). */

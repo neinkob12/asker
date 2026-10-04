@@ -263,10 +263,10 @@ export const NIGHTLIFE_WEEKEND = 1.3;
 
 /** Gewicht des neuesten Verkaufs im gleitenden Schnitt (0,2 = etwa die letzten fünf zählen). */
 export const QUALITY_MEMORY = 0.2;
-/** Solide Ware (Schnitt in diesem Bereich) ändert nichts. */
-export const QUALITY_NEUTRAL: readonly [number, number] = [0.45, 0.65];
+/** Solide und gute Ware (Schnitt in diesem Bereich, normale Lieferantenware) ändert nichts. */
+export const QUALITY_NEUTRAL: readonly [number, number] = [0.45, 0.8];
 /** Ab diesem Schnitt voller Zuschlag (Premium). */
-export const QUALITY_PREMIUM_AT = 0.85;
+export const QUALITY_PREMIUM_AT = 0.95;
 /** Bis zu diesem Schnitt voller Abschlag (Dreck). */
 export const QUALITY_TRASH_AT = 0.15;
 /** Faktor auf die Nachfrage nach der Ware am Spot: Premium bis +25 %, Dreck bis −33 %. */

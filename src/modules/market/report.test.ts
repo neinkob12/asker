@@ -45,4 +45,18 @@ describe('market: Marktbericht', () => {
     expect(text).toContain('Hasch gibt nach (−6 %)');
     expect(text).toContain('Aktion: 50 g Gras bei Toni 15 % billiger');
   });
+
+  it('kennt in Hamburg die Pakete, wie der Lieferant dort auftritt', () => {
+    const sim = createTestGame();
+    sim.state.modules.suppliers.deals.push({
+      id: 2,
+      supplierId: 'amsterdam',
+      packageId: 'hh-haze1kg',
+      cityId: 'hamburg',
+      discount: 0.2,
+      startedAt: sim.state.time,
+      endsAt: sim.state.time + 2000,
+    });
+    expect(marketReport(sim.state, 'hamburg')).toContain('Aktion: 1 kg Amnesia Haze bei Daan 20 % billiger');
+  });
 });

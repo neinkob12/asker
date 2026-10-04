@@ -4,8 +4,16 @@ import { describe, expect, it } from 'vitest';
 import { clock, loadSimulation, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getRelation } from '../suppliers';
-import { CONTRACT_CONTACTS, CONTRACT_TEMPLATES, contractTarget } from './contracts';
-import { activeContract, contractOffers, contractProgress, contractStats, contractValue } from './index';
+import { addInfluence, factions, PLAYER_FACTION } from '../territory';
+import { CONTRACT_CONTACTS, CONTRACT_TEMPLATES, contractRewards, contractTarget } from './contracts';
+import {
+  activeContract,
+  canAcceptContract,
+  contractOffers,
+  contractProgress,
+  contractStats,
+  contractValue,
+} from './index';
 
 /** Tag 1 ist ein Freitag, Tag 4 der erste Montag. */
 const MONDAY_8 = clock.at(4, 8);
@@ -72,6 +80,8 @@ describe('quests: Wochenverträge', () => {
     const offer = contractOffers(sim.state)[0];
     // Den Umsatz-Vertrag erzwingen, damit der Test genau zählen kann.
     Object.assign(offer, { templateId: 'revenue', target: 1000, title: 'Test' });
+    // Als Kleindealer gibt es kein Geld; für den Test eine Geld-Belohnung dazu (Buchungsgrund prüfen).
+    offer.rewards.push({ kind: 'money', money: 'dirty', amount: 400 });
     const trust = offer.rewards.find((r) => r.kind === 'trust');
     const before = trust?.kind === 'trust' ? getRelation(sim.state, trust.supplierId).trust : 0;
     const dirty = sim.state.wallet.dirty;
@@ -101,8 +111,58 @@ describe('quests: Wochenverträge', () => {
     expect(activeContract(sim.state)).toBeNull();
     expect(eventsOfType(events, 'contract.finished')[0].payload.result).toBe('done');
     expect(sim.state.wallet.dirty).toBeGreaterThan(dirty);
+    const booking = eventsOfType(events, 'wallet.changed').find((e) => e.payload.amount === 400);
+    expect(booking?.payload.reason).toMatch(/^Wochenvertrag: /);
     if (trust?.kind === 'trust') expect(getRelation(sim.state, trust.supplierId).trust).toBeGreaterThan(before);
     expect(contractStats(sim.state).done).toBe(1);
+  });
+
+  it('Kleindealer bekommen kein Geld mit 0 €, Händler schon', () => {
+    for (const t of CONTRACT_TEMPLATES) {
+      const small = contractRewards(t, 0, 'frankfurt', 'weed');
+      expect(
+        small.some((r) => r.kind === 'money' && r.amount <= 0),
+        t.id,
+      ).toBe(false);
+      expect(
+        small.some((r) => r.kind === 'trust'),
+        t.id,
+      ).toBe(true);
+      expect(
+        contractRewards(t, 1, null, 'weed').some((r) => r.kind === 'money' && r.amount > 0),
+        t.id,
+      ).toBe(true);
+    }
+  });
+
+  it('„Ein Veedel dazugewinnen“ zählt ab dem Annehmen, nicht ab dem Angebot', () => {
+    const sim = createTestGame({ seed: 2 });
+    untilOffers(sim);
+    const offer = contractOffers(sim.state)[0];
+    // Angebot am Montag mit 0 Veedel, inzwischen hält der Spieler eins.
+    Object.assign(offer, { templateId: 'expand', target: 1, param: 0 });
+    const ctx = sim.ctx('test');
+    for (const f of factions(sim.state)) if (f !== PLAYER_FACTION) addInfluence(ctx, 'kalk', f, -100);
+    addInfluence(ctx, 'kalk', PLAYER_FACTION, 100);
+    sim.step();
+    const events = recordEvents(sim);
+    expect(sim.dispatch({ type: 'quests.acceptContract', payload: { offerId: offer.id } }).ok).toBe(true);
+    sim.step();
+    expect(eventsOfType(events, 'contract.finished')).toHaveLength(0);
+    expect(activeContract(sim.state)?.param).toBe(1);
+  });
+
+  it('nicht mehr schaffbare Verträge lassen sich nicht annehmen', () => {
+    const sim = createTestGame({ seed: 2 });
+    untilOffers(sim);
+    const [first, second] = contractOffers(sim.state);
+    // Serie mit 120 Stunden, aber nur noch knapp sechs Tage bis Sonntag.
+    Object.assign(first, { templateId: 'quiet', target: 200 });
+    expect(canAcceptContract(sim.state, first).ok).toBe(false);
+    expect(sim.dispatch({ type: 'quests.acceptContract', payload: { offerId: first.id } }).ok).toBe(false);
+    // Veedel halten: beim Angebot drei, jetzt keins.
+    Object.assign(second, { templateId: 'hold', target: 24, param: 3 });
+    expect(canAcceptContract(sim.state, second)).toMatchObject({ ok: false });
   });
 
   it('läuft die Frist ab, platzt der Vertrag, und am Montag kommen neue Angebote', () => {

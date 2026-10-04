@@ -761,9 +761,9 @@ function rollDeals(ctx: Ctx): void {
   s.deals = s.deals.filter((d) => d.endsAt > ctx.now);
   for (const cityId of citiesUnlocked(ctx.state)) {
     if (s.deals.some((d) => d.cityId === cityId) || !ctx.chance(DEAL_CHANCE_PER_DAY)) continue;
-    const offers = getSuppliers(ctx.state, cityId).flatMap((supplier) =>
-      availablePackages(ctx.state, supplier.id, cityId).map((pkg) => ({ supplier, pkg })),
-    );
+    const offers = getSuppliers(ctx.state, cityId)
+      .filter((supplier) => !isBlocked(ctx.state, supplier.id))
+      .flatMap((supplier) => availablePackages(ctx.state, supplier.id, cityId).map((pkg) => ({ supplier, pkg })));
     if (offers.length === 0) continue;
     const { supplier, pkg } = ctx.pick(offers);
     const [minDiscount, maxDiscount] = DEAL_DISCOUNT;

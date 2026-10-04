@@ -9,12 +9,13 @@ import { QUALITY_DEMAND_MAX, QUALITY_DEMAND_MIN } from './config';
 import { qualityDemandFactor, qualityDemandFor, spotQuality, spotReputation } from './index';
 
 describe('customers: Qualität treibt Nachfrage', () => {
-  it('Faktor: Solide = 1, Premium bis +25 %, Dreck bis −33 %', () => {
+  it('Faktor: Solide und gute Lieferantenware = 1, Premium bis +25 %, Dreck bis −33 %', () => {
     expect(qualityDemandFor(null)).toBe(1);
     expect(qualityDemandFor(0.5)).toBe(1);
     expect(qualityDemandFor(0.65)).toBe(1);
-    expect(qualityDemandFor(0.75)).toBeGreaterThan(1);
-    expect(qualityDemandFor(0.85)).toBeCloseTo(QUALITY_DEMAND_MAX);
+    expect(qualityDemandFor(0.77)).toBe(1);
+    expect(qualityDemandFor(0.88)).toBeGreaterThan(1);
+    expect(qualityDemandFor(0.95)).toBeCloseTo(QUALITY_DEMAND_MAX);
     expect(qualityDemandFor(1)).toBeCloseTo(QUALITY_DEMAND_MAX);
     expect(qualityDemandFor(0.3)).toBeLessThan(1);
     expect(qualityDemandFor(0.15)).toBeCloseTo(QUALITY_DEMAND_MIN);
@@ -24,7 +25,7 @@ describe('customers: Qualität treibt Nachfrage', () => {
   it('jeder Straßenverkauf schiebt den gleitenden Schnitt am Spot, der Chip folgt', () => {
     const sim = createTestGame();
     for (const id of Object.keys(sim.state.modules.goods.stock)) sim.state.modules.goods.stock[id] = [];
-    store(sim.ctx('test'), { productId: 'weed', amount: 500, quality: 0.95 });
+    store(sim.ctx('test'), { productId: 'weed', amount: 500, quality: 0.98 });
     expect(spotQuality(sim.state, 'uni', 'weed')).toBeNull();
     for (let i = 0; i < 6; i++) {
       const c = {
@@ -39,7 +40,7 @@ describe('customers: Qualität treibt Nachfrage', () => {
       sim.state.modules.customers.waiting.push(c);
       expect(sim.dispatch({ type: 'customers.serve', payload: { customerId: c.id } }).ok).toBe(true);
     }
-    expect(spotQuality(sim.state, 'uni', 'weed')).toBeGreaterThan(0.85);
+    expect(spotQuality(sim.state, 'uni', 'weed')).toBeGreaterThan(0.95);
     expect(qualityDemandFactor(sim.state, 'uni', 'weed')).toBeCloseTo(QUALITY_DEMAND_MAX);
     expect(spotReputation(sim.state, 'uni')).toEqual([
       expect.objectContaining({ productId: 'weed', good: true, label: 'Gras gefragt' }),
@@ -73,7 +74,7 @@ describe('customers: Qualität treibt Nachfrage', () => {
       return eventsOfType(events, 'customer.arrived').length;
     };
     const neutral = arrivals(null);
-    const premium = arrivals(0.95);
+    const premium = arrivals(0.98);
     const trash = arrivals(0.05);
     expect(premium).toBeGreaterThan(neutral * 1.08);
     expect(trash).toBeLessThan(neutral * 0.85);
