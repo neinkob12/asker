@@ -238,7 +238,7 @@ onGameEvent('sale.completed', 'spots.moneyFx', (p, _ui, state) => {
   mapEffects.money(spot, p.revenue, { caption: formatProductAmount(p.productId, p.amount) });
 });
 
-// Nach einer Razzia an einem Spot wird sein Schild eine Weile blau.
+// Nach einer Razzia an einem Spot wird sein Marker eine Weile blau.
 onGameEvent('police.raid', 'spots.raidLook', (p, _ui, state) => {
   if (p.spotId && !p.empty) recordSpotRaid(p.spotId, state.time);
 });

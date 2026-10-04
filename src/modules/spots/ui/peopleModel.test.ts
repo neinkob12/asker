@@ -25,7 +25,7 @@ describe('Leute an Spots', () => {
     const figures = planFigures(sim.state, spot, everywhere).filter((f) => f.spotId === spot.id);
     expect(figures.filter((f) => f.kind === 'staff')).toHaveLength(1);
     expect(figures.filter((f) => f.kind === 'customer')).toHaveLength(MAX_CUSTOMERS_PER_SPOT);
-    // Personal links, Kundschaft rechts vom Schild.
+    // Personal links, Kundschaft rechts vom Marker.
     for (const f of figures) expect(Math.sign(f.offset[0])).toBe(f.kind === 'staff' ? -1 : 1);
     // Gleiche Lage: gleiche Figuren (stabile Schlüssel und Phasen).
     expect(planFigures(sim.state, spot, everywhere)).toEqual(planFigures(sim.state, spot, everywhere));

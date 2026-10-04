@@ -1,13 +1,14 @@
-// Spot-Marker im Look "Glas": ein Achteck-Schild an einem Mast, wie ein Straßenschild. Am Fuß ein Punkt und ein
-// Lichtkegel in der Farbe des Zustands (ruhig, Kunden warten, dringend, Razzia/Überfall), im Schild die Zahl der
-// Wartenden. Daneben eine Plakette aus Glas mit Name, Personal (Läufer, du oder frei) und sechs Strichen für die
-// wartenden Kunden; Seite und Versatz kommen aus spots/config.ts (SPOT_LABELS), damit sich in der Innenstadt nichts
-// überdeckt. Gesperrte Spots sind kleine dunkle Achtecke mit Schloss, ohne Plakette. Eigene Spots haben eine
-// gestrichelte Kante. Mit der Maus erscheint über dem Schild eine Karte mit Details, ein Klick öffnet den Spot im Handy.
-// Am Handy-Bildschirm entfällt die Plakette (nur Schild und Striche).
+// Spot-Marker im Look "Glas": ein Ring flach auf der Straße, am Fuß ein Punkt, darüber an einem kurzen Stiel eine runde
+// Blase mit der Zahl der Wartenden. Die Farbe zeigt den Zustand (ruhig, Kunden warten, dringend, Razzia/Überfall), der
+// Bogen des Rings die Geduld des ungeduldigsten Kunden: voll = frisch, fast leer = geht gleich (ringModel.ts). Daneben
+// eine Plakette aus Glas mit Läufer (oder du) und Leutnant; Seite und Versatz kommen aus spots/config.ts
+// (SPOT_LABELS), damit sich in der Innenstadt nichts überdeckt. Gesperrte Spots sind kleine dunkle Blasen mit Schloss
+// und einem blassen Ring, ohne Plakette. Eigene Spots haben eine gestrichelte Kante und einen goldenen Fußpunkt.
+// Mit der Maus erscheint über der Blase eine Karte mit Details, ein Klick öffnet den Spot im Handy. Am
+// Handy-Bildschirm ist alles etwas kleiner, die Plakette sitzt über der Blase.
 //
-// Dazu die Hotspots: weicher Farb-Blob, wo etwas los ist. Seit dem Lichtkegel deutlich leiser (HOTSPOT_SCALE), er
-// zeigt nur noch Nachfrage und Verkäufe, die man am Schild nicht sieht.
+// Dazu die Hotspots: weicher Farb-Blob, wo etwas los ist. Seit dem Ring deutlich leiser (HOTSPOT_SCALE), er
+// zeigt nur noch Nachfrage und Verkäufe, die man am Marker nicht sieht.
 
 import type { Marker } from 'maplibre-gl';
 import { formatEuro, type GameState } from '../../../core';
@@ -21,6 +22,7 @@ import { getSpotPrice } from '../../market';
 import { getStaff, type StaffMember } from '../../staff';
 import { veedelName } from '../../veedel';
 import { getAllSpots, isKneipe, isSpotActive, type Spot, spotLabelPlacement } from '../index';
+import { patienceFill } from './ringModel';
 
 /** Unter dieser Zoomstufe zeigen gesperrte Spots keinen Namen (sonst drängeln sich die Pillen). */
 const NAMES_ZOOM = 13;
@@ -28,7 +30,7 @@ const NAMES_ZOOM = 13;
 const SALE_GLOW_MINUTES = 90;
 /** So lange zeigt ein Spot nach einer Razzia den Zustand "Razzia" (Spielminuten). */
 const RAID_SHOW_MINUTES = 120;
-/** Hotspots leiser als früher: Den Zustand zeigt jetzt der Lichtkegel. */
+/** Hotspots leiser als früher: Den Zustand zeigt jetzt der Ring. */
 const HOTSPOT_SCALE = 0.45;
 
 export type SpotLook = 'idle' | 'waiting' | 'urgent' | 'raid';
@@ -46,7 +48,7 @@ export function recordSaleGlow(spotId: string, time: number): void {
   recentSales.set(spotId, list);
 }
 
-/** Eine Razzia am Spot merken (Schild wird eine Weile blau). */
+/** Eine Razzia am Spot merken (der Marker wird eine Weile blau). */
 export function recordSpotRaid(spotId: string, time: number): void {
   recentRaids.set(spotId, time);
 }
@@ -84,7 +86,7 @@ export function spotActivity(
   return Math.min(1.5, 0.3 + demand * 0.15 + waiting * 0.16 + saleGlow(spotId, state.time) * 0.25);
 }
 
-/** Zustand des Schilds: Razzia/Überfall vor allem anderen, dann dringend (Kunden gehen bald), wartend, ruhig. */
+/** Zustand des Markers: Razzia/Überfall vor allem anderen, dann dringend (Kunden gehen bald), wartend, ruhig. */
 export function spotLook(
   state: GameState,
   spotId: string,
@@ -221,11 +223,11 @@ export const spotsLayer: MapLayer = {
       const placement = spotLabelPlacement(spot.id);
       const badge = el('span', 'spot-badge', '0');
       const lock = iconElement('lock', { class: 'spot-lock', strokeWidth: 2.4 });
-      const octagon = el('span', 'spot-oct');
-      octagon.append(badge, lock);
+      const bubble = el('span', 'spot-bubble');
+      bubble.append(badge, lock);
       const sign = el('span', 'spot-sign');
-      sign.append(el('span', 'spot-pulse'), octagon);
-      // Kneipen (Auftrag 30, Etappe 7) tragen ein Bierglas am Schild.
+      sign.append(bubble);
+      // Kneipen (Auftrag 30, Etappe 7) tragen ein Bierglas an der Blase.
       if (isKneipe(spot)) {
         const kind = el('span', 'spot-kind');
         kind.appendChild(iconElement('beer', { strokeWidth: 2.4 }));
@@ -247,7 +249,15 @@ export const spotsLayer: MapLayer = {
         tag: 'button',
         anchor: 'bottom',
         title: spot.name,
-        children: [el('span', 'spot-beam'), el('span', 'spot-foot'), el('span', 'spot-mast'), sign, plate],
+        children: [
+          el('span', 'spot-glow'),
+          el('span', 'spot-ring'),
+          el('span', 'spot-pulse'),
+          el('span', 'spot-foot'),
+          el('span', 'spot-stem'),
+          sign,
+          plate,
+        ],
         onClick: () => {
           if (!ctx.isPicking()) ctx.ui.openPanel('spots.spot', { spotId: spot.id });
         },
@@ -280,9 +290,12 @@ export const spotsLayer: MapLayer = {
           const waiting = active ? queue.length : 0;
           const who = active ? seller(state, spot.id, runners) : { kind: 'free', name: '' };
           const lieutenant = active ? lieutenantOfSpot(state, spot.id) : null;
-          const key = `${active}|${look}|${waiting}|${who.kind}|${lieutenant ?? ''}|${spot.custom ? 1 : 0}|${spot.id === selected}`;
+          // Der Ring zeigt die Geduld nur bei wartenden Kunden; bei Razzia und im Leerlauf ist er voll.
+          const fill = active && look !== 'raid' ? patienceFill(state.time, queue) : 100;
+          const key = `${active}|${look}|${waiting}|${fill}|${who.kind}|${lieutenant ?? ''}|${spot.custom ? 1 : 0}|${spot.id === selected}`;
           if (key === entry.key) continue;
           entry.key = key;
+          entry.element.style.setProperty('--fill', String(fill));
           entry.element.classList.toggle('is-locked', !active);
           entry.element.classList.toggle('is-custom', !!spot.custom);
           entry.element.classList.toggle('selected', spot.id === selected);

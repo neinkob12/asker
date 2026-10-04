@@ -112,8 +112,8 @@ Alles außerhalb des Handys (HUD, Kartensteuerung, Marker, Überlagerungen, Dial
   `--hud-ink`, `--hud-ink-2`; Gold für Hauptaktionen `--hud-gold` mit `--hud-gold-on`; leere Stufe `--hud-empty`.
 - **Beschriftung:** 11 px, 700, Großbuchstaben, Laufweite 0,1 em, in der Bedeutungsfarbe (`.hud-label.is-dirty`,
   `.is-money`; Kacheln über `--hud-tint`, das `HudPill` aus `color` setzt).
-- **Spot-Zustände:** `--spot-idle/-waiting/-urgent/-raid` (Füllung), `-on` (Zahl, 4,5:1), `-glow` (Lichtkegel),
-  `-edge` (Mast, Ring, Kante); `--spot-ring`, `--spot-plate`, `--spot-locked(-edge)`, `--spot-shadow`. Rot und Blau
+- **Spot-Zustände:** `--spot-idle/-waiting/-urgent/-raid` (Füllung), `-on` (Zahl, 4,5:1), `-glow` (Schein am Boden),
+  `-edge` (Stiel, Ring, Kante); `--spot-ring`, `--spot-plate`, `--spot-locked(-edge)`, `--spot-shadow`. Rot und Blau
   sind als Füllung eine Spur dunkler als im Entwurf (#d93025, #1f6cf0), sonst hätte die weiße Zahl nur 3,4:1 bzw. 3,9:1.
 - **Weitere:** Geld-Popup `--map-money(-on)`, `--map-money-loss(-on)`; Vignette `--map-vignette`; Akte `--file-*`,
   Kräftebalken `--duel-*`; Razzia `--raid-glass`, `--raid-edge`; Übernahme `--takeover-glow`. Bewegung mit dem Handy:

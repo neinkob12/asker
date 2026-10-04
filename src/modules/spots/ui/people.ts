@@ -1,4 +1,4 @@
-// Leute an Spots auf der Karte (Auftrag 31): kleine Figuren am Fuß der Spot-Schilder, Läufer und Sicherheit in der
+// Leute an Spots auf der Karte (Auftrag 31): kleine Figuren am Fuß der Spot-Marker, Läufer und Sicherheit in der
 // Farbe people, wartende Kunden in goods (gehen beim Kauf, das Geld-Popup kommt wie bisher), dazu eine Streife in law,
 // die in Veedeln mit hoher Heat über die Straßen von Spot zu Spot geht. Symbol-Ebene mit SDF-Figur, keine HTML-Marker;
 // nur im Ausschnitt, unter Zoom 14 unsichtbar, höchstens 60 Figuren. Bei Tempo 0 und verstecktem Tab steht alles, bei

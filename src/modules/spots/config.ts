@@ -616,7 +616,7 @@ export const MIN_SPOT_DISTANCE = 200;
 export const CUSTOM_SPOT_DEMAND = 0.8;
 
 /**
- * Plakette neben dem Spot-Schild auf der Karte (Look "Glas"): Seite und senkrechter Versatz in px (positiv = nach
+ * Plakette neben der Spot-Blase auf der Karte (Look "Glas"): Seite und senkrechter Versatz in px (positiv = nach
  * unten), damit sich in der Innenstadt (Rudolfplatz, Neumarkt, Zülpicher, Friesenplatz) nichts überdeckt. Geprüft
  * beim Standard-Zoom (13,6) mit allen Spots offen. Eigene Spots und fehlende Einträge: rechts, ohne Versatz.
  */
