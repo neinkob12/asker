@@ -4,7 +4,7 @@
 
 import type { GameState } from '../../core';
 import { AGGRESSION_FIGHT, RETREAT_AT } from './config';
-import { availableActions, getKind, resolveAction } from './engine';
+import { availableActions, availableMoves, getKind, resolveAction } from './engine';
 import { activeOwn, foesIn, getIntent, previewShift } from './tactics';
 import type { Encounter, StakeId } from './types';
 
@@ -87,4 +87,23 @@ export function chooseAuto(_state: GameState, encounter: Encounter, smart = fals
     }
   }
   return { actionId: best, protect };
+}
+
+/**
+ * Spezialzug, der sich jetzt lohnt (participantId) oder null: Ware gleich in Sicherheit bringen, die zweite
+ * Verhandlung sofort nutzen; den Fluchtwagen nur, wenn es aussichtslos ist (smart) bzw. alle verletzt sind.
+ */
+export function chooseMove(encounter: Encounter, smart: boolean): string | null {
+  const moves = availableMoves(encounter);
+  const pick = (move: string) => moves.find((m) => m.move === move)?.participantId ?? null;
+  const stash = pick('stash');
+  if (stash) return stash;
+  const talk = pick('secondTalk');
+  if (talk && (!smart || encounter.aggression < AGGRESSION_FIGHT)) return talk;
+  const getaway = pick('getaway');
+  const own = activeOwn(encounter);
+  const hopeless = own.length > 0 && own.every((p) => p.condition !== 'ok') && encounter.brawl;
+  const lost = smart && encounter.brawl && own.length < foesIn(encounter) && encounter.resolve > 60;
+  if (getaway && (hopeless || lost)) return getaway;
+  return null;
 }

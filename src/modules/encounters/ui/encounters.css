@@ -524,6 +524,156 @@
   color: var(--file-ink-2);
 }
 
+/* ---------------------------------------------------------------- Crew (Auftrag 35, Etappe 2) */
+.enc-question__note {
+  margin-left: 8px;
+  font-family: var(--font-hud);
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--file-ink-2);
+  white-space: nowrap;
+}
+.enc-crew-pick {
+  margin-bottom: 16px;
+}
+.enc-crew-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.enc-crew-cand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--file-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.enc-crew-cand:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+.enc-crew-cand:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 2px;
+}
+.enc-crew-cand:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.enc-crew-cand.is-on {
+  border-color: var(--cat-money);
+  background: rgba(70, 200, 140, 0.12);
+}
+.enc-crew-cand__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.enc-crew-cand__text strong {
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.enc-crew-cand__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.enc-crew-cand__check {
+  flex: none;
+  color: var(--file-ink-2);
+}
+.enc-crew-cand.is-on .enc-crew-cand__check {
+  color: var(--cat-money);
+}
+.enc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--file-ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.enc-chip.is-move {
+  background: rgba(201, 155, 255, 0.16);
+  color: var(--file-violet);
+}
+.enc-chip.is-site {
+  color: var(--file-ink);
+}
+.enc-chip.is-used {
+  opacity: 0.6;
+}
+.enc-crew {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.enc-crew__member {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.enc-crew__member.is-down,
+.enc-crew__member.is-dead {
+  opacity: 0.55;
+}
+.enc-crew__text {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: var(--file-ink-2);
+  white-space: nowrap;
+}
+.enc-crew__text strong {
+  font-size: 14px;
+  color: var(--file-ink);
+}
+.enc-move {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid var(--file-violet);
+  border-radius: 12px;
+  background: rgba(201, 155, 255, 0.14);
+  color: var(--file-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.enc-move:hover {
+  background: rgba(201, 155, 255, 0.24);
+}
+.enc-move:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 2px;
+}
+
 /* ---------------------------------------------------------------- Briefing und Runden: Karten im 3er-Raster */
 .enc-question {
   margin: 0 0 12px;
@@ -815,7 +965,8 @@
   .enc-grid {
     grid-template-columns: minmax(0, 1fr);
   }
-  .enc-gauges {
+  .enc-gauges,
+  .enc-crew-list {
     grid-template-columns: minmax(0, 1fr);
   }
   /* Per Handy kompakt: kurze Hinweise weg, die Pfeile bleiben. */

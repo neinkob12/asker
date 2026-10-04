@@ -148,3 +148,16 @@ export const PROTECT_FACTOR = 0.4;
 
 /** Sicherheitsgrenze an Runden, falls die Uhr nicht abläuft. */
 export const ROUND_LIMIT = 12;
+
+// ---------------------------------------------------------------------------------------------
+// Crew und Spezialzüge (Auftrag 35, Etappe 2). Regeln der Spezialzüge: crew.ts.
+
+/** So viele Leute nimmt man höchstens mit (der Boss zählt nicht). */
+export const CREW_MAX = 3;
+/** Wer nicht schon vor Ort ist, fährt mit dem Taxi hin: so viel Schwarzgeld pro Person. */
+export const CREW_TRAVEL_COST = 100;
+/** Ab diesem Charisma gibt es eine zweite Verhandlung, ab diesem Tempo bringt man die halbe Ware weg. */
+export const SPECIAL_CHARISMA = 70;
+export const SPECIAL_SPEED = 70;
+/** Ware in Sicherheit gebracht: Mehr als so viel Prozent der Ware kann nicht mehr verloren gehen. */
+export const STASH_CAP = 50;

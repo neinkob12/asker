@@ -30,6 +30,7 @@ import {
   join,
   protect,
   resolveAction,
+  special,
   start,
 } from './engine';
 import { ENCOUNTER_INTENTS } from './intents';
@@ -53,23 +54,39 @@ export {
   BACKUP_COST,
   BACKUP_EDGE_BONUS,
   BACKUP_MAX_PEOPLE,
+  CREW_MAX,
+  CREW_TRAVEL_COST,
   PAYOFF_RELATION,
   PLAYER_STATS,
   RETREAT_AT,
   TIPOFF_HEAT,
 } from './config';
 export {
+  type CrewCandidate,
+  type CrewMemberInfo,
+  crewCandidates,
+  SPECIAL_MOVE_RULES,
+  SPECIAL_MOVES,
+  type SpecialMove,
+  type SpecialMoveRule,
+  specialMoveOf,
+  specialMoves,
+  suggestedCrew,
+} from './crew';
+export {
   actionChance,
   activeParticipants,
   availableActions,
+  availableMoves,
   type BriefingOption,
   briefingOptions,
   PLAYER_ID,
   payoffCost,
+  requestCity,
 } from './engine';
 export { ENCOUNTER_INTENTS } from './intents';
 export { ENCOUNTER_KINDS } from './kinds';
-export { autoProtect, chooseAuto, scoreAction } from './strategy';
+export { autoProtect, chooseAuto, chooseMove, scoreAction } from './strategy';
 export {
   foesIn,
   getIntent,
@@ -119,7 +136,9 @@ declare module '../../core' {
      * Spieler entscheidet im Briefing, wie er vorgeht (mode, siehe EncounterMode). Die alte Form present: true/false
      * gilt weiter als 'self' bzw. 'crew'.
      */
-    'encounters.join': { encounterId: number; mode?: EncounterMode; present?: boolean };
+    'encounters.join': { encounterId: number; mode?: EncounterMode; present?: boolean; crew?: string[] };
+    /** Spezialzug einer Person aus der Crew spielen (einmal pro Konfrontation, kostet keine Runde). */
+    'encounters.special': { encounterId: number; participantId: string };
     /** Eine Runde mit dieser Handlung spielen, optional mit neuem Schutz (Einsatz). */
     'encounters.act': { encounterId: number; actionId: string; protect?: StakeId };
     /** Einsatz wählen, den die eigene Seite ab jetzt schützt (kostet keine Runde). */
@@ -319,8 +338,9 @@ export default defineModule({
     }
   },
   commands: {
-    'encounters.join': (ctx, { encounterId, mode, present }) =>
-      join(ctx, encounterId, mode ?? (present ? 'self' : 'crew')),
+    'encounters.join': (ctx, { encounterId, mode, present, crew }) =>
+      join(ctx, encounterId, mode ?? (present ? 'self' : 'crew'), crew),
+    'encounters.special': (ctx, { encounterId, participantId }) => special(ctx, encounterId, participantId),
     'encounters.act': (ctx, { encounterId, actionId, protect: guard }) => act(ctx, encounterId, actionId, guard),
     'encounters.protect': (ctx, { encounterId, stake }) => protect(ctx, encounterId, stake),
     'encounters.auto': (ctx, { encounterId }) => autoResolve(ctx, encounterId),

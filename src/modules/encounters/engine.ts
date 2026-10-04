@@ -50,6 +50,7 @@ import {
   CLOCK_GOODS_DAMAGE_PROTECTED,
   CLOCK_HEAT,
   CLOCK_PRESSURE,
+  CREW_MAX,
   DECISION_TIMEOUT,
   END_DAMAGE,
   END_DAMAGE_PROTECTED,
@@ -69,12 +70,14 @@ import {
   RETREAT_AT,
   ROUND_LIMIT,
   STAFF_DEATH_CHANCE,
+  STASH_CAP,
   STRENGTH_FACTOR_LIMIT,
   TIPOFF_GOODS,
   TIPOFF_HEAT,
 } from './config';
+import { crewCandidates, crewCost, SPECIAL_MOVES, specialMoveOf } from './crew';
 import { ENCOUNTER_KINDS } from './kinds';
-import { chooseAuto } from './strategy';
+import { chooseAuto, chooseMove } from './strategy';
 import {
   activeOwn,
   applyShift,
@@ -110,6 +113,7 @@ import type {
   EncounterSetting,
   GaugeShift,
   Participant,
+  SpecialMoveId,
   StakeId,
 } from './types';
 
@@ -467,13 +471,23 @@ export function delegateAbsent(ctx: Ctx): void {
  * Spieler entscheidet im Briefing, wie er vorgeht (siehe EncounterMode). Die alte Form (present: true/false) gilt als
  * 'self' bzw. 'crew'. Freikaufen, Bullen rufen und Spot räumen beenden die Konfrontation sofort.
  */
-export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): CommandResult {
+export function join(ctx: Ctx, encounterId: number, mode: EncounterMode, crew?: readonly string[]): CommandResult {
   const encounter = findActive(ctx, encounterId);
   if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
   if (encounter.phase !== 'briefing') return { ok: false, reason: 'Das ist schon entschieden.' };
   const option = briefingOptions(ctx.state, encounter).find((o) => o.mode === mode);
   if (!option) return { ok: false, reason: 'Das geht hier nicht.' };
   if (!option.ok) return { ok: false, reason: option.reason ?? 'Das geht gerade nicht.' };
+  // Crew nur bei den Wegen, bei denen jemand hingeht.
+  if (crew && (mode === 'self' || mode === 'crew' || mode === 'backup')) {
+    const extra = mode === 'backup' ? option.cost : 0;
+    const cityId = requestCity(ctx.state, encounter.request);
+    if (wallet.balance(ctx.state, 'dirty') < crewCost(ctx.state, encounter, cityId, crew) + extra) {
+      return { ok: false, reason: 'Nicht genug Schwarzgeld für Taxi und Verstärkung.' };
+    }
+    const taken = takeCrew(ctx, encounter, crew);
+    if (!taken.ok) return taken;
+  }
   encounter.mode = mode;
   const vars = () => textVars(encounter);
   switch (mode) {
@@ -582,9 +596,34 @@ function addStaff(state: GameState, encounter: Encounter, id: string): void {
     stats: { speed, caution, strength, charisma },
     condition: 'ok',
     killed: false,
-    move: null,
+    move: specialMoveOf(member),
     moveUsed: false,
   });
+}
+
+/**
+ * Crew aus dem Briefing übernehmen (bis zu CREW_MAX, nur Kandidaten): Wer nicht vor Ort ist, kommt mit dem Taxi.
+ * Wer vor Ort war und nicht gewählt ist, hält sich raus.
+ */
+function takeCrew(ctx: Ctx, encounter: Encounter, crew: readonly string[]): CommandResult {
+  const ids = [...new Set(crew)];
+  if (ids.length > CREW_MAX) return { ok: false, reason: `Höchstens ${CREW_MAX} Leute.` };
+  const cityId = requestCity(ctx.state, encounter.request);
+  const candidates = crewCandidates(ctx.state, encounter, cityId);
+  if (ids.some((id) => !candidates.some((c) => c.id === id))) {
+    return { ok: false, reason: 'Diese Person kann nicht mitkommen.' };
+  }
+  const cost = crewCost(ctx.state, encounter, cityId, ids);
+  if (cost > 0) {
+    if (!wallet.pay(ctx, cost, 'dirty', 'Taxi für die Crew', lossCategory(encounter))) {
+      return { ok: false, reason: `Nicht genug Schwarzgeld fürs Taxi (${formatEuro(cost)}).` };
+    }
+    encounter.bribeSpent += cost;
+  }
+  encounter.participants = encounter.participants.filter((p) => p.isPlayer);
+  for (const id of ids) addStaff(ctx.state, encounter, id);
+  encounter.request.staffIds = ids;
+  return { ok: true };
 }
 
 function enterRounds(ctx: Ctx, encounter: Encounter): void {
@@ -894,6 +933,12 @@ export function autoResolve(ctx: Ctx, encounterId: number): CommandResult {
   if (encounter.phase === 'briefing') enterRounds(ctx, encounter);
   const kind = getKind(encounter.kind);
   for (let guard = 0; encounter.phase === 'rounds' && kind && guard < 50; guard++) {
+    // Spezialzüge kennen die Leute selbst (kosten keine Runde).
+    const move = chooseMove(encounter, false);
+    if (move) {
+      special(ctx, encounter.id, move);
+      continue;
+    }
     const choice = chooseAuto(ctx.state, encounter);
     if (!choice) {
       finish(ctx, encounter, 'failure', undefined, 'overrun');
@@ -1245,7 +1290,9 @@ function finish(
     : fillText(effects?.text ?? DEFAULT_TEXT[outcome], vars);
   result.text = describeResult(encounter, result, headline);
   // Für die Anzeige: Schaden aus den Runden plus am Ende.
-  for (const stake of encounter.stakes) stake.damage = Math.min(100, stake.damage + (end[stake.id] ?? 0));
+  for (const stake of encounter.stakes) {
+    stake.damage = Math.min(stakeCap(encounter, stake.id), stake.damage + (end[stake.id] ?? 0));
+  }
   result.parts = resultParts(encounter, kind, result);
   encounter.result = result;
 
@@ -1272,13 +1319,75 @@ function finish(
   if (encounter.playerKilled) gameOutcome.gameOver(ctx, 'killed', headline);
 }
 
-// Platzhalter für Etappe 2 (Crew und Spezialzüge, crew.ts).
-function blockHit(_encounter: Encounter): string | null {
-  return null;
+// ---------------------------------------------------------------------------------------------
+// Spezialzüge der Crew (crew.ts)
+
+function moveUser(encounter: Encounter, move: SpecialMoveId): Participant | undefined {
+  return encounter.participants.find((p) => p.move === move && !p.moveUsed && p.condition !== 'down');
 }
-function fledSafely(_encounter: Encounter): boolean {
-  return false;
+
+/** Sicherheit fängt den ersten Treffer ab (einmal pro Konfrontation). */
+function blockHit(encounter: Encounter): string | null {
+  const guard = moveUser(encounter, 'block');
+  if (!guard) return null;
+  guard.moveUsed = true;
+  return `${guard.name} fängt den Schlag ab.`;
 }
-function stakeCap(_encounter: Encounter, _stake: StakeId): number {
+
+/** Mit dem Fluchtwagen weg: nichts bleibt zurück. */
+function fledSafely(encounter: Encounter): boolean {
+  return encounter.participants.some((p) => p.move === 'getaway' && p.moveUsed);
+}
+
+/** Wie viel von einem Einsatz höchstens verloren gehen kann (Ware in Sicherheit gebracht: die Hälfte). */
+function stakeCap(encounter: Encounter, stake: StakeId): number {
+  if (stake === 'goods' && encounter.participants.some((p) => p.move === 'stash' && p.moveUsed)) return STASH_CAP;
   return 100;
+}
+
+/** Spezialzüge, die gerade gehen (wer ihn hat, steht noch und hat ihn nicht genutzt; passive nicht). */
+export function availableMoves(encounter: Encounter): { participantId: string; move: SpecialMoveId }[] {
+  if (encounter.phase !== 'rounds') return [];
+  const kind = getKind(encounter.kind);
+  return encounter.participants.flatMap((p) => {
+    if (!p.move || p.moveUsed || p.condition === 'down' || SPECIAL_MOVES[p.move].passive) return [];
+    if (p.move === 'stash' && !kind?.stakes.includes('goods')) return [];
+    return [{ participantId: p.id, move: p.move }];
+  });
+}
+
+/** Spezialzug spielen (einmal pro Konfrontation). Kostet keine Runde, außer der Fluchtwagen beendet alles. */
+export function special(ctx: Ctx, encounterId: number, participantId: string): CommandResult {
+  const encounter = findActive(ctx, encounterId);
+  if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
+  const kind = getKind(encounter.kind);
+  const p = encounter.participants.find((x) => x.id === participantId);
+  if (!kind || !p?.move || !availableMoves(encounter).some((m) => m.participantId === participantId)) {
+    return { ok: false, reason: 'Das geht gerade nicht.' };
+  }
+  p.moveUsed = true;
+  const before: GaugeShift = { aggression: encounter.aggression, resolve: encounter.resolve };
+  const actionId = `special:${p.move}`;
+  switch (p.move) {
+    case 'getaway':
+      logRound(ctx, encounter, actionId, 1, [`${p.name} hat den Motor laufen lassen. Alle rein, weg.`], before);
+      finish(ctx, encounter, 'retreat', undefined, 'fled');
+      return { ok: true };
+    case 'stash':
+      logRound(ctx, encounter, actionId, 1, [`${p.name} schafft die Hälfte der Ware durch den Hinterausgang.`], before);
+      return { ok: true };
+    case 'secondTalk': {
+      const talk = resolveAction(kind, 'negotiate') ?? ENCOUNTER_ACTIONS.negotiate;
+      // Mit dem Charisma dieser Person, ohne dass die Runde weiterläuft (keine Absicht, keine Uhr).
+      const solo: Encounter = { ...encounter, participants: [p] };
+      const strength = roundStrength(solo, talk, 'negotiate', rollDice(ctx));
+      applyShift(encounter, scaleShift(talk.shift, strength));
+      encounter.edge = edgeOf(encounter);
+      logRound(ctx, encounter, actionId, strength, [`${p.name} redet weiter, ruhig und bestimmt.`], before);
+      if (encounter.resolve < RETREAT_AT) finish(ctx, encounter, 'success', undefined, 'gaveUp');
+      return { ok: true };
+    }
+    default:
+      return { ok: false, reason: 'Das geht gerade nicht.' };
+  }
 }

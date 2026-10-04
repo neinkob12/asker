@@ -9,6 +9,7 @@ import {
   autoResolveEncounter,
   availableActions,
   chooseAuto,
+  chooseMove,
   type Encounter,
   getEncounter,
   startEncounter,
@@ -56,6 +57,11 @@ function raid(seed: number, player: Player): Encounter | undefined {
       const protect = e.stakes[Math.floor(rnd() * e.stakes.length)]?.id;
       sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId, ...(protect ? { protect } : {}) } });
     } else {
+      const move = chooseMove(e, true);
+      if (move) {
+        sim.dispatch({ type: 'encounters.special', payload: { encounterId, participantId: move } });
+        continue;
+      }
       const choice = chooseAuto(sim.state, e, true);
       if (!choice) break;
       sim.dispatch({

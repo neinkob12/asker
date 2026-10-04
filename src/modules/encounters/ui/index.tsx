@@ -23,15 +23,19 @@ import {
   useUi,
 } from '../../../ui';
 import { getSpot } from '../../spots';
-import { getStaffMember } from '../../staff';
+import { getStaffMember, roleName } from '../../staff';
 import { getVeedel, veedelName } from '../../veedel';
 import {
   AGGRESSION_FIGHT,
   activeEncounters,
   availableActions,
+  availableMoves,
   BACKUP_MAX_PEOPLE,
   type BriefingOption,
   briefingOptions,
+  CREW_MAX,
+  type CrewCandidate,
+  crewCandidates,
   ENCOUNTER_KINDS,
   type Encounter,
   type EncounterMode,
@@ -46,9 +50,12 @@ import {
   previewShift,
   RETREAT_AT,
   ROLE_NAMES,
+  requestCity,
   type ShiftPreview,
+  SPECIAL_MOVES,
   type StakeId,
   stakeName,
+  suggestedCrew,
 } from '../index';
 import './island';
 import './encounters.css';
@@ -417,14 +424,81 @@ const MODES: Record<EncounterMode, ModeView> = {
   },
 };
 
+/** Wege, bei denen jemand hingeht (dort zählt die Crew). */
+const CREW_MODES: readonly EncounterMode[] = ['self', 'crew', 'backup'];
+
+function CrewPicker(props: { candidates: CrewCandidate[]; chosen: string[]; onToggle: (id: string) => void }) {
+  const { state } = useGame();
+  const { candidates, chosen } = props;
+  const taxi = candidates.filter((c) => chosen.includes(c.id)).reduce((sum, c) => sum + c.cost, 0);
+  return (
+    <section class="enc-crew-pick" aria-label="Wer geht hin?">
+      <h3 class="enc-question">
+        Wer geht hin?{' '}
+        <span class="enc-question__note">
+          {chosen.length} von {CREW_MAX}
+          {taxi > 0 ? ` · Taxi ${formatEuro(taxi)}` : ''}
+        </span>
+      </h3>
+      <ul class="enc-crew-list">
+        {candidates.map((c) => {
+          const on = chosen.includes(c.id);
+          const full = !on && chosen.length >= CREW_MAX;
+          const move = c.move ? SPECIAL_MOVES[c.move] : null;
+          return (
+            <li key={c.id}>
+              <button
+                type="button"
+                class={`enc-crew-cand${on ? ' is-on' : ''}`}
+                aria-pressed={on}
+                disabled={full}
+                onClick={() => props.onToggle(c.id)}
+              >
+                <Avatar name={c.name} look={personLook(c.name, getStaffMember(state, c.id)?.age)} size="sm" />
+                <span class="enc-crew-cand__text">
+                  <strong>{c.name}</strong>
+                  <span class="enc-crew-cand__tags">
+                    <span class="enc-chip">{roleName(c.role)}</span>
+                    <span class="enc-chip">Kraft {c.strength}</span>
+                    {move && (
+                      <span class="enc-chip is-move" title={move.hint}>
+                        <Icon name={move.icon} />
+                        {move.label}
+                      </span>
+                    )}
+                    <span class={`enc-chip${c.atSite ? ' is-site' : ''}`}>
+                      {c.atSite ? 'vor Ort' : `Taxi ${formatEuro(c.cost)}`}
+                    </span>
+                  </span>
+                </span>
+                <Icon name={on ? 'checkCircle' : 'plusCircle'} class="enc-crew-cand__check" />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 function Briefing(props: { encounter: Encounter }) {
   const { state, dispatch } = useGame();
   const { encounter } = props;
   const options = briefingOptions(state, encounter);
+  const cityId = requestCity(state, encounter.request);
+  const candidates = crewCandidates(state, encounter, cityId);
+  const [chosen, setChosen] = useState<string[]>(() => suggestedCrew(state, encounter, cityId));
+  const toggle = (id: string) =>
+    setChosen((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id].slice(0, CREW_MAX)));
+  const withCrew = options.some((o) => CREW_MODES.includes(o.mode)) && candidates.length > 0;
   const join = (mode: EncounterMode) =>
-    dispatch({ type: 'encounters.join', payload: { encounterId: encounter.id, mode } });
+    dispatch({
+      type: 'encounters.join',
+      payload: { encounterId: encounter.id, mode, ...(withCrew && CREW_MODES.includes(mode) ? { crew: chosen } : {}) },
+    });
   return (
     <section class="enc-brief">
+      {withCrew && <CrewPicker candidates={candidates} chosen={chosen} onToggle={toggle} />}
       <h3 class="enc-question">Wie gehst du vor?</h3>
       <div class="enc-grid">
         {options.map((option) => {
@@ -449,6 +523,59 @@ function Briefing(props: { encounter: Encounter }) {
         })}
       </div>
     </section>
+  );
+}
+
+/** Crew in den Runden: Porträts, Zustand und Spezialzug (einmal pro Konfrontation). */
+function Crew(props: { encounter: Encounter }) {
+  const { state, dispatch } = useGame();
+  const { encounter } = props;
+  const ready = availableMoves(encounter);
+  if (encounter.participants.length === 0) return null;
+  return (
+    <ul class="enc-crew" aria-label="Deine Leute">
+      {encounter.participants.map((p) => {
+        const move = p.move ? SPECIAL_MOVES[p.move] : null;
+        const canUse = ready.some((m) => m.participantId === p.id);
+        return (
+          <li key={p.id} class={`enc-crew__member is-${p.killed ? 'dead' : p.condition}`}>
+            <Avatar
+              name={p.isPlayer ? 'Du' : p.name}
+              image={p.isPlayer ? 'user' : undefined}
+              look={p.isPlayer ? null : personLook(p.name, getStaffMember(state, p.id)?.age)}
+              size="sm"
+            />
+            <span class="enc-crew__text">
+              <strong>{p.isPlayer ? 'Du' : p.name.split(' ')[0]}</strong>
+              <span>{conditionText(p)}</span>
+            </span>
+            {move &&
+              (canUse ? (
+                <button
+                  type="button"
+                  class="enc-move"
+                  title={move.hint}
+                  onClick={() =>
+                    dispatch({
+                      type: 'encounters.special',
+                      payload: { encounterId: encounter.id, participantId: p.id },
+                    })
+                  }
+                >
+                  <Icon name={move.icon} />
+                  {move.label}
+                </button>
+              ) : (
+                <span class={`enc-chip is-move${p.moveUsed ? ' is-used' : ''}`} title={move.hint}>
+                  <Icon name={move.icon} />
+                  {move.label}
+                  {p.moveUsed ? ' · genutzt' : move.passive ? ' · bereit' : ''}
+                </span>
+              ))}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -653,6 +780,7 @@ function FileBody(props: { encounter: Encounter; onClose: () => void }) {
         <Board encounter={encounter} preview={preview} interactive={encounter.phase === 'rounds'} />
       )}
       {encounter.phase === 'briefing' && <Briefing encounter={encounter} />}
+      {encounter.phase === 'rounds' && <Crew encounter={encounter} />}
       {encounter.phase === 'rounds' && <Rounds encounter={encounter} onPreview={setHover} />}
       {encounter.phase === 'done' && <Result encounter={encounter} onClose={props.onClose} />}
       <Log encounter={encounter} />
