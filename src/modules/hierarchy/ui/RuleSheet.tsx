@@ -11,6 +11,14 @@ import { homeWarehouse, isPortSupplierAllowed, type OrderRule, PORT_SUPPLIER_HIN
 
 const AUTO = '';
 
+/** Preisgrenze (Auftrag 32): nur bestellen, wenn der Preisindex der Ware darunter liegt. */
+const MAX_INDEX_OPTIONS = [
+  { value: AUTO, label: 'Immer bestellen' },
+  { value: '1', label: 'Index unter 1,00' },
+  { value: '0.95', label: 'Index unter 0,95 (günstig)' },
+  { value: '1.1', label: 'Index unter 1,10 (nicht teuer)' },
+];
+
 export interface RuleSheetProps {
   open: boolean;
   onClose: () => void;
@@ -169,6 +177,26 @@ export function RuleSheet(props: RuleSheetProps) {
               }
             >
               <ItemContent icon="gauge" color="goods" title={unit} />
+            </ListItem>
+          </List>
+        </Group>
+        <Group
+          title="Preisgrenze"
+          icon="chart"
+          color="money"
+          note="Steht der Markt für die Ware höher, wartet er mit der Bestellung."
+        >
+          <List>
+            <ListItem>
+              <ItemContent icon="chart" color="money" title="Wann bestellen">
+                <Select
+                  wide
+                  label="Preisgrenze"
+                  value={draft.maxIndex ? String(draft.maxIndex) : AUTO}
+                  options={MAX_INDEX_OPTIONS}
+                  onChange={(v) => set({ maxIndex: v ? Number(v) : null })}
+                />
+              </ItemContent>
             </ListItem>
           </List>
         </Group>

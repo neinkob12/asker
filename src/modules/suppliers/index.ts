@@ -22,11 +22,13 @@
 //   cheapestPackagePrice(state), getRelation(state, id), trustLabel(trust), supplierDiscount(state, id),
 //   supplierQualityBonus(state, id), creditLimit(state, id), availableCredit(state, id), isBlocked(state, id),
 //   availablePackages(state, id), packagePrice(state, supplierId, packageId), rollShipmentProblem(...),
+//   Rabatt-Aktionen (Auftrag 32): getDeals(state, cityId?), activeDeal(state, supplierId, packageId, cityId?),
+//   supplierContact(supplier) (Kontakt im Handy, z.B. für den Marktbericht)
 //   deliveryLeg(supplier, progress, toPort?) (Darstellung: Schiff, Umladen oder Straße; Weg: roads.shipRoute,
 //   UNLOADING_PORT)
 // Befehle: 'suppliers.order' (onCredit für Kredit, warehouseId als Ziel), 'suppliers.repay', 'suppliers.unlock'
 // Ereignisse: 'shipment.ordered', 'shipment.arrived' (atPort bei Schiffsware), 'shipment.problem',
-//   'supplier.trustChanged', 'supplier.repaid', 'supplier.overdue', 'supplier.unlocked'
+//   'supplier.trustChanged', 'supplier.repaid', 'supplier.overdue', 'supplier.unlocked', 'supplier.dealStarted'
 
 import {
   type CommandResult,
@@ -37,10 +39,11 @@ import {
   formatEuro,
   type GameState,
   journal,
+  MINUTES_PER_DAY,
   messages,
   wallet,
 } from '../../core';
-import { activeCity, cityName, getCity, relationFactor } from '../city';
+import { activeCity, citiesUnlocked, cityName, getCity, relationFactor } from '../city';
 import { getSalesStats } from '../customers';
 import {
   DEFAULT_WAREHOUSE,
@@ -62,6 +65,10 @@ import {
   CREDIT_PER_TRUST,
   CREDIT_TERM,
   CREDIT_TRUST_OFFSET,
+  DEAL_CHANCE_PER_DAY,
+  DEAL_DAYS,
+  DEAL_DISCOUNT,
+  DEAL_PITCHES,
   DELAY_FACTOR,
   DELAY_RANGE,
   DISCOUNT_FROM_TRUST,
@@ -206,7 +213,21 @@ export interface SupplierRelation {
   overdue: number;
 }
 
+/** Rabatt-Aktion eines Lieferanten auf ein Paket in einer Stadt (Auftrag 32). */
+export interface SupplierDeal {
+  id: number;
+  supplierId: string;
+  packageId: string;
+  cityId: string;
+  /** Rabatt als Anteil (0,15 = 15 %). */
+  discount: number;
+  startedAt: number;
+  endsAt: number;
+}
+
 export interface SuppliersState {
+  /** Laufende Rabatt-Aktionen (Auftrag 32). */
+  deals: SupplierDeal[];
   shipments: Shipment[];
   relations: Record<string, SupplierRelation>;
   /** Lieferanten, die mit dir Geschäfte machen. */
@@ -219,7 +240,8 @@ interface SuppliersStateV1 {
   shipments: Shipment[];
 }
 
-type SuppliersStateV2 = Omit<SuppliersState, 'unlocked' | 'offered'>;
+type SuppliersStateV2 = Omit<SuppliersState, 'unlocked' | 'offered' | 'deals'>;
+type SuppliersStateV4 = Omit<SuppliersState, 'deals'>;
 
 declare module '../../core' {
   interface ModuleStates {
@@ -258,6 +280,14 @@ declare module '../../core' {
     'supplier.repaid': { supplierId: string; amount: number; debt: number };
     'supplier.overdue': { supplierId: string; debt: number };
     'supplier.unlocked': { supplierId: string; fee: number };
+    'supplier.dealStarted': {
+      dealId: number;
+      supplierId: string;
+      packageId: string;
+      cityId: string;
+      discount: number;
+      endsAt: number;
+    };
   }
 }
 
@@ -489,7 +519,26 @@ export function packagePrice(
   const pkg = base ? supplierIn(base, cityId).packages.find((p) => p.id === packageId) : undefined;
   if (!base || !pkg) return Number.POSITIVE_INFINITY;
   const factor = (base.priceFactors?.[cityId] ?? 1) * purchaseIndex(state, pkg.productId, cityId);
-  return Math.round(pkg.price * factor * (1 - supplierDiscount(state, supplierId)));
+  const deal = activeDeal(state, supplierId, packageId, cityId)?.discount ?? 0;
+  return Math.round(pkg.price * factor * (1 - supplierDiscount(state, supplierId)) * (1 - deal));
+}
+
+/** Laufende Rabatt-Aktionen, in einer Stadt oder überall. */
+export function getDeals(state: GameState, cityId?: string): readonly SupplierDeal[] {
+  const deals = (state.modules.suppliers.deals ?? []).filter((d) => d.endsAt > state.time);
+  return cityId ? deals.filter((d) => d.cityId === cityId) : deals;
+}
+
+/** Rabatt-Aktion auf ein Paket in einer Stadt (Standard: die aktive), oder undefined. */
+export function activeDeal(
+  state: GameState,
+  supplierId: string,
+  packageId: string,
+  cityId: string = activeCity(state),
+): SupplierDeal | undefined {
+  return (state.modules.suppliers.deals ?? []).find(
+    (d) => d.supplierId === supplierId && d.packageId === packageId && d.cityId === cityId && d.endsAt > state.time,
+  );
 }
 
 /**
@@ -533,6 +582,11 @@ function addTrust(ctx: Ctx, supplierId: string, raw: number, cityId: string = ac
       delta: Math.round((rel.trust - before) * 10) / 10,
     });
   }
+}
+
+/** Kontakt des Lieferanten im Handy (für Nachrichten anderer Module, z.B. den Marktbericht). */
+export function supplierContact(supplier: Supplier): Contact {
+  return contactOf(supplier);
 }
 
 function contactOf(supplier: Supplier): Contact {
@@ -685,6 +739,51 @@ function onCityUnlocked(ctx: Ctx, cityId: string): void {
     hein,
     'Moin. Du bist jetzt in Hamburg, hab ich gehört. Such dir ein Lager, dann liefer ich dir direkt hin.',
   );
+}
+
+/**
+ * Rabatt-Aktionen (Auftrag 32), um Mitternacht: Abgelaufene fallen weg; in jeder freien Stadt ohne laufende Aktion
+ * startet mit DEAL_CHANCE_PER_DAY eine neue bei einem Lieferanten, der dort an dich liefert. Er sagt es still per Handy.
+ */
+function rollDeals(ctx: Ctx): void {
+  const s = ctx.state.modules.suppliers;
+  s.deals = s.deals.filter((d) => d.endsAt > ctx.now);
+  for (const cityId of citiesUnlocked(ctx.state)) {
+    if (s.deals.some((d) => d.cityId === cityId) || !ctx.chance(DEAL_CHANCE_PER_DAY)) continue;
+    const offers = getSuppliers(ctx.state, cityId).flatMap((supplier) =>
+      availablePackages(ctx.state, supplier.id, cityId).map((pkg) => ({ supplier, pkg })),
+    );
+    if (offers.length === 0) continue;
+    const { supplier, pkg } = ctx.pick(offers);
+    const [minDiscount, maxDiscount] = DEAL_DISCOUNT;
+    const discount = Math.round((minDiscount + ctx.random() * (maxDiscount - minDiscount)) * 20) / 20;
+    const [minDays, maxDays] = DEAL_DAYS;
+    const deal: SupplierDeal = {
+      id: ctx.nextId(),
+      supplierId: supplier.id,
+      packageId: pkg.id,
+      cityId,
+      discount,
+      startedAt: ctx.now,
+      endsAt: ctx.now + ctx.randomInt(minDays, maxDays) * MINUTES_PER_DAY,
+    };
+    s.deals.push(deal);
+    const until = `${clock.weekdayName(deal.endsAt - 1)} Abend`;
+    const text = ctx
+      .pick(DEAL_PITCHES)
+      .replace('{package}', `${pkg.label}${citiesUnlocked(ctx.state).length > 1 ? ` für ${cityName(cityId)}` : ''}`)
+      .replace('{discount}', `${Math.round(discount * 100)} %`)
+      .replace('{until}', until);
+    messages.send(ctx, { contact: contactOf(supplier), text, silent: true });
+    ctx.emit('supplier.dealStarted', {
+      dealId: deal.id,
+      supplierId: supplier.id,
+      packageId: pkg.id,
+      cityId,
+      discount,
+      endsAt: deal.endsAt,
+    });
+  }
 }
 
 function unlock(ctx: Ctx, supplierId: string): CommandResult {
@@ -898,7 +997,7 @@ function canRestock(state: GameState, supplier: Supplier): boolean {
 
 export default defineModule({
   id: 'suppliers',
-  version: 4,
+  version: 5,
   dependsOn: ['goods'],
   init: (ctx) => {
     const frankfurt = SUPPLIERS.find((s) => s.id === 'frankfurt') ?? SUPPLIERS[0];
@@ -915,13 +1014,20 @@ export default defineModule({
         { id: 'later', label: 'Später', reply: 'Melde mich.' },
       ],
     });
-    return { shipments: [], relations: initialRelations(), unlocked: openFromStart(), offered: openFromStart() };
+    return {
+      deals: [],
+      shipments: [],
+      relations: initialRelations(),
+      unlocked: openFromStart(),
+      offered: openFromStart(),
+    };
   },
   tick: (ctx) => {
     revealProblems(ctx);
     deliver(ctx);
     checkDebts(ctx);
     if (ctx.now % 60 === 0) offerUnlocks(ctx);
+    if (ctx.now % MINUTES_PER_DAY === 0) rollDeals(ctx);
   },
   commands: {
     'suppliers.order': (ctx, { supplierId, packageId, onCredit, warehouseId }) =>
@@ -935,17 +1041,19 @@ export default defineModule({
   migrations: {
     2: (old: SuppliersStateV1): SuppliersStateV2 => ({ shipments: old.shipments, relations: initialRelations() }),
     // Version 3: Lieferanten werden freigeschaltet. Alte Spielstände kennen schon alle bisherigen Lieferanten.
-    3: (old: SuppliersStateV2): SuppliersState => {
+    3: (old: SuppliersStateV2): SuppliersStateV4 => {
       const known = ['rotterdam', 'frankfurt', 'berlin', 'hamburg'];
       return { ...old, unlocked: [...known], offered: [...known] };
     },
     // Version 4: Lieferanten ohne Bedingungen (Köln, Kalle) sind von Anfang an zu haben. Alte Spielstände hatten ihn
     // nie bekommen, er blieb "bereit" ohne Knopf zum Freischalten.
-    4: (old: SuppliersState): SuppliersState => {
+    4: (old: SuppliersStateV4): SuppliersStateV4 => {
       const open = openFromStart();
       const withOpen = (ids: string[]) => [...ids, ...open.filter((id) => !ids.includes(id))];
       return { ...old, unlocked: withOpen(old.unlocked), offered: withOpen(old.offered) };
     },
+    // Version 5 (Auftrag 32): Rabatt-Aktionen.
+    5: (old: SuppliersStateV4): SuppliersState => ({ ...old, deals: [] }),
   },
   // Pleite-Regel: Wer eine Lieferung erwartet oder sich eine leisten kann (bar oder auf Kredit), macht weiter.
   solvency: (state) =>
