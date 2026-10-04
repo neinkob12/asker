@@ -19,7 +19,17 @@ export type GangTextKey =
   | 'tributeDue'
   | 'protectionRefused'
   | 'offer'
-  | 'allianceOffer';
+  | 'allianceOffer'
+  /** Auftrag 23: Gang-Leute stehen an deinem Spot ({spot}). */
+  | 'intimidation'
+  /** Auftrag 23: Tipp an die Polizei über dich ({veedel}). */
+  | 'tipOff'
+  /** Auftrag 23: Erpressung mit deinem Lager ({warehouse}, {amount}). */
+  | 'blackmail'
+  /** Auftrag 23 (Chance): Warnung vor einem Rivalen ({enemy}). */
+  | 'warnRival'
+  /** Auftrag 23 (Chance): Bitte um einen bezahlten Gefallen ({amount}). */
+  | 'favor';
 
 export type GangVoice = Readonly<Record<GangTextKey, readonly string[]>>;
 
@@ -104,6 +114,41 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Ich mag dich nicht. {enemy} mag ich noch weniger. {price} und wir sind Kollegen.',
       'Feind von meinem Feind und so. {enemy}. {price}. Ja oder nein.',
     ],
+    intimidation: [
+      'Meine Jungs stehen jetzt am {spot}. Mal sehen, wer da noch kauft.',
+      'Jupp hier. Am {spot} is ab heut Kolonne. Deine Kunden haben Angst, dat versteh ich.',
+      'Am {spot} stehen jetzt fünf Kerle mit Hafenjacke. Rate mal, für wen.',
+      'Wir passen ab jetzt auf deinen {spot} auf. Keiner kauft, solang wir gucken.',
+      'Kleiner Besuch am {spot}. Die Kundschaft bleibt heute lieber weg.',
+    ],
+    tipOff: [
+      'Hab den Bullen nen Tipp über {veedel} gegeben. Is nich unser Stil, aber du nervst.',
+      'Die Bullen wissen jetzt, wer in {veedel} vertickt. Rat mal, von wem.',
+      'Jupp hat mal telefoniert. {veedel} wird bald heiß für dich.',
+      'Hab gehört, in {veedel} kommen bald Uniformen. Komisch, wa?',
+      'Nur so: Die Polizei interessiert sich jetzt für {veedel}. Dank uns.',
+    ],
+    blackmail: [
+      'Wir wissen, wo dein {warehouse} is. {amount}, oder die Bullen wissen et auch.',
+      'Jupp. {warehouse}. Schöne Adresse. {amount} und ich vergess sie.',
+      '{amount} bis morgen. Sonst kriegt die Polizei die Adresse vom {warehouse}.',
+      'Dein {warehouse} is kein Geheimnis mehr. {amount} macht et wieder zu einem.',
+      'Ein Anruf und dein {warehouse} is weg. {amount}, dann ruf ich nich an.',
+    ],
+    warnRival: [
+      'Unter uns: {enemy} plant wat gegen dich. Pass auf deine Spots auf.',
+      'Jupp hier. {enemy} sammelt Leute. Gegen dich. Mach dich bereit.',
+      'Hab gehört, {enemy} will dir an den Kragen. Von mir haste dat nich.',
+      '{enemy} redet zu laut in den Kneipen. Die kommen bald zu dir.',
+      'Kleiner Tipp, weil du dich benimmst: {enemy} will Ärger mit dir.',
+    ],
+    favor: [
+      'Brauch nen Gefallen: Lager mal ne Kiste für uns. Gibt {amount}.',
+      'Jupp. Kannst du wat für ein paar Tage unterstellen? {amount} für dich.',
+      'Unsere Bude is zu heiß. Nimmst du unser Zeug? {amount}.',
+      'Ein Freundschaftsdienst, Jung: Zwischenlagern. {amount} bar.',
+      'Wir brauchen nen sicheren Keller. Deiner tut et. {amount}.',
+    ],
   },
   // 🕸 Venloer Syndikat, Nadine Schrader („die Notarin“): förmlich, juristisch, droht über Dritte.
   west: {
@@ -183,6 +228,41 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Ein Bündnis auf Zeit, gegen {enemy}. Die Notarin hat den Vertrag schon im Kopf. Kosten: {price}.',
       'Wir hätten Verwendung für Sie, gegen {enemy}. Einmalige Gebühr: {price}.',
       'Strategische Kooperation, Ziel {enemy}, Kostenanteil {price}. Frau Schrader erwartet Ihre Antwort.',
+    ],
+    intimidation: [
+      'Frau Schrader hat zwei Herren an Ihren {spot} geschickt. Sie stehen dort einfach. Das reicht meist.',
+      'Am {spot} beobachten unsere Mitarbeiter ab sofort die Kundschaft. Die Kundschaft beobachtet zurück und geht.',
+      'Wir haben am {spot} Präsenz gezeigt. Diskret, aber unübersehbar.',
+      'Ihr {spot} wird heute von uns betreut. Ihre Kunden schätzen das weniger.',
+      'Im Auftrag: Am {spot} stehen unsere Leute. Bis auf Weiteres.',
+    ],
+    tipOff: [
+      'Frau Schrader hat einem Bekannten im Präsidium von {veedel} erzählt. Rein zufällig.',
+      'Man hat der Polizei einen Hinweis zu {veedel} zukommen lassen. Anonym, versteht sich.',
+      'Im Präsidium liegt jetzt eine Akte zu {veedel}. Wir haben beim Ausfüllen geholfen.',
+      'Wie angekündigt: Das Präsidium interessiert sich für {veedel}. Die Notarin hält Wort.',
+      'Ein Kriminalhauptkommissar hat heute Ihren Namen gehört. Im Zusammenhang mit {veedel}.',
+    ],
+    blackmail: [
+      'Frau Schrader kennt die Adresse Ihres {warehouse}. Für {amount} vergisst sie sie wieder.',
+      'Diskretion hat ihren Preis: {amount}. Sonst erfährt das Präsidium vom {warehouse}.',
+      'Ein Schreiben liegt bereit, an die Kripo, zum {warehouse}. {amount} und es bleibt liegen.',
+      'Wir schlagen vor: {amount} gegen unser Schweigen über den {warehouse}.',
+      'Die Notarin bietet einen Vergleich an: {amount}, und der {warehouse} bleibt unbekannt.',
+    ],
+    warnRival: [
+      'Frau Schrader möchte Sie warnen: {enemy} plant einen Schritt gegen Sie.',
+      'Unter Geschäftsleuten: {enemy} bereitet etwas vor. Sie sollten vorbereitet sein.',
+      'Eine Information gratis: {enemy} hat es auf Ihre Spots abgesehen.',
+      'Man hört aus gut unterrichteten Kreisen: {enemy} will Ihnen schaden.',
+      'Die Notarin rät zur Vorsicht. {enemy} ist auf dem Weg zu Ihnen.',
+    ],
+    favor: [
+      'Frau Schrader bittet um eine Gefälligkeit: ein paar Kartons zwischenlagern. Honorar: {amount}.',
+      'Wir bräuchten kurzfristig Lagerraum. {amount} für Ihre Mühe.',
+      'Ein kleiner Dienst unter Partnern: Ware für drei Tage. {amount}.',
+      'Das Syndikat sucht einen diskreten Keller. Ihrer käme in Frage. {amount}.',
+      'Im Auftrag: Zwischenlagerung gegen {amount}. Keine Fragen, keine Akten.',
     ],
   },
   // 🔥 Schäl Sick, Kalle Brenner: rotzig, Preise, Masse.
@@ -264,6 +344,41 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Wir brauchen jemand, der {enemy} nervt. Du bist gut darin. {price}.',
       'Gemeinsam gegen {enemy}, Bruder? {price} und die Schäl Sick steht hinter dir.',
     ],
+    intimidation: [
+      'Bruder, am {spot} stehen jetzt meine Jungs. Zwanzig Stück. Viel Spaß beim Verkaufen.',
+      'Kalle hat am {spot} nen Stand aufgemacht. Direkt neben dir. Halber Preis.',
+      'Ey, dein {spot}? Is jetzt voll mit uns. Kunden kommen da nich mehr durch.',
+      'Wir chillen jetzt am {spot}. Deine Kunden finden dat nich so chillig.',
+      'Am {spot} gibt et jetzt Masse. Unsere Masse.',
+    ],
+    tipOff: [
+      'Ey, hab den Bullen gesteckt, wat in {veedel} läuft. Konkurrenz belebt dat Geschäft, wa?',
+      'Kalle hat angerufen. Bei der Polizei. Wegen {veedel}.',
+      'Die Bullen wissen jetzt von deinem Laden in {veedel}. Dat war billig für uns.',
+      'Kleine Info an die Uniformen: {veedel}. Hat nix gekostet.',
+      'Bruder, in {veedel} wird et bald blau. Und nicht vom Kölsch.',
+    ],
+    blackmail: [
+      'Ich weiß, wo dein {warehouse} is. {amount}, dann halt ich die Klappe.',
+      'Bruder, {amount} oder die Bullen kriegen die Adresse vom {warehouse}.',
+      '{warehouse}? Kenn ich. Für {amount} vergess ich dat.',
+      'Kalle hat ne Adresse: dein {warehouse}. Kostet dich {amount}, die zu vergessen.',
+      'Masse-Rabatt aufs Schweigen: {amount}. {warehouse} bleibt sauber.',
+    ],
+    warnRival: [
+      'Ey, Bruder: {enemy} will dich platt machen. Pass auf.',
+      'Kalle sagt: {enemy} sammelt Leute. Gegen dich.',
+      'Nur unter uns: {enemy} hat wat vor. Mit dir.',
+      '{enemy} redet über deine Spots. Sei bereit.',
+      'Hör zu, {enemy} kommt. Bald. Gratis-Tipp.',
+    ],
+    favor: [
+      'Bruder, kannst du Ware für uns bunkern? {amount} für dich.',
+      'Kalle braucht Platz. Zwischenlagern, {amount}.',
+      'Ey, wir haben zu viel Zeug. Nimm wat auf, kriegst {amount}.',
+      'Kleiner Gefallen, Bruder? Drei Tage Lager, {amount}.',
+      'Wir zahlen {amount}, wenn du unsere Kisten versteckst.',
+    ],
   },
   // ♛ Marienburger Kreis, Dr. Konstantin Aldenhoven: leise, gebildet, kalt.
   sued: {
@@ -343,6 +458,41 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Der Doktor bietet Ihnen eine Partnerschaft an. Ziel: {enemy}. Preis: {price}.',
       'Ein Arrangement unter Vernünftigen, gegen {enemy}. {price}. Der Doktor erwartet Diskretion.',
       'Man könnte {enemy} gemeinsam beschneiden. Kosten für Sie: {price}.',
+    ],
+    intimidation: [
+      'Am {spot} stehen nun Herren in guten Mänteln. Sie sagen nichts. Ihre Kunden verstehen trotzdem.',
+      'Der Doktor hat am {spot} Präsenz angeordnet. Leise, aber wirksam.',
+      'Ihr {spot} ist heute nicht der richtige Ort für Geschäfte. Das haben wir dafür gesorgt.',
+      'Zwei unserer Leute beobachten Ihren {spot}. Die Kundschaft spürt das.',
+      'Der Kreis hat sich Ihren {spot} angesehen. Er bleibt dort eine Weile.',
+    ],
+    tipOff: [
+      'Dr. Aldenhoven hat beim Golf erwähnt, was in {veedel} vor sich geht. Der Polizeipräsident hört gut zu.',
+      'Ein Hinweis zu {veedel} hat seinen Weg ins Präsidium gefunden. Stilvoll, über einen Anwalt.',
+      'Der Doktor hat die Behörden auf {veedel} aufmerksam gemacht. Er tut das ungern. Aber er tut es.',
+      'In {veedel} wird man bald genauer hinsehen. Der Kreis hat Freunde.',
+      'Ein Abendessen mit einem Staatsanwalt. {veedel} war das Thema.',
+    ],
+    blackmail: [
+      'Der Doktor weiß, wo Ihr {warehouse} liegt. {amount} erscheinen ihm angemessen für sein Schweigen.',
+      'Diskretion kostet {amount}. Andernfalls erfährt die Polizei vom {warehouse}.',
+      'Ein Umschlag mit der Adresse Ihres {warehouse} liegt bereit. {amount}, und er wird verbrannt.',
+      'Dr. Aldenhoven schlägt vor: {amount}. Der {warehouse} bleibt dann Ihre Privatsache.',
+      'Wir kennen den {warehouse}. Für {amount} vergessen wir ihn.',
+    ],
+    warnRival: [
+      'Der Doktor lässt Sie wissen: {enemy} rüstet gegen Sie. Er schätzt das Gleichgewicht.',
+      'Eine diskrete Warnung: {enemy} plant einen Übergriff.',
+      'Dr. Aldenhoven hält es für klug, Sie zu warnen. {enemy} kommt.',
+      'Man hört, {enemy} sei Ihrer überdrüssig. Seien Sie vorbereitet.',
+      'Der Kreis empfiehlt Wachsamkeit. {enemy}.',
+    ],
+    favor: [
+      'Der Doktor bittet um eine kleine Gefälligkeit: Lagerraum für ein paar Tage. {amount}.',
+      'Eine diskrete Bitte: Unterbringung einiger Kisten. Honorar {amount}.',
+      'Dr. Aldenhoven würde Ihre Kellerräume schätzen. {amount} für drei Tage.',
+      'Der Kreis braucht einen verschwiegenen Ort. {amount}.',
+      'Eine Gefälligkeit unter Vernünftigen: {amount} für Lagerung, keine Fragen.',
     ],
   },
   // 🌹 Neonkrone (Hamburg), Rocco Brandt „der Portier“: Türsteher-Ton, Kiez.
@@ -424,6 +574,41 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Der Kiez gegen {enemy}. Eintritt für dich: {price}.',
       'Gemeinsam räumen wir {enemy} von der Straße. Kostet dich {price}.',
     ],
+    intimidation: [
+      'Meine Türsteher stehen jetzt an deinem {spot}. Wer reinwill, muss an denen vorbei.',
+      'Rocco hier. Am {spot} ist ab heute Gesichtskontrolle. Deine Kunden fallen durch.',
+      'Der {spot} hat jetzt Security. Unsere.',
+      'Heute nicht. Sagt der Portier am {spot} zu deinen Kunden.',
+      'Am {spot} läuft jetzt unsere Tür. Viel Glück.',
+    ],
+    tipOff: [
+      'Hab der Davidwache einen Tipp zu {veedel} gegeben. Wir kennen da ja alle.',
+      'Die Bullen auf dem Kiez wissen jetzt, was in {veedel} läuft.',
+      'Rocco hat telefoniert. {veedel} wird heiß.',
+      'Ein Wort an der Bar, ein Bulle hört zu. {veedel}, mein Lieber.',
+      'Die Polizei weiß jetzt Bescheid über {veedel}. Schöne Grüße vom Kiez.',
+    ],
+    blackmail: [
+      'Ich kenn die Adresse von deinem {warehouse}. {amount}, sonst die Davidwache auch.',
+      'Rocco. {amount} oder die Bullen kriegen den {warehouse}.',
+      'Dein {warehouse}, nette Lage. {amount} und ich vergess die Hausnummer.',
+      '{amount}, dann bleibt der {warehouse} unter uns.',
+      'Für {amount} hab ich nie was vom {warehouse} gehört.',
+    ],
+    warnRival: [
+      'Tipp von der Tür: {enemy} will dir an den Kragen.',
+      'Rocco hier. {enemy} plant was. Pass auf.',
+      'Hab an der Bar gehört: {enemy} kommt zu dir.',
+      '{enemy} sammelt Leute. Gegen dich.',
+      'Kleiner Gefallen unter Nachbarn: {enemy} will Stress.',
+    ],
+    favor: [
+      'Brauch Platz für ein paar Kisten. {amount}, drei Tage.',
+      'Rocco. Kannst du was für uns lagern? {amount}.',
+      'Der Kiez ist zu heiß. Nimm unser Zeug, kriegst {amount}.',
+      'Ein Gefallen, bezahlt: {amount} fürs Bunkern.',
+      'Wir brauchen deinen Keller. {amount}.',
+    ],
   },
   // ⛓ Containerjungs (Hamburg), Hinnerk „Brecher“ Matthiesen: grob vom Hafen.
   'hh-hafen': {
@@ -503,6 +688,41 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Hafen und Rheinland gegen {enemy}? {price}.',
       'Wir brauchen mehr Leute gegen {enemy}. Du zahlst {price}, wir liefern die Muskeln.',
       'Zusammen versenken wir {enemy}. {price}.',
+    ],
+    intimidation: [
+      'Die Containerjungs stehen jetzt an deinem {spot}. Mit Hafenhaken.',
+      'Brecher hier. Am {spot} ist jetzt Hafen. Deine Kunden schwimmen weg.',
+      'Am {spot} parkt jetzt unser Gabelstapler. Ziemlich im Weg.',
+      'Wir stehen am {spot}. Mal sehen, wer sich traut.',
+      'Dein {spot} ist heute dicht. Wegen uns.',
+    ],
+    tipOff: [
+      'Hab der Wasserschutzpolizei was über {veedel} erzählt. Die freuen sich über Arbeit.',
+      'Brecher hat angerufen. Bei den Bullen. {veedel}.',
+      'Die Polizei kriegt einen Tipp zu {veedel}. Von uns, mit Gruß.',
+      'In {veedel} gibt es bald Kontrollen. Ich weiß das, weil ich sie bestellt hab.',
+      'Ein Anruf, {veedel}, fertig. Viel Spaß.',
+    ],
+    blackmail: [
+      'Wir wissen, wo dein {warehouse} steht. {amount}, sonst wissen es die Bullen.',
+      'Brecher. {amount} oder der {warehouse} fliegt auf.',
+      '{warehouse}, Rheinländer. {amount} und wir haben nix gesehen.',
+      'Für {amount} vergessen wir den {warehouse}.',
+      'Zahl {amount}, sonst gibt es eine Hausdurchsuchung im {warehouse}.',
+    ],
+    warnRival: [
+      'Brecher hier: {enemy} will dir ans Leder.',
+      '{enemy} plant was. Pass auf deine Läden auf.',
+      'Gratis-Tipp vom Hafen: {enemy} kommt.',
+      'Hab gehört, {enemy} rüstet. Gegen dich.',
+      'Halt die Augen auf, Rheinländer. {enemy}.',
+    ],
+    favor: [
+      'Ein Container muss weg. Kannst du ihn bunkern? {amount}.',
+      'Brecher braucht Platz. {amount} für drei Tage.',
+      'Unser Zeug ist zu heiß. {amount}, wenn du es nimmst.',
+      'Lager mal was für uns. {amount}.',
+      'Gefallen gegen Bares: {amount}.',
     ],
   },
   // ✊ Das Kollektiv (Hamburg), Merle Asmussen „die Kassenwartin“: Plenum, WG, Polit-Ton.
@@ -584,6 +804,41 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Gemeinsame Aktion gegen {enemy}? Beitrag {price}.',
       'Wir organisieren uns gegen {enemy}. Mach mit, für {price}.',
     ],
+    intimidation: [
+      'Das Kollektiv hat eine Mahnwache an deinem {spot} angemeldet. Mit Transparent.',
+      'Merle hier. Am {spot} steht jetzt das halbe Plenum. Deine Kunden fühlen sich beobachtet.',
+      'Wir machen am {spot} eine Aktion. Deine Geschäfte stören dabei.',
+      'Am {spot} läuft jetzt Aufklärungsarbeit. Gegen dich.',
+      'Unser Infostand steht jetzt an deinem {spot}.',
+    ],
+    tipOff: [
+      'Das Plenum hat beschlossen, der Polizei von {veedel} zu erzählen. Ausnahmsweise.',
+      'Merle hat einen anonymen Brief geschrieben. Thema: {veedel}.',
+      'Die Bullen haben jetzt einen Tipp zu {veedel}. Von uns.',
+      'Wir haben die Polizei auf {veedel} hingewiesen. Taktisch.',
+      'Direkte Aktion, indirekt: {veedel}, Polizei, Hinweis.',
+    ],
+    blackmail: [
+      'Wir kennen deinen {warehouse}. {amount} für die Gemeinschaftskasse, sonst die Polizei.',
+      'Merle hier. {amount}, oder der {warehouse} ist öffentlich.',
+      '{amount} Solibeitrag, dann bleibt der {warehouse} geheim.',
+      'Das Plenum schlägt vor: {amount} gegen Schweigen über den {warehouse}.',
+      'Für {amount} haben wir den {warehouse} nie gesehen.',
+    ],
+    warnRival: [
+      'Solidarische Warnung: {enemy} plant was gegen dich.',
+      'Merle hier. {enemy} organisiert sich. Gegen dich.',
+      'Info aus dem Viertel: {enemy} kommt.',
+      'Das Plenum findet, du solltest wissen: {enemy}.',
+      'Pass auf, {enemy} will Ärger.',
+    ],
+    favor: [
+      'Wir brauchen Lagerplatz. {amount} aus der Gemeinschaftskasse.',
+      'Merle fragt: Kannst du was zwischenlagern? {amount}.',
+      'Solidarische Bitte: drei Tage Lager, {amount}.',
+      'Das Kollektiv zahlt {amount} fürs Bunkern.',
+      'Ein Gefallen fürs Viertel: {amount}.',
+    ],
   },
   // ⛵ Elbchaussee-Club (Hamburg), Frederik Brodersen-Lüth: höflich, herablassend, Anwälte.
   'hh-elbchaussee': {
@@ -664,6 +919,41 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Eine Investition: {price} gegen {enemy}. Rendite garantiert.',
       'Gemeinsam gegen {enemy}, für {price}. Der Club stellt das Personal.',
     ],
+    intimidation: [
+      'Der Club hat an Ihrem {spot} Personal postiert. Teures Personal.',
+      'Herr Brodersen-Lüth lässt Ihren {spot} beobachten. Ihre Kundschaft fühlt sich unwohl.',
+      'Am {spot} stehen jetzt unsere Herren. Sie sind nicht zum Einkaufen da.',
+      'Ihr {spot} ist bis auf Weiteres unser Spot.',
+      'Der Club hat Ihren {spot} gebucht. Exklusiv.',
+    ],
+    tipOff: [
+      'Unser Anwalt hat der Staatsanwaltschaft von {veedel} berichtet.',
+      'Ein Golfpartner bei der Polizei weiß nun von {veedel}.',
+      'Der Club hat einen Hinweis zu {veedel} hinterlegt. Formvollendet.',
+      'In {veedel} wird man bald kontrollieren. Wir haben das angeregt.',
+      'Herr Brodersen-Lüth hat telefoniert. {veedel}.',
+    ],
+    blackmail: [
+      'Wir kennen Ihren {warehouse}. {amount}, und unser Anwalt schweigt.',
+      'Der Club schlägt {amount} vor. Sonst erfährt die Polizei vom {warehouse}.',
+      '{amount}, und der {warehouse} bleibt Ihr Geheimnis.',
+      'Eine diskrete Rechnung: {amount} für Vergesslichkeit zum {warehouse}.',
+      'Herr Brodersen-Lüth bietet Schweigen an. {amount}. Thema: {warehouse}.',
+    ],
+    warnRival: [
+      'Der Club warnt Sie: {enemy} plant einen Übergriff.',
+      'Unter Kaufleuten: {enemy} hat Sie im Visier.',
+      'Herr Brodersen-Lüth meint, Sie sollten wissen: {enemy} kommt.',
+      'Eine Warnung, kostenlos: {enemy}.',
+      'Seien Sie vorbereitet. {enemy}.',
+    ],
+    favor: [
+      'Der Club bräuchte Lagerraum. {amount}.',
+      'Herr Brodersen-Lüth bittet um Unterbringung einiger Kisten. {amount}.',
+      'Drei Tage Lagerung, diskret. {amount}.',
+      'Eine bezahlte Gefälligkeit: {amount}.',
+      'Der Club zahlt {amount} für einen verschwiegenen Keller.',
+    ],
   },
 };
 
@@ -676,3 +966,59 @@ export const DEFAULT_VOICE: GangVoice = Object.fromEntries(
 export function gangVariants(gangId: string, key: GangTextKey): readonly string[] {
   return (GANG_VOICES[gangId] ?? DEFAULT_VOICE)[key];
 }
+
+/**
+ * Texte zu Gang-Aktionen, die nicht der Boss schreibt (Auftrag 23): die Nachbarin am Lager meldet Einbrüche, deine
+ * Leute melden Abwerbeversuche und Gang-Leute am Spot, ein Überläufer bietet Infos an. Platzhalter: {warehouse},
+ * {goods}, {gang}, {name}, {extra}, {spot}, {price}.
+ */
+export const INCIDENT_TEXTS = {
+  burglaryGang: [
+    'Beim {warehouse} ist die Tür aufgebrochen. {goods} fehlen. Die Leute in der Straße sagen, es waren welche von {gang}.',
+    'Heute Nacht war jemand im {warehouse}. {goods} sind weg. Ich hab Jacken von {gang} gesehen, ganz sicher.',
+    'Ihr {warehouse}: aufgebrochen, {goods} weg. Ein Auto mit Leuten von {gang} stand die halbe Nacht davor.',
+    'Ich will mich ja nicht einmischen, aber im {warehouse} fehlen {goods}. Und {gang} hat gestern rumgefragt.',
+    'Einbruch im {warehouse}, {goods} geklaut. Am Tor klebt ein Aufkleber von {gang}. Frech, oder?',
+  ],
+  burglaryJunkies: [
+    'Im {warehouse} wurde eingebrochen, {goods} fehlen. Sah nach Junkies aus, die Scheibe war einfach eingeschlagen.',
+    'Heute Nacht war jemand im {warehouse}. {goods} weg. Zwei Gestalten, völlig neben der Spur.',
+    'Der {warehouse} ist aufgebrochen, {goods} geklaut. Keine Ahnung, wer. Sah nicht nach Profis aus.',
+    'Einbruch im {warehouse}, {goods} weg. Ich glaub, das waren die Typen vom Bahnhof.',
+    'Im {warehouse} fehlen {goods}. Die Spuren führen zum Spielplatz, da hängen nachts immer welche rum.',
+  ],
+  burglaryInsider: [
+    'Im {warehouse} fehlen {goods}, aber die Tür ist heil. Wer hat da einen Schlüssel? {name} war gestern Nacht noch da.',
+    'Komisch: {goods} weg aus dem {warehouse}, kein Einbruch. Ich hab {name} um drei Uhr da rauskommen sehen.',
+    '{warehouse}: {goods} fehlen, Schloss ganz. Fragen Sie mal {name}.',
+    'Im {warehouse} fehlt was, {goods}. Und {name} hatte heute Morgen neue Schuhe an.',
+    'Aus dem {warehouse} sind {goods} verschwunden, ohne Spuren. {name} hat den Schlüssel, oder?',
+  ],
+  burglaryFoiled: [
+    'Heute Nacht wollte jemand in den {warehouse}. Ihre Wache hat die verscheucht. Hut ab.',
+    'Am {warehouse} war nachts Lärm. Ihr Mann hat zwei Einbrecher in die Flucht geschlagen.',
+    'Einbruchsversuch am {warehouse}. Ihre Wache war schneller. Nichts weg.',
+    'Da wollte einer in den {warehouse}. Ihr Aufpasser hat ihn verjagt.',
+  ],
+  poach: [
+    'Chef, {gang} bietet mir {extra} mehr am Tag. Ich sag’s dir lieber gleich. Was machst du?',
+    'Ehrlich: {gang} will mich haben. {extra} mehr pro Tag. Überzeug mich, dass ich bleiben soll.',
+    'Die von {gang} waren bei mir. {extra} am Tag mehr. Ich hab noch nicht Nein gesagt.',
+    'Chef, ich hab ein Angebot von {gang}. {extra} mehr. Ich mag dich, aber ich hab Rechnungen.',
+    '{gang} zahlt {extra} mehr am Tag. Nur damit du Bescheid weißt.',
+  ],
+  intimidationReport: [
+    'Chef, am {spot} stehen Leute von {gang}. Die Kunden trauen sich nicht mehr her.',
+    'Hier am {spot} hängen fünf von {gang} rum. Keiner kauft mehr.',
+    'Ärger am {spot}: {gang} steht da und glotzt jeden Kunden an.',
+    '{gang} hat sich am {spot} breitgemacht. Ich verkauf hier gerade gar nichts.',
+    'Am {spot} ist {gang}. Die schicken meine Kunden weg.',
+  ],
+  defector: [
+    'Ich war bei {gang}. Jetzt nicht mehr. Für {price} erzähl ich dir, was die vorhaben.',
+    'Hab {gang} verlassen, im Streit. Ich weiß, wann die als Nächstes zuschlagen. {price}.',
+    '{gang} hat mich rausgeworfen. Ich hab Infos über deren Leute. {price}, bar.',
+    'Willst du wissen, wie stark {gang} wirklich ist? {price}, dann bin ich weg.',
+    'Ex-{gang} hier. Ich kenn ihre Pläne. {price} und du kennst sie auch.',
+  ],
+} as const;

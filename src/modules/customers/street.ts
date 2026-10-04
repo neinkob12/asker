@@ -12,6 +12,7 @@ import {
 } from '../../core';
 import { activeCity, cityOfSpot } from '../city';
 import { eventFactor } from '../events';
+import { intimidationFactor } from '../gangs';
 import { allProducts, getProduct, getStock, take } from '../goods';
 import { isPlayerOnTheRoad } from '../logistics';
 import { getSpotPrice, priceRatio, spotReferencePrice } from '../market';
@@ -95,6 +96,8 @@ export function demandRate(state: GameState, spot: Spot, time: number): number {
   return (
     spot.demand *
     eventFactor(state, 'demand', { spotId: spot.id, veedelId: spot.veedelId }) *
+    // Auftrag 23: Gang-Leute am Spot schrecken Kunden ab.
+    intimidationFactor(state, spot.id) *
     nightlifeFactor(spot.veedelId, time) *
     hourDemandMultiplier(clock.hour(time)) *
     WEEKDAY_DEMAND[clock.weekday(time)] *

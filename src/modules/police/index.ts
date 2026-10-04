@@ -370,6 +370,23 @@ export function reportViolence(ctx: Ctx, veedelId: string, severity = 1): number
   return addHeat(ctx, veedelId, VIOLENCE_HEAT * severity * presence);
 }
 
+/**
+ * Eine Gang steckt der Polizei etwas über dich (Auftrag 23): Heat im Veedel, mit raid eine geplante Razzia, wenn dort
+ * gerade keine ansteht, du dort bist und Razzien erlaubt sind. Gibt zurück, ob eine Razzia geplant wurde.
+ */
+export function tipOffAgainstPlayer(ctx: Ctx, veedelId: string, heat: number, raid = false): boolean {
+  addHeat(ctx, veedelId, heat);
+  if (!raid) return false;
+  const police = ctx.state.modules.police;
+  const ready =
+    ctx.now >= (police.raidReadyAt[veedelId] ?? 0) &&
+    police.plannedRaids[veedelId] === undefined &&
+    !police.majorRaid?.veedelIds.includes(veedelId);
+  if (!ready || !hasPlayerPresence(ctx.state, veedelId) || !raidsAllowed(ctx.state, veedelCity(veedelId))) return false;
+  planRaid(ctx, veedelId);
+  return true;
+}
+
 /** Kann die Gang gerade verpfiffen werden? */
 export function canSnitch(state: GameState, gangId: string): CommandResult {
   const gang = getGang(state, gangId);

@@ -166,6 +166,25 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     },
   },
 
+  // Auftrag 23: nach einem Einbruch die Täter suchen. Die Ware lagert gangs selbst wieder ein (skipEffects).
+  recoverLoot: {
+    name: 'Täter suchen',
+    baseSuccess: 0.55,
+    situation: 'Die Spur führt {place} in einen Hinterhof. {opponent} sitzen auf deiner Ware: {stakeGoods}.',
+    opponent: { label: 'Die Diebe', strength: 40, count: [1, 3] },
+    maxRounds: 4,
+    joinable: true,
+    ifNobody: 'retreat',
+    briefingOptions: ['self', 'crew', 'backup'],
+    actions: ['fight', 'intimidate', 'negotiate', 'hold', 'flee'],
+    remoteActions: ['fight', 'negotiate', 'flee'],
+    outcomes: {
+      success: { reputation: 1, text: 'Diebe {place} gestellt.' },
+      failure: { reputation: -1, text: 'Die Diebe sind {place} entwischt.' },
+      retreat: { text: 'Suche {place} abgebrochen.' },
+    },
+  },
+
   gangSpotRaid: {
     name: 'Überfall auf Gang-Spot',
     baseSuccess: 0.45,

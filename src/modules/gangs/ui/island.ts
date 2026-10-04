@@ -2,9 +2,10 @@
 
 import { islandCountdown, registerLiveActivity } from '../../../ui';
 import { activeCity } from '../../city';
+import { getSpot } from '../../spots';
 import { controllerOf, PLAYER_FACTION } from '../../territory';
 import { veedelName } from '../../veedel';
-import { getGangStatus, getGangs } from '../index';
+import { getGang, getGangStatus, getGangs } from '../index';
 
 registerLiveActivity({
   id: 'gangs.pushes',
@@ -28,4 +29,33 @@ registerLiveActivity({
         },
       ];
     }),
+});
+
+// Auftrag 23: Gang-Leute an einem deiner Spots, mit Restzeit.
+registerLiveActivity({
+  id: 'gangs.intimidation',
+  activities: (state) =>
+    (state.modules.gangs?.intimidations ?? [])
+      .filter((i) => i.until > state.time)
+      .flatMap((i) => {
+        const gang = getGang(state, i.gangId);
+        const spot = getSpot(state, i.spotId);
+        if (!gang || !spot) return [];
+        return [
+          {
+            id: `gangs.intimidation.${i.spotId}`,
+            priority: 70,
+            icon: 'skull',
+            tone: 'warn' as const,
+            leading: 'Spot',
+            trailing: islandCountdown(i.until - state.time),
+            title: `${gang.name} am ${spot.name}`,
+            detail: 'Kaum Kunden, solange sie dort stehen',
+            open: (ui) => {
+              ui.selectTab('gangs');
+              ui.openPanel('gangs.gang', { gangId: gang.id });
+            },
+          },
+        ];
+      }),
 });

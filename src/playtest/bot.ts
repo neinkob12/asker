@@ -430,7 +430,22 @@ function mayReplace(state: GameState, options: BotOptions): boolean {
  */
 function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions): void {
   const state = sim.state;
-  const PREFERENCE = ['tribute', 'ceasefire', 'raise', 'lieLow', 'refuse', 'decline', 'no', 'later', 'ignore'];
+  // Auftrag 23: Abwerben mit mehr Lohn kontern, nach einem Einbruch die Leute die Täter suchen lassen, Gefallen und
+  // Warnungen der Gangs annehmen, Erpressung ablehnen.
+  const PREFERENCE = [
+    'tribute',
+    'ceasefire',
+    'raise',
+    'hunt',
+    'accept',
+    'thanks',
+    'lieLow',
+    'refuse',
+    'decline',
+    'no',
+    'later',
+    'ignore',
+  ];
   for (const m of [...state.messages.list]) {
     if (!messages.canAnswer(state, m)) continue;
     // Routine (Lieferanfragen, Hafen) überlässt der Bot seiner Rechten Hand, sobald sie das Handy übernimmt.

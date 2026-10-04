@@ -20,6 +20,7 @@ import {
 import {
   canJoinRaid,
   type GangStatus,
+  gangActions,
   gangPower,
   gangVeedel,
   getGang,
@@ -190,7 +191,7 @@ describe('gangs: KI', () => {
   it('wird feindseliger, je mehr du in ihrem Revier verkaufst: Warnung, Drohung, Überfall', () => {
     const sim = createTestGame({ seed: 2 });
     const events = recordEvents(sim);
-    sellHours(sim, 'ebertplatz', 15, 72);
+    sellHours(sim, 'ebertplatz', 15, 120);
     const stages = eventsOfType(events, 'gang.escalated')
       .filter((e) => e.payload.gangId === 'nord')
       .map((e) => e.payload.stage);
@@ -203,11 +204,20 @@ describe('gangs: KI', () => {
       'gangs.ceasefire',
       'gangs.refuse',
     ]);
+    // Auftrag 23: Die Hafenkolonne überfällt oder schüchtert ein (ihre Methoden), beides landet im Protokoll.
     const raids = eventsOfType(events, 'gang.raidStarted').filter((e) => e.payload.gangId === 'nord');
-    expect(raids.length).toBeGreaterThan(0);
-    const raid = getEncounter(sim.state, raids[0].payload.encounterId);
-    expect(raid?.kind).toBe('raidDefense');
-    expect(raid?.request.opponent?.factionId).toBe('nord');
+    const other = [
+      ...eventsOfType(events, 'gang.intimidation'),
+      ...eventsOfType(events, 'gang.burglary'),
+      ...eventsOfType(events, 'gang.poachAttempt'),
+    ].filter((e) => e.payload.gangId === 'nord');
+    expect(raids.length + other.length).toBeGreaterThan(0);
+    expect(gangActions(sim.state, 'nord').length).toBeGreaterThan(0);
+    if (raids.length > 0) {
+      const raid = getEncounter(sim.state, raids[0].payload.encounterId);
+      expect(raid?.kind).toBe('raidDefense');
+      expect(raid?.request.opponent?.factionId).toBe('nord');
+    }
     expect(status(sim, 'nord').hostility).toBeGreaterThanOrEqual(WARN_AT);
   });
 
@@ -465,7 +475,8 @@ describe('gangs: Spielstände', () => {
     delete state.modules.gangs;
     state.moduleVersions.gangs = 1;
     const loaded = loadSimulation(state as unknown as typeof sim.state, sim.modules);
-    expect(loaded.state.moduleVersions.gangs).toBe(3);
+    expect(loaded.state.moduleVersions.gangs).toBe(4);
+    expect(loaded.state.modules.gangs.incidents).toEqual([]);
     expect(getGangStatus(loaded.state, 'hh-kiez')?.people).toBeGreaterThan(0);
     expect(getGangStatus(loaded.state, 'nord')?.people).toBeGreaterThan(0);
     loaded.advance(120);

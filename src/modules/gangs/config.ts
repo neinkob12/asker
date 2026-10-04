@@ -213,3 +213,70 @@ export const MONEY_PER_POWER = 1000;
 export const GOODS_PER_POWER = 100;
 /** Stärke des Spielers pro kontrolliertem Veedel. */
 export const VEEDEL_POWER = 15;
+
+// --- Methoden und neue Aktionen (Auftrag 23) ----------------------------------------------------
+// Wie eine Gang Druck macht, steht pro Gang als Gewichte in data.ts (traits.methods). Ab Stufe 3 wählt die KI bei
+// einem Angriff nach diesen Gewichten (Überfall ist eine der Methoden), ab Stufe 2 kommen leichtere Methoden dazu.
+
+/** Chance pro Stunde (mal Aggression), dass eine drohende Gang (Stufe 2) eine leichtere Methode nutzt. */
+export const METHOD_CHANCE = 0.004;
+/** Abstand zwischen zwei Aktionen derselben Gang (Stufe 2) und zwischen zwei Aktionen irgendeiner Gang. */
+export const METHOD_COOLDOWN = 3 * DAY;
+export const METHOD_GLOBAL_GAP = DAY;
+/** Antwortfrist für Nachrichten zu Einbruch, Abwerben, Einschüchtern, Erpressung. */
+export const INCIDENT_EXPIRY = 8 * HOUR;
+
+/** Einbruch: nur nachts (Stunden), Anteil des Lagerbestands, höchstens so viel. */
+export const BURGLARY_HOURS: readonly [number, number] = [1, 5];
+export const BURGLARY_SHARE = 0.25;
+export const BURGLARY_MAX = 250;
+/** Jede Wache am Lager verscheucht Einbrecher mit dieser Chance (sonst halbiert sie den Verlust). */
+export const BURGLARY_GUARD_STOP = 0.6;
+/** Bemerkt wird der Einbruch um diese Uhrzeit. */
+export const BURGLARY_REPORT_HOUR = 7;
+/** Wohin die Spur führt: Gang, Junkies (keine Gang), eigener Mann. */
+export const BURGLARY_TRAIL = { gang: 0.6, junkies: 0.25, insider: 0.15 } as const;
+/** Täter suchen: so viel holt ein Erfolg zurück. */
+export const RECOVER_SHARE = 0.7;
+
+/** Abwerben: nur Leute unter dieser Loyalität; Angebot als Anteil vom Lohn (mindestens POACH_MIN_EXTRA). */
+export const POACH_MAX_LOYALTY = 45;
+export const POACH_EXTRA_SHARE = 0.35;
+export const POACH_MIN_EXTRA = 20;
+/** Drohen: Chance zu bleiben = Grundwert + Loyalität/100; sonst geht er und plaudert (Heat). */
+export const POACH_THREAT_STAY = 0.35;
+export const POACH_THREAT_LOYALTY = -10;
+export const POACH_TALK_HEAT = 8;
+export const POACH_RAISE_LOYALTY = 10;
+
+/** Einschüchtern: so viele Kunden kommen noch (Faktor), so lange. */
+export const INTIMIDATION_FACTOR = 0.5;
+export const INTIMIDATION_DURATION = 8 * HOUR;
+/** Sicherheit hinschicken: Chance, dass sie ohne Kampf abziehen (sonst Konfrontation). */
+export const INTIMIDATION_LEAVE_CHANCE = 0.5;
+
+/** Tipp an die Polizei: Heat im Veedel, Chance auf eine geplante Razzia. */
+export const TIPOFF_HEAT = 10;
+export const TIPOFF_RAID_CHANCE = 0.3;
+
+/** Erpressung: Grundbetrag plus Anteil am Warenwert des Lagers (Einkauf), gerundet; bei Weigerung Heat und Razzia. */
+export const BLACKMAIL_BASE = 400;
+export const BLACKMAIL_STOCK_SHARE = 0.15;
+export const BLACKMAIL_MAX = 3000;
+export const BLACKMAIL_HEAT = 18;
+
+// Chancen von Gangs (Ton „gemischt“): einmal am Tag gewürfelt, nur bei guter Beziehung.
+/** Chance pro Tag und Gang auf eine Chance (Warnung, Gefallen), wenn die Beziehung reicht. */
+export const GOOD_TURN_CHANCE = 0.12;
+export const GOOD_TURN_MIN_RELATION = 5;
+/** Warnung vor einem Rivalen: Vorbereiten kostet so viel und hält den Rivalen so lange ab. */
+export const WARN_PREPARE_COST = 250;
+/** Gefallen (Ware zwischenlagern): Lohn [von, bis], Beziehung, Heat im Lager-Veedel. */
+export const FAVOR_PAY: readonly [number, number] = [300, 900];
+export const FAVOR_RELATION = 10;
+export const FAVOR_HEAT = 6;
+/** Überläufer: Chance pro Tag bei einer feindlichen Gang (Stufe 2+), Preis für seine Infos. */
+export const DEFECTOR_CHANCE = 0.08;
+export const DEFECTOR_PRICE: readonly [number, number] = [200, 450];
+/** So viele Aktionen gegen dich merkt sich jede Gang für die Anzeige. */
+export const ACTION_LOG_LIMIT = 6;

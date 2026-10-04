@@ -84,6 +84,7 @@ import {
   WARN_AT,
 } from './config';
 import { GANGS, type Gang } from './data';
+import { goodTurns, logAction, maybePressure, pickMethod, runMethod, upkeepIncidents } from './methods';
 import {
   type GangStage,
   type GangStatus,
@@ -113,6 +114,9 @@ export function gangsTick(ctx: Ctx): void {
   const newDay = clock.hour(ctx.now) === 0;
   // Nur die Gangs der Stadt, die live ist (Auftrag 30): Die schlafende Stadt ist eingefroren.
   const city = activeCity(ctx.state);
+  // Auftrag 23: Einbrüche am Morgen melden, abgelaufene Vorfälle schließen, einmal am Tag Chancen würfeln.
+  upkeepIncidents(ctx);
+  if (newDay) goodTurns(ctx);
   for (const gang of GANGS) {
     if (gang.cityId !== city) continue;
     const s = statusOf(ctx, gang.id);
@@ -124,6 +128,7 @@ export function gangsTick(ctx: Ctx): void {
     expand(ctx, gang, s);
     allyStrike(ctx, gang, s);
     reactToPlayer(ctx, gang, s);
+    maybePressure(ctx, gang, s);
     maybeOffer(ctx, gang, s, newDay);
   }
   applyPrices(ctx);
@@ -419,7 +424,14 @@ function reactToPlayer(ctx: Ctx, gang: Gang, s: GangStatus): void {
   // Stadt-Events (Auftrag 30, Etappe 7): Beim FC-Heimspiel sind die Gangs öfter unterwegs.
   const event = eventFactor(ctx.state, 'gangRaids', { cityId: gang.cityId });
   const chance = ATTACK_CHANCE * gang.traits.aggression * Math.min(1, (s.hostility - 60) / 40) * event;
-  if (ctx.chance(chance)) launchRaid(ctx, gang, s);
+  if (!ctx.chance(chance)) return;
+  // Auftrag 23: Wie die Gang zuschlägt, hängt an ihren Methoden (data.ts). Geht die gewählte nicht, Überfall.
+  const method = pickMethod(ctx, gang, 3);
+  if (method && method !== 'raid' && runMethod(ctx, gang, s, method)) {
+    s.lastAttackAt = ctx.now;
+    return;
+  }
+  launchRaid(ctx, gang, s);
 }
 
 function escalate(ctx: Ctx, gang: Gang, s: GangStatus): void {
@@ -492,6 +504,15 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
   const target = pickRaidTarget(ctx, gang, s);
   if (!target) return;
   s.lastAttackAt = ctx.now;
+  logAction(
+    ctx,
+    gang.id,
+    target.kind === 'warehouse'
+      ? `Überfall auf ${target.name}`
+      : target.kind === 'courier'
+        ? 'Überfall auf eine Auftragsfahrt'
+        : `Überfall am ${getSpot(ctx.state, target.spotId)?.name ?? 'Spot'}`,
+  );
   const count = Math.max(1, Math.min(s.people, ctx.randomInt(2, 3) + (s.hostility >= 90 ? 1 : 0)));
   const opponent = { factionId: gang.id, label: gang.crew, strength: gang.traits.fighting, count };
   const origin = { module: 'gangs', ref: `raid:${gang.id}` };

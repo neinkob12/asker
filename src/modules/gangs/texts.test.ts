@@ -12,6 +12,8 @@ const VARS = {
   amount: '100 g',
   price: '400 €',
   enemy: 'Rivalen',
+  spot: 'Ebertplatz',
+  warehouse: 'Lager Ehrenfeld',
 };
 
 describe('Gang-Stimmen', () => {

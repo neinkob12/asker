@@ -37,12 +37,28 @@ import {
   refuse,
   releaseProtection,
 } from './diplomacy';
+import { type IncidentKind, respond } from './methods';
 import { onControlChanged, onEncounterResolved, onPoliceRaid, onSale, onTipOff } from './reactions';
 import { type GangStage, type GangsState, initialGangsState } from './state';
 
+/** Zustand bis Version 3 (vor Auftrag 23). */
+type GangsStateV3 = Pick<GangsState, 'gangs' | 'priceFactors'>;
+
 export { ALLIANCE_COST, GANG_SPOT_MIN_INFLUENCE, WARN_AT } from './config';
-export type { Gang, GangTraits } from './data';
+export type { Gang, GangMethod, GangTraits } from './data';
 export { canJoinRaid, raidCrew } from './diplomacy';
+export {
+  describeIncident,
+  type GangActionEntry,
+  type GangIncident,
+  type GangIntimidation,
+  gangActions,
+  INCIDENT_CHOICES,
+  type IncidentKind,
+  intimidationAt,
+  intimidationFactor,
+  openIncidents,
+} from './methods';
 export {
   ceasefireCost,
   type GangAlliance,
@@ -98,6 +114,8 @@ declare module '../../core' {
     'gangs.attack': { gangId: string; veedelId: string; staffIds: string[]; playerPresent: boolean };
     /** Angebotene Ware kaufen. Manchmal kippt der Deal. */
     'gangs.acceptOffer': { gangId: string; offerId: number };
+    /** Antwort auf einen Vorfall (Auftrag 23): Einbruch, Abwerben, Einschüchtern, Erpressung, Chancen. */
+    'gangs.respond': { incidentId: number; choice: string };
   }
   interface GameEvents {
     'gang.pushStarted': { gangId: string; veedelId: string; against: FactionId | null };
@@ -108,12 +126,21 @@ declare module '../../core' {
     'gang.diplomacyChanged': { gangId: string; kind: GangAgreement; active: boolean };
     /** Razzia der Polizei bei einer Gang (z.B. nach deinem Tipp): was sie verloren hat. */
     'gang.busted': { gangId: string; veedelId: string; arrests: number; goods: number; money: number };
+    /** Auftrag 23: Einbruch in ein Lager bemerkt (amount 0: Wache hat sie verscheucht). gangId = ausführende Gang. */
+    'gang.burglary': { gangId: string; warehouseId: string; amount: number; productId?: string };
+    'gang.poachAttempt': { gangId: string; staffId: string };
+    'gang.intimidation': { gangId: string; spotId: string; until: number };
+    'gang.tipOff': { gangId: string; veedelId: string; raid: boolean };
+    'gang.blackmail': { gangId: string; warehouseId: string; amount: number };
+    /** Chance von einer Gang (Warnung vor einem Rivalen, Gefallen, Überläufer). */
+    'gang.goodTurn': { gangId: string; kind: 'warnRival' | 'favor' | 'defector' };
+    'gang.incidentResolved': { incidentId: number; kind: IncidentKind; choice: string };
   }
 }
 
 export default defineModule({
   id: 'gangs',
-  version: 3,
+  version: 4,
   dependsOn: ['veedel'],
   init: () => initialGangsState(),
   tickEvery: 60,
@@ -129,6 +156,7 @@ export default defineModule({
     'gangs.attack': (ctx, { gangId, veedelId, staffIds, playerPresent }) =>
       attack(ctx, gangId, veedelId, staffIds, playerPresent),
     'gangs.acceptOffer': (ctx, { gangId, offerId }) => acceptOffer(ctx, gangId, offerId),
+    'gangs.respond': (ctx, { incidentId, choice }) => respond(ctx, incidentId, choice),
   },
   on: {
     'sale.completed': onSale,
@@ -142,5 +170,14 @@ export default defineModule({
     2: (): GangsState => initialGangsState(),
     // Version 3 (Auftrag 30): Die Hamburger Gangs kommen dazu, wie bei einem neuen Spiel.
     3: (old: GangsState): GangsState => ({ ...old, gangs: { ...initialGangsState().gangs, ...old.gangs } }),
+    // Version 4 (Auftrag 23): Vorfälle, Einschüchterungen, Protokoll und Abklingzeiten der neuen Gang-Methoden.
+    4: (old: GangsStateV3): GangsState => ({
+      ...old,
+      incidents: [],
+      intimidations: [],
+      log: {},
+      nextMethodAt: {},
+      lastMethodAt: null,
+    }),
   },
 });
