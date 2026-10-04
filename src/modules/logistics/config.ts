@@ -17,6 +17,8 @@ export const PLAYER_DRIVE_SPEED = 380;
 /** Laden am Hafen bzw. im Lager. */
 export const LOAD_MINUTES = 20;
 export const TRANSFER_LOAD_MINUTES = 10;
+/** Am vollen Lager versucht der Fahrer so oft wieder abzuladen (Spielminuten, Auftrag 33). */
+export const UNLOAD_RETRY_MINUTES = 30;
 
 /** Chance auf eine Verkehrskontrolle pro Fahrt mit Ware (× Heat-Faktor × Vorsicht des Fahrers). */
 export const CHECK_CHANCE = 0.08;

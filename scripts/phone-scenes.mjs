@@ -218,6 +218,19 @@ export const SCENES = [
     })()`,
   },
   { name: 'lagerdetail', js: "window.koeln.runtime.api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' })" },
+  {
+    // Auftrag 33: fast volles Lager mit Regalen (Füllstand, Ausbau mit Preis).
+    name: 'lager-ausbau',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      sim.state.wallet.clean = 20000;
+      sim.dispatch({ type: 'goods.upgradeWarehouse', payload: { warehouseId: 'ehrenfeld', kind: 'shelves' } });
+      sim.dispatch({ type: 'goods.upgradeWarehouse', payload: { warehouseId: 'ehrenfeld', kind: 'vault' } });
+      const lots = sim.state.modules.goods.stock.ehrenfeld;
+      lots.push({ id: 99001, productId: 'hash', amount: 26000, quality: 0.7, cut: 0, unitCost: 2.8 });
+      window.koeln.runtime.api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' });
+    })()`,
+  },
   { name: 'marktdetail', js: "window.koeln.runtime.api.openPanel('market.overview', {})" },
   {
     name: 'akte',

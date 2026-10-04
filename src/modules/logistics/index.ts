@@ -60,13 +60,26 @@ import {
   nearestWarehouse,
   productName,
   store,
+  storeFitting,
   type TakeResult,
   take,
+  unitWeight,
+  type Warehouse,
   warehouseCity,
+  warehouseFree,
 } from '../goods';
 import { addHeat, arrestStaff, getHeat, recordConfiscation } from '../police';
 import { type RoadRoute, roadRoute, travelMinutes } from '../roads';
-import { addXp, assign, getStaff, getStaffMember, riskFactor, roleName, type StaffMember } from '../staff';
+import {
+  addXp,
+  assign,
+  getStaff,
+  getStaffMember,
+  riskFactor,
+  roleName,
+  type StaffMember,
+  staffContact,
+} from '../staff';
 import { UNLOADING_PORT } from '../suppliers';
 import { allVeedel, veedelAt, veedelName } from '../veedel';
 import {
@@ -90,6 +103,7 @@ import {
   SEIZE_ARREST_CHANCE,
   SEIZE_HEAT,
   TRANSFER_LOAD_MINUTES,
+  UNLOAD_RETRY_MINUTES,
   XP_PER_TRIP,
 } from './config';
 
@@ -171,13 +185,18 @@ export interface Trip {
   arrivesAt: number;
   /** Wann es unterwegs eine Kontrolle gibt (ausgewürfelt beim Start), sonst null. */
   checkAt: number | null;
-  /** 'stopped': Kontrolle läuft (Konfrontation), die Fahrt steht. */
-  status: 'enRoute' | 'stopped';
+  /**
+   * 'stopped': Kontrolle läuft (Konfrontation), die Fahrt steht. 'waiting': angekommen, aber das Lager ist voll; der
+   * Rest (items) wartet beim Fahrer, bis Platz ist oder die Fahrt umgeleitet wird (Auftrag 33).
+   */
+  status: 'enRoute' | 'stopped' | 'waiting';
   stoppedAt: number | null;
   encounterId: number | null;
   /** Fahrt einer Route: welche, und ob Hin- oder Rückfahrt. */
   routeId?: number;
   leg?: 'out' | 'back';
+  /** Schon abgeladene Einheiten, solange die Fahrt am vollen Lager wartet (Auftrag 33). */
+  unloaded?: number;
 }
 
 export interface TripLogEntry {
@@ -250,6 +269,8 @@ declare module '../../core' {
     'logistics.removeRoute': { routeId: number };
     /** Route sofort fahren, außerhalb des Fahrplans. */
     'logistics.runRouteNow': { routeId: number };
+    /** Fahrt, die am vollen Lager wartet, in ein anderes eigenes Lager der Stadt umleiten (Auftrag 33). */
+    'logistics.redirect': { tripId: number; toId: string };
   }
   interface GameEvents {
     'logistics.berthBought': { cost: number; cityId?: string };
@@ -266,6 +287,8 @@ declare module '../../core' {
     'transport.seized': { tripId: number; amount: number; arrested: boolean };
     /** Fahrer ausgefallen (gekündigt, verletzt …), die Ladung ist weg. */
     'transport.lost': { tripId: number; amount: number };
+    /** Angekommen, aber das Ziel-Lager ist voll: rest Einheiten warten beim Fahrer (Auftrag 33). */
+    'transport.waiting': { tripId: number; toId: string; rest: number };
     /** Eine Route ist losgefahren (Hinfahrt). */
     'route.departed': { routeId: number; tripId: number; amount: number; interCity: boolean };
     /** Eine Route ist ausgefallen (kein Fahrer, keine Ware …). */
@@ -349,9 +372,27 @@ export function tripAmount(trip: Pick<Trip, 'items'>): number {
   return trip.items.reduce((sum, i) => sum + i.amount, 0);
 }
 
-/** Bist du selbst gerade unterwegs (Fahrt mit dem Transporter oder zwischen den Städten, Auftrag 30)? */
+/**
+ * Bist du selbst gerade unterwegs (Fahrt mit dem Transporter oder zwischen den Städten, Auftrag 30)? Wartet deine Fahrt
+ * am vollen Lager, steht der Wagen dort im Hof und du bist frei.
+ */
 export function isPlayerOnTheRoad(state: GameState): boolean {
-  return isPlayerTraveling(state) || getTrips(state).some((t) => t.driverId === null);
+  return isPlayerTraveling(state) || getTrips(state).some((t) => t.driverId === null && t.status !== 'waiting');
+}
+
+/** Gramm, die gerade zu einem Lager unterwegs sind oder dort auf Platz warten (Fahrten aller Art). */
+export function inboundWeight(state: GameState, warehouseId: string): number {
+  let grams = 0;
+  for (const trip of getTrips(state)) {
+    if (trip.toId !== warehouseId) continue;
+    for (const item of trip.items) grams += item.amount * unitWeight(item.productId);
+  }
+  return grams;
+}
+
+/** Platz in einem Lager in Gramm für eine neue Fahrt: frei minus das, was schon dorthin unterwegs ist. */
+export function roomFor(state: GameState, warehouseId: string): number {
+  return Math.max(0, warehouseFree(state, warehouseId) - inboundWeight(state, warehouseId));
 }
 
 /** Fahrer ohne Einsatz in einer Stadt (Standard: die aktive), die sofort losfahren können. */
@@ -652,6 +693,37 @@ function wishedWarehouse(state: GameState, cargo: readonly PortCargo[]) {
   return wanted.size === 1 && id ? getWarehouse(state, id) : undefined;
 }
 
+/**
+ * Ziel einer Abholung ohne Angabe: das bestellte Lager bzw. das nächste am Hafen; hat das keinen Platz mehr, das
+ * nächste Lager der Stadt mit Platz (Auftrag 33).
+ */
+function pickupTarget(state: GameState, cargo: readonly PortCargo[], cityId: string): Warehouse | undefined {
+  const port = portPlace(cityId);
+  const first = wishedWarehouse(state, cargo) ?? nearestWarehouse(state, port);
+  if (!first || roomFor(state, first.id) > 0) return first;
+  const withRoom = getWarehouses(state, cityId).filter((w) => roomFor(state, w.id) > 0);
+  return withRoom.sort((a, b) => travelMinutes(port, a, 300) - travelMinutes(port, b, 300))[0] ?? first;
+}
+
+/**
+ * Ware vom Kai aufteilen: was in grams Gramm passt, kommt mit (älteste zuerst, ein Container auch zum Teil), der Rest
+ * bleibt am Kai stehen (Auftrag 33).
+ */
+function loadFromQuay(s: LogisticsState, cargo: readonly PortCargo[], grams: number): TripItem[] {
+  const items: TripItem[] = [];
+  let room = grams;
+  for (const c of cargo) {
+    const per = unitWeight(c.productId);
+    const n = Math.min(c.amount, Math.floor(room / per));
+    if (n <= 0) continue;
+    room -= n * per;
+    items.push({ productId: c.productId, amount: n, quality: c.quality, cut: 0, unitCost: c.unitCost });
+    if (n === c.amount) s.cargo = s.cargo.filter((x) => x.id !== c.id);
+    else c.amount -= n;
+  }
+  return items;
+}
+
 function pickup(
   ctx: Ctx,
   payload: { by: 'player' | 'driver'; driverId?: string; warehouseId?: string; cargoIds?: number[] },
@@ -666,9 +738,7 @@ function pickup(
   const cargo = chosen.filter((c) => c.cityId === cityId);
   if (cargo.length === 0) return { ok: false, reason: 'Am Kai wartet nichts auf dich.' };
   const port = portPlace(cityId);
-  const warehouse = payload.warehouseId
-    ? getWarehouse(state, payload.warehouseId)
-    : (wishedWarehouse(state, cargo) ?? nearestWarehouse(state, port));
+  const warehouse = payload.warehouseId ? getWarehouse(state, payload.warehouseId) : pickupTarget(state, cargo, cityId);
   if (!warehouse) {
     return {
       ok: false,
@@ -678,6 +748,13 @@ function pickup(
     };
   }
   if (warehouseCity(warehouse.id) !== cityId) return { ok: false, reason: 'Das Lager liegt in einer anderen Stadt.' };
+  const room = roomFor(state, warehouse.id);
+  if (room < Math.min(...cargo.map((c) => unitWeight(c.productId)))) {
+    return {
+      ok: false,
+      reason: `Im ${warehouse.name} ist kein Platz. Bau Regale ein, lager um oder wähl ein anderes Lager.`,
+    };
+  }
   let driverId: string | null = null;
   if (payload.by === 'player') {
     const busy = playerBusy(state, cityId);
@@ -690,20 +767,15 @@ function pickup(
   const speed = speedOf(state, driverId);
   const approach = travelMinutes(warehouse, port, speed);
   const delivery = travelMinutes(port, warehouse, speed);
-  const ids = new Set(cargo.map((c) => c.id));
-  s.cargo = s.cargo.filter((c) => !ids.has(c.id));
+  const total = cargo.reduce((sum, c) => sum + c.amount, 0);
+  const items = loadFromQuay(s, cargo, room);
+  const left = total - items.reduce((sum, i) => sum + i.amount, 0);
   const trip = startTrip(ctx, {
     kind: 'pickup',
     driverId,
     fromId: portPlaceId(cityId),
     toId: warehouse.id,
-    items: cargo.map((c) => ({
-      productId: c.productId,
-      amount: c.amount,
-      quality: c.quality,
-      cut: 0,
-      unitCost: c.unitCost,
-    })),
+    items,
     startedAt: ctx.now,
     loadedAt: ctx.now + approach + LOAD_MINUTES,
     arrivesAt: ctx.now + approach + LOAD_MINUTES + delivery,
@@ -712,9 +784,10 @@ function pickup(
   journal.add(
     ctx,
     `${who} ${driverId ? 'holt' : 'holst'} ${itemsText(trip.items)} am ${portName(cityId)} ab, ` +
-      `im ${warehouse.name} in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}.`,
+      `im ${warehouse.name} in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}.` +
+      (left > 0 ? ` Der Rest passt nicht ins Lager und bleibt am Kai.` : ''),
   );
-  return { ok: true, data: { tripId: trip.id, arrivesAt: trip.arrivesAt } };
+  return { ok: true, data: { tripId: trip.id, arrivesAt: trip.arrivesAt, left } };
 }
 
 function transfer(
@@ -749,18 +822,26 @@ function transfer(
     if (typeof driver === 'string') return { ok: false, reason: driver };
     driverId = driver.id;
   }
-  // Ware raus aus dem Startlager, pro Produkt als ein Posten.
+  // Ware raus aus dem Startlager, pro Produkt als ein Posten, so viel ins Ziel-Lager passt (Auftrag 33).
+  let room = roomFor(state, to.id);
   const products = [...new Set(lots.map((l) => l.productId))];
   const items: TripItem[] = [];
   for (const productId of products) {
     const have = lots.filter((l) => l.productId === productId).reduce((sum, l) => sum + l.amount, 0);
-    const want = payload.productId && payload.amount !== undefined ? Math.min(have, Math.round(payload.amount)) : have;
+    const asked = payload.productId && payload.amount !== undefined ? Math.min(have, Math.round(payload.amount)) : have;
+    const want = Math.min(asked, Math.floor(room / unitWeight(productId)));
     if (want <= 0) continue;
+    room -= want * unitWeight(productId);
     const got: TakeResult = take(ctx, { productId, amount: want, warehouseId: from.id, partial: true });
     if (got.taken > 0)
       items.push({ productId, amount: got.taken, quality: got.quality, cut: got.cut, unitCost: got.unitCost });
   }
-  if (items.length === 0) return { ok: false, reason: `Im ${from.name} liegt davon nichts.` };
+  if (items.length === 0) {
+    return {
+      ok: false,
+      reason: roomFor(state, to.id) <= 0 ? `Im ${to.name} ist kein Platz mehr.` : `Im ${from.name} liegt davon nichts.`,
+    };
+  }
   const speed = speedOf(state, driverId);
   const trip = startTrip(ctx, {
     kind: 'transfer',
@@ -781,14 +862,14 @@ function transfer(
   return { ok: true, data: { tripId: trip.id, arrivesAt: trip.arrivesAt } };
 }
 
-function logTrip(ctx: Ctx, trip: Trip, result: TripLogEntry['result']): void {
+function logTrip(ctx: Ctx, trip: Trip, result: TripLogEntry['result'], amount = tripAmount(trip)): void {
   const s = ctx.state.modules.logistics;
   s.log.unshift({
     id: trip.id,
     kind: trip.kind,
     driverId: trip.driverId,
     toId: trip.toId,
-    amount: tripAmount(trip),
+    amount,
     result,
     at: ctx.now,
     ...(trip.routeId !== undefined ? { routeId: trip.routeId } : {}),
@@ -808,25 +889,46 @@ function removeTrip(ctx: Ctx, trip: Trip): void {
   }
 }
 
+/** Ware einer Fahrt ins Lager bringen, so weit Platz ist. Gibt zurück, was nicht hineinpasste. */
+function unload(ctx: Ctx, items: readonly TripItem[], warehouseId: string | undefined): TripItem[] {
+  const rest: TripItem[] = [];
+  for (const item of items) {
+    const result = storeFitting(ctx, {
+      productId: item.productId,
+      amount: item.amount,
+      warehouseId,
+      quality: item.quality,
+      cut: item.cut,
+      unitCost: item.unitCost,
+    });
+    if (result.rest > 0) rest.push({ ...item, amount: result.rest });
+  }
+  return rest;
+}
+
 function arrive(ctx: Ctx, trip: Trip): void {
   const warehouse = getWarehouse(ctx.state, trip.toId);
   // Wurde das Ziel-Lager inzwischen aufgegeben, landet die Ware im nächsten eigenen Lager.
   const target =
     warehouse ?? nearestWarehouse(ctx.state, placeOf(ctx.state, trip.fromId) ?? portPlace(tripCity(ctx.state, trip)));
-  for (const item of trip.items) {
-    store(ctx, {
-      productId: item.productId,
-      amount: item.amount,
-      warehouseId: target?.id,
-      quality: item.quality,
-      cut: item.cut,
-      unitCost: item.unitCost,
-    });
+  const before = tripAmount(trip);
+  const rest = unload(ctx, trip.items, target?.id);
+  if (rest.length > 0 && target) {
+    // Lager voll (Auftrag 33): Der Rest wartet beim Fahrer, bis Platz ist oder du die Fahrt umleitest.
+    const waitedBefore = trip.status === 'waiting';
+    trip.unloaded = (trip.unloaded ?? 0) + before - tripAmount({ items: rest });
+    trip.items = rest;
+    trip.toId = target.id;
+    trip.status = 'waiting';
+    trip.checkAt = null;
+    if (!waitedBefore) startWaiting(ctx, trip, target);
+    return;
   }
+  const delivered = (trip.unloaded ?? 0) + before;
   removeTrip(ctx, trip);
   const s = ctx.state.modules.logistics;
   s.stats.trips += 1;
-  logTrip(ctx, trip, 'done');
+  logTrip(ctx, trip, 'done', delivered);
   if (trip.driverId) addXp(ctx, trip.driverId, XP_PER_TRIP);
   if (trip.items.length > 0)
     journal.add(ctx, `${itemsText(trip.items)} im ${target?.name ?? 'Lager'} angekommen.`, 'good');
@@ -834,10 +936,77 @@ function arrive(ctx: Ctx, trip: Trip): void {
     tripId: trip.id,
     kind: trip.kind,
     toId: target?.id ?? trip.toId,
-    amount: tripAmount(trip),
+    amount: delivered,
     ...(isInterCityTrip(ctx.state, trip) ? { interCity: true } : {}),
   });
   if (trip.kind === 'route') routeArrived(ctx, trip, target?.id ?? trip.toId);
+}
+
+/** Andere Lager der Stadt mit Platz für diese Ladung, das nächste zuerst (höchstens zwei, für die Nachricht). */
+function redirectTargets(state: GameState, trip: Trip, here: Warehouse): Warehouse[] {
+  const grams = trip.items.reduce((sum, i) => sum + i.amount * unitWeight(i.productId), 0);
+  return getWarehouses(state, here.cityId)
+    .filter((w) => w.id !== here.id && roomFor(state, w.id) >= Math.min(grams, 1))
+    .sort((a, b) => travelMinutes(here, a, 300) - travelMinutes(here, b, 300))
+    .slice(0, 2);
+}
+
+/** Die Fahrt steht am vollen Lager: Journal und eine Nachricht vom Fahrer mit Umleiten als Antwort. */
+function startWaiting(ctx: Ctx, trip: Trip, here: Warehouse): void {
+  const rest = tripAmount(trip);
+  const goods = itemsText(trip.items);
+  const targets = redirectTargets(ctx.state, trip, here);
+  journal.add(
+    ctx,
+    `${here.name} ist voll: ${goods} ${trip.driverId ? 'warten beim Fahrer' : 'stehen in deinem Wagen im Hof'}, ` +
+      'bis Platz ist.',
+    'bad',
+  );
+  const driver = trip.driverId ? getStaffMember(ctx.state, trip.driverId) : undefined;
+  if (driver) {
+    messages.send(ctx, {
+      contact: staffContact(driver),
+      text:
+        `Bin am ${here.name}, aber da geht nix mehr rein. Ich hab noch ${goods} im Wagen. ` +
+        (targets.length > 0 ? 'Soll ich woanders hin?' : 'Ich wart, bis Platz ist.'),
+      options: [
+        ...targets.map((w) => ({
+          id: `to-${w.id}`,
+          label: `Ins ${w.name}`,
+          reply: `Fahr ins ${w.name}.`,
+          command: { type: 'logistics.redirect' as const, payload: { tripId: trip.id, toId: w.id } },
+        })),
+        { id: 'wait', label: 'Warten', reply: 'Warte, ich mach Platz.' },
+      ],
+      routine: true,
+    });
+  }
+  ctx.emit('transport.waiting', { tripId: trip.id, toId: here.id, rest });
+}
+
+/** Wartende Fahrt umleiten: mit dem Rest ins andere Lager fahren (Kontrolle wie bei jeder Fahrt mit Ware). */
+function redirect(ctx: Ctx, payload: { tripId: number; toId: string }): CommandResult {
+  const trip = ctx.state.modules.logistics.trips.find((t) => t.id === payload.tripId);
+  if (trip?.status !== 'waiting') return { ok: false, reason: 'Diese Fahrt wartet nicht mehr.' };
+  const here = getWarehouse(ctx.state, trip.toId);
+  const to = getWarehouse(ctx.state, payload.toId);
+  if (!to) return { ok: false, reason: 'Dieses Lager gehört dir nicht.' };
+  if (to.id === trip.toId) return { ok: false, reason: 'Da steht die Fahrt schon.' };
+  if (here && here.cityId !== to.cityId) return { ok: false, reason: 'Das Lager liegt in einer anderen Stadt.' };
+  if (roomFor(ctx.state, to.id) <= 0) return { ok: false, reason: `Im ${to.name} ist auch kein Platz.` };
+  const from = here ?? to;
+  trip.fromId = from.id;
+  trip.toId = to.id;
+  trip.status = 'enRoute';
+  trip.startedAt = ctx.now;
+  trip.loadedAt = ctx.now;
+  trip.arrivesAt = ctx.now + travelMinutes(from, to, speedOf(ctx.state, trip.driverId));
+  rollCheck(ctx, trip);
+  journal.add(
+    ctx,
+    `${driverLabel(ctx.state, trip.driverId)} ${trip.driverId ? 'fährt' : 'fährst'} mit ${itemsText(trip.items)} ins ${to.name}.`,
+  );
+  return { ok: true, data: { tripId: trip.id, arrivesAt: trip.arrivesAt } };
 }
 
 /** Verkehrskontrolle unterwegs: Die Fahrt hält an, die Konfrontation entscheidet. */
@@ -945,6 +1114,13 @@ function onCheckResolved(ctx: Ctx, ref: string | undefined, outcome: string): vo
 function driverGone(ctx: Ctx, staffId: string): void {
   for (const trip of [...ctx.state.modules.logistics.trips]) {
     if (trip.driverId !== staffId || trip.status === 'stopped') continue;
+    if (trip.status === 'waiting') {
+      // Der Wagen steht schon im Hof: Die Ware wird abgeladen, auch wenn das Lager dann übervoll ist.
+      for (const item of trip.items) store(ctx, { ...item, warehouseId: trip.toId });
+      removeTrip(ctx, trip);
+      logTrip(ctx, trip, 'done', (trip.unloaded ?? 0) + tripAmount(trip));
+      continue;
+    }
     const amount = tripAmount(trip);
     removeTrip(ctx, trip);
     logTrip(ctx, trip, 'lost');
@@ -1031,6 +1207,10 @@ function tick(ctx: Ctx): void {
     if (trip.checkAt !== null && trip.checkAt <= ctx.now) stopForCheck(ctx, trip);
     else if (trip.arrivesAt <= ctx.now) arrive(ctx, trip);
   }
+  // Fahrten am vollen Lager versuchen es regelmäßig wieder (Auftrag 33).
+  if (ctx.now % UNLOAD_RETRY_MINUTES === 0) {
+    for (const trip of [...s.trips]) if (trip.status === 'waiting') arrive(ctx, trip);
+  }
   if (ctx.now % 60 === 0) customs(ctx);
   routesTick(ctx);
   if (ctx.now % MINUTES_PER_DAY === 0) settleRestock(ctx);
@@ -1062,6 +1242,7 @@ export default defineModule({
     'logistics.updateRoute': (ctx, { routeId, ...patch }) => saveRoute(ctx, routeId, patch),
     'logistics.removeRoute': (ctx, { routeId }) => removeRoute(ctx, routeId),
     'logistics.runRouteNow': (ctx, { routeId }) => departRoute(ctx, routeId, 'now'),
+    'logistics.redirect': (ctx, payload) => redirect(ctx, payload),
   },
   on: {
     'encounter.resolved': (ctx, { request, outcome }) => {

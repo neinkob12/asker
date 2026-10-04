@@ -26,7 +26,7 @@ import { travelMinutes } from '../roads';
 import { getStaffMember, isEmployed, moveToCity, STATUS_NAMES } from '../staff';
 import { availablePackages, getSuppliers, isBlocked, packagePrice } from '../suppliers';
 import { INTERCITY_CAPACITY, ROUTE_LIMIT, ROUTE_LOAD_MINUTES } from './config';
-import { getTrips, itemsText, speedOf, startTrip, type Trip, type TripItem, tripAmount } from './index';
+import { getTrips, itemsText, roomFor, speedOf, startTrip, type Trip, type TripItem, tripAmount } from './index';
 
 /** Feste Menge einer Ware pro Fahrt. */
 export interface RouteItem {
@@ -141,8 +141,8 @@ function inTransitTo(state: GameState, warehouseId: string, productId: string): 
 }
 
 /**
- * Was eine Fahrt jetzt laden würde: feste Mengen und Auffüllen, begrenzt durch den Bestand im Startlager und die
- * Kapazität. wanted ist, was die Route eigentlich wollte (für "nur x von y").
+ * Was eine Fahrt jetzt laden würde: feste Mengen und Auffüllen, begrenzt durch den Bestand im Startlager, die Ladung
+ * des Wagens und den Platz im Ziellager (Auftrag 33). wanted ist, was die Route eigentlich wollte (für "nur x von y").
  */
 export function planLoad(
   state: GameState,
@@ -160,13 +160,14 @@ export function planLoad(
   }
   const load: RouteItem[] = [];
   const missing: string[] = [];
+  const limit = Math.min(INTERCITY_CAPACITY, roomFor(state, toId));
   let weight = 0;
   let wanted = 0;
   for (const [productId, amount] of want) {
     wanted += amount;
     const have = getStock(state, { warehouseId: fromId, productId });
     const per = unitWeight(productId);
-    const room = Math.floor((INTERCITY_CAPACITY - weight) / per);
+    const room = Math.floor((limit - weight) / per);
     const take = Math.max(0, Math.min(amount, have, room));
     if (have < amount) missing.push(productName(productId));
     if (take <= 0) continue;
@@ -365,7 +366,11 @@ export function departRoute(ctx: Ctx, routeId: number, why: 'schedule' | 'now'):
   const needsTour = route.roundTrip && route.returnItems.length > 0;
   if (plan.load.length === 0 && !needsTour) {
     const reason =
-      plan.wanted === 0 ? `Im ${to.name} liegt genug.` : `Im ${from.name} fehlt die Ware (${plan.missing.join(', ')}).`;
+      plan.wanted === 0
+        ? `Im ${to.name} liegt genug.`
+        : plan.missing.length === 0
+          ? `Im ${to.name} ist kein Platz.`
+          : `Im ${from.name} fehlt die Ware (${plan.missing.join(', ')}).`;
     return skip(ctx, route, reason, why);
   }
   const driverId = route.driverId as string;

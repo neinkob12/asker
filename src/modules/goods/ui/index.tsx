@@ -3,9 +3,11 @@
 // Lager-Marker auf der Karte. Seit Auftrag 26 ist die Lager-Seite der eine Ort für alles rund ums Lager.
 
 import { memo } from 'preact/compat';
-import { formatEuro, formatPercent } from '../../../core';
+import { useState } from 'preact/hooks';
+import { formatAmount, formatEuro, formatPercent, type GameState } from '../../../core';
 import { addHtmlMarker, el, registerMapLayer } from '../../../map';
 import {
+  ActionSheet,
   Button,
   type CategoryColor,
   Chip,
@@ -18,6 +20,7 @@ import {
   List,
   ListItem,
   memoState,
+  ProgressBar,
   registerHudItem,
   registerPanel,
   registerPhoneApp,
@@ -39,9 +42,18 @@ import {
   getWarehouse,
   getWarehouses,
   MAX_CUT,
+  NEARLY_FULL,
   productName,
   qualityTier,
   stockSummary,
+  UPGRADE_KINDS,
+  upgradeCost,
+  upgradeLevel,
+  WAREHOUSE_UPGRADES,
+  type WarehouseUpgradeKind,
+  warehouseCapacity,
+  warehouseLoad,
+  warehouseModifiers,
   warehouseSites,
 } from '../index';
 import './goods.css';
@@ -168,6 +180,135 @@ function StockFlyout() {
   );
 }
 
+/** Füllstand eines Lagers (0–1) und Text "12,4 kg von 20 kg". */
+function fillOf(state: GameState, warehouseId: string): { share: number; text: string } {
+  const load = warehouseLoad(state, warehouseId);
+  const capacity = warehouseCapacity(state, warehouseId);
+  return {
+    share: capacity > 0 ? load / capacity : 1,
+    text: `${formatAmount(Math.round(load))} von ${formatAmount(capacity)}`,
+  };
+}
+
+/** Füllstand als Chip für Listen: "62 % voll", ab NEARLY_FULL orange, voll rot. */
+function fillChip(share: number) {
+  return {
+    label: share >= 1 ? 'voll' : `${formatPercent(share)} voll`,
+    icon: 'boxes',
+    color: (share >= 1 ? 'danger' : share >= NEARLY_FULL ? 'warn' : 'goods') as CategoryColor,
+  };
+}
+
+/** Wirkung einer Ausbau-Stufe in Worten: "×1,5 Platz", "35 % weniger Verlust". */
+function upgradeEffect(kind: WarehouseUpgradeKind, value: number): string {
+  if (kind === 'shelves') return `×${String(value).replace('.', ',')} Platz`;
+  return `${formatPercent(1 - value)} weniger ${kind === 'vault' ? 'Verlust' : 'gefunden'}`;
+}
+
+/** Platz im Lager: Balken mit Füllstand. */
+function CapacityGroup(props: { warehouseId: string }) {
+  const { state } = useGame();
+  const fill = fillOf(state, props.warehouseId);
+  const tone = fill.share >= 1 ? 'bad' : fill.share >= NEARLY_FULL ? 'warn' : 'accent';
+  return (
+    <Group
+      title="Platz"
+      icon="boxes"
+      color="goods"
+      value={fill.text}
+      note={
+        fill.share >= 1
+          ? 'Voll: Lieferungen und Fahrten warten, bis Platz ist.'
+          : fill.share >= NEARLY_FULL
+            ? 'Fast voll. Regale schaffen Platz.'
+            : undefined
+      }
+    >
+      <div class="goods-capacity">
+        <ProgressBar value={fill.share} tone={tone} label="Füllstand" />
+      </div>
+    </Group>
+  );
+}
+
+/** Ausbau: Regale, Tresor, Tarnung mit Stufe und Preis der nächsten Stufe; Kauf mit Rückfrage. */
+function UpgradeGroup(props: { warehouseId: string }) {
+  const { state, dispatch } = useGame();
+  const [asked, setAsked] = useState<WarehouseUpgradeKind | null>(null);
+  const mods = warehouseModifiers(state, props.warehouseId);
+  const name = getWarehouse(state, props.warehouseId)?.name ?? 'Lager';
+  const askedCost = asked ? upgradeCost(state, props.warehouseId, asked) : null;
+  const askedDef = asked ? WAREHOUSE_UPGRADES[asked] : null;
+  const askedNext = asked && askedDef ? askedDef.levels[upgradeLevel(state, props.warehouseId, asked)] : undefined;
+  return (
+    <Group
+      title="Ausbau"
+      icon="trendUp"
+      color="money"
+      more="Ausbau ist legal und kostet sauberes Geld. Der Tresor schützt bei Einbruch und Überfall, die Tarnung bei Razzien."
+    >
+      <List>
+        {UPGRADE_KINDS.map((kind) => {
+          const def = WAREHOUSE_UPGRADES[kind];
+          const level = mods.levels[kind];
+          const cost = upgradeCost(state, props.warehouseId, kind);
+          const current = level > 0 ? def.levels[level - 1] : undefined;
+          return (
+            <ListItem
+              key={kind}
+              aside={
+                cost === null ? (
+                  <Chip color="money" icon="checkCircle">
+                    fertig
+                  </Chip>
+                ) : (
+                  <Button small disabled={state.wallet.clean < cost} onClick={() => setAsked(kind)}>
+                    {formatEuro(cost)}
+                  </Button>
+                )
+              }
+            >
+              <ItemContent
+                icon={def.icon}
+                color="money"
+                title={def.name}
+                meta={def.effect}
+                tags={[
+                  { label: `Stufe ${level}/${def.levels.length}`, icon: 'layers' },
+                  current && { label: upgradeEffect(kind, current.value), icon: 'checkCircle', color: 'money' },
+                ]}
+              />
+            </ListItem>
+          );
+        })}
+      </List>
+      <ActionSheet
+        open={asked !== null}
+        onClose={() => setAsked(null)}
+        title={askedDef ? `${askedDef.name} für ${name}?` : ''}
+        message={
+          askedDef && askedNext && askedCost !== null
+            ? `Stufe ${upgradeLevel(state, props.warehouseId, asked as WarehouseUpgradeKind) + 1}: ${upgradeEffect(asked as WarehouseUpgradeKind, askedNext.value)}. Kostet ${formatEuro(askedCost)} sauberes Geld.`
+            : undefined
+        }
+        actions={[
+          {
+            label: askedCost !== null ? `Ausbauen (${formatEuro(askedCost)})` : 'Ausbauen',
+            icon: 'trendUp',
+            disabled: askedCost === null || state.wallet.clean < askedCost,
+            onSelect: () => {
+              if (asked) {
+                dispatch({ type: 'goods.upgradeWarehouse', payload: { warehouseId: props.warehouseId, kind: asked } });
+              }
+              setAsked(null);
+            },
+          },
+        ]}
+      />
+    </Group>
+  );
+}
+
 /** Alle eigenen Lager als Zeilen; das offene ist markiert, ein Tipp wechselt dorthin (ersetzt die Seite). */
 function WarehouseList(props: { warehouseId: string }) {
   const { state } = useGame();
@@ -192,7 +333,13 @@ function WarehouseList(props: { warehouseId: string }) {
               onClick={() => ui.openPanel('goods.warehouse', { warehouseId: w.id })}
               value={w.id === props.warehouseId ? 'offen' : undefined}
             >
-              <ItemContent icon="warehouse" color="goods" title={w.name} meta={meta} />
+              <ItemContent
+                icon="warehouse"
+                color="goods"
+                title={w.name}
+                meta={meta}
+                tags={[fillChip(fillOf(state, w.id).share)]}
+              />
             </ListItem>
           );
         })}
@@ -216,6 +363,7 @@ function WarehousePanel(props: { warehouseId: string }) {
   }
   return (
     <div class="goods-panel">
+      <CapacityGroup warehouseId={props.warehouseId} />
       <Group
         title="Bestand"
         icon="boxes"
@@ -287,6 +435,7 @@ function WarehousePanel(props: { warehouseId: string }) {
           </List>
         )}
       </Group>
+      <UpgradeGroup warehouseId={props.warehouseId} />
       <WarehouseList warehouseId={props.warehouseId} />
       <Slot name="goods.warehouse" props={{ warehouseId: props.warehouseId }} />
     </div>
@@ -316,7 +465,13 @@ function WarehouseApp() {
                       .join(', ');
               return (
                 <ListItem key={w.id} onClick={() => ui.openPanel('goods.warehouse', { warehouseId: w.id })}>
-                  <ItemContent icon="warehouse" color="goods" title={w.name} meta={meta} />
+                  <ItemContent
+                    icon="warehouse"
+                    color="goods"
+                    title={w.name}
+                    meta={meta}
+                    tags={[fillChip(fillOf(state, w.id).share)]}
+                  />
                 </ListItem>
               );
             })}
@@ -341,7 +496,13 @@ function WarehouseApp() {
                   </Button>
                 }
               >
-                <ItemContent icon="building" color="money" title={w.name} meta={w.description} />
+                <ItemContent
+                  icon="building"
+                  color="money"
+                  title={w.name}
+                  meta={w.description}
+                  tags={[{ label: `Platz ${formatAmount(w.capacity)}`, icon: 'boxes', color: 'goods' }]}
+                />
               </ListItem>
             ))}
           </List>

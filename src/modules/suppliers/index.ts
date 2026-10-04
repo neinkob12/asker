@@ -50,6 +50,9 @@ import {
   nearestWarehouse,
   productName,
   store,
+  storeFitting,
+  unitWeight,
+  warehouseFree,
 } from '../goods';
 import { hasBerth, portName, receiveCargo } from '../logistics';
 import { getReputation } from '../reputation';
@@ -570,8 +573,14 @@ function order(
   if (toPort && !hasBerth(ctx.state, cityId)) {
     return { ok: false, reason: `Ohne eigenen Liegeplatz im ${portName(cityId)} kann kein Schiff für dich anlegen.` };
   }
-  const target = toPort ? null : (warehouse?.id ?? defaultWarehouse(ctx.state, cityId));
+  const weight = pkg.amount * unitWeight(pkg.productId);
+  // Der Kurier lädt im Lager ab: Es muss Platz haben (Auftrag 33). Ohne Angabe ein Lager der Stadt, in das es passt.
+  const target = toPort ? null : (warehouse?.id ?? defaultWarehouse(ctx.state, cityId, weight));
   if (!toPort && !target) return { ok: false, reason: `In ${cityName(cityId)} hast du noch kein Lager.` };
+  if (target && courierRoom(ctx.state, target) < weight) {
+    const name = getWarehouse(ctx.state, target)?.name ?? 'Lager';
+    return { ok: false, reason: `Im ${name} ist kein Platz mehr für ${pkg.label}. Bau Regale ein oder lager um.` };
+  }
   const rel = relationFor(ctx, supplierId);
   if ((pkg.minTrust ?? 0) > rel.trust) {
     return { ok: false, reason: `Dafür vertraut dir ${supplier.contactName} noch nicht genug.` };
@@ -655,12 +664,58 @@ function order(
   return { ok: true, data: { shipmentId: shipment.id } };
 }
 
-/** Lager, in das Lieferungen ohne Angabe gehen: in Köln das Standardlager, sonst das erste eigene der Stadt. */
-function defaultWarehouse(state: GameState, cityId: string): string | null {
+/**
+ * Lager, in das Lieferungen ohne Angabe gehen: in Köln das Standardlager, sonst das erste eigene der Stadt. Passt die
+ * Ware (weight Gramm) dort nicht mehr hinein, das erste Lager der Stadt, in das sie passt.
+ */
+function defaultWarehouse(state: GameState, cityId: string, weight = 0): string | null {
   const standard = getWarehouse(state, DEFAULT_WAREHOUSE);
-  if (standard && standard.cityId === cityId) return standard.id;
-  return getWarehouses(state, cityId)[0]?.id ?? null;
+  const first = standard && standard.cityId === cityId ? standard.id : (getWarehouses(state, cityId)[0]?.id ?? null);
+  if (!first || courierRoom(state, first) >= weight) return first;
+  return getWarehouses(state, cityId).find((w) => courierRoom(state, w.id) >= weight)?.id ?? first;
 }
+
+/** Platz in einem Lager in Gramm, abzüglich der Kurier-Lieferungen, die schon dorthin unterwegs sind. */
+function courierRoom(state: GameState, warehouseId: string): number {
+  let inbound = 0;
+  for (const s of state.modules.suppliers.shipments) {
+    if (!s.toPort && s.warehouseId === warehouseId) inbound += s.amount * unitWeight(s.productId);
+  }
+  return warehouseFree(state, warehouseId) - inbound;
+}
+
+/**
+ * Kurier-Ware abladen (Auftrag 33): erst ins Ziel-Lager, was dort nicht passt, in die anderen Lager der Stadt (das
+ * nächste zuerst). Ist alles voll, stellt der Kurier den Rest trotzdem ab (das Lager ist dann überfüllt). Gibt das Lager
+ * zurück, in das das meiste ging.
+ */
+function unloadCourier(ctx: Ctx, s: Shipment, first: string, cityId: string): string {
+  const item = { productId: s.productId, quality: s.quality, unitCost: s.price / s.amount };
+  let rest = storeFitting(ctx, { ...item, amount: s.amount, warehouseId: first }).rest;
+  if (rest <= 0) return first;
+  const site = getWarehouse(ctx.state, first);
+  const others = getWarehouses(ctx.state, cityId)
+    .filter((w) => w.id !== first)
+    .sort((a, b) => (site ? distance(site, a) - distance(site, b) : 0));
+  for (const w of others) {
+    if (rest <= 0) break;
+    rest = storeFitting(ctx, { ...item, amount: rest, warehouseId: w.id }).rest;
+  }
+  if (rest > 0) {
+    store(ctx, { ...item, amount: rest, warehouseId: first });
+    journal.add(
+      ctx,
+      `Alle Lager sind voll: ${formatProductAmount(s.productId, rest)} ${productName(s.productId)} stehen zusätzlich im ` +
+        `${site?.name ?? 'Lager'}. Bau Regale ein oder kauf ein Lager dazu.`,
+      'bad',
+    );
+  }
+  return first;
+}
+
+/** Abstand zweier Orte in Grad (reicht zum Sortieren innerhalb einer Stadt). */
+const distance = (a: { lng: number; lat: number }, b: { lng: number; lat: number }) =>
+  Math.hypot((a.lng - b.lng) * 0.63, a.lat - b.lat);
 
 /**
  * Hamburg betreten: Hein sitzt dort. Kennt ihr euch noch nicht, ist er ab jetzt dabei (ohne Vermittlung), sonst meldet
@@ -815,13 +870,7 @@ function deliver(ctx: Ctx): void {
       const warehouse =
         getWarehouse(ctx.state, s.warehouseId) ??
         nearestWarehouse(ctx.state, getCity(s.cityId ?? 'koeln')?.center ?? supplier ?? { lng: 0, lat: 0 });
-      store(ctx, {
-        productId: s.productId,
-        amount: s.amount,
-        warehouseId: warehouse?.id ?? s.warehouseId,
-        quality: s.quality,
-        unitCost: s.price / s.amount,
-      });
+      unloadCourier(ctx, s, warehouse?.id ?? s.warehouseId, s.cityId ?? 'koeln');
       const goods = `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)}`;
       journal.add(ctx, `Lieferung angekommen: ${goods} im ${warehouse?.name ?? 'Lager'}.`, 'good');
     }
