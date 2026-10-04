@@ -26,9 +26,11 @@ registerLiveActivity({
         icon: 'ship',
         tone: risky ? 'bad' : 'warn',
         leading: 'Hafen',
-        trailing: risky ? 'Zoll!' : islandCountdown(cargoRiskFrom(c) - state.time),
+        trailing: risky ? 'Zoll!' : islandCountdown(cargoRiskFrom(c, state) - state.time),
         title: `${formatProductAmount(c.productId, c.amount)} ${productName(c.productId)} am Kai`,
-        detail: risky ? 'Der Zoll kann sie jederzeit finden' : `Sicher bis ${clock.formatTime(cargoRiskFrom(c))}`,
+        detail: risky
+          ? 'Der Zoll kann sie jederzeit finden'
+          : `Sicher bis ${clock.formatTime(cargoRiskFrom(c, state))}`,
         open: (ui) => ui.openPanel('logistics.port', {}),
       };
     });

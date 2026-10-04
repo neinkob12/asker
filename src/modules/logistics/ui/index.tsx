@@ -62,6 +62,7 @@ import {
   tripProgress,
 } from '../index';
 import './island';
+import { BerthGroup } from './port';
 import { LogisticsLinks } from './routes';
 import { AUTO, ChoiceControl, VehicleSelect, vehicleChoice } from './vehicles';
 import './tracking';
@@ -269,7 +270,7 @@ function PortSection() {
                   </Tag>
                 ) : (
                   <Tag category="warn" icon="timer">
-                    bis {clock.formatTime(cargoRiskFrom(c))}
+                    bis {clock.formatTime(cargoRiskFrom(c, state))}
                   </Tag>
                 )
               }
@@ -538,6 +539,7 @@ function PortPanel() {
     <div class="logi-app">
       <Summary />
       <PortSection />
+      <BerthGroup />
       {trips.length > 0 && <TripsGroup trips={trips} />}
       <Group
         icon="route"

@@ -98,6 +98,7 @@ import {
   AUTOBAHN_ARREST_FACTOR,
   AUTOBAHN_CHECK_CHANCE,
   AUTOBAHN_CHECK_DELAY,
+  BERTH_LEVELS,
   CHECK_CHANCE,
   CHECK_DELAY,
   CHECK_HEAT_DIVISOR,
@@ -137,6 +138,7 @@ import {
 
 export {
   BERTH_COST,
+  BERTH_LEVELS,
   CARGO_SAFE_MINUTES,
   INTERCITY_CAPACITY,
   NIGHT_START,
@@ -253,8 +255,8 @@ export interface LogisticsStats {
 }
 
 export interface LogisticsState {
-  /** Eigene Liegeplätze pro Stadt (seit wann). */
-  berths: Record<string, { since: number }>;
+  /** Eigene Liegeplätze pro Stadt (seit wann, Stufe 0 Kai, 1 Halle am Kai, 2 Kran; Auftrag 33). */
+  berths: Record<string, { since: number; level: number }>;
   cargo: PortCargo[];
   trips: Trip[];
   /** Die letzten abgeschlossenen Fahrten, neueste zuerst. */
@@ -266,14 +268,17 @@ export interface LogisticsState {
   restock: RestockDue[];
 }
 
+/** Zustand in Version 5: Liegeplätze ohne Stufe. */
+type LogisticsStateV5 = Omit<LogisticsState, 'berths'> & { berths: Record<string, { since: number }> };
+
 /** Zustand in Version 4: Routen ohne Wahl der Strecke. */
-type LogisticsStateV4 = Omit<LogisticsState, 'routes'> & { routes: Omit<Route, 'choice'>[] };
+type LogisticsStateV4 = Omit<LogisticsStateV5, 'routes'> & { routes: Omit<Route, 'choice'>[] };
 
 /** Zustand in Version 3: Routen ohne Fahrzeug. */
-type LogisticsStateV3 = Omit<LogisticsState, 'routes'> & { routes: Omit<Route, 'vehicleId' | 'choice'>[] };
+type LogisticsStateV3 = Omit<LogisticsStateV5, 'routes'> & { routes: Omit<Route, 'vehicleId' | 'choice'>[] };
 
 /** Zustand in Version 2: ohne Routen. */
-type LogisticsStateV2 = Omit<LogisticsState, 'routes' | 'restock'>;
+type LogisticsStateV2 = Omit<LogisticsStateV5, 'routes' | 'restock'>;
 
 /** Zustand in Version 1: ein Liegeplatz (Köln), Ware am Kai ohne Stadt. */
 type LogisticsStateV1 = Omit<LogisticsStateV2, 'berths' | 'cargo'> & {
@@ -320,9 +325,12 @@ declare module '../../core' {
     'logistics.runRouteNow': { routeId: number };
     /** Fahrt, die am vollen Lager wartet, in ein anderes eigenes Lager der Stadt umleiten (Auftrag 33). */
     'logistics.redirect': { tripId: number; toId: string };
+    /** Liegeplatz um eine Stufe ausbauen: Halle am Kai, dann Kran (sauberes Geld, Auftrag 33). Ohne Stadt: die aktive. */
+    'logistics.upgradeBerth': { cityId?: string };
   }
   interface GameEvents {
     'logistics.berthBought': { cost: number; cityId?: string };
+    'logistics.berthUpgraded': { cityId: string; level: number; cost: number };
     /** Schiffsware liegt am Kai. */
     'cargo.docked': { cargoId: number; supplierId: string; productId: string; amount: number };
     /** Der Zoll hat Ware am Kai gefunden. */
@@ -474,9 +482,34 @@ export function getLogisticsLog(state: GameState): readonly TripLogEntry[] {
   return state.modules.logistics?.log ?? [];
 }
 
-/** Ab wann der Zoll bei dieser Ware neugierig wird (nach dem Hafen ihrer Stadt). */
-export function cargoRiskFrom(cargo: Pick<PortCargo, 'arrivedAt'> & { cityId?: string }): number {
-  return cargo.arrivedAt + portOf(cargo.cityId ?? 'koeln').safeMinutes;
+/** Stufe des Liegeplatzes einer Stadt (0 Kai, 1 Halle am Kai, 2 Kran; ohne Liegeplatz 0). */
+export function berthLevel(state: GameState, cityId: string = activeCity(state)): number {
+  return state.modules.logistics?.berths?.[cityId]?.level ?? 0;
+}
+
+/** Wirkung der Stufe des Liegeplatzes (Auftrag 33). */
+export function berthEffect(state: GameState, cityId: string = activeCity(state)): (typeof BERTH_LEVELS)[number] {
+  return BERTH_LEVELS[Math.min(BERTH_LEVELS.length - 1, berthLevel(state, cityId))];
+}
+
+/** Preis der nächsten Stufe in sauberem Geld, null wenn voll ausgebaut. */
+export function berthUpgradeCost(state: GameState, cityId: string = activeCity(state)): number | null {
+  return portOf(cityId).upgradeCosts[berthLevel(state, cityId)] ?? null;
+}
+
+/** Laden am Kai in Minuten (mit Kran schneller). */
+function loadMinutes(state: GameState, cityId: string): number {
+  return Math.round(LOAD_MINUTES * berthEffect(state, cityId).loadFactor);
+}
+
+/**
+ * Ab wann der Zoll bei dieser Ware neugierig wird (nach dem Hafen ihrer Stadt; mit state auch nach der Stufe des
+ * Liegeplatzes, Auftrag 33).
+ */
+export function cargoRiskFrom(cargo: Pick<PortCargo, 'arrivedAt'> & { cityId?: string }, state?: GameState): number {
+  const cityId = cargo.cityId ?? 'koeln';
+  const factor = state ? berthEffect(state, cityId).safeFactor : 1;
+  return cargo.arrivedAt + Math.round(portOf(cityId).safeMinutes * factor);
 }
 
 /** Gefahr für Ware am Kai: 'safe' (noch sicher), 'risky' (Zoll kann sie jede Stunde finden). */
@@ -484,7 +517,7 @@ export function cargoRisk(
   state: GameState,
   cargo: Pick<PortCargo, 'arrivedAt'> & { cityId?: string },
 ): 'safe' | 'risky' {
-  return state.time >= cargoRiskFrom(cargo) ? 'risky' : 'safe';
+  return state.time >= cargoRiskFrom(cargo, state) ? 'risky' : 'safe';
 }
 
 /** Ort eines Abhol- oder Zielpunkts (Hafen oder Lager). */
@@ -517,7 +550,7 @@ export function tripProgress(state: GameState, trip: Trip): { leg: TripLeg; t: n
   if (trip.status === 'planned') return { leg: 'planned', t: 0, total: 0 };
   const now = trip.status === 'stopped' && trip.stoppedAt !== null ? trip.stoppedAt : state.time;
   const total = clamp01((now - trip.startedAt) / Math.max(1, trip.arrivesAt - trip.startedAt));
-  const atPickup = arriveAtPickup(trip);
+  const atPickup = arriveAtPickup(state, trip);
   let result: { leg: TripLeg; t: number };
   if (now < atPickup) {
     result = { leg: 'toPickup', t: clamp01((now - trip.startedAt) / Math.max(1, atPickup - trip.startedAt)) };
@@ -546,9 +579,9 @@ export function tripRoute(
 }
 
 /** Ankunft am Abholort: bei der Abholung am Hafen vor dem Laden, beim Umlagern sofort (Laden im Startlager). */
-function arriveAtPickup(trip: Trip): number {
+function arriveAtPickup(state: GameState, trip: Trip): number {
   if (trip.kind !== 'pickup') return trip.startedAt;
-  return Math.max(trip.startedAt, trip.loadedAt - LOAD_MINUTES);
+  return Math.max(trip.startedAt, trip.loadedAt - loadMinutes(state, tripCity(state, trip)));
 }
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
@@ -585,7 +618,8 @@ export function receiveCargo(
   messages.send(ctx, {
     contact: portContact(cityId),
     text:
-      `Dein Container ist da: ${goods}. Hol ihn in den nächsten ${clock.formatDuration(port.safeMinutes)} ab, ` +
+      `Dein Container ist da: ${goods}. Hol ihn in den nächsten ` +
+      `${clock.formatDuration(cargoRiskFrom(cargo, ctx.state) - ctx.now)} ab, ` +
       'danach schaut der Zoll genauer hin.',
     options: [
       {
@@ -626,7 +660,7 @@ function buyBerth(ctx: Ctx, cityId: string): CommandResult {
       reason: `Der Hafen will ${formatEuro(port.berthCost)} sauberes Geld. Wasch vorher Schwarzgeld.`,
     };
   }
-  s.berths[cityId] = { since: ctx.now };
+  s.berths[cityId] = { since: ctx.now, level: 0 };
   journal.add(
     ctx,
     `Liegeplatz im ${port.name} gemietet (${formatEuro(port.berthCost)}). Jetzt können Schiffe für dich anlegen.`,
@@ -640,6 +674,23 @@ function buyBerth(ctx: Ctx, cityId: string): CommandResult {
         : `Moin. Dein Platz ist ${port.quay}. Was da ankommt, holst du ab, und zwar zügig. Der Zoll hier schläft nicht.`,
   });
   ctx.emit('logistics.berthBought', { cost: port.berthCost, cityId });
+  return { ok: true };
+}
+
+/** Liegeplatz ausbauen (Auftrag 33): Halle am Kai, dann Kran. Legal, sauberes Geld. */
+function upgradeBerth(ctx: Ctx, cityId: string): CommandResult {
+  const berth = ctx.state.modules.logistics.berths[cityId];
+  if (!berth) return { ok: false, reason: 'Erst brauchst du einen Liegeplatz.' };
+  const cost = berthUpgradeCost(ctx.state, cityId);
+  if (cost === null) return { ok: false, reason: 'Dein Liegeplatz ist voll ausgebaut.' };
+  const next = BERTH_LEVELS[berth.level + 1];
+  const port = portOf(cityId);
+  if (!wallet.pay(ctx, cost, 'clean', `${next.name} ${port.name}`, { category: 'expansion', cityId })) {
+    return { ok: false, reason: `Dafür brauchst du ${formatEuro(cost)} sauberes Geld. Wasch vorher Schwarzgeld.` };
+  }
+  berth.level += 1;
+  journal.add(ctx, `${port.name}: ${next.name} gebaut (${formatEuro(cost)}). ${next.effect}`, 'good');
+  ctx.emit('logistics.berthUpgraded', { cityId, level: berth.level, cost });
   return { ok: true };
 }
 
@@ -891,8 +942,8 @@ function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandRes
     ...(vehicle !== null ? { vehicleId: vehicle } : {}),
     ...(choice !== 'autobahn' ? { choice } : {}),
     startedAt: ctx.now,
-    loadedAt: ctx.now + approach + LOAD_MINUTES,
-    arrivesAt: ctx.now + approach + LOAD_MINUTES + delivery,
+    loadedAt: ctx.now + approach + loadMinutes(state, cityId),
+    arrivesAt: ctx.now + approach + loadMinutes(state, cityId) + delivery,
   });
   const who = driverLabel(state, driverId);
   journal.add(
@@ -958,7 +1009,7 @@ function departPlanned(ctx: Ctx, trip: Trip): void {
       return;
     }
     const approach = travelMinutes(to, from, speed);
-    trip.loadedAt = ctx.now + approach + LOAD_MINUTES;
+    trip.loadedAt = ctx.now + approach + loadMinutes(state, tripCity(state, trip));
     trip.arrivesAt = trip.loadedAt + travelMinutes(from, to, speed, 0, roadOptions(trip.choice));
   } else {
     const wait = trip.loadedAt - trip.startedAt;
@@ -1382,7 +1433,8 @@ function customs(ctx: Ctx): void {
   for (const cargo of [...s.cargo]) {
     if (!isCityLive(ctx.state, cargo.cityId)) continue;
     const port = portOf(cargo.cityId);
-    if (ctx.now < cargoRiskFrom(cargo) || !ctx.chance(port.customsChancePerHour)) continue;
+    const chance = port.customsChancePerHour * berthEffect(ctx.state, cargo.cityId).customsFactor;
+    if (ctx.now < cargoRiskFrom(cargo, ctx.state) || !ctx.chance(chance)) continue;
     s.cargo = s.cargo.filter((c) => c.id !== cargo.id);
     s.stats.seized += cargo.amount;
     recordConfiscation(ctx, cargo.amount);
@@ -1425,12 +1477,12 @@ function tick(ctx: Ctx): void {
 
 export default defineModule({
   id: 'logistics',
-  version: 5,
+  version: 6,
   dependsOn: ['goods', 'suppliers', 'staff', 'fleet'],
   init: (ctx) => ({
     // Alte Spielstände: Wer schon am Hafen bestellt hat, behält seinen Zugang (Bestandsschutz).
     berths: ((ctx.state.modules.suppliers?.relations?.rotterdam?.orders ?? 0) > 0
-      ? { koeln: { since: ctx.now } }
+      ? { koeln: { since: ctx.now, level: 0 } }
       : {}) as LogisticsState['berths'],
     cargo: [],
     trips: [],
@@ -1449,6 +1501,7 @@ export default defineModule({
     'logistics.removeRoute': (ctx, { routeId }) => removeRoute(ctx, routeId),
     'logistics.runRouteNow': (ctx, { routeId }) => departRoute(ctx, routeId, 'now'),
     'logistics.redirect': (ctx, payload) => redirect(ctx, payload),
+    'logistics.upgradeBerth': (ctx, payload) => upgradeBerth(ctx, payload?.cityId ?? activeCity(ctx.state)),
   },
   on: {
     'encounter.resolved': (ctx, { request, outcome }) => {
@@ -1479,9 +1532,14 @@ export default defineModule({
       routes: old.routes.map((r) => ({ ...r, vehicleId: null })),
     }),
     // Version 5 (Auftrag 33): Routen haben eine Wahl der Strecke, bisher immer die Autobahn.
-    5: (old: LogisticsStateV4): LogisticsState => ({
+    5: (old: LogisticsStateV4): LogisticsStateV5 => ({
       ...old,
       routes: old.routes.map((r) => ({ ...r, choice: 'autobahn' as const })),
+    }),
+    // Version 6 (Auftrag 33): Liegeplätze haben Stufen (Kai, Halle am Kai, Kran); bisher alle Kai.
+    6: (old: LogisticsStateV5): LogisticsState => ({
+      ...old,
+      berths: Object.fromEntries(Object.entries(old.berths).map(([id, b]) => [id, { ...b, level: 0 }])),
     }),
   },
 });

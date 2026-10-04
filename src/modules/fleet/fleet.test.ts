@@ -65,7 +65,7 @@ describe('fleet (Auftrag 33)', () => {
 
   it('Abholung mit dem Transporter: mehr Ladung als das Privatauto, Fahrzeug ist unterwegs und danach wieder frei', () => {
     const sim = quietGame();
-    sim.state.modules.logistics.berths.koeln = { since: 0 };
+    sim.state.modules.logistics.berths.koeln = { since: 0, level: 0 };
     receiveCargo(sim.ctx('suppliers'), {
       supplierId: 'rotterdam',
       productId: 'weed',

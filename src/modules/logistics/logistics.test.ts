@@ -30,7 +30,7 @@ function quietGame(seed = 1): Simulation {
 }
 
 function withCargo(sim: Simulation, amount = 500): number {
-  sim.state.modules.logistics.berths.koeln = { since: sim.state.time };
+  sim.state.modules.logistics.berths.koeln = { since: sim.state.time, level: 0 };
   return receiveCargo(sim.ctx('suppliers'), {
     supplierId: 'rotterdam',
     productId: 'hash',

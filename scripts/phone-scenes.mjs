@@ -235,6 +235,23 @@ export const SCENES = [
       window.koeln.runtime.api.openPhone('goods.app');
     })()`,
   },
+  {
+    // Auftrag 33: Schiffe unterwegs im Tracker der Lieferanten-App (Container und halber Container).
+    name: 'schiffe',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      sim.state.wallet.clean = 20000;
+      sim.state.wallet.dirty = 30000;
+      sim.dispatch({ type: 'logistics.buyBerth', payload: {} });
+      sim.dispatch({ type: 'logistics.upgradeBerth', payload: {} });
+      sim.state.modules.suppliers.unlocked.push('rotterdam');
+      sim.state.modules.suppliers.relations.rotterdam.trust = 30;
+      sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'container' } });
+      sim.advance(240);
+      sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'shared' } });
+      window.koeln.runtime.api.openPhone('suppliers.app');
+    })()`,
+  },
   { name: 'lagerdetail', js: "window.koeln.runtime.api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' })" },
   {
     // Auftrag 33: fast volles Lager mit Regalen (Füllstand, Ausbau mit Preis).

@@ -75,7 +75,7 @@ describe('logistics: Routenwahl (Auftrag 33)', () => {
 
   it('nächtliche Abholung: Container bleiben am Kai, bis der Fahrer um 23 Uhr losfährt', () => {
     const sim = quietGame(2);
-    sim.state.modules.logistics.berths.koeln = { since: 0 };
+    sim.state.modules.logistics.berths.koeln = { since: 0, level: 0 };
     receiveCargo(sim.ctx('suppliers'), {
       supplierId: 'rotterdam',
       productId: 'weed',

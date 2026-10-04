@@ -88,7 +88,7 @@ function currentTracking(state: GameState): Tracking | null {
       title: `${formatProductAmount(c.productId, amount)} ${productName(c.productId)} · ${getSupplier(state, c.supplierId)?.name ?? 'Lieferant'}`,
       status: risky
         ? 'Am Kai · der Zoll kann sie jederzeit finden'
-        : `Am Kai · Zoll in ${islandCountdown(cargoRiskFrom(c) - state.time)}`,
+        : `Am Kai · Zoll in ${islandCountdown(cargoRiskFrom(c, state) - state.time)}`,
       sea: 1,
       road: 0,
       tone: risky ? 'bad' : 'warn',

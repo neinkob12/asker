@@ -80,7 +80,39 @@ export interface PortConfig {
   customsChancePerHour: number;
   /** Platz am Kai für die Begrüßung. */
   quay: string;
+  /** Ausbau des Liegeplatzes in sauberem Geld (Auftrag 33): Stufe 1 Halle am Kai, Stufe 2 Kran. */
+  upgradeCosts: readonly number[];
+  /** Orte am Wasserweg für den Schiffs-Tracker (vom Meer zum Kai). */
+  shipPlaces: readonly { name: string; lng: number; lat: number }[];
 }
+
+/**
+ * Stufen des Liegeplatzes (Auftrag 33): Kai, Halle am Kai, Kran. Ware steht länger sicher (safeFactor auf
+ * safeMinutes), der Zoll schaut seltener (customsFactor) und das Laden geht schneller (loadFactor auf LOAD_MINUTES).
+ */
+export const BERTH_LEVELS: readonly {
+  name: string;
+  effect: string;
+  safeFactor: number;
+  customsFactor: number;
+  loadFactor: number;
+}[] = [
+  { name: 'Kai', effect: 'Ein Platz am Kai.', safeFactor: 1, customsFactor: 1, loadFactor: 1 },
+  {
+    name: 'Halle am Kai',
+    effect: 'Ware steht unter Dach: länger sicher, der Zoll schaut seltener.',
+    safeFactor: 1.75,
+    customsFactor: 0.7,
+    loadFactor: 0.7,
+  },
+  {
+    name: 'Kran',
+    effect: 'Eigener Kran: Laden in Minuten, die Ware ist noch länger sicher.',
+    safeFactor: 2.5,
+    customsFactor: 0.5,
+    loadFactor: 0.35,
+  },
+];
 
 export const PORTS: Readonly<Record<string, PortConfig>> = {
   koeln: {
@@ -90,6 +122,18 @@ export const PORTS: Readonly<Record<string, PortConfig>> = {
     safeMinutes: CARGO_SAFE_MINUTES,
     customsChancePerHour: CUSTOMS_CHANCE_PER_HOUR,
     quay: 'Kai 7',
+    upgradeCosts: [5000, 12000],
+    shipPlaces: [
+      { name: 'Rotterdam', lng: 4.48, lat: 51.9 },
+      { name: 'Dordrecht', lng: 4.67, lat: 51.81 },
+      { name: 'Nijmegen', lng: 5.86, lat: 51.85 },
+      { name: 'Emmerich', lng: 6.25, lat: 51.83 },
+      { name: 'Wesel', lng: 6.6, lat: 51.66 },
+      { name: 'Duisburg', lng: 6.73, lat: 51.43 },
+      { name: 'Düsseldorf', lng: 6.77, lat: 51.23 },
+      { name: 'Leverkusen', lng: 6.96, lat: 51.04 },
+      { name: 'Niehl', lng: 6.97, lat: 50.99 },
+    ],
   },
   // Hamburg: Container direkt am O'Swaldkai. Teurer, und der Zoll ist wacher.
   hamburg: {
@@ -101,6 +145,16 @@ export const PORTS: Readonly<Record<string, PortConfig>> = {
     safeMinutes: 10 * 60,
     customsChancePerHour: 0.08,
     quay: 'Schuppen 52 am O’Swaldkai',
+    upgradeCosts: [9000, 20000],
+    shipPlaces: [
+      { name: 'Cuxhaven', lng: 8.7, lat: 53.87 },
+      { name: 'Brunsbüttel', lng: 9.14, lat: 53.89 },
+      { name: 'Glückstadt', lng: 9.42, lat: 53.78 },
+      { name: 'Stade', lng: 9.5, lat: 53.62 },
+      { name: 'Wedel', lng: 9.7, lat: 53.57 },
+      { name: 'Finkenwerder', lng: 9.86, lat: 53.54 },
+      { name: 'O’Swaldkai', lng: 10.0, lat: 53.53 },
+    ],
   },
 };
 

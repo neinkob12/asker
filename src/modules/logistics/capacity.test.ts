@@ -27,7 +27,7 @@ function noChecks(sim: Simulation): void {
 describe('logistics: Lager mit Kapazität (Auftrag 33)', () => {
   it('Abholung nimmt nur mit, was ins Lager passt; der Rest bleibt am Kai', () => {
     const sim = quietGame();
-    sim.state.modules.logistics.berths.koeln = { since: 0 };
+    sim.state.modules.logistics.berths.koeln = { since: 0, level: 0 };
     receiveCargo(sim.ctx('suppliers'), {
       supplierId: 'rotterdam',
       productId: 'hash',

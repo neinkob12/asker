@@ -75,6 +75,7 @@ import {
   PROBLEM_AT,
   QUALITY_SPREAD,
   SEIZE_FACTOR,
+  SHARED_CONTAINER_RISK,
   SHIP_SHARE,
   START_TRUST,
   SUPPLIER_LOOKS,
@@ -98,6 +99,11 @@ export interface SupplierPackage {
   price: number;
   /** Erst ab diesem Vertrauen im Sortiment. */
   minTrust?: number;
+  /**
+   * Container-Paket der Hafen-Lieferanten (Auftrag 33): 'full' ein ganzer Container (groß, billig pro Gramm),
+   * 'shared' ein geteilter (noch billiger, aber fliegt die fremde Hälfte auf, ist die eigene mit weg).
+   */
+  container?: 'full' | 'shared';
 }
 
 /** Bedingungen, bevor ein Lieferant mit dir Geschäfte macht (alle müssen erfüllt sein). */
@@ -184,6 +190,8 @@ export interface Shipment {
   destinationId?: string;
   /** Stadt, für die bestellt wurde (Auftrag 30; fehlt: Köln). */
   cityId?: string;
+  /** Geteilter Container (Auftrag 33): Beschlagnahme kam über die fremde Hälfte. */
+  shared?: boolean;
   /** Ausgewürfeltes Lieferproblem, der Spieler erfährt es erst, wenn es passiert. */
   problem?: ShipmentProblem;
   /** Wann das Problem unterwegs auftritt (Verspätung, Beschlagnahme). */
@@ -606,7 +614,10 @@ function order(
   const quality = clampQuality(
     supplier.quality + supplierQualityBonus(ctx.state, supplierId) + (ctx.random() * 2 - 1) * QUALITY_SPREAD,
   );
-  const problem = rollShipmentProblem(ctx.random(), supplier, rel.trust);
+  let problem = rollShipmentProblem(ctx.random(), supplier, rel.trust);
+  // Geteilter Container: Fliegt die fremde Hälfte auf, ist die eigene mit weg (Auftrag 33).
+  const sharedBust = pkg.container === 'shared' && problem !== 'seized' && ctx.chance(SHARED_CONTAINER_RISK);
+  if (sharedBust) problem = 'seized';
   const shipment: Shipment = {
     id: ctx.nextId(),
     supplierId,
@@ -621,6 +632,7 @@ function order(
   };
   if (cityId !== 'koeln') shipment.cityId = cityId;
   if (onCredit) shipment.onCredit = true;
+  if (sharedBust) shipment.shared = true;
   if (toPort) {
     shipment.toPort = true;
     if (warehouse) shipment.destinationId = warehouse.id;
@@ -834,12 +846,13 @@ function revealProblems(ctx: Ctx): void {
       journal.add(ctx, `Lieferung von ${supplier.name} verspätet sich um ca. ${delay}.`, 'bad');
     } else {
       state.shipments = state.shipments.filter((x) => x.id !== s.id);
+      const what = s.shared
+        ? `Der Zoll hat die andere Hälfte vom Container gefunden. Deine ${goods} waren mit drin, alles weg.`
+        : `Scheiße. Die haben den Wagen hochgenommen, deine ${goods} sind weg.`;
       tell(
         ctx,
         supplier,
-        s.onCredit
-          ? `Scheiße. Die haben den Wagen hochgenommen, deine ${goods} sind weg. Die Schulden bleiben trotzdem.`
-          : `Scheiße. Die haben den Wagen hochgenommen, deine ${goods} sind weg. Pech, so läuft das Geschäft.`,
+        s.onCredit ? `${what} Die Schulden bleiben trotzdem.` : `${what} Pech, so läuft das Geschäft.`,
       );
       journal.add(ctx, `Lieferung von ${supplier.name} beschlagnahmt: ${goods} verloren.`, 'bad');
     }

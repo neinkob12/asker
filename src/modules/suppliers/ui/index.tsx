@@ -6,6 +6,7 @@ import { clock, formatEuro, formatPercent, type GameState } from '../../../core'
 import { registerMapLayer } from '../../../map';
 import {
   Button,
+  Chips,
   Disclosure,
   Group,
   Hint,
@@ -140,10 +141,12 @@ function SupplierList(props: { onSelect: (id: string) => void }) {
   const { state } = useGame();
   const open = getSuppliers(state, activeCity(state)).filter((s) => isUnlocked(state, s.id));
   const locked = getSuppliers(state, activeCity(state)).filter((s) => !isUnlocked(state, s.id));
-  const shipments = shipmentsInTransit(state);
+  // Schiffe an den eigenen Kai stehen im Tracker oben (Slot 'suppliers.top', Logistik), hier nur der Rest.
+  const shipments = shipmentsInTransit(state).filter((s) => !s.toPort);
   const debts = getSuppliers(state, activeCity(state)).filter((s) => getRelation(state, s.id).debt > 0);
   return (
     <div class="sup-groups">
+      <Slot name="suppliers.top" props={{}} />
       {shipments.length > 0 && (
         <Group icon="route" color="goods" title="Unterwegs" count={shipments.length}>
           {shipments.map((s) => (
@@ -188,6 +191,8 @@ declare module '../../../ui' {
   interface SlotRegistry {
     /** Abschnitte unten in der Liste der Lieferanten-App (z.B. Hafen, Routen und Fahrer aus der Logistik). */
     'suppliers.list': Record<string, never>;
+    /** Abschnitte oben in der Liste (Schiffs-Tracker der Logistik, Auftrag 33). */
+    'suppliers.top': Record<string, never>;
   }
 }
 
@@ -423,6 +428,15 @@ function SupplierDetail(props: { supplierId: string }) {
                 <span>
                   {price < p.price && <s>{formatEuro(p.price)}</s>} {formatEuro(price)}
                 </span>
+                {p.container && (
+                  <Chips
+                    items={[
+                      p.container === 'full'
+                        ? { label: 'ganzer Container', icon: 'package', color: 'goods' }
+                        : { label: 'geteilt: fremde Ware drin', icon: 'alert', color: 'warn' },
+                    ]}
+                  />
+                )}
               </div>
             </ListItem>
           );

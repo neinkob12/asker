@@ -42,6 +42,24 @@ export const SUPPLIERS: readonly Supplier[] = [
       { id: 'hash', label: '500 g Hasch', productId: 'hash', amount: 500, price: 1425 },
       { id: 'haze', label: '500 g Amnesia Haze', productId: 'haze', amount: 500, price: 2055, minTrust: 30 },
       { id: 'kush', label: '500 g OG Kush', productId: 'kush', amount: 500, price: 2530, minTrust: 55 },
+      // Container (Auftrag 33): ganz groß und billig pro Gramm, oder geteilt noch billiger, mit fremder Ware daneben.
+      {
+        id: 'container',
+        label: 'Container: 5 kg Gras',
+        productId: 'weed',
+        amount: 5000,
+        price: 12500,
+        minTrust: 20,
+        container: 'full',
+      },
+      {
+        id: 'shared',
+        label: 'Halber Container: 2,5 kg Gras',
+        productId: 'weed',
+        amount: 2500,
+        price: 5900,
+        container: 'shared',
+      },
     ],
   },
   {
@@ -168,6 +186,23 @@ export const SUPPLIERS: readonly Supplier[] = [
           { id: 'hh-kush2kg', label: '2 kg OG Kush', productId: 'kush', amount: 2000, price: 9600, minTrust: 30 },
           { id: 'hh-edibles500', label: '500 Edibles', productId: 'edibles', amount: 500, price: 1100 },
           { id: 'hh-vape200', label: '200 Vape-Pens', productId: 'vape', amount: 200, price: 1850 },
+          {
+            id: 'hh-container',
+            label: 'Container: 6 kg Amnesia Haze',
+            productId: 'haze',
+            amount: 6000,
+            price: 21000,
+            minTrust: 25,
+            container: 'full',
+          },
+          {
+            id: 'hh-shared',
+            label: 'Halber Container: 3 kg Amnesia Haze',
+            productId: 'haze',
+            amount: 3000,
+            price: 9900,
+            container: 'shared',
+          },
         ],
       },
     },
@@ -243,6 +278,11 @@ export const BAD_QUALITY_FACTOR = 0.4;
 export const SEIZE_FACTOR = 0.15;
 /** Zusätzliches Beschlagnahme-Risiko am Hafen (Zoll). */
 export const PORT_SEIZE_EXTRA = 0.02;
+/**
+ * Geteilter Container (Auftrag 33): Fliegt die fremde Hälfte auf, ist die eigene mit weg. Zusätzliche Chance auf
+ * Beschlagnahme pro Bestellung.
+ */
+export const SHARED_CONTAINER_RISK = 0.12;
 /** Verspätung als Anteil der Lieferzeit [von, bis]. */
 export const DELAY_RANGE: readonly [number, number] = [0.4, 1];
 /** Qualitätsverlust bei schlechter Ware [von, bis]. */
