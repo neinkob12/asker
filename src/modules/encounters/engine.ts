@@ -13,11 +13,20 @@ import {
   wallet,
 } from '../../core';
 import { activeCity, bribeFactor, cityName, isPlayerIn } from '../city';
-import { allProducts, DEFAULT_PRODUCT, getProduct, getStock, getWarehouses, store, take } from '../goods';
+import {
+  allProducts,
+  DEFAULT_PRODUCT,
+  getProduct,
+  getStock,
+  getWarehouses,
+  store,
+  take,
+  warehouseCity,
+} from '../goods';
 import { hasFullPower } from '../hierarchy';
 import { addHeat } from '../police';
 import { changeReputation } from '../reputation';
-import { getSpot } from '../spots';
+import { getSpot, spotCity } from '../spots';
 import { getStaff, getStaffMember, setStatus } from '../staff';
 import { addInfluence, PLAYER_FACTION } from '../territory';
 import { veedelCity, veedelName } from '../veedel';
@@ -308,11 +317,24 @@ export function payoffCost(encounter: Encounter): number {
   return Math.max(PAYOFF_MIN, Math.round(encounter.bribeCost * PAYOFF_FACTOR));
 }
 
-/** Freie Leute, die als Verstärkung hinfahren könnten (aktiv, ohne Einsatz, noch nicht dabei), Stärkste zuerst. */
+/** Stadt, in der eine Konfrontation spielt: aus Lager, Spot oder Veedel der Anfrage, sonst die aktive Stadt. */
+export function requestCity(state: GameState, request: EncounterRequest): string {
+  if (request.warehouseId) return warehouseCity(request.warehouseId);
+  const spot = request.spotId ? getSpot(state, request.spotId) : undefined;
+  if (spot) return spotCity(spot);
+  if (request.veedelId) return veedelCity(request.veedelId);
+  return activeCity(state);
+}
+
+/**
+ * Freie Leute, die als Verstärkung hinfahren könnten (aktiv, ohne Einsatz, noch nicht dabei, in der Stadt der
+ * Konfrontation), Stärkste zuerst.
+ */
 export function backupCandidates(state: GameState, encounter: Encounter): string[] {
   const roles: readonly string[] = BACKUP_ROLES;
   const there = new Set(encounter.participants.map((p) => p.id));
-  return getStaff(state)
+  const cityId = requestCity(state, encounter.request);
+  return getStaff(state, { cityId })
     .filter((m) => m.status === 'active' && !m.assignment && roles.includes(m.role) && !there.has(m.id))
     .sort((a, b) => b.stats.strength - a.stats.strength || a.id.localeCompare(b.id))
     .slice(0, BACKUP_MAX_PEOPLE)
@@ -350,16 +372,15 @@ export function briefingOptions(state: GameState, encounter: Encounter): Briefin
       return { mode, cost: 0, ok: false, reason: 'Kein Veedel, in das die Polizei kommen könnte.' };
     }
     if (mode === 'self' && !playerCanBeThere(state, encounter)) {
-      return { mode, cost: 0, ok: false, reason: `Du bist nicht in ${cityName(encounterCity(encounter))}.` };
+      return { mode, cost: 0, ok: false, reason: `Du bist nicht in ${cityName(encounterCity(encounter, state))}.` };
     }
     return { mode, cost: 0, ok: true };
   });
 }
 
-/** Stadt einer Konfrontation (über ihr Veedel; ohne Veedel die aktive Stadt). */
-function encounterCity(encounter: Encounter, state?: GameState): string {
-  const veedelId = encounter.request.veedelId;
-  return veedelId ? veedelCity(veedelId) : state ? activeCity(state) : 'koeln';
+/** Stadt einer Konfrontation (Lager, Spot oder Veedel der Anfrage; sonst die aktive Stadt). */
+function encounterCity(encounter: Encounter, state: GameState): string {
+  return requestCity(state, encounter.request);
 }
 
 /** Kannst du selbst hin? Nur in der Stadt, in der du bist (und nicht unterwegs zwischen den Städten). */
@@ -512,7 +533,8 @@ export function act(ctx: Ctx, encounterId: number, actionId: string): CommandRes
 
 /** Kosten einer Handlung, die sofort anfallen (weggeworfene Ware). */
 function payActionCosts(ctx: Ctx, encounter: Encounter, action: EncounterAction): void {
-  if (action.dropsGoods !== undefined) encounter.goodsDropped += loseGoods(ctx, roll(ctx, action.dropsGoods));
+  if (action.dropsGoods !== undefined)
+    encounter.goodsDropped += loseGoods(ctx, roll(ctx, action.dropsGoods), encounter.request);
 }
 
 function hitOwn(ctx: Ctx, encounter: Encounter): string {
@@ -651,11 +673,18 @@ export function expireDecisions(ctx: Ctx): void {
 // ---------------------------------------------------------------------------------------------
 // Auflösung und Folgen
 
-function loseGoods(ctx: Ctx, amount: number): number {
+/** Wo Ware verloren geht: im überfallenen Lager, sonst in den Lagern der Stadt der Konfrontation. */
+function goodsScope(state: GameState, request: EncounterRequest): { cityId: string; warehouseId?: string } {
+  const cityId = requestCity(state, request);
+  return request.warehouseId ? { cityId, warehouseId: request.warehouseId } : { cityId };
+}
+
+function loseGoods(ctx: Ctx, amount: number, request: EncounterRequest): number {
   let left = Math.max(0, Math.round(amount));
   let lost = 0;
-  // Was bei einer Konfrontation verloren geht, liegt in der Stadt, in der sie spielt (die aktive).
-  for (const warehouse of getWarehouses(ctx.state, activeCity(ctx.state))) {
+  const scope = goodsScope(ctx.state, request);
+  for (const warehouse of getWarehouses(ctx.state, scope.cityId)) {
+    if (scope.warehouseId && warehouse.id !== scope.warehouseId) continue;
     for (const product of allProducts()) {
       if (left <= 0) return lost;
       const { taken } = take(ctx, { productId: product.id, amount: left, warehouseId: warehouse.id, partial: true });
@@ -714,10 +743,16 @@ function applyEffects(ctx: Ctx, encounter: Encounter, effects: EncounterEffects,
     });
     result.goods += goods;
   } else if (goods < 0) {
-    result.goods -= loseGoods(ctx, -goods);
+    result.goods -= loseGoods(ctx, -goods, encounter.request);
   }
   if (effects.goodsShare && effects.goodsShare < 0) {
-    result.goods -= loseGoods(ctx, getStock(ctx.state) * -effects.goodsShare);
+    // Der Anteil gilt für denselben Bestand, aus dem er genommen wird (Lager des Überfalls, sonst die Stadt).
+    const scope = goodsScope(ctx.state, encounter.request);
+    const stock = getStock(
+      ctx.state,
+      scope.warehouseId ? { warehouseId: scope.warehouseId } : { cityId: scope.cityId },
+    );
+    result.goods -= loseGoods(ctx, stock * -effects.goodsShare, encounter.request);
   }
 
   const veedelId = encounter.request.veedelId;

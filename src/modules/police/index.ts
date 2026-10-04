@@ -466,10 +466,10 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** Ware beschlagnahmen, aus allen Lagern und Produkten, bis die Menge erreicht ist. */
-function confiscateGoods(ctx: Ctx, amount: number): number {
+/** Ware beschlagnahmen, aus den Lagern der Stadt des Veedels und allen Produkten, bis die Menge erreicht ist. */
+function confiscateGoods(ctx: Ctx, amount: number, veedelId: string): number {
   let left = Math.max(0, Math.round(amount));
-  for (const warehouse of getWarehouses(ctx.state)) {
+  for (const warehouse of getWarehouses(ctx.state, veedelCity(veedelId))) {
     for (const product of allProducts()) {
       if (left <= 0) break;
       left -= take(ctx, { productId: product.id, amount: left, warehouseId: warehouse.id, partial: true }).taken;
@@ -585,7 +585,7 @@ function runCheck(ctx: Ctx, veedelId: string): void {
     return;
   }
 
-  const goods = confiscateGoods(ctx, ctx.randomInt(CHECK_GOODS.min, CHECK_GOODS.max));
+  const goods = confiscateGoods(ctx, ctx.randomInt(CHECK_GOODS.min, CHECK_GOODS.max), veedelId);
   const money = confiscateMoney(ctx, ctx.randomInt(CHECK_MONEY.min, CHECK_MONEY.max));
   const loss = lossText(goods, money);
   if (!target) {
@@ -621,7 +621,7 @@ function onChaseResolved(ctx: Ctx, outcome: string, veedelId: string, spotId: st
     journal.add(ctx, `${who} In ${veedelName(veedelId)} wird jetzt gesucht.`, 'good', ref);
     return;
   }
-  const goods = confiscateGoods(ctx, ctx.randomInt(CHECK_GOODS.min, CHECK_GOODS.max) * FAILED_CHASE_FACTOR);
+  const goods = confiscateGoods(ctx, ctx.randomInt(CHECK_GOODS.min, CHECK_GOODS.max) * FAILED_CHASE_FACTOR, veedelId);
   const money = confiscateMoney(ctx, ctx.randomInt(CHECK_MONEY.min, CHECK_MONEY.max) * FAILED_CHASE_FACTOR);
   const loss = lossText(goods, money);
   if (staffIds.length === 0) {

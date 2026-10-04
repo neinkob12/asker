@@ -1,7 +1,9 @@
 // Gemeinsame Hilfen der Gang-Logik (KI, Diplomatie, Reaktionen). Schreiben nur mit ctx.
 
 import { type Ctx, formatEuro, type GameState, journal, type MessageOption, messages } from '../../core';
-import { getSpot } from '../spots';
+import { activeCity } from '../city';
+import { warehouseCity } from '../goods';
+import { getSpot, spotCity } from '../spots';
 import { getStaff } from '../staff';
 import { veedelName } from '../veedel';
 import {
@@ -142,17 +144,25 @@ export function breakAgreements(ctx: Ctx, gang: Gang, s: GangStatus, why: string
 
 /**
  * Eigene Leute für eine Konfrontation, die die Gang auslöst: aktive Sicherheitsleute, dazu wer am Ort arbeitet.
- * Höchstens `max` Personen.
+ * Nur aus der Stadt des Anlasses (cityId, sonst die von Spot oder Lager, sonst die aktive): Leute aus der schlafenden
+ * Stadt können nicht mitgehen. Höchstens `max` Personen.
  */
-export function crewFor(state: GameState, where: { spotId?: string; warehouseId?: string }, max = 4): string[] {
+export function crewFor(
+  state: GameState,
+  where: { spotId?: string; warehouseId?: string; cityId?: string },
+  max = 4,
+): string[] {
+  const spot = where.spotId ? getSpot(state, where.spotId) : undefined;
+  const cityId =
+    where.cityId ?? (spot ? spotCity(spot) : where.warehouseId ? warehouseCity(where.warehouseId) : activeCity(state));
   const ids: string[] = [];
-  if (where.spotId) for (const m of getStaff(state, { spotId: where.spotId, status: 'active' })) ids.push(m.id);
-  for (const m of getStaff(state, { status: 'active' })) {
+  if (where.spotId) for (const m of getStaff(state, { spotId: where.spotId, status: 'active', cityId })) ids.push(m.id);
+  for (const m of getStaff(state, { status: 'active', cityId })) {
     if (where.warehouseId && m.assignment?.kind === 'warehouse' && m.assignment.targetId === where.warehouseId) {
       ids.push(m.id);
     }
   }
-  for (const m of getStaff(state, { role: 'security', status: 'active' })) {
+  for (const m of getStaff(state, { role: 'security', status: 'active', cityId })) {
     const free = !m.assignment;
     const here =
       (where.spotId && m.assignment?.kind === 'spot' && m.assignment.targetId === where.spotId) ||

@@ -547,6 +547,7 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
     encounterId = startEncounter(ctx, {
       kind: 'raidDefense',
       veedelId: target.veedelId,
+      warehouseId: target.warehouseId,
       staffIds: target.staffIds,
       askPlayer: true,
       place: `am ${target.name}`,

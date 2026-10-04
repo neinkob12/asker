@@ -268,7 +268,9 @@ function found(ctx: Ctx, payload: { lng: number; lat: number; name?: string }): 
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return { ok: false, reason: 'Ungültiger Ort.' };
   const check = canFoundSpotAt(ctx.state, lng, lat);
   if (!check.ok) return check;
-  if (!wallet.pay(ctx, FOUND_SPOT_COST, 'dirty', 'Eigener Spot', 'expansion'))
+  // Die Kosten gehören zur Stadt des Veedels, nicht zur gerade aktiven.
+  const cityId = veedelCity(check.veedelId);
+  if (!wallet.pay(ctx, FOUND_SPOT_COST, 'dirty', 'Eigener Spot', { category: 'expansion', cityId }))
     return { ok: false, reason: 'Nicht genug Geld.' };
   const state = ctx.state.modules.spots;
   const veedel = getVeedel(check.veedelId);

@@ -22,7 +22,7 @@ import { CITY_EVENTS, type CityEventDef, EVENT_CONTACTS, type EventEffects } fro
 export { CITY_EVENTS, type CityEventDef, type EventEffects } from './config';
 
 export interface EventsState {
-  /** Events, deren Start gemeldet ist (bis zum Ende). */
+  /** Events, deren Start gemeldet ist (bis zu ihrem echten Ende, auch wenn die Stadt zwischendurch schläft). */
   running: string[];
   /** Zuletzt angekündigter Termin pro Event (Startzeit). */
   announced: Record<string, number>;
@@ -193,9 +193,11 @@ function tick(ctx: Ctx): void {
       s.running.push(def.id);
       journal.add(ctx, `${def.name}: ${def.text}`, 'info');
       ctx.emit('events.started', { eventId: def.id, cityId: def.cityId, endsAt: occ.end });
-    } else if (running && (!occ || !live)) {
+    } else if (running && !occ) {
+      // Nur das echte Ende leert die Liste: Wer die Stadt zwischendurch verlässt und wiederkommt, bekommt den Start
+      // nicht noch einmal gemeldet (und die Polizei verschiebt die Razzien nicht noch einmal).
       s.running = s.running.filter((id) => id !== def.id);
-      if (!occ) journal.add(ctx, `${def.name} ist vorbei.`, 'info');
+      if (live) journal.add(ctx, `${def.name} ist vorbei.`, 'info');
       ctx.emit('events.ended', { eventId: def.id, cityId: def.cityId });
     }
     // Ankündigung einen Tag vorher (Kiosk-Kumpel der Stadt), still am Badge.
