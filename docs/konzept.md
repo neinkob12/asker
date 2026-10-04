@@ -1,6 +1,6 @@
 # Köln Tycoon – Konzept
 
-Stand: 29.09.2026 (nach der Integration, Auftrag 20, und Logistik mit echten Straßen, Auftrag 21). Grundlage sind die Antworten aus zwei Fragerunden (50 + 5 Fragen).
+Stand: 04.10.2026 (nach Auftrag 31 und der Fragerunde zum Bogen des Spiels, Plan in [`docs/plan.md`](plan.md)). Grundlage sind die Antworten aus den Fragerunden (50 + 5 Fragen, 16 Fragen zu den Städten, Fragerunde zur Ideensammlung [`docs/ideen.md`](ideen.md)).
 Dieses Dokument ist die gemeinsame Referenz für beide im Duo und für alle Claude-Sessions.
 Wer eine Entscheidung ändert, ändert sie hier.
 
@@ -20,11 +20,16 @@ Wer eine Entscheidung ändert, ändert sie hier.
 ## Spielgefühl
 
 - **Tonalität:** realistisch und düster.
-- **Kampagne:** Ziel ist, Köln komplett zu übernehmen, also alle 12 Veedel zu kontrollieren (Entscheidung vom 02.10.2026, gebaut in Auftrag 30). 7 von 12 bleibt als Meilenstein „Boss von Köln“. Die Reihenfolge ist frei. Danach ruft der Hamburger Hafen an, und es geht in Hamburg weiter (Abschnitt „Mehrere Städte“); wer bleibt, spielt im Endlosmodus.
+- **Richtung (Entscheidung vom 04.10.2026):** Tycoon vor Drama. Es bleiben die Mechaniken, die über alle Städte skalieren (Markt, Lager, Fahrzeuge, Hafen, Warenfluss, Verträge, Leute). Was pro Stadt Drama oder Verwaltung aufbaut, kommt nicht. Jede Stadt muss übersichtlich bleiben, weil man schnell expandiert.
+- **Kampagne als Bogen (Entscheidung vom 04.10.2026, Plan in [`docs/plan.md`](plan.md)):**
+  1. **Stadt-Schleife:** Köln komplett übernehmen (alle 12 Veedel, 7 bleibt Meilenstein „Boss von Köln“), an die Rechte Hand übergeben, die damit Statthalter wird. Dann Hamburg, Berlin, München und vielleicht Frankfurt, die Reihenfolge nach Köln ist frei. Spätere Städte gehen schneller, vor allem weil man mit mehr Geld ankommt.
+  2. **Boss von Deutschland:** Sind alle Städte komplett, verkauft man das Geschäft für eine feste Summe (Formel noch offen).
+  3. **Hafen:** Danach ist man Lieferant am Hafen in den Niederlanden, für alle: die eigenen alten Organisationen, Gangs und fremde Städte. Große Mengen, Schiffe, Container, Zoll als Gegner, die alten Lieferanten als Konkurrenz.
+  4. **Produktion:** Anrufe aus Südamerika, eigene Produktion im Ausland, der Preis wird immer besser. Offenes Ende; das Ziel ist, ganz Europa aus eigener Produktion zu versorgen.
 - **Story:** lockere Aufträge von Figuren mit etwas Dialog, keine durchgehende Handlung.
-- **Kampagnenlänge:** 5–10 Stunden.
+- **Kampagnenlänge:** 15–25 Stunden für den ganzen Bogen (Entscheidung vom 04.10.2026), Köln allein etwa 2 Stunden bei 1x.
 - **Session-Länge:** 10–20 Minuten.
-- **Spielfigur:** eigener Charakter (Name, Aussehen, Hintergrund).
+- **Spielfigur:** Name beim ersten Start. Keine Charakter-Erstellung mit Aussehen und Herkunft, keine Perks (Entscheidung vom 04.10.2026).
 - **Spielstil:** Am Anfang selbst verkaufen (an einen Spot stellen, dann läuft der Verkauf dort von allein), später alles delegieren. Vom Kleindealer zum Boss.
 - **Einstieg:** Tipps und Tooltips, wenn etwas Neues auftaucht. Kein geführtes Tutorial.
 - **Game Over:** wenn du pleite bist oder getötet wirst.
@@ -34,7 +39,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
 
 ## Welt
 
-- **Umfang:** Köln detailliert als Einstieg, danach Hamburg (Auftrag 30), später eine dritte Stadt. Jede Stadt mit echten Stadtteilgrenzen und eigenem Charakter.
+- **Umfang:** Köln detailliert als Einstieg, danach Hamburg (Auftrag 30), Berlin, München und vielleicht Frankfurt in freier Reihenfolge. Jede Stadt mit echten Stadtteilgrenzen und genau einem eigenen Dreh (Köln Klüngel und Karneval, Hamburg Hafen und Zoll, Berlin die Nacht, München teuer und streng, Frankfurt Geld und Flughafen). Danach Europa als Karte mit Häfen, Seewegen und fremden Städten.
 - **Veedel:** echte Kölner Veedel mit eigenen Eigenschaften (z.B. Kaufkraft, Polizeipräsenz, Konkurrenz).
 - **Spots:** einige vorgegeben und freischaltbar, zusätzlich eigene per Klick auf die Karte gründen.
 - **Reviere:** Einfluss pro Veedel, auf der Karte sichtbar. Zu Beginn haben die Gangs Köln unter sich aufgeteilt.
@@ -48,26 +53,25 @@ Wer eine Entscheidung ändert, ändert sie hier.
 - **Beschaffung:**
   - Kleine Mengen kommen schnell aus anderen Großstädten.
   - Große Mengen werden am Hafen Rotterdam bestellt, kommen per Schiff über den Rhein in den Niehler Hafen und brauchen länger. Dafür braucht man einen eigenen Liegeplatz (mit sauberem Geld gemietet), und die Ware muss am Kai von einem Fahrer oder selbst abgeholt werden, bevor der Zoll neugierig wird.
-  - Eigener Anbau kommt später als Erweiterung.
+  - Eigener Anbau kommt ganz am Ende des Bogens, als Produktion im Ausland (Phase 4 im Plan).
 - **Lieferanten:** mehrere, jeweils mit Preis, Qualität, Zuverlässigkeit und Lieferzeit. Nicht alle sind von Anfang an zu haben: Am Anfang liefert nur einer, die anderen melden sich erst mit genug Umsatz, eigenen Veedeln (Einfluss) oder einem Liegeplatz im Hafen und wollen eine Vermittlungsgebühr. Dazu Beziehungen: Vertrauen bringt Rabatt, Kredit und bessere Ware.
-- **Preise:** Der Markt gibt einen Richtwert (Angebot, Nachfrage, Konkurrenz), der Spieler setzt seinen Preis drumherum.
-- **Logistik:** Fahrzeuge fahren über echte Kölner Straßen, Kontrollen unterwegs, mehrere Lager (kaufen, beliefern lassen, umlagern), Fahrer für Abholungen am Hafen. Später: eigene Fahrzeugflotte.
+- **Preise:** Der Markt gibt einen Richtwert (Angebot, Nachfrage, Konkurrenz), der Spieler setzt seinen Preis drumherum. Dazu ein milder Preisindex pro Produkt und Stadt (etwa 0,85 bis 1,2, langsame Drift), der auch die Einkaufspreise bewegt, mit Rabatt-Aktionen der Lieferanten über mehrere Tage und seltenen Schocks. Gute Qualität macht ein Produkt an einem Spot beliebter (Entscheidung vom 04.10.2026). Ware altert nicht.
+- **Logistik:** Fahrzeuge fahren über echte Kölner Straßen, Kontrollen unterwegs, mehrere Lager (kaufen, beliefern lassen, umlagern), Fahrer für Abholungen am Hafen. Dazu (Entscheidung vom 04.10.2026): Lager haben eine Kapazität, die man ausbauen kann; eigene Fahrzeuge mit festen Werten pro Modell (Ladung, Tempo, Zollrisiko, kein Alter, keine Kennzeichen); Routenwahl pro Fahrt (Autobahn, Landstraße, nachts); Hafen-Ausbau mit Liegeplatz-Stufen und Containern; eine Warenfluss-Übersicht.
 - **Geld:**
   - Alles Illegale wird mit Schwarzgeld bezahlt.
   - Für Legales (Lagerhallen, Autos usw.) muss Geld gewaschen werden.
 - **Geldwäsche (Auftrag 27):** drei Wege, die man nach und nach freischaltet: Kumpel mit Kiosk (klein, teuer,
   schnell, kein Risiko), Waschsalon und Shisha-Bar (mittel, Einstieg mit sauberem oder Schwarzgeld), Bauunternehmer
   (groß, billig, langsam, braucht Ruf oder Reviere, zu viel auf einmal bringt Heat).
-- **Tarnfirmen:** Späti, Waschsalon, Shisha-Bar, Werkstatt usw. mit eigenem Gameplay (Umsatz, Personal, Upgrades);
-  die Wege der Geldwäsche sind die Vorstufe.
-- **Vertrieb:** Straßenverkauf an Spots, Lieferdienst per Spiel-Handy, Großhandel an andere Dealer. Kein Darknet.
+- **Tarnfirmen:** entfallen (Entscheidung vom 04.10.2026, zu kompliziert). Die drei Wege der Geldwäsche bleiben.
+- **Vertrieb:** Straßenverkauf an Spots, Lieferdienst per Spiel-Handy, Großhandel an andere Dealer. Kein Darknet. Die Dealer werden Stammabnehmer mit Vertrauen (größere Mengen, Vorkasse, Exklusivität, am Ende Zwischenhändler für ein Veedel). Dazu Wochenverträge: jeden Montag drei Angebote, eins wird angenommen.
 
 ## Personal
 
 - **Typen:** Läufer und Dealer, Fahrer (Abholung am Hafen, Umlagern), Sicherheit, Spezialisten (Anwalt, Buchhalter, Kontakt bei der Polizei). Lieferungen fährt die Rechte Hand (keine Kuriere mehr).
-- **Tiefe:** Individuen mit Namen, Porträt und Werten (z.B. Tempo, Loyalität, Vorsicht), die im Level aufsteigen.
+- **Tiefe:** Individuen mit Namen, Porträt und Werten (z.B. Tempo, Loyalität, Vorsicht), die im Level aufsteigen. Dazu (Entscheidung vom 04.10.2026) zwei bis drei Eigenschaften pro Person, Beziehungen untereinander und kleine Ereignisse im Ton der Figur.
 - **Loyalität:** Verrat kommt selten vor und hat milde Folgen.
-- **Hierarchie:** Boss → Rechte Hand → Leutnants mit bis zu drei Spots → Läufer und Sicherheit. Leutnants führen
+- **Hierarchie:** Boss → Rechte Hand (nach der Übergabe einer Stadt: Statthalter) → Capo (ab Leutnant Level 5, führt bis zu drei Leutnants in einem Bezirk, Entscheidung vom 04.10.2026) → Leutnants mit bis zu drei Spots → Läufer und Sicherheit. Die Rechte Hand gibt Rat (Tagesbericht, Konfrontationen), hat aber keine eigene Haltung und verrät nicht. Leutnants führen
   ihre Spots selbstständig (Preise, eigenes Personal, Nachbestellen nach Regeln, Ausfälle), die Rechte Hand hält
   die Löhne zusammen, verteilt Leute und schickt jeden Morgen einen Tagesbericht.
 - **Rechte Hand als Auftragsfahrer (Auftrag 28):** Nur sie nimmt Lieferanfragen an, sagt im Chat für dich zu und
@@ -81,7 +85,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
 
 ## Gangs, Risiko und Konflikte
 
-- **Gangs:** Die Gangs sind mächtig und aktiv, man muss gegen sie arbeiten.
+- **Gangs:** Die Gangs sind mächtig und aktiv, man muss gegen sie arbeiten. Sie haben ein Gedächtnis mit Verfall (verpfiffen, Schutzgeld pünktlich gezahlt …) und Beziehungen untereinander, daraus entstehen Gang-Kriege (Entscheidung vom 04.10.2026). Keine benannten Statthalter der Gangs.
   - Sie expandieren, verteidigen ihre Veedel, drücken Preise und greifen an.
   - Am Anfang bist du deutlich schwächer als sie.
 - **Mittel gegen die Gangs:**
@@ -89,9 +93,9 @@ Wer eine Entscheidung ändert, ändert sie hier.
   - wirtschaftlich: Preiskrieg, bessere Ware, Kunden und Lieferanten abwerben
   - Polizei ausnutzen: Gangs verpfeifen und Razzien bei ihnen auslösen
   - Diplomatie: Deals, Waffenstillstand, Bündnisse, Schutzgeld zahlen oder kassieren
-- **Polizei:** vorhanden, aber leicht (Heat-System als Würze, nicht als Kern).
+- **Polizei:** vorhanden, aber leicht (Heat-System als Würze, nicht als Kern). Keine Akte und keine Ermittlungen über die Heat hinaus, kein Korruptionsnetz (Entscheidung vom 04.10.2026). In der Hafen-Phase ist der Zoll der Gegner.
 - **Festnahme:** Ware und Geld werden beschlagnahmt, Mitarbeiter kommen in Haft, Anwalt und Kaution holen sie raus. Der Spieler selbst kommt nicht in Haft.
-- **Action:** spielbar als taktische, rundenbasierte Entscheidungen (fliehen, kämpfen, bestechen …). Die Werte der eigenen Leute entscheiden mit. Anlässe:
+- **Action:** spielbar als taktische, rundenbasierte Entscheidungen (fliehen, kämpfen, bestechen …). Die Werte der eigenen Leute entscheiden mit. Neu (Entscheidung vom 04.10.2026): Die Absicht der Gegenseite ist sichtbar, zwei Zeiger (Aggression, Bereitschaft zu gehen) statt einer Chance, eine Polizei-Uhr, Crew-Wahl mit Spezialzug, mehrere Einsätze statt Sieg oder Niederlage, Gegner mit Rollen und Rat der Rechten Hand (Details in `docs/plan.md`). Anlässe:
   - Überfälle abwehren
   - Polizeiflucht
   - Schulden eintreiben
@@ -105,9 +109,8 @@ Wer eine Entscheidung ändert, ändert sie hier.
 
 ## Fortschritt
 
-- Upgrade-Baum
-- Rang-Stufen (vom kleinen Fisch zum Paten von Köln)
-- Besitz und Immobilien als sichtbarer Aufstieg
+- Ränge des Spielers sind die Stufen des Bogens, als Titel ohne Boni: Kleindealer, Händler, Großhändler, Boss von Köln, Boss von <Stadt>, Boss von Deutschland, Importeur, Produzent.
+- Kein Upgrade-Baum, keine Perks, kein Besitz und keine Immobilien als eigenes System (Entscheidung vom 04.10.2026). Ausbau gibt es an Lagern, Hafen und Fahrzeugen.
 
 ## Optik und Sound
 
@@ -167,10 +170,11 @@ Hafengeburtstag, Schlagermove, Dom), Kölscher Klüngel gegen hanseatisch kühl,
 - **Session-Länge:** In 20 Minuten (etwa 8 Spieltage bei 2x) kommen Verkauf, Nachschub, Personal, Leutnants,
   Gang-Drohungen, Konfrontationen, Polizei-Kontrollen, Wetter und das erste Veedel vor (`npm run playthrough`,
   Screenshots in `docs/integration/`).
-- **Noch nicht umgesetzt** (spätere Aufträge, siehe `docs/auftraege/README.md`): eigener Charakter und Aufträge von
-  Figuren, Tarnfirmen, Upgrade-Baum und Rang-Stufen, weitere Immobilien, eigene Fahrzeugflotte (größere Fahrzeuge
-  für Routen), Leutnants, die selbst am Hafen abholen lassen, eine dritte Stadt (Daten-Schablone steht), das Kartell,
-  die lebendige Karte (Auftrag 31), KI-Porträts, Multiplayer.
+- **Noch nicht umgesetzt** (Aufträge 32 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Markt in Bewegung,
+  Wochenverträge, Lager mit Kapazität, Fahrzeuge, Routenwahl, Hafen-Ausbau, Warenfluss, Stammabnehmer, Gangs mit
+  Gedächtnis, Leute mit Geschichte, Capo, Konfrontationen neu, freie Reihenfolge der Städte mit Autobahn-Netz, Berlin,
+  München, Frankfurt, Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen: Tarnfirmen,
+  Charakter-Erstellung, Perks, Besitz, Akte, Korruption.
 
 ## Mehrere Städte (Auftrag 30 gebaut, Auftrag 31 für die Karte)
 
@@ -213,8 +217,10 @@ schönere Deutschland-Ansicht) kommt mit [Auftrag 31](auftraege/31-karte-lebt.md
 - **Daten:** pro Stadt ein Straßennetz aus Overture Maps und die A1 als Linie (409 km, gebaut); Rhein und Elbe als
   echte Wasserwege und mehr Leben auf der Karte (Verkehr, kleine Figuren an Spots, festes Performance-Budget) kommen
   mit Auftrag 31.
-- **Nach Hamburg:** Hamburg komplett geht an eine zweite Rechte Hand; eine dritte Stadt (Berlin oder Frankfurt) ist als
-  Datenschablone vorbereitet. Der Anruf des Kartells aus Kolumbien kommt später.
+- **Nach Hamburg (Entscheidung vom 04.10.2026):** Hamburg komplett geht an eine zweite Rechte Hand (Statthalter). Danach
+  Berlin, München und vielleicht Frankfurt in freier Reihenfolge, verbunden über ein Autobahn-Netz statt nur der A1.
+  Schlafende Städte laufen über ihren Statthalter weiter, ab und zu gibt es dort ein kleines Minus durch eine Razzia,
+  nichts Schlimmes, niemand ruft zurück. Danach Verkauf, Hafen und Produktion, siehe Abschnitt „Spielgefühl“.
 
 Gebaut mit Auftrag 30 genau so wie oben, mit diesen Werten: Hamburg-Fahrt 4,5 bis 5 Spielstunden, Route mit Fahrer
 etwa 4 Stunden 45 Minuten, höchstens 5 kg je Fahrt; Karneval ab Tag 30 alle 90 Tage, FC jeden zweiten Samstag,

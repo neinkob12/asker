@@ -9,6 +9,29 @@ Lies vorher CLAUDE.md, docs/konzept.md, docs/architektur.md, docs/handy-design.m
 docs/auftraege/README.md.
 ```
 
+## Stand 04.10.2026: Was davon noch gilt (Welle 1)
+
+Auftrag 22 ist gemergt, die Vorbedingung ist erfüllt. Seitdem haben die Aufträge 28, 30 und 31 einiges vorweggenommen.
+Dieser Auftrag läuft in **Welle 1** parallel zu 32, 33 und 35 (Tabelle in [`README.md`](README.md)) und wird so gekürzt:
+
+- **Bleibt:** Etappe 1 (Text-Helfer, Gang-Stimmen, Lieferanten-Stimmen, mehr Varianten der Routine-Nachrichten,
+  Hafenmeister umbenennen), Etappe 2 (Gang-Methoden, Einbruch, Abwerben, Einschüchtern, Chancen), Etappe 3
+  (Lieferprobleme mit Gründen und Entscheidungen), Etappe 5 (Spot-Arten, Bekanntheit, Ausbau, verlegen, umbenennen,
+  aufgeben; die Spot-Art Kneipe aus Auftrag 30 gibt es schon und wird eine der Arten).
+- **Prüfen, dann klein halten:** Etappe 4 (Kunden-Anfragen). Seit Auftrag 28 fährt nur die Rechte Hand aus und die
+  Anfragen sind halbiert. Baue den automatischen Übergang nur, wenn er neben der Rechten Hand noch Sinn ergibt, und
+  begründe die Entscheidung im PR.
+- **Entfällt:** Etappe 6 (Fuhrpark, geht in [Auftrag 33](33-lager-fahrzeuge-hafen.md)), Etappe 7 (Disponent, ist in der
+  Rechten Hand aufgegangen), Etappe 8 (Stadt-Events, gebaut in Auftrag 30). Die Situationstexte der Konfrontationen aus
+  Etappe 1 macht [Auftrag 35](35-konfrontationen-neu.md); neue Anlässe (z.B. Täter suchen nach einem Einbruch) trägst
+  du nur als Daten in `encounters/kinds.ts` ein.
+- **Städte:** Alles gilt für Köln und Hamburg, Werte pro Stadt als Daten (Gang-Stimmen auch für die vier Hamburger
+  Gangs, Lieferanten-Stimmen für alle Lieferanten).
+- **Ordner:** `src/modules/gangs/`, `src/modules/spots/`, der Text-Helfer im Kern, in `suppliers` nur die Lieferprobleme,
+  in `customers` nur die Kunden-Anfragen. `suppliers` und `customers` ändern parallel auch 32 und 33: dort nur erweitern.
+- Die Regeln aus dem Abschnitt „Rahmen“ in [Auftrag 32](32-markt-vertraege.md) gelten auch hier (Balancing, Etappen,
+  PR, Doku).
+
 ## Wunsch aus dem Probespielen (01.10.2026)
 
 > Ich möchte, dass es mehr Funktionen gibt, z.B. Spots selber gründen. Kunden sollen einem ab einem Punkt nicht mehr

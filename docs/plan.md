@@ -184,7 +184,7 @@ Kurzfassung mit den Anpassungen aus der Fragerunde. Details in [`docs/ideen.md`]
 | --- | --- | --- | --- |
 | Markt in Bewegung (A1) | Mild: Index zwischen 0,85 und 1,2, langsame Drift, Rabatt-Aktionen eines Lieferanten über drei bis fünf Tage, ein bis zwei Schocks pro Stadt, Marktbericht am Montag | 1, 3, 4 | 32 |
 | Qualität treibt Nachfrage (statt A2) | Die Nachfrage an einem Spot folgt der Qualität der letzten Verkäufe: Premium ein Viertel mehr, Dreck ein Drittel weniger, als Chip am Spot; keine Trends, kein Produkt-Ruf | 1, 3 | 32 |
-| Warenfluss-Übersicht (C3) | wie beschrieben, dazu die Karten-Ebene Lieferwege | alle | 32 |
+| Warenfluss-Übersicht (C3) | wie beschrieben, dazu die Karten-Ebene Lieferwege | alle | 33 |
 | Wochenverträge (H1) | wie beschrieben; in Phase 3 werden sie zur Bestell-Schleife | 1, 3 | 32 |
 | Lager mit Kapazität und Ausbau (C1) | Kapazität, Regale als Ausbau, Tresor, Tarnung; keine Kamera, kein Klima | 1, 3 | 33 |
 | Fahrzeuge (C2) | Roller, Kombi, Transporter, später Lkw: feste Ladung, festes Tempo, fester Zollfaktor pro Modell; kein Alter, keine Kennzeichen, keine Werkstatt | 1, 3 | 33 |
@@ -225,39 +225,28 @@ Ladung aufgeben).
 
 ## Aufträge
 
+Die Aufträge stehen als eigene Dateien in `docs/auftraege/` (32 bis 42, dazu das gekürzte 23) und laufen in vier Wellen,
+Tabelle mit Ordnern in [`docs/auftraege/README.md`](auftraege/README.md):
+
 ```
-23  Mehr Leben in Köln (geplant; die Fuhrpark-Etappe geht in 33)        ─┐  parallel möglich
-32  Markt und Warenfluss                                                 ─┘
-               │
-33  Lager, Fahrzeuge, Hafen
-               │
-34  Leute und Gegner
-               │
-35  Konfrontationen neu
-               │
-36  Deutschland: Reihenfolge frei, Autobahn-Netz, Statthalter, Startpaket, Ränge, kürzere Städte
-               │
-37  Berlin (Inhalt)        ─┐
-38  München (Inhalt)        ├  parallel, reine Daten nach der Checkliste in docs/architektur.md, Abschnitt „Städte“
-39  Frankfurt (Inhalt)     ─┘  optional
-               │
-40  Boss von Deutschland, Verkauf, Hafen-Phase: Kunden, Konkurrenz, Zoll-Heat, Europa-Ansicht
-               │
-41  Schiffe, Container, Häfen, Europa-Kunden
-               │
-42  Produktion: Fincas, Kette, Kartell, Ziel Europa
+Welle 1   23 · 32 Markt und Verträge · 33 Lager, Fahrzeuge, Hafen, Warenfluss · 35 Konfrontationen
+Welle 2   34 Leute und Gegner · 36 Deutschland
+Welle 3   37 Berlin · 38 München · 39 Frankfurt (optional)
+Welle 4   40 Verkauf und Hafen ──► 41 Schiffe und Europa ──► 42 Produktion
 ```
 
-Warum diese Reihenfolge: Die Stadt-Schleife wird fünfmal gespielt, also kommen ihre Verbesserungen zuerst (32 bis 35).
-36 vor den Inhalts-Städten, damit jede Stadt ein reiner Daten-Auftrag ist. 40 bis 42 bauen auf allem davor auf.
+Warum so: Die Stadt-Schleife wird fünfmal gespielt, also kommen ihre Verbesserungen zuerst (Welle 1 und 2). 36 vor den
+Inhalts-Städten, damit jede Stadt ein reiner Daten-Auftrag ist. Welle 4 baut auf allem davor auf. Abweichend von der
+ersten Fassung gehört der Warenfluss zu 33 (ein Besitzer für `goods`) und 35 läuft schon in Welle 1 (eigener Ordner;
+die Spezialzüge aus Eigenschaften kommen mit 34 über einen Haken). Die Abschnitte unten sind die Kurzfassung, maßgeblich
+sind die Auftragsdateien.
 
-### 32 · Markt und Warenfluss
+### 32 · Markt und Verträge
 
 - Preisindex pro Produkt und Stadt in `market`, mild, mit Rückkehr zur Mitte; `suppliers.packagePrice` liest ihn.
 - Rabatt-Aktionen und ein bis zwei Schocks pro Stadt als Marktereignisse in `events` (Art ohne Gebiet), Marktbericht
   am Montag per Handy.
 - Qualität der letzten Verkäufe als Nachfrage-Faktor pro Spot in `customers`, Chip am Spot.
-- Seite „Warenfluss“ in der Lager-App, Karten-Ebene Lieferwege.
 - Wochenverträge in `quests` als zweiter Typ mit Wahl aus drei und Frist, Karte unter der Quest.
 - Messen: Umsatz und Tage bis Köln komplett wie bisher, dazu neu „Entscheidungen pro Spielstunde“ (Befehle des Spielers
   mit echter Wahl) im Bot und im Playthrough.
@@ -270,6 +259,7 @@ Warum diese Reihenfolge: Die Stadt-Schleife wird fünfmal gespielt, also kommen 
   Fahrzeug das Privatauto des Fahrers wie heute.
 - Routenwahl pro Fahrt und als Einstellung der Fahrplan-Routen; `roadRoute` mit Gewicht pro Straßenart.
 - Liegeplatz-Stufen, ganze und geteilte Container, Tracker in der Lieferanten-App.
+- Seite „Warenfluss“ in der Lager-App, Karten-Ebene Lieferwege.
 
 ### 34 · Leute und Gegner
 
@@ -334,6 +324,3 @@ doch gebraucht wird.
    zukaufen.
 5. **Stellschrauben** für das Tempo der späteren Städte: Statthalter-Anteil, Startpaket, Startgeld. Werden mit dem Bot
    eingestellt, nicht geraten.
-6. **Konzept nachziehen:** Nach der Abnahme dieses Plans gehören die Entscheidungen oben nach `docs/konzept.md`
-   (Abschnitte „Spielgefühl“, „Welt“, „Mehrere Städte“, „Noch nicht umgesetzt“), und `docs/auftraege/README.md` bekommt
-   die Aufträge 32 bis 42 als Zeilen.

@@ -144,6 +144,47 @@ Wahrzeichen, Quellenangabe. PR #36 (nach 30):
   freien Städten.
 - Kneipen mit Bierglas, Island am Handy ohne verdeckte Kacheln, Kölner Lichter und Hafengeburtstag auf der Karte.
 
+### Nächste Runde: Der Bogen (Fragerunde vom 04.10.2026)
+
+Grundlage ist [`docs/plan.md`](../plan.md): Tycoon vor Drama, fünf Städte in freier Reihenfolge, dann Verkauf, Hafen und
+Produktion. Die Aufträge laufen in vier Wellen. Innerhalb einer Welle arbeiten die Sessions gleichzeitig, jede in ihren
+Ordnern; eine Welle startet, wenn die vorige gemergt ist. Gestartet und geprüft werden die Sessions aus der
+Planungs-Session heraus (Prüf-Loop, siehe unten).
+
+```
+Welle 1   23 Mehr Leben in Köln (gekürzt) · 32 Markt und Verträge · 33 Lager, Fahrzeuge, Hafen · 35 Konfrontationen
+             │  alle mergen
+Welle 2   34 Leute und Gegner · 36 Deutschland
+             │  alle mergen
+Welle 3   37 Berlin · 38 München · 39 Frankfurt (optional)
+             │  mergen
+Welle 4   40 Verkauf und Hafen ──► 41 Schiffe und Europa ──► 42 Produktion   (nacheinander)
+```
+
+| Auftrag | Thema | Welle | Ordner (gehören in der Welle dieser Session) |
+| --- | --- | --- | --- |
+| [23](23-mehr-leben-in-koeln.md) | Texte und Stimmen, Gang-Methoden, Lieferprobleme, Spot-Arten (gekürzt) | 1 | `gangs`, `spots`, Text-Helfer im Kern; in `suppliers` Lieferprobleme, in `customers` Kunden-Anfragen |
+| [32](32-markt-vertraege.md) | Preisindex, Rabatt-Aktionen, Marktereignisse, Qualität treibt Nachfrage, Wochenverträge | 1 | `market`, `quests`, `events`; in `customers` Qualitäts-Faktor, in `suppliers` Preis und Aktionen |
+| [33](33-lager-fahrzeuge-hafen.md) | Lagerkapazität und Ausbau, Fahrzeuge, Routenwahl, Hafen-Ausbau, Warenfluss | 1 | `goods`, `logistics`, neu `fleet`; in `roads` Gewicht pro Straßenart, in `suppliers` Container-Pakete |
+| [35](35-konfrontationen-neu.md) | Absicht, zwei Zeiger, Polizei-Uhr, Crew, mehrere Einsätze, Rat, Zollkontrolle | 1 | `encounters` |
+| [34](34-leute-und-gegner.md) | Eigenschaften und Beziehungen, Gang-Gedächtnis und Kriege, Stammabnehmer, Capo | 2 | `staff`, `recruiting`, `gangs`; in `hierarchy` Capo und Rat, in `customers` Dealer |
+| [36](36-deutschland.md) | Freie Reihenfolge, Autobahn-Netz, Statthalter, Startpaket, Ränge | 2 | `city`, `roads`, `leaderboard`; in `hierarchy` Übergabe und Statthalter, in `quests` Kapitel |
+| [37](37-berlin.md) | Berlin als Stadt (Daten) | 3 | Daten der Stadt |
+| [38](38-muenchen.md) | München als Stadt (Daten) | 3 | Daten der Stadt |
+| [39](39-frankfurt.md) | Frankfurt als Stadt (Daten, optional) | 3 | Daten der Stadt |
+| [40](40-verkauf-hafen.md) | Boss von Deutschland, Verkauf, Hafen-Phase mit Kunden, Konkurrenz, Zoll | 4 | neu `trade`, `city`, Häfen in `logistics`, Zoll in `police` |
+| [41](41-schiffe-europa.md) | Schiffe, Container, weitere Häfen, Europa-Kunden | 4 | `trade`, `logistics`, `fleet`, Seewege in `roads` |
+| [42](42-produktion.md) | Fincas, Produktionskette, Ziel Europa | 4 | neu `grow` |
+
+`src/core/`, `scripts/`, `package.json` und die Doku-Dateien gehören in den Wellen niemandem fest: nur erweitern, beim
+Mergen beide Seiten behalten. `CLAUDE.md`, `docs/architektur.md` und `docs/konzept.md` ergänzt jede Session in ihrem
+eigenen Abschnitt.
+
+**Prüf-Loop:** Die Planungs-Session startet jede Welle als eigene Cloud-Sessions (je ein Branch `claude/auftrag-<nr>-…`
+und ein Draft-PR), schaut stündlich nach, prüft fertige PRs gegen ihren Auftrag (Checkliste „Fertig, wenn“, CI, Review
+des Diffs), schickt Änderungswünsche an die Session zurück und meldet dem Spieler, welche PRs bereit zum Mergen sind.
+Gemergt wird vom Spieler. Ist eine Welle gemergt, startet der Loop die nächste.
+
 ## Mergen
 
 - Ein PR wird gemergt, sobald er fertig und die CI grün ist. Die Reihenfolge in Phase 1 ist egal.
@@ -157,15 +198,6 @@ Eine Einordnung, was dem Spiel im Vergleich zu den großen Tycoon-, Simulations-
 vom 04.10.2026 gebaut wird, und der Bogen des Spiels (fünf Städte in freier Reihenfolge, Verkauf, Lieferant am Hafen,
 eigene Produktion) mit den Aufträgen 32 bis 42 steht in [`docs/plan.md`](../plan.md).
 
-Diese Themen aus dem Konzept kommen nach der Integration, jeweils wieder als eigene Aufträge:
-
-- Logistik, zweiter Teil: eigene Fahrzeugflotte (Fahrzeuge kaufen, Ladekapazität), Leutnants organisieren Abholungen
-  (echte Straßenrouten, mehrere Lager und Kontrollen unterwegs sind mit Auftrag 21 da)
-- Tarnfirmen mit eigenem Gameplay und ausgebaute Geldwäsche
-- Kampagne: Charakter-Erstellung; der Anruf des Kartells nach mehreren Städten (Städte selbst: Auftrag 30 und 31)
-- Fortschritt: Upgrade-Baum, Rang-Stufen, Immobilien
-- Stadt-Events und Sonderaufträge
-- Inhalte: KI-Porträts und -Illustrationen, Musik und Sounds
-- Hosting: online mit Passwortschutz für den Freundeskreis
-- Eigener Anbau
-- Multiplayer
+Die alte Liste der späteren Themen ist durch den Plan ersetzt: Tarnfirmen, Charakter-Erstellung, Upgrade-Baum und
+Immobilien sind verworfen, Fuhrpark, Städte und Anbau stehen in den Aufträgen 33, 36 bis 39 und 42. Offen bleiben
+KI-Porträts, Hosting mit Passwortschutz und Multiplayer.
