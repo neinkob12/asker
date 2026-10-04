@@ -29,7 +29,9 @@ import {
 import { activeCity, cityName, relationFactor } from '../../city';
 import { getStock, getWarehouse, getWarehouses, productName, qualityTier } from '../../goods';
 import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount, portName } from '../../logistics';
+import { indexTrend, purchaseIndex } from '../../market';
 import {
+  activeDeal,
   assortment,
   availableCredit,
   availablePackages,
@@ -37,6 +39,7 @@ import {
   creditLimit,
   deliversTo,
   expectedArrival,
+  getDeals,
   getRelation,
   getSupplier,
   getSuppliers,
@@ -82,6 +85,43 @@ function ShipmentRow(props: { state: GameState; shipment: Shipment; showSupplier
   );
 }
 
+/**
+ * Chips am Paket: Rabatt-Aktion des Lieferanten und Bewegung des Markts (ab ±5 %). Steigt der Index, wird der
+ * Einkauf teurer.
+ */
+function PackageChips(props: {
+  supplierId: string;
+  packageId: string;
+  productId: string;
+  /** Container-Paket (Auftrag 33). */
+  container?: 'full' | 'shared';
+}) {
+  const { state } = useGame();
+  const trend = indexTrend(state, props.productId);
+  const deal = activeDeal(state, props.supplierId, props.packageId);
+  if (!trend && !deal && !props.container) return null;
+  return (
+    <Chips
+      items={[
+        props.container === 'full' && { label: 'ganzer Container', icon: 'package', color: 'goods' },
+        props.container === 'shared' && { label: 'geteilt: fremde Ware drin', icon: 'alert', color: 'warn' },
+        deal && {
+          label: `Aktion −${Math.round(deal.discount * 100)} % bis ${clock.weekdayName(deal.endsAt - 1, true)}`,
+          icon: 'percent',
+          color: 'money',
+        },
+        trend && {
+          // Der Einkauf folgt dem Markt nur zur Hälfte: Der Chip zeigt, was das Paket dadurch kostet.
+          label: `Einkauf ${trend.up ? '↑' : '↓'} ${Math.round(Math.abs(purchaseIndex(state, props.productId) - 1) * 100)} %`,
+          icon: trend.up ? 'trendUp' : 'trendDown',
+          color: trend.up ? 'warn' : 'money',
+          title: `${trend.label} am Markt, der Einkauf folgt zur Hälfte.`,
+        },
+      ]}
+    />
+  );
+}
+
 /** Eine Zeile der Liste: Kachel (Schiff oder Transporter, gesperrt mit Schloss), Name, Stand, Etikett. */
 function SupplierRow(props: { supplier: Supplier; onSelect: (id: string) => void }) {
   const { state } = useGame();
@@ -106,6 +146,12 @@ function SupplierRow(props: { supplier: Supplier; onSelect: (id: string) => void
           { label: trustLabel(rel.trust), icon: 'handshake', color: 'money' as const },
         ]
       : []),
+    unlocked &&
+      getDeals(state, activeCity(state)).some((d) => d.supplierId === s.id) && {
+        label: 'Aktion',
+        icon: 'percent',
+        color: 'money' as const,
+      },
   ];
   const tag = blocked ? (
     <Tag category="danger" icon="alert">
@@ -425,18 +471,15 @@ function SupplierDetail(props: { supplierId: string }) {
             >
               <div class={locked ? 'sup-pkg is-locked' : 'sup-pkg'}>
                 <strong>{p.label}</strong>
-                <span>
+                <span class="sup-pkg__price">
                   {price < p.price && <s>{formatEuro(p.price)}</s>} {formatEuro(price)}
                 </span>
-                {p.container && (
-                  <Chips
-                    items={[
-                      p.container === 'full'
-                        ? { label: 'ganzer Container', icon: 'package', color: 'goods' }
-                        : { label: 'geteilt: fremde Ware drin', icon: 'alert', color: 'warn' },
-                    ]}
-                  />
-                )}
+                <PackageChips
+                  supplierId={supplier.id}
+                  packageId={p.id}
+                  productId={p.productId}
+                  {...(p.container ? { container: p.container } : {})}
+                />
               </div>
             </ListItem>
           );

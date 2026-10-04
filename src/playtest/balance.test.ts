@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest';
 import type { GameEvent } from '../core';
 import { MONEY_CATEGORIES } from '../core';
 import { createTestGame } from '../core/testing';
+import { allProducts } from '../modules/goods';
+import { priceIndex } from '../modules/market';
+import { contractStats } from '../modules/quests';
 import { type BotOptions, CAREFUL_BOT, DEFAULT_BOT, newBotStats, playFor, snapshot } from './bot';
 import { koelnKomplett } from './scenario';
 
@@ -17,6 +20,12 @@ interface RunReport {
   events: Record<string, number>;
   /** Geldfluss der ersten sieben Tage nach Kategorie der Kasse (Umbuchungen wie Geldwäsche gehen in beide Richtungen). */
   flow: Record<string, number>;
+  /** Preisindex Köln aller Waren am Ende jedes Tages (Auftrag 32). */
+  index: number[];
+  /** Wochenverträge (Auftrag 32). */
+  contracts: ReturnType<typeof contractStats>;
+  /** Rabatt-Aktionen, bei denen der Bot gekauft hat. */
+  dealsBought: number;
 }
 
 function simulate(seed: number, days: number, stopOnWin = false, options: BotOptions = DEFAULT_BOT): RunReport {
@@ -36,13 +45,24 @@ function simulate(seed: number, days: number, stopOnWin = false, options: BotOpt
     const key = e.payload.category ? MONEY_CATEGORIES[e.payload.category].label : '(ohne)';
     flow[key] = (flow[key] ?? 0) + e.payload.amount;
   });
-  const report: RunReport = { seed, days: [], events, flow };
+  const report: RunReport = {
+    seed,
+    days: [],
+    events,
+    flow,
+    index: [],
+    contracts: contractStats(sim.state),
+    dealsBought: 0,
+  };
   for (let d = 0; d < days; d++) {
     revenue = 0;
     playFor(sim, DAY, stats, options);
     report.days.push({ ...snapshot(sim.state), revenue: Math.round(revenue) });
+    for (const p of allProducts()) report.index.push(priceIndex(sim.state, p.id, 'koeln'));
     if (sim.state.outcome.gameOver || (stopOnWin && sim.state.outcome.won)) break;
   }
+  report.contracts = contractStats(sim.state);
+  report.dealsBought = stats.deals?.length ?? 0;
   return report;
 }
 
@@ -113,6 +133,10 @@ describe('Balancing', () => {
       // Das erste Veedel ist in Reichweite, die Gangs merken es und machen Druck.
       expect(Math.max(...r.days.map((d) => d.veedel)), `Seed ${seed}`).toBeGreaterThanOrEqual(1);
       expect(r.events['gang.escalated'] ?? 0, `Seed ${seed}`).toBeGreaterThan(0);
+      // Markt und Verträge (Auftrag 32): Der Index bewegt sich mild, der Bot nimmt am Montag einen Vertrag.
+      expect(Math.min(...r.index), `Seed ${seed}`).toBeGreaterThanOrEqual(0.85);
+      expect(Math.max(...r.index), `Seed ${seed}`).toBeLessThanOrEqual(1.2);
+      expect(r.contracts.accepted, `Seed ${seed}`).toBeGreaterThanOrEqual(1);
     }
   }, 120_000);
 
@@ -158,6 +182,15 @@ describe('Balancing', () => {
             .sort((a, b) => a[1] - b[1])
             .map(([k, v]) => `${k} ${Math.round(v)}`)
             .join(', ')}`,
+        );
+        const c = r.contracts;
+        const fmt = (n: number) => n.toFixed(2).replace('.', ',');
+        console.log(
+          `  Markt: Index Köln ${fmt(Math.min(...r.index))}–${fmt(Math.max(...r.index))}` +
+            ` (Mittel ${fmt(r.index.reduce((a, b) => a + b, 0) / Math.max(1, r.index.length))})` +
+            ` | Marktereignisse ${e('events.marketStarted')} | Aktionen ${e('supplier.dealStarted')}, gekauft ${r.dealsBought}` +
+            ` | Verträge angenommen ${c.accepted}, erfüllt ${c.done}, geplatzt ${c.failed}` +
+            ` (${c.accepted > 0 ? Math.round((c.done / c.accepted) * 100) : 0} %)`,
         );
         if (verbose) for (const d of r.days) if (d.day % 10 === 0 || d === last) console.log(JSON.stringify(d));
         // Vorsichtiger Spieler: zwei Läufer, kein Ausbau. Kann er ansparen?

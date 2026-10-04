@@ -4,29 +4,54 @@
 // ('customer.left', 'customer.missed'), und gleichen sich stündlich wieder aus.
 // Eigene Preise setzt der Spieler pro Spot und Produkt (Befehl 'market.setPrice'); ohne eigenen Preis gilt der
 // Richtpreis am Spot. Wie Kunden auf den Preis reagieren, entscheidet das customers-Modul.
+// Preisindex (Auftrag 32): Pro Stadt und Produkt ein Faktor um 1, der um Mitternacht einen Schritt eines Zufallspfads
+// mit Rückkehr zur Mitte macht (INDEX_MIN bis INDEX_MAX), in allen Städten, auch den schlafenden. Richtpreise
+// multiplizieren damit, der Einkauf bei den Lieferanten mit halben Ausschlägen (purchaseIndex).
 //
 // Öffentliche API:
 //   referencePrice(state, productId, veedelId), averageReferencePrice(state, productId),
 //   purchasingPowerFactor(veedelId), supplyDemandFactor(state, productId, veedelId), getPressure(...),
 //   getCompetitionFactor(state, veedelId), setCompetitionFactor(ctx, veedelId, factor) (für die Gangs),
 //   spotReferencePrice(state, spotId, productId), getSpotPrice(state, spotId, productId),
-//   hasOwnPrice(state, spotId, productId), priceRatio(state, spotId, productId), roundPrice(price)
+//   hasOwnPrice(state, spotId, productId), priceRatio(state, spotId, productId), roundPrice(price),
+//   priceIndex(state, productId, cityId?), purchaseIndex(state, productId, cityId?), indexTrend(state, productId, cityId?),
+//   driftIndex(state, productId, cityId?), marketReport(state, cityId?) (Text des Marktberichts am Montag)
 // Befehle: 'market.setPrice'
 // Ereignisse: 'market.competitionChanged', 'market.priceSet'
 
-import { type CommandResult, type Ctx, defineModule, formatEuro, type GameState } from '../../core';
-import { activeCity, isVeedelLive } from '../city';
-import { getProduct } from '../goods';
-import { getSpot } from '../spots';
-import { allVeedel, getVeedel } from '../veedel';
 import {
+  type CommandResult,
+  type Ctx,
+  clock,
+  defineModule,
+  formatEuro,
+  type GameState,
+  MINUTES_PER_DAY,
+  messages,
+} from '../../core';
+import { activeCity, isVeedelLive, playableCities } from '../city';
+import { marketEventFactor } from '../events';
+import { allProducts, getProduct } from '../goods';
+import { getSpot } from '../spots';
+import { getDeals, getRelation, getSuppliers, isUnlocked, supplierContact } from '../suppliers';
+import { allVeedel, getVeedel, veedelCity } from '../veedel';
+import {
+  INDEX_CHIP_FROM,
+  INDEX_MAX,
+  INDEX_MIN,
+  INDEX_REVERSION,
+  INDEX_STEP,
   LOST_CUSTOMER_WEIGHT,
   MAX_COMPETITION_FACTOR,
   MAX_PRICE_FACTOR,
   MIN_COMPETITION_FACTOR,
   PRESSURE_DECAY,
   PRICE_STEP,
+  PURCHASE_INDEX_SHARE,
   PURCHASING_POWER_WEIGHT,
+  REPORT_HOUR,
+  REPORT_MIN_CHANGE,
+  REPORT_WEEKDAY,
   SATURATION_EUR,
   SUPPLY_DEMAND_RANGE,
 } from './config';
@@ -38,11 +63,15 @@ export interface MarketState {
   pressure: Record<string, Record<string, number>>;
   /** Eigene Preise: Spot-ID → Produkt-ID → Euro pro Einheit. */
   prices: Record<string, Record<string, number>>;
+  /** Preisindex (Auftrag 32): Stadt → Produkt → Faktor (fehlt = 1). */
+  index: Record<string, Record<string, number>>;
 }
 
 interface MarketStateV1 {
   competition: Record<string, number>;
 }
+
+type MarketStateV2 = Omit<MarketState, 'index'>;
 
 declare module '../../core' {
   interface ModuleStates {
@@ -88,8 +117,64 @@ export function referencePrice(state: GameState, productId: string, veedelId: st
     product.basePrice *
     purchasingPowerFactor(veedelId) *
     supplyDemandFactor(state, productId, veedelId) *
-    getCompetitionFactor(state, veedelId)
+    getCompetitionFactor(state, veedelId) *
+    priceIndex(state, productId, veedelCity(veedelId))
   );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Preisindex (Auftrag 32)
+
+/** Der gewürfelte Teil des Index (ohne Marktereignisse). */
+export function driftIndex(state: GameState, productId: string, cityId: string = activeCity(state)): number {
+  return state.modules.market.index?.[cityId]?.[productId] ?? 1;
+}
+
+/**
+ * Preisindex eines Produkts in einer Stadt (1 = normal, 1,08 = acht Prozent teurer): gewürfelter Pfad mal laufende
+ * Marktereignisse (events), zusammen in INDEX_MIN bis INDEX_MAX.
+ */
+export function priceIndex(state: GameState, productId: string, cityId: string = activeCity(state)): number {
+  return clampIndex(driftIndex(state, productId, cityId) * marketEventFactor(state, productId, cityId));
+}
+
+/** Wie der Index den Einkauf trifft: gedämpft (PURCHASE_INDEX_SHARE), damit die Marge nicht kippt. */
+export function purchaseIndex(state: GameState, productId: string, cityId: string = activeCity(state)): number {
+  return 1 + (priceIndex(state, productId, cityId) - 1) * PURCHASE_INDEX_SHARE;
+}
+
+/**
+ * Für die Oberfläche: Abweichung des Index ab INDEX_CHIP_FROM als Text, z.B. "Gras ↑ 8 %", sonst null.
+ * up: der Preis steigt (für den Verkauf gut, für den Einkauf schlecht).
+ */
+export function indexTrend(
+  state: GameState,
+  productId: string,
+  cityId: string = activeCity(state),
+): { change: number; up: boolean; label: string } | null {
+  const change = priceIndex(state, productId, cityId) - 1;
+  if (Math.abs(change) < INDEX_CHIP_FROM) return null;
+  const pct = Math.round(Math.abs(change) * 100);
+  const name = getProduct(productId)?.name ?? productId;
+  return { change, up: change > 0, label: `${name} ${change > 0 ? '↑' : '↓'} ${pct} %` };
+}
+
+function clampIndex(value: number): number {
+  return Math.min(INDEX_MAX, Math.max(INDEX_MIN, value));
+}
+
+/** Ein Tagesschritt des Index in allen Städten (auch den schlafenden): Rückkehr zur Mitte plus Zufall. */
+function stepIndex(ctx: Ctx): void {
+  const market = ctx.state.modules.market;
+  for (const city of playableCities()) {
+    market.index[city.id] ??= {};
+    const row = market.index[city.id];
+    for (const product of allProducts()) {
+      const now = row[product.id] ?? 1;
+      const next = 1 + (now - 1) * (1 - INDEX_REVERSION) + (ctx.random() * 2 - 1) * INDEX_STEP;
+      row[product.id] = Math.round(clampIndex(next) * 1000) / 1000;
+    }
+  }
 }
 
 /** Mittlerer Richtpreis über alle Veedel einer Stadt (Standard: die aktive; z.B. für den Großhandel). */
@@ -127,6 +212,51 @@ export function getSpotPrice(state: GameState, spotId: string, productId: string
 export function priceRatio(state: GameState, spotId: string, productId: string): number {
   const reference = spotReferencePrice(state, spotId, productId);
   return reference > 0 ? getSpotPrice(state, spotId, productId) / reference : 1;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Marktbericht (Auftrag 32): Montag 9 Uhr vom Lieferanten mit dem meisten Vertrauen, zwei Sätze.
+
+/** Die zwei Sätze des Berichts für eine Stadt (ohne Absender). */
+export function marketReport(state: GameState, cityId: string = activeCity(state)): string {
+  const moves = allProducts()
+    .map((p) => ({ name: p.name, change: priceIndex(state, p.id, cityId) - 1 }))
+    .filter((m) => Math.abs(m.change) >= REPORT_MIN_CHANGE);
+  const pct = (c: number) => `${Math.round(Math.abs(c) * 100)} %`;
+  const up = [...moves].sort((a, b) => b.change - a.change).find((m) => m.change > 0);
+  const down = [...moves].sort((a, b) => a.change - b.change).find((m) => m.change < 0);
+  const parts = [
+    up && `${up.name} zieht an (+${pct(up.change)})`,
+    down && `${down.name} gibt nach (−${pct(down.change)})`,
+  ].filter(Boolean);
+  const first = parts.length > 0 ? `${parts.join(', ')}.` : 'Der Markt ist ruhig, die Preise stehen normal.';
+  const deal = getDeals(state, cityId)[0];
+  // So, wie der Lieferant in der Stadt auftritt (in Hamburg andere Pakete, z.B. Daan am Kai).
+  const supplier = deal ? getSuppliers(state, cityId).find((s) => s.id === deal.supplierId) : undefined;
+  const pkg = supplier?.packages.find((p) => p.id === deal?.packageId);
+  const second =
+    deal && supplier && pkg
+      ? `Aktion: ${pkg.label} bei ${supplier.contactName} ${Math.round(deal.discount * 100)} % billiger bis ${clock.weekdayName(deal.endsAt - 1)}.`
+      : 'Aktionen gibt es gerade keine.';
+  return `${first} ${second}`;
+}
+
+/** Wer den Bericht schickt: der freie Lieferant der Stadt mit dem meisten Vertrauen. */
+function reportSender(state: GameState, cityId: string) {
+  return getSuppliers(state, cityId)
+    .filter((s) => isUnlocked(state, s.id))
+    .sort((a, b) => getRelation(state, b.id).trust - getRelation(state, a.id).trust)[0];
+}
+
+function sendReport(ctx: Ctx): void {
+  const cityId = activeCity(ctx.state);
+  const sender = reportSender(ctx.state, cityId);
+  if (!sender) return;
+  messages.send(ctx, {
+    contact: supplierContact(sender),
+    text: `Marktbericht ${clock.weekdayName(ctx.now)}: ${marketReport(ctx.state, cityId)}`,
+    silent: true,
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -188,11 +318,15 @@ function decay(ctx: Ctx): void {
 
 export default defineModule({
   id: 'market',
-  version: 2,
+  version: 3,
   dependsOn: ['goods', 'veedel'],
-  init: () => ({ competition: {}, pressure: {}, prices: {} }),
+  init: () => ({ competition: {}, pressure: {}, prices: {}, index: {} }),
   tickEvery: 60,
-  tick: decay,
+  tick: (ctx) => {
+    decay(ctx);
+    if (ctx.now % MINUTES_PER_DAY === 0) stepIndex(ctx);
+    if (clock.weekday(ctx.now) === REPORT_WEEKDAY && clock.hour(ctx.now) === REPORT_HOUR) sendReport(ctx);
+  },
   commands: {
     'market.setPrice': (ctx, { spotId, productId, price }) => setPrice(ctx, spotId, productId, price),
   },
@@ -204,6 +338,8 @@ export default defineModule({
     'customer.missed': (ctx, { veedelId, productId, amount }) => shiftPressure(ctx, veedelId, productId, amount),
   },
   migrations: {
-    2: (old: MarketStateV1): MarketState => ({ competition: old.competition, pressure: {}, prices: {} }),
+    2: (old: MarketStateV1): MarketStateV2 => ({ competition: old.competition, pressure: {}, prices: {} }),
+    // Version 3 (Auftrag 32): Preisindex, alte Stände fangen bei 1 an.
+    3: (old: MarketStateV2): MarketState => ({ ...old, index: {} }),
   },
 });

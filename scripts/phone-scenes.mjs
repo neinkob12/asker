@@ -286,6 +286,37 @@ export const SCENES = [
     })()`,
   },
   { name: 'marktdetail', js: "window.koeln.runtime.api.openPanel('market.overview', {})" },
+  // Markt in Bewegung (Auftrag 32): Preisindex, ein Marktereignis, eine Rabatt-Aktion, Qualität am Spot
+  {
+    name: 'markt-bewegt',
+    js: `(() => {
+      const s = window.koeln.session.sim.state;
+      s.modules.market.index = { koeln: { weed: 1.09, hash: 0.93, haze: 1.03, vape: 0.95 } };
+      s.modules.events.market = [{ id: 99001, eventId: 'customsSeizure', cityId: 'koeln', productId: 'weed', factor: 1.12, startedAt: s.time, endsAt: s.time + 3 * 1440 }];
+      window.koeln.runtime.api.openPanel('market.overview', {});
+    })()`,
+  },
+  {
+    name: 'lieferant-aktion',
+    js: `(async () => {
+      ${STEPS}
+      const s = window.koeln.session.sim.state;
+      s.modules.market.index = { koeln: { weed: 1.09, hash: 0.93, haze: 1.03, vape: 0.95 } };
+      s.modules.suppliers.deals = [{ id: 99002, supplierId: 'frankfurt', packageId: 'weed50', cityId: 'koeln', discount: 0.15, startedAt: s.time, endsAt: s.time + 3 * 1440 }];
+      window.koeln.runtime.api.openPhone('suppliers.app', { supplierId: 'frankfurt' });
+      const pkg = await until(() => document.querySelector('.phone .sup-pkg'));
+      pkg?.scrollIntoView({ block: 'start' });
+    })()`,
+  },
+  {
+    name: 'spot-qualitaet',
+    js: `(() => {
+      const s = window.koeln.session.sim.state;
+      const id = s.modules.spots.unlocked[0];
+      s.modules.customers.quality[id] = { weed: 0.9, hash: 0.2 };
+      window.koeln.runtime.api.openPanel('spots.spot', { spotId: id });
+    })()`,
+  },
   {
     name: 'akte',
     js: `(() => {
@@ -640,6 +671,30 @@ export const SCENES = [
       const s = window.koeln.session.sim.state;
       const id = s.modules.hierarchy.rightHands?.koeln?.staffId;
       window.koeln.runtime.api.openPhone('core.messages', id ? { contactId: 'staff:' + id } : undefined);
+    })()`,
+  },
+  // Wochenverträge (Auftrag 32): spult bis Montag 8 Uhr vor, deshalb hinten. Erst die Angebote, dann einer läuft.
+  {
+    name: 'vertraege',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      const q = sim.state.modules.quests.contracts;
+      if (q.offers.length === 0 && !q.active) {
+        const t = sim.state.time;
+        const monday8 = 3 * 1440 + 8 * 60;
+        const next = monday8 + Math.max(0, Math.ceil((t - monday8) / 10080)) * 10080;
+        if (next > t) sim.advance(next - t);
+      }
+      window.koeln.runtime.api.openPanel('quests.list', {});
+    })()`,
+  },
+  {
+    name: 'vertrag-laeuft',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      const offer = sim.state.modules.quests.contracts.offers[0];
+      if (offer) sim.dispatch({ type: 'quests.acceptContract', payload: { offerId: offer.id } });
+      window.koeln.runtime.api.openPanel('quests.list', {});
     })()`,
   },
   // Der Anruf aus Hamburg (macht Köln komplett, deshalb ganz am Ende)

@@ -12,21 +12,56 @@
 //   eventFactor(state, effect, where)  Faktor für 'demand' | 'heatPerSale' | 'checks' | 'gangRaids' an einem Spot, in
 //                                      einem Veedel oder (gangRaids) in einer Stadt
 //   raidsAllowed(state, cityId)        false, solange ein Event mit noRaids läuft (Karneval)
-// Ereignisse: 'events.started' { eventId, cityId, endsAt }, 'events.ended' { eventId, cityId }
+//   Marktereignisse (Auftrag 32, ohne Gebiet, MARKET_EVENTS in config.ts): marketEvents(state, cityId?),
+//   marketEventFactor(state, productId, cityId) (Faktor auf den Preisindex), getMarketEventDef(id)
+// Ereignisse: 'events.started' { eventId, cityId, endsAt }, 'events.ended' { eventId, cityId },
+//   'events.marketStarted' { runId, eventId, cityId, productId, factor, endsAt }, 'events.marketEnded' { … }
 
 import { type Ctx, clock, defineModule, type GameState, journal, MINUTES_PER_DAY, messages } from '../../core';
 import { citiesUnlocked, cityOfSpot, isCityLive } from '../city';
+import { allProducts, getProduct } from '../goods';
 import { getSpot } from '../spots';
-import { CITY_EVENTS, type CityEventDef, EVENT_CONTACTS, type EventEffects } from './config';
+import {
+  CITY_EVENTS,
+  type CityEventDef,
+  EVENT_CONTACTS,
+  type EventEffects,
+  MARKET_EVENT_CHANCE,
+  MARKET_EVENT_DAYS,
+  MARKET_EVENTS,
+  MAX_MARKET_EVENTS,
+  type MarketEventDef,
+} from './config';
 
-export { CITY_EVENTS, type CityEventDef, type EventEffects } from './config';
+export {
+  CITY_EVENTS,
+  type CityEventDef,
+  type EventEffects,
+  MARKET_EVENTS,
+  type MarketEventDef,
+} from './config';
+
+/** Ein laufendes Marktereignis (Auftrag 32). */
+export interface MarketEventRun {
+  id: number;
+  eventId: string;
+  cityId: string;
+  productId: string;
+  factor: number;
+  startedAt: number;
+  endsAt: number;
+}
 
 export interface EventsState {
   /** Events, deren Start gemeldet ist (bis zu ihrem echten Ende, auch wenn die Stadt zwischendurch schläft). */
   running: string[];
   /** Zuletzt angekündigter Termin pro Event (Startzeit). */
   announced: Record<string, number>;
+  /** Laufende Marktereignisse (Auftrag 32). */
+  market: MarketEventRun[];
 }
+
+type EventsStateV1 = Omit<EventsState, 'market'>;
 
 declare module '../../core' {
   interface ModuleStates {
@@ -35,6 +70,15 @@ declare module '../../core' {
   interface GameEvents {
     'events.started': { eventId: string; cityId: string; endsAt: number };
     'events.ended': { eventId: string; cityId: string };
+    'events.marketStarted': {
+      runId: number;
+      eventId: string;
+      cityId: string;
+      productId: string;
+      factor: number;
+      endsAt: number;
+    };
+    'events.marketEnded': { runId: number; eventId: string; cityId: string; productId: string };
   }
 }
 
@@ -179,10 +223,94 @@ export function raidsAllowed(state: GameState, cityId: string): boolean {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Marktereignisse (Auftrag 32)
+
+export function getMarketEventDef(id: string): MarketEventDef | undefined {
+  return MARKET_EVENTS.find((e) => e.id === id);
+}
+
+/** Laufende Marktereignisse, in einer Stadt oder überall. */
+export function marketEvents(state: GameState, cityId?: string): readonly MarketEventRun[] {
+  const all = state.modules.events.market ?? [];
+  return cityId ? all.filter((r) => r.cityId === cityId) : all;
+}
+
+/** Faktor der laufenden Marktereignisse auf den Preisindex einer Ware in einer Stadt (1 = keiner). */
+export function marketEventFactor(state: GameState, productId: string, cityId: string): number {
+  let factor = 1;
+  for (const run of state.modules.events.market ?? []) {
+    if (run.cityId === cityId && run.productId === productId && run.endsAt > state.time) factor *= run.factor;
+  }
+  return factor;
+}
+
+/** Text eines Marktereignisses mit der Ware. */
+export function marketEventText(run: Pick<MarketEventRun, 'eventId' | 'productId'>): string {
+  const name = getProduct(run.productId)?.name ?? run.productId;
+  return (getMarketEventDef(run.eventId)?.text ?? '').replace('{product}', name);
+}
+
+/**
+ * Um Mitternacht: Abgelaufene enden, in jeder freien Stadt beginnt mit MARKET_EVENT_CHANCE ein neues (höchstens
+ * MAX_MARKET_EVENTS gleichzeitig, nie zweimal dieselbe Ware). Halb und halb: Preise rauf oder runter.
+ */
+function rollMarketEvents(ctx: Ctx): void {
+  const s = ctx.state.modules.events;
+  for (const run of s.market.filter((r) => r.endsAt <= ctx.now)) {
+    const def = getMarketEventDef(run.eventId);
+    if (def && isCityLive(ctx.state, run.cityId))
+      journal.add(ctx, `${def.name} ist vorbei, die Preise beruhigen sich.`);
+    ctx.emit('events.marketEnded', {
+      runId: run.id,
+      eventId: run.eventId,
+      cityId: run.cityId,
+      productId: run.productId,
+    });
+  }
+  s.market = s.market.filter((r) => r.endsAt > ctx.now);
+  for (const cityId of citiesUnlocked(ctx.state)) {
+    const here = s.market.filter((r) => r.cityId === cityId);
+    if (here.length >= MAX_MARKET_EVENTS || !ctx.chance(MARKET_EVENT_CHANCE)) continue;
+    const up = ctx.chance(0.5);
+    const known = new Set(allProducts().map((p) => p.id));
+    const options = MARKET_EVENTS.filter(
+      (d) =>
+        d.factor > 1 === up &&
+        !here.some((r) => r.eventId === d.id) &&
+        d.products.some((p) => known.has(p) && !here.some((r) => r.productId === p)),
+    );
+    if (options.length === 0) continue;
+    const def = ctx.pick(options);
+    const productId = ctx.pick(def.products.filter((p) => known.has(p) && !here.some((r) => r.productId === p)));
+    const [min, max] = MARKET_EVENT_DAYS;
+    const run: MarketEventRun = {
+      id: ctx.nextId(),
+      eventId: def.id,
+      cityId,
+      productId,
+      factor: def.factor,
+      startedAt: ctx.now,
+      endsAt: ctx.now + ctx.randomInt(min, max) * MINUTES_PER_DAY,
+    };
+    s.market.push(run);
+    if (isCityLive(ctx.state, cityId)) journal.add(ctx, `${def.name}: ${marketEventText(run)}`, up ? 'good' : 'bad');
+    ctx.emit('events.marketStarted', {
+      runId: run.id,
+      eventId: def.id,
+      cityId,
+      productId,
+      factor: def.factor,
+      endsAt: run.endsAt,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Ablauf
 
 function tick(ctx: Ctx): void {
   const s = ctx.state.modules.events;
+  if (ctx.now % MINUTES_PER_DAY === 0) rollMarketEvents(ctx);
   const unlocked = citiesUnlocked(ctx.state);
   for (const def of CITY_EVENTS) {
     if (!unlocked.includes(def.cityId)) continue;
@@ -212,9 +340,13 @@ function tick(ctx: Ctx): void {
 
 export default defineModule({
   id: 'events',
-  version: 1,
+  version: 2,
   dependsOn: ['city', 'spots'],
-  init: () => ({ running: [], announced: {} }),
+  init: () => ({ running: [], announced: {}, market: [] }),
   tickEvery: HOUR,
   tick,
+  migrations: {
+    // Version 2 (Auftrag 32): Marktereignisse.
+    2: (old: EventsStateV1): EventsState => ({ ...old, market: [] }),
+  },
 });

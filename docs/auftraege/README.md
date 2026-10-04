@@ -180,6 +180,10 @@ Welle 4   40 Verkauf und Hafen ──► 41 Schiffe und Europa ──► 42 Prod
 Mergen beide Seiten behalten. `CLAUDE.md`, `docs/architektur.md` und `docs/konzept.md` ergänzt jede Session in ihrem
 eigenen Abschnitt.
 
+**Stand Auftrag 32:** umgesetzt in fünf Etappen (PR #54): Preisindex pro Ware und Stadt (`market`), Rabatt-Aktionen
+(`suppliers`), Marktereignisse (`events`), Marktbericht am Montag, Preisgrenze in Bestellregeln (`hierarchy`, klein),
+Qualität treibt Nachfrage (`customers/quality.ts`), Wochenverträge (`quests/contracts.ts`), Bot und Balancing.
+
 **Stand Auftrag 33:** umgesetzt in sechs Etappen (PR #55). Lager mit Kapazität und Ausbau (Regale, Tresor, Tarnung;
 `storeFitting`, `warehouseModifiers`), neues Modul `fleet` (Roller, Kombi, Transporter; Privatauto ohne eigenes Fahrzeug),
 Routenwahl (Autobahn, Landstraße, nachts; `roads` mit Gewicht pro Straßenart), Liegeplatz-Stufen, ganze und geteilte
