@@ -180,6 +180,13 @@ Welle 4   40 Verkauf und Hafen ──► 41 Schiffe und Europa ──► 42 Prod
 Mergen beide Seiten behalten. `CLAUDE.md`, `docs/architektur.md` und `docs/konzept.md` ergänzt jede Session in ihrem
 eigenen Abschnitt.
 
+**Stand Auftrag 33:** umgesetzt in sechs Etappen (PR #55). Lager mit Kapazität und Ausbau (Regale, Tresor, Tarnung;
+`storeFitting`, `warehouseModifiers`), neues Modul `fleet` (Roller, Kombi, Transporter; Privatauto ohne eigenes Fahrzeug),
+Routenwahl (Autobahn, Landstraße, nachts; `roads` mit Gewicht pro Straßenart), Liegeplatz-Stufen, ganze und geteilte
+Container, Schiffs-Tracker, Seite Warenfluss und Ebene Lieferwege. Für Welle 2: Auftrag 23 (Einbruch) nutzt
+`warehouseModifiers(...).lossFactor`; Auftrag 36 übernimmt mit dem Startpaket die Fahrzeuge (`fleet`, Fahrzeuge stehen in
+einer Stadt) und sollte im Schlafmodus einmalige Ausgaben (`expansion`) aus dem Schnitt nehmen.
+
 **Prüf-Loop:** Die Planungs-Session startet jede Welle als eigene Cloud-Sessions (je ein Branch `claude/auftrag-<nr>-…`
 und ein Draft-PR), schaut stündlich nach, prüft fertige PRs gegen ihren Auftrag (Checkliste „Fertig, wenn“, CI, Review
 des Diffs), schickt Änderungswünsche an die Session zurück und meldet dem Spieler, welche PRs bereit zum Mergen sind.

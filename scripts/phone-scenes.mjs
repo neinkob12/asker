@@ -247,8 +247,12 @@ export const SCENES = [
       sim.state.modules.suppliers.unlocked.push('rotterdam');
       sim.state.modules.suppliers.relations.rotterdam.trust = 30;
       sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'container' } });
-      sim.advance(240);
       sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'shared' } });
+      // Das erste Schiff ist schon vier Stunden unterwegs (ohne Vorspulen, damit die Island ruhig bleibt).
+      const [first] = sim.state.modules.suppliers.shipments;
+      first.orderedAt -= 240;
+      first.arrivesAt -= 240;
+      if (first.problemAt !== undefined) first.problemAt -= 240;
       window.koeln.runtime.api.openPhone('suppliers.app');
     })()`,
   },

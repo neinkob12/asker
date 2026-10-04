@@ -43,6 +43,12 @@ Kopfbedeckung und Oberteil (Fade, Cornrows, Dreads, Cap nach hinten, Durag, Band
 Daunen-, Leder-, Bomberjacke …) auch Kopfform, Brauen, Augen, Mund, Narbe, Veilchen, Tattoo, Goldzahn/Grill, Zigarette,
 Ohrringe, Kette und Maske; jedes Merkmal würfelt fest aus Seed und Merkmalsname (`roll`), gewichtet nach Alter,
 Geschlecht und einem Straßen-Faktor. Das alte Feld `extra` bleibt als Eingabe gültig, `lookTraits` beschreibt alles.
+Auftrag 33: Lager haben Platz in Gramm und Ausbau (`goods.upgradeWarehouse`: Regale, Tresor, Tarnung; `warehouseModifiers`
+fragen `police` und `encounters`). **Lieferungen und Fahrten lagern mit `storeFitting` ein** (nimmt nur, was passt, und meldet
+den Rest); `store` überfüllt (nur für Beute und Rückgaben). Neues Modul `fleet` (Fahrzeuge mit Ladung, Tempo, Kontrollfaktor;
+ohne eigenes das Privatauto mit 5 kg), Fahrten wählen `vehicleId` und `choice` (Autobahn, Landstraße, nachts; `roads` nimmt
+`{ weights }` pro Straßenart), Liegeplatz-Stufen (`logistics.upgradeBerth`), Container-Pakete (`container: 'full' | 'shared'`),
+Warenfluss (`goods.usagePerDay`) in der Lager-App, Ebene „Lieferwege“.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
@@ -152,7 +158,7 @@ export default defineModule({
 ## Oberfläche eines Moduls
 
 In `src/modules/<id>/ui/index.tsx` (Beispiel in `_template/ui/`): `registerHudItem`, `registerTab`,
-`registerSlot` (z.B. in `'tab:territory'`, `'tab:staff'`, `'spots.spotPanel'`, `'goods.warehouse'` (Lager-Seite), `'finance.app'`
+`registerSlot` (z.B. in `'tab:territory'`, `'tab:staff'`, `'spots.spotPanel'`, `'goods.warehouse'` (Lager-Seite), `'goods.app'` (Lager-App), `'suppliers.top'` (oben in der Lieferanten-App), `'finance.app'`
 (unten in der Kasse), `'core.settings'` (eigener Abschnitt in den Einstellungen mit `title`, `icon`, `color`) oder `'map.overlay'`
 über der Kartenfläche), `registerPanel`,
 `registerDialog` (mit `area: 'map'` nur über der Kartenfläche, dazu `MapDialog`), `registerMapLayerOption` (Menü Ebenen),
