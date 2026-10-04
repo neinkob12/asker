@@ -73,7 +73,7 @@ function roadTracking(state: GameState, trip: Trip): Tracking {
 
 /** Was die Karte zeigt: die am weitesten fortgeschrittene Hafenlieferung (Straße vor Kai vor Rhein). */
 function currentTracking(state: GameState): Tracking | null {
-  const pickups = getTrips(state).filter((t) => t.kind === 'pickup' && t.fromId === PORT_ID);
+  const pickups = getTrips(state).filter((t) => t.kind === 'pickup' && t.fromId === PORT_ID && t.status !== 'planned');
   const cargo = getCargo(state);
   const ships = shipmentsInTransit(state).filter((s) => getSupplier(state, s.supplierId)?.kind === 'port');
   const total = pickups.length + cargo.length + ships.length;
@@ -88,7 +88,7 @@ function currentTracking(state: GameState): Tracking | null {
       title: `${formatProductAmount(c.productId, amount)} ${productName(c.productId)} · ${getSupplier(state, c.supplierId)?.name ?? 'Lieferant'}`,
       status: risky
         ? 'Am Kai · der Zoll kann sie jederzeit finden'
-        : `Am Kai · Zoll in ${islandCountdown(cargoRiskFrom(c) - state.time)}`,
+        : `Am Kai · Zoll in ${islandCountdown(cargoRiskFrom(c, state) - state.time)}`,
       sea: 1,
       road: 0,
       tone: risky ? 'bad' : 'warn',

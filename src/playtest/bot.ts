@@ -6,6 +6,10 @@
 // beantwortet die Nachricht nach einer Festnahme (gute Leute per Kaution, sonst ersetzen), wenn die Gangs ungemütlich werden, antwortet auf Handy-Nachrichten und lässt
 // Konfrontationen von seinen Leuten auswürfeln. Er schickt nur Befehle, genau wie die Oberfläche.
 //
+// Lager und Fahrzeuge (Auftrag 33): Weist ein volles Lager Ware ab, baut der Bot Regale ein; stehen mehr als 2 kg am Kai,
+// kauft er einen Kombi (fällt weniger auf). Hafenware holt er nachts ab, wenn sie bis dahin sicher am Kai steht. In
+// einer neuen Stadt nimmt er das günstigste Lager mit genug Platz. Container bestellt er nicht (zu viel Geld auf einmal).
+//
 // Städte (Auftrag 30): Der Bot spielt immer die aktive Stadt (Spots, Lager, Leute, Lieferanten, Hafen und Gangs dort).
 // Gehören ihm alle Veedel einer Stadt und erfüllt die Rechte Hand alles, erteilt er ihr die Vollmacht und zieht in die
 // nächste freie Stadt (city.travel). In einer neuen Stadt kauft er zuerst ein Lager (sauberes Geld, notfalls gewaschen).
@@ -28,8 +32,19 @@ import {
   suggestedCrew,
 } from '../modules/encounters';
 import { periodReport } from '../modules/finance';
+import { getVehicles, VEHICLE_MODELS, vehiclePrice } from '../modules/fleet';
 import { ceasefireCost, getGangs, tributeAmount } from '../modules/gangs';
-import { getStock, getWarehouses, warehouseSites } from '../modules/goods';
+import {
+  getStock,
+  getWarehouses,
+  NEARLY_FULL,
+  stockWeight,
+  storageStats,
+  upgradeCost,
+  warehouseCapacity,
+  warehouseLoad,
+  warehouseSites,
+} from '../modules/goods';
 import {
   canBeRightHand,
   fullPowerMissing,
@@ -41,7 +56,17 @@ import {
   rightHandHandlesOrders,
 } from '../modules/hierarchy';
 import { amountInProgress, launderingCapacity } from '../modules/laundering';
-import { berthCost, cargoAmount, freeDrivers, getCargo, hasBerth, inTransitAmount, PORTS } from '../modules/logistics';
+import {
+  berthCost,
+  cargoAmount,
+  cargoRiskFrom,
+  departureFor,
+  freeDrivers,
+  getCargo,
+  hasBerth,
+  inTransitAmount,
+  PORTS,
+} from '../modules/logistics';
 import { activeContract, contractOffers, contractValue } from '../modules/quests';
 import { getCandidates } from '../modules/recruiting';
 import { canFoundSpotAt, getSpots, lockedSpots, spotCity } from '../modules/spots';
@@ -240,7 +265,8 @@ function buyDeals(sim: Simulation, stats: BotStats): void {
   for (const deal of getDeals(state, city)) {
     if (bought.includes(deal.id)) continue;
     const pkg = availablePackages(state, deal.supplierId).find((p) => p.id === deal.packageId);
-    if (!pkg || !(pkg.productId in PRODUCT_MIX)) continue;
+    // Container (Auftrag 33) kauft der Bot nicht, auch nicht im Angebot: zu viel Geld auf einmal.
+    if (!pkg || pkg.container || !(pkg.productId in PRODUCT_MIX)) continue;
     const supplier = getSuppliers(state, city).find((x) => x.id === deal.supplierId);
     if (supplier?.kind === 'port' && freeDrivers(state).length === 0) continue;
     const price = packagePrice(state, deal.supplierId, deal.packageId);
@@ -295,8 +321,58 @@ function harbor(sim: Simulation, stats: BotStats): void {
   if (drivers === 0 && money(state) > reserve(state) + 800) {
     run(sim, stats, { type: 'staff.hireDriver', payload: {} });
   }
-  if (getCargo(state).length > 0 && freeDrivers(state).length > 0) {
-    run(sim, stats, { type: 'logistics.pickup', payload: { by: 'driver' } });
+  const cargo = getCargo(state);
+  if (cargo.length > 0 && freeDrivers(state).length > 0) {
+    // Nachts, wenn alles bis zur Abfahrt (und eine Stunde Puffer) sicher am Kai steht (Auftrag 33).
+    const night = departureFor(state.time, 'night');
+    const safe = cargo.every((c) => cargoRiskFrom(c, state) > night + 60);
+    run(sim, stats, { type: 'logistics.pickup', payload: { by: 'driver', choice: safe ? 'night' : 'autobahn' } });
+  }
+  // Viel Hafenware (ab 2 kg am Kai, nach Gewicht): ein Kombi, der fasst 8 kg und fällt weniger auf als das Privatauto
+  // (Auftrag 33). In der Stadt passt ins Privatauto zwar alles, aber jede Kontrolle kostet die ganze Ladung.
+  if (getVehicles(state, city).length === 0 && stockWeight(getCargo(state, city)) >= BIG_PICKUP_GRAMS) {
+    const kombi = VEHICLE_MODELS.find((m) => m.id === 'kombi');
+    if (kombi) {
+      const price = vehiclePrice(kombi, city);
+      if (state.wallet.clean >= price) run(sim, stats, { type: 'fleet.buy', payload: { model: 'kombi' } });
+      else launderFor(sim, stats, price);
+    }
+  }
+}
+
+/** Ab so viel Hafenware am Kai (Gramm) kauft der Bot einen Kombi (Auftrag 33). */
+const BIG_PICKUP_GRAMS = 2000;
+
+/** Gramm, die bei der letzten Prüfung schon abgewiesen waren (pro Spiel). */
+const rejectedSeen = new WeakMap<GameState['modules']['goods'], number>();
+
+/**
+ * Regale bei Bedarf (Auftrag 33): Hat ein volles Lager seit dem letzten Blick mehr als ein halbes Kilo abgewiesen,
+ * baut der Bot im vollsten Lager der Stadt Regale ein (sauberes Geld, notfalls gewaschen).
+ */
+function warehouseUpkeep(sim: Simulation, stats: BotStats): void {
+  const state = sim.state;
+  const goods = state.modules.goods;
+  const rejected = storageStats(state).rejected;
+  const seen = rejectedSeen.get(goods) ?? 0;
+  if (rejected - seen < 500) return;
+  const fullest = [...getWarehouses(state, activeCity(state))]
+    .filter((w) => upgradeCost(state, w.id, 'shelves') !== null)
+    .sort(
+      (a, b) =>
+        warehouseLoad(state, b.id) / warehouseCapacity(state, b.id) -
+        warehouseLoad(state, a.id) / warehouseCapacity(state, a.id),
+    )[0];
+  if (!fullest || warehouseLoad(state, fullest.id) < warehouseCapacity(state, fullest.id) * NEARLY_FULL) {
+    rejectedSeen.set(goods, rejected);
+    return;
+  }
+  const cost = upgradeCost(state, fullest.id, 'shelves') ?? 0;
+  if (state.wallet.clean >= cost) {
+    if (run(sim, stats, { type: 'goods.upgradeWarehouse', payload: { warehouseId: fullest.id, kind: 'shelves' } }))
+      rejectedSeen.set(goods, rejected);
+  } else {
+    launderFor(sim, stats, cost);
   }
 }
 
@@ -305,9 +381,11 @@ function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
   const state = sim.state;
   const city = activeCity(state);
   const expand = options.expand !== false;
-  // Neue Stadt ohne Lager: erst ein Lager (das günstigste), sonst geht nichts.
+  // Neue Stadt ohne Lager: erst ein Lager, sonst geht nichts. Das günstigste mit genug Platz (Auftrag 33: kleine
+  // Garagen laufen mit Hafenware schnell voll), sonst das günstigste überhaupt.
   if (getWarehouses(state, city).length === 0) {
-    const site = [...warehouseSites(city)].sort((a, b) => a.cost - b.cost)[0];
+    const sites = [...warehouseSites(city)].sort((a, b) => a.cost - b.cost);
+    const site = sites.find((w) => w.capacity >= 6000) ?? sites[0];
     if (!site) return;
     if (state.wallet.clean >= site.cost)
       run(sim, stats, { type: 'goods.buyWarehouse', payload: { warehouseId: site.id } });
@@ -626,6 +704,7 @@ export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = 
   repay(sim, stats);
   unlockSuppliers(sim, stats);
   if (options.expand !== false) harbor(sim, stats);
+  if (options.expand !== false) warehouseUpkeep(sim, stats);
   buyDeals(sim, stats);
   restock(sim, stats);
   grow(sim, stats, options);
@@ -667,6 +746,9 @@ export function snapshot(state: GameState) {
     reputation: Math.round(state.modules.reputation.value),
     maxHostility: Math.round(Math.max(...Object.values(gangs.gangs).map((s) => s.hostility))),
     gameOver: state.outcome.gameOver?.reason ?? null,
+    /** Einlagern mit Kapazität (Auftrag 33): Anteil der Gramm, die nicht ins Lager passten. */
+    rejected: storageStats(state).offered > 0 ? storageStats(state).rejected / storageStats(state).offered : 0,
+    vehicles: getVehicles(state).length,
     /** Tag, an dem Köln komplett war (alle Veedel, Auftrag 30). */
     won: state.outcome.won ? Math.floor(state.outcome.won.time / 1440) + 1 : null,
     /** Tag des Meilensteins "Boss von Köln" (Mehrheit der Veedel). */

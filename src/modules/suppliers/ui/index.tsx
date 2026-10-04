@@ -89,14 +89,22 @@ function ShipmentRow(props: { state: GameState; shipment: Shipment; showSupplier
  * Chips am Paket: Rabatt-Aktion des Lieferanten und Bewegung des Markts (ab ±5 %). Steigt der Index, wird der
  * Einkauf teurer.
  */
-function PackageChips(props: { supplierId: string; packageId: string; productId: string }) {
+function PackageChips(props: {
+  supplierId: string;
+  packageId: string;
+  productId: string;
+  /** Container-Paket (Auftrag 33). */
+  container?: 'full' | 'shared';
+}) {
   const { state } = useGame();
   const trend = indexTrend(state, props.productId);
   const deal = activeDeal(state, props.supplierId, props.packageId);
-  if (!trend && !deal) return null;
+  if (!trend && !deal && !props.container) return null;
   return (
     <Chips
       items={[
+        props.container === 'full' && { label: 'ganzer Container', icon: 'package', color: 'goods' },
+        props.container === 'shared' && { label: 'geteilt: fremde Ware drin', icon: 'alert', color: 'warn' },
         deal && {
           label: `Aktion −${Math.round(deal.discount * 100)} % bis ${clock.weekdayName(deal.endsAt - 1, true)}`,
           icon: 'percent',
@@ -179,10 +187,12 @@ function SupplierList(props: { onSelect: (id: string) => void }) {
   const { state } = useGame();
   const open = getSuppliers(state, activeCity(state)).filter((s) => isUnlocked(state, s.id));
   const locked = getSuppliers(state, activeCity(state)).filter((s) => !isUnlocked(state, s.id));
-  const shipments = shipmentsInTransit(state);
+  // Schiffe an den eigenen Kai stehen im Tracker oben (Slot 'suppliers.top', Logistik), hier nur der Rest.
+  const shipments = shipmentsInTransit(state).filter((s) => !s.toPort);
   const debts = getSuppliers(state, activeCity(state)).filter((s) => getRelation(state, s.id).debt > 0);
   return (
     <div class="sup-groups">
+      <Slot name="suppliers.top" props={{}} />
       {shipments.length > 0 && (
         <Group icon="route" color="goods" title="Unterwegs" count={shipments.length}>
           {shipments.map((s) => (
@@ -227,6 +237,8 @@ declare module '../../../ui' {
   interface SlotRegistry {
     /** Abschnitte unten in der Liste der Lieferanten-App (z.B. Hafen, Routen und Fahrer aus der Logistik). */
     'suppliers.list': Record<string, never>;
+    /** Abschnitte oben in der Liste (Schiffs-Tracker der Logistik, Auftrag 33). */
+    'suppliers.top': Record<string, never>;
   }
 }
 
@@ -462,7 +474,12 @@ function SupplierDetail(props: { supplierId: string }) {
                 <span class="sup-pkg__price">
                   {price < p.price && <s>{formatEuro(p.price)}</s>} {formatEuro(price)}
                 </span>
-                <PackageChips supplierId={supplier.id} packageId={p.id} productId={p.productId} />
+                <PackageChips
+                  supplierId={supplier.id}
+                  packageId={p.id}
+                  productId={p.productId}
+                  {...(p.container ? { container: p.container } : {})}
+                />
               </div>
             </ListItem>
           );
@@ -536,7 +553,9 @@ soundOnEvent('shipment.arrived', 'delivery');
 onGameEvent('shipment.arrived', 'suppliers.arrivedToast', (payload, ui, state) => {
   // Schiffsware meldet die Logistik (Ware am Kai).
   if (payload.atPort) return;
-  ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.`, 'good', {
+  // Waren die Lager zu voll, steht im Banner, wo die Ware jetzt liegt (Auftrag 33).
+  const where = payload.placedIn ? ` Lager voll, verteilt: ${payload.placedIn}.` : '';
+  ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.${where}`, 'good', {
     urgent: true,
   });
 });

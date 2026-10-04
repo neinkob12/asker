@@ -251,3 +251,15 @@ fieldset.logi-days {
   min-width: 0;
   border: 0;
 }
+
+/* Wahl der Strecke (Auftrag 33): Segmente, darunter ein Satz. */
+.logi-choice {
+  display: grid;
+  gap: var(--space-1);
+}
+.logi-choice .ui-hint {
+  text-align: center;
+}
+.logi-route-choice {
+  padding: var(--space-3);
+}

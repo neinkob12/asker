@@ -78,3 +78,8 @@
   margin: 0;
   color: var(--hud-ink-2);
 }
+
+/* Füllstand des Lagers (Auftrag 33). */
+.goods-capacity {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}

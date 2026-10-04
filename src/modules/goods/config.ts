@@ -1,4 +1,4 @@
-import type { Product, ProductCategory, QualityTier, Warehouse } from './index';
+import type { Product, ProductCategory, QualityTier, Warehouse, WarehouseUpgradeKind } from './index';
 
 /**
  * Produkte mit Grundpreis (pro Einheit auf der Straße), Einheit und Zielgruppen (IDs der Kundentypen aus
@@ -94,7 +94,8 @@ export const UNIT_WEIGHT_GRAMS: Readonly<Record<ProductCategory, number>> = {
 /**
  * Lager-Standorte. Das erste hast du von Anfang an, die anderen kaufst du mit sauberem Geld (Immobilien sind legal,
  * das Geld muss also vorher gewaschen werden). Mehrere Lager: kürzere Wege für Lieferungen, und eine Razzia oder
- * ein Überfall trifft nicht alles auf einmal.
+ * ein Überfall trifft nicht alles auf einmal. capacity ist der Platz ohne Ausbau in Gramm (Gewicht pro Einheit:
+ * UNIT_WEIGHT_GRAMS): Keller und Garagen sind klein, Hallen groß (Auftrag 33).
  */
 export const WAREHOUSES: readonly Warehouse[] = [
   {
@@ -104,6 +105,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 6.918,
     lat: 50.948,
     cost: 0,
+    capacity: 10000,
     description: 'Hinterhof an der Venloer Straße. Hier hat alles angefangen.',
   },
   {
@@ -113,6 +115,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 6.9555,
     lat: 50.964,
     cost: 2000,
+    capacity: 6000,
     description: 'Doppelgarage nah an der Neusser Straße. Kurzer Weg zum Niehler Hafen.',
   },
   {
@@ -122,6 +125,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 6.92,
     lat: 50.9215,
     cost: 2200,
+    capacity: 4000,
     description: 'Trockener Keller unter einem Copyshop, mitten im Studentenviertel.',
   },
   {
@@ -131,6 +135,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 7.006,
     lat: 50.9395,
     cost: 2500,
+    capacity: 25000,
     description: 'Alte Werkshalle hinter der Kalker Hauptstraße. Viel Platz, wenig Nachbarn.',
   },
   {
@@ -140,6 +145,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 7.0105,
     lat: 50.962,
     cost: 2800,
+    capacity: 12000,
     description: 'Kfz-Werkstatt mit Hinterhof. Transporter fallen hier nicht auf.',
   },
   {
@@ -149,6 +155,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 6.97,
     lat: 50.91,
     cost: 3200,
+    capacity: 8000,
     description: 'Bootshaus am Rhein im Süden. Teuer, aber diskret.',
   },
   // Hamburg (Auftrag 30): fünf Standorte zum Kaufen, kein kostenloses (dort fängst du ohne Team an). Preise wie
@@ -160,6 +167,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 9.9285,
     lat: 53.5535,
     cost: 4200,
+    capacity: 12000,
     description: 'Hinterhofwerkstatt zwischen Bio-Laden und Agentur. Kurze Wege nach Altona und auf den Kiez.',
   },
   {
@@ -169,6 +177,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 10.0145,
     lat: 53.5585,
     cost: 3300,
+    capacity: 4000,
     description: 'Gewölbekeller unter einem Kiosk an der Langen Reihe. Hauptbahnhof um die Ecke.',
   },
   {
@@ -178,6 +187,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 9.995,
     lat: 53.508,
     cost: 3750,
+    capacity: 25000,
     description: 'Alte Lagerhalle am Reiherstieg. Viel Platz, Container vor der Tür, der Hafen ist nah.',
   },
   {
@@ -187,6 +197,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 10.0335,
     lat: 53.5765,
     cost: 3000,
+    capacity: 6000,
     description: 'Sammelgarage hinter einem Backsteinblock. Unauffällig und günstig, für Hamburger Verhältnisse.',
   },
   {
@@ -196,6 +207,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 9.9829,
     lat: 53.46529,
     cost: 4800,
+    capacity: 8000,
     description: 'Bootshaus am Harburger Binnenhafen. Teuer, aber wer kommt hier schon vorbei.',
   },
 ];
@@ -229,3 +241,64 @@ export const MAX_CUT = 0.5;
 export const CUT_QUALITY_LOSS = 0.9;
 /** Streckmittel kostet pro zusätzlicher Einheit (Schwarzgeld). */
 export const CUT_AGENT_COST = 0.3;
+
+// --- Ausbau der Lager (Auftrag 33) -----------------------------------------------------------------------------------
+
+export interface UpgradeLevel {
+  /** Wirkung der Stufe: Regale Faktor auf die Kapazität, Tresor und Tarnung Anteil des Verlusts (1 = wie ohne). */
+  value: number;
+  /** Preis in sauberem Geld (mal propertyFactor der Stadt). */
+  cost: number;
+}
+
+export interface UpgradeDef {
+  name: string;
+  icon: string;
+  /** Ein Satz, was der Ausbau bringt. */
+  effect: string;
+  levels: readonly UpgradeLevel[];
+}
+
+/**
+ * Ausbau in Stufen, bezahlt mit sauberem Geld: Regale vergrößern das Lager, der Tresor senkt den Verlust bei Einbruch
+ * und Überfall (gangs, encounters), die Tarnung den Anteil, den eine Razzia aus diesem Lager mitnimmt (police).
+ */
+export const WAREHOUSE_UPGRADES: Readonly<Record<WarehouseUpgradeKind, UpgradeDef>> = {
+  shelves: {
+    name: 'Regale',
+    icon: 'boxes',
+    effect: 'Mehr Platz im Lager.',
+    levels: [
+      { value: 1.5, cost: 1200 },
+      { value: 2, cost: 2600 },
+      { value: 3, cost: 5500 },
+    ],
+  },
+  vault: {
+    name: 'Tresor',
+    icon: 'lock',
+    effect: 'Weniger Verlust bei Einbruch und Überfall.',
+    levels: [
+      { value: 0.65, cost: 1500 },
+      { value: 0.4, cost: 3600 },
+    ],
+  },
+  cover: {
+    name: 'Tarnung',
+    icon: 'eyeOff',
+    effect: 'Eine Razzia findet hier weniger.',
+    levels: [
+      { value: 0.6, cost: 1800 },
+      { value: 0.35, cost: 4200 },
+    ],
+  },
+};
+
+/** Reihenfolge der Ausbauten in der Oberfläche. */
+export const UPGRADE_KINDS: readonly WarehouseUpgradeKind[] = ['shelves', 'vault', 'cover'];
+
+/** Ab diesem Füllstand gilt ein Lager als fast voll (Warnung in der Oberfläche, Bot kauft Regale). */
+export const NEARLY_FULL = 0.85;
+
+/** Warenfluss (Auftrag 33): Reicht die Ware einer Stadt (Bestand und unterwegs) kürzer als so viele Tage, ist es ein Engpass. */
+export const SHORTAGE_DAYS = 2;

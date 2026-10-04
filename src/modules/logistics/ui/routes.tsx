@@ -24,6 +24,7 @@ import {
   useUi,
 } from '../../../ui';
 import { cityName } from '../../city';
+import { getVehicles, VEHICLE_MODELS, vehicleName } from '../../fleet';
 import {
   allProducts,
   formatProductAmount,
@@ -42,14 +43,19 @@ import {
   INTERCITY_CAPACITY,
   nextDeparture,
   placeOf,
+  ROUTE_CHOICES,
   type Route,
+  type RouteChoice,
   type RouteInput,
   type RouteItem,
   type RouteRun,
   routeName,
 } from '../index';
+import { AUTO, ChoiceControl, VehicleSelect } from './vehicles';
 
 const NONE = '';
+/** Größte Ladung einer Fahrt (Privatauto oder größtes Fahrzeug zum Kaufen). */
+const MAX_LOAD = Math.max(INTERCITY_CAPACITY, ...VEHICLE_MODELS.filter((m) => m.available).map((m) => m.capacity));
 
 /** Gewicht als Text: "2,5 kg" oder "800 g". */
 function weightText(grams: number): string {
@@ -110,6 +116,10 @@ function RouteGroup(props: { route: Route; onEdit: () => void }) {
     { label: `${daysText(route.days)} ${clock.formatTime(route.departure)}`, icon: 'clock', color: 'system' },
     { label: loadText(route), icon: 'package', color: 'goods' },
   ];
+  if (route.choice !== 'autobahn')
+    chips.push({ label: ROUTE_CHOICES[route.choice].name, icon: 'moon', color: 'place' });
+  if (route.vehicleId !== null)
+    chips.push({ label: vehicleName(state, route.vehicleId), icon: 'truck', color: 'goods' });
   if (fromCity !== toCity) chips.push({ label: 'über die A1', icon: 'route', color: 'place' });
   if (route.roundTrip) chips.push({ label: 'mit Rückfahrt', icon: 'refresh', color: 'goods' });
   if (last) chips.push({ label: last.label, color: last.color, icon: 'clock' });
@@ -171,7 +181,7 @@ function ItemLine(props: {
           label={`${props.label} ${productName(props.item.productId)}`}
           value={props.item.amount}
           min={step}
-          max={INTERCITY_CAPACITY}
+          max={MAX_LOAD}
           step={step}
           format={(v) => formatProductAmount(props.item.productId, v)}
           onChange={(amount) => props.onChange({ ...props.item, amount })}
@@ -242,6 +252,9 @@ interface Draft {
   days: number[];
   roundTrip: boolean;
   returnItems: RouteItem[];
+  /** Festes Fahrzeug als Text (leer = passendes). */
+  vehicle: string;
+  choice: RouteChoice;
 }
 
 function draftOf(route: Route | null, warehouses: readonly { id: string }[]): Draft {
@@ -259,6 +272,8 @@ function draftOf(route: Route | null, warehouses: readonly { id: string }[]): Dr
       days: [...route.days],
       roundTrip: route.roundTrip,
       returnItems: route.returnItems.map((i) => ({ ...i })),
+      vehicle: route.vehicleId === null ? AUTO : String(route.vehicleId),
+      choice: route.choice,
     };
   }
   return {
@@ -271,6 +286,8 @@ function draftOf(route: Route | null, warehouses: readonly { id: string }[]): Dr
     days: [],
     roundTrip: false,
     returnItems: [],
+    vehicle: AUTO,
+    choice: 'autobahn',
   };
 }
 
@@ -316,6 +333,8 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
       days: draft.days,
       roundTrip: draft.roundTrip,
       returnItems: draft.roundTrip ? draft.returnItems : [],
+      vehicleId: draft.vehicle === AUTO ? null : Number(draft.vehicle),
+      choice: draft.choice,
     };
     const result = route
       ? dispatch({ type: 'logistics.updateRoute', payload: { routeId: route.id, ...input } })
@@ -383,7 +402,26 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
                 />
               </ItemContent>
             </ListItem>
+            {getVehicles(state).length > 0 && (
+              <ListItem>
+                <ItemContent icon="car" color="goods" title="Fahrzeug">
+                  <VehicleSelect
+                    state={state}
+                    cityId={fromCity}
+                    all
+                    value={draft.vehicle}
+                    onChange={(vehicle) => set({ vehicle })}
+                  />
+                </ItemContent>
+              </ListItem>
+            )}
           </List>
+        </Group>
+
+        <Group title="Weg" icon="moon" color="place" value={ROUTE_CHOICES[draft.choice].name}>
+          <div class="logi-route-choice">
+            <ChoiceControl value={draft.choice} onChange={(choice) => set({ choice })} />
+          </div>
         </Group>
 
         <Group title="Fahrplan" icon="clock" color="system" value={daysText(draft.days)}>

@@ -550,13 +550,32 @@ type Found =
       lastDir: number;
     };
 
-/** A* zwischen zwei Punkten auf Kanten. null, wenn es keine Verbindung gibt. */
-function search(g: Graph, s: Snap, t: Snap): Found | null {
+/** Gewicht pro Straßenart (Auftrag 33): Faktor ≥ 1 auf die Fahrzeit, z.B. Autobahn meiden. Fehlt eine Art: 1. */
+export type ClassWeights = Partial<Record<RoadClass, number>>;
+
+const weightArrays = new Map<string, Float64Array>();
+
+/** Gewichte als Faktor je Straßenart-Code (gemerkt), null ohne Gewichte. */
+function classFactors(weights: ClassWeights | undefined): Float64Array | null {
+  if (!weights) return null;
+  const id = ROAD_CLASSES.map((c) => weights[c] ?? 1).join(',');
+  let factors = weightArrays.get(id);
+  if (!factors) {
+    // Faktoren unter 1 würden die Schätzung von A* (Luftlinie) überholen: nie kleiner als 1.
+    factors = Float64Array.from(ROAD_CLASSES.map((c) => Math.max(1, weights[c] ?? 1)));
+    weightArrays.set(id, factors);
+  }
+  return factors;
+}
+
+/** A* zwischen zwei Punkten auf Kanten. null, wenn es keine Verbindung gibt. Mit factors: Gewicht je Straßenart. */
+function search(g: Graph, s: Snap, t: Snap, factors: Float64Array | null = null): Found | null {
   const n = g.nodeX.length;
   const target = n; // virtueller Zielknoten
   const sc = scratchFor(g);
   const { seen, closed, gScore, prevEdge, prevDir, heap, generation } = sc;
   heap.clear();
+  const w = (e: number) => (factors ? g.edgeWeight[e] * factors[g.edgeClass[e]] : g.edgeWeight[e]);
   const h = (node: number) => (node === target ? 0 : Math.hypot(g.nodeX[node] - t.x, g.nodeY[node] - t.y));
 
   const relax = (node: number, cost: number, edge: number, dir: number) => {
@@ -570,12 +589,12 @@ function search(g: Graph, s: Snap, t: Snap): Found | null {
 
   // Start auf Kante s.edge: vorwärts zum Ende, bei zweispurigen Kanten auch rückwärts zum Anfang.
   const se = s.edge;
-  relax(g.edgeTo[se], (g.edgeLength[se] - s.offset) * g.edgeWeight[se], -1, 1);
-  if (!g.edgeOneway[se]) relax(g.edgeFrom[se], s.offset * g.edgeWeight[se], -1, 0);
+  relax(g.edgeTo[se], (g.edgeLength[se] - s.offset) * w(se), -1, 1);
+  if (!g.edgeOneway[se]) relax(g.edgeFrom[se], s.offset * w(se), -1, 0);
   // Start und Ziel auf derselben Kante: direkt, wenn die Richtung passt.
   if (se === t.edge) {
-    if (t.offset >= s.offset) relax(target, (t.offset - s.offset) * g.edgeWeight[se], -2, 1);
-    else if (!g.edgeOneway[se]) relax(target, (s.offset - t.offset) * g.edgeWeight[se], -2, 0);
+    if (t.offset >= s.offset) relax(target, (t.offset - s.offset) * w(se), -2, 1);
+    else if (!g.edgeOneway[se]) relax(target, (s.offset - t.offset) * w(se), -2, 0);
   }
 
   const te = t.edge;
@@ -586,16 +605,16 @@ function search(g: Graph, s: Snap, t: Snap): Found | null {
     if (node === target) break;
     const cost = gScore[node];
     // Zielkante: vom Anfang vorwärts, bei zweispurigen auch vom Ende rückwärts.
-    if (node === g.edgeFrom[te]) relax(target, cost + t.offset * g.edgeWeight[te], te, 1);
+    if (node === g.edgeFrom[te]) relax(target, cost + t.offset * w(te), te, 1);
     if (node === g.edgeTo[te] && !g.edgeOneway[te]) {
-      relax(target, cost + (g.edgeLength[te] - t.offset) * g.edgeWeight[te], te, 0);
+      relax(target, cost + (g.edgeLength[te] - t.offset) * w(te), te, 0);
     }
     for (let k = g.adjStart[node]; k < g.adjStart[node + 1]; k++) {
       const e = g.adjEdge[k];
       const dir = g.adjDir[k];
       const next = dir ? g.edgeTo[e] : g.edgeFrom[e];
       if (closed[next] === generation) continue;
-      relax(next, cost + g.edgeLength[e] * g.edgeWeight[e], e, dir);
+      relax(next, cost + g.edgeLength[e] * w(e), e, dir);
     }
   }
   if (closed[target] !== generation) return null;
@@ -647,12 +666,17 @@ function walkRoad(g: Graph, s: Snap, t: Snap, found: Found, emit: (x: number, y:
  * Route zwischen zwei Punkten über das Straßennetz einer Stadt. null, wenn einer der Punkte zu weit weg von jeder
  * Straße dieses Netzes ist.
  */
-export function findRoute(fromPoint: LngLat, toPoint: LngLat, networkId: string): GraphRoute | null {
+export function findRoute(
+  fromPoint: LngLat,
+  toPoint: LngLat,
+  networkId: string,
+  weights?: ClassWeights,
+): GraphRoute | null {
   const g = getGraph(networkId);
   const s = snapIn(g, fromPoint);
   const t = snapIn(g, toPoint);
   if (!s || !t) return null;
-  const found = search(g, s, t);
+  const found = search(g, s, t, classFactors(weights));
   if (!found) return null;
   const points: [number, number][] = [];
   walkRoad(g, s, t, found, (x, y) => points.push([x, y]));
@@ -663,12 +687,17 @@ export function findRoute(fromPoint: LngLat, toPoint: LngLat, networkId: string)
  * Nur die Länge der Route in Metern (ungerundet), ohne den Weg als Liste zu bauen. Bitgleich mit
  * findRoute(...).meters: gleiche Punkte, gleiche Reihenfolge der Summanden. null wie bei findRoute.
  */
-export function findRouteMeters(fromPoint: LngLat, toPoint: LngLat, networkId: string): number | null {
+export function findRouteMeters(
+  fromPoint: LngLat,
+  toPoint: LngLat,
+  networkId: string,
+  weights?: ClassWeights,
+): number | null {
   const g = getGraph(networkId);
   const s = snapIn(g, fromPoint);
   const t = snapIn(g, toPoint);
   if (!s || !t) return null;
-  const found = search(g, s, t);
+  const found = search(g, s, t, classFactors(weights));
   if (!found) return null;
   // Wie finish(): Punkte, die weniger als 0,5 m vom letzten behaltenen entfernt sind, entfallen.
   let meters = 0;

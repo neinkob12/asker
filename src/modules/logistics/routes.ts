@@ -11,6 +11,7 @@
 
 import { type CommandResult, type Ctx, clock, type GameState, journal, wallet } from '../../core';
 import { cityName, isCityLive } from '../city';
+import { getVehicle, pickVehicle, vehicleSpec } from '../fleet';
 import {
   getProduct,
   getStock,
@@ -25,8 +26,27 @@ import {
 import { travelMinutes } from '../roads';
 import { getStaffMember, isEmployed, moveToCity, STATUS_NAMES } from '../staff';
 import { availablePackages, getSuppliers, isBlocked, packagePrice } from '../suppliers';
-import { INTERCITY_CAPACITY, ROUTE_LIMIT, ROUTE_LOAD_MINUTES } from './config';
-import { getTrips, itemsText, speedOf, startTrip, type Trip, type TripItem, tripAmount } from './index';
+import {
+  INTERCITY_CAPACITY,
+  NIGHT_END,
+  NIGHT_START,
+  ROUTE_CHOICES,
+  ROUTE_LIMIT,
+  ROUTE_LOAD_MINUTES,
+  type RouteChoice,
+} from './config';
+import {
+  chooseVehicle,
+  getTrips,
+  itemsText,
+  roadOptions,
+  roomFor,
+  speedOf,
+  startTrip,
+  type Trip,
+  type TripItem,
+  tripAmount,
+} from './index';
 
 /** Feste Menge einer Ware pro Fahrt. */
 export interface RouteItem {
@@ -68,6 +88,10 @@ export interface Route {
   last: RouteRun | null;
   /** Gefahrene Touren (Hinfahrten). */
   runs: number;
+  /** Festes Fahrzeug (fleet), null = das passende freie oder das Privatauto (Auftrag 33). */
+  vehicleId: number | null;
+  /** Wahl der Strecke (Auftrag 33): Autobahn, Landstraße oder nachts (Abfahrt dann zwischen 23 und 5 Uhr). */
+  choice: RouteChoice;
 }
 
 /** Was man beim Anlegen und Ändern angibt. */
@@ -83,6 +107,8 @@ export interface RouteInput {
   roundTrip?: boolean;
   returnItems?: RouteItem[];
   active?: boolean;
+  vehicleId?: number | null;
+  choice?: RouteChoice;
 }
 
 /** Nachkauf für ein Lager einer schlafenden Stadt. */
@@ -141,8 +167,8 @@ function inTransitTo(state: GameState, warehouseId: string, productId: string): 
 }
 
 /**
- * Was eine Fahrt jetzt laden würde: feste Mengen und Auffüllen, begrenzt durch den Bestand im Startlager und die
- * Kapazität. wanted ist, was die Route eigentlich wollte (für "nur x von y").
+ * Was eine Fahrt jetzt laden würde: feste Mengen und Auffüllen, begrenzt durch den Bestand im Startlager, die Ladung
+ * des Wagens und den Platz im Ziellager (Auftrag 33). wanted ist, was die Route eigentlich wollte (für "nur x von y").
  */
 export function planLoad(
   state: GameState,
@@ -150,6 +176,7 @@ export function planLoad(
   toId: string,
   items: readonly RouteItem[],
   fillTo: readonly RouteFill[] = [],
+  capacity = INTERCITY_CAPACITY,
 ): { load: RouteItem[]; wanted: number; missing: string[] } {
   const want = new Map<string, number>();
   for (const i of items) want.set(i.productId, (want.get(i.productId) ?? 0) + i.amount);
@@ -160,13 +187,14 @@ export function planLoad(
   }
   const load: RouteItem[] = [];
   const missing: string[] = [];
+  const limit = Math.min(capacity, roomFor(state, toId));
   let weight = 0;
   let wanted = 0;
   for (const [productId, amount] of want) {
     wanted += amount;
     const have = getStock(state, { warehouseId: fromId, productId });
     const per = unitWeight(productId);
-    const room = Math.floor((INTERCITY_CAPACITY - weight) / per);
+    const room = Math.floor((limit - weight) / per);
     const take = Math.max(0, Math.min(amount, have, room));
     if (have < amount) missing.push(productName(productId));
     if (take <= 0) continue;
@@ -178,7 +206,19 @@ export function planLoad(
 
 /** Vorschau für die Oberfläche: was die Route jetzt laden würde. */
 export function routeLoadPreview(state: GameState, route: Route): RouteItem[] {
-  return planLoad(state, route.fromId, route.toId, route.items, route.fillTo).load;
+  return planLoad(state, route.fromId, route.toId, route.items, route.fillTo, routeCapacity(state, route)).load;
+}
+
+/** Ladung eines Fahrzeugs auf einer Route: Modell, das Privatauto mit INTERCITY_CAPACITY (wie bisher). */
+function routeVehicleCapacity(state: GameState, vehicleId: number | null): number {
+  return vehicleId === null ? INTERCITY_CAPACITY : vehicleSpec(state, vehicleId).capacity;
+}
+
+/** Ladung einer Route in Gramm: festes Fahrzeug, sonst so viel wie das Privatauto (oder ein größeres freies). */
+export function routeCapacity(state: GameState, route: Pick<Route, 'vehicleId'>): number {
+  return route.vehicleId !== null && getVehicle(state, route.vehicleId)
+    ? vehicleSpec(state, route.vehicleId).capacity
+    : INTERCITY_CAPACITY;
 }
 
 /**
@@ -202,7 +242,7 @@ export function driverWhereabouts(
 // ---------------------------------------------------------------------------------------------
 // Anlegen, ändern, löschen
 
-function checkItems(items: readonly RouteItem[], label: string): string | null {
+function checkItems(items: readonly RouteItem[], label: string, capacity: number): string | null {
   const seen = new Set<string>();
   for (const i of items) {
     if (!getProduct(i.productId)) return 'Unbekannte Ware.';
@@ -210,8 +250,8 @@ function checkItems(items: readonly RouteItem[], label: string): string | null {
     seen.add(i.productId);
     if (!Number.isInteger(i.amount) || i.amount <= 0) return 'Ungültige Menge.';
   }
-  if (routeWeight(items) > INTERCITY_CAPACITY) {
-    return `${label}: zu viel für einen Transporter (höchstens ${INTERCITY_CAPACITY / 1000} kg).`;
+  if (routeWeight(items) > capacity) {
+    return `${label}: zu viel für das Fahrzeug (höchstens ${capacity / 1000} kg).`;
   }
   return null;
 }
@@ -233,7 +273,15 @@ function normalize(state: GameState, id: number, input: RouteInput, base: Route 
   const returnItems = input.roundTrip
     ? (input.returnItems ?? []).map((i) => ({ productId: i.productId, amount: i.amount }))
     : [];
-  const bad = checkItems(items, 'Ladung') ?? checkItems(returnItems, 'Rückfracht');
+  const vehicleId = input.vehicleId ?? null;
+  if (vehicleId !== null && !getVehicle(state, vehicleId)) return 'Dieses Fahrzeug gibt es nicht.';
+  // Das feste Fahrzeug muss in der Startstadt stehen (unterwegs auf dieser Route darf es woanders sein).
+  const fixed = vehicleId !== null ? getVehicle(state, vehicleId) : undefined;
+  if (fixed && fixed.tripId === null && fixed.cityId !== from.cityId) {
+    return `Das Fahrzeug steht nicht in ${cityName(from.cityId)}.`;
+  }
+  const capacity = vehicleId !== null ? vehicleSpec(state, vehicleId).capacity : INTERCITY_CAPACITY;
+  const bad = checkItems(items, 'Ladung', capacity) ?? checkItems(returnItems, 'Rückfracht', capacity);
   if (bad) return bad;
   for (const f of fillTo) {
     if (!getProduct(f.productId)) return 'Unbekannte Ware.';
@@ -245,6 +293,12 @@ function normalize(state: GameState, id: number, input: RouteInput, base: Route 
   if (!Number.isInteger(input.departure) || input.departure < 0 || input.departure >= 1440) {
     return 'Ungültige Abfahrtszeit.';
   }
+  const choice: RouteChoice = input.choice && ROUTE_CHOICES[input.choice] ? input.choice : 'autobahn';
+  // Nachts fährt die Route zwischen 23 und 5 Uhr; eine Abfahrt am Tag rückt auf 23 Uhr.
+  const departure =
+    ROUTE_CHOICES[choice].night && input.departure < NIGHT_START && input.departure >= NIGHT_END
+      ? NIGHT_START
+      : input.departure;
   const days = [...new Set(input.days ?? [])].sort((a, b) => a - b);
   if (days.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) return 'Ungültiger Wochentag.';
   const name = (input.name ?? '').trim().slice(0, 40);
@@ -256,13 +310,15 @@ function normalize(state: GameState, id: number, input: RouteInput, base: Route 
     toId: to.id,
     items,
     fillTo,
-    departure: input.departure,
+    departure,
     days: days.length === 7 ? [] : days,
     roundTrip: !!input.roundTrip,
     returnItems,
     active: input.active ?? true,
     last: base?.last ?? null,
     runs: base?.runs ?? 0,
+    vehicleId,
+    choice,
   };
 }
 
@@ -361,11 +417,28 @@ export function departRoute(ctx: Ctx, routeId: number, why: 'schedule' | 'now'):
   if (!from || !to) return skip(ctx, route, 'Eins der Lager gehört dir nicht mehr.', why);
   const problem = driverProblem(state, route, from);
   if (problem) return skip(ctx, route, problem, why);
-  const plan = planLoad(state, from.id, to.id, route.items, route.fillTo);
+  // Fahrzeug (Auftrag 33): das feste, sonst das passende freie für das, was die Route laden würde.
+  const fromCity = warehouseCity(from.id);
+  let vehicle: number | null | string = null;
+  if (route.vehicleId !== null) {
+    vehicle = getVehicle(state, route.vehicleId) ? chooseVehicle(state, fromCity, route.vehicleId, 0) : null;
+    if (typeof vehicle === 'string') return skip(ctx, route, vehicle, why);
+  } else {
+    // Ohne festes Fahrzeug: das größte freie (oder das Privatauto mit INTERCITY_CAPACITY) bestimmt, was geladen werden
+    // könnte, dann das kleinste, in das das passt.
+    const biggest = pickVehicle(state, fromCity, Number.POSITIVE_INFINITY, INTERCITY_CAPACITY);
+    const most = planLoad(state, from.id, to.id, route.items, route.fillTo, routeVehicleCapacity(state, biggest));
+    vehicle = pickVehicle(state, fromCity, routeWeight(most.load), INTERCITY_CAPACITY);
+  }
+  const plan = planLoad(state, from.id, to.id, route.items, route.fillTo, routeVehicleCapacity(state, vehicle));
   const needsTour = route.roundTrip && route.returnItems.length > 0;
   if (plan.load.length === 0 && !needsTour) {
     const reason =
-      plan.wanted === 0 ? `Im ${to.name} liegt genug.` : `Im ${from.name} fehlt die Ware (${plan.missing.join(', ')}).`;
+      plan.wanted === 0
+        ? `Im ${to.name} liegt genug.`
+        : plan.missing.length === 0
+          ? `Im ${to.name} ist kein Platz.`
+          : `Im ${from.name} fehlt die Ware (${plan.missing.join(', ')}).`;
     return skip(ctx, route, reason, why);
   }
   const driverId = route.driverId as string;
@@ -377,9 +450,11 @@ export function departRoute(ctx: Ctx, routeId: number, why: 'schedule' | 'now'):
     fromId: from.id,
     toId: to.id,
     items,
+    ...(vehicle !== null ? { vehicleId: vehicle } : {}),
+    ...(route.choice !== 'autobahn' ? { choice: route.choice } : {}),
     startedAt: ctx.now,
     loadedAt,
-    arrivesAt: loadedAt + travelMinutes(from, to, speedOf(state, driverId)),
+    arrivesAt: loadedAt + travelMinutes(from, to, speedOf(state, driverId, vehicle), 0, roadOptions(route.choice)),
     routeId: route.id,
     leg: 'out',
   });
@@ -424,7 +499,10 @@ export function routeArrived(ctx: Ctx, trip: Trip, warehouseId: string): void {
     route.last = { at: ctx.now, result: 'done', note: 'angekommen, keine Rückfahrt' };
     return;
   }
-  const plan = planLoad(state, warehouseId, home.id, route.returnItems);
+  // Dasselbe Fahrzeug fährt zurück, wenn es noch da ist (es steht jetzt in der Zielstadt).
+  const vehicle = trip.vehicleId !== undefined ? chooseVehicle(state, cityId, trip.vehicleId, 0) : null;
+  const vehicleId = typeof vehicle === 'number' ? vehicle : null;
+  const plan = planLoad(state, warehouseId, home.id, route.returnItems, [], routeVehicleCapacity(state, vehicleId));
   const items = loadGoods(ctx, warehouseId, plan.load);
   const loadedAt = ctx.now + (items.length > 0 ? ROUTE_LOAD_MINUTES : 0);
   const back = startTrip(ctx, {
@@ -433,9 +511,19 @@ export function routeArrived(ctx: Ctx, trip: Trip, warehouseId: string): void {
     fromId: warehouseId,
     toId: home.id,
     items,
+    ...(vehicleId !== null ? { vehicleId } : {}),
+    ...(route.choice !== 'autobahn' ? { choice: route.choice } : {}),
     startedAt: ctx.now,
     loadedAt,
-    arrivesAt: loadedAt + travelMinutes(getWarehouse(state, warehouseId) ?? home, home, speedOf(state, driver.id)),
+    arrivesAt:
+      loadedAt +
+      travelMinutes(
+        getWarehouse(state, warehouseId) ?? home,
+        home,
+        speedOf(state, driver.id, vehicleId),
+        0,
+        roadOptions(route.choice),
+      ),
     routeId: route.id,
     leg: 'back',
   });
