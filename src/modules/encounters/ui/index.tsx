@@ -51,6 +51,7 @@ import {
   RETREAT_AT,
   ROLE_NAMES,
   requestCity,
+  rightHandAdvice,
   type ShiftPreview,
   SPECIAL_MOVES,
   type StakeId,
@@ -310,6 +311,21 @@ function Stakes(props: { encounter: Encounter; interactive: boolean }) {
   );
 }
 
+/** Rat der Rechten Hand: ein Satz zur Lage, mit Porträt. */
+function AdviceLine(props: { encounter: Encounter }) {
+  const { state } = useGame();
+  const advice = rightHandAdvice(state, props.encounter);
+  if (!advice) return null;
+  return (
+    <figure class="enc-advice">
+      <Avatar name={advice.name} look={personLook(advice.name, getStaffMember(state, advice.staffId)?.age)} size="sm" />
+      <figcaption class="enc-advice__text">
+        „{advice.text}“<span class="enc-advice__who">{advice.name.split(' ')[0]}, Rechte Hand</span>
+      </figcaption>
+    </figure>
+  );
+}
+
 function Board(props: { encounter: Encounter; preview: ShiftPreview | null; interactive: boolean }) {
   const { encounter, preview } = props;
   const intent = getIntent(encounter.intent);
@@ -334,6 +350,7 @@ function Board(props: { encounter: Encounter; preview: ShiftPreview | null; inte
           {encounter.clock === 1 ? 'Runde' : 'Runden'}
         </p>
       </div>
+      <AdviceLine encounter={encounter} />
       <div class="enc-gauges">
         <Gauge
           label="Aggression"

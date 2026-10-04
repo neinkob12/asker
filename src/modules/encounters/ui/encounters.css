@@ -524,6 +524,33 @@
   color: var(--file-ink-2);
 }
 
+/* ---------------------------------------------------------------- Rat der Rechten Hand (Etappe 3) */
+.enc-advice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--file-tab);
+  border-radius: 0 12px 12px 0;
+  background: rgba(201, 178, 133, 0.1);
+}
+.enc-advice__text {
+  margin: 0;
+  font-family: var(--font-file-display);
+  font-size: 16px;
+  font-style: italic;
+  color: var(--file-ink);
+}
+.enc-advice__who {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-hud);
+  font-size: 12px;
+  font-style: normal;
+  color: var(--file-ink-2);
+}
+
 /* ---------------------------------------------------------------- Crew (Auftrag 35, Etappe 2) */
 .enc-question__note {
   margin-left: 8px;

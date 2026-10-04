@@ -47,6 +47,7 @@ import type {
 } from './types';
 
 export { ENCOUNTER_ACTIONS } from './actions';
+export { ADVICE_RULES, type Advice, type AdviceRule, adviceText, rightHandAdvice } from './advice';
 export {
   ABANDON_CASH_MAX,
   ABANDON_CASH_SHARE,
