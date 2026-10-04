@@ -312,6 +312,25 @@ zeigt den Titel der Seite darunter (bis 14 Zeichen, sonst „Zurück“; neben e
   Offene Fragen tragen den Stempel "Antwort!", die Antwortknöpfe stehen als Glasblatt unten (erster Knopf Gold). Die
   Aufbereitung ist in `messagesModel.ts` (getestet).
 
+## Neuzeichnen und Selektoren
+
+Die `UiRuntime` zeichnet nach Simulationsschritten höchstens zehnmal pro Sekunde neu, `App` und alles darunter ohne
+`memo`. `useGame()` bleibt der Normalfall. Für Teile, die oft gezeichnet werden und sich selten ändern (HUD-Kacheln,
+Startbildschirm des Handys, Flyouts), gibt es zusätzlich `useGameSelector(selector, equals?)` und
+`useRuntimeSelector(…)` (`hooks.ts`, Kern in `selector.ts`): Sie lesen einen kleinen Auszug, vergleichen ihn bei jedem
+Neuzeichnen der Runtime mit dem letzten und zeichnen die Komponente nur bei Änderung. Zusammen mit `memo()` auf
+einer Komponente **ohne Props** überspringt das auch das Neuzeichnen von oben.
+
+- Der Zustand ist veränderbar: Der Selektor liefert Zahlen, Texte oder frisch gebaute Auszüge (dann
+  `shallowEqual`), nie eine Referenz auf ein Objekt aus dem Zustand.
+- `memo()` nur, wenn die Komponente **alles**, was sie zeigt, über Selektoren liest (auch `useRuntimeSelector` für
+  UI-Zustand wie Popover) und keine Daten aus dem Zustand in Props bekommt. Den Zustand nie beim Zeichnen in einer
+  Closure festhalten (Klick-Handler lesen `runtime.state` erst beim Klick).
+- Teure Lesefunktionen pro Spielstand einmal rechnen: `memoState(fn)`, mit Argumenten `memoStateKeyed(fn, keyOf)`
+  (beide aus `src/ui`). Beispiele: `police/ui` (`hottestPresent`), `goods/ui` (`stockView`), Kasse (`reportOf` …).
+- `details` einer `HudPill` als Komponente übergeben (`details={<StockFlyout />}`), nicht als fertigen Inhalt: Er
+  rechnet dann erst, wenn die Karte aufgeklappt ist.
+
 ## Prüfen
 
 - `npm test` prüft u.a. `styles/contrast.test.ts` (Kontrast aller Farbpaare, Hell und Dunkel, dazu Glas über der hellsten

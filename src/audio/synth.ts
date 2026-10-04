@@ -411,54 +411,101 @@ export function playSound(core: SynthCore, out: AudioNode, id: SoundId, t: numbe
 // ---------------------------------------------------------------------------------------------
 // Geräusch-Schleifen (Regen, Gewitter, Wind)
 
+/** So lange (ms) dauert das Ausblenden einer Schleife (Zeitkonstante 1,2 s: nach 8 s ist sie unhörbar), dann wird sie abgebaut. */
+export const AMBIENCE_FADE_OUT_MS = 8000;
+
+interface AmbienceLoop {
+  gain: GainNode;
+  /** Quellen anhalten und Knoten trennen. */
+  stop: () => void;
+  /** Läuft nach dem Ausblenden ab und baut die Schleife ab. */
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
 export class Ambience {
-  private readonly gains = new Map<AmbienceId, GainNode>();
+  private readonly loops = new Map<AmbienceId, AmbienceLoop>();
 
   constructor(
     private readonly core: SynthCore,
     private readonly out: AudioNode,
   ) {}
 
-  /** Lautstärke einer Schleife 0–1. Startet sie beim ersten Mal. */
-  set(id: AmbienceId, level: number): void {
-    const ctx = this.core.ctx;
-    let gain = this.gains.get(id);
-    if (!gain) {
-      if (level <= 0) return;
-      gain = ctx.createGain();
-      gain.gain.value = 0;
-      gain.connect(this.out);
-      this.build(id, gain);
-      this.gains.set(id, gain);
-    }
-    const target = Math.max(0, Math.min(1, level)) * AMBIENCE_LEVEL[id];
-    gain.gain.cancelScheduledValues(ctx.currentTime);
-    gain.gain.setTargetAtTime(target, ctx.currentTime, 1.2);
+  /** Wie viele Schleifen gerade gebaut sind (laufen oder ausblenden). */
+  get active(): number {
+    return this.loops.size;
   }
 
-  private build(id: AmbienceId, gain: GainNode): void {
+  /**
+   * Lautstärke einer Schleife 0–1. Startet sie beim ersten Mal. Bei 0 blendet sie aus und wird danach abgebaut
+   * (Rauschquelle angehalten, Knoten getrennt); beim nächsten Regen baut sie sich neu auf.
+   */
+  set(id: AmbienceId, level: number): void {
+    const ctx = this.core.ctx;
+    let loop = this.loops.get(id);
+    if (loop?.timer) {
+      clearTimeout(loop.timer);
+      loop.timer = null;
+    }
+    if (!loop) {
+      if (level <= 0) return;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      gain.connect(this.out);
+      loop = { gain, stop: this.build(id, gain), timer: null };
+      this.loops.set(id, loop);
+    }
+    const target = Math.max(0, Math.min(1, level)) * AMBIENCE_LEVEL[id];
+    loop.gain.gain.cancelScheduledValues(ctx.currentTime);
+    loop.gain.gain.setTargetAtTime(target, ctx.currentTime, 1.2);
+    if (target <= 0) {
+      const ended = loop;
+      ended.timer = setTimeout(() => {
+        if (this.loops.get(id) !== ended) return;
+        ended.stop();
+        this.loops.delete(id);
+      }, AMBIENCE_FADE_OUT_MS);
+    }
+  }
+
+  /** Baut die Schleife auf und gibt zurück, wie man sie wieder abbaut. */
+  private build(id: AmbienceId, gain: GainNode): () => void {
     const ctx = this.core.ctx;
     const src = ctx.createBufferSource();
     src.buffer = this.core.noise;
     src.loop = true;
+    const nodes: AudioNode[] = [src];
+    let lfo: OscillatorNode | null = null;
     if (id === 'rain') {
-      src
-        .connect(filter(ctx, 'highpass', 450))
-        .connect(filter(ctx, 'lowpass', 3800))
-        .connect(gain);
+      const hp = filter(ctx, 'highpass', 450);
+      const lp = filter(ctx, 'lowpass', 3800);
+      src.connect(hp).connect(lp).connect(gain);
+      nodes.push(hp, lp);
     } else if (id === 'storm') {
-      src.connect(filter(ctx, 'lowpass', 170, 0.8)).connect(gain);
+      const lp = filter(ctx, 'lowpass', 170, 0.8);
+      src.connect(lp).connect(gain);
+      nodes.push(lp);
     } else {
       const bp = filter(ctx, 'bandpass', 420, 1.6);
-      const lfo = ctx.createOscillator();
+      lfo = ctx.createOscillator();
       lfo.frequency.value = 0.09;
       const depth = ctx.createGain();
       depth.gain.value = 220;
       lfo.connect(depth).connect(bp.frequency);
       lfo.start();
       src.connect(bp).connect(gain);
+      nodes.push(bp, depth, lfo);
     }
     src.start();
+    return () => {
+      try {
+        src.stop();
+        lfo?.stop();
+      } catch {
+        // Schon angehalten.
+      }
+      for (const node of nodes) node.disconnect();
+      gain.disconnect();
+    };
   }
 }
 

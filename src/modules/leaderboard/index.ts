@@ -9,6 +9,7 @@ import { getLots, getProduct } from '../goods';
 import { getBatches } from '../laundering';
 import { getRelation, getSuppliers } from '../suppliers';
 import { controlledBy, PLAYER_FACTION } from '../territory';
+import { GOODS_FALLBACK_SHARE } from './config';
 
 export interface LeaderboardState {
   /** Höchstes Vermögen im Durchgang (Euro). */
@@ -38,11 +39,16 @@ export interface RunSummary {
 
 /**
  * Vermögen: Schwarzgeld, sauberes Geld, Geld in der Wäsche (schon abgebucht, kommt sauber zurück) und Ware im Lager
- * (zum Grundpreis), abzüglich der Schulden bei Lieferanten (sonst treibt ein Kredit die Zahl).
+ * (konservativ: zum Einkaufspreis des Postens, höchstens zum Straßenpreis; ohne Einkaufspreis mit Abschlag, siehe
+ * `GOODS_FALLBACK_SHARE`), abzüglich der Schulden bei Lieferanten (sonst treibt ein Kredit die Zahl).
  */
 export function netWorth(state: GameState): number {
   let goods = 0;
-  for (const lot of getLots(state)) goods += lot.amount * (getProduct(lot.productId)?.basePrice ?? 0);
+  for (const lot of getLots(state)) {
+    const street = getProduct(lot.productId)?.basePrice ?? 0;
+    const unit = lot.unitCost > 0 ? Math.min(lot.unitCost, street) : street * GOODS_FALLBACK_SHARE;
+    goods += lot.amount * unit;
+  }
   let washing = 0;
   for (const batch of getBatches(state)) washing += batch.amount - batch.fee;
   const debt = getSuppliers(state).reduce((sum, s) => sum + getRelation(state, s.id).debt, 0);

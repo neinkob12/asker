@@ -8,8 +8,9 @@ import { dialogs, sidebarTabs } from '../registry';
 import type { UiRuntime } from '../runtime';
 import { tabShortcuts } from './layout';
 
-export function bindKeys(runtime: UiRuntime): void {
-  document.addEventListener('keydown', (e) => {
+/** Bindet die Tastatur. Gibt die Abmeldung zurück (Neuladen von Modulen im Entwicklungsserver, Tests). */
+export function bindKeys(runtime: UiRuntime): () => void {
+  const onKeyDown = (e: KeyboardEvent) => {
     const { ui, api } = runtime;
     // Suche öffnen geht immer, auch im Textfeld.
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -66,5 +67,7 @@ export function bindKeys(runtime: UiRuntime): void {
       else api.selectTab(tabId);
       return;
     }
-  });
+  };
+  document.addEventListener('keydown', onKeyDown);
+  return () => document.removeEventListener('keydown', onKeyDown);
 }

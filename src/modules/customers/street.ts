@@ -150,6 +150,11 @@ export function onCityEventChanged(ctx: Ctx, cityId: string): void {
 export function onCitySwitched(ctx: Ctx, from: string, to: string): void {
   const s = ctx.state.modules.customers;
   s.waiting = s.waiting.filter((c) => cityOfSpot(ctx.state, c.spotId) !== from);
+  // Wer in der verlassenen Stadt am Spot stand, steht nach dem Wechsel nirgends mehr.
+  if (s.self.spotId && cityOfSpot(ctx.state, s.self.spotId) === from) {
+    s.self.spotId = null;
+    ctx.emit('customers.selfMoved', { spotId: null });
+  }
   for (const spot of getSpots(ctx.state, to)) {
     const current = s.nextSpawnAt[spot.id];
     if (current !== undefined && !Number.isFinite(current)) continue;
@@ -201,7 +206,7 @@ function arrive(ctx: Ctx, spot: Spot, at: number): void {
   }
   addCustomer(ctx, spot, {
     productId,
-    amount: Math.min(amount, getStock(ctx.state, { productId })),
+    amount: Math.min(amount, stockOf(ctx)(productId)),
     typeId: type.id,
     at,
     patience: CUSTOMER_PATIENCE * type.patience,
@@ -457,8 +462,9 @@ const LOSS_JOURNAL_INTERVAL = 60;
 const LOSS_JOURNAL_MARK = 'ist gegangen:';
 
 /** Warum ein Kunde ohne Ware gegangen ist, damit man im Journal versteht, was zu tun ist. */
-function lossReason(ctx: Ctx, c: { productId: string; amount: number }): string {
-  if (getStock(ctx.state, { productId: c.productId }) <= 0) return 'Lager leer, nachbestellen';
+function lossReason(ctx: Ctx, c: { productId: string; amount: number; spotId: string }): string {
+  if (getStock(ctx.state, { productId: c.productId, cityId: cityOfSpot(ctx.state, c.spotId) }) <= 0)
+    return 'Lager leer, nachbestellen';
   return 'niemand hat rechtzeitig verkauft';
 }
 
@@ -518,12 +524,18 @@ function serveInPerson(ctx: Ctx): void {
     return;
   }
   if (isPlayerAway(ctx.state)) return;
-  const customer = ctx.state.modules.customers.waiting
+  // Nur Kunden, für die das Lager der Stadt reicht; scheitert einer trotzdem, kommt der nächste dran.
+  const cityId = cityOfSpot(ctx.state, self.spotId);
+  const candidates = ctx.state.modules.customers.waiting
     .filter((c) => c.spotId === self.spotId)
     .sort((a, b) => a.expiresAt - b.expiresAt)
-    .find((c) => getStock(ctx.state, { productId: c.productId }) >= c.amount);
-  if (!customer) return;
-  if (serve(ctx, customer.id, null).ok) self.busyUntil = ctx.now + PLAYER_SERVE_TIME;
+    .filter((c) => getStock(ctx.state, { productId: c.productId, cityId }) >= c.amount);
+  for (const customer of candidates) {
+    if (serve(ctx, customer.id, null).ok) {
+      self.busyUntil = ctx.now + PLAYER_SERVE_TIME;
+      return;
+    }
+  }
 }
 
 /** Bist du gerade unterwegs (Lieferung oder Fahrt) und nicht am Spot? */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { distanceMeters, type LngLat } from '../../core';
-import { decodeInts } from './graph';
+import { decodeInts, findRoute, findRouteMeters } from './graph';
 import {
   autobahnBetween,
   interCityMinutes,
@@ -275,5 +275,74 @@ describe('Mehrere Städte (Auftrag 30)', () => {
     expect(line?.path[0].lat).toBeGreaterThan(53.4);
     expect(line?.path[line.path.length - 1].lat).toBeLessThan(51.1);
     expect(autobahnBetween('koeln', 'berlin')).toBeNull();
+  });
+});
+
+/** Feste Folge von Punkten um die Mitte einer Stadt (eigener Zufall, kein Spielzufall). */
+function scatter(center: LngLat, count: number, seed: number): LngLat[] {
+  let state = seed >>> 0;
+  const next = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 2 ** 32;
+  };
+  return Array.from({ length: count }, () => ({
+    lng: center.lng + (next() - 0.5) * 0.14,
+    lat: center.lat + (next() - 0.5) * 0.08,
+  }));
+}
+
+describe('Suche mit wiederverwendetem Arbeitsspeicher', () => {
+  it('gleiche Anfrage, gleiches Ergebnis, auch nach vielen anderen Suchen dazwischen (Stempel statt Zurücksetzen)', () => {
+    const points = scatter(NEUMARKT, 40, 7);
+    const first = findRoute(points[0], points[1], 'koeln');
+    const sample = points.slice(2).map((p, i) => findRoute(points[i], p, 'koeln'));
+    expect(first).not.toBeNull();
+    expect(findRoute(points[0], points[1], 'koeln')).toEqual(first);
+    // Eine Hamburger Suche dazwischen stört die Kölner nicht (eigener Speicher pro Netz).
+    findRoute(ST_PAULI, WILHELMSBURG, 'hamburg');
+    expect(points.slice(2).map((p, i) => findRoute(points[i], p, 'koeln'))).toEqual(sample);
+  });
+
+  it('die Länge ohne Wegbau ist bitgleich mit der Länge der vollen Route (beide Städte, auch Start gleich Ziel)', () => {
+    const pairs: [LngLat, LngLat, string][] = [];
+    const koeln = scatter(NEUMARKT, 60, 11);
+    const hamburg = scatter(HAMBURG_RATHAUS, 60, 13);
+    for (let i = 1; i < koeln.length; i++) pairs.push([koeln[i - 1], koeln[i], 'koeln']);
+    for (let i = 1; i < hamburg.length; i++) pairs.push([hamburg[i - 1], hamburg[i], 'hamburg']);
+    pairs.push([NEUMARKT, NEUMARKT, 'koeln'], [DEUTZ, KALK, 'koeln'], [KALK, DEUTZ, 'koeln']);
+    for (const [a, b, net] of pairs) {
+      const full = findRoute(a, b, net);
+      const meters = findRouteMeters(a, b, net);
+      expect(meters).toBe(full === null ? null : full.meters);
+    }
+  });
+
+  it('roadDistance rechnet ohne Wegbau und liefert dieselben Meter wie roadRoute', () => {
+    const points = [...scatter(KOELN_DOM, 30, 21), ...scatter(HAMBURG_RATHAUS, 30, 23)];
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1];
+      const b = points[i];
+      // Erst die Länge (noch nichts gemerkt), dann die volle Route.
+      const meters = roadDistance(a, b);
+      expect(meters).toBe(roadRoute(a, b).meters);
+      expect(roadDistance(a, b)).toBe(meters);
+    }
+    // Fahrzeiten bleiben ganze Minuten aus denselben Metern.
+    expect(travelMinutes(EHRENFELD, NIEHLER_HAFEN, DRIVER_SPEED)).toBe(
+      Math.max(1, Math.ceil(roadRoute(EHRENFELD, NIEHLER_HAFEN).meters / DRIVER_SPEED)),
+    );
+  });
+});
+
+describe('Routen-Cache', () => {
+  it('verdrängt die am längsten unbenutzte Route, nicht die älteste (LRU)', () => {
+    const hot = roadRoute(NEUMARKT, DEUTZ);
+    // Mehr verschiedene Routen als in den Cache passen; die erste wird dabei immer wieder gebraucht.
+    for (let i = 0; i < 700; i++) {
+      const to = { lng: 6.9 + (i % 28) * 0.0037, lat: 50.9 + Math.floor(i / 28) * 0.0041 };
+      roadRoute(NEUMARKT, to);
+      if (i % 100 === 99) expect(roadRoute(NEUMARKT, DEUTZ)).toBe(hot);
+    }
+    expect(roadRoute(NEUMARKT, DEUTZ)).toBe(hot);
   });
 });

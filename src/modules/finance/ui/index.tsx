@@ -16,6 +16,7 @@ import {
   ItemContent,
   List,
   ListItem,
+  memoStateKeyed,
   onGameEvent,
   registerAdvisor,
   registerPanel,
@@ -104,6 +105,28 @@ function encodeFilter(f: FinanceFilter): string {
   if (f.kind === 'lieutenant') return `lieutenant:${f.staffId}`;
   return 'all';
 }
+
+// Die Kasse rechnet bis zu 30 Tage Buchungen. Je Spielstand, Zeitraum und Filter nur einmal, nicht pro Komponente und
+// pro Neuzeichnen (die Kasse zeichnet bis zu zehnmal pro Sekunde, in der Pause und zwischen Schritten ohne Änderung).
+const reportOf = memoStateKeyed(
+  (state: GameState, period: Period, filter: FinanceFilter) => balance(state, period, filter),
+  (period, filter) => `${period}|${encodeFilter(filter)}`,
+);
+const historyOf = memoStateKeyed(
+  (state: GameState, period: Period, filter: FinanceFilter) => balanceHistory(state, period, filter),
+  (period, filter) => `${period}|${encodeFilter(filter)}`,
+);
+const spotRowsOf = memoStateKeyed(
+  (state: GameState, days: number, offset: number) => spotResults(state, days, offset),
+  (days, offset) => `${days}|${offset}`,
+);
+const lieutenantRowsOf = memoStateKeyed(
+  (state: GameState, days: number, offset: number) =>
+    getLieutenantIds(state)
+      .map((staffId) => ({ staffId, ...lieutenantResult(state, staffId, days, offset) }))
+      .sort(byShownResult),
+  (days, offset) => `${days}|${offset}`,
+);
 
 function decodeFilter(value: string): FinanceFilter {
   const [kind, id] = value.split(':', 2);
@@ -259,7 +282,7 @@ function ProfitAndLoss(props: { report: Report; period: Period; filter: FinanceF
 /** Verlauf: ein Balken je Tag (Gewinn nach oben, Verlust nach unten). */
 function History(props: { period: Period; filter: FinanceFilter }) {
   const { state } = useGame();
-  const days = balanceHistory(state, props.period, props.filter);
+  const days = historyOf(state, props.period, props.filter);
   const max = Math.max(1, ...days.map((d) => Math.abs(d.profit)));
   const hasLoss = days.some((d) => d.profit < 0);
   const many = days.length > 10;
@@ -309,7 +332,7 @@ const byShownResult = (a: UnitResult, b: UnitResult): number => shownResult(b) -
 function PerSpot(props: { period: Period; filter: FinanceFilter; onPick: (f: FinanceFilter) => void }) {
   const { state } = useGame();
   const { days, offset } = periodSpan(props.period);
-  let rows = spotResults(state, days, offset).filter((r) => r.revenue > 0 || r.wages > 0 || r.invest > 0);
+  let rows = spotRowsOf(state, days, offset).filter((r) => r.revenue > 0 || r.wages > 0 || r.invest > 0);
   if (props.filter.kind === 'city') {
     const cityId = props.filter.cityId;
     rows = rows.filter((r) => cityOfSpot(state, r.spotId) === cityId);
@@ -364,9 +387,7 @@ function PerSpot(props: { period: Period; filter: FinanceFilter; onPick: (f: Fin
 function PerLieutenant(props: { period: Period; filter: FinanceFilter; onPick: (f: FinanceFilter) => void }) {
   const { state } = useGame();
   const { days, offset } = periodSpan(props.period);
-  const rows = getLieutenantIds(state)
-    .map((staffId) => ({ staffId, ...lieutenantResult(state, staffId, days, offset) }))
-    .sort(byShownResult);
+  const rows = lieutenantRowsOf(state, days, offset);
   if (rows.length === 0) return null;
   return (
     <Group
@@ -433,7 +454,7 @@ function FinanceApp() {
   const encoded = encodeFilter(filter);
   // Ein Filter auf etwas, das es nicht mehr gibt (gelöschter Spot), fällt auf ganz Köln zurück.
   const current = options.some((o) => o.value === encoded) ? filter : ALL_FILTER;
-  const report = balance(state, period, current);
+  const report = reportOf(state, period, current);
   return (
     <div class="fin-app">
       <SummaryTiles
@@ -485,7 +506,7 @@ function CategoryPanel(props: { category: MoneyCategory; period: Period }) {
   const { days, offset } = periodSpan(props.period);
   const lines = categoryLines(state, props.category, days, offset);
   // Die Summe kommt aus der Bilanz: Einzelne Buchungstexte gibt es nur für die letzten Tage, 30 Tage wären zu wenig.
-  const total = balance(state, props.period).rows.find((r) => r.category === props.category)?.amount ?? 0;
+  const total = reportOf(state, props.period, ALL_FILTER).rows.find((r) => r.category === props.category)?.amount ?? 0;
   const label = PERIODS.find((p) => p.value === props.period)?.label ?? '';
   const textsOnlyRecent = props.period === 'month';
   return (

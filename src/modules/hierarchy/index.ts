@@ -33,8 +33,9 @@ import {
   journal,
   messages,
 } from '../../core';
-import { nearestWarehouse, type Warehouse } from '../goods';
-import { getSpot, isSpotActive, type Spot, spotsInVeedel } from '../spots';
+import { cityName } from '../city';
+import { nearestWarehouse, type Warehouse, warehouseCity } from '../goods';
+import { getSpot, isSpotActive, type Spot, spotCity, spotsInVeedel } from '../spots';
 import {
   addCareer,
   addLoyalty,
@@ -245,10 +246,22 @@ export function isLieutenant(state: GameState, staffId: string): boolean {
   return !!state.modules.hierarchy.posts[staffId];
 }
 
+/**
+ * Erster Posten (nach Mitarbeiter-ID) mit dieser Eigenschaft, ohne die Liste zu sortieren oder zu kopieren: Die
+ * Schleifen in Spot-Listen rufen das oft auf. Bei mehreren Treffern gewinnt die kleinste ID, wie in der sortierten Liste,
+ * das Ergebnis hängt also nicht von der Reihenfolge der Schlüssel ab.
+ */
+function findPost(state: GameState, test: (post: LieutenantPost) => boolean): LieutenantPost | undefined {
+  let best: LieutenantPost | undefined;
+  for (const post of Object.values(state.modules.hierarchy.posts)) {
+    if ((best === undefined || post.staffId < best.staffId) && test(post)) best = post;
+  }
+  return best;
+}
+
 /** Leutnant, der diesen Spot führt, sonst null. */
 export function lieutenantOfSpot(state: GameState, spotId: string): string | null {
-  for (const post of getLieutenants(state)) if (post.spotIds.includes(spotId)) return post.staffId;
-  return null;
+  return findPost(state, (post) => post.spotIds.includes(spotId))?.staffId ?? null;
 }
 
 /** Offene Spots, die der Leutnant führt. */
@@ -321,7 +334,10 @@ export function releaseFromTeams(state: GameState, staffId: string): void {
  * es wegen Heat geräumt hat. Wer jemanden an einen Spot dort stellen will, fragt hier.
  */
 export function isVeedelHidden(state: GameState, veedelId: string): boolean {
-  return isLyingLow(state, veedelId) || getLieutenants(state).some((p) => p.lyingLow.includes(veedelId));
+  return (
+    isLyingLow(state, veedelId) ||
+    Object.values(state.modules.hierarchy.posts).some((p) => p.lyingLow.includes(veedelId))
+  );
 }
 
 /** Wartet der Leutnant dieser Person auf ihre Rückkehr (dann bleibt ihr Platz frei und der Spieler wird gefragt)? */
@@ -340,7 +356,7 @@ export function teamLeadOf(state: GameState, staffId: string): string | null {
     const lead = lieutenantOfSpot(state, place.targetId);
     if (lead) return lead;
   }
-  return getLieutenants(state).find((p) => p.team.includes(staffId))?.staffId ?? null;
+  return findPost(state, (p) => p.team.includes(staffId))?.staffId ?? null;
 }
 
 /** Kümmert sich der Leutnant selbst um den Ausfall dieser Person (dann fragt niemand den Spieler)? */
@@ -374,10 +390,25 @@ export function checkSpots(state: GameState, staffId: string, spotIds: readonly 
   if (spotIds.length > MAX_SPOTS_PER_LIEUTENANT) {
     return { ok: false, reason: `Ein Leutnant führt höchstens ${MAX_SPOTS_PER_LIEUTENANT} Spots.` };
   }
+  const member = getStaffMember(state, staffId);
+  // Ein Leutnant führt nur in der Stadt, in der er selbst ist (Person und alle Spots in derselben Stadt).
+  const memberCity = member ? (member.cityId ?? 'koeln') : null;
+  let spotsCity: string | null = null;
   for (const spotId of spotIds) {
     const spot = getSpot(state, spotId);
     if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
     if (!isSpotActive(state, spotId)) return { ok: false, reason: `Der ${spot.name} ist noch nicht freigeschaltet.` };
+    const city = spotCity(spot);
+    if (spotsCity !== null && city !== spotsCity) {
+      return { ok: false, reason: 'Die Spots eines Leutnants liegen alle in einer Stadt.' };
+    }
+    spotsCity = city;
+    if (member && memberCity !== city) {
+      return {
+        ok: false,
+        reason: `${member.name} ist in ${cityName(memberCity ?? 'koeln')}, der ${spot.name} liegt in ${cityName(city)}.`,
+      };
+    }
     const other = lieutenantOfSpot(state, spotId);
     if (other && other !== staffId) {
       const name = getStaffMember(state, other)?.name ?? 'einem anderen Leutnant';
@@ -423,11 +454,22 @@ function cloneRules(rules: readonly OrderRule[]): OrderRule[] {
   return rules.map((r) => ({ ...r, paused: null }));
 }
 
+/** Regeln aus der Vorlage übernehmen: ein festes Lager nur, wenn es in der Stadt des neuen Leutnants liegt. */
+function templateRules(rules: readonly OrderRule[], cityId: string): OrderRule[] {
+  return rules.map((r) => ({
+    ...r,
+    paused: null,
+    warehouseId: r.warehouseId && warehouseCity(r.warehouseId) === cityId ? r.warehouseId : null,
+  }));
+}
+
 function newPost(ctx: Ctx, staffId: string, spotIds: string[], settings?: LieutenantSettings): LieutenantPost {
   const template = ctx.state.modules.hierarchy.orderTemplate;
   const base = settings ?? {
     ...DEFAULT_SETTINGS,
-    orderRules: cloneRules(template ?? DEFAULT_SETTINGS.orderRules),
+    orderRules: template
+      ? templateRules(template, getStaffMember(ctx.state, staffId)?.cityId ?? 'koeln')
+      : cloneRules(DEFAULT_SETTINGS.orderRules),
   };
   return {
     staffId,
@@ -620,7 +662,11 @@ function configure(ctx: Ctx, staffId: string | null, patch: SettingsPatch, meta:
     if (!Array.isArray(patch.orderRules) || patch.orderRules.length > MAX_ORDER_RULES) {
       return { ok: false, reason: `Höchstens ${MAX_ORDER_RULES} Bestellregeln.` };
     }
-    const normalized = normalizeOrderRules(ctx.state, patch.orderRules);
+    const normalized = normalizeOrderRules(
+      ctx.state,
+      patch.orderRules,
+      getStaffMember(ctx.state, post.staffId)?.cityId,
+    );
     if (!normalized.ok) return normalized;
     const rules = normalized.rules;
     next.orderRules = rules;

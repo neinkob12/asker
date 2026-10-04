@@ -40,6 +40,9 @@ export function SwipeRow(props: SwipeRowProps) {
   const spring = useRef(new Spring(SPRINGS.snap));
   const motion = useRef<Motion | null>(null);
   const [open, setOpen] = useState(false);
+  // Die Knöpfe unter der Zeile gibt es erst, wenn jemand sie anfasst (Berührung der Zeile): Eine lange Liste trägt
+  // sonst pro Chat zwei Knöpfe samt Icons im DOM, die man fast nie sieht. Der Inhalt bleibt dabei dasselbe Element.
+  const [armed, setArmed] = useState(false);
   const width = props.actions.length * ACTION_WIDTH;
 
   const paint = (x: number) => {
@@ -78,6 +81,7 @@ export function SwipeRow(props: SwipeRowProps) {
 
   const down = (e: PointerEvent) => {
     if (e.button !== 0 || !row.current || props.actions.length === 0) return;
+    setArmed(true);
     const start = spring.current.value;
     const rowWidth = row.current.clientWidth;
     motion.current?.stop();
@@ -116,21 +120,22 @@ export function SwipeRow(props: SwipeRowProps) {
       onPointerDown={(e) => down(e as unknown as PointerEvent)}
     >
       <div class="ui-swipe__actions" style={{ width: `${width}px` }} aria-hidden={open ? undefined : 'true'}>
-        {props.actions.map((action) => (
-          <button
-            key={action.label}
-            type="button"
-            class={`ui-swipe__action ui-swipe__action--${action.color ?? 'system'}`}
-            tabIndex={open ? 0 : -1}
-            onClick={() => {
-              settle(0);
-              action.onSelect();
-            }}
-          >
-            {action.icon && <Icon name={action.icon} />}
-            <span>{action.label}</span>
-          </button>
-        ))}
+        {(armed || open) &&
+          props.actions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              class={`ui-swipe__action ui-swipe__action--${action.color ?? 'system'}`}
+              tabIndex={open ? 0 : -1}
+              onClick={() => {
+                settle(0);
+                action.onSelect();
+              }}
+            >
+              {action.icon && <Icon name={action.icon} />}
+              <span>{action.label}</span>
+            </button>
+          ))}
       </div>
       {/* Offene Zeile: Tippen auf den Inhalt schließt sie (statt ihn zu öffnen). */}
       <div

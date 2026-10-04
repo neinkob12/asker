@@ -217,7 +217,7 @@ export const suppliersLayer: MapLayer = {
         properties: { kind: line.kind },
         geometry: { type: 'LineString' as const, coordinates: line.path.map((p) => [p.lng, p.lat]) },
       }));
-      (map.getSource(SOURCE) as GeoJSONSource).setData({ type: 'FeatureCollection', features });
+      (map.getSource(SOURCE) as GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features });
     };
 
     const create = (s: Shipment, supplier: Supplier, target: LngLat, progress: number): ShownShipment => {

@@ -22,9 +22,9 @@ import {
   wallet,
 } from '../../core';
 import { activeCity, cityName } from '../city';
-import { cityReport, dayReport, spotResults, wageRunway } from '../finance';
+import { cityReport, spotResults, wageRunway } from '../finance';
 import { playerHeat } from '../police';
-import { getSpot, getSpots } from '../spots';
+import { getSpot, getSpots, spotCity } from '../spots';
 import {
   activeRunnerAt,
   addCareer,
@@ -50,7 +50,7 @@ import {
   staffContact,
 } from '../staff';
 import { campaignProgress } from '../territory';
-import { veedelName } from '../veedel';
+import { veedelCity, veedelName } from '../veedel';
 import {
   DEFAULT_RIGHT_HAND_SETTINGS,
   DEMOTION_LOYALTY,
@@ -504,7 +504,7 @@ export function configureRightHand(
   if (patch.restockRules !== undefined) {
     if (!Array.isArray(patch.restockRules) || patch.restockRules.length > MAX_ORDER_RULES)
       return { ok: false, reason: 'Ungültige Bestellregeln.' };
-    const normalized = normalizeOrderRules(ctx.state, patch.restockRules);
+    const normalized = normalizeOrderRules(ctx.state, patch.restockRules, cityId);
     if (!normalized.ok) return normalized;
     next.restockRules = normalized.rules;
   }
@@ -601,12 +601,11 @@ function rightHandTurn(ctx: Ctx, cityId: string): void {
 }
 
 /**
- * Tagesbericht mit den Zahlen von gestern und bis zu drei Empfehlungen. Mit Vollmacht nur die Zahlen ihrer Stadt
- * (Auftrag 30).
+ * Tagesbericht mit den Zahlen von gestern und bis zu drei Empfehlungen. Immer nur die Zahlen ihrer Stadt (Auftrag 30):
+ * Umsatz und Kosten, schwache Spots, Ausfälle und Heat; die Kasse und die Lohnreichweite sind dagegen eine für alle.
  */
 export function buildReport(state: GameState, cityId: string = activeCity(state)): DailyReport {
-  const city = getRightHand(state, cityId)?.fullPower?.cityId;
-  const yesterday = city ? cityReport(state, city, 1, 1) : dayReport(state, 1);
+  const yesterday = cityReport(state, cityId, 1, 1);
   const runway = wageRunway(state);
   const advice: string[] = [];
   if (yesterday.profit < 0) {
@@ -615,12 +614,16 @@ export function buildReport(state: GameState, cityId: string = activeCity(state)
       .sort((a, b) => a.amount - b.amount)[0];
     if (biggest) advice.push(`Gestern Minus, größter Posten: ${biggest.label} (${formatEuro(-biggest.amount)}).`);
   }
-  const weakest = spotResults(state, 1, 1).find((r) => r.result < 0 && r.wages > 0);
+  const weakest = spotResults(state, 1, 1).find((r) => {
+    if (!(r.result < 0 && r.wages > 0)) return false;
+    const spot = getSpot(state, r.spotId);
+    return !!spot && spotCity(spot) === cityId;
+  });
   if (weakest) {
     const name = getSpot(state, weakest.spotId)?.name ?? weakest.spotId;
     advice.push(`Der ${name} hat gestern ${formatEuro(-weakest.result)} mehr gekostet, als er gebracht hat.`);
   }
-  const absent = getStaff(state).filter(isAbsent);
+  const absent = getStaff(state, { cityId }).filter(isAbsent);
   if (absent.length > 0) {
     advice.push(
       absent.length === 1
@@ -629,7 +632,8 @@ export function buildReport(state: GameState, cityId: string = activeCity(state)
     );
   }
   const hot = playerHeat(state);
-  if (hot && hot.heat >= 60) advice.push(`In ${veedelName(hot.veedelId)} ist es heiß (Heat ${Math.round(hot.heat)}).`);
+  if (hot && hot.heat >= 60 && veedelCity(hot.veedelId) === cityId)
+    advice.push(`In ${veedelName(hot.veedelId)} ist es heiß (Heat ${Math.round(hot.heat)}).`);
   if (runway.warn) advice.unshift(`Die Löhne reichen nur noch für ${runway.days ?? 0} Tage.`);
   const rh = getRightHand(state, cityId);
   const done = rh ? describeDone(rh.done) : '';
@@ -670,7 +674,7 @@ function sendReport(ctx: Ctx, rh: RightHandPost, cityId: string): void {
     ...report.advice,
   ];
   if (fp) fp.done = emptyFullPowerDone();
-  const absent = getStaff(ctx.state).filter(isAbsent);
+  const absent = getStaff(ctx.state, { cityId }).filter(isAbsent);
   messages.send(ctx, {
     contact: staffContact(m),
     text: lines.join(' '),
@@ -734,7 +738,9 @@ function coordinate(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
  * Lohnsicherung anzugreifen), sonst am Spot ersetzen.
  */
 function handleAbsences(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
-  for (const m of getStaff(ctx.state)) {
+  // Nur die Leute ihrer Stadt: Wer in der anderen Stadt ausfällt, ist Sache von dort.
+  const cityId = rightHandCityOf(ctx.state, rh.staffId) ?? undefined;
+  for (const m of getStaff(ctx.state, { cityId })) {
     if (!isAbsent(m) || m.id === rh.staffId || rh.handled.includes(m.id)) continue;
     const lead = teamLeadOf(ctx.state, m.id);
     if (lead && lead !== m.id && handlesAbsence(ctx.state, lead, m.id)) continue;

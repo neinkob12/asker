@@ -368,6 +368,7 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier' 
   order.deliveredBy = who;
   order.courierId = courierId;
   order.fromWarehouseId = warehouse?.id ?? null;
+  order.unitCost = goods.unitCost;
   order.startedAt = ctx.now;
   order.arrivesAt = ctx.now + travel + handover;
   order.quality = goods.quality;
@@ -466,9 +467,13 @@ export function onDealResolved(ctx: Ctx, ref: string | undefined, outcome: strin
     return;
   }
   if (outcome === 'retreat') {
+    // Die Ware geht zurück ins Lager, aus dem sie kam (sonst ins nächste der Stadt), mit ihrem Einkaufspreis.
+    const home = order.fromWarehouseId ?? nearestWarehouse(ctx.state, order)?.id;
     store(ctx, {
       productId: order.productId,
       amount: order.amount,
+      ...(home ? { warehouseId: home } : {}),
+      ...(order.unitCost !== undefined ? { unitCost: order.unitCost } : {}),
       ...(order.quality !== null ? { quality: order.quality } : {}),
       ...(order.cut !== null ? { cut: order.cut } : {}),
     });

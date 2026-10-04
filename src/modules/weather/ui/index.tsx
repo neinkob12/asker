@@ -182,6 +182,10 @@ registerMapLayer({
       destroy() {
         setMapMood('weather', null);
         setPrecipitation({ kind: 'none', intensity: 0 });
+        // Auch der Ton: sonst regnet es im Ohr weiter, wenn das Spiel neu gestartet oder geladen wird.
+        audio.setAmbience('rain', 0);
+        audio.setAmbience('storm', 0);
+        audio.setAmbience('wind', 0);
       },
     };
   },

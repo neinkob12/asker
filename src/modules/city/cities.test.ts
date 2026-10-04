@@ -177,7 +177,7 @@ describe('Städte (Auftrag 30)', () => {
     sim.advance(10 * DAY);
     const slept = eventsOfType(events, 'city.slept').filter((e) => e.payload.cityId === 'koeln');
     expect(slept.length).toBeGreaterThanOrEqual(9);
-    // Der Schnitt: die live gespielten Tage (auch der angefangene Tag des Umschaltens), danach ändert er sich nicht.
+    // Der Schnitt: die ganz live gespielten Tage (der angefangene Tag des Umschaltens zählt nicht), danach ändert er sich nicht.
     const results = sleepInfo(sim.state, 'koeln')?.results ?? [];
     const average = results.reduce((a, b) => a + b, 0) / results.length;
     expect(average).toBeGreaterThan(0);
@@ -216,6 +216,38 @@ describe('Städte (Auftrag 30)', () => {
     expect(getRightHand(sim.state)?.fullPower?.cityId).toBe('koeln');
     sim.advance(DAY);
     expect(eventsOfType(events, 'city.slept').filter((e) => e.payload.cityId === 'koeln').length).toBe(slept.length);
+  });
+
+  it('Tagesergebnis einer live gespielten Stadt enthält die Löhne dieses Tages (Schnitt wird nicht zu hoch)', () => {
+    const sim = quietGame();
+    handOverKoeln(sim);
+    // Ein Tag ohne Umsatz: Das Ergebnis des Tages sind nur die Löhne.
+    sim.advance(DAY + 10 - sim.state.time);
+    const results = sleepInfo(sim.state, 'koeln')?.results ?? [];
+    expect(results).toHaveLength(1);
+    const day1 = cityReport(sim.state, 'koeln', 1, 1);
+    expect(day1.wages).toBeGreaterThan(0);
+    expect(results[0]).toBe(Math.round(cityDayProfit(sim.state, 'koeln', day1.to) ?? Number.NaN));
+    expect(results[0]).toBeLessThanOrEqual(-Math.round(day1.wages));
+  });
+
+  it('Teiltage zählen nicht: Wer mitten am Tag umschaltet, bekommt für diesen Tag weder Eintrag noch Zusammenfassung', () => {
+    const sim = quietGame();
+    handOverKoeln(sim);
+    // Tag 1 ganz in Köln, Tag 2 um 12 Uhr nach Hamburg.
+    sim.advance(DAY + 12 * 60 - sim.state.time);
+    expect(sleepInfo(sim.state, 'koeln')?.results).toHaveLength(1);
+    const events = recordEvents(sim);
+    sim.dispatch({ type: 'city.switch', payload: { cityId: 'hamburg' } });
+    sim.advance(DAY);
+    // Mitternacht nach Tag 2: Köln war nur halb live, Hamburg nur halb zu Hause.
+    expect(sleepInfo(sim.state, 'koeln')?.results).toHaveLength(1);
+    expect(sleepInfo(sim.state, 'hamburg')?.results ?? []).toHaveLength(0);
+    expect(eventsOfType(events, 'city.slept').filter((e) => e.payload.cityId === 'koeln')).toHaveLength(0);
+    // Tag 3 hat Köln ganz geschlafen: Zusammenfassung, Hamburg zählt als ganzer live gespielter Tag.
+    sim.advance(DAY);
+    expect(eventsOfType(events, 'city.slept').filter((e) => e.payload.cityId === 'koeln')).toHaveLength(1);
+    expect(sleepInfo(sim.state, 'hamburg')?.results).toHaveLength(1);
   });
 
   it('Kasse pro Stadt: Buchungen am Spot, durch Leute und ohne Bezug landen in ihrer Stadt; Filter Stadt', () => {

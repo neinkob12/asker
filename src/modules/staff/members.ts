@@ -582,10 +582,13 @@ export function setWage(ctx: Ctx, staffId: string, wage: number): boolean {
   if (next === old) return true;
   m.wage = next;
   const change = old > 0 ? (next - old) / old : 1;
+  // Gerundet wird immer gegen die Person: Gewinn nach unten, Verlust nach oben. Sonst brächte schon eine kleine
+  // Erhöhung +1 und die Rücknahme in Schritten 0, und per Skript käme man kostenlos auf Loyalität 100.
+  const eps = 1e-9;
   const delta =
     change > 0
-      ? Math.min(LOYALTY.wageRaiseMax, Math.round((change / 0.1) * LOYALTY.wageRaisePer10))
-      : Math.round((-change / 0.1) * LOYALTY.wageCutPer10);
+      ? Math.min(LOYALTY.wageRaiseMax, Math.floor((change / 0.1) * LOYALTY.wageRaisePer10 + eps))
+      : -Math.ceil((-change / 0.1) * -LOYALTY.wageCutPer10 - eps);
   addLoyalty(ctx, staffId, delta);
   addCareer(ctx, staffId, `Lohn ${next > old ? 'erhöht' : 'gekürzt'}: ${next} € pro Tag.`);
   return true;

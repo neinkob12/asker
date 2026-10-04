@@ -101,6 +101,29 @@ describe('Stadt-Events (Auftrag 30)', () => {
     ).toHaveLength(1);
   });
 
+  it('Stadtwechsel mitten im Karneval meldet den Start nicht noch einmal', () => {
+    const sim = createTestGame();
+    const events = recordEvents(sim);
+    const started = () => eventsOfType(events, 'events.started').filter((e) => e.payload.eventId === 'karneval');
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+    sim.advance(clock.at(30, 2) - sim.state.time);
+    expect(started()).toHaveLength(1);
+    const journalBefore = sim.state.journal.length;
+    // Köln schläft, Karneval läuft weiter; beim Zurückkommen ist nichts neu.
+    expect(sim.dispatch({ type: 'city.switch', payload: { cityId: 'hamburg' } }).ok).toBe(true);
+    sim.advance(3 * 60);
+    expect(eventsOfType(events, 'events.ended').filter((e) => e.payload.eventId === 'karneval')).toHaveLength(0);
+    expect(sim.dispatch({ type: 'city.switch', payload: { cityId: 'koeln' } }).ok).toBe(true);
+    sim.advance(2 * 60);
+    expect(started()).toHaveLength(1);
+    expect(sim.state.modules.events.running).toContain('karneval');
+    expect(sim.state.journal.slice(journalBefore).some((j) => j.text.includes(def('karneval').name))).toBe(false);
+    // Das echte Ende kommt trotzdem, und danach läuft er beim nächsten Mal wieder an.
+    sim.advance(clock.at(36, 1) - sim.state.time);
+    expect(eventsOfType(events, 'events.ended').filter((e) => e.payload.eventId === 'karneval')).toHaveLength(1);
+    expect(sim.state.modules.events.running).not.toContain('karneval');
+  });
+
   it('kommende Termine für die Reviere', () => {
     const sim = createTestGame();
     sim.state.time = clock.at(28, 12);

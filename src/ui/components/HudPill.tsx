@@ -27,6 +27,15 @@ export interface HudPillProps {
   detailsAction?: string;
 }
 
+/**
+ * Schwebt nur eine Maus über der Karte? Ein Finger löst am Touchscreen nach dem Tippen ein nachgemachtes mouseenter
+ * aus (und mouseleave erst beim nächsten Tipp daneben): Die Karte klebte offen, und ein zweiter Tipp schloss sie nicht.
+ * Pointer-Ereignisse tragen den Typ, Finger und Stift schweben hier nicht.
+ */
+export function hoversWith(pointerType: string): boolean {
+  return pointerType === 'mouse';
+}
+
 /** Waagerechte Leiste 0–100 (z.B. Ruf) in der Kennzahl-Kachel. */
 export function HudBar(props: { value: number; max?: number; label: string; marks?: readonly number[] }) {
   const max = props.max ?? 100;
@@ -82,8 +91,8 @@ export function HudPill(props: HudPillProps) {
       <fieldset
         class={`hud-pill-wrap ${open || hover ? 'is-open' : ''}`}
         aria-label={typeof props.label === 'string' ? props.label : undefined}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
+        onPointerEnter={(e) => hoversWith(e.pointerType) && setHover(true)}
+        onPointerLeave={(e) => hoversWith(e.pointerType) && setHover(false)}
       >
         <button
           type="button"

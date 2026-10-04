@@ -26,6 +26,8 @@ import {
 import { useRuntime, useUi } from '../hooks';
 import { slotContributions } from '../registry';
 import { useAudio } from '../useAudio';
+import { top } from './navModel';
+import { usePage } from './page';
 
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const duration = (seconds: number) => `${Math.floor(seconds / 60)}:${pad(seconds % 60)}`;
@@ -122,11 +124,17 @@ function Player() {
   const audio = useAudio();
   const s = audio.settings;
   // Die Musik läuft auch bei Pause weiter, das Spiel zeichnet dann aber nicht neu: Zeit und Balken sekündlich nachziehen.
+  // Nur, solange die Seite zu sehen ist (Handy offen, Einstellungen oben auf dem Stapel, Musik an): Verdeckt oder
+  // weggelegt wäre das ein Neuzeichnen pro Sekunde für nichts.
   const [, tick] = useState(0);
+  const { ui } = useRuntime();
+  const page = usePage();
+  const visible = ui.phone.open && (!page || top(ui.phone.stack).key === page.entry.key) && s.musicOn;
   useEffect(() => {
+    if (!visible) return;
     const timer = setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [visible]);
   const now = audio.nowPlaying();
   if (!s.musicOn) return null;
   if (!now) {

@@ -8,6 +8,7 @@ import { ABOVE_LAND, addHtmlMarker, BELOW_BUILDINGS, el, type MapLayer, mapToken
 import { getHeat, heatLevel } from '../../police';
 import { allVeedel, getBoundary } from '../../veedel';
 import { controllerOf, factionColor, factionName } from '../index';
+import { heatBucket, veedelSignature } from './mapSignature';
 import { getMapView, onMapViewChange, type VeedelMapView } from './view';
 
 /** Grenzen offener Veedel: dezentes Grau. */
@@ -39,19 +40,12 @@ function buildData(state: GameState, view: VeedelMapView): VeedelData {
           color: muted(factionColor(state, owner), 0.25),
           line: owner === null ? NEUTRAL_LINE : muted(factionColor(state, owner), 0.15),
           neutral: owner === null,
-          heat: Math.round(getHeat(state, v.id)),
+          heat: heatBucket(getHeat(state, v.id)),
         },
         geometry: { type: 'Polygon', coordinates: [[...ring, ring[0]]] },
       };
     }),
   };
-}
-
-/** Kennung für "hat sich etwas Sichtbares geändert?", damit die Daten nicht 10 Mal pro Sekunde neu gesetzt werden. */
-function signature(state: GameState, view: VeedelMapView): string {
-  return `${view}|${allVeedel()
-    .map((v) => `${controllerOf(state, v.id)}:${Math.round(getHeat(state, v.id))}`)
-    .join(',')}`;
 }
 
 function labelText(state: GameState, veedelId: string, view: VeedelMapView): string {
@@ -164,23 +158,24 @@ export const veedelLayer: MapLayer = {
         return;
       }
       label.marker.setLngLat([veedel.center.lng, veedel.center.lat]);
-      hoverName.textContent = veedel.name;
-      hoverDetail.textContent = labelText(state, veedel.id, getMapView());
+      const detail = labelText(state, veedel.id, getMapView());
+      if (hoverName.textContent !== veedel.name) hoverName.textContent = veedel.name;
+      if (hoverDetail.textContent !== detail) hoverDetail.textContent = detail;
       label.element.hidden = false;
     };
 
     const draw = (state: GameState, force = false) => {
       const view = getMapView();
-      const sig = signature(state, view);
+      const sig = veedelSignature(state, view);
       if (!force && sig === lastSignature) return;
       lastSignature = sig;
       (map.getSource(SOURCE) as GeoJSONSource | undefined)?.setData(buildData(state, view));
-      showLabel(hovered);
     };
 
     const unsubscribe = onMapViewChange(() => {
       const state = ctx.getState();
       if (state) draw(state, true);
+      showLabel(hovered);
     });
 
     map.on('click', FILL, (e) => {
@@ -207,6 +202,8 @@ export const veedelLayer: MapLayer = {
     return {
       update(state, ui) {
         draw(state);
+        // Der Text beim Überfahren zeigt den genauen Heat, auch wenn die Flächen nur in Stufen neu gesetzt werden.
+        if (hovered) showLabel(hovered);
         const selected = ui.panel?.id === 'veedel.veedel' ? (ui.panel.props as { veedelId: string }).veedelId : '';
         if (selected !== lastSelected) {
           lastSelected = selected;

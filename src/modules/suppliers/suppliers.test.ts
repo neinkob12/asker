@@ -340,6 +340,26 @@ describe('suppliers', () => {
     expect(order(sim, 'frankfurt', 'weed25').ok).toBe(true);
   });
 
+  it('Neuer Kredit schiebt die Frist hinaus: Er erbt nicht die der ältesten Schuld', () => {
+    const sim = createTestGame();
+    sim.state.modules.suppliers.relations.frankfurt.trust = 80;
+    expect(order(sim, 'frankfurt', 'weed25', true).ok).toBe(true);
+    const first = getRelation(sim.state, 'frankfurt').dueAt;
+    sim.advance(Math.round(CREDIT_TERM * 0.75));
+    expect(order(sim, 'frankfurt', 'weed25', true).ok).toBe(true);
+    const second = getRelation(sim.state, 'frankfurt').dueAt ?? 0;
+    expect(second).toBe(sim.state.time + CREDIT_TERM);
+    expect(second).toBeGreaterThan(first ?? 0);
+    // Die erste Frist läuft ab, die neue noch nicht: nichts ist überfällig.
+    const debt = getRelation(sim.state, 'frankfurt').debt;
+    sim.advance((first ?? 0) - sim.state.time + 5);
+    expect(getRelation(sim.state, 'frankfurt')).toMatchObject({ overdue: 0, debt });
+    expect(isBlocked(sim.state, 'frankfurt')).toBe(false);
+    // Danach ist die Gesamtschuld wie gewohnt fällig.
+    sim.advance(second - sim.state.time);
+    expect(getRelation(sim.state, 'frankfurt').overdue).toBe(1);
+  });
+
   it('Lieferprobleme: je unzuverlässiger, desto öfter; Vertrauen hilft', () => {
     const port = SUPPLIERS[0];
     const hamburg = SUPPLIERS[3];

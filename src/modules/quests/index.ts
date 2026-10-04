@@ -21,7 +21,7 @@ import {
   wallet,
 } from '../../core';
 import { activeCity, liveVeedel } from '../city';
-import { DEFAULT_WAREHOUSE, getWarehouses, productName, store } from '../goods';
+import { DEFAULT_WAREHOUSE, getWarehouses, productName, store, type Warehouse } from '../goods';
 import { addHeat } from '../police';
 import { changeReputation } from '../reputation';
 import { addLoyalty, addXp, getStaff } from '../staff';
@@ -113,38 +113,54 @@ export function rewardText(reward: QuestReward): string {
 // ---------------------------------------------------------------------------------------------
 // Schreiben
 
-function grant(ctx: Ctx, reward: QuestReward): void {
+/**
+ * Lager für Ware aus einer Belohnung: das Standardlager bzw. irgendein eigenes Lager in der aktiven Stadt, sonst
+ * irgendein eigenes Lager (Standardlager zuerst). Ohne eigenes Lager null.
+ */
+function rewardWarehouse(state: GameState): Warehouse | null {
+  const here = getWarehouses(state, activeCity(state));
+  return here.find((w) => w.id === DEFAULT_WAREHOUSE) ?? here[0] ?? getWarehouses(state)[0] ?? null;
+}
+
+/** Zahlt eine Belohnung aus und gibt den Text zurück, der dem Spieler sagt, was wirklich angekommen ist. */
+function grant(ctx: Ctx, reward: QuestReward): string {
+  const text = rewardText(reward);
   switch (reward.kind) {
     case 'goods': {
-      const owned = getWarehouses(ctx.state, activeCity(ctx.state));
-      const warehouseId = owned.some((w) => w.id === DEFAULT_WAREHOUSE) ? DEFAULT_WAREHOUSE : owned[0]?.id;
-      if (warehouseId)
-        store(ctx, { warehouseId, productId: reward.productId, amount: reward.amount, quality: reward.quality });
-      return;
+      // Früher verpuffte die Ware still, wenn es in der aktiven Stadt kein eigenes Lager gab (Hamburg ohne Lager).
+      const warehouse = rewardWarehouse(ctx.state);
+      if (!warehouse) return `${text} (verfallen, du hast kein Lager)`;
+      store(ctx, {
+        warehouseId: warehouse.id,
+        productId: reward.productId,
+        amount: reward.amount,
+        quality: reward.quality,
+      });
+      return warehouse.cityId === activeCity(ctx.state) ? text : `${text} (im Lager ${warehouse.name})`;
     }
     case 'money':
       wallet.earn(ctx, reward.amount, reward.money, 'Belohnung von Peter', 'income.other');
-      return;
+      return text;
     case 'reputation':
       changeReputation(ctx, reward.amount, 'Quest');
-      return;
+      return text;
     case 'heat':
       for (const v of liveVeedel(ctx.state)) addHeat(ctx, v.id, -reward.amount);
-      return;
+      return text;
     case 'teamXp':
       for (const m of getStaff(ctx.state, { status: 'active' })) addXp(ctx, m.id, reward.amount);
-      return;
+      return text;
     case 'loyalty':
       for (const m of getStaff(ctx.state, { status: 'active' })) addLoyalty(ctx, m.id, reward.amount);
-      return;
+      return text;
     case 'influence':
       for (const v of liveVeedel(ctx.state)) {
         if (hasPlayerPresence(ctx.state, v.id)) addInfluence(ctx, v.id, PLAYER_FACTION, reward.amount);
       }
-      return;
+      return text;
     case 'title':
       ctx.state.modules.quests.title = reward.title;
-      return;
+      return text;
   }
 }
 
@@ -168,8 +184,7 @@ function finish(ctx: Ctx, skipped: boolean): void {
     q.skipped.push(quest.id);
   } else {
     q.done.push(quest.id);
-    for (const reward of quest.reward) grant(ctx, reward);
-    const rewards = quest.reward.map(rewardText).join(', ');
+    const rewards = quest.reward.map((reward) => grant(ctx, reward)).join(', ');
     journal.add(ctx, `Quest erledigt: ${quest.title}.${rewards ? ` Belohnung: ${rewards}.` : ''}`, 'good');
     if (quest.doneText) messages.send(ctx, { contact: PETER, text: quest.doneText });
   }

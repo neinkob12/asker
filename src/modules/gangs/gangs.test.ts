@@ -7,7 +7,7 @@ import { getCompetitionFactor } from '../market';
 import { getSpot } from '../spots';
 import { controllerOf, getInfluence } from '../territory';
 import { allVeedel, getVeedel } from '../veedel';
-import { demandOptions, say } from './common';
+import { crewFor, demandOptions, say } from './common';
 import {
   ALLIANCE_COST,
   ATTACK_AT,
@@ -504,6 +504,38 @@ describe('gangs: Überfall und Angebote (Fehler aus der Handy-Prüfung)', () => 
     });
     expect(result.ok).toBe(true);
     expect(activeEncounters(sim.state)[0]?.request.staffIds).toEqual([runner]);
+  });
+
+  it('Crew und Verstärkung kommen aus der Stadt des Anlasses, nicht aus der schlafenden', () => {
+    const sim = createTestGame({ seed: 11 });
+    richer(sim, 5000);
+    const here = hire(sim, 'ebertplatz');
+    const away = hire(sim, 'neumarkt');
+    const awaySecurity = hire(sim, 'zuelpicher');
+    const find = (id: string) => {
+      const m = sim.state.modules.staff.members.find((x) => x.id === id);
+      if (!m) throw new Error(id);
+      return m;
+    };
+    // Zwei Leute aus Hamburg ohne Einsatz (Köln ist aktiv, Hamburg schläft).
+    for (const id of [away, awaySecurity]) {
+      find(id).cityId = 'hamburg';
+      find(id).assignment = null;
+    }
+    find(awaySecurity).role = 'security';
+    expect(raidCrew(sim.state).map((m) => m.id)).toEqual([here]);
+    expect(canJoinRaid(find(away), 'koeln')).toBe(false);
+    expect(canJoinRaid(find(away), 'hamburg')).toBe(true);
+    expect(crewFor(sim.state, { spotId: 'ebertplatz' })).toEqual([here]);
+    expect(crewFor(sim.state, {})).toEqual([]);
+    expect(crewFor(sim.state, { cityId: 'hamburg' })).toEqual([awaySecurity]);
+    // Wer aus der anderen Stadt mitgeschickt wird, geht nicht mit.
+    const result = sim.dispatch({
+      type: 'gangs.attack',
+      payload: { gangId: 'ost', veedelId: 'kalk', staffIds: [here, away], playerPresent: false },
+    });
+    expect(result.ok).toBe(true);
+    expect(activeEncounters(sim.state)[0]?.request.staffIds).toEqual([here]);
   });
 
   it('ein Überfall nur mit Leuten, die nicht mitgehen dürfen, geht nicht', () => {

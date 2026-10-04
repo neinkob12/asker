@@ -1394,12 +1394,29 @@
 .ui-countup.is-down {
   animation: ui-pulse-down 600ms var(--ease-out);
 }
+/* Gleiche Animation unter anderem Namen: Der Wechsel startet sie neu, ohne Layout zu erzwingen (Juice.tsx). */
+.ui-countup.is-up.is-alt {
+  animation-name: ui-pulse-up-b;
+}
+.ui-countup.is-down.is-alt {
+  animation-name: ui-pulse-down-b;
+}
 @keyframes ui-pulse-up {
   30% {
     color: var(--color-accent);
   }
 }
+@keyframes ui-pulse-up-b {
+  30% {
+    color: var(--color-accent);
+  }
+}
 @keyframes ui-pulse-down {
+  30% {
+    color: var(--color-bad);
+  }
+}
+@keyframes ui-pulse-down-b {
   30% {
     color: var(--color-bad);
   }

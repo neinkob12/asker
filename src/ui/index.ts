@@ -12,7 +12,7 @@ export {
 } from '../audio';
 export * from './components';
 export { HAPTIC_PATTERNS, type HapticKind, haptic } from './haptics';
-export { useGame, useSession, useUi } from './hooks';
+export { shallowEqual, useGame, useGameSelector, useSession, useUi } from './hooks';
 export { islandCountdown } from './phone/islandModel';
 export { PhoneScreen, type PhoneScreenProps } from './phone/PhoneScreen';
 /** Handy-Aufbau (≤ 760 px): Module zeigen dann z.B. Blätter statt Dialogen über der Karte. */
@@ -73,3 +73,4 @@ export type {
 export { useIsMobile } from './shell/layout';
 export { Slot } from './shell/Slot';
 export { type SoundOnEventOptions, soundOnEvent } from './sound';
+export { memoState, memoStateKeyed } from './stateMemo';

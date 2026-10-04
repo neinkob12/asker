@@ -288,7 +288,16 @@ export function getLots(state: GameState, filter: StockFilter = {}): StockLot[] 
 
 /** Bestand, ohne Filter über alle Lager und Produkte. */
 export function getStock(state: GameState, filter: StockFilter = {}): number {
-  return getLots(state, filter).reduce((sum, lot) => sum + lot.amount, 0);
+  let sum = 0;
+  // Ohne Zwischen-Array: wird pro Läufer und Minute oft gefragt.
+  for (const [warehouseId, lots] of Object.entries(state.modules.goods.stock)) {
+    if (filter.warehouseId && warehouseId !== filter.warehouseId) continue;
+    if (filter.cityId && warehouseCity(warehouseId) !== filter.cityId) continue;
+    for (const lot of lots) {
+      if (lot.amount > 0 && (!filter.productId || lot.productId === filter.productId)) sum += lot.amount;
+    }
+  }
+  return sum;
 }
 
 /** Liegt irgendwo Ware? Bricht beim ersten Posten ab (die Pleite-Regel fragt das jede Spielminute). */

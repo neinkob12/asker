@@ -7,8 +7,8 @@
 // Welcher Chat offen ist, steht in ui.phone.params.contactId (so öffnen Benachrichtigungen den Chat direkt).
 
 import { memo } from 'preact/compat';
-import { useEffect, useRef, useState } from 'preact/hooks';
-import { clock, messages } from '../../core';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { clock, type GameState, messages } from '../../core';
 import {
   ActionSheet,
   Avatar,
@@ -26,6 +26,7 @@ import {
   Tag,
 } from '../components';
 import { useGame, useUi } from '../hooks';
+import { memoStateKeyed } from '../stateMemo';
 import {
   type ChatListItem,
   CONTACT_KIND_ICONS,
@@ -47,6 +48,12 @@ const APP_ID = 'core.messages';
 const typingMs = (text: string) => Math.min(2200, Math.max(700, 450 + text.length * 22));
 
 const avatarImage = contactAvatar;
+
+/** Verlauf eines Chats einmal pro Spielstand bauen (Fristen, Antwort-Optionen, Anrufe), nicht bei jedem Neuzeichnen. */
+const entriesOf = memoStateKeyed(
+  (state: GameState, contactId: string, firstUnreadId: number | null) => chatEntries(state, contactId, firstUnreadId),
+  (contactId, firstUnreadId) => `${contactId}|${firstUnreadId ?? ''}`,
+);
 
 /** Suche in Namen, Kontaktart und letzter Nachricht (ohne Groß/klein). */
 function matches(chat: ReturnType<typeof chatList>[number], query: string): boolean {
@@ -181,13 +188,19 @@ function ChatList() {
   const [query, setQuery] = useState('');
   const [menu, setMenu] = useState(false);
   const [confirm, setConfirm] = useState<'all' | string | null>(null);
-  const list = (filter === 'open' ? all.filter((c) => c.awaitingAnswer || c.unread > 0) : all).filter((c) =>
-    matches(c, query),
-  );
-  const groups = groupChats(list);
+  // `all` ist pro Spielstand dieselbe Liste (chatList ist gemerkt): Filter und Gruppen nur bei Änderung neu bauen.
+  const { list, groups, recent, openCount } = useMemo(() => {
+    const list = (filter === 'open' ? all.filter((c) => c.awaitingAnswer || c.unread > 0) : all).filter((c) =>
+      matches(c, query),
+    );
+    return {
+      list,
+      groups: groupChats(list),
+      recent: recentContacts(all),
+      openCount: all.filter((c) => c.awaitingAnswer).length,
+    };
+  }, [all, filter, query]);
   const unread = messages.unreadCount(state);
-  const openCount = all.filter((c) => c.awaitingAnswer).length;
-  const withDeadline = all.filter((c) => messages.hasOpenDeadline(state, c.contactId));
   const markRead = (contactId: string) => dispatch({ type: 'messages.markRead', payload: { contactId } });
   const markAllRead = () => dispatch({ type: 'messages.markAllRead', payload: {} });
   const remove = (contactId: string) => dispatch({ type: 'messages.delete', payload: { contactId } });
@@ -206,9 +219,15 @@ function ChatList() {
   };
   const confirmChat = confirm && confirm !== 'all' ? all.find((c) => c.contactId === confirm) : undefined;
   // Beim Ausblenden des Blatts sind Chat und Anzahl schon weg: Der Titel darf nicht zu "Alle 0 Chats" umspringen.
-  const confirmCopy = useRef({ count: all.length, name: '' });
-  if (confirm === 'all') confirmCopy.current.count = all.length;
-  else if (confirmChat) confirmCopy.current.name = confirmChat.name;
+  const confirmCopy = useRef({ count: all.length, name: '', withDeadline: [] as string[] });
+  if (confirm === 'all') {
+    confirmCopy.current.count = all.length;
+    // Nur fürs offene Blatt nötig (Namen der Chats mit Frist), sonst nicht bei jedem Neuzeichnen für alle Chats prüfen.
+    confirmCopy.current.withDeadline = all
+      .filter((c) => messages.hasOpenDeadline(state, c.contactId))
+      .map((c) => c.name);
+  } else if (confirmChat) confirmCopy.current.name = confirmChat.name;
+  const withDeadline = confirmCopy.current.withDeadline;
   return (
     <PhoneScreen
       title="Nachrichten"
@@ -225,7 +244,7 @@ function ChatList() {
         )
       }
     >
-      <RecentRow chats={recentContacts(all)} />
+      <RecentRow chats={recent} />
       <SegmentedControl
         wide
         aria-label="Filter"
@@ -279,7 +298,7 @@ function ChatList() {
         title={`${confirmCopy.current.count === 1 ? 'Einen Chat' : `Alle ${confirmCopy.current.count} Chats`} löschen?`}
         message={
           withDeadline.length > 0
-            ? `${withDeadline.map((c) => c.name).join(', ')} ${withDeadline.length === 1 ? 'wartet' : 'warten'} noch auf eine Antwort mit Frist. Gelöschte Chats kommen wieder, sobald jemand neu schreibt.`
+            ? `${withDeadline.join(', ')} ${withDeadline.length === 1 ? 'wartet' : 'warten'} noch auf eine Antwort mit Frist. Gelöschte Chats kommen wieder, sobald jemand neu schreibt.`
             : 'Gelöschte Chats kommen wieder, sobald jemand neu schreibt.'
         }
         actions={[{ label: 'Alle löschen', icon: 'trash', destructive: true, onSelect: removeAll }]}
@@ -311,7 +330,7 @@ function Chat(props: { contactId: string }) {
   const [firstUnreadId] = useState(() => firstUnread(state, contactId));
   const unread = messages.unreadCount(state, contactId);
   const over = state.outcome.gameOver !== null;
-  const entries = chatEntries(state, contactId, firstUnreadId);
+  const entries = entriesOf(state, contactId, firstUnreadId);
   const bottom = useRef<HTMLDivElement>(null);
 
   // Nachrichten, die schon beim Öffnen da waren, erscheinen sofort; neue tippt der Kontakt erst ("…").

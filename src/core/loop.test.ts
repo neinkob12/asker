@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { GAME_MINUTES_PER_REAL_SECOND } from './config';
 import { GameLoop } from './loop';
 
@@ -60,5 +60,78 @@ describe('GameLoop: fester Zeitschritt', () => {
     loop.stop();
     expect(frames).toBe(61);
     expect(steps).toBe(GAME_MINUTES_PER_REAL_SECOND);
+  });
+
+  it('wirft ein Schritt, läuft das Bild trotzdem zu Ende (Anzeige, Autosave) und die nächsten Bilder kommen', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const callbacks: ((now: number) => void)[] = [];
+    let frames = 0;
+    const loop = new GameLoop({
+      step: () => {
+        throw new Error('Tick kaputt');
+      },
+      frame: () => frames++,
+      scheduler: { request: (cb) => callbacks.push(cb), cancel: () => undefined },
+    });
+    loop.start();
+    for (let i = 0; i <= 30; i++) expect(() => callbacks[i](i * (1000 / 60) * 10)).not.toThrow();
+    expect(frames).toBe(31);
+    expect(callbacks).toHaveLength(32);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it('wirft die Oberfläche im frame, kommt das nächste Bild trotzdem (es ist vorher angefordert)', () => {
+    const callbacks: ((now: number) => void)[] = [];
+    let frames = 0;
+    const loop = new GameLoop({
+      step: () => undefined,
+      frame: () => {
+        if (frames++ === 0) throw new Error('UI kaputt');
+      },
+      scheduler: { request: (cb) => callbacks.push(cb), cancel: () => undefined },
+    });
+    loop.start();
+    expect(() => callbacks[0](0)).toThrow('UI kaputt');
+    callbacks[1](16);
+    expect(frames).toBe(2);
+  });
+
+  it('Tempo: Infinity und NaN werden ignoriert, das alte Tempo bleibt', () => {
+    const { loop, steps } = loopWithCounter();
+    loop.setSpeed(2);
+    loop.setSpeed(Number.POSITIVE_INFINITY);
+    expect(loop.speed).toBe(2);
+    loop.setSpeed(Number.NaN);
+    expect(loop.speed).toBe(2);
+    loop.setSpeed(-3);
+    expect(loop.speed).toBe(0);
+    loop.setSpeed(1);
+    for (let i = 0; i < 100; i++) loop.advanceReal(0.1);
+    expect(steps()).toBe(10 * GAME_MINUTES_PER_REAL_SECOND);
+  });
+
+  it('eine NaN-Bildzeit vergiftet den Übertrag nicht', () => {
+    const { loop, steps } = loopWithCounter();
+    loop.advanceReal(Number.NaN);
+    loop.advanceReal(Number.POSITIVE_INFINITY);
+    const before = steps();
+    for (let i = 0; i < 100; i++) loop.advanceReal(0.1);
+    expect(steps() - before).toBe(10 * GAME_MINUTES_PER_REAL_SECOND);
+  });
+
+  it('frame bekommt nie NaN als Bildzeit', () => {
+    const callbacks: ((now: number) => void)[] = [];
+    const seen: number[] = [];
+    const loop = new GameLoop({
+      step: () => undefined,
+      frame: (dt) => seen.push(dt),
+      scheduler: { request: (cb) => callbacks.push(cb), cancel: () => undefined },
+    });
+    loop.start();
+    callbacks[0](0);
+    callbacks[1](Number.NaN);
+    callbacks[2](100);
+    expect(seen.every((dt) => Number.isFinite(dt) && dt >= 0)).toBe(true);
   });
 });
