@@ -6,6 +6,7 @@ import { clock, formatEuro, formatPercent, type GameState } from '../../../core'
 import { registerMapLayer } from '../../../map';
 import {
   Button,
+  Chips,
   Disclosure,
   Group,
   Hint,
@@ -28,6 +29,7 @@ import {
 import { activeCity, cityName, relationFactor } from '../../city';
 import { getStock, getWarehouse, getWarehouses, productName, qualityTier } from '../../goods';
 import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount, portName } from '../../logistics';
+import { indexTrend } from '../../market';
 import {
   assortment,
   availableCredit,
@@ -78,6 +80,27 @@ function ShipmentRow(props: { state: GameState; shipment: Shipment; showSupplier
       </div>
       <ProgressBar value={shipmentProgress(state, s)} tone={delayed ? 'warn' : 'accent'} label="Lieferung" />
     </div>
+  );
+}
+
+/** Chips am Paket: Bewegung des Markts (ab ±5 %). Steigt der Index, wird der Einkauf teurer. */
+function PackageChips(props: { productId: string }) {
+  const { state } = useGame();
+  const trend = indexTrend(state, props.productId);
+  if (!trend) return null;
+  return (
+    <Chips
+      items={[
+        {
+          label: trend.label,
+          icon: trend.up ? 'trendUp' : 'trendDown',
+          color: trend.up ? 'warn' : 'money',
+          title: trend.up
+            ? 'Der Markt zieht an, der Einkauf wird teurer.'
+            : 'Der Markt gibt nach, der Einkauf wird billiger.',
+        },
+      ]}
+    />
   );
 }
 
@@ -420,9 +443,10 @@ function SupplierDetail(props: { supplierId: string }) {
             >
               <div class={locked ? 'sup-pkg is-locked' : 'sup-pkg'}>
                 <strong>{p.label}</strong>
-                <span>
+                <span class="sup-pkg__price">
                   {price < p.price && <s>{formatEuro(p.price)}</s>} {formatEuro(price)}
                 </span>
+                <PackageChips productId={p.productId} />
               </div>
             </ListItem>
           );

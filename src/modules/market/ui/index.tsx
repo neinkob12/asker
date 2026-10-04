@@ -18,13 +18,14 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity } from '../../city';
+import { activeCity, cityOfSpot } from '../../city';
 import { allProducts, getProduct, productName, stockSummary } from '../../goods';
 import { allVeedel, veedelName } from '../../veedel';
 import {
   getCompetitionFactor,
   getSpotPrice,
   hasOwnPrice,
+  indexTrend,
   priceRatio,
   referencePrice,
   spotReferencePrice,
@@ -95,6 +96,7 @@ function SpotPrices(props: { spotId: string }) {
           const own = hasOwnPrice(state, props.spotId, p.id);
           const reference = spotReferencePrice(state, props.spotId, p.id);
           const loss = price < cost;
+          const trend = indexTrend(state, p.id, cityOfSpot(state, props.spotId));
           return (
             <ListItem
               key={p.id}
@@ -111,6 +113,12 @@ function SpotPrices(props: { spotId: string }) {
                 tags={[
                   { label: `Richtpreis ${formatNumber(reference, 1)} €`, icon: 'chart', color: 'money' },
                   cost > 0 && { label: `Einkauf ${formatNumber(cost, 1)} €`, icon: 'cart', color: 'goods' },
+                  trend && {
+                    label: trend.label,
+                    icon: trend.up ? 'trendUp' : 'trendDown',
+                    color: trend.up ? 'money' : 'danger',
+                    title: 'Bewegung des Markts in der Stadt (Preisindex)',
+                  },
                 ]}
               >
                 <Stepper

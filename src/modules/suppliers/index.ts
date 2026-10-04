@@ -52,6 +52,7 @@ import {
   store,
 } from '../goods';
 import { hasBerth, portName, receiveCargo } from '../logistics';
+import { purchaseIndex } from '../market';
 import { getReputation } from '../reputation';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import {
@@ -474,7 +475,10 @@ export function availablePackages(
   return supplier.packages.filter((p) => (p.minTrust ?? 0) <= trust);
 }
 
-/** Preis nach Rabatt (und Aufschlag der Stadt, Standard: die aktive). */
+/**
+ * Preis nach Rabatt (und Aufschlag der Stadt, Standard: die aktive). Seit Auftrag 32 bewegt der Preisindex des Markts
+ * den Einkauf mit (gedämpft, purchaseIndex).
+ */
 export function packagePrice(
   state: GameState,
   supplierId: string,
@@ -484,7 +488,7 @@ export function packagePrice(
   const base = getSupplier(state, supplierId);
   const pkg = base ? supplierIn(base, cityId).packages.find((p) => p.id === packageId) : undefined;
   if (!base || !pkg) return Number.POSITIVE_INFINITY;
-  const factor = base.priceFactors?.[cityId] ?? 1;
+  const factor = (base.priceFactors?.[cityId] ?? 1) * purchaseIndex(state, pkg.productId, cityId);
   return Math.round(pkg.price * factor * (1 - supplierDiscount(state, supplierId)));
 }
 
