@@ -73,7 +73,7 @@ function roadTracking(state: GameState, trip: Trip): Tracking {
 
 /** Was die Karte zeigt: die am weitesten fortgeschrittene Hafenlieferung (Straße vor Kai vor Rhein). */
 function currentTracking(state: GameState): Tracking | null {
-  const pickups = getTrips(state).filter((t) => t.kind === 'pickup' && t.fromId === PORT_ID);
+  const pickups = getTrips(state).filter((t) => t.kind === 'pickup' && t.fromId === PORT_ID && t.status !== 'planned');
   const cargo = getCargo(state);
   const ships = shipmentsInTransit(state).filter((s) => getSupplier(state, s.supplierId)?.kind === 'port');
   const total = pickups.length + cargo.length + ships.length;

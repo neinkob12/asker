@@ -148,11 +148,16 @@ export const SCENES = [
       sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'nippes' } });
       sim.dispatch({ type: 'staff.hireDriver', payload: {} });
       sim.dispatch({ type: 'staff.hireDriver', payload: {} });
+      sim.dispatch({ type: 'staff.hireDriver', payload: {} });
+      sim.state.wallet.clean += 20000;
+      sim.dispatch({ type: 'fleet.buy', payload: { model: 'van' } });
       sim.state.modules.suppliers.unlocked.push('rotterdam');
       sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'small' } });
       sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'hash' } });
       sim.advance(600);
       sim.dispatch({ type: 'logistics.transfer', payload: { fromId: 'ehrenfeld', toId: 'nippes', by: 'driver' } });
+      // Auftrag 33: eine Nachtfahrt ist geplant (steht unter Unterwegs mit Abfahrtszeit).
+      sim.dispatch({ type: 'logistics.pickup', payload: { by: 'driver', choice: 'night', cargoIds: [sim.state.modules.logistics.cargo[0]?.id] } });
       window.koeln.runtime.api.openPanel('logistics.port', {});
     })()`,
   },

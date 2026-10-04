@@ -26,11 +26,20 @@ import {
 import { travelMinutes } from '../roads';
 import { getStaffMember, isEmployed, moveToCity, STATUS_NAMES } from '../staff';
 import { availablePackages, getSuppliers, isBlocked, packagePrice } from '../suppliers';
-import { INTERCITY_CAPACITY, ROUTE_LIMIT, ROUTE_LOAD_MINUTES } from './config';
+import {
+  INTERCITY_CAPACITY,
+  NIGHT_END,
+  NIGHT_START,
+  ROUTE_CHOICES,
+  ROUTE_LIMIT,
+  ROUTE_LOAD_MINUTES,
+  type RouteChoice,
+} from './config';
 import {
   chooseVehicle,
   getTrips,
   itemsText,
+  roadOptions,
   roomFor,
   speedOf,
   startTrip,
@@ -81,6 +90,8 @@ export interface Route {
   runs: number;
   /** Festes Fahrzeug (fleet), null = das passende freie oder das Privatauto (Auftrag 33). */
   vehicleId: number | null;
+  /** Wahl der Strecke (Auftrag 33): Autobahn, Landstraße oder nachts (Abfahrt dann zwischen 23 und 5 Uhr). */
+  choice: RouteChoice;
 }
 
 /** Was man beim Anlegen und Ändern angibt. */
@@ -97,6 +108,7 @@ export interface RouteInput {
   returnItems?: RouteItem[];
   active?: boolean;
   vehicleId?: number | null;
+  choice?: RouteChoice;
 }
 
 /** Nachkauf für ein Lager einer schlafenden Stadt. */
@@ -271,6 +283,12 @@ function normalize(state: GameState, id: number, input: RouteInput, base: Route 
   if (!Number.isInteger(input.departure) || input.departure < 0 || input.departure >= 1440) {
     return 'Ungültige Abfahrtszeit.';
   }
+  const choice: RouteChoice = input.choice && ROUTE_CHOICES[input.choice] ? input.choice : 'autobahn';
+  // Nachts fährt die Route zwischen 23 und 5 Uhr; eine Abfahrt am Tag rückt auf 23 Uhr.
+  const departure =
+    ROUTE_CHOICES[choice].night && input.departure < NIGHT_START && input.departure >= NIGHT_END
+      ? NIGHT_START
+      : input.departure;
   const days = [...new Set(input.days ?? [])].sort((a, b) => a - b);
   if (days.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) return 'Ungültiger Wochentag.';
   const name = (input.name ?? '').trim().slice(0, 40);
@@ -282,7 +300,7 @@ function normalize(state: GameState, id: number, input: RouteInput, base: Route 
     toId: to.id,
     items,
     fillTo,
-    departure: input.departure,
+    departure,
     days: days.length === 7 ? [] : days,
     roundTrip: !!input.roundTrip,
     returnItems,
@@ -290,6 +308,7 @@ function normalize(state: GameState, id: number, input: RouteInput, base: Route 
     last: base?.last ?? null,
     runs: base?.runs ?? 0,
     vehicleId,
+    choice,
   };
 }
 
@@ -420,9 +439,10 @@ export function departRoute(ctx: Ctx, routeId: number, why: 'schedule' | 'now'):
     toId: to.id,
     items,
     ...(vehicle !== null ? { vehicleId: vehicle } : {}),
+    ...(route.choice !== 'autobahn' ? { choice: route.choice } : {}),
     startedAt: ctx.now,
     loadedAt,
-    arrivesAt: loadedAt + travelMinutes(from, to, speedOf(state, driverId, vehicle)),
+    arrivesAt: loadedAt + travelMinutes(from, to, speedOf(state, driverId, vehicle), 0, roadOptions(route.choice)),
     routeId: route.id,
     leg: 'out',
   });
@@ -481,10 +501,18 @@ export function routeArrived(ctx: Ctx, trip: Trip, warehouseId: string): void {
     toId: home.id,
     items,
     ...(vehicleId !== null ? { vehicleId } : {}),
+    ...(route.choice !== 'autobahn' ? { choice: route.choice } : {}),
     startedAt: ctx.now,
     loadedAt,
     arrivesAt:
-      loadedAt + travelMinutes(getWarehouse(state, warehouseId) ?? home, home, speedOf(state, driver.id, vehicleId)),
+      loadedAt +
+      travelMinutes(
+        getWarehouse(state, warehouseId) ?? home,
+        home,
+        speedOf(state, driver.id, vehicleId),
+        0,
+        roadOptions(route.choice),
+      ),
     routeId: route.id,
     leg: 'back',
   });

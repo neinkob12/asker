@@ -135,3 +135,45 @@ export const A1_PLACES: readonly { name: string; lng: number; lat: number }[] = 
   { name: 'Sittensen', lng: 9.5, lat: 53.28 },
   { name: 'Harburg', lng: 9.98, lat: 53.43 },
 ];
+
+// --- Routenwahl (Auftrag 33) ---------------------------------------------------------------------------------------
+
+/** Wahl der Strecke für eine Fahrt mit Ware. */
+export type RouteChoice = 'autobahn' | 'country' | 'night';
+
+export interface RouteChoiceDef {
+  name: string;
+  /** Ein Satz für die Auswahl. */
+  hint: string;
+  /** Faktor auf die Chance einer Kontrolle. */
+  checkFactor: number;
+  /** Autobahn meiden (länger, roads.AVOID_MOTORWAY). */
+  avoidMotorway: boolean;
+  /** Abfahrt erst nachts (NIGHT_START bis NIGHT_END). */
+  night: boolean;
+}
+
+export const ROUTE_CHOICES: Readonly<Record<RouteChoice, RouteChoiceDef>> = {
+  autobahn: { name: 'Autobahn', hint: 'Schnellster Weg.', checkFactor: 1, avoidMotorway: false, night: false },
+  country: {
+    name: 'Landstraße',
+    hint: 'Länger, halb so viele Kontrollen.',
+    checkFactor: 0.5,
+    avoidMotorway: true,
+    night: false,
+  },
+  night: {
+    name: 'Nachts',
+    hint: 'Abfahrt ab 23 Uhr, ein Drittel der Kontrollen.',
+    checkFactor: 1 / 3,
+    avoidMotorway: false,
+    night: true,
+  },
+};
+
+/** Reihenfolge in der Oberfläche. */
+export const ROUTE_CHOICE_ORDER: readonly RouteChoice[] = ['autobahn', 'country', 'night'];
+
+/** Nachtfahrt: Abfahrt frühestens um 23 Uhr; zwischen 23 und 5 Uhr fährt sie sofort. */
+export const NIGHT_START = 23 * 60;
+export const NIGHT_END = 5 * 60;

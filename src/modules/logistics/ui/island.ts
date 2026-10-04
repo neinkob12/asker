@@ -32,28 +32,31 @@ registerLiveActivity({
         open: (ui) => ui.openPanel('logistics.port', {}),
       };
     });
-    const trips = getTrips(state).map((trip): LiveActivity => {
-      const stopped = trip.status === 'stopped';
-      const to = placeOf(state, trip.toId)?.name ?? 'Lager';
-      const interCity = isInterCityTrip(state, trip);
-      return {
-        id: `logistics.trip.${trip.id}`,
-        priority: stopped ? 88 : 54,
-        icon: stopped ? 'siren' : 'truck',
-        tone: stopped ? 'bad' : 'info',
-        leading: stopped ? (interCity ? 'Zoll' : 'Kontrolle') : interCity ? 'A1' : 'Fahrt',
-        trailing: stopped ? '!' : islandCountdown(trip.arrivesAt - state.time),
-        title:
-          trip.kind === 'pickup'
-            ? `Abholung am Hafen → ${to}`
-            : trip.kind === 'route'
-              ? `${interCity ? 'A1' : 'Route'} → ${to}`
-              : `Umlagern → ${to}`,
-        detail: `${tripAmount(trip)} Einheiten`,
-        progress: tripProgress(state, trip).total,
-        open: (ui) => ui.openPanel(trip.kind === 'route' ? 'logistics.routes' : 'logistics.port', {}),
-      };
-    });
+    // Geplante Nachtfahrten stehen noch nicht in der Island (Auftrag 33), erst wenn sie losfahren.
+    const trips = getTrips(state)
+      .filter((trip) => trip.status !== 'planned')
+      .map((trip): LiveActivity => {
+        const stopped = trip.status === 'stopped';
+        const to = placeOf(state, trip.toId)?.name ?? 'Lager';
+        const interCity = isInterCityTrip(state, trip);
+        return {
+          id: `logistics.trip.${trip.id}`,
+          priority: stopped ? 88 : 54,
+          icon: stopped ? 'siren' : 'truck',
+          tone: stopped ? 'bad' : 'info',
+          leading: stopped ? (interCity ? 'Zoll' : 'Kontrolle') : interCity ? 'A1' : 'Fahrt',
+          trailing: stopped ? '!' : islandCountdown(trip.arrivesAt - state.time),
+          title:
+            trip.kind === 'pickup'
+              ? `Abholung am Hafen → ${to}`
+              : trip.kind === 'route'
+                ? `${interCity ? 'A1' : 'Route'} → ${to}`
+                : `Umlagern → ${to}`,
+          detail: `${tripAmount(trip)} Einheiten`,
+          progress: tripProgress(state, trip).total,
+          open: (ui) => ui.openPanel(trip.kind === 'route' ? 'logistics.routes' : 'logistics.port', {}),
+        };
+      });
     return [...cargo, ...trips];
   },
 });

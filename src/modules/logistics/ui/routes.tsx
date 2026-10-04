@@ -43,13 +43,15 @@ import {
   INTERCITY_CAPACITY,
   nextDeparture,
   placeOf,
+  ROUTE_CHOICES,
   type Route,
+  type RouteChoice,
   type RouteInput,
   type RouteItem,
   type RouteRun,
   routeName,
 } from '../index';
-import { AUTO, VehicleSelect } from './vehicles';
+import { AUTO, ChoiceControl, VehicleSelect } from './vehicles';
 
 const NONE = '';
 /** Größte Ladung einer Fahrt (Privatauto oder größtes Fahrzeug zum Kaufen). */
@@ -114,6 +116,8 @@ function RouteGroup(props: { route: Route; onEdit: () => void }) {
     { label: `${daysText(route.days)} ${clock.formatTime(route.departure)}`, icon: 'clock', color: 'system' },
     { label: loadText(route), icon: 'package', color: 'goods' },
   ];
+  if (route.choice !== 'autobahn')
+    chips.push({ label: ROUTE_CHOICES[route.choice].name, icon: 'moon', color: 'place' });
   if (route.vehicleId !== null)
     chips.push({ label: vehicleName(state, route.vehicleId), icon: 'truck', color: 'goods' });
   if (fromCity !== toCity) chips.push({ label: 'über die A1', icon: 'route', color: 'place' });
@@ -250,6 +254,7 @@ interface Draft {
   returnItems: RouteItem[];
   /** Festes Fahrzeug als Text (leer = passendes). */
   vehicle: string;
+  choice: RouteChoice;
 }
 
 function draftOf(route: Route | null, warehouses: readonly { id: string }[]): Draft {
@@ -268,6 +273,7 @@ function draftOf(route: Route | null, warehouses: readonly { id: string }[]): Dr
       roundTrip: route.roundTrip,
       returnItems: route.returnItems.map((i) => ({ ...i })),
       vehicle: route.vehicleId === null ? AUTO : String(route.vehicleId),
+      choice: route.choice,
     };
   }
   return {
@@ -281,6 +287,7 @@ function draftOf(route: Route | null, warehouses: readonly { id: string }[]): Dr
     roundTrip: false,
     returnItems: [],
     vehicle: AUTO,
+    choice: 'autobahn',
   };
 }
 
@@ -327,6 +334,7 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
       roundTrip: draft.roundTrip,
       returnItems: draft.roundTrip ? draft.returnItems : [],
       vehicleId: draft.vehicle === AUTO ? null : Number(draft.vehicle),
+      choice: draft.choice,
     };
     const result = route
       ? dispatch({ type: 'logistics.updateRoute', payload: { routeId: route.id, ...input } })
@@ -408,6 +416,12 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
               </ListItem>
             )}
           </List>
+        </Group>
+
+        <Group title="Weg" icon="moon" color="place" value={ROUTE_CHOICES[draft.choice].name}>
+          <div class="logi-route-choice">
+            <ChoiceControl value={draft.choice} onChange={(choice) => set({ choice })} />
+          </div>
         </Group>
 
         <Group title="Fahrplan" icon="clock" color="system" value={daysText(draft.days)}>

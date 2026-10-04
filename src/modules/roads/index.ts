@@ -4,13 +4,16 @@
 // Daten neu erzeugen: tools/build-roads.py (Details in network.ts).
 //
 // Öffentliche API:
-//   roadRoute(from, to)       Route über die Straßen: { path (LngLat[], Start und Ziel inklusive), meters, drive
+//   roadRoute(from, to, options?)  Route über die Straßen: { path (LngLat[], Start und Ziel inklusive), meters, drive
 //                             (nur der Teil auf der Straße, dort fährt das Fahrzeug), walkFrom, walkTo (Fußwege) }.
 //                             Das Netz wählt roads nach dem Ausschnitt, in dem Start und Ziel liegen; liegen sie in
 //                             verschiedenen Städten, ist es die Route über die Autobahn (interCityRoute).
-//   roadDistance(from, to)    nur die Länge in Metern
-//   travelMinutes(from, to, metersPerMinute, extra?)  Fahrzeit in ganzen Spielminuten (zwischen Städten: Autobahn
-//                             mit ROAD_SPEEDS.motorway, siehe interCityMinutes)
+//   roadDistance(from, to, options?)  nur die Länge in Metern
+//   travelMinutes(from, to, metersPerMinute, extra?, options?)  Fahrzeit in ganzen Spielminuten (zwischen Städten:
+//                             Autobahn mit ROAD_SPEEDS.motorway, siehe interCityMinutes)
+//   options (Auftrag 33): { weights } Gewicht pro Straßenart (Faktor ≥ 1 auf die Fahrzeit), z.B. AVOID_MOTORWAY für
+//                             die Landstraße; zwischen den Städten heißt Autobahn meiden: Landstraße mit Umweg
+//                             (COUNTRY_DETOUR, COUNTRY_SPEED)
 //   roadEntryFrom(far, via?, into?)  Autobahn-Einfahrt in die Stadt von into (Standard Köln) aus Richtung eines weit
 //                             entfernten Orts (z.B. Frankfurt), optional über eine bestimmte Autobahn ('A3');
 //                             roadApproach(far, via?, into?) mit dem ganzen Weg vom Rand des Ausschnitts bis dorthin,
@@ -33,6 +36,7 @@ import { defineModule, distanceMeters, type LngLat } from '../../core';
 import { AUTOBAHNEN } from './autobahn';
 import { SHIP_SPEED } from './config';
 import {
+  type ClassWeights,
   decodeApproaches,
   decodeLine,
   findRoute,
@@ -51,7 +55,43 @@ import {
 import { WATERWAYS } from './waterways';
 
 export { SHIP_SPEED } from './config';
-export { graphView as roadGraph, networkSize, ROAD_SPEEDS, type RoadClass, type RoadGraphView } from './graph';
+export {
+  type ClassWeights,
+  graphView as roadGraph,
+  networkSize,
+  ROAD_SPEEDS,
+  type RoadClass,
+  type RoadGraphView,
+} from './graph';
+
+/** Wahl der Strecke (Auftrag 33): Gewicht pro Straßenart, Standard ohne (schnellster Weg wie bisher). */
+export interface RoadOptions {
+  weights?: ClassWeights;
+}
+
+/** Autobahn und Schnellstraßen meiden (Landstraße): Sie zählen, als wären sie viel langsamer. */
+export const AVOID_MOTORWAY: ClassWeights = { motorway: 8, trunk: 3 };
+
+/** Zwischen den Städten über Landstraßen: so viel länger als die Autobahn … */
+export const COUNTRY_DETOUR = 1.2;
+/** … und so schnell (km/h) statt ROAD_SPEEDS.motorway. */
+export const COUNTRY_SPEED = 75;
+
+/** Kennung der Gewichte für die Caches ('' = ohne). */
+function optionsKey(options?: RoadOptions): string {
+  const w = options?.weights;
+  if (!w) return '';
+  return Object.entries(w)
+    .filter(([, v]) => v !== undefined && v !== 1)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}${v}`)
+    .join(',');
+}
+
+/** Meidet diese Wahl die Autobahn (für die Fahrt zwischen den Städten)? */
+function avoidsMotorway(options?: RoadOptions): boolean {
+  return (options?.weights?.motorway ?? 1) > 1;
+}
 
 export interface RoadRoute {
   /** Weg vom Start über die Straßen zum Ziel (mindestens zwei Punkte). */
@@ -140,13 +180,13 @@ function toRoadRoute(found: GraphRoute | null, from: LngLat, to: LngLat): RoadRo
  * Route über das Straßennetz. Liegt ein Punkt weit weg von jeder Straße, gibt es die Luftlinie; liegen Start und Ziel
  * in verschiedenen Städten, geht es über die Autobahn (interCityRoute).
  */
-export function roadRoute(from: LngLat, to: LngLat): RoadRoute {
+export function roadRoute(from: LngLat, to: LngLat, options?: RoadOptions): RoadRoute {
   const [netFrom, netTo] = networksOf(from, to);
   if (netFrom !== netTo) return interCityRoute(from, to);
-  const id = `${key(from)}>${key(to)}`;
+  const id = `${key(from)}>${key(to)}${optionsKey(options)}`;
   const known = lruGet(cache, id);
   if (known) return known;
-  const route = toRoadRoute(findRoute(from, to, netFrom), from, to);
+  const route = toRoadRoute(findRoute(from, to, netFrom, options?.weights), from, to);
   lruSet(cache, id, route, CACHE_SIZE);
   return route;
 }
@@ -155,15 +195,18 @@ export function roadRoute(from: LngLat, to: LngLat): RoadRoute {
  * Länge der Route über die Straßen in Metern. Wie roadRoute(...).meters, aber ohne den Weg zu bauen, wenn die Route
  * noch nicht gemerkt ist (Fahrzeiten brauchen nur die Meter).
  */
-export function roadDistance(from: LngLat, to: LngLat): number {
+export function roadDistance(from: LngLat, to: LngLat, options?: RoadOptions): number {
   const [netFrom, netTo] = networksOf(from, to);
-  if (netFrom !== netTo) return interCityRoute(from, to).meters;
-  const id = `${key(from)}>${key(to)}`;
+  if (netFrom !== netTo) {
+    const meters = interCityRoute(from, to).meters;
+    return avoidsMotorway(options) ? Math.round(meters * COUNTRY_DETOUR) : meters;
+  }
+  const id = `${key(from)}>${key(to)}${optionsKey(options)}`;
   const route = lruGet(cache, id);
   if (route) return route.meters;
   const known = lruGet(distances, id);
   if (known !== undefined) return known;
-  const found = findRouteMeters(from, to, netFrom);
+  const found = findRouteMeters(from, to, netFrom, options?.weights);
   const meters = Math.round(found ?? distanceMeters(from, to));
   lruSet(distances, id, meters, DISTANCE_CACHE_SIZE);
   return meters;
@@ -173,10 +216,21 @@ export function roadDistance(from: LngLat, to: LngLat): number {
  * Fahrzeit in ganzen Spielminuten bei diesem Tempo (Meter pro Spielminute), plus extra Minuten. Zwischen zwei Städten
  * fährt die Autobahn schneller (interCityMinutes).
  */
-export function travelMinutes(from: LngLat, to: LngLat, metersPerMinute: number, extra = 0): number {
+export function travelMinutes(
+  from: LngLat,
+  to: LngLat,
+  metersPerMinute: number,
+  extra = 0,
+  options?: RoadOptions,
+): number {
   const [netFrom, netTo] = networksOf(from, to);
-  if (netFrom !== netTo) return interCityMinutes(from, to, metersPerMinute) + extra;
-  return Math.max(1, Math.ceil(roadDistance(from, to) / Math.max(1, metersPerMinute)) + extra);
+  if (netFrom !== netTo) return interCityMinutes(from, to, metersPerMinute, options) + extra;
+  const speed = Math.max(1, metersPerMinute);
+  const minutes = Math.ceil(roadDistance(from, to, options) / speed);
+  // Fahrzeiten rechnen mit einem Tempo für alle Straßen: Ohne Autobahn dauert es mindestens COUNTRY_DETOUR so lange
+  // wie der schnellste Weg (kleine Straßen sind langsamer, auch wenn der Weg kürzer ist).
+  const slower = avoidsMotorway(options) ? Math.ceil((roadDistance(from, to) * COUNTRY_DETOUR) / speed) : 0;
+  return Math.max(1, Math.max(minutes, slower) + extra);
 }
 
 const entries = new Map<string, LngLat>();
@@ -363,13 +417,16 @@ export function interCityRoute(from: LngLat, to: LngLat): InterCityRoute {
  * Fahrzeit zwischen zwei Städten in Spielminuten: Autobahn mit ROAD_SPEEDS.motorway, Anfahrt und Zufahrt im Tempo
  * des Fahrzeugs in der Stadt (Meter pro Spielminute), dazu Auf- und Abfahrt.
  */
-export function interCityMinutes(from: LngLat, to: LngLat, cityMetersPerMinute: number): number {
+export function interCityMinutes(from: LngLat, to: LngLat, cityMetersPerMinute: number, options?: RoadOptions): number {
   const route = interCityRoute(from, to);
-  const motorway = (ROAD_SPEEDS.motorway * 1000) / 60;
+  // Landstraße statt Autobahn (Auftrag 33): länger und langsamer.
+  const country = avoidsMotorway(options);
+  const motorway = ((country ? COUNTRY_SPEED : ROAD_SPEEDS.motorway) * 1000) / 60;
+  const between = route.motorwayMeters * (country ? COUNTRY_DETOUR : 1);
   const city = route.meters - route.motorwayMeters;
   return Math.max(
     1,
-    Math.ceil(route.motorwayMeters / motorway + city / Math.max(1, cityMetersPerMinute) + INTERCITY_ACCESS_MINUTES),
+    Math.ceil(between / motorway + city / Math.max(1, cityMetersPerMinute) + INTERCITY_ACCESS_MINUTES),
   );
 }
 

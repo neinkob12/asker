@@ -140,7 +140,8 @@ export const logisticsLayer: MapLayer = {
           if (p.name.textContent !== label) p.name.textContent = label;
         }
 
-        const trips = getTrips(state);
+        // Geplante Nachtfahrten fahren noch nicht (Auftrag 33).
+        const trips = getTrips(state).filter((t) => t.status !== 'planned');
         const ids = new Set(trips.map((t) => t.id));
         for (const [id, entry] of shown) {
           if (ids.has(id)) continue;

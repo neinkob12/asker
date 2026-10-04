@@ -80,7 +80,7 @@ import {
   warehouseFree,
 } from '../goods';
 import { addHeat, arrestStaff, getHeat, recordConfiscation } from '../police';
-import { type RoadRoute, roadRoute, travelMinutes } from '../roads';
+import { AVOID_MOTORWAY, type RoadOptions, type RoadRoute, roadRoute, travelMinutes } from '../roads';
 import {
   addXp,
   assign,
@@ -108,9 +108,13 @@ import {
   HARBOR_CONTACT,
   LOAD_MINUTES,
   LOG_LIMIT,
+  NIGHT_END,
+  NIGHT_START,
   PLAYER_DRIVE_SPEED,
   PORTS,
   type PortConfig,
+  ROUTE_CHOICES,
+  type RouteChoice,
   SEIZE_ARREST_CHANCE,
   SEIZE_HEAT,
   TRANSFER_LOAD_MINUTES,
@@ -131,7 +135,16 @@ import {
   settleRestock,
 } from './routes';
 
-export { BERTH_COST, CARGO_SAFE_MINUTES, INTERCITY_CAPACITY, PORTS } from './config';
+export {
+  BERTH_COST,
+  CARGO_SAFE_MINUTES,
+  INTERCITY_CAPACITY,
+  NIGHT_START,
+  PORTS,
+  ROUTE_CHOICE_ORDER,
+  ROUTE_CHOICES,
+  type RouteChoice,
+} from './config';
 export {
   driverWhereabouts,
   getRoute,
@@ -198,9 +211,10 @@ export interface Trip {
   checkAt: number | null;
   /**
    * 'stopped': Kontrolle läuft (Konfrontation), die Fahrt steht. 'waiting': angekommen, aber das Lager ist voll; der
-   * Rest (items) wartet beim Fahrer, bis Platz ist oder die Fahrt umgeleitet wird (Auftrag 33).
+   * Rest (items) wartet beim Fahrer, bis Platz ist oder die Fahrt umgeleitet wird (Auftrag 33). 'planned':
+   * Nachtfahrt, die erst um startedAt losfährt (Fahrer und Fahrzeug sind schon eingeteilt).
    */
-  status: 'enRoute' | 'stopped' | 'waiting';
+  status: 'enRoute' | 'stopped' | 'waiting' | 'planned';
   stoppedAt: number | null;
   encounterId: number | null;
   /** Fahrt einer Route: welche, und ob Hin- oder Rückfahrt. */
@@ -210,6 +224,10 @@ export interface Trip {
   unloaded?: number;
   /** Eigenes Fahrzeug (fleet), fehlt = Privatauto des Fahrers (Auftrag 33). */
   vehicleId?: number;
+  /** Wahl der Strecke (Auftrag 33), fehlt = Autobahn. */
+  choice?: RouteChoice;
+  /** Geplante Abholung: Diese Container am Kai holt die Fahrt bei der Abfahrt (bis dahin stehen sie dort). */
+  cargoIds?: number[];
 }
 
 /** Fahrzeugwahl einer Fahrt: eigenes Fahrzeug (ID), 'private' = Privatauto, ohne Angabe das passende freie. */
@@ -248,8 +266,11 @@ export interface LogisticsState {
   restock: RestockDue[];
 }
 
+/** Zustand in Version 4: Routen ohne Wahl der Strecke. */
+type LogisticsStateV4 = Omit<LogisticsState, 'routes'> & { routes: Omit<Route, 'choice'>[] };
+
 /** Zustand in Version 3: Routen ohne Fahrzeug. */
-type LogisticsStateV3 = Omit<LogisticsState, 'routes'> & { routes: Omit<Route, 'vehicleId'>[] };
+type LogisticsStateV3 = Omit<LogisticsState, 'routes'> & { routes: Omit<Route, 'vehicleId' | 'choice'>[] };
 
 /** Zustand in Version 2: ohne Routen. */
 type LogisticsStateV2 = Omit<LogisticsState, 'routes' | 'restock'>;
@@ -277,6 +298,7 @@ declare module '../../core' {
       warehouseId?: string;
       cargoIds?: number[];
       vehicleId?: VehicleChoice;
+      choice?: RouteChoice;
     };
     /** Ware von einem Lager ins andere bringen. Ohne productId alles, ohne amount die ganze Menge des Produkts. */
     'logistics.transfer': {
@@ -287,6 +309,7 @@ declare module '../../core' {
       by: 'player' | 'driver';
       driverId?: string;
       vehicleId?: VehicleChoice;
+      choice?: RouteChoice;
     };
     /** Route mit Fahrplan anlegen (Auftrag 30). Ergebnis data.routeId. */
     'logistics.addRoute': RouteInput;
@@ -403,7 +426,28 @@ export function tripAmount(trip: Pick<Trip, 'items'>): number {
  * am vollen Lager, steht der Wagen dort im Hof und du bist frei.
  */
 export function isPlayerOnTheRoad(state: GameState): boolean {
-  return isPlayerTraveling(state) || getTrips(state).some((t) => t.driverId === null && t.status !== 'waiting');
+  return (
+    isPlayerTraveling(state) ||
+    getTrips(state).some((t) => t.driverId === null && t.status !== 'waiting' && t.status !== 'planned')
+  );
+}
+
+/** Straßenwahl einer Fahrt für roads (Landstraße meidet die Autobahn). */
+export function roadOptions(choice: RouteChoice | undefined): RoadOptions | undefined {
+  return choice && ROUTE_CHOICES[choice].avoidMotorway ? { weights: AVOID_MOTORWAY } : undefined;
+}
+
+/** Abfahrt einer Fahrt mit dieser Wahl: sofort, nachts frühestens um NIGHT_START (zwischen 23 und 5 Uhr sofort). */
+export function departureFor(now: number, choice: RouteChoice | undefined): number {
+  if (!choice || !ROUTE_CHOICES[choice].night) return now;
+  const minute = clock.minuteOfDay(now);
+  if (minute >= NIGHT_START || minute < NIGHT_END) return now;
+  return now - minute + NIGHT_START;
+}
+
+/** Container am Kai, die eine geplante Nachtfahrt schon für sich eingeteilt hat. */
+export function reservedCargo(state: GameState): Set<number> {
+  return new Set(getTrips(state).flatMap((t) => (t.status === 'planned' ? (t.cargoIds ?? []) : [])));
 }
 
 /** Gramm, die gerade zu einem Lager unterwegs sind oder dort auf Platz warten (Fahrten aller Art). */
@@ -463,13 +507,14 @@ export function isInterCityTrip(state: GameState, trip: Pick<Trip, 'toId' | 'fro
   return !!from && !!to && cityAt(from.lng, from.lat) !== cityAt(to.lng, to.lat);
 }
 
-export type TripLeg = 'toPickup' | 'loading' | 'delivering' | 'stopped';
+export type TripLeg = 'toPickup' | 'loading' | 'delivering' | 'stopped' | 'planned';
 
 /**
  * Wo die Fahrt gerade ist: Anfahrt zum Abholort (nur bei der Abholung am Hafen), Laden, mit Ware zum Ziel,
  * oder angehalten (Kontrolle). t ist der Fortschritt im Abschnitt (0–1), total der Fortschritt der ganzen Fahrt.
  */
 export function tripProgress(state: GameState, trip: Trip): { leg: TripLeg; t: number; total: number } {
+  if (trip.status === 'planned') return { leg: 'planned', t: 0, total: 0 };
   const now = trip.status === 'stopped' && trip.stoppedAt !== null ? trip.stoppedAt : state.time;
   const total = clamp01((now - trip.startedAt) / Math.max(1, trip.arrivesAt - trip.startedAt));
   const atPickup = arriveAtPickup(trip);
@@ -496,7 +541,7 @@ export function tripRoute(
   const from = placeOf(state, trip.fromId) ?? portPlace(tripCity(state, trip));
   const to = placeOf(state, trip.toId) ?? from;
   const approach = trip.kind === 'pickup' ? roadRoute(to, from) : null;
-  const delivery = roadRoute(from, to);
+  const delivery = roadRoute(from, to, roadOptions(trip.choice));
   return { approach: approach?.path ?? null, delivery: delivery.path, routes: { approach, delivery } };
 }
 
@@ -617,6 +662,7 @@ function pickDriver(ctx: Ctx, driverId: string | undefined, cityId: string): Sta
 
 function playerBusy(state: GameState, cityId?: string): string | null {
   if (isPlayerTraveling(state)) return 'Du bist gerade zwischen den Städten unterwegs.';
+  if (getTrips(state).some((t) => t.driverId === null && t.status === 'planned')) return 'Du fährst heute Nacht schon.';
   if (isPlayerOnTheRoad(state)) return 'Du bist schon mit einer Fahrt unterwegs.';
   if (cityId && !isPlayerIn(state, cityId)) return `Du bist nicht in ${cityName(cityId)}. Schick einen Fahrer.`;
   if (isPlayerDelivering(state)) return 'Du bist gerade mit einer Lieferung unterwegs.';
@@ -682,6 +728,7 @@ function rollCheck(ctx: Ctx, trip: Trip): void {
     const heat = veedelId ? getHeat(ctx.state, veedelId) : 0;
     chance = CHECK_CHANCE * (1 + heat / CHECK_HEAT_DIVISOR) * caution;
   }
+  chance *= ROUTE_CHOICES[trip.choice ?? 'autobahn'].checkFactor;
   if (!ctx.chance(Math.min(0.9, chance))) return;
   const span = trip.arrivesAt - trip.loadedAt;
   trip.checkAt = trip.loadedAt + Math.max(1, Math.round(span * (0.2 + ctx.random() * 0.6)));
@@ -716,7 +763,9 @@ export function startTrip(ctx: Ctx, trip: Omit<Trip, 'id' | 'checkAt' | 'status'
   };
   // Fahrzeug belegen; ist es doch nicht frei, fährt das Privatauto.
   if (full.vehicleId !== undefined && !useVehicle(ctx, full.vehicleId, full.id)) delete full.vehicleId;
-  rollCheck(ctx, full);
+  // Nachtfahrt (Auftrag 33): steht bis zur Abfahrt, die Kontrolle wird erst dann ausgewürfelt.
+  if (full.startedAt > ctx.now) full.status = 'planned';
+  else rollCheck(ctx, full);
   ctx.state.modules.logistics.trips.push(full);
   if (full.driverId) assign(ctx, full.driverId, { kind: 'transport', targetId: String(full.id) });
   ctx.emit('transport.started', {
@@ -779,10 +828,14 @@ function loadFromQuay(s: LogisticsState, cargo: readonly PortCargo[], grams: num
 function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandResult {
   const state = ctx.state;
   const s = state.modules.logistics;
-  // Ohne Angabe alles am Kai der aktiven Stadt; mit Angabe die Container, aber nur aus einem Hafen.
-  const chosen = payload.cargoIds
-    ? s.cargo.filter((c) => payload.cargoIds?.includes(c.id))
-    : s.cargo.filter((c) => c.cityId === activeCity(state));
+  // Ohne Angabe alles am Kai der aktiven Stadt; mit Angabe die Container, aber nur aus einem Hafen. Was eine
+  // Nachtfahrt schon eingeteilt hat, bleibt für sie.
+  const reserved = reservedCargo(state);
+  const chosen = (
+    payload.cargoIds
+      ? s.cargo.filter((c) => payload.cargoIds?.includes(c.id))
+      : s.cargo.filter((c) => c.cityId === activeCity(state))
+  ).filter((c) => !reserved.has(c.id));
   const cityId = chosen[0]?.cityId ?? activeCity(state);
   const cargo = chosen.filter((c) => c.cityId === cityId);
   if (cargo.length === 0) return { ok: false, reason: 'Am Kai wartet nichts auf dich.' };
@@ -820,9 +873,12 @@ function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandRes
   const vehicle = chooseVehicle(state, cityId, payload.vehicleId, grams);
   if (typeof vehicle === 'string') return { ok: false, reason: vehicle };
   const room = Math.min(space, vehicleSpec(state, vehicle).capacity);
+  const choice = payload.choice ?? 'autobahn';
+  const departAt = departureFor(ctx.now, choice);
+  if (departAt > ctx.now) return planPickup(ctx, { cargo, cityId, warehouse, driverId, vehicle, choice, departAt });
   const speed = speedOf(state, driverId, vehicle);
   const approach = travelMinutes(warehouse, port, speed);
-  const delivery = travelMinutes(port, warehouse, speed);
+  const delivery = travelMinutes(port, warehouse, speed, 0, roadOptions(choice));
   const total = cargo.reduce((sum, c) => sum + c.amount, 0);
   const items = loadFromQuay(s, cargo, room);
   const left = total - items.reduce((sum, i) => sum + i.amount, 0);
@@ -833,6 +889,7 @@ function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandRes
     toId: warehouse.id,
     items,
     ...(vehicle !== null ? { vehicleId: vehicle } : {}),
+    ...(choice !== 'autobahn' ? { choice } : {}),
     startedAt: ctx.now,
     loadedAt: ctx.now + approach + LOAD_MINUTES,
     arrivesAt: ctx.now + approach + LOAD_MINUTES + delivery,
@@ -847,6 +904,77 @@ function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandRes
         : ''),
   );
   return { ok: true, data: { tripId: trip.id, arrivesAt: trip.arrivesAt, left } };
+}
+
+/** Nachtfahrt zum Hafen planen: Fahrer und Fahrzeug sind eingeteilt, die Container warten am Kai bis zur Abfahrt. */
+function planPickup(
+  ctx: Ctx,
+  plan: {
+    cargo: readonly PortCargo[];
+    cityId: string;
+    warehouse: Warehouse;
+    driverId: string | null;
+    vehicle: number | null;
+    choice: RouteChoice;
+    departAt: number;
+  },
+): CommandResult {
+  const trip = startTrip(ctx, {
+    kind: 'pickup',
+    driverId: plan.driverId,
+    fromId: portPlaceId(plan.cityId),
+    toId: plan.warehouse.id,
+    items: [],
+    cargoIds: plan.cargo.map((c) => c.id),
+    ...(plan.vehicle !== null ? { vehicleId: plan.vehicle } : {}),
+    choice: plan.choice,
+    startedAt: plan.departAt,
+    loadedAt: plan.departAt,
+    arrivesAt: plan.departAt,
+  });
+  journal.add(
+    ctx,
+    `${driverLabel(ctx.state, plan.driverId)} ${plan.driverId ? 'holt' : 'holst'} die Ware am ${portName(plan.cityId)} ` +
+      `heute Nacht ab (Abfahrt ${clock.formatTime(plan.departAt)}). Bis dahin steht sie am Kai.`,
+  );
+  return { ok: true, data: { tripId: trip.id, departsAt: plan.departAt, left: 0 } };
+}
+
+/** Geplante Fahrt fährt los: Abholung lädt, was noch am Kai steht; Umlagern hat schon geladen. */
+function departPlanned(ctx: Ctx, trip: Trip): void {
+  const state = ctx.state;
+  const to = getWarehouse(state, trip.toId);
+  const from = placeOf(state, trip.fromId);
+  const speed = speedOf(state, trip.driverId, trip.vehicleId);
+  if (trip.kind === 'pickup') {
+    const s = state.modules.logistics;
+    const cargo = s.cargo.filter((c) => trip.cargoIds?.includes(c.id));
+    trip.cargoIds = undefined;
+    const space = to ? Math.max(0, warehouseFree(state, to.id) - inboundWeight(state, to.id)) : 0;
+    trip.items = to ? loadFromQuay(s, cargo, Math.min(space, vehicleSpec(state, trip.vehicleId).capacity)) : [];
+    if (trip.items.length === 0 || !to || !from) {
+      removeTrip(ctx, trip);
+      journal.add(ctx, `Nachtfahrt zum Hafen fällt aus: Am Kai ist nichts mehr, oder das Lager ist voll.`, 'bad');
+      return;
+    }
+    const approach = travelMinutes(to, from, speed);
+    trip.loadedAt = ctx.now + approach + LOAD_MINUTES;
+    trip.arrivesAt = trip.loadedAt + travelMinutes(from, to, speed, 0, roadOptions(trip.choice));
+  } else {
+    const wait = trip.loadedAt - trip.startedAt;
+    const drive = trip.arrivesAt - trip.loadedAt;
+    trip.loadedAt = ctx.now + wait;
+    trip.arrivesAt = trip.loadedAt + drive;
+  }
+  trip.startedAt = ctx.now;
+  trip.status = 'enRoute';
+  rollCheck(ctx, trip);
+  ctx.emit('transport.started', {
+    tripId: trip.id,
+    kind: trip.kind,
+    driverId: trip.driverId,
+    arrivesAt: trip.arrivesAt,
+  });
 }
 
 function transfer(ctx: Ctx, payload: GameCommands['logistics.transfer']): CommandResult {
@@ -901,6 +1029,9 @@ function transfer(ctx: Ctx, payload: GameCommands['logistics.transfer']): Comman
     };
   }
   const speed = speedOf(state, driverId, vehicle);
+  const choice = payload.choice ?? 'autobahn';
+  // Nachts (Auftrag 33): Die Ware ist geladen, der Wagen steht bis zur Abfahrt im Hof.
+  const departAt = departureFor(ctx.now, choice);
   const trip = startTrip(ctx, {
     kind: 'transfer',
     driverId,
@@ -908,15 +1039,18 @@ function transfer(ctx: Ctx, payload: GameCommands['logistics.transfer']): Comman
     toId: to.id,
     items,
     ...(vehicle !== null ? { vehicleId: vehicle } : {}),
-    startedAt: ctx.now,
-    loadedAt: ctx.now + TRANSFER_LOAD_MINUTES,
-    arrivesAt: ctx.now + TRANSFER_LOAD_MINUTES + travelMinutes(from, to, speed),
+    ...(choice !== 'autobahn' ? { choice } : {}),
+    startedAt: departAt,
+    loadedAt: departAt + TRANSFER_LOAD_MINUTES,
+    arrivesAt: departAt + TRANSFER_LOAD_MINUTES + travelMinutes(from, to, speed, 0, roadOptions(choice)),
   });
   const who = driverLabel(state, driverId);
   journal.add(
     ctx,
     `${who} ${driverId ? 'bringt' : 'bringst'} ${itemsText(items)} vom ${from.name} ins ${to.name}, ` +
-      `Ankunft in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}.`,
+      (departAt > ctx.now
+        ? `Abfahrt heute Nacht um ${clock.formatTime(departAt)}.`
+        : `Ankunft in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}.`),
   );
   return { ok: true, data: { tripId: trip.id, arrivesAt: trip.arrivesAt } };
 }
@@ -1061,7 +1195,8 @@ function redirect(ctx: Ctx, payload: { tripId: number; toId: string }): CommandR
   trip.status = 'enRoute';
   trip.startedAt = ctx.now;
   trip.loadedAt = ctx.now;
-  trip.arrivesAt = ctx.now + travelMinutes(from, to, speedOf(ctx.state, trip.driverId, trip.vehicleId));
+  trip.arrivesAt =
+    ctx.now + travelMinutes(from, to, speedOf(ctx.state, trip.driverId, trip.vehicleId), 0, roadOptions(trip.choice));
   rollCheck(ctx, trip);
   journal.add(
     ctx,
@@ -1177,6 +1312,13 @@ function onCheckResolved(ctx: Ctx, ref: string | undefined, outcome: string): vo
 function driverGone(ctx: Ctx, staffId: string): void {
   for (const trip of [...ctx.state.modules.logistics.trips]) {
     if (trip.driverId !== staffId || trip.status === 'stopped') continue;
+    if (trip.status === 'planned') {
+      // Die Nachtfahrt fällt aus: Geladene Ware kommt zurück ins Lager, Container bleiben am Kai.
+      for (const item of trip.items) store(ctx, { ...item, warehouseId: trip.fromId });
+      removeTrip(ctx, trip);
+      journal.add(ctx, 'Nachtfahrt abgesagt: Der Fahrer ist ausgefallen.', 'bad');
+      continue;
+    }
     if (trip.status === 'waiting') {
       // Der Wagen steht schon im Hof: Die Ware wird abgeladen, auch wenn das Lager dann übervoll ist.
       for (const item of trip.items) store(ctx, { ...item, warehouseId: trip.toId });
@@ -1257,6 +1399,7 @@ function customs(ctx: Ctx): void {
 function tick(ctx: Ctx): void {
   const s = ctx.state.modules.logistics;
   for (const trip of [...s.trips]) {
+    if (trip.status === 'planned' && trip.startedAt <= ctx.now) departPlanned(ctx, trip);
     if (trip.status !== 'enRoute') continue;
     // In einer schlafenden Stadt fährt die Fahrt ohne Kontrolle zu Ende (die Autobahn gehört keiner Stadt).
     if (
@@ -1282,7 +1425,7 @@ function tick(ctx: Ctx): void {
 
 export default defineModule({
   id: 'logistics',
-  version: 4,
+  version: 5,
   dependsOn: ['goods', 'suppliers', 'staff', 'fleet'],
   init: (ctx) => ({
     // Alte Spielstände: Wer schon am Hafen bestellt hat, behält seinen Zugang (Bestandsschutz).
@@ -1331,9 +1474,14 @@ export default defineModule({
     // Version 3 (Auftrag 30, Etappe 6): Routen mit Fahrplan und Nachkauf für schlafende Städte.
     3: (old: LogisticsStateV2): LogisticsStateV3 => ({ ...old, routes: [], restock: [] }),
     // Version 4 (Auftrag 33): Routen fahren mit einem festen Fahrzeug oder dem passenden freien (null).
-    4: (old: LogisticsStateV3): LogisticsState => ({
+    4: (old: LogisticsStateV3): LogisticsStateV4 => ({
       ...old,
       routes: old.routes.map((r) => ({ ...r, vehicleId: null })),
+    }),
+    // Version 5 (Auftrag 33): Routen haben eine Wahl der Strecke, bisher immer die Autobahn.
+    5: (old: LogisticsStateV4): LogisticsState => ({
+      ...old,
+      routes: old.routes.map((r) => ({ ...r, choice: 'autobahn' as const })),
     }),
   },
 });
