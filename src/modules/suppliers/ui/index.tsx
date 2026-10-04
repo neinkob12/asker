@@ -38,6 +38,7 @@ import {
   creditLimit,
   deliversTo,
   expectedArrival,
+  forceShipmentProblem,
   getRelation,
   getSupplier,
   getSuppliers,
@@ -578,3 +579,19 @@ registerAdvisor({
     };
   },
 });
+
+// Nur im Dev-Build (Auftrag 23): Lieferung bei Toni mit Verspätung und Rückfrage, z.B. window.koeln.dev.lieferProblem().
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  const dev = {
+    lieferProblem: () => {
+      const s = window.koeln?.session.sim;
+      if (!s) return;
+      s.state.wallet.dirty = Math.max(s.state.wallet.dirty, 2000);
+      const r = s.dispatch({ type: 'suppliers.order', payload: { supplierId: 'frankfurt', packageId: 'weed50' } });
+      if (r.ok) forceShipmentProblem(s.ctx('suppliers'), (r.data as { shipmentId: number }).shipmentId, 'delayed');
+      s.step();
+    },
+  };
+  const holder = window as unknown as { koeln?: { dev?: Record<string, () => void> } };
+  holder.koeln = { ...holder.koeln, dev: { ...holder.koeln?.dev, ...dev } };
+}

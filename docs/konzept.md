@@ -170,6 +170,14 @@ Hafengeburtstag, Schlagermove, Dom), Kölscher Klüngel gegen hanseatisch kühl,
 - **Session-Länge:** In 20 Minuten (etwa 8 Spieltage bei 2x) kommen Verkauf, Nachschub, Personal, Leutnants,
   Gang-Drohungen, Konfrontationen, Polizei-Kontrollen, Wetter und das erste Veedel vor (`npm run playthrough`,
   Screenshots in `docs/integration/`).
+- **Mehr Leben (Auftrag 23):** Jede Gang klingt im Chat anders (eigene Stimme, keine Variante kommt direkt zweimal)
+  und macht auf ihre Art Druck: Die Hafenkolonne überfällt und schüchtert ein, das Venloer Syndikat hetzt dir die
+  Polizei auf den Hals und bricht ein, die Schäl Sick wirbt deine Leute ab, der Marienburger Kreis erpresst dich mit
+  deinem Lager. Gangs mit guter Beziehung warnen dich vor Rivalen oder bitten um einen bezahlten Gefallen.
+  Lieferprobleme haben echte Gründe (Stau auf der A3, Grenzkontrolle bei Venlo, Niedrigwasser) im Ton des
+  Lieferanten, oft mit Entscheidung (Umweg, Teillieferung, Umleiten, Schmieren), dazu kleine Glücksfälle. Eigene
+  Spots haben eine Art (Straßenecke, Späti, Club, Park, Bahnhof, Campus), müssen sich erst herumsprechen und lassen
+  sich ausbauen (Späher, Versteck, Stammplatz), verlegen, umbenennen und aufgeben.
 - **Noch nicht umgesetzt** (Aufträge 32 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Markt in Bewegung,
   Wochenverträge, Lager mit Kapazität, Fahrzeuge, Routenwahl, Hafen-Ausbau, Warenfluss, Stammabnehmer, Gangs mit
   Gedächtnis, Leute mit Geschichte, Capo, Konfrontationen neu, freie Reihenfolge der Städte mit Autobahn-Netz, Berlin,

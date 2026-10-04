@@ -58,7 +58,9 @@ import {
   protectionAmount,
   raidCrew,
   raidTargets,
+  runGangMethod,
   STAGE_NAMES,
+  sendGangMessage,
   tributeAmount,
   WARN_AT,
 } from '../index';
@@ -803,3 +805,44 @@ registerSearch({
       },
     })),
 });
+
+// ---------------------------------------------------------------------------------------------
+// Nur im Dev-Build: Abkürzungen zum Ausprobieren (Auftrag 23), z.B. window.koeln.dev.einbruch() in der Konsole und
+// in den Szenen von scripts/phone-scenes.mjs.
+
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  const sim = () => {
+    const current = window.koeln?.session.sim;
+    if (!current) throw new Error('Kein Spiel geladen.');
+    return current;
+  };
+  const dev = {
+    /** Jede Kölner Gang schreibt dir eine Warnung und eine Drohung (ihre Stimmen nebeneinander). */
+    gangStimmen: () => {
+      const s = sim();
+      const ctx = s.ctx('gangs');
+      for (const gang of getGangs(s.state, 'koeln')) {
+        sendGangMessage(ctx, gang.id, 'warning', { veedel: veedelName(gang.homeVeedelId) });
+        sendGangMessage(ctx, gang.id, 'threat', { veedel: veedelName(gang.homeVeedelId), tribute: '750 €' });
+      }
+      s.step();
+    },
+    /** Einbruch des Venloer Syndikats ins erste Lager, sofort gemeldet. */
+    einbruch: () => {
+      const s = sim();
+      const ctx = s.ctx('gangs');
+      s.state.modules.gangs.lastMethodAt = null;
+      if (runGangMethod(ctx, 'west', 'burglary', true)) s.advance(60 - (s.state.time % 60));
+    },
+    /** Die Schäl Sick will einen deiner Leute abwerben. */
+    abwerben: () => {
+      const s = sim();
+      const m = s.state.modules.staff.members.find((x) => x.role === 'runner' && x.status === 'active');
+      if (m) m.stats.loyalty = Math.min(m.stats.loyalty, 30);
+      runGangMethod(s.ctx('gangs'), 'ost', 'poach');
+      s.step();
+    },
+  };
+  const holder = window as unknown as { koeln?: { dev?: Record<string, () => void> } };
+  holder.koeln = { ...holder.koeln, dev: { ...holder.koeln?.dev, ...dev } };
+}

@@ -23,9 +23,11 @@
 // Achtung Abhängigkeiten: territory hängt von gangs ab (Startverteilung der Reviere). gangs darf deshalb
 // nicht dependsOn: ['territory'] eintragen (Zyklus). Für API-Aufrufe zur Laufzeit ist das auch nicht nötig.
 
-import { defineModule } from '../../core';
+import { type Ctx, defineModule } from '../../core';
 import type { FactionId } from '../territory';
 import { gangsTick } from './ai';
+import { say } from './common';
+import type { GangMethod } from './data';
 import {
   acceptOffer,
   ally,
@@ -37,9 +39,10 @@ import {
   refuse,
   releaseProtection,
 } from './diplomacy';
-import { type IncidentKind, respond } from './methods';
+import { type IncidentKind, respond, runMethod } from './methods';
 import { onControlChanged, onEncounterResolved, onPoliceRaid, onSale, onTipOff } from './reactions';
-import { type GangStage, type GangsState, initialGangsState } from './state';
+import { type GangStage, type GangsState, getGang, getGangStatus, initialGangsState } from './state';
+import type { GangTextKey } from './texts';
 
 /** Zustand bis Version 3 (vor Auftrag 23). */
 type GangsStateV3 = Pick<GangsState, 'gangs' | 'priceFactors'>;
@@ -88,6 +91,28 @@ export {
   tributeAmount,
   veedelGang,
 } from './state';
+export type { GangTextKey } from './texts';
+
+/**
+ * Eine Methode der Gang sofort ausführen (Tests, Dev-Abkürzungen, Szenen für Screenshots). Gibt zurück, ob etwas
+ * passiert ist. Der Einbruch wird mit report sofort gemeldet statt am Morgen.
+ */
+export function runGangMethod(ctx: Ctx, gangId: string, method: GangMethod, report = false): boolean {
+  const gang = getGang(ctx.state, gangId);
+  const s = getGangStatus(ctx.state, gangId);
+  if (!gang || !s) return false;
+  const done = runMethod(ctx, gang, s, method);
+  if (done && report) {
+    for (const i of ctx.state.modules.gangs.incidents) if (i.reported === false) i.reportAt = ctx.now;
+  }
+  return done;
+}
+
+/** Nachricht des Bosses in der Stimme der Gang schicken (Dev-Abkürzungen, Szenen). */
+export function sendGangMessage(ctx: Ctx, gangId: string, key: GangTextKey, vars: Record<string, string> = {}): void {
+  const gang = getGang(ctx.state, gangId);
+  if (gang) say(ctx, gang, key, vars);
+}
 
 export type GangAgreement = 'ceasefire' | 'tribute' | 'protection' | 'alliance';
 

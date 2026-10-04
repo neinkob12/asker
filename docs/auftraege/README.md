@@ -180,6 +180,11 @@ Welle 4   40 Verkauf und Hafen ──► 41 Schiffe und Europa ──► 42 Prod
 Mergen beide Seiten behalten. `CLAUDE.md`, `docs/architektur.md` und `docs/konzept.md` ergänzt jede Session in ihrem
 eigenen Abschnitt.
 
+**Stand Auftrag 23 (Welle 1, gekürzt):** umgesetzt (PR #56): Text-Helfer im Kern (`texts.pick`), eigene Stimmen für
+Gangs, Lieferanten, Personal, Leutnants und Hafen, Gang-Methoden mit Einbruch, Abwerben, Einschüchtern, Polizei-Tipp,
+Erpressung und Chancen, Lieferprobleme mit Gründen und Entscheidungen, Spot-Arten mit Bekanntheit, Ausbau, Verlegen,
+Umbenennen und Aufgeben. Kunden-Anfragen (Etappe 4) bewusst nicht umgebaut: Seit Auftrag 28 regelt das die Rechte Hand.
+
 **Prüf-Loop:** Die Planungs-Session startet jede Welle als eigene Cloud-Sessions (je ein Branch `claude/auftrag-<nr>-…`
 und ein Draft-PR), schaut stündlich nach, prüft fertige PRs gegen ihren Auftrag (Checkliste „Fertig, wenn“, CI, Review
 des Diffs), schickt Änderungswünsche an die Session zurück und meldet dem Spieler, welche PRs bereit zum Mergen sind.

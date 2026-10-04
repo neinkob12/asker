@@ -43,6 +43,11 @@ Kopfbedeckung und Oberteil (Fade, Cornrows, Dreads, Cap nach hinten, Durag, Band
 Daunen-, Leder-, Bomberjacke …) auch Kopfform, Brauen, Augen, Mund, Narbe, Veilchen, Tattoo, Goldzahn/Grill, Zigarette,
 Ohrringe, Kette und Maske; jedes Merkmal würfelt fest aus Seed und Merkmalsname (`roll`), gewichtet nach Alter,
 Geschlecht und einem Straßen-Faktor. Das alte Feld `extra` bleibt als Eingabe gültig, `lookTraits` beschreibt alles.
+Auftrag 23: Texte mit Varianten über den Text-Helfer `texts.pick(ctx, '<art>:<wer>:<anlass>', liste, vars)` aus dem Kern
+(keine direkte Wiederholung, Gedächtnis im Spielstand), nie `ctx.pick` für Nachrichten. Gangs haben Stimmen und Methoden
+(`gangs/texts.ts`, `traits.methods`, `gangs/methods.ts` mit Vorfällen und `gangs.respond`), Lieferprobleme Gründe und
+Entscheidungen (`suppliers/problems.ts`, `troubles.ts`, `suppliers.resolveProblem`), Spots Arten, Bekanntheit und Ausbau
+(`spots/kinds.ts`, `spotDemandFactor`, `spotModifiers`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

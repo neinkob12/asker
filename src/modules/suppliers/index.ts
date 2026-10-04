@@ -694,6 +694,25 @@ function order(
   return { ok: true, data: { shipmentId: shipment.id } };
 }
 
+/**
+ * Ein Lieferproblem sofort eintreten lassen (Tests, Dev-Abkürzungen, Szenen für Screenshots), mit ask=true immer mit
+ * Rückfrage. Gibt zurück, ob es die Lieferung gibt.
+ */
+export function forceShipmentProblem(ctx: Ctx, shipmentId: number, problem: 'delayed' | 'seized', ask = true): boolean {
+  const s = ctx.state.modules.suppliers.shipments.find((x) => x.id === shipmentId);
+  const supplier = s ? getSupplier(ctx.state, s.supplierId) : undefined;
+  if (!s || !supplier) return false;
+  if (s.delayMinutes) s.arrivesAt -= s.delayMinutes;
+  s.luck = undefined;
+  s.problem = problem;
+  s.problemAt = ctx.now;
+  s.problemRevealed = true;
+  s.delayMinutes = problem === 'delayed' ? Math.round(supplier.deliveryTime * 0.6) : undefined;
+  if (s.delayMinutes) s.arrivesAt += s.delayMinutes;
+  revealProblem(ctx, s, supplier, ask);
+  return true;
+}
+
 /** Lager, in das Lieferungen ohne Angabe gehen: in Köln das Standardlager, sonst das erste eigene der Stadt. */
 function defaultWarehouse(state: GameState, cityId: string): string | null {
   const standard = getWarehouse(state, DEFAULT_WAREHOUSE);

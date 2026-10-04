@@ -244,6 +244,28 @@ async function run() {
     await page.evaluate(() => window.koeln.runtime.api.closePhone());
   });
 
+  await check('Eigenen Spot mit Art gründen (Auftrag 23)', async () => {
+    // Den Klick auf die Karte ersetzt eine feste Stelle in Kalk; Art und Name kommen aus dem Blatt.
+    await page.evaluate(() => {
+      const rt = window.koeln.runtime;
+      rt.map.pickLocation = async () => ({ lng: 7.0035, lat: 50.9385 });
+      window.koeln.session.state.wallet.dirty += 3000;
+      rt.api.selectTab('territory');
+    });
+    await page
+      .locator('.phone')
+      .getByRole('button', { name: /Eigenen Spot gründen/ })
+      .click();
+    const sheet = page.locator('.ui-sheet');
+    await sheet.getByRole('button', { name: /^Park/ }).click();
+    await sheet.getByRole('button', { name: 'Gründen', exact: true }).click();
+    const custom = await game(page, (s) => s.modules.spots.custom.map((x) => [x.kind, x.veedelId]));
+    assert.deepEqual(custom, [['park', 'kalk']]);
+    await page.locator('.phone').getByText('Bekanntheit').first().waitFor();
+    await shot(page, 'spot-gegruendet');
+    await page.evaluate(() => window.koeln.runtime.api.closePhone());
+  });
+
   await check('Stadt wechseln: Hamburg frei, Stadt-Chip, Hamburg aktiv, zurück nach Köln', async () => {
     assert.equal(await page.locator('.hud-pill', { hasText: 'Köln ▾' }).count(), 0, 'kein Stadt-Chip mit einer Stadt');
     await page.evaluate(() => {

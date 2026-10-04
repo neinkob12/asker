@@ -115,7 +115,7 @@ export function shipmentReason(state: GameState, s: Shipment): string | null {
 // Problem wird bekannt
 
 /** Verspätung oder Beschlagnahme tritt ein: Nachricht, je nach Fall mit Rückfrage. */
-export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier): void {
+export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier, ask?: boolean): void {
   const shipments = ctx.state.modules.suppliers;
   const goods = goodsOf(s);
   const remaining = s.arrivesAt - ctx.now;
@@ -124,7 +124,7 @@ export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier): void {
     const why = rollReason(ctx, s, supplier, 'delay');
     const choices = delayChoices(ctx.state, s);
     const time = Math.min(DECISION_TIME, remaining - 1);
-    if (choices.length > 0 && time >= 15 && ctx.chance(DECISION_SHARE_DELAY)) {
+    if (choices.length > 0 && time >= 15 && (ask ?? ctx.chance(DECISION_SHARE_DELAY))) {
       const cost = Math.max(DETOUR_MIN_COST, Math.round((s.price * DETOUR_COST_SHARE) / 5) * 5);
       const redirectTo = otherWarehouse(ctx.state, s);
       s.decision = {
@@ -155,7 +155,7 @@ export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier): void {
   // Beschlagnahme: mit Rückfrage erst eine Drohung (Schmieren), sonst wie vorher sofort weg.
   const why = rollReason(ctx, s, supplier, 'seize');
   const time = Math.min(DECISION_TIME, remaining - 1);
-  if (time >= 15 && ctx.chance(DECISION_SHARE_SEIZE)) {
+  if (time >= 15 && (ask ?? ctx.chance(DECISION_SHARE_SEIZE))) {
     const cost = Math.max(BRIBE_MIN, Math.round((s.price * BRIBE_SHARE) / 10) * 10);
     s.decision = { kind: 'seize', until: ctx.now + time, choices: ['bribe', 'wait'], cost };
     messages.send(ctx, {
