@@ -349,6 +349,24 @@
   --file-photo-foe-a: #4a1a17;
   --file-photo-foe-b: #1c0b0a;
   --file-violet: #c99bff;
+  /* Flächen, Linien und Bedeutungsfarben in der Akte (immer dunkel, deshalb feste Werte statt light-dark) */
+  --file-surface: rgba(255, 255, 255, 0.05);
+  --file-surface-2: rgba(255, 255, 255, 0.09);
+  --file-line: rgba(255, 255, 255, 0.15);
+  --file-grain: rgba(255, 255, 255, 0.9);
+  --file-ghost-a: rgba(255, 255, 255, 0.85);
+  --file-ghost-b: rgba(255, 255, 255, 0.25);
+  --file-shadow: rgba(0, 0, 0, 0.5);
+  --file-rule: rgba(241, 236, 226, 0.25);
+  --file-red-soft: rgba(255, 123, 115, 0.12);
+  --file-red-line: rgba(255, 123, 115, 0.45);
+  --file-alarm: rgba(255, 75, 75, 0.7);
+  --file-alarm-0: rgba(255, 75, 75, 0);
+  --file-good: #46c88c;
+  --file-good-soft: rgba(70, 200, 140, 0.14);
+  --file-violet-soft: rgba(201, 155, 255, 0.15);
+  --file-violet-soft-2: rgba(201, 155, 255, 0.24);
+  --file-tab-soft: rgba(201, 178, 133, 0.1);
   --file-backdrop: radial-gradient(ellipse at 50% 45%, rgba(90, 20, 16, 0.35), rgba(4, 5, 7, 0.88) 72%);
   --duel-own-a: #075fb7;
   --duel-own-b: #2287ed;

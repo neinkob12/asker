@@ -4,6 +4,7 @@
 import {
   type CommandResult,
   type Ctx,
+  clock,
   formatAmount,
   formatEuro,
   type GameState,
@@ -31,26 +32,32 @@ import { getSpot, spotCity } from '../spots';
 import { getStaff, getStaffMember, setStatus } from '../staff';
 import { addInfluence, PLAYER_FACTION } from '../territory';
 import { veedelCity, veedelName } from '../veedel';
+import { getWeather } from '../weather';
 import { ENCOUNTER_ACTIONS } from './actions';
 import {
   ABANDON_CASH_MAX,
   ABANDON_CASH_SHARE,
+  AGGRESSION_FIGHT,
   BACKUP_COST,
-  BACKUP_EDGE_BONUS,
   BACKUP_MAX_PEOPLE,
+  BACKUP_RESOLVE_BONUS,
   BACKUP_ROLES,
+  BRAWL_HIT,
+  BRAWL_PROTECTED_FACTOR,
+  BRAWL_STRIKE,
+  BRUISER_DRIFT,
+  CLOCK_ARREST_CHANCE,
+  CLOCK_GOODS_DAMAGE,
+  CLOCK_GOODS_DAMAGE_PROTECTED,
+  CLOCK_HEAT,
+  CLOCK_PRESSURE,
+  CREW_MAX,
   DECISION_TIMEOUT,
-  EDGE_CHANCE_DIVISOR,
-  EDGE_RETREAT_AFTER_ROUNDS,
-  EDGE_START,
-  EDGE_START_MAX,
-  EDGE_START_MIN,
-  EDGE_WIN_AFTER_ROUNDS,
+  END_DAMAGE,
+  END_DAMAGE_PROTECTED,
   HISTORY_LIMIT,
-  INJURY_PENALTY,
-  MAX_CHANCE,
-  MIN_CHANCE,
-  NUMBERS_BONUS,
+  KNOCKDOWN_RESOLVE,
+  OWN_DOWN_RESOLVE,
   PAYOFF_FACTOR,
   PAYOFF_MIN,
   PAYOFF_RELATION,
@@ -59,26 +66,56 @@ import {
   PLAYER_HIT_WEIGHT,
   PLAYER_LETHAL_CHANCE,
   PLAYER_NAME,
-  PLAYER_PRESENT_BONUS,
   PLAYER_STATS,
+  PROTECT_FACTOR,
+  RETREAT_AT,
+  ROUND_LIMIT,
   STAFF_DEATH_CHANCE,
+  STASH_CAP,
   STRENGTH_FACTOR_LIMIT,
   TIPOFF_GOODS,
   TIPOFF_HEAT,
 } from './config';
+import { crewCandidates, crewCost, SPECIAL_MOVES, specialMoveOf } from './crew';
 import { ENCOUNTER_KINDS } from './kinds';
+import { chooseAuto, chooseMove } from './strategy';
+import {
+  activeOwn,
+  applyShift,
+  buildFoes,
+  damageStake,
+  edgeOf,
+  foesIn,
+  getIntent,
+  removeFoe,
+  rollDice,
+  rollIntent,
+  roundStrength,
+  scaleEffects,
+  scaleShift,
+  splitEffects,
+  stakeDamage,
+  startClock,
+  startGauges,
+  statFactor,
+} from './tactics';
 import type {
   Amount,
   Encounter,
   EncounterAction,
   EncounterEffects,
+  EncounterEnding,
   EncounterKind,
   EncounterMode,
   EncounterOutcome,
   EncounterRequest,
   EncounterResult,
-  EncounterStat,
+  EncounterResultPart,
+  EncounterSetting,
+  GaugeShift,
   Participant,
+  SpecialMoveId,
+  StakeId,
 } from './types';
 
 export const PLAYER_ID = 'player';
@@ -96,16 +133,11 @@ export function resolveAction(kind: EncounterKind, actionId: string): EncounterA
   if (!base) return undefined;
   const o = kind.actionOverrides?.[actionId];
   if (!o) return base;
-  return {
-    ...base,
-    ...o,
-    onSuccess: { ...base.onSuccess, ...o.onSuccess },
-    onFailure: { ...base.onFailure, ...o.onFailure },
-  };
+  return { ...base, ...o, shift: { ...base.shift, ...o.shift }, texts: o.texts ?? base.texts };
 }
 
 export function activeParticipants(encounter: Encounter): Participant[] {
-  return encounter.participants.filter((p) => p.condition !== 'down');
+  return activeOwn(encounter);
 }
 
 function playerActive(encounter: Encounter): boolean {
@@ -123,42 +155,22 @@ export function availableActions(encounter: Encounter): string[] {
     if (!action) return false;
     if (action.requiresPlayer && !withPlayer) return false;
     if (action.costsBribe && encounter.bribeCost <= 0) return false;
+    if (action.requiresVeedel && !encounter.request.veedelId) return false;
+    if (action.target && foesIn(encounter, action.target) === 0) return false;
+    if (action.clock === 'call' && encounter.clock <= 1) return false;
     return true;
   });
 }
 
-function statOf(p: Participant, stat: EncounterStat): number {
-  return p.stats[stat] - (p.condition === 'injured' ? INJURY_PENALTY : 0);
-}
-
-/** Erfolgschance einer Handlung in der aktuellen Lage (0–1). */
+/**
+ * Stärke einer Handlung in der aktuellen Lage (0–1): Wert der Beteiligten und Absicht bei mittlerem Würfel.
+ * Früher die Erfolgschance; der Würfel entscheidet jetzt nur, wie stark eine Handlung wirkt.
+ */
 export function actionChance(encounter: Encounter, actionId: string): number {
   const kind = getKind(encounter.kind);
   const action = kind && resolveAction(kind, actionId);
   if (!action) return 0;
-  return computeChance(encounter, action);
-}
-
-function computeChance(encounter: Encounter, action: EncounterAction): number {
-  const active = activeParticipants(encounter);
-  if (active.length === 0) return 0;
-  const player = active.find((p) => p.isPlayer);
-  const opponent = encounter.opponent;
-  let value: number;
-  if (action.stat === 'none') {
-    value = opponent.strength;
-  } else if (action.requiresPlayer && player) {
-    value = statOf(player, action.stat);
-  } else {
-    const stat = action.stat;
-    const values = active.map((p) => statOf(p, stat));
-    value = action.statMode === 'best' ? Math.max(...values) : values.reduce((a, b) => a + b, 0) / values.length;
-  }
-  let chance = action.base + (value - opponent.strength) / 100;
-  if (action.numbers) chance += NUMBERS_BONUS * (active.length - opponent.count);
-  if (player) chance += PLAYER_PRESENT_BONUS;
-  chance += (encounter.edge - 50) / EDGE_CHANCE_DIVISOR;
-  return Math.min(MAX_CHANCE, Math.max(MIN_CHANCE, chance));
+  return Math.min(0.95, Math.max(0.05, roundStrength(encounter, action, actionId, 1) / 2));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -205,6 +217,40 @@ function textVars(encounter: Encounter): Record<string, string> {
   };
 }
 
+/** Wo eine Anfrage spielt (für die Situationstexte). */
+export function settingOf(request: EncounterRequest): EncounterSetting {
+  if (request.setting) return request.setting;
+  if (request.warehouseId) return 'warehouse';
+  if (request.spotId) return 'spot';
+  return 'street';
+}
+
+/**
+ * Situationstext: der Text des Aufrufers, sonst der genaueste passende aus den Situationen des Anlasses (Ort,
+ * Tagesabschnitt, Wetter; Wetter zählt am meisten), bei Gleichstand gewürfelt.
+ */
+function pickSituation(ctx: Ctx, kind: EncounterKind, request: EncounterRequest): string {
+  if (request.situation) return request.situation;
+  const list = kind.situations ?? [];
+  const setting = settingOf(request);
+  const phase = clock.dayPhase(ctx.now);
+  const weather = ctx.state.modules.weather ? getWeather(ctx.state).kind : null;
+  let best: string[] = [];
+  let bestScore = -1;
+  for (const s of list) {
+    if (s.settings && !s.settings.includes(setting)) continue;
+    if (s.phases && !s.phases.includes(phase)) continue;
+    if (s.weather && (!weather || !s.weather.includes(weather))) continue;
+    // Wetter ist am seltensten und fällt am meisten auf, der Ort am wenigsten.
+    const score = (s.settings ? 0.5 : 0) + (s.phases ? 1 : 0) + (s.weather ? 1.5 : 0);
+    if (score > bestScore) {
+      best = [s.text];
+      bestScore = score;
+    } else if (score === bestScore) best.push(s.text);
+  }
+  return best.length ? ctx.pick(best) : kind.situation;
+}
+
 function addPlayer(encounter: Encounter): void {
   if (encounter.participants.some((p) => p.isPlayer)) return;
   encounter.participants.unshift({
@@ -214,17 +260,34 @@ function addPlayer(encounter: Encounter): void {
     stats: { ...PLAYER_STATS },
     condition: 'ok',
     killed: false,
+    move: null,
+    moveUsed: false,
   });
   encounter.playerPresent = true;
 }
 
-function startEdge(encounter: Encounter): number {
-  const active = activeParticipants(encounter);
-  if (active.length === 0) return EDGE_START;
-  const strength = active.reduce((sum, p) => sum + statOf(p, 'strength'), 0) / active.length;
-  const edge =
-    EDGE_START + 5 * (active.length - encounter.opponent.count) + (strength - encounter.opponent.strength) / 4;
-  return Math.round(Math.min(EDGE_START_MAX, Math.max(EDGE_START_MIN, edge)));
+/** Zeiger, Uhr und erste Absicht setzen, sobald feststeht, wer dabei ist. */
+function setupRounds(ctx: Ctx, encounter: Encounter, kind: EncounterKind): void {
+  const gauges = startGauges(ctx.state, encounter, kind);
+  encounter.aggression = gauges.aggression;
+  encounter.resolve = gauges.resolve;
+  encounter.edge = edgeOf(encounter);
+  encounter.intent = rollIntent(ctx, encounter, kind);
+  encounter.protect = defaultProtect(encounter);
+  encounter.maxRounds = encounter.round + encounter.clock;
+}
+
+/** Einsätze dieser Konfrontation: je nach Ort (stakesBySetting), sonst die des Anlasses. */
+export function stakesFor(kind: EncounterKind, request: EncounterRequest): readonly StakeId[] {
+  return kind.stakesBySetting?.[settingOf(request)] ?? kind.stakes;
+}
+
+/** Was man ohne Wahl schützt: den Einsatz, auf den die Absicht zielt, sonst den ersten des Anlasses. */
+export function defaultProtect(encounter: Encounter): StakeId | null {
+  const target = getIntent(encounter.intent)?.stake;
+  const ids = encounter.stakes.map((x) => x.id);
+  if (target && ids.includes(target)) return target;
+  return encounter.protect ?? ids[0] ?? null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -242,6 +305,7 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
       : rawStrength <= STRENGTH_FACTOR_LIMIT
         ? Math.round(kind.opponent.strength * rawStrength)
         : rawStrength;
+  const clockStart = startClock(ctx.state, request, kind);
   const encounter: Encounter = {
     id: ctx.nextId(),
     kind: request.kind,
@@ -261,9 +325,17 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
       startCount: count,
       down: 0,
     },
-    edge: EDGE_START,
+    edge: 50,
     round: 0,
-    maxRounds: kind.maxRounds,
+    maxRounds: clockStart,
+    aggression: kind.gauges.aggression,
+    resolve: kind.gauges.resolve,
+    clock: clockStart,
+    brawl: false,
+    intent: null,
+    foes: buildFoes(count, kind),
+    stakes: stakesFor(kind, request).map((id) => ({ id, damage: 0 })),
+    protect: null,
     log: [],
     // Freikaufen kostet je nach Stadt mehr oder weniger (Kölscher Klüngel, Auftrag 30).
     bribeCost: kind.bribe
@@ -285,8 +357,9 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
   // Dabei sein kannst du nur in der Stadt, in der du bist (Auftrag 30).
   if (request.playerPresent === true && playerCanBeThere(ctx.state, encounter)) addPlayer(encounter);
   else if (request.playerPresent === undefined && request.askPlayer && kind.joinable) encounter.phase = 'briefing';
-  encounter.situation = fillText(request.situation ?? kind.situation, textVars(encounter));
-  encounter.edge = startEdge(encounter);
+  encounter.situationTemplate = pickSituation(ctx, kind, request);
+  encounter.situation = fillText(encounter.situationTemplate, textVars(encounter));
+  setupRounds(ctx, encounter, kind);
   ctx.state.modules.encounters.active.push(encounter);
   ctx.emit('encounter.started', { encounterId: encounter.id, kind: request.kind, request: encounter.request });
   if (encounter.phase === 'rounds' && activeParticipants(encounter).length === 0) nobodyThere(ctx, encounter);
@@ -294,6 +367,7 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
 }
 
 function nobodyThere(ctx: Ctx, encounter: Encounter): void {
+  encounter.protect = null;
   encounter.log.push({
     round: 0,
     actionId: 'none',
@@ -301,7 +375,7 @@ function nobodyThere(ctx: Ctx, encounter: Encounter): void {
     chance: 0,
     text: 'Niemand von euch war da.',
   });
-  finish(ctx, encounter, getKind(encounter.kind)?.ifNobody ?? 'failure');
+  finish(ctx, encounter, getKind(encounter.kind)?.ifNobody ?? 'failure', undefined, 'resolved');
 }
 
 function findActive(ctx: Ctx, encounterId: number): Encounter | undefined {
@@ -405,13 +479,23 @@ export function delegateAbsent(ctx: Ctx): void {
  * Spieler entscheidet im Briefing, wie er vorgeht (siehe EncounterMode). Die alte Form (present: true/false) gilt als
  * 'self' bzw. 'crew'. Freikaufen, Bullen rufen und Spot räumen beenden die Konfrontation sofort.
  */
-export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): CommandResult {
+export function join(ctx: Ctx, encounterId: number, mode: EncounterMode, crew?: readonly string[]): CommandResult {
   const encounter = findActive(ctx, encounterId);
   if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
   if (encounter.phase !== 'briefing') return { ok: false, reason: 'Das ist schon entschieden.' };
   const option = briefingOptions(ctx.state, encounter).find((o) => o.mode === mode);
   if (!option) return { ok: false, reason: 'Das geht hier nicht.' };
   if (!option.ok) return { ok: false, reason: option.reason ?? 'Das geht gerade nicht.' };
+  // Crew nur bei den Wegen, bei denen jemand hingeht.
+  if (crew && (mode === 'self' || mode === 'crew' || mode === 'backup')) {
+    const extra = mode === 'backup' ? option.cost : 0;
+    const cityId = requestCity(ctx.state, encounter.request);
+    if (wallet.balance(ctx.state, 'dirty') < crewCost(ctx.state, encounter, cityId, crew) + extra) {
+      return { ok: false, reason: 'Nicht genug Schwarzgeld für Taxi und Verstärkung.' };
+    }
+    const taken = takeCrew(ctx, encounter, crew);
+    if (!taken.ok) return taken;
+  }
   encounter.mode = mode;
   const vars = () => textVars(encounter);
   switch (mode) {
@@ -425,13 +509,17 @@ export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): Comman
     case 'backup': {
       if (!wallet.pay(ctx, option.cost, 'dirty', 'Verstärkung', lossCategory(encounter)))
         return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
-      encounter.bribeSpent += option.cost;
+      // Fahrtkosten: kein Verlust an die Gegenseite, deshalb nicht in result.money.
+      encounter.travelSpent = (encounter.travelSpent ?? 0) + option.cost;
       const ids = backupCandidates(ctx.state, encounter);
       for (const id of ids) addStaff(ctx.state, encounter, id);
       // Die Verstärkung gehört dazu (Erfahrung, Loyalität, Verletzungen wie bei allen Beteiligten).
       encounter.request.staffIds = [...(encounter.request.staffIds ?? []), ...ids];
       enterRounds(ctx, encounter);
-      if (!encounter.outcome) encounter.edge = Math.min(EDGE_START_MAX, encounter.edge + BACKUP_EDGE_BONUS);
+      if (!encounter.outcome) {
+        encounter.resolve = Math.max(0, encounter.resolve - BACKUP_RESOLVE_BONUS);
+        encounter.edge = edgeOf(encounter);
+      }
       break;
     }
     case 'payoff': {
@@ -446,11 +534,17 @@ export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): Comman
         chance: 1,
         text: 'Ein Umschlag. Sie ziehen ab.',
       });
-      finish(ctx, encounter, 'success', {
-        relation: PAYOFF_RELATION,
-        reputation: PAYOFF_REPUTATION,
-        text: fillText('Freigekauft {place}. {opponent} ziehen ab, mit deinem Geld.', vars()),
-      });
+      finish(
+        ctx,
+        encounter,
+        'success',
+        {
+          relation: PAYOFF_RELATION,
+          reputation: PAYOFF_REPUTATION,
+          text: fillText('Freigekauft {place}. {opponent} ziehen ab, mit deinem Geld.', vars()),
+        },
+        'briefing',
+      );
       break;
     }
     case 'tipoff':
@@ -462,11 +556,17 @@ export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): Comman
         chance: 1,
         text: 'Ein Anruf aus der Telefonzelle. Zehn Minuten später: Blaulicht. Alle rennen.',
       });
-      finish(ctx, encounter, 'retreat', {
-        heat: TIPOFF_HEAT,
-        goods: TIPOFF_GOODS,
-        text: fillText('Bullen gerufen {place}. {opponent} sind weg, die Polizei ist da.', vars()),
-      });
+      finish(
+        ctx,
+        encounter,
+        'retreat',
+        {
+          heat: TIPOFF_HEAT,
+          goods: TIPOFF_GOODS,
+          text: fillText('Bullen gerufen {place}. {opponent} sind weg, die Polizei ist da.', vars()),
+        },
+        'briefing',
+      );
       break;
     case 'abandon':
       encounter.phase = 'rounds';
@@ -477,11 +577,17 @@ export function join(ctx: Ctx, encounterId: number, mode: EncounterMode): Comman
         chance: 1,
         text: 'Ware in die Tasche, ab durch den Hinterhof. Die Kasse bleibt liegen.',
       });
-      finish(ctx, encounter, 'retreat', {
-        moneyShare: -ABANDON_CASH_SHARE,
-        moneyShareMax: ABANDON_CASH_MAX,
-        text: fillText('Spot {place} geräumt. Die Ware ist gerettet, die Kasse nicht.', vars()),
-      });
+      finish(
+        ctx,
+        encounter,
+        'retreat',
+        {
+          moneyShare: -ABANDON_CASH_SHARE,
+          moneyShareMax: ABANDON_CASH_MAX,
+          text: fillText('Spot {place} geräumt. Die Ware ist gerettet, die Kasse nicht.', vars()),
+        },
+        'briefing',
+      );
       break;
   }
   return { ok: true };
@@ -499,21 +605,62 @@ function addStaff(state: GameState, encounter: Encounter, id: string): void {
     stats: { speed, caution, strength, charisma },
     condition: 'ok',
     killed: false,
+    move: specialMoveOf(member),
+    moveUsed: false,
   });
+}
+
+/**
+ * Crew aus dem Briefing übernehmen (bis zu CREW_MAX, nur Kandidaten): Wer nicht vor Ort ist, kommt mit dem Taxi.
+ * Wer vor Ort war und nicht gewählt ist, hält sich raus.
+ */
+function takeCrew(ctx: Ctx, encounter: Encounter, crew: readonly string[]): CommandResult {
+  const ids = [...new Set(crew)];
+  if (ids.length > CREW_MAX) return { ok: false, reason: `Höchstens ${CREW_MAX} Leute.` };
+  const cityId = requestCity(ctx.state, encounter.request);
+  const candidates = crewCandidates(ctx.state, encounter, cityId);
+  if (ids.some((id) => !candidates.some((c) => c.id === id))) {
+    return { ok: false, reason: 'Diese Person kann nicht mitkommen.' };
+  }
+  const cost = crewCost(ctx.state, encounter, cityId, ids);
+  if (cost > 0) {
+    if (!wallet.pay(ctx, cost, 'dirty', 'Taxi für die Crew', lossCategory(encounter))) {
+      return { ok: false, reason: `Nicht genug Schwarzgeld fürs Taxi (${formatEuro(cost)}).` };
+    }
+    encounter.travelSpent = (encounter.travelSpent ?? 0) + cost;
+  }
+  encounter.participants = encounter.participants.filter((p) => p.isPlayer);
+  for (const id of ids) addStaff(ctx.state, encounter, id);
+  encounter.request.staffIds = ids;
+  return { ok: true };
 }
 
 function enterRounds(ctx: Ctx, encounter: Encounter): void {
   encounter.phase = 'rounds';
-  encounter.situation = fillText(
-    encounter.request.situation ?? getKind(encounter.kind)?.situation ?? '',
-    textVars(encounter),
-  );
-  encounter.edge = startEdge(encounter);
+  const kind = getKind(encounter.kind);
+  // Der Text bleibt, nur {us} kann sich ändern (jetzt weiß man, wer hingeht).
+  if (kind) {
+    encounter.situation = fillText(
+      encounter.request.situation ?? encounter.situationTemplate ?? kind.situation,
+      textVars(encounter),
+    );
+    setupRounds(ctx, encounter, kind);
+  }
   if (activeParticipants(encounter).length === 0) nobodyThere(ctx, encounter);
 }
 
-/** Eine Runde spielen. */
-export function act(ctx: Ctx, encounterId: number, actionId: string): CommandResult {
+/** Einsatz wählen, den die eigene Seite ab jetzt schützt (kostet keine Runde). */
+export function protect(ctx: Ctx, encounterId: number, stake: StakeId): CommandResult {
+  const encounter = findActive(ctx, encounterId);
+  if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
+  if (!encounter.stakes.some((s) => s.id === stake))
+    return { ok: false, reason: 'Das steht hier nicht auf dem Spiel.' };
+  encounter.protect = stake;
+  return { ok: true };
+}
+
+/** Eine Runde spielen (optional mit neuem Schutz). */
+export function act(ctx: Ctx, encounterId: number, actionId: string, guard?: StakeId): CommandResult {
   const encounter = findActive(ctx, encounterId);
   if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
   if (encounter.phase === 'briefing') return { ok: false, reason: 'Erst entscheiden, ob du selbst hingehst.' };
@@ -522,22 +669,23 @@ export function act(ctx: Ctx, encounterId: number, actionId: string): CommandRes
   if (!kind || !action || !availableActions(encounter).includes(actionId)) {
     return { ok: false, reason: 'Das geht gerade nicht.' };
   }
+  // Erst alles prüfen, dann ändern.
+  if (guard !== undefined && !encounter.stakes.some((s) => s.id === guard)) {
+    return { ok: false, reason: 'Das steht hier nicht auf dem Spiel.' };
+  }
+  if (action.costsBribe && wallet.balance(ctx.state, 'dirty') < encounter.bribeCost) {
+    return { ok: false, reason: `Nicht genug Schwarzgeld (${formatEuro(encounter.bribeCost)}).` };
+  }
+  if (guard !== undefined) encounter.protect = guard;
   if (action.costsBribe) {
-    if (!wallet.pay(ctx, encounter.bribeCost, 'dirty', 'Bestechung', lossCategory(encounter))) {
-      return { ok: false, reason: `Nicht genug Schwarzgeld (${formatEuro(encounter.bribeCost)}).` };
-    }
+    wallet.pay(ctx, encounter.bribeCost, 'dirty', 'Bestechung', lossCategory(encounter));
     encounter.bribeSpent += encounter.bribeCost;
   }
-  playRound(ctx, encounter, actionId, action);
+  playRound(ctx, encounter, kind, actionId, action);
   return { ok: true };
 }
 
-/** Kosten einer Handlung, die sofort anfallen (weggeworfene Ware). */
-function payActionCosts(ctx: Ctx, encounter: Encounter, action: EncounterAction): void {
-  if (action.dropsGoods !== undefined)
-    encounter.goodsDropped += loseGoods(ctx, roll(ctx, action.dropsGoods), encounter.request);
-}
-
+/** Wen es trifft (der Boss wird bevorzugt). Ohne Treffer, wenn niemand mehr steht. */
 function hitOwn(ctx: Ctx, encounter: Encounter): string {
   const active = activeParticipants(encounter);
   if (active.length === 0) return '';
@@ -552,6 +700,7 @@ function hitOwn(ctx: Ctx, encounter: Encounter): string {
       break;
     }
   }
+  encounter.resolve = Math.min(100, encounter.resolve + (target.condition === 'ok' ? 0 : OWN_DOWN_RESOLVE));
   if (!lethal) {
     // Niemand stirbt, Getroffene werden zu Boden gerissen.
     const who = target.isPlayer ? 'Du' : target.name;
@@ -593,73 +742,223 @@ function hitOwn(ctx: Ctx, encounter: Encounter): string {
   return `${target.name} ist schwer verletzt und fällt aus.`;
 }
 
-function playRound(ctx: Ctx, encounter: Encounter, actionId: string, action: EncounterAction): void {
-  const chance = computeChance(encounter, action);
-  const success = ctx.random() < chance;
-  encounter.round += 1;
-  payActionCosts(ctx, encounter, action);
-  const lines = [ctx.pick(success ? action.texts.success : action.texts.failure)];
-  if (action.heat) encounter.extraHeat += action.heat;
-  const opponent = encounter.opponent;
-  const effect = success ? action.onSuccess : action.onFailure;
-  encounter.edge = Math.min(100, Math.max(0, encounter.edge + (effect.edge ?? 0)));
-  if (success && action.onSuccess.knockdown && opponent.count > 0 && ctx.chance(action.onSuccess.knockdown)) {
-    opponent.count -= 1;
-    opponent.down += 1;
-    lines.push('Einer von ihnen geht zu Boden.');
-  }
-  if (success && action.onSuccess.scare && opponent.count > 0 && ctx.chance(action.onSuccess.scare)) {
-    opponent.count -= 1;
-    lines.push('Einer von ihnen haut ab.');
-  }
-  if (effect.hitChance && ctx.chance(effect.hitChance)) lines.push(hitOwn(ctx, encounter));
-  encounter.log.push({ round: encounter.round, actionId, success, chance, text: lines.join(' ') });
-  ctx.emit('encounter.round', { encounterId: encounter.id, round: encounter.round, actionId, success });
+/** Ein Treffer gegen eure Seite: Ein Spezialzug "Block" fängt ihn ab (crew.ts), sonst trifft es jemanden. */
+function takeHit(ctx: Ctx, encounter: Encounter): string {
+  const blocked = blockHit(encounter);
+  if (blocked) return blocked;
+  return hitOwn(ctx, encounter);
+}
 
-  const outcome = roundOutcome(encounter, effect.resolve);
-  if (outcome) finish(ctx, encounter, outcome);
+/** Eure Seite schlägt zu: Chance, einen Gegner auszuschalten (Stärke und Überzahl). */
+function strike(ctx: Ctx, encounter: Encounter, chance: number): string | null {
+  const fist = ENCOUNTER_ACTIONS.fight;
+  const p = Math.min(0.9, chance * statFactor(encounter, fist));
+  if (!ctx.chance(p)) return null;
+  const role = removeFoe(encounter, 'down');
+  if (!role) return null;
+  encounter.resolve = Math.max(0, encounter.resolve - KNOCKDOWN_RESOLVE);
+  return role === 'leader' ? 'Der Anführer geht zu Boden.' : 'Einer von ihnen geht zu Boden.';
+}
+
+/** Die Gegenseite schlägt in der Schlägerei zu. Wer die Leute schützt, wird seltener getroffen. */
+function brawlHitChance(encounter: Encounter): number {
+  const fist = ENCOUNTER_ACTIONS.fight;
+  const own = statFactor(encounter, fist);
+  const protectedPeople = encounter.protect === 'people';
+  return Math.min(0.9, (BRAWL_HIT / own) * (protectedPeople ? BRAWL_PROTECTED_FACTOR : 1));
+}
+
+function playRound(ctx: Ctx, encounter: Encounter, kind: EncounterKind, actionId: string, action: EncounterAction) {
+  const intent = getIntent(encounter.intent);
+  const before: GaugeShift = { aggression: encounter.aggression, resolve: encounter.resolve };
+  const dice = rollDice(ctx);
+  const strength = roundStrength(encounter, action, actionId, dice);
+  encounter.round += 1;
+  if (action.dropsGoods !== undefined) {
+    encounter.goodsDropped += loseGoods(ctx, roll(ctx, action.dropsGoods), encounter.request);
+  }
+  if (action.heat) encounter.extraHeat += action.heat;
+  const lines = [ctx.pick(strength >= 1 ? action.texts.strong : action.texts.weak)];
+
+  // 1. Die Handlung verschiebt die Zeiger, der Würfel entscheidet die Stärke.
+  applyShift(encounter, scaleShift(action.shift, strength));
+  if (action.target && action.removesTarget) {
+    if (removeFoe(encounter, 'gone', action.target)) lines.push(`Der ${roleName(action.target)} ist weg.`);
+  }
+  if (action.strike) {
+    const hit = strike(ctx, encounter, action.strike);
+    if (hit) lines.push(hit);
+  }
+  let called = false;
+  if (action.clock === 'call') {
+    encounter.clock = 1;
+    called = true;
+  } else if (typeof action.clock === 'number') encounter.clock = Math.max(1, encounter.clock + action.clock);
+
+  // 2. Sofort vorbei (Abhauen, Ladung aufgeben).
+  if (action.ends) {
+    if (action.endHit && ctx.chance(Math.max(0, action.endHit * (2 - Math.min(1.9, strength))))) {
+      lines.push(takeHit(ctx, encounter));
+    }
+    logRound(ctx, encounter, actionId, strength, lines, before);
+    const dead = encounter.participants.some((p) => p.isPlayer && p.killed);
+    finish(
+      ctx,
+      encounter,
+      dead ? 'failure' : action.ends,
+      undefined,
+      dead ? 'overrun' : (action.ending ?? (action.ends === 'retreat' ? 'fled' : 'resolved')),
+    );
+    return;
+  }
+
+  // 3. Die Absicht der Gegenseite: trifft, außer der Einsatz ist geschützt oder die Handlung wendet sie ab.
+  if (intent) resolveIntent(ctx, encounter, kind, intent, actionId, action, lines);
+
+  // 4. Schlägerei ab AGGRESSION_FIGHT: Beide Seiten schlagen zu.
+  encounter.brawl = encounter.aggression >= AGGRESSION_FIGHT;
+  if (encounter.brawl && foesIn(encounter) > 0) {
+    if (!action.strike) {
+      const hit = strike(ctx, encounter, BRAWL_STRIKE);
+      if (hit) lines.push(hit);
+    }
+    if (foesIn(encounter) > 0 && ctx.chance(brawlHitChance(encounter))) lines.push(takeHit(ctx, encounter));
+  }
+
+  // 5. Schläger heizen ein, die Uhr läuft, und je näher die Streife, desto eher wollen sie weg.
+  applyShift(encounter, { aggression: BRUISER_DRIFT * foesIn(encounter, 'bruiser') });
+  if (!called) encounter.clock -= 1;
+  if (encounter.clock <= 2 && (kind.clockOutcome ?? 'retreat') !== 'failure') {
+    applyShift(encounter, { resolve: -CLOCK_PRESSURE });
+  }
+  encounter.edge = edgeOf(encounter);
+  encounter.maxRounds = encounter.round + Math.max(0, encounter.clock);
+  logRound(ctx, encounter, actionId, strength, lines, before);
+
+  const end = roundOutcome(encounter, kind, action);
+  if (end) {
+    finish(ctx, encounter, end.outcome, undefined, end.ending);
+    return;
+  }
+  encounter.intent = rollIntent(ctx, encounter, kind);
+}
+
+/** Schaden an Ware, Kasse und Spot zusammen (was die Gegenseite schon erbeutet hat). */
+export function lootTaken(encounter: Encounter): number {
+  return encounter.stakes
+    .filter((s) => s.id === 'goods' || s.id === 'cash' || s.id === 'spot')
+    .reduce((sum, s) => sum + s.damage, 0);
+}
+
+function roleName(role: string): string {
+  return role === 'leader' ? 'Anführer' : role === 'nervous' ? 'Nervöse' : 'Schläger';
+}
+
+function resolveIntent(
+  ctx: Ctx,
+  encounter: Encounter,
+  kind: EncounterKind,
+  intent: NonNullable<ReturnType<typeof getIntent>>,
+  actionId: string,
+  action: EncounterAction,
+  lines: string[],
+): void {
+  if (intent.counters?.includes(actionId)) {
+    if (intent.blockedText) lines.push(intent.blockedText);
+    return;
+  }
+  if (intent.drift) applyShift(encounter, intent.drift);
+  if (intent.clock) encounter.clock += intent.clock;
+  if (!intent.stake) {
+    if (intent.hitText) lines.push(intent.hitText);
+    return;
+  }
+  // Geschützt: nur ein Teil des Schadens, und die Gegenseite wird nicht misstrauisch (onHit).
+  const shielded = encounter.protect === intent.stake || action.shields === intent.stake;
+  const factor = shielded ? PROTECT_FACTOR : 1;
+  if (intent.damage) damageStake(encounter, intent.stake, intent.damage * factor, stakeCap(encounter, intent.stake));
+  if (intent.heat && encounter.request.veedelId) {
+    const heat = Math.round(intent.heat * factor);
+    encounter.extraHeat += heat;
+    damageStake(encounter, 'noise', heat * 4);
+  }
+  const hit = !!intent.hit && ctx.chance(intent.hit * factor);
+  lines.push((shielded ? intent.blockedText : intent.hitText) || intent.hitText);
+  if (hit) lines.push(takeHit(ctx, encounter));
+  if (intent.onHit && !shielded) applyShift(encounter, intent.onHit);
+  void kind;
+}
+
+function logRound(
+  ctx: Ctx,
+  encounter: Encounter,
+  actionId: string,
+  strength: number,
+  lines: string[],
+  before: GaugeShift,
+): void {
+  const shift = { aggression: encounter.aggression - before.aggression, resolve: encounter.resolve - before.resolve };
+  const success = shift.resolve + Math.max(0, shift.aggression) / 2 < 0;
+  encounter.log.push({
+    round: encounter.round,
+    actionId,
+    success,
+    chance: Math.min(1, strength / 2),
+    text: lines.filter(Boolean).join(' '),
+    ...(encounter.intent ? { intent: encounter.intent } : {}),
+    shift,
+  });
+  ctx.emit('encounter.round', {
+    encounterId: encounter.id,
+    round: encounter.round,
+    actionId,
+    success,
+    aggression: encounter.aggression,
+    resolve: encounter.resolve,
+    clock: encounter.clock,
+  });
 }
 
 /** Ist die Konfrontation nach dieser Runde vorbei? Dann mit welchem Ausgang. */
-function roundOutcome(encounter: Encounter, resolve: EncounterOutcome | undefined): EncounterOutcome | null {
-  if (encounter.participants.some((p) => p.isPlayer && p.killed)) return 'failure';
-  if (resolve) return resolve;
-  if (activeParticipants(encounter).length === 0) return 'failure';
-  if (encounter.opponent.count <= 0 || encounter.edge >= 100) return 'success';
-  if (encounter.edge <= 0) return 'failure';
-  if (encounter.round < encounter.maxRounds) return null;
-  if (encounter.edge >= EDGE_WIN_AFTER_ROUNDS) return 'success';
-  return encounter.edge >= EDGE_RETREAT_AFTER_ROUNDS ? (getKind(encounter.kind)?.draw ?? 'retreat') : 'failure';
+function roundOutcome(
+  encounter: Encounter,
+  kind: EncounterKind,
+  action: EncounterAction,
+): { outcome: EncounterOutcome; ending: EncounterEnding } | null {
+  if (encounter.participants.some((p) => p.isPlayer && p.killed)) return { outcome: 'failure', ending: 'overrun' };
+  if (activeParticipants(encounter).length === 0) return { outcome: 'failure', ending: 'overrun' };
+  if (foesIn(encounter) === 0) return { outcome: 'success', ending: 'beaten' };
+  if (kind.lootLimit && lootTaken(encounter) >= kind.lootLimit) return { outcome: 'failure', ending: 'looted' };
+  if (encounter.resolve < RETREAT_AT) return { outcome: action.gaveUp ?? 'success', ending: 'gaveUp' };
+  if (encounter.clock <= 0) return { outcome: kind.clockOutcome ?? 'retreat', ending: 'clock' };
+  if (encounter.round >= Math.min(kind.maxRounds, ROUND_LIMIT)) {
+    return { outcome: kind.draw ?? 'retreat', ending: 'resolved' };
+  }
+  return null;
 }
 
-/** Die Leute handeln selbst: Runden werden ausgewürfelt, bis es vorbei ist. Ohne Bestechung (kein Geld ohne dich). */
+/** Die Leute handeln selbst: Runden mit einer einfachen Strategie (strategy.ts), bis es vorbei ist. */
 export function autoResolve(ctx: Ctx, encounterId: number): CommandResult {
   const encounter = findActive(ctx, encounterId);
   if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
   if (encounter.phase === 'briefing') enterRounds(ctx, encounter);
   const kind = getKind(encounter.kind);
   for (let guard = 0; encounter.phase === 'rounds' && kind && guard < 50; guard++) {
-    let best: { id: string; action: EncounterAction; score: number } | null = null;
-    for (const id of availableActions(encounter)) {
-      const action = resolveAction(kind, id);
-      if (!action || action.costsBribe) continue;
-      const resolve = action.onSuccess.resolve;
-      const gain =
-        resolve === 'success'
-          ? 100
-          : resolve === 'retreat'
-            ? encounter.edge < 30
-              ? 60
-              : 0
-            : (action.onSuccess.edge ?? 0);
-      const score = computeChance(encounter, action) * gain;
-      if (!best || score > best.score) best = { id, action, score };
+    // Spezialzüge kennen die Leute selbst (kosten keine Runde).
+    const move = chooseMove(encounter, false);
+    if (move) {
+      special(ctx, encounter.id, move);
+      continue;
     }
-    if (!best) {
-      finish(ctx, encounter, 'failure');
+    const choice = chooseAuto(ctx.state, encounter);
+    if (!choice) {
+      finish(ctx, encounter, 'failure', undefined, 'overrun');
       break;
     }
-    playRound(ctx, encounter, best.id, best.action);
+    const action = resolveAction(kind, choice.actionId);
+    if (!action) break;
+    if (choice.protect) encounter.protect = choice.protect;
+    playRound(ctx, encounter, kind, choice.actionId, action);
   }
   return { ok: true };
 }
@@ -706,6 +1005,7 @@ function lossCategory(encounter: Pick<Encounter, 'kind' | 'request'>): MoneyCate
   if (encounter.request.lossCategory) return encounter.request.lossCategory;
   const kind = encounter.kind;
   if (kind === 'raidDefense') return 'loss.theft';
+  if (kind === 'customsCheck') return 'loss.customs';
   if (kind === 'policeChase' || kind === 'vehicleCheck') return 'loss.police';
   return 'loss.encounter';
 }
@@ -767,10 +1067,9 @@ function applyEffects(ctx: Ctx, encounter: Encounter, effects: EncounterEffects,
     if (effects.opponentInfluence && encounter.opponent.factionId) {
       addInfluence(ctx, veedelId, encounter.opponent.factionId, effects.opponentInfluence);
     }
-    const heat = (effects.heat ?? 0) + encounter.extraHeat;
-    if (heat) {
-      addHeat(ctx, veedelId, heat);
-      result.heat += heat;
+    if (effects.heat) {
+      addHeat(ctx, veedelId, effects.heat);
+      result.heat += effects.heat;
     }
   }
   if (effects.reputation) {
@@ -783,8 +1082,85 @@ function applyEffects(ctx: Ctx, encounter: Encounter, effects: EncounterEffects,
   if (effects.arrestChance) {
     for (const p of encounter.participants) {
       if (p.isPlayer || p.condition === 'down') continue;
+      if (result.staffArrested.includes(p.id)) continue;
       if (ctx.chance(effects.arrestChance) && setStatus(ctx, p.id, 'jailed')) result.staffArrested.push(p.id);
     }
+  }
+}
+
+/** Einsätze, deren Verluste und Gewinne mit dem Schaden skalieren. Lärm und Leute wirken direkt (Heat, Treffer). */
+const SCALED_STAKES: readonly StakeId[] = ['goods', 'cash', 'spot'];
+
+/**
+ * Schaden am Ende: Wer verliert oder abhaut, lässt zurück, was nicht geschützt ist (geschützt die Hälfte). Läuft die
+ * Polizei-Uhr ab, ist vor allem die Ware weg. Im Briefing entschiedene Wege rühren die Einsätze nicht an.
+ */
+function endDamage(
+  encounter: Encounter,
+  outcome: EncounterOutcome,
+  ending: EncounterEnding,
+): Partial<Record<StakeId, number>> {
+  const end: Partial<Record<StakeId, number>> = {};
+  if (ending === 'briefing' || outcome === 'success') return end;
+  for (const stake of encounter.stakes) {
+    if (!SCALED_STAKES.includes(stake.id)) continue;
+    const guarded = encounter.protect === stake.id;
+    let amount: number;
+    if (ending === 'clock') {
+      // Die Streife kommt: Die Ware ist zum Teil weg, und der Spot hat Blaulicht vor der Tür (Einfluss).
+      if (stake.id === 'goods') amount = guarded ? CLOCK_GOODS_DAMAGE_PROTECTED : CLOCK_GOODS_DAMAGE;
+      else if (stake.id === 'spot') amount = guarded ? END_DAMAGE_PROTECTED : END_DAMAGE;
+      else continue;
+    } else {
+      amount = guarded ? END_DAMAGE_PROTECTED : END_DAMAGE;
+    }
+    if (ending === 'fled' && fledSafely(encounter)) amount = 0;
+    end[stake.id] = amount;
+  }
+  return end;
+}
+
+/** Was pro Einsatz tatsächlich gebucht wurde (für die Teil-Ergebnisse). */
+type Booked = Partial<Record<StakeId, { money: number; goods: number; influence: number }>>;
+
+/**
+ * Folgen nach Einsätzen: Verluste eines Einsatzes zählen anteilig zu seinem Schaden (ein unberührter Einsatz kostet
+ * nichts, ein ganz verlorener so viel wie im Ausgang steht), Gewinne schrumpfen mit dem Schaden aus den Runden. Hat der
+ * Ausgang für einen beschädigten Einsatz keinen Verlust (z.B. bei Erfolg), gilt der Verlust bei Niederlage als Maßstab.
+ */
+function applyStakeEffects(
+  ctx: Ctx,
+  encounter: Encounter,
+  kind: EncounterKind,
+  effects: EncounterEffects,
+  end: Partial<Record<StakeId, number>>,
+  result: EncounterResult,
+  booked: Booked,
+): void {
+  const stakes = encounter.stakes.map((x) => x.id).filter((s) => SCALED_STAKES.includes(s));
+  const outcome = splitEffects(effects, stakes);
+  const failure = splitEffects(encounter.request.effects?.failure ?? kind.outcomes.failure, stakes);
+  applyEffects(ctx, encounter, outcome.base, result);
+  for (const stake of stakes) {
+    const cap = stakeCap(encounter, stake) / 100;
+    const rounds = stakeDamage(encounter, stake) / 100;
+    const before = { money: result.money, goods: result.goods, influence: result.influence };
+    // Verluste aus dem Ausgang zählen mit Runden- und End-Schaden; hat der Ausgang keinen Verlust für diesen Einsatz,
+    // gilt der Verlust bei Niederlage, aber nur mit dem Schaden aus den Runden (sonst springt ein Rückzug).
+    const own = outcome.losses[stake];
+    const scaled = own
+      ? { effects: own, factor: Math.min(cap, rounds + (end[stake] ?? 0) / 100) }
+      : { effects: failure.losses[stake], factor: Math.min(cap, rounds) };
+    if (scaled.effects && scaled.factor > 0) {
+      applyEffects(ctx, encounter, scaleEffects(scaled.effects, scaled.factor), result);
+    }
+    const gain = outcome.gains[stake];
+    if (gain && rounds < 1) applyEffects(ctx, encounter, scaleEffects(gain, 1 - rounds), result);
+    booked[stake] = {
+      money: result.money - before.money,
+      goods: result.goods - before.goods,
+      influence: result.influence - before.influence,
+    };
   }
 }
 
@@ -809,8 +1185,89 @@ function describeResult(encounter: Encounter, result: EncounterResult, headline:
   return details.length ? `${headline} (${details.join(', ')})` : headline;
 }
 
+/**
+ * Teil-Ergebnisse pro Einsatz für die Ergebnis-Karte, aus dem, was tatsächlich gebucht wurde (nicht aus dem Schaden).
+ * Einsätze, bei denen es etwas zu gewinnen gab (z.B. die Beute beim Überfall auf einen Gang-Spot), heißen ohne Gewinn
+ * "nicht erbeutet".
+ */
+function resultParts(
+  encounter: Encounter,
+  kind: EncounterKind | undefined,
+  result: EncounterResult,
+  booked: Booked,
+): EncounterResultPart[] {
+  const parts: EncounterResultPart[] = [];
+  const nameOf = (id: string) => encounter.participants.find((p) => p.id === id)?.name ?? id;
+  const stakeIds = encounter.stakes.map((x) => x.id);
+  const winnable = splitEffects(encounter.request.effects?.success ?? kind?.outcomes.success, stakeIds).gains;
+  const signedPart = (
+    stake: StakeId,
+    value: number,
+    damage: number,
+    format: (v: number) => string,
+  ): EncounterResultPart => {
+    if (value > 0) return { stake, state: 'kept', text: `+${format(value)}` };
+    if (value < 0) return { stake, state: damage >= 100 ? 'lost' : 'partial', text: `−${format(-value)}` };
+    if (winnable[stake] && encounter.outcome !== 'success') return { stake, state: 'lost', text: 'nicht erbeutet' };
+    return { stake, state: 'kept', text: 'gehalten' };
+  };
+  for (const stake of encounter.stakes) {
+    const got = booked[stake.id];
+    switch (stake.id) {
+      case 'goods': {
+        if (encounter.request.skipEffects) {
+          const lost = encounter.outcome === 'failure';
+          parts.push({ stake: 'goods', state: lost ? 'lost' : 'kept', text: lost ? 'aufgeflogen' : 'sicher' });
+          break;
+        }
+        const value = (got?.goods ?? 0) - encounter.goodsDropped;
+        parts.push(signedPart('goods', value, stake.damage, (v) => formatAmount(v, goodsUnit())));
+        break;
+      }
+      case 'cash':
+        parts.push(signedPart('cash', got?.money ?? 0, stake.damage, (v) => formatEuro(v)));
+        break;
+      case 'spot':
+        parts.push(signedPart('spot', got?.influence ?? 0, stake.damage, (v) => `Einfluss ${v}`));
+        break;
+      case 'people': {
+        const hurt = [
+          ...(result.playerInjured ? ['du verletzt'] : []),
+          ...result.staffKilled.map((id) => `${nameOf(id)} tot`),
+          ...result.staffInjured.map((id) => `${nameOf(id)} verletzt`),
+          ...result.staffArrested.map((id) => `${nameOf(id)} in Haft`),
+        ];
+        const all = encounter.participants.length;
+        const out = encounter.participants.filter((p) => p.condition === 'down' || p.killed).length;
+        parts.push({
+          stake: 'people',
+          state: hurt.length === 0 ? 'kept' : all > 0 && out >= all ? 'lost' : 'partial',
+          text: hurt.length === 0 ? 'alle heil' : names(hurt),
+        });
+        break;
+      }
+      case 'noise': {
+        const heat = result.heat;
+        parts.push({
+          stake: 'noise',
+          state: heat <= 0 ? 'kept' : heat >= 15 ? 'lost' : 'partial',
+          text: heat <= 0 ? 'ruhig' : `Heat +${heat}`,
+        });
+        break;
+      }
+    }
+  }
+  return parts;
+}
+
 /** Konfrontation beenden. override ersetzt die Folgen (z.B. die Wege im Briefing wie Freikaufen). */
-function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome, override?: EncounterEffects): void {
+function finish(
+  ctx: Ctx,
+  encounter: Encounter,
+  outcome: EncounterOutcome,
+  override?: EncounterEffects,
+  ending: EncounterEnding = 'resolved',
+): void {
   const kind = getKind(encounter.kind);
   const state = ctx.state.modules.encounters;
   const player = encounter.participants.find((p) => p.isPlayer);
@@ -818,6 +1275,8 @@ function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome, overr
   encounter.outcome = outcome;
   encounter.resolvedAt = ctx.now;
   encounter.playerKilled = !!player?.killed;
+  const end = endDamage(encounter, outcome, ending);
+  const booked: Booked = {};
 
   const result: EncounterResult = {
     money: 0 - encounter.bribeSpent,
@@ -832,6 +1291,8 @@ function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome, overr
     reputation: 0,
     relation: 0,
     text: '',
+    ending,
+    ...(encounter.travelSpent ? { travel: encounter.travelSpent } : {}),
   };
   // Verletzungen gelten immer, auch wenn der Auslöser die übrigen Folgen selbst regelt.
   for (const p of encounter.participants) {
@@ -847,12 +1308,27 @@ function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome, overr
   const effects =
     override ??
     (encounter.request.skipEffects ? undefined : (encounter.request.effects?.[outcome] ?? kind?.outcomes[outcome]));
-  if (effects && !encounter.playerKilled) applyEffects(ctx, encounter, effects, result);
-  else if (!effects && !encounter.playerKilled && encounter.extraHeat > 0 && encounter.request.veedelId) {
-    // Der Auslöser regelt die Folgen selbst (skipEffects, z.B. die Verkehrskontrolle), der Heat aus den Handlungen
-    // ("Gewalt gegen Polizei") gilt trotzdem.
-    addHeat(ctx, encounter.request.veedelId, encounter.extraHeat);
-    result.heat += encounter.extraHeat;
+  if (!encounter.playerKilled) {
+    if (override) {
+      // Wege im Briefing (freikaufen, räumen …): alles gehört zu den Einsätzen, die es betrifft.
+      const before = { money: result.money, goods: result.goods, influence: result.influence };
+      applyEffects(ctx, encounter, override, result);
+      booked.cash = { money: result.money - before.money, goods: 0, influence: 0 };
+      booked.goods = { money: 0, goods: result.goods - before.goods, influence: 0 };
+      booked.spot = { money: 0, goods: 0, influence: result.influence - before.influence };
+    } else if (effects && kind) applyStakeEffects(ctx, encounter, kind, effects, end, result, booked);
+    // Die Polizei-Uhr ist abgelaufen: Wer nicht schnell genug weg ist, wird festgenommen (nicht bei der Polizei selbst,
+    // da regelt der Auslöser die Festnahme).
+    if (ending === 'clock' && (kind?.clockOutcome ?? 'retreat') !== 'failure') {
+      applyEffects(ctx, encounter, { arrestChance: CLOCK_ARREST_CHANCE }, result);
+      encounter.extraHeat += CLOCK_HEAT;
+    }
+    // Heat aus den Handlungen ("Gewalt gegen Polizei") und dem Lärm gilt immer, auch wenn der Auslöser die Folgen selbst
+    // regelt (skipEffects, z.B. die Verkehrskontrolle).
+    if (encounter.extraHeat > 0 && encounter.request.veedelId) {
+      addHeat(ctx, encounter.request.veedelId, encounter.extraHeat);
+      result.heat += encounter.extraHeat;
+    }
   }
 
   const vars = textVars(encounter);
@@ -861,6 +1337,11 @@ function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome, overr
     ? `${kind?.name ?? 'Konfrontation'} ${encounter.place}. ${lastWords}`
     : fillText(effects?.text ?? DEFAULT_TEXT[outcome], vars);
   result.text = describeResult(encounter, result, headline);
+  // Für die Anzeige: Schaden aus den Runden plus am Ende.
+  for (const stake of encounter.stakes) {
+    stake.damage = Math.min(stakeCap(encounter, stake.id), stake.damage + (end[stake.id] ?? 0));
+  }
+  result.parts = resultParts(encounter, kind, result, booked);
   encounter.result = result;
 
   const ref: { veedelId?: string; spotId?: string } = {};
@@ -884,4 +1365,86 @@ function finish(ctx: Ctx, encounter: Encounter, outcome: EncounterOutcome, overr
     ...(encounter.mode ? { mode: encounter.mode } : {}),
   });
   if (encounter.playerKilled) gameOutcome.gameOver(ctx, 'killed', headline);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Spezialzüge der Crew (crew.ts)
+
+/** Erlaubt der Anlass diesen Spezialzug? (bei Polizei und Zoll z.B. kein Fluchtwagen) */
+export function moveAllowed(kind: EncounterKind | undefined, move: SpecialMoveId): boolean {
+  return !kind?.moves || kind.moves.includes(move);
+}
+
+function moveUser(encounter: Encounter, move: SpecialMoveId): Participant | undefined {
+  if (!moveAllowed(getKind(encounter.kind), move)) return undefined;
+  return encounter.participants.find((p) => p.move === move && !p.moveUsed && p.condition !== 'down');
+}
+
+/** Sicherheit fängt den ersten Treffer ab (einmal pro Konfrontation). */
+function blockHit(encounter: Encounter): string | null {
+  const guard = moveUser(encounter, 'block');
+  if (!guard) return null;
+  guard.moveUsed = true;
+  return `${guard.name} fängt den Schlag ab.`;
+}
+
+/** Mit dem Fluchtwagen weg: nichts bleibt zurück. */
+function fledSafely(encounter: Encounter): boolean {
+  return encounter.participants.some((p) => p.move === 'getaway' && p.moveUsed);
+}
+
+/** Wie viel von einem Einsatz höchstens verloren gehen kann (Ware in Sicherheit gebracht: die Hälfte). */
+function stakeCap(encounter: Encounter, stake: StakeId): number {
+  if (stake === 'goods' && encounter.goodsCap !== undefined) return encounter.goodsCap;
+  return 100;
+}
+
+/** Spezialzüge, die gerade gehen (wer ihn hat, steht noch und hat ihn nicht genutzt; passive nicht). */
+export function availableMoves(encounter: Encounter): { participantId: string; move: SpecialMoveId }[] {
+  if (encounter.phase !== 'rounds') return [];
+  const kind = getKind(encounter.kind);
+  return encounter.participants.flatMap((p) => {
+    if (!p.move || p.moveUsed || p.condition === 'down' || SPECIAL_MOVES[p.move].passive) return [];
+    if (!moveAllowed(kind, p.move)) return [];
+    if (p.move === 'stash' && !encounter.stakes.some((x) => x.id === 'goods')) return [];
+    return [{ participantId: p.id, move: p.move }];
+  });
+}
+
+/** Spezialzug spielen (einmal pro Konfrontation). Kostet keine Runde, außer der Fluchtwagen beendet alles. */
+export function special(ctx: Ctx, encounterId: number, participantId: string): CommandResult {
+  const encounter = findActive(ctx, encounterId);
+  if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
+  const kind = getKind(encounter.kind);
+  const p = encounter.participants.find((x) => x.id === participantId);
+  if (!kind || !p?.move || !availableMoves(encounter).some((m) => m.participantId === participantId)) {
+    return { ok: false, reason: 'Das geht gerade nicht.' };
+  }
+  p.moveUsed = true;
+  const before: GaugeShift = { aggression: encounter.aggression, resolve: encounter.resolve };
+  const actionId = `special:${p.move}`;
+  switch (p.move) {
+    case 'getaway':
+      logRound(ctx, encounter, actionId, 1, [`${p.name} hat den Motor laufen lassen. Alle rein, weg.`], before);
+      finish(ctx, encounter, 'retreat', undefined, 'fled');
+      return { ok: true };
+    case 'stash':
+      // Was schon weg ist, bleibt weg: Die Grenze gilt ab jetzt.
+      encounter.goodsCap = Math.max(stakeDamage(encounter, 'goods'), STASH_CAP);
+      logRound(ctx, encounter, actionId, 1, [`${p.name} schafft die Hälfte der Ware durch den Hinterausgang.`], before);
+      return { ok: true };
+    case 'secondTalk': {
+      const talk = resolveAction(kind, 'negotiate') ?? ENCOUNTER_ACTIONS.negotiate;
+      // Mit dem Charisma dieser Person, ohne dass die Runde weiterläuft (keine Absicht, keine Uhr).
+      const solo: Encounter = { ...encounter, participants: [p] };
+      const strength = roundStrength(solo, talk, 'negotiate', rollDice(ctx));
+      applyShift(encounter, scaleShift(talk.shift, strength));
+      encounter.edge = edgeOf(encounter);
+      logRound(ctx, encounter, actionId, strength, [`${p.name} redet weiter, ruhig und bestimmt.`], before);
+      if (encounter.resolve < RETREAT_AT) finish(ctx, encounter, 'success', undefined, 'gaveUp');
+      return { ok: true };
+    }
+    default:
+      return { ok: false, reason: 'Das geht gerade nicht.' };
+  }
 }

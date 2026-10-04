@@ -185,8 +185,14 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
 - **Session-Länge:** In 20 Minuten (etwa 8 Spieltage bei 2x) kommen Verkauf, Nachschub, Personal, Leutnants,
   Gang-Drohungen, Konfrontationen, Polizei-Kontrollen, Wetter und das erste Veedel vor (`npm run playthrough`,
   Screenshots in `docs/integration/`).
+- **Konfrontationen neu (Auftrag 35):** Die Akte zeigt jede Runde, was die Gegenseite vorhat (Absicht), zwei Zeiger
+  (Aggression, Entschlossenheit), die Polizei-Uhr, was auf dem Spiel steht (Ware, Kasse, Leute, Spot, Lärm; einen pro
+  Runde schützen) und die Crew mit Spezialzügen; vor dem Tippen zeigt jede Handlung ihre Wirkung als Pfeile. Der Würfel
+  entscheidet nur die Stärke, das Ergebnis ist eine Mischung. Die Rechte Hand gibt Rat, die Zollkontrolle (Autobahn,
+  später Hafen) hat eigene Handlungen. Gute Entscheidungen machen messbar einen Unterschied (siehe `docs/architektur.md`,
+  Balancing).
 - **Noch nicht umgesetzt** (Aufträge 34 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Stammabnehmer, Gangs mit
-  Gedächtnis, Leute mit Geschichte, Capo, Konfrontationen neu, freie Reihenfolge der Städte mit Autobahn-Netz, Berlin,
+  Gedächtnis, Leute mit Geschichte, Capo, freie Reihenfolge der Städte mit Autobahn-Netz, Berlin,
   München, Frankfurt, Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen: Tarnfirmen,
   Charakter-Erstellung, Perks, Besitz, Akte, Korruption.
 

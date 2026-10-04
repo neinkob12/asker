@@ -108,7 +108,8 @@ function audit() {
     return true;
   };
 
-  const roots = [...document.querySelectorAll('.phone, .phone-notice')];
+  // Dazu die Akte einer Konfrontation (über der Karte bzw. als Blatt), Auftrag 35.
+  const roots = [...document.querySelectorAll('.phone, .phone-notice, .enc-overlay, .enc-sheet')];
   const issues = [];
   let textCount = 0;
   let unchecked = 0;

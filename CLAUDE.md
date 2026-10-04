@@ -29,6 +29,12 @@ Nach Auftrag 30: Zufahrten auch in Hamburg (`Supplier.via` pro Stadt, `supplierV
 Stadt (`CITIES` `view.pitch`/`bearing`), Verkehr in der aktiven Stadt, Deutschland-Ansicht (Marker der Stadt mit
 `addHtmlMarker({ near: true })` sind unter `FAR_ZOOM` aus, Wechsel beim Zoomen, A1 in Gold während einer Fahrt), Kneipen
 mit Bierglas, Kölner Lichter und Hafengeburtstag auf der Karte (`events/ui/map.ts`, Effekt `firework`).
+Auftrag 35 (Konfrontationen neu): Jede Runde zeigt die Absicht der Gegenseite (`encounters/intents.ts`), zwei Zeiger
+(Aggression ab 70 Schlägerei, Entschlossenheit unter 30 Abzug), die Polizei-Uhr und die Einsätze (einen pro Runde
+schützen, `result.parts`); Handlungen verschieben die Zeiger (`actions.ts`), der Würfel entscheidet nur die Stärke
+(`tactics.ts`). Crew bis zu drei mit Spezialzügen (`crew.ts`, Haken `specialMoves(member)`), Rat der Rechten Hand
+(`advice.ts`), Zollkontrolle `customsCheck` (`request.setting` 'autobahn'/'port'). Neue Anlässe, Absichten,
+Handlungen und Situationstexte sind reine Daten.
 Anrufe mit Stimme und Figuren mit Gesicht: Im Anruf spricht die Figur ihre Zeilen (`audio.speak`) mit dem Sprachmodell
 Piper im Browser (`src/audio/piper/`: Worker mit ONNX Runtime Web und espeak-ng als WebAssembly, Modelle „Thorsten“ und
 „Kerstin“ einmalig von Hugging Face in den Cache, Einstellungen › Ton zeigt und löscht sie; die Sprachausgabe des
