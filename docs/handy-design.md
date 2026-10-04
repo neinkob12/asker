@@ -410,7 +410,7 @@ alles außerhalb des Handys. Das Handy selbst bleibt, wie es ist; neu ist nur, w
   (`openPanel`), Gang (`gangs.gang`, neu statt des ganzen Tabs), Lager (`goods.warehouse`), Hafen (`openPhone`).
 - **Island bleibt die Quelle** für das Live-Geschehen (Razzia, Konfrontation, Lieferung; die Übernahme als kurzer
   Auftritt); die Karte zeigt dieselben Daten groß (Banner, Akte, Tracking-Karte, goldener Schein).
-- **Handy-Bildschirm:** oben nur Geld und Uhr, Spots ohne Plakette (Schild und Striche), Menü in der Kartensteuerung.
+- **Handy-Bildschirm:** oben nur Geld und Uhr, Spots ohne Plakette über der Blase (Ring und Zahl), Menü in der Kartensteuerung.
   Nichts liegt unter der echten Statusleiste oder dem Home-Balken (sichere Bereiche über `--top` und `--safe-*`).
 
 Geprüft: Kontrast-Test für alle neuen Tokens (Text auf Glas über der hellsten und dunkelsten Kartenfarbe 4,5:1, Zahl auf

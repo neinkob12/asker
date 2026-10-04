@@ -1,6 +1,6 @@
 // Leute an Spots (Auftrag 31), DOM-frei: Wer steht an welchem Spot (Läufer und Sicherheit aus staff, bis zu vier
 // wartende Kunden aus customers) und in welchen Veedeln geht eine Streife (Heat über CHECK_THRESHOLD). Nur lesen; die
-// Karte (people.ts) zeichnet daraus kleine Figuren. Versatz in Bildschirm-Einheiten um den Fuß des Spot-Schilds, damit
+// Karte (people.ts) zeichnet daraus kleine Figuren. Versatz in Bildschirm-Einheiten um den Fuß des Spot-Markers, damit
 // die Figuren auf jeder Zoomstufe nebeneinander stehen.
 
 import type { GameState, LngLat } from '../../../core';
@@ -29,8 +29,8 @@ export const MAX_CUSTOMERS_PER_SPOT = 4;
 export const MAX_STAFF_PER_SPOT = 3;
 
 /**
- * Plätze um den Fuß des Schilds: Personal links, Kundschaft rechts, alle etwas unterhalb des Fußes, damit Schild und
- * Striche darüber frei bleiben (Einheiten des Symbols, y nach unten).
+ * Plätze um den Fuß des Markers: Personal links, Kundschaft rechts, alle etwas unterhalb des Fußes, damit Blase und
+ * Plakette darüber frei bleiben (Einheiten des Symbols, y nach unten).
  */
 const STAFF_SLOTS: [number, number][] = [
   [-18, 18],

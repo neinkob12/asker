@@ -1,20 +1,30 @@
 /*
- * Spot-Marker im Look "Glas": Achteck-Schild an einem Mast mit Lichtkegel am Fuß, daneben eine Glas-Plakette.
- * Aufbau (Anker unten = Spot): Kegel und Punkt am Fuß, Mast 2 × 20 px, Schild 36 × 36 px darüber.
+ * Spot-Marker im Look "Glas": Bodenring mit Geduld-Countdown, darüber eine runde Blase mit der Zahl der Wartenden,
+ * daneben eine Glas-Plakette.
+ * Aufbau (Anker unten = Spot): Der Ring liegt flach auf der Straße (ein Kreis, in der Höhe gestaucht wie in der
+ * Kartenneigung), sein Bogen zeigt die Geduld des ungeduldigsten Kunden (--fill, 100 = frisch, 0 = geht gleich), darunter
+ * ein weicher Schein. Vom Fußpunkt führt ein kurzer Stiel zur Blase (26 px).
  * Zustände über data-urgency: idle, waiting, urgent, raid (Tokens --spot-*). Nur Tokens verwenden.
  */
+@property --fill {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 100;
+}
 .spot-marker {
-  --oct: polygon(29.3% 0, 70.7% 0, 100% 29.3%, 100% 70.7%, 70.7% 100%, 29.3% 100%, 0 70.7%, 0 29.3%);
   --state: var(--spot-idle);
   --state-on: var(--spot-idle-on);
   --state-glow: var(--spot-idle-glow);
   --state-edge: var(--spot-idle-edge);
-  --sign: 36px;
-  --mast: 20px;
+  --bubble: 26px;
+  --stem: 13px;
+  --ring: 72px;
+  --ring-width: 6px;
+  --ring-squash: 0.56;
   position: relative;
   display: block;
-  width: var(--sign);
-  height: calc(var(--sign) + var(--mast) + 3px);
+  width: 36px;
+  height: calc(var(--bubble) + var(--stem) + 5px);
   padding: 0;
   border: 0;
   background: none;
@@ -40,68 +50,92 @@
   --state-edge: var(--spot-raid-edge);
 }
 
-/* Lichtkegel und Fußpunkt am Spot */
-.spot-beam {
+/* Schein, Ring und Fußpunkt am Spot: Ring und Schein liegen mit der Mitte auf dem Spot */
+.spot-glow,
+.spot-ring,
+.spot-pulse {
   position: absolute;
   left: 50%;
-  bottom: -11px;
-  width: 60px;
-  height: 22px;
+  bottom: 0;
   border-radius: 50%;
-  background: radial-gradient(closest-side, var(--state-glow), transparent);
-  transform: translateX(-50%);
+  transform: translate(-50%, 50%) scaleY(var(--ring-squash));
   pointer-events: none;
+}
+.spot-glow {
+  width: calc(var(--ring) * 1.1);
+  height: calc(var(--ring) * 1.1);
+  background: radial-gradient(closest-side, var(--state-glow), transparent 96%);
+  opacity: 0.85;
+}
+/* Ring: Bogen in der Zustandsfarbe bis --fill Prozent, der Rest als blasse Spur */
+.spot-ring {
+  width: var(--ring);
+  height: var(--ring);
+  background: conic-gradient(from 0deg, var(--state-edge) 0 calc(var(--fill) * 1%), var(--spot-locked-edge) 0);
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - var(--ring-width) - 1px),
+    #000 calc(100% - var(--ring-width))
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - var(--ring-width) - 1px),
+    #000 calc(100% - var(--ring-width))
+  );
+  transition: --fill 0.6s linear;
 }
 .spot-foot {
   position: absolute;
   left: 50%;
-  bottom: -3px;
-  width: 6px;
-  height: 6px;
+  bottom: -4px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--state-edge);
   box-shadow: 0 0 0 2px var(--spot-locked);
   transform: translateX(-50%);
 }
-.spot-mast {
+.spot-stem {
   position: absolute;
   left: 50%;
-  bottom: 3px;
+  bottom: 4px;
   width: 2px;
-  height: var(--mast);
+  height: var(--stem);
   background: linear-gradient(to top, transparent, var(--state-edge));
   transform: translateX(-50%);
 }
 
-/* Schild: weißer Rand (außen), Füllung in der Zustandsfarbe (innen 32 px), Zahl der Wartenden */
+/* Blase: weißer Rand (außen), Füllung in der Zustandsfarbe (innen), Zahl der Wartenden */
 .spot-sign {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: var(--sign);
-  height: var(--sign);
+  left: 50%;
+  bottom: calc(var(--stem) + 4px);
+  width: var(--bubble);
+  height: var(--bubble);
+  margin-left: calc(var(--bubble) / -2);
   filter: var(--spot-shadow);
+  transform-origin: 50% 100%;
   transition: transform var(--duration) var(--ease-out);
 }
-.spot-oct {
+.spot-bubble {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  clip-path: var(--oct);
+  border-radius: 50%;
   background: var(--spot-ring);
 }
-.spot-oct::before {
+.spot-bubble::before {
   content: "";
   position: absolute;
   inset: 2px;
-  clip-path: var(--oct);
+  border-radius: 50%;
   background: var(--state);
 }
 .spot-badge {
   position: relative;
   font-family: var(--font-hud-display);
-  font-size: 19px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -110,7 +144,7 @@
 .spot-lock {
   display: none;
 }
-/* Kneipe: kleines Bierglas oben rechts am Schild (Look Glas) */
+/* Kneipe: kleines Bierglas oben rechts an der Blase (Look Glas) */
 .spot-kind {
   position: absolute;
   right: -6px;
@@ -136,51 +170,53 @@
 .spot-marker:focus-visible {
   outline: none;
 }
-.spot-marker:focus-visible .spot-oct,
-.spot-marker.selected .spot-oct {
+.spot-marker:focus-visible .spot-bubble,
+.spot-marker.selected .spot-bubble {
   background: var(--hud-gold);
 }
-/* Eigene Spots: gestrichelte Kante am Achteck */
-.spot-marker.is-custom .spot-oct {
+/* Eigene Spots: gestrichelte Kante an der Blase, goldener Fußpunkt */
+.spot-marker.is-custom .spot-bubble {
   background: repeating-conic-gradient(var(--spot-ring) 0deg 14deg, transparent 14deg 26deg);
 }
+.spot-marker.is-custom .spot-foot {
+  background: var(--hud-gold);
+}
 
-/* Pulsierender Ring bei dringend und Razzia */
+/* Pulsierender Ring am Boden bei dringend und Razzia */
 .spot-pulse {
-  position: absolute;
-  inset: 0;
-  clip-path: var(--oct);
-  background: var(--state-edge);
+  width: var(--ring);
+  height: var(--ring);
+  border: 2px solid var(--state-edge);
   opacity: 0;
 }
 .spot-marker[data-urgency="urgent"] .spot-pulse,
 .spot-marker[data-urgency="raid"] .spot-pulse {
-  animation: spot-pulse 1.2s var(--ease-out) infinite;
+  animation: spot-pulse 1.4s var(--ease-out) infinite;
 }
 @keyframes spot-pulse {
   0% {
-    opacity: 0.7;
-    transform: scale(1);
+    opacity: 0.8;
+    transform: translate(-50%, 50%) scaleY(var(--ring-squash)) scale(0.9);
   }
   100% {
     opacity: 0;
-    transform: scale(1.7);
+    transform: translate(-50%, 50%) scaleY(var(--ring-squash)) scale(1.45);
   }
 }
 
-/* Hinweis aus "Nächster Schritt": goldener Ring um das Schild statt um den ganzen Marker */
+/* Hinweis aus "Nächster Schritt": goldener Ring am Boden statt eines Rahmens um den ganzen Marker */
 .spot-marker.is-coach {
   animation: none;
 }
 .spot-marker.is-coach .spot-pulse {
-  background: var(--hud-gold);
+  border-color: var(--hud-gold);
   animation: spot-pulse 1.6s var(--ease-out) infinite;
 }
 
 /* Plakette: nur Symbole auf kleinem Glas, Kante in der Zustandsfarbe. Läufer (grün) / du (gold), Leutnant (blau). */
 .spot-plate {
   position: absolute;
-  top: calc(var(--sign) / 2 + var(--label-offset, 0px));
+  top: calc(var(--bubble) / 2 + 1px + var(--label-offset, 0px));
   display: flex;
   align-items: center;
   gap: 3px;
@@ -200,10 +236,10 @@
   display: none;
 }
 .spot-marker.is-right .spot-plate {
-  left: calc(var(--sign) + 6px);
+  left: calc(50% + var(--bubble) / 2 + 6px);
 }
 .spot-marker.is-left .spot-plate {
-  right: calc(var(--sign) + 6px);
+  right: calc(50% + var(--bubble) / 2 + 6px);
 }
 .spot-crew,
 .spot-boss {
@@ -231,22 +267,27 @@
   background: var(--cat-people-soft);
 }
 
-/* Gesperrt: kleines dunkles Achteck mit Schloss, ohne Plakette und ohne Kegel */
+/* Gesperrt: kleine dunkle Blase mit Schloss auf blassem Ring, ohne Plakette und ohne Schein */
 .spot-marker.is-locked {
-  --sign: 20px;
-  --mast: 12px;
+  --bubble: 20px;
+  --stem: 9px;
+  --ring: 44px;
+  --ring-width: 3px;
 }
-.spot-marker.is-locked .spot-oct {
+.spot-marker.is-locked .spot-bubble {
   background: var(--spot-locked-edge);
 }
-.spot-marker.is-locked .spot-oct::before {
+.spot-marker.is-locked .spot-bubble::before {
   inset: 1px;
   background: var(--spot-locked);
 }
 .spot-marker.is-locked .spot-badge,
 .spot-marker.is-locked .spot-plate,
-.spot-marker.is-locked .spot-beam {
+.spot-marker.is-locked .spot-glow {
   display: none;
+}
+.spot-marker.is-locked .spot-ring {
+  background: var(--spot-locked-edge);
 }
 .spot-marker.is-locked .spot-lock {
   display: block;
@@ -254,24 +295,27 @@
   font-size: 11px;
   color: var(--hud-ink-2);
 }
-.spot-marker.is-locked .spot-mast {
+.spot-marker.is-locked .spot-stem {
   background: linear-gradient(to top, transparent, var(--spot-locked-edge));
 }
 .spot-marker.is-locked .spot-foot {
+  width: 6px;
+  height: 6px;
+  bottom: -3px;
   background: var(--spot-locked-edge);
 }
 .shell-map.zoomed-out .spot-marker {
   display: none;
 }
 
-/* Hover-Karte (nur Maus): Glas über dem Schild */
+/* Hover-Karte (nur Maus): Glas über der Blase */
 .spot-hover {
   pointer-events: none;
   z-index: 3;
 }
 .spot-hover__card {
   width: 230px;
-  margin-bottom: 70px;
+  margin-bottom: 60px;
   padding: 14px 16px 12px;
   border-radius: var(--hud-radius-tile);
   background: var(--hud-glass-strong);
@@ -284,7 +328,7 @@
   animation: spot-hover-in var(--duration) var(--ease-out);
 }
 .spot-hover.is-locked .spot-hover__card {
-  margin-bottom: 44px;
+  margin-bottom: 40px;
 }
 .spot-hover__title {
   font-family: var(--font-hud-display);
@@ -331,20 +375,29 @@
   }
 }
 
-/* Handy-Bildschirm: keine Plakette, nur ein etwas kleineres Schild und die Striche direkt darunter */
+/* Handy-Bildschirm: Blase und Ring etwas kleiner, die Plakette sitzt über der Blase statt daneben */
 @media (max-width: 760px) {
   .spot-marker {
-    --sign: 28px;
-    --mast: 14px;
+    --bubble: 24px;
+    --stem: 12px;
+    --ring: 64px;
+    --ring-width: 5px;
+  }
+  .spot-marker.is-locked {
+    --bubble: 18px;
+    --stem: 8px;
+    --ring: 40px;
+    --ring-width: 3px;
   }
   .spot-badge {
     font-size: 15px;
   }
-  .spot-plate {
-    top: calc(var(--sign) + 1px);
-    left: 50% !important;
-    right: auto !important;
-    transform: translateX(-50%);
+  .spot-marker.is-right .spot-plate,
+  .spot-marker.is-left .spot-plate {
+    top: -3px;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -100%);
   }
 }
 
@@ -354,6 +407,9 @@
   .spot-marker[data-urgency="urgent"] .spot-pulse,
   .spot-marker[data-urgency="raid"] .spot-pulse {
     animation: none;
+  }
+  .spot-ring {
+    transition: none;
   }
   .spot-hover__card {
     animation: none;

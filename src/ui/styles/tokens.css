@@ -299,9 +299,9 @@
   --map-vignette: radial-gradient(ellipse 60% 70% at 36% 50%, transparent 40%, rgba(0, 0, 0, 0.55));
 
   /*
-   * Spot-Zustände (Achteck-Schild): Füllung, Zahl darauf (4.5:1) und Lichtkegel am Boden.
+   * Spot-Zustände (Bodenring mit Zahlen-Blase): Füllung der Blase, Zahl darauf (4.5:1) sowie Schein und Ring am Boden.
    * Abweichung vom Entwurf: Rot (#ff453a) und Blau (#2f7bff) schaffen mit weißer Zahl nur 3.4:1 bzw. 3.9:1, die
-   * Füllungen sind deshalb eine Spur dunkler; Lichtkegel, Ringe und Kanten behalten die hellen Töne (--spot-*-glow).
+   * Füllungen sind deshalb eine Spur dunkler; Schein, Ringe und Kanten behalten die hellen Töne (--spot-*-glow).
    */
   --spot-idle: rgba(24, 26, 31, 0.92);
   --spot-idle-on: #ffffff;

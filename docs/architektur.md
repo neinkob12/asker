@@ -316,11 +316,11 @@ Details und Beispiele: [`src/map/README.md`](../src/map/README.md).
   den Stadtrand und dann über echte Straßen ins Ziel-Lager, Hafenware als Schiff über den Rhein an den Liegeplatz im
   Niehler Hafen), `logistics.trips` (Hafen-Marker, Abholfahrten und Umlagern über echte Straßen, Blaulicht bei einer
   Kontrolle), `goods.warehouses` (alle eigenen Lager), `gangs.markers` (Hauptquartiere, Vorstöße),
-  `customers.deliveries` (Kurier/Auto vom nächsten Lager über die Straßen zum Kunden), `spots.markers` (Achteck-Schilder
-  mit Lichtkegel und Plakette, leise Hotspots, Hover-Karte), `police.raidArea` (Veedel nach einer Razzia rot),
+  `customers.deliveries` (Kurier/Auto vom nächsten Lager über die Straßen zum Kunden), `spots.markers` (Bodenringe mit
+  Geduld-Countdown, Zahlen-Blase und Plakette, leise Hotspots, Hover-Karte), `police.raidArea` (Veedel nach einer Razzia rot),
   `territory.takeover` (übernommenes Veedel leuchtet gold), `logistics.routes` (Strecke laufender Fahrten), `weather.sky`,
   `roads.traffic` (Verkehr als Kulisse im Netz der aktiven Stadt, Auftrag 31), `spots.people` (Läufer, Sicherheit,
-  wartende Kunden und Streife als kleine Figuren an den Spots, Kneipen mit Bierglas am Schild, Auftrag 31),
+  wartende Kunden und Streife als kleine Figuren an den Spots, Kneipen mit Bierglas an der Blase, Auftrag 31),
   `city.cards` (Glas-Karten der Städte in der Deutschland-Ansicht, Wechsel der Ansicht beim Zoomen), `city.autobahn`
   (A1 in Gold, solange eine Fahrt darauf läuft), `city.travel` (dein Auto auf der A1), `events.map` (Feuerwerk bei den
   Kölner Lichtern, Schiffe zum Hafengeburtstag).

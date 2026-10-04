@@ -17,12 +17,14 @@ Für die Karte selbst heißt das:
 - **Kamera neben dem Handy:** `GameMap` setzt rechts ein Padding in Handybreite (am Desktop, solange das Handy offen
   ist) und gleitet beim Ein- und Ausklappen mit; `flyTo`, `flyToKoeln` und der Start zentrieren so auf die freie
   Fläche. Der Blick auf Köln geht auf `KOELN_VIEW` (etwas westlich der Mitte, dort liegen die meisten Spots).
-- **Marker:** Spots als Achteck-Schild am Mast mit Lichtkegel und Glas-Plakette (`spots/ui`), Orte (Lager, Hafen,
+- **Marker:** Spots als Bodenring mit Geduld-Countdown, Zahlen-Blase an einem Stiel und Glas-Plakette (`spots/ui`), Orte (Lager, Hafen,
   Lieferanten) als runde Kachel mit Verlauf und Glas-Pille (`.map-place`, Verlauf über `--map-place-a/-b` im Modul),
   Gang-Hauptquartiere als Kachel in Gang-Farbe mit Schein. Fahrzeug-Etiketten und Namen beim Überfahren sind Glas.
 - **Geld-Popup** (`mapEffects.money`) ist eine grüne Pille mit dunkler Schrift (Verlust rot), steigt 40 px.
 - **Hotspots** bleiben, aber leiser (die Spots skalieren ihre Stärke mit 0,45): Den Zustand eines Spots zeigt jetzt der
-  Lichtkegel am Schild; die Blobs zeigen nur noch Nachfrage und Verkäufe, die man am Schild nicht sieht.
+  Ring; die Blobs zeigen nur noch Nachfrage und Verkäufe, die man am Marker nicht sieht.
+  **Spot-Ring:** Farbe = Zustand (ruhig, Kunden warten, dringend, Razzia), Bogen = Geduld des ungeduldigsten Kunden
+  (`patienceFill` in `spots/ui/ringModel.ts`, in 5-%-Schritten als `--fill`, bei Razzia und ohne Wartende voll).
 - **Strecken** laufender Fahrten gestrichelt: Schiff in der Farbe der Ware, Lkw und Transporter gold
   (`suppliers.routes`, `logistics.routes`); die letzten Meter zu Fuß gepunktet (`addFootpath`).
 - **Ereignisse auf der Karte:** Nach einer Razzia wird das Veedel rot getönt (`police.raidArea`), nach einer Übernahme
@@ -163,7 +165,7 @@ hotspots.remove();
 
 Weicher Farb-Blob (MapLibre-Heatmap), der langsam pulsiert (nur die Stärke, 6 Bilder pro Sekunde im gemeinsamen Takt;
 bei Pause, verstecktem Tab und "Bewegung reduzieren" still; seit dem Look „Glas“ von den Spots deutlich leiser
-gefüttert, den Zustand zeigt der Lichtkegel am Schild): Gelb über Orange und Pink bis Lila, nachts kräftiger. Die
+gefüttert, den Zustand zeigt der Ring am Boden): Gelb über Orange und Pink bis Lila, nachts kräftiger. Die
 Spots füttern ihn aus wartenden Kunden, Verkäufen (klingen 90 Spielminuten nach) und der aktuellen Nachfrage
 (`spotDemand` aus `customers`).
 
@@ -214,12 +216,12 @@ Knoten im Ausschnitt plus Rand, fahren als Zufallsweg über die Kanten (geradeau
 
 ## Leute an Spots (Auftrag 31)
 
-Layer `spots.people` (`spots/ui/people.ts`, Planung in `peopleModel.ts`): kleine Figuren am Fuß der Spot-Schilder.
+Layer `spots.people` (`spots/ui/people.ts`, Planung in `peopleModel.ts`): kleine Figuren im Ring der Spots.
 Läufer und Sicherheit in `--cat-people`, bis zu vier wartende Kunden in `--cat-goods` (gehen beim Kauf, das Geld-Popup
 kommt wie bisher), dazu eine Streife in `--cat-law`, die in Veedeln mit Heat über `CHECK_THRESHOLD` über die Straßen von
 Spot zu Spot geht. Symbol-Ebene mit der SDF-Figur aus `figure.ts` (`ensureFigureImage`, Farbe über `icon-color`,
 Rand über `icon-halo`), keine HTML-Marker. Versatz in Bildschirm-Einheiten (`icon-offset`), Personal links und Kunden
-rechts unterhalb von Schild und Strichen, damit auch am Handy nichts verdeckt wird. Nur im Ausschnitt, unter Zoom 14
+rechts unterhalb von Blase und Plakette, damit auch am Handy nichts verdeckt wird. Nur im Ausschnitt, unter Zoom 14
 unsichtbar, höchstens 60 Figuren. Antippen öffnet das Spot-Blatt.
 
 **Symbol-Ebenen sparsam füttern:** Jedes `setData` einer Symbol-Ebene lässt MapLibre die Symbole neu einsortieren und
