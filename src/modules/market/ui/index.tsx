@@ -2,9 +2,11 @@
 // ein kurzer Markt-Abschnitt auf der Lager-Seite.
 
 import { useState } from 'preact/hooks';
-import { formatEuro, formatNumber, type GameState } from '../../../core';
+import { formatEuro, formatNumber, type GameState, MINUTES_PER_DAY } from '../../../core';
 import {
   Button,
+  Chips,
+  Disclosure,
   Group,
   ItemContent,
   List,
@@ -18,13 +20,16 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity } from '../../city';
+import { activeCity, cityOfSpot } from '../../city';
+import { getMarketEventDef, marketEvents, marketEventText } from '../../events';
 import { allProducts, getProduct, productName, stockSummary } from '../../goods';
 import { allVeedel, veedelName } from '../../veedel';
 import {
   getCompetitionFactor,
   getSpotPrice,
   hasOwnPrice,
+  indexTrend,
+  priceIndex,
   priceRatio,
   referencePrice,
   spotReferencePrice,
@@ -95,6 +100,7 @@ function SpotPrices(props: { spotId: string }) {
           const own = hasOwnPrice(state, props.spotId, p.id);
           const reference = spotReferencePrice(state, props.spotId, p.id);
           const loss = price < cost;
+          const trend = indexTrend(state, p.id, cityOfSpot(state, props.spotId));
           return (
             <ListItem
               key={p.id}
@@ -111,6 +117,12 @@ function SpotPrices(props: { spotId: string }) {
                 tags={[
                   { label: `Richtpreis ${formatNumber(reference, 1)} €`, icon: 'chart', color: 'money' },
                   cost > 0 && { label: `Einkauf ${formatNumber(cost, 1)} €`, icon: 'cart', color: 'goods' },
+                  trend && {
+                    label: trend.label,
+                    icon: trend.up ? 'trendUp' : 'trendDown',
+                    color: trend.up ? 'money' : 'danger',
+                    title: 'Bewegung des Markts in der Stadt (Preisindex)',
+                  },
                 ]}
               >
                 <Stepper
@@ -159,6 +171,7 @@ function MarketOverview(props: { productId?: string }) {
   const prices = rows.map((r) => r.price);
   return (
     <div class="mkt-overview">
+      <IndexGroup />
       <Group title="Produkt" icon="leaf" color="goods">
         <Select
           label="Produkt"
@@ -226,14 +239,92 @@ function hotSpots(state: GameState): { productId: string; veedelId: string; fact
   return result.sort((a, b) => b.factor - a.factor).slice(0, 3);
 }
 
-/** Auf der Lager-Seite: wo etwas besonders gefragt ist, und der Weg zur Markt-Übersicht. */
+/** Laufende Marktereignisse der aktiven Stadt als Zeilen (Name, Ware, Ende). */
+function MarketEventRows() {
+  const { state } = useGame();
+  const runs = marketEvents(state, activeCity(state));
+  return (
+    <>
+      {runs.map((run) => {
+        const def = getMarketEventDef(run.eventId);
+        const days = Math.max(1, Math.ceil((run.endsAt - state.time) / MINUTES_PER_DAY));
+        return (
+          <ListItem key={run.id} value={days === 1 ? 'noch 1 Tag' : `noch ${days} Tage`}>
+            <ItemContent
+              icon={def?.icon ?? 'chart'}
+              color={run.factor > 1 ? 'money' : 'danger'}
+              title={def?.name ?? 'Marktereignis'}
+              tags={[
+                {
+                  label: `${productName(run.productId)} ${run.factor > 1 ? '↑' : '↓'} ${Math.round(Math.abs(run.factor - 1) * 100)} %`,
+                  icon: run.factor > 1 ? 'trendUp' : 'trendDown',
+                  color: run.factor > 1 ? 'money' : 'danger',
+                },
+              ]}
+            >
+              <Disclosure>{marketEventText(run)}</Disclosure>
+            </ItemContent>
+          </ListItem>
+        );
+      })}
+    </>
+  );
+}
+
+/** Preisindex der aktiven Stadt: alle Waren, stärkste Bewegung zuerst. */
+function IndexGroup() {
+  const { state } = useGame();
+  const cityId = activeCity(state);
+  const rows = allProducts()
+    .map((p) => ({ product: p, index: priceIndex(state, p.id, cityId) }))
+    .sort((a, b) => Math.abs(b.index - 1) - Math.abs(a.index - 1));
+  return (
+    <Group
+      title="Preisindex"
+      icon="chart"
+      color="money"
+      note="Wie teuer die Ware gerade in der ganzen Stadt ist (1,00 = normal)."
+      more="Der Index wandert jeden Tag ein Stück und zieht von selbst zurück zur Mitte, zwischen 0,85 und 1,20. Marktereignisse schieben ihn ein paar Tage an. Richtpreise auf der Straße folgen ihm ganz, der Einkauf bei den Lieferanten zur Hälfte."
+    >
+      <List>
+        <MarketEventRows />
+        {rows.map(({ product, index }) => (
+          <ListItem key={product.id} value={formatNumber(index, 2)}>
+            <ItemContent
+              icon={index > 1.02 ? 'trendUp' : index < 0.98 ? 'trendDown' : 'minus'}
+              color={index > 1.02 ? 'money' : index < 0.98 ? 'danger' : 'system'}
+              title={product.name}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Group>
+  );
+}
+
+/** Auf der Lager-Seite: Marktlage, wo etwas besonders gefragt ist, und der Weg zur Markt-Übersicht. */
 function MarketSection() {
   const { state } = useGame();
   const ui = useUi();
   const hot = hotSpots(state);
+  const movers = allProducts()
+    .map((p) => indexTrend(state, p.id))
+    .filter((t) => t !== null)
+    .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
+    .slice(0, 3);
   return (
     <Group title="Markt" icon="chart" color="money" note="Preise stellst du am Spot ein.">
+      {movers.length > 0 && (
+        <Chips
+          items={movers.map((t) => ({
+            label: t.label,
+            icon: t.up ? 'trendUp' : 'trendDown',
+            color: t.up ? ('money' as const) : ('danger' as const),
+          }))}
+        />
+      )}
       <List>
+        <MarketEventRows />
         {hot.map((h) => (
           <ListItem
             key={`${h.veedelId}:${h.productId}`}

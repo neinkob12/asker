@@ -20,3 +20,24 @@ export const PRESSURE_DECAY = 0.9;
 /** Eigene Preise: Schrittweite in Euro und Obergrenze als Vielfaches des Grundpreises. */
 export const PRICE_STEP = 0.5;
 export const MAX_PRICE_FACTOR = 5;
+
+// ---------------------------------------------------------------------------------------------
+// Preisindex pro Stadt und Produkt (Auftrag 32): mild, langsam, mit Rückkehr zur Mitte.
+
+/** Grenzen des Index (1 = normal). Marktereignisse wirken innerhalb dieser Grenzen. */
+export const INDEX_MIN = 0.85;
+export const INDEX_MAX = 1.2;
+/** Pro Tag zieht der Index diesen Anteil seines Abstands zurück zur 1. */
+export const INDEX_REVERSION = 0.15;
+/** Größter Zufallsschritt pro Tag (gleichverteilt zwischen −STEP und +STEP). */
+export const INDEX_STEP = 0.04;
+/** Wie stark der Index den Einkauf trifft (0,5 = halbe Ausschläge, damit die Marge nicht kippt). */
+export const PURCHASE_INDEX_SHARE = 0.5;
+/** Ab dieser Abweichung zeigt die Oberfläche einen Chip ("Gras ↑ 8 %"). */
+export const INDEX_CHIP_FROM = 0.05;
+
+/** Marktbericht per Handy: Wochentag (0 = Montag) und Stunde. */
+export const REPORT_WEEKDAY = 0;
+export const REPORT_HOUR = 9;
+/** Ab dieser Abweichung nennt der Bericht eine Ware. */
+export const REPORT_MIN_CHANGE = 0.03;

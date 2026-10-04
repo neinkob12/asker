@@ -53,8 +53,11 @@
   display: flex;
   flex-direction: column;
 }
-.sup-pkg span {
+.sup-pkg__price {
   color: var(--color-muted);
+}
+.sup-pkg .ui-chips {
+  margin-top: var(--space-1);
 }
 .sup-pkg s {
   opacity: 0.6;

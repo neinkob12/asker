@@ -10,6 +10,10 @@
 // Gehören ihm alle Veedel einer Stadt und erfüllt die Rechte Hand alles, erteilt er ihr die Vollmacht und zieht in die
 // nächste freie Stadt (city.travel). In einer neuen Stadt kauft er zuerst ein Lager (sauberes Geld, notfalls gewaschen).
 //
+// Markt und Verträge (Auftrag 32): Jeden Montag nimmt er den Wochenvertrag mit der höchsten Belohnung, den er schaffen
+// kann (Vorlagen, die zu seinem Spiel passen, Umsatzziele nur bis zu seinem Umsatz der letzten Woche), und bei einer
+// Rabatt-Aktion kauft er das Paket einmal, wenn das Geld über der Reserve reicht und das Lager nicht voll ist.
+//
 // Liegt außerhalb von src/modules, weil er alle Module zusammen benutzt (wie ein Spieler).
 
 import { type Command, type GameState, messages, type Simulation } from '../core';
@@ -23,6 +27,7 @@ import {
   requestCity,
   suggestedCrew,
 } from '../modules/encounters';
+import { periodReport } from '../modules/finance';
 import { ceasefireCost, getGangs, tributeAmount } from '../modules/gangs';
 import { getStock, getWarehouses, warehouseSites } from '../modules/goods';
 import {
@@ -37,6 +42,7 @@ import {
 } from '../modules/hierarchy';
 import { amountInProgress, launderingCapacity } from '../modules/laundering';
 import { berthCost, cargoAmount, freeDrivers, getCargo, hasBerth, inTransitAmount, PORTS } from '../modules/logistics';
+import { activeContract, contractOffers, contractValue } from '../modules/quests';
 import { getCandidates } from '../modules/recruiting';
 import { canFoundSpotAt, getSpots, lockedSpots, spotCity } from '../modules/spots';
 import { bailCost, getStaff, runnerHireCost, securityAt } from '../modules/staff';
@@ -44,6 +50,7 @@ import {
   availableCredit,
   availablePackages,
   canUnlock,
+  getDeals,
   getRelation,
   getSuppliers,
   isUnlocked,
@@ -87,6 +94,8 @@ export interface BotStats {
   commands: number;
   failed: number;
   byType: Record<string, number>;
+  /** Rabatt-Aktionen, bei denen er schon gekauft hat (Auftrag 32). */
+  deals?: number[];
 }
 
 function money(state: GameState): number {
@@ -189,6 +198,56 @@ function restock(sim: Simulation, stats: BotStats): void {
     if (!pkg) continue;
     const payload = { supplierId: supplier.id, packageId: pkg.id, onCredit: true };
     if (run(sim, stats, { type: 'suppliers.order', payload })) return;
+  }
+}
+
+/** Vorlagen, die der Bot mit seinem Spiel schafft (er liefert nicht selbst, macht keinen Großhandel). */
+const BOT_CONTRACTS = new Set([
+  'revenue',
+  'product',
+  'stock',
+  'night',
+  'hold',
+  'expand',
+  'regulars',
+  'hire',
+  'spots',
+  'quiet',
+]);
+
+/** Montags: den Vertrag mit der höchsten Belohnung nehmen, den er schaffen kann. */
+function takeContract(sim: Simulation, stats: BotStats): void {
+  const state = sim.state;
+  if (activeContract(state)) return;
+  // Umsatz der letzten sieben Tage (Kasse) als Maß, was in einer Woche geht.
+  const week = periodReport(state, 7).income;
+  const feasible = contractOffers(state).filter(
+    (o) =>
+      BOT_CONTRACTS.has(o.templateId) &&
+      (o.templateId !== 'revenue' || o.target <= week * 0.9) &&
+      (o.templateId !== 'product' || (o.productId !== undefined && o.productId in PRODUCT_MIX)),
+  );
+  const best = [...feasible].sort((a, b) => contractValue(b) - contractValue(a))[0];
+  if (best) run(sim, stats, { type: 'quests.acceptContract', payload: { offerId: best.id } });
+}
+
+/** Rabatt-Aktion: einmal pro Aktion zugreifen, wenn Geld und Platz da sind und die Ware zum Mix passt. */
+function buyDeals(sim: Simulation, stats: BotStats): void {
+  const state = sim.state;
+  const city = activeCity(state);
+  stats.deals ??= [];
+  const bought = stats.deals;
+  for (const deal of getDeals(state, city)) {
+    if (bought.includes(deal.id)) continue;
+    const pkg = availablePackages(state, deal.supplierId).find((p) => p.id === deal.packageId);
+    if (!pkg || !(pkg.productId in PRODUCT_MIX)) continue;
+    const supplier = getSuppliers(state, city).find((x) => x.id === deal.supplierId);
+    if (supplier?.kind === 'port' && freeDrivers(state).length === 0) continue;
+    const price = packagePrice(state, deal.supplierId, deal.packageId);
+    if (price > money(state) - reserve(state) * 2) continue;
+    if (getStock(state, { cityId: city }) > 1500) continue;
+    bought.push(deal.id);
+    run(sim, stats, { type: 'suppliers.order', payload: { supplierId: deal.supplierId, packageId: deal.packageId } });
   }
 }
 
@@ -561,11 +620,13 @@ export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = 
     return;
   }
   handleEncounters(sim, stats);
+  takeContract(sim, stats);
   answerMessages(sim, stats, options);
   sellPersonally(sim, stats, options);
   repay(sim, stats);
   unlockSuppliers(sim, stats);
   if (options.expand !== false) harbor(sim, stats);
+  buyDeals(sim, stats);
   restock(sim, stats);
   grow(sim, stats, options);
 }
@@ -580,7 +641,7 @@ export function playFor(sim: Simulation, minutes: number, stats: BotStats, optio
 }
 
 export function newBotStats(): BotStats {
-  return { commands: 0, failed: 0, byType: {} };
+  return { commands: 0, failed: 0, byType: {}, deals: [] };
 }
 
 /** Kurzbericht eines Spielstands. */

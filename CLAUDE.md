@@ -49,6 +49,11 @@ Kopfbedeckung und Oberteil (Fade, Cornrows, Dreads, Cap nach hinten, Durag, Band
 Daunen-, Leder-, Bomberjacke …) auch Kopfform, Brauen, Augen, Mund, Narbe, Veilchen, Tattoo, Goldzahn/Grill, Zigarette,
 Ohrringe, Kette und Maske; jedes Merkmal würfelt fest aus Seed und Merkmalsname (`roll`), gewichtet nach Alter,
 Geschlecht und einem Straßen-Faktor. Das alte Feld `extra` bleibt als Eingabe gültig, `lookTraits` beschreibt alles.
+Auftrag 32 (Markt und Verträge): Preisindex pro Ware und Stadt (`market.priceIndex`, Richtpreis ganz, Einkauf über
+`purchaseIndex` zur Hälfte), Rabatt-Aktionen (`suppliers.getDeals`), Marktereignisse ohne Gebiet (`events.marketEvents`),
+Marktbericht montags, Bestellregel mit `maxIndex`, Qualität treibt Nachfrage am Spot (`customers/quality.ts`),
+Wochenverträge (`quests/contracts.ts`, Befehl `quests.acceptContract`, Belohnung `trust`). Neue Zufallswürfe ändern die
+Würfelfolge eines Moduls: Szenario-Tests mit festem Seed können dann kippen (Autopilot läuft deshalb mit Seed 12).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

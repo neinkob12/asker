@@ -444,7 +444,7 @@ describe('suppliers', () => {
     expect(isUnlocked(loaded.state, 'rotterdam')).toBe(true);
     expect(isUnlocked(loaded.state, 'amsterdam')).toBe(false);
     expect(loaded.state.modules.suppliers.offered).toContain('koeln');
-    expect(loaded.state.moduleVersions.suppliers).toBe(4);
+    expect(loaded.state.moduleVersions.suppliers).toBe(5);
   });
 });
 

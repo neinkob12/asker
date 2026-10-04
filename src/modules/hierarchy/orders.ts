@@ -8,6 +8,7 @@ import { type Actor, type CommandResult, type Ctx, formatEuro, type GameState } 
 import { getSalesStats } from '../customers';
 import { getProduct, getStock, getWarehouse, productName, warehouseCity } from '../goods';
 import { getCargo, getTrips } from '../logistics';
+import { priceIndex } from '../market';
 import { getStaff } from '../staff';
 import {
   availablePackages,
@@ -53,6 +54,13 @@ export function checkOrderRule(state: GameState, rule: OrderRule, cityId?: strin
     if (rule.productId && pkg.productId !== rule.productId)
       return { ok: false, reason: 'Das Paket passt nicht zur Ware.' };
   }
+  if (
+    rule.maxIndex !== undefined &&
+    rule.maxIndex !== null &&
+    (!Number.isFinite(rule.maxIndex) || rule.maxIndex < 0.5 || rule.maxIndex > 2)
+  ) {
+    return { ok: false, reason: 'Ungültige Preisgrenze.' };
+  }
   if (rule.warehouseId && !getWarehouse(state, rule.warehouseId)) return { ok: false, reason: 'Unbekanntes Lager.' };
   if (rule.warehouseId && cityId && warehouseCity(rule.warehouseId) !== cityId) {
     return { ok: false, reason: 'Das Lager liegt in einer anderen Stadt.' };
@@ -87,6 +95,7 @@ export function normalizeOrderRules(
       warehouseId: r.warehouseId ?? null,
       paused: null,
     };
+    if (r.maxIndex !== undefined && r.maxIndex !== null) rule.maxIndex = r.maxIndex;
     if (rules.some((x) => x.id === rule.id)) rule.id = nextRuleId(rules);
     const check = checkOrderRule(state, rule, cityId);
     if (!check.ok) return check;
@@ -137,7 +146,8 @@ export function orderRuleLabel(state: GameState, rule: OrderRule): string {
   const pkg = rule.packageId
     ? (getSupplier(state, rule.supplierId ?? '')?.packages.find((p) => p.id === rule.packageId)?.label ?? 'Paket')
     : 'passend';
-  return `${what} · ${who} · ${pkg} · unter ${rule.minStock}`;
+  const index = rule.maxIndex ? ` · Index unter ${rule.maxIndex.toFixed(2).replace('.', ',')}` : '';
+  return `${what} · ${who} · ${pkg} · unter ${rule.minStock}${index}`;
 }
 
 export type OrderPlan =
@@ -189,12 +199,18 @@ export function planOrder(
       (s) => isUnlocked(state, s.id) && !isBlocked(state, s.id) && (s.kind !== 'port' || isPortSupplierAllowed(state)),
     );
   }
-  const offers = suppliers.flatMap((supplier) =>
+  const all = suppliers.flatMap((supplier) =>
     availablePackages(state, supplier.id, city)
       .filter((pkg) => !rule.productId || pkg.productId === rule.productId)
       .filter((pkg) => !rule.packageId || pkg.id === rule.packageId)
       .map((pkg) => ({ supplier, pkg, price: packagePrice(state, supplier.id, pkg.id, city) })),
   );
+  // Preisgrenze (Auftrag 32): Ware, deren Index zu hoch steht, wartet, bis der Markt nachgibt.
+  const maxIndex = rule.maxIndex ?? null;
+  const offers = maxIndex === null ? all : all.filter((o) => priceIndex(state, o.pkg.productId, city) < maxIndex);
+  if (all.length > 0 && offers.length === 0) {
+    return { kind: 'pause', reason: 'Der Markt steht zu hoch, er wartet auf einen besseren Preis.' };
+  }
   if (offers.length === 0) {
     if (rule.packageId) return { kind: 'pause', reason: 'Das Paket gibt es gerade nicht.' };
     if (rule.supplierId) return { kind: 'pause', reason: 'Der Lieferant hat die Ware gerade nicht.' };
