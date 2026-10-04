@@ -176,6 +176,11 @@ Welle 4   40 Verkauf und Hafen ──► 41 Schiffe und Europa ──► 42 Prod
 | [41](41-schiffe-europa.md) | Schiffe, Container, weitere Häfen, Europa-Kunden | 4 | `trade`, `logistics`, `fleet`, Seewege in `roads` |
 | [42](42-produktion.md) | Fincas, Produktionskette, Ziel Europa | 4 | neu `grow` |
 
+**Stand Auftrag 35:** umgesetzt in sechs Etappen (PR #57). Konfrontationen mit sichtbarer Absicht, zwei Zeigern
+(Aggression, Entschlossenheit), Polizei-Uhr, Einsätzen mit Schutz und Teil-Ergebnissen, Gegnern mit Rollen, Crew mit
+Spezialzügen (Haken `specialMoves(member)` für Auftrag 34), Rat der Rechten Hand und Zollkontrolle als eigener Anlass
+(`customsCheck`, Autobahn und Hafen). Messung in `docs/architektur.md`, Abschnitt „Balancing“.
+
 `src/core/`, `scripts/`, `package.json` und die Doku-Dateien gehören in den Wellen niemandem fest: nur erweitern, beim
 Mergen beide Seiten behalten. `CLAUDE.md`, `docs/architektur.md` und `docs/konzept.md` ergänzt jede Session in ihrem
 eigenen Abschnitt.

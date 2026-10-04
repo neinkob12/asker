@@ -503,16 +503,26 @@ function huntThieves(ctx: Ctx, incident: GangIncident): CommandResult {
   return { ok: true };
 }
 
-/** Ergebnis der Suche nach den Tätern: Erfolg bringt einen Teil der Ware zurück. */
-export function onRecoverResolved(ctx: Ctx, incidentId: number, outcome: string): void {
+/**
+ * Ergebnis der Suche nach den Tätern: Das Teil-Ergebnis für das Diebesgut entscheidet (Auftrag 35: gehalten = alles,
+ * teilweise = die Hälfte, weg = nichts). Ohne Teil-Ergebnis zählt der Ausgang.
+ */
+export function onRecoverResolved(
+  ctx: Ctx,
+  incidentId: number,
+  outcome: string,
+  parts?: readonly { stake: string; state: 'kept' | 'partial' | 'lost' }[],
+): void {
   const incident = ctx.state.modules.gangs.incidents.find((i) => i.id === incidentId);
   if (!incident) return;
   removeIncident(ctx, incident.id);
-  if (outcome !== 'success' || !incident.productId || !incident.amount) {
+  const part = parts?.find((p) => p.stake === 'goods');
+  const share = part ? { kept: 1, partial: 0.5, lost: 0 }[part.state] : outcome === 'success' ? 1 : 0;
+  const amount = Math.round((incident.amount ?? 0) * RECOVER_SHARE * share);
+  if (amount <= 0 || !incident.productId) {
     journal.add(ctx, 'Die Suche nach den Dieben war umsonst. Die Ware bleibt weg.', 'bad');
     return;
   }
-  const amount = Math.round(incident.amount * RECOVER_SHARE);
   const warehouseId =
     incident.warehouseId && getWarehouse(ctx.state, incident.warehouseId) ? incident.warehouseId : undefined;
   store(ctx, {

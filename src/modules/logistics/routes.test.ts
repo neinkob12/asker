@@ -197,7 +197,7 @@ describe('Routen mit Fahrplan (Auftrag 30)', () => {
       sim.advance(trip.checkAt - sim.state.time);
       expect(trip.status).toBe('stopped');
       const started = eventsOfType(events, 'encounter.started')[0].payload;
-      expect(started.kind).toBe('vehicleCheck');
+      expect(started.kind).toBe('customsCheck');
       expect(started.request).toMatchObject({ opponent: { label: 'Der Zoll' }, lossCategory: 'loss.customs' });
       expect(started.request.place).toMatch(/^auf der A1 bei /);
       const heatBefore = sim.state.modules.police.heat.ottensen ?? 0;
@@ -219,6 +219,32 @@ describe('Routen mit Fahrplan (Auftrag 30)', () => {
       }
     }
     expect(results.size).toBe(2);
+  });
+
+  it('Zoll auf der A1: Ladung aufgeben, die Ware ist weg, der Fahrer kommt nicht mit (Auftrag 35)', () => {
+    for (let seed = 1; seed <= 6; seed++) {
+      const sim = twoCities(seed);
+      const events = recordEvents(sim);
+      const driverId = hireDriver(sim);
+      store(sim.ctx('test'), { productId: 'weed', amount: 1000, warehouseId: KOELN });
+      const routeId = addRoute(sim, {
+        driverId,
+        fromId: KOELN,
+        toId: HAMBURG,
+        items: [{ productId: 'weed', amount: 1000 }],
+      });
+      untilDeparture(sim, routeId);
+      const trip = getTrips(sim.state).find((t) => t.routeId === routeId);
+      if (!trip) throw new Error('keine Fahrt');
+      trip.checkAt = trip.loadedAt + 120;
+      sim.advance(trip.checkAt - sim.state.time);
+      const encounterId = activeEncounters(sim.state)[0].id;
+      expect(sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId: 'giveUp' } }).ok).toBe(true);
+      const resolved = eventsOfType(events, 'encounter.resolved')[0].payload;
+      expect(resolved).toMatchObject({ outcome: 'failure', result: { ending: 'surrendered' } });
+      expect(getTrips(sim.state)).toHaveLength(0);
+      expect(getStaffMember(sim.state, driverId)?.status).toBe('active');
+    }
   });
 
   it('schlafendes Köln: Was die Route nimmt, kauft die Rechte Hand um Mitternacht nach', () => {

@@ -23,7 +23,14 @@
 import { type Command, type GameState, messages, type Simulation } from '../core';
 import { activeCity, citiesUnlocked, isPlayerIn, isPlayerTraveling, presentCity } from '../modules/city';
 import { allWaiting, canServe } from '../modules/customers';
-import { activeEncounters } from '../modules/encounters';
+import {
+  activeEncounters,
+  chooseAuto,
+  chooseMove,
+  getEncounter,
+  requestCity,
+  suggestedCrew,
+} from '../modules/encounters';
 import { periodReport } from '../modules/finance';
 import { getVehicles, VEHICLE_MODELS, vehiclePrice } from '../modules/fleet';
 import { ceasefireCost, getGangs, tributeAmount } from '../modules/gangs';
@@ -646,13 +653,39 @@ function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions
   }
 }
 
-/** Konfrontationen: Die Leute sollen es regeln (der Bot geht nie selbst hin). */
+/**
+ * Konfrontationen (Auftrag 35): Der Bot geht nie selbst hin, schickt aber die vorgeschlagene Crew und gibt per Handy
+ * Anweisungen wie ein guter Spieler (Absicht abwenden, Einsatz schützen, Spezialzüge nutzen). Was übrig bleibt,
+ * würfeln die Leute aus.
+ */
 function handleEncounters(sim: Simulation, stats: BotStats): void {
-  for (const e of activeEncounters(sim.state)) {
+  for (const e of [...activeEncounters(sim.state)]) {
     if (e.phase === 'done') continue;
-    if (e.phase === 'briefing')
-      run(sim, stats, { type: 'encounters.join', payload: { encounterId: e.id, present: false } });
-    run(sim, stats, { type: 'encounters.auto', payload: { encounterId: e.id } });
+    if (e.phase === 'briefing') {
+      const crew = suggestedCrew(sim.state, e, requestCity(sim.state, e.request));
+      const joined = run(sim, stats, { type: 'encounters.join', payload: { encounterId: e.id, mode: 'crew', crew } });
+      if (!joined) run(sim, stats, { type: 'encounters.join', payload: { encounterId: e.id, present: false } });
+    }
+    for (let i = 0; i < 20; i++) {
+      const current = getEncounter(sim.state, e.id);
+      if (current?.phase !== 'rounds') break;
+      const move = chooseMove(current, true);
+      if (move) {
+        if (!run(sim, stats, { type: 'encounters.special', payload: { encounterId: e.id, participantId: move } }))
+          break;
+        continue;
+      }
+      const choice = chooseAuto(sim.state, current, true);
+      const payload = {
+        encounterId: e.id,
+        actionId: choice?.actionId ?? '',
+        ...(choice?.protect ? { protect: choice.protect } : {}),
+      };
+      if (!choice || !run(sim, stats, { type: 'encounters.act', payload })) break;
+    }
+    if (getEncounter(sim.state, e.id)?.phase === 'rounds') {
+      run(sim, stats, { type: 'encounters.auto', payload: { encounterId: e.id } });
+    }
   }
 }
 

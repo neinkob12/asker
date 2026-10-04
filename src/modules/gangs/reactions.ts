@@ -34,7 +34,7 @@ export function onSale(ctx: Ctx, sale: GameEvents['sale.completed']): void {
 export function onEncounterResolved(ctx: Ctx, payload: GameEvents['encounter.resolved']): void {
   // Auftrag 23: Täter nach einem Einbruch gesucht, Sicherheit an einem eingeschüchterten Spot.
   const ref = payload.request.origin?.module === 'gangs' ? (payload.request.origin.ref ?? '') : '';
-  if (ref.startsWith('recover:')) onRecoverResolved(ctx, Number(ref.slice(8)), payload.outcome);
+  if (ref.startsWith('recover:')) onRecoverResolved(ctx, Number(ref.slice(8)), payload.outcome, payload.result?.parts);
   if (ref.startsWith('intimidation:')) onIntimidationResolved(ctx, Number(ref.slice(13)), payload.outcome);
   const gangId = payload.request.opponent?.factionId;
   const gang = gangId ? getGang(ctx.state, gangId) : undefined;

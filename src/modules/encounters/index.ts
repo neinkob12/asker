@@ -21,7 +21,21 @@
 // Ereignisse: 'encounter.started', 'encounter.round', 'encounter.resolved'
 
 import { type Ctx, defineModule, type GameState } from '../../core';
-import { act, autoResolve, delegateAbsent, expireDecisions, getKind, join, resolveAction, start } from './engine';
+import {
+  act,
+  autoResolve,
+  delegateAbsent,
+  expireDecisions,
+  getKind,
+  join,
+  protect,
+  resolveAction,
+  special,
+  stakesFor,
+  start,
+} from './engine';
+import { ENCOUNTER_INTENTS } from './intents';
+import { buildFoes, firstIntent } from './tactics';
 import type {
   Encounter,
   EncounterAction,
@@ -30,34 +44,66 @@ import type {
   EncounterRequest,
   EncounterResult,
   EncountersState,
+  StakeId,
 } from './types';
 
 export { ENCOUNTER_ACTIONS } from './actions';
+export { ADVICE_RULES, type Advice, type AdviceRule, adviceText, rightHandAdvice } from './advice';
 export {
   ABANDON_CASH_MAX,
   ABANDON_CASH_SHARE,
+  AGGRESSION_FIGHT,
   BACKUP_COST,
-  BACKUP_EDGE_BONUS,
   BACKUP_MAX_PEOPLE,
+  CREW_MAX,
+  CREW_TRAVEL_COST,
   PAYOFF_RELATION,
   PLAYER_STATS,
+  RETREAT_AT,
   TIPOFF_HEAT,
 } from './config';
+export {
+  type CrewCandidate,
+  type CrewMemberInfo,
+  crewCandidates,
+  SPECIAL_MOVE_RULES,
+  SPECIAL_MOVES,
+  type SpecialMove,
+  type SpecialMoveRule,
+  specialMoveOf,
+  specialMoves,
+  suggestedCrew,
+} from './crew';
 export {
   actionChance,
   activeParticipants,
   availableActions,
+  availableMoves,
   type BriefingOption,
   briefingOptions,
   PLAYER_ID,
   payoffCost,
+  requestCity,
 } from './engine';
+export { ENCOUNTER_INTENTS } from './intents';
 export { ENCOUNTER_KINDS } from './kinds';
+export { autoProtect, chooseAuto, chooseMove, scoreAction } from './strategy';
+export {
+  foesIn,
+  getIntent,
+  previewShift,
+  ROLE_NAMES,
+  type ShiftPreview,
+  STAKE_NAMES,
+  stakeName,
+} from './tactics';
 export type {
   Amount,
   Encounter,
   EncounterAction,
   EncounterEffects,
+  EncounterEnding,
+  EncounterIntent,
   EncounterKind,
   EncounterMode,
   EncounterOpponentRequest,
@@ -65,12 +111,21 @@ export type {
   EncounterPhase,
   EncounterRequest,
   EncounterResult,
+  EncounterResultPart,
+  EncounterSetting,
+  EncounterSituation,
   EncounterStat,
   EncountersState,
+  Foe,
+  FoeRole,
+  GaugeShift,
   Opponent,
   Participant,
   ParticipantCondition,
   RoundLog,
+  SpecialMoveId,
+  StakeId,
+  StakeState,
 } from './types';
 
 declare module '../../core' {
@@ -82,15 +137,29 @@ declare module '../../core' {
      * Spieler entscheidet im Briefing, wie er vorgeht (mode, siehe EncounterMode). Die alte Form present: true/false
      * gilt weiter als 'self' bzw. 'crew'.
      */
-    'encounters.join': { encounterId: number; mode?: EncounterMode; present?: boolean };
-    /** Eine Runde mit dieser Handlung spielen. */
-    'encounters.act': { encounterId: number; actionId: string };
+    'encounters.join': { encounterId: number; mode?: EncounterMode; present?: boolean; crew?: string[] };
+    /** Spezialzug einer Person aus der Crew spielen (einmal pro Konfrontation, kostet keine Runde). */
+    'encounters.special': { encounterId: number; participantId: string };
+    /** Eine Runde mit dieser Handlung spielen, optional mit neuem Schutz (Einsatz). */
+    'encounters.act': { encounterId: number; actionId: string; protect?: StakeId };
+    /** Einsatz wählen, den die eigene Seite ab jetzt schützt (kostet keine Runde). */
+    'encounters.protect': { encounterId: number; stake: StakeId };
     /** Die Leute entscheiden selbst, der Rest wird ausgewürfelt. */
     'encounters.auto': { encounterId: number };
   }
   interface GameEvents {
     'encounter.started': { encounterId: number; kind: string; request: EncounterRequest };
-    'encounter.round': { encounterId: number; round: number; actionId: string; success: boolean };
+    'encounter.round': {
+      encounterId: number;
+      round: number;
+      actionId: string;
+      /** Hat die Runde unterm Strich geholfen? */
+      success: boolean;
+      /** Zeiger und Polizei-Uhr nach der Runde (Auftrag 35). */
+      aggression?: number;
+      resolve?: number;
+      clock?: number;
+    };
     'encounter.resolved': {
       encounterId: number;
       kind: string;
@@ -175,6 +244,14 @@ function migrateV1(old: EncountersStateV1): EncountersState {
     edge: 50,
     round: 0,
     maxRounds: 0,
+    aggression: 0,
+    resolve: 0,
+    clock: 0,
+    brawl: false,
+    intent: null,
+    foes: [],
+    stakes: [],
+    protect: null,
     log: [],
     bribeCost: 0,
     extraHeat: 0,
@@ -190,8 +267,8 @@ function migrateV1(old: EncountersStateV1): EncountersState {
 }
 
 /** Version 2 → 3: Weg im Briefing (mode) und Beziehung zur Gegenseite im Ergebnis. */
-function migrateV2(old: EncountersState): EncountersState {
-  const upgrade = (e: Encounter): Encounter => ({
+function migrateV2(old: EncountersStateV3): EncountersStateV3 {
+  const upgrade = (e: EncounterV3): EncounterV3 => ({
     ...e,
     mode: e.mode ?? (e.phase === 'briefing' || e.request.askPlayer !== true ? null : e.playerPresent ? 'self' : 'crew'),
     result: e.result ? { ...e.result, relation: e.result.relation ?? 0 } : null,
@@ -199,9 +276,62 @@ function migrateV2(old: EncountersState): EncountersState {
   return { active: old.active.map(upgrade), history: old.history.map(upgrade) };
 }
 
+/** Stand bis Version 3: Lage (edge) und Runden statt Zeigern, Uhr, Absicht, Rollen und Einsätzen. */
+type EncounterV3 = Omit<
+  Encounter,
+  'aggression' | 'resolve' | 'clock' | 'brawl' | 'intent' | 'foes' | 'stakes' | 'protect'
+> &
+  Partial<Pick<Encounter, 'aggression' | 'resolve' | 'clock' | 'brawl' | 'intent' | 'foes' | 'stakes' | 'protect'>>;
+interface EncountersStateV3 {
+  active: EncounterV3[];
+  history: EncounterV3[];
+}
+
+/**
+ * Version 3 → 4 (Auftrag 35): Zeiger, Polizei-Uhr, Absicht, Gegner mit Rollen und Einsätze. Eine laufende
+ * Konfrontation macht dort weiter, wo sie stand: Die Lage wird zur Entschlossenheit (gute Lage = wenig entschlossen),
+ * die übrigen Runden zur Uhr, die erste mögliche Absicht des Anlasses steht an (ohne Würfel).
+ */
+export function migrateV3(old: EncountersStateV3): EncountersState {
+  const upgrade = (e: EncounterV3): Encounter => {
+    const kind = getKind(e.kind);
+    const done = e.phase === 'done';
+    const count = Math.max(0, e.opponent?.count ?? 0);
+    const foes = buildFoes(e.opponent?.startCount ?? count, kind);
+    // Wer schon weg ist, zählt als weg (die Ausgeschalteten zuerst).
+    let out = foes.length - count;
+    for (let i = foes.length - 1; i >= 0 && out > 0; i--, out--) {
+      foes[i].state = i >= foes.length - (e.opponent?.down ?? 0) ? 'down' : 'gone';
+    }
+    const resolve = Math.min(90, Math.max(35, Math.round(100 - (e.edge ?? 50))));
+    const clockLeft = done ? 0 : Math.max(1, (e.maxRounds ?? 0) - (e.round ?? 0));
+    const encounter: Encounter = {
+      ...e,
+      aggression: kind?.gauges.aggression ?? 40,
+      resolve,
+      clock: clockLeft,
+      brawl: false,
+      intent: null,
+      foes,
+      stakes: (kind ? stakesFor(kind, e.request) : []).map((id) => ({ id, damage: 0 })),
+      protect: null,
+      participants: (e.participants ?? []).map((p) => ({ ...p, move: p.move ?? null, moveUsed: p.moveUsed ?? false })),
+    };
+    if (!done && kind) {
+      encounter.intent = firstIntent(encounter, kind);
+      const target = encounter.intent ? ENCOUNTER_INTENTS[encounter.intent]?.stake : undefined;
+      const ids = encounter.stakes.map((x) => x.id);
+      encounter.protect = target && ids.includes(target) ? target : (ids[0] ?? null);
+      encounter.maxRounds = (e.round ?? 0) + clockLeft;
+    }
+    return encounter;
+  };
+  return { active: old.active.map(upgrade), history: old.history.map(upgrade) };
+}
+
 export default defineModule({
   id: 'encounters',
-  version: 3,
+  version: 4,
   init: () => ({ active: [], history: [] }),
   tick: (ctx) => {
     if (ctx.state.modules.encounters.active.length > 0) {
@@ -210,13 +340,16 @@ export default defineModule({
     }
   },
   commands: {
-    'encounters.join': (ctx, { encounterId, mode, present }) =>
-      join(ctx, encounterId, mode ?? (present ? 'self' : 'crew')),
-    'encounters.act': (ctx, { encounterId, actionId }) => act(ctx, encounterId, actionId),
+    'encounters.join': (ctx, { encounterId, mode, present, crew }) =>
+      join(ctx, encounterId, mode ?? (present ? 'self' : 'crew'), crew),
+    'encounters.special': (ctx, { encounterId, participantId }) => special(ctx, encounterId, participantId),
+    'encounters.act': (ctx, { encounterId, actionId, protect: guard }) => act(ctx, encounterId, actionId, guard),
+    'encounters.protect': (ctx, { encounterId, stake }) => protect(ctx, encounterId, stake),
     'encounters.auto': (ctx, { encounterId }) => autoResolve(ctx, encounterId),
   },
   migrations: {
     2: migrateV1,
     3: migrateV2,
+    4: migrateV3,
   },
 });
