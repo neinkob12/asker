@@ -666,6 +666,7 @@ function Rounds(props: { encounter: Encounter; onPreview: (actionId: string | nu
               type="button"
               class={`enc-act is-${level}`}
               disabled={broke}
+              title={action.hint}
               onClick={() => act(id)}
               onMouseEnter={() => onPreview(id)}
               onMouseLeave={() => onPreview(null)}

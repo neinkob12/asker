@@ -943,6 +943,14 @@
 }
 
 /* ---------------------------------------------------------------- Schmale Kartenfläche und Handy-Bildschirm */
+/* Handy-Weg (per Handy entscheiden): dieselbe Information, kompakter. Die Hinweise stehen im Tooltip. */
+.enc--remote.enc--rounds .enc-act__hint {
+  display: none;
+}
+.enc--remote.enc--rounds .enc-act {
+  min-height: 0;
+}
+
 @media (max-width: 1180px) {
   .enc-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -992,13 +1000,44 @@
   .enc-grid {
     grid-template-columns: minmax(0, 1fr);
   }
-  .enc-gauges,
   .enc-crew-list {
     grid-template-columns: minmax(0, 1fr);
   }
-  /* Per Handy kompakt: kurze Hinweise weg, die Pfeile bleiben. */
-  .enc--remote .enc-act__hint {
+  /* In den Runden kompakt: Die Handlungen sollen ohne langes Scrollen erreichbar sein. */
+  .enc--rounds .enc-polaroids {
     display: none;
+  }
+  .enc--rounds .enc-title {
+    font-size: 30px;
+  }
+  .enc--rounds .enc-situation {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 14px;
+  }
+  .enc.enc--rounds {
+    gap: 14px;
+  }
+  .enc-intent,
+  .enc-clock {
+    font-size: 14px;
+  }
+  .enc-gauges {
+    gap: 10px 14px;
+  }
+  .enc-gauge__head {
+    font-size: 11px;
+  }
+  .enc-gauge__value {
+    font-size: 16px;
+  }
+  .enc-gauge__hint {
+    font-size: 11px;
+  }
+  .enc-advice__text {
+    font-size: 15px;
   }
   .enc-way,
   .enc-act {

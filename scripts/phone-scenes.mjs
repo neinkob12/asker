@@ -103,6 +103,35 @@ const LIEUTENANT = `(() => {
 const FIRST_GANG = 'Object.keys(window.koeln.session.state.modules.gangs.gangs)[0]';
 
 /** Jede Szene: Name und JavaScript, das im Browser läuft (window.koeln = { session, runtime }). */
+
+/**
+ * JavaScript (in einer async-Funktion): Überfall auf den Neumarkt mit Briefing (Auftrag 35), ein Läufer vor Ort, ein
+ * freier Fahrer für die Crew. Öffnet die Akte und gibt die ID zurück.
+ */
+const RAID = `
+  const sim = window.koeln.session.sim;
+  const s = sim.state;
+  const enc = await import('/src/modules/encounters/index.ts');
+  const spots = await import('/src/modules/spots/index.ts');
+  s.wallet.dirty += 3000;
+  if (!s.modules.staff.members.some((m) => m.assignment?.targetId === 'neumarkt')) {
+    sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'neumarkt' } });
+  }
+  if (!s.modules.staff.members.some((m) => m.role === 'driver' && m.status === 'active' && !m.assignment)) {
+    sim.dispatch({ type: 'staff.hireDriver', payload: {} });
+  }
+  const runner = s.modules.staff.members.find((m) => m.assignment?.targetId === 'neumarkt');
+  const { encounterId } = enc.startEncounter(sim.ctx('gangs'), {
+    kind: 'raidDefense',
+    spotId: 'neumarkt',
+    veedelId: spots.getSpot(s, 'neumarkt').veedelId,
+    staffIds: runner ? [runner.id] : [],
+    askPlayer: true,
+    opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 55, count: 3 },
+    origin: { module: 'gangs', ref: 'raid:nord' },
+  });
+  window.koeln.runtime.api.openDialog('encounters.encounter', { encounterId });`;
+
 export const SCENES = [
   { name: 'home', js: 'window.koeln.runtime.api.openPhone(null)' },
   { name: 'nachrichten', js: "window.koeln.runtime.api.openPhone('core.messages')" },
@@ -573,6 +602,32 @@ export const SCENES = [
       const s = window.koeln.session.sim.state;
       const id = s.modules.hierarchy.rightHands?.koeln?.staffId;
       window.koeln.runtime.api.openPhone('core.messages', id ? { contactId: 'staff:' + id } : undefined);
+    })()`,
+  },
+  // Konfrontation (Auftrag 35): Briefing mit Crew, Runde mit Absicht, Zeigern, Uhr und Rat der Rechten Hand
+  // (die gibt es seit der Szene rechte-hand), Ergebnis mit Teil-Ergebnissen. Am Ende alle offenen auswürfeln.
+  { name: 'konfrontation', js: `(async () => { ${RAID} })()` },
+  {
+    name: 'konfrontation-runde',
+    js: `(async () => {
+      ${RAID}
+      const driver = s.modules.staff.members.find((m) => m.role === 'driver' && m.status === 'active' && !m.assignment);
+      const crew = [runner?.id, driver?.id].filter(Boolean);
+      sim.dispatch({ type: 'encounters.join', payload: { encounterId, mode: 'crew', crew } });
+      sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId: 'negotiate' } });
+      window.koeln.runtime.requestRender();
+    })()`,
+  },
+  {
+    name: 'konfrontation-ergebnis',
+    js: `(async () => {
+      ${RAID}
+      sim.dispatch({ type: 'encounters.join', payload: { encounterId, mode: 'crew' } });
+      for (const e of [...s.modules.encounters.active]) {
+        if (e.id !== encounterId) sim.dispatch({ type: 'encounters.auto', payload: { encounterId: e.id } });
+      }
+      sim.dispatch({ type: 'encounters.auto', payload: { encounterId } });
+      window.koeln.runtime.api.openDialog('encounters.encounter', { encounterId });
     })()`,
   },
   // Der Anruf aus Hamburg (macht Köln komplett, deshalb ganz am Ende)
