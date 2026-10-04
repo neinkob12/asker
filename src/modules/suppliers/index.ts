@@ -23,7 +23,7 @@
 //   supplierQualityBonus(state, id), creditLimit(state, id), availableCredit(state, id), isBlocked(state, id),
 //   availablePackages(state, id), packagePrice(state, supplierId, packageId), rollShipmentProblem(...),
 //   Rabatt-Aktionen (Auftrag 32): getDeals(state, cityId?), activeDeal(state, supplierId, packageId, cityId?),
-//   supplierContact(supplier) (Kontakt im Handy, z.B. für den Marktbericht)
+//   supplierContact(supplier) (Kontakt im Handy, z.B. für den Marktbericht), addSupplierTrust(ctx, id, amount), supplierById(id)
 //   deliveryLeg(supplier, progress, toPort?) (Darstellung: Schiff, Umladen oder Straße; Weg: roads.shipRoute,
 //   UNLOADING_PORT)
 // Befehle: 'suppliers.order' (onCredit für Kredit, warehouseId als Ziel), 'suppliers.repay', 'suppliers.unlock'
@@ -323,6 +323,11 @@ export function supplierIn(supplier: Supplier, cityId: string): Supplier {
   return found;
 }
 
+/** Lieferant nach ID, ohne Spielstand (Stammdaten, z.B. für Texte). */
+export function supplierById(id: string): Supplier | undefined {
+  return SUPPLIERS.find((s) => s.id === id);
+}
+
 export function getSupplier(state: GameState, id: string): Supplier | undefined {
   return getSuppliers(state).find((s) => s.id === id);
 }
@@ -582,6 +587,12 @@ function addTrust(ctx: Ctx, supplierId: string, raw: number, cityId: string = ac
       delta: Math.round((rel.trust - before) * 10) / 10,
     });
   }
+}
+
+/** Vertrauen bei einem Lieferanten schenken (z.B. als Belohnung eines Wochenvertrags, Auftrag 32). */
+export function addSupplierTrust(ctx: Ctx, supplierId: string, amount: number): void {
+  if (!getSupplier(ctx.state, supplierId) || !(amount > 0)) return;
+  addTrust(ctx, supplierId, amount);
 }
 
 /** Kontakt des Lieferanten im Handy (für Nachrichten anderer Module, z.B. den Marktbericht). */

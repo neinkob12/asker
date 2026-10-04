@@ -25,6 +25,7 @@ import { activeCity } from '../../city';
 import { DEFAULT_WAREHOUSE, getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
 import { CHAPTERS, chapterName, currentQuest, QUESTS, type QuestGoTo, questProgress, rewardText } from '../index';
+import { ContractsGroup } from './contracts';
 import './quests.css';
 
 declare module '../../../ui' {
@@ -193,6 +194,7 @@ function QuestList() {
   const active = currentQuest(state);
   return (
     <div class="quest-list">
+      <ContractsGroup />
       {CHAPTERS.map((name, chapter) => {
         const quests = QUESTS.filter((x) => x.chapter === chapter);
         const doneCount = quests.filter((x) => q.done.includes(x.id)).length;
@@ -249,7 +251,7 @@ function QuestList() {
 }
 
 registerHudItem({ id: 'quests.current', order: 40, placement: 'below', icon: 'target', component: QuestHud });
-registerPanel({ id: 'quests.list', title: () => 'Quests von Peter', component: QuestList });
+registerPanel({ id: 'quests.list', title: () => 'Quests und Verträge', component: QuestList });
 registerSearch({
   id: 'quests.search',
   label: 'Quests',
