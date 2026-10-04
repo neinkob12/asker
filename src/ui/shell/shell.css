@@ -152,7 +152,7 @@
 }
 .hud__grid {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
   grid-template-areas:
     "money clock tiles"
     "money alerts tiles";
@@ -186,6 +186,8 @@
   align-items: flex-start;
   gap: var(--space-3);
   min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .hud__below {
   display: flex;
@@ -202,7 +204,7 @@
 }
 .hud-capsule--clock {
   grid-area: clock;
-  justify-self: center;
+  justify-self: safe center;
   display: flex;
   align-items: center;
   gap: var(--space-4);
