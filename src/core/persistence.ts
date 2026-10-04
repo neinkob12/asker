@@ -88,8 +88,14 @@ export function loadSimulation(rawState: unknown, modules: readonly ModuleDefini
   for (const key of ['meta', 'wallet', 'messages', 'outcome', 'modules', 'moduleVersions', 'rng'] as const) {
     if (!isRecord(raw[key])) throw new SaveError(`Der Spielstand ist beschädigt (${key} fehlt).`);
   }
-  if (typeof raw.time !== 'number' || !Number.isFinite(raw.time) || raw.time < 0 || !Array.isArray(raw.journal))
+  // Zeit und nächste ID sind Ganzzahlen: Eine Bruchzahl würde den Takt (time % 60) und die IDs dauerhaft verschieben.
+  if (!Number.isInteger(raw.time) || (raw.time as number) < 0 || !Array.isArray(raw.journal))
     throw new SaveError('Der Spielstand ist beschädigt.');
+  if (!Number.isInteger(raw.nextId) || (raw.nextId as number) < 1)
+    throw new SaveError('Der Spielstand ist beschädigt (nextId).');
+  const messages = raw.messages as Record<string, unknown>;
+  if (!Array.isArray(messages.list) || !isRecord(messages.contacts))
+    throw new SaveError('Der Spielstand ist beschädigt (Nachrichten).');
   const wallet = raw.wallet as Record<string, unknown>;
   for (const key of ['dirty', 'clean'] as const) {
     if (typeof wallet[key] !== 'number' || !Number.isFinite(wallet[key])) {

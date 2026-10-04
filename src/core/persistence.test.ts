@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { defineModule, type ModuleDefinition } from './module';
 import { createSaveFile, loadSimulation, parseSaveFile, SaveError, serializeSave } from './persistence';
 import { MANUAL_SLOTS, memoryStorage } from './saves';
@@ -116,6 +116,24 @@ describe('Speichern und Laden', () => {
     expect(() => loadSimulation({ ...state, time: -5 }, [notesV2])).toThrow(/beschädigt/);
     expect(() => loadSimulation({ ...state, wallet: { dirty: 'abc', clean: 0 } }, [notesV2])).toThrow(/Geld/);
     expect(() => loadSimulation({ ...state, wallet: { dirty: Number.NaN, clean: 0 } }, [notesV2])).toThrow(/Geld/);
+  });
+
+  it('lehnt Spielstände mit unmöglicher Zeit, nextId oder Nachrichten ab', () => {
+    const state = roundTrip(Simulation.create([notesV2], { seed: 1 }).state) as unknown as Record<string, unknown>;
+    const messages = state.messages as Record<string, unknown>;
+    expect(() => loadSimulation({ ...state, time: 12.5 }, [notesV2])).toThrow(/beschädigt/);
+    expect(() => loadSimulation({ ...state, nextId: 'x' }, [notesV2])).toThrow(/nextId/);
+    expect(() => loadSimulation({ ...state, nextId: 3.5 }, [notesV2])).toThrow(/nextId/);
+    expect(() => loadSimulation({ ...state, nextId: undefined }, [notesV2])).toThrow(/nextId/);
+    expect(() => loadSimulation({ ...state, messages: { ...messages, list: {} } }, [notesV2])).toThrow(/Nachrichten/);
+    expect(() => loadSimulation({ ...state, messages: { ...messages, contacts: [] } }, [notesV2])).toThrow(
+      /Nachrichten/,
+    );
+    expect(() => loadSimulation({ ...state, messages: { ...messages, contacts: undefined } }, [notesV2])).toThrow(
+      /Nachrichten/,
+    );
+    // Der unveränderte Stand lädt.
+    expect(() => loadSimulation(state, [notesV2])).not.toThrow();
   });
 
   it('erkennt kaputte Dateien', () => {
@@ -240,5 +258,73 @@ describe('GameSession: Speicherplätze, Autosave, Export und Hardcore', () => {
     expect(session.hardcoreDeleted).toBe(true);
     const left = session.listSaves();
     expect(left.map((s) => s.slot)).toEqual([MANUAL_SLOTS[2]]);
+  });
+
+  it('Hardcore: ein werfender UI-Zuhörer verhindert das Löschen der Spielstände nicht', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const session = new GameSession({ modules: [notesV2, bankrupt], storage: memoryStorage(), now: () => 5 });
+    session.newGame('hardcore', 3);
+    session.save(MANUAL_SLOTS[0]);
+    const heard: string[] = [];
+    session.onEvent(() => {
+      throw new Error('UI kaputt');
+    });
+    session.onEvent((e) => heard.push(e.type));
+    expect(() => goBroke(session)).not.toThrow();
+    expect(session.hardcoreDeleted).toBe(true);
+    expect(session.listSaves()).toEqual([]);
+    expect(heard).toContain('game.over');
+    error.mockRestore();
+  });
+});
+
+describe('GameSession: Fehler im Spiel und im Speicher', () => {
+  it('wirft ein Tick, laufen die übrigen Schritte des Bilds und das Bild (frame) trotzdem', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let ticks = 0;
+    const flaky = defineModule({
+      id: 'testFlaky',
+      version: 1,
+      tick: () => {
+        ticks++;
+        if (ticks === 2) throw new Error('Tick kaputt');
+      },
+    });
+    const callbacks: ((now: number) => void)[] = [];
+    const session = new GameSession({
+      modules: [flaky],
+      storage: memoryStorage(),
+      scheduler: { request: (cb) => callbacks.push(cb), cancel: () => undefined },
+    });
+    session.newGame('normal', 1);
+    const changes: string[] = [];
+    session.subscribe((c) => changes.push(c));
+    session.loop.start();
+    const time = session.state?.time as number;
+    callbacks[0](0);
+    // Sechs Bilder à 0,25 s: Der zweite Tick wirft, die übrigen Schritte laufen weiter.
+    for (let i = 1; i <= 6; i++) expect(() => callbacks[i](i * 250)).not.toThrow();
+    const stepped = (session.state?.time as number) - time;
+    expect(stepped).toBeGreaterThan(2);
+    expect(ticks).toBe(stepped);
+    expect(changes.filter((c) => c === 'frame')).toHaveLength(7);
+    expect(error).toHaveBeenCalledTimes(1);
+    error.mockRestore();
+  });
+
+  it('ein Speicher, dessen getItem wirft, gilt als leer (kein Absturz beim Lesen)', () => {
+    const storage = {
+      getItem: () => {
+        throw new Error('gesperrt');
+      },
+      setItem: () => undefined,
+      removeItem: () => undefined,
+      keys: () => ['koeln-tycoon:autosave'],
+    };
+    const session = new GameSession({ modules: [notesV2], storage });
+    expect(session.saves.read('autosave')).toBeNull();
+    expect(() => session.continueAutosave()).not.toThrow();
+    expect(session.continueAutosave()).toBe(false);
+    expect(() => session.listSaves()).not.toThrow();
   });
 });

@@ -66,9 +66,10 @@ export class SaveStore {
   }
 
   read(slot: string): SaveFile | null {
-    const text = this.storage.getItem(this.key(slot));
-    if (!text) return null;
     try {
+      // getItem kann werfen (gesperrter Speicher, z.B. privates Fenster): dann gilt der Platz als leer.
+      const text = this.storage.getItem(this.key(slot));
+      if (!text) return null;
       return parseSaveFile(text);
     } catch {
       return null;

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { clock } from './clock';
 import { START_DIRTY_MONEY, START_TIME } from './config';
 import { messages } from './messages';
@@ -241,6 +241,45 @@ describe('Simulation: Ereignisse', () => {
     });
     sim.advance(60);
     expect(timeWhenHeard).toBe(START_TIME + 60);
+  });
+});
+
+describe('Simulation: werfende Zuhörer und Handler', () => {
+  it('ein werfender Zuhörer nimmt den anderen weder Ereignisse noch Meldungen', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const sim = create();
+    const heard: string[] = [];
+    sim.onEvent(() => {
+      throw new Error('UI kaputt');
+    });
+    sim.onEvent((e) => heard.push(e.type));
+    expect(() => {
+      sim.dispatch({ type: 'testCounter.chain', payload: {} });
+      sim.dispatch({ type: 'testCounter.add', payload: { by: 2 } });
+    }).not.toThrow();
+    expect(heard).toEqual(['testCounter.added', 'testCounter.second', 'testCounter.added']);
+    expect(error).toHaveBeenCalledTimes(3);
+    error.mockRestore();
+  });
+
+  it('wirft ein Tick, kommt dieser Fehler an, nicht ein Folgefehler aus dem Zustellen', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const broken = defineModule({
+      id: 'testBrokenTick',
+      version: 1,
+      tick: (ctx) => {
+        ctx.emit('clock.hourStarted', { day: 0, hour: 0 });
+        throw new Error('Tick kaputt');
+      },
+      on: {
+        'clock.hourStarted': () => {
+          throw new Error('Handler kaputt');
+        },
+      },
+    });
+    const sim = Simulation.create([broken], { seed: 1 });
+    expect(() => sim.step()).toThrow('Tick kaputt');
+    error.mockRestore();
   });
 });
 

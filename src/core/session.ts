@@ -47,7 +47,14 @@ export class GameSession {
       step: (n) => {
         const sim = this.current;
         if (!sim) return;
-        for (let i = 0; i < n && !sim.isOver; i++) sim.step();
+        // Wirft ein Schritt, gehen die übrigen Schritte dieses Bilds nicht verloren (der Fehler wird gemeldet).
+        for (let i = 0; i < n && !sim.isOver; i++) {
+          try {
+            sim.step();
+          } catch (error) {
+            console.error('Fehler in der Simulation', error);
+          }
+        }
       },
       frame: (dt) => {
         if (this.current && !this.current.isOver && this.loop.speed > 0) {
@@ -191,8 +198,21 @@ export class GameSession {
     this.hardcoreDeleted = false;
     this.sinceAutosave = 0;
     this.detachSim = sim.onEvent((event) => {
-      if (event.type === 'game.over') this.handleGameOver(sim);
-      for (const listener of this.eventListeners) listener(event);
+      // Zuerst die Hardcore-Regel (Spielstände löschen), damit kein UI-Zuhörer sie verhindern kann.
+      if (event.type === 'game.over') {
+        try {
+          this.handleGameOver(sim);
+        } catch (error) {
+          console.error('Fehler beim Beenden des Spiels', error);
+        }
+      }
+      for (const listener of [...this.eventListeners]) {
+        try {
+          listener(event);
+        } catch (error) {
+          console.error(`Fehler in einem Ereignis-Zuhörer (${event.type})`, error);
+        }
+      }
     });
     this.emitChange('sim');
   }

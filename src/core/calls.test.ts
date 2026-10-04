@@ -14,6 +14,8 @@ declare module './types' {
   }
   interface GameCommands {
     'callTest.note': { text: string };
+    'callTest.retract': Record<string, never>;
+    'callTest.fail': Record<string, never>;
   }
 }
 
@@ -25,6 +27,12 @@ const callTest = defineModule({
   commands: {
     'callTest.note': (ctx, payload) => {
       ctx.state.modules.callTest.notes.push(payload.text);
+      return { ok: true };
+    },
+    'callTest.fail': () => ({ ok: false, reason: 'Geht nicht.' }),
+    // Wie recruiting.hire: Die Sache ist erledigt, alle offenen Fragen dazu werden zurückgezogen.
+    'callTest.retract': (ctx) => {
+      messages.retractWhere(ctx, () => true);
       return { ok: true };
     },
   },
@@ -129,5 +137,115 @@ describe('Anrufe', () => {
     expect(play(CALL_RING_MINUTES / 2)).toEqual(straight);
     expect(play(CALL_RING_MINUTES + 5)).toEqual(straight);
     expect(messages.thread(straight, 'other:test').filter((m) => m.text === 'Melde dich.')).toHaveLength(2);
+  });
+
+  it('Chat löschen beendet einen klingelnden Anruf: kein Klingeln mehr, kein Rückruf', () => {
+    const sim = game();
+    const events = recordEvents(sim);
+    const id = messages.call(sim.ctx('callTest'), CALL);
+    expect(sim.dispatch({ type: 'messages.delete', payload: { contactId: 'other:test' } }).ok).toBe(true);
+    expect(messages.ringingCalls(sim.state)).toEqual([]);
+    expect(messages.get(sim.state, id)?.call?.state).toBe('declined');
+    expect(eventsOfType(events, 'call.declined')).toHaveLength(1);
+    sim.advance(CALL_RING_MINUTES + CALL_RETRY_MINUTES * 2);
+    expect(eventsOfType(events, 'call.missed')).toHaveLength(0);
+    expect(eventsOfType(events, 'call.ringing')).toHaveLength(1);
+    expect(sim.state.messages.calls.retries).toEqual([]);
+    // Die Antworten des Anrufs sind erledigt wie bei jeder gelöschten Frage.
+    expect(messages.canAnswer(sim.state, messages.get(sim.state, id) as never)).toBe(false);
+  });
+
+  it('Chat löschen streicht einen ausstehenden Rückruf nach einem verpassten Anruf', () => {
+    const sim = game();
+    const events = recordEvents(sim);
+    messages.call(sim.ctx('callTest'), CALL);
+    sim.advance(CALL_RING_MINUTES);
+    expect(eventsOfType(events, 'call.missed')).toHaveLength(1);
+    expect(sim.state.messages.calls.retries).toHaveLength(1);
+    sim.dispatch({ type: 'messages.delete', payload: { contactId: 'other:test' } });
+    expect(sim.state.messages.calls.retries).toEqual([]);
+    sim.advance(CALL_RETRY_MINUTES * 3);
+    expect(eventsOfType(events, 'call.ringing')).toHaveLength(1);
+  });
+
+  it('Alle löschen beendet ebenfalls klingelnde Anrufe; der Rückruf anderer Figuren bleibt', () => {
+    const sim = game();
+    const other: PlaceCall = { ...CALL, contact: { id: 'other:second', name: 'Anna', kind: 'other' } };
+    messages.call(sim.ctx('callTest'), CALL);
+    messages.call(sim.ctx('callTest'), other);
+    sim.advance(CALL_RING_MINUTES);
+    expect(sim.state.messages.calls.retries).toHaveLength(2);
+    sim.dispatch({ type: 'messages.delete', payload: { contactId: 'other:second' } });
+    expect(sim.state.messages.calls.retries.map((r) => r.call.contact.id)).toEqual(['other:test']);
+    sim.dispatch({ type: 'messages.deleteAll', payload: {} });
+    expect(sim.state.messages.calls.retries).toEqual([]);
+  });
+
+  it('eine Frist, die erst beim Annehmen gesetzt wird, läuft pünktlich ab (auch nach einer späteren Frist im Cache)', () => {
+    const sim = game();
+    const events = recordEvents(sim);
+    // Eine Frage mit weit entfernter Frist, damit expireMessages sich "nächste Frist in 1000 Minuten" merkt.
+    messages.send(sim.ctx('callTest'), {
+      contact: { id: 'other:late', name: 'Spät', kind: 'other' },
+      text: 'Irgendwann',
+      options: [{ id: 'ok', label: 'Ok' }],
+      expiresIn: 1000,
+    });
+    const id = messages.call(sim.ctx('callTest'), { ...CALL, expiresIn: 5 });
+    sim.advance(2);
+    expect(sim.dispatch({ type: 'messages.acceptCall', payload: { messageId: id } }).ok).toBe(true);
+    const deadline = messages.get(sim.state, id)?.expiresAt as number;
+    expect(deadline).toBe(sim.state.time + 5);
+    sim.advance(4);
+    expect(messages.get(sim.state, id)?.expired).toBeUndefined();
+    sim.step();
+    expect(sim.state.time).toBe(deadline);
+    expect(messages.get(sim.state, id)?.expired).toBe(true);
+    expect(eventsOfType(events, 'message.expired').filter((e) => e.payload.messageId === id)).toHaveLength(1);
+  });
+
+  it('dasselbe beim Ablehnen', () => {
+    const sim = game();
+    messages.send(sim.ctx('callTest'), {
+      contact: { id: 'other:late', name: 'Spät', kind: 'other' },
+      text: 'Irgendwann',
+      options: [{ id: 'ok', label: 'Ok' }],
+      expiresIn: 1000,
+    });
+    const id = messages.call(sim.ctx('callTest'), { ...CALL, expiresIn: 3 });
+    sim.step();
+    sim.dispatch({ type: 'messages.declineCall', payload: { messageId: id } });
+    sim.advance(3);
+    expect(messages.get(sim.state, id)?.expired).toBe(true);
+  });
+
+  it('zieht der Befehl einer Antwort die Frage selbst zurück, ist sie beantwortet und nicht zugleich abgelaufen', () => {
+    const sim = game();
+    const id = messages.send(sim.ctx('callTest'), {
+      contact: CALL.contact,
+      text: 'Einstellen?',
+      options: [{ id: 'hire', label: 'Ja', command: { type: 'callTest.retract', payload: {} } }],
+    });
+    expect(sim.dispatch({ type: 'messages.answer', payload: { messageId: id, optionId: 'hire' } }).ok).toBe(true);
+    const message = messages.get(sim.state, id);
+    expect(message?.answer).toBe('hire');
+    expect(message?.expired).toBeUndefined();
+  });
+
+  it('scheitert der Befehl der Antwort, bleibt die Frage unbeantwortet und offen', () => {
+    const sim = game();
+    const id = messages.send(sim.ctx('callTest'), {
+      contact: CALL.contact,
+      text: 'Los?',
+      options: [{ id: 'go', label: 'Los', command: { type: 'callTest.fail', payload: {} } }],
+    });
+    expect(sim.dispatch({ type: 'messages.answer', payload: { messageId: id, optionId: 'go' } })).toEqual({
+      ok: false,
+      reason: 'Geht nicht.',
+    });
+    const message = messages.get(sim.state, id);
+    expect(message?.answer).toBeUndefined();
+    expect(messages.canAnswer(sim.state, message as never)).toBe(true);
+    expect(messages.thread(sim.state, CALL.contact.id)).toHaveLength(1);
   });
 });

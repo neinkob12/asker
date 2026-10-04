@@ -231,11 +231,26 @@ export class Simulation {
   /** Klammert eine Operation: Ereignisse werden erst ganz außen an Zuhörer gemeldet. */
   private run<T>(fn: () => T): T {
     this.depth++;
+    let failed = false;
     try {
       return fn();
+    } catch (error) {
+      failed = true;
+      throw error;
     } finally {
       this.depth--;
-      if (this.depth === 0) this.notifyListeners();
+      if (this.depth === 0) {
+        if (failed) {
+          // Der ursprüngliche Fehler soll beim Aufrufer ankommen, nicht von einem Folgefehler überdeckt werden.
+          try {
+            this.notifyListeners();
+          } catch (error) {
+            console.error('Fehler beim Zustellen der Ereignisse nach einem Fehler', error);
+          }
+        } else {
+          this.notifyListeners();
+        }
+      }
     }
   }
 
@@ -261,7 +276,17 @@ export class Simulation {
     if (this.delivered.length === 0) return;
     const events = this.delivered;
     this.delivered = [];
-    for (const event of events) for (const listener of this.listeners) listener(event);
+    // Jeder Zuhörer einzeln: Ein werfender Zuhörer (UI, Ton) darf weder die übrigen Ereignisse noch die übrigen
+    // Zuhörer um ihre Meldung bringen.
+    for (const event of events) {
+      for (const listener of [...this.listeners]) {
+        try {
+          listener(event);
+        } catch (error) {
+          console.error(`Fehler in einem Ereignis-Zuhörer (${event.type})`, error);
+        }
+      }
+    }
   }
 
   /** Pleite-Regel: Melden alle Module mit solvency-Prüfung false, ist das Spiel verloren. */
