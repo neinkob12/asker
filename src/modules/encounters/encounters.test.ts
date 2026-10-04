@@ -76,6 +76,10 @@ describe('encounters', () => {
       baseSuccess: 0.5,
       situation: '{opponent} steht {place} im Weg.',
       opponent: { label: 'Ein Türsteher', strength: 40, count: 1 },
+      gauges: { aggression: 30, resolve: 50 },
+      clock: 4,
+      stakes: ['people'],
+      intents: ['knife', 'leaderTalks'],
       maxRounds: 3,
       joinable: true,
       actions: ['negotiate', 'fight'],
@@ -117,7 +121,7 @@ describe('encounters', () => {
     expect(sim.dispatch({ type: 'encounters.join', payload: { encounterId: alone, present: false } }).ok).toBe(true);
     const remote = availableActions(encounter(sim, alone));
     // Per Handy geht fast alles, nur Einschüchtern braucht den Boss vor Ort.
-    expect(remote).toEqual(['fight', 'hold', 'negotiate', 'bribe', 'flee']);
+    expect(remote).toEqual(['negotiate', 'talkNervous', 'bluff', 'hold', 'fight', 'bribe', 'callCops', 'flee']);
     expect(remote).not.toContain('intimidate');
     const remoteChance = actionChance(encounter(sim, alone), 'fight');
 
@@ -272,12 +276,17 @@ describe('encounters', () => {
     // 500 + 2 × 200, in Köln ein Viertel günstiger (Klüngel, Auftrag 30).
     expect(e.bribeCost).toBe(675);
     const before = wallet.balance(sim.state, 'dirty');
+    const resolve = e.resolve;
     expect(sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId: 'bribe' } }).ok).toBe(true);
     expect(wallet.balance(sim.state, 'dirty')).toBe(before - 675);
-    if (encounter(sim, encounterId).phase !== 'done') {
-      const result = sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId: 'bribe' } });
-      expect(result).toEqual({ ok: false, reason: 'Nicht genug Schwarzgeld (900 €).' });
-    }
+    // Bestechen senkt die Entschlossenheit stark (oder beendet die Sache gleich).
+    const after = encounter(sim, encounterId);
+    expect(after.phase === 'done' || after.resolve < resolve - 10).toBe(true);
+    const poor = createTestGame();
+    const id = startEncounter(poor.ctx('police'), { kind: 'policeChase', playerPresent: true }).encounterId;
+    wallet.lose(poor.ctx('test'), wallet.balance(poor.state, 'dirty') - 100, 'dirty', 'Test', 'loss.encounter');
+    const result = poor.dispatch({ type: 'encounters.act', payload: { encounterId: id, actionId: 'bribe' } });
+    expect(result).toEqual({ ok: false, reason: 'Nicht genug Schwarzgeld (675 €).' });
   });
 
   it('wer selbst dabei ist, kann sterben: Game Over mit Grund killed', () => {
@@ -353,7 +362,7 @@ describe('encounters', () => {
     const loaded = loadSimulation(state as unknown as typeof sim.state, sim.modules);
     const old = getEncounter(loaded.state, 7);
     expect(old).toMatchObject({ kind: 'policeChase', phase: 'done', outcome: 'success', participants: [], mode: null });
-    expect(loaded.state.moduleVersions.encounters).toBe(3);
+    expect(loaded.state.moduleVersions.encounters).toBe(4);
   });
 
   it('Spielstände der Version 2 bekommen den Weg im Briefing und die Beziehung im Ergebnis', () => {
