@@ -77,10 +77,11 @@ describe('fleet (Auftrag 33)', () => {
     expect(sim.dispatch({ type: 'logistics.pickup', payload: { by: 'player', vehicleId: 'private' } }).ok).toBe(true);
     expect(getTrips(sim.state)[0].items[0].amount).toBe(PRIVATE_CAR.capacity);
     sim.state.modules.logistics.trips = [];
+    sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'kalk' } });
     const van = buy(sim, 'van');
     const hired = sim.dispatch({ type: 'staff.hireDriver', payload: {} });
     expect(hired.ok).toBe(true);
-    expect(sim.dispatch({ type: 'logistics.pickup', payload: { by: 'driver' } }).ok).toBe(true);
+    expect(sim.dispatch({ type: 'logistics.pickup', payload: { by: 'driver', warehouseId: 'kalk' } }).ok).toBe(true);
     const [trip] = getTrips(sim.state);
     expect(trip.vehicleId).toBe(van);
     expect(trip.items[0].amount).toBe(7000);

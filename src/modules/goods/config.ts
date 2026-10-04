@@ -105,7 +105,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 6.918,
     lat: 50.948,
     cost: 0,
-    capacity: 20000,
+    capacity: 10000,
     description: 'Hinterhof an der Venloer Straße. Hier hat alles angefangen.',
   },
   {
@@ -115,7 +115,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 6.9555,
     lat: 50.964,
     cost: 2000,
-    capacity: 12000,
+    capacity: 6000,
     description: 'Doppelgarage nah an der Neusser Straße. Kurzer Weg zum Niehler Hafen.',
   },
   {
@@ -125,7 +125,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 6.92,
     lat: 50.9215,
     cost: 2200,
-    capacity: 10000,
+    capacity: 4000,
     description: 'Trockener Keller unter einem Copyshop, mitten im Studentenviertel.',
   },
   {
@@ -135,7 +135,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 7.006,
     lat: 50.9395,
     cost: 2500,
-    capacity: 40000,
+    capacity: 25000,
     description: 'Alte Werkshalle hinter der Kalker Hauptstraße. Viel Platz, wenig Nachbarn.',
   },
   {
@@ -145,7 +145,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 7.0105,
     lat: 50.962,
     cost: 2800,
-    capacity: 25000,
+    capacity: 12000,
     description: 'Kfz-Werkstatt mit Hinterhof. Transporter fallen hier nicht auf.',
   },
   {
@@ -155,7 +155,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 6.97,
     lat: 50.91,
     cost: 3200,
-    capacity: 15000,
+    capacity: 8000,
     description: 'Bootshaus am Rhein im Süden. Teuer, aber diskret.',
   },
   // Hamburg (Auftrag 30): fünf Standorte zum Kaufen, kein kostenloses (dort fängst du ohne Team an). Preise wie
@@ -167,7 +167,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 9.9285,
     lat: 53.5535,
     cost: 4200,
-    capacity: 25000,
+    capacity: 12000,
     description: 'Hinterhofwerkstatt zwischen Bio-Laden und Agentur. Kurze Wege nach Altona und auf den Kiez.',
   },
   {
@@ -177,7 +177,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 10.0145,
     lat: 53.5585,
     cost: 3300,
-    capacity: 10000,
+    capacity: 4000,
     description: 'Gewölbekeller unter einem Kiosk an der Langen Reihe. Hauptbahnhof um die Ecke.',
   },
   {
@@ -187,7 +187,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 9.995,
     lat: 53.508,
     cost: 3750,
-    capacity: 40000,
+    capacity: 25000,
     description: 'Alte Lagerhalle am Reiherstieg. Viel Platz, Container vor der Tür, der Hafen ist nah.',
   },
   {
@@ -197,7 +197,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 10.0335,
     lat: 53.5765,
     cost: 3000,
-    capacity: 12000,
+    capacity: 6000,
     description: 'Sammelgarage hinter einem Backsteinblock. Unauffällig und günstig, für Hamburger Verhältnisse.',
   },
   {
@@ -207,7 +207,7 @@ export const WAREHOUSES: readonly Warehouse[] = [
     lng: 9.9829,
     lat: 53.46529,
     cost: 4800,
-    capacity: 15000,
+    capacity: 8000,
     description: 'Bootshaus am Harburger Binnenhafen. Teuer, aber wer kommt hier schon vorbei.',
   },
 ];

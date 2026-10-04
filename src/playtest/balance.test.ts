@@ -141,6 +141,12 @@ describe('Balancing', () => {
             ` | Razzien ${e('police.raidPlanned')}, Kontrollen ${e('police.check')}, Festnahmen ${e('police.arrest')}` +
             ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,
         );
+        // Auftrag 33: Lager, Fahrzeuge, Routenwahl.
+        console.log(
+          `  Lager: abgelehnt ${(last.rejected * 100).toFixed(1)} % der Gramm, Regale ${e('goods.warehouseUpgraded')}, ` +
+            `Lager gekauft ${e('goods.warehouseBought')} | Fahrzeuge ${last.vehicles} (beschlagnahmt ${e('fleet.seized')}) | ` +
+            `Fahrten ${e('transport.started')}, am vollen Lager gewartet ${e('transport.waiting')}, Kontrollen unterwegs ${e('transport.stopped')}`,
+        );
         console.log(
           `  Kontostand (Schwarzgeld) am Ende von Tag 1-7: ${r.days
             .slice(0, 7)
@@ -189,6 +195,11 @@ describe('Balancing', () => {
             ` | ${last.gameOver ? `Game Over (${last.gameOver})` : 'keine Pleite'}` +
             ` | Liegeplatz ${last.berth ? 'ja' : 'nein'} | Razzien ${e('police.raidPlanned')}, Gang-Überfälle ${e('gang.raidStarted')}` +
             ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,
+        );
+        console.log(
+          `  Lager: abgelehnt ${(last.rejected * 100).toFixed(1)} % der Gramm, Regale ${e('goods.warehouseUpgraded')}, ` +
+            `Lager gekauft ${e('goods.warehouseBought')} | Fahrzeuge ${last.vehicles} | Fahrten ${e('transport.started')}, ` +
+            `am vollen Lager gewartet ${e('transport.waiting')}`,
         );
         console.log(
           `  Schwarzgeld je Tag: ${r.days.map((d) => d.dirty).join(' / ')}` +
