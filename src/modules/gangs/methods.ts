@@ -52,6 +52,7 @@ import {
   BLACKMAIL_BASE,
   BLACKMAIL_HEAT,
   BLACKMAIL_MAX,
+  BLACKMAIL_RAID_CHANCE,
   BLACKMAIL_STOCK_SHARE,
   BURGLARY_GUARD_STOP,
   BURGLARY_HOURS,
@@ -72,6 +73,7 @@ import {
   INTIMIDATION_LEAVE_CHANCE,
   METHOD_CHANCE,
   METHOD_COOLDOWN,
+  METHOD_FACTOR_BY_CITY,
   METHOD_GLOBAL_GAP,
   METHOD_HOSTILITY_RELIEF,
   POACH_EXTRA_SHARE,
@@ -81,6 +83,7 @@ import {
   POACH_TALK_HEAT,
   POACH_THREAT_LOYALTY,
   POACH_THREAT_STAY,
+  RAID_WEIGHT_FACTOR,
   RECOVER_SHARE,
   TIPOFF_HEAT,
   TIPOFF_RAID_CHANCE,
@@ -301,8 +304,11 @@ function eligible(ctx: Ctx, gang: Gang, method: GangMethod, stage: number): bool
 /** Methode nach den Gewichten der Gang wählen (nur, was gerade geht). */
 export function pickMethod(ctx: Ctx, gang: Gang, stage: number): GangMethod | null {
   const weights: Partial<Record<GangMethod, number>> = {};
+  const city = METHOD_FACTOR_BY_CITY[gang.cityId] ?? 1;
   for (const [method, w] of Object.entries(gang.traits.methods) as [GangMethod, number][]) {
-    if (w > 0 && eligible(ctx, gang, method, stage)) weights[method] = w;
+    // Ab Stufe 3 bleibt der Überfall die Hauptsache (RAID_WEIGHT_FACTOR), die anderen Methoden kommen dazu.
+    if (w > 0 && eligible(ctx, gang, method, stage))
+      weights[method] = method === 'raid' ? w * RAID_WEIGHT_FACTOR : w * city;
   }
   return weightedPick(ctx, weights);
 }
@@ -317,7 +323,8 @@ export function maybePressure(ctx: Ctx, gang: Gang, s: GangStatus): void {
   if (ctx.now < (g.nextMethodAt[gang.id] ?? 0)) return;
   if (g.lastMethodAt !== null && ctx.now - g.lastMethodAt < METHOD_GLOBAL_GAP) return;
   const stageFactor = s.stage >= 2 ? 1 : 0.4;
-  if (!ctx.chance(METHOD_CHANCE * gang.traits.aggression * stageFactor)) return;
+  const city = METHOD_FACTOR_BY_CITY[gang.cityId] ?? 1;
+  if (!ctx.chance(METHOD_CHANCE * city * gang.traits.aggression * stageFactor)) return;
   // Unterhalb von Stufe 3 keine Überfälle: die laufen über die bestehende Eskalation.
   const method = pickMethod(ctx, gang, Math.min(2, s.stage));
   if (!method || method === 'raid') return;
@@ -751,7 +758,7 @@ function resolveBlackmail(ctx: Ctx, incident: GangIncident, choice: string): Com
   }
   const veedelId = warehouseVeedel(w);
   if (veedelId) {
-    const raid = tipOffAgainstPlayer(ctx, veedelId, BLACKMAIL_HEAT, true);
+    const raid = tipOffAgainstPlayer(ctx, veedelId, BLACKMAIL_HEAT, ctx.chance(BLACKMAIL_RAID_CHANCE));
     journal.add(
       ctx,
       `${gang.name} macht die Drohung wahr: Die Polizei weiß vom ${w.name}.${raid ? ' Eine Razzia ist geplant.' : ''}`,

@@ -223,6 +223,13 @@ export const METHOD_CHANCE = 0.004;
 /** Abstand zwischen zwei Aktionen derselben Gang (Stufe 2) und zwischen zwei Aktionen irgendeiner Gang. */
 export const METHOD_COOLDOWN = 3 * DAY;
 export const METHOD_GLOBAL_GAP = DAY;
+/** Gewicht des Überfalls ab Stufe 3 mal diesem Faktor: Er bleibt die Hauptsache, die anderen Methoden kommen dazu. */
+export const RAID_WEIGHT_FACTOR = 2;
+/**
+ * Wie oft und wie stark die neuen Methoden pro Stadt zum Zug kommen (Faktor auf METHOD_CHANCE und auf die Gewichte
+ * außer Überfall). Hamburgs Gangs sind ohnehin stärker und härter, dort kommen die Methoden seltener dazu.
+ */
+export const METHOD_FACTOR_BY_CITY: Readonly<Record<string, number>> = { koeln: 1, hamburg: 0.4 };
 /** Nach einer Methode sinkt die Feindseligkeit der Gang um so viel (nach einem gelungenen Überfall: HOSTILITY_AFTER_LESSON). */
 export const METHOD_HOSTILITY_RELIEF = 20;
 /** Antwortfrist für Nachrichten zu Einbruch, Abwerben, Einschüchtern, Erpressung. */
@@ -252,20 +259,22 @@ export const POACH_TALK_HEAT = 8;
 export const POACH_RAISE_LOYALTY = 10;
 
 /** Einschüchtern: so viele Kunden kommen noch (Faktor), so lange. */
-export const INTIMIDATION_FACTOR = 0.5;
+export const INTIMIDATION_FACTOR = 0.6;
 export const INTIMIDATION_DURATION = 8 * HOUR;
 /** Sicherheit hinschicken: Chance, dass sie ohne Kampf abziehen (sonst Konfrontation). */
 export const INTIMIDATION_LEAVE_CHANCE = 0.5;
 
 /** Tipp an die Polizei: Heat im Veedel, Chance auf eine geplante Razzia. */
 export const TIPOFF_HEAT = 10;
-export const TIPOFF_RAID_CHANCE = 0.3;
+export const TIPOFF_RAID_CHANCE = 0.15;
 
 /** Erpressung: Grundbetrag plus Anteil am Warenwert des Lagers (Einkauf), gerundet; bei Weigerung Heat und Razzia. */
 export const BLACKMAIL_BASE = 400;
 export const BLACKMAIL_STOCK_SHARE = 0.15;
 export const BLACKMAIL_MAX = 3000;
 export const BLACKMAIL_HEAT = 18;
+/** Abgelehnte Erpressung: Chance, dass die Polizei daraufhin eine Razzia plant (Heat gibt es immer). */
+export const BLACKMAIL_RAID_CHANCE = 0.5;
 
 // Chancen von Gangs (Ton „gemischt“): einmal am Tag gewürfelt, nur bei guter Beziehung.
 /** Chance pro Tag und Gang auf eine Chance (Warnung, Gefallen), wenn die Beziehung reicht. */

@@ -591,14 +591,18 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   Hamburger Veedel nach 7/5/7 Tagen, keine Pleite, Köln bringt im Schlaf 7.500–11.000 € am Tag. Stellschrauben:
   `territory/config.ts` `SALE_INFLUENCE_FACTOR_BY_CITY` (Hamburg 0,6), `city/data.ts` (`relationFactor`,
   `bribeFactor`, `raidWarningBonus`, `wageFactor`, `propertyFactor`), `events/config.ts`, `spots/config.ts` `KNEIPE`.
-- Auftrag 23 (Gang-Methoden, Lieferprobleme mit Entscheidungen, Spot-Arten; 30 Tage, 8 Seeds, vorher = `main` nach
-  Auftrag 32): erstes Veedel im Schnitt an Tag 6,3 → 6,5, „Boss von Köln“ an Tag 17,4 → 17,3, Köln komplett an Tag
-  22,6 → 23,6 (alle 8 Seeds), Umsatz pro Tag Tag 6–15 9.369 → 9.305 €, keine Pleiten; Hamburg am Ende im Schnitt
-  1,1 → 1,0 Veedel (schwankt stark mit dem Zufall). Gang-Überfälle werden seltener, weil die Gangs auch andere Methoden
-  nutzen; nach jeder Methode sinkt ihre Feindseligkeit (`METHOD_HOSTILITY_RELIEF`), sonst blieben sie dauerhaft auf
-  Angriffsstufe und Hamburg wurde deutlich schwerer. Stellschrauben: `gangs/config.ts` (`METHOD_CHANCE`,
-  `METHOD_HOSTILITY_RELIEF`, `BURGLARY_*`, `POACH_*`, `INTIMIDATION_*`, `TIPOFF_*`, `BLACKMAIL_*`, `GOOD_TURN_CHANCE`),
-  `suppliers/config.ts` (`DECISION_*`, `DETOUR_*`, `BRIBE_*`, `LUCK_*`), `spots/kinds.ts` (Arten, `AWARENESS_*`, Ausbau).
+- Auftrag 23 (Gang-Methoden, Lieferprobleme mit Entscheidungen, Spot-Arten; 30 Tage, Köln 8 Seeds, Hamburg 16 Seeds,
+  vorher = `main` nach Auftrag 33): erstes Veedel im Schnitt an Tag 6,4 → 6,6, „Boss von Köln“ an Tag 17,3 → 16,8, Köln
+  komplett an Tag 23,3 → 22,5 (alle 8 Seeds), Umsatz pro Tag Tag 6–15 9.478 → 9.607 €, keine Pleiten; Hamburg am Ende
+  im Schnitt 1,8 → 1,5 Veedel, mindestens ein Veedel in 12 → 13 von 16 Seeds (schwankt stark mit dem Zufall).
+  Gang-Überfälle werden seltener, weil die Gangs auch andere Methoden nutzen; nach jeder Methode sinkt ihre
+  Feindseligkeit (`METHOD_HOSTILITY_RELIEF`), sonst blieben sie dauerhaft auf Angriffsstufe. Ab Stufe 3 bleibt der
+  Überfall die Hauptsache (`RAID_WEIGHT_FACTOR`), in Hamburg kommen die neuen Methoden seltener (`METHOD_FACTOR_BY_CITY`).
+  Der Bot schmiert bei drohender Beschlagnahme und nimmt bei Verspätung den Umweg; wer Lieferprobleme nur abwartet,
+  verliert in Hamburg (Schiff, Zoll) spürbar mehr Ware. Stellschrauben: `gangs/config.ts` (`METHOD_CHANCE`,
+  `METHOD_FACTOR_BY_CITY`, `RAID_WEIGHT_FACTOR`, `METHOD_HOSTILITY_RELIEF`, `BURGLARY_*`, `POACH_*`, `INTIMIDATION_*`,
+  `TIPOFF_*`, `BLACKMAIL_*`, `GOOD_TURN_CHANCE`), `suppliers/config.ts` (`DECISION_*`, `DETOUR_*`, `BRIBE_*`, `LUCK_*`),
+  `spots/kinds.ts` (Arten, `AWARENESS_*`, Ausbau).
 
 - Auftrag 32 (Preisindex, Rabatt-Aktionen, Marktereignisse, Qualität treibt Nachfrage, Wochenverträge; 30 Tage,
   32 Seeds, vorher = `main` nach Auftrag 31): erstes Veedel Ø Tag 6,5 → 6,5, „Boss von Köln“ Ø Tag 17,7 → 16,9, Köln

@@ -591,6 +591,8 @@ function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions
     'tribute',
     'ceasefire',
     'raise',
+    'bribe',
+    'detour',
     'hunt',
     'accept',
     'thanks',
