@@ -45,7 +45,7 @@ function openGame(): Simulation {
 function clean(shipment: Shipment): Shipment {
   if (shipment.delayMinutes) shipment.arrivesAt -= shipment.delayMinutes;
   if (shipment.promisedQuality) shipment.quality = shipment.promisedQuality;
-  for (const key of ['problem', 'problemAt', 'delayMinutes', 'problemRevealed', 'promisedQuality'] as const) {
+  for (const key of ['problem', 'problemAt', 'delayMinutes', 'problemRevealed', 'promisedQuality', 'luck'] as const) {
     delete shipment[key];
   }
   return shipment;
@@ -446,7 +446,7 @@ describe('suppliers', () => {
     expect(isUnlocked(loaded.state, 'rotterdam')).toBe(true);
     expect(isUnlocked(loaded.state, 'amsterdam')).toBe(false);
     expect(loaded.state.modules.suppliers.offered).toContain('koeln');
-    expect(loaded.state.moduleVersions.suppliers).toBe(4);
+    expect(loaded.state.moduleVersions.suppliers).toBe(5);
   });
 });
 

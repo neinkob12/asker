@@ -355,3 +355,36 @@ export const SUPPLIER_LOOKS: Readonly<Record<string, Partial<Look>>> = {
     extra: 'tattoo',
   },
 };
+
+// Lieferprobleme mit Entscheidungen (Auftrag 23, troubles.ts). Die Wahrscheinlichkeiten der Probleme bleiben, ein Teil
+// kommt als Nachricht mit Optionen und Frist; ohne Antwort gilt "abwarten" wie vorher.
+
+/** Anteil der Verspätungen bzw. drohenden Beschlagnahmen mit Rückfrage. */
+export const DECISION_SHARE_DELAY = 0.5;
+export const DECISION_SHARE_SEIZE = 0.5;
+/** Antwortfrist in Spielminuten (höchstens bis kurz vor der Ankunft). */
+export const DECISION_TIME = 90;
+/** Umweg: Aufpreis als Anteil am Paketpreis (mindestens DETOUR_MIN_COST), danach bleibt so viel der Verspätung. */
+export const DETOUR_COST_SHARE = 0.12;
+export const DETOUR_MIN_COST = 40;
+export const DETOUR_REMAINING = 0.3;
+/** Teillieferung: dieser Anteil kommt pünktlich, der Rest mit der Verspätung. */
+export const PARTIAL_SHARE = 0.5;
+/** Umleiten in ein anderes eigenes Lager der Stadt: so viel der Verspätung bleibt. */
+export const REDIRECT_REMAINING = 0.5;
+/** Schmieren bei drohender Beschlagnahme: Anteil am Paketpreis (mindestens BRIBE_MIN), Erfolgschance, Wartezeit. */
+export const BRIBE_SHARE = 0.3;
+export const BRIBE_MIN = 60;
+export const BRIBE_SUCCESS = 0.6;
+export const BRIBE_DELAY = 30;
+/**
+ * Chancen (Ton „gemischt“): bei Lieferungen ohne Problem mit dieser Wahrscheinlichkeit früher da, Ware obendrauf oder
+ * bessere Qualität (je ein Drittel).
+ */
+export const LUCK_CHANCE = 0.08;
+/** Früher da um diesen Anteil der Lieferzeit. */
+export const LUCK_EARLY = 0.25;
+/** Ware obendrauf (Anteil der Menge, [von, bis]). */
+export const LUCK_BONUS: readonly [number, number] = [0.1, 0.2];
+/** Bessere Qualität (+ [von, bis]). */
+export const LUCK_QUALITY: readonly [number, number] = [0.05, 0.1];

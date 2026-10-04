@@ -164,7 +164,8 @@ describe('Städte (Auftrag 30)', () => {
     // Zwei Tage live in Köln mit gutem Umsatz (gebucht auf Köln, die aktive Stadt).
     for (let d = 0; d < 2; d++) {
       sim.advance(DAY - (sim.state.time % DAY) - 60);
-      wallet.earn(sim.ctx('test'), 20000, 'dirty', 'Test', 'sales.street');
+      // Reichlich Umsatz: Die Rechte Hand kauft an einem Tag schon mal für 20.000 € nach (Bestellregeln).
+      wallet.earn(sim.ctx('test'), 35000, 'dirty', 'Test', 'sales.street');
       sim.advance(90);
     }
     expect(sleepInfo(sim.state, 'koeln')?.results.length).toBeGreaterThanOrEqual(2);
