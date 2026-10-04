@@ -2,6 +2,7 @@
 // Beiträge anderer Module über den Slot 'goods.warehouse': Hafen und Umlagern aus der Logistik, Markt) und
 // Lager-Marker auf der Karte. Seit Auftrag 26 ist die Lager-Seite der eine Ort für alles rund ums Lager.
 
+import { memo } from 'preact/compat';
 import { formatEuro, formatPercent } from '../../../core';
 import { addHtmlMarker, el, registerMapLayer } from '../../../map';
 import {
@@ -16,11 +17,14 @@ import {
   iconElement,
   List,
   ListItem,
+  memoState,
   registerHudItem,
   registerPanel,
   registerPhoneApp,
   Slot,
+  shallowEqual,
   useGame,
+  useGameSelector,
   useUi,
 } from '../../../ui';
 import {
@@ -72,66 +76,95 @@ function QualityLabel(props: { quality: number }) {
   );
 }
 
-/** Kurzanzeige im HUD: "2,1 kg Gras + 489 Stück Pillen" (die zwei größten Posten), dazu die Aufstellung zum Aufklappen. */
-function StockHud() {
-  const { state } = useGame();
-  const ui = useUi();
-  // Lager der aktiven Stadt (Auftrag 30): In Hamburg zählt nur, was dort liegt.
+const stockText = (r: { productId: string; amount: number }) =>
+  `${formatProductAmount(r.productId, r.amount)} ${productName(r.productId)}`;
+
+/**
+ * Lager der aktiven Stadt (Auftrag 30: In Hamburg zählt nur, was dort liegt), größte Posten zuerst. Einmal pro
+ * Spielstand gerechnet: Pille und Aufstellung lesen dieselbe Liste, ohne Lager zweimal zu durchlaufen.
+ */
+const stockView = memoState((state) => {
   const cityId = activeCity(state);
   const rows = [...stockSummary(state, undefined, cityId)].sort((a, b) => b.amount - a.amount);
-  const warehouses = getWarehouses(state, cityId);
-  const text = (r: (typeof rows)[number]) =>
-    `${formatProductAmount(r.productId, r.amount)} ${productName(r.productId)}`;
-  const short =
-    rows.length === 0
-      ? 'leer'
-      : rows.length <= 2
-        ? rows.map(text).join(' + ')
-        : `${text(rows[0])} + ${rows.length - 1} weitere`;
+  return { cityId, rows, warehouses: getWarehouses(state, cityId) };
+});
+
+/** Kurzanzeige im HUD: "2,1 kg Gras + 489 Stück Pillen" (die zwei größten Posten), dazu die Aufstellung zum Aufklappen. */
+const StockHud = memo(function StockHud() {
+  const ui = useUi();
+  // Nur die angezeigten Texte lesen: Die Kachel zeichnet neu, wenn sich Wert, Titel oder Ziel ändern.
+  const view = useGameSelector((state) => {
+    const { cityId, rows, warehouses } = stockView(state);
+    const short =
+      rows.length === 0
+        ? 'leer'
+        : rows.length <= 2
+          ? rows.map(stockText).join(' + ')
+          : `${stockText(rows[0])} + ${rows.length - 1} weitere`;
+    return {
+      value: warehouses.length === 0 ? 'kein Lager' : short,
+      title: rows.map(stockText).join(', ') || 'Lager leer',
+      empty: rows.length === 0,
+      warehouseId: warehouses[0]?.id ?? warehouseSites(cityId)[0]?.id ?? DEFAULT_WAREHOUSE,
+    };
+  }, shallowEqual);
   return (
     <HudPill
       icon="warehouse"
       color="goods"
       label="Lager"
-      value={warehouses.length === 0 ? 'kein Lager' : short}
-      title={rows.map(text).join(', ') || 'Lager leer'}
-      tone={rows.length === 0 ? 'bad' : undefined}
-      onClick={() =>
-        ui.openPanel('goods.warehouse', {
-          warehouseId: warehouses[0]?.id ?? warehouseSites(cityId)[0]?.id ?? DEFAULT_WAREHOUSE,
-        })
-      }
+      value={view.value}
+      title={view.title}
+      tone={view.empty ? 'bad' : undefined}
+      onClick={() => ui.openPanel('goods.warehouse', { warehouseId: view.warehouseId })}
       detailsAction="Lager öffnen"
-      details={
-        <div class="goods-flyout">
-          {rows.length === 0 ? (
-            <p class="goods-flyout__empty">Nichts auf Lager. Zeit für Nachschub.</p>
-          ) : (
-            <ul class="goods-flyout__rows">
-              {rows.map((r) => {
-                const inWarehouses = warehouses.filter(
-                  (w) => getStock(state, { warehouseId: w.id, productId: r.productId }) > 0,
-                );
-                return (
-                  <li key={r.productId}>
-                    <strong>{text(r)}</strong>
-                    <span>
-                      {qualityTier(r.quality).name} {formatPercent(r.quality)}
-                      {warehouses.length > 1 && inWarehouses.length > 0
-                        ? ` (${inWarehouses.map((w) => w.name.replace(/^(Lager|Garage|Halle|Keller) /, '')).join(', ')})`
-                        : ''}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <button type="button" class="hud-flyout__action is-secondary" onClick={() => ui.openPhone('suppliers.app')}>
-            Bestellen
-          </button>
-        </div>
-      }
+      // Eine Komponente statt fertigem Inhalt: Die Aufstellung rechnet erst, wenn die Karte aufgeklappt ist.
+      details={<StockFlyout />}
     />
+  );
+});
+
+/** Aufstellung des Lagers in der aufgeklappten Karte der HUD-Kachel (zeichnet sich selbst neu, solange sie offen ist). */
+function StockFlyout() {
+  const ui = useUi();
+  const lines = useGameSelector(
+    (state) => {
+      const { rows, warehouses } = stockView(state);
+      return rows.map((r) => {
+        const inWarehouses = warehouses.filter(
+          (w) => getStock(state, { warehouseId: w.id, productId: r.productId }) > 0,
+        );
+        const where =
+          warehouses.length > 1 && inWarehouses.length > 0
+            ? ` (${inWarehouses.map((w) => w.name.replace(/^(Lager|Garage|Halle|Keller) /, '')).join(', ')})`
+            : '';
+        return {
+          productId: r.productId,
+          text: stockText(r),
+          meta: `${qualityTier(r.quality).name} ${formatPercent(r.quality)}${where}`,
+        };
+      });
+    },
+    (a, b) => a.length === b.length && a.every((line, i) => shallowEqual(line, b[i])),
+  );
+  return (
+    <div class="goods-flyout">
+      {lines.length === 0 ? (
+        <p class="goods-flyout__empty">Nichts auf Lager. Zeit für Nachschub.</p>
+      ) : (
+        <ul class="goods-flyout__rows">
+          {lines.map((line) => (
+            <li key={line.productId}>
+              <strong>{line.text}</strong>
+              <span>{line.meta}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button type="button" class="hud-flyout__action is-secondary" onClick={() => ui.openPhone('suppliers.app')}>
+        Bestellen
+      </button>
+    </div>
   );
 }
 

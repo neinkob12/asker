@@ -206,8 +206,11 @@ export interface UiApi {
   openDialog<K extends DialogId>(id: K, props: DialogRegistry[K]): void;
   closeDialog(): void;
   toast(text: string, kind?: ToastKind, options?: ToastOptions): void;
-  /** Aktuellen Toast sofort ausblenden (der nächste aus der Warteschlange folgt). */
-  dismissToast(): void;
+  /**
+   * Toast sofort ausblenden (der nächste aus der Warteschlange folgt). Mit `id` nur genau diesen: Ein Banner, das
+   * inzwischen von einem neueren abgelöst wurde (Wischen, Tipp), räumt so nicht das neue ungesehen weg.
+   */
+  dismissToast(id?: number): void;
   /** Alarm-Zentrale: alles als gelesen markieren bzw. leeren. */
   markAlertsRead(): void;
   clearAlerts(): void;
@@ -223,7 +226,13 @@ export interface UiApi {
   back(): void;
   /** Banner am Spiel-Handy zeigen (mit Vibrieren). Sound spielt, wer es auslöst (siehe src/audio). */
   notify(notification: Omit<PhoneNotification, 'id'>): void;
-  dismissNotification(): void;
+  /** Banner ausblenden. Mit `id` nur, wenn gerade dieses Banner zu sehen ist (siehe dismissToast). */
+  dismissNotification(id?: number): void;
+  /**
+   * Banner anhalten, solange der Zeiger darüber steht oder der Fokus darin liegt (Barrierefreiheit: Zeit zum Lesen).
+   * Die Anzeigezeit läuft erst weiter, wenn es wieder losgelassen wird.
+   */
+  holdBanner(held: boolean): void;
   /** Mitteilungszentrale öffnen oder schließen (ohne Argument umschalten). */
   toggleNotificationCenter(open?: boolean): void;
   /** Alle Mitteilungen löschen. */
@@ -300,6 +309,8 @@ const TOAST_QUEUE = 5;
 const ALERT_LIMIT = 60;
 const NOTIFICATION_STACK = 12;
 const NOTIFICATION_MS = 5000;
+/** Nach dem Loslassen eines angehaltenen Banners bleibt noch kurz Zeit, bevor es verschwindet. */
+const BANNER_RELEASE_MS = 2500;
 /** Im ruhigen Modus: Mindestabstand zwischen zwei Bannern (echte Millisekunden). */
 const QUIET_GAP_MS = 15000;
 const ISLAND_PULSE_MS = 2600;
@@ -323,6 +334,7 @@ export class UiRuntime {
   private notificationId = 0;
   private lastQuietBanner = 0;
   private notificationTimer: ReturnType<typeof setTimeout> | null = null;
+  private bannerHeld = false;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private alertId = 0;
   private pulseId = 0;
@@ -406,6 +418,7 @@ export class UiRuntime {
     this.toastTimer = null;
     this.notificationTimer = null;
     this.pulseTimer = null;
+    this.bannerHeld = false;
     ui.toasts = [];
     ui.alerts = [];
     ui.notifications = [];
@@ -444,7 +457,7 @@ export class UiRuntime {
 
   /** Zeigt den ersten Toast der Warteschlange für seine Dauer, danach den nächsten. */
   private scheduleToast(): void {
-    if (this.toastTimer) return;
+    if (this.toastTimer || this.bannerHeld) return;
     const current = this.ui.toasts[0];
     if (!current) return;
     // Ein Banner (Nachricht) hat Vorrang und verdeckt den Toast: Seine Zeit läuft erst, wenn er zu sehen ist.
@@ -455,6 +468,18 @@ export class UiRuntime {
       this.requestRender();
       this.scheduleToast();
     }, TOAST_MS[current.kind]);
+  }
+
+  /** Blendet das Banner mit dieser ID nach `ms` aus (außer es ist angehalten, dann erst nach dem Loslassen). */
+  private startNotificationTimer(id: number, ms: number): void {
+    if (this.notificationTimer) clearTimeout(this.notificationTimer);
+    this.notificationTimer = null;
+    if (this.bannerHeld) return;
+    this.notificationTimer = setTimeout(() => {
+      this.notificationTimer = null;
+      if (this.ui.notification?.id === id) this.ui.notification = null;
+      this.requestRender();
+    }, ms);
   }
 
   /** Ruhiger Modus: Darf jetzt ein Banner erscheinen? Merkt sich den Zeitpunkt, wenn ja. */
@@ -616,8 +641,13 @@ export class UiRuntime {
             ui.alerts = [alert, ...ui.alerts].slice(0, ALERT_LIMIT);
           }
         }),
-      dismissToast: () =>
+      dismissToast: (id) =>
         update(() => {
+          // Mit ID nur diesen Toast (er kann schon von allein weg sein, dann ist der nächste nicht gemeint).
+          if (id !== undefined && ui.toasts[0]?.id !== id) {
+            ui.toasts = ui.toasts.filter((t) => t.id !== id);
+            return;
+          }
           if (this.toastTimer) clearTimeout(this.toastTimer);
           this.toastTimer = null;
           ui.toasts = ui.toasts.slice(1);
@@ -705,11 +735,7 @@ export class UiRuntime {
               // Nicht jedes Gerät kann vibrieren.
             }
           }
-          if (this.notificationTimer) clearTimeout(this.notificationTimer);
-          this.notificationTimer = setTimeout(() => {
-            if (ui.notification?.id === id) ui.notification = null;
-            this.requestRender();
-          }, NOTIFICATION_MS);
+          this.startNotificationTimer(id, NOTIFICATION_MS);
         }),
       pulseIsland: (pulse) =>
         update(() => {
@@ -739,10 +765,26 @@ export class UiRuntime {
         update(() => {
           ui.island = { ...ui.island, expanded: expanded ?? !ui.island.expanded };
         }),
-      dismissNotification: () =>
+      dismissNotification: (id) =>
         update(() => {
-          ui.notification = null;
+          // Mit ID nur das Banner, das gemeint war: Ein neues, das während der Wisch-Animation kam, bleibt.
+          if (id === undefined || ui.notification?.id === id) ui.notification = null;
         }),
+      holdBanner: (held) => {
+        if (held === this.bannerHeld) return;
+        update(() => {
+          this.bannerHeld = held;
+          if (held) {
+            if (this.notificationTimer) clearTimeout(this.notificationTimer);
+            if (this.toastTimer) clearTimeout(this.toastTimer);
+            this.notificationTimer = null;
+            this.toastTimer = null;
+          } else if (ui.notification) {
+            this.startNotificationTimer(ui.notification.id, BANNER_RELEASE_MS);
+          }
+          // Ein Toast bekommt seine Zeit beim nächsten Zeichnen (scheduleToast in requestRender).
+        });
+      },
       toggleNotificationCenter: (open) =>
         update(() => {
           ui.notificationCenter = open ?? !ui.notificationCenter;

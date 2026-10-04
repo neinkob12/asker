@@ -5,7 +5,7 @@
 // Gesten im Handy: hochwischen = weg, herunterziehen = Mitteilungszentrale (Regeln in gestureModel.ts).
 
 import type { JSX } from 'preact';
-import { useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { type ChipColor, Icon, IconChip } from '../components';
 import { useRuntime } from '../hooks';
 import { phoneApps } from '../registry';
@@ -48,10 +48,11 @@ function bannerContent(ui: ReturnType<typeof useRuntime>['ui'], api: UiApi): Ban
       icon: n.icon ?? 'bell',
       color: tile.color,
       open: () => {
-        api.dismissNotification();
+        api.dismissNotification(n.id);
         api.openPhone(n.appId ?? null, n.params);
       },
-      dismiss: api.dismissNotification,
+      // Mit ID: Kommt während des Wegwischens ein neues Banner, bleibt es stehen.
+      dismiss: () => api.dismissNotification(n.id),
     };
     if (tile.style) content.style = tile.style;
     return content;
@@ -65,27 +66,37 @@ function bannerContent(ui: ReturnType<typeof useRuntime>['ui'], api: UiApi): Ban
     icon: t.icon ?? TOAST_ICONS[t.kind],
     color: TOAST_CHIPS[t.kind],
     open: () => {
-      api.dismissToast();
+      api.dismissToast(t.id);
       if (t.target) api.flyTo(t.target, 15.5);
       else api.openPhone('core.history');
     },
-    dismiss: api.dismissToast,
+    dismiss: () => api.dismissToast(t.id),
   };
+}
+
+/** Maus (nicht Finger oder Stift): Nur sie schwebt über dem Banner, ein Tipp löst sonst ein Pausieren ohne Ende aus. */
+function isMouse(e: PointerEvent): boolean {
+  return e.pointerType === 'mouse';
 }
 
 function Notice(props: { class: string; swipe?: boolean }) {
   const { ui, api } = useRuntime();
   const box = useRef<HTMLDivElement>(null);
   const n = bannerContent(ui, api);
+  const key = n?.key;
+  // Verschwindet oder wechselt das Banner unter dem Zeiger, kommt kein Loslassen mehr: dann hier lösen.
+  useEffect(() => () => api.holdBanner(false), [key, api]);
   if (!n) return null;
   const open = n.open;
-  const paint = (y: number) => {
-    if (box.current) box.current.style.transform = y === 0 ? '' : `translate3d(0,${y}px,0)`;
-  };
   const swipe = (e: PointerEvent) => {
-    if (!props.swipe || e.button !== 0 || !box.current) return;
-    const height = box.current.offsetHeight || 80;
-    startDrag(e, box.current, {
+    // Das Element merken: Kommt während der Animation ein neues Banner (neuer Schlüssel), darf sie nicht das neue bewegen.
+    const el = box.current;
+    if (!props.swipe || e.button !== 0 || !el) return;
+    const paint = (y: number) => {
+      el.style.transform = y === 0 ? '' : `translate3d(0,${y}px,0)`;
+    };
+    const height = el.offsetHeight || 80;
+    startDrag(e, el, {
       axis: 'y',
       onMove: ({ dy }) => paint(dy < 0 ? dy : rubberBand(dy, height * 2)),
       onEnd: ({ dy, vy }) => {
@@ -104,6 +115,7 @@ function Notice(props: { class: string; swipe?: boolean }) {
           velocity: vy * 1000,
           onFrame: paint,
           onRest: () => {
+            // n.dismiss trägt die ID: Ein inzwischen eingetroffenes neues Banner bleibt sichtbar.
             if (result === 'dismiss') n.dismiss();
           },
         });
@@ -111,13 +123,17 @@ function Notice(props: { class: string; swipe?: boolean }) {
     });
   };
   return (
+    // Die Ansage für Screenreader macht NoticeAnnouncer (dauerhaft eingehängt); ein neu eingehängtes role="status"
+    // wird meist nicht vorgelesen.
     <div
       class={`phone-notice ${props.class}`}
-      role="status"
-      aria-live="polite"
       key={n.key}
       ref={box}
       onPointerDown={(e) => swipe(e as unknown as PointerEvent)}
+      onPointerEnter={(e) => isMouse(e as unknown as PointerEvent) && api.holdBanner(true)}
+      onPointerLeave={(e) => isMouse(e as unknown as PointerEvent) && api.holdBanner(false)}
+      onFocusIn={() => api.holdBanner(true)}
+      onFocusOut={() => api.holdBanner(false)}
     >
       <button type="button" class="phone-notice__main" onClick={open}>
         <IconChip icon={n.icon} color={n.color} style={n.style} size="lg" shape="tile" solid />
@@ -136,6 +152,26 @@ function Notice(props: { class: string; swipe?: boolean }) {
   );
 }
 
+/**
+ * Dauerhaft eingehängte Live-Region (nur für Screenreader): Der Text wechselt, die Region bleibt. Das Banner selbst
+ * wird bei jedem neuen Eintrag neu gezeichnet; eine so neu angelegte Region melden Screenreader meist nicht.
+ * Kurz leeren und dann füllen, damit auch derselbe Text zweimal angesagt wird.
+ */
+function NoticeAnnouncer(props: { id: string | undefined; text: string }) {
+  const [said, setSaid] = useState('');
+  useEffect(() => {
+    setSaid('');
+    if (!props.text) return;
+    const timer = setTimeout(() => setSaid(props.text), 60);
+    return () => clearTimeout(timer);
+  }, [props.id]);
+  return (
+    <div class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-live-region="">
+      {said}
+    </div>
+  );
+}
+
 /** Banner im offenen Handy (hochwischen = weg, herunterziehen = Mitteilungszentrale). */
 export function PhoneNotice() {
   return <Notice class="is-inside" swipe />;
@@ -143,7 +179,13 @@ export function PhoneNotice() {
 
 /** Banner über der Karte, solange das Handy weggelegt ist. */
 export function NotificationBanner() {
-  const { ui } = useRuntime();
-  if (ui.phone.open) return null;
-  return <Notice class="is-floating" />;
+  const { ui, api } = useRuntime();
+  // Die Ansage gehört zu jedem Banner, ob im offenen Handy oder darüber: eine Region, immer da.
+  const n = bannerContent(ui, api);
+  return (
+    <>
+      <NoticeAnnouncer id={n?.key} text={n ? `${n.title}. ${n.text}` : ''} />
+      {!ui.phone.open && <Notice class="is-floating" />}
+    </>
+  );
 }

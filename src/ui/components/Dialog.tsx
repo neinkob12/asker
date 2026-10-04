@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact';
+import { useId } from 'preact/hooks';
 import { type ChipColor, Icon, IconChip } from './Icon';
 import type { IconName } from './icons';
 
@@ -23,9 +24,14 @@ export interface DialogProps {
 
 const TONE_CHIP: Record<string, ChipColor> = { accent: 'money', warn: 'warn', bad: 'danger', info: 'place' };
 
-/** Modaler Dialog mit abgedunkeltem Hintergrund. Am Handy als Blatt von unten. */
+/**
+ * Modaler Dialog mit abgedunkeltem Hintergrund. Am Handy als Blatt von unten. Fokus, Sperren des Hintergrunds
+ * (inert) und Fokus-Rückgabe übernimmt DialogHost (shell/Hosts.tsx); tabIndex -1 lässt den Dialog den Fokus aufnehmen,
+ * ein Element mit `data-autofocus` bekommt ihn stattdessen.
+ */
 export function Dialog(props: DialogProps) {
   const tone = props.tone ?? 'accent';
+  const titleId = useId();
   return (
     // Klick daneben schließt; per Tastatur schließt Escape (global in src/ui/start.tsx).
     // biome-ignore lint/a11y/noStaticElementInteractions: Hintergrund, Tastatur über Escape
@@ -35,12 +41,16 @@ export function Dialog(props: DialogProps) {
         class={`ui-dialog ui-dialog--${props.size ?? 'narrow'} ui-dialog--${tone} ${props.class ?? ''}`}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
       >
         <header class="ui-dialog__head">
           {props.icon && <IconChip icon={props.icon} color={TONE_CHIP[tone]} size="lg" class="ui-dialog__icon" />}
           <div class="ui-dialog__heading">
             {props.kicker && <div class="ui-dialog__kicker">{props.kicker}</div>}
-            <h2 class="ui-dialog__title">{props.title}</h2>
+            <h2 class="ui-dialog__title" id={titleId}>
+              {props.title}
+            </h2>
           </div>
           {props.onClose && (
             <button type="button" class="ui-dialog__close" onClick={props.onClose} aria-label="Schließen">

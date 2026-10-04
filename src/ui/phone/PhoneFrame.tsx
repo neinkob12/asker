@@ -12,6 +12,7 @@
 // Tab-Leiste: docs/handy-design.md, Abschnitt 5.
 
 import type { ComponentType } from 'preact';
+import { memo } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { clock, type GameState, messages } from '../../core';
 import {
@@ -27,7 +28,7 @@ import {
   SwipeRow,
 } from '../components';
 import { sectionTitle } from '../components/section';
-import { useRuntime } from '../hooks';
+import { shallowEqual, useRuntime, useRuntimeSelector } from '../hooks';
 import { hasOverlay } from '../overlays';
 import {
   type Advice,
@@ -44,6 +45,7 @@ import { tabIcon, tabTint, useIsMobile, useIsPhoneDevice } from '../shell/layout
 import { collectAdvice } from '../shell/NextStep';
 import { Slot } from '../shell/Slot';
 import { SectionContent, TabContent } from '../shell/TabContent';
+import { stateRevision } from '../stateMemo';
 import { CallScreen } from './CallScreen';
 import { DynamicIsland } from './DynamicIsland';
 import { startDrag } from './drag';
@@ -234,15 +236,20 @@ function markTapped(button: HTMLElement): void {
   button.setAttribute('data-tapped', '');
 }
 
-function AppTile(props: { app: HomeApp; onOpen: () => void; dock?: boolean }) {
+const sameTile = (a: { app: HomeApp; dock?: boolean }, b: { app: HomeApp; dock?: boolean }) =>
+  a.dock === b.dock && shallowEqual(a.app, b.app);
+
+/** Kachel: nur neu zeichnen, wenn sich ihre Anzeige ändert (onOpen hängt allein an der ID und bleibt gleich wirksam). */
+const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void; dock?: boolean }) {
   const { app } = props;
   const runtime = useRuntime();
   const tile = tileColor(app.color);
-  const state = runtime.state;
   return (
     <ContextMenu
       label={`Schnellaktionen ${app.name}`}
-      actions={() => (state ? tileActions(app, runtime.api, state) : [])}
+      // Den Zustand erst beim Öffnen holen: Die Kachel wird nicht bei jedem Schritt neu gezeichnet und kennt sonst einen
+      // alten Stand (z.B. nach dem Laden eines anderen Spiels).
+      actions={() => (runtime.state ? tileActions(app, runtime.api, runtime.state) : [])}
       preview={
         <span class="phone__app-preview">
           <IconChip icon={app.icon} color={tile.color} style={tile.style} shape="tile" solid size="xl" />
@@ -275,7 +282,7 @@ function AppTile(props: { app: HomeApp; onOpen: () => void; dock?: boolean }) {
       </button>
     </ContextMenu>
   );
-}
+}, sameTile);
 
 /**
  * Welchen dringenden Rat der Spieler weggewischt hat (kommt erst wieder, wenn ein anderer kommt). Der Schlüssel enthält
@@ -333,11 +340,28 @@ export function urgentAdvice(state: GameState): Advice | null {
   return dismissedAdvice === adviceKey(top) ? null : top;
 }
 
-function HomeScreen() {
+const sameApps = (a: HomeApp[], b: HomeApp[]) => a.length === b.length && a.every((app, i) => shallowEqual(app, b[i]));
+
+/** Beiträge zu 'phone.home' lesen beliebig im Zustand: Sie ziehen bei jedem neuen Stand nach, der Rest des Bildschirms nicht. */
+function HomeSlot() {
+  useRuntimeSelector(() => stateRevision());
+  return <Slot name="phone.home" />;
+}
+
+/**
+ * Startbildschirm. Ohne Props und mit eigenen Auszügen (Kacheln samt Zählern, dringender Rat) gelesen: Er zeichnet nur
+ * neu, wenn sich eine Kachel, ein Zähler oder der dringende Rat ändert, nicht bei jedem Simulationsschritt.
+ */
+const HomeScreen = memo(function HomeScreen() {
   const runtime = useRuntime();
+  const all = useRuntimeSelector((rt) => (rt.state ? homeApps(rt.state, rt.ui) : []), sameApps);
+  // Der Rat selbst (mit Knopf) wird hier gelesen, ausgelöst wird das Neuzeichnen über seinen Schlüssel (ID und Titel).
+  useRuntimeSelector((rt) => {
+    const advice = rt.state ? urgentAdvice(rt.state) : null;
+    return advice ? adviceKey(advice) : null;
+  });
   const state = runtime.state;
   if (!state) return null;
-  const all = homeApps(state, runtime.ui);
   const dock = DOCK.map((id) => all.find((a) => a.id === id)).filter((a): a is HomeApp => !!a);
   const rank = (a: HomeApp) => {
     const i = HOME_ORDER.indexOf(a.id);
@@ -351,7 +375,7 @@ function HomeScreen() {
       <div class="phone__home-scroll">
         {urgent && <UrgentAdvice key={urgent.id} advice={urgent} />}
         <div class="phone__widgets">
-          <Slot name="phone.home" />
+          <HomeSlot />
         </div>
         <div class="phone__apps">
           {grid.map((a) => (
@@ -368,9 +392,8 @@ function HomeScreen() {
       )}
     </div>
   );
-}
+});
 
-/** Bereich eines Moduls (Tab) als App-Seite. Zurück führt zum Startbildschirm. */
 function TabScreen(props: { tab: SidebarTab }) {
   return (
     <PhoneScreen title={props.tab.title} class="phone-screen--tab">
