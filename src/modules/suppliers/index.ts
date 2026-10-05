@@ -34,6 +34,7 @@ import {
   type CommandResult,
   type Contact,
   type Ctx,
+  cityDayDice,
   clock,
   defineModule,
   formatEuro,
@@ -922,15 +923,18 @@ function onCityUnlocked(ctx: Ctx, cityId: string): void {
 function rollDeals(ctx: Ctx): void {
   const s = ctx.state.modules.suppliers;
   s.deals = s.deals.filter((d) => d.endsAt > ctx.now);
+  const day = Math.floor(ctx.now / MINUTES_PER_DAY);
   for (const cityId of citiesUnlocked(ctx.state)) {
-    if (s.deals.some((d) => d.cityId === cityId) || !ctx.chance(DEAL_CHANCE_PER_DAY)) continue;
+    // Würfel pro Stadt und Tag (Auftrag 40): unabhängig davon, welche Städte sonst frei sind.
+    const dice = cityDayDice(ctx.state.meta.seed, 'suppliers.deal', cityId, day);
+    if (s.deals.some((d) => d.cityId === cityId) || !dice.chance(DEAL_CHANCE_PER_DAY)) continue;
     const offers = getSuppliers(ctx.state, cityId)
       .filter((supplier) => !isBlocked(ctx.state, supplier.id))
       .flatMap((supplier) => availablePackages(ctx.state, supplier.id, cityId).map((pkg) => ({ supplier, pkg })));
     if (offers.length === 0) continue;
-    const { supplier, pkg } = ctx.pick(offers);
+    const { supplier, pkg } = dice.pick(offers);
     const [minDiscount, maxDiscount] = DEAL_DISCOUNT;
-    const discount = Math.round((minDiscount + ctx.random() * (maxDiscount - minDiscount)) * 20) / 20;
+    const discount = Math.round((minDiscount + dice.random() * (maxDiscount - minDiscount)) * 20) / 20;
     const [minDays, maxDays] = DEAL_DAYS;
     const deal: SupplierDeal = {
       id: ctx.nextId(),
@@ -939,11 +943,11 @@ function rollDeals(ctx: Ctx): void {
       cityId,
       discount,
       startedAt: ctx.now,
-      endsAt: ctx.now + ctx.randomInt(minDays, maxDays) * MINUTES_PER_DAY,
+      endsAt: ctx.now + dice.randomInt(minDays, maxDays) * MINUTES_PER_DAY,
     };
     s.deals.push(deal);
     const until = `${clock.weekdayName(deal.endsAt - 1)} Abend`;
-    const text = ctx
+    const text = dice
       .pick(DEAL_PITCHES)
       .replace('{package}', `${pkg.label}${citiesUnlocked(ctx.state).length > 1 ? ` für ${cityName(cityId)}` : ''}`)
       .replace('{discount}', `${Math.round(discount * 100)} %`)

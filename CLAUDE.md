@@ -159,6 +159,11 @@ export default defineModule({
 - **Lesen mit `state`, schreiben mit `ctx`.** Öffentliche Lese-Funktionen nehmen `state: GameState`,
   schreibende nehmen `ctx: Ctx` (hat `emit`, `dispatch`, `random`, `nextId` …).
 - **Zufall nur über `ctx.random()`, `ctx.chance()`, `ctx.pick()`, `ctx.randomInt()`**, nie `Math.random()` oder `Date`.
+  Dokumentierte Ausnahme (Auftrag 40): Würfe fest aus Seed und Schlüssel mit `keyedRandom(key)`, `keyedDice(key)` bzw.
+  `cityDayDice(seed, zweck, stadt, tag)` aus dem Kern (`src/core/rng.ts`), deterministisch, aber ohne Zustand im
+  Spielstand. Dafür, dass ein Wurf die Würfelfolge der Module nicht verschiebt (Eigenschaften der Leute) und für Würfe
+  pro Stadt (Marktindex, Rabatt-Aktionen, Marktereignisse): Was eine Stadt würfelt, hängt nicht davon ab, welche und
+  wie viele Städte frei sind.
 - Zustand nur als JSON-Daten (keine Klassen, Maps, Funktionen, `undefined` in Arrays).
 - Befehle kommen vom Spieler, aus Handy-Antworten oder von Leutnants (`ctx.dispatch(cmd, { actor: 'staff:<id>' })`).
 - Ereignisse werden am Ende des Schritts bzw. Befehls in fester Reihenfolge zugestellt.

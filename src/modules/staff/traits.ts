@@ -2,7 +2,7 @@
 // ctx.random(): So bekommen alte Spielstände in der Migration dieselben Eigenschaften wie beim nächsten Laden, und die
 // Würfelfolge der Module bleibt, wie sie war. Die Wirkung sind kleine Faktoren (TRAITS, RELATIONS in config.ts).
 
-import { type Ctx, feminineName, type GameState, rngNext, seedStream } from '../../core';
+import { type Ctx, feminineName, type GameState, keyedRandom } from '../../core';
 import {
   REFERRAL_FRIENDS_SHARE,
   RELATION_CHANCE,
@@ -19,15 +19,8 @@ import type { RelationKind, StaffMember, StaffRelation, TraitId } from './types'
 export const TRAIT_IDS = Object.keys(TRAITS) as TraitId[];
 export const RELATION_KINDS = Object.keys(RELATIONS) as RelationKind[];
 
-/** Zufallsfolge fest aus einem Schlüssel (gleicher Schlüssel = gleiche Folge). */
-export function keyedRandom(key: string): () => number {
-  let s = seedStream(0x5eed, key);
-  return () => {
-    const [value, next] = rngNext(s);
-    s = next;
-    return value;
-  };
-}
+/** Zufallsfolge fest aus einem Schlüssel, seit Auftrag 40 im Kern (`src/core/rng.ts`); hier weiter exportiert. */
+export { keyedRandom };
 
 function weighted<T>(random: () => number, items: readonly T[], weight: (item: T) => number): T | undefined {
   const total = items.reduce((sum, item) => sum + weight(item), 0);
