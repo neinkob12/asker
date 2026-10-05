@@ -3,6 +3,12 @@
 /** Die Gebühr sinkt durch Boni (Buchhalter) höchstens bis hierhin. */
 export const MIN_LAUNDERING_FEE = 0.03;
 
+/**
+ * Obergrenze pro Stadt (Auftrag 39), fehlt: 1. Solange die Stadt aktiv ist, nehmen alle Wege so viel mehr auf einmal
+ * (Frankfurt: Banken und Messe, da fallen größere Summen nicht auf).
+ */
+export const LAUNDERING_CAPACITY_BY_CITY: Readonly<Record<string, number>> = { frankfurt: 1.5 };
+
 /** Kleinster Betrag pro Wäsche (beim billigsten Weg). */
 export const MIN_LAUNDERING_AMOUNT = 100;
 

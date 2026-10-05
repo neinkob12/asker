@@ -34,8 +34,11 @@ import {
 
 /** Berlin für einen Test spielbar machen (Schablone aus), danach wieder zurück. */
 const berlin = CITIES.find((c) => c.id === 'berlin') as CityDef & { template?: boolean };
+/** Frankfurt (Auftrag 39, spielbar) für einen Test sperren, danach wieder zurück. */
+const frankfurt = CITIES.find((c) => c.id === 'frankfurt') as CityDef & { template?: boolean };
 afterEach(() => {
   berlin.template = true;
+  delete frankfurt.template;
 });
 
 function quietGame(seed = 1): Simulation {
@@ -113,13 +116,15 @@ describe('Freie Reihenfolge (Auftrag 36)', () => {
     expect(new Set(CITIES.map((c) => c.contact.id)).size).toBe(CITIES.length);
   });
 
-  it('Schablonen bleiben gesperrt: Nach Köln komplett ruft nur Hamburg an', () => {
+  it('Schablonen bleiben gesperrt, Frankfurt kommt zuletzt: Nach Köln komplett ruft Hamburg an', () => {
     const sim = quietGame();
-    expect(freeCities(sim.state)).toEqual(['hamburg']);
+    expect(freeCities(sim.state)).toEqual(['hamburg', 'frankfurt']);
     completeKoeln(sim);
     expect(offerFrom(sim.state)).toBe('koeln');
-    expect(offerCities(sim.state)).toEqual(['hamburg']);
+    // Frankfurt liegt näher an Köln, meldet sich als optionale Stadt aber erst nach Hamburg (offerLast).
+    expect(offerCities(sim.state)).toEqual(['hamburg', 'frankfurt']);
     expect(offerStatus(sim.state, 'hamburg')).toBe('scheduled');
+    expect(offerStatus(sim.state, 'frankfurt')).toBe('queued');
     expect(sim.dispatch({ type: 'city.requestCall', payload: { cityId: 'berlin' } }).ok).toBe(false);
     sim.advance(OFFER_CALL_DELAY + 5);
     expect(ringingFrom(sim, 'hamburg')).toBeDefined();
@@ -130,8 +135,8 @@ describe('Freie Reihenfolge (Auftrag 36)', () => {
     const sim = quietGame();
     readyRightHand(sim);
     completeKoeln(sim);
-    // Von Köln aus ist Hamburg näher als Berlin.
-    expect(offerCities(sim.state)).toEqual(['hamburg', 'berlin']);
+    // Von Köln aus ist Hamburg näher als Berlin; Frankfurt kommt zuletzt.
+    expect(offerCities(sim.state)).toEqual(['hamburg', 'berlin', 'frankfurt']);
     expect(offerStatus(sim.state, 'berlin')).toBe('queued');
     sim.advance(OFFER_CALL_DELAY + 5);
     const call = ringingFrom(sim, 'hamburg');
@@ -213,14 +218,14 @@ describe('Freie Reihenfolge (Auftrag 36)', () => {
     expect(loaded.state.modules.city.rounds).toEqual(['koeln']);
   });
 
-  it('zwei Runden: Nach Hamburg komplett zählt nur noch Berlin, Hamburgs erledigtes Angebot nicht mehr', () => {
+  it('zwei Runden: Nach Hamburg komplett zählen Berlin und Frankfurt, Hamburgs erledigtes Angebot nicht mehr', () => {
     const sim = quietGame();
     moveToHamburg(sim);
     berlin.template = false;
     expect(offerStatus(sim.state, 'hamburg')).toBe('none');
     takeCity(sim, 'hamburg');
     expect(offerFrom(sim.state)).toBe('hamburg');
-    expect(offerCities(sim.state)).toEqual(['berlin']);
+    expect(offerCities(sim.state)).toEqual(['berlin', 'frankfurt']);
     expect(sim.dispatch({ type: 'city.requestCall', payload: { cityId: 'berlin' } }).ok).toBe(true);
     sim.dispatch({ type: 'city.answerOffer', payload: { choice: 'later', cityId: 'berlin' } });
     expect(currentOffer(sim.state)).toBe('berlin');
@@ -230,6 +235,7 @@ describe('Freie Reihenfolge (Auftrag 36)', () => {
   });
 
   it('eine leere Runde (keine Stadt frei) kommt nach, sobald eine Stadt spielbar wird', () => {
+    frankfurt.template = true;
     const sim = quietGame();
     moveToHamburg(sim);
     takeCity(sim, 'hamburg');

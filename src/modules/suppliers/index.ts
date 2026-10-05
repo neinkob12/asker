@@ -189,6 +189,11 @@ export interface Supplier {
    * { koeln: 'A3', hamburg: 'A7' }. Fehlt die Stadt, nimmt roads die Zufahrt in der besten Richtung.
    */
   via?: Readonly<Record<string, string>>;
+  /**
+   * Zoll (Auftrag 39): zusätzliche Chance auf Beschlagnahme pro Lieferung, unabhängig vom Vertrauen (Fracht am
+   * Flughafen 0,04). Fehlt: 0.
+   */
+  customs?: number;
 }
 
 /** Autobahn, über die der Kurier in die Stadt kommt (supplier.via), oder undefined. */
@@ -599,11 +604,12 @@ export function activeDeal(
 
 /**
  * Lieferproblem auswürfeln. roll ist eine Zufallszahl in [0, 1).
- * Wahrscheinlichkeit steigt mit schlechter Zuverlässigkeit, sinkt mit Vertrauen; am Hafen kommt der Zoll dazu.
+ * Wahrscheinlichkeit steigt mit schlechter Zuverlässigkeit, sinkt mit Vertrauen; am Hafen kommt der Zoll dazu, bei
+ * Lieferanten mit eigenem Zoll (customs, z.B. Fracht am Flughafen) dessen Zusatz.
  */
 export function rollShipmentProblem(roll: number, supplier: Supplier, trust: number): ShipmentProblem | null {
   const risk = (1 - supplier.reliability) * (1 - trust / 200);
-  const seize = risk * SEIZE_FACTOR + (supplier.kind === 'port' ? PORT_SEIZE_EXTRA : 0);
+  const seize = risk * SEIZE_FACTOR + (supplier.kind === 'port' ? PORT_SEIZE_EXTRA : 0) + (supplier.customs ?? 0);
   const delay = seize + risk * DELAY_FACTOR;
   const bad = delay + risk * BAD_QUALITY_FACTOR;
   if (roll < seize) return 'seized';
@@ -1140,7 +1146,7 @@ function canRestock(state: GameState, supplier: Supplier): boolean {
 
 export default defineModule({
   id: 'suppliers',
-  version: 6,
+  version: 7,
   dependsOn: ['goods'],
   init: (ctx) => {
     const frankfurt = SUPPLIERS.find((s) => s.id === 'frankfurt') ?? SUPPLIERS[0];
@@ -1205,6 +1211,13 @@ export default defineModule({
       ...old,
       shipments: old.shipments.map((s) => ({ ...s })),
     }),
+    // Version 7 (Auftrag 39): Neue Lieferanten ohne Bedingungen (Frankfurt: Fracht am Flughafen) sind auch in alten
+    // Spielständen zu haben, wie in Version 4.
+    7: (old: SuppliersState): SuppliersState => {
+      const open = openFromStart();
+      const withOpen = (ids: string[]) => [...ids, ...open.filter((id) => !ids.includes(id))];
+      return { ...old, unlocked: withOpen(old.unlocked), offered: withOpen(old.offered) };
+    },
   },
   // Pleite-Regel: Wer eine Lieferung erwartet oder sich eine leisten kann (bar oder auf Kredit), macht weiter.
   solvency: (state) =>

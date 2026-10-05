@@ -13,7 +13,7 @@ import { cityTravel, playableCities } from '../index';
 const AUTOBAHN_SOURCE = 'city.autobahn';
 const AUTOBAHN_GLOW = 'city.autobahn.glow';
 
-/** Stadt, in deren Rahmen der Punkt liegt (null außerhalb aller Städte, z.B. Frankfurt). */
+/** Stadt, in deren Rahmen der Punkt liegt (null außerhalb aller Städte, z.B. Berlin, solange es Schablone ist). */
 function cityContaining(point: LngLat): string | null {
   for (const c of playableCities()) {
     const [w, s, e, n] = c.bounds;

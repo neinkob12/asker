@@ -130,7 +130,15 @@ describe('suppliers', () => {
     }
     expect(unitPrice('frankfurt')).toBeGreaterThan(unitPrice('rotterdam'));
     expect(unitPrice('hamburg')).toBeGreaterThan(unitPrice('rotterdam'));
-    expect(SUPPLIERS.map((s) => s.id)).toEqual(['rotterdam', 'frankfurt', 'berlin', 'hamburg', 'amsterdam', 'koeln']);
+    expect(SUPPLIERS.map((s) => s.id)).toEqual([
+      'rotterdam',
+      'frankfurt',
+      'berlin',
+      'hamburg',
+      'amsterdam',
+      'flughafen',
+      'koeln',
+    ]);
   });
 
   it('ohne genug Geld keine Bestellung', () => {
@@ -141,7 +149,12 @@ describe('suppliers', () => {
 
   it('zu Beginn liefern Köln und Frankfurt, Toni schreibt eine Nachricht, über die man bestellen kann', () => {
     const sim = createTestGame();
-    expect(SUPPLIERS.filter((s) => isUnlocked(sim.state, s.id)).map((s) => s.id)).toEqual(['frankfurt', 'koeln']);
+    // Kofi am Frankfurter Flughafen ist ohne Bedingungen zu haben, liefert aber nur nach Frankfurt (Auftrag 39).
+    expect(SUPPLIERS.filter((s) => isUnlocked(sim.state, s.id)).map((s) => s.id)).toEqual([
+      'frankfurt',
+      'flughafen',
+      'koeln',
+    ]);
     expect(order(sim, 'hamburg', 'weed50')).toEqual({ ok: false, reason: 'Hein macht noch keine Geschäfte mit dir.' });
     const [thread] = messages.threads(sim.state);
     expect(thread.contact.id).toBe('supplier:frankfurt');
@@ -446,7 +459,7 @@ describe('suppliers', () => {
     expect(isUnlocked(loaded.state, 'rotterdam')).toBe(true);
     expect(isUnlocked(loaded.state, 'amsterdam')).toBe(false);
     expect(loaded.state.modules.suppliers.offered).toContain('koeln');
-    expect(loaded.state.moduleVersions.suppliers).toBe(6);
+    expect(loaded.state.moduleVersions.suppliers).toBe(7);
   });
 });
 

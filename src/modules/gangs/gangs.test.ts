@@ -79,7 +79,7 @@ function sellHours(sim: Simulation, spotId: string, perHour: number, hours: numb
 }
 
 describe('gangs: Identität und Stärke', () => {
-  it('je vier frei erfundene Gangs in Köln und Hamburg mit Boss, Heimat, Farbe, Stil und Stärken', () => {
+  it('je vier frei erfundene Gangs in Köln, Hamburg und Frankfurt mit Boss, Heimat, Farbe, Stil und Stärken', () => {
     const sim = createTestGame();
     expect(getGangs(sim.state, 'koeln').map((g) => g.id)).toEqual(['nord', 'west', 'ost', 'sued']);
     expect(getGangs(sim.state, 'hamburg').map((g) => g.id)).toEqual([
@@ -88,9 +88,15 @@ describe('gangs: Identität und Stärke', () => {
       'hh-schanze',
       'hh-elbchaussee',
     ]);
+    expect(getGangs(sim.state, 'frankfurt').map((g) => g.id)).toEqual([
+      'ff-bahnhof',
+      'ff-westend',
+      'ff-sachsenhausen',
+      'ff-hoechst',
+    ]);
     const gangs = getGangs(sim.state);
-    expect(new Set(gangs.map((g) => g.color)).size).toBe(8);
-    expect(new Set(gangs.map((g) => g.homeVeedelId)).size).toBe(8);
+    expect(new Set(gangs.map((g) => g.color)).size).toBe(gangs.length);
+    expect(new Set(gangs.map((g) => g.homeVeedelId)).size).toBe(gangs.length);
     for (const g of gangs) expect(getVeedel(g.homeVeedelId)?.cityId, g.id).toBe(g.cityId);
     // Hamburg ist härter: mehr Kampfkraft, Geld und Leute als Köln im Schnitt (etwa ein Viertel).
     const avg = (city: string, f: (g: (typeof gangs)[number]) => number) =>
@@ -475,12 +481,29 @@ describe('gangs: Spielstände', () => {
     delete state.modules.gangs;
     state.moduleVersions.gangs = 1;
     const loaded = loadSimulation(state as unknown as typeof sim.state, sim.modules);
-    expect(loaded.state.moduleVersions.gangs).toBe(5);
+    expect(loaded.state.moduleVersions.gangs).toBe(6);
     expect(loaded.state.modules.gangs.incidents).toEqual([]);
     expect(getGangStatus(loaded.state, 'hh-kiez')?.people).toBeGreaterThan(0);
     expect(getGangStatus(loaded.state, 'nord')?.people).toBeGreaterThan(0);
     loaded.advance(120);
     expect(loaded.isOver).toBe(false);
+  });
+
+  it('Version 5 → 6 (Auftrag 39): Die Frankfurter Gangs kommen dazu, alles Bestehende bleibt', () => {
+    const sim = createTestGame();
+    const state = structuredClone(sim.state) as unknown as {
+      modules: { gangs: { gangs: Record<string, { money: number }> } };
+      moduleVersions: Record<string, number>;
+    };
+    for (const id of ['ff-bahnhof', 'ff-westend', 'ff-sachsenhausen', 'ff-hoechst'])
+      delete state.modules.gangs.gangs[id];
+    state.modules.gangs.gangs.nord.money = 1234;
+    state.moduleVersions.gangs = 5;
+    const loaded = loadSimulation(state as unknown as typeof sim.state, sim.modules);
+    expect(loaded.state.moduleVersions.gangs).toBe(6);
+    expect(getGangStatus(loaded.state, 'nord')?.money).toBe(1234);
+    expect(getGangStatus(loaded.state, 'ff-bahnhof')?.people).toBeGreaterThan(0);
+    expect(getGangStatus(loaded.state, 'ff-westend')?.money).toBeGreaterThan(100000);
   });
 });
 

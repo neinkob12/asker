@@ -51,6 +51,26 @@ CITIES = {
             'Blankenese',
         ],
     },
+    # Frankfurt (Auftrag 39): von Höchst im Westen bis Bornheim, im Süden der Flughafen.
+    'frankfurt': {
+        'box': (8.45, 8.82, 49.99, 50.20),
+        'names': [
+            'Bahnhofsviertel',
+            'Innenstadt',
+            'Westend Süd',
+            'Sachsenhausen Nord',
+            'Nordend West',
+            'Bornheim',
+            'Ostend',
+            'Gallus',
+            'Bockenheim',
+            'Höchst',
+            'Niederrad',
+            'Flughafen',
+        ],
+        # Die Altstadt (Römer, Paulskirche) ist in OSM ein eigener Stadtteil, im Spiel gehört sie zur Innenstadt.
+        'merge': {'Innenstadt': ['Altstadt']},
+    },
 }
 
 _ctx = ssl.create_default_context(cafile=os.environ.get('SSL_CERT_FILE'))
@@ -163,6 +183,22 @@ def main():
         best = wanted[name]
         if best is None or score < best[2]:
             wanted[name] = (row, geom, score)
+    # Kleine Stadtteile, die im Spiel zu einem Nachbarn gehören (merge): die Fläche mit diesem Namen, die den Nachbarn
+    # berührt, wird angefügt.
+    for base, extras in conf.get('merge', {}).items():
+        if not wanted.get(base):
+            continue
+        row, geom, score = wanted[base]
+        for extra in extras:
+            for other in rows:
+                if (other.get('names') or {}).get('primary') != extra or not other.get('is_land'):
+                    continue
+                g = shapely.from_wkb(other['geometry'])
+                if g.distance(geom) < 1e-4:
+                    geom = shapely.union(geom, g).buffer(0)
+                    print(f'{extra} → {base}', file=sys.stderr)
+                    break
+        wanted[base] = (row, geom, score)
     missing = [n for n, v in wanted.items() if v is None]
     if missing:
         names = sorted({(r.get('names') or {}).get('primary') or '?' for r in rows if r.get('is_land')})

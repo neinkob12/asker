@@ -76,10 +76,11 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.62,
     reliability: 0.88,
     description: 'Kurierfahrer über die A3. Schnell und zuverlässig, dafür teuer.',
-    // Toni ist in Hamburg dein Startlieferant per Kurier: länger unterwegs, zehn Prozent Aufschlag.
-    cities: ['koeln', 'hamburg'],
-    deliveryTimes: { hamburg: 330 },
-    priceFactors: { hamburg: 1.1 },
+    // Toni ist in Hamburg dein Startlieferant per Kurier: länger unterwegs, zehn Prozent Aufschlag. In Frankfurt ist er
+    // zu Hause (Auftrag 39): in einer Stunde da und zehn Prozent billiger.
+    cities: ['koeln', 'hamburg', 'frankfurt'],
+    deliveryTimes: { hamburg: 330, frankfurt: 60 },
+    priceFactors: { hamburg: 1.1, frankfurt: 0.9 },
     packages: [
       { id: 'weed25', label: '25 g Gras', productId: 'weed', amount: 25, price: 140 },
       { id: 'weed50', label: '50 g Gras', productId: 'weed', amount: 50, price: 255 },
@@ -95,8 +96,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     name: 'Berlin',
     contactName: 'Mirko',
     kind: 'city',
-    // Kommt über die A2 und die A1 aus Norden in Köln an, in Hamburg über die A24 (nur Karte).
-    via: { koeln: 'A1', hamburg: 'A24' },
+    // Kommt über die A2 und die A1 aus Norden in Köln an, in Hamburg über die A24, in Frankfurt über die A5 (nur Karte).
+    via: { koeln: 'A1', hamburg: 'A24', frankfurt: 'A5' },
     lng: 13.405,
     lat: 52.52,
     deliveryTime: 300,
@@ -104,8 +105,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.74,
     reliability: 0.7,
     description: 'Gute Ware aus der Hauptstadt, Edibles und Vapes. Nicht immer pünktlich.',
-    cities: ['koeln', 'hamburg'],
-    deliveryTimes: { hamburg: 180 },
+    cities: ['koeln', 'hamburg', 'frankfurt'],
+    deliveryTimes: { hamburg: 180, frankfurt: 330 },
     unlock: {
       requires: { veedel: 1 },
       fee: 600,
@@ -160,8 +161,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     name: 'Amsterdam',
     contactName: 'Daan',
     kind: 'city',
-    // Kommt über die A57 aus Nordwesten in Köln an, in Hamburg über die A1 aus Bremen (nur Karte).
-    via: { koeln: 'A57', hamburg: 'A1' },
+    // Kommt über die A57 aus Nordwesten in Köln an, in Hamburg über die A1 aus Bremen, in Frankfurt über die A3 (nur Karte).
+    via: { koeln: 'A57', hamburg: 'A1', frankfurt: 'A3' },
     lng: 4.904,
     lat: 52.368,
     deliveryTime: 240,
@@ -171,8 +172,9 @@ export const SUPPLIERS: readonly Supplier[] = [
     description: 'Großhändler für Coffeeshops. Die beste Ware, kommt über die A57. Redet nur mit großen Leuten.',
     // In Hamburg kauft man bei Daan im Hafen: Container direkt am Kai, kiloweise, günstig, sechs Stunden, abholen
     // musst du selbst (braucht den Hamburger Liegeplatz).
-    cities: ['koeln', 'hamburg'],
-    deliveryTimes: { hamburg: 360 },
+    // In Frankfurt kommt Daan wie in Köln über die Autobahn, nur länger (über die A3 aus Köln).
+    cities: ['koeln', 'hamburg', 'frankfurt'],
+    deliveryTimes: { hamburg: 360, frankfurt: 330 },
     inCity: {
       hamburg: {
         kind: 'port',
@@ -219,6 +221,32 @@ export const SUPPLIERS: readonly Supplier[] = [
       { id: 'edibles60', label: '60 Edibles', productId: 'edibles', amount: 60, price: 185 },
       { id: 'vape20', label: '20 Vape-Pens', productId: 'vape', amount: 20, price: 265 },
       { id: 'kush150', label: '150 g OG Kush', productId: 'kush', amount: 150, price: 1055, minTrust: 30 },
+    ],
+  },
+  {
+    // Auftrag 39: Fracht am Frankfurter Flughafen. Nur in Frankfurt, klein, schnell, teuer, beste Ware, und der Zoll am
+    // Frachtterminal ist scharf (customs).
+    id: 'flughafen',
+    name: 'Flughafen',
+    contactName: 'Kofi',
+    kind: 'city',
+    lng: 8.5893,
+    lat: 50.0328,
+    deliveryTime: 40,
+    priceLevel: 0.68,
+    quality: 0.88,
+    reliability: 0.82,
+    customs: 0.04,
+    description:
+      'Kofi in der Cargo City Süd: Ware aus der Luftfracht, die beste der Stadt, in unter einer Stunde da. Teuer, und der ' +
+      'Zoll am Frachtterminal greift öfter zu.',
+    cities: ['frankfurt'],
+    packages: [
+      { id: 'kush25', label: '25 g OG Kush', productId: 'kush', amount: 25, price: 305 },
+      { id: 'haze25', label: '25 g Amnesia Haze', productId: 'haze', amount: 25, price: 255 },
+      { id: 'kush50', label: '50 g OG Kush', productId: 'kush', amount: 50, price: 570, minTrust: 20 },
+      { id: 'vape10', label: '10 Vape-Pens', productId: 'vape', amount: 10, price: 230 },
+      { id: 'edibles30', label: '30 Edibles', productId: 'edibles', amount: 30, price: 165, minTrust: 30 },
     ],
   },
   {
@@ -378,6 +406,20 @@ export const SUPPLIER_LOOKS: Readonly<Record<string, Partial<Look>>> = {
     hat: 'none',
     top: 'suit',
     topColor: 1,
+    extra: 'none',
+  },
+  // Kofi, Flughafen Frankfurt: Lagerarbeiter in der Cargo City, Warnweste, ruhig.
+  flughafen: {
+    feminine: false,
+    age: 34,
+    skin: 5,
+    hair: 'buzz',
+    hairColor: 0,
+    beard: 'stubble',
+    glasses: 'none',
+    hat: 'none',
+    top: 'raincoat',
+    topColor: 5,
     extra: 'none',
   },
   // Kalle aus Kalk: Nachbarschaft.

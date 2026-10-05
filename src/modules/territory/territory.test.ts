@@ -337,9 +337,30 @@ describe('territory', () => {
     const loaded = loadSimulation(old, sim.modules);
     expect(loaded.state.modules.territory.lastSaleAt).toEqual({});
     expect(loaded.state.modules.territory.controller).toEqual(sim.state.modules.territory.controller);
-    expect(loaded.state.moduleVersions.territory).toBe(4);
+    expect(loaded.state.moduleVersions.territory).toBe(5);
     expect(loaded.state.modules.territory.milestones).toEqual({ koeln: { majority: null, complete: null } });
     sell(loaded, 'kalk');
     expect(getInfluence(loaded.state, 'kalk', PLAYER_FACTION)).toBeGreaterThan(0);
+  });
+
+  it('Version 4 → 5 (Auftrag 39): Frankfurts Stadtteile bekommen Herren wie bei einem neuen Spiel', () => {
+    const sim = createTestGame();
+    const old = structuredClone(sim.state) as unknown as {
+      modules: { territory: { influence: Record<string, unknown>; controller: Record<string, unknown> } };
+      moduleVersions: Record<string, number>;
+    };
+    for (const v of allVeedel('frankfurt')) {
+      delete old.modules.territory.influence[v.id];
+      delete old.modules.territory.controller[v.id];
+    }
+    old.modules.territory.controller.kalk = PLAYER_FACTION;
+    old.moduleVersions.territory = 4;
+    const loaded = loadSimulation(old as unknown as typeof sim.state, sim.modules);
+    expect(loaded.state.moduleVersions.territory).toBe(5);
+    expect(loaded.state.modules.territory.controller.kalk).toBe(PLAYER_FACTION);
+    for (const v of allVeedel('frankfurt')) {
+      expect(loaded.state.modules.territory.controller[v.id], v.id).toBe(sim.state.modules.territory.controller[v.id]);
+    }
+    expect(loaded.state.modules.territory.controller.bahnhofsviertel).toBe('ff-bahnhof');
   });
 });

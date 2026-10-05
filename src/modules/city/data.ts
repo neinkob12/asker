@@ -1,6 +1,6 @@
-// Die Städte im Spiel (Auftrag 30 und 36): Köln (Einstieg), Hamburg und Schablonen für Berlin, München und Frankfurt
+// Die Städte im Spiel (Auftrag 30, 36 und 39): Köln (Einstieg), Hamburg, Frankfurt und Schablonen für Berlin und München
 // (nur Daten-Skelett ohne Veedel, Spots und Gangs; im Spiel gesperrt und in der Deutschland-Ansicht „bald“, die Aufträge
-// 37 bis 39 füllen sie). Nach Köln ist die Reihenfolge frei: Jede Stadt hat einen Kontakt mit Gesicht und Stimme, der
+// 37 und 38 füllen sie). Nach Köln ist die Reihenfolge frei: Jede Stadt hat einen Kontakt mit Gesicht und Stimme, der
 // nach „<Stadt> komplett“ anruft, und einen Satz Dreh (Glas-Karte der Deutschland-Ansicht). Faktoren: 1 = Köln.
 
 import type { Contact, LngLat } from '../../core';
@@ -42,6 +42,11 @@ export interface CityDef {
   contact: Contact;
   /** Der Dreh der Stadt in einem Satz (Glas-Karte der Deutschland-Ansicht, Anruf). */
   pitch: string;
+  /**
+   * Meldet sich nach "<Stadt> komplett" erst nach allen anderen freien Städten (Auftrag 39: Frankfurt ist optional und
+   * soll nicht vor Hamburg anrufen, obwohl es näher an Köln liegt). Per Chat und auf Wunsch geht es trotzdem.
+   */
+  offerLast?: boolean;
   /** Schablone: Daten da, Inhalt fehlt noch, im Spiel gesperrt. */
   template?: boolean;
 }
@@ -208,23 +213,26 @@ export const CITIES: readonly CityDef[] = [
     template: true,
   },
   {
-    // Schablone (Inhalt mit Auftrag 39, optional).
+    // Auftrag 39 (optional): Geld und Flughafen.
     id: 'frankfurt',
     name: 'Frankfurt',
     center: { lng: 8.682, lat: 50.11 },
-    view: { center: { lng: 8.682, lat: 50.11 }, zoom: 12.8, mobileZoom: 11.8, pitch: 50, bearing: 0 },
-    bounds: [8.55, 50.02, 8.8, 50.19],
+    // Blick nach Norden über den Main: Museumsufer vorn, Bahnhofsviertel, Innenstadt und die Türme dahinter.
+    view: { center: { lng: 8.672, lat: 50.106 }, zoom: 13.1, mobileZoom: 12.0, pitch: 50, bearing: -10 },
+    bounds: [8.51, 50.015, 8.75, 50.145],
     roadsNetworkId: 'frankfurt',
     portId: null,
     wageFactor: 1.2,
     propertyFactor: 1.6,
-    relationFactor: 1,
-    bribeFactor: 1.1,
+    relationFactor: 0.9,
+    bribeFactor: 1.3,
     raidWarningBonus: 0,
-    description: 'Noch nicht im Spiel.',
+    description:
+      'Banken, Messe, Flughafen. Die Kundschaft hat Geld, das Bahnhofsviertel die meiste Nachfrage und die meiste ' +
+      'Polizei. Hier wird gerechnet: Gefallen kosten, Wäsche geht in größeren Summen.',
     contact: FRANKFURT_CALLER,
     pitch: 'Geld und Flughafen: Banker als Kunden, das Bahnhofsviertel als Brennpunkt, Fracht über den Flughafen.',
-    template: true,
+    offerLast: true,
   },
 ];
 

@@ -7,7 +7,7 @@
 //
 // Öffentliche API:
 //   getChannels(state), getChannel(id), isChannelUnlocked(state, id), channelFee(state, id), channelDuration(id, amount),
-//   channelFree(state, id), canUnlockChannel(state, id), launderingFee(state), launderingDuration(amount, id?),
+//   channelCapacity(state, id) (Auftrag 39: mal LAUNDERING_CAPACITY_BY_CITY der aktiven Stadt), channelFree(state, id), canUnlockChannel(state, id), launderingFee(state), launderingDuration(amount, id?),
 //   launderingCapacity(state), amountInProgress(state, id?), getBatches(state), batchProgress(state, batch),
 //   getLaunderingStats(state), LAUNDERING_CHANNELS, MIN_LAUNDERING_AMOUNT
 // Befehle: 'laundering.launder', 'laundering.unlock'
@@ -24,11 +24,13 @@ import {
   messages,
   wallet,
 } from '../../core';
+import { activeCity } from '../city';
 import { addHeat } from '../police';
 import { getReputation, reputationLabel } from '../reputation';
 import { bonus } from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import {
+  LAUNDERING_CAPACITY_BY_CITY,
   LAUNDERING_CHANNELS,
   type LaunderingChannel,
   type LaunderingChannelId,
@@ -130,10 +132,18 @@ export function amountInProgress(state: GameState, id?: LaunderingChannelId): nu
   return state.modules.laundering.batches.filter((b) => !id || b.channel === id).reduce((sum, b) => sum + b.amount, 0);
 }
 
+/**
+ * Obergrenze eines Wegs in der aktiven Stadt (Auftrag 39): capacity mal LAUNDERING_CAPACITY_BY_CITY, in Frankfurt
+ * mehr.
+ */
+export function channelCapacity(state: GameState, id: LaunderingChannelId): number {
+  return Math.round(getChannel(id).capacity * (LAUNDERING_CAPACITY_BY_CITY[activeCity(state)] ?? 1));
+}
+
 /** Wie viel über einen Weg gerade noch hineinpasst. */
 export function channelFree(state: GameState, id: LaunderingChannelId): number {
   if (!isChannelUnlocked(state, id)) return 0;
-  return Math.max(0, getChannel(id).capacity - amountInProgress(state, id));
+  return Math.max(0, channelCapacity(state, id) - amountInProgress(state, id));
 }
 
 /** Billigster freigeschalteter Weg (für Anzeigen ohne Wahl, z.B. die Gebühr im Personal). */
@@ -154,7 +164,10 @@ export function launderingDuration(amount: number, id: LaunderingChannelId = 'ki
 
 /** Wie viel Schwarzgeld über alle freigeschalteten Wege gleichzeitig in der Wäsche sein kann. */
 export function launderingCapacity(state: GameState): number {
-  return LAUNDERING_CHANNELS.filter((c) => isChannelUnlocked(state, c.id)).reduce((sum, c) => sum + c.capacity, 0);
+  return LAUNDERING_CHANNELS.filter((c) => isChannelUnlocked(state, c.id)).reduce(
+    (sum, c) => sum + channelCapacity(state, c.id),
+    0,
+  );
 }
 
 export function getBatches(state: GameState): readonly LaunderingBatch[] {

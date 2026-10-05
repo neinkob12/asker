@@ -5,7 +5,10 @@
 //
 // Ton (vom Spieler ausgewählt): Hafenkolonne grob, kölsch, kurz. Venloer Syndikat förmlich, juristisch, droht über
 // Dritte. Schäl Sick rotzig, Preise, Masse. Marienburger Kreis leise, gebildet, kalt. Hamburg: Neonkrone Türsteher-Ton,
-// Containerjungs grob vom Hafen, Kollektiv Plenum und WG, Elbchaussee-Club höflich-herablassend.
+// Containerjungs grob vom Hafen, Kollektiv Plenum und WG, Elbchaussee-Club höflich-herablassend. Frankfurt in
+// texts-frankfurt.ts.
+
+import { FRANKFURT_VOICES } from './texts-frankfurt';
 
 /** Anlässe für Nachrichten der Gangs. */
 export type GangTextKey =
@@ -1013,6 +1016,8 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Der Club führt eine Auseinandersetzung mit {enemy}. Ihre Unterstützung wäre ein Zeichen guten Geschmacks.',
     ],
   },
+  // Frankfurt (Auftrag 39): eigene Datei.
+  ...FRANKFURT_VOICES,
 };
 
 /** Fallback für Gangs ohne eigene Stimme (z.B. künftige Städte): die Hafenkolonne, aber mit Namen davor. */

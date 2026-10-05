@@ -414,11 +414,15 @@ export function freeCities(state: GameState): string[] {
   return NEXT_CITY.filter((id) => !getCity(id)?.template && !isCityUnlocked(state, id));
 }
 
-/** Freie Städte, nach Entfernung zu from (die nächstgelegene zuerst). */
+/**
+ * Freie Städte, nach Entfernung zu from (die nächstgelegene zuerst). Städte mit offerLast (Auftrag 39: Frankfurt,
+ * optional) kommen nach allen anderen, rufen also nur an, wenn keine andere mehr frei ist.
+ */
 function citiesByDistance(state: GameState, from: string): string[] {
   const origin = getCity(from)?.center;
   const far = (id: string) => (origin ? distanceMeters(origin, getCity(id)?.center ?? origin) : 0);
-  return freeCities(state).sort((a, b) => far(a) - far(b) || a.localeCompare(b));
+  const last = (id: string) => (getCity(id)?.offerLast ? 1 : 0);
+  return freeCities(state).sort((a, b) => last(a) - last(b) || far(a) - far(b) || a.localeCompare(b));
 }
 
 /** Städte mit einem Angebot in der laufenden Runde (die nächstgelegene zuerst), leer ohne Runde. */

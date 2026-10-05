@@ -27,6 +27,7 @@ import {
   amountInProgress,
   batchProgress,
   canUnlockChannel,
+  channelCapacity,
   channelDuration,
   channelFee,
   channelFree,
@@ -67,6 +68,7 @@ function OpenChannel(props: { channel: LaunderingChannel }) {
   const c = props.channel;
   const dirty = Math.floor(wallet.balance(state, 'dirty'));
   const free = channelFree(state, c.id);
+  const capacity = channelCapacity(state, c.id);
   const max = Math.min(dirty, free);
   const [amount, setAmount] = useState(() => Math.min(max, Math.max(c.minAmount, 500)));
   const value = Math.min(amount, max);
@@ -82,7 +84,7 @@ function OpenChannel(props: { channel: LaunderingChannel }) {
       color="dirty"
       value={`Gebühr ${formatPercent(fee)}`}
       note={c.how}
-      more={`${c.who} Das Geschäft steht in ${veedelName(c.veedelId)}: Läuft dort zu viel auf einmal, steigt der Heat im Veedel. Kleinster Betrag ${formatEuro(c.minAmount)}, gleichzeitig höchstens ${formatEuro(c.capacity)}.`}
+      more={`${c.who} Das Geschäft steht in ${veedelName(c.veedelId)}: Läuft dort zu viel auf einmal, steigt der Heat im Veedel. Kleinster Betrag ${formatEuro(c.minAmount)}, gleichzeitig höchstens ${formatEuro(capacity)}.`}
     >
       <Chips
         class="laundering-facts"
@@ -92,8 +94,7 @@ function OpenChannel(props: { channel: LaunderingChannel }) {
             icon: 'clock',
           },
           {
-            label:
-              running > 0 ? `${formatEuro(free)} von ${formatEuro(c.capacity)} frei` : `bis ${formatEuro(c.capacity)}`,
+            label: running > 0 ? `${formatEuro(free)} von ${formatEuro(capacity)} frei` : `bis ${formatEuro(capacity)}`,
             icon: 'gauge',
             color: free <= 0 ? 'warn' : 'system',
           },
@@ -174,7 +175,7 @@ function LockedChannel(props: { channel: LaunderingChannel }) {
         class="laundering-facts"
         items={[
           { label: `ab ${formatEuro(c.minAmount)}`, icon: 'coins' },
-          { label: `bis ${formatEuro(c.capacity)} auf einmal`, icon: 'gauge' },
+          { label: `bis ${formatEuro(channelCapacity(state, c.id))} auf einmal`, icon: 'gauge' },
           riskChip(c),
           c.unlock?.reputation !== undefined && {
             label: `Ruf ab ${c.unlock.reputation}`,

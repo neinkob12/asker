@@ -210,6 +210,60 @@ export const WAREHOUSES: readonly Warehouse[] = [
     capacity: 8000,
     description: 'Bootshaus am Harburger Binnenhafen. Teuer, aber wer kommt hier schon vorbei.',
   },
+  // Frankfurt (Auftrag 39): fünf Standorte zum Kaufen, Preise wie vergleichbare Kölner Standorte mal dem
+  // Immobilien-Faktor der Stadt (1,6). Die Halle in der Cargo City liegt am Flughafen, wo die Fracht ankommt.
+  {
+    id: 'keller-bahnhofsviertel',
+    cityId: 'frankfurt',
+    name: 'Keller Bahnhofsviertel',
+    lng: 8.665,
+    lat: 50.1085,
+    cost: 3500,
+    capacity: 4000,
+    description: 'Gewölbekeller unter einem Spätkauf an der Niddastraße. Mitten im Geschäft, mitten unter der Polizei.',
+  },
+  {
+    id: 'garage-gallus',
+    cityId: 'frankfurt',
+    name: 'Garage Gallus',
+    lng: 8.6303,
+    lat: 50.1003,
+    cost: 3200,
+    capacity: 6000,
+    description:
+      'Sammelgarage hinter einem Block an der Frankenallee. Unauffällig, für Frankfurter Verhältnisse günstig.',
+  },
+  {
+    id: 'halle-osthafen',
+    cityId: 'frankfurt',
+    name: 'Halle Osthafen',
+    lng: 8.7245,
+    lat: 50.1122,
+    cost: 4000,
+    capacity: 25000,
+    description: 'Alte Lagerhalle am Osthafen zwischen Schrotthandel und Club. Viel Platz, nachts ist hier keiner.',
+  },
+  {
+    id: 'werkstatt-hoechst',
+    cityId: 'frankfurt',
+    name: 'Werkstatt Höchst',
+    lng: 8.53,
+    lat: 50.0902,
+    cost: 4500,
+    capacity: 12000,
+    description: 'Kfz-Werkstatt am Rand des Industrieparks. Transporter fallen hier nicht auf, Fremde schon.',
+  },
+  {
+    id: 'halle-cargo-city',
+    cityId: 'frankfurt',
+    name: 'Halle Cargo City',
+    lng: 8.5893,
+    lat: 50.0328,
+    cost: 5100,
+    capacity: 8000,
+    description:
+      'Untermiete in einer Speditionshalle in der Cargo City Süd. Teuer, dafür fünf Minuten vom Frachtterminal.',
+  },
 ];
 
 export const DEFAULT_WAREHOUSE = 'ehrenfeld';
