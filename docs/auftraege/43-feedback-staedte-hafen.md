@@ -107,6 +107,33 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [ ] D15 HUD „Anbau“: Ausfuhr-kg, Tage bis zur Ernte, Warnfarbe bei Behörden oder Pacht.
 - [ ] D16 Europa-Ansicht am Desktop: Das Handy verdeckt Rotterdam und Marokko (Padding rechts mit dem Handy).
 
+## E. Prüfer „Städte“ (Sonnet-Agent, 05.10.2026): Was aus der alten Stadt noch durchsickert
+
+- [ ] E1 Kritisch: In Hamburg lässt sich ein Kölner zur Rechten Hand ernennen; das setzt Kölns Statthalter ab
+  (`canBeRightHand`, `appointRightHand`, `installPost` prüfen die Stadt nicht; Listen in `RightHand.tsx` ohne Stadt).
+- [ ] E2 Personal-Tab der neuen Stadt zeigt den Kölner Baum (Leutnants, Capos, Ergebnis), „Leutnant ernennen“ bietet
+  Kölner an, „In anderen Städten“ und die Suche öffnen Kölner Akten mit Aktionen (`Tree.tsx`, `AppointSheet.tsx`,
+  `staff/ui/index.tsx`).
+- [ ] E3 Berichte der Statthalter anderer Städte kommen als offene Fragen mit Frist und Ton, mit Lohnreserve der
+  aktiven Stadt (`sendReport`, `buildReport`, `wageRunway`).
+- [ ] E4 Hafen- und Fahrer-Chats der alten Stadt mit Frist und nicht ausführbaren Antworten; Container einer schlafenden
+  Stadt bleiben ewig am Kai.
+- [ ] E5 Routen-Seite der neuen Stadt zeigt und bedient Routen der alten (`routes.tsx` `getRoutes` ohne Stadt).
+- [ ] E6 Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt) der alten Stadt wirken in der neuen (`bonus`, `bonusProvider`).
+- [ ] E7 Leute der alten Stadt schreiben Empfehlungen in der neuen; Hintergründe mit Kölner Ortsnamen in jeder Stadt.
+- [ ] E8 Event-Ankündigungen und Rabatt-Aktionen der alten Stadt kommen in der neuen an.
+- [ ] E9 Neue Stadt ohne sichtbaren ersten Schritt: Willkommen still, Rat „Läufer anheuern“ aus, sobald irgendwo
+  jemand arbeitet, „Liegeplatz“ vor dem ersten Lager, Reviere-Ziel fest auf Köln, zu wenig sauberes Geld fürs Lager.
+- [ ] E10 Sicherheitsleute schlafender Städte sammeln Erfahrung, Level-Meldungen kommen in der neuen Stadt.
+- [ ] E11 Fahrer-Zählung über Städte bei Rechter Hand und Bestellregeln (`orders.ts`, `tasks.ts`).
+- [ ] E12 Personal-Aufgabe der Rechten Hand läuft über Leutnants aller Städte; `replaceAbsent` prüft die Stadt nicht.
+- [ ] E13 Die Kasse zeigt in der neuen Stadt zuerst alle Städte (Standardfilter = aktive Stadt).
+- [ ] E14 Quest-Belohnungen „Team-Erfahrung“ und „Loyalität“ gehen an alle Städte.
+- [ ] E15 Fest verdrahtete „Köln“-Texte in jeder Stadt (Rechte Hand, Kasse, Hafen, Reviere).
+- [ ] E16 Bewerber-Pool beim Stadtwechsel nicht erneuert (Lohn und Handgeld der alten Stadt).
+- [ ] E17 Lieferant begrüßt „Du bist in Berlin“ schon bei der Abfahrt (auf `city.arrived` legen).
+- [ ] E18 (Designfrage) Zurück in einer übergebenen Stadt: Hinweis, dass man die Vollmacht zurücknehmen kann.
+
 ## Neue Funde
 
 - [x] N0 (Spieler, 05.10.2026) „Man kann im Hafen in Rotterdam keine Ware bestellen, es steht sogar, dass es keinen
