@@ -138,6 +138,24 @@ export const SLEEP_FACTOR_MAX = 1.15;
 export const HANDOVER_START_MONEY_DAYS = 10;
 
 /**
+ * Mindest-Startgeld pro Zielstadt (Planungs-Session nach dem Review): Unter etwa 40.000 € blieb der Bot in Hamburg
+ * hängen, mit 45.000 € kam er in 13 bis 17 Tagen durch. Für die weiteren Städte nach ihrem propertyFactor skaliert
+ * (30.000 € je Faktor 1, Hamburg 1,5). Keine Obergrenze: Wer mehr verdient, bringt mehr mit.
+ */
+export const START_MONEY_MIN_BY_CITY: Readonly<Record<string, number>> = {
+  hamburg: 45_000,
+  berlin: 39_000,
+  muenchen: 54_000,
+  frankfurt: 48_000,
+};
+
+/**
+ * Boss von Deutschland erst mit so vielen kompletten Städten (plan.md: alle spielbaren, Frankfurt optional, also
+ * mindestens vier). Solange weniger Städte spielbar sind, gibt es den Rang nicht.
+ */
+export const GERMANY_MIN_CITIES = 4;
+
+/**
  * Razzia im Schlaf (Auftrag 36): An so vielen von 100 Tagen trifft es eine schlafende Stadt. Das Tagesergebnis halbiert
  * sich (SLEEP_RAID_HALF_CHANCE) oder wird leicht negativ (ein Anteil SLEEP_RAID_LOSS_MIN bis _MAX vom Schnitt), der
  * Statthalter schreibt eine Zeile. Keine Veedel gehen verloren, niemand ruft dich zurück.

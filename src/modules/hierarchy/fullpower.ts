@@ -23,7 +23,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity } from '../city';
+import { activeCity, cityName } from '../city';
 import { cityReport, lieutenantResult, wageRunway } from '../finance';
 import { getGangStatus, tributeAmount } from '../gangs';
 import { getWarehouses, isWarehouseOwned, stockSummary, warehouseSites } from '../goods';
@@ -65,9 +65,9 @@ import type { FullPowerDone, FullPowerTaskKey, RightHandPost } from './types';
 const VIA = 'Rechte Hand';
 const DAY = 24 * 60;
 
-/** Name der Stadt für Texte (bis das Modul city die Namen liefert). */
+/** Name der Stadt für Texte. */
 export function cityLabel(cityId: string): string {
-  return cityId === 'hamburg' ? 'Hamburg' : cityId === 'koeln' ? 'Köln' : cityId;
+  return cityName(cityId);
 }
 
 export function emptyFullPowerDone(): FullPowerDone {

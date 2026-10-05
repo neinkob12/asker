@@ -52,7 +52,11 @@ describe('api/leaderboard: Eintrag prüfen', () => {
       title: 'Boss von Hamburg',
       rank: 41,
     });
-    expect(parseEntry({ ...valid, rank: 1e9 }, 0)?.rank).toBe(1000);
+    // Unbekannte Titel fallen weg, ein Wert, der nicht zum Titel passt, auch.
+    expect(parseEntry({ ...valid, title: 'Kaiser von Europa', rank: 99 }, 0)).toMatchObject({ title: null });
+    expect(parseEntry({ ...valid, title: 'Kaiser von Europa', rank: 99 }, 0)).not.toHaveProperty('rank');
+    expect(parseEntry({ ...valid, title: 'Kleindealer', rank: 50 }, 0)).not.toHaveProperty('rank');
+    expect(parseEntry({ ...valid, title: 'Boss von Deutschland', rank: 50 }, 0)?.rank).toBe(50);
     expect(parseEntry({ ...valid, name: 'x'.repeat(50) }, 0)?.name).toHaveLength(20);
   });
 

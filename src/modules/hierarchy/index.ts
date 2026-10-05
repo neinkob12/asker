@@ -524,6 +524,22 @@ function syncLieutenant(ctx: Ctx, post: LieutenantPost): void {
 }
 
 /** Leutnant abberufen. Er wird wieder normaler Mitarbeiter ohne Einsatz. */
+/**
+ * Startpaket (Auftrag 36): Der Leutnant gibt seine Spots ab, um als neue Rechte Hand in die nächste Stadt zu gehen. Kein
+ * Abberufen (keine Loyalität weniger, kein Lohn runter), nur der Posten ist frei.
+ */
+export function handOffLeader(ctx: Ctx, staffId: string, cityId: string): void {
+  const post = getPost(ctx.state, staffId);
+  if (!post) return;
+  const veedelId = lieutenantVeedel(ctx.state, staffId) ?? '';
+  delete ctx.state.modules.hierarchy.posts[staffId];
+  if (isEmployed(ctx.state, staffId)) {
+    assign(ctx, staffId, null);
+    addCareer(ctx, staffId, `Gibt die Spots ab und geht als Rechte Hand nach ${cityName(cityId)}.`);
+  }
+  ctx.emit('hierarchy.dismissed', { staffId, veedelId });
+}
+
 function demote(ctx: Ctx, staffId: string): CommandResult {
   const post = getPost(ctx.state, staffId);
   if (!post) return { ok: false, reason: 'Diese Person ist kein Leutnant.' };

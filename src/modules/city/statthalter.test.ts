@@ -18,17 +18,26 @@ import {
 import { enlist, generateProfile, getStaffMember, type StaffMember } from '../staff';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
-import { HANDOVER_START_MONEY_DAYS, SLEEP_RAID_CHANCE, SLEEP_RAID_LOSS_MAX } from './config';
+import {
+  GERMANY_MIN_CITIES,
+  HANDOVER_START_MONEY_DAYS,
+  SLEEP_RAID_CHANCE,
+  SLEEP_RAID_LOSS_MAX,
+  START_MONEY_MIN_BY_CITY,
+} from './config';
 import {
   activeCity,
   cityTravel,
   currentRank,
+  nextCityAfter,
   PLAYER_RANKS,
   playerRank,
   presentCity,
   sleepResult,
+  startMoneyDue,
   startMoneyFor,
 } from './index';
+import { reachedRank } from './ranks';
 
 function quietGame(seed = 1): Simulation {
   const sim = createTestGame({ seed });
@@ -132,14 +141,43 @@ describe('Startgeld (Auftrag 36)', () => {
   it('bei der Übergabe gibt der Statthalter Tagesgewinne mit, als Umbuchung, nicht als Gewinn', () => {
     const sim = quietGame();
     readyKoeln(sim);
-    sim.state.modules.city.sleep.koeln.results = [2000, 4000];
-    expect(startMoneyFor(sim.state, 'koeln')).toBe(3000 * HANDOVER_START_MONEY_DAYS);
+    sim.state.modules.city.sleep.koeln.results = [4000, 6000];
+    expect(startMoneyFor(sim.state, 'koeln', 'hamburg')).toBe(5000 * HANDOVER_START_MONEY_DAYS);
+    expect(startMoneyDue(sim.state, 'koeln', 'hamburg')).toBe(5000 * HANDOVER_START_MONEY_DAYS);
     const before = sim.state.wallet.dirty;
     const events = recordEvents(sim);
     expect(sim.dispatch({ type: 'city.handOver', payload: { cityId: 'koeln', toCityId: 'hamburg' } }).ok).toBe(true);
     const start = eventsOfType(events, 'wallet.changed').find((e) => e.payload.reason.startsWith('Startgeld'));
-    expect(start?.payload).toMatchObject({ amount: 3000 * HANDOVER_START_MONEY_DAYS, category: 'transfer' });
-    expect(sim.state.wallet.dirty).toBeGreaterThanOrEqual(before + 3000 * HANDOVER_START_MONEY_DAYS - 1);
+    expect(start?.payload).toMatchObject({ amount: 5000 * HANDOVER_START_MONEY_DAYS, category: 'transfer' });
+    expect(sim.state.wallet.dirty).toBeGreaterThanOrEqual(before + 5000 * HANDOVER_START_MONEY_DAYS - 1);
+  });
+
+  it('mindestens START_MONEY_MIN_BY_CITY der Zielstadt', () => {
+    const sim = quietGame();
+    readyKoeln(sim);
+    sim.state.modules.city.sleep.koeln.results = [500];
+    expect(startMoneyFor(sim.state, 'koeln', 'hamburg')).toBe(START_MONEY_MIN_BY_CITY.hamburg);
+  });
+
+  it('Widerruf und erneute Übergabe: kein zweites Startgeld, keine Stadt ohne Anruf', () => {
+    const sim = quietGame();
+    readyKoeln(sim);
+    expect(sim.dispatch({ type: 'city.handOver', payload: { cityId: 'koeln', toCityId: 'hamburg' } }).ok).toBe(true);
+    const travel = cityTravel(sim.state);
+    if (!travel) throw new Error('keine Fahrt');
+    sim.advance(travel.arrivesAt - sim.state.time + 10);
+    // Zurück nach Köln, Vollmacht widerrufen, erneut übergeben.
+    expect(sim.dispatch({ type: 'city.travel', payload: { cityId: 'koeln' } }).ok).toBe(true);
+    const back = cityTravel(sim.state);
+    if (!back) throw new Error('keine Rückfahrt');
+    sim.advance(back.arrivesAt - sim.state.time + 10);
+    expect(sim.dispatch({ type: 'hierarchy.revokeFullPower', payload: { cityId: 'koeln' } }).ok).toBe(true);
+    expect(startMoneyDue(sim.state, 'koeln', 'hamburg')).toBe(0);
+    expect(nextCityAfter(sim.state, 'koeln')).toBeNull();
+    const events = recordEvents(sim);
+    expect(sim.dispatch({ type: 'city.handOver', payload: { cityId: 'koeln', toCityId: 'hamburg' } }).ok).toBe(true);
+    expect(eventsOfType(events, 'wallet.changed').some((e) => e.payload.reason.startsWith('Startgeld'))).toBe(false);
+    expect(hasFullPower(sim.state, 'koeln')).toBe(true);
   });
 });
 
@@ -226,14 +264,23 @@ describe('Ränge des Spielers (Auftrag 36)', () => {
     takeCity(sim, 'hamburg');
     sim.advance(60);
     expect(playerRank(sim.state).title).toBe('Boss von Hamburg');
-    // Alle spielbaren Städte komplett: Boss von Deutschland.
+    // Köln und Hamburg komplett: noch nicht Boss von Deutschland (dafür braucht es GERMANY_MIN_CITIES Städte).
     takeCity(sim, 'koeln');
     sim.advance(60);
-    expect(playerRank(sim.state).title).toBe('Boss von Deutschland');
+    expect(playerRank(sim.state).title).toBe('Boss von Hamburg');
+    expect(GERMANY_MIN_CITIES).toBeGreaterThanOrEqual(4);
+    // Mit zwei als Mindestzahl wäre es so weit (der Rang selbst ist reine Rechnung).
+    const reached = reachedRank(sim.state, {
+      cities: ['koeln', 'hamburg'],
+      unlocked: ['koeln', 'hamburg'],
+      name: (id) => id,
+      minGermany: 2,
+    });
+    expect(reached.title).toBe('Boss von Deutschland');
     // Ränge gehen nie verloren, auch wenn Veedel fallen.
-    for (const v of allVeedel('koeln')) addInfluence(sim.ctx('test'), v.id, PLAYER_FACTION, -100);
+    for (const v of allVeedel('hamburg')) addInfluence(sim.ctx('test'), v.id, PLAYER_FACTION, -100);
     sim.advance(60);
-    expect(playerRank(sim.state).title).toBe('Boss von Deutschland');
+    expect(playerRank(sim.state).title).toBe('Boss von Hamburg');
     expect(currentRank(sim.state).score).toBeLessThanOrEqual(playerRank(sim.state).score);
   });
 });

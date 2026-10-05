@@ -27,8 +27,9 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName, nextCityAfter } from '../../city';
-import { freeVehicles, vehicleName } from '../../fleet';
+import { activeCity, cityName, nextCityAfter, packVehicles, startMoneyDue } from '../../city';
+import { vehicleName } from '../../fleet';
+import { getSpot } from '../../spots';
 import { getStaffMember, roleName } from '../../staff';
 import {
   cityLabel,
@@ -73,7 +74,9 @@ function HandoverDialog(props: { cityId: string; toCityId?: string }) {
   const done = rh ? describeDone(rh.done) : '';
   const leaders = startPackLeaders(state, props.cityId);
   const people = startPackStaff(state, props.cityId);
-  const vehicles = freeVehicles(state, props.cityId);
+  // Fahrzeuge mit fester Route bleiben (sonst fiele die Route aus).
+  const vehicles = packVehicles(state, props.cityId);
+  const startMoney = to ? startMoneyDue(state, props.cityId, to) : 0;
   // Vorschlag: die beste neue Rechte Hand, sonst niemand; Leute und Fahrzeuge wählt man selbst.
   const [leaderId, setLeaderId] = useState<string | null>(leaders[0]?.id ?? null);
   const [staffIds, setStaffIds] = useState<string[]>([]);
@@ -149,8 +152,16 @@ function HandoverDialog(props: { cityId: string; toCityId?: string }) {
           title={`Startpaket für ${cityName(to)}`}
           icon="package"
           color="people"
-          value={`${(leaderId ? 1 : 0) + staffIds.length + vehicleIds.length}`}
-          note="Das Vertrauen deiner Lieferanten kommt ohnehin mit."
+          value={
+            startMoney > 0
+              ? `+${formatEuro(startMoney)}`
+              : `${(leaderId ? 1 : 0) + staffIds.length + vehicleIds.length}`
+          }
+          note={
+            startMoney > 0
+              ? `Startgeld vom Statthalter: ${formatEuro(startMoney)}. Das Vertrauen deiner Lieferanten kommt ohnehin mit.`
+              : 'Das Vertrauen deiner Lieferanten kommt ohnehin mit.'
+          }
         >
           <List>
             {leaders.length === 0 ? (
@@ -187,47 +198,56 @@ function HandoverDialog(props: { cityId: string; toCityId?: string }) {
               ))
             )}
           </List>
-          {people.length > 0 && (
-            <>
-              <p class="handover__label">
-                Leute ({staffIds.length}/{START_PACK_MAX_STAFF})
-              </p>
-              <List>
-                {people.map((p) => (
-                  <ListItem
-                    key={p.id}
-                    active={staffIds.includes(p.id)}
-                    onClick={() => toggleStaff(p.id)}
-                    aside={<Icon name={staffIds.includes(p.id) ? 'checkCircle' : 'plusCircle'} />}
-                  >
-                    <ItemContent
-                      icon="user"
-                      color="people"
-                      title={p.name}
-                      tags={[{ label: roleName(p.role) }, { label: `Level ${p.level}` }]}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            </>
-          )}
-          {vehicles.length > 0 && (
-            <>
-              <p class="handover__label">Fahrzeuge</p>
-              <List>
-                {vehicles.map((v) => (
-                  <ListItem
-                    key={v.id}
-                    active={vehicleIds.includes(v.id)}
-                    onClick={() => toggleVehicle(v.id)}
-                    aside={<Icon name={vehicleIds.includes(v.id) ? 'checkCircle' : 'plusCircle'} />}
-                  >
-                    <ItemContent icon="car" color="goods" title={vehicleName(state, v.id)} />
-                  </ListItem>
-                ))}
-              </List>
-            </>
-          )}
+        </Group>
+      )}
+      {to && people.length > 0 && (
+        <Group
+          title="Leute"
+          icon="user"
+          color="people"
+          value={`${staffIds.length}/${START_PACK_MAX_STAFF}`}
+          collapsible
+          open={false}
+        >
+          <List>
+            {people.map((p) => (
+              <ListItem
+                key={p.id}
+                active={staffIds.includes(p.id)}
+                onClick={() => toggleStaff(p.id)}
+                aside={<Icon name={staffIds.includes(p.id) ? 'checkCircle' : 'plusCircle'} />}
+              >
+                <ItemContent
+                  icon="user"
+                  color="people"
+                  title={p.name}
+                  tags={[
+                    { label: roleName(p.role) },
+                    { label: `Level ${p.level}` },
+                    p.assignment?.kind === 'spot'
+                      ? { label: `am Spot ${getSpot(state, p.assignment.targetId)?.name ?? ''}`, color: 'place' }
+                      : null,
+                  ]}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </Group>
+      )}
+      {to && vehicles.length > 0 && (
+        <Group title="Fahrzeuge" icon="car" color="goods" value={`${vehicleIds.length}`}>
+          <List>
+            {vehicles.map((v) => (
+              <ListItem
+                key={v.id}
+                active={vehicleIds.includes(v.id)}
+                onClick={() => toggleVehicle(v.id)}
+                aside={<Icon name={vehicleIds.includes(v.id) ? 'checkCircle' : 'plusCircle'} />}
+              >
+                <ItemContent icon="car" color="goods" title={vehicleName(state, v.id)} />
+              </ListItem>
+            ))}
+          </List>
         </Group>
       )}
       {missing.length > 0 && (

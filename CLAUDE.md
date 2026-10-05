@@ -72,7 +72,7 @@ und `pitch`, Gespräche in `CITY_OFFERS`), Autobahn-Netz (`roads/autobahn.ts`, s
 Razzia im Schlaf, Startpaket und Startgeld bei der Übergabe (`hierarchy/handover.ts`, Haken `startPackLeaders` für
 Capos), Ränge des Spielers (`city/ranks.ts`, `playerRank`, Ereignis `player.rankUp`), Quest-Kapitel pro Stadt (`cityId`
 an der Quest). Stellschrauben für das Tempo späterer Städte: `FULL_POWER_SHARE`, `HANDOVER_START_MONEY_DAYS`,
-`START_PACK_MAX_STAFF`.
+`START_MONEY_MIN_BY_CITY`, `START_PACK_MAX_STAFF`.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

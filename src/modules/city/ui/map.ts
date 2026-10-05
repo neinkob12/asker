@@ -38,7 +38,7 @@ export function busyLines(state: GameState): Set<string> {
   }
   for (const s of shipmentsInTransit(state)) {
     const supplier = getSupplier(state, s.supplierId);
-    if (!supplier || supplier.kind !== 'city') continue;
+    if (supplier?.kind !== 'city') continue;
     const from = cityContaining(supplier);
     const to = s.cityId ?? 'koeln';
     if (from !== null && from !== to) mark(from, to);

@@ -112,6 +112,7 @@ function simulateCities(seed: number, koelnDays: number, laterDays: number, mone
     }
     if (e.type === 'sale.completed' && e.payload.veedelId && report.order.length > 1) revenue += e.payload.revenue;
     if (e.type === 'wallet.changed' && e.payload.category === 'income.city') sleepIncome += e.payload.amount;
+    if (e.type === 'city.slept' && e.payload.raid) events.sleepRaids = (events.sleepRaids ?? 0) + 1;
     if (e.type === 'wallet.changed' && e.payload.category === 'transfer' && e.payload.reason.startsWith('Startgeld')) {
       events.startMoney = Math.round(e.payload.amount);
     }
@@ -261,7 +262,7 @@ describe('Balancing', () => {
             ` | ${last.gameOver ? `Game Over (${last.gameOver})` : 'keine Pleite'}` +
             ` | Startpaket ${r.stats.cities?.map((c) => `${c.pack} Leute`).join(', ') ?? '-'}` +
             ` | Startgeld ${r.events.startMoney ?? 0}` +
-            ` | Razzien im Schlaf ${r.days.length > 0 ? e('city.slept') : 0} Tage geschlafen` +
+            ` | Schlaftage ${e('city.slept')}, davon Razzien ${r.events.sleepRaids ?? 0}` +
             ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,
         );
         console.log(

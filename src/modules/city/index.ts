@@ -66,13 +66,14 @@ import {
   FULL_POWER_SHARE,
   fullPowerMissing,
   getRightHand,
+  handOffLeader,
   hasFullPower,
   rightHandTitle,
   START_PACK_MAX_STAFF,
   startPackLeaders,
   startPackStaff,
 } from '../hierarchy';
-import { getTrips } from '../logistics';
+import { getRoutes, getTrips } from '../logistics';
 import { restHeat } from '../police';
 import { autobahnRefs, interCityMinutes } from '../roads';
 import { getSpot } from '../spots';
@@ -83,6 +84,7 @@ import {
   CITY_OFFERS,
   CITY_PLACE,
   type CityOffer,
+  GERMANY_MIN_CITIES,
   HANDOVER_START_MONEY_DAYS,
   HARBOR_CALLER,
   NEXT_CITY,
@@ -98,6 +100,7 @@ import {
   SLEEP_RAID_LOSS_MAX,
   SLEEP_RAID_LOSS_MIN,
   SLEEP_RAID_TEXTS,
+  START_MONEY_MIN_BY_CITY,
 } from './config';
 import { CITIES, type CityDef } from './data';
 import { PLAYER_RANKS, type PlayerRank, reachedRank } from './ranks';
@@ -175,6 +178,8 @@ export interface CityState {
   offerFrom: string | null;
   /** Städte, nach deren "komplett" schon eine Runde Angebote kam (jede nur einmal). */
   rounds: string[];
+  /** Städte, deren Statthalter schon Startgeld mitgegeben hat (jede Stadt nur einmal). */
+  startMoneyPaid: string[];
   /** Startpaket unterwegs: Diese Person wird bei ihrer Ankunft Rechte Hand der Stadt (Auftrag 36). */
   startLeader: { staffId: string; cityId: string } | null;
   /**
@@ -196,7 +201,10 @@ export interface CityState {
 }
 
 /** Zustand in Version 3 (Auftrag 30): ein Angebot, das aus Hamburg. */
-type CityStateV3 = Omit<CityState, 'offers' | 'offerFrom' | 'rounds' | 'startLeader' | 'rank'> & {
+/** Zustand in Version 4 (Auftrag 36, vor dem Review): ohne Gedächtnis fürs Startgeld. */
+type CityStateV4 = Omit<CityState, 'startMoneyPaid'>;
+
+type CityStateV3 = Omit<CityState, 'offers' | 'offerFrom' | 'rounds' | 'startLeader' | 'rank' | 'startMoneyPaid'> & {
   offer: OfferState;
 };
 
@@ -439,6 +447,8 @@ export function currentOffer(state: GameState): string | null {
   let best: string | null = null;
   let rank = STATUS_ORDER.length - 1;
   for (const id of NEXT_CITY) {
+    // Eine freie Stadt hat kein Angebot mehr (es ist mit dem Freischalten erledigt).
+    if (isCityUnlocked(state, id)) continue;
     const status = offers[id]?.status ?? 'none';
     const r = STATUS_ORDER.indexOf(status);
     if (status !== 'none' && r < rank) {
@@ -452,7 +462,8 @@ export function currentOffer(state: GameState): string | null {
 /** Stand des Angebots einer Stadt; ohne Stadt das wichtigste laufende (sonst 'none'). */
 export function offerStatus(state: GameState, cityId?: string): OfferStatus {
   const id = cityId ?? currentOffer(state);
-  return (id && cityState(state)?.offers?.[id]?.status) || 'none';
+  if (!id || isCityUnlocked(state, id)) return 'none';
+  return cityState(state)?.offers?.[id]?.status ?? 'none';
 }
 
 /** Die Stadt, der du zugesagt hast (null ohne Zusage). */
@@ -692,7 +703,9 @@ function travelBlocker(state: GameState): string | null {
 
 /** Wohin es nach der Übergabe von from geht: die zugesagte Stadt, sonst die nächstgelegene freie (null = keine). */
 export function nextCityAfter(state: GameState, from: string): string | null {
-  return acceptedCity(state) ?? citiesByDistance(state, from)[0] ?? null;
+  // Nur in der Runde dieser Stadt: Ohne Anruf wird keine Stadt frei (auch nicht nach Widerruf und neuer Übergabe).
+  if (offerFrom(state) !== from) return null;
+  return acceptedCity(state) ?? offerCities(state)[0] ?? null;
 }
 
 /**
@@ -705,6 +718,11 @@ export function handOver(ctx: Ctx, cityId: string, toCityId?: string, pack: Star
   if (!next || !def) return { ok: false, reason: `Aus ${cityName(cityId)} geht es noch nicht weiter.` };
   if (def.template) return { ok: false, reason: `${def.name} ist noch nicht im Spiel.` };
   if (next === cityId) return { ok: false, reason: `Du bist schon in ${def.name}.` };
+  // Eine neue Stadt wird nur in der Runde der übergebenen Stadt frei (sie hat angerufen oder sich gemeldet).
+  const roundOpen = offerFrom(ctx.state) === cityId;
+  if (!isCityUnlocked(ctx.state, next) && !(roundOpen && offerStatus(ctx.state, next) !== 'none')) {
+    return { ok: false, reason: `${def.name} hat sich noch nicht gemeldet.` };
+  }
   const blocked = travelBlocker(ctx.state);
   if (blocked) return { ok: false, reason: blocked };
   if (!hasFullPower(ctx.state, cityId)) {
@@ -714,12 +732,16 @@ export function handOver(ctx: Ctx, cityId: string, toCityId?: string, pack: Star
   const packProblem = checkPack(ctx.state, cityId, pack);
   if (packProblem) return { ok: false, reason: packProblem };
   // Wer im Dialog eine andere Stadt wählt als zugesagt, sagt damit dieser zu.
-  const offer = offerOf(ctx, next);
-  if (offer.status !== 'accepted') {
-    for (const other of Object.values(ctx.state.modules.city.offers))
-      if (other.status === 'accepted') other.status = 'later';
-    offer.status = 'accepted';
+  if (roundOpen) {
+    const offer = offerOf(ctx, next);
+    if (offer.status !== 'accepted') {
+      for (const [id, other] of Object.entries(ctx.state.modules.city.offers)) {
+        if (other.status === 'accepted' && !isCityUnlocked(ctx.state, id)) other.status = 'later';
+      }
+      offer.status = 'accepted';
+    }
   }
+  const money = startMoneyDue(ctx.state, cityId, next);
   // Das Ereignis der Übergabe kommt erst nach diesem Befehl an; die Stadt muss aber jetzt frei sein, um loszufahren.
   unlockCity(ctx, next);
   closeRound(ctx, next);
@@ -729,8 +751,7 @@ export function handOver(ctx: Ctx, cityId: string, toCityId?: string, pack: Star
   }
   // Erst das Startpaket auf den Weg (danach gibt der Statthalter niemanden mehr frei), dann die Vollmacht.
   sendPack(ctx, cityId, next, pack);
-  const firstHandover = !hasFullPower(ctx.state, cityId);
-  if (firstHandover) startMoney(ctx, cityId, next);
+  if (money > 0) startMoney(ctx, cityId, next, money);
   if (!hasFullPower(ctx.state, cityId)) {
     const granted = ctx.dispatch({ type: 'hierarchy.grantFullPower', payload: { cityId } }, { actor: 'player' });
     if (!granted.ok) return granted;
@@ -739,23 +760,41 @@ export function handOver(ctx: Ctx, cityId: string, toCityId?: string, pack: Star
   return { ok: true };
 }
 
-/** Startgeld für die nächste Stadt: HANDOVER_START_MONEY_DAYS Tagesgewinne der übergebenen Stadt (null ohne Schnitt). */
-export function startMoneyFor(state: GameState, cityId: string): number {
-  const results = cityState(state)?.sleep?.[cityId]?.results ?? [];
-  if (results.length === 0) return 0;
-  const average = results.reduce((a, b) => a + b, 0) / results.length;
-  return Math.max(0, Math.round(average * HANDOVER_START_MONEY_DAYS));
+/**
+ * Startgeld für die nächste Stadt: HANDOVER_START_MONEY_DAYS Tagesgewinne der übergebenen Stadt, mindestens
+ * START_MONEY_MIN_BY_CITY der Zielstadt.
+ */
+export function startMoneyFor(state: GameState, from: string, to?: string): number {
+  const results = cityState(state)?.sleep?.[from]?.results ?? [];
+  const average = results.length > 0 ? results.reduce((a, b) => a + b, 0) / results.length : 0;
+  const min = (to && START_MONEY_MIN_BY_CITY[to]) || 0;
+  return Math.max(min, Math.round(average * HANDOVER_START_MONEY_DAYS), 0);
+}
+
+/**
+ * Startgeld, das die Übergabe von from nach to jetzt wirklich zahlt: nur in der Runde von from (eine neue Stadt hat
+ * angerufen) und nur einmal pro Stadt; sonst 0 (z.B. nach Widerruf und neuer Übergabe).
+ */
+export function startMoneyDue(state: GameState, from: string, to: string): number {
+  const c = cityState(state);
+  if (!c || c.offerFrom !== from || (c.startMoneyPaid ?? []).includes(from) || isCityUnlocked(state, to)) return 0;
+  return startMoneyFor(state, from, to);
 }
 
 /** Der Statthalter gibt dir Startgeld mit (Umbuchung aus der Kasse der Stadt, kein Gewinn). */
-function startMoney(ctx: Ctx, from: string, to: string): void {
-  const amount = startMoneyFor(ctx.state, from);
-  if (amount <= 0) return;
+function startMoney(ctx: Ctx, from: string, to: string, amount: number): void {
+  ctx.state.modules.city.startMoneyPaid.push(from);
   wallet.earn(ctx, amount, 'dirty', `Startgeld für ${cityName(to)} aus ${cityName(from)}`, {
     category: 'transfer',
     cityId: from,
   });
   journal.add(ctx, `Startgeld für ${cityName(to)}: ${formatEuro(amount)} aus der Kasse von ${cityName(from)}.`, 'good');
+}
+
+/** Fahrzeuge, die mitkommen können: frei und keiner festen Route zugeteilt (die bliebe sonst ohne Wagen). */
+export function packVehicles(state: GameState, from: string) {
+  const routed = new Set(getRoutes(state).map((r) => r.vehicleId));
+  return freeVehicles(state, from).filter((v) => !routed.has(v.id));
 }
 
 /** Was am Startpaket nicht stimmt (null = alles gut). */
@@ -767,7 +806,7 @@ function checkPack(state: GameState, from: string, pack: StartPack): string | nu
   }
   const allowed = new Set(startPackStaff(state, from).map((m) => m.id));
   if (staffIds.some((id) => !allowed.has(id) || id === pack.leaderId)) return 'Nicht alle können gerade mitkommen.';
-  const free = new Set(freeVehicles(state, from).map((v) => v.id));
+  const free = new Set(packVehicles(state, from).map((v) => v.id));
   if ((pack.vehicleIds ?? []).some((id) => !free.has(id))) return 'Ein Fahrzeug ist gerade nicht frei.';
   return null;
 }
@@ -779,7 +818,7 @@ function checkPack(state: GameState, from: string, pack: StartPack): string | nu
 function sendPack(ctx: Ctx, from: string, to: string, pack: StartPack): void {
   const leaderId = pack.leaderId ?? null;
   if (leaderId) {
-    ctx.dispatch({ type: 'hierarchy.dismiss', payload: { staffId: leaderId } }, { actor: 'player' });
+    handOffLeader(ctx, leaderId, to);
     if (ctx.dispatch({ type: 'staff.relocate', payload: { staffId: leaderId, cityId: to } }, { actor: 'player' }).ok) {
       ctx.state.modules.city.startLeader = { staffId: leaderId, cityId: to };
     }
@@ -878,6 +917,8 @@ export function unlockCity(ctx: Ctx, cityId: string): CommandResult {
   if (c.unlocked.includes(cityId)) return { ok: true };
   c.unlocked.push(cityId);
   c.sleep[cityId] ??= newSleep(c.active === cityId, ctx.now);
+  // Das Angebot dieser Stadt ist erledigt.
+  if (c.offers[cityId]) c.offers[cityId] = { status: 'none', callAt: null, remindAt: null };
   journal.add(ctx, `${def.name} ist frei. Oben in der Leiste wechselst du zwischen den Städten.`, 'good');
   ctx.emit('city.unlocked', { cityId });
   return { ok: true };
@@ -989,10 +1030,12 @@ function statthalterLine(ctx: Ctx, cityId: string, kind: 'half' | 'loss', amount
  */
 function startRound(ctx: Ctx, from: string): void {
   const c = ctx.state.modules.city;
-  if (c.rounds.includes(from)) return;
-  c.rounds.push(from);
+  if (c.rounds.includes(from) || c.offerFrom !== null) return;
+  // Ist gerade keine Stadt frei (die übrigen sind Schablonen), zählt die Runde nicht: Sie kommt nach, sobald eine
+  // Stadt spielbar wird (tickOffers).
   const list = citiesByDistance(ctx.state, from);
   if (list.length === 0) return;
+  c.rounds.push(from);
   c.offerFrom = from;
   list.forEach((id, i) => {
     c.offers[id] = {
@@ -1023,10 +1066,12 @@ function closeRound(ctx: Ctx, to: string | null): void {
 function tickOffers(ctx: Ctx): void {
   const state = ctx.state;
   const c = state.modules.city;
-  // Alte Spielstände, die eine Stadt schon komplett haben (ohne das Ereignis), kommen auch dran.
-  const here = c.present;
-  if (!c.travel && !c.rounds.includes(here) && !hasFullPower(state, here) && campaignProgress(state, here).complete) {
-    startRound(ctx, here);
+  // Eine komplette Stadt ohne Runde (alte Spielstände, oder es war keine Stadt frei, als sie komplett wurde): Die
+  // Runde kommt nach, sobald eine Stadt frei ist. Die Stadt, in der du bist, zuerst.
+  if (!c.travel && c.offerFrom === null && clock.minute(ctx.now) % 30 === 0 && freeCities(state).length > 0) {
+    const order = [c.present, ...c.unlocked.filter((id) => id !== c.present)];
+    const due = order.find((id) => !c.rounds.includes(id) && campaignProgress(state, id).complete);
+    if (due) startRound(ctx, due);
   }
   const ready = clock.minute(ctx.now) === 0 && nextCityMissing(state).length === 0;
   for (const id of NEXT_CITY) {
@@ -1066,6 +1111,7 @@ export function currentRank(state: GameState): PlayerRank {
     cities: playableCities().map((c) => c.id),
     unlocked: citiesUnlocked(state),
     name: cityName,
+    minGermany: GERMANY_MIN_CITIES,
   });
 }
 
@@ -1102,6 +1148,7 @@ function initialState(): CityState {
     offers: {},
     offerFrom: null,
     rounds: [],
+    startMoneyPaid: [],
     startLeader: null,
     rank: { ...FIRST_RANK, at: 0 },
     active: FIRST_CITY,
@@ -1120,7 +1167,7 @@ function playerOnly(meta: CommandMeta): CommandResult | null {
 
 export default defineModule({
   id: 'city',
-  version: 4,
+  version: 5,
   dependsOn: ['territory', 'hierarchy'],
   init: () => initialState(),
   tickEvery: 5,
@@ -1175,6 +1222,7 @@ export default defineModule({
         rounds: ____,
         startLeader: _____,
         rank: ______,
+        startMoneyPaid: _______,
         ...fresh
       } = initialState();
       return { ...fresh, offer: old.offer };
@@ -1182,7 +1230,7 @@ export default defineModule({
     // Version 3 (Etappe 5): besuchte Städte. Wer schon irgendwo war, war dort.
     3: (old: CityStateV2): CityStateV3 => ({ ...old, visited: [...new Set([FIRST_CITY, old.present])] }),
     // Version 4 (Auftrag 36): Angebote pro Stadt. Das alte war Hamburgs, nach "Köln komplett".
-    4: (old: CityStateV3): CityState => {
+    4: (old: CityStateV3): CityStateV4 => {
       const { offer, ...rest } = old;
       const started = offer.status !== 'none';
       const hamburgFree = rest.unlocked.includes('hamburg');
@@ -1194,6 +1242,18 @@ export default defineModule({
         startLeader: null,
         // Der Rang kommt beim ersten Schritt aus dem Stand (ohne Banner für das, was schon erreicht war).
         rank: { ...FIRST_RANK, at: 0, quiet: true },
+      };
+    },
+    // Version 5 (Review Auftrag 36): Startgeld nur einmal pro Stadt; leere Runden (keine Stadt war frei) zählen nicht
+    // und kommen nach; „Boss von Deutschland“ erst mit GERMANY_MIN_CITIES Städten (zu früh vergeben: neu bestimmen).
+    5: (old: CityStateV4): CityState => {
+      const handedOver = old.unlocked.some((id) => id !== FIRST_CITY);
+      const rounds = old.rounds.filter((id) => id === old.offerFrom || (id === FIRST_CITY && handedOver));
+      return {
+        ...old,
+        rounds,
+        startMoneyPaid: [],
+        rank: old.rank.id === 'bossGermany' ? { ...FIRST_RANK, at: old.rank.at, quiet: true } : old.rank,
       };
     },
   },

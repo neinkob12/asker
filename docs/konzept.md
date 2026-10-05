@@ -205,8 +205,9 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   „bald“ da. Ein Autobahn-Netz (A1, A3, A3/A9, A24, A9, A7/A5) trägt Fahrten zwischen allen Städten, auch über eine
   Stadt hinweg. Die Rechte Hand mit Vollmacht heißt Statthalter; schlafende Städte haben an etwa 3 von 100 Tagen eine
   Razzia (halber Tag oder kleines Minus, eine Zeile vom Statthalter). Bei der Übergabe kommt ein Startpaket mit (neue
-  Rechte Hand, bis zu fünf Leute, Fahrzeuge) und Startgeld (zehn Tagesgewinne der Stadt). Ränge des Spielers ohne
-  Boni: Kleindealer, Händler, Großhändler, Boss von Köln, Boss von <Stadt>, Boss von Deutschland (dann Importeur und
+  Rechte Hand, bis zu fünf Leute, Fahrzeuge) und Startgeld (zehn Tagesgewinne der Stadt, mindestens ein Sockel je
+  Zielstadt, Hamburg 45.000 €). Ränge des Spielers ohne
+  Boni: Kleindealer, Händler, Großhändler, Boss von Köln, Boss von <Stadt>, Boss von Deutschland (ab vier Städten; dann Importeur und
   Produzent), mit Banner, im HUD und in der Bestenliste. Peter hat ein Kapitel pro Stadt.
 - **Noch nicht umgesetzt** (Aufträge 34 und 37 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`):
   Stammabnehmer, Gangs mit Gedächtnis, Leute mit Geschichte, Capo, Inhalt von Berlin, München, Frankfurt, Verkauf und

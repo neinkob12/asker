@@ -22,8 +22,10 @@ import { CITIES, type CityDef } from './data';
 import {
   acceptedCity,
   cityContact,
+  currentOffer,
   freeCities,
   isCityUnlocked,
+  nextCityAfter,
   offerCities,
   offerFrom,
   offerStatus,
@@ -52,6 +54,24 @@ function completeKoeln(sim: Simulation): void {
     addInfluence(ctx, v.id, PLAYER_FACTION, 100);
   }
   sim.step();
+}
+
+function takeCity(sim: Simulation, cityId: string): void {
+  const ctx = sim.ctx('test');
+  for (const v of allVeedel(cityId)) {
+    for (const faction of factions(sim.state)) if (faction !== PLAYER_FACTION) addInfluence(ctx, v.id, faction, -100);
+    addInfluence(ctx, v.id, PLAYER_FACTION, 100);
+  }
+  sim.step();
+}
+
+/** Köln komplett, übergeben, in Hamburg angekommen. */
+function moveToHamburg(sim: Simulation): void {
+  readyRightHand(sim);
+  completeKoeln(sim);
+  expect(sim.dispatch({ type: 'city.handOver', payload: { cityId: 'koeln', toCityId: 'hamburg' } }).ok).toBe(true);
+  sim.advance(6 * 60);
+  expect(presentCity(sim.state)).toBe('hamburg');
 }
 
 function readyRightHand(sim: Simulation): void {
@@ -191,5 +211,57 @@ describe('Freie Reihenfolge (Auftrag 36)', () => {
     expect(offerStatus(loaded.state)).toBe('later');
     expect(offerFrom(loaded.state)).toBe('koeln');
     expect(loaded.state.modules.city.rounds).toEqual(['koeln']);
+  });
+
+  it('zwei Runden: Nach Hamburg komplett zählt nur noch Berlin, Hamburgs erledigtes Angebot nicht mehr', () => {
+    const sim = quietGame();
+    moveToHamburg(sim);
+    berlin.template = false;
+    expect(offerStatus(sim.state, 'hamburg')).toBe('none');
+    takeCity(sim, 'hamburg');
+    expect(offerFrom(sim.state)).toBe('hamburg');
+    expect(offerCities(sim.state)).toEqual(['berlin']);
+    expect(sim.dispatch({ type: 'city.requestCall', payload: { cityId: 'berlin' } }).ok).toBe(true);
+    sim.dispatch({ type: 'city.answerOffer', payload: { choice: 'later', cityId: 'berlin' } });
+    expect(currentOffer(sim.state)).toBe('berlin');
+    expect(offerStatus(sim.state)).toBe('later');
+    // Ohne Zusage und ohne Anruf wird keine andere Stadt frei.
+    expect(nextCityAfter(sim.state, 'koeln')).toBeNull();
+  });
+
+  it('eine leere Runde (keine Stadt frei) kommt nach, sobald eine Stadt spielbar wird', () => {
+    const sim = quietGame();
+    moveToHamburg(sim);
+    takeCity(sim, 'hamburg');
+    // Berlin ist noch Schablone: keine Runde, nichts verbraucht.
+    expect(offerFrom(sim.state)).toBeNull();
+    expect(sim.state.modules.city.rounds).not.toContain('hamburg');
+    berlin.template = false;
+    sim.advance(60);
+    expect(offerFrom(sim.state)).toBe('hamburg');
+    // Berlin ruft an (oder gleich).
+    expect(['scheduled', 'calling']).toContain(offerStatus(sim.state, 'berlin'));
+  });
+
+  it('Version 4 → 5: leere Runden fallen weg, ein zu früh vergebener Boss von Deutschland wird neu bestimmt', () => {
+    const sim = quietGame();
+    moveToHamburg(sim);
+    const saved = structuredClone(sim.state) as GameState;
+    const city = saved.modules.city as unknown as Record<string, unknown>;
+    delete city.startMoneyPaid;
+    city.rounds = ['koeln', 'hamburg'];
+    city.rank = { id: 'bossGermany', title: 'Boss von Deutschland', score: 50, at: 100 };
+    saved.moduleVersions.city = 4;
+    const file = parseSaveFile(serializeSave(createSaveFile(saved, 'alt', 0)));
+    const loaded = loadSimulation(file.state, sim.modules);
+    expect(loaded.state.modules.city.rounds).toEqual(['koeln']);
+    expect(loaded.state.modules.city.startMoneyPaid).toEqual([]);
+    expect(loaded.state.modules.city.rank.quiet).toBe(true);
+    // Der nächste Schritt übernimmt still, was der Stand hergibt (Köln komplett: Boss von Köln), ohne Banner.
+    const events = recordEvents(loaded);
+    loaded.advance(60);
+    expect(loaded.state.modules.city.rank.title).toBe('Boss von Köln');
+    expect(loaded.state.modules.city.rank.quiet).toBeUndefined();
+    expect(eventsOfType(events, 'player.rankUp')).toHaveLength(0);
   });
 });

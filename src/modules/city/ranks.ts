@@ -52,6 +52,8 @@ export interface RankInput {
   unlocked: readonly string[];
   /** Name einer Stadt für den Titel. */
   name: (cityId: string) => string;
+  /** So viele komplette Städte braucht Boss von Deutschland mindestens (GERMANY_MIN_CITIES). */
+  minGermany: number;
 }
 
 /**
@@ -59,14 +61,14 @@ export interface RankInput {
  * der Titel nennt die letzte in der Reihenfolge, in der du sie freigeschaltet hast.
  */
 export function reachedRank(state: GameState, input: RankInput): PlayerRank {
-  const { cities, unlocked, name } = input;
+  const { cities, unlocked, name, minGermany } = input;
   const at = (id: string) => PLAYER_RANKS.findIndex((r) => r.id === id);
   const make = (id: string, extra = 0, city?: string): PlayerRank => {
     const def = PLAYER_RANKS[at(id)];
     return { id, title: def.title.replace('{city}', city ?? ''), score: at(id) * STEP + extra };
   };
   const complete = cities.filter((c) => campaignProgress(state, c).complete);
-  if (cities.length > 1 && complete.length === cities.length) return make('bossGermany');
+  if (complete.length >= minGermany && complete.length === cities.length) return make('bossGermany');
   const others = unlocked.filter((c) => c !== MILESTONE_CITY && complete.includes(c));
   if (others.length > 0) return make('bossCity', others.length, name(others[others.length - 1]));
   if (cityMilestones(state, MILESTONE_CITY).majority !== null || complete.includes(MILESTONE_CITY)) {
