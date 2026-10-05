@@ -8,6 +8,7 @@ import {
   ActionSheet,
   Button,
   Group,
+  Hint,
   ItemContent,
   List,
   ListItem,
@@ -36,6 +37,7 @@ import {
   type ContainerSize,
   type Cover,
   containerRisk,
+  getOrders,
   getProducer,
   getShipments,
   harborPorts,
@@ -46,6 +48,7 @@ import {
   ownShips,
   type ShipVoyage,
   shippingMinutes,
+  stockWithIncoming,
   voyagePlan,
 } from '../index';
 import { MissingClean } from './clean';
@@ -114,6 +117,13 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
   const ships = producer.sea ? freeShips(state) : [];
   const vesselId = vessel !== CHARTER && ships.some((s) => String(s.id) === vessel) ? Number(vessel) : null;
   const target = ports.includes(port) ? port : (ports[0] ?? HARBOR_CITY);
+  // Was angenommene Bestellungen von dieser Ware noch brauchen (Auftrag 43), gegen Bestand und Container unterwegs.
+  const needed = getOrders(state)
+    .filter((o) => o.status === 'accepted')
+    .flatMap((o) => o.items)
+    .filter((i) => i.productId === productId && i.state === undefined)
+    .reduce((sum, i) => sum + i.amount, 0);
+  const have = stockWithIncoming(state, target, productId);
   const container = CONTAINER_SIZES.find((c) => c.id === size) ?? CONTAINER_SIZES[0];
   const capacity = vesselId === null ? Infinity : vehicleSpec(state, vesselId).capacity;
   const onHand = origin ? (stock[productId]?.amount ?? 0) : Infinity;
@@ -147,7 +157,8 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
         note={producer.description}
         value={origin ? `${kg(onHand)} bereit` : undefined}
       >
-        {products.length > 1 && (
+        {/* Ab vier Waren eine Auswahl statt Reitern (Auftrag 43: bei Jansen waren die Namen abgeschnitten). */}
+        {products.length > 1 && products.length <= 3 && (
           <SegmentedControl
             wide
             aria-label="Ware"
@@ -155,6 +166,20 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
             options={products.map((id) => ({ value: id, label: productName(id) }))}
             onChange={setProduct}
           />
+        )}
+        {products.length > 3 && (
+          <Select
+            wide
+            label="Ware"
+            value={productId}
+            options={products.map((id) => ({ value: id, label: productName(id) }))}
+            onChange={setProduct}
+          />
+        )}
+        {needed > 0 && (
+          <Hint icon="inbox">
+            {`Angenommen und noch offen: ${kg(needed)} ${productName(productId)}. Im Hafen oder unterwegs: ${kg(have)}.`}
+          </Hint>
         )}
       </Group>
       <Group title="Container" icon="boxes" color="goods" note="Klein fällt weniger auf, groß ist billiger pro Gramm.">

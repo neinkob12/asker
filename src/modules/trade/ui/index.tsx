@@ -47,8 +47,10 @@ import { productName } from '../../goods';
 import { CALL_AFTER_WEEKS, CALL_MIN_REVENUE, isGrowStarted } from '../../grow';
 import { customsHeat, customsLevel } from '../../police';
 import {
+  CONTAINER_SIZES,
   CUSTOMER_KINDS,
   type CustomerKind,
+  containerCost,
   counterOutcome,
   customerContact,
   deliveryCheckChance,
@@ -65,8 +67,11 @@ import {
   getShipments,
   harborPorts,
   isTradeActive,
+  LATE_GRACE_DAYS,
+  LATE_PRICE_FACTOR,
   MAX_HALLS,
   maxFactor,
+  ORDER_DUE_DAYS,
   OWN_ORIGINS,
   openItems,
   openOrders,
@@ -84,9 +89,11 @@ import {
   portHalls,
   portLoad,
   portStock,
+  SEIZE_ON_CHECK,
   shippableItems,
   shippingMinutes,
   supplierReputation,
+  TRUST,
   type TradeOrder,
   tradeStats,
   weekOf,
@@ -172,32 +179,71 @@ function producersFor(state: GameState, productId: string, portId: string) {
 }
 
 /** Die Woche als Lieferant in vier Schritten (Auftrag 43): in den ersten zwei Wochen offen, danach eingeklappt. */
-const HARBOR_STEPS: { icon: string; color: CategoryColor; title: string; text: string }[] = [
-  {
-    icon: 'inbox',
-    color: 'warn',
-    title: 'Montag: Bestellungen',
-    text: 'Jeder Kunde bestellt einmal pro Woche. Annehmen, ablehnen oder mehr verlangen.',
-  },
-  {
-    icon: 'ship',
-    color: 'goods',
-    title: 'Einkauf im Ausland',
-    text: 'Container bei Produzenten, ein paar Tage auf See. Rechtzeitig bestellen.',
-  },
-  {
-    icon: 'anchor',
-    color: 'law',
-    title: 'Hafen und Zoll',
-    text: 'Jeder Container kann kontrolliert werden. Viel Ware macht den Zoll wach.',
-  },
-  {
-    icon: 'truck',
-    color: 'place',
-    title: 'Ausliefern',
-    text: 'Spedition oder eigener Lkw bis zur Frist. Pünktlich bringt mehr Bestellungen.',
-  },
-];
+/** Die Schritte im Hafen (Auftrag 43: mit Ort zum Tippen, Fristen, Folgen und sauberem Geld). */
+function harborSteps(): { icon: string; color: CategoryColor; title: string; text: string }[] {
+  const days = PRODUCERS.filter((p) => !p.byRoad).map((p) => Math.round(shippingMinutes(p.id, HARBOR_CITY) / 1440));
+  const sea = days.length > 0 ? `${Math.min(...days)} bis ${Math.max(...days)} Tage` : 'ein paar Tage';
+  return [
+    {
+      icon: 'inbox',
+      color: 'warn',
+      title: 'Bestellungen',
+      text: 'Montags bestellt jeder Kunde, zum Start gleich bei der Ankunft. Unter „Neue Bestellungen“ annehmen, ablehnen oder mehr verlangen, bevor die Frist abläuft.',
+    },
+    {
+      icon: 'ship',
+      color: 'goods',
+      title: 'Einkauf im Ausland',
+      text: `Reiter Hafen › Einkauf im Ausland: Container bei Produzenten, bezahlt mit Schwarzgeld, ${sea} auf See. Bestell, bevor die Halle leer ist.`,
+    },
+    {
+      icon: 'anchor',
+      color: 'law',
+      title: 'Hafen und Zoll',
+      text: 'Jeder Container kann kontrolliert werden, viel Ware macht den Zoll wach. In Rotterdam stehst du selbst am Kai.',
+    },
+    {
+      icon: 'truck',
+      color: 'place',
+      title: 'Ausliefern',
+      text: `Unter „Zu liefern“, per Spedition oder eigenem Lkw. ${ORDER_DUE_DAYS} Tage ab Bestellung, danach ${LATE_GRACE_DAYS} Tage mit ${pct(1 - LATE_PRICE_FACTOR)} Abschlag, dann platzt sie: weniger Vertrauen, schlechterer Ruf.`,
+    },
+    {
+      icon: 'washing',
+      color: 'money',
+      title: 'Sauberes Geld',
+      text: 'Lkw, Halle, Liegeplatz und Schiffe kosten sauberes Geld. Schwarzgeld wäschst du am schnellsten über Jansens Reederei (Geldwäsche).',
+    },
+  ];
+}
+
+/** Strenge des Zolls in einem Hafen in Worten (Faktor auf die Kontrollchance). */
+function customsStrictness(factor: number): string {
+  if (factor < 0.95) return 'Zoll lasch';
+  if (factor > 1.05) return 'Zoll streng';
+  return 'Zoll normal';
+}
+
+/** Billigster Preis pro Gramm bei einem Produzenten: großer Container, Ware plus Fracht. */
+function cheapestPerGram(producerId: string): number {
+  const producer = PRODUCERS.find((p) => p.id === producerId);
+  const full = CONTAINER_SIZES.reduce((a, b) => (b.grams > a.grams ? b : a));
+  const prices = Object.keys(producer?.products ?? {}).map((productId) => {
+    const cost = containerCost(producerId, productId, full.id);
+    return (cost.goods + cost.freight) / full.grams;
+  });
+  return prices.length > 0 ? Math.min(...prices) : 0;
+}
+
+/** „1 Tag“, „5 Tage“. */
+function daysLabel(days: number): string {
+  return days === 1 ? '1 Tag' : `${days} Tage`;
+}
+
+/** Frist als „Mi 06:00“. */
+function answerByText(at: number): string {
+  return `${clock.weekdayName(at, true)} ${clock.formatTime(at)}`;
+}
 
 function HarborGuide() {
   const { state } = useGame();
@@ -206,7 +252,7 @@ function HarborGuide() {
   return (
     <Group title="So läuft der Hafen" icon="help" color="system" collapsible open={fresh}>
       <List>
-        {HARBOR_STEPS.map((step, i) => (
+        {harborSteps().map((step, i) => (
           <ListItem key={step.title}>
             <ItemContent icon={step.icon} color={step.color} title={`${i + 1}. ${step.title}`} meta={step.text} />
           </ListItem>
@@ -220,6 +266,8 @@ function OrdersView(props: { onView: (view: View) => void }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
   const [ask, setAsk] = useState<{ order: TradeOrder; mode: 'answer' | 'deliver' | 'buy' } | null>(null);
+  // Auftrag 43: „Alle annehmen“ mit Bestellungen ohne Ware fragt erst nach und sagt, was droht.
+  const [allAsk, setAllAsk] = useState(false);
   const open = openOrders(state);
   const pending = pendingDeliveries(state);
   const deliveries = getDeliveries(state);
@@ -273,7 +321,7 @@ function OrdersView(props: { onView: (view: View) => void }) {
     // Die Wahl: Spedition kostet, fällt aber seltener auf; der eigene Lkw ist umsonst, wird öfter kontrolliert und
     // kann bei einer Kontrolle mit der Ladung weg sein.
     actions.push({
-      label: `Spedition: ${formatEuro(freight)}, Zoll ${pct(deliveryCheckChance(state, customer, port))}`,
+      label: `Spedition: ${formatEuro(freight)}, Kontrolle ${pct(deliveryCheckChance(state, customer, port))}`,
       icon: 'truck',
       disabled: state.wallet.dirty < freight,
       onSelect: () => {
@@ -284,7 +332,7 @@ function OrdersView(props: { onView: (view: View) => void }) {
     const trucks = freeVehicles(state, HARBOR_CITY);
     for (const v of trucks) {
       actions.push({
-        label: `${vehicleName(state, v.id)}: ohne Kosten, Zoll ${pct(deliveryCheckChance(state, customer, port, v.id))}`,
+        label: `${vehicleName(state, v.id)}: ohne Fracht, Kontrolle ${pct(deliveryCheckChance(state, customer, port, v.id))}`,
         icon: 'truck',
         onSelect: () => {
           dispatch({ type: 'trade.deliver', payload: { orderId: o.id, portId: port, vehicleId: v.id } });
@@ -310,7 +358,7 @@ function OrdersView(props: { onView: (view: View) => void }) {
     for (const item of missingItems(state, ask.order)) {
       for (const p of producersFor(state, item.productId, portId).slice(0, 2)) {
         actions.push({
-          label: `${productName(item.productId)} bei ${p.name} (${Math.round(shippingMinutes(p.id, portId) / 1440)} Tage)`,
+          label: `${productName(item.productId)} bei ${p.name} (${daysLabel(Math.round(shippingMinutes(p.id, portId) / 1440))})`,
           icon: p.byRoad ? 'truck' : 'ship',
           onSelect: () => {
             setAsk(null);
@@ -340,7 +388,11 @@ function OrdersView(props: { onView: (view: View) => void }) {
         icon="inbox"
         color="warn"
         count={open.length}
-        note={open.length === 0 ? 'Montag früh kommen neue.' : 'Antworten bis zum nächsten Morgen.'}
+        note={
+          open.length === 0
+            ? 'Montag früh kommen neue.'
+            : `Antworten bis ${answerByText(Math.min(...open.map((o) => o.answerBy)))}, sonst kauft die Konkurrenz.`
+        }
         more="Die Menge ist dein Anteil am Wochenbedarf des Kunden: Er vergleicht dich mit Toni, Hein, Mirko und Daan nach Preis, Qualität und Zuverlässigkeit. Ein Gegenangebot geht bis zu seiner Preisgrenze; liegt die Konkurrenz dann vorn, ist der Auftrag weg. Der Abnahmevertrag der alten Organisationen hat einen festen Preis. „Ware da“ zählt den Bestand in deinen Häfen und Container, die vor der Frist ankommen, abzüglich dessen, was angenommene Bestellungen brauchen."
       >
         <List>
@@ -358,8 +410,8 @@ function OrdersView(props: { onView: (view: View) => void }) {
             <ListItem
               action
               icon="alert"
-              onClick={() => dispatch({ type: 'trade.acceptAll', payload: {} })}
-              value={formatEuro(open.reduce((sum, o) => sum + orderValue(o, 1), 0))}
+              onClick={() => setAllAsk(true)}
+              value={`bis zu ${formatEuro(open.reduce((sum, o) => sum + orderValue(o, 1), 0))}`}
             >
               {`Alle annehmen (${open.length - covered.length} ohne Ware)`}
             </ListItem>
@@ -498,10 +550,46 @@ function OrdersView(props: { onView: (view: View) => void }) {
               ? `${orderItemsText(ask.order.items)}. Höchstens ${formatEuro(orderValue(ask.order, maxFactor(ask.order)))}.`
               : ask.mode === 'buy'
                 ? `Im Hafen fehlt ${orderItemsText(missingItems(state, ask.order))}. Kauf es bei einem Produzenten, vor der Frist ${clock.weekdayName(ask.order.dueAt, true)} ${clock.formatTime(ask.order.dueAt)}.`
-                : `${orderItemsText(port ? shippableItems(state, port, ask.order) : [])} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.${europeCityOf(customer) ? ` Zoll steht ${europeCityOf(customer)?.border.name}.` : ''}`
+                : `${orderItemsText(port ? shippableItems(state, port, ask.order) : [])} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.${europeCityOf(customer) ? ` Zoll steht ${europeCityOf(customer)?.border.name}.` : ''} Wird die Lieferung kontrolliert, ist die Ladung zu ${pct(SEIZE_ON_CHECK)} weg.`
             : undefined
         }
         actions={actions}
+      />
+      <ActionSheet
+        open={allAsk}
+        onClose={() => setAllAsk(false)}
+        title="Auch ohne Ware annehmen?"
+        message={`Für ${open.length - covered.length} Bestellungen fehlt Ware. Kommt sie nicht bis zur Frist, geht es noch ${LATE_GRACE_DAYS} Tage mit ${pct(1 - LATE_PRICE_FACTOR)} Abschlag, danach platzt die Bestellung: Der Kunde vertraut dir weniger (${TRUST.failed}), und dein Ruf als Lieferant sinkt (Europa will mindestens ${pct(EUROPE_MIN_RELIABILITY)} pünktlich).`}
+        actions={[
+          ...(covered.length > 0
+            ? [
+                {
+                  label: `Nur gedeckte annehmen (${covered.length})`,
+                  icon: 'checkCircle' as const,
+                  onSelect: () => {
+                    setAllAsk(false);
+                    dispatch({ type: 'trade.acceptAll', payload: { coveredOnly: true } });
+                  },
+                },
+              ]
+            : []),
+          {
+            label: 'Erst einkaufen',
+            icon: 'ship',
+            onSelect: () => {
+              setAllAsk(false);
+              props.onView('harbor');
+            },
+          },
+          {
+            label: 'Trotzdem alle annehmen',
+            destructive: true,
+            onSelect: () => {
+              setAllAsk(false);
+              dispatch({ type: 'trade.acceptAll', payload: {} });
+            },
+          },
+        ]}
       />
     </>
   );
@@ -534,7 +622,7 @@ function NextStageGroup() {
       color="goods"
       collapsible
       open={false}
-      note="Wer lange genug genug liefert, bekommt Anrufe aus Kolumbien und Marokko: eigene Fincas, eigene Ware."
+      note="Wer lange genug liefert, bekommt Anrufe aus Kolumbien und Marokko: eigene Fincas, eigene Ware."
     >
       <List>
         <ListItem value={`${Math.min(CALL_AFTER_WEEKS, Math.floor(weeks))} von ${CALL_AFTER_WEEKS} Wochen`}>
@@ -651,7 +739,7 @@ function CustomersView() {
                           color: 'warn',
                           icon: 'alert',
                         },
-                        { label: `Zoll ${pct(city.border.check)}`, color: 'law', icon: 'shield' },
+                        { label: `Grenzkontrolle ${pct(city.border.check)}`, color: 'law', icon: 'shield' },
                       ]}
                     />
                   </ListItem>
@@ -863,7 +951,7 @@ function HarborView() {
             <ListItem
               key={p.id}
               onClick={() => ui.openPanel('trade.order', { producerId: p.id })}
-              value={`${Math.round(shippingMinutes(p.id, target) / 1440)} T.`}
+              value={daysLabel(Math.round(shippingMinutes(p.id, target) / 1440))}
             >
               <ItemContent
                 icon={p.byRoad ? 'truck' : 'ship'}
@@ -871,9 +959,9 @@ function HarborView() {
                 title={p.name}
                 meta={p.country}
                 tags={[
-                  ...Object.keys(p.products)
-                    .slice(0, 3)
-                    .map((id) => ({ label: productName(id), color: 'goods' as const })),
+                  // Auftrag 43: Preis ab (großer Container, mit Fracht) und alle Waren, nicht nur drei.
+                  { label: `ab ${formatNumber(cheapestPerGram(p.id), 2)} €/g`, color: 'money', icon: 'euro' },
+                  ...Object.keys(p.products).map((id) => ({ label: productName(id), color: 'goods' as const })),
                   { label: `Qualität ${pct(p.quality)}`, color: 'goods', icon: 'gem' },
                 ]}
               />
@@ -907,7 +995,7 @@ function HarborView() {
                   color="place"
                   title={p.name}
                   meta={p.description}
-                  tags={[{ label: `Zoll ${pct(p.customsFactor)}`, color: 'law', icon: 'shield' }]}
+                  tags={[{ label: customsStrictness(p.customsFactor), color: 'law', icon: 'shield' }]}
                 />
               </ListItem>
             ))}

@@ -155,24 +155,30 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] F4 Sauberes Geld als unsichtbare Sperre (Lkw 63.000, Halle, Liegeplatz, Schiff ausgegraut ohne Grund): Zeile
   „Dir fehlen … € sauber“ mit Knopf zur Geldwäsche (Jansens Reederei), Texte in `rtBuy`/`rtTruck` und Geldwäsche-Rat.
   Erledigt: Zeile „Dir fehlen … € sauber“ unter Lkw, Halle, Liegeplatz und Schiffen (`trade/ui/clean.tsx`) mit Sprung zur Geldwäsche; Rat der Geldwäsche nennt nach dem Verkauf Lkw, Halle, Liegeplatz, Schiffe und Jansens Reederei; `rtTruck` sagt, dass es sauberes Geld braucht.
-- [ ] F5 „Alle annehmen (9 ohne Ware)“ und Fennas „Alle“ ohne Warnung (Ruf 0,85 → 0,28): Rückfrage mit Folge und
+- [x] F5 „Alle annehmen (9 ohne Ware)“ und Fennas „Alle“ ohne Warnung (Ruf 0,85 → 0,28): Rückfrage mit Folge und
   „Erst einkaufen“, Summe als „nur wenn alles geliefert wird“.
+  Erledigt: „Alle annehmen (N ohne Ware)“ fragt nach (Nachfrist, Abschlag, Vertrauen, Ruf, Europa-Grenze) mit „Nur gedeckte“, „Erst einkaufen“, „Trotzdem“; Summe als „bis zu“; Fennas „Alle“ sagt die Folge.
 - [x] F6 Lkw-Quest ehrlich (lohnt erst bei vielen Fahrten, doppelte Kontrollchance), `rtTruck` ans Ende oder optional,
   Abwägung im Liefer-Blatt.
   Erledigt: `rtTruck` ehrlich („lohnt bei vielen Fahrten, doppelt so oft kontrolliert“) und als letzter Schritt des Kapitels nach „fünfmal pünktlich“.
-- [ ] F7 Fristen und Folgen erklären: Fußnote aus der echten Frist, Guide mit Ankunfts-Runde, Strafe für Platzen,
+- [x] F7 Fristen und Folgen erklären: Fußnote aus der echten Frist, Guide mit Ankunfts-Runde, Strafe für Platzen,
   sauberes Geld, Laufzeit der Container gegen die Frist.
+  Erledigt: Fußnote aus der echten Frist; Guide mit fünf Schritten (wo tippen, Ankunftsrunde, Laufzeit der Container aus den Daten, Frist, Nachfrist, Abschlag, Folgen, sauberes Geld).
 - [ ] F8 Gesperrte Gang-Kunden (Anteil 0 %, Rache) mit Chip und Grund oder ausblenden.
 - [ ] F9 Europa-Karte: Karten überlappen (Rotterdam/Amsterdam/Antwerpen, Düsseldorf über Köln), Knopf „Europa“.
-- [ ] F10 Einkaufsliste mit Preis ab €/g und „Tage“ ausgeschrieben, alle Waren; im Panel offener Bedarf.
-- [ ] F11 „Zoll X %“ heißt dreierlei: Kontrollchance, Grenzchance, Strenge. Eindeutig benennen.
+- [x] F10 Einkaufsliste mit Preis ab €/g und „Tage“ ausgeschrieben, alle Waren; im Panel offener Bedarf.
+  Erledigt: Einkaufsliste mit „ab … €/g“ (großer Container mit Fracht), allen Waren und „Tage“ ausgeschrieben; im Einkauf-Panel offener Bedarf gegen Bestand und Container unterwegs.
+- [x] F11 „Zoll X %“ heißt dreierlei: Kontrollchance, Grenzchance, Strenge. Eindeutig benennen.
+  Erledigt: „Kontrolle X %“ an Lieferungen (mit Satz zur Beschlagnahme), „Grenzkontrolle X %“ bei Europa, Häfen „Zoll lasch/normal/streng“.
 - [ ] F12 Personal-App in Rotterdam lockt mit Bewerbern (Badge), die dort nichts tun können.
 - [ ] F13 Gegenangebot: „du bleibst vorn“ hervorheben, Vertrag „Fester Preis“, Konkurrenz erklären.
 - [x] F14 Großrazzia der alten Stadt im Dynamic Island (`police/ui/island.ts` ohne Stadtfilter); beim Verkauf leeren.
   Erledigt: Island zeigt die Großrazzia nur in der aktiven Stadt; beim Verkauf fallen geplante Razzien weg; eine wartende Großrazzia einer schlafenden Stadt blockiert die aktive Stadt nicht mehr.
 - [ ] F15 „Alle ausliefern (Spedition)“; Lkw-Stufe im Plan nur mit Lkw; Verträge vor Gangs bei der Deckung.
-- [ ] F16 Waren-Leiste bei Jansen abgeschnitten (ab 4 Waren `Select`).
-- [ ] F17 Tippfehler „lange genug genug“ (`NextStageGroup`).
+- [x] F16 Waren-Leiste bei Jansen abgeschnitten (ab 4 Waren `Select`).
+  Erledigt: Ab vier Waren eine Auswahl (`Select`) statt Reitern.
+- [x] F17 Tippfehler „lange genug genug“ (`NextStageGroup`).
+  Erledigt: Tippfehler behoben.
 - [ ] F18 Köln-Reste in der Suche (Spots, Veedel) und Texten (Kasse, Geldwäsche) nach dem Verkauf.
 - [ ] F19 Test-Spielstände `hafen`/`hafen-europa` neu erzeugen, „Ankunft in Rotterdam“ vor dem ersten Bot-Zug.
 - [ ] F20 App „Kunden“ heißt besser „Handel“ (Reiter „Kunden“ bleibt).

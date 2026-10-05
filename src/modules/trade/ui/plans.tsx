@@ -76,7 +76,7 @@ function PlanControls(props: { plan: CustomerPlan; onChange: (patch: Partial<Cus
             props.plan.accept === 'covered'
               ? 'Nur, wenn die Ware da oder unterwegs ist.'
               : props.plan.accept === 'all'
-                ? 'Alles, was bestellt wird.'
+                ? 'Alles, auch ohne Ware. Kommt sie nicht rechtzeitig, platzt die Bestellung: weniger Vertrauen, schlechterer Ruf.'
                 : 'Das machst du.'
           }
         />
