@@ -3,6 +3,7 @@
 // (Auftrag 31): Elbphilharmonie, Michel, Heinrich-Hertz-Turm, Köhlbrandbrücke, Landungsbrücken, Elbbrücken; Lage und
 // Ausrichtung aus Overture Maps (Gebäude, Straßen über Wasser, Infrastruktur, ODbL). Berlin (Auftrag 37): Fernsehturm,
 // Brandenburger Tor, Oberbaumbrücke. München (Auftrag 38): Frauenkirche, Olympiaturm, BMW-Vierzylinder, Allianz Arena.
+// Frankfurt (Auftrag 39): Commerzbank Tower, Main Tower, Messeturm, EZB und Römer.
 // Echte Koordinaten, ungefähre Maße in Metern. Jedes Teil ist ein Grundriss im lokalen Rahmen des Bauwerks
 // (forward entlang der Achse, left quer dazu) mit Unter- und Oberkante.
 // Die echten OSM-Gebäude an diesen Stellen blendet die Grundkarte aus (LANDMARK_ZONES), sonst stecken zwei
@@ -653,6 +654,120 @@ function allianzArena(): Landmark {
   };
 }
 
+// --- Frankfurt (Auftrag 39) ----------------------------------------------------------------------------------------
+
+/** Commerzbank Tower (259 m): abgerundetes Dreieck mit Mast. */
+function commerzbankTower(): Landmark {
+  return {
+    id: 'commerzbank-tower',
+    name: 'Commerzbank Tower',
+    city: 'frankfurt',
+    center: { lng: 8.67425, lat: 50.11025 },
+    heading: 0,
+    colors: {
+      glass: ['#6d8297', '#2c3a48'],
+      crown: ['#a8b6c2', '#e2ae4a'],
+    },
+    parts: [
+      part(roundedTriangle(60), 0, 245, 'glass'),
+      part(roundedTriangle(44), 245, 250, 'crown'),
+      part(ngon(0, 0, 1.5), 250, 259, 'crown'),
+    ],
+    zone: [-40, -40, 40, 40],
+  };
+}
+
+/** Main Tower (200 m): runder Glasturm neben einem eckigen Steinturm, Antenne obendrauf. */
+function mainTower(): Landmark {
+  return {
+    id: 'main-tower',
+    name: 'Main Tower',
+    city: 'frankfurt',
+    center: { lng: 8.67205, lat: 50.11245 },
+    heading: 30,
+    colors: {
+      glass: ['#5f7f9a', '#284055'],
+      stone: ['#7c7f86', '#363a40'],
+      antenna: ['#b8c6d3', '#e2ae4a'],
+    },
+    parts: [
+      part(ngon(6, 0, 22, 12), 0, 200, 'glass'),
+      part(rect(-24, -18, 2, 18), 0, 170, 'stone'),
+      part(ngon(6, 0, 1.5), 200, 240, 'antenna'),
+    ],
+    zone: [-32, -30, 32, 30],
+  };
+}
+
+/** Messeturm (257 m): quadratischer Schaft mit Pyramidenspitze, rötlicher Stein. */
+function messeturm(): Landmark {
+  return {
+    id: 'messeturm',
+    name: 'Messeturm',
+    city: 'frankfurt',
+    center: { lng: 8.65345, lat: 50.11225 },
+    heading: 0,
+    colors: {
+      stone: ['#8a6c66', '#3f302d'],
+      top: ['#a9867e', '#e2ae4a'],
+    },
+    parts: [
+      part(rect(-20.5, -20.5, 20.5, 20.5), 0, 205, 'stone'),
+      part(rect(-15, -15, 15, 15), 205, 222, 'stone'),
+      part(rect(-10, -10, 10, 10), 222, 236, 'top'),
+      part(rect(-5, -5, 5, 5), 236, 250, 'top'),
+      part(ngon(0, 0, 1.6), 250, 257, 'top'),
+    ],
+    zone: [-28, -28, 28, 28],
+  };
+}
+
+/** Europäische Zentralbank (185 m): zwei schräg versetzte Hochhausscheiben über der alten Großmarkthalle. */
+function ezb(): Landmark {
+  return {
+    id: 'ezb',
+    name: 'Europäische Zentralbank',
+    city: 'frankfurt',
+    center: { lng: 8.70265, lat: 50.10955 },
+    heading: 80,
+    colors: {
+      glass: ['#6f8496', '#2d3b48'],
+      hall: ['#7d7266', '#382f28'],
+    },
+    parts: [
+      part(rect(-110, -25, 110, 25), 0, 22, 'hall'),
+      part(rect(-28, 8, 32, 30), 0, 185, 'glass'),
+      part(rect(-32, -30, 28, -8), 0, 165, 'glass'),
+    ],
+    zone: [-118, -36, 118, 36],
+  };
+}
+
+/** Römer: drei Häuser mit Treppengiebeln am Römerberg. */
+function roemer(): Landmark {
+  const parts: Part[] = [];
+  for (const [i, l] of [-12, 0, 12].entries()) {
+    parts.push(
+      part(rect(-14, l - 5.5, 14, l + 5.5), 0, 16, 'stone'),
+      part(rect(-10, l - 4, 14, l + 4), 16, 21, 'gable'),
+      part(rect(-6, l - 2.5, 14, l + 2.5), 21, 25 + (i === 1 ? 2 : 0), 'gable'),
+    );
+  }
+  return {
+    id: 'roemer',
+    name: 'Römer',
+    city: 'frankfurt',
+    center: { lng: 8.68172, lat: 50.11045 },
+    heading: 280,
+    colors: {
+      stone: ['#9a6f62', '#45302a'],
+      gable: ['#b0857a', '#e2ae4a'],
+    },
+    parts,
+    zone: [-20, -22, 20, 22],
+  };
+}
+
 export const LANDMARKS: readonly Landmark[] = [
   dom(),
   hohenzollernBridge(),
@@ -674,6 +789,11 @@ export const LANDMARKS: readonly Landmark[] = [
   olympiaturm(),
   bmwVierzylinder(),
   allianzArena(),
+  commerzbankTower(),
+  mainTower(),
+  messeturm(),
+  ezb(),
+  roemer(),
 ];
 
 type Ring = number[][];

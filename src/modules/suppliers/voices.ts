@@ -1,7 +1,8 @@
 // Stimmen der Lieferanten (Auftrag 23): Jeder Ansprechpartner schreibt in seinem eigenen Ton. Gewählt wird mit dem
 // Text-Helfer des Kerns (texts.pick), der dieselbe Variante nicht direkt wiederholt.
 // Ton: Toni (Frankfurt) hektisch, Hein (Hamburg) wortkarg norddeutsch, Mirko (Berlin) Berliner Schnauze, Daan
-// (Amsterdam) locker holländisch, Jansen (Rotterdam) geschäftsmäßig, Kalle (Köln) kölsch, Enzo (Verona) italienisch.
+// (Amsterdam) locker holländisch, Jansen (Rotterdam) geschäftsmäßig, Kalle (Köln) kölsch, Enzo (Verona) italienisch,
+// Kofi (Cargo City) knapp wie ein Frachtbrief.
 //
 // Platzhalter: {goods} (z.B. "50 g Gras"), {reason} (Grund aus problems.ts, als Satzteil), {delay} (Dauer),
 // {cost} (Aufpreis oder Schmiergeld), {debt}, {extra} (Ware obendrauf), {warehouse}, {share} (Teillieferung).
@@ -132,6 +133,98 @@ export const SUPPLIER_VOICES: Readonly<Record<string, SupplierVoice>> = {
       'Neues Ziel: {warehouse}! Spart Zeit!',
       'Okay, {warehouse}! Bin unterwegs!',
     ],
+  },
+  // Kofi, Flughafen Frankfurt: ruhig, knapp, redet wie ein Frachtbrief.
+  flughafen: {
+    unlocked: [
+      'Gut. Bestellungen über die App, Abholung mache ich. Keine Anrufe.',
+      'Abgemacht. App, dann Cargo City, dann zu dir. Unter einer Stunde.',
+      'Wir sind im Geschäft. Bestell über die App, ich melde mich nur, wenn was ist.',
+    ],
+    delayed: [
+      'Kofi. {reason}. Deine {goods} kommen {delay} später.',
+      'Kurz: {reason}. {goods} verspätet, etwa {delay}.',
+      'Status: {reason}. Neue Ankunft in {delay} mehr. Nichts verloren.',
+      '{reason}. {delay} Verspätung für die {goods}. Ich bleib dran.',
+    ],
+    delayedAsk: [
+      'Kofi. {reason}. Das kostet {delay}. Wie willst du es haben?',
+      'Problem: {reason}. {goods} hängen, etwa {delay}. Entscheide.',
+      '{reason}. Rund {delay} Verzug. Ich hab Optionen, du wählst.',
+      'Status: {reason}. {delay}. Sag mir, wie ich weitermache.',
+    ],
+    seized: [
+      'Kofi. {reason}. Die {goods} sind beim Zoll. Abgeschrieben.',
+      '{reason}. {goods} weg. So ist das am Flughafen.',
+      'Schlechte Nachricht: {reason}. Die {goods} sind beschlagnahmt.',
+      'Verlust. {reason}. {goods}. Ich halte mich ein paar Tage zurück.',
+    ],
+    seizedCredit: [
+      'Kofi. {reason}. Die {goods} sind weg, die Rechnung bleibt.',
+      '{reason}. {goods} beschlagnahmt. Der Kredit läuft weiter.',
+      'Verlust: {reason}. Ware weg, Schulden nicht.',
+      '{reason}. Die {goods} hat der Zoll. Du schuldest mir trotzdem.',
+    ],
+    seizeThreat: [
+      'Kofi. {reason}. Mit {cost} schaut jemand weg. Ja oder nein?',
+      'Achtung: {reason}. {cost} für den Kollegen an der Halle, dann geht es vielleicht durch.',
+      '{reason}. Ich kenne einen in der Schicht. {cost}. Schnell.',
+      'Status kritisch: {reason}. {cost} unter der Hand, sonst ist es weg.',
+    ],
+    bribeSaved: [
+      'Durch. Die {goods} sind unterwegs.',
+      'Hat geklappt. Freigegeben, ich fahre.',
+      'Kollege hat genommen. Ware kommt.',
+    ],
+    bribeFailed: [
+      'Geld genommen, Ware trotzdem weg. {goods} verloren.',
+      'Hat nicht gereicht. Die {goods} sind beim Zoll.',
+      'Falscher Kollege. Geld weg, Ware weg.',
+    ],
+    badQuality: [
+      'Kofi. {reason}. Die Ware ist nicht wie bestellt. Nächste Lieferung gleiche ich aus.',
+      'Ehrlich: {reason}. Qualität unter Standard.',
+      '{reason}. Die Charge ist schwächer. Kommt nicht wieder vor.',
+      'Reklamation von mir an mich: {reason}. Ware nicht gut.',
+    ],
+    overdue: [
+      'Kofi. {debt} sind fällig. Bis dahin keine Fracht.',
+      'Offener Posten: {debt}. Lieferstopp bis zur Zahlung.',
+      '{debt}. Fällig. Ich warte.',
+      'Ich buche nichts mehr für dich, bis die {debt} da sind.',
+    ],
+    overdueAgain: [
+      'Immer noch {debt}. Das wird schwierig.',
+      'Zweite Mahnung: {debt}. Danach rede ich mit anderen Leuten.',
+      '{debt}. Heute.',
+      'Meine Geduld hat ein Zollsiegel. {debt}, jetzt.',
+    ],
+    early: [
+      'Die Maschine war früh. Deine {goods} auch.',
+      'Schnell durch die Halle. Ware früher da.',
+      'Kein Stau am Kreuz. Bin früher bei dir.',
+    ],
+    bonus: [
+      'Übermenge in der Kiste: {extra} gehen an dich.',
+      'Es war mehr drin als bestellt. {extra} obendrauf.',
+      '{extra} zusätzlich. Frag nicht, nimm.',
+    ],
+    betterQuality: [
+      'Gute Charge diesmal. Besser als bestellt.',
+      'Erste Wahl in der Kiste. Kein Aufpreis.',
+      'Die Ware ist besser als angekündigt.',
+    ],
+    detourDone: [
+      'Ich nehme die Landstraße. Kostet, geht schneller.',
+      'Umweg gebucht. Ich melde mich.',
+      'Anderer Weg, gleiche Ware. Bin unterwegs.',
+    ],
+    partialDone: [
+      '{share} kommen jetzt, der Rest mit dem nächsten Flug.',
+      'Aufgeteilt: {share} sofort, Rest später.',
+      'Teillieferung: {share} jetzt.',
+    ],
+    redirectDone: ['Neues Ziel: {warehouse}.', 'Ich fahre zum {warehouse}. Ist näher.', 'Umgebucht auf {warehouse}.'],
   },
   // Hein, Hamburg: wortkarg, norddeutsch.
   hamburg: {

@@ -1,6 +1,6 @@
-// Die Städte im Spiel (Auftrag 30, 36, 37 und 38): Köln (Einstieg), Hamburg, Berlin, München und eine Schablone für
-// Frankfurt (nur Daten-Skelett ohne Veedel, Spots und Gangs; im Spiel gesperrt und in der Deutschland-Ansicht „bald“,
-// Auftrag 39 füllt sie). Nach Köln ist die Reihenfolge frei: Jede Stadt hat einen Kontakt mit Gesicht und Stimme, der
+// Die Städte im Spiel (Auftrag 30, 36 bis 39): Köln (Einstieg), Hamburg, Berlin, München und Frankfurt (optional, ruft
+// nach den anderen an: offerRank). Eine Stadt mit template ist nur ein Daten-Skelett ohne Veedel, Spots und Gangs (im
+// Spiel gesperrt, in der Deutschland-Ansicht „bald“). Nach Köln ist die Reihenfolge frei: Jede Stadt hat einen Kontakt mit Gesicht und Stimme, der
 // nach „<Stadt> komplett“ anruft, und einen Satz Dreh (Glas-Karte der Deutschland-Ansicht). Faktoren: 1 = Köln.
 
 import type { Contact, LngLat } from '../../core';
@@ -42,6 +42,11 @@ export interface CityDef {
   contact: Contact;
   /** Der Dreh der Stadt in einem Satz (Glas-Karte der Deutschland-Ansicht, Anruf). */
   pitch: string;
+  /**
+   * Rang beim Anruf nach "<Stadt> komplett" (Auftrag 39, Standard 0): Erst nach Rang, dann nach Entfernung. Frankfurt ist
+   * optional (1) und ruft nicht vor Hamburg an, obwohl es näher an Köln liegt; per Chat und auf Wunsch geht es trotzdem.
+   */
+  offerRank?: number;
   /** Schablone: Daten da, Inhalt fehlt noch, im Spiel gesperrt. */
   template?: boolean;
 }
@@ -215,23 +220,26 @@ export const CITIES: readonly CityDef[] = [
     pitch: 'Teuer und streng: viel Kaufkraft, teure Lager und Löhne, die Polizei startet eine Stufe härter.',
   },
   {
-    // Schablone (Inhalt mit Auftrag 39, optional).
+    // Auftrag 39 (optional): Geld und Flughafen.
     id: 'frankfurt',
     name: 'Frankfurt',
     center: { lng: 8.682, lat: 50.11 },
-    view: { center: { lng: 8.682, lat: 50.11 }, zoom: 12.8, mobileZoom: 11.8, pitch: 50, bearing: 0 },
-    bounds: [8.55, 50.02, 8.8, 50.19],
+    // Blick nach Norden über den Main: Museumsufer vorn, Bahnhofsviertel, Innenstadt und die Türme dahinter.
+    view: { center: { lng: 8.674, lat: 50.112 }, zoom: 13.1, mobileZoom: 12.2, pitch: 50, bearing: -10 },
+    bounds: [8.51, 50.015, 8.75, 50.145],
     roadsNetworkId: 'frankfurt',
     portId: null,
     wageFactor: 1.2,
     propertyFactor: 1.6,
-    relationFactor: 1,
-    bribeFactor: 1.1,
+    relationFactor: 0.9,
+    bribeFactor: 1.3,
     raidWarningBonus: 0,
-    description: 'Noch nicht im Spiel.',
+    description:
+      'Banken, Messe, Flughafen. Die Kundschaft hat Geld, das Bahnhofsviertel die meiste Nachfrage und die meiste ' +
+      'Polizei. Hier wird gerechnet: Gefallen kosten, Wäsche geht in größeren Summen.',
     contact: FRANKFURT_CALLER,
     pitch: 'Geld und Flughafen: Banker als Kunden, das Bahnhofsviertel als Brennpunkt, Fracht über den Flughafen.',
-    template: true,
+    offerRank: 1,
   },
 ];
 

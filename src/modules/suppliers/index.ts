@@ -615,7 +615,8 @@ export function activeDeal(
 
 /**
  * Lieferproblem auswürfeln. roll ist eine Zufallszahl in [0, 1).
- * Wahrscheinlichkeit steigt mit schlechter Zuverlässigkeit, sinkt mit Vertrauen; am Hafen kommt der Zoll dazu.
+ * Wahrscheinlichkeit steigt mit schlechter Zuverlässigkeit, sinkt mit Vertrauen; am Hafen kommt der Zoll dazu, bei
+ * Lieferanten mit eigenem Zoll (customs, z.B. Fracht am Flughafen) dessen Zusatz.
  */
 export function rollShipmentProblem(roll: number, supplier: Supplier, trust: number): ShipmentProblem | null {
   const risk = (1 - supplier.reliability) * (1 - trust / 200);

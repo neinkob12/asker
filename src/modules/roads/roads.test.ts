@@ -228,7 +228,9 @@ describe('Mehrere Städte (Auftrag 30)', () => {
     expect(stats.km).toBeGreaterThan(1000);
     expect(roadNetworkAt(ST_PAULI)).toBe('hamburg');
     expect(roadNetworkAt(KALK)).toBe('koeln');
-    expect(roadNetworkAt({ lng: 8.68, lat: 50.11 })).toBeNull();
+    expect(roadNetworkAt({ lng: 8.68, lat: 50.11 })).toBe('frankfurt');
+    // Leipzig liegt in keiner Stadt im Spiel (auch nicht, wenn Berlin und München Netze haben).
+    expect(roadNetworkAt({ lng: 12.37, lat: 51.34 })).toBeNull();
     // Über die Elbbrücken nach Wilhelmsburg, auf Hamburger Straßen.
     const route = roadRoute(ST_PAULI, WILHELMSBURG);
     expect(route.onRoads).toBe(true);

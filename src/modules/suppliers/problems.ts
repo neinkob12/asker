@@ -1,5 +1,6 @@
 // Gründe für Lieferprobleme (Auftrag 23) als Daten, pro Weg: Autobahn aus einer Großstadt, Grenze NL, Schiff, lokal,
-// seit Auftrag 38 über die Alpen (Brenner, Italien nach München).
+// seit Auftrag 38 über die Alpen (Brenner, Italien nach München), seit Auftrag 39 Luftfracht über den Frankfurter
+// Flughafen.
 // Je mindestens acht Gründe für Verspätungen, vier für Beschlagnahmen und vier für schlechte Ware. Der Text ist ein
 // Satzteil, den der Lieferant in seinem Ton einbaut (voices.ts: {reason}); label ist die kurze Form für Liste und
 // Journal. Platzhalter: {road} (Autobahn des Kuriers), {city}, {river}, {port}.
@@ -7,13 +8,14 @@
 
 import type { Supplier } from './index';
 
-export type RouteKind = 'road' | 'border' | 'ship' | 'local' | 'alps';
+export type RouteKind = 'road' | 'border' | 'ship' | 'local' | 'alps' | 'air';
 
 export const ROUTE_NAMES: Readonly<Record<RouteKind, string>> = {
   road: 'Autobahn',
   border: 'Grenze NL',
   ship: 'Schiff',
   local: 'In der Stadt',
+  air: 'Luftfracht',
   alps: 'Brenner',
 };
 
@@ -177,6 +179,40 @@ export const PROBLEM_REASONS: Readonly<Record<RouteKind, RouteReasons>> = {
       { id: 'wrong', text: 'Falsches Tütchen erwischt', label: 'falsches Tütchen' },
     ],
   },
+  air: {
+    delay: [
+      { id: 'late', text: 'Die Maschine aus Toronto hat Verspätung', label: 'Flug verspätet' },
+      { id: 'fog', text: 'Nebel über dem Rhein-Main-Gebiet, die Maschinen kreisen', label: 'Nebel am Flughafen' },
+      { id: 'strike', text: 'Warnstreik beim Bodenpersonal', label: 'Warnstreik' },
+      { id: 'shift', text: 'Schichtwechsel beim Zoll, keiner gibt die Fracht frei', label: 'Schichtwechsel beim Zoll' },
+      {
+        id: 'split',
+        text: 'Die Sendung wurde auf zwei Flüge aufgeteilt',
+        label: 'auf zwei Flüge verteilt',
+        choices: ['partial'],
+      },
+      { id: 'scanner', text: 'Der Röntgenscanner in der Halle ist ausgefallen', label: 'Scanner ausgefallen' },
+      { id: 'night', text: 'Nachtflugverbot, die Maschine landet erst morgens', label: 'Nachtflugverbot' },
+      {
+        id: 'van',
+        text: 'Der Transporter von der Cargo City steht im Stau am Kreuz',
+        label: 'Stau am Frankfurter Kreuz',
+        choices: ['detour', 'partial', 'redirect'],
+      },
+    ],
+    seize: [
+      { id: 'dog', text: 'Spürhund in der Frachthalle', label: 'Spürhund in der Halle' },
+      { id: 'xray', text: 'Der Zoll hat das Paket geröntgt', label: 'Paket geröntgt' },
+      { id: 'sample', text: 'Stichprobe beim Zoll, ausgerechnet unsere Kiste', label: 'Stichprobe' },
+      { id: 'tip', text: 'Jemand am Terminal hat geredet', label: 'Hinweis vom Terminal' },
+    ],
+    badQuality: [
+      { id: 'pressure', text: 'Im Frachtraum war es zu kalt, die Ware ist brüchig', label: 'im Frachtraum gelitten' },
+      { id: 'repack', text: 'Beim Umpacken in der Halle ist was durcheinandergekommen', label: 'falsch umgepackt' },
+      { id: 'sender', text: 'Der Absender hat die zweite Wahl geschickt', label: 'zweite Wahl' },
+      { id: 'wait', text: 'Die Kiste stand zwei Tage im Zolllager', label: 'zu lange im Zolllager' },
+    ],
+  },
   alps: {
     delay: [
       { id: 'brenner', text: 'Stau am Brenner, Blockabfertigung bei Kufstein', label: 'Blockabfertigung' },
@@ -218,19 +254,21 @@ export const PROBLEM_REASONS: Readonly<Record<RouteKind, RouteReasons>> = {
 };
 
 /** Fluss pro Stadt für Schiffsgründe. */
-const RIVER_BY_CITY: Readonly<Record<string, string>> = { koeln: 'Rhein', hamburg: 'Elbe' };
+const RIVER_BY_CITY: Readonly<Record<string, string>> = { koeln: 'Rhein', hamburg: 'Elbe', frankfurt: 'Main' };
 
 /**
  * Weg eines Lieferanten in eine Stadt, wo er von der Regel abweicht (sonst: Hafen = Schiff, alle anderen Autobahn).
- * Kalle beliefert Köln aus Kalk, Hein Hamburg und Mirko Berlin aus der Stadt, Daan kommt über die Grenze, Enzo über
- * den Brenner.
+ * Kalle beliefert Köln aus Kalk, Hein Hamburg, Mirko Berlin und Toni Frankfurt aus der Stadt, Daan kommt über die
+ * Grenze, Enzo über den Brenner, Kofi schickt Luftfracht über den Frankfurter Flughafen.
  */
 export const SUPPLIER_ROUTES: Readonly<Record<string, Readonly<Record<string, RouteKind>>>> = {
   koeln: { koeln: 'local' },
   hamburg: { hamburg: 'local' },
+  frankfurt: { frankfurt: 'local' },
   berlin: { berlin: 'local' },
-  amsterdam: { koeln: 'border', hamburg: 'border', berlin: 'border' },
+  amsterdam: { koeln: 'border', hamburg: 'border', berlin: 'border', frankfurt: 'border' },
   italien: { muenchen: 'alps' },
+  flughafen: { frankfurt: 'air' },
 };
 
 /** Weg der Lieferung (supplier so, wie er in der Stadt auftritt). */

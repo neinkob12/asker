@@ -156,8 +156,16 @@ export const SNITCH_COOLDOWN = 24 * 60;
 
 /** So sieht dich die Polizei in einer Stadt mindestens (Hamburg und München: von Anfang an Händler). */
 export const MIN_TIER_BY_CITY: Readonly<Record<string, number>> = { hamburg: 1, muenchen: 1 };
-/** Kontrollen in der Stadt so viel öfter (Hamburg: die Polizei ist wacher; Berlin: lockerer; München: am strengsten). */
-export const CHECK_FACTOR_BY_CITY: Readonly<Record<string, number>> = { hamburg: 1.3, berlin: 0.75, muenchen: 1.5 };
+/**
+ * Kontrollen in der Stadt so viel öfter (Hamburg: die Polizei ist wacher; Berlin: lockerer; München: am strengsten;
+ * Frankfurt: etwas mehr, der Brennpunkt Bahnhofsviertel steckt schon in seiner Polizeipräsenz).
+ */
+export const CHECK_FACTOR_BY_CITY: Readonly<Record<string, number>> = {
+  hamburg: 1.3,
+  berlin: 0.75,
+  muenchen: 1.5,
+  frankfurt: 1.15,
+};
 /** Nachts (22 bis 4 Uhr) kommen Kontrollen in Veedeln mit Nachtleben so viel öfter (mal nightlife des Veedels). */
 export const NIGHT_HOURS = { from: 22, to: 4 } as const;
 /** Lokale Nachrichten, wenn sich die Stufe ändert und kein Polizei-Kontakt da ist. */
@@ -166,4 +174,5 @@ export const TICKERS: Readonly<Record<string, { id: string; name: string }>> = {
   hamburg: { id: 'other:hamburg-ticker', name: 'Hamburg-Ticker' },
   berlin: { id: 'other:berlin-ticker', name: 'Berlin-Ticker' },
   muenchen: { id: 'other:muenchen-ticker', name: 'München-Ticker' },
+  frankfurt: { id: 'other:frankfurt-ticker', name: 'Frankfurt-Ticker' },
 };

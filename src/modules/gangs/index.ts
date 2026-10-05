@@ -203,7 +203,7 @@ declare module '../../core' {
 
 export default defineModule({
   id: 'gangs',
-  version: 7,
+  version: 8,
   dependsOn: ['veedel'],
   init: () => initialGangsState(),
   tickEvery: 60,
@@ -256,5 +256,7 @@ export default defineModule({
     // Version 7 (Auftrag 38): Die Münchner Gangs kommen dazu, genauso (auch für Stände, die schon mit 6 gespeichert
     // wurden).
     7: (old: GangsState): GangsState => ({ ...old, gangs: { ...initialGangsState().gangs, ...old.gangs } }),
+    // Version 8 (Auftrag 39): Die Frankfurter Gangs kommen dazu, genauso.
+    8: (old: GangsState): GangsState => ({ ...old, gangs: { ...initialGangsState().gangs, ...old.gangs } }),
   },
 });

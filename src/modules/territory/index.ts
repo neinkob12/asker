@@ -117,6 +117,7 @@ const AFTER_COMPLETE: Record<string, string> = {
   hamburg: 'Hamburg gehört dir, der Hafen auch. Die nächste Stadt meldet sich, sobald eine frei ist.',
   berlin: 'Berlin gehört dir, die Nacht auch. Die nächste Stadt meldet sich, sobald eine frei ist.',
   muenchen: 'München gehört dir, die Wiesn auch. Die nächste Stadt meldet sich, sobald eine frei ist.',
+  frankfurt: 'Frankfurt gehört dir, Banken und Flughafen auch. Die nächste Stadt meldet sich, sobald eine frei ist.',
 };
 
 declare module '../../core' {
@@ -454,7 +455,7 @@ function graphDistances(start: string): Map<string, number> {
 
 export default defineModule({
   id: 'territory',
-  version: 6,
+  version: 7,
   dependsOn: ['veedel', 'gangs'],
   init: (ctx) => initialState(ctx.state),
   tickEvery: 60,
@@ -481,5 +482,7 @@ export default defineModule({
     5: (old: TerritoryState, state: GameState): TerritoryState => addMissingVeedel(old, state),
     // Version 6 (Auftrag 38): München kommt dazu, genauso.
     6: (old: TerritoryState, state: GameState): TerritoryState => addMissingVeedel(old, state),
+    // Version 7 (Auftrag 39): Frankfurt kommt dazu, genauso.
+    7: (old: TerritoryState, state: GameState): TerritoryState => addMissingVeedel(old, state),
   },
 });

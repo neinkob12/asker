@@ -231,6 +231,7 @@ export const METHOD_INTERVAL_BY_CITY: Readonly<Record<string, readonly [number, 
   // Berlin (Auftrag 37): starke Gangs, die oft Druck machen.
   berlin: [5, 10],
   muenchen: [6, 12],
+  frankfurt: [5, 10],
 };
 /** Geht zum Termin nichts (kein Ziel, eine andere Gang war gerade dran), versucht sie es so viel später wieder. */
 export const METHOD_RETRY = 6 * HOUR;

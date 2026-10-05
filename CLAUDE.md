@@ -89,6 +89,10 @@ Auftrag 38 (München): vierte spielbare Stadt, nur Daten nach der Checkliste (`v
 Stimmen in `gangs/texts-muenchen.ts`, `network-muenchen.ts`); Dreh teuer und streng über `CITIES`, `MIN_TIER_BY_CITY`,
 `CHECK_FACTOR_BY_CITY`, Events Oktoberfest und Bayern. Neu und allgemein: `Supplier.customs` (Zoll an einer Grenze),
 `requires.city` (Lieferant meldet sich erst in dieser Stadt), Bot `cityOrder` (`BALANCE_ORDER=muenchen npm run balance`).
+Auftrag 39 (Frankfurt, optional): fünfte spielbare Stadt nach Checkliste, Dreh nur als Daten (Kofi am Flughafen mit
+`Supplier.customs` und Weg `'air'`, `LAUNDERING_CAPACITY_BY_CITY`, `CityDef.offerRank`). Gang-Stimmen einer neuen Stadt in
+eigener Datei (`gangs/texts-frankfurt.ts`). Würfe, die für noch nicht freie Städte nichts bewirken, unterbleiben (sonst
+verschiebt jede neue Stadt die Kölner Würfelfolge, siehe `market.stepIndex`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

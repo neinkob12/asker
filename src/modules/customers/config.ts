@@ -370,6 +370,35 @@ export const DEALERS: readonly DealerInfo[] = [
     veedelId: 'bogenhausen',
     about: 'Privatfahrer für die Villen an der Isar. Liefert, was bestellt wird.',
   },
+  // Frankfurt (Auftrag 39)
+  {
+    id: 'yusuf-ffm',
+    name: 'Yusuf (Bahnhofsviertel)',
+    cityId: 'frankfurt',
+    veedelId: 'bahnhofsviertel',
+    about: 'Hat einen Handyladen an der Taunusstraße, hinten im Lager läuft das andere Geschäft.',
+  },
+  {
+    id: 'philipp',
+    name: 'Philipp (Westend)',
+    cityId: 'frankfurt',
+    veedelId: 'westend-sued',
+    about: 'Analyst im dritten Jahr. Versorgt seine Abteilung und deren Kunden, zahlt pünktlich.',
+  },
+  {
+    id: 'ilse',
+    name: 'Ilse (Sachsenhausen)',
+    cityId: 'frankfurt',
+    veedelId: 'sachsenhausen-nord',
+    about: 'Wirtin in der Kneipengasse. Was die Junggesellenabschiede wollen, besorgt sie.',
+  },
+  {
+    id: 'marco',
+    name: 'Marco (Flughafen)',
+    cityId: 'frankfurt',
+    veedelId: 'flughafen',
+    about: 'Fährt Gepäckwagen auf dem Vorfeld und verkauft an Crews, die nur eine Nacht bleiben.',
+  },
 ];
 
 // --- Stammabnehmer (Auftrag 34) ---

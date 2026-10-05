@@ -127,6 +127,24 @@ CITIES = {
             ('A995', ['A 995', 'E 54'], 'Sauerlach, Salzburg', (11.598, 48.075)),
         ],
     },
+    # Frankfurt (Auftrag 39): von Höchst bis Bornheim, im Süden der Flughafen und das Frankfurter Kreuz.
+    'frankfurt': {
+        'box': (8.49, 8.77, 50.005, 50.16),
+        'out': 'network-frankfurt.ts',
+        'lat0': 50.09,
+        'extra_areas': [],
+        # Autobahn-Zufahrten wie in Köln; die Rand-Punkte sind dort, wo die Autobahn den Ausschnitt schneidet.
+        'approaches': [
+            ('A3', ['A 3'], 'Wiesbaden, Limburg, Köln', (8.49, 50.04)),
+            ('A3', ['A 3'], 'Offenbach, Würzburg, Nürnberg', (8.77, 50.08)),
+            # Die A5 trägt in Overture hier nur die Europastraße E 451, die A66 gar keine Nummer (fehlt deshalb).
+            ('A5', ['A 5', 'E 451'], 'Bad Homburg, Gießen, Kassel, Hamburg', (8.598, 50.16)),
+            ('A5', ['A 5', 'E 451'], 'Darmstadt, Heidelberg, Basel', (8.61, 50.005)),
+            ('A648', ['A 648'], 'Eschborn, Wiesbaden', (8.565, 50.12)),
+            ('A661', ['A 661'], 'Bad Homburg, Oberursel', (8.685, 50.16)),
+            ('A661', ['A 661'], 'Offenbach, Egelsbach', (8.70, 50.005)),
+        ],
+    },
 }
 # Autobahn-Netz zwischen den Städten (Auftrag 36): je Linie Endpunkte (lng, lat) in den Städten, die Nummern in Overture
 # (routes.ref; die erste ist der Name im Spiel, die Linie darf über mehrere Autobahnen laufen) und Wegpunkte des

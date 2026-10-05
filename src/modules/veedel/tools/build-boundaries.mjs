@@ -5,6 +5,7 @@
 //   node src/modules/veedel/tools/build-boundaries.mjs stadtteile.json Köln: nimmt eine schon geladene GeoJSON-Datei
 //   node src/modules/veedel/tools/build-boundaries.mjs --city hamburg hamburg.geojson
 //                                                                      Hamburg: GeoJSON aus tools/fetch-divisions.py
+//   node src/modules/veedel/tools/build-boundaries.mjs --city frankfurt frankfurt.geojson   Frankfurt, ebenso
 //   node src/modules/veedel/tools/build-boundaries.mjs --city berlin berlin.geojson     Berlin (Auftrag 37), ebenso
 //   npm run format                                                     danach, damit Biome zufrieden ist
 //
@@ -137,6 +138,35 @@ const CITIES = {
     header: [
       '// Quelle: Overture Maps Foundation, Thema "divisions", Typ "division_area" (Release 2026-09-23.1), Stadtbezirke',
       '//   (admin_level 9) aus OpenStreetMap. Geladen mit tools/fetch-divisions.py.',
+      '// Lizenz: ODbL 1.0 (https://opendatacommons.org/licenses/odbl/), © OpenStreetMap-Mitwirkende,',
+      '//   © Overture Maps Foundation.',
+    ],
+  },
+  // Frankfurt (Auftrag 39): wie Hamburg aus Overture; die Altstadt ist in tools/fetch-divisions.py an die Innenstadt
+  // angefügt.
+  frankfurt: {
+    sourceUrl: null,
+    lat0: 50.1,
+    outFile: 'boundaries-frankfurt.ts',
+    names: {
+      Bahnhofsviertel: 'bahnhofsviertel',
+      Innenstadt: 'innenstadt',
+      'Westend Süd': 'westend-sued',
+      'Sachsenhausen Nord': 'sachsenhausen-nord',
+      'Nordend West': 'nordend-west',
+      Bornheim: 'bornheim',
+      Ostend: 'ostend',
+      Gallus: 'gallus',
+      Bockenheim: 'bockenheim',
+      Höchst: 'hoechst',
+      Niederrad: 'niederrad',
+      Flughafen: 'flughafen',
+    },
+    anchors: [],
+    header: [
+      '// Quelle: Overture Maps Foundation, Thema "divisions", Typ "division_area" (Release 2026-09-23.1), Stadtteile',
+      '//   aus OpenStreetMap (die Altstadt an die Innenstadt angefügt), Landflächen ohne Main. Geladen mit',
+      '//   tools/fetch-divisions.py.',
       '// Lizenz: ODbL 1.0 (https://opendatacommons.org/licenses/odbl/), © OpenStreetMap-Mitwirkende,',
       '//   © Overture Maps Foundation.',
     ],

@@ -47,6 +47,7 @@ export interface CityEventDef {
 export const EVENT_CONTACTS: Readonly<Record<string, Contact>> = {
   koeln: { id: 'other:buedchen', name: 'Ömer (Büdchen am Ring)', kind: 'other' },
   hamburg: { id: 'other:kiosk-kiez', name: 'Jens (Kiosk am Hans-Albers-Platz)', kind: 'other' },
+  frankfurt: { id: 'other:trinkhalle-ffm', name: 'Sevgi (Trinkhalle an der Konsti)', kind: 'other' },
   berlin: { id: 'other:spaeti-kotti', name: 'Aylin (Späti am Kotti)', kind: 'other' },
   muenchen: { id: 'other:kiosk-glockenbach', name: 'Resi (Kiosk am Sendlinger Tor)', kind: 'other' },
 };
@@ -70,6 +71,11 @@ const BERLIN_PARTY = ['kreuzberg', 'friedrichshain', 'neukoelln', 'mitte', 'pren
 /** Spots an den Landungsbrücken und am Hafenrand (Hafengeburtstag). */
 export const HARBOR_SPOTS: readonly string[] = ['landungsbruecken', 'fischmarkt'];
 
+/** Spots am Museumsufer und am Mainufer (Museumsuferfest). */
+export const MAIN_SPOTS: readonly string[] = ['museumsufer', 'alt-sachsenhausen', 'schweizer-platz', 'roemerberg'];
+
+/** Spots, an denen Messegäste kaufen (Messe, Hotels und Bars drumherum). */
+export const MESSE_SPOTS: readonly string[] = ['messe', 'kettenhofweg', 'skyline-plaza', 'bockenheimer-warte'];
 /** Spots rund um die Theresienwiese (Oktoberfest). */
 export const WIESN_SPOTS: readonly string[] = [
   'theresienwiese',
@@ -219,6 +225,41 @@ export const CITY_EVENTS: readonly CityEventDef[] = [
     text: 'Heimspiel in der Arena: Die U6 ist voll, die Kundschaft auch, aber die Polizei fährt mit.',
     announce:
       'Morgen spielt der FC Bayern daheim. Ab zwei ist die U6 voll bis Fröttmaning, und die Polizei ist überall.',
+  },
+  // --- Frankfurt (Auftrag 39) ---
+  {
+    id: 'messe',
+    cityId: 'frankfurt',
+    name: 'Messe',
+    icon: 'briefcase',
+    schedule: { kind: 'cycle', firstDay: 20, everyDays: 30, days: 4 },
+    area: { spots: MESSE_SPOTS, veedel: ['bahnhofsviertel'] },
+    effects: { demand: 1.8, checks: 1.2 },
+    text: 'Messe: Die Hotels sind voll, und die Gäste auf Spesen wollen abends noch was. Mehr Kundschaft rund um die Messe.',
+    announce:
+      'Ab morgen ist wieder Messe. Hotels ausgebucht, die Anzugträger wollen abends feiern. Westend und Bahnhof, Ware bereithalten.',
+  },
+  {
+    id: 'museumsuferfest',
+    cityId: 'frankfurt',
+    name: 'Museumsuferfest',
+    icon: 'party',
+    schedule: { kind: 'cycle', firstDay: 45, everyDays: 90, days: 3 },
+    area: { spots: MAIN_SPOTS },
+    effects: { demand: 2.5, checks: 1.5 },
+    text: 'Drei Tage Museumsuferfest: Am Main stehen die Leute dicht an dicht, die Polizei auch.',
+    announce: 'Ab morgen ist Museumsuferfest. Drei Tage, das ganze Ufer voll. Polizei auch, sag ich nur.',
+  },
+  {
+    id: 'eintracht',
+    cityId: 'frankfurt',
+    name: 'Eintracht-Heimspiel',
+    icon: 'flag',
+    schedule: { kind: 'weekly', weekday: 6, everyWeeks: 2, offset: 1, fromHour: 13, toHour: 21 },
+    area: { veedel: ['niederrad', 'sachsenhausen-nord'] },
+    effects: { demand: 1.6, gangRaids: 1.5 },
+    text: 'Die Eintracht spielt zu Hause: Kundschaft rund um Stadion und Sachsenhausen, aber die Gangs sind auch unterwegs.',
+    announce: 'Morgen spielt die Eintracht. Ab Mittag ist Niederrad dicht und Sachsenhausen gleich mit. Pass auf.',
   },
 ];
 

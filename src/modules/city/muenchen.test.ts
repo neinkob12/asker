@@ -243,8 +243,8 @@ describe('München (Auftrag 38)', () => {
     }
     old.moduleVersions.territory = 5;
     const loaded = loadSimulation(old as never, sim.modules);
-    expect(loaded.state.moduleVersions.gangs).toBe(7);
-    expect(loaded.state.moduleVersions.territory).toBe(6);
+    expect(loaded.state.moduleVersions.gangs).toBeGreaterThanOrEqual(7);
+    expect(loaded.state.moduleVersions.territory).toBeGreaterThanOrEqual(6);
     for (const id of ['mu-bahnhof', 'mu-giesing', 'mu-isar', 'mu-nord']) {
       expect(getGangStatus(loaded.state, id)?.people, id).toBeGreaterThan(0);
     }

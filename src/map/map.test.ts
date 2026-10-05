@@ -192,6 +192,21 @@ describe('Wahrzeichen', () => {
     expect(LANDMARKS.filter((l) => l.city === 'koeln').length).toBe(7);
   });
 
+  it('Frankfurt hat schlichte Klötze an echten Orten (Auftrag 39)', () => {
+    const height = (id: string) => Math.max(...(LANDMARKS.find((l) => l.id === id)?.parts.map((p) => p.height) ?? []));
+    expect(LANDMARKS.filter((l) => l.city === 'frankfurt').map((l) => l.id)).toEqual([
+      'commerzbank-tower',
+      'main-tower',
+      'messeturm',
+      'ezb',
+      'roemer',
+    ]);
+    expect(height('commerzbank-tower')).toBe(259);
+    expect(height('messeturm')).toBe(257);
+    const roemer = LANDMARKS.find((l) => l.id === 'roemer');
+    expect(distanceMeters(roemer?.center ?? KOELN, { lng: 8.6818, lat: 50.1105 })).toBeLessThan(80);
+  });
+
   it('liefern GeoJSON mit geschlossenen Ringen und Farben für Tag und Nacht', () => {
     const day = landmarkFeatures(0);
     const night = landmarkFeatures(1);
