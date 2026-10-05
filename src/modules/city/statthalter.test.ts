@@ -117,6 +117,12 @@ describe('Übergabe: Leute bleiben in ihrer Stadt (Feedback vom 05.10.2026)', ()
     for (const id of koelnStaff) expect(getStaffMember(sim.state, id)?.cityId).toBe('koeln');
     // Wer in Hamburg anheuert, arbeitet in Hamburg.
     expect(hire(sim, 1, 60).cityId).toBe('hamburg');
+    // Aus Hamburg lässt sich kein Kölner zur Rechten Hand machen (Auftrag 43): Kölns Statthalter bliebe sonst weg.
+    const appointed = sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: capo.id } });
+    expect(appointed.ok).toBe(false);
+    if (!appointed.ok) expect(appointed.reason).toContain('arbeitet in Köln');
+    expect(getRightHand(sim.state, 'koeln')?.staffId).toBe(boss.id);
+    expect(hasFullPower(sim.state, 'koeln')).toBe(true);
   });
 });
 

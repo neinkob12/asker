@@ -109,9 +109,9 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 
 ## E. Prüfer „Städte“ (Sonnet-Agent, 05.10.2026): Was aus der alten Stadt noch durchsickert
 
-- [ ] E1 Kritisch: In Hamburg lässt sich ein Kölner zur Rechten Hand ernennen; das setzt Kölns Statthalter ab
+- [x] E1 Kritisch: In Hamburg lässt sich ein Kölner zur Rechten Hand ernennen; das setzt Kölns Statthalter ab
   (`canBeRightHand`, `appointRightHand`, `installPost` prüfen die Stadt nicht; Listen in `RightHand.tsx` ohne Stadt).
-- [ ] E2 Personal-Tab der neuen Stadt zeigt den Kölner Baum (Leutnants, Capos, Ergebnis), „Leutnant ernennen“ bietet
+- [x] E2 Personal-Tab der neuen Stadt zeigt den Kölner Baum (Leutnants, Capos, Ergebnis), „Leutnant ernennen“ bietet
   Kölner an, „In anderen Städten“ und die Suche öffnen Kölner Akten mit Aktionen (`Tree.tsx`, `AppointSheet.tsx`,
   `staff/ui/index.tsx`).
 - [ ] E3 Berichte der Statthalter anderer Städte kommen als offene Fragen mit Frist und Ton, mit Lohnreserve der

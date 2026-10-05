@@ -71,7 +71,8 @@ declare module '../../../ui' {
 /** Blatt: Wer wird Rechte Hand? */
 export function RightHandSheet(props: { open: boolean; onClose: () => void }) {
   const { state, dispatch } = useGame();
-  const people = getStaff(state)
+  // Nur Leute der Stadt, in der du spielst (Auftrag 43).
+  const people = getStaff(state, { cityId: activeCity(state) })
     .map((m) => ({ m, check: canBeRightHand(state, m.id) }))
     .filter(({ m }) => m.role === 'runner' || m.role === 'security' || m.role === 'driver')
     .sort((a, b) => Number(b.check.ok) - Number(a.check.ok) || b.m.level - a.m.level);
@@ -567,7 +568,7 @@ registerAdvisor({
   id: 'hierarchy.rightHand',
   advise: (state) => {
     if (!rightHandOffered(state)) return null;
-    const ready = getStaff(state).some((m) => canBeRightHand(state, m.id).ok);
+    const ready = getStaff(state, { cityId: activeCity(state) }).some((m) => canBeRightHand(state, m.id).ok);
     if (!ready) return null;
     return {
       id: 'hierarchy.rightHand',

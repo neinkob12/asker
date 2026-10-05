@@ -6,7 +6,7 @@ import { useState } from 'preact/hooks';
 import { formatEuro } from '../../../core';
 import { Group, ItemContent, List, ListItem, Tag, useGame, useUi } from '../../../ui';
 import { activeCity } from '../../city';
-import { dayReport, lieutenantResult, spotResult } from '../../finance';
+import { cityReport, lieutenantResult, spotResult } from '../../finance';
 import { getSpots, type Spot } from '../../spots';
 import { activeRunnerAt, getStaff, getStaffMember, runnerAt, STATUS_NAMES, securityAt } from '../../staff';
 import { veedelName } from '../../veedel';
@@ -119,11 +119,15 @@ export function StaffTree() {
   const { state } = useGame();
   const ui = useUi();
   const [appointing, setAppointing] = useState(false);
-  const posts = getLieutenants(state);
+  // Nur die Stadt, in der du spielst (Auftrag 43): Leutnants und Ergebnis der anderen Städte gehören ihrem Statthalter.
+  const city = activeCity(state);
+  const posts = getLieutenants(state).filter((p) => (getStaffMember(state, p.staffId)?.cityId ?? 'koeln') === city);
   const led = new Set(posts.flatMap((p) => p.spotIds));
-  const unled = getSpots(state, activeCity(state)).filter((s) => !led.has(s.id));
-  const today = dayReport(state, 0);
-  const anyone = getStaff(state).some((m) => canBeLieutenant(state, m.id).ok && !isLieutenant(state, m.id));
+  const unled = getSpots(state, city).filter((s) => !led.has(s.id));
+  const today = cityReport(state, city, 1);
+  const anyone = getStaff(state, { cityId: city }).some(
+    (m) => canBeLieutenant(state, m.id).ok && !isLieutenant(state, m.id),
+  );
   const rh = getRightHand(state);
   return (
     <>

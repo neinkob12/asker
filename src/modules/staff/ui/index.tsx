@@ -176,7 +176,7 @@ function StaffOverview() {
   const elsewhere = everyone.filter((m) => m.cityId !== city);
   const absent = current.filter(isAbsent);
   const former = [...getStaff(state, { status: 'quit' }), ...getStaff(state, { status: 'dead' })].filter(
-    (m) => !isFarmRole(m.role),
+    (m) => !isFarmRole(m.role) && m.cityId === city,
   );
   const group = ROLE_GROUPS.find((g) => g.id === filter);
   // Aufbau: Wer nicht im Baum steht (Leutnants, Rechte Hand, an Spots) und nicht ausfällt.
@@ -230,11 +230,13 @@ function StaffOverview() {
           <SpecialistBonuses />
           <HireGroup />
           {elsewhere.length > 0 && (
-            <PeopleGroup
+            // Auftrag 43: nur die Zahl, keine Akten mit Aktionen. Die Leute gehören dem Statthalter ihrer Stadt.
+            <Group
               title="In anderen Städten"
               icon="building"
-              members={elsewhere}
-              note="Arbeiten dort weiter; einsetzen kannst du sie nur in ihrer Stadt."
+              color="system"
+              value={`${elsewhere.length} Leute`}
+              note="Arbeiten dort für deine Statthalter. Wechsel die Stadt, um sie zu sehen."
             />
           )}
           <PeopleGroup title="Ehemalige" icon="clock" members={former} />
@@ -471,8 +473,9 @@ onGameEvent('staff.betrayed', 'staff.betrayed', (payload, ui, state) => {
 registerAdvisor({
   id: 'staff.hireRunner',
   advise: (state) => {
+    // Pro Stadt (Auftrag 43): In einer neuen Stadt fängst du wieder ohne Leute an.
     const spot = getSpots(state, activeCity(state))[0];
-    if (!spot || getStaff(state).length > 0) return null;
+    if (!spot || getStaff(state, { cityId: activeCity(state) }).length > 0) return null;
     return {
       id: 'staff.firstRunner',
       priority: 60,
@@ -495,7 +498,7 @@ registerSearch({
   label: 'Personal',
   order: 30,
   items: (state) =>
-    getStaff(state).map((m) => ({
+    getStaff(state, { cityId: activeCity(state) }).map((m) => ({
       id: m.id,
       title: m.name,
       subtitle: `${roleName(m.role)}, Level ${m.level}`,

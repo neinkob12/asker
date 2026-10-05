@@ -237,6 +237,11 @@ export function canBeRightHand(state: GameState, staffId: string): CommandResult
   const m = getStaffMember(state, staffId);
   if (!m || !isEmployed(state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
   if (isRightHand(state, staffId)) return { ok: false, reason: `${m.name} ist schon deine Rechte Hand.` };
+  // Leute bleiben in ihrer Stadt (Auftrag 43): Rechte Hand wird man nur in der Stadt, in der du gerade spielst. Sonst
+  // setzte die Ernennung den Statthalter der anderen Stadt ab.
+  if ((m.cityId ?? 'koeln') !== activeCity(state)) {
+    return { ok: false, reason: `${m.name} arbeitet in ${cityName(m.cityId ?? 'koeln')}.` };
+  }
   if (isSpecialist(m.role) || isFarmRole(m.role)) {
     return { ok: false, reason: `${roleName(m.role)} führen keine Leutnants.` };
   }
