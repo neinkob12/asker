@@ -10,9 +10,11 @@
 // kauft er einen Kombi (fällt weniger auf). Hafenware holt er nachts ab, wenn sie bis dahin sicher am Kai steht. In
 // einer neuen Stadt nimmt er das günstigste Lager mit genug Platz. Container bestellt er nicht (zu viel Geld auf einmal).
 //
-// Städte (Auftrag 30): Der Bot spielt immer die aktive Stadt (Spots, Lager, Leute, Lieferanten, Hafen und Gangs dort).
-// Gehören ihm alle Veedel einer Stadt und erfüllt die Rechte Hand alles, erteilt er ihr die Vollmacht und zieht in die
-// nächste freie Stadt (city.travel). In einer neuen Stadt kauft er zuerst ein Lager (sauberes Geld, notfalls gewaschen).
+// Städte (Auftrag 30 und 36): Der Bot spielt immer die aktive Stadt (Spots, Lager, Leute, Lieferanten, Hafen und Gangs
+// dort). Gehören ihm alle Veedel einer Stadt und erfüllt die Rechte Hand alles, wählt er die nächste Stadt selbst (die
+// günstigste: Lager und Löhne, bei Gleichstand die nächste) und übergibt mit Startpaket (die beste neue Rechte Hand,
+// bis zu fünf freie Leute, ein Fahrzeug; city.handOver). In einer neuen Stadt kauft er zuerst ein Lager (sauberes Geld,
+// notfalls gewaschen).
 //
 // Markt und Verträge (Auftrag 32): Jeden Montag nimmt er den Wochenvertrag mit der höchsten Belohnung, den er schaffen
 // kann (Vorlagen, die zu seinem Spiel passen, Umsatzziele nur bis zu seinem Umsatz der letzten Woche), und bei einer
@@ -21,7 +23,19 @@
 // Liegt außerhalb von src/modules, weil er alle Module zusammen benutzt (wie ein Spieler).
 
 import { type Command, type GameState, messages, type Simulation } from '../core';
-import { activeCity, citiesUnlocked, isPlayerIn, isPlayerTraveling, presentCity } from '../modules/city';
+import {
+  activeCity,
+  CITY_OFFERS,
+  citiesUnlocked,
+  cityContact,
+  freeCities,
+  getCity,
+  isPlayerIn,
+  isPlayerTraveling,
+  NEXT_CITY,
+  presentCity,
+  travelMinutesBetween,
+} from '../modules/city';
 import { allWaiting, canServe } from '../modules/customers';
 import {
   activeEncounters,
@@ -32,7 +46,7 @@ import {
   suggestedCrew,
 } from '../modules/encounters';
 import { periodReport } from '../modules/finance';
-import { getVehicles, VEHICLE_MODELS, vehiclePrice } from '../modules/fleet';
+import { freeVehicles, getVehicles, VEHICLE_MODELS, vehiclePrice } from '../modules/fleet';
 import { ceasefireCost, getGangs, tributeAmount } from '../modules/gangs';
 import {
   getStock,
@@ -54,6 +68,9 @@ import {
   lieutenantOfSpot,
   MAX_SPOTS_PER_LIEUTENANT,
   rightHandHandlesOrders,
+  START_PACK_MAX_STAFF,
+  startPackLeaders,
+  startPackStaff,
 } from '../modules/hierarchy';
 import { amountInProgress, launderingCapacity } from '../modules/laundering';
 import {
@@ -130,6 +147,8 @@ export interface BotStats {
   byType: Record<string, number>;
   /** Rabatt-Aktionen, bei denen er schon gekauft hat (Auftrag 32). */
   deals?: number[];
+  /** Übergaben (Auftrag 36): von wo nach wo, an welchem Tag, wie viele Leute im Startpaket. */
+  cities?: { from: string; to: string; day: number; pack: number }[];
 }
 
 function money(state: GameState): number {
@@ -320,9 +339,11 @@ function harbor(sim: Simulation, stats: BotStats): void {
       run(sim, stats, { type: 'logistics.buyBerth', payload: {} });
       return;
     }
-    // Sparen in Raten: Sobald das Geschäft läuft (zwei Läufer, Lager voll genug), geht übriges Geld in die Wäsche.
+    // Sparen in Raten: Sobald das Geschäft läuft (zwei Läufer, Lager voll genug), geht übriges Geld in die Wäsche. In
+    // einer späteren Stadt (Auftrag 36) erst die Spots: Der Liegeplatz kommt ab fünf Läufern.
     const runners = getStaff(state, { role: 'runner', cityId: city }).length;
-    if (getStock(state, { cityId: city }) < 150 || runners < 2) return;
+    const later = citiesUnlocked(state).length > 1;
+    if (getStock(state, { cityId: city }) < 150 || runners < (later ? LATER_CITY_BERTH_RUNNERS : 2)) return;
     launderFor(sim, stats, cost);
     return;
   }
@@ -348,6 +369,9 @@ function harbor(sim: Simulation, stats: BotStats): void {
     }
   }
 }
+
+/** In einer späteren Stadt spart der Bot erst ab so vielen Läufern für den Liegeplatz (Auftrag 36). */
+const LATER_CITY_BERTH_RUNNERS = 5;
 
 /** Ab so viel Hafenware am Kai (Gramm) kauft der Bot einen Kombi (Auftrag 33). */
 const BIG_PICKUP_GRAMS = 2000;
@@ -612,6 +636,7 @@ function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions
   ];
   for (const m of [...state.messages.list]) {
     if (!messages.canAnswer(state, m)) continue;
+    if (CITY_CONTACTS.has(m.contactId)) continue;
     // Routine (Lieferanfragen, Hafen) überlässt der Bot seiner Rechten Hand, sobald sie das Handy übernimmt.
     if (m.routine && rightHandHandlesOrders(state)) continue;
     const options = m.options ?? [];
@@ -701,8 +726,21 @@ function repay(sim: Simulation, stats: BotStats): void {
 }
 
 /**
- * Städte (Auftrag 30): Gehört dir die ganze Stadt und erfüllt die Rechte Hand alles, bekommt sie die Vollmacht (das
- * macht die nächste Stadt frei). Danach fährt der Bot in die nächste freie Stadt ohne Vollmacht und spielt dort.
+ * Die nächste Stadt, die der Bot wählt (Auftrag 36: Reihenfolge frei): die günstigste zum Anfangen (Faktoren für Lager
+ * und Löhne), bei Gleichstand die schnellste Fahrt. null, wenn keine frei ist.
+ */
+export function chooseNextCity(state: GameState, from: string): string | null {
+  const cost = (id: string) => (getCity(id)?.propertyFactor ?? 1) + (getCity(id)?.wageFactor ?? 1);
+  const list = [...freeCities(state)].sort(
+    (a, b) => cost(a) - cost(b) || travelMinutesBetween(from, a) - travelMinutesBetween(from, b),
+  );
+  return list[0] ?? null;
+}
+
+/**
+ * Städte (Auftrag 30 und 36): Gehört dir die ganze Stadt und erfüllt die Rechte Hand alles, übergibt der Bot mit
+ * Startpaket an den Statthalter und fährt in die Stadt, die er gewählt hat. Ist er in einer Stadt mit Vollmacht (z.B.
+ * zurück zu Besuch), fährt er in eine freie Stadt ohne Vollmacht.
  */
 function moveOn(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
@@ -715,12 +753,34 @@ function moveOn(sim: Simulation, stats: BotStats): void {
     progress.controlled >= progress.total &&
     fullPowerMissing(state, here).length === 0
   ) {
+    const next = chooseNextCity(state, here);
+    if (next) {
+      // Startpaket: die beste neue Rechte Hand, freie Leute zuerst (die an Spots braucht der Statthalter), ein Fahrzeug.
+      const leaderId = startPackLeaders(state, here)[0]?.id ?? null;
+      const people = startPackStaff(state, here)
+        .filter((m) => m.id !== leaderId)
+        .sort((a, b) => Number(a.assignment !== null) - Number(b.assignment !== null) || b.level - a.level);
+      const staffIds = people.slice(0, START_PACK_MAX_STAFF).map((m) => m.id);
+      const vehicleIds = freeVehicles(state, here)
+        .slice(0, 1)
+        .map((v) => v.id);
+      const pack = { leaderId, staffIds, vehicleIds };
+      const done = run(sim, stats, { type: 'city.handOver', payload: { cityId: here, toCityId: next, pack } });
+      if (done) {
+        stats.cities ??= [];
+        stats.cities.push({ from: here, to: next, day: Math.floor(state.time / 1440) + 1, pack: staffIds.length });
+        return;
+      }
+    }
     run(sim, stats, { type: 'hierarchy.grantFullPower', payload: { cityId: here } });
   }
   if (!hasFullPower(state, here)) return;
   const next = citiesUnlocked(state).find((c) => c !== here && !hasFullPower(state, c));
   if (next) run(sim, stats, { type: 'city.travel', payload: { cityId: next } });
 }
+
+/** Nachrichten der Städte (Angebote) beantwortet der Bot nicht im Chat: Er entscheidet selbst (moveOn). */
+const CITY_CONTACTS = new Set(NEXT_CITY.filter((id) => CITY_OFFERS[id]).map((id) => cityContact(id).id));
 
 /** Ein Blick aufs Spiel. */
 export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = DEFAULT_BOT): void {

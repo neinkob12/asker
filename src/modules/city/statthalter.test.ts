@@ -18,8 +18,17 @@ import {
 import { enlist, generateProfile, getStaffMember, type StaffMember } from '../staff';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
-import { SLEEP_RAID_CHANCE, SLEEP_RAID_LOSS_MAX } from './config';
-import { activeCity, cityTravel, currentRank, PLAYER_RANKS, playerRank, presentCity, sleepResult } from './index';
+import { HANDOVER_START_MONEY_DAYS, SLEEP_RAID_CHANCE, SLEEP_RAID_LOSS_MAX } from './config';
+import {
+  activeCity,
+  cityTravel,
+  currentRank,
+  PLAYER_RANKS,
+  playerRank,
+  presentCity,
+  sleepResult,
+  startMoneyFor,
+} from './index';
 
 function quietGame(seed = 1): Simulation {
   const sim = createTestGame({ seed });
@@ -116,6 +125,21 @@ describe('Startpaket (Auftrag 36)', () => {
     expect(eventsOfType(events, 'hierarchy.rightHandAppointed').map((e) => e.payload.staffId)).toContain(capo.id);
     // Köln führt weiter die alte Rechte Hand, als Statthalter.
     expect(getRightHand(sim.state, 'koeln')?.staffId).toBe(boss.id);
+  });
+});
+
+describe('Startgeld (Auftrag 36)', () => {
+  it('bei der Übergabe gibt der Statthalter Tagesgewinne mit, als Umbuchung, nicht als Gewinn', () => {
+    const sim = quietGame();
+    readyKoeln(sim);
+    sim.state.modules.city.sleep.koeln.results = [2000, 4000];
+    expect(startMoneyFor(sim.state, 'koeln')).toBe(3000 * HANDOVER_START_MONEY_DAYS);
+    const before = sim.state.wallet.dirty;
+    const events = recordEvents(sim);
+    expect(sim.dispatch({ type: 'city.handOver', payload: { cityId: 'koeln', toCityId: 'hamburg' } }).ok).toBe(true);
+    const start = eventsOfType(events, 'wallet.changed').find((e) => e.payload.reason.startsWith('Startgeld'));
+    expect(start?.payload).toMatchObject({ amount: 3000 * HANDOVER_START_MONEY_DAYS, category: 'transfer' });
+    expect(sim.state.wallet.dirty).toBeGreaterThanOrEqual(before + 3000 * HANDOVER_START_MONEY_DAYS - 1);
   });
 });
 

@@ -83,6 +83,7 @@ import {
   CITY_OFFERS,
   CITY_PLACE,
   type CityOffer,
+  HANDOVER_START_MONEY_DAYS,
   HARBOR_CALLER,
   NEXT_CITY,
   OFFER_CALL_DELAY,
@@ -728,12 +729,33 @@ export function handOver(ctx: Ctx, cityId: string, toCityId?: string, pack: Star
   }
   // Erst das Startpaket auf den Weg (danach gibt der Statthalter niemanden mehr frei), dann die Vollmacht.
   sendPack(ctx, cityId, next, pack);
+  const firstHandover = !hasFullPower(ctx.state, cityId);
+  if (firstHandover) startMoney(ctx, cityId, next);
   if (!hasFullPower(ctx.state, cityId)) {
     const granted = ctx.dispatch({ type: 'hierarchy.grantFullPower', payload: { cityId } }, { actor: 'player' });
     if (!granted.ok) return granted;
   }
   messages.send(ctx, { contact: cityContact(next), text: offerText(ctx.state, next, 'handoverDone') });
   return { ok: true };
+}
+
+/** Startgeld für die nächste Stadt: HANDOVER_START_MONEY_DAYS Tagesgewinne der übergebenen Stadt (null ohne Schnitt). */
+export function startMoneyFor(state: GameState, cityId: string): number {
+  const results = cityState(state)?.sleep?.[cityId]?.results ?? [];
+  if (results.length === 0) return 0;
+  const average = results.reduce((a, b) => a + b, 0) / results.length;
+  return Math.max(0, Math.round(average * HANDOVER_START_MONEY_DAYS));
+}
+
+/** Der Statthalter gibt dir Startgeld mit (Umbuchung aus der Kasse der Stadt, kein Gewinn). */
+function startMoney(ctx: Ctx, from: string, to: string): void {
+  const amount = startMoneyFor(ctx.state, from);
+  if (amount <= 0) return;
+  wallet.earn(ctx, amount, 'dirty', `Startgeld für ${cityName(to)} aus ${cityName(from)}`, {
+    category: 'transfer',
+    cityId: from,
+  });
+  journal.add(ctx, `Startgeld für ${cityName(to)}: ${formatEuro(amount)} aus der Kasse von ${cityName(from)}.`, 'good');
 }
 
 /** Was am Startpaket nicht stimmt (null = alles gut). */

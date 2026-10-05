@@ -130,6 +130,14 @@ export const SLEEP_FACTOR_MIN = 0.85;
 export const SLEEP_FACTOR_MAX = 1.15;
 
 /**
+ * Startgeld (Auftrag 36): Bei der Übergabe gibt dir der Statthalter so viele Tagesgewinne der Stadt mit (Schnitt der
+ * letzten live gespielten Tage, wie im Schlaf), als Umbuchung aus der Kasse der Stadt, nicht als Gewinn (sein Anteil
+ * bleibt davon unberührt). Stellschraube für das Tempo der späteren Städte, zusammen mit FULL_POWER_SHARE
+ * (hierarchy/config.ts) und dem Startpaket.
+ */
+export const HANDOVER_START_MONEY_DAYS = 10;
+
+/**
  * Razzia im Schlaf (Auftrag 36): An so vielen von 100 Tagen trifft es eine schlafende Stadt. Das Tagesergebnis halbiert
  * sich (SLEEP_RAID_HALF_CHANCE) oder wird leicht negativ (ein Anteil SLEEP_RAID_LOSS_MIN bis _MAX vom Schnitt), der
  * Statthalter schreibt eine Zeile. Keine Veedel gehen verloren, niemand ruft dich zurück.
