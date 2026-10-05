@@ -49,7 +49,8 @@ import {
   getGangStatus,
   getGangs,
   hasCeasefire,
-  INCIDENT_CHOICES,
+  incidentChoiceLabel,
+  incidentChoices,
   isAllied,
   isGangBroken,
   openIncidents,
@@ -523,27 +524,6 @@ const METHOD_NAMES: Record<GangMethod, string> = {
   blackmail: 'Erpressung',
 };
 
-/** Beschriftung der Antworten auf Vorfälle. */
-const CHOICE_LABELS: Record<string, string> = {
-  drop: 'Abhaken',
-  hunt: 'Täter suchen',
-  snitch: 'Verpfeifen',
-  fire: 'Rauswerfen',
-  release: 'Gehen lassen',
-  raise: 'Lohn erhöhen',
-  threaten: 'Drohen',
-  wait: 'Abwarten',
-  security: 'Sicherheit hinschicken',
-  tribute: 'Schutzgeld zahlen',
-  refuse: 'Ablehnen',
-  pay: 'Zahlen',
-  thanks: 'Danke',
-  prepare: 'Leute in Stellung',
-  decline: 'Ablehnen',
-  accept: 'Annehmen',
-  buy: 'Kaufen',
-};
-
 /**
  * Wie die Gang Druck macht (Methoden als Chips), offene Vorfälle mit Antworten und ihre letzten Aktionen gegen dich
  * (Auftrag 23).
@@ -556,7 +536,8 @@ function GangMethods(props: { gang: Gang }) {
     .filter(([, w]) => w > 0)
     .sort((a, b) => b[1] - a[1])
     .map(([m]) => ({ label: METHOD_NAMES[m], color: 'danger' as const }));
-  const open = openIncidents(state).filter((i) => i.gangId === gang.id || i.byGangId === gang.id);
+  // Nur, was dir bekannt ist: Beim Einbruch zählt die Spur (gangId), nicht wer es wirklich war.
+  const open = openIncidents(state).filter((i) => i.gangId === gang.id);
   const actions = gangActions(state, gang.id);
   return (
     <Group title="Gegen dich" icon="skull" color="danger" value={actions.length > 0 ? `${actions.length}` : undefined}>
@@ -578,17 +559,17 @@ function GangMethods(props: { gang: Gang }) {
             />
             {incident.encounterId === undefined && (
               <div class="gang-incident__actions">
-                {INCIDENT_CHOICES[incident.kind].map((choice) => (
+                {incidentChoices(state, incident).map((choice, index) => (
                   <Button
                     key={choice}
                     small
-                    variant={choice === INCIDENT_CHOICES[incident.kind][0] ? 'subtle' : 'default'}
+                    variant={index === 0 ? 'subtle' : 'default'}
                     onClick={() => {
                       const r = dispatch({ type: 'gangs.respond', payload: { incidentId: incident.id, choice } });
                       if (!r.ok) ui.toast(r.reason, 'warn');
                     }}
                   >
-                    {CHOICE_LABELS[choice] ?? choice}
+                    {incidentChoiceLabel(state, incident, choice)[0]}
                   </Button>
                 ))}
               </div>
@@ -781,10 +762,8 @@ onGameEvent('gang.tipOff', 'gangs.tipOffToast', (p, ui, state) => {
 });
 onGameEvent('gang.goodTurn', 'gangs.goodTurnToast', (p, ui, state) => {
   const gang = getGang(state, p.gangId);
-  const what =
-    p.kind === 'warnRival' ? 'warnt dich' : p.kind === 'favor' ? 'bittet um einen Gefallen' : 'Überläufer meldet sich';
-  if (gang)
-    ui.toast(p.kind === 'defector' ? `Ein ${what} (${gang.name})` : `${gang.name} ${what}`, 'good', { urgent: false });
+  const what = p.kind === 'warnRival' ? 'warnt dich' : 'bittet um einen Gefallen';
+  if (gang) ui.toast(`${gang.name} ${what}`, 'good', { urgent: false });
 });
 soundOnEvent('gang.burglary', 'alert', { when: (p) => p.amount > 0 });
 soundOnEvent('gang.tipOff', 'siren', { volume: 0.4 });

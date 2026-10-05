@@ -275,10 +275,13 @@ export const spotsLayer: MapLayer = {
           const fill = active && look !== 'raid' ? patienceFill(state.time, queue) : 100;
           // Auftrag 23: Wenig bekannte eigene Spots sind blasser; verlegte Spots wandern mit.
           const faint = spotAwareness(state, spot.id) < 0.5;
-          const key = `${active}|${look}|${waiting}|${fill}|${who.kind}|${lieutenant ?? ''}|${spot.custom ? 1 : 0}|${spot.id === selected}|${faint}|${spot.lng},${spot.lat}`;
+          const key = `${active}|${look}|${waiting}|${fill}|${who.kind}|${lieutenant ?? ''}|${spot.custom ? 1 : 0}|${spot.id === selected}|${faint}|${spot.lng},${spot.lat}|${spot.name}`;
           if (key === entry.key) continue;
           entry.key = key;
           entry.marker.setLngLat([spot.lng, spot.lat]);
+          // Umbenannte Spots (Auftrag 23): Name für Vorleser und, ohne Maus, als Tooltip.
+          entry.element.setAttribute('aria-label', `Spot ${spot.name} im Handy öffnen`);
+          if (entry.element.hasAttribute('title')) entry.element.title = spot.name;
           entry.element.classList.toggle('is-faint', faint);
           entry.element.style.setProperty('--fill', String(fill));
           entry.element.classList.toggle('is-locked', !active);

@@ -19,6 +19,7 @@ import {
 } from '../../../ui';
 import { getVeedel, veedelName } from '../../veedel';
 import {
+  CUSTOM_SPOT_DEMAND,
   canFoundSpotAt,
   getSpot,
   isSpotActive,
@@ -36,7 +37,7 @@ import {
 
 /** Andrang eines neuen Spots dieser Art im Veedel (wie spots.found ihn setzt, als Prozent von normal). */
 function expectedDemand(kind: SpotKind, veedelId: string): number {
-  return 0.8 * SPOT_TYPES[kind].demand * (getVeedel(veedelId)?.density ?? 1);
+  return CUSTOM_SPOT_DEMAND * SPOT_TYPES[kind].demand * (getVeedel(veedelId)?.density ?? 1);
 }
 
 /** Blatt nach dem Klick auf die Karte: Art wählen, Name optional, bestätigen. */

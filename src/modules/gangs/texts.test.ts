@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fillText } from '../../core';
 import { GANGS } from './data';
-import { GANG_VOICES, type GangTextKey } from './texts';
+import { GANG_VOICES, type GangTextKey, INCIDENT_TEXTS } from './texts';
 
 /** Alle Platzhalter, die die Gang-Logik für Nachrichten mitgibt. */
 const VARS = {
@@ -45,6 +45,42 @@ describe('Gang-Stimmen', () => {
           expect(seen.get(text), text).toBeUndefined();
           seen.set(text, id);
         }
+      }
+    }
+  });
+});
+
+describe('Texte zu Vorfällen (Nachbarin, Abwerben, Einschüchtern)', () => {
+  const vars = {
+    warehouse: 'Lager Ehrenfeld',
+    goods: '40 g Gras',
+    gang: 'Hafenkolonne',
+    name: 'Kalle',
+    extra: '30 €',
+    spot: 'Ebertplatz',
+  };
+  /** Platzhalter, die in jeder Variante eines Anlasses vorkommen müssen. */
+  const needs: Record<keyof typeof INCIDENT_TEXTS, string[]> = {
+    burglaryGang: ['warehouse', 'goods', 'gang'],
+    burglaryJunkies: ['warehouse', 'goods'],
+    burglaryInsider: ['warehouse', 'goods', 'name'],
+    burglaryFoiled: ['warehouse'],
+    poach: ['gang', 'extra'],
+    intimidationReport: ['spot', 'gang'],
+  };
+
+  it('jeder Anlass hat mindestens vier verschiedene Varianten', () => {
+    for (const [key, list] of Object.entries(INCIDENT_TEXTS)) {
+      expect(list.length, key).toBeGreaterThanOrEqual(4);
+      expect(new Set(list).size, `${key} doppelt`).toBe(list.length);
+    }
+  });
+
+  it('jede Variante nennt, was sie braucht, und alle Platzhalter werden ersetzt', () => {
+    for (const [key, list] of Object.entries(INCIDENT_TEXTS) as [keyof typeof INCIDENT_TEXTS, readonly string[]][]) {
+      for (const text of list) {
+        for (const name of needs[key]) expect(text, `${key}: {${name}}`).toContain(`{${name}}`);
+        expect(fillText(text, vars), key).not.toMatch(/\{\w*\}/);
       }
     }
   });

@@ -969,8 +969,8 @@ export function gangVariants(gangId: string, key: GangTextKey): readonly string[
 
 /**
  * Texte zu Gang-Aktionen, die nicht der Boss schreibt (Auftrag 23): die Nachbarin am Lager meldet Einbrüche, deine
- * Leute melden Abwerbeversuche und Gang-Leute am Spot, ein Überläufer bietet Infos an. Platzhalter: {warehouse},
- * {goods}, {gang}, {name}, {extra}, {spot}, {price}.
+ * Leute melden Abwerbeversuche und Gang-Leute am Spot. Platzhalter: {warehouse}, {goods}, {gang}, {name}, {extra},
+ * {spot}.
  */
 export const INCIDENT_TEXTS = {
   burglaryGang: [
@@ -1013,12 +1013,5 @@ export const INCIDENT_TEXTS = {
     'Ärger am {spot}: {gang} steht da und glotzt jeden Kunden an.',
     '{gang} hat sich am {spot} breitgemacht. Ich verkauf hier gerade gar nichts.',
     'Am {spot} ist {gang}. Die schicken meine Kunden weg.',
-  ],
-  defector: [
-    'Ich war bei {gang}. Jetzt nicht mehr. Für {price} erzähl ich dir, was die vorhaben.',
-    'Hab {gang} verlassen, im Streit. Ich weiß, wann die als Nächstes zuschlagen. {price}.',
-    '{gang} hat mich rausgeworfen. Ich hab Infos über deren Leute. {price}, bar.',
-    'Willst du wissen, wie stark {gang} wirklich ist? {price}, dann bin ich weg.',
-    'Ex-{gang} hier. Ich kenn ihre Pläne. {price} und du kennst sie auch.',
   ],
 } as const;

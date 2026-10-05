@@ -39,7 +39,7 @@ import {
   refuse,
   releaseProtection,
 } from './diplomacy';
-import { type IncidentKind, respond, runMethod } from './methods';
+import { burgleNow, type IncidentKind, respond, runMethod } from './methods';
 import { onControlChanged, onEncounterResolved, onPoliceRaid, onSale, onTipOff } from './reactions';
 import { type GangStage, type GangsState, getGang, getGangStatus, initialGangsState } from './state';
 import type { GangTextKey } from './texts';
@@ -58,6 +58,8 @@ export {
   gangActions,
   INCIDENT_CHOICES,
   type IncidentKind,
+  incidentChoiceLabel,
+  incidentChoices,
   intimidationAt,
   intimidationFactor,
   openIncidents,
@@ -95,13 +97,14 @@ export type { GangTextKey } from './texts';
 
 /**
  * Eine Methode der Gang sofort ausführen (Tests, Dev-Abkürzungen, Szenen für Screenshots). Gibt zurück, ob etwas
- * passiert ist. Der Einbruch wird mit report sofort gemeldet statt am Morgen.
+ * passiert ist. Der Einbruch findet sofort statt statt in der nächsten Nacht, mit report wird er auch gleich gemeldet.
  */
 export function runGangMethod(ctx: Ctx, gangId: string, method: GangMethod, report = false): boolean {
   const gang = getGang(ctx.state, gangId);
   const s = getGangStatus(ctx.state, gangId);
   if (!gang || !s) return false;
   const done = runMethod(ctx, gang, s, method);
+  if (done && method === 'burglary') burgleNow(ctx, gangId);
   if (done && report) {
     for (const i of ctx.state.modules.gangs.incidents) if (i.reported === false) i.reportAt = ctx.now;
   }
@@ -157,8 +160,8 @@ declare module '../../core' {
     'gang.intimidation': { gangId: string; spotId: string; until: number };
     'gang.tipOff': { gangId: string; veedelId: string; raid: boolean };
     'gang.blackmail': { gangId: string; warehouseId: string; amount: number };
-    /** Chance von einer Gang (Warnung vor einem Rivalen, Gefallen, Überläufer). */
-    'gang.goodTurn': { gangId: string; kind: 'warnRival' | 'favor' | 'defector' };
+    /** Chance von einer Gang (Warnung vor einem Rivalen, Gefallen). */
+    'gang.goodTurn': { gangId: string; kind: 'warnRival' | 'favor' };
     'gang.incidentResolved': { incidentId: number; kind: IncidentKind; choice: string };
   }
 }

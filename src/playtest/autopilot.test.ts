@@ -100,7 +100,8 @@ describe('Köln läuft allein', () => {
     expect(rightHandDeliveries).toBeGreaterThan(0);
     expect(after.staff).toBeGreaterThanOrEqual(2);
     // Sie hat berichtet und etwas erledigt.
-    expect(events['hierarchy.dailyReport'] ?? 0).toBeGreaterThanOrEqual(9 - awayDays);
+    // Höchstens drei Tage Ausfall gelten als Haft oder Krankenhaus; mehr verdeckte sonst einen kaputten Tagesbericht.
+    expect(events['hierarchy.dailyReport'] ?? 0).toBeGreaterThanOrEqual(9 - Math.min(3, awayDays));
     expect(getRightHand(sim.state)?.lastReport?.done ?? '').not.toBe('');
   }, 180_000);
 

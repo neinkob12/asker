@@ -526,15 +526,18 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 - **Stimmen:** Jede Gang (`gangs/texts.ts`, 16 Anlässe, je mindestens fünf Varianten), jeder Lieferant
   (`suppliers/voices.ts`), Personal (`staff/texts.ts`), Leutnants (`hierarchy/texts.ts`) und der Hafen
   (`logistics/texts.ts`, pro Stadt) haben eigene Listen. Der Hafenmeister in Niehl heißt Willi Esser (`other:harbor`).
-- **Gang-Methoden** (`gangs/methods.ts`): Gewichte pro Gang in `data.ts`. Ab Stufe 2 macht eine Gang ab und zu Druck
-  nach diesen Gewichten (`METHOD_CHANCE` mal `METHOD_FACTOR_BY_CITY`, Abstand pro Gang und zwischen allen Gangs). Die
+- **Gang-Methoden** (`gangs/methods.ts`): Gewichte pro Gang in `data.ts`. Ab Stufe 2 macht eine Gang Druck nach diesen
+  Gewichten, mit festem Abstand pro Stadt (`METHOD_INTERVAL_BY_CITY`, Köln 4–8 Tage, Hamburg 6–12, auf Stufe 1 doppelt)
+  und einem Tag zwischen allen Gangs; ohne mindestens zwei Leute (`METHOD_MIN_PEOPLE`) nicht. Die
   Methoden kommen zum Überfall ab Stufe 3 dazu und ersetzen ihn nie: Abgewehrte Überfälle schwächen die Gang, davon lebt
-  die Übernahme ihrer Veedel. Einbruch nachts ins Lager (Wachen verscheuchen, Meldung um 7 Uhr durch die
-  Nachbarin, Antworten: Täter suchen = Konfrontation `recoverLoot`, verpfeifen, eigenen Mann rauswerfen, abhaken),
+  die Übernahme ihrer Veedel. Einbruch ins Lager, geplant für die nächste Nacht (Wachen verscheuchen, Meldung um 7 Uhr
+  durch die Nachbarin, Antworten: Täter suchen = Konfrontation `recoverLoot`, nur ein Erfolg bringt Ware zurück,
+  verpfeifen, eigenen Mann rauswerfen, abhaken; ins Protokoll der Gang nur, wenn die Spur zu ihr führt),
   Abwerben (Lohn erhöhen, gehen lassen, drohen), Einschüchtern (`intimidationFactor` senkt die Kundschaft am Spot,
   `customers` fragt das), Tipp an die Polizei (`police.tipOffAgainstPlayer`), Erpressung mit einem Lager. Chancen:
-  Warnung vor einem Rivalen, bezahlter Gefallen, Überläufer. Alles, was eine Antwort braucht, ist ein Vorfall mit
-  Frist; ohne Antwort gilt die vorsichtige Wahl (`INCIDENT_CHOICES[kind][0]`).
+  Warnung vor einem Rivalen, bezahlter Gefallen. Alles, was eine Antwort braucht, ist ein Vorfall mit
+  Frist; ohne Antwort gilt die vorsichtige Wahl (`INCIDENT_CHOICES[kind][0]`). Was gerade geht, sagt
+  `incidentChoices(state, incident)` (Nachricht und Gangs-Seite gleich); Schutzgeld beendet eine Einschüchterung.
 - **Lieferprobleme** (`suppliers/problems.ts`, `troubles.ts`): Gründe pro Weg (Autobahn, Grenze NL, Schiff, in der
   Stadt), die Hälfte der Verspätungen und drohenden Beschlagnahmen kommt mit Rückfrage (`suppliers.resolveProblem`:
   Umweg, Teillieferung, Umleiten in ein anderes Lager, Schmieren, abwarten). Chancen: früher da, Ware obendrauf,
@@ -615,18 +618,18 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   `territory/config.ts` `SALE_INFLUENCE_FACTOR_BY_CITY` (Hamburg 0,6), `city/data.ts` (`relationFactor`,
   `bribeFactor`, `raidWarningBonus`, `wageFactor`, `propertyFactor`), `events/config.ts`, `spots/config.ts` `KNEIPE`.
 - Auftrag 23 (Gang-Methoden, Lieferprobleme mit Entscheidungen, Spot-Arten; 30 Tage, Köln 8 Seeds, Hamburg 32 Seeds,
-  vorher = `main` nach Auftrag 35): erstes Veedel im Schnitt an Tag 6,3 → 6,8, „Boss von Köln“ an Tag 16,5 → 17,5, Köln
-  komplett an Tag 22,0 → 22,8 (alle 8 Seeds), Umsatz pro Tag Tag 6–15 10.247 → 9.044 €, keine Pleiten; Hamburg am Ende
+  vorher = `main` nach Auftrag 35): erstes Veedel im Schnitt an Tag 6,3 → 7,1, „Boss von Köln“ an Tag 16,5 → 17,1, Köln
+  komplett an Tag 22,0 → 22,9 (alle 8 Seeds), Umsatz pro Tag Tag 6–15 10.247 → 9.255 €, keine Pleiten; Hamburg am Ende
   im Schnitt 1,8 → 1,75 Veedel, mindestens ein Veedel in 25 → 24 von 32 Seeds (schwankt stark mit dem Zufall, 0 bis 6).
-  Köln wird mit Einbrüchen, Abwerben, Einschüchtern und Erpressung etwas härter, das ist gewollt. Die Methoden kommen zum
-  Überfall dazu und ersetzen ihn nie: Abgewehrte Überfälle schwächen die Gang, ohne sie fiel Hamburg auf 1,0 Veedel. Nach
-  jeder Methode sinkt die Feindseligkeit der Gang (`METHOD_HOSTILITY_RELIEF`), wie oft sie kommen, steht pro Stadt in
-  `METHOD_FACTOR_BY_CITY` (Köln 0,6, Hamburg 0,4). Köln schläft mit dem Schnitt seiner letzten sieben Tage, jede Mehrausgabe
-  dort fehlt also auch in Hamburg. Der Bot schmiert bei drohender Beschlagnahme und nimmt bei Verspätung den Umweg; wer
-  Lieferprobleme nur abwartet, verliert in Hamburg (Schiff, Zoll) spürbar mehr Ware. Stellschrauben: `gangs/config.ts`
-  (`METHOD_CHANCE`, `METHOD_FACTOR_BY_CITY`, `METHOD_HOSTILITY_RELIEF`, `BURGLARY_*`, `POACH_*`, `INTIMIDATION_*`,
-  `TIPOFF_*`, `BLACKMAIL_*`, `GOOD_TURN_CHANCE`), `suppliers/config.ts` (`DECISION_*`, `DETOUR_*`, `BRIBE_*`, `LUCK_*`),
-  `spots/kinds.ts` (Arten, `AWARENESS_*`, Ausbau).
+  Ziel ist mehr Abwechslung, nicht mehr Härte: Jede einzelne Methode ist mild (Einbruch höchstens 15 % eines Postens,
+  Einschüchtern 6 Stunden bei drei Vierteln der Kundschaft, kleine Heat-Schübe), dafür zeigt eine drohende Gang
+  verlässlich alle paar Tage eine (Bot, 3 Seeds × 25 Tage: 9 Methoden, 19 Überfälle, 6 Chancen). Die Methoden kommen zum
+  Überfall dazu und ersetzen ihn nie: Abgewehrte Überfälle schwächen die Gang, ohne sie fiel Hamburg auf 1,0 Veedel.
+  Köln schläft mit dem Schnitt seiner letzten sieben Tage, jede Mehrausgabe dort fehlt also auch in Hamburg. Der Bot
+  schmiert bei drohender Beschlagnahme und nimmt bei Verspätung den Umweg; wer Lieferprobleme nur abwartet, verliert in
+  Hamburg (Schiff, Zoll) spürbar mehr Ware. Stellschrauben: `gangs/config.ts` (`METHOD_INTERVAL_BY_CITY`,
+  `METHOD_HOSTILITY_RELIEF`, `BURGLARY_*`, `POACH_*`, `INTIMIDATION_*`, `TIPOFF_*`, `BLACKMAIL_*`, `GOOD_TURN_CHANCE`),
+  `suppliers/config.ts` (`DECISION_*`, `DETOUR_*`, `BRIBE_*`, `LUCK_*`), `spots/kinds.ts` (Arten, `AWARENESS_*`, Ausbau).
 
 - Auftrag 32 (Preisindex, Rabatt-Aktionen, Marktereignisse, Qualität treibt Nachfrage, Wochenverträge; 30 Tage,
   32 Seeds, vorher = `main` nach Auftrag 31): erstes Veedel Ø Tag 6,5 → 6,5, „Boss von Köln“ Ø Tag 17,7 → 16,9, Köln

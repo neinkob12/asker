@@ -67,7 +67,7 @@ import {
   STASH_LOSS_FACTOR,
 } from './kinds';
 
-export { FOUND_SPOT_COST, KNEIPE, MAX_CUSTOM_SPOTS } from './config';
+export { CUSTOM_SPOT_DEMAND, FOUND_SPOT_COST, KNEIPE, MAX_CUSTOM_SPOTS } from './config';
 export {
   MOVE_COST,
   SPOT_KINDS,

@@ -22,8 +22,9 @@ export interface GangTraits {
   /** Startwerte. */
   start: { money: number; people: number; goods: number };
   /**
-   * Wie die Gang Druck macht (Auftrag 23): Gewichte der Methoden. Überfall ab Stufe 3, die anderen ab Stufe 2,
-   * Abwerben schon ab Stufe 1. Fehlt eine Methode, nutzt die Gang sie nie.
+   * Wie die Gang Druck macht (Auftrag 23): Gewichte der Methoden, ab Stufe 2 (Abwerben schon ab Stufe 1). Fehlt eine
+   * Methode, nutzt die Gang sie nie. Der Überfall läuft ab Stufe 3 über die Eskalation (ai.ts); sein Gewicht zeigt
+   * nur die Gangs-Seite.
    */
   methods: Partial<Record<GangMethod, number>>;
 }

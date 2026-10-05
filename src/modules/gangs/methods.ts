@@ -1,6 +1,6 @@
 // Methoden der Gangs (Auftrag 23): Jede Gang macht auf ihre Art Druck (Gewichte in data.ts, traits.methods).
 // Neben dem Überfall (ai.ts: launchRaid) gibt es Einbruch und Diebstahl, Abwerben, Einschüchtern, einen Tipp an die
-// Polizei und Erpressung, dazu Chancen (Warnung vor einem Rivalen, ein bezahlter Gefallen, ein Überläufer).
+// Polizei und Erpressung, dazu Chancen (Warnung vor einem Rivalen, ein bezahlter Gefallen).
 // Was eine Antwort braucht, liegt als Vorfall (incident) im Zustand; die Nachricht trägt Optionen mit dem Befehl
 // 'gangs.respond'. Ohne Antwort bis zur Frist gilt die vorsichtige Wahl (abhaken, gehen lassen, abwarten, ablehnen).
 
@@ -8,7 +8,6 @@ import {
   type CommandResult,
   type Contact,
   type Ctx,
-  clock,
   formatEuro,
   type GameState,
   journal,
@@ -60,8 +59,6 @@ import {
   BURGLARY_REPORT_HOUR,
   BURGLARY_SHARE,
   BURGLARY_TRAIL,
-  DEFECTOR_CHANCE,
-  DEFECTOR_PRICE,
   FAVOR_HEAT,
   FAVOR_PAY,
   FAVOR_RELATION,
@@ -71,11 +68,11 @@ import {
   INTIMIDATION_DURATION,
   INTIMIDATION_FACTOR,
   INTIMIDATION_LEAVE_CHANCE,
-  METHOD_CHANCE,
-  METHOD_COOLDOWN,
-  METHOD_FACTOR_BY_CITY,
   METHOD_GLOBAL_GAP,
   METHOD_HOSTILITY_RELIEF,
+  METHOD_INTERVAL_BY_CITY,
+  METHOD_MIN_PEOPLE,
+  METHOD_RETRY,
   POACH_EXTRA_SHARE,
   POACH_MAX_LOYALTY,
   POACH_MIN_EXTRA,
@@ -90,10 +87,10 @@ import {
   WARN_PREPARE_COST,
 } from './config';
 import { GANGS, type Gang, type GangMethod } from './data';
-import { type GangStatus, gangVeedel, getGang, isAtPeace } from './state';
+import { type GangStatus, gangVeedel, getGang, isAtPeace, isGangBroken } from './state';
 import { INCIDENT_TEXTS } from './texts';
 
-export type IncidentKind = 'burglary' | 'poach' | 'intimidation' | 'blackmail' | 'warnRival' | 'favor' | 'defector';
+export type IncidentKind = 'burglary' | 'poach' | 'intimidation' | 'blackmail' | 'warnRival' | 'favor';
 
 /** Wohin die Spur nach einem Einbruch führt. */
 export type BurglaryTrail = keyof typeof BURGLARY_TRAIL;
@@ -110,6 +107,8 @@ export interface GangIncident {
   at: number;
   /** Antwortfrist (beim Einbruch erst ab der Meldung). */
   expiresAt: number;
+  /** Einbruch: geplant für diese Nacht (volle Stunde), danach ausgeführt und entfernt. */
+  plannedAt?: number;
   /** Einbruch: wird um diese Zeit gemeldet. */
   reportAt?: number;
   reported?: boolean;
@@ -149,7 +148,6 @@ export const INCIDENT_CHOICES: Readonly<Record<IncidentKind, readonly string[]>>
   blackmail: ['refuse', 'pay'],
   warnRival: ['thanks', 'prepare'],
   favor: ['decline', 'accept'],
-  defector: ['decline', 'buy'],
 };
 
 /** Die Nachbarin am Lager: sieht alles, meldet Einbrüche. */
@@ -161,16 +159,6 @@ const NEIGHBOR: Contact = {
   about: 'Rentnerin, Fenster immer offen, Fernglas auf der Fensterbank. Meldet dir, wenn am Lager etwas nicht stimmt.',
   look: { feminine: true, age: 74, hair: 'bun', hairColor: 6, glasses: 'round', top: 'raincoat', topColor: 5 },
   voice: { pitch: 1.1, rate: 0.9 },
-};
-
-/** Überläufer aus einer Gang: verkauft Infos. */
-const DEFECTOR: Contact = {
-  id: 'other:defector',
-  name: 'Unbekannte Nummer',
-  kind: 'other',
-  role: 'Überläufer',
-  about: 'Hat eine Gang verlassen und will Geld für das, was er weiß.',
-  look: { feminine: false, age: 29, hat: 'hood', top: 'hoodie', topColor: 0 },
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -195,7 +183,86 @@ export function gangActions(state: GameState, gangId: string): readonly GangActi
 
 /** Offene Vorfälle (z.B. für die Gangs-Seite). */
 export function openIncidents(state: GameState): readonly GangIncident[] {
-  return (state.modules.gangs?.incidents ?? []).filter((i) => i.reported !== false);
+  return (state.modules.gangs?.incidents ?? []).filter((i) => i.reported !== false && i.kind in INCIDENT_CHOICES);
+}
+
+/** Sicherheitsleute, die zu einem eingeschüchterten Spot können. */
+function securityCrew(state: GameState, spotId: string): string[] {
+  return crewFor(state, { spotId }).filter((id) => getStaffMember(state, id)?.role === 'security');
+}
+
+/**
+ * Antworten, die bei einem Vorfall gerade gehen (dieselben in der Nachricht und auf der Gangs-Seite). Die erste ist
+ * immer die Wahl ohne Antwort bis zur Frist.
+ */
+export function incidentChoices(state: GameState, incident: GangIncident): string[] {
+  const all = INCIDENT_CHOICES[incident.kind] ?? [];
+  return all.filter((choice) => {
+    if (choice === all[0]) return true;
+    switch (`${incident.kind}:${choice}`) {
+      case 'burglary:snitch':
+        return !!incident.gangId && canSnitch(state, incident.gangId).ok;
+      case 'burglary:fire':
+        return !!incident.staffId && isEmployed(state, incident.staffId);
+      case 'intimidation:security':
+        return !!incident.spotId && securityCrew(state, incident.spotId).length > 0;
+      case 'intimidation:tribute':
+        return !!incident.gangId && !isAtPeace(state, incident.gangId);
+      default:
+        return true;
+    }
+  });
+}
+
+/** Beschriftung und Antworttext einer Wahl (Nachricht und Gangs-Seite). */
+export function incidentChoiceLabel(state: GameState, incident: GangIncident, choice: string): [string, string] {
+  const gang = incident.gangId ? getGang(state, incident.gangId) : undefined;
+  const member = incident.staffId ? getStaffMember(state, incident.staffId) : undefined;
+  switch (`${incident.kind}:${choice}`) {
+    case 'burglary:hunt':
+      return ['Täter suchen', 'Ich schick Leute los.'];
+    case 'burglary:snitch':
+      return [`${gang?.name ?? 'Gang'} verpfeifen`, 'Das geht an die Bullen.'];
+    case 'burglary:fire':
+      return [`${member?.name ?? 'Ihn'} rauswerfen`, 'Der fliegt.'];
+    case 'burglary:drop':
+      return ['Abhaken', 'Lass gut sein.'];
+    case 'poach:raise':
+      return [`Lohn auf ${formatEuro((member?.wage ?? 0) + (incident.extra ?? 0))}`, 'Du kriegst mehr. Bleib.'];
+    case 'poach:threaten':
+      return ['Drohen', 'Überleg dir gut, wem du was schuldest.'];
+    case 'poach:release':
+      return ['Gehen lassen', 'Dann geh halt.'];
+    case 'intimidation:security':
+      return ['Sicherheit hinschicken', 'Ich schick Leute.'];
+    case 'intimidation:wait':
+      return ['Abwarten', 'Die gehen schon wieder.'];
+    case 'intimidation:tribute':
+      return ['Schutzgeld zahlen', 'Okay. Ich zahle.'];
+    case 'blackmail:pay':
+      return [`Zahlen (${formatEuro(incident.amount ?? 0)})`, 'Hier ist euer Geld.'];
+    case 'blackmail:refuse':
+      return ['Ablehnen', 'Macht doch.'];
+    case 'warnRival:prepare':
+      return [`Leute in Stellung (${formatEuro(WARN_PREPARE_COST)})`, 'Danke. Wir sind bereit.'];
+    case 'warnRival:thanks':
+      return ['Danke für den Tipp', 'Danke. Ich merk mir das.'];
+    case 'favor:accept':
+      return [`Annehmen (${formatEuro(incident.amount ?? 0)})`, 'Bringt es vorbei.'];
+    case 'favor:decline':
+      return ['Ablehnen', 'Diesmal nicht.'];
+    default:
+      return [choice, choice];
+  }
+}
+
+/** Antworten als Optionen der Nachricht: erst die aktiven, die Wahl ohne Antwort zuletzt. */
+function incidentOptions(state: GameState, incident: GangIncident): MessageOption[] {
+  const [fallback, ...rest] = incidentChoices(state, incident);
+  return [...rest, fallback].map((choice) => {
+    const [label, reply] = incidentChoiceLabel(state, incident, choice);
+    return respondOption(incident, choice, label, reply);
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -286,11 +353,13 @@ function eligible(ctx: Ctx, gang: Gang, method: GangMethod, stage: number): bool
       return stage >= 3;
     case 'poach':
       return stage >= 1 && poachable(state, gang.cityId).length > 0;
-    case 'burglary': {
-      const hour = clock.hour(ctx.now);
-      const night = hour >= BURGLARY_HOURS[0] && hour < BURGLARY_HOURS[1];
-      return stage >= 2 && night && stockedWarehouses(state, gang.cityId).length > 0;
-    }
+    case 'burglary':
+      // Geplant wird jederzeit, eingebrochen in der nächsten Nacht (planBurglary).
+      return (
+        stage >= 2 &&
+        stockedWarehouses(state, gang.cityId).length > 0 &&
+        !state.modules.gangs.incidents.some((i) => i.plannedAt !== undefined && i.byGangId === gang.id)
+      );
     case 'intimidate':
       return stage >= 2 && intimidationTargets(state, gang).length > 0;
     case 'tipOff':
@@ -300,37 +369,57 @@ function eligible(ctx: Ctx, gang: Gang, method: GangMethod, stage: number): bool
   }
 }
 
-/** Methode nach den Gewichten der Gang wählen (nur, was gerade geht). */
+/**
+ * Methode nach den Gewichten der Gang wählen (nur, was gerade geht). Der Überfall ('raid') zählt hier nicht: Er läuft
+ * über die Eskalation in ai.ts, sein Gewicht in traits.methods ist nur die Anzeige auf der Gangs-Seite.
+ */
 export function pickMethod(ctx: Ctx, gang: Gang, stage: number): GangMethod | null {
   const weights: Partial<Record<GangMethod, number>> = {};
   for (const [method, w] of Object.entries(gang.traits.methods) as [GangMethod, number][]) {
-    if (w > 0 && eligible(ctx, gang, method, stage)) weights[method] = w;
+    if (method !== 'raid' && w > 0 && eligible(ctx, gang, method, stage)) weights[method] = w;
   }
   return weightedPick(ctx, weights);
 }
 
+/** Abstand bis zur nächsten Methode (METHOD_INTERVAL_BY_CITY, auf Stufe 1 doppelt). */
+function methodInterval(ctx: Ctx, gang: Gang, s: GangStatus): number {
+  const [from, to] = METHOD_INTERVAL_BY_CITY[gang.cityId] ?? METHOD_INTERVAL_BY_CITY.koeln;
+  const minutes = ctx.randomInt(from * MINUTES_PER_DAY, to * MINUTES_PER_DAY);
+  return s.stage >= 2 ? minutes : minutes * 2;
+}
+
 /**
- * Leichtere Methoden, solange die Gang droht (Stufe 1–2) oder zwischen Überfällen: selten, mit Abklingzeit pro Gang
- * und einem Abstand zwischen allen Gangs. Die Überfälle ab Stufe 3 wählt ai.ts (reactToPlayer) über pickMethod.
+ * Methoden, solange die Gang droht (ab Stufe 1, voll ab Stufe 2), zusätzlich zu den Überfällen ab Stufe 3: Ab dem
+ * Beginn der Drohung hat jede Gang einen Termin (methodInterval), dazu ein Abstand zwischen allen Gangs. Hört die
+ * Drohung auf, verfällt der Termin. Eine Gang ohne Leute macht keinen Druck.
  */
 export function maybePressure(ctx: Ctx, gang: Gang, s: GangStatus): void {
-  if (s.stage < 1 || isAtPeace(ctx.state, gang.id)) return;
   const g = ctx.state.modules.gangs;
-  if (ctx.now < (g.nextMethodAt[gang.id] ?? 0)) return;
+  if (
+    s.stage < 1 ||
+    isAtPeace(ctx.state, gang.id) ||
+    s.people < METHOD_MIN_PEOPLE ||
+    isGangBroken(ctx.state, gang.id)
+  ) {
+    delete g.nextMethodAt[gang.id];
+    return;
+  }
+  const due = g.nextMethodAt[gang.id];
+  if (due === undefined) {
+    g.nextMethodAt[gang.id] = ctx.now + methodInterval(ctx, gang, s);
+    return;
+  }
+  if (ctx.now < due) return;
   if (g.lastMethodAt !== null && ctx.now - g.lastMethodAt < METHOD_GLOBAL_GAP) return;
-  const stageFactor = s.stage >= 2 ? 1 : 0.4;
-  const city = METHOD_FACTOR_BY_CITY[gang.cityId] ?? 1;
-  if (!ctx.chance(METHOD_CHANCE * city * gang.traits.aggression * stageFactor)) return;
-  // Unterhalb von Stufe 3 keine Überfälle: die laufen über die bestehende Eskalation.
-  const method = pickMethod(ctx, gang, Math.min(2, s.stage));
-  if (!method || method === 'raid') return;
-  if (runMethod(ctx, gang, s, method)) g.nextMethodAt[gang.id] = ctx.now + METHOD_COOLDOWN;
+  const method = pickMethod(ctx, gang, s.stage);
+  if (method && runMethod(ctx, gang, s, method)) g.nextMethodAt[gang.id] = ctx.now + methodInterval(ctx, gang, s);
+  else g.nextMethodAt[gang.id] = ctx.now + METHOD_RETRY;
 }
 
 /** Methode ausführen (außer Überfall). Gibt zurück, ob etwas passiert ist. */
 export function runMethod(ctx: Ctx, gang: Gang, s: GangStatus, method: GangMethod): boolean {
   let done = false;
-  if (method === 'burglary') done = burglary(ctx, gang);
+  if (method === 'burglary') done = planBurglary(ctx, gang);
   else if (method === 'poach') done = poach(ctx, gang);
   else if (method === 'intimidate') done = intimidate(ctx, gang);
   else if (method === 'tipOff') done = tipOff(ctx, gang);
@@ -346,7 +435,44 @@ export function runMethod(ctx: Ctx, gang: Gang, s: GangStatus, method: GangMetho
 // ---------------------------------------------------------------------------------------------
 // Einbruch und Diebstahl
 
-function burglary(ctx: Ctx, gang: Gang): boolean {
+/** Einbruch für die nächste Nacht einplanen (volle Stunde in BURGLARY_HOURS). */
+function planBurglary(ctx: Ctx, gang: Gang): boolean {
+  if (stockedWarehouses(ctx.state, gang.cityId).length === 0) return false;
+  const day = Math.floor(ctx.now / MINUTES_PER_DAY) * MINUTES_PER_DAY;
+  const hours: number[] = [];
+  for (let h = BURGLARY_HOURS[0]; h < BURGLARY_HOURS[1]; h++) hours.push(h);
+  const tonight = hours.map((h) => day + h * 60).filter((t) => t > ctx.now);
+  const plannedAt = tonight.length > 0 ? ctx.pick(tonight) : day + MINUTES_PER_DAY + ctx.pick(hours) * 60;
+  const reportAt = nextReport(plannedAt);
+  addIncident(ctx, {
+    kind: 'burglary',
+    gangId: null,
+    byGangId: gang.id,
+    cityId: gang.cityId,
+    expiresAt: reportAt + INCIDENT_EXPIRY,
+    plannedAt,
+    reportAt,
+    reported: false,
+  });
+  return true;
+}
+
+/** Geplante Einbrüche einer Gang sofort ausführen (Tests, Dev-Abkürzungen, Szenen). */
+export function burgleNow(ctx: Ctx, gangId: string): void {
+  for (const incident of [...ctx.state.modules.gangs.incidents]) {
+    if (incident.plannedAt !== undefined && incident.byGangId === gangId) runBurglary(ctx, incident);
+  }
+}
+
+/** Geplanter Einbruch: Jetzt ist es so weit. Gibt es nichts mehr zu holen, fällt er aus. */
+function runBurglary(ctx: Ctx, incident: GangIncident): void {
+  incident.plannedAt = undefined;
+  delete incident.plannedAt;
+  const gang = getGang(ctx.state, incident.byGangId);
+  if (!gang || !burglary(ctx, gang, incident)) removeIncident(ctx, incident.id);
+}
+
+function burglary(ctx: Ctx, gang: Gang, incident: GangIncident): boolean {
   const state = ctx.state;
   const candidates = stockedWarehouses(state, gang.cityId);
   if (candidates.length === 0) return false;
@@ -358,18 +484,8 @@ function burglary(ctx: Ctx, gang: Gang): boolean {
   ).length;
   const reportAt = nextReport(ctx.now);
   if (guards > 0 && ctx.chance(1 - (1 - BURGLARY_GUARD_STOP) ** guards)) {
-    // Verscheucht: Die Nachbarin meldet es am Morgen, nichts fehlt (Chance).
-    addIncident(ctx, {
-      kind: 'burglary',
-      gangId: null,
-      byGangId: gang.id,
-      cityId: gang.cityId,
-      expiresAt: reportAt,
-      reportAt,
-      reported: false,
-      warehouseId: w.id,
-      amount: 0,
-    });
+    // Verscheucht: Die Nachbarin meldet es am Morgen, nichts fehlt.
+    Object.assign(incident, { expiresAt: reportAt, reportAt, warehouseId: w.id, amount: 0 });
     return true;
   }
   const lot = [...getLots(state, { warehouseId: w.id })].sort((a, b) => b.amount - a.amount)[0];
@@ -384,14 +500,10 @@ function burglary(ctx: Ctx, gang: Gang): boolean {
   let trail: BurglaryTrail = 'gang';
   if (roll >= BURGLARY_TRAIL.gang) trail = roll < BURGLARY_TRAIL.gang + BURGLARY_TRAIL.junkies ? 'junkies' : 'insider';
   if (trail === 'insider' && insiders.length === 0) trail = 'junkies';
-  addIncident(ctx, {
-    kind: 'burglary',
+  Object.assign(incident, {
     gangId: trail === 'gang' ? gang.id : null,
-    byGangId: gang.id,
-    cityId: gang.cityId,
     expiresAt: reportAt + INCIDENT_EXPIRY,
     reportAt,
-    reported: false,
     warehouseId: w.id,
     productId: lot.productId,
     amount: got.taken,
@@ -416,7 +528,6 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
   incident.reported = true;
   const w = incident.warehouseId ? getWarehouse(ctx.state, incident.warehouseId) : undefined;
   const warehouse = w?.name ?? 'Lager';
-  const by = getGang(ctx.state, incident.byGangId);
   if (!incident.amount || !incident.productId) {
     // Verscheucht.
     messages.send(ctx, {
@@ -425,7 +536,6 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
     });
     journal.add(ctx, `Einbruchsversuch am ${warehouse}: Deine Wache hat sie verscheucht.`, 'good');
     removeIncident(ctx, incident.id);
-    if (by) logAction(ctx, by.id, `Einbruchsversuch am ${warehouse}, verscheucht`);
     ctx.emit('gang.burglary', { gangId: incident.byGangId, warehouseId: incident.warehouseId ?? '', amount: 0 });
     return;
   }
@@ -440,12 +550,7 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
     gang: gang?.name ?? '',
     name: insider?.name ?? 'jemand',
   });
-  const options: MessageOption[] = [respondOption(incident, 'hunt', 'Täter suchen', 'Ich schick Leute los.')];
-  if (gang && canSnitch(ctx.state, gang.id).ok) {
-    options.push(respondOption(incident, 'snitch', `${gang.name} verpfeifen`, 'Das geht an die Bullen.'));
-  }
-  if (insider) options.push(respondOption(incident, 'fire', `${insider.name} rauswerfen`, 'Der fliegt.'));
-  options.push(respondOption(incident, 'drop', 'Abhaken', 'Lass gut sein.'));
+  const options = incidentOptions(ctx.state, incident);
   incident.messageId = messages.send(ctx, {
     contact: NEIGHBOR,
     text,
@@ -457,7 +562,8 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
     `Einbruch im ${warehouse}: ${goods} gestohlen.${gang ? ` Die Spur führt zu ${gang.name}.` : ''}`,
     'bad',
   );
-  if (by) logAction(ctx, by.id, `Einbruch im ${warehouse}: ${goods}`);
+  // Ins Protokoll einer Gang nur, wenn die Spur zu ihr führt: Wer es wirklich war, weißt du sonst nicht.
+  if (gang) logAction(ctx, gang.id, `Einbruch im ${warehouse}: ${goods}`);
   ctx.emit('gang.burglary', {
     gangId: incident.byGangId,
     warehouseId: incident.warehouseId ?? '',
@@ -500,21 +606,15 @@ function huntThieves(ctx: Ctx, incident: GangIncident): CommandResult {
 }
 
 /**
- * Ergebnis der Suche nach den Tätern: Das Teil-Ergebnis für das Diebesgut entscheidet (Auftrag 35: gehalten = alles,
- * teilweise = die Hälfte, weg = nichts). Ohne Teil-Ergebnis zählt der Ausgang.
+ * Ergebnis der Suche nach den Tätern: Nur ein Erfolg bringt das Diebesgut zurück (RECOVER_SHARE davon). Rückzug und
+ * Niederlage bringen nichts (wegen skipEffects zählt das Teil-Ergebnis der Ware hier nicht: Bei einem Rückzug stünde
+ * es auf „gehalten“, obwohl niemand etwas zurückgeholt hat).
  */
-export function onRecoverResolved(
-  ctx: Ctx,
-  incidentId: number,
-  outcome: string,
-  parts?: readonly { stake: string; state: 'kept' | 'partial' | 'lost' }[],
-): void {
+export function onRecoverResolved(ctx: Ctx, incidentId: number, outcome: string): void {
   const incident = ctx.state.modules.gangs.incidents.find((i) => i.id === incidentId);
   if (!incident) return;
   removeIncident(ctx, incident.id);
-  const part = parts?.find((p) => p.stake === 'goods');
-  const share = part ? { kept: 1, partial: 0.5, lost: 0 }[part.state] : outcome === 'success' ? 1 : 0;
-  const amount = Math.round((incident.amount ?? 0) * RECOVER_SHARE * share);
+  const amount = outcome === 'success' ? Math.round((incident.amount ?? 0) * RECOVER_SHARE) : 0;
   if (amount <= 0 || !incident.productId) {
     journal.add(ctx, 'Die Suche nach den Dieben war umsonst. Die Ware bleibt weg.', 'bad');
     return;
@@ -553,11 +653,7 @@ function poach(ctx: Ctx, gang: Gang): boolean {
   incident.messageId = messages.send(ctx, {
     contact: staffContact(m),
     text: texts.pick(ctx, 'staff:poach', INCIDENT_TEXTS.poach, { gang: gang.name, extra: formatEuro(extra) }),
-    options: [
-      respondOption(incident, 'raise', `Lohn auf ${formatEuro(m.wage + extra)}`, 'Du kriegst mehr. Bleib.'),
-      respondOption(incident, 'threaten', 'Drohen', 'Überleg dir gut, wem du was schuldest.'),
-      respondOption(incident, 'release', 'Gehen lassen', 'Dann geh halt.'),
-    ],
+    options: incidentOptions(ctx.state, incident),
     expiresIn: INCIDENT_EXPIRY,
   });
   journal.add(ctx, `${gang.name} will ${m.name} abwerben.`, 'bad', { staffId: m.id });
@@ -621,12 +717,7 @@ function intimidate(ctx: Ctx, gang: Gang): boolean {
     expiresAt: until,
     spotId: spot.id,
   });
-  const options = [
-    respondOption(incident, 'security', 'Sicherheit hinschicken', 'Ich schick Leute.'),
-    respondOption(incident, 'wait', 'Abwarten', 'Die gehen schon wieder.'),
-  ];
-  if (!isAtPeace(ctx.state, gang.id))
-    options.push(respondOption(incident, 'tribute', 'Schutzgeld zahlen', 'Okay. Ich zahle.'));
+  const options = incidentOptions(ctx.state, incident);
   const runner = activeRunnerAt(ctx.state, spot.id);
   incident.messageId = runner
     ? messages.send(ctx, {
@@ -656,11 +747,17 @@ function resolveIntimidation(ctx: Ctx, incident: GangIncident, choice: string): 
   const gang = incident.gangId ? getGang(ctx.state, incident.gangId) : undefined;
   const spot = incident.spotId ? getSpot(ctx.state, incident.spotId) : undefined;
   if (!gang || !spot) return { ok: true };
-  if (choice === 'tribute') return ctx.dispatch({ type: 'gangs.payTribute', payload: { gangId: gang.id } });
+  if (choice === 'tribute') {
+    const paid = ctx.dispatch({ type: 'gangs.payTribute', payload: { gangId: gang.id } });
+    if (!paid.ok) return paid;
+    endIntimidation(ctx, spot.id);
+    journal.add(ctx, `Schutzgeld an ${gang.name}: Ihre Leute ziehen vom ${spot.name} ab.`, 'info', {
+      spotId: spot.id,
+    });
+    return paid;
+  }
   if (choice !== 'security') return { ok: true };
-  const crew = crewFor(ctx.state, { spotId: spot.id }).filter(
-    (id) => getStaffMember(ctx.state, id)?.role === 'security',
-  );
+  const crew = securityCrew(ctx.state, spot.id);
   if (crew.length === 0) return { ok: false, reason: 'Du hast gerade keine freien Sicherheitsleute.' };
   if (ctx.chance(INTIMIDATION_LEAVE_CHANCE) || activeEncounters(ctx.state).length > 0) {
     endIntimidation(ctx, spot.id);
@@ -736,10 +833,7 @@ function blackmail(ctx: Ctx, gang: Gang): boolean {
     gang,
     'blackmail',
     { warehouse: w.name, amount: formatEuro(amount) },
-    [
-      respondOption(incident, 'pay', `Zahlen (${formatEuro(amount)})`, 'Hier ist euer Geld.'),
-      respondOption(incident, 'refuse', 'Ablehnen', 'Macht doch.'),
-    ],
+    incidentOptions(ctx.state, incident),
     INCIDENT_EXPIRY,
   );
   journal.add(ctx, `${gang.name} erpresst dich mit deinem ${w.name}.`, 'bad');
@@ -776,7 +870,7 @@ function resolveBlackmail(ctx: Ctx, incident: GangIncident, choice: string): Com
 }
 
 // ---------------------------------------------------------------------------------------------
-// Chancen: Warnung vor einem Rivalen, Gefallen, Überläufer (einmal am Tag gewürfelt)
+// Chancen: Warnung vor einem Rivalen, Gefallen (einmal am Tag gewürfelt)
 
 export function goodTurns(ctx: Ctx): void {
   const g = ctx.state.modules.gangs;
@@ -791,10 +885,6 @@ export function goodTurns(ctx: Ctx): void {
         g.lastMethodAt = ctx.now;
         return;
       }
-    }
-    if (s.stage >= 2 && s.people > 2 && ctx.chance(DEFECTOR_CHANCE) && defector(ctx, gang)) {
-      g.lastMethodAt = ctx.now;
-      return;
     }
   }
 }
@@ -823,15 +913,7 @@ function warnRival(ctx: Ctx, gang: Gang): boolean {
     gang,
     'warnRival',
     { enemy: enemy.name },
-    [
-      respondOption(
-        incident,
-        'prepare',
-        `Leute in Stellung (${formatEuro(WARN_PREPARE_COST)})`,
-        'Danke. Wir sind bereit.',
-      ),
-      respondOption(incident, 'thanks', 'Danke für den Tipp', 'Danke. Ich merk mir das.'),
-    ],
+    incidentOptions(ctx.state, incident),
     INCIDENT_EXPIRY,
   );
   journal.add(ctx, `${gang.name} warnt dich vor ${enemy.name}.`, 'good');
@@ -857,36 +939,10 @@ function favor(ctx: Ctx, gang: Gang): boolean {
     gang,
     'favor',
     { amount: formatEuro(amount) },
-    [
-      respondOption(incident, 'accept', `Annehmen (${formatEuro(amount)})`, 'Bringt es vorbei.'),
-      respondOption(incident, 'decline', 'Ablehnen', 'Diesmal nicht.'),
-    ],
+    incidentOptions(ctx.state, incident),
     INCIDENT_EXPIRY,
   );
   ctx.emit('gang.goodTurn', { gangId: gang.id, kind: 'favor' });
-  return true;
-}
-
-function defector(ctx: Ctx, gang: Gang): boolean {
-  const price = Math.round(ctx.randomInt(DEFECTOR_PRICE[0], DEFECTOR_PRICE[1]) / 10) * 10;
-  const incident = addIncident(ctx, {
-    kind: 'defector',
-    gangId: gang.id,
-    byGangId: gang.id,
-    cityId: gang.cityId,
-    expiresAt: ctx.now + INCIDENT_EXPIRY,
-    price,
-  });
-  incident.messageId = messages.send(ctx, {
-    contact: DEFECTOR,
-    text: texts.pick(ctx, 'gang:defector', INCIDENT_TEXTS.defector, { gang: gang.name, price: formatEuro(price) }),
-    options: [
-      respondOption(incident, 'buy', `Kaufen (${formatEuro(price)})`, 'Erzähl.'),
-      respondOption(incident, 'decline', 'Kein Interesse', 'Verschwinde.'),
-    ],
-    expiresIn: INCIDENT_EXPIRY,
-  });
-  ctx.emit('gang.goodTurn', { gangId: gang.id, kind: 'defector' });
   return true;
 }
 
@@ -925,21 +981,6 @@ function resolveGoodTurn(ctx: Ctx, incident: GangIncident, choice: string): Comm
     );
     return { ok: true };
   }
-  if (incident.kind === 'defector') {
-    if (choice !== 'buy') return { ok: true };
-    const price = incident.price ?? 0;
-    if (!wallet.pay(ctx, price, 'dirty', 'Infos eines Überläufers', 'expense.other')) {
-      return { ok: false, reason: 'Nicht genug Geld.' };
-    }
-    s.people = Math.max(0, s.people - 1);
-    s.lastAttackAt = ctx.now;
-    const push = s.push ? ` Gerade drängen sie nach ${veedelName(s.push.veedelId)}.` : '';
-    journal.add(
-      ctx,
-      `Der Überläufer packt aus: ${gang.name} hat ${s.people} Leute und ${formatEuro(Math.round(s.money / 100) * 100)} in der Kasse.${push} Ihren nächsten Überfall kennst du jetzt.`,
-      'good',
-    );
-  }
   return { ok: true };
 }
 
@@ -956,7 +997,7 @@ export function respond(ctx: Ctx, incidentId: number, choice: string): CommandRe
   const g = ctx.state.modules.gangs;
   const incident = g.incidents.find((i) => i.id === incidentId);
   if (!incident) return { ok: false, reason: 'Das hat sich schon erledigt.' };
-  if (!INCIDENT_CHOICES[incident.kind].includes(choice)) return { ok: false, reason: 'Unbekannte Antwort.' };
+  if (!INCIDENT_CHOICES[incident.kind]?.includes(choice)) return { ok: false, reason: 'Unbekannte Antwort.' };
   if (incident.encounterId !== undefined) return { ok: false, reason: 'Darum kümmern sich gerade deine Leute.' };
   let result: CommandResult = { ok: true };
   if (incident.kind === 'burglary') {
@@ -1010,7 +1051,16 @@ export function upkeepIncidents(ctx: Ctx): void {
   const g = ctx.state.modules.gangs;
   g.intimidations = g.intimidations.filter((i) => i.until > ctx.now);
   for (const incident of [...g.incidents]) {
+    // Vorfälle einer Art, die es nicht mehr gibt (Überläufer aus älteren Ständen dieses Auftrags): weg.
+    if (!(incident.kind in INCIDENT_CHOICES)) {
+      removeIncident(ctx, incident.id);
+      continue;
+    }
     if (incident.reported === false) {
+      if (incident.plannedAt !== undefined) {
+        if (incident.plannedAt <= ctx.now) runBurglary(ctx, incident);
+        continue;
+      }
       if (incident.reportAt !== undefined && incident.reportAt <= ctx.now) reportBurglary(ctx, incident);
       continue;
     }
@@ -1040,7 +1090,7 @@ export function describeIncident(state: GameState, incident: GangIncident): stri
       return `Warnung vor ${getGang(state, incident.enemyId ?? '')?.name ?? 'einem Rivalen'}`;
     case 'favor':
       return `Gefallen für ${gang?.name ?? 'eine Gang'}`;
-    case 'defector':
-      return `Überläufer von ${gang?.name ?? 'einer Gang'}`;
+    default:
+      return 'Vorfall';
   }
 }
