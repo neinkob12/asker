@@ -90,6 +90,7 @@ import {
   PRICE_CAP_MARKUP,
   PRICE_LEVEL_RANGE,
   QUAY_FEE_PER_DAY,
+  RELIABILITY_RECOVERY,
   REPUTATION_ALPHA,
   SCORE_WEIGHTS,
   SEIZE_ON_CHECK,
@@ -991,6 +992,10 @@ export function placeOrders(ctx: Ctx): number {
   const s = ctx.state.modules.trade;
   const week = weekOf(ctx.now);
   s.week = week;
+  if (s.reliability < START_RELIABILITY) {
+    s.reliability =
+      Math.round((s.reliability + (START_RELIABILITY - s.reliability) * RELIABILITY_RECOVERY) * 1000) / 1000;
+  }
   joinEurope(ctx);
   const contract = s.contractUntil !== null && ctx.now < s.contractUntil;
   let placed = 0;

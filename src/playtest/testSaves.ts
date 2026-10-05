@@ -7,7 +7,9 @@
 import { clock, type GameState, loadSimulation, MINUTES_PER_HOUR, Simulation } from '../core';
 import { discoverModules } from '../core/discover';
 import { activeEncounters, autoResolveEncounter } from '../modules/encounters';
+import { getFincas } from '../modules/grow';
 import { controllerOf, PLAYER_FACTION } from '../modules/territory';
+import { OWN_ORIGINS, originStock } from '../modules/trade';
 import { allVeedel } from '../modules/veedel';
 import { newBotStats, playFor } from './bot';
 import { playToGermany, rightHandReady, sellAndArrive } from './scenario';
@@ -108,8 +110,37 @@ export function buildHafen(seed = 1): GameState {
   return sim.state;
 }
 
+/** Ware in den Ausfuhrlagern der eigenen Fincas (Gramm). */
+function exportGrams(state: GameState): number {
+  return OWN_ORIGINS.reduce(
+    (sum, o) => sum + Object.values(originStock(state, o.id)).reduce((g, lot) => g + lot.amount, 0),
+    0,
+  );
+}
+
+/**
+ * Produktion (Auftrag 42): wie „Hafen-Phase“, dann spielt der Bot weiter, bis Kolumbien und Marokko angerufen haben,
+ * beide Fincas stehen und die erste Ernte verpackt im Ausfuhrlager liegt (höchstens 120 Tage). Gespeichert mit der
+ * Ware in Cartagena bzw. Tanger: Verschiffen, Fincas ausbauen, Kartell und Behörden.
+ */
+export function buildProduktion(seed = 1): GameState {
+  const sim = germanyRun(seed);
+  const stats = newBotStats();
+  if (!sellAndArrive(sim, stats)) throw new Error(`Seed ${seed}: kein Verkauf.`);
+  const start = sim.state.time;
+  while (sim.state.time - start < 120 * 1440) {
+    playFor(sim, 6 * MINUTES_PER_HOUR, stats);
+    if (sim.state.outcome.gameOver) throw new Error(`Seed ${seed}: Game Over (${sim.state.outcome.gameOver.reason}).`);
+    if (getFincas(sim.state).length >= 2 && exportGrams(sim.state) > 0) break;
+  }
+  if (getFincas(sim.state).length < 2) throw new Error(`Seed ${seed}: keine zwei Fincas.`);
+  sim.state.meta.scenario = 'produktion';
+  return sim.state;
+}
+
 export const TEST_SAVES: readonly TestSave[] = [
   { id: 'koeln-komplett', label: 'Test: Köln fast komplett', build: () => buildKoelnKomplett() },
   { id: 'deutschland', label: 'Test: Boss von Deutschland', build: () => buildDeutschland() },
   { id: 'hafen', label: 'Test: Hafen-Phase', build: () => buildHafen() },
+  { id: 'produktion', label: 'Test: Produktion', build: () => buildProduktion() },
 ];

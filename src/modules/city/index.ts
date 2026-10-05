@@ -63,6 +63,7 @@ import { activeEncounters } from '../encounters';
 import { bookDay, cityDayProfit, cityReport } from '../finance';
 import { freeVehicles, releaseVehicle } from '../fleet';
 import { getLots } from '../goods';
+import { growGoals } from '../grow';
 import {
   FULL_POWER_SHARE,
   fullPowerMissing,
@@ -75,7 +76,6 @@ import {
   startPackStaff,
 } from '../hierarchy';
 import { getRoutes, getTrips } from '../logistics';
-import { growGoals } from '../grow';
 import { restHeat } from '../police';
 import { autobahnRefs, interCityMinutes } from '../roads';
 import { getSpot } from '../spots';

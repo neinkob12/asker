@@ -323,6 +323,7 @@ doch gebraucht wird.
 2. **Frankfurt** ja oder nein. Bis dahin gilt: vier Städte, Frankfurt optional.
 3. **Fremde Städte** in Deutschland und Europa: Vorschlag oben, Liste darf kleiner sein.
 4. **Edibles, Vapes und Öl** im Ausland: Vorschlag ein Labor in den Niederlanden als Verarbeitung in Phase 4, oder weiter
-   zukaufen.
+   zukaufen. Auftrag 42 schlägt vor: weiter zukaufen (Labor Westland), weil sie ein kleiner Teil der Nachfrage sind und
+   ein eigenes Labor eine dritte Kette wäre. Entscheidung des Spielers steht noch aus.
 5. **Stellschrauben** für das Tempo der späteren Städte: Statthalter-Anteil, Startpaket, Startgeld. Werden mit dem Bot
    eingestellt, nicht geraten.

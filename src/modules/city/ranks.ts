@@ -30,7 +30,12 @@ export const PLAYER_RANKS: readonly PlayerRankDef[] = [
   { id: 'bossCity', title: 'Boss von {city}', kind: 'city', hint: 'Eine weitere Stadt komplett übernommen.' },
   { id: 'bossGermany', title: 'Boss von Deutschland', kind: 'germany', hint: 'Alle Städte gehören dir.' },
   { id: 'importer', title: 'Importeur', kind: 'later', hint: 'Lieferant für alle, vom Hafen aus.' },
-  { id: 'producer', title: 'Produzent', kind: 'later', hint: 'Die Hälfte deiner Lieferungen kommt aus eigener Produktion.' },
+  {
+    id: 'producer',
+    title: 'Produzent',
+    kind: 'later',
+    hint: 'Die Hälfte deiner Lieferungen kommt aus eigener Produktion.',
+  },
   // Auftrag 42: der Titel am Ende des Bogens (danach geht es offen weiter).
   { id: 'europe', title: 'Europa', kind: 'later', hint: 'Jeder Kunde in Europa bekommt Ware aus deinen Fincas.' },
 ];

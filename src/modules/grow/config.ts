@@ -28,7 +28,7 @@ export interface RegionEconomy {
 export const REGION_ECONOMY: Readonly<Record<string, RegionEconomy>> = {
   kolumbien: {
     landPrice: 30_000,
-    leasePerWeek: 600,
+    leasePerWeek: 450,
     crops: ['weed', 'haze', 'kush'],
     qualityBonus: 0.04,
     cartelShare: 0.2,
@@ -37,7 +37,7 @@ export const REGION_ECONOMY: Readonly<Record<string, RegionEconomy>> = {
   },
   marokko: {
     landPrice: 20_000,
-    leasePerWeek: 450,
+    leasePerWeek: 350,
     crops: ['hash', 'weed'],
     qualityBonus: 0,
     cartelShare: 0.15,
@@ -48,14 +48,14 @@ export const REGION_ECONOMY: Readonly<Record<string, RegionEconomy>> = {
 
 /** Ernte pro Hektar (getrocknet, vor dem Anteil des Kartells): im Freien alle 60 Tage, im Gewächshaus alle 30. */
 export const GROW_DAYS = { outdoor: 60, greenhouse: 30 } as const;
-export const YIELD_PER_HA = { outdoor: 30_000, greenhouse: 18_000 } as const;
+export const YIELD_PER_HA = { outdoor: 35_000, greenhouse: 22_000 } as const;
 /** Hasch: aus so viel Pflanze wird ein Gramm gepresstes Harz (Ernte mal diesen Faktor). */
 export const HASH_YIELD = 0.6;
 /** Gewächshaus pro Hektar (sauberes Geld) und Bonus auf die Qualität. */
 export const GREENHOUSE_PER_HA = 15_000;
 export const GREENHOUSE_QUALITY = 0.03;
 /** Dünger, Wasser, Strom pro Hektar und Aussaat (sauberes Geld). Im Gewächshaus pro Durchgang etwas weniger. */
-export const SUPPLIES_PER_HA = { outdoor: 2_000, greenhouse: 1_500 } as const;
+export const SUPPLIES_PER_HA = { outdoor: 4_000, greenhouse: 3_000 } as const;
 
 /** Nach der Ernte: Trocknen, Pressen (nur Hasch), Verpacken (Tage). */
 export const DRY_DAYS = 7;
@@ -81,9 +81,9 @@ export interface GeneticsLevel {
 
 export const GENETICS: readonly GeneticsLevel[] = [
   { quality: 0.58, yield: 1, cost: 0 },
-  { quality: 0.68, yield: 1.1, cost: 40_000 },
-  { quality: 0.78, yield: 1.2, cost: 120_000 },
-  { quality: 0.88, yield: 1.3, cost: 300_000 },
+  { quality: 0.68, yield: 1.1, cost: 25_000 },
+  { quality: 0.78, yield: 1.2, cost: 60_000 },
+  { quality: 0.88, yield: 1.3, cost: 120_000 },
 ];
 export const MAX_QUALITY = 0.95;
 

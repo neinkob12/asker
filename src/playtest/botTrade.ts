@@ -184,12 +184,15 @@ function procure(state: GameState, run: BotRun): void {
   }
 }
 
-/** Ware einer Sorte im Hafen und unterwegs (Gramm). */
+/**
+ * Ware einer Sorte im Hafen und unterwegs (Gramm). Auftrag 42: Eigene Ernte, die erst nach PENDING_HORIZON ankommt
+ * (aus Cartagena gut zwei Wochen unterwegs), zählt noch nicht: sonst fehlt die Ware für die Bestellungen dieser Woche.
+ */
 function onHand(state: GameState, productId: string): number {
   return (
     totalStock(state, productId) +
     getShipments(state)
-      .filter((x) => x.productId === productId)
+      .filter((x) => x.productId === productId && (!x.own || x.arrivesAt - state.time <= PENDING_HORIZON))
       .reduce((s, x) => s + x.amount, 0)
   );
 }
