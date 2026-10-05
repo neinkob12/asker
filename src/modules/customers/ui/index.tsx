@@ -26,17 +26,25 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { getGang } from '../../gangs';
 import { formatProductAmount, getProduct, productName } from '../../goods';
 import { activeRunnerAt } from '../../staff';
+import { veedelName } from '../../veedel';
 import {
   canServe,
   customerRevenue,
   customerTypeName,
+  DEALER_STAGES,
+  dealerRelation,
+  dealerStage,
+  dealerStageName,
+  getDealers,
   getOrders,
   getRegular,
   getRegulars,
   getSalesStats,
   isPlayerAway,
+  MIDDLEMAN_AMOUNT,
   playerSpot,
   spotReputation,
   waitingAt,
@@ -274,6 +282,67 @@ function CustomersSection() {
   );
 }
 
+/**
+ * Auftrag 34: Stammabnehmer in der Kasse. Pro Dealer der Stadt Vertrauen als Balken, Stufe als Chip; wer gegangen ist,
+ * steht bei seiner Gang. Exklusivität und Zwischenhandel bietet der Dealer per Handy an, beenden geht hier.
+ */
+function DealersSection() {
+  const { state, dispatch } = useGame();
+  const dealers = getDealers(state);
+  if (dealers.length === 0) return null;
+  return (
+    <Group
+      title="Stammabnehmer"
+      icon="handshake"
+      color="money"
+      note="Erfüllte Deals bringen Vertrauen, wer hängengelassen wird, geht zur Konkurrenz."
+      more={`Stufen: ${DEALER_STAGES.map((st) => `${st.name} ab ${st.at}`).join(', ')}. Ab Vorkasse zahlt der Dealer die Hälfte vorab und der Deal kippt nicht mehr. Exklusiv kauft er nur bei dir, mit Rabatt. Als Zwischenhändler holt er jede Woche ${MIDDLEMAN_AMOUNT} g für sein Veedel ab: weniger Marge, aber Einfluss ohne Spot.`}
+    >
+      <List>
+        {dealers.map((d) => {
+          const r = dealerRelation(state, d.id);
+          const stage = dealerStage(state, d.id);
+          const gone = r.status === 'gone';
+          const gang = r.goneTo ? getGang(state, r.goneTo) : undefined;
+          return (
+            <ListItem
+              key={d.id}
+              value={`${r.deals} Deals`}
+              aside={
+                r.middleman ? (
+                  <Button
+                    small
+                    variant="subtle"
+                    onClick={() =>
+                      dispatch({ type: 'customers.dealerMiddleman', payload: { dealerId: d.id, accept: false } })
+                    }
+                  >
+                    Beenden
+                  </Button>
+                ) : undefined
+              }
+            >
+              <ItemContent
+                icon="handshake"
+                color={gone ? 'danger' : 'money'}
+                title={d.name}
+                tags={[
+                  gone
+                    ? { label: gang ? `kauft bei ${gang.name}` : 'weg', icon: 'logout', color: 'danger' }
+                    : { label: dealerStageName(stage), color: stage === 'casual' ? 'system' : 'money' },
+                  r.middleman && { label: veedelName(d.veedelId), icon: 'pin', color: 'place' },
+                ]}
+              >
+                <ProgressBar value={r.trust / 100} tone={r.trust < 20 ? 'bad' : 'accent'} label="Vertrauen" />
+              </ItemContent>
+            </ListItem>
+          );
+        })}
+      </List>
+    </Group>
+  );
+}
+
 /** Einstellungen › Anfragen: ob Kunden dir direkt schreiben dürfen (Spielzustand, nicht pro Gerät). */
 function OrderSettings() {
   const { state, dispatch } = useGame();
@@ -289,6 +358,7 @@ function OrderSettings() {
 
 registerSlot('spots.spotPanel', { id: 'customers.list', order: 10, component: SpotCustomers });
 registerSlot('finance.app', { id: 'customers.stats', title: 'Kundschaft', order: 10, component: CustomersSection });
+registerSlot('finance.app', { id: 'customers.dealers', title: 'Stammabnehmer', order: 11, component: DealersSection });
 registerSlot('core.settings', {
   id: 'customers.orders',
   title: 'Anfragen',

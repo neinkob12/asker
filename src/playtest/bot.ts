@@ -655,6 +655,18 @@ function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions
     if (!messages.canAnswer(state, m)) continue;
     // Auftrag 34: Geschichten der Leute beantwortet er wie ein vernünftiger Chef.
     if (answerStory(sim, stats, m.id, m.options ?? [])) continue;
+    // Auftrag 34: Großhandel von Dealern nimmt er an (Stammabnehmer brauchen erfüllte Deals): mit der Rechten Hand,
+    // sonst selbst, wenn er gerade nicht unterwegs ist.
+    if (
+      m.contactId.startsWith('dealer:') &&
+      (m.options ?? []).some((o) => o.command?.type === 'customers.acceptOrder')
+    ) {
+      for (const optionId of ['rightHand', 'self', 'decline']) {
+        if (!(m.options ?? []).some((o) => o.id === optionId)) continue;
+        if (run(sim, stats, { type: 'messages.answer', payload: { messageId: m.id, optionId } })) break;
+      }
+      continue;
+    }
     // Auftrag 34: Im Gang-Krieg liefert er Ware, wenn das Lager voll genug ist, sonst hält er sich raus.
     if ((m.options ?? []).some((o) => o.command?.type === 'gangs.supportWar')) {
       const plenty = getStock(state, { cityId: activeCity(state) }) >= 300;

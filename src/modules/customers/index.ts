@@ -21,6 +21,10 @@
 // bedienst du dort automatisch (PLAYER_SERVE_TIME pro Kunde), solange du nicht mit einer Lieferung unterwegs bist.
 // Befehle: 'customers.serve' (auch für Läufer, mit sellerId), 'customers.serveAll', 'customers.standAt',
 //   'customers.acceptOrder', 'customers.declineOrder'
+// Stammabnehmer (Auftrag 34, dealers.ts): Dealer pro Stadt (DEALERS) mit Vertrauen und Stufen (DEALER_STAGES:
+//   regelmäßig, Vorkasse, exklusiv, Zwischenhändler), getDealers, dealerRelation, dealerStage, dealerPrepays,
+//   middlemanPrice; Befehle 'customers.dealerExclusive', 'customers.dealerMiddleman'; Ereignisse
+//   'dealer.stageChanged', 'dealer.left', 'dealer.middlemanDelivered'.
 // Ereignisse: 'sale.completed', 'customer.arrived', 'customer.left', 'customer.missed', 'customers.selfMoved',
 //   'customer.regularGained', 'customer.regularLost', 'order.received', 'order.accepted', 'order.finished'
 
@@ -28,7 +32,9 @@ import { type CommandResult, type Ctx, defineModule, type GameState, journal } f
 import { cityName, cityOfSpot, isPlayerIn } from '../city';
 import { getStock } from '../goods';
 import { getSpot, getSpots, isSpotActive } from '../spots';
+import type { DealerStageId } from './config';
 import { CUSTOMER_TYPES, HANDOVER_MINUTES, WHOLESALE_HANDOVER_MINUTES } from './config';
+import { type DealerRelation, setExclusive, setMiddleman } from './dealers';
 import { customerType } from './decisions';
 import { acceptOrder, courierGone, declineOrder, expireOrderMessage, onDealResolved, ordersTick } from './orders';
 import {
@@ -42,7 +48,27 @@ import {
   streetTick,
 } from './street';
 
-export { CUSTOMER_PATIENCE } from './config';
+export {
+  CUSTOMER_PATIENCE,
+  DEALER_STAGES,
+  DEALER_TRUST,
+  DEALERS,
+  type DealerInfo,
+  type DealerStageId,
+  MIDDLEMAN_AMOUNT,
+  MIDDLEMAN_INFLUENCE,
+} from './config';
+export {
+  type DealerMiddleman,
+  type DealerRelation,
+  dealerPrepays,
+  dealerRelation,
+  dealerStage,
+  dealerStageName,
+  getDealer,
+  getDealers,
+  middlemanPrice,
+} from './dealers';
 export {
   acceptsPrice,
   chooseProduct,
@@ -159,6 +185,8 @@ export interface Order {
   fromWarehouseId?: string | null;
   /** Einkaufspreis je Einheit der mitgenommenen Ware (für den Rückweg bei einem geplatzten Deal; fehlt in alten Ständen). */
   unitCost?: number;
+  /** Auftrag 34: schon vorab gezahlt (Stammabnehmer ab „Vorkasse“). */
+  prepaid?: number;
 }
 
 export interface SalesStats {
@@ -198,11 +226,14 @@ export interface CustomersState {
   directOrders: boolean;
   /** Qualität der letzten Straßenverkäufe (gleitender Schnitt): Spot → Ware → 0–1 (Auftrag 32). */
   quality: Record<string, Record<string, number>>;
+  /** Auftrag 34: Stammabnehmer, Dealer-ID → Verhältnis (fehlt = noch nie gehandelt). */
+  dealers: Record<string, DealerRelation>;
 }
 
-type CustomersStateV2 = Omit<CustomersState, 'self' | 'directOrders' | 'quality'>;
-type CustomersStateV3 = Omit<CustomersState, 'directOrders' | 'quality'>;
-type CustomersStateV4 = Omit<CustomersState, 'quality'>;
+type CustomersStateV2 = Omit<CustomersState, 'self' | 'directOrders' | 'quality' | 'dealers'>;
+type CustomersStateV3 = Omit<CustomersState, 'directOrders' | 'quality' | 'dealers'>;
+type CustomersStateV4 = Omit<CustomersState, 'quality' | 'dealers'>;
+type CustomersStateV5 = Omit<CustomersState, 'dealers'>;
 
 interface CustomersStateV1 {
   waiting: Customer[];
@@ -232,8 +263,17 @@ declare module '../../core' {
      */
     'customers.acceptOrder': { orderId: number; by: 'player' | 'courier' | 'rightHand' };
     'customers.declineOrder': { orderId: number };
+    /** Auftrag 34: Exklusivität eines Stammabnehmers annehmen (oder mit accept false beenden). */
+    'customers.dealerExclusive': { dealerId: string; accept: boolean };
+    /** Auftrag 34: Stammabnehmer als Zwischenhändler für sein Veedel (oder mit accept false beenden). */
+    'customers.dealerMiddleman': { dealerId: string; accept: boolean };
   }
   interface GameEvents {
+    /** Auftrag 34: Ein Stammabnehmer ist auf eine andere Stufe gekommen. */
+    'dealer.stageChanged': { dealerId: string; stage: DealerStageId };
+    /** Zweimal hängengelassen: Der Dealer kauft jetzt bei einer Gang. */
+    'dealer.left': { dealerId: string; gangId: string | null };
+    'dealer.middlemanDelivered': { dealerId: string; amount: number; price: number };
     /** Jeder Verkauf, egal über welchen Vertriebsweg. spotId ist null bei Lieferdienst und Großhandel. */
     'sale.completed': {
       channel: SalesChannel;
@@ -416,7 +456,7 @@ function standAt(ctx: Ctx, spotId: string | null): CommandResult {
 
 export default defineModule({
   id: 'customers',
-  version: 5,
+  version: 6,
   dependsOn: ['spots', 'goods', 'market'],
   init: (ctx) => ({
     waiting: [],
@@ -438,6 +478,7 @@ export default defineModule({
     self: { spotId: null, busyUntil: 0, since: 0 },
     directOrders: false,
     quality: {},
+    dealers: {},
   }),
   tick: (ctx) => {
     streetTick(ctx);
@@ -460,6 +501,8 @@ export default defineModule({
     },
     'customers.acceptOrder': (ctx, { orderId, by }) => acceptOrder(ctx, orderId, by),
     'customers.declineOrder': (ctx, { orderId }) => declineOrder(ctx, orderId),
+    'customers.dealerExclusive': (ctx, { dealerId, accept }) => setExclusive(ctx, dealerId, accept),
+    'customers.dealerMiddleman': (ctx, { dealerId, accept }) => setMiddleman(ctx, dealerId, accept),
   },
   on: {
     'message.expired': (ctx, { messageId, source }) => {
@@ -500,6 +543,8 @@ export default defineModule({
     // Version 4: Direktanfragen von Kunden sind abschaltbar, standardmäßig aus.
     4: (old: CustomersStateV3): CustomersStateV4 => ({ ...old, directOrders: false }),
     // Version 5 (Auftrag 32): Qualität der letzten Verkäufe pro Spot und Ware, alte Stände ohne Verlauf.
-    5: (old: CustomersStateV4): CustomersState => ({ ...old, quality: {} }),
+    5: (old: CustomersStateV4): CustomersStateV5 => ({ ...old, quality: {} }),
+    // Version 6 (Auftrag 34): Stammabnehmer mit Vertrauen, alte Stände fangen bei null an.
+    6: (old: CustomersStateV5): CustomersState => ({ ...old, dealers: {} }),
   },
 });

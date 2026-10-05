@@ -234,18 +234,122 @@ export const WHOLESALE_HANDOVER_MINUTES = 20;
 /** So oft kippt ein Großhandels-Deal bei der Übergabe (Konfrontation "Deal kippt"). */
 export const WHOLESALE_BETRAYAL_CHANCE = 0.12;
 
-export const DEALERS: readonly { id: string; name: string; veedelId: string }[] = [
-  { id: 'oemer', name: 'Ömer (Kalk)', veedelId: 'kalk' },
-  { id: 'pitter', name: 'Pitter (Mülheim)', veedelId: 'muelheim' },
-  { id: 'hollaender', name: 'Der Holländer', veedelId: 'deutz' },
-  { id: 'jacky', name: 'Jacky (Nippes)', veedelId: 'nippes' },
-  { id: 'sven', name: 'Sven vom Ring', veedelId: 'altstadt-sued' },
+/**
+ * Dealer, die bei dir im Großen kaufen (Auftrag 34: Stammabnehmer mit Vertrauen, dealers.ts), pro Stadt als Daten.
+ * Das Modell ist die Vorlage für die Kunden der Hafen-Phase (Auftrag 40).
+ */
+export interface DealerInfo {
+  id: string;
+  name: string;
+  cityId: string;
+  veedelId: string;
+  /** Ein Satz fürs Profil. */
+  about: string;
+}
+
+export const DEALERS: readonly DealerInfo[] = [
+  {
+    id: 'oemer',
+    name: 'Ömer (Kalk)',
+    cityId: 'koeln',
+    veedelId: 'kalk',
+    about: 'Betreibt einen Kiosk an der Kalker Hauptstraße, verkauft hinten raus.',
+  },
+  {
+    id: 'pitter',
+    name: 'Pitter (Mülheim)',
+    cityId: 'koeln',
+    veedelId: 'muelheim',
+    about: 'Alter Hase aus Mülheim, kennt jeden auf der Keupstraße.',
+  },
+  {
+    id: 'hollaender',
+    name: 'Der Holländer',
+    cityId: 'koeln',
+    veedelId: 'deutz',
+    about: 'Kommt aus Venlo, kauft für Kunden auf beiden Seiten der Grenze.',
+  },
+  {
+    id: 'jacky',
+    name: 'Jacky (Nippes)',
+    cityId: 'koeln',
+    veedelId: 'nippes',
+    about: 'Versorgt die Kneipen in Nippes und hat ein gutes Gedächtnis.',
+  },
+  {
+    id: 'sven',
+    name: 'Sven vom Ring',
+    cityId: 'koeln',
+    veedelId: 'altstadt-sued',
+    about: 'Türsteher am Ring, verkauft an die Leute in der Schlange.',
+  },
   // Hamburg (Auftrag 30)
-  { id: 'jojo', name: 'Jojo vom Kiez', veedelId: 'st-pauli' },
-  { id: 'kemal', name: 'Kemal (St. Georg)', veedelId: 'st-georg' },
-  { id: 'ole', name: 'Ole (Wilhelmsburg)', veedelId: 'wilhelmsburg' },
-  { id: 'malte', name: 'Malte (Harburg)', veedelId: 'harburg' },
+  {
+    id: 'jojo',
+    name: 'Jojo vom Kiez',
+    cityId: 'hamburg',
+    veedelId: 'st-pauli',
+    about: 'Kennt jede Tür auf der Reeperbahn.',
+  },
+  {
+    id: 'kemal',
+    name: 'Kemal (St. Georg)',
+    cityId: 'hamburg',
+    veedelId: 'st-georg',
+    about: 'Hat einen Imbiss am Steindamm und viele Cousins.',
+  },
+  {
+    id: 'ole',
+    name: 'Ole (Wilhelmsburg)',
+    cityId: 'hamburg',
+    veedelId: 'wilhelmsburg',
+    about: 'Arbeitet am Hafen und versorgt die Schichten.',
+  },
+  {
+    id: 'malte',
+    name: 'Malte (Harburg)',
+    cityId: 'hamburg',
+    veedelId: 'harburg',
+    about: 'Student mit großem Freundeskreis südlich der Elbe.',
+  },
 ];
+
+// --- Stammabnehmer (Auftrag 34) ---
+
+/** Vertrauen eines Dealers, mit dem du noch nie gehandelt hast (0–100). */
+export const DEALER_START_TRUST = 15;
+/** Vertrauen nach einem Deal: erfüllt, abgelehnt, geplatzt oder hängengelassen (Frist verpasst). */
+export const DEALER_TRUST = { done: 8, declined: -4, failed: -20, expired: -15 } as const;
+/**
+ * Stufen nach Vertrauen: regelmäßige Anfragen, Vorkasse (zahlt die Hälfte vorab, der Deal kippt nicht mehr),
+ * Exklusivität (kauft nur bei dir, dafür Rabatt), Zwischenhändler für sein Veedel (wöchentliche Lieferung).
+ */
+export const DEALER_STAGES = [
+  { id: 'casual', at: 0, name: 'Gelegentlich' },
+  { id: 'regular', at: 30, name: 'Regelmäßig' },
+  { id: 'prepay', at: 50, name: 'Vorkasse' },
+  { id: 'exclusive', at: 70, name: 'Exklusiv' },
+  { id: 'middleman', at: 85, name: 'Zwischenhändler' },
+] as const;
+export type DealerStageId = (typeof DEALER_STAGES)[number]['id'];
+/** Regelmäßige Anfragen spätestens alle so viele Minuten (exklusiv öfter). */
+export const DEALER_REGULAR_INTERVAL = 3 * 1440;
+export const DEALER_EXCLUSIVE_INTERVAL = 2 * 1440;
+/** Vorkasse: Anteil, den der Dealer beim Annehmen zahlt. */
+export const DEALER_PREPAY_SHARE = 0.5;
+/** Exklusiv: so viel Rabatt zusätzlich. */
+export const DEALER_EXCLUSIVE_DISCOUNT = 0.1;
+/** Wer so oft in so vielen Tagen hängengelassen wird, geht zu einer Gang (und kommt nach DEALER_RETURN_DAYS wieder). */
+export const DEALER_LETDOWNS_TO_LEAVE = 2;
+export const DEALER_LETDOWN_DAYS = 14;
+export const DEALER_RETURN_DAYS = 21;
+/** Ein neues Angebot (Exklusivität, Zwischenhandel) frühestens nach so vielen Minuten. */
+export const DEALER_OFFER_GAP = 5 * 1440;
+/** Zwischenhändler: Menge pro Woche, Rabatt (geringere Marge) und Einfluss im Veedel pro Lieferung. */
+export const MIDDLEMAN_INTERVAL = 7 * 1440;
+export const MIDDLEMAN_AMOUNT = 150;
+export const MIDDLEMAN_DISCOUNT = 0.45;
+export const MIDDLEMAN_INFLUENCE = 6;
 
 /** Abgeschlossene Aufträge, die in der Liste bleiben. */
 export const ORDER_HISTORY = 15;

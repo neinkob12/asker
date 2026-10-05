@@ -785,6 +785,25 @@ export const SCENES = [
       head?.scrollIntoView({ block: 'start' });
     })()`,
   },
+  // Auftrag 34: Stammabnehmer in der Kasse
+  {
+    name: 'stammabnehmer',
+    js: `(async () => {
+      ${STEPS}
+      const s = window.koeln.session.sim.state;
+      const now = s.time;
+      const base = { deals: 0, letdowns: [], status: 'active', goneTo: null, goneUntil: null, exclusive: false, middleman: null, lastRequestAt: now, lastOfferAt: now };
+      s.modules.customers.dealers = {
+        oemer: { ...base, trust: 88, deals: 9, exclusive: true, middleman: { productId: 'weed', amount: 150, nextAt: now + 3000 } },
+        pitter: { ...base, trust: 55, deals: 4 },
+        jacky: { ...base, trust: 5, status: 'gone', goneTo: 'nord', goneUntil: now + 20000 },
+        sven: { ...base, trust: 32, deals: 2 },
+      };
+      window.koeln.runtime.api.openPhone('finance.app');
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Stammabnehmer')));
+      head?.scrollIntoView({ block: 'center' });
+    })()`,
+  },
   {
     name: 'gang-seite',
     js: `(() => {

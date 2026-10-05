@@ -163,6 +163,7 @@ describe('Balancing', () => {
             ` | Umsatz/Tag T1-5 ${avg(0, 5)}, T6-15 ${avg(5, 15)}, T16-30 ${avg(15, 30)}, danach ${avg(30, r.days.length)}` +
             ` | Gang-Überfälle ${e('gang.raidStarted')}, Vorstöße ${e('gang.pushStarted')}, Eskalationen ${e('gang.escalated')}` +
             ` | Gang-Kriege ${e('gang.warStarted')} (geholfen ${e('gang.warSupported')}), Geschichten ${e('staff.story')}` +
+            ` | Stammabnehmer: Stufen ${e('dealer.stageChanged')}, weg ${e('dealer.left')}, Zwischenhandel ${e('dealer.middlemanDelivered')}` +
             ` | Razzien ${e('police.raidPlanned')}, Kontrollen ${e('police.check')}, Festnahmen ${e('police.arrest')}` +
             ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,
         );
