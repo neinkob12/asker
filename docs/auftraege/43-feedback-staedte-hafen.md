@@ -82,18 +82,18 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 
 - [ ] D1 Einleitung für den Anbau wie C1 (Anruf aus Kolumbien bzw. Marokko → Finca → Ernte → Ausfuhr → Schiff).
 - [ ] D2 Zwischenziel bis zum Anruf: zeigen, ab wann die Produzenten anrufen (Wochen und Umsatz).
-- [ ] D3 Finca ohne Arbeiter erntet 0 kg, ohne Warnung (`grow/index.ts` Ernte × Arbeiter): nach dem Kauf das
+- [x] D3 Finca ohne Arbeiter erntet 0 kg, ohne Warnung (`grow/index.ts` Ernte × Arbeiter): nach dem Kauf das
   Finca-Panel öffnen, Rat „<Finca> hat keine Arbeiter“ (dringend, solange die Ernte nah ist), Journal „Ernte
   ausgefallen: keine Arbeiter“; Nutzen des Gärtners in einem Satz.
-- [ ] D4 Falle beim sauberen Geld: Löhne und Dünger zahlen zuerst sauber (`payLocal`), die Pacht geht nur sauber, die
+- [x] D4 Falle beim sauberen Geld: Löhne und Dünger zahlen zuerst sauber (`payLocal`), die Pacht geht nur sauber, die
   Finca ist weg, obwohl Schwarzgeld da ist. Laufende Kosten zuerst schwarz (oder Reserve für die Pacht), Banner bei
   knapper Pacht mit Sprung zur Geldwäsche, „Finca verloren“ als Banner.
-- [ ] D5 Land-Gruppe im Region-Panel nach oben, im Anbau-Tab „Land kaufen oder pachten“ pro Region; ausgegrautes
+- [x] D5 Land-Gruppe im Region-Panel nach oben, im Anbau-Tab „Land kaufen oder pachten“ pro Region; ausgegrautes
   Kaufen sagt, was fehlt, mit Knopf zur Geldwäsche.
-- [ ] D6 „Kaufen ist auf Dauer billiger“ ehrlich machen (Break-even etwa 60 Wochen; Pachten zum Start).
-- [ ] D7 Meldungen der Produktion sichtbar: Ware verpackt im Ausfuhrlager und Ziele als dringende Banner mit Sprung,
+- [x] D6 „Kaufen ist auf Dauer billiger“ ehrlich machen (Break-even etwa 60 Wochen; Pachten zum Start).
+- [x] D7 Meldungen der Produktion sichtbar: Ware verpackt im Ausfuhrlager und Ziele als dringende Banner mit Sprung,
   Feld brach, Löhne unbezahlt, Pacht fällig, Kartell-Treffer als Banner `bad`.
-- [ ] D8 „Nächster Schritt“ für die Produktion: erste Finca fehlt, Arbeiter fehlen, Ausfuhr bereit (Sprung zum
+- [x] D8 „Nächster Schritt“ für die Produktion: erste Finca fehlt, Arbeiter fehlen, Ausfuhr bereit (Sprung zum
   Verschiffen), Behörden hoch, Pacht knapp; mehrere Räte statt einem, Angebot höher gewichten, `view: 'grow'`.
 - [ ] D9 Eigene Ware zuerst: Fehlt Ware, bietet das Spiel zuerst das eigene Ausfuhrlager an (`producersFor`,
   `trade.missing`, „Diese Woche“); „Alles verschiffen“ im Verschiff-Panel; eigene Ernte im Hafen-Tab.

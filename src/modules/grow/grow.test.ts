@@ -532,3 +532,32 @@ describe('Spielstände (Auftrag 42)', () => {
     });
   });
 });
+
+describe('Geld und Meldungen in der Produktion (Auftrag 43)', () => {
+  it('Löhne zahlt man vor Ort bar (schwarz), die Pacht sauber; ohne Arbeiter fällt die Ernte aus', () => {
+    const sim = openGame(7);
+    const events = recordEvents(sim);
+    expect(sim.dispatch({ type: 'grow.leaseFinca', payload: { siteId: 'el-tigre' } }).ok).toBe(true);
+    const finca = getFincas(sim.state)[0];
+    expect(
+      sim.dispatch({ type: 'grow.hire', payload: { fincaId: finca.id, role: 'worker', count: workersNeeded(finca) } })
+        .ok,
+    ).toBe(true);
+    const wages = eventsOfType(events, 'wallet.changed');
+    settle(sim, 3 * DAY);
+    const paid = eventsOfType(events, 'wallet.changed').slice(wages.length);
+    const wagePays = paid.filter((e) => e.payload.reason.startsWith('Löhne'));
+    const leasePays = paid.filter((e) => e.payload.reason.startsWith('Pacht'));
+    expect(wagePays.length).toBeGreaterThan(0);
+    expect(wagePays.every((e) => e.payload.kind === 'dirty')).toBe(true);
+    expect(leasePays.every((e) => e.payload.kind === 'clean')).toBe(true);
+    // Eine zweite Finca ohne Arbeiter: Die Ernte fällt aus, das Ereignis sagt es (0 g).
+    expect(sim.dispatch({ type: 'grow.leaseFinca', payload: { siteId: 'san-isidro' } }).ok).toBe(true);
+    const empty = getFincas(sim.state).find((f) => f.siteId === 'san-isidro');
+    if (!empty) throw new Error('keine zweite Finca');
+    settle(sim, 40 * DAY);
+    const harvests = eventsOfType(events, 'grow.harvested').filter((e) => e.payload.fincaId === empty.id);
+    expect(harvests.length).toBeGreaterThan(0);
+    expect(harvests[0].payload.grams).toBe(0);
+  });
+});
