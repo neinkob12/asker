@@ -710,7 +710,8 @@ function TradeApp() {
           aria-label="Bereich"
           value={view}
           options={[
-            { value: 'orders', label: 'Bestellungen', badge: waiting + toDeliver },
+            // Mit dem vierten Bereich (Anbau) wird es eng: dann das kürzere Wort.
+            { value: 'orders', label: isGrowStarted(state) ? 'Aufträge' : 'Bestellungen', badge: waiting + toDeliver },
             { value: 'customers', label: 'Kunden' },
             { value: 'harbor', label: 'Hafen' },
             // Auftrag 42: eigene Produktion (Fincas, Kartell, Ausfuhr), sobald die Produzenten angerufen haben.

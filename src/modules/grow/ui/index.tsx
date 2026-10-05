@@ -191,8 +191,8 @@ function GrowView() {
       <SummaryTiles
         items={[
           { icon: 'leaf', color: 'goods', value: fincas.length, label: 'Fincas' },
-          { icon: 'coinEuro', color: 'money', value: cost === null ? '–' : perGram(cost), label: 'Pro Gramm' },
-          { icon: 'gem', color: 'brand', value: pct(shares.share), label: 'Eigene Ware' },
+          { icon: 'coinEuro', color: 'money', value: cost === null ? '–' : perGram(cost), label: '€ pro g' },
+          { icon: 'gem', color: 'brand', value: pct(shares.share), label: 'Eigen' },
         ]}
       />
       <GoalsGroup />
@@ -221,7 +221,6 @@ function GrowView() {
             title={region.name}
             icon="leaf"
             color="goods"
-            value={region.area}
             note={list.length === 0 ? 'Noch keine Finca. Kaufen oder pachten unter Region.' : undefined}
           >
             <List>
@@ -452,7 +451,7 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
   return (
     <div class="trade-app">
       <Group
-        title="Pflanzung"
+        title={finca.name}
         icon="leaf"
         color="goods"
         value={phase.label}
@@ -525,12 +524,7 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
         <List>
           {gardener ? (
             <ListItem value={`Level ${gardener.level}`}>
-              <ItemContent
-                icon="flask"
-                color="people"
-                title={gardener.name}
-                meta="Gärtner: mehr Ernte, bessere Qualität."
-              />
+              <ItemContent icon="flask" color="people" title={gardener.name} meta="Gärtner" />
             </ListItem>
           ) : (
             <ListItem

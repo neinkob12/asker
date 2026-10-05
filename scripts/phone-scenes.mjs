@@ -1106,6 +1106,83 @@ export const SCENES = [
       window.koeln.runtime.api.flyToDeutschland();
     })()`,
     wait: 4000,
+  }, // Auftrag 42: eigene Produktion. Die Anrufe kommen (Hafen-Phase lang genug), beide Regionen frei, zwei Fincas.
+  {
+    name: 'anbau-anruf',
+    js: `(async () => {
+      ${STEPS}
+      const sim = window.koeln.session.sim;
+      const trade = sim.state.modules.trade;
+      trade.startedAt = sim.state.time - 21 * 1440;
+      trade.stats.revenue = Math.max(trade.stats.revenue, 1500000);
+      sim.advance(60);
+      window.koeln.runtime.requestRender();
+      await sleep(300);
+      window.koeln.runtime.api.openPhone('core.messages');
+    })()`,
+    wait: 1500,
+  },
+  {
+    name: 'anbau',
+    js: `(async () => {
+      ${STEPS}
+      const sim = window.koeln.session.sim;
+      window.koeln.runtime.api.closeDialog();
+      sim.advance(7 * 60);
+      sim.state.wallet.clean += 2000000;
+      sim.state.wallet.dirty += 1000000;
+      for (const regionId of ['kolumbien', 'marokko']) sim.dispatch({ type: 'grow.openRegion', payload: { regionId } });
+      sim.dispatch({ type: 'grow.leaseFinca', payload: { siteId: 'la-esperanza' } });
+      sim.dispatch({ type: 'grow.buyFinca', payload: { siteId: 'bab-berred' } });
+      for (const f of sim.state.modules.grow.fincas) {
+        sim.dispatch({ type: 'grow.hire', payload: { fincaId: f.id, role: 'worker', count: Math.ceil(f.hectares / 2) } });
+        sim.dispatch({ type: 'grow.hire', payload: { fincaId: f.id, role: 'gardener' } });
+        sim.dispatch({ type: 'grow.plant', payload: { fincaId: f.id, productId: f.regionId === 'marokko' ? 'hash' : 'weed' } });
+      }
+      sim.state.modules.trade.origins['own-kolumbien'] = { weed: { amount: 64000, quality: 0.66, pack: 0.8 } };
+      sim.advance(9 * 1440);
+      window.koeln.runtime.api.closeDialog();
+      window.koeln.runtime.api.openPhone('trade.app');
+      const tab = await until(() => [...document.querySelectorAll('.phone .ui-segmented button')].find((b) => b.textContent.includes('Anbau')));
+      tab?.click();
+    })()`,
+    wait: 1200,
+  },
+  {
+    name: 'anbau-region',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.runtime.api.openPhone('trade.app');
+      window.koeln.runtime.api.openPanel('grow.region', { regionId: 'kolumbien' });
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'anbau-finca',
+    js: `(async () => {
+      ${STEPS}
+      const finca = window.koeln.session.sim.state.modules.grow.fincas[0];
+      window.koeln.runtime.api.openPhone('trade.app');
+      window.koeln.runtime.api.openPanel('grow.finca', { fincaId: finca.id });
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'anbau-verschiffen',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.runtime.api.openPhone('trade.app');
+      window.koeln.runtime.api.openPanel('trade.order', { producerId: 'own-kolumbien' });
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'anbau-karte',
+    js: `(() => {
+      window.koeln.runtime.api.closeDialog();
+      window.koeln.runtime.api.flyToDeutschland();
+    })()`,
+    wait: 4000,
   },
 ];
 
