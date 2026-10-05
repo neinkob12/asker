@@ -60,7 +60,7 @@ export interface DealerRelation {
   exclusive: boolean;
   middleman: DealerMiddleman | null;
   lastRequestAt: number;
-  /** Letztes Angebot (Exklusivität oder Zwischenhandel). */
+  /** Letztes Angebot (Exklusivität oder Zwischenhandel); am Anfang so weit zurück, dass gleich eins kommen darf. */
   lastOfferAt: number;
 }
 
@@ -75,7 +75,7 @@ function fresh(): DealerRelation {
     exclusive: false,
     middleman: null,
     lastRequestAt: 0,
-    lastOfferAt: -Infinity,
+    lastOfferAt: -DEALER_OFFER_GAP,
   };
 }
 

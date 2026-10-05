@@ -65,6 +65,13 @@ den Rest); `store` überfüllt (nur für Beute und Rückgaben). Neues Modul `fle
 ohne eigenes das Privatauto, in der Stadt ohne Grenze, auf Routen 5 kg), Fahrten wählen `vehicleId` und `choice` (Autobahn, Landstraße, nachts; `roads` nimmt
 `{ weights }` pro Straßenart), Liegeplatz-Stufen (`logistics.upgradeBerth`), Container-Pakete (`container: 'full' | 'shared'`),
 Warenfluss (`goods.usagePerDay`) in der Lager-App, Ebene „Lieferwege“.
+Auftrag 34 (Leute und Gegner): Leute haben Eigenschaften (`traits`, `TRAITS` in `staff/config.ts`, Wirkung nur über
+`traitFactor`), Beziehungen (`relationsOf`) und Geschichten als Daten (`staff/stories.ts`, Antwort `staff.storyChoice`);
+**Würfeln, das Spielstände nicht verschieben soll, geht fest aus einem Schlüssel** (`rollTraits`, `keyedRandom`) statt mit
+`ctx.random()`. Gangs merken sich etwas mit `remember(ctx, gangId, kind)` (`MEMORIES`, verblasst), Verhältnisse unter den
+Gangs stehen in `gangs/data.ts` (`GANG_RIVALRY`), Gang-Kriege in `gangs/war.ts`. Dealer sind Stammabnehmer mit Vertrauen
+(`customers/dealers.ts`), Capos führen Leutnants (`hierarchy/capo.ts`, `getCapos`), der Rat im Tagesbericht ist eine
+Liste von Regeln (`REPORT_TIPS` in `hierarchy/advice.ts`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
