@@ -211,6 +211,8 @@ export const PLAYER_CITY_SPEED = 380;
 export const WELCOME_TEXTS: Readonly<Record<string, readonly string[]>> = {
   hamburg: [
     'Moin. Da bist du ja. Willkommen an der Elbe.',
+    'Deine Leute sind nicht mitgekommen, die braucht dein Statthalter. Hier fängst du bei null an: eigene Leute, ' +
+      'und bestellen musst du erst mal selbst.',
     'So fängst du hier an: Erst ein Lager, sonst hast du nichts, wo die Ware hinkommt. Ottensen, St. Georg, ' +
       'Wilhelmsburg, Barmbek oder Harburg, such dir was aus.',
     'Dann ein Spot. Auf dem Kiez ist am meisten los, aber da steht an jeder Tür einer von der Neonkrone. In der Schanze ' +
@@ -258,6 +260,8 @@ export const CITY_OFFERS: Readonly<Record<string, CityOffer>> = {
     come: 'Ich komme nach Berlin',
     welcome: [
       'Da bist du. Willkommen in Berlin.',
+      'Deine Crew ist zu Hause geblieben, die braucht dein Statthalter. Hier suchst du dir neue Leute, und bis jemand ' +
+        'für dich bestellt, machst du das selbst.',
       'Erst ein Lager: Neukölln, Friedrichshain, Lichtenberg, Wedding oder Schöneberg. Mirko liefert dir hin, der ist ' +
         'hier zu Hause.',
       'Dann eine Ecke. Die Clubs machen Freitagabend auf und Montagfrüh zu, dazwischen brennt die Luft. Unter der Woche ' +
@@ -296,6 +300,7 @@ export const CITY_OFFERS: Readonly<Record<string, CityOffer>> = {
     come: 'Ich komme nach München',
     welcome: [
       'Willkommen in München. Schön, dass Sie da sind.',
+      'Ihre Leute bleiben bei Ihrem Statthalter. Hier stellen Sie neu ein, und bestellen müssen Sie zunächst selbst.',
       'Zuerst ein Lager. Teuer, ich weiß: Giesing ist das günstigste, an der Großmarkthalle in Sendling ist am meisten ' +
         'Platz.',
       'Dann eine ruhige Ecke, nicht gleich am Hauptbahnhof. Die Polizei hier sieht Sie vom ersten Tag an als Händler.',
@@ -335,6 +340,7 @@ export const CITY_OFFERS: Readonly<Record<string, CityOffer>> = {
     come: 'Ich komme nach Frankfurt',
     welcome: [
       'Willkommen in Frankfurt.',
+      'Ihre Leute bleiben, wo sie sind. Hier fangen Sie neu an: eigene Leute, eigene Bestellungen.',
       'Ein Lager zuerst, dann die erste Ecke. Im Bahnhofsviertel ist am meisten los, aber da schaut jeder hin.',
     ],
   },

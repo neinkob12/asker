@@ -247,7 +247,7 @@ function StaffOverview() {
 /** Anheuern ohne Bewerber: Fahrer für Hafen und Umlagern (die Logistik braucht sie), Läufer am Spot. */
 function HireGroup() {
   const { state, dispatch } = useGame();
-  const drivers = getStaff(state, { role: 'driver' }).length;
+  const drivers = getStaff(state, { role: 'driver', cityId: activeCity(state) }).length;
   return (
     <Group
       title="Anheuern"

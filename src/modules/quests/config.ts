@@ -121,6 +121,18 @@ export const CHAPTERS: readonly string[] = [
   'Mainhattan',
 ];
 
+/** Quests, die Auftrag 43 in die Stadt-Kapitel eingefügt hat (Migration 5 rechnet den Index um). */
+export const QUESTS_ADDED_IN_43: readonly string[] = [
+  'hhRunner',
+  'hhOrder',
+  'beRunner',
+  'beOrder',
+  'muRunner',
+  'muOrder',
+  'ffRunner',
+  'ffOrder',
+];
+
 /** So viele Quests gab es vor Auftrag 36 (alte Spielstände mit allem erledigt: index = diese Zahl). */
 export const QUEST_COUNT_BEFORE_36 = 32;
 
@@ -542,6 +554,34 @@ export const QUESTS: readonly QuestDef[] = [
     reward: [{ kind: 'reputation', amount: 3 }],
   },
   {
+    id: 'hhRunner',
+    chapter: 6,
+    cityId: 'hamburg',
+    icon: 'runner',
+    title: 'Heuere in Hamburg einen Läufer an',
+    task:
+      'Deine alten Leute bleiben, wo sie sind, die braucht dein Statthalter. In Hamburg fängst du bei null an: Heuer ' +
+      'einen Läufer an.',
+    hint: 'Personal-App: Leute finden, oder im Spot-Fenster einen Läufer anheuern.',
+    target: 1,
+    measure: (state) => (getStaff(state, { cityId: 'hamburg' }).length > 0 ? 1 : 0),
+    goTo: 'staff',
+    reward: [{ kind: 'money', money: 'dirty', amount: 1000 }],
+  },
+  {
+    id: 'hhOrder',
+    chapter: 6,
+    cityId: 'hamburg',
+    icon: 'truck',
+    title: 'Bestell Ware für Hamburg',
+    task: 'Und Nachschub bestellt dir hier keiner. Bestell selbst Ware für dein Hamburger Lager, Toni liefert auch an die Elbe.',
+    hint: 'Lieferanten-App: Paket bestellen, die Ware kommt in dein Lager in Hamburg.',
+    target: 1,
+    count: { 'shipment.ordered': (p) => (p.cityId === 'hamburg' ? 1 : 0) },
+    goTo: 'suppliers',
+    reward: [{ kind: 'money', money: 'dirty', amount: 500 }],
+  },
+  {
     id: 'hhBerth',
     chapter: 6,
     cityId: 'hamburg',
@@ -566,6 +606,10 @@ export const QUESTS: readonly QuestDef[] = [
     warehouse: 'Berlin also. Da schläft keiner, sagen sie. Erst mal ein Lager, sonst hast du nichts zu verkaufen.',
     spot: 'Jetzt eine Ecke. Vor den Clubs ist am meisten los, freitags bis montags.',
     sale: 'Und los. Der erste Kunde in Berlin, und dann der nächste. Die hören da nicht auf.',
+    runner:
+      'Deine Leute sind nicht mitgekommen, die bleiben beim Statthalter. In Berlin heuerst du neu an, fang mit einem ' +
+      'Läufer an.',
+    order: 'Bestellen musst du hier selbst, bis du wieder eine Rechte Hand hast. Mirko liefert in Berlin.',
     veedel: 'Ein Kiez, der auf dich hört. Die Gangs da sind stark, pass auf.',
     done: 'Berlin läuft. Ehrlich, ich komm nicht mehr mit, wo du überall bist.',
   }),
@@ -577,6 +621,8 @@ export const QUESTS: readonly QuestDef[] = [
     warehouse: 'München. Teuer, sagen alle. Ein Lager kostet da ein Vermögen, aber ohne geht es nicht.',
     spot: 'Jetzt eine ruhige Ecke. Die Polizei da schaut genau hin.',
     sale: 'Und verkaufen. Die zahlen da jeden Preis, wenn die Ware gut ist.',
+    runner: 'Neue Stadt, neue Leute. Deine alten bleiben beim Statthalter. Heuer in München einen Läufer an.',
+    order: 'Und bestell selbst Ware für München. Toni liefert, und der aus Verona meldet sich bestimmt.',
     veedel: 'Ein Viertel, das dir gehört. In München zählt jeder Schritt.',
     done: 'Servus, Boss. München ist deins.',
   }),
@@ -588,6 +634,8 @@ export const QUESTS: readonly QuestDef[] = [
     warehouse: 'Frankfurt. Banker, Flughafen, Bahnhofsviertel. Erst ein Lager.',
     spot: 'Jetzt eine Ecke. Im Bahnhofsviertel ist am meisten los, aber da guckt jeder hin.',
     sale: 'Und verkaufen. Die Anzugträger zahlen gut.',
+    runner: 'Deine Leute bleiben, wo sie sind. In Frankfurt heuerst du neu an: erst mal ein Läufer.',
+    order: 'Bestell selbst Ware für dein Frankfurter Lager. Toni ist da zu Hause.',
     veedel: 'Ein Viertel, das auf dich hört. Dann gehört dir auch Frankfurt bald.',
     done: 'Mainhattan. Du bist überall, Boss.',
   }),
@@ -603,11 +651,18 @@ interface CityChapterTexts {
   warehouse: string;
   spot: string;
   sale: string;
+  /** Neue Leute anheuern (Auftrag 43: die alten bleiben in ihrer Stadt). */
+  runner: string;
+  /** Selbst bestellen (Auftrag 43: keine Rechte Hand aus der alten Stadt). */
+  order: string;
   veedel: string;
   done: string;
 }
 
-/** Ein Kapitel für eine Stadt nach dem Muster von "Moin Hamburg": Lager, Spot, erster Verkauf, erstes Veedel. */
+/**
+ * Ein Kapitel für eine Stadt nach dem Muster von "Moin Hamburg": Lager, Spot, erster Verkauf, Läufer, Bestellung, erstes
+ * Veedel.
+ */
 function cityChapter(t: CityChapterTexts): QuestDef[] {
   const city = t.cityId;
   return [
@@ -649,6 +704,32 @@ function cityChapter(t: CityChapterTexts): QuestDef[] {
       count: { 'sale.completed': (p) => (veedelCity(p.veedelId) === city ? 1 : 0) },
       goTo: 'spot',
       reward: [{ kind: 'reputation', amount: 3 }],
+    },
+    {
+      id: `${t.prefix}Runner`,
+      chapter: t.chapter,
+      cityId: city,
+      icon: 'runner',
+      title: `Heuere in ${t.name} einen Läufer an`,
+      task: t.runner,
+      hint: 'Personal-App: Leute finden, oder im Spot-Fenster einen Läufer anheuern.',
+      target: 1,
+      measure: (state) => (getStaff(state, { cityId: city }).length > 0 ? 1 : 0),
+      goTo: 'staff',
+      reward: [{ kind: 'money', money: 'dirty', amount: 1000 }],
+    },
+    {
+      id: `${t.prefix}Order`,
+      chapter: t.chapter,
+      cityId: city,
+      icon: 'truck',
+      title: `Bestell Ware für ${t.name}`,
+      task: t.order,
+      hint: `Lieferanten-App: Paket bestellen, die Ware kommt in dein Lager in ${t.name}.`,
+      target: 1,
+      count: { 'shipment.ordered': (p) => (p.cityId === city ? 1 : 0) },
+      goTo: 'suppliers',
+      reward: [{ kind: 'money', money: 'dirty', amount: 500 }],
     },
     {
       id: `${t.prefix}Veedel`,

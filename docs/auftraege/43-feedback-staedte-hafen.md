@@ -23,9 +23,12 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   Spielstand noch unterwegs ist, kommt an.
 - [x] A3 Fahrer auf Routen in eine andere Stadt gehören weiter zu ihrer Stadt und kommen immer zurück (ohne Rückfracht
   leer, mit demselben Fahrzeug).
-- [ ] A4 Die neue Stadt erklärt den Neuanfang: Begrüßung des Kontakts (`CITY_OFFERS[…].welcome`) und Peters Kapitel
-  sagen, dass man selbst ein Lager kauft, Leute anheuert und bestellt. Prüfen, dass Lieferanten-App, Rechte-Hand-Seite,
-  HUD-Lager und Rat („Nächster Schritt“) in der neuen Stadt nichts aus der alten Stadt zeigen oder vorschlagen.
+- [x] A4 Die neue Stadt erklärt den Neuanfang: Begrüßung des Kontakts (`CITY_OFFERS[…].welcome`) und Peters Kapitel
+  sagen, dass man selbst ein Lager kauft, Leute anheuert und bestellt (neue Quests „Läufer anheuern“ und „Ware
+  bestellen“ pro Stadt, Migration `quests` 5, `shipment.ordered` mit `cityId`). Lieferanten-App, Island, Lieferung
+  live, Schiffs-Tracker, Banner (Ware da, Schiff im Hafen, Fahrt angekommen) und Fahrer-Zahlen zeigen nur die Stadt,
+  in der du spielst (`shipmentsInTransit(state, cityId)`, `tripTouchesCity`, `placeCity`); der Routen-Editor bietet
+  nur Fahrer aus der Stadt des Startlagers an.
 - [ ] A5 Bot und Balancing: Ohne Startpaket neu messen (`npm run balance`, Bericht „Tage pro Stadt“). Ziel bleibt
   Hamburg etwa 15 Tage, dritte Stadt 12, vierte 10, fünfte 8; Stellschrauben `START_MONEY_MIN_BY_CITY`,
   `HANDOVER_START_MONEY_DAYS`. Zahlen in `docs/architektur.md`, Abschnitt „Balancing“.
@@ -75,4 +78,7 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 
 ## Neue Funde
 
-(hier ergänzen)
+- [ ] N1 Lieferanten schreiben nach dem Umzug weiter Chats über Lieferungen in die alte Stadt („Freie Bahn. Bin früher
+  da.“). Lieferungen für eine Stadt mit Statthalter still oder als Bericht des Statthalters.
+- [ ] N2 Peters Quest-Leiste zeigt nach dem Umzug alte Kölner Quests (z.B. „Setz einen eigenen Preis“), wenn sie in
+  Köln liegen geblieben sind; beim Umzug in eine neue Stadt sollte ihr Kapitel vorgehen.

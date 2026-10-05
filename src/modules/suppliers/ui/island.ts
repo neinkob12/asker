@@ -1,13 +1,14 @@
 // Dynamic Island: Lieferungen unterwegs mit Restzeit und Fortschritt, dazu ein kurzer Auftritt bei Ankunft.
 
 import { islandCountdown, onGameEvent, registerLiveActivity } from '../../../ui';
+import { activeCity } from '../../city';
 import { formatProductAmount, productName } from '../../goods';
 import { expectedArrival, getSupplier, shipmentProgress, shipmentReason, shipmentsInTransit } from '../index';
 
 registerLiveActivity({
   id: 'suppliers.shipments',
   activities: (state) =>
-    shipmentsInTransit(state).map((shipment) => {
+    shipmentsInTransit(state, activeCity(state)).map((shipment) => {
       const supplier = getSupplier(state, shipment.supplierId);
       const left = expectedArrival(shipment) - state.time;
       const late = shipment.problem === 'delayed' && shipment.problemRevealed;
@@ -29,6 +30,7 @@ registerLiveActivity({
     }),
 });
 
-onGameEvent('shipment.arrived', 'suppliers.island', (_payload, ui) =>
-  ui.pulseIsland({ icon: 'truck', tone: 'accent', text: 'Ware ist da' }),
-);
+onGameEvent('shipment.arrived', 'suppliers.island', (payload, ui, state) => {
+  if (payload.cityId !== undefined && payload.cityId !== activeCity(state)) return;
+  ui.pulseIsland({ icon: 'truck', tone: 'accent', text: 'Ware ist da' });
+});

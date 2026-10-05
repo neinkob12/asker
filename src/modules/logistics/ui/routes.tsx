@@ -23,7 +23,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { cityName } from '../../city';
+import { activeCity, cityName } from '../../city';
 import { getVehicles, VEHICLE_MODELS, vehicleName } from '../../fleet';
 import {
   allProducts,
@@ -313,7 +313,11 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
     value: w.id,
     label: `${cityName(warehouseCity(w.id))}: ${w.name}`,
   }));
-  const drivers = getStaff(state, { role: 'driver' });
+  // Fahrer aus der Stadt des Startlagers (Leute bleiben in ihrer Stadt, Auftrag 43).
+  const drivers = getStaff(state, {
+    role: 'driver',
+    cityId: draft.fromId ? warehouseCity(draft.fromId) : activeCity(state),
+  });
   const driverOptions = [
     { value: NONE, label: 'Kein Fahrer' },
     ...drivers.map((m) => ({
@@ -533,7 +537,7 @@ function RoutesPanel() {
   const routes = getRoutes(state);
   const [sheet, setSheet] = useState<{ open: boolean; routeId: number | null }>({ open: false, routeId: null });
   const warehouses = getWarehouses(state).length;
-  const drivers = getStaff(state, { role: 'driver' }).length;
+  const drivers = getStaff(state, { role: 'driver', cityId: activeCity(state) }).length;
   return (
     <div class="logi-app">
       {routes.length === 0 ? (
@@ -563,7 +567,7 @@ function RoutesPanel() {
 function DriversPanel() {
   const { state, dispatch } = useGame();
   const ui = useUi();
-  const drivers = getStaff(state, { role: 'driver' });
+  const drivers = getStaff(state, { role: 'driver', cityId: activeCity(state) });
   return (
     <div class="logi-app">
       <Group icon="truck" color="people" title="Fahrer" count={drivers.length}>
@@ -622,7 +626,7 @@ export function LogisticsLinks() {
     .map((r) => nextDeparture(state, r))
     .filter((at): at is number => at !== null)
     .sort((a, b) => a - b)[0];
-  const drivers = getStaff(state, { role: 'driver' });
+  const drivers = getStaff(state, { role: 'driver', cityId: activeCity(state) });
   const free = drivers.filter((m) => m.status === 'active' && !m.assignment).length;
   return (
     <>

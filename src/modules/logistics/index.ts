@@ -556,6 +556,20 @@ export function placeOf(state: GameState, id: string): (LngLat & { name: string 
 }
 
 /** Stadt einer Fahrt (nach ihrem Ziel). */
+/** Stadt eines Lagers oder Hafens (null = unbekannt). */
+export function placeCity(state: GameState, id: string): string | null {
+  const place = placeOf(state, id);
+  return place ? cityAt(place.lng, place.lat) : null;
+}
+
+/**
+ * Fährt die Fahrt von oder nach dieser Stadt (Auftrag 43: Island und Lieferung live zeigen nur die Stadt, in der du
+ * spielst; eine Route aus einer anderen Stadt zu dir gehört dazu)?
+ */
+export function tripTouchesCity(state: GameState, trip: Pick<Trip, 'toId' | 'fromId'>, cityId: string): boolean {
+  return placeCity(state, trip.fromId) === cityId || placeCity(state, trip.toId) === cityId;
+}
+
 export function tripCity(state: GameState, trip: Pick<Trip, 'toId' | 'fromId'>): string {
   const place = placeOf(state, trip.toId) ?? placeOf(state, trip.fromId);
   return place ? cityAt(place.lng, place.lat) : 'koeln';

@@ -18,7 +18,7 @@
 //   supplierVia(supplier, cityId) (Autobahn des Kuriers in die Stadt, nur Karte),
 //   deliveryTimeTo(supplier, cityId), supplierContactId(id), assortment(supplier),
 //   isUnlocked(state, id), unlockRequirements(state, id), canUnlock(state, id),
-//   shipmentsInTransit(state), shipmentProgress(state, shipment), expectedArrival(shipment),
+//   shipmentsInTransit(state, cityId?), shipmentCity(shipment), shipmentProgress(state, shipment), expectedArrival(shipment),
 //   cheapestPackagePrice(state), getRelation(state, id), trustLabel(trust), supplierDiscount(state, id),
 //   supplierQualityBonus(state, id), creditLimit(state, id), availableCredit(state, id), isBlocked(state, id),
 //   availablePackages(state, id), packagePrice(state, supplierId, packageId), rollShipmentProblem(...),
@@ -324,6 +324,8 @@ declare module '../../core' {
       price: number;
       productId?: string;
       onCredit?: boolean;
+      /** Stadt, für die bestellt wurde (Auftrag 43). */
+      cityId?: string;
     };
     'shipment.arrived': {
       shipmentId: number;
@@ -336,6 +338,8 @@ declare module '../../core' {
       atPort?: boolean;
       /** Lager waren zu voll, die Ware liegt in mehreren (Auftrag 33): "300 g im Lager Ehrenfeld, 200 g im …". */
       placedIn?: string;
+      /** Stadt, für die bestellt wurde (Auftrag 43; die Oberfläche meldet nur die Stadt, in der du spielst). */
+      cityId?: string;
     };
     /** Lieferproblem ist eingetreten. */
     'shipment.problem': { shipmentId: number; supplierId: string; kind: ShipmentProblem; reason?: string };
@@ -501,8 +505,14 @@ export function assortment(supplier: Supplier): string[] {
   return [...new Set(supplier.packages.map((p) => p.productId))];
 }
 
-export function shipmentsInTransit(state: GameState): readonly Shipment[] {
-  return state.modules.suppliers.shipments;
+export function shipmentsInTransit(state: GameState, cityId?: string): readonly Shipment[] {
+  const all = state.modules.suppliers.shipments;
+  return cityId === undefined ? all : all.filter((s) => shipmentCity(s) === cityId);
+}
+
+/** Stadt, für die eine Lieferung bestellt wurde (alte Lieferungen ohne Angabe: Köln). */
+export function shipmentCity(shipment: Shipment): string {
+  return shipment.cityId ?? 'koeln';
 }
 
 /** Fortschritt einer Lieferung von 0 (bestellt) bis 1 (angekommen). Während einer Verspätung steht sie. */
@@ -837,6 +847,7 @@ function order(
     price,
     productId: pkg.productId,
     onCredit,
+    cityId,
   });
   return { ok: true, data: { shipmentId: shipment.id } };
 }
@@ -1142,6 +1153,7 @@ function deliver(ctx: Ctx): void {
       quality: s.quality,
       ...(s.toPort ? { atPort: true } : {}),
       ...(placedIn.has(s.id) ? { placedIn: placedIn.get(s.id) } : {}),
+      cityId: shipmentCity(s),
     });
   }
 }

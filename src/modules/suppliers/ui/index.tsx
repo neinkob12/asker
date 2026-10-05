@@ -181,7 +181,7 @@ function SupplierRow(props: { supplier: Supplier; onSelect: (id: string) => void
   const { state } = useGame();
   const s = props.supplier;
   const rel = getRelation(state, s.id);
-  const underway = shipmentsInTransit(state).filter((x) => x.supplierId === s.id).length;
+  const underway = shipmentsInTransit(state, activeCity(state)).filter((x) => x.supplierId === s.id).length;
   const unlocked = isUnlocked(state, s.id);
   const ready = !unlocked && canUnlock(state, s.id).ok;
   const missing = unlockRequirements(state, s.id).find((r) => !r.done);
@@ -241,8 +241,9 @@ function SupplierList(props: { onSelect: (id: string) => void }) {
   const { state } = useGame();
   const open = getSuppliers(state, activeCity(state)).filter((s) => isUnlocked(state, s.id));
   const locked = getSuppliers(state, activeCity(state)).filter((s) => !isUnlocked(state, s.id));
-  // Schiffe an den eigenen Kai stehen im Tracker oben (Slot 'suppliers.top', Logistik), hier nur der Rest.
-  const shipments = shipmentsInTransit(state).filter((s) => !s.toPort);
+  // Schiffe an den eigenen Kai stehen im Tracker oben (Slot 'suppliers.top', Logistik), hier nur der Rest. Nur die
+  // Stadt, in der du spielst: Was der Statthalter einer anderen Stadt bestellt hat, geht dich hier nichts an.
+  const shipments = shipmentsInTransit(state, activeCity(state)).filter((s) => !s.toPort);
   const debts = getSuppliers(state, activeCity(state)).filter((s) => getRelation(state, s.id).debt > 0);
   return (
     <div class="sup-groups">
@@ -385,7 +386,7 @@ function SupplierDetail(props: { supplierId: string }) {
   const blocked = isBlocked(state, supplier.id);
   const offered = new Set(availablePackages(state, supplier.id).map((p) => p.id));
   const discount = supplierDiscount(state, supplier.id);
-  const shipments = shipmentsInTransit(state).filter((s) => s.supplierId === supplier.id);
+  const shipments = shipmentsInTransit(state, activeCity(state)).filter((s) => s.supplierId === supplier.id);
   return (
     <div class="sup-app">
       <p class="ui-hint">{supplier.description}</p>
@@ -606,8 +607,8 @@ onGameEvent('shipment.problem', 'suppliers.problemToast', (payload, ui, state) =
 });
 soundOnEvent('shipment.arrived', 'delivery');
 onGameEvent('shipment.arrived', 'suppliers.arrivedToast', (payload, ui, state) => {
-  // Schiffsware meldet die Logistik (Ware am Kai).
-  if (payload.atPort) return;
+  // Schiffsware meldet die Logistik (Ware am Kai); Lieferungen in eine andere Stadt meldet ihr Statthalter.
+  if (payload.atPort || (payload.cityId !== undefined && payload.cityId !== activeCity(state))) return;
   // Waren die Lager zu voll, steht im Banner, wo die Ware jetzt liegt (Auftrag 33).
   const where = payload.placedIn ? ` Lager voll, verteilt: ${payload.placedIn}.` : '';
   ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.${where}`, 'good', {
@@ -623,7 +624,8 @@ onGameEvent('supplier.unlocked', 'suppliers.unlockedToast', (payload, ui, state)
 registerAdvisor({
   id: 'suppliers.restock',
   advise: (state) => {
-    if (shipmentsInTransit(state).length > 0 || cargoAmount(state) > 0 || inTransitAmount(state) > 0) return null;
+    if (shipmentsInTransit(state, activeCity(state)).length > 0 || cargoAmount(state) > 0 || inTransitAmount(state) > 0)
+      return null;
     const stock = getStock(state);
     if (stock >= 20) return null;
     return {

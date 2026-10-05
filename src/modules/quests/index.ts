@@ -44,6 +44,7 @@ import {
   QUEST_CHECK_EVERY,
   QUEST_COUNT_BEFORE_36,
   QUESTS,
+  QUESTS_ADDED_IN_43,
   type QuestDef,
   type QuestReward,
 } from './config';
@@ -630,7 +631,7 @@ function onCounted<K extends keyof GameEvents>(type: K) {
 
 export default defineModule({
   id: 'quests',
-  version: 4,
+  version: 5,
   dependsOn: ['goods', 'staff', 'territory', 'police', 'reputation', 'leaderboard'],
   init: () => ({
     index: 0,
@@ -703,5 +704,16 @@ export default defineModule({
     // nächste Stadt (sonst stünde er mitten im Kapitel einer Stadt, die noch gar nicht frei ist).
     4: (old: QuestsState): QuestsState =>
       old.index >= QUEST_COUNT_BEFORE_36 ? { ...old, index: WAITING, progress: 0 } : old,
+    // Version 5 (Auftrag 43): Jedes Stadt-Kapitel hat zwei Quests mehr (Läufer anheuern, selbst bestellen). Der Index
+    // zeigte in die alte Liste; dieselbe Quest in der neuen suchen. Die neuen Quests einer Stadt, die schon läuft,
+    // kommen erst nach dem Ende der Liste wieder dran (nextIndex sucht Stadt-Quests auch vorne).
+    5: (old: QuestsState): QuestsState => {
+      const added = new Set(QUESTS_ADDED_IN_43);
+      const before = QUESTS.filter((q) => !added.has(q.id));
+      if (old.index < 0) return old;
+      const id = before[old.index]?.id;
+      const index = id === undefined ? QUESTS.length : QUESTS.findIndex((q) => q.id === id);
+      return { ...old, index };
+    },
   },
 });
