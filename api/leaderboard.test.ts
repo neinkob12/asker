@@ -46,6 +46,17 @@ describe('api/leaderboard: Eintrag prüfen', () => {
     expect(parseEntry(valid, 0)).not.toHaveProperty('cities');
     expect(parseEntry({ ...valid, cities: 2 }, 0)?.cities).toBe(2);
     expect(parseEntry({ ...valid, cities: 999 }, 0)?.cities).toBe(20);
+    // Rang des Spielers (Auftrag 36): Titel wie bisher, dazu sein Wert, optional und begrenzt.
+    expect(parseEntry(valid, 0)).not.toHaveProperty('rank');
+    expect(parseEntry({ ...valid, title: 'Boss von Hamburg', rank: 41 }, 0)).toMatchObject({
+      title: 'Boss von Hamburg',
+      rank: 41,
+    });
+    // Unbekannte Titel fallen weg, ein Wert, der nicht zum Titel passt, auch.
+    expect(parseEntry({ ...valid, title: 'Kaiser von Europa', rank: 99 }, 0)).toMatchObject({ title: null });
+    expect(parseEntry({ ...valid, title: 'Kaiser von Europa', rank: 99 }, 0)).not.toHaveProperty('rank');
+    expect(parseEntry({ ...valid, title: 'Kleindealer', rank: 50 }, 0)).not.toHaveProperty('rank');
+    expect(parseEntry({ ...valid, title: 'Boss von Deutschland', rank: 50 }, 0)?.rank).toBe(50);
     expect(parseEntry({ ...valid, name: 'x'.repeat(50) }, 0)?.name).toHaveLength(20);
   });
 

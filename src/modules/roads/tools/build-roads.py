@@ -6,6 +6,8 @@
 #   .venv-roads/bin/python src/modules/roads/tools/build-roads.py                   Köln (lädt die Daten, ca. 1 Minute)
 #   .venv-roads/bin/python src/modules/roads/tools/build-roads.py --city hamburg    Hamburg
 #   .venv-roads/bin/python src/modules/roads/tools/build-roads.py --autobahn koeln hamburg   die A1 dazwischen
+#   .venv-roads/bin/python src/modules/roads/tools/build-roads.py --autobahn all   das ganze Netz (AUTOBAHNEN)
+#   … --autobahn hamburg:berlin berlin:muenchen   nur diese Linien (die anderen in autobahn.ts bleiben)
 #   … build-roads.py [--city …] segs.parquet      nimmt schon geladene Segmente (fehlt die Datei, wird sie angelegt)
 #
 # Quelle: Overture Maps Foundation, Thema "transportation", Typ "segment" (https://docs.overturemaps.org),
@@ -91,10 +93,14 @@ CITIES = {
         ],
     },
 }
-# Autobahn zwischen zwei Städten: Endpunkte (lng, lat) in den Städten und Wegpunkte des Korridors dazwischen.
+# Autobahn-Netz zwischen den Städten (Auftrag 36): je Linie Endpunkte (lng, lat) in den Städten, die Nummern in Overture
+# (routes.ref; die erste ist der Name im Spiel, die Linie darf über mehrere Autobahnen laufen) und Wegpunkte des
+# Korridors dazwischen. Endpunkte einer Stadt sollen sich treffen, damit roads über die Stadt hinweg routen kann: in
+# Städten mit Straßennetz verbinden die Straßen, in Schablonen-Städten ohne Netz (Berlin, München, Frankfurt) gehen die
+# Linien von einem gemeinsamen Knoten aus (Frankfurter Kreuz, Kreuz München-Nord, Dreieck Funkturm).
 AUTOBAHNEN = {
     ('koeln', 'hamburg'): {
-        'ref': 'A 1',
+        'refs': ['A 1'],
         'start': (6.897, 51.0),  # A1 am Kreuz Köln-Nord
         'end': (10.04, 53.505),  # A1 bei Hamburg-Wilhelmsburg, Richtung Norderelbbrücken
         'via': [
@@ -112,9 +118,117 @@ AUTOBAHNEN = {
             (10.06, 53.40),
             (10.04, 53.505),
         ],
-        'out': 'autobahn.ts',
+    },
+    ('koeln', 'frankfurt'): {
+        'refs': ['A 3'],
+        'start': (7.045, 50.955),  # A3 am Kreuz Köln-Ost
+        'end': (8.596, 50.055),  # Frankfurter Kreuz
+        'via': [
+            (7.045, 50.955),
+            (7.08, 50.90),
+            (7.24, 50.79),
+            (7.50, 50.62),
+            (7.83, 50.44),
+            (8.06, 50.39),
+            (8.26, 50.22),
+            (8.36, 50.07),
+            (8.596, 50.055),
+        ],
+    },
+    ('frankfurt', 'muenchen'): {
+        'refs': ['A 3', 'A 9'],
+        'start': (8.596, 50.055),  # Frankfurter Kreuz
+        'end': (11.615, 48.215),  # A9 am Kreuz München-Nord
+        'via': [
+            (8.596, 50.055),
+            (8.80, 50.08),
+            (9.15, 49.98),
+            (9.55, 49.85),
+            (9.95, 49.78),
+            (10.35, 49.72),
+            (10.75, 49.62),
+            (11.05, 49.47),
+            (11.30, 49.30),
+            (11.45, 49.00),
+            (11.48, 48.75),
+            (11.55, 48.45),
+            (11.615, 48.215),
+        ],
+    },
+    ('hamburg', 'berlin'): {
+        'refs': ['A 24', 'E 26', 'A 10', 'A 111', 'A 100'],
+        'start': (10.065, 53.562),  # A24 bei Hamburg-Horn
+        'end': (13.275, 52.505),  # Dreieck Funkturm
+        'via': [
+            (10.065, 53.562),
+            (10.30, 53.52),
+            (10.75, 53.45),
+            (11.25, 53.35),
+            (11.75, 53.20),
+            (12.25, 53.12),
+            (12.50, 53.15),
+            (12.75, 52.90),
+            (12.97, 52.65),
+            (13.17, 52.69),
+            (13.15, 52.62),
+            (13.25, 52.58),
+            (13.275, 52.505),
+        ],
+    },
+    ('berlin', 'muenchen'): {
+        'refs': ['A 9', 'E 51', 'A 10', 'A 115', 'A 100'],
+        'start': (13.275, 52.505),  # Dreieck Funkturm
+        'end': (11.615, 48.215),  # Kreuz München-Nord
+        'via': [
+            (13.275, 52.505),
+            (13.20, 52.40),
+            (12.95, 52.30),
+            (12.75, 52.05),
+            (12.30, 51.85),
+            (12.20, 51.45),
+            (11.85, 51.05),
+            (11.75, 50.60),
+            (11.65, 50.15),
+            (11.55, 49.80),
+            (11.40, 49.45),
+            (11.30, 49.30),
+            (11.45, 49.00),
+            (11.48, 48.75),
+            (11.55, 48.45),
+            (11.615, 48.215),
+        ],
+    },
+    ('hamburg', 'frankfurt'): {
+        'refs': ['A 7', 'E 45', 'A 5', 'E 40', 'E 451'],  # südlich von Kassel trägt Overture nur die Europastraßen
+        'margin': 0.2,  # die A7 schwenkt zwischen den Wegpunkten weit aus (Walsrode, Hannover, Kassel)
+        'start': (9.921, 53.46),  # A7 bei Hamburg-Heimfeld (südlich der Elbe)
+        'end': (8.596, 50.055),  # Frankfurter Kreuz
+        'via': [
+            (9.921, 53.46),
+            (9.98, 53.40),
+            (10.07, 53.25),
+            (9.97, 53.05),
+            (9.70, 52.82),
+            (9.62, 52.68),
+            (9.80, 52.50),
+            (9.88, 52.38),
+            (9.95, 52.10),
+            (10.18, 51.95),
+            (9.98, 51.72),
+            (9.90, 51.50),
+            (9.55, 51.28),
+            (9.62, 51.00),
+            (9.62, 50.84),
+            (9.30, 50.74),
+            (8.95, 50.62),
+            (8.70, 50.50),
+            (8.65, 50.25),
+            (8.60, 50.13),
+            (8.596, 50.055),
+        ],
     },
 }
+AUTOBAHN_OUT = 'autobahn.ts'
 CORRIDOR_MARGIN = 0.12
 AUTOBAHN_TOLERANCE_METERS = 50
 OFF_ROUTE_FACTOR = 3.0
@@ -643,26 +757,26 @@ export const ROAD_APPROACHES: readonly {{ ref: string; toward: string; path: str
 # --- Autobahn zwischen zwei Städten ------------------------------------------------------------------------------
 
 
-def corridor(via):
+def corridor(via, margin=CORRIDOR_MARGIN):
     """Kleine Kästen entlang der Wegpunkte (je Abschnitt einer mit Rand)."""
     boxes = []
     for (x0, y0), (x1, y1) in zip(via, via[1:]):
-        boxes.append(
-            (
-                min(x0, x1) - CORRIDOR_MARGIN,
-                max(x0, x1) + CORRIDOR_MARGIN,
-                min(y0, y1) - CORRIDOR_MARGIN,
-                max(y0, y1) + CORRIDOR_MARGIN,
-            )
-        )
+        boxes.append((min(x0, x1) - margin, max(x0, x1) + margin, min(y0, y1) - margin, max(y0, y1) + margin))
     return boxes
 
 
-def has_ref(routes, ref):
+def has_ref(routes, refs):
+    """Trägt das Segment eine der gesuchten Nummern (z.B. ['A 3', 'A 9'])?"""
+    wanted = {ref.replace(' ', '') for ref in refs}
     for r in routes or []:
-        if (r.get('ref') or '').replace(' ', '') == ref.replace(' ', ''):
+        if (r.get('ref') or '').replace(' ', '') in wanted:
             return True
     return False
+
+
+def in_boxes(geom, boxes):
+    x0, y0, x1, y1 = geom.bounds
+    return any(not (x0 > b[1] or x1 < b[0] or y0 > b[3] or y1 < b[2]) for b in boxes)
 
 
 def geo_meters(p0, p1):
@@ -674,9 +788,11 @@ def geo_meters(p0, p1):
 def build_autobahn(table, conf):
     import heapq
 
-    rows = table.to_pylist()
-    with_ref = sum(1 for r in rows if has_ref(r.get('routes'), conf['ref']))
-    print(f'{len(rows)} Autobahn-Segmente im Korridor, {with_ref} mit {conf["ref"]}', file=sys.stderr)
+    # Nur Segmente im eigenen Korridor (die Tabelle kann mehrere Linien abdecken).
+    boxes = corridor(conf['via'], conf.get('margin', CORRIDOR_MARGIN))
+    rows = [r for r in table.to_pylist() if in_boxes(shapely.from_wkb(r['geometry']), boxes)]
+    with_ref = sum(1 for r in rows if has_ref(r.get('routes'), conf['refs']))
+    print(f'{len(rows)} Autobahn-Segmente im Korridor, {with_ref} mit {", ".join(conf["refs"])}', file=sys.stderr)
     # Alle Autobahnen sind befahrbar, Abschnitte ohne die gesuchte Nummer zählen aber länger (OFF_ROUTE_FACTOR).
     # So bleibt der Weg auf der A 1 und überbrückt Lücken in den Routen-Angaben.
     pos = {}
@@ -687,7 +803,7 @@ def build_autobahn(table, conf):
         if geom.geom_type != 'LineString':
             continue
         d = oneway(row['access_restrictions'])
-        factor = 1.0 if has_ref(row.get('routes'), conf['ref']) else OFF_ROUTE_FACTOR
+        factor = 1.0 if has_ref(row.get('routes'), conf['refs']) else OFF_ROUTE_FACTOR
         for a, b, pts in split_at_connectors(list(geom.coords), row['connectors']):
             pos[a] = pts[0]
             pos[b] = pts[-1]
@@ -742,18 +858,69 @@ def build_autobahn(table, conf):
     return points, meters[end]
 
 
-def write_autobahn(points, meters, a, b, conf):
-    ints = []
-    px = py = 0
-    for x, y in points:
-        ints += [q(x) - px, q(y) - py]
-        px, py = q(x), q(y)
-    text = f"""// Automatisch erzeugt von tools/build-roads.py --autobahn {a} {b}. Nicht von Hand ändern.
+def read_autobahn_lines():
+    """Schon erzeugte Linien aus autobahn.ts (damit ein Lauf für eine Linie die anderen behält)."""
+    out = os.path.join(ROADS_DIR, AUTOBAHN_OUT)
+    if not os.path.exists(out):
+        return {}
+    text = open(out, encoding='utf-8').read()
+    lines = {}
+    pattern = (
+        r"from: '([a-z]+)',\s*to: '([a-z]+)',\s*ref: '([^']+)',\s*refs: \[([^\]]*)\],\s*meters: (\d+),\s*points:\s*"
+        r"((?:'(?:[^'\\]|\\.)*'(?:\s*\+\s*)?)+),\s*source: '([^']*)',"
+    )
+    for m in re.finditer(pattern, text):
+        a, b = m.group(1), m.group(2)
+        lines[(a, b)] = {
+            'refs': re.findall(r"'([^']+)'", m.group(4)),
+            'meters': int(m.group(5)),
+            'points_ts': m.group(6).strip(),
+            'source': m.group(7),
+        }
+    return lines
+
+
+def write_autobahn(built):
+    """Alle Linien nach autobahn.ts; built: neu erzeugte Linien {(a, b): (points, meters)}, der Rest bleibt."""
+    lines = read_autobahn_lines()
+    for (a, b), (points, meters) in built.items():
+        conf = AUTOBAHNEN[(a, b)]
+        ints = []
+        px = py = 0
+        for x, y in points:
+            ints += [q(x) - px, q(y) - py]
+            px, py = q(x), q(y)
+        lines[(a, b)] = {
+            'refs': conf['refs'],
+            'meters': round(meters),
+            'points_ts': ts_string(encode_ints(ints)),
+            'source': f'{conf["start"]} nach {conf["end"]}, {len(points)} Punkte',
+        }
+    order = [k for k in AUTOBAHNEN if k in lines]
+    entries = []
+    for a, b in order:
+        line = lines[(a, b)]
+        refs = ', '.join(f"'{r}'" for r in line['refs'])
+        entries.append(
+            f"""  {{
+    from: '{a}',
+    to: '{b}',
+    ref: '{line['refs'][0]}',
+    refs: [{refs}],
+    meters: {line['meters']},
+    points:
+      {line['points_ts']},
+    source: '{line['source']}',
+  }},"""
+        )
+    total = sum(lines[k]['meters'] for k in order) / 1000
+    text = f"""// Automatisch erzeugt von tools/build-roads.py --autobahn <a> <b> bzw. --autobahn all. Nicht von Hand ändern.
 //
-// Quelle: Overture Maps, Release {RELEASE}, Thema "transportation", Segmente der Klasse motorway mit {conf['ref']}
-//   (routes.ref), kürzester Weg von {conf['start']} nach {conf['end']}, vereinfacht auf {AUTOBAHN_TOLERANCE_METERS} m.
+// Das Autobahn-Netz zwischen den Städten (Auftrag 36): je Linie der kürzeste Weg über Segmente der Klasse motorway mit
+// den Nummern in refs (routes.ref; andere Autobahnen zählen {OFF_ROUTE_FACTOR:g}-mal so lang), vereinfacht auf
+// {AUTOBAHN_TOLERANCE_METERS} m. Quelle: Overture Maps, Release {RELEASE}, Thema "transportation".
 // Lizenz: ODbL 1.0 (https://opendatacommons.org/licenses/odbl/). © OpenStreetMap-Mitwirkende, © Overture Maps Foundation.
-// {len(points)} Punkte, {meters / 1000:.0f} km.
+// {len(order)} Linien, {total:.0f} km.
 //
 // Format: Punkte lng, lat im Polyline-Format (1e-5 Grad, Abstand zum vorigen Punkt, siehe decodeInts in graph.ts).
 
@@ -761,42 +928,62 @@ export interface AutobahnLine {{
   /** Städte an den Enden (Richtung der Punkte). */
   from: string;
   to: string;
+  /** Name im Spiel (die erste Nummer). */
   ref: string;
+  /** Alle Nummern, über die die Linie läuft. */
+  refs: readonly string[];
   meters: number;
   points: string;
+  /** Endpunkte und Punktzahl (zur Nachverfolgung). */
+  source: string;
 }}
 
 export const AUTOBAHNEN: readonly AutobahnLine[] = [
-  {{
-    from: '{a}',
-    to: '{b}',
-    ref: '{conf['ref']}',
-    meters: {round(meters)},
-    points:
-      {ts_string(encode_ints(ints))},
-  }},
+{chr(10).join(entries)}
 ];
 """
-    out = os.path.join(ROADS_DIR, conf['out'])
+    out = os.path.join(ROADS_DIR, AUTOBAHN_OUT)
     with open(out, 'w', encoding='utf-8') as f:
         f.write(text)
-    print(f'{out}: {len(text) // 1024} KB, {len(points)} Punkte', file=sys.stderr)
+    print(f'{out}: {len(text) // 1024} KB, {len(order)} Linien', file=sys.stderr)
 
 
 if __name__ == '__main__':
     args = sys.argv[1:]
     if args[:1] == ['--autobahn']:
-        a, b = args[1], args[2]
-        conf = AUTOBAHNEN[(a, b)]
-        # Projektion in der Mitte des Korridors.
-        LAT0 = (conf['start'][1] + conf['end'][1]) / 2
-        M_LNG = 111_320.0 * math.cos(math.radians(LAT0))
-        BOXES = corridor(conf['via'])
+        # --autobahn all [segs.parquet] oder --autobahn A B [segs.parquet]
+        if args[1:2] == ['all']:
+            pairs = list(AUTOBAHNEN)
+            rest = args[2:]
+        elif ':' in args[1]:
+            # mehrere Linien: --autobahn hamburg:berlin berlin:muenchen [segs.parquet]
+            pairs = [tuple(a.split(':')) for a in args[1:] if ':' in a]
+            rest = [a for a in args[2:] if ':' not in a]
+        else:
+            pairs = [(args[1], args[2])]
+            rest = args[3:]
+        # Ein Download für alle Korridore; jede Linie nimmt dann nur ihren eigenen.
+        BOXES = [
+            box
+            for pair in pairs
+            for box in corridor(AUTOBAHNEN[pair]['via'], AUTOBAHNEN[pair].get('margin', CORRIDOR_MARGIN))
+        ]
         MOTORWAY_ONLY = True
-        table = load(args[3] if len(args) > 3 else None)
-        points, meters = build_autobahn(table, conf)
-        write_autobahn(points, meters, a, b, conf)
-        sys.exit(0)
+        table = load(rest[0] if rest else None)
+        built = {}
+        for a, b in pairs:
+            conf = AUTOBAHNEN[(a, b)]
+            # Projektion in der Mitte des Korridors.
+            LAT0 = (conf['start'][1] + conf['end'][1]) / 2
+            M_LNG = 111_320.0 * math.cos(math.radians(LAT0))
+            print(f'{a} – {b}:', file=sys.stderr)
+            try:
+                built[(a, b)] = build_autobahn(table, conf)
+            except SystemExit as err:
+                # Eine Linie ohne Weg hält die anderen nicht auf (Korridor anpassen und nur sie neu bauen).
+                print(f'  übersprungen: {err}', file=sys.stderr)
+        write_autobahn(built)
+        sys.exit(0 if len(built) == len(pairs) else 1)
     city = 'koeln'
     if args[:1] == ['--city']:
         city = args[1]

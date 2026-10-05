@@ -86,6 +86,7 @@ import {
   TRAINING_XP,
 } from './config';
 import { grantFullPower, revokeFullPower } from './fullpower';
+import { installRightHand } from './handover';
 import { nextRuleId, normalizeOrderRules } from './orders';
 import {
   appointRightHand,
@@ -157,6 +158,8 @@ export {
   RIGHT_HAND_RESTOCK_MIN_STOCK_OPTIONS,
   RIGHT_HAND_TASKS,
   RIGHT_HAND_WHOLESALE_PRICE_OPTIONS,
+  START_PACK_LEADER_MIN_LEVEL,
+  START_PACK_MAX_STAFF,
 } from './config';
 export {
   cityLabel,
@@ -164,6 +167,7 @@ export {
   fullPowerActive,
   hasFullPower,
 } from './fullpower';
+export { installRightHand, rightHandTitle, startPackLeaders, startPackRank, startPackStaff } from './handover';
 export { isPortSupplierAllowed, orderRuleLabel, PORT_SUPPLIER_HINT, ruleStock, ruleWarehouse } from './orders';
 export {
   absenceHandled,
@@ -221,6 +225,11 @@ declare module '../../core' {
     'hierarchy.configureRightHand': { settings: Partial<RightHandSettings>; cityId?: string };
     /** Vollmacht (Auftrag 30, Chefsache): Die Rechte Hand führt die Stadt allein, gegen 80 % vom Tagesgewinn. */
     'hierarchy.grantFullPower': { cityId?: string };
+    /**
+     * Startpaket (Auftrag 36): Die mitgebrachte Person wird Rechte Hand der Stadt, in der sie angekommen ist. Nur das
+     * Spiel selbst (city nach der Ankunft).
+     */
+    'hierarchy.installRightHand': { staffId: string; cityId: string };
     /** Vollmacht zurückziehen: kostet Loyalität und Laune, Stufe und Aufgaben bleiben. */
     'hierarchy.revokeFullPower': { cityId?: string };
     /** Auftrag 34: Leutnant (ab Level 5, drei Spots) zum Capo machen, mit bis zu drei Leutnants aus seinem Bezirk. */
@@ -540,6 +549,25 @@ function syncLieutenant(ctx: Ctx, post: LieutenantPost): void {
   // Ein Capo verlangt doppelt so viel wie ein Leutnant mit drei Spots (Auftrag 34).
   const demand = isCapo(ctx.state, m.id) ? capoDemand() : lieutenantDemand(post.spotIds.length);
   if (m.demand !== demand) setDemand(ctx, m.id, demand);
+}
+
+/**
+ * Startpaket (Auftrag 36): Der Leutnant gibt seine Spots ab, um als neue Rechte Hand in die nächste Stadt zu gehen. Kein
+ * Abberufen (keine Loyalität weniger, kein Lohn runter), nur der Posten ist frei.
+ */
+export function handOffLeader(ctx: Ctx, staffId: string, cityId: string): void {
+  const post = getPost(ctx.state, staffId);
+  if (!post) return;
+  const veedelId = lieutenantVeedel(ctx.state, staffId) ?? '';
+  // Ein Capo, der geht, ist kein Capo mehr (Auftrag 34), seine Leutnants sind frei.
+  if (isCapo(ctx.state, staffId)) dismissCapo(ctx, staffId, true);
+  delete ctx.state.modules.hierarchy.posts[staffId];
+  cleanupCapos(ctx);
+  if (isEmployed(ctx.state, staffId)) {
+    assign(ctx, staffId, null);
+    addCareer(ctx, staffId, `Gibt die Spots ab und geht als Rechte Hand nach ${cityName(cityId)}.`);
+  }
+  ctx.emit('hierarchy.dismissed', { staffId, veedelId });
 }
 
 /** Leutnant abberufen. Er wird wieder normaler Mitarbeiter ohne Einsatz. */
@@ -982,6 +1010,10 @@ export default defineModule({
     'hierarchy.dismissRightHand': (ctx, payload) => dismissRightHand(ctx, payload?.cityId),
     'hierarchy.configureRightHand': (ctx, { settings, cityId }) => configureRightHand(ctx, settings, cityId),
     'hierarchy.grantFullPower': (ctx, { cityId }, meta) => grantFullPower(ctx, cityId ?? 'koeln', meta),
+    'hierarchy.installRightHand': (ctx, { staffId, cityId }, meta) =>
+      meta.actor === 'system'
+        ? installRightHand(ctx, staffId, cityId)
+        : { ok: false, reason: 'Das passiert mit dem Startpaket von selbst.' },
     'hierarchy.revokeFullPower': (ctx, payload, meta) => revokeFullPower(ctx, meta, payload?.cityId),
     'hierarchy.appointCapo': (ctx, { staffId, lieutenantIds }) => appointCapo(ctx, staffId, lieutenantIds),
     'hierarchy.dismissCapo': (ctx, { staffId }) => dismissCapo(ctx, staffId),

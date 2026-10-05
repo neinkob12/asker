@@ -947,6 +947,37 @@ export const SCENES = [
     })()`,
     wait: 1500,
   },
+  // Übergabe mit Startpaket (Auftrag 36): neue Rechte Hand (Leutnant ab Level 5), Leute, Fahrzeug
+  {
+    name: 'uebergabe-startpaket',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      window.koeln.dev.rechteHandBereit();
+      sim.state.wallet.clean += 20000;
+      sim.dispatch({ type: 'fleet.buy', payload: { model: 'kombi', cityId: 'koeln' } });
+      const posts = sim.state.modules.hierarchy.posts;
+      const lead = sim.state.modules.staff.members.find((m) => posts[m.id]);
+      if (lead) lead.level = Math.max(lead.level, 5);
+      // Zwei Läufer ohne Spot, die mitkommen können.
+      const spotId = sim.state.modules.spots.unlocked[0];
+      for (let i = 0; i < 2; i++) {
+        sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+        const fresh = sim.state.modules.staff.members.at(-1);
+        if (fresh) sim.dispatch({ type: 'staff.assign', payload: { staffId: fresh.id, assignment: null } });
+      }
+      window.koeln.runtime.api.openDialog('hierarchy.handover', { cityId: 'koeln', toCityId: 'hamburg' });
+    })()`,
+    wait: 1200,
+  },
+  // Deutschland-Ansicht (Auftrag 36): Glas-Karten aller Städte, Autobahn-Netz
+  {
+    name: 'deutschland',
+    js: `(() => {
+      window.koeln.runtime.api.closeDialog();
+      window.koeln.runtime.api.flyToDeutschland();
+    })()`,
+    wait: 4000,
+  },
 ];
 
 /** Öffnet eine frische Sitzung (pausiert, fester Seed) und spult vor. */

@@ -98,6 +98,11 @@ export interface QuestDef {
   /** Fortschritt als Geld anzeigen. */
   euro?: boolean;
   goTo?: QuestGoTo;
+  /**
+   * Stadt des Kapitels (Auftrag 36): Die Quest kommt erst dran, wenn die Stadt frei ist. Nach Köln ist die Reihenfolge
+   * frei, also nimmt Peter das Kapitel der Stadt, in die du gehst.
+   */
+  cityId?: string;
   reward: QuestReward[];
   /** Was Peter schreibt, wenn die Quest erledigt ist (sonst nur der Kapitel-Abschluss). */
   doneText?: string;
@@ -111,7 +116,13 @@ export const CHAPTERS: readonly string[] = [
   'Boss von Köln',
   'Ganz Köln',
   'Moin Hamburg',
+  'Berliner Nächte',
+  'Servus München',
+  'Mainhattan',
 ];
+
+/** So viele Quests gab es vor Auftrag 36 (alte Spielstände mit allem erledigt: index = diese Zahl). */
+export const QUEST_COUNT_BEFORE_36 = 32;
 
 /** Titel für die Bestenliste, sobald die Mehrheit der Kölner Veedel dir gehört (Meilenstein, Auftrag 30). */
 export const MILESTONE_TITLE = 'Boss von Köln';
@@ -492,6 +503,7 @@ export const QUESTS: readonly QuestDef[] = [
   {
     id: 'hhWarehouse',
     chapter: 6,
+    cityId: 'hamburg',
     icon: 'warehouse',
     title: 'Kauf ein Lager in Hamburg',
     task:
@@ -506,6 +518,7 @@ export const QUESTS: readonly QuestDef[] = [
   {
     id: 'hhSpot',
     chapter: 6,
+    cityId: 'hamburg',
     icon: 'pin',
     title: 'Schalte einen Spot in Hamburg frei',
     task: 'Jetzt brauchst du eine Ecke. Auf dem Kiez ist am meisten los, aber da guckt jeder hin.',
@@ -518,6 +531,7 @@ export const QUESTS: readonly QuestDef[] = [
   {
     id: 'hhFirstSale',
     chapter: 6,
+    cityId: 'hamburg',
     icon: 'cart',
     title: 'Verkauf in Hamburg',
     task: 'Und dann: verkaufen. Der erste Kunde an der Elbe. Die zahlen da mehr, sagt man.',
@@ -530,6 +544,7 @@ export const QUESTS: readonly QuestDef[] = [
   {
     id: 'hhBerth',
     chapter: 6,
+    cityId: 'hamburg',
     icon: 'ship',
     title: 'Liegeplatz im Hamburger Hafen',
     task:
@@ -540,6 +555,114 @@ export const QUESTS: readonly QuestDef[] = [
     measure: (state) => (hasBerth(state, 'hamburg') ? 1 : 0),
     goTo: 'port',
     reward: [{ kind: 'money', money: 'clean', amount: 3000 }],
-    doneText: 'Moin Hamburg. Du hast es echt geschafft, zwei Städte. Ab jetzt brauchst du mich nicht mehr.',
+    doneText: 'Moin Hamburg. Du hast es echt geschafft, noch eine Stadt. Ab jetzt brauchst du mich kaum noch.',
   },
+  // --- Kapitel 8 bis 10 (Auftrag 36): je ein Kapitel pro weiterer Stadt, nach dem Muster von "Moin Hamburg" ---
+  ...cityChapter({
+    cityId: 'berlin',
+    prefix: 'be',
+    chapter: 7,
+    name: 'Berlin',
+    warehouse: 'Berlin also. Da schläft keiner, sagen sie. Erst mal ein Lager, sonst hast du nichts zu verkaufen.',
+    spot: 'Jetzt eine Ecke. Vor den Clubs ist am meisten los, freitags bis montags.',
+    sale: 'Und los. Der erste Kunde in Berlin, und dann der nächste. Die hören da nicht auf.',
+    veedel: 'Ein Kiez, der auf dich hört. Die Gangs da sind stark, pass auf.',
+    done: 'Berlin läuft. Ehrlich, ich komm nicht mehr mit, wo du überall bist.',
+  }),
+  ...cityChapter({
+    cityId: 'muenchen',
+    prefix: 'mu',
+    chapter: 8,
+    name: 'München',
+    warehouse: 'München. Teuer, sagen alle. Ein Lager kostet da ein Vermögen, aber ohne geht es nicht.',
+    spot: 'Jetzt eine ruhige Ecke. Die Polizei da schaut genau hin.',
+    sale: 'Und verkaufen. Die zahlen da jeden Preis, wenn die Ware gut ist.',
+    veedel: 'Ein Viertel, das dir gehört. In München zählt jeder Schritt.',
+    done: 'Servus, Boss. München ist deins.',
+  }),
+  ...cityChapter({
+    cityId: 'frankfurt',
+    prefix: 'ff',
+    chapter: 9,
+    name: 'Frankfurt',
+    warehouse: 'Frankfurt. Banker, Flughafen, Bahnhofsviertel. Erst ein Lager.',
+    spot: 'Jetzt eine Ecke. Im Bahnhofsviertel ist am meisten los, aber da guckt jeder hin.',
+    sale: 'Und verkaufen. Die Anzugträger zahlen gut.',
+    veedel: 'Ein Viertel, das auf dich hört. Dann gehört dir auch Frankfurt bald.',
+    done: 'Mainhattan. Du bist überall, Boss.',
+  }),
 ];
+
+/** Texte eines Stadt-Kapitels (Auftrag 36). */
+interface CityChapterTexts {
+  cityId: string;
+  /** Kürzel für die IDs der Quests. */
+  prefix: string;
+  chapter: number;
+  name: string;
+  warehouse: string;
+  spot: string;
+  sale: string;
+  veedel: string;
+  done: string;
+}
+
+/** Ein Kapitel für eine Stadt nach dem Muster von "Moin Hamburg": Lager, Spot, erster Verkauf, erstes Veedel. */
+function cityChapter(t: CityChapterTexts): QuestDef[] {
+  const city = t.cityId;
+  return [
+    {
+      id: `${t.prefix}Warehouse`,
+      chapter: t.chapter,
+      cityId: city,
+      icon: 'warehouse',
+      title: `Kauf ein Lager in ${t.name}`,
+      task: t.warehouse,
+      hint: `Lager-Seite in ${t.name}: Standorte kaufen.`,
+      target: 1,
+      measure: (state) => (getWarehouses(state, city).length > 0 ? 1 : 0),
+      goTo: 'warehouse',
+      reward: [{ kind: 'goods', productId: 'weed', amount: 50, quality: 0.7 }],
+    },
+    {
+      id: `${t.prefix}Spot`,
+      chapter: t.chapter,
+      cityId: city,
+      icon: 'pin',
+      title: `Schalte einen Spot in ${t.name} frei`,
+      task: t.spot,
+      hint: 'Tipp auf einen gesperrten Spot auf der Karte.',
+      target: 1,
+      measure: (state) => (getSpots(state, city).length > 0 ? 1 : 0),
+      goTo: 'spot',
+      reward: [{ kind: 'money', money: 'dirty', amount: 1500 }],
+    },
+    {
+      id: `${t.prefix}FirstSale`,
+      chapter: t.chapter,
+      cityId: city,
+      icon: 'cart',
+      title: `Verkauf in ${t.name}`,
+      task: t.sale,
+      hint: 'Stell dich an deinen Spot oder schick einen Läufer hin.',
+      target: 1,
+      count: { 'sale.completed': (p) => (veedelCity(p.veedelId) === city ? 1 : 0) },
+      goTo: 'spot',
+      reward: [{ kind: 'reputation', amount: 3 }],
+    },
+    {
+      id: `${t.prefix}Veedel`,
+      chapter: t.chapter,
+      cityId: city,
+      icon: 'flag',
+      title: `Dein erstes Viertel in ${t.name}`,
+      task: t.veedel,
+      hint: 'Reviere-App: Wo hast du schon Einfluss?',
+      target: 1,
+      measure: (state) => controlledBy(state, PLAYER_FACTION).filter((id) => veedelCity(id) === city).length,
+      goTo: 'territory',
+      reward: [{ kind: 'money', money: 'clean', amount: 3000 }],
+      doneText: t.done,
+    },
+  ];
+}

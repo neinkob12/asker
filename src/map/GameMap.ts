@@ -396,10 +396,10 @@ export class GameMap implements MapController {
     if (camera.tilt) this.tilt = { pitch: camera.pitch ?? KOELN_PITCH, bearing: camera.bearing ?? KOELN_BEARING };
     if (camera.bounds) {
       // Rahmen ganz zeigen, mit Platz für die Stadt-Karten (über dem Punkt, halb so breit wie eine Karte) und am Handy
-      // für die Karte unter Geld und Heat.
+      // für die Karten unter Geld und Heat (Quest, Stadt wartet; Auftrag 36: bis zu fünf Städte im Rahmen).
       const [w, s, e, n] = camera.bounds;
       const padding = isMobile()
-        ? { top: 220, bottom: 40, left: 125, right: 125 }
+        ? { top: 300, bottom: 40, left: 110, right: 110 }
         : { top: 110, bottom: 60, left: 140, right: 140 };
       const fit = this.map.cameraForBounds(
         [

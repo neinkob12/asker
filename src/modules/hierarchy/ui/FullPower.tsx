@@ -1,9 +1,10 @@
 // Vollmacht der Rechten Hand im Handy und über der Karte (Auftrag 30):
 //   - Übergabe-Dialog über der Kartenfläche (Look "Glas"): die Rechte Hand mit Stufe und Erledigtem, der Deal (80 % für
 //     sie, 20 % für dich, täglich um Mitternacht, nur bei Gewinn), was sie ab jetzt zusätzlich tut, dass du jederzeit
-//     zurückkommen kannst, und "Köln übergeben und nach Hamburg fahren". Nach der Zusage an Fiete fragt er selbst im
-//     Gespräch, ob du übergibst ('city.handOver'); wer erst noch etwas regeln will, kommt über die Karte unter Geld und
-//     Heat oder die Seite der Rechten Hand hierher.
+//     zurückkommen kannst, das Startpaket (Auftrag 36: neue Rechte Hand, bis zu fünf Leute, Fahrzeuge) und "<Stadt>
+//     übergeben und nach <Ziel> fahren" ('city.handOver' mit pack). Nach der Zusage fragt der Kontakt der neuen Stadt
+//     selbst im Gespräch, ob du übergibst (ohne Startpaket); wer erst noch etwas regeln oder Leute mitnehmen will, kommt
+//     über die Karte unter Geld und Heat oder die Seite der Rechten Hand hierher.
 //   - Abschnitt "Vollmacht" auf der Seite der Rechten Hand: Aufgaben mit Vollmacht als Schalter, Beträge, Widerruf.
 
 import { useState } from 'preact/hooks';
@@ -26,7 +27,10 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { getStaffMember } from '../../staff';
+import { activeCity, cityName, nextCityAfter, packVehicles, startMoneyDue } from '../../city';
+import { vehicleName } from '../../fleet';
+import { getSpot } from '../../spots';
+import { getStaffMember, roleName } from '../../staff';
 import {
   cityLabel,
   describeDone,
@@ -40,11 +44,17 @@ import {
   RIGHT_HAND_TASKS,
   type RightHandSettings,
   rightHandRank,
+  START_PACK_LEADER_MIN_LEVEL,
+  START_PACK_MAX_STAFF,
+  startPackLeaders,
+  startPackRank,
+  startPackStaff,
 } from '../index';
 
 declare module '../../../ui' {
   interface DialogRegistry {
-    'hierarchy.handover': { cityId: string };
+    /** Übergabe der Stadt cityId; toCityId = wohin es danach geht (Standard: die zugesagte bzw. nächstgelegene). */
+    'hierarchy.handover': { cityId: string; toCityId?: string };
   }
 }
 
@@ -52,20 +62,44 @@ const SHARE = `${Math.round(FULL_POWER_SHARE * 100)} %`;
 const REST = `${Math.round((1 - FULL_POWER_SHARE) * 100)} %`;
 
 /** Übergabe einer Stadt an die Rechte Hand (über der Karte, am Handy-Bildschirm als Blatt). */
-function HandoverDialog(props: { cityId: string }) {
+function HandoverDialog(props: { cityId: string; toCityId?: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
-  const rh = getRightHand(state);
+  const rh = getRightHand(state, props.cityId);
   const m = rh ? getStaffMember(state, rh.staffId) : undefined;
   const city = cityLabel(props.cityId);
+  const to = props.toCityId ?? nextCityAfter(state, props.cityId);
   const missing = fullPowerMissing(state, props.cityId);
   const close = () => ui.closeDialog();
   const done = rh ? describeDone(rh.done) : '';
+  const leaders = startPackLeaders(state, props.cityId);
+  const people = startPackStaff(state, props.cityId);
+  // Fahrzeuge mit fester Route bleiben (sonst fiele die Route aus).
+  const vehicles = packVehicles(state, props.cityId);
+  const startMoney = to ? startMoneyDue(state, props.cityId, to) : 0;
+  // Vorschlag: die beste neue Rechte Hand, sonst niemand; Leute und Fahrzeuge wählt man selbst.
+  const [leaderId, setLeaderId] = useState<string | null>(leaders[0]?.id ?? null);
+  const [staffIds, setStaffIds] = useState<string[]>([]);
+  const [vehicleIds, setVehicleIds] = useState<number[]>([]);
+  const toggleStaff = (id: string) =>
+    setStaffIds((list) =>
+      list.includes(id) ? list.filter((x) => x !== id) : list.length < START_PACK_MAX_STAFF ? [...list, id] : list,
+    );
+  const toggleVehicle = (id: number) =>
+    setVehicleIds((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+  // Übergeben und sofort in die nächste Stadt fahren (Ankunft: sie wird aktiv), mit Startpaket, in einem Befehl.
   const handOver = () => {
-    if (!dispatch({ type: 'hierarchy.grantFullPower', payload: { cityId: props.cityId } }).ok) return;
-    close();
-    // Mit der Übergabe ist Hamburg frei: Du fährst selbst über die A1 hin (Ankunft: Hamburg wird aktiv).
-    dispatch({ type: 'city.travel', payload: { cityId: 'hamburg' } });
+    // Keine Stadt mehr frei (die übrigen sind noch Schablonen): nur die Vollmacht, du bleibst.
+    if (!to) {
+      if (dispatch({ type: 'hierarchy.grantFullPower', payload: { cityId: props.cityId } }).ok) close();
+      return;
+    }
+    const pack = {
+      leaderId: leaders.some((l) => l.id === leaderId) ? leaderId : null,
+      staffIds: staffIds.filter((id) => people.some((p) => p.id === id)),
+      vehicleIds: vehicleIds.filter((id) => vehicles.some((v) => v.id === id)),
+    };
+    if (dispatch({ type: 'city.handOver', payload: { cityId: props.cityId, toCityId: to, pack } }).ok) close();
   };
   return (
     <MapDialog label={`${city} übergeben`} onClose={close} class="handover" detent="large">
@@ -78,7 +112,7 @@ function HandoverDialog(props: { cityId: string }) {
             <strong>{m.name}</strong>
             <Chips>
               <Chip color="brand" icon="medal">
-                Stufe {rightHandRank(state)}/{RIGHT_HAND_MAX_RANK}
+                Stufe {rightHandRank(state, props.cityId)}/{RIGHT_HAND_MAX_RANK}
               </Chip>
               <Chip color="people" icon="heart">
                 Loyalität {Math.round(m.stats.loyalty)}
@@ -113,6 +147,109 @@ function HandoverDialog(props: { cityId: string }) {
         <Icon name="refresh" /> Du kannst jederzeit nach {city} schauen und eingreifen. Die Vollmacht lässt sich
         zurücknehmen, das kränkt sie aber.
       </p>
+      {to && (
+        <Group
+          title={`Startpaket für ${cityName(to)}`}
+          icon="package"
+          color="people"
+          value={
+            startMoney > 0
+              ? `+${formatEuro(startMoney)}`
+              : `${(leaderId ? 1 : 0) + staffIds.length + vehicleIds.length}`
+          }
+          note={
+            startMoney > 0
+              ? `Startgeld vom Statthalter: ${formatEuro(startMoney)}. Das Vertrauen deiner Lieferanten kommt ohnehin mit.`
+              : 'Das Vertrauen deiner Lieferanten kommt ohnehin mit.'
+          }
+        >
+          <List>
+            {leaders.length === 0 ? (
+              <ListItem>
+                <ItemContent
+                  icon="crown"
+                  color="brand"
+                  title="Keine neue Rechte Hand"
+                  meta={`Ein Capo, sonst ein Leutnant ab Level ${START_PACK_LEADER_MIN_LEVEL}, kann mitkommen und dort Rechte Hand werden.`}
+                />
+              </ListItem>
+            ) : (
+              [...leaders, null].map((l) => (
+                <ListItem
+                  key={l?.id ?? 'none'}
+                  active={leaderId === (l?.id ?? null)}
+                  onClick={() => setLeaderId(l?.id ?? null)}
+                  aside={<Icon name={leaderId === (l?.id ?? null) ? 'checkCircle' : 'plusCircle'} />}
+                >
+                  {l ? (
+                    <ItemContent
+                      icon="crown"
+                      color="brand"
+                      title={`${l.name} als Rechte Hand`}
+                      tags={[
+                        { label: `Level ${l.level}`, color: 'people' },
+                        { label: `Stufe ${startPackRank(l.level)}`, color: 'brand' },
+                      ]}
+                    />
+                  ) : (
+                    <ItemContent icon="crown" title="Ohne neue Rechte Hand" />
+                  )}
+                </ListItem>
+              ))
+            )}
+          </List>
+        </Group>
+      )}
+      {to && people.length > 0 && (
+        <Group
+          title="Leute"
+          icon="user"
+          color="people"
+          value={`${staffIds.length}/${START_PACK_MAX_STAFF}`}
+          collapsible
+          open={false}
+        >
+          <List>
+            {people.map((p) => (
+              <ListItem
+                key={p.id}
+                active={staffIds.includes(p.id)}
+                onClick={() => toggleStaff(p.id)}
+                aside={<Icon name={staffIds.includes(p.id) ? 'checkCircle' : 'plusCircle'} />}
+              >
+                <ItemContent
+                  icon="user"
+                  color="people"
+                  title={p.name}
+                  tags={[
+                    { label: roleName(p.role) },
+                    { label: `Level ${p.level}` },
+                    p.assignment?.kind === 'spot'
+                      ? { label: `am Spot ${getSpot(state, p.assignment.targetId)?.name ?? ''}`, color: 'place' }
+                      : null,
+                  ]}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </Group>
+      )}
+      {to && vehicles.length > 0 && (
+        <Group title="Fahrzeuge" icon="car" color="goods" value={`${vehicleIds.length}`}>
+          <List>
+            {vehicles.map((v) => (
+              <ListItem
+                key={v.id}
+                active={vehicleIds.includes(v.id)}
+                onClick={() => toggleVehicle(v.id)}
+                aside={<Icon name={vehicleIds.includes(v.id) ? 'checkCircle' : 'plusCircle'} />}
+              >
+                <ItemContent icon="car" color="goods" title={vehicleName(state, v.id)} />
+              </ListItem>
+            ))}
+          </List>
+        </Group>
+      )}
       {missing.length > 0 && (
         <ul class="handover__missing">
           {missing.map((line) => (
@@ -126,8 +263,8 @@ function HandoverDialog(props: { cityId: string }) {
         <Button variant="subtle" onClick={close}>
           Später
         </Button>
-        <Button variant="primary" icon="car" disabled={missing.length > 0} onClick={handOver}>
-          {city} übergeben und nach Hamburg fahren
+        <Button variant="primary" icon={to ? 'car' : 'crown'} disabled={missing.length > 0} onClick={handOver}>
+          {to ? `${city} übergeben und nach ${cityName(to)} fahren` : `${city} übergeben`}
         </Button>
       </div>
     </MapDialog>
@@ -154,7 +291,8 @@ export function FullPowerSection(props: { offered: boolean }) {
     dispatch({ type: 'hierarchy.configureRightHand', payload: { settings } });
   if (!fp) {
     if (!props.offered) return null;
-    const missing = fullPowerMissing(state, 'koeln');
+    const here = activeCity(state);
+    const missing = fullPowerMissing(state, here);
     // Aufgaben, die schon frei sind, aber aus: für die Vollmacht mit einem Tipp alle an.
     const off = RIGHT_HAND_TASKS.filter((t) => !rh.settings[t.key] && isTaskUnlocked(state, t.key));
     return (
@@ -164,7 +302,7 @@ export function FullPowerSection(props: { offered: boolean }) {
         color="brand"
         note={
           missing.length === 0
-            ? `Sie ist bereit, Köln allein zu führen (für ${SHARE} vom Tagesgewinn).`
+            ? `Sie ist bereit, ${cityName(here)} allein zu führen (für ${SHARE} vom Tagesgewinn).`
             : `Es fehlt noch: ${missing.join(' ')}`
         }
       >
@@ -179,8 +317,8 @@ export function FullPowerSection(props: { offered: boolean }) {
               />
             </ListItem>
           )}
-          <ListItem onClick={() => ui.openDialog('hierarchy.handover', { cityId: 'koeln' })}>
-            <ItemContent icon="crown" color="brand" title="Köln übergeben …" meta="Übergabe ansehen" />
+          <ListItem onClick={() => ui.openDialog('hierarchy.handover', { cityId: here })}>
+            <ItemContent icon="crown" color="brand" title={`${cityName(here)} übergeben …`} meta="Übergabe ansehen" />
           </ListItem>
         </List>
       </Group>

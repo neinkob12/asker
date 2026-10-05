@@ -47,6 +47,8 @@ interface Entry {
   quests: number;
   /** Komplett übernommene Städte (Auftrag 30, fehlt bei älteren Einträgen). */
   cities?: number;
+  /** Wert des Rangs (Auftrag 36, fehlt bei älteren Einträgen). */
+  rank?: number;
 }
 
 interface Board {
@@ -110,7 +112,8 @@ function submit(state: GameState): Promise<void> {
     ...summary,
     token: token(runId),
     name: getPlayerName(),
-    title: questTitle(state),
+    // Titel ist der Rang (Auftrag 36); alte Durchgänge ohne Rang hatten den Titel aus den Quests.
+    title: summary.title || questTitle(state),
     quests: completedQuests(state).length,
   });
   if (lastSent.get(runId) === body) return Promise.resolve();
@@ -299,6 +302,10 @@ onGameEvent('game.over', 'leaderboard.over', (_payload, _ui, state) => {
   submit(state);
 });
 onGameEvent('campaign.won', 'leaderboard.won', (_payload, _ui, state) => {
+  submit(state);
+});
+// Neuer Rang (Auftrag 36): gleich mit dem neuen Titel in die Liste.
+onGameEvent('player.rankUp', 'leaderboard.rank', (_payload, _ui, state) => {
   submit(state);
 });
 onGameEvent('clock.dayStarted', 'leaderboard.day', (_payload, _ui, state) => {

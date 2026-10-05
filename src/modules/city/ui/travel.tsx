@@ -19,7 +19,7 @@ import {
   useSession,
   useUi,
 } from '../../../ui';
-import { interCityRoute } from '../../roads';
+import { autobahnRefs, interCityRoute } from '../../roads';
 import { cityName, cityTravel, getCity } from '../index';
 
 /** Tempo vor "Fahrt überspringen", damit es nach der Ankunft wieder gilt (pro Durchgang). */
@@ -102,7 +102,7 @@ registerLiveActivity({
       priority: 60,
       icon: 'car',
       tone: 'info',
-      leading: 'A1',
+      leading: autobahnRefs(travel.from, travel.to)[0]?.replace(' ', '') ?? 'Autobahn',
       trailing: islandCountdown(travel.arrivesAt - state.time),
       title: `Unterwegs nach ${cityName(travel.to)}`,
       detail: `Ankunft ${clock.formatTime(travel.arrivesAt)}`,

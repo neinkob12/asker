@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { GameEvent } from '../core';
 import { MONEY_CATEGORIES } from '../core';
 import { createTestGame } from '../core/testing';
+import { activeCity } from '../modules/city';
 import { allProducts } from '../modules/goods';
 import { priceIndex } from '../modules/market';
 import { contractStats } from '../modules/quests';
@@ -66,31 +67,54 @@ function simulate(seed: number, days: number, stopOnWin = false, options: BotOpt
   return report;
 }
 
-interface HamburgReport {
+interface CitiesReport {
   seed: number;
-  /** Tag der Ankunft in Hamburg (Spieltag). */
-  arrived: number | null;
-  days: (ReturnType<typeof snapshot> & { revenue: number; koelnIncome: number })[];
+  /** Tag der Ankunft in der Stadt (Spieltag), Köln ab Tag 1. */
+  arrived: Record<string, number>;
+  /** Tag, an dem die Stadt komplett war. */
+  complete: Record<string, number>;
+  /** Reihenfolge der Städte, wie der Bot sie gespielt hat. */
+  order: string[];
+  days: (ReturnType<typeof snapshot> & { revenue: number; sleepIncome: number; activeCity: string })[];
   events: Record<string, number>;
+  stats: ReturnType<typeof newBotStats>;
 }
 
 /**
- * Hamburg nach "Köln komplett" (Auftrag 30): Der Bot spielt koelnDays Tage Köln, dann ist Köln komplett und die Rechte
- * Hand bereit; der Bot erteilt die Vollmacht, fährt nach Hamburg und spielt dort hamburgDays Tage.
+ * Mehrere Städte nacheinander (Auftrag 36, früher simulateHamburg): Der Bot spielt koelnDays Tage Köln, dann ist Köln
+ * komplett und die Rechte Hand bereit (koelnKomplett), danach wählt er die nächste Stadt selbst, übergibt mit
+ * Startpaket und spielt dort weiter, insgesamt laterDays Tage. Gemessen: Tage pro Stadt (Ankunft bis komplett).
  */
-function simulateHamburg(seed: number, koelnDays: number, hamburgDays: number, money?: number): HamburgReport {
+function simulateCities(seed: number, koelnDays: number, laterDays: number, money?: number): CitiesReport {
   const sim = createTestGame({ seed });
   const stats = newBotStats();
   const events: Record<string, number> = {};
-  let arrived: number | null = null;
+  const report: CitiesReport = {
+    seed,
+    arrived: { koeln: 1 },
+    complete: {},
+    order: ['koeln'],
+    days: [],
+    events,
+    stats,
+  };
   let revenue = 0;
-  let koelnIncome = 0;
+  let sleepIncome = 0;
   sim.onEvent((e: GameEvent) => {
     events[e.type] = (events[e.type] ?? 0) + 1;
-    if (e.type === 'city.arrived' && e.payload.cityId === 'hamburg') arrived = Math.floor(e.time / DAY) + 1;
-    if (e.type === 'sale.completed' && e.payload.veedelId && arrived !== null) revenue += e.payload.revenue;
-    if (e.type === 'wallet.changed' && e.payload.cityId === 'koeln' && e.payload.category === 'income.city') {
-      koelnIncome += e.payload.amount;
+    const day = Math.floor(e.time / DAY) + 1;
+    if (e.type === 'city.arrived' && report.arrived[e.payload.cityId] === undefined) {
+      report.arrived[e.payload.cityId] = day;
+      report.order.push(e.payload.cityId);
+    }
+    if (e.type === 'campaign.won' && e.payload.cityId && report.complete[e.payload.cityId] === undefined) {
+      report.complete[e.payload.cityId] = day;
+    }
+    if (e.type === 'sale.completed' && e.payload.veedelId && report.order.length > 1) revenue += e.payload.revenue;
+    if (e.type === 'wallet.changed' && e.payload.category === 'income.city') sleepIncome += e.payload.amount;
+    if (e.type === 'city.slept' && e.payload.raid) events.sleepRaids = (events.sleepRaids ?? 0) + 1;
+    if (e.type === 'wallet.changed' && e.payload.category === 'transfer' && e.payload.reason.startsWith('Startgeld')) {
+      events.startMoney = Math.round(e.payload.amount);
     }
   });
   for (let d = 0; d < koelnDays; d++) playFor(sim, DAY, stats);
@@ -99,24 +123,28 @@ function simulateHamburg(seed: number, koelnDays: number, hamburgDays: number, m
     sim.state.wallet.clean = Math.max(sim.state.wallet.clean, money / 4);
   }
   koelnKomplett(sim);
-  const report: HamburgReport = { seed, arrived: null, days: [], events };
-  for (let d = 0; d < hamburgDays; d++) {
+  for (let d = 0; d < laterDays; d++) {
     revenue = 0;
-    koelnIncome = 0;
+    sleepIncome = 0;
     playFor(sim, DAY, stats);
-    report.days.push({ ...snapshot(sim.state), revenue: Math.round(revenue), koelnIncome: Math.round(koelnIncome) });
+    report.days.push({
+      ...snapshot(sim.state),
+      revenue: Math.round(revenue),
+      sleepIncome: Math.round(sleepIncome),
+      activeCity: activeCity(sim.state),
+    });
     if (sim.state.outcome.gameOver) break;
   }
-  report.arrived = arrived;
   return report;
 }
 
 describe('Balancing', () => {
-  it('nach Köln komplett erteilt der Bot die Vollmacht, zieht nach Hamburg und fängt dort an', () => {
-    const r = simulateHamburg(1, 0, 4, 30_000);
+  it('nach Köln komplett wählt der Bot die nächste Stadt, übergibt mit Startpaket und fängt dort an', () => {
+    const r = simulateCities(1, 0, 4, 30_000);
     const last = r.days[r.days.length - 1];
     expect(r.events['hierarchy.fullPowerGranted']).toBe(1);
-    expect(r.arrived).not.toBeNull();
+    expect(r.order).toEqual(['koeln', 'hamburg']);
+    expect(r.stats.cities?.[0]).toMatchObject({ from: 'koeln', to: 'hamburg' });
     expect(last.city).toBe('hamburg');
     expect(last.gameOver).toBeNull();
     expect(r.events['goods.warehouseBought'] ?? 0).toBeGreaterThanOrEqual(1);
@@ -209,38 +237,46 @@ describe('Balancing', () => {
   );
 
   it.skipIf(!process.env.BALANCE)(
-    'Bericht: Hamburg nach Köln komplett',
+    'Bericht: Tage pro Stadt',
     () => {
       const seeds = (process.env.BALANCE_SEEDS ?? '1,2,3').split(',').map(Number);
       const koelnDays = Number(process.env.BALANCE_KOELN_DAYS ?? 25);
-      const hamburgDays = Number(process.env.BALANCE_HAMBURG_DAYS ?? 20);
+      const laterDays = Number(process.env.BALANCE_LATER_DAYS ?? 30);
       for (const seed of seeds) {
         const started = Date.now();
-        const r = simulateHamburg(seed, koelnDays, hamburgDays);
+        const r = simulateCities(seed, koelnDays, laterDays);
         const last = r.days[r.days.length - 1];
-        const arrived = r.arrived ?? 0;
-        const firstDay = (n: number) => {
-          const day = r.days.find((d) => d.hamburg >= n)?.day;
-          return day ? `${day - arrived}` : '-';
-        };
         const e = (k: string) => r.events[k] ?? 0;
+        const perCity = r.order.slice(1).map((cityId) => {
+          const arrived = r.arrived[cityId];
+          const done = r.complete[cityId];
+          const veedel = (n: number) => {
+            const day = r.days.find((d) => d.activeCity === cityId && d[cityId as 'hamburg'] >= n)?.day;
+            return day ? `${day - arrived}` : '-';
+          };
+          return (
+            `${cityId}: Ankunft Tag ${arrived}, komplett ${done ? `nach ${done - arrived} Tagen` : 'noch nicht'}` +
+            ` (Veedel 1/3/6/9/12 nach ${veedel(1)}/${veedel(3)}/${veedel(6)}/${veedel(9)}/${veedel(12)} Tagen)`
+          );
+        });
         console.log(
-          `Hamburg Seed ${seed}: Köln ${koelnDays} Tage gespielt, dann komplett | Ankunft Tag ${r.arrived ?? '-'}` +
-            ` | Hamburger Veedel 1/3/5 nach ${firstDay(1)}/${firstDay(3)}/${firstDay(5)} Tagen` +
-            ` | am Ende ${last.hamburg}/12 Veedel, ${last.spots} Spots gesamt, ${last.runners} Läufer` +
+          `Tage pro Stadt, Seed ${seed}: Köln ${koelnDays} Tage gespielt, dann komplett | Reihenfolge ${r.order.join(' → ')}` +
+            ` | ${perCity.join(' | ')}` +
             ` | ${last.gameOver ? `Game Over (${last.gameOver})` : 'keine Pleite'}` +
-            ` | Liegeplatz ${last.berth ? 'ja' : 'nein'} | Razzien ${e('police.raidPlanned')}, Gang-Überfälle ${e('gang.raidStarted')}` +
+            ` | Startpaket ${r.stats.cities?.map((c) => `${c.pack} Leute`).join(', ') ?? '-'}` +
+            ` | Startgeld ${r.events.startMoney ?? 0}` +
+            ` | Schlaftage ${e('city.slept')}, davon Razzien ${r.events.sleepRaids ?? 0}` +
             ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,
         );
         console.log(
-          `  Lager: abgelehnt ${(last.rejected * 100).toFixed(1)} % der Gramm, Regale ${e('goods.warehouseUpgraded')}, ` +
-            `Lager gekauft ${e('goods.warehouseBought')} | Fahrzeuge ${last.vehicles} | Fahrten ${e('transport.started')}, ` +
-            `am vollen Lager gewartet ${e('transport.waiting')}`,
+          `  Lager: abgelehnt ${(last.rejected * 100).toFixed(1)} % der Gramm, Lager gekauft ${e('goods.warehouseBought')}` +
+            ` | Fahrzeuge ${last.vehicles} | Liegeplatz ${last.berth ? 'ja' : 'nein'} | Razzien ${e('police.raidPlanned')}` +
+            `, Gang-Überfälle ${e('gang.raidStarted')}`,
         );
         console.log(
           `  Schwarzgeld je Tag: ${r.days.map((d) => d.dirty).join(' / ')}` +
-            `\n  Umsatz Hamburg je Tag: ${r.days.map((d) => d.revenue).join(' / ')}` +
-            `\n  Ergebnis Köln (schläft) je Tag: ${r.days.map((d) => d.koelnIncome).join(' / ')}`,
+            `\n  Umsatz neue Stadt je Tag: ${r.days.map((d) => d.revenue).join(' / ')}` +
+            `\n  Ergebnis schlafende Städte je Tag: ${r.days.map((d) => d.sleepIncome).join(' / ')}`,
         );
       }
     },

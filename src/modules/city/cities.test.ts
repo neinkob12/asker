@@ -75,8 +75,8 @@ function handOverKoeln(sim: Simulation): string {
 }
 
 describe('Städte (Auftrag 30)', () => {
-  it('Daten: Köln, Hamburg und die Schablone Berlin; je 12 Veedel, Berlin ohne Inhalt und gesperrt', () => {
-    expect(CITIES.map((c) => c.id)).toEqual(['koeln', 'hamburg', 'berlin']);
+  it('Daten: Köln, Hamburg und die Schablonen Berlin, München, Frankfurt; je 12 Veedel, Schablonen gesperrt', () => {
+    expect(CITIES.map((c) => c.id)).toEqual(['koeln', 'hamburg', 'berlin', 'muenchen', 'frankfurt']);
     expect(playableCities().map((c) => c.id)).toEqual(['koeln', 'hamburg']);
     expect(allVeedel('koeln')).toHaveLength(12);
     expect(allVeedel('hamburg')).toHaveLength(12);

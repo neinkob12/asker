@@ -3,7 +3,8 @@
 //
 //   GET  /api/leaderboard?runId=…   → { entries: PublicEntry[] (beste zuerst, ohne runId), total,
 //                                       me: { rank, entry } | null }
-//   POST /api/leaderboard           ← { runId, token, name, score, days, veedel, outcome, mode, title?, quests, cities? }
+//   POST /api/leaderboard           ← { runId, token, name, score, days, veedel, outcome, mode, title?, quests, cities?,
+//                                       rank? }  (title = Rang des Spielers, rank = sein Wert, Auftrag 36)
 //                                   → { rank: number | null, total }   (429 bei zu vielen Anfragen, 403 bei falschem Token)
 //
 // Ein Durchgang (runId) steht nur einmal in der Liste, mit seinem besten Ergebnis. Schutz, soweit er mit einem
@@ -47,6 +48,8 @@ export interface Entry {
   quests: number;
   /** Komplett übernommene Städte (Auftrag 30, optional: ältere Spielstände schicken es nicht). */
   cities?: number;
+  /** Wert des Rangs zum Titel (Auftrag 36, optional: ältere Spielstände schicken es nicht). */
+  rank?: number;
   /** Zeitpunkt des Eintrags (ms seit 1970). */
   at: number;
 }
@@ -67,6 +70,27 @@ function cleanText(value: unknown, max: number): string {
         .trim()
         .slice(0, max)
     : '';
+}
+
+/**
+ * Gültige Titel (Ränge des Spielers, Auftrag 36, `src/modules/city/ranks.ts`) in ihrer Reihenfolge. Der Wert eines
+ * Rangs (`rank`) ist Platz × 10, bei „Boss von <Stadt>“ plus die Zahl der weiteren kompletten Städte.
+ */
+export const RANK_TITLES: readonly (string | RegExp)[] = [
+  'Kleindealer',
+  'Händler',
+  'Großhändler',
+  'Boss von Köln',
+  /^Boss von (Hamburg|Berlin|München|Frankfurt)$/,
+  'Boss von Deutschland',
+  'Importeur',
+  'Produzent',
+];
+
+/** Platz eines Titels in RANK_TITLES, null für einen unbekannten Titel. */
+export function rankStep(title: string): number | null {
+  const step = RANK_TITLES.findIndex((t) => (typeof t === 'string' ? t === title : t.test(title)));
+  return step < 0 ? null : step;
 }
 
 /** Höchstes Vermögen, das für so viele gespielte Tage angenommen wird. */
@@ -127,8 +151,13 @@ export function parseEntry(body: unknown, now: number): Entry | null {
   if (score === null) return null;
   const outcome = OUTCOMES.find((o) => o === b.outcome);
   if (!outcome) return null;
-  const title = cleanText(b.title, 40);
+  // Nur bekannte Titel, und der Wert muss zum Titel passen (sonst fällt er weg).
+  const rawTitle = cleanText(b.title, 40);
+  const step = rawTitle ? rankStep(rawTitle) : null;
+  const title = step === null ? '' : rawTitle;
   const cities = b.cities === undefined ? null : clampInt(b.cities, 0, 20);
+  const rawRank = b.rank === undefined ? null : clampInt(b.rank, 0, 1000);
+  const rank = rawRank !== null && step !== null && Math.floor(rawRank / 10) === step ? rawRank : null;
   return {
     runId,
     name: cleanText(b.name, 20) || 'Anonym',
@@ -140,6 +169,7 @@ export function parseEntry(body: unknown, now: number): Entry | null {
     title: title || null,
     quests,
     ...(cities !== null ? { cities } : {}),
+    ...(rank !== null ? { rank } : {}),
     at: now,
   };
 }

@@ -389,11 +389,27 @@ function note(ctx: Ctx, rh: RightHandPost, text: string, phone = false, silent =
 export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
   const check = canBeRightHand(ctx.state, staffId);
   if (!check.ok) return check;
-  const h = ctx.state.modules.hierarchy;
   const m = getStaffMember(ctx.state, staffId);
   if (!m) return { ok: false, reason: NOT_EMPLOYED };
   // Eine Rechte Hand pro Stadt: die der Stadt, in der die Person ist (Auftrag 30).
-  const cityId = m.cityId ?? 'koeln';
+  installPost(ctx, m, m.cityId ?? 'koeln', 0);
+  journal.add(ctx, `${m.name} ist jetzt deine Rechte Hand (${formatEuro(m.wage)} pro Tag).`, 'good', { staffId });
+  messages.send(ctx, {
+    contact: staffContact(m),
+    text: 'Ich halte dir den Rücken frei. Jeden Morgen um acht kriegst du von mir die Zahlen.',
+    silent: true,
+  });
+  ctx.emit('hierarchy.rightHandAppointed', { staffId });
+  return { ok: true };
+}
+
+/**
+ * Die Person wird Rechte Hand der Stadt (ohne Prüfung): eine bisherige geht, ein Leutnant gibt seine Spots ab. xp =
+ * Erfahrung als Rechte Hand (Startpaket, Auftrag 36: Level behalten, freie Aufgaben gleich an).
+ */
+export function installPost(ctx: Ctx, m: StaffMember, cityId: string, xp: number): RightHandPost {
+  const h = ctx.state.modules.hierarchy;
+  const staffId = m.id;
   if (h.rightHands[cityId]) dismissRightHand(ctx, cityId);
   // Ein Leutnant, der aufsteigt, gibt seine Spots ab.
   if (isLieutenant(ctx.state, staffId)) {
@@ -405,7 +421,7 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
   }
   // Ein Leutnant, der sie angeheuert hat, darf sie nicht mehr als sein Team behandeln (und bei Ausfall entlassen).
   releaseFromTeams(ctx.state, staffId);
-  h.rightHands[cityId] = {
+  const post: RightHandPost = {
     staffId,
     appointedAt: ctx.now,
     // Tief kopieren: Die Bestellregeln werden später verändert (paused), die Vorgabe darf das nie mitbekommen.
@@ -421,7 +437,7 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
     warnedAt: null,
     handled: [],
     log: [],
-    xp: 0,
+    xp,
     done: emptyDone(),
     restockDay: clock.day(ctx.now),
     restockSpent: 0,
@@ -429,19 +445,13 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
     fullPower: null,
     grudgeUntil: null,
   };
+  h.rightHands[cityId] = post;
   assign(ctx, staffId, OFFICE);
   setDemand(ctx, staffId, RIGHT_HAND_DEMAND);
   setWage(ctx, staffId, Math.max(m.wage, expectedWage(ctx.state, staffId)));
   addLoyalty(ctx, staffId, PROMOTION_LOYALTY);
   addCareer(ctx, staffId, 'Zur Rechten Hand ernannt.');
-  journal.add(ctx, `${m.name} ist jetzt deine Rechte Hand (${formatEuro(m.wage)} pro Tag).`, 'good', { staffId });
-  messages.send(ctx, {
-    contact: staffContact(m),
-    text: 'Ich halte dir den Rücken frei. Jeden Morgen um acht kriegst du von mir die Zahlen.',
-    silent: true,
-  });
-  ctx.emit('hierarchy.rightHandAppointed', { staffId });
-  return { ok: true };
+  return post;
 }
 
 export function dismissRightHand(ctx: Ctx, cityId: string = activeCity(ctx.state)): CommandResult {
