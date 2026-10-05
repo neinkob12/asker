@@ -80,8 +80,9 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 
 ## D. Produktion
 
-- [ ] D1 Einleitung für den Anbau wie C1 (Anruf aus Kolumbien bzw. Marokko → Finca → Ernte → Ausfuhr → Schiff).
-- [ ] D2 Zwischenziel bis zum Anruf: zeigen, ab wann die Produzenten anrufen (Wochen und Umsatz).
+- [x] D1 Einleitung für den Anbau: Kapitel „Produktion“ (`voice: 'grow'`, der Anrufer der Region; Angebot → Finca →
+  Arbeiter → erste Ernte → verschiffen → eigene Ware ausliefern), erst nach den Anrufen (`requires`).
+- [x] D2 Zwischenziel bis zum Anruf: Kunden-App › Kunden „Als Nächstes: eigene Produktion“ mit Wochen und Umsatz.
 - [x] D3 Finca ohne Arbeiter erntet 0 kg, ohne Warnung (`grow/index.ts` Ernte × Arbeiter): nach dem Kauf das
   Finca-Panel öffnen, Rat „<Finca> hat keine Arbeiter“ (dringend, solange die Ernte nah ist), Journal „Ernte
   ausgefallen: keine Arbeiter“; Nutzen des Gärtners in einem Satz.
@@ -99,7 +100,7 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   `trade.missing`, „Diese Woche“); „Alles verschiffen“ im Verschiff-Panel; eigene Ernte im Hafen-Tab.
 - [ ] D10 Ziel „Europa“: wen man noch versorgen muss (Liste `missing`), Titel und Regel passen zusammen, zwei Hinweise.
 - [x] D11 „Nächste Ernte“ netto nach dem Kartell-Anteil (oder beides).
-- [ ] D12 Karte „Angebot“ auf der Karte öffnet ein Panel mit „Angebot annehmen“ (keine Sackgasse).
+- [x] D12 Karte „Angebot“ auf der Karte öffnet ein Panel mit „Angebot annehmen“ (keine Sackgasse).
 - [x] D13 Finca-Panel lesbar: Leute ohne Pacht, „Als Nächstes pflanzen“, Währung an jedem Preis, Zoll-Faktor in Worten.
 - [x] D14 Kartell und Behörden mit Zahlen („von 100“, Chance und Verlust ohne Anteil); stilles Zurückfallen der
   Verpackung melden.

@@ -303,8 +303,19 @@ function RegionPanel({ regionId }: { regionId: string }) {
     fn();
     setConfirm(null);
   };
+  const called = regionStatus(state, regionId) === 'called';
   return (
     <div class="trade-app">
+      {called && (
+        // Auftrag 43: Vom Angebot auf der Karte kommt man hierher, also auch hier annehmen (keine Sackgasse).
+        <Group title="Angebot" icon="phone" color="money" note={`${region.contact.name} wartet auf deine Antwort.`}>
+          <List>
+            <ListItem action icon="check" onClick={() => dispatch({ type: 'grow.openRegion', payload: { regionId } })}>
+              {`Angebot von ${region.contact.name} annehmen`}
+            </ListItem>
+          </List>
+        </Group>
+      )}
       <Group title={region.area} icon="leaf" color="goods" note={region.pitch}>
         <List>
           {getFincas(state, regionId).map((f) => (

@@ -5,6 +5,7 @@ import { loadSimulation, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { playableCities, playerRank } from '../city';
 import { activeEncounters, autoResolveEncounter } from '../encounters';
+import { currentQuest, QUESTS } from '../quests';
 import { getStaffMember } from '../staff';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import {
@@ -559,5 +560,31 @@ describe('Geld und Meldungen in der Produktion (Auftrag 43)', () => {
     const harvests = eventsOfType(events, 'grow.harvested').filter((e) => e.payload.fincaId === empty.id);
     expect(harvests.length).toBeGreaterThan(0);
     expect(harvests[0].payload.grams).toBe(0);
+  });
+});
+
+describe('Kapitel Produktion (Auftrag 43)', () => {
+  it('nach den Anrufen führt der Anrufer durch Angebot, Finca und Arbeiter', () => {
+    const sim = soldGame(8);
+    // Rotterdam ist durch: Peter wartet auf das nächste Kapitel.
+    const q = sim.state.modules.quests;
+    for (const quest of QUESTS) if (!q.done.includes(quest.id) && quest.chapter < 11) q.skipped.push(quest.id);
+    q.index = -1;
+    readyForCalls(sim);
+    sim.advance(8 * 60);
+    expect(currentQuest(sim.state)?.id).toBe('pdOffer');
+    expect(currentQuest(sim.state)?.voice).toBe('grow');
+    expect(sim.dispatch({ type: 'grow.openRegion', payload: { regionId: 'kolumbien' } }).ok).toBe(true);
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('pdFinca');
+    sim.state.wallet.clean = 1_000_000;
+    sim.state.wallet.dirty = 1_000_000;
+    expect(sim.dispatch({ type: 'grow.leaseFinca', payload: { siteId: 'el-tigre' } }).ok).toBe(true);
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('pdWorkers');
+    const finca = getFincas(sim.state)[0];
+    sim.dispatch({ type: 'grow.hire', payload: { fincaId: finca.id, role: 'worker', count: workersNeeded(finca) } });
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('pdHarvest');
   });
 });

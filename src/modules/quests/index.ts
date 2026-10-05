@@ -31,8 +31,9 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, isBusinessSold, isCityUnlocked, jansenContact, liveVeedel } from '../city';
+import { activeCity, isBusinessSold, isCityUnlocked, jansenContact, liveVeedel, REGIONS } from '../city';
 import { DEFAULT_WAREHOUSE, getWarehouses, productName, store, type Warehouse } from '../goods';
+import { regionStatus } from '../grow';
 import { addHeat, operationTier } from '../police';
 import { changeReputation } from '../reputation';
 import { addLoyalty, addXp, getStaff } from '../staff';
@@ -158,9 +159,17 @@ function eligible(state: GameState, quest: QuestDef): boolean {
   return (!quest.cityId || isCityUnlocked(state, quest.cityId)) && (!quest.requires || quest.requires(state));
 }
 
-/** Wer die Quest schickt: Peter, im Kapitel Rotterdam Jansen (Auftrag 43). */
+/**
+ * Wer die Quest schickt: Peter, im Kapitel Rotterdam Jansen, in der Produktion der Anrufer der Region, die zuerst
+ * angerufen hat (Auftrag 43).
+ */
 export function questContact(state: GameState, quest: QuestDef | null): Contact {
-  return quest?.voice === 'jansen' ? jansenContact(state) : PETER;
+  if (quest?.voice === 'jansen') return jansenContact(state);
+  if (quest?.voice === 'grow') {
+    const region = REGIONS.find((r) => regionStatus(state, r.id) !== 'none') ?? REGIONS[0];
+    return region?.contact ?? PETER;
+  }
+  return PETER;
 }
 
 /**
@@ -179,7 +188,8 @@ function nextIndex(state: GameState, from: number): number {
   }
   for (let i = 0; i < Math.min(from, QUESTS.length); i++) {
     const quest = QUESTS[i];
-    if (!quest.cityId || finished.has(quest.id)) continue;
+    // Weiter vorn kommen nur Kapitel, die warten mussten: an einer Stadt oder einer Bedingung (Auftrag 43).
+    if ((!quest.cityId && !quest.requires) || finished.has(quest.id)) continue;
     if (eligible(state, quest)) return i;
     waiting = true;
   }
@@ -613,7 +623,9 @@ function resume(ctx: Ctx): void {
     text:
       next.voice === 'jansen'
         ? 'Willkommen in der Halle. Ich zeig dir, wie das hier läuft, Schritt für Schritt. Danach bist du allein.'
-        : `Neue Stadt, neues Kapitel: „${chapterName(next.chapter)}“.`,
+        : next.voice === 'grow'
+          ? 'Ich zeig dir, wie das mit dem Anbau läuft. Vom Feld bis in deinen Hafen, Schritt für Schritt.'
+          : `Neue Stadt, neues Kapitel: „${chapterName(next.chapter)}“.`,
   });
   announce(ctx);
   check(ctx);

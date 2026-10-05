@@ -97,6 +97,9 @@ export function goTo(ui: UiApi, state: GameState, target: QuestGoTo | undefined)
     case 'tradeHarbor':
       ui.openPhone('trade.app', { view: 'harbor' });
       return;
+    case 'grow':
+      ui.openPhone('trade.app', { view: 'grow' });
+      return;
     default:
       ui.openPanel('quests.list', {});
       return;

@@ -19,6 +19,7 @@ import {
   ListItem,
   onGameEvent,
   PhoneScreen,
+  ProgressBar,
   registerAdvisor,
   registerHudItem,
   registerLiveActivity,
@@ -43,7 +44,7 @@ import {
   vehicleStatus,
 } from '../../fleet';
 import { productName } from '../../goods';
-import { isGrowStarted } from '../../grow';
+import { CALL_AFTER_WEEKS, CALL_MIN_REVENUE, isGrowStarted } from '../../grow';
 import { customsHeat, customsLevel } from '../../police';
 import {
   CUSTOMER_KINDS,
@@ -515,6 +516,41 @@ const KIND_GROUPS: { kind: CustomerKind; title: string; note: string }[] = [
   { kind: 'europe', title: 'Europa', note: 'Zahlen mehr, aber an der Grenze steht der Zoll.' },
 ];
 
+/**
+ * Was nach dem Hafen kommt (Auftrag 43): Ab CALL_AFTER_WEEKS Wochen als Lieferant und CALL_MIN_REVENUE Umsatz rufen die
+ * Produzenten in Kolumbien und Marokko an (grow). Bis dahin zeigt die Gruppe, wie weit es noch ist.
+ */
+function NextStageGroup() {
+  const { state } = useGame();
+  if (isGrowStarted(state)) return null;
+  const started = state.modules.trade.startedAt ?? state.time;
+  const weeks = (state.time - started) / (7 * 1440);
+  const revenue = tradeStats(state).revenue;
+  return (
+    <Group
+      title="Als Nächstes: eigene Produktion"
+      icon="leaf"
+      color="goods"
+      collapsible
+      open={false}
+      note="Wer lange genug genug liefert, bekommt Anrufe aus Kolumbien und Marokko: eigene Fincas, eigene Ware."
+    >
+      <List>
+        <ListItem value={`${Math.min(CALL_AFTER_WEEKS, Math.floor(weeks))} von ${CALL_AFTER_WEEKS} Wochen`}>
+          <ItemContent icon="clock" color="place" title="Zeit als Lieferant">
+            <ProgressBar value={Math.min(1, weeks / CALL_AFTER_WEEKS)} label="Wochen" />
+          </ItemContent>
+        </ListItem>
+        <ListItem value={`${formatEuro(Math.min(revenue, CALL_MIN_REVENUE))} von ${formatEuro(CALL_MIN_REVENUE)}`}>
+          <ItemContent icon="coinEuro" color="money" title="Umsatz">
+            <ProgressBar value={Math.min(1, revenue / CALL_MIN_REVENUE)} label="Umsatz" />
+          </ItemContent>
+        </ListItem>
+      </List>
+    </Group>
+  );
+}
+
 function CustomersView() {
   const ui = useUi();
   const { state, dispatch } = useGame();
@@ -524,6 +560,7 @@ function CustomersView() {
   const share = stats.demand > 0 ? stats.ordered / stats.demand : 0;
   return (
     <>
+      <NextStageGroup />
       <SummaryTiles
         items={[
           { icon: 'chart', color: 'money', value: pct(share), label: 'Marktanteil' },

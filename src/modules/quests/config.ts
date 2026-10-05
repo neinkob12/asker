@@ -6,6 +6,7 @@ import type { Contact, GameEvents, GameState, MoneyKind } from '../../core';
 import { HARBOR_CITY, isPlayerTraveling, presentCity } from '../city';
 import { getVehicles, isShip } from '../fleet';
 import { getWarehouses } from '../goods';
+import { fincaWorkers, getFincas, isGrowStarted, openRegions, workersNeeded } from '../grow';
 import { getLieutenants, getRightHand } from '../hierarchy';
 import { netWorth } from '../leaderboard';
 import { hasBerth } from '../logistics';
@@ -81,9 +82,10 @@ export type QuestGoTo =
   | 'gangs'
   | 'laundering'
   | 'finance'
-  /** Auftrag 43: Kunden-App (Bestellungen) bzw. ihr Bereich Hafen. */
+  /** Auftrag 43: Kunden-App (Bestellungen) bzw. ihr Bereich Hafen, Anbau. */
   | 'trade'
-  | 'tradeHarbor';
+  | 'tradeHarbor'
+  | 'grow';
 
 export interface QuestDef {
   id: string;
@@ -112,8 +114,8 @@ export interface QuestDef {
   cityId?: string;
   /** Weitere Bedingung, bevor die Quest dran sein kann (Auftrag 43: Rotterdam erst nach der Ankunft). */
   requires?: (state: GameState) => boolean;
-  /** Wer die Quest schickt (Auftrag 43): Jansen statt Peter. */
-  voice?: 'jansen';
+  /** Wer die Quest schickt (Auftrag 43): Jansen statt Peter, in der Produktion der Anrufer der Region. */
+  voice?: 'jansen' | 'grow';
   reward: QuestReward[];
   /** Was Peter schreibt, wenn die Quest erledigt ist (sonst nur der Kapitel-Abschluss). */
   doneText?: string;
@@ -131,6 +133,7 @@ export const CHAPTERS: readonly string[] = [
   'Servus München',
   'Mainhattan',
   'Rotterdam',
+  'Produktion',
 ];
 
 /** Quests, die Auftrag 43 eingefügt hat (Migration 5 rechnet den Index um). */
@@ -148,6 +151,12 @@ export const QUESTS_ADDED_IN_43: readonly string[] = [
   'rtBuy',
   'rtTruck',
   'rtOnTime',
+  'pdOffer',
+  'pdFinca',
+  'pdWorkers',
+  'pdHarvest',
+  'pdShip',
+  'pdDeliver',
 ];
 
 /** So viele Quests gab es vor Auftrag 36 (alte Spielstände mit allem erledigt: index = diese Zahl). */
@@ -658,6 +667,8 @@ export const QUESTS: readonly QuestDef[] = [
   }),
   // --- Kapitel 11 (Auftrag 43): Rotterdam. Jansen zeigt dir den neuen Job, erst wenn du angekommen bist. ---
   ...harborChapter(),
+  // --- Kapitel 12 (Auftrag 43): Produktion. Der Anrufer aus Kolumbien bzw. Marokko führt durch die Kette. ---
+  ...growChapter(),
 ];
 
 /** In Rotterdam angekommen (nach dem Verkauf). */
@@ -853,6 +864,103 @@ function cityChapter(t: CityChapterTexts): QuestDef[] {
       goTo: 'territory',
       reward: [{ kind: 'money', money: 'clean', amount: 3000 }],
       doneText: t.done,
+    },
+  ];
+}
+
+/** Die Anrufe aus Kolumbien bzw. Marokko sind gekommen (Produktion, Auftrag 42). */
+function growing(state: GameState): boolean {
+  return isGrowStarted(state);
+}
+
+/**
+ * Das Kapitel „Produktion“ (Auftrag 43): Der Anrufer der Region führt durch die Kette vom Angebot bis zur ersten eigenen
+ * Lieferung. Jeder Schritt misst den Zustand und führt mit „Hinführen“ in den Anbau der Kunden-App.
+ */
+function growChapter(): QuestDef[] {
+  const base = { chapter: 11, requires: growing, voice: 'grow' as const, target: 1 };
+  return [
+    {
+      ...base,
+      id: 'pdOffer',
+      icon: 'leaf',
+      title: 'Nimm ein Angebot an',
+      task:
+        'Wir bauen an, du verkaufst. Eigene Ware kostet dich einen Bruchteil vom Einkauf. Nimm unser Angebot an, dann ' +
+        'zeig ich dir das Land.',
+      hint: 'Kunden-App › Anbau: Angebot annehmen.',
+      measure: (state) => (openRegions(state).length > 0 ? 1 : 0),
+      goTo: 'grow',
+      reward: [{ kind: 'money', money: 'clean', amount: 20000 }],
+    },
+    {
+      ...base,
+      id: 'pdFinca',
+      icon: 'home',
+      title: 'Pachte eine Finca',
+      task:
+        'Erst Land. Pachten ist zum Anfang günstiger, kaufen rechnet sich erst nach einem Jahr. Auf der ersten Finca ' +
+        'steht schon was im Feld, die Ernte kommt bald.',
+      hint: 'Kunden-App › Anbau › Region: Land kaufen oder pachten (sauberes Geld).',
+      measure: (state) => (getFincas(state).length > 0 ? 1 : 0),
+      goTo: 'grow',
+      reward: [{ kind: 'money', money: 'clean', amount: 20000 }],
+    },
+    {
+      ...base,
+      id: 'pdWorkers',
+      icon: 'users',
+      title: 'Stell Arbeiter ein',
+      task:
+        'Ohne Leute auf dem Feld gibt es keine Ernte. Stell so viele Arbeiter ein, wie die Finca braucht, und am besten ' +
+        'einen Gärtner, der macht die Ware besser.',
+      hint: 'Finca-Seite › Leute: Arbeiter auf die Zahl stellen, die dort steht.',
+      measure: (state) => (getFincas(state).some((f) => fincaWorkers(state, f) >= workersNeeded(f)) ? 1 : 0),
+      goTo: 'grow',
+      reward: [{ kind: 'money', money: 'clean', amount: 10000 }],
+    },
+    {
+      ...base,
+      id: 'pdHarvest',
+      icon: 'package',
+      title: 'Bring die erste Ernte ein',
+      task:
+        'Jetzt heißt es warten. Ernte, trocknen, bei Hasch pressen, verpacken: Dann liegt die Ware im Ausfuhrlager am ' +
+        'Hafen. Die Verpackung entscheidet, wie oft der Zoll reinschaut.',
+      hint: 'Die Finca-Seite zeigt, wie lange es noch dauert.',
+      measure: (state) => (state.modules.grow.stats.harvested > 0 ? 1 : 0),
+      goTo: 'grow',
+      reward: [{ kind: 'money', money: 'clean', amount: 10000 }],
+    },
+    {
+      ...base,
+      id: 'pdShip',
+      icon: 'ship',
+      title: 'Verschiffe deine eigene Ware',
+      task:
+        'Die Ware liegt im Ausfuhrlager. Bring sie aufs Schiff nach Europa, ein paar Wochen ist sie unterwegs. Mit eigenem ' +
+        'Schiff fällt sie weniger auf.',
+      hint: 'Kunden-App › Hafen › Einkauf: „Eigene Ernte“ ganz oben.',
+      measure: (state) =>
+        getShipments(state).some((x) => x.own === true) || tradeStats(state).ownDelivered > 0 ? 1 : 0,
+      goTo: 'tradeHarbor',
+      reward: [{ kind: 'money', money: 'clean', amount: 20000 }],
+    },
+    {
+      ...base,
+      id: 'pdDeliver',
+      icon: 'truck',
+      title: 'Liefere eigene Ware aus',
+      task:
+        'Wenn sie im Hafen ist, geht sie raus wie jede andere Ware. Nur dass sie dich fast nichts gekostet hat. Je mehr ' +
+        'davon, desto näher bist du am Produzenten.',
+      hint: 'Kunden-App › Bestellungen: ausliefern wie immer (oder Fenna machen lassen).',
+      measure: (state) => (tradeStats(state).ownDelivered > 0 ? 1 : 0),
+      goTo: 'trade',
+      reward: [{ kind: 'money', money: 'clean', amount: 50000 }],
+      doneText:
+        'Das ist der Anfang. Wenn die Hälfte deiner Lieferungen aus eigener Ernte kommt, bist du Produzent. Und dann ganz ' +
+        'Europa.',
     },
   ];
 }
