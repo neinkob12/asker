@@ -756,7 +756,12 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   Bot die dritte Stadt (er wählt die günstigste: Hamburg vor Frankfurt). Mit `SALE_INFLUENCE_FACTOR_BY_CITY` 0,7 war er
   nach 7/3/6 Tagen komplett, mit 0,4 blieb er in 2 von 6 Seeds länger als 30 Tage hängen. Mit 0,5 ist er nach
   14/6/7/10/7/12 Tagen komplett (Seed 1–6, Schnitt 9,3; Richtwert 8–15, am Ende wohl die vierte Stadt mit etwa 10).
-  Startgeld 48.000 € (`START_MONEY_MIN_BY_CITY`) bleibt, keine Pleite.
+  Startgeld 48.000 € (`START_MONEY_MIN_BY_CITY`) bleibt, keine Pleite. Nach dem Merge mit Berlin und München: Köln
+  komplett unverändert gegenüber `main` (22/22/22/23/23/24/22/21/21/22/17/20, Seeds 1–12). Der Bot wählt selbst
+  Köln → Berlin → Hamburg → Frankfurt → München; Frankfurt als vierte Stadt komplett nach 7/13/7/16/8/15 Tagen
+  (Seed 1–6, Median 10,5; Richtwert vierte etwa 10). Als fünfte (`BALANCE_ORDER=berlin,hamburg,muenchen,frankfurt`)
+  nach 7/9/8/9/5 Tagen (Median 8, Richtwert 8); Seed 2 blieb bei 9 bis 11 Stadtteilen und war nach 44 Tagen nicht
+  komplett. München als vierte Stadt nach Hamburg brauchte 15 bis 27 Tage (aus Auftrag 38 bekannt), keine Pleite.
 
 - **München (Auftrag 38, nach dem Merge mit Berlin):** `BALANCE_ORDER` (Bot `cityOrder`) legt die Städte nach Köln
   fest. Einfluss pro Verkauf in München gedämpft wie in Hamburg (`SALE_INFLUENCE_FACTOR_BY_CITY.muenchen` 0,6): ohne
@@ -872,7 +877,7 @@ Geld und Flughafen, nur als Daten:
   hängen über Ausfallstraßen und Mainbrücken am Rest (`LINKS_FRANKFURT`).
 - **Kundschaft**: viele Banker an den Spots (Westend, Messe, EZB, Bürostadt, Terminals). **Gangs**: Kaisersack-Clan
   (Bahnhof), Mainkapital (Westend, Geld und Anwälte), Die Bembel (Sachsenhausen), Farbwerker (Höchst und Flughafen).
-- **Lieferanten**: Toni ist zu Hause (`deliveryTimes`/`priceFactors` frankfurt: eine Stunde, 0,9). Kofi in der Cargo City
+- **Lieferanten**: Toni und Kofi sind in Frankfurt zu Hause (`Supplier.home`, beide begrüßen dich bei der Ankunft); Toni dort in einer Stunde und zehn Prozent billiger. Kofi in der Cargo City
   (Lieferant „Cargo City“, ID `flughafen`, nur Frankfurt, ohne Bedingungen): 40 Minuten, Preisniveau 0,68, Qualität 0,88, höchstens 50 g, Zoll
   `customs` 0,04 (zusätzliche Beschlagnahme-Chance), Weg `'air'` mit eigenen Gründen in `suppliers/problems.ts`.
 - **Geldwäsche**: `LAUNDERING_CAPACITY_BY_CITY` (Frankfurt 1,5): Solange du in Frankfurt bist (`presentCity`, nicht die
