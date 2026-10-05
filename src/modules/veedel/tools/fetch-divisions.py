@@ -51,6 +51,27 @@ CITIES = {
             'Blankenese',
         ],
     },
+    # München (Auftrag 38): zwölf Stadtbezirke (OSM admin_level 9) rund um die Innenstadt, von der Theresienwiese bis
+    # zur Allianz Arena.
+    'muenchen': {
+        'box': (11.36, 11.75, 48.04, 48.28),
+        # Stadtbezirke sind in Overture "locality"; gleichnamige Bezirksteile ("Schwanthalerhöhe") sind kleiner.
+        'subtypes': ['locality'],
+        'names': [
+            'Altstadt-Lehel',
+            'Ludwigsvorstadt-Isarvorstadt',
+            'Maxvorstadt',
+            'Schwabing-West',
+            'Au-Haidhausen',
+            'Sendling',
+            'Schwanthalerhöhe',
+            'Neuhausen-Nymphenburg',
+            'Schwabing-Freimann',
+            'Obergiesing-Fasangarten',
+            'Bogenhausen',
+            'Milbertshofen-Am Hart',
+        ],
+    },
 }
 
 _ctx = ssl.create_default_context(cafile=os.environ.get('SSL_CERT_FILE'))
@@ -157,6 +178,8 @@ def main():
     for row in rows:
         name = (row.get('names') or {}).get('primary')
         if name not in wanted or not row.get('is_land'):
+            continue
+        if 'subtypes' in conf and row.get('subtype') not in conf['subtypes']:
             continue
         geom = shapely.from_wkb(row['geometry'])
         score = (rank.get(row.get('subtype'), 9), -geom.area)

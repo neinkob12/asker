@@ -228,6 +228,7 @@ export const VEEDEL_POWER = 15;
 export const METHOD_INTERVAL_BY_CITY: Readonly<Record<string, readonly [number, number]>> = {
   koeln: [4, 8],
   hamburg: [6, 12],
+  muenchen: [6, 12],
 };
 /** Geht zum Termin nichts (kein Ziel, eine andere Gang war gerade dran), versucht sie es so viel später wieder. */
 export const METHOD_RETRY = 6 * HOUR;

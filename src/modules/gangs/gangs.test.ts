@@ -79,7 +79,7 @@ function sellHours(sim: Simulation, spotId: string, perHour: number, hours: numb
 }
 
 describe('gangs: Identität und Stärke', () => {
-  it('je vier frei erfundene Gangs in Köln und Hamburg mit Boss, Heimat, Farbe, Stil und Stärken', () => {
+  it('je vier frei erfundene Gangs in Köln, Hamburg und München mit Boss, Heimat, Farbe, Stil und Stärken', () => {
     const sim = createTestGame();
     expect(getGangs(sim.state, 'koeln').map((g) => g.id)).toEqual(['nord', 'west', 'ost', 'sued']);
     expect(getGangs(sim.state, 'hamburg').map((g) => g.id)).toEqual([
@@ -88,9 +88,15 @@ describe('gangs: Identität und Stärke', () => {
       'hh-schanze',
       'hh-elbchaussee',
     ]);
+    expect(getGangs(sim.state, 'muenchen').map((g) => g.id)).toEqual([
+      'mu-bahnhof',
+      'mu-giesing',
+      'mu-isar',
+      'mu-nord',
+    ]);
     const gangs = getGangs(sim.state);
-    expect(new Set(gangs.map((g) => g.color)).size).toBe(8);
-    expect(new Set(gangs.map((g) => g.homeVeedelId)).size).toBe(8);
+    expect(new Set(gangs.map((g) => g.color)).size).toBe(gangs.length);
+    expect(new Set(gangs.map((g) => g.homeVeedelId)).size).toBe(gangs.length);
     for (const g of gangs) expect(getVeedel(g.homeVeedelId)?.cityId, g.id).toBe(g.cityId);
     // Hamburg ist härter: mehr Kampfkraft, Geld und Leute als Köln im Schnitt (etwa ein Viertel).
     const avg = (city: string, f: (g: (typeof gangs)[number]) => number) =>
@@ -101,7 +107,11 @@ describe('gangs: Identität und Stärke', () => {
       (g: (typeof gangs)[number]) => g.traits.start.people,
     ]) {
       expect(avg('hamburg', f)).toBeGreaterThan(avg('koeln', f) * 1.15);
+      expect(avg('muenchen', f)).toBeGreaterThan(avg('koeln', f) * 1.15);
     }
+    // München ist reicher und besser vernetzt als Hamburg.
+    expect(avg('muenchen', (g) => g.traits.start.money)).toBeGreaterThan(avg('hamburg', (g) => g.traits.start.money));
+    expect(avg('muenchen', (g) => g.traits.network)).toBeGreaterThan(avg('hamburg', (g) => g.traits.network));
     for (const g of gangs) {
       expect(getVeedel(g.homeVeedelId)).toBeDefined();
       expect(g.name && g.boss && g.style && g.crew).toBeTruthy();

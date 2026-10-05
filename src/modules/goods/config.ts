@@ -210,6 +210,58 @@ export const WAREHOUSES: readonly Warehouse[] = [
     capacity: 8000,
     description: 'Bootshaus am Harburger Binnenhafen. Teuer, aber wer kommt hier schon vorbei.',
   },
+  // München (Auftrag 38): fünf Standorte zum Kaufen, die teuersten im Spiel (vergleichbare Kölner Standorte mal dem
+  // Immobilien-Faktor 2). Ein billiges großes Lager gibt es nicht, nur in Sendling an der Großmarkthalle.
+  {
+    id: 'halle-sendling',
+    cityId: 'muenchen',
+    name: 'Halle an der Großmarkthalle',
+    lng: 11.548,
+    lat: 48.1115,
+    cost: 7400,
+    capacity: 20000,
+    description: 'Kühlhalle neben der Großmarkthalle. Lieferwagen um vier Uhr morgens fallen hier niemandem auf.',
+  },
+  {
+    id: 'hinterhof-giesing',
+    cityId: 'muenchen',
+    name: 'Hinterhof Giesing',
+    lng: 11.5965,
+    lat: 48.106,
+    cost: 6000,
+    capacity: 8000,
+    description: 'Werkstatt im Hinterhof an der Tegernseer Landstraße. Für Münchner Verhältnisse fast billig.',
+  },
+  {
+    id: 'garage-milbertshofen',
+    cityId: 'muenchen',
+    name: 'Garage Milbertshofen',
+    lng: 11.5745,
+    lat: 48.1891,
+    cost: 6400,
+    capacity: 12000,
+    description: 'Tiefgarage unter einem Wohnblock am Hart. Viel Platz, weit draußen.',
+  },
+  {
+    id: 'keller-haidhausen',
+    cityId: 'muenchen',
+    name: 'Keller Haidhausen',
+    lng: 11.6,
+    lat: 48.1255,
+    cost: 7000,
+    capacity: 4000,
+    description: 'Gewölbekeller unter einem Wirtshaus im Franzosenviertel. Klein, teuer, mitten im Nachtleben.',
+  },
+  {
+    id: 'remise-neuhausen',
+    cityId: 'muenchen',
+    name: 'Remise Neuhausen',
+    lng: 11.5265,
+    lat: 48.16,
+    cost: 8000,
+    capacity: 6000,
+    description: 'Alte Remise hinter einer Villa. Diskret, gepflegt, und der Vermieter stellt keine Fragen.',
+  },
 ];
 
 export const DEFAULT_WAREHOUSE = 'ehrenfeld';

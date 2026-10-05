@@ -1,6 +1,7 @@
-// Veedel: die Stadtteile der Städte im Spiel (Köln, seit Auftrag 30 auch Hamburg) mit echten Grenzen, Eigenschaften
-// und Nachbarschaft. Statische Daten, kein eigener Spielzustand. Grenzen: Köln aus den Offenen Daten Köln (Datenlizenz
-// Deutschland – Zero – 2.0), Hamburg aus Overture Maps / OpenStreetMap (ODbL), Details in boundaries*.ts und tools/.
+// Veedel: die Stadtteile der Städte im Spiel (Köln, seit Auftrag 30 auch Hamburg, seit Auftrag 38 München) mit echten
+// Grenzen, Eigenschaften und Nachbarschaft. Statische Daten, kein eigener Spielzustand. Grenzen: Köln aus den Offenen
+// Daten Köln (Datenlizenz Deutschland – Zero – 2.0), Hamburg und München aus Overture Maps / OpenStreetMap (ODbL),
+// Details in boundaries*.ts und tools/.
 //
 // Öffentliche API:
 //   allVeedel(cityId?) (ohne Stadt: alle Städte), getVeedel(id), veedelName(id), veedelCity(id), veedelAt(lng, lat),
@@ -9,8 +10,10 @@
 import { defineModule } from '../../core';
 import { SHARED_BORDERS as KOELN_BORDERS, BOUNDARY_COORDINATES as KOELN_BOUNDARIES } from './boundaries';
 import { SHARED_BORDERS as HAMBURG_BORDERS, BOUNDARY_COORDINATES as HAMBURG_BOUNDARIES } from './boundaries-hamburg';
+import { SHARED_BORDERS as MUENCHEN_BORDERS, BOUNDARY_COORDINATES as MUENCHEN_BOUNDARIES } from './boundaries-muenchen';
 import { LINKS as KOELN_LINKS, VEEDEL as KOELN_VEEDEL, type Veedel } from './data';
 import { LINKS_HAMBURG, VEEDEL_HAMBURG } from './data-hamburg';
+import { LINKS_MUENCHEN, VEEDEL_MUENCHEN } from './data-muenchen';
 
 export type { Veedel } from './data';
 
@@ -18,12 +21,17 @@ export type { Veedel } from './data';
 export type LngLatTuple = readonly [number, number];
 
 /** Alle Veedel aller Städte, Köln zuerst. */
-const VEEDEL: readonly Veedel[] = [...KOELN_VEEDEL, ...VEEDEL_HAMBURG];
-const BOUNDARY_COORDINATES: Record<string, readonly number[]> = { ...KOELN_BOUNDARIES, ...HAMBURG_BOUNDARIES };
-const SHARED_BORDERS: Record<string, readonly string[]> = { ...KOELN_BORDERS, ...HAMBURG_BORDERS };
+const VEEDEL: readonly Veedel[] = [...KOELN_VEEDEL, ...VEEDEL_HAMBURG, ...VEEDEL_MUENCHEN];
+const BOUNDARY_COORDINATES: Record<string, readonly number[]> = {
+  ...KOELN_BOUNDARIES,
+  ...HAMBURG_BOUNDARIES,
+  ...MUENCHEN_BOUNDARIES,
+};
+const SHARED_BORDERS: Record<string, readonly string[]> = { ...KOELN_BORDERS, ...HAMBURG_BORDERS, ...MUENCHEN_BORDERS };
 const LINKS: readonly { a: string; b: string; via: string }[] = [
   ...KOELN_LINKS,
   ...LINKS_HAMBURG.map((l) => ({ a: l.a, b: l.b, via: l.why })),
+  ...LINKS_MUENCHEN.map((l) => ({ a: l.a, b: l.b, via: l.why })),
 ];
 const BY_ID = new Map(VEEDEL.map((v) => [v.id, v]));
 const BY_CITY = new Map<string, Veedel[]>();

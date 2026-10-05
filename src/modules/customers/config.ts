@@ -312,6 +312,35 @@ export const DEALERS: readonly DealerInfo[] = [
     veedelId: 'harburg',
     about: 'Student mit großem Freundeskreis südlich der Elbe.',
   },
+  // München (Auftrag 38)
+  {
+    id: 'ferdl',
+    name: 'Ferdl (Glockenbach)',
+    cityId: 'muenchen',
+    veedelId: 'isarvorstadt',
+    about: 'Barkeeper am Gärtnerplatz, kennt jede Nachtschicht im Viertel.',
+  },
+  {
+    id: 'vroni',
+    name: 'Vroni (Schwabing)',
+    cityId: 'muenchen',
+    veedelId: 'schwabing-freimann',
+    about: 'Organisiert Partys für Leute, die nie selbst einkaufen.',
+  },
+  {
+    id: 'emre',
+    name: 'Emre (Giesing)',
+    cityId: 'muenchen',
+    veedelId: 'giesing',
+    about: 'Hat ein Wettbüro an der Tegernseer Landstraße und viele Stammgäste.',
+  },
+  {
+    id: 'konstantin',
+    name: 'Konstantin (Bogenhausen)',
+    cityId: 'muenchen',
+    veedelId: 'bogenhausen',
+    about: 'Privatfahrer für die Villen an der Isar. Liefert, was bestellt wird.',
+  },
 ];
 
 // --- Stammabnehmer (Auftrag 34) ---

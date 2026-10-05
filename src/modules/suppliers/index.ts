@@ -145,6 +145,8 @@ export interface SupplierRequirements {
   reputation?: number;
   /** Eigener Liegeplatz im Niehler Hafen (logistics). */
   berth?: boolean;
+  /** Diese Stadt ist freigeschaltet (Auftrag 38: Lieferanten, die nur in eine spätere Stadt liefern). */
+  city?: string;
 }
 
 export interface SupplierUnlock {
@@ -189,6 +191,11 @@ export interface Supplier {
    * { koeln: 'A3', hamburg: 'A7' }. Fehlt die Stadt, nimmt roads die Zufahrt in der besten Richtung.
    */
   via?: Readonly<Record<string, string>>;
+  /**
+   * Zoll an einer Grenze (Auftrag 38, z.B. am Brenner): zusätzliche Chance auf Beschlagnahme pro Lieferung, wie
+   * PORT_SEIZE_EXTRA am Hafen. Fehlt: 0.
+   */
+  customs?: number;
 }
 
 /** Autobahn, über die der Kurier in die Stadt kommt (supplier.via), oder undefined. */
@@ -429,6 +436,10 @@ export function unlockRequirements(
     const berth = hasBerth(state, 'koeln');
     rows.push({ label: 'Eigener Liegeplatz im Niehler Hafen', done: berth, progress: berth ? 1 : 0 });
   }
+  if (requires.city) {
+    const there = citiesUnlocked(state).includes(requires.city);
+    rows.push({ label: `Du bist in ${cityName(requires.city)}`, done: there, progress: there ? 1 : 0 });
+  }
   return rows;
 }
 
@@ -603,7 +614,7 @@ export function activeDeal(
  */
 export function rollShipmentProblem(roll: number, supplier: Supplier, trust: number): ShipmentProblem | null {
   const risk = (1 - supplier.reliability) * (1 - trust / 200);
-  const seize = risk * SEIZE_FACTOR + (supplier.kind === 'port' ? PORT_SEIZE_EXTRA : 0);
+  const seize = risk * SEIZE_FACTOR + (supplier.kind === 'port' ? PORT_SEIZE_EXTRA : 0) + (supplier.customs ?? 0);
   const delay = seize + risk * DELAY_FACTOR;
   const bad = delay + risk * BAD_QUALITY_FACTOR;
   if (roll < seize) return 'seized';

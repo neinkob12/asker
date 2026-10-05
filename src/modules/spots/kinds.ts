@@ -180,6 +180,17 @@ export const PRESET_KINDS: Readonly<Record<string, SpotKind>> = {
   schanzenpark: 'park',
   'am-weiher': 'park',
   strandweg: 'park',
+  'sendlinger-tor': 'station',
+  'hauptbahnhof-muc': 'station',
+  'ostbahnhof-muc': 'club',
+  'uni-muc': 'campus',
+  'weissenburger-platz': 'club',
+  'muenchner-freiheit': 'club',
+  bavariapark: 'park',
+  hirschgarten: 'park',
+  olympiadorf: 'campus',
+  scheidplatz: 'station',
+  froettmaning: 'station',
 };
 
 // --- Bekanntheit -------------------------------------------------------------------------------

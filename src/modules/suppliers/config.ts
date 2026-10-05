@@ -67,8 +67,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     name: 'Frankfurt',
     contactName: 'Toni',
     kind: 'city',
-    // Kommt über die A3 aus Süden in Köln an, in Hamburg über die A7 (nur Karte).
-    via: { koeln: 'A3', hamburg: 'A7' },
+    // Kommt über die A3 aus Süden in Köln an, in Hamburg über die A7, in München über die A9 (nur Karte).
+    via: { koeln: 'A3', hamburg: 'A7', muenchen: 'A9' },
     lng: 8.682,
     lat: 50.111,
     deliveryTime: 180,
@@ -76,10 +76,11 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.62,
     reliability: 0.88,
     description: 'Kurierfahrer über die A3. Schnell und zuverlässig, dafür teuer.',
-    // Toni ist in Hamburg dein Startlieferant per Kurier: länger unterwegs, zehn Prozent Aufschlag.
-    cities: ['koeln', 'hamburg'],
-    deliveryTimes: { hamburg: 330 },
-    priceFactors: { hamburg: 1.1 },
+    // Toni ist in Hamburg dein Startlieferant per Kurier: länger unterwegs, zehn Prozent Aufschlag. In München ebenso,
+    // mit fünfzehn Prozent (Auftrag 38).
+    cities: ['koeln', 'hamburg', 'muenchen'],
+    deliveryTimes: { hamburg: 330, muenchen: 300 },
+    priceFactors: { hamburg: 1.1, muenchen: 1.15 },
     packages: [
       { id: 'weed25', label: '25 g Gras', productId: 'weed', amount: 25, price: 140 },
       { id: 'weed50', label: '50 g Gras', productId: 'weed', amount: 50, price: 255 },
@@ -219,6 +220,40 @@ export const SUPPLIERS: readonly Supplier[] = [
       { id: 'edibles60', label: '60 Edibles', productId: 'edibles', amount: 60, price: 185 },
       { id: 'vape20', label: '20 Vape-Pens', productId: 'vape', amount: 20, price: 265 },
       { id: 'kush150', label: '150 g OG Kush', productId: 'kush', amount: 150, price: 1055, minTrust: 30 },
+    ],
+  },
+  {
+    // Auftrag 38: Enzo aus Verona liefert nur nach München, über den Brenner und die A8. Beste Ware in großen Mengen,
+    // aber am Brenner wartet der Zoll (customs). Meldet sich, sobald du in München bist.
+    id: 'italien',
+    name: 'Verona',
+    contactName: 'Enzo',
+    kind: 'city',
+    via: { muenchen: 'A8' },
+    lng: 10.992,
+    lat: 45.438,
+    deliveryTime: 420,
+    priceLevel: 0.4,
+    quality: 0.86,
+    reliability: 0.78,
+    customs: 0.04,
+    description:
+      'Ware vom Gardasee über den Brenner. Die beste Qualität in großen Mengen, aber am Brenner wartet der Zoll.',
+    cities: ['muenchen'],
+    unlock: {
+      requires: { city: 'muenchen' },
+      fee: 2500,
+      pitch:
+        'Ciao, amico. Enzo, aus Verona. Man sagt, du bist jetzt in München. Ich bring dir Ware über den Brenner, ' +
+        'die beste, die du kriegst. Für den Anfang {fee}.',
+    },
+    packages: [
+      { id: 'haze250', label: '250 g Amnesia Haze', productId: 'haze', amount: 250, price: 1295 },
+      { id: 'kush250', label: '250 g OG Kush', productId: 'kush', amount: 250, price: 1560 },
+      { id: 'oil100', label: '100 ml Öl', productId: 'oil', amount: 100, price: 745 },
+      { id: 'edibles200', label: '200 Edibles', productId: 'edibles', amount: 200, price: 545 },
+      { id: 'haze1kg', label: '1 kg Amnesia Haze', productId: 'haze', amount: 1000, price: 4780, minTrust: 20 },
+      { id: 'kush1kg', label: '1 kg OG Kush', productId: 'kush', amount: 1000, price: 5780, minTrust: 35 },
     ],
   },
   {
@@ -379,6 +414,20 @@ export const SUPPLIER_LOOKS: Readonly<Record<string, Partial<Look>>> = {
     top: 'suit',
     topColor: 1,
     extra: 'none',
+  },
+  // Enzo, Verona: Lkw-Unternehmer vom Gardasee, gut gelaunt.
+  italien: {
+    feminine: false,
+    age: 54,
+    skin: 2,
+    hair: 'slick',
+    hairColor: 6,
+    beard: 'full',
+    glasses: 'sun',
+    hat: 'none',
+    top: 'jacket',
+    topColor: 5,
+    extra: 'chain',
   },
   // Kalle aus Kalk: Nachbarschaft.
   koeln: {

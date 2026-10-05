@@ -270,8 +270,12 @@ export const CITY_OFFERS: Readonly<Record<string, CityOffer>> = {
     },
     come: 'Ich komme nach München',
     welcome: [
-      'Willkommen in München.',
-      'Ein Lager zuerst. Teuer, ich weiß. Dann eine ruhige Ecke, nicht gleich am Hauptbahnhof.',
+      'Willkommen in München. Schön, dass Sie da sind.',
+      'Zuerst ein Lager. Teuer, ich weiß: Giesing ist das günstigste, an der Großmarkthalle in Sendling ist am meisten ' +
+        'Platz.',
+      'Dann eine ruhige Ecke, nicht gleich am Hauptbahnhof. Die Polizei hier sieht Sie vom ersten Tag an als Händler.',
+      'Toni aus Frankfurt liefert auch hierher. Und ein Bekannter aus Verona meldet sich bestimmt, beste Ware über den ' +
+        'Brenner. Zur Wiesn brauchen Sie volle Lager.',
     ],
   },
   frankfurt: {
