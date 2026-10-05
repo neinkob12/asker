@@ -114,9 +114,9 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] E2 Personal-Tab der neuen Stadt zeigt den Kölner Baum (Leutnants, Capos, Ergebnis), „Leutnant ernennen“ bietet
   Kölner an, „In anderen Städten“ und die Suche öffnen Kölner Akten mit Aktionen (`Tree.tsx`, `AppointSheet.tsx`,
   `staff/ui/index.tsx`).
-- [ ] E3 Berichte der Statthalter anderer Städte kommen als offene Fragen mit Frist und Ton, mit Lohnreserve der
+- [x] E3 Berichte der Statthalter anderer Städte kommen als offene Fragen mit Frist und Ton, mit Lohnreserve der
   aktiven Stadt (`sendReport`, `buildReport`, `wageRunway`).
-- [ ] E4 Hafen- und Fahrer-Chats der alten Stadt mit Frist und nicht ausführbaren Antworten; Container einer schlafenden
+- [x] E4 Hafen- und Fahrer-Chats der alten Stadt mit Frist und nicht ausführbaren Antworten; Container einer schlafenden
   Stadt bleiben ewig am Kai.
 - [ ] E5 Routen-Seite der neuen Stadt zeigt und bedient Routen der alten (`routes.tsx` `getRoutes` ohne Stadt).
 - [ ] E6 Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt) der alten Stadt wirken in der neuen (`bonus`, `bonusProvider`).

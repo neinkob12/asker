@@ -654,6 +654,8 @@ export function receiveCargo(
   const cityId = item.cityId ?? 'koeln';
   const cargo: PortCargo = { id: ctx.nextId(), ...item, cityId, arrivedAt: ctx.now };
   ctx.state.modules.logistics.cargo.push(cargo);
+  // Schläft die Stadt (du bist woanders, Auftrag 43), holt ihr Statthalter die Ware selbst: keine Frage mit Frist an dich.
+  if (!isCityLive(ctx.state, cityId) && collectSleeping(ctx, cargo)) return cargo.id;
   const port = portOf(cityId);
   const goods = `${formatProductAmount(item.productId, item.amount)} ${productName(item.productId)}`;
   journal.add(
@@ -1286,7 +1288,8 @@ function startWaiting(ctx: Ctx, trip: Trip, here: Warehouse): void {
     'bad',
   );
   const driver = trip.driverId ? getStaffMember(ctx.state, trip.driverId) : undefined;
-  if (driver) {
+  // In einer schlafenden Stadt fragt der Fahrer nicht dich (Auftrag 43), er wartet, bis Platz ist.
+  if (driver && isCityLive(ctx.state, here.cityId)) {
     messages.send(ctx, {
       contact: staffContact(driver),
       text:
@@ -1500,6 +1503,33 @@ function retractStaleQuestions(ctx: Ctx): void {
   }
 }
 
+/**
+ * Ware am Kai einer schlafenden Stadt (Auftrag 43): Der Statthalter holt sie ins Lager der Stadt, so weit Platz ist.
+ * true, wenn nichts mehr am Kai steht.
+ */
+function collectSleeping(ctx: Ctx, cargo: PortCargo): boolean {
+  const s = ctx.state.modules.logistics;
+  const warehouseId = defaultPickupWarehouse(ctx.state, cargo.cityId);
+  if (!warehouseId) return false;
+  const result = storeFitting(ctx, {
+    productId: cargo.productId,
+    amount: cargo.amount,
+    warehouseId,
+    quality: cargo.quality,
+    unitCost: cargo.unitCost,
+  });
+  const taken = cargo.amount - result.rest;
+  if (taken <= 0) return false;
+  const goods = `${formatProductAmount(cargo.productId, taken)} ${productName(cargo.productId)}`;
+  journal.add(ctx, `${cityName(cargo.cityId)}: Der Statthalter hat ${goods} vom Kai ins Lager geholt.`, 'info');
+  if (result.rest > 0) {
+    cargo.amount = result.rest;
+    return false;
+  }
+  s.cargo = s.cargo.filter((c) => c.id !== cargo.id);
+  return true;
+}
+
 /** Zoll am Kai: Ware, die zu lange steht, kann jede Stunde gefunden werden (nur in der Stadt, die live ist). */
 function customs(ctx: Ctx): void {
   const s = ctx.state.modules.logistics;
@@ -1542,7 +1572,11 @@ function tick(ctx: Ctx): void {
   if (ctx.now % UNLOAD_RETRY_MINUTES === 0) {
     for (const trip of [...s.trips]) if (trip.status === 'waiting') arrive(ctx, trip);
   }
-  if (ctx.now % 60 === 0) customs(ctx);
+  if (ctx.now % 60 === 0) {
+    customs(ctx);
+    // Alte Stände: Ware am Kai einer schlafenden Stadt holt ihr Statthalter (Auftrag 43).
+    for (const cargo of [...s.cargo]) if (!isCityLive(ctx.state, cargo.cityId)) collectSleeping(ctx, cargo);
+  }
   routesTick(ctx);
   if (ctx.now % MINUTES_PER_DAY === 0) settleRestock(ctx);
   retractStaleQuestions(ctx);

@@ -635,7 +635,9 @@ function rightHandTurn(ctx: Ctx, cityId: string): void {
  */
 export function buildReport(state: GameState, cityId: string = activeCity(state)): DailyReport {
   const yesterday = cityReport(state, cityId, 1, 1);
-  const runway = wageRunway(state);
+  // Die Lohnreichweite gilt für die Stadt, in der du spielst (Auftrag 43: in den Berichten anderer Städte stand sonst
+  // die Reserve der aktiven Stadt).
+  const runway = cityId === activeCity(state) ? wageRunway(state) : { due: 0, days: null, warn: false };
   const advice: string[] = [];
   if (yesterday.profit < 0) {
     const biggest = yesterday.rows
@@ -686,7 +688,10 @@ function sendReport(ctx: Ctx, rh: RightHandPost, cityId: string): void {
   const tip = reportTip(ctx, cityId);
   if (tip) report.tip = tip;
   rh.lastReport = report;
-  const problems = (report.profit < 0 ? 1 : 0) + (wageRunway(ctx.state).warn ? 1 : 0);
+  // Aus einer anderen Stadt (Statthalter, Auftrag 43) kommt der Bericht still und ohne Frage: Entscheiden musst du dort
+  // nichts, und die Knöpfe würden die Stadt öffnen, in der du gerade bist.
+  const live = cityId === activeCity(ctx.state);
+  const problems = (report.profit < 0 ? 1 : 0) + (live && wageRunway(ctx.state).warn ? 1 : 0);
   // Mit Vollmacht wird der Tagesbericht zum Bericht aus der Stadt: Ergebnis, ihr Anteil, Erledigtes, Probleme.
   const fp = rh.fullPower;
   const fpDone = fp ? describeFullPowerDone(fp.done) : '';
@@ -708,17 +713,21 @@ function sendReport(ctx: Ctx, rh: RightHandPost, cityId: string): void {
   ];
   if (fp) fp.done = emptyFullPowerDone();
   const absent = getStaff(ctx.state, { cityId }).filter(isAbsent);
-  messages.send(ctx, {
-    contact: staffContact(m),
-    text: lines.join(' '),
-    options: [
-      { id: 'openFinance', label: 'Kasse öffnen', reply: 'Zeig mal die Kasse.' },
-      ...(absent.length > 0 ? [{ id: 'openStaff', label: 'Ausfälle ansehen', reply: 'Wer fällt aus?' }] : []),
-      { id: 'ok', label: 'Gut so', reply: 'Gut so.' },
-    ],
-    expiresIn: 12 * 60,
-    silent: problems === 0,
-  });
+  if (live) {
+    messages.send(ctx, {
+      contact: staffContact(m),
+      text: lines.join(' '),
+      options: [
+        { id: 'openFinance', label: 'Kasse öffnen', reply: 'Zeig mal die Kasse.' },
+        ...(absent.length > 0 ? [{ id: 'openStaff', label: 'Ausfälle ansehen', reply: 'Wer fällt aus?' }] : []),
+        { id: 'ok', label: 'Gut so', reply: 'Gut so.' },
+      ],
+      expiresIn: 12 * 60,
+      silent: problems === 0,
+    });
+  } else {
+    messages.send(ctx, { contact: staffContact(m), text: lines.join(' '), silent: true });
+  }
   rh.log.unshift({
     time: ctx.now,
     text: `Tagesbericht: ${report.profit >= 0 ? 'Gewinn' : 'Verlust'} ${formatEuro(report.profit)}.`,
