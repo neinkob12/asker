@@ -160,8 +160,13 @@ export interface Producer {
   /** Ware → Preis als Anteil am Grundpreis der Ware (pro Gramm). */
   products: Readonly<Record<string, number>>;
   quality: number;
-  /** Laufzeit bis Rotterdam in Tagen (andere Häfen: HarborPort.shipDays dazu). */
+  /**
+   * Per Lkw: Tage bis in den Hafen. Per Schiff: Tage bis das Schiff ablegt (Verladen); die Fahrt kommt aus dem Seeweg
+   * (roads.seaRoute ab dem Knoten sea, Auftrag 41).
+   */
   days: number;
+  /** Knoten im Seewege-Netz (roads), an dem das Schiff ablegt; fehlt bei Ware per Lkw. */
+  sea?: string;
   /** Grundchance einer Kontrolle pro Container (mal Größe, Hafen, Zoll-Heat). */
   risk: number;
   /** Per Lkw statt per Schiff (Niederlande): kein Seeweg auf der Karte. */
@@ -178,7 +183,8 @@ export const PRODUCERS: readonly Producer[] = [
     at: { lng: -5.81, lat: 35.78 },
     products: { hash: 0.16, weed: 0.2 },
     quality: 0.62,
-    days: 5,
+    days: 1,
+    sea: 'tanger',
     risk: 0.1,
     description: 'Hasch aus dem Rif, billig und viel. Der Zoll kennt die Route.',
   },
@@ -190,7 +196,8 @@ export const PRODUCERS: readonly Producer[] = [
     at: { lng: -5.44, lat: 36.13 },
     products: { weed: 0.19, haze: 0.25 },
     quality: 0.66,
-    days: 4,
+    days: 1,
+    sea: 'algeciras',
     risk: 0.07,
     description: 'Gewächshäuser an der Küste, gutes Gras, unter Tomaten verladen.',
   },
@@ -202,9 +209,10 @@ export const PRODUCERS: readonly Producer[] = [
     at: { lng: 19.45, lat: 41.32 },
     products: { weed: 0.17, kush: 0.24 },
     quality: 0.6,
-    days: 6,
+    days: 1,
+    sea: 'durres',
     risk: 0.09,
-    description: 'Felder in den Bergen, sehr billig, lange auf See um Griechenland herum.',
+    description: 'Felder in den Bergen, sehr billig, aber eine Woche auf See: durchs ganze Mittelmeer.',
   },
   {
     id: 'westland',
@@ -250,62 +258,184 @@ export const CONTAINER_SIZES: readonly ContainerSize[] = [
 ];
 
 /**
- * Seewege für die Europa-Ansicht (nur Darstellung): Wegpunkte vom Produzenten bis vor den Ärmelkanal, dann je Hafen
- * das letzte Stück. Grob entlang der echten Routen (Gibraltar, Biskaya, Kanal); Produzenten mit byRoad fahren per Lkw.
+ * Deckladung (Auftrag 41): was oben im Container liegt. Bessere Tarnung kostet mehr (Anteil am Warenwert des
+ * Containers) und senkt die Chance einer Kontrolle. Die Wahl: billig und riskant oder teuer und sicher.
  */
-export const SEA_LANES: Readonly<Record<string, readonly LngLat[]>> = {
-  marokko: [
-    { lng: -5.81, lat: 35.78 },
-    { lng: -6.2, lat: 36.0 },
-  ],
-  spanien: [
-    { lng: -5.44, lat: 36.13 },
-    { lng: -6.2, lat: 36.0 },
-  ],
-  albanien: [
-    { lng: 19.45, lat: 41.32 },
-    { lng: 18.9, lat: 40.0 },
-    { lng: 15.5, lat: 37.4 },
-    { lng: 12.0, lat: 37.2 },
-    { lng: 8.5, lat: 38.3 },
-    { lng: 2.0, lat: 37.6 },
-    { lng: -1.0, lat: 36.9 },
-    { lng: -5.4, lat: 35.95 },
-    { lng: -6.2, lat: 36.0 },
-  ],
-};
+export interface Cover {
+  id: 'none' | 'tiles' | 'bananas';
+  label: string;
+  /** Kosten als Anteil am Warenwert des Containers. */
+  share: number;
+  /** Faktor auf die Chance einer Zollkontrolle. */
+  riskFactor: number;
+  description: string;
+}
 
-/** Gemeinsamer Weg von Gibraltar bis vor den Kanal. */
-export const ATLANTIC_LANE: readonly LngLat[] = [
-  { lng: -6.2, lat: 36.0 },
-  { lng: -9.3, lat: 36.9 },
-  { lng: -9.9, lat: 39.5 },
-  { lng: -9.8, lat: 43.2 },
-  { lng: -5.6, lat: 48.4 },
-  { lng: -2.0, lat: 49.8 },
-  { lng: 1.4, lat: 50.95 },
+export const COVERS: readonly Cover[] = [
+  { id: 'none', label: 'Ohne', share: 0, riskFactor: 1, description: 'Nichts drüber. Wer aufmacht, sieht die Ware.' },
+  {
+    id: 'tiles',
+    label: 'Fliesen',
+    share: 0.015,
+    riskFactor: 0.7,
+    description: 'Paletten voller Fliesen: schwer, langweilig, der Hund riecht wenig.',
+  },
+  {
+    id: 'bananas',
+    label: 'Bananen',
+    share: 0.04,
+    riskFactor: 0.45,
+    description: 'Kühlcontainer mit Obst. Teuer, aber der Zoll winkt verderbliche Ware meist durch.',
+  },
 ];
 
-/** Das letzte Stück vom Kanal in den Hafen. */
-export const PORT_LANES: Readonly<Record<string, readonly LngLat[]>> = {
-  rotterdam: [
-    { lng: 1.4, lat: 50.95 },
-    { lng: 3.6, lat: 51.95 },
-    { lng: 4.05, lat: 51.97 },
-    { lng: 4.4, lat: 51.9 },
-  ],
-  antwerpen: [
-    { lng: 1.4, lat: 50.95 },
-    { lng: 3.5, lat: 51.45 },
-    { lng: 4.0, lat: 51.38 },
-    { lng: 4.29, lat: 51.29 },
-  ],
-  hamburg: [
-    { lng: 1.4, lat: 50.95 },
-    { lng: 4.4, lat: 53.0 },
-    { lng: 7.0, lat: 54.0 },
-    { lng: 8.4, lat: 53.95 },
-    { lng: 9.3, lat: 53.75 },
-    { lng: 10.0, lat: 53.53 },
-  ],
-};
+/**
+ * Auftrag 41: Städte in Europa als Kunden. Sie melden sich nach und nach (joinWeek: Wochen nach dem Start der
+ * Hafen-Phase, und nur bei gutem Ruf), zahlen mehr als die deutschen Städte (priceFactor auf den fairen Preis), aber
+ * auf dem Weg liegt eine Grenze mit Zoll (border: Chance einer Kontrolle pro Lieferung, mal Kontrollfaktor des Wagens).
+ * Der Lkw fährt über die Autobahn-Linien in roads (Rotterdam – Amsterdam, Antwerpen – Brüssel – Paris, Hamburg –
+ * Kopenhagen, München – Wien, München – Mailand über den Brenner, Frankfurt – Zürich). Namen frei erfunden.
+ */
+export interface EuropeCity extends ForeignCity {
+  country: string;
+  priceFactor: number;
+  joinWeek: number;
+  /** Wo der Zoll steht (für Texte: „Zollkontrolle <name>“) und die Chance einer Kontrolle pro Lieferung. */
+  border: { name: string; check: number };
+}
+
+export const EUROPE_CITIES: readonly EuropeCity[] = [
+  {
+    id: 'amsterdam',
+    name: 'Amsterdam',
+    country: 'Niederlande',
+    at: { lng: 4.83, lat: 52.33 },
+    indexCity: 'koeln',
+    priceFactor: 0.95,
+    joinWeek: 1,
+    border: { name: 'auf der A4 vor Amsterdam', check: 0.01 },
+    weekly: { hash: 10_000, weed: 8_000 },
+    contact: person(
+      'amsterdam',
+      'Joost Visser',
+      'Amsterdam, Coffeeshops',
+      'Beliefert ein Dutzend Coffeeshops durch die Hintertür. Will Menge, nicht Luxus.',
+      false,
+      51,
+    ),
+  },
+  {
+    id: 'bruessel',
+    name: 'Brüssel',
+    country: 'Belgien',
+    at: { lng: 4.45, lat: 50.9 },
+    indexCity: 'koeln',
+    priceFactor: 1.1,
+    joinWeek: 1,
+    border: { name: 'an der Grenze bei Antwerpen', check: 0.01 },
+    weekly: { weed: 9_000, hash: 5_000 },
+    contact: person(
+      'bruessel',
+      'Nadia El Amrani',
+      'Brüssel, Molenbeek',
+      'Hat die Straßen um den Gare du Midi und Verbindungen bis Lüttich.',
+      true,
+      36,
+    ),
+  },
+  {
+    id: 'paris',
+    name: 'Paris',
+    country: 'Frankreich',
+    at: { lng: 2.36, lat: 48.91 },
+    indexCity: 'frankfurt',
+    priceFactor: 1.2,
+    joinWeek: 2,
+    border: { name: 'an der Grenze bei Valenciennes', check: 0.025 },
+    weekly: { hash: 14_000, weed: 8_000 },
+    contact: person(
+      'paris',
+      'Karim Benali',
+      'Paris, Seine-Saint-Denis',
+      'Kauft für die Banlieue im Norden. Groß, schnell, misstrauisch.',
+      false,
+      42,
+    ),
+  },
+  {
+    id: 'kopenhagen',
+    name: 'Kopenhagen',
+    country: 'Dänemark',
+    at: { lng: 12.4, lat: 55.63 },
+    indexCity: 'hamburg',
+    priceFactor: 1.3,
+    joinWeek: 3,
+    border: { name: 'an der Grenze bei Padborg', check: 0.03 },
+    weekly: { weed: 8_000, hash: 4_000 },
+    contact: person(
+      'kopenhagen',
+      'Mads Kjær',
+      'Kopenhagen, Christianshavn',
+      'Die Pusher Street ist zu, die Kundschaft nicht. Zahlt gut für Ruhe.',
+      false,
+      45,
+    ),
+  },
+  {
+    id: 'wien',
+    name: 'Wien',
+    country: 'Österreich',
+    at: { lng: 16.215, lat: 48.205 },
+    indexCity: 'muenchen',
+    priceFactor: 1.15,
+    joinWeek: 3,
+    border: { name: 'an der Grenze am Walserberg', check: 0.025 },
+    weekly: { weed: 9_000, haze: 3_000 },
+    contact: person(
+      'wien',
+      'Ferdinand Grubhofer',
+      'Wien, Favoriten',
+      'Höflich, pünktlich, gnadenlos, wenn etwas fehlt.',
+      false,
+      58,
+    ),
+  },
+  {
+    id: 'zuerich',
+    name: 'Zürich',
+    country: 'Schweiz',
+    at: { lng: 8.47, lat: 47.4 },
+    indexCity: 'muenchen',
+    priceFactor: 1.4,
+    joinWeek: 4,
+    border: { name: 'an der Schweizer Grenze bei Basel', check: 0.05 },
+    weekly: { kush: 4_000, haze: 4_000 },
+    contact: person(
+      'zuerich',
+      'Beat Sutter',
+      'Zürich, Langstrasse',
+      'Banker als Kundschaft, Qualität vor Preis, nie ein lautes Wort.',
+      false,
+      49,
+    ),
+  },
+  {
+    id: 'mailand',
+    name: 'Mailand',
+    country: 'Italien',
+    at: { lng: 9.23, lat: 45.52 },
+    indexCity: 'muenchen',
+    priceFactor: 1.25,
+    joinWeek: 5,
+    border: { name: 'an der Grenze bei Kufstein oder am Brenner', check: 0.05 },
+    weekly: { hash: 8_000, weed: 6_000 },
+    contact: person(
+      'mailand',
+      'Giulia Ferraro',
+      'Mailand, Quarto Oggiaro',
+      'Familie aus Kalabrien, Geschäft in der Lombardei. Testet erst, kauft dann groß.',
+      true,
+      40,
+    ),
+  },
+];

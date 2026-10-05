@@ -94,7 +94,7 @@ export const MONEY_CATEGORIES: Record<MoneyCategory, MoneyCategoryInfo> = {
   'business.rotterdam': { label: 'Kauf Rotterdam', group: 'expense', icon: 'anchor' },
   'sales.trade': { label: 'Lieferungen an Kunden', group: 'income', icon: 'ship' },
   'trade.purchase': { label: 'Einkauf im Ausland', group: 'expense', icon: 'boxes' },
-  'trade.freight': { label: 'Fracht und Lkw', group: 'expense', icon: 'truck' },
+  'trade.freight': { label: 'Fracht, Schiffe und Lkw', group: 'expense', icon: 'truck' },
   'loss.police': { label: 'Polizei', group: 'loss', icon: 'siren' },
   'loss.theft': { label: 'Überfälle und Diebstahl', group: 'loss', icon: 'alert' },
   'loss.betrayal': { label: 'Verrat', group: 'loss', icon: 'userMinus' },

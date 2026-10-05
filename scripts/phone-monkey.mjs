@@ -46,6 +46,8 @@ const TARGETS = [
   // Auftrag 40: Verkauf (Boss von Deutschland, Jansen hat angerufen) und die App „Kunden“ der Hafen-Phase.
   { kind: 'panel', id: 'city.sale', extra: 'germany' },
   { kind: 'phone', id: 'trade.app', extra: 'sold' },
+  // Auftrag 41: Seite „Einkauf“ (Ware, Container, Deckladung, Schiff).
+  { kind: 'panel', id: 'trade.order', params: { producerId: 'spanien' }, extra: 'sold' },
 ];
 
 /** Zusätzliche Ausgangslagen (Auftrag 40), nach SETUP. */
@@ -60,6 +62,7 @@ const EXTRA = {
     window.koeln.dev.verkaufen();
     while (sim.state.modules.city.travel) sim.advance(30);
     sim.state.wallet.dirty += 300000;
+    sim.state.wallet.clean += 300000;
     window.koeln.runtime.api.closeDialog();
   })()`,
 };
@@ -181,6 +184,15 @@ const HIT = (index) => `(async () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   if (stuckAt !== null) return { stuck: true, offset: stuckAt };
+  // CSS-Animationen des Handys (Einschub, Wackeln bei einer Nachricht) zu Ende laufen lassen, sonst liegt alles kurz
+  // daneben (höchstens zwei Sekunden, endlose Animationen zählen nicht).
+  const running = (document.querySelector('.phone')?.getAnimations({ subtree: true }) ?? []).filter(
+    (a) => a.effect?.getComputedTiming().iterations !== Infinity,
+  );
+  await Promise.race([
+    Promise.all(running.map((a) => a.finished.catch(() => null))),
+    new Promise((resolve) => setTimeout(resolve, 2000)),
+  ]);
   // Blätter, Dialoge und Fenster gleiten mit einer Feder ein: Erst messen, wenn das Element nicht mehr wandert.
   let before = '';
   for (let i = 0; i < 30; i++) {

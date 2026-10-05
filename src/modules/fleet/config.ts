@@ -52,6 +52,34 @@ export const VEHICLE_MODELS: readonly VehicleModel[] = [
     harborOnly: true,
     description: 'Für die großen Lieferungen vom Hafen zu den Kunden. Wird oft rausgewunken.',
   },
+  // Auftrag 41: eigene Schiffe für die Hafen-Phase. Sie holen die Container selbst ab (hin und zurück), ohne Fracht pro
+  // Container; eigene Crew, der Zoll schaut seltener hin (checkFactor). speed ist hier ohne Bedeutung.
+  {
+    id: 'coaster',
+    name: 'Küstenmotorschiff',
+    capacity: 250_000,
+    speed: 1,
+    checkFactor: 0.6,
+    price: 100_000,
+    mapKind: 'ship',
+    available: true,
+    harborOnly: true,
+    ship: { kmPerDay: 500, costPerDay: 1_200 },
+    description: 'Klein und langsam, fällt zwischen den Fischkuttern nicht auf. Fasst zwei große Container.',
+  },
+  {
+    id: 'freighter',
+    name: 'Frachter',
+    capacity: 800_000,
+    speed: 1,
+    checkFactor: 1,
+    price: 300_000,
+    mapKind: 'ship',
+    available: true,
+    harborOnly: true,
+    ship: { kmPerDay: 700, costPerDay: 3_000 },
+    description: 'Schnell und groß: holt den Bedarf von Wochen auf einmal. Fällt so auf wie jedes Linienschiff.',
+  },
 ];
 
 /**
@@ -76,5 +104,7 @@ export const VEHICLE_SEIZE_CHANCE = 0.5;
 export const SEIZED_VISIBLE_MINUTES = 3 * 24 * 60;
 /** Beim Verkauf gibt es diesen Anteil vom Preis zurück (sauberes Geld). */
 export const RESALE_SHARE = 0.5;
-/** So viele Fahrzeuge kann man insgesamt haben. */
+/** So viele Fahrzeuge für die Straße kann man insgesamt haben. */
 export const FLEET_LIMIT = 12;
+/** So viele eigene Schiffe (Auftrag 41, eigenes Limit neben den Straßenfahrzeugen). */
+export const SHIP_LIMIT = 4;

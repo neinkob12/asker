@@ -45,28 +45,42 @@ import {
 } from '../../core';
 import { cityName, getCity, HARBOR_CITY, isBusinessSold } from '../city';
 import { activeEncounters, startEncounter } from '../encounters';
-import { getVehicle, maybeSeize, releaseVehicle, useVehicle, vehicleSpec } from '../fleet';
+import {
+  getShips,
+  getVehicle,
+  isShip,
+  maybeSeize,
+  releaseVehicle,
+  useVehicle,
+  vehicleName,
+  vehicleSpec,
+  vehicleStatus,
+} from '../fleet';
 import { gangContact, gangPower, getGang, getGangs, memoryScore, remember } from '../gangs';
 import { getProduct, productName } from '../goods';
 import { getRightHand, rightHandTitle } from '../hierarchy';
 import { CUSTOMS_OPPONENT, HARBOR_PORTS, type HarborPort, harborPort } from '../logistics';
 import { priceIndex } from '../market';
 import { customsArrival, customsHeat, customsSeized } from '../police';
-import { interCityMinutes, interCityRoute } from '../roads';
+import { interCityMinutes, interCityRoute, seaRoute } from '../roads';
 import { getStaffMember, staffContact } from '../staff';
 import { rivalOffers } from '../suppliers';
 import {
+  AUTOBAHN_CHECK_MAX,
   AUTOBAHN_CHECK_PER_100KM,
+  CHARTER_KM_PER_DAY,
   CONTRACT_SHARE,
   CONTRACT_WEEKS,
   CUSTOMER_KINDS,
   DEMAND_SCALE,
+  EUROPE_MIN_RELIABILITY,
   FREIGHT_BASE,
   FREIGHT_PER_KG_100KM,
   GANG_MEMORY_BLOCK,
   GANG_TIP_CHANCE,
   LATE_GRACE_DAYS,
   LATE_PRICE_FACTOR,
+  MAX_HALLS,
   MIN_ITEM_GRAMS,
   MIN_ORDER_GRAMS,
   ORDER_ANSWER_MINUTES,
@@ -75,6 +89,7 @@ import {
   ORDER_ROUND_GRAMS,
   PRICE_CAP_MARKUP,
   PRICE_LEVEL_RANGE,
+  QUAY_FEE_PER_DAY,
   REPUTATION_ALPHA,
   SCORE_WEIGHTS,
   SEIZE_ON_CHECK,
@@ -88,21 +103,39 @@ import {
   WHOLESALE_SHARE,
 } from './config';
 import {
-  ATLANTIC_LANE,
   CONTAINER_SIZES,
+  COVERS,
   type ContainerSize,
+  type Cover,
+  EUROPE_CITIES,
+  type EuropeCity,
   FOREIGN_CITIES,
   GANG_DEMAND,
   ORG_DEMAND,
-  PORT_LANES,
   PRODUCERS,
   type Producer,
-  SEA_LANES,
   type WeeklyDemand,
 } from './data';
 
-export { CONTRACT_WEEKS, CUSTOMER_KINDS, PRICE_LEVEL_RANGE, PRICE_LEVEL_STEP } from './config';
-export { CONTAINER_SIZES, type ContainerSize, FOREIGN_CITIES, PRODUCERS, type Producer } from './data';
+export {
+  CONTRACT_WEEKS,
+  CUSTOMER_KINDS,
+  MAX_HALLS,
+  PRICE_LEVEL_RANGE,
+  PRICE_LEVEL_STEP,
+  SEIZE_ON_CHECK,
+} from './config';
+export {
+  CONTAINER_SIZES,
+  COVERS,
+  type ContainerSize,
+  type Cover,
+  EUROPE_CITIES,
+  type EuropeCity,
+  FOREIGN_CITIES,
+  PRODUCERS,
+  type Producer,
+} from './data';
 
 // ---------------------------------------------------------------------------------------------
 // Zustand, Befehle, Ereignisse
@@ -126,6 +159,10 @@ export interface TradeCustomer {
   cityId?: string;
   /** Fremde Stadt (kind 'city'). */
   foreignId?: string;
+  /** Stadt in Europa (kind 'europe', Auftrag 41). */
+  europeId?: string;
+  /** Eigener Preisfaktor auf den fairen Preis (Europa), sonst der der Art. */
+  priceFactor?: number;
   /** Vertrauen 0–100. */
   trust: number;
   /** Dein Anteil am Wochenbedarf in der letzten Runde (0–1) und wer sonst am meisten liefert. */
@@ -170,7 +207,8 @@ export interface TradeOrder {
   revenue?: number;
 }
 
-export type ShipmentStatus = 'sea' | 'customs';
+/** Auf See, beim Zoll oder am Kai (Auftrag 41: das Lager ist voll, der Rest wartet an Bord). */
+export type ShipmentStatus = 'sea' | 'customs' | 'quay';
 
 export interface TradeShipment {
   id: number;
@@ -184,6 +222,21 @@ export interface TradeShipment {
   arrivesAt: number;
   status: ShipmentStatus;
   encounterId?: number;
+  /** Seit wann der Container am Kai wartet (Liegegeld), nur mit status 'quay'. */
+  quaySince?: number;
+  /** Deckladung (Auftrag 41). */
+  cover: Cover['id'];
+  /** Eigenes Schiff (fleet), null = Linienschiff (Charter pro Container). */
+  vesselId: number | null;
+}
+
+/** Ein Container für eine Bestellung beim Produzenten (trade.buy, trade.sail). */
+export interface ContainerLoad {
+  productId: string;
+  size: ContainerSize['id'];
+  cover?: Cover['id'];
+  /** Wie viele Container dieser Art (Standard 1). */
+  count?: number;
 }
 
 export interface DeliveryItem {
@@ -228,6 +281,8 @@ export interface TradeStats {
   /** Bedarf aller Kunden und dein Anteil daran, aufsummiert über die Wochen (für den Marktanteil). */
   demand: number;
   ordered: number;
+  /** Auftrag 41: Fahrten eigener Schiffe. */
+  voyages: number;
 }
 
 export interface TradeState {
@@ -245,6 +300,8 @@ export interface TradeState {
   stock: Record<string, Record<string, StockLot>>;
   /** Deine Häfen (Rotterdam nach dem Kauf, weitere gemietet). */
   ports: string[];
+  /** Auftrag 41: gebaute Hallen pro Hafen (mehr Platz im Lager). */
+  halls: Record<string, number>;
   /** Dein Preis als Faktor auf den fairen Preis. */
   priceLevel: number;
   /** Dein Ruf als Lieferant (gleitender Schnitt): pünktlich und Qualität. */
@@ -264,10 +321,21 @@ declare module '../../core' {
     'trade.acceptAll': { guaranteedOnly?: boolean; coveredOnly?: boolean };
     /** Angenommene Bestellung ausliefern: aus einem Hafen (Standard: der mit genug Ware, nächster zuerst). */
     'trade.deliver': { orderId: number; portId?: string; vehicleId?: number | null };
-    /** Container bei einem Produzenten bestellen. */
-    'trade.buy': { producerId: string; productId: string; size: ContainerSize['id']; portId?: string };
+    /** Container bei einem Produzenten bestellen, auf dem Linienschiff (Charter pro Container). */
+    'trade.buy': {
+      producerId: string;
+      productId: string;
+      size: ContainerSize['id'];
+      portId?: string;
+      cover?: Cover['id'];
+      count?: number;
+    };
+    /** Auftrag 41: eigenes Schiff zum Produzenten schicken; es holt die Container und bringt sie in den Hafen. */
+    'trade.sail': { vesselId: number; producerId: string; portId?: string; load: ContainerLoad[] };
     /** Liegeplatz in einem weiteren Hafen mieten (sauberes Geld). */
     'trade.rentBerth': { portId: string };
+    /** Eine Halle mehr im Hafen (sauberes Geld, Auftrag 41). */
+    'trade.buildHall': { portId: string };
     /** Deinen Preis setzen (Faktor auf den fairen Preis). */
     'trade.setPriceLevel': { level: number };
   }
@@ -279,9 +347,16 @@ declare module '../../core' {
     'trade.orderFailed': { orderId: number; customerId: string; reason: 'expired' | 'late' };
     'trade.containerOrdered': { shipmentId: number; producerId: string; amount: number; portId: string; cost: number };
     'trade.containerArrived': { shipmentId: number; portId: string; amount: number; checked: boolean };
+    /** Auftrag 41: Das Lager ist voll, der Container (oder sein Rest) wartet am Kai. */
+    'trade.containerWaiting': { shipmentId: number; portId: string; amount: number };
+    'trade.hallBuilt': { portId: string; halls: number; cost: number };
+    'trade.shipSailed': { vesselId: number; producerId: string; portId: string; containers: number; cost: number };
+    'trade.shipReturned': { vesselId: number; portId: string };
     'trade.containerSeized': { shipmentId: number; portId: string; amount: number };
     'trade.deliverySeized': { deliveryId: number; orderId: number; amount: number };
     'trade.dealTipped': { orderId: number; customerId: string; amount: number };
+    /** Auftrag 41: Eine Stadt in Europa kauft ab jetzt bei dir. */
+    'trade.customerJoined': { customerId: string };
   }
 }
 
@@ -290,6 +365,7 @@ declare module '../../core' {
 
 const PRODUCER_BY_ID = new Map(PRODUCERS.map((p) => [p.id, p]));
 const SIZE_BY_ID = new Map(CONTAINER_SIZES.map((c) => [c.id, c]));
+const COVER_BY_ID = new Map(COVERS.map((c) => [c.id, c]));
 
 function tradeState(state: GameState): TradeState | undefined {
   return state.modules.trade as TradeState | undefined;
@@ -331,7 +407,10 @@ export function customerContact(state: GameState, customer: TradeCustomer): Cont
       return { ...staffContact(m), role: `${rightHandTitle(state, customer.cityId)} ${cityName(customer.cityId)}` };
     return { id: `trade:org-${customer.cityId}`, name: customer.name, kind: 'customer', look: {} };
   }
-  const city = FOREIGN_CITIES.find((c) => c.id === customer.foreignId);
+  const city =
+    customer.kind === 'europe'
+      ? EUROPE_CITIES.find((c) => c.id === customer.europeId)
+      : FOREIGN_CITIES.find((c) => c.id === customer.foreignId);
   return city?.contact ?? { id: `trade:${customer.id}`, name: customer.name, kind: 'customer', look: {} };
 }
 
@@ -388,7 +467,8 @@ export function fairPrice(state: GameState, productId: string, indexCity: string
 
 /** Was der Kunde von sich aus pro Gramm bietet (fairer Preis × Art). */
 export function customerOffer(state: GameState, customer: TradeCustomer, productId: string): number {
-  return round2(fairPrice(state, productId, customer.indexCity) * CUSTOMER_KINDS[customer.kind].priceFactor);
+  const factor = customer.priceFactor ?? CUSTOMER_KINDS[customer.kind].priceFactor;
+  return round2(fairPrice(state, productId, customer.indexCity) * factor);
 }
 
 /** Höchster Faktor auf ihr Angebot, den ein Kunde bei einem Gegenangebot zahlt (Preisgrenze). */
@@ -467,39 +547,163 @@ export function shareFor(
   return { share: total > 0 ? weights[0] / total : 0, topRival: best?.name ?? null };
 }
 
-/** Kosten eines Containers: Ware (Schwarzgeld) und Fracht. */
+/**
+ * Kosten eines Containers (Schwarzgeld): Ware, Fracht auf dem Linienschiff (auf dem eigenen Schiff keine, own) und
+ * Deckladung (Anteil am Warenwert, Auftrag 41).
+ */
 export function containerCost(
   producerId: string,
   productId: string,
   size: ContainerSize['id'],
+  cover: Cover['id'] = 'none',
+  own = false,
 ): {
   goods: number;
   freight: number;
+  cover: number;
 } {
   const producer = PRODUCER_BY_ID.get(producerId);
   const container = SIZE_BY_ID.get(size);
   const share = producer?.products[productId];
-  if (!producer || !container || share === undefined) return { goods: 0, freight: 0 };
+  if (!producer || !container || share === undefined) return { goods: 0, freight: 0, cover: 0 };
   const base = getProduct(productId)?.basePrice ?? 0;
-  return { goods: Math.round((container.grams * base * share) / 10) * 10, freight: container.freight };
+  const goods = Math.round((container.grams * base * share) / 10) * 10;
+  return {
+    goods,
+    freight: own ? 0 : container.freight,
+    cover: Math.round((goods * (COVER_BY_ID.get(cover)?.share ?? 0)) / 10) * 10,
+  };
 }
 
-/** Chance, dass der Zoll einen Container in diesem Hafen kontrolliert (0–1). */
-export function containerRisk(state: GameState, producerId: string, size: ContainerSize['id'], portId: string): number {
+/**
+ * Chance, dass der Zoll einen Container in diesem Hafen kontrolliert (0–1): Grundrisiko der Herkunft × Größe × Hafen ×
+ * Deckladung × Schiff (Linie 1, eigenes Schiff sein Kontrollfaktor) × (1 + Zoll-Heat/50).
+ */
+export function containerRisk(
+  state: GameState,
+  producerId: string,
+  size: ContainerSize['id'],
+  portId: string,
+  cover: Cover['id'] = 'none',
+  vesselId: number | null = null,
+): number {
   const producer = PRODUCER_BY_ID.get(producerId);
   const container = SIZE_BY_ID.get(size);
   const port = harborPort(portId);
   if (!producer || !container || !port) return 0;
   const heat = customsHeat(state, portId);
-  return Math.min(0.9, producer.risk * container.riskFactor * port.customsFactor * (1 + heat / 50));
+  const ship = vesselId === null ? 1 : vehicleSpec(state, vesselId).checkFactor;
+  const tarn = COVER_BY_ID.get(cover)?.riskFactor ?? 1;
+  return Math.min(0.9, producer.risk * container.riskFactor * port.customsFactor * tarn * ship * (1 + heat / 50));
 }
 
-/** Laufzeit eines Containers in Minuten. */
+/** Deckladung nach ID. */
+export function getCover(id: Cover['id']): Cover | undefined {
+  return COVER_BY_ID.get(id);
+}
+
+/** Seeweg vom Produzenten in den Hafen (roads, Auftrag 41); null bei Ware per Lkw oder ohne Weg. */
+export function producerSeaRoute(producerId: string, portId: string): { path: LngLat[]; km: number } | null {
+  const producer = PRODUCER_BY_ID.get(producerId);
+  if (!producer?.sea || producer.byRoad) return null;
+  return seaRoute(producer.sea, portId);
+}
+
+/** Laufzeit eines Containers auf dem Linienschiff in Minuten: Verladen plus Seeweg mit CHARTER_KM_PER_DAY. */
 export function shippingMinutes(producerId: string, portId: string): number {
   const producer = PRODUCER_BY_ID.get(producerId);
+  if (!producer || !harborPort(portId)) return MINUTES_PER_DAY;
+  const sea = producerSeaRoute(producerId, portId);
+  const days = producer.days + (sea ? sea.km / CHARTER_KM_PER_DAY : 0);
+  return Math.max(MINUTES_PER_DAY, Math.round(days * MINUTES_PER_DAY));
+}
+
+/**
+ * Fahrt eines eigenen Schiffs (Auftrag 41): hin zum Produzenten, Verladen (Producer.days), zurück in den Hafen.
+ * Minuten pro Strecke und zusammen, Betriebskosten; null ohne Seeweg (Ware per Lkw) oder ohne Schiff.
+ */
+export function voyagePlan(
+  state: GameState,
+  vesselId: number,
+  producerId: string,
+  portId: string,
+): { legMinutes: number; loadMinutes: number; minutes: number; km: number; cost: number } | null {
+  const spec = vehicleSpec(state, vesselId).ship;
+  const producer = PRODUCER_BY_ID.get(producerId);
+  const sea = producerSeaRoute(producerId, portId);
+  if (!spec || !producer || !sea) return null;
+  const legMinutes = Math.round((sea.km / spec.kmPerDay) * MINUTES_PER_DAY);
+  const loadMinutes = Math.round(producer.days * MINUTES_PER_DAY);
+  const minutes = 2 * legMinutes + loadMinutes;
+  const cost = Math.round(((minutes / MINUTES_PER_DAY) * spec.costPerDay) / 10) * 10;
+  return { legMinutes, loadMinutes, minutes, km: sea.km, cost };
+}
+
+export type VoyagePhase = 'out' | 'loading' | 'back';
+
+export interface ShipVoyage {
+  producerId: string;
+  portId: string;
+  departedAt: number;
+  arrivesAt: number;
+  phase: VoyagePhase;
+  /** Fortschritt auf der aktuellen Strecke (0–1). */
+  progress: number;
+  grams: number;
+  containers: number;
+}
+
+/** Wo ein eigenes Schiff gerade ist (für Tracker und Karte); null, wenn es im Hafen liegt. */
+export function shipVoyage(state: GameState, vesselId: number): ShipVoyage | null {
+  const list = getShipments(state).filter((x) => x.vesselId === vesselId && x.status === 'sea');
+  if (list.length === 0) return null;
+  const first = list[0];
+  const plan = voyagePlan(state, vesselId, first.producerId, first.portId);
+  const total = Math.max(1, first.arrivesAt - first.orderedAt);
+  const leg = Math.max(1, plan ? Math.min(plan.legMinutes, total / 2) : total / 2);
+  const elapsed = Math.max(0, state.time - first.orderedAt);
+  const phase: VoyagePhase = elapsed < leg ? 'out' : elapsed < total - leg ? 'loading' : 'back';
+  const progress =
+    phase === 'out' ? elapsed / leg : phase === 'back' ? Math.min(1, (elapsed - (total - leg)) / leg) : 0;
+  return {
+    producerId: first.producerId,
+    portId: first.portId,
+    departedAt: first.orderedAt,
+    arrivesAt: first.arrivesAt,
+    phase,
+    progress,
+    grams: list.reduce((sum, x) => sum + x.amount, 0),
+    containers: list.length,
+  };
+}
+
+/** Eigene Schiffe (nicht beschlagnahmt) mit ihrer Fahrt, null = liegt im Hafen. */
+export function ownShips(state: GameState): { id: number; name: string; voyage: ShipVoyage | null }[] {
+  return getShips(state)
+    .filter((v) => vehicleStatus(v) !== 'seized')
+    .map((v) => ({ id: v.id, name: vehicleName(state, v.id), voyage: shipVoyage(state, v.id) }));
+}
+
+/** Platz im Lager eines Hafens in Gramm (Grundfläche plus Hallen, Auftrag 41). */
+export function portCapacity(state: GameState, portId: string): number {
   const port = harborPort(portId);
-  if (!producer || !port) return MINUTES_PER_DAY;
-  return Math.max(1, producer.days + (producer.byRoad ? 0 : port.shipDays)) * MINUTES_PER_DAY;
+  if (!port) return 0;
+  return port.capacity + (tradeState(state)?.halls[portId] ?? 0) * port.hallCapacity;
+}
+
+/** Gramm, die im Lager eines Hafens liegen. */
+export function portLoad(state: GameState, portId: string): number {
+  return Object.values(portStock(state, portId)).reduce((sum, lot) => sum + lot.amount, 0);
+}
+
+/** Freier Platz im Lager eines Hafens (Gramm). */
+export function portRoom(state: GameState, portId: string): number {
+  return Math.max(0, portCapacity(state, portId) - portLoad(state, portId));
+}
+
+/** Gebaute Hallen in einem Hafen. */
+export function portHalls(state: GameState, portId: string): number {
+  return tradeState(state)?.halls[portId] ?? 0;
 }
 
 function portPoint(portId: string): LngLat {
@@ -513,6 +717,23 @@ export function deliveryEstimate(customer: TradeCustomer, portId: string): { min
   const to = { lng: customer.lng, lat: customer.lat };
   const route = interCityRoute(from, to);
   return { minutes: interCityMinutes(from, to, TRUCK_CITY_SPEED), km: Math.round(route.meters / 1000) };
+}
+
+/**
+ * Chance einer Zollkontrolle auf dem Weg zum Kunden (0–1): pro 100 km Autobahn, dazu die Grenze nach Europa
+ * (Auftrag 41), mal Kontrollfaktor des eigenen Lkw (Spedition 1).
+ */
+export function deliveryCheckChance(
+  state: GameState,
+  customer: TradeCustomer,
+  portId: string,
+  vehicleId: number | null = null,
+): number {
+  const trip = deliveryEstimate(customer, portId);
+  const factor = vehicleId === null ? 1 : vehicleSpec(state, vehicleId).checkFactor;
+  const border = europeCityOf(customer)?.border.check ?? 0;
+  const road = Math.min(AUTOBAHN_CHECK_MAX, (trip.km / 100) * AUTOBAHN_CHECK_PER_100KM);
+  return Math.min(0.8, (road + border) * factor);
 }
 
 /** Spedition statt eigenem Lkw: Grundpreis plus pro Kilo und 100 km. */
@@ -542,6 +763,7 @@ function emptyStats(): TradeStats {
     tipped: 0,
     demand: 0,
     ordered: 0,
+    voyages: 0,
   };
 }
 
@@ -664,11 +886,64 @@ export function startTrade(ctx: Ctx, cities: readonly string[]): void {
   ctx.emit('trade.started', { customers: s.customers.length });
 }
 
+/** Stadt in Europa eines Kunden (Auftrag 41), sonst undefined. */
+export function europeCityOf(customer: Pick<TradeCustomer, 'europeId'>): EuropeCity | undefined {
+  return customer.europeId ? EUROPE_CITIES.find((c) => c.id === customer.europeId) : undefined;
+}
+
+/** Wann sich eine Stadt in Europa meldet: Woche der Hafen-Phase und nötiger Ruf; null, wenn sie schon Kunde ist. */
+export function europeStatus(state: GameState, city: EuropeCity): { joined: boolean; week: number; reliable: boolean } {
+  const s = tradeState(state);
+  const joined = getCustomers(state).some((c) => c.europeId === city.id);
+  const start = s?.startedAt ?? state.time;
+  return {
+    joined,
+    week: weekOf(start) + city.joinWeek,
+    reliable: (s?.reliability ?? START_RELIABILITY) >= EUROPE_MIN_RELIABILITY,
+  };
+}
+
+/** Städte in Europa, deren Woche gekommen ist, werden Kunden (wenn dein Ruf reicht); jede schreibt kurz. */
+function joinEurope(ctx: Ctx): void {
+  const s = ctx.state.modules.trade;
+  if (s.startedAt === null) return;
+  for (const city of EUROPE_CITIES) {
+    const status = europeStatus(ctx.state, city);
+    if (status.joined || weekOf(ctx.now) < status.week || !status.reliable) continue;
+    const customer: TradeCustomer = {
+      id: `europe:${city.id}`,
+      kind: 'europe',
+      name: city.name,
+      lng: city.at.lng,
+      lat: city.at.lat,
+      indexCity: city.indexCity,
+      weekly: scaled(city.weekly),
+      europeId: city.id,
+      priceFactor: city.priceFactor,
+      trust: CUSTOMER_KINDS.europe.startTrust,
+      share: 0,
+      topRival: null,
+      delivered: 0,
+      late: 0,
+      failed: 0,
+    };
+    s.customers.push(customer);
+    messages.send(ctx, {
+      contact: city.contact,
+      text: `Man hört, in Rotterdam liefert jemand pünktlich. ${city.name} braucht jede Woche Ware. Montags kommt meine Bestellung.`,
+      silent: true,
+    });
+    journal.add(ctx, `${city.name} (${city.country}) kauft ab jetzt bei dir.`, 'good');
+    ctx.emit('trade.customerJoined', { customerId: customer.id });
+  }
+}
+
 /** Bestellungen einer Woche: pro Kunde und Ware dein Anteil am Bedarf (Abnahmevertrag mindestens CONTRACT_SHARE). */
 export function placeOrders(ctx: Ctx): number {
   const s = ctx.state.modules.trade;
   const week = weekOf(ctx.now);
   s.week = week;
+  joinEurope(ctx);
   const contract = s.contractUntil !== null && ctx.now < s.contractUntil;
   let placed = 0;
   for (const customer of s.customers) {
@@ -895,6 +1170,7 @@ export function deliver(ctx: Ctx, orderId: number, portId?: string, vehicleId?: 
   let vehicle: number | null = null;
   if (vehicleId !== undefined && vehicleId !== null) {
     const v = getVehicle(ctx.state, vehicleId);
+    if (v && isShip(v)) return { ok: false, reason: 'Schiffe fahren nicht auf der Straße.' };
     if (!v || v.cityId !== HARBOR_CITY) return { ok: false, reason: 'Dieser Lkw steht nicht in Rotterdam.' };
     if (vehicleSpec(ctx.state, vehicleId).capacity < grams)
       return { ok: false, reason: 'Das passt nicht in den Wagen.' };
@@ -918,8 +1194,7 @@ export function deliver(ctx: Ctx, orderId: number, portId?: string, vehicleId?: 
     items.push({ productId: item.productId, amount: item.amount, quality: lot?.quality ?? START_QUALITY });
     item.state = 'shipped';
   }
-  const factor = vehicle === null ? 1 : vehicleSpec(ctx.state, vehicle).checkFactor;
-  const checkChance = Math.min(0.8, (trip.km / 100) * AUTOBAHN_CHECK_PER_100KM * factor);
+  const checkChance = deliveryCheckChance(ctx.state, customer, from, vehicle);
   const checkAt = ctx.chance(checkChance) ? ctx.now + Math.round(trip.minutes * (0.2 + ctx.random() * 0.6)) : null;
   s.deliveries.push({
     id,
@@ -939,59 +1214,175 @@ export function deliver(ctx: Ctx, orderId: number, portId?: string, vehicleId?: 
   return { ok: true, data: { deliveryId: id, arrivesAt: ctx.now + trip.minutes } };
 }
 
-/** Container bestellen. */
+type Loaded = { productId: string; size: ContainerSize; cover: Cover };
+
+/** Prüft eine Bestellung beim Produzenten; gibt die Container einzeln zurück oder einen Grund. */
+function checkLoad(
+  ctx: Ctx,
+  producerId: string,
+  portId: string,
+  load: readonly ContainerLoad[],
+): { producer: Producer; containers: Loaded[] } | string {
+  const s = ctx.state.modules.trade;
+  if (s.startedAt === null) return 'Erst nach dem Verkauf des Geschäfts.';
+  const producer = PRODUCER_BY_ID.get(producerId);
+  if (!producer) return 'Diesen Produzenten gibt es nicht.';
+  if (!s.ports.includes(portId)) return 'In diesem Hafen hast du keinen Liegeplatz.';
+  const containers: Loaded[] = [];
+  for (const item of load) {
+    if (producer.products[item.productId] === undefined) {
+      return `${producer.name} hat kein ${productName(item.productId)}.`;
+    }
+    const size = SIZE_BY_ID.get(item.size);
+    if (!size) return 'Diese Größe gibt es nicht.';
+    const cover = COVER_BY_ID.get(item.cover ?? 'none');
+    if (!cover) return 'Diese Deckladung gibt es nicht.';
+    const count = item.count ?? 1;
+    if (!Number.isInteger(count) || count < 1 || count > 20) return 'Wie viele Container?';
+    for (let i = 0; i < count; i++) containers.push({ productId: item.productId, size, cover });
+  }
+  if (containers.length === 0) return 'Nichts zu laden.';
+  return { producer, containers };
+}
+
+/** Was eine Ladung kostet (Ware, Fracht auf der Linie, Deckladung). */
+export function loadCost(producerId: string, load: readonly ContainerLoad[], own: boolean): number {
+  return load.reduce((sum, c) => {
+    const cost = containerCost(producerId, c.productId, c.size, c.cover ?? 'none', own);
+    return sum + (cost.goods + cost.freight + cost.cover) * (c.count ?? 1);
+  }, 0);
+}
+
+/** Container anlegen und bezahlen (Ware und Deckladung; Fracht nur auf dem Linienschiff). */
+function shipContainers(
+  ctx: Ctx,
+  producer: Producer,
+  portId: string,
+  containers: readonly Loaded[],
+  vesselId: number | null,
+  arrivesAt: number,
+): TradeShipment[] {
+  const s = ctx.state.modules.trade;
+  const port = harborPort(portId)?.name ?? portId;
+  const list: TradeShipment[] = [];
+  for (const c of containers) {
+    const cost = containerCost(producer.id, c.productId, c.size.id, c.cover.id, vesselId !== null);
+    wallet.pay(ctx, cost.goods, 'dirty', `${c.size.label} ${productName(c.productId)} bei ${producer.name}`, {
+      category: 'trade.purchase',
+      cityId: HARBOR_CITY,
+    });
+    if (cost.freight > 0) {
+      wallet.pay(ctx, cost.freight, 'dirty', `Fracht ${producer.from} – ${port}`, {
+        category: 'trade.freight',
+        cityId: HARBOR_CITY,
+      });
+    }
+    if (cost.cover > 0) {
+      wallet.pay(ctx, cost.cover, 'dirty', `Deckladung ${c.cover.label}`, {
+        category: 'trade.freight',
+        cityId: HARBOR_CITY,
+      });
+    }
+    const quality = Math.max(0.2, Math.min(1, producer.quality + (ctx.random() * 2 - 1) * 0.05));
+    const shipment: TradeShipment = {
+      id: ctx.nextId(),
+      producerId: producer.id,
+      productId: c.productId,
+      amount: c.size.grams,
+      quality: Math.round(quality * 1000) / 1000,
+      size: c.size.id,
+      portId,
+      orderedAt: ctx.now,
+      arrivesAt,
+      status: 'sea',
+      cover: c.cover.id,
+      vesselId,
+    };
+    s.shipments.push(shipment);
+    s.stats.containers += 1;
+    list.push(shipment);
+    ctx.emit('trade.containerOrdered', {
+      shipmentId: shipment.id,
+      producerId: producer.id,
+      amount: c.size.grams,
+      portId,
+      cost: cost.goods + cost.freight + cost.cover,
+    });
+  }
+  return list;
+}
+
+/** Container auf dem Linienschiff bestellen (Charter pro Container). */
 export function buyContainer(
   ctx: Ctx,
   producerId: string,
   productId: string,
   size: ContainerSize['id'],
   portId: string = HARBOR_CITY,
+  cover: Cover['id'] = 'none',
+  count = 1,
 ): CommandResult {
-  const s = ctx.state.modules.trade;
-  if (s.startedAt === null) return { ok: false, reason: 'Erst nach dem Verkauf des Geschäfts.' };
-  const producer = PRODUCER_BY_ID.get(producerId);
-  if (!producer) return { ok: false, reason: 'Diesen Produzenten gibt es nicht.' };
-  if (producer.products[productId] === undefined) {
-    return { ok: false, reason: `${producer.name} hat kein ${productName(productId)}.` };
+  const load = [{ productId, size, cover, count }];
+  const checked = checkLoad(ctx, producerId, portId, load);
+  if (typeof checked === 'string') return { ok: false, reason: checked };
+  const total = loadCost(producerId, load, false);
+  if (!wallet.canAfford(ctx.state, total, 'dirty')) return { ok: false, reason: `Das kostet ${formatEuro(total)}.` };
+  const arrivesAt = ctx.now + shippingMinutes(producerId, portId);
+  const list = shipContainers(ctx, checked.producer, portId, checked.containers, null, arrivesAt);
+  return { ok: true, data: { shipmentId: list[0].id, shipmentIds: list.map((x) => x.id), arrivesAt } };
+}
+
+/** Eigenes Schiff zum Produzenten schicken (Auftrag 41): Ware, Deckladung und Betrieb für die ganze Fahrt vorab. */
+export function sail(
+  ctx: Ctx,
+  vesselId: number,
+  producerId: string,
+  portId: string,
+  load: readonly ContainerLoad[],
+): CommandResult {
+  const vessel = getVehicle(ctx.state, vesselId);
+  if (!vessel || !isShip(vessel)) return { ok: false, reason: 'Dieses Schiff gibt es nicht.' };
+  const name = vehicleName(ctx.state, vesselId);
+  if (vehicleStatus(vessel) !== 'free') return { ok: false, reason: `${name} ist nicht im Hafen.` };
+  const checked = checkLoad(ctx, producerId, portId, load);
+  if (typeof checked === 'string') return { ok: false, reason: checked };
+  const plan = voyagePlan(ctx.state, vesselId, producerId, portId);
+  if (!plan) return { ok: false, reason: `${checked.producer.name} liefert nicht per Schiff.` };
+  const spec = vehicleSpec(ctx.state, vesselId);
+  const grams = checked.containers.reduce((sum, c) => sum + c.size.grams, 0);
+  if (grams > spec.capacity) {
+    return {
+      ok: false,
+      reason: `${spec.name} fasst ${Math.round(spec.capacity / 1000)} kg, das sind ${Math.round(grams / 1000)} kg.`,
+    };
   }
-  const container = SIZE_BY_ID.get(size);
-  if (!container) return { ok: false, reason: 'Diese Größe gibt es nicht.' };
-  if (!s.ports.includes(portId)) return { ok: false, reason: 'In diesem Hafen hast du keinen Liegeplatz.' };
-  const cost = containerCost(producerId, productId, size);
-  if (!wallet.canAfford(ctx.state, cost.goods + cost.freight, 'dirty')) {
-    return { ok: false, reason: `Das kostet ${formatEuro(cost.goods + cost.freight)}.` };
+  const total = loadCost(producerId, load, true) + plan.cost;
+  if (!wallet.canAfford(ctx.state, total, 'dirty')) {
+    return { ok: false, reason: `Die Fahrt kostet ${formatEuro(total)}.` };
   }
-  wallet.pay(ctx, cost.goods, 'dirty', `${container.label} ${productName(productId)} bei ${producer.name}`, {
-    category: 'trade.purchase',
-    cityId: HARBOR_CITY,
-  });
-  wallet.pay(ctx, cost.freight, 'dirty', `Fracht ${producer.from} – ${harborPort(portId)?.name ?? portId}`, {
+  wallet.pay(ctx, plan.cost, 'dirty', `${name}: Crew und Diesel bis ${checked.producer.from}`, {
     category: 'trade.freight',
     cityId: HARBOR_CITY,
   });
-  const quality = Math.max(0.2, Math.min(1, producer.quality + (ctx.random() * 2 - 1) * 0.05));
-  const shipment: TradeShipment = {
-    id: ctx.nextId(),
-    producerId,
-    productId,
-    amount: container.grams,
-    quality: Math.round(quality * 1000) / 1000,
-    size,
-    portId,
-    orderedAt: ctx.now,
-    arrivesAt: ctx.now + shippingMinutes(producerId, portId),
-    status: 'sea',
-  };
-  s.shipments.push(shipment);
-  s.stats.containers += 1;
-  ctx.emit('trade.containerOrdered', {
-    shipmentId: shipment.id,
-    producerId,
-    amount: container.grams,
-    portId,
-    cost: cost.goods + cost.freight,
-  });
-  return { ok: true, data: { shipmentId: shipment.id, arrivesAt: shipment.arrivesAt } };
+  const list = shipContainers(ctx, checked.producer, portId, checked.containers, vesselId, ctx.now + plan.minutes);
+  useVehicle(ctx, vesselId, list[0].id);
+  ctx.state.modules.trade.stats.voyages += 1;
+  journal.add(
+    ctx,
+    `${name} legt ab nach ${checked.producer.from}: ${list.length} Container, zurück in ${harborPort(portId)?.name ?? portId} in ${clock.formatDuration(plan.minutes)}.`,
+  );
+  ctx.emit('trade.shipSailed', { vesselId, producerId, portId, containers: list.length, cost: total });
+  return { ok: true, data: { shipmentIds: list.map((x) => x.id), arrivesAt: ctx.now + plan.minutes } };
+}
+
+/** Ist das letzte Stück eines eigenen Schiffs da, liegt es wieder frei im Hafen. */
+function maybeReleaseShip(ctx: Ctx, vesselId: number | null, portId: string): void {
+  if (vesselId === null) return;
+  if (ctx.state.modules.trade.shipments.some((x) => x.vesselId === vesselId && x.status === 'sea')) return;
+  const vessel = getVehicle(ctx.state, vesselId);
+  if (!vessel || vehicleStatus(vessel) !== 'busy') return;
+  releaseVehicle(ctx, vesselId);
+  ctx.emit('trade.shipReturned', { vesselId, portId });
 }
 
 /** Liegeplatz in einem weiteren Hafen mieten (sauberes Geld). */
@@ -1012,6 +1403,27 @@ export function rentBerth(ctx: Ctx, portId: string): CommandResult {
   return { ok: true };
 }
 
+/** Eine Halle mehr im Hafen (sauberes Geld). */
+export function buildHall(ctx: Ctx, portId: string): CommandResult {
+  const s = ctx.state.modules.trade;
+  const port = harborPort(portId);
+  if (!port || !s.ports.includes(portId)) return { ok: false, reason: 'In diesem Hafen hast du keinen Liegeplatz.' };
+  const halls = s.halls[portId] ?? 0;
+  if (halls >= MAX_HALLS) return { ok: false, reason: `Mehr als ${MAX_HALLS} Hallen gibt es in ${port.name} nicht.` };
+  if (
+    !wallet.pay(ctx, port.hallCost, 'clean', `Halle in ${port.name}`, { category: 'expansion', cityId: HARBOR_CITY })
+  ) {
+    return { ok: false, reason: `Die Halle kostet ${formatEuro(port.hallCost)} sauberes Geld.` };
+  }
+  s.halls[portId] = halls + 1;
+  journal.add(ctx, `Neue Halle in ${port.name}: ${Math.round(port.hallCapacity / 1000)} kg mehr Platz.`, 'good');
+  ctx.emit('trade.hallBuilt', { portId, halls: halls + 1, cost: port.hallCost });
+  // Was am Kai wartet, kommt gleich herein.
+  for (const shipment of [...s.shipments])
+    if (shipment.status === 'quay' && shipment.portId === portId) unload(ctx, shipment);
+  return { ok: true };
+}
+
 /** Deinen Preis setzen. */
 export function setPriceLevel(ctx: Ctx, level: number): CommandResult {
   if (!Number.isFinite(level)) return { ok: false, reason: 'Welcher Preis?' };
@@ -1022,14 +1434,23 @@ export function setPriceLevel(ctx: Ctx, level: number): CommandResult {
 
 /** Ein Container kommt an: vielleicht eine Zollkontrolle (Konfrontation am Kai), sonst gleich ins Lager. */
 function containerArrives(ctx: Ctx, shipment: TradeShipment): void {
-  const risk = containerRisk(ctx.state, shipment.producerId, shipment.size, shipment.portId);
+  const risk = containerRisk(
+    ctx.state,
+    shipment.producerId,
+    shipment.size,
+    shipment.portId,
+    shipment.cover,
+    shipment.vesselId,
+  );
   customsArrival(ctx, shipment.portId, shipment.amount / 1000);
+  // Das Schiff ist im Hafen: Kontrolliert wird am Kai.
+  shipment.status = 'customs';
+  maybeReleaseShip(ctx, shipment.vesselId, shipment.portId);
   if (!ctx.chance(risk)) {
     landContainer(ctx, shipment, false);
     return;
   }
   const port = harborPort(shipment.portId);
-  shipment.status = 'customs';
   const { encounterId } = startEncounter(ctx, {
     kind: 'customsCheck',
     setting: 'port',
@@ -1044,21 +1465,55 @@ function containerArrives(ctx: Ctx, shipment: TradeShipment): void {
   journal.add(ctx, `Zoll in ${port?.name ?? shipment.portId}: Sie wollen den Container sehen.`, 'bad');
 }
 
+/** Der Zoll ist durch (oder hat nicht geschaut): ab ins Lager, soweit Platz ist. */
 function landContainer(ctx: Ctx, shipment: TradeShipment, checked: boolean): void {
-  const s = ctx.state.modules.trade;
-  s.shipments = s.shipments.filter((x) => x.id !== shipment.id);
-  addStock(ctx, shipment.portId, shipment.productId, shipment.amount, shipment.quality);
-  journal.add(
-    ctx,
-    `${Math.round(shipment.amount / 1000)} kg ${productName(shipment.productId)} in ${harborPort(shipment.portId)?.name ?? shipment.portId} angekommen.`,
-    'good',
-  );
   ctx.emit('trade.containerArrived', {
     shipmentId: shipment.id,
     portId: shipment.portId,
     amount: shipment.amount,
     checked,
   });
+  unload(ctx, shipment);
+}
+
+/**
+ * Entladen, soweit das Lager Platz hat (Auftrag 41, wie storeFitting in goods): Der Rest wartet an Bord am Kai und
+ * kommt herein, sobald Platz ist. Ist alles drin, wird das Liegegeld für die Wartezeit fällig.
+ */
+function unload(ctx: Ctx, shipment: TradeShipment): void {
+  const s = ctx.state.modules.trade;
+  const name = harborPort(shipment.portId)?.name ?? shipment.portId;
+  const room = portRoom(ctx.state, shipment.portId);
+  const amount = Math.min(shipment.amount, room);
+  if (amount > 0) addStock(ctx, shipment.portId, shipment.productId, amount, shipment.quality);
+  if (amount < shipment.amount) {
+    shipment.amount -= amount;
+    if (shipment.status !== 'quay') {
+      shipment.status = 'quay';
+      shipment.quaySince = ctx.now;
+      journal.add(
+        ctx,
+        `Lager in ${name} voll: ${Math.round(shipment.amount / 1000)} kg ${productName(shipment.productId)} warten am Kai (Liegegeld ${formatEuro(QUAY_FEE_PER_DAY)} am Tag).`,
+        'bad',
+      );
+      ctx.emit('trade.containerWaiting', { shipmentId: shipment.id, portId: shipment.portId, amount: shipment.amount });
+    }
+    return;
+  }
+  s.shipments = s.shipments.filter((x) => x.id !== shipment.id);
+  if (shipment.quaySince !== undefined) {
+    const days = Math.max(1, Math.ceil((ctx.now - shipment.quaySince) / MINUTES_PER_DAY));
+    // Liegegeld ist eine Rechnung des Hafens (legal): sauberes Geld, so viel da ist.
+    const fee = Math.min(days * QUAY_FEE_PER_DAY, ctx.state.wallet.clean);
+    if (fee > 0) {
+      wallet.pay(ctx, fee, 'clean', `Liegegeld in ${name}`, { category: 'trade.freight', cityId: HARBOR_CITY });
+    }
+  }
+  journal.add(
+    ctx,
+    `${Math.round(amount / 1000)} kg ${productName(shipment.productId)} in ${name} eingelagert.`,
+    'good',
+  );
 }
 
 function onContainerCheck(ctx: Ctx, ref: string | undefined, outcome: string): void {
@@ -1166,6 +1621,12 @@ function ema(old: number, value: number): number {
   return Math.round((old * (1 - REPUTATION_ALPHA) + value * REPUTATION_ALPHA) * 1000) / 1000;
 }
 
+/** Wo der Zoll steht: an der Grenze (Europa) oder auf der Autobahn. */
+function checkPlace(state: GameState, delivery: TradeDelivery): string {
+  const city = europeCityOf(getCustomer(state, delivery.customerId) ?? {});
+  return city ? city.border.name : 'auf der Autobahn';
+}
+
 /** Zollkontrolle unterwegs: mit SEIZE_ON_CHECK ist die Ladung weg, die Bestellung wartet wieder auf Ware. */
 function deliveryCheck(ctx: Ctx, delivery: TradeDelivery): void {
   delivery.checkAt = null;
@@ -1173,7 +1634,11 @@ function deliveryCheck(ctx: Ctx, delivery: TradeDelivery): void {
   const order = s.orders.find((o) => o.id === delivery.orderId);
   if (!ctx.chance(SEIZE_ON_CHECK)) {
     delivery.arrivesAt += 60;
-    journal.add(ctx, 'Zollkontrolle auf der Autobahn: Der Lkw darf nach einer Stunde weiter.', 'info');
+    journal.add(
+      ctx,
+      `Zollkontrolle ${checkPlace(ctx.state, delivery)}: Der Lkw darf nach einer Stunde weiter.`,
+      'info',
+    );
     return;
   }
   s.deliveries = s.deliveries.filter((d) => d.id !== delivery.id);
@@ -1195,7 +1660,7 @@ function deliveryCheck(ctx: Ctx, delivery: TradeDelivery): void {
   }
   journal.add(
     ctx,
-    `Zollkontrolle auf der Autobahn: ${orderItemsText(delivery.items)} beschlagnahmt. Die Bestellung wartet noch.`,
+    `Zollkontrolle ${checkPlace(ctx.state, delivery)}: ${orderItemsText(delivery.items)} beschlagnahmt. Die Bestellung wartet noch.`,
     'bad',
   );
   ctx.emit('trade.deliverySeized', { deliveryId: delivery.id, orderId: delivery.orderId, amount: delivery.amount });
@@ -1241,6 +1706,8 @@ function tick(ctx: Ctx): void {
   }
   for (const shipment of [...s.shipments]) {
     if (shipment.status === 'sea' && ctx.now >= shipment.arrivesAt) containerArrives(ctx, shipment);
+    // Am Kai: herein, sobald im Lager Platz ist (der älteste zuerst).
+    else if (shipment.status === 'quay' && portRoom(ctx.state, shipment.portId) > 0) unload(ctx, shipment);
   }
   for (const delivery of [...s.deliveries]) {
     if (delivery.checkAt !== null && ctx.now >= delivery.checkAt) deliveryCheck(ctx, delivery);
@@ -1259,6 +1726,7 @@ function initialState(): TradeState {
     deliveries: [],
     stock: {},
     ports: [],
+    halls: {},
     priceLevel: 1,
     reliability: START_RELIABILITY,
     quality: START_QUALITY,
@@ -1268,8 +1736,23 @@ function initialState(): TradeState {
 
 export default defineModule({
   id: 'trade',
-  version: 1,
+  version: 2,
   init: () => initialState(),
+  migrations: {
+    // Auftrag 41: Hallen pro Hafen; Container, die schon auf See sind, behalten ihre Ankunft.
+    // Container von vorher: Linienschiff, ohne Deckladung.
+    2: (
+      old: Omit<TradeState, 'halls' | 'shipments' | 'stats'> & {
+        shipments: Omit<TradeShipment, 'cover' | 'vesselId'>[];
+        stats: Omit<TradeStats, 'voyages'>;
+      },
+    ) => ({
+      ...old,
+      halls: {},
+      shipments: old.shipments.map((x) => ({ ...x, cover: 'none' as const, vesselId: null })),
+      stats: { ...old.stats, voyages: 0 },
+    }),
+  },
   tickEvery: 5,
   tick,
   commands: {
@@ -1277,9 +1760,12 @@ export default defineModule({
     'trade.acceptAll': (ctx, payload) =>
       acceptAll(ctx, payload?.guaranteedOnly === true, payload?.coveredOnly === true),
     'trade.deliver': (ctx, { orderId, portId, vehicleId }) => deliver(ctx, orderId, portId, vehicleId),
-    'trade.buy': (ctx, { producerId, productId, size, portId }) =>
-      buyContainer(ctx, producerId, productId, size, portId),
+    'trade.buy': (ctx, { producerId, productId, size, portId, cover, count }) =>
+      buyContainer(ctx, producerId, productId, size, portId, cover, count),
+    'trade.sail': (ctx, { vesselId, producerId, portId, load }) =>
+      sail(ctx, vesselId, producerId, portId ?? HARBOR_CITY, Array.isArray(load) ? load : []),
     'trade.rentBerth': (ctx, { portId }) => rentBerth(ctx, portId),
+    'trade.buildHall': (ctx, { portId }) => buildHall(ctx, portId),
     'trade.setPriceLevel': (ctx, { level }) => setPriceLevel(ctx, level),
   },
   on: {
@@ -1313,19 +1799,15 @@ export function harborPorts(): readonly HarborPort[] {
 }
 
 /**
- * Weg eines Containers auf der Karte (nur Darstellung): Seeweg vom Produzenten über Gibraltar und den Kanal in den
- * Hafen; Ware per Lkw (Westland, Jansen) als gerade Linie.
+ * Weg eines Containers auf der Karte (nur Darstellung): der Seeweg vom Produzenten in den Hafen (roads.seaRoute, aus
+ * Overture-Tiefen); Ware per Lkw (Westland, Jansen) als gerade Linie.
  */
 export function shipmentPath(shipment: Pick<TradeShipment, 'producerId' | 'portId'>): LngLat[] {
   const producer = PRODUCER_BY_ID.get(shipment.producerId);
-  const port = harborPort(shipment.portId);
-  const end = port ? { lng: port.lng, lat: port.lat } : { lng: 4.4, lat: 51.9 };
-  if (!producer || producer.byRoad || !SEA_LANES[producer.id]) return [producer?.at ?? end, end];
-  return [
-    ...SEA_LANES[producer.id],
-    ...ATLANTIC_LANE.slice(1),
-    ...(PORT_LANES[shipment.portId] ?? PORT_LANES.rotterdam).slice(1),
-  ];
+  const end = portPoint(shipment.portId);
+  const sea = producerSeaRoute(shipment.producerId, shipment.portId);
+  if (sea) return sea.path;
+  return [producer?.at ?? end, end];
 }
 
 /** Weg einer Lieferung auf der Karte (über roads, wie die Fahrzeit). */

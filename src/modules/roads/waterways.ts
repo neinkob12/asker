@@ -9,6 +9,8 @@
 //   die letzten 3 Punkte bis zum Liegeplatz von Hand (Hafenbecken haben keine Mittellinie), ganz im Wasser.
 // Nordsee – Hamburg: 107 km, 71 Punkte.
 //   die letzten 4 Punkte bis zum Liegeplatz von Hand (Hafenbecken haben keine Mittellinie), ganz im Wasser.
+// Nordsee – Rotterdam: 42 km, 40 Punkte.
+// Nordsee – Antwerpen: 99 km, 79 Punkte.
 //
 // Format: Weg vom Meer bzw. von Rotterdam bis zum Liegeplatz, Polyline-Format (1e-5 Grad, erster Punkt absolut, dann
 // Abstände, wie ROAD_APPROACHES in network.ts).
@@ -23,5 +25,15 @@ export const WATERWAYS: Readonly<Record<string, { name: string; km: number; path
     name: 'Nordsee – Hamburg',
     km: 106.6,
     path: 'myet@eyygIm}B`xA_jAtj@efBht@sbChb@{mClIg|CjCymEkFoqRov@q`BaJcbBcP_uPaoC_pBsNiuNeN_gD|F}_E~YccCvc@k}Cjd@wbDnyA_kFjqCyy@rw@_Xzf@m]jfAmtDzcHsX|P}tCvsAosC|x@qgAjc@shBthAuaApcA{Wly@ae@t|@{Q~e@mv@rlCkN|\\ku@lfA_w@bh@cpAps@qd@xS}|EzaBozDtoBecCtu@ct@tNowHd_@{kLhc@kt@jFi~A`QcfBzSklFjg@e|AlKu\\lB{h@jB{oBjBqaBv@kzEPyGUqUqBm]kGaKaAmNw@k`@i@gTRsJbAwM~Bet@tOuc@dMcYzCuCpNkFfHci@vUs@tL',
+  },
+  rotterdam: {
+    name: 'Nordsee – Rotterdam',
+    km: 41.6,
+    path: 'uusVqqp|HybBPi~@fF{l@`HuvYxsEif@HwqAjRktC~YoiD~g@y_AhUif@xOqhAla@okCdgAwiCx~@g}B|m@acAp\\}[rPq\\t^gZ`Vst@|Ykh@fLua@nKgwCly@yb@bJem@nIyvAfM_ZhBw{@|DqXZ_cAq@ud@wCiz@_Os\\cF_]kB{]i@qZLk}AxL_k@fCcc@_BwfCi[',
+  },
+  antwerpen: {
+    name: 'Nordsee – Antwerpen',
+    km: 98.5,
+    path: 'sapRwmsxHupH{h@wbS_iAu|FmZubBsEgl_@yfBsnDwk@}yJqs@}]r@i`@nIud@hQgrClcB_c@zj@cs@pWwjJfbCq`HtwAcy@pVqcBjWodBnKilAkSedAi`@_`BytAaQoUqoBqiEai@_}@}Oeq@oa@wVwp@kCoqDx@upChr@eyB~d@}~@zo@q_@jd@yHnh@}@ly@aJp{Asf@nn@gPjJk_AnWwnDbYy~AtEqrDeLwoAmKwr@wRejEqyBab@wLml@uCi^nBmPhBePfG}JvHaJ~IwK`SgQnv@yV`l@eVfo@_Vd[_QjMqh@hR_b@jTgw@vS_^pLkv@fZsTpLyHvFgMjRmKhZiBbUdHtt@t@`LIzJiAvUgHbXoDhHsKjPcE~DuVlLmPpFuj@|M',
   },
 };

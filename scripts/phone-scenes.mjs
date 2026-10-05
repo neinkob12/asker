@@ -1041,6 +1041,18 @@ export const SCENES = [
     wait: 900,
   },
   {
+    name: 'kunden-europa',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.runtime.api.openPhone('trade.app');
+      const tab = await until(() => [...document.querySelectorAll('.phone .ui-segmented button')].find((b) => b.textContent.includes('Kunden')));
+      tab?.click();
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.trim() === 'Europa'));
+      head?.scrollIntoView({ block: 'start' });
+    })()`,
+    wait: 900,
+  },
+  {
     name: 'kunden-hafen',
     js: `(async () => {
       ${STEPS}
@@ -1051,6 +1063,39 @@ export const SCENES = [
       window.koeln.runtime.api.openPhone('trade.app');
       const tab = await until(() => [...document.querySelectorAll('.phone .ui-segmented button')].find((b) => b.textContent.includes('Hafen')));
       tab?.click();
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'kunden-einkauf',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.runtime.api.openPhone('trade.app');
+      window.koeln.runtime.api.openPanel('trade.order', { producerId: 'spanien' });
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'kunden-schiffe',
+    js: `(async () => {
+      ${STEPS}
+      const sim = window.koeln.session.sim;
+      sim.state.wallet.clean += 400000;
+      sim.state.wallet.dirty += 600000;
+      const bought = sim.dispatch({ type: 'fleet.buy', payload: { model: 'coaster', cityId: 'rotterdam' } });
+      if (bought.ok) {
+        sim.dispatch({
+          type: 'trade.sail',
+          payload: { vesselId: bought.data.vehicleId, producerId: 'marokko', load: [{ productId: 'hash', size: 'full', cover: 'tiles', count: 2 }] },
+        });
+      }
+      sim.dispatch({ type: 'trade.buy', payload: { producerId: 'albanien', productId: 'kush', size: 'medium', cover: 'bananas' } });
+      sim.advance(2 * 1440);
+      window.koeln.runtime.api.openPhone('trade.app');
+      const tab = await until(() => [...document.querySelectorAll('.phone .ui-segmented button')].find((b) => b.textContent.includes('Hafen')));
+      tab?.click();
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Schiffe')));
+      head?.scrollIntoView({ block: 'start' });
     })()`,
     wait: 900,
   },

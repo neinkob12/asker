@@ -6,3 +6,4 @@ test-results
 playwright-report
 screenshots
 __pycache__/
+.venv-roads/

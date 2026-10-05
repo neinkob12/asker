@@ -34,6 +34,10 @@
 //   shipRoute(cityId)         Weg eines Schiffs von außen bis zum Kai ('koeln': Rotterdam über Waal und Rhein,
 //                             'hamburg': Elbe ab Cuxhaven), aus Overture-Daten (waterways.ts, tools/build-water.py)
 //   shipMinutes(cityId)       Fahrzeit dieses Wegs mit SHIP_SPEED (nur zur Anzeige, die Lieferzeit kommt aus suppliers)
+//   Seewege (Auftrag 41, seaways.ts aus Overture-Tiefen, tools/build-water.py --sea):
+//   seaRoute(from, portId)    Weg eines Seeschiffs von einem Knoten (z.B. 'tanger') bis zum Liegeplatz eines Hafens
+//                             der Hafen-Phase ('rotterdam', 'antwerpen', 'hamburg'): { path, km, nodes }, null ohne Weg
+//   seaNodes(), seaLanes()    Knoten und Wege des Netzes (für die Karte), seaPorts() Häfen mit Weg vom Meer
 //   roadGraph(cityId?)        Lesesicht auf den Graphen einer Stadt (Knoten, Kanten, Nachbarn in Metern), z.B. für
 //                             den Verkehr
 //
@@ -60,6 +64,7 @@ import {
   snapToRoad,
 } from './graph';
 
+import { SEA_LANES, SEA_NODES, SEA_PORTS } from './seaways';
 import { WATERWAYS } from './waterways';
 
 export { SHIP_SPEED } from './config';
@@ -339,6 +344,99 @@ export function shipMinutes(cityId: string): number {
   let meters = 0;
   for (let i = 1; i < route.length; i++) meters += distanceMeters(route[i - 1], route[i]);
   return route.length < 2 ? 0 : Math.ceil(meters / SHIP_SPEED);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Seewege (Auftrag 41)
+
+export interface SeaNode {
+  id: string;
+  name: string;
+  lng: number;
+  lat: number;
+}
+
+export interface SeaLane {
+  from: string;
+  to: string;
+  name: string;
+  km: number;
+  /** Punkte von from nach to. */
+  path: LngLat[];
+}
+
+export interface SeaRoute {
+  /** Punkte vom Knoten bis zum Liegeplatz. */
+  path: LngLat[];
+  km: number;
+  /** Knoten unterwegs, mit Start und dem Knoten vor dem Hafen. */
+  nodes: string[];
+}
+
+let seaLaneCache: SeaLane[] | null = null;
+const seaRouteCache = new Map<string, SeaRoute | null>();
+
+export function seaNodes(): SeaNode[] {
+  return Object.entries(SEA_NODES).map(([id, n]) => ({ id, ...n }));
+}
+
+export function seaLanes(): readonly SeaLane[] {
+  seaLaneCache ??= SEA_LANES.map((l) => ({ from: l.from, to: l.to, name: l.name, km: l.km, path: decodeLine(l.path) }));
+  return seaLaneCache;
+}
+
+/** Häfen, in die ein Weg vom Meer führt. */
+export function seaPorts(): string[] {
+  return Object.keys(SEA_PORTS);
+}
+
+/**
+ * Seeweg von einem Knoten (Hafen eines Produzenten) bis an den Liegeplatz eines Hafens: kürzester Weg über die Seewege
+ * (Dijkstra, bei Gleichstand nach Namen) bis vor den Hafen, dann das Fahrwasser hinein (WATERWAYS). null ohne Weg.
+ */
+export function seaRoute(from: string, portId: string): SeaRoute | null {
+  const id = `${from}>${portId}`;
+  if (seaRouteCache.has(id)) return seaRouteCache.get(id) ?? null;
+  const target = SEA_PORTS[portId];
+  const water = WATERWAYS[portId];
+  let result: SeaRoute | null = null;
+  if (target && water && SEA_NODES[from]) {
+    const dist = new Map<string, number>([[from, 0]]);
+    const prev = new Map<string, SeaLane>();
+    const done = new Set<string>();
+    for (;;) {
+      let here: string | null = null;
+      for (const [node, d] of dist) {
+        if (done.has(node)) continue;
+        if (here === null || d < (dist.get(here) ?? Infinity) || (d === dist.get(here) && node < here)) here = node;
+      }
+      if (here === null || here === target) break;
+      done.add(here);
+      for (const lane of seaLanes()) {
+        const next = lane.from === here ? lane.to : lane.to === here ? lane.from : null;
+        if (!next || done.has(next)) continue;
+        const d = (dist.get(here) ?? 0) + lane.km;
+        if (d < (dist.get(next) ?? Infinity)) {
+          dist.set(next, d);
+          prev.set(next, lane);
+        }
+      }
+    }
+    if (dist.has(target)) {
+      const nodes = [target];
+      let path: LngLat[] = [];
+      while (nodes[0] !== from) {
+        const lane = prev.get(nodes[0]) as SeaLane;
+        const forward = lane.to === nodes[0];
+        path = join(forward ? lane.path : [...lane.path].reverse(), path);
+        nodes.unshift(forward ? lane.from : lane.to);
+      }
+      path = join(path, decodeLine(water.path));
+      result = { path, km: Math.round(((dist.get(target) ?? 0) + water.km) * 10) / 10, nodes };
+    }
+  }
+  seaRouteCache.set(id, result);
+  return result;
 }
 
 /** Nächster Punkt auf einer Straße und der Abstand dorthin (null = keine Straße in der Nähe). */

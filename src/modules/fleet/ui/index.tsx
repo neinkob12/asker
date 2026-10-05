@@ -20,6 +20,7 @@ import {
 import { activeCity, getCity } from '../../city';
 import {
   getVehicles,
+  isShip,
   VEHICLE_MODELS,
   type Vehicle,
   type VehicleModel,
@@ -38,6 +39,13 @@ const STATUS: Record<VehicleStatus, { label: string; icon: string; color: Catego
 
 /** Eigenschaften eines Modells als Chips: Ladung, Tempo, Auffälligkeit. */
 export function modelChips(model: VehicleModel): ChipSpec[] {
+  if (model.ship) {
+    return [
+      { label: formatAmount(model.capacity), icon: 'package', color: 'goods' },
+      { label: `${model.ship.kmPerDay} km am Tag`, icon: 'speed', color: 'place' },
+      model.checkFactor < 1 && { label: 'unauffällig', icon: 'eye', color: 'money' },
+    ].filter(Boolean) as ChipSpec[];
+  }
   return [
     { label: formatAmount(model.capacity), icon: 'package', color: 'goods' },
     model.speed !== 1 && {
@@ -55,6 +63,7 @@ export function modelChips(model: VehicleModel): ChipSpec[] {
 
 /** Icon eines Modells in Listen. */
 function modelIcon(model: VehicleModel | undefined): string {
+  if (model?.ship) return 'ship';
   return model?.mapKind === 'courier' ? 'bike' : model?.mapKind === 'car' ? 'car' : 'truck';
 }
 
@@ -64,10 +73,11 @@ function FleetGroup() {
   const { state, dispatch } = useGame();
   const [ask, setAsk] = useState<Ask>(null);
   const cityId = activeCity(state);
-  const vehicles = getVehicles(state, cityId);
+  // Schiffe stehen in der Kunden-App (trade, Hafen), nicht hier.
+  const vehicles = getVehicles(state, cityId).filter((v) => !isShip(v));
   // Den Lkw gibt es nur in der Hafen-Phase an einem Ort im Ausland (Auftrag 40).
   const abroad = getCity(cityId)?.abroad === true;
-  const models = VEHICLE_MODELS.filter((m) => m.available && (!m.harborOnly || abroad));
+  const models = VEHICLE_MODELS.filter((m) => m.available && !m.ship && (!m.harborOnly || abroad));
   const askPrice = ask?.kind === 'buy' ? vehiclePrice(ask.model, cityId) : 0;
   const sellModel = ask?.kind === 'sell' ? vehicleModel(ask.vehicle.model) : undefined;
   const sellAmount =

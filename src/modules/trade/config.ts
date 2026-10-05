@@ -19,7 +19,12 @@ export const CUSTOMER_KINDS = {
   org: { label: 'Alte Organisation', priceFactor: 1, startTrust: 80, expects: 0.85, icon: 'crown' },
   gang: { label: 'Gang', priceFactor: 1.2, startTrust: 40, expects: 0.6, icon: 'skull' },
   city: { label: 'Fremde Stadt', priceFactor: 1.05, startTrust: 30, expects: 0.75, icon: 'building' },
+  // Auftrag 41: Städte in Europa (der Preisfaktor steht pro Stadt in data.ts, EUROPE_CITIES).
+  europe: { label: 'Europa', priceFactor: 1.15, startTrust: 25, expects: 0.8, icon: 'globe' },
 } as const satisfies Record<string, CustomerKindInfo>;
+
+/** Europa-Kunden melden sich erst, wenn dein Ruf (Pünktlichkeit) mindestens so gut ist. */
+export const EUROPE_MIN_RELIABILITY = 0.7;
 
 /** Preisgrenze: so viel über ihrem Angebot zahlt ein Kunde höchstens (Gegenangebot). */
 export const PRICE_CAP_MARKUP = 0.15;
@@ -83,6 +88,8 @@ export const GANG_MEMORY_BLOCK = -20;
  * fliegt die Ladung mit SEIZE_ON_CHECK auf, ist sie weg (die Bestellung bleibt offen, solange die Frist läuft).
  */
 export const AUTOBAHN_CHECK_PER_100KM = 0.015;
+/** Auftrag 41: Mehr als so viel Kontroll-Chance bringt die Strecke allein nicht (lange Wege nach Europa). */
+export const AUTOBAHN_CHECK_MAX = 0.08;
 export const SEIZE_ON_CHECK = 0.45;
 /** Ohne eigenen Lkw fährt eine Spedition: Grundpreis plus pro Kilo und 100 km (Schwarzgeld). */
 export const FREIGHT_BASE = 800;
@@ -96,3 +103,14 @@ export const START_STOCK_QUALITY = 0.6;
 
 /** Mengen der Bestellungen gesamt (Stellschraube fürs Balancing, 1 = Daten wie in data.ts). */
 export const DEMAND_SCALE = 1;
+
+/**
+ * Auftrag 41: Ein Linienschiff (Charter pro Container) schafft so viele Kilometer am Tag auf dem Seeweg (roads.seaRoute),
+ * mit den Stopps unterwegs. Dazu kommen die Tage bis zum Ablegen (Producer.days).
+ */
+export const CHARTER_KM_PER_DAY = 650;
+
+/** Hallen im Hafen (trade.buildHall): höchstens so viele pro Hafen, Platz und Preis stehen am Hafen (logistics). */
+export const MAX_HALLS = 2;
+/** Passt ein Container nicht mehr ins Lager, wartet der Rest an Bord: Liegegeld pro Tag und Container (sauberes Geld). */
+export const QUAY_FEE_PER_DAY = 1_500;

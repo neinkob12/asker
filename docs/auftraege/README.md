@@ -173,7 +173,7 @@ Welle 4   40 Verkauf und Hafen ──► 41 Schiffe und Europa ──► 42 Prod
 | [38](38-muenchen.md) | München als Stadt (Daten) | 3 | Daten der Stadt |
 | [39](39-frankfurt.md) | Frankfurt als Stadt (Daten, optional) | 3 | Daten der Stadt |
 | [40](40-verkauf-hafen.md) | Boss von Deutschland, Verkauf, Hafen-Phase mit Kunden, Konkurrenz, Zoll | 4 | neu `trade`, `city`, Häfen in `logistics`, Zoll in `police` |
-| [41](41-schiffe-europa.md) | Schiffe, Container, weitere Häfen, Europa-Kunden | 4 | `trade`, `logistics`, `fleet`, Seewege in `roads` |
+| [41](41-schiffe-europa.md) | Schiffe, Container, weitere Häfen, Europa-Kunden (umgesetzt) | 4 | `trade`, `logistics`, `fleet`, Seewege in `roads` |
 | [42](42-produktion.md) | Fincas, Produktionskette, Ziel Europa | 4 | neu `grow` |
 
 **Stand Auftrag 35:** umgesetzt in sechs Etappen (PR #57). Konfrontationen mit sichtbarer Absicht, zwei Zeigern
@@ -240,6 +240,13 @@ Marktereignisse fest pro (Seed, Stadt, Tag, Zweck) (`cityDayDice` im Kern), Bala
 mit der Zahl fertiger Städte, Schlafmodus ohne Ausbau und Anwerben). Danach Boss von Deutschland, Verkauf an Jansen,
 Rotterdam als Ausland, neues Modul `trade` (Kunden, Bestellungen, Container, Häfen, Konkurrenz), Zoll-Heat pro Hafen in
 `police`, Europa-Ansicht, Bot und Test-Spielstände `deutschland` und `hafen`.
+
+**Stand Auftrag 41 (Welle 4):** umgesetzt in vier Etappen (PR #65). Seewege aus Overture-Tiefen (`build-water.py
+--sea`: Mittelmeer, Atlantik, Ärmelkanal, Nordsee) und Fahrwasser nach Rotterdam und Antwerpen, Hafen-Lager mit Platz
+und Hallen, eigene Schiffe (Küstenmotorschiff, Frachter) neben dem Charter pro Container, Deckladung (ohne, Fliesen,
+Bananen), Schiffs-Tracker, sieben Europa-Kunden mit Grenze und neuen Autobahn-Linien (Mailand über den Brenner). Für
+Auftrag 42: Produzenten haben einen Knoten im Seewege-Netz (`Producer.sea`); neue Häfen in Übersee (Cartagena) brauchen
+einen Knoten und eine Linie in `SEA_LANES` von `build-water.py` (Ausschnitt `SEA_BOX` erweitern).
 
 **Prüf-Loop:** Die Planungs-Session startet jede Welle als eigene Cloud-Sessions (je ein Branch `claude/auftrag-<nr>-…`
 und ein Draft-PR), schaut stündlich nach, prüft fertige PRs gegen ihren Auftrag (Checkliste „Fertig, wenn“, CI, Review

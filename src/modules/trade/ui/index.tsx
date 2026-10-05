@@ -31,18 +31,18 @@ import {
   useUi,
 } from '../../../ui';
 import { HARBOR_CITY } from '../../city';
-import { getVehicles, vehicleName, vehicleStatus } from '../../fleet';
+import { freeVehicles, vehicleName } from '../../fleet';
 import { productName } from '../../goods';
 import { customsHeat, customsLevel } from '../../police';
 import {
-  CONTAINER_SIZES,
-  type ContainerSize,
   CUSTOMER_KINDS,
   type CustomerKind,
-  containerCost,
-  containerRisk,
   customerContact,
+  deliveryCheckChance,
   deliveryEstimate,
+  EUROPE_CITIES,
+  europeCityOf,
+  europeStatus,
   freightCost,
   getCustomer,
   getCustomers,
@@ -51,6 +51,7 @@ import {
   getShipments,
   harborPorts,
   isTradeActive,
+  MAX_HALLS,
   maxFactor,
   openItems,
   openOrders,
@@ -61,16 +62,21 @@ import {
   PRICE_LEVEL_RANGE,
   PRICE_LEVEL_STEP,
   PRODUCERS,
-  type Producer,
   pendingDeliveries,
+  portCapacity,
   portFor,
+  portHalls,
+  portLoad,
   portStock,
   shippableItems,
+  shippingMinutes,
   supplierReputation,
   type TradeOrder,
   tradeStats,
+  weekOf,
 } from '../index';
 import { europeLayer } from './map';
+import { ShipsGroup } from './order';
 import './trade.css';
 
 const APP_ID = 'trade.app';
@@ -88,7 +94,12 @@ function kindIcon(kind: CustomerKind): string {
   return CUSTOMER_KINDS[kind].icon;
 }
 
-const KIND_COLOR: Record<CustomerKind, CategoryColor> = { org: 'brand', gang: 'danger', city: 'place' };
+const KIND_COLOR: Record<CustomerKind, CategoryColor> = {
+  org: 'brand',
+  gang: 'danger',
+  city: 'place',
+  europe: 'people',
+};
 
 // ---------------------------------------------------------------------------------------------
 // Bestellungen
@@ -163,8 +174,10 @@ function OrdersView() {
     const trip = deliveryEstimate(customer, port);
     const grams = shippableItems(state, port, o).reduce((sum, i) => sum + i.amount, 0);
     const freight = freightCost(grams, trip.km);
+    // Die Wahl: Spedition kostet, fällt aber seltener auf; der eigene Lkw ist umsonst, wird öfter kontrolliert und
+    // kann bei einer Kontrolle mit der Ladung weg sein.
     actions.push({
-      label: `Spedition (${formatEuro(freight)})`,
+      label: `Spedition: ${formatEuro(freight)}, Zoll ${pct(deliveryCheckChance(state, customer, port))}`,
       icon: 'truck',
       disabled: state.wallet.dirty < freight,
       onSelect: () => {
@@ -172,9 +185,9 @@ function OrdersView() {
         setAsk(null);
       },
     });
-    for (const v of getVehicles(state, HARBOR_CITY).filter((x) => vehicleStatus(x) === 'free')) {
+    for (const v of freeVehicles(state, HARBOR_CITY)) {
       actions.push({
-        label: `${vehicleName(state, v.id)} (ohne Kosten)`,
+        label: `${vehicleName(state, v.id)}: ohne Kosten, Zoll ${pct(deliveryCheckChance(state, customer, port, v.id))}`,
         icon: 'truck',
         onSelect: () => {
           dispatch({ type: 'trade.deliver', payload: { orderId: o.id, portId: port, vehicleId: v.id } });
@@ -356,7 +369,7 @@ function OrdersView() {
           ask && customer
             ? ask.mode === 'answer'
               ? `${orderItemsText(ask.order.items)}. Höchstens ${formatEuro(orderValue(ask.order, maxFactor(ask.order)))}.`
-              : `${orderItemsText(port ? shippableItems(state, port, ask.order) : [])} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.`
+              : `${orderItemsText(port ? shippableItems(state, port, ask.order) : [])} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.${europeCityOf(customer) ? ` Zoll steht ${europeCityOf(customer)?.border.name}.` : ''}`
             : undefined
         }
         actions={actions}
@@ -372,6 +385,7 @@ const KIND_GROUPS: { kind: CustomerKind; title: string; note: string }[] = [
   { kind: 'org', title: 'Alte Organisationen', note: 'Zuverlässig, fairer Preis, große Mengen.' },
   { kind: 'gang', title: 'Gangs', note: 'Zahlen ein Fünftel mehr, aber ein Deal kann kippen.' },
   { kind: 'city', title: 'Fremde Städte', note: 'Neue Kunden: Vertrauen muss erst wachsen.' },
+  { kind: 'europe', title: 'Europa', note: 'Zahlen mehr, aber an der Grenze steht der Zoll.' },
 ];
 
 function CustomersView() {
@@ -409,7 +423,8 @@ function CustomersView() {
       </Group>
       {KIND_GROUPS.map((g) => {
         const list = getCustomers(state).filter((c) => c.kind === g.kind);
-        if (list.length === 0) return null;
+        const coming = g.kind === 'europe' ? EUROPE_CITIES.filter((c) => !europeStatus(state, c).joined) : [];
+        if (list.length === 0 && coming.length === 0) return null;
         return (
           <Group
             key={g.kind}
@@ -444,6 +459,30 @@ function CustomersView() {
                   </ListItem>
                 );
               })}
+              {coming.map((city) => {
+                const status = europeStatus(state, city);
+                const wait = status.week - weekOf(state.time);
+                return (
+                  <ListItem key={city.id} value={city.country}>
+                    <ItemContent
+                      icon="globe"
+                      color="system"
+                      title={city.name}
+                      tags={[
+                        wait > 0
+                          ? {
+                              label: wait === 1 ? 'ab nächster Woche' : `in ${wait} Wochen`,
+                              color: 'system',
+                              icon: 'clock',
+                            }
+                          : status.reliable && { label: 'meldet sich Montag', color: 'people', icon: 'clock' },
+                        !status.reliable && { label: 'will pünktlichen Ruf', color: 'warn', icon: 'alert' },
+                        { label: `Zoll ${pct(city.border.check)}`, color: 'law', icon: 'shield' },
+                      ]}
+                    />
+                  </ListItem>
+                );
+              })}
             </List>
           </Group>
         );
@@ -455,40 +494,22 @@ function CustomersView() {
 // ---------------------------------------------------------------------------------------------
 // Hafen
 
+/** Rückfrage vor einer Ausgabe mit sauberem Geld (Halle, Liegeplatz). */
+type Confirm = { title: string; message: string; label: string; cost: number; run: () => void } | null;
+
 function HarborView() {
   const { state, dispatch } = useGame();
+  const ui = useUi();
+  const [confirm, setConfirm] = useState<Confirm>(null);
   const ports = ownedPorts(state);
-  const [port, setPort] = useState(ports[0] ?? 'rotterdam');
-  const [producer, setProducer] = useState<Producer | null>(null);
   const shipments = getShipments(state);
   const stats = tradeStats(state);
-  const target = ports.includes(port) ? port : (ports[0] ?? 'rotterdam');
-  const buyActions: SheetAction[] = producer
-    ? Object.keys(producer.products).flatMap((productId) =>
-        CONTAINER_SIZES.map((size: ContainerSize) => {
-          const cost = containerCost(producer.id, productId, size.id);
-          const total = cost.goods + cost.freight;
-          const risk = containerRisk(state, producer.id, size.id, target);
-          return {
-            label: `${size.label} ${productName(productId)}: ${formatEuro(total)}, Zoll ${pct(risk)}`,
-            icon: 'boxes',
-            disabled: state.wallet.dirty < total,
-            onSelect: () => {
-              dispatch({
-                type: 'trade.buy',
-                payload: { producerId: producer.id, productId, size: size.id, portId: target },
-              });
-              setProducer(null);
-            },
-          };
-        }),
-      )
-    : [];
+  const target = ports[0] ?? 'rotterdam';
   return (
     <>
       <SummaryTiles
         items={[
-          { icon: 'ship', color: 'place', value: shipments.length, label: 'Auf See' },
+          { icon: 'ship', color: 'place', value: shipments.filter((x) => x.status === 'sea').length, label: 'Auf See' },
           { icon: 'boxes', color: 'goods', value: stats.containers, label: 'Container' },
           { icon: 'anchor', color: 'danger', value: stats.seized, label: 'Aufgeflogen' },
         ]}
@@ -497,14 +518,25 @@ function HarborView() {
         const lots = Object.entries(portStock(state, id));
         const heat = customsHeat(state, id);
         const level = customsLevel(heat);
+        const load = portLoad(state, id);
+        const capacity = portCapacity(state, id);
+        const halls = portHalls(state, id);
+        const info = harborPorts().find((p) => p.id === id);
+        const waiting = shipments.filter((x) => x.status === 'quay' && x.portId === id);
         return (
           <Group
             key={id}
             title={`Lager ${harborName(id)}`}
             icon="warehouse"
             color="goods"
-            value={`Zoll ${level.label}`}
-            note={lots.length === 0 ? 'Leer. Bestell Container unten.' : undefined}
+            value={`${kg(load)} von ${kg(capacity)}`}
+            note={
+              waiting.length > 0
+                ? `Voll: ${kg(waiting.reduce((sum, x) => sum + x.amount, 0))} warten am Kai.`
+                : lots.length === 0
+                  ? 'Leer. Bestell Container unten.'
+                  : undefined
+            }
           >
             <List>
               {lots.map(([productId, lot]) => (
@@ -523,10 +555,30 @@ function HarborView() {
                   color="law"
                   title="Zoll-Heat"
                   tags={[
+                    { label: level.label, color: level.index >= 2 ? 'danger' : 'law', icon: 'shield' },
                     { label: `${Math.round(heat)} von 100`, color: level.index >= 2 ? 'danger' : 'law', icon: 'flame' },
                   ]}
                 />
               </ListItem>
+              {info && halls < MAX_HALLS && (
+                <ListItem
+                  action
+                  icon="warehouse"
+                  value={formatEuro(info.hallCost)}
+                  disabled={state.wallet.clean < info.hallCost}
+                  onClick={() =>
+                    setConfirm({
+                      title: `Halle in ${harborName(id)} bauen?`,
+                      message: `${kg(info.hallCapacity)} mehr Platz im Lager. Kostet ${formatEuro(info.hallCost)} sauberes Geld.`,
+                      label: `Bauen (${formatEuro(info.hallCost)})`,
+                      cost: info.hallCost,
+                      run: () => dispatch({ type: 'trade.buildHall', payload: { portId: id } }),
+                    })
+                  }
+                >
+                  {`Halle bauen (+${kg(info.hallCapacity)})`}
+                </ListItem>
+              )}
             </List>
           </Group>
         );
@@ -535,21 +587,16 @@ function HarborView() {
         title="Einkauf im Ausland"
         icon="ship"
         color="goods"
-        note={`Ankunft in ${harborName(target)}.`}
+        note="Tippen: Ware, Container, Deckladung und Schiff wählen."
         more="Kleine Kisten fallen dem Zoll seltener auf, große Container sind billiger pro Gramm. Jedes Kilo im Hafen macht den Zoll wacher, mit der Zeit kühlt er ab. Verteilen auf mehrere Häfen senkt das Risiko."
       >
-        {ports.length > 1 && (
-          <SegmentedControl
-            wide
-            aria-label="Hafen"
-            value={target}
-            options={ports.map((id) => ({ value: id, label: harborName(id) }))}
-            onChange={setPort}
-          />
-        )}
         <List>
           {PRODUCERS.map((p) => (
-            <ListItem key={p.id} onClick={() => setProducer(p)} value={`${p.days} T.`}>
+            <ListItem
+              key={p.id}
+              onClick={() => ui.openPanel('trade.order', { producerId: p.id })}
+              value={`${Math.round(shippingMinutes(p.id, target) / 1440)} T.`}
+            >
               <ItemContent
                 icon={p.byRoad ? 'truck' : 'ship'}
                 color="goods"
@@ -566,28 +613,7 @@ function HarborView() {
           ))}
         </List>
       </Group>
-      {shipments.length > 0 && (
-        <Group title="Auf See" icon="ship" color="place" count={shipments.length}>
-          <List>
-            {shipments.map((x) => (
-              <ListItem
-                key={x.id}
-                value={x.status === 'customs' ? 'Zoll' : clock.formatDuration(Math.max(0, x.arrivesAt - state.time))}
-              >
-                <ItemContent
-                  icon={x.status === 'customs' ? 'siren' : 'ship'}
-                  color={x.status === 'customs' ? 'danger' : 'place'}
-                  title={`${kg(x.amount)} ${productName(x.productId)}`}
-                  tags={[
-                    { label: PRODUCERS.find((p) => p.id === x.producerId)?.country ?? x.producerId, color: 'goods' },
-                    { label: `nach ${harborName(x.portId)}`, color: 'place', icon: 'anchor' },
-                  ]}
-                />
-              </ListItem>
-            ))}
-          </List>
-        </Group>
-      )}
+      <ShipsGroup />
       <Group title="Weitere Häfen" icon="anchor" color="place" collapsible open={false}>
         <List>
           {harborPorts()
@@ -596,7 +622,15 @@ function HarborView() {
               <ListItem
                 key={p.id}
                 value={formatEuro(p.berthCost)}
-                onClick={() => dispatch({ type: 'trade.rentBerth', payload: { portId: p.id } })}
+                onClick={() =>
+                  setConfirm({
+                    title: `Liegeplatz in ${p.name} mieten?`,
+                    message: `${p.description} Kostet ${formatEuro(p.berthCost)} sauberes Geld.`,
+                    label: `Mieten (${formatEuro(p.berthCost)})`,
+                    cost: p.berthCost,
+                    run: () => dispatch({ type: 'trade.rentBerth', payload: { portId: p.id } }),
+                  })
+                }
                 disabled={state.wallet.clean < p.berthCost}
               >
                 <ItemContent
@@ -615,11 +649,25 @@ function HarborView() {
         Container kontrolliert.
       </Disclosure>
       <ActionSheet
-        open={producer !== null}
-        onClose={() => setProducer(null)}
-        title={producer ? `${producer.name} (${producer.country})` : ''}
-        message={producer?.description}
-        actions={buyActions}
+        open={confirm !== null}
+        onClose={() => setConfirm(null)}
+        title={confirm?.title ?? ''}
+        message={confirm?.message}
+        actions={
+          confirm
+            ? [
+                {
+                  label: confirm.label,
+                  icon: 'check',
+                  disabled: state.wallet.clean < confirm.cost,
+                  onSelect: () => {
+                    confirm.run();
+                    setConfirm(null);
+                  },
+                },
+              ]
+            : []
+        }
       />
     </>
   );

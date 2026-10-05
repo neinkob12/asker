@@ -2,13 +2,16 @@
 // Häfen (Rotterdam, Antwerpen, Hamburg) und die fremden Städte als Glas-Karten auf der Karte, dazu die Wege der
 // Lieferungen (Lkw über das Autobahn-Netz) und der Container (Seeweg über Gibraltar und den Kanal) mit einem Punkt, wo
 // sie gerade sind. Die alten Städte zeigt city (cards.tsx) nach dem Verkauf als Kunden. Optik liest nur.
+// Auftrag 41: Die Seewege (roads.seaLanes, aus Overture-Tiefen) liegen blass darunter, Container fahren sie entlang.
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import { distanceMeters, formatNumber, type GameState, type LngLat } from '../../../core';
 import { addHtmlMarker, FAR_ZOOM, type MapLayer, mapToken } from '../../../map';
 import { customsHeat, customsLevel } from '../../police';
+import { seaLanes, seaPorts, shipRoute } from '../../roads';
 import {
   deliveryPath,
+  EUROPE_CITIES,
   FOREIGN_CITIES,
   getCustomer,
   getDeliveries,
@@ -17,10 +20,12 @@ import {
   isTradeActive,
   openOrders,
   ownedPorts,
+  ownShips,
   portStock,
   shipmentPath,
 } from '../index';
 
+const SEAWAYS = 'trade.seaways';
 const ROUTES = 'trade.routes';
 const MOVERS = 'trade.movers';
 
@@ -67,6 +72,16 @@ function portCard(state: GameState, id: string): { title: string; lines: string[
   return { title: port?.name ?? id, lines, owned };
 }
 
+/** Stadt in Europa (Auftrag 41): Kunde mit Bestellung oder Anteil, sonst das Land (meldet sich noch). */
+function europeCard(state: GameState, id: string): { title: string; lines: string[] } {
+  const city = EUROPE_CITIES.find((c) => c.id === id);
+  const customer = getCustomer(state, `europe:${id}`);
+  if (!city) return { title: id, lines: [] };
+  if (!customer) return { title: city.name, lines: [city.country] };
+  const open = openOrders(state).some((o) => o.customerId === customer.id);
+  return { title: city.name, lines: [open ? 'Bestellung' : `Anteil ${Math.round(customer.share * 100)} %`] };
+}
+
 function cityCard(state: GameState, id: string): { title: string; lines: string[] } {
   const customer = getCustomer(state, `city:${id}`);
   const city = FOREIGN_CITIES.find((c) => c.id === id);
@@ -102,7 +117,19 @@ export const europeLayer: MapLayer = {
     const sea = mapToken('--cat-place', '#5aa9ff');
     const ink = mapToken('--hud-ink', '#f5f1e8');
     const empty = { type: 'FeatureCollection' as const, features: [] };
+    map.addSource(SEAWAYS, { type: 'geojson', data: empty });
     map.addSource(ROUTES, { type: 'geojson', data: empty });
+    map.addLayer({
+      id: SEAWAYS,
+      type: 'line',
+      source: SEAWAYS,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': sea,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 4, 1, 9, 2],
+        'line-opacity': 0.35,
+      },
+    });
     map.addSource(MOVERS, { type: 'geojson', data: empty });
     map.addLayer({
       id: ROUTES,
@@ -146,16 +173,39 @@ export const europeLayer: MapLayer = {
     for (const city of FOREIGN_CITIES) {
       addCard(`city:${city.id}`, city.at, () => ctx.ui.openPhone('trade.app'), 'top');
     }
+    for (const city of EUROPE_CITIES) {
+      addCard(`europe:${city.id}`, city.at, () => ctx.ui.openPhone('trade.app'), 'top');
+    }
     let routesKey = '';
+    let seawaysShown = false;
     const refresh = (state: GameState) => {
       const active = isTradeActive(state);
+      if (active !== seawaysShown) {
+        // Die Seewege ändern sich nie: einmal zeichnen, wenn die Hafen-Phase beginnt.
+        seawaysShown = active;
+        const lines = active ? [...seaLanes().map((l) => l.path), ...seaPorts().map((id) => shipRoute(id))] : [];
+        (map.getSource(SEAWAYS) as GeoJSONSource | undefined)?.setData({
+          type: 'FeatureCollection',
+          features: lines
+            .filter((path) => path.length > 1)
+            .map((path) => ({
+              type: 'Feature' as const,
+              properties: {},
+              geometry: { type: 'LineString' as const, coordinates: path.map((q) => [q.lng, q.lat]) },
+            })),
+        });
+      }
       const far = map.getZoom() <= FAR_ZOOM;
       for (const [id, card] of cards) {
         // Hamburg ist schon eine Stadt mit Karte: Ihr Hafen erscheint nur, wenn du dort einen Liegeplatz hast.
         const hidden = !active || !far || (id === 'port:hamburg' && !ownedPorts(state).includes('hamburg'));
         card.element.hidden = hidden;
         if (hidden) continue;
-        const model = id.startsWith('port:') ? portCard(state, id.slice(5)) : cityCard(state, id.slice(5));
+        const model = id.startsWith('port:')
+          ? portCard(state, id.slice(5))
+          : id.startsWith('europe:')
+            ? europeCard(state, id.slice(7))
+            : cityCard(state, id.slice(5));
         const key = JSON.stringify(model);
         if (key === card.key) continue;
         card.key = key;
@@ -165,8 +215,14 @@ export const europeLayer: MapLayer = {
       }
       if (!active) return;
       const deliveries = getDeliveries(state);
-      const shipments = getShipments(state).filter((x) => x.status === 'sea');
-      const key = [...deliveries.map((d) => `d${d.id}`), ...shipments.map((x) => `s${x.id}`)].join(',');
+      // Container auf der Linie fahren den Seeweg einmal; eigene Schiffe hin und zurück (Auftrag 41).
+      const shipments = getShipments(state).filter((x) => x.status === 'sea' && x.vesselId === null);
+      const voyages = ownShips(state).filter((v) => v.voyage !== null);
+      const key = [
+        ...deliveries.map((d) => `d${d.id}`),
+        ...shipments.map((x) => `s${x.id}`),
+        ...voyages.map((v) => `v${v.id}:${v.voyage?.producerId}`),
+      ].join(',');
       const paths = new Map<string, { kind: 'truck' | 'ship'; path: LngLat[]; t: number }>();
       for (const d of deliveries) {
         const span = Math.max(1, d.arrivesAt - d.departedAt);
@@ -175,6 +231,13 @@ export const europeLayer: MapLayer = {
       for (const x of shipments) {
         const span = Math.max(1, x.arrivesAt - x.orderedAt);
         paths.set(`s${x.id}`, { kind: 'ship', path: shipmentPath(x), t: (state.time - x.orderedAt) / span });
+      }
+      for (const { id, voyage } of voyages) {
+        if (!voyage) continue;
+        const path = shipmentPath(voyage);
+        // Hinweg: der Weg rückwärts; beim Verladen am Produzenten.
+        const t = voyage.phase === 'back' ? voyage.progress : voyage.phase === 'out' ? 1 - voyage.progress : 0;
+        paths.set(`v${id}`, { kind: 'ship', path, t });
       }
       if (key !== routesKey) {
         routesKey = key;
@@ -213,8 +276,8 @@ export const europeLayer: MapLayer = {
       destroy() {
         map.off('zoomend', onZoom);
         for (const card of cards.values()) card.element.remove();
-        for (const id of [MOVERS, ROUTES]) if (map.getLayer(id)) map.removeLayer(id);
-        for (const id of [MOVERS, ROUTES]) if (map.getSource(id)) map.removeSource(id);
+        for (const id of [MOVERS, ROUTES, SEAWAYS]) if (map.getLayer(id)) map.removeLayer(id);
+        for (const id of [MOVERS, ROUTES, SEAWAYS]) if (map.getSource(id)) map.removeSource(id);
       },
     };
   },

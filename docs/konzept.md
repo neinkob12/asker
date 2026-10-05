@@ -238,8 +238,16 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   Konkurrenten aus Frankfurt, Hamburg, Berlin und Amsterdam unterbieten dich, und weit herausgezoomt wird die
   Deutschland-Ansicht zur Europa-Ansicht mit Häfen, Kunden und Wegen. Neue App „Kunden“ im Dock, Jansens Reederei als
   vierter Weg der Geldwäsche.
-- **Noch nicht umgesetzt** (Aufträge 41 und 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Schiffe und
-  Europa, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen:
+- **Schiffe und Europa (Auftrag 41):** Container fahren echte Seewege (aus Overture-Tiefen: Mittelmeer, Atlantik,
+  Ärmelkanal, Nordsee, dazu das Fahrwasser nach Rotterdam, Antwerpen und Hamburg), die Laufzeit kommt aus den
+  Kilometern. Pro Container chartern (Linienschiff, Fracht pro Container) oder ein eigenes Schiff kaufen
+  (Küstenmotorschiff klein und unauffällig, Frachter groß und schnell), das hin und zurück fährt, ohne Fracht. Jeder
+  Container bekommt eine Deckladung: ohne (billig, riskant), Fliesen oder Bananen (teurer, der Zoll schaut seltener).
+  Das Hafen-Lager hat Platz und Hallen; was nicht passt, wartet am Kai gegen Liegegeld. Sieben Städte in Europa
+  (Amsterdam, Brüssel, Paris, Kopenhagen, Wien, Zürich, Mailand) melden sich Woche für Woche, zahlen mehr, aber an der
+  Grenze steht der Zoll; der Lkw fährt über neue Autobahn-Linien.
+- **Noch nicht umgesetzt** (Auftrag 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Produktion im Ausland,
+  KI-Porträts, Multiplayer. Verworfen:
   Tarnfirmen, Charakter-Erstellung, Perks, Besitz, Akte, Korruption.
 
 ## Mehrere Städte (Auftrag 30 gebaut, Auftrag 31 für die Karte)

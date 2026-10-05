@@ -27,7 +27,7 @@ import { getRightHand, hasFullPower, lieutenantOfSpot, RIGHT_HAND_RANK_XP } from
 import { getSpots } from '../../spots';
 import { enlist, generateProfile } from '../../staff';
 import { addInfluence, campaignProgress, factions, PLAYER_FACTION } from '../../territory';
-import { FOREIGN_CITIES } from '../../trade';
+import { EUROPE_CITIES, FOREIGN_CITIES, getCustomer } from '../../trade';
 import { allVeedel } from '../../veedel';
 import {
   ABROAD_CITIES,
@@ -72,7 +72,14 @@ registerCityViews({
   deutschlandBounds: (state) => {
     const points = [
       ...CITIES.map((c) => c.center),
-      ...(isBusinessSold(state) ? [...ABROAD_CITIES.map((c) => c.center), ...FOREIGN_CITIES.map((c) => c.at)] : []),
+      ...(isBusinessSold(state)
+        ? [
+            ...ABROAD_CITIES.map((c) => c.center),
+            ...FOREIGN_CITIES.map((c) => c.at),
+            // Auftrag 41: die Städte in Europa, die schon bei dir kaufen.
+            ...EUROPE_CITIES.filter((c) => getCustomer(state, `europe:${c.id}`)).map((c) => c.at),
+          ]
+        : []),
       ...(isBusinessSold(state) ? [{ lng: 4.29, lat: 51.29 }] : []),
     ];
     const lngs = points.map((p) => p.lng);

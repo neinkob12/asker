@@ -203,6 +203,8 @@ describe('Hafen-Phase: Bestellungen und Auslieferung', () => {
         orderedAt: sim.state.time,
         arrivesAt: first.dueAt - 60,
         status: 'sea',
+        cover: 'none',
+        vesselId: null,
       });
     }
     const coverage = orderCoverage(sim.state);
