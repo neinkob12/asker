@@ -343,6 +343,7 @@ describe('Balancing', () => {
             ` | Umsatz ${t.revenue} (${Math.round(t.revenue / Math.max(1, harborDays))}/Tag)` +
             ` | Marktanteil ${Math.round(share * 100)} % | Lieferungen ${delivered} (pünktlich ${t.onTime}, zu spät ${t.late}, geplatzt ${t.failed}, gekippt ${t.tipped})` +
             ` | Container ${t.containers}, aufgeflogen ${t.seized}, Lkw-Ladungen beschlagnahmt ${t.deliveriesSeized}` +
+            ` | Schiffsfahrten ${t.voyages}, Europa-Kunden beliefert ${getCustomers(sim.state).filter((c) => c.kind === 'europe' && c.delivered > 0).length}` +
             ` | Ruf pünktlich ${Math.round(rep.reliability * 100)} %, Qualität ${Math.round(rep.quality * 100)} %` +
             ` | Ware im Hafen ${Math.round(totalStock(sim.state) / 1000)} kg` +
             ` | ${sim.state.outcome.gameOver ? `Game Over (${sim.state.outcome.gameOver.reason})` : 'keine Pleite'}` +

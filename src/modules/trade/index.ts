@@ -273,6 +273,8 @@ export interface TradeStats {
   /** Bedarf aller Kunden und dein Anteil daran, aufsummiert über die Wochen (für den Marktanteil). */
   demand: number;
   ordered: number;
+  /** Auftrag 41: Fahrten eigener Schiffe. */
+  voyages: number;
 }
 
 export interface TradeState {
@@ -736,6 +738,7 @@ function emptyStats(): TradeStats {
     tipped: 0,
     demand: 0,
     ordered: 0,
+    voyages: 0,
   };
 }
 
@@ -1341,6 +1344,7 @@ export function sail(
   });
   const list = shipContainers(ctx, checked.producer, portId, checked.containers, vesselId, ctx.now + plan.minutes);
   useVehicle(ctx, vesselId, list[0].id);
+  ctx.state.modules.trade.stats.voyages += 1;
   journal.add(
     ctx,
     `${name} legt ab nach ${checked.producer.from}: ${list.length} Container, zurück in ${harborPort(portId)?.name ?? portId} in ${clock.formatDuration(plan.minutes)}.`,
@@ -1714,10 +1718,16 @@ export default defineModule({
   migrations: {
     // Auftrag 41: Hallen pro Hafen; Container, die schon auf See sind, behalten ihre Ankunft.
     // Container von vorher: Linienschiff, ohne Deckladung.
-    2: (old: Omit<TradeState, 'halls' | 'shipments'> & { shipments: Omit<TradeShipment, 'cover' | 'vesselId'>[] }) => ({
+    2: (
+      old: Omit<TradeState, 'halls' | 'shipments' | 'stats'> & {
+        shipments: Omit<TradeShipment, 'cover' | 'vesselId'>[];
+        stats: Omit<TradeStats, 'voyages'>;
+      },
+    ) => ({
       ...old,
       halls: {},
       shipments: old.shipments.map((x) => ({ ...x, cover: 'none' as const, vesselId: null })),
+      stats: { ...old.stats, voyages: 0 },
     }),
   },
   tickEvery: 5,

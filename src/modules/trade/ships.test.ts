@@ -132,6 +132,7 @@ describe('Hafen-Lager mit Platz (Auftrag 41, Etappe 1)', () => {
     const sim = soldGame(22);
     const raw = JSON.parse(JSON.stringify(sim.state));
     delete raw.modules.trade.halls;
+    delete raw.modules.trade.stats.voyages;
     raw.modules.trade.shipments = [
       {
         id: 9901,
@@ -150,6 +151,7 @@ describe('Hafen-Lager mit Platz (Auftrag 41, Etappe 1)', () => {
     const loaded = loadSimulation(raw, sim.modules);
     expect(loaded.state.modules.trade.halls).toEqual({});
     expect(loaded.state.modules.trade.shipments[0]).toMatchObject({ id: 9901, cover: 'none', vesselId: null });
+    expect(loaded.state.modules.trade.stats.voyages).toBe(0);
     expect(portCapacity(loaded.state, 'rotterdam')).toBe(harborPort('rotterdam')?.capacity);
     expect(loaded.state.modules.trade.customers).toEqual(sim.state.modules.trade.customers);
   }, 30_000);
@@ -307,4 +309,36 @@ describe('Europa-Kunden (Auftrag 41, Etappe 3)', () => {
       expect(km, city.id).toBeLessThan(1600);
     }
   });
+});
+
+describe('Auftrag 41: Determinismus', () => {
+  it('gleicher Seed und gleiche Befehle: gleiche Fahrten, Container und Europa-Kunden', () => {
+    const run = () => {
+      const sim = soldGame(28);
+      sim.state.wallet.dirty += 2_000_000;
+      sim.state.wallet.clean += 500_000;
+      const bought = sim.dispatch({ type: 'fleet.buy', payload: { model: 'coaster', cityId: 'rotterdam' } });
+      if (!bought.ok) throw new Error(bought.reason);
+      const vesselId = (bought.data as { vehicleId: number }).vehicleId;
+      sim.dispatch({
+        type: 'trade.sail',
+        payload: {
+          vesselId,
+          producerId: 'marokko',
+          load: [{ productId: 'hash', size: 'full', cover: 'tiles', count: 2 }],
+        },
+      });
+      sim.dispatch({
+        type: 'trade.buy',
+        payload: { producerId: 'spanien', productId: 'weed', size: 'medium', count: 2 },
+      });
+      settle(sim, 15 * DAY);
+      return sim.state.modules.trade;
+    };
+    const a = run();
+    const b = run();
+    expect(a.stock).toEqual(b.stock);
+    expect(a.customers).toEqual(b.customers);
+    expect(a.stats).toEqual(b.stats);
+  }, 60_000);
 });

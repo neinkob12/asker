@@ -103,6 +103,11 @@ fremde Städte als Daten), eine Bestellung pro Kunde und Woche mit Waren (`Order
 `customsArrival`), Häfen als Daten in `logistics` (`HARBOR_PORTS`), Lkw nur an einem Ort im Ausland (`harborOnly`). Eine App
 kann zeitweise eine andere im Dock ersetzen (`registerPhoneApp({ dock: { replaces, when } })`). Ein Ort ohne Veedel darf
 nichts kaputt machen: Code, der `liveVeedel(state)[0]` o. ä. nimmt, braucht einen Fall für die leere Liste.
+Auftrag 41 (Schiffe und Europa): Seewege aus Overture-Tiefen (`roads.seaRoute`, `build-water.py --sea`), Laufzeit aus
+Kilometern, Hafen-Lager mit Platz und Hallen (`trade.buildHall`, Rest wartet am Kai mit Liegegeld), eigene Schiffe in
+`fleet` (`VehicleModel.ship`, `trade.sail` hin und zurück; Schiffe fahren nie auf der Straße, `freeVehicles` lässt sie
+weg), Deckladung (`COVERS`), Europa-Kunden als Daten (`EUROPE_CITIES` mit Grenze, Woche, Preis) über neue
+Autobahn-Linien.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
