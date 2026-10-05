@@ -13,12 +13,14 @@ import {
   type ChipSpec,
   Disclosure,
   Group,
+  HudPill,
   ItemContent,
   List,
   ListItem,
   onGameEvent,
   ProgressBar,
   registerAdvisor,
+  registerHudItem,
   registerPanel,
   registerSlot,
   SegmentedControl,
@@ -172,12 +174,39 @@ function GoalsGroup() {
           </ItemContent>
         </ListItem>
         <ListItem value={goals.europe ? 'erreicht' : `${europe.supplied} von ${europe.total}`}>
-          <ItemContent icon="globe" color={goals.europe ? 'money' : 'people'} title="Europa">
+          <ItemContent
+            icon="globe"
+            color={goals.europe ? 'money' : 'people'}
+            title="Europa"
+            meta={goals.europe ? undefined : 'Jeder Kunde und jede Stadt in Europa zur Hälfte mit eigener Ware.'}
+            // Auftrag 43: wen du noch versorgen musst (bis sechs, dann „+N“).
+            tags={
+              goals.europe
+                ? undefined
+                : [
+                    ...europe.missing.slice(0, 6).map((name) => ({ label: name, color: 'danger' as const })),
+                    europe.missing.length > 6 && {
+                      label: `+${europe.missing.length - 6} weitere`,
+                      color: 'danger' as const,
+                    },
+                  ]
+            }
+          >
             {!goals.europe && europe.total > 0 && (
               <ProgressBar value={europe.supplied / europe.total} tone="info" label="Kunden aus eigener Produktion" />
             )}
           </ItemContent>
         </ListItem>
+        {!goals.europe && europe.missing.length > 0 && (
+          <ListItem>
+            <ItemContent
+              icon="help"
+              color="system"
+              title="So kommst du hin"
+              meta="Städte, die noch nicht kaufen, melden sich bei gutem Ruf (pünktlich). Wer schon kauft, braucht Lieferungen aus deinem Ausfuhrlager: Handel › Hafen › Einkauf › „Eigene Ernte“."
+            />
+          </ListItem>
+        )}
       </List>
     </Group>
   );
@@ -852,3 +881,41 @@ onGameEvent('grow.goalReached', 'grow.goalToast', (payload, ui) => {
 });
 soundOnEvent('grow.goalReached', 'cash');
 registerMapLayer(regionsLayer);
+
+/**
+ * HUD „Anbau“ (Auftrag 43): Ware im Ausfuhrlager und Tage bis zur nächsten Ernte; rot, wenn Pacht oder Löhne offen sind
+ * oder die Behörden einer Region aufmerksam werden (ab 45 von 100, wie im Region-Panel).
+ */
+function GrowHud() {
+  const { state } = useGame();
+  const ui = useUi();
+  if (!isGrowStarted(state)) return null;
+  const fincas = getFincas(state);
+  if (fincas.length === 0) return null;
+  const exported = REGIONS.reduce((sum, r) => {
+    const origin = regionOrigin(r.id);
+    return origin ? sum + Object.values(originStock(state, origin.id)).reduce((a, lot) => a + lot.amount, 0) : sum;
+  }, 0);
+  const next = fincas
+    .map((f) => f.crop?.readyAt ?? null)
+    .filter((at): at is number => at !== null)
+    .sort((a, b) => a - b)[0];
+  const days = next === undefined ? null : Math.max(0, Math.ceil((next - state.time) / 1440));
+  const trouble =
+    fincas.some((f) => f.unpaidLease > 0 || f.unpaidWages || f.stalled) ||
+    REGIONS.some((r) => regionStatus(state, r.id) !== 'none' && regionAttention(state, r.id) >= 45);
+  const harvest = days === null ? 'keine Ernte' : days === 0 ? 'Ernte heute' : `Ernte in ${days} T.`;
+  return (
+    <HudPill
+      icon="leaf"
+      color="goods"
+      label="Anbau"
+      value={exported > 0 ? kg(exported) : harvest}
+      title={`${kg(exported)} im Ausfuhrlager, ${harvest}${trouble ? ', es gibt Ärger auf einer Finca' : ''}`}
+      tone={trouble ? 'bad' : undefined}
+      onClick={() => ui.openPhone('trade.app', { view: 'grow' })}
+    />
+  );
+}
+
+registerHudItem({ id: 'grow.hud', order: 21, placement: 'more', icon: 'leaf', component: GrowHud });
