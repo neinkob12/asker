@@ -846,7 +846,7 @@ registerTab({
   title: 'Gangs',
   order: 30,
   component: GangsTab,
-  // Nach dem Verkauf sind die Gangs Kunden (Kunden-App), keine Gegner auf der Straße mehr (Auftrag 43).
+  // Nach dem Verkauf sind die Gangs Kunden (App Handel), keine Gegner auf der Straße mehr (Auftrag 43).
   hiddenWhen: isBusinessSold,
   badge: (state) =>
     getGangs(state, activeCity(state)).filter((g) => (getGangStatus(state, g.id)?.stage ?? 0) >= 2).length,

@@ -27,7 +27,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityOfSpot } from '../../city';
+import { activeCity, cityOfSpot, isBusinessSold } from '../../city';
 import { getSpots } from '../../spots';
 import {
   activeRunnerAt,
@@ -170,7 +170,7 @@ function StaffOverview() {
   const [filter, setFilter] = useState<RoleFilter>('all');
   // Das Personal folgt der aktiven Stadt (Auftrag 30); wer in einer anderen Stadt ist, steht unten extra.
   const city = activeCity(state);
-  // Arbeiter und Gärtner auf den Fincas (Auftrag 42) stehen in der Kunden-App bei ihrer Finca, nicht hier.
+  // Arbeiter und Gärtner auf den Fincas (Auftrag 42) stehen in der App Handel bei ihrer Finca, nicht hier.
   const everyone = getStaff(state).filter((m) => !isFarmRole(m.role));
   const current = everyone.filter((m) => m.cityId === city);
   const elsewhere = everyone.filter((m) => m.cityId !== city);
@@ -445,7 +445,10 @@ registerTab({
   id: 'staff',
   title: 'Personal',
   order: 30,
-  badge: (state) => getStaff(state, { status: 'jailed' }).length,
+  // Nur die Stadt, in der du bist (Auftrag 43: in Rotterdam stand die Zahl aller Inhaftierten Deutschlands).
+  badge: (state) => getStaff(state, { status: 'jailed', cityId: activeCity(state) }).length,
+  // Nach dem Verkauf gehören die Leute den Statthaltern; Arbeiter für Fincas stellst du im Anbau ein.
+  hiddenWhen: isBusinessSold,
 });
 registerSlot('tab:staff', { id: 'staff.overview', order: 10, component: StaffOverview });
 registerSlot('spots.spotPanel', { id: 'staff.runner', order: 50, component: SpotStaff });

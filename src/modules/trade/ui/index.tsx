@@ -52,6 +52,7 @@ import {
   type CustomerKind,
   containerCost,
   counterOutcome,
+  customerBlocked,
   customerContact,
   deliveryCheckChance,
   deliveryEstimate,
@@ -106,7 +107,7 @@ import './trade.css';
 
 declare module '../../../ui' {
   interface SlotRegistry {
-    /** Auftrag 42: Abschnitt „Anbau“ der Kunden-App (grow: Regionen, Fincas, Ausfuhr, Ziele). */
+    /** Auftrag 42: Abschnitt „Anbau“ der App Handel (grow: Regionen, Fincas, Ausfuhr, Ziele). */
     'trade.grow': Record<string, never>;
   }
 }
@@ -288,13 +289,19 @@ function OrdersView(props: { onView: (view: View) => void }) {
       },
     });
     if (!o.guaranteed) {
+      const seen = new Set<number>();
       for (const up of [0.05, 0.1, 0.15]) {
         const factor = Math.min(maxFactor(o), 1 + up);
-        // Auftrag 43: vorher sagen, ob der Kunde dann lieber bei der Konkurrenz kauft.
+        // Stößt der Aufschlag an seine Preisgrenze, wäre die nächste Stufe dieselbe (Auftrag 43: keine Doppelten).
+        if (factor <= 1 || seen.has(factor)) continue;
+        seen.add(factor);
+        // Auftrag 43: vorher sagen, ob der Kunde dann lieber bei der Konkurrenz kauft; solche Stufen rot.
         const rival = counterOutcome(state, o, factor).rival;
+        const percent = Math.round((factor - 1) * 100);
         actions.push({
-          label: `Gegenangebot ${formatEuro(orderValue(o, factor))} (+${Math.round(up * 100)} %): ${rival ? `dann kauft er bei ${rival.name}` : 'du bleibst vorn'}`,
+          label: `Gegenangebot ${formatEuro(orderValue(o, factor))} (+${percent} %): ${rival ? `dann kauft er bei ${rival.name}` : 'du bleibst vorn'}`,
           icon: 'tag',
+          ...(rival ? { destructive: true } : {}),
           onSelect: () => {
             dispatch({ type: 'trade.answer', payload: { orderId: o.id, choice: 'counter', factor } });
             setAsk(null);
@@ -369,6 +376,7 @@ function OrdersView(props: { onView: (view: View) => void }) {
     }
   }
   const guaranteed = open.filter((o) => o.guaranteed);
+  const ready = pending.filter((o) => portFor(state, o) !== null);
   const coverage = orderCoverage(state);
   const covered = open.filter((o) => coverage.get(o.id) === 0);
   return (
@@ -464,6 +472,18 @@ function OrdersView(props: { onView: (view: View) => void }) {
         note="Pünktlich bringt Vertrauen, zu spät kostet ein Fünftel."
       >
         <List>
+          {/* Auftrag 43: nicht jede Lieferung einzeln antippen. */}
+          {ready.length > 1 && (
+            <ListItem
+              action
+              icon="truck"
+              onClick={() => {
+                for (const o of ready) dispatch({ type: 'trade.deliver', payload: { orderId: o.id } });
+              }}
+            >
+              {`Alle mit Ware ausliefern (${ready.length}, Spedition)`}
+            </ListItem>
+          )}
           {pending.map((o) => {
             const c = getCustomer(state, o.customerId);
             if (!c) return null;
@@ -547,7 +567,9 @@ function OrdersView(props: { onView: (view: View) => void }) {
         message={
           ask && customer
             ? ask.mode === 'answer'
-              ? `${orderItemsText(ask.order.items)}. Höchstens ${formatEuro(orderValue(ask.order, maxFactor(ask.order)))}.`
+              ? ask.order.guaranteed
+                ? `${orderItemsText(ask.order.items)}. Fester Preis aus dem Abnahmevertrag: ${formatEuro(orderValue(ask.order, 1))}.`
+                : `${orderItemsText(ask.order.items)}. Mehr als ${formatEuro(orderValue(ask.order, maxFactor(ask.order)))} zahlt er nicht. Verlangst du zu viel, kauft er bei der Konkurrenz, deinen alten Lieferanten.`
               : ask.mode === 'buy'
                 ? `Im Hafen fehlt ${orderItemsText(missingItems(state, ask.order))}. Kauf es bei einem Produzenten, vor der Frist ${clock.weekdayName(ask.order.dueAt, true)} ${clock.formatTime(ask.order.dueAt)}.`
                 : `${orderItemsText(port ? shippableItems(state, port, ask.order) : [])} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.${europeCityOf(customer) ? ` Zoll steht ${europeCityOf(customer)?.border.name}.` : ''} Wird die Lieferung kontrolliert, ist die Ladung zu ${pct(SEIZE_ON_CHECK)} weg.`
@@ -704,6 +726,7 @@ function CustomersView() {
                       title={c.name}
                       meta={contact.name !== c.name ? contact.name : undefined}
                       tags={[
+                        customerBlocked(state, c) && { label: 'kauft nicht bei dir', color: 'danger', icon: 'fist' },
                         { label: `Anteil ${pct(c.share)}`, color: c.share >= 0.4 ? 'money' : 'warn', icon: 'chart' },
                         {
                           label: `Vertrauen ${c.trust}`,
@@ -1045,7 +1068,7 @@ function TradeApp() {
   }, [asked]);
   if (!isTradeActive(state)) {
     return (
-      <PhoneScreen title="Kunden">
+      <PhoneScreen title="Handel">
         <Group
           title="Noch nicht"
           icon="handshake"
@@ -1058,7 +1081,7 @@ function TradeApp() {
   const waiting = openOrders(state).length;
   const toDeliver = pendingDeliveries(state).length;
   return (
-    <PhoneScreen title="Kunden">
+    <PhoneScreen title="Handel">
       <div class="trade-app">
         <SegmentedControl
           wide
@@ -1085,7 +1108,8 @@ function TradeApp() {
 
 registerPhoneApp({
   id: APP_ID,
-  name: 'Kunden',
+  // Auftrag 43: „Handel“ statt „Kunden“; hier liegen Bestellungen, Hafen, Einkauf und Anbau. Der Reiter „Kunden“ bleibt.
+  name: 'Handel',
   icon: 'handshake',
   order: 19,
   color: 'money',

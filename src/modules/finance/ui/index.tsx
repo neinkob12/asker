@@ -586,11 +586,13 @@ registerSearch({
   id: 'finance.search',
   label: 'Kasse',
   order: 5,
-  items: () => [
+  items: (state) => [
     {
       id: 'finance.app',
       title: 'Kasse',
-      subtitle: 'Bilanz: Gewinn, Einnahmen, Ausgaben, pro Veedel, Spot und Leutnant',
+      subtitle: isBusinessSold(state)
+        ? 'Bilanz: Gewinn, Einnahmen, Ausgaben'
+        : 'Bilanz: Gewinn, Einnahmen, Ausgaben, pro Veedel, Spot und Leutnant',
       icon: 'cash',
       keywords: 'Bilanz Gewinn Verlust Umsatz Löhne Geld Ausgaben Einnahmen Tagesbilanz Wochenbilanz',
       run: openFinance,

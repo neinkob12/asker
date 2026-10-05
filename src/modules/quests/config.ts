@@ -82,7 +82,7 @@ export type QuestGoTo =
   | 'gangs'
   | 'laundering'
   | 'finance'
-  /** Auftrag 43: Kunden-App (Bestellungen) bzw. ihr Bereich Hafen, Anbau. */
+  /** Auftrag 43: App Handel (Bestellungen) bzw. ihr Bereich Hafen, Anbau. */
   | 'trade'
   | 'tradeHarbor'
   | 'grow';
@@ -694,7 +694,7 @@ function harborChapter(): QuestDef[] {
         'Das ist die Halle. Hier kommt die Ware an, von hier geht sie raus. Montags rufen die Kunden an: wer, was, wie ' +
         'viel. Fenna hat dir die erste Liste geschickt. Nimm eine Bestellung an, für die die Ware schon da ist, da steht ' +
         '„Ware da“ dran.',
-      hint: 'Kunden-App › Bestellungen: Tipp auf eine Bestellung mit „Ware da“.',
+      hint: 'Handel › Bestellungen: Tipp auf eine Bestellung mit „Ware da“.',
       measure: (state) =>
         getOrders(state).some((o) => o.status === 'accepted' || o.status === 'delivering' || o.status === 'delivered')
           ? 1
@@ -710,7 +710,7 @@ function harborChapter(): QuestDef[] {
       task:
         'Angenommen ist noch nicht geliefert. Unter „Zu liefern“ schickst du die Ware los. Die Spedition kostet, wird ' +
         'aber selten kontrolliert. Bezahlt wird bei Ankunft.',
-      hint: 'Kunden-App › Bestellungen › Zu liefern: Tipp auf den Kunden.',
+      hint: 'Handel › Bestellungen › Zu liefern: Tipp auf den Kunden.',
       measure: (state) => (tradeStats(state).delivered > 0 || getDeliveries(state).length > 0 ? 1 : 0),
       goTo: 'trade',
       reward: [{ kind: 'money', money: 'clean', amount: 5000 }],
@@ -723,7 +723,7 @@ function harborChapter(): QuestDef[] {
       task:
         'Die Halle ist schneller leer, als du denkst. Ware kaufst du bei Produzenten im Ausland: Marokko für Hasch, ' +
         'Spanien und Albanien für Gras. Das Schiff braucht ein paar Tage, also bestell, bevor es knapp wird.',
-      hint: 'Kunden-App › Hafen › Einkauf im Ausland: Produzent wählen, Container bestellen.',
+      hint: 'Handel › Hafen › Einkauf im Ausland: Produzent wählen, Container bestellen.',
       measure: (state) => (tradeStats(state).containers > 0 || getShipments(state).length > 0 ? 1 : 0),
       goTo: 'tradeHarbor',
       reward: [{ kind: 'money', money: 'clean', amount: 10000 }],
@@ -751,7 +751,7 @@ function harborChapter(): QuestDef[] {
         'Lieferst du viel und oft, frisst die Fracht der Spedition einen Teil der Marge. Ein eigener Lkw fährt ohne ' +
         'Fracht, aber der Zoll winkt ihn doppelt so oft raus. Er kostet sauberes Geld: Wasch vorher Schwarzgeld über ' +
         'meine Reederei.',
-      hint: 'Geldwäsche › Jansens Reederei, dann Kunden-App › Hafen › Lkw kaufen.',
+      hint: 'Geldwäsche › Jansens Reederei, dann Handel › Hafen › Lkw kaufen.',
       measure: (state) => (getVehicles(state, HARBOR_CITY).some((v) => !isShip(v)) ? 1 : 0),
       goTo: 'tradeHarbor',
       reward: [{ kind: 'money', money: 'clean', amount: 10000 }],
@@ -876,7 +876,7 @@ function growing(state: GameState): boolean {
 
 /**
  * Das Kapitel „Produktion“ (Auftrag 43): Der Anrufer der Region führt durch die Kette vom Angebot bis zur ersten eigenen
- * Lieferung. Jeder Schritt misst den Zustand und führt mit „Hinführen“ in den Anbau der Kunden-App.
+ * Lieferung. Jeder Schritt misst den Zustand und führt mit „Hinführen“ in den Anbau der App Handel.
  */
 function growChapter(): QuestDef[] {
   const base = { chapter: 11, requires: growing, voice: 'grow' as const, target: 1 };
@@ -889,7 +889,7 @@ function growChapter(): QuestDef[] {
       task:
         'Wir bauen an, du verkaufst. Eigene Ware kostet dich einen Bruchteil vom Einkauf. Nimm unser Angebot an, dann ' +
         'zeig ich dir das Land.',
-      hint: 'Kunden-App › Anbau: Angebot annehmen.',
+      hint: 'Handel › Anbau: Angebot annehmen.',
       measure: (state) => (openRegions(state).length > 0 ? 1 : 0),
       goTo: 'grow',
       reward: [{ kind: 'money', money: 'clean', amount: 20000 }],
@@ -902,7 +902,7 @@ function growChapter(): QuestDef[] {
       task:
         'Erst Land. Pachten ist zum Anfang günstiger, kaufen rechnet sich erst nach einem Jahr. Auf der ersten Finca ' +
         'steht schon was im Feld, die Ernte kommt bald.',
-      hint: 'Kunden-App › Anbau › Region: Land kaufen oder pachten (sauberes Geld).',
+      hint: 'Handel › Anbau › Region: Land kaufen oder pachten (sauberes Geld).',
       measure: (state) => (getFincas(state).length > 0 ? 1 : 0),
       goTo: 'grow',
       reward: [{ kind: 'money', money: 'clean', amount: 20000 }],
@@ -941,7 +941,7 @@ function growChapter(): QuestDef[] {
       task:
         'Die Ware liegt im Ausfuhrlager. Bring sie aufs Schiff nach Europa, ein paar Wochen ist sie unterwegs. Mit eigenem ' +
         'Schiff fällt sie weniger auf.',
-      hint: 'Kunden-App › Hafen › Einkauf: „Eigene Ernte“ ganz oben.',
+      hint: 'Handel › Hafen › Einkauf: „Eigene Ernte“ ganz oben.',
       measure: (state) =>
         getShipments(state).some((x) => x.own === true) || tradeStats(state).ownDelivered > 0 ? 1 : 0,
       goTo: 'tradeHarbor',
@@ -955,7 +955,7 @@ function growChapter(): QuestDef[] {
       task:
         'Wenn sie im Hafen ist, geht sie raus wie jede andere Ware. Nur dass sie dich fast nichts gekostet hat. Je mehr ' +
         'davon, desto näher bist du am Produzenten.',
-      hint: 'Kunden-App › Bestellungen: ausliefern wie immer (oder Fenna machen lassen).',
+      hint: 'Handel › Bestellungen: ausliefern wie immer (oder Fenna machen lassen).',
       measure: (state) => (tradeStats(state).ownDelivered > 0 ? 1 : 0),
       goTo: 'trade',
       reward: [{ kind: 'money', money: 'clean', amount: 50000 }],

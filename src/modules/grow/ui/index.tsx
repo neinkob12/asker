@@ -1,4 +1,4 @@
-// Oberfläche der eigenen Produktion (Auftrag 42). Keine neue App: ein Abschnitt „Anbau“ in der Kunden-App (Slot
+// Oberfläche der eigenen Produktion (Auftrag 42). Keine neue App: ein Abschnitt „Anbau“ in der App Handel (Slot
 // trade.grow) mit den Zielen, den Regionen und ihren Fincas, dazu zwei Seiten: Region (Kartell, Behörden, Fincas
 // kaufen oder pachten, Ausfuhr) und Finca (Pflanzung, Leute, Gewächshaus, Genetik, Verpackung). Verschifft wird auf der
 // Einkaufsseite von trade (Ausfuhrhafen als Produzent). Dazu die Glas-Karten der Regionen (map.ts), ein Rat, wenn ein

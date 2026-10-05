@@ -172,24 +172,30 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] F7 Fristen und Folgen erklären: Fußnote aus der echten Frist, Guide mit Ankunfts-Runde, Strafe für Platzen,
   sauberes Geld, Laufzeit der Container gegen die Frist.
   Erledigt: Fußnote aus der echten Frist; Guide mit fünf Schritten (wo tippen, Ankunftsrunde, Laufzeit der Container aus den Daten, Frist, Nachfrist, Abschlag, Folgen, sauberes Geld).
-- [ ] F8 Gesperrte Gang-Kunden (Anteil 0 %, Rache) mit Chip und Grund oder ausblenden.
+- [x] F8 Gesperrte Gang-Kunden (Anteil 0 %, Rache) mit Chip und Grund oder ausblenden.
+  Erledigt: `customerBlocked` (exportiert): Chip „kauft nicht bei dir“ in der Kundenliste, Satz mit Grund auf der Kunden-Seite.
 - [ ] F9 Europa-Karte: Karten überlappen (Rotterdam/Amsterdam/Antwerpen, Düsseldorf über Köln), Knopf „Europa“.
 - [x] F10 Einkaufsliste mit Preis ab €/g und „Tage“ ausgeschrieben, alle Waren; im Panel offener Bedarf.
   Erledigt: Einkaufsliste mit „ab … €/g“ (großer Container mit Fracht), allen Waren und „Tage“ ausgeschrieben; im Einkauf-Panel offener Bedarf gegen Bestand und Container unterwegs.
 - [x] F11 „Zoll X %“ heißt dreierlei: Kontrollchance, Grenzchance, Strenge. Eindeutig benennen.
   Erledigt: „Kontrolle X %“ an Lieferungen (mit Satz zur Beschlagnahme), „Grenzkontrolle X %“ bei Europa, Häfen „Zoll lasch/normal/streng“.
-- [ ] F12 Personal-App in Rotterdam lockt mit Bewerbern (Badge), die dort nichts tun können.
-- [ ] F13 Gegenangebot: „du bleibst vorn“ hervorheben, Vertrag „Fester Preis“, Konkurrenz erklären.
+- [x] F12 Personal-App in Rotterdam lockt mit Bewerbern (Badge), die dort nichts tun können.
+  Erledigt: Reiter Personal nach dem Verkauf aus (`hiddenWhen`), Badge zählt nur Inhaftierte der aktiven Stadt; nach dem Verkauf kommen keine Bewerber mehr.
+- [x] F13 Gegenangebot: „du bleibst vorn“ hervorheben, Vertrag „Fester Preis“, Konkurrenz erklären.
+  Erledigt: Gegenangebot-Stufen ohne Doppelte, Stufen mit Verlust an die Konkurrenz rot; Vertrag „Fester Preis aus dem Abnahmevertrag“; Satz zur Preisgrenze und zur Konkurrenz (alte Lieferanten).
 - [x] F14 Großrazzia der alten Stadt im Dynamic Island (`police/ui/island.ts` ohne Stadtfilter); beim Verkauf leeren.
   Erledigt: Island zeigt die Großrazzia nur in der aktiven Stadt; beim Verkauf fallen geplante Razzien weg; eine wartende Großrazzia einer schlafenden Stadt blockiert die aktive Stadt nicht mehr.
-- [ ] F15 „Alle ausliefern (Spedition)“; Lkw-Stufe im Plan nur mit Lkw; Verträge vor Gangs bei der Deckung.
+- [x] F15 „Alle ausliefern (Spedition)“; Lkw-Stufe im Plan nur mit Lkw; Verträge vor Gangs bei der Deckung.
+  Erledigt: „Alle mit Ware ausliefern (Spedition)“ in „Zu liefern“; Plan-Stufe „Lkw“ erst mit eigenem Lkw; Verträge zuerst bei der Deckung (`orderCoverage`).
 - [x] F16 Waren-Leiste bei Jansen abgeschnitten (ab 4 Waren `Select`).
   Erledigt: Ab vier Waren eine Auswahl (`Select`) statt Reitern.
 - [x] F17 Tippfehler „lange genug genug“ (`NextStageGroup`).
   Erledigt: Tippfehler behoben.
-- [ ] F18 Köln-Reste in der Suche (Spots, Veedel) und Texten (Kasse, Geldwäsche) nach dem Verkauf.
+- [x] F18 Köln-Reste in der Suche (Spots, Veedel) und Texten (Kasse, Geldwäsche) nach dem Verkauf.
+  Erledigt: Suche nur mit Spots und Veedeln der aktiven Stadt, Polizei-Eintrag nach dem Verkauf aus, Kasse-Untertitel ohne Veedel/Spot/Leutnant.
 - [ ] F19 Test-Spielstände `hafen`/`hafen-europa` neu erzeugen, „Ankunft in Rotterdam“ vor dem ersten Bot-Zug.
-- [ ] F20 App „Kunden“ heißt besser „Handel“ (Reiter „Kunden“ bleibt).
+- [x] F20 App „Kunden“ heißt besser „Handel“ (Reiter „Kunden“ bleibt).
+  Erledigt: App heißt „Handel“ (Titel, Quest-Hinweise, Texte), der Reiter „Kunden“ bleibt.
 
 ## Neue Funde
 

@@ -130,5 +130,5 @@ export const CALL_TEXTS = {
   gaveUp: 'Gut. Wenn du willst, schreib mir. Das Angebot steht.',
   laterAnswer: 'Wie du willst. Wenn du so weit bist, sag Bescheid.',
   openAnswer:
-    'Gut. Die Fincas stehen in deiner Kunden-App unter Anbau. Pachten geht schnell, kaufen ist auf Dauer billiger.',
+    'Gut. Die Fincas stehen in der App Handel unter Anbau. Pachten geht schnell, kaufen ist auf Dauer billiger.',
 } as const;

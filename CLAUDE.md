@@ -121,7 +121,7 @@ Test-Spielstände pro Stadt. Hafen-Phase: Kapitel „Rotterdam“ mit Jansen (`Q
 `trade`/`tradeHarbor`, `openPhone('trade.app', { view })`), mit dem Verkauf fallen die alten Kapitel weg; erste Runde
 Bestellungen nur mit Ware aus der Halle; Fenna übernimmt Annehmen, Ausliefern und Nachkauf (`trade/plans.ts`,
 `trade.setPlan`, `trade.addRestock`); Kunden-Seite `trade.customer`; „Dein Preis“ wirkt auf den Preis pro Gramm; nach
-dem Verkauf führen alte Hafen-Seite und Lieferanten-App in die Kunden-App, Apps und Tabs können mit `hiddenWhen`
+dem Verkauf führen alte Hafen-Seite und Lieferanten-App in die App Handel, Apps und Tabs können mit `hiddenWhen`
 zeitweise verschwinden, das HUD zeigt Zoll und Ruf als Lieferant.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 

@@ -1059,7 +1059,7 @@ export function placeOrders(ctx: Ctx, first = false): number {
   let placed = 0;
   let waiting = 0;
   for (const customer of s.customers) {
-    if (customer.kind === 'gang' && customer.gangId && memoryScore(ctx.state, customer.gangId) <= GANG_MEMORY_BLOCK) {
+    if (customerBlocked(ctx.state, customer)) {
       customer.share = 0;
       continue;
     }
@@ -1235,7 +1235,9 @@ export function orderCoverage(state: GameState): Map<number, number> {
       .reduce((sum, x) => sum + x.amount, 0) -
     (reserved.get(productId) ?? 0);
   const result = new Map<number, number>();
-  for (const order of openOrders(state)) {
+  // Verträge zuerst (Auftrag 43): Die alten Organisationen haben einen Abnahmevertrag, die Ware geht an sie vor den Gangs.
+  const ordered = [...openOrders(state)].sort((a, b) => Number(b.guaranteed) - Number(a.guaranteed));
+  for (const order of ordered) {
     let missing = 0;
     for (const item of order.items) {
       const free = Math.max(0, supply(item.productId, order.dueAt));
@@ -1247,6 +1249,14 @@ export function orderCoverage(state: GameState): Map<number, number> {
     }
   }
   return result;
+}
+
+/**
+ * Kauft der Kunde nicht bei dir (Auftrag 43)? Eine Gang, die sich an zu viel Ärger aus der Stadt-Phase erinnert
+ * (memoryScore bis GANG_MEMORY_BLOCK), bestellt nichts; das verblasst mit der Zeit.
+ */
+export function customerBlocked(state: GameState, customer: TradeCustomer): boolean {
+  return customer.kind === 'gang' && !!customer.gangId && memoryScore(state, customer.gangId) <= GANG_MEMORY_BLOCK;
 }
 
 /** Alle offenen Bestellungen annehmen (nur Verträge oder nur die, für die die Ware reicht: orderCoverage). */

@@ -157,7 +157,7 @@ export const TEST_SAVE_FILES: readonly TestSaveInfo[] = [
     id: 'produktion',
     phase: 'production',
     title: 'Produktion',
-    text: 'Fincas in Kolumbien und Marokko, die erste Ernte liegt verpackt in Cartagena bzw. Tanger. Kunden-App › Anbau.',
+    text: 'Fincas in Kolumbien und Marokko, die erste Ernte liegt verpackt in Cartagena bzw. Tanger. Handel › Anbau.',
   },
   {
     id: 'produzent',

@@ -43,12 +43,12 @@ const TARGETS = [
   { kind: 'phone', id: 'goods.app' },
   { kind: 'panel', id: 'goods.warehouse', params: { warehouseId: 'ehrenfeld' } },
   { kind: 'panel', id: 'goods.flow' },
-  // Auftrag 40: Verkauf (Boss von Deutschland, Jansen hat angerufen) und die App „Kunden“ der Hafen-Phase.
+  // Auftrag 40: Verkauf (Boss von Deutschland, Jansen hat angerufen) und die App „Handel“ der Hafen-Phase.
   { kind: 'panel', id: 'city.sale', extra: 'germany' },
   { kind: 'phone', id: 'trade.app', extra: 'sold' },
   // Auftrag 41: Seite „Einkauf“ (Ware, Container, Deckladung, Schiff).
   { kind: 'panel', id: 'trade.order', params: { producerId: 'spanien' }, extra: 'sold' },
-  // Auftrag 42: Anbau in der Kunden-App, Seiten Region und Finca, Verschiffen aus Cartagena.
+  // Auftrag 42: Anbau in der App Handel, Seiten Region und Finca, Verschiffen aus Cartagena.
   { kind: 'phone', id: 'trade.app', extra: 'grow' },
   { kind: 'panel', id: 'grow.region', params: { regionId: 'kolumbien' }, extra: 'grow' },
   {

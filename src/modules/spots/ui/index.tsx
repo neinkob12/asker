@@ -30,7 +30,6 @@ import { activeRunnerAt } from '../../staff';
 import { veedelName } from '../../veedel';
 import {
   customSpots,
-  getAllSpots,
   getSpot,
   getSpots,
   isKneipe,
@@ -342,8 +341,9 @@ registerSearch({
   id: 'spots.search',
   label: 'Spots',
   order: 10,
+  // Nur die Spots der Stadt, in der du bist (Auftrag 43: in Rotterdam standen die Kölner).
   items: (state) =>
-    getAllSpots(state).map((spot) => ({
+    getSpots(state, activeCity(state)).map((spot) => ({
       id: spot.id,
       title: spot.name,
       subtitle: veedelName(spot.veedelId),

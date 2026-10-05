@@ -113,7 +113,7 @@
   gap: var(--space-2);
 }
 
-/* Nach dem Verkauf (Auftrag 43): Knopf zum Einkauf in der Kunden-App statt der Lieferanten. */
+/* Nach dem Verkauf (Auftrag 43): Knopf zum Einkauf in der App Handel statt der Lieferanten. */
 .sup-redirect {
   padding: var(--space-4);
 }

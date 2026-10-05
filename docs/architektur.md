@@ -1119,7 +1119,7 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
 - **Auslöser** (`grow`): `CALL_AFTER_WEEKS` (3) Wochen Hafen-Phase und `CALL_MIN_REVENUE` (1,5 Mio. €) Umsatz, dann ruft
   Esteban Mejía aus Cartagena an, `SECOND_CALL_DELAY` später Hassan Amrani aus dem Rif (`messages.call`, Kontakte mit
   `look` und `voice` in `city/regions.ts`). „Ich schau es mir an“ ist `grow.openRegion`; das Angebot steht danach in der
-  Kunden-App. Regionen sind Daten in `city` (`REGIONS`: Land, Gegend, Ausfuhrhafen mit Seeknoten, Anrufer, Kartell mit
+  App Handel. Regionen sind Daten in `city` (`REGIONS`: Land, Gegend, Ausfuhrhafen mit Seeknoten, Anrufer, Kartell mit
   Kontakt, Behörde), keine spielbaren Orte. Die Europa-Ansicht nimmt freie Regionen in ihren Rahmen
   (`city/ui/index.tsx`), der Seeweg über den Atlantik erscheint erst mit Kolumbien (`trade/ui/map.ts`).
 - **Seeweg**: `build-water.py --sea` rechnet `OCEAN_LANES` (Cartagena – Ärmelkanal, 8.237 km) in einem eigenen, gröberen
@@ -1159,7 +1159,7 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
   Hasch); Edibles, Öl und Vapes vom Labor bleiben draußen, ein Kunde nur mit Laborware gilt als versorgt
   (`trade.delivered` meldet dafür `items` mit `own`). `growGoals` liest city für die Ränge
   (`PLAYER_RANKS`: Produzent Wert 70, Europa 80), `api/leaderboard.ts` kennt beide Titel. Danach geht es offen weiter.
-- **Oberfläche**: keine neue App. Abschnitt „Anbau“ in der Kunden-App (Slot `trade.grow`, nur nach den Anrufen; dann
+- **Oberfläche**: keine neue App. Abschnitt „Anbau“ in der App Handel (Slot `trade.grow`, nur nach den Anrufen; dann
   heißt „Bestellungen“ dort „Aufträge“): Kennzahlen (Fincas, € pro Gramm, eigene Ware), Ziele, Regionen mit Fincas und
   Ausfuhrlager, im Kopf jeder Region „Ernte bis Hafen“ in Tagen (`harvestToHarborDays`). Seite `grow.region` (Kartell mit Schalter, Behörden mit Schmieren, Land kaufen oder pachten mit
   Rückfrage), Seite `grow.finca` (Pflanzung, Arbeiter, Gärtner, Gewächshaus und Genetik mit Rückfrage, Verpackung),
