@@ -52,8 +52,10 @@ die Bestenliste aus.
 - **Handy:** Nachrichten von Figuren, teils mit Antwort-Knöpfen.
 - **Game Over:** kein Geld, keine Ware und keine Lieferung unterwegs.
 - **Spielstände** (Knopf "Menü"): Autosave, drei Speicherplätze, Export und Import als Datei. Dazu Test-Spielstände
-  zum Ausprobieren, z.B. *Köln fast komplett* (50.000 € Schwarzgeld, das zwölfte Veedel fällt gleich nach dem Laden),
-  auch direkt über die Adresse: `?spielstand=koeln-komplett`. Sie zählen nicht für die Bestenliste.
+  zum Ausprobieren, einer für jeden Abschnitt des Spiels (Köln, die Ankunft in jeder Stadt, Boss von Deutschland,
+  Hafen, Produktion bis zum Titel Europa), z.B. *Köln fast komplett* (50.000 € Schwarzgeld, das zwölfte Veedel fällt
+  gleich nach dem Laden), auch direkt über die Adresse: `?spielstand=koeln-komplett`. Sie zählen nicht für die
+  Bestenliste.
 
 ## Anpassen
 

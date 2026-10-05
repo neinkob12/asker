@@ -993,6 +993,9 @@ kbd {
   font-size: var(--font-size-md);
   font-weight: 600;
 }
+.saves-phase + .saves-phase {
+  margin-top: var(--space-3);
+}
 /* Spielende: Stempel und Statistik */
 .ending {
   position: relative;

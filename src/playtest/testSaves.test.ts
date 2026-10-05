@@ -3,25 +3,112 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { loadSimulation, parseSaveFile } from '../core';
+import { type GameState, loadSimulation, parseSaveFile } from '../core';
 import { discoverModules } from '../core/discover';
 import { eventsOfType, recordEvents } from '../core/testing';
-import { hamburgMissing, isBossOfGermany, isBusinessSold, offerStatus, presentCity, saleStatus } from '../modules/city';
-import { getFincas } from '../modules/grow';
-import { fullPowerMissing, getRightHand } from '../modules/hierarchy';
+import {
+  hamburgMissing,
+  isBossOfGermany,
+  isBusinessSold,
+  isPlayerTraveling,
+  offerStatus,
+  playableCities,
+  playerRank,
+  presentCity,
+  saleStatus,
+} from '../modules/city';
+import { getShips } from '../modules/fleet';
+import { getFincas, growGoals } from '../modules/grow';
+import { fullPowerMissing, getLieutenants, getRightHand } from '../modules/hierarchy';
+import { getSpots } from '../modules/spots';
+import { getStaff } from '../modules/staff';
+import { campaignProgress, cityMilestones } from '../modules/territory';
 import { isTradeActive, OWN_ORIGINS, openOrders, originStock } from '../modules/trade';
-import { TEST_SAVE_FILES } from '../ui/builtin/testSaves';
-import { KOELN_KOMPLETT_DIRTY, ownedInKoeln, TEST_SAVES } from './testSaves';
+import { TEST_SAVE_FILES, TEST_SAVE_PHASES } from '../ui/builtin/testSaves';
+import {
+  ARRIVAL_CITIES,
+  europeCustomers,
+  HARBOR_EUROPE_CUSTOMERS,
+  KOELN_KOMPLETT_DIRTY,
+  ownedInKoeln,
+  TEST_SAVES,
+} from './testSaves';
 
 const loadFile = (id: string) => {
   const file = parseSaveFile(readFileSync(`public/spielstaende/${id}.json`, 'utf8'));
   return loadSimulation(file.state, discoverModules());
 };
 
+/** Städte, die komplett sind. */
+const completeCities = (state: GameState) => playableCities().filter((c) => campaignProgress(state, c.id).complete);
+
 describe('Test-Spielstände', () => {
   it('zu jedem Test-Spielstand gibt es die Datei, und der Spielstände-Dialog kennt alle', () => {
     for (const save of TEST_SAVES) expect(() => loadFile(save.id), save.id).not.toThrow();
     expect(TEST_SAVE_FILES.map((t) => t.id)).toEqual(TEST_SAVES.map((t) => t.id));
+    // Jede Phase im Dialog hat Spielstände, und sie stehen in der Reihenfolge des Bogens.
+    const phases = TEST_SAVE_PHASES.map((p) => p.id);
+    for (const phase of phases)
+      expect(
+        TEST_SAVE_FILES.some((t) => t.phase === phase),
+        phase,
+      ).toBe(true);
+    const order = TEST_SAVE_FILES.map((t) => phases.indexOf(t.phase));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it('jeder Test-Spielstand trägt seine Kennung und läuft einen Tag ohne Game Over', { timeout: 120_000 }, () => {
+    for (const save of TEST_SAVES) {
+      const sim = loadFile(save.id);
+      expect(sim.state.meta.scenario, save.id).toBe(save.id);
+      expect(sim.state.outcome.gameOver, save.id).toBeNull();
+      sim.advance(24 * 60);
+      expect(sim.state.outcome.gameOver, save.id).toBeNull();
+    }
+  });
+
+  it('Köln, die ersten Tage: Spots und Läufer, noch kein Veedel und kein Leutnant', () => {
+    const sim = loadFile('koeln-anfang');
+    expect(presentCity(sim.state)).toBe('koeln');
+    expect(playerRank(sim.state).id).toBe('smallDealer');
+    expect(getSpots(sim.state, 'koeln').length).toBeGreaterThan(0);
+    expect(getStaff(sim.state, { cityId: 'koeln' }).length).toBeGreaterThan(0);
+    expect(ownedInKoeln(sim.state)).toHaveLength(0);
+    expect(getLieutenants(sim.state)).toHaveLength(0);
+  });
+
+  it('Köln, das erste Veedel: ein Veedel, ein Leutnant', () => {
+    const sim = loadFile('koeln-veedel');
+    expect(ownedInKoeln(sim.state)).toHaveLength(1);
+    expect(getLieutenants(sim.state).length).toBeGreaterThan(0);
+    expect(playerRank(sim.state).id).toBe('dealer');
+  });
+
+  it('Boss von Köln: gerade die Mehrheit, 7 von 12 Veedeln, noch nicht komplett', () => {
+    const sim = loadFile('boss-von-koeln');
+    expect(cityMilestones(sim.state, 'koeln').majority).not.toBeNull();
+    expect(playerRank(sim.state).id).toBe('bossKoeln');
+    expect(ownedInKoeln(sim.state)).toHaveLength(7);
+    expect(getRightHand(sim.state, 'koeln')).not.toBeNull();
+  });
+
+  it('Ankunft in jeder Stadt: gerade ausgestiegen, die Städte davor sind komplett', () => {
+    ARRIVAL_CITIES.forEach((cityId, i) => {
+      const sim = loadFile(`ankunft-${cityId}`);
+      expect(presentCity(sim.state), cityId).toBe(cityId);
+      expect(isPlayerTraveling(sim.state), cityId).toBe(false);
+      expect(campaignProgress(sim.state, cityId).controlled, cityId).toBe(0);
+      expect(getSpots(sim.state, cityId), cityId).toHaveLength(0);
+      // Köln und die Städte davor (die Texte im Dialog nennen sie).
+      expect(
+        completeCities(sim.state)
+          .map((c) => c.id)
+          .sort(),
+        cityId,
+      ).toEqual(['koeln', ...ARRIVAL_CITIES.slice(0, i)].sort());
+      // Das Startpaket ist mitgekommen.
+      expect(getStaff(sim.state, { cityId }).length, cityId).toBeGreaterThan(0);
+    });
   });
 
   it('Köln fast komplett: 50.000 € schwarz, 11 Veedel, das zwölfte fällt gleich, dann ruft Hamburg an', () => {
@@ -98,6 +185,14 @@ describe('Test-Spielstände', () => {
     expect(sim.state.outcome.gameOver).toBeNull();
   });
 
+  it('Hafen, Schiff und Europa: ein eigenes Schiff, zwei Häfen, die ersten Kunden in Europa (Auftrag 41)', () => {
+    const sim = loadFile('hafen-europa');
+    expect(getShips(sim.state).length).toBeGreaterThan(0);
+    expect(europeCustomers(sim.state)).toBeGreaterThanOrEqual(HARBOR_EUROPE_CUSTOMERS);
+    expect(getFincas(sim.state)).toHaveLength(0);
+    expect(playerRank(sim.state).id).toBe('importer');
+  });
+
   it('Produktion: zwei Fincas, die erste Ernte im Ausfuhrlager, verschiffen geht (Auftrag 42)', () => {
     const sim = loadFile('produktion');
     expect(sim.state.meta.scenario).toBe('produktion');
@@ -111,5 +206,14 @@ describe('Test-Spielstände', () => {
     ).toBe(true);
     sim.advance(24 * 60);
     expect(sim.state.outcome.gameOver).toBeNull();
+  });
+
+  it('Produzent und Europa: die Ränge am Ende des Bogens (Auftrag 42)', () => {
+    const producer = loadFile('produzent');
+    expect(playerRank(producer.state).id).toBe('producer');
+    expect(growGoals(producer.state)).toEqual({ producer: true, europe: false });
+    const europe = loadFile('europa');
+    expect(playerRank(europe.state).id).toBe('europe');
+    expect(growGoals(europe.state).europe).toBe(true);
   });
 });

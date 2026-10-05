@@ -142,6 +142,20 @@ zählt, ob das Geld für Schulden plus Paket reicht).
 - Laden: Kernfelder migrieren (`CORE_MIGRATIONS`), dann jedes Modul von seiner gespeicherten Version auf die
   aktuelle (`migrations[v]`), fehlende Module frisch anlegen. Neuere Stände werden mit Fehlermeldung abgelehnt.
   Prototyp-Spielstände werden verworfen.
+- **Test-Spielstände** (Spielstände › Test-Spielstände, nach Phase gruppiert, oder `?spielstand=<id>`): ein Stand für
+  jeden Abschnitt des Bogens, vom Bot gespielt (`src/playtest/testSaves.ts`, Liste für den Dialog in
+  `src/ui/builtin/testSaves.ts`, Dateien in `public/spielstaende/`). Drei Bot-Läufe mit Seed 1 reichen für alle, jeder
+  hält unterwegs Stände fest (`meta.scenario` = Kennung, eigene `meta.runId`, nicht in der Bestenliste):
+
+  | Lauf | Test-Spielstände |
+  | --- | --- |
+  | Köln (stundenweise bis 11 von 12 Veedeln) | `koeln-anfang` (Tag 3), `koeln-veedel` (erstes Veedel), `boss-von-koeln` (im Schritt der Mehrheit), `koeln-komplett` (zurechtgerückt: 50.000 €, das zwölfte Veedel fällt nach einer Spielminute, ein paar Stunden ruhig) |
+  | Deutschland (`playToGermany`) | `ankunft-<stadt>` bei jeder ersten Ankunft (`city.arrived`, bevor der Bot dort etwas tut; mit Seed 1 Berlin, Hamburg, Frankfurt, München), `deutschland` (Boss von Deutschland, Jansen ruft gleich an) |
+  | Hafen (Verkauf bis zum Titel Europa) | `hafen` (Ankunft in Rotterdam), `hafen-europa` (eigenes Schiff, Kunden in Europa), `produktion` (zwei Fincas, erste Ernte im Ausfuhrlager), `produzent`, `europa` |
+
+  Neu erzeugen mit `npm run saves:build` (alle in etwa einer Minute, einzelne mit `node scripts/build-test-saves.mjs <id> …`);
+  `testSaves.test.ts` lädt jede Datei, lässt sie einen Tag laufen und prüft den Moment, für den sie gemacht ist. Ändert
+  sich die Reihenfolge der Städte beim Bot, schlägt der Ankunfts-Test fehl: `ARRIVAL_CITIES` und die Texte anpassen.
 
 ### Modul-Registry (`module.ts`, `discover.ts`)
 

@@ -12,12 +12,12 @@ import {
   SaveError,
   type SaveInfo,
 } from '../../core';
-import { Button, Confetti, Dialog, Hint, Icon, IconChip, List, ListItem, Stamp } from '../components';
+import { Button, Confetti, Dialog, Group, Hint, Icon, IconChip, List, ListItem, Stamp } from '../components';
 import { useRuntime } from '../hooks';
 import { gameStats } from '../registry';
 import type { UiRuntime } from '../runtime';
 import { Slot } from '../shell/Slot';
-import { loadTestSave, TEST_SAVE_FILES } from './testSaves';
+import { loadTestSave, TEST_SAVE_FILES, TEST_SAVE_PHASES } from './testSaves';
 
 declare module '../registry' {
   interface DialogRegistry {
@@ -224,21 +224,36 @@ export function SavesDialog() {
         })}
       </List>
       <h3 class="saves-heading">Test-Spielstände</h3>
-      <List>
-        {TEST_SAVE_FILES.map((t) => (
-          <ListItem
-            key={t.id}
-            aside={
-              <Button small disabled={loadingTest !== null} onClick={() => onTestSave(t.id)}>
-                {loadingTest === t.id ? 'Lädt …' : 'Laden'}
-              </Button>
-            }
+      {TEST_SAVE_PHASES.map((phase) => {
+        const saves = TEST_SAVE_FILES.filter((t) => t.phase === phase.id);
+        return (
+          <Group
+            key={phase.id}
+            title={phase.title}
+            icon={phase.icon}
+            color={phase.color}
+            count={saves.length}
+            collapsible
+            class="saves-phase"
           >
-            <strong>{t.title}</strong>
-            <div class="ui-hint">{t.text}</div>
-          </ListItem>
-        ))}
-      </List>
+            <List>
+              {saves.map((t) => (
+                <ListItem
+                  key={t.id}
+                  aside={
+                    <Button small disabled={loadingTest !== null} onClick={() => onTestSave(t.id)}>
+                      {loadingTest === t.id ? 'Lädt …' : 'Laden'}
+                    </Button>
+                  }
+                >
+                  <strong>{t.title}</strong>
+                  <div class="ui-hint">{t.text}</div>
+                </ListItem>
+              ))}
+            </List>
+          </Group>
+        );
+      })}
       <Hint>
         Vom Bot gespielt, zum Ausprobieren. Laden überschreibt den Autosave und zählt nicht für die Bestenliste.
       </Hint>
