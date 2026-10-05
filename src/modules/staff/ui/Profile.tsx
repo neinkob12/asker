@@ -3,7 +3,25 @@
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro, lookTraits, personLook } from '../../../core';
-import { Button, Chip, Chips, Empty, KeyValue, ProgressBar, Select, Slot, Stepper, Toggle, useGame } from '../../../ui';
+import {
+  Button,
+  Chip,
+  Chips,
+  Disclosure,
+  Empty,
+  Group,
+  ItemContent,
+  KeyValue,
+  List,
+  ListItem,
+  ProgressBar,
+  Select,
+  Slot,
+  Stepper,
+  Toggle,
+  useGame,
+  useUi,
+} from '../../../ui';
 import { bribeFactor, citiesUnlocked, cityName, travelMinutesBetween } from '../../city';
 import { getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
@@ -19,13 +37,18 @@ import {
   JAIL_WAGE_FACTOR,
   levelProgress,
   MAX_LEVEL,
+  RELATIONS,
+  relationLabel,
+  relationsOf,
   roleName,
   type StaffAssignment,
   type StaffMember,
   securityAt,
+  TRAITS,
+  traitName,
 } from '../index';
 import { AbsenceSheet } from './absence';
-import { ORIGIN_NAMES, Portrait, StatBars, StatusTag } from './common';
+import { ORIGIN_NAMES, Portrait, relationLook, StatBars, StatusTag, traitChips } from './common';
 
 export function StaffProfile(props: { staffId: string }) {
   const { state } = useGame();
@@ -67,6 +90,8 @@ export function StaffProfile(props: { staffId: string }) {
             <Chip key={trait}>{trait}</Chip>
           ))}
       </Chips>
+
+      <PeopleSection member={m} />
 
       <section class="staff-file__section">
         <KeyValue label="Herkunft" value={ORIGIN_NAMES[m.origin]} />
@@ -119,6 +144,49 @@ export function StaffProfile(props: { staffId: string }) {
         </ol>
       </section>
     </article>
+  );
+}
+
+/**
+ * Eigenschaften als Chips (Auftrag 34), was sie bewirken in „Mehr dazu“, darunter die Beziehungen zu Leuten im Team
+ * (Tipp öffnet deren Akte).
+ */
+function PeopleSection(props: { member: StaffMember }) {
+  const { state } = useGame();
+  const ui = useUi();
+  const m = props.member;
+  const relations = relationsOf(state, m.id);
+  if ((m.traits ?? []).length === 0 && relations.length === 0) return null;
+  return (
+    <>
+      {(m.traits ?? []).length > 0 && (
+        <Group title="Eigenschaften" icon="sparkles" color="people">
+          <Chips items={traitChips(m)} />
+          <Disclosure>
+            {(m.traits ?? []).map((t) => (
+              <p key={t}>
+                <strong>{traitName(t, m.name)}:</strong> {TRAITS[t].hint}
+              </p>
+            ))}
+          </Disclosure>
+        </Group>
+      )}
+      {relations.length > 0 && (
+        <Group title="Beziehungen" icon="users" color="people" count={relations.length}>
+          <List>
+            {relations.map(({ other, kind }) => (
+              <ListItem key={other.id} onClick={() => ui.openPanel('staff.profile', { staffId: other.id })}>
+                <ItemContent
+                  {...relationLook(kind)}
+                  title={relationLabel(kind, other.name)}
+                  tags={[{ label: RELATIONS[kind].name, ...relationLook(kind) }]}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </Group>
+      )}
+    </>
   );
 }
 

@@ -37,12 +37,14 @@ import {
   type RecruitProfile,
   ROLE_INFO,
   roleName,
+  rollTraits,
   STAT_KEYS,
   type StaffAssignment,
   type StaffRole,
   type StaffStats,
   type StatKey,
   staffContact,
+  type TraitId,
 } from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import {
@@ -108,6 +110,8 @@ export interface Candidate {
   arrivedAt: number;
   /** Wer ihn empfohlen hat (Mitarbeiter-ID). */
   referrerId: string | null;
+  /** Eigenschaften (Auftrag 34), sichtbar schon vor der Einstellung. */
+  traits: TraitId[];
 }
 
 export interface RecruitingState {
@@ -234,6 +238,7 @@ function addCandidate(ctx: Ctx, role: StaffRole, source: CandidateSource, option
     stats: profile.stats,
     arrivedAt: ctx.now,
     referrerId: options.referrerId ?? null,
+    traits: profile.traits ? [...profile.traits] : [],
   };
   ctx.state.modules.recruiting.candidates.push(candidate);
   ctx.emit('recruiting.candidateArrived', { candidateId: candidate.id, source });
@@ -387,6 +392,7 @@ function profileOf(c: Candidate): RecruitProfile {
     level: c.level,
     wage: c.wage,
     portrait: c.portrait,
+    traits: [...(c.traits ?? [])],
   };
 }
 
@@ -404,6 +410,8 @@ function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null,
     origin: c.source,
     knownStats: STAT_KEYS.filter((k) => c.visibleStats[k] !== undefined),
     note: c.note,
+    // Auftrag 34: Wer empfohlen wurde, kennt die empfehlende Person (befreundet oder verwandt).
+    referrerId: c.referrerId && isEmployed(ctx.state, c.referrerId) ? c.referrerId : null,
   });
   if (c.referrerId && isEmployed(ctx.state, c.referrerId)) addLoyalty(ctx, c.referrerId, 3);
   // Fragen im Chat zu genau diesem Bewerber (Empfehlung, Bewerbung) sind erledigt, auch wenn er über die App kam.
@@ -451,7 +459,10 @@ interface RecruitingStateV1 {
   candidates: CandidateV1[];
 }
 
-export function migrateRecruitingV1(old: RecruitingStateV1, state: GameState): RecruitingState {
+type CandidateV3 = Omit<Candidate, 'traits'>;
+type RecruitingStateV3 = Omit<RecruitingState, 'candidates'> & { candidates: CandidateV3[] };
+
+export function migrateRecruitingV1(old: RecruitingStateV1, state: GameState): RecruitingStateV3 {
   return {
     candidates: old.candidates.map((c) => ({
       ...c,
@@ -471,9 +482,17 @@ export function migrateRecruitingV1(old: RecruitingStateV1, state: GameState): R
   };
 }
 
+/** Version 3 → 4 (Auftrag 34): Bewerber bekommen Eigenschaften, fest aus ihrer ID. */
+export function migrateRecruitingV3(old: RecruitingStateV3, state: GameState): RecruitingState {
+  return {
+    ...old,
+    candidates: old.candidates.map((c) => ({ ...c, traits: rollTraits(`${state.meta.seed}:${c.id}`) })),
+  };
+}
+
 export default defineModule({
   id: 'recruiting',
-  version: 3,
+  version: 4,
   dependsOn: ['staff', 'territory', 'reputation'],
   init: (ctx) => {
     const state: RecruitingState = { candidates: [], nextPoolAt: 0, searchReadyAt: 0 };
@@ -511,9 +530,10 @@ export default defineModule({
     2: migrateRecruitingV1,
     // Version 3 (Auftrag 28): Kurier-Bewerber gibt es nicht mehr. Wer einen aus einem alten Spielstand einstellte, hatte
     // jemanden, der nirgends arbeiten kann und trotzdem Lohn kostet.
-    3: (old: RecruitingState): RecruitingState => ({
+    3: (old: RecruitingStateV3): RecruitingStateV3 => ({
       ...old,
       candidates: old.candidates.filter((c) => c.role !== 'courier'),
     }),
+    4: migrateRecruitingV3,
   },
 });

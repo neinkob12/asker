@@ -7,7 +7,9 @@ describe('Routine-Nachrichten des Personals', () => {
     for (const [key, list] of Object.entries(STAFF_TEXTS)) {
       expect(list.length, key).toBeGreaterThanOrEqual(4);
       for (const text of list) {
-        expect(fillText(text, { amount: '80 €', time: '14:00', veedel: 'Nippes' })).not.toMatch(/\{\w*\}/);
+        expect(fillText(text, { amount: '80 €', time: '14:00', veedel: 'Nippes', other: 'Kevin' })).not.toMatch(
+          /\{\w*\}/,
+        );
       }
     }
   });

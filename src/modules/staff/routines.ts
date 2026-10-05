@@ -16,6 +16,7 @@ import {
   DANGER_HEAT,
   HIDE_AFTER_RAID,
   LOYALTY,
+  RELATIONS,
   REVEAL_CHANCE,
   TALK_HEAT,
   THEFT_GOODS_MAX,
@@ -41,6 +42,7 @@ import {
   hidingReturn,
   isMemberLive,
   isSpecialist,
+  relationPace,
   removeMember,
   revealStat,
   serveTime,
@@ -51,6 +53,7 @@ import {
   wageCategory,
 } from './members';
 import { STAFF_TEXTS } from './texts';
+import { relationsOf, traitFactor, traitLoyaltyDay } from './traits';
 import type { BetrayalKind, StaffMember } from './types';
 
 /** Jede Spielminute: Haft und Verletzung ablaufen lassen, Läufer bedienen Kunden. */
@@ -119,7 +122,7 @@ function serveCustomers(ctx: Ctx): void {
       { actor: `staff:${member.id}` },
     );
     if (result.ok) {
-      member.busyUntil = ctx.now + serveTime(member);
+      member.busyUntil = ctx.now + Math.round(serveTime(member) * relationPace(ctx.state, member));
       stockCache.clear();
     }
   }
@@ -315,14 +318,24 @@ function dailyLoyalty(ctx: Ctx, m: StaffMember): void {
   else if (ratio < 0.85) delta += LOYALTY.wageLow;
   if (m.status === 'jailed') delta += m.jailSupport ? LOYALTY.jailDay : LOYALTY.jailDayUnsupported;
   const veedelId = staffVeedel(ctx.state, m);
-  if (veedelId && getHeat(ctx.state, veedelId) >= DANGER_HEAT) delta += LOYALTY.heatDay;
+  if (veedelId && getHeat(ctx.state, veedelId) >= DANGER_HEAT)
+    delta += Math.round(LOYALTY.heatDay * traitFactor(m, 'fear'));
+  // Auftrag 34: Eigenschaften (treu wie Gold) und Beziehungen (ein Paar hält zusammen, bis eine von beiden sitzt).
+  delta += traitLoyaltyDay(m);
+  for (const { other, kind } of relationsOf(ctx.state, m.id)) {
+    const info = RELATIONS[kind];
+    if (other.status === 'jailed') delta += info.dayApart;
+    else if (other.status === 'active' && m.status === 'active') delta += info.dayTogether;
+  }
   if (delta !== 0) addLoyalty(ctx, m.id, delta);
 }
 
 /** Wahrscheinlichkeit für Verrat an einem Tag (0 bei ausreichender Loyalität). */
 export function betrayalChance(m: StaffMember): number {
   if (m.stats.loyalty >= BETRAYAL_THRESHOLD) return 0;
-  return BETRAYAL_MAX_CHANCE * ((BETRAYAL_THRESHOLD - m.stats.loyalty) / BETRAYAL_THRESHOLD);
+  // Eigenschaften (Auftrag 34): Wer spielt, greift eher zu; wer treu wie Gold ist, nie.
+  const base = BETRAYAL_MAX_CHANCE * ((BETRAYAL_THRESHOLD - m.stats.loyalty) / BETRAYAL_THRESHOLD);
+  return Math.min(1, base * traitFactor(m, 'betrayal'));
 }
 
 /** Selten und mild: Wer kaum noch loyal ist, klaut etwas, kündigt oder redet. */

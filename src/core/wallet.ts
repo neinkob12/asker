@@ -30,6 +30,7 @@ export type MoneyCategory =
   | 'wages.specialist'
   | 'wages.jail'
   | 'wages.injured'
+  | 'wages.extra'
   | 'hiring'
   | 'bail'
   | 'expansion'
@@ -70,6 +71,8 @@ export const MONEY_CATEGORIES: Record<MoneyCategory, MoneyCategoryInfo> = {
   'wages.specialist': { label: 'Löhne Spezialisten', group: 'expense', icon: 'scale' },
   'wages.jail': { label: 'Stillhaltegeld (Haft)', group: 'expense', icon: 'jail' },
   'wages.injured': { label: 'Halber Lohn (verletzt)', group: 'expense', icon: 'bandage' },
+  // Auftrag 34: Geldbitten, Runden, Kautionen für die Wohnung (Geschichten der Leute).
+  'wages.extra': { label: 'Zuwendungen ans Personal', group: 'expense', icon: 'gift' },
   hiring: { label: 'Anheuern', group: 'expense', icon: 'userPlus' },
   bail: { label: 'Kaution', group: 'expense', icon: 'scale' },
   expansion: { label: 'Ausbau', group: 'expense', icon: 'building' },

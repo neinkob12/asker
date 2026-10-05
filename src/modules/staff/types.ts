@@ -90,6 +90,81 @@ export interface StaffMember {
   leftReason: StaffLeaveReason | null;
   /** Stadt, in der die Person gerade ist (Auftrag 30; alte Stände: Köln). */
   cityId: string;
+  /** Eigenschaften (Auftrag 34), zwei bis drei, fest bei der Erzeugung (alte Stände: fest aus der ID). */
+  traits: TraitId[];
+}
+
+/**
+ * Eigenschaften (Auftrag 34). Werte und Wirkungen in config.ts (TRAITS).
+ * family Familienmensch, drinker trinkt, gambler spielt, ambitious ehrgeizig, coward Angsthase, braggart Maulheld,
+ * loyal treu wie Gold, hothead Hitzkopf, charmer charmant, nimble flink.
+ */
+export type TraitId =
+  | 'family'
+  | 'drinker'
+  | 'gambler'
+  | 'ambitious'
+  | 'coward'
+  | 'braggart'
+  | 'loyal'
+  | 'hothead'
+  | 'charmer'
+  | 'nimble';
+
+/** Beziehungen zwischen zwei Leuten (Auftrag 34). */
+export type RelationKind = 'friends' | 'siblings' | 'rivals' | 'couple';
+
+export interface StaffRelation {
+  /** Die beiden Personen (IDs, a < b nicht garantiert). */
+  a: string;
+  b: string;
+  kind: RelationKind;
+  since: number;
+}
+
+/** Arten der Geschichten (Ereignisse aus Eigenschaften und Beziehungen, Auftrag 34), Vorlagen in stories.ts. */
+export type StoryId =
+  | 'loan'
+  | 'familyTime'
+  | 'drunk'
+  | 'hangover'
+  | 'debt'
+  | 'gamblerWin'
+  | 'promotion'
+  | 'raise'
+  | 'bragged'
+  | 'scared'
+  | 'loyalTip'
+  | 'hothead'
+  | 'rivalsFight'
+  | 'friendsParty'
+  | 'coupleMoveIn'
+  | 'siblingJailed';
+
+/** Eine offene Geschichte: Nachricht mit Antworten, wartet auf die Wahl des Spielers. */
+export interface StaffStory {
+  id: string;
+  story: StoryId;
+  staffId: string;
+  /** Die zweite Person (Beziehung), sonst null. */
+  otherId: string | null;
+  /** Betrag, um den es geht (Geldbitte, Lohn …), sonst 0. */
+  amount: number;
+  messageId: number;
+  createdAt: number;
+  cityId: string;
+}
+
+export interface StaffStories {
+  open: StaffStory[];
+  /** Letzte Geschichte pro Stadt (Spielminute), für den Abstand. */
+  lastAt: Record<string, number>;
+  /** Letzte Geschichte pro Person. */
+  byPerson: Record<string, number>;
+  /** Letzte Geschichte pro Vorlage. */
+  byStory: Record<string, number>;
+  /** Wie viele es bisher gab (für die Messung). */
+  count: number;
 }
 
 export interface StaffState {
@@ -99,6 +174,10 @@ export interface StaffState {
   former: StaffMember[];
   /** Abgetauchte Veedel (nach einer Warnung vor einer Razzia): bis wann und wer danach wohin zurückgeht. */
   hiding: Record<string, StaffHiding>;
+  /** Beziehungen zwischen Leuten (Auftrag 34), auch mit Ehemaligen (die zählen nicht mehr). */
+  relations: StaffRelation[];
+  /** Geschichten der Leute (Auftrag 34). */
+  stories: StaffStories;
 }
 
 export interface StaffHiding {
@@ -142,4 +221,6 @@ export interface RecruitProfile {
   /** Verlangter Tageslohn. */
   wage: number;
   portrait: string | null;
+  /** Eigenschaften (Auftrag 34). Fehlen sie, würfelt enlist sie fest aus Name und Zeit. */
+  traits?: TraitId[];
 }

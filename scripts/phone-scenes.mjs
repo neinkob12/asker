@@ -357,6 +357,44 @@ export const SCENES = [
       if (member) window.koeln.runtime.api.openPanel('staff.profile', { staffId: member.id });
     })()`,
   },
+  // Auftrag 34: Akte mit Eigenschaften und Beziehungen
+  {
+    name: 'akte-beziehung',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      const s = sim.state;
+      for (const spotId of s.modules.spots.unlocked.slice(0, 2)) sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+      const [a, b] = s.modules.staff.members;
+      if (a && b) {
+        a.traits = ['family', 'drinker', 'loyal'];
+        s.modules.staff.relations = [{ a: a.id, b: b.id, kind: 'siblings', since: s.time }];
+        window.koeln.runtime.api.selectTab('staff');
+        window.koeln.runtime.api.openPanel('staff.profile', { staffId: a.id });
+      }
+    })()`,
+  },
+  // Auftrag 34: eine Geschichte (Geldbitte) im Chat
+  {
+    name: 'geschichte',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      const s = sim.state;
+      sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: s.modules.spots.unlocked[0] } });
+      const m = s.modules.staff.members[0];
+      if (!m) return;
+      m.traits = ['family', 'nimble'];
+      const contactId = 'staff:' + m.id;
+      const choice = (id, label) => ({ id, label, command: { type: 'staff.storyChoice', payload: { storyId: 'st9100', choice: id } } });
+      s.messages.contacts[contactId] = { id: contactId, name: m.name, kind: 'staff', role: 'Läufer' };
+      s.messages.list.push({
+        id: 9100, contactId, time: s.time, from: 'contact', read: false, source: 'staff', expiresAt: s.time + 480,
+        text: 'Chef, ich muss dich was fragen. Mein Kleiner braucht eine Zahnspange, die Kasse zahlt nix. 400 €, ich zahl’s zurück.',
+        options: [choice('give', 'Geld geben'), choice('work', 'Abarbeiten'), choice('refuse', 'Ablehnen')],
+      });
+      s.modules.staff.stories.open.push({ id: 'st9100', story: 'loan', staffId: m.id, otherId: null, amount: 400, messageId: 9100, createdAt: s.time, cityId: 'koeln' });
+      window.koeln.runtime.api.openPhone('core.messages', { contactId });
+    })()`,
+  },
   // Aktionsblatt: Entlassen in der Akte bestätigen
   {
     name: 'aktionsblatt',

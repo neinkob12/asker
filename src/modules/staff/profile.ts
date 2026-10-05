@@ -17,6 +17,7 @@ import {
   STAT_SPREAD,
   WAGE_PER_LEVEL,
 } from './config';
+import { rollTraits, traitFactor } from './traits';
 import type { RecruitProfile, StaffRole, StaffStats, StatKey } from './types';
 
 export const STAT_KEYS: readonly StatKey[] = ['speed', 'caution', 'strength', 'charisma', 'loyalty'];
@@ -83,15 +84,21 @@ export function generateProfile(ctx: Ctx, role: StaffRole, options: GenerateOpti
   }
   // Lohnniveau der Stadt, in der angeheuert wird (Auftrag 30: Hamburg × 1,25).
   const city = getCity(activeCity(ctx.state))?.wageFactor ?? 1;
-  const wage = roundTo5(expectedWageFor(role, level) * city * (0.9 + ctx.random() * 0.3));
+  const wageRoll = 0.9 + ctx.random() * 0.3;
+  const name = randomName(ctx);
+  const age = ctx.randomInt(info.age[0], info.age[1]);
+  // Eigenschaften fest aus Name, Alter und Zeit (Auftrag 34; ohne ctx.random, die Würfelfolge bleibt).
+  const traits = rollTraits(`${ctx.state.meta.seed}:${ctx.now}:${name}:${age}`);
+  const wage = roundTo5(expectedWageFor(role, level) * city * wageRoll * traitFactor({ traits }, 'wage'));
   return {
-    name: randomName(ctx),
+    name,
     role,
-    age: ctx.randomInt(info.age[0], info.age[1]),
+    age,
     background: ctx.pick(BACKGROUNDS[role]),
     stats,
     level,
     wage,
     portrait: null,
+    traits,
   };
 }

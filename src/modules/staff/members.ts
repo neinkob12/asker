@@ -3,6 +3,7 @@
 import { type Contact, type Ctx, type GameState, journal, type MoneyCategory, personLook } from '../../core';
 import { activeCity, bribeFactor, cityName, getCity, isCityLive } from '../city';
 import { getWarehouse } from '../goods';
+import { lieutenantOfSpot } from '../hierarchy';
 import { getSpot, isSpotActive } from '../spots';
 import { veedelAt, veedelName } from '../veedel';
 import {
@@ -18,6 +19,7 @@ import {
   JAIL_WAGE_FACTOR,
   LOYALTY,
   MIN_SERVE_TIME,
+  RELATIONS,
   ROLE_INFO,
   RUNNER_HIRE_COST,
   RUNNER_HIRE_COST_MAX,
@@ -29,6 +31,7 @@ import {
   UNSUPPORTED_TALK_LOYALTY,
 } from './config';
 import { clampStat, expectedWageFor, levelForXp, levelUpGains, STAT_KEYS } from './profile';
+import { relateNewMember, relationsOf, rollTraits, traitFactor } from './traits';
 import type {
   RecruitProfile,
   StaffAssignment,
@@ -177,7 +180,9 @@ export function isStatKnown(member: StaffMember, stat: StatKey): boolean {
 /** Lohn, den die Person erwartet (Typ, Level, Anspruch). */
 export function expectedWage(state: GameState, id: string): number {
   const m = getStaffMember(state, id);
-  return m ? Math.round(expectedWageFor(m.role, m.level, m.demand) * cityWageFactor(m.cityId)) : 0;
+  if (!m) return 0;
+  // Eigenschaften (Auftrag 34): Ehrgeizige und Familienmenschen wollen etwas mehr.
+  return Math.round(expectedWageFor(m.role, m.level, m.demand) * cityWageFactor(m.cityId) * traitFactor(m, 'wage'));
 }
 
 /** Lohnniveau der Stadt (Auftrag 30, CITIES.wageFactor; Köln 1). */
@@ -226,9 +231,12 @@ export function payrollDue(state: GameState): number {
  * 0 = sie hält dicht.
  */
 export function talkChance(member: StaffMember): number {
+  // Eigenschaften (Auftrag 34): Wer treu wie Gold ist, hält dicht; ein Maulheld redet eher.
+  const factor = traitFactor(member, 'talk');
   const unsupported = member.status === 'jailed' && !member.jailSupport;
-  if (unsupported && member.stats.loyalty < UNSUPPORTED_TALK_LOYALTY) return UNSUPPORTED_TALK_CHANCE;
-  if (member.stats.loyalty < FIRED_TALK_LOYALTY) return FIRED_TALK_CHANCE;
+  if (unsupported && member.stats.loyalty < UNSUPPORTED_TALK_LOYALTY)
+    return Math.min(1, UNSUPPORTED_TALK_CHANCE * factor);
+  if (member.stats.loyalty < FIRED_TALK_LOYALTY) return Math.min(1, FIRED_TALK_CHANCE * factor);
   return 0;
 }
 
@@ -239,8 +247,26 @@ export function isAbsent(member: StaffMember): boolean {
 
 /** So lange braucht die Person für einen Kunden (Tempo und Level). */
 export function serveTime(member: StaffMember): number {
-  const factor = (1.4 - member.stats.speed / 125) * (1 - 0.03 * (member.level - 1));
+  const factor = (1.4 - member.stats.speed / 125) * (1 - 0.03 * (member.level - 1)) * traitFactor(member, 'pace');
   return Math.max(MIN_SERVE_TIME, Math.round(RUNNER_SERVE_TIME * factor));
+}
+
+/**
+ * Beziehungen am selben Spot (Auftrag 34): Faktor auf die Zeit pro Kunde. Befreundete, Geschwister und ein Paar
+ * arbeiten Hand in Hand (kleiner = schneller), Rivalen streiten (größer). Zählt, wer am Spot steht (Läufer, Sicherheit)
+ * und der Leutnant des Spots.
+ */
+export function relationPace(state: GameState, member: StaffMember): number {
+  const spotId = member.assignment?.kind === 'spot' ? member.assignment.targetId : null;
+  if (!spotId) return 1;
+  const lead = lieutenantOfSpot(state, spotId);
+  let factor = 1;
+  for (const { other, kind } of relationsOf(state, member.id)) {
+    if (other.status !== 'active') continue;
+    const here = other.id === lead || (other.assignment?.kind === 'spot' && other.assignment.targetId === spotId);
+    if (here) factor *= RELATIONS[kind].samePlace;
+  }
+  return factor;
 }
 
 /** Arbeitstempo als Faktor (1 = normal, größer = schneller), z.B. für Fahrer. */
@@ -257,7 +283,8 @@ export function speedFactor(state: GameState, id: string): number {
 export function riskFactor(state: GameState, id: string): number {
   const m = getStaffMember(state, id);
   if (!m) return 1;
-  return Math.round(Math.max(0.4, 1.4 - m.stats.caution / 125 - 0.03 * (m.level - 1)) * 100) / 100;
+  const base = Math.max(0.4, 1.4 - m.stats.caution / 125 - 0.03 * (m.level - 1));
+  return Math.round(base * traitFactor(m, 'risk') * 100) / 100;
 }
 
 /**
@@ -268,7 +295,8 @@ export function combatValue(state: GameState, id: string): number {
   const m = getStaffMember(state, id);
   if (m?.status !== 'active') return 0;
   const loyaltyPenalty = m.stats.loyalty < 30 ? 10 : 0;
-  return Math.max(0, Math.round(m.stats.strength * 0.7 + m.stats.caution * 0.2 + m.level * 4 - loyaltyPenalty));
+  const base = m.stats.strength * 0.7 + m.stats.caution * 0.2 + m.level * 4 - loyaltyPenalty;
+  return Math.max(0, Math.round(base * traitFactor(m, 'combat')));
 }
 
 /**
@@ -351,6 +379,8 @@ export interface EnlistOptions {
   journalText?: string;
   /** Stadt, in der die Person anfängt. Standard: die aktive Stadt. */
   cityId?: string;
+  /** Wer die Person empfohlen hat (Auftrag 34: die beiden kennen sich). */
+  referrerId?: string | null;
 }
 
 /** Jemanden einstellen (z.B. einen Bewerber aus recruiting). Meldet 'staff.hired'. */
@@ -382,8 +412,13 @@ export function enlist(ctx: Ctx, profile: RecruitProfile, options: EnlistOptions
     leftReason: null,
     jailSupport: true,
     cityId: options.cityId ?? activeCity(ctx.state),
+    traits: profile.traits
+      ? [...profile.traits]
+      : rollTraits(`${ctx.state.meta.seed}:${ctx.now}:${profile.name}:${profile.age}`),
   };
   ctx.state.modules.staff.members.push(member);
+  // Auftrag 34: Manche kennen schon jemanden im Team.
+  relateNewMember(ctx, member, options.referrerId);
   addCareer(ctx, member.id, options.note ? `Eingestellt. ${options.note}` : 'Eingestellt.');
   const text = options.journalText ?? `${member.name} als ${roleName(member.role)} eingestellt.`;
   if (text) journal.add(ctx, text, 'good', { staffId: member.id });
@@ -539,7 +574,7 @@ export function addLoyalty(ctx: Ctx, staffId: string, delta: number): number {
 export function addXp(ctx: Ctx, staffId: string, amount: number): void {
   const m = getStaffMember(ctx.state, staffId);
   if (!m || m.leftAt !== null || amount <= 0) return;
-  m.xp += Math.round(amount);
+  m.xp += Math.round(amount * traitFactor(m, 'xp'));
   const target = levelForXp(m.xp);
   while (m.level < target) {
     m.level += 1;

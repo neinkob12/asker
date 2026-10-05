@@ -265,6 +265,6 @@ describe('recruiting: Spielstände aus dem Fundament', () => {
     const loaded = loadSimulation(file.state, sim.modules);
     expect(getCandidate(loaded.state, 'alt-kurier')).toBeUndefined();
     expect(getCandidate(loaded.state, keep.id)).toBeDefined();
-    expect(loaded.state.moduleVersions.recruiting).toBe(3);
+    expect(loaded.state.moduleVersions.recruiting).toBe(4);
   });
 });
