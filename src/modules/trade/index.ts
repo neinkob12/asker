@@ -45,7 +45,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { cityName, getCity, HARBOR_CITY, isBusinessSold } from '../city';
+import { cityName, getCity, HARBOR_CITY, isBusinessSold, presentCity } from '../city';
 import { activeEncounters, startEncounter } from '../encounters';
 import {
   getShips,
@@ -104,6 +104,7 @@ import {
   START_STOCK_QUALITY,
   TRUCK_CITY_SPEED,
   TRUST,
+  UNATTENDED_CUSTOMS_PASS,
   WHOLESALE_SHARE,
 } from './config';
 import {
@@ -1606,18 +1607,32 @@ function containerArrives(ctx: Ctx, shipment: TradeShipment): void {
     return;
   }
   const port = harborPort(shipment.portId);
+  const name = port?.name ?? shipment.portId;
+  // Bist du nicht in dem Hafen, regeln es die Hafenarbeiter dort (Auftrag 43). Früher startete die Konfrontation ohne
+  // jemanden am Kai und endete jedes Mal mit dem Verlust des Containers.
+  if (presentCity(ctx.state) !== shipment.portId) {
+    if (ctx.chance(UNATTENDED_CUSTOMS_PASS)) {
+      journal.add(ctx, `Zoll in ${name}: Die Hafenarbeiter haben den Container durchgeredet.`, 'good');
+      landContainer(ctx, shipment, true);
+    } else {
+      onContainerCheck(ctx, `container:${shipment.id}`, 'failure');
+    }
+    return;
+  }
   const { encounterId } = startEncounter(ctx, {
     kind: 'customsCheck',
     setting: 'port',
-    place: `in ${port?.name ?? shipment.portId}`,
+    place: `in ${name}`,
     stakes: { goods: shipment.amount },
     skipEffects: true,
     opponent: { ...CUSTOMS_OPPONENT },
     lossCategory: 'loss.customs',
     origin: { module: 'trade', ref: `container:${shipment.id}` },
+    // Du bist im Hafen und stehst selbst am Kai: Papiere, Ablenken, Bestechen oder Aufgeben.
+    playerPresent: true,
   });
   shipment.encounterId = encounterId;
-  journal.add(ctx, `Zoll in ${port?.name ?? shipment.portId}: Sie wollen den Container sehen.`, 'bad');
+  journal.add(ctx, `Zoll in ${name}: Sie wollen den Container sehen.`, 'bad');
 }
 
 /** Der Zoll ist durch (oder hat nicht geschaut): ab ins Lager, soweit Platz ist. */

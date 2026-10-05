@@ -125,7 +125,8 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   Erledigt: `bonus`/`bonusProvider`/`jailDuration` mit Stadt (ohne Angabe die aktive); Kaution, Haft, Razzia-Warnung und Rechte Hand fragen die Stadt der Person bzw. des Veedels.
 - [x] E7 Leute der alten Stadt schreiben Empfehlungen in der neuen; Hintergründe mit Kölner Ortsnamen in jeder Stadt.
   Erledigt: Empfehlungen nur von Leuten der aktiven Stadt, nach dem Verkauf keine; `BACKGROUNDS` mit `{veedel}`, gefüllt fest aus Name und Zeit mit einem Veedel der Stadt.
-- [ ] E8 Event-Ankündigungen und Rabatt-Aktionen der alten Stadt kommen in der neuen an.
+- [x] E8 Event-Ankündigungen und Rabatt-Aktionen der alten Stadt kommen in der neuen an.
+  Erledigt: Rabatt-Aktionen und Event-Ankündigungen schreiben nur für die aktive Stadt (die Aktion gilt weiter), nach dem Verkauf keine Aktionen mehr.
 - [ ] E9 Neue Stadt ohne sichtbaren ersten Schritt: Willkommen still, Rat „Läufer anheuern“ aus, sobald irgendwo
   jemand arbeitet, „Liegeplatz“ vor dem ersten Lager, Reviere-Ziel fest auf Köln, zu wenig sauberes Geld fürs Lager.
 - [ ] E10 Sicherheitsleute schlafender Städte sammeln Erfahrung, Level-Meldungen kommen in der neuen Stadt.
@@ -141,11 +142,13 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 
 ## F Hafen-Prüfer (Spieltest Rotterdam ab `deutschland`, 05.10.2026)
 
-- [ ] F1 Kritisch: Zollkontrolle im Hafen endet immer mit Totalverlust (`trade/index.ts` `startEncounter` ohne
+- [x] F1 Kritisch: Zollkontrolle im Hafen endet immer mit Totalverlust (`trade/index.ts` `startEncounter` ohne
   `playerPresent`/`staffIds` → `nobodyThere` → `failure`); in Rotterdam bist du da, anderswo Fenna als Fernhilfe oder
   `ifNobody: 'retreat'` mit Bußgeld; Erfolgstext für `setting: 'port'` („Weiter geht die Fahrt“).
-- [ ] F2 Alte Städte fluten das Handy nach dem Verkauf: Tagesberichte der Statthalter, Empfehlungen, Lieferanten-Aktionen,
+  Erledigt: Bist du im Hafen (`presentCity`), stehst du selbst am Kai (`playerPresent: true`, Papiere, Ablenken, Bestechen, Aufgeben); in einem anderen Hafen reden die Hafenarbeiter mit dem Zoll (`UNATTENDED_CUSTOMS_PASS` 0,5), ohne Konfrontation. Erfolgstext ohne „Weiter geht die Fahrt“.
+- [x] F2 Alte Städte fluten das Handy nach dem Verkauf: Tagesberichte der Statthalter, Empfehlungen, Lieferanten-Aktionen,
   Rang-Text, Festnahme-Banner. Nach `isBusinessSold` abstellen, alte Chats beim Verkauf als gelesen markieren.
+  Erledigt: Beim Verkauf sind alle alten Chats gelesen, offene Fragen erledigt, Jansens Verkaufsanruf ruft nicht zurück. Statthalter schreiben nur bei Verlust (nach dem Verkauf nie), Stufen-Meldung, Polizei-Stufe, Kontrolle und Festnahme nur aus der aktiven Stadt; Empfehlungen und Milieu-Kontakte nach dem Verkauf aus.
 - [ ] F3 Doppelte Bestellungen: Erste Runde bei Ankunft plus Montag-Runde kurz danach (32 offene am ersten Morgen).
   Kein zweiter Auftrag, solange ein Kunde noch einen offenen derselben Woche hat; Fennas Montag-Text anpassen.
 - [ ] F4 Sauberes Geld als unsichtbare Sperre (Lkw 63.000, Halle, Liegeplatz, Schiff ausgegraut ohne Grund): Zeile
@@ -162,7 +165,8 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [ ] F11 „Zoll X %“ heißt dreierlei: Kontrollchance, Grenzchance, Strenge. Eindeutig benennen.
 - [ ] F12 Personal-App in Rotterdam lockt mit Bewerbern (Badge), die dort nichts tun können.
 - [ ] F13 Gegenangebot: „du bleibst vorn“ hervorheben, Vertrag „Fester Preis“, Konkurrenz erklären.
-- [ ] F14 Großrazzia der alten Stadt im Dynamic Island (`police/ui/island.ts` ohne Stadtfilter); beim Verkauf leeren.
+- [x] F14 Großrazzia der alten Stadt im Dynamic Island (`police/ui/island.ts` ohne Stadtfilter); beim Verkauf leeren.
+  Erledigt: Island zeigt die Großrazzia nur in der aktiven Stadt; beim Verkauf fallen geplante Razzien weg; eine wartende Großrazzia einer schlafenden Stadt blockiert die aktive Stadt nicht mehr.
 - [ ] F15 „Alle ausliefern (Spedition)“; Lkw-Stufe im Plan nur mit Lkw; Verträge vor Gangs bei der Deckung.
 - [ ] F16 Waren-Leiste bei Jansen abgeschnitten (ab 4 Waren `Select`).
 - [ ] F17 Tippfehler „lange genug genug“ (`NextStageGroup`).

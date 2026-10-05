@@ -66,6 +66,26 @@ describe('Einführung in die Hafen-Phase (Auftrag 43)', () => {
     expect(thread.some((t) => t.includes('Das ist die Halle'))).toBe(true);
   });
 
+  it('nach dem Verkauf schweigen die alten Städte: alte Chats gelesen, keine Berichte, Aktionen oder Empfehlungen', () => {
+    const sim = quietGame(5);
+    soldAndArrived(sim);
+    const soldAt = sim.state.modules.city.sale.sold?.at ?? 0;
+    // Bis zum Verkauf ist alles gelesen und keine alte Frage mehr offen.
+    const before = sim.state.messages.list.filter((m) => m.time < soldAt);
+    expect(before.every((m) => m.read)).toBe(true);
+    expect(before.filter((m) => messages.canAnswer(sim.state, m))).toEqual([]);
+    sim.advance(3 * DAY);
+    const jansen = jansenContact(sim.state).id;
+    const old = sim.state.messages.list.filter(
+      (m) =>
+        m.time >= soldAt && m.from === 'contact' && m.contactId !== jansen && /^(staff|supplier):/.test(m.contactId),
+    );
+    expect(old.map((m) => m.text)).toEqual([]);
+    // Jansens Verkaufsanruf ruft nach dem Verkauf nicht noch einmal an.
+    const again = sim.state.messages.list.filter((m) => m.time > soldAt && m.text.includes('Ich ruf nochmal an'));
+    expect(again).toEqual([]);
+  });
+
   it('die erste Runde bestellt nur, was in der Halle liegt, mit drei Tagen zum Antworten', () => {
     const sim = quietGame(2);
     soldAndArrived(sim);

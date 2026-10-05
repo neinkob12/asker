@@ -1364,7 +1364,12 @@ export function sellBusiness(ctx: Ctx): CommandResult {
   if (!c.unlocked.includes(HARBOR_CITY)) c.unlocked.push(HARBOR_CITY);
   c.sleep[HARBOR_CITY] ??= newSleep(false, ctx.now);
   const contact = jansenContact(ctx.state);
-  messages.retractWhere(ctx, (m) => m.contactId === contact.id && (m.options?.some((o) => o.id === 'sell') ?? false));
+  // Die alten Chats gehören zu den Städten, die jetzt die Statthalter führen (Auftrag 43): alles bis hierhin gelesen,
+  // offene Fragen erledigt. Sonst gingen Jansen und Fenna unter 180 Ungelesenen unter.
+  // Verkauft über den Knopf statt im Anruf: Jansens Verkaufsanruf klingelt nicht weiter und ruft nicht zurück.
+  messages.cancelCalls(ctx, contact.id);
+  messages.retractWhere(ctx, () => true);
+  for (const m of ctx.state.messages.list) m.read = true;
   journal.add(
     ctx,
     `Verkauft: ${formatEuro(offer.price)} von den Statthaltern, ${formatEuro(offer.rotterdamPrice)} an Jansen. Dir bleiben ${formatEuro(offer.rest)}.`,

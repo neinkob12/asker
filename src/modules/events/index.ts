@@ -27,7 +27,7 @@ import {
   MINUTES_PER_DAY,
   messages,
 } from '../../core';
-import { citiesUnlocked, cityOfSpot, isCityLive } from '../city';
+import { activeCity, citiesUnlocked, cityOfSpot, isBusinessSold, isCityLive } from '../city';
 import { allProducts, getProduct } from '../goods';
 import { getSpot } from '../spots';
 import {
@@ -346,7 +346,9 @@ function tick(ctx: Ctx): void {
     if (next === null || next - ctx.now > MINUTES_PER_DAY || s.announced[def.id] === next) continue;
     s.announced[def.id] = next;
     const contact = EVENT_CONTACTS[def.cityId];
-    if (contact) messages.send(ctx, { contact, text: def.announce, silent: true });
+    // Nur aus der Stadt, in der du bist (Auftrag 43), und nicht mehr nach dem Verkauf.
+    const here = def.cityId === activeCity(ctx.state) && !isBusinessSold(ctx.state);
+    if (contact && here) messages.send(ctx, { contact, text: def.announce, silent: true });
   }
 }
 

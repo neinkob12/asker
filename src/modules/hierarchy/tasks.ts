@@ -8,7 +8,7 @@
 //   Stündlich (RIGHT_HAND_INTERVAL): Personal, Geldwäsche.
 
 import { type Actor, type Ctx, clock, formatEuro, type GameState, messages } from '../../core';
-import { activeCity, cityAt } from '../city';
+import { activeCity, cityAt, isBusinessSold } from '../city';
 import { getOrders, type Order } from '../customers';
 import { wageRunway } from '../finance';
 import {
@@ -84,7 +84,9 @@ export function addRightHandXp(ctx: Ctx, rh: RightHandPost, amount: number, memb
     `Ich hab dazugelernt, Stufe ${after}.` +
     (unlocked.length > 0 ? ` Du kannst mir jetzt auch ${unlocked.join(' und ')} überlassen.` : '');
   log(ctx, rh, `Stufe ${after} erreicht.`);
-  messages.send(ctx, { contact: staffContactOf(member), text, silent: false });
+  // Aus einer anderen Stadt (Statthalter) oder nach dem Verkauf steht es nur in ihrem Protokoll (Auftrag 43).
+  const here = (member.cityId ?? 'koeln') === activeCity(ctx.state) && !isBusinessSold(ctx.state);
+  if (here) messages.send(ctx, { contact: staffContactOf(member), text, silent: false });
   ctx.emit('hierarchy.rightHandRankUp', { staffId: member.id, rank: after });
 }
 

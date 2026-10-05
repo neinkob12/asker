@@ -123,5 +123,10 @@ export const CHARTER_KM_PER_DAY = 650;
 
 /** Hallen im Hafen (trade.buildHall): höchstens so viele pro Hafen, Platz und Preis stehen am Hafen (logistics). */
 export const MAX_HALLS = 2;
+/**
+ * Zollkontrolle in einem Hafen, in dem du nicht bist (Auftrag 43): Die Hafenarbeiter dort reden mit dem Zoll, so oft
+ * kommt der Container durch. Bist du selbst im Hafen, entscheidest du in der Konfrontation (Papiere, Ablenken, Bestechen).
+ */
+export const UNATTENDED_CUSTOMS_PASS = 0.5;
 /** Passt ein Container nicht mehr ins Lager, wartet der Rest an Bord: Liegegeld pro Tag und Container (sauberes Geld). */
 export const QUAY_FEE_PER_DAY = 1_500;

@@ -44,7 +44,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, isVeedelLive, liveVeedel } from '../city';
+import { activeCity, isBusinessSold, isVeedelLive, liveVeedel } from '../city';
 import { startEncounter } from '../encounters';
 import { eventFactor, raidsAllowed } from '../events';
 import { getGang } from '../gangs';
@@ -919,6 +919,8 @@ function updateTier(ctx: Ctx): void {
   journal.add(ctx, `${text} (Stufe: ${info.name})`, 'bad');
   const contact = bonusProvider(ctx.state, 'raidWarning', cityId);
   const ticker = TICKERS[cityId] ?? TICKERS.koeln;
+  // Aufs Handy nur aus der Stadt, in der du bist, und nicht mehr nach dem Verkauf (Auftrag 43).
+  if (cityId !== activeCity(ctx.state) || isBusinessSold(ctx.state)) return;
   messages.send(ctx, {
     contact: contact ? staffContact(contact) : { ...ticker, kind: 'other' as const },
     text: contact ? `Hör zu: ${text}` : text,
@@ -982,7 +984,10 @@ function tick(ctx: Ctx): void {
   // Stadt-Events (Etappe 7): Im Karneval plant die Polizei keine Razzien gegen dich.
   const raidsOn = raidsAllowed(state, city);
   // Großrazzia nur gegen Großhändler: je heißer deine Veedel im Schnitt, desto eher.
-  if (raidsOn && tier >= 2 && !police.majorRaid && ctx.now >= police.majorReadyAt) {
+  // Eine Großrazzia, die in einer schlafenden Stadt wartet, hält die Stadt, in der du bist, nicht frei (Auftrag 43):
+  // Es gibt nur einen Platz, eine neue Planung ersetzt sie.
+  const blocked = police.majorRaid !== null && isVeedelLive(state, police.majorRaid.veedelIds[0]);
+  if (raidsOn && tier >= 2 && !blocked && ctx.now >= police.majorReadyAt) {
     const mine = liveVeedel(state).filter((v) => hasPlayerPresence(state, v.id));
     const heat = mine.length > 0 ? mine.reduce((sum, v) => sum + getHeat(state, v.id), 0) / mine.length : 0;
     const chance =
@@ -1064,6 +1069,12 @@ export default defineModule({
     'police.snitch': (ctx, { gangId }) => snitchOnGang(ctx, gangId),
   },
   on: {
+    // Nach dem Verkauf (Auftrag 43) gehören die Städte den Statthaltern: geplante Razzien gegen dich fallen weg.
+    'business.sold': (ctx) => {
+      const police = ctx.state.modules.police;
+      police.majorRaid = null;
+      police.plannedRaids = {};
+    },
     'sale.completed': (ctx, { veedelId, amount, sellerId, spotId }) => {
       const presence = getVeedel(veedelId)?.policePresence;
       if (presence === undefined) return;

@@ -45,7 +45,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, citiesUnlocked, cityName, getCity, relationFactor } from '../city';
+import { activeCity, citiesUnlocked, cityName, getCity, isBusinessSold, relationFactor } from '../city';
 import { getSalesStats } from '../customers';
 import {
   DEFAULT_WAREHOUSE,
@@ -971,6 +971,8 @@ function onCityUnlocked(ctx: Ctx, cityId: string): void {
 function rollDeals(ctx: Ctx): void {
   const s = ctx.state.modules.suppliers;
   s.deals = s.deals.filter((d) => d.endsAt > ctx.now);
+  // Nach dem Verkauf kaufst du nicht mehr bei den alten Lieferanten (Auftrag 43).
+  if (isBusinessSold(ctx.state)) return;
   const day = Math.floor(ctx.now / MINUTES_PER_DAY);
   for (const cityId of citiesUnlocked(ctx.state)) {
     // Würfel pro Stadt und Tag (Auftrag 40): unabhängig davon, welche Städte sonst frei sind.
@@ -1000,7 +1002,8 @@ function rollDeals(ctx: Ctx): void {
       .replace('{package}', `${pkg.label}${citiesUnlocked(ctx.state).length > 1 ? ` für ${cityName(cityId)}` : ''}`)
       .replace('{discount}', `${Math.round(discount * 100)} %`)
       .replace('{until}', until);
-    messages.send(ctx, { contact: contactOf(supplier), text, silent: true });
+    // Gesagt wird es nur für die Stadt, in der du bist (Auftrag 43); die Aktion anderswo steht in der App dieser Stadt.
+    if (cityId === activeCity(ctx.state)) messages.send(ctx, { contact: contactOf(supplier), text, silent: true });
     ctx.emit('supplier.dealStarted', {
       dealId: deal.id,
       supplierId: supplier.id,

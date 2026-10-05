@@ -280,7 +280,7 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
       bribe: { hint: 'Kostet Schwarzgeld. Beim Zoll teuer, aber wirksam.' },
     },
     outcomes: {
-      success: { text: 'Zoll {place} durch. Weiter geht die Fahrt.' },
+      success: { text: 'Zoll {place} durch, die Ware kommt durch.' },
       failure: { text: 'Ladung {place} beim Zoll aufgeflogen.' },
       retreat: { text: '{place} am Zoll vorbeigekommen.' },
     },

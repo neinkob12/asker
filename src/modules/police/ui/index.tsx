@@ -26,12 +26,12 @@ import {
   useGameSelector,
   useUi,
 } from '../../../ui';
-import { isBusinessSold } from '../../city';
+import { activeCity, isBusinessSold } from '../../city';
 import { getGang } from '../../gangs';
 import { getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
 import { controllerOf, PLAYER_FACTION } from '../../territory';
-import { getVeedel, veedelName } from '../../veedel';
+import { getVeedel, veedelCity, veedelName } from '../../veedel';
 import {
   activeTipOff,
   CHECK_THRESHOLD,
@@ -298,7 +298,9 @@ onGameEvent('police.raid', 'police.toast.raid', (payload, ui, state) => {
         : `Razzia in ${veedelName(payload.veedelId)}!`;
   ui.toast(payload.empty ? `${title.slice(0, -1)}: niemand da.` : title, payload.empty ? 'info' : 'bad');
 });
-onGameEvent('police.tierChanged', 'police.toast.tier', (payload, ui) => {
+// Banner nur aus der Stadt, in der du bist (Auftrag 43): Was in einer Stadt beim Statthalter passiert, steht dort.
+onGameEvent('police.tierChanged', 'police.toast.tier', (payload, ui, state) => {
+  if (payload.cityId !== activeCity(state)) return;
   const tier = OPERATION_TIERS[payload.to];
   ui.toast(`Die Polizei sieht dich jetzt als ${tier.name}.`, payload.to > payload.from ? 'bad' : 'good', {
     urgent: false,
@@ -317,9 +319,12 @@ onGameEvent('police.check', 'police.fx.check', (payload, _ui, state) => {
 });
 soundOnEvent('police.raid', 'siren', { when: (p) => p.target === PLAYER_FACTION && !p.empty });
 soundOnEvent('police.check', 'siren', { volume: 0.5, throttleMs: 4000 });
-onGameEvent('police.check', 'police.toast.check', (payload, ui) => {
+onGameEvent('police.check', 'police.toast.check', (payload, ui, state) => {
+  if (veedelCity(payload.veedelId) !== activeCity(state)) return;
   ui.toast(`Kontrolle in ${veedelName(payload.veedelId)}.`, 'bad');
 });
 onGameEvent('police.arrest', 'police.toast.arrest', (payload, ui, state) => {
-  ui.toast(`${getStaffMember(state, payload.staffId)?.name ?? 'Jemand'} wurde festgenommen.`, 'bad');
+  const m = getStaffMember(state, payload.staffId);
+  if (m && (m.cityId ?? 'koeln') !== activeCity(state)) return;
+  ui.toast(`${m?.name ?? 'Jemand'} wurde festgenommen.`, 'bad');
 });

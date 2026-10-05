@@ -21,7 +21,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, cityName } from '../city';
+import { activeCity, cityName, isBusinessSold } from '../city';
 import { cityReport, spotResults, wageRunway } from '../finance';
 import { playerHeat } from '../police';
 import { getSpot, getSpots, spotCity } from '../spots';
@@ -726,7 +726,9 @@ function sendReport(ctx: Ctx, rh: RightHandPost, cityId: string): void {
       expiresIn: 12 * 60,
       silent: problems === 0,
     });
-  } else {
+  } else if (report.profit < 0 && !isBusinessSold(ctx.state)) {
+    // Aus einer anderen Stadt schreibt der Statthalter nur, wenn etwas schiefläuft (Auftrag 43: vier Berichte am Tag
+    // fluteten sonst das Handy); den Bericht gibt es immer auf seiner Seite. Nach dem Verkauf gehört alles ihm.
     messages.send(ctx, { contact: staffContact(m), text: lines.join(' '), silent: true });
   }
   rh.log.unshift({
