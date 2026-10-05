@@ -236,7 +236,8 @@ export const NIGHT_END = 5 * 60;
 /**
  * Häfen der Hafen-Phase (Auftrag 40): Hier kommen die Container aus dem Ausland an. Rotterdam gehört nach dem Verkauf
  * dir (Jansens Liegeplatz, berthCost 0), Antwerpen und Hamburg mietest du dazu (sauberes Geld). customsFactor: wie
- * scharf der Zoll dort hinschaut (1 = Rotterdam); shipDays: Tage mehr (oder weniger) als bis Rotterdam.
+ * scharf der Zoll dort hinschaut (1 = Rotterdam). Wie weit ein Schiff fährt, kommt aus den Seewegen
+ * (roads.seaRoute, Auftrag 41). Das Lager am Kai fasst capacity Gramm, jede Halle (trade.buildHall) hallCapacity mehr.
  */
 export interface HarborPort {
   id: string;
@@ -248,7 +249,11 @@ export interface HarborPort {
   /** Miete für den Liegeplatz (sauberes Geld), 0 = gehört dir mit Rotterdam. */
   berthCost: number;
   customsFactor: number;
-  shipDays: number;
+  /** Lager am Kai in Gramm (Auftrag 41); was nicht passt, wartet auf dem Schiff (Liegegeld). */
+  capacity: number;
+  /** Eine Halle mehr (sauberes Geld): so viel Platz dazu. */
+  hallCapacity: number;
+  hallCost: number;
   /** Ein Satz zum Hafen. */
   description: string;
 }
@@ -262,7 +267,9 @@ export const HARBOR_PORTS: readonly HarborPort[] = [
     lat: 51.9,
     berthCost: 0,
     customsFactor: 1,
-    shipDays: 0,
+    capacity: 400_000,
+    hallCapacity: 200_000,
+    hallCost: 60_000,
     description: 'Jansens Liegeplatz im Waalhaven: der größte Hafen Europas, der Zoll kennt jeden Container.',
   },
   {
@@ -273,7 +280,9 @@ export const HARBOR_PORTS: readonly HarborPort[] = [
     lat: 51.29,
     berthCost: 90_000,
     customsFactor: 0.8,
-    shipDays: 0,
+    capacity: 250_000,
+    hallCapacity: 150_000,
+    hallCost: 45_000,
     description: 'Riesig und unübersichtlich. Der Zoll schaut seltener hin, die Hafenarbeiter wollen ihren Anteil.',
   },
   {
@@ -284,7 +293,9 @@ export const HARBOR_PORTS: readonly HarborPort[] = [
     lat: 53.52789,
     berthCost: 120_000,
     customsFactor: 1.15,
-    shipDays: 1,
-    description: 'Ein Tag länger auf See, dafür näher an Bremen, Hannover und Leipzig. Der Zoll ist wach.',
+    capacity: 250_000,
+    hallCapacity: 150_000,
+    hallCost: 50_000,
+    description: 'Ein Tag länger auf See, dafür näher an Bremen, Hannover, Leipzig und Kopenhagen. Der Zoll ist wach.',
   },
 ];

@@ -160,8 +160,13 @@ export interface Producer {
   /** Ware → Preis als Anteil am Grundpreis der Ware (pro Gramm). */
   products: Readonly<Record<string, number>>;
   quality: number;
-  /** Laufzeit bis Rotterdam in Tagen (andere Häfen: HarborPort.shipDays dazu). */
+  /**
+   * Per Lkw: Tage bis in den Hafen. Per Schiff: Tage bis das Schiff ablegt (Verladen); die Fahrt kommt aus dem Seeweg
+   * (roads.seaRoute ab dem Knoten sea, Auftrag 41).
+   */
   days: number;
+  /** Knoten im Seewege-Netz (roads), an dem das Schiff ablegt; fehlt bei Ware per Lkw. */
+  sea?: string;
   /** Grundchance einer Kontrolle pro Container (mal Größe, Hafen, Zoll-Heat). */
   risk: number;
   /** Per Lkw statt per Schiff (Niederlande): kein Seeweg auf der Karte. */
@@ -178,7 +183,8 @@ export const PRODUCERS: readonly Producer[] = [
     at: { lng: -5.81, lat: 35.78 },
     products: { hash: 0.16, weed: 0.2 },
     quality: 0.62,
-    days: 5,
+    days: 1,
+    sea: 'tanger',
     risk: 0.1,
     description: 'Hasch aus dem Rif, billig und viel. Der Zoll kennt die Route.',
   },
@@ -190,7 +196,8 @@ export const PRODUCERS: readonly Producer[] = [
     at: { lng: -5.44, lat: 36.13 },
     products: { weed: 0.19, haze: 0.25 },
     quality: 0.66,
-    days: 4,
+    days: 1,
+    sea: 'algeciras',
     risk: 0.07,
     description: 'Gewächshäuser an der Küste, gutes Gras, unter Tomaten verladen.',
   },
@@ -202,9 +209,10 @@ export const PRODUCERS: readonly Producer[] = [
     at: { lng: 19.45, lat: 41.32 },
     products: { weed: 0.17, kush: 0.24 },
     quality: 0.6,
-    days: 6,
+    days: 1,
+    sea: 'durres',
     risk: 0.09,
-    description: 'Felder in den Bergen, sehr billig, lange auf See um Griechenland herum.',
+    description: 'Felder in den Bergen, sehr billig, aber eine Woche auf See: durchs ganze Mittelmeer.',
   },
   {
     id: 'westland',
@@ -248,64 +256,3 @@ export const CONTAINER_SIZES: readonly ContainerSize[] = [
   { id: 'medium', label: 'Halber Container (50 kg)', grams: 50_000, freight: 6_000, riskFactor: 1 },
   { id: 'full', label: 'Container (120 kg)', grams: 120_000, freight: 10_000, riskFactor: 1.6 },
 ];
-
-/**
- * Seewege für die Europa-Ansicht (nur Darstellung): Wegpunkte vom Produzenten bis vor den Ärmelkanal, dann je Hafen
- * das letzte Stück. Grob entlang der echten Routen (Gibraltar, Biskaya, Kanal); Produzenten mit byRoad fahren per Lkw.
- */
-export const SEA_LANES: Readonly<Record<string, readonly LngLat[]>> = {
-  marokko: [
-    { lng: -5.81, lat: 35.78 },
-    { lng: -6.2, lat: 36.0 },
-  ],
-  spanien: [
-    { lng: -5.44, lat: 36.13 },
-    { lng: -6.2, lat: 36.0 },
-  ],
-  albanien: [
-    { lng: 19.45, lat: 41.32 },
-    { lng: 18.9, lat: 40.0 },
-    { lng: 15.5, lat: 37.4 },
-    { lng: 12.0, lat: 37.2 },
-    { lng: 8.5, lat: 38.3 },
-    { lng: 2.0, lat: 37.6 },
-    { lng: -1.0, lat: 36.9 },
-    { lng: -5.4, lat: 35.95 },
-    { lng: -6.2, lat: 36.0 },
-  ],
-};
-
-/** Gemeinsamer Weg von Gibraltar bis vor den Kanal. */
-export const ATLANTIC_LANE: readonly LngLat[] = [
-  { lng: -6.2, lat: 36.0 },
-  { lng: -9.3, lat: 36.9 },
-  { lng: -9.9, lat: 39.5 },
-  { lng: -9.8, lat: 43.2 },
-  { lng: -5.6, lat: 48.4 },
-  { lng: -2.0, lat: 49.8 },
-  { lng: 1.4, lat: 50.95 },
-];
-
-/** Das letzte Stück vom Kanal in den Hafen. */
-export const PORT_LANES: Readonly<Record<string, readonly LngLat[]>> = {
-  rotterdam: [
-    { lng: 1.4, lat: 50.95 },
-    { lng: 3.6, lat: 51.95 },
-    { lng: 4.05, lat: 51.97 },
-    { lng: 4.4, lat: 51.9 },
-  ],
-  antwerpen: [
-    { lng: 1.4, lat: 50.95 },
-    { lng: 3.5, lat: 51.45 },
-    { lng: 4.0, lat: 51.38 },
-    { lng: 4.29, lat: 51.29 },
-  ],
-  hamburg: [
-    { lng: 1.4, lat: 50.95 },
-    { lng: 4.4, lat: 53.0 },
-    { lng: 7.0, lat: 54.0 },
-    { lng: 8.4, lat: 53.95 },
-    { lng: 9.3, lat: 53.75 },
-    { lng: 10.0, lat: 53.53 },
-  ],
-};

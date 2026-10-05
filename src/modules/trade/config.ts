@@ -96,3 +96,14 @@ export const START_STOCK_QUALITY = 0.6;
 
 /** Mengen der Bestellungen gesamt (Stellschraube fürs Balancing, 1 = Daten wie in data.ts). */
 export const DEMAND_SCALE = 1;
+
+/**
+ * Auftrag 41: Ein Linienschiff (Charter pro Container) schafft so viele Kilometer am Tag auf dem Seeweg (roads.seaRoute),
+ * mit den Stopps unterwegs. Dazu kommen die Tage bis zum Ablegen (Producer.days).
+ */
+export const CHARTER_KM_PER_DAY = 650;
+
+/** Hallen im Hafen (trade.buildHall): höchstens so viele pro Hafen, Platz und Preis stehen am Hafen (logistics). */
+export const MAX_HALLS = 2;
+/** Passt ein Container nicht mehr ins Lager, wartet der Rest an Bord: Liegegeld pro Tag und Container (Schwarzgeld). */
+export const QUAY_FEE_PER_DAY = 1_500;

@@ -52,11 +52,12 @@ import { getRightHand, rightHandTitle } from '../hierarchy';
 import { CUSTOMS_OPPONENT, HARBOR_PORTS, type HarborPort, harborPort } from '../logistics';
 import { priceIndex } from '../market';
 import { customsArrival, customsHeat, customsSeized } from '../police';
-import { interCityMinutes, interCityRoute } from '../roads';
+import { interCityMinutes, interCityRoute, seaRoute } from '../roads';
 import { getStaffMember, staffContact } from '../staff';
 import { rivalOffers } from '../suppliers';
 import {
   AUTOBAHN_CHECK_PER_100KM,
+  CHARTER_KM_PER_DAY,
   CONTRACT_SHARE,
   CONTRACT_WEEKS,
   CUSTOMER_KINDS,
@@ -67,6 +68,7 @@ import {
   GANG_TIP_CHANCE,
   LATE_GRACE_DAYS,
   LATE_PRICE_FACTOR,
+  MAX_HALLS,
   MIN_ITEM_GRAMS,
   MIN_ORDER_GRAMS,
   ORDER_ANSWER_MINUTES,
@@ -75,6 +77,7 @@ import {
   ORDER_ROUND_GRAMS,
   PRICE_CAP_MARKUP,
   PRICE_LEVEL_RANGE,
+  QUAY_FEE_PER_DAY,
   REPUTATION_ALPHA,
   SCORE_WEIGHTS,
   SEIZE_ON_CHECK,
@@ -88,20 +91,17 @@ import {
   WHOLESALE_SHARE,
 } from './config';
 import {
-  ATLANTIC_LANE,
   CONTAINER_SIZES,
   type ContainerSize,
   FOREIGN_CITIES,
   GANG_DEMAND,
   ORG_DEMAND,
-  PORT_LANES,
   PRODUCERS,
   type Producer,
-  SEA_LANES,
   type WeeklyDemand,
 } from './data';
 
-export { CONTRACT_WEEKS, CUSTOMER_KINDS, PRICE_LEVEL_RANGE, PRICE_LEVEL_STEP } from './config';
+export { CONTRACT_WEEKS, CUSTOMER_KINDS, MAX_HALLS, PRICE_LEVEL_RANGE, PRICE_LEVEL_STEP } from './config';
 export { CONTAINER_SIZES, type ContainerSize, FOREIGN_CITIES, PRODUCERS, type Producer } from './data';
 
 // ---------------------------------------------------------------------------------------------
@@ -170,7 +170,8 @@ export interface TradeOrder {
   revenue?: number;
 }
 
-export type ShipmentStatus = 'sea' | 'customs';
+/** Auf See, beim Zoll oder am Kai (Auftrag 41: das Lager ist voll, der Rest wartet an Bord). */
+export type ShipmentStatus = 'sea' | 'customs' | 'quay';
 
 export interface TradeShipment {
   id: number;
@@ -184,6 +185,8 @@ export interface TradeShipment {
   arrivesAt: number;
   status: ShipmentStatus;
   encounterId?: number;
+  /** Seit wann der Container am Kai wartet (Liegegeld), nur mit status 'quay'. */
+  quaySince?: number;
 }
 
 export interface DeliveryItem {
@@ -245,6 +248,8 @@ export interface TradeState {
   stock: Record<string, Record<string, StockLot>>;
   /** Deine Häfen (Rotterdam nach dem Kauf, weitere gemietet). */
   ports: string[];
+  /** Auftrag 41: gebaute Hallen pro Hafen (mehr Platz im Lager). */
+  halls: Record<string, number>;
   /** Dein Preis als Faktor auf den fairen Preis. */
   priceLevel: number;
   /** Dein Ruf als Lieferant (gleitender Schnitt): pünktlich und Qualität. */
@@ -268,6 +273,8 @@ declare module '../../core' {
     'trade.buy': { producerId: string; productId: string; size: ContainerSize['id']; portId?: string };
     /** Liegeplatz in einem weiteren Hafen mieten (sauberes Geld). */
     'trade.rentBerth': { portId: string };
+    /** Eine Halle mehr im Hafen (sauberes Geld, Auftrag 41). */
+    'trade.buildHall': { portId: string };
     /** Deinen Preis setzen (Faktor auf den fairen Preis). */
     'trade.setPriceLevel': { level: number };
   }
@@ -279,6 +286,9 @@ declare module '../../core' {
     'trade.orderFailed': { orderId: number; customerId: string; reason: 'expired' | 'late' };
     'trade.containerOrdered': { shipmentId: number; producerId: string; amount: number; portId: string; cost: number };
     'trade.containerArrived': { shipmentId: number; portId: string; amount: number; checked: boolean };
+    /** Auftrag 41: Das Lager ist voll, der Container (oder sein Rest) wartet am Kai. */
+    'trade.containerWaiting': { shipmentId: number; portId: string; amount: number };
+    'trade.hallBuilt': { portId: string; halls: number; cost: number };
     'trade.containerSeized': { shipmentId: number; portId: string; amount: number };
     'trade.deliverySeized': { deliveryId: number; orderId: number; amount: number };
     'trade.dealTipped': { orderId: number; customerId: string; amount: number };
@@ -494,12 +504,42 @@ export function containerRisk(state: GameState, producerId: string, size: Contai
   return Math.min(0.9, producer.risk * container.riskFactor * port.customsFactor * (1 + heat / 50));
 }
 
-/** Laufzeit eines Containers in Minuten. */
+/** Seeweg vom Produzenten in den Hafen (roads, Auftrag 41); null bei Ware per Lkw oder ohne Weg. */
+export function producerSeaRoute(producerId: string, portId: string): { path: LngLat[]; km: number } | null {
+  const producer = PRODUCER_BY_ID.get(producerId);
+  if (!producer?.sea || producer.byRoad) return null;
+  return seaRoute(producer.sea, portId);
+}
+
+/** Laufzeit eines Containers auf dem Linienschiff in Minuten: Verladen plus Seeweg mit CHARTER_KM_PER_DAY. */
 export function shippingMinutes(producerId: string, portId: string): number {
   const producer = PRODUCER_BY_ID.get(producerId);
+  if (!producer || !harborPort(portId)) return MINUTES_PER_DAY;
+  const sea = producerSeaRoute(producerId, portId);
+  const days = producer.days + (sea ? sea.km / CHARTER_KM_PER_DAY : 0);
+  return Math.max(MINUTES_PER_DAY, Math.round(days * MINUTES_PER_DAY));
+}
+
+/** Platz im Lager eines Hafens in Gramm (Grundfläche plus Hallen, Auftrag 41). */
+export function portCapacity(state: GameState, portId: string): number {
   const port = harborPort(portId);
-  if (!producer || !port) return MINUTES_PER_DAY;
-  return Math.max(1, producer.days + (producer.byRoad ? 0 : port.shipDays)) * MINUTES_PER_DAY;
+  if (!port) return 0;
+  return port.capacity + (tradeState(state)?.halls[portId] ?? 0) * port.hallCapacity;
+}
+
+/** Gramm, die im Lager eines Hafens liegen. */
+export function portLoad(state: GameState, portId: string): number {
+  return Object.values(portStock(state, portId)).reduce((sum, lot) => sum + lot.amount, 0);
+}
+
+/** Freier Platz im Lager eines Hafens (Gramm). */
+export function portRoom(state: GameState, portId: string): number {
+  return Math.max(0, portCapacity(state, portId) - portLoad(state, portId));
+}
+
+/** Gebaute Hallen in einem Hafen. */
+export function portHalls(state: GameState, portId: string): number {
+  return tradeState(state)?.halls[portId] ?? 0;
 }
 
 function portPoint(portId: string): LngLat {
@@ -1012,6 +1052,27 @@ export function rentBerth(ctx: Ctx, portId: string): CommandResult {
   return { ok: true };
 }
 
+/** Eine Halle mehr im Hafen (sauberes Geld). */
+export function buildHall(ctx: Ctx, portId: string): CommandResult {
+  const s = ctx.state.modules.trade;
+  const port = harborPort(portId);
+  if (!port || !s.ports.includes(portId)) return { ok: false, reason: 'In diesem Hafen hast du keinen Liegeplatz.' };
+  const halls = s.halls[portId] ?? 0;
+  if (halls >= MAX_HALLS) return { ok: false, reason: `Mehr als ${MAX_HALLS} Hallen gibt es in ${port.name} nicht.` };
+  if (
+    !wallet.pay(ctx, port.hallCost, 'clean', `Halle in ${port.name}`, { category: 'expansion', cityId: HARBOR_CITY })
+  ) {
+    return { ok: false, reason: `Die Halle kostet ${formatEuro(port.hallCost)} sauberes Geld.` };
+  }
+  s.halls[portId] = halls + 1;
+  journal.add(ctx, `Neue Halle in ${port.name}: ${Math.round(port.hallCapacity / 1000)} kg mehr Platz.`, 'good');
+  ctx.emit('trade.hallBuilt', { portId, halls: halls + 1, cost: port.hallCost });
+  // Was am Kai wartet, kommt gleich herein.
+  for (const shipment of [...s.shipments])
+    if (shipment.status === 'quay' && shipment.portId === portId) unload(ctx, shipment);
+  return { ok: true };
+}
+
 /** Deinen Preis setzen. */
 export function setPriceLevel(ctx: Ctx, level: number): CommandResult {
   if (!Number.isFinite(level)) return { ok: false, reason: 'Welcher Preis?' };
@@ -1044,21 +1105,54 @@ function containerArrives(ctx: Ctx, shipment: TradeShipment): void {
   journal.add(ctx, `Zoll in ${port?.name ?? shipment.portId}: Sie wollen den Container sehen.`, 'bad');
 }
 
+/** Der Zoll ist durch (oder hat nicht geschaut): ab ins Lager, soweit Platz ist. */
 function landContainer(ctx: Ctx, shipment: TradeShipment, checked: boolean): void {
-  const s = ctx.state.modules.trade;
-  s.shipments = s.shipments.filter((x) => x.id !== shipment.id);
-  addStock(ctx, shipment.portId, shipment.productId, shipment.amount, shipment.quality);
-  journal.add(
-    ctx,
-    `${Math.round(shipment.amount / 1000)} kg ${productName(shipment.productId)} in ${harborPort(shipment.portId)?.name ?? shipment.portId} angekommen.`,
-    'good',
-  );
   ctx.emit('trade.containerArrived', {
     shipmentId: shipment.id,
     portId: shipment.portId,
     amount: shipment.amount,
     checked,
   });
+  unload(ctx, shipment);
+}
+
+/**
+ * Entladen, soweit das Lager Platz hat (Auftrag 41, wie storeFitting in goods): Der Rest wartet an Bord am Kai und
+ * kommt herein, sobald Platz ist. Ist alles drin, wird das Liegegeld für die Wartezeit fällig.
+ */
+function unload(ctx: Ctx, shipment: TradeShipment): void {
+  const s = ctx.state.modules.trade;
+  const name = harborPort(shipment.portId)?.name ?? shipment.portId;
+  const room = portRoom(ctx.state, shipment.portId);
+  const amount = Math.min(shipment.amount, room);
+  if (amount > 0) addStock(ctx, shipment.portId, shipment.productId, amount, shipment.quality);
+  if (amount < shipment.amount) {
+    shipment.amount -= amount;
+    if (shipment.status !== 'quay') {
+      shipment.status = 'quay';
+      shipment.quaySince = ctx.now;
+      journal.add(
+        ctx,
+        `Lager in ${name} voll: ${Math.round(shipment.amount / 1000)} kg ${productName(shipment.productId)} warten am Kai (Liegegeld ${formatEuro(QUAY_FEE_PER_DAY)} am Tag).`,
+        'bad',
+      );
+      ctx.emit('trade.containerWaiting', { shipmentId: shipment.id, portId: shipment.portId, amount: shipment.amount });
+    }
+    return;
+  }
+  s.shipments = s.shipments.filter((x) => x.id !== shipment.id);
+  if (shipment.quaySince !== undefined) {
+    const days = Math.max(1, Math.ceil((ctx.now - shipment.quaySince) / MINUTES_PER_DAY));
+    const fee = Math.min(days * QUAY_FEE_PER_DAY, ctx.state.wallet.dirty);
+    if (fee > 0) {
+      wallet.pay(ctx, fee, 'dirty', `Liegegeld in ${name}`, { category: 'trade.freight', cityId: HARBOR_CITY });
+    }
+  }
+  journal.add(
+    ctx,
+    `${Math.round(amount / 1000)} kg ${productName(shipment.productId)} in ${name} eingelagert.`,
+    'good',
+  );
 }
 
 function onContainerCheck(ctx: Ctx, ref: string | undefined, outcome: string): void {
@@ -1241,6 +1335,8 @@ function tick(ctx: Ctx): void {
   }
   for (const shipment of [...s.shipments]) {
     if (shipment.status === 'sea' && ctx.now >= shipment.arrivesAt) containerArrives(ctx, shipment);
+    // Am Kai: herein, sobald im Lager Platz ist (der älteste zuerst).
+    else if (shipment.status === 'quay' && portRoom(ctx.state, shipment.portId) > 0) unload(ctx, shipment);
   }
   for (const delivery of [...s.deliveries]) {
     if (delivery.checkAt !== null && ctx.now >= delivery.checkAt) deliveryCheck(ctx, delivery);
@@ -1259,6 +1355,7 @@ function initialState(): TradeState {
     deliveries: [],
     stock: {},
     ports: [],
+    halls: {},
     priceLevel: 1,
     reliability: START_RELIABILITY,
     quality: START_QUALITY,
@@ -1268,8 +1365,12 @@ function initialState(): TradeState {
 
 export default defineModule({
   id: 'trade',
-  version: 1,
+  version: 2,
   init: () => initialState(),
+  migrations: {
+    // Auftrag 41: Hallen pro Hafen; Container, die schon auf See sind, behalten ihre Ankunft.
+    2: (old: Omit<TradeState, 'halls'> & { halls?: Record<string, number> }) => ({ ...old, halls: old.halls ?? {} }),
+  },
   tickEvery: 5,
   tick,
   commands: {
@@ -1280,6 +1381,7 @@ export default defineModule({
     'trade.buy': (ctx, { producerId, productId, size, portId }) =>
       buyContainer(ctx, producerId, productId, size, portId),
     'trade.rentBerth': (ctx, { portId }) => rentBerth(ctx, portId),
+    'trade.buildHall': (ctx, { portId }) => buildHall(ctx, portId),
     'trade.setPriceLevel': (ctx, { level }) => setPriceLevel(ctx, level),
   },
   on: {
@@ -1313,19 +1415,15 @@ export function harborPorts(): readonly HarborPort[] {
 }
 
 /**
- * Weg eines Containers auf der Karte (nur Darstellung): Seeweg vom Produzenten über Gibraltar und den Kanal in den
- * Hafen; Ware per Lkw (Westland, Jansen) als gerade Linie.
+ * Weg eines Containers auf der Karte (nur Darstellung): der Seeweg vom Produzenten in den Hafen (roads.seaRoute, aus
+ * Overture-Tiefen); Ware per Lkw (Westland, Jansen) als gerade Linie.
  */
 export function shipmentPath(shipment: Pick<TradeShipment, 'producerId' | 'portId'>): LngLat[] {
   const producer = PRODUCER_BY_ID.get(shipment.producerId);
-  const port = harborPort(shipment.portId);
-  const end = port ? { lng: port.lng, lat: port.lat } : { lng: 4.4, lat: 51.9 };
-  if (!producer || producer.byRoad || !SEA_LANES[producer.id]) return [producer?.at ?? end, end];
-  return [
-    ...SEA_LANES[producer.id],
-    ...ATLANTIC_LANE.slice(1),
-    ...(PORT_LANES[shipment.portId] ?? PORT_LANES.rotterdam).slice(1),
-  ];
+  const end = portPoint(shipment.portId);
+  const sea = producerSeaRoute(shipment.producerId, shipment.portId);
+  if (sea) return sea.path;
+  return [producer?.at ?? end, end];
 }
 
 /** Weg einer Lieferung auf der Karte (über roads, wie die Fahrzeit). */

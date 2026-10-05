@@ -2,11 +2,13 @@
 // Häfen (Rotterdam, Antwerpen, Hamburg) und die fremden Städte als Glas-Karten auf der Karte, dazu die Wege der
 // Lieferungen (Lkw über das Autobahn-Netz) und der Container (Seeweg über Gibraltar und den Kanal) mit einem Punkt, wo
 // sie gerade sind. Die alten Städte zeigt city (cards.tsx) nach dem Verkauf als Kunden. Optik liest nur.
+// Auftrag 41: Die Seewege (roads.seaLanes, aus Overture-Tiefen) liegen blass darunter, Container fahren sie entlang.
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import { distanceMeters, formatNumber, type GameState, type LngLat } from '../../../core';
 import { addHtmlMarker, FAR_ZOOM, type MapLayer, mapToken } from '../../../map';
 import { customsHeat, customsLevel } from '../../police';
+import { seaLanes, seaPorts, shipRoute } from '../../roads';
 import {
   deliveryPath,
   FOREIGN_CITIES,
@@ -21,6 +23,7 @@ import {
   shipmentPath,
 } from '../index';
 
+const SEAWAYS = 'trade.seaways';
 const ROUTES = 'trade.routes';
 const MOVERS = 'trade.movers';
 
@@ -102,7 +105,19 @@ export const europeLayer: MapLayer = {
     const sea = mapToken('--cat-place', '#5aa9ff');
     const ink = mapToken('--hud-ink', '#f5f1e8');
     const empty = { type: 'FeatureCollection' as const, features: [] };
+    map.addSource(SEAWAYS, { type: 'geojson', data: empty });
     map.addSource(ROUTES, { type: 'geojson', data: empty });
+    map.addLayer({
+      id: SEAWAYS,
+      type: 'line',
+      source: SEAWAYS,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': sea,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 4, 1, 9, 2],
+        'line-opacity': 0.35,
+      },
+    });
     map.addSource(MOVERS, { type: 'geojson', data: empty });
     map.addLayer({
       id: ROUTES,
@@ -147,8 +162,24 @@ export const europeLayer: MapLayer = {
       addCard(`city:${city.id}`, city.at, () => ctx.ui.openPhone('trade.app'), 'top');
     }
     let routesKey = '';
+    let seawaysShown = false;
     const refresh = (state: GameState) => {
       const active = isTradeActive(state);
+      if (active !== seawaysShown) {
+        // Die Seewege ändern sich nie: einmal zeichnen, wenn die Hafen-Phase beginnt.
+        seawaysShown = active;
+        const lines = active ? [...seaLanes().map((l) => l.path), ...seaPorts().map((id) => shipRoute(id))] : [];
+        (map.getSource(SEAWAYS) as GeoJSONSource | undefined)?.setData({
+          type: 'FeatureCollection',
+          features: lines
+            .filter((path) => path.length > 1)
+            .map((path) => ({
+              type: 'Feature' as const,
+              properties: {},
+              geometry: { type: 'LineString' as const, coordinates: path.map((q) => [q.lng, q.lat]) },
+            })),
+        });
+      }
       const far = map.getZoom() <= FAR_ZOOM;
       for (const [id, card] of cards) {
         // Hamburg ist schon eine Stadt mit Karte: Ihr Hafen erscheint nur, wenn du dort einen Liegeplatz hast.
@@ -213,8 +244,8 @@ export const europeLayer: MapLayer = {
       destroy() {
         map.off('zoomend', onZoom);
         for (const card of cards.values()) card.element.remove();
-        for (const id of [MOVERS, ROUTES]) if (map.getLayer(id)) map.removeLayer(id);
-        for (const id of [MOVERS, ROUTES]) if (map.getSource(id)) map.removeSource(id);
+        for (const id of [MOVERS, ROUTES, SEAWAYS]) if (map.getLayer(id)) map.removeLayer(id);
+        for (const id of [MOVERS, ROUTES, SEAWAYS]) if (map.getSource(id)) map.removeSource(id);
       },
     };
   },

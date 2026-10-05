@@ -51,6 +51,7 @@ import {
   getShipments,
   harborPorts,
   isTradeActive,
+  MAX_HALLS,
   maxFactor,
   openItems,
   openOrders,
@@ -63,9 +64,13 @@ import {
   PRODUCERS,
   type Producer,
   pendingDeliveries,
+  portCapacity,
   portFor,
+  portHalls,
+  portLoad,
   portStock,
   shippableItems,
+  shippingMinutes,
   supplierReputation,
   type TradeOrder,
   tradeStats,
@@ -497,14 +502,25 @@ function HarborView() {
         const lots = Object.entries(portStock(state, id));
         const heat = customsHeat(state, id);
         const level = customsLevel(heat);
+        const load = portLoad(state, id);
+        const capacity = portCapacity(state, id);
+        const halls = portHalls(state, id);
+        const info = harborPorts().find((p) => p.id === id);
+        const waiting = shipments.filter((x) => x.status === 'quay' && x.portId === id);
         return (
           <Group
             key={id}
             title={`Lager ${harborName(id)}`}
             icon="warehouse"
             color="goods"
-            value={`Zoll ${level.label}`}
-            note={lots.length === 0 ? 'Leer. Bestell Container unten.' : undefined}
+            value={`${kg(load)} von ${kg(capacity)}`}
+            note={
+              waiting.length > 0
+                ? `Voll: ${kg(waiting.reduce((sum, x) => sum + x.amount, 0))} warten am Kai.`
+                : lots.length === 0
+                  ? 'Leer. Bestell Container unten.'
+                  : undefined
+            }
           >
             <List>
               {lots.map(([productId, lot]) => (
@@ -523,10 +539,22 @@ function HarborView() {
                   color="law"
                   title="Zoll-Heat"
                   tags={[
+                    { label: level.label, color: level.index >= 2 ? 'danger' : 'law', icon: 'shield' },
                     { label: `${Math.round(heat)} von 100`, color: level.index >= 2 ? 'danger' : 'law', icon: 'flame' },
                   ]}
                 />
               </ListItem>
+              {info && halls < MAX_HALLS && (
+                <ListItem
+                  action
+                  icon="warehouse"
+                  value={formatEuro(info.hallCost)}
+                  disabled={state.wallet.clean < info.hallCost}
+                  onClick={() => dispatch({ type: 'trade.buildHall', payload: { portId: id } })}
+                >
+                  {`Halle bauen (+${kg(info.hallCapacity)})`}
+                </ListItem>
+              )}
             </List>
           </Group>
         );
@@ -549,7 +577,11 @@ function HarborView() {
         )}
         <List>
           {PRODUCERS.map((p) => (
-            <ListItem key={p.id} onClick={() => setProducer(p)} value={`${p.days} T.`}>
+            <ListItem
+              key={p.id}
+              onClick={() => setProducer(p)}
+              value={`${Math.round(shippingMinutes(p.id, target) / 1440)} T.`}
+            >
               <ItemContent
                 icon={p.byRoad ? 'truck' : 'ship'}
                 color="goods"
@@ -572,11 +604,17 @@ function HarborView() {
             {shipments.map((x) => (
               <ListItem
                 key={x.id}
-                value={x.status === 'customs' ? 'Zoll' : clock.formatDuration(Math.max(0, x.arrivesAt - state.time))}
+                value={
+                  x.status === 'customs'
+                    ? 'Zoll'
+                    : x.status === 'quay'
+                      ? 'am Kai'
+                      : clock.formatDuration(Math.max(0, x.arrivesAt - state.time))
+                }
               >
                 <ItemContent
-                  icon={x.status === 'customs' ? 'siren' : 'ship'}
-                  color={x.status === 'customs' ? 'danger' : 'place'}
+                  icon={x.status === 'customs' ? 'siren' : x.status === 'quay' ? 'anchor' : 'ship'}
+                  color={x.status === 'customs' ? 'danger' : x.status === 'quay' ? 'warn' : 'place'}
                   title={`${kg(x.amount)} ${productName(x.productId)}`}
                   tags={[
                     { label: PRODUCERS.find((p) => p.id === x.producerId)?.country ?? x.producerId, color: 'goods' },
