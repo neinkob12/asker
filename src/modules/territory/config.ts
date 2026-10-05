@@ -35,9 +35,14 @@ export const SALE_DISPLACEMENT = 0.5;
  * Einfluss pro Verkauf je Stadt (Auftrag 30, fehlt: 1). In Hamburg sitzen die Gangs fester: Wer aus Köln kommt, hat
  * viel Geld und Leute; das erste Hamburger Veedel soll trotzdem etwa 7 bis 10 Tage dauern (Balancing-Bericht). Berlin
  * (Auftrag 37): viele billige Spots und viel Nachtleben bringen sehr viele Verkäufe; ohne Dämpfung war die Stadt in zwei
- * bis fünf Tagen komplett, mit 0,3 in 6 bis 14 (Median 8).
+ * bis fünf Tagen komplett, mit 0,3 in 6 bis 14 (Median 8). München (Auftrag 38) wie Hamburg 0,6: ohne Dämpfung als
+ * dritte Stadt nach 5 bis 19 Tagen (Median 7), mit 0,6 als zweite nach 13 bis 15 (Median 14), als dritte Median 9,5.
  */
-export const SALE_INFLUENCE_FACTOR_BY_CITY: Readonly<Record<string, number>> = { hamburg: 0.6, berlin: 0.3 };
+export const SALE_INFLUENCE_FACTOR_BY_CITY: Readonly<Record<string, number>> = {
+  hamburg: 0.6,
+  berlin: 0.3,
+  muenchen: 0.6,
+};
 
 // --- Präsenz und Verfall (stündlich) ------------------------------------------------------------------------
 

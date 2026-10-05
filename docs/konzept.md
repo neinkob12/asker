@@ -210,7 +210,7 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   Zwischenhändler für ein Veedel). Große Städte bekommen Capos, die Rechte Hand gibt im Tagesbericht einen Satz Rat.
 - **Deutschland (Auftrag 36):** Nach Köln ist die Reihenfolge frei. Jede Stadt hat einen Kontakt mit Gesicht und Stimme
   und einen Satz Dreh; nach „<Stadt> komplett“ ruft die nächstgelegene freie an, die anderen melden sich per Handy, ein
-  Tipp auf ihre Glas-Karte in der Deutschland-Ansicht holt den Anruf. München und Frankfurt stehen schon als
+  Tipp auf ihre Glas-Karte in der Deutschland-Ansicht holt den Anruf. Frankfurt steht schon als
   „bald“ da. Ein Autobahn-Netz (A1, A3, A3/A9, A24, A9, A7/A5) trägt Fahrten zwischen allen Städten, auch über eine
   Stadt hinweg. Die Rechte Hand mit Vollmacht heißt Statthalter; schlafende Städte haben an etwa 3 von 100 Tagen eine
   Razzia (halber Tag oder kleines Minus, eine Zeile vom Statthalter). Bei der Übergabe kommt ein Startpaket mit (neue

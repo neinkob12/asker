@@ -196,13 +196,12 @@ Overture, Straßennetz mit Zufahrten A111, A115 und A113, 40 Spots (vier Clubs n
 Silvester mit Feuerwerk), Mirko zu Hause in Berlin (`Supplier.home`), Wahrzeichen. Der Bot spielt Berlin als zweite Stadt
 (Median 8 Tage bis komplett). Für 38 und 39: `check-roads` prüft Städte ohne Hafen ohne Hafen, die Migrationen von
 `gangs` und `territory` legen fehlende Gangs und Veedel allgemein an.
-**Stand Auftrag 38 (Welle 3):** umgesetzt (PR #63). München ist spielbar: zwölf Stadtbezirke mit Grenzen aus Overture,
-24 Spots, fünf Lager, vier Gangs, Straßennetz mit Zufahrten, Wahrzeichen, Dreh „teuer und streng“ als Daten (höchste
-Löhne und Immobilien, Polizei startet als Händler, Oktoberfest, Bayern-Heimspiel, Enzo aus Verona über den Brenner mit
-Zoll). Balancing: München als zweite Stadt komplett nach 8–16 Tagen (Median 12, 8 Seeds), als dritte nach Hamburg
-8–18 Tage (Median 13, 6 Seeds); Mindest-Startgeld 60.000 €. Köln komplett jetzt Tag 20–29 (Mittel 23,3 über 12 Seeds,
-vorher 21–27, Mittel 21,9): allein, weil der Markt den Preisindex jeder spielbaren Stadt mit demselben Zufall würfelt
-(`market.stepIndex`), jede weitere Stadt verschiebt die Würfelfolge für Köln.
+**Stand Auftrag 38 (Welle 3):** umgesetzt (PR #63, nach Berlin gemergt). München ist die vierte spielbare Stadt: zwölf
+Stadtbezirke mit Grenzen aus Overture, 24 Spots (`spots/config-muenchen.ts`), fünf Lager, vier Gangs mit Stimmen
+(`gangs/texts-muenchen.ts`), Straßennetz mit Zufahrten, Wahrzeichen, Dreh „teuer und streng“ als Daten (höchste Löhne
+und Immobilien, Polizei startet als Händler, Oktoberfest, Bayern-Heimspiel, Enzo aus Verona über den Brenner mit Zoll).
+Migrationen gangs 7 und territory 6. Balancing: München als dritte Stadt nach Berlin Median 9,5 Tage, als zweite 14;
+Köln komplett unverändert gegenüber `main`.
 
 `src/core/`, `scripts/`, `package.json` und die Doku-Dateien gehören in den Wellen niemandem fest: nur erweitern, beim
 Mergen beide Seiten behalten. `CLAUDE.md`, `docs/architektur.md` und `docs/konzept.md` ergänzt jede Session in ihrem

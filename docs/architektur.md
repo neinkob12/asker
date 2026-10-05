@@ -750,14 +750,13 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   `START_PACK_MAX_STAFF` 5 und `START_PACK_RANK_BY_LEVEL` (`hierarchy/config.ts`), `SLEEP_RAID_*` (`city/config.ts`). Der
   Bot spart in späteren Städten erst ab fünf Läufern für den Liegeplatz (vorher ging das Geld ab zwei Läufern in die
   Wäsche, Hamburg hatte zwei Wochen lang einen Spot).
-- **München (Auftrag 38):** `BALANCE_ORDER=muenchen` (Bot `cityOrder`) legt die Stadt nach Köln fest. München als
-  zweite Stadt komplett nach 13/8/13/16/9/11/10/15 Tagen (Seeds 1–8, Median 12), als dritte nach Hamburg
-  14/12/16/10/8/18 Tage (Seeds 1–6, Median 13). Mit 54.000 € Mindest-Startgeld blieb Seed 4 in 25 Tagen bei einem
-  Bezirk hängen (Köln schlief dort ohne Gewinn, Löhne ×1,4 fraßen den Umsatz), deshalb `START_MONEY_MIN_BY_CITY.muenchen`
-  60.000 € (30.000 € je Faktor `propertyFactor` 2). Köln komplett: vorher Tag 22/22/23/27/21/21/22/21/21/21/21/21
-  (Seeds 1–12, Ø 21,9), nachher 23/23/29/28/21/23/23/23/20/20/24/23 (Ø 23,3). Das liegt nur an der Würfelfolge des
-  Markts: `stepIndex` würfelt den Preisindex für jede spielbare Stadt aus demselben Strom; ein zusätzlicher Wurf je Ware
-  auf `main` ergibt genau dieselben Tage. Jede weitere Stadt (37, 39) verschiebt Köln wieder.
+- **München (Auftrag 38, nach dem Merge mit Berlin):** `BALANCE_ORDER` (Bot `cityOrder`) legt die Städte nach Köln
+  fest. Einfluss pro Verkauf in München gedämpft wie in Hamburg (`SALE_INFLUENCE_FACTOR_BY_CITY.muenchen` 0,6): ohne
+  Dämpfung war München als dritte Stadt (Köln → Berlin → München) nach 6/6/7/13/5/10/19/7 Tagen komplett (Median 7),
+  mit 0,6 nach 7/6/9/18/6/10/23/15 (Median 9,5); als zweite Stadt nach 14/15/14/13/13/13/15/15 (Median 14, Seeds 1–8).
+  `START_MONEY_MIN_BY_CITY.muenchen` 60.000 € (30.000 € je `propertyFactor` 2): als dritte Stadt egal (der Bot bringt aus
+  Berlin mehr mit), als zweite nötig (mit 54.000 € und Faktor 0,5 Median 20 statt 16 Tage). Köln komplett gleich wie
+  auf `main` (22/22/22/23/23/24/22/21/21/22/17/20, Seeds 1–12): Der Markt würfelt den Index nur noch für freie Städte.
 
 - Auftrag 37 (Berlin als dritte spielbare Stadt; Köln 16 Seeds, Tage pro Stadt 8 Seeds, vorher = `main` nach Auftrag 34):
   Köln komplett Ø Tag 22,25 (19–29) → 21,7 (17–24), „Boss von Köln“ Ø Tag 15,9 → 16,4, erstes Veedel Ø Tag 6,5 → 6,6,
