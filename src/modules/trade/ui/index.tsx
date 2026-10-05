@@ -1117,6 +1117,8 @@ registerPhoneApp({
   component: TradeApp,
   badge: (state) => openOrders(state).length,
   dock: { replaces: 'suppliers.app', when: isTradeActive },
+  // Vor dem Verkauf gibt es hier nichts zu tun (Auftrag 43, G12: die Suche fand eine leere App).
+  hiddenWhen: (state) => !isTradeActive(state),
 });
 
 /** HUD in der Hafen-Phase: Ware in allen Häfen (statt des Lagers der Stadt). */

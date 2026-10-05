@@ -358,7 +358,14 @@ function RightHandPage() {
   const [confirm, setConfirm] = useState(false);
   const rh = getRightHand(state);
   const m = rh ? getStaffMember(state, rh.staffId) : undefined;
-  if (!rh || !m) return <Empty icon="crown">Du hast keine Rechte Hand.</Empty>;
+  if (!rh || !m) {
+    // Auftrag 43 (G12): sagen, wie man eine bekommt, statt nur „keine“.
+    return (
+      <Empty icon="crown">
+        {`In ${cityName(activeCity(state))} hast du keine Rechte Hand. Ernennen kannst du sie im Personal, ab Level ${RIGHT_HAND_MIN_LEVEL} und Loyalität ${RIGHT_HAND_MIN_LOYALTY}.`}
+      </Empty>
+    );
+  }
   const satisfaction = rightHandSatisfaction(state) ?? 0;
   const configure = (settings: Partial<RightHandSettings>) =>
     dispatch({ type: 'hierarchy.configureRightHand', payload: { settings } });

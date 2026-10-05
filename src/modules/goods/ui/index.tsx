@@ -25,6 +25,7 @@ import {
   registerHudItem,
   registerPanel,
   registerPhoneApp,
+  registerSearch,
   Slot,
   shallowEqual,
   useGame,
@@ -648,4 +649,20 @@ registerAdvisor({
           action: (ui) => ui.openPhone('goods.app'),
         };
   },
+});
+
+// Eigene Lager der Stadt in der Suche (Auftrag 43, G12: „Lager“ fand die Garage Barmbek nicht).
+registerSearch({
+  id: 'goods.warehouses',
+  label: 'Lager',
+  order: 25,
+  items: (state) =>
+    getWarehouses(state, activeCity(state)).map((w) => ({
+      id: `warehouse:${w.id}`,
+      title: w.name,
+      subtitle: 'Eigenes Lager',
+      icon: 'warehouse',
+      keywords: 'Lager Ware Bestand Regale Tresor',
+      run: (ui) => ui.openPanel('goods.warehouse', { warehouseId: w.id }),
+    })),
 });

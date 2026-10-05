@@ -374,7 +374,7 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier' 
     const city = cityAt(order.lng, order.lat);
     if (!isPlayerIn(state, city)) return { ok: false, reason: `Du bist nicht in ${cityName(city)}.` };
   } else {
-    const driver = rightHandDriver(state);
+    const driver = rightHandDriver(state, cityAt(order.lng, order.lat));
     if (!driver.ok) return { ok: false, reason: driver.reason };
     courierId = driver.member.id;
     speed = Math.round(

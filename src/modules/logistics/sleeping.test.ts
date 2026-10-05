@@ -54,5 +54,7 @@ describe('Ware am Kai einer schlafenden Stadt (Auftrag 43)', () => {
     sim.advance(6 * 60);
     expect(getCargo(sim.state, 'koeln')).toHaveLength(1);
     expect(storageStats(sim.state).rejected).toBe(rejected);
+    // Und keine Frage des Kölner Hafenmeisters in Hamburg (G2).
+    expect(messages.thread(sim.state, 'other:harbor').filter((m) => m.options).length).toBe(0);
   });
 });

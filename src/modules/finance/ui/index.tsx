@@ -389,7 +389,12 @@ function PerSpot(props: { period: Period; filter: FinanceFilter; onPick: (f: Fin
 function PerLieutenant(props: { period: Period; filter: FinanceFilter; onPick: (f: FinanceFilter) => void }) {
   const { state } = useGame();
   const { days, offset } = periodSpan(props.period);
-  const rows = lieutenantRowsOf(state, days, offset);
+  // Wie „Pro Spot“: mit Stadt-Filter nur deren Leutnants, sonst (außer bei „Alle Städte“) die der aktiven Stadt (Auftrag 43).
+  const city =
+    props.filter.kind === 'city' ? props.filter.cityId : props.filter.kind === 'all' ? null : activeCity(state);
+  const rows = lieutenantRowsOf(state, days, offset).filter(
+    (r) => city === null || (getStaffMember(state, r.staffId)?.cityId ?? 'koeln') === city,
+  );
   if (rows.length === 0) return null;
   return (
     <Group

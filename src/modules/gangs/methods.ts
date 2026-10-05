@@ -29,6 +29,7 @@ import {
   store,
   take,
   type Warehouse,
+  warehouseCity,
 } from '../goods';
 import { allRightHands, isLieutenant } from '../hierarchy';
 import { addHeat, canSnitch, tipOffAgainstPlayer } from '../police';
@@ -162,6 +163,19 @@ const NEIGHBOR: Contact = {
   look: { feminine: true, age: 74, hair: 'bun', hairColor: 6, glasses: 'round', top: 'raincoat', topColor: 5 },
   voice: { pitch: 1.1, rate: 0.9 },
 };
+
+/** Nachbarin pro Stadt (Auftrag 43: Frau Krämer meldete Einbrüche in Hamburg und Berlin); Köln behält ihren Chat. */
+const NEIGHBOR_NAMES: Record<string, string> = {
+  hamburg: 'Frau Petersen',
+  berlin: 'Frau Schulze',
+  muenchen: 'Frau Huber',
+  frankfurt: 'Frau Becker',
+};
+
+function neighborIn(cityId: string): Contact {
+  const name = NEIGHBOR_NAMES[cityId];
+  return name ? { ...NEIGHBOR, id: `other:neighbor:${cityId}`, name: `${name} (Nachbarin)` } : NEIGHBOR;
+}
 
 // ---------------------------------------------------------------------------------------------
 // Lesen
@@ -530,10 +544,11 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
   incident.reported = true;
   const w = incident.warehouseId ? getWarehouse(ctx.state, incident.warehouseId) : undefined;
   const warehouse = w?.name ?? 'Lager';
+  const neighbor = neighborIn(incident.warehouseId ? warehouseCity(incident.warehouseId) : 'koeln');
   if (!incident.amount || !incident.productId) {
     // Verscheucht.
     messages.send(ctx, {
-      contact: NEIGHBOR,
+      contact: neighbor,
       text: texts.pick(ctx, 'gang:burglaryFoiled', INCIDENT_TEXTS.burglaryFoiled, { warehouse }),
     });
     journal.add(ctx, `Einbruchsversuch am ${warehouse}: Deine Wache hat sie verscheucht.`, 'good');
@@ -554,7 +569,7 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
   });
   const options = incidentOptions(ctx.state, incident);
   incident.messageId = messages.send(ctx, {
-    contact: NEIGHBOR,
+    contact: neighbor,
     text,
     options,
     expiresIn: Math.max(60, incident.expiresAt - ctx.now),

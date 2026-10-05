@@ -13,9 +13,18 @@ import { hasBerth } from '../logistics';
 import { hottestVeedel } from '../police';
 import { getSpots } from '../spots';
 import { getStaff } from '../staff';
+import { shipmentsInTransit } from '../suppliers';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import { getDeliveries, getOrders, getShipments, tradeStats } from '../trade';
 import { veedelCity } from '../veedel';
+
+/**
+ * Fortschritt einer Bestell-Quest (Auftrag 43, G6): bestellt nach dem Start (Zähler) oder schon vorher, solange die
+ * Lieferung für die Stadt noch unterwegs ist. Vorher blieb die Quest auf 0/1, wer zuerst bestellt hatte.
+ */
+function orderedFor(cityId: string): (state: GameState) => number {
+  return (state) => Math.max(state.modules.quests.progress, shipmentsInTransit(state, cityId).length > 0 ? 1 : 0);
+}
 
 export const PETER: Contact = {
   id: 'quest:peter',
@@ -604,6 +613,7 @@ export const QUESTS: readonly QuestDef[] = [
     hint: 'Lieferanten-App: Paket bestellen, die Ware kommt in dein Lager in Hamburg.',
     target: 1,
     count: { 'shipment.ordered': (p) => (p.cityId === 'hamburg' ? 1 : 0) },
+    measure: orderedFor('hamburg'),
     goTo: 'suppliers',
     reward: [{ kind: 'money', money: 'dirty', amount: 500 }],
   },
@@ -849,6 +859,7 @@ function cityChapter(t: CityChapterTexts): QuestDef[] {
       hint: `Lieferanten-App: Paket bestellen, die Ware kommt in dein Lager in ${t.name}.`,
       target: 1,
       count: { 'shipment.ordered': (p) => (p.cityId === city ? 1 : 0) },
+      measure: orderedFor(city),
       goTo: 'suppliers',
       reward: [{ kind: 'money', money: 'dirty', amount: 500 }],
     },

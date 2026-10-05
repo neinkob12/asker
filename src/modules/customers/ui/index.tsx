@@ -26,6 +26,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { activeCity, citiesUnlocked, cityOfSpot } from '../../city';
 import { getGang } from '../../gangs';
 import { formatProductAmount, getProduct, productName } from '../../goods';
 import { activeRunnerAt } from '../../staff';
@@ -208,7 +209,10 @@ function CustomersSection() {
   const { state } = useGame();
   const ui = useUi();
   const stats = getSalesStats(state);
-  const regulars = getRegulars(state, { status: 'active' });
+  // Stammkunden der Stadt, in der du bist (Auftrag 43); die Zahlen darüber zählen über alle Städte.
+  const city = activeCity(state);
+  const regulars = getRegulars(state, { status: 'active' }).filter((r) => cityOfSpot(state, r.spotId) === city);
+  const allCities = citiesUnlocked(state).length > 1;
   const offered = getOrders(state, { status: 'offered' }).length;
   const waitingNow = state.modules.customers.waiting.length;
   const missed = Object.entries(stats.missedByProduct)
@@ -231,7 +235,7 @@ function CustomersSection() {
       }
     >
       <KeyValue label="Wartet gerade an deinen Spots" value={waitingNow} tone={waitingNow > 0 ? 'warn' : undefined} />
-      <KeyValue label="Kunden bedient" value={stats.customersServed} />
+      <KeyValue label={allCities ? 'Kunden bedient, alle Städte' : 'Kunden bedient'} value={stats.customersServed} />
       <KeyValue
         label="Ohne Ware gegangen"
         value={stats.customersLost}
@@ -241,7 +245,10 @@ function CustomersSection() {
         Kunden warten nur eine Weile am Spot. Verkaufst du nicht rechtzeitig (selbst an den Spot stellen, verkaufen oder
         einen Läufer hinstellen) oder ist das Lager leer, gehen sie wieder. Das kostet etwas Ruf.
       </Disclosure>
-      <KeyValue label="Umsatz seit Spielbeginn" value={formatEuro(stats.revenue)} />
+      <KeyValue
+        label={allCities ? 'Umsatz seit Spielbeginn, alle Städte' : 'Umsatz seit Spielbeginn'}
+        value={formatEuro(stats.revenue)}
+      />
       <KeyValue label="Lieferungen / Großhandel" value={`${stats.deliveries} / ${stats.wholesaleDeals}`} />
       <KeyValue label="Fanden es zu teuer" value={stats.tooExpensive} />
       <KeyValue label="Haben Streckmittel bemerkt" value={stats.cutNoticed} />

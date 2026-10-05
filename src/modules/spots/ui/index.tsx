@@ -23,9 +23,9 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity } from '../../city';
+import { activeCity, cityName, isBusinessSold } from '../../city';
 import { getSalesStats, isPlayerAway, playerSpot, waitingAt } from '../../customers';
-import { formatProductAmount } from '../../goods';
+import { formatProductAmount, getWarehouses } from '../../goods';
 import { activeRunnerAt } from '../../staff';
 import { veedelName } from '../../veedel';
 import {
@@ -264,6 +264,35 @@ onGameEvent('police.raid', 'spots.raidLook', (p, _ui, state) => {
 });
 
 // Empfehlungen und Suche
+// Erster Spot in einer neuen Stadt (Auftrag 43, G6): Ohne offenen Spot gibt es keine Kunden. Erst mit Lager, damit es
+// Ware zu verkaufen gibt; der günstigste zuerst.
+registerAdvisor({
+  id: 'spots.firstSpot',
+  advise: (state) => {
+    const city = activeCity(state);
+    if (isBusinessSold(state) || getSpots(state, city).length > 0 || getWarehouses(state, city).length === 0)
+      return null;
+    const spot = lockedSpots(state)
+      .filter((s) => spotCity(s) === city)
+      .sort((a, b) => (a.unlockCost ?? 0) - (b.unlockCost ?? 0))[0];
+    if (!spot) return null;
+    return {
+      id: 'spots.firstSpot',
+      priority: 68,
+      icon: 'pin',
+      title: `Ersten Spot in ${cityName(city)} freischalten`,
+      text: `Ohne Spot keine Kunden. Am günstigsten: ${spot.name}.`,
+      ...(spot.unlockCost ? { cost: spot.unlockCost } : {}),
+      actionLabel: 'Zum Spot',
+      target: { lng: spot.lng, lat: spot.lat },
+      action: (ui) => {
+        ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
+        ui.openPanel('spots.spot', { spotId: spot.id });
+      },
+    };
+  },
+});
+
 registerAdvisor({
   id: 'spots.sell',
   advise: (state) => {

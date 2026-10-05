@@ -159,7 +159,7 @@ describe('Bestellregeln und Städte', () => {
 });
 
 describe('Rechte Hand: Aufträge und Bestand der Stadt des Auftrags', () => {
-  it('Bestand nur in Köln: Eine Hamburger Anfrage wartet, statt sofort beim Boss zu landen', () => {
+  it('Eine Hamburger Anfrage fasst die Kölner Rechte Hand nicht an (Auftrag 43, G1)', () => {
     const sim = quietGame();
     const a = recruit(sim, 'runner');
     const b = recruit(sim, 'runner');
@@ -190,11 +190,16 @@ describe('Rechte Hand: Aufträge und Bestand der Stadt des Auftrags', () => {
     expect(getOrders(sim.state, { status: 'offered' }).map((o) => o.id)).toContain(order.id);
     expect(post.passed).not.toContain(order.id);
     expect(post.done.leftToBoss).toBe(0);
-    // Kurz vor Fristende bleibt sie beim Spieler, mit dem richtigen Grund.
+    // Auch kurz vor Fristende: Die Anfrage gehört nach Hamburg, sie fährt nicht hin und gibt sie nicht ab.
     order.expiresAt = sim.state.time + 10;
     sim.advance(5);
-    expect(post.passed).toContain(order.id);
-    expect(post.log[0].text).toMatch(/nicht genug/);
+    expect(post.passed).not.toContain(order.id);
+    // Und schicken lässt sie sich auch nicht: In Hamburg gibt es keine Rechte Hand.
+    store(sim.ctx('goods'), { productId: 'weed', amount: 100, warehouseId: 'werkstatt-ottensen' });
+    expect(sim.dispatch({ type: 'customers.acceptOrder', payload: { orderId: order.id, by: 'rightHand' } })).toEqual({
+      ok: false,
+      reason: 'In Hamburg hast du keine Rechte Hand, die ausfahren könnte.',
+    });
   });
 });
 

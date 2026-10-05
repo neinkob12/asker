@@ -23,7 +23,7 @@ import {
 import { activeCity, cityOfSpot } from '../../city';
 import { getMarketEventDef, marketEvents, marketEventText } from '../../events';
 import { allProducts, getProduct, productName, stockSummary } from '../../goods';
-import { allVeedel, veedelName } from '../../veedel';
+import { allVeedel, veedelCity, veedelName } from '../../veedel';
 import {
   getCompetitionFactor,
   getSpotPrice,
@@ -230,7 +230,10 @@ function MarketOverview(props: { productId?: string }) {
 /** Die auffälligsten Chancen: Produkte mit der stärksten Nachfrage ohne Angebot. */
 function hotSpots(state: GameState): { productId: string; veedelId: string; factor: number }[] {
   const result: { productId: string; veedelId: string; factor: number }[] = [];
+  // Nur Veedel der Stadt, in der du bist (Auftrag 43, G8: in Hamburg stand Neustadt-Nord).
+  const city = activeCity(state);
   for (const [veedelId, products] of Object.entries(state.modules.market.pressure)) {
+    if (veedelCity(veedelId) !== city) continue;
     for (const productId of Object.keys(products)) {
       const factor = supplyDemandFactor(state, productId, veedelId);
       if (factor > 1.03) result.push({ productId, veedelId, factor });
