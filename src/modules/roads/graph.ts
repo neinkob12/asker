@@ -1,10 +1,11 @@
-// Straßengraphen: dekodiert die Netze der Städte (network.ts, network-hamburg.ts), findet die nächste Straße zu einem
+// Straßengraphen: dekodiert die Netze der Städte (network.ts, network-hamburg.ts, network-berlin.ts), findet die nächste Straße zu einem
 // Punkt (Raster-Index) und sucht Routen mit A*. Reine Rechnung ohne Zufall und ohne DOM, damit Simulation und Karte
 // dieselben Routen bekommen. Kosten = Fahrzeit (Länge geteilt durch das Tempo der Straßenart), Ergebnis = Weg und
 // Länge in Metern. Jede Stadt hat ihr eigenes Netz (Auftrag 30); es wird erst beim ersten Gebrauch dekodiert.
 
 import type { LngLat } from '../../core';
 import * as koeln from './network';
+import * as berlin from './network-berlin';
 import * as hamburg from './network-hamburg';
 
 export type RoadClass = (typeof koeln.ROAD_CLASSES)[number];
@@ -51,6 +52,14 @@ const NETWORKS: readonly NetworkData[] = [
     nodes: hamburg.ROAD_NODES,
     edges: hamburg.ROAD_EDGES,
     approaches: hamburg.ROAD_APPROACHES,
+  },
+  {
+    id: 'berlin',
+    box: berlin.ROAD_BOX,
+    lat0: berlin.ROAD_LAT0,
+    nodes: berlin.ROAD_NODES,
+    edges: berlin.ROAD_EDGES,
+    approaches: berlin.ROAD_APPROACHES,
   },
 ];
 

@@ -312,6 +312,35 @@ export const DEALERS: readonly DealerInfo[] = [
     veedelId: 'harburg',
     about: 'Student mit großem Freundeskreis südlich der Elbe.',
   },
+  // Berlin (Auftrag 37)
+  {
+    id: 'yusuf',
+    name: 'Yusuf (Kotti)',
+    cityId: 'berlin',
+    veedelId: 'kreuzberg',
+    about: 'Betreibt einen Späti am Kottbusser Tor, der nie zumacht.',
+  },
+  {
+    id: 'lena',
+    name: 'Lena von der Tür',
+    cityId: 'berlin',
+    veedelId: 'friedrichshain',
+    about: 'Macht Einlass im Club und weiß, wer drinnen was braucht.',
+  },
+  {
+    id: 'piotr',
+    name: 'Piotr (Neukölln)',
+    cityId: 'berlin',
+    veedelId: 'neukoelln',
+    about: 'Bar in der Weserstraße, Stammgäste aus halb Europa.',
+  },
+  {
+    id: 'jonas',
+    name: 'Jonas (Prenzlauer Berg)',
+    cityId: 'berlin',
+    veedelId: 'prenzlauer-berg',
+    about: 'Grafiker, beliefert die halbe Agenturszene am Wochenende.',
+  },
 ];
 
 // --- Stammabnehmer (Auftrag 34) ---

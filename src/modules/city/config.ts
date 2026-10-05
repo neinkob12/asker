@@ -200,8 +200,8 @@ export const WELCOME_TEXTS: Readonly<Record<string, readonly string[]>> = {
 };
 
 /**
- * Die Anrufe der Städte (Auftrag 36). Hamburg: Fietes Gespräch von oben. Berlin, München und Frankfurt sind noch
- * Schablonen (rufen erst an, wenn ihr Inhalt da ist); ihre Texte stehen schon, damit die Aufträge 37 bis 39 nur noch
+ * Die Anrufe der Städte (Auftrag 36). Hamburg: Fietes Gespräch von oben, Berlin: Dilara (Auftrag 37). München und
+ * Frankfurt sind noch Schablonen (rufen erst an, wenn ihr Inhalt da ist); ihre Texte stehen schon, damit die Aufträge 37 bis 39 nur noch
  * Daten liefern.
  */
 export const CITY_OFFERS: Readonly<Record<string, CityOffer>> = {
@@ -237,7 +237,11 @@ export const CITY_OFFERS: Readonly<Record<string, CityOffer>> = {
     come: 'Ich komme nach Berlin',
     welcome: [
       'Da bist du. Willkommen in Berlin.',
-      'Erst ein Lager, dann eine Ecke. Am Wochenende brennt hier die Luft, plan das ein.',
+      'Erst ein Lager: Neukölln, Friedrichshain, Lichtenberg, Wedding oder Schöneberg. Mirko liefert dir hin, der ist ' +
+        'hier zu Hause.',
+      'Dann eine Ecke. Die Clubs machen Freitagabend auf und Montagfrüh zu, dazwischen brennt die Luft. Unter der Woche ' +
+        'läuft es an den Bahnhöfen und in den Parks.',
+      'Die Bullen sind entspannt. Die Türsteher und die Kotti-Familie nicht. Leg dich nicht mit allen gleichzeitig an.',
     ],
   },
   muenchen: {

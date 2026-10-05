@@ -9,7 +9,7 @@
 // die A1, interCityRoute). Fehler nennen Ort und Abstand.
 
 import { distanceMeters, type GameState, type LngLat } from '../../../core';
-import { playableCities } from '../../city';
+import { getCity, playableCities } from '../../city';
 import { warehouseSites } from '../../goods';
 import { portPlace } from '../../logistics';
 import { getAllSpots, spotCity } from '../../spots';
@@ -42,14 +42,15 @@ function cityPlaces(
   state: GameState,
   cityId: string,
   center: LngLat,
-): { spots: Place[]; warehouses: Place[]; port: Place; center: LngLat } {
-  const port = portPlace(cityId);
+): { spots: Place[]; warehouses: Place[]; port: Place | null; center: LngLat } {
+  // Städte ohne Hafen (Berlin): kein Hafen zu prüfen (portPlace fiele sonst auf den Kölner zurück).
+  const port = getCity(cityId)?.portId ? portPlace(cityId) : null;
   return {
     spots: getAllSpots(state)
       .filter((s) => spotCity(s) === cityId)
       .map((s) => ({ name: `Spot ${s.name}`, lng: s.lng, lat: s.lat })),
     warehouses: warehouseSites(cityId).map((w) => ({ name: `Lager ${w.name}`, lng: w.lng, lat: w.lat })),
-    port: { name: `Hafen ${port.name}`, lng: port.lng, lat: port.lat },
+    port: port ? { name: `Hafen ${port.name}`, lng: port.lng, lat: port.lat } : null,
     center,
   };
 }
@@ -94,7 +95,7 @@ function checkCity(
     .map((s) => ({ name: `Autobahn-Einfahrt aus ${s.name}`, ...roadEntryFrom(s, supplierVia(s, cityId), center) }));
   // Orte, die schon zu weit weg liegen, nicht noch einmal in jeder Route melden.
   const far = new Set<string>();
-  for (const place of [...spots, ...warehouses, port, ...entries]) {
+  for (const place of [...spots, ...warehouses, ...(port ? [port] : []), ...entries]) {
     const near = nearestRoadPoint(place);
     const meters = near?.meters ?? Infinity;
     if (meters > MAX_SNAP_METERS) {
@@ -110,7 +111,7 @@ function checkCity(
   const pairs: [Place, Place][] = [];
   for (const w of warehouses) {
     for (const s of spots) pairs.push([w, s], [s, w]);
-    pairs.push([port, w], [w, port]);
+    if (port) pairs.push([port, w], [w, port]);
   }
   for (const [from, to] of pairs) {
     if (far.has(from.name) || far.has(to.name)) continue;

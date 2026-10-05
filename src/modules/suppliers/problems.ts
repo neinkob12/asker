@@ -182,12 +182,13 @@ const RIVER_BY_CITY: Readonly<Record<string, string>> = { koeln: 'Rhein', hambur
 
 /**
  * Weg eines Lieferanten in eine Stadt, wo er von der Regel abweicht (sonst: Hafen = Schiff, alle anderen Autobahn).
- * Kalle beliefert Köln aus Kalk, Hein Hamburg aus der Stadt, Daan kommt über die Grenze.
+ * Kalle beliefert Köln aus Kalk, Hein Hamburg und Mirko Berlin aus der Stadt, Daan kommt über die Grenze.
  */
 export const SUPPLIER_ROUTES: Readonly<Record<string, Readonly<Record<string, RouteKind>>>> = {
   koeln: { koeln: 'local' },
   hamburg: { hamburg: 'local' },
-  amsterdam: { koeln: 'border', hamburg: 'border' },
+  berlin: { berlin: 'local' },
+  amsterdam: { koeln: 'border', hamburg: 'border', berlin: 'border' },
 };
 
 /** Weg der Lieferung (supplier so, wie er in der Stadt auftritt). */

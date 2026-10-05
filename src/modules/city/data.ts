@@ -1,6 +1,6 @@
-// Die Städte im Spiel (Auftrag 30 und 36): Köln (Einstieg), Hamburg und Schablonen für Berlin, München und Frankfurt
+// Die Städte im Spiel (Auftrag 30, 36 und 37): Köln (Einstieg), Hamburg, Berlin und Schablonen für München und Frankfurt
 // (nur Daten-Skelett ohne Veedel, Spots und Gangs; im Spiel gesperrt und in der Deutschland-Ansicht „bald“, die Aufträge
-// 37 bis 39 füllen sie). Nach Köln ist die Reihenfolge frei: Jede Stadt hat einen Kontakt mit Gesicht und Stimme, der
+// 38 und 39 füllen sie). Nach Köln ist die Reihenfolge frei: Jede Stadt hat einen Kontakt mit Gesicht und Stimme, der
 // nach „<Stadt> komplett“ anruft, und einen Satz Dreh (Glas-Karte der Deutschland-Ansicht). Faktoren: 1 = Köln.
 
 import type { Contact, LngLat } from '../../core';
@@ -170,23 +170,27 @@ export const CITIES: readonly CityDef[] = [
     pitch: 'Der Hafen: Container kiloweise, aber Zoll und Polizei sind eine Stufe härter.',
   },
   {
-    // Schablone (Auftrag 30, Inhalt mit Auftrag 37): Daten-Skelett, noch ohne Veedel, Spots, Gangs und Straßennetz.
+    // Auftrag 37: Die Nacht. Clubs von Freitagabend bis Montagfrüh, viel Nachtleben, viele Spots, starke Gangs, die
+    // Polizei eher locker, Mieten mittel. Alles als Daten: Veedel (nightlife, policePresence), Spots (Clubs mit
+    // weekHours), Gangs, Polizei (CHECK_FACTOR_BY_CITY) und Events.
     id: 'berlin',
     name: 'Berlin',
-    center: { lng: 13.405, lat: 52.52 },
-    view: { center: { lng: 13.405, lat: 52.52 }, zoom: 12.2, mobileZoom: 11.2, pitch: 50, bearing: -20 },
-    bounds: [13.2, 52.42, 13.6, 52.62],
+    center: { lng: 13.405, lat: 52.505 },
+    // Blick nach Nordosten über Kreuzberg: Spree und Friedrichshain vorn rechts, Mitte und der Fernsehturm dahinter.
+    view: { center: { lng: 13.405, lat: 52.508 }, zoom: 12.4, mobileZoom: 11.3, pitch: 50, bearing: 20 },
+    bounds: [13.27, 52.44, 13.53, 52.57],
     roadsNetworkId: 'berlin',
     portId: null,
     wageFactor: 1.1,
-    propertyFactor: 1.3,
+    propertyFactor: 1.2,
     relationFactor: 1,
-    bribeFactor: 1,
-    raidWarningBonus: 0,
-    description: 'Noch nicht im Spiel.',
+    bribeFactor: 0.9,
+    raidWarningBonus: 0.05,
+    description:
+      'Die Spree, zwölf Kieze, Clubs von Freitag bis Montag. Mehr Ecken, als du Leute hast, und Gangs, die nicht ' +
+      'teilen wollen. Die Polizei hat genug anderes zu tun.',
     contact: BERLIN_CALLER,
     pitch: 'Die Nacht: Clubs rund um die Uhr, viele Spots, starke Gangs, Polizei locker.',
-    template: true,
   },
   {
     // Schablone (Inhalt mit Auftrag 38).

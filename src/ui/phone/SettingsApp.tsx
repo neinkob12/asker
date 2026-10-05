@@ -337,6 +337,8 @@ export function SettingsApp() {
           <dd>{'©\u00a0OpenStreetMap-Mitwirkende, Overture Maps Foundation (ODbL)'}</dd>
           <dt>Veedel-Grenzen</dt>
           <dd>Stadt Köln, Offene Daten Köln (Datenlizenz Deutschland Zero 2.0)</dd>
+          <dt>Stadtteile Hamburg und Berlin</dt>
+          <dd>{'©\u00a0OpenStreetMap-Mitwirkende, Overture Maps Foundation (ODbL)'}</dd>
           <dt>Stimmen</dt>
           <dd>
             Piper (Rhasspy, MIT) mit espeak-ng (GPL-3.0) und ONNX Runtime (Microsoft, MIT); Stimme „Thorsten“ aus
