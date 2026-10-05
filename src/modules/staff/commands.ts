@@ -140,6 +140,10 @@ export function replaceAbsent(ctx: Ctx, staffId: string, fireToo: boolean, meta:
   const m = getStaffMember(ctx.state, staffId);
   if (!m || !isEmployed(ctx.state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
   if (!isAbsent(m)) return { ok: false, reason: `${m.name} fällt gar nicht aus.` };
+  // Ersetzt wird in der Stadt, in der du bist (Auftrag 43): Die freien Leute kommen von dort.
+  if ((m.cityId ?? 'koeln') !== activeCity(ctx.state)) {
+    return { ok: false, reason: `${m.name} arbeitet in ${cityName(m.cityId ?? 'koeln')}.` };
+  }
   const spotId = m.returnTo?.kind === 'spot' ? m.returnTo.targetId : null;
   if (!spotId || (m.role !== 'runner' && m.role !== 'security')) {
     if (fireToo) return fire(ctx, staffId, meta);

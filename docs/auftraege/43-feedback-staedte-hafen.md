@@ -130,12 +130,18 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] E9 Neue Stadt ohne sichtbaren ersten Schritt: Willkommen still, Rat „Läufer anheuern“ aus, sobald irgendwo
   jemand arbeitet, „Liegeplatz“ vor dem ersten Lager, Reviere-Ziel fest auf Köln, zu wenig sauberes Geld fürs Lager.
   Erledigt: Begrüßung nicht mehr still; Rat „Lager in <Stadt> kaufen“ bzw. „Geld waschen für ein Lager“ (fehlender Betrag); Liegeplatz-Rat erst mit Lager; Reviere-Ziel und Spielende-Statistik pro Stadt (`campaignProgress` stand ohne Stadt auf Köln). Läufer-Rat war schon pro Stadt.
-- [ ] E10 Sicherheitsleute schlafender Städte sammeln Erfahrung, Level-Meldungen kommen in der neuen Stadt.
-- [ ] E11 Fahrer-Zählung über Städte bei Rechter Hand und Bestellregeln (`orders.ts`, `tasks.ts`).
-- [ ] E12 Personal-Aufgabe der Rechten Hand läuft über Leutnants aller Städte; `replaceAbsent` prüft die Stadt nicht.
-- [ ] E13 Die Kasse zeigt in der neuen Stadt zuerst alle Städte (Standardfilter = aktive Stadt).
-- [ ] E14 Quest-Belohnungen „Team-Erfahrung“ und „Loyalität“ gehen an alle Städte.
-- [ ] E15 Fest verdrahtete „Köln“-Texte in jeder Stadt (Rechte Hand, Kasse, Hafen, Reviere).
+- [x] E10 Sicherheitsleute schlafender Städte sammeln Erfahrung, Level-Meldungen kommen in der neuen Stadt.
+  Erledigt: Erfahrung im Dienst nur in der Stadt, die live ist; Banner für Level, Verletzung und Ärger nur für Leute der aktiven Stadt.
+- [x] E11 Fahrer-Zählung über Städte bei Rechter Hand und Bestellregeln (`orders.ts`, `tasks.ts`).
+  Erledigt: Fahrer der aktiven Stadt in `isPortSupplierAllowed` und im Hinweis der Aufgabe „Hafen abholen“.
+- [x] E12 Personal-Aufgabe der Rechten Hand läuft über Leutnants aller Städte; `replaceAbsent` prüft die Stadt nicht.
+  Erledigt: Die Aufgabe „Personal“ der Rechten Hand schaut nur auf Leutnants ihrer Stadt; `staff.replace` ersetzt nur in der aktiven Stadt.
+- [x] E13 Die Kasse zeigt in der neuen Stadt zuerst alle Städte (Standardfilter = aktive Stadt).
+  Erledigt: Ab zwei Städten zeigt die Kasse zuerst die aktive Stadt (nach dem Verkauf alles).
+- [x] E14 Quest-Belohnungen „Team-Erfahrung“ und „Loyalität“ gehen an alle Städte.
+  Erledigt: „Erfahrung fürs Team“ und „Loyalität fürs Team“ gehen an die Leute der aktiven Stadt.
+- [x] E15 Fest verdrahtete „Köln“-Texte in jeder Stadt (Rechte Hand, Kasse, Hafen, Reviere).
+  Erledigt: Kasse („Ganz <Stadt>“ bzw. „Alle Städte“), Rechte Hand (Stadtname), Aufgabe „Nachbestellen für die ganze Stadt“; Reviere-Ziel war schon in E9.
 - [x] E16 Bewerber-Pool beim Stadtwechsel nicht erneuert (Lohn und Handgeld der alten Stadt).
   Erledigt: Bewerber tragen `cityId` (Migration `recruiting` 5), Pool und Kontakte pro Stadt, einstellen nur in der aktiven Stadt; bei Ankunft oder Wechsel in eine Stadt ohne Bewerber kommen gleich `POOL_START` von dort.
 - [x] E17 Lieferant begrüßt „Du bist in Berlin“ schon bei der Abfahrt (auf `city.arrived` legen).

@@ -2,7 +2,7 @@
 // Läufer und Sicherheit im Spot-Panel, Hinweise bei Level-Aufstieg, Haft, Verrat.
 
 import { useState } from 'preact/hooks';
-import { formatEuro, formatPercent } from '../../../core';
+import { formatEuro, formatPercent, type GameState } from '../../../core';
 import {
   Button,
   Chips,
@@ -455,19 +455,21 @@ registerPanel({
   component: StaffProfile,
 });
 
+// Banner nur für Leute der Stadt, in der du bist (Auftrag 43).
+const here = (state: GameState, m: { cityId?: string }) => (m.cityId ?? 'koeln') === activeCity(state);
 onGameEvent('staff.levelUp', 'staff.levelUp', (payload, ui, state) => {
   const m = getStaffMember(state, payload.staffId);
-  if (m) ui.toast(`${m.name} ist jetzt Level ${payload.level}.`, 'good');
+  if (m && here(state, m)) ui.toast(`${m.name} ist jetzt Level ${payload.level}.`, 'good');
 });
 // Festnahmen meldet schon die Polizei, hier nur Verletzungen.
 onGameEvent('staff.statusChanged', 'staff.status', (payload, ui, state) => {
   const m = getStaffMember(state, payload.staffId);
-  if (!m) return;
+  if (!m || !here(state, m)) return;
   if (payload.to === 'injured') ui.toast(`${m.name} ist verletzt.`, 'bad', { urgent: false });
 });
 onGameEvent('staff.betrayed', 'staff.betrayed', (payload, ui, state) => {
   const m = getStaffMember(state, payload.staffId);
-  if (m) ui.toast(`Ärger mit ${m.name}. Schau in den Verlauf.`, 'bad', { urgent: false });
+  if (m && here(state, m)) ui.toast(`Ärger mit ${m.name}. Schau in den Verlauf.`, 'bad', { urgent: false });
 });
 
 // Empfehlungen, Suche und Statistik

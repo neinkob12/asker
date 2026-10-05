@@ -280,11 +280,16 @@ function grant(ctx: Ctx, reward: QuestReward, reason: string): string {
     case 'heat':
       for (const v of liveVeedel(ctx.state)) addHeat(ctx, v.id, -reward.amount);
       return text;
+    // Das Team der Stadt, in der du bist (Auftrag 43), nicht die Leute der Statthalter.
     case 'teamXp':
-      for (const m of getStaff(ctx.state, { status: 'active' })) addXp(ctx, m.id, reward.amount);
+      for (const m of getStaff(ctx.state, { status: 'active', cityId: activeCity(ctx.state) })) {
+        addXp(ctx, m.id, reward.amount);
+      }
       return text;
     case 'loyalty':
-      for (const m of getStaff(ctx.state, { status: 'active' })) addLoyalty(ctx, m.id, reward.amount);
+      for (const m of getStaff(ctx.state, { status: 'active', cityId: activeCity(ctx.state) })) {
+        addLoyalty(ctx, m.id, reward.amount);
+      }
       return text;
     case 'influence':
       for (const v of liveVeedel(ctx.state)) {

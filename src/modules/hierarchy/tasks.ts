@@ -325,7 +325,10 @@ function staffing(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor
   const state = ctx.state;
   if (!isTaskActive(state, 'staffing')) return;
   const budget = staffingBudget(state);
+  // Nur die Leutnants ihrer Stadt (Auftrag 43).
+  const city = member.cityId ?? 'koeln';
   for (const post of getLieutenants(state)) {
+    if ((getStaffMember(state, post.staffId)?.cityId ?? 'koeln') !== city) continue;
     for (const [staffId, absence] of Object.entries(post.absences)) {
       if (!absence.stuck || absence.replaced) continue;
       const gone = getStaffMember(state, staffId);
@@ -396,7 +399,7 @@ export function taskIdleReason(state: GameState, key: RightHandTaskKey): string 
     }
     case 'pickup':
       if (freeDrivers(state).length > 0) return null;
-      return getStaff(state, { role: 'driver', status: 'active' }).length === 0
+      return getStaff(state, { role: 'driver', status: 'active', cityId: activeCity(state) }).length === 0
         ? 'Ohne Fahrer holt niemand ab: Heuer einen unter Personal an.'
         : 'Alle Fahrer sind gerade unterwegs.';
     case 'restock': {
