@@ -1,7 +1,8 @@
 // Wahrzeichen als einfache 3D-Klötze (fill-extrusion, gestapelt, Toon-Farben), damit man sich ohne
 // Straßennamen zurechtfindet. Köln: Kölner Dom, Hohenzollernbrücke, Colonius, Kranhäuser, KölnTriangle. Hamburg
 // (Auftrag 31): Elbphilharmonie, Michel, Heinrich-Hertz-Turm, Köhlbrandbrücke, Landungsbrücken, Elbbrücken; Lage und
-// Ausrichtung aus Overture Maps (Gebäude, Straßen über Wasser, Infrastruktur, ODbL).
+// Ausrichtung aus Overture Maps (Gebäude, Straßen über Wasser, Infrastruktur, ODbL). Berlin (Auftrag 37): Fernsehturm,
+// Brandenburger Tor, Oberbaumbrücke.
 // Echte Koordinaten, ungefähre Maße in Metern. Jedes Teil ist ein Grundriss im lokalen Rahmen des Bauwerks
 // (forward entlang der Achse, left quer dazu) mit Unter- und Oberkante.
 // Die echten OSM-Gebäude an diesen Stellen blendet die Grundkarte aus (LANDMARK_ZONES), sonst stecken zwei
@@ -25,7 +26,7 @@ export interface Landmark {
   id: string;
   name: string;
   /** Stadt, zu der das Wahrzeichen gehört (Kennung wie im Modul city, Auftrag 30). */
-  city: 'koeln' | 'hamburg';
+  city: string;
   center: LngLat;
   /** Richtung der lokalen forward-Achse (Kompass). */
   heading: number;
@@ -435,6 +436,97 @@ function elbbruecken(): Landmark {
   };
 }
 
+/** Berliner Fernsehturm (368 m): Schaft, Kugel mit Aussichtsgeschoss in 200 bis 237 m, rot-weiße Antenne. */
+function fernsehturm(): Landmark {
+  return {
+    id: 'fernsehturm',
+    name: 'Fernsehturm',
+    city: 'berlin',
+    center: { lng: 13.40942, lat: 52.52082 },
+    heading: 0,
+    colors: {
+      shaft: ['#9a9ea6', '#40444b'],
+      ball: ['#b4bcc6', '#c9a25a'],
+      antenna: ['#b0585e', '#e5484d'],
+      base: ['#7e828a', '#36393f'],
+    },
+    parts: [
+      // Pavillon am Fuß (die gefalteten Dächer als flache Ringe).
+      part(ngon(0, 0, 34, 12), 0, 8, 'base'),
+      part(ngon(0, 0, 16), 8, 30, 'shaft'),
+      part(ngon(0, 0, 12), 30, 120, 'shaft'),
+      part(ngon(0, 0, 9), 120, 196, 'shaft'),
+      // Kugel aus Ringen: breiter in der Mitte.
+      part(ngon(0, 0, 11, 12), 196, 202, 'ball'),
+      part(ngon(0, 0, 15, 12), 202, 210, 'ball'),
+      part(ngon(0, 0, 16.5, 12), 210, 226, 'ball'),
+      part(ngon(0, 0, 15, 12), 226, 234, 'ball'),
+      part(ngon(0, 0, 10, 12), 234, 240, 'ball'),
+      part(ngon(0, 0, 5), 240, 250, 'shaft'),
+      part(ngon(0, 0, 2.2), 250, 368, 'antenna'),
+    ],
+    zone: [-36, -36, 36, 36],
+  };
+}
+
+/** Brandenburger Tor: sechs Säulenpaare, Attika und die Quadriga obenauf; forward läuft quer über den Pariser Platz. */
+function brandenburgerTor(): Landmark {
+  const parts: Part[] = [];
+  // Sechs Pfeiler (je ein Säulenpaar), dazwischen fünf Durchfahrten, die mittlere breiter.
+  for (const f of [-28, -17.5, -7.5, 7.5, 17.5, 28])
+    parts.push(part(rect(f - 2.2, -5.5, f + 2.2, 5.5), 0, 15, 'stone'));
+  parts.push(
+    part(rect(-31, -5.8, 31, 5.8), 15, 19, 'stone'),
+    part(rect(-22, -4.5, 22, 4.5), 19, 22, 'stone'),
+    part(rect(-3.5, -2.5, 3.5, 2.5), 22, 27, 'copper'),
+    // Torhäuser zu beiden Seiten.
+    part(rect(-41, -6, -33, 6), 0, 11, 'stone'),
+    part(rect(33, -6, 41, 6), 0, 11, 'stone'),
+  );
+  return {
+    id: 'brandenburger-tor',
+    name: 'Brandenburger Tor',
+    city: 'berlin',
+    center: { lng: 13.37772, lat: 52.51628 },
+    heading: 0,
+    colors: {
+      stone: ['#a59c88', '#4a463d'],
+      copper: ['#6f9c86', '#c9a25a'],
+    },
+    parts,
+    zone: [-44, -9, 44, 9],
+  };
+}
+
+/** Oberbaumbrücke: Backsteinbrücke über die Spree mit dem U-Bahn-Viadukt obendrauf und zwei Türmen in der Mitte. */
+function oberbaumbruecke(): Landmark {
+  const parts: Part[] = [];
+  parts.push(part(rect(-77, -14, 77, 14), 5, 8, 'brick'));
+  // Pfeiler im Wasser.
+  for (const f of [-60, -36, -12, 12, 36, 60]) parts.push(part(rect(f - 3, -14, f + 3, 14), 0, 5, 'brick'));
+  // U-Bahn-Viadukt auf der Nordseite (Bögen als Pfeiler), oben das Gleisbett.
+  for (let f = -72; f <= 72; f += 9) parts.push(part(rect(f - 1.6, 3, f + 1.6, 12), 8, 13, 'brick'));
+  parts.push(part(rect(-77, 3, 77, 12), 13, 15, 'brick'));
+  // Die zwei Türme an der Mitte.
+  for (const f of [-9, 9]) {
+    parts.push(part(rect(f - 4, 9, f + 4, 15), 0, 30, 'brick'), part(ngon(f, 12, 3.5), 30, 34, 'roof'));
+  }
+  return {
+    id: 'oberbaumbruecke',
+    name: 'Oberbaumbrücke',
+    city: 'berlin',
+    center: { lng: 13.44575, lat: 52.50195 },
+    // forward zeigt nach Nordosten (Friedrichshain), left nach Nordwesten (flussabwärts).
+    heading: 44,
+    colors: {
+      brick: ['#8a5a4a', '#40291f'],
+      roof: ['#5b7f6e', '#2b3d35'],
+    },
+    parts,
+    zone: [-80, -16, 80, 16],
+  };
+}
+
 export const LANDMARKS: readonly Landmark[] = [
   dom(),
   hohenzollernBridge(),
@@ -449,6 +541,9 @@ export const LANDMARKS: readonly Landmark[] = [
   koehlbrandbruecke(),
   landungsbruecken(),
   elbbruecken(),
+  fernsehturm(),
+  brandenburgerTor(),
+  oberbaumbruecke(),
 ];
 
 type Ring = number[][];

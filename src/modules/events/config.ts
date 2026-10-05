@@ -47,6 +47,7 @@ export interface CityEventDef {
 export const EVENT_CONTACTS: Readonly<Record<string, Contact>> = {
   koeln: { id: 'other:buedchen', name: 'Ömer (Büdchen am Ring)', kind: 'other' },
   hamburg: { id: 'other:kiosk-kiez', name: 'Jens (Kiosk am Hans-Albers-Platz)', kind: 'other' },
+  berlin: { id: 'other:spaeti-kotti', name: 'Aylin (Späti am Kotti)', kind: 'other' },
 };
 
 /** Innenstadt Köln (Karneval). */
@@ -61,6 +62,9 @@ export const RHINE_SPOTS: readonly string[] = [
   'rheinufer-bayenthal',
   'muelheimer-hafen',
 ];
+
+/** Kieze mit Nachtleben in Berlin (Fête de la Musique). */
+const BERLIN_PARTY = ['kreuzberg', 'friedrichshain', 'neukoelln', 'mitte', 'prenzlauer-berg', 'alt-treptow'] as const;
 
 /** Spots an den Landungsbrücken und am Hafenrand (Hafengeburtstag). */
 export const HARBOR_SPOTS: readonly string[] = ['landungsbruecken', 'fischmarkt'];
@@ -145,6 +149,41 @@ export const CITY_EVENTS: readonly CityEventDef[] = [
     effects: { demand: 1.4 },
     text: 'Vier Wochen Dom auf dem Heiligengeistfeld: Jeden Abend Leute, die noch was wollen.',
     announce: 'Ab morgen ist wieder Dom auf dem Heiligengeistfeld. Vier Wochen lang.',
+  },
+  // --- Berlin (Auftrag 37): die Nacht, dreimal im Jahr noch größer ---
+  {
+    id: 'fete',
+    cityId: 'berlin',
+    name: 'Fête de la Musique',
+    icon: 'music',
+    schedule: { kind: 'cycle', firstDay: 40, everyDays: 90, days: 1 },
+    area: { veedel: BERLIN_PARTY },
+    effects: { demand: 1.8, checks: 0.8 },
+    text: 'Musik an jeder Ecke, von mittags bis in die Nacht: viel mehr Kundschaft in den Kiezen, die Polizei lässt laufen.',
+    announce: 'Morgen ist Fête de la Musique. Auf jeder Straße eine Bühne, und alle sind draußen. Füll die Lager auf.',
+  },
+  {
+    id: 'csd',
+    cityId: 'berlin',
+    name: 'CSD',
+    icon: 'flag',
+    schedule: { kind: 'cycle', firstDay: 55, everyDays: 90, days: 1 },
+    area: { veedel: ['schoeneberg', 'mitte'] },
+    effects: { demand: 2.2, checks: 0.6, noRaids: true },
+    text: 'Der CSD zieht vom Kudamm zum Brandenburger Tor: eine halbe Million Leute, die feiern wollen, keine Razzien.',
+    announce: 'Morgen ist CSD. Schöneberg und Mitte voll bis zum Rand, und danach geht es am Nolli weiter.',
+  },
+  {
+    id: 'silvester',
+    cityId: 'berlin',
+    name: 'Silvester am Brandenburger Tor',
+    icon: 'sparkles',
+    schedule: { kind: 'cycle', firstDay: 85, everyDays: 90, days: 1 },
+    area: { veedel: ['mitte', 'friedrichshain', 'kreuzberg'] },
+    effects: { demand: 2.5, checks: 1.3, gangRaids: 1.5 },
+    text: 'Silvester: Party am Tor, Böller in jedem Kiez. Riesiges Geschäft, aber auch Polizei und Gangs überall.',
+    announce:
+      'Morgen ist Silvester. Am Tor eine Million Leute, in Kreuzberg fliegen die Raketen. Pass auf deine Spots auf.',
   },
 ];
 

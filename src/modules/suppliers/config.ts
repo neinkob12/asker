@@ -67,8 +67,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     name: 'Frankfurt',
     contactName: 'Toni',
     kind: 'city',
-    // Kommt über die A3 aus Süden in Köln an, in Hamburg über die A7 (nur Karte).
-    via: { koeln: 'A3', hamburg: 'A7' },
+    // Kommt über die A3 aus Süden in Köln an, in Hamburg über die A7, in Berlin über die AVUS (nur Karte).
+    via: { koeln: 'A3', hamburg: 'A7', berlin: 'A115' },
     lng: 8.682,
     lat: 50.111,
     deliveryTime: 180,
@@ -77,9 +77,10 @@ export const SUPPLIERS: readonly Supplier[] = [
     reliability: 0.88,
     description: 'Kurierfahrer über die A3. Schnell und zuverlässig, dafür teuer.',
     // Toni ist in Hamburg dein Startlieferant per Kurier: länger unterwegs, zehn Prozent Aufschlag.
-    cities: ['koeln', 'hamburg'],
-    deliveryTimes: { hamburg: 330 },
-    priceFactors: { hamburg: 1.1 },
+    // In Berlin genauso weit weg wie in Hamburg.
+    cities: ['koeln', 'hamburg', 'berlin'],
+    deliveryTimes: { hamburg: 330, berlin: 330 },
+    priceFactors: { hamburg: 1.1, berlin: 1.1 },
     packages: [
       { id: 'weed25', label: '25 g Gras', productId: 'weed', amount: 25, price: 140 },
       { id: 'weed50', label: '50 g Gras', productId: 'weed', amount: 50, price: 255 },
@@ -104,8 +105,20 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.74,
     reliability: 0.7,
     description: 'Gute Ware aus der Hauptstadt, Edibles und Vapes. Nicht immer pünktlich.',
-    cities: ['koeln', 'hamburg'],
-    deliveryTimes: { hamburg: 180 },
+    // Auftrag 37: Mirko ist in Berlin zu Hause. Dort liefert er aus der Stadt, in einer Stunde und billiger.
+    cities: ['koeln', 'hamburg', 'berlin'],
+    deliveryTimes: { hamburg: 180, berlin: 60 },
+    priceFactors: { berlin: 0.85 },
+    inCity: {
+      berlin: {
+        description: 'Mirko aus Kreuzberg, hier zu Hause: in einer Stunde da und billiger als überall sonst.',
+      },
+    },
+    home: {
+      cityId: 'berlin',
+      welcome:
+        'Ey, du bist in Berlin! Willkommen bei mir zu Hause. Hier liefer ich in einer Stunde und billiger als sonst. Such dir ein Lager, dann geht’s los.',
+    },
     unlock: {
       requires: { veedel: 1 },
       fee: 600,
@@ -126,8 +139,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     name: 'Hamburg',
     contactName: 'Hein',
     kind: 'city',
-    // Kommt über die A1 aus Norden in Köln an (nur Karte).
-    via: { koeln: 'A1' },
+    // Kommt über die A1 aus Norden in Köln an, in Berlin über die A111 (nur Karte).
+    via: { koeln: 'A1', berlin: 'A111' },
     lng: 9.993,
     lat: 53.551,
     deliveryTime: 270,
@@ -137,8 +150,12 @@ export const SUPPLIERS: readonly Supplier[] = [
     description: 'Hanseatisch korrekt. Solide Ware, fast nie Ärger.',
     // In Hamburg liefert Hein aus der Stadt selbst, mit denselben Mengen wie in Köln, direkt ins Lager (kein Hafen).
     // Die großen Mengen gibt es nur im Hafen (Amsterdam, Rotterdam).
-    cities: ['koeln', 'hamburg'],
-    deliveryTimes: { hamburg: 60 },
+    cities: ['koeln', 'hamburg', 'berlin'],
+    deliveryTimes: { hamburg: 60, berlin: 240 },
+    home: {
+      cityId: 'hamburg',
+      welcome: 'Moin. Du bist jetzt in Hamburg, hab ich gehört. Such dir ein Lager, dann liefer ich dir direkt hin.',
+    },
     unlock: {
       requires: { revenue: 1500 },
       fee: 250,
@@ -161,7 +178,7 @@ export const SUPPLIERS: readonly Supplier[] = [
     contactName: 'Daan',
     kind: 'city',
     // Kommt über die A57 aus Nordwesten in Köln an, in Hamburg über die A1 aus Bremen (nur Karte).
-    via: { koeln: 'A57', hamburg: 'A1' },
+    via: { koeln: 'A57', hamburg: 'A1', berlin: 'A115' },
     lng: 4.904,
     lat: 52.368,
     deliveryTime: 240,
@@ -171,8 +188,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     description: 'Großhändler für Coffeeshops. Die beste Ware, kommt über die A57. Redet nur mit großen Leuten.',
     // In Hamburg kauft man bei Daan im Hafen: Container direkt am Kai, kiloweise, günstig, sechs Stunden, abholen
     // musst du selbst (braucht den Hamburger Liegeplatz).
-    cities: ['koeln', 'hamburg'],
-    deliveryTimes: { hamburg: 360 },
+    cities: ['koeln', 'hamburg', 'berlin'],
+    deliveryTimes: { hamburg: 360, berlin: 420 },
     inCity: {
       hamburg: {
         kind: 'port',

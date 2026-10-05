@@ -934,6 +934,7 @@ export function snapshot(state: GameState) {
     city: activeCity(state),
     koeln: campaignProgress(state, 'koeln').controlled,
     hamburg: campaignProgress(state, 'hamburg').controlled,
+    berlin: campaignProgress(state, 'berlin').controlled,
     reputation: Math.round(state.modules.reputation.value),
     maxHostility: Math.round(Math.max(...Object.values(gangs.gangs).map((s) => s.hostility))),
     gameOver: state.outcome.gameOver?.reason ?? null,

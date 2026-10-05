@@ -140,11 +140,12 @@ export const HANDOVER_START_MONEY_DAYS = 10;
 /**
  * Mindest-Startgeld pro Zielstadt (Planungs-Session nach dem Review): Unter etwa 40.000 € blieb der Bot in Hamburg
  * hängen, mit 45.000 € kam er in 13 bis 17 Tagen durch. Für die weiteren Städte nach ihrem propertyFactor skaliert
- * (30.000 € je Faktor 1, Hamburg 1,5). Keine Obergrenze: Wer mehr verdient, bringt mehr mit.
+ * (30.000 € je Faktor 1, Hamburg 1,5). Keine Obergrenze: Wer mehr verdient, bringt mehr mit. Berlin (Auftrag 37): mit
+ * 39.000 € blieb der Bot bei einem Seed über 30 Tage hängen, mit 45.000 € (wie Hamburg) kam er in 6 bis 14 Tagen durch.
  */
 export const START_MONEY_MIN_BY_CITY: Readonly<Record<string, number>> = {
   hamburg: 45_000,
-  berlin: 39_000,
+  berlin: 45_000,
   muenchen: 54_000,
   frankfurt: 48_000,
 };
@@ -200,8 +201,8 @@ export const WELCOME_TEXTS: Readonly<Record<string, readonly string[]>> = {
 };
 
 /**
- * Die Anrufe der Städte (Auftrag 36). Hamburg: Fietes Gespräch von oben. Berlin, München und Frankfurt sind noch
- * Schablonen (rufen erst an, wenn ihr Inhalt da ist); ihre Texte stehen schon, damit die Aufträge 37 bis 39 nur noch
+ * Die Anrufe der Städte (Auftrag 36). Hamburg: Fietes Gespräch von oben, Berlin: Dilara (Auftrag 37). München und
+ * Frankfurt sind noch Schablonen (rufen erst an, wenn ihr Inhalt da ist); ihre Texte stehen schon, damit die Aufträge 37 bis 39 nur noch
  * Daten liefern.
  */
 export const CITY_OFFERS: Readonly<Record<string, CityOffer>> = {
@@ -237,7 +238,11 @@ export const CITY_OFFERS: Readonly<Record<string, CityOffer>> = {
     come: 'Ich komme nach Berlin',
     welcome: [
       'Da bist du. Willkommen in Berlin.',
-      'Erst ein Lager, dann eine Ecke. Am Wochenende brennt hier die Luft, plan das ein.',
+      'Erst ein Lager: Neukölln, Friedrichshain, Lichtenberg, Wedding oder Schöneberg. Mirko liefert dir hin, der ist ' +
+        'hier zu Hause.',
+      'Dann eine Ecke. Die Clubs machen Freitagabend auf und Montagfrüh zu, dazwischen brennt die Luft. Unter der Woche ' +
+        'läuft es an den Bahnhöfen und in den Parks.',
+      'Die Bullen sind entspannt. Die Türsteher und die Kotti-Familie nicht. Leg dich nicht mit allen gleichzeitig an.',
     ],
   },
   muenchen: {

@@ -1,5 +1,6 @@
 // Die Gangs, die die Städte zu Beginn unter sich aufgeteilt haben: vier in Köln, seit Auftrag 30 vier in Hamburg
-// (Präfix hh-, etwa ein Viertel stärker: Kampfkraft, Geld, Leute). Alle frei erfunden, keine echten Gruppen.
+// (Präfix hh-, etwa ein Viertel stärker: Kampfkraft, Geld, Leute), seit Auftrag 37 vier in Berlin (Präfix be-, noch
+// einmal stärker und mit mehr Leuten). Alle frei erfunden, keine echten Gruppen.
 // IDs und Heimat-Veedel bleiben stabil (territory verteilt danach die Veedel, andere Module nutzen die IDs).
 
 export interface GangTraits {
@@ -262,6 +263,108 @@ export const GANGS: readonly Gang[] = [
       methods: { blackmail: 3, tipOff: 2, burglary: 1.5, raid: 1 },
     },
   },
+  // --- Berlin (Auftrag 37): die stärksten Gangs bisher (mehr Leute, mehr Kampfkraft), dafür kaum Polizei. ---
+  {
+    id: 'be-tuer',
+    cityId: 'berlin',
+    name: 'Die Türsteher',
+    color: '#6c5ce7',
+    homeVeedelId: 'friedrichshain',
+    boss: 'Goran „Gästeliste“ Vuković',
+    crew: 'Leute von der Tür',
+    emblem: '🎧',
+    style: 'Wer am Wochenende in einen Club will, kommt an ihnen vorbei. Und wer drinnen verkauft, zahlt an sie.',
+    strengths: ['Nachtgeschäft', 'Türsteher'],
+    weakness: 'tagsüber kaum zu sehen',
+    traits: {
+      aggression: 1.3,
+      expansion: 1.0,
+      fighting: 80,
+      network: 0.6,
+      priceFactor: 0.95,
+      goodsCost: 4.6,
+      goodsQuality: 0.75,
+      dealing: 0.7,
+      start: { money: 70000, people: 26, goods: 2200 },
+      methods: { intimidate: 3, raid: 2, poach: 1.5 },
+    },
+  },
+  {
+    id: 'be-kotti',
+    cityId: 'berlin',
+    name: 'Kotti-Familie',
+    color: '#b03a5b',
+    homeVeedelId: 'neukoelln',
+    boss: 'Tarek Haddad, genannt „der Onkel“',
+    crew: 'Cousins der Kotti-Familie',
+    emblem: '🗝',
+    style: 'Eine große Familie von der Sonnenallee bis zum Kotti. Jeder Späti, jede Shisha-Bar gehört einem Cousin.',
+    strengths: ['viele Leute', 'Zusammenhalt'],
+    weakness: 'Streit, sobald es um die Erbfolge geht',
+    traits: {
+      aggression: 1.4,
+      expansion: 1.2,
+      fighting: 78,
+      network: 0.7,
+      priceFactor: 0.88,
+      goodsCost: 4.0,
+      goodsQuality: 0.6,
+      dealing: 1.1,
+      start: { money: 55000, people: 28, goods: 3000 },
+      methods: { raid: 3, intimidate: 2, blackmail: 1 },
+    },
+  },
+  {
+    id: 'be-leo',
+    cityId: 'berlin',
+    name: 'Leo-Gang',
+    color: '#e67e22',
+    homeVeedelId: 'wedding',
+    boss: 'Kevin „Kralle“ Schulz',
+    crew: 'Jungs vom Leo',
+    emblem: '🐺',
+    style: 'Junge Typen vom Leopoldplatz, schnell, laut und billig. Was sie nicht kaufen können, holen sie sich.',
+    strengths: ['brutal', 'billige Ware'],
+    weakness: 'keine Disziplin',
+    traits: {
+      aggression: 1.6,
+      expansion: 1.3,
+      fighting: 76,
+      network: 0.3,
+      priceFactor: 0.82,
+      goodsCost: 3.5,
+      goodsQuality: 0.5,
+      dealing: 1.4,
+      start: { money: 30000, people: 24, goods: 3200 },
+      methods: { raid: 3, burglary: 2.5, poach: 1 },
+    },
+  },
+  {
+    id: 'be-westend',
+    cityId: 'berlin',
+    name: 'Kudamm-Kreis',
+    color: '#95a5a6',
+    homeVeedelId: 'charlottenburg',
+    boss: 'Konstantin von Arnim',
+    crew: 'Leute des Kudamm-Kreises',
+    emblem: '🥂',
+    style:
+      'Alter Westen mit neuem Geld. Liefern an Villen in Grunewald und an Hotelsuiten am Kudamm, mit Anwalt im Auto.',
+    strengths: ['viel Geld', 'Anwälte'],
+    weakness: 'wenig Leute für die Straße',
+    traits: {
+      aggression: 1.0,
+      expansion: 0.9,
+      fighting: 70,
+      network: 0.85,
+      priceFactor: 1.05,
+      goodsCost: 5.4,
+      goodsQuality: 0.9,
+      dealing: 0.5,
+      start: { money: 110000, people: 18, goods: 1000 },
+      methods: { blackmail: 3, tipOff: 2.5, burglary: 1 },
+    },
+  },
 ];
 
 /**
@@ -284,6 +387,13 @@ export const GANG_RIVALRY: Readonly<Record<string, number>> = {
   'hh-hafen|hh-schanze': -20,
   'hh-elbchaussee|hh-hafen': -60,
   'hh-elbchaussee|hh-schanze': -70,
+  // Berlin: Tür gegen Familie um die Clubs in Kreuzberg, der Leo hasst alle, der Kudamm-Kreis kauft sich Frieden.
+  'be-kotti|be-tuer': -60,
+  'be-leo|be-tuer': -30,
+  'be-tuer|be-westend': 20,
+  'be-kotti|be-leo': -50,
+  'be-kotti|be-westend': -20,
+  'be-leo|be-westend': -70,
 };
 
 /** Schlüssel eines Gang-Paars (alphabetisch). */

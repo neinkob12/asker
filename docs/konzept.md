@@ -210,7 +210,7 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   Zwischenhändler für ein Veedel). Große Städte bekommen Capos, die Rechte Hand gibt im Tagesbericht einen Satz Rat.
 - **Deutschland (Auftrag 36):** Nach Köln ist die Reihenfolge frei. Jede Stadt hat einen Kontakt mit Gesicht und Stimme
   und einen Satz Dreh; nach „<Stadt> komplett“ ruft die nächstgelegene freie an, die anderen melden sich per Handy, ein
-  Tipp auf ihre Glas-Karte in der Deutschland-Ansicht holt den Anruf. Berlin, München und Frankfurt stehen schon als
+  Tipp auf ihre Glas-Karte in der Deutschland-Ansicht holt den Anruf. München und Frankfurt stehen schon als
   „bald“ da. Ein Autobahn-Netz (A1, A3, A3/A9, A24, A9, A7/A5) trägt Fahrten zwischen allen Städten, auch über eine
   Stadt hinweg. Die Rechte Hand mit Vollmacht heißt Statthalter; schlafende Städte haben an etwa 3 von 100 Tagen eine
   Razzia (halber Tag oder kleines Minus, eine Zeile vom Statthalter). Bei der Übergabe kommt ein Startpaket mit (neue
@@ -218,8 +218,14 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   Zielstadt, Hamburg 45.000 €). Ränge des Spielers ohne
   Boni: Kleindealer, Händler, Großhändler, Boss von Köln, Boss von <Stadt>, Boss von Deutschland (ab vier Städten; dann Importeur und
   Produzent), mit Banner, im HUD und in der Bestenliste. Peter hat ein Kapitel pro Stadt.
-- **Noch nicht umgesetzt** (Aufträge 37 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Inhalt von
-  Berlin, München, Frankfurt, Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen:
+- **Berlin (Auftrag 37):** die dritte spielbare Stadt, Dreh „die Nacht“. Zwölf Ortsteile von Charlottenburg bis
+  Lichtenberg mit viel Nachtleben und lockerer Polizei, 40 Spots, darunter vier Clubs, die nur von Freitag 22 Uhr bis
+  Montag 8 Uhr offen haben (dann mit dem größten Andrang der Stadt), vier starke Gangs (Türsteher, Kotti-Familie,
+  Leo-Gang, Kudamm-Kreis), Mieten mittel. Mirko ist hier zu Hause und liefert billiger in einer Stunde. Events: Fête de
+  la Musique, CSD, Silvester am Brandenburger Tor mit Feuerwerk. Wahrzeichen: Fernsehturm, Brandenburger Tor,
+  Oberbaumbrücke.
+- **Noch nicht umgesetzt** (Aufträge 38 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Inhalt von
+  München, Frankfurt, Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen:
   Tarnfirmen, Charakter-Erstellung, Perks, Besitz, Akte, Korruption.
 
 ## Mehrere Städte (Auftrag 30 gebaut, Auftrag 31 für die Karte)

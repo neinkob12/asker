@@ -30,6 +30,7 @@ import {
   type GameState,
   journal,
   MINUTES_PER_DAY,
+  WEEKDAYS_SHORT,
   wallet,
 } from '../../core';
 import { isCityLive, isCityUnlocked } from '../city';
@@ -104,6 +105,11 @@ export interface Spot {
    * weitere Arten (kinds.ts: Straßenecke, Späti, Club, Park, Bahnhof, Campus). Ohne: Straßenecke.
    */
   kind?: SpotKind;
+  /**
+   * Öffnungszeiten über die Woche (Auftrag 37): [von, bis) in Stunden ab Montag 0 Uhr (0–167), z.B. [118, 8] = Freitag
+   * 22 Uhr bis Montag 8 Uhr (Berliner Clubs). Geht vor den Öffnungszeiten der Art; fehlt: wie bisher.
+   */
+  weekHours?: readonly [number, number];
 }
 
 export interface SpotsState {
@@ -247,32 +253,58 @@ export function isKneipe(spot: Pick<Spot, 'kind'> | undefined): boolean {
  * Öffnungszeiten [von, bis) eines Spots oder null (immer offen): Kneipen von KNEIPE.from bis KNEIPE.to Uhr, eigene
  * Spots nach ihrer Art (Auftrag 23). Vorgegebene Spots einer anderen Art sind immer offen (ihre Werte stehen im Spot).
  */
-function openingHours(spot: Pick<Spot, 'kind'> & { custom?: boolean }): readonly [number, number] | null {
+function openingHours(spot: OpeningInfo): readonly [number, number] | null {
   if (spot.kind === 'kneipe') return [KNEIPE.from, KNEIPE.to];
   if (!spot.custom || !spot.kind) return null;
   return SPOT_TYPES[spot.kind]?.hours ?? null;
 }
 
-/** Hat der Spot gerade offen? Straßen-Spots immer, Kneipen von KNEIPE.from bis KNEIPE.to Uhr, eigene nach Art. */
-export function isSpotOpen(spot: Pick<Spot, 'kind'> & { custom?: boolean }, time: number): boolean {
+/** Was die Öffnungszeiten eines Spots bestimmt. */
+type OpeningInfo = Pick<Spot, 'kind' | 'weekHours'> & { custom?: boolean };
+
+const HOURS_PER_WEEK = 7 * 24;
+
+/** Stunde der Woche (0 = Montag 0 Uhr … 167 = Sonntag 23 Uhr). */
+function hourOfWeek(time: number): number {
+  return clock.weekday(time) * 24 + clock.hour(time);
+}
+
+/** Liegt h im Fenster [from, to) (über Mitternacht bzw. das Wochenende hinweg, wenn from > to)? */
+function inWindow(h: number, from: number, to: number): boolean {
+  return from > to ? h >= from || h < to : h >= from && h < to;
+}
+
+/**
+ * Hat der Spot gerade offen? Straßen-Spots immer, Kneipen von KNEIPE.from bis KNEIPE.to Uhr, eigene nach Art, Spots
+ * mit weekHours nur in diesem Fenster der Woche.
+ */
+export function isSpotOpen(spot: OpeningInfo, time: number): boolean {
+  if (spot.weekHours) return inWindow(hourOfWeek(time), spot.weekHours[0], spot.weekHours[1]);
   const hours = openingHours(spot);
   if (!hours) return true;
-  const [from, to] = hours;
-  const hour = clock.hour(time);
-  return from > to ? hour >= from || hour < to : hour >= from && hour < to;
+  return inWindow(clock.hour(time), hours[0], hours[1]);
 }
 
 /** Nächste Öffnung ab time (time selbst, wenn offen). */
-export function nextSpotOpening(spot: Pick<Spot, 'kind'> & { custom?: boolean }, time: number): number {
+export function nextSpotOpening(spot: OpeningInfo, time: number): number {
   if (isSpotOpen(spot, time)) return time;
+  const hourStart = time - (time % 60);
+  if (spot.weekHours) {
+    const wait = (spot.weekHours[0] - hourOfWeek(time) + HOURS_PER_WEEK) % HOURS_PER_WEEK;
+    return hourStart + wait * 60;
+  }
   const from = openingHours(spot)?.[0] ?? 0;
   const dayStart = time - clock.minuteOfDay(time);
   const today = dayStart + from * 60;
   return today > time ? today : today + MINUTES_PER_DAY;
 }
 
-/** Öffnungszeiten als Text ("21–5 Uhr") oder null, wenn immer offen. */
-export function spotHoursLabel(spot: Pick<Spot, 'kind'> & { custom?: boolean }): string | null {
+/** Öffnungszeiten als Text ("21–5 Uhr", "Fr 22 – Mo 8 Uhr") oder null, wenn immer offen. */
+export function spotHoursLabel(spot: OpeningInfo): string | null {
+  if (spot.weekHours) {
+    const at = (h: number) => `${WEEKDAYS_SHORT[Math.floor(h / 24) % 7]} ${h % 24}`;
+    return `${at(spot.weekHours[0])} – ${at(spot.weekHours[1])} Uhr`;
+  }
   const hours = openingHours(spot);
   return hours ? `${hours[0]}–${hours[1]} Uhr` : null;
 }

@@ -51,6 +51,24 @@ CITIES = {
             'Blankenese',
         ],
     },
+    # Berlin (Auftrag 37): Ortsteile rund um die Innenstadt (in OSM admin_level 10, Bezirke sind admin_level 9).
+    'berlin': {
+        'box': (13.20, 13.60, 52.40, 52.62),
+        'names': [
+            'Mitte',
+            'Kreuzberg',
+            'Friedrichshain',
+            'Neukölln',
+            'Prenzlauer Berg',
+            'Wedding',
+            'Moabit',
+            'Schöneberg',
+            'Charlottenburg',
+            'Alt-Treptow',
+            'Lichtenberg',
+            'Tempelhof',
+        ],
+    },
 }
 
 _ctx = ssl.create_default_context(cafile=os.environ.get('SSL_CERT_FILE'))

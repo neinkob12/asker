@@ -80,6 +80,11 @@ Razzia im Schlaf, Startpaket und Startgeld bei der Übergabe (`hierarchy/handove
 Capos), Ränge des Spielers (`city/ranks.ts`, `playerRank`, Ereignis `player.rankUp`), Quest-Kapitel pro Stadt (`cityId`
 an der Quest). Stellschrauben für das Tempo späterer Städte: `FULL_POWER_SHARE`, `HANDOVER_START_MONEY_DAYS`,
 `START_MONEY_MIN_BY_CITY`, `START_PACK_MAX_STAFF`.
+Auftrag 37 (Berlin): dritte spielbare Stadt nur aus Daten (`veedel/data-berlin.ts`, `spots/config-berlin.ts`,
+`gangs/texts-berlin.ts`, `roads/network-berlin.ts`, Einträge in den Listen der anderen Module). Neu und allgemein:
+`Spot.weekHours` (Öffnungszeiten über die Woche, Berliner Clubs Fr 22 bis Mo 8 Uhr) und `Supplier.home` (Lieferant ist
+in einer Stadt zu Hause, Hein in Hamburg, Mirko in Berlin). Neue Städte legen Spots und Gang-Stimmen am besten in eigene
+Dateien und spreizen sie in die Listen ein.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

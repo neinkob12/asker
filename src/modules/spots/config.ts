@@ -1,3 +1,4 @@
+import { PRESET_SPOTS_BERLIN, SPOT_LABELS_BERLIN } from './config-berlin';
 import type { Spot } from './index';
 
 /** Vorgegebener Spot ohne Veedel: Das Veedel ergibt sich aus der Lage (veedelAt, siehe presetSpots in index.ts). */
@@ -580,6 +581,8 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
     unlockCost: 1800,
     audience: { party: 1.6, stoner: 1.3, tourist: 1.0 },
   },
+  // Berlin (Auftrag 37): eigene Datei, damit die Städte-Aufträge sich nicht in die Quere kommen.
+  ...PRESET_SPOTS_BERLIN,
 ];
 
 /**
@@ -678,4 +681,5 @@ export const SPOT_LABELS: Readonly<Record<string, { labelSide: 'left' | 'right';
   'harburger-sand': { labelSide: 'right', labelOffsetY: 0 },
   'blankeneser-markt': { labelSide: 'right', labelOffsetY: 0 },
   strandweg: { labelSide: 'left', labelOffsetY: 0 },
+  ...SPOT_LABELS_BERLIN,
 };

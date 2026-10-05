@@ -5,7 +5,7 @@
 
 export interface Veedel {
   id: string;
-  /** Stadt, zu der das Veedel gehört (Auftrag 30: 'koeln', 'hamburg'). */
+  /** Stadt, zu der das Veedel gehört (Auftrag 30: 'koeln', 'hamburg'; Auftrag 37: 'berlin'). */
   cityId: string;
   name: string;
   /** Stadtbezirk, zu dem das Veedel gehört. */

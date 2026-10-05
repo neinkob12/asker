@@ -1,5 +1,6 @@
 // Stadt-Events auf der Karte (Auftrag 31): Bei den Kölner Lichtern geht abends über dem Rhein zwischen
-// Hohenzollernbrücke und Deutzer Brücke ein Feuerwerk hoch (mapEffects firework, nur CSS), beim Hafengeburtstag ziehen
+// Hohenzollernbrücke und Deutzer Brücke ein Feuerwerk hoch (mapEffects firework, nur CSS), zu Silvester in Berlin über
+// der Straße des 17. Juni vor dem Brandenburger Tor (Auftrag 37; FIREWORKS), beim Hafengeburtstag ziehen
 // Schiffe auf der Elbe vor den Landungsbrücken hin und her (3D-Mini-Fahrzeuge auf dem Wasserweg aus roads.shipRoute).
 // Nur in der aktiven Stadt und in der Stadtansicht. Reine Optik mit eigenem Zufall: steht bei Tempo 0 und verstecktem
 // Tab, bei "Bewegung reduzieren" gibt es kein Feuerwerk.
@@ -10,11 +11,26 @@ import { activeCity } from '../../city';
 import { shipRoute } from '../../roads';
 import { activeEvents } from '../index';
 
-/** Rhein zwischen Hohenzollernbrücke und Deutzer Brücke (Mitte des Stroms): dort steigen die Raketen. */
-const RHINE_SHOW: readonly [LngLat, LngLat] = [
-  { lng: 6.9668, lat: 50.9408 },
-  { lng: 6.9707, lat: 50.9342 },
-];
+/**
+ * Feuerwerk pro Event: Stadt und die Linie, auf der die Raketen steigen. Kölner Lichter: Rhein zwischen
+ * Hohenzollernbrücke und Deutzer Brücke (Mitte des Stroms). Silvester: Straße des 17. Juni bis zum Brandenburger Tor.
+ */
+const FIREWORKS: Readonly<Record<string, { cityId: string; line: readonly [LngLat, LngLat] }>> = {
+  lichter: {
+    cityId: 'koeln',
+    line: [
+      { lng: 6.9668, lat: 50.9408 },
+      { lng: 6.9707, lat: 50.9342 },
+    ],
+  },
+  silvester: {
+    cityId: 'berlin',
+    line: [
+      { lng: 13.3655, lat: 52.5145 },
+      { lng: 13.3765, lat: 52.5162 },
+    ],
+  },
+};
 /** Feuerwerk ab dieser Stunde bis Mitternacht. */
 const FIREWORK_FROM_HOUR = 21;
 /** Abstand zwischen zwei Schlägen in echten Sekunden (zufällig dazwischen), schneller mit dem Spieltempo. */
@@ -46,6 +62,7 @@ export const eventsLayer: MapLayer = {
     );
     const random = lcg(31);
     let showOn = false;
+    let show: readonly [LngLat, LngLat] = FIREWORKS.lichter.line;
     let wait = 0;
     let lastNow = 0;
     let stopShow: (() => void) | null = null;
@@ -53,8 +70,8 @@ export const eventsLayer: MapLayer = {
     const burst = () => {
       const t = random();
       const along = {
-        lng: RHINE_SHOW[0].lng + (RHINE_SHOW[1].lng - RHINE_SHOW[0].lng) * t + (random() - 0.5) * 0.002,
-        lat: RHINE_SHOW[0].lat + (RHINE_SHOW[1].lat - RHINE_SHOW[0].lat) * t + (random() - 0.5) * 0.001,
+        lng: show[0].lng + (show[1].lng - show[0].lng) * t + (random() - 0.5) * 0.002,
+        lat: show[0].lat + (show[1].lat - show[0].lat) * t + (random() - 0.5) * 0.001,
       };
       firework(map, along, { color: colors[Math.floor(random() * colors.length)], size: 34 + random() * 30 });
     };
@@ -109,7 +126,9 @@ export const eventsLayer: MapLayer = {
         const city = activeCity(state);
         const running = activeEvents(state, city).map((e) => e.id);
         const hour = clock.hour(state.time);
-        showOn = running.includes('lichter') && hour >= FIREWORK_FROM_HOUR && ctx.ui.mapView() === 'city:koeln';
+        const fw = running.map((id) => FIREWORKS[id]).find((f) => f && f.cityId === city);
+        if (fw) show = fw.line;
+        showOn = !!fw && hour >= FIREWORK_FROM_HOUR && ctx.ui.mapView() === `city:${city}`;
         syncShow();
         const parade = running.includes('hafengeburtstag') && city === 'hamburg';
         if (parade && ships.length === 0) startParade();

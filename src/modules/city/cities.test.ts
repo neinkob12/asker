@@ -75,12 +75,13 @@ function handOverKoeln(sim: Simulation): string {
 }
 
 describe('Städte (Auftrag 30)', () => {
-  it('Daten: Köln, Hamburg und die Schablonen Berlin, München, Frankfurt; je 12 Veedel, Schablonen gesperrt', () => {
+  it('Daten: Köln, Hamburg, Berlin und die Schablonen München, Frankfurt; je 12 Veedel, Schablonen gesperrt', () => {
     expect(CITIES.map((c) => c.id)).toEqual(['koeln', 'hamburg', 'berlin', 'muenchen', 'frankfurt']);
-    expect(playableCities().map((c) => c.id)).toEqual(['koeln', 'hamburg']);
+    expect(playableCities().map((c) => c.id)).toEqual(['koeln', 'hamburg', 'berlin']);
     expect(allVeedel('koeln')).toHaveLength(12);
     expect(allVeedel('hamburg')).toHaveLength(12);
-    expect(allVeedel('berlin')).toHaveLength(0);
+    expect(allVeedel('berlin')).toHaveLength(12);
+    expect(allVeedel('muenchen')).toHaveLength(0);
     for (const c of playableCities()) {
       const [w, s, e, n] = c.bounds;
       for (const v of allVeedel(c.id)) {
@@ -94,6 +95,7 @@ describe('Städte (Auftrag 30)', () => {
     // Der Niehler Hafen liegt in keinem Veedel, gehört aber zu Köln; der Hamburger Hafen zu Hamburg.
     expect(cityAt(6.9712, 50.9862)).toBe('koeln');
     expect(cityAt(10.0045, 53.5282)).toBe('hamburg');
+    expect(cityAt(13.4125, 52.5215)).toBe('berlin');
     expect(cityAt(8.68, 50.11)).toBe('koeln');
   });
 

@@ -143,9 +143,9 @@ describe('Balancing', () => {
     const r = simulateCities(1, 0, 4, 30_000);
     const last = r.days[r.days.length - 1];
     expect(r.events['hierarchy.fullPowerGranted']).toBe(1);
-    expect(r.order).toEqual(['koeln', 'hamburg']);
-    expect(r.stats.cities?.[0]).toMatchObject({ from: 'koeln', to: 'hamburg' });
-    expect(last.city).toBe('hamburg');
+    expect(r.order).toEqual(['koeln', 'berlin']);
+    expect(r.stats.cities?.[0]).toMatchObject({ from: 'koeln', to: 'berlin' });
+    expect(last.city).toBe('berlin');
     expect(last.gameOver).toBeNull();
     expect(r.events['goods.warehouseBought'] ?? 0).toBeGreaterThanOrEqual(1);
     expect(r.days.some((d) => d.revenue > 0)).toBe(true);
@@ -251,7 +251,7 @@ describe('Balancing', () => {
           const arrived = r.arrived[cityId];
           const done = r.complete[cityId];
           const veedel = (n: number) => {
-            const day = r.days.find((d) => d.activeCity === cityId && d[cityId as 'hamburg'] >= n)?.day;
+            const day = r.days.find((d) => d.activeCity === cityId && (d[cityId as 'hamburg'] ?? 0) >= n)?.day;
             return day ? `${day - arrived}` : '-';
           };
           return (
