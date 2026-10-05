@@ -65,6 +65,14 @@ den Rest); `store` überfüllt (nur für Beute und Rückgaben). Neues Modul `fle
 ohne eigenes das Privatauto, in der Stadt ohne Grenze, auf Routen 5 kg), Fahrten wählen `vehicleId` und `choice` (Autobahn, Landstraße, nachts; `roads` nimmt
 `{ weights }` pro Straßenart), Liegeplatz-Stufen (`logistics.upgradeBerth`), Container-Pakete (`container: 'full' | 'shared'`),
 Warenfluss (`goods.usagePerDay`) in der Lager-App, Ebene „Lieferwege“.
+Auftrag 36 (Deutschland): Reihenfolge der Städte nach Köln frei (`NEXT_CITY` ist eine Liste, Angebote pro Stadt in
+`city.offers`, `city.answerOffer`/`city.handOver` mit Stadt, `city.requestCall`; jede Stadt in `CITIES` mit `contact`
+und `pitch`, Gespräche in `CITY_OFFERS`), Autobahn-Netz (`roads/autobahn.ts`, sechs Linien, `autobahnPath`,
+`interCityRoute` über eine Stadt hinweg; neu bauen mit `build-roads.py --autobahn all`), Statthalter (`rightHandTitle`),
+Razzia im Schlaf, Startpaket und Startgeld bei der Übergabe (`hierarchy/handover.ts`, Haken `startPackLeaders` für
+Capos), Ränge des Spielers (`city/ranks.ts`, `playerRank`, Ereignis `player.rankUp`), Quest-Kapitel pro Stadt (`cityId`
+an der Quest). Stellschrauben für das Tempo späterer Städte: `FULL_POWER_SHARE`, `HANDOVER_START_MONEY_DAYS`,
+`START_PACK_MAX_STAFF`.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

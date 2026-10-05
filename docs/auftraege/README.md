@@ -181,6 +181,15 @@ Welle 4   40 Verkauf und Hafen ──► 41 Schiffe und Europa ──► 42 Prod
 Spezialzügen (Haken `specialMoves(member)` für Auftrag 34), Rat der Rechten Hand und Zollkontrolle als eigener Anlass
 (`customsCheck`, Autobahn und Hafen). Messung in `docs/architektur.md`, Abschnitt „Balancing“.
 
+**Stand Auftrag 36:** umgesetzt in fünf Etappen (PR #60). Freie Reihenfolge nach Köln (Angebote pro Stadt, Kontakte
+mit Gesicht und Dreh, Glas-Karten in der Deutschland-Ansicht, Schablonen „bald“), Autobahn-Netz aus Overture (sechs
+Linien, Routen über eine Stadt hinweg), Statthalter mit Razzia im Schlaf, Startpaket und Startgeld im Übergabe-Dialog,
+Ränge des Spielers (HUD, Banner, Bestenliste), Kapitel pro Stadt, Bot wählt die nächste Stadt, Bericht „Tage pro
+Stadt“. Für Auftrag 34: Das Startpaket nimmt bis dahin einen Leutnant ab Level 5 (`hierarchy/handover.ts`,
+`startPackLeaders`); mit dem Capo wird nur diese Auswahl umgestellt. Für 37 bis 39: Kontakt, Dreh, Gespräch und
+Quest-Kapitel der Städte stehen schon; die Enden ihrer Autobahn-Linien in `build-roads.py` (`AUTOBAHNEN`) auf Punkte im
+neuen Straßennetz legen und `--autobahn all` neu bauen.
+
 `src/core/`, `scripts/`, `package.json` und die Doku-Dateien gehören in den Wellen niemandem fest: nur erweitern, beim
 Mergen beide Seiten behalten. `CLAUDE.md`, `docs/architektur.md` und `docs/konzept.md` ergänzt jede Session in ihrem
 eigenen Abschnitt.

@@ -86,7 +86,11 @@ function HandoverDialog(props: { cityId: string; toCityId?: string }) {
     setVehicleIds((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
   // Übergeben und sofort in die nächste Stadt fahren (Ankunft: sie wird aktiv), mit Startpaket, in einem Befehl.
   const handOver = () => {
-    if (!to) return;
+    // Keine Stadt mehr frei (die übrigen sind noch Schablonen): nur die Vollmacht, du bleibst.
+    if (!to) {
+      if (dispatch({ type: 'hierarchy.grantFullPower', payload: { cityId: props.cityId } }).ok) close();
+      return;
+    }
     const pack = {
       leaderId: leaders.some((l) => l.id === leaderId) ? leaderId : null,
       staffIds: staffIds.filter((id) => people.some((p) => p.id === id)),
@@ -239,7 +243,7 @@ function HandoverDialog(props: { cityId: string; toCityId?: string }) {
         <Button variant="subtle" onClick={close}>
           Später
         </Button>
-        <Button variant="primary" icon="car" disabled={missing.length > 0 || !to} onClick={handOver}>
+        <Button variant="primary" icon={to ? 'car' : 'crown'} disabled={missing.length > 0} onClick={handOver}>
           {to ? `${city} übergeben und nach ${cityName(to)} fahren` : `${city} übergeben`}
         </Button>
       </div>

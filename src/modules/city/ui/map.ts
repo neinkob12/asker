@@ -53,7 +53,7 @@ export const autobahnLayer: MapLayer = {
   mount(ctx) {
     const { map } = ctx;
     const gold = mapToken('--hud-gold', '#f2c766');
-    const quiet = mapToken('--hud-ink-2', '#c9c4b8');
+    const quiet = mapToken('--hud-ink', '#f5f1e8');
     const lines = autobahnLines();
     const data = (busy: Set<string>) => ({
       type: 'FeatureCollection' as const,
@@ -86,8 +86,8 @@ export const autobahnLayer: MapLayer = {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': ['case', ['==', ['get', 'busy'], 1], gold, quiet],
-        'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 9, 2.2],
-        'line-opacity': ['case', ['==', ['get', 'busy'], 1], 0.9, 0.35],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['==', ['get', 'busy'], 1], 1.8, 1.4], 9, 2.6],
+        'line-opacity': ['case', ['==', ['get', 'busy'], 1], 0.95, 0.5],
       },
     });
     let shownKey = '';

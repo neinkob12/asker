@@ -842,8 +842,12 @@ export const SCENES = [
       const posts = sim.state.modules.hierarchy.posts;
       const lead = sim.state.modules.staff.members.find((m) => posts[m.id]);
       if (lead) lead.level = Math.max(lead.level, 5);
-      if (!sim.state.modules.staff.members.some((m) => m.role === 'runner' && !m.assignment && m.status === 'active')) {
-        sim.dispatch({ type: 'staff.hireRunner', payload: {} });
+      // Zwei Läufer ohne Spot, die mitkommen können.
+      const spotId = sim.state.modules.spots.unlocked[0];
+      for (let i = 0; i < 2; i++) {
+        sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+        const fresh = sim.state.modules.staff.members.at(-1);
+        if (fresh) sim.dispatch({ type: 'staff.assign', payload: { staffId: fresh.id, assignment: null } });
       }
       window.koeln.runtime.api.openDialog('hierarchy.handover', { cityId: 'koeln', toCityId: 'hamburg' });
     })()`,
@@ -856,7 +860,7 @@ export const SCENES = [
       window.koeln.runtime.api.closeDialog();
       window.koeln.runtime.api.flyToDeutschland();
     })()`,
-    wait: 2500,
+    wait: 4000,
   },
 ];
 

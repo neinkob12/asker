@@ -27,6 +27,7 @@ import {
 } from '../../../ui';
 import { activeCity, offerStatus } from '../../city';
 import { getStaff, getStaffMember, roleName } from '../../staff';
+import { campaignProgress } from '../../territory';
 import {
   canBeRightHand,
   cityLabel,
@@ -472,7 +473,10 @@ function RightHandPage() {
           );
         })}
       </Group>
-      <FullPowerSection offered={offerStatus(state) !== 'none'} />
+      {/* Vollmacht: sobald eine Stadt anruft oder die Stadt komplett ist (Auftrag 36: auch ohne nächste Stadt). */}
+      <FullPowerSection
+        offered={offerStatus(state) !== 'none' || campaignProgress(state, activeCity(state)).complete}
+      />
       <Group
         title="Büro"
         icon="briefcase"

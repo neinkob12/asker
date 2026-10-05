@@ -197,7 +197,10 @@ export const citiesLayer: MapLayer = {
         const key = JSON.stringify(model);
         if (key === card.key) continue;
         card.key = key;
-        card.element.className = `city-card is-${model.kind}${model.active ? ' is-active' : ''}`;
+        // Nur die eigenen Klassen setzen: MapLibre hängt seine (Position, Anker) an dasselbe Element.
+        for (const kind of ['mine', 'offer', 'free', 'soon'])
+          card.element.classList.toggle(`is-${kind}`, kind === model.kind);
+        card.element.classList.toggle('is-active', model.active);
         (card.element as HTMLButtonElement).disabled = model.kind === 'soon' || model.kind === 'free';
         card.element.setAttribute(
           'aria-label',
