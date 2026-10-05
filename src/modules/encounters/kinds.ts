@@ -388,6 +388,50 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     },
   },
 
+  // Auftrag 23: nach einem Einbruch die Täter suchen. Die Ware lagert gangs selbst wieder ein (skipEffects), je nach
+  // Teil-Ergebnis des Einsatzes „Diebesgut“ ganz, zur Hälfte oder gar nicht.
+  recoverLoot: {
+    name: 'Täter suchen',
+    baseSuccess: 0.55,
+    situation: 'Die Spur führt {place} in einen Hinterhof. {opponent} sitzen auf deiner Ware: {stakeGoods}.',
+    situations: [
+      { text: 'Die Spur führt {place} in einen Hinterhof. {opponent} sitzen auf deiner Ware: {stakeGoods}.' },
+      {
+        text: 'Nachts {place}, ein Kellerfenster ist noch hell. Drinnen zählen {opponent} deine Ware: {stakeGoods}.',
+        phases: ['night'],
+      },
+      {
+        text: 'Mittags {place}, eine Garage steht halb offen. {opponent} laden gerade {stakeGoods} in einen Kofferraum.',
+        phases: ['day'],
+      },
+      {
+        text: 'Regen {place}, die Straße ist leer. Unter einem Vordach stehen {opponent} mit deinen Taschen: {stakeGoods}.',
+        weather: ['rain', 'storm', 'snow'],
+      },
+      {
+        text: 'Dämmerung {place}. {opponent} wollen {stakeGoods} gerade weiterverkaufen, der Käufer ist schon da.',
+        phases: ['dawn', 'dusk'],
+      },
+    ],
+    opponent: { label: 'Die Diebe', strength: 40, count: [1, 3] },
+    gauges: { aggression: 40, resolve: 50 },
+    clock: 5,
+    stakes: ['goods', 'people', 'noise'],
+    stakeLabels: { goods: 'Diebesgut' },
+    intents: ['hideLoot', 'knife', 'callFriends', 'exit', 'noise', 'bruiserUp', 'nervousWavers'],
+    maxRounds: 8,
+    joinable: true,
+    ifNobody: 'retreat',
+    briefingOptions: ['self', 'crew', 'backup'],
+    actions: ['fight', 'intimidate', 'talkNervous', 'negotiate', 'hold', 'flee'],
+    remoteActions: ['fight', 'talkNervous', 'negotiate', 'flee'],
+    outcomes: {
+      success: { reputation: 1, text: 'Diebe {place} gestellt.' },
+      failure: { reputation: -1, text: 'Die Diebe sind {place} entwischt.' },
+      retreat: { text: 'Suche {place} abgebrochen.' },
+    },
+  },
+
   gangSpotRaid: {
     name: 'Überfall auf Gang-Spot',
     baseSuccess: 0.45,

@@ -17,6 +17,7 @@ import {
   RELATION_ON_SNITCH,
   TIPOFF_DISCOVERY_BASE,
 } from './config';
+import { onIntimidationResolved, onRecoverResolved } from './methods';
 import { getGang, veedelGang } from './state';
 
 /** Wirtschaftlich gegen die Gangs: Wer in ihrem Revier verkauft, fällt auf und drückt ihren Umsatz (siehe ai.ts). */
@@ -31,6 +32,10 @@ export function onSale(ctx: Ctx, sale: GameEvents['sale.completed']): void {
 
 /** Konfrontationen mit einer Gang als Gegenseite: Verluste und Beute auf ihrer Seite verbuchen, dann reagieren. */
 export function onEncounterResolved(ctx: Ctx, payload: GameEvents['encounter.resolved']): void {
+  // Auftrag 23: Täter nach einem Einbruch gesucht, Sicherheit an einem eingeschüchterten Spot.
+  const ref = payload.request.origin?.module === 'gangs' ? (payload.request.origin.ref ?? '') : '';
+  if (ref.startsWith('recover:')) onRecoverResolved(ctx, Number(ref.slice(8)), payload.outcome);
+  if (ref.startsWith('intimidation:')) onIntimidationResolved(ctx, Number(ref.slice(13)), payload.outcome);
   const gangId = payload.request.opponent?.factionId;
   const gang = gangId ? getGang(ctx.state, gangId) : undefined;
   const s = gang ? statusOf(ctx, gang.id) : undefined;

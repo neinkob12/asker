@@ -19,6 +19,7 @@ import type { ModuleDefinition } from './module';
 import { sortModules } from './module';
 import { createOutcomeState, outcome } from './outcome';
 import { rngNext, seedStream } from './rng';
+import { createTextsState } from './texts';
 import type {
   Command,
   CommandMeta,
@@ -32,7 +33,7 @@ import type {
 } from './types';
 
 /** Version des Kern-Formats im Spielstand. Hochzählen, wenn sich die Kernfelder ändern, und in persistence.ts migrieren. */
-export const CORE_SCHEMA_VERSION = 3;
+export const CORE_SCHEMA_VERSION = 4;
 
 /** ID des Kerns, z.B. als Quelle von Journal-Einträgen. */
 export const CORE_ID = 'core';
@@ -126,6 +127,7 @@ export class Simulation {
       journal: [],
       messages: createMessagesState(),
       outcome: createOutcomeState(),
+      texts: createTextsState(),
       modules: {} as GameState['modules'],
       moduleVersions: {},
     };

@@ -21,7 +21,20 @@ export interface GangTraits {
   dealing: number;
   /** Startwerte. */
   start: { money: number; people: number; goods: number };
+  /**
+   * Wie die Gang Druck macht (Auftrag 23): Gewichte der Methoden, ab Stufe 2 (Abwerben schon ab Stufe 1). Fehlt eine
+   * Methode, nutzt die Gang sie nie. Der Überfall läuft ab Stufe 3 über die Eskalation (ai.ts); sein Gewicht zeigt
+   * nur die Gangs-Seite.
+   */
+  methods: Partial<Record<GangMethod, number>>;
 }
+
+/**
+ * Methoden einer Gang: raid Überfall (Konfrontation), intimidate Leute an deinen Spot stellen, burglary nachts ins
+ * Lager einbrechen, poach deine Leute abwerben, tipOff der Polizei einen Tipp geben, blackmail mit deinem Lager
+ * erpressen.
+ */
+export type GangMethod = 'raid' | 'intimidate' | 'burglary' | 'poach' | 'tipOff' | 'blackmail';
 
 export interface Gang {
   id: string;
@@ -70,6 +83,7 @@ export const GANGS: readonly Gang[] = [
       goodsQuality: 0.6,
       dealing: 0.3,
       start: { money: 18000, people: 16, goods: 900 },
+      methods: { raid: 3, intimidate: 3, burglary: 1, poach: 0.5 },
     },
   },
   {
@@ -94,6 +108,7 @@ export const GANGS: readonly Gang[] = [
       goodsQuality: 0.65,
       dealing: 0.6,
       start: { money: 45000, people: 14, goods: 1200 },
+      methods: { tipOff: 3, burglary: 2.5, poach: 1, intimidate: 0.5, raid: 1 },
     },
   },
   {
@@ -118,6 +133,7 @@ export const GANGS: readonly Gang[] = [
       goodsQuality: 0.45,
       dealing: 1.5,
       start: { money: 25000, people: 14, goods: 2500 },
+      methods: { poach: 3, intimidate: 1.5, raid: 1.5, burglary: 1 },
     },
   },
   {
@@ -142,6 +158,7 @@ export const GANGS: readonly Gang[] = [
       goodsQuality: 0.8,
       dealing: 0.5,
       start: { money: 70000, people: 10, goods: 600 },
+      methods: { blackmail: 3, burglary: 2.5, tipOff: 1, raid: 1 },
     },
   },
   // --- Hamburg (Auftrag 30) ---
@@ -167,6 +184,7 @@ export const GANGS: readonly Gang[] = [
       goodsQuality: 0.7,
       dealing: 0.6,
       start: { money: 65000, people: 20, goods: 1600 },
+      methods: { intimidate: 3, raid: 2, poach: 1, blackmail: 1 },
     },
   },
   {
@@ -191,6 +209,7 @@ export const GANGS: readonly Gang[] = [
       goodsQuality: 0.55,
       dealing: 1.3,
       start: { money: 30000, people: 22, goods: 3500 },
+      methods: { raid: 3, burglary: 2, intimidate: 1.5 },
     },
   },
   {
@@ -215,6 +234,7 @@ export const GANGS: readonly Gang[] = [
       goodsQuality: 0.75,
       dealing: 0.8,
       start: { money: 45000, people: 17, goods: 1500 },
+      methods: { tipOff: 2.5, poach: 2, burglary: 1, raid: 1 },
     },
   },
   {
@@ -239,6 +259,7 @@ export const GANGS: readonly Gang[] = [
       goodsQuality: 0.9,
       dealing: 0.4,
       start: { money: 100000, people: 13, goods: 800 },
+      methods: { blackmail: 3, tipOff: 2, burglary: 1.5, raid: 1 },
     },
   },
 ];

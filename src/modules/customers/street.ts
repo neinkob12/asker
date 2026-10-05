@@ -4,6 +4,7 @@ import {
   type CommandResult,
   type Ctx,
   clock,
+  distanceMeters,
   type GameState,
   journal,
   MINUTES_PER_DAY,
@@ -12,6 +13,7 @@ import {
 } from '../../core';
 import { activeCity, cityOfSpot } from '../city';
 import { eventFactor } from '../events';
+import { intimidationFactor } from '../gangs';
 import { allProducts, getProduct, getStock, take } from '../goods';
 import { isPlayerOnTheRoad } from '../logistics';
 import { getSpotPrice, priceRatio, spotReferencePrice } from '../market';
@@ -26,6 +28,8 @@ import {
   nextSpotOpening,
   type Spot,
   spotCity,
+  spotDemandFactor,
+  spotModifiers,
 } from '../spots';
 import { nightlifeOf } from '../veedel';
 import { weatherDemandFactor } from '../weather';
@@ -67,6 +71,9 @@ import {
 import type { Customer, Regular } from './index';
 import { qualityDemandFactor, recordSaleQuality } from './quality';
 
+/** Stammkunden eines aufgegebenen Spots wechseln höchstens so weit (Meter) zum nächsten Spot (Auftrag 23). */
+const REGULAR_MOVE_METERS = 1500;
+
 const TYPE_NORM = CUSTOMER_TYPES.reduce((sum, t) => sum + t.share, 0);
 
 function typeWeights(spot: Pick<Spot, 'audience'>, time: number): number[] {
@@ -96,6 +103,9 @@ export function demandRate(state: GameState, spot: Spot, time: number): number {
   return (
     spot.demand *
     eventFactor(state, 'demand', { spotId: spot.id, veedelId: spot.veedelId }) *
+    // Auftrag 23: Gang-Leute am Spot schrecken Kunden ab; Bekanntheit und Art des Spots (Tageskurve, Wetter).
+    intimidationFactor(state, spot.id) *
+    spotDemandFactor(state, spot, time) *
     nightlifeFactor(spot.veedelId, time) *
     hourDemandMultiplier(clock.hour(time)) *
     WEEKDAY_DEMAND[clock.weekday(time)] *
@@ -369,7 +379,9 @@ function maybeBecomeRegular(ctx: Ctx, customer: Customer, spot: Spot, quality: n
   if (activeRegulars(ctx).length >= MAX_REGULARS) return;
   const type = customerType(customer.typeId);
   const kneipe = isKneipe(spot) ? KNEIPE.regularFactor : 1;
-  if (!ctx.chance(REGULAR_CHANCE * kneipe * type.loyalty * reputationDemandFactor(ctx.state))) return;
+  // Auftrag 23: Ein Stammplatz (Ausbau) bringt mehr Stammkunden.
+  const place = spotModifiers(ctx.state, spot.id).regularFactor;
+  if (!ctx.chance(REGULAR_CHANCE * kneipe * place * type.loyalty * reputationDemandFactor(ctx.state))) return;
   const taken = new Set(state.regulars.map((r) => r.name));
   let name = '';
   for (let i = 0; i < 5 && (!name || taken.has(name)); i++) {
@@ -408,6 +420,29 @@ export function updateRegularAfterSale(
   regular.visits += 1;
   if (regular.satisfaction < REGULAR_LOST_BELOW) {
     loseRegular(ctx, regular, sale.noticedCut ? 'gestreckte Ware' : 'die Qualität stimmt nicht mehr');
+  }
+}
+
+/**
+ * Ein eigener Spot wird aufgegeben (Auftrag 23): Wer dort wartet, geht; Stammkunden wechseln zum nächsten Spot in
+ * derselben Stadt (bis REGULAR_MOVE_METERS entfernt), sonst sind sie weg. Stehst du selbst dort, gehst du.
+ */
+export function onSpotClosed(ctx: Ctx, spotId: string, where: { lng: number; lat: number }): void {
+  const s = ctx.state.modules.customers;
+  s.waiting = s.waiting.filter((c) => c.spotId !== spotId);
+  delete s.nextSpawnAt[spotId];
+  if (s.self.spotId === spotId) s.self.spotId = null;
+  for (const regular of s.regulars) {
+    if (regular.status !== 'active' || regular.spotId !== spotId) continue;
+    const next = getSpots(ctx.state)
+      .filter((x) => x.id !== spotId)
+      .map((x) => ({ x, d: distanceMeters(x, where) }))
+      .filter(({ d }) => d <= REGULAR_MOVE_METERS)
+      .sort((a, b) => a.d - b.d || a.x.id.localeCompare(b.x.id))[0]?.x;
+    if (next) {
+      regular.spotId = next.id;
+      journal.add(ctx, `Stammkunde ${regular.name} kommt ab jetzt zum ${next.name}.`, 'info', { spotId: next.id });
+    } else loseRegular(ctx, regular, 'sein Spot ist zu');
   }
 }
 

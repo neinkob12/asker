@@ -185,6 +185,10 @@ Spezialzügen (Haken `specialMoves(member)` für Auftrag 34), Rat der Rechten Ha
 Mergen beide Seiten behalten. `CLAUDE.md`, `docs/architektur.md` und `docs/konzept.md` ergänzt jede Session in ihrem
 eigenen Abschnitt.
 
+**Stand Auftrag 23 (Welle 1, gekürzt):** umgesetzt (PR #56): Text-Helfer im Kern (`texts.pick`), eigene Stimmen für
+Gangs, Lieferanten, Personal, Leutnants und Hafen, Gang-Methoden mit Einbruch, Abwerben, Einschüchtern, Polizei-Tipp,
+Erpressung und Chancen, Lieferprobleme mit Gründen und Entscheidungen, Spot-Arten mit Bekanntheit, Ausbau, Verlegen,
+Umbenennen und Aufgeben. Kunden-Anfragen (Etappe 4) bewusst nicht umgebaut: Seit Auftrag 28 regelt das die Rechte Hand.
 **Stand Auftrag 32:** umgesetzt in fünf Etappen (PR #54): Preisindex pro Ware und Stadt (`market`), Rabatt-Aktionen
 (`suppliers`), Marktereignisse (`events`), Marktbericht am Montag, Preisgrenze in Bestellregeln (`hierarchy`, klein),
 Qualität treibt Nachfrage (`customers/quality.ts`), Wochenverträge (`quests/contracts.ts`), Bot und Balancing.

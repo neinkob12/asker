@@ -664,6 +664,70 @@ export const SCENES = [
     name: 'fahrer',
     js: `${ROUTE}; window.koeln.runtime.api.openPanel('logistics.drivers', {})`,
   },
+  // Auftrag 23: Spot gründen (Blatt mit Art-Auswahl), Spot mit Ausbau, Gang-Stimmen, Einbruch, Abwerben, Lieferproblem
+  {
+    name: 'spot-gruenden',
+    js: `(async () => {
+      ${STEPS}
+      const rt = window.koeln.runtime;
+      rt.map.pickLocation = async () => ({ lng: 7.0035, lat: 50.9385 });
+      window.koeln.session.sim.state.wallet.dirty += 3000;
+      rt.api.selectTab('territory');
+      const button = await until(() => [...document.querySelectorAll('.phone button')].find((b) => b.textContent.includes('Eigenen Spot gründen')));
+      button?.click();
+      await until(() => document.querySelector('.ui-sheet'));
+      await sleep(600);
+      await still();
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'spot-ausbau',
+    js: `(async () => {
+      ${STEPS}
+      const sim = window.koeln.session.sim;
+      let spot = sim.state.modules.spots.custom[0];
+      if (!spot) {
+        sim.state.wallet.dirty += 3000;
+        sim.dispatch({ type: 'spots.found', payload: { lng: 7.0035, lat: 50.9385, kind: 'club', name: 'Keller in Kalk' } });
+        spot = sim.state.modules.spots.custom[0];
+      }
+      if (!spot) return;
+      sim.state.wallet.dirty += 2000;
+      sim.dispatch({ type: 'spots.upgrade', payload: { spotId: spot.id, upgrade: 'lookout' } });
+      window.koeln.runtime.api.openPanel('spots.spot', { spotId: spot.id });
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Bekanntheit')));
+      head?.scrollIntoView({ block: 'start' });
+    })()`,
+  },
+  ...['nord', 'west', 'ost', 'sued'].map((gangId) => ({
+    name: `gang-chat-${gangId}`,
+    js: `(() => {
+      if (!window.koeln.session.state.messages.list.some((m) => m.contactId === 'gang:${gangId}')) window.koeln.dev.gangStimmen();
+      window.koeln.runtime.api.openPhone('core.messages', { contactId: 'gang:${gangId}' });
+    })()`,
+  })),
+  {
+    name: 'einbruch',
+    js: `(() => {
+      if (!window.koeln.session.state.messages.list.some((m) => m.contactId === 'other:neighbor')) window.koeln.dev.einbruch();
+      window.koeln.runtime.api.openPhone('core.messages', { contactId: 'other:neighbor' });
+    })()`,
+  },
+  {
+    name: 'gang-seite',
+    js: `(() => {
+      window.koeln.runtime.api.selectTab('gangs');
+      window.koeln.runtime.api.openPanel('gangs.gang', { gangId: 'west' });
+    })()`,
+  },
+  {
+    name: 'lieferproblem',
+    js: `(() => {
+      if (!window.koeln.session.state.modules.suppliers.shipments.some((x) => x.decision)) window.koeln.dev.lieferProblem();
+      window.koeln.runtime.api.openPhone('suppliers.app');
+    })()`,
+  },
   // Rechte Hand mit Tagesbericht (spult einen Tag vor, deshalb am Ende)
   {
     name: 'rechte-hand',

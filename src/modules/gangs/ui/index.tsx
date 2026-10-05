@@ -28,6 +28,7 @@ import {
   registerTab,
   Sheet,
   SummaryTiles,
+  soundOnEvent,
   Tag,
   useGame,
   useUi,
@@ -38,21 +39,29 @@ import { veedelName } from '../../veedel';
 import {
   ALLIANCE_COST,
   ceasefireCost,
+  describeIncident,
   type Gang,
+  type GangMethod,
+  gangActions,
   gangPower,
   gangVeedel,
   getGang,
   getGangStatus,
   getGangs,
   hasCeasefire,
+  incidentChoiceLabel,
+  incidentChoices,
   isAllied,
   isGangBroken,
+  openIncidents,
   paysTribute,
   playerPower,
   protectionAmount,
   raidCrew,
   raidTargets,
+  runGangMethod,
   STAGE_NAMES,
+  sendGangMessage,
   tributeAmount,
   WARN_AT,
 } from '../index';
@@ -337,6 +346,7 @@ function GangPanel(props: { gangId: string }) {
           </ListItem>
         </List>
       </Group>
+      <GangMethods gang={gang} />
       {lines.length > 0 && (
         <Group title="Abmachungen" icon="clipboard" color="warn">
           <List>
@@ -504,6 +514,83 @@ function AllySheet(props: { gang: Gang; open: boolean; onClose: () => void }) {
   );
 }
 
+/** Namen der Methoden für die Chips (Auftrag 23). */
+const METHOD_NAMES: Record<GangMethod, string> = {
+  raid: 'Überfälle',
+  intimidate: 'Einschüchtern',
+  burglary: 'Einbrüche',
+  poach: 'Abwerben',
+  tipOff: 'Polizei-Tipps',
+  blackmail: 'Erpressung',
+};
+
+/**
+ * Wie die Gang Druck macht (Methoden als Chips), offene Vorfälle mit Antworten und ihre letzten Aktionen gegen dich
+ * (Auftrag 23).
+ */
+function GangMethods(props: { gang: Gang }) {
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const { gang } = props;
+  const methods = (Object.entries(gang.traits.methods) as [GangMethod, number][])
+    .filter(([, w]) => w > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([m]) => ({ label: METHOD_NAMES[m], color: 'danger' as const }));
+  // Nur, was dir bekannt ist: Beim Einbruch zählt die Spur (gangId), nicht wer es wirklich war.
+  const open = openIncidents(state).filter((i) => i.gangId === gang.id);
+  const actions = gangActions(state, gang.id);
+  return (
+    <Group title="Gegen dich" icon="skull" color="danger" value={actions.length > 0 ? `${actions.length}` : undefined}>
+      <List>
+        <ListItem>
+          <ItemContent icon="bolt" color="danger" title="Methoden" tags={methods} />
+        </ListItem>
+        {open.map((incident) => (
+          <ListItem key={incident.id}>
+            <ItemContent
+              icon="alert"
+              color="warn"
+              title={describeIncident(state, incident)}
+              meta={
+                incident.encounterId !== undefined
+                  ? 'Deine Leute kümmern sich'
+                  : `bis ${clock.formatTime(incident.expiresAt)}`
+              }
+            />
+            {incident.encounterId === undefined && (
+              <div class="gang-incident__actions">
+                {incidentChoices(state, incident).map((choice, index) => (
+                  <Button
+                    key={choice}
+                    small
+                    variant={index === 0 ? 'subtle' : 'default'}
+                    onClick={() => {
+                      const r = dispatch({ type: 'gangs.respond', payload: { incidentId: incident.id, choice } });
+                      if (!r.ok) ui.toast(r.reason, 'warn');
+                    }}
+                  >
+                    {incidentChoiceLabel(state, incident, choice)[0]}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </ListItem>
+        ))}
+        {actions.map((a) => (
+          <ListItem key={`${a.at}-${a.text}`} value={clock.format(a.at)}>
+            <ItemContent icon="clock" color="system" title={a.text} />
+          </ListItem>
+        ))}
+        {actions.length === 0 && open.length === 0 && (
+          <ListItem>
+            <ItemContent icon="check" color="money" title="Bisher nichts gegen dich" />
+          </ListItem>
+        )}
+      </List>
+    </Group>
+  );
+}
+
 function hostilityColor(value: number): CategoryColor {
   if (value >= 70) return 'danger';
   if (value >= 25) return 'warn';
@@ -655,6 +742,32 @@ onGameEvent('gang.busted', 'gangs.bustedToast', (p, ui, state) => {
   ui.toast(`Razzia bei ${gang.name}${lost ? `: ${lost}` : ''}`, 'good');
 });
 
+// Auftrag 23: neue Aktionen der Gangs. Was eine Antwort braucht, kommt als Chat mit Frist (das ist das Banner); hier
+// Verlauf und Ton.
+onGameEvent('gang.burglary', 'gangs.burglaryToast', (p, ui) => {
+  if (p.amount === 0) ui.toast('Einbruchsversuch am Lager, deine Wache war schneller', 'good', { urgent: false });
+  else ui.toast(`Einbruch im Lager: ${formatAmount(p.amount)} weg`, 'bad', { urgent: false });
+});
+onGameEvent('gang.poachAttempt', 'gangs.poachToast', (p, ui, state) => {
+  const gang = getGang(state, p.gangId);
+  if (gang) ui.toast(`${gang.name} will einen deiner Leute abwerben`, 'warn', { urgent: false });
+});
+onGameEvent('gang.intimidation', 'gangs.intimidationToast', (p, ui, state) => {
+  const gang = getGang(state, p.gangId);
+  if (gang) ui.toast(`${gang.name} schüchtert an deinem Spot ein`, 'bad', { urgent: false });
+});
+onGameEvent('gang.tipOff', 'gangs.tipOffToast', (p, ui, state) => {
+  const gang = getGang(state, p.gangId);
+  if (gang) ui.toast(`${gang.name} hat dich in ${veedelName(p.veedelId)} angeschwärzt`, 'bad');
+});
+onGameEvent('gang.goodTurn', 'gangs.goodTurnToast', (p, ui, state) => {
+  const gang = getGang(state, p.gangId);
+  const what = p.kind === 'warnRival' ? 'warnt dich' : 'bittet um einen Gefallen';
+  if (gang) ui.toast(`${gang.name} ${what}`, 'good', { urgent: false });
+});
+soundOnEvent('gang.burglary', 'alert', { when: (p) => p.amount > 0 });
+soundOnEvent('gang.tipOff', 'siren', { volume: 0.4 });
+
 registerSearch({
   id: 'gangs.search',
   label: 'Gangs',
@@ -671,3 +784,44 @@ registerSearch({
       },
     })),
 });
+
+// ---------------------------------------------------------------------------------------------
+// Nur im Dev-Build: Abkürzungen zum Ausprobieren (Auftrag 23), z.B. window.koeln.dev.einbruch() in der Konsole und
+// in den Szenen von scripts/phone-scenes.mjs.
+
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  const sim = () => {
+    const current = window.koeln?.session.sim;
+    if (!current) throw new Error('Kein Spiel geladen.');
+    return current;
+  };
+  const dev = {
+    /** Jede Kölner Gang schreibt dir eine Warnung und eine Drohung (ihre Stimmen nebeneinander). */
+    gangStimmen: () => {
+      const s = sim();
+      const ctx = s.ctx('gangs');
+      for (const gang of getGangs(s.state, 'koeln')) {
+        sendGangMessage(ctx, gang.id, 'warning', { veedel: veedelName(gang.homeVeedelId) });
+        sendGangMessage(ctx, gang.id, 'threat', { veedel: veedelName(gang.homeVeedelId), tribute: '750 €' });
+      }
+      s.step();
+    },
+    /** Einbruch des Venloer Syndikats ins erste Lager, sofort gemeldet. */
+    einbruch: () => {
+      const s = sim();
+      const ctx = s.ctx('gangs');
+      s.state.modules.gangs.lastMethodAt = null;
+      if (runGangMethod(ctx, 'west', 'burglary', true)) s.advance(60 - (s.state.time % 60));
+    },
+    /** Die Schäl Sick will einen deiner Leute abwerben. */
+    abwerben: () => {
+      const s = sim();
+      const m = s.state.modules.staff.members.find((x) => x.role === 'runner' && x.status === 'active');
+      if (m) m.stats.loyalty = Math.min(m.stats.loyalty, 30);
+      runGangMethod(s.ctx('gangs'), 'ost', 'poach');
+      s.step();
+    },
+  };
+  const holder = window as unknown as { koeln?: { dev?: Record<string, () => void> } };
+  holder.koeln = { ...holder.koeln, dev: { ...holder.koeln?.dev, ...dev } };
+}

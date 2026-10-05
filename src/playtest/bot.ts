@@ -69,7 +69,16 @@ import {
 } from '../modules/logistics';
 import { activeContract, contractOffers, contractValue } from '../modules/quests';
 import { getCandidates } from '../modules/recruiting';
-import { canFoundSpotAt, getSpots, lockedSpots, spotCity } from '../modules/spots';
+import {
+  canFoundSpotAt,
+  customSpots,
+  getSpots,
+  lockedSpots,
+  SPOT_UPGRADES,
+  spotAwareness,
+  spotCity,
+  spotUpgrades,
+} from '../modules/spots';
 import { bailCost, getStaff, runnerHireCost, securityAt } from '../modules/staff';
 import {
   availableCredit,
@@ -457,10 +466,19 @@ function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
         const lng = target.center.lng + dx;
         const lat = target.center.lat + dy;
         if (!canFoundSpotAt(state, lng, lat).ok) continue;
-        run(sim, stats, { type: 'spots.found', payload: { lng, lat } });
+        // Auftrag 23: In dichten Veedeln ein Bahnhof (viel Andrang), sonst eine Straßenecke.
+        const kind = (target.density ?? 1) >= 1.2 ? 'station' : 'corner';
+        run(sim, stats, { type: 'spots.found', payload: { lng, lat, kind } });
         break;
       }
     }
+  }
+
+  // Auftrag 23: Eigene Spots mit Stammplatz ausbauen, damit sie sich schneller herumsprechen.
+  for (const spot of customSpots(state)) {
+    if (spotAwareness(state, spot.id) >= 0.8 || spotUpgrades(state, spot.id).includes('regular')) continue;
+    if (money(state) < reserve(state) + SPOT_UPGRADES.regular.cost + 1000) break;
+    run(sim, stats, { type: 'spots.upgrade', payload: { spotId: spot.id, upgrade: 'regular' } });
   }
 
   appointLieutenants(sim, stats);
@@ -574,7 +592,24 @@ function mayReplace(state: GameState, options: BotOptions): boolean {
  */
 function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions): void {
   const state = sim.state;
-  const PREFERENCE = ['tribute', 'ceasefire', 'raise', 'lieLow', 'refuse', 'decline', 'no', 'later', 'ignore'];
+  // Auftrag 23: Abwerben mit mehr Lohn kontern, nach einem Einbruch die Leute die Täter suchen lassen, Gefallen und
+  // Warnungen der Gangs annehmen, Erpressung ablehnen.
+  const PREFERENCE = [
+    'tribute',
+    'ceasefire',
+    'raise',
+    'bribe',
+    'detour',
+    'hunt',
+    'accept',
+    'thanks',
+    'lieLow',
+    'refuse',
+    'decline',
+    'no',
+    'later',
+    'ignore',
+  ];
   for (const m of [...state.messages.list]) {
     if (!messages.canAnswer(state, m)) continue;
     // Routine (Lieferanfragen, Hafen) überlässt der Bot seiner Rechten Hand, sobald sie das Handy übernimmt.

@@ -32,6 +32,7 @@ import {
   type GameState,
   journal,
   messages,
+  texts,
 } from '../../core';
 import { cityName } from '../city';
 import { nearestWarehouse, type Warehouse, warehouseCity } from '../goods';
@@ -93,6 +94,7 @@ import {
   rightHandDaily,
   rightHandTick,
 } from './righthand';
+import { HIERARCHY_TEXTS } from './texts';
 import type {
   HierarchyState,
   LieutenantPost,
@@ -729,7 +731,7 @@ function complain(ctx: Ctx, post: LieutenantPost): void {
   const what = post.spotIds.length === 1 ? 'den Spot' : `${post.spotIds.length} Spots`;
   messages.send(ctx, {
     contact: staffContact(m),
-    text: `Chef, ich halte ${what} für dich zusammen und krieg ${formatEuro(m.wage)} am Tag. Das reicht so nicht.`,
+    text: texts.pick(ctx, 'lieutenant:wageRequest', HIERARCHY_TEXTS.wageRequest, { what, wage: formatEuro(m.wage) }),
     options: [
       {
         id: 'raise',

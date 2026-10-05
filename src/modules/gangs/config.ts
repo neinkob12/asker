@@ -213,3 +213,87 @@ export const MONEY_PER_POWER = 1000;
 export const GOODS_PER_POWER = 100;
 /** Stärke des Spielers pro kontrolliertem Veedel. */
 export const VEEDEL_POWER = 15;
+
+// --- Methoden und neue Aktionen (Auftrag 23) ----------------------------------------------------
+// Wie eine Gang Druck macht, steht pro Gang als Gewichte in data.ts (traits.methods). Ab Stufe 1 (Abwerben) und
+// voll ab Stufe 2 wählt sie danach eine Methode; der Überfall ab Stufe 3 läuft weiter über die Eskalation (ai.ts),
+// sein Gewicht ist nur die Anzeige auf der Gangs-Seite.
+
+/**
+ * Abstand zwischen zwei Methoden einer drohenden Gang (Stufe 2) in Tagen [von, bis], pro Stadt; auf Stufe 1 (nur
+ * Abwerben) doppelt so lang. Der erste Termin kommt so weit nach dem Beginn der Drohung. Ein fester Abstand statt
+ * eines Wurfs pro Stunde: Eine drohende Gang zeigt verlässlich in etwa acht Tagen eine Methode, und es hagelt nicht.
+ * Hamburgs Gangs sind ohnehin stärker und härter, dort kommen die Methoden seltener dazu.
+ */
+export const METHOD_INTERVAL_BY_CITY: Readonly<Record<string, readonly [number, number]>> = {
+  koeln: [4, 8],
+  hamburg: [6, 12],
+};
+/** Geht zum Termin nichts (kein Ziel, eine andere Gang war gerade dran), versucht sie es so viel später wieder. */
+export const METHOD_RETRY = 6 * HOUR;
+/** Abstand zwischen zwei Aktionen irgendeiner Gang. */
+export const METHOD_GLOBAL_GAP = DAY;
+/** So viele Leute braucht eine Gang für eine Methode (wie für einen Überfall). */
+export const METHOD_MIN_PEOPLE = 2;
+/**
+ * Nach einer Methode sinkt die Feindseligkeit der Gang um so viel (nach einem gelungenen Überfall:
+ * HOSTILITY_AFTER_LESSON). Die Methoden kommen zum Überfall dazu und ersetzen ihn nie: Abgewehrte Überfälle schwächen
+ * die Gang, davon lebt die Übernahme ihrer Veedel.
+ */
+export const METHOD_HOSTILITY_RELIEF = 5;
+/** Antwortfrist für Nachrichten zu Einbruch, Abwerben, Einschüchtern, Erpressung. */
+export const INCIDENT_EXPIRY = 8 * HOUR;
+
+/** Einbruch: nur nachts (Stunden), Anteil des Lagerbestands, höchstens so viel. */
+export const BURGLARY_HOURS: readonly [number, number] = [1, 5];
+export const BURGLARY_SHARE = 0.15;
+export const BURGLARY_MAX = 150;
+/** Jede Wache am Lager verscheucht Einbrecher mit dieser Chance (sonst halbiert sie den Verlust). */
+export const BURGLARY_GUARD_STOP = 0.6;
+/** Bemerkt wird der Einbruch um diese Uhrzeit. */
+export const BURGLARY_REPORT_HOUR = 7;
+/** Wohin die Spur führt: Gang, Junkies (keine Gang), eigener Mann. */
+export const BURGLARY_TRAIL = { gang: 0.6, junkies: 0.25, insider: 0.15 } as const;
+/** Täter suchen: so viel holt ein Erfolg zurück. */
+export const RECOVER_SHARE = 0.7;
+
+/** Abwerben: nur Leute unter dieser Loyalität; Angebot als Anteil vom Lohn (mindestens POACH_MIN_EXTRA). */
+export const POACH_MAX_LOYALTY = 45;
+export const POACH_EXTRA_SHARE = 0.2;
+export const POACH_MIN_EXTRA = 15;
+/** Drohen: Chance zu bleiben = Grundwert + Loyalität/100; sonst geht er und plaudert (Heat). */
+export const POACH_THREAT_STAY = 0.35;
+export const POACH_THREAT_LOYALTY = -10;
+export const POACH_TALK_HEAT = 8;
+export const POACH_RAISE_LOYALTY = 10;
+
+/** Einschüchtern: so viele Kunden kommen noch (Faktor), so lange. */
+export const INTIMIDATION_FACTOR = 0.75;
+export const INTIMIDATION_DURATION = 6 * HOUR;
+/** Sicherheit hinschicken: Chance, dass sie ohne Kampf abziehen (sonst Konfrontation). */
+export const INTIMIDATION_LEAVE_CHANCE = 0.5;
+
+/** Tipp an die Polizei: Heat im Veedel, Chance auf eine geplante Razzia. */
+export const TIPOFF_HEAT = 6;
+export const TIPOFF_RAID_CHANCE = 0.1;
+
+/** Erpressung: Grundbetrag plus Anteil am Warenwert des Lagers (Einkauf), gerundet; bei Weigerung Heat und Razzia. */
+export const BLACKMAIL_BASE = 300;
+export const BLACKMAIL_STOCK_SHARE = 0.1;
+export const BLACKMAIL_MAX = 3000;
+export const BLACKMAIL_HEAT = 12;
+/** Abgelehnte Erpressung: Chance, dass die Polizei daraufhin eine Razzia plant (Heat gibt es immer). */
+export const BLACKMAIL_RAID_CHANCE = 0.35;
+
+// Chancen von Gangs (Ton „gemischt“): einmal am Tag gewürfelt, nur bei guter Beziehung.
+/** Chance pro Tag und Gang auf eine Chance (Warnung, Gefallen), wenn die Beziehung reicht. */
+export const GOOD_TURN_CHANCE = 0.12;
+export const GOOD_TURN_MIN_RELATION = 5;
+/** Warnung vor einem Rivalen: Vorbereiten kostet so viel und hält den Rivalen so lange ab. */
+export const WARN_PREPARE_COST = 250;
+/** Gefallen (Ware zwischenlagern): Lohn [von, bis], Beziehung, Heat im Lager-Veedel. */
+export const FAVOR_PAY: readonly [number, number] = [300, 900];
+export const FAVOR_RELATION = 10;
+export const FAVOR_HEAT = 6;
+/** So viele Aktionen gegen dich merkt sich jede Gang für die Anzeige. */
+export const ACTION_LOG_LIMIT = 6;

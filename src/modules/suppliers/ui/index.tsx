@@ -35,20 +35,24 @@ import {
   assortment,
   availableCredit,
   availablePackages,
+  CHOICE_NAMES,
   canUnlock,
   creditLimit,
   deliversTo,
   expectedArrival,
+  forceShipmentProblem,
   getDeals,
   getRelation,
   getSupplier,
   getSuppliers,
   isBlocked,
   isUnlocked,
+  type ProblemChoice,
   packagePrice,
   type Shipment,
   type Supplier,
   shipmentProgress,
+  shipmentReason,
   shipmentsInTransit,
   supplierDiscount,
   supplierIn,
@@ -81,8 +85,58 @@ function ShipmentRow(props: { state: GameState; shipment: Shipment; showSupplier
         </span>
       </div>
       <ProgressBar value={shipmentProgress(state, s)} tone={delayed ? 'warn' : 'accent'} label="Lieferung" />
+      <ShipmentTrouble state={state} shipment={s} />
     </div>
   );
+}
+
+/** Auftrag 23: Grund des Problems, gewählte Antwort und offene Rückfrage mit Knöpfen. */
+function ShipmentTrouble(props: { state: GameState; shipment: Shipment }) {
+  const { dispatch } = useGame();
+  const ui = useUi();
+  const { state, shipment: s } = props;
+  const reason = s.problemRevealed || s.decision ? shipmentReason(state, s) : null;
+  const chips = [
+    reason ? { label: reason, color: 'warn' as const, icon: 'alert' as const } : null,
+    s.choice && s.choice !== 'wait' ? { label: CHOICE_NAMES[s.choice], color: 'goods' as const } : null,
+    s.partOf ? { label: 'Rest der Teillieferung', color: 'system' as const } : null,
+  ];
+  if (!chips.some(Boolean) && !s.decision) return null;
+  const d = s.decision;
+  return (
+    <div class="shipment__trouble">
+      <Chips items={chips} />
+      {d && (
+        <div class="shipment__choices">
+          {d.choices.map((choice) => (
+            <Button
+              key={choice}
+              small
+              variant={choice === 'wait' ? 'subtle' : 'default'}
+              onClick={() => {
+                const r = dispatch({ type: 'suppliers.resolveProblem', payload: { shipmentId: s.id, choice } });
+                if (!r.ok) ui.toast(r.reason, 'warn');
+              }}
+            >
+              {choiceLabel(state, s, choice)}
+            </Button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function choiceLabel(state: GameState, s: Shipment, choice: ProblemChoice): string {
+  const cost = s.decision ? formatEuro(s.decision.cost) : '';
+  if (choice === 'detour') return `Umweg (${cost})`;
+  if (choice === 'bribe') return `Schmieren (${cost})`;
+  if (choice === 'partial') return 'Teillieferung';
+  if (choice === 'redirect') {
+    const target = s.decision?.redirectTo ? getWarehouse(state, s.decision.redirectTo)?.name : undefined;
+    return `Ins ${target ?? 'andere Lager'}`;
+  }
+  return s.decision?.kind === 'seize' ? 'Aufgeben' : 'Abwarten';
 }
 
 /**
@@ -541,11 +595,12 @@ registerMapLayer(suppliersLayer);
 
 onGameEvent('shipment.problem', 'suppliers.problemToast', (payload, ui, state) => {
   const name = getSupplier(state, payload.supplierId)?.name ?? 'Lieferant';
-  const text = {
-    delayed: `Lieferung aus ${name} verspätet sich.`,
-    badQuality: `Die Ware aus ${name} ist schlechter als versprochen.`,
-    seized: `Lieferung aus ${name} beschlagnahmt!`,
+  const base = {
+    delayed: `Lieferung aus ${name} verspätet sich`,
+    badQuality: `Die Ware aus ${name} ist schlechter als versprochen`,
+    seized: `Lieferung aus ${name} beschlagnahmt`,
   }[payload.kind];
+  const text = payload.reason ? `${base}: ${payload.reason}` : `${base}.`;
   // Nur eine verlorene Lieferung ist ein Banner wert; Verspätung und Qualität stehen im Verlauf.
   ui.toast(text, 'bad', { urgent: payload.kind === 'seized' });
 });
@@ -582,3 +637,19 @@ registerAdvisor({
     };
   },
 });
+
+// Nur im Dev-Build (Auftrag 23): Lieferung bei Toni mit Verspätung und Rückfrage, z.B. window.koeln.dev.lieferProblem().
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  const dev = {
+    lieferProblem: () => {
+      const s = window.koeln?.session.sim;
+      if (!s) return;
+      s.state.wallet.dirty = Math.max(s.state.wallet.dirty, 2000);
+      const r = s.dispatch({ type: 'suppliers.order', payload: { supplierId: 'frankfurt', packageId: 'weed50' } });
+      if (r.ok) forceShipmentProblem(s.ctx('suppliers'), (r.data as { shipmentId: number }).shipmentId, 'delayed');
+      s.step();
+    },
+  };
+  const holder = window as unknown as { koeln?: { dev?: Record<string, () => void> } };
+  holder.koeln = { ...holder.koeln, dev: { ...holder.koeln?.dev, ...dev } };
+}

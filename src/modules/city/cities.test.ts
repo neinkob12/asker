@@ -164,7 +164,8 @@ describe('Städte (Auftrag 30)', () => {
     // Zwei Tage live in Köln mit gutem Umsatz (gebucht auf Köln, die aktive Stadt).
     for (let d = 0; d < 2; d++) {
       sim.advance(DAY - (sim.state.time % DAY) - 60);
-      wallet.earn(sim.ctx('test'), 20000, 'dirty', 'Test', 'sales.street');
+      // Reichlich Umsatz: Die Rechte Hand kauft an einem Tag schon mal für 20.000 € nach (Bestellregeln).
+      wallet.earn(sim.ctx('test'), 35000, 'dirty', 'Test', 'sales.street');
       sim.advance(90);
     }
     expect(sleepInfo(sim.state, 'koeln')?.results.length).toBeGreaterThanOrEqual(2);
@@ -390,7 +391,9 @@ describe('Hamburger Hafen und Lieferanten (Auftrag 30)', () => {
     expect(getCargo(sim.state, 'koeln')).toHaveLength(0);
     expect(cargoRiskFrom(cargo[0])).toBe(cargo[0].arrivedAt + 10 * 60);
     // Fiete meldet den Container.
-    expect(messages.thread(sim.state, HARBOR_CALLER.id).some((m) => m.text.includes('Container ist da'))).toBe(true);
+    expect(messages.thread(sim.state, HARBOR_CALLER.id).some((m) => m.options?.some((o) => o.id === 'driver'))).toBe(
+      true,
+    );
     // Lange stehen lassen: Irgendwann ist er weg.
     sim.advance(5 * DAY);
     expect(getCargo(sim.state, 'hamburg')).toHaveLength(0);

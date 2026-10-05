@@ -70,7 +70,11 @@ describe('spots', () => {
     expect(sim.state.wallet.dirty).toBe(START_DIRTY_MONEY - FOUND_SPOT_COST);
     expect(getSpots(sim.state).map((s) => s.id)).toContain(spot.id);
     expect(spotsInVeedel(sim.state, 'kalk')).toHaveLength(1);
-    expect(eventsOfType(events, 'spots.founded')[0].payload).toEqual({ spotId: spot.id, veedelId: 'kalk' });
+    expect(eventsOfType(events, 'spots.founded')[0].payload).toEqual({
+      spotId: spot.id,
+      veedelId: 'kalk',
+      kind: 'corner',
+    });
     // Kunden kommen auch an eigene Spots.
     sim.advance(24 * 60);
     expect(sim.state.modules.customers.nextSpawnAt[spot.id]).toBeDefined();
@@ -138,7 +142,7 @@ describe('spots', () => {
     const loaded = loadSimulation(raw, sim.modules);
     expect(getSpots(loaded.state).map((s) => s.id)).toEqual(['ebertplatz', 'rheinpark']);
     expect(lockedSpots(loaded.state).map((s) => s.id)).toContain('kalk-post');
-    expect(loaded.state.moduleVersions.spots).toBe(3);
+    expect(loaded.state.moduleVersions.spots).toBe(4);
   });
 });
 

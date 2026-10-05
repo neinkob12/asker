@@ -41,7 +41,8 @@ export const LOG_LIMIT = 8;
 /** Kontakt im Handy für Nachrichten vom Hafen. */
 export const HARBOR_CONTACT: Contact = {
   id: 'other:harbor',
-  name: 'Kalle (Hafenmeister)',
+  // Hieß bis Auftrag 23 Kalle wie der Lieferant aus Kalk und der Boss der Schäl Sick; die Kontakt-ID bleibt.
+  name: 'Willi Esser (Hafenmeister)',
   kind: 'other',
   role: 'Niehler Hafen',
   about: 'Hafenmeister in Niehl. Sieht viel, sagt wenig, und für den richtigen Preis sieht er auch mal weg.',

@@ -49,7 +49,7 @@ import { startEncounter } from '../encounters';
 import { eventFactor, raidsAllowed } from '../events';
 import { getGang } from '../gangs';
 import { allProducts, getLots, getWarehouses, nearestWarehouse, take, warehouseModifiers } from '../goods';
-import { getSpot, spotsInVeedel } from '../spots';
+import { getSpot, spotModifiers, spotsInVeedel } from '../spots';
 import {
   activeRunnerAt,
   bonusProvider,
@@ -370,6 +370,23 @@ export function reportViolence(ctx: Ctx, veedelId: string, severity = 1): number
   return addHeat(ctx, veedelId, VIOLENCE_HEAT * severity * presence);
 }
 
+/**
+ * Eine Gang steckt der Polizei etwas über dich (Auftrag 23): Heat im Veedel, mit raid eine geplante Razzia, wenn dort
+ * gerade keine ansteht, du dort bist und Razzien erlaubt sind. Gibt zurück, ob eine Razzia geplant wurde.
+ */
+export function tipOffAgainstPlayer(ctx: Ctx, veedelId: string, heat: number, raid = false): boolean {
+  addHeat(ctx, veedelId, heat);
+  if (!raid) return false;
+  const police = ctx.state.modules.police;
+  const ready =
+    ctx.now >= (police.raidReadyAt[veedelId] ?? 0) &&
+    police.plannedRaids[veedelId] === undefined &&
+    !police.majorRaid?.veedelIds.includes(veedelId);
+  if (!ready || !hasPlayerPresence(ctx.state, veedelId) || !raidsAllowed(ctx.state, veedelCity(veedelId))) return false;
+  planRaid(ctx, veedelId);
+  return true;
+}
+
 /** Kann die Gang gerade verpfiffen werden? */
 export function canSnitch(state: GameState, gangId: string): CommandResult {
   const gang = getGang(state, gangId);
@@ -568,6 +585,16 @@ function runCheck(ctx: Ctx, veedelId: string): void {
   const target = people.length > 0 ? ctx.pick(people) : null;
   const spotId = spotOf(target) ?? spotsInVeedel(state, veedelId)[0]?.id ?? null;
   const place = placeText(state, veedelId, spotId);
+  const mods = spotModifiers(state, spotId);
+  // Auftrag 23: Ein Späher am Spot sieht die Streife kommen, die Kontrolle geht ins Leere.
+  if (mods.checkAvoid > 0 && ctx.chance(mods.checkAvoid)) {
+    police.checkReadyAt[veedelId] = ctx.now + CHECK_COOLDOWN;
+    journal.add(ctx, `Kontrolle ${place}: Der Späher hat die Streife früh gesehen, alle waren weg.`, 'good', {
+      veedelId,
+      ...(spotId ? { spotId } : {}),
+    });
+    return;
+  }
   police.checkReadyAt[veedelId] = ctx.now + CHECK_COOLDOWN;
   police.stats.checks += 1;
   addHeat(ctx, veedelId, -CHECK_HEAT_RELIEF);
@@ -589,8 +616,13 @@ function runCheck(ctx: Ctx, veedelId: string): void {
     return;
   }
 
-  const goods = confiscateGoods(ctx, ctx.randomInt(CHECK_GOODS.min, CHECK_GOODS.max), veedelId);
-  const money = confiscateMoney(ctx, ctx.randomInt(CHECK_MONEY.min, CHECK_MONEY.max));
+  // Auftrag 23: Mit Versteck am Spot ist weniger am Mann.
+  const goods = confiscateGoods(
+    ctx,
+    Math.round(ctx.randomInt(CHECK_GOODS.min, CHECK_GOODS.max) * mods.lossFactor),
+    veedelId,
+  );
+  const money = confiscateMoney(ctx, Math.round(ctx.randomInt(CHECK_MONEY.min, CHECK_MONEY.max) * mods.lossFactor));
   const loss = lossText(goods, money);
   if (!target) {
     journal.add(
@@ -972,13 +1004,15 @@ export default defineModule({
     'police.snitch': (ctx, { gangId }) => snitchOnGang(ctx, gangId),
   },
   on: {
-    'sale.completed': (ctx, { veedelId, amount, sellerId }) => {
+    'sale.completed': (ctx, { veedelId, amount, sellerId, spotId }) => {
       const presence = getVeedel(veedelId)?.policePresence;
       if (presence === undefined) return;
       const tier = SALE_HEAT_BY_TIER[tierOf(ctx.state, veedelCity(veedelId))];
       const heat = (SALE_HEAT_BASE + SALE_HEAT_PER_UNIT * Math.max(0, amount)) * presence * tier;
       const event = eventFactor(ctx.state, 'heatPerSale', { veedelId });
-      addHeat(ctx, veedelId, heat * event * cautionFactor(ctx.state, sellerId));
+      // Auftrag 23: Die Art eines eigenen Spots (Club, Bahnhof mehr, Späti weniger).
+      const kind = spotModifiers(ctx.state, spotId).heatFactor;
+      addHeat(ctx, veedelId, heat * event * kind * cautionFactor(ctx.state, sellerId));
     },
     // Stadt-Events (Etappe 7): Fängt ein Fest ohne Razzien an, wartet eine geplante Razzia bis danach.
     'events.started': (ctx, { cityId, endsAt }) => {

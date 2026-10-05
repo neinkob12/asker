@@ -1,6 +1,6 @@
 // Gemeinsame Hilfen der Gang-Logik (KI, Diplomatie, Reaktionen). Schreiben nur mit ctx.
 
-import { type Ctx, formatEuro, type GameState, journal, type MessageOption, messages } from '../../core';
+import { type Ctx, formatEuro, type GameState, journal, type MessageOption, messages, texts } from '../../core';
 import { activeCity } from '../city';
 import { warehouseCity } from '../goods';
 import { getSpot, spotCity } from '../spots';
@@ -15,7 +15,7 @@ import {
 } from './config';
 import type { Gang } from './data';
 import { ceasefireCost, type GangStatus, gangContact, hasCeasefire, paysTribute, tributeAmount } from './state';
-import { GANG_TEXTS, GANG_VOICES } from './texts';
+import { type GangTextKey, gangVariants } from './texts';
 
 export function statusOf(ctx: Ctx, gangId: string): GangStatus | undefined {
   return ctx.state.modules.gangs.gangs[gangId];
@@ -27,10 +27,6 @@ export function addHostility(s: GangStatus, delta: number): void {
 
 export function addRelation(s: GangStatus, delta: number): void {
   s.relation = Math.round(Math.min(100, Math.max(-100, s.relation + delta)));
-}
-
-export function fill(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match);
 }
 
 /** Veedel, auf das sich eine Nachricht bezieht: wo du zuletzt in ihrem Revier verkauft hast, sonst ihr Heimat-Veedel. */
@@ -102,14 +98,18 @@ export function demandOptions(ctx: Ctx, gang: Gang, s: GangStatus): MessageOptio
 export function say(
   ctx: Ctx,
   gang: Gang,
-  key: keyof typeof GANG_TEXTS,
+  key: GangTextKey,
   vars: Record<string, string> = {},
   options?: MessageOption[],
   /** Antwortfrist der Nachricht; bei Angeboten die des Angebots (sonst gilt "Deal" in der Nachricht länger als das Angebot). */
   expiresIn = MESSAGE_EXPIRY,
 ): number {
-  const variants = GANG_VOICES[gang.id]?.[key] ?? GANG_TEXTS[key];
-  const text = fill(ctx.pick(variants), { boss: gang.boss, gang: gang.name, ...vars });
+  // Eigene Stimme pro Gang, ohne dieselbe Variante direkt zu wiederholen (Text-Helfer des Kerns, Auftrag 23).
+  const text = texts.pick(ctx, `gang:${gang.id}:${key}`, gangVariants(gang.id, key), {
+    boss: gang.boss,
+    gang: gang.name,
+    ...vars,
+  });
   return messages.send(ctx, {
     contact: gangContact(gang),
     text,

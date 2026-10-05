@@ -6,7 +6,7 @@
 // Wichtig: Er handelt ausschließlich über ctx.dispatch(...) mit actor 'staff:<id>', also über dieselben Befehle wie
 // der Spieler. Direkt ändert er nur den eigenen Zustand (state.modules.hierarchy) und das Journal.
 
-import { type Actor, type Command, type Ctx, clock, type GameState, journal, messages } from '../../core';
+import { type Actor, type Command, type Ctx, clock, type GameState, journal, messages, texts } from '../../core';
 import { allWaiting, canServe, waitingAt } from '../customers';
 import { stockSummary } from '../goods';
 import { getSpotPrice, hasOwnPrice, priceRatio, roundPrice, spotReferencePrice } from '../market';
@@ -42,6 +42,7 @@ import { hireRunnerFor } from './hire';
 import { homeWarehouse, isLieutenant, lieutenantSpots, spotList, teamOf } from './index';
 import { runRestock } from './orders';
 import { isRightHand, leadSpendingLimit, recordLeadSpending } from './righthand';
+import { HIERARCHY_TEXTS } from './texts';
 import type { CautionLevel, LieutenantPost } from './types';
 
 /** Abstand zwischen zwei Runden, in denen er seine Spots ordnet. Gute Leutnants reagieren schneller. */
@@ -140,7 +141,8 @@ export function onRaidWarning(ctx: Ctx, veedelId: string, post: LieutenantPost, 
   const turn = turnFor(ctx, post, lt);
   if (isLyingLow(ctx.state, veedelId)) return;
   if (turn.run({ type: 'staff.lieLow', payload: { veedelId, until } })) {
-    note(turn, `Tipp vom Polizei-Kontakt: Razzia in ${veedelName(veedelId)}. Alle runter von der Straße.`, false, true);
+    const text = texts.pick(ctx, 'lieutenant:raidPulled', HIERARCHY_TEXTS.raidPulled, { veedel: veedelName(veedelId) });
+    note(turn, text, false, true);
   }
 }
 
@@ -178,7 +180,10 @@ function handleHeat(turn: Turn): void {
       pullFromStreet(turn, veedelId);
     } else if (hiding) {
       post.lyingLow = post.lyingLow.filter((id) => id !== veedelId);
-      note(turn, `In ${veedelName(veedelId)} ist die Luft wieder rein, zurück an die Arbeit.`, true, true);
+      const text = texts.pick(ctx, 'lieutenant:backToWork', HIERARCHY_TEXTS.backToWork, {
+        veedel: veedelName(veedelId),
+      });
+      note(turn, text, true, true);
     }
   }
   // Veedel, in denen er keine Spots mehr hat, vergessen.

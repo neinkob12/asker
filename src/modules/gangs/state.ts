@@ -28,6 +28,7 @@ import {
   WARN_AT,
 } from './config';
 import { GANGS, type Gang } from './data';
+import type { GangActionEntry, GangIncident, GangIntimidation } from './methods';
 
 /** Eskalation gegenüber dem Spieler: 0 ignoriert, 1 gewarnt, 2 bedroht, 3 greift an. */
 export type GangStage = 0 | 1 | 2 | 3;
@@ -105,6 +106,16 @@ export interface GangsState {
   gangs: Record<string, GangStatus>;
   /** Zuletzt von den Gangs gesetzter Konkurrenzfaktor pro Veedel (market). */
   priceFactors: Record<string, number>;
+  /** Auftrag 23: offene Vorfälle (Einbruch, Abwerben, Einschüchtern, Erpressung, Chancen), siehe methods.ts. */
+  incidents: GangIncident[];
+  /** Gang-Leute an deinen Spots. */
+  intimidations: GangIntimidation[];
+  /** Letzte Aktionen jeder Gang gegen dich (für die Gangs-Seite). */
+  log: Record<string, GangActionEntry[]>;
+  /** Nächste leichtere Methode pro Gang frühestens ab hier. */
+  nextMethodAt: Record<string, number>;
+  /** Letzte Aktion irgendeiner Gang (Abstand zwischen allen). */
+  lastMethodAt: number | null;
 }
 
 export function initialGangsState(): GangsState {
@@ -129,7 +140,7 @@ export function initialGangsState(): GangsState {
       lastSaleSpotId: null,
     };
   }
-  return { gangs, priceFactors: {} };
+  return { gangs, priceFactors: {}, incidents: [], intimidations: [], log: {}, nextMethodAt: {}, lastMethodAt: null };
 }
 
 const GANGS_BY_CITY = new Map<string, readonly Gang[]>();

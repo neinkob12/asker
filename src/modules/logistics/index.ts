@@ -39,6 +39,7 @@ import {
   type Message,
   MINUTES_PER_DAY,
   messages,
+  texts,
   wallet,
 } from '../../core';
 import {
@@ -122,7 +123,6 @@ import {
   UNLOAD_RETRY_MINUTES,
   XP_PER_TRIP,
 } from './config';
-
 import {
   departRoute,
   type RestockDue,
@@ -135,6 +135,7 @@ import {
   saveRoute,
   settleRestock,
 } from './routes';
+import { PORT_TEXTS } from './texts';
 
 export {
   BERTH_COST,
@@ -376,6 +377,11 @@ export function portName(cityId = 'koeln'): string {
 /** Liegeplatz in sauberem Geld. */
 export function berthCost(cityId = 'koeln'): number {
   return portOf(cityId).berthCost;
+}
+
+/** Texte des Hafens einer Stadt (Auftrag 23), ohne eigene Texte die Kölner. */
+function portTexts(cityId: string) {
+  return PORT_TEXTS[cityId] ?? PORT_TEXTS.koeln;
 }
 
 /** Wer im Hafen dieser Stadt schreibt (Köln: der Hafenmeister, Hamburg: Fiete). */
@@ -635,10 +641,11 @@ export function receiveCargo(
   );
   messages.send(ctx, {
     contact: portContact(cityId),
-    text:
-      `Dein Container ist da: ${goods}. Hol ihn in den nächsten ` +
-      `${clock.formatDuration(cargoRiskFrom(cargo, ctx.state) - ctx.now)} ab, ` +
-      'danach schaut der Zoll genauer hin.',
+    text: texts.pick(ctx, `port:${cityId}:docked`, portTexts(cityId).docked, {
+      goods,
+      duration: clock.formatDuration(cargoRiskFrom(cargo, ctx.state) - ctx.now),
+      quay: port.quay,
+    }),
     options: [
       {
         id: 'driver',
@@ -686,10 +693,7 @@ function buyBerth(ctx: Ctx, cityId: string): CommandResult {
   );
   messages.send(ctx, {
     contact: portContact(cityId),
-    text:
-      cityId === 'koeln'
-        ? 'Willkommen im Hafen. Dein Platz ist Kai 7. Was da ankommt, holst du ab. Ich seh nix, ich hör nix.'
-        : `Moin. Dein Platz ist ${port.quay}. Was da ankommt, holst du ab, und zwar zügig. Der Zoll hier schläft nicht.`,
+    text: texts.pick(ctx, `port:${cityId}:welcome`, portTexts(cityId).welcome, { quay: port.quay }),
   });
   ctx.emit('logistics.berthBought', { cost: port.berthCost, cityId });
   return { ok: true };
@@ -1487,7 +1491,7 @@ function customs(ctx: Ctx): void {
     journal.add(ctx, `Der Zoll hat deinen Container im ${port.name} geöffnet: ${goods} beschlagnahmt.`, 'bad');
     messages.send(ctx, {
       contact: portContact(cargo.cityId),
-      text: `Zu spät. Der Zoll war an deinem Container, ${goods} sind weg. Ich hab dir gesagt, hol das Zeug ab.`,
+      text: texts.pick(ctx, `port:${cargo.cityId}:seized`, portTexts(cargo.cityId).seized, { goods, quay: port.quay }),
     });
     ctx.emit('cargo.seized', { cargoId: cargo.id, productId: cargo.productId, amount: cargo.amount });
   }

@@ -95,8 +95,29 @@ import {
   TRUST_PER_ORDER,
   UNLOADING_SHARE,
 } from './config';
+import type { RouteKind } from './problems';
+import {
+  applyArrivalLuck,
+  type ProblemChoice,
+  resolveProblem,
+  revealProblem,
+  rollLuck,
+  rollReason,
+  type ShipmentDecision,
+  type ShipmentLuck,
+  upkeepDecisions,
+  voice,
+} from './troubles';
 
 export { CITY_APPROACH_SHARE, SHIP_SHARE, UNLOADING_PORT, UNLOADING_SHARE } from './config';
+export { PROBLEM_REASONS, type ProblemReason, ROUTE_NAMES, type RouteKind, routeKindOf } from './problems';
+export {
+  CHOICE_NAMES,
+  type ProblemChoice,
+  type ShipmentDecision,
+  type ShipmentLuck,
+  shipmentReason,
+} from './troubles';
 
 export interface SupplierPackage {
   id: string;
@@ -208,6 +229,17 @@ export interface Shipment {
   problemRevealed?: boolean;
   /** Versprochene Qualität, falls die Ware schlechter ankommt. */
   promisedQuality?: number;
+  /** Weg der Lieferung und Grund des Problems (Auftrag 23, problems.ts), gesetzt, sobald es bekannt ist. */
+  route?: RouteKind;
+  reasonId?: string;
+  /** Offene Rückfrage zum Problem (troubles.ts) und die gewählte Antwort. */
+  decision?: ShipmentDecision;
+  choice?: ProblemChoice;
+  /** Chance: früher da, Ware obendrauf, bessere Qualität (gemeldet bei der Ankunft). */
+  luck?: ShipmentLuck;
+  luckShown?: boolean;
+  /** Rest einer Teillieferung: ID der Lieferung, von der er abgeteilt wurde. */
+  partOf?: number;
 }
 
 export interface SupplierRelation {
@@ -263,6 +295,8 @@ declare module '../../core' {
     'suppliers.order': { supplierId: string; packageId: string; onCredit?: boolean; warehouseId?: string };
     /** Lieferanten freischalten (Bedingungen erfüllt, Vermittlungsgebühr zahlen). */
     'suppliers.unlock': { supplierId: string };
+    /** Antwort auf ein Lieferproblem mit Rückfrage (Auftrag 23): Umweg, Teillieferung, Umleiten, Schmieren, abwarten. */
+    'suppliers.resolveProblem': { shipmentId: number; choice: ProblemChoice };
     /** Schulden zurückzahlen, ohne amount komplett. */
     'suppliers.repay': { supplierId: string; amount?: number };
   }
@@ -288,7 +322,11 @@ declare module '../../core' {
       placedIn?: string;
     };
     /** Lieferproblem ist eingetreten. */
-    'shipment.problem': { shipmentId: number; supplierId: string; kind: ShipmentProblem };
+    'shipment.problem': { shipmentId: number; supplierId: string; kind: ShipmentProblem; reason?: string };
+    /** Antwort auf ein Lieferproblem (Auftrag 23). */
+    'shipment.decided': { shipmentId: number; supplierId: string; choice: ProblemChoice };
+    /** Chance bei einer Lieferung (Auftrag 23). */
+    'shipment.luck': { shipmentId: number; supplierId: string; kind: ShipmentLuck };
     'supplier.trustChanged': { supplierId: string; trust: number; delta: number };
     'supplier.repaid': { supplierId: string; amount: number; debt: number };
     'supplier.overdue': { supplierId: string; debt: number };
@@ -613,7 +651,8 @@ export function supplierContact(supplier: Supplier): Contact {
   return contactOf(supplier);
 }
 
-function contactOf(supplier: Supplier): Contact {
+/** Kontakt des Lieferanten im Handy (mit Aussehen). */
+export function contactOf(supplier: Supplier): Contact {
   return {
     id: supplierContactId(supplier.id),
     name: `${supplier.contactName} (${supplier.name})`,
@@ -624,7 +663,7 @@ function contactOf(supplier: Supplier): Contact {
   };
 }
 
-function tell(ctx: Ctx, supplier: Supplier, text: string): void {
+export function tell(ctx: Ctx, supplier: Supplier, text: string): void {
   messages.send(ctx, { contact: contactOf(supplier), text });
 }
 
@@ -721,7 +760,7 @@ function order(
       shipment.promisedQuality = quality;
       shipment.quality = clampQuality(quality - (min + ctx.random() * (max - min)));
     }
-  }
+  } else rollLuck(ctx, shipment, supplier.deliveryTime);
   ctx.state.modules.suppliers.shipments.push(shipment);
 
   rel.orders += 1;
@@ -745,6 +784,25 @@ function order(
     onCredit,
   });
   return { ok: true, data: { shipmentId: shipment.id } };
+}
+
+/**
+ * Ein Lieferproblem sofort eintreten lassen (Tests, Dev-Abkürzungen, Szenen für Screenshots), mit ask=true immer mit
+ * Rückfrage. Gibt zurück, ob es die Lieferung gibt.
+ */
+export function forceShipmentProblem(ctx: Ctx, shipmentId: number, problem: 'delayed' | 'seized', ask = true): boolean {
+  const s = ctx.state.modules.suppliers.shipments.find((x) => x.id === shipmentId);
+  const supplier = s ? getSupplier(ctx.state, s.supplierId) : undefined;
+  if (!s || !supplier) return false;
+  if (s.delayMinutes) s.arrivesAt -= s.delayMinutes;
+  s.luck = undefined;
+  s.problem = problem;
+  s.problemAt = ctx.now;
+  s.problemRevealed = true;
+  s.delayMinutes = problem === 'delayed' ? Math.round(supplier.deliveryTime * 0.6) : undefined;
+  if (s.delayMinutes) s.arrivesAt += s.delayMinutes;
+  revealProblem(ctx, s, supplier, ask);
+  return true;
 }
 
 /**
@@ -912,7 +970,7 @@ function unlock(ctx: Ctx, supplierId: string): CommandResult {
     (m) =>
       !!m.options?.some((o) => o.command?.type === 'suppliers.unlock' && o.command.payload.supplierId === supplierId),
   );
-  tell(ctx, supplier, 'Abgemacht. Alle Angebote findest du in der Lieferanten-App.');
+  tell(ctx, supplier, voice(ctx, supplier, 'unlocked'));
   ctx.emit('supplier.unlocked', { supplierId, fee });
   return { ok: true };
 }
@@ -973,28 +1031,7 @@ function revealProblems(ctx: Ctx): void {
     const supplier = getSupplier(ctx.state, s.supplierId);
     if (!supplier) continue;
     s.problemRevealed = true;
-    const goods = `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)}`;
-    if (s.problem === 'delayed') {
-      const delay = clock.formatDuration(s.delayMinutes ?? 0);
-      tell(
-        ctx,
-        supplier,
-        `Kontrolle auf der Strecke, der Fahrer muss warten. Deine ${goods} kommen ca. ${delay} später.`,
-      );
-      journal.add(ctx, `Lieferung von ${supplier.name} verspätet sich um ca. ${delay}.`, 'bad');
-    } else {
-      state.shipments = state.shipments.filter((x) => x.id !== s.id);
-      const what = s.shared
-        ? `Der Zoll hat die andere Hälfte vom Container gefunden. Deine ${goods} waren mit drin, alles weg.`
-        : `Scheiße. Die haben den Wagen hochgenommen, deine ${goods} sind weg.`;
-      tell(
-        ctx,
-        supplier,
-        s.onCredit ? `${what} Die Schulden bleiben trotzdem.` : `${what} Pech, so läuft das Geschäft.`,
-      );
-      journal.add(ctx, `Lieferung von ${supplier.name} beschlagnahmt: ${goods} verloren.`, 'bad');
-    }
-    ctx.emit('shipment.problem', { shipmentId: s.id, supplierId: s.supplierId, kind: s.problem });
+    revealProblem(ctx, s, supplier);
   }
 }
 
@@ -1006,6 +1043,7 @@ function deliver(ctx: Ctx): void {
   const placedIn = new Map<number, string>();
   for (const s of arrived) {
     const supplier = getSupplier(ctx.state, s.supplierId);
+    if (supplier) applyArrivalLuck(ctx, s, supplier);
     if (s.toPort) {
       // Schiffsware: am Kai abladen, abholen muss der Spieler (logistics schreibt Journal und Nachricht).
       receiveCargo(ctx, {
@@ -1030,9 +1068,15 @@ function deliver(ctx: Ctx): void {
     }
     if (s.problem === 'badQuality' && supplier) {
       s.problemRevealed = true;
-      tell(ctx, supplier, 'Ich sag es lieber gleich: Die letzte Ladung ist nicht so gut wie versprochen. Kommt vor.');
-      journal.add(ctx, `Die Ware von ${supplier.name} ist schlechter als versprochen.`, 'bad');
-      ctx.emit('shipment.problem', { shipmentId: s.id, supplierId: s.supplierId, kind: 'badQuality' });
+      const why = rollReason(ctx, s, supplier, 'badQuality');
+      tell(ctx, supplier, voice(ctx, supplier, 'badQuality', why));
+      journal.add(ctx, `Die Ware von ${supplier.name} ist schlechter als versprochen (${why.reasonLabel}).`, 'bad');
+      ctx.emit('shipment.problem', {
+        shipmentId: s.id,
+        supplierId: s.supplierId,
+        kind: 'badQuality',
+        reason: why.reasonLabel,
+      });
     }
     ctx.emit('shipment.arrived', {
       shipmentId: s.id,
@@ -1060,9 +1104,7 @@ function checkDebts(ctx: Ctx): void {
     tell(
       ctx,
       supplier,
-      rel.overdue === 1
-        ? `Du schuldest mir ${formatEuro(rel.debt)}. Das Geld war fällig. Ich liefer nichts mehr, bis du zahlst.`
-        : `Ich warte immer noch auf ${formatEuro(rel.debt)}. Meine Geduld ist bald am Ende.`,
+      voice(ctx, supplier, rel.overdue === 1 ? 'overdue' : 'overdueAgain', { debt: formatEuro(rel.debt) }),
     );
     journal.add(ctx, `Schulden bei ${supplier.name} überfällig: ${formatEuro(rel.debt)} inkl. Aufschlag.`, 'bad');
     ctx.emit('supplier.overdue', { supplierId, debt: rel.debt });
@@ -1098,7 +1140,7 @@ function canRestock(state: GameState, supplier: Supplier): boolean {
 
 export default defineModule({
   id: 'suppliers',
-  version: 5,
+  version: 6,
   dependsOn: ['goods'],
   init: (ctx) => {
     const frankfurt = SUPPLIERS.find((s) => s.id === 'frankfurt') ?? SUPPLIERS[0];
@@ -1125,6 +1167,7 @@ export default defineModule({
   },
   tick: (ctx) => {
     revealProblems(ctx);
+    upkeepDecisions(ctx);
     deliver(ctx);
     checkDebts(ctx);
     if (ctx.now % 60 === 0) offerUnlocks(ctx);
@@ -1134,6 +1177,7 @@ export default defineModule({
     'suppliers.order': (ctx, { supplierId, packageId, onCredit, warehouseId }) =>
       order(ctx, supplierId, packageId, !!onCredit, warehouseId),
     'suppliers.repay': (ctx, { supplierId, amount }) => repay(ctx, supplierId, amount),
+    'suppliers.resolveProblem': (ctx, { shipmentId, choice }) => resolveProblem(ctx, shipmentId, choice),
     'suppliers.unlock': (ctx, { supplierId }) => unlock(ctx, supplierId),
   },
   on: {
@@ -1155,6 +1199,12 @@ export default defineModule({
     },
     // Version 5 (Auftrag 32): Rabatt-Aktionen.
     5: (old: SuppliersStateV4): SuppliersState => ({ ...old, deals: [] }),
+    // Version 6 (Auftrag 23): Lieferungen tragen Weg, Grund, Rückfrage, Antwort und Chance (alles optional). Alte
+    // Lieferungen laufen ohne Grund weiter; eine schon bekannte Verspätung bekommt keine Rückfrage mehr.
+    6: (old: SuppliersState): SuppliersState => ({
+      ...old,
+      shipments: old.shipments.map((s) => ({ ...s })),
+    }),
   },
   // Pleite-Regel: Wer eine Lieferung erwartet oder sich eine leisten kann (bar oder auf Kredit), macht weiter.
   solvency: (state) =>

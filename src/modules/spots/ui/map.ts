@@ -21,7 +21,16 @@ import { lieutenantOfSpot } from '../../hierarchy';
 import { getSpotPrice } from '../../market';
 import { getStaff, type StaffMember } from '../../staff';
 import { veedelName } from '../../veedel';
-import { getAllSpots, isKneipe, isSpotActive, type Spot, spotLabelPlacement } from '../index';
+import {
+  getAllSpots,
+  isKneipe,
+  isSpotActive,
+  type Spot,
+  spotAwareness,
+  spotKind,
+  spotLabelPlacement,
+  spotType,
+} from '../index';
 import { raidShown, saleGlow, syncSpotGlow } from './glow';
 import { patienceFill } from './ringModel';
 
@@ -198,10 +207,11 @@ export const spotsLayer: MapLayer = {
       bubble.append(badge, lock);
       const sign = el('span', 'spot-sign');
       sign.append(bubble);
-      // Kneipen (Auftrag 30, Etappe 7) tragen ein Bierglas an der Blase.
-      if (isKneipe(spot)) {
+      // Kneipen (Auftrag 30, Etappe 7) tragen ein Bierglas an der Blase, seit Auftrag 23 jede Art außer der Straßenecke
+      // ihr Icon (Club, Park, Bahnhof …).
+      if (isKneipe(spot) || spotKind(spot) !== 'corner') {
         const kind = el('span', 'spot-kind');
-        kind.appendChild(iconElement('beer', { strokeWidth: 2.4 }));
+        kind.appendChild(iconElement(spotType(spot).icon, { strokeWidth: 2.4 }));
         sign.append(kind);
       }
 
@@ -263,9 +273,16 @@ export const spotsLayer: MapLayer = {
           const lieutenant = active ? lieutenantOfSpot(state, spot.id) : null;
           // Der Ring zeigt die Geduld nur bei wartenden Kunden; bei Razzia und im Leerlauf ist er voll.
           const fill = active && look !== 'raid' ? patienceFill(state.time, queue) : 100;
-          const key = `${active}|${look}|${waiting}|${fill}|${who.kind}|${lieutenant ?? ''}|${spot.custom ? 1 : 0}|${spot.id === selected}`;
+          // Auftrag 23: Wenig bekannte eigene Spots sind blasser; verlegte Spots wandern mit.
+          const faint = spotAwareness(state, spot.id) < 0.5;
+          const key = `${active}|${look}|${waiting}|${fill}|${who.kind}|${lieutenant ?? ''}|${spot.custom ? 1 : 0}|${spot.id === selected}|${faint}|${spot.lng},${spot.lat}|${spot.name}`;
           if (key === entry.key) continue;
           entry.key = key;
+          entry.marker.setLngLat([spot.lng, spot.lat]);
+          // Umbenannte Spots (Auftrag 23): Name für Vorleser und, ohne Maus, als Tooltip.
+          entry.element.setAttribute('aria-label', `Spot ${spot.name} im Handy öffnen`);
+          if (entry.element.hasAttribute('title')) entry.element.title = spot.name;
+          entry.element.classList.toggle('is-faint', faint);
           entry.element.style.setProperty('--fill', String(fill));
           entry.element.classList.toggle('is-locked', !active);
           entry.element.classList.toggle('is-custom', !!spot.custom);

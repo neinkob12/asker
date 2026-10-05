@@ -37,6 +37,7 @@ import {
   isPlayerAway,
   onCityEventChanged,
   onCitySwitched,
+  onSpotClosed,
   serve,
   streetTick,
 } from './street';
@@ -468,6 +469,8 @@ export default defineModule({
     // Stadt-Events (Etappe 7): Die Laufkundschaft passt sich sofort der neuen Nachfrage an.
     'events.started': (ctx, { cityId }) => onCityEventChanged(ctx, cityId),
     'events.ended': (ctx, { cityId }) => onCityEventChanged(ctx, cityId),
+    // Auftrag 23: Ein eigener Spot wird aufgegeben.
+    'spots.closed': (ctx, { spotId, lng, lat }) => onSpotClosed(ctx, spotId, { lng, lat }),
     'staff.statusChanged': (ctx, { staffId, to }) => {
       if (to !== 'active') courierGone(ctx, staffId, true);
     },

@@ -2,7 +2,7 @@
 
 import { islandCountdown, onGameEvent, registerLiveActivity } from '../../../ui';
 import { formatProductAmount, productName } from '../../goods';
-import { expectedArrival, getSupplier, shipmentProgress, shipmentsInTransit } from '../index';
+import { expectedArrival, getSupplier, shipmentProgress, shipmentReason, shipmentsInTransit } from '../index';
 
 registerLiveActivity({
   id: 'suppliers.shipments',
@@ -19,7 +19,10 @@ registerLiveActivity({
         leading: 'Lieferung',
         trailing: islandCountdown(left),
         title: `${formatProductAmount(shipment.productId, shipment.amount)} ${productName(shipment.productId)}`,
-        detail: `${supplier?.name ?? 'Lieferant'}${late ? ' · verspätet' : ''}`,
+        // Auftrag 23: bei einer Verspätung mit Grund.
+        detail: late
+          ? `Verspätet: ${shipmentReason(state, shipment) ?? supplier?.name ?? 'unterwegs'}`
+          : (supplier?.name ?? 'Lieferant'),
         progress: shipmentProgress(state, shipment),
         open: (ui) => ui.openPhone('suppliers.app'),
       };

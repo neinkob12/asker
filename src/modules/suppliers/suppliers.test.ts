@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { distanceMeters, loadSimulation, messages, type Simulation, START_DIRTY_MONEY } from '../../core';
+import { distanceMeters, formatEuro, loadSimulation, messages, type Simulation, START_DIRTY_MONEY } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getLots, getStock } from '../goods';
 import { getCargo } from '../logistics';
@@ -20,6 +20,7 @@ import {
   rollShipmentProblem,
   type Shipment,
   shipmentProgress,
+  shipmentReason,
   shipmentsInTransit,
   supplierDiscount,
   UNLOADING_PORT,
@@ -44,7 +45,7 @@ function openGame(): Simulation {
 function clean(shipment: Shipment): Shipment {
   if (shipment.delayMinutes) shipment.arrivesAt -= shipment.delayMinutes;
   if (shipment.promisedQuality) shipment.quality = shipment.promisedQuality;
-  for (const key of ['problem', 'problemAt', 'delayMinutes', 'problemRevealed', 'promisedQuality'] as const) {
+  for (const key of ['problem', 'problemAt', 'delayMinutes', 'problemRevealed', 'promisedQuality', 'luck'] as const) {
     delete shipment[key];
   }
   return shipment;
@@ -193,7 +194,7 @@ describe('suppliers', () => {
       .thread(other.state, 'supplier:hamburg')
       .map((m) => (m.from === 'player' ? `Du: ${m.text}` : m.text));
     expect(texts[1]).toBe('Du: Deal.');
-    expect(texts[2]).toMatch(/Abgemacht/);
+    expect(texts[2]).toMatch(/app/i);
   });
 
   it('Kuriere kommen in jeder Stadt über eine Autobahn herein, die es dort als Zufahrt gibt', () => {
@@ -334,7 +335,7 @@ describe('suppliers', () => {
     expect(isBlocked(sim.state, 'frankfurt')).toBe(true);
     expect(order(sim, 'frankfurt', 'weed25').ok).toBe(false);
     expect(eventsOfType(events, 'supplier.overdue')).toHaveLength(1);
-    expect(messages.thread(sim.state, 'supplier:frankfurt').at(-1)?.text).toMatch(/schuldest/);
+    expect(messages.thread(sim.state, 'supplier:frankfurt').at(-1)?.text).toContain(formatEuro(Math.round(debt * 1.1)));
     sim.dispatch({ type: 'suppliers.repay', payload: { supplierId: 'frankfurt' } });
     expect(isBlocked(sim.state, 'frankfurt')).toBe(false);
     expect(order(sim, 'frankfurt', 'weed25').ok).toBe(true);
@@ -388,7 +389,8 @@ describe('suppliers', () => {
     sim.advance(50);
     expect(shipmentProgress(sim.state, s)).toBeCloseTo(before);
     expect(eventsOfType(events, 'shipment.problem')[0].payload.kind).toBe('delayed');
-    expect(messages.thread(sim.state, 'supplier:frankfurt').at(-1)?.text).toMatch(/später/);
+    expect(messages.thread(sim.state, 'supplier:frankfurt').at(-1)?.text).toMatch(/Std\.|Min\./);
+    expect(shipmentReason(sim.state, s)).toBeTruthy();
     sim.advance(s.arrivesAt - sim.state.time - 1);
     expect(shipmentsInTransit(sim.state)).toHaveLength(1);
     sim.advance(1);
@@ -444,7 +446,7 @@ describe('suppliers', () => {
     expect(isUnlocked(loaded.state, 'rotterdam')).toBe(true);
     expect(isUnlocked(loaded.state, 'amsterdam')).toBe(false);
     expect(loaded.state.modules.suppliers.offered).toContain('koeln');
-    expect(loaded.state.moduleVersions.suppliers).toBe(5);
+    expect(loaded.state.moduleVersions.suppliers).toBe(6);
   });
 });
 

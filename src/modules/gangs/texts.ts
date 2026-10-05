@@ -1,84 +1,1017 @@
-// Texte der Gangs für Handy-Nachrichten. Platzhalter: {boss}, {gang}, {veedel}, {tribute}, {amount}, {price},
-// {enemy}. Pro Anlass mehrere Varianten, eine wird zufällig gewählt.
+// Stimmen der Gangs für Handy-Nachrichten (Auftrag 23): Jede Gang hat für jeden Anlass mindestens fünf eigene
+// Varianten. Gewählt wird mit dem Text-Helfer des Kerns (texts.pick), der dieselbe Variante nicht direkt wiederholt.
+// Platzhalter: {boss}, {gang} immer; {veedel} (warning, threat, war, offer), {tribute} (threat, tributeDue),
+// {amount}, {price} (offer, Angebote), {enemy} (allianceOffer, Warnung vor Rivalen), weitere je Anlass unten.
+//
+// Ton (vom Spieler ausgewählt): Hafenkolonne grob, kölsch, kurz. Venloer Syndikat förmlich, juristisch, droht über
+// Dritte. Schäl Sick rotzig, Preise, Masse. Marienburger Kreis leise, gebildet, kalt. Hamburg: Neonkrone Türsteher-Ton,
+// Containerjungs grob vom Hafen, Kollektiv Plenum und WG, Elbchaussee-Club höflich-herablassend.
 
-export const GANG_TEXTS = {
-  warning: [
-    '{boss}: Man hört, du verkaufst in {veedel}. Das ist unser Pflaster. Such dir was anderes, solange wir noch fragen.',
-    '{boss}: Kleiner Tipp unter Kollegen. {veedel} gehört uns. Wir reden einmal. Einmal.',
-  ],
-  threat: [
-    '{boss}: Du hast nicht zugehört. Ab jetzt zahlst du {tribute} die Woche. Oder wir kommen vorbei.',
-    '{boss}: Letzte Ansage. {tribute} pro Woche, dann darfst du in {veedel} weiter deine Tütchen verkaufen.',
-  ],
-  war: [
-    '{boss}: Du willst es nicht anders. Schau dich in Zukunft besser um.',
-    '{boss}: Ab heute bist du Freiwild. Grüß deine Leute von uns.',
-  ],
-  raidWon: ['{boss}: Glück gehabt. Nächstes Mal bringen wir mehr Leute mit.'],
-  raidLost: ['{boss}: Das war die Quittung. Willst du noch eine?', '{boss}: Nur damit du weißt, wie sich das anfühlt.'],
-  attacked: ['{boss}: Du hast gerade einen Krieg angefangen, den du nicht gewinnen kannst.'],
-  snitch: ['{boss}: Wir wissen, wer bei den Bullen gesungen hat. Du hörst von uns.'],
-  tributeDue: ['{boss}: Die Woche ist rum. {tribute} für die nächste. Du weißt, wie das läuft.'],
-  protectionRefused: ['{boss}: Diese Woche gibt es kein Geld. Hol es dir doch.'],
-  offer: [
-    '{boss}: Hab {amount} übrig. {price}, Übergabe in {veedel}. Heute noch, sonst ist es weg.',
-    '{boss}: Freundschaftspreis: {amount} für {price}. Treffpunkt {veedel}. Keine Fragen.',
-  ],
-  allianceOffer: [
-    '{boss}: {enemy} wird uns zu groß. Du hilfst uns, wir lassen dich in Ruhe. Für {price} bist du dabei.',
-  ],
-} as const;
+/** Anlässe für Nachrichten der Gangs. */
+export type GangTextKey =
+  | 'warning'
+  | 'threat'
+  | 'war'
+  | 'raidWon'
+  | 'raidLost'
+  | 'attacked'
+  | 'snitch'
+  | 'tributeDue'
+  | 'protectionRefused'
+  | 'offer'
+  | 'allianceOffer'
+  /** Auftrag 23: Gang-Leute stehen an deinem Spot ({spot}). */
+  | 'intimidation'
+  /** Auftrag 23: Tipp an die Polizei über dich ({veedel}). */
+  | 'tipOff'
+  /** Auftrag 23: Erpressung mit deinem Lager ({warehouse}, {amount}). */
+  | 'blackmail'
+  /** Auftrag 23 (Chance): Warnung vor einem Rivalen ({enemy}). */
+  | 'warnRival'
+  /** Auftrag 23 (Chance): Bitte um einen bezahlten Gefallen ({amount}). */
+  | 'favor';
 
-type GangTextKey = keyof typeof GANG_TEXTS;
+export type GangVoice = Readonly<Record<GangTextKey, readonly string[]>>;
 
-/**
- * Eigene Stimmen (Auftrag 30): Die Hamburger Gangs reden anders. Fehlt ein Anlass hier, gilt GANG_TEXTS.
- */
-export const GANG_VOICES: Readonly<Record<string, Partial<Record<GangTextKey, readonly string[]>>>> = {
+export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
+  // ⚓ Hafenkolonne, Jupp „Kran“ Wendeler: grob, kölsch, kurz.
+  nord: {
+    warning: [
+      'Jung, du verkaufst in {veedel}. Dat is unser Pflaster. Nächstes Mal reden wir nicht.',
+      'Jupp hier. {veedel} gehört der Kolonne. Pack deine Tütchen ein.',
+      'Hör zu, Pänz. In {veedel} verkauft nur einer, und dat bist nicht du.',
+      'Wir haben dich in {veedel} gesehen. Einmal sag ich dat. Einmal.',
+      'Kleiner, dat hier is nicht dein Veedel. {veedel} is Hafen. Verpiss dich, solang du noch laufen kannst.',
+      'Noch so ein Tag in {veedel} und meine Jungs kommen vorbei. Nicht zum Kaffee.',
+    ],
+    threat: [
+      'Du hörst nicht zu. {tribute} die Woche, oder wir kommen nach {veedel}. Mit Kran.',
+      'Jupp. Ab jetzt zahlst du. {tribute} pro Woche. Sonst gibt et Ärger, und zwar richtig.',
+      '{tribute} jede Woche, bar. Dann darfst du in {veedel} weiter deinen Kram verticken.',
+      'Letzte Ansage, Jung: {tribute} pro Woche. Is billiger als ein neues Gebiss.',
+      'Meine Jungs sind schon unruhig. {tribute} die Woche beruhigt die. Du hast die Wahl.',
+    ],
+    war: [
+      'Gut. Dann eben so. Ab heute schaust du dich besser um.',
+      'Du willst Krieg? Kriegste. Grüß deine Leute, solang sie noch stehen.',
+      'Jupp hat genug gequatscht. Ab jetzt redet der Kran.',
+      'Ab heute bist du Freiwild in ganz Köln. Dat hast du dir selbst eingebrockt.',
+      'Ich hab gefragt. Du hast gelacht. Jetzt lach mal weiter.',
+    ],
+    raidWon: [
+      'Glück gehabt. Nächstes Mal bringen wir mehr Jungs mit.',
+      'Dat war knapp für dich. Wir kommen wieder.',
+      'Hast dich gewehrt. Respekt. Aber wir haben mehr Leute als du.',
+      'Eins zu null für dich. Dat Spiel is lang.',
+      'Meine Jungs bluten. Deine bald auch.',
+    ],
+    raidLost: [
+      'Dat war die Quittung. Willst du noch eine?',
+      'So fühlt sich dat an, Jung. Merk dir dat.',
+      'Wir haben genommen, wat wir wollten. Nächstes Mal mehr.',
+      'Kölsche Antwort auf deine Frechheit. Prost.',
+      'Und dat war nur ein Abend. Wir haben viele Abende.',
+    ],
+    attacked: [
+      'Du hast gerade einen Krieg angefangen, den du nicht gewinnen kannst.',
+      'Meine Jungs. Mein Spot. Dat zahlst du doppelt zurück.',
+      'Biste bekloppt? Die Kolonne vergisst so wat nicht.',
+      'Dat war dein Fehler. Der Hafen hat ein langes Gedächtnis.',
+      'Jetzt wird et ungemütlich für dich, Jung. Ganz ungemütlich.',
+    ],
+    snitch: [
+      'Wir wissen, wer bei den Bullen gesungen hat. Du hörst von uns.',
+      'Ein Spitzel. Ausgerechnet du. In Nippes hängt man so wat nicht an die große Glocke. Man regelt dat.',
+      'Die Bullen waren bei uns. Und wir wissen, wer die geschickt hat.',
+      'Petzen is dat Letzte, Jung. Dat Allerletzte.',
+      'Du hast gesungen. Jetzt singen wir. Und dir wird dat Lied nicht gefallen.',
+    ],
+    tributeDue: [
+      'Woche is rum. {tribute} für die nächste. Du weißt, wie dat läuft.',
+      'Zahltag, Jung. {tribute}. Nicht vergessen.',
+      'Jupp hier. Die nächsten {tribute} sind fällig.',
+      'Neue Woche, neue {tribute}. Is wie Miete, nur ohne Mieterschutz.',
+      'Meine Jungs fragen schon nach dir. {tribute}, dann sind die wieder ruhig.',
+    ],
+    protectionRefused: [
+      'Diese Woche gibt et kein Geld. Hol et dir doch.',
+      'Schutzgeld? Von uns? Vergiss et.',
+      'Die Kasse is leer. Und wenn nicht: Komm und hol et.',
+      'Die Kolonne zahlt nicht mehr. Wat willste machen?',
+      'Hast du gedacht, dat geht ewig so? Diese Woche nix.',
+    ],
+    offer: [
+      'Hab {amount} übrig, vom Hafen. {price}, Übergabe in {veedel}. Heute noch.',
+      'Is wat reingekommen. {amount} für {price}. Treffpunkt {veedel}, keine Fragen.',
+      'Jupp. {amount} Ware, {price}. Abholen in {veedel}, sonst geht et an wen anders.',
+      'Freundschaftspreis, weil heut Sonntag is. Is nicht Sonntag? Egal. {amount} für {price}, in {veedel}.',
+      'Wir haben zu viel. {amount} für {price}. In {veedel} am Kran. Bar.',
+    ],
+    allianceOffer: [
+      '{enemy} wird uns zu frech. Du hilfst uns, wir lassen dich in Ruhe. {price}, dann bist du dabei.',
+      'Jupp hier. Gemeinsamer Feind: {enemy}. Für {price} gehen wir zusammen drauf.',
+      'Die von {enemy} brauchen eine Abreibung. Du zahlst {price}, wir machen den Rest.',
+      'Ich mag dich nicht. {enemy} mag ich noch weniger. {price} und wir sind Kollegen.',
+      'Feind von meinem Feind und so. {enemy}. {price}. Ja oder nein.',
+    ],
+    intimidation: [
+      'Meine Jungs stehen jetzt am {spot}. Mal sehen, wer da noch kauft.',
+      'Jupp hier. Am {spot} is ab heut Kolonne. Deine Kunden haben Angst, dat versteh ich.',
+      'Am {spot} stehen jetzt fünf Kerle mit Hafenjacke. Rate mal, für wen.',
+      'Wir passen ab jetzt auf deinen {spot} auf. Keiner kauft, solang wir gucken.',
+      'Kleiner Besuch am {spot}. Die Kundschaft bleibt heute lieber weg.',
+    ],
+    tipOff: [
+      'Hab den Bullen nen Tipp über {veedel} gegeben. Is nich unser Stil, aber du nervst.',
+      'Die Bullen wissen jetzt, wer in {veedel} vertickt. Rat mal, von wem.',
+      'Jupp hat mal telefoniert. {veedel} wird bald heiß für dich.',
+      'Hab gehört, in {veedel} kommen bald Uniformen. Komisch, wa?',
+      'Nur so: Die Polizei interessiert sich jetzt für {veedel}. Dank uns.',
+    ],
+    blackmail: [
+      'Wir wissen, wo dein {warehouse} is. {amount}, oder die Bullen wissen et auch.',
+      'Jupp. {warehouse}. Schöne Adresse. {amount} und ich vergess sie.',
+      '{amount} bis morgen. Sonst kriegt die Polizei die Adresse vom {warehouse}.',
+      'Dein {warehouse} is kein Geheimnis mehr. {amount} macht et wieder zu einem.',
+      'Ein Anruf und dein {warehouse} is weg. {amount}, dann ruf ich nich an.',
+    ],
+    warnRival: [
+      'Unter uns: {enemy} plant wat gegen dich. Pass auf deine Spots auf.',
+      'Jupp hier. {enemy} sammelt Leute. Gegen dich. Mach dich bereit.',
+      'Hab gehört, {enemy} will dir an den Kragen. Von mir haste dat nich.',
+      '{enemy} redet zu laut in den Kneipen. Die kommen bald zu dir.',
+      'Kleiner Tipp, weil du dich benimmst: {enemy} will Ärger mit dir.',
+    ],
+    favor: [
+      'Brauch nen Gefallen: Lager mal ne Kiste für uns. Gibt {amount}.',
+      'Jupp. Kannst du wat für ein paar Tage unterstellen? {amount} für dich.',
+      'Unsere Bude is zu heiß. Nimmst du unser Zeug? {amount}.',
+      'Ein Freundschaftsdienst, Jung: Zwischenlagern. {amount} bar.',
+      'Wir brauchen nen sicheren Keller. Deiner tut et. {amount}.',
+    ],
+  },
+  // 🕸 Venloer Syndikat, Nadine Schrader („die Notarin“): förmlich, juristisch, droht über Dritte.
+  west: {
+    warning: [
+      'Frau Schrader lässt ausrichten: Ihre Aktivitäten in {veedel} sind aufgefallen. Man könnte das dem Präsidium gegenüber erwähnen.',
+      'Im Auftrag von Frau Schrader: Wir weisen darauf hin, dass {veedel} vertraglich vergeben ist. An uns.',
+      'Eine freundliche Mitteilung des Syndikats: In {veedel} gelten Regeln. Sie kennen sie offenbar nicht.',
+      'Frau Schrader hat Ihren Namen auf einer Liste gesehen. Noch ist es eine kurze Liste. {veedel}, bitte meiden.',
+      'Man hat uns Ihre Geschäfte in {veedel} zugetragen. Wir würden ungern einen Bekannten bei der Kripo bemühen.',
+    ],
+    threat: [
+      'Frau Schrader schlägt eine Vereinbarung vor: {tribute} pro Woche. Andernfalls erhält das Präsidium einen anonymen Hinweis zu {veedel}.',
+      'Wir haben ein Angebot aufgesetzt: {tribute} wöchentlich, und {veedel} bleibt für Sie ruhig. Unterschreiben müssen Sie nicht. Zahlen schon.',
+      'Die Notarin bittet um {tribute} pro Woche. Die Alternative wäre ein Gespräch zwischen unseren Freunden und Ihren Lagern.',
+      'Wöchentliche Gebühr: {tribute}. Die Konditionen sind nicht verhandelbar, die Folgen bei Nichtzahlung leider auch nicht.',
+      'Im Auftrag: {tribute} pro Woche sichern Ihnen Diskretion. Diskretion ist in {veedel} ein knappes Gut.',
+    ],
+    war: [
+      'Frau Schrader betrachtet die Gespräche als gescheitert. Sie werden von uns hören. Über Umwege.',
+      'Die Vereinbarung ist hinfällig. Ab heute kümmern sich andere um Sie. Wir bleiben im Hintergrund.',
+      'Wir haben Ihnen eine Frist gesetzt. Sie ist verstrichen. Man wird Sie ab jetzt behandeln wie einen Fremden.',
+      'Die Notarin hat entschieden. Gegen Sie. Die Akte ist eröffnet.',
+      'Bedauerlich. Frau Schrader schätzt Einsicht. Sie haben sich für das Gegenteil entschieden.',
+    ],
+    raidWon: [
+      'Frau Schrader nimmt zur Kenntnis, dass Sie sich gewehrt haben. Sie wird es bei der nächsten Planung berücksichtigen.',
+      'Ein vorläufiges Ergebnis zu Ihren Gunsten. Vorläufig.',
+      'Unsere Mitarbeiter waren unzureichend vorbereitet. Das wird nicht wieder vorkommen.',
+      'Man gratuliert. Leise. Und plant neu.',
+      'Ein Etappensieg. Die Notarin denkt in Instanzen.',
+    ],
+    raidLost: [
+      'Betrachten Sie das als erste Mahnung. Die zweite kommt mit Kosten.',
+      'Frau Schrader lässt ausrichten: Das war die höfliche Variante.',
+      'Wir haben uns genommen, was uns zusteht. Mit Zinsen.',
+      'Die Rechnung ist beglichen. Für diesen Monat.',
+      'Sie wissen jetzt, wie wir arbeiten. Gründlich und ohne Zeugen.',
+    ],
+    attacked: [
+      'Ein Angriff auf unsere Leute. Frau Schrader hat bereits einen Anwalt und zwei andere Herren informiert.',
+      'Das war ungeschickt. Wir dokumentieren so etwas. Für die richtigen Stellen.',
+      'Sie haben gerade aus einer Meinungsverschiedenheit einen Rechtsstreit gemacht. Nach unseren Regeln.',
+      'Die Notarin ist verärgert. Das kommt selten vor. Es endet nie gut.',
+      'Wir werden das nicht vergessen. Wir vergessen grundsätzlich nichts. Wir haben Archive.',
+    ],
+    snitch: [
+      'Unsere Freunde im Präsidium haben uns verraten, wer uns verraten hat. Sie verstehen die Ironie.',
+      'Frau Schrader weiß, von wem der Hinweis kam. Sie war darüber nicht amüsiert.',
+      'Ein anonymer Hinweis. Wie originell. Unsere Quellen sind weniger anonym als Ihre.',
+      'Sie haben die Polizei bemüht. Wir bemühen jetzt jemand anderen.',
+      'Wir haben Leute im Präsidium. Haben Sie das wirklich nicht gewusst?',
+    ],
+    tributeDue: [
+      'Erinnerung des Syndikats: Die nächste Rate von {tribute} ist fällig.',
+      'Frau Schrader bittet um Überweisung von {tribute}. Bar, versteht sich.',
+      'Die Vereinbarung verlängert sich um eine Woche, sobald {tribute} eingegangen sind.',
+      'Fälligkeit: heute. Betrag: {tribute}. Mahngebühren erheben wir anders.',
+      'Höfliche Erinnerung: {tribute}. Unhöfliche Erinnerungen verschicken wir ungern.',
+    ],
+    protectionRefused: [
+      'Frau Schrader sieht sich diese Woche außerstande zu zahlen. Sie dürfen das gerne anfechten.',
+      'Die Zahlung entfällt. Unsere Juristen sehen keine Grundlage mehr.',
+      'Wir haben die Vereinbarung geprüft und für nichtig befunden. Holen Sie es sich, wenn Sie können.',
+      'Keine Zahlung diese Woche. Beschwerden bitte schriftlich an niemanden.',
+      'Das Syndikat zahlt nicht mehr. Die Gründe sind vertraulich.',
+    ],
+    offer: [
+      'Frau Schrader hätte {amount} abzugeben. {price}, Übergabe in {veedel}, Kiosk an der Venloer.',
+      'Ein Angebot unter Geschäftsleuten: {amount} für {price}. Abholung in {veedel}, nur heute.',
+      'Wir haben einen Überhang von {amount}. Zu {price} gehört er Ihnen. Treffpunkt {veedel}, diskret.',
+      'Im Auftrag: {amount}, {price}. Übergabe in einem Wettbüro in {veedel}. Fragen Sie nach Herrn K.',
+      'Restposten, einwandfreie Ware: {amount} für {price}. In {veedel}. Die Frist ist kurz.',
+    ],
+    allianceOffer: [
+      'Frau Schrader schlägt eine Partnerschaft gegen {enemy} vor. Ihr Beitrag: {price}.',
+      '{enemy} stört unser Geschäft und Ihres. Gegen {price} kümmern wir uns gemeinsam darum.',
+      'Ein Bündnis auf Zeit, gegen {enemy}. Die Notarin hat den Vertrag schon im Kopf. Kosten: {price}.',
+      'Wir hätten Verwendung für Sie, gegen {enemy}. Einmalige Gebühr: {price}.',
+      'Strategische Kooperation, Ziel {enemy}, Kostenanteil {price}. Frau Schrader erwartet Ihre Antwort.',
+    ],
+    intimidation: [
+      'Frau Schrader hat zwei Herren an Ihren {spot} geschickt. Sie stehen dort einfach. Das reicht meist.',
+      'Am {spot} beobachten unsere Mitarbeiter ab sofort die Kundschaft. Die Kundschaft beobachtet zurück und geht.',
+      'Wir haben am {spot} Präsenz gezeigt. Diskret, aber unübersehbar.',
+      'Ihr {spot} wird heute von uns betreut. Ihre Kunden schätzen das weniger.',
+      'Im Auftrag: Am {spot} stehen unsere Leute. Bis auf Weiteres.',
+    ],
+    tipOff: [
+      'Frau Schrader hat einem Bekannten im Präsidium von {veedel} erzählt. Rein zufällig.',
+      'Man hat der Polizei einen Hinweis zu {veedel} zukommen lassen. Anonym, versteht sich.',
+      'Im Präsidium liegt jetzt eine Akte zu {veedel}. Wir haben beim Ausfüllen geholfen.',
+      'Wie angekündigt: Das Präsidium interessiert sich für {veedel}. Die Notarin hält Wort.',
+      'Ein Kriminalhauptkommissar hat heute Ihren Namen gehört. Im Zusammenhang mit {veedel}.',
+    ],
+    blackmail: [
+      'Frau Schrader kennt die Adresse Ihres {warehouse}. Für {amount} vergisst sie sie wieder.',
+      'Diskretion hat ihren Preis: {amount}. Sonst erfährt das Präsidium vom {warehouse}.',
+      'Ein Schreiben liegt bereit, an die Kripo, zum {warehouse}. {amount} und es bleibt liegen.',
+      'Wir schlagen vor: {amount} gegen unser Schweigen über den {warehouse}.',
+      'Die Notarin bietet einen Vergleich an: {amount}, und der {warehouse} bleibt unbekannt.',
+    ],
+    warnRival: [
+      'Frau Schrader möchte Sie warnen: {enemy} plant einen Schritt gegen Sie.',
+      'Unter Geschäftsleuten: {enemy} bereitet etwas vor. Sie sollten vorbereitet sein.',
+      'Eine Information gratis: {enemy} hat es auf Ihre Spots abgesehen.',
+      'Man hört aus gut unterrichteten Kreisen: {enemy} will Ihnen schaden.',
+      'Die Notarin rät zur Vorsicht. {enemy} ist auf dem Weg zu Ihnen.',
+    ],
+    favor: [
+      'Frau Schrader bittet um eine Gefälligkeit: ein paar Kartons zwischenlagern. Honorar: {amount}.',
+      'Wir bräuchten kurzfristig Lagerraum. {amount} für Ihre Mühe.',
+      'Ein kleiner Dienst unter Partnern: Ware für drei Tage. {amount}.',
+      'Das Syndikat sucht einen diskreten Keller. Ihrer käme in Frage. {amount}.',
+      'Im Auftrag: Zwischenlagerung gegen {amount}. Keine Fragen, keine Akten.',
+    ],
+  },
+  // 🔥 Schäl Sick, Kalle Brenner: rotzig, Preise, Masse.
+  ost: {
+    warning: [
+      'Bei uns kostet dat Gramm 6 €. Bei dir 9? Viel Glück in {veedel}, Bruder.',
+      'Kalle hier. {veedel}? Da sind wir billiger, mehr und schneller. Such dir wat anderes.',
+      'Ey, du verkaufst in {veedel}? Lustig. Die Kunden laufen eh zu uns.',
+      'Die Schäl Sick sieht dich, Bruder. {veedel} is unser Revier. Wir sind mehr als du.',
+      'Kleiner Tipp vom Kalle: Mit deinen Preisen überlebst du in {veedel} keine Woche.',
+    ],
+    threat: [
+      'Pass auf: {tribute} die Woche, dann lassen wir dich in {veedel} in Ruhe. Sonst fluten wir dat Veedel mit Ware für nix.',
+      'Kalle. {tribute} pro Woche. Billiger kriegste dat nirgends, glaub mir.',
+      '{tribute} jede Woche, Bruder. Oder wir verkaufen in {veedel} zum halben Preis, bis du pleite bist.',
+      'Du zahlst {tribute} die Woche. Is Masse-Rabatt schon drin.',
+      'Ey, {tribute}, jede Woche. Wir sind zwanzig, du bist allein. Rechne selbst.',
+    ],
+    war: [
+      'Okay, dann Krieg. Wir sind mehr. Wir sind immer mehr.',
+      'Kalle hat gesprochen: Ab heute machen wir dich fertig. Preise, Leute, alles.',
+      'Bruder, du hast es verkackt. Jetzt kommt die ganze Schäl Sick.',
+      'Ab heute bist du auf der rechten Rheinseite unerwünscht. Und auf der linken bald auch.',
+      'Masse schlägt Klasse. Wirst du sehen.',
+    ],
+    raidWon: [
+      'Glück gehabt. Wir haben noch dreißig von den Jungs.',
+      'Ey, Respekt. Aber nächstes Mal kommen wir doppelt so viele.',
+      'Hast gewonnen? Egal. Wir kaufen neue Leute.',
+      'Dat war Pech. Für dich wird Pech noch teuer.',
+      'Kalle lacht drüber. Lach du mal noch.',
+    ],
+    raidLost: [
+      'Dat war die Quittung, Bruder. Masse, wie versprochen.',
+      'Haben alles mitgenommen. Wird bei uns eh billiger verkauft.',
+      'Siehste? Mehr Leute, mehr Spaß.',
+      'Dein Zeug liegt jetzt bei uns im Regal. Für den halben Preis.',
+      'Dat war ein Angebot, dat du nicht ablehnen konntest.',
+    ],
+    attacked: [
+      'Du greifst die Schäl Sick an? Wir kommen über die Brücke. Alle.',
+      'Ey, dat war mein Laden. Jetzt wird dein Laden mein Laden.',
+      'Bruder, du hast keine Ahnung, wie viele wir sind.',
+      'Kalle is sauer. Und wenn Kalle sauer is, wird et billig. Für dich teuer.',
+      'Wir holen uns dat zurück. Mit Zinsen, in Ware.',
+    ],
+    snitch: [
+      'Du hast die Bullen nach Kalk geschickt? Wir wissen dat. Kalk weiß alles.',
+      'Spitzel. Auf der Schäl Sick gibt et dafür keinen Rabatt.',
+      'Die Bullen waren da. Und sie haben deinen Namen fallen lassen. Dumm von denen, dumm von dir.',
+      'Petze. Dat spricht sich rum. Schneller als unsere Preise.',
+      'Wir haben dich für einen Konkurrenten gehalten. Bist aber nur ein Spitzel.',
+    ],
+    tributeDue: [
+      'Kalle. {tribute}. Du weißt Bescheid.',
+      'Neue Woche, gleicher Preis: {tribute}. Bei uns gibt et keine Inflation.',
+      'Ey, {tribute} sind fällig. Bar oder in Ware.',
+      'Zahltag, Bruder. {tribute}. Wir warten.',
+      '{tribute} für die nächste Woche. Billig für dat, wat du dafür kriegst.',
+    ],
+    protectionRefused: [
+      'Diese Woche nix, Bruder. Ware is teuer geworden.',
+      'Kein Geld für dich. Komm doch rüber und hol et.',
+      'Die Schäl Sick zahlt nicht mehr. Wir sind jetzt zu viele dafür.',
+      'Schutzgeld? Wir schützen uns jetzt selbst. Kostet nix.',
+      'Kalle sagt: is aus. Wat willste machen?',
+    ],
+    offer: [
+      'Hab {amount} zu viel. {price}. Is spottbillig, Bruder. In {veedel}.',
+      'Masse-Angebot: {amount} für {price}. Übergabe in {veedel}. Qualität? Frag nicht.',
+      'Kalle hier. {amount}, {price}, {veedel}. Nur heute, dann geht et an die Straße.',
+      'Restposten! {amount} für {price}. In {veedel} hinterm Kiosk.',
+      'Billiger als bei mir kriegste nix: {amount} für {price}. In {veedel}.',
+    ],
+    allianceOffer: [
+      '{enemy} wird zu fett. Du und wir, zusammen. {price} und wir sind Partner.',
+      'Ey, {enemy} geht mir auf den Sack. Dir doch auch. {price}, dann machen wir die platt.',
+      'Kalle bietet Bündnis gegen {enemy}. Kostet {price}. Masse plus Klasse, Bruder.',
+      'Wir brauchen jemand, der {enemy} nervt. Du bist gut darin. {price}.',
+      'Gemeinsam gegen {enemy}, Bruder? {price} und die Schäl Sick steht hinter dir.',
+    ],
+    intimidation: [
+      'Bruder, am {spot} stehen jetzt meine Jungs. Zwanzig Stück. Viel Spaß beim Verkaufen.',
+      'Kalle hat am {spot} nen Stand aufgemacht. Direkt neben dir. Halber Preis.',
+      'Ey, dein {spot}? Is jetzt voll mit uns. Kunden kommen da nich mehr durch.',
+      'Wir chillen jetzt am {spot}. Deine Kunden finden dat nich so chillig.',
+      'Am {spot} gibt et jetzt Masse. Unsere Masse.',
+    ],
+    tipOff: [
+      'Ey, hab den Bullen gesteckt, wat in {veedel} läuft. Konkurrenz belebt dat Geschäft, wa?',
+      'Kalle hat angerufen. Bei der Polizei. Wegen {veedel}.',
+      'Die Bullen wissen jetzt von deinem Laden in {veedel}. Dat war billig für uns.',
+      'Kleine Info an die Uniformen: {veedel}. Hat nix gekostet.',
+      'Bruder, in {veedel} wird et bald blau. Und nicht vom Kölsch.',
+    ],
+    blackmail: [
+      'Ich weiß, wo dein {warehouse} is. {amount}, dann halt ich die Klappe.',
+      'Bruder, {amount} oder die Bullen kriegen die Adresse vom {warehouse}.',
+      '{warehouse}? Kenn ich. Für {amount} vergess ich dat.',
+      'Kalle hat ne Adresse: dein {warehouse}. Kostet dich {amount}, die zu vergessen.',
+      'Masse-Rabatt aufs Schweigen: {amount}. {warehouse} bleibt sauber.',
+    ],
+    warnRival: [
+      'Ey, Bruder: {enemy} will dich platt machen. Pass auf.',
+      'Kalle sagt: {enemy} sammelt Leute. Gegen dich.',
+      'Nur unter uns: {enemy} hat wat vor. Mit dir.',
+      '{enemy} redet über deine Spots. Sei bereit.',
+      'Hör zu, {enemy} kommt. Bald. Gratis-Tipp.',
+    ],
+    favor: [
+      'Bruder, kannst du Ware für uns bunkern? {amount} für dich.',
+      'Kalle braucht Platz. Zwischenlagern, {amount}.',
+      'Ey, wir haben zu viel Zeug. Nimm wat auf, kriegst {amount}.',
+      'Kleiner Gefallen, Bruder? Drei Tage Lager, {amount}.',
+      'Wir zahlen {amount}, wenn du unsere Kisten versteckst.',
+    ],
+  },
+  // ♛ Marienburger Kreis, Dr. Konstantin Aldenhoven: leise, gebildet, kalt.
+  sued: {
+    warning: [
+      'Dr. Aldenhoven bittet um ein Gespräch. Diskret. Er schätzt Vernunft. Ihre Geschäfte in {veedel} sind unvernünftig.',
+      'Der Doktor hat von Ihnen gehört. In {veedel}. Er würde das gerne ein einziges Mal erwähnen.',
+      'Man verkehrt in {veedel} nicht ohne Einladung. Betrachten Sie dies als Ausladung.',
+      'Ein Hinweis aus Marienburg: {veedel} ist ein ruhiges Viertel. Es soll ruhig bleiben.',
+      'Dr. Aldenhoven schätzt Menschen, die einen Wink verstehen. Dies ist einer. {veedel}.',
+    ],
+    threat: [
+      'Dr. Aldenhoven schlägt einen Ausgleich vor: {tribute} pro Woche. Er hält das für großzügig. Er irrt selten.',
+      '{tribute} wöchentlich, und Ihre Lager bleiben das, was sie sind: unbekannt.',
+      'Der Doktor rechnet nüchtern. {tribute} pro Woche sind weniger als das, was Sie sonst verlieren würden. In {veedel} und anderswo.',
+      'Man erwartet {tribute} pro Woche. Man erwartet auch, dass Sie das nicht persönlich nehmen.',
+      'Eine Gebühr für Ruhe: {tribute} jede Woche. Unruhe wäre kostspieliger. Für Sie.',
+    ],
+    war: [
+      'Dr. Aldenhoven hat das Gespräch beendet. Er beginnt nie ein zweites.',
+      'Der Doktor bedauert. Er bedauert selten etwas lange.',
+      'Sie haben Vernunft ausgeschlagen. Was folgt, hat mit Vernunft wenig zu tun.',
+      'Marienburg hat entschieden. Sie werden es nicht kommen sehen.',
+      'Ab heute existieren Sie für den Kreis nur noch als Problem. Probleme löst man.',
+    ],
+    raidWon: [
+      'Bemerkenswert. Der Doktor wird beim nächsten Mal sorgfältiger planen.',
+      'Ein Ergebnis zu Ihren Gunsten. Genießen Sie es. In Maßen.',
+      'Unsere Leute waren nachlässig. Das korrigieren wir.',
+      'Der Doktor nimmt es sportlich. Noch.',
+      'Sie haben gewonnen. Er notiert sich das.',
+    ],
+    raidLost: [
+      'Eine Lektion. Der Doktor hält nichts von Wiederholungen.',
+      'Betrachten Sie es als Rechnung. Unsere Preise sind nun mal höher.',
+      'Diskret erledigt. Sie dürfen davon ausgehen, dass niemand etwas gesehen hat.',
+      'Man hat genommen, was Ihnen ohnehin nicht zustand.',
+      'Der Doktor hofft, dass Sie nun verstehen. Er hofft nicht oft.',
+    ],
+    attacked: [
+      'Sie haben die Hand gegen den Kreis erhoben. Das war unklug.',
+      'Dr. Aldenhoven ist nicht wütend. Er ist enttäuscht. Das ist schlimmer.',
+      'Unsere Leute bluten selten. Wenn doch, bluten andere doppelt.',
+      'Ein Angriff. Wie ungeschliffen. Der Doktor wird höflich antworten. Auf seine Art.',
+      'Sie haben gerade eine sehr teure Entscheidung getroffen.',
+    ],
+    snitch: [
+      'Der Doktor weiß, wer der Polizei geschrieben hat. Er hat mit dem Polizeipräsidenten studiert.',
+      'Ein Hinweis an die Behörden. Wie bürgerlich von Ihnen.',
+      'Sie haben gesungen. Der Doktor bevorzugt Kammermusik. Und Stille.',
+      'Wir wissen es. Wir wussten es, bevor die Polizei kam.',
+      'Verrat ist eine Frage des Stils. Ihrer ist schlecht.',
+    ],
+    tributeDue: [
+      'Der Doktor erinnert an {tribute}. Pünktlichkeit ist eine Tugend.',
+      'Die Woche ist um. {tribute}, bitte. Diskret, wie immer.',
+      'Ein Bote holt {tribute} ab. Bitte halten Sie den Umschlag bereit.',
+      'Fällig: {tribute}. Dr. Aldenhoven verlässt sich auf Sie.',
+      'Die nächsten {tribute}. Der Kreis dankt im Voraus.',
+    ],
+    protectionRefused: [
+      'Der Kreis zahlt diese Woche nicht. Der Doktor hält Sie für entbehrlich.',
+      'Man sieht keine Veranlassung mehr zu zahlen. Sie dürfen widersprechen. Persönlich.',
+      'Die Zahlungen ruhen. Bis Sie das Gegenteil beweisen.',
+      'Der Doktor hat die Abmachung neu bewertet. Zu Ihren Ungunsten.',
+      'Keine Zahlung. Der Kreis zahlt nur denen, die er fürchtet.',
+    ],
+    offer: [
+      'Der Doktor hat {amount} erstklassige Ware übrig. {price}. Übergabe in {veedel}, Villa mit Rheinblick.',
+      'Ein Angebot für Kenner: {amount} für {price}. In {veedel}, nur auf Empfehlung.',
+      'Erlesene Ware, {amount}, {price}. Der Fahrer wartet in {veedel}. Er wartet nicht lange.',
+      'Dr. Aldenhoven überlässt Ihnen {amount} zu {price}. Ein Zeichen guten Willens. In {veedel}.',
+      'Aus privaten Beständen: {amount}, {price}. Abholung in {veedel}, Hintereingang.',
+    ],
+    allianceOffer: [
+      'Dr. Aldenhoven schlägt eine Allianz gegen {enemy} vor. Ihr Beitrag: {price}. Sein Beitrag: Ergebnisse.',
+      '{enemy} ist laut und gierig. Gegen {price} sorgen wir gemeinsam für Ruhe.',
+      'Der Doktor bietet Ihnen eine Partnerschaft an. Ziel: {enemy}. Preis: {price}.',
+      'Ein Arrangement unter Vernünftigen, gegen {enemy}. {price}. Der Doktor erwartet Diskretion.',
+      'Man könnte {enemy} gemeinsam beschneiden. Kosten für Sie: {price}.',
+    ],
+    intimidation: [
+      'Am {spot} stehen nun Herren in guten Mänteln. Sie sagen nichts. Ihre Kunden verstehen trotzdem.',
+      'Der Doktor hat am {spot} Präsenz angeordnet. Leise, aber wirksam.',
+      'Ihr {spot} ist heute nicht der richtige Ort für Geschäfte. Das haben wir dafür gesorgt.',
+      'Zwei unserer Leute beobachten Ihren {spot}. Die Kundschaft spürt das.',
+      'Der Kreis hat sich Ihren {spot} angesehen. Er bleibt dort eine Weile.',
+    ],
+    tipOff: [
+      'Dr. Aldenhoven hat beim Golf erwähnt, was in {veedel} vor sich geht. Der Polizeipräsident hört gut zu.',
+      'Ein Hinweis zu {veedel} hat seinen Weg ins Präsidium gefunden. Stilvoll, über einen Anwalt.',
+      'Der Doktor hat die Behörden auf {veedel} aufmerksam gemacht. Er tut das ungern. Aber er tut es.',
+      'In {veedel} wird man bald genauer hinsehen. Der Kreis hat Freunde.',
+      'Ein Abendessen mit einem Staatsanwalt. {veedel} war das Thema.',
+    ],
+    blackmail: [
+      'Der Doktor weiß, wo Ihr {warehouse} liegt. {amount} erscheinen ihm angemessen für sein Schweigen.',
+      'Diskretion kostet {amount}. Andernfalls erfährt die Polizei vom {warehouse}.',
+      'Ein Umschlag mit der Adresse Ihres {warehouse} liegt bereit. {amount}, und er wird verbrannt.',
+      'Dr. Aldenhoven schlägt vor: {amount}. Der {warehouse} bleibt dann Ihre Privatsache.',
+      'Wir kennen den {warehouse}. Für {amount} vergessen wir ihn.',
+    ],
+    warnRival: [
+      'Der Doktor lässt Sie wissen: {enemy} rüstet gegen Sie. Er schätzt das Gleichgewicht.',
+      'Eine diskrete Warnung: {enemy} plant einen Übergriff.',
+      'Dr. Aldenhoven hält es für klug, Sie zu warnen. {enemy} kommt.',
+      'Man hört, {enemy} sei Ihrer überdrüssig. Seien Sie vorbereitet.',
+      'Der Kreis empfiehlt Wachsamkeit. {enemy}.',
+    ],
+    favor: [
+      'Der Doktor bittet um eine kleine Gefälligkeit: Lagerraum für ein paar Tage. {amount}.',
+      'Eine diskrete Bitte: Unterbringung einiger Kisten. Honorar {amount}.',
+      'Dr. Aldenhoven würde Ihre Kellerräume schätzen. {amount} für drei Tage.',
+      'Der Kreis braucht einen verschwiegenen Ort. {amount}.',
+      'Eine Gefälligkeit unter Vernünftigen: {amount} für Lagerung, keine Fragen.',
+    ],
+  },
+  // 🌹 Neonkrone (Hamburg), Rocco Brandt „der Portier“: Türsteher-Ton, Kiez.
   'hh-kiez': {
     warning: [
-      '{boss}: Moin. Auf dem Kiez fragt man vorher, wem die Tür gehört. In {veedel} gehören sie alle uns.',
-      '{boss}: Freundlicher Hinweis von der Tür: {veedel} ist kein Ort für Laufkundschaft wie dich.',
+      'Moin. Auf dem Kiez fragt man vorher, wem die Tür gehört. In {veedel} gehören sie alle uns.',
+      'Freundlicher Hinweis von der Tür: {veedel} ist kein Ort für Laufkundschaft wie dich.',
+      'Der Portier hat dich gesehen. In {veedel}. Du stehst nicht auf der Liste.',
+      'Heute nicht. In {veedel} nicht. Nie, wenn du schlau bist.',
+      'Rocco hier. {veedel} ist mein Laden. Und in meinem Laden verkauft nur, wen ich reinlasse.',
     ],
     threat: [
-      '{boss}: Eintritt kostet. {tribute} die Woche, dann darfst du in {veedel} rein. Sonst bleibst du draußen.',
+      'Eintritt kostet. {tribute} die Woche, dann darfst du in {veedel} rein. Sonst bleibst du draußen.',
+      'Der Portier will {tribute} pro Woche. Dafür bleibt die Tür in {veedel} für dich offen.',
+      '{tribute} die Woche, wie jede Bar auf dem Kiez. Du bist nichts Besonderes.',
+      'Garderobe, Eintritt, Mindestverzehr: {tribute} wöchentlich. Ohne gibt es Hausverbot.',
+      'Rocco. {tribute} pro Woche. Und das ist der Preis für Freunde.',
     ],
-    war: ['{boss}: Hausverbot. Auf dem ganzen Kiez. Und meine Jungs vergessen keine Gesichter.'],
-    raidLost: ['{boss}: Das war die Rechnung vom Haus. Mit Trinkgeld.'],
-    offer: ['{boss}: Ich hab {amount} über, beste Ware vom Kiez. {price}, abholen in {veedel}. Bis Ladenschluss.'],
+    war: [
+      'Hausverbot. Auf dem ganzen Kiez. Und meine Jungs vergessen keine Gesichter.',
+      'Du stehst ab heute auf der schwarzen Liste. An jeder Tür.',
+      'Der Portier macht dir nicht mehr auf. Ab jetzt kommen wir raus.',
+      'Feierabend für dich. Licht an, Musik aus, raus.',
+      'Auf dem Kiez gibt es keine zweite Chance. Du hattest deine.',
+    ],
+    raidWon: [
+      'Hast dich durchgedrückt. Nächstes Mal stehen da mehr von uns.',
+      'Respekt, Kleiner. Aber die Tür ist noch nicht zu.',
+      'Glück an der Tür. Das hält nicht jede Nacht.',
+      'Meine Jungs sind angeknackst. Die Nacht ist noch lang.',
+      'Notiert. Und vergessen tun wir auf dem Kiez nichts.',
+    ],
+    raidLost: [
+      'Das war die Rechnung vom Haus. Mit Trinkgeld.',
+      'Rausgeflogen. So läuft das auf dem Kiez.',
+      'Wir haben abgeräumt. Wie nach jeder guten Party.',
+      'Die Garderobe gehört jetzt uns. Deine Ware auch.',
+      'Ein Abend auf dem Kiez. Bezahlt hast du.',
+    ],
+    attacked: [
+      'Du hast eine Tür eingetreten. Jetzt kommen alle Türsteher.',
+      'Rocco ist nicht amüsiert. Und wenn Rocco nicht amüsiert ist, wird es laut.',
+      'Das war meine Bar. Jetzt wird deine Bar Kleinholz.',
+      'Auf dem Kiez schlägt man nicht ungestraft zu.',
+      'Du hast gerade dem Portier ins Gesicht gespuckt. Das wäscht man mit Blut ab.',
+    ],
+    snitch: [
+      'Du hast die Davidwache geschickt? Wir haben dort auch Kunden.',
+      'Ein Petzer auf dem Kiez. Das hat es lange nicht gegeben. Das gibt es auch nicht lange.',
+      'Wir wissen, wer gequatscht hat. Die Tür hat Ohren.',
+      'Verpfiffen. Von dir. Rocco nimmt das persönlich.',
+      'Die Bullen waren da. Dein Name stand auf ihrem Zettel. Und jetzt auf unserem.',
+    ],
+    tributeDue: [
+      'Neue Woche, neuer Eintritt: {tribute}.',
+      'Der Portier kassiert: {tribute}.',
+      'Rocco hier. {tribute} sind fällig. Bar an der Tür.',
+      '{tribute}, wie jede Woche. Der Kiez schläft nie, die Kasse auch nicht.',
+      'Zahltag auf dem Kiez. {tribute}.',
+    ],
+    protectionRefused: [
+      'Diese Woche zahlt die Tür nicht. Komm rein und hol es dir.',
+      'Kein Geld. Der Portier sagt Nein.',
+      'Die Neonkrone zahlt nicht mehr. Wir haben genug Türsteher.',
+      'Schutzgeld? Wir sind der Schutz. Für uns selbst.',
+      'Abgelehnt. Wie an der Tür.',
+    ],
+    offer: [
+      'Ich hab {amount} über, beste Ware vom Kiez. {price}, abholen in {veedel}. Bis Ladenschluss.',
+      'Rocco. {amount} für {price}. Hinterausgang, {veedel}.',
+      'Aus der Bar-Kasse: {amount}, {price}. In {veedel}, frag nach dem Portier.',
+      'Party war kleiner als gedacht. {amount} übrig, {price}. {veedel}.',
+      'Kiez-Angebot: {amount} für {price}. Nur heute Nacht, in {veedel}.',
+    ],
+    allianceOffer: [
+      '{enemy} macht uns die Türen streitig. {price} und du stehst mit uns an der Tür.',
+      'Rocco bietet: zusammen gegen {enemy}. {price}.',
+      'Wir brauchen Leute gegen {enemy}. Du hast welche. {price}, dann sind wir Partner.',
+      'Der Kiez gegen {enemy}. Eintritt für dich: {price}.',
+      'Gemeinsam räumen wir {enemy} von der Straße. Kostet dich {price}.',
+    ],
+    intimidation: [
+      'Meine Türsteher stehen jetzt an deinem {spot}. Wer reinwill, muss an denen vorbei.',
+      'Rocco hier. Am {spot} ist ab heute Gesichtskontrolle. Deine Kunden fallen durch.',
+      'Der {spot} hat jetzt Security. Unsere.',
+      'Heute nicht. Sagt der Portier am {spot} zu deinen Kunden.',
+      'Am {spot} läuft jetzt unsere Tür. Viel Glück.',
+    ],
+    tipOff: [
+      'Hab der Davidwache einen Tipp zu {veedel} gegeben. Wir kennen da ja alle.',
+      'Die Bullen auf dem Kiez wissen jetzt, was in {veedel} läuft.',
+      'Rocco hat telefoniert. {veedel} wird heiß.',
+      'Ein Wort an der Bar, ein Bulle hört zu. {veedel}, mein Lieber.',
+      'Die Polizei weiß jetzt Bescheid über {veedel}. Schöne Grüße vom Kiez.',
+    ],
+    blackmail: [
+      'Ich kenn die Adresse von deinem {warehouse}. {amount}, sonst die Davidwache auch.',
+      'Rocco. {amount} oder die Bullen kriegen den {warehouse}.',
+      'Dein {warehouse}, nette Lage. {amount} und ich vergess die Hausnummer.',
+      '{amount}, dann bleibt der {warehouse} unter uns.',
+      'Für {amount} hab ich nie was vom {warehouse} gehört.',
+    ],
+    warnRival: [
+      'Tipp von der Tür: {enemy} will dir an den Kragen.',
+      'Rocco hier. {enemy} plant was. Pass auf.',
+      'Hab an der Bar gehört: {enemy} kommt zu dir.',
+      '{enemy} sammelt Leute. Gegen dich.',
+      'Kleiner Gefallen unter Nachbarn: {enemy} will Stress.',
+    ],
+    favor: [
+      'Brauch Platz für ein paar Kisten. {amount}, drei Tage.',
+      'Rocco. Kannst du was für uns lagern? {amount}.',
+      'Der Kiez ist zu heiß. Nimm unser Zeug, kriegst {amount}.',
+      'Ein Gefallen, bezahlt: {amount} fürs Bunkern.',
+      'Wir brauchen deinen Keller. {amount}.',
+    ],
   },
+  // ⛓ Containerjungs (Hamburg), Hinnerk „Brecher“ Matthiesen: grob vom Hafen.
   'hh-hafen': {
     warning: [
-      '{boss}: Hör mal zu, Rheinländer. {veedel} ist Hafen. Und im Hafen wird nicht gefragt, da wird geschoben.',
-      '{boss}: Wir haben gesehen, was du in {veedel} treibst. Noch so ein Ding und du schwimmst.',
-    ],
-    threat: ['{boss}: {tribute} die Woche. Bar. Sonst verschwindet dein Kram so wie unsere Container: spurlos.'],
-    war: ['{boss}: Jetzt ist Schluss mit lustig. Wir kommen mit dem Gabelstapler.'],
-    raidLost: ['{boss}: Das war nur der erste Container. Wir haben noch tausend.'],
-    offer: ['{boss}: Is was vom Laster gefallen. {amount} für {price}, in {veedel} am Kai. Nicht quatschen.'],
-  },
-  'hh-schanze': {
-    warning: [
-      '{boss}: Hey. Wir haben das im Plenum besprochen: {veedel} ist unser Viertel. Deins ist es nicht.',
-      '{boss}: Nur damit das klar ist: In {veedel} weiß jede WG, wer du bist. Wir auch.',
-    ],
-    threat: ['{boss}: Solidaritätsbeitrag: {tribute} die Woche, dann regeln wir das unter uns. Sonst nicht.'],
-    war: ['{boss}: Das Plenum hat entschieden. Gegen dich. Einstimmig.'],
-    snitch: [
-      '{boss}: Uns verpfeift man nicht. Wir hatten die Bullen eine Stunde vorher auf dem Schirm. Und dich jetzt auch.',
-    ],
-    offer: ['{boss}: Wir haben {amount} zu viel, gute Qualität. {price}, Übergabe in {veedel}. Fair Trade.'],
-  },
-  'hh-elbchaussee': {
-    warning: [
-      '{boss}: Guten Tag. Ihre Geschäfte in {veedel} sind uns aufgefallen. Unser Anwalt meldet sich nicht ohne Grund.',
-      '{boss}: Man verkauft in {veedel} nicht ohne Einladung. Und Sie haben keine.',
+      'Hör mal zu, Rheinländer. {veedel} ist Hafen. Und im Hafen wird nicht gefragt, da wird geschoben.',
+      'Wir haben gesehen, was du in {veedel} treibst. Noch so ein Ding und du schwimmst.',
+      'Brecher hier. {veedel} gehört uns, von Kai bis Kneipe.',
+      'Rheinländer in {veedel}. Hatten wir lange nicht. Hatten wir auch nicht vermisst.',
+      'Kleiner Tipp: Im Hafenbecken ist es kalt. {veedel} ist nicht dein Revier.',
     ],
     threat: [
-      '{boss}: {tribute} wöchentlich, dann sehen wir von weiteren Schritten ab. Das ist ein großzügiges Angebot.',
+      '{tribute} die Woche. Bar. Sonst verschwindet dein Kram so wie unsere Container: spurlos.',
+      'Brecher. {tribute} pro Woche, oder wir räumen dein Lager mit dem Gabelstapler aus.',
+      'Hafengebühr für {veedel}: {tribute} wöchentlich.',
+      'Wir wollen {tribute} die Woche. Und wir kriegen immer, was wir wollen.',
+      '{tribute} pro Woche, sonst gehst du baden. Wörtlich.',
     ],
-    war: ['{boss}: Ich habe Sie gewarnt. Ab jetzt reden andere mit Ihnen. Die mögen keine Anwälte.'],
-    raidLost: ['{boss}: Sehen Sie es als Rechnung. Unsere Preise sind nun mal höher.'],
-    offer: ['{boss}: Wir hätten {amount} beste Qualität abzugeben. {price}. Abholung in {veedel}, diskret bitte.'],
+    war: [
+      'Jetzt ist Schluss mit lustig. Wir kommen mit dem Gabelstapler.',
+      'Krieg, Rheinländer. Und wir haben mehr Kräne als du.',
+      'Ab heute bist du Ladung. Und Ladung geht über Bord.',
+      'Die Insel steht gegen dich. Alle.',
+      'Brecher hat genug geredet. Jetzt wird gebrochen.',
+    ],
+    raidWon: [
+      'Du hast Glück gehabt. Das Hafenbecken wartet trotzdem.',
+      'Ein Container weniger. Wir haben tausend.',
+      'Gewonnen? Wir kommen mit Verstärkung von der Insel.',
+      'Hast dich gewehrt. Das macht es nur lustiger.',
+      'Nächstes Mal bringen wir den Brecher selbst mit.',
+    ],
+    raidLost: [
+      'Das war nur der erste Container. Wir haben noch tausend.',
+      'Ausgeladen. Dein Kram gehört jetzt uns.',
+      'Schön leer, dein Lager. So wie unsere Container nach Zoll.',
+      'Hafen-Regel: Was rumliegt, gehört uns.',
+      'Hat Spaß gemacht. Wir kommen wieder.',
+    ],
+    attacked: [
+      'Du gehst auf die Containerjungs los? Wir versenken dich.',
+      'Brecher ist wach. Und schlecht gelaunt.',
+      'Das war ein Fehler, Rheinländer. Ein nasser Fehler.',
+      'Wir zahlen das zurück. Mit Hafenzinsen.',
+      'Die ganze Insel weiß jetzt, wer du bist.',
+    ],
+    snitch: [
+      'Du hast die Wasserschutzpolizei geholt? Mutig. Dumm, aber mutig.',
+      'Petze. Im Hafen wird so was über Bord geworfen.',
+      'Wir wissen, wer gequatscht hat. Der Hafen redet.',
+      'Die Bullen waren auf der Insel. Und wir wissen, wer die bestellt hat.',
+      'Verpfiffen. Das vergisst der Brecher nie.',
+    ],
+    tributeDue: [
+      'Hafengebühr fällig: {tribute}.',
+      'Brecher. {tribute}. Wie jede Woche.',
+      'Die Woche ist um, {tribute} bitte. Bar.',
+      '{tribute}, sonst geht dein nächster Container verloren.',
+      'Zahltag am Kai: {tribute}.',
+    ],
+    protectionRefused: [
+      'Diese Woche gibt es nix. Komm auf die Insel und hol es dir.',
+      'Kein Geld. Container sind teurer geworden.',
+      'Die Containerjungs zahlen nicht mehr. Kannst ja klagen.',
+      'Brecher sagt: Schluss mit Schutzgeld.',
+      'Nix da. Wir haben selbst genug Muskeln.',
+    ],
+    offer: [
+      'Is was vom Laster gefallen. {amount} für {price}, in {veedel} am Kai. Nicht quatschen.',
+      'Container aufgegangen. {amount}, {price}, {veedel}.',
+      'Brecher hat {amount} über. {price}. Abholen am Kai in {veedel}.',
+      'Zollfrei, sozusagen: {amount} für {price}. In {veedel}.',
+      'Restladung: {amount}, {price}. Heute noch, in {veedel}.',
+    ],
+    allianceOffer: [
+      '{enemy} geht uns auf die Nerven. {price} und wir machen die zusammen fertig.',
+      'Brecher bietet: gemeinsam gegen {enemy}. Kostet {price}.',
+      'Hafen und Rheinland gegen {enemy}? {price}.',
+      'Wir brauchen mehr Leute gegen {enemy}. Du zahlst {price}, wir liefern die Muskeln.',
+      'Zusammen versenken wir {enemy}. {price}.',
+    ],
+    intimidation: [
+      'Die Containerjungs stehen jetzt an deinem {spot}. Mit Hafenhaken.',
+      'Brecher hier. Am {spot} ist jetzt Hafen. Deine Kunden schwimmen weg.',
+      'Am {spot} parkt jetzt unser Gabelstapler. Ziemlich im Weg.',
+      'Wir stehen am {spot}. Mal sehen, wer sich traut.',
+      'Dein {spot} ist heute dicht. Wegen uns.',
+    ],
+    tipOff: [
+      'Hab der Wasserschutzpolizei was über {veedel} erzählt. Die freuen sich über Arbeit.',
+      'Brecher hat angerufen. Bei den Bullen. {veedel}.',
+      'Die Polizei kriegt einen Tipp zu {veedel}. Von uns, mit Gruß.',
+      'In {veedel} gibt es bald Kontrollen. Ich weiß das, weil ich sie bestellt hab.',
+      'Ein Anruf, {veedel}, fertig. Viel Spaß.',
+    ],
+    blackmail: [
+      'Wir wissen, wo dein {warehouse} steht. {amount}, sonst wissen es die Bullen.',
+      'Brecher. {amount} oder der {warehouse} fliegt auf.',
+      '{warehouse}, Rheinländer. {amount} und wir haben nix gesehen.',
+      'Für {amount} vergessen wir den {warehouse}.',
+      'Zahl {amount}, sonst gibt es eine Hausdurchsuchung im {warehouse}.',
+    ],
+    warnRival: [
+      'Brecher hier: {enemy} will dir ans Leder.',
+      '{enemy} plant was. Pass auf deine Läden auf.',
+      'Gratis-Tipp vom Hafen: {enemy} kommt.',
+      'Hab gehört, {enemy} rüstet. Gegen dich.',
+      'Halt die Augen auf, Rheinländer. {enemy}.',
+    ],
+    favor: [
+      'Ein Container muss weg. Kannst du ihn bunkern? {amount}.',
+      'Brecher braucht Platz. {amount} für drei Tage.',
+      'Unser Zeug ist zu heiß. {amount}, wenn du es nimmst.',
+      'Lager mal was für uns. {amount}.',
+      'Gefallen gegen Bares: {amount}.',
+    ],
+  },
+  // ✊ Das Kollektiv (Hamburg), Merle Asmussen „die Kassenwartin“: Plenum, WG, Polit-Ton.
+  'hh-schanze': {
+    warning: [
+      'Hey. Wir haben das im Plenum besprochen: {veedel} ist unser Viertel. Deins ist es nicht.',
+      'Nur damit das klar ist: In {veedel} weiß jede WG, wer du bist. Wir auch.',
+      'Merle hier. Das Kollektiv bittet dich, {veedel} zu verlassen. Noch bitten wir.',
+      'Gentrifizierung des Dealens in {veedel}? Nicht mit uns.',
+      'Das Plenum hat über dich abgestimmt. Ergebnis: Du hast in {veedel} nichts verloren.',
+    ],
+    threat: [
+      'Solidaritätsbeitrag: {tribute} die Woche, dann regeln wir das unter uns. Sonst nicht.',
+      'Das Kollektiv schlägt vor: {tribute} wöchentlich in die Gemeinschaftskasse. Für {veedel}.',
+      'Die Kassenwartin sagt: {tribute} pro Woche. Das ist fair. Wir haben es durchgerechnet.',
+      '{tribute} pro Woche, oder wir machen in {veedel} eine Aktion. Gegen dich.',
+      'Wer in {veedel} verdient, gibt ab. {tribute} die Woche. So funktioniert Gemeinschaft.',
+    ],
+    war: [
+      'Das Plenum hat entschieden. Gegen dich. Einstimmig.',
+      'Das Kollektiv erklärt dich zum Gegner. Wir organisieren uns.',
+      'Kein Dialog mehr. Ab jetzt direkte Aktion.',
+      'Merle hat die Liste rumgeschickt. Dein Name steht oben.',
+      'Wir haben es friedlich versucht. Das Plenum hat jetzt andere Mittel beschlossen.',
+    ],
+    raidWon: [
+      'Das war kein Sieg, das war ein Zwischenstand. Das Plenum tagt.',
+      'Wir haben die Aktion ausgewertet. Nächstes Mal sind wir mehr.',
+      'Rückschlag. Kommt vor. Wir sind geduldig.',
+      'Die Bewegung lässt sich nicht aufhalten. Du schon.',
+      'Glückwunsch. Wir machen eine Nachbesprechung.',
+    ],
+    raidLost: [
+      'Umverteilung erfolgreich. Danke für die Spende.',
+      'Das Kollektiv hat sich genommen, was der Gemeinschaft zusteht.',
+      'Direkte Aktion, direkte Ergebnisse.',
+      'Deine Ware ist jetzt Gemeingut.',
+      'Das war die Ansage aus der Schanze. Verstanden?',
+    ],
+    attacked: [
+      'Du greifst das Kollektiv an? Das ganze Viertel hat es gesehen.',
+      'Gewalt gegen uns. Das Plenum tagt heute Nacht. Über dich.',
+      'Das war ein Angriff auf alle. Alle antworten.',
+      'Merle ist sauer. Und Merle hat die Kasse.',
+      'Das kostet dich mehr als Geld. Das kostet dich das Viertel.',
+    ],
+    snitch: [
+      'Uns verpfeift man nicht. Wir hatten die Bullen eine Stunde vorher auf dem Schirm. Und dich jetzt auch.',
+      'Ein Spitzel. Wir haben im Plenum über dich gesprochen. Lange.',
+      'Die Kollegen in Grün waren da. Wir wissen, wer sie gerufen hat.',
+      'Verrat an der Bewegung. Das verzeiht die Schanze nicht.',
+      'Wir haben unsere Quellen. Deine Quelle war zu laut.',
+    ],
+    tributeDue: [
+      'Die Kassenwartin erinnert: {tribute} für die Gemeinschaftskasse.',
+      'Solibeitrag fällig: {tribute}.',
+      'Neue Woche, {tribute}. Quittung gibt es nicht.',
+      'Merle hier. {tribute}, bitte. Die Kasse muss stimmen.',
+      'Das Plenum erwartet {tribute}.',
+    ],
+    protectionRefused: [
+      'Das Kollektiv zahlt diese Woche nicht. Beschluss des Plenums.',
+      'Keine Zahlung. Die Kasse ist leer, und Merle ist streng.',
+      'Wir haben abgestimmt: Ab jetzt zahlen wir nicht mehr.',
+      'Schutzgeld ist kapitalistisch. Haben wir beschlossen.',
+      'Diese Woche nix. Komm zur Versammlung, wenn du was willst.',
+    ],
+    offer: [
+      'Wir haben {amount} zu viel, gute Qualität. {price}, Übergabe in {veedel}. Fair Trade.',
+      'Aus Kollektiv-Anbau: {amount} für {price}. In {veedel}, Hinterhof.',
+      'Merle hat {amount} übrig. {price}. In {veedel}, WG im dritten Stock.',
+      'Solidarischer Preis: {amount} für {price}. {veedel}, nur heute.',
+      'Überschuss der Gemeinschaft: {amount}, {price}, in {veedel}.',
+    ],
+    allianceOffer: [
+      'Das Plenum schlägt vor: gemeinsam gegen {enemy}. Dein Solibeitrag: {price}.',
+      '{enemy} ist das Problem. Für {price} sind wir solidarisch mit dir.',
+      'Das Kollektiv bietet ein Bündnis gegen {enemy}. Kosten: {price}.',
+      'Gemeinsame Aktion gegen {enemy}? Beitrag {price}.',
+      'Wir organisieren uns gegen {enemy}. Mach mit, für {price}.',
+    ],
+    intimidation: [
+      'Das Kollektiv hat eine Mahnwache an deinem {spot} angemeldet. Mit Transparent.',
+      'Merle hier. Am {spot} steht jetzt das halbe Plenum. Deine Kunden fühlen sich beobachtet.',
+      'Wir machen am {spot} eine Aktion. Deine Geschäfte stören dabei.',
+      'Am {spot} läuft jetzt Aufklärungsarbeit. Gegen dich.',
+      'Unser Infostand steht jetzt an deinem {spot}.',
+    ],
+    tipOff: [
+      'Das Plenum hat beschlossen, der Polizei von {veedel} zu erzählen. Ausnahmsweise.',
+      'Merle hat einen anonymen Brief geschrieben. Thema: {veedel}.',
+      'Die Bullen haben jetzt einen Tipp zu {veedel}. Von uns.',
+      'Wir haben die Polizei auf {veedel} hingewiesen. Taktisch.',
+      'Direkte Aktion, indirekt: {veedel}, Polizei, Hinweis.',
+    ],
+    blackmail: [
+      'Wir kennen deinen {warehouse}. {amount} für die Gemeinschaftskasse, sonst die Polizei.',
+      'Merle hier. {amount}, oder der {warehouse} ist öffentlich.',
+      '{amount} Solibeitrag, dann bleibt der {warehouse} geheim.',
+      'Das Plenum schlägt vor: {amount} gegen Schweigen über den {warehouse}.',
+      'Für {amount} haben wir den {warehouse} nie gesehen.',
+    ],
+    warnRival: [
+      'Solidarische Warnung: {enemy} plant was gegen dich.',
+      'Merle hier. {enemy} organisiert sich. Gegen dich.',
+      'Info aus dem Viertel: {enemy} kommt.',
+      'Das Plenum findet, du solltest wissen: {enemy}.',
+      'Pass auf, {enemy} will Ärger.',
+    ],
+    favor: [
+      'Wir brauchen Lagerplatz. {amount} aus der Gemeinschaftskasse.',
+      'Merle fragt: Kannst du was zwischenlagern? {amount}.',
+      'Solidarische Bitte: drei Tage Lager, {amount}.',
+      'Das Kollektiv zahlt {amount} fürs Bunkern.',
+      'Ein Gefallen fürs Viertel: {amount}.',
+    ],
+  },
+  // ⛵ Elbchaussee-Club (Hamburg), Frederik Brodersen-Lüth: höflich, herablassend, Anwälte.
+  'hh-elbchaussee': {
+    warning: [
+      'Guten Tag. Ihre Geschäfte in {veedel} sind uns aufgefallen. Unser Anwalt meldet sich nicht ohne Grund.',
+      'Man verkauft in {veedel} nicht ohne Einladung. Und Sie haben keine.',
+      'Herr Brodersen-Lüth lässt grüßen. Und fragen, was Sie in {veedel} zu suchen haben.',
+      'Ein Hinweis unter Kaufleuten: {veedel} ist ein gutes Viertel. Für gute Leute.',
+      'Der Club wünscht in {veedel} keine Konkurrenz. Bitte richten Sie sich danach.',
+    ],
+    threat: [
+      '{tribute} wöchentlich, dann sehen wir von weiteren Schritten ab. Das ist ein großzügiges Angebot.',
+      'Der Club erhebt eine Gebühr: {tribute} pro Woche, für {veedel}.',
+      'Herr Brodersen-Lüth schlägt {tribute} wöchentlich vor. Er schlägt selten zweimal vor.',
+      'Mitgliedsbeitrag: {tribute} pro Woche. Ohne Mitgliedschaft wird es ungemütlich.',
+      '{tribute} jede Woche, oder unser Anwalt und ein paar weniger höfliche Herren besuchen Sie.',
+    ],
+    war: [
+      'Ich habe Sie gewarnt. Ab jetzt reden andere mit Ihnen. Die mögen keine Anwälte.',
+      'Der Club kündigt Ihnen. Fristlos.',
+      'Bedauerlich. Herr Brodersen-Lüth hat die Sache abgegeben. An Leute ohne Manieren.',
+      'Sie haben sich gegen den Club entschieden. Der Club entscheidet sich gegen Sie.',
+      'Ab heute sind Sie für uns ein Ärgernis. Ärgernisse werden beseitigt.',
+    ],
+    raidWon: [
+      'Ein Achtungserfolg. Mehr nicht.',
+      'Man ist überrascht. Angenehm ist anders.',
+      'Unsere Leute waren unterbezahlt. Das ändern wir.',
+      'Gewonnen. Wir kaufen uns bessere Leute.',
+      'Notiert. Der Club denkt langfristig.',
+    ],
+    raidLost: [
+      'Sehen Sie es als Rechnung. Unsere Preise sind nun mal höher.',
+      'Man hat sich bedient. Mit Stil, versteht sich.',
+      'Eine kleine Korrektur Ihres Inventars.',
+      'Der Club holt sich, was ihm zusteht. Immer.',
+      'Unsere Herren waren gründlich. Wir zahlen gut.',
+    ],
+    attacked: [
+      'Ein Angriff auf den Club. Wie primitiv.',
+      'Herr Brodersen-Lüth hat heute schon drei Anwälte und zwei Schläger angerufen.',
+      'Sie haben gerade sehr viel Geld gegen sich aufgebracht.',
+      'Das war eine Kriegserklärung. Wir haben die bessere Finanzierung.',
+      'Man schlägt keine Mitglieder des Clubs. Man bezahlt dafür.',
+    ],
+    snitch: [
+      'Ein Hinweis an die Polizei? Unser Anwalt hat ihn schon gelesen.',
+      'Wie gewöhnlich, die Polizei zu rufen. Wir wissen, dass Sie es waren.',
+      'Der Club hat Freunde in der Behörde. Sie offenbar nicht.',
+      'Petzen ist unter Ihrem Niveau. Und das ist schon niedrig.',
+      'Man hat uns Ihren Namen zugetragen. Freundlich, aber deutlich.',
+    ],
+    tributeDue: [
+      'Der Club erinnert an den Beitrag: {tribute}.',
+      'Fällig: {tribute}. Wir nehmen auch Schecks. Scherz.',
+      'Die nächsten {tribute}, bitte. Pünktlich, wie es sich gehört.',
+      'Herr Brodersen-Lüth wartet auf {tribute}.',
+      'Mitgliedsbeitrag: {tribute}.',
+    ],
+    protectionRefused: [
+      'Der Club zahlt diese Woche nicht. Klagen Sie doch.',
+      'Unsere Buchhaltung sieht keine Grundlage mehr für Zahlungen.',
+      'Keine Zahlung. Wir finanzieren lieber unsere Anwälte.',
+      'Abgelehnt. Mit freundlichen Grüßen.',
+      'Der Club hat die Zusammenarbeit überdacht. Ergebnis: nein.',
+    ],
+    offer: [
+      'Wir hätten {amount} beste Qualität abzugeben. {price}. Abholung in {veedel}, diskret bitte.',
+      'Aus dem Bootshaus: {amount} für {price}. In {veedel}.',
+      'Herr Brodersen-Lüth überlässt Ihnen {amount} zu {price}. Ausnahmsweise. In {veedel}.',
+      'Premium, {amount}, {price}. Übergabe am Steg in {veedel}.',
+      'Exklusiv für Sie: {amount} für {price}. In {veedel}, nach Voranmeldung.',
+    ],
+    allianceOffer: [
+      'Der Club schlägt eine Partnerschaft gegen {enemy} vor. Ihr Anteil: {price}.',
+      '{enemy} ist unkultiviert. Gegen {price} korrigieren wir das gemeinsam.',
+      'Herr Brodersen-Lüth bietet Ihnen eine Allianz gegen {enemy}. {price}.',
+      'Eine Investition: {price} gegen {enemy}. Rendite garantiert.',
+      'Gemeinsam gegen {enemy}, für {price}. Der Club stellt das Personal.',
+    ],
+    intimidation: [
+      'Der Club hat an Ihrem {spot} Personal postiert. Teures Personal.',
+      'Herr Brodersen-Lüth lässt Ihren {spot} beobachten. Ihre Kundschaft fühlt sich unwohl.',
+      'Am {spot} stehen jetzt unsere Herren. Sie sind nicht zum Einkaufen da.',
+      'Ihr {spot} ist bis auf Weiteres unser Spot.',
+      'Der Club hat Ihren {spot} gebucht. Exklusiv.',
+    ],
+    tipOff: [
+      'Unser Anwalt hat der Staatsanwaltschaft von {veedel} berichtet.',
+      'Ein Golfpartner bei der Polizei weiß nun von {veedel}.',
+      'Der Club hat einen Hinweis zu {veedel} hinterlegt. Formvollendet.',
+      'In {veedel} wird man bald kontrollieren. Wir haben das angeregt.',
+      'Herr Brodersen-Lüth hat telefoniert. {veedel}.',
+    ],
+    blackmail: [
+      'Wir kennen Ihren {warehouse}. {amount}, und unser Anwalt schweigt.',
+      'Der Club schlägt {amount} vor. Sonst erfährt die Polizei vom {warehouse}.',
+      '{amount}, und der {warehouse} bleibt Ihr Geheimnis.',
+      'Eine diskrete Rechnung: {amount} für Vergesslichkeit zum {warehouse}.',
+      'Herr Brodersen-Lüth bietet Schweigen an. {amount}. Thema: {warehouse}.',
+    ],
+    warnRival: [
+      'Der Club warnt Sie: {enemy} plant einen Übergriff.',
+      'Unter Kaufleuten: {enemy} hat Sie im Visier.',
+      'Herr Brodersen-Lüth meint, Sie sollten wissen: {enemy} kommt.',
+      'Eine Warnung, kostenlos: {enemy}.',
+      'Seien Sie vorbereitet. {enemy}.',
+    ],
+    favor: [
+      'Der Club bräuchte Lagerraum. {amount}.',
+      'Herr Brodersen-Lüth bittet um Unterbringung einiger Kisten. {amount}.',
+      'Drei Tage Lagerung, diskret. {amount}.',
+      'Eine bezahlte Gefälligkeit: {amount}.',
+      'Der Club zahlt {amount} für einen verschwiegenen Keller.',
+    ],
   },
 };
+
+/** Fallback für Gangs ohne eigene Stimme (z.B. künftige Städte): die Hafenkolonne, aber mit Namen davor. */
+export const DEFAULT_VOICE: GangVoice = Object.fromEntries(
+  Object.entries(GANG_VOICES.nord).map(([key, list]) => [key, list.map((t) => `{boss}: ${t}`)]),
+) as unknown as GangVoice;
+
+/** Varianten einer Gang für einen Anlass. */
+export function gangVariants(gangId: string, key: GangTextKey): readonly string[] {
+  return (GANG_VOICES[gangId] ?? DEFAULT_VOICE)[key];
+}
+
+/**
+ * Texte zu Gang-Aktionen, die nicht der Boss schreibt (Auftrag 23): die Nachbarin am Lager meldet Einbrüche, deine
+ * Leute melden Abwerbeversuche und Gang-Leute am Spot. Platzhalter: {warehouse}, {goods}, {gang}, {name}, {extra},
+ * {spot}.
+ */
+export const INCIDENT_TEXTS = {
+  burglaryGang: [
+    'Beim {warehouse} ist die Tür aufgebrochen. {goods} fehlen. Die Leute in der Straße sagen, es waren welche von {gang}.',
+    'Heute Nacht war jemand im {warehouse}. {goods} sind weg. Ich hab Jacken von {gang} gesehen, ganz sicher.',
+    'Ihr {warehouse}: aufgebrochen, {goods} weg. Ein Auto mit Leuten von {gang} stand die halbe Nacht davor.',
+    'Ich will mich ja nicht einmischen, aber im {warehouse} fehlen {goods}. Und {gang} hat gestern rumgefragt.',
+    'Einbruch im {warehouse}, {goods} geklaut. Am Tor klebt ein Aufkleber von {gang}. Frech, oder?',
+  ],
+  burglaryJunkies: [
+    'Im {warehouse} wurde eingebrochen, {goods} fehlen. Sah nach Junkies aus, die Scheibe war einfach eingeschlagen.',
+    'Heute Nacht war jemand im {warehouse}. {goods} weg. Zwei Gestalten, völlig neben der Spur.',
+    'Der {warehouse} ist aufgebrochen, {goods} geklaut. Keine Ahnung, wer. Sah nicht nach Profis aus.',
+    'Einbruch im {warehouse}, {goods} weg. Ich glaub, das waren die Typen vom Bahnhof.',
+    'Im {warehouse} fehlen {goods}. Die Spuren führen zum Spielplatz, da hängen nachts immer welche rum.',
+  ],
+  burglaryInsider: [
+    'Im {warehouse} fehlen {goods}, aber die Tür ist heil. Wer hat da einen Schlüssel? {name} war gestern Nacht noch da.',
+    'Komisch: {goods} weg aus dem {warehouse}, kein Einbruch. Ich hab {name} um drei Uhr da rauskommen sehen.',
+    '{warehouse}: {goods} fehlen, Schloss ganz. Fragen Sie mal {name}.',
+    'Im {warehouse} fehlt was, {goods}. Und {name} hatte heute Morgen neue Schuhe an.',
+    'Aus dem {warehouse} sind {goods} verschwunden, ohne Spuren. {name} hat den Schlüssel, oder?',
+  ],
+  burglaryFoiled: [
+    'Heute Nacht wollte jemand in den {warehouse}. Ihre Wache hat die verscheucht. Hut ab.',
+    'Am {warehouse} war nachts Lärm. Ihr Mann hat zwei Einbrecher in die Flucht geschlagen.',
+    'Einbruchsversuch am {warehouse}. Ihre Wache war schneller. Nichts weg.',
+    'Da wollte einer in den {warehouse}. Ihr Aufpasser hat ihn verjagt.',
+  ],
+  poach: [
+    'Chef, {gang} bietet mir {extra} mehr am Tag. Ich sag’s dir lieber gleich. Was machst du?',
+    'Ehrlich: {gang} will mich haben. {extra} mehr pro Tag. Überzeug mich, dass ich bleiben soll.',
+    'Die von {gang} waren bei mir. {extra} am Tag mehr. Ich hab noch nicht Nein gesagt.',
+    'Chef, ich hab ein Angebot von {gang}. {extra} mehr. Ich mag dich, aber ich hab Rechnungen.',
+    '{gang} zahlt {extra} mehr am Tag. Nur damit du Bescheid weißt.',
+  ],
+  intimidationReport: [
+    'Chef, am {spot} stehen Leute von {gang}. Die Kunden trauen sich nicht mehr her.',
+    'Hier am {spot} hängen fünf von {gang} rum. Keiner kauft mehr.',
+    'Ärger am {spot}: {gang} steht da und glotzt jeden Kunden an.',
+    '{gang} hat sich am {spot} breitgemacht. Ich verkauf hier gerade gar nichts.',
+    'Am {spot} ist {gang}. Die schicken meine Kunden weg.',
+  ],
+} as const;

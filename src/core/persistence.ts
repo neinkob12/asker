@@ -43,6 +43,11 @@ const CORE_MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record
       },
     };
   },
+  // 4: Gedächtnis des Text-Helfers (texts.recent), Auftrag 23.
+  4: (state) => {
+    const texts = isRecord(state.texts) ? state.texts : {};
+    return { ...state, texts: { recent: isRecord(texts.recent) ? texts.recent : {} } };
+  },
 };
 
 export function createSaveFile(state: GameState, label: string, savedAt: number): SaveFile {
