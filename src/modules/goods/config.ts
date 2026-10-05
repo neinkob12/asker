@@ -210,6 +210,59 @@ export const WAREHOUSES: readonly Warehouse[] = [
     capacity: 8000,
     description: 'Bootshaus am Harburger Binnenhafen. Teuer, aber wer kommt hier schon vorbei.',
   },
+  // Berlin (Auftrag 37): fünf Standorte zum Kaufen, kein kostenloses. Preise wie vergleichbare Kölner Standorte mal dem
+  // Immobilien-Faktor der Stadt (1,2): Mieten mittel.
+  {
+    id: 'hinterhof-neukoelln',
+    cityId: 'berlin',
+    name: 'Hinterhof Neukölln',
+    lng: 13.4335,
+    lat: 52.4815,
+    cost: 2400,
+    capacity: 6000,
+    description: 'Zweiter Hinterhof, Remise mit Rolltor. Kurze Wege nach Kreuzberg und zum Hermannplatz.',
+  },
+  {
+    id: 'keller-friedrichshain',
+    cityId: 'berlin',
+    name: 'Clubkeller Friedrichshain',
+    lng: 13.4565,
+    lat: 52.5085,
+    cost: 2900,
+    capacity: 4000,
+    description:
+      'Alter Keller unter einem geschlossenen Club. Mitten im Nachtleben, und keiner fragt, was nachts rein und raus geht.',
+  },
+  {
+    id: 'halle-lichtenberg',
+    cityId: 'berlin',
+    name: 'Halle Lichtenberg',
+    lng: 13.4935,
+    lat: 52.5155,
+    cost: 3000,
+    capacity: 25000,
+    description: 'Ehemalige Werkstatthalle hinter dem Bahnhof Lichtenberg. Viel Platz, weit weg vom Trubel.',
+  },
+  {
+    id: 'garage-wedding',
+    cityId: 'berlin',
+    name: 'Garage Wedding',
+    lng: 13.3545,
+    lat: 52.5505,
+    cost: 2600,
+    capacity: 10000,
+    description: 'Sammelgarage an der Müllerstraße. Günstig, unauffällig, die Leo-Gang wohnt nebenan.',
+  },
+  {
+    id: 'remise-schoeneberg',
+    cityId: 'berlin',
+    name: 'Remise Schöneberg',
+    lng: 13.3555,
+    lat: 52.4905,
+    cost: 3400,
+    capacity: 8000,
+    description: 'Ruhige Remise im Hof eines Altbaus. Teurer, aber nah an Kreuzberg und am Nollendorfplatz.',
+  },
   // München (Auftrag 38): fünf Standorte zum Kaufen, die teuersten im Spiel (vergleichbare Kölner Standorte mal dem
   // Immobilien-Faktor 2). Ein billiges großes Lager gibt es nicht, nur in Sendling an der Großmarkthalle.
   {

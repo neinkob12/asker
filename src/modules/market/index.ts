@@ -29,7 +29,7 @@ import {
   MINUTES_PER_DAY,
   messages,
 } from '../../core';
-import { activeCity, isVeedelLive, playableCities } from '../city';
+import { activeCity, citiesUnlocked, isVeedelLive } from '../city';
 import { marketEventFactor } from '../events';
 import { allProducts, getProduct } from '../goods';
 import { getSpot } from '../spots';
@@ -163,12 +163,16 @@ function clampIndex(value: number): number {
   return Math.min(INDEX_MAX, Math.max(INDEX_MIN, value));
 }
 
-/** Ein Tagesschritt des Index in allen Städten (auch den schlafenden): Rückkehr zur Mitte plus Zufall. */
+/**
+ * Ein Tagesschritt des Index in allen freien Städten (auch den schlafenden): Rückkehr zur Mitte plus Zufall. Städte,
+ * die noch nicht frei sind, würfeln nicht mit (Auftrag 39): sonst verschiebt jede neue spielbare Stadt die Würfelfolge
+ * schon in Köln; ihr Index startet beim Freischalten bei 1.
+ */
 function stepIndex(ctx: Ctx): void {
   const market = ctx.state.modules.market;
-  for (const city of playableCities()) {
-    market.index[city.id] ??= {};
-    const row = market.index[city.id];
+  for (const cityId of citiesUnlocked(ctx.state)) {
+    market.index[cityId] ??= {};
+    const row = market.index[cityId];
     for (const product of allProducts()) {
       const now = row[product.id] ?? 1;
       const next = 1 + (now - 1) * (1 - INDEX_REVERSION) + (ctx.random() * 2 - 1) * INDEX_STEP;

@@ -43,7 +43,7 @@ function cityPlaces(
   cityId: string,
   center: LngLat,
 ): { spots: Place[]; warehouses: Place[]; port: Place | null; center: LngLat } {
-  // Städte ohne Hafen (München, Auftrag 38) prüfen nur Spots, Lager und Einfahrten.
+  // Städte ohne Hafen (Auftrag 39: Frankfurt) prüfen keinen; portPlace gäbe sonst den Kölner zurück.
   const port = PORTS[cityId] ? portPlace(cityId) : null;
   return {
     spots: getAllSpots(state)
@@ -140,10 +140,11 @@ function checkCity(
 export function checkedCounts(state: GameState): { places: number; routes: number } {
   let places = 0;
   let routes = 0;
-  for (const { cityId, spots, warehouses } of allPlaces(state)) {
+  for (const { cityId, spots, warehouses, port } of allPlaces(state)) {
+    const ports = port ? 1 : 0;
     places +=
-      spots.length + warehouses.length + 1 + getSuppliers(state, cityId).filter((s) => s.kind === 'city').length;
-    routes += warehouses.length * (spots.length * 2 + 2);
+      spots.length + warehouses.length + ports + getSuppliers(state, cityId).filter((s) => s.kind === 'city').length;
+    routes += warehouses.length * (spots.length * 2 + 2 * ports);
   }
   return { places, routes };
 }

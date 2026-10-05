@@ -5,6 +5,7 @@
 #   python3 -m venv .venv-roads && .venv-roads/bin/pip install pyarrow shapely
 #   .venv-roads/bin/python src/modules/roads/tools/build-roads.py                   Köln (lädt die Daten, ca. 1 Minute)
 #   .venv-roads/bin/python src/modules/roads/tools/build-roads.py --city hamburg    Hamburg
+#   .venv-roads/bin/python src/modules/roads/tools/build-roads.py --city berlin     Berlin (Auftrag 37)
 #   .venv-roads/bin/python src/modules/roads/tools/build-roads.py --autobahn koeln hamburg   die A1 dazwischen
 #   .venv-roads/bin/python src/modules/roads/tools/build-roads.py --autobahn all   das ganze Netz (AUTOBAHNEN)
 #   … --autobahn hamburg:berlin berlin:muenchen   nur diese Linien (die anderen in autobahn.ts bleiben)
@@ -90,6 +91,21 @@ CITIES = {
             ('A24', ['A 24'], 'Schwerin, Berlin', (10.08, 53.5622)),
             ('A25', ['A 25'], 'Bergedorf, Geesthacht', (10.08, 53.5083)),
             ('A26', ['A 26'], 'Buxtehude, Stade', (9.78, 53.4889)),
+        ],
+    },
+    # Berlin (Auftrag 37): die zwölf Ortsteile von Charlottenburg bis Lichtenberg, der Stadtring A100 und die
+    # Autobahnen, die vom Berliner Ring (A10) in die Stadt führen.
+    'berlin': {
+        'box': (13.25, 13.55, 52.42, 52.58),
+        'out': 'network-berlin.ts',
+        'lat0': 52.5,
+        'extra_areas': [],
+        # Die A100 liegt ganz im Ausschnitt; herein kommen die A111 (Norden), die AVUS A115 (Südwesten) und die A113
+        # (Südosten).
+        'approaches': [
+            ('A111', ['A 111', 'E 26'], 'Oranienburg, Hamburg, Rostock', (13.2958, 52.58)),
+            ('A115', ['A 115', 'E 51'], 'Potsdam, Leipzig, München', (13.25, 52.4806)),
+            ('A113', ['A 113'], 'Schönefeld, Dresden, Cottbus', (13.522, 52.42)),
         ],
     },
     # München (Auftrag 38): alle Stadtbezirke im Spiel (Nymphenburg bis Bogenhausen, Giesing bis zur Allianz Arena) und

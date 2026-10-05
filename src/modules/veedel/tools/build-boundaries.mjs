@@ -5,6 +5,7 @@
 //   node src/modules/veedel/tools/build-boundaries.mjs stadtteile.json Köln: nimmt eine schon geladene GeoJSON-Datei
 //   node src/modules/veedel/tools/build-boundaries.mjs --city hamburg hamburg.geojson
 //                                                                      Hamburg: GeoJSON aus tools/fetch-divisions.py
+//   node src/modules/veedel/tools/build-boundaries.mjs --city berlin berlin.geojson     Berlin (Auftrag 37), ebenso
 //   npm run format                                                     danach, damit Biome zufrieden ist
 //
 // Quellen:
@@ -87,6 +88,30 @@ const CITIES = {
       '//   (admin_level 10) aus OpenStreetMap, Landflächen ohne Elbe und Hafenbecken. Geladen mit tools/fetch-divisions.py.',
       '// Lizenz: ODbL 1.0 (https://opendatacommons.org/licenses/odbl/), © OpenStreetMap-Mitwirkende,',
       '//   © Overture Maps Foundation.',
+    ],
+  },
+  berlin: {
+    sourceUrl: null,
+    lat0: 52.51,
+    outFile: 'boundaries-berlin.ts',
+    names: {
+      Mitte: 'mitte',
+      Kreuzberg: 'kreuzberg',
+      Friedrichshain: 'friedrichshain',
+      Neukölln: 'neukoelln',
+      'Prenzlauer Berg': 'prenzlauer-berg',
+      Wedding: 'wedding',
+      Moabit: 'moabit',
+      Schöneberg: 'schoeneberg',
+      Charlottenburg: 'charlottenburg',
+      'Alt-Treptow': 'alt-treptow',
+      Lichtenberg: 'lichtenberg',
+      Tempelhof: 'tempelhof',
+    },
+    anchors: [],
+    header: [
+      '// Quelle: Overture Maps Foundation, Thema "divisions", Typ "division_area" (Release 2026-09-23.1), Ortsteile',
+      '//   (admin_level 10) aus OpenStreetMap, Landflächen ohne Spree und Landwehrkanal. Geladen mit tools/fetch-divisions.py.',
     ],
   },
   // München (Auftrag 38): zwölf Stadtbezirke (admin_level 9), ebenfalls aus Overture (tools/fetch-divisions.py).

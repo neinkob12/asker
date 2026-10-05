@@ -114,8 +114,9 @@ export const DEFAULT_CITY = 'koeln';
 /** Was nach "Köln komplett" passiert (Hinweis im Sieg-Bildschirm und im Journal). */
 const AFTER_COMPLETE: Record<string, string> = {
   koeln: 'Gleich klingelt dein Telefon.',
-  hamburg:
-    'Zwei Städte gehören dir. Hamburg kann eine zweite Rechte Hand führen, die nächste Stadt kommt später. Bis dahin geht es im Endlosmodus weiter.',
+  hamburg: 'Hamburg gehört dir, der Hafen auch. Die nächste Stadt meldet sich, sobald eine frei ist.',
+  berlin: 'Berlin gehört dir, die Nacht auch. Die nächste Stadt meldet sich, sobald eine frei ist.',
+  muenchen: 'München gehört dir, die Wiesn auch. Die nächste Stadt meldet sich, sobald eine frei ist.',
 };
 
 declare module '../../core' {
@@ -420,6 +421,22 @@ function initialState(state: GameState): TerritoryState {
   return { influence, controller, lastSaleAt: {}, milestones: {} };
 }
 
+/**
+ * Veedel, die im Spielstand fehlen (eine neue Stadt), bekommen Einfluss und Herren wie bei einem neuen Spiel; alles
+ * Bestehende bleibt.
+ */
+function addMissingVeedel(old: TerritoryState, state: GameState): TerritoryState {
+  const fresh = initialState(state);
+  const influence = { ...old.influence };
+  const controller = { ...old.controller };
+  for (const v of allVeedel()) {
+    if (influence[v.id]) continue;
+    influence[v.id] = fresh.influence[v.id];
+    controller[v.id] = fresh.controller[v.id];
+  }
+  return { ...old, influence, controller };
+}
+
 /** Schritte über die Nachbarschaft von einem Veedel zu allen anderen. */
 function graphDistances(start: string): Map<string, number> {
   const distances = new Map([[start, 0]]);
@@ -437,7 +454,7 @@ function graphDistances(start: string): Map<string, number> {
 
 export default defineModule({
   id: 'territory',
-  version: 4,
+  version: 6,
   dependsOn: ['veedel', 'gangs'],
   init: (ctx) => initialState(ctx.state),
   tickEvery: 60,
@@ -459,16 +476,10 @@ export default defineModule({
     },
     // Version 4 (Auftrag 30, Etappe 4): Hamburg kommt dazu. Seine Veedel bekommen Einfluss und Herren wie bei einem
     // neuen Spiel; alles Bestehende bleibt (es war Köln).
-    4: (old: TerritoryState, state: GameState): TerritoryState => {
-      const fresh = initialState(state);
-      const influence = { ...old.influence };
-      const controller = { ...old.controller };
-      for (const v of allVeedel()) {
-        if (influence[v.id]) continue;
-        influence[v.id] = fresh.influence[v.id];
-        controller[v.id] = fresh.controller[v.id];
-      }
-      return { ...old, influence, controller };
-    },
+    4: (old: TerritoryState, state: GameState): TerritoryState => addMissingVeedel(old, state),
+    // Version 5 (Auftrag 37): Berlin kommt dazu, genauso.
+    5: (old: TerritoryState, state: GameState): TerritoryState => addMissingVeedel(old, state),
+    // Version 6 (Auftrag 38): München kommt dazu, genauso.
+    6: (old: TerritoryState, state: GameState): TerritoryState => addMissingVeedel(old, state),
   },
 });

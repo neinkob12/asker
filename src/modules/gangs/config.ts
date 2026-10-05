@@ -228,6 +228,8 @@ export const VEEDEL_POWER = 15;
 export const METHOD_INTERVAL_BY_CITY: Readonly<Record<string, readonly [number, number]>> = {
   koeln: [4, 8],
   hamburg: [6, 12],
+  // Berlin (Auftrag 37): starke Gangs, die oft Druck machen.
+  berlin: [5, 10],
   muenchen: [6, 12],
 };
 /** Geht zum Termin nichts (kein Ziel, eine andere Gang war gerade dran), versucht sie es so viel später wieder. */

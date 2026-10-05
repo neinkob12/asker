@@ -192,6 +192,11 @@ export interface Supplier {
    */
   via?: Readonly<Record<string, string>>;
   /**
+   * Hier zu Hause (Auftrag 37, allgemein statt nur Hein in Hamburg): Betrittst du die Stadt zum ersten Mal, ist er ohne
+   * Vermittlung dabei und meldet sich mit welcome.
+   */
+  home?: { cityId: string; welcome: string };
+  /**
    * Zoll an einer Grenze (Auftrag 38, z.B. am Brenner): zusätzliche Chance auf Beschlagnahme pro Lieferung, wie
    * PORT_SEIZE_EXTRA am Hafen. Fehlt: 0.
    */
@@ -892,24 +897,21 @@ const distance = (a: { lng: number; lat: number }, b: { lng: number; lat: number
   Math.hypot((a.lng - b.lng) * 0.63, a.lat - b.lat);
 
 /**
- * Hamburg betreten: Hein sitzt dort. Kennt ihr euch noch nicht, ist er ab jetzt dabei (ohne Vermittlung), sonst meldet
- * er sich nur kurz.
+ * Eine Stadt betreten: Lieferanten, die dort zu Hause sind (home, z.B. Hein in Hamburg, Mirko in Berlin). Kennt ihr
+ * euch noch nicht, ist er ab jetzt dabei (ohne Vermittlung), sonst meldet er sich nur kurz.
  */
 function onCityUnlocked(ctx: Ctx, cityId: string): void {
-  const hein = getSupplier(ctx.state, 'hamburg');
-  if (cityId !== 'hamburg' || !hein) return;
   const s = ctx.state.modules.suppliers;
-  if (!s.unlocked.includes(hein.id)) {
-    s.unlocked.push(hein.id);
-    if (!s.offered.includes(hein.id)) s.offered.push(hein.id);
-    relationFor(ctx, hein.id);
-    ctx.emit('supplier.unlocked', { supplierId: hein.id, fee: 0 });
+  for (const supplier of getSuppliers(ctx.state)) {
+    if (supplier.home?.cityId !== cityId) continue;
+    if (!s.unlocked.includes(supplier.id)) {
+      s.unlocked.push(supplier.id);
+      if (!s.offered.includes(supplier.id)) s.offered.push(supplier.id);
+      relationFor(ctx, supplier.id);
+      ctx.emit('supplier.unlocked', { supplierId: supplier.id, fee: 0 });
+    }
+    tell(ctx, supplier, supplier.home.welcome);
   }
-  tell(
-    ctx,
-    hein,
-    'Moin. Du bist jetzt in Hamburg, hab ich gehört. Such dir ein Lager, dann liefer ich dir direkt hin.',
-  );
 }
 
 /**

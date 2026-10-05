@@ -337,7 +337,7 @@ describe('territory', () => {
     const loaded = loadSimulation(old, sim.modules);
     expect(loaded.state.modules.territory.lastSaleAt).toEqual({});
     expect(loaded.state.modules.territory.controller).toEqual(sim.state.modules.territory.controller);
-    expect(loaded.state.moduleVersions.territory).toBe(4);
+    expect(loaded.state.moduleVersions.territory).toBe(6);
     expect(loaded.state.modules.territory.milestones).toEqual({ koeln: { majority: null, complete: null } });
     sell(loaded, 'kalk');
     expect(getInfluence(loaded.state, 'kalk', PLAYER_FACTION)).toBeGreaterThan(0);

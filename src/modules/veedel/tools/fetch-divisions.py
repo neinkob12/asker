@@ -51,6 +51,24 @@ CITIES = {
             'Blankenese',
         ],
     },
+    # Berlin (Auftrag 37): Ortsteile rund um die Innenstadt (in OSM admin_level 10, Bezirke sind admin_level 9).
+    'berlin': {
+        'box': (13.20, 13.60, 52.40, 52.62),
+        'names': [
+            'Mitte',
+            'Kreuzberg',
+            'Friedrichshain',
+            'Neukölln',
+            'Prenzlauer Berg',
+            'Wedding',
+            'Moabit',
+            'Schöneberg',
+            'Charlottenburg',
+            'Alt-Treptow',
+            'Lichtenberg',
+            'Tempelhof',
+        ],
+    },
     # München (Auftrag 38): zwölf Stadtbezirke (OSM admin_level 9) rund um die Innenstadt, von der Theresienwiese bis
     # zur Allianz Arena.
     'muenchen': {

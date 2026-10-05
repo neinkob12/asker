@@ -470,6 +470,11 @@ function visitRegulars(ctx: Ctx): void {
       scheduleVisit(ctx, regular, ctx.now);
       continue;
     }
+    // Geschlossene Spots (Kneipe, Club am Wochenende): Der Stammkunde kommt kurz nach der nächsten Öffnung.
+    if (!isSpotOpen(spot, ctx.now)) {
+      regular.nextVisitAt = nextSpotOpening(spot, ctx.now) + 30;
+      continue;
+    }
     const type = customerType(regular.typeId);
     const stock = getStock(ctx.state, { productId: regular.productId, cityId: spotCity(spot) });
     const price = getSpotPrice(ctx.state, spot.id, regular.productId);

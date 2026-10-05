@@ -2,10 +2,10 @@
 // der Dreh „teuer und streng“ als Daten. Dazu ein kurzer Weg ins Spiel: Köln komplett, übergeben, in München ankommen.
 
 import { describe, expect, it } from 'vitest';
-import { distanceMeters, type Simulation } from '../../core';
+import { distanceMeters, loadSimulation, type Simulation } from '../../core';
 import { createTestGame } from '../../core/testing';
 import { CITY_EVENTS, getEventDef, isEventActive } from '../events';
-import { getGangs } from '../gangs';
+import { getGangStatus, getGangs } from '../gangs';
 import { warehouseSites } from '../goods';
 import { getRightHand, RIGHT_HAND_RANK_XP } from '../hierarchy';
 import { operationTier } from '../police';
@@ -227,5 +227,33 @@ describe('München (Auftrag 38)', () => {
     expect(sim.state.wallet.clean).toBe(20000 - (site?.cost ?? 0));
     expect(sim.dispatch({ type: 'spots.unlock', payload: { spotId: 'tegernseer-landstrasse' } }).ok).toBe(true);
     expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'italien' } }).ok).toBe(true);
+  });
+
+  it('alte Spielstände ohne München (auch schon mit Berlin gespeichert) bekommen Bezirke und Gangs wie neu', () => {
+    const sim = createTestGame({ seed: 3 });
+    const fresh = JSON.parse(JSON.stringify(sim.state));
+    const old = JSON.parse(JSON.stringify(sim.state));
+    const gangs = old.modules.gangs.gangs as Record<string, unknown>;
+    for (const id of Object.keys(gangs)) if (id.startsWith('mu-')) delete gangs[id];
+    // Stand nach dem Berliner Merge (gangs 6, territory 5), also nach den Migrationen, die Berlin ergänzt haben.
+    old.moduleVersions.gangs = 6;
+    for (const v of allVeedel(CITY)) {
+      delete old.modules.territory.influence[v.id];
+      delete old.modules.territory.controller[v.id];
+    }
+    old.moduleVersions.territory = 5;
+    const loaded = loadSimulation(old as never, sim.modules);
+    expect(loaded.state.moduleVersions.gangs).toBe(7);
+    expect(loaded.state.moduleVersions.territory).toBe(6);
+    for (const id of ['mu-bahnhof', 'mu-giesing', 'mu-isar', 'mu-nord']) {
+      expect(getGangStatus(loaded.state, id)?.people, id).toBeGreaterThan(0);
+    }
+    for (const v of allVeedel(CITY)) {
+      expect(loaded.state.modules.territory.influence[v.id], v.id).toEqual(fresh.modules.territory.influence[v.id]);
+      expect(controllerOf(loaded.state, v.id), v.id).not.toBe(PLAYER_FACTION);
+    }
+    // Köln und Berlin bleiben, wie sie waren.
+    expect(loaded.state.modules.territory.influence.kalk).toEqual(fresh.modules.territory.influence.kalk);
+    expect(loaded.state.modules.territory.influence.kreuzberg).toEqual(fresh.modules.territory.influence.kreuzberg);
   });
 });
