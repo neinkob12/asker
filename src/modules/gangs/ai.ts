@@ -22,7 +22,6 @@ import {
 import { allVeedel, getVeedel, neighborsOf, veedelAt, veedelName } from '../veedel';
 import { addHostility, commandOption, crewFor, demandOptions, focusVeedel, say, statusOf } from './common';
 import {
-  ALLIANCE_COST,
   ALLIANCE_MAX_HOSTILITY,
   ALLIANCE_PUSH_FACTOR,
   ANNOUNCE_INTERVAL,
@@ -71,6 +70,7 @@ import {
   RECRUITS_PER_DAY,
   RESTOCK_BELOW_HOURS,
   RESTOCK_HOURS,
+  RIVALRY_TARGET_BONUS,
   SALES_PER_VEEDEL_HOUR,
   SALES_SATURATION,
   SATURATION_VEEDEL,
@@ -86,6 +86,7 @@ import {
 import { GANGS, type Gang } from './data';
 import { goodTurns, logAction, maybePressure, upkeepIncidents } from './methods';
 import {
+  allianceCost,
   type GangStage,
   type GangStatus,
   gangPower,
@@ -101,6 +102,7 @@ import {
   tributeAmount,
   veedelGang,
 } from './state';
+import { endWar, onPushIntoGang, rivalry, warSupportFactor } from './war';
 
 const STAGE_THRESHOLD: Record<GangStage, number> = { 0: 0, 1: WARN_AT, 2: THREAT_AT, 3: ATTACK_AT };
 
@@ -292,6 +294,8 @@ function expand(ctx: Ctx, gang: Gang, s: GangStatus): void {
         : `${gang.name} drängt nach ${veedelName(target)}.`;
   journal.add(ctx, text, against === PLAYER_FACTION ? 'bad' : 'info', { veedelId: target });
   ctx.emit('gang.pushStarted', { gangId: gang.id, veedelId: target, against });
+  // Auftrag 34: Ins Revier einer verfeindeten Gang wird daraus ein Gang-Krieg.
+  if (againstGang) onPushIntoGang(ctx, gang, againstGang.id, target);
 }
 
 /** Ziel für einen Vorstoß: angrenzende oder herrenlose Veedel, bevorzugt schwach gehaltene. */
@@ -319,6 +323,9 @@ function pickTarget(ctx: Ctx, gang: Gang, s: GangStatus): string | null {
     if (controller === PLAYER_FACTION && s.hostility >= THREAT_AT) score += 25;
     if (controller === PLAYER_FACTION) score += PLAYER_THREAT_TARGET_BONUS * controlledBy(state, PLAYER_FACTION).length;
     if (holder && holder !== PLAYER_FACTION && gangPower(state, holder) > myPower) score -= STRONGER_TARGET_PENALTY;
+    // Auftrag 34: Feinde greift man lieber an.
+    if (holder && holder !== PLAYER_FACTION)
+      score += Math.max(0, -rivalry(state, gang.id, holder)) * RIVALRY_TARGET_BONUS;
     if (score > bestScore) {
       best = v;
       bestScore = score;
@@ -339,6 +346,7 @@ function continuePush(ctx: Ctx, gang: Gang, s: GangStatus): void {
   const controller = controllerOf(ctx.state, veedelId);
   const end = (success: boolean) => {
     s.push = null;
+    endWar(ctx, gang.id, veedelId, success);
     journal.add(
       ctx,
       success
@@ -364,7 +372,10 @@ function continuePush(ctx: Ctx, gang: Gang, s: GangStatus): void {
 
   const squad = Math.min(s.people, 4 + Math.floor(s.people / 4));
   const homeFight = veedelId === gang.homeVeedelId && gangVeedel(ctx.state, gang.id).length === 0;
-  const attack = squad * gang.traits.fighting * (homeFight ? HOME_PUSH_STRENGTH : 1) * (0.5 + ctx.random());
+  // Auftrag 34: Ware von dir im Gang-Krieg macht stärker (die Seite, der du geholfen hast).
+  const support = (side: 'attack' | 'defend') => warSupportFactor(ctx.state, gang.id, veedelId, side);
+  const attack =
+    squad * gang.traits.fighting * (homeFight ? HOME_PUSH_STRENGTH : 1) * (0.5 + ctx.random()) * support('attack');
   let defense = 0;
   const defenderGang = controller && controller !== PLAYER_FACTION ? getGang(ctx.state, controller) : undefined;
   const defender = defenderGang ? statusOf(ctx, defenderGang.id) : undefined;
@@ -374,7 +385,7 @@ function continuePush(ctx: Ctx, gang: Gang, s: GangStatus): void {
     const lastStand = gangVeedel(ctx.state, defenderGang.id).length <= 1 ? LAST_STAND_BONUS : 1;
     const home = veedelId === defenderGang.homeVeedelId ? HOME_DEFENSE_BONUS : 1;
     const local = defender.people * DEFENDER_COMMIT * Math.max(lastStand, home) + DEFENDER_BASE;
-    defense = local * defenderGang.traits.fighting * (0.5 + ctx.random());
+    defense = local * defenderGang.traits.fighting * (0.5 + ctx.random()) * support('defend');
   }
   if (attack > defense) {
     addInfluence(ctx, veedelId, gang.id, PUSH_GAIN);
@@ -648,10 +659,11 @@ function maybeOfferAlliance(ctx: Ctx, gang: Gang, s: GangStatus): void {
     }
   }
   if (!enemy) return;
-  say(ctx, gang, 'allianceOffer', { enemy: enemy.name, price: formatEuro(ALLIANCE_COST) }, [
+  const cost = allianceCost(ctx.state, gang.id);
+  say(ctx, gang, 'allianceOffer', { enemy: enemy.name, price: formatEuro(cost) }, [
     commandOption(
       'ally',
-      `Bündnis (${formatEuro(ALLIANCE_COST)})`,
+      `Bündnis (${formatEuro(cost)})`,
       { type: 'gangs.ally', payload: { gangId: gang.id, againstGangId: enemy.id } },
       'Ich bin dabei.',
     ),

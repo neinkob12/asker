@@ -17,6 +17,7 @@ import {
   RELATION_ON_SNITCH,
   TIPOFF_DISCOVERY_BASE,
 } from './config';
+import { remember } from './memory';
 import { onIntimidationResolved, onRecoverResolved } from './methods';
 import { getGang, veedelGang } from './state';
 
@@ -62,6 +63,7 @@ export function onEncounterResolved(ctx: Ctx, payload: GameEvents['encounter.res
       if (alive) say(ctx, gang, 'raidWon');
     } else if (payload.outcome === 'failure') {
       addHostility(s, -HOSTILITY_AFTER_LESSON);
+      remember(ctx, gang.id, 'raidRepelled');
       if (alive) say(ctx, gang, 'raidLost');
     }
   } else if (kind === 'attack') {
@@ -92,6 +94,7 @@ export function onTipOff(ctx: Ctx, payload: GameEvents['police.tipOff']): void {
   if (!ctx.chance(TIPOFF_DISCOVERY_BASE + gang.traits.network * 0.5)) return;
   addHostility(s, HOSTILITY_ON_SNITCH);
   addRelation(s, RELATION_ON_SNITCH);
+  remember(ctx, gang.id, 'snitched');
   breakAgreements(ctx, gang, s, 'Verrat');
   journal.add(ctx, `${gang.name} weiß, dass du gesungen hast.`, 'bad');
   say(ctx, gang, 'snitch');
@@ -122,6 +125,7 @@ export function onControlChanged(ctx: Ctx, payload: GameEvents['territory.contro
   const s = gang ? statusOf(ctx, gang.id) : undefined;
   if (!gang || !s) return;
   addHostility(s, HOSTILITY_ON_TAKEOVER);
+  remember(ctx, gang.id, 'takeover');
   journal.add(ctx, `${gang.name} wird dir ${veedelName(payload.veedelId)} nicht vergessen.`, 'bad', {
     veedelId: payload.veedelId,
   });

@@ -655,6 +655,14 @@ function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions
     if (!messages.canAnswer(state, m)) continue;
     // Auftrag 34: Geschichten der Leute beantwortet er wie ein vernünftiger Chef.
     if (answerStory(sim, stats, m.id, m.options ?? [])) continue;
+    // Auftrag 34: Im Gang-Krieg liefert er Ware, wenn das Lager voll genug ist, sonst hält er sich raus.
+    if ((m.options ?? []).some((o) => o.command?.type === 'gangs.supportWar')) {
+      const plenty = getStock(state, { cityId: activeCity(state) }) >= 300;
+      for (const optionId of plenty ? ['goods', 'stay'] : ['stay']) {
+        if (run(sim, stats, { type: 'messages.answer', payload: { messageId: m.id, optionId } })) break;
+      }
+      continue;
+    }
     // Routine (Lieferanfragen, Hafen) überlässt der Bot seiner Rechten Hand, sobald sie das Handy übernimmt.
     if (m.routine && rightHandHandlesOrders(state)) continue;
     const options = m.options ?? [];

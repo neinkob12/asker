@@ -14,8 +14,12 @@ import {
   WARN_AT,
 } from './config';
 import type { Gang } from './data';
+import { memoryLine, remember } from './memory';
 import { ceasefireCost, type GangStatus, gangContact, hasCeasefire, paysTribute, tributeAmount } from './state';
 import { type GangTextKey, gangVariants } from './texts';
+
+/** Anlässe, bei denen sich die Gang auf ihre stärkste Erinnerung bezieht (Auftrag 34). */
+const MEMORY_KEYS: readonly GangTextKey[] = ['warning', 'threat', 'war', 'offer', 'allianceOffer', 'warAsk', 'favor'];
 
 export function statusOf(ctx: Ctx, gangId: string): GangStatus | undefined {
   return ctx.state.modules.gangs.gangs[gangId];
@@ -105,11 +109,14 @@ export function say(
   expiresIn = MESSAGE_EXPIRY,
 ): number {
   // Eigene Stimme pro Gang, ohne dieselbe Variante direkt zu wiederholen (Text-Helfer des Kerns, Auftrag 23).
-  const text = texts.pick(ctx, `gang:${gang.id}:${key}`, gangVariants(gang.id, key), {
+  const base = texts.pick(ctx, `gang:${gang.id}:${key}`, gangVariants(gang.id, key), {
     boss: gang.boss,
     gang: gang.name,
     ...vars,
   });
+  // Auftrag 34: Die Gang erinnert sich (verpfiffen, pünktlich gezahlt …) und sagt es.
+  const memory = MEMORY_KEYS.includes(key) ? memoryLine(ctx, gang.id) : '';
+  const text = memory ? `${base} ${memory}` : base;
   return messages.send(ctx, {
     contact: gangContact(gang),
     text,
@@ -137,6 +144,7 @@ export function breakAgreements(ctx: Ctx, gang: Gang, s: GangStatus, why: string
   for (const kind of kinds) ctx.emit('gang.diplomacyChanged', { gangId: gang.id, kind, active: false });
   if (had) {
     addRelation(s, RELATION_ON_BETRAYAL);
+    remember(ctx, gang.id, 'agreementBroken');
     journal.add(ctx, `${why}: Alle Abmachungen mit ${gang.name} sind geplatzt.`, 'bad');
   }
   return had;

@@ -752,6 +752,39 @@ export const SCENES = [
       window.koeln.runtime.api.openPhone('core.messages', { contactId: 'other:neighbor' });
     })()`,
   },
+  // Auftrag 34: Gedächtnis der Gang und ein Gang-Krieg
+  {
+    name: 'gang-gedaechtnis',
+    js: `(async () => {
+      ${STEPS}
+      const g = window.koeln.session.sim.state.modules.gangs;
+      const now = window.koeln.session.sim.state.time;
+      g.gangs.nord.hostility = 45;
+      g.memories.nord = [
+        { kind: 'snitched', effect: -30, at: now, until: now + 20 * 1440 },
+        { kind: 'tributePaid', effect: 10, at: now, until: now + 21 * 1440 },
+        { kind: 'deal', effect: 4, at: now, until: now + 10 * 1440 },
+      ];
+      g.wars = [{ id: 9200, cityId: 'koeln', attacker: 'nord', defender: 'ost', veedelId: 'kalk', startedAt: now, asker: 'nord', support: { side: 'nord', kind: 'goods' } }];
+      window.koeln.runtime.api.selectTab('gangs');
+      window.koeln.runtime.api.openPanel('gangs.gang', { gangId: 'nord' });
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Erinnert sich')));
+      head?.scrollIntoView({ block: 'start' });
+    })()`,
+  },
+  {
+    name: 'gang-kriege',
+    js: `(async () => {
+      ${STEPS}
+      const g = window.koeln.session.sim.state.modules.gangs;
+      const now = window.koeln.session.sim.state.time;
+      g.wars = [{ id: 9201, cityId: 'koeln', attacker: 'nord', defender: 'ost', veedelId: 'kalk', startedAt: now, asker: 'nord', support: null }];
+      g.warLog = [{ attacker: 'sued', defender: 'west', veedelId: 'lindenthal', winner: 'west', endedAt: now - 300, supported: 'west' }];
+      window.koeln.runtime.api.selectTab('gangs');
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Gang-Kriege')));
+      head?.scrollIntoView({ block: 'start' });
+    })()`,
+  },
   {
     name: 'gang-seite',
     js: `(() => {

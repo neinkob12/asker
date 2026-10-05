@@ -162,6 +162,7 @@ describe('Balancing', () => {
             ` | Veedel 1/3/5/7/9/12 ab Tag ${firstDay(1)}/${firstDay(3)}/${firstDay(5)}/${firstDay(7)}/${firstDay(9)}/${firstDay(12)}` +
             ` | Umsatz/Tag T1-5 ${avg(0, 5)}, T6-15 ${avg(5, 15)}, T16-30 ${avg(15, 30)}, danach ${avg(30, r.days.length)}` +
             ` | Gang-Überfälle ${e('gang.raidStarted')}, Vorstöße ${e('gang.pushStarted')}, Eskalationen ${e('gang.escalated')}` +
+            ` | Gang-Kriege ${e('gang.warStarted')} (geholfen ${e('gang.warSupported')}), Geschichten ${e('staff.story')}` +
             ` | Razzien ${e('police.raidPlanned')}, Kontrollen ${e('police.check')}, Festnahmen ${e('police.arrest')}` +
             ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,
         );
