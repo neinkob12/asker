@@ -64,17 +64,7 @@ import { bookDay, cityDayProfit, cityReport } from '../finance';
 import { freeVehicles, releaseVehicle } from '../fleet';
 import { getLots } from '../goods';
 import { growGoals } from '../grow';
-import {
-  FULL_POWER_SHARE,
-  fullPowerMissing,
-  getRightHand,
-  handOffLeader,
-  hasFullPower,
-  rightHandTitle,
-  START_PACK_MAX_STAFF,
-  startPackLeaders,
-  startPackStaff,
-} from '../hierarchy';
+import { FULL_POWER_SHARE, fullPowerMissing, getRightHand, hasFullPower, rightHandTitle } from '../hierarchy';
 import { getRoutes, getTrips } from '../logistics';
 import { restHeat } from '../police';
 import { autobahnRefs, interCityMinutes } from '../roads';
@@ -154,12 +144,11 @@ export type OfferStatus =
 export type OfferChoice = 'come' | 'later' | 'stay';
 
 /**
- * Was bei der Übergabe in die nächste Stadt mitkommt (Auftrag 36): eine neue Rechte Hand (hierarchy.startPackLeaders),
- * bis zu START_PACK_MAX_STAFF Leute (hierarchy.startPackStaff) und freie Fahrzeuge der Stadt. Leer = nichts.
+ * Was bei der Übergabe in die nächste Stadt mitkommt: freie Fahrzeuge der Stadt. Leute kommen nie mit (Feedback vom
+ * 05.10.2026): Wer in einer Stadt angeheuert wurde, bleibt dort und arbeitet für den Statthalter; in der neuen Stadt
+ * fängst du mit eigenen Leuten und eigenen Bestellungen an. Leer = nichts.
  */
 export interface StartPack {
-  leaderId?: string | null;
-  staffIds?: string[];
   vehicleIds?: number[];
 }
 
@@ -222,8 +211,6 @@ export interface CityState {
   rounds: string[];
   /** Städte, deren Statthalter schon Startgeld mitgegeben hat (jede Stadt nur einmal). */
   startMoneyPaid: string[];
-  /** Startpaket unterwegs: Diese Person wird bei ihrer Ankunft Rechte Hand der Stadt (Auftrag 36). */
-  startLeader: { staffId: string; cityId: string } | null;
   /**
    * Dein höchster Rang bisher (Auftrag 36, ranks.ts), at = seit wann. quiet: aus einem alten Spielstand, der nächste
    * Schritt übernimmt den Stand ohne Banner.
@@ -242,8 +229,11 @@ export interface CityState {
   visited: string[];
 }
 
+/** Zustand in Version 6 (Auftrag 40): mit Startpaket-Person unterwegs (Auftrag 36). */
+type CityStateV6 = CityState & { startLeader: { staffId: string; cityId: string } | null };
+
 /** Zustand in Version 5 (Auftrag 36 nach dem Review): ohne Verkauf. */
-type CityStateV5 = Omit<CityState, 'sale'>;
+type CityStateV5 = Omit<CityStateV6, 'sale'>;
 
 /** Zustand in Version 3 (Auftrag 30): ein Angebot, das aus Hamburg. */
 /** Zustand in Version 4 (Auftrag 36, vor dem Review): ohne Gedächtnis fürs Startgeld. */
@@ -813,7 +803,7 @@ export function handOver(ctx: Ctx, cityId: string, toCityId?: string, pack: Star
     const travel = travelTo(ctx, next);
     if (!travel.ok) return travel;
   }
-  // Erst das Startpaket auf den Weg (danach gibt der Statthalter niemanden mehr frei), dann die Vollmacht.
+  // Erst die Fahrzeuge auf den Weg, dann die Vollmacht.
   sendPack(ctx, cityId, next, pack);
   if (money > 0) startMoney(ctx, cityId, next, money);
   if (!hasFullPower(ctx.state, cityId)) {
@@ -866,43 +856,19 @@ export function packVehicles(state: GameState, from: string) {
 
 /** Was am Startpaket nicht stimmt (null = alles gut). */
 function checkPack(state: GameState, from: string, pack: StartPack): string | null {
-  const staffIds = pack.staffIds ?? [];
-  if (staffIds.length > START_PACK_MAX_STAFF) return `Höchstens ${START_PACK_MAX_STAFF} Leute können mitkommen.`;
-  if (pack.leaderId && !startPackLeaders(state, from).some((m) => m.id === pack.leaderId)) {
-    return 'Diese Person kann nicht als Rechte Hand mitkommen.';
-  }
-  const allowed = new Set(startPackStaff(state, from).map((m) => m.id));
-  if (staffIds.some((id) => !allowed.has(id) || id === pack.leaderId)) return 'Nicht alle können gerade mitkommen.';
   const free = new Set(packVehicles(state, from).map((v) => v.id));
   if ((pack.vehicleIds ?? []).some((id) => !free.has(id))) return 'Ein Fahrzeug ist gerade nicht frei.';
   return null;
 }
 
-/**
- * Startpaket auf den Weg: Die neue Rechte Hand gibt ihre Spots ab und fährt los (wird bei der Ankunft Rechte Hand, siehe
- * 'staff.relocated'), die Leute fahren mit, die Fahrzeuge kommen mit dir an.
- */
+/** Die Fahrzeuge aus dem Startpaket kommen mit dir an. */
 function sendPack(ctx: Ctx, from: string, to: string, pack: StartPack): void {
-  const leaderId = pack.leaderId ?? null;
-  if (leaderId) {
-    handOffLeader(ctx, leaderId, to);
-    if (ctx.dispatch({ type: 'staff.relocate', payload: { staffId: leaderId, cityId: to } }, { actor: 'player' }).ok) {
-      ctx.state.modules.city.startLeader = { staffId: leaderId, cityId: to };
-    }
-  }
-  for (const staffId of pack.staffIds ?? []) {
-    ctx.dispatch({ type: 'staff.relocate', payload: { staffId, cityId: to } }, { actor: 'player' });
-  }
-  for (const id of pack.vehicleIds ?? []) releaseVehicle(ctx, id, to);
-  const parts = [
-    leaderId ? 'eine neue Rechte Hand' : '',
-    (pack.staffIds ?? []).length > 0 ? `${(pack.staffIds ?? []).length} Leute` : '',
-    (pack.vehicleIds ?? []).length > 0 ? `${(pack.vehicleIds ?? []).length} Fahrzeuge` : '',
-  ].filter(Boolean);
-  if (parts.length > 0) {
+  const vehicleIds = pack.vehicleIds ?? [];
+  for (const id of vehicleIds) releaseVehicle(ctx, id, to);
+  if (vehicleIds.length > 0) {
     journal.add(
       ctx,
-      `Startpaket nach ${cityName(to)}: ${parts.join(', ')}. Aus ${cityName(from)} mitgenommen.`,
+      `${vehicleIds.length === 1 ? 'Ein Fahrzeug kommt' : `${vehicleIds.length} Fahrzeuge kommen`} aus ${cityName(from)} mit nach ${cityName(to)}.`,
       'info',
     );
   }
@@ -1501,7 +1467,6 @@ function initialState(): CityState {
     offerFrom: null,
     rounds: [],
     startMoneyPaid: [],
-    startLeader: null,
     rank: { ...FIRST_RANK, at: 0 },
     active: FIRST_CITY,
     present: FIRST_CITY,
@@ -1519,7 +1484,7 @@ function playerOnly(meta: CommandMeta): CommandResult | null {
 
 export default defineModule({
   id: 'city',
-  version: 6,
+  version: 7,
   dependsOn: ['territory', 'hierarchy'],
   init: () => initialState(),
   tickEvery: 5,
@@ -1551,14 +1516,6 @@ export default defineModule({
       if (next) unlockCity(ctx, next);
       closeRound(ctx, next);
     },
-    // Startpaket: Die mitgebrachte Person ist angekommen und wird Rechte Hand (hat die Stadt keine).
-    'staff.relocated': (ctx, { staffId, to }) => {
-      const leader = ctx.state.modules.city.startLeader;
-      if (!leader || leader.staffId !== staffId || leader.cityId !== to) return;
-      ctx.state.modules.city.startLeader = null;
-      if (getRightHand(ctx.state, to)) return;
-      ctx.dispatch({ type: 'hierarchy.installRightHand', payload: { staffId, cityId: to } }, { actor: 'system' });
-    },
     // "Ich regel vorher noch was": Der Kontakt gibt dir Zeit.
     'message.answered': (ctx, { contactId, optionId }) => {
       if (optionId !== HANDOVER_LATER) return;
@@ -1574,7 +1531,6 @@ export default defineModule({
         offers: __,
         offerFrom: ___,
         rounds: ____,
-        startLeader: _____,
         rank: ______,
         startMoneyPaid: _______,
         ...fresh
@@ -1612,6 +1568,12 @@ export default defineModule({
     },
     // Version 6 (Auftrag 40): Verkauf des Geschäfts. Alte Stände haben nicht verkauft; wer schon Boss von Deutschland
     // ist, bekommt den Anruf von Jansen beim nächsten Schritt.
-    6: (old: CityStateV5): CityState => ({ ...old, sale: { status: 'none', callAt: null, sold: null } }),
+    6: (old: CityStateV5): CityStateV6 => ({ ...old, sale: { status: 'none', callAt: null, sold: null } }),
+    // Version 7 (Feedback vom 05.10.2026): Leute bleiben in ihrer Stadt, das Startpaket bringt niemanden mehr mit. Wer
+    // noch unterwegs ist, kommt als normale Person an.
+    7: (old: CityStateV6): CityState => {
+      const { startLeader: _, ...rest } = old;
+      return rest;
+    },
   },
 });

@@ -76,10 +76,11 @@ Auftrag 36 (Deutschland): Reihenfolge der Städte nach Köln frei (`NEXT_CITY` i
 `city.offers`, `city.answerOffer`/`city.handOver` mit Stadt, `city.requestCall`; jede Stadt in `CITIES` mit `contact`
 und `pitch`, Gespräche in `CITY_OFFERS`), Autobahn-Netz (`roads/autobahn.ts`, sechs Linien, `autobahnPath`,
 `interCityRoute` über eine Stadt hinweg; neu bauen mit `build-roads.py --autobahn all`), Statthalter (`rightHandTitle`),
-Razzia im Schlaf, Startpaket und Startgeld bei der Übergabe (`hierarchy/handover.ts`, Haken `startPackLeaders` für
-Capos), Ränge des Spielers (`city/ranks.ts`, `playerRank`, Ereignis `player.rankUp`), Quest-Kapitel pro Stadt (`cityId`
+Razzia im Schlaf, Startgeld und Fahrzeuge bei der Übergabe (`city.handOver`, `pack.vehicleIds`), Ränge des Spielers (`city/ranks.ts`, `playerRank`, Ereignis `player.rankUp`), Quest-Kapitel pro Stadt (`cityId`
 an der Quest). Stellschrauben für das Tempo späterer Städte: `FULL_POWER_SHARE`, `HANDOVER_START_MONEY_DAYS`,
-`START_MONEY_MIN_BY_CITY`, `START_PACK_MAX_STAFF`.
+`START_MONEY_MIN_BY_CITY`. **Leute bleiben in ihrer Stadt** (Feedback vom 05.10.2026): kein Startpaket mit Rechter
+Hand oder Leuten, kein `staff.relocate`, Fahrer auf Routen in eine andere Stadt kommen immer zurück. In jeder neuen
+Stadt fängt der Spieler ohne Rechte Hand, ohne Leute und ohne Routen an und bestellt selbst.
 Auftrag 37 (Berlin): dritte spielbare Stadt nur aus Daten (`veedel/data-berlin.ts`, `spots/config-berlin.ts`,
 `gangs/texts-berlin.ts`, `roads/network-berlin.ts`, Einträge in den Listen der anderen Module). Neu und allgemein:
 `Spot.weekHours` (Öffnungszeiten über die Woche, Berliner Clubs Fr 22 bis Mo 8 Uhr) und `Supplier.home` (Lieferant ist

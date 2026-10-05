@@ -24,7 +24,7 @@ import {
   warehouseCity,
 } from '../goods';
 import { travelMinutes } from '../roads';
-import { getStaffMember, isEmployed, moveToCity, STATUS_NAMES } from '../staff';
+import { getStaffMember, isEmployed, STATUS_NAMES } from '../staff';
 import { availablePackages, getSuppliers, isBlocked, packagePrice } from '../suppliers';
 import {
   INTERCITY_CAPACITY,
@@ -477,14 +477,18 @@ export function departRoute(ctx: Ctx, routeId: number, why: 'schedule' | 'now'):
   return { ok: true, data: { tripId: trip.id, arrivesAt: trip.arrivesAt } };
 }
 
-/** Fahrt einer Route ist angekommen (logistics.arrive): Fahrer in der Zielstadt, bei Bedarf die Rückfahrt. */
+/**
+ * Fahrt einer Route ist angekommen (logistics.arrive): bei Bedarf die Rückfahrt. Leute bleiben in ihrer Stadt (Feedback
+ * vom 05.10.2026): Wer eine Route in eine andere Stadt fährt, kommt immer zurück, ohne Rückfracht mit leerem Wagen.
+ */
 export function routeArrived(ctx: Ctx, trip: Trip, warehouseId: string): void {
   const state = ctx.state;
   const cityId = warehouseCity(warehouseId);
-  if (trip.driverId) moveToCity(ctx, trip.driverId, cityId);
   const route = state.modules.logistics.routes.find((r) => r.id === trip.routeId);
   if (!route) return;
-  if (trip.leg === 'back' || !route.roundTrip) {
+  const driver = trip.driverId ? getStaffMember(state, trip.driverId) : undefined;
+  const away = driver !== undefined && driver.cityId !== cityId;
+  if (trip.leg === 'back' || (!route.roundTrip && !away)) {
     route.last = {
       at: ctx.now,
       result: 'done',
@@ -494,7 +498,6 @@ export function routeArrived(ctx: Ctx, trip: Trip, warehouseId: string): void {
   }
   // Rückfahrt: Rückfracht im Ziellager laden, zurück ins Startlager (oder leer zurück, wenn nichts da ist).
   const home = getWarehouse(state, route.fromId);
-  const driver = trip.driverId ? getStaffMember(state, trip.driverId) : undefined;
   if (!home || !driver || driver.status !== 'active' || driver.assignment) {
     route.last = { at: ctx.now, result: 'done', note: 'angekommen, keine Rückfahrt' };
     return;
@@ -502,7 +505,8 @@ export function routeArrived(ctx: Ctx, trip: Trip, warehouseId: string): void {
   // Dasselbe Fahrzeug fährt zurück, wenn es noch da ist (es steht jetzt in der Zielstadt).
   const vehicle = trip.vehicleId !== undefined ? chooseVehicle(state, cityId, trip.vehicleId, 0) : null;
   const vehicleId = typeof vehicle === 'number' ? vehicle : null;
-  const plan = planLoad(state, warehouseId, home.id, route.returnItems, [], routeVehicleCapacity(state, vehicleId));
+  const returnItems = route.roundTrip ? route.returnItems : [];
+  const plan = planLoad(state, warehouseId, home.id, returnItems, [], routeVehicleCapacity(state, vehicleId));
   const items = loadGoods(ctx, warehouseId, plan.load);
   const loadedAt = ctx.now + (items.length > 0 ? ROUTE_LOAD_MINUTES : 0);
   const back = startTrip(ctx, {

@@ -492,7 +492,9 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
           hint={
             draft.roundTrip
               ? 'Der Fahrer lädt im Ziellager die Rückfracht und kommt zurück.'
-              : `Ohne Rückfahrt bleibt der Fahrer${fromCity === toCity ? '' : ` in ${cityName(toCity)}`}.`
+              : fromCity === toCity
+                ? 'Ohne Rückfahrt bleibt der Fahrer am Ziellager.'
+                : `Ohne Rückfracht kommt der Fahrer leer aus ${cityName(toCity)} zurück.`
           }
           checked={draft.roundTrip}
           onChange={(roundTrip) => set({ roundTrip })}

@@ -467,19 +467,6 @@ export function assign(ctx: Ctx, staffId: string, assignment: StaffAssignment | 
   return true;
 }
 
-/**
- * Jemand ist in einer anderen Stadt angekommen, ohne über staff.relocate zu fahren (z.B. ein Fahrer am Ende einer Route
- * zwischen den Städten, Auftrag 30). Der Einsatz bleibt, wie er ist; Ereignis 'staff.relocated'.
- */
-export function moveToCity(ctx: Ctx, staffId: string, cityId: string): boolean {
-  const m = getStaffMember(ctx.state, staffId);
-  if (!m || m.leftAt !== null || m.cityId === cityId || !getCity(cityId)) return false;
-  const from = m.cityId;
-  m.cityId = cityId;
-  ctx.emit('staff.relocated', { staffId, from, to: cityId });
-  return true;
-}
-
 /** Einsatzort als Text, z.B. "Zülpicher Platz" oder "Leutnant in Ehrenfeld". */
 export function assignmentLabel(state: GameState, a: StaffAssignment | null): string {
   if (!a) return 'ohne Einsatz';

@@ -77,9 +77,6 @@ import {
   lieutenantOfSpot,
   MAX_SPOTS_PER_LIEUTENANT,
   rightHandHandlesOrders,
-  START_PACK_MAX_STAFF,
-  startPackLeaders,
-  startPackStaff,
 } from '../modules/hierarchy';
 import { amountInProgress, launderingCapacity } from '../modules/laundering';
 import {
@@ -168,7 +165,7 @@ export interface BotStats {
   /** Rabatt-Aktionen, bei denen er schon gekauft hat (Auftrag 32). */
   deals?: number[];
   /** Übergaben (Auftrag 36): von wo nach wo, an welchem Tag, wie viele Leute im Startpaket. */
-  cities?: { from: string; to: string; day: number; pack: number }[];
+  cities?: { from: string; to: string; day: number }[];
 }
 
 function money(state: GameState): number {
@@ -868,20 +865,15 @@ function moveOn(sim: Simulation, stats: BotStats, options: BotOptions): void {
   ) {
     const next = chooseNextCity(state, here, options.cityOrder);
     if (next) {
-      // Startpaket: die beste neue Rechte Hand, freie Leute zuerst (die an Spots braucht der Statthalter), ein Fahrzeug.
-      const leaderId = startPackLeaders(state, here)[0]?.id ?? null;
-      const people = startPackStaff(state, here)
-        .filter((m) => m.id !== leaderId)
-        .sort((a, b) => Number(a.assignment !== null) - Number(b.assignment !== null) || b.level - a.level);
-      const staffIds = people.slice(0, START_PACK_MAX_STAFF).map((m) => m.id);
+      // Leute bleiben in ihrer Stadt; ein Fahrzeug kommt mit.
       const vehicleIds = freeVehicles(state, here)
         .slice(0, 1)
         .map((v) => v.id);
-      const pack = { leaderId, staffIds, vehicleIds };
+      const pack = { vehicleIds };
       const done = run(sim, stats, { type: 'city.handOver', payload: { cityId: here, toCityId: next, pack } });
       if (done) {
         stats.cities ??= [];
-        stats.cities.push({ from: here, to: next, day: Math.floor(state.time / 1440) + 1, pack: staffIds.length });
+        stats.cities.push({ from: here, to: next, day: Math.floor(state.time / 1440) + 1 });
         return;
       }
     }

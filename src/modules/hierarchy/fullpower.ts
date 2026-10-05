@@ -238,7 +238,7 @@ function appointLieutenants(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
   if (unled.length === 0) return;
   const candidates = getStaff(state, { status: 'active', role: 'runner', cityId: activeCity(state) })
     .filter((m) => m.level >= FP_LIEUTENANT_MIN_LEVEL && m.stats.loyalty >= FP_LIEUTENANT_MIN_LOYALTY)
-    // Wer gerade in eine andere Stadt fährt (Startpaket, Auftrag 36), bleibt dabei.
+    // Wer aus einem alten Spielstand noch in eine andere Stadt fährt, bleibt dabei.
     .filter((m) => m.assignment?.kind !== 'travel')
     .filter((m) => !isLieutenant(state, m.id) && !isRightHand(state, m.id) && canBeLieutenant(state, m.id).ok)
     .sort((a, b) => b.level - a.level || b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id));

@@ -408,9 +408,9 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
 
 /**
  * Die Person wird Rechte Hand der Stadt (ohne Prüfung): eine bisherige geht, ein Leutnant gibt seine Spots ab. xp =
- * Erfahrung als Rechte Hand (Startpaket, Auftrag 36: Level behalten, freie Aufgaben gleich an).
+ * Erfahrung als Rechte Hand zum Start.
  */
-export function installPost(ctx: Ctx, m: StaffMember, cityId: string, xp: number): RightHandPost {
+function installPost(ctx: Ctx, m: StaffMember, cityId: string, xp: number): RightHandPost {
   const h = ctx.state.modules.hierarchy;
   const staffId = m.id;
   if (h.rightHands[cityId]) dismissRightHand(ctx, cityId);

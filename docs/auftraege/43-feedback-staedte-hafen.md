@@ -1,0 +1,78 @@
+# Auftrag 43: Feedback vom 05.10.2026 – Städte sauber trennen, Spielstände pro Stadt, Hafen-Phase verständlich
+
+Grundlage ist das Feedback des Spielers vom 05.10.2026:
+
+> In jeder Stadt ist nur das Personal, das du auch in dieser Stadt eingestellt hast. Hast du die alte Stadt an die Rechte
+> Hand abgegeben, bleibt das Personal dort. In Hamburg musst du dann selber wieder bestellen, und es gibt dort noch keine
+> Handelsrouten. Dazu Spielstände von allen Städten zu jedem Zeitpunkt (Köln übernommen, dann Hamburg, dann die
+> weiteren), damit man jeweils den Stand der nächsten Stadt laden kann. Und in den späteren Phasen (Lieferant in den
+> Niederlanden, Großkunden) checkt man nicht, wie alles funktioniert: Es braucht eine Einleitung für den neuen Job,
+> Routen und Versorgung der Kunden müssen planbar und übersichtlich sein.
+
+Die Arbeit läuft als Loop in einer Session (Branch `claude/dazzling-thompson-dzjuma`). Jede Runde nimmt den obersten
+offenen Punkt, baut ihn, prüft ihn (`npm run check`, `npm run build`, bei UI zusätzlich Screenshots bzw.
+`npm run monkey:phone -- --apps <app>`), committet und pusht und hakt ihn hier ab. Neue Funde kommen unten in die
+passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, Optik-Regeln, deutsche Texte).
+
+## A. Personal bleibt in seiner Stadt
+
+- [x] A1 Übergabe ohne Startpaket mit Leuten: Es kommen keine neue Rechte Hand und keine Leute mehr mit, nur Startgeld
+  und auf Wunsch Fahrzeuge (`city.handOver` mit `pack.vehicleIds`). Der Übergabe-Dialog sagt, wie viele Leute beim
+  Statthalter bleiben. Migration `city` 7 (ohne `startLeader`).
+- [x] A2 Kein Versetzen in eine andere Stadt (`staff.relocate` und der Knopf im Profil sind weg). Wer in einem alten
+  Spielstand noch unterwegs ist, kommt an.
+- [x] A3 Fahrer auf Routen in eine andere Stadt gehören weiter zu ihrer Stadt und kommen immer zurück (ohne Rückfracht
+  leer, mit demselben Fahrzeug).
+- [ ] A4 Die neue Stadt erklärt den Neuanfang: Begrüßung des Kontakts (`CITY_OFFERS[…].welcome`) und Peters Kapitel
+  sagen, dass man selbst ein Lager kauft, Leute anheuert und bestellt. Prüfen, dass Lieferanten-App, Rechte-Hand-Seite,
+  HUD-Lager und Rat („Nächster Schritt“) in der neuen Stadt nichts aus der alten Stadt zeigen oder vorschlagen.
+- [ ] A5 Bot und Balancing: Ohne Startpaket neu messen (`npm run balance`, Bericht „Tage pro Stadt“). Ziel bleibt
+  Hamburg etwa 15 Tage, dritte Stadt 12, vierte 10, fünfte 8; Stellschrauben `START_MONEY_MIN_BY_CITY`,
+  `HANDOVER_START_MONEY_DAYS`. Zahlen in `docs/architektur.md`, Abschnitt „Balancing“.
+
+## B. Test-Spielstände für jede Stadt in jeder Phase
+
+- [ ] B1 Feste Reihenfolge Köln → Hamburg → Berlin → München → Frankfurt (Bot `cityOrder`), Hamburg direkt nach Köln.
+- [ ] B2 Pro Stadt nach Köln drei Stände: „Ankunft in <Stadt>“ (gerade angekommen, alte Städte beim Statthalter),
+  „Boss von <Stadt>“ (Mehrheit gerade gefallen) und „<Stadt> fast komplett“ (ein Veedel fehlt und fällt gleich nach
+  dem Laden, danach ruft die nächste Stadt an), wie bei Köln.
+- [ ] B3 Spielstände-Dialog: eine Gruppe pro Stadt (Köln, Hamburg, Berlin, München, Frankfurt), dann Deutschland, Hafen,
+  Produktion.
+- [ ] B4 `testSaves.test.ts`: In jeder Ankunft hat die Stadt keine Leute, keine Rechte Hand und keine Routen, und der
+  Spieler ist dort; „fast komplett“ wird nach dem Laden komplett, und die nächste Stadt meldet sich.
+
+## C. Hafen-Phase: Lieferant in Rotterdam
+
+- [ ] C1 Einleitung für den neuen Job: Bei der Ankunft in Rotterdam führt Jansen durch die Halle (Anruf oder Folge von
+  Nachrichten) und ein Kapitel mit Schritten (Bestellungen ansehen → Ware einkaufen → annehmen → ausliefern → Lkw →
+  Zoll). Jeder Schritt sagt, wo man tippt, und hakt sich selbst ab. Kurze Seite „So läuft der Hafen“ in der Kunden-App
+  zum Nachlesen.
+- [ ] C2 Erste Woche fair: Bestellungen kommen wie angesagt am Montag (oder Jansen sagt es richtig), längere
+  Antwortfrist in der ersten Woche, Startware passend zu den ersten Bestellungen.
+- [ ] C3 „Nächster Schritt“ für die Hafen-Phase: Ware fehlt → Einkauf; kein Lkw → Lkw kaufen; Container am Kai bzw.
+  Lager voll → Halle; Zoll-Heat hoch → zweiter Hafen oder Deckladung; Bestellung kurz vor der Frist. Der alte Rat
+  „Ware ist alle → Lieferanten-App“ schweigt nach dem Verkauf.
+- [ ] C4 Keine Sackgasse in „Zu liefern“: Fehlt Ware, führt ein Knopf direkt zum Einkauf mit vorausgefüllter Ware und
+  Menge.
+- [ ] C5 Versorgung planbar: Lieferplan pro Kunde (Dauerauftrag): Die Disponentin liefert jede Bestellung dieses
+  Kunden selbst aus, sobald die Ware im Hafen liegt (Lkw oder Spedition nach Wahl), und kauft auf Wunsch nach einer
+  Regel nach. Übersicht „Diese Woche“: Bedarf, Bestand, unterwegs, fehlt.
+- [ ] C6 Großkunden mit eigener Seite: Bedarf pro Woche, Anteil, Konkurrenz, Vertrauen, Pünktlichkeit, Preisgrenze,
+  letzte Bestellungen; antippbar in der Liste und auf der Europa-Karte.
+- [ ] C7 Lkw dort kaufen, wo man ihn braucht (Kunden-App, Hafen › Fahrzeuge); das Liefer-Blatt weist darauf hin.
+- [ ] C8 HUD und Handy nach dem Verkauf: Zoll-Heat statt Veedel-Heat, leere Apps (Reviere, Gangs, Lieferanten) aus dem
+  Raster oder mit einem Satz, warum.
+- [ ] C9 „Dein Preis“ ehrlich beschriften (er verschiebt den Anteil, nicht den Preis pro Gramm) oder wirklich wirken
+  lassen.
+- [ ] C10 Banner für Dringendes in der Hafen-Phase: Container angekommen, Zollkontrolle, Bestellung läuft ab.
+- [ ] C11 Gegenangebot zeigt vorher, ob man damit vor der Konkurrenz liegt; Europa-Kunden nennen die Pünktlichkeit als
+  Zahl.
+
+## D. Produktion
+
+- [ ] D1 Einleitung für den Anbau wie C1 (Anruf aus Kolumbien bzw. Marokko → Finca → Ernte → Ausfuhr → Schiff).
+- [ ] D2 Zwischenziel bis zum Anruf: zeigen, ab wann die Produzenten anrufen (Wochen und Umsatz).
+
+## Neue Funde
+
+(hier ergänzen)

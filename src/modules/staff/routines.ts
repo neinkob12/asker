@@ -63,7 +63,10 @@ export function tick(ctx: Ctx): void {
   serveCustomers(ctx);
 }
 
-/** Wer in eine andere Stadt gefahren ist (staff.relocate), kommt an: Er ist dort, ohne Einsatz. */
+/**
+ * Wer in einem alten Spielstand noch in eine andere Stadt unterwegs ist (früher 'staff.relocate' und das Startpaket),
+ * kommt an: Er ist dort, ohne Einsatz. Neue Fahrten dieser Art gibt es nicht mehr.
+ */
 function arriveFromTravel(ctx: Ctx): void {
   for (const m of ctx.state.modules.staff.members) {
     if (m.assignment?.kind !== 'travel' || m.busyUntil > ctx.now) continue;
