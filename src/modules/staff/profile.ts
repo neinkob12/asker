@@ -1,8 +1,9 @@
 // Neue Leute erzeugen: Name, Alter, Hintergrund, Werte je nach Typ. Und die Regeln für Level und Lohn.
 // Nutzt nur den Zufall des übergebenen Kontexts, damit alles deterministisch bleibt.
 
-import type { Ctx } from '../../core';
-import { activeCity, getCity } from '../city';
+import { type Ctx, keyedDice } from '../../core';
+import { activeCity, cityName, getCity } from '../city';
+import { allVeedel } from '../veedel';
 import {
   BACKGROUNDS,
   FIRST_NAMES,
@@ -66,6 +67,14 @@ export interface GenerateOptions {
   level?: number;
 }
 
+/** {veedel} im Hintergrund mit einem Veedel der Stadt füllen (fest aus dem Schlüssel, ohne ctx.random). */
+function fillBackground(text: string, key: string, cityId: string): string {
+  if (!text.includes('{veedel}')) return text;
+  const veedel = allVeedel(cityId);
+  const place = veedel.length > 0 ? keyedDice(key).pick(veedel).name : cityName(cityId);
+  return text.replaceAll('{veedel}', place);
+}
+
 /** Einen neuen Menschen erzeugen. Werte nach Typ, zufällig gestreut; höhere Level haben schon zugelegt. */
 export function generateProfile(ctx: Ctx, role: StaffRole, options: GenerateOptions = {}): RecruitProfile {
   const info = ROLE_INFO[role];
@@ -83,7 +92,8 @@ export function generateProfile(ctx: Ctx, role: StaffRole, options: GenerateOpti
     }
   }
   // Lohnniveau der Stadt, in der angeheuert wird (Auftrag 30: Hamburg × 1,25).
-  const city = getCity(activeCity(ctx.state))?.wageFactor ?? 1;
+  const cityId = activeCity(ctx.state);
+  const city = getCity(cityId)?.wageFactor ?? 1;
   const wageRoll = 0.9 + ctx.random() * 0.3;
   const name = randomName(ctx);
   const age = ctx.randomInt(info.age[0], info.age[1]);
@@ -94,7 +104,7 @@ export function generateProfile(ctx: Ctx, role: StaffRole, options: GenerateOpti
     name,
     role,
     age,
-    background: ctx.pick(BACKGROUNDS[role]),
+    background: fillBackground(ctx.pick(BACKGROUNDS[role]), `${ctx.state.meta.seed}:${ctx.now}:${name}:bg`, cityId),
     stats,
     level,
     wage,

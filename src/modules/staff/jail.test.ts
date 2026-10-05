@@ -173,6 +173,9 @@ describe('Kaution', () => {
     expect(bonus(sim.state, 'jailReduction')).toBe(0.25);
     expect(bailCost(sim.state, runner.id)).toBe(Math.round((expensive * 0.8) / 10) * 10);
     expect(jailDuration(sim.state)).toBe(Math.round(withoutLawyer * 0.75));
+    // Nur in seiner Stadt (Auftrag 43): In Hamburg hilft der Kölner Anwalt nicht.
+    expect(bonus(sim.state, 'bailDiscount', 'hamburg')).toBe(0);
+    expect(jailDuration(sim.state, 'hamburg')).toBe(withoutLawyer);
     // Ein Anwalt in Haft hilft niemandem.
     arrest(sim, lawyer.id);
     expect(bonus(sim.state, 'bailDiscount')).toBe(0);

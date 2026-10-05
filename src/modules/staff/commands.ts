@@ -266,7 +266,7 @@ export function bail(ctx: Ctx, staffId: string, meta: CommandMeta): CommandResul
   setStatus(ctx, staffId, 'active');
   addLoyalty(ctx, staffId, LOYALTY.bailed);
   addCareer(ctx, staffId, `Gegen ${formatEuro(cost)} Kaution rausgeholt.`);
-  const lawyer = bonusProvider(ctx.state, 'bailDiscount');
+  const lawyer = bonusProvider(ctx.state, 'bailDiscount', m.cityId ?? 'koeln');
   if (lawyer) addXp(ctx, lawyer.id, XP_PER_BAIL);
   const by = meta.actor === 'player' ? '' : ` (${actorName(ctx, meta.actor)} hat gezahlt)`;
   journal.add(ctx, `${m.name} gegen ${formatEuro(cost)} Kaution rausgeholt${by}.`, 'good', { staffId });

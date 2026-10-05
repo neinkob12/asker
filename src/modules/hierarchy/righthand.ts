@@ -331,7 +331,8 @@ function rightHandCovers(state: GameState, m: StaffMember): boolean {
   const rh = activeRightHand(state);
   if (!rh?.settings.absences || m.id === rh.staffId || waitsForReturn(state, m.id)) return false;
   if (m.returnTo?.kind === 'spot' && (m.role === 'runner' || m.role === 'security')) return true;
-  return m.status === 'jailed' && !!bonusProvider(state, 'bailDiscount') && m.level >= RIGHT_HAND_BAIL_MIN_LEVEL;
+  const lawyer = bonusProvider(state, 'bailDiscount', m.cityId ?? 'koeln');
+  return m.status === 'jailed' && !!lawyer && m.level >= RIGHT_HAND_BAIL_MIN_LEVEL;
 }
 
 /** Kümmert sich jemand (Leutnant oder Rechte Hand) um den Ausfall, sodass niemand den Spieler fragen muss? */
@@ -795,7 +796,7 @@ function handleAbsences(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
     if (lead && lead !== m.id && capoInCharge(ctx.state, lead)) continue;
     // Wartet der Leutnant auf die Rückkehr, entscheidest du (die Frage kam aufs Handy): nichts hinter seinem Rücken.
     if (waitsForReturn(ctx.state, m.id)) continue;
-    const lawyer = bonusProvider(ctx.state, 'bailDiscount');
+    const lawyer = bonusProvider(ctx.state, 'bailDiscount', m.cityId ?? 'koeln');
     const cost = m.status === 'jailed' ? bailCost(ctx.state, m.id) : Number.POSITIVE_INFINITY;
     const affordable = cost <= ctx.state.wallet.dirty - payrollReserve(ctx.state);
     if (m.status === 'jailed' && lawyer && m.level >= RIGHT_HAND_BAIL_MIN_LEVEL && affordable) {

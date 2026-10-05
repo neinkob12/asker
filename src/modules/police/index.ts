@@ -917,7 +917,7 @@ function updateTier(ctx: Ctx): void {
       ? 'Die Kripo hat eine Ermittlungsgruppe gegen dich gebildet. Ab jetzt drohen Großrazzien, mehrere Veedel auf einmal.'
       : 'Die Polizei hat dich auf dem Schirm: Für die bist du jetzt ein Händler. Razzien treffen ganze Veedel und deine Lager dort.';
   journal.add(ctx, `${text} (Stufe: ${info.name})`, 'bad');
-  const contact = bonusProvider(ctx.state, 'raidWarning');
+  const contact = bonusProvider(ctx.state, 'raidWarning', cityId);
   const ticker = TICKERS[cityId] ?? TICKERS.koeln;
   messages.send(ctx, {
     contact: contact ? staffContact(contact) : { ...ticker, kind: 'other' as const },

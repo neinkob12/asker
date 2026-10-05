@@ -265,7 +265,7 @@ describe('recruiting: Spielstände aus dem Fundament', () => {
     const loaded = loadSimulation(file.state, sim.modules);
     expect(getCandidate(loaded.state, 'alt-kurier')).toBeUndefined();
     expect(getCandidate(loaded.state, keep.id)).toBeDefined();
-    expect(loaded.state.moduleVersions.recruiting).toBe(4);
+    expect(loaded.state.moduleVersions.recruiting).toBe(5);
   });
 
   it('Version 3 → 4 (Auftrag 34): Bewerber ohne Eigenschaften bekommen zwei bis drei, bei jedem Laden dieselben', () => {
@@ -283,5 +283,37 @@ describe('recruiting: Spielstände aus dem Fundament', () => {
       expect(c.traits.length).toBeLessThanOrEqual(3);
       expect(getCandidate(two.state, c.id)?.traits).toEqual(c.traits);
     }
+  });
+
+  it('Version 4 → 5 (Auftrag 43): Bewerber bekommen die aktive Stadt', () => {
+    const sim = quietGame();
+    const state = structuredClone(sim.state) as GameState;
+    const candidates = (state.modules.recruiting as { candidates: { cityId?: string }[] }).candidates;
+    for (const c of candidates) delete c.cityId;
+    state.moduleVersions.recruiting = 4;
+    const loaded = loadSimulation(parseSaveFile(serializeSave(createSaveFile(state, 'alt', 0))).state, sim.modules);
+    expect(getPool(loaded.state).length).toBe(candidates.length);
+    expect(getPool(loaded.state).every((c) => c.cityId === 'koeln')).toBe(true);
+  });
+});
+
+describe('Bewerber pro Stadt (Auftrag 43)', () => {
+  it('Hamburg hat eigene Bewerber mit Hamburger Lohn; Kölner lassen sich dort nicht einstellen', () => {
+    const sim = quietGame();
+    sim.state.wallet.dirty = 50_000;
+    const koeln = getPool(sim.state).map((c) => c.id);
+    expect(koeln.length).toBeGreaterThan(0);
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+    expect(sim.dispatch({ type: 'city.switch', payload: { cityId: 'hamburg' } }).ok).toBe(true);
+    sim.advance(1);
+    // Nach der Ankunft warten Hamburger, die Kölner bleiben in Köln.
+    const hamburg = getPool(sim.state);
+    expect(hamburg.length).toBeGreaterThan(0);
+    expect(hamburg.every((c) => c.cityId === 'hamburg')).toBe(true);
+    expect(getPool(sim.state, 'koeln').map((c) => c.id)).toEqual(expect.arrayContaining(koeln.slice(0, 1)));
+    const hire = sim.dispatch({ type: 'recruiting.hire', payload: { candidateId: koeln[0] } });
+    expect(hire.ok).toBe(false);
+    expect(sim.dispatch({ type: 'recruiting.hire', payload: { candidateId: hamburg[0].id } }).ok).toBe(true);
+    expect(sim.state.modules.staff.members.find((m) => m.name === hamburg[0].name)?.cityId).toBe('hamburg');
   });
 });

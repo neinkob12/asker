@@ -315,7 +315,8 @@ function SpecialistBonuses() {
   if (contact) {
     lines.push(`${contact.name}: warnt zu ${formatPercent(bonus(state, 'raidWarning'))} vor Razzien`);
   }
-  if (lines.length === 0) return <Hint>Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt) geben Boni.</Hint>;
+  if (lines.length === 0)
+    return <Hint>Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt) geben Boni, jeweils in ihrer Stadt.</Hint>;
   return (
     <div class="staff-bonuses">
       {lines.map((l) => (

@@ -320,14 +320,18 @@ export const NICKNAMES = ['Schrank', 'Hase', 'Brikett', 'Nase', 'Professor', 'Bl
 /** So oft hat jemand einen Spitznamen. */
 export const NICKNAME_CHANCE = 0.15;
 
+/**
+ * Hintergründe pro Rolle. {veedel} wird beim Anheuern mit einem Veedel der Stadt gefüllt (Auftrag 43: kein Chorweiler in
+ * Hamburg), fest aus Name und Zeit, ohne die Würfelfolge zu verschieben.
+ */
 export const BACKGROUNDS: Record<StaffRole, readonly string[]> = {
   runner: [
-    'Hat die Schule geschmissen und kennt jeden am Ring.',
+    'Hat die Schule geschmissen und kennt jeden in {veedel}.',
     'Studiert im vierzehnten Semester und braucht Geld für die Miete.',
     'Hat früher an der Tanke gejobbt, bis die Kasse nicht stimmte.',
-    'Wuchs in Chorweiler auf, hat früh gelernt, den Mund zu halten.',
+    'Wuchs in {veedel} auf, hat früh gelernt, den Mund zu halten.',
     'Verkauft seit Jahren an Freunde, jetzt will er mehr.',
-    'Kommt aus Porz und hat Schulden bei den falschen Leuten.',
+    'Kommt aus {veedel} und hat Schulden bei den falschen Leuten.',
   ],
   courier: [
     'Fährt tagsüber Pizza aus und kennt jede Einbahnstraße.',
@@ -338,19 +342,19 @@ export const BACKGROUNDS: Record<StaffRole, readonly string[]> = {
   driver: [
     'Ist zwanzig Jahre Lkw gefahren, bis der Rücken nicht mehr wollte.',
     'Hat einen Sprinter ohne Firmenlogo und stellt keine Fragen.',
-    'Kennt jede Kontrollstelle zwischen Niehl und Porz.',
+    'Kennt jede Kontrollstelle rund um {veedel}.',
     'Fährt nachts Pakete und tagsüber das, was sonst keiner fahren will.',
   ],
   security: [
-    'Ex-Türsteher aus der Altstadt, hat schon alles gesehen.',
+    'Ex-Türsteher aus {veedel}, hat schon alles gesehen.',
     'Kampfsportler, der nach einer Verletzung nicht mehr antreten darf.',
     'War bei der Bundeswehr und redet nicht darüber.',
-    'Hat in Kalk ein Fitnessstudio und zu viel Zeit.',
+    'Hat in {veedel} ein Fitnessstudio und zu viel Zeit.',
     'Hat für eine der Gangs gearbeitet und ist im Streit gegangen.',
   ],
   lawyer: [
     'Strafverteidiger mit Spielschulden.',
-    'Hat eine kleine Kanzlei in Lindenthal und teure Hobbys.',
+    'Hat eine kleine Kanzlei in {veedel} und teure Hobbys.',
     'Frisch aus einer großen Kanzlei geflogen, kennt aber die Richter.',
     'Alter Hase am Landgericht, dem niemand mehr etwas beweist.',
   ],
@@ -361,7 +365,7 @@ export const BACKGROUNDS: Record<StaffRole, readonly string[]> = {
     'Führt ein Nagelstudio, das nie Kundschaft hat.',
   ],
   policeContact: [
-    'Polizeiobermeister in Kalk, kurz vor der Pension.',
+    'Polizeiobermeister in {veedel}, kurz vor der Pension.',
     'Sachbearbeiterin im Präsidium mit Zugriff auf die Einsatzpläne.',
     'Streifenpolizist mit Spielsucht.',
     'Hat seine Beförderung nie bekommen und ist entsprechend gelaunt.',

@@ -121,8 +121,10 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] E5 Routen-Seite der neuen Stadt zeigt und bedient Routen der alten (`routes.tsx` `getRoutes` ohne Stadt).
   Erledigt: `getRoutes(state, cityId)` (Stadt des Startlagers), Seite und Zeile „Routen“ nur mit Routen der aktiven Stadt,
   Hinweis auf Routen anderswo, Start nur in der aktiven Stadt; `logistics.addRoute`/`updateRoute` lehnen fremde Städte ab.
-- [ ] E6 Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt) der alten Stadt wirken in der neuen (`bonus`, `bonusProvider`).
-- [ ] E7 Leute der alten Stadt schreiben Empfehlungen in der neuen; Hintergründe mit Kölner Ortsnamen in jeder Stadt.
+- [x] E6 Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt) der alten Stadt wirken in der neuen (`bonus`, `bonusProvider`).
+  Erledigt: `bonus`/`bonusProvider`/`jailDuration` mit Stadt (ohne Angabe die aktive); Kaution, Haft, Razzia-Warnung und Rechte Hand fragen die Stadt der Person bzw. des Veedels.
+- [x] E7 Leute der alten Stadt schreiben Empfehlungen in der neuen; Hintergründe mit Kölner Ortsnamen in jeder Stadt.
+  Erledigt: Empfehlungen nur von Leuten der aktiven Stadt, nach dem Verkauf keine; `BACKGROUNDS` mit `{veedel}`, gefüllt fest aus Name und Zeit mit einem Veedel der Stadt.
 - [ ] E8 Event-Ankündigungen und Rabatt-Aktionen der alten Stadt kommen in der neuen an.
 - [ ] E9 Neue Stadt ohne sichtbaren ersten Schritt: Willkommen still, Rat „Läufer anheuern“ aus, sobald irgendwo
   jemand arbeitet, „Liegeplatz“ vor dem ersten Lager, Reviere-Ziel fest auf Köln, zu wenig sauberes Geld fürs Lager.
@@ -132,9 +134,41 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [ ] E13 Die Kasse zeigt in der neuen Stadt zuerst alle Städte (Standardfilter = aktive Stadt).
 - [ ] E14 Quest-Belohnungen „Team-Erfahrung“ und „Loyalität“ gehen an alle Städte.
 - [ ] E15 Fest verdrahtete „Köln“-Texte in jeder Stadt (Rechte Hand, Kasse, Hafen, Reviere).
-- [ ] E16 Bewerber-Pool beim Stadtwechsel nicht erneuert (Lohn und Handgeld der alten Stadt).
+- [x] E16 Bewerber-Pool beim Stadtwechsel nicht erneuert (Lohn und Handgeld der alten Stadt).
+  Erledigt: Bewerber tragen `cityId` (Migration `recruiting` 5), Pool und Kontakte pro Stadt, einstellen nur in der aktiven Stadt; bei Ankunft oder Wechsel in eine Stadt ohne Bewerber kommen gleich `POOL_START` von dort.
 - [ ] E17 Lieferant begrüßt „Du bist in Berlin“ schon bei der Abfahrt (auf `city.arrived` legen).
 - [ ] E18 (Designfrage) Zurück in einer übergebenen Stadt: Hinweis, dass man die Vollmacht zurücknehmen kann.
+
+## F Hafen-Prüfer (Spieltest Rotterdam ab `deutschland`, 05.10.2026)
+
+- [ ] F1 Kritisch: Zollkontrolle im Hafen endet immer mit Totalverlust (`trade/index.ts` `startEncounter` ohne
+  `playerPresent`/`staffIds` → `nobodyThere` → `failure`); in Rotterdam bist du da, anderswo Fenna als Fernhilfe oder
+  `ifNobody: 'retreat'` mit Bußgeld; Erfolgstext für `setting: 'port'` („Weiter geht die Fahrt“).
+- [ ] F2 Alte Städte fluten das Handy nach dem Verkauf: Tagesberichte der Statthalter, Empfehlungen, Lieferanten-Aktionen,
+  Rang-Text, Festnahme-Banner. Nach `isBusinessSold` abstellen, alte Chats beim Verkauf als gelesen markieren.
+- [ ] F3 Doppelte Bestellungen: Erste Runde bei Ankunft plus Montag-Runde kurz danach (32 offene am ersten Morgen).
+  Kein zweiter Auftrag, solange ein Kunde noch einen offenen derselben Woche hat; Fennas Montag-Text anpassen.
+- [ ] F4 Sauberes Geld als unsichtbare Sperre (Lkw 63.000, Halle, Liegeplatz, Schiff ausgegraut ohne Grund): Zeile
+  „Dir fehlen … € sauber“ mit Knopf zur Geldwäsche (Jansens Reederei), Texte in `rtBuy`/`rtTruck` und Geldwäsche-Rat.
+- [ ] F5 „Alle annehmen (9 ohne Ware)“ und Fennas „Alle“ ohne Warnung (Ruf 0,85 → 0,28): Rückfrage mit Folge und
+  „Erst einkaufen“, Summe als „nur wenn alles geliefert wird“.
+- [ ] F6 Lkw-Quest ehrlich (lohnt erst bei vielen Fahrten, doppelte Kontrollchance), `rtTruck` ans Ende oder optional,
+  Abwägung im Liefer-Blatt.
+- [ ] F7 Fristen und Folgen erklären: Fußnote aus der echten Frist, Guide mit Ankunfts-Runde, Strafe für Platzen,
+  sauberes Geld, Laufzeit der Container gegen die Frist.
+- [ ] F8 Gesperrte Gang-Kunden (Anteil 0 %, Rache) mit Chip und Grund oder ausblenden.
+- [ ] F9 Europa-Karte: Karten überlappen (Rotterdam/Amsterdam/Antwerpen, Düsseldorf über Köln), Knopf „Europa“.
+- [ ] F10 Einkaufsliste mit Preis ab €/g und „Tage“ ausgeschrieben, alle Waren; im Panel offener Bedarf.
+- [ ] F11 „Zoll X %“ heißt dreierlei: Kontrollchance, Grenzchance, Strenge. Eindeutig benennen.
+- [ ] F12 Personal-App in Rotterdam lockt mit Bewerbern (Badge), die dort nichts tun können.
+- [ ] F13 Gegenangebot: „du bleibst vorn“ hervorheben, Vertrag „Fester Preis“, Konkurrenz erklären.
+- [ ] F14 Großrazzia der alten Stadt im Dynamic Island (`police/ui/island.ts` ohne Stadtfilter); beim Verkauf leeren.
+- [ ] F15 „Alle ausliefern (Spedition)“; Lkw-Stufe im Plan nur mit Lkw; Verträge vor Gangs bei der Deckung.
+- [ ] F16 Waren-Leiste bei Jansen abgeschnitten (ab 4 Waren `Select`).
+- [ ] F17 Tippfehler „lange genug genug“ (`NextStageGroup`).
+- [ ] F18 Köln-Reste in der Suche (Spots, Veedel) und Texten (Kasse, Geldwäsche) nach dem Verkauf.
+- [ ] F19 Test-Spielstände `hafen`/`hafen-europa` neu erzeugen, „Ankunft in Rotterdam“ vor dem ersten Bot-Zug.
+- [ ] F20 App „Kunden“ heißt besser „Handel“ (Reiter „Kunden“ bleibt).
 
 ## Neue Funde
 
