@@ -17,7 +17,16 @@
 // Ereignisse: 'events.started' { eventId, cityId, endsAt }, 'events.ended' { eventId, cityId },
 //   'events.marketStarted' { runId, eventId, cityId, productId, factor, endsAt }, 'events.marketEnded' { … }
 
-import { type Ctx, clock, defineModule, type GameState, journal, MINUTES_PER_DAY, messages } from '../../core';
+import {
+  type Ctx,
+  cityDayDice,
+  clock,
+  defineModule,
+  type GameState,
+  journal,
+  MINUTES_PER_DAY,
+  messages,
+} from '../../core';
 import { citiesUnlocked, cityOfSpot, isCityLive } from '../city';
 import { allProducts, getProduct } from '../goods';
 import { getSpot } from '../spots';
@@ -268,10 +277,13 @@ function rollMarketEvents(ctx: Ctx): void {
     });
   }
   s.market = s.market.filter((r) => r.endsAt > ctx.now);
+  const day = Math.floor(ctx.now / MINUTES_PER_DAY);
   for (const cityId of citiesUnlocked(ctx.state)) {
+    // Würfel pro Stadt und Tag (Auftrag 40): unabhängig davon, welche Städte sonst frei sind.
+    const dice = cityDayDice(ctx.state.meta.seed, 'events.market', cityId, day);
     const here = s.market.filter((r) => r.cityId === cityId);
-    if (here.length >= MAX_MARKET_EVENTS || !ctx.chance(MARKET_EVENT_CHANCE)) continue;
-    const up = ctx.chance(0.5);
+    if (here.length >= MAX_MARKET_EVENTS || !dice.chance(MARKET_EVENT_CHANCE)) continue;
+    const up = dice.chance(0.5);
     const known = new Set(allProducts().map((p) => p.id));
     const options = MARKET_EVENTS.filter(
       (d) =>
@@ -280,8 +292,8 @@ function rollMarketEvents(ctx: Ctx): void {
         d.products.some((p) => known.has(p) && !here.some((r) => r.productId === p)),
     );
     if (options.length === 0) continue;
-    const def = ctx.pick(options);
-    const productId = ctx.pick(def.products.filter((p) => known.has(p) && !here.some((r) => r.productId === p)));
+    const def = dice.pick(options);
+    const productId = dice.pick(def.products.filter((p) => known.has(p) && !here.some((r) => r.productId === p)));
     const [min, max] = MARKET_EVENT_DAYS;
     const run: MarketEventRun = {
       id: ctx.nextId(),
@@ -290,7 +302,7 @@ function rollMarketEvents(ctx: Ctx): void {
       productId,
       factor: def.factor,
       startedAt: ctx.now,
-      endsAt: ctx.now + ctx.randomInt(min, max) * MINUTES_PER_DAY,
+      endsAt: ctx.now + dice.randomInt(min, max) * MINUTES_PER_DAY,
     };
     s.market.push(run);
     if (isCityLive(ctx.state, cityId)) journal.add(ctx, `${def.name}: ${marketEventText(run)}`, up ? 'good' : 'bad');

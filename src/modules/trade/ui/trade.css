@@ -1,0 +1,46 @@
+/* App „Kunden“ (Auftrag 40) */
+.trade-app {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Europa-Ansicht: Häfen und fremde Städte als Glas-Karten (wie die Städte in city.css). */
+.trade-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  text-align: left;
+  cursor: pointer;
+}
+.trade-card.is-port {
+  border-color: var(--cat-goods);
+}
+.trade-card__name {
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.trade-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.trade-card__stat {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--hud-glass-edge);
+  font-size: 13px;
+  color: var(--hud-ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

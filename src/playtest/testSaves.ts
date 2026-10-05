@@ -4,13 +4,13 @@
 // testSaves.test.ts prüft, dass sie sich laden lassen und tun, was sie sollen. Test-Spielstände tragen
 // meta.scenario und kommen nicht in die Bestenliste.
 
-import { clock, type GameState, MINUTES_PER_HOUR, Simulation } from '../core';
+import { clock, type GameState, loadSimulation, MINUTES_PER_HOUR, Simulation } from '../core';
 import { discoverModules } from '../core/discover';
 import { activeEncounters, autoResolveEncounter } from '../modules/encounters';
 import { controllerOf, PLAYER_FACTION } from '../modules/territory';
 import { allVeedel } from '../modules/veedel';
 import { newBotStats, playFor } from './bot';
-import { rightHandReady } from './scenario';
+import { playToGermany, rightHandReady, sellAndArrive } from './scenario';
 
 /** Ein Test-Spielstand: Kennung (Dateiname), Name im Spielstände-Dialog und wie er entsteht. */
 export interface TestSave {
@@ -73,6 +73,43 @@ export function buildKoelnKomplett(seed = 1): GameState {
   return sim.state;
 }
 
+/** Ein Lauf bis Boss von Deutschland pro Seed (beide Test-Spielstände der Hafen-Phase bauen darauf auf). */
+const germanyRuns = new Map<number, GameState>();
+
+function germanyRun(seed: number): Simulation {
+  const modules = discoverModules();
+  const known = germanyRuns.get(seed);
+  if (known) return loadSimulation(structuredClone(known), modules);
+  const sim = Simulation.create(modules, { seed, mode: 'normal', runId: `test-deutschland-${seed}` });
+  const day = playToGermany(sim, newBotStats());
+  if (day === null) throw new Error(`Seed ${seed}: nicht Boss von Deutschland geworden.`);
+  germanyRuns.set(seed, structuredClone(sim.state));
+  return sim;
+}
+
+/**
+ * Ganz Deutschland (Auftrag 40): Der Bot spielt alle fünf Städte, bis er Boss von Deutschland ist. Gespeichert vor dem
+ * Anruf von Jansen (er ruft ein paar Stunden später an): Verkauf, Rechnung, „Verkauft“.
+ */
+export function buildDeutschland(seed = 1): GameState {
+  const sim = germanyRun(seed);
+  sim.state.meta.scenario = 'deutschland';
+  return sim.state;
+}
+
+/**
+ * Hafen-Phase (Auftrag 40): wie „Ganz Deutschland“, dann verkauft der Bot und fährt nach Rotterdam. Gespeichert bei der
+ * Ankunft: die ersten Bestellungen, Jansens Halle, die App „Kunden“ im Dock.
+ */
+export function buildHafen(seed = 1): GameState {
+  const sim = germanyRun(seed);
+  if (!sellAndArrive(sim, newBotStats())) throw new Error(`Seed ${seed}: kein Verkauf.`);
+  sim.state.meta.scenario = 'hafen';
+  return sim.state;
+}
+
 export const TEST_SAVES: readonly TestSave[] = [
   { id: 'koeln-komplett', label: 'Test: Köln fast komplett', build: () => buildKoelnKomplett() },
+  { id: 'deutschland', label: 'Test: Boss von Deutschland', build: () => buildDeutschland() },
+  { id: 'hafen', label: 'Test: Hafen-Phase', build: () => buildHafen() },
 ];

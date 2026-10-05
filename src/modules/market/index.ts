@@ -22,6 +22,7 @@
 import {
   type CommandResult,
   type Ctx,
+  cityDayDice,
   clock,
   defineModule,
   formatEuro,
@@ -166,16 +167,19 @@ function clampIndex(value: number): number {
 /**
  * Ein Tagesschritt des Index in allen freien Städten (auch den schlafenden): Rückkehr zur Mitte plus Zufall. Städte,
  * die noch nicht frei sind, würfeln nicht mit (Auftrag 39): sonst verschiebt jede neue spielbare Stadt die Würfelfolge
- * schon in Köln; ihr Index startet beim Freischalten bei 1.
+ * schon in Köln; ihr Index startet beim Freischalten bei 1. Seit Auftrag 40 würfelt jede Stadt aus eigenem Schlüssel.
  */
 function stepIndex(ctx: Ctx): void {
   const market = ctx.state.modules.market;
+  const day = Math.floor(ctx.now / MINUTES_PER_DAY);
   for (const cityId of citiesUnlocked(ctx.state)) {
+    // Würfel pro Stadt und Tag (Auftrag 40): Kölns Index hängt nicht davon ab, welche Städte sonst frei sind.
+    const dice = cityDayDice(ctx.state.meta.seed, 'market.index', cityId, day);
     market.index[cityId] ??= {};
     const row = market.index[cityId];
     for (const product of allProducts()) {
       const now = row[product.id] ?? 1;
-      const next = 1 + (now - 1) * (1 - INDEX_REVERSION) + (ctx.random() * 2 - 1) * INDEX_STEP;
+      const next = 1 + (now - 1) * (1 - INDEX_REVERSION) + (dice.random() * 2 - 1) * INDEX_STEP;
       row[product.id] = Math.round(clampIndex(next) * 1000) / 1000;
     }
   }

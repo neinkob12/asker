@@ -142,6 +142,12 @@ export interface PhoneApp {
    * ui.openPhone(id) öffnen (z.B. eine Unterseite, die andere Stellen verlinken).
    */
   hidden?: boolean;
+  /**
+   * Nur zeitweise auf dem Startbildschirm, dann im Dock statt einer anderen App (Auftrag 40: „Kunden“ statt
+   * „Lieferanten“ in der Hafen-Phase). Solange when nicht gilt, fehlt die App auf dem Startbildschirm (per openPhone
+   * bleibt sie erreichbar); die ersetzte App rückt dann ins Raster.
+   */
+  dock?: { replaces: string; when: (state: GameState) => boolean };
 }
 
 /** Empfehlung für die Karte "Nächster Schritt" (und den sanften Hinweis beim Einstieg). */

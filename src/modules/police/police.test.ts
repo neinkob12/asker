@@ -385,8 +385,9 @@ describe('police', () => {
     old.modules.police = { heat: { kalk: 70, deutz: 10 } };
     old.moduleVersions.police = 1;
     const loaded = loadSimulation(old, sim.modules);
-    expect(loaded.state.moduleVersions.police).toBe(5);
+    expect(loaded.state.moduleVersions.police).toBe(6);
     expect(loaded.state.modules.police.plannedRaids).toEqual({});
+    expect(loaded.state.modules.police.customs).toEqual({});
     expect(getHeat(loaded.state, 'kalk')).toBe(70);
     expect(loaded.state.modules.police.level.kalk).toBe(heatLevel(70).index);
     expect(getPoliceStats(loaded.state).raids).toBe(0);

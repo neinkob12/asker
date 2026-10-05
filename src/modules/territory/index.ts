@@ -42,6 +42,7 @@ import {
   PLAYER_COLOR,
   SALE_DISPLACEMENT,
   SALE_INFLUENCE_BASE,
+  SALE_INFLUENCE_BY_CITIES_DONE,
   SALE_INFLUENCE_FACTOR_BY_CITY,
   SALE_INFLUENCE_MAX,
   SALE_INFLUENCE_PER_UNIT,
@@ -119,6 +120,9 @@ const AFTER_COMPLETE: Record<string, string> = {
   muenchen: 'München gehört dir, die Wiesn auch. Die nächste Stadt meldet sich, sobald eine frei ist.',
   frankfurt: 'Frankfurt gehört dir, Banken und Flughafen auch. Die nächste Stadt meldet sich, sobald eine frei ist.',
 };
+
+/** Nach der letzten Stadt (Auftrag 40). */
+const GERMANY_COMPLETE = 'Ganz Deutschland hört auf dich. Gleich ruft jemand aus Rotterdam an.';
 
 declare module '../../core' {
   interface ModuleStates {
@@ -274,14 +278,27 @@ function updateController(ctx: Ctx, veedelId: string): void {
 
 /** Eigener Verkauf: Einfluss für den Spieler, die stärkste Gang im Veedel wird zurückgedrängt. */
 /** Einfluss pro Verkauf in einer Stadt (1 = wie in Köln; Hamburg weniger, die Gangs sitzen fester). */
-export function saleInfluenceFactor(cityId: string): number {
-  return SALE_INFLUENCE_FACTOR_BY_CITY[cityId] ?? 1;
+export function saleInfluenceFactor(cityId: string, state?: GameState): number {
+  const base = SALE_INFLUENCE_FACTOR_BY_CITY[cityId] ?? 1;
+  if (!state) return base;
+  const done = citiesDoneBefore(state, cityId);
+  const table = SALE_INFLUENCE_BY_CITIES_DONE;
+  return base * (table[Math.min(done, table.length - 1)] ?? 1);
+}
+
+/** Wie viele andere Städte du schon komplett hast (Meilenstein „komplett“, Auftrag 40). */
+export function citiesDoneBefore(state: GameState, cityId: string): number {
+  let n = 0;
+  for (const [id, m] of Object.entries(state.modules.territory.milestones ?? {})) {
+    if (id !== cityId && m.complete !== null) n++;
+  }
+  return n;
 }
 
 function onSale(ctx: Ctx, veedelId: string, amount: number): void {
   if (!getVeedel(veedelId)) return;
   ctx.state.modules.territory.lastSaleAt[veedelId] = ctx.now;
-  const cityFactor = saleInfluenceFactor(veedelCity(veedelId));
+  const cityFactor = saleInfluenceFactor(veedelCity(veedelId), ctx.state);
   const gain =
     Math.min(SALE_INFLUENCE_MAX, SALE_INFLUENCE_BASE + SALE_INFLUENCE_PER_UNIT * Math.max(0, amount)) * cityFactor;
   changeInfluence(ctx.state, veedelId, PLAYER_FACTION, gain);
@@ -364,6 +381,8 @@ function onControlChanged(ctx: Ctx, veedelId: string, from: FactionId | null, to
  */
 function checkMilestones(ctx: Ctx, cityId: string): void {
   const progress = campaignProgress(ctx.state, cityId);
+  // Ein Ort ohne Veedel (Rotterdam in der Hafen-Phase, Auftrag 40) hat keine Kampagne.
+  if (progress.total === 0) return;
   const t = ctx.state.modules.territory;
   t.milestones ??= {};
   t.milestones[cityId] ??= { majority: null, complete: null };
@@ -385,7 +404,10 @@ function checkMilestones(ctx: Ctx, cityId: string): void {
   }
   if (m.complete === null && progress.controlled >= progress.total) {
     m.complete = ctx.now;
-    const next = AFTER_COMPLETE[cityId];
+    // Die letzte Stadt (Auftrag 40): Boss von Deutschland, gleich ruft Jansen aus Rotterdam an.
+    const cities = new Set(allVeedel().map((v) => v.cityId));
+    const all = [...cities].every((c) => c === cityId || (t.milestones[c]?.complete ?? null) !== null);
+    const next = all && cities.size > 1 ? GERMANY_COMPLETE : AFTER_COMPLETE[cityId];
     outcome.win(ctx, next ? { cityId, cityName: name, next } : { cityId, cityName: name });
   }
 }

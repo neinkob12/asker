@@ -6,8 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { loadSimulation, parseSaveFile } from '../core';
 import { discoverModules } from '../core/discover';
 import { eventsOfType, recordEvents } from '../core/testing';
-import { hamburgMissing, offerStatus } from '../modules/city';
+import { hamburgMissing, isBossOfGermany, isBusinessSold, offerStatus, presentCity, saleStatus } from '../modules/city';
 import { fullPowerMissing, getRightHand } from '../modules/hierarchy';
+import { isTradeActive, openOrders } from '../modules/trade';
 import { TEST_SAVE_FILES } from '../ui/builtin/testSaves';
 import { KOELN_KOMPLETT_DIRTY, ownedInKoeln, TEST_SAVES } from './testSaves';
 
@@ -72,5 +73,27 @@ describe('Test-Spielstände', () => {
     answerCall();
     expect(offerStatus(sim.state)).toBe('accepted');
     expect(eventsOfType(events, 'city.offerAccepted')).toHaveLength(1);
+  });
+
+  it('Boss von Deutschland: alle Städte komplett, ein paar Stunden später ruft Jansen an (Auftrag 40)', () => {
+    const sim = loadFile('deutschland');
+    expect(sim.state.meta.scenario).toBe('deutschland');
+    expect(isBossOfGermany(sim.state)).toBe(true);
+    expect(isBusinessSold(sim.state)).toBe(false);
+    sim.advance(12 * 60);
+    expect(saleStatus(sim.state)).toBe('calling');
+    expect(sim.dispatch({ type: 'city.sell', payload: {} }).ok).toBe(true);
+    expect(isBusinessSold(sim.state)).toBe(true);
+  });
+
+  it('Hafen-Phase: verkauft, in Rotterdam, die ersten Bestellungen warten (Auftrag 40)', () => {
+    const sim = loadFile('hafen');
+    expect(sim.state.meta.scenario).toBe('hafen');
+    expect(isBusinessSold(sim.state)).toBe(true);
+    expect(presentCity(sim.state)).toBe('rotterdam');
+    expect(isTradeActive(sim.state)).toBe(true);
+    expect(openOrders(sim.state).length).toBeGreaterThan(0);
+    sim.advance(24 * 60);
+    expect(sim.state.outcome.gameOver).toBeNull();
   });
 });

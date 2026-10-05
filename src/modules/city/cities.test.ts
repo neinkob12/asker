@@ -230,7 +230,11 @@ describe('Städte (Auftrag 30)', () => {
     expect(results).toHaveLength(1);
     const day1 = cityReport(sim.state, 'koeln', 1, 1);
     expect(day1.wages).toBeGreaterThan(0);
-    expect(results[0]).toBe(Math.round(cityDayProfit(sim.state, 'koeln', day1.to) ?? Number.NaN));
+    // Anheuern und Ausbau zählen nicht (Wachstum, Auftrag 36 und 40).
+    const growth = day1.rows
+      .filter((r) => r.category === 'hiring' || r.category === 'expansion')
+      .reduce((sum, r) => sum + r.amount, 0);
+    expect(results[0]).toBe(Math.round((cityDayProfit(sim.state, 'koeln', day1.to) ?? Number.NaN) - growth));
     expect(results[0]).toBeLessThanOrEqual(-Math.round(day1.wages));
   });
 

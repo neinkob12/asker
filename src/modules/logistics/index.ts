@@ -108,6 +108,8 @@ import {
   DRIVER_SPEED_PER_POINT,
   ESCAPE_HEAT,
   HARBOR_CONTACT,
+  HARBOR_PORTS,
+  type HarborPort,
   LOAD_MINUTES,
   LOG_LIMIT,
   NIGHT_END,
@@ -141,6 +143,9 @@ export {
   BERTH_COST,
   BERTH_LEVELS,
   CARGO_SAFE_MINUTES,
+  CUSTOMS_OPPONENT,
+  HARBOR_PORTS,
+  type HarborPort,
   INTERCITY_CAPACITY,
   NIGHT_START,
   PORTS,
@@ -162,6 +167,11 @@ export {
   routeName,
   routeWeight,
 } from './routes';
+
+/** Hafen der Hafen-Phase (Auftrag 40), z.B. 'rotterdam', 'antwerpen', 'hamburg'. */
+export function harborPort(id: string): HarborPort | undefined {
+  return HARBOR_PORTS.find((p) => p.id === id);
+}
 
 /** ID des Kölner Hafens als Abholort einer Fahrt (andere Städte: PORTS[cityId].placeId, z.B. 'port:hamburg'). */
 export const PORT_ID = 'port';
@@ -1557,6 +1567,13 @@ export default defineModule({
       if (request.origin?.module === 'logistics') onCheckResolved(ctx, request.origin.ref, outcome, result?.ending);
     },
     'staff.left': (ctx, { staffId }) => driverGone(ctx, staffId),
+    // Auftrag 40: Das Geschäft ist verkauft. Fahrplan-Routen und Nachkauf gehören jetzt den Statthaltern.
+    'business.sold': (ctx) => {
+      const s = ctx.state.modules.logistics;
+      if (s.routes.length > 0) journal.add(ctx, `${s.routes.length} Fahrplan-Routen gehen mit dem Geschäft weg.`);
+      s.routes = [];
+      s.restock = [];
+    },
     'staff.statusChanged': (ctx, { staffId, to }) => {
       if (to !== 'active') driverGone(ctx, staffId);
     },

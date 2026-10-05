@@ -32,7 +32,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { citiesUnlocked, cityName, cityOfSpot } from '../../city';
+import { citiesUnlocked, cityName, cityOfSpot, isBusinessSold } from '../../city';
 import { getLieutenantIds, lieutenantOfSpot } from '../../hierarchy';
 import { getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
@@ -142,8 +142,10 @@ function filterOptions(state: GameState): SelectOption[] {
   const veedel = [...veedelIds].sort((a, b) => veedelName(a).localeCompare(veedelName(b)));
   // Ab zwei Städten (Auftrag 30): "Alle Städte" und je Stadt ein Eintrag.
   const cities = citiesUnlocked(state);
+  // Nach dem Verkauf (Auftrag 40) gibt es keine Kasse pro Stadt mehr; die Städte bleiben nur als Rückblick.
+  const sold = isBusinessSold(state);
   return [
-    { value: 'all', label: cities.length > 1 ? 'Alle Städte' : 'Ganz Köln' },
+    { value: 'all', label: sold ? 'Alles' : cities.length > 1 ? 'Alle Städte' : 'Ganz Köln' },
     ...(cities.length > 1 ? cities.map((id) => ({ value: `city:${id}`, label: `Stadt ${cityName(id)}` })) : []),
     ...veedel.map((id) => ({ value: `veedel:${id}`, label: `Veedel ${veedelName(id)}` })),
     ...[...spots]

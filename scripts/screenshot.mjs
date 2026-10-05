@@ -12,6 +12,7 @@
 //   --query   URL-Parameter (Standard: ?neu=normal&seed=1&tempo=0, also frisches Spiel, pausiert)
 //   --wait    Wartezeit in ms nach dem Laden (Standard 4000, die Karte braucht etwas)
 //   --eval    JavaScript, das vor dem Screenshot im Browser läuft (window.koeln = { session, runtime })
+//   --after   Wartezeit in ms nach --eval und --click (Standard 400, z.B. 4000 für einen Kameraflug)
 //   --click   CSS-Selektor, der vor dem Screenshot angeklickt wird
 //   --sizes   desktop,mobile (Standard beide)
 //   --name    Präfix der Dateinamen (Standard: spiel)
@@ -75,7 +76,7 @@ try {
     await page.waitForTimeout(wait);
     if (args.eval) await page.evaluate(args.eval);
     if (args.click) await page.click(args.click);
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(Number(args.after ?? 400));
     const file = `${outDir}/${name}-${size}.png`;
     await page.screenshot({ path: file });
     console.log(`Screenshot: ${file}`);

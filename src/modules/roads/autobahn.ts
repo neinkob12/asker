@@ -4,7 +4,7 @@
 // den Nummern in refs (routes.ref; andere Autobahnen zählen 3-mal so lang), vereinfacht auf
 // 50 m. Quelle: Overture Maps, Release 2026-09-23.1, Thema "transportation".
 // Lizenz: ODbL 1.0 (https://opendatacommons.org/licenses/odbl/). © OpenStreetMap-Mitwirkende, © Overture Maps Foundation.
-// 6 Linien, 2281 km.
+// 8 Linien, 2644 km.
 //
 // Format: Punkte lng, lat im Polyline-Format (1e-5 Grad, Abstand zum vorigen Punkt, siehe decodeInts in graph.ts).
 
@@ -72,6 +72,26 @@ export const AUTOBAHNEN: readonly AutobahnLine[] = [
     points:
       'gq_pAkzl_IhwNdtK|Lxn@cZd[eKdw@pBxNfhBt{Aj[rJhdBbXxZhPn\\vn@zBzdAxk@ja@dIxNYlhBnHrSvMvLvX~K|eCbf@`ZpKrnAfjAhr@rkArb@dQ|o@zAvxC_Df_A|N~Wl@xhCm_@rtEB~zIjlA`YfHzL|Obq@b_DeFb^yt@x_Bp@bn@hUh`@v~DvoDps@jYzwAtTnb@`LpdBnhAtd@jRh~E~u@hr@~Sh_HptF|gDllAjlBbjAbqA`k@bvAl}@~u@dt@jqAxxBz_@`]~hBbq@~r@|l@~cAbT`cAlp@~vCj_Ax}AjjAp`CftA~eDt|@deDzm@b{Bhz@hd@tf@~sAjcEnXz_@bXvPblCtiAncCluCva@d\\vf@lSvyAp^b}CbcAbp@p\\|Yb[`w@buAlcBrbB|fB`cAjlBtiCr]jUjvCzrAbaBvwBrV`g@vK|c@~jBhnP~gB`mGuAh[sl@xlBBvXbVh_Biz@`lDmHjqBg^bpBkaA|bBqQ|xA|Kls@`rExsJQtc@qs@vgDvShpB`fAngBpzCdkDtjBlvAnaCzxAppF~jCvaFnaFleBnsAtgCv}DxmFrnGnRj`@|Fz`@tA`aGxFfh@bjAr~BlOftAx_Dr`Gha@nYx[dLxlEft@xV|HjT|Qp_@`y@tmBtr@rOjNpXbi@we@`~Cqn@r~Goj@dmBsw@xxAqxAnlAih@x_Ao}@|v@}CzOn@p}BvN`]`{@jd@bMpM~MhcA~HhPjaBfnArlAfdBrEvc@k`@heA`Cte@j~@ldAvqBx|C|u@h{Al_Atv@`QpU~t@joCvMxgBpeBh`EaJda@wlApy@oYx|@ax@zk@qRbc@fCnc@`a@zq@lGjeAjYzb@zD~RqKz\\au@d_@}NzVvWbdAkLhm@p@zXzZriAiY`zAj]ju@p^|^nWjc@lx@td@`h@dy@hs@xOdL`VqLvc@w_Av[e\\|\\sv@v^_NtR`An_@px@nw@xEj\\ef@nu@pCrx@g]bwAsi@jp@woAdzC}Ej_@jFn_@ftBbzD|eAtz@dQbU~D|e@e[dv@iCt\\|EdZ`c@tfA~_BnpBr_A`{@hTp[bCf]gUlv@i@jQ|f@lgAtFd~@hOp\\f^lWn~CbqAhUnRhh@dt@~|@rj@bkEfwAnrA|LbjAdSpu@lb@lPdStMt_BpP~a@be@tp@`UnrAkQr{@kTf`@bW|o@sEnkAnNffCqNvmAl`@dgCwQ|kB~L~~@za@nvAtPjPjSrIre@lGpoC\\lj@jCxa@zIrp@h`@`tAdHfc@pMbVt[pCv{@pF~R`}@vt@pOfTbYn_A~Btb@`Mlb@cThfAvGdOl_@r[tDjUeRjZwjA|YsY~ZL~Xt\\zc@hJnl@gRvb@mB|Zwc@llBAnQvWvd@pUnOpgCz`@hZdJ|vAdxAlMfj@iWnvDjKbc@tyAnhA|WfG|l@jD`YnJp[jd@j\\pTnh@~l@tlAn}@vfBzb@jnBtWbZxPhk@vr@ddA~[b^jc@|PjbAzmB|mB``ArhEtRd_@~iBteBz~@~p@|rBz|BnsA~bAfdAphAj[`Tha@bm@tsC|eCb|@b|@~MpXLhl@yd@`tAdJncAyk@xoKiJvwEmu@zhF_z@deDknEf|F}{@ldGke@viAoQ`~@kXrl@ue@|jC}O~U{XzSu~C`qA{p@zz@qt@`h@qYhKieAxP}VxNuUve@{^|`@oDtOlKbXtv@~b@jJrMr@rTqQp`@sWzLurA`Wqb@jRcyAd{Amc@~t@}Y~Mg`AxP{ZnOw[bU_q@`u@mfBjz@mnAl}@uWtZsKbXoLho@q@b~@vTtjAhCl}@sKpt@bT`fCsD|^uh@z_BuB|Uff@fuAfFbcAf`@|bByCt}AxTtaBY`[qLr[wzBvcDunAxiDe`B|pC{Qhi@aWjyA}v@`cB}Hdp@uIzSwV`Uix@f_@{dEp|Ck`@xPyhAzW{UdWD|t@lWreAi_@n}@_I~eAfI|Tvv@~s@xJba@mGtl@gv@l`AqJd^xDx\\dm@reAfGhY}b@ztBrI~zAsBlmF}EvW__@bo@qFrWrLhoCwE`a@oeGbgMmu@|rCdBhn@bhAzqC',
     source: '(13.275, 52.505) nach (11.6278, 48.2183), 398 Punkte',
+  },
+  {
+    from: 'koeln',
+    to: 'rotterdam',
+    ref: 'A 3',
+    refs: ['A 3', 'E 35', 'A 12', 'A 15', 'E 31'],
+    meters: 273742,
+    points:
+      'ca|i@sbbvHlO}`@haAso@jYki@fAqXuMeaBjk@eeElT}[pjA_z@jVgr@qAm~CzCk`ClFmXzbAupAb~@wdDpvA{tBnjBo_EhrC_|DrCu^}\\qbCC}XnL__@t_AukAzMoZzVoqAoPmoAzFqg@dYi_@zuDykCt]gOneCyq@lh@k[|q@mkA`d@i_CtQkUfjAy{@b^_aAyCkZot@um@mKc[lIcZpm@oh@Xul@{QaZay@sYiWcWqEmb@dRoy@NuUuz@w_CfC{Svk@i{@jAoc@yNuWyp@ag@so@oS}Ck@iEw@aEo@kCSwErArGdC~Ac@bD_BlCuAxBeA|Bo@jJcFdxBi`BdrA}}BnvAkrApI}ZnEiz@rMy[ptDqrCxrAczBphAugAbaBu{Abh@mYxnCcn@|]oPnr@mg@j_@_Ope@sIjmBwQxbAy[`i@{f@j{@ecC|g@eg@fo@oS`wDgh@xxDclBx`AuYrxBwf@tf@iZ`z@}kAzj@yZb`IagBt`AaKvmDwRvt@}JpcH_hBdp@iFpwB{Fxy@_JppEkuA`p@kF`iEaKxoAyNhkAiWhaAy]jz@ue@bdDcvCfjL_oE~mAeb@jiDau@`_HmoAbc@aPn_BcfA`{Byk@fk@qb@hq@utAx`@uWp]qLdj@uIjcFib@xbC}a@f`AsJpuAwBllC`OvTmE~JbAhMjy@f`@pu@|WdYps@h^lrC|y@fw@za@~UnXUl_@{Zr]qFzObAbPlWpj@jAz\\sp@zzExFr^dS~LxZRl`AaW|v@yHd{Cj@ljEsH~fMmc@jf@`@rcCdQ`xF|ClaB}JhgBl@hkAxKp}C~~@zbD~f@d_GnOzmArMriFjiBlgDttAffE|l@nyKfG~v@hIn{Ax\\bcCbTxgB{An|DfG|pCsBzl@vEjpCzc@~p@zFpkEGvpEqMfcAgHhr@qK|fAgGleEbCbg@rFh|Afa@d{A`AnxAlLz}A|V~lCfn@|}BpGxmA`NrpAnBfg@}BvsB}XvwGa^~~HgmAh_B}d@bgAwe@p_@iHjoBg@`|BbEfzC_B|iCkoApZsVfQ}D|XzAtgBbm@h}@hOvv@`A`mAkHvbAkAj|EzU',
+    source: '(7.045, 50.955) nach (4.45, 51.87), 212 Punkte',
+  },
+  {
+    from: 'rotterdam',
+    to: 'antwerpen',
+    ref: 'A 16',
+    refs: ['A 16', 'E 19', 'A 1', 'R 1', 'A 15'],
+    meters: 89414,
+    points:
+      'kjhZsgp{HqhFeVciC~Jen@Kgw@oJyiBif@_f@^sdAj]si@rWuLxIaLdWud@|OmcCzeC{aAbiBo`@`Psu@lMgV~NaG`SbHhkAyI|}@bBfa@j]zoBzlAtcDjBrn@yn@hrAyt@h`Au_@bw@ulCtxCgmGbbKyWzz@Rxz@yFbd@wvAltD_IfvA}ZtsAgBvj@xRnqB~sAbfD`xAdwEdbAhjCf\\zd@nb@z_@thD||B~wHpjGxy@zj@leBzy@`iIxxCleBpw@th@h]~bAvdAbd@~X`l@bQpd@fEpzBwGr{BzIj|@dVhh@zd@',
+    source: '(4.45, 51.87) nach (4.42, 51.24), 57 Punkte',
   },
   {
     from: 'hamburg',

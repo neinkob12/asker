@@ -31,9 +31,12 @@ describe('Autobahn-Netz (Auftrag 36)', () => {
         'hamburg-berlin',
         'berlin-muenchen',
         'hamburg-frankfurt',
+        // Auftrag 40: nach Rotterdam und weiter nach Antwerpen (Häfen der Hafen-Phase).
+        'koeln-rotterdam',
+        'rotterdam-antwerpen',
       ]),
     );
-    expect(autobahnCities()).toEqual(['berlin', 'frankfurt', 'hamburg', 'koeln', 'muenchen']);
+    expect(autobahnCities()).toEqual(['antwerpen', 'berlin', 'frankfurt', 'hamburg', 'koeln', 'muenchen', 'rotterdam']);
     for (const line of autobahnLines()) {
       const crow = distanceMeters(line.path[0], line.path[line.path.length - 1]);
       // Eine Autobahn ist länger als die Luftlinie, aber nicht doppelt so lang.
@@ -41,6 +44,14 @@ describe('Autobahn-Netz (Auftrag 36)', () => {
       expect(line.meters, `${line.from}-${line.to}`).toBeLessThan(crow * 1.6);
       expect(line.refs[0], `${line.from}-${line.to}`).toBe(line.ref);
     }
+  });
+
+  it('Rotterdam hängt über Köln am Netz (Auftrag 40): nach Berlin über Köln und Hamburg', () => {
+    const way = autobahnPath('rotterdam', 'berlin');
+    expect(way?.via).toEqual(['koeln', 'hamburg']);
+    const route = interCityRoute({ lng: 4.4, lat: 51.9 }, KOELN_DOM);
+    expect(route.motorwayMeters).toBeGreaterThan(250_000);
+    expect(route.refs[0]).toBe('A 3');
   });
 
   it('die Enden einer Stadt treffen sich (Frankfurter Kreuz, Kreuz München-Nord, Dreieck Funkturm)', () => {

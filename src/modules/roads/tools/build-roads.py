@@ -252,6 +252,41 @@ AUTOBAHNEN = {
             (11.6278, 48.2183),
         ],
     },
+    # Auftrag 40: Köln – Rotterdam (A3 bis Emmerich, A12 und A15 bis an den Waalhaven) und Rotterdam – Antwerpen (A16,
+    # in Belgien E19/A1). Rotterdam und Antwerpen haben kein eigenes Straßennetz; roads fährt dort gerade weiter.
+    ('koeln', 'rotterdam'): {
+        'refs': ['A 3', 'E 35', 'A 12', 'A 15', 'E 31'],
+        'start': (7.045, 50.955),  # A3 am Kreuz Köln-Ost
+        'end': (4.45, 51.87),  # A15 am Waalhaven
+        'via': [
+            (7.045, 50.955),
+            (7.0, 51.05),
+            (6.86, 51.29),
+            (6.82, 51.48),
+            (6.56, 51.69),
+            (6.25, 51.84),
+            (5.98, 51.94),
+            (5.89, 51.90),
+            (5.43, 51.88),
+            (4.98, 51.83),
+            (4.68, 51.85),
+            (4.45, 51.87),
+        ],
+    },
+    ('rotterdam', 'antwerpen'): {
+        'refs': ['A 16', 'E 19', 'A 1', 'R 1', 'A 15'],
+        'start': (4.45, 51.87),  # A15 am Waalhaven
+        'end': (4.42, 51.24),  # Ring von Antwerpen
+        'via': [
+            (4.45, 51.87),
+            (4.56, 51.84),
+            (4.62, 51.70),
+            (4.66, 51.58),
+            (4.55, 51.42),
+            (4.47, 51.30),
+            (4.42, 51.24),
+        ],
+    },
     ('hamburg', 'frankfurt'): {
         'refs': ['A 7', 'E 45', 'A 5', 'E 40', 'E 451'],  # südlich von Kassel trägt Overture nur die Europastraßen
         'margin': 0.2,  # die A7 schwenkt zwischen den Wegpunkten weit aus (Walsrode, Hannover, Kassel)

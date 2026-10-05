@@ -978,6 +978,90 @@ export const SCENES = [
     })()`,
     wait: 4000,
   },
+  // Auftrag 40: Boss von Deutschland, Verkauf und Hafen-Phase (verkauft das Geschäft, deshalb ganz am Ende)
+  {
+    name: 'verkauf',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.dev.deutschlandKomplett();
+      window.koeln.session.sim.state.modules.city.sale = { status: 'calling', callAt: null, sold: null };
+      window.koeln.runtime.api.closeDialog();
+      window.koeln.runtime.requestRender();
+      await sleep(300);
+      window.koeln.runtime.api.closeDialog();
+      window.koeln.runtime.api.openPanel('city.sale', {});
+    })()`,
+    wait: 1200,
+  },
+  {
+    name: 'verkauft',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.runtime.api.closeDialog();
+      window.koeln.session.sim.dispatch({ type: 'city.sell', payload: {} });
+      window.koeln.runtime.requestRender();
+      await sleep(400);
+    })()`,
+    wait: 1500,
+  },
+  {
+    name: 'kunden',
+    js: `(async () => {
+      ${STEPS}
+      const sim = window.koeln.session.sim;
+      window.koeln.runtime.api.closeDialog();
+      while (sim.state.modules.city.travel) sim.advance(30);
+      window.koeln.runtime.requestRender();
+      await sleep(300);
+      window.koeln.runtime.api.closeDialog();
+      window.koeln.runtime.api.openPhone('trade.app');
+    })()`,
+    wait: 1200,
+  },
+  {
+    name: 'kunden-liefern',
+    js: `(async () => {
+      ${STEPS}
+      const sim = window.koeln.session.sim;
+      sim.dispatch({ type: 'trade.acceptAll', payload: { guaranteedOnly: true } });
+      window.koeln.runtime.api.openPhone('trade.app');
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Zu liefern')));
+      head?.scrollIntoView({ block: 'start' });
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'kunden-kunden',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.runtime.api.openPhone('trade.app');
+      const tab = await until(() => [...document.querySelectorAll('.phone .ui-segmented button')].find((b) => b.textContent.includes('Kunden')));
+      tab?.click();
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'kunden-hafen',
+    js: `(async () => {
+      ${STEPS}
+      const sim = window.koeln.session.sim;
+      sim.state.wallet.dirty += 300000;
+      sim.dispatch({ type: 'trade.buy', payload: { producerId: 'spanien', productId: 'weed', size: 'medium' } });
+      sim.dispatch({ type: 'trade.buy', payload: { producerId: 'marokko', productId: 'hash', size: 'small' } });
+      window.koeln.runtime.api.openPhone('trade.app');
+      const tab = await until(() => [...document.querySelectorAll('.phone .ui-segmented button')].find((b) => b.textContent.includes('Hafen')));
+      tab?.click();
+    })()`,
+    wait: 900,
+  },
+  {
+    name: 'europa',
+    js: `(() => {
+      window.koeln.runtime.api.closeDialog();
+      window.koeln.runtime.api.flyToDeutschland();
+    })()`,
+    wait: 4000,
+  },
 ];
 
 /** Öffnet eine frische Sitzung (pausiert, fester Seed) und spult vor. */

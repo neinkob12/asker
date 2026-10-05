@@ -23,8 +23,10 @@ import { allVeedel } from '../veedel';
 import {
   GERMANY_MIN_CITIES,
   HANDOVER_START_MONEY_DAYS,
+  SLEEP_AVERAGE_FLOOR,
   SLEEP_RAID_CHANCE,
   SLEEP_RAID_LOSS_MAX,
+  START_MONEY_FACTOR_BY_CITIES_DONE,
   START_MONEY_MIN_BY_CITY,
 } from './config';
 import {
@@ -192,6 +194,28 @@ describe('Startgeld (Auftrag 36)', () => {
     readyKoeln(sim);
     sim.state.modules.city.sleep.koeln.results = [500];
     expect(startMoneyFor(sim.state, 'koeln', 'hamburg')).toBe(START_MONEY_MIN_BY_CITY.hamburg);
+  });
+
+  it('mit mehr kompletten Städten im Rücken steigt das Mindest-Startgeld (Auftrag 40)', () => {
+    const sim = quietGame();
+    readyKoeln(sim);
+    sim.state.modules.city.sleep.koeln.results = [500];
+    for (const id of ['berlin', 'frankfurt']) {
+      sim.dispatch({ type: 'city.unlock', payload: { cityId: id } }, { actor: 'system' });
+      takeCity(sim, id);
+    }
+    // Köln, Berlin und Frankfurt komplett: Faktor für drei Städte.
+    const factor = START_MONEY_FACTOR_BY_CITIES_DONE[3];
+    expect(startMoneyFor(sim.state, 'koeln', 'hamburg')).toBe(
+      Math.round((START_MONEY_MIN_BY_CITY.hamburg * factor) / 1000) * 1000,
+    );
+  });
+
+  it('im Schlaf kein Dauerverlust: ein negativer Schnitt bucht 0, ein Minus gibt es nur bei einer Razzia', () => {
+    for (let i = 0; i < 50; i++) {
+      const r = sleepResult(Math.max(SLEEP_AVERAGE_FLOOR, -8000), () => (i + 0.5) / 50);
+      expect(r.amount).toBe(0);
+    }
   });
 
   it('Widerruf und erneute Übergabe: kein zweites Startgeld, keine Stadt ohne Anruf', () => {

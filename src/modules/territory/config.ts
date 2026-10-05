@@ -46,6 +46,14 @@ export const SALE_INFLUENCE_FACTOR_BY_CITY: Readonly<Record<string, number>> = {
   frankfurt: 0.5,
 };
 
+/**
+ * Der Ruf eilt voraus (Auftrag 40, Etappe 0): Faktor auf den Einfluss pro Verkauf nach der Zahl der Städte, die du
+ * schon komplett hast (ohne die Stadt selbst; Index = Zahl, darüber der letzte Wert). Köln (0) und die zweite Stadt (1)
+ * bleiben, wie sie sind; spätere Städte gehen schneller, damit die Richtwerte (zweite ~15, dritte ~12, vierte ~10,
+ * fünfte ~8 Tage) auch für teure Städte wie München als vierte gelten.
+ */
+export const SALE_INFLUENCE_BY_CITIES_DONE: readonly number[] = [1, 1, 1.1, 1.3, 1.5];
+
 // --- Präsenz und Verfall (stündlich) ------------------------------------------------------------------------
 
 /** So lange nach dem letzten eigenen Verkauf zählt der Spieler im Veedel noch als präsent. */

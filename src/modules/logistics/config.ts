@@ -232,3 +232,59 @@ export const ROUTE_CHOICE_ORDER: readonly RouteChoice[] = ['autobahn', 'country'
 /** Nachtfahrt: Abfahrt frühestens um 23 Uhr; zwischen 23 und 5 Uhr fährt sie sofort. */
 export const NIGHT_START = 23 * 60;
 export const NIGHT_END = 5 * 60;
+
+/**
+ * Häfen der Hafen-Phase (Auftrag 40): Hier kommen die Container aus dem Ausland an. Rotterdam gehört nach dem Verkauf
+ * dir (Jansens Liegeplatz, berthCost 0), Antwerpen und Hamburg mietest du dazu (sauberes Geld). customsFactor: wie
+ * scharf der Zoll dort hinschaut (1 = Rotterdam); shipDays: Tage mehr (oder weniger) als bis Rotterdam.
+ */
+export interface HarborPort {
+  id: string;
+  name: string;
+  /** Land für die Anzeige. */
+  country: string;
+  lng: number;
+  lat: number;
+  /** Miete für den Liegeplatz (sauberes Geld), 0 = gehört dir mit Rotterdam. */
+  berthCost: number;
+  customsFactor: number;
+  shipDays: number;
+  /** Ein Satz zum Hafen. */
+  description: string;
+}
+
+export const HARBOR_PORTS: readonly HarborPort[] = [
+  {
+    id: 'rotterdam',
+    name: 'Rotterdam',
+    country: 'Niederlande',
+    lng: 4.4,
+    lat: 51.9,
+    berthCost: 0,
+    customsFactor: 1,
+    shipDays: 0,
+    description: 'Jansens Liegeplatz im Waalhaven: der größte Hafen Europas, der Zoll kennt jeden Container.',
+  },
+  {
+    id: 'antwerpen',
+    name: 'Antwerpen',
+    country: 'Belgien',
+    lng: 4.29,
+    lat: 51.29,
+    berthCost: 90_000,
+    customsFactor: 0.8,
+    shipDays: 0,
+    description: 'Riesig und unübersichtlich. Der Zoll schaut seltener hin, die Hafenarbeiter wollen ihren Anteil.',
+  },
+  {
+    id: 'hamburg',
+    name: 'Hamburg',
+    country: 'Deutschland',
+    lng: 9.99978,
+    lat: 53.52789,
+    berthCost: 120_000,
+    customsFactor: 1.15,
+    shipDays: 1,
+    description: 'Ein Tag länger auf See, dafür näher an Bremen, Hannover und Leipzig. Der Zoll ist wach.',
+  },
+];

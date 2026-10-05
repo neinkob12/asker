@@ -14,12 +14,14 @@ import {
   LOSE_CONTROL_THRESHOLD,
   SALE_DISPLACEMENT,
   SALE_INFLUENCE_BASE,
+  SALE_INFLUENCE_BY_CITIES_DONE,
   SALE_INFLUENCE_PER_UNIT,
   STAFF_PRESENCE_PER_HOUR,
 } from './config';
 import {
   addInfluence,
   campaignProgress,
+  citiesDoneBefore,
   controlledBy,
   controllerOf,
   factionColor,
@@ -29,6 +31,7 @@ import {
   lieutenantInfluence,
   PLAYER_FACTION,
   playerPresence,
+  saleInfluenceFactor,
 } from './index';
 
 /** Spiel ohne zufällig auftauchende Kunden. */
@@ -341,5 +344,25 @@ describe('territory', () => {
     expect(loaded.state.modules.territory.milestones).toEqual({ koeln: { majority: null, complete: null } });
     sell(loaded, 'kalk');
     expect(getInfluence(loaded.state, 'kalk', PLAYER_FACTION)).toBeGreaterThan(0);
+  });
+});
+
+describe('Der Ruf eilt voraus (Auftrag 40)', () => {
+  it('mehr Einfluss pro Verkauf nach der Zahl der schon kompletten Städte, Köln und die zweite Stadt unverändert', () => {
+    const sim = createTestGame();
+    expect(saleInfluenceFactor('hamburg', sim.state)).toBe(saleInfluenceFactor('hamburg'));
+    const t = sim.state.modules.territory;
+    t.milestones.koeln = { majority: 1, complete: 1 };
+    expect(citiesDoneBefore(sim.state, 'hamburg')).toBe(1);
+    expect(saleInfluenceFactor('hamburg', sim.state)).toBe(
+      saleInfluenceFactor('hamburg') * SALE_INFLUENCE_BY_CITIES_DONE[1],
+    );
+    t.milestones.berlin = { majority: 1, complete: 1 };
+    t.milestones.muenchen = { majority: 1, complete: 1 };
+    expect(citiesDoneBefore(sim.state, 'hamburg')).toBe(3);
+    expect(citiesDoneBefore(sim.state, 'koeln')).toBe(2);
+    expect(saleInfluenceFactor('hamburg', sim.state)).toBeCloseTo(
+      saleInfluenceFactor('hamburg') * SALE_INFLUENCE_BY_CITIES_DONE[3],
+    );
   });
 });

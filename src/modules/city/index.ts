@@ -62,6 +62,7 @@ import { isPlayerDelivering, playerSpot } from '../customers';
 import { activeEncounters } from '../encounters';
 import { bookDay, cityDayProfit, cityReport } from '../finance';
 import { freeVehicles, releaseVehicle } from '../fleet';
+import { getLots } from '../goods';
 import {
   FULL_POWER_SHARE,
   fullPowerMissing,
@@ -78,6 +79,7 @@ import { restHeat } from '../police';
 import { autobahnRefs, interCityMinutes } from '../roads';
 import { getSpot } from '../spots';
 import { getStaffMember, staffContact } from '../staff';
+import { getSupplier, supplierContact } from '../suppliers';
 import { campaignProgress } from '../territory';
 import { allVeedel, type Veedel, veedelAt, veedelCity } from '../veedel';
 import {
@@ -87,12 +89,23 @@ import {
   GERMANY_MIN_CITIES,
   HANDOVER_START_MONEY_DAYS,
   HARBOR_CALLER,
+  HARBOR_CITY,
   NEXT_CITY,
   OFFER_CALL_DELAY,
   OFFER_NEXT_DELAY,
   OFFER_REMINDER_DAYS,
   PLAYER_CITY_SPEED,
+  ROTTERDAM_SHARE,
+  SALE_AVERAGE_DAYS,
+  SALE_CALL_DELAY,
+  SALE_CALL_LINES,
+  SALE_PRICE_MIN,
+  SALE_PROFIT_DAYS,
+  SALE_REMINDER_DAYS,
+  SALE_TEXTS,
   SLEEP_AVERAGE_DAYS,
+  SLEEP_AVERAGE_FLOOR,
+  SLEEP_EXCLUDED_CATEGORIES,
   SLEEP_FACTOR_MAX,
   SLEEP_FACTOR_MIN,
   SLEEP_RAID_CHANCE,
@@ -100,21 +113,25 @@ import {
   SLEEP_RAID_LOSS_MAX,
   SLEEP_RAID_LOSS_MIN,
   SLEEP_RAID_TEXTS,
+  START_MONEY_FACTOR_BY_CITIES_DONE,
   START_MONEY_MIN_BY_CITY,
 } from './config';
-import { CITIES, type CityDef } from './data';
+import { ABROAD_CITIES, CITIES, type CityDef, JANSEN_CONTACT } from './data';
 import { PLAYER_RANKS, type PlayerRank, reachedRank } from './ranks';
 
 export {
   CITY_OFFERS,
   type CityOffer,
   HARBOR_CALLER,
+  HARBOR_CITY,
   NEXT_CITY,
   OFFER_LINES,
   type OfferTexts,
+  ROTTERDAM_SHARE,
+  SALE_PROFIT_DAYS,
   SLEEP_AVERAGE_DAYS,
 } from './config';
-export { CITIES, type CityDef, DEUTSCHLAND_VIEW } from './data';
+export { ABROAD_CITIES, CITIES, type CityDef, DEUTSCHLAND_VIEW } from './data';
 export { PLAYER_RANKS, type PlayerRank, type PlayerRankDef } from './ranks';
 
 /**
@@ -171,7 +188,29 @@ export interface CityTravel {
   arrivesAt: number;
 }
 
+/**
+ * Verkauf des Geschäfts (Auftrag 40): none → scheduled (Jansen ruft bald an) → calling → later (er meldet sich wieder)
+ * oder sold. Nach dem Verkauf gehören dir die deutschen Städte nicht mehr: Sie sind Kunden (trade), du bist in Rotterdam.
+ */
+export interface SaleState {
+  status: 'none' | 'scheduled' | 'calling' | 'later' | 'sold';
+  /** Wann Jansen anruft ('scheduled') bzw. sich wieder meldet ('later'). */
+  callAt: number | null;
+  /** Der Abschluss: Preis, Jansens Anteil, Tagesgewinn, aus dem gerechnet wurde, und die verkauften Städte. */
+  sold: SaleRecord | null;
+}
+
+export interface SaleRecord {
+  at: number;
+  price: number;
+  rotterdamPrice: number;
+  dailyProfit: number;
+  cities: string[];
+}
+
 export interface CityState {
+  /** Verkauf des Geschäfts (Auftrag 40). */
+  sale: SaleState;
   /** Angebote der freien Städte (Auftrag 36), pro Stadt. */
   offers: Record<string, OfferState>;
   /** Die komplette Stadt, für die die Angebote gerade laufen (null = keine Runde offen). */
@@ -200,11 +239,14 @@ export interface CityState {
   visited: string[];
 }
 
+/** Zustand in Version 5 (Auftrag 36 nach dem Review): ohne Verkauf. */
+type CityStateV5 = Omit<CityState, 'sale'>;
+
 /** Zustand in Version 3 (Auftrag 30): ein Angebot, das aus Hamburg. */
 /** Zustand in Version 4 (Auftrag 36, vor dem Review): ohne Gedächtnis fürs Startgeld. */
-type CityStateV4 = Omit<CityState, 'startMoneyPaid'>;
+type CityStateV4 = Omit<CityStateV5, 'startMoneyPaid'>;
 
-type CityStateV3 = Omit<CityState, 'offers' | 'offerFrom' | 'rounds' | 'startLeader' | 'rank' | 'startMoneyPaid'> & {
+type CityStateV3 = Omit<CityStateV5, 'offers' | 'offerFrom' | 'rounds' | 'startLeader' | 'rank' | 'startMoneyPaid'> & {
   offer: OfferState;
 };
 
@@ -237,6 +279,13 @@ declare module '../../core' {
     'city.unlock': { cityId: string };
     /** Selbst in eine andere Stadt fahren (über die A1). */
     'city.travel': { cityId: string };
+    /**
+     * Auftrag 40: Das Geschäft an die Statthalter verkaufen, Rotterdam von Jansen kaufen und hinfahren. Nur der Spieler,
+     * erst als Boss von Deutschland.
+     */
+    'city.sell': Record<string, never>;
+    /** „Noch nicht“: Jansen meldet sich in SALE_REMINDER_DAYS Tagen wieder. */
+    'city.postponeSale': Record<string, never>;
   }
   interface GameEvents {
     'city.offerAnswered': { choice: OfferChoice; ready: boolean; cityId: string };
@@ -252,13 +301,20 @@ declare module '../../core' {
     'city.arrived': { cityId: string; first?: boolean };
     /** Neuer Rang des Spielers (Auftrag 36): Titel im HUD und in der Bestenliste. */
     'player.rankUp': { rankId: string; title: string; score: number };
+    /** Jansen ruft an: Verkauf und Rotterdam (Auftrag 40). */
+    'city.saleOffered': { price: number; rotterdamPrice: number };
+    /**
+     * Das Geschäft ist verkauft (Auftrag 40): Die Städte sind ab jetzt Kunden (trade), keine Kasse pro Stadt, keine
+     * Vollmacht. cities = die verkauften Städte.
+     */
+    'business.sold': { price: number; rotterdamPrice: number; dailyProfit: number; cities: string[] };
   }
 }
 
 // ---------------------------------------------------------------------------------------------
 // Lesen
 
-const CITY_BY_ID = new Map(CITIES.map((c) => [c.id, c]));
+const CITY_BY_ID = new Map([...CITIES, ...ABROAD_CITIES].map((c) => [c.id, c]));
 
 /** Die Stadt, mit der alles beginnt (und zu der alte Spielstände gehören). */
 export const FIRST_CITY = 'koeln';
@@ -771,7 +827,10 @@ export function handOver(ctx: Ctx, cityId: string, toCityId?: string, pack: Star
 export function startMoneyFor(state: GameState, from: string, to?: string): number {
   const results = cityState(state)?.sleep?.[from]?.results ?? [];
   const average = results.length > 0 ? results.reduce((a, b) => a + b, 0) / results.length : 0;
-  const min = (to && START_MONEY_MIN_BY_CITY[to]) || 0;
+  const table = START_MONEY_FACTOR_BY_CITIES_DONE;
+  const done = playableCities().filter((c) => c.id !== to && campaignProgress(state, c.id).complete).length;
+  const factor = table[Math.min(done, table.length - 1)] ?? 1;
+  const min = Math.round((((to && START_MONEY_MIN_BY_CITY[to]) || 0) * factor) / 1000) * 1000;
   return Math.max(min, Math.round(average * HANDOVER_START_MONEY_DAYS), 0);
 }
 
@@ -854,6 +913,9 @@ export function travelTo(ctx: Ctx, cityId: string): CommandResult {
   const c = ctx.state.modules.city;
   const def = getCity(cityId);
   if (!def || def.template) return { ok: false, reason: 'Diese Stadt gibt es im Spiel noch nicht.' };
+  const sold = c.sale?.sold !== null && c.sale?.sold !== undefined;
+  if (def.abroad && !sold) return { ok: false, reason: `Nach ${def.name} geht es erst nach dem Verkauf.` };
+  if (sold && !def.abroad) return { ok: false, reason: `${def.name} gehört dir nicht mehr.` };
   if (!c.unlocked.includes(cityId)) return { ok: false, reason: `${def.name} ist noch nicht frei.` };
   if (c.travel) return { ok: false, reason: `Du bist schon auf dem Weg nach ${cityName(c.travel.to)}.` };
   if (c.present === cityId) return { ok: false, reason: `Du bist schon in ${def.name}.` };
@@ -897,6 +959,9 @@ export function switchCity(ctx: Ctx, cityId: string): CommandResult {
   const c = ctx.state.modules.city;
   const def = getCity(cityId);
   if (!def || def.template) return { ok: false, reason: 'Diese Stadt gibt es im Spiel noch nicht.' };
+  const sold = c.sale?.sold !== null && c.sale?.sold !== undefined;
+  if (def.abroad && !sold) return { ok: false, reason: `Nach ${def.name} geht es erst nach dem Verkauf.` };
+  if (sold && !def.abroad) return { ok: false, reason: `${def.name} gehört dir nicht mehr.` };
   if (!c.unlocked.includes(cityId)) return { ok: false, reason: `${def.name} ist noch nicht frei.` };
   if (c.active === cityId) return { ok: true };
   const from = c.active;
@@ -938,6 +1003,8 @@ const LIVE_CLOSE_MINUTE = 5;
  */
 function closeSleepers(ctx: Ctx): void {
   const c = ctx.state.modules.city;
+  // Nach dem Verkauf (Auftrag 40) gehören dir die Städte nicht mehr: keine Tageszusammenfassung, keine Kasse pro Stadt.
+  if (c.sale.sold) return;
   const day = bookDay(ctx.now);
   const dayStart = clock.at(day);
   for (const cityId of c.unlocked) {
@@ -954,20 +1021,22 @@ function closeSleepers(ctx: Ctx): void {
  */
 function closeLiveDay(ctx: Ctx): void {
   const c = ctx.state.modules.city;
+  if (c.sale.sold) return;
   const day = bookDay(ctx.now) - 1;
   for (const cityId of c.unlocked) {
     c.sleep[cityId] ??= newSleep(c.active === cityId, ctx.now);
     const rec = c.sleep[cityId];
     if (rec.liveToday && day >= 1) {
-      const profit = cityDayProfit(ctx.state, cityId, day);
-      if (profit !== null) {
-        // Einmalige Ausgaben (Lager, Spots, Fahrzeuge: Ausbau) gehören nicht in den Schnitt (Auftrag 33/36): Der
-        // Statthalter baut im Schlaf nicht weiter aus.
-        const once = cityReport(ctx.state, cityId, 1, bookDay(ctx.now) - day).rows;
-        const expansion = once.find((r) => r.category === 'expansion')?.amount ?? 0;
-        rec.results.push(Math.round(profit - expansion));
-        if (rec.results.length > SLEEP_AVERAGE_DAYS) rec.results.splice(0, rec.results.length - SLEEP_AVERAGE_DAYS);
-      }
+      // Ein ganzer Tag ohne eine einzige Buchung steht nicht im Buch: Er zählt mit 0 (Auftrag 40).
+      const profit = cityDayProfit(ctx.state, cityId, day) ?? 0;
+      // Einmalige Ausgaben (Lager, Spots, Fahrzeuge: Ausbau) gehören nicht in den Schnitt (Auftrag 33/36): Der
+      // Statthalter baut im Schlaf nicht weiter aus. Auftrag 40: auch das Anheuern (Wachstum, nicht laufender Betrieb).
+      const once = cityReport(ctx.state, cityId, 1, bookDay(ctx.now) - day).rows;
+      const growth = once
+        .filter((r) => (SLEEP_EXCLUDED_CATEGORIES as readonly string[]).includes(r.category))
+        .reduce((sum, r) => sum + r.amount, 0);
+      rec.results.push(Math.round(profit - growth));
+      if (rec.results.length > SLEEP_AVERAGE_DAYS) rec.results.splice(0, rec.results.length - SLEEP_AVERAGE_DAYS);
     }
     rec.liveToday = c.active === cityId;
   }
@@ -988,7 +1057,8 @@ export function sleepResult(average: number, random: () => number): { amount: nu
 
 function sleepSummary(ctx: Ctx, cityId: string, day: number, rec: CitySleep): void {
   const name = cityName(cityId);
-  const average = rec.results.length > 0 ? rec.results.reduce((a, b) => a + b, 0) / rec.results.length : 0;
+  const raw = rec.results.length > 0 ? rec.results.reduce((a, b) => a + b, 0) / rec.results.length : 0;
+  const average = Math.max(SLEEP_AVERAGE_FLOOR, raw);
   const result = sleepResult(average, () => ctx.random());
   let amount = result.amount;
   const raidKind = result.raid;
@@ -1101,6 +1171,276 @@ function tickOffers(ctx: Ctx): void {
   }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Boss von Deutschland und Verkauf (Auftrag 40)
+
+function saleState(state: GameState): SaleState {
+  return cityState(state)?.sale ?? { status: 'none', callAt: null, sold: null };
+}
+
+/** Ist das Geschäft verkauft (Hafen-Phase)? */
+export function isBusinessSold(state: GameState): boolean {
+  return saleState(state).sold !== null;
+}
+
+/** Der Abschluss des Verkaufs (null vorher). */
+export function saleRecord(state: GameState): SaleRecord | null {
+  return saleState(state).sold;
+}
+
+/** Stand des Verkaufs (none, scheduled, calling, later, sold). */
+export function saleStatus(state: GameState): SaleState['status'] {
+  return saleState(state).status;
+}
+
+/** Die deutschen Städte, die dir gehören (vor dem Verkauf: alle freien spielbaren; danach keine). */
+export function ownedCities(state: GameState): string[] {
+  if (isBusinessSold(state)) return [];
+  return citiesUnlocked(state).filter((id) => !getCity(id)?.abroad);
+}
+
+/** Jansen im Handy: derselbe Chat wie beim Lieferanten (mit Gesicht), Stimme aus den Daten. */
+export function jansenContact(state: GameState): Contact {
+  const supplier = getSupplier(state, 'rotterdam');
+  return supplier ? { ...supplierContact(supplier), voice: JANSEN_CONTACT.voice } : JANSEN_CONTACT;
+}
+
+/**
+ * Tagesgewinn des ganzen Geschäfts: Schnitt der letzten SALE_AVERAGE_DAYS abgeschlossenen Tage aus der Kasse, je Stadt
+ * das Ergebnis vor dem Anteil der Statthalter und ohne Ausbau (einmalige Ausgaben), summiert über deine Städte.
+ */
+export function businessDailyProfit(state: GameState): number {
+  let total = 0;
+  for (const cityId of ownedCities(state)) {
+    const r = cityReport(state, cityId, SALE_AVERAGE_DAYS, 1);
+    const back = r.rows
+      .filter((row) => row.category === 'share.righthand' || row.category === 'expansion')
+      .reduce((sum, row) => sum + row.amount, 0);
+    total += r.profit - back;
+  }
+  return Math.round(total / SALE_AVERAGE_DAYS);
+}
+
+export interface SaleOffer {
+  /** Tagesgewinn, aus dem gerechnet wurde. */
+  dailyProfit: number;
+  /** Was die Statthalter zahlen. */
+  price: number;
+  /** Was Jansen für Rotterdam will. */
+  rotterdamPrice: number;
+  /** Was dir bleibt (Startkapital der Hafen-Phase, zusätzlich zu deinem Konto). */
+  rest: number;
+  /** Ware in den Lagern deiner Städte zum Einkaufspreis: Sie bleibt bei den Statthaltern, die zahlen sie dazu. */
+  stockValue: number;
+  /** Gramm (bzw. Einheiten) dieser Ware. */
+  stockAmount: number;
+}
+
+/** Verkaufspreis nach der Formel (rein, für Tests und die Anzeige): auf 1.000 € gerundet. */
+/**
+ * Preis aus dem Tagesgewinn: SALE_PROFIT_DAYS Tagesgewinne (mindestens SALE_PRICE_MIN), Rotterdam ROTTERDAM_SHARE davon.
+ * Die Ware in den Lagern (stockValue) kommt obendrauf und gehört ganz dir.
+ */
+export function salePriceFor(
+  dailyProfit: number,
+  stock: { value: number; amount: number } = { value: 0, amount: 0 },
+): SaleOffer {
+  const business = Math.max(SALE_PRICE_MIN, Math.round((dailyProfit * SALE_PROFIT_DAYS) / 1000) * 1000);
+  const rotterdamPrice = Math.round((business * ROTTERDAM_SHARE) / 1000) * 1000;
+  const stockValue = Math.max(0, Math.round(stock.value / 100) * 100);
+  const price = business + stockValue;
+  return { dailyProfit, price, rotterdamPrice, rest: price - rotterdamPrice, stockValue, stockAmount: stock.amount };
+}
+
+/** Ware in den Lagern deiner Städte, zum Einkaufspreis (Durchschnitt pro Posten). */
+export function saleStockValue(state: GameState): { value: number; amount: number } {
+  const cities = new Set(ownedCities(state));
+  let value = 0;
+  let amount = 0;
+  for (const cityId of cities) {
+    for (const lot of getLots(state, { cityId })) {
+      value += lot.amount * lot.unitCost;
+      amount += lot.amount;
+    }
+  }
+  return { value, amount };
+}
+
+/** Das aktuelle Angebot aus dem Stand der Kasse und der Lager. */
+export function saleOffer(state: GameState): SaleOffer {
+  return salePriceFor(businessDailyProfit(state), saleStockValue(state));
+}
+
+/** Bist du Boss von Deutschland (alle spielbaren Städte komplett, mindestens GERMANY_MIN_CITIES)? */
+export function isBossOfGermany(state: GameState): boolean {
+  const cities = playableCities().map((c) => c.id);
+  const complete = cities.filter((c) => campaignProgress(state, c).complete);
+  return complete.length >= GERMANY_MIN_CITIES && complete.length === cities.length;
+}
+
+/** Warum du gerade nicht verkaufen kannst (null = es geht). */
+export function saleBlocker(state: GameState): string | null {
+  if (isBusinessSold(state)) return 'Das Geschäft ist schon verkauft.';
+  if (!isBossOfGermany(state)) return 'Erst ganz Deutschland, dann redet Jansen mit dir.';
+  if (saleState(state).status === 'none' || saleState(state).status === 'scheduled') {
+    return 'Jansen hat sich noch nicht gemeldet.';
+  }
+  return travelBlocker(state);
+}
+
+function saleVars(state: GameState): Record<string, string> {
+  const offer = saleOffer(state);
+  return {
+    price: formatEuro(offer.price),
+    rotterdam: formatEuro(offer.rotterdamPrice),
+    rest: formatEuro(offer.rest),
+  };
+}
+
+function saleOptions() {
+  return [
+    {
+      id: 'sell',
+      label: SALE_TEXTS.accept,
+      reply: 'Abgemacht. Ich verkaufe und komme nach Rotterdam.',
+      command: { type: 'city.sell' as const, payload: {} },
+    },
+    {
+      id: 'saleLater',
+      label: SALE_TEXTS.later,
+      reply: 'Noch nicht.',
+      command: { type: 'city.postponeSale' as const, payload: {} },
+    },
+  ];
+}
+
+/** Jansen ruft an; gleichzeitig schreiben die Statthalter ihr Angebot. */
+function placeSaleCall(ctx: Ctx): void {
+  const sale = ctx.state.modules.city.sale;
+  const vars = saleVars(ctx.state);
+  const contact = jansenContact(ctx.state);
+  sale.status = 'calling';
+  sale.callAt = null;
+  messages.retractWhere(ctx, (m) => m.contactId === contact.id && (m.options?.some((o) => o.id === 'sell') ?? false));
+  messages.call(ctx, {
+    contact,
+    lines: SALE_CALL_LINES.map((line) => fill(line, vars)),
+    options: saleOptions(),
+    summary: SALE_TEXTS.summary,
+    missedText: SALE_TEXTS.missed,
+    gaveUpText: SALE_TEXTS.gaveUp,
+  });
+  statthalterOffer(ctx, vars);
+  const offer = saleOffer(ctx.state);
+  journal.add(ctx, `Anruf aus Rotterdam: Jansen will verkaufen. Deine Statthalter bieten ${vars.price}.`, 'good');
+  ctx.emit('city.saleOffered', { price: offer.price, rotterdamPrice: offer.rotterdamPrice });
+}
+
+/** Die Statthalter legen zusammen (eine Nachricht vom Statthalter der ersten Stadt). */
+function statthalterOffer(ctx: Ctx, vars: Record<string, string>): void {
+  const cityId = ownedCities(ctx.state).find((id) => getRightHand(ctx.state, id)) ?? FIRST_CITY;
+  const rh = getRightHand(ctx.state, cityId);
+  const m = rh ? getStaffMember(ctx.state, rh.staffId) : undefined;
+  if (!m) return;
+  messages.send(ctx, {
+    contact: { ...staffContact(m), role: rightHandTitle(ctx.state, cityId) },
+    text: fill(SALE_TEXTS.statthalter, { ...vars, name: m.name }),
+  });
+}
+
+/** „Noch nicht“. */
+export function postponeSale(ctx: Ctx): CommandResult {
+  const sale = ctx.state.modules.city.sale;
+  if (sale.status === 'sold') return { ok: false, reason: 'Das Geschäft ist schon verkauft.' };
+  if (sale.status === 'none' || sale.status === 'scheduled') return { ok: false, reason: 'Es gibt kein Angebot.' };
+  sale.status = 'later';
+  sale.callAt = ctx.now + SALE_REMINDER_DAYS * MINUTES_PER_DAY;
+  messages.send(ctx, { contact: jansenContact(ctx.state), text: SALE_TEXTS.laterReply });
+  return { ok: true };
+}
+
+/**
+ * Verkaufen: Die Statthalter zahlen den Preis, Jansen bekommt seinen Anteil, Rotterdam wird frei und du fährst hin. Die
+ * deutschen Städte schlafen ab jetzt nicht mehr für dich (keine Tageszusammenfassung, kein Anteil), sie sind Kunden.
+ */
+export function sellBusiness(ctx: Ctx): CommandResult {
+  const blocked = saleBlocker(ctx.state);
+  if (blocked) return { ok: false, reason: blocked };
+  const c = ctx.state.modules.city;
+  const offer = saleOffer(ctx.state);
+  const cities = ownedCities(ctx.state);
+  // Gebucht auf Rotterdam, nicht auf die aktive Stadt: Die Kasse der alten Städte bleibt sauber.
+  wallet.earn(ctx, offer.price, 'dirty', 'Verkauf des Geschäfts an die Statthalter', {
+    category: 'sale.business',
+    cityId: HARBOR_CITY,
+  });
+  wallet.pay(ctx, offer.rotterdamPrice, 'dirty', 'Rotterdam von Jansen (Liegeplatz, Halle, Kunden)', {
+    category: 'business.rotterdam',
+    cityId: HARBOR_CITY,
+  });
+  c.sale = {
+    status: 'sold',
+    callAt: null,
+    sold: {
+      at: ctx.now,
+      price: offer.price,
+      rotterdamPrice: offer.rotterdamPrice,
+      dailyProfit: offer.dailyProfit,
+      cities,
+    },
+  };
+  c.offerFrom = null;
+  // Rotterdam frei schalten (Ausland: kein Angebot, kein Schlaf) und hinfahren.
+  if (!c.unlocked.includes(HARBOR_CITY)) c.unlocked.push(HARBOR_CITY);
+  c.sleep[HARBOR_CITY] ??= newSleep(false, ctx.now);
+  const contact = jansenContact(ctx.state);
+  messages.retractWhere(ctx, (m) => m.contactId === contact.id && (m.options?.some((o) => o.id === 'sell') ?? false));
+  journal.add(
+    ctx,
+    `Verkauft: ${formatEuro(offer.price)} von den Statthaltern, ${formatEuro(offer.rotterdamPrice)} an Jansen. Dir bleiben ${formatEuro(offer.rest)}.`,
+    'good',
+  );
+  ctx.emit('business.sold', {
+    price: offer.price,
+    rotterdamPrice: offer.rotterdamPrice,
+    dailyProfit: offer.dailyProfit,
+    cities,
+  });
+  if (c.present !== HARBOR_CITY) {
+    const travel = travelTo(ctx, HARBOR_CITY);
+    if (!travel.ok) {
+      // Kommt nicht vor (vorher geprüft); zur Sicherheit direkt in Rotterdam.
+      c.present = HARBOR_CITY;
+      switchCity(ctx, HARBOR_CITY);
+    }
+  }
+  messages.send(ctx, { contact, text: SALE_TEXTS.done });
+  updateRank(ctx);
+  return { ok: true, data: { ...offer } };
+}
+
+/** Boss von Deutschland: Jansen ruft an (einmal), danach erinnert er, bis du verkaufst. */
+function tickSale(ctx: Ctx): void {
+  const sale = ctx.state.modules.city.sale;
+  if (sale.status === 'sold') return;
+  if (sale.status === 'none') {
+    if (isBossOfGermany(ctx.state)) {
+      sale.status = 'scheduled';
+      sale.callAt = ctx.now + SALE_CALL_DELAY;
+    }
+    return;
+  }
+  if (sale.callAt === null || ctx.now < sale.callAt) return;
+  if (sale.status === 'scheduled') {
+    if (activeEncounters(ctx.state).length === 0 && !cityCalling(ctx.state)) placeSaleCall(ctx);
+  } else if (sale.status === 'later') {
+    sale.callAt = ctx.now + SALE_REMINDER_DAYS * MINUTES_PER_DAY;
+    const contact = jansenContact(ctx.state);
+    messages.retractWhere(ctx, (m) => m.contactId === contact.id && (m.options?.some((o) => o.id === 'sell') ?? false));
+    messages.send(ctx, { contact, text: fill(SALE_TEXTS.reminder, saleVars(ctx.state)), options: saleOptions() });
+  }
+}
+
 const FIRST_RANK: PlayerRank = { id: PLAYER_RANKS[0].id, title: PLAYER_RANKS[0].title, score: 0 };
 
 /** Dein Rang (der höchste bisher). */
@@ -1116,6 +1456,7 @@ export function currentRank(state: GameState): PlayerRank {
     unlocked: citiesUnlocked(state),
     name: cityName,
     minGermany: GERMANY_MIN_CITIES,
+    sold: isBusinessSold(state),
   });
 }
 
@@ -1145,10 +1486,12 @@ function tick(ctx: Ctx): void {
   const travel = state.modules.city.travel;
   if (travel && ctx.now >= travel.arrivesAt) arrive(ctx);
   tickOffers(ctx);
+  tickSale(ctx);
 }
 
 function initialState(): CityState {
   return {
+    sale: { status: 'none', callAt: null, sold: null },
     offers: {},
     offerFrom: null,
     rounds: [],
@@ -1171,7 +1514,7 @@ function playerOnly(meta: CommandMeta): CommandResult | null {
 
 export default defineModule({
   id: 'city',
-  version: 5,
+  version: 6,
   dependsOn: ['territory', 'hierarchy'],
   init: () => initialState(),
   tickEvery: 5,
@@ -1185,6 +1528,8 @@ export default defineModule({
     'city.unlock': (ctx, { cityId }, meta) =>
       meta.actor === 'system' ? unlockCity(ctx, cityId) : { ok: false, reason: 'Städte werden im Spiel frei.' },
     'city.travel': (ctx, { cityId }, meta) => playerOnly(meta) ?? travelTo(ctx, cityId),
+    'city.sell': (ctx, _payload, meta) => playerOnly(meta) ?? sellBusiness(ctx),
+    'city.postponeSale': (ctx, _payload, meta) => playerOnly(meta) ?? postponeSale(ctx),
   },
   on: {
     'campaign.won': (ctx, { cityId }) => {
@@ -1250,7 +1595,7 @@ export default defineModule({
     },
     // Version 5 (Review Auftrag 36): Startgeld nur einmal pro Stadt; leere Runden (keine Stadt war frei) zählen nicht
     // und kommen nach; „Boss von Deutschland“ erst mit GERMANY_MIN_CITIES Städten (zu früh vergeben: neu bestimmen).
-    5: (old: CityStateV4): CityState => {
+    5: (old: CityStateV4): CityStateV5 => {
       const handedOver = old.unlocked.some((id) => id !== FIRST_CITY);
       const rounds = old.rounds.filter((id) => id === old.offerFrom || (id === FIRST_CITY && handedOver));
       return {
@@ -1260,5 +1605,8 @@ export default defineModule({
         rank: old.rank.id === 'bossGermany' ? { ...FIRST_RANK, at: old.rank.at, quiet: true } : old.rank,
       };
     },
+    // Version 6 (Auftrag 40): Verkauf des Geschäfts. Alte Stände haben nicht verkauft; wer schon Boss von Deutschland
+    // ist, bekommt den Anruf von Jansen beim nächsten Schritt.
+    6: (old: CityStateV5): CityState => ({ ...old, sale: { status: 'none', callAt: null, sold: null } }),
   },
 });

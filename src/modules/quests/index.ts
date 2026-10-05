@@ -30,7 +30,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, isCityUnlocked, liveVeedel } from '../city';
+import { activeCity, isBusinessSold, isCityUnlocked, liveVeedel } from '../city';
 import { DEFAULT_WAREHOUSE, getWarehouses, productName, store, type Warehouse } from '../goods';
 import { addHeat, operationTier } from '../police';
 import { changeReputation } from '../reputation';
@@ -401,6 +401,12 @@ function trustSupplier(ctx: Ctx, cityId: string): string | null {
 /** Montag 8 Uhr: drei Angebote von verschiedenen Figuren für die aktive Stadt. */
 function offerContracts(ctx: Ctx): void {
   const c = ctx.state.modules.quests.contracts;
+  // Hafen-Phase (Auftrag 40): Die Wochenverträge sind in den Bestellungen der Kunden aufgegangen (trade).
+  if (isBusinessSold(ctx.state)) {
+    retractOffers(ctx);
+    c.offers = [];
+    return;
+  }
   const cityId = activeCity(ctx.state);
   const tier = operationTier(ctx.state, cityId).index;
   const deadline = nextMonday(ctx.now);

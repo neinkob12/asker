@@ -317,7 +317,9 @@ doch gebraucht wird.
 
 ## Offene Punkte
 
-1. **Verkaufsformel.** Vorschlag oben (90 Tagesgewinne, Rotterdam kostet drei Viertel). Entscheidung steht aus.
+1. **Verkaufsformel.** In Auftrag 40 umgesetzt: 90 Tagesgewinne (Schnitt der letzten sieben Tage, mindestens 1 Mio.),
+   Rotterdam kostet 65 % davon (mit drei Vierteln reichte das Startkapital im Bot nicht für die ersten Wochen; Werte in
+   `city/config.ts`). Entscheidung des Spielers steht noch aus.
 2. **Frankfurt** ja oder nein. Bis dahin gilt: vier Städte, Frankfurt optional.
 3. **Fremde Städte** in Deutschland und Europa: Vorschlag oben, Liste darf kleiner sein.
 4. **Edibles, Vapes und Öl** im Ausland: Vorschlag ein Labor in den Niederlanden als Verarbeitung in Phase 4, oder weiter

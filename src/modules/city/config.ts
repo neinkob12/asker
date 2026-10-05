@@ -130,6 +130,14 @@ export const SLEEP_FACTOR_MIN = 0.85;
 export const SLEEP_FACTOR_MAX = 1.15;
 
 /**
+ * Untergrenze des Schnitts im Schlaf (Auftrag 40, Etappe 0): plan.md sagt „hin und wieder ein kleines Minus durch eine
+ * Razzia, nichts Schlimmes“. Ein Statthalter führt die Stadt sparsam; lief sie live mit Verlust (München als teure Stadt,
+ * die letzten Tage nach dem Übernehmen), bucht sie im Schlaf mindestens 0. Ein Minus gibt es nur durch eine Razzia, und
+ * die nur bei einem Schnitt über 0 (der Verlust ist ein Anteil davon): Bei einem Schnitt ≤ 0 bucht der Tag 0, ohne Razzia.
+ */
+export const SLEEP_AVERAGE_FLOOR = 0;
+
+/**
  * Startgeld (Auftrag 36): Bei der Übergabe gibt dir der Statthalter so viele Tagesgewinne der Stadt mit (Schnitt der
  * letzten live gespielten Tage, wie im Schlaf), als Umbuchung aus der Kasse der Stadt, nicht als Gewinn (sein Anteil
  * bleibt davon unberührt). Stellschraube für das Tempo der späteren Städte, zusammen mit FULL_POWER_SHARE
@@ -149,6 +157,18 @@ export const START_MONEY_MIN_BY_CITY: Readonly<Record<string, number>> = {
   muenchen: 60_000,
   frankfurt: 48_000,
 };
+
+/**
+ * Faktor auf das Mindest-Startgeld nach der Zahl der Städte, die du schon komplett hast (Auftrag 40, Etappe 0; Index =
+ * Zahl, darüber der letzte Wert): Wer mit mehr Städten im Rücken ankommt, bringt mehr mit. Die zweite Stadt bleibt bei 1.
+ */
+export const START_MONEY_FACTOR_BY_CITIES_DONE: readonly number[] = [1, 1, 1.25, 1.5, 1.75];
+
+/**
+ * Was im Schlaf nicht in den Schnitt zählt (Auftrag 36 und 40): einmalige Ausgaben für Wachstum. Der Statthalter baut
+ * nicht weiter aus und heuert nicht ständig neu an; das Ergebnis einer schlafenden Stadt ist kein Dauerverlust.
+ */
+export const SLEEP_EXCLUDED_CATEGORIES: readonly ('expansion' | 'hiring')[] = ['expansion', 'hiring'];
 
 /**
  * Boss von Deutschland erst mit so vielen kompletten Städten (plan.md: alle spielbaren, Frankfurt optional, also
@@ -319,3 +339,51 @@ export const CITY_OFFERS: Readonly<Record<string, CityOffer>> = {
     ],
   },
 };
+
+// --- Boss von Deutschland und Verkauf (Auftrag 40) ---
+
+/**
+ * Verkaufspreis des Geschäfts: so viele Tagesgewinne aller deiner Städte (Schnitt der letzten SALE_AVERAGE_DAYS
+ * abgeschlossenen Tage aus der Kasse, das Ergebnis der Städte vor dem Anteil der Statthalter und ohne Ausbau). Die
+ * Statthalter zahlen dich damit aus. Begründung und Messung: docs/architektur.md, Abschnitt „Verkauf und Hafen“.
+ */
+export const SALE_PROFIT_DAYS = 90;
+export const SALE_AVERAGE_DAYS = 7;
+/** Untergrenze des Verkaufspreises (falls die letzten Tage schlecht liefen, z.B. viele Razzien). */
+export const SALE_PRICE_MIN = 1_000_000;
+/**
+ * Rotterdam (Liegeplatz, Halle, Leute und Kunden von Jansen) kostet diesen Anteil des Verkaufspreises. Mit dem Bot
+ * eingestellt (Auftrag 40): Bei drei Vierteln blieb die erste Woche im Hafen so knapp, dass Bestellungen platzten; mit
+ * 0,65 bleibt etwa ein Monat Tagesgewinn als Startkapital, genug für die ersten Container, nicht für alle Kunden.
+ */
+export const ROTTERDAM_SHARE = 0.65;
+/** So viele Spielminuten nach „Boss von Deutschland“ ruft Jansen an. */
+export const SALE_CALL_DELAY = 6 * 60;
+/** „Noch nicht“: So viele Spieltage später meldet er sich wieder. */
+export const SALE_REMINDER_DAYS = 3;
+/** Der Ort im Ausland, an dem die Hafen-Phase spielt. */
+export const HARBOR_CITY = 'rotterdam';
+
+/** Jansens Anruf, Zeile für Zeile ({price} Verkaufspreis, {rotterdam} sein Preis, {rest} was dir bleibt). */
+export const SALE_CALL_LINES: readonly string[] = [
+  'Jansen hier. Rotterdam. Du kennst mich, ich hab dir Container in den Niehler Hafen geschickt.',
+  'Ganz Deutschland, hab ich gehört. Respekt. Das hat vor dir keiner geschafft.',
+  'Ich hör auf. Vierzig Jahre Hafen reichen. Mein Liegeplatz, meine Halle, meine Leute, meine Kunden: alles zu haben.',
+  'Deine Statthalter wollen dich auszahlen. {price} für alles, was du in Deutschland hast. Sie laufen sowieso allein.',
+  'Ich will {rotterdam}. Dann bleiben dir {rest}, und du bist Lieferant für alle. Auch für deine alten Leute.',
+  'Kein Spot mehr, keine Läufer. Container, Zoll, Kunden. Großes Geschäft.',
+  'Also. Kommst du nach Rotterdam?',
+];
+
+export const SALE_TEXTS = {
+  summary: 'Anruf aus Rotterdam',
+  missed: 'Jansen, Rotterdam. Ich ruf nochmal an. Geh ran, es lohnt sich.',
+  gaveUp: 'Mein Angebot steht. Schreib mir, wenn du so weit bist.',
+  accept: 'Verkaufen und nach Rotterdam',
+  later: 'Noch nicht',
+  reminder: 'Jansen hier. Rotterdam wartet. Deine Statthalter auch. {price} für Deutschland, {rotterdam} für mich.',
+  laterReply: 'Gut. Überleg es dir. Ich meld mich in ein paar Tagen.',
+  done: 'Abgemacht. Fahr rüber, ich zeig dir die Halle. Ab Montag rufen die ersten Kunden an.',
+  statthalter:
+    'Wir haben gerechnet, {name} und die anderen Statthalter. {price} für alles, bar. Du hast es aufgebaut, wir führen es weiter.',
+} as const;

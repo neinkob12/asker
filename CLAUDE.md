@@ -93,6 +93,16 @@ Auftrag 39 (Frankfurt, optional): fünfte spielbare Stadt nach Checkliste, Dreh 
 `Supplier.customs` und Weg `'air'`, `LAUNDERING_CAPACITY_BY_CITY`, `CityDef.offerRank`). Gang-Stimmen einer neuen Stadt in
 eigener Datei (`gangs/texts-frankfurt.ts`). Würfe, die für noch nicht freie Städte nichts bewirken, unterbleiben (sonst
 verschiebt jede neue Stadt die Kölner Würfelfolge, siehe `market.stepIndex`).
+Auftrag 40 (Verkauf und Hafen): Sind alle spielbaren Städte komplett (`isBossOfGermany`), ruft Jansen an; `city.sell`
+verkauft das Geschäft an die Statthalter (Preis `SALE_PROFIT_DAYS` Tagesgewinne, Rotterdam `ROTTERDAM_SHARE` davon) und
+fährt dich nach Rotterdam (Ort im Ausland: `ABROAD_CITIES`, `CityDef.abroad`, ohne Veedel). Ereignis `business.sold`: Module
+räumen ihren Teil selbst auf (logistics Routen, laundering vierter Weg). Danach `isBusinessSold`: keine Kasse pro Stadt,
+kein Schlaf, Rang Importeur. Neues Modul `trade`: Kunden (alte Organisationen mit Abnahmevertrag, je Stadt eine Gang,
+fremde Städte als Daten), eine Bestellung pro Kunde und Woche mit Waren (`OrderItem`, Teillieferung), Konkurrenz aus
+`suppliers.rivalOffers`, Container bei Produzenten (`trade/data.ts`), Zoll-Heat pro Hafen in `police` (`customsHeat`,
+`customsArrival`), Häfen als Daten in `logistics` (`HARBOR_PORTS`), Lkw nur an einem Ort im Ausland (`harborOnly`). Eine App
+kann zeitweise eine andere im Dock ersetzen (`registerPhoneApp({ dock: { replaces, when } })`). Ein Ort ohne Veedel darf
+nichts kaputt machen: Code, der `liveVeedel(state)[0]` o. ä. nimmt, braucht einen Fall für die leere Liste.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
@@ -159,6 +169,11 @@ export default defineModule({
 - **Lesen mit `state`, schreiben mit `ctx`.** Öffentliche Lese-Funktionen nehmen `state: GameState`,
   schreibende nehmen `ctx: Ctx` (hat `emit`, `dispatch`, `random`, `nextId` …).
 - **Zufall nur über `ctx.random()`, `ctx.chance()`, `ctx.pick()`, `ctx.randomInt()`**, nie `Math.random()` oder `Date`.
+  Dokumentierte Ausnahme (Auftrag 40): Würfe fest aus Seed und Schlüssel mit `keyedRandom(key)`, `keyedDice(key)` bzw.
+  `cityDayDice(seed, zweck, stadt, tag)` aus dem Kern (`src/core/rng.ts`), deterministisch, aber ohne Zustand im
+  Spielstand. Dafür, dass ein Wurf die Würfelfolge der Module nicht verschiebt (Eigenschaften der Leute) und für Würfe
+  pro Stadt (Marktindex, Rabatt-Aktionen, Marktereignisse): Was eine Stadt würfelt, hängt nicht davon ab, welche und
+  wie viele Städte frei sind.
 - Zustand nur als JSON-Daten (keine Klassen, Maps, Funktionen, `undefined` in Arrays).
 - Befehle kommen vom Spieler, aus Handy-Antworten oder von Leutnants (`ctx.dispatch(cmd, { actor: 'staff:<id>' })`).
 - Ereignisse werden am Ende des Schritts bzw. Befehls in fester Reihenfolge zugestellt.

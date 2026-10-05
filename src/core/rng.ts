@@ -37,3 +37,53 @@ export function createRng(seed: number): () => number {
     return value;
   };
 }
+
+/**
+ * Zufallsfolge fest aus einem Schlüssel (gleicher Schlüssel = gleiche Folge), ohne Zustand im Spielstand. Dokumentierte
+ * Ausnahme von „nur ctx.random()“: deterministisch, aber unabhängig von der Würfelfolge der Module. Für Würfe, die
+ * Spielstände nicht verschieben sollen (Eigenschaften der Leute, Auftrag 34) und für Würfe pro Stadt (Auftrag 40):
+ * Was eine Stadt würfelt, hängt dann nicht davon ab, welche und wie viele andere Städte frei sind.
+ */
+export function keyedRandom(key: string): () => number {
+  let s = seedStream(0x5eed, key);
+  return () => {
+    const [value, next] = rngNext(s);
+    s = next;
+    return value;
+  };
+}
+
+/** Würfel mit denselben Helfern wie `Ctx` (random, randomInt, chance, pick) über einer festen Folge. */
+export interface Dice {
+  random(): number;
+  /** Ganze Zahl von min bis max (beide inklusive). */
+  randomInt(min: number, max: number): number;
+  chance(p: number): boolean;
+  pick<T>(items: readonly T[]): T;
+}
+
+/** Würfel aus einer Zufallsfunktion. */
+export function diceFrom(random: () => number): Dice {
+  return {
+    random,
+    randomInt: (min, max) => min + Math.floor(random() * (max - min + 1)),
+    chance: (p) => random() < p,
+    pick: (items) => {
+      if (items.length === 0) throw new Error('pick: leere Liste');
+      return items[Math.floor(random() * items.length)];
+    },
+  };
+}
+
+/** Würfel fest aus einem Schlüssel (`keyedRandom`). */
+export function keyedDice(key: string): Dice {
+  return diceFrom(keyedRandom(key));
+}
+
+/**
+ * Würfel pro (Seed, Stadt, Tag, Zweck), z.B. der Tagesschritt des Marktindex einer Stadt (Auftrag 40, Etappe 0). Jede
+ * Stadt würfelt so für sich, egal welche und wie viele Städte frei sind; neue Zwecke verschieben keine alten Würfe.
+ */
+export function cityDayDice(seed: number, purpose: string, cityId: string, day: number): Dice {
+  return keyedDice(`${purpose}:${seed}:${cityId}:${day}`);
+}
