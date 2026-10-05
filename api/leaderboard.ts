@@ -85,6 +85,8 @@ export const RANK_TITLES: readonly (string | RegExp)[] = [
   'Boss von Deutschland',
   'Importeur',
   'Produzent',
+  // Auftrag 42: Titel, sobald jeder Kunde in Europa aus eigener Produktion versorgt wird (Wert 80).
+  'Europa',
 ];
 
 /** Platz eines Titels in RANK_TITLES, null für einen unbekannten Titel. */

@@ -3,11 +3,19 @@
 import { describe, expect, it } from 'vitest';
 import { loadSimulation, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { playableCities } from '../city';
+import { playableCities, playerRank } from '../city';
 import { activeEncounters, autoResolveEncounter } from '../encounters';
 import { getStaffMember } from '../staff';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
-import { containerRisk, getShipments, originStock, portStock, shippingMinutes, tradeStats } from '../trade';
+import {
+  containerRisk,
+  EUROPE_CITIES,
+  getShipments,
+  originStock,
+  portStock,
+  shippingMinutes,
+  tradeStats,
+} from '../trade';
 import { allVeedel } from '../veedel';
 import { CALL_AFTER_WEEKS, CALL_MIN_REVENUE, DRY_DAYS, GROW_DAYS, PACK_DAYS, PRESS_DAYS } from './config';
 import {
@@ -284,6 +292,36 @@ describe('Ziele (Auftrag 42, Etappe 3)', () => {
     expect(growGoals(sim.state).producer).toBe(true);
     expect(growGoals(sim.state).europe).toBe(false);
     expect(eventsOfType(events, 'grow.goalReached').map((e) => e.payload.goal)).toEqual(['producer']);
+    // Der Rang folgt zur vollen Stunde (city), und er bleibt.
+    sim.advance(60);
+    expect(playerRank(sim.state).title).toBe('Produzent');
+    expect(playerRank(sim.state).score).toBe(70);
+    // Europa: alle Kunden aus eigener Produktion, auch jede Stadt in Europa.
+    for (const city of EUROPE_CITIES) {
+      if (!customers.some((c) => c.europeId === city.id)) {
+        customers.push({
+          ...customers[0],
+          id: `europe:${city.id}`,
+          kind: 'europe',
+          europeId: city.id,
+          name: city.name,
+        });
+      }
+    }
+    for (const c of customers) {
+      ctx.emit('trade.delivered', {
+        orderId: 0,
+        customerId: c.id,
+        amount: 10_000,
+        revenue: 1,
+        late: false,
+        ownAmount: 10_000,
+      });
+    }
+    sim.advance(2 * 60);
+    expect(growGoals(sim.state).europe).toBe(true);
+    expect(playerRank(sim.state).title).toBe('Europa');
+    expect(playerRank(sim.state).score).toBe(80);
   });
 });
 

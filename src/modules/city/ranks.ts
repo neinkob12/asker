@@ -1,8 +1,9 @@
 // Ränge des Spielers (Auftrag 36): die Stufen des Bogens als Titel, ohne Boni. Kleindealer, Händler und Großhändler
 // sind die Stufen der Polizei (police.operationTier, die höchste über alle deine Städte), Boss von Köln der Meilenstein
 // (Mehrheit der Kölner Veedel), Boss von <Stadt> je weitere komplette Stadt, Boss von Deutschland, wenn alle
-// spielbaren Städte komplett sind. Importeur und Produzent sind Platzhalter für die Aufträge 40 und 42 (reached liefert
-// dort erst etwas). Ein Rang geht nie verloren: city merkt sich den höchsten (CityState.rank).
+// spielbaren Städte komplett sind, Importeur nach dem Verkauf (Auftrag 40), Produzent und der Titel Europa mit den Zielen
+// der eigenen Produktion (Auftrag 42, grow.growGoals). Ein Rang geht nie verloren: city merkt sich den höchsten
+// (CityState.rank).
 
 import type { GameState } from '../../core';
 import { operationTier } from '../police';
@@ -29,7 +30,9 @@ export const PLAYER_RANKS: readonly PlayerRankDef[] = [
   { id: 'bossCity', title: 'Boss von {city}', kind: 'city', hint: 'Eine weitere Stadt komplett übernommen.' },
   { id: 'bossGermany', title: 'Boss von Deutschland', kind: 'germany', hint: 'Alle Städte gehören dir.' },
   { id: 'importer', title: 'Importeur', kind: 'later', hint: 'Lieferant für alle, vom Hafen aus.' },
-  { id: 'producer', title: 'Produzent', kind: 'later', hint: 'Eigene Ware aus eigener Produktion.' },
+  { id: 'producer', title: 'Produzent', kind: 'later', hint: 'Die Hälfte deiner Lieferungen kommt aus eigener Produktion.' },
+  // Auftrag 42: der Titel am Ende des Bogens (danach geht es offen weiter).
+  { id: 'europe', title: 'Europa', kind: 'later', hint: 'Jeder Kunde in Europa bekommt Ware aus deinen Fincas.' },
 ];
 
 /** Die Stadt, deren Mehrheit "Boss von Köln" macht. */
@@ -56,6 +59,9 @@ export interface RankInput {
   minGermany: number;
   /** Geschäft verkauft (Auftrag 40): Importeur, Lieferant für alle vom Hafen aus. */
   sold?: boolean;
+  /** Ziele der eigenen Produktion (Auftrag 42): Produzent, Europa. */
+  producer?: boolean;
+  europe?: boolean;
 }
 
 /**
@@ -63,12 +69,14 @@ export interface RankInput {
  * der Titel nennt die letzte in der Reihenfolge, in der du sie freigeschaltet hast.
  */
 export function reachedRank(state: GameState, input: RankInput): PlayerRank {
-  const { cities, unlocked, name, minGermany, sold } = input;
+  const { cities, unlocked, name, minGermany, sold, producer, europe } = input;
   const at = (id: string) => PLAYER_RANKS.findIndex((r) => r.id === id);
   const make = (id: string, extra = 0, city?: string): PlayerRank => {
     const def = PLAYER_RANKS[at(id)];
     return { id, title: def.title.replace('{city}', city ?? ''), score: at(id) * STEP + extra };
   };
+  if (sold && europe) return make('europe');
+  if (sold && producer) return make('producer');
   if (sold) return make('importer');
   const complete = cities.filter((c) => campaignProgress(state, c).complete);
   if (complete.length >= minGermany && complete.length === cities.length) return make('bossGermany');

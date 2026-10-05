@@ -75,6 +75,7 @@ import {
   startPackStaff,
 } from '../hierarchy';
 import { getRoutes, getTrips } from '../logistics';
+import { growGoals } from '../grow';
 import { restHeat } from '../police';
 import { autobahnRefs, interCityMinutes } from '../roads';
 import { getSpot } from '../spots';
@@ -1460,6 +1461,7 @@ export function currentRank(state: GameState): PlayerRank {
     name: cityName,
     minGermany: GERMANY_MIN_CITIES,
     sold: isBusinessSold(state),
+    ...growGoals(state),
   });
 }
 
