@@ -6,8 +6,17 @@ import { createTestGame } from '../../core/testing';
 import { getAllSpots, getSpots, spotCity } from '../spots';
 import { activeRunnerAt, enlist, generateProfile, getStaffMember, type StaffMember } from '../staff';
 import { neighborsOf } from '../veedel';
-import { CAPO_DEMAND_FACTOR, LIEUTENANT_DEMAND_BY_SPOTS } from './config';
-import { canBeCapo, capoCandidates, capoOf, getCapos, isCapo, REPORT_TIPS, reportTipFor } from './index';
+import { CAPO_DEMAND_FACTOR, LIEUTENANT_DEMAND_BY_SPOTS, RIGHT_HAND_DEMAND } from './config';
+import {
+  absenceHandled,
+  canBeCapo,
+  capoCandidates,
+  capoOf,
+  getCapos,
+  isCapo,
+  REPORT_TIPS,
+  reportTipFor,
+} from './index';
 
 function game(): Simulation {
   const sim = createTestGame();
@@ -189,5 +198,46 @@ describe('Rat im Tagesbericht', () => {
     sim.advance(1440 * 2);
     const report = sim.state.modules.hierarchy.rightHands.koeln?.lastReport;
     expect(report?.tip ?? '').toMatch(/^Mein Rat:/);
+  });
+});
+
+describe('Review: Capo und Rechte Hand', () => {
+  it('ein Capo, der Rechte Hand wird, behält ihren Lohnanspruch über Mitternacht', () => {
+    const sim = game();
+    const d = district(sim);
+    const capo = recruit(sim, 6);
+    const a = recruit(sim, 4);
+    appoint(sim, capo, d.capoSpots);
+    appoint(sim, a, d.nearA);
+    const b = recruit(sim, 4);
+    appoint(sim, b, d.nearB);
+    sim.dispatch({ type: 'hierarchy.appointCapo', payload: { staffId: capo.id, lieutenantIds: [a.id, b.id] } });
+    const m = getStaffMember(sim.state, capo.id);
+    if (m) m.stats.loyalty = 80;
+    expect(sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: capo.id } }).ok).toBe(true);
+    expect(isCapo(sim.state, capo.id)).toBe(false);
+    expect(capoOf(sim.state, a.id)).toBeNull();
+    sim.advance(1440);
+    expect(getStaffMember(sim.state, capo.id)?.demand).toBe(RIGHT_HAND_DEMAND);
+  });
+
+  it('wird ein Leutnant unter einem Capo festgenommen, fragt das Handy (der Capo regelt nur sein Team)', () => {
+    const sim = game();
+    const d = district(sim);
+    const capo = recruit(sim, 6);
+    const a = recruit(sim, 4);
+    appoint(sim, capo, d.capoSpots);
+    appoint(sim, a, d.nearA);
+    sim.dispatch({ type: 'hierarchy.appointCapo', payload: { staffId: capo.id, lieutenantIds: [a.id] } });
+    const lt = getStaffMember(sim.state, a.id);
+    if (lt) lt.status = 'jailed';
+    expect(absenceHandled(sim.state, a.id)).toBe(false);
+  });
+
+  it('der Rat „Leute ohne Einsatz“ zählt in der Stadt des Berichts', () => {
+    const sim = game();
+    for (let i = 0; i < 4; i++) recruit(sim, 1);
+    expect(reportTipFor(sim.state, 'koeln')?.tip.id).toBe('idle');
+    expect(reportTipFor(sim.state, 'hamburg')?.tip.id).not.toBe('idle');
   });
 });

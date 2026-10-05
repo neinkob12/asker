@@ -75,6 +75,23 @@ describe('Stammabnehmer', () => {
     }
   });
 
+  it('platzt ein vorab bezahlter Deal, geht die Vorkasse zurück', () => {
+    const sim = game();
+    setTrust(sim, 'pitter', 55);
+    const before = sim.state.wallet.dirty;
+    const order = deal(sim, 'pitter');
+    expect(sim.state.wallet.dirty).toBe(before + Math.round(order.price / 2));
+    const o = getOrder(sim.state, order.id);
+    if (o) {
+      o.courierId = 'weg';
+      o.deliveredBy = 'rightHand';
+    }
+    sim.ctx('staff').emit('staff.left', { staffId: 'weg', reason: 'quit' });
+    sim.advance(1);
+    expect(getOrder(sim.state, order.id)?.status).toBe('failed');
+    expect(sim.state.wallet.dirty).toBe(before);
+  });
+
   it('zweimal hängengelassen: der Dealer geht zu einer Gang und kommt später wieder', () => {
     const sim = game();
     for (let i = 0; i < 2; i++) {

@@ -96,7 +96,13 @@ function findOrder(ctx: Ctx, orderId: number): Order | undefined {
 function finish(ctx: Ctx, order: Order, status: 'done' | 'declined' | 'expired' | 'failed'): void {
   order.status = status;
   order.finishedAt = ctx.now;
-  // Auftrag 34: Stammabnehmer merken sich, wie es lief.
+  // Auftrag 34: Platzt ein vorab bezahlter Deal, bekommt der Dealer seine Vorkasse zurück (sonst verlöre er Geld und
+  // Vertrauen zugleich). Gebucht gegen den Großhandel, so bleibt der Umsatz in der Kasse ehrlich.
+  if (status === 'failed' && order.prepaid && order.prepaid > 0) {
+    const back = wallet.lose(ctx, order.prepaid, 'dirty', `Vorkasse zurück an ${order.contactName}`, 'sales.wholesale');
+    order.prepaid = Math.max(0, order.prepaid - back);
+  }
+  // Stammabnehmer merken sich, wie es lief.
   if (order.kind === 'wholesale') onDealerOrderFinished(ctx, order.contactId, status);
   ctx.emit('order.finished', { orderId: order.id, kind: order.kind, status });
 }

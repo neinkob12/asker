@@ -184,8 +184,14 @@ export function dismissCapo(ctx: Ctx, staffId: string, quiet = false): CommandRe
   const m = getStaffMember(ctx.state, staffId);
   const p = post(ctx.state, staffId);
   if (m && isEmployed(ctx.state, staffId)) {
-    const i = Math.min(p?.spotIds.length ?? 0, LIEUTENANT_DEMAND_BY_SPOTS.length - 1);
-    setDemand(ctx, staffId, p ? LIEUTENANT_DEMAND_BY_SPOTS[i] : 1);
+    // Den Anspruch nur mit Posten zurücksetzen: Ohne Posten ist er schon etwas anderes (z.B. Rechte Hand) und hat dort
+    // seinen eigenen Anspruch.
+    if (p)
+      setDemand(
+        ctx,
+        staffId,
+        LIEUTENANT_DEMAND_BY_SPOTS[Math.min(p.spotIds.length, LIEUTENANT_DEMAND_BY_SPOTS.length - 1)],
+      );
     if (!quiet) {
       addLoyalty(ctx, staffId, CAPO_DEMOTION_LOYALTY);
       addCareer(ctx, staffId, 'Nicht mehr Capo.');

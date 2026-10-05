@@ -267,4 +267,21 @@ describe('recruiting: Spielstände aus dem Fundament', () => {
     expect(getCandidate(loaded.state, keep.id)).toBeDefined();
     expect(loaded.state.moduleVersions.recruiting).toBe(4);
   });
+
+  it('Version 3 → 4 (Auftrag 34): Bewerber ohne Eigenschaften bekommen zwei bis drei, bei jedem Laden dieselben', () => {
+    const sim = quietGame();
+    const state = structuredClone(sim.state) as GameState;
+    const candidates = (state.modules.recruiting as { candidates: { id: string; traits?: string[] }[] }).candidates;
+    for (const c of candidates) delete c.traits;
+    state.moduleVersions.recruiting = 3;
+    const load = () =>
+      loadSimulation(parseSaveFile(serializeSave(createSaveFile(structuredClone(state), 'alt', 0))).state, sim.modules);
+    const one = load();
+    const two = load();
+    for (const c of getPool(one.state)) {
+      expect(c.traits.length).toBeGreaterThanOrEqual(2);
+      expect(c.traits.length).toBeLessThanOrEqual(3);
+      expect(getCandidate(two.state, c.id)?.traits).toEqual(c.traits);
+    }
+  });
 });

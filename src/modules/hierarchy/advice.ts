@@ -6,7 +6,7 @@ import { type Ctx, formatEuro, type GameState, texts } from '../../core';
 import { lieutenantResult } from '../finance';
 import { activeWars, ceasefireCost, getGang, getGangStatus, getGangs, isAtPeace } from '../gangs';
 import { getStock, usagePerDay } from '../goods';
-import { freeStaff, getStaff, getStaffMember } from '../staff';
+import { getStaff, getStaffMember } from '../staff';
 import { canBeCapo, getCapos } from './capo';
 import { CAPO_ADVICE_LIEUTENANTS } from './config';
 
@@ -120,8 +120,11 @@ export const REPORT_TIPS: readonly ReportTip[] = [
   {
     id: 'idle',
     priority: 50,
-    test: (state) => {
-      const idle = freeStaff(state, 'runner').length + freeStaff(state, 'security').length;
+    test: (state, cityId) => {
+      // In der Stadt des Berichts (auch der schlafenden eines Statthalters), nicht in der aktiven.
+      const idle = getStaff(state, { cityId, status: 'active' }).filter(
+        (m) => (m.role === 'runner' || m.role === 'security') && !m.assignment,
+      ).length;
       return idle >= 3 ? { count: idle } : null;
     },
     texts: [

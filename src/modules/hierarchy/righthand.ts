@@ -52,7 +52,7 @@ import {
 import { campaignProgress } from '../territory';
 import { veedelCity, veedelName } from '../veedel';
 import { reportTip } from './advice';
-import { capoInCharge } from './capo';
+import { capoInCharge, cleanupCapos, dismissCapo, isCapo } from './capo';
 import {
   DEFAULT_RIGHT_HAND_SETTINGS,
   DEMOTION_LOYALTY,
@@ -331,7 +331,10 @@ export function absenceHandled(state: GameState, staffId: string): boolean {
   const lead = teamLeadOf(state, staffId);
   if (lead && lead !== staffId && handlesAbsence(state, lead, staffId)) return true;
   // Auftrag 34: Fällt ein Leutnant aus, regelt sein Capo das Team (die Rechte Hand spricht nur mit dem Capo).
-  if (lead && capoInCharge(state, lead) && getStaffMember(state, lead)?.status !== 'active') return true;
+  // Der Leutnant selbst (teamLeadOf gibt ihn selbst zurück) zählt nicht: Für seine eigene Festnahme fragt das Handy.
+  if (lead && lead !== staffId && capoInCharge(state, lead) && getStaffMember(state, lead)?.status !== 'active') {
+    return true;
+  }
   const m = getStaffMember(state, staffId);
   return !!m && rightHandCovers(state, m);
 }
@@ -394,7 +397,10 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
   if (h.rightHands[cityId]) dismissRightHand(ctx, cityId);
   // Ein Leutnant, der aufsteigt, gibt seine Spots ab.
   if (isLieutenant(ctx.state, staffId)) {
+    // Ein Capo, der aufsteigt, ist auch kein Capo mehr (Auftrag 34), seine Leutnants sind frei.
+    if (isCapo(ctx.state, staffId)) dismissCapo(ctx, staffId, true);
     delete h.posts[staffId];
+    cleanupCapos(ctx);
     ctx.emit('hierarchy.dismissed', { staffId, veedelId: '' });
   }
   // Ein Leutnant, der sie angeheuert hat, darf sie nicht mehr als sein Team behandeln (und bei Ausfall entlassen).
@@ -759,7 +765,7 @@ function handleAbsences(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
     const lead = teamLeadOf(ctx.state, m.id);
     if (lead && lead !== m.id && handlesAbsence(ctx.state, lead, m.id)) continue;
     // Auftrag 34: Im Bezirk eines Capos spricht sie nur mit ihm, er kümmert sich.
-    if (lead && capoInCharge(ctx.state, lead)) continue;
+    if (lead && lead !== m.id && capoInCharge(ctx.state, lead)) continue;
     // Wartet der Leutnant auf die Rückkehr, entscheidest du (die Frage kam aufs Handy): nichts hinter seinem Rücken.
     if (waitsForReturn(ctx.state, m.id)) continue;
     const lawyer = bonusProvider(ctx.state, 'bailDiscount');

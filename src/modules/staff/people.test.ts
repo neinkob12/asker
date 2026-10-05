@@ -86,7 +86,7 @@ describe('Eigenschaften', () => {
 
   it('Version 6 → 7: alte Leute bekommen Eigenschaften fest aus der ID', () => {
     const sim = quietGame();
-    const a = recruit(sim, 'runner');
+    const a = recruit(sim, 'runner', { traits: [] });
     const raw = structuredClone(sim.state) as unknown as {
       moduleVersions: Record<string, number>;
       modules: { staff: { members: Partial<StaffMember>[]; relations?: unknown; stories?: unknown } };
@@ -101,6 +101,8 @@ describe('Eigenschaften', () => {
     expect(traits.length).toBeGreaterThanOrEqual(2);
     expect(getStaffMember(two.state, a.id)?.traits).toEqual(traits);
     expect(one.state.modules.staff.relations).toEqual([]);
+    // Der erwartete Lohn bleibt, wie er vorher war (Anspruch gleicht den Lohnfaktor der Eigenschaften aus).
+    expect(Math.abs(expectedWage(one.state, a.id) - expectedWage(sim.state, a.id))).toBeLessThanOrEqual(5);
     expect(openStories(one.state)).toEqual([]);
   });
 

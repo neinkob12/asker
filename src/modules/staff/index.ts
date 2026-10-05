@@ -422,10 +422,16 @@ type StaffStateV6 = Omit<StaffState, 'members' | 'former' | 'relations' | 'stori
 
 /**
  * Version 6 → 7 (Auftrag 34): Eigenschaften fest aus der ID (gleicher Stand = gleiche Eigenschaften), noch keine
- * Beziehungen und Geschichten.
+ * Beziehungen und Geschichten. Der erwartete Lohn bleibt, wie er war (Anspruch geteilt durch den Lohnfaktor).
  */
 export function migrateStaffV6(old: StaffStateV6, state: GameState): StaffState {
-  const withTraits = (m: StaffMemberV6): StaffMember => ({ ...m, traits: rollTraits(`${state.meta.seed}:${m.id}`) });
+  // Der Lohnwunsch der neuen Eigenschaften wird über den Anspruch ausgeglichen: Alte Stände bleiben ruhig, niemand ist
+  // nach dem Laden plötzlich unterbezahlt und verliert jeden Tag Loyalität.
+  const withTraits = (m: StaffMemberV6): StaffMember => {
+    const traits = rollTraits(`${state.meta.seed}:${m.id}`);
+    const demand = Math.round((m.demand / traitFactor({ traits }, 'wage')) * 1000) / 1000;
+    return { ...m, traits, demand };
+  };
   return {
     ...old,
     members: old.members.map(withTraits),

@@ -296,7 +296,7 @@ function DealersSection() {
       icon="handshake"
       color="money"
       note="Erfüllte Deals bringen Vertrauen, wer hängengelassen wird, geht zur Konkurrenz."
-      more={`Stufen: ${DEALER_STAGES.map((st) => `${st.name} ab ${st.at}`).join(', ')}. Ab Vorkasse zahlt der Dealer die Hälfte vorab und der Deal kippt nicht mehr. Exklusiv kauft er nur bei dir, mit Rabatt. Als Zwischenhändler holt er jede Woche ${MIDDLEMAN_AMOUNT} g für sein Veedel ab: weniger Marge, aber Einfluss ohne Spot.`}
+      more={`Stufen: ${DEALER_STAGES.map((st) => `${st.name} ab ${st.at}`).join(', ')}. Ab Vorkasse zahlt der Dealer die Hälfte vorab und der Deal kippt nicht mehr. Exklusiv kauft er nur bei dir, mit Rabatt. Als Zwischenhändler holt er jede Woche ${MIDDLEMAN_AMOUNT} Einheiten der Ware, von der am meisten da ist, für sein Veedel ab: weniger Marge, aber Einfluss ohne Spot.`}
     >
       <List>
         {dealers.map((d) => {
