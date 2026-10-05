@@ -583,6 +583,32 @@ export const SCENES = [
       window.koeln.runtime.api.openPanel('hierarchy.lieutenant', { staffId: Object.keys(window.koeln.session.sim.state.modules.hierarchy.posts)[0] });
     })()`,
   },
+  // Auftrag 34: Capo mit Leutnants im Bezirk (Personal-Baum und Leutnant-Seite)
+  {
+    name: 'capo',
+    js: `(async () => {
+      ${STEPS}
+      const sim = window.koeln.session.sim;
+      const s = sim.state;
+      s.wallet.dirty = 50000;
+      const plan = [['zuelpicher', 'uni', 'neumarkt'], ['rudolfplatz'], ['friesenplatz']];
+      for (const spotIds of plan) for (const spotId of spotIds) if (!s.modules.spots.unlocked.includes(spotId)) s.modules.spots.unlocked.push(spotId);
+      const ids = [];
+      for (const spotIds of plan) {
+        const r = sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: spotIds[0] } });
+        const m = s.modules.staff.members.find((x) => x.id === r.data?.staffId);
+        if (!m) continue;
+        m.level = ids.length === 0 ? 6 : 3;
+        sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: m.id, spotIds } });
+        ids.push(m.id);
+      }
+      sim.dispatch({ type: 'hierarchy.appointCapo', payload: { staffId: ids[0], lieutenantIds: ids.slice(1) } });
+      window.koeln.runtime.api.selectTab('staff');
+      window.koeln.runtime.api.openPanel('hierarchy.lieutenant', { staffId: ids[0] });
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.trim() === 'Capo'));
+      head?.scrollIntoView({ block: 'center' });
+    })()`,
+  },
   {
     name: 'personal-baum',
     js: `(() => {

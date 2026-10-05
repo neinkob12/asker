@@ -22,7 +22,7 @@
 
 import { type Command, type GameState, messages, type Simulation } from '../core';
 import { activeCity, citiesUnlocked, isPlayerIn, isPlayerTraveling, presentCity } from '../modules/city';
-import { allWaiting, canServe } from '../modules/customers';
+import { allWaiting, canServe, dealerStage } from '../modules/customers';
 import {
   activeEncounters,
   chooseAuto,
@@ -46,8 +46,13 @@ import {
   warehouseSites,
 } from '../modules/goods';
 import {
+  CAPO_ADVICE_LIEUTENANTS,
+  CAPO_MAX_LIEUTENANTS,
+  canBeCapo,
   canBeRightHand,
+  capoCandidates,
   fullPowerMissing,
+  getCapos,
   getRightHand,
   hasFullPower,
   isLieutenant,
@@ -483,6 +488,7 @@ function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
 
   appointLieutenants(sim, stats);
   appointRightHand(sim, stats);
+  appointCapo(sim, stats);
 
   // Sicherheit: eine pro Veedel mit Leuten, sobald eine Gang droht.
   const threatened = getGangs(state, city).some((g) => (state.modules.gangs.gangs[g.id]?.hostility ?? 0) >= 40);
@@ -545,6 +551,32 @@ function appointLieutenants(sim: Simulation, stats: BotStats): void {
     ];
     run(sim, stats, { type: 'hierarchy.configure', payload: { staffId: best.id, settings: { orderRules } } });
   }
+}
+
+/**
+ * Auftrag 34: Ab acht Leutnants in der Stadt macht er den erfahrensten, der es kann (Level 5, drei Spots), zum Capo,
+ * mit bis zu drei Leutnants aus dessen Bezirk. Kommen neue Leutnants in den Bezirk, füllt er auf.
+ */
+function appointCapo(sim: Simulation, stats: BotStats): void {
+  const state = sim.state;
+  const city = activeCity(state);
+  const lieutenants = getStaff(state, { cityId: city }).filter((m) => isLieutenant(state, m.id));
+  if (lieutenants.length < CAPO_ADVICE_LIEUTENANTS) return;
+  const existing = getCapos(state, city);
+  for (const capo of existing) {
+    if (capo.lieutenants.length >= CAPO_MAX_LIEUTENANTS) continue;
+    const more = capoCandidates(state, capo.staffId).filter((id) => !capo.lieutenants.includes(id));
+    if (more.length === 0) continue;
+    const ids = [...capo.lieutenants, ...more].slice(0, CAPO_MAX_LIEUTENANTS);
+    run(sim, stats, { type: 'hierarchy.appointCapo', payload: { staffId: capo.staffId, lieutenantIds: ids } });
+  }
+  if (existing.length > 0 || money(state) <= reserve(state) + 1000) return;
+  const best = lieutenants
+    .filter((m) => canBeCapo(state, m.id).ok)
+    .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id))[0];
+  if (!best) return;
+  const ids = capoCandidates(state, best.id).slice(0, CAPO_MAX_LIEUTENANTS);
+  run(sim, stats, { type: 'hierarchy.appointCapo', payload: { staffId: best.id, lieutenantIds: ids } });
 }
 
 /**
@@ -655,13 +687,14 @@ function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions
     if (!messages.canAnswer(state, m)) continue;
     // Auftrag 34: Geschichten der Leute beantwortet er wie ein vernünftiger Chef.
     if (answerStory(sim, stats, m.id, m.options ?? [])) continue;
-    // Auftrag 34: Großhandel von Dealern nimmt er an (Stammabnehmer brauchen erfüllte Deals): mit der Rechten Hand,
-    // sonst selbst, wenn er gerade nicht unterwegs ist.
+    // Auftrag 34: Großhandel von Dealern: mit der Rechten Hand immer, selbst nur für Stammabnehmer (ab „regelmäßig“).
+    // Fremde Dealer lehnt er ohne Rechte Hand höflich ab (ablehnen kostet weniger Vertrauen als hängenlassen).
     if (
       m.contactId.startsWith('dealer:') &&
       (m.options ?? []).some((o) => o.command?.type === 'customers.acceptOrder')
     ) {
-      for (const optionId of ['rightHand', 'self', 'decline']) {
+      const regular = dealerStage(state, m.contactId.slice(7)) !== 'casual';
+      for (const optionId of regular ? ['rightHand', 'self', 'decline'] : ['rightHand', 'decline']) {
         if (!(m.options ?? []).some((o) => o.id === optionId)) continue;
         if (run(sim, stats, { type: 'messages.answer', payload: { messageId: m.id, optionId } })) break;
       }

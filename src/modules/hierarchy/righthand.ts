@@ -51,6 +51,8 @@ import {
 } from '../staff';
 import { campaignProgress } from '../territory';
 import { veedelCity, veedelName } from '../veedel';
+import { reportTip } from './advice';
+import { capoInCharge } from './capo';
 import {
   DEFAULT_RIGHT_HAND_SETTINGS,
   DEMOTION_LOYALTY,
@@ -86,6 +88,7 @@ import {
   handlesAbsence,
   isLieutenant,
   isVeedelHidden,
+  lieutenantOfSpot,
   releaseFromTeams,
   teamLeadOf,
   waitsForReturn,
@@ -327,6 +330,8 @@ function rightHandCovers(state: GameState, m: StaffMember): boolean {
 export function absenceHandled(state: GameState, staffId: string): boolean {
   const lead = teamLeadOf(state, staffId);
   if (lead && lead !== staffId && handlesAbsence(state, lead, staffId)) return true;
+  // Auftrag 34: Fällt ein Leutnant aus, regelt sein Capo das Team (die Rechte Hand spricht nur mit dem Capo).
+  if (lead && capoInCharge(state, lead) && getStaffMember(state, lead)?.status !== 'active') return true;
   const m = getStaffMember(state, staffId);
   return !!m && rightHandCovers(state, m);
 }
@@ -653,6 +658,9 @@ function sendReport(ctx: Ctx, rh: RightHandPost, cityId: string): void {
   const m = getStaffMember(ctx.state, rh.staffId);
   if (!m) return;
   const report = buildReport(ctx.state, cityId);
+  // Auftrag 34: ein Satz Rat aus Daten (Engpass, teurer Leutnant, Gang-Druck, Capo …).
+  const tip = reportTip(ctx, cityId);
+  if (tip) report.tip = tip;
   rh.lastReport = report;
   const problems = (report.profit < 0 ? 1 : 0) + (wageRunway(ctx.state).warn ? 1 : 0);
   // Mit Vollmacht wird der Tagesbericht zum Bericht aus der Stadt: Ergebnis, ihr Anteil, Erledigtes, Probleme.
@@ -672,6 +680,7 @@ function sendReport(ctx: Ctx, rh: RightHandPost, cityId: string): void {
     ...(report.done ? [`Erledigt: ${report.done}.`] : []),
     ...(fpDone ? [`Mit Vollmacht: ${fpDone}.`] : []),
     ...report.advice,
+    ...(report.tip ? [report.tip] : []),
   ];
   if (fp) fp.done = emptyFullPowerDone();
   const absent = getStaff(ctx.state, { cityId }).filter(isAbsent);
@@ -721,6 +730,11 @@ function coordinate(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
       const away = runnerAt(ctx.state, s.id);
       return !(away && waitsForReturn(ctx.state, away.id));
     })
+    // Auftrag 34: Spots im Bezirk eines Capos regelt der Capo.
+    .filter((s) => {
+      const lead = lieutenantOfSpot(ctx.state, s.id);
+      return !lead || !capoInCharge(ctx.state, lead);
+    })
     .sort((a, b) => b.demand - a.demand || a.id.localeCompare(b.id));
   for (const spot of empty) {
     const runner = freeStaff(ctx.state, 'runner')[0];
@@ -744,6 +758,8 @@ function handleAbsences(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
     if (!isAbsent(m) || m.id === rh.staffId || rh.handled.includes(m.id)) continue;
     const lead = teamLeadOf(ctx.state, m.id);
     if (lead && lead !== m.id && handlesAbsence(ctx.state, lead, m.id)) continue;
+    // Auftrag 34: Im Bezirk eines Capos spricht sie nur mit ihm, er kümmert sich.
+    if (lead && capoInCharge(ctx.state, lead)) continue;
     // Wartet der Leutnant auf die Rückkehr, entscheidest du (die Frage kam aufs Handy): nichts hinter seinem Rücken.
     if (waitsForReturn(ctx.state, m.id)) continue;
     const lawyer = bonusProvider(ctx.state, 'bailDiscount');

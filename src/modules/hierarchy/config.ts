@@ -318,3 +318,19 @@ export const FULL_POWER_TASKS: readonly { key: FullPowerTaskKey; name: string; h
 export const FP_STOCK_GRAMS = 1000;
 export const FP_STOCK_PIECES = 300;
 export const FP_RESTOCK_BUDGET_PER_DAY = 15000;
+
+// --- Capo (Auftrag 34) ---
+
+/** Ab diesem Level und mit drei Spots kann ein Leutnant Capo werden. */
+export const CAPO_MIN_LEVEL = 5;
+/** So viele Leutnants führt ein Capo höchstens. */
+export const CAPO_MAX_LIEUTENANTS = 3;
+/** Lohnanspruch: so viel mal der eines Leutnants mit drei Spots. */
+export const CAPO_DEMAND_FACTOR = 2;
+/** Ab so vielen Leutnants in einer Stadt rät die Rechte Hand zu einem Capo. */
+export const CAPO_ADVICE_LIEUTENANTS = 8;
+/** So oft sieht ein Capo nach seinem Bezirk (Spielminuten). */
+export const CAPO_INTERVAL = 30;
+/** Loyalität bei der Ernennung bzw. beim Abberufen als Capo. */
+export const CAPO_PROMOTION_LOYALTY = 10;
+export const CAPO_DEMOTION_LOYALTY = -10;

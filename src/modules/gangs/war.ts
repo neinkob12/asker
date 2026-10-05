@@ -17,6 +17,8 @@ import {
   WAR_GOODS,
   WAR_MESSAGE_GAP,
   WAR_RAID_CREW,
+  WAR_SPOILS_MONEY,
+  WAR_SPOILS_PEOPLE,
   WAR_SUPPORT_FACTOR,
 } from './config';
 import { GANG_RIVALRY, GANGS, type Gang, rivalryKey } from './data';
@@ -221,6 +223,18 @@ export function endWar(ctx: Ctx, attacker: string, veedelId: string, success: bo
   if (!war) return;
   g.wars = (g.wars ?? []).filter((w) => w.id !== war.id);
   const winner = success ? war.attacker : war.defender;
+  const loser = success ? war.defender : war.attacker;
+  // Die Siegerin schluckt Leute und Geld der Verliererin.
+  const ws = statusOf(ctx, winner);
+  const ls = statusOf(ctx, loser);
+  if (ws && ls) {
+    const people = Math.min(WAR_SPOILS_PEOPLE, Math.max(0, ls.people));
+    const money = Math.round(Math.max(0, ls.money) * WAR_SPOILS_MONEY);
+    ls.people -= people;
+    ws.people += people;
+    ls.money -= money;
+    ws.money += money;
+  }
   const a = getGang(ctx.state, war.attacker);
   const d = getGang(ctx.state, war.defender);
   g.warLog ??= [];

@@ -369,7 +369,7 @@ describe('Rechte Hand: Aufgaben (Auftrag 28)', () => {
     expect(post?.passed).toEqual([]);
     // Danach gleich weiter auf Version 5 (Vollmacht, Auftrag 30): aus.
     expect(post?.fullPower).toBeNull();
-    expect(loaded.state.moduleVersions.hierarchy).toBe(6);
+    expect(loaded.state.moduleVersions.hierarchy).toBe(7);
     expect(getStaffMember(loaded.state, boss.id)?.assignment).toEqual({ kind: 'office', targetId: 'rightHand' });
     expect(getStock(loaded.state)).toBe(getStock(sim.state));
   });

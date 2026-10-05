@@ -391,13 +391,12 @@ export const TRAITS: Record<TraitId, TraitInfo> = {
   family: {
     name: 'Familienvater',
     nameFeminine: 'Familienmutter',
-    hint: 'Vorsichtig und treu, braucht aber öfter Geld oder einen freien Tag.',
+    hint: 'Vorsichtig, braucht aber öfter Geld oder einen freien Tag.',
     icon: 'home',
     tone: 'mixed',
     weight: 3,
     risk: 0.9,
     wage: 1.1,
-    betrayal: 0.7,
   },
   drinker: {
     name: 'Trinkt',
@@ -423,7 +422,7 @@ export const TRAITS: Record<TraitId, TraitInfo> = {
     icon: 'rocket',
     tone: 'mixed',
     weight: 3,
-    xp: 1.25,
+    xp: 1.15,
     wage: 1.15,
   },
   coward: {
@@ -453,7 +452,6 @@ export const TRAITS: Record<TraitId, TraitInfo> = {
     tone: 'good',
     weight: 2,
     wage: 0.95,
-    loyaltyDay: 1,
     betrayal: 0,
     talk: 0,
   },
@@ -482,7 +480,7 @@ export const TRAITS: Record<TraitId, TraitInfo> = {
     icon: 'bolt',
     tone: 'good',
     weight: 2,
-    pace: 0.9,
+    pace: 0.95,
   },
 };
 

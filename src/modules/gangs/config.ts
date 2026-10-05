@@ -333,7 +333,7 @@ export const MEMORY_LIMIT = 10;
  * zahlt mehr, wer pünktlich Schutzgeld zahlte, weniger.
  */
 export const MEMORY_PRICE_DIVISOR = 100;
-export const MEMORY_PRICE_RANGE: readonly [number, number] = [0.7, 1.6];
+export const MEMORY_PRICE_RANGE: readonly [number, number] = [0.85, 1.6];
 /** Ab so viel (Betrag) bezieht sich eine Nachricht der Gang auf die stärkste Erinnerung. */
 export const MEMORY_MENTION_AT = 8;
 
@@ -353,5 +353,11 @@ export const WAR_MESSAGE_GAP = 3 * 1440;
 export const WAR_GOODS = 50;
 /** Wer Ware bekommt, stößt so viel stärker vor; wer deine Leute im Revier hat, verteidigt so viel schwächer. */
 export const WAR_SUPPORT_FACTOR = 1.3;
+/**
+ * Beute der Siegerin eines Gang-Kriegs: so viele Leute laufen über, so viel vom Geld der Verliererin wechselt. Wer
+ * eine Gang schwächt, stärkt die Nachbarin; am Ende steht man gegen die Stärkste (Idee D1).
+ */
+export const WAR_SPOILS_PEOPLE = 2;
+export const WAR_SPOILS_MONEY = 0.2;
 /** Höchstens so viele Leute gehen beim Überfall auf einen Spot der anderen mit. */
 export const WAR_RAID_CREW = 3;

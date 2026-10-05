@@ -35,6 +35,7 @@ import {
   canBeLieutenant,
   getLieutenants,
   getPost,
+  isCapo,
   type LieutenantPost,
   lieutenantSatisfaction,
   lieutenantSpots,
@@ -50,6 +51,7 @@ import {
   teamOf,
 } from '../index';
 import { AppointSheet } from './AppointSheet';
+import { CapoGroup } from './Capo';
 import './RightHand';
 import { RuleSheet } from './RuleSheet';
 import { StaffTree } from './Tree';
@@ -147,6 +149,7 @@ function LieutenantPage(props: { staffId?: string; veedelId?: string }) {
           </ListItem>
         </List>
       </Group>
+      <CapoGroup staffId={m.id} />
       <SpotsGroup post={post} onEdit={() => setEditSpots(true)} />
       <TeamGroup post={post} />
       <StaffRights post={post} configure={configure} />
@@ -621,7 +624,8 @@ registerPanel({
   id: 'hierarchy.lieutenant',
   title: (props, state) => {
     const post = resolve(state, props);
-    return post ? `Leutnant ${getStaffMember(state, post.staffId)?.name ?? ''}` : 'Leutnant';
+    if (!post) return 'Leutnant';
+    return `${isCapo(state, post.staffId) ? 'Capo' : 'Leutnant'} ${getStaffMember(state, post.staffId)?.name ?? ''}`;
   },
   component: LieutenantPage,
 });

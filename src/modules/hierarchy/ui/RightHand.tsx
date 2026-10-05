@@ -408,8 +408,9 @@ function RightHandPage() {
         color="brand"
         note={
           report
-            ? [report.done ? `Erledigt: ${report.done}.` : '', report.advice.join(' ')].filter(Boolean).join(' ') ||
-              'Keine Empfehlungen, alles im Griff.'
+            ? [report.done ? `Erledigt: ${report.done}.` : '', report.advice.join(' '), report.tip ?? '']
+                .filter(Boolean)
+                .join(' ') || 'Keine Empfehlungen, alles im Griff.'
             : undefined
         }
       >
