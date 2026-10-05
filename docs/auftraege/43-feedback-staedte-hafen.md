@@ -216,5 +216,6 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] N2 Peters Quest-Leiste zeigt nach dem Umzug alte Kölner Quests (z.B. „Setz einen eigenen Preis“), wenn sie in
   Köln liegen geblieben sind; beim Umzug in eine neue Stadt sollte ihr Kapitel vorgehen.
   Erledigt: `followCity` im Quest-Tick: Bist du in einer Stadt mit eigenem Kapitel und die aktive Quest gehört woanders hin, macht Peter mit dem Kapitel der Stadt weiter; Liegengebliebenes aus Köln gilt als übersprungen.
-- [ ] N3 Bot, Seed 4: Hamburg hängt nach neun Stadtteilen 33 Tage an den letzten drei. Herausfinden, was blockiert
+- [x] N3 Bot, Seed 4: Hamburg hängt nach neun Stadtteilen 33 Tage an den letzten drei. Herausfinden, was blockiert
   (Gang zu stark, Bot verkauft dort nicht, Spots fehlen) und ob ein Spieler dort auch hängen bliebe.
+  Erledigt: Nicht mehr nachzustellen (Seed 4: Hamburg nach 9–10 Tagen komplett, Seeds 1 und 2 nach 6 bzw. 5). Dabei gefunden: Ware am Kai einer schlafenden Stadt wurde jede Stunde gegen ein volles Lager versucht und zählte jedes Mal als abgewiesen (94 % statt 2 %); der Bot baute deshalb Regale in der aktiven Stadt. `collectSleeping` versucht es nur noch mit Platz, Test in `logistics/sleeping.test.ts`.
