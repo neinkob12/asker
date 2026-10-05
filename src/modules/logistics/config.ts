@@ -296,6 +296,6 @@ export const HARBOR_PORTS: readonly HarborPort[] = [
     capacity: 250_000,
     hallCapacity: 150_000,
     hallCost: 50_000,
-    description: 'Ein Tag länger auf See, dafür näher an Bremen, Hannover, Leipzig und Kopenhagen. Der Zoll ist wach.',
+    description: 'Länger auf See, dafür näher an Bremen, Leipzig und Kopenhagen. Der Zoll ist wach.',
   },
 ];

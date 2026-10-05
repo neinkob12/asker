@@ -46,6 +46,8 @@ const TARGETS = [
   // Auftrag 40: Verkauf (Boss von Deutschland, Jansen hat angerufen) und die App „Kunden“ der Hafen-Phase.
   { kind: 'panel', id: 'city.sale', extra: 'germany' },
   { kind: 'phone', id: 'trade.app', extra: 'sold' },
+  // Auftrag 41: Seite „Einkauf“ (Ware, Container, Deckladung, Schiff).
+  { kind: 'panel', id: 'trade.order', params: { producerId: 'spanien' }, extra: 'sold' },
 ];
 
 /** Zusätzliche Ausgangslagen (Auftrag 40), nach SETUP. */
@@ -60,6 +62,7 @@ const EXTRA = {
     window.koeln.dev.verkaufen();
     while (sim.state.modules.city.travel) sim.advance(30);
     sim.state.wallet.dirty += 300000;
+    sim.state.wallet.clean += 300000;
     window.koeln.runtime.api.closeDialog();
   })()`,
 };
