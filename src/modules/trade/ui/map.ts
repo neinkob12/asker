@@ -19,6 +19,7 @@ import {
   isTradeActive,
   openOrders,
   ownedPorts,
+  ownShips,
   portStock,
   shipmentPath,
 } from '../index';
@@ -196,8 +197,14 @@ export const europeLayer: MapLayer = {
       }
       if (!active) return;
       const deliveries = getDeliveries(state);
-      const shipments = getShipments(state).filter((x) => x.status === 'sea');
-      const key = [...deliveries.map((d) => `d${d.id}`), ...shipments.map((x) => `s${x.id}`)].join(',');
+      // Container auf der Linie fahren den Seeweg einmal; eigene Schiffe hin und zurück (Auftrag 41).
+      const shipments = getShipments(state).filter((x) => x.status === 'sea' && x.vesselId === null);
+      const voyages = ownShips(state).filter((v) => v.voyage !== null);
+      const key = [
+        ...deliveries.map((d) => `d${d.id}`),
+        ...shipments.map((x) => `s${x.id}`),
+        ...voyages.map((v) => `v${v.id}:${v.voyage?.producerId}`),
+      ].join(',');
       const paths = new Map<string, { kind: 'truck' | 'ship'; path: LngLat[]; t: number }>();
       for (const d of deliveries) {
         const span = Math.max(1, d.arrivesAt - d.departedAt);
@@ -206,6 +213,13 @@ export const europeLayer: MapLayer = {
       for (const x of shipments) {
         const span = Math.max(1, x.arrivesAt - x.orderedAt);
         paths.set(`s${x.id}`, { kind: 'ship', path: shipmentPath(x), t: (state.time - x.orderedAt) / span });
+      }
+      for (const { id, voyage } of voyages) {
+        if (!voyage) continue;
+        const path = shipmentPath(voyage);
+        // Hinweg: der Weg rückwärts; beim Verladen am Produzenten.
+        const t = voyage.phase === 'back' ? voyage.progress : voyage.phase === 'out' ? 1 - voyage.progress : 0;
+        paths.set(`v${id}`, { kind: 'ship', path, t });
       }
       if (key !== routesKey) {
         routesKey = key;

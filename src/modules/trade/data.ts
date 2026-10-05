@@ -256,3 +256,35 @@ export const CONTAINER_SIZES: readonly ContainerSize[] = [
   { id: 'medium', label: 'Halber Container (50 kg)', grams: 50_000, freight: 6_000, riskFactor: 1 },
   { id: 'full', label: 'Container (120 kg)', grams: 120_000, freight: 10_000, riskFactor: 1.6 },
 ];
+
+/**
+ * Deckladung (Auftrag 41): was oben im Container liegt. Bessere Tarnung kostet mehr (Anteil am Warenwert des
+ * Containers) und senkt die Chance einer Kontrolle. Die Wahl: billig und riskant oder teuer und sicher.
+ */
+export interface Cover {
+  id: 'none' | 'tiles' | 'bananas';
+  label: string;
+  /** Kosten als Anteil am Warenwert des Containers. */
+  share: number;
+  /** Faktor auf die Chance einer Zollkontrolle. */
+  riskFactor: number;
+  description: string;
+}
+
+export const COVERS: readonly Cover[] = [
+  { id: 'none', label: 'Ohne', share: 0, riskFactor: 1, description: 'Nichts drüber. Wer aufmacht, sieht die Ware.' },
+  {
+    id: 'tiles',
+    label: 'Fliesen',
+    share: 0.015,
+    riskFactor: 0.7,
+    description: 'Paletten voller Fliesen: schwer, langweilig, der Hund riecht wenig.',
+  },
+  {
+    id: 'bananas',
+    label: 'Bananen',
+    share: 0.04,
+    riskFactor: 0.45,
+    description: 'Kühlcontainer mit Obst. Teuer, aber der Zoll winkt verderbliche Ware meist durch.',
+  },
+];

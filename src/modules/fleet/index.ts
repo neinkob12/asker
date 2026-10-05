@@ -7,7 +7,7 @@
 //
 // Öffentliche API:
 //   VEHICLE_MODELS, PRIVATE_CAR, vehicleModel(id), getVehicles(state, cityId?), getVehicle(state, id),
-//   freeVehicles(state, cityId), vehicleSpec(state, vehicleId?) (Modell oder Privatauto), pickVehicle(state, cityId,
+//   freeVehicles(state, cityId) (ohne Schiffe), isShip(vehicle), getShips(state) (Auftrag 41), vehicleSpec(state, vehicleId?) (Modell oder Privatauto), pickVehicle(state, cityId,
 //   grams) (bestes freies Fahrzeug für eine Ladung, null = Privatauto), vehicleStatus(vehicle), vehicleName(state, id?)
 //   useVehicle(ctx, id, tripId), releaseVehicle(ctx, id, cityId?), seizeVehicle(ctx, id), maybeSeize(ctx, id)
 // Befehle: 'fleet.buy' (Modell, Stadt; sauberes Geld), 'fleet.sell'
@@ -27,7 +27,7 @@ import {
 export { FLEET_LIMIT, PRIVATE_CAR, VEHICLE_MODELS, VEHICLE_SEIZE_CHANCE } from './config';
 
 /** Darstellung auf der Karte (createVehicle aus src/map). */
-export type VehicleMapKind = 'courier' | 'car' | 'van' | 'truck';
+export type VehicleMapKind = 'courier' | 'car' | 'van' | 'truck' | 'ship';
 
 export interface VehicleModel {
   id: string;
@@ -45,6 +45,11 @@ export interface VehicleModel {
   available: boolean;
   /** Nur in der Hafen-Phase zu haben, an einem Ort im Ausland (Auftrag 40: der Lkw in Rotterdam). */
   harborOnly?: boolean;
+  /**
+   * Seeschiff (Auftrag 41): fährt nicht auf der Straße, sondern holt Container bei Produzenten im Ausland (trade).
+   * Kilometer am Tag auf dem Seeweg und Betriebskosten pro Tag auf See (Schwarzgeld).
+   */
+  ship?: { kmPerDay: number; costPerDay: number };
   description: string;
 }
 
@@ -109,10 +114,20 @@ export function vehicleStatus(vehicle: Vehicle): VehicleStatus {
   return vehicle.tripId !== null ? 'busy' : 'free';
 }
 
-/** Freie Fahrzeuge einer Stadt, größte zuerst. */
+/** Ist das ein Seeschiff (Auftrag 41)? */
+export function isShip(vehicle: Vehicle): boolean {
+  return vehicleModel(vehicle.model)?.ship !== undefined;
+}
+
+/** Eigene Seeschiffe (auch unterwegs und beschlagnahmte). */
+export function getShips(state: GameState): Vehicle[] {
+  return getVehicles(state).filter(isShip);
+}
+
+/** Freie Fahrzeuge einer Stadt für die Straße (ohne Schiffe), größte zuerst. */
 export function freeVehicles(state: GameState, cityId: string): Vehicle[] {
   return getVehicles(state, cityId)
-    .filter((v) => vehicleStatus(v) === 'free')
+    .filter((v) => vehicleStatus(v) === 'free' && !isShip(v))
     .sort((a, b) => (vehicleModel(b.model)?.capacity ?? 0) - (vehicleModel(a.model)?.capacity ?? 0) || a.id - b.id);
 }
 
@@ -194,6 +209,8 @@ export function seizeVehicle(ctx: Ctx, id: number): void {
 
 /** Ladung aufgeflogen: Fahrzeug mit VEHICLE_SEIZE_CHANCE beschlagnahmen. true, wenn es weg ist. */
 export function maybeSeize(ctx: Ctx, id: number): boolean {
+  const vehicle = ctx.state.modules.fleet.vehicles.find((v) => v.id === id);
+  if (vehicle && isShip(vehicle)) return false;
   if (!ctx.chance(VEHICLE_SEIZE_CHANCE)) return false;
   seizeVehicle(ctx, id);
   return true;
@@ -223,7 +240,7 @@ function buy(ctx: Ctx, modelId: string, cityId: string): CommandResult {
   s.vehicles.push(vehicle);
   journal.add(
     ctx,
-    `${model.name} in ${cityName(cityId)} gekauft (${formatEuro(cost)} sauberes Geld). Fasst ${model.capacity / 1000} kg.`,
+    `${model.name} in ${cityName(cityId)} ${model.ship ? 'liegt bereit' : 'gekauft'} (${formatEuro(cost)} sauberes Geld). Fasst ${model.capacity / 1000} kg.`,
     'good',
   );
   ctx.emit('fleet.bought', { vehicleId: vehicle.id, model: model.id, cityId, cost });

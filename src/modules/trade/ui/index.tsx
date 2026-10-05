@@ -35,12 +35,8 @@ import { getVehicles, vehicleName, vehicleStatus } from '../../fleet';
 import { productName } from '../../goods';
 import { customsHeat, customsLevel } from '../../police';
 import {
-  CONTAINER_SIZES,
-  type ContainerSize,
   CUSTOMER_KINDS,
   type CustomerKind,
-  containerCost,
-  containerRisk,
   customerContact,
   deliveryEstimate,
   freightCost,
@@ -62,7 +58,6 @@ import {
   PRICE_LEVEL_RANGE,
   PRICE_LEVEL_STEP,
   PRODUCERS,
-  type Producer,
   pendingDeliveries,
   portCapacity,
   portFor,
@@ -76,6 +71,7 @@ import {
   tradeStats,
 } from '../index';
 import { europeLayer } from './map';
+import { ShipsGroup } from './order';
 import './trade.css';
 
 const APP_ID = 'trade.app';
@@ -462,38 +458,16 @@ function CustomersView() {
 
 function HarborView() {
   const { state, dispatch } = useGame();
+  const ui = useUi();
   const ports = ownedPorts(state);
-  const [port, setPort] = useState(ports[0] ?? 'rotterdam');
-  const [producer, setProducer] = useState<Producer | null>(null);
   const shipments = getShipments(state);
   const stats = tradeStats(state);
-  const target = ports.includes(port) ? port : (ports[0] ?? 'rotterdam');
-  const buyActions: SheetAction[] = producer
-    ? Object.keys(producer.products).flatMap((productId) =>
-        CONTAINER_SIZES.map((size: ContainerSize) => {
-          const cost = containerCost(producer.id, productId, size.id);
-          const total = cost.goods + cost.freight;
-          const risk = containerRisk(state, producer.id, size.id, target);
-          return {
-            label: `${size.label} ${productName(productId)}: ${formatEuro(total)}, Zoll ${pct(risk)}`,
-            icon: 'boxes',
-            disabled: state.wallet.dirty < total,
-            onSelect: () => {
-              dispatch({
-                type: 'trade.buy',
-                payload: { producerId: producer.id, productId, size: size.id, portId: target },
-              });
-              setProducer(null);
-            },
-          };
-        }),
-      )
-    : [];
+  const target = ports[0] ?? 'rotterdam';
   return (
     <>
       <SummaryTiles
         items={[
-          { icon: 'ship', color: 'place', value: shipments.length, label: 'Auf See' },
+          { icon: 'ship', color: 'place', value: shipments.filter((x) => x.status === 'sea').length, label: 'Auf See' },
           { icon: 'boxes', color: 'goods', value: stats.containers, label: 'Container' },
           { icon: 'anchor', color: 'danger', value: stats.seized, label: 'Aufgeflogen' },
         ]}
@@ -563,23 +537,14 @@ function HarborView() {
         title="Einkauf im Ausland"
         icon="ship"
         color="goods"
-        note={`Ankunft in ${harborName(target)}.`}
+        note="Tippen: Ware, Container, Deckladung und Schiff wählen."
         more="Kleine Kisten fallen dem Zoll seltener auf, große Container sind billiger pro Gramm. Jedes Kilo im Hafen macht den Zoll wacher, mit der Zeit kühlt er ab. Verteilen auf mehrere Häfen senkt das Risiko."
       >
-        {ports.length > 1 && (
-          <SegmentedControl
-            wide
-            aria-label="Hafen"
-            value={target}
-            options={ports.map((id) => ({ value: id, label: harborName(id) }))}
-            onChange={setPort}
-          />
-        )}
         <List>
           {PRODUCERS.map((p) => (
             <ListItem
               key={p.id}
-              onClick={() => setProducer(p)}
+              onClick={() => ui.openPanel('trade.order', { producerId: p.id })}
               value={`${Math.round(shippingMinutes(p.id, target) / 1440)} T.`}
             >
               <ItemContent
@@ -598,34 +563,7 @@ function HarborView() {
           ))}
         </List>
       </Group>
-      {shipments.length > 0 && (
-        <Group title="Auf See" icon="ship" color="place" count={shipments.length}>
-          <List>
-            {shipments.map((x) => (
-              <ListItem
-                key={x.id}
-                value={
-                  x.status === 'customs'
-                    ? 'Zoll'
-                    : x.status === 'quay'
-                      ? 'am Kai'
-                      : clock.formatDuration(Math.max(0, x.arrivesAt - state.time))
-                }
-              >
-                <ItemContent
-                  icon={x.status === 'customs' ? 'siren' : x.status === 'quay' ? 'anchor' : 'ship'}
-                  color={x.status === 'customs' ? 'danger' : x.status === 'quay' ? 'warn' : 'place'}
-                  title={`${kg(x.amount)} ${productName(x.productId)}`}
-                  tags={[
-                    { label: PRODUCERS.find((p) => p.id === x.producerId)?.country ?? x.producerId, color: 'goods' },
-                    { label: `nach ${harborName(x.portId)}`, color: 'place', icon: 'anchor' },
-                  ]}
-                />
-              </ListItem>
-            ))}
-          </List>
-        </Group>
-      )}
+      <ShipsGroup />
       <Group title="Weitere Häfen" icon="anchor" color="place" collapsible open={false}>
         <List>
           {harborPorts()
@@ -652,13 +590,6 @@ function HarborView() {
         Wie die Heat eines Veedels: Menge treibt ihn, Zeit kühlt ihn ab. Je höher, desto öfter wird ein ankommender
         Container kontrolliert.
       </Disclosure>
-      <ActionSheet
-        open={producer !== null}
-        onClose={() => setProducer(null)}
-        title={producer ? `${producer.name} (${producer.country})` : ''}
-        message={producer?.description}
-        actions={buyActions}
-      />
     </>
   );
 }

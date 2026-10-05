@@ -52,6 +52,34 @@ export const VEHICLE_MODELS: readonly VehicleModel[] = [
     harborOnly: true,
     description: 'Für die großen Lieferungen vom Hafen zu den Kunden. Wird oft rausgewunken.',
   },
+  // Auftrag 41: eigene Schiffe für die Hafen-Phase. Sie holen die Container selbst ab (hin und zurück), ohne Fracht pro
+  // Container; eigene Crew, der Zoll schaut seltener hin (checkFactor). speed ist hier ohne Bedeutung.
+  {
+    id: 'coaster',
+    name: 'Küstenmotorschiff',
+    capacity: 250_000,
+    speed: 1,
+    checkFactor: 0.6,
+    price: 160_000,
+    mapKind: 'ship',
+    available: true,
+    harborOnly: true,
+    ship: { kmPerDay: 500, costPerDay: 1_200 },
+    description: 'Klein und langsam, fällt zwischen den Fischkuttern nicht auf. Fasst zwei große Container.',
+  },
+  {
+    id: 'freighter',
+    name: 'Frachter',
+    capacity: 800_000,
+    speed: 1,
+    checkFactor: 1,
+    price: 480_000,
+    mapKind: 'ship',
+    available: true,
+    harborOnly: true,
+    ship: { kmPerDay: 700, costPerDay: 3_000 },
+    description: 'Schnell und groß: holt den Bedarf von Wochen auf einmal. Fällt so auf wie jedes Linienschiff.',
+  },
 ];
 
 /**
