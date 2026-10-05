@@ -1,10 +1,11 @@
 // Oberfläche der Hafen-Phase (Auftrag 40): die App „Kunden“ steht dann im Dock statt der Lieferanten. Drei Bereiche:
 // Bestellungen (annehmen, ablehnen, Gegenangebot; ausliefern), Kunden (Anteil, Vertrauen, Konkurrenz, dein Preis) und
 // Hafen (Ware pro Hafen mit Zoll-Heat, Einkauf bei Produzenten, Container auf See, weitere Häfen). Dazu ein Rat, wenn
-// Bestellungen warten, Lieferungen in der Dynamic Island.
+// Bestellungen warten, Lieferungen in der Dynamic Island, die Europa-Ansicht auf der Karte (map.ts).
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro, formatNumber, type GameState } from '../../../core';
+import { registerMapLayer } from '../../../map';
 import {
   ActionSheet,
   type CategoryColor,
@@ -65,6 +66,7 @@ import {
   type TradeOrder,
   tradeStats,
 } from '../index';
+import { europeLayer } from './map';
 import './trade.css';
 
 const APP_ID = 'trade.app';
@@ -737,3 +739,4 @@ onGameEvent('trade.dealTipped', 'trade.tippedToast', (payload, ui, state) => {
   ui.toast(`${getCustomer(state, payload.customerId)?.name ?? 'Die Gang'} hat nicht gezahlt.`, 'bad');
 });
 soundOnEvent('trade.delivered', 'cash');
+registerMapLayer(europeLayer);

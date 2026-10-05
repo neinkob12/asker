@@ -248,3 +248,64 @@ export const CONTAINER_SIZES: readonly ContainerSize[] = [
   { id: 'medium', label: 'Halber Container (50 kg)', grams: 50_000, freight: 6_000, riskFactor: 1 },
   { id: 'full', label: 'Container (120 kg)', grams: 120_000, freight: 10_000, riskFactor: 1.6 },
 ];
+
+/**
+ * Seewege für die Europa-Ansicht (nur Darstellung): Wegpunkte vom Produzenten bis vor den Ärmelkanal, dann je Hafen
+ * das letzte Stück. Grob entlang der echten Routen (Gibraltar, Biskaya, Kanal); Produzenten mit byRoad fahren per Lkw.
+ */
+export const SEA_LANES: Readonly<Record<string, readonly LngLat[]>> = {
+  marokko: [
+    { lng: -5.81, lat: 35.78 },
+    { lng: -6.2, lat: 36.0 },
+  ],
+  spanien: [
+    { lng: -5.44, lat: 36.13 },
+    { lng: -6.2, lat: 36.0 },
+  ],
+  albanien: [
+    { lng: 19.45, lat: 41.32 },
+    { lng: 18.9, lat: 40.0 },
+    { lng: 15.5, lat: 37.4 },
+    { lng: 12.0, lat: 37.2 },
+    { lng: 8.5, lat: 38.3 },
+    { lng: 2.0, lat: 37.6 },
+    { lng: -1.0, lat: 36.9 },
+    { lng: -5.4, lat: 35.95 },
+    { lng: -6.2, lat: 36.0 },
+  ],
+};
+
+/** Gemeinsamer Weg von Gibraltar bis vor den Kanal. */
+export const ATLANTIC_LANE: readonly LngLat[] = [
+  { lng: -6.2, lat: 36.0 },
+  { lng: -9.3, lat: 36.9 },
+  { lng: -9.9, lat: 39.5 },
+  { lng: -9.8, lat: 43.2 },
+  { lng: -5.6, lat: 48.4 },
+  { lng: -2.0, lat: 49.8 },
+  { lng: 1.4, lat: 50.95 },
+];
+
+/** Das letzte Stück vom Kanal in den Hafen. */
+export const PORT_LANES: Readonly<Record<string, readonly LngLat[]>> = {
+  rotterdam: [
+    { lng: 1.4, lat: 50.95 },
+    { lng: 3.6, lat: 51.95 },
+    { lng: 4.05, lat: 51.97 },
+    { lng: 4.4, lat: 51.9 },
+  ],
+  antwerpen: [
+    { lng: 1.4, lat: 50.95 },
+    { lng: 3.5, lat: 51.45 },
+    { lng: 4.0, lat: 51.38 },
+    { lng: 4.29, lat: 51.29 },
+  ],
+  hamburg: [
+    { lng: 1.4, lat: 50.95 },
+    { lng: 4.4, lat: 53.0 },
+    { lng: 7.0, lat: 54.0 },
+    { lng: 8.4, lat: 53.95 },
+    { lng: 9.3, lat: 53.75 },
+    { lng: 10.0, lat: 53.53 },
+  ],
+};

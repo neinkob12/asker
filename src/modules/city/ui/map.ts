@@ -8,7 +8,7 @@ import { FAR_ZOOM, type MapLayer, mapToken } from '../../../map';
 import { getTrips, isInterCityTrip, originCity, tripCity } from '../../logistics';
 import { autobahnLines, autobahnPath } from '../../roads';
 import { getSupplier, shipmentsInTransit } from '../../suppliers';
-import { cityTravel, playableCities } from '../index';
+import { cityTravel, getCity, isBusinessSold, playableCities } from '../index';
 
 const AUTOBAHN_SOURCE = 'city.autobahn';
 const AUTOBAHN_GLOW = 'city.autobahn.glow';
@@ -54,14 +54,19 @@ export const autobahnLayer: MapLayer = {
     const { map } = ctx;
     const gold = mapToken('--hud-gold', '#f2c766');
     const quiet = mapToken('--hud-ink', '#f5f1e8');
-    const lines = autobahnLines();
+    const all = autobahnLines();
+    // Die Linien nach Rotterdam und Antwerpen (Auftrag 40) erst in der Hafen-Phase.
+    const abroad = (id: string) => getCity(id)?.abroad === true || !getCity(id);
+    let sold = false;
     const data = (busy: Set<string>) => ({
       type: 'FeatureCollection' as const,
-      features: lines.map((l) => ({
-        type: 'Feature' as const,
-        properties: { busy: busy.has(lineKey(l.from, l.to)) ? 1 : 0, ref: l.ref },
-        geometry: { type: 'LineString' as const, coordinates: l.path.map((p) => [p.lng, p.lat]) },
-      })),
+      features: all
+        .filter((l) => sold || (!abroad(l.from) && !abroad(l.to)))
+        .map((l) => ({
+          type: 'Feature' as const,
+          properties: { busy: busy.has(lineKey(l.from, l.to)) ? 1 : 0, ref: l.ref },
+          geometry: { type: 'LineString' as const, coordinates: l.path.map((p) => [p.lng, p.lat]) },
+        })),
     });
     map.addSource(AUTOBAHN_SOURCE, { type: 'geojson', data: data(new Set()) });
     map.addLayer({
@@ -94,7 +99,8 @@ export const autobahnLayer: MapLayer = {
     return {
       update(state) {
         const busy = busyLines(state);
-        const key = [...busy].sort().join(',');
+        sold = isBusinessSold(state);
+        const key = `${sold}:${[...busy].sort().join(',')}`;
         if (key === shownKey) return;
         shownKey = key;
         (map.getSource(AUTOBAHN_SOURCE) as GeoJSONSource | undefined)?.setData(data(busy));

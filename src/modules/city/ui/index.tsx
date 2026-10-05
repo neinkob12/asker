@@ -27,6 +27,7 @@ import { getRightHand, hasFullPower, lieutenantOfSpot, RIGHT_HAND_RANK_XP } from
 import { getSpots } from '../../spots';
 import { enlist, generateProfile } from '../../staff';
 import { addInfluence, campaignProgress, factions, PLAYER_FACTION } from '../../territory';
+import { FOREIGN_CITIES } from '../../trade';
 import { allVeedel } from '../../veedel';
 import {
   ABROAD_CITIES,
@@ -67,9 +68,15 @@ registerCityViews({
   })),
   deutschland: DEUTSCHLAND_VIEW,
   // Rahmen um alle Städte (Auftrag 36: auch die freien und die, die bald kommen, stehen als Karten da).
-  deutschlandBounds: () => {
-    const lngs = CITIES.map((c) => c.center.lng);
-    const lats = CITIES.map((c) => c.center.lat);
+  // Nach dem Verkauf (Auftrag 40) wächst sie zur Europa-Ansicht: Häfen und fremde Städte kommen dazu.
+  deutschlandBounds: (state) => {
+    const points = [
+      ...CITIES.map((c) => c.center),
+      ...(isBusinessSold(state) ? [...ABROAD_CITIES.map((c) => c.center), ...FOREIGN_CITIES.map((c) => c.at)] : []),
+      ...(isBusinessSold(state) ? [{ lng: 4.29, lat: 51.29 }] : []),
+    ];
+    const lngs = points.map((p) => p.lng);
+    const lats = points.map((p) => p.lat);
     const pad = 0.3;
     return [Math.min(...lngs) - pad, Math.min(...lats) - pad, Math.max(...lngs) + pad, Math.max(...lats) + pad];
   },

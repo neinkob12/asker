@@ -18,12 +18,23 @@ import { getRightHand, hasFullPower } from '../../hierarchy';
 import { getTrips, tripCity } from '../../logistics';
 import { getStaffMember } from '../../staff';
 import { campaignProgress } from '../../territory';
-import { activeCity, CITIES, type CityDef, citiesUnlocked, offerFrom, offerStatus, playableCities } from '../index';
+import { getCustomer } from '../../trade';
+import {
+  ABROAD_CITIES,
+  activeCity,
+  CITIES,
+  type CityDef,
+  citiesUnlocked,
+  isBusinessSold,
+  offerFrom,
+  offerStatus,
+  playableCities,
+} from '../index';
 
 /** So weit (über FAR_ZOOM) muss man hineinzoomen, bis aus Deutschland wieder die Stadt wird (kein Hin und Her). */
 const ENTER_CITY_MARGIN = 1;
 
-type CardKind = 'mine' | 'offer' | 'free' | 'soon';
+type CardKind = 'mine' | 'offer' | 'free' | 'soon' | 'customer';
 
 /** Was eine Karte zeigt (als Daten, damit sie nur bei Änderungen neu zeichnet). */
 interface CardModel {
@@ -63,6 +74,20 @@ const OFFER_ACTION: Record<string, string> = {
 };
 
 export function cardModel(state: GameState, city: CityDef): CardModel {
+  // Nach dem Verkauf (Auftrag 40): Die alten Städte sind Kunden, ihr Statthalter bestellt bei dir.
+  if (isBusinessSold(state)) {
+    const customer = getCustomer(state, `org:${city.id}`);
+    const rh = getRightHand(state, city.id);
+    const m = rh ? getStaffMember(state, rh.staffId) : undefined;
+    return {
+      kind: customer ? 'customer' : 'soon',
+      active: false,
+      stats: customer ? [`Anteil ${Math.round(customer.share * 100)} %`, `Vertrauen ${customer.trust}`] : [],
+      person: m ? { name: m.name, role: 'Statthalter', age: m.age } : null,
+      pitch: null,
+      action: customer ? 'Kunde' : null,
+    };
+  }
   const unlocked = citiesUnlocked(state).includes(city.id);
   if (unlocked) {
     let person: CardModel['person'] = null;
@@ -108,7 +133,7 @@ function CityCard(props: { city: CityDef; model: CardModel }) {
       <span class="city-card__head">
         <strong class="city-card__name">{city.name}</strong>
         {model.kind === 'soon' && <Chip>bald</Chip>}
-        {model.kind === 'mine' && model.person && (
+        {(model.kind === 'mine' || model.kind === 'customer') && model.person && (
           <Chip color="brand" icon="crown">
             Statthalter
           </Chip>
@@ -126,7 +151,12 @@ function CityCard(props: { city: CityDef; model: CardModel }) {
       {model.pitch && <span class="city-card__pitch">{model.pitch}</span>}
       {model.person && (
         <span class="city-card__person">
-          <Avatar name={model.person.name} look={look} size="sm" tone={model.kind === 'mine' ? 'brand' : 'place'} />
+          <Avatar
+            name={model.person.name}
+            look={look}
+            size="sm"
+            tone={model.kind === 'mine' || model.kind === 'customer' ? 'brand' : 'place'}
+          />
           <span class="city-card__who">
             <span class="city-card__who-name">{model.person.name}</span>
             {model.person.role && <span class="city-card__who-role">{model.person.role}</span>}
@@ -135,7 +165,10 @@ function CityCard(props: { city: CityDef; model: CardModel }) {
       )}
       {model.action && (
         <Chips>
-          <Chip color={model.kind === 'offer' ? 'chat' : 'place'} icon="phone">
+          <Chip
+            color={model.kind === 'offer' ? 'chat' : model.kind === 'customer' ? 'money' : 'place'}
+            icon={model.kind === 'customer' ? 'handshake' : 'phone'}
+          >
             {model.action}
           </Chip>
         </Chips>
@@ -161,7 +194,9 @@ export const citiesLayer: MapLayer = {
       const state = ctx.getState();
       const model = cards.get(city.id)?.model;
       if (!state || !model) return;
-      if (model.kind === 'mine') {
+      if (model.kind === 'customer') {
+        ctx.ui.openPhone('trade.app');
+      } else if (model.kind === 'mine') {
         if (activeCity(state) !== city.id) ctx.ui.dispatch({ type: 'city.switch', payload: { cityId: city.id } });
         else ctx.ui.flyToCity(city.id);
       } else if (model.kind === 'offer') {
@@ -198,7 +233,7 @@ export const citiesLayer: MapLayer = {
         if (key === card.key) continue;
         card.key = key;
         // Nur die eigenen Klassen setzen: MapLibre hängt seine (Position, Anker) an dasselbe Element.
-        for (const kind of ['mine', 'offer', 'free', 'soon'])
+        for (const kind of ['mine', 'offer', 'free', 'soon', 'customer'])
           card.element.classList.toggle(`is-${kind}`, kind === model.kind);
         card.element.classList.toggle('is-active', model.active);
         (card.element as HTMLButtonElement).disabled = model.kind === 'soon' || model.kind === 'free';
@@ -220,6 +255,15 @@ export const citiesLayer: MapLayer = {
       }
       if (view !== 'deutschland' || zoom < FAR_ZOOM + ENTER_CITY_MARGIN) return;
       const { lng, lat } = map.getCenter();
+      // Hafen-Phase (Auftrag 40): Nur Rotterdam hat eine Stadtansicht, die alten Städte gehören dir nicht mehr.
+      if (isBusinessSold(state)) {
+        const here = ABROAD_CITIES.find((c) => {
+          const [w, s, e, n] = c.bounds;
+          return lng >= w && lng <= e && lat >= s && lat <= n;
+        });
+        if (here) ctx.ui.enterView(`city:${here.id}`);
+        return;
+      }
       const city = playableCities().find((c) => {
         const [w, s, e, n] = c.bounds;
         return lng >= w && lng <= e && lat >= s && lat <= n;

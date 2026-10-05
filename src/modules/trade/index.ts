@@ -87,13 +87,16 @@ import {
   WHOLESALE_SHARE,
 } from './config';
 import {
+  ATLANTIC_LANE,
   CONTAINER_SIZES,
   type ContainerSize,
   FOREIGN_CITIES,
   GANG_DEMAND,
   ORG_DEMAND,
+  PORT_LANES,
   PRODUCERS,
   type Producer,
+  SEA_LANES,
   type WeeklyDemand,
 } from './data';
 
@@ -1199,6 +1202,29 @@ export function containerInCustoms(state: GameState): TradeShipment | undefined 
 /** Häfen mit Daten (gemietet oder nicht), für die Oberfläche. */
 export function harborPorts(): readonly HarborPort[] {
   return HARBOR_PORTS;
+}
+
+/**
+ * Weg eines Containers auf der Karte (nur Darstellung): Seeweg vom Produzenten über Gibraltar und den Kanal in den
+ * Hafen; Ware per Lkw (Westland, Jansen) als gerade Linie.
+ */
+export function shipmentPath(shipment: Pick<TradeShipment, 'producerId' | 'portId'>): LngLat[] {
+  const producer = PRODUCER_BY_ID.get(shipment.producerId);
+  const port = harborPort(shipment.portId);
+  const end = port ? { lng: port.lng, lat: port.lat } : { lng: 4.4, lat: 51.9 };
+  if (!producer || producer.byRoad || !SEA_LANES[producer.id]) return [producer?.at ?? end, end];
+  return [
+    ...SEA_LANES[producer.id],
+    ...ATLANTIC_LANE.slice(1),
+    ...(PORT_LANES[shipment.portId] ?? PORT_LANES.rotterdam).slice(1),
+  ];
+}
+
+/** Weg einer Lieferung auf der Karte (über roads, wie die Fahrzeit). */
+export function deliveryPath(state: GameState, delivery: Pick<TradeDelivery, 'portId' | 'customerId'>): LngLat[] {
+  const customer = getCustomer(state, delivery.customerId);
+  if (!customer) return [];
+  return interCityRoute(portPoint(delivery.portId), { lng: customer.lng, lat: customer.lat }).drive;
 }
 
 /** Produzent nach ID. */
