@@ -496,7 +496,7 @@ describe('Spielstände (Auftrag 42)', () => {
     delete old.modules.grow;
     delete old.moduleVersions.grow;
     const loaded = loadSimulation(old as never, sim.modules);
-    expect(loaded.state.moduleVersions.trade).toBe(3);
+    expect(loaded.state.moduleVersions.trade).toBe(4);
     expect(loaded.state.modules.trade.origins).toEqual({});
     expect(loaded.state.modules.trade.stats.deliveredGrams).toBe(0);
     expect(loaded.state.modules.trade.stats.ownDelivered).toBe(0);

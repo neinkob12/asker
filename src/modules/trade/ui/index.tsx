@@ -90,6 +90,7 @@ import {
 } from '../index';
 import { europeLayer } from './map';
 import { ShipsGroup } from './order';
+import { DispatcherGroup, RestockGroup, WeekGroup } from './plans';
 import './trade.css';
 
 declare module '../../../ui' {
@@ -316,6 +317,8 @@ function OrdersView(props: { onView: (view: View) => void }) {
   return (
     <>
       <HarborGuide />
+      <DispatcherGroup />
+      <WeekGroup />
       <SummaryTiles
         items={[
           { icon: 'inbox', color: 'warn', value: open.length, label: 'Neu' },
@@ -506,6 +509,7 @@ const KIND_GROUPS: { kind: CustomerKind; title: string; note: string }[] = [
 ];
 
 function CustomersView() {
+  const ui = useUi();
   const { state, dispatch } = useGame();
   const rep = supplierReputation(state);
   const stats = tradeStats(state);
@@ -556,7 +560,11 @@ function CustomersView() {
                 const weekly = Object.values(c.weekly).reduce((a, b) => a + b, 0);
                 const contact = customerContact(state, c);
                 return (
-                  <ListItem key={c.id} value={`${kg(weekly)}/Wo.`}>
+                  <ListItem
+                    key={c.id}
+                    value={`${kg(weekly)}/Wo.`}
+                    onClick={() => ui.openPanel('trade.customer', { customerId: c.id })}
+                  >
                     <ItemContent
                       icon={kindIcon(c.kind)}
                       color={KIND_COLOR[c.kind]}
@@ -806,6 +814,7 @@ function HarborView() {
           ))}
         </List>
       </Group>
+      <RestockGroup />
       <ShipsGroup />
       <Group title="Weitere Häfen" icon="anchor" color="place" collapsible open={false}>
         <List>

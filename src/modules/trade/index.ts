@@ -24,7 +24,9 @@
 //   openOrders, pendingDeliveries, orderCoverage, getShipments, getDeliveries, portStock, totalStock, ownedPorts, fairPrice,
 //   customerOffer, priceCap, orderValue, playerScore, rivalScores, shareFor, supplierReputation, tradeStats,
 //   containerCost, containerRisk, deliveryEstimate, freightCost, weekOf, PRODUCERS, CONTAINER_SIZES, FOREIGN_CITIES
-// Befehle: 'trade.answer', 'trade.acceptAll', 'trade.deliver', 'trade.buy', 'trade.rentBerth', 'trade.setPriceLevel'
+// Befehle: 'trade.answer', 'trade.acceptAll', 'trade.deliver', 'trade.buy', 'trade.sail', 'trade.rentBerth',
+//   'trade.buildHall', 'trade.setPriceLevel'; Auftrag 43 (plans.ts, Fenna): 'trade.setPlan', 'trade.addRestock',
+//   'trade.removeRestock'
 // Ereignisse: 'trade.started', 'trade.orderPlaced', 'trade.orderAnswered', 'trade.delivered', 'trade.orderFailed',
 //   'trade.containerOrdered', 'trade.containerArrived', 'trade.containerSeized', 'trade.deliverySeized',
 //   'trade.dealTipped'
@@ -120,6 +122,16 @@ import {
   type Producer,
   type WeeklyDemand,
 } from './data';
+import {
+  addRestock,
+  type CustomerPlan,
+  DISPATCH_EVERY,
+  dispatcherTick,
+  NO_PLAN,
+  type RestockRule,
+  removeRestock,
+  setPlan,
+} from './plans';
 
 export {
   CONTRACT_WEEKS,
@@ -143,6 +155,16 @@ export {
   PRODUCERS,
   type Producer,
 } from './data';
+export {
+  ACCEPT_LABELS,
+  type CustomerPlan,
+  DELIVER_LABELS,
+  hasOwnPlan,
+  planFor,
+  type RestockRule,
+  restockRules,
+  stockWithIncoming,
+} from './plans';
 
 // ---------------------------------------------------------------------------------------------
 // Zustand, Befehle, Ereignisse
@@ -334,6 +356,10 @@ export interface TradeState {
   stats: TradeStats;
   /** Auftrag 42: Ausfuhrlager der eigenen Fincas pro Ausfuhrhafen (OWN_ORIGINS) und Sorte. */
   origins: Record<string, Record<string, OriginLot>>;
+  /** Auftrag 43 (plans.ts): Fennas Plan für alle Kunden, eigene Pläne pro Kunde und Nachkauf-Regeln. */
+  defaultPlan: CustomerPlan;
+  plans: Record<string, CustomerPlan>;
+  restock: RestockRule[];
 }
 
 declare module '../../core' {
@@ -364,6 +390,20 @@ declare module '../../core' {
     'trade.buildHall': { portId: string };
     /** Deinen Preis setzen (Faktor auf den fairen Preis). */
     'trade.setPriceLevel': { level: number };
+    /**
+     * Auftrag 43: Was Fenna übernimmt (annehmen, ausliefern), für einen Kunden oder ohne customerId für alle; reset
+     * nimmt den eigenen Plan eines Kunden weg (dann gilt der für alle).
+     */
+    'trade.setPlan': { plan: Partial<CustomerPlan>; customerId?: string; reset?: boolean };
+    /** Auftrag 43: Nachkauf-Regel (eine pro Ware und Hafen) anlegen bzw. löschen. */
+    'trade.addRestock': {
+      productId: string;
+      minGrams: number;
+      producerId: string;
+      size: ContainerSize['id'];
+      portId?: string;
+    };
+    'trade.removeRestock': { ruleId: number };
   }
   interface GameEvents {
     'trade.started': { customers: number };
@@ -1840,6 +1880,8 @@ function tick(ctx: Ctx): void {
     if (delivery.checkAt !== null && ctx.now >= delivery.checkAt) deliveryCheck(ctx, delivery);
     else if (ctx.now >= delivery.arrivesAt) deliveryArrives(ctx, delivery);
   }
+  // Auftrag 43: Fenna arbeitet einmal pro Stunde ab, was du ihr überlassen hast.
+  if (ctx.now % DISPATCH_EVERY === 0) dispatcherTick(ctx);
 }
 
 function initialState(): TradeState {
@@ -1859,12 +1901,15 @@ function initialState(): TradeState {
     quality: START_QUALITY,
     stats: emptyStats(),
     origins: {},
+    defaultPlan: { ...NO_PLAN },
+    plans: {},
+    restock: [],
   };
 }
 
 export default defineModule({
   id: 'trade',
-  version: 3,
+  version: 4,
   init: () => initialState(),
   migrations: {
     // Auftrag 41: Hallen pro Hafen; Container, die schon auf See sind, behalten ihre Ankunft.
@@ -1888,6 +1933,13 @@ export default defineModule({
       origins: {},
       stats: { ...old.stats, deliveredGrams: 0, ownDelivered: 0 },
     }),
+    // Auftrag 43: Lieferpläne und Nachkauf (Fenna). Alte Stände: Sie macht nichts, bis du es ihr sagst.
+    4: (old: Omit<TradeState, 'defaultPlan' | 'plans' | 'restock'>) => ({
+      ...old,
+      defaultPlan: { ...NO_PLAN },
+      plans: {},
+      restock: [],
+    }),
   },
   tickEvery: 5,
   tick,
@@ -1903,6 +1955,9 @@ export default defineModule({
     'trade.rentBerth': (ctx, { portId }) => rentBerth(ctx, portId),
     'trade.buildHall': (ctx, { portId }) => buildHall(ctx, portId),
     'trade.setPriceLevel': (ctx, { level }) => setPriceLevel(ctx, level),
+    'trade.setPlan': (ctx, { plan, customerId, reset }) => setPlan(ctx, plan ?? {}, customerId, reset === true),
+    'trade.addRestock': (ctx, rule) => addRestock(ctx, rule),
+    'trade.removeRestock': (ctx, { ruleId }) => removeRestock(ctx, ruleId),
   },
   on: {
     'business.sold': (ctx, { cities }) => startTrade(ctx, cities),

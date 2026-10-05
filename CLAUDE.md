@@ -115,6 +115,14 @@ Daten in `city` (`REGIONS`, `isRegion`), keine Orte zum Spielen; Leute dort (Rol
 haben die Region als `cityId` und sind nie live. Eigene Ware fährt über `trade` (`OWN_ORIGINS` als Produzenten,
 `storeExport`, `StockLot.own`, `trade.delivered` mit `ownAmount`), keine zweite Logistik. grow würfelt nur über
 `cityDayDice`/`keyedDice`. Seewege über den Atlantik in einem eigenen Ausschnitt (`build-water.py`, `OCEAN_LANES`).
+Auftrag 43 (Feedback 05.10.2026, `docs/auftraege/43-feedback-staedte-hafen.md`): Leute bleiben in ihrer Stadt (siehe
+oben), das Handy zeigt nur die aktive Stadt (`shipmentsInTransit(state, cityId)`, `tripTouchesCity`, `placeCity`),
+Test-Spielstände pro Stadt. Hafen-Phase: Kapitel „Rotterdam“ mit Jansen (`QuestDef.voice`, `requires`, `goTo`
+`trade`/`tradeHarbor`, `openPhone('trade.app', { view })`), mit dem Verkauf fallen die alten Kapitel weg; erste Runde
+Bestellungen nur mit Ware aus der Halle; Fenna übernimmt Annehmen, Ausliefern und Nachkauf (`trade/plans.ts`,
+`trade.setPlan`, `trade.addRestock`); Kunden-Seite `trade.customer`; „Dein Preis“ wirkt auf den Preis pro Gramm; nach
+dem Verkauf führen alte Hafen-Seite und Lieferanten-App in die Kunden-App, Apps und Tabs können mit `hiddenWhen`
+zeitweise verschwinden, das HUD zeigt Zoll und Ruf als Lieferant.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

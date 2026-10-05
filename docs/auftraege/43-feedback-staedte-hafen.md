@@ -59,11 +59,14 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   „Ware ist alle → Lieferanten-App“ schweigt nach dem Verkauf.
 - [x] C4 Keine Sackgasse in „Zu liefern“: Fehlt Ware, führt ein Knopf direkt zum Einkauf mit vorausgefüllter Ware und
   Menge.
-- [ ] C5 Versorgung planbar: Lieferplan pro Kunde (Dauerauftrag): Die Disponentin liefert jede Bestellung dieses
-  Kunden selbst aus, sobald die Ware im Hafen liegt (Lkw oder Spedition nach Wahl), und kauft auf Wunsch nach einer
-  Regel nach. Übersicht „Diese Woche“: Bedarf, Bestand, unterwegs, fehlt.
-- [ ] C6 Großkunden mit eigener Seite: Bedarf pro Woche, Anteil, Konkurrenz, Vertrauen, Pünktlichkeit, Preisgrenze,
-  letzte Bestellungen; antippbar in der Liste und auf der Europa-Karte.
+- [x] C5 Versorgung planbar (`trade/plans.ts`, Migration `trade` 4): Fenna übernimmt für alle Kunden oder pro Kunde
+  (`trade.setPlan`): annehmen (selbst, mit Ware, alle) und ausliefern, sobald die Ware im Hafen liegt (selbst, Lkw sonst
+  Spedition, Spedition). Nachkauf-Regeln (`trade.addRestock`): unter einer Menge (Hafen und unterwegs) bestellt sie einen
+  Container beim gewählten Produzenten. Sie arbeitet stündlich und zahlt wie du. Übersicht „Diese Woche“ (bestellt, im
+  Hafen, auf See, fehlt; Tipp führt zum Einkauf).
+- [x] C6 Großkunden mit eigener Seite (`trade.customer`): Gesicht, Anteil, Vertrauen, stärkste Konkurrenz, Grenze, Bedarf
+  pro Woche, eigener Lieferplan, Zuverlässigkeit, letzte Bestellungen; antippbar in der Kunden-Liste, auf der
+  Europa-Karte und auf den Karten der alten Städte.
 - [x] C7 Lkw dort kaufen, wo man ihn braucht (Kunden-App, Hafen › Fahrzeuge); das Liefer-Blatt weist darauf hin.
 - [x] C8 HUD und Handy nach dem Verkauf: Zoll statt Heat (wachster Hafen), „Ruf als Lieferant“ (pünktlich, Qualität)
   statt Ruf und Reviere; Reviere, Gangs, Lieferanten und Lager verschwinden vom Startbildschirm (`hiddenWhen` für Apps

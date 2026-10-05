@@ -195,7 +195,9 @@ export const citiesLayer: MapLayer = {
       const model = cards.get(city.id)?.model;
       if (!state || !model) return;
       if (model.kind === 'customer') {
-        ctx.ui.openPhone('trade.app');
+        // Auftrag 43: die Seite der alten Organisation als Kunde.
+        if (getCustomer(state, `org:${city.id}`)) ctx.ui.openPanel('trade.customer', { customerId: `org:${city.id}` });
+        else ctx.ui.openPhone('trade.app', { view: 'customers' });
       } else if (model.kind === 'mine') {
         if (activeCity(state) !== city.id) ctx.ui.dispatch({ type: 'city.switch', payload: { cityId: city.id } });
         else ctx.ui.flyToCity(city.id);
