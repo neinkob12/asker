@@ -106,6 +106,8 @@ import { CALL_LINES, CALL_TEXTS, FINCA_SITES, type FincaSite, LOCAL_NAMES, PACKI
 export {
   CALL_AFTER_WEEKS,
   CALL_MIN_REVENUE,
+  CARTEL_HIT_CHANCE,
+  CARTEL_HIT_LOSS,
   CROP_PRODUCTS,
   EUROPE_WINDOW_DAYS,
   GENETICS,
@@ -387,14 +389,18 @@ export function expectedHarvest(
   return Math.round((finca.hectares * perHa * genetics * people * care * press * loss) / 100) * 100;
 }
 
-/** Laufende Kosten pro Tag (Löhne, Pacht), sauberes Geld. */
-export function fincaRunningCost(state: GameState, finca: Finca): number {
-  const wages = [...finca.workerIds, ...(finca.gardenerId ? [finca.gardenerId] : [])].reduce(
+/** Löhne pro Tag (Arbeiter und Gärtner), bar vor Ort. */
+export function fincaWages(state: GameState, finca: Finca): number {
+  return [...finca.workerIds, ...(finca.gardenerId ? [finca.gardenerId] : [])].reduce(
     (sum, id) => sum + (getStaffMember(state, id)?.wage ?? 0),
     0,
   );
+}
+
+/** Laufende Kosten pro Tag (Löhne bar, Pacht sauber). */
+export function fincaRunningCost(state: GameState, finca: Finca): number {
   const lease = finca.tenure === 'leased' ? leasePerWeek(finca) / 7 : 0;
-  return Math.round(wages + lease);
+  return Math.round(fincaWages(state, finca) + lease);
 }
 
 /**
@@ -979,6 +985,12 @@ function advanceBatch(ctx: Ctx, finca: Finca): void {
         cityId: finca.regionId,
       })
     ) {
+      // Auftrag 43: nicht still zurückfallen, der Spieler hat die Tarnung bewusst gewählt.
+      journal.add(
+        ctx,
+        `${finca.name}: Kein Geld für ${packing.label} (${formatEuro(cost)}), die Ware geht in ${PACKINGS[0].label}.`,
+        'bad',
+      );
       packing = PACKINGS[0];
     } else batch.cost += cost;
     batch.stage = 'packing';

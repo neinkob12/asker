@@ -35,6 +35,8 @@ import { getProduct, productName } from '../../goods';
 import { originStock, PRODUCERS, regionOrigin } from '../../trade';
 import {
   bribeReadyAt,
+  CARTEL_HIT_CHANCE,
+  CARTEL_HIT_LOSS,
   cartelPaid,
   costPerGram,
   cropDays,
@@ -43,8 +45,8 @@ import {
   type Finca,
   fincaGardener,
   fincaQuality,
-  fincaRunningCost,
   fincaSites,
+  fincaWages,
   fincaWorkers,
   GENETICS,
   getFinca,
@@ -393,7 +395,11 @@ function RegionPanel({ regionId }: { regionId: string }) {
         icon="handshake"
         color="danger"
         value={paid ? `${pct(economy.cartelShare)} der Ernte` : 'kein Anteil'}
-        note={paid ? 'Das Kartell hält dir die Polizei vom Hals.' : 'Ohne Anteil brennen Felder und Ware verschwindet.'}
+        note={
+          paid
+            ? 'Mit Anteil kühlen die Behörden schneller ab, und das Kartell lässt deine Felder in Ruhe.'
+            : `Ohne Anteil schlägt das Kartell an etwa ${Math.round(CARTEL_HIT_CHANCE * 100)} von 100 Tagen zu und nimmt ${Math.round(CARTEL_HIT_LOSS * 100)} % einer Ernte oder Ware.`
+        }
       >
         <Toggle
           icon="handshake"
@@ -468,6 +474,10 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
   const needed = workersNeeded(finca);
   const gardener = fincaGardener(state, finca);
   const harvest = expectedHarvest(state, finca);
+  // Auftrag 43: netto zeigen, was nach dem Anteil des Kartells bleibt.
+  const cartelCut = cartelPaid(state, finca.regionId)
+    ? Math.round((harvest * (REGION_ECONOMY[finca.regionId]?.cartelShare ?? 0)) / 100) * 100
+    : 0;
   const quality = fincaQuality(state, finca);
   const genetics = nextGenetics(finca);
   const greenhouse = greenhouseCost(finca);
@@ -491,10 +501,11 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
         note={`${finca.hectares} Hektar, ${finca.tenure === 'owned' ? 'gekauft' : 'gepachtet'}, Ernte alle ${cropDays(finca)} Tage.`}
       >
         {finca.crop && <ProgressBar value={progress} label="Bis zur Ernte" />}
+        {crops.length > 1 && <p class="ui-hint">Als Nächstes pflanzen:</p>}
         {crops.length > 1 && (
           <SegmentedControl
             wide
-            aria-label="Was wächst"
+            aria-label="Als Nächstes pflanzen"
             value={finca.plan ?? crops[0]}
             options={crops.map((id) => ({ value: id, label: productName(id) }))}
             onChange={(id) => dispatch({ type: 'grow.plant', payload: { fincaId, productId: id } })}
@@ -511,13 +522,15 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
               {`${productName(finca.plan ?? crops[0] ?? 'weed')} pflanzen`}
             </ListItem>
           )}
-          <ListItem value={kg(harvest)}>
+          <ListItem value={kg(harvest - cartelCut)}>
             <ItemContent
               icon="package"
-              color="goods"
+              color={harvest > 0 ? 'goods' : 'danger'}
               title="Nächste Ernte"
+              meta={harvest > 0 ? undefined : 'Ohne Arbeiter fällt sie aus.'}
               tags={[
                 { label: `Qualität ${pct(quality)}`, color: 'goods', icon: 'gem' },
+                cartelCut > 0 && { label: `dazu ${kg(cartelCut)} fürs Kartell`, color: 'danger', icon: 'handshake' },
                 finca.crop &&
                   finca.crop.loss > 0 && { label: `${pct(finca.crop.loss)} verloren`, color: 'danger', icon: 'flame' },
               ]}
@@ -539,8 +552,14 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
         title="Leute"
         icon="users"
         color="people"
-        value={`${formatEuro(fincaRunningCost(state, finca))}/Tag`}
-        note={workers < needed ? `Für ${finca.hectares} Hektar brauchst du ${needed} Arbeiter.` : undefined}
+        value={`${formatEuro(fincaWages(state, finca))}/Tag bar`}
+        note={
+          workers < needed
+            ? `Für ${finca.hectares} Hektar brauchst du ${needed} Arbeiter.`
+            : finca.tenure === 'leased'
+              ? `Dazu Pacht ${formatEuro(Math.round(leasePerWeek(finca) / 7))}/Tag sauber.`
+              : undefined
+        }
       >
         <Stepper
           label="Arbeiter"
@@ -565,7 +584,7 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
               icon="userPlus"
               onClick={() => dispatch({ type: 'grow.hire', payload: { fincaId, role: 'gardener' } })}
             >
-              Gärtner anheuern
+              Gärtner anheuern (ohne: 15 % weniger Ernte, schlechtere Qualität)
             </ListItem>
           )}
         </List>
@@ -576,7 +595,7 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
             <ListItem
               action
               icon="sun"
-              value={formatEuro(greenhouse)}
+              value={`${formatEuro(greenhouse)} sauber`}
               disabled={state.wallet.clean < greenhouse}
               onClick={() =>
                 setConfirm({
@@ -599,7 +618,7 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
             <ListItem
               action
               icon="flask"
-              value={formatEuro(genetics.cost)}
+              value={`${formatEuro(genetics.cost)} schwarz`}
               disabled={state.wallet.dirty < genetics.cost}
               onClick={() =>
                 setConfirm({
@@ -633,12 +652,21 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
           onChange={(v) => dispatch({ type: 'grow.setPacking', payload: { fincaId, packing: v as Finca['packing'] } })}
         />
         <List>
-          <ListItem value={packing.perKg > 0 ? `${formatEuro(packing.perKg)}/kg` : 'gratis'}>
+          <ListItem value={packing.perKg > 0 ? `${formatEuro(packing.perKg)}/kg schwarz` : 'gratis'}>
             <ItemContent
               icon="anchor"
               color="law"
-              title="Zoll schaut hin"
-              tags={[{ label: `× ${formatNumber(packing.risk, 1)}`, color: 'law', icon: 'shield' }]}
+              title="Zoll-Risiko"
+              tags={[
+                {
+                  label:
+                    packing.risk < 1
+                      ? `${Math.round((1 - packing.risk) * 100)} % seltener kontrolliert`
+                      : 'normal kontrolliert',
+                  color: 'law',
+                  icon: 'shield',
+                },
+              ]}
             />
           </ListItem>
         </List>

@@ -94,7 +94,8 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
   const [size, setSize] = useState<ContainerSize['id']>('medium');
   const [cover, setCover] = useState<Cover['id']>('none');
   const [vessel, setVessel] = useState<string>(CHARTER);
-  const [count, setCount] = useState(1);
+  // Aus dem eigenen Ausfuhrlager standardmäßig alles (Auftrag 43), sonst ein Container.
+  const [count, setCount] = useState<number | null>(null);
   const [port, setPort] = useState(ports[0] ?? HARBOR_CITY);
   if (!producer) return null;
   if (origin && products.length === 0) {
@@ -119,7 +120,7 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
     1,
     Math.min(CHARTER_MAX, Math.floor(capacity / container.grams), Math.ceil(onHand / container.grams)),
   );
-  const n = Math.min(count, max);
+  const n = Math.min(count ?? (origin ? max : 1), max);
   const load = [{ productId, size, cover, count: n }];
   const plan = vesselId === null ? null : voyagePlan(state, vesselId, producer.id, target);
   const total = loadCost(producer.id, load, vesselId !== null) + (plan?.cost ?? 0);

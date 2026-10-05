@@ -38,7 +38,9 @@ import {
   getOrders,
   getShipments,
   hasOwnPlan,
+  OWN_ORIGINS,
   openItems,
+  originStock,
   ownedPorts,
   PRODUCERS,
   planFor,
@@ -169,8 +171,10 @@ function weekRows(state: GameState) {
     .sort((a, b) => b.missing - a.missing || b.need - a.need);
 }
 
-/** Produzenten für eine Ware, der schnellste zuerst. */
-function fastestProducer(productId: string, portId: string) {
+/** Woher eine Ware am besten kommt: die eigene Ernte im Ausfuhrlager, sonst der schnellste Produzent. */
+function fastestProducer(state: GameState, productId: string, portId: string) {
+  const own = OWN_ORIGINS.find((o) => (originStock(state, o.id)[productId]?.amount ?? 0) > 0);
+  if (own) return own;
   return PRODUCERS.filter((p) => p.products[productId] !== undefined).sort(
     (a, b) => shippingMinutes(a.id, portId) - shippingMinutes(b.id, portId),
   )[0];
@@ -194,7 +198,7 @@ export function WeekGroup() {
     >
       <List>
         {rows.map((r) => {
-          const producer = r.missing > 0 ? fastestProducer(r.productId, port) : undefined;
+          const producer = r.missing > 0 ? fastestProducer(state, r.productId, port) : undefined;
           return (
             <ListItem
               key={r.productId}
@@ -231,7 +235,7 @@ export function RestockGroup() {
   const [open, setOpen] = useState(false);
   const rules = restockRules(state);
   const port = ownedPorts(state)[0] ?? HARBOR_CITY;
-  const [draft, setDraft] = useState({ ...DEFAULT_RULE, producerId: fastestProducer('weed', port)?.id ?? '' });
+  const [draft, setDraft] = useState({ ...DEFAULT_RULE, producerId: fastestProducer(state, 'weed', port)?.id ?? '' });
   const products = [...new Set(PRODUCERS.flatMap((p) => Object.keys(p.products)))];
   const producers = PRODUCERS.filter((p) => p.products[draft.productId] !== undefined);
   const producerId = producers.some((p) => p.id === draft.producerId) ? draft.producerId : (producers[0]?.id ?? '');

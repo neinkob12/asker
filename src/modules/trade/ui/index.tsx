@@ -66,11 +66,13 @@ import {
   isTradeActive,
   MAX_HALLS,
   maxFactor,
+  OWN_ORIGINS,
   openItems,
   openOrders,
   orderCoverage,
   orderItemsText,
   orderValue,
+  originStock,
   ownedPorts,
   PRICE_LEVEL_RANGE,
   PRICE_LEVEL_STEP,
@@ -155,11 +157,16 @@ function missingItems(state: GameState, order: TradeOrder): { productId: string;
     .filter((item) => item.amount > 0);
 }
 
-/** Produzenten für eine Ware, der schnellste zuerst. */
-function producersFor(productId: string, portId: string) {
-  return PRODUCERS.filter((p) => p.products[productId] !== undefined).sort(
+/**
+ * Woher eine Ware kommen kann: zuerst die eigene Ernte, wenn sie im Ausfuhrlager liegt (Auftrag 43: kostet fast nichts
+ * und zählt für „Produzent“), dann die Produzenten, der schnellste zuerst.
+ */
+function producersFor(state: GameState, productId: string, portId: string) {
+  const own = OWN_ORIGINS.filter((o) => (originStock(state, o.id)[productId]?.amount ?? 0) > 0);
+  const bought = PRODUCERS.filter((p) => p.products[productId] !== undefined).sort(
     (a, b) => shippingMinutes(a.id, portId) - shippingMinutes(b.id, portId),
   );
+  return [...own, ...bought];
 }
 
 /** Die Woche als Lieferant in vier Schritten (Auftrag 43): in den ersten zwei Wochen offen, danach eingeklappt. */
@@ -299,7 +306,7 @@ function OrdersView(props: { onView: (view: View) => void }) {
   if (ask && customer && ask.mode === 'buy') {
     const portId = ownedPorts(state)[0] ?? HARBOR_CITY;
     for (const item of missingItems(state, ask.order)) {
-      for (const p of producersFor(item.productId, portId).slice(0, 2)) {
+      for (const p of producersFor(state, item.productId, portId).slice(0, 2)) {
         actions.push({
           label: `${productName(item.productId)} bei ${p.name} (${Math.round(shippingMinutes(p.id, portId) / 1440)} Tage)`,
           icon: p.byRoad ? 'truck' : 'ship',
@@ -792,6 +799,22 @@ function HarborView() {
         more="Kleine Kisten fallen dem Zoll seltener auf, große Container sind billiger pro Gramm. Jedes Kilo im Hafen macht den Zoll wacher, mit der Zeit kühlt er ab. Verteilen auf mehrere Häfen senkt das Risiko."
       >
         <List>
+          {/* Auftrag 43: die eigene Ernte zuerst, sobald etwas im Ausfuhrlager liegt. */}
+          {OWN_ORIGINS.map((o) => {
+            const grams = Object.values(originStock(state, o.id)).reduce((sum, lot) => sum + lot.amount, 0);
+            if (grams <= 0) return null;
+            return (
+              <ListItem key={o.id} onClick={() => ui.openPanel('trade.order', { producerId: o.id })} value={kg(grams)}>
+                <ItemContent
+                  icon="leaf"
+                  color="money"
+                  title={o.name}
+                  meta={`liegt in ${o.from}`}
+                  tags={[{ label: 'eigene Ware', color: 'money', icon: 'leaf' }]}
+                />
+              </ListItem>
+            );
+          })}
           {PRODUCERS.map((p) => (
             <ListItem
               key={p.id}
@@ -1030,7 +1053,7 @@ registerAdvisor({
     }
     for (const x of getShipments(state)) need.set(x.productId, (need.get(x.productId) ?? 0) - x.amount);
     const [productId, missing] = [...need.entries()].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])[0] ?? [];
-    const producer = productId ? producersFor(productId, port)[0] : undefined;
+    const producer = productId ? producersFor(state, productId, port)[0] : undefined;
     if (productId && missing && producer) {
       list.push({
         id: 'trade.missing',
