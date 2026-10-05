@@ -19,7 +19,12 @@ export const CUSTOMER_KINDS = {
   org: { label: 'Alte Organisation', priceFactor: 1, startTrust: 80, expects: 0.85, icon: 'crown' },
   gang: { label: 'Gang', priceFactor: 1.2, startTrust: 40, expects: 0.6, icon: 'skull' },
   city: { label: 'Fremde Stadt', priceFactor: 1.05, startTrust: 30, expects: 0.75, icon: 'building' },
+  // Auftrag 41: Städte in Europa (der Preisfaktor steht pro Stadt in data.ts, EUROPE_CITIES).
+  europe: { label: 'Europa', priceFactor: 1.15, startTrust: 25, expects: 0.8, icon: 'globe' },
 } as const satisfies Record<string, CustomerKindInfo>;
+
+/** Europa-Kunden melden sich erst, wenn dein Ruf (Pünktlichkeit) mindestens so gut ist. */
+export const EUROPE_MIN_RELIABILITY = 0.7;
 
 /** Preisgrenze: so viel über ihrem Angebot zahlt ein Kunde höchstens (Gegenangebot). */
 export const PRICE_CAP_MARKUP = 0.15;

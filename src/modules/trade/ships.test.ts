@@ -10,11 +10,18 @@ import { harborPort } from '../logistics';
 import { seaRoute } from '../roads';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
-import { CHARTER_KM_PER_DAY, MAX_HALLS, QUAY_FEE_PER_DAY } from './config';
+import { CHARTER_KM_PER_DAY, EUROPE_MIN_RELIABILITY, MAX_HALLS, QUAY_FEE_PER_DAY } from './config';
+import { EUROPE_CITIES } from './data';
 import {
   containerCost,
   containerRisk,
+  customerContact,
+  customerOffer,
+  deliveryEstimate,
+  europeStatus,
+  getCustomers,
   getShipments,
+  openOrders,
   ownShips,
   portCapacity,
   portLoad,
@@ -25,6 +32,7 @@ import {
   totalStock,
   tradeStats,
   voyagePlan,
+  weekOf,
 } from './index';
 
 const DAY = 1440;
@@ -240,5 +248,63 @@ describe('Deckladung und eigene Schiffe (Auftrag 41, Etappe 2)', () => {
     const sim = createTestGame({ seed: 25 });
     sim.state.wallet.clean = 1_000_000;
     expect(sim.dispatch({ type: 'fleet.buy', payload: { model: 'coaster' } }).ok).toBe(false);
+  });
+});
+
+describe('Europa-Kunden (Auftrag 41, Etappe 3)', () => {
+  /** Bis zum Montag der Woche spulen, in der die Stadt sich meldet (plus Bestellstunde). */
+  function untilWeek(sim: Simulation, week: number): void {
+    while (weekOf(sim.state.time) < week || sim.state.modules.trade.week < week) sim.advance(6 * 60);
+  }
+
+  it('melden sich nach und nach, mit eigenem Kontakt, Preis und Bestellung', () => {
+    const sim = soldGame(26);
+    const events = recordEvents(sim);
+    expect(getCustomers(sim.state).some((c) => c.kind === 'europe')).toBe(false);
+    const amsterdam = EUROPE_CITIES.find((c) => c.id === 'amsterdam');
+    const zuerich = EUROPE_CITIES.find((c) => c.id === 'zuerich');
+    if (!amsterdam || !zuerich) throw new Error('Daten fehlen');
+    untilWeek(sim, europeStatus(sim.state, amsterdam).week);
+    const joined = getCustomers(sim.state).filter((c) => c.kind === 'europe');
+    expect(joined.map((c) => c.europeId)).toContain('amsterdam');
+    expect(joined.map((c) => c.europeId)).not.toContain('zuerich');
+    expect(eventsOfType(events, 'trade.customerJoined').length).toBe(joined.length);
+    const customer = joined.find((c) => c.europeId === 'amsterdam');
+    if (!customer) throw new Error('Amsterdam fehlt');
+    expect(customerContact(sim.state, customer).name).toBe(amsterdam.contact.name);
+    expect(openOrders(sim.state).some((o) => o.customerId === customer.id)).toBe(true);
+    // Der Preis kommt aus der Stadt: Zürich zahlt mehr als Amsterdam (gleicher Index).
+    const zh = { ...customer, priceFactor: zuerich.priceFactor, indexCity: customer.indexCity };
+    expect(customerOffer(sim.state, zh, 'hash')).toBeGreaterThan(customerOffer(sim.state, customer, 'hash'));
+    untilWeek(sim, europeStatus(sim.state, zuerich).week);
+    expect(getCustomers(sim.state).some((c) => c.europeId === 'zuerich')).toBe(
+      sim.state.modules.trade.reliability >= EUROPE_MIN_RELIABILITY,
+    );
+  }, 60_000);
+
+  it('bei schlechtem Ruf meldet sich niemand', () => {
+    const sim = soldGame(27);
+    sim.state.modules.trade.reliability = EUROPE_MIN_RELIABILITY - 0.1;
+    const amsterdam = EUROPE_CITIES[0];
+    untilWeek(sim, europeStatus(sim.state, amsterdam).week);
+    expect(getCustomers(sim.state).some((c) => c.kind === 'europe')).toBe(false);
+    expect(europeStatus(sim.state, amsterdam).reliable).toBe(false);
+  }, 60_000);
+
+  it('der Lkw fährt über die Autobahn ins Ausland; vom nächsten Hafen ist es kürzer', () => {
+    const at = (id: string) => {
+      const city = EUROPE_CITIES.find((c) => c.id === id);
+      if (!city) throw new Error(id);
+      return { lng: city.at.lng, lat: city.at.lat } as Parameters<typeof deliveryEstimate>[0];
+    };
+    expect(deliveryEstimate(at('paris'), 'antwerpen').km).toBeLessThan(deliveryEstimate(at('paris'), 'hamburg').km);
+    expect(deliveryEstimate(at('kopenhagen'), 'hamburg').km).toBeLessThan(
+      deliveryEstimate(at('kopenhagen'), 'rotterdam').km,
+    );
+    for (const city of EUROPE_CITIES) {
+      const km = deliveryEstimate(at(city.id), 'rotterdam').km;
+      expect(km, city.id).toBeGreaterThan(50);
+      expect(km, city.id).toBeLessThan(1600);
+    }
   });
 });

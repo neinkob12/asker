@@ -72,6 +72,7 @@ import {
   CONTRACT_WEEKS,
   CUSTOMER_KINDS,
   DEMAND_SCALE,
+  EUROPE_MIN_RELIABILITY,
   FREIGHT_BASE,
   FREIGHT_PER_KG_100KM,
   GANG_MEMORY_BLOCK,
@@ -105,6 +106,8 @@ import {
   COVERS,
   type ContainerSize,
   type Cover,
+  EUROPE_CITIES,
+  type EuropeCity,
   FOREIGN_CITIES,
   GANG_DEMAND,
   ORG_DEMAND,
@@ -119,6 +122,8 @@ export {
   COVERS,
   type ContainerSize,
   type Cover,
+  EUROPE_CITIES,
+  type EuropeCity,
   FOREIGN_CITIES,
   PRODUCERS,
   type Producer,
@@ -146,6 +151,10 @@ export interface TradeCustomer {
   cityId?: string;
   /** Fremde Stadt (kind 'city'). */
   foreignId?: string;
+  /** Stadt in Europa (kind 'europe', Auftrag 41). */
+  europeId?: string;
+  /** Eigener Preisfaktor auf den fairen Preis (Europa), sonst der der Art. */
+  priceFactor?: number;
   /** Vertrauen 0–100. */
   trust: number;
   /** Dein Anteil am Wochenbedarf in der letzten Runde (0–1) und wer sonst am meisten liefert. */
@@ -336,6 +345,8 @@ declare module '../../core' {
     'trade.containerSeized': { shipmentId: number; portId: string; amount: number };
     'trade.deliverySeized': { deliveryId: number; orderId: number; amount: number };
     'trade.dealTipped': { orderId: number; customerId: string; amount: number };
+    /** Auftrag 41: Eine Stadt in Europa kauft ab jetzt bei dir. */
+    'trade.customerJoined': { customerId: string };
   }
 }
 
@@ -386,7 +397,10 @@ export function customerContact(state: GameState, customer: TradeCustomer): Cont
       return { ...staffContact(m), role: `${rightHandTitle(state, customer.cityId)} ${cityName(customer.cityId)}` };
     return { id: `trade:org-${customer.cityId}`, name: customer.name, kind: 'customer', look: {} };
   }
-  const city = FOREIGN_CITIES.find((c) => c.id === customer.foreignId);
+  const city =
+    customer.kind === 'europe'
+      ? EUROPE_CITIES.find((c) => c.id === customer.europeId)
+      : FOREIGN_CITIES.find((c) => c.id === customer.foreignId);
   return city?.contact ?? { id: `trade:${customer.id}`, name: customer.name, kind: 'customer', look: {} };
 }
 
@@ -443,7 +457,8 @@ export function fairPrice(state: GameState, productId: string, indexCity: string
 
 /** Was der Kunde von sich aus pro Gramm bietet (fairer Preis × Art). */
 export function customerOffer(state: GameState, customer: TradeCustomer, productId: string): number {
-  return round2(fairPrice(state, productId, customer.indexCity) * CUSTOMER_KINDS[customer.kind].priceFactor);
+  const factor = customer.priceFactor ?? CUSTOMER_KINDS[customer.kind].priceFactor;
+  return round2(fairPrice(state, productId, customer.indexCity) * factor);
 }
 
 /** Höchster Faktor auf ihr Angebot, den ein Kunde bei einem Gegenangebot zahlt (Preisgrenze). */
@@ -843,11 +858,64 @@ export function startTrade(ctx: Ctx, cities: readonly string[]): void {
   ctx.emit('trade.started', { customers: s.customers.length });
 }
 
+/** Stadt in Europa eines Kunden (Auftrag 41), sonst undefined. */
+export function europeCityOf(customer: Pick<TradeCustomer, 'europeId'>): EuropeCity | undefined {
+  return customer.europeId ? EUROPE_CITIES.find((c) => c.id === customer.europeId) : undefined;
+}
+
+/** Wann sich eine Stadt in Europa meldet: Woche der Hafen-Phase und nötiger Ruf; null, wenn sie schon Kunde ist. */
+export function europeStatus(state: GameState, city: EuropeCity): { joined: boolean; week: number; reliable: boolean } {
+  const s = tradeState(state);
+  const joined = getCustomers(state).some((c) => c.europeId === city.id);
+  const start = s?.startedAt ?? state.time;
+  return {
+    joined,
+    week: weekOf(start) + city.joinWeek,
+    reliable: (s?.reliability ?? START_RELIABILITY) >= EUROPE_MIN_RELIABILITY,
+  };
+}
+
+/** Städte in Europa, deren Woche gekommen ist, werden Kunden (wenn dein Ruf reicht); jede schreibt kurz. */
+function joinEurope(ctx: Ctx): void {
+  const s = ctx.state.modules.trade;
+  if (s.startedAt === null) return;
+  for (const city of EUROPE_CITIES) {
+    const status = europeStatus(ctx.state, city);
+    if (status.joined || weekOf(ctx.now) < status.week || !status.reliable) continue;
+    const customer: TradeCustomer = {
+      id: `europe:${city.id}`,
+      kind: 'europe',
+      name: city.name,
+      lng: city.at.lng,
+      lat: city.at.lat,
+      indexCity: city.indexCity,
+      weekly: scaled(city.weekly),
+      europeId: city.id,
+      priceFactor: city.priceFactor,
+      trust: CUSTOMER_KINDS.europe.startTrust,
+      share: 0,
+      topRival: null,
+      delivered: 0,
+      late: 0,
+      failed: 0,
+    };
+    s.customers.push(customer);
+    messages.send(ctx, {
+      contact: city.contact,
+      text: `Man hört, in Rotterdam liefert jemand pünktlich. ${city.name} braucht jede Woche Ware. Montags kommt meine Bestellung.`,
+      silent: true,
+    });
+    journal.add(ctx, `${city.name} (${city.country}) kauft ab jetzt bei dir.`, 'good');
+    ctx.emit('trade.customerJoined', { customerId: customer.id });
+  }
+}
+
 /** Bestellungen einer Woche: pro Kunde und Ware dein Anteil am Bedarf (Abnahmevertrag mindestens CONTRACT_SHARE). */
 export function placeOrders(ctx: Ctx): number {
   const s = ctx.state.modules.trade;
   const week = weekOf(ctx.now);
   s.week = week;
+  joinEurope(ctx);
   const contract = s.contractUntil !== null && ctx.now < s.contractUntil;
   let placed = 0;
   for (const customer of s.customers) {
@@ -1099,7 +1167,9 @@ export function deliver(ctx: Ctx, orderId: number, portId?: string, vehicleId?: 
     item.state = 'shipped';
   }
   const factor = vehicle === null ? 1 : vehicleSpec(ctx.state, vehicle).checkFactor;
-  const checkChance = Math.min(0.8, (trip.km / 100) * AUTOBAHN_CHECK_PER_100KM * factor);
+  // Auftrag 41: Nach Europa liegt eine Grenze mit Zoll auf dem Weg.
+  const border = europeCityOf(customer)?.border.check ?? 0;
+  const checkChance = Math.min(0.8, ((trip.km / 100) * AUTOBAHN_CHECK_PER_100KM + border) * factor);
   const checkAt = ctx.chance(checkChance) ? ctx.now + Math.round(trip.minutes * (0.2 + ctx.random() * 0.6)) : null;
   s.deliveries.push({
     id,
@@ -1524,6 +1594,12 @@ function ema(old: number, value: number): number {
   return Math.round((old * (1 - REPUTATION_ALPHA) + value * REPUTATION_ALPHA) * 1000) / 1000;
 }
 
+/** Wo der Zoll steht: an der Grenze (Europa) oder auf der Autobahn. */
+function checkPlace(state: GameState, delivery: TradeDelivery): string {
+  const city = europeCityOf(getCustomer(state, delivery.customerId) ?? {});
+  return city ? `an der Grenze (${city.border.name})` : 'auf der Autobahn';
+}
+
 /** Zollkontrolle unterwegs: mit SEIZE_ON_CHECK ist die Ladung weg, die Bestellung wartet wieder auf Ware. */
 function deliveryCheck(ctx: Ctx, delivery: TradeDelivery): void {
   delivery.checkAt = null;
@@ -1531,7 +1607,11 @@ function deliveryCheck(ctx: Ctx, delivery: TradeDelivery): void {
   const order = s.orders.find((o) => o.id === delivery.orderId);
   if (!ctx.chance(SEIZE_ON_CHECK)) {
     delivery.arrivesAt += 60;
-    journal.add(ctx, 'Zollkontrolle auf der Autobahn: Der Lkw darf nach einer Stunde weiter.', 'info');
+    journal.add(
+      ctx,
+      `Zollkontrolle ${checkPlace(ctx.state, delivery)}: Der Lkw darf nach einer Stunde weiter.`,
+      'info',
+    );
     return;
   }
   s.deliveries = s.deliveries.filter((d) => d.id !== delivery.id);
@@ -1553,7 +1633,7 @@ function deliveryCheck(ctx: Ctx, delivery: TradeDelivery): void {
   }
   journal.add(
     ctx,
-    `Zollkontrolle auf der Autobahn: ${orderItemsText(delivery.items)} beschlagnahmt. Die Bestellung wartet noch.`,
+    `Zollkontrolle ${checkPlace(ctx.state, delivery)}: ${orderItemsText(delivery.items)} beschlagnahmt. Die Bestellung wartet noch.`,
     'bad',
   );
   ctx.emit('trade.deliverySeized', { deliveryId: delivery.id, orderId: delivery.orderId, amount: delivery.amount });

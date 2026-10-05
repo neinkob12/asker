@@ -11,6 +11,7 @@ import { customsHeat, customsLevel } from '../../police';
 import { seaLanes, seaPorts, shipRoute } from '../../roads';
 import {
   deliveryPath,
+  EUROPE_CITIES,
   FOREIGN_CITIES,
   getCustomer,
   getDeliveries,
@@ -69,6 +70,16 @@ function portCard(state: GameState, id: string): { title: string; lines: string[
   const heat = customsHeat(state, id);
   const lines = owned ? [kg(stock), `Zoll ${customsLevel(heat).label}`] : ['zu mieten'];
   return { title: port?.name ?? id, lines, owned };
+}
+
+/** Stadt in Europa (Auftrag 41): Kunde mit Bestellung oder Anteil, sonst das Land (meldet sich noch). */
+function europeCard(state: GameState, id: string): { title: string; lines: string[] } {
+  const city = EUROPE_CITIES.find((c) => c.id === id);
+  const customer = getCustomer(state, `europe:${id}`);
+  if (!city) return { title: id, lines: [] };
+  if (!customer) return { title: city.name, lines: [city.country] };
+  const open = openOrders(state).some((o) => o.customerId === customer.id);
+  return { title: city.name, lines: [open ? 'Bestellung' : `Anteil ${Math.round(customer.share * 100)} %`] };
 }
 
 function cityCard(state: GameState, id: string): { title: string; lines: string[] } {
@@ -162,6 +173,9 @@ export const europeLayer: MapLayer = {
     for (const city of FOREIGN_CITIES) {
       addCard(`city:${city.id}`, city.at, () => ctx.ui.openPhone('trade.app'), 'top');
     }
+    for (const city of EUROPE_CITIES) {
+      addCard(`europe:${city.id}`, city.at, () => ctx.ui.openPhone('trade.app'), 'top');
+    }
     let routesKey = '';
     let seawaysShown = false;
     const refresh = (state: GameState) => {
@@ -187,7 +201,11 @@ export const europeLayer: MapLayer = {
         const hidden = !active || !far || (id === 'port:hamburg' && !ownedPorts(state).includes('hamburg'));
         card.element.hidden = hidden;
         if (hidden) continue;
-        const model = id.startsWith('port:') ? portCard(state, id.slice(5)) : cityCard(state, id.slice(5));
+        const model = id.startsWith('port:')
+          ? portCard(state, id.slice(5))
+          : id.startsWith('europe:')
+            ? europeCard(state, id.slice(7))
+            : cityCard(state, id.slice(5));
         const key = JSON.stringify(model);
         if (key === card.key) continue;
         card.key = key;

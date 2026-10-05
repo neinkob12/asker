@@ -288,3 +288,153 @@ export const COVERS: readonly Cover[] = [
     description: 'Kühlcontainer mit Obst. Teuer, aber der Zoll winkt verderbliche Ware meist durch.',
   },
 ];
+
+/**
+ * Auftrag 41: Städte in Europa als Kunden. Sie melden sich nach und nach (joinWeek: Wochen nach dem Start der
+ * Hafen-Phase, und nur bei gutem Ruf), zahlen mehr als die deutschen Städte (priceFactor auf den fairen Preis), aber
+ * auf dem Weg liegt eine Grenze mit Zoll (border: Chance einer Kontrolle pro Lieferung, mal Kontrollfaktor des Wagens).
+ * Der Lkw fährt über die Autobahn-Linien in roads (Rotterdam – Amsterdam, Antwerpen – Brüssel – Paris, Hamburg –
+ * Kopenhagen, München – Wien, München – Mailand über den Brenner, Frankfurt – Zürich). Namen frei erfunden.
+ */
+export interface EuropeCity extends ForeignCity {
+  country: string;
+  priceFactor: number;
+  joinWeek: number;
+  border: { name: string; check: number };
+}
+
+export const EUROPE_CITIES: readonly EuropeCity[] = [
+  {
+    id: 'amsterdam',
+    name: 'Amsterdam',
+    country: 'Niederlande',
+    at: { lng: 4.83, lat: 52.33 },
+    indexCity: 'koeln',
+    priceFactor: 0.95,
+    joinWeek: 1,
+    border: { name: 'keine Grenze ab Rotterdam', check: 0.01 },
+    weekly: { hash: 10_000, weed: 8_000 },
+    contact: person(
+      'amsterdam',
+      'Joost Visser',
+      'Amsterdam, Coffeeshops',
+      'Beliefert ein Dutzend Coffeeshops durch die Hintertür. Will Menge, nicht Luxus.',
+      false,
+      51,
+    ),
+  },
+  {
+    id: 'bruessel',
+    name: 'Brüssel',
+    country: 'Belgien',
+    at: { lng: 4.45, lat: 50.9 },
+    indexCity: 'koeln',
+    priceFactor: 1.1,
+    joinWeek: 1,
+    border: { name: 'Grenze bei Antwerpen', check: 0.02 },
+    weekly: { weed: 9_000, hash: 5_000 },
+    contact: person(
+      'bruessel',
+      'Nadia El Amrani',
+      'Brüssel, Molenbeek',
+      'Hat die Straßen um den Gare du Midi und Verbindungen bis Lüttich.',
+      true,
+      36,
+    ),
+  },
+  {
+    id: 'paris',
+    name: 'Paris',
+    country: 'Frankreich',
+    at: { lng: 2.36, lat: 48.91 },
+    indexCity: 'frankfurt',
+    priceFactor: 1.2,
+    joinWeek: 2,
+    border: { name: 'Grenze bei Valenciennes', check: 0.05 },
+    weekly: { hash: 14_000, weed: 8_000 },
+    contact: person(
+      'paris',
+      'Karim Benali',
+      'Paris, Seine-Saint-Denis',
+      'Kauft für die Banlieue im Norden. Groß, schnell, misstrauisch.',
+      false,
+      42,
+    ),
+  },
+  {
+    id: 'kopenhagen',
+    name: 'Kopenhagen',
+    country: 'Dänemark',
+    at: { lng: 12.4, lat: 55.63 },
+    indexCity: 'hamburg',
+    priceFactor: 1.3,
+    joinWeek: 3,
+    border: { name: 'Grenze bei Padborg', check: 0.06 },
+    weekly: { weed: 8_000, hash: 4_000 },
+    contact: person(
+      'kopenhagen',
+      'Mads Kjær',
+      'Kopenhagen, Christianshavn',
+      'Die Pusher Street ist zu, die Kundschaft nicht. Zahlt gut für Ruhe.',
+      false,
+      45,
+    ),
+  },
+  {
+    id: 'wien',
+    name: 'Wien',
+    country: 'Österreich',
+    at: { lng: 16.215, lat: 48.205 },
+    indexCity: 'muenchen',
+    priceFactor: 1.15,
+    joinWeek: 3,
+    border: { name: 'Grenze am Walserberg', check: 0.05 },
+    weekly: { weed: 9_000, haze: 3_000 },
+    contact: person(
+      'wien',
+      'Ferdinand Grubhofer',
+      'Wien, Favoriten',
+      'Höflich, pünktlich, gnadenlos, wenn etwas fehlt.',
+      false,
+      58,
+    ),
+  },
+  {
+    id: 'zuerich',
+    name: 'Zürich',
+    country: 'Schweiz',
+    at: { lng: 8.47, lat: 47.4 },
+    indexCity: 'muenchen',
+    priceFactor: 1.4,
+    joinWeek: 4,
+    border: { name: 'Grenze bei Basel (Schweiz, scharf)', check: 0.1 },
+    weekly: { kush: 4_000, haze: 4_000 },
+    contact: person(
+      'zuerich',
+      'Beat Sutter',
+      'Zürich, Langstrasse',
+      'Banker als Kundschaft, Qualität vor Preis, nie ein lautes Wort.',
+      false,
+      49,
+    ),
+  },
+  {
+    id: 'mailand',
+    name: 'Mailand',
+    country: 'Italien',
+    at: { lng: 9.23, lat: 45.52 },
+    indexCity: 'muenchen',
+    priceFactor: 1.25,
+    joinWeek: 5,
+    border: { name: 'Grenzen bei Kufstein und am Brenner', check: 0.1 },
+    weekly: { hash: 8_000, weed: 6_000 },
+    contact: person(
+      'mailand',
+      'Giulia Ferraro',
+      'Mailand, Quarto Oggiaro',
+      'Familie aus Kalabrien, Geschäft in der Lombardei. Testet erst, kauft dann groß.',
+      true,
+      40,
+    ),
+  },
+];

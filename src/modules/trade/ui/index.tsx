@@ -39,6 +39,9 @@ import {
   type CustomerKind,
   customerContact,
   deliveryEstimate,
+  EUROPE_CITIES,
+  europeCityOf,
+  europeStatus,
   freightCost,
   getCustomer,
   getCustomers,
@@ -69,6 +72,7 @@ import {
   supplierReputation,
   type TradeOrder,
   tradeStats,
+  weekOf,
 } from '../index';
 import { europeLayer } from './map';
 import { ShipsGroup } from './order';
@@ -89,7 +93,12 @@ function kindIcon(kind: CustomerKind): string {
   return CUSTOMER_KINDS[kind].icon;
 }
 
-const KIND_COLOR: Record<CustomerKind, CategoryColor> = { org: 'brand', gang: 'danger', city: 'place' };
+const KIND_COLOR: Record<CustomerKind, CategoryColor> = {
+  org: 'brand',
+  gang: 'danger',
+  city: 'place',
+  europe: 'people',
+};
 
 // ---------------------------------------------------------------------------------------------
 // Bestellungen
@@ -357,7 +366,7 @@ function OrdersView() {
           ask && customer
             ? ask.mode === 'answer'
               ? `${orderItemsText(ask.order.items)}. Höchstens ${formatEuro(orderValue(ask.order, maxFactor(ask.order)))}.`
-              : `${orderItemsText(port ? shippableItems(state, port, ask.order) : [])} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.`
+              : `${orderItemsText(port ? shippableItems(state, port, ask.order) : [])} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.${europeCityOf(customer) ? ` Zoll: ${europeCityOf(customer)?.border.name}.` : ''}`
             : undefined
         }
         actions={actions}
@@ -373,6 +382,7 @@ const KIND_GROUPS: { kind: CustomerKind; title: string; note: string }[] = [
   { kind: 'org', title: 'Alte Organisationen', note: 'Zuverlässig, fairer Preis, große Mengen.' },
   { kind: 'gang', title: 'Gangs', note: 'Zahlen ein Fünftel mehr, aber ein Deal kann kippen.' },
   { kind: 'city', title: 'Fremde Städte', note: 'Neue Kunden: Vertrauen muss erst wachsen.' },
+  { kind: 'europe', title: 'Europa', note: 'Zahlen mehr, aber an der Grenze steht der Zoll.' },
 ];
 
 function CustomersView() {
@@ -410,7 +420,8 @@ function CustomersView() {
       </Group>
       {KIND_GROUPS.map((g) => {
         const list = getCustomers(state).filter((c) => c.kind === g.kind);
-        if (list.length === 0) return null;
+        const coming = g.kind === 'europe' ? EUROPE_CITIES.filter((c) => !europeStatus(state, c).joined) : [];
+        if (list.length === 0 && coming.length === 0) return null;
         return (
           <Group
             key={g.kind}
@@ -440,6 +451,30 @@ function CustomersView() {
                         },
                         c.topRival !== null &&
                           c.share < 0.5 && { label: `vorn: ${c.topRival}`, color: 'danger', icon: 'trendDown' },
+                      ]}
+                    />
+                  </ListItem>
+                );
+              })}
+              {coming.map((city) => {
+                const status = europeStatus(state, city);
+                const wait = status.week - weekOf(state.time);
+                return (
+                  <ListItem key={city.id} value={city.country}>
+                    <ItemContent
+                      icon="globe"
+                      color="system"
+                      title={city.name}
+                      tags={[
+                        wait > 0
+                          ? {
+                              label: wait === 1 ? 'ab nächster Woche' : `in ${wait} Wochen`,
+                              color: 'system',
+                              icon: 'clock',
+                            }
+                          : { label: 'meldet sich Montag', color: 'people', icon: 'clock' },
+                        !status.reliable && { label: 'will pünktlichen Ruf', color: 'warn', icon: 'alert' },
+                        { label: `Zoll ${pct(city.border.check)}`, color: 'law', icon: 'shield' },
                       ]}
                     />
                   </ListItem>

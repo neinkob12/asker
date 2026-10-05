@@ -34,14 +34,40 @@ describe('Autobahn-Netz (Auftrag 36)', () => {
         // Auftrag 40: nach Rotterdam und weiter nach Antwerpen (Häfen der Hafen-Phase).
         'koeln-rotterdam',
         'rotterdam-antwerpen',
+        // Auftrag 41: zu den Europa-Kunden.
+        'rotterdam-amsterdam',
+        'antwerpen-bruessel',
+        'bruessel-paris',
+        'hamburg-kopenhagen',
+        'muenchen-wien',
+        'muenchen-mailand',
+        'frankfurt-zuerich',
       ]),
     );
-    expect(autobahnCities()).toEqual(['antwerpen', 'berlin', 'frankfurt', 'hamburg', 'koeln', 'muenchen', 'rotterdam']);
+    expect(autobahnCities()).toEqual([
+      'amsterdam',
+      'antwerpen',
+      'berlin',
+      'bruessel',
+      'frankfurt',
+      'hamburg',
+      'koeln',
+      'kopenhagen',
+      'mailand',
+      'muenchen',
+      'paris',
+      'rotterdam',
+      'wien',
+      'zuerich',
+    ]);
     for (const line of autobahnLines()) {
       const crow = distanceMeters(line.path[0], line.path[line.path.length - 1]);
       // Eine Autobahn ist länger als die Luftlinie, aber nicht doppelt so lang.
       expect(line.meters, `${line.from}-${line.to}`).toBeGreaterThan(crow);
-      expect(line.meters, `${line.from}-${line.to}`).toBeLessThan(crow * 1.6);
+      // Nach Kopenhagen geht es ohne Fähre über Jütland und den Großen Belt, nach Mailand durchs Inntal und über den
+      // Brenner (Auftrag 41).
+      const detour = line.to === 'kopenhagen' || line.to === 'mailand' ? 1.7 : 1.6;
+      expect(line.meters, `${line.from}-${line.to}`).toBeLessThan(crow * detour);
       expect(line.refs[0], `${line.from}-${line.to}`).toBe(line.ref);
     }
   });
@@ -55,11 +81,15 @@ describe('Autobahn-Netz (Auftrag 36)', () => {
   });
 
   it('die Enden einer Stadt treffen sich (Frankfurter Kreuz, Kreuz München-Nord, Dreieck Funkturm)', () => {
+    // Die Linien ins Ausland (Auftrag 41) beginnen an anderen Auffahrten der Stadt (München: A8 in Ramersdorf).
+    const home = new Set(['koeln', 'hamburg', 'berlin', 'frankfurt', 'muenchen', 'rotterdam', 'antwerpen']);
     const ends = (city: string) =>
-      autobahnLines().flatMap((l) => [
-        ...(l.from === city ? [l.path[0]] : []),
-        ...(l.to === city ? [l.path[l.path.length - 1]] : []),
-      ]);
+      autobahnLines()
+        .filter((l) => home.has(l.from) && home.has(l.to))
+        .flatMap((l) => [
+          ...(l.from === city ? [l.path[0]] : []),
+          ...(l.to === city ? [l.path[l.path.length - 1]] : []),
+        ]);
     for (const [city, node] of [
       ['frankfurt', FRANKFURTER_KREUZ],
       ['muenchen', MUENCHEN_NORD],

@@ -1041,6 +1041,18 @@ export const SCENES = [
     wait: 900,
   },
   {
+    name: 'kunden-europa',
+    js: `(async () => {
+      ${STEPS}
+      window.koeln.runtime.api.openPhone('trade.app');
+      const tab = await until(() => [...document.querySelectorAll('.phone .ui-segmented button')].find((b) => b.textContent.includes('Kunden')));
+      tab?.click();
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.trim() === 'Europa'));
+      head?.scrollIntoView({ block: 'start' });
+    })()`,
+    wait: 900,
+  },
+  {
     name: 'kunden-hafen',
     js: `(async () => {
       ${STEPS}
