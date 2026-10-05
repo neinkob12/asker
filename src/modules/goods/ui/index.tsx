@@ -559,6 +559,8 @@ registerPhoneApp({
   order: 25,
   color: 'goods',
   component: WarehouseApp,
+  // Nach dem Verkauf liegt die Ware in den Häfen (Kunden-App › Hafen, Auftrag 43).
+  hiddenWhen: isBusinessSold,
 });
 registerHudItem({ id: 'goods.stock', order: 20, placement: 'more', icon: 'warehouse', component: StockHud });
 registerPanel({

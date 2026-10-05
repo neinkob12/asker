@@ -73,6 +73,11 @@ export interface SidebarTab {
   shortcut?: string;
   /** Nicht als App auf dem Startbildschirm, in der Suche und bei den Tastenkürzeln zeigen (nur per selectTab erreichbar). */
   hidden?: boolean;
+  /**
+   * Zeitweise nicht auf dem Startbildschirm und nicht in der Suche (Auftrag 43: Reviere und Gangs nach dem Verkauf, wenn
+   * es keine Veedel mehr gibt). Per selectTab bleibt der Tab erreichbar.
+   */
+  hiddenWhen?: (state: GameState) => boolean;
 }
 
 export interface SlotContribution<N extends SlotName = SlotName> {
@@ -142,6 +147,8 @@ export interface PhoneApp {
    * ui.openPhone(id) öffnen (z.B. eine Unterseite, die andere Stellen verlinken).
    */
   hidden?: boolean;
+  /** Zeitweise versteckt wie hidden (Auftrag 43: Lieferanten und Lager nach dem Verkauf). */
+  hiddenWhen?: (state: GameState) => boolean;
   /**
    * Nur zeitweise auf dem Startbildschirm, dann im Dock statt einer anderen App (Auftrag 40: „Kunden“ statt
    * „Lieferanten“ in der Hafen-Phase). Solange when nicht gilt, fehlt die App auf dem Startbildschirm (per openPhone

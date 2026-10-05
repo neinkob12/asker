@@ -65,8 +65,9 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [ ] C6 Großkunden mit eigener Seite: Bedarf pro Woche, Anteil, Konkurrenz, Vertrauen, Pünktlichkeit, Preisgrenze,
   letzte Bestellungen; antippbar in der Liste und auf der Europa-Karte.
 - [x] C7 Lkw dort kaufen, wo man ihn braucht (Kunden-App, Hafen › Fahrzeuge); das Liefer-Blatt weist darauf hin.
-- [ ] C8 HUD und Handy nach dem Verkauf: Zoll-Heat statt Veedel-Heat, leere Apps (Reviere, Gangs, Lieferanten) aus dem
-  Raster oder mit einem Satz, warum.
+- [x] C8 HUD und Handy nach dem Verkauf: Zoll statt Heat (wachster Hafen), „Ruf als Lieferant“ (pünktlich, Qualität)
+  statt Ruf und Reviere; Reviere, Gangs, Lieferanten und Lager verschwinden vom Startbildschirm (`hiddenWhen` für Apps
+  und Tabs in `src/ui/registry.ts`).
 - [ ] C9 „Dein Preis“ ehrlich beschriften (er verschiebt den Anteil, nicht den Preis pro Gramm) oder wirklich wirken
   lassen.
 - [ ] C10 Banner für Dringendes in der Hafen-Phase: Container angekommen, Zollkontrolle, Bestellung läuft ab.

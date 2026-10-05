@@ -33,7 +33,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName, relationFactor } from '../../city';
+import { activeCity, cityName, isBusinessSold, relationFactor } from '../../city';
 import { canSnitch } from '../../police';
 import { veedelName } from '../../veedel';
 import {
@@ -846,6 +846,8 @@ registerTab({
   title: 'Gangs',
   order: 30,
   component: GangsTab,
+  // Nach dem Verkauf sind die Gangs Kunden (Kunden-App), keine Gegner auf der Straße mehr (Auftrag 43).
+  hiddenWhen: isBusinessSold,
   badge: (state) =>
     getGangs(state, activeCity(state)).filter((g) => (getGangStatus(state, g.id)?.stage ?? 0) >= 2).length,
 });

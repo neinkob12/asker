@@ -24,7 +24,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName } from '../../city';
+import { activeCity, cityName, isBusinessSold } from '../../city';
 import { getHeat, heatLevel } from '../../police';
 import { allVeedel, veedelName } from '../../veedel';
 import {
@@ -189,6 +189,8 @@ registerTab({
   title: 'Reviere',
   order: 20,
   component: TerritoryTab,
+  // Nach dem Verkauf gibt es keine Veedel mehr (Auftrag 43).
+  hiddenWhen: isBusinessSold,
 });
 
 onGameEvent('territory.controlChanged', 'territory.toast', (payload, ui) => {

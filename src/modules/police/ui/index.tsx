@@ -26,6 +26,7 @@ import {
   useGameSelector,
   useUi,
 } from '../../../ui';
+import { isBusinessSold } from '../../city';
 import { getGang } from '../../gangs';
 import { getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
@@ -35,6 +36,7 @@ import {
   activeTipOff,
   CHECK_THRESHOLD,
   canSnitch,
+  customsLevel,
   getHeat,
   heatLevel,
   MAX_HEAT,
@@ -64,7 +66,20 @@ const hottestPresent = memoState((state) => playerHeat(state));
  */
 const HeatHud = memo(function HeatHud() {
   // Nur ein kleiner Auszug (Veedel, Stufe, gefüllte Flammen): Die Pille zeichnet nicht bei jeder Heat-Nachkommastelle neu.
-  const { veedelId, levelId, levelLabel, filled } = useGameSelector((state) => {
+  const { veedelId, levelId, levelLabel, filled, customs } = useGameSelector((state) => {
+    // Nach dem Verkauf (Auftrag 43) gibt es keine Veedel mehr: Der Gegner ist der Zoll im wachsten Hafen.
+    if (isBusinessSold(state)) {
+      const heat = Math.max(0, ...Object.values(state.modules.police.customs ?? {}));
+      const level = customsLevel(heat);
+      const share = Math.min(1, Math.max(0, heat / MAX_HEAT));
+      return {
+        veedelId: null,
+        levelId: (['calm', 'watchful', 'hot', 'manhunt'] as const)[level.index],
+        levelLabel: level.label,
+        filled: share <= 0 ? 0 : Math.max(1, Math.ceil(share * FLAMES - 1e-9)),
+        customs: true,
+      };
+    }
     const hottest = hottestPresent(state);
     const level = heatLevel(hottest?.heat ?? 0);
     const share = Math.min(1, Math.max(0, (hottest?.heat ?? 0) / MAX_HEAT));
@@ -73,14 +88,17 @@ const HeatHud = memo(function HeatHud() {
       levelId: level.id,
       levelLabel: level.label,
       filled: share <= 0 ? 0 : Math.max(1, Math.ceil(share * FLAMES - 1e-9)),
+      customs: false,
     };
   }, shallowEqual);
-  const title = veedelId
-    ? `Heat in ${veedelName(veedelId)} (heißestes Veedel, in dem du aktiv bist): ${levelLabel}`
-    : 'Du bist gerade in keinem Veedel aktiv.';
+  const title = customs
+    ? `Zoll in deinem wachsten Hafen: ${levelLabel}`
+    : veedelId
+      ? `Heat in ${veedelName(veedelId)} (heißestes Veedel, in dem du aktiv bist): ${levelLabel}`
+      : 'Du bist gerade in keinem Veedel aktiv.';
   return (
     <div class={`hud-heat-pill is-${FLAME_TONE[levelId]}`} title={title}>
-      <span class="hud-heat-pill__label">Heat</span>
+      <span class="hud-heat-pill__label">{customs ? 'Zoll' : 'Heat'}</span>
       <span class="hud-heat-pill__flames" role="img" aria-label={`Heat: ${filled} von ${FLAMES} Flammen`}>
         {Array.from({ length: FLAMES }, (_, i) => (
           <Icon key={i} name="flame" class={`hud-heat-pill__flame ${i < filled ? 'is-on' : ''}`} />

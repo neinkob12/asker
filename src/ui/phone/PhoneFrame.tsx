@@ -106,7 +106,7 @@ function badgeOf(read: () => number | undefined): number {
 function homeApps(state: GameState, ui: UiState): HomeApp[] {
   const tabs = sidebarTabs
     .list()
-    .filter((t) => !t.hidden)
+    .filter((t) => !t.hidden && !t.hiddenWhen?.(state))
     .map(
       (t): HomeApp => ({
         id: `${TAB_APP_PREFIX}${t.id}`,
@@ -118,7 +118,7 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
     );
   const apps = phoneApps
     .list()
-    .filter((a) => !a.hidden && (!a.dock || a.dock.when(state)))
+    .filter((a) => !a.hidden && !a.hiddenWhen?.(state) && (!a.dock || a.dock.when(state)))
     .map(
       (a): HomeApp => ({
         id: a.id,

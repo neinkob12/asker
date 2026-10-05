@@ -605,6 +605,8 @@ registerPhoneApp({
   color: 'goods',
   chrome: 'none',
   component: SuppliersApp,
+  // Nach dem Verkauf kauft man in der Kunden-App ein (Auftrag 43); die Seite verweist dorthin, falls sie jemand öffnet.
+  hiddenWhen: isBusinessSold,
   // Gesperrt wegen Schulden oder bereit zum Freischalten.
   badge: (state) =>
     getSuppliers(state, activeCity(state)).filter(
