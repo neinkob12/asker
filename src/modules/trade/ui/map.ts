@@ -7,6 +7,7 @@
 import type { GeoJSONSource } from 'maplibre-gl';
 import { distanceMeters, formatNumber, type GameState, type LngLat } from '../../../core';
 import { addHtmlMarker, FAR_ZOOM, type MapLayer, mapToken } from '../../../map';
+import { openRegions } from '../../grow';
 import { customsHeat, customsLevel } from '../../police';
 import { seaLanes, seaPorts, shipRoute } from '../../roads';
 import {
@@ -18,9 +19,11 @@ import {
   getShipments,
   harborPorts,
   isTradeActive,
+  OWN_ORIGINS,
   openOrders,
   ownedPorts,
   ownShips,
+  PRODUCERS,
   portStock,
   shipmentPath,
 } from '../index';
@@ -177,13 +180,19 @@ export const europeLayer: MapLayer = {
       addCard(`europe:${city.id}`, city.at, () => ctx.ui.openPhone('trade.app'), 'top');
     }
     let routesKey = '';
-    let seawaysShown = false;
+    let seawaysShown = '';
     const refresh = (state: GameState) => {
       const active = isTradeActive(state);
-      if (active !== seawaysShown) {
-        // Die Seewege ändern sich nie: einmal zeichnen, wenn die Hafen-Phase beginnt.
-        seawaysShown = active;
-        const lines = active ? [...seaLanes().map((l) => l.path), ...seaPorts().map((id) => shipRoute(id))] : [];
+      // Auftrag 42: Der Weg über den Atlantik erscheint erst, wenn Kolumbien frei ist.
+      const open = openRegions(state);
+      const hiddenNodes = new Set(OWN_ORIGINS.filter((o) => !open.includes(o.regionId)).map((o) => o.sea ?? ''));
+      for (const p of PRODUCERS) hiddenNodes.delete(p.sea ?? '');
+      const seawaysKey = active ? `on:${[...hiddenNodes].sort().join(',')}` : '';
+      if (seawaysKey !== seawaysShown) {
+        // Die Seewege ändern sich sonst nie: nur neu zeichnen, wenn die Hafen-Phase beginnt oder eine Region frei wird.
+        seawaysShown = seawaysKey;
+        const lanes = seaLanes().filter((l) => !hiddenNodes.has(l.from) && !hiddenNodes.has(l.to));
+        const lines = active ? [...lanes.map((l) => l.path), ...seaPorts().map((id) => shipRoute(id))] : [];
         (map.getSource(SEAWAYS) as GeoJSONSource | undefined)?.setData({
           type: 'FeatureCollection',
           features: lines

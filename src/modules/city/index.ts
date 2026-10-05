@@ -118,6 +118,7 @@ import {
 } from './config';
 import { ABROAD_CITIES, CITIES, type CityDef, JANSEN_CONTACT } from './data';
 import { PLAYER_RANKS, type PlayerRank, reachedRank } from './ranks';
+import { getRegion } from './regions';
 
 export {
   CITY_OFFERS,
@@ -133,6 +134,7 @@ export {
 } from './config';
 export { ABROAD_CITIES, CITIES, type CityDef, DEUTSCHLAND_VIEW } from './data';
 export { PLAYER_RANKS, type PlayerRank, type PlayerRankDef } from './ranks';
+export { getRegion, isRegion, REGIONS, type RegionDef } from './regions';
 
 /**
  * queued: meldet sich später per Chat; pitched: hat sich per Chat gemeldet und wartet auf "Ruf mich an" bzw. einen
@@ -324,7 +326,8 @@ export function getCity(id: string): CityDef | undefined {
 }
 
 export function cityName(id: string): string {
-  return CITY_BY_ID.get(id)?.name ?? id;
+  // Auftrag 42: Regionen im Ausland (Kolumbien, Marokko) haben auch einen Namen (Kasse, Personal).
+  return CITY_BY_ID.get(id)?.name ?? getRegion(id)?.name ?? id;
 }
 
 /**

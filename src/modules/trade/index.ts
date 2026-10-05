@@ -112,6 +112,8 @@ import {
   FOREIGN_CITIES,
   GANG_DEMAND,
   ORG_DEMAND,
+  OWN_ORIGINS,
+  type OwnOrigin,
   PRODUCERS,
   type Producer,
   type WeeklyDemand,
@@ -133,6 +135,8 @@ export {
   EUROPE_CITIES,
   type EuropeCity,
   FOREIGN_CITIES,
+  OWN_ORIGINS,
+  type OwnOrigin,
   PRODUCERS,
   type Producer,
 } from './data';
@@ -228,6 +232,9 @@ export interface TradeShipment {
   cover: Cover['id'];
   /** Eigenes Schiff (fleet), null = Linienschiff (Charter pro Container). */
   vesselId: number | null;
+  /** Auftrag 42: eigene Ware aus den Fincas (grow), mit dem Faktor der Verpackung auf die Chance einer Kontrolle. */
+  own?: boolean;
+  pack?: number;
 }
 
 /** Ein Container für eine Bestellung beim Produzenten (trade.buy, trade.sail). */
@@ -243,6 +250,8 @@ export interface DeliveryItem {
   productId: string;
   amount: number;
   quality: number;
+  /** Auftrag 42: davon aus eigener Produktion (Gramm). */
+  own?: number;
 }
 
 export interface TradeDelivery {
@@ -264,6 +273,15 @@ export interface TradeDelivery {
 export interface StockLot {
   amount: number;
   quality: number;
+  /** Auftrag 42: davon aus eigener Produktion (Gramm); fehlt = 0. */
+  own?: number;
+}
+
+/** Ware im Ausfuhrlager eines eigenen Ausfuhrhafens (Auftrag 42), mit dem Faktor der Verpackung (gewichteter Schnitt). */
+export interface OriginLot {
+  amount: number;
+  quality: number;
+  pack: number;
 }
 
 export interface TradeStats {
@@ -283,6 +301,9 @@ export interface TradeStats {
   ordered: number;
   /** Auftrag 41: Fahrten eigener Schiffe. */
   voyages: number;
+  /** Auftrag 42: gelieferte Gramm insgesamt und davon aus eigener Produktion. */
+  deliveredGrams: number;
+  ownDelivered: number;
 }
 
 export interface TradeState {
@@ -308,6 +329,8 @@ export interface TradeState {
   reliability: number;
   quality: number;
   stats: TradeStats;
+  /** Auftrag 42: Ausfuhrlager der eigenen Fincas pro Ausfuhrhafen (OWN_ORIGINS) und Sorte. */
+  origins: Record<string, Record<string, OriginLot>>;
 }
 
 declare module '../../core' {
@@ -343,7 +366,15 @@ declare module '../../core' {
     'trade.started': { customers: number };
     'trade.orderPlaced': { orderId: number; customerId: string; amount: number; value: number; guaranteed: boolean };
     'trade.orderAnswered': { orderId: number; choice: string; result: 'accepted' | 'declined' | 'lost' };
-    'trade.delivered': { orderId: number; customerId: string; amount: number; revenue: number; late: boolean };
+    /** ownAmount (Auftrag 42): davon aus eigener Produktion. */
+    'trade.delivered': {
+      orderId: number;
+      customerId: string;
+      amount: number;
+      revenue: number;
+      late: boolean;
+      ownAmount: number;
+    };
     'trade.orderFailed': { orderId: number; customerId: string; reason: 'expired' | 'late' };
     'trade.containerOrdered': { shipmentId: number; producerId: string; amount: number; portId: string; cost: number };
     'trade.containerArrived': { shipmentId: number; portId: string; amount: number; checked: boolean };
@@ -363,7 +394,9 @@ declare module '../../core' {
 // ---------------------------------------------------------------------------------------------
 // Lesen
 
-const PRODUCER_BY_ID = new Map(PRODUCERS.map((p) => [p.id, p]));
+/** Woher Container kommen können: Produzenten und (Auftrag 42) die eigenen Ausfuhrhäfen. */
+const SOURCE_BY_ID = new Map<string, Producer | OwnOrigin>([...PRODUCERS, ...OWN_ORIGINS].map((p) => [p.id, p]));
+const ORIGIN_BY_ID = new Map(OWN_ORIGINS.map((o) => [o.id, o]));
 const SIZE_BY_ID = new Map(CONTAINER_SIZES.map((c) => [c.id, c]));
 const COVER_BY_ID = new Map(COVERS.map((c) => [c.id, c]));
 
@@ -562,16 +595,18 @@ export function containerCost(
   freight: number;
   cover: number;
 } {
-  const producer = PRODUCER_BY_ID.get(producerId);
+  const producer = SOURCE_BY_ID.get(producerId);
   const container = SIZE_BY_ID.get(size);
   const share = producer?.products[productId];
   if (!producer || !container || share === undefined) return { goods: 0, freight: 0, cover: 0 };
   const base = getProduct(productId)?.basePrice ?? 0;
-  const goods = Math.round((container.grams * base * share) / 10) * 10;
+  const value = Math.round((container.grams * base * share) / 10) * 10;
+  // Auftrag 42: Eigene Ware ist schon bezahlt (auf der Finca); die Deckladung richtet sich trotzdem nach ihrem Wert.
+  const goods = ORIGIN_BY_ID.has(producerId) ? 0 : value;
   return {
     goods,
     freight: own ? 0 : container.freight,
-    cover: Math.round((goods * (COVER_BY_ID.get(cover)?.share ?? 0)) / 10) * 10,
+    cover: Math.round((value * (COVER_BY_ID.get(cover)?.share ?? 0)) / 10) * 10,
   };
 }
 
@@ -586,15 +621,19 @@ export function containerRisk(
   portId: string,
   cover: Cover['id'] = 'none',
   vesselId: number | null = null,
+  pack = 1,
 ): number {
-  const producer = PRODUCER_BY_ID.get(producerId);
+  const producer = SOURCE_BY_ID.get(producerId);
   const container = SIZE_BY_ID.get(size);
   const port = harborPort(portId);
   if (!producer || !container || !port) return 0;
   const heat = customsHeat(state, portId);
   const ship = vesselId === null ? 1 : vehicleSpec(state, vesselId).checkFactor;
   const tarn = COVER_BY_ID.get(cover)?.riskFactor ?? 1;
-  return Math.min(0.9, producer.risk * container.riskFactor * port.customsFactor * tarn * ship * (1 + heat / 50));
+  return Math.min(
+    0.9,
+    producer.risk * container.riskFactor * port.customsFactor * tarn * ship * pack * (1 + heat / 50),
+  );
 }
 
 /** Deckladung nach ID. */
@@ -604,14 +643,14 @@ export function getCover(id: Cover['id']): Cover | undefined {
 
 /** Seeweg vom Produzenten in den Hafen (roads, Auftrag 41); null bei Ware per Lkw oder ohne Weg. */
 export function producerSeaRoute(producerId: string, portId: string): { path: LngLat[]; km: number } | null {
-  const producer = PRODUCER_BY_ID.get(producerId);
+  const producer = SOURCE_BY_ID.get(producerId);
   if (!producer?.sea || producer.byRoad) return null;
   return seaRoute(producer.sea, portId);
 }
 
 /** Laufzeit eines Containers auf dem Linienschiff in Minuten: Verladen plus Seeweg mit CHARTER_KM_PER_DAY. */
 export function shippingMinutes(producerId: string, portId: string): number {
-  const producer = PRODUCER_BY_ID.get(producerId);
+  const producer = SOURCE_BY_ID.get(producerId);
   if (!producer || !harborPort(portId)) return MINUTES_PER_DAY;
   const sea = producerSeaRoute(producerId, portId);
   const days = producer.days + (sea ? sea.km / CHARTER_KM_PER_DAY : 0);
@@ -629,7 +668,7 @@ export function voyagePlan(
   portId: string,
 ): { legMinutes: number; loadMinutes: number; minutes: number; km: number; cost: number } | null {
   const spec = vehicleSpec(state, vesselId).ship;
-  const producer = PRODUCER_BY_ID.get(producerId);
+  const producer = SOURCE_BY_ID.get(producerId);
   const sea = producerSeaRoute(producerId, portId);
   if (!spec || !producer || !sea) return null;
   const legMinutes = Math.round((sea.km / spec.kmPerDay) * MINUTES_PER_DAY);
@@ -764,6 +803,8 @@ function emptyStats(): TradeStats {
     demand: 0,
     ordered: 0,
     voyages: 0,
+    deliveredGrams: 0,
+    ownDelivered: 0,
   };
 }
 
@@ -847,14 +888,18 @@ function stockAt(ctx: Ctx, portId: string): Record<string, StockLot> {
 }
 
 /** Ware einlagern (Qualität als gewichteter Schnitt). */
-function addStock(ctx: Ctx, portId: string, productId: string, amount: number, quality: number): void {
+function addStock(ctx: Ctx, portId: string, productId: string, amount: number, quality: number, own = 0): void {
   const lots = stockAt(ctx, portId);
   const lot = lots[productId] ?? { amount: 0, quality };
   const total = lot.amount + amount;
-  lots[productId] = {
+  const next: StockLot = {
     amount: total,
     quality: total > 0 ? Math.round(((lot.amount * lot.quality + amount * quality) / total) * 1000) / 1000 : quality,
   };
+  // Auftrag 42: wie viel davon aus eigener Produktion ist (nur, wenn überhaupt etwas Eigenes drin ist).
+  const mine = (lot.own ?? 0) + own;
+  if (mine > 0) next.own = Math.min(total, mine);
+  lots[productId] = next;
 }
 
 /** Ware entnehmen (alles oder nichts). */
@@ -862,9 +907,12 @@ function takeStock(ctx: Ctx, portId: string, productId: string, amount: number):
   const lots = stockAt(ctx, portId);
   const lot = lots[productId];
   if (!lot || lot.amount < amount) return null;
+  // Eigene Ware geht anteilig mit (Auftrag 42).
+  const own = lot.own ? Math.round((lot.own * amount) / lot.amount) : 0;
   lot.amount -= amount;
+  if (lot.own) lot.own = Math.max(0, lot.own - own);
   if (lot.amount <= 0) delete lots[productId];
-  return { amount, quality: lot.quality };
+  return own > 0 ? { amount, quality: lot.quality, own } : { amount, quality: lot.quality };
 }
 
 /** Die Hafen-Phase beginnt (nach dem Verkauf). */
@@ -1191,7 +1239,13 @@ export function deliver(ctx: Ctx, orderId: number, portId?: string, vehicleId?: 
   const items: DeliveryItem[] = [];
   for (const item of ship) {
     const lot = takeStock(ctx, from, item.productId, item.amount);
-    items.push({ productId: item.productId, amount: item.amount, quality: lot?.quality ?? START_QUALITY });
+    const delivered: DeliveryItem = {
+      productId: item.productId,
+      amount: item.amount,
+      quality: lot?.quality ?? START_QUALITY,
+    };
+    if (lot?.own) delivered.own = lot.own;
+    items.push(delivered);
     item.state = 'shipped';
   }
   const checkChance = deliveryCheckChance(ctx.state, customer, from, vehicle);
@@ -1214,7 +1268,7 @@ export function deliver(ctx: Ctx, orderId: number, portId?: string, vehicleId?: 
   return { ok: true, data: { deliveryId: id, arrivesAt: ctx.now + trip.minutes } };
 }
 
-type Loaded = { productId: string; size: ContainerSize; cover: Cover };
+type Loaded = { productId: string; size: ContainerSize; cover: Cover; grams: number };
 
 /** Prüft eine Bestellung beim Produzenten; gibt die Container einzeln zurück oder einen Grund. */
 function checkLoad(
@@ -1225,9 +1279,13 @@ function checkLoad(
 ): { producer: Producer; containers: Loaded[] } | string {
   const s = ctx.state.modules.trade;
   if (s.startedAt === null) return 'Erst nach dem Verkauf des Geschäfts.';
-  const producer = PRODUCER_BY_ID.get(producerId);
+  const producer = SOURCE_BY_ID.get(producerId);
   if (!producer) return 'Diesen Produzenten gibt es nicht.';
   if (!s.ports.includes(portId)) return 'In diesem Hafen hast du keinen Liegeplatz.';
+  // Auftrag 42: Aus dem eigenen Ausfuhrhafen fährt nur, was im Ausfuhrlager liegt (der letzte Container darf kleiner sein).
+  const origin = ORIGIN_BY_ID.get(producerId);
+  const left = new Map<string, number>();
+  if (origin) for (const [id, lot] of Object.entries(s.origins[origin.id] ?? {})) left.set(id, lot.amount);
   const containers: Loaded[] = [];
   for (const item of load) {
     if (producer.products[item.productId] === undefined) {
@@ -1239,7 +1297,15 @@ function checkLoad(
     if (!cover) return 'Diese Deckladung gibt es nicht.';
     const count = item.count ?? 1;
     if (!Number.isInteger(count) || count < 1 || count > 20) return 'Wie viele Container?';
-    for (let i = 0; i < count; i++) containers.push({ productId: item.productId, size, cover });
+    for (let i = 0; i < count; i++) {
+      let grams = size.grams;
+      if (origin) {
+        grams = Math.min(size.grams, left.get(item.productId) ?? 0);
+        if (grams <= 0) return `In ${origin.from} liegt nicht genug ${productName(item.productId)}.`;
+        left.set(item.productId, (left.get(item.productId) ?? 0) - grams);
+      }
+      containers.push({ productId: item.productId, size, cover, grams });
+    }
   }
   if (containers.length === 0) return 'Nichts zu laden.';
   return { producer, containers };
@@ -1265,12 +1331,15 @@ function shipContainers(
   const s = ctx.state.modules.trade;
   const port = harborPort(portId)?.name ?? portId;
   const list: TradeShipment[] = [];
+  const origin = ORIGIN_BY_ID.get(producer.id);
   for (const c of containers) {
     const cost = containerCost(producer.id, c.productId, c.size.id, c.cover.id, vesselId !== null);
-    wallet.pay(ctx, cost.goods, 'dirty', `${c.size.label} ${productName(c.productId)} bei ${producer.name}`, {
-      category: 'trade.purchase',
-      cityId: HARBOR_CITY,
-    });
+    if (cost.goods > 0) {
+      wallet.pay(ctx, cost.goods, 'dirty', `${c.size.label} ${productName(c.productId)} bei ${producer.name}`, {
+        category: 'trade.purchase',
+        cityId: HARBOR_CITY,
+      });
+    }
     if (cost.freight > 0) {
       wallet.pay(ctx, cost.freight, 'dirty', `Fracht ${producer.from} – ${port}`, {
         category: 'trade.freight',
@@ -1283,12 +1352,14 @@ function shipContainers(
         cityId: HARBOR_CITY,
       });
     }
-    const quality = Math.max(0.2, Math.min(1, producer.quality + (ctx.random() * 2 - 1) * 0.05));
+    // Eigene Ware (Auftrag 42) kommt mit Qualität und Verpackung aus dem Ausfuhrlager, ohne Würfel.
+    const lot = origin ? takeOrigin(ctx, origin.id, c.productId, c.grams) : null;
+    const quality = lot ? lot.quality : Math.max(0.2, Math.min(1, producer.quality + (ctx.random() * 2 - 1) * 0.05));
     const shipment: TradeShipment = {
       id: ctx.nextId(),
       producerId: producer.id,
       productId: c.productId,
-      amount: c.size.grams,
+      amount: c.grams,
       quality: Math.round(quality * 1000) / 1000,
       size: c.size.id,
       portId,
@@ -1298,13 +1369,17 @@ function shipContainers(
       cover: c.cover.id,
       vesselId,
     };
+    if (lot) {
+      shipment.own = true;
+      shipment.pack = lot.pack;
+    }
     s.shipments.push(shipment);
     s.stats.containers += 1;
     list.push(shipment);
     ctx.emit('trade.containerOrdered', {
       shipmentId: shipment.id,
       producerId: producer.id,
-      amount: c.size.grams,
+      amount: c.grams,
       portId,
       cost: cost.goods + cost.freight + cost.cover,
     });
@@ -1349,7 +1424,7 @@ export function sail(
   const plan = voyagePlan(ctx.state, vesselId, producerId, portId);
   if (!plan) return { ok: false, reason: `${checked.producer.name} liefert nicht per Schiff.` };
   const spec = vehicleSpec(ctx.state, vesselId);
-  const grams = checked.containers.reduce((sum, c) => sum + c.size.grams, 0);
+  const grams = checked.containers.reduce((sum, c) => sum + c.grams, 0);
   if (grams > spec.capacity) {
     return {
       ok: false,
@@ -1441,6 +1516,7 @@ function containerArrives(ctx: Ctx, shipment: TradeShipment): void {
     shipment.portId,
     shipment.cover,
     shipment.vesselId,
+    shipment.pack ?? 1,
   );
   customsArrival(ctx, shipment.portId, shipment.amount / 1000);
   // Das Schiff ist im Hafen: Kontrolliert wird am Kai.
@@ -1485,7 +1561,8 @@ function unload(ctx: Ctx, shipment: TradeShipment): void {
   const name = harborPort(shipment.portId)?.name ?? shipment.portId;
   const room = portRoom(ctx.state, shipment.portId);
   const amount = Math.min(shipment.amount, room);
-  if (amount > 0) addStock(ctx, shipment.portId, shipment.productId, amount, shipment.quality);
+  if (amount > 0)
+    addStock(ctx, shipment.portId, shipment.productId, amount, shipment.quality, shipment.own ? amount : 0);
   if (amount < shipment.amount) {
     shipment.amount -= amount;
     if (shipment.status !== 'quay') {
@@ -1561,7 +1638,7 @@ function deliveryArrives(ctx: Ctx, delivery: TradeDelivery): void {
   if (!order || !customer) return;
   if (order.status === 'failed') {
     // Der Deal ist schon gekippt: Die Ladung kommt zurück in den Hafen, an der Bestellung ändert sich nichts.
-    for (const d of delivery.items) addStock(ctx, delivery.portId, d.productId, d.amount, d.quality);
+    for (const d of delivery.items) addStock(ctx, delivery.portId, d.productId, d.amount, d.quality, d.own ?? 0);
     journal.add(
       ctx,
       `${customer.name} nimmt nichts mehr an. ${orderItemsText(delivery.items)} sind zurück im Hafen.`,
@@ -1595,6 +1672,9 @@ function deliveryArrives(ctx: Ctx, delivery: TradeDelivery): void {
   customer.delivered += 1;
   s.stats.revenue += revenue;
   s.stats.delivered += 1;
+  const ownAmount = delivery.items.reduce((sum, i) => sum + (i.own ?? 0), 0);
+  s.stats.deliveredGrams += delivery.amount;
+  s.stats.ownDelivered += ownAmount;
   if (late) {
     customer.late += 1;
     s.stats.late += 1;
@@ -1614,7 +1694,14 @@ function deliveryArrives(ctx: Ctx, delivery: TradeDelivery): void {
     `${customer.name} hat ${orderItemsText(delivery.items)} bekommen: ${formatEuro(revenue)}${late ? ' (zu spät)' : ''}.`,
     late ? 'info' : 'good',
   );
-  ctx.emit('trade.delivered', { orderId: order.id, customerId: customer.id, amount: delivery.amount, revenue, late });
+  ctx.emit('trade.delivered', {
+    orderId: order.id,
+    customerId: customer.id,
+    amount: delivery.amount,
+    revenue,
+    late,
+    ownAmount,
+  });
 }
 
 function ema(old: number, value: number): number {
@@ -1731,12 +1818,13 @@ function initialState(): TradeState {
     reliability: START_RELIABILITY,
     quality: START_QUALITY,
     stats: emptyStats(),
+    origins: {},
   };
 }
 
 export default defineModule({
   id: 'trade',
-  version: 2,
+  version: 3,
   init: () => initialState(),
   migrations: {
     // Auftrag 41: Hallen pro Hafen; Container, die schon auf See sind, behalten ihre Ankunft.
@@ -1751,6 +1839,14 @@ export default defineModule({
       halls: {},
       shipments: old.shipments.map((x) => ({ ...x, cover: 'none' as const, vesselId: null })),
       stats: { ...old.stats, voyages: 0 },
+    }),
+    // Auftrag 42: Ausfuhrlager der eigenen Fincas, Gramm insgesamt und aus eigener Produktion.
+    3: (
+      old: Omit<TradeState, 'origins' | 'stats'> & { stats: Omit<TradeStats, 'deliveredGrams' | 'ownDelivered'> },
+    ) => ({
+      ...old,
+      origins: {},
+      stats: { ...old.stats, deliveredGrams: 0, ownDelivered: 0 },
     }),
   },
   tickEvery: 5,
@@ -1803,7 +1899,7 @@ export function harborPorts(): readonly HarborPort[] {
  * Overture-Tiefen); Ware per Lkw (Westland, Jansen) als gerade Linie.
  */
 export function shipmentPath(shipment: Pick<TradeShipment, 'producerId' | 'portId'>): LngLat[] {
-  const producer = PRODUCER_BY_ID.get(shipment.producerId);
+  const producer = SOURCE_BY_ID.get(shipment.producerId);
   const end = portPoint(shipment.portId);
   const sea = producerSeaRoute(shipment.producerId, shipment.portId);
   if (sea) return sea.path;
@@ -1817,7 +1913,69 @@ export function deliveryPath(state: GameState, delivery: Pick<TradeDelivery, 'po
   return interCityRoute(portPoint(delivery.portId), { lng: customer.lng, lat: customer.lat }).drive;
 }
 
-/** Produzent nach ID. */
+/** Produzent (oder eigener Ausfuhrhafen, Auftrag 42) nach ID. */
 export function getProducer(id: string): Producer | undefined {
-  return PRODUCER_BY_ID.get(id);
+  return SOURCE_BY_ID.get(id);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Auftrag 42: eigene Ausfuhrhäfen (Cartagena, Tanger). grow legt verpackte Ware ins Ausfuhrlager, Container und eigene
+// Schiffe holen sie wie bei einem Produzenten ab (trade.buy, trade.sail mit der ID des Ausfuhrhafens).
+
+/** Eigener Ausfuhrhafen nach ID (undefined für Produzenten). */
+export function ownOrigin(id: string): OwnOrigin | undefined {
+  return ORIGIN_BY_ID.get(id);
+}
+
+/** Ausfuhrhafen einer Region (grow). */
+export function regionOrigin(regionId: string): OwnOrigin | undefined {
+  return OWN_ORIGINS.find((o) => o.regionId === regionId);
+}
+
+/** Ware im Ausfuhrlager eines eigenen Ausfuhrhafens (Sorte → Menge, Qualität, Verpackung). */
+export function originStock(state: GameState, originId: string): Readonly<Record<string, OriginLot>> {
+  return tradeState(state)?.origins?.[originId] ?? {};
+}
+
+/** Verpackte Ware ins Ausfuhrlager legen (grow). pack = Faktor der Verpackung auf die Chance einer Kontrolle. */
+export function storeExport(
+  ctx: Ctx,
+  originId: string,
+  productId: string,
+  amount: number,
+  quality: number,
+  pack: number,
+): void {
+  if (!(amount > 0)) return;
+  const s = ctx.state.modules.trade;
+  s.origins[originId] ??= {};
+  const lots = s.origins[originId];
+  const lot = lots[productId] ?? { amount: 0, quality, pack };
+  const total = lot.amount + amount;
+  const mix = (a: number, b: number) => Math.round(((lot.amount * a + amount * b) / total) * 1000) / 1000;
+  lots[productId] = { amount: total, quality: mix(lot.quality, quality), pack: mix(lot.pack, pack) };
+}
+
+/** Ware aus dem Ausfuhrlager nehmen (höchstens, was da ist); null, wenn nichts da ist. */
+export function takeOrigin(ctx: Ctx, originId: string, productId: string, amount: number): OriginLot | null {
+  const lots = ctx.state.modules.trade.origins[originId];
+  const lot = lots?.[productId];
+  if (!lot || lot.amount <= 0) return null;
+  const taken = Math.min(amount, lot.amount);
+  lot.amount -= taken;
+  if (lot.amount <= 0) delete lots[productId];
+  return { amount: taken, quality: lot.quality, pack: lot.pack };
+}
+
+/** Ware aus dem Ausfuhrlager verlieren (Razzia, Kartell; Auftrag 42). Gibt die verlorenen Gramm zurück. */
+export function loseOrigin(ctx: Ctx, originId: string, share: number): number {
+  const lots = ctx.state.modules.trade.origins[originId] ?? {};
+  let lost = 0;
+  for (const [id, lot] of Object.entries(lots)) {
+    const gone = Math.round(lot.amount * Math.min(1, Math.max(0, share)));
+    lot.amount -= gone;
+    lost += gone;
+    if (lot.amount <= 0) delete lots[id];
+  }
+  return lost;
 }

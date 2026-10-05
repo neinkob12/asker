@@ -80,6 +80,21 @@ export const VEHICLE_MODELS: readonly VehicleModel[] = [
     ship: { kmPerDay: 700, costPerDay: 3_000 },
     description: 'Schnell und groß: holt den Bedarf von Wochen auf einmal. Fällt so auf wie jedes Linienschiff.',
   },
+  // Auftrag 42: für die eigene Ernte über den Atlantik. Schnell, eine echte Bananen-Reederei als Fassade (der Zoll
+  // winkt Kühlschiffe der Linie eher durch), teuer im Betrieb.
+  {
+    id: 'reefer',
+    name: 'Kühlschiff',
+    capacity: 600_000,
+    speed: 1,
+    checkFactor: 0.75,
+    price: 450_000,
+    mapKind: 'ship',
+    available: true,
+    harborOnly: true,
+    ship: { kmPerDay: 850, costPerDay: 3_500 },
+    description: 'Fährt für eine Bananen-Reederei. Schnell über den Atlantik, der Zoll kennt die Flagge.',
+  },
 ];
 
 /**

@@ -41,6 +41,8 @@ const ROLE_LOOK: Record<StaffRole, { icon: string; color: 'people' | 'goods' | '
   lawyer: { icon: 'scale', color: 'law' },
   accountant: { icon: 'clipboard', color: 'money' },
   policeContact: { icon: 'badge', color: 'law' },
+  worker: { icon: 'leaf', color: 'goods' },
+  gardener: { icon: 'flask', color: 'goods' },
 };
 
 type RoleFilter = 'all' | 'runner' | 'driver' | 'security' | 'specialist';

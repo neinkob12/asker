@@ -164,6 +164,11 @@ export function staffVeedel(state: GameState, member: StaffMember): string | nul
   return placeVeedel(state, member.assignment);
 }
 
+/** Arbeiter und Gärtner auf den Fincas (Auftrag 42): nie in einer Stadt, nie im Team einer Stadt. */
+export function isFarmRole(role: StaffRole): boolean {
+  return role === 'worker' || role === 'gardener';
+}
+
 export function isSpecialist(role: StaffRole): boolean {
   return ROLE_INFO[role].specialist;
 }

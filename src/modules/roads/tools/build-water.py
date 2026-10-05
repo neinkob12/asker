@@ -443,6 +443,17 @@ SEA_LANES = [
     ('kanal', 'elbe', 'Nordsee'),
 ]
 
+# Auftrag 42: Über den Atlantik (Cartagena in Kolumbien bis in den Ärmelkanal). Eigener, gröberer Ausschnitt, damit die
+# Wege oben Zelle für Zelle gleich bleiben (ein größerer SEA_BOX verschöbe sie). Gleiche Kosten, gleiche Prüfung.
+OCEAN_BOX = (-80.0, 5.0, 5.0, 56.0)
+OCEAN_GRID = 0.1
+OCEAN_NODES = {
+    'cartagena': ('Cartagena', -75.6, 10.42),
+}
+OCEAN_LANES = [
+    ('cartagena', 'kanal', 'Karibik und Atlantik'),
+]
+
 R_EARTH = 6_371_000.0
 
 
@@ -454,18 +465,19 @@ def haversine(a, b):
     return 2 * R_EARTH * math.asin(math.sqrt(h))
 
 
-def download_sea():
-    roads.BOX = SEA_BOX
-    roads.BOXES = [SEA_BOX]
+def download_sea(box=SEA_BOX):
+    roads.BOX = box
+    roads.BOXES = [box]
     roads.PREFIX = f'release/{RELEASE}/theme=base/type=bathymetry/'
     roads.COLUMNS = ['id', 'depth', 'geometry', 'bbox']
-    print(f'Seewege: lade Tiefen im Ausschnitt {SEA_BOX} …', file=sys.stderr)
+    print(f'Seewege: lade Tiefen im Ausschnitt {box} …', file=sys.stderr)
     return roads.download()
 
 
-def build_sea(table):
+def build_sea(table, box=SEA_BOX, grid=SEA_GRID, lane_list=SEA_LANES):
     import numpy as np
 
+    SEA_BOX, SEA_GRID = box, grid
     x0, x1, y0, y1 = SEA_BOX
     window = shapely.box(x0, y0, x1, y1)
     rows = table.select(['depth', 'geometry']).to_pylist()
@@ -582,7 +594,7 @@ def build_sea(table):
         return out
 
     lanes = []
-    for a, b, name in SEA_LANES:
+    for a, b, name in lane_list:
         (_, ax, ay), (_, bx, by) = SEA_NODES[a], SEA_NODES[b]
         for key, x, y in ((a, ax, ay), (b, bx, by)):
             if not sea.contains(shapely.Point(x, y)):
@@ -646,9 +658,14 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     if args[:1] == ['--sea']:
         # --sea [bathymetry.parquet]: nur die Seewege (seaways.ts).
+        # --sea [bathymetry.parquet [ocean.parquet]]: dazu die Wege über den Atlantik (OCEAN_BOX, Auftrag 42).
         place_port_nodes()
+        SEA_NODES.update(OCEAN_NODES)
         table = pq.read_table(args[1]) if len(args) > 1 else download_sea()
-        write_sea(build_sea(table))
+        lanes = build_sea(table)
+        ocean = pq.read_table(args[2]) if len(args) > 2 else download_sea(OCEAN_BOX)
+        lanes += build_sea(ocean, OCEAN_BOX, OCEAN_GRID, OCEAN_LANES)
+        write_sea(lanes)
         sys.exit(0)
     files = args
     results = {}

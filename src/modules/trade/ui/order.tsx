@@ -40,7 +40,9 @@ import {
   getShipments,
   harborPorts,
   loadCost,
+  originStock,
   ownedPorts,
+  ownOrigin,
   ownShips,
   type ShipVoyage,
   shippingMinutes,
@@ -80,7 +82,12 @@ function OrderPanel({ producerId }: { producerId: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
   const producer = getProducer(producerId);
-  const products = producer ? Object.keys(producer.products) : [];
+  // Auftrag 42: Aus dem eigenen Ausfuhrhafen fährt nur, was im Ausfuhrlager liegt.
+  const origin = ownOrigin(producerId);
+  const stock = origin ? originStock(state, origin.id) : {};
+  const products = producer
+    ? Object.keys(producer.products).filter((id) => !origin || (stock[id]?.amount ?? 0) > 0)
+    : [];
   const ports = ownedPorts(state);
   const [productId, setProduct] = useState(products[0] ?? 'weed');
   const [size, setSize] = useState<ContainerSize['id']>('medium');
@@ -89,17 +96,33 @@ function OrderPanel({ producerId }: { producerId: string }) {
   const [count, setCount] = useState(1);
   const [port, setPort] = useState(ports[0] ?? HARBOR_CITY);
   if (!producer) return null;
+  if (origin && products.length === 0) {
+    return (
+      <div class="trade-app">
+        <Group
+          title={origin.from}
+          icon="ship"
+          color="goods"
+          note="Das Ausfuhrlager ist leer. Nach der Ernte kommt die Ware hierher."
+        />
+      </div>
+    );
+  }
   const ships = producer.sea ? freeShips(state) : [];
   const vesselId = vessel !== CHARTER && ships.some((s) => String(s.id) === vessel) ? Number(vessel) : null;
   const target = ports.includes(port) ? port : (ports[0] ?? HARBOR_CITY);
   const container = CONTAINER_SIZES.find((c) => c.id === size) ?? CONTAINER_SIZES[0];
   const capacity = vesselId === null ? Infinity : vehicleSpec(state, vesselId).capacity;
-  const max = Math.max(1, Math.min(CHARTER_MAX, Math.floor(capacity / container.grams)));
+  const onHand = origin ? (stock[productId]?.amount ?? 0) : Infinity;
+  const max = Math.max(
+    1,
+    Math.min(CHARTER_MAX, Math.floor(capacity / container.grams), Math.ceil(onHand / container.grams)),
+  );
   const n = Math.min(count, max);
   const load = [{ productId, size, cover, count: n }];
   const plan = vesselId === null ? null : voyagePlan(state, vesselId, producer.id, target);
   const total = loadCost(producer.id, load, vesselId !== null) + (plan?.cost ?? 0);
-  const risk = containerRisk(state, producer.id, size, target, cover, vesselId);
+  const risk = containerRisk(state, producer.id, size, target, cover, vesselId, stock[productId]?.pack ?? 1);
   const minutes = plan ? plan.minutes : shippingMinutes(producer.id, target);
   const fits = vesselId === null || n * container.grams <= capacity;
   const order = () => {
@@ -114,7 +137,13 @@ function OrderPanel({ producerId }: { producerId: string }) {
   };
   return (
     <div class="trade-app">
-      <Group title={producer.name} icon={producer.byRoad ? 'truck' : 'ship'} color="goods" note={producer.description}>
+      <Group
+        title={producer.name}
+        icon={producer.byRoad ? 'truck' : 'ship'}
+        color="goods"
+        note={producer.description}
+        value={origin ? `${kg(onHand)} bereit` : undefined}
+      >
         {products.length > 1 && (
           <SegmentedControl
             wide
@@ -217,7 +246,11 @@ function OrderPanel({ producerId }: { producerId: string }) {
           disabled={!fits || state.wallet.dirty < total}
           onClick={order}
         >
-          {vesselId === null ? `Bestellen (${formatEuro(total)})` : `Ablegen (${formatEuro(total)})`}
+          {vesselId !== null
+            ? `Ablegen (${formatEuro(total)})`
+            : origin
+              ? `Verschiffen (${formatEuro(total)})`
+              : `Bestellen (${formatEuro(total)})`}
         </Button>
       </Group>
     </div>

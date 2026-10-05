@@ -12,6 +12,7 @@
 // Kanal – Maasmond: 209 km, 4 Punkte.
 // Kanal – Schelde: 139 km, 4 Punkte.
 // Nordsee: 641 km, 6 Punkte.
+// Karibik und Atlantik: 8237 km, 8 Punkte.
 //
 // Format: SEA_NODES sind Knoten (Häfen der Produzenten, Engstellen, Beginn der Wege in die Häfen), SEA_LANES die Wege
 // dazwischen im Polyline-Format (1e-5 Grad, erster Punkt absolut, dann Abstände, wie WATERWAYS). SEA_PORTS: an welchem
@@ -26,6 +27,7 @@ export const SEA_NODES: Readonly<Record<string, { name: string; lng: number; lat
   maas: { name: 'Maasgeul', lng: 3.87435, lat: 52.02729 },
   wielingen: { name: 'Wielingen', lng: 3.20042, lat: 51.38668 },
   elbe: { name: 'Elbmündung', lng: 8.71847, lat: 53.87683 },
+  cartagena: { name: 'Cartagena', lng: -75.6, lat: 10.42 },
 };
 
 export const SEA_LANES: readonly { from: string; to: string; name: string; km: number; path: string }[] = [
@@ -77,6 +79,13 @@ export const SEA_LANES: readonly { from: string; to: string; name: string; km: n
     name: 'Nordsee',
     km: 640.9,
     path: 'oezG_}gvHf{Cf{CorpYod_Q_luP?owHnwHxg@mJ',
+  },
+  {
+    from: 'cartagena',
+    to: 'kanal',
+    name: 'Karibik und Atlantik',
+    km: 8237.3,
+    path: '~rllM_dr~@owHozD_af@_vgC_nnqJ_arjF_d{r@?_coh@_ibE_g{C_af@?owH',
   },
 ];
 

@@ -38,6 +38,7 @@ import {
   getStaff,
   getStaffMember,
   isAbsent,
+  isFarmRole,
   isSpecialist,
   payrollDue,
   RUNNER_DAILY_WAGE,
@@ -169,7 +170,8 @@ function StaffOverview() {
   const [filter, setFilter] = useState<RoleFilter>('all');
   // Das Personal folgt der aktiven Stadt (Auftrag 30); wer in einer anderen Stadt ist, steht unten extra.
   const city = activeCity(state);
-  const everyone = getStaff(state);
+  // Arbeiter und Gärtner auf den Fincas (Auftrag 42) stehen in der Kunden-App bei ihrer Finca, nicht hier.
+  const everyone = getStaff(state).filter((m) => !isFarmRole(m.role));
   const current = everyone.filter((m) => m.cityId === city);
   const elsewhere = everyone.filter((m) => m.cityId !== city);
   const absent = current.filter(isAbsent);

@@ -34,6 +34,7 @@ import {
   getStaff,
   getStaffMember,
   isEmployed,
+  isFarmRole,
   type RecruitProfile,
   ROLE_INFO,
   roleName,
@@ -293,7 +294,7 @@ const describe = (c: Candidate) => `${c.name}, ${c.age}, ${roleName(c.role)}`;
 /** Empfehlung eines loyalen Mitarbeiters (höchstens eine pro Tag). */
 function maybeReferral(ctx: Ctx): void {
   const loyal = getStaff(ctx.state, { status: 'active' })
-    .filter((m) => m.stats.loyalty >= REFERRAL_MIN_LOYALTY)
+    .filter((m) => m.stats.loyalty >= REFERRAL_MIN_LOYALTY && !isFarmRole(m.role))
     .sort((a, b) => a.id.localeCompare(b.id));
   for (const m of loyal) {
     if (!ctx.chance(REFERRAL_CHANCE)) continue;

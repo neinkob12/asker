@@ -4,7 +4,17 @@
  * Rollen. 'courier' ist eine Altlast aus der Zeit vor Auftrag 28: Kuriere gibt es nicht mehr (Aufträge fährt allein die
  * Rechte Hand), alte Spielstände machen aus ihnen Läufer. Die ID bleibt im Typ, damit nichts bricht.
  */
-export type StaffRole = 'runner' | 'courier' | 'driver' | 'security' | 'lawyer' | 'accountant' | 'policeContact';
+/** Auftrag 42: 'worker' und 'gardener' arbeiten auf den Fincas im Ausland (grow), nie in einer Stadt. */
+export type StaffRole =
+  | 'runner'
+  | 'courier'
+  | 'driver'
+  | 'security'
+  | 'lawyer'
+  | 'accountant'
+  | 'policeContact'
+  | 'worker'
+  | 'gardener';
 export type StaffStatus = 'active' | 'injured' | 'jailed' | 'quit' | 'dead';
 
 /** Werte von 0 bis 100. */
