@@ -37,7 +37,17 @@ import {
   PARTIAL_SHARE,
   REDIRECT_REMAINING,
 } from './config';
-import { contactOf, getSupplier, type Shipment, type Supplier, supplierIn, supplierVia, tell } from './index';
+import {
+  contactOf,
+  getSupplier,
+  type Shipment,
+  type Supplier,
+  shipmentHere,
+  supplierIn,
+  supplierVia,
+  tell,
+  tellAbout,
+} from './index';
 import { type DelayChoice, findReason, PROBLEM_REASONS, type ProblemKind, reasonVars, routeKindOf } from './problems';
 import { type SupplierTextKey, supplierVariants } from './voices';
 
@@ -124,7 +134,9 @@ export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier, ask?: b
     const why = rollReason(ctx, s, supplier, 'delay');
     const choices = delayChoices(ctx.state, s);
     const time = Math.min(DECISION_TIME, remaining - 1);
-    if (choices.length > 0 && time >= 15 && (ask ?? ctx.chance(DECISION_SHARE_DELAY))) {
+    // Gefragt wird nur für die Stadt, in der du bist (Auftrag 43).
+    const here = shipmentHere(ctx.state, s);
+    if (here && choices.length > 0 && time >= 15 && (ask ?? ctx.chance(DECISION_SHARE_DELAY))) {
       const cost = Math.max(DETOUR_MIN_COST, Math.round((s.price * DETOUR_COST_SHARE) / 5) * 5);
       const redirectTo = otherWarehouse(ctx.state, s);
       s.decision = {
@@ -141,7 +153,7 @@ export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier, ask?: b
         expiresIn: time,
       });
     } else {
-      tell(ctx, supplier, voice(ctx, supplier, 'delayed', { ...why, goods, delay, ...roadVar(supplier, s) }));
+      tellAbout(ctx, supplier, s, voice(ctx, supplier, 'delayed', { ...why, goods, delay, ...roadVar(supplier, s) }));
     }
     journal.add(ctx, `Lieferung von ${supplier.name} verspätet sich um ca. ${delay} (${why.reasonLabel}).`, 'bad');
     ctx.emit('shipment.problem', {
@@ -156,7 +168,12 @@ export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier, ask?: b
   if (s.shared) {
     shipments.shipments = shipments.shipments.filter((x) => x.id !== s.id);
     const what = `Der Zoll hat die andere Hälfte vom Container gefunden. Deine ${goods} waren mit drin, alles weg.`;
-    tell(ctx, supplier, s.onCredit ? `${what} Die Schulden bleiben trotzdem.` : `${what} Pech, so läuft das Geschäft.`);
+    tellAbout(
+      ctx,
+      supplier,
+      s,
+      s.onCredit ? `${what} Die Schulden bleiben trotzdem.` : `${what} Pech, so läuft das Geschäft.`,
+    );
     journal.add(ctx, `Lieferung von ${supplier.name} beschlagnahmt (geteilter Container): ${goods} verloren.`, 'bad');
     ctx.emit('shipment.problem', {
       shipmentId: s.id,
@@ -169,7 +186,7 @@ export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier, ask?: b
   // Beschlagnahme: mit Rückfrage erst eine Drohung (Schmieren), sonst wie vorher sofort weg.
   const why = rollReason(ctx, s, supplier, 'seize');
   const time = Math.min(DECISION_TIME, remaining - 1);
-  if (time >= 15 && (ask ?? ctx.chance(DECISION_SHARE_SEIZE))) {
+  if (shipmentHere(ctx.state, s) && time >= 15 && (ask ?? ctx.chance(DECISION_SHARE_SEIZE))) {
     const cost = Math.max(BRIBE_MIN, Math.round((s.price * BRIBE_SHARE) / 10) * 10);
     s.decision = { kind: 'seize', until: ctx.now + time, choices: ['bribe', 'wait'], cost };
     messages.send(ctx, {
@@ -182,7 +199,7 @@ export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier, ask?: b
     return;
   }
   shipments.shipments = shipments.shipments.filter((x) => x.id !== s.id);
-  tell(ctx, supplier, voice(ctx, supplier, s.onCredit ? 'seizedCredit' : 'seized', { ...why, goods }));
+  tellAbout(ctx, supplier, s, voice(ctx, supplier, s.onCredit ? 'seizedCredit' : 'seized', { ...why, goods }));
   journal.add(ctx, `Lieferung von ${supplier.name} beschlagnahmt (${why.reasonLabel}): ${goods} verloren.`, 'bad');
   ctx.emit('shipment.problem', { shipmentId: s.id, supplierId: s.supplierId, kind: 'seized', reason: why.reasonLabel });
 }
@@ -361,6 +378,6 @@ export function applyArrivalLuck(ctx: Ctx, s: Shipment, supplier: Supplier): voi
   } else {
     text = voice(ctx, supplier, 'early', { goods: goodsOf(s), ...roadVar(supplier, s) });
   }
-  tell(ctx, supplier, text);
+  tellAbout(ctx, supplier, s, text);
   ctx.emit('shipment.luck', { shipmentId: s.id, supplierId: s.supplierId, kind: s.luck });
 }

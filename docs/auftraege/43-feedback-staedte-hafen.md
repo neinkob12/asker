@@ -149,7 +149,8 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   Erledigt: Bewerber tragen `cityId` (Migration `recruiting` 5), Pool und Kontakte pro Stadt, einstellen nur in der aktiven Stadt; bei Ankunft oder Wechsel in eine Stadt ohne Bewerber kommen gleich `POOL_START` von dort.
 - [x] E17 Lieferant begrüßt „Du bist in Berlin“ schon bei der Abfahrt (auf `city.arrived` legen).
   Erledigt: Hein, Mirko, Toni und Kofi sind mit der Stadt frei, melden sich aber erst bei der ersten Ankunft (`city.arrived`).
-- [ ] E18 (Designfrage) Zurück in einer übergebenen Stadt: Hinweis, dass man die Vollmacht zurücknehmen kann.
+- [x] E18 (Designfrage) Zurück in einer übergebenen Stadt: Hinweis, dass man die Vollmacht zurücknehmen kann.
+  Erledigt: Rat „<Name> führt <Stadt>“ in einer Stadt mit Statthalter: Vollmacht widerrufen auf seiner Seite (niedrige Priorität, nur ein Hinweis).
 
 ## F Hafen-Prüfer (Spieltest Rotterdam ab `deutschland`, 05.10.2026)
 
@@ -209,8 +210,9 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   Kölner Niehler Hafen mit „Liegeplatz mieten“, die Lieferanten-App war leer. Beide führen jetzt nach dem Verkauf in
   die Kunden-App, Bereich Hafen (Einkauf im Ausland); der Rat „Ware ist alle“ schweigt nach dem Verkauf.
 
-- [ ] N1 Lieferanten schreiben nach dem Umzug weiter Chats über Lieferungen in die alte Stadt („Freie Bahn. Bin früher
+- [x] N1 Lieferanten schreiben nach dem Umzug weiter Chats über Lieferungen in die alte Stadt („Freie Bahn. Bin früher
   da.“). Lieferungen für eine Stadt mit Statthalter still oder als Bericht des Statthalters.
+  Erledigt: `tellAbout`/`shipmentHere` in suppliers: Verspätung, Beschlagnahme, schlechte Ware und „früher da“ schreiben nur für Lieferungen in die aktive Stadt (sonst nur Journal), Rückfragen mit Frist nur dort.
 - [x] N2 Peters Quest-Leiste zeigt nach dem Umzug alte Kölner Quests (z.B. „Setz einen eigenen Preis“), wenn sie in
   Köln liegen geblieben sind; beim Umzug in eine neue Stadt sollte ihr Kapitel vorgehen.
   Erledigt: `followCity` im Quest-Tick: Bist du in einer Stadt mit eigenem Kapitel und die aktive Quest gehört woanders hin, macht Peter mit dem Kapitel der Stadt weiter; Liegengebliebenes aus Köln gilt als übersprungen.

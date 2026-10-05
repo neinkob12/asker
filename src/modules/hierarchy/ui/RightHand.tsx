@@ -25,7 +25,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName, offerStatus } from '../../city';
+import { activeCity, cityName, isBusinessSold, offerStatus } from '../../city';
 import { getStaff, getStaffMember, roleName } from '../../staff';
 import { campaignProgress } from '../../territory';
 import {
@@ -567,6 +567,21 @@ registerPanel({
 registerAdvisor({
   id: 'hierarchy.rightHand',
   advise: (state) => {
+    // Zurück in einer übergebenen Stadt (Auftrag 43): Hier führt der Statthalter; wer selbst wieder ran will, widerruft.
+    const city = activeCity(state);
+    const rh = getRightHand(state, city);
+    const keeper = rh ? getStaffMember(state, rh.staffId) : undefined;
+    if (hasFullPower(state, city) && keeper && !isBusinessSold(state)) {
+      return {
+        id: 'hierarchy.statthalter',
+        priority: 25,
+        icon: 'crown',
+        title: `${keeper.name} führt ${cityName(city)}`,
+        text: 'Als Statthalter mit Vollmacht. Willst du selbst wieder ran, widerrufst du sie auf der Seite des Statthalters.',
+        actionLabel: 'Statthalter',
+        action: (ui) => ui.openPanel('hierarchy.rightHand', {}),
+      };
+    }
     if (!rightHandOffered(state)) return null;
     const ready = getStaff(state, { cityId: activeCity(state) }).some((m) => canBeRightHand(state, m.id).ok);
     if (!ready) return null;
