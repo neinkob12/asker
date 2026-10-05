@@ -1,0 +1,48 @@
+--- advice
+[
+ "90 core.answer: 3 Chats warten auf Antwort | Manche Antworten haben eine Frist. | Antworten",
+ "70 goods.firstWarehouse.wash: Geld waschen für ein Lager in Berlin | Ein Lager kostet sauberes Geld. Für das billigste fehlen dir 97 €. | Geldwäsche",
+ "20 territory.goal: Ziel: Berlin übernehmen | Ab 7 Veedeln bist du Boss von Berlin, mit allen 12 gehört dir die Stadt. | Reviere"
+]
+--- city
+{
+ "active": "berlin",
+ "present": "berlin",
+ "unlocked": [
+  "koeln",
+  "hamburg",
+  "berlin"
+ ],
+ "wallet": {
+  "dirty": 70953,
+  "clean": 2303
+ },
+ "unread": 190,
+ "recent": [
+  "dt=-212 other:hamburg-harbor  | Zollfahndung. 200 Stück Vape-Pen sind sichergestellt. Ich kenn dich nicht. | ",
+  "dt=-211 other:hamburg-harbor  | Ladung für dich am Schuppen 52 am O’Swaldkai: 200 Stück Vape-Pen. Nicht trödeln, 10 Std.. | Fahrer schicken/Ich hol ihn selbst/Später",
+  "dt=-152 staff:s10238 (s) [exp 480] | Ich weiß, ich weiß. Ein Kölsch zu viel. Der Elbphilharmonie-Plaza ist heute Abend leer. | Abmahnen/Lohn kürzen/Lass gut sein",
+  "dt=-151 staff:s10238  | Einmal noch, und du bist raus. | ",
+  "dt=-151 staff:s10238 (s) | Ja, Chef. Sorry. | ",
+  "dt=-37 supplier:berlin  | Ick sach’s dir, bevor du’s merkst: Mein Zwischenhändler hat gestreckt. Ware is schwach. | ",
+  "dt=-33 supplier:frankfurt  | Toni hier, die haben mich gefilzt! Spürhund auf dem Rastplatz. Alles weg, 50 ml Öl. Ich bin raus, für heute. | ",
+  "dt=-31 gang:hh-schanze  | Glückwunsch. Wir machen eine Nachbesprechung. | ",
+  "dt=-7 other:berlin-club  | Da bist du. Willkommen in Berlin. | ",
+  "dt=-7 other:berlin-club  | Deine Crew ist zu Hause geblieben, die braucht dein Statthalter. Hier suchst du dir neue Leute, und bis jemand für dich bestellt, machst du das selbst. | ",
+  "dt=-7 other:berlin-club  | Erst ein Lager: Neukölln, Friedrichshain, Lichtenberg, Wedding oder Schöneberg. Mirko liefert dir hin, der ist hier zu Hause. | ",
+  "dt=-7 other:berlin-club  | Dann eine Ecke. Die Clubs machen Freitagabend auf und Montagfrüh zu, dazwischen brennt die Luft. Unter der Woche läuft es an den Bahnhöfen und in den Parks. | ",
+  "dt=-7 other:berlin-club  | Die Bullen sind entspannt. Die Türsteher und die Kotti-Familie nicht. Leg dich nicht mit allen gleichzeitig an. | ",
+  "dt=-7 supplier:berlin  | Ey, du bist in Berlin! Willkommen bei mir zu Hause. Hier liefer ich in einer Stunde und billiger als sonst. Such dir ein Lager, dann geht’s los. | "
+ ]
+}
+--- home
+ok
+--- fin
+ok
+--- fintxt
+Start | Kasse | Kasse | 70.953 € | Schwarz | 2.303 € | Sauber | Heute | Gestern | 7 Tage | 30 Tage | Alle Städte | Stadt Köln | Stadt Hamburg | Stadt Berlin | Veedel Altona-Altstadt | Veedel Altstadt-
+--- k1
+1
+--- pxt
+Start | Kasse | Kasse | 70.953 € | Schwarz | 2.303 € | Sauber | Heute | Gestern | 7 Tage | 30 Tage | Alle Städte | Stadt Köln | Stadt Hamburg | Stadt Berlin | Veedel Altona-Altstadt | Veedel Altstadt-Nord | Veedel Altstadt-Süd | Veedel Barmbek-Süd | Veedel Bayenthal | Veedel Blankenese | Veedel Deutz | Veedel Ehrenfeld | Veedel Eimsbüttel | Veedel Eppendorf | Veedel HafenCity | Veedel Harburg | Veedel Kalk | Veedel Lindenthal | Veedel Mülheim | Veedel Neustadt-Nord | Veedel Neustadt-Süd | Veedel Nippes | Veedel Ottensen | Veedel St. Georg | Veedel St. Pauli | Veedel Sternschanze | Veedel Sülz | Veedel Wilhelmsburg | Spot Aachener Weiher | Spot Alma-Wartenberg-Platz | Spot Am Weiher | Spot Bahnhof Ehrenfeld | Spot Berrenrather Straße | Spot Blankeneser Markt | Spot Breslauer Platz | Spot Chlodwigplatz | Spot Deutzer Bahnhof | Spot Domplatte | Spot Ebertplatz | Spot Elbphilharmonie-Plaza | Spot Eppendorfer Baum | Spot Fischmarkt | Spot Friesenplatz | Spot Fuhlsbüttler Straße | Spot Große Bergstraße | Spot Hans-Albers-Platz | Spot Hansaplatz | Spot Harburger Rathausplatz | Spot Herbrandstraße | Spot Hermeskeiler Platz | Spot Isemarkt | Spot Kalk Post | Spot Kiez-Bar Hamburger Berg | Spot Kneipe Körnerstraße | Spot Kneipe Neusser Straße | Spot Kneipe Severinstraße | Spot Kneipe Sülzburgstraße | Spot Landungsbrücken | Spot Lange Reihe | Spot Mülheimer Hafen | Spot Museumsplatz | Spot Neumarkt | Spot Neusser Straße | Spot Osterstraße | Spot Ottenser Hauptstraße | Spot Ottmar-Pohl-Platz | Spot Reiherstieg | Spot Rheinpark | Spot Rheinufer Bayenthal | Spot Rudolfplatz | Spot Sand | Spot Schanzenpark | Spot Schulterblatt | Spot Spielbudenplatz | Spot Stadtgarten | Spot Stadtwald | Spot Strandweg | Spot Stübenplatz | Spot Südpark | Spot Überseeboulevard | Spot Uni-Wiese | Spot Wiener Platz | Spot Wilhelmplatz | Spot Zülpicher Platz | Leutnant Marco M. | Leutnant Can W. | Leutnant Vanessa Y. | Leutnant Sascha M. | Leutnant Chantal P. | Leutnant Mario „Nase“ K. | Leutnant Nico B. | Leutnant Nico „Brikett“ T. | Leutnant Hakan B. | Leutnant Ilias D. | Leutnant Emre M. | Leutnant Sven L. | Leutnant Marco S. | Leutnant Ilias M. | Leutnant Marco „Brikett“ K. | Leutnant Leonie K. | Leutnant Sergej „Nase“ B. | Leutnant Marco Y. | Leutnant Ali T. | Leutnant Bianca S. | Leutnant Murat Ö. | Leutnant Timo K. | GEWINN HEUTE, BERLIN | 0 € | Keine Kontobewegung. | Was zählt hier? | Heute noch keine Kontobewegung. | VERLAUF | T30 | T31 | T32 | T33 | T34 | T35 | T36 | Gewinn bzw. Verlust je Spieltag, heute bis jetzt. | PRO LEUTNANT | Nico B. | Umsatz 4.792 € | Ware 1.508 € | +3.284 € | Can W. | Umsatz 3.751 € | Ware 855 € | +2.896 € | Hakan B. | Umsatz 3.710 € | Ware 921 € | +2.789 € | Marco M. | Umsatz 4.786 € | Ware 1.618 € | Anheuern 860 € | +2.308 € | Vanessa Y. | Umsatz 2.816 € | Ware 888 € | +1.928 € | Chantal P. | Umsatz 2.795 € | Ware 921 € | +1.874 € | Nico „Brikett“ T. | Umsatz 2.370 € | Ware 676 € | +1.694 € | Sascha M. | Umsatz 2.532 € | Ware 904 € | +1.628 € | Mario „Nase“ K. | Umsatz 1.160 € | Ware 378 € | +782 € | Ilias D. | Umsatz 0 € | 0 € | Emre M. | Umsatz 0 € | 0 € | Sven L. | Umsatz 0 € | 0 € | Marco S. | Umsatz 0 € | 0 € | Ilias M. | Umsatz 0 € | 0
+errors []

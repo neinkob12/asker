@@ -139,8 +139,10 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
   const orders = isTaskActive(state, 'orders');
   const wholesale = isTaskActive(state, 'wholesale');
   if (!orders && !wholesale) return;
+  // Nur Aufträge in ihrer Stadt (Auftrag 43: die Kölner Rechte Hand fuhr sonst nach Hamburg aus).
+  const home = member.cityId ?? 'koeln';
   const offered = getOrders(state, { status: 'offered' })
-    .filter((o) => !rh.passed.includes(o.id))
+    .filter((o) => !rh.passed.includes(o.id) && cityAt(o.lng, o.lat) === home)
     .sort((a, b) => a.expiresAt - b.expiresAt || a.id - b.id);
   for (const order of offered) {
     const big = order.kind === 'wholesale';
@@ -163,7 +165,7 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
       pass(ctx, rh, order, `nicht genug ${productName(order.productId)} im Lager`);
       continue;
     }
-    const driver = rightHandDriver(state);
+    const driver = rightHandDriver(state, home);
     if (!driver.ok) {
       // Unterwegs: Reicht die Frist, bis sie zurück ist, nimmt sie die Anfrage danach.
       const current = getOrders(state, { status: 'enRoute' }).find((o) => o.courierId === member.id);

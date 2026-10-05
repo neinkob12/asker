@@ -1082,14 +1082,16 @@ kbd {
   /* Lager und Ruf · Reviere als flache Kacheln in einer Reihe (seit Auftrag 26 nicht mehr im Handy) */
   .hud-tiles {
     justify-self: stretch;
+    flex-wrap: wrap;
     gap: var(--space-2);
   }
   /* Schwebt die Dynamic Island unter Geld und Uhr, rücken die Kacheln darunter (sonst lägen Stadt, Lager, Ruf darunter) */
   .has-floating-island .hud-tiles {
     margin-top: var(--island-gap);
   }
+  /* Höchstens drei Kacheln pro Reihe (Auftrag 43: fünf in einer Reihe schnitten Rang, Event und Ruf ab) */
   .hud-tiles .hud-pill-wrap {
-    flex: 1;
+    flex: 1 1 calc((100% - 2 * var(--space-2)) / 3);
     min-width: 0;
   }
   .hud-tiles .hud-pill {

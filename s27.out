@@ -1,0 +1,62 @@
+--- buy
+{"ok":true}
+--- unl
+{"ok":true}
+--- ord
+{"ok":true,"data":{"shipmentId":9986}}
+--- m0
+mark 9983
+--- hire
+{"ok":true,"data":{"staffId":"s9988"}}
+--- adv
+1
+--- q
+QUEST 33/63 · MOIN HAMBURG
+Bestell Ware für Hamburg
+Lieferanten-App: Paket bestellen, die Ware kommt in dein Lager in Hamburg.
+0/1
+500 € schwarz
+Alle Quests
+Überspringen
+--- msgs
+[
+ "id=9992 dt=2 quest:peter  | Jetzt brauchst du eine Ecke. Auf dem Kiez ist am meisten los, aber da guckt jeder hin.  Dafür gibt's von mir: 1.500 € schwarz. | ",
+ "id=9994 dt=2 quest:peter  | Und dann: verkaufen. Der erste Kunde an der Elbe. Die zahlen da mehr, sagt man.  Dafür gibt's von mir: +3 Ruf. | ",
+ "id=10028 dt=32 gang:hh-hafen  [exp 720] | Krieg mit Neonkrone. Wer jetzt liefert, hat am Hafen immer nen Platz. | Ware liefern (50 g für 180 €)/Spot von Neonkrone überfallen/Raushalten",
+ "id=10031 dt=32 dealer:jojo  [exp 150] | Ich brauch 50 g Gras. Zahle 400 € (8,00 € pro g), Übergabe in St. Pauli. Bist du dabei? | Ich bring's selbst/Kein Interesse",
+ "id=10045 dt=157 quest:peter  | Deine alten Leute bleiben, wo sie sind, die braucht dein Statthalter. In Hamburg fängst du bei null an: Heuer einen Läufer an.  Dafür gibt's von mir: 1.000 € schwarz. | ",
+ "id=10047 dt=157 quest:peter  | Und Nachschub bestellt dir hier keiner. Bestell selbst Ware für dein Hamburger Lager, Toni liefert auch an die Elbe.  Dafür gibt's von mir: 500 € schwarz. | ",
+ "id=10054 dt=307 other:harbor  | Container für dich, 500 g Amnesia Haze. Der Zoll macht um die Zeit Pause. Noch 16 Std.. | Fahrer schicken/Ich hol ihn selbst/Später",
+ "id=10057 dt=307 other:harbor  | Deine Ladung ist angekommen: 500 g OG Kush. Bitte zügig, so 16 Std. hast du. | Fahrer schicken/Ich hol ihn selbst/Später"
+]
+--- adv2
+1
+--- q2
+QUEST 33/63 · MOIN HAMBURG
+Bestell Ware für Hamburg
+Lieferanten-App: Paket bestellen, die Ware kommt in dein Lager in Hamburg.
+0/1
+500 € schwarz
+Alle Quests
+Überspringen
+--- msgs2
+[
+ "id=9992 dt=2 quest:peter  | Jetzt brauchst du eine Ecke. Auf dem Kiez ist am meisten los, aber da guckt jeder hin.  Dafür gibt's von mir: 1.500 € schwarz. | ",
+ "id=9994 dt=2 quest:peter  | Und dann: verkaufen. Der erste Kunde an der Elbe. Die zahlen da mehr, sagt man.  Dafür gibt's von mir: +3 Ruf. | ",
+ "id=10028 dt=32 gang:hh-hafen  [exp 720] | Krieg mit Neonkrone. Wer jetzt liefert, hat am Hafen immer nen Platz. | Ware liefern (50 g für 180 €)/Spot von Neonkrone überfallen/Raushalten",
+ "id=10031 dt=32 dealer:jojo  [exp 150] | Ich brauch 50 g Gras. Zahle 400 € (8,00 € pro g), Übergabe in St. Pauli. Bist du dabei? | Ich bring's selbst/Kein Interesse",
+ "id=10045 dt=157 quest:peter  | Deine alten Leute bleiben, wo sie sind, die braucht dein Statthalter. In Hamburg fängst du bei null an: Heuer einen Läufer an.  Dafür gibt's von mir: 1.000 € schwarz. | ",
+ "id=10047 dt=157 quest:peter  | Und Nachschub bestellt dir hier keiner. Bestell selbst Ware für dein Hamburger Lager, Toni liefert auch an die Elbe.  Dafür gibt's von mir: 500 € schwarz. | ",
+ "id=10054 dt=307 other:harbor  | Container für dich, 500 g Amnesia Haze. Der Zoll macht um die Zeit Pause. Noch 16 Std.. | Fahrer schicken/Ich hol ihn selbst/Später",
+ "id=10057 dt=307 other:harbor  | Deine Ladung ist angekommen: 500 g OG Kush. Bitte zügig, so 16 Std. hast du. | Fahrer schicken/Ich hol ihn selbst/Später",
+ "id=10072 dt=682 other:harbor  | Dein Container ist da: 500 g Hasch. Hol ihn in den nächsten 16 Std. ab, danach schaut der Zoll genauer hin. | Fahrer schicken/Ich hol ihn selbst/Später",
+ "id=10092 dt=1052 supplier:hamburg (s) | Kleine Aktion unter Freunden: 30 Edibles für Hamburg bis Mittwoch Abend 15 % günstiger. | ",
+ "id=10107 dt=1532 staff:s476 (s) | Bericht aus Köln, Tag 23: Umsatz 10.685 €, Kosten 16.705 €, Verlust 6.020 €. Kein Gewinn, also kein Anteil für mich. In der Kasse 98.500 €. Gestern Minus, größter Posten: Einkauf Ware (15.073 €). 2 Leute fallen aus. Mein Rat: Hafenkolonne macht Druck. Ein Waff | "
+]
+--- staff
+ok
+--- txt
+Start | Personal | Personal | 1 | Team | 100 € | Lohn/Tag | 0 | Ausfälle | DEIN TEAM | 1 | Alle | Läufer | Fahrer | Sicherheit | Spezialisten | BOSS | Du | Ergebnis heute | Keine Leutnants | 429 € | OHNE LEUTNANT | 1 | Schanzenpark | Sternschanze | Kemal S. | 245 € | Leutnant ernennen | bis zu drei Spots | Diese Spots führst du selbst. | Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt) geben Boni, jeweils in ihrer Stadt. | ANHEUERN | Fahrer anheuern | Holt Schiffsware am Hafen ab und lagert um. Ohne Fahrer fährst du selbst. | 450 € | Läufer heuerst du am Spot an, alle anderen unten bei „Könntest du einstellen“. | IN ANDEREN STÄDTEN | 62 Leute | Arbeiten dort für deine Statthalter. Wechsel die Stadt, um sie zu sehen. | KÖNNTEST DU EINSTELLEN | 12 | Alle | Läufer | Fahrer | Sicherheit | Spezialisten | Nadine S. | Sicherheit | Level 1 | Handgeld 480 € | noch 4 Std. 56 Min. | 160 €/Tag | Can M. | Sicherheit | Level 1 | Handgeld 450 € | noch 14 Std. 5 Min. | 150 €/Tag | Murat M. | Läufer | Level 1 | Handgeld 320 € | noch 26 Std. 14 Min. | 105 €/Tag | Vanessa „Blitz“ T. | Sicherheit | Level 2 | Handgeld 590 € | noch 14 Std. 39 Min. | 195 €/Tag | Luca „Professor“ D. | Läufer | Level 1 | Handgeld 300 € | noch 22 Std. 37 Min. | 100 €/Tag | Kevin A. | Polizei-Kontakt | Level 1 | Handgeld 720 € | noch 6 Std. 15 Min. | 240 €/Tag | Mario M. | Buchhalter | Level 1 | Handgeld 720 € | noch 11 Std. 17 Min. | 240 €/Tag | Jessica D. | Läufer | Level 2 | Handgeld 440 € | noch 26 Std. 53 Min. | 145 €/Tag | Murat M. | Läufer | Level 1 | Handgeld 240 € | noch 29 Std. 10 Min. | 80 €/Tag | Sascha S. | Polizei-Kontakt | Level 1 | Handgeld 770 € | noch 19 Std. 22 Min. | 255 €/Tag | Kemal T. | Anwalt | Level 1 | Handgeld 900 € | noch 34 Std. 30 Min. | 300 €/Tag | Hakan „Professor“ K. | Läufer | Level 1 | Handgeld 380 € | noch 33 Std. 34 Min. | 125 €/Tag | Ein Tipp zeigt Werte und Hintergrund. | Mehr dazu | LEUTE FINDEN | Egal wen | Läufer | Fahrer | Sicherheit | Rumfragen | etwa 3 neue Bewerber, sofort | 150 € | Kostet 150 € und bringt etwa 3 Leute (gemischt, meist Läufer). | 12:40 | Meldung | jetzt | Lieferung aus Hamburg ist da.
+--- wallet
+{"dirty":98519,"clean":13164}
+errors []

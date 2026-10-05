@@ -555,7 +555,10 @@ function PortPanel() {
     );
   }
   const trips = getTrips(state).filter((t) => tripTouchesCity(state, t, activeCity(state)));
-  const log = getLogisticsLog(state).slice(0, 4);
+  // Nur Fahrten in diese Stadt (Auftrag 43, G7: in Hamburg standen die Kölner Fahrten).
+  const log = getLogisticsLog(state)
+    .filter((entry) => placeCity(state, entry.toId) === activeCity(state))
+    .slice(0, 4);
   const drivers = getStaff(state, { role: 'driver', cityId: activeCity(state) }).length;
   return (
     <div class="logi-app">
@@ -592,8 +595,8 @@ function PortPanel() {
                 <ItemContent
                   icon={entry.result === 'done' ? 'checkCircle' : 'xCircle'}
                   color={entry.result === 'done' ? 'money' : 'danger'}
-                  title={`${who(state, entry.driverId)} → ${placeOf(state, entry.toId)?.name ?? 'Lager'}`}
-                  meta={clock.formatTime(entry.at)}
+                  title={placeOf(state, entry.toId)?.name ?? 'Lager'}
+                  meta={`${who(state, entry.driverId)}, ${clock.formatTime(entry.at)}`}
                 />
               </ListItem>
             ))}

@@ -308,16 +308,21 @@ export const ALL_FILTER: FinanceFilter = { kind: 'all' };
  * Worauf sich die Bilanz filtern lässt: offene Spots (auch selbst gegründete, die nicht in "unlocked" stehen), deren
  * Veedel und die Leutnants.
  */
-export function filterTargets(state: GameState): {
+export function filterTargets(
+  state: GameState,
+  cityId = activeCity(state),
+): {
   spots: readonly Spot[];
   veedelIds: string[];
   lieutenantIds: string[];
 } {
-  const spots = getSpots(state);
+  // Nur die Stadt, in der du bist (Auftrag 43: in Hamburg standen über 30 Kölner Einträge); andere Städte über den
+  // Filter „Stadt …“.
+  const spots = getSpots(state).filter((s) => cityOfSpot(state, s.id) === cityId);
   return {
     spots,
     veedelIds: [...new Set(spots.map((s) => s.veedelId))],
-    lieutenantIds: getLieutenantIds(state),
+    lieutenantIds: getLieutenantIds(state).filter((id) => (getStaffMember(state, id)?.cityId ?? 'koeln') === cityId),
   };
 }
 

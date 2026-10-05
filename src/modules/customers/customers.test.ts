@@ -521,7 +521,7 @@ describe('customers: Lieferdienst und Großhandel', () => {
     if (!before) throw new Error('keine Bestellung');
     expect(sim.dispatch({ type: 'customers.acceptOrder', payload: { orderId: before.id, by: 'rightHand' } })).toEqual({
       ok: false,
-      reason: 'Du hast keine Rechte Hand, die ausfahren könnte.',
+      reason: 'In Köln hast du keine Rechte Hand, die ausfahren könnte.',
     });
     sim.dispatch({ type: 'customers.declineOrder', payload: { orderId: before.id } });
     const rightHandId = withRightHand(sim);

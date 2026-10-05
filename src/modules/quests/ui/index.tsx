@@ -21,9 +21,9 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity } from '../../city';
-import { DEFAULT_WAREHOUSE, getWarehouses } from '../../goods';
-import { getSpots } from '../../spots';
+import { activeCity, cityOfSpot } from '../../city';
+import { getWarehouses } from '../../goods';
+import { getSpots, lockedSpots } from '../../spots';
 import { CHAPTERS, chapterName, currentQuest, QUESTS, type QuestGoTo, questProgress, rewardText } from '../index';
 import { ContractsGroup } from './contracts';
 import './quests.css';
@@ -56,7 +56,9 @@ function writeCollapsed(value: boolean): void {
 export function goTo(ui: UiApi, state: GameState, target: QuestGoTo | undefined): void {
   switch (target) {
     case 'spot': {
-      const spot = getSpots(state, activeCity(state))[0];
+      // In einer neuen Stadt gibt es noch keinen offenen Spot (Auftrag 43): dann der erste, den du freischalten kannst.
+      const city = activeCity(state);
+      const spot = getSpots(state, city)[0] ?? lockedSpots(state).find((s) => cityOfSpot(state, s.id) === city);
       if (!spot) return;
       ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
       ui.openPanel('spots.spot', { spotId: spot.id });
@@ -68,11 +70,13 @@ export function goTo(ui: UiApi, state: GameState, target: QuestGoTo | undefined)
     case 'port':
       ui.openPanel('logistics.port', {});
       return;
-    case 'warehouse':
-      ui.openPanel('goods.warehouse', {
-        warehouseId: getWarehouses(state, activeCity(state))[0]?.id ?? DEFAULT_WAREHOUSE,
-      });
+    case 'warehouse': {
+      // Ohne eigenes Lager in der Stadt die Lager-App mit den Standorten (Auftrag 43: vorher „Lager Ehrenfeld“).
+      const own = getWarehouses(state, activeCity(state))[0];
+      if (own) ui.openPanel('goods.warehouse', { warehouseId: own.id });
+      else ui.openPhone('goods.app');
       return;
+    }
     case 'staff':
       ui.selectTab('staff');
       return;

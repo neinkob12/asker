@@ -1,0 +1,54 @@
+--- buy
+{"ok":true}
+--- unl
+{"ok":true}
+--- adv
+1
+--- m0
+mark 10027
+--- trav
+{"ok":true,"data":{"arrivesAt":32553}}
+--- s1
+{"active":"hamburg","present":"hamburg","travel":{"from":"hamburg","to":"koeln","departedAt":32248,"arrivesAt":32553},"t":32248}
+--- adv1
+1
+--- s2
+{"active":"koeln","present":"koeln","travel":null,"t":32581}
+--- msgs1
+[
+ "id=10046 dt=127 other:harbor  | Deine Ladung ist angekommen: 500 g Amnesia Haze. Bitte zügig, so 16 Std. hast du. | Fahrer schicken/Ich hol ihn selbst/Später",
+ "id=10049 dt=127 other:harbor  | Container für dich, 500 g OG Kush. Der Zoll macht um die Zeit Pause. Noch 16 Std.. | Fahrer schicken/Ich hol ihn selbst/Später",
+ "id=10072 dt=312 other:harbor (s) | Nicht alles passte ins Lager Ehrenfeld. 777 Einheiten stehen noch am Kai, hol sie, bevor der Zoll guckt. | ",
+ "id=10073 dt=312 other:harbor  | Mein Fahrer kommt. | ",
+ "id=10074 dt=312 other:harbor  | Mein Fahrer kommt. | "
+]
+--- m1
+mark 10074
+--- adv2
+1
+--- msgs2
+[
+ "id=10120 dt=33 other:harbor (s) | Nicht alles passte ins Lager Ehrenfeld. 633 Einheiten stehen noch am Kai, hol sie, bevor der Zoll guckt. | ",
+ "id=10161 dt=88 other:harbor (s) | Nicht alles passte ins Lager Ehrenfeld. 348 Einheiten stehen noch am Kai, hol sie, bevor der Zoll guckt. | ",
+ "id=10216 dt=143 other:harbor (s) | Nicht alles passte ins Lager Ehrenfeld. 60 Einheiten stehen noch am Kai, hol sie, bevor der Zoll guckt. | ",
+ "id=10244 dt=168 other:harbor  | Dein Container ist da: 500 g Hasch. Hol ihn in den nächsten 16 Std. ab, danach schaut der Zoll genauer hin. | Fahrer schicken/Ich hol ihn selbst/Später",
+ "id=10261 dt=178 dealer:pitter  [exp 150] | Ich brauch 80 Stück Vape-Pen. Zahle 1.790 € (22,38 € pro Stück), Übergabe in Mülheim. Bist du dabei? | Ich bring's selbst/Rechte Hand schicken/Kein Interesse",
+ "id=10263 dt=178 dealer:pitter  | Meine Rechte Hand bringt die Ware. | ",
+ "id=10293 dt=198 other:harbor  | Mein Fahrer kommt. | ",
+ "id=10364 dt=238 customer:area-muelheim (s) [exp 150] | Hab deine Nummer von einem Kumpel. 8 g Hasch nach Mülheim, 80 €. Geht das? | Ich komme selbst/Rechte Hand schicken/Geht gerade nicht",
+ "id=10366 dt=238 customer:area-muelheim  | Rechte Hand hat zugesagt: Ich komm vorbei. | "
+]
+--- m2
+mark 10366
+--- trav2
+{"ok":true,"data":{"arrivesAt":33118}}
+--- adv3
+1
+--- s3
+{"active":"hamburg","present":"hamburg","travel":null,"t":33159}
+--- msgs3
+[
+ "id=10764 dt=232 customer:area-nippes (s) [exp 150] | Hab deine Nummer von einem Kumpel. 6 g OG Kush nach Nippes, 121 €. Geht das? | Ich komme selbst/Rechte Hand schicken/Geht gerade nicht",
+ "id=10766 dt=232 customer:area-nippes  | Rechte Hand hat zugesagt: Ich komm vorbei. | "
+]
+errors []

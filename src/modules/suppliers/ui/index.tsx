@@ -649,7 +649,11 @@ registerAdvisor({
     if (isBusinessSold(state)) return null;
     if (shipmentsInTransit(state, activeCity(state)).length > 0 || cargoAmount(state) > 0 || inTransitAmount(state) > 0)
       return null;
-    const stock = getStock(state);
+    // Ware der Stadt, in der du bist (Auftrag 43: in Hamburg zählte das Kölner Lager mit, der Rat kam nie); ohne Lager
+    // dort rät erst goods zum Lagerkauf.
+    const city = activeCity(state);
+    if (getWarehouses(state, city).length === 0) return null;
+    const stock = getStock(state, { cityId: city });
     if (stock >= 20) return null;
     return {
       id: 'suppliers.restock',

@@ -916,6 +916,12 @@ function arrive(ctx: Ctx): void {
   if (first) c.visited.push(travel.to);
   if (c.active !== travel.to) switchCity(ctx, travel.to);
   journal.add(ctx, `Angekommen in ${cityName(travel.to)}.`, 'good');
+  // Was bei der Ankunft noch offen ist, gehört zur Stadt, die du verlassen hast (Auftrag 43, G3/G9): Dort entscheiden der
+  // Statthalter bzw. die Frist, die Fragen erledigen sich; der Verlauf bis hier gilt als gelesen. Angebote der Städte
+  // (Anrufe, Übergaben) bleiben offen.
+  const cityContacts = new Set(CITIES.map((c) => cityContact(c.id).id));
+  messages.retractWhere(ctx, (m) => !cityContacts.has(m.contactId));
+  for (const m of ctx.state.messages.list) m.read = true;
   ctx.emit('city.arrived', first ? { cityId: travel.to, first } : { cityId: travel.to });
   if (first) {
     // Nicht mehr still (Auftrag 43): Die Begrüßung sagt, wie es in der neuen Stadt anfängt.

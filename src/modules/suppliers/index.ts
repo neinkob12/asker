@@ -1151,7 +1151,14 @@ function deliver(ctx: Ctx): void {
       const placed = unloadCourier(ctx, s, warehouse?.id ?? s.warehouseId, s.cityId ?? 'koeln');
       const goods = `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)}`;
       const where = placedText(ctx.state, s.productId, placed);
-      journal.add(ctx, `Lieferung angekommen: ${goods}${placed.length > 1 ? ', verteilt: ' : ' '}${where}.`, 'good');
+      // Aus einer anderen Stadt mit Stadtname (Auftrag 43, G10: im Hamburger Verlauf standen Kölner Lieferungen ohne Ort).
+      const city = s.cityId ?? 'koeln';
+      const prefix = city === activeCity(ctx.state) ? '' : `${cityName(city)}: `;
+      journal.add(
+        ctx,
+        `${prefix}Lieferung angekommen: ${goods}${placed.length > 1 ? ', verteilt: ' : ' '}${where}.`,
+        'good',
+      );
       if (placed.length > 1) placedIn.set(s.id, where);
     }
     if (s.problem === 'badQuality' && supplier) {

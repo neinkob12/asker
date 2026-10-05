@@ -25,7 +25,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { presentCity } from '../city';
+import { activeCity, presentCity } from '../city';
 import { addHeat } from '../police';
 import { getReputation, reputationLabel } from '../reputation';
 import { bonus } from '../staff';
@@ -50,6 +50,11 @@ export interface LaunderingBatch {
   readyAt: number;
   /** Über welchen Weg. */
   channel: LaunderingChannelId;
+  /**
+   * Stadt, in der die Wäsche begann (Auftrag 43, G10): Dorthin bucht die Kasse das saubere Geld. Fehlt bei alten
+   * Ständen, dann wie früher die aktive Stadt.
+   */
+  cityId?: string;
 }
 
 export interface LaunderingState {
@@ -224,9 +229,11 @@ export function canUnlockChannel(state: GameState, id: LaunderingChannelId): Com
 function startBatch(ctx: Ctx, channel: LaunderingChannel, amount: number): LaunderingBatch {
   const fee = Math.round(amount * channelFee(ctx.state, channel.id));
   // Die Gebühr ist eine Ausgabe, der Rest nur eine Umbuchung (kommt später als sauberes Geld zurück).
-  wallet.pay(ctx, amount - fee, 'dirty', `Geldwäsche ${channel.name}`, 'transfer');
-  if (fee > 0) wallet.pay(ctx, fee, 'dirty', `Gebühr ${channel.name}`, 'laundering');
+  const cityId = activeCity(ctx.state);
+  wallet.pay(ctx, amount - fee, 'dirty', `Geldwäsche ${channel.name}`, { category: 'transfer', cityId });
+  if (fee > 0) wallet.pay(ctx, fee, 'dirty', `Gebühr ${channel.name}`, { category: 'laundering', cityId });
   const batch: LaunderingBatch = {
+    cityId,
     id: ctx.nextId(),
     amount,
     fee,
@@ -346,7 +353,8 @@ function tick(ctx: Ctx): void {
   if (done.length === 0) return;
   s.batches = s.batches.filter((b) => b.readyAt > ctx.now);
   for (const b of done) {
-    wallet.earn(ctx, b.amount - b.fee, 'clean', `Geldwäsche ${getChannel(b.channel).name}`, 'transfer');
+    const tag = b.cityId ? { category: 'transfer' as const, cityId: b.cityId } : 'transfer';
+    wallet.earn(ctx, b.amount - b.fee, 'clean', `Geldwäsche ${getChannel(b.channel).name}`, tag);
     s.totalLaundered += b.amount;
     s.totalFees += b.fee;
     journal.add(ctx, `${formatEuro(b.amount - b.fee)} sind sauber (Gebühr ${formatEuro(b.fee)}).`, 'good');

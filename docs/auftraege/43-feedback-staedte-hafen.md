@@ -203,6 +203,38 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] F20 App „Kunden“ heißt besser „Handel“ (Reiter „Kunden“ bleibt).
   Erledigt: App heißt „Handel“ (Titel, Quest-Hinweise, Texte), der Reiter „Kunden“ bleibt.
 
+## G Zweiter Prüfer (Neustart in Hamburg, Stichproben Berlin und München, 05.10.2026)
+
+- [x] G1 Kritisch: Die Kölner Rechte Hand fährt Hamburger Aufträge aus, sobald Köln aktiv ist (`hierarchy/tasks.ts`
+  `handleOrders` nimmt Aufträge aller Städte, `customers.acceptOrder` mit `by: 'rightHand'` prüft die Stadt nicht).
+  Erledigt: `rightHandDriver(state, cityId)` nimmt die Rechte Hand der Stadt des Auftrags; `handleOrders` nur Aufträge ihrer Stadt; `customers.acceptOrder` mit `by: 'rightHand'` lehnt ohne Rechte Hand dort ab.
+- [x] G2 Hafen-Chats des Kölner Hafens mit Antworten in Hamburg, wenn das Kölner Lager voll ist (`receiveCargo` sendet
+  nach `collectSleeping` = false die normale Frage).
+  Erledigt: `receiveCargo` fragt für eine schlafende Stadt nie; passt die Ware nicht ins Lager, wartet sie still am Kai (Journal).
+- [x] G3 Fragen aus der alten Stadt (z.B. Rotterdam-Lieferproblem für Köln) im Rat „Nächster Schritt“, in der Island
+  und als Banner (`core.answer`, `core.deadlines` ohne Stadtfilter).
+  Erledigt: Bei jeder Ankunft erledigen sich offene Fragen der verlassenen Stadt (außer Angeboten der Städte), der Verlauf gilt als gelesen.
+- [x] G4 Kasse in Hamburg: „Pro Leutnant“, Filter-Auswahl und Karte „Kundschaft“ mit Köln (`filterTargets`,
+  `PerLieutenant`, Stammkunden); `getSpots(state)` ohne Stadt liefert alle Städte.
+  Erledigt: `filterTargets` und „Pro Leutnant“ nach Stadt; Stammkunden in der Karte „Kundschaft“ nur der aktiven Stadt, Gesamtzahlen als „alle Städte“ beschriftet.
+- [x] G5 Quest-Karten: „Spot freischalten“ tut nichts (kein aktiver Spot), „Lager kaufen“ öffnet „Lager Ehrenfeld“.
+  Erledigt: „Spot freischalten“ fliegt zum ersten sperrbaren Spot der Stadt, „Lager kaufen“ ohne Lager öffnet die Lager-App.
+- [x] G6 Rat für „Spot freischalten“ und „Ware bestellen“ fehlt; `hhOrder` zählt nur Bestellungen nach dem Start.
+  Erledigt: Bestell-Quests zählen auch Lieferungen, die schon unterwegs sind (`orderedFor`); Rat „Ersten Spot freischalten“; der Nachbestell-Rat schaut nur auf Lager und Ware der aktiven Stadt.
+- [x] G7 Hafen-Seite „Zuletzt“ zeigt Kölner Fahrten (`getLogisticsLog` ohne Stadt), Text abgeschnitten.
+  Erledigt: „Zuletzt“ nur mit Fahrten in die aktive Stadt, Ziel als Titel, Fahrer und Zeit darunter.
+- [x] G8 Markt-Kasten auf der Lager-Seite zeigt Kölner Veedel (`hotSpots` ohne Stadt).
+  Erledigt: Markt-Kasten nur mit Veedeln der aktiven Stadt.
+- [x] G9 Nachrichten der alten Stadt beim Umzug: gelesen markieren (wie beim Verkauf).
+  Erledigt: siehe G3.
+- [x] G10 Verlauf mit Kölner Journal-Einträgen; Geldwäsche bucht in die aktive Stadt statt in die Stadt des Beginns.
+  Erledigt: Geldwäsche bucht in die Stadt, in der sie begann (`LaunderingBatch.cityId`); Lieferungen anderer Städte stehen mit Stadtname im Verlauf.
+- [x] G11 „Kölsch“ in Geschichten anderer Städte, „Der Elbphilharmonie-Plaza“; Frau Krämer (Nachbarin) in jeder Stadt.
+  Erledigt: Bier statt Kölsch in den Geschichten, „Heute Abend steht am Spot keiner: {spot}“; Nachbarin pro Stadt (Petersen, Schulze, Huber, Becker).
+- [x] G12 Kleinigkeiten: App „Handel“ in der Suche vor dem Verkauf, Suche findet eigene Lager nicht, Seite Rechte Hand
+  ohne Hinweis, HUD-Kacheln am Handy abgeschnitten.
+  Erledigt: App „Handel“ vor dem Verkauf aus (`hiddenWhen`), eigene Lager in der Suche, Seite Rechte Hand sagt, wie man eine ernennt, HUD-Kacheln am Handy höchstens drei pro Reihe.
+
 ## Neue Funde
 
 - [x] N0 (Spieler, 05.10.2026) „Man kann im Hafen in Rotterdam keine Ware bestellen, es steht sogar, dass es keinen

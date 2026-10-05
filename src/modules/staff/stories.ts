@@ -197,7 +197,7 @@ export const STORIES: Record<StoryId, StoryTemplate> = {
       'Chef … hicks. Bin kurz weg vom {spot}. Paar Stunden. Ist nix.',
       'Sorry, ich war mit Jungs im Brauhaus, ich kann grad nicht stehen. Der {spot} muss warten.',
       'Hab einen sitzen. Ich geh pennen, morgen bin ich wieder da, ehrlich.',
-      'Ich weiß, ich weiß. Ein Kölsch zu viel. Der {spot} ist heute Abend leer.',
+      'Ich weiß, ich weiß. Ein Bier zu viel. Heute Abend steht am Spot keiner: {spot}.',
     ],
     choices: [
       {
@@ -546,7 +546,7 @@ export const STORIES: Record<StoryId, StoryTemplate> = {
     amount: () => 150,
     texts: [
       '{other} hat Geburtstag. Gibst du eine Runde aus? {amount} reichen.',
-      'Wir feiern heute, {other} und ich. Ein paar Kölsch auf den Chef?',
+      'Wir feiern heute, {other} und ich. Ein paar Bier auf den Chef?',
       'Kleine Feier nach Feierabend mit {other}. Wär schön, wenn du was dazugibst.',
     ],
     choices: [

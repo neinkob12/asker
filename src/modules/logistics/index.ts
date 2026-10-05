@@ -654,10 +654,16 @@ export function receiveCargo(
   const cityId = item.cityId ?? 'koeln';
   const cargo: PortCargo = { id: ctx.nextId(), ...item, cityId, arrivedAt: ctx.now };
   ctx.state.modules.logistics.cargo.push(cargo);
-  // Schläft die Stadt (du bist woanders, Auftrag 43), holt ihr Statthalter die Ware selbst: keine Frage mit Frist an dich.
-  if (!isCityLive(ctx.state, cityId) && collectSleeping(ctx, cargo)) return cargo.id;
   const port = portOf(cityId);
   const goods = `${formatProductAmount(item.productId, item.amount)} ${productName(item.productId)}`;
+  // Schläft die Stadt (du bist woanders, Auftrag 43), holt ihr Statthalter die Ware selbst: keine Frage mit Frist an dich.
+  // Passt nicht alles ins Lager, wartet der Rest still am Kai (der Statthalter holt ihn, sobald Platz ist; G2).
+  if (!isCityLive(ctx.state, cityId)) {
+    if (!collectSleeping(ctx, cargo)) {
+      journal.add(ctx, `${cityName(cityId)}: ${goods} warten am Kai, das Lager ist voll.`, 'info');
+    }
+    return cargo.id;
+  }
   journal.add(
     ctx,
     cityId === 'koeln'
