@@ -190,6 +190,13 @@ Stadt“. Für Auftrag 34: Das Startpaket nimmt bis dahin einen Leutnant ab Leve
 Quest-Kapitel der Städte stehen schon; die Enden ihrer Autobahn-Linien in `build-roads.py` (`AUTOBAHNEN`) auf Punkte im
 neuen Straßennetz legen und `--autobahn all` neu bauen.
 
+**Stand Auftrag 37:** umgesetzt (PR #61). Berlin ist die dritte spielbare Stadt: zwölf Ortsteile mit Grenzen aus
+Overture, Straßennetz mit Zufahrten A111, A115 und A113, 40 Spots (vier Clubs nur am Wochenende, neues Spot-Feld
+`weekHours`), fünf Lager, vier Gangs mit Stimmen und Verhältnissen, Stammabnehmer, Events (Fête de la Musique, CSD,
+Silvester mit Feuerwerk), Mirko zu Hause in Berlin (`Supplier.home`), Wahrzeichen. Der Bot spielt Berlin als zweite Stadt
+(Median 10 Tage bis komplett). Für 38 und 39: `check-roads` prüft Städte ohne Hafen ohne Hafen, die Migrationen von
+`gangs` und `territory` legen fehlende Gangs und Veedel allgemein an.
+
 `src/core/`, `scripts/`, `package.json` und die Doku-Dateien gehören in den Wellen niemandem fest: nur erweitern, beim
 Mergen beide Seiten behalten. `CLAUDE.md`, `docs/architektur.md` und `docs/konzept.md` ergänzt jede Session in ihrem
 eigenen Abschnitt.

@@ -91,6 +91,21 @@ export const PRELUDE = `
     run('customers.standAt', { spotId: 'hans-albers-platz' });
     sim.advance(60);
   };
+  /** Berlin (Auftrag 37): frei, aktiv, du bist dort; Clubkeller in Friedrichshain, Spots rund um die Warschauer Straße. */
+  const berlin = async () => {
+    const goods = await import('/src/modules/goods/index.ts');
+    rich();
+    k.dev.berlinFrei();
+    run('city.switch', { cityId: 'berlin' });
+    state().modules.city.present = 'berlin';
+    run('goods.buyWarehouse', { warehouseId: 'keller-friedrichshain' });
+    goods.store(sim.ctx('goods'), { productId: 'weed', amount: 800, warehouseId: 'keller-friedrichshain', quality: 0.8 });
+    for (const id of ['warschauer-strasse', 'raw-gelaende', 'club-halle-ost', 'kottbusser-tor', 'goerlitzer-park', 'club-spreeufer']) run('spots.unlock', { spotId: id });
+    run('staff.hireRunner', { spotId: 'warschauer-strasse' });
+    run('staff.hireRunner', { spotId: 'club-halle-ost' });
+    run('customers.standAt', { spotId: 'raw-gelaende' });
+    sim.advance(60);
+  };
 `;
 
 /** Tageszeiten: Spielminuten ab Start (Tag 1, Freitag 18:00). */
@@ -251,6 +266,32 @@ export const SCENES = [
     name: 'hamburg-nacht',
     js: `sim.advance(${TIMES.nacht}); await hamburg(); render();`,
     wait: 4500,
+  },
+  // Auftrag 37: Berlin bei Tag (Samstagmittag, die Clubs haben durchgehend offen) und Nacht (Freitag 23 Uhr).
+  {
+    name: 'berlin-tag',
+    js: `sim.advance(${TIMES.tag - 60}); await berlin(); render();`,
+    wait: 4500,
+  },
+  {
+    name: 'berlin-nacht',
+    js: `sim.advance(${TIMES.nacht - 60}); await berlin(); render();`,
+    wait: 4500,
+  },
+  {
+    // Wahrzeichen: Fernsehturm, Brandenburger Tor, Oberbaumbrücke (nah, ohne Handy).
+    name: 'berlin-mitte',
+    js: `sim.advance(${TIMES.tag - 60}); await berlin(); render(); api.closePhone(); await sleep(3000); k.runtime.map.map.jumpTo({ center: [13.396, 52.5172], zoom: 14.6, bearing: 20, pitch: 55 });`,
+    wait: 4500,
+    sizes: ['desktop'],
+  },
+  {
+    name: 'silvester',
+    js:
+      'await berlin(); state().time = (85 - 1) * 1440 + 21 * 60 + 40; sim.step(); render(); await sleep(3000); ' +
+      'api.setSpeed(1); k.runtime.map.map.jumpTo({ center: [13.3735, 52.5155], zoom: 14.6 });',
+    wait: 2600,
+    live: true,
   },
   // Auftrag 31: Events auf der Karte. Die Uhr springt direkt auf den Event-Tag (nur für das Bild).
   {
