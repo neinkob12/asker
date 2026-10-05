@@ -75,13 +75,14 @@ function handOverKoeln(sim: Simulation): string {
 }
 
 describe('Städte (Auftrag 30)', () => {
-  it('Daten: Köln, Hamburg, Berlin und die Schablonen München, Frankfurt; je 12 Veedel, Schablonen gesperrt', () => {
+  it('Daten: Köln, Hamburg, Berlin, München und die Schablone Frankfurt; je 12 Veedel, Schablonen gesperrt', () => {
     expect(CITIES.map((c) => c.id)).toEqual(['koeln', 'hamburg', 'berlin', 'muenchen', 'frankfurt']);
-    expect(playableCities().map((c) => c.id)).toEqual(['koeln', 'hamburg', 'berlin']);
+    expect(playableCities().map((c) => c.id)).toEqual(['koeln', 'hamburg', 'berlin', 'muenchen']);
     expect(allVeedel('koeln')).toHaveLength(12);
     expect(allVeedel('hamburg')).toHaveLength(12);
     expect(allVeedel('berlin')).toHaveLength(12);
-    expect(allVeedel('muenchen')).toHaveLength(0);
+    expect(allVeedel('muenchen')).toHaveLength(12);
+    expect(allVeedel('frankfurt')).toHaveLength(0);
     for (const c of playableCities()) {
       const [w, s, e, n] = c.bounds;
       for (const v of allVeedel(c.id)) {
@@ -96,6 +97,7 @@ describe('Städte (Auftrag 30)', () => {
     expect(cityAt(6.9712, 50.9862)).toBe('koeln');
     expect(cityAt(10.0045, 53.5282)).toBe('hamburg');
     expect(cityAt(13.4125, 52.5215)).toBe('berlin');
+    expect(cityAt(11.5755, 48.1374)).toBe('muenchen');
     expect(cityAt(8.68, 50.11)).toBe('koeln');
   });
 

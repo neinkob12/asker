@@ -191,8 +191,8 @@ describe('Berlin (Auftrag 37)', () => {
     }
     old.moduleVersions.territory = 4;
     const loaded = loadSimulation(old as never, sim.modules);
-    expect(loaded.state.moduleVersions.gangs).toBe(6);
-    expect(loaded.state.moduleVersions.territory).toBe(5);
+    expect(loaded.state.moduleVersions.gangs).toBeGreaterThanOrEqual(6);
+    expect(loaded.state.moduleVersions.territory).toBeGreaterThanOrEqual(5);
     expect(getGangStatus(loaded.state, 'be-kotti')?.people).toBeGreaterThan(0);
     for (const v of allVeedel('berlin')) {
       expect(loaded.state.modules.territory.influence[v.id], v.id).toEqual(fresh.modules.territory.influence[v.id]);

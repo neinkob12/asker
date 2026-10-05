@@ -48,6 +48,7 @@ export const EVENT_CONTACTS: Readonly<Record<string, Contact>> = {
   koeln: { id: 'other:buedchen', name: 'Ömer (Büdchen am Ring)', kind: 'other' },
   hamburg: { id: 'other:kiosk-kiez', name: 'Jens (Kiosk am Hans-Albers-Platz)', kind: 'other' },
   berlin: { id: 'other:spaeti-kotti', name: 'Aylin (Späti am Kotti)', kind: 'other' },
+  muenchen: { id: 'other:kiosk-glockenbach', name: 'Resi (Kiosk am Sendlinger Tor)', kind: 'other' },
 };
 
 /** Innenstadt Köln (Karneval). */
@@ -68,6 +69,14 @@ const BERLIN_PARTY = ['kreuzberg', 'friedrichshain', 'neukoelln', 'mitte', 'pren
 
 /** Spots an den Landungsbrücken und am Hafenrand (Hafengeburtstag). */
 export const HARBOR_SPOTS: readonly string[] = ['landungsbruecken', 'fischmarkt'];
+
+/** Spots rund um die Theresienwiese (Oktoberfest). */
+export const WIESN_SPOTS: readonly string[] = [
+  'theresienwiese',
+  'bavariapark',
+  'augustiner-keller',
+  'hauptbahnhof-muc',
+];
 
 export const CITY_EVENTS: readonly CityEventDef[] = [
   // --- Köln ---
@@ -184,6 +193,32 @@ export const CITY_EVENTS: readonly CityEventDef[] = [
     text: 'Silvester: Party am Tor, Böller in jedem Kiez. Riesiges Geschäft, aber auch Polizei und Gangs überall.',
     announce:
       'Morgen ist Silvester. Am Tor eine Million Leute, in Kreuzberg fliegen die Raketen. Pass auf deine Spots auf.',
+  },
+  // --- München (Auftrag 38) ---
+  {
+    id: 'oktoberfest',
+    cityId: 'muenchen',
+    name: 'Oktoberfest',
+    icon: 'party',
+    schedule: { kind: 'cycle', firstDay: 40, everyDays: 90, days: 16 },
+    area: { spots: WIESN_SPOTS },
+    effects: { demand: 3, heatPerSale: 1.3, checks: 2 },
+    text: 'Zwei Wochen Wiesn: dreimal so viel Kundschaft rund um die Theresienwiese, aber überall Polizei.',
+    announce:
+      'Servus. Morgen ist Anstich, dann zwei Wochen Wiesn. Rund um die Theresienwiese ist die Hölle los, und die ' +
+      'Polizei steht an jedem Eingang. Füll die Lager auf.',
+  },
+  {
+    id: 'bayern',
+    cityId: 'muenchen',
+    name: 'FC-Bayern-Heimspiel',
+    icon: 'flag',
+    schedule: { kind: 'weekly', weekday: 5, everyWeeks: 2, offset: 1, fromHour: 14, toHour: 22 },
+    area: { veedel: ['schwabing-freimann', 'milbertshofen'] },
+    effects: { demand: 1.6, checks: 1.4, gangRaids: 1.3 },
+    text: 'Heimspiel in der Arena: Die U6 ist voll, die Kundschaft auch, aber die Polizei fährt mit.',
+    announce:
+      'Morgen spielt der FC Bayern daheim. Ab zwei ist die U6 voll bis Fröttmaning, und die Polizei ist überall.',
   },
 ];
 

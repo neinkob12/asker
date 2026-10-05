@@ -1,6 +1,6 @@
-// Die Städte im Spiel (Auftrag 30, 36 und 37): Köln (Einstieg), Hamburg, Berlin und Schablonen für München und Frankfurt
-// (nur Daten-Skelett ohne Veedel, Spots und Gangs; im Spiel gesperrt und in der Deutschland-Ansicht „bald“, die Aufträge
-// 38 und 39 füllen sie). Nach Köln ist die Reihenfolge frei: Jede Stadt hat einen Kontakt mit Gesicht und Stimme, der
+// Die Städte im Spiel (Auftrag 30, 36, 37 und 38): Köln (Einstieg), Hamburg, Berlin, München und eine Schablone für
+// Frankfurt (nur Daten-Skelett ohne Veedel, Spots und Gangs; im Spiel gesperrt und in der Deutschland-Ansicht „bald“,
+// Auftrag 39 füllt sie). Nach Köln ist die Reihenfolge frei: Jede Stadt hat einen Kontakt mit Gesicht und Stimme, der
 // nach „<Stadt> komplett“ anruft, und einen Satz Dreh (Glas-Karte der Deutschland-Ansicht). Faktoren: 1 = Köln.
 
 import type { Contact, LngLat } from '../../core';
@@ -193,23 +193,26 @@ export const CITIES: readonly CityDef[] = [
     pitch: 'Die Nacht: Clubs rund um die Uhr, viele Spots, starke Gangs, Polizei locker.',
   },
   {
-    // Schablone (Inhalt mit Auftrag 38).
+    // München (Auftrag 38): teuer und streng. Die höchste Kaufkraft im Spiel, aber Lager, Spots und Löhne kosten am
+    // meisten, die Polizei sieht dich von Anfang an als Händler (police: MIN_TIER_BY_CITY) und kontrolliert öfter.
     id: 'muenchen',
     name: 'München',
-    center: { lng: 11.575, lat: 48.137 },
-    view: { center: { lng: 11.575, lat: 48.137 }, zoom: 12.4, mobileZoom: 11.4, pitch: 50, bearing: 0 },
-    bounds: [11.4, 48.06, 11.72, 48.22],
+    center: { lng: 11.575, lat: 48.14 },
+    // Blick nach Norden: Theresienwiese und Altstadt vorn, Schwabing und der Englische Garten dahinter.
+    view: { center: { lng: 11.571, lat: 48.143 }, zoom: 12.6, mobileZoom: 11.5, pitch: 50, bearing: 0 },
+    bounds: [11.48, 48.085, 11.7, 48.23],
     roadsNetworkId: 'muenchen',
     portId: null,
-    wageFactor: 1.3,
-    propertyFactor: 1.8,
-    relationFactor: 1,
-    bribeFactor: 1.3,
+    wageFactor: 1.4,
+    propertyFactor: 2,
+    relationFactor: 0.9,
+    bribeFactor: 1.5,
     raidWarningBonus: 0,
-    description: 'Noch nicht im Spiel.',
+    description:
+      'Die Isar, die Wiesn, das meiste Geld im Land. Die Kundschaft zahlt jeden Preis, aber alles kostet doppelt, und ' +
+      'die Polizei schaut hier genauer hin als irgendwo sonst.',
     contact: MUENCHEN_CALLER,
     pitch: 'Teuer und streng: viel Kaufkraft, teure Lager und Löhne, die Polizei startet eine Stufe härter.',
-    template: true,
   },
   {
     // Schablone (Inhalt mit Auftrag 39, optional).

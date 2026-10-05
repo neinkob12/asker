@@ -85,6 +85,10 @@ Auftrag 37 (Berlin): dritte spielbare Stadt nur aus Daten (`veedel/data-berlin.t
 `Spot.weekHours` (Öffnungszeiten über die Woche, Berliner Clubs Fr 22 bis Mo 8 Uhr) und `Supplier.home` (Lieferant ist
 in einer Stadt zu Hause, Hein in Hamburg, Mirko in Berlin). Neue Städte legen Spots und Gang-Stimmen am besten in eigene
 Dateien und spreizen sie in die Listen ein.
+Auftrag 38 (München): vierte spielbare Stadt, nur Daten nach der Checkliste (`veedel/data-muenchen.ts`, Gangs `mu-` mit
+Stimmen in `gangs/texts-muenchen.ts`, `network-muenchen.ts`); Dreh teuer und streng über `CITIES`, `MIN_TIER_BY_CITY`,
+`CHECK_FACTOR_BY_CITY`, Events Oktoberfest und Bayern. Neu und allgemein: `Supplier.customs` (Zoll an einer Grenze),
+`requires.city` (Lieferant meldet sich erst in dieser Stadt), Bot `cityOrder` (`BALANCE_ORDER=muenchen npm run balance`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

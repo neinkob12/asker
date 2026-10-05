@@ -1,6 +1,7 @@
 // Die Gangs, die die Städte zu Beginn unter sich aufgeteilt haben: vier in Köln, seit Auftrag 30 vier in Hamburg
 // (Präfix hh-, etwa ein Viertel stärker: Kampfkraft, Geld, Leute), seit Auftrag 37 vier in Berlin (Präfix be-, noch
-// einmal stärker und mit mehr Leuten). Alle frei erfunden, keine echten Gruppen.
+// einmal stärker und mit mehr Leuten), seit Auftrag 38 vier in München (Präfix mu-, reicher und besser vernetzt). Alle
+// frei erfunden, keine echten Gruppen.
 // IDs und Heimat-Veedel bleiben stabil (territory verteilt danach die Veedel, andere Module nutzen die IDs).
 
 export interface GangTraits {
@@ -365,6 +366,108 @@ export const GANGS: readonly Gang[] = [
       methods: { blackmail: 3, tipOff: 2.5, burglary: 1 },
     },
   },
+  // --- München (Auftrag 38): Geld haben sie alle, die Gangs sind vernetzter als anderswo (Präfix mu-) ---
+  {
+    id: 'mu-bahnhof',
+    cityId: 'muenchen',
+    name: 'Goldene Hand',
+    color: '#fdcb6e',
+    homeVeedelId: 'isarvorstadt',
+    boss: 'Dragan Kovač, genannt „der Schaffner“',
+    crew: 'Leute der Goldenen Hand',
+    emblem: '✋',
+    style: 'Hauptbahnhof bis Glockenbach. Wer am Bahnhof aussteigt und etwas sucht, findet zuerst ihre Leute.',
+    strengths: ['viele Leute', 'Nachtgeschäft'],
+    weakness: 'die Bundespolizei am Bahnhof kennt sie alle',
+    traits: {
+      aggression: 1.2,
+      expansion: 1.2,
+      fighting: 68,
+      network: 0.6,
+      priceFactor: 0.95,
+      goodsCost: 5,
+      goodsQuality: 0.65,
+      dealing: 0.9,
+      start: { money: 70000, people: 21, goods: 1800 },
+      methods: { intimidate: 2.5, poach: 2, raid: 1.5, burglary: 1 },
+    },
+  },
+  {
+    id: 'mu-giesing',
+    cityId: 'muenchen',
+    name: 'Giasinga Buam',
+    color: '#3498db',
+    homeVeedelId: 'giesing',
+    boss: 'Xaver „Wasti“ Huber',
+    crew: 'Giasinga Buam',
+    emblem: '🦁',
+    style: 'Giesinger von Geburt: Fußball, Wettbüros, Fäuste. Wer in ihr Viertel will, muss erst an ihnen vorbei.',
+    strengths: ['brutal', 'Heimvorteil'],
+    weakness: 'mit allen anderen zerstritten',
+    traits: {
+      aggression: 1.5,
+      expansion: 0.8,
+      fighting: 78,
+      network: 0.45,
+      priceFactor: 0.9,
+      goodsCost: 4.4,
+      goodsQuality: 0.55,
+      dealing: 0.7,
+      start: { money: 40000, people: 22, goods: 1400 },
+      methods: { raid: 3, intimidate: 2, burglary: 1.5 },
+    },
+  },
+  {
+    id: 'mu-isar',
+    cityId: 'muenchen',
+    name: 'Isar-Konsortium',
+    color: '#a29bfe',
+    homeVeedelId: 'bogenhausen',
+    boss: 'Dr. Benedikt von Arnim',
+    crew: 'Leute des Isar-Konsortiums',
+    emblem: '💎',
+    style: 'Anwälte, Ärzte, Erben. Teure Ware für teure Kundschaft, und Freunde bis ins Präsidium.',
+    strengths: ['viel Geld', 'Freunde bei der Polizei'],
+    weakness: 'keiner will sich die Hände schmutzig machen',
+    traits: {
+      aggression: 0.8,
+      expansion: 0.9,
+      fighting: 60,
+      network: 0.95,
+      priceFactor: 1.1,
+      goodsCost: 6,
+      goodsQuality: 0.92,
+      dealing: 0.4,
+      start: { money: 140000, people: 13, goods: 900 },
+      methods: { tipOff: 3, blackmail: 3, poach: 1, raid: 0.5 },
+    },
+  },
+  {
+    id: 'mu-nord',
+    cityId: 'muenchen',
+    name: 'Nordblock',
+    color: '#ff7675',
+    homeVeedelId: 'milbertshofen',
+    boss: 'Serkan Aydın, genannt „Beton“',
+    crew: 'Leute vom Nordblock',
+    emblem: '🏭',
+    style:
+      'Die Hochhäuser am Hart, das Werk, die U2. Der Norden gehört ihnen seit zwanzig Jahren, und sie halten zusammen.',
+    strengths: ['viel Ware', 'loyal'],
+    weakness: 'weit weg von der Innenstadt',
+    traits: {
+      aggression: 1.2,
+      expansion: 1.1,
+      fighting: 72,
+      network: 0.6,
+      priceFactor: 0.85,
+      goodsCost: 4,
+      goodsQuality: 0.6,
+      dealing: 1.2,
+      start: { money: 45000, people: 19, goods: 3000 },
+      methods: { raid: 2, burglary: 2.5, intimidate: 1.5, poach: 1 },
+    },
+  },
 ];
 
 /**
@@ -394,6 +497,13 @@ export const GANG_RIVALRY: Readonly<Record<string, number>> = {
   'be-kotti|be-leo': -50,
   'be-kotti|be-westend': -20,
   'be-leo|be-westend': -70,
+  // München: Giesing gegen alle, das Konsortium lässt die Goldene Hand für sich am Bahnhof arbeiten.
+  'mu-bahnhof|mu-giesing': -60,
+  'mu-bahnhof|mu-isar': 30,
+  'mu-bahnhof|mu-nord': -40,
+  'mu-giesing|mu-isar': -50,
+  'mu-giesing|mu-nord': -30,
+  'mu-isar|mu-nord': -20,
 };
 
 /** Schlüssel eines Gang-Paars (alphabetisch). */

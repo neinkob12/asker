@@ -146,7 +146,7 @@ export const HANDOVER_START_MONEY_DAYS = 10;
 export const START_MONEY_MIN_BY_CITY: Readonly<Record<string, number>> = {
   hamburg: 45_000,
   berlin: 45_000,
-  muenchen: 54_000,
+  muenchen: 60_000,
   frankfurt: 48_000,
 };
 
@@ -275,8 +275,12 @@ export const CITY_OFFERS: Readonly<Record<string, CityOffer>> = {
     },
     come: 'Ich komme nach München',
     welcome: [
-      'Willkommen in München.',
-      'Ein Lager zuerst. Teuer, ich weiß. Dann eine ruhige Ecke, nicht gleich am Hauptbahnhof.',
+      'Willkommen in München. Schön, dass Sie da sind.',
+      'Zuerst ein Lager. Teuer, ich weiß: Giesing ist das günstigste, an der Großmarkthalle in Sendling ist am meisten ' +
+        'Platz.',
+      'Dann eine ruhige Ecke, nicht gleich am Hauptbahnhof. Die Polizei hier sieht Sie vom ersten Tag an als Händler.',
+      'Toni aus Frankfurt liefert auch hierher. Und ein Bekannter aus Verona meldet sich bestimmt, beste Ware über den ' +
+        'Brenner. Zur Wiesn brauchen Sie volle Lager.',
     ],
   },
   frankfurt: {

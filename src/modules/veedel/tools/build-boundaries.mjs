@@ -112,6 +112,31 @@ const CITIES = {
     header: [
       '// Quelle: Overture Maps Foundation, Thema "divisions", Typ "division_area" (Release 2026-09-23.1), Ortsteile',
       '//   (admin_level 10) aus OpenStreetMap, Landflächen ohne Spree und Landwehrkanal. Geladen mit tools/fetch-divisions.py.',
+    ],
+  },
+  // München (Auftrag 38): zwölf Stadtbezirke (admin_level 9), ebenfalls aus Overture (tools/fetch-divisions.py).
+  muenchen: {
+    sourceUrl: null,
+    lat0: 48.15,
+    outFile: 'boundaries-muenchen.ts',
+    names: {
+      'Altstadt-Lehel': 'altstadt-lehel',
+      'Ludwigsvorstadt-Isarvorstadt': 'isarvorstadt',
+      Maxvorstadt: 'maxvorstadt',
+      'Schwabing-West': 'schwabing-west',
+      'Au-Haidhausen': 'au-haidhausen',
+      Sendling: 'sendling',
+      Schwanthalerhöhe: 'schwanthalerhoehe',
+      'Neuhausen-Nymphenburg': 'neuhausen',
+      'Schwabing-Freimann': 'schwabing-freimann',
+      'Obergiesing-Fasangarten': 'giesing',
+      Bogenhausen: 'bogenhausen',
+      'Milbertshofen-Am Hart': 'milbertshofen',
+    },
+    anchors: [],
+    header: [
+      '// Quelle: Overture Maps Foundation, Thema "divisions", Typ "division_area" (Release 2026-09-23.1), Stadtbezirke',
+      '//   (admin_level 9) aus OpenStreetMap. Geladen mit tools/fetch-divisions.py.',
       '// Lizenz: ODbL 1.0 (https://opendatacommons.org/licenses/odbl/), © OpenStreetMap-Mitwirkende,',
       '//   © Overture Maps Foundation.',
     ],

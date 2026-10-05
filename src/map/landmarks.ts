@@ -2,7 +2,7 @@
 // Straßennamen zurechtfindet. Köln: Kölner Dom, Hohenzollernbrücke, Colonius, Kranhäuser, KölnTriangle. Hamburg
 // (Auftrag 31): Elbphilharmonie, Michel, Heinrich-Hertz-Turm, Köhlbrandbrücke, Landungsbrücken, Elbbrücken; Lage und
 // Ausrichtung aus Overture Maps (Gebäude, Straßen über Wasser, Infrastruktur, ODbL). Berlin (Auftrag 37): Fernsehturm,
-// Brandenburger Tor, Oberbaumbrücke.
+// Brandenburger Tor, Oberbaumbrücke. München (Auftrag 38): Frauenkirche, Olympiaturm, BMW-Vierzylinder, Allianz Arena.
 // Echte Koordinaten, ungefähre Maße in Metern. Jedes Teil ist ein Grundriss im lokalen Rahmen des Bauwerks
 // (forward entlang der Achse, left quer dazu) mit Unter- und Oberkante.
 // Die echten OSM-Gebäude an diesen Stellen blendet die Grundkarte aus (LANDMARK_ZONES), sonst stecken zwei
@@ -527,6 +527,132 @@ function oberbaumbruecke(): Landmark {
   };
 }
 
+// --- München (Auftrag 38) ----------------------------------------------------------------------------------------
+
+/** Ellipse um einen Mittelpunkt (Halbachsen entlang forward und left). */
+function ellipse(radiusForward: number, radiusLeft: number, corners = 20): Point[] {
+  const ring: Point[] = [];
+  for (let i = 0; i < corners; i++) {
+    const a = (i / corners) * 2 * Math.PI;
+    ring.push([radiusForward * Math.cos(a), radiusLeft * Math.sin(a)]);
+  }
+  return ring;
+}
+
+/** Frauenkirche: Backstein-Hallenkirche mit zwei Türmen im Westen (99 m) und den grünen Hauben. */
+function frauenkirche(): Landmark {
+  const parts: Part[] = [];
+  for (const side of [-1, 1]) {
+    const l = side * 13;
+    parts.push(
+      part(rect(-54, l - 7.5, -40, l + 7.5), 0, 66, 'brick'),
+      part(ngon(-47, l, 7.5), 66, 78, 'brick'),
+      part(ngon(-47, l, 6.5), 78, 90, 'copper'),
+      part(ngon(-47, l, 3.5), 90, 96, 'copper'),
+      part(ngon(-47, l, 1.2), 96, 99, 'gold'),
+    );
+  }
+  parts.push(
+    part(rect(-54, -5.5, -40, 5.5), 0, 40, 'brick'),
+    // Halle (109 × 40 m) mit hohem Satteldach und rundem Chor.
+    part(rect(-40, -20, 50, 20), 0, 37, 'brick'),
+    part(rect(-40, -14, 50, 14), 37, 50, 'roof'),
+    part(rect(-40, -7, 50, 7), 50, 62, 'roof'),
+    part(ngon(50, 0, 19), 0, 37, 'brick'),
+    part(ngon(50, 0, 11), 37, 52, 'roof'),
+  );
+  return {
+    id: 'frauenkirche',
+    name: 'Frauenkirche',
+    city: 'muenchen',
+    center: { lng: 11.57354, lat: 48.13863 },
+    heading: 90,
+    colors: {
+      brick: ['#8a5f4e', '#3f2b24'],
+      roof: ['#7a4a3c', '#352019'],
+      copper: ['#6f9c86', '#35503f'],
+      gold: ['#c9a25a', '#e2ae4a'],
+    },
+    parts,
+    zone: [-60, -26, 72, 26],
+  };
+}
+
+/** Olympiaturm (291 m) im Olympiapark: schlanker Schaft, Korb mit Aussichtsplattform, rot-weiße Antenne. */
+function olympiaturm(): Landmark {
+  return {
+    id: 'olympiaturm',
+    name: 'Olympiaturm',
+    city: 'muenchen',
+    center: { lng: 11.55375, lat: 48.17436 },
+    heading: 0,
+    colors: {
+      shaft: ['#9a9fa6', '#3e4249'],
+      cabin: ['#a7afb8', '#b0646a'],
+      antenna: ['#b0585e', '#e5484d'],
+    },
+    parts: [
+      part(ngon(0, 0, 13), 0, 8, 'shaft'),
+      part(ngon(0, 0, 8.5), 8, 180, 'shaft'),
+      part(ngon(0, 0, 17), 180, 186, 'cabin'),
+      part(ngon(0, 0, 14), 186, 194, 'cabin'),
+      part(ngon(0, 0, 17), 194, 199, 'cabin'),
+      part(ngon(0, 0, 5), 199, 220, 'shaft'),
+      part(ngon(0, 0, 2), 220, 291, 'antenna'),
+    ],
+    zone: [-20, -20, 20, 20],
+  };
+}
+
+/** BMW-Vierzylinder (101 m): vier Zylinder im Kleeblatt, oben das Dach mit den Lüftern. */
+function bmwVierzylinder(): Landmark {
+  const parts: Part[] = [];
+  for (const [f, l] of [
+    [11, 11],
+    [11, -11],
+    [-11, 11],
+    [-11, -11],
+  ] as const) {
+    parts.push(part(ngon(f, l, 12, 12), 0, 96, 'glass'));
+    parts.push(part(ngon(f, l, 10, 12), 96, 101, 'roof'));
+  }
+  parts.push(part(ngon(0, 0, 7), 0, 101, 'roof'));
+  return {
+    id: 'bmw-vierzylinder',
+    name: 'BMW-Vierzylinder',
+    city: 'muenchen',
+    center: { lng: 11.55617, lat: 48.17668 },
+    heading: 0,
+    colors: {
+      glass: ['#a3b1bd', '#566676'],
+      roof: ['#7d858e', '#2f343a'],
+    },
+    parts,
+    zone: [-26, -26, 26, 26],
+  };
+}
+
+/** Allianz Arena: das leuchtende Schlauchboot in Fröttmaning (258 × 227 m, 50 m hoch). */
+function allianzArena(): Landmark {
+  return {
+    id: 'allianz-arena',
+    name: 'Allianz Arena',
+    city: 'muenchen',
+    center: { lng: 11.62468, lat: 48.21883 },
+    heading: 150,
+    colors: {
+      shell: ['#d8dde2', '#c4404a'],
+      top: ['#c3c9cf', '#a8333c'],
+    },
+    parts: [
+      part(ellipse(129, 113), 0, 38, 'shell'),
+      part(ellipse(120, 104), 38, 46, 'shell'),
+      part(ellipse(106, 90), 46, 50, 'top'),
+    ],
+    zone: [-135, -120, 135, 120],
+  };
+}
+
 export const LANDMARKS: readonly Landmark[] = [
   dom(),
   hohenzollernBridge(),
@@ -544,6 +670,10 @@ export const LANDMARKS: readonly Landmark[] = [
   fernsehturm(),
   brandenburgerTor(),
   oberbaumbruecke(),
+  frauenkirche(),
+  olympiaturm(),
+  bmwVierzylinder(),
+  allianzArena(),
 ];
 
 type Ring = number[][];

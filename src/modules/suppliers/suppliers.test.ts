@@ -122,7 +122,8 @@ describe('suppliers', () => {
       return weed ? weed.price / weed.amount : Infinity;
     };
     const port = getSupplier(sim.state, 'rotterdam');
-    for (const city of SUPPLIERS.filter((s) => s.kind === 'city')) {
+    // Nur wer nach Köln liefert (Enzo bringt große Mengen über den Brenner, aber nur nach München).
+    for (const city of SUPPLIERS.filter((s) => s.kind === 'city' && (s.cities ?? ['koeln']).includes('koeln'))) {
       expect(city.deliveryTime).toBeLessThan(port?.deliveryTime ?? 0);
       expect(Math.max(...city.packages.map((p) => p.amount))).toBeLessThan(
         Math.min(...(port?.packages.map((p) => p.amount) ?? [])),
@@ -130,7 +131,15 @@ describe('suppliers', () => {
     }
     expect(unitPrice('frankfurt')).toBeGreaterThan(unitPrice('rotterdam'));
     expect(unitPrice('hamburg')).toBeGreaterThan(unitPrice('rotterdam'));
-    expect(SUPPLIERS.map((s) => s.id)).toEqual(['rotterdam', 'frankfurt', 'berlin', 'hamburg', 'amsterdam', 'koeln']);
+    expect(SUPPLIERS.map((s) => s.id)).toEqual([
+      'rotterdam',
+      'frankfurt',
+      'berlin',
+      'hamburg',
+      'amsterdam',
+      'italien',
+      'koeln',
+    ]);
   });
 
   it('ohne genug Geld keine Bestellung', () => {

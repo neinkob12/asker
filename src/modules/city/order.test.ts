@@ -1,7 +1,7 @@
 // Freie Reihenfolge nach Köln (Auftrag 36): Angebote pro Stadt, die nächstgelegene ruft zuerst an, die anderen melden
 // sich per Chat, ein Tipp auf die Karte holt den Anruf, nur eine Zusage gilt, Übergabe in die gewählte Stadt.
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createSaveFile,
   type GameState,
@@ -34,8 +34,17 @@ import {
 
 /** Berlin für einen Test spielbar machen (Schablone aus), danach wieder zurück. */
 const berlin = CITIES.find((c) => c.id === 'berlin') as CityDef & { template?: boolean };
+/**
+ * München ist seit Auftrag 38 spielbar. Die Tests hier prüfen die Reihenfolge mit Hamburg und Berlin, deshalb ist
+ * München für sie wieder Schablone (der letzte Test prüft München selbst).
+ */
+const muenchen = CITIES.find((c) => c.id === 'muenchen') as CityDef & { template?: boolean };
+beforeEach(() => {
+  muenchen.template = true;
+});
 afterEach(() => {
   berlin.template = true;
+  muenchen.template = false;
 });
 
 function quietGame(seed = 1): Simulation {

@@ -108,12 +108,32 @@ CITIES = {
             ('A113', ['A 113'], 'Schönefeld, Dresden, Cottbus', (13.522, 52.42)),
         ],
     },
+    # München (Auftrag 38): alle Stadtbezirke im Spiel (Nymphenburg bis Bogenhausen, Giesing bis zur Allianz Arena) und
+    # die Autobahnen, die in die Stadt hineinführen.
+    'muenchen': {
+        'box': (11.44, 11.71, 48.075, 48.24),
+        'out': 'network-muenchen.ts',
+        'lat0': 48.15,
+        'extra_areas': [],
+        # Autobahn-Zufahrten wie in Köln; die A95 und die A96 tragen in Overture nur die Europastraßen (E 533, E 54).
+        # Die A8 aus Stuttgart endet in Obermenzing an einer Stadtstraße ohne Kreuzung, die Zufahrt fände dort keinen
+        # Knoten im Netz (sie käme über die A8 aus Salzburg herein); Lieferungen aus Westen nehmen die A96.
+        'approaches': [
+            ('A9', ['A 9', 'E 45'], 'Ingolstadt, Nürnberg, Berlin, Frankfurt', (11.6389, 48.24)),
+            ('A8', ['A 8'], 'Rosenheim, Salzburg, Innsbruck, Brenner', (11.6242, 48.075)),
+            ('A94', ['A 94'], 'Passau', (11.71, 48.1421)),
+            ('A95', ['E 533'], 'Starnberg, Garmisch-Partenkirchen', (11.4856, 48.075)),
+            ('A96', ['E 54'], 'Lindau', (11.44, 48.1279)),
+            ('A995', ['A 995', 'E 54'], 'Sauerlach, Salzburg', (11.598, 48.075)),
+        ],
+    },
 }
 # Autobahn-Netz zwischen den Städten (Auftrag 36): je Linie Endpunkte (lng, lat) in den Städten, die Nummern in Overture
 # (routes.ref; die erste ist der Name im Spiel, die Linie darf über mehrere Autobahnen laufen) und Wegpunkte des
 # Korridors dazwischen. Endpunkte einer Stadt sollen sich treffen, damit roads über die Stadt hinweg routen kann: in
-# Städten mit Straßennetz verbinden die Straßen, in Schablonen-Städten ohne Netz (Berlin, München, Frankfurt) gehen die
-# Linien von einem gemeinsamen Knoten aus (Frankfurter Kreuz, Kreuz München-Nord, Dreieck Funkturm).
+# Städten mit Straßennetz verbinden die Straßen, in Schablonen-Städten ohne Netz (Berlin, Frankfurt) gehen die
+# Linien von einem gemeinsamen Knoten aus (Frankfurter Kreuz, Dreieck Funkturm). München (Auftrag 38): beide Linien
+# enden auf der A9 bei Fröttmaning, dort, wo die Zufahrt A9 das Münchner Netz erreicht.
 AUTOBAHNEN = {
     ('koeln', 'hamburg'): {
         'refs': ['A 1'],
@@ -154,7 +174,7 @@ AUTOBAHNEN = {
     ('frankfurt', 'muenchen'): {
         'refs': ['A 3', 'A 9'],
         'start': (8.596, 50.055),  # Frankfurter Kreuz
-        'end': (11.615, 48.215),  # A9 am Kreuz München-Nord
+        'end': (11.6278, 48.2183),  # A9 bei Fröttmaning, wo die Zufahrt ins Münchner Netz führt (Auftrag 38)
         'via': [
             (8.596, 50.055),
             (8.80, 50.08),
@@ -168,7 +188,7 @@ AUTOBAHNEN = {
             (11.45, 49.00),
             (11.48, 48.75),
             (11.55, 48.45),
-            (11.615, 48.215),
+            (11.6278, 48.2183),
         ],
     },
     ('hamburg', 'berlin'): {
@@ -194,7 +214,7 @@ AUTOBAHNEN = {
     ('berlin', 'muenchen'): {
         'refs': ['A 9', 'E 51', 'A 10', 'A 115', 'A 100'],
         'start': (13.275, 52.505),  # Dreieck Funkturm
-        'end': (11.615, 48.215),  # Kreuz München-Nord
+        'end': (11.6278, 48.2183),  # A9 bei Fröttmaning (Auftrag 38)
         'via': [
             (13.275, 52.505),
             (13.20, 52.40),
@@ -211,7 +231,7 @@ AUTOBAHNEN = {
             (11.45, 49.00),
             (11.48, 48.75),
             (11.55, 48.45),
-            (11.615, 48.215),
+            (11.6278, 48.2183),
         ],
     },
     ('hamburg', 'frankfurt'): {

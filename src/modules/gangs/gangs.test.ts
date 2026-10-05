@@ -79,7 +79,7 @@ function sellHours(sim: Simulation, spotId: string, perHour: number, hours: numb
 }
 
 describe('gangs: Identität und Stärke', () => {
-  it('je vier frei erfundene Gangs in Köln, Hamburg und Berlin mit Boss, Heimat, Farbe, Stil und Stärken', () => {
+  it('je vier frei erfundene Gangs in Köln, Hamburg, Berlin und München mit Boss, Heimat, Farbe, Stil und Stärken', () => {
     const sim = createTestGame();
     expect(getGangs(sim.state, 'koeln').map((g) => g.id)).toEqual(['nord', 'west', 'ost', 'sued']);
     expect(getGangs(sim.state, 'hamburg').map((g) => g.id)).toEqual([
@@ -87,6 +87,12 @@ describe('gangs: Identität und Stärke', () => {
       'hh-hafen',
       'hh-schanze',
       'hh-elbchaussee',
+    ]);
+    expect(getGangs(sim.state, 'muenchen').map((g) => g.id)).toEqual([
+      'mu-bahnhof',
+      'mu-giesing',
+      'mu-isar',
+      'mu-nord',
     ]);
     const gangs = getGangs(sim.state);
     expect(getGangs(sim.state, 'berlin').map((g) => g.id)).toEqual(['be-tuer', 'be-kotti', 'be-leo', 'be-westend']);
@@ -102,7 +108,11 @@ describe('gangs: Identität und Stärke', () => {
       (g: (typeof gangs)[number]) => g.traits.start.people,
     ]) {
       expect(avg('hamburg', f)).toBeGreaterThan(avg('koeln', f) * 1.15);
+      expect(avg('muenchen', f)).toBeGreaterThan(avg('koeln', f) * 1.15);
     }
+    // München ist reicher und besser vernetzt als Hamburg.
+    expect(avg('muenchen', (g) => g.traits.start.money)).toBeGreaterThan(avg('hamburg', (g) => g.traits.start.money));
+    expect(avg('muenchen', (g) => g.traits.network)).toBeGreaterThan(avg('hamburg', (g) => g.traits.network));
     for (const g of gangs) {
       expect(getVeedel(g.homeVeedelId)).toBeDefined();
       expect(g.name && g.boss && g.style && g.crew).toBeTruthy();
@@ -476,7 +486,7 @@ describe('gangs: Spielstände', () => {
     delete state.modules.gangs;
     state.moduleVersions.gangs = 1;
     const loaded = loadSimulation(state as unknown as typeof sim.state, sim.modules);
-    expect(loaded.state.moduleVersions.gangs).toBe(6);
+    expect(loaded.state.moduleVersions.gangs).toBe(7);
     expect(loaded.state.modules.gangs.incidents).toEqual([]);
     expect(getGangStatus(loaded.state, 'hh-kiez')?.people).toBeGreaterThan(0);
     expect(getGangStatus(loaded.state, 'nord')?.people).toBeGreaterThan(0);
