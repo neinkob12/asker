@@ -142,7 +142,8 @@ zählt, ob das Geld für Schulden plus Paket reicht).
 - Laden: Kernfelder migrieren (`CORE_MIGRATIONS`), dann jedes Modul von seiner gespeicherten Version auf die
   aktuelle (`migrations[v]`), fehlende Module frisch anlegen. Neuere Stände werden mit Fehlermeldung abgelehnt.
   Prototyp-Spielstände werden verworfen.
-- **Test-Spielstände** (Spielstände › Test-Spielstände, nach Phase gruppiert, oder `?spielstand=<id>`): ein Stand für
+- **Test-Spielstände** (Spielstände › Test-Spielstände, eine Gruppe pro Stadt, dann Deutschland, Hafen, Produktion, oder
+  `?spielstand=<id>`): ein Stand für
   jeden Abschnitt des Bogens, vom Bot gespielt (`src/playtest/testSaves.ts`, Liste für den Dialog in
   `src/ui/builtin/testSaves.ts`, Dateien in `public/spielstaende/`). Drei Bot-Läufe mit Seed 1 reichen für alle, jeder
   hält unterwegs Stände fest (`meta.scenario` = Kennung, eigene `meta.runId`, nicht in der Bestenliste):
@@ -150,12 +151,13 @@ zählt, ob das Geld für Schulden plus Paket reicht).
   | Lauf | Test-Spielstände |
   | --- | --- |
   | Köln (stundenweise bis 11 von 12 Veedeln) | `koeln-anfang` (Tag 3), `koeln-veedel` (erstes Veedel), `boss-von-koeln` (im Schritt der Mehrheit), `koeln-komplett` (zurechtgerückt: 50.000 €, das zwölfte Veedel fällt nach einer Spielminute, ein paar Stunden ruhig) |
-  | Deutschland (`playToGermany`) | `ankunft-<stadt>` bei jeder ersten Ankunft (`city.arrived`, bevor der Bot dort etwas tut; mit Seed 1 Berlin, Hamburg, Frankfurt, München), `deutschland` (Boss von Deutschland, Jansen ruft gleich an) |
+  | Deutschland (`playToGermany` mit `cityOrder` = `ARRIVAL_CITIES`: Hamburg, Berlin, München, Frankfurt) | pro Stadt `ankunft-<stadt>` (erste Ankunft, `city.arrived`, bevor der Bot dort etwas tut: keine Leute, keine Rechte Hand, keine Routen), `boss-von-<stadt>` (im Schritt der Mehrheit) und `<stadt>-komplett` (Stand beim vorletzten Veedel, zurechtgerückt wie Köln mit `nearlyComplete`: Rechte Hand bereit, das letzte Veedel fällt nach einer Spielminute, danach meldet sich die nächste Stadt bzw. Jansen); `deutschland` (Boss von Deutschland, Jansen ruft gleich an) |
   | Hafen (Verkauf bis zum Titel Europa) | `hafen` (Ankunft in Rotterdam), `hafen-europa` (eigenes Schiff, Kunden in Europa), `produktion` (zwei Fincas, erste Ernte im Ausfuhrlager), `produzent`, `europa` |
 
-  Neu erzeugen mit `npm run saves:build` (alle in etwa einer Minute, einzelne mit `node scripts/build-test-saves.mjs <id> …`);
-  `testSaves.test.ts` lädt jede Datei, lässt sie einen Tag laufen und prüft den Moment, für den sie gemacht ist. Ändert
-  sich die Reihenfolge der Städte beim Bot, schlägt der Ankunfts-Test fehl: `ARRIVAL_CITIES` und die Texte anpassen.
+  Neu erzeugen mit `npm run saves:build` (alle in etwa zwei Minuten, einzelne mit `node scripts/build-test-saves.mjs <id> …`);
+  `testSaves.test.ts` lädt jede Datei, lässt sie einen Tag laufen und prüft den Moment, für den sie gemacht ist. Die
+  Reihenfolge der Städte steht fest (`ARRIVAL_CITIES`); wer sie ändert, passt die Texte in `src/ui/builtin/testSaves.ts`
+  an.
 
 ### Modul-Registry (`module.ts`, `discover.ts`)
 

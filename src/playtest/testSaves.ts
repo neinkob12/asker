@@ -1,7 +1,8 @@
 // Test-Spielstände zum Laden (Spielstände › Test-Spielstände, oder ?spielstand=<id> in der Adresse): Der Bot spielt
 // echte Durchgänge, und an den Abschnitten des Bogens wird ein Stand festgehalten (manche danach für einen Moment
-// zurechtgerückt). Drei Läufe pro Seed reichen für alle: Köln (bis kurz vor komplett), Deutschland (alle Städte, mit
-// der Ankunft in jeder) und der Hafen (Verkauf bis zum Titel Europa). Die fertigen Dateien liegen in
+// zurechtgerückt). Drei Läufe pro Seed reichen für alle: Köln (bis kurz vor komplett), Deutschland (alle Städte in der
+// festen Reihenfolge ARRIVAL_CITIES, in jeder die Ankunft, die Mehrheit und „fast komplett“) und der Hafen (Verkauf bis
+// zum Titel Europa). Die fertigen Dateien liegen in
 // public/spielstaende/ (neu erzeugen mit `npm run saves:build`, scripts/build-test-saves.mjs); testSaves.test.ts prüft,
 // dass sie sich laden lassen und tun, was sie sollen. Test-Spielstände tragen meta.scenario und kommen nicht in die
 // Bestenliste.
@@ -12,10 +13,10 @@ import { cityName, isPlayerTraveling, playerRank, presentCity } from '../modules
 import { activeEncounters, autoResolveEncounter } from '../modules/encounters';
 import { getShips } from '../modules/fleet';
 import { getFincas, growGoals } from '../modules/grow';
-import { controllerOf, PLAYER_FACTION } from '../modules/territory';
+import { campaignProgress, controllerOf, PLAYER_FACTION } from '../modules/territory';
 import { getCustomers, OWN_ORIGINS, originStock } from '../modules/trade';
 import { allVeedel } from '../modules/veedel';
-import { newBotStats, playFor } from './bot';
+import { DEFAULT_BOT, newBotStats, playFor } from './bot';
 import { playToGermany, rightHandReady, sellAndArrive } from './scenario';
 
 /** Ein Test-Spielstand: Kennung (Dateiname), Name im Spielstände-Dialog und wie er entsteht. */
@@ -34,18 +35,26 @@ const GANG_INFLUENCE_CAP = 30;
 const KOELN_KOMPLETT_QUIET = 3 * MINUTES_PER_HOUR;
 /** "Köln: die ersten Tage" nach so vielen Spielstunden. */
 export const KOELN_START_HOURS = 48;
-/** Städte in der Reihenfolge, in der der Bot sie mit Seed 1 spielt (je ein Test-Spielstand bei der Ankunft). */
-export const ARRIVAL_CITIES = ['berlin', 'hamburg', 'frankfurt', 'muenchen'] as const;
+/**
+ * Städte nach Köln in der Reihenfolge der Test-Spielstände (Auftrag 43: Hamburg direkt nach Köln). Für jede gibt es
+ * drei Stände: Ankunft (ankunft-<stadt>), Mehrheit (boss-von-<stadt>) und fast komplett (<stadt>-komplett).
+ */
+export const ARRIVAL_CITIES = ['hamburg', 'berlin', 'muenchen', 'frankfurt'] as const;
 /** "Hafen: Schiff und Europa": ein eigenes Schiff und mindestens so viele Kunden in Europa. */
 export const HARBOR_EUROPE_CUSTOMERS = 3;
 /** So lange spielt der Bot die Hafen-Phase höchstens, bis alle Abschnitte erreicht sind (Spieltage). */
 const HARBOR_MAX_DAYS = 240;
 
-/** Kölner Veedel, die der Spieler kontrolliert. */
-export function ownedInKoeln(state: GameState): string[] {
-  return allVeedel('koeln')
+/** Veedel einer Stadt, die der Spieler kontrolliert. */
+export function ownedIn(state: GameState, cityId: string): string[] {
+  return allVeedel(cityId)
     .filter((v) => controllerOf(state, v.id) === PLAYER_FACTION)
     .map((v) => v.id);
+}
+
+/** Kölner Veedel, die der Spieler kontrolliert. */
+export function ownedInKoeln(state: GameState): string[] {
+  return ownedIn(state, 'koeln');
 }
 
 /** Kunden in Europa (Auftrag 41). */
@@ -139,39 +148,80 @@ function koelnRun(seed: number): Kept {
       },
     });
     sim.state.wallet.dirty = KOELN_KOMPLETT_DIRTY;
-    // Im zwölften Veedel die Mehrheit, in den übrigen ein sicherer Vorsprung: Ohne Bot soll in den ersten Stunden nach
-    // dem Laden kein Veedel kippen (sonst fehlt für den Anruf aus Hamburg wieder eins).
-    if (!allVeedel('koeln').some((v) => !owned.includes(v.id))) throw new Error('Kein zwölftes Veedel.');
-    for (const v of allVeedel('koeln')) {
-      const row = sim.state.modules.territory.influence[v.id];
-      for (const faction of Object.keys(row)) {
-        if (faction !== PLAYER_FACTION) row[faction] = Math.min(row[faction], GANG_INFLUENCE_CAP);
-      }
-      row[PLAYER_FACTION] = Math.max(row[PLAYER_FACTION] ?? 0, PLAYER_INFLUENCE);
-    }
-    // Die ersten Stunden nach dem Laden ohne Polizeikontrolle in Köln: Der Anruf soll nicht in eine Verfolgung fallen.
-    const police = sim.state.modules.police;
-    for (const v of allVeedel('koeln')) {
-      police.checkReadyAt[v.id] = Math.max(police.checkReadyAt[v.id] ?? 0, sim.state.time + KOELN_KOMPLETT_QUIET);
-    }
+    lastVeedelFalls(sim, 'koeln');
     kept.set('koeln-komplett', keep(sim.state, 'koeln-komplett', seed));
   });
+}
+
+/**
+ * Im letzten Veedel der Stadt die Mehrheit, in den übrigen ein sicherer Vorsprung: Ohne Bot soll in den ersten Stunden
+ * nach dem Laden kein Veedel kippen (sonst fehlt für den Anruf der nächsten Stadt wieder eins). Dazu die ersten Stunden
+ * ohne Polizeikontrolle: Der Anruf soll nicht in eine Verfolgung fallen.
+ */
+function lastVeedelFalls(sim: Simulation, cityId: string): void {
+  const owned = ownedIn(sim.state, cityId);
+  if (!allVeedel(cityId).some((v) => !owned.includes(v.id))) throw new Error(`Kein letztes Veedel in ${cityId}.`);
+  for (const v of allVeedel(cityId)) {
+    const row = sim.state.modules.territory.influence[v.id];
+    for (const faction of Object.keys(row)) {
+      if (faction !== PLAYER_FACTION) row[faction] = Math.min(row[faction], GANG_INFLUENCE_CAP);
+    }
+    row[PLAYER_FACTION] = Math.max(row[PLAYER_FACTION] ?? 0, PLAYER_INFLUENCE);
+  }
+  const police = sim.state.modules.police;
+  for (const v of allVeedel(cityId)) {
+    police.checkReadyAt[v.id] = Math.max(police.checkReadyAt[v.id] ?? 0, sim.state.time + KOELN_KOMPLETT_QUIET);
+  }
+}
+
+/**
+ * „<Stadt> fast komplett“ aus dem Stand, in dem der Bot das vorletzte Veedel genommen hat (Auftrag 43): ohne Bot bis kurz
+ * vor die nächste volle Stunde, offene Konfrontationen würfeln die Leute aus, die Rechte Hand ist bereit für die
+ * Vollmacht (alle Aufgaben an), und das letzte Veedel fällt eine Spielminute nach dem Laden. Danach meldet sich die
+ * nächste Stadt (nach der letzten ruft Jansen an).
+ */
+function nearlyComplete(raw: GameState, cityId: string, seed: number): GameState {
+  const sim = loadSimulation(structuredClone(raw), discoverModules());
+  while (clock.minute(sim.state.time) !== MINUTES_PER_HOUR - 1) sim.step();
+  const ctx = sim.ctx('scenario');
+  for (const encounter of [...activeEncounters(sim.state)]) autoResolveEncounter(ctx, encounter.id);
+  const total = allVeedel(cityId).length;
+  const owned = ownedIn(sim.state, cityId).length;
+  if (owned !== total - 1) throw new Error(`Seed ${seed}: ${owned} statt ${total - 1} Veedel in ${cityId}.`);
+  rightHandReady(sim, cityId);
+  lastVeedelFalls(sim, cityId);
+  return keep(sim.state, `${cityId}-komplett`, seed);
 }
 
 const germanyRuns = new Map<number, Kept>();
 
 /**
- * Deutschland (Auftrag 40): Der Bot spielt alle fünf Städte, bis er Boss von Deutschland ist. Festgehalten wird jede
- * Ankunft in einer neuen Stadt (ankunft-<stadt>, gleich nach dem Aussteigen, bevor der Bot dort etwas tut) und das Ende
+ * Deutschland (Auftrag 40, 43): Der Bot spielt alle fünf Städte in der Reihenfolge ARRIVAL_CITIES, bis er Boss von
+ * Deutschland ist. Festgehalten wird in jeder Stadt nach Köln die Ankunft (ankunft-<stadt>, gleich nach dem Aussteigen,
+ * bevor der Bot dort etwas tut: keine Leute, keine Rechte Hand, keine Routen), die Mehrheit (boss-von-<stadt>, im Schritt,
+ * in dem sie fällt) und das vorletzte Veedel (Rohstand für <stadt>-komplett, siehe nearlyComplete), dazu das Ende
  * ("deutschland", vor dem Anruf von Jansen; er ruft ein paar Stunden später an: Verkauf, Rechnung, „Verkauft“).
  */
 function germanyRun(seed: number): Kept {
   return cached(germanyRuns, seed, (kept) => {
     const sim = Simulation.create(discoverModules(), { seed, mode: 'normal', runId: `test-deutschland-${seed}` });
+    const later = (cityId: string) => (ARRIVAL_CITIES as readonly string[]).includes(cityId);
+    const reached = (id: string) => {
+      if (!kept.has(id)) kept.set(id, keep(sim.state, id, seed));
+    };
     sim.on('city.arrived', ({ cityId, first }) => {
-      if (first) kept.set(`ankunft-${cityId}`, keep(sim.state, `ankunft-${cityId}`, seed));
+      if (first && later(cityId)) reached(`ankunft-${cityId}`);
     });
-    const day = playToGermany(sim, newBotStats());
+    sim.on('campaign.milestone', ({ kind, cityId }) => {
+      if (kind === 'majority' && later(cityId)) reached(`boss-von-${cityId}`);
+    });
+    sim.on('territory.controlChanged', () => {
+      for (const cityId of ARRIVAL_CITIES) {
+        const progress = campaignProgress(sim.state, cityId);
+        if (progress.controlled === progress.total - 1) reached(`vor-${cityId}-komplett`);
+      }
+    });
+    const day = playToGermany(sim, newBotStats(), { ...DEFAULT_BOT, cityOrder: ARRIVAL_CITIES });
     if (day === null) throw new Error(`Seed ${seed}: nicht Boss von Deutschland geworden.`);
     kept.set('deutschland', keep(sim.state, 'deutschland', seed));
   });
@@ -220,6 +270,11 @@ export const buildBossVonKoeln = (seed = 1) => take(koelnRun(seed), 'boss-von-ko
 export const buildKoelnKomplett = (seed = 1) => take(koelnRun(seed), 'koeln-komplett', seed);
 /** Gerade in einer neuen Stadt angekommen. */
 export const buildArrival = (cityId: string, seed = 1) => take(germanyRun(seed), `ankunft-${cityId}`, seed);
+/** Boss einer Stadt nach Köln: gerade die Mehrheit. */
+export const buildCityBoss = (cityId: string, seed = 1) => take(germanyRun(seed), `boss-von-${cityId}`, seed);
+/** Eine Stadt nach Köln fast komplett (siehe nearlyComplete). */
+export const buildCityNearlyComplete = (cityId: string, seed = 1) =>
+  nearlyComplete(take(germanyRun(seed), `vor-${cityId}-komplett`, seed), cityId, seed);
 /** Boss von Deutschland, kurz vor dem Anruf von Jansen. */
 export const buildDeutschland = (seed = 1) => take(germanyRun(seed), 'deutschland', seed);
 /** Abschnitte der Hafen-Phase und der Produktion (siehe harborRun). */
@@ -230,11 +285,15 @@ export const TEST_SAVES: readonly TestSave[] = [
   { id: 'koeln-veedel', label: 'Test: Köln, das erste Veedel', build: () => buildKoelnVeedel() },
   { id: 'boss-von-koeln', label: 'Test: Boss von Köln', build: () => buildBossVonKoeln() },
   { id: 'koeln-komplett', label: 'Test: Köln fast komplett', build: () => buildKoelnKomplett() },
-  ...ARRIVAL_CITIES.map((cityId) => ({
-    id: `ankunft-${cityId}`,
-    label: `Test: Ankunft in ${cityName(cityId)}`,
-    build: () => buildArrival(cityId),
-  })),
+  ...ARRIVAL_CITIES.flatMap((cityId) => [
+    { id: `ankunft-${cityId}`, label: `Test: Ankunft in ${cityName(cityId)}`, build: () => buildArrival(cityId) },
+    { id: `boss-von-${cityId}`, label: `Test: Boss von ${cityName(cityId)}`, build: () => buildCityBoss(cityId) },
+    {
+      id: `${cityId}-komplett`,
+      label: `Test: ${cityName(cityId)} fast komplett`,
+      build: () => buildCityNearlyComplete(cityId),
+    },
+  ]),
   { id: 'deutschland', label: 'Test: Boss von Deutschland', build: () => buildDeutschland() },
   { id: 'hafen', label: 'Test: Hafen-Phase', build: () => buildHarbor('hafen') },
   { id: 'hafen-europa', label: 'Test: Hafen, Schiff und Europa', build: () => buildHarbor('hafen-europa') },

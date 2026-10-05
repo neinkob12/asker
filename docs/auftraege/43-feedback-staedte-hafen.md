@@ -35,13 +35,13 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 
 ## B. Test-Spielstände für jede Stadt in jeder Phase
 
-- [ ] B1 Feste Reihenfolge Köln → Hamburg → Berlin → München → Frankfurt (Bot `cityOrder`), Hamburg direkt nach Köln.
-- [ ] B2 Pro Stadt nach Köln drei Stände: „Ankunft in <Stadt>“ (gerade angekommen, alte Städte beim Statthalter),
+- [x] B1 Feste Reihenfolge Köln → Hamburg → Berlin → München → Frankfurt (Bot `cityOrder`), Hamburg direkt nach Köln.
+- [x] B2 Pro Stadt nach Köln drei Stände: „Ankunft in <Stadt>“ (gerade angekommen, alte Städte beim Statthalter),
   „Boss von <Stadt>“ (Mehrheit gerade gefallen) und „<Stadt> fast komplett“ (ein Veedel fehlt und fällt gleich nach
   dem Laden, danach ruft die nächste Stadt an), wie bei Köln.
-- [ ] B3 Spielstände-Dialog: eine Gruppe pro Stadt (Köln, Hamburg, Berlin, München, Frankfurt), dann Deutschland, Hafen,
+- [x] B3 Spielstände-Dialog: eine Gruppe pro Stadt (Köln, Hamburg, Berlin, München, Frankfurt), dann Deutschland, Hafen,
   Produktion.
-- [ ] B4 `testSaves.test.ts`: In jeder Ankunft hat die Stadt keine Leute, keine Rechte Hand und keine Routen, und der
+- [x] B4 `testSaves.test.ts`: In jeder Ankunft hat die Stadt keine Leute, keine Rechte Hand und keine Routen, und der
   Spieler ist dort; „fast komplett“ wird nach dem Laden komplett, und die nächste Stadt meldet sich.
 
 ## C. Hafen-Phase: Lieferant in Rotterdam

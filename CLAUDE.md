@@ -273,9 +273,10 @@ Selbst ausprobieren:
 
 Im Browser: `?neu=normal&seed=1&tempo=0` startet ein frisches Spiel; `window.koeln.session` in der Konsole.
 Test-Spielstände (vom Bot gespielt, nicht in der Bestenliste), einer für jeden Abschnitt des Bogens (`koeln-anfang` bis
-`europa`): `?spielstand=koeln-komplett` oder Spielstände › Test-Spielstände; Liste in `src/playtest/testSaves.ts` und
-`src/ui/builtin/testSaves.ts`, Dateien in `public/spielstaende/`, neu erzeugen mit `npm run saves:build` (etwa eine
-Minute; `testSaves.test.ts` prüft, dass sie laden und den Moment zeigen; Übersicht in `docs/architektur.md`, Abschnitt
+`europa`; jede Stadt in der Reihenfolge Hamburg, Berlin, München, Frankfurt mit `ankunft-<stadt>`, `boss-von-<stadt>`
+und `<stadt>-komplett`): `?spielstand=koeln-komplett` oder Spielstände › Test-Spielstände; Liste in `src/playtest/testSaves.ts` und
+`src/ui/builtin/testSaves.ts`, Dateien in `public/spielstaende/`, neu erzeugen mit `npm run saves:build` (etwa zwei
+Minuten; `testSaves.test.ts` prüft, dass sie laden und den Moment zeigen; Übersicht in `docs/architektur.md`, Abschnitt
 "Spielstände").
 Kartenkacheln (Esri, OpenFreeMap) lädt das Skript über Node (auch hinter einem `HTTPS_PROXY`).
 TypeScript-Eigenheit: Dateien, die Module importieren, nicht in einen Ordner legen, der alphabetisch vor

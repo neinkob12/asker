@@ -234,6 +234,7 @@ export function SavesDialog() {
             color={phase.color}
             count={saves.length}
             collapsible
+            open={false}
             class="saves-phase"
           >
             <List>

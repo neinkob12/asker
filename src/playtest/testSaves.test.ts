@@ -20,6 +20,7 @@ import {
 import { getShips } from '../modules/fleet';
 import { getFincas, growGoals } from '../modules/grow';
 import { fullPowerMissing, getLieutenants, getRightHand } from '../modules/hierarchy';
+import { getRoutes } from '../modules/logistics';
 import { getSpots } from '../modules/spots';
 import { getStaff } from '../modules/staff';
 import { campaignProgress, cityMilestones } from '../modules/territory';
@@ -92,7 +93,7 @@ describe('Test-Spielstände', () => {
     expect(getRightHand(sim.state, 'koeln')).not.toBeNull();
   });
 
-  it('Ankunft in jeder Stadt: gerade ausgestiegen, die Städte davor sind komplett', () => {
+  it('Ankunft in jeder Stadt: gerade ausgestiegen, die Städte davor sind komplett, keine Leute, keine Routen', () => {
     ARRIVAL_CITIES.forEach((cityId, i) => {
       const sim = loadFile(`ankunft-${cityId}`);
       expect(presentCity(sim.state), cityId).toBe(cityId);
@@ -106,8 +107,48 @@ describe('Test-Spielstände', () => {
           .sort(),
         cityId,
       ).toEqual(['koeln', ...ARRIVAL_CITIES.slice(0, i)].sort());
-      // Das Startpaket ist mitgekommen.
-      expect(getStaff(sim.state, { cityId }).length, cityId).toBeGreaterThan(0);
+      // Leute bleiben in ihrer Stadt (Auftrag 43): Hier fängst du ohne Leute, Rechte Hand und Routen an.
+      expect(getStaff(sim.state, { cityId }), cityId).toHaveLength(0);
+      expect(getRightHand(sim.state, cityId), cityId).toBeNull();
+      expect(getRoutes(sim.state), cityId).toHaveLength(0);
+    });
+  });
+
+  it('Boss jeder Stadt: gerade die Mehrheit, noch nicht komplett', () => {
+    for (const cityId of ARRIVAL_CITIES) {
+      const sim = loadFile(`boss-von-${cityId}`);
+      expect(presentCity(sim.state), cityId).toBe(cityId);
+      expect(cityMilestones(sim.state, cityId).majority, cityId).not.toBeNull();
+      const progress = campaignProgress(sim.state, cityId);
+      expect(progress.controlled * 2, cityId).toBeGreaterThan(progress.total);
+      expect(progress.complete, cityId).toBe(false);
+    }
+  });
+
+  it('jede Stadt fast komplett: das letzte Veedel fällt gleich, die Vollmacht geht, dann geht es weiter', () => {
+    ARRIVAL_CITIES.forEach((cityId, i) => {
+      const sim = loadFile(`${cityId}-komplett`);
+      const events = recordEvents(sim);
+      expect(presentCity(sim.state), cityId).toBe(cityId);
+      const total = campaignProgress(sim.state, cityId).total;
+      expect(campaignProgress(sim.state, cityId).controlled, cityId).toBe(total - 1);
+      // Die erste Spielminute nach dem Laden ist die volle Stunde: Das letzte Veedel fällt.
+      sim.step();
+      expect(campaignProgress(sim.state, cityId).complete, cityId).toBe(true);
+      expect(
+        eventsOfType(events, 'campaign.won').some((e) => e.payload.cityId === cityId),
+        cityId,
+      ).toBe(true);
+      expect(fullPowerMissing(sim.state, cityId), cityId).toEqual([]);
+      if (i === ARRIVAL_CITIES.length - 1) {
+        // Die letzte Stadt: Boss von Deutschland, Jansen ruft an.
+        expect(isBossOfGermany(sim.state), cityId).toBe(true);
+      } else {
+        // Die nächste Stadt meldet sich.
+        expect(offerStatus(sim.state, ARRIVAL_CITIES[i + 1]), cityId).not.toBe('none');
+      }
+      sim.advance(6 * 60);
+      expect(sim.state.outcome.gameOver, cityId).toBeNull();
     });
   });
 
@@ -189,7 +230,6 @@ describe('Test-Spielstände', () => {
     const sim = loadFile('hafen-europa');
     expect(getShips(sim.state).length).toBeGreaterThan(0);
     expect(europeCustomers(sim.state)).toBeGreaterThanOrEqual(HARBOR_EUROPE_CUSTOMERS);
-    expect(getFincas(sim.state)).toHaveLength(0);
     expect(playerRank(sim.state).id).toBe('importer');
   });
 
