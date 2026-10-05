@@ -8,7 +8,10 @@
 // Wochenverträge (Auftrag 32, contracts.ts): Montag 8 Uhr drei Angebote von Figuren mit Gesicht, eins wird per Handy
 // angenommen, Frist Sonntag 23:59, Fortschritt wie bei den Quests, Belohnung plus Vertrauen bei einem Lieferanten.
 //
-// Öffentliche API: currentQuest(state), questProgress(state), completedQuests(state), questTitle(state),
+// Kapitel pro Stadt (Auftrag 36): Nach Köln ist die Reihenfolge frei. Quests mit cityId kommen erst dran, wenn ihre Stadt
+// frei ist; bis dahin wartet Peter (questsWaiting) und macht mit dem Kapitel der Stadt weiter, in die du gehst.
+//
+// Öffentliche API: currentQuest(state), questsWaiting(state), questProgress(state), completedQuests(state), questTitle(state),
 //   rewardText(reward), QUESTS, CHAPTERS,
 //   Verträge: contractOffers(state), activeContract(state), contractProgress(state), contractHistory(state),
 //   contractStats(state), contractValue(offer), canAcceptContract(state, offer), getContractTemplate(id),
@@ -27,14 +30,23 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, liveVeedel } from '../city';
+import { activeCity, isCityUnlocked, liveVeedel } from '../city';
 import { DEFAULT_WAREHOUSE, getWarehouses, productName, store, type Warehouse } from '../goods';
 import { addHeat, operationTier } from '../police';
 import { changeReputation } from '../reputation';
 import { addLoyalty, addXp, getStaff } from '../staff';
 import { addSupplierTrust, getRelation, getSuppliers, isUnlocked, supplierById } from '../suppliers';
 import { addInfluence, hasPlayerPresence, PLAYER_FACTION } from '../territory';
-import { CHAPTERS, MILESTONE_TITLE, PETER, QUEST_CHECK_EVERY, QUESTS, type QuestDef, type QuestReward } from './config';
+import {
+  CHAPTERS,
+  MILESTONE_TITLE,
+  PETER,
+  QUEST_CHECK_EVERY,
+  QUEST_COUNT_BEFORE_36,
+  QUESTS,
+  type QuestDef,
+  type QuestReward,
+} from './config';
 import {
   type ActiveContract,
   CONTRACT_HISTORY,
@@ -129,6 +141,42 @@ declare module '../../core' {
 
 export function currentQuest(state: GameState): QuestDef | null {
   return QUESTS[state.modules.quests.index] ?? null;
+}
+
+/** Index, solange Peter auf die nächste Stadt wartet (alle Quests bis dahin durch, die nächsten hängen an einer Stadt). */
+const WAITING = -1;
+
+/** Wartet Peter auf die nächste Stadt (Auftrag 36)? Dann gibt es gerade keine Quest, aber es kommen noch welche. */
+export function questsWaiting(state: GameState): boolean {
+  return state.modules.quests.index === WAITING;
+}
+
+/** Kann die Quest jetzt dran sein? Kapitel einer Stadt erst, wenn die Stadt frei ist. */
+function eligible(state: GameState, quest: QuestDef): boolean {
+  return !quest.cityId || isCityUnlocked(state, quest.cityId);
+}
+
+/**
+ * Die nächste Quest nach der Stelle from: die nächste in der Liste, die weder erledigt noch übersprungen ist und dran
+ * sein kann; sonst ein Stadt-Kapitel weiter vorn, das inzwischen dran sein kann (nach Köln ist die Reihenfolge der
+ * Städte frei). Hängen alle übrigen an Städten, die noch nicht frei sind: WAITING. Alles durch: QUESTS.length.
+ */
+function nextIndex(state: GameState, from: number): number {
+  const q = state.modules.quests;
+  const finished = new Set([...q.done, ...q.skipped]);
+  let waiting = false;
+  for (let i = Math.max(0, from); i < QUESTS.length; i++) {
+    if (finished.has(QUESTS[i].id)) continue;
+    if (eligible(state, QUESTS[i])) return i;
+    waiting = true;
+  }
+  for (let i = 0; i < Math.min(from, QUESTS.length); i++) {
+    const quest = QUESTS[i];
+    if (!quest.cityId || finished.has(quest.id)) continue;
+    if (eligible(state, quest)) return i;
+    waiting = true;
+  }
+  return waiting ? WAITING : QUESTS.length;
 }
 
 /** Fortschritt der aktiven Quest: [jetzt, Ziel]. */
@@ -259,7 +307,7 @@ function finish(ctx: Ctx, skipped: boolean): void {
     journal.add(ctx, `Quest erledigt: ${quest.title}.${rewards ? ` Belohnung: ${rewards}.` : ''}`, 'good');
     if (quest.doneText) messages.send(ctx, { contact: PETER, text: quest.doneText });
   }
-  q.index += 1;
+  q.index = nextIndex(ctx.state, q.index + 1);
   q.progress = 0;
   q.startedAt = ctx.now;
   ctx.emit('quest.completed', { questId: quest.id, skipped });
@@ -269,7 +317,9 @@ function finish(ctx: Ctx, skipped: boolean): void {
       contact: PETER,
       text: next
         ? `Stark. Kapitel „${chapterName(quest.chapter)}“ ist durch. Jetzt kommt „${chapterName(next.chapter)}“.`
-        : 'Das war alles, was ich dir beibringen kann. Ab jetzt bist du auf dich gestellt, Boss.',
+        : questsWaiting(ctx.state)
+          ? `Stark. Kapitel „${chapterName(quest.chapter)}“ ist durch. Wenn du in einer neuen Stadt bist, meld ich mich.`
+          : 'Das war alles, was ich dir beibringen kann. Ab jetzt bist du auf dich gestellt, Boss.',
     });
   }
   announce(ctx);
@@ -533,6 +583,21 @@ function contractHour(ctx: Ctx): void {
   }
 }
 
+/** Eine neue Stadt ist frei: Peter macht mit ihrem Kapitel weiter. */
+function resume(ctx: Ctx): void {
+  const q = ctx.state.modules.quests;
+  const index = nextIndex(ctx.state, QUESTS.length);
+  if (index === WAITING) return;
+  q.index = index;
+  q.progress = 0;
+  q.startedAt = ctx.now;
+  const next = currentQuest(ctx.state);
+  if (!next) return;
+  messages.send(ctx, { contact: PETER, text: `Neue Stadt, neues Kapitel: „${chapterName(next.chapter)}“.` });
+  announce(ctx);
+  check(ctx);
+}
+
 export function skipQuest(ctx: Ctx): CommandResult {
   if (!currentQuest(ctx.state)) return { ok: false, reason: 'Keine Quest offen.' };
   finish(ctx, true);
@@ -559,7 +624,7 @@ function onCounted<K extends keyof GameEvents>(type: K) {
 
 export default defineModule({
   id: 'quests',
-  version: 3,
+  version: 4,
   dependsOn: ['goods', 'staff', 'territory', 'police', 'reputation', 'leaderboard'],
   init: () => ({
     index: 0,
@@ -581,6 +646,8 @@ export default defineModule({
       });
       announce(ctx);
     }
+    // Peter wartet auf die nächste Stadt (Auftrag 36): Ist sie frei, kommt ihr Kapitel.
+    if (q.index === WAITING) resume(ctx);
     if (currentQuest(ctx.state)?.measure) check(ctx);
     const contract = ctx.state.modules.quests.contracts.active;
     if (contract && getContractTemplate(contract.templateId)?.measure) checkContract(ctx);
@@ -626,5 +693,9 @@ export default defineModule({
     },
     // Version 3 (Auftrag 32): Wochenverträge, alte Stände fangen am nächsten Montag an.
     3: (old: QuestsStateV2): QuestsState => ({ ...old, contracts: newContracts() }),
+    // Version 4 (Auftrag 36): Kapitel pro Stadt hinten an der Liste. Wer mit allem durch war, wartet jetzt auf die
+    // nächste Stadt (sonst stünde er mitten im Kapitel einer Stadt, die noch gar nicht frei ist).
+    4: (old: QuestsState): QuestsState =>
+      old.index >= QUEST_COUNT_BEFORE_36 ? { ...old, index: WAITING, progress: 0 } : old,
   },
 });

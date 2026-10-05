@@ -1,10 +1,12 @@
 // Bestenliste (Auftrag 29): Das Modul merkt sich, was ein Durchgang erreicht hat (höchstes Vermögen, Tage, Veedel),
 // damit die Oberfläche das Ergebnis bei Game Over oder Sieg an die gemeinsame Bestenliste schicken kann
-// (ui/index.tsx, Server: api/leaderboard.ts). Gerankt wird nach dem höchsten Vermögen im Durchgang.
+// (ui/index.tsx, Server: api/leaderboard.ts). Gerankt wird nach dem höchsten Vermögen im Durchgang. Mit dabei: der
+// Rang des Spielers als Titel (Auftrag 36, city.playerRank: Kleindealer bis Boss von Deutschland) und sein Wert.
 //
 // Öffentliche API: netWorth(state), getRecord(state), runSummary(state)
 
 import { clock, defineModule, type GameState, wallet } from '../../core';
+import { playerRank } from '../city';
 import { getLots, getProduct } from '../goods';
 import { getBatches } from '../laundering';
 import { getRelation, getSuppliers } from '../suppliers';
@@ -35,6 +37,10 @@ export interface RunSummary {
   outcome: 'bankrupt' | 'killed' | 'won' | 'running';
   /** Komplett übernommene Städte (Auftrag 30). */
   cities: number;
+  /** Rang des Spielers als Titel (Auftrag 36), z.B. "Boss von Hamburg". */
+  title: string;
+  /** Wert des Rangs (größer = höher, siehe city/ranks.ts). */
+  rank: number;
 }
 
 /**
@@ -71,6 +77,8 @@ export function runSummary(state: GameState): RunSummary {
     outcome: over ? over.reason : state.outcome.won ? 'won' : 'running',
     // Alte Spielstände mit Sieg ohne Städte-Liste: damals war es Köln.
     cities: state.outcome.won ? (state.outcome.won.cities?.length ?? 1) : 0,
+    title: playerRank(state).title,
+    rank: playerRank(state).score,
   };
 }
 

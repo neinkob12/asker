@@ -199,10 +199,20 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   entscheidet nur die Stärke, das Ergebnis ist eine Mischung. Die Rechte Hand gibt Rat, die Zollkontrolle (Autobahn,
   später Hafen) hat eigene Handlungen. Gute Entscheidungen machen messbar einen Unterschied (siehe `docs/architektur.md`,
   Balancing).
-- **Noch nicht umgesetzt** (Aufträge 34 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Stammabnehmer, Gangs mit
-  Gedächtnis, Leute mit Geschichte, Capo, freie Reihenfolge der Städte mit Autobahn-Netz, Berlin,
-  München, Frankfurt, Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen: Tarnfirmen,
-  Charakter-Erstellung, Perks, Besitz, Akte, Korruption.
+- **Deutschland (Auftrag 36):** Nach Köln ist die Reihenfolge frei. Jede Stadt hat einen Kontakt mit Gesicht und Stimme
+  und einen Satz Dreh; nach „<Stadt> komplett“ ruft die nächstgelegene freie an, die anderen melden sich per Handy, ein
+  Tipp auf ihre Glas-Karte in der Deutschland-Ansicht holt den Anruf. Berlin, München und Frankfurt stehen schon als
+  „bald“ da. Ein Autobahn-Netz (A1, A3, A3/A9, A24, A9, A7/A5) trägt Fahrten zwischen allen Städten, auch über eine
+  Stadt hinweg. Die Rechte Hand mit Vollmacht heißt Statthalter; schlafende Städte haben an etwa 3 von 100 Tagen eine
+  Razzia (halber Tag oder kleines Minus, eine Zeile vom Statthalter). Bei der Übergabe kommt ein Startpaket mit (neue
+  Rechte Hand, bis zu fünf Leute, Fahrzeuge) und Startgeld (zehn Tagesgewinne der Stadt, mindestens ein Sockel je
+  Zielstadt, Hamburg 45.000 €). Ränge des Spielers ohne
+  Boni: Kleindealer, Händler, Großhändler, Boss von Köln, Boss von <Stadt>, Boss von Deutschland (ab vier Städten; dann Importeur und
+  Produzent), mit Banner, im HUD und in der Bestenliste. Peter hat ein Kapitel pro Stadt.
+- **Noch nicht umgesetzt** (Aufträge 34 und 37 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`):
+  Stammabnehmer, Gangs mit Gedächtnis, Leute mit Geschichte, Capo, Inhalt von Berlin, München, Frankfurt, Verkauf und
+  Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen: Tarnfirmen, Charakter-Erstellung, Perks,
+  Besitz, Akte, Korruption.
 
 ## Mehrere Städte (Auftrag 30 gebaut, Auftrag 31 für die Karte)
 
@@ -245,10 +255,11 @@ schönere Deutschland-Ansicht) kommt mit [Auftrag 31](auftraege/31-karte-lebt.md
 - **Daten:** pro Stadt ein Straßennetz aus Overture Maps und die A1 als Linie (409 km, gebaut); Rhein und Elbe als
   echte Wasserwege und mehr Leben auf der Karte (Verkehr, kleine Figuren an Spots, festes Performance-Budget) kommen
   mit Auftrag 31.
-- **Nach Hamburg (Entscheidung vom 04.10.2026):** Hamburg komplett geht an eine zweite Rechte Hand (Statthalter). Danach
-  Berlin, München und vielleicht Frankfurt in freier Reihenfolge, verbunden über ein Autobahn-Netz statt nur der A1.
-  Schlafende Städte laufen über ihren Statthalter weiter, ab und zu gibt es dort ein kleines Minus durch eine Razzia,
-  nichts Schlimmes, niemand ruft zurück. Danach Verkauf, Hafen und Produktion, siehe Abschnitt „Spielgefühl“.
+- **Nach Hamburg (Entscheidung vom 04.10.2026, gebaut mit Auftrag 36):** Hamburg komplett geht an eine zweite Rechte
+  Hand (Statthalter). Danach Berlin, München und vielleicht Frankfurt in freier Reihenfolge, verbunden über ein
+  Autobahn-Netz statt nur der A1. Schlafende Städte laufen über ihren Statthalter weiter, ab und zu gibt es dort ein
+  kleines Minus durch eine Razzia, nichts Schlimmes, niemand ruft zurück. Danach Verkauf, Hafen und Produktion, siehe
+  Abschnitt „Spielgefühl“.
 
 Gebaut mit Auftrag 30 genau so wie oben, mit diesen Werten: Hamburg-Fahrt 4,5 bis 5 Spielstunden, Route mit Fahrer
 etwa 4 Stunden 45 Minuten, höchstens 5 kg je Fahrt; Karneval ab Tag 30 alle 90 Tage, FC jeden zweiten Samstag,

@@ -25,12 +25,14 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { offerStatus } from '../../city';
+import { activeCity, offerStatus } from '../../city';
 import { getStaff, getStaffMember, roleName } from '../../staff';
+import { campaignProgress } from '../../territory';
 import {
   canBeRightHand,
   cityLabel,
   getRightHand,
+  hasFullPower,
   isTaskUnlocked,
   PAYROLL_RESERVE_DAYS,
   PAYROLL_RESERVE_DAYS_ORDERS,
@@ -142,7 +144,7 @@ export function RightHandRow() {
         <ItemContent
           icon="crown"
           color="brand"
-          title={`Rechte Hand: ${m.name}`}
+          title={`${hasFullPower(state, activeCity(state)) ? 'Statthalter' : 'Rechte Hand'}: ${m.name}`}
           meta={
             rh.lastReport
               ? `Letzter Bericht: ${formatEuro(rh.lastReport.profit)} Ergebnis`
@@ -471,7 +473,10 @@ function RightHandPage() {
           );
         })}
       </Group>
-      <FullPowerSection offered={offerStatus(state) !== 'none'} />
+      {/* Vollmacht: sobald eine Stadt anruft oder die Stadt komplett ist (Auftrag 36: auch ohne nächste Stadt). */}
+      <FullPowerSection
+        offered={offerStatus(state) !== 'none' || campaignProgress(state, activeCity(state)).complete}
+      />
       <Group
         title="Büro"
         icon="briefcase"
@@ -550,7 +555,12 @@ function RightHandPage() {
   );
 }
 
-registerPanel({ id: 'hierarchy.rightHand', title: () => 'Rechte Hand', component: RightHandPage });
+registerPanel({
+  id: 'hierarchy.rightHand',
+  // Mit Vollmacht heißt sie Statthalter (Auftrag 36).
+  title: (_props, state) => (hasFullPower(state, activeCity(state)) ? 'Statthalter' : 'Rechte Hand'),
+  component: RightHandPage,
+});
 
 registerAdvisor({
   id: 'hierarchy.rightHand',

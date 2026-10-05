@@ -264,3 +264,120 @@
   font-size: 13px;
   color: var(--hud-ink-2);
 }
+
+/* Glas-Karten der Deutschland-Ansicht (Auftrag 36): freie Städte mit Dreh und Kontakt, Schablonen „bald“. */
+.city-card {
+  max-width: 260px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.city-card:disabled {
+  cursor: default;
+}
+
+.city-card.is-soon {
+  opacity: 0.6;
+}
+
+.city-card.is-offer {
+  border-color: var(--cat-chat);
+}
+
+.city-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.city-card__pitch {
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--hud-ink-2);
+}
+
+.city-card__person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.city-card__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.city-card__who-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.city-card__who-role {
+  font-size: 12px;
+  color: var(--hud-ink-2);
+  white-space: nowrap;
+}
+
+/* Rang im HUD: die Leiter des Bogens. */
+.city-ranks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 220px;
+}
+
+.city-ranks__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.city-ranks__list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: var(--space-2);
+  color: var(--hud-ink-2);
+  font-size: 14px;
+}
+
+.city-ranks__list li.is-done {
+  color: var(--hud-ink);
+}
+
+.city-ranks__list li.is-now {
+  color: var(--hud-gold);
+  font-weight: 700;
+}
+
+.city-ranks__title {
+  white-space: nowrap;
+}
+
+.city-ranks__hint {
+  grid-column: 2;
+  font-size: 12px;
+}
+
+/* Am Handy-Bildschirm ist Deutschland klein: Die Karten zeigen nur Name, Stand und Gesicht, der Dreh steht im Anruf. */
+@media (max-width: 760px) {
+  .city-card {
+    max-width: 170px;
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .city-card__name {
+    font-size: 15px;
+  }
+
+  .city-card__pitch,
+  .city-card__who,
+  .city-card__stat:nth-child(n + 2) {
+    display: none;
+  }
+}

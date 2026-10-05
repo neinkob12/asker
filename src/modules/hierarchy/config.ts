@@ -259,8 +259,23 @@ export const RIGHT_HAND_RESTOCK_MIN_STOCK_OPTIONS = [50, 100, 200, 400, 800];
 
 // --- Vollmacht (Auftrag 30): Die Rechte Hand führt eine Stadt allein ---
 
-/** Ihr Anteil am Tagesgewinn der Stadt (laut Kasse, nur bei Gewinn). */
+/**
+ * Ihr Anteil am Tagesgewinn der Stadt (laut Kasse, nur bei Gewinn). Stellschraube für das Tempo der späteren Städte
+ * (Auftrag 36): Je weniger der Statthalter nimmt, desto mehr Geld bringst du in die nächste Stadt mit.
+ */
 export const FULL_POWER_SHARE = 0.8;
+
+// --- Startpaket bei der Übergabe (Auftrag 36) ---
+
+/**
+ * Die neue Rechte Hand der nächsten Stadt: bis es Capos gibt (Auftrag 34), ein Leutnant ab diesem Level. Sie behält
+ * ihr Level und bekommt als Rechte Hand gleich die Stufe START_PACK_RANK_BY_LEVEL (freie Aufgaben gleich an).
+ */
+export const START_PACK_LEADER_MIN_LEVEL = 5;
+/** Stufe der neuen Rechten Hand nach dem Level der Person (Level 5 → Stufe 3, ab Level 7 die höchste). */
+export const START_PACK_RANK_BY_LEVEL: Readonly<Record<number, number>> = { 5: 3, 6: 4, 7: 5 };
+/** So viele Leute nimmst du höchstens mit (ohne die neue Rechte Hand). */
+export const START_PACK_MAX_STAFF = 5;
 /** Widerruf: so viel Loyalität weniger, und so lange ist sie verstimmt (Zufriedenheit). */
 export const REVOKE_LOYALTY = -20;
 export const REVOKE_GRUDGE_DAYS = 7;

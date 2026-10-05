@@ -1,120 +1,14 @@
-// Deutschland-Ansicht (Auftrag 30 und 31): Jede freie Stadt steht als Glas-Karte auf der Karte (Name, Veedel x/12,
-// Ergebnis heute, Fahrten unterwegs). Sichtbar nur weit herausgezoomt (FAR_ZOOM, dann sind die Marker der Städte aus);
-// ein Klick macht die Stadt aktiv und fliegt hin. Zoomt man aus einer Stadt heraus, wird daraus die Deutschland-Ansicht
-// (Draufsicht), zoomt man über einer freien Stadt wieder hinein, deren Stadtansicht (schräg; eine andere Stadt wird
-// dabei aktiv wie mit einem Klick auf ihre Karte).
+// Das Autobahn-Netz in der Deutschland-Ansicht (Auftrag 31 und 36): alle Linien zwischen den Städten fein und gedämpft,
+// die Abschnitte, auf denen gerade eine Fahrt läuft (du selbst, eine Route, ein Lieferant aus einer anderen Stadt), in
+// Gold. Nur weit herausgezoomt; in der Stadt zeigt die Grundkarte die Autobahnen. Die Glas-Karten der Städte: cards.tsx.
 
 import type { GeoJSONSource } from 'maplibre-gl';
-import { formatEuro, type GameState, type LngLat } from '../../../core';
-import { addHtmlMarker, el, FAR_ZOOM, type MapLayer, mapToken } from '../../../map';
-import { cityReport } from '../../finance';
-import { getTrips, isInterCityTrip, tripCity } from '../../logistics';
-import { autobahnBetween } from '../../roads';
+import type { GameState, LngLat } from '../../../core';
+import { FAR_ZOOM, type MapLayer, mapToken } from '../../../map';
+import { getTrips, isInterCityTrip, originCity, tripCity } from '../../logistics';
+import { autobahnLines, autobahnPath } from '../../roads';
 import { getSupplier, shipmentsInTransit } from '../../suppliers';
-import { campaignProgress } from '../../territory';
-import { activeCity, citiesUnlocked, cityTravel, playableCities } from '../index';
-
-/** So weit (über FAR_ZOOM) muss man hineinzoomen, bis aus Deutschland wieder die Stadt wird (kein Hin und Her). */
-const ENTER_CITY_MARGIN = 1;
-
-interface Card {
-  element: HTMLElement;
-  stats: HTMLElement;
-  key: string;
-}
-
-/** Kennzahlen einer Stadt als einzelne Werte (keine Aufzählung mit Punkten). */
-function stats(state: GameState, cityId: string): string[] {
-  const progress = campaignProgress(state, cityId);
-  const today = cityReport(state, cityId, 1).profit;
-  const trips = getTrips(state).filter((t) => tripCity(state, t) === cityId).length;
-  const parts = [
-    `${progress.controlled}/${progress.total} Veedel`,
-    `heute ${today >= 0 ? '+' : ''}${formatEuro(today)}`,
-  ];
-  if (trips > 0) parts.push(`${trips} ${trips === 1 ? 'Fahrt' : 'Fahrten'}`);
-  return parts;
-}
-
-export const citiesLayer: MapLayer = {
-  id: 'city.cards',
-  order: 90,
-  mount(ctx) {
-    const { map } = ctx;
-    const cards = new Map<string, Card>();
-    for (const city of playableCities()) {
-      const values = el('span', 'city-card__stats');
-      const { element } = addHtmlMarker(map, {
-        position: city.center,
-        className: 'city-card',
-        anchor: 'bottom',
-        tag: 'button',
-        title: `${city.name} ansehen`,
-        children: [el('strong', 'city-card__name', city.name), values],
-        onClick: () => {
-          if (ctx.isPicking()) return;
-          const state = ctx.getState();
-          if (state && activeCity(state) !== city.id)
-            ctx.ui.dispatch({ type: 'city.switch', payload: { cityId: city.id } });
-          else ctx.ui.flyToCity(city.id);
-        },
-      });
-      element.hidden = true;
-      cards.set(city.id, { element, stats: values, key: '' });
-    }
-    const refresh = (state: GameState) => {
-      const far = map.getZoom() <= FAR_ZOOM;
-      const unlocked = citiesUnlocked(state);
-      const active = activeCity(state);
-      for (const [id, card] of cards) {
-        const show = far && unlocked.includes(id);
-        card.element.hidden = !show;
-        if (!show) continue;
-        card.element.classList.toggle('is-active', id === active);
-        const parts = stats(state, id);
-        const key = parts.join('|');
-        if (key !== card.key) {
-          card.key = key;
-          card.stats.replaceChildren(...parts.map((text) => el('span', 'city-card__stat', text)));
-        }
-      }
-    };
-    /** Ansicht nach dem Zoomen: aus der Stadt heraus nach Deutschland, über einer freien Stadt wieder hinein. */
-    const followZoom = (state: GameState) => {
-      if (ctx.isPicking()) return;
-      const zoom = map.getZoom();
-      const view = ctx.ui.mapView();
-      if (view.startsWith('city:') && zoom <= FAR_ZOOM) {
-        ctx.ui.enterView('deutschland');
-        return;
-      }
-      if (view !== 'deutschland' || zoom < FAR_ZOOM + ENTER_CITY_MARGIN) return;
-      const { lng, lat } = map.getCenter();
-      const city = playableCities().find((c) => {
-        const [w, s, e, n] = c.bounds;
-        return lng >= w && lng <= e && lat >= s && lat <= n;
-      });
-      if (!city || !citiesUnlocked(state).includes(city.id)) return;
-      if (activeCity(state) !== city.id) ctx.ui.dispatch({ type: 'city.switch', payload: { cityId: city.id } });
-      else ctx.ui.enterView(`city:${city.id}`);
-    };
-    // Auch ohne laufende Uhr (Pause): Nach dem Zoomen erscheinen oder verschwinden die Karten.
-    const onZoom = () => {
-      const state = ctx.getState();
-      if (!state) return;
-      refresh(state);
-      followZoom(state);
-    };
-    map.on('zoomend', onZoom);
-    return {
-      update: refresh,
-      destroy() {
-        map.off('zoomend', onZoom);
-        for (const card of cards.values()) card.element.remove();
-      },
-    };
-  },
-};
+import { cityTravel, playableCities } from '../index';
 
 const AUTOBAHN_SOURCE = 'city.autobahn';
 const AUTOBAHN_GLOW = 'city.autobahn.glow';
@@ -128,34 +22,54 @@ function cityContaining(point: LngLat): string | null {
   return null;
 }
 
-/** Läuft gerade eine Fahrt zwischen den Städten (du selbst, eine Route oder ein Kurier von Stadt zu Stadt)? */
-function autobahnBusy(state: GameState): boolean {
-  if (cityTravel(state)) return true;
-  if (getTrips(state).some((t) => isInterCityTrip(state, t))) return true;
-  return shipmentsInTransit(state).some((s) => {
+/** Schlüssel einer Linie unabhängig von der Richtung. */
+const lineKey = (a: string, b: string) => (a < b ? `${a}-${b}` : `${b}-${a}`);
+
+/** Abschnitte des Netzes, auf denen gerade eine Fahrt zwischen zwei Städten läuft. */
+export function busyLines(state: GameState): Set<string> {
+  const busy = new Set<string>();
+  const mark = (from: string, to: string) => {
+    for (const leg of autobahnPath(from, to)?.legs ?? []) busy.add(lineKey(leg.from, leg.to));
+  };
+  const travel = cityTravel(state);
+  if (travel) mark(travel.from, travel.to);
+  for (const trip of getTrips(state)) {
+    if (isInterCityTrip(state, trip)) mark(originCity(state, trip), tripCity(state, trip));
+  }
+  for (const s of shipmentsInTransit(state)) {
     const supplier = getSupplier(state, s.supplierId);
-    if (!supplier || supplier.kind !== 'city') return false;
+    if (supplier?.kind !== 'city') continue;
     const from = cityContaining(supplier);
-    return from !== null && from !== (s.cityId ?? 'koeln');
-  });
+    const to = s.cityId ?? 'koeln';
+    if (from !== null && from !== to) mark(from, to);
+  }
+  return busy;
 }
 
-/**
- * Die Autobahn zwischen den freien Städten (A1 Köln–Hamburg, roads: autobahnBetween) als feine goldene Linie, nur
- * weit herausgezoomt und nur, solange eine Fahrt darauf läuft (Auftrag 31). In der Stadt zeigt die Grundkarte sie.
- */
+/** Alle Linien des Autobahn-Netzes, gedämpft; die mit einer laufenden Fahrt in Gold (Eigenschaft busy). */
 export const autobahnLayer: MapLayer = {
   id: 'city.autobahn',
   order: 14,
   mount(ctx) {
     const { map } = ctx;
     const gold = mapToken('--hud-gold', '#f2c766');
-    map.addSource(AUTOBAHN_SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    const quiet = mapToken('--hud-ink', '#f5f1e8');
+    const lines = autobahnLines();
+    const data = (busy: Set<string>) => ({
+      type: 'FeatureCollection' as const,
+      features: lines.map((l) => ({
+        type: 'Feature' as const,
+        properties: { busy: busy.has(lineKey(l.from, l.to)) ? 1 : 0, ref: l.ref },
+        geometry: { type: 'LineString' as const, coordinates: l.path.map((p) => [p.lng, p.lat]) },
+      })),
+    });
+    map.addSource(AUTOBAHN_SOURCE, { type: 'geojson', data: data(new Set()) });
     map.addLayer({
       id: AUTOBAHN_GLOW,
       type: 'line',
       source: AUTOBAHN_SOURCE,
       maxzoom: FAR_ZOOM + 1,
+      filter: ['==', ['get', 'busy'], 1],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': gold,
@@ -171,34 +85,19 @@ export const autobahnLayer: MapLayer = {
       maxzoom: FAR_ZOOM + 1,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': gold,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 9, 2.2],
-        'line-opacity': 0.9,
+        'line-color': ['case', ['==', ['get', 'busy'], 1], gold, quiet],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['==', ['get', 'busy'], 1], 1.8, 1.4], 9, 2.6],
+        'line-opacity': ['case', ['==', ['get', 'busy'], 1], 0.95, 0.5],
       },
     });
     let shownKey = '';
     return {
       update(state) {
-        const unlocked = citiesUnlocked(state);
-        const lines = autobahnBusy(state)
-          ? unlocked.flatMap((a, i) =>
-              unlocked.slice(i + 1).flatMap((b) => {
-                const line = autobahnBetween(a, b);
-                return line ? [{ id: `${a}-${b}`, path: line.path }] : [];
-              }),
-            )
-          : [];
-        const key = lines.map((l) => l.id).join(',');
+        const busy = busyLines(state);
+        const key = [...busy].sort().join(',');
         if (key === shownKey) return;
         shownKey = key;
-        (map.getSource(AUTOBAHN_SOURCE) as GeoJSONSource | undefined)?.setData({
-          type: 'FeatureCollection',
-          features: lines.map((l) => ({
-            type: 'Feature' as const,
-            properties: {},
-            geometry: { type: 'LineString' as const, coordinates: l.path.map((p) => [p.lng, p.lat]) },
-          })),
-        });
+        (map.getSource(AUTOBAHN_SOURCE) as GeoJSONSource | undefined)?.setData(data(busy));
       },
       destroy() {
         for (const id of [AUTOBAHN_SOURCE, AUTOBAHN_GLOW]) if (map.getLayer(id)) map.removeLayer(id);

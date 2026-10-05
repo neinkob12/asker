@@ -23,7 +23,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity } from '../city';
+import { activeCity, cityName } from '../city';
 import { cityReport, lieutenantResult, wageRunway } from '../finance';
 import { getGangStatus, tributeAmount } from '../gangs';
 import { getWarehouses, isWarehouseOwned, stockSummary, warehouseSites } from '../goods';
@@ -65,9 +65,9 @@ import type { FullPowerDone, FullPowerTaskKey, RightHandPost } from './types';
 const VIA = 'Rechte Hand';
 const DAY = 24 * 60;
 
-/** Name der Stadt für Texte (bis das Modul city die Namen liefert). */
+/** Name der Stadt für Texte. */
 export function cityLabel(cityId: string): string {
-  return cityId === 'hamburg' ? 'Hamburg' : cityId === 'koeln' ? 'Köln' : cityId;
+  return cityName(cityId);
 }
 
 export function emptyFullPowerDone(): FullPowerDone {
@@ -238,6 +238,8 @@ function appointLieutenants(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
   if (unled.length === 0) return;
   const candidates = getStaff(state, { status: 'active', role: 'runner', cityId: activeCity(state) })
     .filter((m) => m.level >= FP_LIEUTENANT_MIN_LEVEL && m.stats.loyalty >= FP_LIEUTENANT_MIN_LOYALTY)
+    // Wer gerade in eine andere Stadt fährt (Startpaket, Auftrag 36), bleibt dabei.
+    .filter((m) => m.assignment?.kind !== 'travel')
     .filter((m) => !isLieutenant(state, m.id) && !isRightHand(state, m.id) && canBeLieutenant(state, m.id).ok)
     .sort((a, b) => b.level - a.level || b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id));
   const best = candidates[0];

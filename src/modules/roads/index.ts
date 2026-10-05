@@ -1,5 +1,7 @@
 // Straßen: die echten Straßennetze der Städte (Köln, Hamburg; Autobahn bis Wohnstraße, aus OpenStreetMap über
-// Overture Maps, ODbL) als Graphen, dazu die A1 zwischen den Städten als Linie. Fahrzeuge fahren darauf statt
+// Overture Maps, ODbL) als Graphen, dazu das Autobahn-Netz zwischen den Städten (Auftrag 36: A1, A3, A3/A9, A24, A9,
+// A7/A5 als Linien zwischen Köln, Hamburg, Berlin, München und Frankfurt; Routen gehen über den Graphen, auch über eine
+// Stadt hinweg). Fahrzeuge fahren darauf statt
 // Luftlinie, und Fahrzeiten in der Simulation kommen aus der Straßenlänge. Statische Daten, kein eigener Spielzustand.
 // Daten neu erzeugen: tools/build-roads.py (Details in network.ts).
 //
@@ -20,10 +22,15 @@
 //                             roadApproaches(cityId?) alle Zufahrten einer Stadt
 //   nearestRoadPoint(point)   nächster Punkt auf einer Straße, networkSize(id?), networkStats(id?), ROAD_SPEEDS
 //   roadNetworkAt(point)      Stadt, in deren Netz der Punkt liegt (null = außerhalb)
-//   interCityRoute(from, to)  Weg zwischen zwei Städten (Auftrag 30): Stadt-Anfahrt, A1, Stadt-Zufahrt
-//                             ({ path, meters, motorwayMeters, onRoads, drive, walkFrom, walkTo })
+//   interCityRoute(from, to)  Weg zwischen zwei Städten (Auftrag 30, 36): Stadt-Anfahrt, Autobahn über das Netz (auch
+//                             durch eine dritte Stadt), Stadt-Zufahrt
+//                             ({ path, meters, motorwayMeters, onRoads, drive, walkFrom, walkTo, via, refs })
 //   interCityMinutes(from, to, cityMetersPerMinute)  Fahrzeit dafür
-//   autobahnBetween(a, b)     die Autobahn zwischen zwei Städten als Linie (für die Karte), null wenn keine
+//   autobahnBetween(a, b)     die direkte Autobahn zwischen zwei Städten als Linie, null wenn keine
+//   autobahnPath(a, b)        kürzester Weg über das Autobahn-Netz: Abschnitte (Linien in Fahrtrichtung), Städte
+//                             unterwegs, Meter; null ohne Verbindung
+//   autobahnRefs(a, b)        Nummern auf diesem Weg, z.B. ['A 1', 'A 24']
+//   autobahnLines()           alle Linien des Netzes (für die Karte)
 //   shipRoute(cityId)         Weg eines Schiffs von außen bis zum Kai ('koeln': Rotterdam über Waal und Rhein,
 //                             'hamburg': Elbe ab Cuxhaven), aus Overture-Daten (waterways.ts, tools/build-water.py)
 //   shipMinutes(cityId)       Fahrzeit dieses Wegs mit SHIP_SPEED (nur zur Anzeige, die Lieferzeit kommt aus suppliers)
@@ -46,6 +53,7 @@ import {
   nearestNetwork,
   networkAt,
   networkCenter,
+  networkIds,
   networkSize,
   ROAD_SPEEDS,
   snapToLngLat,
@@ -345,61 +353,221 @@ export function nearestRoadPoint(point: LngLat): { point: LngLat; meters: number
 const INTERCITY_DETOUR = 1.18;
 /** Minuten für Auffahrt, Abfahrt und Tankpause (zusätzlich zu den Fahrten in den Städten). */
 const INTERCITY_ACCESS_MINUTES = 15;
+/** Ein Punkt außerhalb aller Straßennetze gehört zu einer Stadt des Autobahn-Netzes, wenn er so nah an ihrem Knoten ist. */
+const NODE_RADIUS = 40_000;
 
 export interface InterCityRoute extends RoadRoute {
   /** Davon auf der Autobahn (Rest: Anfahrt und Zufahrt in den Städten). */
   motorwayMeters: number;
+  /** Städte, durch die der Weg unterwegs führt (ohne Start und Ziel). */
+  via: string[];
+  /** Nummern der Autobahnen in Fahrtrichtung, z.B. ['A 1', 'A 24']. */
+  refs: string[];
 }
 
-interface Autobahn {
+export interface AutobahnLeg {
   from: string;
   to: string;
   ref: string;
+  refs: readonly string[];
   meters: number;
+  /** Punkte in Fahrtrichtung. */
   path: LngLat[];
 }
 
-let autobahnLines: Autobahn[] | null = null;
+let autobahnLineCache: AutobahnLeg[] | null = null;
 
-/** Die Autobahn zwischen zwei Städten (Punkte in Fahrtrichtung von a nach b), null wenn es keine gibt. */
-export function autobahnBetween(a: string, b: string): { ref: string; meters: number; path: LngLat[] } | null {
-  autobahnLines ??= AUTOBAHNEN.map((line) => ({ ...line, path: decodeLine(line.points) }));
-  for (const line of autobahnLines) {
+/** Alle Linien des Autobahn-Netzes (Richtung wie in autobahn.ts). */
+export function autobahnLines(): readonly AutobahnLeg[] {
+  autobahnLineCache ??= AUTOBAHNEN.map((line) => ({
+    from: line.from,
+    to: line.to,
+    ref: line.ref,
+    refs: line.refs,
+    meters: line.meters,
+    path: decodeLine(line.points),
+  }));
+  return autobahnLineCache;
+}
+
+/** Die direkte Autobahn zwischen zwei Städten (Punkte in Fahrtrichtung von a nach b), null wenn es keine gibt. */
+export function autobahnBetween(a: string, b: string): AutobahnLeg | null {
+  for (const line of autobahnLines()) {
     if (line.from === a && line.to === b) return line;
   }
-  for (const line of autobahnLines) {
-    if (line.from === b && line.to === a) return { ref: line.ref, meters: line.meters, path: [...line.path].reverse() };
+  for (const line of autobahnLines()) {
+    if (line.from === b && line.to === a) return { ...line, from: a, to: b, path: [...line.path].reverse() };
   }
   return null;
+}
+
+export interface AutobahnPath {
+  /** Abschnitte in Fahrtrichtung (je eine Linie des Netzes). */
+  legs: AutobahnLeg[];
+  /** Städte unterwegs (ohne Start und Ziel). */
+  via: string[];
+  meters: number;
+}
+
+const pathCache = new Map<string, AutobahnPath | null>();
+
+/** Städte im Autobahn-Netz (alle Enden der Linien), sortiert. */
+export function autobahnCities(): string[] {
+  return [...new Set(autobahnLines().flatMap((l) => [l.from, l.to]))].sort();
+}
+
+/**
+ * Kürzester Weg über das Autobahn-Netz von Stadt a nach Stadt b (Dijkstra über die Meter der Linien, bei Gleichstand
+ * nach Namen, also fest). null ohne Verbindung oder bei a = b.
+ */
+export function autobahnPath(a: string, b: string): AutobahnPath | null {
+  const id = `${a}>${b}`;
+  if (pathCache.has(id)) return pathCache.get(id) ?? null;
+  let result: AutobahnPath | null = null;
+  if (a !== b) {
+    const dist = new Map<string, number>([[a, 0]]);
+    const prev = new Map<string, string>();
+    const done = new Set<string>();
+    for (;;) {
+      let here: string | null = null;
+      for (const [city, d] of dist) {
+        if (done.has(city)) continue;
+        if (here === null || d < (dist.get(here) ?? Infinity) || (d === dist.get(here) && city < here)) here = city;
+      }
+      if (here === null || here === b) break;
+      done.add(here);
+      for (const line of autobahnLines()) {
+        const next = line.from === here ? line.to : line.to === here ? line.from : null;
+        if (!next || done.has(next)) continue;
+        const d = (dist.get(here) ?? 0) + line.meters;
+        if (d < (dist.get(next) ?? Infinity)) {
+          dist.set(next, d);
+          prev.set(next, here);
+        }
+      }
+    }
+    if (dist.has(b)) {
+      const cities = [b];
+      while (cities[0] !== a) cities.unshift(prev.get(cities[0]) as string);
+      const legs = cities.slice(1).map((to, i) => autobahnBetween(cities[i], to) as AutobahnLeg);
+      result = { legs, via: cities.slice(1, -1), meters: dist.get(b) ?? 0 };
+    }
+  }
+  pathCache.set(id, result);
+  return result;
+}
+
+/** Nummern der Autobahnen auf dem Weg von a nach b, in Fahrtrichtung ohne Wiederholung (leer ohne Weg). */
+export function autobahnRefs(a: string, b: string): string[] {
+  const refs: string[] = [];
+  for (const leg of autobahnPath(a, b)?.legs ?? []) {
+    for (const ref of leg.refs) if (ref.startsWith('A') && !refs.includes(ref)) refs.push(ref);
+  }
+  return refs;
+}
+
+/** Hat die Stadt ein eigenes Straßennetz (Schablonen-Städte haben noch keins)? */
+function hasNetwork(cityId: string): boolean {
+  return networkIds().includes(cityId);
+}
+
+/** Mitte der Enden der Linien in einer Stadt (Knoten des Autobahn-Netzes). */
+function nodeOf(cityId: string): LngLat | null {
+  const ends = autobahnLines().flatMap((l) => [
+    ...(l.from === cityId ? [l.path[0]] : []),
+    ...(l.to === cityId ? [l.path[l.path.length - 1]] : []),
+  ]);
+  if (ends.length === 0) return null;
+  return {
+    lng: ends.reduce((s, p) => s + p.lng, 0) / ends.length,
+    lat: ends.reduce((s, p) => s + p.lat, 0) / ends.length,
+  };
+}
+
+/** Stadt eines Punkts für die Fahrt zwischen den Städten: das Netz, sonst ein naher Knoten (Schablonen), sonst null. */
+function placeOf(point: LngLat): string | null {
+  const net = networkAt(point);
+  if (net) return net;
+  let best: string | null = null;
+  let bestMeters = NODE_RADIUS;
+  for (const city of autobahnCities()) {
+    const node = nodeOf(city);
+    const meters = node ? distanceMeters(node, point) : Infinity;
+    if (meters < bestMeters) {
+      best = city;
+      bestMeters = meters;
+    }
+  }
+  return best;
+}
+
+/** Stück innerhalb einer Stadt: über ihre Straßen, ohne Netz (Schablone) gerade. */
+function cityPiece(cityId: string, from: LngLat, to: LngLat): RoadRoute {
+  if (hasNetwork(cityId)) return roadRoute(from, to);
+  if (from.lng === to.lng && from.lat === to.lat) {
+    const p = { lng: from.lng, lat: from.lat };
+    return { path: [p, p], meters: 0, onRoads: true, drive: [p, p], walkFrom: null, walkTo: null };
+  }
+  return toRoadRoute(null, from, to);
+}
+
+/** Zwei Wege aneinanderhängen (der gemeinsame Punkt nur einmal). */
+function join(a: LngLat[], b: LngLat[]): LngLat[] {
+  if (a.length === 0) return [...b];
+  const last = a[a.length - 1];
+  const first = b[0];
+  return first && last.lng === first.lng && last.lat === first.lat ? [...a, ...b.slice(1)] : [...a, ...b];
 }
 
 const interCityCache = new Map<string, InterCityRoute>();
 
 /**
- * Weg zwischen zwei Städten (Auftrag 30): mit den Straßen der ersten Stadt zur Autobahn, die A1 entlang und in der
- * zweiten Stadt über die Straßen zum Ziel. Ohne Autobahn-Linie zwischen den Städten die Luftlinie mit dem üblichen
- * Umweg einer Autobahn.
+ * Weg zwischen zwei Städten (Auftrag 30, 36): mit den Straßen der ersten Stadt zur Autobahn, über das Autobahn-Netz
+ * (in einer Stadt unterwegs über ihre Straßen von einer Autobahn zur nächsten) und in der letzten Stadt über die Straßen
+ * zum Ziel. Ohne Verbindung im Netz die Luftlinie mit dem üblichen Umweg einer Autobahn.
  */
 export function interCityRoute(from: LngLat, to: LngLat): InterCityRoute {
   const id = `${key(from)}>${key(to)}`;
   const known = lruGet(interCityCache, id);
   if (known) return known;
   const [netFrom, netTo] = networksOf(from, to);
-  const autobahn = netFrom !== netTo ? autobahnBetween(netFrom, netTo) : null;
+  const a = placeOf(from) ?? netFrom;
+  const b = placeOf(to) ?? netTo;
+  const way = a !== b ? autobahnPath(a, b) : null;
   let route: InterCityRoute;
-  if (autobahn) {
-    const onRamp = autobahn.path[0];
-    const offRamp = autobahn.path[autobahn.path.length - 1];
-    const access = roadRoute(from, onRamp);
-    const egress = roadRoute(offRamp, to);
+  if (way) {
+    const legs = way.legs;
+    const access = cityPiece(a, from, legs[0].path[0]);
+    const egress = cityPiece(b, legs[legs.length - 1].path[legs[legs.length - 1].path.length - 1], to);
+    let path = access.path;
+    let drive = access.drive;
+    let cityMeters = access.meters + egress.meters;
+    let onRoads = access.onRoads && egress.onRoads;
+    legs.forEach((leg, i) => {
+      const inner = leg.path.slice(1, -1);
+      path = join(path, inner);
+      drive = join(drive, inner);
+      if (i < legs.length - 1) {
+        // Durch die Stadt dazwischen: vom Ende dieser Linie zum Anfang der nächsten.
+        const through = cityPiece(way.via[i], leg.path[leg.path.length - 1], legs[i + 1].path[0]);
+        path = join(path, through.path);
+        drive = join(drive, through.drive);
+        cityMeters += through.meters;
+        onRoads &&= through.onRoads;
+      }
+    });
+    path = join(path, egress.path);
+    drive = join(drive, egress.drive);
     route = {
-      path: [...access.path, ...autobahn.path.slice(1, -1), ...egress.path],
-      meters: access.meters + autobahn.meters + egress.meters,
-      motorwayMeters: autobahn.meters,
-      onRoads: access.onRoads && egress.onRoads,
-      drive: [...access.drive, ...autobahn.path.slice(1, -1), ...egress.drive],
+      path,
+      meters: cityMeters + way.meters,
+      motorwayMeters: way.meters,
+      onRoads,
+      drive,
       walkFrom: access.walkFrom,
       walkTo: egress.walkTo,
+      via: way.via,
+      refs: autobahnRefs(a, b),
     };
   } else {
     const meters = Math.round(distanceMeters(from, to) * INTERCITY_DETOUR);
@@ -407,7 +575,17 @@ export function interCityRoute(from: LngLat, to: LngLat): InterCityRoute {
       { lng: from.lng, lat: from.lat },
       { lng: to.lng, lat: to.lat },
     ];
-    route = { path, meters, motorwayMeters: meters, onRoads: false, drive: path, walkFrom: null, walkTo: null };
+    route = {
+      path,
+      meters,
+      motorwayMeters: meters,
+      onRoads: false,
+      drive: path,
+      walkFrom: null,
+      walkTo: null,
+      via: [],
+      refs: [],
+    };
   }
   lruSet(interCityCache, id, route, CACHE_SIZE);
   return route;
