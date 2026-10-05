@@ -308,11 +308,14 @@ describe('quests', () => {
     raw.moduleVersions.quests = 4;
     const loaded = loadSimulation(raw, sim.modules);
     expect(currentQuest(loaded.state)?.id).toBe('beVeedel');
-    // Alle durch: bleibt am Ende der Liste.
+    // Alle durch: Jetzt wartet das Kapitel Rotterdam (es kommt erst nach dem Verkauf, in Rotterdam).
     const done = structuredClone(sim.state) as GameState;
     done.modules.quests = { ...done.modules.quests, index: before.length };
     done.moduleVersions.quests = 4;
-    expect(loadSimulation(done, sim.modules).state.modules.quests.index).toBe(QUESTS.length);
+    const waiting = loadSimulation(done, sim.modules);
+    expect(questsWaiting(waiting.state)).toBe(true);
+    waiting.advance(60);
+    expect(currentQuest(waiting.state)).toBeNull();
   });
 
   it('Kapitel pro Stadt (Auftrag 36): Wer nach Köln eine andere Stadt nimmt, bekommt deren Kapitel', () => {

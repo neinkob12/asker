@@ -49,6 +49,11 @@ export const ORDER_ROUND_GRAMS = 500;
 export const ORDER_HOUR = 6 * 60;
 /** So lange kannst du eine Bestellung annehmen, ablehnen oder ein Gegenangebot machen. */
 export const ORDER_ANSWER_MINUTES = 24 * 60;
+/**
+ * Die erste Runde bei der Ankunft in Rotterdam (Auftrag 43): mehr Zeit zum Antworten, und bestellt wird nur, was in der
+ * Halle liegt (die Startware), damit der neue Job nicht mit lauter „fehlt“ beginnt.
+ */
+export const FIRST_ORDER_ANSWER_MINUTES = 3 * 24 * 60;
 /** Frist für die Lieferung ab Bestellung. */
 export const ORDER_DUE_DAYS = 6;
 /** Zu spät geliefert: nur so viel vom Preis. */

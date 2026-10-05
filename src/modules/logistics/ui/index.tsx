@@ -24,7 +24,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity } from '../../city';
+import { activeCity, isBusinessSold } from '../../city';
 import { isPlayerDelivering } from '../../customers';
 import { vehicleName } from '../../fleet';
 import {
@@ -534,6 +534,26 @@ function TripsGroup(props: { trips: readonly Trip[] }) {
 /** Hafen-Seite (Panel): Kennzahlen, Kai, Fahrten unterwegs, was zuletzt lief. */
 function PortPanel() {
   const { state } = useGame();
+  const ui = useUi();
+  // Nach dem Verkauf (Auftrag 43): Der Hafen ist Jansens Halle in Rotterdam, die Kunden-App zeigt ihn.
+  if (isBusinessSold(state)) {
+    return (
+      <div class="logi-app">
+        <Group
+          title="Dein Hafen ist jetzt Rotterdam"
+          icon="anchor"
+          color="goods"
+          note="Lager, Zoll, Einkauf im Ausland und Lkw findest du in der Kunden-App unter „Hafen“."
+        >
+          <div class="logi-redirect">
+            <Button variant="primary" icon="ship" onClick={() => ui.openPhone('trade.app', { view: 'harbor' })}>
+              Zum Hafen in der Kunden-App
+            </Button>
+          </div>
+        </Group>
+      </div>
+    );
+  }
   const trips = getTrips(state).filter((t) => tripTouchesCity(state, t, activeCity(state)));
   const log = getLogisticsLog(state).slice(0, 4);
   const drivers = getStaff(state, { role: 'driver', cityId: activeCity(state) }).length;

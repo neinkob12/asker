@@ -26,7 +26,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName, relationFactor } from '../../city';
+import { activeCity, cityName, isBusinessSold, relationFactor } from '../../city';
 import { getStock, getWarehouse, getWarehouses, productName, qualityTier } from '../../goods';
 import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount, portName } from '../../logistics';
 import { indexTrend, purchaseIndex } from '../../market';
@@ -564,6 +564,25 @@ function SuppliersApp() {
   const supplierId =
     ui.state.phone.app === APP_ID ? (ui.state.phone.params?.supplierId as string | undefined) : undefined;
   const supplier = supplierId ? getSupplier(state, supplierId) : undefined;
+  // Nach dem Verkauf (Auftrag 43) kaufst du nicht mehr bei Lieferanten, sondern bei Produzenten im Ausland ein.
+  if (isBusinessSold(state)) {
+    return (
+      <PhoneScreen title="Lieferanten">
+        <Group
+          title="Du bist jetzt selbst Lieferant"
+          icon="ship"
+          color="goods"
+          note="Ware kaufst du ab jetzt bei Produzenten im Ausland ein, als Container in deinen Hafen. Toni, Hein, Mirko und Daan sind deine Konkurrenz."
+        >
+          <div class="sup-redirect">
+            <Button variant="primary" icon="ship" onClick={() => ui.openPhone('trade.app', { view: 'harbor' })}>
+              Zum Einkauf im Hafen
+            </Button>
+          </div>
+        </Group>
+      </PhoneScreen>
+    );
+  }
   if (supplier) {
     return (
       <PhoneScreen title={`${supplier.contactName} (${supplier.name})`} onBack={() => ui.openPhone(APP_ID)}>
@@ -624,6 +643,8 @@ onGameEvent('supplier.unlocked', 'suppliers.unlockedToast', (payload, ui, state)
 registerAdvisor({
   id: 'suppliers.restock',
   advise: (state) => {
+    // Nach dem Verkauf rät die Kunden-App (trade), wo Ware fehlt.
+    if (isBusinessSold(state)) return null;
     if (shipmentsInTransit(state, activeCity(state)).length > 0 || cargoAmount(state) > 0 || inTransitAmount(state) > 0)
       return null;
     const stock = getStock(state);

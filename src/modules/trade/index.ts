@@ -74,6 +74,7 @@ import {
   CUSTOMER_KINDS,
   DEMAND_SCALE,
   EUROPE_MIN_RELIABILITY,
+  FIRST_ORDER_ANSWER_MINUTES,
   FREIGHT_BASE,
   FREIGHT_PER_KG_100KM,
   GANG_MEMORY_BLOCK,
@@ -989,8 +990,11 @@ function joinEurope(ctx: Ctx): void {
   }
 }
 
-/** Bestellungen einer Woche: pro Kunde und Ware dein Anteil am Bedarf (Abnahmevertrag mindestens CONTRACT_SHARE). */
-export function placeOrders(ctx: Ctx): number {
+/**
+ * Bestellungen einer Woche: pro Kunde und Ware dein Anteil am Bedarf (Abnahmevertrag mindestens CONTRACT_SHARE). first:
+ * die Runde bei der Ankunft (nur Ware, die in der Halle liegt, mehr Zeit zum Antworten; Auftrag 43).
+ */
+export function placeOrders(ctx: Ctx, first = false): number {
   const s = ctx.state.modules.trade;
   const week = weekOf(ctx.now);
   s.week = week;
@@ -1000,6 +1004,12 @@ export function placeOrders(ctx: Ctx): number {
   }
   joinEurope(ctx);
   const contract = s.contractUntil !== null && ctx.now < s.contractUntil;
+  // Ware, die in deinen Häfen liegt (für die erste Runde).
+  const inStock = new Set(
+    s.ports.flatMap((portId) =>
+      Object.keys(s.stock[portId] ?? {}).filter((id) => (s.stock[portId]?.[id]?.amount ?? 0) > 0),
+    ),
+  );
   let placed = 0;
   for (const customer of s.customers) {
     if (customer.kind === 'gang' && customer.gangId && memoryScore(ctx.state, customer.gangId) <= GANG_MEMORY_BLOCK) {
@@ -1015,6 +1025,7 @@ export function placeOrders(ctx: Ctx): number {
     for (const [productId, weekly] of Object.entries(customer.weekly)) {
       // Kleine Schwankung von Woche zu Woche (±15 %).
       const demand = Math.round(weekly * (0.85 + ctx.random() * 0.3));
+      if (first && !inStock.has(productId)) continue;
       s.stats.demand += demand;
       const amount = Math.round((demand * mine) / ORDER_ROUND_GRAMS) * ORDER_ROUND_GRAMS;
       if (amount < MIN_ITEM_GRAMS) continue;
@@ -1033,7 +1044,7 @@ export function placeOrders(ctx: Ctx): number {
       factor: null,
       guaranteed,
       placedAt: ctx.now,
-      answerBy: ctx.now + ORDER_ANSWER_MINUTES,
+      answerBy: ctx.now + (first ? FIRST_ORDER_ANSWER_MINUTES : ORDER_ANSWER_MINUTES),
       dueAt: ctx.now + ORDER_DUE_DAYS * MINUTES_PER_DAY,
       status: 'open',
     };
@@ -1049,9 +1060,12 @@ export function placeOrders(ctx: Ctx): number {
     });
   }
   if (placed > 0) {
+    const goods = [...inStock].map(productName).join(' und ');
     messages.send(ctx, {
       contact: dispatcherContact(),
-      text: `Neue Woche, ${placed} Bestellungen. Annehmen bis morgen früh, sonst kauft die Konkurrenz.`,
+      text: first
+        ? `Willkommen. Ich bin Fenna, ich mach hier die Disposition. Für den Anfang hab ich nur ${goods} zugesagt, das liegt in der Halle: ${placed} Bestellungen, du hast drei Tage zum Antworten.`
+        : `Neue Woche, ${placed} Bestellungen. Annehmen bis morgen früh, sonst kauft die Konkurrenz.`,
       silent: true,
     });
   }
@@ -1874,10 +1888,10 @@ export default defineModule({
   },
   on: {
     'business.sold': (ctx, { cities }) => startTrade(ctx, cities),
-    // Ankunft in Rotterdam: die ersten Bestellungen gleich (nicht erst am Montag).
+    // Ankunft in Rotterdam: die ersten Bestellungen gleich (nicht erst am Montag), nur für die Ware in der Halle.
     'city.arrived': (ctx, { cityId }) => {
       const s = ctx.state.modules.trade;
-      if (cityId === HARBOR_CITY && s.startedAt !== null && s.orders.length === 0) placeOrders(ctx);
+      if (cityId === HARBOR_CITY && s.startedAt !== null && s.orders.length === 0) placeOrders(ctx, true);
     },
     'encounter.resolved': (ctx, { request, outcome }) => {
       if (request.origin?.module === 'trade') onContainerCheck(ctx, request.origin.ref, outcome);

@@ -240,8 +240,11 @@ function harborRun(seed: number): Kept {
   return cached(harborRuns, seed, (kept) => {
     const sim = loadSimulation(take(germanyRun(seed), 'deutschland', seed), discoverModules());
     const stats = newBotStats();
+    // Gleich bei der Ankunft, bevor der Bot dort etwas tut: die erste Runde Bestellungen, Jansens erster Schritt.
+    sim.on('city.arrived', ({ cityId }) => {
+      if (cityId === 'rotterdam' && !kept.has('hafen')) kept.set('hafen', keep(sim.state, 'hafen', seed));
+    });
     if (!sellAndArrive(sim, stats)) throw new Error(`Seed ${seed}: kein Verkauf.`);
-    kept.set('hafen', keep(sim.state, 'hafen', seed));
     const sections: [string, (state: GameState) => boolean][] = [
       ['hafen-europa', (s) => getShips(s).length > 0 && europeCustomers(s) >= HARBOR_EUROPE_CUSTOMERS],
       ['produktion', (s) => getFincas(s).length >= 2 && exportGrams(s) > 0],

@@ -3,11 +3,12 @@
 // Hafen (Ware pro Hafen mit Zoll-Heat, Einkauf bei Produzenten, Container auf See, weitere Häfen). Dazu ein Rat, wenn
 // Bestellungen warten, Lieferungen in der Dynamic Island, die Europa-Ansicht auf der Karte (map.ts).
 
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { clock, formatEuro, formatNumber, type GameState } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import {
   ActionSheet,
+  type Advice,
   type CategoryColor,
   type ChipSpec,
   Disclosure,
@@ -32,7 +33,15 @@ import {
   useUi,
 } from '../../../ui';
 import { HARBOR_CITY } from '../../city';
-import { freeVehicles, vehicleName } from '../../fleet';
+import {
+  freeVehicles,
+  getVehicles,
+  isShip,
+  VEHICLE_MODELS,
+  vehicleName,
+  vehiclePrice,
+  vehicleStatus,
+} from '../../fleet';
 import { productName } from '../../goods';
 import { isGrowStarted } from '../../grow';
 import { customsHeat, customsLevel } from '../../police';
@@ -132,9 +141,73 @@ function itemChips(items: readonly { productId: string; amount: number }[]): Chi
   return items.map((i) => ({ label: `${kg(i.amount)} ${productName(i.productId)}`, color: 'goods', icon: 'package' }));
 }
 
-function OrdersView() {
+/** Ware, die für eine Bestellung im Hafen fehlt (Gramm pro Sorte). */
+function missingItems(state: GameState, order: TradeOrder): { productId: string; amount: number }[] {
+  const port = ownedPorts(state)[0] ?? HARBOR_CITY;
+  return openItems(order)
+    .map((item) => ({
+      productId: item.productId,
+      amount: Math.max(0, item.amount - (portStock(state, port)[item.productId]?.amount ?? 0)),
+    }))
+    .filter((item) => item.amount > 0);
+}
+
+/** Produzenten für eine Ware, der schnellste zuerst. */
+function producersFor(productId: string, portId: string) {
+  return PRODUCERS.filter((p) => p.products[productId] !== undefined).sort(
+    (a, b) => shippingMinutes(a.id, portId) - shippingMinutes(b.id, portId),
+  );
+}
+
+/** Die Woche als Lieferant in vier Schritten (Auftrag 43): in den ersten zwei Wochen offen, danach eingeklappt. */
+const HARBOR_STEPS: { icon: string; color: CategoryColor; title: string; text: string }[] = [
+  {
+    icon: 'inbox',
+    color: 'warn',
+    title: 'Montag: Bestellungen',
+    text: 'Jeder Kunde bestellt einmal pro Woche. Annehmen, ablehnen oder mehr verlangen.',
+  },
+  {
+    icon: 'ship',
+    color: 'goods',
+    title: 'Einkauf im Ausland',
+    text: 'Container bei Produzenten, ein paar Tage auf See. Rechtzeitig bestellen.',
+  },
+  {
+    icon: 'anchor',
+    color: 'law',
+    title: 'Hafen und Zoll',
+    text: 'Jeder Container kann kontrolliert werden. Viel Ware macht den Zoll wach.',
+  },
+  {
+    icon: 'truck',
+    color: 'place',
+    title: 'Ausliefern',
+    text: 'Spedition oder eigener Lkw bis zur Frist. Pünktlich bringt mehr Bestellungen.',
+  },
+];
+
+function HarborGuide() {
+  const { state } = useGame();
+  const started = state.modules.trade.startedAt ?? state.time;
+  const fresh = weekOf(state.time) - weekOf(started) < 2;
+  return (
+    <Group title="So läuft der Hafen" icon="help" color="system" collapsible open={fresh}>
+      <List>
+        {HARBOR_STEPS.map((step, i) => (
+          <ListItem key={step.title}>
+            <ItemContent icon={step.icon} color={step.color} title={`${i + 1}. ${step.title}`} meta={step.text} />
+          </ListItem>
+        ))}
+      </List>
+    </Group>
+  );
+}
+
+function OrdersView(props: { onView: (view: View) => void }) {
   const { state, dispatch } = useGame();
-  const [ask, setAsk] = useState<{ order: TradeOrder; mode: 'answer' | 'deliver' } | null>(null);
+  const ui = useUi();
+  const [ask, setAsk] = useState<{ order: TradeOrder; mode: 'answer' | 'deliver' | 'buy' } | null>(null);
   const open = openOrders(state);
   const pending = pendingDeliveries(state);
   const deliveries = getDeliveries(state);
@@ -194,7 +267,8 @@ function OrdersView() {
         setAsk(null);
       },
     });
-    for (const v of freeVehicles(state, HARBOR_CITY)) {
+    const trucks = freeVehicles(state, HARBOR_CITY);
+    for (const v of trucks) {
       actions.push({
         label: `${vehicleName(state, v.id)}: ohne Kosten, Zoll ${pct(deliveryCheckChance(state, customer, port, v.id))}`,
         icon: 'truck',
@@ -204,12 +278,40 @@ function OrdersView() {
         },
       });
     }
+    // Ohne freien Lkw (Auftrag 43): Wo es einen gibt.
+    if (trucks.length === 0) {
+      actions.push({
+        label: 'Eigener Lkw: unter „Hafen“ kaufen',
+        icon: 'plusCircle',
+        onSelect: () => {
+          setAsk(null);
+          props.onView('harbor');
+        },
+      });
+    }
+  }
+  // Fehlt Ware (Auftrag 43): direkt zum Einkauf, die Ware ist vorausgewählt.
+  if (ask && customer && ask.mode === 'buy') {
+    const portId = ownedPorts(state)[0] ?? HARBOR_CITY;
+    for (const item of missingItems(state, ask.order)) {
+      for (const p of producersFor(item.productId, portId).slice(0, 2)) {
+        actions.push({
+          label: `${productName(item.productId)} bei ${p.name} (${Math.round(shippingMinutes(p.id, portId) / 1440)} Tage)`,
+          icon: p.byRoad ? 'truck' : 'ship',
+          onSelect: () => {
+            setAsk(null);
+            ui.openPanel('trade.order', { producerId: p.id, productId: item.productId });
+          },
+        });
+      }
+    }
   }
   const guaranteed = open.filter((o) => o.guaranteed);
   const coverage = orderCoverage(state);
   const covered = open.filter((o) => coverage.get(o.id) === 0);
   return (
     <>
+      <HarborGuide />
       <SummaryTiles
         items={[
           { icon: 'inbox', color: 'warn', value: open.length, label: 'Neu' },
@@ -305,7 +407,7 @@ function OrdersView() {
               <ListItem
                 key={o.id}
                 value={formatEuro(orderValue(o))}
-                onClick={some ? () => setAsk({ order: o, mode: 'deliver' }) : undefined}
+                onClick={() => setAsk({ order: o, mode: some ? 'deliver' : 'buy' })}
               >
                 <ItemContent
                   icon={kindIcon(c.kind)}
@@ -378,7 +480,9 @@ function OrdersView() {
           ask && customer
             ? ask.mode === 'answer'
               ? `${orderItemsText(ask.order.items)}. Höchstens ${formatEuro(orderValue(ask.order, maxFactor(ask.order)))}.`
-              : `${orderItemsText(port ? shippableItems(state, port, ask.order) : [])} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.${europeCityOf(customer) ? ` Zoll steht ${europeCityOf(customer)?.border.name}.` : ''}`
+              : ask.mode === 'buy'
+                ? `Im Hafen fehlt ${orderItemsText(missingItems(state, ask.order))}. Kauf es bei einem Produzenten, vor der Frist ${clock.weekdayName(ask.order.dueAt, true)} ${clock.formatTime(ask.order.dueAt)}.`
+                : `${orderItemsText(port ? shippableItems(state, port, ask.order) : [])} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.${europeCityOf(customer) ? ` Zoll steht ${europeCityOf(customer)?.border.name}.` : ''}`
             : undefined
         }
         actions={actions}
@@ -506,6 +610,67 @@ function CustomersView() {
 /** Rückfrage vor einer Ausgabe mit sauberem Geld (Halle, Liegeplatz). */
 type Confirm = { title: string; message: string; label: string; cost: number; run: () => void } | null;
 
+const TRUCK_STATUS = {
+  free: { label: 'frei', color: 'money' },
+  busy: { label: 'unterwegs', color: 'goods' },
+  seized: { label: 'beschlagnahmt', color: 'danger' },
+} as const;
+
+/**
+ * Lkw der Hafen-Phase (Auftrag 43): Hier kauft man sie, wo man sie braucht (vorher nur in der Lager-App). Ohne Lkw
+ * fährt die Spedition gegen Fracht.
+ */
+function TrucksGroup(props: { onBuy: (price: number, run: () => void) => void }) {
+  const { state, dispatch } = useGame();
+  const trucks = getVehicles(state, HARBOR_CITY).filter((v) => !isShip(v));
+  const model = VEHICLE_MODELS.find((m) => m.harborOnly && !m.ship && m.available);
+  const price = model ? vehiclePrice(model, HARBOR_CITY) : 0;
+  return (
+    <Group
+      title="Lkw"
+      icon="truck"
+      color="goods"
+      count={trucks.length}
+      note={
+        trucks.length === 0
+          ? 'Ohne eigenen Lkw liefert die Spedition, gegen Fracht.'
+          : 'Eigene Lkw fahren ohne Fracht, der Zoll winkt sie öfter raus.'
+      }
+    >
+      <List>
+        {trucks.map((v) => {
+          const status = TRUCK_STATUS[vehicleStatus(v)];
+          return (
+            <ListItem key={v.id}>
+              <ItemContent
+                icon="truck"
+                color="goods"
+                title={vehicleName(state, v.id)}
+                tags={[{ label: status.label, color: status.color }]}
+              />
+            </ListItem>
+          );
+        })}
+        {model && (
+          <ListItem
+            action
+            icon="plusCircle"
+            value={formatEuro(price)}
+            disabled={state.wallet.clean < price}
+            onClick={() =>
+              props.onBuy(price, () =>
+                dispatch({ type: 'fleet.buy', payload: { model: model.id, cityId: HARBOR_CITY } }),
+              )
+            }
+          >
+            Lkw kaufen
+          </ListItem>
+        )}
+      </List>
+    </Group>
+  );
+}
+
 function HarborView() {
   const { state, dispatch } = useGame();
   const ui = useUi();
@@ -592,6 +757,17 @@ function HarborView() {
           </Group>
         );
       })}
+      <TrucksGroup
+        onBuy={(price, run) =>
+          setConfirm({
+            title: 'Lkw kaufen?',
+            message: `80 kg Ladung, fährt deine Lieferungen ohne Frachtkosten. Wird öfter kontrolliert als die Spedition. Kostet ${formatEuro(price)} sauberes Geld.`,
+            label: `Kaufen (${formatEuro(price)})`,
+            cost: price,
+            run,
+          })
+        }
+      />
       <Group
         title="Einkauf im Ausland"
         icon="ship"
@@ -687,7 +863,13 @@ function HarborView() {
 
 function TradeApp() {
   const { state } = useGame();
-  const [view, setView] = useState<View>('orders');
+  const ui = useUi();
+  // Bereich aus ui.openPhone('trade.app', { view }) (z.B. „Hinführen“ einer Quest, Auftrag 43).
+  const asked = ui.state.phone.app === APP_ID ? (ui.state.phone.params?.view as View | undefined) : undefined;
+  const [view, setView] = useState<View>(asked ?? 'orders');
+  useEffect(() => {
+    if (asked) setView(asked);
+  }, [asked]);
   if (!isTradeActive(state)) {
     return (
       <PhoneScreen title="Kunden">
@@ -719,7 +901,7 @@ function TradeApp() {
           ]}
           onChange={(v) => setView(v as View)}
         />
-        {view === 'orders' && <OrdersView />}
+        {view === 'orders' && <OrdersView onView={setView} />}
         {view === 'customers' && <CustomersView />}
         {view === 'harbor' && <HarborView />}
         {view === 'grow' && <Slot name="trade.grow" props={{}} />}
@@ -776,7 +958,7 @@ registerAdvisor({
         priority: 82,
         icon: 'inbox',
         title: `${open} ${open === 1 ? 'Bestellung wartet' : 'Bestellungen warten'}`,
-        action: (ui) => ui.openPhone(APP_ID),
+        action: (ui) => ui.openPhone(APP_ID, { view: 'orders' }),
       };
     }
     const ready = pendingDeliveries(state).length;
@@ -786,10 +968,101 @@ registerAdvisor({
         priority: 60,
         icon: 'package',
         title: `${ready} ${ready === 1 ? 'Lieferung' : 'Lieferungen'} offen`,
-        action: (ui) => ui.openPhone(APP_ID),
+        action: (ui) => ui.openPhone(APP_ID, { view: 'orders' }),
       };
     }
     return null;
+  },
+});
+
+/**
+ * „Nächster Schritt“ in der Hafen-Phase (Auftrag 43): was fehlt, was abläuft, was den Hafen verstopft, wann der Zoll wach
+ * ist und wann sich ein Lkw lohnt. Jeder Rat führt direkt an die Stelle, wo man es löst.
+ */
+registerAdvisor({
+  id: 'trade.harbor',
+  advise(state) {
+    if (!isTradeActive(state)) return null;
+    const list: Advice[] = [];
+    const now = state.time;
+    const port = ownedPorts(state)[0] ?? HARBOR_CITY;
+    // Bestellung kurz vor der Frist, noch nicht unterwegs.
+    const due = pendingDeliveries(state)
+      .filter((o) => o.dueAt - now < 24 * 60)
+      .sort((a, b) => a.dueAt - b.dueAt)[0];
+    if (due) {
+      list.push({
+        id: 'trade.due',
+        priority: 86,
+        icon: 'clock',
+        title: `Lieferung für ${getCustomer(state, due.customerId)?.name ?? 'einen Kunden'} läuft ab`,
+        text: now > due.dueAt ? 'Schon zu spät: Es gibt nur noch einen Teil vom Preis.' : 'Schick sie heute noch los.',
+        actionLabel: 'Ausliefern',
+        action: (ui) => ui.openPhone(APP_ID, { view: 'orders' }),
+      });
+    }
+    // Ware, die für angenommene Bestellungen fehlt und auch nicht unterwegs ist.
+    const need = new Map<string, number>();
+    for (const o of pendingDeliveries(state)) {
+      for (const item of openItems(o)) need.set(item.productId, (need.get(item.productId) ?? 0) + item.amount);
+    }
+    for (const id of ownedPorts(state)) {
+      for (const [productId, lot] of Object.entries(portStock(state, id))) {
+        need.set(productId, (need.get(productId) ?? 0) - lot.amount);
+      }
+    }
+    for (const x of getShipments(state)) need.set(x.productId, (need.get(x.productId) ?? 0) - x.amount);
+    const [productId, missing] = [...need.entries()].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])[0] ?? [];
+    const producer = productId ? producersFor(productId, port)[0] : undefined;
+    if (productId && missing && producer) {
+      list.push({
+        id: 'trade.missing',
+        priority: 78,
+        icon: 'ship',
+        title: `${kg(missing)} ${productName(productId)} fehlen`,
+        text: `Für angenommene Bestellungen. ${producer.name} liefert in ${Math.round(shippingMinutes(producer.id, port) / 1440)} Tagen.`,
+        actionLabel: 'Einkaufen',
+        action: (ui) => ui.openPanel('trade.order', { producerId: producer.id, productId }),
+      });
+    }
+    // Container am Kai: Das Lager ist voll, das kostet Liegegeld.
+    if (getShipments(state).some((x) => x.status === 'quay')) {
+      list.push({
+        id: 'trade.quay',
+        priority: 74,
+        icon: 'warehouse',
+        title: 'Container warten am Kai',
+        text: 'Das Lager ist voll, das kostet Liegegeld. Liefer aus oder bau eine Halle.',
+        actionLabel: 'Zum Hafen',
+        action: (ui) => ui.openPhone(APP_ID, { view: 'harbor' }),
+      });
+    }
+    // Der Zoll ist wach.
+    const hot = ownedPorts(state).find((id) => customsLevel(customsHeat(state, id)).index >= 2);
+    if (hot) {
+      list.push({
+        id: 'trade.customs',
+        priority: 56,
+        icon: 'shield',
+        title: `Der Zoll in ${harborName(hot)} ist wach`,
+        text: 'Kleinere Container, Deckladung oder ein zweiter Hafen senken das Risiko.',
+        actionLabel: 'Zum Hafen',
+        action: (ui) => ui.openPhone(APP_ID, { view: 'harbor' }),
+      });
+    }
+    // Ohne Lkw zahlt jede Lieferung Fracht.
+    if (tradeStats(state).delivered >= 3 && !getVehicles(state, HARBOR_CITY).some((v) => !isShip(v))) {
+      list.push({
+        id: 'trade.truck',
+        priority: 40,
+        icon: 'truck',
+        title: 'Ein eigener Lkw spart die Fracht',
+        text: 'Die Spedition kostet bei jeder Lieferung. Ein Lkw fährt umsonst.',
+        actionLabel: 'Zum Hafen',
+        action: (ui) => ui.openPhone(APP_ID, { view: 'harbor' }),
+      });
+    }
+    return list;
   },
 });
 

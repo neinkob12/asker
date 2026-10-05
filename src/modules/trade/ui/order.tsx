@@ -51,7 +51,8 @@ import {
 
 declare module '../../../ui' {
   interface PanelRegistry {
-    'trade.order': { producerId: string };
+    /** productId (Auftrag 43): Ware vorausgewählt, z.B. aus „fehlt“ in den Bestellungen. */
+    'trade.order': { producerId: string; productId?: string };
   }
 }
 
@@ -78,7 +79,7 @@ function freeShips(state: GameState): { id: number; name: string }[] {
   });
 }
 
-function OrderPanel({ producerId }: { producerId: string }) {
+function OrderPanel({ producerId, productId: wanted }: { producerId: string; productId?: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
   const producer = getProducer(producerId);
@@ -89,7 +90,7 @@ function OrderPanel({ producerId }: { producerId: string }) {
     ? Object.keys(producer.products).filter((id) => !origin || (stock[id]?.amount ?? 0) > 0)
     : [];
   const ports = ownedPorts(state);
-  const [productId, setProduct] = useState(products[0] ?? 'weed');
+  const [productId, setProduct] = useState(wanted && products.includes(wanted) ? wanted : (products[0] ?? 'weed'));
   const [size, setSize] = useState<ContainerSize['id']>('medium');
   const [cover, setCover] = useState<Cover['id']>('none');
   const [vessel, setVessel] = useState<string>(CHARTER);

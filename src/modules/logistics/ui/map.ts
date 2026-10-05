@@ -101,6 +101,11 @@ export const logisticsLayer: MapLayer = {
         onClick: () => {
           if (ctx.isPicking()) return;
           const state = ctx.getState();
+          // Nach dem Verkauf (Auftrag 43) gehören die Häfen in Deutschland nicht mehr dir: Rotterdam zeigt die Kunden-App.
+          if (state?.modules.city.sale.sold) {
+            ctx.ui.openPhone('trade.app', { view: 'harbor' });
+            return;
+          }
           if (state && state.modules.city.active !== cityId) {
             ctx.ui.dispatch({ type: 'city.switch', payload: { cityId } });
           }

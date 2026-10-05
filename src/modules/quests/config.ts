@@ -1,7 +1,10 @@
 // Einstellbare Werte der Quests: Kapitel, die Quests der Reihe nach und ihre Belohnungen.
-// Peter (dein alter Kontakt) schickt jede Quest per Handy und meldet sich, wenn sie erledigt ist.
+// Peter (dein alter Kontakt) schickt jede Quest per Handy und meldet sich, wenn sie erledigt ist. Im Kapitel
+// „Rotterdam“ (Auftrag 43) führt Jansen durch den neuen Job (voice: 'jansen').
 
 import type { Contact, GameEvents, GameState, MoneyKind } from '../../core';
+import { HARBOR_CITY, isPlayerTraveling, presentCity } from '../city';
+import { getVehicles, isShip } from '../fleet';
 import { getWarehouses } from '../goods';
 import { getLieutenants, getRightHand } from '../hierarchy';
 import { netWorth } from '../leaderboard';
@@ -10,6 +13,7 @@ import { hottestVeedel } from '../police';
 import { getSpots } from '../spots';
 import { getStaff } from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
+import { getDeliveries, getOrders, getShipments, tradeStats } from '../trade';
 import { veedelCity } from '../veedel';
 
 export const PETER: Contact = {
@@ -76,7 +80,10 @@ export type QuestGoTo =
   | 'territory'
   | 'gangs'
   | 'laundering'
-  | 'finance';
+  | 'finance'
+  /** Auftrag 43: Kunden-App (Bestellungen) bzw. ihr Bereich Hafen. */
+  | 'trade'
+  | 'tradeHarbor';
 
 export interface QuestDef {
   id: string;
@@ -103,6 +110,10 @@ export interface QuestDef {
    * frei, also nimmt Peter das Kapitel der Stadt, in die du gehst.
    */
   cityId?: string;
+  /** Weitere Bedingung, bevor die Quest dran sein kann (Auftrag 43: Rotterdam erst nach der Ankunft). */
+  requires?: (state: GameState) => boolean;
+  /** Wer die Quest schickt (Auftrag 43): Jansen statt Peter. */
+  voice?: 'jansen';
   reward: QuestReward[];
   /** Was Peter schreibt, wenn die Quest erledigt ist (sonst nur der Kapitel-Abschluss). */
   doneText?: string;
@@ -119,9 +130,10 @@ export const CHAPTERS: readonly string[] = [
   'Berliner Nächte',
   'Servus München',
   'Mainhattan',
+  'Rotterdam',
 ];
 
-/** Quests, die Auftrag 43 in die Stadt-Kapitel eingefügt hat (Migration 5 rechnet den Index um). */
+/** Quests, die Auftrag 43 eingefügt hat (Migration 5 rechnet den Index um). */
 export const QUESTS_ADDED_IN_43: readonly string[] = [
   'hhRunner',
   'hhOrder',
@@ -131,6 +143,11 @@ export const QUESTS_ADDED_IN_43: readonly string[] = [
   'muOrder',
   'ffRunner',
   'ffOrder',
+  'rtAnswer',
+  'rtDeliver',
+  'rtBuy',
+  'rtTruck',
+  'rtOnTime',
 ];
 
 /** So viele Quests gab es vor Auftrag 36 (alte Spielstände mit allem erledigt: index = diese Zahl). */
@@ -639,7 +656,99 @@ export const QUESTS: readonly QuestDef[] = [
     veedel: 'Ein Viertel, das auf dich hört. Dann gehört dir auch Frankfurt bald.',
     done: 'Mainhattan. Du bist überall, Boss.',
   }),
+  // --- Kapitel 11 (Auftrag 43): Rotterdam. Jansen zeigt dir den neuen Job, erst wenn du angekommen bist. ---
+  ...harborChapter(),
 ];
+
+/** In Rotterdam angekommen (nach dem Verkauf). */
+function inRotterdam(state: GameState): boolean {
+  return presentCity(state) === HARBOR_CITY && !isPlayerTraveling(state);
+}
+
+/**
+ * Das Kapitel „Rotterdam“ (Auftrag 43): Jansen führt Schritt für Schritt durch die Woche als Lieferant (annehmen,
+ * ausliefern, einkaufen, Lkw, pünktlich sein). Jeder Schritt misst den Zustand, damit er auch abgehakt wird, wenn du
+ * schneller warst als Jansen.
+ */
+function harborChapter(): QuestDef[] {
+  // Die Stadt als Text (wie city.HARBOR_CITY): Das Kapitel wird beim Laden gebaut, da darf kein fremdes Modul ran.
+  const base = { chapter: 10, cityId: 'rotterdam', requires: inRotterdam, voice: 'jansen' as const, target: 1 };
+  return [
+    {
+      ...base,
+      id: 'rtAnswer',
+      icon: 'inbox',
+      title: 'Nimm eine Bestellung an',
+      task:
+        'Das ist die Halle. Hier kommt die Ware an, von hier geht sie raus. Montags rufen die Kunden an: wer, was, wie ' +
+        'viel. Fenna hat dir die erste Liste geschickt. Nimm eine Bestellung an, für die die Ware schon da ist, da steht ' +
+        '„Ware da“ dran.',
+      hint: 'Kunden-App › Bestellungen: Tipp auf eine Bestellung mit „Ware da“.',
+      measure: (state) =>
+        getOrders(state).some((o) => o.status === 'accepted' || o.status === 'delivering' || o.status === 'delivered')
+          ? 1
+          : 0,
+      goTo: 'trade',
+      reward: [{ kind: 'money', money: 'clean', amount: 5000 }],
+    },
+    {
+      ...base,
+      id: 'rtDeliver',
+      icon: 'truck',
+      title: 'Liefere die Bestellung aus',
+      task:
+        'Angenommen ist noch nicht geliefert. Unter „Zu liefern“ schickst du die Ware los. Die Spedition kostet, wird ' +
+        'aber selten kontrolliert. Bezahlt wird bei Ankunft.',
+      hint: 'Kunden-App › Bestellungen › Zu liefern: Tipp auf den Kunden.',
+      measure: (state) => (tradeStats(state).delivered > 0 || getDeliveries(state).length > 0 ? 1 : 0),
+      goTo: 'trade',
+      reward: [{ kind: 'money', money: 'clean', amount: 5000 }],
+    },
+    {
+      ...base,
+      id: 'rtBuy',
+      icon: 'ship',
+      title: 'Kauf einen Container',
+      task:
+        'Die Halle ist schneller leer, als du denkst. Ware kaufst du bei Produzenten im Ausland: Marokko für Hasch, ' +
+        'Spanien und Albanien für Gras. Das Schiff braucht ein paar Tage, also bestell, bevor es knapp wird.',
+      hint: 'Kunden-App › Hafen › Einkauf im Ausland: Produzent wählen, Container bestellen.',
+      measure: (state) => (tradeStats(state).containers > 0 || getShipments(state).length > 0 ? 1 : 0),
+      goTo: 'tradeHarbor',
+      reward: [{ kind: 'money', money: 'clean', amount: 10000 }],
+    },
+    {
+      ...base,
+      id: 'rtTruck',
+      icon: 'truck',
+      title: 'Kauf einen Lkw',
+      task:
+        'Die Spedition frisst deine Marge. Ein eigener Lkw fährt umsonst, nur der Zoll winkt ihn öfter raus. Kostet ' +
+        'sauberes Geld, das zahlt sich nach ein paar Fahrten aus.',
+      hint: 'Kunden-App › Hafen › Lkw kaufen.',
+      measure: (state) => (getVehicles(state, HARBOR_CITY).some((v) => !isShip(v)) ? 1 : 0),
+      goTo: 'tradeHarbor',
+      reward: [{ kind: 'money', money: 'clean', amount: 10000 }],
+    },
+    {
+      ...base,
+      id: 'rtOnTime',
+      icon: 'clock',
+      title: 'Liefere fünfmal pünktlich',
+      task:
+        'Ruf ist alles in diesem Geschäft. Wer pünktlich liefert, bekommt mehr Bestellungen, und irgendwann rufen auch ' +
+        'die Städte in Europa an. Fünf pünktliche Lieferungen, dann reden sie bis nach Amsterdam von dir.',
+      hint: 'Liefere vor der Frist, die an jeder Bestellung steht.',
+      target: 5,
+      measure: (state) => tradeStats(state).onTime,
+      goTo: 'trade',
+      reward: [{ kind: 'money', money: 'clean', amount: 20000 }],
+      doneText:
+        'Du hast es drauf. Der Hafen läuft über dich, ich bin raus. Pass auf den Zoll auf, der vergisst nichts. Und ' +
+        'wenn mal einer aus Südamerika anruft: Geh ran.',
+    },
+  ];
+}
 
 /** Texte eines Stadt-Kapitels (Auftrag 36). */
 interface CityChapterTexts {

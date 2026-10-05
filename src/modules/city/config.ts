@@ -389,7 +389,7 @@ export const SALE_TEXTS = {
   later: 'Noch nicht',
   reminder: 'Jansen hier. Rotterdam wartet. Deine Statthalter auch. {price} für Deutschland, {rotterdam} für mich.',
   laterReply: 'Gut. Überleg es dir. Ich meld mich in ein paar Tagen.',
-  done: 'Abgemacht. Fahr rüber, ich zeig dir die Halle. Ab Montag rufen die ersten Kunden an.',
+  done: 'Abgemacht. Fahr rüber, ich zeig dir die Halle. Die ersten Kunden rufen an, sobald du da bist.',
   statthalter:
     'Wir haben gerechnet, {name} und die anderen Statthalter. {price} für alles, bar. Du hast es aufgebaut, wir führen es weiter.',
 } as const;

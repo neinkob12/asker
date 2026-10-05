@@ -21,6 +21,7 @@
 
 import {
   type CommandResult,
+  type Contact,
   type Ctx,
   clock,
   defineModule,
@@ -30,7 +31,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, isBusinessSold, isCityUnlocked, liveVeedel } from '../city';
+import { activeCity, isBusinessSold, isCityUnlocked, jansenContact, liveVeedel } from '../city';
 import { DEFAULT_WAREHOUSE, getWarehouses, productName, store, type Warehouse } from '../goods';
 import { addHeat, operationTier } from '../police';
 import { changeReputation } from '../reputation';
@@ -152,9 +153,14 @@ export function questsWaiting(state: GameState): boolean {
   return state.modules.quests.index === WAITING;
 }
 
-/** Kann die Quest jetzt dran sein? Kapitel einer Stadt erst, wenn die Stadt frei ist. */
+/** Kann die Quest jetzt dran sein? Kapitel einer Stadt erst, wenn die Stadt frei ist (und ihre Bedingung gilt). */
 function eligible(state: GameState, quest: QuestDef): boolean {
-  return !quest.cityId || isCityUnlocked(state, quest.cityId);
+  return (!quest.cityId || isCityUnlocked(state, quest.cityId)) && (!quest.requires || quest.requires(state));
+}
+
+/** Wer die Quest schickt: Peter, im Kapitel Rotterdam Jansen (Auftrag 43). */
+export function questContact(state: GameState, quest: QuestDef | null): Contact {
+  return quest?.voice === 'jansen' ? jansenContact(state) : PETER;
 }
 
 /**
@@ -240,7 +246,7 @@ function rewardWarehouse(state: GameState): Warehouse | null {
 }
 
 /** Zahlt eine Belohnung aus und gibt den Text zurück, der dem Spieler sagt, was wirklich angekommen ist. */
-function grant(ctx: Ctx, reward: QuestReward, reason = 'Belohnung von Peter'): string {
+function grant(ctx: Ctx, reward: QuestReward, reason: string): string {
   const text = rewardText(reward);
   switch (reward.kind) {
     case 'goods': {
@@ -284,13 +290,13 @@ function grant(ctx: Ctx, reward: QuestReward, reason = 'Belohnung von Peter'): s
   }
 }
 
-/** Peter schickt die aktive Quest. */
+/** Peter (bzw. Jansen) schickt die aktive Quest. */
 function announce(ctx: Ctx): void {
   const quest = currentQuest(ctx.state);
   if (!quest) return;
   const rewards = quest.reward.map(rewardText).join(', ');
   messages.send(ctx, {
-    contact: PETER,
+    contact: questContact(ctx.state, quest),
     text: rewards ? `${quest.task}\n\nDafür gibt's von mir: ${rewards}.` : quest.task,
   });
   ctx.emit('quest.started', { questId: quest.id });
@@ -304,16 +310,18 @@ function finish(ctx: Ctx, skipped: boolean): void {
     q.skipped.push(quest.id);
   } else {
     q.done.push(quest.id);
-    const rewards = quest.reward.map((reward) => grant(ctx, reward)).join(', ');
+    const from = questContact(ctx.state, quest);
+    const rewards = quest.reward.map((reward) => grant(ctx, reward, `Belohnung von ${from.name}`)).join(', ');
     journal.add(ctx, `Quest erledigt: ${quest.title}.${rewards ? ` Belohnung: ${rewards}.` : ''}`, 'good');
-    if (quest.doneText) messages.send(ctx, { contact: PETER, text: quest.doneText });
+    if (quest.doneText) messages.send(ctx, { contact: from, text: quest.doneText });
   }
   q.index = nextIndex(ctx.state, q.index + 1);
   q.progress = 0;
   q.startedAt = ctx.now;
   ctx.emit('quest.completed', { questId: quest.id, skipped });
   const next = currentQuest(ctx.state);
-  if (!skipped && (!next || next.chapter !== quest.chapter)) {
+  // Jansens Kapitel endet mit seinem eigenen Satz (doneText), Peter mischt sich da nicht ein.
+  if (!skipped && quest.voice === undefined && (!next || next.chapter !== quest.chapter)) {
     messages.send(ctx, {
       contact: PETER,
       text: next
@@ -600,9 +608,37 @@ function resume(ctx: Ctx): void {
   q.startedAt = ctx.now;
   const next = currentQuest(ctx.state);
   if (!next) return;
-  messages.send(ctx, { contact: PETER, text: `Neue Stadt, neues Kapitel: „${chapterName(next.chapter)}“.` });
+  messages.send(ctx, {
+    contact: questContact(ctx.state, next),
+    text:
+      next.voice === 'jansen'
+        ? 'Willkommen in der Halle. Ich zeig dir, wie das hier läuft, Schritt für Schritt. Danach bist du allein.'
+        : `Neue Stadt, neues Kapitel: „${chapterName(next.chapter)}“.`,
+  });
   announce(ctx);
   check(ctx);
+}
+
+/**
+ * Das Geschäft ist verkauft (Auftrag 43): Was von den Kapiteln in Deutschland noch offen war, fällt weg (ohne
+ * Belohnung), ebenso ein laufender Wochenvertrag. Peter wartet, bis Jansen in Rotterdam mit seinem Kapitel anfängt.
+ */
+function leaveOldChapters(ctx: Ctx): void {
+  const q = ctx.state.modules.quests;
+  const finished = new Set([...q.done, ...q.skipped]);
+  for (const quest of QUESTS) {
+    if (quest.voice === undefined && !finished.has(quest.id)) q.skipped.push(quest.id);
+  }
+  q.index = WAITING;
+  q.progress = 0;
+  q.startedAt = ctx.now;
+  const c = q.contracts;
+  if (c.active) {
+    journal.add(ctx, `Vertrag beendet: ${c.active.title}. Das Geschäft ist verkauft.`, 'info');
+    c.active = null;
+  }
+  retractOffers(ctx);
+  c.offers = [];
 }
 
 export function skipQuest(ctx: Ctx): CommandResult {
@@ -653,6 +689,10 @@ export default defineModule({
       });
       announce(ctx);
     }
+    // Nach dem Verkauf zählen nur noch Jansens Schritte in Rotterdam (Auftrag 43, auch für alte Spielstände).
+    if (isBusinessSold(ctx.state) && currentQuest(ctx.state)?.voice === undefined && q.index !== WAITING) {
+      leaveOldChapters(ctx);
+    }
     // Peter wartet auf die nächste Stadt (Auftrag 36): Ist sie frei, kommt ihr Kapitel.
     if (q.index === WAITING) resume(ctx);
     if (currentQuest(ctx.state)?.measure) check(ctx);
@@ -674,6 +714,8 @@ export default defineModule({
         text: 'Sieben Veedel. Du bist jetzt der Boss von Köln, das sagen sie überall. Aber die anderen fünf schlafen nicht.',
       });
     },
+    // Verkauft (Auftrag 43): Die Kapitel in Deutschland und der Wochenvertrag sind vorbei.
+    'business.sold': (ctx) => leaveOldChapters(ctx),
     // "Nein danke" auf ein Vertragsangebot: Das Angebot ist weg.
     'message.answered': (ctx, { messageId, optionId }) => {
       const c = ctx.state.modules.quests.contracts;
@@ -712,8 +754,9 @@ export default defineModule({
       const before = QUESTS.filter((q) => !added.has(q.id));
       if (old.index < 0) return old;
       const id = before[old.index]?.id;
-      const index = id === undefined ? QUESTS.length : QUESTS.findIndex((q) => q.id === id);
-      return { ...old, index };
+      // Alles durch: Jetzt wartet das Kapitel Rotterdam (es kommt nach dem Verkauf, sobald du dort bist).
+      if (id === undefined) return { ...old, index: WAITING, progress: 0 };
+      return { ...old, index: QUESTS.findIndex((q) => q.id === id) };
     },
   },
 });

@@ -47,23 +47,24 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 
 ## C. Hafen-Phase: Lieferant in Rotterdam
 
-- [ ] C1 Einleitung für den neuen Job: Bei der Ankunft in Rotterdam führt Jansen durch die Halle (Anruf oder Folge von
-  Nachrichten) und ein Kapitel mit Schritten (Bestellungen ansehen → Ware einkaufen → annehmen → ausliefern → Lkw →
-  Zoll). Jeder Schritt sagt, wo man tippt, und hakt sich selbst ab. Kurze Seite „So läuft der Hafen“ in der Kunden-App
-  zum Nachlesen.
-- [ ] C2 Erste Woche fair: Bestellungen kommen wie angesagt am Montag (oder Jansen sagt es richtig), längere
+- [x] C1 Einleitung für den neuen Job: Kapitel „Rotterdam“ (Quests, `voice: 'jansen'`, erst nach der Ankunft über
+  `requires`): Bestellung annehmen → ausliefern → Container kaufen → Lkw → fünfmal pünktlich; jeder Schritt misst den
+  Zustand und führt mit „Hinführen“ in die Kunden-App (`goTo` `trade`/`tradeHarbor`, `openPhone('trade.app', { view })`).
+  Mit dem Verkauf fallen die offenen Kapitel aus Deutschland und der Wochenvertrag weg. „So läuft der Hafen“ oben in den
+  Bestellungen (die ersten zwei Wochen offen).
+- [x] C2 Erste Woche fair: Bestellungen kommen wie angesagt am Montag (oder Jansen sagt es richtig), längere
   Antwortfrist in der ersten Woche, Startware passend zu den ersten Bestellungen.
-- [ ] C3 „Nächster Schritt“ für die Hafen-Phase: Ware fehlt → Einkauf; kein Lkw → Lkw kaufen; Container am Kai bzw.
+- [x] C3 „Nächster Schritt“ für die Hafen-Phase: Ware fehlt → Einkauf; kein Lkw → Lkw kaufen; Container am Kai bzw.
   Lager voll → Halle; Zoll-Heat hoch → zweiter Hafen oder Deckladung; Bestellung kurz vor der Frist. Der alte Rat
   „Ware ist alle → Lieferanten-App“ schweigt nach dem Verkauf.
-- [ ] C4 Keine Sackgasse in „Zu liefern“: Fehlt Ware, führt ein Knopf direkt zum Einkauf mit vorausgefüllter Ware und
+- [x] C4 Keine Sackgasse in „Zu liefern“: Fehlt Ware, führt ein Knopf direkt zum Einkauf mit vorausgefüllter Ware und
   Menge.
 - [ ] C5 Versorgung planbar: Lieferplan pro Kunde (Dauerauftrag): Die Disponentin liefert jede Bestellung dieses
   Kunden selbst aus, sobald die Ware im Hafen liegt (Lkw oder Spedition nach Wahl), und kauft auf Wunsch nach einer
   Regel nach. Übersicht „Diese Woche“: Bedarf, Bestand, unterwegs, fehlt.
 - [ ] C6 Großkunden mit eigener Seite: Bedarf pro Woche, Anteil, Konkurrenz, Vertrauen, Pünktlichkeit, Preisgrenze,
   letzte Bestellungen; antippbar in der Liste und auf der Europa-Karte.
-- [ ] C7 Lkw dort kaufen, wo man ihn braucht (Kunden-App, Hafen › Fahrzeuge); das Liefer-Blatt weist darauf hin.
+- [x] C7 Lkw dort kaufen, wo man ihn braucht (Kunden-App, Hafen › Fahrzeuge); das Liefer-Blatt weist darauf hin.
 - [ ] C8 HUD und Handy nach dem Verkauf: Zoll-Heat statt Veedel-Heat, leere Apps (Reviere, Gangs, Lieferanten) aus dem
   Raster oder mit einem Satz, warum.
 - [ ] C9 „Dein Preis“ ehrlich beschriften (er verschiebt den Anteil, nicht den Preis pro Gramm) oder wirklich wirken
@@ -78,6 +79,11 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [ ] D2 Zwischenziel bis zum Anruf: zeigen, ab wann die Produzenten anrufen (Wochen und Umsatz).
 
 ## Neue Funde
+
+- [x] N0 (Spieler, 05.10.2026) „Man kann im Hafen in Rotterdam keine Ware bestellen, es steht sogar, dass es keinen
+  Hafen gäbe“: Die alte Hafen-Seite (`logistics.port`, auch über den Anker auf der Karte) zeigte in Rotterdam den
+  Kölner Niehler Hafen mit „Liegeplatz mieten“, die Lieferanten-App war leer. Beide führen jetzt nach dem Verkauf in
+  die Kunden-App, Bereich Hafen (Einkauf im Ausland); der Rat „Ware ist alle“ schweigt nach dem Verkauf.
 
 - [ ] N1 Lieferanten schreiben nach dem Umzug weiter Chats über Lieferungen in die alte Stadt („Freie Bahn. Bin früher
   da.“). Lieferungen für eine Stadt mit Statthalter still oder als Bericht des Statthalters.
