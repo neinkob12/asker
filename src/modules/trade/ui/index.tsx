@@ -48,10 +48,12 @@ import { customsHeat, customsLevel } from '../../police';
 import {
   CUSTOMER_KINDS,
   type CustomerKind,
+  counterOutcome,
   customerContact,
   deliveryCheckChance,
   deliveryEstimate,
   EUROPE_CITIES,
+  EUROPE_MIN_RELIABILITY,
   europeCityOf,
   europeStatus,
   freightCost,
@@ -230,8 +232,10 @@ function OrdersView(props: { onView: (view: View) => void }) {
     if (!o.guaranteed) {
       for (const up of [0.05, 0.1, 0.15]) {
         const factor = Math.min(maxFactor(o), 1 + up);
+        // Auftrag 43: vorher sagen, ob der Kunde dann lieber bei der Konkurrenz kauft.
+        const rival = counterOutcome(state, o, factor).rival;
         actions.push({
-          label: `Gegenangebot ${formatEuro(orderValue(o, factor))} (+${Math.round(up * 100)} %)`,
+          label: `Gegenangebot ${formatEuro(orderValue(o, factor))} (+${Math.round(up * 100)} %): ${rival ? `dann kauft er bei ${rival.name}` : 'du bleibst vorn'}`,
           icon: 'tag',
           onSelect: () => {
             dispatch({ type: 'trade.answer', payload: { orderId: o.id, choice: 'counter', factor } });
@@ -589,7 +593,11 @@ function CustomersView() {
                               icon: 'clock',
                             }
                           : status.reliable && { label: 'meldet sich Montag', color: 'people', icon: 'clock' },
-                        !status.reliable && { label: 'will pünktlichen Ruf', color: 'warn', icon: 'alert' },
+                        !status.reliable && {
+                          label: `will ${pct(EUROPE_MIN_RELIABILITY)} pünktlich`,
+                          color: 'warn',
+                          icon: 'alert',
+                        },
                         { label: `Zoll ${pct(city.border.check)}`, color: 'law', icon: 'shield' },
                       ]}
                     />
@@ -1096,6 +1104,36 @@ onGameEvent('trade.delivered', 'trade.deliveredToast', (payload, ui, state) => {
 });
 onGameEvent('trade.dealTipped', 'trade.tippedToast', (payload, ui, state) => {
   ui.toast(`${getCustomer(state, payload.customerId)?.name ?? 'Die Gang'} hat nicht gezahlt.`, 'bad');
+});
+// Auftrag 43: Was in der Hafen-Phase passiert, sagt ein Banner (Ware da ist dringend, Verluste auch).
+onGameEvent('trade.containerArrived', 'trade.arrivedToast', (payload, ui) => {
+  if (payload.checked) return;
+  ui.toast(`Container in ${harborName(payload.portId)} angekommen: ${kg(payload.amount)} im Lager.`, 'good', {
+    urgent: true,
+  });
+});
+onGameEvent('trade.containerWaiting', 'trade.waitingToast', (payload, ui) => {
+  ui.toast(
+    `Lager in ${harborName(payload.portId)} voll: ${kg(payload.amount)} warten am Kai, das kostet Liegegeld.`,
+    'warn',
+  );
+});
+onGameEvent('trade.deliverySeized', 'trade.deliverySeizedToast', (payload, ui) => {
+  ui.toast(`Lieferung aufgeflogen: ${kg(payload.amount)} weg.`, 'bad');
+});
+onGameEvent('trade.orderFailed', 'trade.failedToast', (payload, ui, state) => {
+  // Nur angenommene, die zu spät geplatzt sind; unbeantwortete verfallen still (sonst käme montags ein Schwall).
+  if (payload.reason !== 'late') return;
+  ui.toast(`${getCustomer(state, payload.customerId)?.name ?? 'Ein Kunde'}: Lieferung geplatzt, zu spät.`, 'bad');
+});
+onGameEvent('trade.customerJoined', 'trade.joinedToast', (payload, ui, state) => {
+  ui.toast(
+    `Neuer Kunde: ${getCustomer(state, payload.customerId)?.name ?? 'eine Stadt'} kauft ab jetzt bei dir.`,
+    'good',
+    {
+      urgent: true,
+    },
+  );
 });
 soundOnEvent('trade.delivered', 'cash');
 registerMapLayer(europeLayer);

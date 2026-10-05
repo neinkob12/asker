@@ -124,6 +124,7 @@ import {
 export {
   CONTRACT_WEEKS,
   CUSTOMER_KINDS,
+  EUROPE_MIN_RELIABILITY,
   MAX_HALLS,
   PRICE_LEVEL_RANGE,
   PRICE_LEVEL_STEP,
@@ -1094,6 +1095,26 @@ function dispatcherContact(): Contact {
 }
 
 /** Antwort auf eine Bestellung. */
+/**
+ * Was ein Gegenangebot bringt (Auftrag 43, auch für die Oberfläche): Liegt die Konkurrenz zu diesem Preis vorn, kauft
+ * der Kunde dort (rival), sonst nimmt er an (rival null). Der Preis ist dein Preis mal dem Faktor auf ihr Angebot.
+ */
+export function counterOutcome(
+  state: GameState,
+  order: TradeOrder,
+  factor: number,
+): { rival: { name: string; score: number } | null } {
+  const customer = getCustomer(state, order.customerId);
+  if (!customer || order.guaranteed) return { rival: null };
+  const level = tradeState(state)?.priceLevel ?? 1;
+  const mine = playerScore(state, customer, round2(level * factor));
+  const best = rivalScores(state, weekOf(state.time)).reduce<{ name: string; score: number } | null>(
+    (top, r) => (!top || r.score > top.score ? r : top),
+    null,
+  );
+  return { rival: best && best.score > mine ? best : null };
+}
+
 export function answerOrder(
   ctx: Ctx,
   orderId: number,
@@ -1127,13 +1148,8 @@ export function answerOrder(
       reason: `Mehr als ${formatEuro(orderValue(order, maxFactor(order)))} zahlt ${customer.name} nicht.`,
     };
   }
-  const mine = playerScore(ctx.state, customer, factor);
-  const rivals = rivalScores(ctx.state, weekOf(ctx.now));
-  const best = rivals.reduce<{ name: string; score: number } | null>(
-    (top, r) => (!top || r.score > top.score ? r : top),
-    null,
-  );
-  if (best && best.score > mine) {
+  const best = counterOutcome(ctx.state, order, factor).rival;
+  if (best) {
     order.status = 'lost';
     order.lostTo = best.name;
     s.stats.lost += 1;

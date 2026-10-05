@@ -70,9 +70,10 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   und Tabs in `src/ui/registry.ts`).
 - [x] C9 „Dein Preis“ wirkt jetzt wirklich: Er geht als Faktor in das Angebot pro Gramm ein (außer beim
   Abnahmevertrag) und verschiebt weiter den Anteil. Vorher war ein niedriger Preis geschenkter Mehrumsatz.
-- [ ] C10 Banner für Dringendes in der Hafen-Phase: Container angekommen, Zollkontrolle, Bestellung läuft ab.
-- [ ] C11 Gegenangebot zeigt vorher, ob man damit vor der Konkurrenz liegt; Europa-Kunden nennen die Pünktlichkeit als
-  Zahl.
+- [x] C10 Banner in der Hafen-Phase: Container angekommen (dringend), Lager voll am Kai, Lieferung aufgeflogen, zu spät
+  geplatzt, neuer Kunde in Europa; „Bestellung läuft ab“ steht als Rat (C3).
+- [x] C11 Gegenangebot zeigt vorher, ob man damit vor der Konkurrenz liegt (`counterOutcome`, rechnet mit deinem
+  Preis); Europa-Kunden nennen die nötige Pünktlichkeit als Zahl.
 
 ## D. Produktion
 
