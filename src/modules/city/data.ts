@@ -43,10 +43,10 @@ export interface CityDef {
   /** Der Dreh der Stadt in einem Satz (Glas-Karte der Deutschland-Ansicht, Anruf). */
   pitch: string;
   /**
-   * Meldet sich nach "<Stadt> komplett" erst nach allen anderen freien Städten (Auftrag 39: Frankfurt ist optional und
-   * soll nicht vor Hamburg anrufen, obwohl es näher an Köln liegt). Per Chat und auf Wunsch geht es trotzdem.
+   * Rang beim Anruf nach "<Stadt> komplett" (Auftrag 39, Standard 0): Erst nach Rang, dann nach Entfernung. Frankfurt ist
+   * optional (1) und ruft nicht vor Hamburg an, obwohl es näher an Köln liegt; per Chat und auf Wunsch geht es trotzdem.
    */
-  offerLast?: boolean;
+  offerRank?: number;
   /** Schablone: Daten da, Inhalt fehlt noch, im Spiel gesperrt. */
   template?: boolean;
 }
@@ -232,7 +232,7 @@ export const CITIES: readonly CityDef[] = [
       'Polizei. Hier wird gerechnet: Gefallen kosten, Wäsche geht in größeren Summen.',
     contact: FRANKFURT_CALLER,
     pitch: 'Geld und Flughafen: Banker als Kunden, das Bahnhofsviertel als Brennpunkt, Fracht über den Flughafen.',
-    offerLast: true,
+    offerRank: 1,
   },
 ];
 

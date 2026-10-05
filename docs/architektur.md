@@ -826,7 +826,7 @@ Geld und Flughafen, nur als Daten:
 - **Geldwäsche**: `LAUNDERING_CAPACITY_BY_CITY` (Frankfurt 1,5): Solange Frankfurt aktiv ist, nehmen alle Wege
   anderthalbmal so viel auf einmal (`channelCapacity`).
 - **Events**: Messe (alle 30 Tage vier Tage, Spots um die Messe und das Bahnhofsviertel), Museumsuferfest (drei Tage am
-  Main), Eintracht-Heimspiel. **Anruf**: Nadia Okafor; mit `offerLast` meldet sich Frankfurt erst nach den anderen freien
+  Main), Eintracht-Heimspiel. **Anruf**: Nadia Okafor; mit `offerRank` meldet sich Frankfurt erst nach den anderen freien
   Städten, obwohl es näher an Köln liegt.
 
 ### Deutschland (Auftrag 36)

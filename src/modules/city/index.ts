@@ -415,14 +415,14 @@ export function freeCities(state: GameState): string[] {
 }
 
 /**
- * Freie Städte, nach Entfernung zu from (die nächstgelegene zuerst). Städte mit offerLast (Auftrag 39: Frankfurt,
- * optional) kommen nach allen anderen, rufen also nur an, wenn keine andere mehr frei ist.
+ * Freie Städte, erst nach offerRank (Auftrag 39, Standard 0; Frankfurt als optionale Stadt 1), dann nach Entfernung zu
+ * from (die nächstgelegene zuerst). Eine Stadt mit höherem Rang ruft also erst an, wenn keine mit kleinerem mehr frei ist.
  */
 function citiesByDistance(state: GameState, from: string): string[] {
   const origin = getCity(from)?.center;
   const far = (id: string) => (origin ? distanceMeters(origin, getCity(id)?.center ?? origin) : 0);
-  const last = (id: string) => (getCity(id)?.offerLast ? 1 : 0);
-  return freeCities(state).sort((a, b) => last(a) - last(b) || far(a) - far(b) || a.localeCompare(b));
+  const rank = (id: string) => getCity(id)?.offerRank ?? 0;
+  return freeCities(state).sort((a, b) => rank(a) - rank(b) || far(a) - far(b) || a.localeCompare(b));
 }
 
 /** Städte mit einem Angebot in der laufenden Runde (die nächstgelegene zuerst), leer ohne Runde. */

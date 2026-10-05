@@ -121,7 +121,7 @@ describe('Freie Reihenfolge (Auftrag 36)', () => {
     expect(freeCities(sim.state)).toEqual(['hamburg', 'frankfurt']);
     completeKoeln(sim);
     expect(offerFrom(sim.state)).toBe('koeln');
-    // Frankfurt liegt näher an Köln, meldet sich als optionale Stadt aber erst nach Hamburg (offerLast).
+    // Frankfurt liegt näher an Köln, meldet sich als optionale Stadt aber erst nach Hamburg (offerRank).
     expect(offerCities(sim.state)).toEqual(['hamburg', 'frankfurt']);
     expect(offerStatus(sim.state, 'hamburg')).toBe('scheduled');
     expect(offerStatus(sim.state, 'frankfurt')).toBe('queued');
@@ -175,6 +175,36 @@ describe('Freie Reihenfolge (Auftrag 36)', () => {
     expect(offerStatus(sim.state, 'hamburg')).toBe('none');
     sim.advance(MINUTES_PER_DAY);
     expect(presentCity(sim.state)).toBe('berlin');
+  });
+
+  it('Frankfurt (offerRank 1): Hamburg ruft an, Frankfurt meldet sich per Chat und lässt sich trotzdem zusagen', () => {
+    const sim = quietGame();
+    readyRightHand(sim);
+    completeKoeln(sim);
+    expect(offerCities(sim.state)).toEqual(['hamburg', 'frankfurt']);
+    sim.advance(OFFER_CALL_DELAY + 5);
+    const call = ringingFrom(sim, 'hamburg');
+    expect(call).toBeDefined();
+    expect(ringingFrom(sim, 'frankfurt')).toBeUndefined();
+    if (!call) throw new Error('kein Anruf');
+    sim.dispatch({ type: 'messages.acceptCall', payload: { messageId: call.id } });
+    sim.dispatch({ type: 'messages.answer', payload: { messageId: call.id, optionId: 'later' } });
+    sim.advance(OFFER_NEXT_DELAY);
+    // Frankfurt schreibt: „Ruf mich an“.
+    expect(offerStatus(sim.state, 'frankfurt')).toBe('pitched');
+    const pitch = messages.thread(sim.state, cityContact('frankfurt').id).find((m) => messages.canAnswer(sim.state, m));
+    expect(pitch?.options?.[0].id).toBe('callMe');
+    expect(sim.dispatch({ type: 'city.requestCall', payload: { cityId: 'frankfurt' } }).ok).toBe(true);
+    const fromFrankfurt = ringingFrom(sim, 'frankfurt');
+    if (!fromFrankfurt) throw new Error('kein Anruf aus Frankfurt');
+    sim.dispatch({ type: 'messages.acceptCall', payload: { messageId: fromFrankfurt.id } });
+    sim.dispatch({ type: 'messages.answer', payload: { messageId: fromFrankfurt.id, optionId: 'come' } });
+    expect(acceptedCity(sim.state)).toBe('frankfurt');
+    expect(sim.dispatch({ type: 'city.handOver', payload: { cityId: 'koeln', toCityId: 'frankfurt' } }).ok).toBe(true);
+    expect(isCityUnlocked(sim.state, 'frankfurt')).toBe(true);
+    expect(isCityUnlocked(sim.state, 'hamburg')).toBe(false);
+    sim.advance(MINUTES_PER_DAY);
+    expect(presentCity(sim.state)).toBe('frankfurt');
   });
 
   it('nur eine Zusage gilt: Wer danach einer anderen Stadt zusagt, lässt die erste warten', () => {

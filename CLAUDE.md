@@ -81,7 +81,7 @@ Capos), Ränge des Spielers (`city/ranks.ts`, `playerRank`, Ereignis `player.ran
 an der Quest). Stellschrauben für das Tempo späterer Städte: `FULL_POWER_SHARE`, `HANDOVER_START_MONEY_DAYS`,
 `START_MONEY_MIN_BY_CITY`, `START_PACK_MAX_STAFF`.
 Auftrag 39 (Frankfurt, optional): dritte spielbare Stadt nach Checkliste, Dreh nur als Daten (Kofi am Flughafen mit
-`Supplier.customs` und Weg `'air'`, `LAUNDERING_CAPACITY_BY_CITY`, `CityDef.offerLast`). Gang-Stimmen einer neuen Stadt in
+`Supplier.customs` und Weg `'air'`, `LAUNDERING_CAPACITY_BY_CITY`, `CityDef.offerRank`). Gang-Stimmen einer neuen Stadt in
 eigener Datei (`gangs/texts-frankfurt.ts`). Würfe, die für noch nicht freie Städte nichts bewirken, unterbleiben (sonst
 verschiebt jede neue Stadt die Kölner Würfelfolge, siehe `market.stepIndex`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".

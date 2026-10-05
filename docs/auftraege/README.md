@@ -194,7 +194,7 @@ neuen Straßennetz legen und `--autobahn all` neu bauen.
 31 Spots, fünf Lager, vier Gangs mit Stimmen, Stammabnehmer, Messe, Museumsuferfest und Eintracht, Wahrzeichen. Der
 Dreh als Daten: Banker-Kundschaft, Bahnhofsviertel als Brennpunkt, Kofi mit Luftfracht und scharfem Zoll
 (`Supplier.customs`, Weg `'air'`), Toni zu Hause, mehr Geldwäsche (`LAUNDERING_CAPACITY_BY_CITY`). Kleine allgemeine
-Erweiterungen: `CityDef.offerLast` (Frankfurt ruft nicht vor Hamburg an), `check-roads` ohne Hafen, Marktindex würfelt
+Erweiterungen: `CityDef.offerRank` (Frankfurt ruft nicht vor Hamburg an), `check-roads` ohne Hafen, Marktindex würfelt
 nur für freie Städte (neue Städte verschieben die Kölner Würfelfolge nicht mehr). Die Autobahn-Enden am Frankfurter
 Kreuz lagen schon im neuen Netz, `autobahn.ts` blieb. Screenshots in `docs/integration/auftrag-39/`.
 
