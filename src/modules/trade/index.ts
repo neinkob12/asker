@@ -1029,9 +1029,11 @@ export function placeOrders(ctx: Ctx, first = false): number {
       s.stats.demand += demand;
       const amount = Math.round((demand * mine) / ORDER_ROUND_GRAMS) * ORDER_ROUND_GRAMS;
       if (amount < MIN_ITEM_GRAMS) continue;
+      // Dein Preis (Auftrag 43) wirkt auf beides: Er verschiebt den Anteil (shareFor) und den Preis pro Gramm. Der
+      // Abnahmevertrag hat einen festen Preis.
       const offer = guaranteed
         ? fairPrice(ctx.state, productId, customer.indexCity)
-        : customerOffer(ctx.state, customer, productId);
+        : round2(customerOffer(ctx.state, customer, productId) * s.priceLevel);
       items.push({ productId, amount, offer });
     }
     const amount = items.reduce((sum, item) => sum + item.amount, 0);

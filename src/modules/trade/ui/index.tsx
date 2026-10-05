@@ -521,8 +521,8 @@ function CustomersView() {
         icon="tag"
         color="money"
         value={pct(level)}
-        note="Faktor auf den fairen Großhandelspreis (Marktindex)."
-        more="Billiger bringt mehr Anteil, teurer mehr pro Gramm. Pünktliche Lieferungen und gute Qualität heben deinen Ruf, Vertrauen kommt mit jedem Geschäft."
+        note="Gilt ab den nächsten Bestellungen am Montag."
+        more="Faktor auf den fairen Großhandelspreis (Marktindex). Billiger bringt mehr Anteil am Bedarf, aber weniger pro Gramm; teurer bringt mehr pro Gramm, aber die Kunden kaufen mehr bei der Konkurrenz. Der Abnahmevertrag der alten Organisationen hat einen festen Preis. Pünktliche Lieferungen und gute Qualität heben deinen Ruf, Vertrauen kommt mit jedem Geschäft."
       >
         <Stepper
           label="Dein Preis"

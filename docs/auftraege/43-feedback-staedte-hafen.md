@@ -68,8 +68,8 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] C8 HUD und Handy nach dem Verkauf: Zoll statt Heat (wachster Hafen), „Ruf als Lieferant“ (pünktlich, Qualität)
   statt Ruf und Reviere; Reviere, Gangs, Lieferanten und Lager verschwinden vom Startbildschirm (`hiddenWhen` für Apps
   und Tabs in `src/ui/registry.ts`).
-- [ ] C9 „Dein Preis“ ehrlich beschriften (er verschiebt den Anteil, nicht den Preis pro Gramm) oder wirklich wirken
-  lassen.
+- [x] C9 „Dein Preis“ wirkt jetzt wirklich: Er geht als Faktor in das Angebot pro Gramm ein (außer beim
+  Abnahmevertrag) und verschiebt weiter den Anteil. Vorher war ein niedriger Preis geschenkter Mehrumsatz.
 - [ ] C10 Banner für Dringendes in der Hafen-Phase: Container angekommen, Zollkontrolle, Bestellung läuft ab.
 - [ ] C11 Gegenangebot zeigt vorher, ob man damit vor der Konkurrenz liegt; Europa-Kunden nennen die Pünktlichkeit als
   Zahl.

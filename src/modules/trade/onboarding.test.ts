@@ -9,7 +9,16 @@ import { currentQuest, QUESTS } from '../quests';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
 import { FIRST_ORDER_ANSWER_MINUTES, START_STOCK } from './config';
-import { getOrders, openOrders, orderCoverage, PRODUCERS, pendingDeliveries } from './index';
+import {
+  customerOffer,
+  getCustomer,
+  getOrders,
+  openOrders,
+  orderCoverage,
+  PRODUCERS,
+  pendingDeliveries,
+  placeOrders,
+} from './index';
 
 const DAY = 1440;
 
@@ -96,5 +105,20 @@ describe('Einführung in die Hafen-Phase (Auftrag 43)', () => {
     // Pünktliche Lieferungen zählen, nach fünf ist Jansen raus.
     sim.advance(3 * DAY);
     expect(getOrders(sim.state).some((o) => o.status === 'delivered')).toBe(true);
+  });
+
+  it('dein Preis wirkt auf den Preis pro Gramm (nicht nur auf den Anteil), der Abnahmevertrag bleibt fest', () => {
+    const sim = quietGame(4);
+    soldAndArrived(sim);
+    sim.state.modules.trade.priceLevel = 0.9;
+    const before = new Set(getOrders(sim.state).map((o) => o.id));
+    placeOrders(sim.ctx('trade'));
+    const fresh = getOrders(sim.state).filter((o) => !before.has(o.id));
+    const free = fresh.find((o) => !o.guaranteed);
+    if (!free) throw new Error('keine freie Bestellung');
+    const customer = getCustomer(sim.state, free.customerId);
+    if (!customer) throw new Error('kein Kunde');
+    const item = free.items[0];
+    expect(item.offer).toBeCloseTo(customerOffer(sim.state, customer, item.productId) * 0.9, 1);
   });
 });
