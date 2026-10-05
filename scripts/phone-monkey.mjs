@@ -48,6 +48,16 @@ const TARGETS = [
   { kind: 'phone', id: 'trade.app', extra: 'sold' },
   // Auftrag 41: Seite „Einkauf“ (Ware, Container, Deckladung, Schiff).
   { kind: 'panel', id: 'trade.order', params: { producerId: 'spanien' }, extra: 'sold' },
+  // Auftrag 42: Anbau in der Kunden-App, Seiten Region und Finca, Verschiffen aus Cartagena.
+  { kind: 'phone', id: 'trade.app', extra: 'grow' },
+  { kind: 'panel', id: 'grow.region', params: { regionId: 'kolumbien' }, extra: 'grow' },
+  {
+    kind: 'panel',
+    id: 'grow.finca',
+    paramsJs: '{ fincaId: window.koeln.session.sim.state.modules.grow.fincas[0].id }',
+    extra: 'grow',
+  },
+  { kind: 'panel', id: 'trade.order', params: { producerId: 'own-kolumbien' }, extra: 'grow' },
 ];
 
 /** Zusätzliche Ausgangslagen (Auftrag 40), nach SETUP. */
@@ -63,6 +73,26 @@ const EXTRA = {
     while (sim.state.modules.city.travel) sim.advance(30);
     sim.state.wallet.dirty += 300000;
     sim.state.wallet.clean += 300000;
+    window.koeln.runtime.api.closeDialog();
+  })()`,
+  grow: `(() => {
+    const sim = window.koeln.session.sim;
+    window.koeln.dev.verkaufen();
+    while (sim.state.modules.city.travel) sim.advance(30);
+    sim.state.wallet.dirty += 3000000;
+    sim.state.wallet.clean += 3000000;
+    const trade = sim.state.modules.trade;
+    trade.startedAt = sim.state.time - 21 * 1440;
+    trade.stats.revenue = Math.max(trade.stats.revenue, 1500000);
+    sim.advance(8 * 60);
+    for (const regionId of ['kolumbien', 'marokko']) sim.dispatch({ type: 'grow.openRegion', payload: { regionId } });
+    sim.dispatch({ type: 'grow.leaseFinca', payload: { siteId: 'el-tigre' } });
+    sim.dispatch({ type: 'grow.leaseFinca', payload: { siteId: 'ketama-hang' } });
+    for (const f of sim.state.modules.grow.fincas) {
+      sim.dispatch({ type: 'grow.hire', payload: { fincaId: f.id, role: 'worker', count: 2 } });
+      sim.dispatch({ type: 'grow.plant', payload: { fincaId: f.id, productId: f.regionId === 'marokko' ? 'hash' : 'weed' } });
+    }
+    trade.origins['own-kolumbien'] = { weed: { amount: 64000, quality: 0.7, pack: 0.8 } };
     window.koeln.runtime.api.closeDialog();
   })()`,
 };
@@ -284,7 +314,7 @@ try {
               target.kind === 'tab'
                 ? `api.selectTab('${target.id}')`
                 : target.kind === 'panel'
-                  ? `api.openPanel('${target.id}', ${JSON.stringify(target.params ?? {})})`
+                  ? `api.openPanel('${target.id}', ${target.paramsJs ?? JSON.stringify(target.params ?? {})})`
                   : `api.openPhone('${target.id}')`
             };
           })()`);

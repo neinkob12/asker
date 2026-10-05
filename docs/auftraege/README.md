@@ -248,6 +248,16 @@ Bananen), Schiffs-Tracker, sieben Europa-Kunden mit Grenze und neuen Autobahn-Li
 Auftrag 42: Produzenten haben einen Knoten im Seewege-Netz (`Producer.sea`); neue Häfen in Übersee (Cartagena) brauchen
 einen Knoten und eine Linie in `SEA_LANES` von `build-water.py` (Ausschnitt `SEA_BOX` erweitern).
 
+**Stand Auftrag 42 (Welle 4):** umgesetzt in vier Etappen (PR #66). Neues Modul `grow`: Anrufe aus Kolumbien und
+Marokko nach drei Wochen Hafen-Phase, Regionen als Daten in `city`, Seeweg Cartagena – Ärmelkanal aus Overture,
+Fincas mit Arbeitern und Gärtnern (Rollen in `staff`), Genetik, Gewächshaus, Ernte, Trocknen, Pressen, Verpacken,
+Ausfuhrlager in `trade` (Cartagena und Tanger als Quelle für Container und eigene Schiffe, eigene Ware markiert),
+Kühlschiff in `fleet`, Kartell-Anteil und Aufmerksamkeit der Behörden pro Region, Ränge Produzent und Europa (auch in
+der Bestenliste), Abschnitt „Anbau“ in der Kunden-App, Bot und Test-Spielstand `produktion`. Dazu in `trade`: Der Ruf
+erholt sich jede Woche ein Stück (vorher stand der Handel nach ein paar geplatzten Lieferungen für immer still).
+Edibles, Vapes und Öl werden weiter zugekauft (zählen für „Europa“ nicht). Tempo nach den Änderungswünschen: neue
+Fincas mit stehender Ernte, „Produzent“ etwa 50 bis 65 Tage nach dem Anruf, „Europa“ nach 108 bis 156 Tagen (Bot).
+
 **Prüf-Loop:** Die Planungs-Session startet jede Welle als eigene Cloud-Sessions (je ein Branch `claude/auftrag-<nr>-…`
 und ein Draft-PR), schaut stündlich nach, prüft fertige PRs gegen ihren Auftrag (Checkliste „Fertig, wenn“, CI, Review
 des Diffs), schickt Änderungswünsche an die Session zurück und meldet dem Spieler, welche PRs bereit zum Mergen sind.

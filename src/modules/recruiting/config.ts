@@ -27,6 +27,9 @@ export const POOL_ROLE_WEIGHTS: Record<StaffRole, number> = {
   lawyer: 8,
   accountant: 9,
   policeContact: 8,
+  // Auftrag 42: Leute für die Fincas heuert grow vor Ort an, nie über den Aushang.
+  worker: 0,
+  gardener: 0,
 };
 
 /** Kontakte aus dem Milieu sind öfter Spezialisten. */
@@ -38,6 +41,8 @@ export const EVENT_ROLE_WEIGHTS: Record<StaffRole, number> = {
   lawyer: 18,
   accountant: 16,
   policeContact: 16,
+  worker: 0,
+  gardener: 0,
 };
 
 /** Handgeld bei der Einstellung: so viele Tageslöhne. */

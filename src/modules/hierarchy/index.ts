@@ -50,6 +50,7 @@ import {
   getStaff,
   getStaffMember,
   isEmployed,
+  isFarmRole,
   isLyingLow,
   isSpecialist,
   roleName,
@@ -409,7 +410,9 @@ export function handlesAbsence(state: GameState, lieutenantId: string, staffId: 
 export function canBeLieutenant(state: GameState, staffId: string): CommandResult {
   const m = getStaffMember(state, staffId);
   if (!m || !isEmployed(state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
-  if (isSpecialist(m.role)) return { ok: false, reason: `${roleName(m.role)} führen keine Spots.` };
+  // Arbeiter und Gärtner (Auftrag 42) bleiben auf ihrer Finca.
+  if (isSpecialist(m.role) || isFarmRole(m.role))
+    return { ok: false, reason: `${roleName(m.role)} führen keine Spots.` };
   // Auch auf einer Lieferfahrt (Einsatz 'delivery') bleibt sie die Rechte Hand.
   if (m.assignment?.kind === 'office' || isRightHand(state, staffId)) {
     return { ok: false, reason: `${m.name} ist deine Rechte Hand.` };

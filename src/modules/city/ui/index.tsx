@@ -23,6 +23,7 @@ import {
 } from '../../../ui';
 import { cityReport } from '../../finance';
 import { store } from '../../goods';
+import { openRegions } from '../../grow';
 import { getRightHand, hasFullPower, lieutenantOfSpot, RIGHT_HAND_RANK_XP } from '../../hierarchy';
 import { getSpots } from '../../spots';
 import { enlist, generateProfile } from '../../staff';
@@ -40,6 +41,7 @@ import {
   currentOffer,
   DEUTSCHLAND_VIEW,
   getCity,
+  getRegion,
   isBusinessSold,
   nextCityMissing,
   type OfferStatus,
@@ -81,6 +83,11 @@ registerCityViews({
           ]
         : []),
       ...(isBusinessSold(state) ? [{ lng: 4.29, lat: 51.29 }] : []),
+      // Auftrag 42: freie Regionen der eigenen Produktion (die Karte reicht bis Südamerika und Nordafrika).
+      ...openRegions(state).flatMap((id) => {
+        const region = getRegion(id);
+        return region ? [region.center, region.port.at] : [];
+      }),
     ];
     const lngs = points.map((p) => p.lng);
     const lats = points.map((p) => p.lat);

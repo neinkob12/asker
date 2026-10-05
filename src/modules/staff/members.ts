@@ -164,6 +164,11 @@ export function staffVeedel(state: GameState, member: StaffMember): string | nul
   return placeVeedel(state, member.assignment);
 }
 
+/** Arbeiter und Gärtner auf den Fincas (Auftrag 42): nie in einer Stadt, nie im Team einer Stadt. */
+export function isFarmRole(role: StaffRole): boolean {
+  return role === 'worker' || role === 'gardener';
+}
+
 export function isSpecialist(role: StaffRole): boolean {
   return ROLE_INFO[role].specialist;
 }
@@ -556,7 +561,8 @@ export function removeMember(ctx: Ctx, staffId: string, reason: StaffLeaveReason
   member.leftAt = ctx.now;
   member.leftReason = reason;
   addCareer(ctx, staffId, reason === 'fired' ? 'Entlassen.' : reason === 'dead' ? 'Gestorben.' : 'Gekündigt.');
-  s.former.unshift(member);
+  // Arbeiter und Gärtner der Fincas (Auftrag 42) verdrängen nicht die Ehemaligen aus den Städten (FORMER_LIMIT).
+  if (!isFarmRole(member.role)) s.former.unshift(member);
   if (s.former.length > FORMER_LIMIT) s.former.length = FORMER_LIMIT;
   ctx.emit('staff.left', { staffId, reason });
   return member;

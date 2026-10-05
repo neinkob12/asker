@@ -47,6 +47,8 @@ export const ROLE_ICONS: Record<StaffRole, string> = {
   lawyer: 'scale',
   accountant: 'clipboard',
   policeContact: 'badge',
+  worker: 'leaf',
+  gardener: 'flask',
 };
 
 export const ORIGIN_NAMES: Record<StaffOrigin, string> = {
@@ -66,6 +68,8 @@ export const ROLE_TONES: Record<StaffRole, CategoryColor> = {
   lawyer: 'law',
   accountant: 'money',
   policeContact: 'law',
+  worker: 'goods',
+  gardener: 'goods',
 };
 
 /** Status als Etikett: Farbe, Symbol und Wort, nie Farbe allein. */

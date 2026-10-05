@@ -439,3 +439,45 @@ export const EUROPE_CITIES: readonly EuropeCity[] = [
     ),
   },
 ];
+
+/**
+ * Auftrag 42: Ausfuhrhäfen der eigenen Fincas (grow). Gleiche Form wie ein Produzent (Seeweg, Verladen, Grundrisiko),
+ * aber die Ware wird nicht gekauft: Sie kommt aus dem eigenen Ausfuhrlager (TradeState.origins), das grow nach dem
+ * Verpacken füllt. products nennt den Warenwert pro Gramm (Anteil am Grundpreis), nur für die Kosten der Deckladung.
+ * Container und eigene Schiffe fahren von hier wie von jedem Produzenten.
+ */
+export interface OwnOrigin extends Producer {
+  /** Region der Fincas (city.REGIONS). */
+  regionId: string;
+}
+
+export const OWN_ORIGINS: readonly OwnOrigin[] = [
+  {
+    id: 'own-kolumbien',
+    regionId: 'kolumbien',
+    name: 'Eigene Ernte Kolumbien',
+    country: 'Kolumbien',
+    from: 'Cartagena',
+    at: { lng: -75.53, lat: 10.4 },
+    products: { weed: 0.19, haze: 0.25, kush: 0.24 },
+    quality: 0.7,
+    days: 5,
+    sea: 'cartagena',
+    risk: 0.14,
+    description: 'Deine Ware aus der Sierra Nevada, verladen in Cartagena zwischen Bananen und Kaffee.',
+  },
+  {
+    id: 'own-marokko',
+    regionId: 'marokko',
+    name: 'Eigene Ernte Marokko',
+    country: 'Marokko',
+    from: 'Tanger',
+    at: { lng: -5.8, lat: 35.78 },
+    products: { hash: 0.16, weed: 0.2 },
+    quality: 0.65,
+    days: 3,
+    sea: 'tanger',
+    risk: 0.1,
+    description: 'Deine Ware aus dem Rif, über Tanger Med auf die Fähren und Frachter nach Norden.',
+  },
+];

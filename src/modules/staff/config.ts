@@ -103,6 +103,25 @@ export const ROLE_INFO: Record<StaffRole, RoleInfo> = {
     specialist: true,
     age: [29, 58],
   },
+  // Auftrag 42: Leute auf den Fincas (grow). Löhne vor Ort zahlt grow (sauberes Geld), die Region ist nie live.
+  worker: {
+    name: 'Arbeiter',
+    plural: 'Arbeiter',
+    wage: 25,
+    stats: { speed: 55, caution: 45, strength: 60, charisma: 35, loyalty: 60 },
+    keyStats: ['strength', 'speed'],
+    specialist: false,
+    age: [17, 60],
+  },
+  gardener: {
+    name: 'Gärtner',
+    plural: 'Gärtner',
+    wage: 140,
+    stats: { speed: 45, caution: 60, strength: 40, charisma: 45, loyalty: 60 },
+    keyStats: ['caution', 'speed'],
+    specialist: false,
+    age: [28, 66],
+  },
 };
 
 export const STAT_NAMES: Record<StatKey, string> = {
@@ -346,6 +365,16 @@ export const BACKGROUNDS: Record<StaffRole, readonly string[]> = {
     'Sachbearbeiterin im Präsidium mit Zugriff auf die Einsatzpläne.',
     'Streifenpolizist mit Spielsucht.',
     'Hat seine Beförderung nie bekommen und ist entsprechend gelaunt.',
+  ],
+  worker: [
+    'Hat sein Leben lang auf den Feldern gearbeitet, für wen auch immer.',
+    'Kommt aus dem Dorf unten am Fluss und schickt jeden Peso nach Hause.',
+    'Hat früher Kaffee gepflückt, bis der Preis fiel.',
+  ],
+  gardener: [
+    'Züchtet seit zwanzig Jahren Pflanzen, die nicht im Katalog stehen.',
+    'Hat Agrarwissenschaft studiert und weiß, was er nicht sagen darf.',
+    'Kennt jede Sorte am Hang beim Namen und jede Krankheit am Geruch.',
   ],
 };
 

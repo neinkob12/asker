@@ -4,10 +4,11 @@
 
 import { describe, expect, it } from 'vitest';
 import type { GameEvent } from '../core';
-import { MONEY_CATEGORIES } from '../core';
+import { loadSimulation, MONEY_CATEGORIES, type Simulation } from '../core';
 import { createTestGame } from '../core/testing';
 import { activeCity, saleRecord } from '../modules/city';
 import { allProducts } from '../modules/goods';
+import { costPerGram, europeProgress, getFincas, goalShares, growStats, harvestLog } from '../modules/grow';
 import { priceIndex } from '../modules/market';
 import { contractStats } from '../modules/quests';
 import { getCustomers, getShipments, supplierReputation, totalStock, tradeStats } from '../modules/trade';
@@ -374,5 +375,78 @@ describe('Balancing', () => {
       }
     },
     3_600_000,
+  );
+
+  it.skipIf(!process.env.BALANCE)(
+    'Bericht: Produktion (Auftrag 42, nach dem Hafen)',
+    () => {
+      const seeds = (process.env.BALANCE_SEEDS ?? '1,2,3').split(',').map(Number);
+      const growDays = Number(process.env.BALANCE_GROW_DAYS ?? 180);
+      const marks = [30, 60, 90, 120, 150, 180].filter((d) => d <= growDays);
+      for (const seed of seeds) {
+        const started = Date.now();
+        const sim = createTestGame({ seed });
+        const stats = newBotStats();
+        if (playToGermany(sim, stats) === null || !sellAndArrive(sim, stats)) {
+          console.log(`Produktion, Seed ${seed}: kein Verkauf (${sim.state.outcome.gameOver?.reason ?? 'zu langsam'})`);
+          continue;
+        }
+        const arrived = Math.floor(sim.state.time / DAY);
+        const saved = structuredClone(sim.state);
+        // Gleicher Stand bei der Ankunft: einmal mit, einmal ohne Produktion.
+        const run = (grow: boolean) => {
+          const run: Simulation = loadSimulation(structuredClone(saved), sim.modules);
+          const st = newBotStats();
+          const money: Record<number, number> = {};
+          const revenue: Record<number, number> = {};
+          let called: number | null = null;
+          let producer: number | null = null;
+          let europe: number | null = null;
+          const prices: string[] = [];
+          for (let d = 1; d <= growDays && !run.state.outcome.gameOver; d++) {
+            playFor(run, DAY, st, { ...DEFAULT_BOT, grow });
+            const g = run.state.modules.grow;
+            if (called === null && g.startedAt !== null) called = d;
+            if (producer === null && g.goals.producer !== null) producer = d;
+            if (europe === null && g.goals.europe !== null) europe = d;
+            if (marks.includes(d)) {
+              money[d] = Math.round((run.state.wallet.dirty + run.state.wallet.clean) / 1000);
+              revenue[d] = Math.round(tradeStats(run.state).revenue / 1000);
+            }
+          }
+          for (const h of harvestLog(run.state)) {
+            prices.push(`T${Math.floor(h.at / DAY) - arrived}:${(h.cost / Math.max(1, h.grams)).toFixed(2)}`);
+          }
+          return { sim: run, money, revenue, called, producer, europe, prices };
+        };
+        const without = run(false);
+        const withGrow = run(true);
+        const t = tradeStats(withGrow.sim.state);
+        const g = growStats(withGrow.sim.state);
+        const share = goalShares(withGrow.sim.state);
+        const line = (r: typeof withGrow) =>
+          marks.map((d) => `T${d} ${r.revenue[d] ?? '-'}/${r.money[d] ?? '-'}`).join(', ');
+        console.log(
+          `Produktion, Seed ${seed}: Ankunft Rotterdam Tag ${arrived + 1}` +
+            ` | Anruf nach ${withGrow.called ?? '-'} Tagen, Produzent nach ${withGrow.producer ?? '-'}, Europa nach ${withGrow.europe ?? '-'}` +
+            ` | Fincas ${getFincas(withGrow.sim.state)
+              .map((f) => `${f.name} ${f.hectares} ha${f.greenhouse ? ' GH' : ''} G${f.genetics}`)
+              .join(', ')}` +
+            ` | eigene Ware zuletzt ${Math.round(share.share * 100)} %, geliefert ${Math.round(t.ownDelivered / 1000)} von ${Math.round(t.deliveredGrams / 1000)} kg` +
+            ` | geerntet ${Math.round(g.harvested / 1000)} kg, Kartell ${Math.round(g.cartelTaken / 1000)} kg, Razzien ${g.raids}, investiert ${Math.round(g.invested / 1000)} Tsd.` +
+            ` | Container aufgeflogen ${t.seized} (ohne Produktion ${tradeStats(without.sim.state).seized})` +
+            ` | ${withGrow.sim.state.outcome.gameOver ? `Game Over (${withGrow.sim.state.outcome.gameOver.reason})` : 'keine Pleite'}` +
+            `${without.sim.state.outcome.gameOver ? `, ohne Produktion Game Over (${without.sim.state.outcome.gameOver.reason})` : ''}` +
+            ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,
+        );
+        console.log(`  Umsatz/Geld in Tsd. € mit Produktion:  ${line(withGrow)}`);
+        console.log(`  Umsatz/Geld in Tsd. € ohne Produktion: ${line(without)}`);
+        console.log(
+          `  Preis pro Gramm eigener Ware (Ernte: €/g): ${withGrow.prices.join(' ')} | Schnitt der letzten vier ${costPerGram(withGrow.sim.state, 4) ?? '-'} €/g` +
+            ` | Europa: ${europeProgress(withGrow.sim.state).supplied} von ${europeProgress(withGrow.sim.state).total}, fehlen ${europeProgress(withGrow.sim.state).missing.join(', ')}`,
+        );
+      }
+    },
+    7_200_000,
   );
 });

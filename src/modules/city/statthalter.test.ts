@@ -311,6 +311,7 @@ describe('Ränge des Spielers (Auftrag 36)', () => {
       'Boss von Deutschland',
       'Importeur',
       'Produzent',
+      'Europa',
     ]);
     const events = recordEvents(sim);
     const ctx = sim.ctx('test');

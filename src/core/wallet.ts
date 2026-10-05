@@ -44,6 +44,10 @@ export type MoneyCategory =
   | 'sales.trade'
   | 'trade.purchase'
   | 'trade.freight'
+  | 'grow.land'
+  | 'grow.wages'
+  | 'grow.supplies'
+  | 'grow.bribe'
   // Verluste
   | 'loss.police'
   | 'loss.theft'
@@ -95,6 +99,11 @@ export const MONEY_CATEGORIES: Record<MoneyCategory, MoneyCategoryInfo> = {
   'sales.trade': { label: 'Lieferungen an Kunden', group: 'income', icon: 'ship' },
   'trade.purchase': { label: 'Einkauf im Ausland', group: 'expense', icon: 'boxes' },
   'trade.freight': { label: 'Fracht, Schiffe und Lkw', group: 'expense', icon: 'truck' },
+  // Auftrag 42: eigene Produktion im Ausland (Fincas mit sauberem Geld, Saatgut und Verpackung schwarz).
+  'grow.land': { label: 'Fincas: Kauf, Pacht, Gewächshaus', group: 'expense', icon: 'leaf' },
+  'grow.wages': { label: 'Löhne auf den Fincas', group: 'expense', icon: 'users' },
+  'grow.supplies': { label: 'Anbau: Dünger, Genetik, Verpackung', group: 'expense', icon: 'flask' },
+  'grow.bribe': { label: 'Schmiergeld im Ausland', group: 'expense', icon: 'handshake' },
   'loss.police': { label: 'Polizei', group: 'loss', icon: 'siren' },
   'loss.theft': { label: 'Überfälle und Diebstahl', group: 'loss', icon: 'alert' },
   'loss.betrayal': { label: 'Verrat', group: 'loss', icon: 'userMinus' },

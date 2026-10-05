@@ -24,6 +24,7 @@ import {
   registerPhoneApp,
   SegmentedControl,
   type SheetAction,
+  Slot,
   Stepper,
   SummaryTiles,
   soundOnEvent,
@@ -33,6 +34,7 @@ import {
 import { HARBOR_CITY } from '../../city';
 import { freeVehicles, vehicleName } from '../../fleet';
 import { productName } from '../../goods';
+import { isGrowStarted } from '../../grow';
 import { customsHeat, customsLevel } from '../../police';
 import {
   CUSTOMER_KINDS,
@@ -79,8 +81,15 @@ import { europeLayer } from './map';
 import { ShipsGroup } from './order';
 import './trade.css';
 
+declare module '../../../ui' {
+  interface SlotRegistry {
+    /** Auftrag 42: Abschnitt „Anbau“ der Kunden-App (grow: Regionen, Fincas, Ausfuhr, Ziele). */
+    'trade.grow': Record<string, never>;
+  }
+}
+
 const APP_ID = 'trade.app';
-type View = 'orders' | 'customers' | 'harbor';
+type View = 'orders' | 'customers' | 'harbor' | 'grow';
 
 const kg = (grams: number) => `${formatNumber(Math.round(grams / 100) / 10, 1)} kg`;
 const pct = (n: number) => `${Math.round(n * 100)} %`;
@@ -701,15 +710,19 @@ function TradeApp() {
           aria-label="Bereich"
           value={view}
           options={[
-            { value: 'orders', label: 'Bestellungen', badge: waiting + toDeliver },
+            // Mit dem vierten Bereich (Anbau) wird es eng: dann das kürzere Wort.
+            { value: 'orders', label: isGrowStarted(state) ? 'Aufträge' : 'Bestellungen', badge: waiting + toDeliver },
             { value: 'customers', label: 'Kunden' },
             { value: 'harbor', label: 'Hafen' },
+            // Auftrag 42: eigene Produktion (Fincas, Kartell, Ausfuhr), sobald die Produzenten angerufen haben.
+            ...(isGrowStarted(state) ? [{ value: 'grow', label: 'Anbau' }] : []),
           ]}
           onChange={(v) => setView(v as View)}
         />
         {view === 'orders' && <OrdersView />}
         {view === 'customers' && <CustomersView />}
         {view === 'harbor' && <HarborView />}
+        {view === 'grow' && <Slot name="trade.grow" props={{}} />}
       </div>
     </PhoneScreen>
   );

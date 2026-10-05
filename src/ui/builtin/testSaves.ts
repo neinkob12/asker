@@ -28,6 +28,11 @@ export const TEST_SAVE_FILES: readonly TestSaveInfo[] = [
     title: 'Hafen-Phase',
     text: 'Verkauft und in Rotterdam angekommen: Jansens Halle, die ersten Bestellungen, die App „Kunden“ im Dock.',
   },
+  {
+    id: 'produktion',
+    title: 'Produktion',
+    text: 'Fincas in Kolumbien und Marokko, die erste Ernte liegt verpackt in Cartagena bzw. Tanger. Kunden-App › Anbau.',
+  },
 ];
 
 /** Lädt einen Test-Spielstand (überschreibt den Autosave). Wirft mit Text für den Spieler. */

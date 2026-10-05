@@ -250,6 +250,16 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   KI-Porträts, Multiplayer. Verworfen:
   Tarnfirmen, Charakter-Erstellung, Perks, Besitz, Akte, Korruption.
 
+Mit Auftrag 42 dazu (Phase 4 aus `docs/plan.md`, der Schluss des Bogens): Nach drei Wochen als Lieferant am Hafen rufen
+Produzenten aus Kolumbien und Marokko an. Eigene Fincas (kaufen oder pachten mit sauberem Geld, 6 bis 25 Hektar),
+Arbeiter und Gärtner vor Ort, Genetik als Qualität, Ernte alle 42 Tage im Freien oder 21 im Gewächshaus (eine neue Finca hat schon eine stehende Ernte), Trocknen,
+Pressen für Hasch, Verpacken als Tarnung, Verschiffung aus Cartagena (über den Atlantik) und Tanger mit den Containern
+und Schiffen der Hafen-Phase. Pro Region zwei Zahlen: der Anteil des Kartells (zahlen oder Feuer und Diebstahl) und die
+Aufmerksamkeit der Behörden (Razzien, Schmiergeld). Eigene Ware kostet anfangs ein Viertel des Einkaufs, mit
+Gewächshaus und Genetik ein Achtel. Ränge „Produzent“ (die Hälfte der Lieferungen aus eigener Ernte) und „Europa“ (jeder
+Kunde aus eigener Ernte), beide in der Bestenliste; danach geht das Spiel offen weiter. Edibles, Vapes und Öl kauft man
+weiter beim Labor in den Niederlanden.
+
 ## Mehrere Städte (Auftrag 30 gebaut, Auftrag 31 für die Karte)
 
 Köln ist der Einstieg und bleibt die Basis. Entschieden am 02.10.2026 in einer Fragerunde mit 16 Fragen; die

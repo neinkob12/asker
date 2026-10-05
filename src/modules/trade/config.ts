@@ -70,6 +70,12 @@ export const TRUST = {
 export const REPUTATION_ALPHA = 0.2;
 /** Jansens Ruf geht mit dem Hafen auf dich über. */
 export const START_RELIABILITY = 0.85;
+/**
+ * Auftrag 42: Ein schlechter Ruf verblasst. Jeden Montag rückt die Pünktlichkeit um diesen Anteil zurück Richtung
+ * START_RELIABILITY (nur nach oben). Ohne das blieb nach ein paar geplatzten Lieferungen der Anteil bei fast null, es
+ * kamen keine Bestellungen mehr und damit nie wieder eine Gelegenheit, pünktlich zu sein.
+ */
+export const RELIABILITY_RECOVERY = 0.3;
 export const START_QUALITY = 0.7;
 
 /**

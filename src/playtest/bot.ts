@@ -119,6 +119,7 @@ import {
 } from '../modules/suppliers';
 import { campaignProgress, controlledBy, PLAYER_FACTION } from '../modules/territory';
 import { allVeedel, neighborsOf } from '../modules/veedel';
+import { growTurn } from './botGrow';
 import { sellWhenOffered, tradeTurn } from './botTrade';
 
 export interface BotOptions {
@@ -141,6 +142,8 @@ export interface BotOptions {
   cityOrder?: readonly string[];
   /** Verkauft der Bot das Geschäft, sobald Jansen anruft (Auftrag 40)? Fehlt: ja. */
   sellBusiness?: boolean;
+  /** Baut der Bot eigene Produktion auf, wenn Kolumbien und Marokko anrufen (Auftrag 42)? Fehlt: ja. */
+  grow?: boolean;
 }
 
 /**
@@ -901,7 +904,10 @@ export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = 
   if (isBusinessSold(sim.state)) {
     handleEncounters(sim, stats);
     answerMessages(sim, stats, options);
-    if (!isPlayerTraveling(sim.state)) tradeTurn(sim.state, command);
+    if (!isPlayerTraveling(sim.state)) {
+      tradeTurn(sim.state, command);
+      if (options.grow !== false) growTurn(sim.state, command);
+    }
     return;
   }
   moveOn(sim, stats, options);

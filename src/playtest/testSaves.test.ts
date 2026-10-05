@@ -7,8 +7,9 @@ import { loadSimulation, parseSaveFile } from '../core';
 import { discoverModules } from '../core/discover';
 import { eventsOfType, recordEvents } from '../core/testing';
 import { hamburgMissing, isBossOfGermany, isBusinessSold, offerStatus, presentCity, saleStatus } from '../modules/city';
+import { getFincas } from '../modules/grow';
 import { fullPowerMissing, getRightHand } from '../modules/hierarchy';
-import { isTradeActive, openOrders } from '../modules/trade';
+import { isTradeActive, OWN_ORIGINS, openOrders, originStock } from '../modules/trade';
 import { TEST_SAVE_FILES } from '../ui/builtin/testSaves';
 import { KOELN_KOMPLETT_DIRTY, ownedInKoeln, TEST_SAVES } from './testSaves';
 
@@ -93,6 +94,21 @@ describe('Test-Spielstände', () => {
     expect(presentCity(sim.state)).toBe('rotterdam');
     expect(isTradeActive(sim.state)).toBe(true);
     expect(openOrders(sim.state).length).toBeGreaterThan(0);
+    sim.advance(24 * 60);
+    expect(sim.state.outcome.gameOver).toBeNull();
+  });
+
+  it('Produktion: zwei Fincas, die erste Ernte im Ausfuhrlager, verschiffen geht (Auftrag 42)', () => {
+    const sim = loadFile('produktion');
+    expect(sim.state.meta.scenario).toBe('produktion');
+    expect(getFincas(sim.state).length).toBeGreaterThanOrEqual(2);
+    const origin = OWN_ORIGINS.find((o) => Object.keys(originStock(sim.state, o.id)).length > 0);
+    expect(origin).toBeDefined();
+    const [productId] = Object.keys(originStock(sim.state, origin?.id ?? ''));
+    sim.state.wallet.dirty += 100_000;
+    expect(
+      sim.dispatch({ type: 'trade.buy', payload: { producerId: origin?.id ?? '', productId, size: 'small' } }).ok,
+    ).toBe(true);
     sim.advance(24 * 60);
     expect(sim.state.outcome.gameOver).toBeNull();
   });

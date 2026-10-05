@@ -108,6 +108,12 @@ Kilometern, Hafen-Lager mit Platz und Hallen (`trade.buildHall`, Rest wartet am 
 `fleet` (`VehicleModel.ship`, `trade.sail` hin und zurück; Schiffe fahren nie auf der Straße, `freeVehicles` lässt sie
 weg), Deckladung (`COVERS`), Europa-Kunden als Daten (`EUROPE_CITIES` mit Grenze, Woche, Preis) über neue
 Autobahn-Linien.
+Auftrag 42 (Produktion): Neues Modul `grow` (Fincas in Kolumbien und Marokko, Kette bis ins Ausfuhrlager, Kartell und
+Behörden als zwei Zahlen pro Region, Ziele `growGoals` für die Ränge Produzent und Europa). Regionen im Ausland sind
+Daten in `city` (`REGIONS`, `isRegion`), keine Orte zum Spielen; Leute dort (Rollen `worker`, `gardener` in `staff`)
+haben die Region als `cityId` und sind nie live. Eigene Ware fährt über `trade` (`OWN_ORIGINS` als Produzenten,
+`storeExport`, `StockLot.own`, `trade.delivered` mit `ownAmount`), keine zweite Logistik. grow würfelt nur über
+`cityDayDice`/`keyedDice`. Seewege über den Atlantik in einem eigenen Ausschnitt (`build-water.py`, `OCEAN_LANES`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

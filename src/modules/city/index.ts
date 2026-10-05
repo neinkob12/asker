@@ -63,6 +63,7 @@ import { activeEncounters } from '../encounters';
 import { bookDay, cityDayProfit, cityReport } from '../finance';
 import { freeVehicles, releaseVehicle } from '../fleet';
 import { getLots } from '../goods';
+import { growGoals } from '../grow';
 import {
   FULL_POWER_SHARE,
   fullPowerMissing,
@@ -118,6 +119,7 @@ import {
 } from './config';
 import { ABROAD_CITIES, CITIES, type CityDef, JANSEN_CONTACT } from './data';
 import { PLAYER_RANKS, type PlayerRank, reachedRank } from './ranks';
+import { getRegion } from './regions';
 
 export {
   CITY_OFFERS,
@@ -133,6 +135,7 @@ export {
 } from './config';
 export { ABROAD_CITIES, CITIES, type CityDef, DEUTSCHLAND_VIEW } from './data';
 export { PLAYER_RANKS, type PlayerRank, type PlayerRankDef } from './ranks';
+export { getRegion, isRegion, REGIONS, type RegionDef } from './regions';
 
 /**
  * queued: meldet sich später per Chat; pitched: hat sich per Chat gemeldet und wartet auf "Ruf mich an" bzw. einen
@@ -324,7 +327,8 @@ export function getCity(id: string): CityDef | undefined {
 }
 
 export function cityName(id: string): string {
-  return CITY_BY_ID.get(id)?.name ?? id;
+  // Auftrag 42: Regionen im Ausland (Kolumbien, Marokko) haben auch einen Namen (Kasse, Personal).
+  return CITY_BY_ID.get(id)?.name ?? getRegion(id)?.name ?? id;
 }
 
 /**
@@ -1457,6 +1461,7 @@ export function currentRank(state: GameState): PlayerRank {
     name: cityName,
     minGermany: GERMANY_MIN_CITIES,
     sold: isBusinessSold(state),
+    ...growGoals(state),
   });
 }
 

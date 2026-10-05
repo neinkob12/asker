@@ -57,6 +57,10 @@ describe('api/leaderboard: Eintrag prüfen', () => {
     expect(parseEntry({ ...valid, title: 'Kaiser von Europa', rank: 99 }, 0)).not.toHaveProperty('rank');
     expect(parseEntry({ ...valid, title: 'Kleindealer', rank: 50 }, 0)).not.toHaveProperty('rank');
     expect(parseEntry({ ...valid, title: 'Boss von Deutschland', rank: 50 }, 0)?.rank).toBe(50);
+    // Auftrag 42: Produzent (Wert 70) und Europa (Wert 80) am Ende des Bogens.
+    expect(parseEntry({ ...valid, title: 'Produzent', rank: 70 }, 0)?.rank).toBe(70);
+    expect(parseEntry({ ...valid, title: 'Europa', rank: 80 }, 0)).toMatchObject({ title: 'Europa', rank: 80 });
+    expect(parseEntry({ ...valid, title: 'Europa', rank: 70 }, 0)).not.toHaveProperty('rank');
     expect(parseEntry({ ...valid, name: 'x'.repeat(50) }, 0)?.name).toHaveLength(20);
   });
 
