@@ -10,7 +10,7 @@
 // Bestellregeln: das günstigste Paket eines freien Lieferanten in der Stadt). So gibt es keine Ware umsonst.
 
 import { type CommandResult, type Ctx, clock, type GameState, journal, wallet } from '../../core';
-import { cityName, isCityLive } from '../city';
+import { activeCity, cityName, isCityLive } from '../city';
 import { getVehicle, pickVehicle, vehicleSpec } from '../fleet';
 import {
   getProduct,
@@ -124,8 +124,13 @@ export interface RestockDue {
 // ---------------------------------------------------------------------------------------------
 // Lesen
 
-export function getRoutes(state: GameState): readonly Route[] {
-  return state.modules.logistics?.routes ?? [];
+/**
+ * Routen, mit Stadt nur die, die dort losfahren (Auftrag 43): Eine Route gehört zur Stadt ihres Startlagers, dort sitzen
+ * ihr Fahrer und wer sie führt. In der neuen Stadt tauchen die Routen der alten nicht auf.
+ */
+export function getRoutes(state: GameState, cityId?: string): readonly Route[] {
+  const routes = state.modules.logistics?.routes ?? [];
+  return cityId === undefined ? routes : routes.filter((r) => warehouseCity(r.fromId) === cityId);
 }
 
 export function getRoute(state: GameState, id: number): Route | undefined {
@@ -331,6 +336,11 @@ export function saveRoute(ctx: Ctx, id: number | null, input: Partial<RouteInput
   const merged = { ...(base ?? {}), ...input } as RouteInput;
   if (merged.fromId === undefined || merged.toId === undefined || merged.departure === undefined) {
     return { ok: false, reason: 'Start, Ziel und Abfahrt fehlen.' };
+  }
+  // Routen legst und änderst du dort, wo sie losfahren; die der anderen Städte führen deren Statthalter (Auftrag 43).
+  const start = warehouseCity(merged.fromId);
+  if (start !== activeCity(ctx.state)) {
+    return { ok: false, reason: `Die Route fährt in ${cityName(start)} los, die führst du dort.` };
   }
   const route = normalize(ctx.state, base?.id ?? ctx.nextId(), merged, base);
   if (typeof route === 'string') return { ok: false, reason: route };

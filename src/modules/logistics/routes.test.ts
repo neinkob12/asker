@@ -12,6 +12,7 @@ import { INTERCITY_CAPACITY, ROUTE_LOAD_MINUTES } from './config';
 import {
   driverWhereabouts,
   getRoute,
+  getRoutes,
   getTrips,
   isInterCityTrip,
   nextDeparture,
@@ -251,10 +252,7 @@ describe('Routen mit Fahrplan (Auftrag 30)', () => {
     const sim = twoCities();
     const driverId = hireDriver(sim);
     store(sim.ctx('test'), { productId: 'weed', amount: 2500, warehouseId: KOELN, quality: 0.8, unitCost: 4 });
-    expect(sim.dispatch({ type: 'city.switch', payload: { cityId: 'hamburg' } }).ok).toBe(true);
-    expect(activeCity(sim.state)).toBe('hamburg');
-    expect(isCityLive(sim.state, 'koeln')).toBe(false);
-    const before = getStock(sim.state, { warehouseId: KOELN, productId: 'weed' });
+    // Die Route legst du in Köln an (dort fährt sie los), dann geht es nach Hamburg.
     const routeId = addRoute(sim, {
       driverId,
       fromId: KOELN,
@@ -262,6 +260,14 @@ describe('Routen mit Fahrplan (Auftrag 30)', () => {
       items: [{ productId: 'weed', amount: 2000 }],
       departure: 8 * 60,
     });
+    expect(sim.dispatch({ type: 'city.switch', payload: { cityId: 'hamburg' } }).ok).toBe(true);
+    expect(activeCity(sim.state)).toBe('hamburg');
+    expect(isCityLive(sim.state, 'koeln')).toBe(false);
+    const before = getStock(sim.state, { warehouseId: KOELN, productId: 'weed' });
+    // In Hamburg tauchen Kölner Routen nicht auf und lassen sich nicht ändern (Auftrag 43).
+    expect(getRoutes(sim.state, 'hamburg')).toEqual([]);
+    expect(getRoutes(sim.state, 'koeln')).toHaveLength(1);
+    expect(sim.dispatch({ type: 'logistics.updateRoute', payload: { routeId, departure: 9 * 60 } }).ok).toBe(false);
     untilDeparture(sim, routeId);
     expect(getStock(sim.state, { warehouseId: KOELN, productId: 'weed' })).toBe(before - 2000);
     expect(sim.state.modules.logistics.restock).toEqual([

@@ -118,7 +118,9 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   aktiven Stadt (`sendReport`, `buildReport`, `wageRunway`).
 - [x] E4 Hafen- und Fahrer-Chats der alten Stadt mit Frist und nicht ausführbaren Antworten; Container einer schlafenden
   Stadt bleiben ewig am Kai.
-- [ ] E5 Routen-Seite der neuen Stadt zeigt und bedient Routen der alten (`routes.tsx` `getRoutes` ohne Stadt).
+- [x] E5 Routen-Seite der neuen Stadt zeigt und bedient Routen der alten (`routes.tsx` `getRoutes` ohne Stadt).
+  Erledigt: `getRoutes(state, cityId)` (Stadt des Startlagers), Seite und Zeile „Routen“ nur mit Routen der aktiven Stadt,
+  Hinweis auf Routen anderswo, Start nur in der aktiven Stadt; `logistics.addRoute`/`updateRoute` lehnen fremde Städte ab.
 - [ ] E6 Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt) der alten Stadt wirken in der neuen (`bonus`, `bonusProvider`).
 - [ ] E7 Leute der alten Stadt schreiben Empfehlungen in der neuen; Hintergründe mit Kölner Ortsnamen in jeder Stadt.
 - [ ] E8 Event-Ankündigungen und Rabatt-Aktionen der alten Stadt kommen in der neuen an.
