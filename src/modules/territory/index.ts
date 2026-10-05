@@ -114,8 +114,7 @@ export const DEFAULT_CITY = 'koeln';
 /** Was nach "Köln komplett" passiert (Hinweis im Sieg-Bildschirm und im Journal). */
 const AFTER_COMPLETE: Record<string, string> = {
   koeln: 'Gleich klingelt dein Telefon.',
-  hamburg:
-    'Zwei Städte gehören dir. Hamburg kann eine zweite Rechte Hand führen, die nächste Stadt kommt später. Bis dahin geht es im Endlosmodus weiter.',
+  hamburg: 'Hamburg gehört dir, der Hafen auch. Die nächste Stadt meldet sich, sobald eine frei ist.',
   berlin: 'Berlin gehört dir, die Nacht auch. Die nächste Stadt meldet sich, sobald eine frei ist.',
 };
 

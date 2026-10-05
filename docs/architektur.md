@@ -752,20 +752,21 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   Wäsche, Hamburg hatte zwei Wochen lang einen Spot).
 
 - Auftrag 37 (Berlin als dritte spielbare Stadt; Köln 16 Seeds, Tage pro Stadt 8 Seeds, vorher = `main` nach Auftrag 34):
-  Köln komplett Ø Tag 22,25 (19–29) → 22,9 (20–29), „Boss von Köln“ Ø Tag 15,9 → 16,6, erstes Veedel Ø Tag 6,5 → 6,75,
-  Umsatz pro Tag T6–15 11.735 → 10.428 €, T16–30 23.120 → 23.888 €, keine Pleite. Köln selbst hat sich nicht geändert;
-  der Preisindex würfelt jetzt auch für Berlin (`market.stepIndex` über alle spielbaren Städte), das verschiebt die
-  Würfelfolge ab Tag 2. Der Bot wählt Berlin als zweite Stadt (günstigste nach `propertyFactor` + `wageFactor`).
-  Bericht „Tage pro Stadt“: Berlin komplett nach 8/14/14/17/8/8/7/12 Tagen (Median 10, Richtwert 8 bis 15), keine Pleite;
-  danach Hamburg als dritte Stadt nach 6/14/10/6/6/9 Tagen (zwei Seeds noch nicht komplett, als das Fenster von 30 Tagen
-  endete). Gemessen, was das Tempo bestimmt: Ohne Dämpfung nahm der
-  Bot ganz Berlin in zwei bis fünf Tagen (über 1.100 Verkäufe am Tag an 40 billigen Spots mit viel Nachtleben, jeder
-  Verkauf bringt Einfluss); `SALE_INFLUENCE_FACTOR_BY_CITY.berlin` 0,4 → 5 bis 16 Tage, 0,35 → 5 bis 22, 0,25 → 7 bis 17.
-  Kam der Bot nur mit dem Mindest-Startgeld an (39.000 €), blieb Berlin bei einem Seed über 30 Tage hängen, deshalb
-  `START_MONEY_MIN_BY_CITY.berlin` 45.000 € (wie Hamburg). Stellschrauben: `territory/config.ts`
-  `SALE_INFLUENCE_FACTOR_BY_CITY` (Berlin 0,25, wirkt am stärksten), `city/config.ts` `START_MONEY_MIN_BY_CITY`,
-  Andrang der Spots und Clubs in `spots/config-berlin.ts`, `nightlife` in `veedel/data-berlin.ts`, Stärke der Gangs in
-  `gangs/data.ts`.
+  Köln komplett Ø Tag 22,25 (19–29) → 21,7 (17–24), „Boss von Köln“ Ø Tag 15,9 → 16,4, erstes Veedel Ø Tag 6,5 → 6,6,
+  Umsatz pro Tag T6–15 11.735 → 10.981 €, T16–30 23.120 → 24.371 €, keine Pleite. Der Preisindex würfelt nur noch für
+  freie Städte (`market.stepIndex` über `citiesUnlocked`), eine neue spielbare Stadt verschiebt Kölns Würfelfolge also
+  nicht mehr; der Unterschied kommt von den Stammkunden, die jetzt die Öffnungszeiten beachten (auch an Kölner Kneipen).
+  Der Bot wählt Berlin als zweite Stadt (günstigste nach `propertyFactor` + `wageFactor`). Bericht „Tage pro Stadt“:
+  Berlin komplett nach 8/7/6/14/13/8/8/7 Tagen (Median 8, Richtwert 8 bis 15), Hamburg danach als dritte Stadt nach
+  6/6/14/11/6/11/15/8 Tagen, keine Pleite. Gemessen, was das Tempo bestimmt: Ohne Dämpfung nahm der Bot ganz Berlin in
+  zwei bis fünf Tagen (über 1.100 Verkäufe am Tag an 40 billigen Spots mit viel Nachtleben, jeder Verkauf bringt
+  Einfluss); `SALE_INFLUENCE_FACTOR_BY_CITY.berlin` 0,4 → 5 bis 16 Tage, 0,3 → 6 bis 14, 0,25 → 7 bis 21. Die Streuung
+  zwischen zwei Läufen ist groß (Würfelfolge). Kam der Bot nur mit dem Mindest-Startgeld an (39.000 €), blieb Berlin bei
+  einem Seed über 30 Tage hängen, deshalb `START_MONEY_MIN_BY_CITY.berlin` 45.000 € (wie Hamburg; 55.000 € brachten im
+  Schnitt nichts). Der Bot schaltet die Clubs als teuerste Spots zuletzt frei, das Wochenend-Geschäft der Clubs steckt
+  also kaum in diesen Zahlen. Stellschrauben: `territory/config.ts` `SALE_INFLUENCE_FACTOR_BY_CITY` (Berlin 0,3, wirkt
+  am stärksten), `city/config.ts` `START_MONEY_MIN_BY_CITY`, Andrang der Spots und Clubs in `spots/config-berlin.ts`,
+  `nightlife` in `veedel/data-berlin.ts`, Stärke der Gangs in `gangs/data.ts`.
 
 ## Städte (Auftrag 30)
 

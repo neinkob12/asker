@@ -141,7 +141,7 @@ export const HANDOVER_START_MONEY_DAYS = 10;
  * Mindest-Startgeld pro Zielstadt (Planungs-Session nach dem Review): Unter etwa 40.000 € blieb der Bot in Hamburg
  * hängen, mit 45.000 € kam er in 13 bis 17 Tagen durch. Für die weiteren Städte nach ihrem propertyFactor skaliert
  * (30.000 € je Faktor 1, Hamburg 1,5). Keine Obergrenze: Wer mehr verdient, bringt mehr mit. Berlin (Auftrag 37): mit
- * 39.000 € blieb der Bot bei einem Seed über 30 Tage hängen, mit 45.000 € (wie Hamburg) kam er in 7 bis 17 Tagen durch.
+ * 39.000 € blieb der Bot bei einem Seed über 30 Tage hängen, mit 45.000 € (wie Hamburg) kam er in 6 bis 14 Tagen durch.
  */
 export const START_MONEY_MIN_BY_CITY: Readonly<Record<string, number>> = {
   hamburg: 45_000,

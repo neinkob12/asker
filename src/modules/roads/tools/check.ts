@@ -9,9 +9,9 @@
 // die A1, interCityRoute). Fehler nennen Ort und Abstand.
 
 import { distanceMeters, type GameState, type LngLat } from '../../../core';
-import { getCity, playableCities } from '../../city';
+import { playableCities } from '../../city';
 import { warehouseSites } from '../../goods';
-import { portPlace } from '../../logistics';
+import { PORTS, portPlace } from '../../logistics';
 import { getAllSpots, spotCity } from '../../spots';
 import { getSuppliers, supplierVia } from '../../suppliers';
 import { nearestRoadPoint, roadEntryFrom, roadRoute } from '../index';
@@ -43,14 +43,14 @@ function cityPlaces(
   cityId: string,
   center: LngLat,
 ): { spots: Place[]; warehouses: Place[]; port: Place | null; center: LngLat } {
-  // Städte ohne Hafen (Berlin): kein Hafen zu prüfen (portPlace fiele sonst auf den Kölner zurück).
-  const port = getCity(cityId)?.portId ? portPlace(cityId) : null;
+  // Städte ohne Hafen (Auftrag 39: Frankfurt) prüfen keinen; portPlace gäbe sonst den Kölner zurück.
+  const port = PORTS[cityId] ? portPlace(cityId) : null;
   return {
     spots: getAllSpots(state)
       .filter((s) => spotCity(s) === cityId)
       .map((s) => ({ name: `Spot ${s.name}`, lng: s.lng, lat: s.lat })),
     warehouses: warehouseSites(cityId).map((w) => ({ name: `Lager ${w.name}`, lng: w.lng, lat: w.lat })),
-    port: port ? { name: `Hafen ${port.name}`, lng: port.lng, lat: port.lat } : null,
+    port: port && { name: `Hafen ${port.name}`, lng: port.lng, lat: port.lat },
     center,
   };
 }
@@ -140,10 +140,11 @@ function checkCity(
 export function checkedCounts(state: GameState): { places: number; routes: number } {
   let places = 0;
   let routes = 0;
-  for (const { cityId, spots, warehouses } of allPlaces(state)) {
+  for (const { cityId, spots, warehouses, port } of allPlaces(state)) {
+    const ports = port ? 1 : 0;
     places +=
-      spots.length + warehouses.length + 1 + getSuppliers(state, cityId).filter((s) => s.kind === 'city').length;
-    routes += warehouses.length * (spots.length * 2 + 2);
+      spots.length + warehouses.length + ports + getSuppliers(state, cityId).filter((s) => s.kind === 'city').length;
+    routes += warehouses.length * (spots.length * 2 + 2 * ports);
   }
   return { places, routes };
 }

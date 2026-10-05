@@ -299,7 +299,7 @@ export const GANGS: readonly Gang[] = [
     crew: 'Cousins der Kotti-Familie',
     emblem: '🗝',
     style: 'Eine große Familie von der Sonnenallee bis zum Kotti. Jeder Späti, jede Shisha-Bar gehört einem Cousin.',
-    strengths: ['viele Leute', 'zusammenhalt'],
+    strengths: ['viele Leute', 'Zusammenhalt'],
     weakness: 'Streit, sobald es um die Erbfolge geht',
     traits: {
       aggression: 1.4,

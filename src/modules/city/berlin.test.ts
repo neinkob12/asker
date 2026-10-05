@@ -5,7 +5,7 @@ import { clock, loadSimulation } from '../../core';
 import { createTestGame } from '../../core/testing';
 import { CITY_EVENTS } from '../events';
 import { GANG_RIVALRY, getGangStatus, getGangs } from '../gangs';
-import { warehouseSites } from '../goods';
+import { store, warehouseSites } from '../goods';
 import { roadRoute } from '../roads';
 import { getAllSpots, isSpotOpen, nextSpotOpening, spotCity, spotHoursLabel } from '../spots';
 import { getSupplier, isUnlocked, packagePrice } from '../suppliers';
@@ -89,6 +89,52 @@ describe('Berlin (Auftrag 37)', () => {
     expect(nextSpotOpening(club, at(2, 10) + 17)).toBe(at(4, 22));
     expect(nextSpotOpening(club, at(5, 3))).toBe(at(5, 3));
     expect(spotHoursLabel(club)).toBe('Fr 22 – Mo 8 Uhr');
+  });
+
+  it('Stammkunden eines Clubs kommen erst, wenn er offen hat (nicht am Mittwochnachmittag)', () => {
+    const sim = createTestGame();
+    sim.state.modules.customers.directOrders = false;
+    sim.state.wallet.dirty = 50_000;
+    sim.state.wallet.clean = 20_000;
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'berlin' } }, { actor: 'system' });
+    expect(sim.dispatch({ type: 'city.switch', payload: { cityId: 'berlin' } }).ok).toBe(true);
+    sim.state.modules.city.present = 'berlin';
+    expect(sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'keller-friedrichshain' } }).ok).toBe(
+      true,
+    );
+    store(sim.ctx('goods'), { productId: 'weed', amount: 500, warehouseId: 'keller-friedrichshain', quality: 0.8 });
+    expect(sim.dispatch({ type: 'spots.unlock', payload: { spotId: 'club-halle-ost' } }).ok).toBe(true);
+    // Spieltag 1 ist ein Freitag, Tag 6 also Mittwoch, Tag 8 Freitag.
+    const wednesday = clock.at(6, 14);
+    const friday = clock.at(8, 22);
+    sim.state.time = wednesday - 30;
+    const customers = sim.state.modules.customers;
+    for (const key of Object.keys(customers.nextSpawnAt)) customers.nextSpawnAt[key] = Infinity;
+    customers.regulars.push({
+      id: 'regular-club',
+      name: 'Stammgast',
+      typeId: 'party',
+      spotId: 'club-halle-ost',
+      productId: 'weed',
+      amount: 2,
+      visits: 3,
+      lastPrice: 10,
+      lastQuality: 0.8,
+      satisfaction: 0.9,
+      since: 0,
+      nextVisitAt: wednesday,
+      status: 'active',
+    });
+    sim.advance(90);
+    const regular = () => customers.regulars.find((r) => r.id === 'regular-club');
+    expect(customers.waiting.some((c) => c.regularId === 'regular-club')).toBe(false);
+    expect(regular()?.nextVisitAt).toBe(friday + 30);
+    for (const key of Object.keys(customers.nextSpawnAt)) customers.nextSpawnAt[key] = Infinity;
+    sim.advance(friday + 31 - sim.state.time);
+    // Freitagnacht: Er kommt (wartet am Club oder hat schon gekauft und plant den nächsten Besuch).
+    expect(
+      customers.waiting.some((c) => c.regularId === 'regular-club') || (regular()?.nextVisitAt ?? 0) > friday + 30,
+    ).toBe(true);
   });
 
   it('die Nacht: viel Nachtleben, die Polizei lockerer als in Köln', () => {

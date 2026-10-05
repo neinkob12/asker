@@ -297,7 +297,7 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
         },
       });
     },
-    /** Berlin frei (ohne Übergabe), dorthin umgeschaltet und angekommen, z.B. um die Stadt anzuschauen (Auftrag 37). */
+    /** Berlin frei (ohne Übergabe), z.B. um die Stadt anzuschauen (Auftrag 37). */
     berlinFrei: () => {
       const s = sim();
       s.dispatch({ type: 'city.unlock', payload: { cityId: 'berlin' } }, { actor: 'system' });

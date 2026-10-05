@@ -26,7 +26,7 @@ export interface Landmark {
   id: string;
   name: string;
   /** Stadt, zu der das Wahrzeichen gehört (Kennung wie im Modul city, Auftrag 30). */
-  city: 'koeln' | 'hamburg' | 'berlin';
+  city: string;
   center: LngLat;
   /** Richtung der lokalen forward-Achse (Kompass). */
   heading: number;

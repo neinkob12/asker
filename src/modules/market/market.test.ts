@@ -179,8 +179,10 @@ describe('market: eigene Preise', () => {
 });
 
 describe('market: Preisindex (Auftrag 32)', () => {
-  it('startet bei 1 und macht um Mitternacht einen Schritt, in allen Städten', () => {
+  it('startet bei 1 und macht um Mitternacht einen Schritt, in allen freien Städten', () => {
     const sim = createTestGame();
+    // Nicht freie Städte würfeln nicht mit (Auftrag 39), Hamburg ist für den Test frei.
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
     expect(priceIndex(sim.state, 'weed', 'koeln')).toBe(1);
     expect(indexTrend(sim.state, 'weed')).toBeNull();
     // Start 18 Uhr: sechs Stunden bis Mitternacht.
@@ -192,10 +194,12 @@ describe('market: Preisindex (Auftrag 32)', () => {
     expect(Object.keys(koeln)).toHaveLength(allProducts().length);
     expect(Object.keys(hamburg)).toHaveLength(allProducts().length);
     expect(Object.values(koeln).some((v) => v !== 1)).toBe(true);
+    expect(sim.state.modules.market.index.frankfurt).toBeUndefined();
   });
 
   it('bleibt über 60 Tage zwischen INDEX_MIN und INDEX_MAX und kehrt zur Mitte zurück', () => {
     const sim = createTestGame({ seed: 7 });
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
     const seen: number[] = [];
     for (let day = 0; day < 60; day++) {
       sim.advance(24 * 60);
