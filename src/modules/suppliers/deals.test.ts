@@ -33,7 +33,8 @@ describe('suppliers: Rabatt-Aktionen', () => {
       );
       expect(msg?.text).toContain(`${Math.round(e.payload.discount * 100)} %`);
     }
-  });
+    // Mehrere Wochen Spielzeit: unter Last knapp über den 5 Sekunden Standard.
+  }, 30_000);
 
   it('der Rabatt gilt nur für das Paket, die Stadt und die Laufzeit', () => {
     const sim = createTestGame();

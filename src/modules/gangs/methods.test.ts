@@ -349,7 +349,8 @@ describe('Gang-Methoden (Auftrag 23)', () => {
     }
     expect(warned).toBeGreaterThan(0);
     expect(favored).toBeGreaterThan(0);
-  });
+    // Sechs Spiele über Wochen: unter Last knapp über den 5 Sekunden Standard.
+  }, 30_000);
 
   it('Abklingzeiten: eine drohende Gang zeigt in etwa acht Tagen eine Methode, aber es hagelt nicht', () => {
     let shown = 0;
