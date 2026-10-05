@@ -270,16 +270,20 @@ registerSearch({
   id: 'police.search',
   label: 'Polizei',
   order: 60,
-  items: (state) => [
-    {
-      id: 'police.tier',
-      title: 'Polizei',
-      subtitle: `So sieht dich die Polizei: ${operationTier(state).name}`,
-      icon: 'siren',
-      keywords: 'Razzia Großrazzia Heat Kripo Stufe',
-      run: (ui) => ui.selectTab('territory'),
-    },
-  ],
+  // Nach dem Verkauf gibt es keine Polizei-Stufe mehr, nur den Zoll (Auftrag 43).
+  items: (state) =>
+    isBusinessSold(state)
+      ? []
+      : [
+          {
+            id: 'police.tier',
+            title: 'Polizei',
+            subtitle: `So sieht dich die Polizei: ${operationTier(state).name}`,
+            icon: 'siren',
+            keywords: 'Razzia Großrazzia Heat Kripo Stufe',
+            run: (ui) => ui.selectTab('territory'),
+          },
+        ],
 });
 registerHudItem({ id: 'police.heat', order: 30, placement: 'main', component: HeatHud });
 registerSlot('veedel.veedelPanel', { id: 'police.heat', order: 20, component: PoliceSection });

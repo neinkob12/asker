@@ -73,7 +73,7 @@ function FleetGroup() {
   const { state, dispatch } = useGame();
   const [ask, setAsk] = useState<Ask>(null);
   const cityId = activeCity(state);
-  // Schiffe stehen in der Kunden-App (trade, Hafen), nicht hier.
+  // Schiffe stehen in der App Handel (trade, Hafen), nicht hier.
   const vehicles = getVehicles(state, cityId).filter((v) => !isShip(v));
   // Den Lkw gibt es nur in der Hafen-Phase an einem Ort im Ausland (Auftrag 40).
   const abroad = getCity(cityId)?.abroad === true;

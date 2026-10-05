@@ -3,6 +3,7 @@
 
 import { formatEuro, formatPercent } from '../../../core';
 import { Group, ItemContent, List, ListItem, registerPanel, registerSearch, Slot, useGame, useUi } from '../../../ui';
+import { activeCity } from '../../city';
 import { waitingAt } from '../../customers';
 import { getSpots, lockedSpots } from '../../spots';
 import { allVeedel, getVeedel, neighborsOf, sharesBorder, veedelLinks, veedelName } from '../index';
@@ -127,8 +128,9 @@ registerSearch({
   id: 'veedel.search',
   label: 'Veedel',
   order: 20,
-  items: () =>
-    allVeedel().map((v) => ({
+  // Nur die Veedel der Stadt, in der du bist (Auftrag 43).
+  items: (state) =>
+    allVeedel(activeCity(state)).map((v) => ({
       id: v.id,
       title: v.name,
       subtitle: v.district,

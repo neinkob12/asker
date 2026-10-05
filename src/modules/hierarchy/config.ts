@@ -203,7 +203,7 @@ export const RIGHT_HAND_TASKS: readonly {
   },
   {
     key: 'restock',
-    name: 'Nachbestellen für ganz Köln',
+    name: 'Nachbestellen für die ganze Stadt',
     hint: 'Bestellt nach ihren Regeln (Ware, Lieferant, Mindestbestand) mit eigenem Tagesbudget ins Hauptlager.',
     icon: 'boxes',
     rank: 2,

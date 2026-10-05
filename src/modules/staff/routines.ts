@@ -134,7 +134,9 @@ function serveCustomers(ctx: Ctx): void {
 /** Zur vollen Stunde: Sicherheit im Einsatz sammelt Erfahrung, Abgetauchte kehren zurück. */
 export function hourly(ctx: Ctx): void {
   for (const m of ctx.state.modules.staff.members) {
-    if (m.role === 'security' && m.status === 'active' && m.assignment) addXp(ctx, m.id, XP_PER_DUTY_HOUR);
+    // Nur in der Stadt, die live ist (Auftrag 43): Eine schlafende Stadt steht still, auch für die Erfahrung.
+    const onDuty = m.role === 'security' && m.status === 'active' && m.assignment;
+    if (onDuty && isMemberLive(ctx.state, m)) addXp(ctx, m.id, XP_PER_DUTY_HOUR);
   }
   returnFromHiding(ctx);
 }

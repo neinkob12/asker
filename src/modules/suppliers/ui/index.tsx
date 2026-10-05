@@ -605,7 +605,7 @@ registerPhoneApp({
   color: 'goods',
   chrome: 'none',
   component: SuppliersApp,
-  // Nach dem Verkauf kauft man in der Kunden-App ein (Auftrag 43); die Seite verweist dorthin, falls sie jemand öffnet.
+  // Nach dem Verkauf kauft man in der App Handel ein (Auftrag 43); die Seite verweist dorthin, falls sie jemand öffnet.
   hiddenWhen: isBusinessSold,
   // Gesperrt wegen Schulden oder bereit zum Freischalten.
   badge: (state) =>
@@ -645,7 +645,7 @@ onGameEvent('supplier.unlocked', 'suppliers.unlockedToast', (payload, ui, state)
 registerAdvisor({
   id: 'suppliers.restock',
   advise: (state) => {
-    // Nach dem Verkauf rät die Kunden-App (trade), wo Ware fehlt.
+    // Nach dem Verkauf rät die App Handel (trade), wo Ware fehlt.
     if (isBusinessSold(state)) return null;
     if (shipmentsInTransit(state, activeCity(state)).length > 0 || cargoAmount(state) > 0 || inTransitAmount(state) > 0)
       return null;

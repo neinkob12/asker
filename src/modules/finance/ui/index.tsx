@@ -32,7 +32,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { citiesUnlocked, cityName, cityOfSpot, isBusinessSold } from '../../city';
+import { activeCity, citiesUnlocked, cityName, cityOfSpot, isBusinessSold } from '../../city';
 import { getLieutenantIds, lieutenantOfSpot } from '../../hierarchy';
 import { getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
@@ -145,7 +145,7 @@ function filterOptions(state: GameState): SelectOption[] {
   // Nach dem Verkauf (Auftrag 40) gibt es keine Kasse pro Stadt mehr; die Städte bleiben nur als Rückblick.
   const sold = isBusinessSold(state);
   return [
-    { value: 'all', label: sold ? 'Alles' : cities.length > 1 ? 'Alle Städte' : 'Ganz Köln' },
+    { value: 'all', label: sold ? 'Alles' : cities.length > 1 ? 'Alle Städte' : `Ganz ${cityName(activeCity(state))}` },
     ...(cities.length > 1 ? cities.map((id) => ({ value: `city:${id}`, label: `Stadt ${cityName(id)}` })) : []),
     ...veedel.map((id) => ({ value: `veedel:${id}`, label: `Veedel ${veedelName(id)}` })),
     ...[...spots]
@@ -163,7 +163,7 @@ function filterLabel(state: GameState, f: FinanceFilter): string {
   if (f.kind === 'veedel') return veedelName(f.veedelId);
   if (f.kind === 'spot') return getSpot(state, f.spotId)?.name ?? 'Spot';
   if (f.kind === 'lieutenant') return getStaffMember(state, f.staffId)?.name ?? 'Leutnant';
-  return 'Ganz Köln';
+  return citiesUnlocked(state).length > 1 ? 'Alle Städte' : `Ganz ${cityName(activeCity(state))}`;
 }
 
 /** Zeilen einer Gruppe (Einnahmen, Ausgaben, Verluste); ein Tipp öffnet die größten Posten (nur für ganz Köln). */
@@ -451,7 +451,12 @@ function Runway() {
 function FinanceApp() {
   const { state } = useGame();
   const [period, setPeriod] = useState<Period>('today');
-  const [filter, setFilter] = useState<FinanceFilter>(ALL_FILTER);
+  // Ab zwei Städten zuerst die Stadt, in der du bist (Auftrag 43), nach dem Verkauf alles.
+  const [filter, setFilter] = useState<FinanceFilter>(() =>
+    citiesUnlocked(state).length > 1 && !isBusinessSold(state)
+      ? { kind: 'city', cityId: activeCity(state) }
+      : ALL_FILTER,
+  );
   const options = filterOptions(state);
   const encoded = encodeFilter(filter);
   // Ein Filter auf etwas, das es nicht mehr gibt (gelöschter Spot), fällt auf ganz Köln zurück.
@@ -581,11 +586,13 @@ registerSearch({
   id: 'finance.search',
   label: 'Kasse',
   order: 5,
-  items: () => [
+  items: (state) => [
     {
       id: 'finance.app',
       title: 'Kasse',
-      subtitle: 'Bilanz: Gewinn, Einnahmen, Ausgaben, pro Veedel, Spot und Leutnant',
+      subtitle: isBusinessSold(state)
+        ? 'Bilanz: Gewinn, Einnahmen, Ausgaben'
+        : 'Bilanz: Gewinn, Einnahmen, Ausgaben, pro Veedel, Spot und Leutnant',
       icon: 'cash',
       keywords: 'Bilanz Gewinn Verlust Umsatz Löhne Geld Ausgaben Einnahmen Tagesbilanz Wochenbilanz',
       run: openFinance,

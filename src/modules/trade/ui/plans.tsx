@@ -11,6 +11,7 @@ import {
   Chip,
   Chips,
   Group,
+  Hint,
   Icon,
   ItemContent,
   List,
@@ -24,6 +25,7 @@ import {
   useUi,
 } from '../../../ui';
 import { HARBOR_CITY } from '../../city';
+import { getVehicles, isShip } from '../../fleet';
 import { productName } from '../../goods';
 import {
   ACCEPT_LABELS,
@@ -31,6 +33,7 @@ import {
   type ContainerSize,
   CUSTOMER_KINDS,
   type CustomerPlan,
+  customerBlocked,
   customerContact,
   DELIVER_LABELS,
   europeCityOf,
@@ -65,6 +68,8 @@ const DELIVER_SHORT: Record<CustomerPlan['deliver'], string> = { off: 'Selbst', 
 
 /** Die zwei Schalter eines Plans: annehmen und ausliefern. */
 function PlanControls(props: { plan: CustomerPlan; onChange: (patch: Partial<CustomerPlan>) => void }) {
+  const { state } = useGame();
+  const hasTruck = getVehicles(state, HARBOR_CITY).some((v) => !isShip(v));
   return (
     <List>
       <ListItem>
@@ -110,10 +115,13 @@ function PlanControls(props: { plan: CustomerPlan; onChange: (patch: Partial<Cus
           wide
           aria-label="Ausliefern"
           value={props.plan.deliver}
-          options={(Object.keys(DELIVER_SHORT) as CustomerPlan['deliver'][]).map((v) => ({
-            value: v,
-            label: DELIVER_SHORT[v],
-          }))}
+          // „Lkw“ erst mit eigenem Lkw (Auftrag 43: sonst fuhr still die Spedition).
+          options={(Object.keys(DELIVER_SHORT) as CustomerPlan['deliver'][])
+            .filter((v) => v !== 'truck' || hasTruck || props.plan.deliver === 'truck')
+            .map((v) => ({
+              value: v,
+              label: DELIVER_SHORT[v],
+            }))}
           onChange={(deliver) => props.onChange({ deliver })}
         />
       </ListItem>
@@ -417,6 +425,12 @@ function CustomerPanel(props: { customerId: string }) {
           </Chip>
         )}
       </Chips>
+      {customerBlocked(state, c) && (
+        <Hint icon="fist">
+          Die Gang hat aus der Zeit in der Stadt noch eine Rechnung mit dir offen und kauft nicht bei dir. Das verblasst
+          mit der Zeit.
+        </Hint>
+      )}
       <Group title="Bedarf pro Woche" icon="package" color="goods" note="Davon bestellt er deinen Anteil bei dir.">
         <List>
           {weekly.map(([productId, grams]) => (

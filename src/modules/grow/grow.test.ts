@@ -130,7 +130,7 @@ describe('Produktion: Auslöser (Auftrag 42, Etappe 1)', () => {
     expect(sim.dispatch({ type: 'grow.openRegion', payload: { regionId: 'atlantis' } }).ok).toBe(false);
   });
 
-  it('wer das Angebot in der Kunden-App annimmt, bekommt keinen Rückruf mehr mit demselben Angebot', () => {
+  it('wer das Angebot in der App Handel annimmt, bekommt keinen Rückruf mehr mit demselben Angebot', () => {
     const sim = soldGame();
     const events = recordEvents(sim);
     readyForCalls(sim);

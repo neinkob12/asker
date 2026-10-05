@@ -25,7 +25,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, offerStatus } from '../../city';
+import { activeCity, cityName, isBusinessSold, offerStatus } from '../../city';
 import { getStaff, getStaffMember, roleName } from '../../staff';
 import { campaignProgress } from '../../territory';
 import {
@@ -84,7 +84,7 @@ export function RightHandSheet(props: { open: boolean; onClose: () => void }) {
           icon="crown"
           color="brand"
           note={`Ab Level ${RIGHT_HAND_MIN_LEVEL} und Loyalität ${RIGHT_HAND_MIN_LOYALTY}.`}
-          more="Die Rechte Hand will etwa das 2,5-Fache vom Lohn und steht an keinem Spot. Nur sie nimmt Aufträge an und fährt sie aus; mit ihren Aufgaben hält sie Köln am Laufen."
+          more={`Die Rechte Hand will etwa das 2,5-Fache vom Lohn und steht an keinem Spot. Nur sie nimmt Aufträge an und fährt sie aus; mit ihren Aufgaben hält sie ${cityName(activeCity(state))} am Laufen.`}
         >
           {people.length === 0 ? (
             <Empty icon="users">Niemand im Team.</Empty>
@@ -382,7 +382,7 @@ function RightHandPage() {
         note={
           progress
             ? `Erfahrung ${progress[0]} von ${progress[1]} bis Stufe ${rank + 1}. Jede erledigte Aufgabe und jeder gute Tagesbericht zählen.`
-            : 'Höchste Stufe: Mit allen Aufgaben an läuft Köln ohne dich.'
+            : `Höchste Stufe: Mit allen Aufgaben an läuft ${cityName(activeCity(state))} ohne dich.`
         }
       >
         <List>
@@ -567,6 +567,21 @@ registerPanel({
 registerAdvisor({
   id: 'hierarchy.rightHand',
   advise: (state) => {
+    // Zurück in einer übergebenen Stadt (Auftrag 43): Hier führt der Statthalter; wer selbst wieder ran will, widerruft.
+    const city = activeCity(state);
+    const rh = getRightHand(state, city);
+    const keeper = rh ? getStaffMember(state, rh.staffId) : undefined;
+    if (hasFullPower(state, city) && keeper && !isBusinessSold(state)) {
+      return {
+        id: 'hierarchy.statthalter',
+        priority: 25,
+        icon: 'crown',
+        title: `${keeper.name} führt ${cityName(city)}`,
+        text: 'Als Statthalter mit Vollmacht. Willst du selbst wieder ran, widerrufst du sie auf der Seite des Statthalters.',
+        actionLabel: 'Statthalter',
+        action: (ui) => ui.openPanel('hierarchy.rightHand', {}),
+      };
+    }
     if (!rightHandOffered(state)) return null;
     const ready = getStaff(state, { cityId: activeCity(state) }).some((m) => canBeRightHand(state, m.id).ok);
     if (!ready) return null;

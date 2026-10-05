@@ -98,14 +98,17 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   Verschiffen), Behörden hoch, Pacht knapp; mehrere Räte statt einem, Angebot höher gewichten, `view: 'grow'`.
 - [x] D9 Eigene Ware zuerst: Fehlt Ware, bietet das Spiel zuerst das eigene Ausfuhrlager an (`producersFor`,
   `trade.missing`, „Diese Woche“); „Alles verschiffen“ im Verschiff-Panel; eigene Ernte im Hafen-Tab.
-- [ ] D10 Ziel „Europa“: wen man noch versorgen muss (Liste `missing`), Titel und Regel passen zusammen, zwei Hinweise.
+- [x] D10 Ziel „Europa“: wen man noch versorgen muss (Liste `missing`), Titel und Regel passen zusammen, zwei Hinweise.
+  Erledigt: Ziel „Europa“ mit Regel als Satz, den fehlenden Kunden und Städten als Chips (bis sechs, dann „+N“) und einer Zeile „So kommst du hin“ (Ruf für neue Städte, eigene Ernte für Kunden).
 - [x] D11 „Nächste Ernte“ netto nach dem Kartell-Anteil (oder beides).
 - [x] D12 Karte „Angebot“ auf der Karte öffnet ein Panel mit „Angebot annehmen“ (keine Sackgasse).
 - [x] D13 Finca-Panel lesbar: Leute ohne Pacht, „Als Nächstes pflanzen“, Währung an jedem Preis, Zoll-Faktor in Worten.
 - [x] D14 Kartell und Behörden mit Zahlen („von 100“, Chance und Verlust ohne Anteil); stilles Zurückfallen der
   Verpackung melden.
-- [ ] D15 HUD „Anbau“: Ausfuhr-kg, Tage bis zur Ernte, Warnfarbe bei Behörden oder Pacht.
-- [ ] D16 Europa-Ansicht am Desktop: Das Handy verdeckt Rotterdam und Marokko (Padding rechts mit dem Handy).
+- [x] D15 HUD „Anbau“: Ausfuhr-kg, Tage bis zur Ernte, Warnfarbe bei Behörden oder Pacht.
+  Erledigt: HUD „Anbau“ (`grow.hud`): Ware im Ausfuhrlager bzw. Tage bis zur Ernte, rot bei offener Pacht, offenen Löhnen, Stillstand oder Behörden ab 45; Tipp öffnet Handel › Anbau.
+- [x] D16 Europa-Ansicht am Desktop: Das Handy verdeckt Rotterdam und Marokko (Padding rechts mit dem Handy).
+  Erledigt: Der Rahmen der Übersicht rechnet am Desktop die Breite des Handys ein.
 
 ## E. Prüfer „Städte“ (Sonnet-Agent, 05.10.2026): Was aus der alten Stadt noch durchsickert
 
@@ -130,17 +133,24 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] E9 Neue Stadt ohne sichtbaren ersten Schritt: Willkommen still, Rat „Läufer anheuern“ aus, sobald irgendwo
   jemand arbeitet, „Liegeplatz“ vor dem ersten Lager, Reviere-Ziel fest auf Köln, zu wenig sauberes Geld fürs Lager.
   Erledigt: Begrüßung nicht mehr still; Rat „Lager in <Stadt> kaufen“ bzw. „Geld waschen für ein Lager“ (fehlender Betrag); Liegeplatz-Rat erst mit Lager; Reviere-Ziel und Spielende-Statistik pro Stadt (`campaignProgress` stand ohne Stadt auf Köln). Läufer-Rat war schon pro Stadt.
-- [ ] E10 Sicherheitsleute schlafender Städte sammeln Erfahrung, Level-Meldungen kommen in der neuen Stadt.
-- [ ] E11 Fahrer-Zählung über Städte bei Rechter Hand und Bestellregeln (`orders.ts`, `tasks.ts`).
-- [ ] E12 Personal-Aufgabe der Rechten Hand läuft über Leutnants aller Städte; `replaceAbsent` prüft die Stadt nicht.
-- [ ] E13 Die Kasse zeigt in der neuen Stadt zuerst alle Städte (Standardfilter = aktive Stadt).
-- [ ] E14 Quest-Belohnungen „Team-Erfahrung“ und „Loyalität“ gehen an alle Städte.
-- [ ] E15 Fest verdrahtete „Köln“-Texte in jeder Stadt (Rechte Hand, Kasse, Hafen, Reviere).
+- [x] E10 Sicherheitsleute schlafender Städte sammeln Erfahrung, Level-Meldungen kommen in der neuen Stadt.
+  Erledigt: Erfahrung im Dienst nur in der Stadt, die live ist; Banner für Level, Verletzung und Ärger nur für Leute der aktiven Stadt.
+- [x] E11 Fahrer-Zählung über Städte bei Rechter Hand und Bestellregeln (`orders.ts`, `tasks.ts`).
+  Erledigt: Fahrer der aktiven Stadt in `isPortSupplierAllowed` und im Hinweis der Aufgabe „Hafen abholen“.
+- [x] E12 Personal-Aufgabe der Rechten Hand läuft über Leutnants aller Städte; `replaceAbsent` prüft die Stadt nicht.
+  Erledigt: Die Aufgabe „Personal“ der Rechten Hand schaut nur auf Leutnants ihrer Stadt; `staff.replace` ersetzt nur in der aktiven Stadt.
+- [x] E13 Die Kasse zeigt in der neuen Stadt zuerst alle Städte (Standardfilter = aktive Stadt).
+  Erledigt: Ab zwei Städten zeigt die Kasse zuerst die aktive Stadt (nach dem Verkauf alles).
+- [x] E14 Quest-Belohnungen „Team-Erfahrung“ und „Loyalität“ gehen an alle Städte.
+  Erledigt: „Erfahrung fürs Team“ und „Loyalität fürs Team“ gehen an die Leute der aktiven Stadt.
+- [x] E15 Fest verdrahtete „Köln“-Texte in jeder Stadt (Rechte Hand, Kasse, Hafen, Reviere).
+  Erledigt: Kasse („Ganz <Stadt>“ bzw. „Alle Städte“), Rechte Hand (Stadtname), Aufgabe „Nachbestellen für die ganze Stadt“; Reviere-Ziel war schon in E9.
 - [x] E16 Bewerber-Pool beim Stadtwechsel nicht erneuert (Lohn und Handgeld der alten Stadt).
   Erledigt: Bewerber tragen `cityId` (Migration `recruiting` 5), Pool und Kontakte pro Stadt, einstellen nur in der aktiven Stadt; bei Ankunft oder Wechsel in eine Stadt ohne Bewerber kommen gleich `POOL_START` von dort.
 - [x] E17 Lieferant begrüßt „Du bist in Berlin“ schon bei der Abfahrt (auf `city.arrived` legen).
   Erledigt: Hein, Mirko, Toni und Kofi sind mit der Stadt frei, melden sich aber erst bei der ersten Ankunft (`city.arrived`).
-- [ ] E18 (Designfrage) Zurück in einer übergebenen Stadt: Hinweis, dass man die Vollmacht zurücknehmen kann.
+- [x] E18 (Designfrage) Zurück in einer übergebenen Stadt: Hinweis, dass man die Vollmacht zurücknehmen kann.
+  Erledigt: Rat „<Name> führt <Stadt>“ in einer Stadt mit Statthalter: Vollmacht widerrufen auf seiner Seite (niedrige Priorität, nur ein Hinweis).
 
 ## F Hafen-Prüfer (Spieltest Rotterdam ab `deutschland`, 05.10.2026)
 
@@ -166,24 +176,32 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] F7 Fristen und Folgen erklären: Fußnote aus der echten Frist, Guide mit Ankunfts-Runde, Strafe für Platzen,
   sauberes Geld, Laufzeit der Container gegen die Frist.
   Erledigt: Fußnote aus der echten Frist; Guide mit fünf Schritten (wo tippen, Ankunftsrunde, Laufzeit der Container aus den Daten, Frist, Nachfrist, Abschlag, Folgen, sauberes Geld).
-- [ ] F8 Gesperrte Gang-Kunden (Anteil 0 %, Rache) mit Chip und Grund oder ausblenden.
-- [ ] F9 Europa-Karte: Karten überlappen (Rotterdam/Amsterdam/Antwerpen, Düsseldorf über Köln), Knopf „Europa“.
+- [x] F8 Gesperrte Gang-Kunden (Anteil 0 %, Rache) mit Chip und Grund oder ausblenden.
+  Erledigt: `customerBlocked` (exportiert): Chip „kauft nicht bei dir“ in der Kundenliste, Satz mit Grund auf der Kunden-Seite.
+- [x] F9 Europa-Karte: Karten überlappen (Rotterdam/Amsterdam/Antwerpen, Düsseldorf über Köln), Knopf „Europa“.
+  Erledigt: `declutterCards` in `src/map` (Klasse `MAP_CARD`, `data-priority`): Karten, die eine wichtigere überdecken würden, werden zum Punkt (Häfen vor Kunden mit Bestellung vor dem Rest, eigene Stadt zuerst). Knopf „Übersicht“ (Globus) in der Kartensteuerung.
 - [x] F10 Einkaufsliste mit Preis ab €/g und „Tage“ ausgeschrieben, alle Waren; im Panel offener Bedarf.
   Erledigt: Einkaufsliste mit „ab … €/g“ (großer Container mit Fracht), allen Waren und „Tage“ ausgeschrieben; im Einkauf-Panel offener Bedarf gegen Bestand und Container unterwegs.
 - [x] F11 „Zoll X %“ heißt dreierlei: Kontrollchance, Grenzchance, Strenge. Eindeutig benennen.
   Erledigt: „Kontrolle X %“ an Lieferungen (mit Satz zur Beschlagnahme), „Grenzkontrolle X %“ bei Europa, Häfen „Zoll lasch/normal/streng“.
-- [ ] F12 Personal-App in Rotterdam lockt mit Bewerbern (Badge), die dort nichts tun können.
-- [ ] F13 Gegenangebot: „du bleibst vorn“ hervorheben, Vertrag „Fester Preis“, Konkurrenz erklären.
+- [x] F12 Personal-App in Rotterdam lockt mit Bewerbern (Badge), die dort nichts tun können.
+  Erledigt: Reiter Personal nach dem Verkauf aus (`hiddenWhen`), Badge zählt nur Inhaftierte der aktiven Stadt; nach dem Verkauf kommen keine Bewerber mehr.
+- [x] F13 Gegenangebot: „du bleibst vorn“ hervorheben, Vertrag „Fester Preis“, Konkurrenz erklären.
+  Erledigt: Gegenangebot-Stufen ohne Doppelte, Stufen mit Verlust an die Konkurrenz rot; Vertrag „Fester Preis aus dem Abnahmevertrag“; Satz zur Preisgrenze und zur Konkurrenz (alte Lieferanten).
 - [x] F14 Großrazzia der alten Stadt im Dynamic Island (`police/ui/island.ts` ohne Stadtfilter); beim Verkauf leeren.
   Erledigt: Island zeigt die Großrazzia nur in der aktiven Stadt; beim Verkauf fallen geplante Razzien weg; eine wartende Großrazzia einer schlafenden Stadt blockiert die aktive Stadt nicht mehr.
-- [ ] F15 „Alle ausliefern (Spedition)“; Lkw-Stufe im Plan nur mit Lkw; Verträge vor Gangs bei der Deckung.
+- [x] F15 „Alle ausliefern (Spedition)“; Lkw-Stufe im Plan nur mit Lkw; Verträge vor Gangs bei der Deckung.
+  Erledigt: „Alle mit Ware ausliefern (Spedition)“ in „Zu liefern“; Plan-Stufe „Lkw“ erst mit eigenem Lkw; Verträge zuerst bei der Deckung (`orderCoverage`).
 - [x] F16 Waren-Leiste bei Jansen abgeschnitten (ab 4 Waren `Select`).
   Erledigt: Ab vier Waren eine Auswahl (`Select`) statt Reitern.
 - [x] F17 Tippfehler „lange genug genug“ (`NextStageGroup`).
   Erledigt: Tippfehler behoben.
-- [ ] F18 Köln-Reste in der Suche (Spots, Veedel) und Texten (Kasse, Geldwäsche) nach dem Verkauf.
-- [ ] F19 Test-Spielstände `hafen`/`hafen-europa` neu erzeugen, „Ankunft in Rotterdam“ vor dem ersten Bot-Zug.
-- [ ] F20 App „Kunden“ heißt besser „Handel“ (Reiter „Kunden“ bleibt).
+- [x] F18 Köln-Reste in der Suche (Spots, Veedel) und Texten (Kasse, Geldwäsche) nach dem Verkauf.
+  Erledigt: Suche nur mit Spots und Veedeln der aktiven Stadt, Polizei-Eintrag nach dem Verkauf aus, Kasse-Untertitel ohne Veedel/Spot/Leutnant.
+- [x] F19 Test-Spielstände `hafen`/`hafen-europa` neu erzeugen, „Ankunft in Rotterdam“ vor dem ersten Bot-Zug.
+  Erledigt: Alle Test-Spielstände neu gebaut (`npm run saves:build`); „hafen“ ist der Moment der Ankunft in Rotterdam, vor dem ersten Bot-Zug.
+- [x] F20 App „Kunden“ heißt besser „Handel“ (Reiter „Kunden“ bleibt).
+  Erledigt: App heißt „Handel“ (Titel, Quest-Hinweise, Texte), der Reiter „Kunden“ bleibt.
 
 ## Neue Funde
 
@@ -192,10 +210,12 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   Kölner Niehler Hafen mit „Liegeplatz mieten“, die Lieferanten-App war leer. Beide führen jetzt nach dem Verkauf in
   die Kunden-App, Bereich Hafen (Einkauf im Ausland); der Rat „Ware ist alle“ schweigt nach dem Verkauf.
 
-- [ ] N1 Lieferanten schreiben nach dem Umzug weiter Chats über Lieferungen in die alte Stadt („Freie Bahn. Bin früher
+- [x] N1 Lieferanten schreiben nach dem Umzug weiter Chats über Lieferungen in die alte Stadt („Freie Bahn. Bin früher
   da.“). Lieferungen für eine Stadt mit Statthalter still oder als Bericht des Statthalters.
+  Erledigt: `tellAbout`/`shipmentHere` in suppliers: Verspätung, Beschlagnahme, schlechte Ware und „früher da“ schreiben nur für Lieferungen in die aktive Stadt (sonst nur Journal), Rückfragen mit Frist nur dort.
 - [x] N2 Peters Quest-Leiste zeigt nach dem Umzug alte Kölner Quests (z.B. „Setz einen eigenen Preis“), wenn sie in
   Köln liegen geblieben sind; beim Umzug in eine neue Stadt sollte ihr Kapitel vorgehen.
   Erledigt: `followCity` im Quest-Tick: Bist du in einer Stadt mit eigenem Kapitel und die aktive Quest gehört woanders hin, macht Peter mit dem Kapitel der Stadt weiter; Liegengebliebenes aus Köln gilt als übersprungen.
-- [ ] N3 Bot, Seed 4: Hamburg hängt nach neun Stadtteilen 33 Tage an den letzten drei. Herausfinden, was blockiert
+- [x] N3 Bot, Seed 4: Hamburg hängt nach neun Stadtteilen 33 Tage an den letzten drei. Herausfinden, was blockiert
   (Gang zu stark, Bot verkauft dort nicht, Spots fehlen) und ob ein Spieler dort auch hängen bliebe.
+  Erledigt: Nicht mehr nachzustellen (Seed 4: Hamburg nach 9–10 Tagen komplett, Seeds 1 und 2 nach 6 bzw. 5). Dabei gefunden: Ware am Kai einer schlafenden Stadt wurde jede Stunde gegen ein volles Lager versucht und zählte jedes Mal als abgewiesen (94 % statt 2 %); der Bot baute deshalb Regale in der aktiven Stadt. `collectSleeping` versucht es nur noch mit Platz, Test in `logistics/sleeping.test.ts`.

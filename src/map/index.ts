@@ -49,8 +49,10 @@ export { type MapMood, mixColor, pastel } from './look';
 export {
   addHtmlMarker,
   addTargetMarker,
+  declutterCards,
   el,
   type HtmlMarkerOptions,
+  MAP_CARD,
   type MarkerTone,
   setText,
   type TargetMarker,

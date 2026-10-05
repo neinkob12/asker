@@ -535,7 +535,7 @@ function TripsGroup(props: { trips: readonly Trip[] }) {
 function PortPanel() {
   const { state } = useGame();
   const ui = useUi();
-  // Nach dem Verkauf (Auftrag 43): Der Hafen ist Jansens Halle in Rotterdam, die Kunden-App zeigt ihn.
+  // Nach dem Verkauf (Auftrag 43): Der Hafen ist Jansens Halle in Rotterdam, die App Handel zeigt ihn.
   if (isBusinessSold(state)) {
     return (
       <div class="logi-app">
@@ -543,11 +543,11 @@ function PortPanel() {
           title="Dein Hafen ist jetzt Rotterdam"
           icon="anchor"
           color="goods"
-          note="Lager, Zoll, Einkauf im Ausland und Lkw findest du in der Kunden-App unter „Hafen“."
+          note="Lager, Zoll, Einkauf im Ausland und Lkw findest du in der App Handel unter „Hafen“."
         >
           <div class="logi-redirect">
             <Button variant="primary" icon="ship" onClick={() => ui.openPhone('trade.app', { view: 'harbor' })}>
-              Zum Hafen in der Kunden-App
+              Zum Hafen in der App Handel
             </Button>
           </div>
         </Group>

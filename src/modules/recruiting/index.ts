@@ -393,7 +393,8 @@ function tick(ctx: Ctx): void {
       ctx.emit('recruiting.candidateLeft', { candidateId: c.id, name: c.name, role: c.role, source: c.source });
     }
   }
-  if (ctx.now < s.nextPoolAt) return;
+  // Nach dem Verkauf sucht niemand mehr Arbeit bei dir (Auftrag 43).
+  if (ctx.now < s.nextPoolAt || isBusinessSold(ctx.state)) return;
   const count = ctx.randomInt(POOL_ARRIVALS[0], POOL_ARRIVALS[1]);
   const max = poolMax(ctx.state);
   for (let i = 0; i < count && getPool(ctx.state).length < max; i++) addPoolCandidate(ctx);

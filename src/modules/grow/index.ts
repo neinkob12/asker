@@ -599,7 +599,7 @@ export function openRegion(ctx: Ctx, regionId: string): CommandResult {
   if (r.status === 'open') return { ok: false, reason: `${region.name} ist schon frei.` };
   if (r.status === 'none') return { ok: false, reason: `Aus ${region.name} hat noch niemand angerufen.` };
   r.status = 'open';
-  // Angenommen (im Anruf oder in der Kunden-App): Rückrufe mit demselben Angebot fallen weg.
+  // Angenommen (im Anruf oder in der App Handel): Rückrufe mit demselben Angebot fallen weg.
   messages.cancelCalls(ctx, region.contact.id);
   messages.retractWhere(
     ctx,

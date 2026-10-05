@@ -1510,7 +1510,9 @@ function retractStaleQuestions(ctx: Ctx): void {
 function collectSleeping(ctx: Ctx, cargo: PortCargo): boolean {
   const s = ctx.state.modules.logistics;
   const warehouseId = defaultPickupWarehouse(ctx.state, cargo.cityId);
-  if (!warehouseId) return false;
+  // Ist das Lager voll, wartet die Ware ohne neuen Versuch (sonst zählte jede Stunde als abgewiesen, die Statistik stand
+  // bei über 90 % und der Bot baute deshalb Regale in der aktiven Stadt).
+  if (!warehouseId || warehouseFree(ctx.state, warehouseId) <= 0) return false;
   const result = storeFitting(ctx, {
     productId: cargo.productId,
     amount: cargo.amount,

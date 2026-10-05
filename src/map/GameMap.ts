@@ -398,9 +398,10 @@ export class GameMap implements MapController {
       // Rahmen ganz zeigen, mit Platz für die Stadt-Karten (über dem Punkt, halb so breit wie eine Karte) und am Handy
       // für die Karten unter Geld und Heat (Quest, Stadt wartet; Auftrag 36: bis zu fünf Städte im Rahmen).
       const [w, s, e, n] = camera.bounds;
+      // Am Desktop steht rechts das Handy (Auftrag 43: Rotterdam und Marokko lagen dahinter).
       const padding = isMobile()
         ? { top: 300, bottom: 40, left: 110, right: 110 }
-        : { top: 110, bottom: 60, left: 140, right: 140 };
+        : { top: 110, bottom: 60, left: 140, right: 140 + this.padRight };
       const fit = this.map.cameraForBounds(
         [
           [w, s],

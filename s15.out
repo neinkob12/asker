@@ -1,0 +1,60 @@
+--- m0
+mark 9983
+--- hook
+hooked
+--- j0
+["0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44","45","46","47","48","49","50","51","52","53","54","55","56","57","58","59"] 0
+--- adv
+[
+ "shipment.arrived {\"shipmentId\":9727,\"supplierId\":\"berlin\",\"productId\":\"haze\",\"amount\":50,\"warehouseId\":\"ehrenfeld\",\"quality\":0.9,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9731,\"supplierId\":\"berlin\",\"productId\":\"kush\",\"amount\":100,\"warehouseId\":\"ehrenfeld\",\"quality\":0.86,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9733,\"supplierId\":\"berlin\",\"productId\":\"kush\",\"amount\":100,\"warehouseId\":\"ehrenfeld\",\"quality\":0.89,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9739,\"supplierId\":\"berlin\",\"productId\":\"edibles\",\"amount\":30,\"warehouseId\":\"ehrenfeld\",\"quality\":0.81,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9741,\"supplierId\":\"berlin\",\"productId\":\"edibles\",\"amount\":30,\"warehouseId\":\"ehrenfeld\",\"quality\":0.91,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9743,\"supplierId\":\"berlin\",\"productId\":\"edibles\",\"amount\":30,\"warehouseId\":\"ehrenfeld\",\"quality\":0.88,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9769,\"supplierId\":\"berlin\",\"productId\":\"haze\",\"amount\":50,\"warehouseId\":\"ehrenfeld\",\"quality\":0.84,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9771,\"supplierId\":\"berlin\",\"productId\":\"haze\",\"amount\":50,\"warehouseId\":\"ehrenfeld\",\"quality\":0.81,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9773,\"supplierId\":\"berlin\",\"productId\":\"haze\",\"amount\":50,\"warehouseId\":\"ehrenfeld\",\"quality\":0.89,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9775,\"supplierId\":\"berlin\",\"productId\":\"kush\",\"amount\":25,\"warehouseId\":\"ehrenfeld\",\"quality\":0.9,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9777,\"supplierId\":\"berlin\",\"productId\":\"kush\",\"amount\":25,\"warehouseId\":\"ehrenfeld\",\"quality\":0.84,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9779,\"supplierId\":\"berlin\",\"productId\":\"edibles\",\"amount\":30,\"warehouseId\":\"ehrenfeld\",\"quality\":0.88,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9781,\"supplierId\":\"berlin\",\"productId\":\"edibles\",\"amount\":30,\"warehouseId\":\"ehrenfeld\",\"quality\":0.81,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9783,\"supplierId\":\"berlin\",\"productId\":\"edibles\",\"amount\":30,\"warehouseId\":\"ehrenfeld\",\"quality\":0.91,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9791,\"supplierId\":\"hamburg\",\"productId\":\"vape\",\"amount\":30,\"warehouseId\":\"ehrenfeld\",\"quality\":0.68,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9799,\"supplierId\":\"berlin\",\"productId\":\"edibles\",\"amount\":30,\"warehouseId\":\"ehrenfeld\",\"quality\":0.87,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9840,\"supplierId\":\"berlin\",\"productId\":\"edibles\",\"amount\":30,\"warehouseId\":\"ehrenfeld\",\"quality\":0.9,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9725,\"supplierId\":\"berlin\",\"productId\":\"haze\",\"amount\":50,\"warehouseId\":\"ehrenfeld\",\"quality\":0.83,\"cityId\":\"koeln\"}",
+ "hierarchy.dailyReport {\"staffId\":\"s476\",\"day\":22,\"profit\":16485,\"problems\":0}",
+ "shipment.arrived {\"shipmentId\":9737,\"supplierId\":\"rotterdam\",\"productId\":\"hash\",\"amount\":500,\"warehouseId\":\"port\",\"quality\":0.66,\"atPort\":true,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9723,\"supplierId\":\"rotterdam\",\"productId\":\"haze\",\"amount\":500,\"warehouseId\":\"port\",\"quality\":0.7,\"atPort\":true,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9729,\"supplierId\":\"rotterdam\",\"productId\":\"kush\",\"amount\":500,\"warehouseId\":\"port\",\"quality\":0.63,\"atPort\":true,\"cityId\":\"koeln\"}",
+ "shipment.arrived {\"shipmentId\":9735,\"supplierId\":\"rotterdam\",\"productId\":\"hash\",\"amount\":500,\"warehouseId\":\"port\",\"quality\":0.63,\"atPort\":true,\"cityId\":\"koeln\"}",
+ "supplier.dealStarted {\"dealId\":10049,\"supplierId\":\"hamburg\",\"packageId\":\"edibles30\",\"cityId\":\"hamburg\",\"discount\":0.15,\"endsAt\":38880}",
+ "hierarchy.dailyReport {\"staffId\":\"s476\",\"day\":23,\"profit\":-6020,\"problems\":1}",
+ "city.slept {\"cityId\":\"koeln\",\"day\":24,\"amount\":7294}",
+ "hierarchy.shareTaken {\"staffId\":\"s476\",\"cityId\":\"koeln\",\"day\":24,\"profit\":7294,\"amount\":5835}",
+ "hierarchy.dailyReport {\"staffId\":\"s476\",\"day\":24,\"profit\":7294,\"problems\":0}",
+ "city.slept {\"cityId\":\"koeln\",\"day\":25,\"amount\":8358}",
+ "hierarchy.shareTaken {\"staffId\":\"s476\",\"cityId\":\"koeln\",\"day\":25,\"profit\":8358,\"amount\":6686}"
+]
+--- msgs
+[
+ "id=10033 dt=311 other:harbor  | Deine Ladung ist angekommen: 500 g Amnesia Haze. Bitte zügig, so 16 Std. hast du. | Fahrer schicken/Ich hol ihn selbst/Später",
+ "id=10036 dt=311 other:harbor  | Container für dich, 500 g OG Kush. Der Zoll macht um die Zeit Pause. Noch 16 Std.. | Fahrer schicken/Ich hol ihn selbst/Später",
+ "id=10046 dt=686 other:harbor  | Dein Container ist da: 500 g Hasch. Hol ihn in den nächsten 16 Std. ab, danach schaut der Zoll genauer hin. | Fahrer schicken/Ich hol ihn selbst/Später",
+ "id=10050 dt=1056 supplier:hamburg (s) | Kleine Aktion unter Freunden: 30 Edibles für Hamburg bis Mittwoch Abend 15 % günstiger. | ",
+ "id=10054 dt=1536 staff:s476 (s) | Bericht aus Köln, Tag 23: Umsatz 10.685 €, Kosten 16.705 €, Verlust 6.020 €. Kein Gewinn, also kein Anteil für mich. In der Kasse 96.411 €. Gestern Minus, größter Posten: Einkauf Ware (15.073 €). 2 Leute fallen aus. Mein Rat: Hafenkolonne macht Druck. Ein Waff | ",
+ "id=10083 dt=2976 contract:frank  | Ein paar Jungs aus dem Veedel brauchen Arbeit. Stell diese Woche 3 Leute ein. Bis Sonntag.  Dafür gibt's: 400 € schwarz, +8 Loyalität fürs Team, +4 Vertrauen bei Daan. | Annehmen/Nein danke",
+ "id=10085 dt=2976 contract:marlene  | Meine Gäste bestellen nach Hause. Fahr diese Woche 4 Lieferungen aus, dann gehören sie dir. Bis Sonntag.  Dafür gibt's: 500 € schwarz, +40 Erfahrung fürs Team, +4 Vertrauen bei Daan. | Annehmen/Nein danke",
+ "id=10087 dt=2976 contract:ali  | Die Leute fragen bei mir nach Amnesia Haze. Bring diese Woche 400 davon unter die Leute. Bis Sonntag.  Dafür gibt's: 300 € schwarz, 100 g Amnesia Haze (Premium), +4 Vertrauen bei Daan. | Annehmen/Nein danke",
+ "id=10088 dt=3036 supplier:frankfurt (s) | Marktbericht Montag: Vape-Pen zieht an (+4 %). Aktion: 30 Edibles bei Hein 15 % billiger bis Mittwoch. | ",
+ "id=10095 dt=3456 gang:hh-kiez  [exp 240] | Ich hab 100 g über, beste Ware vom Kiez. 650 €, abholen in St. Pauli. Bis Ladenschluss. | Deal (650 €)/Kein Interesse"
+]
+--- j
+EXC page.evaluate: TypeError: j.slice is not a function
+    at eval (eval at evaluate (:290:30), <anonymous>:1:106)
+    at eval (eval at evaluate (:290:30), <anonymous>:1:159)
+    at eval (<anonymous>)
+    at UtilityScript.evaluate (<anonymous>:290:30)
+    at UtilityScript.<anonymous> (<anonymous>:1:44)
+errors []

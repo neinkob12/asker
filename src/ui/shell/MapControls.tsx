@@ -48,6 +48,8 @@ export function MapControls() {
           </Popover>
         </div>
         <IconButton icon="pin" label="Zurück zur Stadt" onClick={api.flyHome} />
+        {/* Auftrag 43: Übersicht über alle Städte bzw. nach dem Verkauf über Europa, ohne zu zoomen. */}
+        <IconButton icon="globe" label="Übersicht" onClick={api.flyToDeutschland} />
       </div>
       {mobile && (
         <div class="shell-mapctl__group">

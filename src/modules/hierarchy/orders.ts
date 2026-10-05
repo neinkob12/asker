@@ -5,6 +5,7 @@
 // "automatisch". Schiffsware nur, wenn jemand sie automatisch am Kai abholt (die Rechte Hand mit "Hafen abholen").
 
 import { type Actor, type CommandResult, type Ctx, formatEuro, type GameState } from '../../core';
+import { activeCity } from '../city';
 import { getSalesStats } from '../customers';
 import { getProduct, getStock, getWarehouse, productName, warehouseCity } from '../goods';
 import { getCargo, getTrips } from '../logistics';
@@ -29,7 +30,9 @@ import type { OrderRule } from './types';
  * die Rechte Hand mit der Aufgabe "Hafen abholen" und mindestens einem Fahrer (Auftrag 28).
  */
 export function isPortSupplierAllowed(state: GameState): boolean {
-  return isTaskActive(state, 'pickup') && getStaff(state, { role: 'driver', status: 'active' }).length > 0;
+  // Fahrer der Stadt, in der bestellt wird (Auftrag 43): Ein Kölner holt in Hamburg nichts ab.
+  const drivers = getStaff(state, { role: 'driver', status: 'active', cityId: activeCity(state) });
+  return isTaskActive(state, 'pickup') && drivers.length > 0;
 }
 
 export const PORT_SUPPLIER_HINT =

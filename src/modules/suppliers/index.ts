@@ -732,6 +732,19 @@ export function tell(ctx: Ctx, supplier: Supplier, text: string): void {
   messages.send(ctx, { contact: contactOf(supplier), text });
 }
 
+/** Liefert die Lieferung in die Stadt, in der du bist (und gehört das Geschäft noch dir)? */
+export function shipmentHere(state: GameState, s: { cityId?: string }): boolean {
+  return (s.cityId ?? 'koeln') === activeCity(state) && !isBusinessSold(state);
+}
+
+/**
+ * Über eine Lieferung schreiben, aber nur, wenn sie in die Stadt geht, in der du bist (Auftrag 43: nach dem Umzug
+ * kamen Chats wie „Freie Bahn. Bin früher da.“ über Lieferungen nach Köln). Sonst steht es nur im Journal.
+ */
+export function tellAbout(ctx: Ctx, supplier: Supplier, s: { cityId?: string }, text: string): void {
+  if (shipmentHere(ctx.state, s)) tell(ctx, supplier, text);
+}
+
 function order(
   ctx: Ctx,
   supplierId: string,
@@ -1144,7 +1157,7 @@ function deliver(ctx: Ctx): void {
     if (s.problem === 'badQuality' && supplier) {
       s.problemRevealed = true;
       const why = rollReason(ctx, s, supplier, 'badQuality');
-      tell(ctx, supplier, voice(ctx, supplier, 'badQuality', why));
+      tellAbout(ctx, supplier, s, voice(ctx, supplier, 'badQuality', why));
       journal.add(ctx, `Die Ware von ${supplier.name} ist schlechter als versprochen (${why.reasonLabel}).`, 'bad');
       ctx.emit('shipment.problem', {
         shipmentId: s.id,
