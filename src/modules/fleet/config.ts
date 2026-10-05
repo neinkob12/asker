@@ -104,5 +104,7 @@ export const VEHICLE_SEIZE_CHANCE = 0.5;
 export const SEIZED_VISIBLE_MINUTES = 3 * 24 * 60;
 /** Beim Verkauf gibt es diesen Anteil vom Preis zurück (sauberes Geld). */
 export const RESALE_SHARE = 0.5;
-/** So viele Fahrzeuge kann man insgesamt haben. */
+/** So viele Fahrzeuge für die Straße kann man insgesamt haben. */
 export const FLEET_LIMIT = 12;
+/** So viele eigene Schiffe (Auftrag 41, eigenes Limit neben den Straßenfahrzeugen). */
+export const SHIP_LIMIT = 4;

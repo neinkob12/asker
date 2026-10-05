@@ -11,19 +11,34 @@
 
 import type { Command, GameState } from '../core';
 import { isBusinessSold, saleStatus } from '../modules/city';
-import { getShips, getVehicles, VEHICLE_MODELS, vehiclePrice, vehicleSpec, vehicleStatus } from '../modules/fleet';
+import {
+  freeVehicles,
+  getShips,
+  getVehicles,
+  VEHICLE_MODELS,
+  vehiclePrice,
+  vehicleSpec,
+  vehicleStatus,
+} from '../modules/fleet';
 import { amountInProgress } from '../modules/laundering';
 import { customsHeat } from '../modules/police';
 import {
   CONTAINER_SIZES,
+  COVERS,
   type ContainerSize,
   type Cover,
   containerCost,
+  containerRisk,
+  deliveryCheckChance,
+  deliveryEstimate,
+  freightCost,
+  getCustomer,
   getShipments,
   harborPorts,
   isTradeActive,
   loadCost,
   MAX_HALLS,
+  openItems,
   openOrders,
   orderCoverage,
   ownedPorts,
@@ -33,6 +48,9 @@ import {
   portFor,
   portHalls,
   portLoad,
+  portStock,
+  SEIZE_ON_CHECK,
+  shippableItems,
   shippingMinutes,
   totalStock,
   voyagePlan,
@@ -47,8 +65,8 @@ const BUFFER_SHARE = 0.3;
 const URGENT_MINUTES = 3 * DAY;
 /** Ab diesem Zoll-Heat in Rotterdam mietet er einen zweiten Hafen. */
 const SECOND_PORT_HEAT = 30;
-/** Deckladung ab diesem Zoll-Heat im Zielhafen: Fliesen, darüber Bananen. */
-const COVER_HEAT = { tiles: 15, bananas: 35 } as const;
+/** So viel vom Warenwert geht im Schnitt verloren, wenn der Zoll einen Container aufmacht (Schätzung des Bots). */
+const LOSS_ON_CHECK = 0.5;
 /** Ab so viel Bedarf pro Woche lohnt ein eigenes Schiff (Gramm). */
 const SHIP_WEEKLY_GRAMS = 150_000;
 /** Halle bauen, wenn das Lager zu so viel voll ist. */
@@ -57,6 +75,8 @@ const HALL_FILL = 0.8;
 const PENDING_HORIZON = 6 * DAY;
 /** Länger fährt das eigene Schiff nicht (hin und zurück). */
 const SHIP_MAX_MINUTES = 13 * DAY;
+/** Das eigene Schiff holt den Bedarf so vieler Wochen (abzüglich dessen, was da oder unterwegs ist). */
+const SHIP_WEEKS = 1.5;
 
 export type BotRun = (command: Command) => boolean;
 
@@ -86,28 +106,35 @@ function targetPort(state: GameState): string {
   return [...ports].sort((a, b) => customsHeat(state, a) - customsHeat(state, b) || a.localeCompare(b))[0];
 }
 
-/** Deckladung nach dem Zoll-Heat im Hafen: ruhig ohne, wach Fliesen, scharf Bananen. */
-function coverFor(state: GameState, portId: string): Cover['id'] {
-  const heat = customsHeat(state, portId);
-  return heat >= COVER_HEAT.bananas ? 'bananas' : heat >= COVER_HEAT.tiles ? 'tiles' : 'none';
+/**
+ * Deckladung nach erwartetem Verlust: Kosten der Tarnung plus Chance einer Kontrolle mal Anteil, der dabei verloren
+ * geht (LOSS_ON_CHECK), mal Warenwert; die günstigste Wahl gewinnt. Große Container im wachen Hafen bekommen so
+ * Bananen, kleine Kisten im ruhigen Hafen nichts.
+ */
+function coverFor(
+  state: GameState,
+  producerId: string,
+  productId: string,
+  size: ContainerSize['id'],
+  portId: string,
+  vesselId: number | null = null,
+): Cover['id'] {
+  const goods = containerCost(producerId, productId, size).goods;
+  const cost = (cover: Cover) =>
+    goods * cover.share + containerRisk(state, producerId, size, portId, cover.id, vesselId) * LOSS_ON_CHECK * goods;
+  return [...COVERS].sort((a, b) => cost(a) - cost(b) || a.share - b.share)[0]?.id ?? 'none';
 }
 
 /** Container einer Sorte kaufen, bis short gedeckt ist (höchstens vier). Gibt zurück, was gekauft wurde. */
-function buy(
-  state: GameState,
-  run: BotRun,
-  productId: string,
-  short: number,
-  urgent: boolean,
-  horizon = Infinity,
-): number {
+function buy(state: GameState, run: BotRun, productId: string, short: number, urgent: boolean): number {
   const port = targetPort(state);
   const producer =
     PRODUCERS.filter(
       (p) =>
         p.products[productId] !== undefined &&
         (urgent ? p.id === 'jansen' : p.id !== 'jansen') &&
-        shippingMinutes(p.id, port) <= horizon,
+        // Auf der Linie nur, was vor der Frist einer Bestellung ankommt (Albanien braucht länger).
+        shippingMinutes(p.id, port) <= PENDING_HORIZON,
     ).sort((a, b) => (a.products[productId] ?? 1) - (b.products[productId] ?? 1))[0] ??
     PRODUCERS.find((p) => p.id === 'jansen');
   if (!producer) return 0;
@@ -115,7 +142,7 @@ function buy(
   for (let i = 0; i < 4 && short - bought > 0; i++) {
     const size: ContainerSize['id'] = short - bought > 35_000 ? 'medium' : 'small';
     const portId = targetPort(state);
-    const cover = coverFor(state, portId);
+    const cover = coverFor(state, producer.id, productId, size, portId);
     const cost = containerCost(producer.id, productId, size, cover);
     if (state.wallet.dirty - cost.goods - cost.freight - cost.cover < TRADE_RESERVE) break;
     const ok = run({ type: 'trade.buy', payload: { producerId: producer.id, productId, size, portId, cover } });
@@ -131,28 +158,20 @@ function buy(
  */
 function procure(state: GameState, run: BotRun): void {
   const pending = pendingDeliveries(state);
+  // Eilig ist eine Ware, die einer Bestellung kurz vor der Frist noch fehlt (auch wenn der Rest schon da ist).
   const urgent = new Set(
     pending
-      .filter((o) => o.dueAt - state.time < URGENT_MINUTES && portFor(state, o) === null)
-      .flatMap((o) => o.items.map((i) => i.productId)),
+      .filter((o) => o.dueAt - state.time < URGENT_MINUTES)
+      .flatMap((o) => openItems(o))
+      .filter((i) => !ownedPorts(state).some((p) => (portStock(state, p)[i.productId]?.amount ?? 0) >= i.amount))
+      .map((i) => i.productId),
   );
   const covered = new Map<string, number>();
-  const have = (productId: string, horizon = Infinity) =>
-    totalStock(state, productId) +
-    getShipments(state)
-      .filter((x) => x.productId === productId && x.arrivesAt - state.time <= horizon)
-      .reduce((s, x) => s + x.amount, 0) +
-    (covered.get(productId) ?? 0);
-  // Für angenommene und offene Bestellungen zählt nur, was vor der Frist ankommt; gekauft wird bei einem Produzenten,
-  // der rechtzeitig liefert (Albanien und das eigene Schiff brauchen länger).
-  const due = sum(pending);
-  for (const [productId, need] of sum(openOrders(state))) due.set(productId, (due.get(productId) ?? 0) + need);
-  for (const [productId, need] of due) {
-    const short = need - have(productId, PENDING_HORIZON);
-    if (short > 0) {
-      const bought = buy(state, run, productId, short, urgent.has(productId), PENDING_HORIZON);
-      covered.set(productId, (covered.get(productId) ?? 0) + bought);
-    }
+  const have = (productId: string) => onHand(state, productId) + (covered.get(productId) ?? 0);
+  for (const [productId, need] of sum(pending)) {
+    const short = need - have(productId);
+    if (short > 0)
+      covered.set(productId, (covered.get(productId) ?? 0) + buy(state, run, productId, short, urgent.has(productId)));
   }
   const week = state.modules.trade.orders.filter((o) => state.time - o.placedAt < 7 * DAY && o.status !== 'lost');
   const buffer = sum(week, BUFFER_SHARE);
@@ -165,13 +184,36 @@ function procure(state: GameState, run: BotRun): void {
   }
 }
 
-/** Ausliefern, was im Hafen liegt (Lkw, wenn einer frei ist und passt, sonst Spedition). */
+/** Ware einer Sorte im Hafen und unterwegs (Gramm). */
+function onHand(state: GameState, productId: string): number {
+  return (
+    totalStock(state, productId) +
+    getShipments(state)
+      .filter((x) => x.productId === productId)
+      .reduce((s, x) => s + x.amount, 0)
+  );
+}
+
+/**
+ * Ausliefern, was im Hafen liegt: mit dem eigenen Lkw, wenn er frei ist und das zusätzliche Risiko (er wird öfter
+ * kontrolliert, die Ladung ist dann weg) weniger kostet als die Spedition; sonst Spedition.
+ */
 function deliverReady(state: GameState, run: BotRun): void {
   for (const order of pendingDeliveries(state)) {
     const port = portFor(state, order);
-    if (!port) continue;
-    const truck = getVehicles(state, 'rotterdam').find((v) => vehicleStatus(v) === 'free' && v.model === 'truck');
-    run({ type: 'trade.deliver', payload: { orderId: order.id, portId: port, vehicleId: truck?.id ?? null } });
+    const customer = getCustomer(state, order.customerId);
+    if (!port || !customer) continue;
+    const items = shippableItems(state, port, order);
+    const grams = items.reduce((s, i) => s + i.amount, 0);
+    const value = items.reduce((s, i) => s + i.amount * i.offer, 0);
+    const truck = freeVehicles(state, 'rotterdam').find((v) => v.model === 'truck');
+    let vehicleId: number | null = null;
+    if (truck) {
+      const extra = deliveryCheckChance(state, customer, port, truck.id) - deliveryCheckChance(state, customer, port);
+      const freight = freightCost(grams, deliveryEstimate(customer, port).km);
+      if (extra * SEIZE_ON_CHECK * value < freight) vehicleId = truck.id;
+    }
+    run({ type: 'trade.deliver', payload: { orderId: order.id, portId: port, vehicleId } });
   }
 }
 
@@ -196,17 +238,26 @@ function sailShips(state: GameState, run: BotRun): void {
         (voyagePlan(state, ship.id, p.id, portId)?.minutes ?? Infinity) <= SHIP_MAX_MINUTES,
     ).sort((a, b) => (a.products[top[0]] ?? 1) - (b.products[top[0]] ?? 1))[0];
     if (!producer) continue;
-    const cover = coverFor(state, portId);
     const full = CONTAINER_SIZES.find((c) => c.id === 'full')?.grams ?? 120_000;
     const plan = voyagePlan(state, ship.id, producer.id, portId);
     if (!plan) return;
-    // Volle Container, verteilt nach Bedarf über die Waren dieses Produzenten, so viele die Kasse hergibt.
-    const wares = need.filter(([id]) => producer.products[id] !== undefined);
-    const load: { productId: string; size: 'full'; cover: Cover['id'] }[] = [];
-    for (let i = 0; i < Math.max(1, Math.floor(capacity / full)); i++) {
-      const next = [...load, { productId: wares[i % wares.length][0], size: 'full' as const, cover }];
-      if (state.wallet.dirty - loadCost(producer.id, next, true) - plan.cost < TRADE_RESERVE * 2) break;
-      load.push(next[next.length - 1]);
+    // Geladen wird, was in den nächsten anderthalb Wochen fehlt (große Container, der Rest halb), so viel die Kasse hergibt.
+    const load: { productId: string; size: 'full' | 'medium'; cover: Cover['id'] }[] = [];
+    let room = capacity;
+    for (const [productId, weekly] of need) {
+      if (producer.products[productId] === undefined) continue;
+      let short = SHIP_WEEKS * weekly - onHand(state, productId);
+      while (short > 30_000 && room > 0) {
+        const size: 'full' | 'medium' = short >= 90_000 && room >= full ? 'full' : 'medium';
+        const grams = CONTAINER_SIZES.find((c) => c.id === size)?.grams ?? full;
+        if (grams > room) break;
+        const cover = coverFor(state, producer.id, productId, size, portId, ship.id);
+        const next = [...load, { productId, size, cover }];
+        if (state.wallet.dirty - loadCost(producer.id, next, true) - plan.cost < TRADE_RESERVE * 2) break;
+        load.push({ productId, size, cover });
+        short -= grams;
+        room -= grams;
+      }
     }
     if (load.length === 0) return;
     run({ type: 'trade.sail', payload: { vesselId: ship.id, producerId: producer.id, portId, load } });

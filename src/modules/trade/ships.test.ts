@@ -5,7 +5,7 @@ import { loadSimulation, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { playableCities } from '../city';
 import { activeEncounters, autoResolveEncounter } from '../encounters';
-import { getVehicle, vehicleStatus } from '../fleet';
+import { freeVehicles, getVehicle, vehicleStatus } from '../fleet';
 import { harborPort } from '../logistics';
 import { seaRoute } from '../roads';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
@@ -115,12 +115,15 @@ describe('Hafen-Lager mit Platz (Auftrag 41, Etappe 1)', () => {
     expect(sim.dispatch({ type: 'trade.buildHall', payload: { portId: 'rotterdam' } }).ok).toBe(false);
     sim.state.wallet.clean = 1_000_000;
     sim.advance(DAY);
-    const dirty = sim.state.wallet.dirty;
+    const clean = sim.state.wallet.clean;
     expect(sim.dispatch({ type: 'trade.buildHall', payload: { portId: 'rotterdam' } }).ok).toBe(true);
     expect(portCapacity(sim.state, 'rotterdam')).toBe(capacity + (harborPort('rotterdam')?.hallCapacity ?? 0));
     expect(getShipments(sim.state).some((x) => x.status === 'quay')).toBe(false);
     expect(totalStock(sim.state, 'weed')).toBe(weed + 20_000);
-    expect(dirty - sim.state.wallet.dirty).toBeGreaterThanOrEqual(QUAY_FEE_PER_DAY);
+    // Halle und Liegegeld sind legal: sauberes Geld.
+    expect(clean - sim.state.wallet.clean).toBeGreaterThanOrEqual(
+      (harborPort('rotterdam')?.hallCost ?? 0) + QUAY_FEE_PER_DAY,
+    );
     for (let i = 1; i < MAX_HALLS; i++) {
       expect(sim.dispatch({ type: 'trade.buildHall', payload: { portId: 'rotterdam' } }).ok).toBe(true);
     }
@@ -242,8 +245,16 @@ describe('Deckladung und eigene Schiffe (Auftrag 41, Etappe 2)', () => {
     expect(eventsOfType(events, 'trade.shipReturned')).toHaveLength(1);
     const landed = eventsOfType(events, 'trade.containerArrived').length;
     expect(landed + tradeStats(sim.state).seized).toBe(2);
-    // Schiffe fahren keine Lieferungen auf der Straße.
-    expect(sim.dispatch({ type: 'trade.deliver', payload: { orderId: -1, vehicleId: vesselId } }).ok).toBe(false);
+    // Schiffe fahren keine Lieferungen auf der Straße und stehen nicht unter den freien Straßenfahrzeugen.
+    expect(freeVehicles(sim.state, 'rotterdam').some((v) => v.id === vesselId)).toBe(false);
+    const order = sim.state.modules.trade.orders.find((o) => o.status === 'open');
+    if (order) {
+      sim.dispatch({ type: 'trade.answer', payload: { orderId: order.id, choice: 'accept' } });
+      const ship = sim.dispatch({ type: 'trade.deliver', payload: { orderId: order.id, vehicleId: vesselId } });
+      expect(ship.ok ? '' : ship.reason).toBe('Schiffe fahren nicht auf der Straße.');
+    }
+    // Im Hafen lässt es sich verkaufen.
+    expect(sim.dispatch({ type: 'fleet.sell', payload: { vehicleId: vesselId } }).ok).toBe(true);
   }, 30_000);
 
   it('Schiffe gibt es erst in der Hafen-Phase', () => {

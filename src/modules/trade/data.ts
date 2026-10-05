@@ -300,6 +300,7 @@ export interface EuropeCity extends ForeignCity {
   country: string;
   priceFactor: number;
   joinWeek: number;
+  /** Wo der Zoll steht (für Texte: „Zollkontrolle <name>“) und die Chance einer Kontrolle pro Lieferung. */
   border: { name: string; check: number };
 }
 
@@ -312,7 +313,7 @@ export const EUROPE_CITIES: readonly EuropeCity[] = [
     indexCity: 'koeln',
     priceFactor: 0.95,
     joinWeek: 1,
-    border: { name: 'keine Grenze ab Rotterdam', check: 0.01 },
+    border: { name: 'auf der A4 vor Amsterdam', check: 0.01 },
     weekly: { hash: 10_000, weed: 8_000 },
     contact: person(
       'amsterdam',
@@ -331,7 +332,7 @@ export const EUROPE_CITIES: readonly EuropeCity[] = [
     indexCity: 'koeln',
     priceFactor: 1.1,
     joinWeek: 1,
-    border: { name: 'Grenze bei Antwerpen', check: 0.02 },
+    border: { name: 'an der Grenze bei Antwerpen', check: 0.01 },
     weekly: { weed: 9_000, hash: 5_000 },
     contact: person(
       'bruessel',
@@ -350,7 +351,7 @@ export const EUROPE_CITIES: readonly EuropeCity[] = [
     indexCity: 'frankfurt',
     priceFactor: 1.2,
     joinWeek: 2,
-    border: { name: 'Grenze bei Valenciennes', check: 0.05 },
+    border: { name: 'an der Grenze bei Valenciennes', check: 0.025 },
     weekly: { hash: 14_000, weed: 8_000 },
     contact: person(
       'paris',
@@ -369,7 +370,7 @@ export const EUROPE_CITIES: readonly EuropeCity[] = [
     indexCity: 'hamburg',
     priceFactor: 1.3,
     joinWeek: 3,
-    border: { name: 'Grenze bei Padborg', check: 0.06 },
+    border: { name: 'an der Grenze bei Padborg', check: 0.03 },
     weekly: { weed: 8_000, hash: 4_000 },
     contact: person(
       'kopenhagen',
@@ -388,7 +389,7 @@ export const EUROPE_CITIES: readonly EuropeCity[] = [
     indexCity: 'muenchen',
     priceFactor: 1.15,
     joinWeek: 3,
-    border: { name: 'Grenze am Walserberg', check: 0.05 },
+    border: { name: 'an der Grenze am Walserberg', check: 0.025 },
     weekly: { weed: 9_000, haze: 3_000 },
     contact: person(
       'wien',
@@ -407,7 +408,7 @@ export const EUROPE_CITIES: readonly EuropeCity[] = [
     indexCity: 'muenchen',
     priceFactor: 1.4,
     joinWeek: 4,
-    border: { name: 'Grenze bei Basel (Schweiz, scharf)', check: 0.1 },
+    border: { name: 'an der Schweizer Grenze bei Basel', check: 0.05 },
     weekly: { kush: 4_000, haze: 4_000 },
     contact: person(
       'zuerich',
@@ -426,7 +427,7 @@ export const EUROPE_CITIES: readonly EuropeCity[] = [
     indexCity: 'muenchen',
     priceFactor: 1.25,
     joinWeek: 5,
-    border: { name: 'Grenzen bei Kufstein und am Brenner', check: 0.1 },
+    border: { name: 'an der Grenze bei Kufstein oder am Brenner', check: 0.05 },
     weekly: { hash: 8_000, weed: 6_000 },
     contact: person(
       'mailand',

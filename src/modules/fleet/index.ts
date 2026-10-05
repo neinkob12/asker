@@ -20,11 +20,12 @@ import {
   PRIVATE_CAR,
   RESALE_SHARE,
   SEIZED_VISIBLE_MINUTES,
+  SHIP_LIMIT,
   VEHICLE_MODELS,
   VEHICLE_SEIZE_CHANCE,
 } from './config';
 
-export { FLEET_LIMIT, PRIVATE_CAR, VEHICLE_MODELS, VEHICLE_SEIZE_CHANCE } from './config';
+export { FLEET_LIMIT, PRIVATE_CAR, RESALE_SHARE, SHIP_LIMIT, VEHICLE_MODELS, VEHICLE_SEIZE_CHANCE } from './config';
 
 /** Darstellung auf der Karte (createVehicle aus src/map). */
 export type VehicleMapKind = 'courier' | 'car' | 'van' | 'truck' | 'ship';
@@ -225,7 +226,10 @@ function buy(ctx: Ctx, modelId: string, cityId: string): CommandResult {
   }
   if (!isCityUnlocked(ctx.state, cityId)) return { ok: false, reason: 'In dieser Stadt bist du noch nicht.' };
   const s = ctx.state.modules.fleet;
-  if (s.vehicles.filter((v) => v.seizedAt === null).length >= FLEET_LIMIT) {
+  // Schiffe und Straßenfahrzeuge haben je ein eigenes Limit (Auftrag 41).
+  const same = s.vehicles.filter((v) => v.seizedAt === null && isShip(v) === (model.ship !== undefined)).length;
+  if (model.ship && same >= SHIP_LIMIT) return { ok: false, reason: `Mehr als ${SHIP_LIMIT} Schiffe braucht niemand.` };
+  if (!model.ship && same >= FLEET_LIMIT) {
     return { ok: false, reason: `Mehr als ${FLEET_LIMIT} Fahrzeuge kann niemand fahren.` };
   }
   const cost = vehiclePrice(model, cityId);

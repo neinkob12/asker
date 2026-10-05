@@ -184,6 +184,15 @@ const HIT = (index) => `(async () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   if (stuckAt !== null) return { stuck: true, offset: stuckAt };
+  // CSS-Animationen des Handys (Einschub, Wackeln bei einer Nachricht) zu Ende laufen lassen, sonst liegt alles kurz
+  // daneben (höchstens zwei Sekunden, endlose Animationen zählen nicht).
+  const running = (document.querySelector('.phone')?.getAnimations({ subtree: true }) ?? []).filter(
+    (a) => a.effect?.getComputedTiming().iterations !== Infinity,
+  );
+  await Promise.race([
+    Promise.all(running.map((a) => a.finished.catch(() => null))),
+    new Promise((resolve) => setTimeout(resolve, 2000)),
+  ]);
   // Blätter, Dialoge und Fenster gleiten mit einer Feder ein: Erst messen, wenn das Element nicht mehr wandert.
   let before = '';
   for (let i = 0; i < 30; i++) {

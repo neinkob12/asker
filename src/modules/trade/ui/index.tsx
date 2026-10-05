@@ -31,13 +31,14 @@ import {
   useUi,
 } from '../../../ui';
 import { HARBOR_CITY } from '../../city';
-import { getVehicles, vehicleName, vehicleStatus } from '../../fleet';
+import { freeVehicles, vehicleName } from '../../fleet';
 import { productName } from '../../goods';
 import { customsHeat, customsLevel } from '../../police';
 import {
   CUSTOMER_KINDS,
   type CustomerKind,
   customerContact,
+  deliveryCheckChance,
   deliveryEstimate,
   EUROPE_CITIES,
   europeCityOf,
@@ -173,8 +174,10 @@ function OrdersView() {
     const trip = deliveryEstimate(customer, port);
     const grams = shippableItems(state, port, o).reduce((sum, i) => sum + i.amount, 0);
     const freight = freightCost(grams, trip.km);
+    // Die Wahl: Spedition kostet, fällt aber seltener auf; der eigene Lkw ist umsonst, wird öfter kontrolliert und
+    // kann bei einer Kontrolle mit der Ladung weg sein.
     actions.push({
-      label: `Spedition (${formatEuro(freight)})`,
+      label: `Spedition: ${formatEuro(freight)}, Zoll ${pct(deliveryCheckChance(state, customer, port))}`,
       icon: 'truck',
       disabled: state.wallet.dirty < freight,
       onSelect: () => {
@@ -182,9 +185,9 @@ function OrdersView() {
         setAsk(null);
       },
     });
-    for (const v of getVehicles(state, HARBOR_CITY).filter((x) => vehicleStatus(x) === 'free')) {
+    for (const v of freeVehicles(state, HARBOR_CITY)) {
       actions.push({
-        label: `${vehicleName(state, v.id)} (ohne Kosten)`,
+        label: `${vehicleName(state, v.id)}: ohne Kosten, Zoll ${pct(deliveryCheckChance(state, customer, port, v.id))}`,
         icon: 'truck',
         onSelect: () => {
           dispatch({ type: 'trade.deliver', payload: { orderId: o.id, portId: port, vehicleId: v.id } });
@@ -366,7 +369,7 @@ function OrdersView() {
           ask && customer
             ? ask.mode === 'answer'
               ? `${orderItemsText(ask.order.items)}. Höchstens ${formatEuro(orderValue(ask.order, maxFactor(ask.order)))}.`
-              : `${orderItemsText(port ? shippableItems(state, port, ask.order) : [])} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.${europeCityOf(customer) ? ` Zoll: ${europeCityOf(customer)?.border.name}.` : ''}`
+              : `${orderItemsText(port ? shippableItems(state, port, ask.order) : [])} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.${europeCityOf(customer) ? ` Zoll steht ${europeCityOf(customer)?.border.name}.` : ''}`
             : undefined
         }
         actions={actions}
@@ -472,7 +475,7 @@ function CustomersView() {
                               color: 'system',
                               icon: 'clock',
                             }
-                          : { label: 'meldet sich Montag', color: 'people', icon: 'clock' },
+                          : status.reliable && { label: 'meldet sich Montag', color: 'people', icon: 'clock' },
                         !status.reliable && { label: 'will pünktlichen Ruf', color: 'warn', icon: 'alert' },
                         { label: `Zoll ${pct(city.border.check)}`, color: 'law', icon: 'shield' },
                       ]}
@@ -491,9 +494,13 @@ function CustomersView() {
 // ---------------------------------------------------------------------------------------------
 // Hafen
 
+/** Rückfrage vor einer Ausgabe mit sauberem Geld (Halle, Liegeplatz). */
+type Confirm = { title: string; message: string; label: string; cost: number; run: () => void } | null;
+
 function HarborView() {
   const { state, dispatch } = useGame();
   const ui = useUi();
+  const [confirm, setConfirm] = useState<Confirm>(null);
   const ports = ownedPorts(state);
   const shipments = getShipments(state);
   const stats = tradeStats(state);
@@ -559,7 +566,15 @@ function HarborView() {
                   icon="warehouse"
                   value={formatEuro(info.hallCost)}
                   disabled={state.wallet.clean < info.hallCost}
-                  onClick={() => dispatch({ type: 'trade.buildHall', payload: { portId: id } })}
+                  onClick={() =>
+                    setConfirm({
+                      title: `Halle in ${harborName(id)} bauen?`,
+                      message: `${kg(info.hallCapacity)} mehr Platz im Lager. Kostet ${formatEuro(info.hallCost)} sauberes Geld.`,
+                      label: `Bauen (${formatEuro(info.hallCost)})`,
+                      cost: info.hallCost,
+                      run: () => dispatch({ type: 'trade.buildHall', payload: { portId: id } }),
+                    })
+                  }
                 >
                   {`Halle bauen (+${kg(info.hallCapacity)})`}
                 </ListItem>
@@ -607,7 +622,15 @@ function HarborView() {
               <ListItem
                 key={p.id}
                 value={formatEuro(p.berthCost)}
-                onClick={() => dispatch({ type: 'trade.rentBerth', payload: { portId: p.id } })}
+                onClick={() =>
+                  setConfirm({
+                    title: `Liegeplatz in ${p.name} mieten?`,
+                    message: `${p.description} Kostet ${formatEuro(p.berthCost)} sauberes Geld.`,
+                    label: `Mieten (${formatEuro(p.berthCost)})`,
+                    cost: p.berthCost,
+                    run: () => dispatch({ type: 'trade.rentBerth', payload: { portId: p.id } }),
+                  })
+                }
                 disabled={state.wallet.clean < p.berthCost}
               >
                 <ItemContent
@@ -625,6 +648,27 @@ function HarborView() {
         Wie die Heat eines Veedels: Menge treibt ihn, Zeit kühlt ihn ab. Je höher, desto öfter wird ein ankommender
         Container kontrolliert.
       </Disclosure>
+      <ActionSheet
+        open={confirm !== null}
+        onClose={() => setConfirm(null)}
+        title={confirm?.title ?? ''}
+        message={confirm?.message}
+        actions={
+          confirm
+            ? [
+                {
+                  label: confirm.label,
+                  icon: 'check',
+                  disabled: state.wallet.clean < confirm.cost,
+                  onSelect: () => {
+                    confirm.run();
+                    setConfirm(null);
+                  },
+                },
+              ]
+            : []
+        }
+      />
     </>
   );
 }

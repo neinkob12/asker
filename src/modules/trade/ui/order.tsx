@@ -19,7 +19,16 @@ import {
   useUi,
 } from '../../../ui';
 import { HARBOR_CITY } from '../../city';
-import { getVehicle, VEHICLE_MODELS, type VehicleModel, vehiclePrice, vehicleSpec, vehicleStatus } from '../../fleet';
+import {
+  getVehicle,
+  RESALE_SHARE,
+  VEHICLE_MODELS,
+  type VehicleModel,
+  vehicleModel,
+  vehiclePrice,
+  vehicleSpec,
+  vehicleStatus,
+} from '../../fleet';
 import { productName } from '../../goods';
 import {
   CONTAINER_SIZES,
@@ -227,6 +236,7 @@ const PHASE: Record<ShipVoyage['phase'], string> = { out: 'auf dem Weg', loading
 export function ShipsGroup() {
   const { state, dispatch } = useGame();
   const [buy, setBuy] = useState<VehicleModel | null>(null);
+  const [sell, setSell] = useState<{ id: number; name: string; amount: number } | null>(null);
   const ships = ownShips(state);
   const charter = getShipments(state).filter((x) => x.vesselId === null && x.status !== 'quay');
   const models = VEHICLE_MODELS.filter((m) => m.ship && m.available);
@@ -245,7 +255,19 @@ export function ShipsGroup() {
           const v = s.voyage;
           const from = v ? getProducer(v.producerId) : undefined;
           return (
-            <ListItem key={`own${s.id}`} value={v ? eta(v.arrivesAt - state.time) : undefined}>
+            <ListItem
+              key={`own${s.id}`}
+              value={v ? eta(v.arrivesAt - state.time) : undefined}
+              onClick={
+                v
+                  ? undefined
+                  : () => {
+                      const model = vehicleModel(getVehicle(state, s.id)?.model ?? '');
+                      const amount = model ? Math.round(vehiclePrice(model, HARBOR_CITY) * RESALE_SHARE) : 0;
+                      setSell({ id: s.id, name: s.name, amount });
+                    }
+              }
+            >
               <ItemContent
                 icon="ship"
                 color={v ? 'place' : 'money'}
@@ -295,6 +317,26 @@ export function ShipsGroup() {
           </ListItem>
         ))}
       </List>
+      <ActionSheet
+        open={sell !== null}
+        onClose={() => setSell(null)}
+        title={sell ? `${sell.name} verkaufen?` : ''}
+        message={sell ? `Du bekommst ${formatEuro(sell.amount)} sauberes Geld zurück.` : undefined}
+        actions={
+          sell
+            ? [
+                {
+                  label: `Verkaufen (${formatEuro(sell.amount)})`,
+                  destructive: true,
+                  onSelect: () => {
+                    dispatch({ type: 'fleet.sell', payload: { vehicleId: sell.id } });
+                    setSell(null);
+                  },
+                },
+              ]
+            : []
+        }
+      />
       <ActionSheet
         open={buy !== null}
         onClose={() => setBuy(null)}

@@ -10,7 +10,7 @@ import { activeCity, saleRecord } from '../modules/city';
 import { allProducts } from '../modules/goods';
 import { priceIndex } from '../modules/market';
 import { contractStats } from '../modules/quests';
-import { getCustomers, supplierReputation, totalStock, tradeStats } from '../modules/trade';
+import { getCustomers, getShipments, supplierReputation, totalStock, tradeStats } from '../modules/trade';
 import { type BotOptions, CAREFUL_BOT, DEFAULT_BOT, newBotStats, playFor, snapshot } from './bot';
 import { koelnKomplett, playToGermany, sellAndArrive } from './scenario';
 
@@ -328,6 +328,7 @@ describe('Balancing', () => {
         const arrived = Math.floor(sim.state.time / DAY) + 1;
         const start = Math.round(sim.state.wallet.dirty + sim.state.wallet.clean);
         const money: number[] = [];
+        const firstDay = Math.floor(sim.state.time / DAY);
         for (let d = 0; d < harborDays && !sim.state.outcome.gameOver; d++) {
           playFor(sim, DAY, stats);
           money.push(Math.round((sim.state.wallet.dirty + sim.state.wallet.clean) / 1000));
@@ -345,11 +346,26 @@ describe('Balancing', () => {
             ` | Container ${t.containers}, aufgeflogen ${t.seized}, Lkw-Ladungen beschlagnahmt ${t.deliveriesSeized}` +
             ` | Schiffsfahrten ${t.voyages}, Europa-Kunden beliefert ${getCustomers(sim.state).filter((c) => c.kind === 'europe' && c.delivered > 0).length}` +
             ` | Ruf pünktlich ${Math.round(rep.reliability * 100)} %, Qualität ${Math.round(rep.quality * 100)} %` +
-            ` | Ware im Hafen ${Math.round(totalStock(sim.state) / 1000)} kg` +
+            ` | Ware im Hafen ${Math.round(totalStock(sim.state) / 1000)} kg, unterwegs ${Math.round(getShipments(sim.state).reduce((g, x) => g + x.amount, 0) / 1000)} kg` +
             ` | ${sim.state.outcome.gameOver ? `Game Over (${sim.state.outcome.gameOver.reason})` : 'keine Pleite'}` +
             ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,
         );
         console.log(`  Geld je Tag (Tsd.): ${money.join(' / ')}`);
+        // Wohin das Geld geht (Auftrag 41): Summen der Kasse über die Hafen-Tage, in Tsd. €.
+        const sums: Record<string, number> = {};
+        for (const book of sim.state.modules.finance.days) {
+          if (book.day < firstDay) continue;
+          for (const [category, split] of Object.entries(book.categories)) {
+            sums[category] = (sums[category] ?? 0) + (split?.dirty ?? 0) + (split?.clean ?? 0);
+          }
+        }
+        console.log(
+          `  Kasse (Tsd.): ${Object.entries(sums)
+            .filter(([, v]) => Math.abs(v) >= 1000)
+            .sort((a, b) => a[1] - b[1])
+            .map(([k, v]) => `${k} ${Math.round(v / 1000)}`)
+            .join(', ')}`,
+        );
         console.log(
           `  Kunden (Vertrauen/Anteil): ${getCustomers(sim.state)
             .map((c) => `${c.name} ${c.trust}/${Math.round(c.share * 100)} %`)

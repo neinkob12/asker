@@ -785,15 +785,21 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   `DEMAND_SCALE`), Kunden und Produzenten in `trade/data.ts`, `RIVALS` in `suppliers/config.ts`, `CUSTOMS_*` in
   `police/config.ts`, `HARBOR_PORTS` in `logistics/config.ts`, `SALE_*` und `ROTTERDAM_SHARE` in `city/config.ts`.
 
-- **Auftrag 41, Hafen-Phase** (gleicher Bericht, Seeds 1–3, 30 Tage). Vorher (`main`, siehe oben) Umsatz
-  105/95/99 Tsd. € am Tag. Mit Seewegen, Hallen und Europa-Kunden, aber altem Bot: 70/89/98 Tsd. € (Albanien braucht
-  jetzt knapp 9 Tage, der Bot zählte diese Container als Deckung und nahm Bestellungen nicht an). Mit dem neuen Bot:
-  Umsatz 3,70/4,96/4,12 Mio. € (123/165/137 Tsd. € am Tag), Marktanteil 49/56/47 %, Lieferungen 136/178/144 (zu spät
-  2/0/3, geplatzt 3/6/0, gekippt 3/1/3), Container 36/46/36, aufgeflogen 1/4/2, Lkw-Ladungen beschlagnahmt 17/9/7 (an
-  den Grenzen), Schiffsfahrten 2/3/2, Europa-Kunden beliefert 5/6/6, Geld nach 30 Tagen 0,73/0,80/0,98 Mio. € plus
-  162/430/41 kg Ware, keine Pleite. Köln komplett (Seeds 1–12) unverändert 23/19/21/28/21/21/24/22/24/22/21/24.
-  Stellschrauben: `CHARTER_KM_PER_DAY`, `COVERS`, `QUAY_FEE_PER_DAY`, `EUROPE_MIN_RELIABILITY` (`trade`), Schiffe in
-  `fleet/config.ts`, `capacity`/`hall*` in `HARBOR_PORTS`, `EUROPE_CITIES` in `trade/data.ts`.
+- **Auftrag 41, Hafen-Phase** (gleicher Bericht, Seeds 1–3, 30 Tage; der Bericht zeigt jetzt auch Ware unterwegs und
+  die Kasse nach Kategorie). Basis `main` neu gemessen: Umsatz 82/104/81 Tsd. € am Tag, Geld nach 30 Tagen
+  1.497/2.135/1.100 Tsd. €, Marktanteil 47/54/42 %, geplatzt 0/0/5, Container aufgeflogen 0/2/4, Lkw-Ladungen
+  beschlagnahmt 4/1/8. Mit Auftrag 41: Umsatz 160/156/150 Tsd. € am Tag, Geld nach 30 Tagen 1.901/2.142/1.879 Tsd. €
+  (dazu 138/213/114 kg im Hafen und 120/120/200 kg unterwegs), Marktanteil 59/56/57 %, geplatzt 2/0/0, Container
+  aufgeflogen 2/1/1 (von 40/35/39), Lkw-Ladungen beschlagnahmt 11/6/8 (mehr Fahrten, Grenzen), Schiffsfahrten 2/3/2,
+  Europa-Kunden beliefert 6/6/6, keine Pleite. Köln komplett (Seeds 1–12) unverändert 23/19/21/28/21/21/24/22/24/22/21/24.
+  Gefunden mit dem Bot: Lange Fahrten nach Europa wurden mit dem eigenen Lkw (Kontrollfaktor 1,8) zu oft kontrolliert
+  (Wien fast 40 %); jetzt deckelt `AUTOBAHN_CHECK_MAX` den Streckenanteil, die Grenzen sind milder, und der Bot nimmt den
+  Lkw nur, wenn das zusätzliche Risiko billiger ist als die Spedition (`deliveryCheckChance`). Ein voller Container auf
+  dem eigenen Schiff, der auffliegt, ließ Bestellungen platzen: Der Bot holt fehlende Ware jetzt pro Ware eilig bei
+  Jansen. Deckladung wählt der Bot nach erwartetem Verlust, das Schiff lädt den Bedarf von anderthalb Wochen.
+  Stellschrauben: `CHARTER_KM_PER_DAY`, `COVERS`, `QUAY_FEE_PER_DAY`, `EUROPE_MIN_RELIABILITY`, `AUTOBAHN_CHECK_MAX`
+  (`trade`), Schiffe und `SHIP_LIMIT` in `fleet/config.ts`, `capacity`/`hall*` in `HARBOR_PORTS`, `EUROPE_CITIES` in
+  `trade/data.ts`.
 
 - **Auftrag 40, Etappe 0 (Zufall pro Stadt, fünf Städte):** Marktindex, Rabatt-Aktionen und Marktereignisse würfeln pro
   (Seed, Stadt, Tag, Zweck) aus `cityDayDice` im Kern (`src/core/rng.ts`, dort auch `keyedRandom`), also unabhängig davon,
@@ -1018,7 +1024,7 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
 - **Beschaffung und Zoll**: `PRODUCERS` (Marokko, Spanien, Albanien per Schiff; Labor Westland und Jansens Netz per Lkw)
   mit Preis pro Ware, Qualität, Laufzeit, Grundrisiko; Container `CONTAINER_SIZES` (klein ist sicherer, groß billiger pro
   Gramm). Häfen als Daten in `logistics.HARBOR_PORTS` (Rotterdam mit dem Kauf, Antwerpen und Hamburg zu mieten;
-  `customsFactor`, `shipDays`). Zoll-Heat pro Hafen in `police` (`customsHeat`, `customsArrival`, `customsSeized`,
+  `customsFactor`; seit Auftrag 41 `capacity`, `hallCapacity`, `hallCost`, die Laufzeit kommt aus `roads.seaRoute`). Zoll-Heat pro Hafen in `police` (`customsHeat`, `customsArrival`, `customsSeized`,
   stündliches Abkühlen; Version 6). Chance einer Kontrolle `containerRisk` = Grundrisiko × Größe × Hafen × (1 + Heat/50);
   dann eine Zollkontrolle als Konfrontation (`customsCheck`, `setting: 'port'`, Ursprung `trade`). Auslieferung per
   Spedition (`FREIGHT_*`) oder Lkw (`fleet`, `harborOnly`), Weg und Zeit über `roads.interCityRoute`, unterwegs mit
@@ -1057,9 +1063,12 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
   Ankunft), Gruppe „Schiffe“ (Tracker, Schiffe kaufen) und Hallen in der Hafen-Seite, Gruppe „Europa“ bei den Kunden
   (auch die Städte, die noch kommen). Europa-Ansicht: Seewege blass, Container auf der Linie und eigene Schiffe (hin
   und zurück) als Punkte, Karten der Städte in Europa, die Autobahn-Linien nach dem Verkauf.
-- **Bot** (`botTrade.ts`): Deckladung nach dem Zoll-Heat, ein Küstenmotorschiff ab 150 kg Wochenbedarf (volle
-  Container, Fahrt höchstens 13 Tage), Charter für alles mit Frist (nur Produzenten, die rechtzeitig liefern), Hallen
-  bei vollem Lager.
+- **Bot** (`botTrade.ts`): Deckladung nach erwartetem Verlust, ein Küstenmotorschiff ab 150 kg Wochenbedarf (lädt den
+  Bedarf von anderthalb Wochen, Fahrt höchstens 13 Tage), Charter nur bei Produzenten, die vor der Frist liefern, Lkw
+  oder Spedition nach erwartetem Verlust, fehlende Ware kurz vor der Frist bei Jansen, Hallen bei vollem Lager.
+- **Lieferblatt**: Spedition und eigener Lkw zeigen die Chance einer Kontrolle (`deliveryCheckChance`: Strecke bis
+  `AUTOBAHN_CHECK_MAX`, dazu die Grenze, mal Kontrollfaktor). Schiffe haben ein eigenes Limit (`SHIP_LIMIT`), lassen
+  sich im Hafen verkaufen; Liegegeld zahlt man mit sauberem Geld.
 
 ## Qualität
 

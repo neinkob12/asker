@@ -88,6 +88,8 @@ export const GANG_MEMORY_BLOCK = -20;
  * fliegt die Ladung mit SEIZE_ON_CHECK auf, ist sie weg (die Bestellung bleibt offen, solange die Frist läuft).
  */
 export const AUTOBAHN_CHECK_PER_100KM = 0.015;
+/** Auftrag 41: Mehr als so viel Kontroll-Chance bringt die Strecke allein nicht (lange Wege nach Europa). */
+export const AUTOBAHN_CHECK_MAX = 0.08;
 export const SEIZE_ON_CHECK = 0.45;
 /** Ohne eigenen Lkw fährt eine Spedition: Grundpreis plus pro Kilo und 100 km (Schwarzgeld). */
 export const FREIGHT_BASE = 800;
@@ -110,5 +112,5 @@ export const CHARTER_KM_PER_DAY = 650;
 
 /** Hallen im Hafen (trade.buildHall): höchstens so viele pro Hafen, Platz und Preis stehen am Hafen (logistics). */
 export const MAX_HALLS = 2;
-/** Passt ein Container nicht mehr ins Lager, wartet der Rest an Bord: Liegegeld pro Tag und Container (Schwarzgeld). */
+/** Passt ein Container nicht mehr ins Lager, wartet der Rest an Bord: Liegegeld pro Tag und Container (sauberes Geld). */
 export const QUAY_FEE_PER_DAY = 1_500;

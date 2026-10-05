@@ -66,6 +66,7 @@ import { interCityMinutes, interCityRoute, seaRoute } from '../roads';
 import { getStaffMember, staffContact } from '../staff';
 import { rivalOffers } from '../suppliers';
 import {
+  AUTOBAHN_CHECK_MAX,
   AUTOBAHN_CHECK_PER_100KM,
   CHARTER_KM_PER_DAY,
   CONTRACT_SHARE,
@@ -116,7 +117,14 @@ import {
   type WeeklyDemand,
 } from './data';
 
-export { CONTRACT_WEEKS, CUSTOMER_KINDS, MAX_HALLS, PRICE_LEVEL_RANGE, PRICE_LEVEL_STEP } from './config';
+export {
+  CONTRACT_WEEKS,
+  CUSTOMER_KINDS,
+  MAX_HALLS,
+  PRICE_LEVEL_RANGE,
+  PRICE_LEVEL_STEP,
+  SEIZE_ON_CHECK,
+} from './config';
 export {
   CONTAINER_SIZES,
   COVERS,
@@ -711,6 +719,23 @@ export function deliveryEstimate(customer: TradeCustomer, portId: string): { min
   return { minutes: interCityMinutes(from, to, TRUCK_CITY_SPEED), km: Math.round(route.meters / 1000) };
 }
 
+/**
+ * Chance einer Zollkontrolle auf dem Weg zum Kunden (0–1): pro 100 km Autobahn, dazu die Grenze nach Europa
+ * (Auftrag 41), mal Kontrollfaktor des eigenen Lkw (Spedition 1).
+ */
+export function deliveryCheckChance(
+  state: GameState,
+  customer: TradeCustomer,
+  portId: string,
+  vehicleId: number | null = null,
+): number {
+  const trip = deliveryEstimate(customer, portId);
+  const factor = vehicleId === null ? 1 : vehicleSpec(state, vehicleId).checkFactor;
+  const border = europeCityOf(customer)?.border.check ?? 0;
+  const road = Math.min(AUTOBAHN_CHECK_MAX, (trip.km / 100) * AUTOBAHN_CHECK_PER_100KM);
+  return Math.min(0.8, (road + border) * factor);
+}
+
 /** Spedition statt eigenem Lkw: Grundpreis plus pro Kilo und 100 km. */
 export function freightCost(grams: number, km: number): number {
   return Math.round((FREIGHT_BASE + (grams / 1000) * (km / 100) * FREIGHT_PER_KG_100KM) / 10) * 10;
@@ -1145,8 +1170,8 @@ export function deliver(ctx: Ctx, orderId: number, portId?: string, vehicleId?: 
   let vehicle: number | null = null;
   if (vehicleId !== undefined && vehicleId !== null) {
     const v = getVehicle(ctx.state, vehicleId);
-    if (!v || v.cityId !== HARBOR_CITY || isShip(v))
-      return { ok: false, reason: 'Dieser Lkw steht nicht in Rotterdam.' };
+    if (v && isShip(v)) return { ok: false, reason: 'Schiffe fahren nicht auf der Straße.' };
+    if (!v || v.cityId !== HARBOR_CITY) return { ok: false, reason: 'Dieser Lkw steht nicht in Rotterdam.' };
     if (vehicleSpec(ctx.state, vehicleId).capacity < grams)
       return { ok: false, reason: 'Das passt nicht in den Wagen.' };
     vehicle = vehicleId;
@@ -1169,10 +1194,7 @@ export function deliver(ctx: Ctx, orderId: number, portId?: string, vehicleId?: 
     items.push({ productId: item.productId, amount: item.amount, quality: lot?.quality ?? START_QUALITY });
     item.state = 'shipped';
   }
-  const factor = vehicle === null ? 1 : vehicleSpec(ctx.state, vehicle).checkFactor;
-  // Auftrag 41: Nach Europa liegt eine Grenze mit Zoll auf dem Weg.
-  const border = europeCityOf(customer)?.border.check ?? 0;
-  const checkChance = Math.min(0.8, ((trip.km / 100) * AUTOBAHN_CHECK_PER_100KM + border) * factor);
+  const checkChance = deliveryCheckChance(ctx.state, customer, from, vehicle);
   const checkAt = ctx.chance(checkChance) ? ctx.now + Math.round(trip.minutes * (0.2 + ctx.random() * 0.6)) : null;
   s.deliveries.push({
     id,
@@ -1481,9 +1503,10 @@ function unload(ctx: Ctx, shipment: TradeShipment): void {
   s.shipments = s.shipments.filter((x) => x.id !== shipment.id);
   if (shipment.quaySince !== undefined) {
     const days = Math.max(1, Math.ceil((ctx.now - shipment.quaySince) / MINUTES_PER_DAY));
-    const fee = Math.min(days * QUAY_FEE_PER_DAY, ctx.state.wallet.dirty);
+    // Liegegeld ist eine Rechnung des Hafens (legal): sauberes Geld, so viel da ist.
+    const fee = Math.min(days * QUAY_FEE_PER_DAY, ctx.state.wallet.clean);
     if (fee > 0) {
-      wallet.pay(ctx, fee, 'dirty', `Liegegeld in ${name}`, { category: 'trade.freight', cityId: HARBOR_CITY });
+      wallet.pay(ctx, fee, 'clean', `Liegegeld in ${name}`, { category: 'trade.freight', cityId: HARBOR_CITY });
     }
   }
   journal.add(
@@ -1601,7 +1624,7 @@ function ema(old: number, value: number): number {
 /** Wo der Zoll steht: an der Grenze (Europa) oder auf der Autobahn. */
 function checkPlace(state: GameState, delivery: TradeDelivery): string {
   const city = europeCityOf(getCustomer(state, delivery.customerId) ?? {});
-  return city ? `an der Grenze (${city.border.name})` : 'auf der Autobahn';
+  return city ? city.border.name : 'auf der Autobahn';
 }
 
 /** Zollkontrolle unterwegs: mit SEIZE_ON_CHECK ist die Ladung weg, die Bestellung wartet wieder auf Ware. */
