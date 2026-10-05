@@ -130,6 +130,13 @@ export const SLEEP_FACTOR_MIN = 0.85;
 export const SLEEP_FACTOR_MAX = 1.15;
 
 /**
+ * Untergrenze des Schnitts im Schlaf (Auftrag 40, Etappe 0): plan.md sagt „hin und wieder ein kleines Minus durch eine
+ * Razzia, nichts Schlimmes“. Ein Statthalter führt die Stadt sparsam; lief sie live mit Verlust (München als teure Stadt,
+ * die letzten Tage nach dem Übernehmen), bucht sie im Schlaf mindestens 0. Ein Minus gibt es nur durch eine Razzia.
+ */
+export const SLEEP_AVERAGE_FLOOR = 0;
+
+/**
  * Startgeld (Auftrag 36): Bei der Übergabe gibt dir der Statthalter so viele Tagesgewinne der Stadt mit (Schnitt der
  * letzten live gespielten Tage, wie im Schlaf), als Umbuchung aus der Kasse der Stadt, nicht als Gewinn (sein Anteil
  * bleibt davon unberührt). Stellschraube für das Tempo der späteren Städte, zusammen mit FULL_POWER_SHARE
@@ -149,6 +156,18 @@ export const START_MONEY_MIN_BY_CITY: Readonly<Record<string, number>> = {
   muenchen: 60_000,
   frankfurt: 48_000,
 };
+
+/**
+ * Faktor auf das Mindest-Startgeld nach der Zahl der Städte, die du schon komplett hast (Auftrag 40, Etappe 0; Index =
+ * Zahl, darüber der letzte Wert): Wer mit mehr Städten im Rücken ankommt, bringt mehr mit. Die zweite Stadt bleibt bei 1.
+ */
+export const START_MONEY_FACTOR_BY_CITIES_DONE: readonly number[] = [1, 1, 1.25, 1.5, 1.75];
+
+/**
+ * Was im Schlaf nicht in den Schnitt zählt (Auftrag 36 und 40): einmalige Ausgaben für Wachstum. Der Statthalter baut
+ * nicht weiter aus und heuert nicht ständig neu an; das Ergebnis einer schlafenden Stadt ist kein Dauerverlust.
+ */
+export const SLEEP_EXCLUDED_CATEGORIES: readonly ('expansion' | 'hiring')[] = ['expansion', 'hiring'];
 
 /**
  * Boss von Deutschland erst mit so vielen kompletten Städten (plan.md: alle spielbaren, Frankfurt optional, also

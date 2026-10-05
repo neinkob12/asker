@@ -93,6 +93,8 @@ import {
   OFFER_REMINDER_DAYS,
   PLAYER_CITY_SPEED,
   SLEEP_AVERAGE_DAYS,
+  SLEEP_AVERAGE_FLOOR,
+  SLEEP_EXCLUDED_CATEGORIES,
   SLEEP_FACTOR_MAX,
   SLEEP_FACTOR_MIN,
   SLEEP_RAID_CHANCE,
@@ -100,6 +102,7 @@ import {
   SLEEP_RAID_LOSS_MAX,
   SLEEP_RAID_LOSS_MIN,
   SLEEP_RAID_TEXTS,
+  START_MONEY_FACTOR_BY_CITIES_DONE,
   START_MONEY_MIN_BY_CITY,
 } from './config';
 import { CITIES, type CityDef } from './data';
@@ -771,7 +774,10 @@ export function handOver(ctx: Ctx, cityId: string, toCityId?: string, pack: Star
 export function startMoneyFor(state: GameState, from: string, to?: string): number {
   const results = cityState(state)?.sleep?.[from]?.results ?? [];
   const average = results.length > 0 ? results.reduce((a, b) => a + b, 0) / results.length : 0;
-  const min = (to && START_MONEY_MIN_BY_CITY[to]) || 0;
+  const table = START_MONEY_FACTOR_BY_CITIES_DONE;
+  const done = playableCities().filter((c) => c.id !== to && campaignProgress(state, c.id).complete).length;
+  const factor = table[Math.min(done, table.length - 1)] ?? 1;
+  const min = Math.round((((to && START_MONEY_MIN_BY_CITY[to]) || 0) * factor) / 1000) * 1000;
   return Math.max(min, Math.round(average * HANDOVER_START_MONEY_DAYS), 0);
 }
 
@@ -959,15 +965,16 @@ function closeLiveDay(ctx: Ctx): void {
     c.sleep[cityId] ??= newSleep(c.active === cityId, ctx.now);
     const rec = c.sleep[cityId];
     if (rec.liveToday && day >= 1) {
-      const profit = cityDayProfit(ctx.state, cityId, day);
-      if (profit !== null) {
-        // Einmalige Ausgaben (Lager, Spots, Fahrzeuge: Ausbau) gehören nicht in den Schnitt (Auftrag 33/36): Der
-        // Statthalter baut im Schlaf nicht weiter aus.
-        const once = cityReport(ctx.state, cityId, 1, bookDay(ctx.now) - day).rows;
-        const expansion = once.find((r) => r.category === 'expansion')?.amount ?? 0;
-        rec.results.push(Math.round(profit - expansion));
-        if (rec.results.length > SLEEP_AVERAGE_DAYS) rec.results.splice(0, rec.results.length - SLEEP_AVERAGE_DAYS);
-      }
+      // Ein ganzer Tag ohne eine einzige Buchung steht nicht im Buch: Er zählt mit 0 (Auftrag 40).
+      const profit = cityDayProfit(ctx.state, cityId, day) ?? 0;
+      // Einmalige Ausgaben (Lager, Spots, Fahrzeuge: Ausbau) gehören nicht in den Schnitt (Auftrag 33/36): Der
+      // Statthalter baut im Schlaf nicht weiter aus. Auftrag 40: auch das Anheuern (Wachstum, nicht laufender Betrieb).
+      const once = cityReport(ctx.state, cityId, 1, bookDay(ctx.now) - day).rows;
+      const growth = once
+        .filter((r) => (SLEEP_EXCLUDED_CATEGORIES as readonly string[]).includes(r.category))
+        .reduce((sum, r) => sum + r.amount, 0);
+      rec.results.push(Math.round(profit - growth));
+      if (rec.results.length > SLEEP_AVERAGE_DAYS) rec.results.splice(0, rec.results.length - SLEEP_AVERAGE_DAYS);
     }
     rec.liveToday = c.active === cityId;
   }
@@ -988,7 +995,8 @@ export function sleepResult(average: number, random: () => number): { amount: nu
 
 function sleepSummary(ctx: Ctx, cityId: string, day: number, rec: CitySleep): void {
   const name = cityName(cityId);
-  const average = rec.results.length > 0 ? rec.results.reduce((a, b) => a + b, 0) / rec.results.length : 0;
+  const raw = rec.results.length > 0 ? rec.results.reduce((a, b) => a + b, 0) / rec.results.length : 0;
+  const average = Math.max(SLEEP_AVERAGE_FLOOR, raw);
   const result = sleepResult(average, () => ctx.random());
   let amount = result.amount;
   const raidKind = result.raid;

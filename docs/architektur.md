@@ -771,6 +771,28 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   Berlin mehr mit), als zweite nötig (mit 54.000 € und Faktor 0,5 Median 20 statt 16 Tage). Köln komplett gleich wie
   auf `main` (22/22/22/23/23/24/22/21/21/22/17/20, Seeds 1–12): Der Markt würfelt den Index nur noch für freie Städte.
 
+- **Auftrag 40, Etappe 0 (Zufall pro Stadt, fünf Städte):** Marktindex, Rabatt-Aktionen und Marktereignisse würfeln pro
+  (Seed, Stadt, Tag, Zweck) aus `cityDayDice` im Kern (`src/core/rng.ts`, dort auch `keyedRandom`), also unabhängig davon,
+  welche und wie viele Städte frei sind (Test `market/cityDice.test.ts`). Dadurch neue Würfelfolge in Köln: Köln komplett
+  (Seeds 1–12) 22/22/22/23/23/24/22/21/21/22/17/20 → 23/19/21/28/21/21/24/22/24/22/21/24 (Ø 21,6 → 22,5).
+  Bericht „Tage pro Stadt“ (6 Seeds, `BALANCE_LATER_DAYS=80`, Ankunft bis komplett), vorher → nachher:
+  - Köln → Berlin → München → Hamburg → Frankfurt (`BALANCE_ORDER=berlin,muenchen,hamburg,frankfurt`): Hamburg als
+    vierte Stadt vorher in 5 von 6 Seeds nicht komplett, nachher nach 15/8/8/10/7/9 Tagen; Frankfurt als fünfte vorher
+    nie erreicht, nachher 4/4/6/8/5/4; München als dritte 7/6/13/18/6/10 → 14/7/6/6/7/10.
+  - Köln → Berlin → Hamburg → München → Frankfurt: München als vierte 21/27/20/21/15/16 → 8/10/8/16/8/11, Frankfurt als
+    fünfte 7/–/9/8/9/5 → 6/6/6/11/5/6.
+  - Bot wählt selbst (Köln → Berlin → Hamburg → Frankfurt → München): Frankfurt als vierte 7/13/7/16/8/15 → 6/4/6/7/7/6,
+    München als fünfte 13/22/–/27/19/28 → 6/9/6/6/6/6. Berlin als zweite 5–9, Hamburg als dritte 6–13. Keine Pleite.
+  Gefunden mit dem Bot: Nach dem Übernehmen arbeitete München beim Bot mit Verlust (Löhne mal 1,4, ständig neu angeheuert),
+  im Schlaf buchte es jeden Tag 8.000 bis 16.000 € Minus, und die nächste Stadt verhungerte. Stellschrauben (alle als
+  Daten): `SLEEP_AVERAGE_FLOOR` 0 (plan.md: im Schlaf ein Minus nur durch eine Razzia) und `SLEEP_EXCLUDED_CATEGORIES`
+  (Anheuern zählt wie Ausbau nicht in den Schnitt) in `city/config.ts`, `START_MONEY_FACTOR_BY_CITIES_DONE`
+  [1, 1, 1,25, 1,5, 1,75] auf das Mindest-Startgeld, `SALE_INFLUENCE_BY_CITIES_DONE` [1, 1, 1,1, 1,3, 1,5] in
+  `territory/config.ts` („der Ruf eilt voraus“: Einfluss pro Verkauf nach der Zahl der schon kompletten Städte). Ohne den
+  Einfluss-Faktor war die vierte Stadt nach 7 bis 20, die fünfte nach 5 bis 22 Tagen komplett; mit [1, 1, 1,2, 1,5, 1,8]
+  nach 6 bis 12 bzw. 2 bis 6. Die Wartezeit zwischen „komplett“ und der Abfahrt (die Rechte Hand muss Stufe 5 erreichen)
+  steckt nicht in diesen Zahlen; sie ist nach einer schnellen Stadt oft zwei bis drei Wochen lang.
+
 - Auftrag 37 (Berlin als dritte spielbare Stadt; Köln 16 Seeds, Tage pro Stadt 8 Seeds, vorher = `main` nach Auftrag 34):
   Köln komplett Ø Tag 22,25 (19–29) → 21,7 (17–24), „Boss von Köln“ Ø Tag 15,9 → 16,4, erstes Veedel Ø Tag 6,5 → 6,6,
   Umsatz pro Tag T6–15 11.735 → 10.981 €, T16–30 23.120 → 24.371 €, keine Pleite. Der Preisindex würfelt nur noch für

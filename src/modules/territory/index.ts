@@ -42,6 +42,7 @@ import {
   PLAYER_COLOR,
   SALE_DISPLACEMENT,
   SALE_INFLUENCE_BASE,
+  SALE_INFLUENCE_BY_CITIES_DONE,
   SALE_INFLUENCE_FACTOR_BY_CITY,
   SALE_INFLUENCE_MAX,
   SALE_INFLUENCE_PER_UNIT,
@@ -274,14 +275,27 @@ function updateController(ctx: Ctx, veedelId: string): void {
 
 /** Eigener Verkauf: Einfluss für den Spieler, die stärkste Gang im Veedel wird zurückgedrängt. */
 /** Einfluss pro Verkauf in einer Stadt (1 = wie in Köln; Hamburg weniger, die Gangs sitzen fester). */
-export function saleInfluenceFactor(cityId: string): number {
-  return SALE_INFLUENCE_FACTOR_BY_CITY[cityId] ?? 1;
+export function saleInfluenceFactor(cityId: string, state?: GameState): number {
+  const base = SALE_INFLUENCE_FACTOR_BY_CITY[cityId] ?? 1;
+  if (!state) return base;
+  const done = citiesDoneBefore(state, cityId);
+  const table = SALE_INFLUENCE_BY_CITIES_DONE;
+  return base * (table[Math.min(done, table.length - 1)] ?? 1);
+}
+
+/** Wie viele andere Städte du schon komplett hast (Meilenstein „komplett“, Auftrag 40). */
+export function citiesDoneBefore(state: GameState, cityId: string): number {
+  let n = 0;
+  for (const [id, m] of Object.entries(state.modules.territory.milestones ?? {})) {
+    if (id !== cityId && m.complete !== null) n++;
+  }
+  return n;
 }
 
 function onSale(ctx: Ctx, veedelId: string, amount: number): void {
   if (!getVeedel(veedelId)) return;
   ctx.state.modules.territory.lastSaleAt[veedelId] = ctx.now;
-  const cityFactor = saleInfluenceFactor(veedelCity(veedelId));
+  const cityFactor = saleInfluenceFactor(veedelCity(veedelId), ctx.state);
   const gain =
     Math.min(SALE_INFLUENCE_MAX, SALE_INFLUENCE_BASE + SALE_INFLUENCE_PER_UNIT * Math.max(0, amount)) * cityFactor;
   changeInfluence(ctx.state, veedelId, PLAYER_FACTION, gain);
