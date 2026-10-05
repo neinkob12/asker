@@ -83,7 +83,6 @@ import {
   POACH_TALK_HEAT,
   POACH_THREAT_LOYALTY,
   POACH_THREAT_STAY,
-  RAID_WEIGHT_FACTOR,
   RECOVER_SHARE,
   TIPOFF_HEAT,
   TIPOFF_RAID_CHANCE,
@@ -304,11 +303,8 @@ function eligible(ctx: Ctx, gang: Gang, method: GangMethod, stage: number): bool
 /** Methode nach den Gewichten der Gang wählen (nur, was gerade geht). */
 export function pickMethod(ctx: Ctx, gang: Gang, stage: number): GangMethod | null {
   const weights: Partial<Record<GangMethod, number>> = {};
-  const city = METHOD_FACTOR_BY_CITY[gang.cityId] ?? 1;
   for (const [method, w] of Object.entries(gang.traits.methods) as [GangMethod, number][]) {
-    // Ab Stufe 3 bleibt der Überfall die Hauptsache (RAID_WEIGHT_FACTOR), die anderen Methoden kommen dazu.
-    if (w > 0 && eligible(ctx, gang, method, stage))
-      weights[method] = method === 'raid' ? w * RAID_WEIGHT_FACTOR : w * city;
+    if (w > 0 && eligible(ctx, gang, method, stage)) weights[method] = w;
   }
   return weightedPick(ctx, weights);
 }

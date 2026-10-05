@@ -84,7 +84,7 @@ import {
   WARN_AT,
 } from './config';
 import { GANGS, type Gang } from './data';
-import { goodTurns, logAction, maybePressure, pickMethod, runMethod, upkeepIncidents } from './methods';
+import { goodTurns, logAction, maybePressure, upkeepIncidents } from './methods';
 import {
   type GangStage,
   type GangStatus,
@@ -425,12 +425,6 @@ function reactToPlayer(ctx: Ctx, gang: Gang, s: GangStatus): void {
   const event = eventFactor(ctx.state, 'gangRaids', { cityId: gang.cityId });
   const chance = ATTACK_CHANCE * gang.traits.aggression * Math.min(1, (s.hostility - 60) / 40) * event;
   if (!ctx.chance(chance)) return;
-  // Auftrag 23: Wie die Gang zuschlägt, hängt an ihren Methoden (data.ts). Geht die gewählte nicht, Überfall.
-  const method = pickMethod(ctx, gang, 3);
-  if (method && method !== 'raid' && runMethod(ctx, gang, s, method)) {
-    s.lastAttackAt = ctx.now;
-    return;
-  }
   launchRaid(ctx, gang, s);
 }
 

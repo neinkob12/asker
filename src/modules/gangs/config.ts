@@ -223,13 +223,12 @@ export const METHOD_CHANCE = 0.004;
 /** Abstand zwischen zwei Aktionen derselben Gang (Stufe 2) und zwischen zwei Aktionen irgendeiner Gang. */
 export const METHOD_COOLDOWN = 3 * DAY;
 export const METHOD_GLOBAL_GAP = DAY;
-/** Gewicht des Überfalls ab Stufe 3 mal diesem Faktor: Er bleibt die Hauptsache, die anderen Methoden kommen dazu. */
-export const RAID_WEIGHT_FACTOR = 2;
 /**
- * Wie oft und wie stark die neuen Methoden pro Stadt zum Zug kommen (Faktor auf METHOD_CHANCE und auf die Gewichte
- * außer Überfall). Hamburgs Gangs sind ohnehin stärker und härter, dort kommen die Methoden seltener dazu.
+ * Wie oft die neuen Methoden pro Stadt zum Zug kommen (Faktor auf METHOD_CHANCE). Sie kommen zum Überfall dazu,
+ * ersetzen ihn nie: Abgewehrte Überfälle schwächen die Gang, davon lebt die Übernahme ihrer Veedel. Hamburgs Gangs sind
+ * ohnehin stärker und härter, dort kommen die Methoden noch seltener dazu.
  */
-export const METHOD_FACTOR_BY_CITY: Readonly<Record<string, number>> = { koeln: 1, hamburg: 0.4 };
+export const METHOD_FACTOR_BY_CITY: Readonly<Record<string, number>> = { koeln: 0.6, hamburg: 0.4 };
 /** Nach einer Methode sinkt die Feindseligkeit der Gang um so viel (nach einem gelungenen Überfall: HOSTILITY_AFTER_LESSON). */
 export const METHOD_HOSTILITY_RELIEF = 20;
 /** Antwortfrist für Nachrichten zu Einbruch, Abwerben, Einschüchtern, Erpressung. */

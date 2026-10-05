@@ -72,13 +72,24 @@ describe('Köln läuft allein', () => {
     const events: Record<string, number> = {};
     let rightHandDeliveries = 0;
     let salesLastDays = 0;
+    let awaySince: number | null = null;
+    let awayDays = 0;
     const end = sim.state.time + 10 * DAY;
     sim.onEvent((e: GameEvent) => {
       events[e.type] = (events[e.type] ?? 0) + 1;
       if (e.type === 'order.accepted' && e.payload.by === 'rightHand') rightHandDeliveries++;
       if (e.type === 'sale.completed' && e.time >= end - 2 * DAY) salesLastDays++;
+      // Sitzt sie in Haft oder liegt im Krankenhaus, schreibt sie keinen Bericht: Diese Tage zählen nicht.
+      if (e.type === 'staff.statusChanged' && e.payload.staffId === rh.staffId) {
+        if (e.payload.from === 'active') awaySince = e.time;
+        else if (e.payload.to === 'active' && awaySince !== null) {
+          awayDays += Math.max(0, Math.floor(e.time / DAY) - Math.floor(awaySince / DAY) - 1);
+          awaySince = null;
+        }
+      }
     });
     sim.advance(10 * DAY);
+    if (awaySince !== null) awayDays += Math.floor(sim.state.time / DAY) - Math.floor(awaySince / DAY);
 
     const after = snapshot(sim.state);
     expect(after.gameOver, JSON.stringify({ before, after, events })).toBeNull();
@@ -89,7 +100,7 @@ describe('Köln läuft allein', () => {
     expect(rightHandDeliveries).toBeGreaterThan(0);
     expect(after.staff).toBeGreaterThanOrEqual(2);
     // Sie hat berichtet und etwas erledigt.
-    expect(events['hierarchy.dailyReport'] ?? 0).toBeGreaterThanOrEqual(9);
+    expect(events['hierarchy.dailyReport'] ?? 0).toBeGreaterThanOrEqual(9 - awayDays);
     expect(getRightHand(sim.state)?.lastReport?.done ?? '').not.toBe('');
   }, 180_000);
 
