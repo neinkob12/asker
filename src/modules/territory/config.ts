@@ -34,8 +34,9 @@ export const SALE_DISPLACEMENT = 0.5;
 /**
  * Einfluss pro Verkauf je Stadt (Auftrag 30, fehlt: 1). In Hamburg sitzen die Gangs fester: Wer aus Köln kommt, hat
  * viel Geld und Leute; das erste Hamburger Veedel soll trotzdem etwa 7 bis 10 Tage dauern (Balancing-Bericht).
+ * Frankfurt (Auftrag 39): 0,5, der Bot ist als dritte Stadt nach 6 bis 14 Tagen komplett (Schnitt etwa 9).
  */
-export const SALE_INFLUENCE_FACTOR_BY_CITY: Readonly<Record<string, number>> = { hamburg: 0.6, frankfurt: 0.7 };
+export const SALE_INFLUENCE_FACTOR_BY_CITY: Readonly<Record<string, number>> = { hamburg: 0.6, frankfurt: 0.5 };
 
 // --- Präsenz und Verfall (stündlich) ------------------------------------------------------------------------
 

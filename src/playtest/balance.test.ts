@@ -251,7 +251,7 @@ describe('Balancing', () => {
           const arrived = r.arrived[cityId];
           const done = r.complete[cityId];
           const veedel = (n: number) => {
-            const day = r.days.find((d) => d.activeCity === cityId && d[cityId as 'hamburg'] >= n)?.day;
+            const day = r.days.find((d) => d.activeCity === cityId && d[cityId as 'hamburg' | 'frankfurt'] >= n)?.day;
             return day ? `${day - arrived}` : '-';
           };
           return (
