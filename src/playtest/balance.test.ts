@@ -85,7 +85,14 @@ interface CitiesReport {
  * komplett und die Rechte Hand bereit (koelnKomplett), danach wählt er die nächste Stadt selbst, übergibt mit
  * Startpaket und spielt dort weiter, insgesamt laterDays Tage. Gemessen: Tage pro Stadt (Ankunft bis komplett).
  */
-function simulateCities(seed: number, koelnDays: number, laterDays: number, money?: number): CitiesReport {
+function simulateCities(
+  seed: number,
+  koelnDays: number,
+  laterDays: number,
+  money?: number,
+  cityOrder?: readonly string[],
+): CitiesReport {
+  const options = { ...DEFAULT_BOT, ...(cityOrder ? { cityOrder } : {}) };
   const sim = createTestGame({ seed });
   const stats = newBotStats();
   const events: Record<string, number> = {};
@@ -117,7 +124,7 @@ function simulateCities(seed: number, koelnDays: number, laterDays: number, mone
       events.startMoney = Math.round(e.payload.amount);
     }
   });
-  for (let d = 0; d < koelnDays; d++) playFor(sim, DAY, stats);
+  for (let d = 0; d < koelnDays; d++) playFor(sim, DAY, stats, options);
   if (money !== undefined) {
     sim.state.wallet.dirty = Math.max(sim.state.wallet.dirty, money);
     sim.state.wallet.clean = Math.max(sim.state.wallet.clean, money / 4);
@@ -126,7 +133,7 @@ function simulateCities(seed: number, koelnDays: number, laterDays: number, mone
   for (let d = 0; d < laterDays; d++) {
     revenue = 0;
     sleepIncome = 0;
-    playFor(sim, DAY, stats);
+    playFor(sim, DAY, stats, options);
     report.days.push({
       ...snapshot(sim.state),
       revenue: Math.round(revenue),
@@ -140,12 +147,22 @@ function simulateCities(seed: number, koelnDays: number, laterDays: number, mone
 
 describe('Balancing', () => {
   it('nach Köln komplett wählt der Bot die nächste Stadt, übergibt mit Startpaket und fängt dort an', () => {
-    const r = simulateCities(1, 0, 4, 30_000);
+    const r = simulateCities(1, 0, 4, 30_000, ['berlin']);
     const last = r.days[r.days.length - 1];
     expect(r.events['hierarchy.fullPowerGranted']).toBe(1);
-    expect(r.order).toEqual(['koeln', 'hamburg']);
-    expect(r.stats.cities?.[0]).toMatchObject({ from: 'koeln', to: 'hamburg' });
-    expect(last.city).toBe('hamburg');
+    expect(r.order).toEqual(['koeln', 'berlin']);
+    expect(r.stats.cities?.[0]).toMatchObject({ from: 'koeln', to: 'berlin' });
+    expect(last.city).toBe('berlin');
+    expect(last.gameOver).toBeNull();
+    expect(r.events['goods.warehouseBought'] ?? 0).toBeGreaterThanOrEqual(1);
+    expect(r.days.some((d) => d.revenue > 0)).toBe(true);
+  }, 120_000);
+
+  it('München nach Köln (Auftrag 38): der Bot fährt hin, kauft ein Lager und verkauft dort', () => {
+    const r = simulateCities(1, 0, 4, 60_000, ['muenchen']);
+    const last = r.days[r.days.length - 1];
+    expect(r.order).toEqual(['koeln', 'muenchen']);
+    expect(last.city).toBe('muenchen');
     expect(last.gameOver).toBeNull();
     expect(r.events['goods.warehouseBought'] ?? 0).toBeGreaterThanOrEqual(1);
     expect(r.days.some((d) => d.revenue > 0)).toBe(true);
@@ -242,16 +259,18 @@ describe('Balancing', () => {
       const seeds = (process.env.BALANCE_SEEDS ?? '1,2,3').split(',').map(Number);
       const koelnDays = Number(process.env.BALANCE_KOELN_DAYS ?? 25);
       const laterDays = Number(process.env.BALANCE_LATER_DAYS ?? 30);
+      // Reihenfolge der Städte nach Köln (Auftrag 38), z.B. BALANCE_ORDER=muenchen; fehlt: der Bot wählt selbst.
+      const order = process.env.BALANCE_ORDER?.split(',').filter(Boolean);
       for (const seed of seeds) {
         const started = Date.now();
-        const r = simulateCities(seed, koelnDays, laterDays);
+        const r = simulateCities(seed, koelnDays, laterDays, undefined, order);
         const last = r.days[r.days.length - 1];
         const e = (k: string) => r.events[k] ?? 0;
         const perCity = r.order.slice(1).map((cityId) => {
           const arrived = r.arrived[cityId];
           const done = r.complete[cityId];
           const veedel = (n: number) => {
-            const day = r.days.find((d) => d.activeCity === cityId && d[cityId as 'hamburg' | 'frankfurt'] >= n)?.day;
+            const day = r.days.find((d) => d.activeCity === cityId && (d.controlled[cityId] ?? 0) >= n)?.day;
             return day ? `${day - arrived}` : '-';
           };
           return (

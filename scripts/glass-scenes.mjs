@@ -1,5 +1,5 @@
 // Szenen für die Bilder des Looks "Glas" (Auftrag 24): Karte, HUD, Spots, Konfrontation, Razzia, Lieferung,
-// Veedel übernommen; seit Auftrag 30 auch Anruf, Übergabe, Deutschland-Ansicht und Hamburg bei Nacht, seit Auftrag 31 Kölner Lichter und Hafengeburtstag. Jede Szene startet ein frisches Spiel (fester Seed, pausiert) und bereitet es per JavaScript vor
+// Veedel übernommen; seit Auftrag 30 auch Anruf, Übergabe, Deutschland-Ansicht und Hamburg bei Nacht, seit Auftrag 31 Kölner Lichter und Hafengeburtstag, seit Auftrag 38 München und das Oktoberfest. Jede Szene startet ein frisches Spiel (fester Seed, pausiert) und bereitet es per JavaScript vor
 // (window.koeln = { session, runtime }). Genutzt von glass-shots.mjs.
 
 /** Hilfen, die in jeder Szene im Browser bereitstehen. */
@@ -89,6 +89,37 @@ export const PRELUDE = `
     for (const id of ['spielbudenplatz', 'hans-albers-platz', 'landungsbruecken', 'kiezbar']) run('spots.unlock', { spotId: id });
     run('staff.hireRunner', { spotId: 'spielbudenplatz' });
     run('customers.standAt', { spotId: 'hans-albers-platz' });
+    sim.advance(60);
+  };
+  /** Berlin (Auftrag 37): frei, aktiv, du bist dort; Clubkeller in Friedrichshain, Spots rund um die Warschauer Straße. */
+  const berlin = async () => {
+    const goods = await import('/src/modules/goods/index.ts');
+    rich();
+    k.dev.berlinFrei();
+    run('city.switch', { cityId: 'berlin' });
+    state().modules.city.present = 'berlin';
+    run('goods.buyWarehouse', { warehouseId: 'keller-friedrichshain' });
+    goods.store(sim.ctx('goods'), { productId: 'weed', amount: 800, warehouseId: 'keller-friedrichshain', quality: 0.8 });
+    for (const id of ['warschauer-strasse', 'raw-gelaende', 'club-halle-ost', 'kottbusser-tor', 'goerlitzer-park', 'club-spreeufer']) run('spots.unlock', { spotId: id });
+    run('staff.hireRunner', { spotId: 'warschauer-strasse' });
+    run('staff.hireRunner', { spotId: 'club-halle-ost' });
+    run('customers.standAt', { spotId: 'raw-gelaende' });
+    sim.advance(60);
+  };
+  /** München (Auftrag 38): frei, aktiv, du bist dort; Lager in Giesing, Spots an der Wiesn und in Giesing, Ware. */
+  const muenchen = async () => {
+    const goods = await import('/src/modules/goods/index.ts');
+    rich();
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'muenchen' } }, { actor: 'system' });
+    run('city.switch', { cityId: 'muenchen' });
+    state().modules.city.present = 'muenchen';
+    run('goods.buyWarehouse', { warehouseId: 'hinterhof-giesing' });
+    goods.store(sim.ctx('goods'), { productId: 'weed', amount: 800, warehouseId: 'hinterhof-giesing', quality: 0.8 });
+    for (const id of ['theresienwiese', 'augustiner-keller', 'hauptbahnhof-muc', 'tegernseer-landstrasse', 'sendlinger-tor']) {
+      run('spots.unlock', { spotId: id });
+    }
+    run('staff.hireRunner', { spotId: 'tegernseer-landstrasse' });
+    run('customers.standAt', { spotId: 'theresienwiese' });
     sim.advance(60);
   };
   /** Frankfurt (Auftrag 39): frei, aktiv, du bist dort; Keller im Bahnhofsviertel, Spots dort und am Main, Läufer, Ware. */
@@ -279,6 +310,32 @@ export const SCENES = [
     js: `await frankfurt(); sim.advance(${TIMES.nacht} - 60); render();`,
     wait: 4500,
   },
+  // Auftrag 37: Berlin bei Tag (Samstagmittag, die Clubs haben durchgehend offen) und Nacht (Freitag 23 Uhr).
+  {
+    name: 'berlin-tag',
+    js: `sim.advance(${TIMES.tag - 60}); await berlin(); render();`,
+    wait: 4500,
+  },
+  {
+    name: 'berlin-nacht',
+    js: `sim.advance(${TIMES.nacht - 60}); await berlin(); render();`,
+    wait: 4500,
+  },
+  {
+    // Wahrzeichen: Fernsehturm, Brandenburger Tor, Oberbaumbrücke (nah, ohne Handy).
+    name: 'berlin-mitte',
+    js: `sim.advance(${TIMES.tag - 60}); await berlin(); render(); api.closePhone(); await sleep(3000); k.runtime.map.map.jumpTo({ center: [13.396, 52.5172], zoom: 14.6, bearing: 20, pitch: 55 });`,
+    wait: 4500,
+    sizes: ['desktop'],
+  },
+  {
+    name: 'silvester',
+    js:
+      'await berlin(); state().time = (85 - 1) * 1440 + 21 * 60 + 40; sim.step(); render(); await sleep(3000); ' +
+      'api.setSpeed(1); k.runtime.map.map.jumpTo({ center: [13.3735, 52.5155], zoom: 14.6 });',
+    wait: 2600,
+    live: true,
+  },
   // Auftrag 31: Events auf der Karte. Die Uhr springt direkt auf den Event-Tag (nur für das Bild).
   {
     name: 'lichter',
@@ -293,6 +350,24 @@ export const SCENES = [
     js:
       'await hamburg(); state().time = (50 - 1) * 1440 + 15 * 60; sim.step(); render(); ' +
       'k.runtime.map.map.jumpTo({ center: [9.95, 53.5445], zoom: 14 });',
+    wait: 4000,
+  },
+  // Auftrag 38: München bei Tag und Nacht, Oktoberfest (Tag 40) an der Theresienwiese.
+  {
+    name: 'muenchen-tag',
+    js: `sim.advance(${TIMES.tag}); await muenchen(); render();`,
+    wait: 4500,
+  },
+  {
+    name: 'muenchen-nacht',
+    js: `sim.advance(${TIMES.nacht}); await muenchen(); render();`,
+    wait: 4500,
+  },
+  {
+    name: 'oktoberfest',
+    js:
+      'await muenchen(); state().time = (41 - 1) * 1440 + 19 * 60; sim.step(); render(); ' +
+      'k.runtime.map.map.jumpTo({ center: [11.551, 48.134], zoom: 14.2 });',
     wait: 4000,
   },
   {

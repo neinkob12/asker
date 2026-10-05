@@ -210,7 +210,7 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   Zwischenhändler für ein Veedel). Große Städte bekommen Capos, die Rechte Hand gibt im Tagesbericht einen Satz Rat.
 - **Deutschland (Auftrag 36):** Nach Köln ist die Reihenfolge frei. Jede Stadt hat einen Kontakt mit Gesicht und Stimme
   und einen Satz Dreh; nach „<Stadt> komplett“ ruft die nächstgelegene freie an, die anderen melden sich per Handy, ein
-  Tipp auf ihre Glas-Karte in der Deutschland-Ansicht holt den Anruf. Berlin, München und Frankfurt stehen schon als
+  Tipp auf ihre Glas-Karte in der Deutschland-Ansicht holt den Anruf. Frankfurt steht schon als
   „bald“ da. Ein Autobahn-Netz (A1, A3, A3/A9, A24, A9, A7/A5) trägt Fahrten zwischen allen Städten, auch über eine
   Stadt hinweg. Die Rechte Hand mit Vollmacht heißt Statthalter; schlafende Städte haben an etwa 3 von 100 Tagen eine
   Razzia (halber Tag oder kleines Minus, eine Zeile vom Statthalter). Bei der Übergabe kommt ein Startpaket mit (neue
@@ -218,13 +218,18 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   Zielstadt, Hamburg 45.000 €). Ränge des Spielers ohne
   Boni: Kleindealer, Händler, Großhändler, Boss von Köln, Boss von <Stadt>, Boss von Deutschland (ab vier Städten; dann Importeur und
   Produzent), mit Banner, im HUD und in der Bestenliste. Peter hat ein Kapitel pro Stadt.
+- **Berlin (Auftrag 37):** die dritte spielbare Stadt, Dreh „die Nacht“. Zwölf Ortsteile von Charlottenburg bis
+  Lichtenberg mit viel Nachtleben und lockerer Polizei, 40 Spots, darunter vier Clubs, die nur von Freitag 22 Uhr bis
+  Montag 8 Uhr offen haben (dann mit dem größten Andrang der Stadt), vier starke Gangs (Türsteher, Kotti-Familie,
+  Leo-Gang, Kudamm-Kreis), Mieten mittel. Mirko ist hier zu Hause und liefert billiger in einer Stunde. Events: Fête de
+  la Musique, CSD, Silvester am Brandenburger Tor mit Feuerwerk. Wahrzeichen: Fernsehturm, Brandenburger Tor,
+  Oberbaumbrücke.
 - **Frankfurt (Auftrag 39, optional):** spielbar mit zwölf Stadtteilen, Geld und Flughafen als Dreh: viele Banker an
   den Spots, das Bahnhofsviertel mit der meisten Nachfrage und Polizei, Kofi am Flughafen (klein, schnell, teuer, beste
   Ware, der Zoll greift öfter zu), Toni zu Hause (schneller und billiger), Geldwäsche nimmt dort anderthalbmal so viel
   auf einmal, Messe und Museumsuferfest. Frankfurt meldet sich nach „<Stadt> komplett“ erst nach den anderen freien
-  Städten. Der Bot ist als dritte Stadt nach 6 bis 14 Tagen komplett.
-- **Noch nicht umgesetzt** (Aufträge 37, 38, 40 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Inhalt von
-  Berlin, München, Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen:
+  Städten.
+- **Noch nicht umgesetzt** (Aufträge 40 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen:
   Tarnfirmen, Charakter-Erstellung, Perks, Besitz, Akte, Korruption.
 
 ## Mehrere Städte (Auftrag 30 gebaut, Auftrag 31 für die Karte)
@@ -257,6 +262,12 @@ schönere Deutschland-Ansicht) kommt mit [Auftrag 31](auftraege/31-karte-lebt.md
   Polizei startet eine Stufe härter, Zoll am Kai und auf der Autobahn. Vier eigene, stärkere Gangs. Startlieferant in
   Hamburg ist Toni aus Frankfurt (Vertrauen bleibt). Man fängt mit seinem Geld an, aber ohne Spots, Lager und Leute;
   Leute aus Köln können nachkommen.
+- **München (Auftrag 38):** 12 Stadtbezirke mit echten Grenzen (Altstadt-Lehel, Isarvorstadt, Maxvorstadt,
+  Schwabing-West, Au-Haidhausen, Sendling, Westend, Neuhausen, Schwabing-Freimann, Giesing, Bogenhausen, Milbertshofen).
+  Teuer und streng: die höchste Kaufkraft und die höchsten Preise, aber die teuersten Lager, Spots und Löhne, weniger
+  Spots als anderswo, die Polizei sieht dich vom ersten Tag an als Händler und kontrolliert öfter. Oktoberfest (zwei
+  Wochen, dreimal so viel Kundschaft rund um die Theresienwiese, doppelt so viele Kontrollen) und Bayern-Heimspiele.
+  Toni liefert auch hierher; Enzo aus Verona bringt die beste Ware über den Brenner, aber am Brenner wartet der Zoll.
 - **Köln:** Stadt-Events (Karneval, FC-Heimspiel, Kölner Lichter mit Wirkung auf Nachfrage, Polizei und Gangs),
   Kölscher Klüngel (Beziehungen wachsen schneller, Freikaufen und Kaution billiger; Hamburg ist kühl und korrekt),
   Studenten und Kneipen (Veedel-Kneipen als Spot-Art mit Stammkunden und doppeltem Ruf, Studentenviertel mit viel

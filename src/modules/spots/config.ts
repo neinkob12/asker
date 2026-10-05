@@ -1,3 +1,5 @@
+import { PRESET_SPOTS_BERLIN, SPOT_LABELS_BERLIN } from './config-berlin';
+import { PRESET_SPOTS_MUENCHEN, SPOT_LABELS_MUENCHEN } from './config-muenchen';
 import type { Spot } from './index';
 
 /** Vorgegebener Spot ohne Veedel: Das Veedel ergibt sich aus der Lage (veedelAt, siehe presetSpots in index.ts). */
@@ -893,6 +895,10 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
     unlockCost: 1900,
     audience: { party: 1.3, banker: 1.1, tourist: 1.0 },
   },
+  // Berlin (Auftrag 37): eigene Datei, damit die Städte-Aufträge sich nicht in die Quere kommen.
+  ...PRESET_SPOTS_BERLIN,
+  // München (Auftrag 38): eigene Datei.
+  ...PRESET_SPOTS_MUENCHEN,
 ];
 
 /**
@@ -1023,4 +1029,6 @@ export const SPOT_LABELS: Readonly<Record<string, { labelSide: 'left' | 'right';
   'terminal-1': { labelSide: 'left', labelOffsetY: 0 },
   squaire: { labelSide: 'right', labelOffsetY: 0 },
   'terminal-2': { labelSide: 'right', labelOffsetY: 0 },
+  ...SPOT_LABELS_BERLIN,
+  ...SPOT_LABELS_MUENCHEN,
 };

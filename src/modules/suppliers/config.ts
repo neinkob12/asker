@@ -67,8 +67,9 @@ export const SUPPLIERS: readonly Supplier[] = [
     name: 'Frankfurt',
     contactName: 'Toni',
     kind: 'city',
-    // Kommt über die A3 aus Süden in Köln an, in Hamburg über die A7 (nur Karte).
-    via: { koeln: 'A3', hamburg: 'A7' },
+    // Kommt über die A3 aus Süden in Köln an, in Hamburg über die A7, in Berlin über die AVUS, in München über die A9
+    // (nur Karte).
+    via: { koeln: 'A3', hamburg: 'A7', berlin: 'A115', muenchen: 'A9' },
     lng: 8.682,
     lat: 50.111,
     deliveryTime: 180,
@@ -76,11 +77,17 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.62,
     reliability: 0.88,
     description: 'Kurierfahrer über die A3. Schnell und zuverlässig, dafür teuer.',
-    // Toni ist in Hamburg dein Startlieferant per Kurier: länger unterwegs, zehn Prozent Aufschlag. In Frankfurt ist er
-    // zu Hause (Auftrag 39): in einer Stunde da und zehn Prozent billiger.
-    cities: ['koeln', 'hamburg', 'frankfurt'],
-    deliveryTimes: { hamburg: 330, frankfurt: 60 },
-    priceFactors: { hamburg: 1.1, frankfurt: 0.9 },
+    // Toni ist in Hamburg dein Startlieferant per Kurier: länger unterwegs, zehn Prozent Aufschlag.
+    // In Berlin genauso weit weg wie in Hamburg, in München mit fünfzehn Prozent (Auftrag 38). In Frankfurt ist er zu
+    // Hause (Auftrag 39): in einer Stunde da und zehn Prozent billiger.
+    cities: ['koeln', 'hamburg', 'berlin', 'muenchen', 'frankfurt'],
+    deliveryTimes: { hamburg: 330, berlin: 330, muenchen: 300, frankfurt: 60 },
+    priceFactors: { hamburg: 1.1, berlin: 1.1, muenchen: 1.15, frankfurt: 0.9 },
+    home: {
+      cityId: 'frankfurt',
+      welcome:
+        'Toni hier! Du bist in Frankfurt, bei mir zu Hause! Hier bin ich in einer Stunde da und billiger als überall sonst. Lager suchen, dann los!',
+    },
     packages: [
       { id: 'weed25', label: '25 g Gras', productId: 'weed', amount: 25, price: 140 },
       { id: 'weed50', label: '50 g Gras', productId: 'weed', amount: 50, price: 255 },
@@ -105,8 +112,20 @@ export const SUPPLIERS: readonly Supplier[] = [
     quality: 0.74,
     reliability: 0.7,
     description: 'Gute Ware aus der Hauptstadt, Edibles und Vapes. Nicht immer pünktlich.',
-    cities: ['koeln', 'hamburg', 'frankfurt'],
-    deliveryTimes: { hamburg: 180, frankfurt: 330 },
+    // Auftrag 37: Mirko ist in Berlin zu Hause. Dort liefert er aus der Stadt, in einer Stunde und billiger.
+    cities: ['koeln', 'hamburg', 'berlin', 'frankfurt'],
+    deliveryTimes: { hamburg: 180, berlin: 60, frankfurt: 330 },
+    priceFactors: { berlin: 0.85 },
+    inCity: {
+      berlin: {
+        description: 'Mirko aus Kreuzberg, hier zu Hause: in einer Stunde da und billiger als überall sonst.',
+      },
+    },
+    home: {
+      cityId: 'berlin',
+      welcome:
+        'Ey, du bist in Berlin! Willkommen bei mir zu Hause. Hier liefer ich in einer Stunde und billiger als sonst. Such dir ein Lager, dann geht’s los.',
+    },
     unlock: {
       requires: { veedel: 1 },
       fee: 600,
@@ -127,8 +146,8 @@ export const SUPPLIERS: readonly Supplier[] = [
     name: 'Hamburg',
     contactName: 'Hein',
     kind: 'city',
-    // Kommt über die A1 aus Norden in Köln an (nur Karte).
-    via: { koeln: 'A1' },
+    // Kommt über die A1 aus Norden in Köln an, in Berlin über die A111 (nur Karte).
+    via: { koeln: 'A1', berlin: 'A111' },
     lng: 9.993,
     lat: 53.551,
     deliveryTime: 270,
@@ -138,8 +157,12 @@ export const SUPPLIERS: readonly Supplier[] = [
     description: 'Hanseatisch korrekt. Solide Ware, fast nie Ärger.',
     // In Hamburg liefert Hein aus der Stadt selbst, mit denselben Mengen wie in Köln, direkt ins Lager (kein Hafen).
     // Die großen Mengen gibt es nur im Hafen (Amsterdam, Rotterdam).
-    cities: ['koeln', 'hamburg'],
-    deliveryTimes: { hamburg: 60 },
+    cities: ['koeln', 'hamburg', 'berlin'],
+    deliveryTimes: { hamburg: 60, berlin: 240 },
+    home: {
+      cityId: 'hamburg',
+      welcome: 'Moin. Du bist jetzt in Hamburg, hab ich gehört. Such dir ein Lager, dann liefer ich dir direkt hin.',
+    },
     unlock: {
       requires: { revenue: 1500 },
       fee: 250,
@@ -161,8 +184,9 @@ export const SUPPLIERS: readonly Supplier[] = [
     name: 'Amsterdam',
     contactName: 'Daan',
     kind: 'city',
-    // Kommt über die A57 aus Nordwesten in Köln an, in Hamburg über die A1 aus Bremen, in Frankfurt über die A3 (nur Karte).
-    via: { koeln: 'A57', hamburg: 'A1', frankfurt: 'A3' },
+    // Kommt über die A57 aus Nordwesten in Köln an, in Hamburg über die A1 aus Bremen, in Berlin über die A115, in
+    // Frankfurt über die A3 (nur Karte).
+    via: { koeln: 'A57', hamburg: 'A1', berlin: 'A115', frankfurt: 'A3' },
     lng: 4.904,
     lat: 52.368,
     deliveryTime: 240,
@@ -172,9 +196,9 @@ export const SUPPLIERS: readonly Supplier[] = [
     description: 'Großhändler für Coffeeshops. Die beste Ware, kommt über die A57. Redet nur mit großen Leuten.',
     // In Hamburg kauft man bei Daan im Hafen: Container direkt am Kai, kiloweise, günstig, sechs Stunden, abholen
     // musst du selbst (braucht den Hamburger Liegeplatz).
-    // In Frankfurt kommt Daan wie in Köln über die Autobahn, nur länger (über die A3 aus Köln).
-    cities: ['koeln', 'hamburg', 'frankfurt'],
-    deliveryTimes: { hamburg: 360, frankfurt: 330 },
+    // In Frankfurt kommt Daan wie in Köln über die Grenze und die A3, nur länger.
+    cities: ['koeln', 'hamburg', 'berlin', 'frankfurt'],
+    deliveryTimes: { hamburg: 360, berlin: 420, frankfurt: 330 },
     inCity: {
       hamburg: {
         kind: 'port',
@@ -241,12 +265,51 @@ export const SUPPLIERS: readonly Supplier[] = [
       'Kofi in der Cargo City Süd: Ware aus der Luftfracht, die beste der Stadt, in unter einer Stunde da. Teuer, und der ' +
       'Zoll am Frachtterminal greift öfter zu.',
     cities: ['frankfurt'],
+    home: {
+      cityId: 'frankfurt',
+      welcome:
+        'Kofi, Cargo City Süd. Okafor hat mir von dir erzählt. Luftfracht, beste Ware, in unter einer Stunde bei dir. Teuer, und der Zoll schaut hier genauer hin. Bestellen über die App.',
+    },
     packages: [
       { id: 'kush25', label: '25 g OG Kush', productId: 'kush', amount: 25, price: 305 },
       { id: 'haze25', label: '25 g Amnesia Haze', productId: 'haze', amount: 25, price: 255 },
       { id: 'kush50', label: '50 g OG Kush', productId: 'kush', amount: 50, price: 570, minTrust: 20 },
       { id: 'vape10', label: '10 Vape-Pens', productId: 'vape', amount: 10, price: 230 },
       { id: 'edibles30', label: '30 Edibles', productId: 'edibles', amount: 30, price: 165, minTrust: 30 },
+    ],
+  },
+  {
+    // Auftrag 38: Enzo aus Verona liefert nur nach München, über den Brenner und die A8. Beste Ware in großen Mengen,
+    // aber am Brenner wartet der Zoll (customs). Meldet sich, sobald du in München bist.
+    id: 'italien',
+    name: 'Verona',
+    contactName: 'Enzo',
+    kind: 'city',
+    via: { muenchen: 'A8' },
+    lng: 10.992,
+    lat: 45.438,
+    deliveryTime: 420,
+    priceLevel: 0.4,
+    quality: 0.86,
+    reliability: 0.78,
+    customs: 0.04,
+    description:
+      'Ware vom Gardasee über den Brenner. Die beste Qualität in großen Mengen, aber am Brenner wartet der Zoll.',
+    cities: ['muenchen'],
+    unlock: {
+      requires: { city: 'muenchen' },
+      fee: 2500,
+      pitch:
+        'Ciao, amico. Enzo, aus Verona. Man sagt, du bist jetzt in München. Ich bring dir Ware über den Brenner, ' +
+        'die beste, die du kriegst. Für den Anfang {fee}.',
+    },
+    packages: [
+      { id: 'haze250', label: '250 g Amnesia Haze', productId: 'haze', amount: 250, price: 1295 },
+      { id: 'kush250', label: '250 g OG Kush', productId: 'kush', amount: 250, price: 1560 },
+      { id: 'oil100', label: '100 ml Öl', productId: 'oil', amount: 100, price: 745 },
+      { id: 'edibles200', label: '200 Edibles', productId: 'edibles', amount: 200, price: 545 },
+      { id: 'haze1kg', label: '1 kg Amnesia Haze', productId: 'haze', amount: 1000, price: 4780, minTrust: 20 },
+      { id: 'kush1kg', label: '1 kg OG Kush', productId: 'kush', amount: 1000, price: 5780, minTrust: 35 },
     ],
   },
   {
@@ -421,6 +484,20 @@ export const SUPPLIER_LOOKS: Readonly<Record<string, Partial<Look>>> = {
     top: 'raincoat',
     topColor: 5,
     extra: 'none',
+  },
+  // Enzo, Verona: Lkw-Unternehmer vom Gardasee, gut gelaunt.
+  italien: {
+    feminine: false,
+    age: 54,
+    skin: 2,
+    hair: 'slick',
+    hairColor: 6,
+    beard: 'full',
+    glasses: 'sun',
+    hat: 'none',
+    top: 'jacket',
+    topColor: 5,
+    extra: 'chain',
   },
   // Kalle aus Kalk: Nachbarschaft.
   koeln: {

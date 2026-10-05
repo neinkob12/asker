@@ -203,7 +203,7 @@ declare module '../../core' {
 
 export default defineModule({
   id: 'gangs',
-  version: 6,
+  version: 8,
   dependsOn: ['veedel'],
   init: () => initialGangsState(),
   tickEvery: 60,
@@ -250,8 +250,13 @@ export default defineModule({
     }),
     // Version 5 (Auftrag 34): Gedächtnis, Verhältnis der Gangs untereinander, Gang-Kriege.
     5: (old: GangsStateV4): GangsState => ({ ...old, ...initialMemoryState() }),
-    // Version 6 (Auftrag 39): Gangs neuer Städte (Frankfurt) kommen dazu, wie bei einem neuen Spiel. Bestehende
-    // bleiben; die Migration taugt für jede weitere Stadt.
+    // Version 6 (Auftrag 37): Die Berliner Gangs kommen dazu, wie bei einem neuen Spiel. Allgemein gehalten: Jede Gang,
+    // die im Spielstand fehlt, bekommt ihren Startzustand (so reicht dieselbe Migration auch für weitere Städte).
     6: (old: GangsState): GangsState => ({ ...old, gangs: { ...initialGangsState().gangs, ...old.gangs } }),
+    // Version 7 (Auftrag 38): Die Münchner Gangs kommen dazu, genauso (auch für Stände, die schon mit 6 gespeichert
+    // wurden).
+    7: (old: GangsState): GangsState => ({ ...old, gangs: { ...initialGangsState().gangs, ...old.gangs } }),
+    // Version 8 (Auftrag 39): Die Frankfurter Gangs kommen dazu, genauso.
+    8: (old: GangsState): GangsState => ({ ...old, gangs: { ...initialGangsState().gangs, ...old.gangs } }),
   },
 });

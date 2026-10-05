@@ -1,8 +1,8 @@
 // Stimmen der Lieferanten (Auftrag 23): Jeder Ansprechpartner schreibt in seinem eigenen Ton. Gewählt wird mit dem
 // Text-Helfer des Kerns (texts.pick), der dieselbe Variante nicht direkt wiederholt.
 // Ton: Toni (Frankfurt) hektisch, Hein (Hamburg) wortkarg norddeutsch, Mirko (Berlin) Berliner Schnauze, Daan
-// (Amsterdam) locker holländisch, Jansen (Rotterdam) geschäftsmäßig, Kalle (Köln) kölsch, Kofi (Flughafen) knapp wie
-// ein Frachtbrief.
+// (Amsterdam) locker holländisch, Jansen (Rotterdam) geschäftsmäßig, Kalle (Köln) kölsch, Enzo (Verona) italienisch,
+// Kofi (Cargo City) knapp wie ein Frachtbrief.
 //
 // Platzhalter: {goods} (z.B. "50 g Gras"), {reason} (Grund aus problems.ts, als Satzteil), {delay} (Dauer),
 // {cost} (Aufpreis oder Schmiergeld), {debt}, {extra} (Ware obendrauf), {warehouse}, {share} (Teillieferung).
@@ -573,6 +573,78 @@ export const SUPPLIER_VOICES: Readonly<Record<string, SupplierVoice>> = {
     detourDone: ['Jot, isch fahr außenrum.', 'Umweg. Dauert nit lang.', 'Isch nehm de Abkürzung.'],
     partialDone: ['{share} bring isch jetzt.', 'Jot: {share} vorab, Rest später.', 'Jeteilt. {share} kommt.'],
     redirectDone: ['Isch fahr zum {warehouse}.', '{warehouse}, jot.', 'Neues Ziel: {warehouse}.'],
+  },
+  // Enzo, Verona (Auftrag 38): herzlich, italienisch gemischt, über den Brenner.
+  italien: {
+    unlocked: [
+      'Perfetto! Benvenuto, amico. Bestell über die App, ich bring alles über den Brenner.',
+      'Bene, bene. Wir sind im Geschäft. Die App, und ich fahre los.',
+      'Allora, abgemacht. Beste Ware aus Verona, direkt zu dir.',
+    ],
+    delayed: [
+      'Madonna. {reason}. {goods} kommen {delay} später, scusa.',
+      'Amico, {reason}. Wird {delay} später, ma arriva.',
+      'Pazienza: {reason}. {delay} Verspätung.',
+      'Scusami. {reason}. {goods} kommen, nur {delay} später.',
+    ],
+    delayedAsk: [
+      'Problema, amico: {reason}. {delay} später. Was machen wir?',
+      'Enzo hier. {reason}. Das kostet {delay}. Du entscheidest.',
+      'Allora. {reason}. {delay} Verzug. Wie willst du?',
+      'Madonna santa, {reason}. {delay}. Dimmi.',
+    ],
+    seized: [
+      'Disastro. {reason}. {goods} sind weg.',
+      'Mi dispiace, amico. {reason}. Alles beschlagnahmt.',
+      '{reason}. {goods} weg. Che sfortuna.',
+      'Brutto giorno. {reason}. Die Ware ist verloren.',
+    ],
+    seizedCredit: [
+      '{reason}. {goods} weg. Aber der Kredit bleibt, capisci.',
+      'Mi dispiace. {reason}. Ware weg, Rechnung bleibt.',
+      'Disastro: {reason}. Das Geld brauche ich trotzdem, amico.',
+      '{reason}. Alles weg. Die Schulden leider nicht.',
+    ],
+    seizeThreat: [
+      'Attenzione: {reason}. Mit {cost} redet der Mann vielleicht anders.',
+      'Enzo. {reason}. {cost}, und wir fahren weiter. Sì?',
+      'Amico, {reason}. Ich kenne einen, {cost}. Soll ich?',
+      '{reason}. Für {cost} schaut er vielleicht weg. Dimmi.',
+    ],
+    bribeSaved: ['Fatto! Wir fahren weiter.', 'Perfetto, durch. Arrivo.', 'Grazie, amico. Alles gut.'],
+    bribeFailed: ['Niente. Geld weg, Ware weg.', 'Madonna. Hat nicht geklappt.', 'Mi dispiace. Nix zu machen.'],
+    badQuality: [
+      'Sincero: {reason}. Die Ware ist nicht wie sonst.',
+      '{reason}. Qualität mittel, scusa.',
+      'Amico, {reason}. Nicht mein bestes Zeug diesmal.',
+      'Ich sag es gleich: {reason}. Schlechter als sonst.',
+    ],
+    overdue: [
+      'Amico, {debt} sind fällig. Erst das Geld, poi la merce.',
+      'Enzo wartet auf {debt}. Bis dahin fahre ich nicht.',
+      '{debt}, per favore. Sonst kein Brenner mehr.',
+      'Allora. {debt}. Dann reden wir weiter.',
+    ],
+    overdueAgain: [
+      'Immer noch {debt}. Non va bene.',
+      '{debt}, amico. Meine Geduld ist auch aus Verona, nicht aus Stahl.',
+      'Enzo wird ungemütlich. {debt}.',
+      'Basta. {debt}. Jetzt.',
+    ],
+    early: [
+      'Freie Fahrt am Brenner! Bin früher da.',
+      'Veloce! {goods} sind gleich bei dir.',
+      'Prima del previsto. Früher da.',
+    ],
+    bonus: ['Ich leg {extra} dazu. Un regalo.', '{extra} extra, per te.', 'Hab {extra} übrig. Prendi.'],
+    betterQuality: ['Che qualità! Beste Charge.', 'Diesmal ist es eccellente.', 'Feinste Ware vom Gardasee.'],
+    detourDone: [
+      'Va bene, ich fahre über den Reschenpass.',
+      'Umweg. Andiamo.',
+      'Ich nehme die Landstraße, tranquillo.',
+    ],
+    partialDone: ['{share} sofort, der Rest dopo.', 'Bene: {share} vorweg.', 'Geteilt. {share} kommt jetzt.'],
+    redirectDone: ['Ich fahre zum {warehouse}.', '{warehouse}, perfetto.', 'Neues Ziel: {warehouse}.'],
   },
 };
 

@@ -3,11 +3,11 @@
 // Hause, Geldwäsche mit höherer Obergrenze, Messe und Museumsuferfest.
 
 import { describe, expect, it } from 'vitest';
-import { MINUTES_PER_DAY, type Simulation } from '../../core';
+import { loadSimulation, MINUTES_PER_DAY, messages, type Simulation } from '../../core';
 import { createTestGame } from '../../core/testing';
 import { DEALERS } from '../customers';
 import { CITY_EVENTS, eventFactor, isEventActive } from '../events';
-import { getGangs } from '../gangs';
+import { getGangStatus, getGangs } from '../gangs';
 import { getStock, warehouseSites } from '../goods';
 import { channelCapacity, channelFree, channelHeatAbove, getChannel, launderingCapacity } from '../laundering';
 import { networkStats, roadApproaches, roadNetworkAt } from '../roads';
@@ -120,6 +120,9 @@ describe('Frankfurt (Auftrag 39)', () => {
     const kofi = getSupplier(sim.state, 'flughafen');
     if (!kofi) throw new Error('kein Kofi');
     expect(getSuppliers(sim.state, 'koeln').map((s) => s.id)).not.toContain('flughafen');
+    // Zu Hause in Frankfurt (Supplier.home): Kofi und Toni melden sich, sobald Frankfurt frei ist.
+    expect(messages.thread(sim.state, 'supplier:flughafen').some((m) => m.text.includes('Cargo City'))).toBe(true);
+    expect(messages.thread(sim.state, 'supplier:frankfurt').some((m) => m.text.includes('zu Hause'))).toBe(true);
     expect(getSuppliers(sim.state, 'frankfurt').map((s) => s.id)).toContain('flughafen');
     const toni = supplierIn(getSupplier(sim.state, 'frankfurt') ?? kofi, 'frankfurt');
     expect(kofi.deliveryTime).toBeLessThan(60);
@@ -194,6 +197,34 @@ describe('Frankfurt (Auftrag 39)', () => {
       const twice = ids.filter((id, i) => ids.indexOf(id) !== i);
       expect(twice, name).toEqual([]);
     }
+  });
+
+  it('alte Spielstände ohne Frankfurt (schon mit Berlin und München gespeichert) bekommen Stadtteile und Gangs wie neu', () => {
+    const sim = createTestGame({ seed: 3 });
+    const fresh = JSON.parse(JSON.stringify(sim.state));
+    const old = JSON.parse(JSON.stringify(sim.state));
+    const gangs = old.modules.gangs.gangs as Record<string, unknown>;
+    for (const id of Object.keys(gangs)) if (id.startsWith('ff-')) delete gangs[id];
+    // Stand nach dem Münchner Merge (gangs 7, territory 6).
+    old.moduleVersions.gangs = 7;
+    for (const v of allVeedel('frankfurt')) {
+      delete old.modules.territory.influence[v.id];
+      delete old.modules.territory.controller[v.id];
+    }
+    old.moduleVersions.territory = 6;
+    const loaded = loadSimulation(old as never, sim.modules);
+    expect(loaded.state.moduleVersions.gangs).toBe(8);
+    expect(loaded.state.moduleVersions.territory).toBe(7);
+    for (const id of ['ff-bahnhof', 'ff-westend', 'ff-sachsenhausen', 'ff-hoechst']) {
+      expect(getGangStatus(loaded.state, id)?.people, id).toBeGreaterThan(0);
+    }
+    for (const v of allVeedel('frankfurt')) {
+      expect(loaded.state.modules.territory.influence[v.id], v.id).toEqual(fresh.modules.territory.influence[v.id]);
+      expect(controllerOf(loaded.state, v.id), v.id).toBe(fresh.modules.territory.controller[v.id]);
+    }
+    // Köln, Berlin und München bleiben, wie sie waren.
+    expect(loaded.state.modules.territory.influence.kalk).toEqual(fresh.modules.territory.influence.kalk);
+    expect(loaded.state.modules.territory.influence.kreuzberg).toEqual(fresh.modules.territory.influence.kreuzberg);
   });
 
   it('gleicher Seed, gleiche Befehle: Frankfurt spielt sich gleich', () => {

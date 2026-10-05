@@ -74,7 +74,7 @@ wird besser lesbar und schneller.
 | --- | --- | --- |
 | Köln | Klüngel, Karneval, Kneipen, Studenten | fertig |
 | Hamburg | Hafen mit großen Containern, Zoll, Reeperbahn, Polizei eine Stufe härter | fertig |
-| Berlin | Die Nacht: Clubs rund um die Uhr, Nachfrage nachts und am Wochenende, viele Spots, starke Gangs, Polizei locker | Schablone steht, Inhalt fehlt |
+| Berlin | Die Nacht: Clubs rund um die Uhr, Nachfrage nachts und am Wochenende, viele Spots, starke Gangs, Polizei locker | umgesetzt (Auftrag 37) |
 | München | Teuer und streng: hohe Kaufkraft, teure Lager und Löhne, Polizei startet eine Stufe härter, Oktoberfest als Event | neu |
 | Frankfurt | Geld und Flughafen: Banker-Kundschaft, Bahnhofsviertel als Brennpunkt, ein Lieferant über den Flughafen (klein, schnell, teuer, Zoll scharf), Geldwäsche mit mehr Kapazität | neu, vielleicht |
 

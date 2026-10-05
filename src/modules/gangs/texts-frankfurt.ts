@@ -214,7 +214,7 @@ export const FRANKFURT_VOICES: Readonly<Record<string, GangVoice>> = {
       'Wir haben am {spot} Präsenz gezeigt. Diskret, aber deutlich.',
     ],
     tipOff: [
-      'Ein Bekannter im Präsidium interessiert sich jetzt für {veedel}.',
+      'Ein Bekannter im Polizeipräsidium an der Adickesallee interessiert sich jetzt für {veedel}.',
       'Dr. Wehrle hat ein Gespräch beim Abendessen geführt. Es ging um {veedel}.',
       'Die Polizei hat Hinweise zu {veedel} erhalten. Aus guter Quelle.',
       'Ihre Geschäfte in {veedel} sind jetzt aktenkundig.',

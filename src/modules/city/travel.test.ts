@@ -202,7 +202,11 @@ describe('Ankommen in Hamburg (Auftrag 30)', () => {
     const events = recordEvents(sim);
     takeCity(sim, 'hamburg');
     expect(eventsOfType(events, 'campaign.won').map((e) => e.payload)).toEqual([
-      expect.objectContaining({ cityId: 'hamburg', cityName: 'Hamburg', next: expect.stringContaining('Endlosmodus') }),
+      expect.objectContaining({
+        cityId: 'hamburg',
+        cityName: 'Hamburg',
+        next: expect.stringContaining('nächste Stadt'),
+      }),
     ]);
     expect(sim.state.outcome.won?.cities).toEqual(['koeln', 'hamburg']);
     expect(runSummary(sim.state).cities).toBe(2);

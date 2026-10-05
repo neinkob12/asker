@@ -1,8 +1,9 @@
 // Wahrzeichen als einfache 3D-Klötze (fill-extrusion, gestapelt, Toon-Farben), damit man sich ohne
 // Straßennamen zurechtfindet. Köln: Kölner Dom, Hohenzollernbrücke, Colonius, Kranhäuser, KölnTriangle. Hamburg
 // (Auftrag 31): Elbphilharmonie, Michel, Heinrich-Hertz-Turm, Köhlbrandbrücke, Landungsbrücken, Elbbrücken; Lage und
-// Ausrichtung aus Overture Maps (Gebäude, Straßen über Wasser, Infrastruktur, ODbL). Frankfurt (Auftrag 39): Commerzbank
-// Tower, Main Tower, Messeturm, EZB und Römer als schlichte Klötze.
+// Ausrichtung aus Overture Maps (Gebäude, Straßen über Wasser, Infrastruktur, ODbL). Berlin (Auftrag 37): Fernsehturm,
+// Brandenburger Tor, Oberbaumbrücke. München (Auftrag 38): Frauenkirche, Olympiaturm, BMW-Vierzylinder, Allianz Arena.
+// Frankfurt (Auftrag 39): Commerzbank Tower, Main Tower, Messeturm, EZB und Römer.
 // Echte Koordinaten, ungefähre Maße in Metern. Jedes Teil ist ein Grundriss im lokalen Rahmen des Bauwerks
 // (forward entlang der Achse, left quer dazu) mit Unter- und Oberkante.
 // Die echten OSM-Gebäude an diesen Stellen blendet die Grundkarte aus (LANDMARK_ZONES), sonst stecken zwei
@@ -436,6 +437,223 @@ function elbbruecken(): Landmark {
   };
 }
 
+/** Berliner Fernsehturm (368 m): Schaft, Kugel mit Aussichtsgeschoss in 200 bis 237 m, rot-weiße Antenne. */
+function fernsehturm(): Landmark {
+  return {
+    id: 'fernsehturm',
+    name: 'Fernsehturm',
+    city: 'berlin',
+    center: { lng: 13.40942, lat: 52.52082 },
+    heading: 0,
+    colors: {
+      shaft: ['#9a9ea6', '#40444b'],
+      ball: ['#b4bcc6', '#c9a25a'],
+      antenna: ['#b0585e', '#e5484d'],
+      base: ['#7e828a', '#36393f'],
+    },
+    parts: [
+      // Pavillon am Fuß (die gefalteten Dächer als flache Ringe).
+      part(ngon(0, 0, 34, 12), 0, 8, 'base'),
+      part(ngon(0, 0, 16), 8, 30, 'shaft'),
+      part(ngon(0, 0, 12), 30, 120, 'shaft'),
+      part(ngon(0, 0, 9), 120, 196, 'shaft'),
+      // Kugel aus Ringen: breiter in der Mitte.
+      part(ngon(0, 0, 11, 12), 196, 202, 'ball'),
+      part(ngon(0, 0, 15, 12), 202, 210, 'ball'),
+      part(ngon(0, 0, 16.5, 12), 210, 226, 'ball'),
+      part(ngon(0, 0, 15, 12), 226, 234, 'ball'),
+      part(ngon(0, 0, 10, 12), 234, 240, 'ball'),
+      part(ngon(0, 0, 5), 240, 250, 'shaft'),
+      part(ngon(0, 0, 2.2), 250, 368, 'antenna'),
+    ],
+    zone: [-36, -36, 36, 36],
+  };
+}
+
+/** Brandenburger Tor: sechs Säulenpaare, Attika und die Quadriga obenauf; forward läuft quer über den Pariser Platz. */
+function brandenburgerTor(): Landmark {
+  const parts: Part[] = [];
+  // Sechs Pfeiler (je ein Säulenpaar), dazwischen fünf Durchfahrten, die mittlere breiter.
+  for (const f of [-28, -17.5, -7.5, 7.5, 17.5, 28])
+    parts.push(part(rect(f - 2.2, -5.5, f + 2.2, 5.5), 0, 15, 'stone'));
+  parts.push(
+    part(rect(-31, -5.8, 31, 5.8), 15, 19, 'stone'),
+    part(rect(-22, -4.5, 22, 4.5), 19, 22, 'stone'),
+    part(rect(-3.5, -2.5, 3.5, 2.5), 22, 27, 'copper'),
+    // Torhäuser zu beiden Seiten.
+    part(rect(-41, -6, -33, 6), 0, 11, 'stone'),
+    part(rect(33, -6, 41, 6), 0, 11, 'stone'),
+  );
+  return {
+    id: 'brandenburger-tor',
+    name: 'Brandenburger Tor',
+    city: 'berlin',
+    center: { lng: 13.37772, lat: 52.51628 },
+    heading: 0,
+    colors: {
+      stone: ['#a59c88', '#4a463d'],
+      copper: ['#6f9c86', '#c9a25a'],
+    },
+    parts,
+    zone: [-44, -9, 44, 9],
+  };
+}
+
+/** Oberbaumbrücke: Backsteinbrücke über die Spree mit dem U-Bahn-Viadukt obendrauf und zwei Türmen in der Mitte. */
+function oberbaumbruecke(): Landmark {
+  const parts: Part[] = [];
+  parts.push(part(rect(-77, -14, 77, 14), 5, 8, 'brick'));
+  // Pfeiler im Wasser.
+  for (const f of [-60, -36, -12, 12, 36, 60]) parts.push(part(rect(f - 3, -14, f + 3, 14), 0, 5, 'brick'));
+  // U-Bahn-Viadukt auf der Nordseite (Bögen als Pfeiler), oben das Gleisbett.
+  for (let f = -72; f <= 72; f += 9) parts.push(part(rect(f - 1.6, 3, f + 1.6, 12), 8, 13, 'brick'));
+  parts.push(part(rect(-77, 3, 77, 12), 13, 15, 'brick'));
+  // Die zwei Türme an der Mitte.
+  for (const f of [-9, 9]) {
+    parts.push(part(rect(f - 4, 9, f + 4, 15), 0, 30, 'brick'), part(ngon(f, 12, 3.5), 30, 34, 'roof'));
+  }
+  return {
+    id: 'oberbaumbruecke',
+    name: 'Oberbaumbrücke',
+    city: 'berlin',
+    center: { lng: 13.44575, lat: 52.50195 },
+    // forward zeigt nach Nordosten (Friedrichshain), left nach Nordwesten (flussabwärts).
+    heading: 44,
+    colors: {
+      brick: ['#8a5a4a', '#40291f'],
+      roof: ['#5b7f6e', '#2b3d35'],
+    },
+    parts,
+    zone: [-80, -16, 80, 16],
+  };
+}
+
+// --- München (Auftrag 38) ----------------------------------------------------------------------------------------
+
+/** Ellipse um einen Mittelpunkt (Halbachsen entlang forward und left). */
+function ellipse(radiusForward: number, radiusLeft: number, corners = 20): Point[] {
+  const ring: Point[] = [];
+  for (let i = 0; i < corners; i++) {
+    const a = (i / corners) * 2 * Math.PI;
+    ring.push([radiusForward * Math.cos(a), radiusLeft * Math.sin(a)]);
+  }
+  return ring;
+}
+
+/** Frauenkirche: Backstein-Hallenkirche mit zwei Türmen im Westen (99 m) und den grünen Hauben. */
+function frauenkirche(): Landmark {
+  const parts: Part[] = [];
+  for (const side of [-1, 1]) {
+    const l = side * 13;
+    parts.push(
+      part(rect(-54, l - 7.5, -40, l + 7.5), 0, 66, 'brick'),
+      part(ngon(-47, l, 7.5), 66, 78, 'brick'),
+      part(ngon(-47, l, 6.5), 78, 90, 'copper'),
+      part(ngon(-47, l, 3.5), 90, 96, 'copper'),
+      part(ngon(-47, l, 1.2), 96, 99, 'gold'),
+    );
+  }
+  parts.push(
+    part(rect(-54, -5.5, -40, 5.5), 0, 40, 'brick'),
+    // Halle (109 × 40 m) mit hohem Satteldach und rundem Chor.
+    part(rect(-40, -20, 50, 20), 0, 37, 'brick'),
+    part(rect(-40, -14, 50, 14), 37, 50, 'roof'),
+    part(rect(-40, -7, 50, 7), 50, 62, 'roof'),
+    part(ngon(50, 0, 19), 0, 37, 'brick'),
+    part(ngon(50, 0, 11), 37, 52, 'roof'),
+  );
+  return {
+    id: 'frauenkirche',
+    name: 'Frauenkirche',
+    city: 'muenchen',
+    center: { lng: 11.57354, lat: 48.13863 },
+    heading: 90,
+    colors: {
+      brick: ['#8a5f4e', '#3f2b24'],
+      roof: ['#7a4a3c', '#352019'],
+      copper: ['#6f9c86', '#35503f'],
+      gold: ['#c9a25a', '#e2ae4a'],
+    },
+    parts,
+    zone: [-60, -26, 72, 26],
+  };
+}
+
+/** Olympiaturm (291 m) im Olympiapark: schlanker Schaft, Korb mit Aussichtsplattform, rot-weiße Antenne. */
+function olympiaturm(): Landmark {
+  return {
+    id: 'olympiaturm',
+    name: 'Olympiaturm',
+    city: 'muenchen',
+    center: { lng: 11.55375, lat: 48.17436 },
+    heading: 0,
+    colors: {
+      shaft: ['#9a9fa6', '#3e4249'],
+      cabin: ['#a7afb8', '#b0646a'],
+      antenna: ['#b0585e', '#e5484d'],
+    },
+    parts: [
+      part(ngon(0, 0, 13), 0, 8, 'shaft'),
+      part(ngon(0, 0, 8.5), 8, 180, 'shaft'),
+      part(ngon(0, 0, 17), 180, 186, 'cabin'),
+      part(ngon(0, 0, 14), 186, 194, 'cabin'),
+      part(ngon(0, 0, 17), 194, 199, 'cabin'),
+      part(ngon(0, 0, 5), 199, 220, 'shaft'),
+      part(ngon(0, 0, 2), 220, 291, 'antenna'),
+    ],
+    zone: [-20, -20, 20, 20],
+  };
+}
+
+/** BMW-Vierzylinder (101 m): vier Zylinder im Kleeblatt, oben das Dach mit den Lüftern. */
+function bmwVierzylinder(): Landmark {
+  const parts: Part[] = [];
+  for (const [f, l] of [
+    [11, 11],
+    [11, -11],
+    [-11, 11],
+    [-11, -11],
+  ] as const) {
+    parts.push(part(ngon(f, l, 12, 12), 0, 96, 'glass'));
+    parts.push(part(ngon(f, l, 10, 12), 96, 101, 'roof'));
+  }
+  parts.push(part(ngon(0, 0, 7), 0, 101, 'roof'));
+  return {
+    id: 'bmw-vierzylinder',
+    name: 'BMW-Vierzylinder',
+    city: 'muenchen',
+    center: { lng: 11.55617, lat: 48.17668 },
+    heading: 0,
+    colors: {
+      glass: ['#a3b1bd', '#566676'],
+      roof: ['#7d858e', '#2f343a'],
+    },
+    parts,
+    zone: [-26, -26, 26, 26],
+  };
+}
+
+/** Allianz Arena: das leuchtende Schlauchboot in Fröttmaning (258 × 227 m, 50 m hoch). */
+function allianzArena(): Landmark {
+  return {
+    id: 'allianz-arena',
+    name: 'Allianz Arena',
+    city: 'muenchen',
+    center: { lng: 11.62468, lat: 48.21883 },
+    heading: 150,
+    colors: {
+      shell: ['#d8dde2', '#c4404a'],
+      top: ['#c3c9cf', '#a8333c'],
+    },
+    parts: [
+      part(ellipse(129, 113), 0, 38, 'shell'),
+      part(ellipse(120, 104), 38, 46, 'shell'),
+      part(ellipse(106, 90), 46, 50, 'top'),
+    ],
+    zone: [-135, -120, 135, 120],
+  };
+}
+
 // --- Frankfurt (Auftrag 39) ----------------------------------------------------------------------------------------
 
 /** Commerzbank Tower (259 m): abgerundetes Dreieck mit Mast. */
@@ -564,6 +782,13 @@ export const LANDMARKS: readonly Landmark[] = [
   koehlbrandbruecke(),
   landungsbruecken(),
   elbbruecken(),
+  fernsehturm(),
+  brandenburgerTor(),
+  oberbaumbruecke(),
+  frauenkirche(),
+  olympiaturm(),
+  bmwVierzylinder(),
+  allianzArena(),
   commerzbankTower(),
   mainTower(),
   messeturm(),

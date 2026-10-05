@@ -122,7 +122,8 @@ describe('suppliers', () => {
       return weed ? weed.price / weed.amount : Infinity;
     };
     const port = getSupplier(sim.state, 'rotterdam');
-    for (const city of SUPPLIERS.filter((s) => s.kind === 'city')) {
+    // Nur wer nach Köln liefert (Enzo bringt große Mengen über den Brenner, aber nur nach München).
+    for (const city of SUPPLIERS.filter((s) => s.kind === 'city' && (s.cities ?? ['koeln']).includes('koeln'))) {
       expect(city.deliveryTime).toBeLessThan(port?.deliveryTime ?? 0);
       expect(Math.max(...city.packages.map((p) => p.amount))).toBeLessThan(
         Math.min(...(port?.packages.map((p) => p.amount) ?? [])),
@@ -137,6 +138,7 @@ describe('suppliers', () => {
       'hamburg',
       'amsterdam',
       'flughafen',
+      'italien',
       'koeln',
     ]);
   });
@@ -459,27 +461,7 @@ describe('suppliers', () => {
     expect(isUnlocked(loaded.state, 'rotterdam')).toBe(true);
     expect(isUnlocked(loaded.state, 'amsterdam')).toBe(false);
     expect(loaded.state.modules.suppliers.offered).toContain('koeln');
-    expect(loaded.state.moduleVersions.suppliers).toBe(7);
-  });
-
-  it('migriert Version 6 → 7 (Auftrag 39): Kofi am Flughafen kommt dazu, alles andere bleibt', () => {
-    const sim = createTestGame();
-    const raw = structuredClone(sim.state) as unknown as {
-      modules: { suppliers: { unlocked: string[]; offered: string[]; relations: Record<string, unknown> } };
-      moduleVersions: Record<string, number>;
-    };
-    const s = raw.modules.suppliers;
-    s.unlocked = ['frankfurt', 'koeln', 'hamburg'];
-    s.offered = ['frankfurt', 'koeln', 'hamburg', 'berlin'];
-    raw.moduleVersions.suppliers = 6;
-    const before = structuredClone(s);
-    const loaded = loadSimulation(raw, sim.modules);
-    const after = loaded.state.modules.suppliers;
-    expect(after.unlocked).toEqual([...before.unlocked, 'flughafen']);
-    expect(after.offered).toEqual([...before.offered, 'flughafen']);
-    expect(after.relations).toEqual(before.relations);
-    expect(isUnlocked(loaded.state, 'berlin')).toBe(false);
-    expect(loaded.state.moduleVersions.suppliers).toBe(7);
+    expect(loaded.state.moduleVersions.suppliers).toBe(6);
   });
 });
 

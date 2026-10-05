@@ -48,6 +48,8 @@ export const EVENT_CONTACTS: Readonly<Record<string, Contact>> = {
   koeln: { id: 'other:buedchen', name: 'Ömer (Büdchen am Ring)', kind: 'other' },
   hamburg: { id: 'other:kiosk-kiez', name: 'Jens (Kiosk am Hans-Albers-Platz)', kind: 'other' },
   frankfurt: { id: 'other:trinkhalle-ffm', name: 'Sevgi (Trinkhalle an der Konsti)', kind: 'other' },
+  berlin: { id: 'other:spaeti-kotti', name: 'Aylin (Späti am Kotti)', kind: 'other' },
+  muenchen: { id: 'other:kiosk-glockenbach', name: 'Resi (Kiosk am Sendlinger Tor)', kind: 'other' },
 };
 
 /** Innenstadt Köln (Karneval). */
@@ -63,6 +65,9 @@ export const RHINE_SPOTS: readonly string[] = [
   'muelheimer-hafen',
 ];
 
+/** Kieze mit Nachtleben in Berlin (Fête de la Musique). */
+const BERLIN_PARTY = ['kreuzberg', 'friedrichshain', 'neukoelln', 'mitte', 'prenzlauer-berg', 'alt-treptow'] as const;
+
 /** Spots an den Landungsbrücken und am Hafenrand (Hafengeburtstag). */
 export const HARBOR_SPOTS: readonly string[] = ['landungsbruecken', 'fischmarkt'];
 
@@ -71,6 +76,13 @@ export const MAIN_SPOTS: readonly string[] = ['museumsufer', 'alt-sachsenhausen'
 
 /** Spots, an denen Messegäste kaufen (Messe, Hotels und Bars drumherum). */
 export const MESSE_SPOTS: readonly string[] = ['messe', 'kettenhofweg', 'skyline-plaza', 'bockenheimer-warte'];
+/** Spots rund um die Theresienwiese (Oktoberfest). */
+export const WIESN_SPOTS: readonly string[] = [
+  'theresienwiese',
+  'bavariapark',
+  'augustiner-keller',
+  'hauptbahnhof-muc',
+];
 
 export const CITY_EVENTS: readonly CityEventDef[] = [
   // --- Köln ---
@@ -152,6 +164,67 @@ export const CITY_EVENTS: readonly CityEventDef[] = [
     effects: { demand: 1.4 },
     text: 'Vier Wochen Dom auf dem Heiligengeistfeld: Jeden Abend Leute, die noch was wollen.',
     announce: 'Ab morgen ist wieder Dom auf dem Heiligengeistfeld. Vier Wochen lang.',
+  },
+  // --- Berlin (Auftrag 37): die Nacht, dreimal im Jahr noch größer ---
+  {
+    id: 'fete',
+    cityId: 'berlin',
+    name: 'Fête de la Musique',
+    icon: 'music',
+    schedule: { kind: 'cycle', firstDay: 40, everyDays: 90, days: 1 },
+    area: { veedel: BERLIN_PARTY },
+    effects: { demand: 1.8, checks: 0.8 },
+    text: 'Musik an jeder Ecke, von mittags bis in die Nacht: viel mehr Kundschaft in den Kiezen, die Polizei lässt laufen.',
+    announce: 'Morgen ist Fête de la Musique. Auf jeder Straße eine Bühne, und alle sind draußen. Füll die Lager auf.',
+  },
+  {
+    id: 'csd',
+    cityId: 'berlin',
+    name: 'CSD',
+    icon: 'flag',
+    schedule: { kind: 'cycle', firstDay: 55, everyDays: 90, days: 1 },
+    area: { veedel: ['schoeneberg', 'mitte'] },
+    effects: { demand: 2.2, checks: 0.6, noRaids: true },
+    text: 'Der CSD zieht vom Kudamm zum Brandenburger Tor: eine halbe Million Leute, die feiern wollen, keine Razzien.',
+    announce: 'Morgen ist CSD. Schöneberg und Mitte voll bis zum Rand, und danach geht es am Nolli weiter.',
+  },
+  {
+    id: 'silvester',
+    cityId: 'berlin',
+    name: 'Silvester am Brandenburger Tor',
+    icon: 'sparkles',
+    schedule: { kind: 'cycle', firstDay: 85, everyDays: 90, days: 1 },
+    area: { veedel: ['mitte', 'friedrichshain', 'kreuzberg'] },
+    effects: { demand: 2.5, checks: 1.3, gangRaids: 1.5 },
+    text: 'Silvester: Party am Tor, Böller in jedem Kiez. Riesiges Geschäft, aber auch Polizei und Gangs überall.',
+    announce:
+      'Morgen ist Silvester. Am Tor eine Million Leute, in Kreuzberg fliegen die Raketen. Pass auf deine Spots auf.',
+  },
+  // --- München (Auftrag 38) ---
+  {
+    id: 'oktoberfest',
+    cityId: 'muenchen',
+    name: 'Oktoberfest',
+    icon: 'party',
+    schedule: { kind: 'cycle', firstDay: 40, everyDays: 90, days: 16 },
+    area: { spots: WIESN_SPOTS },
+    effects: { demand: 3, heatPerSale: 1.3, checks: 2 },
+    text: 'Zwei Wochen Wiesn: dreimal so viel Kundschaft rund um die Theresienwiese, aber überall Polizei.',
+    announce:
+      'Servus. Morgen ist Anstich, dann zwei Wochen Wiesn. Rund um die Theresienwiese ist die Hölle los, und die ' +
+      'Polizei steht an jedem Eingang. Füll die Lager auf.',
+  },
+  {
+    id: 'bayern',
+    cityId: 'muenchen',
+    name: 'FC-Bayern-Heimspiel',
+    icon: 'flag',
+    schedule: { kind: 'weekly', weekday: 5, everyWeeks: 2, offset: 1, fromHour: 14, toHour: 22 },
+    area: { veedel: ['schwabing-freimann', 'milbertshofen'] },
+    effects: { demand: 1.6, checks: 1.4, gangRaids: 1.3 },
+    text: 'Heimspiel in der Arena: Die U6 ist voll, die Kundschaft auch, aber die Polizei fährt mit.',
+    announce:
+      'Morgen spielt der FC Bayern daheim. Ab zwei ist die U6 voll bis Fröttmaning, und die Polizei ist überall.',
   },
   // --- Frankfurt (Auftrag 39) ---
   {

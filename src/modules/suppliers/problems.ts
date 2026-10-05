@@ -1,12 +1,14 @@
-// Gründe für Lieferprobleme (Auftrag 23) als Daten, pro Weg: Autobahn aus einer Großstadt, Grenze NL, Schiff, lokal.
-// Auftrag 39: Luftfracht über den Frankfurter Flughafen. Je mindestens acht Gründe für Verspätungen, vier für Beschlagnahmen und vier für schlechte Ware. Der Text ist ein
+// Gründe für Lieferprobleme (Auftrag 23) als Daten, pro Weg: Autobahn aus einer Großstadt, Grenze NL, Schiff, lokal,
+// seit Auftrag 38 über die Alpen (Brenner, Italien nach München), seit Auftrag 39 Luftfracht über den Frankfurter
+// Flughafen.
+// Je mindestens acht Gründe für Verspätungen, vier für Beschlagnahmen und vier für schlechte Ware. Der Text ist ein
 // Satzteil, den der Lieferant in seinem Ton einbaut (voices.ts: {reason}); label ist die kurze Form für Liste und
 // Journal. Platzhalter: {road} (Autobahn des Kuriers), {city}, {river}, {port}.
 // Die Wahrscheinlichkeiten bleiben im Mittel wie vorher (rollShipmentProblem), nur Gründe und Folgen sind vielfältig.
 
 import type { Supplier } from './index';
 
-export type RouteKind = 'road' | 'border' | 'ship' | 'local' | 'air';
+export type RouteKind = 'road' | 'border' | 'ship' | 'local' | 'alps' | 'air';
 
 export const ROUTE_NAMES: Readonly<Record<RouteKind, string>> = {
   road: 'Autobahn',
@@ -14,6 +16,7 @@ export const ROUTE_NAMES: Readonly<Record<RouteKind, string>> = {
   ship: 'Schiff',
   local: 'In der Stadt',
   air: 'Luftfracht',
+  alps: 'Brenner',
 };
 
 /** Was der Spieler bei einer Verspätung entscheiden kann. */
@@ -210,6 +213,44 @@ export const PROBLEM_REASONS: Readonly<Record<RouteKind, RouteReasons>> = {
       { id: 'wait', text: 'Die Kiste stand zwei Tage im Zolllager', label: 'zu lange im Zolllager' },
     ],
   },
+  alps: {
+    delay: [
+      { id: 'brenner', text: 'Stau am Brenner, Blockabfertigung bei Kufstein', label: 'Blockabfertigung' },
+      { id: 'snow', text: 'Schnee auf dem Pass, Kettenpflicht', label: 'Schnee am Brenner' },
+      {
+        id: 'grenzkontrolle',
+        text: 'Grenzkontrolle bei Kiefersfelden, Schlange bis Kufstein',
+        label: 'Grenzkontrolle Kiefersfelden',
+      },
+      { id: 'inntal', text: 'Unfall im Inntal, alles dicht', label: 'Unfall im Inntal' },
+      {
+        id: 'breakdown',
+        text: 'Panne kurz hinter Bozen',
+        label: 'Panne bei Bozen',
+        choices: ['detour', 'partial', 'redirect'],
+      },
+      { id: 'holiday', text: 'Ferienbeginn, halb Deutschland fährt an den Gardasee', label: 'Ferienverkehr' },
+      {
+        id: 'carswitch',
+        text: 'Der Fahrer musste in Innsbruck das Auto wechseln',
+        label: 'Autowechsel in Innsbruck',
+        choices: ['partial', 'redirect'],
+      },
+      { id: 'vignette', text: 'Kontrolle an der Mautstelle Schönberg', label: 'Mautkontrolle' },
+    ],
+    seize: [
+      { id: 'customs', text: 'Der Zoll am Brenner hat den Wagen auseinandergenommen', label: 'Zoll am Brenner' },
+      { id: 'dog', text: 'Spürhund an der Grenze bei Kiefersfelden', label: 'Spürhund an der Grenze' },
+      { id: 'dragnet', text: 'Schleierfahndung auf der {road} hinter Rosenheim', label: 'Schleierfahndung' },
+      { id: 'xray', text: 'Röntgenkontrolle am Brenner', label: 'Röntgen am Brenner' },
+    ],
+    badQuality: [
+      { id: 'heat', text: 'Die Hitze im Laster am Pass hat der Ware nicht gutgetan', label: 'zu warm geworden' },
+      { id: 'grower', text: 'Mein Bauer am Gardasee hat zu früh geerntet', label: 'zu früh geerntet' },
+      { id: 'damp', text: 'Im Versteck unter dem Olivenöl ist sie feucht geworden', label: 'feucht geworden' },
+      { id: 'mixed', text: 'Jemand in Verona hat die Chargen vertauscht', label: 'Chargen vertauscht' },
+    ],
+  },
 };
 
 /** Fluss pro Stadt für Schiffsgründe. */
@@ -217,14 +258,16 @@ const RIVER_BY_CITY: Readonly<Record<string, string>> = { koeln: 'Rhein', hambur
 
 /**
  * Weg eines Lieferanten in eine Stadt, wo er von der Regel abweicht (sonst: Hafen = Schiff, alle anderen Autobahn).
- * Kalle beliefert Köln aus Kalk, Hein Hamburg und Toni Frankfurt aus der Stadt, Daan kommt über die Grenze, Kofi
- * schickt Luftfracht über den Frankfurter Flughafen.
+ * Kalle beliefert Köln aus Kalk, Hein Hamburg, Mirko Berlin und Toni Frankfurt aus der Stadt, Daan kommt über die
+ * Grenze, Enzo über den Brenner, Kofi schickt Luftfracht über den Frankfurter Flughafen.
  */
 export const SUPPLIER_ROUTES: Readonly<Record<string, Readonly<Record<string, RouteKind>>>> = {
   koeln: { koeln: 'local' },
   hamburg: { hamburg: 'local' },
   frankfurt: { frankfurt: 'local' },
-  amsterdam: { koeln: 'border', hamburg: 'border', frankfurt: 'border' },
+  berlin: { berlin: 'local' },
+  amsterdam: { koeln: 'border', hamburg: 'border', berlin: 'border', frankfurt: 'border' },
+  italien: { muenchen: 'alps' },
   flughafen: { frankfurt: 'air' },
 };
 

@@ -1,7 +1,7 @@
 // Freie Reihenfolge nach Köln (Auftrag 36): Angebote pro Stadt, die nächstgelegene ruft zuerst an, die anderen melden
 // sich per Chat, ein Tipp auf die Karte holt den Anruf, nur eine Zusage gilt, Übergabe in die gewählte Stadt.
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createSaveFile,
   type GameState,
@@ -32,13 +32,25 @@ import {
   presentCity,
 } from './index';
 
-/** Berlin für einen Test spielbar machen (Schablone aus), danach wieder zurück. */
 const berlin = CITIES.find((c) => c.id === 'berlin') as CityDef & { template?: boolean };
-/** Frankfurt (Auftrag 39, spielbar) für einen Test sperren, danach wieder zurück. */
+const muenchen = CITIES.find((c) => c.id === 'muenchen') as CityDef & { template?: boolean };
 const frankfurt = CITIES.find((c) => c.id === 'frankfurt') as CityDef & { template?: boolean };
-afterEach(() => {
+/** Schablonen-Flags aller Städte, wie sie in den Daten stehen (vor jedem Test gesichert, danach zurück). */
+const templates = new Map(CITIES.map((c) => [c.id, c.template]));
+/**
+ * Die Tests hier prüfen die Reihenfolge mit Hamburg, Berlin und Frankfurt (offerRank 1, meldet sich zuletzt): Berlin ist
+ * zunächst Schablone und wird pro Test freigeschaltet, München bleibt Schablone (der letzte Test prüft München selbst).
+ */
+beforeEach(() => {
   berlin.template = true;
-  delete frankfurt.template;
+  muenchen.template = true;
+});
+afterEach(() => {
+  for (const c of CITIES as (CityDef & { template?: boolean })[]) {
+    const flag = templates.get(c.id);
+    if (flag === undefined) delete c.template;
+    else c.template = flag;
+  }
 });
 
 function quietGame(seed = 1): Simulation {
@@ -175,6 +187,20 @@ describe('Freie Reihenfolge (Auftrag 36)', () => {
     expect(offerStatus(sim.state, 'hamburg')).toBe('none');
     sim.advance(MINUTES_PER_DAY);
     expect(presentCity(sim.state)).toBe('berlin');
+  });
+
+  it('offerRank: Auch mit Berlin und München frei ruft Frankfurt nie zuerst an', () => {
+    berlin.template = false;
+    muenchen.template = false;
+    const sim = quietGame();
+    readyRightHand(sim);
+    completeKoeln(sim);
+    const order = offerCities(sim.state);
+    // Nach Entfernung von Köln: Hamburg, München, Berlin; Frankfurt (am nächsten) mit Rang 1 zuletzt.
+    expect(order).toEqual(['hamburg', 'muenchen', 'berlin', 'frankfurt']);
+    sim.advance(OFFER_CALL_DELAY + 5);
+    expect(ringingFrom(sim, 'hamburg')).toBeDefined();
+    expect(ringingFrom(sim, 'frankfurt')).toBeUndefined();
   });
 
   it('Frankfurt (offerRank 1): Hamburg ruft an, Frankfurt meldet sich per Chat und lässt sich trotzdem zusagen', () => {

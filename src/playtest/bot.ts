@@ -33,6 +33,7 @@ import {
   isPlayerIn,
   isPlayerTraveling,
   NEXT_CITY,
+  playableCities,
   presentCity,
   travelMinutesBetween,
 } from '../modules/city';
@@ -129,6 +130,11 @@ export interface BotOptions {
   expand?: boolean;
   /** Holt der Bot gute Leute per Kaution aus der Haft? Fehlt: ja. */
   bail?: boolean;
+  /**
+   * Reihenfolge der Städte nach Köln (Auftrag 38, für den Balancing-Bericht): die erste freie daraus. Fehlt: die
+   * günstigste zum Anfangen (chooseNextCity).
+   */
+  cityOrder?: readonly string[];
 }
 
 /**
@@ -825,7 +831,9 @@ function repay(sim: Simulation, stats: BotStats): void {
  * Die nächste Stadt, die der Bot wählt (Auftrag 36: Reihenfolge frei): die günstigste zum Anfangen (Faktoren für Lager
  * und Löhne), bei Gleichstand die schnellste Fahrt. null, wenn keine frei ist.
  */
-export function chooseNextCity(state: GameState, from: string): string | null {
+export function chooseNextCity(state: GameState, from: string, order?: readonly string[]): string | null {
+  const preferred = order?.find((id) => freeCities(state).includes(id));
+  if (preferred) return preferred;
   const cost = (id: string) => (getCity(id)?.propertyFactor ?? 1) + (getCity(id)?.wageFactor ?? 1);
   const list = [...freeCities(state)].sort(
     (a, b) => cost(a) - cost(b) || travelMinutesBetween(from, a) - travelMinutesBetween(from, b),
@@ -838,7 +846,7 @@ export function chooseNextCity(state: GameState, from: string): string | null {
  * Startpaket an den Statthalter und fährt in die Stadt, die er gewählt hat. Ist er in einer Stadt mit Vollmacht (z.B.
  * zurück zu Besuch), fährt er in eine freie Stadt ohne Vollmacht.
  */
-function moveOn(sim: Simulation, stats: BotStats): void {
+function moveOn(sim: Simulation, stats: BotStats, options: BotOptions): void {
   const state = sim.state;
   if (isPlayerTraveling(state)) return;
   const here = presentCity(state);
@@ -849,7 +857,7 @@ function moveOn(sim: Simulation, stats: BotStats): void {
     progress.controlled >= progress.total &&
     fullPowerMissing(state, here).length === 0
   ) {
-    const next = chooseNextCity(state, here);
+    const next = chooseNextCity(state, here, options.cityOrder);
     if (next) {
       // Startpaket: die beste neue Rechte Hand, freie Leute zuerst (die an Spots braucht der Statthalter), ein Fahrzeug.
       const leaderId = startPackLeaders(state, here)[0]?.id ?? null;
@@ -881,7 +889,7 @@ const CITY_CONTACTS = new Set(NEXT_CITY.filter((id) => CITY_OFFERS[id]).map((id)
 /** Ein Blick aufs Spiel. */
 export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = DEFAULT_BOT): void {
   if (sim.state.outcome.gameOver) return;
-  moveOn(sim, stats);
+  moveOn(sim, stats, options);
   // Unterwegs zwischen den Städten: nur das Nötigste (Handy, Konfrontationen).
   if (isPlayerTraveling(sim.state)) {
     handleEncounters(sim, stats);
@@ -934,7 +942,8 @@ export function snapshot(state: GameState) {
     city: activeCity(state),
     koeln: campaignProgress(state, 'koeln').controlled,
     hamburg: campaignProgress(state, 'hamburg').controlled,
-    frankfurt: campaignProgress(state, 'frankfurt').controlled,
+    /** Veedel unter deiner Kontrolle pro spielbarer Stadt (Auftrag 38, für den Bericht „Tage pro Stadt“). */
+    controlled: Object.fromEntries(playableCities().map((c) => [c.id, campaignProgress(state, c.id).controlled])),
     reputation: Math.round(state.modules.reputation.value),
     maxHostility: Math.round(Math.max(...Object.values(gangs.gangs).map((s) => s.hostility))),
     gameOver: state.outcome.gameOver?.reason ?? null,

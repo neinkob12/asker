@@ -51,6 +51,45 @@ CITIES = {
             'Blankenese',
         ],
     },
+    # Berlin (Auftrag 37): Ortsteile rund um die Innenstadt (in OSM admin_level 10, Bezirke sind admin_level 9).
+    'berlin': {
+        'box': (13.20, 13.60, 52.40, 52.62),
+        'names': [
+            'Mitte',
+            'Kreuzberg',
+            'Friedrichshain',
+            'Neukölln',
+            'Prenzlauer Berg',
+            'Wedding',
+            'Moabit',
+            'Schöneberg',
+            'Charlottenburg',
+            'Alt-Treptow',
+            'Lichtenberg',
+            'Tempelhof',
+        ],
+    },
+    # München (Auftrag 38): zwölf Stadtbezirke (OSM admin_level 9) rund um die Innenstadt, von der Theresienwiese bis
+    # zur Allianz Arena.
+    'muenchen': {
+        'box': (11.36, 11.75, 48.04, 48.28),
+        # Stadtbezirke sind in Overture "locality"; gleichnamige Bezirksteile ("Schwanthalerhöhe") sind kleiner.
+        'subtypes': ['locality'],
+        'names': [
+            'Altstadt-Lehel',
+            'Ludwigsvorstadt-Isarvorstadt',
+            'Maxvorstadt',
+            'Schwabing-West',
+            'Au-Haidhausen',
+            'Sendling',
+            'Schwanthalerhöhe',
+            'Neuhausen-Nymphenburg',
+            'Schwabing-Freimann',
+            'Obergiesing-Fasangarten',
+            'Bogenhausen',
+            'Milbertshofen-Am Hart',
+        ],
+    },
     # Frankfurt (Auftrag 39): von Höchst im Westen bis Bornheim, im Süden der Flughafen.
     'frankfurt': {
         'box': (8.45, 8.82, 49.99, 50.20),
@@ -177,6 +216,8 @@ def main():
     for row in rows:
         name = (row.get('names') or {}).get('primary')
         if name not in wanted or not row.get('is_land'):
+            continue
+        if 'subtypes' in conf and row.get('subtype') not in conf['subtypes']:
             continue
         geom = shapely.from_wkb(row['geometry'])
         score = (rank.get(row.get('subtype'), 9), -geom.area)

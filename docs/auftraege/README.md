@@ -190,13 +190,25 @@ Stadt“. Für Auftrag 34: Das Startpaket nimmt bis dahin einen Leutnant ab Leve
 Quest-Kapitel der Städte stehen schon; die Enden ihrer Autobahn-Linien in `build-roads.py` (`AUTOBAHNEN`) auf Punkte im
 neuen Straßennetz legen und `--autobahn all` neu bauen.
 
-**Stand Auftrag 39:** Frankfurt ist spielbar (PR #62): zwölf Stadtteile aus Overture, Straßennetz mit Zufahrten,
+**Stand Auftrag 37:** umgesetzt (PR #61). Berlin ist die dritte spielbare Stadt: zwölf Ortsteile mit Grenzen aus
+Overture, Straßennetz mit Zufahrten A111, A115 und A113, 40 Spots (vier Clubs nur am Wochenende, neues Spot-Feld
+`weekHours`), fünf Lager, vier Gangs mit Stimmen und Verhältnissen, Stammabnehmer, Events (Fête de la Musique, CSD,
+Silvester mit Feuerwerk), Mirko zu Hause in Berlin (`Supplier.home`), Wahrzeichen. Der Bot spielt Berlin als zweite Stadt
+(Median 8 Tage bis komplett). Für 38 und 39: `check-roads` prüft Städte ohne Hafen ohne Hafen, die Migrationen von
+`gangs` und `territory` legen fehlende Gangs und Veedel allgemein an.
+**Stand Auftrag 38 (Welle 3):** umgesetzt (PR #63, nach Berlin gemergt). München ist die vierte spielbare Stadt: zwölf
+Stadtbezirke mit Grenzen aus Overture, 24 Spots (`spots/config-muenchen.ts`), fünf Lager, vier Gangs mit Stimmen
+(`gangs/texts-muenchen.ts`), Straßennetz mit Zufahrten, Wahrzeichen, Dreh „teuer und streng“ als Daten (höchste Löhne
+und Immobilien, Polizei startet als Händler, Oktoberfest, Bayern-Heimspiel, Enzo aus Verona über den Brenner mit Zoll).
+Migrationen gangs 7 und territory 6. Balancing: München als dritte Stadt nach Berlin Median 9,5 Tage, als zweite 14;
+Köln komplett unverändert gegenüber `main`.
+**Stand Auftrag 39:** Frankfurt ist spielbar (PR #62, nach Berlin und München gemergt): zwölf Stadtteile aus Overture, Straßennetz mit Zufahrten,
 31 Spots, fünf Lager, vier Gangs mit Stimmen, Stammabnehmer, Messe, Museumsuferfest und Eintracht, Wahrzeichen. Der
 Dreh als Daten: Banker-Kundschaft, Bahnhofsviertel als Brennpunkt, Kofi mit Luftfracht und scharfem Zoll
 (`Supplier.customs`, Weg `'air'`), Toni zu Hause, mehr Geldwäsche (`LAUNDERING_CAPACITY_BY_CITY`). Kleine allgemeine
 Erweiterungen: `CityDef.offerRank` (Frankfurt ruft nicht vor Hamburg an), `check-roads` ohne Hafen, Marktindex würfelt
 nur für freie Städte (neue Städte verschieben die Kölner Würfelfolge nicht mehr). Die Autobahn-Enden am Frankfurter
-Kreuz lagen schon im neuen Netz, `autobahn.ts` blieb. Screenshots in `docs/integration/auftrag-39/`.
+Kreuz liegen im neuen Netz, `autobahn.ts` ist nach dem Merge mit `--autobahn all` neu gebaut. Screenshots in `docs/integration/auftrag-39/`.
 
 `src/core/`, `scripts/`, `package.json` und die Doku-Dateien gehören in den Wellen niemandem fest: nur erweitern, beim
 Mergen beide Seiten behalten. `CLAUDE.md`, `docs/architektur.md` und `docs/konzept.md` ergänzt jede Session in ihrem

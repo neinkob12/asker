@@ -80,7 +80,16 @@ Razzia im Schlaf, Startpaket und Startgeld bei der Übergabe (`hierarchy/handove
 Capos), Ränge des Spielers (`city/ranks.ts`, `playerRank`, Ereignis `player.rankUp`), Quest-Kapitel pro Stadt (`cityId`
 an der Quest). Stellschrauben für das Tempo späterer Städte: `FULL_POWER_SHARE`, `HANDOVER_START_MONEY_DAYS`,
 `START_MONEY_MIN_BY_CITY`, `START_PACK_MAX_STAFF`.
-Auftrag 39 (Frankfurt, optional): dritte spielbare Stadt nach Checkliste, Dreh nur als Daten (Kofi am Flughafen mit
+Auftrag 37 (Berlin): dritte spielbare Stadt nur aus Daten (`veedel/data-berlin.ts`, `spots/config-berlin.ts`,
+`gangs/texts-berlin.ts`, `roads/network-berlin.ts`, Einträge in den Listen der anderen Module). Neu und allgemein:
+`Spot.weekHours` (Öffnungszeiten über die Woche, Berliner Clubs Fr 22 bis Mo 8 Uhr) und `Supplier.home` (Lieferant ist
+in einer Stadt zu Hause, Hein in Hamburg, Mirko in Berlin). Neue Städte legen Spots und Gang-Stimmen am besten in eigene
+Dateien und spreizen sie in die Listen ein.
+Auftrag 38 (München): vierte spielbare Stadt, nur Daten nach der Checkliste (`veedel/data-muenchen.ts`, Gangs `mu-` mit
+Stimmen in `gangs/texts-muenchen.ts`, `network-muenchen.ts`); Dreh teuer und streng über `CITIES`, `MIN_TIER_BY_CITY`,
+`CHECK_FACTOR_BY_CITY`, Events Oktoberfest und Bayern. Neu und allgemein: `Supplier.customs` (Zoll an einer Grenze),
+`requires.city` (Lieferant meldet sich erst in dieser Stadt), Bot `cityOrder` (`BALANCE_ORDER=muenchen npm run balance`).
+Auftrag 39 (Frankfurt, optional): fünfte spielbare Stadt nach Checkliste, Dreh nur als Daten (Kofi am Flughafen mit
 `Supplier.customs` und Weg `'air'`, `LAUNDERING_CAPACITY_BY_CITY`, `CityDef.offerRank`). Gang-Stimmen einer neuen Stadt in
 eigener Datei (`gangs/texts-frankfurt.ts`). Würfe, die für noch nicht freie Städte nichts bewirken, unterbleiben (sonst
 verschiebt jede neue Stadt die Kölner Würfelfolge, siehe `market.stepIndex`).
