@@ -29,9 +29,10 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   live, Schiffs-Tracker, Banner (Ware da, Schiff im Hafen, Fahrt angekommen) und Fahrer-Zahlen zeigen nur die Stadt,
   in der du spielst (`shipmentsInTransit(state, cityId)`, `tripTouchesCity`, `placeCity`); der Routen-Editor bietet
   nur Fahrer aus der Stadt des Startlagers an.
-- [ ] A5 Bot und Balancing: Ohne Startpaket neu messen (`npm run balance`, Bericht „Tage pro Stadt“). Ziel bleibt
+- [x] A5 Bot und Balancing: Ohne Startpaket neu messen (`npm run balance`, Bericht „Tage pro Stadt“). Ziel bleibt
   Hamburg etwa 15 Tage, dritte Stadt 12, vierte 10, fünfte 8; Stellschrauben `START_MONEY_MIN_BY_CITY`,
-  `HANDOVER_START_MONEY_DAYS`. Zahlen in `docs/architektur.md`, Abschnitt „Balancing“.
+  `HANDOVER_START_MONEY_DAYS`. Zahlen in `docs/architektur.md`, Abschnitt „Balancing“. Gemessen: Hamburg 6–8 (ein
+  Ausreißer 38), Berlin 6–9, München 5–9, Frankfurt 3–6 Tage; schneller als die Richtwerte, keine Änderung nötig.
 
 ## B. Test-Spielstände für jede Stadt in jeder Phase
 
@@ -82,3 +83,5 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   da.“). Lieferungen für eine Stadt mit Statthalter still oder als Bericht des Statthalters.
 - [ ] N2 Peters Quest-Leiste zeigt nach dem Umzug alte Kölner Quests (z.B. „Setz einen eigenen Preis“), wenn sie in
   Köln liegen geblieben sind; beim Umzug in eine neue Stadt sollte ihr Kapitel vorgehen.
+- [ ] N3 Bot, Seed 4: Hamburg hängt nach neun Stadtteilen 33 Tage an den letzten drei. Herausfinden, was blockiert
+  (Gang zu stark, Bot verkauft dort nicht, Spots fehlen) und ob ein Spieler dort auch hängen bliebe.

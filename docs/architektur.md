@@ -875,6 +875,15 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   `YIELD_PER_HA`, `GROW_DAYS`, `STANDING_CROP_DAYS`, `SUPPLIES_PER_HA`, `GENETICS`, `GREENHOUSE_PER_HA`, `ATTENTION`, `CARTEL_*`, `CALL_*`, Ziele), `PACKINGS` und `FINCA_SITES` in
   `grow/data.ts`, `OWN_ORIGINS` in `trade/data.ts`, `RELIABILITY_RECOVERY` in `trade/config.ts`.
 
+- **Auftrag 43, Leute bleiben in ihrer Stadt** (kein Startpaket mit Rechter Hand und Leuten; Bericht „Tage pro
+  Stadt“, 6 Seeds, `BALANCE_LATER_DAYS=80`, `BALANCE_ORDER=hamburg,berlin,muenchen,frankfurt`, Ankunft bis komplett):
+  Hamburg als zweite 6/6/6/38/8/8 Tage, Berlin als dritte 8/9/7/7/6/8, München als vierte 7/9/8/7/5/7, Frankfurt als
+  fünfte 4/6/–/–/3/4 (Seeds 1 und 4 kamen in 80 Tagen nicht bis Frankfurt, weil die Wartezeit auf Stufe 5 der Rechten
+  Hand zwischen den Städten zwei bis drei Wochen dauert), keine Pleite, Startgeld 84.000–90.000 € in Summe. Die Städte
+  sind auch ohne mitgebrachte Rechte Hand schneller als die Richtwerte (15/12/10/8), weil das Startgeld und der Ruf
+  („der Ruf eilt voraus“) das Tempo machen; deshalb keine neue Stellschraube. Ausreißer Seed 4: Hamburg hing nach neun
+  Stadtteilen 33 Tage an den letzten drei (offen in Auftrag 43, „Neue Funde“).
+
 ## Städte (Auftrag 30)
 
 Köln und Hamburg sind zwei Städte in einem Spielstand mit einem Konto. Das Modul `city` hält fest, welche Stadt
