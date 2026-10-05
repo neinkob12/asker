@@ -108,11 +108,11 @@ export function shipPosition(
   return { point, place, progress };
 }
 
-/** Schiffe unterwegs zum eigenen Liegeplatz (alle Städte): Ort, Fortschritt und Ankunft. */
+/** Schiffe unterwegs zum eigenen Liegeplatz der Stadt, in der du spielst: Ort, Fortschritt und Ankunft. */
 function ShipTracker() {
   const { state } = useGame();
   const ui = useUi();
-  const ships = shipmentsInTransit(state).filter((s) => s.toPort);
+  const ships = shipmentsInTransit(state, activeCity(state)).filter((s) => s.toPort);
   if (ships.length === 0) return null;
   return (
     <Group title="Schiffe" icon="ship" color="goods" count={ships.length}>

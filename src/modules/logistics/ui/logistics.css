@@ -263,3 +263,8 @@ fieldset.logi-days {
 .logi-route-choice {
   padding: var(--space-3);
 }
+
+/* Nach dem Verkauf (Auftrag 43): Knopf zur Kunden-App statt der alten Hafen-Seite. */
+.logi-redirect {
+  padding: var(--space-4);
+}

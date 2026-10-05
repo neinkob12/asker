@@ -21,6 +21,7 @@
 
 import {
   type CommandResult,
+  type Contact,
   type Ctx,
   clock,
   defineModule,
@@ -30,8 +31,9 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, isBusinessSold, isCityUnlocked, liveVeedel } from '../city';
+import { activeCity, isBusinessSold, isCityUnlocked, jansenContact, liveVeedel, presentCity, REGIONS } from '../city';
 import { DEFAULT_WAREHOUSE, getWarehouses, productName, store, type Warehouse } from '../goods';
+import { regionStatus } from '../grow';
 import { addHeat, operationTier } from '../police';
 import { changeReputation } from '../reputation';
 import { addLoyalty, addXp, getStaff } from '../staff';
@@ -44,6 +46,7 @@ import {
   QUEST_CHECK_EVERY,
   QUEST_COUNT_BEFORE_36,
   QUESTS,
+  QUESTS_ADDED_IN_43,
   type QuestDef,
   type QuestReward,
 } from './config';
@@ -151,9 +154,22 @@ export function questsWaiting(state: GameState): boolean {
   return state.modules.quests.index === WAITING;
 }
 
-/** Kann die Quest jetzt dran sein? Kapitel einer Stadt erst, wenn die Stadt frei ist. */
+/** Kann die Quest jetzt dran sein? Kapitel einer Stadt erst, wenn die Stadt frei ist (und ihre Bedingung gilt). */
 function eligible(state: GameState, quest: QuestDef): boolean {
-  return !quest.cityId || isCityUnlocked(state, quest.cityId);
+  return (!quest.cityId || isCityUnlocked(state, quest.cityId)) && (!quest.requires || quest.requires(state));
+}
+
+/**
+ * Wer die Quest schickt: Peter, im Kapitel Rotterdam Jansen, in der Produktion der Anrufer der Region, die zuerst
+ * angerufen hat (Auftrag 43).
+ */
+export function questContact(state: GameState, quest: QuestDef | null): Contact {
+  if (quest?.voice === 'jansen') return jansenContact(state);
+  if (quest?.voice === 'grow') {
+    const region = REGIONS.find((r) => regionStatus(state, r.id) !== 'none') ?? REGIONS[0];
+    return region?.contact ?? PETER;
+  }
+  return PETER;
 }
 
 /**
@@ -172,7 +188,8 @@ function nextIndex(state: GameState, from: number): number {
   }
   for (let i = 0; i < Math.min(from, QUESTS.length); i++) {
     const quest = QUESTS[i];
-    if (!quest.cityId || finished.has(quest.id)) continue;
+    // Weiter vorn kommen nur Kapitel, die warten mussten: an einer Stadt oder einer Bedingung (Auftrag 43).
+    if ((!quest.cityId && !quest.requires) || finished.has(quest.id)) continue;
     if (eligible(state, quest)) return i;
     waiting = true;
   }
@@ -239,7 +256,7 @@ function rewardWarehouse(state: GameState): Warehouse | null {
 }
 
 /** Zahlt eine Belohnung aus und gibt den Text zurück, der dem Spieler sagt, was wirklich angekommen ist. */
-function grant(ctx: Ctx, reward: QuestReward, reason = 'Belohnung von Peter'): string {
+function grant(ctx: Ctx, reward: QuestReward, reason: string): string {
   const text = rewardText(reward);
   switch (reward.kind) {
     case 'goods': {
@@ -283,13 +300,13 @@ function grant(ctx: Ctx, reward: QuestReward, reason = 'Belohnung von Peter'): s
   }
 }
 
-/** Peter schickt die aktive Quest. */
+/** Peter (bzw. Jansen) schickt die aktive Quest. */
 function announce(ctx: Ctx): void {
   const quest = currentQuest(ctx.state);
   if (!quest) return;
   const rewards = quest.reward.map(rewardText).join(', ');
   messages.send(ctx, {
-    contact: PETER,
+    contact: questContact(ctx.state, quest),
     text: rewards ? `${quest.task}\n\nDafür gibt's von mir: ${rewards}.` : quest.task,
   });
   ctx.emit('quest.started', { questId: quest.id });
@@ -303,16 +320,18 @@ function finish(ctx: Ctx, skipped: boolean): void {
     q.skipped.push(quest.id);
   } else {
     q.done.push(quest.id);
-    const rewards = quest.reward.map((reward) => grant(ctx, reward)).join(', ');
+    const from = questContact(ctx.state, quest);
+    const rewards = quest.reward.map((reward) => grant(ctx, reward, `Belohnung von ${from.name}`)).join(', ');
     journal.add(ctx, `Quest erledigt: ${quest.title}.${rewards ? ` Belohnung: ${rewards}.` : ''}`, 'good');
-    if (quest.doneText) messages.send(ctx, { contact: PETER, text: quest.doneText });
+    if (quest.doneText) messages.send(ctx, { contact: from, text: quest.doneText });
   }
   q.index = nextIndex(ctx.state, q.index + 1);
   q.progress = 0;
   q.startedAt = ctx.now;
   ctx.emit('quest.completed', { questId: quest.id, skipped });
   const next = currentQuest(ctx.state);
-  if (!skipped && (!next || next.chapter !== quest.chapter)) {
+  // Jansens Kapitel endet mit seinem eigenen Satz (doneText), Peter mischt sich da nicht ein.
+  if (!skipped && quest.voice === undefined && (!next || next.chapter !== quest.chapter)) {
     messages.send(ctx, {
       contact: PETER,
       text: next
@@ -599,9 +618,69 @@ function resume(ctx: Ctx): void {
   q.startedAt = ctx.now;
   const next = currentQuest(ctx.state);
   if (!next) return;
+  messages.send(ctx, {
+    contact: questContact(ctx.state, next),
+    text:
+      next.voice === 'jansen'
+        ? 'Willkommen in der Halle. Ich zeig dir, wie das hier läuft, Schritt für Schritt. Danach bist du allein.'
+        : next.voice === 'grow'
+          ? 'Ich zeig dir, wie das mit dem Anbau läuft. Vom Feld bis in deinen Hafen, Schritt für Schritt.'
+          : `Neue Stadt, neues Kapitel: „${chapterName(next.chapter)}“.`,
+  });
+  announce(ctx);
+  check(ctx);
+}
+
+/**
+ * Du bist in einer Stadt mit eigenem Kapitel, die aktive Quest gehört aber woanders hin (Auftrag 43: in Hamburg
+ * stand noch „Setz einen eigenen Preis“ aus Köln): Peter macht mit dem Kapitel der Stadt weiter. Was aus Köln liegen
+ * geblieben ist, gilt als übersprungen (die Stadt führt jetzt der Statthalter); offene Kapitel anderer Städte kommen
+ * wieder dran, wenn du dort bist.
+ */
+function followCity(ctx: Ctx): void {
+  const state = ctx.state;
+  const current = currentQuest(state);
+  if (!current || current.voice !== undefined || isBusinessSold(state)) return;
+  const here = presentCity(state);
+  if ((current.cityId ?? 'koeln') === here) return;
+  const q = state.modules.quests;
+  const finished = new Set([...q.done, ...q.skipped]);
+  const index = QUESTS.findIndex((x) => x.cityId === here && !finished.has(x.id) && eligible(state, x));
+  if (index < 0) return;
+  for (const quest of QUESTS.slice(0, index)) {
+    const base = quest.cityId === undefined && quest.requires === undefined && quest.voice === undefined;
+    if (base && !finished.has(quest.id)) q.skipped.push(quest.id);
+  }
+  q.index = index;
+  q.progress = 0;
+  q.startedAt = ctx.now;
+  const next = currentQuest(state);
+  if (!next) return;
   messages.send(ctx, { contact: PETER, text: `Neue Stadt, neues Kapitel: „${chapterName(next.chapter)}“.` });
   announce(ctx);
   check(ctx);
+}
+
+/**
+ * Das Geschäft ist verkauft (Auftrag 43): Was von den Kapiteln in Deutschland noch offen war, fällt weg (ohne
+ * Belohnung), ebenso ein laufender Wochenvertrag. Peter wartet, bis Jansen in Rotterdam mit seinem Kapitel anfängt.
+ */
+function leaveOldChapters(ctx: Ctx): void {
+  const q = ctx.state.modules.quests;
+  const finished = new Set([...q.done, ...q.skipped]);
+  for (const quest of QUESTS) {
+    if (quest.voice === undefined && !finished.has(quest.id)) q.skipped.push(quest.id);
+  }
+  q.index = WAITING;
+  q.progress = 0;
+  q.startedAt = ctx.now;
+  const c = q.contracts;
+  if (c.active) {
+    journal.add(ctx, `Vertrag beendet: ${c.active.title}. Das Geschäft ist verkauft.`, 'info');
+    c.active = null;
+  }
+  retractOffers(ctx);
+  c.offers = [];
 }
 
 export function skipQuest(ctx: Ctx): CommandResult {
@@ -630,7 +709,7 @@ function onCounted<K extends keyof GameEvents>(type: K) {
 
 export default defineModule({
   id: 'quests',
-  version: 4,
+  version: 5,
   dependsOn: ['goods', 'staff', 'territory', 'police', 'reputation', 'leaderboard'],
   init: () => ({
     index: 0,
@@ -652,8 +731,14 @@ export default defineModule({
       });
       announce(ctx);
     }
+    // Nach dem Verkauf zählen nur noch Jansens Schritte in Rotterdam (Auftrag 43, auch für alte Spielstände).
+    if (isBusinessSold(ctx.state) && currentQuest(ctx.state)?.voice === undefined && q.index !== WAITING) {
+      leaveOldChapters(ctx);
+    }
     // Peter wartet auf die nächste Stadt (Auftrag 36): Ist sie frei, kommt ihr Kapitel.
     if (q.index === WAITING) resume(ctx);
+    // In einer neuen Stadt geht ihr Kapitel vor (Auftrag 43).
+    followCity(ctx);
     if (currentQuest(ctx.state)?.measure) check(ctx);
     const contract = ctx.state.modules.quests.contracts.active;
     if (contract && getContractTemplate(contract.templateId)?.measure) checkContract(ctx);
@@ -673,6 +758,8 @@ export default defineModule({
         text: 'Sieben Veedel. Du bist jetzt der Boss von Köln, das sagen sie überall. Aber die anderen fünf schlafen nicht.',
       });
     },
+    // Verkauft (Auftrag 43): Die Kapitel in Deutschland und der Wochenvertrag sind vorbei.
+    'business.sold': (ctx) => leaveOldChapters(ctx),
     // "Nein danke" auf ein Vertragsangebot: Das Angebot ist weg.
     'message.answered': (ctx, { messageId, optionId }) => {
       const c = ctx.state.modules.quests.contracts;
@@ -703,5 +790,17 @@ export default defineModule({
     // nächste Stadt (sonst stünde er mitten im Kapitel einer Stadt, die noch gar nicht frei ist).
     4: (old: QuestsState): QuestsState =>
       old.index >= QUEST_COUNT_BEFORE_36 ? { ...old, index: WAITING, progress: 0 } : old,
+    // Version 5 (Auftrag 43): Jedes Stadt-Kapitel hat zwei Quests mehr (Läufer anheuern, selbst bestellen). Der Index
+    // zeigte in die alte Liste; dieselbe Quest in der neuen suchen. Die neuen Quests einer Stadt, die schon läuft,
+    // kommen erst nach dem Ende der Liste wieder dran (nextIndex sucht Stadt-Quests auch vorne).
+    5: (old: QuestsState): QuestsState => {
+      const added = new Set(QUESTS_ADDED_IN_43);
+      const before = QUESTS.filter((q) => !added.has(q.id));
+      if (old.index < 0) return old;
+      const id = before[old.index]?.id;
+      // Alles durch: Jetzt wartet das Kapitel Rotterdam (es kommt nach dem Verkauf, sobald du dort bist).
+      if (id === undefined) return { ...old, index: WAITING, progress: 0 };
+      return { ...old, index: QUESTS.findIndex((q) => q.id === id) };
+    },
   },
 });

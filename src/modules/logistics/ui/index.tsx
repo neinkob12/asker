@@ -24,7 +24,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity } from '../../city';
+import { activeCity, isBusinessSold } from '../../city';
 import { isPlayerDelivering } from '../../customers';
 import { vehicleName } from '../../fleet';
 import {
@@ -50,6 +50,7 @@ import {
   isInterCityTrip,
   isPlayerOnTheRoad,
   PORTS,
+  placeCity,
   placeOf,
   portName,
   ROUTE_CHOICES,
@@ -60,6 +61,7 @@ import {
   type TripLeg,
   tripAmount,
   tripProgress,
+  tripTouchesCity,
 } from '../index';
 import './island';
 import { BerthGroup } from './port';
@@ -155,9 +157,9 @@ function Summary() {
   const { state } = useGame();
   const cargo = getCargo(state);
   const risky = cargo.some((c) => cargoRisk(state, c) === 'risky');
-  const trips = getTrips(state);
+  const trips = getTrips(state).filter((t) => tripTouchesCity(state, t, activeCity(state)));
   const stopped = trips.some((t) => t.status === 'stopped');
-  const drivers = getStaff(state, { role: 'driver' }).length;
+  const drivers = getStaff(state, { role: 'driver', cityId: activeCity(state) }).length;
   return (
     <SummaryTiles
       items={[
@@ -532,9 +534,29 @@ function TripsGroup(props: { trips: readonly Trip[] }) {
 /** Hafen-Seite (Panel): Kennzahlen, Kai, Fahrten unterwegs, was zuletzt lief. */
 function PortPanel() {
   const { state } = useGame();
-  const trips = getTrips(state);
+  const ui = useUi();
+  // Nach dem Verkauf (Auftrag 43): Der Hafen ist Jansens Halle in Rotterdam, die Kunden-App zeigt ihn.
+  if (isBusinessSold(state)) {
+    return (
+      <div class="logi-app">
+        <Group
+          title="Dein Hafen ist jetzt Rotterdam"
+          icon="anchor"
+          color="goods"
+          note="Lager, Zoll, Einkauf im Ausland und Lkw findest du in der Kunden-App unter „Hafen“."
+        >
+          <div class="logi-redirect">
+            <Button variant="primary" icon="ship" onClick={() => ui.openPhone('trade.app', { view: 'harbor' })}>
+              Zum Hafen in der Kunden-App
+            </Button>
+          </div>
+        </Group>
+      </div>
+    );
+  }
+  const trips = getTrips(state).filter((t) => tripTouchesCity(state, t, activeCity(state)));
   const log = getLogisticsLog(state).slice(0, 4);
-  const drivers = getStaff(state, { role: 'driver' }).length;
+  const drivers = getStaff(state, { role: 'driver', cityId: activeCity(state) }).length;
   return (
     <div class="logi-app">
       <Summary />
@@ -649,7 +671,9 @@ registerAdvisor({
       };
     }
     const cityId = activeCity(state);
-    if (!hasBerth(state) && PORTS[cityId] && state.wallet.clean >= berthCost(cityId)) {
+    // Erst mit einem Lager in der Stadt (Auftrag 43): Container vom Kai brauchen einen Platz.
+    const stored = getWarehouses(state, cityId).length > 0;
+    if (stored && !hasBerth(state) && PORTS[cityId] && state.wallet.clean >= berthCost(cityId)) {
       return {
         id: 'logistics.berth',
         priority: 45,
@@ -667,7 +691,14 @@ registerAdvisor({
   },
 });
 
-onGameEvent('cargo.docked', 'logistics.dockedToast', (payload, ui) => {
+/** Gehört die Ware am Kai zu einer anderen Stadt als der, in der du spielst (dann meldet sie ihr Statthalter)? */
+function otherCityCargo(state: GameState, cargoId: number): boolean {
+  const cargo = state.modules.logistics.cargo.find((c) => c.id === cargoId);
+  return cargo !== undefined && cargo.cityId !== activeCity(state);
+}
+
+onGameEvent('cargo.docked', 'logistics.dockedToast', (payload, ui, state) => {
+  if (otherCityCargo(state, payload.cargoId)) return;
   ui.toast(
     `Schiff im Hafen: ${formatProductAmount(payload.productId, payload.amount)} ${productName(payload.productId)} am Kai.`,
     'good',
@@ -679,6 +710,9 @@ onGameEvent('cargo.seized', 'logistics.customsToast', (payload, ui) => {
 });
 onGameEvent('transport.arrived', 'logistics.arrivedToast', (payload, ui, state) => {
   if (payload.amount === 0) return;
+  // Fahrten in einer anderen Stadt (Statthalter) sind nicht deine Sache.
+  const city = placeCity(state, payload.toId);
+  if (city !== null && city !== activeCity(state)) return;
   const place = getWarehouse(state, payload.toId)?.name ?? 'Lager';
   // Routen in derselben Stadt sind Routine (still im Verlauf); eine Ankunft über die A1 ist ein Banner wert.
   const routine = payload.kind === 'route' && !payload.interCity;

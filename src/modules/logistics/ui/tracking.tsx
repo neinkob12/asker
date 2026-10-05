@@ -5,6 +5,7 @@
 
 import { formatPercent, type GameState } from '../../../core';
 import { Icon, islandCountdown, registerSlot, useGame, useIsMobile } from '../../../ui';
+import { activeCity } from '../../city';
 import { formatProductAmount, productName } from '../../goods';
 import { getSupplier, type Shipment, shipmentProgress, shipmentsInTransit } from '../../suppliers';
 import {
@@ -18,6 +19,7 @@ import {
   type Trip,
   tripAmount,
   tripProgress,
+  tripTouchesCity,
 } from '../index';
 
 type Stage = 'sea' | 'quay' | 'road';
@@ -73,9 +75,13 @@ function roadTracking(state: GameState, trip: Trip): Tracking {
 
 /** Was die Karte zeigt: die am weitesten fortgeschrittene Hafenlieferung (Straße vor Kai vor Rhein). */
 function currentTracking(state: GameState): Tracking | null {
-  const pickups = getTrips(state).filter((t) => t.kind === 'pickup' && t.fromId === PORT_ID && t.status !== 'planned');
-  const cargo = getCargo(state);
-  const ships = shipmentsInTransit(state).filter((s) => getSupplier(state, s.supplierId)?.kind === 'port');
+  // Nur die Stadt, in der du spielst (Auftrag 43): Schiffe für eine andere Stadt sind Sache ihres Statthalters.
+  const here = activeCity(state);
+  const pickups = getTrips(state).filter(
+    (t) => t.kind === 'pickup' && t.fromId === PORT_ID && t.status !== 'planned' && tripTouchesCity(state, t, here),
+  );
+  const cargo = getCargo(state, here);
+  const ships = shipmentsInTransit(state, here).filter((s) => getSupplier(state, s.supplierId)?.kind === 'port');
   const total = pickups.length + cargo.length + ships.length;
   let tracking: Tracking | null = null;
   if (pickups.length > 0) tracking = roadTracking(state, pickups[0]);

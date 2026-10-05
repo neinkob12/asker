@@ -1,18 +1,30 @@
 // Test-Spielstände zum Ausprobieren, einer für jeden Abschnitt des Bogens: vom Bot gespielt und manche für einen Moment
 // zurechtgerückt (src/playtest/testSaves.ts, Dateien in public/spielstaende/, neu erzeugen mit `npm run saves:build`).
-// Zu laden im Spielstände-Dialog unter "Test-Spielstände" (nach Phase gruppiert) oder direkt mit ?spielstand=<id> in der
+// Zu laden im Spielstände-Dialog unter "Test-Spielstände" (nach Stadt bzw. Phase gruppiert) oder direkt mit ?spielstand=<id> in der
 // Adresse. Sie kommen nicht in die Bestenliste.
 
 import type { GameSession } from '../../core';
 import type { CategoryColor, IconName } from '../components';
 
-/** Abschnitt des Bogens, unter dem ein Test-Spielstand im Spielstände-Dialog steht. */
-export type TestSavePhase = 'koeln' | 'germany' | 'harbor' | 'production';
+/** Abschnitt des Bogens, unter dem ein Test-Spielstand im Spielstände-Dialog steht (Auftrag 43: eine Gruppe pro Stadt). */
+export type TestSavePhase =
+  | 'koeln'
+  | 'hamburg'
+  | 'berlin'
+  | 'muenchen'
+  | 'frankfurt'
+  | 'germany'
+  | 'harbor'
+  | 'production';
 
 export const TEST_SAVE_PHASES: readonly { id: TestSavePhase; title: string; icon: IconName; color: CategoryColor }[] = [
   { id: 'koeln', title: 'Köln', icon: 'dom', color: 'place' },
+  { id: 'hamburg', title: 'Hamburg', icon: 'anchor', color: 'place' },
+  { id: 'berlin', title: 'Berlin', icon: 'music', color: 'place' },
+  { id: 'muenchen', title: 'München', icon: 'beer', color: 'place' },
+  { id: 'frankfurt', title: 'Frankfurt', icon: 'building', color: 'place' },
   { id: 'germany', title: 'Deutschland', icon: 'map', color: 'place' },
-  { id: 'harbor', title: 'Hafen', icon: 'anchor', color: 'goods' },
+  { id: 'harbor', title: 'Hafen', icon: 'ship', color: 'goods' },
   { id: 'production', title: 'Produktion', icon: 'leaf', color: 'goods' },
 ];
 
@@ -52,28 +64,76 @@ export const TEST_SAVE_FILES: readonly TestSaveInfo[] = [
     text: '50.000 € Schwarzgeld, 11 von 12 Veedeln, Rechte Hand auf höchster Stufe (Geldwäsche aus). Das zwölfte Veedel fällt gleich nach dem Laden.',
   },
   {
-    id: 'ankunft-berlin',
-    phase: 'germany',
-    title: 'Ankunft in Berlin',
-    text: 'Köln gehört dem Statthalter. Gerade in Berlin angekommen, mit Startpaket, noch ohne Lager: Clubs, die Nacht.',
-  },
-  {
     id: 'ankunft-hamburg',
-    phase: 'germany',
+    phase: 'hamburg',
     title: 'Ankunft in Hamburg',
-    text: 'Köln und Berlin laufen beim Statthalter. Gerade in Hamburg angekommen: Hafen, Zoll, Reeperbahn.',
+    text: 'Köln gehört dem Statthalter. Gerade in Hamburg angekommen: keine Leute, keine Rechte Hand, keine Routen. Lager kaufen, anheuern, selbst bestellen.',
   },
   {
-    id: 'ankunft-frankfurt',
-    phase: 'germany',
-    title: 'Ankunft in Frankfurt',
-    text: 'Drei Städte komplett. Gerade in Frankfurt angekommen: Banker, Bahnhofsviertel, Flughafen.',
+    id: 'boss-von-hamburg',
+    phase: 'hamburg',
+    title: 'Boss von Hamburg',
+    text: 'Gerade ist die Mehrheit der Hamburger Stadtteile gefallen. Hafen, Zoll, Reeperbahn.',
+  },
+  {
+    id: 'hamburg-komplett',
+    phase: 'hamburg',
+    title: 'Hamburg fast komplett',
+    text: 'Elf von zwölf Stadtteilen, die Rechte Hand ist bereit für die Vollmacht. Der letzte fällt gleich nach dem Laden, dann meldet sich die nächste Stadt.',
+  },
+  {
+    id: 'ankunft-berlin',
+    phase: 'berlin',
+    title: 'Ankunft in Berlin',
+    text: 'Köln und Hamburg laufen beim Statthalter. Gerade in Berlin angekommen, ohne Leute und ohne Lager: Clubs, die Nacht.',
+  },
+  {
+    id: 'boss-von-berlin',
+    phase: 'berlin',
+    title: 'Boss von Berlin',
+    text: 'Gerade ist die Mehrheit der Berliner Ortsteile gefallen. Die Clubs haben Freitag bis Montag offen.',
+  },
+  {
+    id: 'berlin-komplett',
+    phase: 'berlin',
+    title: 'Berlin fast komplett',
+    text: 'Elf von zwölf Ortsteilen, die Rechte Hand ist bereit für die Vollmacht. Der letzte fällt gleich nach dem Laden, dann meldet sich die nächste Stadt.',
   },
   {
     id: 'ankunft-muenchen',
-    phase: 'germany',
+    phase: 'muenchen',
     title: 'Ankunft in München',
-    text: 'Vier Städte komplett, die letzte fehlt. Gerade in München angekommen: teuer und streng.',
+    text: 'Drei Städte komplett. Gerade in München angekommen, ohne Leute und ohne Lager: teuer und streng.',
+  },
+  {
+    id: 'boss-von-muenchen',
+    phase: 'muenchen',
+    title: 'Boss von München',
+    text: 'Gerade ist die Mehrheit der Münchner Stadtbezirke gefallen. Die Polizei schaut genau hin.',
+  },
+  {
+    id: 'muenchen-komplett',
+    phase: 'muenchen',
+    title: 'München fast komplett',
+    text: 'Elf von zwölf Stadtbezirken, die Rechte Hand ist bereit für die Vollmacht. Der letzte fällt gleich nach dem Laden, dann meldet sich Frankfurt.',
+  },
+  {
+    id: 'ankunft-frankfurt',
+    phase: 'frankfurt',
+    title: 'Ankunft in Frankfurt',
+    text: 'Vier Städte komplett, die letzte fehlt. Gerade in Frankfurt angekommen, ohne Leute und ohne Lager: Banker, Bahnhofsviertel, Flughafen.',
+  },
+  {
+    id: 'boss-von-frankfurt',
+    phase: 'frankfurt',
+    title: 'Boss von Frankfurt',
+    text: 'Gerade ist die Mehrheit der Frankfurter Stadtteile gefallen. Kofi am Flughafen, scharfer Zoll.',
+  },
+  {
+    id: 'frankfurt-komplett',
+    phase: 'frankfurt',
+    title: 'Frankfurt fast komplett',
+    text: 'Elf von zwölf Stadtteilen. Der letzte fällt gleich nach dem Laden: Boss von Deutschland, dann ruft Jansen aus Rotterdam an.',
   },
   {
     id: 'deutschland',
@@ -91,7 +151,7 @@ export const TEST_SAVE_FILES: readonly TestSaveInfo[] = [
     id: 'hafen-europa',
     phase: 'harbor',
     title: 'Schiff und Europa',
-    text: 'Knapp zwei Wochen später: ein eigenes Schiff, Antwerpen als zweiter Hafen, die ersten drei Städte in Europa bestellen.',
+    text: 'Knapp vier Wochen später: ein eigenes Schiff, Antwerpen als zweiter Hafen, die ersten drei Städte in Europa bestellen.',
   },
   {
     id: 'produktion',

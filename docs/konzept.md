@@ -213,9 +213,10 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   Tipp auf ihre Glas-Karte in der Deutschland-Ansicht holt den Anruf. Frankfurt steht schon als
   „bald“ da. Ein Autobahn-Netz (A1, A3, A3/A9, A24, A9, A7/A5) trägt Fahrten zwischen allen Städten, auch über eine
   Stadt hinweg. Die Rechte Hand mit Vollmacht heißt Statthalter; schlafende Städte haben an etwa 3 von 100 Tagen eine
-  Razzia (halber Tag oder kleines Minus, eine Zeile vom Statthalter). Bei der Übergabe kommt ein Startpaket mit (neue
-  Rechte Hand, bis zu fünf Leute, Fahrzeuge) und Startgeld (zehn Tagesgewinne der Stadt, mindestens ein Sockel je
-  Zielstadt, Hamburg 45.000 €). Ränge des Spielers ohne
+  Razzia (halber Tag oder kleines Minus, eine Zeile vom Statthalter). Bei der Übergabe kommen Fahrzeuge mit und
+  Startgeld (zehn Tagesgewinne der Stadt, mindestens ein Sockel je
+  Zielstadt, Hamburg 45.000 €); die Leute bleiben in ihrer Stadt beim Statthalter, in der neuen Stadt fängst du mit
+  eigenen Leuten und eigenen Bestellungen an. Ränge des Spielers ohne
   Boni: Kleindealer, Händler, Großhändler, Boss von Köln, Boss von <Stadt>, Boss von Deutschland (ab vier Städten; dann Importeur und
   Produzent), mit Banner, im HUD und in der Bestenliste. Peter hat ein Kapitel pro Stadt.
 - **Berlin (Auftrag 37):** die dritte spielbare Stadt, Dreh „die Nacht“. Zwölf Ortsteile von Charlottenburg bis

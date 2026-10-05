@@ -26,15 +26,17 @@ import {
   useGameSelector,
   useUi,
 } from '../../../ui';
+import { activeCity, isBusinessSold } from '../../city';
 import { getGang } from '../../gangs';
 import { getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
 import { controllerOf, PLAYER_FACTION } from '../../territory';
-import { getVeedel, veedelName } from '../../veedel';
+import { getVeedel, veedelCity, veedelName } from '../../veedel';
 import {
   activeTipOff,
   CHECK_THRESHOLD,
   canSnitch,
+  customsLevel,
   getHeat,
   heatLevel,
   MAX_HEAT,
@@ -64,7 +66,20 @@ const hottestPresent = memoState((state) => playerHeat(state));
  */
 const HeatHud = memo(function HeatHud() {
   // Nur ein kleiner Auszug (Veedel, Stufe, gefüllte Flammen): Die Pille zeichnet nicht bei jeder Heat-Nachkommastelle neu.
-  const { veedelId, levelId, levelLabel, filled } = useGameSelector((state) => {
+  const { veedelId, levelId, levelLabel, filled, customs } = useGameSelector((state) => {
+    // Nach dem Verkauf (Auftrag 43) gibt es keine Veedel mehr: Der Gegner ist der Zoll im wachsten Hafen.
+    if (isBusinessSold(state)) {
+      const heat = Math.max(0, ...Object.values(state.modules.police.customs ?? {}));
+      const level = customsLevel(heat);
+      const share = Math.min(1, Math.max(0, heat / MAX_HEAT));
+      return {
+        veedelId: null,
+        levelId: (['calm', 'watchful', 'hot', 'manhunt'] as const)[level.index],
+        levelLabel: level.label,
+        filled: share <= 0 ? 0 : Math.max(1, Math.ceil(share * FLAMES - 1e-9)),
+        customs: true,
+      };
+    }
     const hottest = hottestPresent(state);
     const level = heatLevel(hottest?.heat ?? 0);
     const share = Math.min(1, Math.max(0, (hottest?.heat ?? 0) / MAX_HEAT));
@@ -73,14 +88,17 @@ const HeatHud = memo(function HeatHud() {
       levelId: level.id,
       levelLabel: level.label,
       filled: share <= 0 ? 0 : Math.max(1, Math.ceil(share * FLAMES - 1e-9)),
+      customs: false,
     };
   }, shallowEqual);
-  const title = veedelId
-    ? `Heat in ${veedelName(veedelId)} (heißestes Veedel, in dem du aktiv bist): ${levelLabel}`
-    : 'Du bist gerade in keinem Veedel aktiv.';
+  const title = customs
+    ? `Zoll in deinem wachsten Hafen: ${levelLabel}`
+    : veedelId
+      ? `Heat in ${veedelName(veedelId)} (heißestes Veedel, in dem du aktiv bist): ${levelLabel}`
+      : 'Du bist gerade in keinem Veedel aktiv.';
   return (
     <div class={`hud-heat-pill is-${FLAME_TONE[levelId]}`} title={title}>
-      <span class="hud-heat-pill__label">Heat</span>
+      <span class="hud-heat-pill__label">{customs ? 'Zoll' : 'Heat'}</span>
       <span class="hud-heat-pill__flames" role="img" aria-label={`Heat: ${filled} von ${FLAMES} Flammen`}>
         {Array.from({ length: FLAMES }, (_, i) => (
           <Icon key={i} name="flame" class={`hud-heat-pill__flame ${i < filled ? 'is-on' : ''}`} />
@@ -280,7 +298,9 @@ onGameEvent('police.raid', 'police.toast.raid', (payload, ui, state) => {
         : `Razzia in ${veedelName(payload.veedelId)}!`;
   ui.toast(payload.empty ? `${title.slice(0, -1)}: niemand da.` : title, payload.empty ? 'info' : 'bad');
 });
-onGameEvent('police.tierChanged', 'police.toast.tier', (payload, ui) => {
+// Banner nur aus der Stadt, in der du bist (Auftrag 43): Was in einer Stadt beim Statthalter passiert, steht dort.
+onGameEvent('police.tierChanged', 'police.toast.tier', (payload, ui, state) => {
+  if (payload.cityId !== activeCity(state)) return;
   const tier = OPERATION_TIERS[payload.to];
   ui.toast(`Die Polizei sieht dich jetzt als ${tier.name}.`, payload.to > payload.from ? 'bad' : 'good', {
     urgent: false,
@@ -299,9 +319,12 @@ onGameEvent('police.check', 'police.fx.check', (payload, _ui, state) => {
 });
 soundOnEvent('police.raid', 'siren', { when: (p) => p.target === PLAYER_FACTION && !p.empty });
 soundOnEvent('police.check', 'siren', { volume: 0.5, throttleMs: 4000 });
-onGameEvent('police.check', 'police.toast.check', (payload, ui) => {
+onGameEvent('police.check', 'police.toast.check', (payload, ui, state) => {
+  if (veedelCity(payload.veedelId) !== activeCity(state)) return;
   ui.toast(`Kontrolle in ${veedelName(payload.veedelId)}.`, 'bad');
 });
 onGameEvent('police.arrest', 'police.toast.arrest', (payload, ui, state) => {
-  ui.toast(`${getStaffMember(state, payload.staffId)?.name ?? 'Jemand'} wurde festgenommen.`, 'bad');
+  const m = getStaffMember(state, payload.staffId);
+  if (m && (m.cityId ?? 'koeln') !== activeCity(state)) return;
+  ui.toast(`${m?.name ?? 'Jemand'} wurde festgenommen.`, 'bad');
 });

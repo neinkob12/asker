@@ -5,7 +5,8 @@
 // mit der Zeit (siehe staff: knownStats, revealStat).
 //
 // Öffentliche API:
-//   getCandidates(state), getCandidate(state, id), getPool(state), getContacts(state), searchReadyAt(state),
+//   getCandidates(state, cityId?), getCandidate(state, id), getPool(state, cityId?), getContacts(state, cityId?),
+//   searchReadyAt(state),
 //   poolMax(state), searchPreview(state, role?), SOURCE_NAMES, SEARCH_COST, SEARCH_ROLES
 // Befehle: 'recruiting.hire', 'recruiting.decline', 'recruiting.search' (mit role: gezielt nach einer Rolle)
 // Ereignisse: 'recruiting.candidateArrived', 'recruiting.hired', 'recruiting.candidateLeft'
@@ -23,6 +24,7 @@ import {
   messages,
   wallet,
 } from '../../core';
+import { activeCity, cityName, isBusinessSold } from '../city';
 import { getRegular } from '../customers';
 import { getReputation } from '../reputation';
 import { getSpot } from '../spots';
@@ -113,6 +115,11 @@ export interface Candidate {
   referrerId: string | null;
   /** Eigenschaften (Auftrag 34), sichtbar schon vor der Einstellung. */
   traits: TraitId[];
+  /**
+   * Stadt, in der die Person Arbeit sucht (Auftrag 43). Jede Stadt hat ihre eigenen Bewerber, mit Lohn und Handgeld von
+   * dort; eingestellt wird nur, wer in der Stadt ist, in der du bist.
+   */
+  cityId: string;
 }
 
 export interface RecruitingState {
@@ -145,23 +152,28 @@ declare module '../../core' {
 
 // --- Lesen ---
 
-/** Alle Kandidaten: Bewerber aus dem Pool und Kontakte. */
-export function getCandidates(state: GameState): readonly Candidate[] {
-  return state.modules.recruiting.candidates;
+/** Stadt eines Kandidaten (alte Stände ohne Angabe: Köln). */
+function candidateCity(c: Candidate): string {
+  return c.cityId ?? 'koeln';
+}
+
+/** Kandidaten einer Stadt (ohne Angabe die aktive): Bewerber aus dem Pool und Kontakte. */
+export function getCandidates(state: GameState, cityId = activeCity(state)): readonly Candidate[] {
+  return state.modules.recruiting.candidates.filter((c) => candidateCity(c) === cityId);
 }
 
 export function getCandidate(state: GameState, id: string): Candidate | undefined {
   return state.modules.recruiting.candidates.find((c) => c.id === id);
 }
 
-/** Bewerber aus dem Pool (noch verfügbar). */
-export function getPool(state: GameState): Candidate[] {
-  return state.modules.recruiting.candidates.filter((c) => c.source === 'pool' && c.expiresAt > state.time);
+/** Bewerber aus dem Pool einer Stadt (ohne Angabe die aktive, noch verfügbar). */
+export function getPool(state: GameState, cityId = activeCity(state)): Candidate[] {
+  return getCandidates(state, cityId).filter((c) => c.source === 'pool' && c.expiresAt > state.time);
 }
 
-/** Kontakte: Empfehlungen, Stammkunden, Ereignisse (noch verfügbar). */
-export function getContacts(state: GameState): Candidate[] {
-  return state.modules.recruiting.candidates.filter((c) => c.source !== 'pool' && c.expiresAt > state.time);
+/** Kontakte einer Stadt (ohne Angabe die aktive): Empfehlungen, Stammkunden, Ereignisse (noch verfügbar). */
+export function getContacts(state: GameState, cityId = activeCity(state)): Candidate[] {
+  return getCandidates(state, cityId).filter((c) => c.source !== 'pool' && c.expiresAt > state.time);
 }
 
 export function searchReadyAt(state: GameState): number {
@@ -241,6 +253,7 @@ function addCandidate(ctx: Ctx, role: StaffRole, source: CandidateSource, option
     arrivedAt: ctx.now,
     referrerId: options.referrerId ?? null,
     traits: profile.traits ? [...profile.traits] : [],
+    cityId: activeCity(ctx.state),
   };
   ctx.state.modules.recruiting.candidates.push(candidate);
   ctx.emit('recruiting.candidateArrived', { candidateId: candidate.id, source });
@@ -294,7 +307,9 @@ const describe = (c: Candidate) => `${c.name}, ${c.age}, ${roleName(c.role)}`;
 
 /** Empfehlung eines loyalen Mitarbeiters (höchstens eine pro Tag). */
 function maybeReferral(ctx: Ctx): void {
-  const loyal = getStaff(ctx.state, { status: 'active' })
+  // Nur Leute der Stadt, in der du bist, kennen dort wen (Auftrag 43); nach dem Verkauf niemand mehr.
+  if (isBusinessSold(ctx.state)) return;
+  const loyal = getStaff(ctx.state, { status: 'active', cityId: activeCity(ctx.state) })
     .filter((m) => m.stats.loyalty >= REFERRAL_MIN_LOYALTY && !isFarmRole(m.role))
     .sort((a, b) => a.id.localeCompare(b.id));
   for (const m of loyal) {
@@ -318,7 +333,7 @@ function maybeReferral(ctx: Ctx): void {
 
 /** Jemand aus dem Milieu meldet sich. */
 function maybeEventContact(ctx: Ctx): void {
-  if (!ctx.chance(EVENT_CHANCE)) return;
+  if (isBusinessSold(ctx.state) || !ctx.chance(EVENT_CHANCE)) return;
   const c = addContact(ctx, pickWeighted(ctx, EVENT_ROLE_WEIGHTS), 'event', 'Hat sich von selbst gemeldet.');
   if (!c) return;
   const intro = ctx.pick(EVENT_INTROS).replace('{name}', c.name);
@@ -353,7 +368,8 @@ function maybeRegular(ctx: Ctx, regularId: string, sellerId: string | null): voi
 /** Wer aus der Haft kommt, hat dort manchmal jemanden kennengelernt. */
 function maybeJailContact(ctx: Ctx, staffId: string): void {
   const m = getStaffMember(ctx.state, staffId);
-  if (!m || !ctx.chance(JAIL_CONTACT_CHANCE)) return;
+  // Den Kontakt gibt es nur, wenn die Person in der Stadt ist, in der du bist (Auftrag 43).
+  if (!m || (m.cityId ?? 'koeln') !== activeCity(ctx.state) || !ctx.chance(JAIL_CONTACT_CHANCE)) return;
   const c = addContact(ctx, pickWeighted(ctx, EVENT_ROLE_WEIGHTS), 'event', `Hat ${m.name} im Knast kennengelernt.`);
   if (!c) return;
   announce(
@@ -384,6 +400,12 @@ function tick(ctx: Ctx): void {
   s.nextPoolAt = ctx.now + ctx.randomInt(POOL_INTERVAL[0], POOL_INTERVAL[1]);
 }
 
+/** Kommst du in eine Stadt ohne Bewerber, warten gleich ein paar von dort (Auftrag 43). */
+function freshPool(ctx: Ctx, cityId: string): void {
+  if (isBusinessSold(ctx.state) || activeCity(ctx.state) !== cityId || getPool(ctx.state, cityId).length > 0) return;
+  for (let i = 0; i < POOL_START; i++) addPoolCandidate(ctx);
+}
+
 function profileOf(c: Candidate): RecruitProfile {
   return {
     name: c.name,
@@ -401,6 +423,9 @@ function profileOf(c: Candidate): RecruitProfile {
 function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null, meta: CommandMeta): CommandResult {
   const c = getCandidate(ctx.state, candidateId);
   if (!c || c.expiresAt <= ctx.now) return { ok: false, reason: 'Die Person ist nicht mehr zu haben.' };
+  if (candidateCity(c) !== activeCity(ctx.state)) {
+    return { ok: false, reason: `${c.name} sucht in ${cityName(candidateCity(c))} Arbeit.` };
+  }
   // Kommt die Person an einen Spot, gehört das Handgeld zu dessen Kosten (Kasse: Pro Spot und Pro Leutnant).
   const tag = assignment?.kind === 'spot' ? { category: 'hiring' as const, spotId: assignment.targetId } : 'hiring';
   if (!wallet.pay(ctx, c.hireCost, 'dirty', `Handgeld ${c.name}`, tag)) {
@@ -409,6 +434,7 @@ function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null,
   const s = ctx.state.modules.recruiting;
   s.candidates = s.candidates.filter((x) => x.id !== c.id);
   const member = enlist(ctx, profileOf(c), {
+    cityId: candidateCity(c),
     origin: c.source,
     knownStats: STAT_KEYS.filter((k) => c.visibleStats[k] !== undefined),
     note: c.note,
@@ -461,7 +487,7 @@ interface RecruitingStateV1 {
   candidates: CandidateV1[];
 }
 
-type CandidateV3 = Omit<Candidate, 'traits'>;
+type CandidateV3 = Omit<Candidate, 'traits' | 'cityId'>;
 type RecruitingStateV3 = Omit<RecruitingState, 'candidates'> & { candidates: CandidateV3[] };
 
 export function migrateRecruitingV1(old: RecruitingStateV1, state: GameState): RecruitingStateV3 {
@@ -484,17 +510,26 @@ export function migrateRecruitingV1(old: RecruitingStateV1, state: GameState): R
   };
 }
 
+type CandidateV4 = Omit<Candidate, 'cityId'>;
+type RecruitingStateV4 = Omit<RecruitingState, 'candidates'> & { candidates: CandidateV4[] };
+
 /** Version 3 → 4 (Auftrag 34): Bewerber bekommen Eigenschaften, fest aus ihrer ID. */
-export function migrateRecruitingV3(old: RecruitingStateV3, state: GameState): RecruitingState {
+export function migrateRecruitingV3(old: RecruitingStateV3, state: GameState): RecruitingStateV4 {
   return {
     ...old,
     candidates: old.candidates.map((c) => ({ ...c, traits: rollTraits(`${state.meta.seed}:${c.id}`) })),
   };
 }
 
+/** Version 4 → 5 (Auftrag 43): Bewerber suchen in der Stadt Arbeit, in der du gerade bist. */
+export function migrateRecruitingV4(old: RecruitingStateV4, state: GameState): RecruitingState {
+  const cityId = activeCity(state);
+  return { ...old, candidates: old.candidates.map((c) => ({ ...c, cityId })) };
+}
+
 export default defineModule({
   id: 'recruiting',
-  version: 4,
+  version: 5,
   dependsOn: ['staff', 'territory', 'reputation'],
   init: (ctx) => {
     const state: RecruitingState = { candidates: [], nextPoolAt: 0, searchReadyAt: 0 };
@@ -527,6 +562,9 @@ export default defineModule({
     'staff.statusChanged': (ctx, { staffId, from, to }) => {
       if (from === 'jailed' && to === 'active') maybeJailContact(ctx, staffId);
     },
+    // In einer neuen Stadt warten gleich ein paar Bewerber von dort (Auftrag 43), nicht erst nach Stunden.
+    'city.arrived': (ctx, { cityId }) => freshPool(ctx, cityId),
+    'city.switched': (ctx, { to }) => freshPool(ctx, to),
   },
   migrations: {
     2: migrateRecruitingV1,
@@ -537,5 +575,6 @@ export default defineModule({
       candidates: old.candidates.filter((c) => c.role !== 'courier'),
     }),
     4: migrateRecruitingV3,
+    5: migrateRecruitingV4,
   },
 });

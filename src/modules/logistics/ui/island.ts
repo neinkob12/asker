@@ -3,6 +3,7 @@
 
 import { clock } from '../../../core';
 import { islandCountdown, type LiveActivity, onGameEvent, registerLiveActivity } from '../../../ui';
+import { activeCity } from '../../city';
 import { formatProductAmount, productName } from '../../goods';
 import {
   cargoRisk,
@@ -13,6 +14,7 @@ import {
   placeOf,
   tripAmount,
   tripProgress,
+  tripTouchesCity,
 } from '../index';
 
 registerLiveActivity({
@@ -35,8 +37,9 @@ registerLiveActivity({
       };
     });
     // Geplante Nachtfahrten stehen noch nicht in der Island (Auftrag 33), erst wenn sie losfahren.
+    const here = activeCity(state);
     const trips = getTrips(state)
-      .filter((trip) => trip.status !== 'planned')
+      .filter((trip) => trip.status !== 'planned' && tripTouchesCity(state, trip, here))
       .map((trip): LiveActivity => {
         const stopped = trip.status === 'stopped';
         // Am vollen Lager steht die Fahrt (Auftrag 33): keine Restzeit, sondern "voll".
@@ -67,6 +70,8 @@ registerLiveActivity({
   },
 });
 
-onGameEvent('cargo.docked', 'logistics.island', (_payload, ui) =>
-  ui.pulseIsland({ icon: 'ship', tone: 'accent', text: 'Schiff im Hafen' }),
-);
+onGameEvent('cargo.docked', 'logistics.island', (payload, ui, state) => {
+  const cargo = state.modules.logistics.cargo.find((c) => c.id === payload.cargoId);
+  if (cargo && cargo.cityId !== activeCity(state)) return;
+  ui.pulseIsland({ icon: 'ship', tone: 'accent', text: 'Schiff im Hafen' });
+});

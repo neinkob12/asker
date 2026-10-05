@@ -146,26 +146,16 @@ describe('Ankommen in Hamburg (Auftrag 30)', () => {
     if (e) expect(e.mode).toBe('crew');
   });
 
-  it('Leute nachholen: Mit Vollmacht gibt die Rechte Hand Leute am Spot nicht frei, freie Leute fahren nach Hamburg', () => {
+  it('Leute bleiben in ihrer Stadt: Versetzen gibt es nicht, wer in einem alten Stand unterwegs war, kommt an', () => {
     const sim = quietGame();
-    const boss = handOverKoeln(sim);
-    const atSpot = hire(sim, 1, 60);
-    sim.dispatch({
-      type: 'staff.assign',
-      payload: { staffId: atSpot.id, assignment: { kind: 'spot', targetId: 'zuelpicher' } },
-    });
+    handOverKoeln(sim);
     const free = hire(sim, 1, 60);
-    const refused = sim.dispatch({ type: 'staff.relocate', payload: { staffId: atSpot.id, cityId: 'hamburg' } });
-    expect(refused.ok).toBe(false);
-    const chat = messages.thread(sim.state, `staff:${boss.id}`).map((m) => m.text);
-    expect(chat.some((t) => t.includes('steht der Zülpicher Platz leer'))).toBe(true);
-    expect(sim.dispatch({ type: 'staff.relocate', payload: { staffId: free.id, cityId: 'hamburg' } }).ok).toBe(true);
-    expect(getStaffMember(sim.state, free.id)?.assignment).toEqual({ kind: 'travel', targetId: 'hamburg' });
-    // Leutnants werden nicht verschickt.
-    const lead = Object.keys(sim.state.modules.hierarchy.posts)[0];
-    expect(sim.dispatch({ type: 'staff.relocate', payload: { staffId: lead, cityId: 'hamburg' } }).ok).toBe(false);
+    expect(free.cityId).toBe('koeln');
+    // Aus einem alten Spielstand: unterwegs nach Hamburg.
+    free.assignment = { kind: 'travel', targetId: 'hamburg' };
+    free.busyUntil = sim.state.time + 30;
     const events = recordEvents(sim);
-    sim.advance(travelMinutesBetween('koeln', 'hamburg') + 2);
+    sim.advance(31);
     expect(getStaffMember(sim.state, free.id)).toMatchObject({ cityId: 'hamburg', assignment: null });
     expect(eventsOfType(events, 'staff.relocated').map((e) => e.payload)).toEqual([
       { staffId: free.id, from: 'koeln', to: 'hamburg' },

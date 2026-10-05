@@ -170,14 +170,22 @@ export const europeLayer: MapLayer = {
       element.hidden = true;
       cards.set(id, { element, key: '' });
     };
+    // Ein Tipp auf einen Kunden öffnet seine Seite (Auftrag 43), noch ohne Kunden die Kunden-Liste; ein Hafen den Hafen.
+    const openCustomer = (customerId: string) => {
+      const state = ctx.getState();
+      if (state && getCustomer(state, customerId)) ctx.ui.openPanel('trade.customer', { customerId });
+      else ctx.ui.openPhone('trade.app', { view: 'customers' });
+    };
     for (const port of harborPorts()) {
-      addCard(`port:${port.id}`, { lng: port.lng, lat: port.lat }, () => ctx.ui.openPhone('trade.app'));
+      addCard(`port:${port.id}`, { lng: port.lng, lat: port.lat }, () =>
+        ctx.ui.openPhone('trade.app', { view: 'harbor' }),
+      );
     }
     for (const city of FOREIGN_CITIES) {
-      addCard(`city:${city.id}`, city.at, () => ctx.ui.openPhone('trade.app'), 'top');
+      addCard(`city:${city.id}`, city.at, () => openCustomer(`city:${city.id}`), 'top');
     }
     for (const city of EUROPE_CITIES) {
-      addCard(`europe:${city.id}`, city.at, () => ctx.ui.openPhone('trade.app'), 'top');
+      addCard(`europe:${city.id}`, city.at, () => openCustomer(`europe:${city.id}`), 'top');
     }
     let routesKey = '';
     let seawaysShown = '';

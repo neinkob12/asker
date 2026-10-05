@@ -8,6 +8,7 @@ import {
   ActionSheet,
   Button,
   Group,
+  Hint,
   ItemContent,
   List,
   ListItem,
@@ -36,6 +37,7 @@ import {
   type ContainerSize,
   type Cover,
   containerRisk,
+  getOrders,
   getProducer,
   getShipments,
   harborPorts,
@@ -46,12 +48,15 @@ import {
   ownShips,
   type ShipVoyage,
   shippingMinutes,
+  stockWithIncoming,
   voyagePlan,
 } from '../index';
+import { MissingClean } from './clean';
 
 declare module '../../../ui' {
   interface PanelRegistry {
-    'trade.order': { producerId: string };
+    /** productId (Auftrag 43): Ware vorausgewählt, z.B. aus „fehlt“ in den Bestellungen. */
+    'trade.order': { producerId: string; productId?: string };
   }
 }
 
@@ -78,7 +83,7 @@ function freeShips(state: GameState): { id: number; name: string }[] {
   });
 }
 
-function OrderPanel({ producerId }: { producerId: string }) {
+function OrderPanel({ producerId, productId: wanted }: { producerId: string; productId?: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
   const producer = getProducer(producerId);
@@ -89,11 +94,12 @@ function OrderPanel({ producerId }: { producerId: string }) {
     ? Object.keys(producer.products).filter((id) => !origin || (stock[id]?.amount ?? 0) > 0)
     : [];
   const ports = ownedPorts(state);
-  const [productId, setProduct] = useState(products[0] ?? 'weed');
+  const [productId, setProduct] = useState(wanted && products.includes(wanted) ? wanted : (products[0] ?? 'weed'));
   const [size, setSize] = useState<ContainerSize['id']>('medium');
   const [cover, setCover] = useState<Cover['id']>('none');
   const [vessel, setVessel] = useState<string>(CHARTER);
-  const [count, setCount] = useState(1);
+  // Aus dem eigenen Ausfuhrlager standardmäßig alles (Auftrag 43), sonst ein Container.
+  const [count, setCount] = useState<number | null>(null);
   const [port, setPort] = useState(ports[0] ?? HARBOR_CITY);
   if (!producer) return null;
   if (origin && products.length === 0) {
@@ -111,6 +117,13 @@ function OrderPanel({ producerId }: { producerId: string }) {
   const ships = producer.sea ? freeShips(state) : [];
   const vesselId = vessel !== CHARTER && ships.some((s) => String(s.id) === vessel) ? Number(vessel) : null;
   const target = ports.includes(port) ? port : (ports[0] ?? HARBOR_CITY);
+  // Was angenommene Bestellungen von dieser Ware noch brauchen (Auftrag 43), gegen Bestand und Container unterwegs.
+  const needed = getOrders(state)
+    .filter((o) => o.status === 'accepted')
+    .flatMap((o) => o.items)
+    .filter((i) => i.productId === productId && i.state === undefined)
+    .reduce((sum, i) => sum + i.amount, 0);
+  const have = stockWithIncoming(state, target, productId);
   const container = CONTAINER_SIZES.find((c) => c.id === size) ?? CONTAINER_SIZES[0];
   const capacity = vesselId === null ? Infinity : vehicleSpec(state, vesselId).capacity;
   const onHand = origin ? (stock[productId]?.amount ?? 0) : Infinity;
@@ -118,7 +131,7 @@ function OrderPanel({ producerId }: { producerId: string }) {
     1,
     Math.min(CHARTER_MAX, Math.floor(capacity / container.grams), Math.ceil(onHand / container.grams)),
   );
-  const n = Math.min(count, max);
+  const n = Math.min(count ?? (origin ? max : 1), max);
   const load = [{ productId, size, cover, count: n }];
   const plan = vesselId === null ? null : voyagePlan(state, vesselId, producer.id, target);
   const total = loadCost(producer.id, load, vesselId !== null) + (plan?.cost ?? 0);
@@ -144,7 +157,8 @@ function OrderPanel({ producerId }: { producerId: string }) {
         note={producer.description}
         value={origin ? `${kg(onHand)} bereit` : undefined}
       >
-        {products.length > 1 && (
+        {/* Ab vier Waren eine Auswahl statt Reitern (Auftrag 43: bei Jansen waren die Namen abgeschnitten). */}
+        {products.length > 1 && products.length <= 3 && (
           <SegmentedControl
             wide
             aria-label="Ware"
@@ -152,6 +166,20 @@ function OrderPanel({ producerId }: { producerId: string }) {
             options={products.map((id) => ({ value: id, label: productName(id) }))}
             onChange={setProduct}
           />
+        )}
+        {products.length > 3 && (
+          <Select
+            wide
+            label="Ware"
+            value={productId}
+            options={products.map((id) => ({ value: id, label: productName(id) }))}
+            onChange={setProduct}
+          />
+        )}
+        {needed > 0 && (
+          <Hint icon="inbox">
+            {`Angenommen und noch offen: ${kg(needed)} ${productName(productId)}. Im Hafen oder unterwegs: ${kg(have)}.`}
+          </Hint>
         )}
       </Group>
       <Group title="Container" icon="boxes" color="goods" note="Klein fällt weniger auf, groß ist billiger pro Gramm.">
@@ -349,6 +377,9 @@ export function ShipsGroup() {
             {`${m.name} kaufen`}
           </ListItem>
         ))}
+        {models.length > 0 && (
+          <MissingClean cost={Math.min(...models.map((m) => vehiclePrice(m, HARBOR_CITY)))} what="ein Schiff" />
+        )}
       </List>
       <ActionSheet
         open={sell !== null}

@@ -1,10 +1,11 @@
 // Vollmacht der Rechten Hand im Handy und über der Karte (Auftrag 30):
 //   - Übergabe-Dialog über der Kartenfläche (Look "Glas"): die Rechte Hand mit Stufe und Erledigtem, der Deal (80 % für
 //     sie, 20 % für dich, täglich um Mitternacht, nur bei Gewinn), was sie ab jetzt zusätzlich tut, dass du jederzeit
-//     zurückkommen kannst, das Startpaket (Auftrag 36: neue Rechte Hand, bis zu fünf Leute, Fahrzeuge) und "<Stadt>
-//     übergeben und nach <Ziel> fahren" ('city.handOver' mit pack). Nach der Zusage fragt der Kontakt der neuen Stadt
-//     selbst im Gespräch, ob du übergibst (ohne Startpaket); wer erst noch etwas regeln oder Leute mitnehmen will, kommt
-//     über die Karte unter Geld und Heat oder die Seite der Rechten Hand hierher.
+//     zurückkommen kannst, was mitkommt (Startgeld und auf Wunsch Fahrzeuge; Leute bleiben seit dem Feedback vom
+//     05.10.2026 in ihrer Stadt) und "<Stadt> übergeben und nach <Ziel> fahren" ('city.handOver' mit pack). Nach der
+//     Zusage fragt der Kontakt der neuen Stadt selbst im Gespräch, ob du übergibst (ohne Fahrzeuge); wer erst noch etwas
+//     regeln oder Fahrzeuge mitnehmen will, kommt über die Karte unter Geld und Heat oder die Seite der Rechten Hand
+//     hierher.
 //   - Abschnitt "Vollmacht" auf der Seite der Rechten Hand: Aufgaben mit Vollmacht als Schalter, Beträge, Widerruf.
 
 import { useState } from 'preact/hooks';
@@ -29,8 +30,7 @@ import {
 } from '../../../ui';
 import { activeCity, cityName, nextCityAfter, packVehicles, startMoneyDue } from '../../city';
 import { vehicleName } from '../../fleet';
-import { getSpot } from '../../spots';
-import { getStaffMember, roleName } from '../../staff';
+import { getStaff, getStaffMember } from '../../staff';
 import {
   cityLabel,
   describeDone,
@@ -44,11 +44,6 @@ import {
   RIGHT_HAND_TASKS,
   type RightHandSettings,
   rightHandRank,
-  START_PACK_LEADER_MIN_LEVEL,
-  START_PACK_MAX_STAFF,
-  startPackLeaders,
-  startPackRank,
-  startPackStaff,
 } from '../index';
 
 declare module '../../../ui' {
@@ -72,33 +67,22 @@ function HandoverDialog(props: { cityId: string; toCityId?: string }) {
   const missing = fullPowerMissing(state, props.cityId);
   const close = () => ui.closeDialog();
   const done = rh ? describeDone(rh.done) : '';
-  const leaders = startPackLeaders(state, props.cityId);
-  const people = startPackStaff(state, props.cityId);
+  // Leute bleiben in ihrer Stadt und arbeiten für den Statthalter weiter.
+  const staying = getStaff(state, { cityId: props.cityId, status: 'active' }).length;
   // Fahrzeuge mit fester Route bleiben (sonst fiele die Route aus).
   const vehicles = packVehicles(state, props.cityId);
   const startMoney = to ? startMoneyDue(state, props.cityId, to) : 0;
-  // Vorschlag: die beste neue Rechte Hand, sonst niemand; Leute und Fahrzeuge wählt man selbst.
-  const [leaderId, setLeaderId] = useState<string | null>(leaders[0]?.id ?? null);
-  const [staffIds, setStaffIds] = useState<string[]>([]);
   const [vehicleIds, setVehicleIds] = useState<number[]>([]);
-  const toggleStaff = (id: string) =>
-    setStaffIds((list) =>
-      list.includes(id) ? list.filter((x) => x !== id) : list.length < START_PACK_MAX_STAFF ? [...list, id] : list,
-    );
   const toggleVehicle = (id: number) =>
     setVehicleIds((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
-  // Übergeben und sofort in die nächste Stadt fahren (Ankunft: sie wird aktiv), mit Startpaket, in einem Befehl.
+  // Übergeben und sofort in die nächste Stadt fahren (Ankunft: sie wird aktiv), mit den Fahrzeugen, in einem Befehl.
   const handOver = () => {
     // Keine Stadt mehr frei (die übrigen sind noch Schablonen): nur die Vollmacht, du bleibst.
     if (!to) {
       if (dispatch({ type: 'hierarchy.grantFullPower', payload: { cityId: props.cityId } }).ok) close();
       return;
     }
-    const pack = {
-      leaderId: leaders.some((l) => l.id === leaderId) ? leaderId : null,
-      staffIds: staffIds.filter((id) => people.some((p) => p.id === id)),
-      vehicleIds: vehicleIds.filter((id) => vehicles.some((v) => v.id === id)),
-    };
+    const pack = { vehicleIds: vehicleIds.filter((id) => vehicles.some((v) => v.id === id)) };
     if (dispatch({ type: 'city.handOver', payload: { cityId: props.cityId, toCityId: to, pack } }).ok) close();
   };
   return (
@@ -149,88 +133,31 @@ function HandoverDialog(props: { cityId: string; toCityId?: string }) {
       </p>
       {to && (
         <Group
-          title={`Startpaket für ${cityName(to)}`}
+          title={`Neu anfangen in ${cityName(to)}`}
           icon="package"
           color="people"
-          value={
-            startMoney > 0
-              ? `+${formatEuro(startMoney)}`
-              : `${(leaderId ? 1 : 0) + staffIds.length + vehicleIds.length}`
-          }
-          note={
-            startMoney > 0
-              ? `Startgeld vom Statthalter: ${formatEuro(startMoney)}. Das Vertrauen deiner Lieferanten kommt ohnehin mit.`
-              : 'Das Vertrauen deiner Lieferanten kommt ohnehin mit.'
-          }
+          value={startMoney > 0 ? `+${formatEuro(startMoney)}` : undefined}
+          note={`In ${cityName(to)} heuerst du eigene Leute an und bestellst selbst. Das Vertrauen deiner Lieferanten kommt mit.`}
         >
           <List>
-            {leaders.length === 0 ? (
+            {startMoney > 0 && (
               <ListItem>
                 <ItemContent
-                  icon="crown"
-                  color="brand"
-                  title="Keine neue Rechte Hand"
-                  meta={`Ein Capo, sonst ein Leutnant ab Level ${START_PACK_LEADER_MIN_LEVEL}, kann mitkommen und dort Rechte Hand werden.`}
+                  icon="wallet"
+                  color="money"
+                  title={`Startgeld ${formatEuro(startMoney)}`}
+                  meta={`Aus der Kasse von ${city}, vom Statthalter mitgegeben.`}
                 />
               </ListItem>
-            ) : (
-              [...leaders, null].map((l) => (
-                <ListItem
-                  key={l?.id ?? 'none'}
-                  active={leaderId === (l?.id ?? null)}
-                  onClick={() => setLeaderId(l?.id ?? null)}
-                  aside={<Icon name={leaderId === (l?.id ?? null) ? 'checkCircle' : 'plusCircle'} />}
-                >
-                  {l ? (
-                    <ItemContent
-                      icon="crown"
-                      color="brand"
-                      title={`${l.name} als Rechte Hand`}
-                      tags={[
-                        { label: `Level ${l.level}`, color: 'people' },
-                        { label: `Stufe ${startPackRank(l.level)}`, color: 'brand' },
-                      ]}
-                    />
-                  ) : (
-                    <ItemContent icon="crown" title="Ohne neue Rechte Hand" />
-                  )}
-                </ListItem>
-              ))
             )}
-          </List>
-        </Group>
-      )}
-      {to && people.length > 0 && (
-        <Group
-          title="Leute"
-          icon="user"
-          color="people"
-          value={`${staffIds.length}/${START_PACK_MAX_STAFF}`}
-          collapsible
-          open={false}
-        >
-          <List>
-            {people.map((p) => (
-              <ListItem
-                key={p.id}
-                active={staffIds.includes(p.id)}
-                onClick={() => toggleStaff(p.id)}
-                aside={<Icon name={staffIds.includes(p.id) ? 'checkCircle' : 'plusCircle'} />}
-              >
-                <ItemContent
-                  icon="user"
-                  color="people"
-                  title={p.name}
-                  tags={[
-                    { label: roleName(p.role) },
-                    { label: `Level ${p.level}` },
-                    p.assignment?.kind === 'spot'
-                      ? { label: `am Spot ${getSpot(state, p.assignment.targetId)?.name ?? ''}`, color: 'place' }
-                      : null,
-                  ]}
-                />
-              </ListItem>
-            ))}
+            <ListItem>
+              <ItemContent
+                icon="user"
+                color="people"
+                title={staying === 1 ? '1 Person bleibt hier' : `${staying} Leute bleiben hier`}
+                meta={`Sie arbeiten in ${city} für ${m?.name ?? 'deine Rechte Hand'} weiter.`}
+              />
+            </ListItem>
           </List>
         </Group>
       )}

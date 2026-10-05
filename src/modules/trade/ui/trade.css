@@ -44,3 +44,16 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+
+/* Seite eines Kunden (Auftrag 43): Gesicht und Name oben. */
+.trade-customer__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-1);
+}
+.trade-customer__head > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}

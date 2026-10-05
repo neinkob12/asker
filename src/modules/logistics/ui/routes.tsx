@@ -23,7 +23,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { cityName } from '../../city';
+import { activeCity, cityName } from '../../city';
 import { getVehicles, VEHICLE_MODELS, vehicleName } from '../../fleet';
 import {
   allProducts,
@@ -260,7 +260,7 @@ interface Draft {
   choice: RouteChoice;
 }
 
-function draftOf(route: Route | null, warehouses: readonly { id: string }[]): Draft {
+function draftOf(route: Route | null, warehouses: readonly { id: string }[], cityId: string): Draft {
   if (route) {
     const fill = route.fillTo.length > 0;
     return {
@@ -279,10 +279,13 @@ function draftOf(route: Route | null, warehouses: readonly { id: string }[]): Dr
       choice: route.choice,
     };
   }
+  const home = warehouses.filter((w) => warehouseCity(w.id) === cityId);
+  const fromId = home[0]?.id ?? '';
+  const toId = (home[1] ?? warehouses.find((w) => w.id !== fromId) ?? home[0])?.id ?? '';
   return {
     driverId: NONE,
-    fromId: warehouses[0]?.id ?? '',
-    toId: warehouses[1]?.id ?? warehouses[0]?.id ?? '',
+    fromId,
+    toId,
     mode: 'fixed',
     items: [{ productId: 'weed', amount: 1000 }],
     departure: 6 * 60,
@@ -299,11 +302,11 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
   const { state, dispatch } = useGame();
   const warehouses = getWarehouses(state);
   const route = props.routeId !== null ? (getRoute(state, props.routeId) ?? null) : null;
-  const [draft, setDraft] = useState<Draft>(() => draftOf(route, warehouses));
+  const [draft, setDraft] = useState<Draft>(() => draftOf(route, warehouses, activeCity(state)));
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (props.open) {
-      setDraft(draftOf(route, getWarehouses(state)));
+      setDraft(draftOf(route, getWarehouses(state), activeCity(state)));
       setError(null);
     }
   }, [props.open, props.routeId]);
@@ -313,7 +316,14 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
     value: w.id,
     label: `${cityName(warehouseCity(w.id))}: ${w.name}`,
   }));
-  const drivers = getStaff(state, { role: 'driver' });
+  // Los geht es nur in der Stadt, in der du bist; das Ziel darf in jeder Stadt liegen (Auftrag 43).
+  const city = activeCity(state);
+  const fromOptions = warehouseOptions.filter((o) => warehouseCity(o.value) === city || o.value === draft.fromId);
+  // Fahrer aus der Stadt des Startlagers (Leute bleiben in ihrer Stadt, Auftrag 43).
+  const drivers = getStaff(state, {
+    role: 'driver',
+    cityId: draft.fromId ? warehouseCity(draft.fromId) : activeCity(state),
+  });
   const driverOptions = [
     { value: NONE, label: 'Kein Fahrer' },
     ...drivers.map((m) => ({
@@ -373,7 +383,7 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
                   wide
                   label="Startlager"
                   value={draft.fromId}
-                  options={warehouseOptions}
+                  options={fromOptions}
                   onChange={(fromId) => set({ fromId })}
                 />
               </ItemContent>
@@ -492,7 +502,9 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
           hint={
             draft.roundTrip
               ? 'Der Fahrer lädt im Ziellager die Rückfracht und kommt zurück.'
-              : `Ohne Rückfahrt bleibt der Fahrer${fromCity === toCity ? '' : ` in ${cityName(toCity)}`}.`
+              : fromCity === toCity
+                ? 'Ohne Rückfahrt bleibt der Fahrer am Ziellager.'
+                : `Ohne Rückfracht kommt der Fahrer leer aus ${cityName(toCity)} zurück.`
           }
           checked={draft.roundTrip}
           onChange={(roundTrip) => set({ roundTrip })}
@@ -528,10 +540,14 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
 /** Seite "Routen": alle Routen, neue anlegen. */
 function RoutesPanel() {
   const { state } = useGame();
-  const routes = getRoutes(state);
+  const city = activeCity(state);
+  // Nur die Routen, die hier losfahren; die der anderen Städte führen deren Statthalter (Auftrag 43).
+  const routes = getRoutes(state, city);
+  const elsewhere = getRoutes(state).length - routes.length;
   const [sheet, setSheet] = useState<{ open: boolean; routeId: number | null }>({ open: false, routeId: null });
-  const warehouses = getWarehouses(state).length;
-  const drivers = getStaff(state, { role: 'driver' }).length;
+  const here = getWarehouses(state, city).length;
+  const canStart = here > 0 && getWarehouses(state).length >= 2;
+  const drivers = getStaff(state, { role: 'driver', cityId: city }).length;
   return (
     <div class="logi-app">
       {routes.length === 0 ? (
@@ -542,12 +558,23 @@ function RoutesPanel() {
       ) : (
         routes.map((r) => <RouteGroup key={r.id} route={r} onEdit={() => setSheet({ open: true, routeId: r.id })} />)
       )}
-      {warehouses < 2 && <Hint icon="warehouse">Für eine Route brauchst du zwei Lager.</Hint>}
+      {elsewhere > 0 && (
+        <Hint icon="building">
+          {elsewhere === 1 ? 'Eine Route fährt' : `${elsewhere} Routen fahren`} in anderen Städten, die führst du dort.
+        </Hint>
+      )}
+      {!canStart && (
+        <Hint icon="warehouse">
+          {here === 0
+            ? `Für eine Route brauchst du ein Lager in ${cityName(city)}.`
+            : 'Für eine Route brauchst du zwei Lager.'}
+        </Hint>
+      )}
       {drivers === 0 && <Hint icon="truck">Ohne Fahrer fährt keine Route. Fahrer heuerst du im Personal an.</Hint>}
       <Button
         variant="primary"
         icon="plus"
-        disabled={warehouses < 2}
+        disabled={!canStart}
         onClick={() => setSheet({ open: true, routeId: null })}
       >
         Neue Route
@@ -561,7 +588,7 @@ function RoutesPanel() {
 function DriversPanel() {
   const { state, dispatch } = useGame();
   const ui = useUi();
-  const drivers = getStaff(state, { role: 'driver' });
+  const drivers = getStaff(state, { role: 'driver', cityId: activeCity(state) });
   return (
     <div class="logi-app">
       <Group icon="truck" color="people" title="Fahrer" count={drivers.length}>
@@ -614,13 +641,14 @@ function DriversPanel() {
 export function LogisticsLinks() {
   const { state } = useGame();
   const ui = useUi();
-  const routes = getRoutes(state);
-  const running = state.modules.logistics.trips.filter((t) => t.routeId !== undefined).length;
+  const routes = getRoutes(state, activeCity(state));
+  const ids = new Set(routes.map((r) => r.id));
+  const running = state.modules.logistics.trips.filter((t) => t.routeId !== undefined && ids.has(t.routeId)).length;
   const next = routes
     .map((r) => nextDeparture(state, r))
     .filter((at): at is number => at !== null)
     .sort((a, b) => a - b)[0];
-  const drivers = getStaff(state, { role: 'driver' });
+  const drivers = getStaff(state, { role: 'driver', cityId: activeCity(state) });
   const free = drivers.filter((m) => m.status === 'active' && !m.assignment).length;
   return (
     <>

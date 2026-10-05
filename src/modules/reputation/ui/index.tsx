@@ -18,8 +18,9 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName } from '../../city';
+import { activeCity, cityName, isBusinessSold } from '../../city';
 import { campaignProgress, controlledBy, PLAYER_FACTION } from '../../territory';
+import { supplierReputation } from '../../trade';
 import { veedelCity, veedelName } from '../../veedel';
 import { getReputation, recentReputationChanges, reputationLabel, reputationTier, reputationTiers } from '../index';
 import './reputation.css';
@@ -29,7 +30,35 @@ import './reputation.css';
  * der Veedel. Beim Drüberfahren oder Antippen klappt eine Karte auf: die Stufe, die darunter und die darüber mit je
  * einem Satz, und die Reviere als kleine Liste. Der Knopf unten führt zu den Revieren.
  */
+/**
+ * Nach dem Verkauf (Auftrag 43): Ruf als Lieferant statt Ruf und Reviere (es gibt keine Veedel mehr). Pünktlich und
+ * Qualität entscheiden, wie viel die Kunden bei dir bestellen.
+ */
+function SupplierReputationHud() {
+  const { state } = useGame();
+  const ui = useUi();
+  const { reliability, quality } = supplierReputation(state);
+  const pct = (n: number) => `${Math.round(n * 100)} %`;
+  return (
+    <HudPill
+      icon="star"
+      color="brand"
+      label="Ruf als Lieferant"
+      value={`${pct(reliability)} pünktlich`}
+      tone={reliability < 0.6 ? 'bad' : reliability < 0.75 ? 'warn' : undefined}
+      title={`Pünktlich ${pct(reliability)}, Qualität ${pct(quality)}. Danach bestellen die Kunden bei dir.`}
+      onClick={() => ui.openPhone('trade.app', { view: 'customers' })}
+    />
+  );
+}
+
 function ReputationHud() {
+  const { state } = useGame();
+  if (isBusinessSold(state)) return <SupplierReputationHud />;
+  return <PlayerReputationHud />;
+}
+
+function PlayerReputationHud() {
   const { state } = useGame();
   const ui = useUi();
   const value = getReputation(state);

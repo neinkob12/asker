@@ -59,7 +59,7 @@ function collect(runtime: UiRuntime): Entry[] {
     }
   }
   for (const tab of sidebarTabs.list()) {
-    if (tab.hidden) continue;
+    if (tab.hidden || (state && tab.hiddenWhen?.(state))) continue;
     add({
       id: `tab:${tab.id}`,
       group: 'Bereiche',
@@ -69,7 +69,7 @@ function collect(runtime: UiRuntime): Entry[] {
     });
   }
   for (const app of phoneApps.list()) {
-    if (app.hidden) continue;
+    if (app.hidden || (state && app.hiddenWhen?.(state))) continue;
     add({
       id: `app:${app.id}`,
       group: 'Handy',

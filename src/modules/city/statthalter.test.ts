@@ -1,23 +1,13 @@
-// Statthalter, Schlaf und Startpaket (Auftrag 36): Übergabe mit neuer Rechter Hand, Leuten und Fahrzeugen; Razzia im
-// Schlaf; Titel Statthalter; Ränge des Spielers.
+// Statthalter, Schlaf und Übergabe (Auftrag 36): Übergabe mit Startgeld und Fahrzeugen, Leute bleiben in ihrer Stadt
+// (Feedback vom 05.10.2026); Razzia im Schlaf; Titel Statthalter; Ränge des Spielers.
 
 import { describe, expect, it } from 'vitest';
 import { messages, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getVehicles } from '../fleet';
-import {
-  getRightHand,
-  hasFullPower,
-  isCapo,
-  isTaskUnlocked,
-  RIGHT_HAND_DEMAND,
-  RIGHT_HAND_RANK_XP,
-  rankForXp,
-  rightHandTitle,
-  startPackLeaders,
-  startPackStaff,
-} from '../hierarchy';
-import { enlist, generateProfile, getStaffMember, type StaffMember } from '../staff';
+import { getRightHand, hasFullPower, RIGHT_HAND_RANK_XP, rightHandTitle } from '../hierarchy';
+import { getRoutes, getTrips } from '../logistics';
+import { enlist, generateProfile, getStaff, getStaffMember, type StaffMember } from '../staff';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
 import {
@@ -93,29 +83,17 @@ function readyKoeln(sim: Simulation): { boss: StaffMember; capo: StaffMember; ru
   return { boss, capo, runner };
 }
 
-describe('Startpaket (Auftrag 36)', () => {
-  it('neue Rechte Hand, Leute und Fahrzeug kommen mit; die Rechte Hand behält Level und bekommt freie Aufgaben', () => {
+describe('Übergabe: Leute bleiben in ihrer Stadt (Feedback vom 05.10.2026)', () => {
+  it('nur Fahrzeuge kommen mit; in Hamburg gibt es keine Rechte Hand, keine Leute aus Köln und keine Routen', () => {
     const sim = quietGame();
     const { boss, capo, runner } = readyKoeln(sim);
     expect(sim.dispatch({ type: 'fleet.buy', payload: { model: 'kombi', cityId: 'koeln' } }).ok).toBe(true);
     const vehicle = getVehicles(sim.state, 'koeln')[0];
-    expect(startPackLeaders(sim.state, 'koeln').map((m) => m.id)).toEqual([capo.id]);
-    expect(startPackStaff(sim.state, 'koeln').map((m) => m.id)).toContain(runner.id);
-    // Zu viele Leute oder jemand, der nicht darf: nichts passiert.
-    const tooMany = sim.dispatch({
-      type: 'city.handOver',
-      payload: { cityId: 'koeln', toCityId: 'hamburg', pack: { leaderId: boss.id } },
-    });
-    expect(tooMany.ok).toBe(false);
-    expect(hasFullPower(sim.state, 'koeln')).toBe(false);
+    const koelnStaff = getStaff(sim.state, { cityId: 'koeln' }).map((m) => m.id);
     const events = recordEvents(sim);
     const done = sim.dispatch({
       type: 'city.handOver',
-      payload: {
-        cityId: 'koeln',
-        toCityId: 'hamburg',
-        pack: { leaderId: capo.id, staffIds: [runner.id], vehicleIds: [vehicle.id] },
-      },
+      payload: { cityId: 'koeln', toCityId: 'hamburg', pack: { vehicleIds: [vehicle.id] } },
     });
     expect(done.ok).toBe(true);
     expect(hasFullPower(sim.state, 'koeln')).toBe(true);
@@ -127,50 +105,24 @@ describe('Startpaket (Auftrag 36)', () => {
     sim.advance(travel.arrivesAt - sim.state.time + 10);
     expect(presentCity(sim.state)).toBe('hamburg');
     expect(activeCity(sim.state)).toBe('hamburg');
-    // Angekommen: Der Capo ist Rechte Hand in Hamburg, mit Stufe nach seinem Level (6 → Stufe 4), der Läufer ist da.
-    const rh = getRightHand(sim.state, 'hamburg');
-    expect(rh?.staffId).toBe(capo.id);
-    expect(rankForXp(rh?.xp ?? 0)).toBe(4);
-    expect(getStaffMember(sim.state, capo.id)?.level).toBe(6);
-    expect(isTaskUnlocked(sim.state, 'orders')).toBe(true);
-    expect(rh?.settings.orders).toBe(true);
-    expect(getStaffMember(sim.state, runner.id)?.cityId).toBe('hamburg');
-    expect(eventsOfType(events, 'hierarchy.rightHandAppointed').map((e) => e.payload.staffId)).toContain(capo.id);
-    // Köln führt weiter die alte Rechte Hand, als Statthalter.
+    // Angekommen: niemand aus Köln ist mitgekommen, Hamburg hat keine Rechte Hand und keine Routen.
+    expect(getRightHand(sim.state, 'hamburg')).toBeNull();
+    expect(getStaff(sim.state, { cityId: 'hamburg' })).toHaveLength(0);
+    expect(eventsOfType(events, 'staff.relocated')).toHaveLength(0);
+    expect(getRoutes(sim.state)).toHaveLength(0);
+    expect(getTrips(sim.state)).toHaveLength(0);
+    // Köln führt weiter die alte Rechte Hand, als Statthalter, mit allen Leuten.
     expect(getRightHand(sim.state, 'koeln')?.staffId).toBe(boss.id);
-  });
-});
-
-describe('Startpaket mit Capo (Auftrag 34)', () => {
-  it('Capos stehen vorn; der Capo geht als Rechte Hand, ist dort kein Capo mehr und behält ihren Anspruch', () => {
-    const sim = quietGame();
-    const { capo } = readyKoeln(sim);
-    for (const id of ['zuelpicher', 'rudolfplatz', 'aachener-weiher']) {
-      if (!sim.state.modules.spots.unlocked.includes(id)) sim.state.modules.spots.unlocked.push(id);
-    }
-    const veteran = hire(sim, 8, 90);
-    const spots = (staffId: string, spotIds: string[]) =>
-      sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId, spotIds } }).ok;
-    expect(spots(veteran.id, ['rudolfplatz'])).toBe(true);
-    expect(spots(capo.id, ['neumarkt', 'zuelpicher', 'aachener-weiher'])).toBe(true);
-    expect(sim.dispatch({ type: 'hierarchy.appointCapo', payload: { staffId: capo.id, lieutenantIds: [] } }).ok).toBe(
-      true,
-    );
-    // Der Leutnant mit Level 8 ist kein Capo: vorgeschlagen wird nur der Capo.
-    expect(startPackLeaders(sim.state, 'koeln').map((m) => m.id)).toEqual([capo.id]);
-    expect(
-      sim.dispatch({
-        type: 'city.handOver',
-        payload: { cityId: 'koeln', toCityId: 'hamburg', pack: { leaderId: capo.id } },
-      }).ok,
-    ).toBe(true);
-    expect(isCapo(sim.state, capo.id)).toBe(false);
-    const travel = cityTravel(sim.state);
-    if (!travel) throw new Error('keine Fahrt');
-    sim.advance(travel.arrivesAt - sim.state.time + 10);
-    expect(getRightHand(sim.state, 'hamburg')?.staffId).toBe(capo.id);
-    sim.advance(1440);
-    expect(getStaffMember(sim.state, capo.id)?.demand).toBe(RIGHT_HAND_DEMAND);
+    expect(koelnStaff).toEqual(expect.arrayContaining([capo.id, runner.id]));
+    for (const id of koelnStaff) expect(getStaffMember(sim.state, id)?.cityId).toBe('koeln');
+    // Wer in Hamburg anheuert, arbeitet in Hamburg.
+    expect(hire(sim, 1, 60).cityId).toBe('hamburg');
+    // Aus Hamburg lässt sich kein Kölner zur Rechten Hand machen (Auftrag 43): Kölns Statthalter bliebe sonst weg.
+    const appointed = sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: capo.id } });
+    expect(appointed.ok).toBe(false);
+    if (!appointed.ok) expect(appointed.reason).toContain('arbeitet in Köln');
+    expect(getRightHand(sim.state, 'koeln')?.staffId).toBe(boss.id);
+    expect(hasFullPower(sim.state, 'koeln')).toBe(true);
   });
 });
 

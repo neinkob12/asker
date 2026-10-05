@@ -5,10 +5,11 @@
 // Angebot wartet, und der Flug in die Europa-Ansicht, sobald eine Region frei wird.
 
 import { useState } from 'preact/hooks';
-import { formatEuro, formatNumber, type GameState } from '../../../core';
+import { type CommandResult, formatEuro, formatNumber, type GameState } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import {
   ActionSheet,
+  type Advice,
   type ChipSpec,
   Disclosure,
   Group,
@@ -34,6 +35,8 @@ import { getProduct, productName } from '../../goods';
 import { originStock, PRODUCERS, regionOrigin } from '../../trade';
 import {
   bribeReadyAt,
+  CARTEL_HIT_CHANCE,
+  CARTEL_HIT_LOSS,
   cartelPaid,
   costPerGram,
   cropDays,
@@ -42,8 +45,8 @@ import {
   type Finca,
   fincaGardener,
   fincaQuality,
-  fincaRunningCost,
   fincaSites,
+  fincaWages,
   fincaWorkers,
   GENETICS,
   getFinca,
@@ -281,7 +284,14 @@ type Confirm = { title: string; message: string; actions: SheetAction[] } | null
 
 function RegionPanel({ regionId }: { regionId: string }) {
   const { state, dispatch } = useGame();
+  const ui = useUi();
   const [confirm, setConfirm] = useState<Confirm>(null);
+  // Gekauft oder gepachtet: gleich zur Finca, dort fehlen noch Arbeiter (Auftrag 43).
+  const openFinca = (result: CommandResult) => {
+    if (!result.ok) return;
+    const fincaId = (result.data as { fincaId?: number } | undefined)?.fincaId;
+    if (fincaId !== undefined) ui.openPanel('grow.finca', { fincaId });
+  };
   const region = getRegion(regionId);
   const economy = REGION_ECONOMY[regionId];
   if (!region || !economy) return null;
@@ -293,8 +303,19 @@ function RegionPanel({ regionId }: { regionId: string }) {
     fn();
     setConfirm(null);
   };
+  const called = regionStatus(state, regionId) === 'called';
   return (
     <div class="trade-app">
+      {called && (
+        // Auftrag 43: Vom Angebot auf der Karte kommt man hierher, also auch hier annehmen (keine Sackgasse).
+        <Group title="Angebot" icon="phone" color="money" note={`${region.contact.name} wartet auf deine Antwort.`}>
+          <List>
+            <ListItem action icon="check" onClick={() => dispatch({ type: 'grow.openRegion', payload: { regionId } })}>
+              {`Angebot von ${region.contact.name} annehmen`}
+            </ListItem>
+          </List>
+        </Group>
+      )}
       <Group title={region.area} icon="leaf" color="goods" note={region.pitch}>
         <List>
           {getFincas(state, regionId).map((f) => (
@@ -303,12 +324,93 @@ function RegionPanel({ regionId }: { regionId: string }) {
           <ExportRow regionId={regionId} />
         </List>
       </Group>
+      {/* Auftrag 43: Land zuerst, das ist der erste Schritt. */}
+      {open && (
+        <Group
+          title="Land kaufen oder pachten"
+          icon="pin"
+          color="place"
+          note="Zum Start pachten: Kaufen rechnet sich erst nach gut einem Jahr. Beides kostet sauberes Geld."
+        >
+          <List>
+            {fincaSites(regionId).map((site) => {
+              const taken = siteTaken(state, site.id);
+              const price = landPrice(site);
+              const lease = leasePerWeek(site);
+              return (
+                <ListItem
+                  key={site.id}
+                  value={`${site.hectares} ha`}
+                  disabled={taken}
+                  onClick={
+                    taken
+                      ? undefined
+                      : () =>
+                          setConfirm({
+                            title: site.name,
+                            message: `${site.description} Sauberes Geld: kaufen ${formatEuro(price)} (rechnet sich nach ${Math.round(price / lease)} Wochen) oder pachten ${formatEuro(lease)} die Woche. Danach brauchst du Arbeiter, sonst fällt die Ernte aus.`,
+                            actions: [
+                              ...(state.wallet.clean < lease
+                                ? [
+                                    {
+                                      label: `Geld waschen (dir fehlen ${formatEuro(lease - state.wallet.clean)} sauber)`,
+                                      icon: 'washing',
+                                      onSelect: run(() => ui.openPhone('laundering.app')),
+                                    },
+                                  ]
+                                : []),
+                              {
+                                label:
+                                  state.wallet.clean < price
+                                    ? `Kaufen (${formatEuro(price)}, dir fehlen ${formatEuro(price - state.wallet.clean)} sauber)`
+                                    : `Kaufen (${formatEuro(price)})`,
+                                icon: 'key',
+                                disabled: state.wallet.clean < price,
+                                onSelect: run(() =>
+                                  openFinca(dispatch({ type: 'grow.buyFinca', payload: { siteId: site.id } })),
+                                ),
+                              },
+                              {
+                                label: `Pachten (${formatEuro(lease)} die Woche)`,
+                                icon: 'calendar',
+                                disabled: state.wallet.clean < lease,
+                                onSelect: run(() =>
+                                  openFinca(dispatch({ type: 'grow.leaseFinca', payload: { siteId: site.id } })),
+                                ),
+                              },
+                            ],
+                          })
+                  }
+                >
+                  <ItemContent
+                    icon="leaf"
+                    color={taken ? 'system' : 'goods'}
+                    title={site.name}
+                    tags={
+                      taken
+                        ? [{ label: 'deine', color: 'money', icon: 'check' }]
+                        : [
+                            { label: formatEuro(price), color: 'money', icon: 'key' },
+                            { label: `${formatEuro(lease)}/Woche`, color: 'money', icon: 'calendar' },
+                          ]
+                    }
+                  />
+                </ListItem>
+              );
+            })}
+          </List>
+        </Group>
+      )}
       <Group
         title={region.cartel.name}
         icon="handshake"
         color="danger"
         value={paid ? `${pct(economy.cartelShare)} der Ernte` : 'kein Anteil'}
-        note={paid ? 'Das Kartell hält dir die Polizei vom Hals.' : 'Ohne Anteil brennen Felder und Ware verschwindet.'}
+        note={
+          paid
+            ? 'Mit Anteil kühlen die Behörden schneller ab, und das Kartell lässt deine Felder in Ruhe.'
+            : `Ohne Anteil schlägt das Kartell an etwa ${Math.round(CARTEL_HIT_CHANCE * 100)} von 100 Tagen zu und nimmt ${Math.round(CARTEL_HIT_LOSS * 100)} % einer Ernte oder Ware.`
+        }
       >
         <Toggle
           icon="handshake"
@@ -351,68 +453,6 @@ function RegionPanel({ regionId }: { regionId: string }) {
           </ListItem>
         </List>
       </Group>
-      {open && (
-        <Group
-          title="Land kaufen oder pachten"
-          icon="pin"
-          color="place"
-          note="Kaufen ist auf Dauer billiger, Pacht kostet jede Woche."
-        >
-          <List>
-            {fincaSites(regionId).map((site) => {
-              const taken = siteTaken(state, site.id);
-              const price = landPrice(site);
-              const lease = leasePerWeek(site);
-              return (
-                <ListItem
-                  key={site.id}
-                  value={`${site.hectares} ha`}
-                  disabled={taken}
-                  onClick={
-                    taken
-                      ? undefined
-                      : () =>
-                          setConfirm({
-                            title: site.name,
-                            message: `${site.description} Sauberes Geld: kaufen ${formatEuro(price)} oder pachten ${formatEuro(lease)} die Woche.`,
-                            actions: [
-                              {
-                                label: `Kaufen (${formatEuro(price)})`,
-                                icon: 'key',
-                                disabled: state.wallet.clean < price,
-                                onSelect: run(() => dispatch({ type: 'grow.buyFinca', payload: { siteId: site.id } })),
-                              },
-                              {
-                                label: `Pachten (${formatEuro(lease)} die Woche)`,
-                                icon: 'calendar',
-                                disabled: state.wallet.clean < lease,
-                                onSelect: run(() =>
-                                  dispatch({ type: 'grow.leaseFinca', payload: { siteId: site.id } }),
-                                ),
-                              },
-                            ],
-                          })
-                  }
-                >
-                  <ItemContent
-                    icon="leaf"
-                    color={taken ? 'system' : 'goods'}
-                    title={site.name}
-                    tags={
-                      taken
-                        ? [{ label: 'deine', color: 'money', icon: 'check' }]
-                        : [
-                            { label: formatEuro(price), color: 'money', icon: 'key' },
-                            { label: `${formatEuro(lease)}/Woche`, color: 'money', icon: 'calendar' },
-                          ]
-                    }
-                  />
-                </ListItem>
-              );
-            })}
-          </List>
-        </Group>
-      )}
       <ActionSheet
         open={confirm !== null}
         onClose={() => setConfirm(null)}
@@ -445,6 +485,10 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
   const needed = workersNeeded(finca);
   const gardener = fincaGardener(state, finca);
   const harvest = expectedHarvest(state, finca);
+  // Auftrag 43: netto zeigen, was nach dem Anteil des Kartells bleibt.
+  const cartelCut = cartelPaid(state, finca.regionId)
+    ? Math.round((harvest * (REGION_ECONOMY[finca.regionId]?.cartelShare ?? 0)) / 100) * 100
+    : 0;
   const quality = fincaQuality(state, finca);
   const genetics = nextGenetics(finca);
   const greenhouse = greenhouseCost(finca);
@@ -468,10 +512,11 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
         note={`${finca.hectares} Hektar, ${finca.tenure === 'owned' ? 'gekauft' : 'gepachtet'}, Ernte alle ${cropDays(finca)} Tage.`}
       >
         {finca.crop && <ProgressBar value={progress} label="Bis zur Ernte" />}
+        {crops.length > 1 && <p class="ui-hint">Als Nächstes pflanzen:</p>}
         {crops.length > 1 && (
           <SegmentedControl
             wide
-            aria-label="Was wächst"
+            aria-label="Als Nächstes pflanzen"
             value={finca.plan ?? crops[0]}
             options={crops.map((id) => ({ value: id, label: productName(id) }))}
             onChange={(id) => dispatch({ type: 'grow.plant', payload: { fincaId, productId: id } })}
@@ -488,13 +533,15 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
               {`${productName(finca.plan ?? crops[0] ?? 'weed')} pflanzen`}
             </ListItem>
           )}
-          <ListItem value={kg(harvest)}>
+          <ListItem value={kg(harvest - cartelCut)}>
             <ItemContent
               icon="package"
-              color="goods"
+              color={harvest > 0 ? 'goods' : 'danger'}
               title="Nächste Ernte"
+              meta={harvest > 0 ? undefined : 'Ohne Arbeiter fällt sie aus.'}
               tags={[
                 { label: `Qualität ${pct(quality)}`, color: 'goods', icon: 'gem' },
+                cartelCut > 0 && { label: `dazu ${kg(cartelCut)} fürs Kartell`, color: 'danger', icon: 'handshake' },
                 finca.crop &&
                   finca.crop.loss > 0 && { label: `${pct(finca.crop.loss)} verloren`, color: 'danger', icon: 'flame' },
               ]}
@@ -516,8 +563,14 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
         title="Leute"
         icon="users"
         color="people"
-        value={`${formatEuro(fincaRunningCost(state, finca))}/Tag`}
-        note={workers < needed ? `Für ${finca.hectares} Hektar brauchst du ${needed} Arbeiter.` : undefined}
+        value={`${formatEuro(fincaWages(state, finca))}/Tag bar`}
+        note={
+          workers < needed
+            ? `Für ${finca.hectares} Hektar brauchst du ${needed} Arbeiter.`
+            : finca.tenure === 'leased'
+              ? `Dazu Pacht ${formatEuro(Math.round(leasePerWeek(finca) / 7))}/Tag sauber.`
+              : undefined
+        }
       >
         <Stepper
           label="Arbeiter"
@@ -542,7 +595,7 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
               icon="userPlus"
               onClick={() => dispatch({ type: 'grow.hire', payload: { fincaId, role: 'gardener' } })}
             >
-              Gärtner anheuern
+              Gärtner anheuern (ohne: 15 % weniger Ernte, schlechtere Qualität)
             </ListItem>
           )}
         </List>
@@ -553,7 +606,7 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
             <ListItem
               action
               icon="sun"
-              value={formatEuro(greenhouse)}
+              value={`${formatEuro(greenhouse)} sauber`}
               disabled={state.wallet.clean < greenhouse}
               onClick={() =>
                 setConfirm({
@@ -576,7 +629,7 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
             <ListItem
               action
               icon="flask"
-              value={formatEuro(genetics.cost)}
+              value={`${formatEuro(genetics.cost)} schwarz`}
               disabled={state.wallet.dirty < genetics.cost}
               onClick={() =>
                 setConfirm({
@@ -610,12 +663,21 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
           onChange={(v) => dispatch({ type: 'grow.setPacking', payload: { fincaId, packing: v as Finca['packing'] } })}
         />
         <List>
-          <ListItem value={packing.perKg > 0 ? `${formatEuro(packing.perKg)}/kg` : 'gratis'}>
+          <ListItem value={packing.perKg > 0 ? `${formatEuro(packing.perKg)}/kg schwarz` : 'gratis'}>
             <ItemContent
               icon="anchor"
               color="law"
-              title="Zoll schaut hin"
-              tags={[{ label: `× ${formatNumber(packing.risk, 1)}`, color: 'law', icon: 'shield' }]}
+              title="Zoll-Risiko"
+              tags={[
+                {
+                  label:
+                    packing.risk < 1
+                      ? `${Math.round((1 - packing.risk) * 100)} % seltener kontrolliert`
+                      : 'normal kontrolliert',
+                  color: 'law',
+                  icon: 'shield',
+                },
+              ]}
             />
           </ListItem>
         </List>
@@ -645,30 +707,93 @@ registerPanel({
 // ---------------------------------------------------------------------------------------------
 // Rat, Ereignisse, Karte
 
+/**
+ * „Nächster Schritt“ in der Produktion (Auftrag 43): Angebot annehmen, erste Finca, fehlende Arbeiter vor der Ernte,
+ * Ware im Ausfuhrlager verschiffen, wache Behörden, Finca liegt brach. Mehrere Räte, jeder führt an die Stelle.
+ */
 registerAdvisor({
   id: 'grow.offer',
   advise(state) {
+    const list: Advice[] = [];
     const waiting = REGIONS.find((r) => regionStatus(state, r.id) === 'called');
     if (waiting) {
-      return {
+      list.push({
         id: 'grow.offer',
-        priority: 55,
+        priority: 72,
         icon: 'leaf',
         title: `Angebot aus ${waiting.name}: eigene Fincas`,
-        action: (ui) => ui.openPhone('trade.app'),
-      };
+        text: 'Eigene Ware kostet einen Bruchteil vom Einkauf.',
+        actionLabel: 'Ansehen',
+        action: (ui) => ui.openPhone('trade.app', { view: 'grow' }),
+      });
     }
-    const idle = getFincas(state).find((f) => !f.crop && !f.batch);
+    const fincas = getFincas(state);
+    const open = REGIONS.filter((r) => regionStatus(state, r.id) === 'open');
+    const empty = open.find((r) => fincas.every((f) => f.regionId !== r.id));
+    if (empty) {
+      list.push({
+        id: 'grow.firstFinca',
+        priority: 70,
+        icon: 'home',
+        title: `Noch keine Finca in ${empty.name}`,
+        text: 'Pachten ist zum Start günstiger als kaufen.',
+        actionLabel: 'Land ansehen',
+        action: (ui) => ui.openPanel('grow.region', { regionId: empty.id }),
+      });
+    }
+    // Ohne Arbeiter keine Ernte: dringend, solange etwas wächst.
+    const short = fincas.find((f) => f.crop && fincaWorkers(state, f) < workersNeeded(f));
+    if (short) {
+      const none = fincaWorkers(state, short) === 0;
+      list.push({
+        id: 'grow.workers',
+        priority: none ? 88 : 64,
+        icon: 'users',
+        title: none ? `Auf ${short.name} arbeitet niemand` : `Auf ${short.name} fehlen Arbeiter`,
+        text: none ? 'Ohne Arbeiter fällt die Ernte aus.' : 'Mit weniger Leuten wird die Ernte kleiner.',
+        actionLabel: 'Anheuern',
+        action: (ui) => ui.openPanel('grow.finca', { fincaId: short.id }),
+      });
+    }
+    // Ware im Ausfuhrlager: verschiffen.
+    for (const r of open) {
+      const origin = regionOrigin(r.id);
+      if (!origin) continue;
+      const grams = Object.values(originStock(state, origin.id)).reduce((sum, lot) => sum + lot.amount, 0);
+      if (grams <= 0) continue;
+      list.push({
+        id: `grow.ship.${origin.id}`,
+        priority: 76,
+        icon: 'ship',
+        title: `${kg(grams)} eigene Ware in ${origin.from}`,
+        text: 'Verschiffen, dann liegt sie in ein paar Wochen in deinem Hafen.',
+        actionLabel: 'Verschiffen',
+        action: (ui) => ui.openPanel('trade.order', { producerId: origin.id }),
+      });
+    }
+    const hot = open.find((r) => regionAttention(state, r.id) >= 60);
+    if (hot) {
+      list.push({
+        id: 'grow.attention',
+        priority: 62,
+        icon: 'siren',
+        title: `${getRegion(hot.id)?.authority ?? 'Die Behörden'} in ${hot.name} werden wach`,
+        text: 'Kartell-Anteil zahlen oder schmieren kühlt sie ab.',
+        actionLabel: 'Region',
+        action: (ui) => ui.openPanel('grow.region', { regionId: hot.id }),
+      });
+    }
+    const idle = fincas.find((f) => !f.crop && !f.batch);
     if (idle) {
-      return {
+      list.push({
         id: 'grow.idle',
         priority: 50,
         icon: 'leaf',
         title: `${idle.name} liegt brach`,
         action: (ui) => ui.openPanel('grow.finca', { fincaId: idle.id }),
-      };
+      });
     }
-    return null;
+    return list;
   },
 });
 
@@ -677,7 +802,43 @@ onGameEvent('grow.regionOpened', 'grow.flyToRegion', (_payload, ui) => {
   ui.flyToDeutschland();
 });
 onGameEvent('grow.packed', 'grow.packedToast', (payload, ui) => {
-  ui.toast(`${kg(payload.grams)} ${productName(payload.productId)} bereit zur Verschiffung.`, 'good');
+  ui.toast(
+    `${kg(payload.grams)} ${productName(payload.productId)} verpackt im Ausfuhrlager: bereit zum Verschiffen.`,
+    'good',
+    {
+      urgent: true,
+    },
+  );
+});
+// Auftrag 43: Was in der Produktion schiefgeht, sagt ein Banner (vorher nur stille Chats).
+onGameEvent('grow.harvested', 'grow.failedToast', (payload, ui, state) => {
+  if (payload.grams > 0) return;
+  ui.toast(`Ernte auf ${getFinca(state, payload.fincaId)?.name ?? 'einer Finca'} ausgefallen: keine Arbeiter.`, 'bad');
+});
+onGameEvent('grow.unpaid', 'grow.unpaidToast', (payload, ui, state) => {
+  const name = getFinca(state, payload.fincaId)?.name ?? 'einer Finca';
+  ui.toast(
+    payload.kind === 'lease'
+      ? `Pacht für ${name} nicht bezahlt: Es fehlt sauberes Geld. Nach ein paar Tagen ist das Land weg.`
+      : `Keine Löhne auf ${name}: Heute arbeitet dort niemand.`,
+    'bad',
+  );
+});
+onGameEvent('grow.stalled', 'grow.stalledToast', (payload, ui, state) => {
+  ui.toast(
+    `${getFinca(state, payload.fincaId)?.name ?? 'Eine Finca'} liegt brach: kein Geld für Saat und Dünger.`,
+    'warn',
+  );
+});
+onGameEvent('grow.fincaLost', 'grow.lostToast', (payload, ui) => {
+  ui.toast(`${payload.name} ist weg: Die Pacht wurde nicht bezahlt.`, 'bad');
+});
+onGameEvent('grow.cartelHit', 'grow.cartelToast', (payload, ui, state) => {
+  const finca = payload.fincaId !== null ? getFinca(state, payload.fincaId) : undefined;
+  ui.toast(
+    `Das Kartell hat zugeschlagen${finca ? ` auf ${finca.name}` : ''}: ${Math.round(payload.share * 100)} % weg.`,
+    'bad',
+  );
 });
 onGameEvent('grow.raided', 'grow.raidedToast', (payload, ui, state) => {
   ui.toast(`Razzia auf ${getFinca(state, payload.fincaId)?.name ?? 'einer Finca'}.`, 'bad');
@@ -686,6 +847,7 @@ onGameEvent('grow.goalReached', 'grow.goalToast', (payload, ui) => {
   ui.toast(
     payload.goal === 'producer' ? 'Produzent: die Hälfte aus eigener Ernte.' : 'Europa: alle Kunden aus eigener Ernte.',
     'good',
+    { urgent: true },
   );
 });
 soundOnEvent('grow.goalReached', 'cash');

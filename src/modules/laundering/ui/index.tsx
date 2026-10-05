@@ -22,6 +22,7 @@ import {
   SummaryTiles,
   useGame,
 } from '../../../ui';
+import { isBusinessSold } from '../../city';
 import { veedelName } from '../../veedel';
 import {
   amountInProgress,
@@ -330,7 +331,10 @@ registerAdvisor({
       priority: 35,
       icon: 'washing',
       title: 'Geld waschen',
-      text: 'Sauberes Geld brauchst du für alles Legale, zum Beispiel Lager und Autos.',
+      // Nach dem Verkauf (Auftrag 43) sind es Lkw, Halle, Liegeplatz und Schiffe.
+      text: isBusinessSold(state)
+        ? 'Sauberes Geld brauchst du für Lkw, Halle, Liegeplatz und Schiffe. Große Beträge über Jansens Reederei.'
+        : 'Sauberes Geld brauchst du für alles Legale, zum Beispiel Lager und Autos.',
       actionLabel: 'Öffnen',
       action: (ui) => ui.openPhone('laundering.app'),
     };

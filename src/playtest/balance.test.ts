@@ -284,7 +284,6 @@ describe('Balancing', () => {
           `Tage pro Stadt, Seed ${seed}: Köln ${koelnDays} Tage gespielt, dann komplett | Reihenfolge ${r.order.join(' → ')}` +
             ` | ${perCity.join(' | ')}` +
             ` | ${last.gameOver ? `Game Over (${last.gameOver})` : 'keine Pleite'}` +
-            ` | Startpaket ${r.stats.cities?.map((c) => `${c.pack} Leute`).join(', ') ?? '-'}` +
             ` | Startgeld ${r.events.startMoney ?? 0}` +
             ` | Schlaftage ${e('city.slept')}, davon Razzien ${r.events.sleepRaids ?? 0}` +
             ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,

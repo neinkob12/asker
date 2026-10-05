@@ -24,7 +24,9 @@
 //   openOrders, pendingDeliveries, orderCoverage, getShipments, getDeliveries, portStock, totalStock, ownedPorts, fairPrice,
 //   customerOffer, priceCap, orderValue, playerScore, rivalScores, shareFor, supplierReputation, tradeStats,
 //   containerCost, containerRisk, deliveryEstimate, freightCost, weekOf, PRODUCERS, CONTAINER_SIZES, FOREIGN_CITIES
-// Befehle: 'trade.answer', 'trade.acceptAll', 'trade.deliver', 'trade.buy', 'trade.rentBerth', 'trade.setPriceLevel'
+// Befehle: 'trade.answer', 'trade.acceptAll', 'trade.deliver', 'trade.buy', 'trade.sail', 'trade.rentBerth',
+//   'trade.buildHall', 'trade.setPriceLevel'; Auftrag 43 (plans.ts, Fenna): 'trade.setPlan', 'trade.addRestock',
+//   'trade.removeRestock'
 // Ereignisse: 'trade.started', 'trade.orderPlaced', 'trade.orderAnswered', 'trade.delivered', 'trade.orderFailed',
 //   'trade.containerOrdered', 'trade.containerArrived', 'trade.containerSeized', 'trade.deliverySeized',
 //   'trade.dealTipped'
@@ -43,7 +45,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { cityName, getCity, HARBOR_CITY, isBusinessSold } from '../city';
+import { cityName, getCity, HARBOR_CITY, isBusinessSold, presentCity } from '../city';
 import { activeEncounters, startEncounter } from '../encounters';
 import {
   getShips,
@@ -74,6 +76,7 @@ import {
   CUSTOMER_KINDS,
   DEMAND_SCALE,
   EUROPE_MIN_RELIABILITY,
+  FIRST_ORDER_ANSWER_MINUTES,
   FREIGHT_BASE,
   FREIGHT_PER_KG_100KM,
   GANG_MEMORY_BLOCK,
@@ -101,6 +104,7 @@ import {
   START_STOCK_QUALITY,
   TRUCK_CITY_SPEED,
   TRUST,
+  UNATTENDED_CUSTOMS_PASS,
   WHOLESALE_SHARE,
 } from './config';
 import {
@@ -119,14 +123,29 @@ import {
   type Producer,
   type WeeklyDemand,
 } from './data';
+import {
+  addRestock,
+  type CustomerPlan,
+  DISPATCH_EVERY,
+  dispatcherTick,
+  NO_PLAN,
+  type RestockRule,
+  removeRestock,
+  setPlan,
+} from './plans';
 
 export {
   CONTRACT_WEEKS,
   CUSTOMER_KINDS,
+  EUROPE_MIN_RELIABILITY,
+  LATE_GRACE_DAYS,
+  LATE_PRICE_FACTOR,
   MAX_HALLS,
+  ORDER_DUE_DAYS,
   PRICE_LEVEL_RANGE,
   PRICE_LEVEL_STEP,
   SEIZE_ON_CHECK,
+  TRUST,
 } from './config';
 export {
   CONTAINER_SIZES,
@@ -141,6 +160,16 @@ export {
   PRODUCERS,
   type Producer,
 } from './data';
+export {
+  ACCEPT_LABELS,
+  type CustomerPlan,
+  DELIVER_LABELS,
+  hasOwnPlan,
+  planFor,
+  type RestockRule,
+  restockRules,
+  stockWithIncoming,
+} from './plans';
 
 // ---------------------------------------------------------------------------------------------
 // Zustand, Befehle, Ereignisse
@@ -332,6 +361,10 @@ export interface TradeState {
   stats: TradeStats;
   /** Auftrag 42: Ausfuhrlager der eigenen Fincas pro Ausfuhrhafen (OWN_ORIGINS) und Sorte. */
   origins: Record<string, Record<string, OriginLot>>;
+  /** Auftrag 43 (plans.ts): Fennas Plan für alle Kunden, eigene Pläne pro Kunde und Nachkauf-Regeln. */
+  defaultPlan: CustomerPlan;
+  plans: Record<string, CustomerPlan>;
+  restock: RestockRule[];
 }
 
 declare module '../../core' {
@@ -362,6 +395,20 @@ declare module '../../core' {
     'trade.buildHall': { portId: string };
     /** Deinen Preis setzen (Faktor auf den fairen Preis). */
     'trade.setPriceLevel': { level: number };
+    /**
+     * Auftrag 43: Was Fenna übernimmt (annehmen, ausliefern), für einen Kunden oder ohne customerId für alle; reset
+     * nimmt den eigenen Plan eines Kunden weg (dann gilt der für alle).
+     */
+    'trade.setPlan': { plan: Partial<CustomerPlan>; customerId?: string; reset?: boolean };
+    /** Auftrag 43: Nachkauf-Regel (eine pro Ware und Hafen) anlegen bzw. löschen. */
+    'trade.addRestock': {
+      productId: string;
+      minGrams: number;
+      producerId: string;
+      size: ContainerSize['id'];
+      portId?: string;
+    };
+    'trade.removeRestock': { ruleId: number };
   }
   interface GameEvents {
     'trade.started': { customers: number };
@@ -989,8 +1036,11 @@ function joinEurope(ctx: Ctx): void {
   }
 }
 
-/** Bestellungen einer Woche: pro Kunde und Ware dein Anteil am Bedarf (Abnahmevertrag mindestens CONTRACT_SHARE). */
-export function placeOrders(ctx: Ctx): number {
+/**
+ * Bestellungen einer Woche: pro Kunde und Ware dein Anteil am Bedarf (Abnahmevertrag mindestens CONTRACT_SHARE). first:
+ * die Runde bei der Ankunft (nur Ware, die in der Halle liegt, mehr Zeit zum Antworten; Auftrag 43).
+ */
+export function placeOrders(ctx: Ctx, first = false): number {
   const s = ctx.state.modules.trade;
   const week = weekOf(ctx.now);
   s.week = week;
@@ -1000,10 +1050,23 @@ export function placeOrders(ctx: Ctx): number {
   }
   joinEurope(ctx);
   const contract = s.contractUntil !== null && ctx.now < s.contractUntil;
+  // Ware, die in deinen Häfen liegt (für die erste Runde).
+  const inStock = new Set(
+    s.ports.flatMap((portId) =>
+      Object.keys(s.stock[portId] ?? {}).filter((id) => (s.stock[portId]?.[id]?.amount ?? 0) > 0),
+    ),
+  );
   let placed = 0;
+  let waiting = 0;
   for (const customer of s.customers) {
     if (customer.kind === 'gang' && customer.gangId && memoryScore(ctx.state, customer.gangId) <= GANG_MEMORY_BLOCK) {
       customer.share = 0;
+      continue;
+    }
+    // Wartet der Kunde noch auf deine Antwort (z.B. aus der ersten Runde bei der Ankunft), bestellt er nicht doppelt
+    // (Auftrag 43: sonst lagen am ersten Montag 32 offene Bestellungen da, jeder Kunde zweimal).
+    if (s.orders.some((o) => o.customerId === customer.id && o.status === 'open')) {
+      waiting++;
       continue;
     }
     const { share, topRival } = shareFor(ctx.state, customer, week);
@@ -1015,12 +1078,15 @@ export function placeOrders(ctx: Ctx): number {
     for (const [productId, weekly] of Object.entries(customer.weekly)) {
       // Kleine Schwankung von Woche zu Woche (±15 %).
       const demand = Math.round(weekly * (0.85 + ctx.random() * 0.3));
+      if (first && !inStock.has(productId)) continue;
       s.stats.demand += demand;
       const amount = Math.round((demand * mine) / ORDER_ROUND_GRAMS) * ORDER_ROUND_GRAMS;
       if (amount < MIN_ITEM_GRAMS) continue;
+      // Dein Preis (Auftrag 43) wirkt auf beides: Er verschiebt den Anteil (shareFor) und den Preis pro Gramm. Der
+      // Abnahmevertrag hat einen festen Preis.
       const offer = guaranteed
         ? fairPrice(ctx.state, productId, customer.indexCity)
-        : customerOffer(ctx.state, customer, productId);
+        : round2(customerOffer(ctx.state, customer, productId) * s.priceLevel);
       items.push({ productId, amount, offer });
     }
     const amount = items.reduce((sum, item) => sum + item.amount, 0);
@@ -1033,7 +1099,7 @@ export function placeOrders(ctx: Ctx): number {
       factor: null,
       guaranteed,
       placedAt: ctx.now,
-      answerBy: ctx.now + ORDER_ANSWER_MINUTES,
+      answerBy: ctx.now + (first ? FIRST_ORDER_ANSWER_MINUTES : ORDER_ANSWER_MINUTES),
       dueAt: ctx.now + ORDER_DUE_DAYS * MINUTES_PER_DAY,
       status: 'open',
     };
@@ -1049,9 +1115,13 @@ export function placeOrders(ctx: Ctx): number {
     });
   }
   if (placed > 0) {
+    const goods = [...inStock].map(productName).join(' und ');
     messages.send(ctx, {
       contact: dispatcherContact(),
-      text: `Neue Woche, ${placed} Bestellungen. Annehmen bis morgen früh, sonst kauft die Konkurrenz.`,
+      text: first
+        ? `Willkommen. Ich bin Fenna, ich mach hier die Disposition. Für den Anfang hab ich nur ${goods} zugesagt, das liegt in der Halle: ${placed} Bestellungen, du hast drei Tage zum Antworten.`
+        : `Neue Woche, ${placed} Bestellungen. Annehmen bis morgen früh, sonst kauft die Konkurrenz.` +
+          (waiting > 0 ? ` ${waiting} warten noch auf deine Antwort von vorher.` : ''),
       silent: true,
     });
   }
@@ -1078,6 +1148,26 @@ function dispatcherContact(): Contact {
 }
 
 /** Antwort auf eine Bestellung. */
+/**
+ * Was ein Gegenangebot bringt (Auftrag 43, auch für die Oberfläche): Liegt die Konkurrenz zu diesem Preis vorn, kauft
+ * der Kunde dort (rival), sonst nimmt er an (rival null). Der Preis ist dein Preis mal dem Faktor auf ihr Angebot.
+ */
+export function counterOutcome(
+  state: GameState,
+  order: TradeOrder,
+  factor: number,
+): { rival: { name: string; score: number } | null } {
+  const customer = getCustomer(state, order.customerId);
+  if (!customer || order.guaranteed) return { rival: null };
+  const level = tradeState(state)?.priceLevel ?? 1;
+  const mine = playerScore(state, customer, round2(level * factor));
+  const best = rivalScores(state, weekOf(state.time)).reduce<{ name: string; score: number } | null>(
+    (top, r) => (!top || r.score > top.score ? r : top),
+    null,
+  );
+  return { rival: best && best.score > mine ? best : null };
+}
+
 export function answerOrder(
   ctx: Ctx,
   orderId: number,
@@ -1111,13 +1201,8 @@ export function answerOrder(
       reason: `Mehr als ${formatEuro(orderValue(order, maxFactor(order)))} zahlt ${customer.name} nicht.`,
     };
   }
-  const mine = playerScore(ctx.state, customer, factor);
-  const rivals = rivalScores(ctx.state, weekOf(ctx.now));
-  const best = rivals.reduce<{ name: string; score: number } | null>(
-    (top, r) => (!top || r.score > top.score ? r : top),
-    null,
-  );
-  if (best && best.score > mine) {
+  const best = counterOutcome(ctx.state, order, factor).rival;
+  if (best) {
     order.status = 'lost';
     order.lostTo = best.name;
     s.stats.lost += 1;
@@ -1534,18 +1619,32 @@ function containerArrives(ctx: Ctx, shipment: TradeShipment): void {
     return;
   }
   const port = harborPort(shipment.portId);
+  const name = port?.name ?? shipment.portId;
+  // Bist du nicht in dem Hafen, regeln es die Hafenarbeiter dort (Auftrag 43). Früher startete die Konfrontation ohne
+  // jemanden am Kai und endete jedes Mal mit dem Verlust des Containers.
+  if (presentCity(ctx.state) !== shipment.portId) {
+    if (ctx.chance(UNATTENDED_CUSTOMS_PASS)) {
+      journal.add(ctx, `Zoll in ${name}: Die Hafenarbeiter haben den Container durchgeredet.`, 'good');
+      landContainer(ctx, shipment, true);
+    } else {
+      onContainerCheck(ctx, `container:${shipment.id}`, 'failure');
+    }
+    return;
+  }
   const { encounterId } = startEncounter(ctx, {
     kind: 'customsCheck',
     setting: 'port',
-    place: `in ${port?.name ?? shipment.portId}`,
+    place: `in ${name}`,
     stakes: { goods: shipment.amount },
     skipEffects: true,
     opponent: { ...CUSTOMS_OPPONENT },
     lossCategory: 'loss.customs',
     origin: { module: 'trade', ref: `container:${shipment.id}` },
+    // Du bist im Hafen und stehst selbst am Kai: Papiere, Ablenken, Bestechen oder Aufgeben.
+    playerPresent: true,
   });
   shipment.encounterId = encounterId;
-  journal.add(ctx, `Zoll in ${port?.name ?? shipment.portId}: Sie wollen den Container sehen.`, 'bad');
+  journal.add(ctx, `Zoll in ${name}: Sie wollen den Container sehen.`, 'bad');
 }
 
 /** Der Zoll ist durch (oder hat nicht geschaut): ab ins Lager, soweit Platz ist. */
@@ -1808,6 +1907,8 @@ function tick(ctx: Ctx): void {
     if (delivery.checkAt !== null && ctx.now >= delivery.checkAt) deliveryCheck(ctx, delivery);
     else if (ctx.now >= delivery.arrivesAt) deliveryArrives(ctx, delivery);
   }
+  // Auftrag 43: Fenna arbeitet einmal pro Stunde ab, was du ihr überlassen hast.
+  if (ctx.now % DISPATCH_EVERY === 0) dispatcherTick(ctx);
 }
 
 function initialState(): TradeState {
@@ -1827,12 +1928,15 @@ function initialState(): TradeState {
     quality: START_QUALITY,
     stats: emptyStats(),
     origins: {},
+    defaultPlan: { ...NO_PLAN },
+    plans: {},
+    restock: [],
   };
 }
 
 export default defineModule({
   id: 'trade',
-  version: 3,
+  version: 4,
   init: () => initialState(),
   migrations: {
     // Auftrag 41: Hallen pro Hafen; Container, die schon auf See sind, behalten ihre Ankunft.
@@ -1856,6 +1960,13 @@ export default defineModule({
       origins: {},
       stats: { ...old.stats, deliveredGrams: 0, ownDelivered: 0 },
     }),
+    // Auftrag 43: Lieferpläne und Nachkauf (Fenna). Alte Stände: Sie macht nichts, bis du es ihr sagst.
+    4: (old: Omit<TradeState, 'defaultPlan' | 'plans' | 'restock'>) => ({
+      ...old,
+      defaultPlan: { ...NO_PLAN },
+      plans: {},
+      restock: [],
+    }),
   },
   tickEvery: 5,
   tick,
@@ -1871,13 +1982,16 @@ export default defineModule({
     'trade.rentBerth': (ctx, { portId }) => rentBerth(ctx, portId),
     'trade.buildHall': (ctx, { portId }) => buildHall(ctx, portId),
     'trade.setPriceLevel': (ctx, { level }) => setPriceLevel(ctx, level),
+    'trade.setPlan': (ctx, { plan, customerId, reset }) => setPlan(ctx, plan ?? {}, customerId, reset === true),
+    'trade.addRestock': (ctx, rule) => addRestock(ctx, rule),
+    'trade.removeRestock': (ctx, { ruleId }) => removeRestock(ctx, ruleId),
   },
   on: {
     'business.sold': (ctx, { cities }) => startTrade(ctx, cities),
-    // Ankunft in Rotterdam: die ersten Bestellungen gleich (nicht erst am Montag).
+    // Ankunft in Rotterdam: die ersten Bestellungen gleich (nicht erst am Montag), nur für die Ware in der Halle.
     'city.arrived': (ctx, { cityId }) => {
       const s = ctx.state.modules.trade;
-      if (cityId === HARBOR_CITY && s.startedAt !== null && s.orders.length === 0) placeOrders(ctx);
+      if (cityId === HARBOR_CITY && s.startedAt !== null && s.orders.length === 0) placeOrders(ctx, true);
     },
     'encounter.resolved': (ctx, { request, outcome }) => {
       if (request.origin?.module === 'trade') onContainerCheck(ctx, request.origin.ref, outcome);

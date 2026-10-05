@@ -21,7 +21,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, cityName } from '../city';
+import { activeCity, cityName, isBusinessSold } from '../city';
 import { cityReport, spotResults, wageRunway } from '../finance';
 import { playerHeat } from '../police';
 import { getSpot, getSpots, spotCity } from '../spots';
@@ -237,6 +237,11 @@ export function canBeRightHand(state: GameState, staffId: string): CommandResult
   const m = getStaffMember(state, staffId);
   if (!m || !isEmployed(state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
   if (isRightHand(state, staffId)) return { ok: false, reason: `${m.name} ist schon deine Rechte Hand.` };
+  // Leute bleiben in ihrer Stadt (Auftrag 43): Rechte Hand wird man nur in der Stadt, in der du gerade spielst. Sonst
+  // setzte die Ernennung den Statthalter der anderen Stadt ab.
+  if ((m.cityId ?? 'koeln') !== activeCity(state)) {
+    return { ok: false, reason: `${m.name} arbeitet in ${cityName(m.cityId ?? 'koeln')}.` };
+  }
   if (isSpecialist(m.role) || isFarmRole(m.role)) {
     return { ok: false, reason: `${roleName(m.role)} führen keine Leutnants.` };
   }
@@ -326,7 +331,8 @@ function rightHandCovers(state: GameState, m: StaffMember): boolean {
   const rh = activeRightHand(state);
   if (!rh?.settings.absences || m.id === rh.staffId || waitsForReturn(state, m.id)) return false;
   if (m.returnTo?.kind === 'spot' && (m.role === 'runner' || m.role === 'security')) return true;
-  return m.status === 'jailed' && !!bonusProvider(state, 'bailDiscount') && m.level >= RIGHT_HAND_BAIL_MIN_LEVEL;
+  const lawyer = bonusProvider(state, 'bailDiscount', m.cityId ?? 'koeln');
+  return m.status === 'jailed' && !!lawyer && m.level >= RIGHT_HAND_BAIL_MIN_LEVEL;
 }
 
 /** Kümmert sich jemand (Leutnant oder Rechte Hand) um den Ausfall, sodass niemand den Spieler fragen muss? */
@@ -408,9 +414,9 @@ export function appointRightHand(ctx: Ctx, staffId: string): CommandResult {
 
 /**
  * Die Person wird Rechte Hand der Stadt (ohne Prüfung): eine bisherige geht, ein Leutnant gibt seine Spots ab. xp =
- * Erfahrung als Rechte Hand (Startpaket, Auftrag 36: Level behalten, freie Aufgaben gleich an).
+ * Erfahrung als Rechte Hand zum Start.
  */
-export function installPost(ctx: Ctx, m: StaffMember, cityId: string, xp: number): RightHandPost {
+function installPost(ctx: Ctx, m: StaffMember, cityId: string, xp: number): RightHandPost {
   const h = ctx.state.modules.hierarchy;
   const staffId = m.id;
   if (h.rightHands[cityId]) dismissRightHand(ctx, cityId);
@@ -630,7 +636,9 @@ function rightHandTurn(ctx: Ctx, cityId: string): void {
  */
 export function buildReport(state: GameState, cityId: string = activeCity(state)): DailyReport {
   const yesterday = cityReport(state, cityId, 1, 1);
-  const runway = wageRunway(state);
+  // Die Lohnreichweite gilt für die Stadt, in der du spielst (Auftrag 43: in den Berichten anderer Städte stand sonst
+  // die Reserve der aktiven Stadt).
+  const runway = cityId === activeCity(state) ? wageRunway(state) : { due: 0, days: null, warn: false };
   const advice: string[] = [];
   if (yesterday.profit < 0) {
     const biggest = yesterday.rows
@@ -681,7 +689,10 @@ function sendReport(ctx: Ctx, rh: RightHandPost, cityId: string): void {
   const tip = reportTip(ctx, cityId);
   if (tip) report.tip = tip;
   rh.lastReport = report;
-  const problems = (report.profit < 0 ? 1 : 0) + (wageRunway(ctx.state).warn ? 1 : 0);
+  // Aus einer anderen Stadt (Statthalter, Auftrag 43) kommt der Bericht still und ohne Frage: Entscheiden musst du dort
+  // nichts, und die Knöpfe würden die Stadt öffnen, in der du gerade bist.
+  const live = cityId === activeCity(ctx.state);
+  const problems = (report.profit < 0 ? 1 : 0) + (live && wageRunway(ctx.state).warn ? 1 : 0);
   // Mit Vollmacht wird der Tagesbericht zum Bericht aus der Stadt: Ergebnis, ihr Anteil, Erledigtes, Probleme.
   const fp = rh.fullPower;
   const fpDone = fp ? describeFullPowerDone(fp.done) : '';
@@ -703,17 +714,23 @@ function sendReport(ctx: Ctx, rh: RightHandPost, cityId: string): void {
   ];
   if (fp) fp.done = emptyFullPowerDone();
   const absent = getStaff(ctx.state, { cityId }).filter(isAbsent);
-  messages.send(ctx, {
-    contact: staffContact(m),
-    text: lines.join(' '),
-    options: [
-      { id: 'openFinance', label: 'Kasse öffnen', reply: 'Zeig mal die Kasse.' },
-      ...(absent.length > 0 ? [{ id: 'openStaff', label: 'Ausfälle ansehen', reply: 'Wer fällt aus?' }] : []),
-      { id: 'ok', label: 'Gut so', reply: 'Gut so.' },
-    ],
-    expiresIn: 12 * 60,
-    silent: problems === 0,
-  });
+  if (live) {
+    messages.send(ctx, {
+      contact: staffContact(m),
+      text: lines.join(' '),
+      options: [
+        { id: 'openFinance', label: 'Kasse öffnen', reply: 'Zeig mal die Kasse.' },
+        ...(absent.length > 0 ? [{ id: 'openStaff', label: 'Ausfälle ansehen', reply: 'Wer fällt aus?' }] : []),
+        { id: 'ok', label: 'Gut so', reply: 'Gut so.' },
+      ],
+      expiresIn: 12 * 60,
+      silent: problems === 0,
+    });
+  } else if (report.profit < 0 && !isBusinessSold(ctx.state)) {
+    // Aus einer anderen Stadt schreibt der Statthalter nur, wenn etwas schiefläuft (Auftrag 43: vier Berichte am Tag
+    // fluteten sonst das Handy); den Bericht gibt es immer auf seiner Seite. Nach dem Verkauf gehört alles ihm.
+    messages.send(ctx, { contact: staffContact(m), text: lines.join(' '), silent: true });
+  }
   rh.log.unshift({
     time: ctx.now,
     text: `Tagesbericht: ${report.profit >= 0 ? 'Gewinn' : 'Verlust'} ${formatEuro(report.profit)}.`,
@@ -781,7 +798,7 @@ function handleAbsences(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
     if (lead && lead !== m.id && capoInCharge(ctx.state, lead)) continue;
     // Wartet der Leutnant auf die Rückkehr, entscheidest du (die Frage kam aufs Handy): nichts hinter seinem Rücken.
     if (waitsForReturn(ctx.state, m.id)) continue;
-    const lawyer = bonusProvider(ctx.state, 'bailDiscount');
+    const lawyer = bonusProvider(ctx.state, 'bailDiscount', m.cityId ?? 'koeln');
     const cost = m.status === 'jailed' ? bailCost(ctx.state, m.id) : Number.POSITIVE_INFINITY;
     const affordable = cost <= ctx.state.wallet.dirty - payrollReserve(ctx.state);
     if (m.status === 'jailed' && lawyer && m.level >= RIGHT_HAND_BAIL_MIN_LEVEL && affordable) {

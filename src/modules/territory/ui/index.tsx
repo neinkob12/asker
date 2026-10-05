@@ -24,7 +24,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName } from '../../city';
+import { activeCity, citiesUnlocked, cityName, isBusinessSold } from '../../city';
 import { getHeat, heatLevel } from '../../police';
 import { allVeedel, veedelName } from '../../veedel';
 import {
@@ -189,6 +189,8 @@ registerTab({
   title: 'Reviere',
   order: 20,
   component: TerritoryTab,
+  // Nach dem Verkauf gibt es keine Veedel mehr (Auftrag 43).
+  hiddenWhen: isBusinessSold,
 });
 
 onGameEvent('territory.controlChanged', 'territory.toast', (payload, ui) => {
@@ -213,14 +215,17 @@ for (const [i, option] of MAP_VIEW_OPTIONS.entries()) {
 registerAdvisor({
   id: 'territory.goal',
   advise: (state) => {
-    const progress = campaignProgress(state);
-    if (progress.controlled > 0 || progress.won) return null;
+    // Ziel der Stadt, in der du bist (Auftrag 43: stand in jeder Stadt auf Köln).
+    const cityId = activeCity(state);
+    const progress = campaignProgress(state, cityId);
+    if (progress.total === 0 || progress.controlled > 0 || progress.won) return null;
+    const city = cityName(cityId);
     return {
       id: 'territory.goal',
       priority: 20,
       icon: 'flag',
-      title: 'Ziel: Köln übernehmen',
-      text: `Ab ${progress.majority} Veedeln bist du Boss von Köln, mit allen ${progress.total} gehört dir die Stadt.`,
+      title: `Ziel: ${city} übernehmen`,
+      text: `Ab ${progress.majority} Veedeln bist du Boss von ${city}, mit allen ${progress.total} gehört dir die Stadt.`,
       actionLabel: 'Reviere',
       action: (ui) => ui.selectTab('territory'),
     };
@@ -233,8 +238,11 @@ registerGameStat({
   icon: 'flag',
   label: 'Veedel unter Kontrolle',
   value: (state) => {
-    const p = campaignProgress(state);
-    return `${p.controlled} von ${p.total}`;
+    // Über alle freien Städte (Auftrag 43: zählte nur Köln).
+    const all = citiesUnlocked(state).map((id) => campaignProgress(state, id));
+    const controlled = all.reduce((sum, p) => sum + p.controlled, 0);
+    const total = all.reduce((sum, p) => sum + p.total, 0);
+    return `${controlled} von ${total}`;
   },
 });
 

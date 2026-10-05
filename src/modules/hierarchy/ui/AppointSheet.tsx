@@ -120,7 +120,8 @@ export function AppointSheet(props: AppointSheetProps) {
 
 function PersonStep(props: { onPick: (staffId: string) => void }) {
   const { state } = useGame();
-  const candidates = getStaff(state)
+  // Nur Leute der Stadt, in der du spielst (Auftrag 43).
+  const candidates = getStaff(state, { cityId: activeCity(state) })
     .filter((m) => !isLieutenant(state, m.id) && m.assignment?.kind !== 'office')
     .map((m) => ({ m, check: canBeLieutenant(state, m.id) }))
     .filter(({ m }) => m.role === 'runner' || m.role === 'security' || m.role === 'driver')

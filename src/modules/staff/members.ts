@@ -324,39 +324,39 @@ export function defenseStrength(
 }
 
 /**
- * Bonus durch Spezialisten (0 = keiner). Zählt der beste aktive Spezialist des passenden Typs.
- * Werte siehe StaffBonus.
+ * Bonus durch Spezialisten (0 = keiner). Zählt der beste aktive Spezialist des passenden Typs in der Stadt (ohne
+ * Angabe die aktive): Ein Kölner Anwalt hilft in Hamburg nicht (Auftrag 43). Werte siehe StaffBonus.
  */
-export function bonus(state: GameState, key: StaffBonus): number {
+export function bonus(state: GameState, key: StaffBonus, cityId = activeCity(state)): number {
   const rule = SPECIALIST_BONUS[key];
   let best = 0;
   for (const m of state.modules.staff.members) {
-    if (m.role !== rule.role || m.status !== 'active') continue;
+    if (m.role !== rule.role || m.status !== 'active' || (m.cityId ?? 'koeln') !== cityId) continue;
     const value = rule.base + rule.perLevel * (m.level - 1) + (m.stats[rule.stat] - 50) / rule.divisor;
     best = Math.max(best, Math.min(rule.max, value));
   }
   return Math.round(best * 100) / 100;
 }
 
-/** Wer liefert den Bonus? (für die Anzeige) */
-export function bonusProvider(state: GameState, key: StaffBonus): StaffMember | undefined {
+/** Wer liefert den Bonus in der Stadt (ohne Angabe die aktive)? */
+export function bonusProvider(state: GameState, key: StaffBonus, cityId = activeCity(state)): StaffMember | undefined {
   const rule = SPECIALIST_BONUS[key];
   return state.modules.staff.members
-    .filter((m) => m.role === rule.role && m.status === 'active')
+    .filter((m) => m.role === rule.role && m.status === 'active' && (m.cityId ?? 'koeln') === cityId)
     .sort((a, b) => b.level - a.level || b.stats[rule.stat] - a.stats[rule.stat])[0];
 }
 
-/** Kaution für eine Person in Haft (Anwalt macht sie billiger). */
+/** Kaution für eine Person in Haft (ein Anwalt aus ihrer Stadt macht sie billiger). */
 export function bailCost(state: GameState, id: string): number {
   const m = getStaffMember(state, id);
   if (!m) return 0;
   const base = (BAIL_BASE + BAIL_PER_LEVEL * (m.level - 1)) * bribeFactor(m.cityId);
-  return Math.round((base * (1 - bonus(state, 'bailDiscount'))) / 10) * 10;
+  return Math.round((base * (1 - bonus(state, 'bailDiscount', m.cityId ?? 'koeln'))) / 10) * 10;
 }
 
-/** Haftdauer für eine neue Festnahme (Anwalt macht sie kürzer). */
-export function jailDuration(state: GameState): number {
-  return Math.round(JAIL_DURATION * (1 - bonus(state, 'jailReduction')));
+/** Haftdauer für eine neue Festnahme in der Stadt (ein Anwalt dort macht sie kürzer). */
+export function jailDuration(state: GameState, cityId = activeCity(state)): number {
+  return Math.round(JAIL_DURATION * (1 - bonus(state, 'jailReduction', cityId)));
 }
 
 /** Kontakt fürs Handy, z.B. für Nachrichten von dieser Person. */
@@ -467,19 +467,6 @@ export function assign(ctx: Ctx, staffId: string, assignment: StaffAssignment | 
   return true;
 }
 
-/**
- * Jemand ist in einer anderen Stadt angekommen, ohne über staff.relocate zu fahren (z.B. ein Fahrer am Ende einer Route
- * zwischen den Städten, Auftrag 30). Der Einsatz bleibt, wie er ist; Ereignis 'staff.relocated'.
- */
-export function moveToCity(ctx: Ctx, staffId: string, cityId: string): boolean {
-  const m = getStaffMember(ctx.state, staffId);
-  if (!m || m.leftAt !== null || m.cityId === cityId || !getCity(cityId)) return false;
-  const from = m.cityId;
-  m.cityId = cityId;
-  ctx.emit('staff.relocated', { staffId, from, to: cityId });
-  return true;
-}
-
 /** Einsatzort als Text, z.B. "Zülpicher Platz" oder "Leutnant in Ehrenfeld". */
 export function assignmentLabel(state: GameState, a: StaffAssignment | null): string {
   if (!a) return 'ohne Einsatz';
@@ -507,7 +494,7 @@ export function setStatus(ctx: Ctx, staffId: string, status: StaffStatus, until?
     return true;
   }
   if (status === 'jailed' || status === 'injured') {
-    const duration = status === 'jailed' ? jailDuration(ctx.state) : INJURY_DURATION;
+    const duration = status === 'jailed' ? jailDuration(ctx.state, member.cityId ?? 'koeln') : INJURY_DURATION;
     member.statusUntil = until ?? ctx.now + duration;
     if (member.assignment && member.assignment.kind !== 'delivery') member.returnTo = member.assignment;
     if (member.assignment) {

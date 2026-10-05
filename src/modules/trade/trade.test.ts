@@ -308,6 +308,41 @@ describe('Hafen-Phase: Container und Zoll', () => {
     expect(customsHeat(sim.state, 'rotterdam')).toBeGreaterThan(0);
   });
 
+  it('Zoll in Rotterdam: du stehst selbst am Kai und entscheidest; in Antwerpen regeln es die Hafenarbeiter', () => {
+    const sim = soldGame(9);
+    sim.state.wallet.dirty += 5_000_000;
+    sim.state.wallet.clean += 500_000;
+    expect(sim.dispatch({ type: 'trade.rentBerth', payload: { portId: 'antwerpen' } }).ok).toBe(true);
+    // Viel Zoll-Heat: fast jeder Container wird kontrolliert.
+    sim.state.modules.police.customs = { rotterdam: 100, antwerpen: 100 };
+    const events = recordEvents(sim);
+    // Zehn große Container nach Rotterdam (mindestens einer wird kontrolliert), zwei kleine nach Antwerpen.
+    const ports = [...Array(10).fill('rotterdam'), 'antwerpen', 'antwerpen'];
+    for (const portId of ports) {
+      const size = portId === 'rotterdam' ? ('full' as const) : ('small' as const);
+      const payload = { producerId: 'spanien', productId: 'weed', size, portId };
+      expect(sim.dispatch({ type: 'trade.buy', payload })).toEqual({ ok: true, data: expect.anything() });
+    }
+    let seen = 0;
+    for (let i = 0; i < 10 * 24; i++) {
+      sim.advance(60);
+      for (const e of activeEncounters(sim.state)) {
+        if (e.kind !== 'customsCheck' || e.phase === 'done') continue;
+        // Nie mehr „Niemand von euch war da“: Du bist dabei und hast die Handlungen am Kai.
+        expect(e.playerPresent).toBe(true);
+        expect(e.phase).toBe('rounds');
+        seen++;
+        autoResolveEncounter(sim.ctx('test'), e.id);
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+    // Antwerpen ohne Konfrontation, aber mit Ergebnis (durch oder weg).
+    const antwerp = (type: 'trade.containerArrived' | 'trade.containerSeized') =>
+      eventsOfType(events, type).filter((e) => e.payload.portId === 'antwerpen').length;
+    expect(antwerp('trade.containerArrived') + antwerp('trade.containerSeized')).toBe(2);
+    expect(activeEncounters(sim.state).filter((e) => e.phase !== 'done')).toEqual([]);
+  });
+
   it('weitere Häfen kosten sauberes Geld', () => {
     const sim = soldGame(7);
     sim.state.wallet.clean = 0;

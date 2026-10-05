@@ -12,6 +12,7 @@ import { INTERCITY_CAPACITY, ROUTE_LOAD_MINUTES } from './config';
 import {
   driverWhereabouts,
   getRoute,
+  getRoutes,
   getTrips,
   isInterCityTrip,
   nextDeparture,
@@ -70,7 +71,7 @@ function finishTrip(sim: Simulation, routeId: number): void {
 }
 
 describe('Routen mit Fahrplan (Auftrag 30)', () => {
-  it('tägliche Route bringt Ware von Köln nach Hamburg: Bestand sinkt und steigt, der Fahrer ist danach dort', () => {
+  it('tägliche Route bringt Ware von Köln nach Hamburg: Bestand sinkt und steigt, der Fahrer kommt leer zurück', () => {
     const sim = twoCities();
     const events = recordEvents(sim);
     const driverId = hireDriver(sim);
@@ -100,19 +101,19 @@ describe('Routen mit Fahrplan (Auftrag 30)', () => {
 
     finishTrip(sim, routeId);
     expect(getStock(sim.state, { warehouseId: HAMBURG, productId: 'weed' })).toBe(2000);
-    expect(getStaffMember(sim.state, driverId)?.cityId).toBe('hamburg');
+    // Leute bleiben in ihrer Stadt (Feedback vom 05.10.2026): Der Fahrer gehört weiter zu Köln und fährt leer zurück.
+    expect(getStaffMember(sim.state, driverId)?.cityId).toBe('koeln');
+    expect(eventsOfType(events, 'staff.relocated')).toHaveLength(0);
+    const back = getTrips(sim.state).find((t) => t.routeId === routeId);
+    expect(back).toMatchObject({ leg: 'back', fromId: HAMBURG, toId: KOELN, items: [] });
+    finishTrip(sim, routeId);
     expect(getStaffMember(sim.state, driverId)?.assignment).toBeNull();
     expect(getRoute(sim.state, routeId)?.last).toMatchObject({ result: 'done' });
-    expect(eventsOfType(events, 'staff.relocated')[0].payload).toEqual({
-      staffId: driverId,
-      from: 'koeln',
-      to: 'hamburg',
-    });
 
-    // Am nächsten Tag steht der Fahrer in Hamburg: Die Route fällt aus und steht im Protokoll.
+    // Am nächsten Tag fährt die Route wieder.
     untilDeparture(sim, routeId);
-    expect(getRoute(sim.state, routeId)?.last).toMatchObject({ result: 'skipped' });
-    expect(eventsOfType(events, 'route.skipped')[0].payload.reason).toContain('in Hamburg');
+    expect(getRoute(sim.state, routeId)?.last).toMatchObject({ result: 'started' });
+    expect(eventsOfType(events, 'route.skipped')).toHaveLength(0);
   });
 
   it('lädt höchstens 5 kg je Fahrt (Edibles 5 g, Vapes 20 g) und füllt bis zum Zielbestand auf', () => {
@@ -251,10 +252,7 @@ describe('Routen mit Fahrplan (Auftrag 30)', () => {
     const sim = twoCities();
     const driverId = hireDriver(sim);
     store(sim.ctx('test'), { productId: 'weed', amount: 2500, warehouseId: KOELN, quality: 0.8, unitCost: 4 });
-    expect(sim.dispatch({ type: 'city.switch', payload: { cityId: 'hamburg' } }).ok).toBe(true);
-    expect(activeCity(sim.state)).toBe('hamburg');
-    expect(isCityLive(sim.state, 'koeln')).toBe(false);
-    const before = getStock(sim.state, { warehouseId: KOELN, productId: 'weed' });
+    // Die Route legst du in Köln an (dort fährt sie los), dann geht es nach Hamburg.
     const routeId = addRoute(sim, {
       driverId,
       fromId: KOELN,
@@ -262,6 +260,14 @@ describe('Routen mit Fahrplan (Auftrag 30)', () => {
       items: [{ productId: 'weed', amount: 2000 }],
       departure: 8 * 60,
     });
+    expect(sim.dispatch({ type: 'city.switch', payload: { cityId: 'hamburg' } }).ok).toBe(true);
+    expect(activeCity(sim.state)).toBe('hamburg');
+    expect(isCityLive(sim.state, 'koeln')).toBe(false);
+    const before = getStock(sim.state, { warehouseId: KOELN, productId: 'weed' });
+    // In Hamburg tauchen Kölner Routen nicht auf und lassen sich nicht ändern (Auftrag 43).
+    expect(getRoutes(sim.state, 'hamburg')).toEqual([]);
+    expect(getRoutes(sim.state, 'koeln')).toHaveLength(1);
+    expect(sim.dispatch({ type: 'logistics.updateRoute', payload: { routeId, departure: 9 * 60 } }).ok).toBe(false);
     untilDeparture(sim, routeId);
     expect(getStock(sim.state, { warehouseId: KOELN, productId: 'weed' })).toBe(before - 2000);
     expect(sim.state.modules.logistics.restock).toEqual([
@@ -334,7 +340,7 @@ describe('Routen mit Fahrplan (Auftrag 30)', () => {
     expect(loaded.state.modules.logistics.restock).toEqual([]);
   });
 
-  it('mit festem Transporter fährt die Route mehr als 5 kg, danach steht der Transporter in Hamburg (Auftrag 33)', () => {
+  it('mit festem Transporter fährt die Route mehr als 5 kg, Fahrer und Transporter kommen zurück (Auftrag 33)', () => {
     const sim = twoCities(4);
     const driverId = hireDriver(sim);
     const bought = sim.dispatch({ type: 'fleet.buy', payload: { model: 'van' } });
@@ -356,7 +362,10 @@ describe('Routen mit Fahrplan (Auftrag 30)', () => {
     expect(trip?.vehicleId).toBe(vehicleId);
     expect(trip?.items[0].amount).toBe(8000);
     finishTrip(sim, routeId);
-    expect(sim.state.modules.fleet.vehicles[0]).toMatchObject({ cityId: 'hamburg', tripId: null });
     expect(getStock(sim.state, { warehouseId: HAMBURG, productId: 'weed' })).toBe(8000);
+    // Leer zurück nach Köln, mit demselben Transporter.
+    expect(getTrips(sim.state).find((t) => t.routeId === routeId)).toMatchObject({ leg: 'back', vehicleId });
+    finishTrip(sim, routeId);
+    expect(sim.state.modules.fleet.vehicles[0]).toMatchObject({ cityId: 'koeln', tripId: null });
   });
 });

@@ -19,7 +19,7 @@ export function regionCard(state: GameState, regionId: string): { title: string;
     lines: [
       fincas === 1 ? '1 Finca' : `${fincas} Fincas`,
       cartelPaid(state, regionId) ? `Kartell ${share} %` : 'Kartell offen',
-      `Behörden ${Math.round(regionAttention(state, regionId))}`,
+      `Behörden ${Math.round(regionAttention(state, regionId))} von 100`,
     ],
   };
 }

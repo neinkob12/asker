@@ -106,6 +106,8 @@ import { CALL_LINES, CALL_TEXTS, FINCA_SITES, type FincaSite, LOCAL_NAMES, PACKI
 export {
   CALL_AFTER_WEEKS,
   CALL_MIN_REVENUE,
+  CARTEL_HIT_CHANCE,
+  CARTEL_HIT_LOSS,
   CROP_PRODUCTS,
   EUROPE_WINDOW_DAYS,
   GENETICS,
@@ -266,6 +268,10 @@ declare module '../../core' {
     'grow.raided': { regionId: string; fincaId: number; share: number };
     'grow.cartelHit': { regionId: string; fincaId: number | null; share: number };
     'grow.goalReached': { goal: 'producer' | 'europe' };
+    /** Auftrag 43: Lohn oder Pacht nicht bezahlt (der erste Tag), das Feld liegt brach, die Finca ist weg. */
+    'grow.unpaid': { fincaId: number; kind: 'wages' | 'lease' };
+    'grow.stalled': { fincaId: number };
+    'grow.fincaLost': { fincaId: number; regionId: string; name: string };
   }
 }
 
@@ -383,14 +389,18 @@ export function expectedHarvest(
   return Math.round((finca.hectares * perHa * genetics * people * care * press * loss) / 100) * 100;
 }
 
-/** Laufende Kosten pro Tag (Löhne, Pacht), sauberes Geld. */
-export function fincaRunningCost(state: GameState, finca: Finca): number {
-  const wages = [...finca.workerIds, ...(finca.gardenerId ? [finca.gardenerId] : [])].reduce(
+/** Löhne pro Tag (Arbeiter und Gärtner), bar vor Ort. */
+export function fincaWages(state: GameState, finca: Finca): number {
+  return [...finca.workerIds, ...(finca.gardenerId ? [finca.gardenerId] : [])].reduce(
     (sum, id) => sum + (getStaffMember(state, id)?.wage ?? 0),
     0,
   );
+}
+
+/** Laufende Kosten pro Tag (Löhne bar, Pacht sauber). */
+export function fincaRunningCost(state: GameState, finca: Finca): number {
   const lease = finca.tenure === 'leased' ? leasePerWeek(finca) / 7 : 0;
-  return Math.round(wages + lease);
+  return Math.round(fincaWages(state, finca) + lease);
 }
 
 /**
@@ -522,7 +532,11 @@ function regionState(ctx: Ctx, regionId: string): GrowRegion {
   return s.regions[regionId];
 }
 
-/** Löhne und Dünger: sauberes Geld, sonst bar vor Ort (Schwarzgeld); false, wenn beides nicht reicht. Pacht nur sauber. */
+/**
+ * Löhne und Dünger: bar vor Ort (Schwarzgeld), sonst sauberes Geld; false, wenn beides nicht reicht. Die Pacht geht nur
+ * sauber; deshalb zuerst schwarz (Auftrag 43: vorher fraßen Löhne das saubere Geld, und die Finca ging an der Pacht
+ * verloren, obwohl genug Schwarzgeld da war).
+ */
 function payLocal(
   ctx: Ctx,
   amount: number,
@@ -532,8 +546,8 @@ function payLocal(
 ): boolean {
   if (amount <= 0) return true;
   const tag = { category, cityId };
-  if (wallet.canAfford(ctx.state, amount, 'clean')) return wallet.pay(ctx, amount, 'clean', reason, tag);
-  return wallet.pay(ctx, amount, 'dirty', reason, tag);
+  if (wallet.canAfford(ctx.state, amount, 'dirty')) return wallet.pay(ctx, amount, 'dirty', reason, tag);
+  return wallet.pay(ctx, amount, 'clean', reason, tag);
 }
 
 /** Auslöser: genug Wochen und Umsatz als Lieferant. Die Anrufe kommen nacheinander. */
@@ -793,6 +807,7 @@ function trySow(ctx: Ctx, finca: Finca): void {
   }
   if (finca.stalled) return;
   finca.stalled = true;
+  ctx.emit('grow.stalled', { fincaId: finca.id });
   notify(
     ctx,
     finca,
@@ -936,11 +951,16 @@ function harvest(ctx: Ctx, finca: Finca): void {
     };
   }
   finca.spent = 0;
-  journal.add(
-    ctx,
-    `Ernte auf ${finca.name}: ${kg(grams)} ${productName(crop.productId)}${cartel > 0 ? `, ${kg(cartel)} für das Kartell` : ''}. Jetzt wird getrocknet.`,
-    'good',
-  );
+  if (grams <= 0) {
+    // Ohne Arbeiter auf dem Feld gibt es nichts zu ernten (Auftrag 43: vorher stand hier „0 kg, jetzt wird getrocknet“).
+    journal.add(ctx, `Ernte auf ${finca.name} ausgefallen: Niemand hat auf dem Feld gearbeitet.`, 'bad');
+  } else {
+    journal.add(
+      ctx,
+      `Ernte auf ${finca.name}: ${kg(grams)} ${productName(crop.productId)}${cartel > 0 ? `, ${kg(cartel)} für das Kartell` : ''}. Jetzt wird getrocknet.`,
+      'good',
+    );
+  }
   ctx.emit('grow.harvested', { fincaId: finca.id, productId: crop.productId, grams, cartel });
   trySow(ctx, finca);
 }
@@ -965,6 +985,12 @@ function advanceBatch(ctx: Ctx, finca: Finca): void {
         cityId: finca.regionId,
       })
     ) {
+      // Auftrag 43: nicht still zurückfallen, der Spieler hat die Tarnung bewusst gewählt.
+      journal.add(
+        ctx,
+        `${finca.name}: Kein Geld für ${packing.label} (${formatEuro(cost)}), die Ware geht in ${PACKINGS[0].label}.`,
+        'bad',
+      );
       packing = PACKINGS[0];
     } else batch.cost += cost;
     batch.stage = 'packing';
@@ -1017,6 +1043,7 @@ function payLease(ctx: Ctx, finca: Finca): boolean {
     return true;
   }
   finca.unpaidLease += 1;
+  if (finca.unpaidLease === 1) ctx.emit('grow.unpaid', { fincaId: finca.id, kind: 'lease' });
   const contact = getRegion(finca.regionId)?.contact;
   if (finca.unpaidLease === 1 && contact) {
     message(
@@ -1031,6 +1058,7 @@ function payLease(ctx: Ctx, finca: Finca): boolean {
     removeMember(ctx, id, 'fired');
   s.fincas = s.fincas.filter((f) => f.id !== finca.id);
   journal.add(ctx, `${finca.name} ist weg: ${LEASE_LOST_DAYS} Tage keine Pacht. Die Leute dort sind gegangen.`, 'bad');
+  ctx.emit('grow.fincaLost', { fincaId: finca.id, regionId: finca.regionId, name: finca.name });
   return false;
 }
 
@@ -1047,6 +1075,7 @@ function daily(ctx: Ctx, day: number): void {
     else {
       // Ohne Lohn kein Arbeitstag: Der Tag fehlt der Ernte.
       if (!finca.unpaidWages) {
+        ctx.emit('grow.unpaid', { fincaId: finca.id, kind: 'wages' });
         notify(
           ctx,
           finca,

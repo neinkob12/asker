@@ -49,6 +49,11 @@ export const ORDER_ROUND_GRAMS = 500;
 export const ORDER_HOUR = 6 * 60;
 /** So lange kannst du eine Bestellung annehmen, ablehnen oder ein Gegenangebot machen. */
 export const ORDER_ANSWER_MINUTES = 24 * 60;
+/**
+ * Die erste Runde bei der Ankunft in Rotterdam (Auftrag 43): mehr Zeit zum Antworten, und bestellt wird nur, was in der
+ * Halle liegt (die Startware), damit der neue Job nicht mit lauter „fehlt“ beginnt.
+ */
+export const FIRST_ORDER_ANSWER_MINUTES = 3 * 24 * 60;
 /** Frist für die Lieferung ab Bestellung. */
 export const ORDER_DUE_DAYS = 6;
 /** Zu spät geliefert: nur so viel vom Preis. */
@@ -118,5 +123,10 @@ export const CHARTER_KM_PER_DAY = 650;
 
 /** Hallen im Hafen (trade.buildHall): höchstens so viele pro Hafen, Platz und Preis stehen am Hafen (logistics). */
 export const MAX_HALLS = 2;
+/**
+ * Zollkontrolle in einem Hafen, in dem du nicht bist (Auftrag 43): Die Hafenarbeiter dort reden mit dem Zoll, so oft
+ * kommt der Container durch. Bist du selbst im Hafen, entscheidest du in der Konfrontation (Papiere, Ablenken, Bestechen).
+ */
+export const UNATTENDED_CUSTOMS_PASS = 0.5;
 /** Passt ein Container nicht mehr ins Lager, wartet der Rest an Bord: Liegegeld pro Tag und Container (sauberes Geld). */
 export const QUAY_FEE_PER_DAY = 1_500;

@@ -18,7 +18,7 @@
 //   supplierVia(supplier, cityId) (Autobahn des Kuriers in die Stadt, nur Karte),
 //   deliveryTimeTo(supplier, cityId), supplierContactId(id), assortment(supplier),
 //   isUnlocked(state, id), unlockRequirements(state, id), canUnlock(state, id),
-//   shipmentsInTransit(state), shipmentProgress(state, shipment), expectedArrival(shipment),
+//   shipmentsInTransit(state, cityId?), shipmentCity(shipment), shipmentProgress(state, shipment), expectedArrival(shipment),
 //   cheapestPackagePrice(state), getRelation(state, id), trustLabel(trust), supplierDiscount(state, id),
 //   supplierQualityBonus(state, id), creditLimit(state, id), availableCredit(state, id), isBlocked(state, id),
 //   availablePackages(state, id), packagePrice(state, supplierId, packageId), rollShipmentProblem(...),
@@ -45,7 +45,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, citiesUnlocked, cityName, getCity, relationFactor } from '../city';
+import { activeCity, citiesUnlocked, cityName, getCity, isBusinessSold, relationFactor } from '../city';
 import { getSalesStats } from '../customers';
 import {
   DEFAULT_WAREHOUSE,
@@ -324,6 +324,8 @@ declare module '../../core' {
       price: number;
       productId?: string;
       onCredit?: boolean;
+      /** Stadt, für die bestellt wurde (Auftrag 43). */
+      cityId?: string;
     };
     'shipment.arrived': {
       shipmentId: number;
@@ -336,6 +338,8 @@ declare module '../../core' {
       atPort?: boolean;
       /** Lager waren zu voll, die Ware liegt in mehreren (Auftrag 33): "300 g im Lager Ehrenfeld, 200 g im …". */
       placedIn?: string;
+      /** Stadt, für die bestellt wurde (Auftrag 43; die Oberfläche meldet nur die Stadt, in der du spielst). */
+      cityId?: string;
     };
     /** Lieferproblem ist eingetreten. */
     'shipment.problem': { shipmentId: number; supplierId: string; kind: ShipmentProblem; reason?: string };
@@ -501,8 +505,14 @@ export function assortment(supplier: Supplier): string[] {
   return [...new Set(supplier.packages.map((p) => p.productId))];
 }
 
-export function shipmentsInTransit(state: GameState): readonly Shipment[] {
-  return state.modules.suppliers.shipments;
+export function shipmentsInTransit(state: GameState, cityId?: string): readonly Shipment[] {
+  const all = state.modules.suppliers.shipments;
+  return cityId === undefined ? all : all.filter((s) => shipmentCity(s) === cityId);
+}
+
+/** Stadt, für die eine Lieferung bestellt wurde (alte Lieferungen ohne Angabe: Köln). */
+export function shipmentCity(shipment: Shipment): string {
+  return shipment.cityId ?? 'koeln';
 }
 
 /** Fortschritt einer Lieferung von 0 (bestellt) bis 1 (angekommen). Während einer Verspätung steht sie. */
@@ -837,6 +847,7 @@ function order(
     price,
     productId: pkg.productId,
     onCredit,
+    cityId,
   });
   return { ok: true, data: { shipmentId: shipment.id } };
 }
@@ -936,8 +947,8 @@ const distance = (a: { lng: number; lat: number }, b: { lng: number; lat: number
   Math.hypot((a.lng - b.lng) * 0.63, a.lat - b.lat);
 
 /**
- * Eine Stadt betreten: Lieferanten, die dort zu Hause sind (home, z.B. Hein in Hamburg, Mirko in Berlin). Kennt ihr
- * euch noch nicht, ist er ab jetzt dabei (ohne Vermittlung), sonst meldet er sich nur kurz.
+ * Eine Stadt ist frei: Lieferanten, die dort zu Hause sind (home, z.B. Hein in Hamburg, Mirko in Berlin), sind ab jetzt
+ * dabei (ohne Vermittlung). Bescheid sagen sie bei deiner Ankunft (onCityArrived).
  */
 function onCityUnlocked(ctx: Ctx, cityId: string): void {
   const s = ctx.state.modules.suppliers;
@@ -949,7 +960,13 @@ function onCityUnlocked(ctx: Ctx, cityId: string): void {
       relationFor(ctx, supplier.id);
       ctx.emit('supplier.unlocked', { supplierId: supplier.id, fee: 0 });
     }
-    tell(ctx, supplier, supplier.home.welcome);
+  }
+}
+
+/** Bei der ersten Ankunft in seiner Stadt meldet er sich (Auftrag 43: vorher schon bei der Zusage, vor der Fahrt). */
+function onCityArrived(ctx: Ctx, cityId: string): void {
+  for (const supplier of getSuppliers(ctx.state)) {
+    if (supplier.home?.cityId === cityId) tell(ctx, supplier, supplier.home.welcome);
   }
 }
 
@@ -960,6 +977,8 @@ function onCityUnlocked(ctx: Ctx, cityId: string): void {
 function rollDeals(ctx: Ctx): void {
   const s = ctx.state.modules.suppliers;
   s.deals = s.deals.filter((d) => d.endsAt > ctx.now);
+  // Nach dem Verkauf kaufst du nicht mehr bei den alten Lieferanten (Auftrag 43).
+  if (isBusinessSold(ctx.state)) return;
   const day = Math.floor(ctx.now / MINUTES_PER_DAY);
   for (const cityId of citiesUnlocked(ctx.state)) {
     // Würfel pro Stadt und Tag (Auftrag 40): unabhängig davon, welche Städte sonst frei sind.
@@ -989,7 +1008,8 @@ function rollDeals(ctx: Ctx): void {
       .replace('{package}', `${pkg.label}${citiesUnlocked(ctx.state).length > 1 ? ` für ${cityName(cityId)}` : ''}`)
       .replace('{discount}', `${Math.round(discount * 100)} %`)
       .replace('{until}', until);
-    messages.send(ctx, { contact: contactOf(supplier), text, silent: true });
+    // Gesagt wird es nur für die Stadt, in der du bist (Auftrag 43); die Aktion anderswo steht in der App dieser Stadt.
+    if (cityId === activeCity(ctx.state)) messages.send(ctx, { contact: contactOf(supplier), text, silent: true });
     ctx.emit('supplier.dealStarted', {
       dealId: deal.id,
       supplierId: supplier.id,
@@ -1142,6 +1162,7 @@ function deliver(ctx: Ctx): void {
       quality: s.quality,
       ...(s.toPort ? { atPort: true } : {}),
       ...(placedIn.has(s.id) ? { placedIn: placedIn.get(s.id) } : {}),
+      cityId: shipmentCity(s),
     });
   }
 }
@@ -1237,6 +1258,9 @@ export default defineModule({
   },
   on: {
     'city.unlocked': (ctx, { cityId }) => onCityUnlocked(ctx, cityId),
+    'city.arrived': (ctx, { cityId, first }) => {
+      if (first) onCityArrived(ctx, cityId);
+    },
   },
   migrations: {
     2: (old: SuppliersStateV1): SuppliersStateV2 => ({ shipments: old.shipments, relations: initialRelations() }),

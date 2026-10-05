@@ -76,10 +76,11 @@ Auftrag 36 (Deutschland): Reihenfolge der Städte nach Köln frei (`NEXT_CITY` i
 `city.offers`, `city.answerOffer`/`city.handOver` mit Stadt, `city.requestCall`; jede Stadt in `CITIES` mit `contact`
 und `pitch`, Gespräche in `CITY_OFFERS`), Autobahn-Netz (`roads/autobahn.ts`, sechs Linien, `autobahnPath`,
 `interCityRoute` über eine Stadt hinweg; neu bauen mit `build-roads.py --autobahn all`), Statthalter (`rightHandTitle`),
-Razzia im Schlaf, Startpaket und Startgeld bei der Übergabe (`hierarchy/handover.ts`, Haken `startPackLeaders` für
-Capos), Ränge des Spielers (`city/ranks.ts`, `playerRank`, Ereignis `player.rankUp`), Quest-Kapitel pro Stadt (`cityId`
+Razzia im Schlaf, Startgeld und Fahrzeuge bei der Übergabe (`city.handOver`, `pack.vehicleIds`), Ränge des Spielers (`city/ranks.ts`, `playerRank`, Ereignis `player.rankUp`), Quest-Kapitel pro Stadt (`cityId`
 an der Quest). Stellschrauben für das Tempo späterer Städte: `FULL_POWER_SHARE`, `HANDOVER_START_MONEY_DAYS`,
-`START_MONEY_MIN_BY_CITY`, `START_PACK_MAX_STAFF`.
+`START_MONEY_MIN_BY_CITY`. **Leute bleiben in ihrer Stadt** (Feedback vom 05.10.2026): kein Startpaket mit Rechter
+Hand oder Leuten, kein `staff.relocate`, Fahrer auf Routen in eine andere Stadt kommen immer zurück. In jeder neuen
+Stadt fängt der Spieler ohne Rechte Hand, ohne Leute und ohne Routen an und bestellt selbst.
 Auftrag 37 (Berlin): dritte spielbare Stadt nur aus Daten (`veedel/data-berlin.ts`, `spots/config-berlin.ts`,
 `gangs/texts-berlin.ts`, `roads/network-berlin.ts`, Einträge in den Listen der anderen Module). Neu und allgemein:
 `Spot.weekHours` (Öffnungszeiten über die Woche, Berliner Clubs Fr 22 bis Mo 8 Uhr) und `Supplier.home` (Lieferant ist
@@ -114,6 +115,14 @@ Daten in `city` (`REGIONS`, `isRegion`), keine Orte zum Spielen; Leute dort (Rol
 haben die Region als `cityId` und sind nie live. Eigene Ware fährt über `trade` (`OWN_ORIGINS` als Produzenten,
 `storeExport`, `StockLot.own`, `trade.delivered` mit `ownAmount`), keine zweite Logistik. grow würfelt nur über
 `cityDayDice`/`keyedDice`. Seewege über den Atlantik in einem eigenen Ausschnitt (`build-water.py`, `OCEAN_LANES`).
+Auftrag 43 (Feedback 05.10.2026, `docs/auftraege/43-feedback-staedte-hafen.md`): Leute bleiben in ihrer Stadt (siehe
+oben), das Handy zeigt nur die aktive Stadt (`shipmentsInTransit(state, cityId)`, `tripTouchesCity`, `placeCity`),
+Test-Spielstände pro Stadt. Hafen-Phase: Kapitel „Rotterdam“ mit Jansen (`QuestDef.voice`, `requires`, `goTo`
+`trade`/`tradeHarbor`, `openPhone('trade.app', { view })`), mit dem Verkauf fallen die alten Kapitel weg; erste Runde
+Bestellungen nur mit Ware aus der Halle; Fenna übernimmt Annehmen, Ausliefern und Nachkauf (`trade/plans.ts`,
+`trade.setPlan`, `trade.addRestock`); Kunden-Seite `trade.customer`; „Dein Preis“ wirkt auf den Preis pro Gramm; nach
+dem Verkauf führen alte Hafen-Seite und Lieferanten-App in die Kunden-App, Apps und Tabs können mit `hiddenWhen`
+zeitweise verschwinden, das HUD zeigt Zoll und Ruf als Lieferant.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
@@ -272,9 +281,10 @@ Selbst ausprobieren:
 
 Im Browser: `?neu=normal&seed=1&tempo=0` startet ein frisches Spiel; `window.koeln.session` in der Konsole.
 Test-Spielstände (vom Bot gespielt, nicht in der Bestenliste), einer für jeden Abschnitt des Bogens (`koeln-anfang` bis
-`europa`): `?spielstand=koeln-komplett` oder Spielstände › Test-Spielstände; Liste in `src/playtest/testSaves.ts` und
-`src/ui/builtin/testSaves.ts`, Dateien in `public/spielstaende/`, neu erzeugen mit `npm run saves:build` (etwa eine
-Minute; `testSaves.test.ts` prüft, dass sie laden und den Moment zeigen; Übersicht in `docs/architektur.md`, Abschnitt
+`europa`; jede Stadt in der Reihenfolge Hamburg, Berlin, München, Frankfurt mit `ankunft-<stadt>`, `boss-von-<stadt>`
+und `<stadt>-komplett`): `?spielstand=koeln-komplett` oder Spielstände › Test-Spielstände; Liste in `src/playtest/testSaves.ts` und
+`src/ui/builtin/testSaves.ts`, Dateien in `public/spielstaende/`, neu erzeugen mit `npm run saves:build` (etwa zwei
+Minuten; `testSaves.test.ts` prüft, dass sie laden und den Moment zeigen; Übersicht in `docs/architektur.md`, Abschnitt
 "Spielstände").
 Kartenkacheln (Esri, OpenFreeMap) lädt das Skript über Node (auch hinter einem `HTTPS_PROXY`).
 TypeScript-Eigenheit: Dateien, die Module importieren, nicht in einen Ordner legen, der alphabetisch vor

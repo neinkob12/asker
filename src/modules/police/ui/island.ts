@@ -2,7 +2,7 @@
 
 import { islandCountdown, type LiveActivity, registerLiveActivity } from '../../../ui';
 import { activeCity } from '../../city';
-import { allVeedel, veedelName } from '../../veedel';
+import { allVeedel, veedelCity, veedelName } from '../../veedel';
 import { heatLevel, plannedMajorRaid, plannedRaidInfo, playerHeat } from '../index';
 
 registerLiveActivity({
@@ -10,7 +10,9 @@ registerLiveActivity({
   activities: (state) => {
     const raids: LiveActivity[] = [];
     const major = plannedMajorRaid(state);
-    if (major && major.at > state.time) {
+    // Nur eine Großrazzia in der Stadt, in der du bist (Auftrag 43: die der alten Stadt tickte sonst in Rotterdam).
+    const here = major?.veedelIds.some((id) => veedelCity(id) === activeCity(state)) ?? false;
+    if (major && here && major.at > state.time) {
       raids.push({
         id: 'police.majorRaid',
         priority: 90,

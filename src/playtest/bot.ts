@@ -77,9 +77,6 @@ import {
   lieutenantOfSpot,
   MAX_SPOTS_PER_LIEUTENANT,
   rightHandHandlesOrders,
-  START_PACK_MAX_STAFF,
-  startPackLeaders,
-  startPackStaff,
 } from '../modules/hierarchy';
 import { amountInProgress, launderingCapacity } from '../modules/laundering';
 import {
@@ -168,7 +165,13 @@ export interface BotStats {
   /** Rabatt-Aktionen, bei denen er schon gekauft hat (Auftrag 32). */
   deals?: number[];
   /** Übergaben (Auftrag 36): von wo nach wo, an welchem Tag, wie viele Leute im Startpaket. */
-  cities?: { from: string; to: string; day: number; pack: number }[];
+  cities?: { from: string; to: string; day: number }[];
+  /**
+   * Gramm, die beim letzten Blick aufs Lager schon abgewiesen waren. Gehört zum Lauf, nicht zum Spielstand: Ein geladener
+   * Stand mit neuen Stats spielt so genauso weiter wie der ungeladene (früher eine WeakMap am Zustand, die nach dem Laden
+   * leer war).
+   */
+  rejectedSeen?: number;
 }
 
 function money(state: GameState): number {
@@ -396,19 +399,14 @@ const LATER_CITY_BERTH_RUNNERS = 5;
 /** Ab so viel Hafenware am Kai (Gramm) kauft der Bot einen Kombi (Auftrag 33). */
 const BIG_PICKUP_GRAMS = 2000;
 
-/** Gramm, die bei der letzten Prüfung schon abgewiesen waren (pro Spiel). */
-const rejectedSeen = new WeakMap<GameState['modules']['goods'], number>();
-
 /**
  * Regale bei Bedarf (Auftrag 33): Hat ein volles Lager seit dem letzten Blick mehr als ein halbes Kilo abgewiesen,
  * baut der Bot im vollsten Lager der Stadt Regale ein (sauberes Geld, notfalls gewaschen).
  */
 function warehouseUpkeep(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
-  const goods = state.modules.goods;
   const rejected = storageStats(state).rejected;
-  const seen = rejectedSeen.get(goods) ?? 0;
-  if (rejected - seen < 500) return;
+  if (rejected - (stats.rejectedSeen ?? 0) < 500) return;
   const fullest = [...getWarehouses(state, activeCity(state))]
     .filter((w) => upgradeCost(state, w.id, 'shelves') !== null)
     .sort(
@@ -417,13 +415,13 @@ function warehouseUpkeep(sim: Simulation, stats: BotStats): void {
         warehouseLoad(state, a.id) / warehouseCapacity(state, a.id),
     )[0];
   if (!fullest || warehouseLoad(state, fullest.id) < warehouseCapacity(state, fullest.id) * NEARLY_FULL) {
-    rejectedSeen.set(goods, rejected);
+    stats.rejectedSeen = rejected;
     return;
   }
   const cost = upgradeCost(state, fullest.id, 'shelves') ?? 0;
   if (state.wallet.clean >= cost) {
     if (run(sim, stats, { type: 'goods.upgradeWarehouse', payload: { warehouseId: fullest.id, kind: 'shelves' } }))
-      rejectedSeen.set(goods, rejected);
+      stats.rejectedSeen = rejected;
   } else {
     launderFor(sim, stats, cost);
   }
@@ -868,20 +866,15 @@ function moveOn(sim: Simulation, stats: BotStats, options: BotOptions): void {
   ) {
     const next = chooseNextCity(state, here, options.cityOrder);
     if (next) {
-      // Startpaket: die beste neue Rechte Hand, freie Leute zuerst (die an Spots braucht der Statthalter), ein Fahrzeug.
-      const leaderId = startPackLeaders(state, here)[0]?.id ?? null;
-      const people = startPackStaff(state, here)
-        .filter((m) => m.id !== leaderId)
-        .sort((a, b) => Number(a.assignment !== null) - Number(b.assignment !== null) || b.level - a.level);
-      const staffIds = people.slice(0, START_PACK_MAX_STAFF).map((m) => m.id);
+      // Leute bleiben in ihrer Stadt; ein Fahrzeug kommt mit.
       const vehicleIds = freeVehicles(state, here)
         .slice(0, 1)
         .map((v) => v.id);
-      const pack = { leaderId, staffIds, vehicleIds };
+      const pack = { vehicleIds };
       const done = run(sim, stats, { type: 'city.handOver', payload: { cityId: here, toCityId: next, pack } });
       if (done) {
         stats.cities ??= [];
-        stats.cities.push({ from: here, to: next, day: Math.floor(state.time / 1440) + 1, pack: staffIds.length });
+        stats.cities.push({ from: here, to: next, day: Math.floor(state.time / 1440) + 1 });
         return;
       }
     }

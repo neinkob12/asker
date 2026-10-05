@@ -63,7 +63,10 @@ export function tick(ctx: Ctx): void {
   serveCustomers(ctx);
 }
 
-/** Wer in eine andere Stadt gefahren ist (staff.relocate), kommt an: Er ist dort, ohne Einsatz. */
+/**
+ * Wer in einem alten Spielstand noch in eine andere Stadt unterwegs ist (früher 'staff.relocate' und das Startpaket),
+ * kommt an: Er ist dort, ohne Einsatz. Neue Fahrten dieser Art gibt es nicht mehr.
+ */
 function arriveFromTravel(ctx: Ctx): void {
   for (const m of ctx.state.modules.staff.members) {
     if (m.assignment?.kind !== 'travel' || m.busyUntil > ctx.now) continue;
@@ -167,10 +170,12 @@ export function lieLow(ctx: Ctx, veedelId: string, until: number): number {
  * schreibt er dem Spieler. Die Antwort "Leute abziehen" lässt das Veedel abtauchen.
  */
 export function warnOfRaid(ctx: Ctx, veedelId: string, at: number, major = false): void {
-  const contact = bonusProvider(ctx.state, 'raidWarning');
+  // Nur ein Kontakt aus der Stadt des Veedels hört davon (Auftrag 43).
+  const city = veedelCity(veedelId);
+  const contact = bonusProvider(ctx.state, 'raidWarning', city);
   // Eine Großrazzia bekommt der Kontakt immer mit (einen Tag Vorlauf), normale Razzien nur mit seinem Bonus.
   // In Köln kennt man sich (Klüngel, Auftrag 30): Der Kontakt warnt öfter.
-  const chance = Math.min(1, bonus(ctx.state, 'raidWarning') + raidWarningBonus(veedelCity(veedelId)));
+  const chance = Math.min(1, bonus(ctx.state, 'raidWarning', city) + raidWarningBonus(city));
   if (!contact || (!major && !ctx.chance(chance))) return;
   const time = major ? `${clock.weekdayName(at)}, ${clock.formatTime(at)}` : clock.formatTime(at);
   messages.send(ctx, {

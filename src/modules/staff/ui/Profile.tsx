@@ -22,7 +22,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { bribeFactor, citiesUnlocked, cityName, travelMinutesBetween } from '../../city';
+import { bribeFactor, cityName } from '../../city';
 import { getWarehouses } from '../../goods';
 import { getSpots } from '../../spots';
 import {
@@ -225,7 +225,7 @@ function ProfileActions(props: { member: StaffMember }) {
         </p>
       )}
       {canMove && <MoveControl member={m} />}
-      <RelocateControl member={m} />
+      <TravelHint member={m} />
       <div class="staff-file__row">
         <span>Lohn</span>
         <Stepper
@@ -257,35 +257,16 @@ function ProfileActions(props: { member: StaffMember }) {
 }
 
 /**
- * In eine andere Stadt schicken (Auftrag 30): Fahrt über die A1, der Lohn läuft weiter. Nur ab zwei freien Städten und
- * für Leute ohne Führungsposten; unterwegs steht, wann sie ankommt.
+ * Unterwegs in eine andere Stadt (nur noch aus alten Spielständen): wann die Person ankommt. Leute in eine andere Stadt
+ * schicken geht seit dem Feedback vom 05.10.2026 nicht mehr, sie bleiben in der Stadt, in der du sie angeheuert hast.
  */
-function RelocateControl(props: { member: StaffMember }) {
-  const { state, dispatch } = useGame();
+function TravelHint(props: { member: StaffMember }) {
   const m = props.member;
-  if (m.assignment?.kind === 'travel') {
-    return (
-      <p class="ui-hint">
-        Unterwegs nach {cityName(m.assignment.targetId)}, Ankunft {clock.formatTime(m.busyUntil)}.
-      </p>
-    );
-  }
-  const targets = citiesUnlocked(state).filter((id) => id !== m.cityId);
-  const leads = m.assignment?.kind === 'veedel' || m.assignment?.kind === 'office';
-  if (targets.length === 0 || leads || m.status !== 'active') return null;
+  if (m.assignment?.kind !== 'travel') return null;
   return (
-    <>
-      {targets.map((cityId) => (
-        <Button
-          key={cityId}
-          wide
-          icon="car"
-          onClick={() => dispatch({ type: 'staff.relocate', payload: { staffId: m.id, cityId } })}
-        >
-          {`Nach ${cityName(cityId)} schicken (ca. ${clock.formatDuration(travelMinutesBetween(m.cityId, cityId))})`}
-        </Button>
-      ))}
-    </>
+    <p class="ui-hint">
+      Unterwegs nach {cityName(m.assignment.targetId)}, Ankunft {clock.formatTime(m.busyUntil)}.
+    </p>
   );
 }
 

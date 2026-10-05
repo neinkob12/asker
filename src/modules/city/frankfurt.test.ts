@@ -105,6 +105,9 @@ describe('Frankfurt (Auftrag 39)', () => {
       Math.round(packagePrice(sim.state, 'frankfurt', 'weed50', 'koeln') * 0.9),
     );
     expect(sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'halle-osthafen' } }).ok).toBe(true);
+    // Peters Frankfurter Kapitel belohnt das erste Lager vielleicht mit Ware (Auftrag 43): erst danach zählen.
+    sim.advance(10);
+    const before = getStock(sim.state, { cityId: 'frankfurt', productId: 'weed' });
     expect(
       sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'frankfurt', packageId: 'weed50' } }).ok,
     ).toBe(true);
@@ -112,7 +115,7 @@ describe('Frankfurt (Auftrag 39)', () => {
     expect(s.warehouseId).toBe('halle-osthafen');
     expect(s.arrivesAt - s.orderedAt).toBeLessThanOrEqual(60 * 2);
     sim.advance(s.arrivesAt - sim.state.time + 1);
-    expect(getStock(sim.state, { cityId: 'frankfurt', productId: 'weed' })).toBe(50);
+    expect(getStock(sim.state, { cityId: 'frankfurt', productId: 'weed' })).toBe(before + 50);
   });
 
   it('Kofi am Flughafen: nur in Frankfurt, klein, schnell, teuer, beste Ware, Luftfracht mit scharfem Zoll', () => {
@@ -120,7 +123,12 @@ describe('Frankfurt (Auftrag 39)', () => {
     const kofi = getSupplier(sim.state, 'flughafen');
     if (!kofi) throw new Error('kein Kofi');
     expect(getSuppliers(sim.state, 'koeln').map((s) => s.id)).not.toContain('flughafen');
-    // Zu Hause in Frankfurt (Supplier.home): Kofi und Toni melden sich, sobald Frankfurt frei ist.
+    // Zu Hause in Frankfurt (Supplier.home): Kofi und Toni sind dabei, sobald Frankfurt frei ist, und melden sich bei
+    // der ersten Ankunft (Auftrag 43).
+    expect(getSuppliers(sim.state, 'frankfurt').map((s) => s.id)).toContain('flughafen');
+    expect(messages.thread(sim.state, 'supplier:flughafen')).toEqual([]);
+    sim.ctx('city').emit('city.arrived', { cityId: 'frankfurt', first: true });
+    sim.advance(1);
     expect(messages.thread(sim.state, 'supplier:flughafen').some((m) => m.text.includes('Cargo City'))).toBe(true);
     expect(messages.thread(sim.state, 'supplier:frankfurt').some((m) => m.text.includes('zu Hause'))).toBe(true);
     expect(getSuppliers(sim.state, 'frankfurt').map((s) => s.id)).toContain('flughafen');

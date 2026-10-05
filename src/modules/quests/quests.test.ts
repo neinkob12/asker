@@ -5,7 +5,7 @@ import { allProducts, getStock } from '../goods';
 import { addHeat } from '../police';
 import { addInfluence, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
-import { CHAPTERS, PETER, QUEST_COUNT_BEFORE_36, QUESTS } from './config';
+import { CHAPTERS, PETER, QUEST_COUNT_BEFORE_36, QUESTS, QUESTS_ADDED_IN_43 } from './config';
 import {
   chapterName,
   completedQuests,
@@ -139,7 +139,7 @@ describe('quests', () => {
     expect(questsWaiting(sim.state)).toBe(false);
   });
 
-  it('Kapitel 7 "Moin Hamburg": Lager, Spot, erster Verkauf, Liegeplatz in Hamburg', () => {
+  it('Kapitel 7 "Moin Hamburg": Lager, Spot, erster Verkauf, Läufer, Bestellung, Liegeplatz in Hamburg', () => {
     const sim = createTestGame();
     sim.advance(10);
     jumpTo(sim, 'hhWarehouse');
@@ -157,10 +157,44 @@ describe('quests', () => {
     expect(sim.dispatch({ type: 'spots.unlock', payload: { spotId: 'hansaplatz' } }).ok).toBe(true);
     sim.advance(10);
     expect(currentQuest(sim.state)?.id).toBe('hhFirstSale');
+    sim.ctx('customers').emit('sale.completed', {
+      channel: 'street',
+      spotId: 'hansaplatz',
+      veedelId: 'st-georg',
+      productId: 'weed',
+      amount: 1,
+      quality: 0.6,
+      revenue: 50,
+      sellerId: null,
+      customerId: null,
+    });
+    sim.advance(10);
+    // Leute aus Köln zählen nicht (Auftrag 43): In Hamburg heuerst du neu an.
+    expect(currentQuest(sim.state)?.id).toBe('hhRunner');
+    expect(sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'hansaplatz' } }).ok).toBe(true);
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('hhOrder');
+    // Eine Bestellung für Köln zählt nicht, eine für Hamburg schon.
+    sim
+      .ctx('suppliers')
+      .emit('shipment.ordered', { shipmentId: 1, supplierId: 'toni', amount: 100, price: 500, cityId: 'koeln' });
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('hhOrder');
+    sim.ctx('suppliers').emit('shipment.ordered', {
+      shipmentId: 2,
+      supplierId: 'toni',
+      amount: 100,
+      price: 500,
+      cityId: 'hamburg',
+    });
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('hhBerth');
     expect(QUESTS.filter((q) => q.chapter === 6).map((q) => q.id)).toEqual([
       'hhWarehouse',
       'hhSpot',
       'hhFirstSale',
+      'hhRunner',
+      'hhOrder',
       'hhBerth',
     ]);
   });
@@ -247,7 +281,7 @@ describe('quests', () => {
     // Neu: Nach 'order' folgt 'revenue1k', der Hafen kommt erst später.
     expect(currentQuest(loaded.state)?.id).toBe('revenue1k');
     expect(loaded.state.modules.quests.done).toEqual(['firstSales', 'setPrice', 'order']);
-    expect(loaded.state.moduleVersions.quests).toBe(4);
+    expect(loaded.state.moduleVersions.quests).toBe(5);
     // Alles durch: Index am Ende.
     raw.modules.quests = { index: 26, progress: 0, done: QUESTS.map((q) => q.id), skipped: [], title: 'Boss von Köln' };
     expect(currentQuest(loadSimulation(raw, sim.modules).state)).toBeNull();
@@ -264,6 +298,26 @@ describe('quests', () => {
     expect(currentQuest(loaded.state)).toBeNull();
   });
 
+  it('Migration 4 → 5 (Auftrag 43): Der Index zeigt weiter auf dieselbe Quest, die neuen kommen später dran', () => {
+    const sim = createTestGame();
+    const raw = structuredClone(sim.state) as GameState;
+    const added = new Set(QUESTS_ADDED_IN_43);
+    const before = QUESTS.filter((q) => !added.has(q.id));
+    const at = before.findIndex((q) => q.id === 'beVeedel');
+    raw.modules.quests = { ...raw.modules.quests, index: at };
+    raw.moduleVersions.quests = 4;
+    const loaded = loadSimulation(raw, sim.modules);
+    expect(currentQuest(loaded.state)?.id).toBe('beVeedel');
+    // Alle durch: Jetzt wartet das Kapitel Rotterdam (es kommt erst nach dem Verkauf, in Rotterdam).
+    const done = structuredClone(sim.state) as GameState;
+    done.modules.quests = { ...done.modules.quests, index: before.length };
+    done.moduleVersions.quests = 4;
+    const waiting = loadSimulation(done, sim.modules);
+    expect(questsWaiting(waiting.state)).toBe(true);
+    waiting.advance(60);
+    expect(currentQuest(waiting.state)).toBeNull();
+  });
+
   it('Kapitel pro Stadt (Auftrag 36): Wer nach Köln eine andere Stadt nimmt, bekommt deren Kapitel', () => {
     const sim = createTestGame();
     sim.advance(10);
@@ -278,13 +332,33 @@ describe('quests', () => {
     sim.advance(10);
     expect(currentQuest(sim.state)?.id).toBe('beWarehouse');
     expect(chapterName(currentQuest(sim.state)?.chapter ?? 0)).toBe('Berliner Nächte');
-    for (const id of ['beWarehouse', 'beSpot', 'beFirstSale', 'beVeedel']) {
+    for (const id of ['beWarehouse', 'beSpot', 'beFirstSale', 'beRunner', 'beOrder', 'beVeedel']) {
       expect(currentQuest(sim.state)?.id).toBe(id);
       sim.dispatch({ type: 'quests.skip', payload: {} });
     }
     expect(questsWaiting(sim.state)).toBe(true);
     // Danach Hamburg: Das Kapitel steht weiter vorn in der Liste und kommt trotzdem dran.
     sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('hhWarehouse');
+  });
+
+  it('In der neuen Stadt geht ihr Kapitel vor (Auftrag 43): Liegengebliebenes aus Köln gilt als übersprungen', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    jumpTo(sim, 'setPrice');
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+    sim.advance(10);
+    // Noch in Köln: Die Kölner Quest bleibt.
+    expect(currentQuest(sim.state)?.id).toBe('setPrice');
+    sim.state.modules.city.present = 'hamburg';
+    sim.dispatch({ type: 'city.switch', payload: { cityId: 'hamburg' } });
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('hhWarehouse');
+    expect(sim.state.modules.quests.skipped).toContain('setPrice');
+    // Zurück in Köln bleibt das Hamburger Kapitel dran.
+    sim.state.modules.city.present = 'koeln';
+    sim.dispatch({ type: 'city.switch', payload: { cityId: 'koeln' } });
     sim.advance(10);
     expect(currentQuest(sim.state)?.id).toBe('hhWarehouse');
   });

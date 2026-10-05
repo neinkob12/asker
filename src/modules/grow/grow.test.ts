@@ -5,6 +5,7 @@ import { loadSimulation, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { playableCities, playerRank } from '../city';
 import { activeEncounters, autoResolveEncounter } from '../encounters';
+import { currentQuest, QUESTS } from '../quests';
 import { getStaffMember } from '../staff';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import {
@@ -496,7 +497,7 @@ describe('Spielstände (Auftrag 42)', () => {
     delete old.modules.grow;
     delete old.moduleVersions.grow;
     const loaded = loadSimulation(old as never, sim.modules);
-    expect(loaded.state.moduleVersions.trade).toBe(3);
+    expect(loaded.state.moduleVersions.trade).toBe(4);
     expect(loaded.state.modules.trade.origins).toEqual({});
     expect(loaded.state.modules.trade.stats.deliveredGrams).toBe(0);
     expect(loaded.state.modules.trade.stats.ownDelivered).toBe(0);
@@ -530,5 +531,60 @@ describe('Spielstände (Auftrag 42)', () => {
       crop: 5_000,
       cropOwn: 2_000,
     });
+  });
+});
+
+describe('Geld und Meldungen in der Produktion (Auftrag 43)', () => {
+  it('Löhne zahlt man vor Ort bar (schwarz), die Pacht sauber; ohne Arbeiter fällt die Ernte aus', () => {
+    const sim = openGame(7);
+    const events = recordEvents(sim);
+    expect(sim.dispatch({ type: 'grow.leaseFinca', payload: { siteId: 'el-tigre' } }).ok).toBe(true);
+    const finca = getFincas(sim.state)[0];
+    expect(
+      sim.dispatch({ type: 'grow.hire', payload: { fincaId: finca.id, role: 'worker', count: workersNeeded(finca) } })
+        .ok,
+    ).toBe(true);
+    const wages = eventsOfType(events, 'wallet.changed');
+    settle(sim, 3 * DAY);
+    const paid = eventsOfType(events, 'wallet.changed').slice(wages.length);
+    const wagePays = paid.filter((e) => e.payload.reason.startsWith('Löhne'));
+    const leasePays = paid.filter((e) => e.payload.reason.startsWith('Pacht'));
+    expect(wagePays.length).toBeGreaterThan(0);
+    expect(wagePays.every((e) => e.payload.kind === 'dirty')).toBe(true);
+    expect(leasePays.every((e) => e.payload.kind === 'clean')).toBe(true);
+    // Eine zweite Finca ohne Arbeiter: Die Ernte fällt aus, das Ereignis sagt es (0 g).
+    expect(sim.dispatch({ type: 'grow.leaseFinca', payload: { siteId: 'san-isidro' } }).ok).toBe(true);
+    const empty = getFincas(sim.state).find((f) => f.siteId === 'san-isidro');
+    if (!empty) throw new Error('keine zweite Finca');
+    settle(sim, 40 * DAY);
+    const harvests = eventsOfType(events, 'grow.harvested').filter((e) => e.payload.fincaId === empty.id);
+    expect(harvests.length).toBeGreaterThan(0);
+    expect(harvests[0].payload.grams).toBe(0);
+  });
+});
+
+describe('Kapitel Produktion (Auftrag 43)', () => {
+  it('nach den Anrufen führt der Anrufer durch Angebot, Finca und Arbeiter', () => {
+    const sim = soldGame(8);
+    // Rotterdam ist durch: Peter wartet auf das nächste Kapitel.
+    const q = sim.state.modules.quests;
+    for (const quest of QUESTS) if (!q.done.includes(quest.id) && quest.chapter < 11) q.skipped.push(quest.id);
+    q.index = -1;
+    readyForCalls(sim);
+    sim.advance(8 * 60);
+    expect(currentQuest(sim.state)?.id).toBe('pdOffer');
+    expect(currentQuest(sim.state)?.voice).toBe('grow');
+    expect(sim.dispatch({ type: 'grow.openRegion', payload: { regionId: 'kolumbien' } }).ok).toBe(true);
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('pdFinca');
+    sim.state.wallet.clean = 1_000_000;
+    sim.state.wallet.dirty = 1_000_000;
+    expect(sim.dispatch({ type: 'grow.leaseFinca', payload: { siteId: 'el-tigre' } }).ok).toBe(true);
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('pdWorkers');
+    const finca = getFincas(sim.state)[0];
+    sim.dispatch({ type: 'grow.hire', payload: { fincaId: finca.id, role: 'worker', count: workersNeeded(finca) } });
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('pdHarvest');
   });
 });
