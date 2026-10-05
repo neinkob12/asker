@@ -351,6 +351,8 @@ async function run() {
       window.koeln.runtime.api.setSpeed(0);
       window.koeln.runtime.api.openDialog('core.saves', {});
     });
+    // Die Test-Spielstände stehen in eingeklappten Gruppen pro Stadt (Auftrag 43): erst Köln aufklappen.
+    await page.locator('.ui-dialog summary', { hasText: 'Köln' }).first().click();
     const item = page.locator('.ui-dialog li', { hasText: 'Köln fast komplett' });
     await item.getByRole('button', { name: 'Laden', exact: true }).click();
     await page.waitForFunction(() => window.koeln.session.state?.meta.scenario === 'koeln-komplett', null, {
