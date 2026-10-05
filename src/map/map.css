@@ -603,3 +603,17 @@ button.map-target:hover .map-target__reticle {
 .map-perf.is-over {
   border-color: var(--color-bad);
 }
+
+/* Entzerrte Karten (declutterCards, Auftrag 43): Wer eine wichtigere Karte überdecken würde, wird zum Punkt. */
+.map-card.is-tucked {
+  width: 14px;
+  height: 14px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.map-card.is-tucked > * {
+  display: none;
+}

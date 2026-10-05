@@ -11,7 +11,7 @@
 
 import { render } from 'preact';
 import { contactLook, formatEuro, type GameState, personLook } from '../../../core';
-import { addHtmlMarker, FAR_ZOOM, type MapLayer } from '../../../map';
+import { addHtmlMarker, declutterCards, FAR_ZOOM, MAP_CARD, type MapLayer } from '../../../map';
 import { Avatar, Chip, Chips } from '../../../ui';
 import { cityReport } from '../../finance';
 import { getRightHand, hasFullPower } from '../../hierarchy';
@@ -213,7 +213,7 @@ export const citiesLayer: MapLayer = {
     for (const city of CITIES) {
       const { element } = addHtmlMarker(map, {
         position: city.center,
-        className: 'city-card',
+        className: `city-card ${MAP_CARD}`,
         anchor: 'bottom',
         tag: 'button',
         title: city.template ? `${city.name}: bald` : city.name,
@@ -224,9 +224,11 @@ export const citiesLayer: MapLayer = {
     }
     const refresh = (state: GameState) => {
       const far = map.getZoom() <= FAR_ZOOM;
+      let changed = false;
       for (const city of CITIES) {
         const card = cards.get(city.id);
         if (!card) continue;
+        if (card.element.hidden !== !far) changed = true;
         card.element.hidden = !far;
         if (!far) continue;
         const model = cardModel(state, city);
@@ -234,6 +236,9 @@ export const citiesLayer: MapLayer = {
         const key = JSON.stringify(model);
         if (key === card.key) continue;
         card.key = key;
+        changed = true;
+        // Entzerren mit den Karten der Hafen-Phase (Auftrag 43): die eigene Stadt zuerst, „bald“ zuletzt.
+        card.element.dataset.priority = model.active ? '4' : model.kind === 'soon' ? '0' : '2';
         // Nur die eigenen Klassen setzen: MapLibre hängt seine (Position, Anker) an dasselbe Element.
         for (const kind of ['mine', 'offer', 'free', 'soon', 'customer'])
           card.element.classList.toggle(`is-${kind}`, kind === model.kind);
@@ -245,6 +250,7 @@ export const citiesLayer: MapLayer = {
         );
         render(<CityCard city={city} model={model} />, card.element);
       }
+      if (changed) declutterCards(map);
     };
     /** Ansicht nach dem Zoomen: aus der Stadt heraus nach Deutschland, über einer freien Stadt wieder hinein. */
     const followZoom = (state: GameState) => {
@@ -280,6 +286,7 @@ export const citiesLayer: MapLayer = {
       if (!state) return;
       refresh(state);
       followZoom(state);
+      declutterCards(map);
     };
     map.on('zoomend', onZoom);
     return {

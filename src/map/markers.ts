@@ -132,3 +132,41 @@ export function addTargetMarker(map: MapLibreMap, options: TargetMarkerOptions):
     },
   };
 }
+
+/** Klasse für Glas-Karten weit herausgezoomt, die sich gegenseitig ausweichen (declutterCards). */
+export const MAP_CARD = 'map-card';
+
+const declutterPending = new WeakSet<MapLibreMap>();
+
+/**
+ * Karten entzerren (Auftrag 43: in der Europa-Ansicht lagen Rotterdam, Amsterdam und Antwerpen übereinander): Alle
+ * sichtbaren Marker mit der Klasse MAP_CARD werden nach Wichtigkeit (data-priority, höher zuerst) gelegt; wer eine
+ * schon gelegte Karte überdecken würde, schrumpft zum Punkt (is-tucked, antippen öffnet ihn trotzdem). Einmal pro
+ * Bild, egal wie viele Ebenen es anstoßen. Optik liest nur.
+ */
+export function declutterCards(map: MapLibreMap): void {
+  if (declutterPending.has(map)) return;
+  declutterPending.add(map);
+  requestAnimationFrame(() => {
+    declutterPending.delete(map);
+    const cards = [...map.getContainer().querySelectorAll<HTMLElement>(`.${MAP_CARD}`)].filter((c) => !c.hidden);
+    for (const card of cards) card.classList.remove('is-tucked');
+    const placed: DOMRect[] = [];
+    const measured = cards
+      .map((card) => ({ card, rect: card.getBoundingClientRect(), priority: Number(card.dataset.priority ?? 0) }))
+      .filter((c) => c.rect.width > 0)
+      .sort((a, b) => b.priority - a.priority || a.rect.top - b.rect.top);
+    const gap = 4;
+    for (const { card, rect } of measured) {
+      const hit = placed.some(
+        (p) =>
+          rect.left < p.right + gap &&
+          rect.right > p.left - gap &&
+          rect.top < p.bottom + gap &&
+          rect.bottom > p.top - gap,
+      );
+      if (hit) card.classList.add('is-tucked');
+      else placed.push(rect);
+    }
+  });
+}

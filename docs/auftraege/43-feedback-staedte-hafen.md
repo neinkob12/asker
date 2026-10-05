@@ -105,7 +105,8 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] D14 Kartell und Behörden mit Zahlen („von 100“, Chance und Verlust ohne Anteil); stilles Zurückfallen der
   Verpackung melden.
 - [ ] D15 HUD „Anbau“: Ausfuhr-kg, Tage bis zur Ernte, Warnfarbe bei Behörden oder Pacht.
-- [ ] D16 Europa-Ansicht am Desktop: Das Handy verdeckt Rotterdam und Marokko (Padding rechts mit dem Handy).
+- [x] D16 Europa-Ansicht am Desktop: Das Handy verdeckt Rotterdam und Marokko (Padding rechts mit dem Handy).
+  Erledigt: Der Rahmen der Übersicht rechnet am Desktop die Breite des Handys ein.
 
 ## E. Prüfer „Städte“ (Sonnet-Agent, 05.10.2026): Was aus der alten Stadt noch durchsickert
 
@@ -174,7 +175,8 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   Erledigt: Fußnote aus der echten Frist; Guide mit fünf Schritten (wo tippen, Ankunftsrunde, Laufzeit der Container aus den Daten, Frist, Nachfrist, Abschlag, Folgen, sauberes Geld).
 - [x] F8 Gesperrte Gang-Kunden (Anteil 0 %, Rache) mit Chip und Grund oder ausblenden.
   Erledigt: `customerBlocked` (exportiert): Chip „kauft nicht bei dir“ in der Kundenliste, Satz mit Grund auf der Kunden-Seite.
-- [ ] F9 Europa-Karte: Karten überlappen (Rotterdam/Amsterdam/Antwerpen, Düsseldorf über Köln), Knopf „Europa“.
+- [x] F9 Europa-Karte: Karten überlappen (Rotterdam/Amsterdam/Antwerpen, Düsseldorf über Köln), Knopf „Europa“.
+  Erledigt: `declutterCards` in `src/map` (Klasse `MAP_CARD`, `data-priority`): Karten, die eine wichtigere überdecken würden, werden zum Punkt (Häfen vor Kunden mit Bestellung vor dem Rest, eigene Stadt zuerst). Knopf „Übersicht“ (Globus) in der Kartensteuerung.
 - [x] F10 Einkaufsliste mit Preis ab €/g und „Tage“ ausgeschrieben, alle Waren; im Panel offener Bedarf.
   Erledigt: Einkaufsliste mit „ab … €/g“ (großer Container mit Fracht), allen Waren und „Tage“ ausgeschrieben; im Einkauf-Panel offener Bedarf gegen Bestand und Container unterwegs.
 - [x] F11 „Zoll X %“ heißt dreierlei: Kontrollchance, Grenzchance, Strenge. Eindeutig benennen.
@@ -193,7 +195,8 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   Erledigt: Tippfehler behoben.
 - [x] F18 Köln-Reste in der Suche (Spots, Veedel) und Texten (Kasse, Geldwäsche) nach dem Verkauf.
   Erledigt: Suche nur mit Spots und Veedeln der aktiven Stadt, Polizei-Eintrag nach dem Verkauf aus, Kasse-Untertitel ohne Veedel/Spot/Leutnant.
-- [ ] F19 Test-Spielstände `hafen`/`hafen-europa` neu erzeugen, „Ankunft in Rotterdam“ vor dem ersten Bot-Zug.
+- [x] F19 Test-Spielstände `hafen`/`hafen-europa` neu erzeugen, „Ankunft in Rotterdam“ vor dem ersten Bot-Zug.
+  Erledigt: Alle Test-Spielstände neu gebaut (`npm run saves:build`); „hafen“ ist der Moment der Ankunft in Rotterdam, vor dem ersten Bot-Zug.
 - [x] F20 App „Kunden“ heißt besser „Handel“ (Reiter „Kunden“ bleibt).
   Erledigt: App heißt „Handel“ (Titel, Quest-Hinweise, Texte), der Reiter „Kunden“ bleibt.
 

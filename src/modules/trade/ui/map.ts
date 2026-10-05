@@ -6,7 +6,7 @@
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import { distanceMeters, formatNumber, type GameState, type LngLat } from '../../../core';
-import { addHtmlMarker, FAR_ZOOM, type MapLayer, mapToken } from '../../../map';
+import { addHtmlMarker, declutterCards, FAR_ZOOM, MAP_CARD, type MapLayer, mapToken } from '../../../map';
 import { openRegions } from '../../grow';
 import { customsHeat, customsLevel } from '../../police';
 import { seaLanes, seaPorts, shipRoute } from '../../roads';
@@ -162,7 +162,7 @@ export const europeLayer: MapLayer = {
     const addCard = (id: string, at: LngLat, onClick: () => void, anchor: 'top' | 'bottom' = 'bottom') => {
       const { element } = addHtmlMarker(map, {
         position: at,
-        className: 'trade-card',
+        className: `trade-card ${MAP_CARD}`,
         anchor,
         tag: 'button',
         onClick,
@@ -213,9 +213,11 @@ export const europeLayer: MapLayer = {
         });
       }
       const far = map.getZoom() <= FAR_ZOOM;
+      let changed = false;
       for (const [id, card] of cards) {
         // Hamburg ist schon eine Stadt mit Karte: Ihr Hafen erscheint nur, wenn du dort einen Liegeplatz hast.
         const hidden = !active || !far || (id === 'port:hamburg' && !ownedPorts(state).includes('hamburg'));
+        if (card.element.hidden !== hidden) changed = true;
         card.element.hidden = hidden;
         if (hidden) continue;
         const model = id.startsWith('port:')
@@ -226,10 +228,14 @@ export const europeLayer: MapLayer = {
         const key = JSON.stringify(model);
         if (key === card.key) continue;
         card.key = key;
+        changed = true;
+        // Wichtigkeit beim Entzerren (Auftrag 43): Häfen vor Kunden mit Bestellung vor dem Rest.
+        card.element.dataset.priority = id.startsWith('port:') ? '3' : model.lines.includes('Bestellung') ? '2' : '1';
         card.element.classList.toggle('is-port', id.startsWith('port:'));
         card.element.setAttribute('aria-label', [model.title, ...model.lines].join('. '));
         renderCard(card.element, model.title, model.lines);
       }
+      if (changed) declutterCards(map);
       if (!active) return;
       const deliveries = getDeliveries(state);
       // Container auf der Linie fahren den Seeweg einmal; eigene Schiffe hin und zurück (Auftrag 41).
@@ -286,6 +292,7 @@ export const europeLayer: MapLayer = {
     const onZoom = () => {
       const state = ctx.getState();
       if (state) refresh(state);
+      declutterCards(map);
     };
     map.on('zoomend', onZoom);
     return {
