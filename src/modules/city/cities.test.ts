@@ -96,7 +96,8 @@ describe('Städte (Auftrag 30)', () => {
     expect(cityAt(6.9712, 50.9862)).toBe('koeln');
     expect(cityAt(10.0045, 53.5282)).toBe('hamburg');
     expect(cityAt(8.68, 50.11)).toBe('frankfurt');
-    expect(cityAt(13.4, 52.52)).toBe('hamburg');
+    // Außerhalb aller Rahmen gilt die nächste Stadt: Bremen gehört zu Hamburg.
+    expect(cityAt(8.8, 53.08)).toBe('hamburg');
   });
 
   it('am Anfang ist nur Köln frei und live; umschalten geht erst nach der Übergabe, nur durch den Spieler', () => {

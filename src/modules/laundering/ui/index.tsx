@@ -4,7 +4,7 @@
 // Freischalten mit sauberem oder Schwarzgeld. Schwarzgeld und sauberes Geld im HUD öffnen diese App.
 
 import { useState } from 'preact/hooks';
-import { clock, formatEuro, formatPercent, wallet } from '../../../core';
+import { clock, formatEuro, formatPercent, type GameState, wallet } from '../../../core';
 import {
   Chips,
   Disclosure,
@@ -31,6 +31,7 @@ import {
   channelDuration,
   channelFee,
   channelFree,
+  channelHeatAbove,
   getBatches,
   getChannel,
   isChannelUnlocked,
@@ -56,10 +57,11 @@ function readyLabel(now: number, readyAt: number): string {
 }
 
 /** Risiko eines Wegs in einem Chip: kein Risiko, oder Heat ab so viel gleichzeitig. */
-function riskChip(c: LaunderingChannel) {
+function riskChip(state: GameState, c: LaunderingChannel) {
   if (c.heatPer1000 === 0) return { label: 'fast kein Risiko', icon: 'shieldCheck', color: 'money' as const };
   const level = c.heatPer1000 >= 2 ? 'Heat' : 'etwas Heat';
-  return { label: `${level} ab ${formatEuro(c.heatAbove)} auf einmal`, icon: 'flame', color: 'danger' as const };
+  const above = channelHeatAbove(state, c.id);
+  return { label: `${level} ab ${formatEuro(above)} auf einmal`, icon: 'flame', color: 'danger' as const };
 }
 
 /** Ein freigeschalteter Weg: Kennzahlen als Chips, Betrag, Vorgaben, Waschen. */
@@ -98,7 +100,7 @@ function OpenChannel(props: { channel: LaunderingChannel }) {
             icon: 'gauge',
             color: free <= 0 ? 'warn' : 'system',
           },
-          riskChip(c),
+          riskChip(state, c),
         ]}
       />
       <List>
@@ -176,7 +178,7 @@ function LockedChannel(props: { channel: LaunderingChannel }) {
         items={[
           { label: `ab ${formatEuro(c.minAmount)}`, icon: 'coins' },
           { label: `bis ${formatEuro(channelCapacity(state, c.id))} auf einmal`, icon: 'gauge' },
-          riskChip(c),
+          riskChip(state, c),
           c.unlock?.reputation !== undefined && {
             label: `Ruf ab ${c.unlock.reputation}`,
             icon: 'star',
@@ -243,7 +245,7 @@ function LaunderingApp() {
           count={batches.length}
           value={formatEuro(inProgress)}
           collapsible
-          note={`Frei über alle Wege: ${formatEuro(launderingCapacity(state) - inProgress)}.`}
+          note={`Frei über alle Wege: ${formatEuro(Math.max(0, launderingCapacity(state) - inProgress))}.`}
         >
           <List>
             {batches.map((b) => (

@@ -224,7 +224,7 @@ export const SUPPLIER_ROUTES: Readonly<Record<string, Readonly<Record<string, Ro
   koeln: { koeln: 'local' },
   hamburg: { hamburg: 'local' },
   frankfurt: { frankfurt: 'local' },
-  amsterdam: { koeln: 'border', hamburg: 'border' },
+  amsterdam: { koeln: 'border', hamburg: 'border', frankfurt: 'border' },
   flughafen: { frankfurt: 'air' },
 };
 

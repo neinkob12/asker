@@ -314,7 +314,7 @@ export const DEALERS: readonly DealerInfo[] = [
   },
   // Frankfurt (Auftrag 39)
   {
-    id: 'yusuf',
+    id: 'yusuf-ffm',
     name: 'Yusuf (Bahnhofsviertel)',
     cityId: 'frankfurt',
     veedelId: 'bahnhofsviertel',

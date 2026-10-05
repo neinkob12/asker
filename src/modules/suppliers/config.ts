@@ -227,7 +227,7 @@ export const SUPPLIERS: readonly Supplier[] = [
     // Auftrag 39: Fracht am Frankfurter Flughafen. Nur in Frankfurt, klein, schnell, teuer, beste Ware, und der Zoll am
     // Frachtterminal ist scharf (customs).
     id: 'flughafen',
-    name: 'Flughafen',
+    name: 'Cargo City',
     contactName: 'Kofi',
     kind: 'city',
     lng: 8.5893,

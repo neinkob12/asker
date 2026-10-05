@@ -5,10 +5,11 @@
 import { describe, expect, it } from 'vitest';
 import { MINUTES_PER_DAY, type Simulation } from '../../core';
 import { createTestGame } from '../../core/testing';
+import { DEALERS } from '../customers';
 import { CITY_EVENTS, eventFactor, isEventActive } from '../events';
 import { getGangs } from '../gangs';
 import { getStock, warehouseSites } from '../goods';
-import { channelCapacity, getChannel, launderingCapacity } from '../laundering';
+import { channelCapacity, channelFree, channelHeatAbove, getChannel, launderingCapacity } from '../laundering';
 import { networkStats, roadApproaches, roadNetworkAt } from '../roads';
 import { getAllSpots, spotCity } from '../spots';
 import { getSupplier, getSuppliers, packagePrice, rollShipmentProblem, routeKindOf, supplierIn } from '../suppliers';
@@ -137,22 +138,28 @@ describe('Frankfurt (Auftrag 39)', () => {
     ).toBe(true);
   });
 
-  it('Geldwäsche: In Frankfurt nehmen alle Wege anderthalbmal so viel auf einmal', () => {
+  it('Geldwäsche: Wo du in Frankfurt bist, nehmen alle Wege anderthalbmal so viel auf einmal', () => {
     const sim = createTestGame();
     const kiosk = getChannel('kiosk');
+    const salon = getChannel('laundromat');
     expect(channelCapacity(sim.state, 'kiosk')).toBe(kiosk.capacity);
     const before = launderingCapacity(sim.state);
     expect(sim.dispatch({ type: 'city.unlock', payload: { cityId: 'frankfurt' } }, { actor: 'system' }).ok).toBe(true);
+    // Nur anschauen reicht nicht: Der Faktor hängt an der Stadt, in der du bist.
     expect(sim.dispatch({ type: 'city.switch', payload: { cityId: 'frankfurt' } }).ok).toBe(true);
+    expect(channelCapacity(sim.state, 'kiosk')).toBe(kiosk.capacity);
+    sim.state.modules.city.present = 'frankfurt';
     expect(channelCapacity(sim.state, 'kiosk')).toBe(Math.round(kiosk.capacity * 1.5));
+    expect(channelHeatAbove(sim.state, 'laundromat')).toBe(Math.round(salon.heatAbove * 1.5));
     expect(launderingCapacity(sim.state)).toBe(Math.round(before * 1.5));
     sim.state.wallet.dirty = kiosk.capacity * 2;
-    expect(
-      sim.dispatch({
-        type: 'laundering.launder',
-        payload: { amount: Math.round(kiosk.capacity * 1.4), channel: 'kiosk' },
-      }).ok,
-    ).toBe(true);
+    const amount = Math.round(kiosk.capacity * 1.4);
+    expect(sim.dispatch({ type: 'laundering.launder', payload: { amount, channel: 'kiosk' } }).ok).toBe(true);
+    // Zurück in Köln: Was läuft, läuft weiter; frei ist nichts mehr, aber nie weniger als nichts.
+    sim.state.modules.city.present = 'koeln';
+    expect(channelCapacity(sim.state, 'kiosk')).toBe(kiosk.capacity);
+    expect(channelFree(sim.state, 'kiosk')).toBe(0);
+    expect(sim.dispatch({ type: 'laundering.launder', payload: { amount: 100, channel: 'kiosk' } }).ok).toBe(false);
   });
 
   it('Messe und Museumsuferfest: mehr Kundschaft am Main und rund um die Messe', () => {
@@ -165,13 +172,28 @@ describe('Frankfurt (Auftrag 39)', () => {
       for (const id of e.area.veedel ?? []) expect(getVeedel(id)?.cityId, `${e.id}: ${id}`).toBe('frankfurt');
     }
     const fest = CITY_EVENTS.find((e) => e.id === 'museumsuferfest');
-    if (!fest || fest.schedule.kind !== 'cycle') throw new Error('kein Museumsuferfest');
+    if (fest?.schedule.kind !== 'cycle') throw new Error('kein Museumsuferfest');
     sim.state.time = fest.schedule.firstDay * MINUTES_PER_DAY + 12 * 60;
     expect(isEventActive(fest, sim.state.time)).toBe(true);
     expect(eventFactor(sim.state, 'demand', { spotId: 'museumsufer' })).toBeGreaterThan(2);
     expect(eventFactor(sim.state, 'demand', { spotId: 'museumsufer' })).toBeGreaterThan(
       eventFactor(sim.state, 'demand', { spotId: 'kaiserstrasse' }),
     );
+  });
+
+  it('IDs in den Datenlisten sind über alle Städte eindeutig (Stammabnehmer, Lager, Events, Gangs, Spots)', () => {
+    const sim = createTestGame();
+    const lists: Record<string, readonly string[]> = {
+      DEALERS: DEALERS.map((d) => d.id),
+      WAREHOUSES: warehouseSites().map((w) => w.id),
+      CITY_EVENTS: CITY_EVENTS.map((e) => e.id),
+      GANGS: getGangs(sim.state).map((g) => g.id),
+      SPOTS: getAllSpots(sim.state).map((s) => s.id),
+    };
+    for (const [name, ids] of Object.entries(lists)) {
+      const twice = ids.filter((id, i) => ids.indexOf(id) !== i);
+      expect(twice, name).toEqual([]);
+    }
   });
 
   it('gleicher Seed, gleiche Befehle: Frankfurt spielt sich gleich', () => {

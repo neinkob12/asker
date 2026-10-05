@@ -345,7 +345,7 @@ export const GANGS: readonly Gang[] = [
     id: 'ff-hoechst',
     cityId: 'frankfurt',
     name: 'Farbwerker',
-    color: '#e67e22',
+    color: '#a3cb38',
     homeVeedelId: 'hoechst',
     boss: 'Erkan Doğan, genannt „Chemie“',
     crew: 'Leute der Farbwerker',

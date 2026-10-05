@@ -7,7 +7,8 @@
 //
 // Öffentliche API:
 //   getChannels(state), getChannel(id), isChannelUnlocked(state, id), channelFee(state, id), channelDuration(id, amount),
-//   channelCapacity(state, id) (Auftrag 39: mal LAUNDERING_CAPACITY_BY_CITY der aktiven Stadt), channelFree(state, id), canUnlockChannel(state, id), launderingFee(state), launderingDuration(amount, id?),
+//   channelCapacity(state, id), channelHeatAbove(state, id) (Auftrag 39: mal LAUNDERING_CAPACITY_BY_CITY der Stadt, in
+//   der du bist), channelFree(state, id), canUnlockChannel(state, id), launderingFee(state), launderingDuration(amount, id?),
 //   launderingCapacity(state), amountInProgress(state, id?), getBatches(state), batchProgress(state, batch),
 //   getLaunderingStats(state), LAUNDERING_CHANNELS, MIN_LAUNDERING_AMOUNT
 // Befehle: 'laundering.launder', 'laundering.unlock'
@@ -24,7 +25,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity } from '../city';
+import { presentCity } from '../city';
 import { addHeat } from '../police';
 import { getReputation, reputationLabel } from '../reputation';
 import { bonus } from '../staff';
@@ -133,11 +134,21 @@ export function amountInProgress(state: GameState, id?: LaunderingChannelId): nu
 }
 
 /**
- * Obergrenze eines Wegs in der aktiven Stadt (Auftrag 39): capacity mal LAUNDERING_CAPACITY_BY_CITY, in Frankfurt
- * mehr.
+ * Faktor auf Obergrenze und Heat-Schwelle (Auftrag 39): LAUNDERING_CAPACITY_BY_CITY der Stadt, in der du bist (nicht
+ * der angezeigten; kurz umschalten schenkt nichts).
  */
+function cityFactor(state: GameState): number {
+  return LAUNDERING_CAPACITY_BY_CITY[presentCity(state)] ?? 1;
+}
+
+/** Obergrenze eines Wegs (Auftrag 39): capacity mal dem Faktor der Stadt, in der du bist, in Frankfurt mehr. */
 export function channelCapacity(state: GameState, id: LaunderingChannelId): number {
-  return Math.round(getChannel(id).capacity * (LAUNDERING_CAPACITY_BY_CITY[activeCity(state)] ?? 1));
+  return Math.round(getChannel(id).capacity * cityFactor(state));
+}
+
+/** Ab so viel gleichzeitig bringt ein Weg Heat (heatAbove mit demselben Faktor wie die Obergrenze). */
+export function channelHeatAbove(state: GameState, id: LaunderingChannelId): number {
+  return Math.round(getChannel(id).heatAbove * cityFactor(state));
 }
 
 /** Wie viel über einen Weg gerade noch hineinpasst. */
@@ -225,8 +236,9 @@ function startBatch(ctx: Ctx, channel: LaunderingChannel, amount: number): Laund
   ctx.state.modules.laundering.batches.push(batch);
   // Risiko: Läuft über diesen Weg mehr als die Schwelle, steigt der Heat im Veedel des Geschäfts.
   const running = amountInProgress(ctx.state, channel.id);
-  if (channel.heatPer1000 > 0 && running > channel.heatAbove) {
-    const over = Math.min(amount, running - channel.heatAbove);
+  const heatAbove = channelHeatAbove(ctx.state, channel.id);
+  if (channel.heatPer1000 > 0 && running > heatAbove) {
+    const over = Math.min(amount, running - heatAbove);
     addHeat(ctx, channel.veedelId, (over / 1000) * channel.heatPer1000);
   }
   ctx.emit('laundering.started', { batchId: batch.id, amount, fee, readyAt: batch.readyAt, channel: channel.id });

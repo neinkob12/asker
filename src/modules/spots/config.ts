@@ -524,7 +524,6 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
     unlockCost: 1100,
     audience: { banker: 1.6, tourist: 1.6, stoner: 0.3 },
   },
-  // Veedel-Kneipen (Auftrag 30, Etappe 7): zum Kaufen, offen 17 bis 1 Uhr, weniger Laufkundschaft, viele Stammgäste.
   // Frankfurt (Auftrag 39): alles zum Freischalten, Preise wie in Köln mal dem Immobilien-Faktor (1,6). Viel
   // Banker-Kundschaft (Westend, Messe, EZB, Bürostadt, Flughafen), das Bahnhofsviertel mit der meisten Nachfrage.
   {
@@ -827,6 +826,7 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
     unlockCost: 1600,
     audience: { tourist: 2.0, banker: 1.3 },
   },
+  // Veedel-Kneipen (Auftrag 30, Etappe 7): zum Kaufen, offen 17 bis 1 Uhr, weniger Laufkundschaft, viele Stammgäste.
   {
     id: 'kneipe-severin',
     name: 'Kneipe Severinstraße',
