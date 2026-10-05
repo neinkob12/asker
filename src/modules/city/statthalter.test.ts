@@ -8,7 +8,9 @@ import { getVehicles } from '../fleet';
 import {
   getRightHand,
   hasFullPower,
+  isCapo,
   isTaskUnlocked,
+  RIGHT_HAND_DEMAND,
   RIGHT_HAND_RANK_XP,
   rankForXp,
   rightHandTitle,
@@ -134,6 +136,39 @@ describe('Startpaket (Auftrag 36)', () => {
     expect(eventsOfType(events, 'hierarchy.rightHandAppointed').map((e) => e.payload.staffId)).toContain(capo.id);
     // Köln führt weiter die alte Rechte Hand, als Statthalter.
     expect(getRightHand(sim.state, 'koeln')?.staffId).toBe(boss.id);
+  });
+});
+
+describe('Startpaket mit Capo (Auftrag 34)', () => {
+  it('Capos stehen vorn; der Capo geht als Rechte Hand, ist dort kein Capo mehr und behält ihren Anspruch', () => {
+    const sim = quietGame();
+    const { capo } = readyKoeln(sim);
+    for (const id of ['zuelpicher', 'rudolfplatz', 'aachener-weiher']) {
+      if (!sim.state.modules.spots.unlocked.includes(id)) sim.state.modules.spots.unlocked.push(id);
+    }
+    const veteran = hire(sim, 8, 90);
+    const spots = (staffId: string, spotIds: string[]) =>
+      sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId, spotIds } }).ok;
+    expect(spots(veteran.id, ['rudolfplatz'])).toBe(true);
+    expect(spots(capo.id, ['neumarkt', 'zuelpicher', 'aachener-weiher'])).toBe(true);
+    expect(sim.dispatch({ type: 'hierarchy.appointCapo', payload: { staffId: capo.id, lieutenantIds: [] } }).ok).toBe(
+      true,
+    );
+    // Der Leutnant mit Level 8 ist kein Capo: vorgeschlagen wird nur der Capo.
+    expect(startPackLeaders(sim.state, 'koeln').map((m) => m.id)).toEqual([capo.id]);
+    expect(
+      sim.dispatch({
+        type: 'city.handOver',
+        payload: { cityId: 'koeln', toCityId: 'hamburg', pack: { leaderId: capo.id } },
+      }).ok,
+    ).toBe(true);
+    expect(isCapo(sim.state, capo.id)).toBe(false);
+    const travel = cityTravel(sim.state);
+    if (!travel) throw new Error('keine Fahrt');
+    sim.advance(travel.arrivesAt - sim.state.time + 10);
+    expect(getRightHand(sim.state, 'hamburg')?.staffId).toBe(capo.id);
+    sim.advance(1440);
+    expect(getStaffMember(sim.state, capo.id)?.demand).toBe(RIGHT_HAND_DEMAND);
   });
 });
 

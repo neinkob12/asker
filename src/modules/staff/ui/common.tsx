@@ -2,8 +2,10 @@
 
 import type { JSX } from 'preact';
 import { personLook } from '../../../core';
-import { Avatar, type CategoryColor, Icon, ProgressBar, Tag } from '../../../ui';
+import { Avatar, type CategoryColor, type ChipSpec, Icon, ProgressBar, Tag } from '../../../ui';
 import {
+  RELATIONS,
+  type RelationKind,
   ROLE_INFO,
   STAT_KEYS,
   STAT_NAMES,
@@ -13,7 +15,28 @@ import {
   type StaffStats,
   type StaffStatus,
   type StatKey,
+  TRAITS,
+  type TraitId,
+  traitName,
 } from '../index';
+
+/** Farbe einer Eigenschaft: gut grün, schlecht rot, beides gelb (Auftrag 34). */
+const TONE_COLORS: Record<'good' | 'bad' | 'mixed', CategoryColor> = { good: 'money', bad: 'danger', mixed: 'warn' };
+
+/** Eigenschaften als Chips (Symbol, Farbe, Name; der Satz dazu als Tooltip). */
+export function traitChips(person: { name: string; traits?: readonly TraitId[] }): ChipSpec[] {
+  return (person.traits ?? []).map((t) => ({
+    label: traitName(t, person.name),
+    icon: TRAITS[t].icon,
+    color: TONE_COLORS[TRAITS[t].tone],
+    title: TRAITS[t].hint,
+  }));
+}
+
+/** Symbol und Farbe einer Beziehung. */
+export function relationLook(kind: RelationKind): { icon: string; color: CategoryColor } {
+  return { icon: RELATIONS[kind].icon, color: RELATIONS[kind].tone === 'good' ? 'people' : 'danger' };
+}
 
 /** Symbol je Rolle (Namen aus dem Icon-Set, keine Emojis). */
 export const ROLE_ICONS: Record<StaffRole, string> = {

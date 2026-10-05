@@ -170,7 +170,7 @@ function HandoverDialog(props: { cityId: string; toCityId?: string }) {
                   icon="crown"
                   color="brand"
                   title="Keine neue Rechte Hand"
-                  meta={`Ein Leutnant ab Level ${START_PACK_LEADER_MIN_LEVEL} kann mitkommen und dort Rechte Hand werden.`}
+                  meta={`Ein Capo, sonst ein Leutnant ab Level ${START_PACK_LEADER_MIN_LEVEL}, kann mitkommen und dort Rechte Hand werden.`}
                 />
               </ListItem>
             ) : (

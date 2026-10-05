@@ -36,7 +36,7 @@ import {
   presentCity,
   travelMinutesBetween,
 } from '../modules/city';
-import { allWaiting, canServe } from '../modules/customers';
+import { allWaiting, canServe, dealerStage } from '../modules/customers';
 import {
   activeEncounters,
   chooseAuto,
@@ -60,8 +60,13 @@ import {
   warehouseSites,
 } from '../modules/goods';
 import {
+  CAPO_ADVICE_LIEUTENANTS,
+  CAPO_MAX_LIEUTENANTS,
+  canBeCapo,
   canBeRightHand,
+  capoCandidates,
   fullPowerMissing,
+  getCapos,
   getRightHand,
   hasFullPower,
   isLieutenant,
@@ -96,7 +101,7 @@ import {
   spotCity,
   spotUpgrades,
 } from '../modules/spots';
-import { bailCost, getStaff, runnerHireCost, securityAt } from '../modules/staff';
+import { bailCost, getStaff, openStories, runnerHireCost, type StoryId, securityAt } from '../modules/staff';
 import {
   availableCredit,
   availablePackages,
@@ -507,6 +512,7 @@ function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
 
   appointLieutenants(sim, stats);
   appointRightHand(sim, stats);
+  appointCapo(sim, stats);
 
   // Sicherheit: eine pro Veedel mit Leuten, sobald eine Gang droht.
   const threatened = getGangs(state, city).some((g) => (state.modules.gangs.gangs[g.id]?.hostility ?? 0) >= 40);
@@ -572,6 +578,32 @@ function appointLieutenants(sim: Simulation, stats: BotStats): void {
 }
 
 /**
+ * Auftrag 34: Ab acht Leutnants in der Stadt macht er den erfahrensten, der es kann (Level 5, drei Spots), zum Capo,
+ * mit bis zu drei Leutnants aus dessen Bezirk. Kommen neue Leutnants in den Bezirk, füllt er auf.
+ */
+function appointCapo(sim: Simulation, stats: BotStats): void {
+  const state = sim.state;
+  const city = activeCity(state);
+  const lieutenants = getStaff(state, { cityId: city }).filter((m) => isLieutenant(state, m.id));
+  if (lieutenants.length < CAPO_ADVICE_LIEUTENANTS) return;
+  const existing = getCapos(state, city);
+  for (const capo of existing) {
+    if (capo.lieutenants.length >= CAPO_MAX_LIEUTENANTS) continue;
+    const more = capoCandidates(state, capo.staffId).filter((id) => !capo.lieutenants.includes(id));
+    if (more.length === 0) continue;
+    const ids = [...capo.lieutenants, ...more].slice(0, CAPO_MAX_LIEUTENANTS);
+    run(sim, stats, { type: 'hierarchy.appointCapo', payload: { staffId: capo.staffId, lieutenantIds: ids } });
+  }
+  if (existing.length > 0 || money(state) <= reserve(state) + 1000) return;
+  const best = lieutenants
+    .filter((m) => canBeCapo(state, m.id).ok)
+    .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id))[0];
+  if (!best) return;
+  const ids = capoCandidates(state, best.id).slice(0, CAPO_MAX_LIEUTENANTS);
+  run(sim, stats, { type: 'hierarchy.appointCapo', payload: { staffId: best.id, lieutenantIds: ids } });
+}
+
+/**
  * Später: eine Rechte Hand, sobald es zwei Leutnants gibt und jemand die Voraussetzungen erfüllt. Der Bot gibt ihr
  * alle Aufgaben (sie laufen an, sobald ihre Stufe reicht): Aufträge fährt sie, den Hafen holt sie ab, bestellt nach,
  * stellt ein, macht Großhandel bis 10.000 € und wäscht über 8.000 € die Hälfte.
@@ -611,6 +643,47 @@ function mayReplace(state: GameState, options: BotOptions): boolean {
 }
 
 /**
+ * Geschichten der Leute (Auftrag 34): kleine Geldbitten aus der Portokasse (höchstens ein Zehntel), Kaution für
+ * Geschwister bis zu einem Viertel, frei geben, verwarnen statt kürzen, versprechen statt Lohn. Gibt true zurück, wenn
+ * die Nachricht eine Geschichte war.
+ */
+function answerStory(
+  sim: Simulation,
+  stats: BotStats,
+  messageId: number,
+  options: readonly { id: string; command?: Command }[],
+): boolean {
+  const command = options.find((o) => o.command?.type === 'staff.storyChoice')?.command;
+  if (command?.type !== 'staff.storyChoice') return false;
+  const story = openStories(sim.state).find((s) => s.id === command.payload.storyId);
+  if (!story) return false;
+  const cheap = story.amount <= money(sim.state) / 10;
+  const PREFER: Record<StoryId, string[]> = {
+    loan: cheap ? ['give'] : ['refuse'],
+    familyTime: ['off'],
+    drunk: ['warn'],
+    hangover: ['ok'],
+    debt: cheap ? ['pay'] : ['refuse'],
+    gamblerWin: ['cheer'],
+    promotion: ['promise'],
+    raise: ['yes'],
+    bragged: ['shut'],
+    scared: ['pull'],
+    loyalTip: ['hide'],
+    hothead: ['warn'],
+    rivalsFight: ['both'],
+    friendsParty: cheap ? ['pay'] : ['no'],
+    coupleMoveIn: cheap ? ['pay'] : ['no'],
+    siblingJailed: story.amount <= money(sim.state) / 4 ? ['bail', 'wait'] : ['wait'],
+  };
+  for (const optionId of [...PREFER[story.story], ...options.map((o) => o.id)]) {
+    if (!options.some((o) => o.id === optionId)) continue;
+    if (run(sim, stats, { type: 'messages.answer', payload: { messageId, optionId } })) break;
+  }
+  return true;
+}
+
+/**
  * Offene Handy-Nachrichten beantworten. Schutzgeld und Waffenstillstand nur, wenn es aus der Portokasse geht
  * (höchstens ein Viertel des Geldes), sonst ablehnen. Aufträge und Angebote lehnt er ab, Warnungen nimmt er ernst.
  */
@@ -637,6 +710,29 @@ function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions
   for (const m of [...state.messages.list]) {
     if (!messages.canAnswer(state, m)) continue;
     if (CITY_CONTACTS.has(m.contactId)) continue;
+    // Auftrag 34: Geschichten der Leute beantwortet er wie ein vernünftiger Chef.
+    if (answerStory(sim, stats, m.id, m.options ?? [])) continue;
+    // Auftrag 34: Großhandel von Dealern: mit der Rechten Hand immer, selbst nur für Stammabnehmer (ab „regelmäßig“).
+    // Fremde Dealer lehnt er ohne Rechte Hand höflich ab (ablehnen kostet weniger Vertrauen als hängenlassen).
+    if (
+      m.contactId.startsWith('dealer:') &&
+      (m.options ?? []).some((o) => o.command?.type === 'customers.acceptOrder')
+    ) {
+      const regular = dealerStage(state, m.contactId.slice(7)) !== 'casual';
+      for (const optionId of regular ? ['rightHand', 'self', 'decline'] : ['rightHand', 'decline']) {
+        if (!(m.options ?? []).some((o) => o.id === optionId)) continue;
+        if (run(sim, stats, { type: 'messages.answer', payload: { messageId: m.id, optionId } })) break;
+      }
+      continue;
+    }
+    // Auftrag 34: Im Gang-Krieg liefert er Ware, wenn das Lager voll genug ist, sonst hält er sich raus.
+    if ((m.options ?? []).some((o) => o.command?.type === 'gangs.supportWar')) {
+      const plenty = getStock(state, { cityId: activeCity(state) }) >= 300;
+      for (const optionId of plenty ? ['goods', 'stay'] : ['stay']) {
+        if (run(sim, stats, { type: 'messages.answer', payload: { messageId: m.id, optionId } })) break;
+      }
+      continue;
+    }
     // Routine (Lieferanfragen, Hafen) überlässt der Bot seiner Rechten Hand, sobald sie das Handy übernimmt.
     if (m.routine && rightHandHandlesOrders(state)) continue;
     const options = m.options ?? [];

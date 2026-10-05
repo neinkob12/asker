@@ -5,12 +5,15 @@
 //   getaway     Fahrer mit Fahrzeug: Flucht ohne Verluste
 //   secondTalk  hohes Charisma: eine zweite Verhandlung, ohne dass die Runde weiterläuft
 //   stash       hohes Tempo: die halbe Ware ist sofort in Sicherheit
-// Die Regeln sind Daten (SPECIAL_MOVE_RULES). Haken für Auftrag 34 (Eigenschaften der Leute): specialMoves(member)
-// liest member.traits, sobald es sie gibt; neue Regeln mit `trait` kommen einfach in die Liste.
+// Die Regeln sind Daten (SPECIAL_MOVE_RULES). Auftrag 34 (Eigenschaften der Leute): specialMoves(member) liest
+// member.traits (IDs aus staff/config.ts TRAITS): Hitzkopf fängt einen Treffer ab, Charmante verhandeln ein zweites Mal,
+// Flinke und Angsthasen bringen die Ware weg. Welche Züge ein Anlass erlaubt, steht in seinen `moves`; eine Person nimmt
+// den ersten erlaubten (specialMoveFor).
 
 import type { GameState } from '../../core';
 import { getStaff, getStaffMember, type StaffRole } from '../staff';
 import { CREW_MAX, CREW_TRAVEL_COST, SPECIAL_CHARISMA, SPECIAL_SPEED } from './config';
+import { ENCOUNTER_KINDS } from './kinds';
 import type { Encounter, SpecialMoveId } from './types';
 
 export interface SpecialMove {
@@ -42,7 +45,7 @@ export const SPECIAL_MOVES: Record<SpecialMoveId, SpecialMove> = {
 export interface CrewMemberInfo {
   role: string;
   stats: { speed: number; caution: number; strength: number; charisma: number };
-  /** Eigenschaften aus Auftrag 34 (später), z.B. ['Türsteher']. */
+  /** Eigenschaften aus Auftrag 34 (IDs), z.B. ['hothead', 'nimble']. */
   traits?: readonly string[];
 }
 
@@ -58,6 +61,11 @@ export interface SpecialMoveRule {
 export const SPECIAL_MOVE_RULES: SpecialMoveRule[] = [
   { move: 'block', role: 'security' },
   { move: 'getaway', role: 'driver' },
+  // Auftrag 34: Eigenschaften vor den Werten.
+  { move: 'block', trait: 'hothead' },
+  { move: 'secondTalk', trait: 'charmer' },
+  { move: 'stash', trait: 'nimble' },
+  { move: 'stash', trait: 'coward' },
   { move: 'secondTalk', stat: { key: 'charisma', min: SPECIAL_CHARISMA } },
   { move: 'stash', stat: { key: 'speed', min: SPECIAL_SPEED } },
 ];
@@ -77,6 +85,15 @@ export function specialMoves(member: CrewMemberInfo): SpecialMoveId[] {
 /** Spezialzug einer Person (der erste passende) oder null. */
 export function specialMoveOf(member: CrewMemberInfo | undefined): SpecialMoveId | null {
   return member ? (specialMoves(member)[0] ?? null) : null;
+}
+
+/** Spezialzug einer Person für einen Anlass: der erste, den der Anlass erlaubt (`moves`), oder null. */
+export function specialMoveFor(
+  member: CrewMemberInfo | undefined,
+  allowed: readonly SpecialMoveId[] | undefined,
+): SpecialMoveId | null {
+  if (!member) return null;
+  return specialMoves(member).find((m) => !allowed || allowed.includes(m)) ?? null;
 }
 
 /** Rollen, die mitkommen können (keine Anwälte, Buchhalter, Kontakte bei der Polizei). */
@@ -100,6 +117,7 @@ export interface CrewCandidate {
  */
 export function crewCandidates(state: GameState, encounter: Encounter, cityId: string): CrewCandidate[] {
   const site = new Set(encounter.request.staffIds ?? []);
+  const allowed = ENCOUNTER_KINDS[encounter.kind]?.moves;
   const list: CrewCandidate[] = [];
   for (const id of site) {
     const m = getStaffMember(state, id);
@@ -108,7 +126,7 @@ export function crewCandidates(state: GameState, encounter: Encounter, cityId: s
       id,
       name: m.name,
       role: m.role,
-      move: specialMoveOf(m),
+      move: specialMoveFor(m, allowed),
       atSite: true,
       cost: 0,
       strength: m.stats.strength,
@@ -122,7 +140,7 @@ export function crewCandidates(state: GameState, encounter: Encounter, cityId: s
       id: m.id,
       name: m.name,
       role: m.role,
-      move: specialMoveOf(m),
+      move: specialMoveFor(m, allowed),
       atSite: false,
       cost: CREW_TRAVEL_COST,
       strength: m.stats.strength,

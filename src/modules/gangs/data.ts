@@ -263,3 +263,30 @@ export const GANGS: readonly Gang[] = [
     },
   },
 ];
+
+/**
+ * Wie die Gangs einer Stadt zueinander stehen (Auftrag 34), -100 (Todfeinde) bis 100 (Freunde). Schlüssel: die beiden
+ * IDs alphabetisch, mit „|“ getrennt. Fehlt ein Paar, gilt 0. Vorstöße ins Revier einer Gang verschlechtern das
+ * Verhältnis (Laufzeit in GangsState.rivalry); ab WAR_AT wird daraus ein Gang-Krieg.
+ */
+export const GANG_RIVALRY: Readonly<Record<string, number>> = {
+  // Köln: Die Hafenkolonne hasst die Schäl Sick (Hafen gegen rechtsrheinisch), Syndikat und Kreis dulden sich.
+  'nord|ost': -70,
+  'nord|west': -30,
+  'nord|sued': -20,
+  'ost|west': -40,
+  'ost|sued': -50,
+  'sued|west': 20,
+  // Hamburg: Kiez gegen Hafen, das Kollektiv gegen den Club an der Elbchaussee.
+  'hh-hafen|hh-kiez': -50,
+  'hh-kiez|hh-schanze': -30,
+  'hh-elbchaussee|hh-kiez': 10,
+  'hh-hafen|hh-schanze': -20,
+  'hh-elbchaussee|hh-hafen': -60,
+  'hh-elbchaussee|hh-schanze': -70,
+};
+
+/** Schlüssel eines Gang-Paars (alphabetisch). */
+export function rivalryKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}

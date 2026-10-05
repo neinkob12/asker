@@ -19,7 +19,11 @@ function hire(sim: Simulation, spotId = 'ebertplatz'): string {
   if (wallet.balance(sim.state, 'dirty') < 2000) wallet.earn(sim.ctx('test'), 5000, 'dirty', 'Test', 'income.other');
   const result = sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
   if (!result.ok) throw new Error(result.reason);
-  return (result.data as { staffId: string }).staffId;
+  const id = (result.data as { staffId: string }).staffId;
+  // Ohne Eigenschaften (Auftrag 34), damit nur Rolle und Werte zählen.
+  const m = getStaffMember(sim.state, id);
+  if (m) m.traits = [];
+  return id;
 }
 
 /** Eine freie Person (ohne Einsatz) mit Rolle und Werten. */
@@ -60,6 +64,33 @@ describe('Spezialzüge aus Rolle und Werten', () => {
     expect(specialMoves({ role: 'runner', stats })).toEqual([]);
     // Mehrere passen: der erste zählt im Spiel, die Liste zeigt alle (Haken für Eigenschaften aus Auftrag 34).
     expect(specialMoves({ role: 'security', stats: { ...stats, charisma: 90 } })).toEqual(['block', 'secondTalk']);
+  });
+});
+
+describe('Spezialzüge aus Eigenschaften (Auftrag 34)', () => {
+  const stats = { speed: 50, caution: 50, strength: 50, charisma: 50 };
+  it('Hitzkopf fängt ab, Charmante verhandeln, Flinke und Angsthasen bringen die Ware weg', () => {
+    expect(specialMoves({ role: 'runner', stats, traits: ['hothead'] })).toEqual(['block']);
+    expect(specialMoves({ role: 'runner', stats, traits: ['charmer'] })).toEqual(['secondTalk']);
+    expect(specialMoves({ role: 'runner', stats, traits: ['nimble'] })).toEqual(['stash']);
+    expect(specialMoves({ role: 'runner', stats, traits: ['coward', 'family'] })).toEqual(['stash']);
+    // Rolle zuerst, dann Eigenschaft.
+    expect(specialMoves({ role: 'driver', stats, traits: ['charmer'] })).toEqual(['getaway', 'secondTalk']);
+  });
+
+  it('pro Anlass zählt der erste erlaubte Zug', () => {
+    const sim = createTestGame();
+    const driver = free(sim, 'driver');
+    const m = getStaffMember(sim.state, driver);
+    if (m) m.traits = ['charmer'];
+    const id = startEncounter(sim.ctx('logistics'), {
+      kind: 'policeChase',
+      veedelId: 'kalk',
+      staffIds: [driver],
+      playerPresent: false,
+      skipEffects: true,
+    }).encounterId;
+    expect(get(sim, id).participants[0].move).toBe('secondTalk');
   });
 });
 
@@ -189,7 +220,8 @@ describe('Review: Spezialzüge pro Anlass, Grenzen', () => {
         skipEffects: true,
       }).encounterId;
       const e = get(sim, id);
-      expect(e.participants[0].move, kind).toBe('getaway');
+      // Der Anlass erlaubt keinen Fluchtwagen: Der Fahrer bringt dann keinen Zug mit.
+      expect(e.participants[0].move, kind).toBeNull();
       expect(availableMoves(e), kind).toEqual([]);
       expect(sim.dispatch({ type: 'encounters.special', payload: { encounterId: id, participantId: driver } }).ok).toBe(
         false,

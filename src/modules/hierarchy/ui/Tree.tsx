@@ -12,8 +12,11 @@ import { activeRunnerAt, getStaff, getStaffMember, runnerAt, STATUS_NAMES, secur
 import { veedelName } from '../../veedel';
 import {
   canBeLieutenant,
+  capoOf,
+  getCapos,
   getLieutenants,
   getRightHand,
+  isCapo,
   isLieutenant,
   type LieutenantPost,
   lieutenantSpots,
@@ -21,6 +24,7 @@ import {
   rightHandOffered,
 } from '../index';
 import { AppointSheet } from './AppointSheet';
+import { CapoBranch } from './Capo';
 import { RightHandRow } from './RightHand';
 
 /** Spot-Zeile: wer dort arbeitet, Status und Ergebnis heute. */
@@ -74,7 +78,12 @@ function LieutenantBranch(props: { post: LieutenantPost }) {
   const paused = props.post.settings.orderRules.some((r) => r.paused);
   const last = props.post.log[0]?.text;
   return (
-    <Group title={`Leutnant ${m.name}`} icon="crew" color="people" count={spots.length}>
+    <Group
+      title={`${isCapo(state, m.id) ? 'Capo' : 'Leutnant'} ${m.name}`}
+      icon={isCapo(state, m.id) ? 'crown' : 'crew'}
+      color="people"
+      count={spots.length}
+    >
       <List>
         <ListItem
           onClick={() => ui.openPanel('hierarchy.lieutenant', { staffId: m.id })}
@@ -88,6 +97,11 @@ function LieutenantBranch(props: { post: LieutenantPost }) {
             tags={[
               { label: `Level ${m.level}` },
               { label: 'Ergebnis heute', icon: 'chart', color: 'money' },
+              !!capoOf(state, m.id) && {
+                label: `Capo ${getStaffMember(state, capoOf(state, m.id) ?? '')?.name ?? ''}`,
+                icon: 'crown',
+                color: 'brand',
+              },
               paused && { label: 'Bestellung ruht', icon: 'alert', color: 'warn' },
               !paused && !!last && { label: last ?? '', icon: 'clock' },
             ]}
@@ -138,6 +152,9 @@ export function StaffTree() {
           {(rh || rightHandOffered(state)) && <RightHandRow />}
         </List>
       </Group>
+      {getCapos(state, activeCity(state)).map((capo) => (
+        <CapoBranch key={capo.staffId} capo={capo} />
+      ))}
       {posts.map((post) => (
         <LieutenantBranch key={post.staffId} post={post} />
       ))}

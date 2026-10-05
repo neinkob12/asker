@@ -41,10 +41,10 @@ import { changeReputation, getReputation, reputationDemandFactor } from '../repu
 import { travelMinutes } from '../roads';
 import { getSpot } from '../spots';
 import { assign, getStaffMember } from '../staff';
-import { allVeedel, getVeedel, type Veedel, veedelCity } from '../veedel';
+import { allVeedel, getVeedel, type Veedel } from '../veedel';
 import {
   CUSTOMER_TYPES,
-  DEALERS,
+  DEALER_PREPAY_SHARE,
   DELIVERY_CHANCE_PER_HOUR,
   DELIVERY_MARKUP,
   DELIVERY_MIN_REPUTATION,
@@ -69,6 +69,20 @@ import {
   WHOLESALE_HANDOVER_MINUTES,
   WHOLESALE_MIN_REPUTATION,
 } from './config';
+import {
+  dealerContact,
+  dealerExtraDiscount,
+  dealerOfContact,
+  dealerPrepays,
+  dealerRelation,
+  dealersTick,
+  dealerWantsMore,
+  dueDealer,
+  getDealer,
+  noteDealerRequest,
+  onDealerOrderFinished,
+  pickDealer,
+} from './dealers';
 import { customerType, productsFor, typeDemandWeight } from './decisions';
 import type { Order, OrderKind, Regular } from './index';
 import { pickWeighted, rateSale, updateRegularAfterSale } from './street';
@@ -82,6 +96,14 @@ function findOrder(ctx: Ctx, orderId: number): Order | undefined {
 function finish(ctx: Ctx, order: Order, status: 'done' | 'declined' | 'expired' | 'failed'): void {
   order.status = status;
   order.finishedAt = ctx.now;
+  // Auftrag 34: Platzt ein vorab bezahlter Deal, bekommt der Dealer seine Vorkasse zurück (sonst verlöre er Geld und
+  // Vertrauen zugleich). Gebucht gegen den Großhandel, so bleibt der Umsatz in der Kasse ehrlich.
+  if (status === 'failed' && order.prepaid && order.prepaid > 0) {
+    const back = wallet.lose(ctx, order.prepaid, 'dirty', `Vorkasse zurück an ${order.contactName}`, 'sales.wholesale');
+    order.prepaid = Math.max(0, order.prepaid - back);
+  }
+  // Stammabnehmer merken sich, wie es lief.
+  if (order.kind === 'wholesale') onDealerOrderFinished(ctx, order.contactId, status);
   ctx.emit('order.finished', { orderId: order.id, kind: order.kind, status });
 }
 
@@ -149,14 +171,17 @@ function createOrder(
   const routine =
     fields.kind === 'delivery' ||
     (!!rh && isTaskActive(ctx.state, 'wholesale') && fields.price <= rh.settings.wholesaleMaxPrice);
+  const dealer = getDealer(dealerOfContact(fields.contactId) ?? '');
   const messageId = messages.send(ctx, {
-    contact: {
-      id: fields.contactId,
-      name: fields.contactName,
-      kind: fields.kind === 'wholesale' ? 'other' : 'customer',
-      // Großhändler sind auch Menschen: Porträt aus dem Namen.
-      ...(fields.kind === 'wholesale' ? { role: 'Großhandel', look: {} } : {}),
-    },
+    contact: dealer
+      ? dealerContact(dealer)
+      : {
+          id: fields.contactId,
+          name: fields.contactName,
+          kind: fields.kind === 'wholesale' ? 'other' : 'customer',
+          // Großhändler sind auch Menschen: Porträt aus dem Namen.
+          ...(fields.kind === 'wholesale' ? { role: 'Großhandel', look: {} } : {}),
+        },
     text,
     options: orderOptions(ctx, id, fields.kind),
     expiresIn: ORDER_EXPIRES_IN,
@@ -269,8 +294,11 @@ export function offerDelivery(ctx: Ctx, force = false): Order | null {
   );
 }
 
-/** Großhandelsanfrage eines anderen Dealers: große Menge mit Rabatt. */
-export function offerWholesale(ctx: Ctx, force = false): Order | null {
+/**
+ * Großhandelsanfrage eines anderen Dealers: große Menge mit Rabatt. Auftrag 34: Wer fragt, hängt am Vertrauen
+ * (pickDealer); mit dealerId fragt genau dieser (regelmäßige Anfragen der Stammabnehmer).
+ */
+export function offerWholesale(ctx: Ctx, force = false, dealerId?: string): Order | null {
   const state = ctx.state;
   const s = state.modules.customers;
   if (s.orders.some((o) => isOpen(o) && o.kind === 'wholesale')) return null;
@@ -286,12 +314,15 @@ export function offerWholesale(ctx: Ctx, force = false): Order | null {
     .filter((o) => o.amounts.length > 0);
   if (options.length === 0) return null;
   const { product, amounts } = ctx.pick(options);
-  const amount = ctx.pick(amounts);
-  const dealers = DEALERS.filter((d) => veedelCity(d.veedelId) === cityId);
-  if (dealers.length === 0) return null;
-  const dealer = ctx.pick(dealers);
+  const forced = dealerId ? getDealer(dealerId) : undefined;
+  const dealer = forced && dealerRelation(state, forced.id).status === 'active' ? forced : pickDealer(ctx, cityId);
+  if (!dealer) return null;
+  // Ab „regelmäßig“ wollen Stammabnehmer größere Mengen.
+  const range = dealerWantsMore(state, dealer.id) ? amounts.slice(Math.floor(amounts.length / 2)) : amounts;
+  const amount = ctx.pick(range);
   const [min, max] = WHOLESALE_DISCOUNT;
-  const discount = min + ctx.random() * (max - min);
+  const discount = min + ctx.random() * (max - min) + dealerExtraDiscount(state, dealer.id);
+  noteDealerRequest(ctx, dealer.id);
   const price = Math.max(
     10,
     Math.round((amount * averageReferencePrice(state, product.id) * (1 - discount)) / 10) * 10,
@@ -314,7 +345,9 @@ export function offerWholesale(ctx: Ctx, force = false): Order | null {
       veedelId: veedel.id,
       ...place,
     },
-    `Ich brauch ${goods}. Zahle ${formatEuro(price)} (${perUnit} € pro ${product.unit}), Übergabe in ${veedel.name}. Bist du dabei?`,
+    `Ich brauch ${goods}. Zahle ${formatEuro(price)} (${perUnit} € pro ${product.unit}), Übergabe in ${veedel.name}.` +
+      (dealerPrepays(state, dealer.id) ? ' Die Hälfte kriegst du vorab.' : '') +
+      ' Bist du dabei?',
   );
 }
 
@@ -374,6 +407,12 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier' 
   order.quality = goods.quality;
   order.cut = goods.cut;
   if (courierId) assign(ctx, courierId, { kind: 'delivery', targetId: String(order.id) });
+  // Auftrag 34: Stammabnehmer ab „Vorkasse“ zahlen die Hälfte beim Annehmen.
+  const dealerId = order.kind === 'wholesale' ? dealerOfContact(order.contactId) : null;
+  if (dealerId && dealerPrepays(state, dealerId)) {
+    order.prepaid = Math.round(order.price * DEALER_PREPAY_SHARE);
+    wallet.earn(ctx, order.prepaid, 'dirty', `Vorkasse ${order.contactName}`, 'sales.wholesale');
+  }
   const name = courierId ? (getStaffMember(state, courierId)?.name ?? 'Deine Rechte Hand') : 'Du';
   journal.add(
     ctx,
@@ -433,7 +472,11 @@ export function courierGone(ctx: Ctx, staffId: string, clearAssignment: boolean)
  * ist dabei; die Rechte Hand muss es allein regeln. Das Ergebnis kommt in onDealResolved an.
  */
 function dealGoesWrong(ctx: Ctx, order: Order): boolean {
-  if (order.kind !== 'wholesale' || !ctx.chance(WHOLESALE_BETRAYAL_CHANCE)) return false;
+  if (order.kind !== 'wholesale') return false;
+  // Auftrag 34: Wer vorab zahlt, haut dich nicht übers Ohr.
+  const dealerId = dealerOfContact(order.contactId);
+  if (dealerId && dealerPrepays(ctx.state, dealerId)) return false;
+  if (!ctx.chance(WHOLESALE_BETRAYAL_CHANCE)) return false;
   order.status = 'contested';
   const goods = `${formatProductAmount(order.productId, order.amount)} ${productName(order.productId)}`;
   startEncounter(ctx, {
@@ -486,10 +529,12 @@ function complete(ctx: Ctx, order: Order, afterFight = false): void {
   if (!afterFight && dealGoesWrong(ctx, order)) return;
   const s = ctx.state.modules.customers;
   const wholesale = order.kind === 'wholesale';
-  wallet.earn(ctx, order.price, 'dirty', wholesale ? 'Großhandel' : 'Lieferung', {
-    category: wholesale ? 'sales.wholesale' : 'sales.delivery',
-    ...(order.courierId ? { staffId: order.courierId } : {}),
-  });
+  const due = order.price - (order.prepaid ?? 0);
+  if (due > 0)
+    wallet.earn(ctx, due, 'dirty', wholesale ? 'Großhandel' : 'Lieferung', {
+      category: wholesale ? 'sales.wholesale' : 'sales.delivery',
+      ...(order.courierId ? { staffId: order.courierId } : {}),
+    });
   s.stats.unitsSold += order.amount;
   s.stats.revenue += order.price;
   if (wholesale) s.stats.wholesaleDeals += 1;
@@ -563,6 +608,10 @@ export function ordersTick(ctx: Ctx): void {
   if (ctx.now % 60 === 0) {
     offerDelivery(ctx);
     offerWholesale(ctx);
+    // Auftrag 34: Stammabnehmer melden sich regelmäßig von selbst, Zwischenhändler holen ihre Wochenlieferung.
+    const due = dueDealer(ctx.state, activeCity(ctx.state));
+    if (due) offerWholesale(ctx, true, due.id);
+    dealersTick(ctx);
   }
   prune(ctx);
 }

@@ -21,6 +21,10 @@
 //   'hierarchy.appointRightHand', 'hierarchy.dismissRightHand', 'hierarchy.configureRightHand'
 // Ereignisse: 'hierarchy.appointed', 'hierarchy.dismissed', 'hierarchy.configured', 'hierarchy.spotsChanged',
 //   'hierarchy.rightHandAppointed', 'hierarchy.rightHandDismissed', 'hierarchy.dailyReport'
+// Capo (Auftrag 34, capo.ts): Leutnant ab Level 5 mit drei Spots führt bis zu drei Leutnants seines Bezirks, vertritt
+//   sie bei Ausfall, schickt Sicherheit gegen Gang-Leute; getCapos, isCapo, capoOf, capoDistrict, canBeCapo,
+//   capoCandidates; Befehle 'hierarchy.appointCapo', 'hierarchy.dismissCapo'; Ereignisse 'hierarchy.capoAppointed',
+//   'hierarchy.capoDismissed'. Rat im Tagesbericht (advice.ts, Daten in REPORT_TIPS).
 
 import {
   type CommandMeta,
@@ -56,6 +60,7 @@ import {
 } from '../staff';
 import { getVeedel, veedelName } from '../veedel';
 import { tick as lieutenantTick, onRaidWarning } from './ai';
+import { appointCapo, capoDemand, capoTick, cleanupCapos, dismissCapo, isCapo } from './capo';
 import {
   ABSENT_DAYS_OPTIONS,
   ABSENT_POLICIES,
@@ -105,10 +110,25 @@ import type {
   RightHandSettings,
 } from './types';
 
+export { REPORT_TIPS, type ReportTip, reportTipFor } from './advice';
 export { actionInterval, heatThreshold, postSummary } from './ai';
+export {
+  canBeCapo,
+  capoCandidates,
+  capoDemand,
+  capoDistrict,
+  capoInCharge,
+  capoOf,
+  getCapo,
+  getCapos,
+  isCapo,
+} from './capo';
 export {
   ABSENT_DAYS_OPTIONS,
   ABSENT_POLICIES,
+  CAPO_ADVICE_LIEUTENANTS,
+  CAPO_MAX_LIEUTENANTS,
+  CAPO_MIN_LEVEL,
   CAUTION_LEVELS,
   DEFAULT_RIGHT_HAND_SETTINGS,
   DEFAULT_SETTINGS,
@@ -212,6 +232,10 @@ declare module '../../core' {
     'hierarchy.installRightHand': { staffId: string; cityId: string };
     /** Vollmacht zurückziehen: kostet Loyalität und Laune, Stufe und Aufgaben bleiben. */
     'hierarchy.revokeFullPower': { cityId?: string };
+    /** Auftrag 34: Leutnant (ab Level 5, drei Spots) zum Capo machen, mit bis zu drei Leutnants aus seinem Bezirk. */
+    'hierarchy.appointCapo': { staffId: string; lieutenantIds: string[] };
+    /** Capo abberufen (er bleibt Leutnant). */
+    'hierarchy.dismissCapo': { staffId: string };
   }
   interface GameEvents {
     /** veedelId: Veedel mit den meisten seiner Spots (für ältere Zuhörer). */
@@ -227,6 +251,9 @@ declare module '../../core' {
     'hierarchy.rightHandRankUp': { staffId: string; rank: number };
     'hierarchy.fullPowerGranted': { staffId: string; cityId: string };
     'hierarchy.fullPowerRevoked': { staffId: string; cityId: string };
+    /** Auftrag 34: Capo ernannt (oder seine Leutnants geändert) bzw. abberufen. */
+    'hierarchy.capoAppointed': { staffId: string; lieutenantIds: string[] };
+    'hierarchy.capoDismissed': { staffId: string };
     /** Ihr Anteil am Gewinn eines abgeschlossenen Tages ist gebucht. */
     'hierarchy.shareTaken': { staffId: string; cityId: string; day: number; profit: number; amount: number };
   }
@@ -519,11 +546,11 @@ function syncLieutenant(ctx: Ctx, post: LieutenantPost): void {
   if (veedelId && (target?.kind !== 'veedel' || target.targetId !== veedelId)) {
     assign(ctx, m.id, { kind: 'veedel', targetId: veedelId });
   }
-  const demand = lieutenantDemand(post.spotIds.length);
+  // Ein Capo verlangt doppelt so viel wie ein Leutnant mit drei Spots (Auftrag 34).
+  const demand = isCapo(ctx.state, m.id) ? capoDemand() : lieutenantDemand(post.spotIds.length);
   if (m.demand !== demand) setDemand(ctx, m.id, demand);
 }
 
-/** Leutnant abberufen. Er wird wieder normaler Mitarbeiter ohne Einsatz. */
 /**
  * Startpaket (Auftrag 36): Der Leutnant gibt seine Spots ab, um als neue Rechte Hand in die nächste Stadt zu gehen. Kein
  * Abberufen (keine Loyalität weniger, kein Lohn runter), nur der Posten ist frei.
@@ -532,7 +559,10 @@ export function handOffLeader(ctx: Ctx, staffId: string, cityId: string): void {
   const post = getPost(ctx.state, staffId);
   if (!post) return;
   const veedelId = lieutenantVeedel(ctx.state, staffId) ?? '';
+  // Ein Capo, der geht, ist kein Capo mehr (Auftrag 34), seine Leutnants sind frei.
+  if (isCapo(ctx.state, staffId)) dismissCapo(ctx, staffId, true);
   delete ctx.state.modules.hierarchy.posts[staffId];
+  cleanupCapos(ctx);
   if (isEmployed(ctx.state, staffId)) {
     assign(ctx, staffId, null);
     addCareer(ctx, staffId, `Gibt die Spots ab und geht als Rechte Hand nach ${cityName(cityId)}.`);
@@ -540,11 +570,15 @@ export function handOffLeader(ctx: Ctx, staffId: string, cityId: string): void {
   ctx.emit('hierarchy.dismissed', { staffId, veedelId });
 }
 
+/** Leutnant abberufen. Er wird wieder normaler Mitarbeiter ohne Einsatz. */
 function demote(ctx: Ctx, staffId: string): CommandResult {
   const post = getPost(ctx.state, staffId);
   if (!post) return { ok: false, reason: 'Diese Person ist kein Leutnant.' };
   const veedelId = lieutenantVeedel(ctx.state, staffId) ?? '';
+  // Wer kein Leutnant mehr ist, ist auch kein Capo und gehört zu keinem Bezirk (Auftrag 34).
+  if (isCapo(ctx.state, staffId)) dismissCapo(ctx, staffId, true);
   delete ctx.state.modules.hierarchy.posts[staffId];
+  cleanupCapos(ctx);
   const m = getStaffMember(ctx.state, staffId);
   if (m && isEmployed(ctx.state, staffId)) {
     assign(ctx, staffId, null);
@@ -730,6 +764,11 @@ function daily(ctx: Ctx): void {
     post.team = post.team.filter((id) => isEmployed(ctx.state, id));
     for (const id of Object.keys(post.absences)) if (!isEmployed(ctx.state, id)) delete post.absences[id];
     syncLieutenant(ctx, post);
+    if (isCapo(ctx.state, staffId) && post.spotIds.length < MAX_SPOTS_PER_LIEUTENANT) {
+      journal.add(ctx, `${m.name} führt keine ${MAX_SPOTS_PER_LIEUTENANT} Spots mehr und ist nicht mehr Capo.`, 'info');
+      dismissCapo(ctx, staffId, true);
+      syncLieutenant(ctx, post);
+    }
     post.revenueYesterday = post.revenueToday;
     post.revenueToday = 0;
     const satisfaction = lieutenantSatisfaction(ctx.state, staffId) ?? 50;
@@ -746,6 +785,7 @@ function daily(ctx: Ctx): void {
         for (const other of teamOf(ctx.state, staffId)) addLoyalty(ctx, other.id, TEAM_LOYALTY);
     }
   }
+  cleanupCapos(ctx);
   rightHandDaily(ctx);
 }
 
@@ -871,7 +911,7 @@ export function migrateHierarchyV2(old: HierarchyStateV2, state: GameState): Hie
 }
 
 /** Zustand bis Version 5: eine Rechte Hand für alles (Köln). */
-type HierarchyStateV5 = Omit<HierarchyState, 'rightHands'> & { rightHand: RightHandPost | null };
+type HierarchyStateV5 = Omit<HierarchyState, 'rightHands' | 'capos'> & { rightHand: RightHandPost | null };
 
 type RightHandSettingsV3 = Pick<
   RightHandSettings,
@@ -943,13 +983,17 @@ interface HierarchyStateV4 extends Omit<HierarchyStateV5, 'rightHand'> {
   rightHand: (Omit<RightHandPost, 'fullPower' | 'grudgeUntil' | 'settings'> & { settings: RightHandSettingsV4 }) | null;
 }
 
+/** Zustand bis Version 6 (vor dem Capo). */
+type HierarchyStateV6 = Omit<HierarchyState, 'capos'>;
+
 export default defineModule({
   id: 'hierarchy',
-  version: 6,
+  version: 7,
   dependsOn: ['staff'],
-  init: () => ({ posts: {}, rightHands: {}, orderTemplate: null }),
+  init: () => ({ posts: {}, capos: {}, rightHands: {}, orderTemplate: null }),
   tick: (ctx) => {
     lieutenantTick(ctx);
+    capoTick(ctx);
     rightHandTick(ctx);
   },
   tickEvery: TICK_EVERY,
@@ -971,6 +1015,8 @@ export default defineModule({
         ? installRightHand(ctx, staffId, cityId)
         : { ok: false, reason: 'Das passiert mit dem Startpaket von selbst.' },
     'hierarchy.revokeFullPower': (ctx, payload, meta) => revokeFullPower(ctx, meta, payload?.cityId),
+    'hierarchy.appointCapo': (ctx, { staffId, lieutenantIds }) => appointCapo(ctx, staffId, lieutenantIds),
+    'hierarchy.dismissCapo': (ctx, { staffId }) => dismissCapo(ctx, staffId),
   },
   on: {
     'clock.dayStarted': daily,
@@ -988,6 +1034,7 @@ export default defineModule({
       if (h.posts[staffId]) {
         const veedelId = lieutenantVeedel(ctx.state, staffId) ?? '';
         delete h.posts[staffId];
+        cleanupCapos(ctx);
         journal.add(ctx, 'Ein Leutnant ist weg, seine Spots laufen ohne ihn.', 'bad', { staffId });
         ctx.emit('hierarchy.dismissed', { staffId, veedelId });
       }
@@ -1056,9 +1103,11 @@ export default defineModule({
     4: migrateHierarchyV3,
     5: migrateHierarchyV4,
     // Version 6 (Auftrag 30, Etappe 5): Rechte Hand pro Stadt. Die bisherige war die von Köln.
-    6: (old: HierarchyStateV5): HierarchyState => {
+    6: (old: HierarchyStateV5): HierarchyStateV6 => {
       const { rightHand, ...rest } = old;
       return { ...rest, rightHands: rightHand ? { koeln: rightHand } : {} };
     },
+    // Version 7 (Auftrag 34): Capos. Alte Stände haben noch keine.
+    7: (old: HierarchyStateV6): HierarchyState => ({ ...old, capos: {} }),
   },
 });

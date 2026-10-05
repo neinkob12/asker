@@ -70,6 +70,7 @@ export {
   SPECIAL_MOVES,
   type SpecialMove,
   type SpecialMoveRule,
+  specialMoveFor,
   specialMoveOf,
   specialMoves,
   suggestedCrew,

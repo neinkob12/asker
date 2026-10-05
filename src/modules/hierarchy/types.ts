@@ -197,6 +197,8 @@ export interface DailyReport {
   advice: string[];
   /** Was sie erledigt hat, z.B. "3 Lieferungen gefahren, 1 Abholung" (fehlt bei alten Berichten). */
   done?: string;
+  /** Auftrag 34: ein Satz Rat aus Daten (advice.ts), fehlt, wenn nichts ansteht. */
+  tip?: string;
 }
 
 /** Die Stelle der Rechten Hand über den Leutnants. */
@@ -231,9 +233,27 @@ export interface RightHandPost {
   grudgeUntil: number | null;
 }
 
+/**
+ * Capo (Auftrag 34): ein Leutnant ab Level 5 mit drei Spots, der bis zu drei Leutnants in benachbarten Veedeln führt
+ * (Bezirk). Er bleibt selbst Leutnant (sein Posten in posts), das hier ist die Ebene darüber.
+ */
+export interface CapoPost {
+  staffId: string;
+  /** Leutnants seines Bezirks (höchstens CAPO_MAX_LIEUTENANTS). */
+  lieutenants: string[];
+  appointedAt: number;
+  /** Nächste Runde, in der er nach seinem Bezirk sieht. */
+  nextActionAt: number;
+  /** Wie oft er eingesprungen ist (Vertretung, Sicherheit). */
+  standIns: number;
+  log: LogEntry[];
+}
+
 export interface HierarchyState {
   /** Mitarbeiter-ID → Posten. */
   posts: Record<string, LieutenantPost>;
+  /** Auftrag 34: Capos (Mitarbeiter-ID → Bezirk). */
+  capos: Record<string, CapoPost>;
   /**
    * Rechte Hand pro Stadt (Auftrag 30): Stadt → Posten. Jede Stadt kann ihre eigene haben (Vollmacht pro Stadt); die
    * Stadt ist die, in der die Person ist.

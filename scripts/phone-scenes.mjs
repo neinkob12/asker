@@ -357,6 +357,44 @@ export const SCENES = [
       if (member) window.koeln.runtime.api.openPanel('staff.profile', { staffId: member.id });
     })()`,
   },
+  // Auftrag 34: Akte mit Eigenschaften und Beziehungen
+  {
+    name: 'akte-beziehung',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      const s = sim.state;
+      for (const spotId of s.modules.spots.unlocked.slice(0, 2)) sim.dispatch({ type: 'staff.hireRunner', payload: { spotId } });
+      const [a, b] = s.modules.staff.members;
+      if (a && b) {
+        a.traits = ['family', 'drinker', 'loyal'];
+        s.modules.staff.relations = [{ a: a.id, b: b.id, kind: 'siblings', since: s.time }];
+        window.koeln.runtime.api.selectTab('staff');
+        window.koeln.runtime.api.openPanel('staff.profile', { staffId: a.id });
+      }
+    })()`,
+  },
+  // Auftrag 34: eine Geschichte (Geldbitte) im Chat
+  {
+    name: 'geschichte',
+    js: `(() => {
+      const sim = window.koeln.session.sim;
+      const s = sim.state;
+      sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: s.modules.spots.unlocked[0] } });
+      const m = s.modules.staff.members[0];
+      if (!m) return;
+      m.traits = ['family', 'nimble'];
+      const contactId = 'staff:' + m.id;
+      const choice = (id, label) => ({ id, label, command: { type: 'staff.storyChoice', payload: { storyId: 'st9100', choice: id } } });
+      s.messages.contacts[contactId] = { id: contactId, name: m.name, kind: 'staff', role: 'Läufer' };
+      s.messages.list.push({
+        id: 9100, contactId, time: s.time, from: 'contact', read: false, source: 'staff', expiresAt: s.time + 480,
+        text: 'Chef, ich muss dich was fragen. Mein Kleiner braucht eine Zahnspange, die Kasse zahlt nix. 400 €, ich zahl’s zurück.',
+        options: [choice('give', 'Geld geben'), choice('work', 'Abarbeiten'), choice('refuse', 'Ablehnen')],
+      });
+      s.modules.staff.stories.open.push({ id: 'st9100', story: 'loan', staffId: m.id, otherId: null, amount: 400, messageId: 9100, createdAt: s.time, cityId: 'koeln' });
+      window.koeln.runtime.api.openPhone('core.messages', { contactId });
+    })()`,
+  },
   // Aktionsblatt: Entlassen in der Akte bestätigen
   {
     name: 'aktionsblatt',
@@ -545,6 +583,32 @@ export const SCENES = [
       window.koeln.runtime.api.openPanel('hierarchy.lieutenant', { staffId: Object.keys(window.koeln.session.sim.state.modules.hierarchy.posts)[0] });
     })()`,
   },
+  // Auftrag 34: Capo mit Leutnants im Bezirk (Personal-Baum und Leutnant-Seite)
+  {
+    name: 'capo',
+    js: `(async () => {
+      ${STEPS}
+      const sim = window.koeln.session.sim;
+      const s = sim.state;
+      s.wallet.dirty = 50000;
+      const plan = [['zuelpicher', 'uni', 'neumarkt'], ['rudolfplatz'], ['friesenplatz']];
+      for (const spotIds of plan) for (const spotId of spotIds) if (!s.modules.spots.unlocked.includes(spotId)) s.modules.spots.unlocked.push(spotId);
+      const ids = [];
+      for (const spotIds of plan) {
+        const r = sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: spotIds[0] } });
+        const m = s.modules.staff.members.find((x) => x.id === r.data?.staffId);
+        if (!m) continue;
+        m.level = ids.length === 0 ? 6 : 3;
+        sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: m.id, spotIds } });
+        ids.push(m.id);
+      }
+      sim.dispatch({ type: 'hierarchy.appointCapo', payload: { staffId: ids[0], lieutenantIds: ids.slice(1) } });
+      window.koeln.runtime.api.selectTab('staff');
+      window.koeln.runtime.api.openPanel('hierarchy.lieutenant', { staffId: ids[0] });
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.trim() === 'Capo'));
+      head?.scrollIntoView({ block: 'center' });
+    })()`,
+  },
   {
     name: 'personal-baum',
     js: `(() => {
@@ -712,6 +776,58 @@ export const SCENES = [
     js: `(() => {
       if (!window.koeln.session.state.messages.list.some((m) => m.contactId === 'other:neighbor')) window.koeln.dev.einbruch();
       window.koeln.runtime.api.openPhone('core.messages', { contactId: 'other:neighbor' });
+    })()`,
+  },
+  // Auftrag 34: Gedächtnis der Gang und ein Gang-Krieg
+  {
+    name: 'gang-gedaechtnis',
+    js: `(async () => {
+      ${STEPS}
+      const g = window.koeln.session.sim.state.modules.gangs;
+      const now = window.koeln.session.sim.state.time;
+      g.gangs.nord.hostility = 45;
+      g.memories.nord = [
+        { kind: 'snitched', effect: -30, at: now, until: now + 20 * 1440 },
+        { kind: 'tributePaid', effect: 10, at: now, until: now + 21 * 1440 },
+        { kind: 'deal', effect: 4, at: now, until: now + 10 * 1440 },
+      ];
+      g.wars = [{ id: 9200, cityId: 'koeln', attacker: 'nord', defender: 'ost', veedelId: 'kalk', startedAt: now, asker: 'nord', support: { side: 'nord', kind: 'goods' } }];
+      window.koeln.runtime.api.selectTab('gangs');
+      window.koeln.runtime.api.openPanel('gangs.gang', { gangId: 'nord' });
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Erinnert sich')));
+      head?.scrollIntoView({ block: 'start' });
+    })()`,
+  },
+  {
+    name: 'gang-kriege',
+    js: `(async () => {
+      ${STEPS}
+      const g = window.koeln.session.sim.state.modules.gangs;
+      const now = window.koeln.session.sim.state.time;
+      g.wars = [{ id: 9201, cityId: 'koeln', attacker: 'nord', defender: 'ost', veedelId: 'kalk', startedAt: now, asker: 'nord', support: null }];
+      g.warLog = [{ attacker: 'sued', defender: 'west', veedelId: 'lindenthal', winner: 'west', endedAt: now - 300, supported: 'west' }];
+      window.koeln.runtime.api.selectTab('gangs');
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Gang-Kriege')));
+      head?.scrollIntoView({ block: 'start' });
+    })()`,
+  },
+  // Auftrag 34: Stammabnehmer in der Kasse
+  {
+    name: 'stammabnehmer',
+    js: `(async () => {
+      ${STEPS}
+      const s = window.koeln.session.sim.state;
+      const now = s.time;
+      const base = { deals: 0, letdowns: [], status: 'active', goneTo: null, goneUntil: null, exclusive: false, middleman: null, lastRequestAt: now, lastOfferAt: now };
+      s.modules.customers.dealers = {
+        oemer: { ...base, trust: 88, deals: 9, exclusive: true, middleman: { productId: 'weed', amount: 150, nextAt: now + 3000 } },
+        pitter: { ...base, trust: 55, deals: 4 },
+        jacky: { ...base, trust: 5, status: 'gone', goneTo: 'nord', goneUntil: now + 20000 },
+        sven: { ...base, trust: 32, deals: 2 },
+      };
+      window.koeln.runtime.api.openPhone('finance.app');
+      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Stammabnehmer')));
+      head?.scrollIntoView({ block: 'center' });
     })()`,
   },
   {

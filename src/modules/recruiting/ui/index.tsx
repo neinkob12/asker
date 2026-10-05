@@ -9,6 +9,7 @@ import {
   Avatar,
   Button,
   Chips,
+  Disclosure,
   Empty,
   Group,
   ItemContent,
@@ -19,7 +20,7 @@ import {
   Sheet,
   useGame,
 } from '../../../ui';
-import { isSpecialist, roleName, STAT_KEYS, STAT_NAMES, type StaffRole } from '../../staff';
+import { isSpecialist, roleName, STAT_KEYS, STAT_NAMES, type StaffRole, TRAITS, traitName } from '../../staff';
 import {
   type Candidate,
   getContacts,
@@ -139,6 +140,25 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
               }))}
             />
           </Group>
+          {(c.traits ?? []).length > 0 && (
+            <Group title="Eigenschaften" icon="sparkles" color="people">
+              <Chips
+                items={(c.traits ?? []).map((t) => ({
+                  label: traitName(t, c.name),
+                  icon: TRAITS[t].icon,
+                  color: TRAITS[t].tone === 'good' ? 'money' : TRAITS[t].tone === 'bad' ? 'danger' : 'warn',
+                  title: TRAITS[t].hint,
+                }))}
+              />
+              <Disclosure>
+                {(c.traits ?? []).map((t) => (
+                  <p key={t}>
+                    <strong>{traitName(t, c.name)}:</strong> {TRAITS[t].hint}
+                  </p>
+                ))}
+              </Disclosure>
+            </Group>
+          )}
           <Group title="Konditionen" icon="coinEuro" color="money">
             <List>
               <ListItem value={`${formatEuro(c.wage)}/Tag`}>

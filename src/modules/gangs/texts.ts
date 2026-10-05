@@ -29,7 +29,9 @@ export type GangTextKey =
   /** Auftrag 23 (Chance): Warnung vor einem Rivalen ({enemy}). */
   | 'warnRival'
   /** Auftrag 23 (Chance): Bitte um einen bezahlten Gefallen ({amount}). */
-  | 'favor';
+  | 'favor'
+  /** Auftrag 34: Gang-Krieg, die Gang bittet dich um Hilfe gegen {enemy} in {veedel}. */
+  | 'warAsk';
 
 export type GangVoice = Readonly<Record<GangTextKey, readonly string[]>>;
 
@@ -149,6 +151,13 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Ein Freundschaftsdienst, Jung: Zwischenlagern. {amount} bar.',
       'Wir brauchen nen sicheren Keller. Deiner tut et. {amount}.',
     ],
+    warAsk: [
+      'Jupp. Wir räumen in {veedel} bei {enemy} auf. Bist du dabei oder guckst du zu?',
+      'Krieg mit {enemy}, Jung. Wer uns jetzt hilft, hat beim Hafen wat gut.',
+      'Wir gehen auf {enemy} los, in {veedel}. Bring Ware oder bring Fäuste.',
+      'Dat mit {enemy} regeln wir jetzt. Stehste neben uns oder gegenüber?',
+      'Die Kolonne marschiert nach {veedel}. {enemy} kriegt Kloppe. Hilfste?',
+    ],
   },
   // 🕸 Venloer Syndikat, Nadine Schrader („die Notarin“): förmlich, juristisch, droht über Dritte.
   west: {
@@ -263,6 +272,13 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Ein kleiner Dienst unter Partnern: Ware für drei Tage. {amount}.',
       'Das Syndikat sucht einen diskreten Keller. Ihrer käme in Frage. {amount}.',
       'Im Auftrag: Zwischenlagerung gegen {amount}. Keine Fragen, keine Akten.',
+    ],
+    warAsk: [
+      'Frau Schrader bittet um Unterstützung: Das Syndikat bereinigt die Lage mit {enemy} in {veedel}. Ihr Beitrag würde vermerkt.',
+      'Wir befinden uns in einer Auseinandersetzung mit {enemy}. Eine Lieferung oder eine Intervention in {veedel} wäre willkommen.',
+      'Ich formuliere es freundlich: {enemy} wird aus {veedel} entfernt. Wer dabei hilft, steht in unseren Akten auf der richtigen Seite.',
+      'Unsere Anwälte haben Feierabend, unsere Leute nicht. {enemy}, {veedel}. Machen Sie mit?',
+      'Ein Angebot unter Geschäftspartnern: Helfen Sie uns gegen {enemy}, und wir vergessen das eine oder andere.',
     ],
   },
   // 🔥 Schäl Sick, Kalle Brenner: rotzig, Preise, Masse.
@@ -379,6 +395,13 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Kleiner Gefallen, Bruder? Drei Tage Lager, {amount}.',
       'Wir zahlen {amount}, wenn du unsere Kisten versteckst.',
     ],
+    warAsk: [
+      'Ey, wir hauen {enemy} in {veedel} weg. Haste Ware über? Oder Jungs?',
+      'Schäl Sick gegen {enemy}, heute. Bist du dabei, Bruder?',
+      '{enemy} muss weg aus {veedel}. Hilf uns, und du kriegst Rabatt bis Weihnachten.',
+      'Krieg, Digga. {enemy}. Wir brauchen Stoff und Leute. Was geht?',
+      'Kalle sagt: Wer jetzt gegen {enemy} hilft, is Familie. Wer nicht, nicht.',
+    ],
   },
   // ♛ Marienburger Kreis, Dr. Konstantin Aldenhoven: leise, gebildet, kalt.
   sued: {
@@ -493,6 +516,13 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Dr. Aldenhoven würde Ihre Kellerräume schätzen. {amount} für drei Tage.',
       'Der Kreis braucht einen verschwiegenen Ort. {amount}.',
       'Eine Gefälligkeit unter Vernünftigen: {amount} für Lagerung, keine Fragen.',
+    ],
+    warAsk: [
+      'Der Kreis bereinigt seine Beziehungen zu {enemy}. In {veedel} wäre ein Freund nützlich.',
+      'Wir haben beschlossen, dass {enemy} in {veedel} nicht mehr erwünscht ist. Möchten Sie sich beteiligen?',
+      'Eine leise Frage: Wie stehen Sie zu {enemy}? Wir wüssten das gern, bevor es in {veedel} laut wird.',
+      'Man trennt sich gerade von {enemy}. Wer hilft, wird erinnert. Wer zusieht, ebenfalls.',
+      'Wir regeln {enemy}. Eine kleine Gefälligkeit in {veedel} würde nicht vergessen.',
     ],
   },
   // 🌹 Neonkrone (Hamburg), Rocco Brandt „der Portier“: Türsteher-Ton, Kiez.
@@ -609,6 +639,13 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Ein Gefallen, bezahlt: {amount} fürs Bunkern.',
       'Wir brauchen deinen Keller. {amount}.',
     ],
+    warAsk: [
+      'Neonkrone hier. Wir machen {enemy} in {veedel} die Tür zu. Stehst du mit an der Tür?',
+      'Heute Nacht räumen wir bei {enemy} auf. Wer mithilft, kommt immer rein.',
+      '{enemy} hat in {veedel} nix verloren. Hilf uns, und du hast auf dem Kiez Kredit.',
+      'Ich frag einmal: Gegen {enemy}, bist du dabei? Ware oder Leute, egal.',
+      'Die Krone geht auf {enemy} los. Wer jetzt kneift, steht draußen. Für immer.',
+    ],
   },
   // ⛓ Containerjungs (Hamburg), Hinnerk „Brecher“ Matthiesen: grob vom Hafen.
   'hh-hafen': {
@@ -723,6 +760,13 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Unser Zeug ist zu heiß. {amount}, wenn du es nimmst.',
       'Lager mal was für uns. {amount}.',
       'Gefallen gegen Bares: {amount}.',
+    ],
+    warAsk: [
+      'Moin. Wir hauen {enemy} aus {veedel} raus. Packst du mit an?',
+      'Containerjungs gegen {enemy}. Wir brauchen Ware und Leute, und zwar flott.',
+      '{enemy} meint, {veedel} gehört denen. Falsch gedacht. Hilfst du?',
+      'Krieg mit {enemy}. Wer jetzt liefert, hat am Hafen immer nen Platz.',
+      'Wir räumen auf, Kollege. {enemy}, {veedel}. Dabei oder nicht?',
     ],
   },
   // ✊ Das Kollektiv (Hamburg), Merle Asmussen „die Kassenwartin“: Plenum, WG, Polit-Ton.
@@ -839,6 +883,13 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Das Kollektiv zahlt {amount} fürs Bunkern.',
       'Ein Gefallen fürs Viertel: {amount}.',
     ],
+    warAsk: [
+      'Das Plenum hat beschlossen: {enemy} raus aus {veedel}. Solidarität wär angebracht.',
+      'Kurze Abstimmung: Bist du für uns oder für {enemy}? Wir zählen mit.',
+      'Wir organisieren gerade Widerstand gegen {enemy}. Spenden in Form von Ware gern gesehen.',
+      '{enemy} gentrifiziert {veedel}. Hilf uns, das zu verhindern.',
+      'Das Kollektiv braucht Unterstützung gegen {enemy}. Konsens ist: Wer hilft, gehört dazu.',
+    ],
   },
   // ⛵ Elbchaussee-Club (Hamburg), Frederik Brodersen-Lüth: höflich, herablassend, Anwälte.
   'hh-elbchaussee': {
@@ -953,6 +1004,13 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Drei Tage Lagerung, diskret. {amount}.',
       'Eine bezahlte Gefälligkeit: {amount}.',
       'Der Club zahlt {amount} für einen verschwiegenen Keller.',
+    ],
+    warAsk: [
+      'Der Club bedauert, Sie zu behelligen: Mit {enemy} ist in {veedel} eine Klärung fällig. Mögen Sie sich beteiligen?',
+      'Man hat uns zugetragen, dass {enemy} lästig wird. Ihre Hilfe würde großzügig honoriert.',
+      'Wir räumen {veedel} auf, sehr diskret. {enemy} geht. Sie dürfen helfen.',
+      'Eine Einladung, die man nicht ausschlägt: Gemeinsam gegen {enemy}, in {veedel}.',
+      'Der Club führt eine Auseinandersetzung mit {enemy}. Ihre Unterstützung wäre ein Zeichen guten Geschmacks.',
     ],
   },
 };

@@ -1,10 +1,10 @@
 // Übergabe mit Startpaket (Auftrag 36): Wer eine Stadt an den Statthalter übergibt, nimmt in die nächste mit, was er
-// will: eine neue Rechte Hand (bis es Capos gibt, Auftrag 34, ein Leutnant ab START_PACK_LEADER_MIN_LEVEL), bis zu
+// will: eine neue Rechte Hand (ein Capo, Auftrag 34; ohne Capo ein Leutnant ab START_PACK_LEADER_MIN_LEVEL), bis zu
 // START_PACK_MAX_STAFF Leute und Fahrzeuge (fleet). Das Vertrauen der Lieferanten bleibt ohnehin. Die Fahrt selbst und
 // das Umziehen macht city ('city.handOver' mit pack); hier steht, wer mitkommen darf, und wie die mitgebrachte Person
 // in der neuen Stadt Rechte Hand wird ('hierarchy.installRightHand', sobald sie angekommen ist).
 //
-// Für die Integration mit Auftrag 34: Nur startPackLeaders muss auf Capos umgestellt werden (Auswahl), der Rest bleibt.
+// Auftrag 34: startPackLeaders schlägt zuerst die Capos der Stadt vor, ohne Capo Leutnants ab Level 5.
 //
 // Statthalter (Auftrag 36): So heißt die Rechte Hand, die eine Stadt mit Vollmacht führt (rightHandTitle). Keine neue
 // Person, nur ein Titel mit Gesicht auf der Deutschland-Ansicht und dem Bericht aus der Stadt.
@@ -12,6 +12,7 @@
 import { type CommandResult, type Ctx, type GameState, journal, messages } from '../../core';
 import { cityName } from '../city';
 import { getStaff, getStaffMember, isEmployed, isSpecialist, type StaffMember, staffContact } from '../staff';
+import { getCapos } from './capo';
 import {
   RIGHT_HAND_MAX_RANK,
   RIGHT_HAND_RANK_XP,
@@ -35,14 +36,24 @@ function canTravel(m: StaffMember): boolean {
 }
 
 /**
- * Wer als neue Rechte Hand mitkommen kann (Haken für Auftrag 34: dann Capos statt Leutnants ab Level 5). Die beste
- * zuerst (Level, dann Loyalität).
+ * Wer als neue Rechte Hand mitkommen kann: die Capos der Stadt (Auftrag 34), ohne Capo Leutnants ab
+ * START_PACK_LEADER_MIN_LEVEL (sonst hätte die nächste Stadt oft keine Rechte Hand). Die beste zuerst (Level, dann
+ * Loyalität).
  */
 export function startPackLeaders(state: GameState, cityId: string): StaffMember[] {
+  const ready = (m: StaffMember | undefined): m is StaffMember =>
+    !!m && isEmployed(state, m.id) && canTravel(m) && !isRightHand(state, m.id);
+  const order = (a: StaffMember, b: StaffMember) =>
+    b.level - a.level || b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id);
+  const capos = getCapos(state, cityId)
+    .map((c) => getStaffMember(state, c.staffId))
+    .filter(ready)
+    .sort(order);
+  if (capos.length > 0) return capos;
   return getStaff(state, { cityId })
-    .filter((m) => isEmployed(state, m.id) && canTravel(m) && !isRightHand(state, m.id))
+    .filter(ready)
     .filter((m) => isLieutenant(state, m.id) && m.level >= START_PACK_LEADER_MIN_LEVEL)
-    .sort((a, b) => b.level - a.level || b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id));
+    .sort(order);
 }
 
 /** Wer sonst mitkommen kann: Leute der Stadt ohne Führungsposten (Läufer, Sicherheit, Fahrer …). */

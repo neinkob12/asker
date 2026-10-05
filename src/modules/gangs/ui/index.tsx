@@ -37,12 +37,14 @@ import { activeCity, cityName, relationFactor } from '../../city';
 import { canSnitch } from '../../police';
 import { veedelName } from '../../veedel';
 import {
-  ALLIANCE_COST,
+  activeWars,
+  allianceCost,
   ceasefireCost,
   describeIncident,
   type Gang,
   type GangMethod,
   gangActions,
+  gangMemories,
   gangPower,
   gangVeedel,
   getGang,
@@ -53,16 +55,21 @@ import {
   incidentChoices,
   isAllied,
   isGangBroken,
+  MEMORIES,
+  memoryPriceFactor,
   openIncidents,
+  pastWars,
   paysTribute,
   playerPower,
   protectionAmount,
   raidCrew,
   raidTargets,
+  rivalry,
   runGangMethod,
   STAGE_NAMES,
   sendGangMessage,
   tributeAmount,
+  WAR_AT,
   WARN_AT,
 } from '../index';
 import { gangsLayer } from './map';
@@ -267,7 +274,140 @@ function GangsTab() {
           ))}
         </List>
       </Group>
+      <GangWars />
     </div>
+  );
+}
+
+/** Wie die Gang über das Verhältnis mit einer anderen spricht. */
+function rivalryLabel(value: number): { label: string; color: CategoryColor } {
+  if (value <= WAR_AT) return { label: 'Todfeinde', color: 'danger' };
+  if (value < -10) return { label: 'verfeindet', color: 'warn' };
+  if (value <= 10) return { label: 'neutral', color: 'system' };
+  return { label: 'dulden sich', color: 'money' };
+}
+
+/**
+ * Auftrag 34: Woran sich die Gang erinnert, als Chips mit Wirkung (verblasst mit der Zeit). Darunter, was das für die
+ * Preise heißt.
+ */
+function GangMemory(props: { gang: Gang }) {
+  const { state } = useGame();
+  const memories = gangMemories(state, props.gang.id);
+  if (memories.length === 0) return null;
+  const factor = memoryPriceFactor(state, props.gang.id);
+  const percent = Math.round((factor - 1) * 100);
+  return (
+    <Group
+      title="Erinnert sich"
+      icon="journal"
+      color={percent > 0 ? 'danger' : 'money'}
+      note={
+        percent === 0
+          ? undefined
+          : `Waffenstillstand und Bündnis ${Math.abs(percent)} % ${percent > 0 ? 'teurer' : 'billiger'}.`
+      }
+      more="Gangs vergessen nicht, aber Erinnerungen verblassen mit der Zeit. Schlechte machen Frieden teurer und tauchen in ihren Nachrichten auf, gute machen ihn billiger."
+    >
+      <Chips
+        items={memories.map((m) => ({
+          label: `${MEMORIES[m.kind].label} ${m.value > 0 ? '+' : ''}${m.value}`,
+          icon: MEMORIES[m.kind].icon,
+          color: m.value > 0 ? 'money' : 'danger',
+          title: m.until === null ? 'vergisst nie' : `verblasst bis ${clock.format(m.until)}`,
+        }))}
+      />
+    </Group>
+  );
+}
+
+/** Auftrag 34: Verhältnis zu den anderen Gangs der Stadt (Todfeinde führen Krieg). */
+function GangRivals(props: { gang: Gang }) {
+  const { state } = useGame();
+  const others = getGangs(state, props.gang.cityId).filter((g) => g.id !== props.gang.id);
+  if (others.length === 0) return null;
+  const wars = activeWars(state, props.gang.cityId);
+  return (
+    <Group title="Andere Gangs" icon="swords" color="warn">
+      <List>
+        {others.map((g) => {
+          const value = rivalry(state, props.gang.id, g.id);
+          const look = rivalryLabel(value);
+          const war = wars.find(
+            (w) =>
+              (w.attacker === g.id && w.defender === props.gang.id) ||
+              (w.defender === g.id && w.attacker === props.gang.id),
+          );
+          return (
+            <ListItem key={g.id}>
+              <ItemContent
+                icon="skull"
+                color={look.color}
+                title={g.name}
+                tags={[
+                  { label: look.label, color: look.color },
+                  war && { label: `Krieg in ${veedelName(war.veedelId)}`, icon: 'swords', color: 'danger' },
+                ]}
+              />
+            </ListItem>
+          );
+        })}
+      </List>
+    </Group>
+  );
+}
+
+/** Auftrag 34: laufende Gang-Kriege in der Stadt und die letzten Ausgänge. */
+function GangWars() {
+  const { state } = useGame();
+  const city = activeCity(state);
+  const wars = activeWars(state, city);
+  const past = pastWars(state)
+    .filter((w) => getGang(state, w.attacker)?.cityId === city)
+    .slice(0, 3);
+  if (wars.length === 0 && past.length === 0) return null;
+  const name = (id: string) => getGang(state, id)?.name ?? id;
+  return (
+    <Group
+      title="Gang-Kriege"
+      icon="swords"
+      color="danger"
+      count={wars.length}
+      note="Wer einer Seite hilft, hat dort einen Freund und drüben einen Feind."
+    >
+      <List>
+        {wars.map((w) => (
+          <ListItem key={w.id}>
+            <ItemContent
+              icon="swords"
+              color="danger"
+              title={`${name(w.attacker)} gegen ${name(w.defender)}`}
+              tags={[
+                { label: veedelName(w.veedelId), icon: 'pin', color: 'place' },
+                w.support && { label: `du hilfst ${name(w.support.side)}`, icon: 'handshake', color: 'money' },
+              ]}
+            />
+          </ListItem>
+        ))}
+        {past.map((w) => (
+          <ListItem key={`${w.attacker}-${w.endedAt}`}>
+            <ItemContent
+              icon="flag"
+              color="system"
+              title={`${name(w.winner)} gewinnt`}
+              tags={[
+                { label: veedelName(w.veedelId), icon: 'pin', color: 'place' },
+                { label: clock.format(w.endedAt), icon: 'clock' },
+                !!w.supported && {
+                  label: w.supported === w.winner ? 'mit deiner Hilfe' : 'trotz deiner Hilfe',
+                  color: w.supported === w.winner ? 'money' : 'danger',
+                },
+              ]}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Group>
   );
 }
 
@@ -346,6 +486,8 @@ function GangPanel(props: { gangId: string }) {
           </ListItem>
         </List>
       </Group>
+      <GangMemory gang={gang} />
+      <GangRivals gang={gang} />
       <GangMethods gang={gang} />
       {lines.length > 0 && (
         <Group title="Abmachungen" icon="clipboard" color="warn">
@@ -423,7 +565,7 @@ function GangPanel(props: { gangId: string }) {
                 icon="handshake"
                 color="money"
                 title="Bündnis …"
-                meta={`${formatEuro(ALLIANCE_COST)}, gemeinsam gegen eine andere Gang`}
+                meta={`${formatEuro(allianceCost(state, gang.id))}, gemeinsam gegen eine andere Gang`}
               />
             </ListItem>
           )}
@@ -477,8 +619,8 @@ function AllySheet(props: { gang: Gang; open: boolean; onClose: () => void }) {
   return (
     <Sheet open={props.open} onClose={props.onClose} title={`Bündnis mit ${gang.name}`} detents={['medium', 'large']}>
       <p class="gang-sheet__lead">
-        Für {formatEuro(ALLIANCE_COST)} lässt dich {gang.name} in Ruhe und geht gegen eine andere Gang vor. Die bekommt
-        das mit. Braucht eine neutrale Beziehung oder besser.
+        Für {formatEuro(allianceCost(state, gang.id))} lässt dich {gang.name} in Ruhe und geht gegen eine andere Gang
+        vor. Die bekommt das mit. Braucht eine neutrale Beziehung oder besser.
       </p>
       <Group title="Gegen wen?" icon="swords" color="danger">
         <List>

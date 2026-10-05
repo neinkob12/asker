@@ -297,3 +297,67 @@ export const FAVOR_RELATION = 10;
 export const FAVOR_HEAT = 6;
 /** So viele Aktionen gegen dich merkt sich jede Gang für die Anzeige. */
 export const ACTION_LOG_LIMIT = 6;
+
+// --- Gedächtnis (Auftrag 34) ---
+
+/**
+ * Woran sich eine Gang erinnert: Wirkung auf ihre Meinung von dir (Punkte, verblasst linear), wie lange (Tage, null =
+ * nie vergessen) und wie stark sich gleiche Erinnerungen höchstens aufsummieren (Vielfaches der Wirkung).
+ */
+export const MEMORIES = {
+  snitched: { label: 'Verpfiffen', effect: -30, days: 20, icon: 'siren', stack: 2 },
+  agreementBroken: { label: 'Abkommen gebrochen', effect: -40, days: 30, icon: 'xCircle', stack: 1.5 },
+  spotRaided: { label: 'Spot überfallen', effect: -20, days: 15, icon: 'swords', stack: 2 },
+  raidRepelled: { label: 'Überfall abgewehrt', effect: -10, days: 10, icon: 'shield', stack: 2 },
+  takeover: { label: 'Veedel abgenommen', effect: -25, days: 25, icon: 'flag', stack: 3 },
+  threatened: { label: 'Bedroht', effect: -10, days: 10, icon: 'fist', stack: 2 },
+  chasedOff: { label: 'Verjagt', effect: -8, days: 10, icon: 'shield', stack: 2 },
+  hunted: { label: 'Gejagt', effect: -10, days: 12, icon: 'target', stack: 2 },
+  blackmailRefused: { label: 'Nicht erpressbar', effect: -5, days: 10, icon: 'lock', stack: 2 },
+  warAgainst: { label: 'Im Krieg gegen sie', effect: -20, days: 25, icon: 'swords', stack: 2 },
+  tributePaid: { label: 'Schutzgeld pünktlich', effect: 5, days: 21, icon: 'handshake', stack: 4 },
+  ceasefire: { label: 'Waffenstillstand', effect: 5, days: 10, icon: 'handshake', stack: 2 },
+  deal: { label: 'Deal gemacht', effect: 4, days: 14, icon: 'package', stack: 3 },
+  blackmailPaid: { label: 'Erpressung gezahlt', effect: 4, days: 10, icon: 'coins', stack: 2 },
+  favor: { label: 'Gefallen getan', effect: 15, days: 30, icon: 'gift', stack: 2 },
+  warned: { label: 'Warnung angenommen', effect: 5, days: 14, icon: 'bell', stack: 2 },
+  warHelp: { label: 'Im Krieg geholfen', effect: 20, days: 30, icon: 'trophy', stack: 2 },
+} as const;
+
+export type MemoryKind = keyof typeof MEMORIES;
+
+/** So viele Erinnerungen behält eine Gang (die schwächsten fallen weg). */
+export const MEMORY_LIMIT = 10;
+/**
+ * Preise für Waffenstillstand und Bündnis: mal (1 − Gedächtnis / MEMORY_PRICE_DIVISOR), begrenzt. Wer verpfiffen hat,
+ * zahlt mehr, wer pünktlich Schutzgeld zahlte, weniger.
+ */
+export const MEMORY_PRICE_DIVISOR = 100;
+export const MEMORY_PRICE_RANGE: readonly [number, number] = [0.85, 1.6];
+/** Ab so viel (Betrag) bezieht sich eine Nachricht der Gang auf die stärkste Erinnerung. */
+export const MEMORY_MENTION_AT = 8;
+
+// --- Gang-Kriege (Auftrag 34) ---
+
+/** Ein Vorstoß ins Revier einer anderen Gang verschlechtert das Verhältnis der beiden um so viel. */
+export const RIVALRY_PER_PUSH = -6;
+/** Pro Tag erholt sich das Verhältnis um so viel Richtung Startwert. */
+export const RIVALRY_RECOVERY = 1;
+/** Ab diesem Verhältnis ist ein Vorstoß ein Gang-Krieg. */
+export const WAR_AT = -40;
+/** Bei Feinden wählen Gangs eher deren Revier als Ziel: Bonus pro Punkt Feindschaft. */
+export const RIVALRY_TARGET_BONUS = 0.25;
+/** Höchstens alle so viele Minuten fragt eine Gang dich in einer Stadt um Hilfe. */
+export const WAR_MESSAGE_GAP = 3 * 1440;
+/** Ware liefern: so viele Einheiten, bezahlt zum Einkaufspreis der Gang. */
+export const WAR_GOODS = 50;
+/** Wer Ware bekommt, stößt so viel stärker vor; wer deine Leute im Revier hat, verteidigt so viel schwächer. */
+export const WAR_SUPPORT_FACTOR = 1.3;
+/**
+ * Beute der Siegerin eines Gang-Kriegs: so viele Leute laufen über, so viel vom Geld der Verliererin wechselt. Wer
+ * eine Gang schwächt, stärkt die Nachbarin; am Ende steht man gegen die Stärkste (Idee D1).
+ */
+export const WAR_SPOILS_PEOPLE = 2;
+export const WAR_SPOILS_MONEY = 0.2;
+/** Höchstens so viele Leute gehen beim Überfall auf einen Spot der anderen mit. */
+export const WAR_RAID_CREW = 3;

@@ -34,4 +34,11 @@ export const STAFF_TEXTS = {
     'Hundertschaften für {time}. {veedel} steht auf der Liste. Wenn du da wen hast: weg damit.',
     'Ich riskier hier meinen Job: Großrazzia {time}, auch {veedel}. Mach sauber.',
   ],
+  /** Geht mit, weil jemand entlassen wurde, den die Person mag (Auftrag 34). Platzhalter {other}. */
+  leaveWith: [
+    'Du schmeißt {other} raus? Dann bin ich auch weg.',
+    'Ohne {other} mach ich hier nicht weiter. Tschüss.',
+    '{other} war der Grund, warum ich das hier mache. Ich bin raus.',
+    'Wer {other} so behandelt, behandelt mich irgendwann genauso. Ich geh.',
+  ],
 } as const;

@@ -475,7 +475,7 @@ describe('gangs: Spielstände', () => {
     delete state.modules.gangs;
     state.moduleVersions.gangs = 1;
     const loaded = loadSimulation(state as unknown as typeof sim.state, sim.modules);
-    expect(loaded.state.moduleVersions.gangs).toBe(4);
+    expect(loaded.state.moduleVersions.gangs).toBe(5);
     expect(loaded.state.modules.gangs.incidents).toEqual([]);
     expect(getGangStatus(loaded.state, 'hh-kiez')?.people).toBeGreaterThan(0);
     expect(getGangStatus(loaded.state, 'nord')?.people).toBeGreaterThan(0);

@@ -19,6 +19,9 @@
 //   'gangs.releaseProtection', 'gangs.ally', 'gangs.attack', 'gangs.acceptOffer'
 // Ereignisse: 'gang.pushStarted', 'gang.pushEnded', 'gang.escalated', 'gang.raidStarted', 'gang.diplomacyChanged',
 //   'gang.busted'
+// Auftrag 34: Gedächtnis (memory.ts: gangMemories, memoryScore, memoryPriceFactor, remember; Preise für Waffenstillstand
+//   und Bündnis hängen daran, allianceCost) und Gang-Kriege (war.ts: rivalry, rivalries, activeWars, pastWars; Befehl
+//   'gangs.supportWar', Ereignisse 'gang.remembered', 'gang.warStarted', 'gang.warEnded', 'gang.warSupported').
 //
 // Achtung Abhängigkeiten: territory hängt von gangs ab (Startverteilung der Reviere). gangs darf deshalb
 // nicht dependsOn: ['territory'] eintragen (Zyklus). Für API-Aufrufe zur Laufzeit ist das auch nicht nötig.
@@ -27,6 +30,7 @@ import { type Ctx, defineModule } from '../../core';
 import type { FactionId } from '../territory';
 import { gangsTick } from './ai';
 import { say } from './common';
+import type { MemoryKind } from './config';
 import type { GangMethod } from './data';
 import {
   acceptOffer,
@@ -39,17 +43,30 @@ import {
   refuse,
   releaseProtection,
 } from './diplomacy';
+import { forgetFaded } from './memory';
 import { burgleNow, type IncidentKind, respond, runMethod } from './methods';
 import { onControlChanged, onEncounterResolved, onPoliceRaid, onSale, onTipOff } from './reactions';
-import { type GangStage, type GangsState, getGang, getGangStatus, initialGangsState } from './state';
+import {
+  type GangStage,
+  type GangsState,
+  getGang,
+  getGangStatus,
+  initialGangsState,
+  initialMemoryState,
+} from './state';
 import type { GangTextKey } from './texts';
+import { recoverRivalries, supportWar, type WarSupport } from './war';
 
 /** Zustand bis Version 3 (vor Auftrag 23). */
 type GangsStateV3 = Pick<GangsState, 'gangs' | 'priceFactors'>;
+/** Zustand bis Version 4 (vor Auftrag 34). */
+type GangsStateV4 = Omit<GangsState, keyof ReturnType<typeof initialMemoryState>>;
 
-export { ALLIANCE_COST, GANG_SPOT_MIN_INFLUENCE, WARN_AT } from './config';
+export { ALLIANCE_COST, GANG_SPOT_MIN_INFLUENCE, MEMORIES, type MemoryKind, WAR_AT, WARN_AT } from './config';
 export type { Gang, GangMethod, GangTraits } from './data';
+export { GANG_RIVALRY } from './data';
 export { canJoinRaid, raidCrew } from './diplomacy';
+export { type GangMemory, gangMemories, MEMORY_TEXTS, memoryPriceFactor, memoryScore, remember } from './memory';
 export {
   describeIncident,
   type GangActionEntry,
@@ -65,6 +82,7 @@ export {
   openIncidents,
 } from './methods';
 export {
+  allianceCost,
   ceasefireCost,
   type GangAlliance,
   type GangOffer,
@@ -94,6 +112,15 @@ export {
   veedelGang,
 } from './state';
 export type { GangTextKey } from './texts';
+export {
+  activeWars,
+  type GangWar,
+  type GangWarResult,
+  pastWars,
+  rivalries,
+  rivalry,
+  type WarSupport,
+} from './war';
 
 /**
  * Eine Methode der Gang sofort ausführen (Tests, Dev-Abkürzungen, Szenen für Screenshots). Gibt zurück, ob etwas
@@ -144,6 +171,8 @@ declare module '../../core' {
     'gangs.acceptOffer': { gangId: string; offerId: number };
     /** Antwort auf einen Vorfall (Auftrag 23): Einbruch, Abwerben, Einschüchtern, Erpressung, Chancen. */
     'gangs.respond': { incidentId: number; choice: string };
+    /** Auftrag 34: im Gang-Krieg Partei ergreifen (Ware liefern oder einen Spot der anderen überfallen). */
+    'gangs.supportWar': { warId: number; kind: WarSupport };
   }
   interface GameEvents {
     'gang.pushStarted': { gangId: string; veedelId: string; against: FactionId | null };
@@ -163,12 +192,18 @@ declare module '../../core' {
     /** Chance von einer Gang (Warnung vor einem Rivalen, Gefallen). */
     'gang.goodTurn': { gangId: string; kind: 'warnRival' | 'favor' };
     'gang.incidentResolved': { incidentId: number; kind: IncidentKind; choice: string };
+    /** Auftrag 34: Eine Gang merkt sich etwas über dich. */
+    'gang.remembered': { gangId: string; kind: MemoryKind; effect: number };
+    /** Auftrag 34: Gang-Krieg (ein Vorstoß ins Revier einer verfeindeten Gang). */
+    'gang.warStarted': { warId: number; attacker: string; defender: string; veedelId: string };
+    'gang.warEnded': { warId: number; attacker: string; defender: string; veedelId: string; winner: string };
+    'gang.warSupported': { warId: number; gangId: string; kind: WarSupport };
   }
 }
 
 export default defineModule({
   id: 'gangs',
-  version: 4,
+  version: 5,
   dependsOn: ['veedel'],
   init: () => initialGangsState(),
   tickEvery: 60,
@@ -185,8 +220,14 @@ export default defineModule({
       attack(ctx, gangId, veedelId, staffIds, playerPresent),
     'gangs.acceptOffer': (ctx, { gangId, offerId }) => acceptOffer(ctx, gangId, offerId),
     'gangs.respond': (ctx, { incidentId, choice }) => respond(ctx, incidentId, choice),
+    'gangs.supportWar': (ctx, { warId, kind }) => supportWar(ctx, warId, kind),
   },
   on: {
+    // Auftrag 34: Das Gedächtnis verblasst in allen Städten, Verhältnisse unter den Gangs erholen sich.
+    'clock.dayStarted': (ctx) => {
+      forgetFaded(ctx);
+      recoverRivalries(ctx);
+    },
     'sale.completed': onSale,
     'encounter.resolved': onEncounterResolved,
     'police.tipOff': onTipOff,
@@ -199,7 +240,7 @@ export default defineModule({
     // Version 3 (Auftrag 30): Die Hamburger Gangs kommen dazu, wie bei einem neuen Spiel.
     3: (old: GangsState): GangsState => ({ ...old, gangs: { ...initialGangsState().gangs, ...old.gangs } }),
     // Version 4 (Auftrag 23): Vorfälle, Einschüchterungen, Protokoll und Abklingzeiten der neuen Gang-Methoden.
-    4: (old: GangsStateV3): GangsState => ({
+    4: (old: GangsStateV3): GangsStateV4 => ({
       ...old,
       incidents: [],
       intimidations: [],
@@ -207,5 +248,7 @@ export default defineModule({
       nextMethodAt: {},
       lastMethodAt: null,
     }),
+    // Version 5 (Auftrag 34): Gedächtnis, Verhältnis der Gangs untereinander, Gang-Kriege.
+    5: (old: GangsStateV4): GangsState => ({ ...old, ...initialMemoryState() }),
   },
 });

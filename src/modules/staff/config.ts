@@ -1,4 +1,4 @@
-import type { StaffRole, StaffStats, StaffStatus, StatKey } from './types';
+import type { RelationKind, StaffRole, StaffStats, StaffStatus, StatKey, StoryId, TraitId } from './types';
 
 // Einstellbare Werte des Personals. Zeiten in Spielminuten, Geld in Euro (Schwarzgeld), Werte von 0 bis 100.
 
@@ -347,4 +347,269 @@ export const BACKGROUNDS: Record<StaffRole, readonly string[]> = {
     'Streifenpolizist mit Spielsucht.',
     'Hat seine Beförderung nie bekommen und ist entsprechend gelaunt.',
   ],
+};
+
+// --- Eigenschaften (Auftrag 34) ---
+
+/**
+ * Wie eine Eigenschaft wirkt. Alle Faktoren sind klein (1 = keine Wirkung) und gleichen sich über ein Team aus:
+ * abwechslungsreicher, nicht härter. Der Lohnwunsch liegt im Schnitt bei 1 (mehr: Familie, Ehrgeiz, Charme; weniger:
+ * Trinker, Angsthasen, Treue, Hitzköpfe); ohne diesen Ausgleich brauchte Köln komplett anderthalb Tage länger.
+ */
+export interface TraitInfo {
+  name: string;
+  /** Name für Frauen, wenn er anders lautet. */
+  nameFeminine?: string;
+  /** Ein Satz für die Oberfläche. */
+  hint: string;
+  icon: string;
+  /** Färbung des Chips: gut, schlecht oder beides. */
+  tone: 'good' | 'bad' | 'mixed';
+  /** Gewicht beim Würfeln. */
+  weight: number;
+  /** Loyalität pro Tag. */
+  loyaltyDay?: number;
+  /** Faktor auf den erwarteten Lohn. */
+  wage?: number;
+  /** Faktor auf das Risiko (Festnahme, Entdeckung). */
+  risk?: number;
+  /** Faktor auf die Zeit pro Kunde (kleiner = schneller). */
+  pace?: number;
+  /** Faktor auf die Kampfkraft. */
+  combat?: number;
+  /** Faktor auf die Erfahrung. */
+  xp?: number;
+  /** Faktor auf die Chance für Verrat. */
+  betrayal?: number;
+  /** Faktor auf die Chance, dass jemand redet (Entlassung, Haft). */
+  talk?: number;
+  /** Faktor auf Angst (Loyalität bei Festnahmen nebenan, Razzien, Heat). */
+  fear?: number;
+}
+
+export const TRAITS: Record<TraitId, TraitInfo> = {
+  family: {
+    name: 'Familienvater',
+    nameFeminine: 'Familienmutter',
+    hint: 'Vorsichtig, braucht aber öfter Geld oder einen freien Tag.',
+    icon: 'home',
+    tone: 'mixed',
+    weight: 3,
+    risk: 0.9,
+    wage: 1.1,
+  },
+  drinker: {
+    name: 'Trinkt',
+    hint: 'Billig zu haben, fällt aber öfter auf und lässt auch mal den Spot stehen.',
+    icon: 'beer',
+    tone: 'bad',
+    weight: 3,
+    wage: 0.9,
+    risk: 1.15,
+    pace: 1.05,
+  },
+  gambler: {
+    name: 'Spielt',
+    hint: 'Hat Schulden bei den falschen Leuten. Wer klamm ist, greift eher in die Kasse.',
+    icon: 'dice',
+    tone: 'bad',
+    weight: 2,
+    betrayal: 1.5,
+  },
+  ambitious: {
+    name: 'Ehrgeizig',
+    hint: 'Lernt schneller, will aber mehr Geld und irgendwann mehr Verantwortung.',
+    icon: 'rocket',
+    tone: 'mixed',
+    weight: 3,
+    xp: 1.15,
+    wage: 1.15,
+  },
+  coward: {
+    name: 'Angsthase',
+    hint: 'Will wenig, hält sich aus Ärger raus und rettet zuerst die Ware. Razzien schlagen auf die Laune.',
+    icon: 'frown',
+    tone: 'mixed',
+    weight: 2,
+    wage: 0.9,
+    combat: 0.75,
+    risk: 0.85,
+    fear: 2,
+  },
+  braggart: {
+    name: 'Maulheld',
+    hint: 'Redet zu viel, in der Kneipe und bei den Bullen.',
+    icon: 'megaphone',
+    tone: 'bad',
+    weight: 2,
+    risk: 1.1,
+    talk: 1.5,
+  },
+  loyal: {
+    name: 'Treu wie Gold',
+    hint: 'Verrät dich nicht und hält in Haft dicht.',
+    icon: 'heart',
+    tone: 'good',
+    weight: 2,
+    wage: 0.95,
+    betrayal: 0,
+    talk: 0,
+  },
+  hothead: {
+    name: 'Hitzkopf',
+    hint: 'Geht bei Ärger dazwischen und fängt einen Treffer ab, schlägt aber auch mal einen Kunden.',
+    icon: 'flame',
+    tone: 'mixed',
+    weight: 2,
+    wage: 0.95,
+    combat: 1.2,
+    risk: 1.05,
+  },
+  charmer: {
+    name: 'Charmant',
+    hint: 'Kunden bleiben gern stehen; in Konfrontationen eine zweite Verhandlung.',
+    icon: 'smile',
+    tone: 'good',
+    weight: 2,
+    pace: 0.95,
+    wage: 1.05,
+  },
+  nimble: {
+    name: 'Flink',
+    hint: 'Bedient schneller und bringt in Konfrontationen die halbe Ware in Sicherheit.',
+    icon: 'bolt',
+    tone: 'good',
+    weight: 2,
+    pace: 0.95,
+  },
+};
+
+/** Paare, die nicht zusammen vorkommen. */
+export const TRAIT_EXCLUDES: readonly (readonly [TraitId, TraitId])[] = [
+  ['coward', 'hothead'],
+  ['loyal', 'gambler'],
+  ['charmer', 'braggart'],
+];
+
+/** So oft hat jemand drei statt zwei Eigenschaften. */
+export const THIRD_TRAIT_CHANCE = 0.35;
+
+// --- Beziehungen (Auftrag 34) ---
+
+export interface RelationInfo {
+  name: string;
+  icon: string;
+  tone: 'good' | 'bad';
+  /** Gewicht, wenn beim Einstellen eine Beziehung entsteht. */
+  weight: number;
+  /** Loyalität der anderen Person, wenn eine entlassen wird bzw. stirbt bzw. festgenommen wird. */
+  fired: number;
+  died: number;
+  jailed: number;
+  /** Chance, dass die andere Person mitgeht, wenn eine entlassen wird. */
+  leaveWith: number;
+  /** Faktor auf die Zeit pro Kunde, wenn beide am selben Spot sind (kleiner = schneller). */
+  samePlace: number;
+  /** Loyalität pro Tag, solange beide aktiv sind bzw. eine von beiden sitzt. */
+  dayTogether: number;
+  dayApart: number;
+}
+
+export const RELATIONS: Record<RelationKind, RelationInfo> = {
+  friends: {
+    name: 'Befreundet',
+    icon: 'handshake',
+    tone: 'good',
+    weight: 4,
+    fired: -10,
+    died: -15,
+    jailed: -3,
+    leaveWith: 0.1,
+    samePlace: 0.9,
+    dayTogether: 0,
+    dayApart: 0,
+  },
+  siblings: {
+    name: 'Geschwister',
+    icon: 'users',
+    tone: 'good',
+    weight: 1,
+    fired: -20,
+    died: -30,
+    jailed: -6,
+    leaveWith: 0.3,
+    samePlace: 0.9,
+    dayTogether: 0,
+    dayApart: -1,
+  },
+  rivals: {
+    name: 'Rivalen',
+    icon: 'swords',
+    tone: 'bad',
+    weight: 3,
+    fired: 4,
+    died: -3,
+    jailed: 2,
+    leaveWith: 0,
+    samePlace: 1.15,
+    dayTogether: 0,
+    dayApart: 0,
+  },
+  couple: {
+    name: 'Ein Paar',
+    icon: 'heart',
+    tone: 'good',
+    weight: 1,
+    fired: -25,
+    died: -40,
+    jailed: -8,
+    leaveWith: 0.4,
+    samePlace: 0.9,
+    dayTogether: 1,
+    dayApart: -2,
+  },
+};
+
+/** Chance, dass beim Einstellen eine Beziehung zu jemandem im Team entsteht. */
+export const RELATION_CHANCE = 0.3;
+/** Empfehlungen: So oft ist die neue Person mit der empfehlenden befreundet (sonst Geschwister oder Paar). */
+export const REFERRAL_FRIENDS_SHARE = 0.7;
+/** Höchstens so viele Beziehungen pro Person. */
+export const RELATIONS_PER_PERSON = 2;
+/** Höchstens eine Beziehung auf so viele Leute im Team (wenige pro Team). */
+export const RELATION_TEAM_SHARE = 3;
+
+// --- Geschichten (Auftrag 34) ---
+
+/** Mindestabstand zwischen zwei Geschichten in einer Stadt. */
+export const STORY_GAP = 1.5 * 1440;
+/** Danach pro Stunde (tagsüber) diese Chance auf eine Geschichte. */
+export const STORY_CHANCE_PER_HOUR = 0.06;
+/** Geschichten kommen zwischen diesen Stunden. */
+export const STORY_HOURS: [number, number] = [9, 22];
+/** Abstand pro Person und pro Vorlage. */
+export const STORY_PERSON_GAP = 7 * 1440;
+export const STORY_TEMPLATE_GAP = 4 * 1440;
+/** Antwortfrist. */
+export const STORY_EXPIRES = 8 * 60;
+/** Ab so vielen Leuten in der Stadt gibt es Geschichten. */
+export const STORY_MIN_TEAM = 2;
+/** Gewichte der Vorlagen beim Würfeln (Vorlagen in stories.ts). */
+export const STORY_WEIGHTS: Record<StoryId, number> = {
+  loan: 3,
+  familyTime: 2,
+  drunk: 3,
+  hangover: 2,
+  debt: 3,
+  gamblerWin: 1,
+  promotion: 3,
+  raise: 2,
+  bragged: 3,
+  scared: 3,
+  loyalTip: 2,
+  hothead: 3,
+  rivalsFight: 4,
+  friendsParty: 2,
+  coupleMoveIn: 2,
+  siblingJailed: 4,
 };

@@ -46,6 +46,7 @@ import {
 } from '../staff';
 import { veedelAt, veedelName } from '../veedel';
 import { addHostility, addRelation, crewFor, say, statusOf } from './common';
+import type { MemoryKind } from './config';
 import {
   ACTION_LOG_LIMIT,
   BLACKMAIL_BASE,
@@ -87,6 +88,7 @@ import {
   WARN_PREPARE_COST,
 } from './config';
 import { GANGS, type Gang, type GangMethod } from './data';
+import { remember } from './memory';
 import { type GangStatus, gangVeedel, getGang, isAtPeace, isGangBroken } from './state';
 import { INCIDENT_TEXTS } from './texts';
 
@@ -992,6 +994,25 @@ function removeIncident(ctx: Ctx, id: number): void {
   g.incidents = g.incidents.filter((i) => i.id !== id);
 }
 
+/** Woran sich die Gang nach deiner Antwort auf einen Vorfall erinnert (Auftrag 34). */
+const INCIDENT_MEMORIES: Readonly<Record<string, MemoryKind>> = {
+  'burglary:hunt': 'hunted',
+  'poach:threaten': 'threatened',
+  'intimidation:security': 'chasedOff',
+  'intimidation:tribute': 'tributePaid',
+  'blackmail:pay': 'blackmailPaid',
+  'blackmail:refuse': 'blackmailRefused',
+  'favor:accept': 'favor',
+  'warnRival:thanks': 'warned',
+  'warnRival:prepare': 'warned',
+};
+
+function rememberIncident(ctx: Ctx, incident: GangIncident, choice: string): void {
+  const kind = INCIDENT_MEMORIES[`${incident.kind}:${choice}`];
+  const gangId = incident.gangId ?? incident.byGangId;
+  if (kind && gangId) remember(ctx, gangId, kind);
+}
+
 /** Befehl 'gangs.respond': Antwort auf einen Vorfall. */
 export function respond(ctx: Ctx, incidentId: number, choice: string): CommandResult {
   const g = ctx.state.modules.gangs;
@@ -1005,6 +1026,7 @@ export function respond(ctx: Ctx, incidentId: number, choice: string): CommandRe
       result = huntThieves(ctx, incident);
       if (result.ok) {
         retract(ctx, incident);
+        rememberIncident(ctx, incident, choice);
         ctx.emit('gang.incidentResolved', { incidentId, kind: incident.kind, choice });
         // Bleibt offen, bis die Konfrontation entschieden ist (onRecoverResolved).
         return result;
@@ -1025,6 +1047,7 @@ export function respond(ctx: Ctx, incidentId: number, choice: string): CommandRe
     result = resolveIntimidation(ctx, incident, choice);
     if (result.ok && choice === 'security' && incident.encounterId !== undefined) {
       retract(ctx, incident);
+      rememberIncident(ctx, incident, choice);
       ctx.emit('gang.incidentResolved', { incidentId, kind: incident.kind, choice });
       return result;
     }
@@ -1033,6 +1056,7 @@ export function respond(ctx: Ctx, incidentId: number, choice: string): CommandRe
   if (!result.ok) return result;
   retract(ctx, incident);
   removeIncident(ctx, incident.id);
+  rememberIncident(ctx, incident, choice);
   ctx.emit('gang.incidentResolved', { incidentId, kind: incident.kind, choice });
   return { ok: true };
 }

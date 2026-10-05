@@ -8,6 +8,7 @@ import { getStaff } from '../staff';
 import { controlledBy, controllerOf, getInfluence, PLAYER_FACTION } from '../territory';
 import { allVeedel, veedelCity } from '../veedel';
 import {
+  ALLIANCE_COST,
   ALLIANCE_HOSTILITY_FACTOR,
   ATTACK_AT,
   CEASEFIRE_BASE_COST,
@@ -28,7 +29,9 @@ import {
   WARN_AT,
 } from './config';
 import { GANGS, type Gang } from './data';
+import { type GangMemory, memoryPriceFactor } from './memory';
 import type { GangActionEntry, GangIncident, GangIntimidation } from './methods';
+import type { GangWar, GangWarResult } from './war';
 
 /** Eskalation gegenüber dem Spieler: 0 ignoriert, 1 gewarnt, 2 bedroht, 3 greift an. */
 export type GangStage = 0 | 1 | 2 | 3;
@@ -116,6 +119,17 @@ export interface GangsState {
   nextMethodAt: Record<string, number>;
   /** Letzte Aktion irgendeiner Gang (Abstand zwischen allen). */
   lastMethodAt: number | null;
+  /** Auftrag 34: Erinnerungen pro Gang (über alle Städte, siehe memory.ts). */
+  memories: Record<string, GangMemory[]>;
+  /** Auftrag 34: Verhältnis der Gangs untereinander, nur wo es vom Startwert (GANG_RIVALRY) abweicht. */
+  rivalry: Record<string, number>;
+  /** Laufende Gang-Kriege und die letzten beendeten. */
+  wars: GangWar[];
+  warLog: GangWarResult[];
+  /** Letzte Bitte um Hilfe im Krieg pro Stadt. */
+  lastWarAskAt: Record<string, number>;
+  /** Wie viele Kriege es gab (Messung). */
+  warCount: number;
 }
 
 export function initialGangsState(): GangsState {
@@ -140,7 +154,24 @@ export function initialGangsState(): GangsState {
       lastSaleSpotId: null,
     };
   }
-  return { gangs, priceFactors: {}, incidents: [], intimidations: [], log: {}, nextMethodAt: {}, lastMethodAt: null };
+  return {
+    gangs,
+    priceFactors: {},
+    incidents: [],
+    intimidations: [],
+    log: {},
+    nextMethodAt: {},
+    lastMethodAt: null,
+    ...initialMemoryState(),
+  };
+}
+
+/** Felder aus Auftrag 34 (Gedächtnis, Kriege), auch für die Migration. */
+export function initialMemoryState(): Pick<
+  GangsState,
+  'memories' | 'rivalry' | 'wars' | 'warLog' | 'lastWarAskAt' | 'warCount'
+> {
+  return { memories: {}, rivalry: {}, wars: [], warLog: [], lastWarAskAt: {}, warCount: 0 };
 }
 
 const GANGS_BY_CITY = new Map<string, readonly Gang[]>();
@@ -294,7 +325,14 @@ export function ceasefireCost(state: GameState, id: string): number {
   const s = getGangStatus(state, id);
   if (!s) return 0;
   if (s.quote && s.quote.until > state.time) return s.quote.ceasefire;
-  return roundTo(CEASEFIRE_BASE_COST + s.hostility * CEASEFIRE_COST_PER_HOSTILITY, 50);
+  // Auftrag 34: Groll macht teurer, Wohlwollen billiger.
+  const base = CEASEFIRE_BASE_COST + s.hostility * CEASEFIRE_COST_PER_HOSTILITY;
+  return roundTo(base * memoryPriceFactor(state, id), 50);
+}
+
+/** Was ein Bündnis mit dieser Gang kostet (Auftrag 34: hängt am Gedächtnis). */
+export function allianceCost(state: GameState, id: string): number {
+  return roundTo(ALLIANCE_COST * memoryPriceFactor(state, id), 50);
 }
 
 /** Schutzgeld pro Woche, das die Gang von dir will (oder der in einer Nachricht genannte Betrag). */

@@ -1,6 +1,6 @@
 # Köln Tycoon – Konzept
 
-Stand: 04.10.2026 (nach Auftrag 31, Auftrag 32 und der Fragerunde zum Bogen des Spiels, Plan in [`docs/plan.md`](plan.md)). Grundlage sind die Antworten aus den Fragerunden (50 + 5 Fragen, 16 Fragen zu den Städten, Fragerunde zur Ideensammlung [`docs/ideen.md`](ideen.md)).
+Stand: 05.10.2026 (nach Auftrag 31 bis 35 und der Fragerunde zum Bogen des Spiels, Plan in [`docs/plan.md`](plan.md)). Grundlage sind die Antworten aus den Fragerunden (50 + 5 Fragen, 16 Fragen zu den Städten, Fragerunde zur Ideensammlung [`docs/ideen.md`](ideen.md)).
 Dieses Dokument ist die gemeinsame Referenz für beide im Duo und für alle Claude-Sessions.
 Wer eine Entscheidung ändert, ändert sie hier.
 
@@ -179,7 +179,7 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
 
 - **Kampagnenlänge:** Köln ist der Einstieg, Hamburg die zweite Stadt. Laut Balancing-Simulation (`npm run balance`)
   erstes Veedel nach etwa 6–7 Spieltagen, drei nach etwa 8, fünf nach 13–16, „Boss von Köln“ (7 von 12) nach 16–19,
-  Köln komplett nach 21–24 Spieltagen (Stand Auftrag 32), bei Tempo 1x (4,8 Minuten pro Spieltag) grob 2 Stunden. In Hamburg fällt das
+  Köln komplett nach 21–25 Spieltagen (Stand Auftrag 34, Mittel 22,7 über 20 Seeds), bei Tempo 1x (4,8 Minuten pro Spieltag) grob 2 Stunden. In Hamburg fällt das
   erste Stadtteil-Revier etwa eine Woche nach der Ankunft. Die Polizei bleibt in den ersten gut zwei Wochen bei
   1–2 Flammen und zieht erst als Großhändler an.
 - **Session-Länge:** In 20 Minuten (etwa 8 Spieltage bei 2x) kommen Verkauf, Nachschub, Personal, Leutnants,
@@ -199,6 +199,15 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   entscheidet nur die Stärke, das Ergebnis ist eine Mischung. Die Rechte Hand gibt Rat, die Zollkontrolle (Autobahn,
   später Hafen) hat eigene Handlungen. Gute Entscheidungen machen messbar einen Unterschied (siehe `docs/architektur.md`,
   Balancing).
+- **Leute und Gegner (Auftrag 34):** Jede Person hat zwei bis drei Eigenschaften (Familienvater, trinkt, spielt,
+  ehrgeizig, Angsthase, Maulheld, treu wie Gold, Hitzkopf, charmant, flink) mit kleinen Wirkungen und einem Spezialzug
+  in Konfrontationen, dazu wenige Beziehungen im Team (befreundet, Geschwister, Rivalen, ein Paar). Daraus kommen etwa
+  zwei Geschichten pro Woche per Handy (Geldbitte, Spielschulden, betrunken den Spot stehen lassen, Beförderungswunsch,
+  Rivalen prügeln sich …), jede mit Antworten und Folgen. Gangs merken sich, was du getan hast (verpfiffen, pünktlich
+  gezahlt, ihren Spot überfallen …), das verblasst mit der Zeit, macht Frieden teurer oder billiger und steht in ihren
+  Nachrichten. Verfeindete Gangs führen Krieg, eine Seite bittet dich um Hilfe (Ware liefern oder einen Spot der anderen
+  überfallen), die Siegerin wird stärker. Die Dealer werden Stammabnehmer mit Vertrauen (regelmäßig, Vorkasse, exklusiv,
+  Zwischenhändler für ein Veedel). Große Städte bekommen Capos, die Rechte Hand gibt im Tagesbericht einen Satz Rat.
 - **Deutschland (Auftrag 36):** Nach Köln ist die Reihenfolge frei. Jede Stadt hat einen Kontakt mit Gesicht und Stimme
   und einen Satz Dreh; nach „<Stadt> komplett“ ruft die nächstgelegene freie an, die anderen melden sich per Handy, ein
   Tipp auf ihre Glas-Karte in der Deutschland-Ansicht holt den Anruf. Berlin, München und Frankfurt stehen schon als
@@ -209,10 +218,9 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   Zielstadt, Hamburg 45.000 €). Ränge des Spielers ohne
   Boni: Kleindealer, Händler, Großhändler, Boss von Köln, Boss von <Stadt>, Boss von Deutschland (ab vier Städten; dann Importeur und
   Produzent), mit Banner, im HUD und in der Bestenliste. Peter hat ein Kapitel pro Stadt.
-- **Noch nicht umgesetzt** (Aufträge 34 und 37 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`):
-  Stammabnehmer, Gangs mit Gedächtnis, Leute mit Geschichte, Capo, Inhalt von Berlin, München, Frankfurt, Verkauf und
-  Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen: Tarnfirmen, Charakter-Erstellung, Perks,
-  Besitz, Akte, Korruption.
+- **Noch nicht umgesetzt** (Aufträge 37 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Inhalt von
+  Berlin, München, Frankfurt, Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen:
+  Tarnfirmen, Charakter-Erstellung, Perks, Besitz, Akte, Korruption.
 
 ## Mehrere Städte (Auftrag 30 gebaut, Auftrag 31 für die Karte)
 

@@ -19,6 +19,10 @@
 //   assign(ctx, id, assignment), setStatus(ctx, id, status, until?), addXp, addLoyalty, setWage, setDemand,
 //   addCareer, revealStat, enlist(ctx, profile, options), generateProfile(ctx, role, options), randomName(ctx)
 //   isLyingLow(state, veedelId), lieLow(ctx, veedelId, until)
+// Auftrag 34 (Leute mit Geschichte): Eigenschaften (traits, TRAITS in config.ts) mit kleinen Faktoren (traitFactor,
+//   hasTrait, traitName, rollTraits fest aus einem Schlüssel), Beziehungen (relationsOf, relationBetween, relationLabel,
+//   RELATIONS: Wirkung beim Entlassen, in Haft, am selben Spot), Geschichten (stories.ts: STORIES, openStories,
+//   storyChoices, startStory) mit Antwort 'staff.storyChoice' und Ereignissen 'staff.story', 'staff.storyResolved'.
 // Befehle: 'staff.hireRunner', 'staff.hireDriver', 'staff.fire', 'staff.assign', 'staff.setWage', 'staff.bail', 'staff.lieLow',
 //   'staff.relocate' (in eine andere Stadt, Auftrag 30),
 //   'staff.setJailSupport' (Stillhaltegeld), 'staff.replace' (Ausfall am Spot ersetzen, optional entlassen)
@@ -36,6 +40,7 @@ import {
   journal,
   type MessageOption,
   messages,
+  texts,
 } from '../../core';
 import { absenceHandled, teamLeadOf } from '../hierarchy';
 import { PLAYER_FACTION } from '../territory';
@@ -58,14 +63,27 @@ import {
   JAIL_DURATION,
   LOYALTY,
   MAX_HIDE_DURATION,
+  RELATIONS,
   XP_PER_ENCOUNTER,
   XP_PER_SALE,
   XP_PER_SALE_UNIT,
   XP_SALE_UNITS_MAX,
 } from './config';
-import { addLoyalty, addXp, bailCost, getStaff, getStaffMember, setStatus, staffContact } from './members';
+import {
+  addLoyalty,
+  addXp,
+  bailCost,
+  getStaff,
+  getStaffMember,
+  removeMember,
+  setStatus,
+  staffContact,
+} from './members';
 import { STAT_KEYS } from './profile';
 import { daily, hourly, lieLow, tick, warnOfRaid } from './routines';
+import { chooseStory, dropStoriesOf, expireStory, maybeStartStory } from './stories';
+import { STAFF_TEXTS } from './texts';
+import { relationsOf, rollTraits, traitFactor } from './traits';
 import type {
   BetrayalKind,
   StaffAssignment,
@@ -75,6 +93,7 @@ import type {
   StaffState,
   StaffStats,
   StaffStatus,
+  StoryId,
 } from './types';
 
 export {
@@ -83,11 +102,15 @@ export {
   INJURED_WAGE_FACTOR,
   JAIL_WAGE_FACTOR,
   MAX_LEVEL,
+  RELATIONS,
+  type RelationInfo,
   ROLE_INFO,
   RUNNER_DAILY_WAGE,
   RUNNER_HIRE_COST,
   STAT_NAMES,
   STATUS_NAMES,
+  TRAITS,
+  type TraitInfo,
 } from './config';
 export * from './members';
 export {
@@ -101,6 +124,28 @@ export {
   STAT_KEYS,
 } from './profile';
 export { betrayalChance, isLyingLow, lieLow } from './routines';
+export {
+  openStories,
+  STORIES,
+  type StoryChoice,
+  type StoryEffect,
+  type StoryTemplate,
+  startStory,
+  storyChoices,
+} from './stories';
+export {
+  hasTrait,
+  keyedRandom,
+  RELATION_KINDS,
+  relationBetween,
+  relationLabel,
+  relationsOf,
+  rollTraits,
+  TRAIT_IDS,
+  traitFactor,
+  traitName,
+  traitsOf,
+} from './traits';
 export type * from './types';
 
 declare module '../../core' {
@@ -127,6 +172,8 @@ declare module '../../core' {
     'staff.lieLow': { veedelId: string; until: number };
     /** Jemanden in eine andere Stadt schicken (Fahrt über die A1, Auftrag 30). */
     'staff.relocate': { staffId: string; cityId: string };
+    /** Antwort auf eine Geschichte (Auftrag 34; kommt aus der Handy-Antwort). */
+    'staff.storyChoice': { storyId: string; choice: string };
   }
   interface GameEvents {
     'staff.hired': { staffId: string; role: StaffRole };
@@ -143,6 +190,10 @@ declare module '../../core' {
     'staff.wentUnderground': { veedelId: string; until: number; pulled: number };
     /** Jemand ist in einer anderen Stadt angekommen. */
     'staff.relocated': { staffId: string; from: string; to: string };
+    /** Eine Geschichte hat angefangen (Auftrag 34). */
+    'staff.story': { storyId: string; story: StoryId; staffId: string; otherId: string | null };
+    /** Auf eine Geschichte wurde geantwortet (oder die Frist ist abgelaufen). */
+    'staff.storyResolved': { storyId: string; story: StoryId; staffId: string; choice: string };
   }
 }
 
@@ -191,10 +242,16 @@ function upgradeMember(m: StaffMemberV1, state: GameState): StaffMemberV3 {
 }
 
 /** Person bis Version 5 (ohne Stadt). */
-type StaffMemberV5 = Omit<StaffMember, 'cityId'>;
-type StaffStateV5 = Omit<StaffState, 'members' | 'former'> & { members: StaffMemberV5[]; former: StaffMemberV5[] };
+type StaffMemberV5 = Omit<StaffMember, 'cityId' | 'traits'>;
+type StaffStateV5 = Omit<StaffState, 'members' | 'former' | 'relations' | 'stories'> & {
+  members: StaffMemberV5[];
+  former: StaffMemberV5[];
+};
 type StaffMemberV3 = Omit<StaffMemberV5, 'jailSupport'>;
-type StaffStateV3 = Omit<StaffState, 'members' | 'former'> & { members: StaffMemberV3[]; former: StaffMemberV3[] };
+type StaffStateV3 = Omit<StaffState, 'members' | 'former' | 'relations' | 'stories'> & {
+  members: StaffMemberV3[];
+  former: StaffMemberV3[];
+};
 type StaffStateV2 = Omit<StaffStateV3, 'hiding'> & { warnings: Record<string, number> };
 
 export function migrateStaffV1(old: StaffStateV1, state: GameState): StaffStateV2 {
@@ -255,8 +312,12 @@ function onArrest(ctx: Ctx, staffId: string, veedelId: string): void {
     'bad',
     { staffId, veedelId },
   );
-  // Angst bei den anderen im selben Veedel.
-  for (const other of getStaff(ctx.state, { veedelId })) addLoyalty(ctx, other.id, LOYALTY.arrestNearby);
+  // Angst bei den anderen im selben Veedel (Angsthasen trifft es doppelt, Auftrag 34).
+  for (const other of getStaff(ctx.state, { veedelId })) {
+    addLoyalty(ctx, other.id, Math.round(LOYALTY.arrestNearby * traitFactor(other, 'fear')));
+  }
+  // Beziehungen: Geschwister und ein Paar leiden mit, Rivalen nicht.
+  for (const { other, kind } of relationsOf(ctx.state, staffId)) addLoyalty(ctx, other.id, RELATIONS[kind].jailed);
   askAboutArrest(ctx, m);
 }
 
@@ -325,11 +386,72 @@ function lieLowCommand(ctx: Ctx, veedelId: string, until: number, actor: string)
   return { ok: true };
 }
 
+/**
+ * Jemand ist gegangen (Auftrag 34): Wer mit der Person befreundet, verwandt oder zusammen war, nimmt es übel. Nach
+ * einer Entlassung geht manchmal jemand mit; Rivalen freuen sich.
+ */
+function onLeft(ctx: Ctx, staffId: string, reason: StaffLeaveReason): void {
+  dropStoriesOf(ctx, staffId);
+  const gone = getStaffMember(ctx.state, staffId);
+  if (!gone) return;
+  for (const r of ctx.state.modules.staff.relations ?? []) {
+    if (r.a !== staffId && r.b !== staffId) continue;
+    const other = ctx.state.modules.staff.members.find((m) => m.id === (r.a === staffId ? r.b : r.a));
+    if (!other) continue;
+    const info = RELATIONS[r.kind];
+    if (reason === 'dead') addLoyalty(ctx, other.id, info.died);
+    else if (reason === 'fired') addLoyalty(ctx, other.id, info.fired);
+    if (reason === 'fired' && info.leaveWith > 0 && other.leftAt === null && ctx.chance(info.leaveWith)) {
+      messages.send(ctx, {
+        contact: staffContact(other),
+        text: texts.pick(ctx, 'staff:leaveWith', STAFF_TEXTS.leaveWith, { other: gone.name.split(' ')[0] }),
+        silent: true,
+      });
+      journal.add(ctx, `${other.name} geht mit ${gone.name}.`, 'bad', { staffId: other.id });
+      removeMember(ctx, other.id, 'quit');
+    }
+  }
+}
+
+/** Person bis Version 6 (ohne Eigenschaften). */
+type StaffMemberV6 = Omit<StaffMember, 'traits'>;
+type StaffStateV6 = Omit<StaffState, 'members' | 'former' | 'relations' | 'stories'> & {
+  members: StaffMemberV6[];
+  former: StaffMemberV6[];
+};
+
+/**
+ * Version 6 → 7 (Auftrag 34): Eigenschaften fest aus der ID (gleicher Stand = gleiche Eigenschaften), noch keine
+ * Beziehungen und Geschichten. Der erwartete Lohn bleibt, wie er war (Anspruch geteilt durch den Lohnfaktor).
+ */
+export function migrateStaffV6(old: StaffStateV6, state: GameState): StaffState {
+  // Der Lohnwunsch der neuen Eigenschaften wird über den Anspruch ausgeglichen: Alte Stände bleiben ruhig, niemand ist
+  // nach dem Laden plötzlich unterbezahlt und verliert jeden Tag Loyalität.
+  const withTraits = (m: StaffMemberV6): StaffMember => {
+    const traits = rollTraits(`${state.meta.seed}:${m.id}`);
+    const demand = Math.round((m.demand / traitFactor({ traits }, 'wage')) * 1000) / 1000;
+    return { ...m, traits, demand };
+  };
+  return {
+    ...old,
+    members: old.members.map(withTraits),
+    former: old.former.map(withTraits),
+    relations: [],
+    stories: { open: [], lastAt: {}, byPerson: {}, byStory: {}, count: 0 },
+  };
+}
+
 export default defineModule({
   id: 'staff',
-  version: 6,
+  version: 7,
   dependsOn: ['spots', 'customers'],
-  init: () => ({ members: [], former: [], hiding: {} }),
+  init: () => ({
+    members: [],
+    former: [],
+    hiding: {},
+    relations: [],
+    stories: { open: [], lastAt: {}, byPerson: {}, byStory: {}, count: 0 },
+  }),
   tick,
   commands: {
     'staff.hireRunner': (ctx, { spotId }) => hireRunner(ctx, spotId),
@@ -342,10 +464,18 @@ export default defineModule({
     'staff.bail': (ctx, { staffId }, meta) => bail(ctx, staffId, meta),
     'staff.lieLow': (ctx, { veedelId, until }, meta) => lieLowCommand(ctx, veedelId, until, meta.actor),
     'staff.relocate': (ctx, { staffId, cityId }, meta) => relocate(ctx, staffId, cityId, meta),
+    'staff.storyChoice': (ctx, { storyId, choice }) => chooseStory(ctx, storyId, choice),
   },
   on: {
     'clock.dayStarted': daily,
-    'clock.hourStarted': hourly,
+    'clock.hourStarted': (ctx) => {
+      hourly(ctx);
+      maybeStartStory(ctx);
+    },
+    'message.expired': (ctx, { messageId, source }) => {
+      if (source === 'staff') expireStory(ctx, messageId);
+    },
+    'staff.left': (ctx, { staffId, reason }) => onLeft(ctx, staffId, reason),
     'police.arrest': (ctx, { staffId, veedelId }) => onArrest(ctx, staffId, veedelId),
     'police.raidPlanned': (ctx, { veedelId, at, scope }) => warnOfRaid(ctx, veedelId, at, scope === 'major'),
     'police.raid': (ctx, { veedelId, veedelIds, target }) => {
@@ -353,7 +483,9 @@ export default defineModule({
       // mehrere Veedel.
       if (target !== PLAYER_FACTION) return;
       for (const id of veedelIds && veedelIds.length > 0 ? veedelIds : [veedelId]) {
-        for (const m of getStaff(ctx.state, { veedelId: id })) addLoyalty(ctx, m.id, LOYALTY.raid);
+        for (const m of getStaff(ctx.state, { veedelId: id })) {
+          addLoyalty(ctx, m.id, Math.round(LOYALTY.raid * traitFactor(m, 'fear')));
+        }
       }
     },
     'sale.completed': (ctx, { sellerId, amount, revenue }) => {
@@ -377,9 +509,10 @@ export default defineModule({
     4: migrateStaffV3,
     5: migrateStaffV4,
     // Version 6 (Auftrag 30): Jede Person ist in einer Stadt; bis dahin waren alle in Köln.
-    6: (old: StaffStateV5): StaffState => {
-      const inKoeln = (m: StaffMemberV5): StaffMember => ({ ...m, cityId: 'koeln' });
+    6: (old: StaffStateV5): StaffStateV6 => {
+      const inKoeln = (m: StaffMemberV5): StaffMemberV6 => ({ ...m, cityId: 'koeln' });
       return { ...old, members: old.members.map(inKoeln), former: old.former.map(inKoeln) };
     },
+    7: migrateStaffV6,
   },
 });

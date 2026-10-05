@@ -122,6 +122,15 @@ export function tick(ctx: Ctx): void {
   }
 }
 
+/**
+ * Capo (Auftrag 34): Fällt ein Leutnant seines Bezirks aus, springt der Capo ein. Er ordnet dessen Spots (Ausfälle,
+ * Läufer, Preise, Sicherheit) und bestellt nach dessen Bestellregeln, im eigenen Namen (actor = Capo).
+ */
+export function standIn(ctx: Ctx, post: LieutenantPost, capo: StaffMember): void {
+  manage(turnFor(ctx, post, capo));
+  if (post.settings.mayOrder) restock(turnFor(ctx, post, capo));
+}
+
 function manage(turn: Turn): void {
   handleHeat(turn);
   const fresh = turnFor(turn.ctx, turn.post, turn.lt);

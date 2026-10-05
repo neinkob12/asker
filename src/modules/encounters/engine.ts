@@ -76,7 +76,7 @@ import {
   TIPOFF_GOODS,
   TIPOFF_HEAT,
 } from './config';
-import { crewCandidates, crewCost, SPECIAL_MOVES, specialMoveOf } from './crew';
+import { crewCandidates, crewCost, SPECIAL_MOVES, specialMoveFor } from './crew';
 import { ENCOUNTER_KINDS } from './kinds';
 import { chooseAuto, chooseMove } from './strategy';
 import {
@@ -605,7 +605,7 @@ function addStaff(state: GameState, encounter: Encounter, id: string): void {
     stats: { speed, caution, strength, charisma },
     condition: 'ok',
     killed: false,
-    move: specialMoveOf(member),
+    move: specialMoveFor(member, getKind(encounter.kind)?.moves),
     moveUsed: false,
   });
 }

@@ -209,6 +209,12 @@ Container, Schiffs-Tracker, Seite Warenfluss und Ebene Lieferwege. Für Welle 2:
 `warehouseModifiers(...).lossFactor`; Auftrag 36 übernimmt mit dem Startpaket die Fahrzeuge (`fleet`, Fahrzeuge stehen in
 einer Stadt) und sollte im Schlafmodus einmalige Ausgaben (`expansion`) aus dem Schnitt nehmen.
 
+**Stand Auftrag 34 (Welle 2):** umgesetzt in fünf Etappen (PR #59). Leute mit Eigenschaften (Faktoren, Spezialzüge über
+den Haken aus Auftrag 35), Beziehungen und 16 Geschichten per Handy; Gangs mit Gedächtnis (Preise, Texte, Chips) und
+Gang-Kriegen, in denen man Partei ergreifen kann; Stammabnehmer mit Vertrauen bis zum Zwischenhändler; Capo in
+`hierarchy` (für Auftrag 36: `getCapos`, `isCapo`) und ein Satz Rat im Tagesbericht. Köln komplett im Schnitt Tag 22,65
+(vorher 22,85, 20 Seeds).
+
 **Prüf-Loop:** Die Planungs-Session startet jede Welle als eigene Cloud-Sessions (je ein Branch `claude/auftrag-<nr>-…`
 und ein Draft-PR), schaut stündlich nach, prüft fertige PRs gegen ihren Auftrag (Checkliste „Fertig, wenn“, CI, Review
 des Diffs), schickt Änderungswünsche an die Session zurück und meldet dem Spieler, welche PRs bereit zum Mergen sind.

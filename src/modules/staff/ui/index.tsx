@@ -50,7 +50,7 @@ import {
   securityAt,
 } from '../index';
 import { AbsenceSheet, AbsentGroup } from './absence';
-import { Portrait, ROLE_ICONS, ROLE_TONES, StatusTag } from './common';
+import { Portrait, ROLE_ICONS, ROLE_TONES, StatusTag, traitChips } from './common';
 import { StaffProfile } from './Profile';
 import './staff.css';
 
@@ -147,6 +147,7 @@ function StaffRowItem(props: { member: StaffMember }) {
             items={[
               { label: roleName(m.role), icon: ROLE_ICONS[m.role], color: ROLE_TONES[m.role] },
               { label: `Level ${m.level}` },
+              ...traitChips(m),
             ]}
           >
             {m.status !== 'active' && <StatusTag status={m.status} />}
