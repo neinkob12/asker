@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { journal, loadSimulation, messages, type Simulation, wallet } from '../../core';
+import { type GameState, journal, loadSimulation, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { allProducts, getStock } from '../goods';
 import { addHeat } from '../police';
 import { addInfluence, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
-import { CHAPTERS, PETER, QUESTS } from './config';
-import { completedQuests, currentQuest, questProgress, questTitle, rewardText } from './index';
+import { CHAPTERS, PETER, QUEST_COUNT_BEFORE_36, QUESTS } from './config';
+import {
+  chapterName,
+  completedQuests,
+  currentQuest,
+  questProgress,
+  questsWaiting,
+  questTitle,
+  rewardText,
+} from './index';
 
 function jumpTo(sim: Simulation, questId: string): void {
   sim.state.modules.quests.index = QUESTS.findIndex((q) => q.id === questId);
@@ -120,10 +128,15 @@ describe('quests', () => {
     for (const id of ids.slice(7)) addInfluence(ctx, id, PLAYER_FACTION, 100);
     sim.advance(10);
     expect(completedQuests(sim.state)).toEqual(expect.arrayContaining(['nineVeedel', 'allVeedel']));
-    // Danach geht es mit Kapitel 7 in Hamburg weiter (Auftrag 30).
-    expect(currentQuest(sim.state)?.id).toBe('hhWarehouse');
+    // Danach wartet Peter auf die nächste Stadt (Auftrag 36: Reihenfolge frei) und macht mit ihrem Kapitel weiter.
+    expect(currentQuest(sim.state)).toBeNull();
+    expect(questsWaiting(sim.state)).toBe(true);
     const texts = messages.thread(sim.state, PETER.id).map((m) => m.text);
     expect(texts.some((t) => t.includes('Telefon'))).toBe(true);
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('hhWarehouse');
+    expect(questsWaiting(sim.state)).toBe(false);
   });
 
   it('Kapitel 7 "Moin Hamburg": Lager, Spot, erster Verkauf, Liegeplatz in Hamburg', () => {
@@ -234,9 +247,45 @@ describe('quests', () => {
     // Neu: Nach 'order' folgt 'revenue1k', der Hafen kommt erst später.
     expect(currentQuest(loaded.state)?.id).toBe('revenue1k');
     expect(loaded.state.modules.quests.done).toEqual(['firstSales', 'setPrice', 'order']);
-    expect(loaded.state.moduleVersions.quests).toBe(3);
+    expect(loaded.state.moduleVersions.quests).toBe(4);
     // Alles durch: Index am Ende.
     raw.modules.quests = { index: 26, progress: 0, done: QUESTS.map((q) => q.id), skipped: [], title: 'Boss von Köln' };
     expect(currentQuest(loadSimulation(raw, sim.modules).state)).toBeNull();
+  });
+
+  it('Migration 3 → 4 (Auftrag 36): Wer mit allen alten Quests durch war, wartet auf die nächste Stadt', () => {
+    const sim = createTestGame();
+    const raw = structuredClone(sim.state) as GameState;
+    const old = QUESTS.slice(0, QUEST_COUNT_BEFORE_36).map((q) => q.id);
+    raw.modules.quests = { ...raw.modules.quests, index: QUEST_COUNT_BEFORE_36, done: old, skipped: [] };
+    raw.moduleVersions.quests = 3;
+    const loaded = loadSimulation(raw, sim.modules);
+    expect(questsWaiting(loaded.state)).toBe(true);
+    expect(currentQuest(loaded.state)).toBeNull();
+  });
+
+  it('Kapitel pro Stadt (Auftrag 36): Wer nach Köln eine andere Stadt nimmt, bekommt deren Kapitel', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    const q = sim.state.modules.quests;
+    q.done = QUESTS.filter((x) => !x.cityId).map((x) => x.id);
+    q.index = QUESTS.findIndex((x) => x.id === 'allVeedel');
+    q.done = q.done.filter((id) => id !== 'allVeedel');
+    sim.dispatch({ type: 'quests.skip', payload: {} });
+    expect(questsWaiting(sim.state)).toBe(true);
+    // Berlin wird frei (als wäre es keine Schablone mehr): Peter nimmt das Berliner Kapitel, Hamburg wartet.
+    sim.state.modules.city.unlocked.push('berlin');
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('beWarehouse');
+    expect(chapterName(currentQuest(sim.state)?.chapter ?? 0)).toBe('Berliner Nächte');
+    for (const id of ['beWarehouse', 'beSpot', 'beFirstSale', 'beVeedel']) {
+      expect(currentQuest(sim.state)?.id).toBe(id);
+      sim.dispatch({ type: 'quests.skip', payload: {} });
+    }
+    expect(questsWaiting(sim.state)).toBe(true);
+    // Danach Hamburg: Das Kapitel steht weiter vorn in der Liste und kommt trotzdem dran.
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('hhWarehouse');
   });
 });

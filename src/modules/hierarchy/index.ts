@@ -81,6 +81,7 @@ import {
   TRAINING_XP,
 } from './config';
 import { grantFullPower, revokeFullPower } from './fullpower';
+import { installRightHand } from './handover';
 import { nextRuleId, normalizeOrderRules } from './orders';
 import {
   appointRightHand,
@@ -137,6 +138,8 @@ export {
   RIGHT_HAND_RESTOCK_MIN_STOCK_OPTIONS,
   RIGHT_HAND_TASKS,
   RIGHT_HAND_WHOLESALE_PRICE_OPTIONS,
+  START_PACK_LEADER_MIN_LEVEL,
+  START_PACK_MAX_STAFF,
 } from './config';
 export {
   cityLabel,
@@ -144,6 +147,7 @@ export {
   fullPowerActive,
   hasFullPower,
 } from './fullpower';
+export { installRightHand, rightHandTitle, startPackLeaders, startPackRank, startPackStaff } from './handover';
 export { isPortSupplierAllowed, orderRuleLabel, PORT_SUPPLIER_HINT, ruleStock, ruleWarehouse } from './orders';
 export {
   absenceHandled,
@@ -201,6 +205,11 @@ declare module '../../core' {
     'hierarchy.configureRightHand': { settings: Partial<RightHandSettings>; cityId?: string };
     /** Vollmacht (Auftrag 30, Chefsache): Die Rechte Hand führt die Stadt allein, gegen 80 % vom Tagesgewinn. */
     'hierarchy.grantFullPower': { cityId?: string };
+    /**
+     * Startpaket (Auftrag 36): Die mitgebrachte Person wird Rechte Hand der Stadt, in der sie angekommen ist. Nur das
+     * Spiel selbst (city nach der Ankunft).
+     */
+    'hierarchy.installRightHand': { staffId: string; cityId: string };
     /** Vollmacht zurückziehen: kostet Loyalität und Laune, Stufe und Aufgaben bleiben. */
     'hierarchy.revokeFullPower': { cityId?: string };
   }
@@ -941,6 +950,10 @@ export default defineModule({
     'hierarchy.dismissRightHand': (ctx, payload) => dismissRightHand(ctx, payload?.cityId),
     'hierarchy.configureRightHand': (ctx, { settings, cityId }) => configureRightHand(ctx, settings, cityId),
     'hierarchy.grantFullPower': (ctx, { cityId }, meta) => grantFullPower(ctx, cityId ?? 'koeln', meta),
+    'hierarchy.installRightHand': (ctx, { staffId, cityId }, meta) =>
+      meta.actor === 'system'
+        ? installRightHand(ctx, staffId, cityId)
+        : { ok: false, reason: 'Das passiert mit dem Startpaket von selbst.' },
     'hierarchy.revokeFullPower': (ctx, payload, meta) => revokeFullPower(ctx, meta, payload?.cityId),
   },
   on: {

@@ -1,14 +1,26 @@
-// Oberfläche der Städte (Auftrag 30). Bis zur Übergabe: eine Glas-Karte unter Geld und Heat (wie die Quest-Karte),
-// solange Hamburg wartet: was noch fehlt, und ein Tipp führt dorthin, wo man es erledigt (Rechte Hand, Personal,
-// Reviere; ist alles bereit, Fietes Chat bzw. die Übergabe). Ab zwei freien Städten: der Stadt-Chip
-// oben rechts (Köln ▾) mit Köln, Hamburg und Deutschland; die Kamera folgt der aktiven Stadt (registerCityViews), in
-// der Deutschland-Ansicht stehen die Städte als Glas-Karten auf der Karte (map.ts). Dazu im Dev-Build Abkürzungen
-// zum Ausprobieren unter window.koeln.dev (Köln komplett, Rechte Hand bereit, Hamburg frei).
+// Oberfläche der Städte (Auftrag 30 und 36). Bis zur Übergabe: eine Glas-Karte unter Geld und Heat (wie die
+// Quest-Karte), solange eine Stadt wartet: was noch fehlt, und ein Tipp führt dorthin, wo man es erledigt (Rechte Hand,
+// Personal, Reviere; ist alles bereit, der Chat der Stadt bzw. die Übergabe). Ab zwei freien Städten: der Stadt-Chip
+// oben rechts (Köln ▾) mit den Städten und Deutschland; die Kamera folgt der aktiven Stadt (registerCityViews), in der
+// Deutschland-Ansicht stehen alle Städte als Glas-Karten auf der Karte (cards.tsx) über dem Autobahn-Netz (map.ts).
+// Dazu im Dev-Build Abkürzungen zum Ausprobieren unter window.koeln.dev (Köln komplett, Rechte Hand bereit, Hamburg
+// frei).
 
 import { useEffect } from 'preact/hooks';
 import { clock, formatEuro, type Simulation } from '../../../core';
 import { registerMapLayer } from '../../../map';
-import { HudPill, Icon, IconChip, registerCityViews, registerHudItem, registerSlot, useGame, useUi } from '../../../ui';
+import {
+  HudPill,
+  Icon,
+  IconChip,
+  onGameEvent,
+  registerCityViews,
+  registerHudItem,
+  registerSlot,
+  soundOnEvent,
+  useGame,
+  useUi,
+} from '../../../ui';
 import { cityReport } from '../../finance';
 import { store } from '../../goods';
 import { getRightHand, hasFullPower, lieutenantOfSpot, RIGHT_HAND_RANK_XP } from '../../hierarchy';
@@ -20,17 +32,23 @@ import {
   activeCity,
   CITIES,
   citiesUnlocked,
+  cityContact,
   cityName,
   cityTravel,
+  currentOffer,
   DEUTSCHLAND_VIEW,
-  HARBOR_CALLER,
-  hamburgMissing,
+  getCity,
+  nextCityMissing,
   type OfferStatus,
+  offerFrom,
   offerStatus,
+  PLAYER_RANKS,
+  playerRank,
   presentCity,
   travelMinutesBetween,
 } from '../index';
-import { autobahnLayer, citiesLayer } from './map';
+import { citiesLayer } from './cards';
+import { autobahnLayer } from './map';
 import { travelLayer } from './travel';
 import './city.css';
 
@@ -45,15 +63,11 @@ registerCityViews({
     bearing: c.view.bearing,
   })),
   deutschland: DEUTSCHLAND_VIEW,
-  // Rahmen um die Mitten der freien Städte (eine Stadt allein: etwas Land drumherum).
-  deutschlandBounds: (state) => {
-    const centers = citiesUnlocked(state).flatMap((id) => {
-      const city = CITIES.find((c) => c.id === id);
-      return city ? [city.center] : [];
-    });
-    const lngs = centers.map((c) => c.lng);
-    const lats = centers.map((c) => c.lat);
-    const pad = centers.length > 1 ? 0.2 : 1.5;
+  // Rahmen um alle Städte (Auftrag 36: auch die freien und die, die bald kommen, stehen als Karten da).
+  deutschlandBounds: () => {
+    const lngs = CITIES.map((c) => c.center.lng);
+    const lats = CITIES.map((c) => c.center.lat);
+    const pad = 0.3;
     return [Math.min(...lngs) - pad, Math.min(...lats) - pad, Math.max(...lngs) + pad, Math.max(...lats) + pad];
   },
   active: (state) => activeCity(state),
@@ -64,54 +78,61 @@ registerMapLayer(autobahnLayer);
 registerMapLayer(travelLayer);
 
 const WAITING: Partial<Record<OfferStatus, string>> = {
-  house: 'Hamburg wartet: erst das Haus in Ordnung bringen',
-  later: 'Hamburg wartet',
-  declined: 'Angebot aus Hamburg steht',
+  house: '{city} wartet: erst das Haus in Ordnung bringen',
+  later: '{city} wartet',
+  declined: 'Angebot aus {city} steht',
 };
 
 /** Wohin ein Tipp auf die Karte führt: dorthin, wo man das Fehlende erledigt. */
 type WaitTarget = 'handover' | 'rightHand' | 'staff' | 'territory' | 'chat';
 
-const TARGET_LABEL: Record<WaitTarget, string> = {
+const TARGET_LABEL: Record<Exclude<WaitTarget, 'chat'>, string> = {
   handover: 'Übergabe öffnen',
   rightHand: 'Zur Rechten Hand',
   staff: 'Zum Personal',
   territory: 'Zu den Revieren',
-  chat: `Chat mit ${HARBOR_CALLER.name}`,
 };
 
-/** Karte unter Geld und Heat, solange das Angebot aus Hamburg offen ist. */
-function HamburgWaits() {
+/** Karte unter Geld und Heat, solange das Angebot einer Stadt offen ist. */
+function NextCityWaits() {
   const { state } = useGame();
   const ui = useUi();
-  const status = offerStatus(state);
+  const cityId = currentOffer(state);
+  if (!cityId) return null;
+  const status = offerStatus(state, cityId);
+  const from = offerFrom(state) ?? 'koeln';
   // Zugesagt, aber noch nicht übergeben ("Später" in der Übergabe): Die Karte führt zur Übergabe.
-  const handover = status === 'accepted' && !hasFullPower(state, 'koeln');
-  const title = handover ? 'Köln übergeben, dann nach Hamburg' : WAITING[status];
+  const handover = status === 'accepted' && offerFrom(state) !== null && !hasFullPower(state, from);
+  const name = cityName(cityId);
+  const title = handover ? `${cityName(from)} übergeben, dann nach ${name}` : WAITING[status]?.replace('{city}', name);
   if (!title) return null;
-  const missing = hamburgMissing(state);
+  const contact = cityContact(cityId);
+  const missing = nextCityMissing(state);
   // Fehlen nur Veedel, geht es in die Reviere; sonst liegt es an der Rechten Hand (Stufe, Aufgaben) oder es gibt keine.
-  const veedelMissing = !campaignProgress(state, 'koeln').complete;
+  const veedelMissing = !campaignProgress(state, from).complete;
   const target: WaitTarget = handover
     ? 'handover'
     : missing.length === 0
       ? 'chat'
-      : !getRightHand(state, 'koeln')
+      : !getRightHand(state, from)
         ? 'staff'
         : missing.length > (veedelMissing ? 1 : 0)
           ? 'rightHand'
           : 'territory';
+  const label = target === 'chat' ? `Chat mit ${contact.name}` : TARGET_LABEL[target];
   const open = () => {
-    if (target === 'handover') ui.openDialog('hierarchy.handover', { cityId: 'koeln' });
+    if (target === 'handover') ui.openDialog('hierarchy.handover', { cityId: from, toCityId: cityId });
     else if (target === 'rightHand') ui.openPanel('hierarchy.rightHand', {});
     else if (target === 'staff' || target === 'territory') ui.selectTab(target);
-    else ui.openPhone('core.messages', { contactId: HARBOR_CALLER.id });
+    else ui.openPhone('core.messages', { contactId: contact.id });
   };
   return (
-    <button type="button" class="city-hud" onClick={open} aria-label={`${title}. ${TARGET_LABEL[target]}`}>
-      <span class="hud-label is-city">Fiete · Hamburger Hafen</span>
+    <button type="button" class="city-hud" onClick={open} aria-label={`${title}. ${label}`}>
+      <span class="hud-label is-city">
+        {contact.name} · {contact.role}
+      </span>
       <span class="city-hud__main">
-        <IconChip icon="anchor" color="place" size="md" />
+        <IconChip icon={getCity(cityId)?.portId ? 'anchor' : 'building'} color="place" size="md" />
         <span class="city-hud__text">
           <strong>{title}</strong>
           {missing.length > 0 ? (
@@ -121,15 +142,15 @@ function HamburgWaits() {
                   <li key={line}>{line}</li>
                 ))}
               </ul>
-              <span class="city-hud__action">{TARGET_LABEL[target]}</span>
+              <span class="city-hud__action">{label}</span>
             </>
           ) : (
             <span class="city-hud__hint">
               {handover
                 ? 'Deine Rechte Hand ist bereit.'
                 : status === 'house'
-                  ? 'Alles bereit. Er meldet sich gleich und ruft dich an.'
-                  : 'Alles bereit. Sag ihm im Chat zu.'}
+                  ? 'Alles bereit. Gleich kommt der Anruf.'
+                  : 'Alles bereit. Sag im Chat zu.'}
             </span>
           )}
         </span>
@@ -139,7 +160,7 @@ function HamburgWaits() {
   );
 }
 
-registerHudItem({ id: 'city.hamburgWaits', order: 45, placement: 'below', icon: 'anchor', component: HamburgWaits });
+registerHudItem({ id: 'city.hamburgWaits', order: 45, placement: 'below', icon: 'anchor', component: NextCityWaits });
 
 /**
  * Stadt-Chip ("Köln ▾"), nur ab zwei freien Städten: wechselt die Stadt (sie wird live, die andere schläft) oder
@@ -316,3 +337,42 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
   const holder = window as unknown as { koeln?: { dev?: Record<string, () => void> } };
   holder.koeln = { ...holder.koeln, dev: { ...holder.koeln?.dev, ...dev } };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Ränge des Spielers (Auftrag 36): Titel im HUD (Mehr-Menü) mit der Leiter, Banner und Ton beim Aufstieg.
+
+function RankHud() {
+  const { state } = useGame();
+  const rank = playerRank(state);
+  const reachedAt = PLAYER_RANKS.findIndex((r) => r.id === rank.id);
+  return (
+    <HudPill
+      icon="crown"
+      color="brand"
+      label="Rang"
+      value={rank.title}
+      title={`Dein Rang: ${rank.title}`}
+      details={
+        <div class="city-ranks">
+          <span class="hud-label is-brand">Dein Weg</span>
+          <ol class="city-ranks__list">
+            {PLAYER_RANKS.map((r, i) => (
+              <li key={r.id} class={i < reachedAt ? 'is-done' : i === reachedAt ? 'is-now' : ''}>
+                <Icon name={i <= reachedAt ? 'checkCircle' : 'plusCircle'} />
+                <span class="city-ranks__title">{i === reachedAt ? rank.title : r.title.replace('{city}', '…')}</span>
+                {i === reachedAt + 1 && <span class="city-ranks__hint">{r.hint}</span>}
+              </li>
+            ))}
+          </ol>
+        </div>
+      }
+    />
+  );
+}
+
+registerHudItem({ id: 'city.rank', order: 4, placement: 'more', icon: 'crown', component: RankHud });
+
+onGameEvent('player.rankUp', 'city.rankUp', (payload, ui) =>
+  ui.toast(`Neuer Rang: ${payload.title}`, 'good', { urgent: true, icon: 'crown' }),
+);
+soundOnEvent('player.rankUp', 'win');
