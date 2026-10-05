@@ -49,6 +49,11 @@ export interface CityDef {
   offerRank?: number;
   /** Schablone: Daten da, Inhalt fehlt noch, im Spiel gesperrt. */
   template?: boolean;
+  /**
+   * Ort im Ausland (Auftrag 40): keine Veedel, keine Spots, keine Gangs, nicht spielbar wie eine Stadt. Nach dem Verkauf
+   * des Geschäfts bist du hier (Rotterdam) und lieferst an alle.
+   */
+  abroad?: boolean;
 }
 
 /** Kontakte der Städte nach Köln (Namen frei erfunden). Hamburg: Fiete aus dem Hafen (config.ts). */
@@ -240,6 +245,45 @@ export const CITIES: readonly CityDef[] = [
     contact: FRANKFURT_CALLER,
     pitch: 'Geld und Flughafen: Banker als Kunden, das Bahnhofsviertel als Brennpunkt, Fracht über den Flughafen.',
     offerRank: 1,
+  },
+];
+
+/**
+ * Jansen aus Rotterdam (Auftrag 40): der Lieferant, den du aus Köln kennst. Er hört auf und verkauft dir alles. Gleiche
+ * Kontakt-ID wie im Lieferanten-Chat; Gesicht und Rolle setzt city zur Laufzeit aus suppliers (jansenContact).
+ */
+export const JANSEN_CONTACT: Contact = {
+  id: 'supplier:rotterdam',
+  name: 'Jansen (Hafen Rotterdam)',
+  kind: 'supplier',
+  role: 'Hafen Rotterdam',
+  look: {},
+  voice: { feminine: false, pitch: 0.75, rate: 0.9 },
+};
+
+/**
+ * Orte im Ausland (Auftrag 40): Rotterdam als neues Zuhause nach dem Verkauf. Nicht in CITIES (dort stehen nur die
+ * deutschen Städte mit Veedeln), aber über getCity erreichbar (Kamera, Mittelpunkt, Hafen).
+ */
+export const ABROAD_CITIES: readonly CityDef[] = [
+  {
+    id: 'rotterdam',
+    name: 'Rotterdam',
+    center: { lng: 4.3, lat: 51.92 },
+    // Blick nach Westen über die Maasvlakte-Zufahrt: Waalhaven und Eemhaven vorn.
+    view: { center: { lng: 4.33, lat: 51.895 }, zoom: 11.6, mobileZoom: 10.6, pitch: 45, bearing: -60 },
+    bounds: [4.0, 51.85, 4.55, 51.99],
+    roadsNetworkId: 'koeln',
+    portId: 'rotterdam',
+    wageFactor: 1.3,
+    propertyFactor: 1.5,
+    relationFactor: 1,
+    bribeFactor: 1.4,
+    raidWarningBonus: 0,
+    description: 'Der größte Hafen Europas. Von hier aus lieferst du an alle: deine alten Leute, Gangs, fremde Städte.',
+    contact: JANSEN_CONTACT,
+    pitch: 'Lieferant für alle: Kunden, Container, Zoll und die alten Lieferanten als Konkurrenz.',
+    abroad: true,
   },
 ];
 

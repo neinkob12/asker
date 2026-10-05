@@ -17,7 +17,7 @@ import {
   registerSlot,
   useGame,
 } from '../../../ui';
-import { activeCity } from '../../city';
+import { activeCity, getCity } from '../../city';
 import {
   getVehicles,
   VEHICLE_MODELS,
@@ -65,7 +65,9 @@ function FleetGroup() {
   const [ask, setAsk] = useState<Ask>(null);
   const cityId = activeCity(state);
   const vehicles = getVehicles(state, cityId);
-  const models = VEHICLE_MODELS.filter((m) => m.available);
+  // Den Lkw gibt es nur in der Hafen-Phase an einem Ort im Ausland (Auftrag 40).
+  const abroad = getCity(cityId)?.abroad === true;
+  const models = VEHICLE_MODELS.filter((m) => m.available && (!m.harborOnly || abroad));
   const askPrice = ask?.kind === 'buy' ? vehiclePrice(ask.model, cityId) : 0;
   const sellModel = ask?.kind === 'sell' ? vehicleModel(ask.vehicle.model) : undefined;
   const sellAmount =

@@ -121,6 +121,9 @@ const AFTER_COMPLETE: Record<string, string> = {
   frankfurt: 'Frankfurt gehört dir, Banken und Flughafen auch. Die nächste Stadt meldet sich, sobald eine frei ist.',
 };
 
+/** Nach der letzten Stadt (Auftrag 40). */
+const GERMANY_COMPLETE = 'Ganz Deutschland hört auf dich. Gleich ruft jemand aus Rotterdam an.';
+
 declare module '../../core' {
   interface ModuleStates {
     territory: TerritoryState;
@@ -378,6 +381,8 @@ function onControlChanged(ctx: Ctx, veedelId: string, from: FactionId | null, to
  */
 function checkMilestones(ctx: Ctx, cityId: string): void {
   const progress = campaignProgress(ctx.state, cityId);
+  // Ein Ort ohne Veedel (Rotterdam in der Hafen-Phase, Auftrag 40) hat keine Kampagne.
+  if (progress.total === 0) return;
   const t = ctx.state.modules.territory;
   t.milestones ??= {};
   t.milestones[cityId] ??= { majority: null, complete: null };
@@ -399,7 +404,10 @@ function checkMilestones(ctx: Ctx, cityId: string): void {
   }
   if (m.complete === null && progress.controlled >= progress.total) {
     m.complete = ctx.now;
-    const next = AFTER_COMPLETE[cityId];
+    // Die letzte Stadt (Auftrag 40): Boss von Deutschland, gleich ruft Jansen aus Rotterdam an.
+    const cities = new Set(allVeedel().map((v) => v.cityId));
+    const all = [...cities].every((c) => c === cityId || (t.milestones[c]?.complete ?? null) !== null);
+    const next = all && cities.size > 1 ? GERMANY_COMPLETE : AFTER_COMPLETE[cityId];
     outcome.win(ctx, next ? { cityId, cityName: name, next } : { cityId, cityName: name });
   }
 }

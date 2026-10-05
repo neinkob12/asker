@@ -54,6 +54,8 @@ export interface RankInput {
   name: (cityId: string) => string;
   /** So viele komplette Städte braucht Boss von Deutschland mindestens (GERMANY_MIN_CITIES). */
   minGermany: number;
+  /** Geschäft verkauft (Auftrag 40): Importeur, Lieferant für alle vom Hafen aus. */
+  sold?: boolean;
 }
 
 /**
@@ -61,12 +63,13 @@ export interface RankInput {
  * der Titel nennt die letzte in der Reihenfolge, in der du sie freigeschaltet hast.
  */
 export function reachedRank(state: GameState, input: RankInput): PlayerRank {
-  const { cities, unlocked, name, minGermany } = input;
+  const { cities, unlocked, name, minGermany, sold } = input;
   const at = (id: string) => PLAYER_RANKS.findIndex((r) => r.id === id);
   const make = (id: string, extra = 0, city?: string): PlayerRank => {
     const def = PLAYER_RANKS[at(id)];
     return { id, title: def.title.replace('{city}', city ?? ''), score: at(id) * STEP + extra };
   };
+  if (sold) return make('importer');
   const complete = cities.filter((c) => campaignProgress(state, c).complete);
   if (complete.length >= minGermany && complete.length === cities.length) return make('bossGermany');
   const others = unlocked.filter((c) => c !== MILESTONE_CITY && complete.includes(c));

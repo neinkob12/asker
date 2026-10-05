@@ -59,7 +59,7 @@ import {
 import { daysText, flowRows } from './flow';
 import { supplyRoutesLayer } from './map';
 import './goods.css';
-import { activeCity } from '../../city';
+import { activeCity, isBusinessSold } from '../../city';
 
 declare module '../../../ui' {
   interface PanelRegistry {
@@ -108,6 +108,8 @@ const stockView = memoState((state) => {
 /** Kurzanzeige im HUD: "2,1 kg Gras + 489 Stück Pillen" (die zwei größten Posten), dazu die Aufstellung zum Aufklappen. */
 const StockHud = memo(function StockHud() {
   const ui = useUi();
+  // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen.
+  const sold = useGameSelector((state) => isBusinessSold(state));
   // Nur die angezeigten Texte lesen: Die Kachel zeichnet neu, wenn sich Wert, Titel oder Ziel ändern.
   const view = useGameSelector((state) => {
     const { cityId, rows, warehouses } = stockView(state);
@@ -124,6 +126,7 @@ const StockHud = memo(function StockHud() {
       warehouseId: warehouses[0]?.id ?? warehouseSites(cityId)[0]?.id ?? DEFAULT_WAREHOUSE,
     };
   }, shallowEqual);
+  if (sold) return null;
   return (
     <HudPill
       icon="warehouse"

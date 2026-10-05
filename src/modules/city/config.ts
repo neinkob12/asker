@@ -338,3 +338,47 @@ export const CITY_OFFERS: Readonly<Record<string, CityOffer>> = {
     ],
   },
 };
+
+// --- Boss von Deutschland und Verkauf (Auftrag 40) ---
+
+/**
+ * Verkaufspreis des Geschäfts: so viele Tagesgewinne aller deiner Städte (Schnitt der letzten SALE_AVERAGE_DAYS
+ * abgeschlossenen Tage aus der Kasse, das Ergebnis der Städte vor dem Anteil der Statthalter und ohne Ausbau). Die
+ * Statthalter zahlen dich damit aus. Begründung und Messung: docs/architektur.md, Abschnitt „Verkauf und Hafen“.
+ */
+export const SALE_PROFIT_DAYS = 90;
+export const SALE_AVERAGE_DAYS = 7;
+/** Untergrenze des Verkaufspreises (falls die letzten Tage schlecht liefen, z.B. viele Razzien). */
+export const SALE_PRICE_MIN = 1_000_000;
+/** Rotterdam (Liegeplatz, Halle, Leute und Kunden von Jansen) kostet diesen Anteil des Verkaufspreises. */
+export const ROTTERDAM_SHARE = 0.75;
+/** So viele Spielminuten nach „Boss von Deutschland“ ruft Jansen an. */
+export const SALE_CALL_DELAY = 6 * 60;
+/** „Noch nicht“: So viele Spieltage später meldet er sich wieder. */
+export const SALE_REMINDER_DAYS = 3;
+/** Der Ort im Ausland, an dem die Hafen-Phase spielt. */
+export const HARBOR_CITY = 'rotterdam';
+
+/** Jansens Anruf, Zeile für Zeile ({price} Verkaufspreis, {rotterdam} sein Preis, {rest} was dir bleibt). */
+export const SALE_CALL_LINES: readonly string[] = [
+  'Jansen hier. Rotterdam. Du kennst mich, ich hab dir Container in den Niehler Hafen geschickt.',
+  'Ganz Deutschland, hab ich gehört. Respekt. Das hat vor dir keiner geschafft.',
+  'Ich hör auf. Vierzig Jahre Hafen reichen. Mein Liegeplatz, meine Halle, meine Leute, meine Kunden: alles zu haben.',
+  'Deine Statthalter wollen dich auszahlen. {price} für alles, was du in Deutschland hast. Sie laufen sowieso allein.',
+  'Ich will {rotterdam}. Dann bleiben dir {rest}, und du bist Lieferant für alle. Auch für deine alten Leute.',
+  'Kein Spot mehr, keine Läufer. Container, Zoll, Kunden. Großes Geschäft.',
+  'Also. Kommst du nach Rotterdam?',
+];
+
+export const SALE_TEXTS = {
+  summary: 'Anruf aus Rotterdam',
+  missed: 'Jansen, Rotterdam. Ich ruf nochmal an. Geh ran, es lohnt sich.',
+  gaveUp: 'Mein Angebot steht. Schreib mir, wenn du so weit bist.',
+  accept: 'Verkaufen und nach Rotterdam',
+  later: 'Noch nicht',
+  reminder: 'Jansen hier. Rotterdam wartet. Deine Statthalter auch. {price} für Deutschland, {rotterdam} für mich.',
+  laterReply: 'Gut. Überleg es dir. Ich meld mich in ein paar Tagen.',
+  done: 'Abgemacht. Fahr rüber, ich zeig dir die Halle. Ab Montag rufen die ersten Kunden an.',
+  statthalter:
+    'Wir haben gerechnet, {name} und die anderen Statthalter. {price} für alles, bar. Du hast es aufgebaut, wir führen es weiter.',
+} as const;

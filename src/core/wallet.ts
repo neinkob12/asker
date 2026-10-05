@@ -39,6 +39,11 @@ export type MoneyCategory =
   | 'expense.other'
   | 'share.righthand'
   | 'expense.city'
+  | 'sale.business'
+  | 'business.rotterdam'
+  | 'sales.trade'
+  | 'trade.purchase'
+  | 'trade.freight'
   // Verluste
   | 'loss.police'
   | 'loss.theft'
@@ -84,6 +89,12 @@ export const MONEY_CATEGORIES: Record<MoneyCategory, MoneyCategoryInfo> = {
   'share.righthand': { label: 'Anteil Rechte Hand', group: 'expense', icon: 'crown' },
   'income.city': { label: 'Ergebnis einer Stadt im Schlafmodus (Rechte Hand)', group: 'income', icon: 'building' },
   'expense.city': { label: 'Verlust einer Stadt im Schlafmodus', group: 'expense', icon: 'building' },
+  // Auftrag 40: Verkauf des Geschäfts und Hafen-Phase (Lieferant für alle).
+  'sale.business': { label: 'Verkauf des Geschäfts', group: 'income', icon: 'handshake' },
+  'business.rotterdam': { label: 'Kauf Rotterdam', group: 'expense', icon: 'anchor' },
+  'sales.trade': { label: 'Lieferungen an Kunden', group: 'income', icon: 'ship' },
+  'trade.purchase': { label: 'Einkauf im Ausland', group: 'expense', icon: 'boxes' },
+  'trade.freight': { label: 'Fracht und Lkw', group: 'expense', icon: 'truck' },
   'loss.police': { label: 'Polizei', group: 'loss', icon: 'siren' },
   'loss.theft': { label: 'Überfälle und Diebstahl', group: 'loss', icon: 'alert' },
   'loss.betrayal': { label: 'Verrat', group: 'loss', icon: 'userMinus' },

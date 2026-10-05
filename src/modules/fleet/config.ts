@@ -3,8 +3,8 @@
 import type { VehicleModel } from './index';
 
 /**
- * Modelle. Feste Werte, kein Alter, keine Kennzeichen, keine Werkstatt. Der Lkw kommt erst mit der Hafen-Phase
- * (available: false, Aufträge 40 und 41).
+ * Modelle. Feste Werte, kein Alter, keine Kennzeichen, keine Werkstatt. Den Lkw gibt es erst in der Hafen-Phase
+ * (harborOnly, Auftrag 40), dann in Rotterdam.
  */
 export const VEHICLE_MODELS: readonly VehicleModel[] = [
   {
@@ -48,8 +48,9 @@ export const VEHICLE_MODELS: readonly VehicleModel[] = [
     checkFactor: 1.8,
     price: 42000,
     mapKind: 'truck',
-    available: false,
-    description: 'Kommt mit dem eigenen Hafen.',
+    available: true,
+    harborOnly: true,
+    description: 'Für die großen Lieferungen vom Hafen zu den Kunden. Wird oft rausgewunken.',
   },
 ];
 

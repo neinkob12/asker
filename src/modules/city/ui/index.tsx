@@ -29,6 +29,7 @@ import { enlist, generateProfile } from '../../staff';
 import { addInfluence, campaignProgress, factions, PLAYER_FACTION } from '../../territory';
 import { allVeedel } from '../../veedel';
 import {
+  ABROAD_CITIES,
   activeCity,
   CITIES,
   citiesUnlocked,
@@ -38,6 +39,7 @@ import {
   currentOffer,
   DEUTSCHLAND_VIEW,
   getCity,
+  isBusinessSold,
   nextCityMissing,
   type OfferStatus,
   offerFrom,
@@ -48,12 +50,13 @@ import {
   travelMinutesBetween,
 } from '../index';
 import { citiesLayer } from './cards';
+import './sale';
 import { autobahnLayer } from './map';
 import { travelLayer } from './travel';
 import './city.css';
 
 registerCityViews({
-  cameras: CITIES.filter((c) => !c.template).map((c) => ({
+  cameras: [...CITIES.filter((c) => !c.template), ...ABROAD_CITIES].map((c) => ({
     id: c.id,
     name: c.name,
     center: c.view.center,
@@ -170,7 +173,8 @@ function CityChip() {
   const { state, dispatch } = useGame();
   const ui = useUi();
   const unlocked = citiesUnlocked(state);
-  if (unlocked.length < 2) return null;
+  // Nach dem Verkauf (Auftrag 40) gehören dir die Städte nicht mehr: kein Wechsel, keine Fahrt dorthin.
+  if (unlocked.length < 2 || isBusinessSold(state)) return null;
   const active = activeCity(state);
   const present = presentCity(state);
   const travel = cityTravel(state);
@@ -296,6 +300,30 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
           settings: { orders: true, pickup: true, restock: true, staffing: true, wholesale: true, laundering: true },
         },
       });
+    },
+    /**
+     * Ganz Deutschland (Auftrag 40): alle spielbaren Städte frei und komplett, mit Geld. Jansen ruft wenige Stunden
+     * später an.
+     */
+    deutschlandKomplett: () => {
+      const s = sim();
+      const ctx = s.ctx('dev');
+      s.state.wallet.dirty = Math.max(s.state.wallet.dirty, 50000);
+      for (const c of CITIES.filter((x) => !x.template)) {
+        if (c.id !== 'koeln') s.dispatch({ type: 'city.unlock', payload: { cityId: c.id } }, { actor: 'system' });
+        for (const v of allVeedel(c.id)) {
+          for (const f of factions(s.state)) if (f !== PLAYER_FACTION) addInfluence(ctx, v.id, f, -100);
+          addInfluence(ctx, v.id, PLAYER_FACTION, 100);
+        }
+      }
+      s.step();
+    },
+    /** Ganz Deutschland und sofort verkauft (Auftrag 40): direkt in die Hafen-Phase. */
+    verkaufen: () => {
+      dev.deutschlandKomplett();
+      const s = sim();
+      s.state.modules.city.sale = { status: 'calling', callAt: null, sold: null };
+      s.dispatch({ type: 'city.sell', payload: {} });
     },
     /** Berlin frei (ohne Übergabe), z.B. um die Stadt anzuschauen (Auftrag 37). */
     berlinFrei: () => {

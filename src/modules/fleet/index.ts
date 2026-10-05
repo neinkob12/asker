@@ -43,6 +43,8 @@ export interface VehicleModel {
   mapKind: VehicleMapKind;
   /** Kann man kaufen (der Lkw kommt erst mit der Hafen-Phase). */
   available: boolean;
+  /** Nur in der Hafen-Phase zu haben, an einem Ort im Ausland (Auftrag 40: der Lkw in Rotterdam). */
+  harborOnly?: boolean;
   description: string;
 }
 
@@ -201,6 +203,9 @@ function buy(ctx: Ctx, modelId: string, cityId: string): CommandResult {
   const model = MODEL_BY_ID.get(modelId);
   if (!model) return { ok: false, reason: 'Dieses Fahrzeug gibt es nicht.' };
   if (!model.available) return { ok: false, reason: `Einen ${model.name} gibt es erst später.` };
+  if (model.harborOnly && !getCity(cityId)?.abroad) {
+    return { ok: false, reason: `Einen ${model.name} gibt es erst mit dem eigenen Hafen.` };
+  }
   if (!isCityUnlocked(ctx.state, cityId)) return { ok: false, reason: 'In dieser Stadt bist du noch nicht.' };
   const s = ctx.state.modules.fleet;
   if (s.vehicles.filter((v) => v.seizedAt === null).length >= FLEET_LIMIT) {
