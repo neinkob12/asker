@@ -55,7 +55,10 @@ import { AUTO, ChoiceControl, VehicleSelect } from './vehicles';
 
 const NONE = '';
 /** Größte Ladung einer Fahrt (Privatauto oder größtes Fahrzeug zum Kaufen). */
-const MAX_LOAD = Math.max(INTERCITY_CAPACITY, ...VEHICLE_MODELS.filter((m) => m.available).map((m) => m.capacity));
+const MAX_LOAD = Math.max(
+  INTERCITY_CAPACITY,
+  ...VEHICLE_MODELS.filter((m) => m.available && !m.harborOnly).map((m) => m.capacity),
+);
 
 /** Gewicht als Text: "2,5 kg" oder "800 g". */
 function weightText(grams: number): string {

@@ -21,10 +21,10 @@
 // hängt, hat einen Hafen oder Kunden mit Koordinaten; die Hafen-Phase läuft unabhängig von der aktiven Stadt.
 //
 // Öffentliche API: isTradeActive, getCustomers, getCustomer, customerName, customerContact, getOrders, getOrder,
-//   openOrders, pendingDeliveries, getShipments, getDeliveries, portStock, totalStock, ownedPorts, fairPrice,
+//   openOrders, pendingDeliveries, orderCoverage, getShipments, getDeliveries, portStock, totalStock, ownedPorts, fairPrice,
 //   customerOffer, priceCap, orderValue, playerScore, rivalScores, shareFor, supplierReputation, tradeStats,
 //   containerCost, containerRisk, deliveryEstimate, freightCost, weekOf, PRODUCERS, CONTAINER_SIZES, FOREIGN_CITIES
-// Befehle: 'trade.answer', 'trade.deliver', 'trade.buy', 'trade.rentBerth', 'trade.setPriceLevel'
+// Befehle: 'trade.answer', 'trade.acceptAll', 'trade.deliver', 'trade.buy', 'trade.rentBerth', 'trade.setPriceLevel'
 // Ereignisse: 'trade.started', 'trade.orderPlaced', 'trade.orderAnswered', 'trade.delivered', 'trade.orderFailed',
 //   'trade.containerOrdered', 'trade.containerArrived', 'trade.containerSeized', 'trade.deliverySeized',
 //   'trade.dealTipped'
@@ -65,6 +65,7 @@ import {
   FREIGHT_PER_KG_100KM,
   GANG_MEMORY_BLOCK,
   GANG_TIP_CHANCE,
+  LATE_GRACE_DAYS,
   LATE_PRICE_FACTOR,
   MIN_ITEM_GRAMS,
   MIN_ORDER_GRAMS,
@@ -260,7 +261,7 @@ declare module '../../core' {
     /** Bestellung annehmen, ablehnen oder Gegenangebot (factor auf ihr Angebot, nur mit 'counter'). */
     'trade.answer': { orderId: number; choice: 'accept' | 'decline' | 'counter'; factor?: number };
     /** Alle offenen Bestellungen annehmen (nur die mit Abnahmevertrag, wenn guaranteedOnly). */
-    'trade.acceptAll': { guaranteedOnly?: boolean };
+    'trade.acceptAll': { guaranteedOnly?: boolean; coveredOnly?: boolean };
     /** Angenommene Bestellung ausliefern: aus einem Hafen (Standard: der mit genug Ware, nächster zuerst). */
     'trade.deliver': { orderId: number; portId?: string; vehicleId?: number | null };
     /** Container bei einem Produzenten bestellen. */
@@ -800,9 +801,45 @@ export function answerOrder(
   return { ok: true, data: { result: 'accepted' } };
 }
 
-/** Alle offenen Bestellungen annehmen. */
-export function acceptAll(ctx: Ctx, guaranteedOnly = false): CommandResult {
-  const list = openOrders(ctx.state).filter((o) => !guaranteedOnly || o.guaranteed);
+/**
+ * Reicht die Ware für die offenen Bestellungen? Pro Bestellung die Gramm, die fehlen: Bestand in allen eigenen Häfen plus
+ * Container, die vor der Frist ankommen, minus was angenommene Bestellungen schon brauchen. Die offenen Bestellungen
+ * zählen der Reihe nach (wer vorn steht, bekommt die Ware zuerst), so wie „Gedeckte annehmen“ sie annimmt.
+ */
+export function orderCoverage(state: GameState): Map<number, number> {
+  const reserved = new Map<string, number>();
+  for (const order of getOrders(state)) {
+    if (order.status !== 'accepted' && order.status !== 'delivering') continue;
+    for (const item of openItems(order))
+      reserved.set(item.productId, (reserved.get(item.productId) ?? 0) + item.amount);
+  }
+  const supply = (productId: string, by: number) =>
+    totalStock(state, productId) +
+    getShipments(state)
+      .filter((x) => x.productId === productId && x.arrivesAt <= by)
+      .reduce((sum, x) => sum + x.amount, 0) -
+    (reserved.get(productId) ?? 0);
+  const result = new Map<number, number>();
+  for (const order of openOrders(state)) {
+    let missing = 0;
+    for (const item of order.items) {
+      const free = Math.max(0, supply(item.productId, order.dueAt));
+      missing += Math.max(0, item.amount - free);
+    }
+    result.set(order.id, missing);
+    if (missing === 0) {
+      for (const item of order.items) reserved.set(item.productId, (reserved.get(item.productId) ?? 0) + item.amount);
+    }
+  }
+  return result;
+}
+
+/** Alle offenen Bestellungen annehmen (nur Verträge oder nur die, für die die Ware reicht: orderCoverage). */
+export function acceptAll(ctx: Ctx, guaranteedOnly = false, coveredOnly = false): CommandResult {
+  const coverage = coveredOnly ? orderCoverage(ctx.state) : null;
+  const list = openOrders(ctx.state).filter(
+    (o) => (!guaranteedOnly || o.guaranteed) && (coverage === null || coverage.get(o.id) === 0),
+  );
   if (list.length === 0) return { ok: false, reason: 'Keine offenen Bestellungen.' };
   for (const order of list) answerOrder(ctx, order.id, 'accept');
   return { ok: true, data: { accepted: list.length } };
@@ -1067,6 +1104,16 @@ function deliveryArrives(ctx: Ctx, delivery: TradeDelivery): void {
   const order = s.orders.find((o) => o.id === delivery.orderId);
   const customer = s.customers.find((c) => c.id === delivery.customerId);
   if (!order || !customer) return;
+  if (order.status === 'failed') {
+    // Der Deal ist schon gekippt: Die Ladung kommt zurück in den Hafen, an der Bestellung ändert sich nichts.
+    for (const d of delivery.items) addStock(ctx, delivery.portId, d.productId, d.amount, d.quality);
+    journal.add(
+      ctx,
+      `${customer.name} nimmt nichts mehr an. ${orderItemsText(delivery.items)} sind zurück im Hafen.`,
+      'info',
+    );
+    return;
+  }
   const late = ctx.now > order.dueAt;
   if (customer.kind === 'gang' && ctx.chance(GANG_TIP_CHANCE * (1 - customer.trust / 100))) {
     // Der Deal kippt: Die Gang nimmt die Ware und zahlt nicht.
@@ -1136,12 +1183,15 @@ function deliveryCheck(ctx: Ctx, delivery: TradeDelivery): void {
   }
   s.stats.deliveriesSeized += 1;
   if (order) {
-    // Die Waren sind wieder offen: Wer noch Ware hat, kann bis zur Frist neu liefern.
+    // Die Waren sind wieder offen: Wer noch Ware hat, kann bis zur Frist neu liefern. Ist die Bestellung schon
+    // geplatzt (failOrder 'late'), kommt nichts mehr nach: Die Posten sind verloren, eine zweite Strafe gibt es nicht.
+    const over = ctx.now >= order.dueAt + LATE_GRACE_DAYS * MINUTES_PER_DAY;
     for (const d of delivery.items) {
       const item = order.items.find((i) => i.productId === d.productId && i.state === 'shipped');
-      if (item) item.state = undefined;
+      if (item) item.state = over ? 'missed' : undefined;
     }
-    if (order.status === 'delivering') order.status = 'accepted';
+    if (over) closeIfDone(order);
+    else if (order.status === 'delivering') order.status = 'accepted';
   }
   journal.add(
     ctx,
@@ -1185,8 +1235,9 @@ function tick(ctx: Ctx): void {
   if (week > s.week && clock.weekday(ctx.now) === 0 && ctx.now % MINUTES_PER_DAY >= ORDER_HOUR) placeOrders(ctx);
   for (const order of s.orders) {
     if (order.status === 'open' && ctx.now >= order.answerBy) failOrder(ctx, order, 'expired');
-    // Eine Woche nach der Frist ohne Lieferung: geplatzt (bis dahin geht es mit Abschlag).
-    else if (order.status === 'accepted' && ctx.now >= order.dueAt + 2 * MINUTES_PER_DAY) failOrder(ctx, order, 'late');
+    // LATE_GRACE_DAYS nach der Frist ohne Lieferung: geplatzt (bis dahin geht es mit Abschlag).
+    else if (order.status === 'accepted' && ctx.now >= order.dueAt + LATE_GRACE_DAYS * MINUTES_PER_DAY)
+      failOrder(ctx, order, 'late');
   }
   for (const shipment of [...s.shipments]) {
     if (shipment.status === 'sea' && ctx.now >= shipment.arrivesAt) containerArrives(ctx, shipment);
@@ -1223,7 +1274,8 @@ export default defineModule({
   tick,
   commands: {
     'trade.answer': (ctx, { orderId, choice, factor }) => answerOrder(ctx, orderId, choice, factor),
-    'trade.acceptAll': (ctx, payload) => acceptAll(ctx, payload?.guaranteedOnly === true),
+    'trade.acceptAll': (ctx, payload) =>
+      acceptAll(ctx, payload?.guaranteedOnly === true, payload?.coveredOnly === true),
     'trade.deliver': (ctx, { orderId, portId, vehicleId }) => deliver(ctx, orderId, portId, vehicleId),
     'trade.buy': (ctx, { producerId, productId, size, portId }) =>
       buyContainer(ctx, producerId, productId, size, portId),

@@ -1,6 +1,7 @@
-// Der Bot in der Hafen-Phase (Auftrag 40): Als Boss von Deutschland verkauft er, sobald Jansen anruft. Danach nimmt er
-// jeden Montag alle Bestellungen an, liefert, sobald die Ware in einem Hafen liegt (eigener Lkw, sonst Spedition), und
-// kauft Container nach: für das, was an Bestellungen offen ist, plus einen Puffer für die nächste Woche, beim günstigsten
+// Der Bot in der Hafen-Phase (Auftrag 40): Als Boss von Deutschland verkauft er, sobald Jansen anruft. Danach kauft er
+// für die neuen Bestellungen ein und nimmt nur die an, für die die Ware reicht (orderCoverage). Er liefert, sobald die
+// Ware in einem Hafen liegt (eigener Lkw, sonst Spedition), und kauft Container nach: für das, was an Bestellungen offen
+// ist, plus einen Puffer für die nächste Woche, beim günstigsten
 // Produzenten, im Hafen mit dem ruhigsten Zoll, in halben Containern (verteilt das Risiko). Ist eine Frist knapp, holt
 // er die Ware aus Jansens Netz (teurer, am nächsten Tag da). Wird der Zoll in Rotterdam scharf, mietet er Antwerpen dazu.
 // Er schickt nur Befehle, genau wie die Oberfläche.
@@ -18,6 +19,7 @@ import {
   harborPorts,
   isTradeActive,
   openOrders,
+  orderCoverage,
   ownedPorts,
   PRODUCERS,
   pendingDeliveries,
@@ -150,8 +152,11 @@ function equip(state: GameState, run: BotRun): void {
 /** Ein Blick auf die Hafen-Phase. */
 export function tradeTurn(state: GameState, run: BotRun): void {
   if (!isTradeActive(state)) return;
-  if (openOrders(state).length > 0) run({ type: 'trade.acceptAll', payload: {} });
   deliverReady(state, run);
   equip(state, run);
   procure(state, run);
+  // Erst beschaffen, dann nur annehmen, wofür die Ware reicht (Bestand plus Container vor der Frist).
+  if ([...orderCoverage(state).values()].some((m) => m === 0)) {
+    run({ type: 'trade.acceptAll', payload: { coveredOnly: true } });
+  }
 }

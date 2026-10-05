@@ -47,12 +47,21 @@ function germany(sim: Simulation): void {
 }
 
 describe('Verkaufspreis (Auftrag 40)', () => {
-  it('90 Tagesgewinne, Rotterdam drei Viertel davon, nie unter der Untergrenze', () => {
+  it('90 Tagesgewinne, Rotterdam ROTTERDAM_SHARE davon, nie unter der Untergrenze', () => {
     const offer = salePriceFor(40_000);
     expect(offer.price).toBe(40_000 * SALE_PROFIT_DAYS);
     expect(offer.rotterdamPrice).toBe(Math.round((offer.price * ROTTERDAM_SHARE) / 1000) * 1000);
     expect(offer.rest).toBe(offer.price - offer.rotterdamPrice);
     expect(salePriceFor(-5_000).price).toBe(SALE_PRICE_MIN);
+  });
+
+  it('die Ware in den Lagern kommt zum Einkaufspreis obendrauf und gehört ganz dir', () => {
+    const plain = salePriceFor(40_000);
+    const offer = salePriceFor(40_000, { value: 123_456, amount: 20_000 });
+    expect(offer.stockValue).toBe(123_500);
+    expect(offer.price).toBe(plain.price + 123_500);
+    expect(offer.rotterdamPrice).toBe(plain.rotterdamPrice);
+    expect(offer.rest).toBe(plain.rest + 123_500);
   });
 });
 

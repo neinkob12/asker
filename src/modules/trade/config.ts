@@ -48,6 +48,8 @@ export const ORDER_ANSWER_MINUTES = 24 * 60;
 export const ORDER_DUE_DAYS = 6;
 /** Zu spät geliefert: nur so viel vom Preis. */
 export const LATE_PRICE_FACTOR = 0.8;
+/** So viele Tage nach der Frist geht es noch mit Abschlag, danach ist die Bestellung geplatzt. */
+export const LATE_GRACE_DAYS = 2;
 
 /** Vertrauen (0–100) nach einem Geschäft. */
 export const TRUST = {

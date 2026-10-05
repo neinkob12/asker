@@ -30,6 +30,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
+import { HARBOR_CITY } from '../../city';
 import { getVehicles, vehicleName, vehicleStatus } from '../../fleet';
 import { productName } from '../../goods';
 import { customsHeat, customsLevel } from '../../police';
@@ -53,6 +54,7 @@ import {
   maxFactor,
   openItems,
   openOrders,
+  orderCoverage,
   orderItemsText,
   orderValue,
   ownedPorts,
@@ -170,7 +172,7 @@ function OrdersView() {
         setAsk(null);
       },
     });
-    for (const v of getVehicles(state, 'rotterdam').filter((x) => vehicleStatus(x) === 'free')) {
+    for (const v of getVehicles(state, HARBOR_CITY).filter((x) => vehicleStatus(x) === 'free')) {
       actions.push({
         label: `${vehicleName(state, v.id)} (ohne Kosten)`,
         icon: 'truck',
@@ -182,6 +184,8 @@ function OrdersView() {
     }
   }
   const guaranteed = open.filter((o) => o.guaranteed);
+  const coverage = orderCoverage(state);
+  const covered = open.filter((o) => coverage.get(o.id) === 0);
   return (
     <>
       <SummaryTiles
@@ -197,17 +201,27 @@ function OrdersView() {
         color="warn"
         count={open.length}
         note={open.length === 0 ? 'Montag früh kommen neue.' : 'Antworten bis zum nächsten Morgen.'}
-        more="Die Menge ist dein Anteil am Wochenbedarf des Kunden: Er vergleicht dich mit Toni, Hein, Mirko und Daan nach Preis, Qualität und Zuverlässigkeit. Ein Gegenangebot geht bis zu seiner Preisgrenze; liegt die Konkurrenz dann vorn, ist der Auftrag weg. Der Abnahmevertrag der alten Organisationen hat einen festen Preis."
+        more="Die Menge ist dein Anteil am Wochenbedarf des Kunden: Er vergleicht dich mit Toni, Hein, Mirko und Daan nach Preis, Qualität und Zuverlässigkeit. Ein Gegenangebot geht bis zu seiner Preisgrenze; liegt die Konkurrenz dann vorn, ist der Auftrag weg. Der Abnahmevertrag der alten Organisationen hat einen festen Preis. „Ware da“ zählt den Bestand in deinen Häfen und Container, die vor der Frist ankommen, abzüglich dessen, was angenommene Bestellungen brauchen."
       >
         <List>
-          {open.length > 1 && (
+          {covered.length > 0 && (covered.length < open.length || open.length > 1) && (
             <ListItem
               action
               icon="checkCircle"
+              onClick={() => dispatch({ type: 'trade.acceptAll', payload: { coveredOnly: true } })}
+              value={formatEuro(covered.reduce((sum, o) => sum + orderValue(o, 1), 0))}
+            >
+              {covered.length === open.length ? 'Alle annehmen' : `Gedeckte annehmen (${covered.length})`}
+            </ListItem>
+          )}
+          {open.length > 1 && covered.length < open.length && (
+            <ListItem
+              action
+              icon="alert"
               onClick={() => dispatch({ type: 'trade.acceptAll', payload: {} })}
               value={formatEuro(open.reduce((sum, o) => sum + orderValue(o, 1), 0))}
             >
-              Alle annehmen
+              {`Alle annehmen (${open.length - covered.length} ohne Ware)`}
             </ListItem>
           )}
           {guaranteed.length > 0 && guaranteed.length < open.length && (
@@ -234,6 +248,9 @@ function OrdersView() {
                   title={c.name}
                   tags={[
                     o.guaranteed && { label: 'Vertrag', color: 'brand', icon: 'handshake' },
+                    (coverage.get(o.id) ?? 0) === 0
+                      ? { label: 'Ware da', color: 'money', icon: 'check' }
+                      : { label: `fehlt ${kg(coverage.get(o.id) ?? 0)}`, color: 'danger', icon: 'alert' },
                     ...itemChips(o.items),
                     {
                       label: `bis ${clock.weekdayName(o.answerBy, true)} ${clock.formatTime(o.answerBy)}`,

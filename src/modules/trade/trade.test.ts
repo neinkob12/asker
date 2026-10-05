@@ -18,6 +18,7 @@ import {
   isTradeActive,
   maxFactor,
   openOrders,
+  orderCoverage,
   ownedPorts,
   playerScore,
   portStock,
@@ -178,6 +179,93 @@ describe('Hafen-Phase: Bestellungen und Auslieferung', () => {
       expect(paid.revenue).toBe(Math.round(first.amount * first.offer));
       expect(paid.status).toBe('accepted');
     }
+  });
+
+  it('Abdeckung: „Ware da“ zählt Bestand und Container vor der Frist; „Gedeckte annehmen“ nimmt nur diese', () => {
+    const sim = soldGame(3);
+    const open = openOrders(sim.state);
+    expect(open.length).toBeGreaterThan(1);
+    const stock = sim.state.modules.trade.stock.rotterdam;
+    for (const id of Object.keys(stock)) delete stock[id];
+    expect([...orderCoverage(sim.state).values()].every((m) => m > 0)).toBe(true);
+    // Genau die Ware für die erste Bestellung, die Hälfte davon als Container vor der Frist.
+    const first = open[0];
+    for (const item of first.items) {
+      stock[item.productId] = { amount: Math.ceil(item.amount / 2), quality: 0.7 };
+      sim.state.modules.trade.shipments.push({
+        id: 9000 + sim.state.modules.trade.shipments.length,
+        producerId: 'jansen',
+        productId: item.productId,
+        amount: Math.ceil(item.amount / 2),
+        quality: 0.7,
+        size: 'small',
+        portId: 'rotterdam',
+        orderedAt: sim.state.time,
+        arrivesAt: first.dueAt - 60,
+        status: 'sea',
+      });
+    }
+    const coverage = orderCoverage(sim.state);
+    expect(coverage.get(first.id)).toBe(0);
+    const accepted = sim.dispatch({ type: 'trade.acceptAll', payload: { coveredOnly: true } });
+    expect(accepted.ok).toBe(true);
+    const after = getOrders(sim.state);
+    for (const o of open) {
+      expect(after.find((x) => x.id === o.id)?.status === 'open').toBe(coverage.get(o.id) !== 0);
+    }
+  });
+
+  it('keine doppelte Strafe: Beschlagnahme nach der geplatzten Frist und Ladung nach gekipptem Deal', () => {
+    const sim = soldGame(12);
+    const events = recordEvents(sim);
+    const order = openOrders(sim.state).find((o) => o.items.length > 1);
+    if (!order) throw new Error('keine Bestellung mit mehreren Waren');
+    sim.dispatch({ type: 'trade.answer', payload: { orderId: order.id, choice: 'accept' } });
+    const stock = sim.state.modules.trade.stock.rotterdam;
+    const first = order.items[0];
+    let seized = false;
+    for (let i = 0; i < 40 && !seized; i++) {
+      for (const id of Object.keys(stock)) delete stock[id];
+      stock[first.productId] = { amount: first.amount, quality: 0.7 };
+      const live = getOrders(sim.state).find((o) => o.id === order.id);
+      if (!live) throw new Error('Bestellung weg');
+      for (const item of live.items) delete item.state;
+      live.status = 'accepted';
+      live.dueAt = sim.state.time + DAY;
+      sim.state.modules.trade.deliveries = [];
+      expect(sim.dispatch({ type: 'trade.deliver', payload: { orderId: order.id } }).ok).toBe(true);
+      // Frist plus Gnadenfrist vorbei, während die Ladung unterwegs ist: geplatzt, Teil unterwegs.
+      live.dueAt = sim.state.time - 3 * DAY;
+      const delivery = sim.state.modules.trade.deliveries[0];
+      delivery.arrivesAt = sim.state.time + 10 * DAY;
+      delivery.checkAt = sim.state.time + 2;
+      sim.advance(5);
+      seized = eventsOfType(events, 'trade.deliverySeized').length > 0;
+      if (!seized) events.length = 0;
+    }
+    expect(seized).toBe(true);
+    sim.advance(DAY);
+    const failed = eventsOfType(events, 'trade.orderFailed').filter((e) => e.payload.orderId === order.id);
+    expect(failed).toHaveLength(1);
+    expect(getOrders(sim.state).find((o) => o.id === order.id)?.status).toBe('failed');
+
+    // Gekippter Deal: eine zweite Ladung ändert die Bestellung nicht mehr, die Ware kommt zurück.
+    const live = getOrders(sim.state).find((o) => o.id === order.id);
+    if (!live) throw new Error('Bestellung weg');
+    for (const item of live.items) delete item.state;
+    live.status = 'accepted';
+    live.dueAt = sim.state.time + 5 * DAY;
+    for (const id of Object.keys(stock)) delete stock[id];
+    stock[first.productId] = { amount: first.amount, quality: 0.7 };
+    expect(sim.dispatch({ type: 'trade.deliver', payload: { orderId: order.id } }).ok).toBe(true);
+    const delivery = sim.state.modules.trade.deliveries[0];
+    delivery.checkAt = null;
+    live.status = 'failed';
+    for (const item of live.items) if (item.state !== 'shipped') item.state = 'missed';
+    const before = JSON.stringify(live);
+    sim.advance(delivery.arrivesAt - sim.state.time + 5);
+    expect(JSON.stringify(getOrders(sim.state).find((o) => o.id === order.id))).toBe(before);
+    expect(portStock(sim.state, 'rotterdam')[first.productId]?.amount).toBe(first.amount);
   });
 
   it('nicht angenommen: die Bestellung verfällt; montags kommen neue', () => {

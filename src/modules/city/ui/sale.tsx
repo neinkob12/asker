@@ -2,7 +2,7 @@
 // ein Tipp öffnet die Seite „Verkauf“ mit der Rechnung (Tagesgewinn, Preis der Statthalter, Rotterdam, was bleibt).
 // Nach dem Verkauf der große Moment über der Karte („Verkauft“), dann geht es nach Rotterdam.
 
-import { formatEuro } from '../../../core';
+import { formatEuro, formatNumber } from '../../../core';
 import {
   Button,
   Group,
@@ -62,7 +62,7 @@ function SaleWaits() {
       onClick={() => ui.openPanel('city.sale', {})}
       aria-label={`Verkauf: ${formatEuro(offer.price)}. Rechnung öffnen`}
     >
-      <span class="hud-label is-city">{contact.name} · Rotterdam</span>
+      <span class="hud-label is-city">{contact.name.split(' (')[0]}</span>
       <span class="city-hud__main">
         <IconChip icon="handshake" color="brand" size="md" />
         <span class="city-hud__text">
@@ -127,7 +127,7 @@ function SalePanel() {
         color="money"
         value={formatEuro(offer.dailyProfit)}
         note={`Der Preis: ${SALE_PROFIT_DAYS} Tagesgewinne, Schnitt der letzten sieben Tage.`}
-        more={`Gezählt wird das Ergebnis jeder Stadt vor dem Anteil der Statthalter, ohne einmaligen Ausbau. Rotterdam kostet ${Math.round(ROTTERDAM_SHARE * 100)} Prozent davon: Liegeplatz, Halle, Jansens Leute und Kunden. Dein Konto bleibt, wie es ist.`}
+        more={`Gezählt wird das Ergebnis jeder Stadt vor dem Anteil der Statthalter, ohne einmaligen Ausbau. Rotterdam kostet ${Math.round(ROTTERDAM_SHARE * 100)} Prozent davon: Liegeplatz, Halle, Jansens Leute und Kunden. Die Ware in deinen Lagern bleibt bei den Statthaltern, sie zahlen sie zum Einkaufspreis dazu. Dein Konto bleibt, wie es ist.`}
       >
         <List>
           {ownedCities(state).map((id) => {
@@ -143,6 +143,15 @@ function SalePanel() {
           })}
         </List>
       </Group>
+      {offer.stockAmount > 0 && (
+        <Group
+          title="Ware in deinen Lagern"
+          icon="boxes"
+          color="goods"
+          value={formatEuro(offer.stockValue)}
+          note={`${formatNumber(Math.round(offer.stockAmount / 100) / 10, 1)} kg bleiben bei den Statthaltern, zum Einkaufspreis im Preis.`}
+        />
+      )}
       <Group title="Danach" icon="ship" color="goods" note="Lieferant für alle, vom Hafen in Rotterdam aus.">
         <List>
           <ListItem>

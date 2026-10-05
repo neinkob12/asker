@@ -132,7 +132,8 @@ export const SLEEP_FACTOR_MAX = 1.15;
 /**
  * Untergrenze des Schnitts im Schlaf (Auftrag 40, Etappe 0): plan.md sagt „hin und wieder ein kleines Minus durch eine
  * Razzia, nichts Schlimmes“. Ein Statthalter führt die Stadt sparsam; lief sie live mit Verlust (München als teure Stadt,
- * die letzten Tage nach dem Übernehmen), bucht sie im Schlaf mindestens 0. Ein Minus gibt es nur durch eine Razzia.
+ * die letzten Tage nach dem Übernehmen), bucht sie im Schlaf mindestens 0. Ein Minus gibt es nur durch eine Razzia, und
+ * die nur bei einem Schnitt über 0 (der Verlust ist ein Anteil davon): Bei einem Schnitt ≤ 0 bucht der Tag 0, ohne Razzia.
  */
 export const SLEEP_AVERAGE_FLOOR = 0;
 

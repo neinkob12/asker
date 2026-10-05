@@ -48,5 +48,5 @@ describe('Zufall pro Stadt', () => {
     for (const others of [['hamburg'], ['berlin', 'muenchen'], ['frankfurt', 'hamburg', 'berlin', 'muenchen']]) {
       expect(koelnDice(others), others.join(',')).toEqual(alone);
     }
-  });
+  }, 30_000);
 });

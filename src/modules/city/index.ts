@@ -62,6 +62,7 @@ import { isPlayerDelivering, playerSpot } from '../customers';
 import { activeEncounters } from '../encounters';
 import { bookDay, cityDayProfit, cityReport } from '../finance';
 import { freeVehicles, releaseVehicle } from '../fleet';
+import { getLots } from '../goods';
 import {
   FULL_POWER_SHARE,
   fullPowerMissing,
@@ -1229,18 +1230,45 @@ export interface SaleOffer {
   rotterdamPrice: number;
   /** Was dir bleibt (Startkapital der Hafen-Phase, zusätzlich zu deinem Konto). */
   rest: number;
+  /** Ware in den Lagern deiner Städte zum Einkaufspreis: Sie bleibt bei den Statthaltern, die zahlen sie dazu. */
+  stockValue: number;
+  /** Gramm (bzw. Einheiten) dieser Ware. */
+  stockAmount: number;
 }
 
 /** Verkaufspreis nach der Formel (rein, für Tests und die Anzeige): auf 1.000 € gerundet. */
-export function salePriceFor(dailyProfit: number): SaleOffer {
-  const price = Math.max(SALE_PRICE_MIN, Math.round((dailyProfit * SALE_PROFIT_DAYS) / 1000) * 1000);
-  const rotterdamPrice = Math.round((price * ROTTERDAM_SHARE) / 1000) * 1000;
-  return { dailyProfit, price, rotterdamPrice, rest: price - rotterdamPrice };
+/**
+ * Preis aus dem Tagesgewinn: SALE_PROFIT_DAYS Tagesgewinne (mindestens SALE_PRICE_MIN), Rotterdam ROTTERDAM_SHARE davon.
+ * Die Ware in den Lagern (stockValue) kommt obendrauf und gehört ganz dir.
+ */
+export function salePriceFor(
+  dailyProfit: number,
+  stock: { value: number; amount: number } = { value: 0, amount: 0 },
+): SaleOffer {
+  const business = Math.max(SALE_PRICE_MIN, Math.round((dailyProfit * SALE_PROFIT_DAYS) / 1000) * 1000);
+  const rotterdamPrice = Math.round((business * ROTTERDAM_SHARE) / 1000) * 1000;
+  const stockValue = Math.max(0, Math.round(stock.value / 100) * 100);
+  const price = business + stockValue;
+  return { dailyProfit, price, rotterdamPrice, rest: price - rotterdamPrice, stockValue, stockAmount: stock.amount };
 }
 
-/** Das aktuelle Angebot aus dem Stand der Kasse. */
+/** Ware in den Lagern deiner Städte, zum Einkaufspreis (Durchschnitt pro Posten). */
+export function saleStockValue(state: GameState): { value: number; amount: number } {
+  const cities = new Set(ownedCities(state));
+  let value = 0;
+  let amount = 0;
+  for (const cityId of cities) {
+    for (const lot of getLots(state, { cityId })) {
+      value += lot.amount * lot.unitCost;
+      amount += lot.amount;
+    }
+  }
+  return { value, amount };
+}
+
+/** Das aktuelle Angebot aus dem Stand der Kasse und der Lager. */
 export function saleOffer(state: GameState): SaleOffer {
-  return salePriceFor(businessDailyProfit(state));
+  return salePriceFor(businessDailyProfit(state), saleStockValue(state));
 }
 
 /** Bist du Boss von Deutschland (alle spielbaren Städte komplett, mindestens GERMANY_MIN_CITIES)? */
@@ -1341,14 +1369,15 @@ export function sellBusiness(ctx: Ctx): CommandResult {
   const c = ctx.state.modules.city;
   const offer = saleOffer(ctx.state);
   const cities = ownedCities(ctx.state);
-  wallet.earn(ctx, offer.price, 'dirty', 'Verkauf des Geschäfts an die Statthalter', 'sale.business');
-  wallet.pay(
-    ctx,
-    offer.rotterdamPrice,
-    'dirty',
-    'Rotterdam von Jansen (Liegeplatz, Halle, Kunden)',
-    'business.rotterdam',
-  );
+  // Gebucht auf Rotterdam, nicht auf die aktive Stadt: Die Kasse der alten Städte bleibt sauber.
+  wallet.earn(ctx, offer.price, 'dirty', 'Verkauf des Geschäfts an die Statthalter', {
+    category: 'sale.business',
+    cityId: HARBOR_CITY,
+  });
+  wallet.pay(ctx, offer.rotterdamPrice, 'dirty', 'Rotterdam von Jansen (Liegeplatz, Halle, Kunden)', {
+    category: 'business.rotterdam',
+    cityId: HARBOR_CITY,
+  });
   c.sale = {
     status: 'sold',
     callAt: null,
