@@ -149,14 +149,17 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] F2 Alte Städte fluten das Handy nach dem Verkauf: Tagesberichte der Statthalter, Empfehlungen, Lieferanten-Aktionen,
   Rang-Text, Festnahme-Banner. Nach `isBusinessSold` abstellen, alte Chats beim Verkauf als gelesen markieren.
   Erledigt: Beim Verkauf sind alle alten Chats gelesen, offene Fragen erledigt, Jansens Verkaufsanruf ruft nicht zurück. Statthalter schreiben nur bei Verlust (nach dem Verkauf nie), Stufen-Meldung, Polizei-Stufe, Kontrolle und Festnahme nur aus der aktiven Stadt; Empfehlungen und Milieu-Kontakte nach dem Verkauf aus.
-- [ ] F3 Doppelte Bestellungen: Erste Runde bei Ankunft plus Montag-Runde kurz danach (32 offene am ersten Morgen).
+- [x] F3 Doppelte Bestellungen: Erste Runde bei Ankunft plus Montag-Runde kurz danach (32 offene am ersten Morgen).
   Kein zweiter Auftrag, solange ein Kunde noch einen offenen derselben Woche hat; Fennas Montag-Text anpassen.
-- [ ] F4 Sauberes Geld als unsichtbare Sperre (Lkw 63.000, Halle, Liegeplatz, Schiff ausgegraut ohne Grund): Zeile
+  Erledigt: Ein Kunde mit offener (unbeantworteter) Bestellung bestellt nicht neu; Fenna sagt am Montag, wie viele noch auf Antwort warten.
+- [x] F4 Sauberes Geld als unsichtbare Sperre (Lkw 63.000, Halle, Liegeplatz, Schiff ausgegraut ohne Grund): Zeile
   „Dir fehlen … € sauber“ mit Knopf zur Geldwäsche (Jansens Reederei), Texte in `rtBuy`/`rtTruck` und Geldwäsche-Rat.
+  Erledigt: Zeile „Dir fehlen … € sauber“ unter Lkw, Halle, Liegeplatz und Schiffen (`trade/ui/clean.tsx`) mit Sprung zur Geldwäsche; Rat der Geldwäsche nennt nach dem Verkauf Lkw, Halle, Liegeplatz, Schiffe und Jansens Reederei; `rtTruck` sagt, dass es sauberes Geld braucht.
 - [ ] F5 „Alle annehmen (9 ohne Ware)“ und Fennas „Alle“ ohne Warnung (Ruf 0,85 → 0,28): Rückfrage mit Folge und
   „Erst einkaufen“, Summe als „nur wenn alles geliefert wird“.
-- [ ] F6 Lkw-Quest ehrlich (lohnt erst bei vielen Fahrten, doppelte Kontrollchance), `rtTruck` ans Ende oder optional,
+- [x] F6 Lkw-Quest ehrlich (lohnt erst bei vielen Fahrten, doppelte Kontrollchance), `rtTruck` ans Ende oder optional,
   Abwägung im Liefer-Blatt.
+  Erledigt: `rtTruck` ehrlich („lohnt bei vielen Fahrten, doppelt so oft kontrolliert“) und als letzter Schritt des Kapitels nach „fünfmal pünktlich“.
 - [ ] F7 Fristen und Folgen erklären: Fußnote aus der echten Frist, Guide mit Ankunfts-Runde, Strafe für Platzen,
   sauberes Geld, Laufzeit der Container gegen die Frist.
 - [ ] F8 Gesperrte Gang-Kunden (Anteil 0 %, Rache) mit Chip und Grund oder ausblenden.

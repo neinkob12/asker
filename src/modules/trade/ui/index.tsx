@@ -91,6 +91,7 @@ import {
   tradeStats,
   weekOf,
 } from '../index';
+import { MissingClean } from './clean';
 import { europeLayer } from './map';
 import { ShipsGroup } from './order';
 import { DispatcherGroup, RestockGroup, WeekGroup } from './plans';
@@ -726,6 +727,7 @@ function TrucksGroup(props: { onBuy: (price: number, run: () => void) => void })
             Lkw kaufen
           </ListItem>
         )}
+        {model && <MissingClean cost={price} what="den Lkw" />}
       </List>
     </Group>
   );
@@ -736,6 +738,10 @@ function HarborView() {
   const ui = useUi();
   const [confirm, setConfirm] = useState<Confirm>(null);
   const ports = ownedPorts(state);
+  const berths = harborPorts()
+    .filter((p) => !ports.includes(p.id))
+    .map((p) => p.berthCost);
+  const cheapestBerth = berths.length > 0 ? Math.min(...berths) : null;
   const shipments = getShipments(state);
   const stats = tradeStats(state);
   const target = ports[0] ?? 'rotterdam';
@@ -813,6 +819,7 @@ function HarborView() {
                   {`Halle bauen (+${kg(info.hallCapacity)})`}
                 </ListItem>
               )}
+              {info && halls < MAX_HALLS && <MissingClean cost={info.hallCost} what="die Halle" />}
             </List>
           </Group>
         );
@@ -904,6 +911,7 @@ function HarborView() {
                 />
               </ListItem>
             ))}
+          {cheapestBerth !== null && <MissingClean cost={cheapestBerth} what="einen Liegeplatz" />}
         </List>
       </Group>
       <Disclosure label="Was ist der Zoll-Heat?">

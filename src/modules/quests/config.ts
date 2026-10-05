@@ -730,19 +730,6 @@ function harborChapter(): QuestDef[] {
     },
     {
       ...base,
-      id: 'rtTruck',
-      icon: 'truck',
-      title: 'Kauf einen Lkw',
-      task:
-        'Die Spedition frisst deine Marge. Ein eigener Lkw fährt umsonst, nur der Zoll winkt ihn öfter raus. Kostet ' +
-        'sauberes Geld, das zahlt sich nach ein paar Fahrten aus.',
-      hint: 'Kunden-App › Hafen › Lkw kaufen.',
-      measure: (state) => (getVehicles(state, HARBOR_CITY).some((v) => !isShip(v)) ? 1 : 0),
-      goTo: 'tradeHarbor',
-      reward: [{ kind: 'money', money: 'clean', amount: 10000 }],
-    },
-    {
-      ...base,
       id: 'rtOnTime',
       icon: 'clock',
       title: 'Liefere fünfmal pünktlich',
@@ -754,6 +741,20 @@ function harborChapter(): QuestDef[] {
       measure: (state) => tradeStats(state).onTime,
       goTo: 'trade',
       reward: [{ kind: 'money', money: 'clean', amount: 20000 }],
+    },
+    {
+      ...base,
+      id: 'rtTruck',
+      icon: 'truck',
+      title: 'Eigener Lkw, wenn es sich lohnt',
+      task:
+        'Lieferst du viel und oft, frisst die Fracht der Spedition einen Teil der Marge. Ein eigener Lkw fährt ohne ' +
+        'Fracht, aber der Zoll winkt ihn doppelt so oft raus. Er kostet sauberes Geld: Wasch vorher Schwarzgeld über ' +
+        'meine Reederei.',
+      hint: 'Geldwäsche › Jansens Reederei, dann Kunden-App › Hafen › Lkw kaufen.',
+      measure: (state) => (getVehicles(state, HARBOR_CITY).some((v) => !isShip(v)) ? 1 : 0),
+      goTo: 'tradeHarbor',
+      reward: [{ kind: 'money', money: 'clean', amount: 10000 }],
       doneText:
         'Du hast es drauf. Der Hafen läuft über dich, ich bin raus. Pass auf den Zoll auf, der vergisst nichts. Und ' +
         'wenn mal einer aus Südamerika anruft: Geh ran.',

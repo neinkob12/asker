@@ -1053,9 +1053,16 @@ export function placeOrders(ctx: Ctx, first = false): number {
     ),
   );
   let placed = 0;
+  let waiting = 0;
   for (const customer of s.customers) {
     if (customer.kind === 'gang' && customer.gangId && memoryScore(ctx.state, customer.gangId) <= GANG_MEMORY_BLOCK) {
       customer.share = 0;
+      continue;
+    }
+    // Wartet der Kunde noch auf deine Antwort (z.B. aus der ersten Runde bei der Ankunft), bestellt er nicht doppelt
+    // (Auftrag 43: sonst lagen am ersten Montag 32 offene Bestellungen da, jeder Kunde zweimal).
+    if (s.orders.some((o) => o.customerId === customer.id && o.status === 'open')) {
+      waiting++;
       continue;
     }
     const { share, topRival } = shareFor(ctx.state, customer, week);
@@ -1109,7 +1116,8 @@ export function placeOrders(ctx: Ctx, first = false): number {
       contact: dispatcherContact(),
       text: first
         ? `Willkommen. Ich bin Fenna, ich mach hier die Disposition. Für den Anfang hab ich nur ${goods} zugesagt, das liegt in der Halle: ${placed} Bestellungen, du hast drei Tage zum Antworten.`
-        : `Neue Woche, ${placed} Bestellungen. Annehmen bis morgen früh, sonst kauft die Konkurrenz.`,
+        : `Neue Woche, ${placed} Bestellungen. Annehmen bis morgen früh, sonst kauft die Konkurrenz.` +
+          (waiting > 0 ? ` ${waiting} warten noch auf deine Antwort von vorher.` : ''),
       silent: true,
     });
   }

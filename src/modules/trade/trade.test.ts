@@ -310,15 +310,18 @@ describe('Hafen-Phase: Container und Zoll', () => {
 
   it('Zoll in Rotterdam: du stehst selbst am Kai und entscheidest; in Antwerpen regeln es die Hafenarbeiter', () => {
     const sim = soldGame(9);
-    sim.state.wallet.dirty += 2_000_000;
+    sim.state.wallet.dirty += 5_000_000;
     sim.state.wallet.clean += 500_000;
     expect(sim.dispatch({ type: 'trade.rentBerth', payload: { portId: 'antwerpen' } }).ok).toBe(true);
     // Viel Zoll-Heat: fast jeder Container wird kontrolliert.
     sim.state.modules.police.customs = { rotterdam: 100, antwerpen: 100 };
     const events = recordEvents(sim);
-    for (const portId of ['rotterdam', 'antwerpen', 'rotterdam', 'antwerpen']) {
-      const payload = { producerId: 'spanien', productId: 'weed', size: 'small' as const, portId };
-      expect(sim.dispatch({ type: 'trade.buy', payload }).ok).toBe(true);
+    // Zehn große Container nach Rotterdam (mindestens einer wird kontrolliert), zwei kleine nach Antwerpen.
+    const ports = [...Array(10).fill('rotterdam'), 'antwerpen', 'antwerpen'];
+    for (const portId of ports) {
+      const size = portId === 'rotterdam' ? ('full' as const) : ('small' as const);
+      const payload = { producerId: 'spanien', productId: 'weed', size, portId };
+      expect(sim.dispatch({ type: 'trade.buy', payload })).toEqual({ ok: true, data: expect.anything() });
     }
     let seen = 0;
     for (let i = 0; i < 10 * 24; i++) {

@@ -48,6 +48,7 @@ import {
   shippingMinutes,
   voyagePlan,
 } from '../index';
+import { MissingClean } from './clean';
 
 declare module '../../../ui' {
   interface PanelRegistry {
@@ -351,6 +352,9 @@ export function ShipsGroup() {
             {`${m.name} kaufen`}
           </ListItem>
         ))}
+        {models.length > 0 && (
+          <MissingClean cost={Math.min(...models.map((m) => vehiclePrice(m, HARBOR_CITY)))} what="ein Schiff" />
+        )}
       </List>
       <ActionSheet
         open={sell !== null}

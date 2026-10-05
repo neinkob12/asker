@@ -86,6 +86,16 @@ describe('Einführung in die Hafen-Phase (Auftrag 43)', () => {
     expect(again).toEqual([]);
   });
 
+  it('kein Kunde hat zwei offene Bestellungen, auch wenn der erste Montag gleich nach der Ankunft kommt', () => {
+    const sim = quietGame(6);
+    soldAndArrived(sim);
+    for (let hour = 0; hour < 8 * 24; hour++) {
+      sim.advance(60);
+      const open = openOrders(sim.state).map((o) => o.customerId);
+      expect(open.length).toBe(new Set(open).size);
+    }
+  });
+
   it('die erste Runde bestellt nur, was in der Halle liegt, mit drei Tagen zum Antworten', () => {
     const sim = quietGame(2);
     soldAndArrived(sim);
@@ -97,7 +107,7 @@ describe('Einführung in die Hafen-Phase (Auftrag 43)', () => {
     }
   });
 
-  it('annehmen, ausliefern, Container, Lkw: jeder Schritt hakt sich ab', () => {
+  it('annehmen, ausliefern, Container, pünktlich: jeder Schritt hakt sich ab', () => {
     const sim = quietGame(3);
     soldAndArrived(sim);
     sim.state.wallet.clean = 200_000;
@@ -118,10 +128,10 @@ describe('Einführung in die Hafen-Phase (Auftrag 43)', () => {
       sim.dispatch({ type: 'trade.buy', payload: { producerId: producer.id, productId: 'weed', size: 'small' } }).ok,
     ).toBe(true);
     sim.advance(10);
-    expect(currentQuest(sim.state)?.id).toBe('rtTruck');
+    // Erst pünktlich liefern, der eigene Lkw kommt zuletzt (Auftrag 43: er lohnt sich erst bei vielen Fahrten).
+    expect(currentQuest(sim.state)?.id).toBe('rtOnTime');
     expect(sim.dispatch({ type: 'fleet.buy', payload: { model: 'truck', cityId: 'rotterdam' } }).ok).toBe(true);
     sim.advance(10);
-    expect(currentQuest(sim.state)?.id).toBe('rtOnTime');
     // Pünktliche Lieferungen zählen, nach fünf ist Jansen raus.
     sim.advance(3 * DAY);
     expect(getOrders(sim.state).some((o) => o.status === 'delivered')).toBe(true);
@@ -131,6 +141,10 @@ describe('Einführung in die Hafen-Phase (Auftrag 43)', () => {
     const sim = quietGame(4);
     soldAndArrived(sim);
     sim.state.modules.trade.priceLevel = 0.9;
+    // Wer noch auf eine Antwort wartet, bestellt nicht neu: die erste Runde ablehnen.
+    for (const o of openOrders(sim.state)) {
+      sim.dispatch({ type: 'trade.answer', payload: { orderId: o.id, choice: 'decline' } });
+    }
     const before = new Set(getOrders(sim.state).map((o) => o.id));
     placeOrders(sim.ctx('trade'));
     const fresh = getOrders(sim.state).filter((o) => !before.has(o.id));
