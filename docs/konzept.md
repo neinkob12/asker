@@ -252,6 +252,12 @@ schönere Deutschland-Ansicht) kommt mit [Auftrag 31](auftraege/31-karte-lebt.md
   Polizei startet eine Stufe härter, Zoll am Kai und auf der Autobahn. Vier eigene, stärkere Gangs. Startlieferant in
   Hamburg ist Toni aus Frankfurt (Vertrauen bleibt). Man fängt mit seinem Geld an, aber ohne Spots, Lager und Leute;
   Leute aus Köln können nachkommen.
+- **München (Auftrag 38):** 12 Stadtbezirke mit echten Grenzen (Altstadt-Lehel, Isarvorstadt, Maxvorstadt,
+  Schwabing-West, Au-Haidhausen, Sendling, Westend, Neuhausen, Schwabing-Freimann, Giesing, Bogenhausen, Milbertshofen).
+  Teuer und streng: die höchste Kaufkraft und die höchsten Preise, aber die teuersten Lager, Spots und Löhne, weniger
+  Spots als anderswo, die Polizei sieht dich vom ersten Tag an als Händler und kontrolliert öfter. Oktoberfest (zwei
+  Wochen, dreimal so viel Kundschaft rund um die Theresienwiese, doppelt so viele Kontrollen) und Bayern-Heimspiele.
+  Toni liefert auch hierher; Enzo aus Verona bringt die beste Ware über den Brenner, aber am Brenner wartet der Zoll.
 - **Köln:** Stadt-Events (Karneval, FC-Heimspiel, Kölner Lichter mit Wirkung auf Nachfrage, Polizei und Gangs),
   Kölscher Klüngel (Beziehungen wachsen schneller, Freikaufen und Kaution billiger; Hamburg ist kühl und korrekt),
   Studenten und Kneipen (Veedel-Kneipen als Spot-Art mit Stammkunden und doppeltem Ruf, Studentenviertel mit viel

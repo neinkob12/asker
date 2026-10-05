@@ -80,6 +80,10 @@ Razzia im Schlaf, Startpaket und Startgeld bei der Übergabe (`hierarchy/handove
 Capos), Ränge des Spielers (`city/ranks.ts`, `playerRank`, Ereignis `player.rankUp`), Quest-Kapitel pro Stadt (`cityId`
 an der Quest). Stellschrauben für das Tempo späterer Städte: `FULL_POWER_SHARE`, `HANDOVER_START_MONEY_DAYS`,
 `START_MONEY_MIN_BY_CITY`, `START_PACK_MAX_STAFF`.
+Auftrag 38 (München): dritte spielbare Stadt, nur Daten nach der Checkliste (`veedel/data-muenchen.ts`, Gangs `mu-` mit
+Stimmen in `gangs/texts-muenchen.ts`, `network-muenchen.ts`); Dreh teuer und streng über `CITIES`, `MIN_TIER_BY_CITY`,
+`CHECK_FACTOR_BY_CITY`, Events Oktoberfest und Bayern. Neu und allgemein: `Supplier.customs` (Zoll an einer Grenze),
+`requires.city` (Lieferant meldet sich erst in dieser Stadt), Bot `cityOrder` (`BALANCE_ORDER=muenchen npm run balance`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

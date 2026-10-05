@@ -190,6 +190,14 @@ Stadt“. Für Auftrag 34: Das Startpaket nimmt bis dahin einen Leutnant ab Leve
 Quest-Kapitel der Städte stehen schon; die Enden ihrer Autobahn-Linien in `build-roads.py` (`AUTOBAHNEN`) auf Punkte im
 neuen Straßennetz legen und `--autobahn all` neu bauen.
 
+**Stand Auftrag 38 (Welle 3):** umgesetzt (PR #63). München ist spielbar: zwölf Stadtbezirke mit Grenzen aus Overture,
+24 Spots, fünf Lager, vier Gangs, Straßennetz mit Zufahrten, Wahrzeichen, Dreh „teuer und streng“ als Daten (höchste
+Löhne und Immobilien, Polizei startet als Händler, Oktoberfest, Bayern-Heimspiel, Enzo aus Verona über den Brenner mit
+Zoll). Balancing: München als zweite Stadt komplett nach 8–16 Tagen (Median 12, 8 Seeds), als dritte nach Hamburg
+8–18 Tage (Median 13, 6 Seeds); Mindest-Startgeld 60.000 €. Köln komplett jetzt Tag 20–29 (Mittel 23,3 über 12 Seeds,
+vorher 21–27, Mittel 21,9): allein, weil der Markt den Preisindex jeder spielbaren Stadt mit demselben Zufall würfelt
+(`market.stepIndex`), jede weitere Stadt verschiebt die Würfelfolge für Köln.
+
 `src/core/`, `scripts/`, `package.json` und die Doku-Dateien gehören in den Wellen niemandem fest: nur erweitern, beim
 Mergen beide Seiten behalten. `CLAUDE.md`, `docs/architektur.md` und `docs/konzept.md` ergänzt jede Session in ihrem
 eigenen Abschnitt.

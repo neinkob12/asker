@@ -145,7 +145,7 @@ export const HANDOVER_START_MONEY_DAYS = 10;
 export const START_MONEY_MIN_BY_CITY: Readonly<Record<string, number>> = {
   hamburg: 45_000,
   berlin: 39_000,
-  muenchen: 54_000,
+  muenchen: 60_000,
   frankfurt: 48_000,
 };
 
