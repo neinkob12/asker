@@ -918,8 +918,9 @@ function arrive(ctx: Ctx): void {
   journal.add(ctx, `Angekommen in ${cityName(travel.to)}.`, 'good');
   ctx.emit('city.arrived', first ? { cityId: travel.to, first } : { cityId: travel.to });
   if (first) {
+    // Nicht mehr still (Auftrag 43): Die Begrüßung sagt, wie es in der neuen Stadt anfängt.
     for (const text of CITY_OFFERS[travel.to]?.welcome ?? []) {
-      messages.send(ctx, { contact: cityContact(travel.to), text, silent: true });
+      messages.send(ctx, { contact: cityContact(travel.to), text });
     }
   }
 }

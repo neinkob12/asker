@@ -947,8 +947,8 @@ const distance = (a: { lng: number; lat: number }, b: { lng: number; lat: number
   Math.hypot((a.lng - b.lng) * 0.63, a.lat - b.lat);
 
 /**
- * Eine Stadt betreten: Lieferanten, die dort zu Hause sind (home, z.B. Hein in Hamburg, Mirko in Berlin). Kennt ihr
- * euch noch nicht, ist er ab jetzt dabei (ohne Vermittlung), sonst meldet er sich nur kurz.
+ * Eine Stadt ist frei: Lieferanten, die dort zu Hause sind (home, z.B. Hein in Hamburg, Mirko in Berlin), sind ab jetzt
+ * dabei (ohne Vermittlung). Bescheid sagen sie bei deiner Ankunft (onCityArrived).
  */
 function onCityUnlocked(ctx: Ctx, cityId: string): void {
   const s = ctx.state.modules.suppliers;
@@ -960,7 +960,13 @@ function onCityUnlocked(ctx: Ctx, cityId: string): void {
       relationFor(ctx, supplier.id);
       ctx.emit('supplier.unlocked', { supplierId: supplier.id, fee: 0 });
     }
-    tell(ctx, supplier, supplier.home.welcome);
+  }
+}
+
+/** Bei der ersten Ankunft in seiner Stadt meldet er sich (Auftrag 43: vorher schon bei der Zusage, vor der Fahrt). */
+function onCityArrived(ctx: Ctx, cityId: string): void {
+  for (const supplier of getSuppliers(ctx.state)) {
+    if (supplier.home?.cityId === cityId) tell(ctx, supplier, supplier.home.welcome);
   }
 }
 
@@ -1252,6 +1258,9 @@ export default defineModule({
   },
   on: {
     'city.unlocked': (ctx, { cityId }) => onCityUnlocked(ctx, cityId),
+    'city.arrived': (ctx, { cityId, first }) => {
+      if (first) onCityArrived(ctx, cityId);
+    },
   },
   migrations: {
     2: (old: SuppliersStateV1): SuppliersStateV2 => ({ shipments: old.shipments, relations: initialRelations() }),

@@ -127,8 +127,9 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   Erledigt: Empfehlungen nur von Leuten der aktiven Stadt, nach dem Verkauf keine; `BACKGROUNDS` mit `{veedel}`, gefüllt fest aus Name und Zeit mit einem Veedel der Stadt.
 - [x] E8 Event-Ankündigungen und Rabatt-Aktionen der alten Stadt kommen in der neuen an.
   Erledigt: Rabatt-Aktionen und Event-Ankündigungen schreiben nur für die aktive Stadt (die Aktion gilt weiter), nach dem Verkauf keine Aktionen mehr.
-- [ ] E9 Neue Stadt ohne sichtbaren ersten Schritt: Willkommen still, Rat „Läufer anheuern“ aus, sobald irgendwo
+- [x] E9 Neue Stadt ohne sichtbaren ersten Schritt: Willkommen still, Rat „Läufer anheuern“ aus, sobald irgendwo
   jemand arbeitet, „Liegeplatz“ vor dem ersten Lager, Reviere-Ziel fest auf Köln, zu wenig sauberes Geld fürs Lager.
+  Erledigt: Begrüßung nicht mehr still; Rat „Lager in <Stadt> kaufen“ bzw. „Geld waschen für ein Lager“ (fehlender Betrag); Liegeplatz-Rat erst mit Lager; Reviere-Ziel und Spielende-Statistik pro Stadt (`campaignProgress` stand ohne Stadt auf Köln). Läufer-Rat war schon pro Stadt.
 - [ ] E10 Sicherheitsleute schlafender Städte sammeln Erfahrung, Level-Meldungen kommen in der neuen Stadt.
 - [ ] E11 Fahrer-Zählung über Städte bei Rechter Hand und Bestellregeln (`orders.ts`, `tasks.ts`).
 - [ ] E12 Personal-Aufgabe der Rechten Hand läuft über Leutnants aller Städte; `replaceAbsent` prüft die Stadt nicht.
@@ -137,7 +138,8 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [ ] E15 Fest verdrahtete „Köln“-Texte in jeder Stadt (Rechte Hand, Kasse, Hafen, Reviere).
 - [x] E16 Bewerber-Pool beim Stadtwechsel nicht erneuert (Lohn und Handgeld der alten Stadt).
   Erledigt: Bewerber tragen `cityId` (Migration `recruiting` 5), Pool und Kontakte pro Stadt, einstellen nur in der aktiven Stadt; bei Ankunft oder Wechsel in eine Stadt ohne Bewerber kommen gleich `POOL_START` von dort.
-- [ ] E17 Lieferant begrüßt „Du bist in Berlin“ schon bei der Abfahrt (auf `city.arrived` legen).
+- [x] E17 Lieferant begrüßt „Du bist in Berlin“ schon bei der Abfahrt (auf `city.arrived` legen).
+  Erledigt: Hein, Mirko, Toni und Kofi sind mit der Stadt frei, melden sich aber erst bei der ersten Ankunft (`city.arrived`).
 - [ ] E18 (Designfrage) Zurück in einer übergebenen Stadt: Hinweis, dass man die Vollmacht zurücknehmen kann.
 
 ## F Hafen-Prüfer (Spieltest Rotterdam ab `deutschland`, 05.10.2026)
@@ -192,7 +194,8 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 
 - [ ] N1 Lieferanten schreiben nach dem Umzug weiter Chats über Lieferungen in die alte Stadt („Freie Bahn. Bin früher
   da.“). Lieferungen für eine Stadt mit Statthalter still oder als Bericht des Statthalters.
-- [ ] N2 Peters Quest-Leiste zeigt nach dem Umzug alte Kölner Quests (z.B. „Setz einen eigenen Preis“), wenn sie in
+- [x] N2 Peters Quest-Leiste zeigt nach dem Umzug alte Kölner Quests (z.B. „Setz einen eigenen Preis“), wenn sie in
   Köln liegen geblieben sind; beim Umzug in eine neue Stadt sollte ihr Kapitel vorgehen.
+  Erledigt: `followCity` im Quest-Tick: Bist du in einer Stadt mit eigenem Kapitel und die aktive Quest gehört woanders hin, macht Peter mit dem Kapitel der Stadt weiter; Liegengebliebenes aus Köln gilt als übersprungen.
 - [ ] N3 Bot, Seed 4: Hamburg hängt nach neun Stadtteilen 33 Tage an den letzten drei. Herausfinden, was blockiert
   (Gang zu stark, Bot verkauft dort nicht, Spots fehlen) und ob ein Spieler dort auch hängen bliebe.

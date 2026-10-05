@@ -342,4 +342,24 @@ describe('quests', () => {
     sim.advance(10);
     expect(currentQuest(sim.state)?.id).toBe('hhWarehouse');
   });
+
+  it('In der neuen Stadt geht ihr Kapitel vor (Auftrag 43): Liegengebliebenes aus Köln gilt als übersprungen', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    jumpTo(sim, 'setPrice');
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+    sim.advance(10);
+    // Noch in Köln: Die Kölner Quest bleibt.
+    expect(currentQuest(sim.state)?.id).toBe('setPrice');
+    sim.state.modules.city.present = 'hamburg';
+    sim.dispatch({ type: 'city.switch', payload: { cityId: 'hamburg' } });
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('hhWarehouse');
+    expect(sim.state.modules.quests.skipped).toContain('setPrice');
+    // Zurück in Köln bleibt das Hamburger Kapitel dran.
+    sim.state.modules.city.present = 'koeln';
+    sim.dispatch({ type: 'city.switch', payload: { cityId: 'koeln' } });
+    sim.advance(10);
+    expect(currentQuest(sim.state)?.id).toBe('hhWarehouse');
+  });
 });

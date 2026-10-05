@@ -31,7 +31,7 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, isBusinessSold, isCityUnlocked, jansenContact, liveVeedel, REGIONS } from '../city';
+import { activeCity, isBusinessSold, isCityUnlocked, jansenContact, liveVeedel, presentCity, REGIONS } from '../city';
 import { DEFAULT_WAREHOUSE, getWarehouses, productName, store, type Warehouse } from '../goods';
 import { regionStatus } from '../grow';
 import { addHeat, operationTier } from '../police';
@@ -632,6 +632,36 @@ function resume(ctx: Ctx): void {
 }
 
 /**
+ * Du bist in einer Stadt mit eigenem Kapitel, die aktive Quest gehört aber woanders hin (Auftrag 43: in Hamburg
+ * stand noch „Setz einen eigenen Preis“ aus Köln): Peter macht mit dem Kapitel der Stadt weiter. Was aus Köln liegen
+ * geblieben ist, gilt als übersprungen (die Stadt führt jetzt der Statthalter); offene Kapitel anderer Städte kommen
+ * wieder dran, wenn du dort bist.
+ */
+function followCity(ctx: Ctx): void {
+  const state = ctx.state;
+  const current = currentQuest(state);
+  if (!current || current.voice !== undefined || isBusinessSold(state)) return;
+  const here = presentCity(state);
+  if ((current.cityId ?? 'koeln') === here) return;
+  const q = state.modules.quests;
+  const finished = new Set([...q.done, ...q.skipped]);
+  const index = QUESTS.findIndex((x) => x.cityId === here && !finished.has(x.id) && eligible(state, x));
+  if (index < 0) return;
+  for (const quest of QUESTS.slice(0, index)) {
+    const base = quest.cityId === undefined && quest.requires === undefined && quest.voice === undefined;
+    if (base && !finished.has(quest.id)) q.skipped.push(quest.id);
+  }
+  q.index = index;
+  q.progress = 0;
+  q.startedAt = ctx.now;
+  const next = currentQuest(state);
+  if (!next) return;
+  messages.send(ctx, { contact: PETER, text: `Neue Stadt, neues Kapitel: „${chapterName(next.chapter)}“.` });
+  announce(ctx);
+  check(ctx);
+}
+
+/**
  * Das Geschäft ist verkauft (Auftrag 43): Was von den Kapiteln in Deutschland noch offen war, fällt weg (ohne
  * Belohnung), ebenso ein laufender Wochenvertrag. Peter wartet, bis Jansen in Rotterdam mit seinem Kapitel anfängt.
  */
@@ -707,6 +737,8 @@ export default defineModule({
     }
     // Peter wartet auf die nächste Stadt (Auftrag 36): Ist sie frei, kommt ihr Kapitel.
     if (q.index === WAITING) resume(ctx);
+    // In einer neuen Stadt geht ihr Kapitel vor (Auftrag 43).
+    followCity(ctx);
     if (currentQuest(ctx.state)?.measure) check(ctx);
     const contract = ctx.state.modules.quests.contracts.active;
     if (contract && getContractTemplate(contract.templateId)?.measure) checkContract(ctx);

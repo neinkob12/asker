@@ -21,6 +21,7 @@ import {
   ListItem,
   memoState,
   ProgressBar,
+  registerAdvisor,
   registerHudItem,
   registerPanel,
   registerPhoneApp,
@@ -59,7 +60,7 @@ import {
 import { daysText, flowRows } from './flow';
 import { supplyRoutesLayer } from './map';
 import './goods.css';
-import { activeCity, isBusinessSold } from '../../city';
+import { activeCity, cityName, isBusinessSold } from '../../city';
 
 declare module '../../../ui' {
   interface PanelRegistry {
@@ -615,3 +616,36 @@ registerMapLayer({
 });
 
 registerMapLayer(supplyRoutesLayer);
+
+// Erster Schritt in einer neuen Stadt (Auftrag 43): Ohne Lager keine Ware. Fehlt sauberes Geld, erst waschen.
+registerAdvisor({
+  id: 'goods.firstWarehouse',
+  advise: (state) => {
+    const cityId = activeCity(state);
+    if (isBusinessSold(state) || getWarehouses(state, cityId).length > 0) return null;
+    const sites = warehouseSites(cityId).filter((w) => w.cost > 0);
+    if (sites.length === 0) return null;
+    const cheapest = Math.min(...sites.map((w) => w.cost));
+    const missing = Math.ceil(cheapest - state.wallet.clean);
+    const city = cityName(cityId);
+    return missing > 0
+      ? {
+          id: 'goods.firstWarehouse.wash',
+          priority: 70,
+          icon: 'washing',
+          title: `Geld waschen für ein Lager in ${city}`,
+          text: `Ein Lager kostet sauberes Geld. Für das billigste fehlen dir ${formatEuro(missing)}.`,
+          actionLabel: 'Geldwäsche',
+          action: (ui) => ui.openPhone('laundering.app'),
+        }
+      : {
+          id: 'goods.firstWarehouse.buy',
+          priority: 70,
+          icon: 'warehouse',
+          title: `Lager in ${city} kaufen`,
+          text: `Ohne Lager keine Ware: Lieferanten liefern dorthin. Das billigste kostet ${formatEuro(cheapest)} sauber.`,
+          actionLabel: 'Standorte',
+          action: (ui) => ui.openPhone('goods.app'),
+        };
+  },
+});

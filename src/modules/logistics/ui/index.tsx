@@ -671,7 +671,9 @@ registerAdvisor({
       };
     }
     const cityId = activeCity(state);
-    if (!hasBerth(state) && PORTS[cityId] && state.wallet.clean >= berthCost(cityId)) {
+    // Erst mit einem Lager in der Stadt (Auftrag 43): Container vom Kai brauchen einen Platz.
+    const stored = getWarehouses(state, cityId).length > 0;
+    if (stored && !hasBerth(state) && PORTS[cityId] && state.wallet.clean >= berthCost(cityId)) {
       return {
         id: 'logistics.berth',
         priority: 45,
