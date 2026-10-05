@@ -127,7 +127,7 @@ function ship(state: GameState, run: BotRun, regionId: string): void {
 /** Fincas zahlen mit sauberem Geld: rechtzeitig einen Teil des Schwarzgelds waschen. */
 function launder(state: GameState, run: BotRun): void {
   if (getFincas(state).length === 0) return;
-  if (state.wallet.clean < 600_000 && state.wallet.dirty > KEEP_DIRTY * 3 && amountInProgress(state) < 10_000) {
+  if (state.wallet.clean < 1_200_000 && state.wallet.dirty > KEEP_DIRTY * 3 && amountInProgress(state) < 10_000) {
     run({ type: 'laundering.launder', payload: { amount: Math.round(state.wallet.dirty * 0.15) } });
   }
 }

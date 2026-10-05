@@ -843,21 +843,23 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 
 - **Auftrag 42, Produktion** (Bericht „Produktion (Auftrag 42, nach dem Hafen)“ in `balance.test.ts`: wie die Hafen-Phase
   bis zur Ankunft in Rotterdam, dann 180 Tage zweimal vom selben Stand, mit und ohne Produktion; `BALANCE_GROW_DAYS`).
-  Seeds 1–3: Anruf nach 21 Tagen Hafen-Phase, „Produzent“ nach 94/122/100 Tagen, „Europa“ bei Seed 3 nach 170 Tagen
-  (Seeds 1 und 2 fehlen am Ende noch Kunden, die Kush, Haze, Öl und Vapes wollen). Umsatz/Geld in Mio. € mit Produktion
-  (ohne): nach 30 Tagen 4,8/1,3 (4,8/1,9), 4,7/1,4 (4,7/2,1), 4,5/1,5 (4,5/1,9); nach 60 Tagen 10,1/2,4 (10,1/4,1),
-  9,6/2,9 (9,6/4,6), 6,9/1,2 (6,9/2,5); nach 120 Tagen 21,9/9,3 (19,1/8,5), 18,9/7,9 (18,9/9,0), 13,8/3,7 (12,7/5,2);
-  nach 180 Tagen 37,5/19,2 (28,0/11,3), 34,8/18,9 (30,1/14,4), 29,3/14,1 (20,5/8,8). In den ersten zwei Monaten kostet
-  die Produktion (Pacht, Gewächshäuser, Genetik, 1,1 bis 2,3 Mio. € investiert), ab dem vierten Monat liegt das Geld
-  deutlich höher, der Umsatz auch (bessere Qualität, mehr Anteil). Preis pro Gramm eigener Ware je Ernte: erste Ernte
-  0,40 bis 0,58 €/g (Gras im Einkauf ab 2,09 €/g, Hasch ab 1,60 €/g: etwa ein Viertel), danach mit Gewächshaus und
-  Genetik 0,25 (Kolumbien) und 0,35 €/g (Marokko), Kush aus der dritten Finca 0,18 €/g. Eigene Ware am Ende 50/72/68 %
-  der gelieferten Gramm, geerntet 5,3 bis 6,4 t, davon das Kartell 18 %, Razzien 0, keine Pleite. Container aufgeflogen
-  17/11/14 (ohne Produktion 13/9/12; mehr Container, die Verpackung senkt die Chance pro Container). Ohne Produktion
-  sind die Zahlen der ersten 30 Tage Hafen gleich wie nach Auftrag 41 (Umsatz 160/156/150 Tsd. € am Tag), Köln
-  komplett (Seeds 1–6) unverändert 23/19/21/28/21/21. Stellschrauben: `grow/config.ts` (`REGION_ECONOMY`, `YIELD_PER_HA`,
-  `GROW_DAYS`, `SUPPLIES_PER_HA`, `GENETICS`, `GREENHOUSE_PER_HA`, `ATTENTION`, `CARTEL_*`, `CALL_*`, Ziele), `PACKINGS`
-  und `FINCA_SITES` in `grow/data.ts`, `OWN_ORIGINS` in `trade/data.ts`, `RELIABILITY_RECOVERY` in `trade/config.ts`.
+  Seeds 1–3: Anruf nach 21 Tagen Hafen-Phase, „Produzent“ nach 94/122/100 Tagen (Seeds 4–6: 101/95/109). Umsatz/Geld
+  in Mio. € mit Produktion (ohne): nach 30 Tagen 4,8/1,3 (4,8/1,9), 4,7/1,4 (4,7/2,1), 4,5/1,5 (4,5/1,9); nach 60 Tagen
+  10,1/2,4 (10,1/4,1), 9,6/2,8 (9,6/4,6), 6,9/1,3 (6,9/2,5); nach 120 Tagen 22,0/8,5 (19,1/8,5), 19,2/8,0 (18,9/9,0),
+  13,8/3,6 (12,7/5,2); nach 180 Tagen 37,6/18,8 (28,0/11,3), 34,8/17,5 (30,1/14,4), 27,6/11,6 (20,5/8,8). In den ersten
+  zwei Monaten kostet die Produktion (Pacht, Gewächshäuser, Genetik; 1,5 bis 2,5 Mio. € investiert), ab dem vierten
+  Monat liegt das Geld deutlich höher, der Umsatz auch (bessere Qualität, mehr Anteil). Preis pro Gramm eigener Ware je
+  Ernte: erste Ernte 0,40 bis 0,60 €/g (Gras im Einkauf ab 2,09 €/g, Hasch ab 1,60 €/g: etwa ein Viertel), danach mit
+  Gewächshaus und Genetik 0,25 (Kolumbien, Gras) und 0,36 €/g (Marokko, Hasch), Kush 0,18 €/g. Eigene Ware am Ende
+  55/62/71 % der gelieferten Gramm, geerntet 5,7 bis 6,3 t, davon 18 % fürs Kartell, höchstens eine Razzia, keine
+  Pleite. Container aufgeflogen 14/12/16 (ohne Produktion 13/9/12: mehr Container, die Verpackung senkt die Chance pro
+  Container). „Europa“ ist das lange Ziel: Nach 180 Tagen bekommen 17/17/21 von 24 Kunden (Seed 5: 23) mindestens die
+  Hälfte eigene Ware; es fehlen Kunden, die Kush, Haze, Öl oder Vapes wollen (Frankfurt, München, Stuttgart, Zürich).
+  In Zwischenständen erreichte der Bot den Titel nach 170 bzw. 178 Tagen. Ohne Produktion sind die ersten 30 Tage Hafen
+  gleich wie nach Auftrag 41 (Umsatz 160/156/150 Tsd. € am Tag), Köln komplett (Seeds 1–6) unverändert
+  23/19/21/28/21/21. Stellschrauben: `grow/config.ts` (`REGION_ECONOMY`, `YIELD_PER_HA`, `GROW_DAYS`, `SUPPLIES_PER_HA`,
+  `GENETICS`, `GREENHOUSE_PER_HA`, `ATTENTION`, `CARTEL_*`, `CALL_*`, Ziele), `PACKINGS` und `FINCA_SITES` in
+  `grow/data.ts`, `OWN_ORIGINS` in `trade/data.ts`, `RELIABILITY_RECOVERY` in `trade/config.ts`.
 
 ## Städte (Auftrag 30)
 
