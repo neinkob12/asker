@@ -368,7 +368,7 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 | `events` | `running`, `announced`, `market` (laufende Marktereignisse, Auftrag 32) (2); Kalender in `config.ts` (`CITY_EVENTS`: Karneval, Kater, FC, Kölner Lichter, Hafengeburtstag, Schlagermove, Dom, Oktoberfest, FC-Bayern-Heimspiel; `MARKET_EVENTS`: Zollfund, Großrazzia bei einer Gang, Semesterstart, gute Ernte, Schwemme aus Marokko, Billigware aus dem Netz) | `activeEvents(state, cityId?)`, `upcomingEvents`, `eventFactor(state, 'demand' \| 'heatPerSale' \| 'checks' \| 'gangRaids', where)`, `raidsAllowed(state, cityId)`, `isEventActive`, `nextEventStart`, `eventEnd`, `getEventDef`; Auftrag 32: `marketEvents(state, cityId?)`, `marketEventFactor(state, productId, cityId)`, `marketEventText`, `getMarketEventDef` | | `events.started`, `events.ended`, `events.marketStarted`, `events.marketEnded` |
 | `logistics` | `berths` pro Stadt (mit Stufe `level`: Kai, Halle am Kai, Kran), `cargo` (Ware am Kai, mit `cityId`), `trips` (Fahrten, auch `kind: 'route'` mit `routeId`, `leg`), `log`, `stats`, `routes` (Fahrplan), `restock` (Nachkauf für schlafende Städte) (6; Fahrten mit `vehicleId`, `choice`, Status `planned`/`waiting`; Routen mit `vehicleId`, `choice`) | `hasBerth(state, cityId?)`, `getCargo`, `cargoAmount`, `cargoRisk`, `getTrips`, `tripProgress`, `tripRoute` (Wege über Straßen und A1, mit `routes` für Fahrweg und Fußwege), `tripCity`, `isInterCityTrip`, `inTransitAmount`, `isPlayerOnTheRoad`, `freeDrivers(state, cityId?)`, `portPlace(cityId)`, `PORTS`, `receiveCargo` (für suppliers), Routen: `getRoutes`, `getRoute`, `nextDeparture`, `routeLoadPreview`, `driverWhereabouts`, `routeName`, `INTERCITY_CAPACITY`; Auftrag 33: `roomFor`, `inboundWeight`, `chooseVehicle`, `departureFor`, `roadOptions`, `reservedCargo`, `berthLevel`, `berthEffect`, `berthUpgradeCost`, `cargoRiskFrom(cargo, state?)`, `ROUTE_CHOICES`, `BERTH_LEVELS`; Auftrag 40: `HARBOR_PORTS` (Häfen der Hafen-Phase; Auftrag 41: `capacity`, `hallCapacity`, `hallCost` statt `shipDays`), `harborPort`, `CUSTOMS_OPPONENT` | `logistics.buyBerth` (`cityId?`, sauberes Geld), `.upgradeBerth`, `.pickup`, `.transfer` (beide mit `vehicleId?`, `choice?`), `.redirect` (wartende Fahrt umleiten) (nur in einer Stadt), `.addRoute`, `.updateRoute`, `.removeRoute`, `.runRouteNow` | `logistics.berthBought`, `cargo.docked`, `cargo.seized` (Zoll), `transport.started`, `.stopped` (Kontrolle, zwischen Städten Zoll), `.arrived` (`interCity`), `.seized`, `.lost`, `route.departed`, `route.skipped`, `transport.waiting`, `logistics.berthUpgraded` |
 | `trade` | Hafen-Phase (Auftrag 40; Version 2 seit Auftrag 41: `halls`, Container mit `cover` und `vesselId`, Status `quay`, `stats.voyages`): `startedAt`, `contractUntil` (Abnahmevertrag), `week`, `customers` (alte Organisationen, je Stadt die stärkste Gang, sieben fremde Städte; Vertrauen, Anteil, stärkster Konkurrent), `orders` (eine pro Kunde und Woche, Waren als `OrderItem` mit Teillieferung, Faktor auf ihr Angebot, Frist), `shipments` (Container auf See oder beim Zoll), `deliveries` (Lkw oder Spedition), `stock` pro Hafen, `ports`, `priceLevel`, Ruf `reliability`/`quality`, `stats`; Daten in `data.ts` (`FOREIGN_CITIES`, `ORG_DEMAND`, `GANG_DEMAND`, `PRODUCERS`, `CONTAINER_SIZES`, Seewege), Werte in `config.ts` | `isTradeActive`, `getCustomers`, `getCustomer`, `customerContact`, `getOrders`, `openOrders`, `pendingDeliveries`, `openItems`, `shippableItems`, `portFor`, `portHas`, `orderValue`, `maxFactor`, `orderItemsText`, `getShipments`, `getDeliveries`, `portStock`, `totalStock`, `ownedPorts`, `fairPrice`, `customerOffer`, `playerScore`, `rivalScores`, `shareFor`, `supplierReputation`, `tradeStats`, `containerCost`, `containerRisk`, `shippingMinutes`, `deliveryEstimate`, `freightCost`, `shipmentPath`, `deliveryPath`, `weekOf`, `harborPorts`, `getProducer`, `containerInCustoms`; Auftrag 41: `producerSeaRoute`, `portCapacity`, `portLoad`, `portRoom`, `portHalls`, `voyagePlan`, `shipVoyage`, `ownShips`, `loadCost`, `getCover`, `COVERS`, `EUROPE_CITIES`, `europeCityOf`, `europeStatus` | `trade.answer` (`accept`, `decline`, `counter` mit `factor`), `.acceptAll` (`guaranteedOnly?`), `.deliver` (`portId?`, `vehicleId?`), `.buy` (`producerId`, `productId`, `size`, `portId?`), `.rentBerth`, `.setPriceLevel`, Auftrag 41: `.buy` mit `cover`, `count`; `.sail` (`vesselId`, `producerId`, `portId?`, `load`), `.buildHall` | `trade.started`, `.orderPlaced`, `.orderAnswered`, `.delivered`, `.orderFailed`, `.containerOrdered`, `.containerArrived`, `.containerSeized`, `.deliverySeized`, `.dealTipped`, Auftrag 41: `.containerWaiting`, `.hallBuilt`, `.shipSailed`, `.shipReturned`, `.customerJoined`; Auftrag 42 (Version 3): Ausfuhrhäfen `OWN_ORIGINS` (Cartagena, Tanger) als Quelle für `.buy`/`.sail`, Ausfuhrlager `origins` (`storeExport`, `originStock`, `takeOrigin`, `loseOrigin`, `ownOrigin`, `regionOrigin`), eigene Ware `StockLot.own`, `DeliveryItem.own`, `stats.deliveredGrams`/`ownDelivered`, `trade.delivered` mit `ownAmount`, `containerRisk(…, pack)` |
-| `grow` | Eigene Produktion (Auftrag 42, Version 1): `startedAt` (Anrufe ausgelöst), `regions` (Status `none`/`called`/`open`, `callAt`, `cartelPaid`, `attention`, `bribedAt`), `fincas` (Lage, Hektar, gekauft oder gepachtet mit `leasePaidUntil`, Gewächshaus, Genetik, `plan`, `crop` mit `loss`, `batch` mit Stufe trocknen/pressen/verpacken, Verpackung, `workerIds`, `gardenerId`, `spent`), `harvests` (Kosten und Gramm je Ernte), `deliveries` (aus `trade.delivered`, 28 Tage), `goals` (`producer`, `europe`), `day`, `stats`; Daten in `data.ts` (`FINCA_SITES`, `PACKINGS`, Namen vor Ort, Anrufe), Werte in `config.ts` (`REGION_ECONOMY` pro Region) | `isGrowStarted`, `regionStatus`, `openRegions`, `getFincas`, `getFinca`, `fincaSites`, `siteTaken`, `landPrice`, `leasePerWeek`, `greenhouseCost`, `nextGenetics`, `workersNeeded`, `fincaWorkers`, `fincaGardener`, `cropDays`, `fincaQuality`, `expectedHarvest`, `fincaRunningCost`, `regionAttention`, `cartelPaid`, `bribeReadyAt`, `harvestLog`, `costPerGram`, `growStats`, `goalShares`, `europeProgress`, `growGoals`, `REGION_ECONOMY`, `GENETICS`, `PACKINGS`, `FINCA_SITES` | `grow.openRegion`, `.buyFinca`, `.leaseFinca`, `.hire`, `.dismiss` (`role` `worker`/`gardener`), `.plant`, `.buildGreenhouse`, `.upgradeGenetics`, `.setPacking`, `.setCartel`, `.bribe` | `grow.called`, `.regionOpened`, `.fincaAcquired`, `.planted`, `.harvested`, `.packed`, `.raided`, `.cartelHit`, `.goalReached` |
+| `grow` | Eigene Produktion (Auftrag 42, Version 2): `startedAt` (Anrufe ausgelöst), `regions` (Status `none`/`called`/`open`, `callAt`, `cartelPaid`, `attention`, `bribedAt`), `fincas` (Lage, Hektar, gekauft oder gepachtet mit `leasePaidUntil` und `unpaidLease`, `unpaidWages`, `stalled`, Gewächshaus, Genetik, `plan`, `crop` mit `loss`, `batch` mit Stufe trocknen/pressen/verpacken, Verpackung, `workerIds`, `gardenerId`, `spent`), `harvests` (Kosten und Gramm je Ernte), `deliveries` (aus `trade.delivered`, 28 Tage, mit `crop`/`cropOwn`), `goals` (`producer`, `europe`), `day`, `stats`; Daten in `data.ts` (`FINCA_SITES`, `PACKINGS`, Namen vor Ort, Anrufe), Werte in `config.ts` (`REGION_ECONOMY` pro Region) | `isGrowStarted`, `regionStatus`, `openRegions`, `getFincas`, `getFinca`, `fincaSites`, `siteTaken`, `landPrice`, `leasePerWeek`, `greenhouseCost`, `nextGenetics`, `workersNeeded`, `fincaWorkers`, `fincaGardener`, `cropDays`, `fincaQuality`, `expectedHarvest`, `fincaRunningCost`, `regionAttention`, `cartelPaid`, `bribeReadyAt`, `harvestLog`, `costPerGram`, `growStats`, `goalShares`, `europeProgress`, `harvestToHarborDays`, `CROP_PRODUCTS`, `growGoals`, `REGION_ECONOMY`, `GENETICS`, `PACKINGS`, `FINCA_SITES` | `grow.openRegion`, `.buyFinca`, `.leaseFinca`, `.hire`, `.dismiss` (`role` `worker`/`gardener`), `.plant`, `.buildGreenhouse`, `.upgradeGenetics`, `.setPacking`, `.setCartel`, `.bribe` | `grow.called`, `.regionOpened`, `.fincaAcquired`, `.planted`, `.harvested`, `.packed`, `.raided`, `.cartelHit`, `.goalReached` |
 
 ## Zusammenspiel der Systeme
 
@@ -843,22 +843,20 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 
 - **Auftrag 42, Produktion** (Bericht „Produktion (Auftrag 42, nach dem Hafen)“ in `balance.test.ts`: wie die Hafen-Phase
   bis zur Ankunft in Rotterdam, dann 180 Tage zweimal vom selben Stand, mit und ohne Produktion; `BALANCE_GROW_DAYS`).
-  Seeds 1–3: Anruf nach 21 Tagen Hafen-Phase, „Produzent“ nach 94/122/100 Tagen (Seeds 4–6: 101/95/109). Umsatz/Geld
-  in Mio. € mit Produktion (ohne): nach 30 Tagen 4,8/1,3 (4,8/1,9), 4,7/1,4 (4,7/2,1), 4,5/1,5 (4,5/1,9); nach 60 Tagen
-  10,1/2,4 (10,1/4,1), 9,6/2,8 (9,6/4,6), 6,9/1,3 (6,9/2,5); nach 120 Tagen 22,0/8,5 (19,1/8,5), 19,2/8,0 (18,9/9,0),
-  13,8/3,6 (12,7/5,2); nach 180 Tagen 37,6/18,8 (28,0/11,3), 34,8/17,5 (30,1/14,4), 27,6/11,6 (20,5/8,8). In den ersten
-  zwei Monaten kostet die Produktion (Pacht, Gewächshäuser, Genetik; 1,5 bis 2,5 Mio. € investiert), ab dem vierten
-  Monat liegt das Geld deutlich höher, der Umsatz auch (bessere Qualität, mehr Anteil). Preis pro Gramm eigener Ware je
-  Ernte: erste Ernte 0,40 bis 0,60 €/g (Gras im Einkauf ab 2,09 €/g, Hasch ab 1,60 €/g: etwa ein Viertel), danach mit
-  Gewächshaus und Genetik 0,25 (Kolumbien, Gras) und 0,36 €/g (Marokko, Hasch), Kush 0,18 €/g. Eigene Ware am Ende
-  55/62/71 % der gelieferten Gramm, geerntet 5,7 bis 6,3 t, davon 18 % fürs Kartell, höchstens eine Razzia, keine
-  Pleite. Container aufgeflogen 14/12/16 (ohne Produktion 13/9/12: mehr Container, die Verpackung senkt die Chance pro
-  Container). „Europa“ ist das lange Ziel: Nach 180 Tagen bekommen 17/17/21 von 24 Kunden (Seed 5: 23) mindestens die
-  Hälfte eigene Ware; es fehlen Kunden, die Kush, Haze, Öl oder Vapes wollen (Frankfurt, München, Stuttgart, Zürich).
-  In Zwischenständen erreichte der Bot den Titel nach 170 bzw. 178 Tagen. Ohne Produktion sind die ersten 30 Tage Hafen
-  gleich wie nach Auftrag 41 (Umsatz 160/156/150 Tsd. € am Tag), Köln komplett (Seeds 1–6) unverändert
-  23/19/21/28/21/21. Stellschrauben: `grow/config.ts` (`REGION_ECONOMY`, `YIELD_PER_HA`, `GROW_DAYS`, `SUPPLIES_PER_HA`,
-  `GENETICS`, `GREENHOUSE_PER_HA`, `ATTENTION`, `CARTEL_*`, `CALL_*`, Ziele), `PACKINGS` und `FINCA_SITES` in
+  Seeds 1–3: Anruf nach 21 Tagen Hafen-Phase, „Produzent“ nach 72/73/86 Tagen (51/52/65 Tage nach dem Anruf; Seeds
+  4–6: 67/70/74), „Europa“ nach 122/108/156 (Seeds 4–6: 126/108/129). Umsatz/Geld in Mio. € mit Produktion (ohne):
+  nach 30 Tagen 4,8/1,4 (4,8/1,9), 4,7/1,8 (4,7/2,1), 4,5/1,4 (4,5/1,9); nach 60 Tagen 10,0/1,7 (10,1/4,1), 9,5/1,8
+  (9,6/4,6), 6,9/0,5 (6,9/2,5); nach 120 Tagen 18,9/7,0 (19,1/8,5), 22,4/11,2 (18,9/9,0), 14,7/3,3 (12,7/5,2); nach 180
+  Tagen 29,7/15,1 (28,0/11,3), 36,2/22,1 (30,1/14,4), 31,1/16,3 (20,5/8,8); Seeds 4–6 Geld nach 180 Tagen 18,1/18,3/20,4
+  (15,7/13,3/14,7). In den ersten zwei Monaten kostet die Produktion (Pacht, Gewächshäuser, Genetik; 2,1 bis 3,3 Mio. €
+  investiert), ab dem vierten Monat liegt das Geld höher, der Umsatz auch. Preis pro Gramm eigener Ware je Ernte: die
+  stehende Ernte 0,10 bis 0,17 €/g, danach mit Gewächshaus und Genetik 0,22 bis 0,30 €/g (Kolumbien) und etwa 0,40 €/g
+  (Marokko, Hasch); Gras im Einkauf ab 2,09 €/g, Hasch ab 1,60 €/g. Eigene Ware am Ende 95/98/87 % der gelieferten
+  Gramm, geerntet 6,8 bis 9,0 t, davon knapp 19 % fürs Kartell, 1 bis 4 Razzien, keine Pleite. Container aufgeflogen
+  15/16/9 (ohne Produktion 13/9/12). Nach „Produzent“ kauft der Bot Gras und Hasch nur noch für offene Bestellungen
+  zu. Ohne Produktion sind die ersten 30 Tage Hafen gleich wie nach Auftrag 41 (Umsatz 160/156/150 Tsd. € am Tag),
+  Köln komplett (Seeds 1–6) unverändert 23/19/21/28/21/21. Stellschrauben: `grow/config.ts` (`REGION_ECONOMY`,
+  `YIELD_PER_HA`, `GROW_DAYS`, `STANDING_CROP_DAYS`, `SUPPLIES_PER_HA`, `GENETICS`, `GREENHOUSE_PER_HA`, `ATTENTION`, `CARTEL_*`, `CALL_*`, Ziele), `PACKINGS` und `FINCA_SITES` in
   `grow/data.ts`, `OWN_ORIGINS` in `trade/data.ts`, `RELIABILITY_RECOVERY` in `trade/config.ts`.
 
 ## Städte (Auftrag 30)
@@ -1103,11 +1101,15 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
   Ausschnitt (`OCEAN_BOX`, `OCEAN_GRID` 0,1 Grad), damit die Wege aus Auftrag 41 Zelle für Zelle gleich bleiben.
   Cartagena – Rotterdam auf der Linie: Verladen 5 Tage plus Seeweg mit `CHARTER_KM_PER_DAY`, gut 18 Tage; Tanger 7.
 - **Kette** einer Finca (`FINCA_SITES`, je drei pro Region, 6 bis 25 Hektar): kaufen (`landPrice`) oder pachten
-  (`leasePerWeek`, erste Woche sofort, dann täglich ein Siebtel), sauberes Geld (`grow.land`). Arbeiter
-  (`WORKERS_PER_HA`) und ein Gärtner sind Leute in `staff` (Rollen `worker`, `gardener`) mit der Region als `cityId`:
-  nie live, staff lässt sie in Ruhe, grow zahlt die Löhne (`grow.wages`, sauber, notfalls bar). Pflanzen bezahlt Dünger
-  (`SUPPLIES_PER_HA`); Ernte nach `GROW_DAYS` (60 im Freien, 30 im Gewächshaus) mit `YIELD_PER_HA` × Genetik × Anteil
-  der Arbeiter × Gärtner (Level) × (1 − Verlust), Hasch × `HASH_YIELD`. Dann Trocknen (`DRY_DAYS`), Pressen (nur Hasch,
+  (`leasePerWeek`, erste Woche sofort, dann täglich ein Siebtel), nur sauberes Geld (`grow.land`). Fehlt es, schreibt
+  der Kontakt der Region, nach `LEASE_LOST_DAYS` (5) Tagen ohne Pacht ist das Land weg und die Leute dort gehen.
+  Arbeiter (`WORKERS_PER_HA`) und ein Gärtner sind Leute in `staff` (Rollen `worker`, `gardener`) mit der Region als
+  `cityId`: nie live, nie Leutnant oder Rechte Hand, gehen nicht in `staff.former`; grow zahlt die Löhne (`grow.wages`,
+  sauber, notfalls bar). Ohne Lohn zählen die Arbeiter nicht, und die Pflanzung verliert jeden Tag `1/cropDays`. Eine
+  neue Finca hat schon eine stehende Ernte (reif nach `STANDING_CROP_DAYS`, 21). Pflanzen bezahlt Dünger
+  (`SUPPLIES_PER_HA`); fehlt das Geld, versucht grow es täglich neu (`trySow`, eine stille Nachricht). Ernte nach
+  `GROW_DAYS` (42 im Freien, 21 im Gewächshaus) mit `YIELD_PER_HA` × Genetik × Anteil der Arbeiter × Gärtner (Level)
+  × (1 − Verlust), Hasch × `HASH_YIELD`. Dann Trocknen (`DRY_DAYS`), Pressen (nur Hasch,
   `PRESS_DAYS`), Verpacken (`PACKINGS`: Ballen, Vakuum, Versteckt mit Kosten pro Kilo und Faktor auf die
   Zollkontrolle), danach liegt die Ware im Ausfuhrlager (`trade.storeExport`). Gleich nach der Ernte wird wieder
   gepflanzt (`plan`). Genetik (`GENETICS`, Schwarzgeld) hebt Qualität und Ernte, das Gewächshaus
@@ -1125,25 +1127,32 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
 - **Zufall**: grow würfelt nie mit `ctx.random()`. Razzien und Kartell fest pro Region und Tag (`cityDayDice`), Leute
   vor Ort aus einem Schlüssel (`keyedDice`); vor dem ersten Anruf passiert nichts. Köln und die Hafen-Phase bis zum
   Anruf bleiben Wurf für Wurf gleich.
-- **Ziele**: „Produzent“, sobald in den letzten `GOAL_WINDOW_DAYS` (28) Tagen mindestens `PRODUCER_SHARE` (50 %) der
-  gelieferten Gramm eigene Ware waren (mindestens `PRODUCER_MIN_GRAMS`); „Europa“, sobald alle Städte in Europa Kunden
-  sind und jeder belieferte Kunde mindestens `EUROPE_SHARE` eigene Ware bekam. `growGoals` liest city für die Ränge
+- **Ziele**: „Produzent“, sobald in den letzten `PRODUCER_WINDOW_DAYS` (14) Tagen mindestens `PRODUCER_SHARE` (50 %)
+  der gelieferten Gramm eigene Ware waren (mindestens `PRODUCER_MIN_GRAMS`); „Europa“, sobald alle Städte in Europa
+  Kunden sind und in den letzten `EUROPE_WINDOW_DAYS` (28) Tagen jeder belieferte Kunde mindestens `EUROPE_SHARE`
+  eigene Ware bekam. Für „Europa“ zählen nur Waren, die auf den Fincas wachsen (`CROP_PRODUCTS`: Gras, Haze, Kush,
+  Hasch); Edibles, Öl und Vapes vom Labor bleiben draußen, ein Kunde nur mit Laborware gilt als versorgt
+  (`trade.delivered` meldet dafür `items` mit `own`). `growGoals` liest city für die Ränge
   (`PLAYER_RANKS`: Produzent Wert 70, Europa 80), `api/leaderboard.ts` kennt beide Titel. Danach geht es offen weiter.
 - **Oberfläche**: keine neue App. Abschnitt „Anbau“ in der Kunden-App (Slot `trade.grow`, nur nach den Anrufen; dann
   heißt „Bestellungen“ dort „Aufträge“): Kennzahlen (Fincas, € pro Gramm, eigene Ware), Ziele, Regionen mit Fincas und
-  Ausfuhrlager. Seite `grow.region` (Kartell mit Schalter, Behörden mit Schmieren, Land kaufen oder pachten mit
+  Ausfuhrlager, im Kopf jeder Region „Ernte bis Hafen“ in Tagen (`harvestToHarborDays`). Seite `grow.region` (Kartell mit Schalter, Behörden mit Schmieren, Land kaufen oder pachten mit
   Rückfrage), Seite `grow.finca` (Pflanzung, Arbeiter, Gärtner, Gewächshaus und Genetik mit Rückfrage, Verpackung),
   Verschiffen auf der Einkaufsseite `trade.order`. Glas-Karten der Regionen in der Europa-Ansicht (`grow/ui/map.ts`).
 - **Edibles, Vapes und Öl**: weiter zukaufen beim Labor Westland (Niederlande, per Lkw). Begründung: Sie sind ein kleiner
   Teil der Nachfrage (Berlin, Frankfurt, Hannover), ein eigenes Labor wäre eine dritte Kette mit eigener Oberfläche für
   wenige Kilo pro Woche. Die Fincas liefern Gras, Haze, Kush und Hasch; das reicht für „Produzent“ und „Europa“.
 - **Bot** (`botGrow.ts`, `BotOptions.grow`): nimmt beide Angebote an, pachtet (oder kauft mit genug sauberem Geld) die
-  Hacienda San Isidro (Gras) und die Hochebene Issaguen (Hasch), nach „Produzent“ dazu La Esperanza (Kush) und El Tigre
-  (Haze) für „Europa“; heuert Arbeiter und Gärtner, baut Gewächshäuser und nach der ersten Ernte Genetik mit Reserve,
-  zahlt dem Kartell, schmiert ab 38, verschifft ab 20 kg auf der Linie, wäscht Geld für die Fincas. In `botTrade.ts`
-  zählt eigene Ware, die erst nach `PENDING_HORIZON` ankommt, beim Einkauf noch nicht als Bestand.
+  Hacienda San Isidro (Gras) und die Hochebene Issaguen (Hasch), nach der ersten eigenen Ernte dazu La Esperanza und
+  El Tigre (Kush, Haze); jede Finca baut die Ware ihrer Region an, die am kürzesten reicht (Bedarf der letzten Woche,
+  Wechsel erst ab `CROP_SWITCH_WEEKS`). Heuert Arbeiter und Gärtner, baut Gewächshäuser und nach der ersten Ernte
+  Genetik mit Reserve, zahlt dem Kartell, schmiert ab 38, verschifft ab 20 kg, aber höchstens vier Wochen Bedarf (sonst
+  läuft das Hafenlager voll), hält drei Wochen Pacht sauber und wäscht nur so viel, wie die Wege aufnehmen. In
+  `botTrade.ts` zählt eigene Ware, die erst nach `PENDING_HORIZON` ankommt, noch nicht als Bestand; nach „Produzent“
+  kauft er Gras, Haze, Kush und Hasch nur noch für offene Bestellungen zu, nicht mehr für Vorrat.
 - **Ruf erholt sich** (`trade`, `RELIABILITY_RECOVERY` 0,3): Jeden Montag rückt die Pünktlichkeit ein Stück zurück Richtung
-  `START_RELIABILITY`. Gefunden mit dem Bot: Nach vier geplatzten Lieferungen (Pünktlichkeit 0,42) fiel der Anteil auf
+  `START_RELIABILITY` (0,2 wird zu etwa 0,395; über 0,85 bleibt sie, wie sie ist). Das ändert die Hafen-Phase für
+  Seeds mit geplatzten Lieferungen. Gefunden mit dem Bot: Nach vier geplatzten Lieferungen (Pünktlichkeit 0,42) fiel der Anteil auf
   3 %, es kamen keine Bestellungen mehr, und der Ruf konnte nie wieder steigen (ab etwa Woche acht der Hafen-Phase stand
   der Handel still, auch ohne Produktion).
 - **Test-Spielstand** `produktion`: zwei Fincas, die erste Ernte im Ausfuhrlager.

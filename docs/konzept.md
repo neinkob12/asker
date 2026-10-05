@@ -252,7 +252,7 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
 
 Mit Auftrag 42 dazu (Phase 4 aus `docs/plan.md`, der Schluss des Bogens): Nach drei Wochen als Lieferant am Hafen rufen
 Produzenten aus Kolumbien und Marokko an. Eigene Fincas (kaufen oder pachten mit sauberem Geld, 6 bis 25 Hektar),
-Arbeiter und Gärtner vor Ort, Genetik als Qualität, Ernte alle 60 Tage im Freien oder 30 im Gewächshaus, Trocknen,
+Arbeiter und Gärtner vor Ort, Genetik als Qualität, Ernte alle 42 Tage im Freien oder 21 im Gewächshaus (eine neue Finca hat schon eine stehende Ernte), Trocknen,
 Pressen für Hasch, Verpacken als Tarnung, Verschiffung aus Cartagena (über den Atlantik) und Tanger mit den Containern
 und Schiffen der Hafen-Phase. Pro Region zwei Zahlen: der Anteil des Kartells (zahlen oder Feuer und Diebstahl) und die
 Aufmerksamkeit der Behörden (Razzien, Schmiergeld). Eigene Ware kostet anfangs ein Viertel des Einkaufs, mit

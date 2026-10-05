@@ -561,7 +561,8 @@ export function removeMember(ctx: Ctx, staffId: string, reason: StaffLeaveReason
   member.leftAt = ctx.now;
   member.leftReason = reason;
   addCareer(ctx, staffId, reason === 'fired' ? 'Entlassen.' : reason === 'dead' ? 'Gestorben.' : 'Gekündigt.');
-  s.former.unshift(member);
+  // Arbeiter und Gärtner der Fincas (Auftrag 42) verdrängen nicht die Ehemaligen aus den Städten (FORMER_LIMIT).
+  if (!isFarmRole(member.role)) s.former.unshift(member);
   if (s.former.length > FORMER_LIMIT) s.former.length = FORMER_LIMIT;
   ctx.emit('staff.left', { staffId, reason });
   return member;

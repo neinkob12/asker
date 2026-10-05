@@ -46,9 +46,17 @@ export const REGION_ECONOMY: Readonly<Record<string, RegionEconomy>> = {
   },
 };
 
-/** Ernte pro Hektar (getrocknet, vor dem Anteil des Kartells): im Freien alle 60 Tage, im Gewächshaus alle 30. */
-export const GROW_DAYS = { outdoor: 60, greenhouse: 30 } as const;
-export const YIELD_PER_HA = { outdoor: 35_000, greenhouse: 22_000 } as const;
+/**
+ * Ernte pro Hektar (getrocknet, vor dem Anteil des Kartells): im Freien alle 42 Tage, im Gewächshaus alle 21. Kürzer als
+ * die 60 und 30 Tage aus plan.md (Review: zwei Monate ohne eigene Ware waren zu zäh; eine Stadt dauert 8 bis 15 Tage).
+ */
+export const GROW_DAYS = { outdoor: 42, greenhouse: 21 } as const;
+export const YIELD_PER_HA = { outdoor: 28_000, greenhouse: 17_000 } as const;
+/**
+ * Eine Finca kommt mit der Pflanzung des Vorbesitzers (Landsorte, die erste Ware der Region): reif nach so vielen
+ * Tagen. So gibt es die erste eigene Ernte nach drei Wochen statt nach sechs.
+ */
+export const STANDING_CROP_DAYS = 21;
 /** Hasch: aus so viel Pflanze wird ein Gramm gepresstes Harz (Ernte mal diesen Faktor). */
 export const HASH_YIELD = 0.6;
 /** Gewächshaus pro Hektar (sauberes Geld) und Bonus auf die Qualität. */
@@ -115,12 +123,24 @@ export const CARTEL_HIT_CHANCE = 0.04;
 export const CARTEL_HIT_LOSS = 0.3;
 
 /**
- * Ziele (plan.md): „Produzent“, sobald in den letzten GOAL_WINDOW_DAYS Tagen mindestens PRODUCER_SHARE der gelieferten
- * Gramm aus eigener Produktion stammen (und mindestens PRODUCER_MIN_GRAMS geliefert wurden); „Europa“, sobald alle
- * Städte in Europa Kunden sind und jeder Kunde, der in dieser Zeit beliefert wurde, mindestens EUROPE_SHARE eigene Ware
- * bekam (jede Stadt in Europa mit mindestens einer Lieferung).
+ * Ziele (plan.md): „Produzent“, sobald in den letzten PRODUCER_WINDOW_DAYS Tagen mindestens PRODUCER_SHARE der
+ * gelieferten Gramm aus eigener Produktion stammen (und mindestens PRODUCER_MIN_GRAMS geliefert wurden); „Europa“, sobald
+ * alle Städte in Europa Kunden sind und jeder Kunde, der in den letzten EUROPE_WINDOW_DAYS Tagen beliefert wurde, bei
+ * den Waren, die man anbauen kann (CROP_PRODUCTS: ohne Edibles, Öl, Vapes aus dem Labor), mindestens EUROPE_SHARE
+ * eigene Ware bekam (jede Stadt in Europa mit mindestens einer Lieferung).
  */
-export const GOAL_WINDOW_DAYS = 28;
+export const PRODUCER_WINDOW_DAYS = 14;
+export const EUROPE_WINDOW_DAYS = 28;
 export const PRODUCER_SHARE = 0.5;
 export const PRODUCER_MIN_GRAMS = 50_000;
 export const EUROPE_SHARE = 0.5;
+
+/** Waren, die auf den Fincas wachsen (alle Regionen zusammen). Laborware (Edibles, Öl, Vapes) zählt für Europa nicht. */
+export const CROP_PRODUCTS: readonly string[] = [...new Set(Object.values(REGION_ECONOMY).flatMap((r) => r.crops))];
+
+/**
+ * Pacht ist legal und geht nur mit sauberem Geld. Fehlt es, schreibt der Verpächter am ersten Tag; nach
+ * LEASE_LOST_DAYS Tagen ohne Pacht ist das Land weg (die Leute dort gehen). Löhne und Dünger zahlt man notfalls bar
+ * (Schwarzgeld); reicht auch das nicht, arbeiten die Leute an dem Tag nicht (die Ernte wird kleiner).
+ */
+export const LEASE_LOST_DAYS = 5;

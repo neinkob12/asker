@@ -255,7 +255,8 @@ Ausfuhrlager in `trade` (Cartagena und Tanger als Quelle für Container und eige
 Kühlschiff in `fleet`, Kartell-Anteil und Aufmerksamkeit der Behörden pro Region, Ränge Produzent und Europa (auch in
 der Bestenliste), Abschnitt „Anbau“ in der Kunden-App, Bot und Test-Spielstand `produktion`. Dazu in `trade`: Der Ruf
 erholt sich jede Woche ein Stück (vorher stand der Handel nach ein paar geplatzten Lieferungen für immer still).
-Edibles, Vapes und Öl werden weiter zugekauft.
+Edibles, Vapes und Öl werden weiter zugekauft (zählen für „Europa“ nicht). Tempo nach den Änderungswünschen: neue
+Fincas mit stehender Ernte, „Produzent“ etwa 50 bis 65 Tage nach dem Anruf, „Europa“ nach 108 bis 156 Tagen (Bot).
 
 **Prüf-Loop:** Die Planungs-Session startet jede Welle als eigene Cloud-Sessions (je ein Branch `claude/auftrag-<nr>-…`
 und ein Draft-PR), schaut stündlich nach, prüft fertige PRs gegen ihren Auftrag (Checkliste „Fertig, wenn“, CI, Review

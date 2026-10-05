@@ -189,7 +189,8 @@ export function searchPreview(
 // --- Kandidaten erzeugen ---
 
 function pickWeighted<K extends string>(ctx: Ctx, weights: Record<K, number>): K {
-  const entries = Object.entries(weights) as [K, number][];
+  // Ohne Gewicht nie (Auftrag 42: Arbeiter und Gärtner; sonst landete der Rückfall am Ende auf ihnen).
+  const entries = (Object.entries(weights) as [K, number][]).filter(([, w]) => w > 0);
   let roll = ctx.random() * entries.reduce((sum, [, w]) => sum + w, 0);
   for (const [key, weight] of entries) {
     roll -= weight;

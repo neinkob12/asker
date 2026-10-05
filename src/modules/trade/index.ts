@@ -375,6 +375,8 @@ declare module '../../core' {
       revenue: number;
       late: boolean;
       ownAmount: number;
+      /** Auftrag 42: die Waren der Lieferung mit ihrem eigenen Anteil (Gramm). */
+      items: { productId: string; amount: number; own: number }[];
     };
     'trade.orderFailed': { orderId: number; customerId: string; reason: 'expired' | 'late' };
     'trade.containerOrdered': { shipmentId: number; producerId: string; amount: number; portId: string; cost: number };
@@ -1706,6 +1708,7 @@ function deliveryArrives(ctx: Ctx, delivery: TradeDelivery): void {
     revenue,
     late,
     ownAmount,
+    items: delivery.items.map((i) => ({ productId: i.productId, amount: i.amount, own: i.own ?? 0 })),
   });
 }
 

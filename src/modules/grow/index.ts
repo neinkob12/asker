@@ -61,6 +61,7 @@ import {
   isTradeActive,
   loseOrigin,
   regionOrigin,
+  shippingMinutes,
   storeExport,
   tradeStats,
 } from '../trade';
@@ -72,26 +73,30 @@ import {
   CALL_MIN_REVENUE,
   CARTEL_HIT_CHANCE,
   CARTEL_HIT_LOSS,
+  CROP_PRODUCTS,
   DRY_DAYS,
   EUROPE_SHARE,
+  EUROPE_WINDOW_DAYS,
   GARDENER_PER_LEVEL,
   GARDENER_XP_PER_HARVEST,
   GENETICS,
-  GOAL_WINDOW_DAYS,
   GREENHOUSE_PER_HA,
   GREENHOUSE_QUALITY,
   GROW_DAYS,
   HASH_YIELD,
   HIRE_DAYS,
+  LEASE_LOST_DAYS,
   MAX_QUALITY,
   NO_GARDENER,
   PACK_DAYS,
   PRESS_DAYS,
   PRODUCER_MIN_GRAMS,
   PRODUCER_SHARE,
+  PRODUCER_WINDOW_DAYS,
   REGION_ECONOMY,
   type RegionEconomy,
   SECOND_CALL_DELAY,
+  STANDING_CROP_DAYS,
   SUPPLIES_PER_HA,
   WORKERS_PER_HA,
   YIELD_PER_HA,
@@ -101,10 +106,12 @@ import { CALL_LINES, CALL_TEXTS, FINCA_SITES, type FincaSite, LOCAL_NAMES, PACKI
 export {
   CALL_AFTER_WEEKS,
   CALL_MIN_REVENUE,
+  CROP_PRODUCTS,
+  EUROPE_WINDOW_DAYS,
   GENETICS,
-  GOAL_WINDOW_DAYS,
   GROW_DAYS,
   PRODUCER_SHARE,
+  PRODUCER_WINDOW_DAYS,
   REGION_ECONOMY,
   type RegionEconomy,
 } from './config';
@@ -173,6 +180,12 @@ export interface Finca {
   gardenerId: string | null;
   /** Laufende Kosten seit der letzten Aussaat (Löhne, Pacht, Dünger), für den Preis pro Gramm. */
   spent: number;
+  /** Tage in Folge ohne Pacht (nach LEASE_LOST_DAYS ist das Land weg). */
+  unpaidLease: number;
+  /** Heute keine Löhne bezahlt: Die Leute arbeiten nicht. */
+  unpaidWages: boolean;
+  /** Säen ging nicht (kein Geld), der Gärtner hat es schon gesagt; nächster Versuch täglich. */
+  stalled: boolean;
   harvests: number;
   acquiredAt: number;
 }
@@ -193,6 +206,9 @@ export interface DeliveryRecord {
   customerId: string;
   grams: number;
   own: number;
+  /** Davon Waren, die man anbauen kann (CROP_PRODUCTS), und wie viel davon eigene war. */
+  crop: number;
+  cropOwn: number;
 }
 
 export interface GrowStats {
@@ -324,6 +340,8 @@ export function workersNeeded(finca: Pick<Finca, 'hectares'>): number {
 }
 
 export function fincaWorkers(state: GameState, finca: Finca): number {
+  // Ohne Lohn arbeitet niemand.
+  if (finca.unpaidWages) return 0;
   return finca.workerIds.filter((id) => getStaffMember(state, id)?.status === 'active').length;
 }
 
@@ -375,6 +393,16 @@ export function fincaRunningCost(state: GameState, finca: Finca): number {
   return Math.round(wages + lease);
 }
 
+/**
+ * Tage von der Ernte bis in den Hafen (Rotterdam, Linienschiff): Trocknen, Pressen (Hasch), Verpacken und der Seeweg ab
+ * dem Ausfuhrhafen. Marokko ist der schnelle Einstieg, Kolumbien der weite Weg.
+ */
+export function harvestToHarborDays(regionId: string, productId = economy(regionId).crops[0]): number {
+  const origin = regionOrigin(regionId);
+  const sea = origin ? shippingMinutes(origin.id, 'rotterdam') / DAY : 0;
+  return Math.round(DRY_DAYS + (productId === 'hash' ? PRESS_DAYS : 0) + PACK_DAYS + sea);
+}
+
 export function regionAttention(state: GameState, regionId: string): number {
   return growState(state)?.regions[regionId]?.attention ?? 0;
 }
@@ -411,19 +439,27 @@ export function growStats(state: GameState): GrowStats {
   return growState(state)?.stats ?? emptyStats();
 }
 
-/** Anteil eigener Ware in den letzten GOAL_WINDOW_DAYS Tagen: gesamt und pro Kunde (Gramm). */
-export function goalShares(state: GameState): {
+/**
+ * Anteil eigener Ware in den letzten days Tagen (Standard: das Fenster für „Produzent“): gesamt und pro Kunde (Gramm).
+ * cropOnly: nur Waren, die man anbauen kann (für „Europa“; Laborware zählt dort nicht).
+ */
+export function goalShares(
+  state: GameState,
+  days: number = PRODUCER_WINDOW_DAYS,
+  cropOnly = false,
+): {
   grams: number;
   own: number;
   share: number;
   customers: Map<string, { grams: number; own: number }>;
 } {
-  const from = state.time - GOAL_WINDOW_DAYS * DAY;
+  const from = state.time - days * DAY;
   const customers = new Map<string, { grams: number; own: number }>();
   let grams = 0;
   let own = 0;
-  for (const d of growState(state)?.deliveries ?? []) {
-    if (d.at < from) continue;
+  for (const record of growState(state)?.deliveries ?? []) {
+    if (record.at < from) continue;
+    const d = cropOnly ? { ...record, grams: record.crop, own: record.cropOwn } : record;
     grams += d.grams;
     own += d.own;
     const c = customers.get(d.customerId) ?? { grams: 0, own: 0 };
@@ -436,7 +472,7 @@ export function goalShares(state: GameState): {
 
 /** Wie weit „Europa“ ist: Kunden (beliefert in der Zeit) mit genug eigener Ware, Städte in Europa noch ohne. */
 export function europeProgress(state: GameState): { supplied: number; total: number; missing: string[] } {
-  const { customers } = goalShares(state);
+  const { customers } = goalShares(state, EUROPE_WINDOW_DAYS, true);
   const all = getCustomers(state);
   const missing: string[] = [];
   let supplied = 0;
@@ -446,7 +482,8 @@ export function europeProgress(state: GameState): { supplied: number; total: num
     const isEurope = customer.kind === 'europe';
     if (!c && !isEurope) continue;
     total++;
-    if (c && c.grams > 0 && c.own / c.grams >= EUROPE_SHARE) supplied++;
+    // Wer nur Laborware bekam (nichts zum Anbauen), ist versorgt; eine Stadt in Europa ohne Lieferung nicht.
+    if (c && (c.grams === 0 || c.own / c.grams >= EUROPE_SHARE)) supplied++;
     else missing.push(customer.name);
   }
   for (const city of EUROPE_CITIES) {
@@ -485,12 +522,12 @@ function regionState(ctx: Ctx, regionId: string): GrowRegion {
   return s.regions[regionId];
 }
 
-/** Sauberes Geld, sonst bar vor Ort (Schwarzgeld); false, wenn beides nicht reicht. */
+/** Löhne und Dünger: sauberes Geld, sonst bar vor Ort (Schwarzgeld); false, wenn beides nicht reicht. Pacht nur sauber. */
 function payLocal(
   ctx: Ctx,
   amount: number,
   reason: string,
-  category: 'grow.wages' | 'grow.land' | 'grow.supplies',
+  category: 'grow.wages' | 'grow.supplies',
   cityId: string,
 ): boolean {
   if (amount <= 0) return true;
@@ -588,9 +625,22 @@ function addFinca(ctx: Ctx, site: FincaSite, tenure: Finca['tenure'], cost: numb
     workerIds: [],
     gardenerId: null,
     spent: 0,
+    unpaidLease: 0,
+    unpaidWages: false,
+    stalled: false,
     harvests: 0,
     acquiredAt: ctx.now,
   };
+  // Auf dem Feld steht noch die Pflanzung des Vorbesitzers (die erste Ware der Region, Landsorte).
+  const standing = economy(site.regionId).crops[0];
+  if (standing) {
+    finca.crop = {
+      productId: standing,
+      plantedAt: ctx.now - (GROW_DAYS.outdoor - STANDING_CROP_DAYS) * DAY,
+      readyAt: ctx.now + STANDING_CROP_DAYS * DAY,
+      loss: 0,
+    };
+  }
   s.fincas.push(finca);
   if (tenure === 'owned') s.stats.invested += cost;
   ctx.emit('grow.fincaAcquired', { fincaId: finca.id, regionId: site.regionId, tenure, cost });
@@ -606,7 +656,11 @@ export function buyFinca(ctx: Ctx, siteId: string): CommandResult {
     return { ok: false, reason: `${site.name} kostet ${formatEuro(price)} sauberes Geld.` };
   }
   const finca = addFinca(ctx, site, 'owned', price);
-  journal.add(ctx, `${site.name} gekauft: ${site.hectares} Hektar für ${formatEuro(price)}.`, 'good');
+  journal.add(
+    ctx,
+    `${site.name} gekauft: ${site.hectares} Hektar für ${formatEuro(price)}. Die Pflanzung ist in ${STANDING_CROP_DAYS} Tagen reif.`,
+    'good',
+  );
   return { ok: true, data: { fincaId: finca.id } };
 }
 
@@ -626,7 +680,11 @@ export function leaseFinca(ctx: Ctx, siteId: string): CommandResult {
   const finca = addFinca(ctx, site, 'leased', week);
   // Die erste Woche ist bezahlt: die tägliche Pacht beginnt danach (spent zählt sie trotzdem für den Preis pro Gramm).
   finca.spent += week;
-  journal.add(ctx, `${site.name} gepachtet: ${site.hectares} Hektar für ${formatEuro(week)} die Woche.`, 'good');
+  journal.add(
+    ctx,
+    `${site.name} gepachtet: ${site.hectares} Hektar für ${formatEuro(week)} die Woche. Die Pflanzung ist in ${STANDING_CROP_DAYS} Tagen reif.`,
+    'good',
+  );
   return { ok: true, data: { fincaId: finca.id } };
 }
 
@@ -690,7 +748,7 @@ export function hire(ctx: Ctx, fincaId: number, role: 'worker' | 'gardener', cou
     ctx,
     role === 'gardener'
       ? `${profiles[0].name} ist Gärtner auf ${finca.name}.`
-      : `${n} ${n === 1 ? 'Arbeiter' : 'Arbeiter'} für ${finca.name} angeheuert.`,
+      : `${n} Arbeiter für ${finca.name} angeheuert.`,
     'good',
   );
   return { ok: true };
@@ -720,6 +778,28 @@ function sow(ctx: Ctx, finca: Finca, productId: string): CommandResult {
   finca.crop = { productId, plantedAt: ctx.now, readyAt, loss: 0 };
   ctx.emit('grow.planted', { fincaId: finca.id, productId, readyAt });
   return { ok: true, data: { readyAt } };
+}
+
+/**
+ * Wieder säen, was vorgemerkt ist. Geht es nicht (kein Geld für Dünger), sagt der Gärtner einmal Bescheid; der nächste
+ * Versuch kommt jeden Tag (daily).
+ */
+function trySow(ctx: Ctx, finca: Finca): void {
+  if (!finca.plan || finca.crop) return;
+  const result = sow(ctx, finca, finca.plan);
+  if (result.ok) {
+    finca.stalled = false;
+    return;
+  }
+  if (finca.stalled) return;
+  finca.stalled = true;
+  notify(
+    ctx,
+    finca,
+    finca.regionId,
+    `Kein Geld für Saat und Dünger auf ${finca.name}. Das Feld liegt brach, bis es reicht.`,
+  );
+  journal.add(ctx, `${finca.name} liegt brach: kein Geld für Saat und Dünger.`, 'bad');
 }
 
 /** Pflanzen (sofort, wenn das Feld frei ist; sonst für die nächste Aussaat vorgemerkt). */
@@ -862,7 +942,7 @@ function harvest(ctx: Ctx, finca: Finca): void {
     'good',
   );
   ctx.emit('grow.harvested', { fincaId: finca.id, productId: crop.productId, grams, cartel });
-  if (finca.plan) sow(ctx, finca, finca.plan);
+  trySow(ctx, finca);
 }
 
 /** Nächster Schritt nach dem Trocknen: Pressen (Hasch), Verpacken, ins Ausfuhrlager. */
@@ -925,19 +1005,60 @@ function advanceBatch(ctx: Ctx, finca: Finca): void {
   });
 }
 
+/**
+ * Pacht für einen Tag (nur sauberes Geld). Fehlt es, schreibt der Verpächter am ersten Tag, nach LEASE_LOST_DAYS ist das
+ * Land weg und die Leute dort gehen. false, wenn die Finca verloren ist.
+ */
+function payLease(ctx: Ctx, finca: Finca): boolean {
+  const lease = Math.round(leasePerWeek(finca) / 7);
+  if (wallet.pay(ctx, lease, 'clean', `Pacht ${finca.name}`, { category: 'grow.land', cityId: finca.regionId })) {
+    finca.spent += lease;
+    finca.unpaidLease = 0;
+    return true;
+  }
+  finca.unpaidLease += 1;
+  const contact = getRegion(finca.regionId)?.contact;
+  if (finca.unpaidLease === 1 && contact) {
+    message(
+      ctx,
+      contact,
+      `Der Verpächter von ${finca.name} wartet auf sein Geld (sauber, ${formatEuro(lease)} am Tag). Nach ${LEASE_LOST_DAYS} Tagen nimmt er das Land zurück.`,
+    );
+  }
+  if (finca.unpaidLease < LEASE_LOST_DAYS) return true;
+  const s = ctx.state.modules.grow;
+  for (const id of [...finca.workerIds, ...(finca.gardenerId ? [finca.gardenerId] : [])])
+    removeMember(ctx, id, 'fired');
+  s.fincas = s.fincas.filter((f) => f.id !== finca.id);
+  journal.add(ctx, `${finca.name} ist weg: ${LEASE_LOST_DAYS} Tage keine Pacht. Die Leute dort sind gegangen.`, 'bad');
+  return false;
+}
+
 /** Mitternacht: Löhne und Pacht, Aufmerksamkeit der Behörden, Razzia und Kartell (fest gewürfelt pro Region und Tag). */
 function daily(ctx: Ctx, day: number): void {
   const s = ctx.state.modules.grow;
-  for (const finca of s.fincas) {
+  for (const finca of [...s.fincas]) {
     const wages = [...finca.workerIds, ...(finca.gardenerId ? [finca.gardenerId] : [])].reduce(
       (sum, id) => sum + (getStaffMember(ctx.state, id)?.wage ?? 0),
       0,
     );
-    if (wages > 0 && payLocal(ctx, wages, `Löhne ${finca.name}`, 'grow.wages', finca.regionId)) finca.spent += wages;
-    if (finca.tenure === 'leased' && ctx.now >= finca.leasePaidUntil) {
-      const lease = Math.round(leasePerWeek(finca) / 7);
-      if (payLocal(ctx, lease, `Pacht ${finca.name}`, 'grow.land', finca.regionId)) finca.spent += lease;
+    const paid = wages <= 0 || payLocal(ctx, wages, `Löhne ${finca.name}`, 'grow.wages', finca.regionId);
+    if (paid) finca.spent += wages;
+    else {
+      // Ohne Lohn kein Arbeitstag: Der Tag fehlt der Ernte.
+      if (!finca.unpaidWages) {
+        notify(
+          ctx,
+          finca,
+          finca.regionId,
+          `Die Leute auf ${finca.name} haben heute keinen Lohn bekommen. Sie bleiben zu Hause.`,
+        );
+      }
+      if (finca.crop) finca.crop.loss = Math.min(1, finca.crop.loss + 1 / cropDays(finca));
     }
+    finca.unpaidWages = !paid;
+    if (finca.tenure === 'leased' && ctx.now >= finca.leasePaidUntil && !payLease(ctx, finca)) continue;
+    trySow(ctx, finca);
   }
   for (const region of REGIONS) {
     const r = s.regions[region.id];
@@ -1086,9 +1207,23 @@ function initialState(): GrowState {
 
 export default defineModule({
   id: 'grow',
-  version: 1,
+  version: 2,
   dependsOn: ['trade'],
   init: () => initialState(),
+  migrations: {
+    // Review: Folgen unbezahlter Pacht und Löhne, Säen mit neuem Versuch; Lieferungen mit dem Anteil der Waren zum
+    // Anbauen (für „Europa“; vorher zählte alles, auch Laborware).
+    2: (
+      old: Omit<GrowState, 'fincas' | 'deliveries'> & {
+        fincas: Omit<Finca, 'unpaidLease' | 'unpaidWages' | 'stalled'>[];
+        deliveries: Omit<DeliveryRecord, 'crop' | 'cropOwn'>[];
+      },
+    ): GrowState => ({
+      ...old,
+      fincas: old.fincas.map((f) => ({ ...f, unpaidLease: 0, unpaidWages: false, stalled: false })),
+      deliveries: old.deliveries.map((d) => ({ ...d, crop: d.grams, cropOwn: d.own })),
+    }),
+  },
   tickEvery: 60,
   tick,
   commands: {
@@ -1105,11 +1240,19 @@ export default defineModule({
     'grow.bribe': (ctx, { regionId }) => bribe(ctx, regionId),
   },
   on: {
-    'trade.delivered': (ctx, { customerId, amount, ownAmount }) => {
+    'trade.delivered': (ctx, { customerId, amount, ownAmount, items }) => {
       const s = ctx.state.modules.grow;
       if (s.startedAt === null) return;
-      s.deliveries.push({ at: ctx.now, customerId, grams: amount, own: ownAmount ?? 0 });
-      const from = ctx.now - GOAL_WINDOW_DAYS * DAY;
+      const crop = (items ?? []).filter((i) => CROP_PRODUCTS.includes(i.productId));
+      s.deliveries.push({
+        at: ctx.now,
+        customerId,
+        grams: amount,
+        own: ownAmount ?? 0,
+        crop: crop.reduce((sum, i) => sum + i.amount, 0),
+        cropOwn: crop.reduce((sum, i) => sum + i.own, 0),
+      });
+      const from = ctx.now - Math.max(PRODUCER_WINDOW_DAYS, EUROPE_WINDOW_DAYS) * DAY;
       s.deliveries = s.deliveries.filter((d) => d.at >= from);
       checkGoals(ctx);
     },

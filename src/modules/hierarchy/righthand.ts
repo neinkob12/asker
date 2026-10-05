@@ -38,6 +38,7 @@ import {
   getStaffMember,
   isAbsent,
   isEmployed,
+  isFarmRole,
   isMemberLive,
   isSpecialist,
   payrollDue,
@@ -236,7 +237,9 @@ export function canBeRightHand(state: GameState, staffId: string): CommandResult
   const m = getStaffMember(state, staffId);
   if (!m || !isEmployed(state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
   if (isRightHand(state, staffId)) return { ok: false, reason: `${m.name} ist schon deine Rechte Hand.` };
-  if (isSpecialist(m.role)) return { ok: false, reason: `${roleName(m.role)} führen keine Leutnants.` };
+  if (isSpecialist(m.role) || isFarmRole(m.role)) {
+    return { ok: false, reason: `${roleName(m.role)} führen keine Leutnants.` };
+  }
   if (m.status !== 'active') return { ok: false, reason: `${m.name} ist gerade nicht einsatzbereit.` };
   if (m.level < RIGHT_HAND_MIN_LEVEL) return { ok: false, reason: `${m.name} braucht Level ${RIGHT_HAND_MIN_LEVEL}.` };
   if (m.stats.loyalty < RIGHT_HAND_MIN_LOYALTY) {

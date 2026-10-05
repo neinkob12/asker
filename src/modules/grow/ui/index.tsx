@@ -51,6 +51,7 @@ import {
   goalShares,
   greenhouseCost,
   growGoals,
+  harvestToHarborDays,
   isGrowStarted,
   landPrice,
   leasePerWeek,
@@ -157,9 +158,9 @@ function GoalsGroup() {
       note={
         goals.europe
           ? 'Ganz Europa aus eigener Produktion. Es geht offen weiter.'
-          : 'Eigene Ware in den letzten vier Wochen.'
+          : 'Eigene Ware in den letzten zwei Wochen.'
       }
-      more="Produzent: Die Hälfte der gelieferten Gramm stammt aus deinen Fincas. Europa: Jeder Kunde, den du beliefert hast, und jede Stadt in Europa bekommt mindestens zur Hälfte eigene Ware."
+      more="Produzent: In den letzten zwei Wochen stammt die Hälfte der gelieferten Gramm aus deinen Fincas. Europa: Jeder Kunde, den du in den letzten vier Wochen beliefert hast, und jede Stadt in Europa bekommt bei Gras, Haze, Kush und Hasch mindestens zur Hälfte eigene Ware (Edibles, Öl und Vapes aus dem Labor zählen nicht)."
     >
       <List>
         <ListItem value={goals.producer ? 'erreicht' : `${pct(shares.share)} von ${pct(PRODUCER_SHARE)}`}>
@@ -201,7 +202,14 @@ function GrowView() {
         if (status === 'none') return null;
         if (status === 'called') {
           return (
-            <Group key={region.id} title={region.name} icon="phone" color="goods" note={region.pitch}>
+            <Group
+              key={region.id}
+              title={region.name}
+              icon="phone"
+              color="goods"
+              value={`Ernte bis Hafen ${harvestToHarborDays(region.id)} T.`}
+              note={region.pitch}
+            >
               <List>
                 <ListItem
                   action
@@ -221,6 +229,7 @@ function GrowView() {
             title={region.name}
             icon="leaf"
             color="goods"
+            value={`Ernte bis Hafen ${harvestToHarborDays(region.id)} T.`}
             note={list.length === 0 ? 'Noch keine Finca. Kaufen oder pachten unter Region.' : undefined}
           >
             <List>
@@ -256,7 +265,8 @@ function GrowView() {
       <Disclosure label="Wie lohnt sich das?">
         Eigene Ware kostet nur die Löhne, die Pacht und den Dünger: ein Bruchteil des Einkaufs. Kaufen statt pachten,
         Gewächshäuser und bessere Genetik drücken den Preis pro Gramm weiter. Von der Ernte bis in den Hafen dauert es
-        drei bis vier Wochen: Was in zwei Monaten in Berlin sein soll, wird heute gepflanzt.
+        aus Marokko gut zwei, aus Kolumbien gut drei Wochen. Jede Finca kommt mit der Pflanzung des Vorbesitzers, die
+        erste Ernte ist nach drei Wochen reif.
       </Disclosure>
     </>
   );

@@ -20,6 +20,7 @@ import {
   vehicleSpec,
   vehicleStatus,
 } from '../modules/fleet';
+import { getFincas, growGoals } from '../modules/grow';
 import { amountInProgress } from '../modules/laundering';
 import { customsHeat } from '../modules/police';
 import {
@@ -85,6 +86,12 @@ export function sellWhenOffered(state: GameState, run: BotRun): void {
   if (isBusinessSold(state)) return;
   const status = saleStatus(state);
   if (status === 'calling' || status === 'later') run({ type: 'city.sell', payload: {} });
+}
+
+/** Auftrag 42: Was die eigenen Fincas anbauen, sobald „Produzent“ erreicht ist (dann kauft er das nicht mehr zu). */
+function ownCrops(state: GameState): Set<string> {
+  if (!growGoals(state).producer) return new Set();
+  return new Set(getFincas(state).flatMap((f) => (f.plan ? [f.plan] : [])));
 }
 
 /** Gramm pro Sorte aus einer Liste von Bestellungen. */
@@ -168,6 +175,9 @@ function procure(state: GameState, run: BotRun): void {
   );
   const covered = new Map<string, number>();
   const have = (productId: string) => onHand(state, productId) + (covered.get(productId) ?? 0);
+  // Auftrag 42: Ab „Produzent“ kauft er, was die eigenen Fincas anbauen, nur noch für angenommene Bestellungen zu
+  // (kein Puffer, keine eigenen Schiffe dafür): Der Rest kommt aus der eigenen Ernte.
+  const own = ownCrops(state);
   for (const [productId, need] of sum(pending)) {
     const short = need - have(productId);
     if (short > 0)
@@ -179,6 +189,7 @@ function procure(state: GameState, run: BotRun): void {
   for (const [productId, need] of sum(pending)) buffer.set(productId, (buffer.get(productId) ?? 0) + need);
   for (const [productId, need] of open) buffer.set(productId, (buffer.get(productId) ?? 0) + need);
   for (const [productId, need] of buffer) {
+    if (own.has(productId)) continue;
     const short = need - have(productId);
     if (short > 0) covered.set(productId, (covered.get(productId) ?? 0) + buy(state, run, productId, short, false));
   }
@@ -247,8 +258,9 @@ function sailShips(state: GameState, run: BotRun): void {
     // Geladen wird, was in den nächsten anderthalb Wochen fehlt (große Container, der Rest halb), so viel die Kasse hergibt.
     const load: { productId: string; size: 'full' | 'medium'; cover: Cover['id'] }[] = [];
     let room = capacity;
+    const own = ownCrops(state);
     for (const [productId, weekly] of need) {
-      if (producer.products[productId] === undefined) continue;
+      if (producer.products[productId] === undefined || own.has(productId)) continue;
       let short = SHIP_WEEKS * weekly - onHand(state, productId);
       while (short > 30_000 && room > 0) {
         const size: 'full' | 'medium' = short >= 90_000 && room >= full ? 'full' : 'medium';

@@ -12,16 +12,29 @@ import {
   EUROPE_CITIES,
   getShipments,
   originStock,
+  placeOrders,
   portStock,
   shippingMinutes,
   tradeStats,
 } from '../trade';
 import { allVeedel } from '../veedel';
-import { CALL_AFTER_WEEKS, CALL_MIN_REVENUE, DRY_DAYS, GROW_DAYS, PACK_DAYS, PRESS_DAYS } from './config';
+import {
+  CALL_AFTER_WEEKS,
+  CALL_MIN_REVENUE,
+  DRY_DAYS,
+  GROW_DAYS,
+  LEASE_LOST_DAYS,
+  PACK_DAYS,
+  PRESS_DAYS,
+  STANDING_CROP_DAYS,
+} from './config';
 import {
   costPerGram,
+  cropDays,
+  europeProgress,
   expectedHarvest,
   fincaQuality,
+  fincaWorkers,
   getFincas,
   goalShares,
   growGoals,
@@ -187,10 +200,15 @@ describe('Fincas und Kette (Auftrag 42, Etappe 2)', () => {
     const finca = getFincas(sim.state)[0];
     expect(finca.tenure).toBe('owned');
     sim.dispatch({ type: 'grow.hire', payload: { fincaId: finca.id, role: 'worker', count: workersNeeded(finca) } });
+    // Die Finca kommt mit der Pflanzung des Vorbesitzers (Hasch, reif nach STANDING_CROP_DAYS).
+    expect(finca.crop?.productId).toBe('hash');
+    expect((finca.crop?.readyAt ?? 0) - sim.state.time).toBe(STANDING_CROP_DAYS * DAY);
     expect(sim.dispatch({ type: 'grow.buildGreenhouse', payload: { fincaId: finca.id } }).ok).toBe(true);
+    // Unter Glas wächst, was steht, doppelt so schnell; die nächste Aussaat braucht GROW_DAYS.greenhouse.
+    expect((finca.crop?.readyAt ?? 0) - sim.state.time).toBe((STANDING_CROP_DAYS / 2) * DAY);
+    expect(cropDays(finca)).toBe(GROW_DAYS.greenhouse);
     sim.dispatch({ type: 'grow.plant', payload: { fincaId: finca.id, productId: 'hash' } });
-    expect((finca.crop?.readyAt ?? 0) - sim.state.time).toBe(GROW_DAYS.greenhouse * DAY);
-    settle(sim, (GROW_DAYS.greenhouse + DRY_DAYS) * DAY + 2 * 60);
+    settle(sim, (STANDING_CROP_DAYS / 2 + DRY_DAYS) * DAY + 2 * 60);
     expect(getFincas(sim.state)[0].batch?.stage).toBe('pressing');
     settle(sim, (PRESS_DAYS + PACK_DAYS) * DAY);
     expect(originStock(sim.state, 'own-marokko').hash?.amount).toBeGreaterThan(0);
@@ -277,7 +295,7 @@ describe('Fincas und Kette (Auftrag 42, Etappe 2)', () => {
 });
 
 describe('Ziele (Auftrag 42, Etappe 3)', () => {
-  it('Produzent ab der Hälfte eigener Ware in vier Wochen, Europa erst mit allen Kunden', () => {
+  it('Produzent ab der Hälfte eigener Ware in zwei Wochen, Europa erst mit allen Kunden', () => {
     const sim = openGame();
     const events = recordEvents(sim);
     const ctx = sim.ctx('test');
@@ -290,6 +308,7 @@ describe('Ziele (Auftrag 42, Etappe 3)', () => {
         revenue: 1,
         late: false,
         ownAmount: 2_000,
+        items: [{ productId: 'weed', amount: 10_000, own: 2_000 }],
       });
     }
     sim.advance(60);
@@ -302,6 +321,7 @@ describe('Ziele (Auftrag 42, Etappe 3)', () => {
         revenue: 1,
         late: false,
         ownAmount: 10_000,
+        items: [{ productId: 'weed', amount: 10_000, own: 10_000 }],
       });
     }
     sim.advance(60);
@@ -332,12 +352,136 @@ describe('Ziele (Auftrag 42, Etappe 3)', () => {
         revenue: 1,
         late: false,
         ownAmount: 10_000,
+        items: [{ productId: 'weed', amount: 10_000, own: 10_000 }],
       });
     }
     sim.advance(2 * 60);
     expect(growGoals(sim.state).europe).toBe(true);
     expect(playerRank(sim.state).title).toBe('Europa');
     expect(playerRank(sim.state).score).toBe(80);
+  });
+});
+
+describe('Geld, Pacht und Europa (Review zu Auftrag 42)', () => {
+  /** Eine gepachtete Finca mit Arbeitern und Gärtner, die Pflanzung des Vorbesitzers steht. */
+  function leased(sim: Simulation) {
+    sim.dispatch({ type: 'grow.leaseFinca', payload: { siteId: 'el-tigre' } });
+    const finca = getFincas(sim.state)[0];
+    sim.dispatch({ type: 'grow.hire', payload: { fincaId: finca.id, role: 'worker', count: workersNeeded(finca) } });
+    return finca;
+  }
+
+  it('eine Finca kommt mit stehender Pflanzung: die erste Ernte nach drei Wochen', () => {
+    const sim = openGame();
+    const events = recordEvents(sim);
+    const finca = leased(sim);
+    expect(finca.crop?.productId).toBe('weed');
+    settle(sim, STANDING_CROP_DAYS * DAY + 2 * 60);
+    expect(eventsOfType(events, 'grow.harvested')).toHaveLength(1);
+  });
+
+  it('Pacht nur mit sauberem Geld: erst eine Warnung, nach LEASE_LOST_DAYS ist das Land weg', () => {
+    const sim = openGame();
+    const finca = leased(sim);
+    sim.state.wallet.clean = 0;
+    sim.state.wallet.dirty = 5_000_000;
+    // Die erste Woche ist vorab bezahlt, danach fehlt die Pacht jeden Tag.
+    settle(sim, (7 + LEASE_LOST_DAYS + 1) * DAY);
+    // Schwarzgeld zahlt keine Pacht.
+    expect(getFincas(sim.state)).toHaveLength(0);
+    expect(sim.state.messages.list.some((m) => m.contactId === 'grow:kolumbien' && m.text.includes('Verpächter'))).toBe(
+      true,
+    );
+    // Die Leute dort sind gegangen und stehen nicht bei den Ehemaligen.
+    for (const id of finca.workerIds) expect(getStaffMember(sim.state, id)).toBeUndefined();
+    expect(sim.state.modules.staff.former.some((m) => finca.workerIds.includes(m.id))).toBe(false);
+  });
+
+  it('ohne Geld für Löhne arbeitet niemand (der Tag fehlt der Ernte); ohne Geld für Dünger wird später gesät', () => {
+    const sim = openGame();
+    const finca = leased(sim);
+    sim.state.wallet.clean = 0;
+    sim.state.wallet.dirty = 0;
+    settle(sim, DAY + 60);
+    const now = getFincas(sim.state)[0];
+    expect(now.unpaidWages).toBe(true);
+    expect(fincaWorkers(sim.state, now)).toBe(0);
+    expect(now.crop?.loss ?? 0).toBeGreaterThan(0);
+    // Geld zurück, bevor das Land weg ist: Löhne laufen wieder.
+    sim.state.wallet.clean = 5_000_000;
+    settle(sim, DAY);
+    expect(getFincas(sim.state)[0].unpaidWages).toBe(false);
+    expect(fincaWorkers(sim.state, getFincas(sim.state)[0])).toBe(workersNeeded(finca));
+    // Ernte, dann ohne Geld keine neue Aussaat (der Gärtner sagt es einmal), mit Geld am nächsten Tag doch.
+    const until = (getFincas(sim.state)[0].crop?.readyAt ?? 0) - sim.state.time;
+    settle(sim, until - 60);
+    sim.state.wallet.clean = 0;
+    sim.state.wallet.dirty = 0;
+    settle(sim, 2 * 60);
+    expect(getFincas(sim.state)[0].crop).toBeNull();
+    expect(getFincas(sim.state)[0].stalled).toBe(true);
+    sim.state.wallet.clean = 5_000_000;
+    settle(sim, DAY);
+    expect(getFincas(sim.state)[0].crop).not.toBeNull();
+    expect(getFincas(sim.state)[0].stalled).toBe(false);
+  }, 30_000);
+
+  it('Europa zählt nur Waren, die man anbauen kann: Laborware (Edibles, Öl, Vapes) ändert nichts', () => {
+    const sim = openGame();
+    const ctx = sim.ctx('test');
+    const customer = sim.state.modules.trade.customers[0];
+    const deliver = (items: { productId: string; amount: number; own: number }[]) =>
+      ctx.emit('trade.delivered', {
+        orderId: 0,
+        customerId: customer.id,
+        amount: items.reduce((s, i) => s + i.amount, 0),
+        revenue: 1,
+        late: false,
+        ownAmount: items.reduce((s, i) => s + i.own, 0),
+        items,
+      });
+    // 6 kg eigenes Gras und 10 kg zugekaufte Edibles: nach Gramm nur 37 % eigen, beim Anbau aber 100 %.
+    deliver([
+      { productId: 'weed', amount: 6_000, own: 6_000 },
+      { productId: 'edibles', amount: 10_000, own: 0 },
+    ]);
+    sim.advance(60);
+    expect(europeProgress(sim.state).missing).not.toContain(customer.name);
+    expect(goalShares(sim.state).share).toBeLessThan(0.5);
+    // Nur Laborware: nichts zum Anbauen, gilt als versorgt.
+    const other = sim.state.modules.trade.customers[1];
+    ctx.emit('trade.delivered', {
+      orderId: 0,
+      customerId: other.id,
+      amount: 3_000,
+      revenue: 1,
+      late: false,
+      ownAmount: 0,
+      items: [{ productId: 'oil', amount: 3_000, own: 0 }],
+    });
+    sim.advance(60);
+    expect(europeProgress(sim.state).missing).not.toContain(other.name);
+  });
+
+  it('Arbeiter und Gärtner werden weder Leutnant noch Rechte Hand', () => {
+    const sim = openGame();
+    const finca = leased(sim);
+    const id = finca.workerIds[0];
+    expect(sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: id, spotIds: [] } }).ok).toBe(false);
+    expect(sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: id } }).ok).toBe(false);
+  });
+});
+
+describe('Hafen-Phase: der Ruf erholt sich (Review zu Auftrag 42)', () => {
+  it('jeden Montag rückt die Pünktlichkeit 30 % zurück Richtung Startwert, nie darüber hinaus', () => {
+    const sim = soldGame();
+    const trade = sim.state.modules.trade;
+    trade.reliability = 0.2;
+    placeOrders(sim.ctx('test'));
+    expect(trade.reliability).toBeCloseTo(0.395, 3);
+    trade.reliability = 0.9;
+    placeOrders(sim.ctx('test'));
+    expect(trade.reliability).toBe(0.9);
   });
 });
 
@@ -360,5 +504,31 @@ describe('Spielstände (Auftrag 42)', () => {
     expect(loaded.state.modules.trade.customers).toEqual(sim.state.modules.trade.customers);
     expect(loaded.state.modules.grow.startedAt).toBeNull();
     expect(loaded.state.modules.grow.fincas).toEqual([]);
+  });
+
+  it('grow Version 1: Fincas ohne Schulden, Lieferungen zählen ganz als Anbau-Ware (Version 2)', () => {
+    const sim = openGame();
+    expect(sim.dispatch({ type: 'grow.leaseFinca', payload: { siteId: 'san-isidro' } }).ok).toBe(true);
+    const old = JSON.parse(JSON.stringify(sim.state));
+    for (const f of old.modules.grow.fincas) {
+      delete f.unpaidLease;
+      delete f.unpaidWages;
+      delete f.stalled;
+    }
+    old.modules.grow.deliveries = [{ at: sim.state.time, grams: 5_000, own: 2_000, customerId: 'amsterdam' }];
+    old.moduleVersions.grow = 1;
+    const loaded = loadSimulation(old as never, sim.modules);
+    expect(loaded.state.moduleVersions.grow).toBe(2);
+    const finca = loaded.state.modules.grow.fincas[0];
+    expect(finca.unpaidLease).toBe(0);
+    expect(finca.unpaidWages).toBe(false);
+    expect(finca.stalled).toBe(false);
+    expect(finca.siteId).toBe('san-isidro');
+    expect(loaded.state.modules.grow.deliveries[0]).toMatchObject({
+      grams: 5_000,
+      own: 2_000,
+      crop: 5_000,
+      cropOwn: 2_000,
+    });
   });
 });
