@@ -563,3 +563,16 @@ export const DEAL_PITCHES: readonly string[] = [
   'Kleine Aktion unter Freunden: {package} bis {until} {discount} günstiger.',
   'Muss Platz schaffen. {package}, {discount} runter, gilt bis {until}.',
 ];
+
+/**
+ * Konkurrenz in der Hafen-Phase (Auftrag 40): Die alten Lieferanten bieten deinen Kunden ebenfalls an. price ist ein
+ * Faktor auf den fairen Großhandelspreis (Index), Qualität und Zuverlässigkeit kommen vom Lieferanten selbst
+ * (SUPPLIERS). Sie kaufen selbst ein und sind deshalb etwas teurer als der Hafen. Jede Woche schwankt der Preis um bis zu RIVAL_WEEKLY_SWING (fest aus Seed, Woche und Lieferant).
+ */
+export const RIVALS: readonly { supplierId: string; price: number }[] = [
+  { supplierId: 'frankfurt', price: 1.08 },
+  { supplierId: 'hamburg', price: 1.04 },
+  { supplierId: 'berlin', price: 1.02 },
+  { supplierId: 'amsterdam', price: 1.12 },
+];
+export const RIVAL_WEEKLY_SWING = 0.05;

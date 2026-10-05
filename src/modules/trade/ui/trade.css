@@ -1,0 +1,6 @@
+/* App „Kunden“ (Auftrag 40) */
+.trade-app {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}

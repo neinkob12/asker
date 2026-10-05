@@ -176,3 +176,21 @@ export const TICKERS: Readonly<Record<string, { id: string; name: string }>> = {
   muenchen: { id: 'other:muenchen-ticker', name: 'München-Ticker' },
   frankfurt: { id: 'other:frankfurt-ticker', name: 'Frankfurt-Ticker' },
 };
+
+// --- Zoll-Heat pro Hafen (Auftrag 40) ---------------------------------------------------------------------------
+
+/**
+ * Zoll-Heat eines Hafens (0–100) wie die Heat eines Veedels: jedes Kilo, das ankommt, treibt ihn hoch, die Zeit kühlt
+ * ihn ab (pro Stunde ein fester Teil plus ein Anteil). Ein aufgeflogener Container treibt ihn weiter.
+ */
+export const CUSTOMS_HEAT_PER_KG = 0.35;
+export const CUSTOMS_HEAT_SEIZED = 15;
+export const CUSTOMS_DECAY_PER_HOUR = 0.15;
+export const CUSTOMS_DECAY_SHARE_PER_HOUR = 0.012;
+/** Stufen für die Anzeige (wie HEAT_LEVELS). */
+export const CUSTOMS_LEVELS = [
+  { min: 0, label: 'ruhig' },
+  { min: 25, label: 'aufmerksam' },
+  { min: 50, label: 'scharf' },
+  { min: 75, label: 'Großkontrolle' },
+] as const;

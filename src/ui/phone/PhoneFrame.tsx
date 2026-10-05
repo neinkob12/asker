@@ -89,6 +89,8 @@ interface HomeApp {
   icon: string;
   color: string;
   badge: number;
+  /** Steht gerade im Dock statt dieser App (PhoneApp.dock). */
+  replaces?: string;
 }
 
 /** Zahl am Symbol: Wirft das Modul beim Zählen, bleibt es bei 0, statt den ganzen Startbildschirm abzuräumen. */
@@ -116,7 +118,7 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
     );
   const apps = phoneApps
     .list()
-    .filter((a) => !a.hidden)
+    .filter((a) => !a.hidden && (!a.dock || a.dock.when(state)))
     .map(
       (a): HomeApp => ({
         id: a.id,
@@ -124,6 +126,7 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
         icon: a.icon,
         color: a.color ?? 'system',
         badge: badgeOf(() => a.badge?.(state, ui)),
+        ...(a.dock ? { replaces: a.dock.replaces } : {}),
       }),
     );
   return [...tabs, ...apps];
@@ -362,13 +365,17 @@ const HomeScreen = memo(function HomeScreen() {
   });
   const state = runtime.state;
   if (!state) return null;
-  const dock = DOCK.map((id) => all.find((a) => a.id === id)).filter((a): a is HomeApp => !!a);
+  // Eine App kann zeitweise eine andere im Dock ersetzen (PhoneApp.dock); die ersetzte rückt ins Raster.
+  const dockIds = DOCK.map((id) => all.find((a) => a.replaces === id)?.id ?? id);
+  const dock = dockIds.map((id) => all.find((a) => a.id === id)).filter((a): a is HomeApp => !!a);
   const rank = (a: HomeApp) => {
     const i = HOME_ORDER.indexOf(a.id);
     return i < 0 ? HOME_ORDER.length : i;
   };
   // Im Raster stehen die sechs Apps der Tabelle (Kasse und Personal auch im Dock); Nachrichten und Lieferanten nur im Dock.
-  const grid = all.filter((a) => HOME_ORDER.includes(a.id) || !DOCK.includes(a.id)).sort((a, b) => rank(a) - rank(b));
+  const grid = all
+    .filter((a) => HOME_ORDER.includes(a.id) || !dockIds.includes(a.id))
+    .sort((a, b) => rank(a) - rank(b));
   const urgent = urgentAdvice(state);
   return (
     <div class="phone__home">

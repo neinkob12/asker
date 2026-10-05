@@ -40,6 +40,7 @@ import {
   formatEuro,
   type GameState,
   journal,
+  keyedDice,
   MINUTES_PER_DAY,
   messages,
   wallet,
@@ -83,6 +84,8 @@ import {
   PORT_SEIZE_EXTRA,
   PROBLEM_AT,
   QUALITY_SPREAD,
+  RIVAL_WEEKLY_SWING,
+  RIVALS,
   SEIZE_FACTOR,
   SHARED_CONTAINER_RISK,
   SHIP_SHARE,
@@ -394,6 +397,40 @@ export function supplierById(id: string): Supplier | undefined {
 
 export function getSupplier(state: GameState, id: string): Supplier | undefined {
   return getSuppliers(state).find((s) => s.id === id);
+}
+
+/** Ein Angebot der Konkurrenz an einen Kunden der Hafen-Phase (Auftrag 40). */
+export interface RivalOffer {
+  supplierId: string;
+  /** Name im Satz, z.B. „Toni“. */
+  name: string;
+  /** Faktor auf den fairen Großhandelspreis. */
+  price: number;
+  quality: number;
+  reliability: number;
+}
+
+/**
+ * Was die Konkurrenz (Toni, Hein, Mirko, Daan; RIVALS) in einer Woche anbietet: Preis um den fairen Preis mit einer
+ * kleinen Schwankung pro Woche (fest aus Seed, Woche und Lieferant, kein ctx.random), Qualität und Zuverlässigkeit des
+ * Lieferanten.
+ */
+export function rivalOffers(state: GameState, week: number): RivalOffer[] {
+  return RIVALS.flatMap((r) => {
+    const supplier = getSupplier(state, r.supplierId);
+    if (!supplier) return [];
+    const dice = keyedDice(`suppliers.rival:${state.meta.seed}:${r.supplierId}:${week}`);
+    const swing = (dice.random() * 2 - 1) * RIVAL_WEEKLY_SWING;
+    return [
+      {
+        supplierId: supplier.id,
+        name: supplier.contactName,
+        price: Math.round(r.price * (1 + swing) * 1000) / 1000,
+        quality: supplier.quality,
+        reliability: supplier.reliability,
+      },
+    ];
+  });
 }
 
 /** Kontakt-ID im Handy. */

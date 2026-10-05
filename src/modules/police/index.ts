@@ -81,6 +81,11 @@ import {
   CHECK_HEAT_RELIEF,
   CHECK_MONEY,
   CHECK_THRESHOLD,
+  CUSTOMS_DECAY_PER_HOUR,
+  CUSTOMS_DECAY_SHARE_PER_HOUR,
+  CUSTOMS_HEAT_PER_KG,
+  CUSTOMS_HEAT_SEIZED,
+  CUSTOMS_LEVELS,
   FAILED_CHASE_FACTOR,
   GANG_RAID_INFLUENCE_LOSS,
   HEAT_DECAY_PER_HOUR,
@@ -177,11 +182,16 @@ export interface PoliceState {
   majorReadyAt: number;
   /** So sieht dich die Polizei pro Stadt: 0 Kleindealer, 1 Händler, 2 Großhändler (fehlt = noch nicht bestimmt). */
   tiers: Record<string, number>;
+  /** Zoll-Heat pro Hafen der Hafen-Phase (Auftrag 40, 0–100). */
+  customs: Record<string, number>;
   stats: PoliceStats;
 }
 
+/** Zustand in Version 5 (Auftrag 30, ohne Zoll-Heat). */
+type PoliceStateV5 = Omit<PoliceState, 'customs'>;
+
 /** Zustand in Version 4 (eine Stufe für alles, das war Köln). */
-type PoliceStateV4 = Omit<PoliceState, 'tiers'> & { tier: number | null };
+type PoliceStateV4 = Omit<PoliceStateV5, 'tiers'> & { tier: number | null };
 
 /** Zustand in Version 3 (geplante Razzien nur als Zeitpunkt, keine Stufen). */
 type PoliceStateV3 = Omit<PoliceStateV4, 'plannedRaids' | 'majorRaid' | 'majorReadyAt' | 'tier'> & {
@@ -335,6 +345,52 @@ export function restHeat(ctx: Ctx, cityId: string): void {
     }
     police.heat[v.id] = Math.round(heat * 1000) / 1000;
     police.level[v.id] = Math.min(police.level[v.id] ?? 0, heatLevel(heat).index);
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Zoll-Heat pro Hafen (Auftrag 40)
+
+/** Zoll-Heat eines Hafens (0–100). */
+export function customsHeat(state: GameState, portId: string): number {
+  return state.modules.police.customs?.[portId] ?? 0;
+}
+
+/** Stufe des Zolls in einem Hafen für die Anzeige (0 ruhig … 3 Großkontrolle). */
+export function customsLevel(heat: number): { index: number; label: string } {
+  let index = 0;
+  CUSTOMS_LEVELS.forEach((l, i) => {
+    if (heat >= l.min) index = i;
+  });
+  return { index, label: CUSTOMS_LEVELS[index].label };
+}
+
+/** Zoll-Heat erhöhen (negativ: senken), begrenzt auf 0–100. Gibt den neuen Wert zurück. */
+export function addCustomsHeat(ctx: Ctx, portId: string, amount: number): number {
+  const police = ctx.state.modules.police;
+  police.customs ??= {};
+  const value = Math.min(MAX_HEAT, Math.max(0, (police.customs[portId] ?? 0) + amount));
+  police.customs[portId] = Math.round(value * 1000) / 1000;
+  return value;
+}
+
+/** Ankunft im Hafen: so viele Kilo treiben den Zoll hoch (CUSTOMS_HEAT_PER_KG). */
+export function customsArrival(ctx: Ctx, portId: string, kilos: number): number {
+  return addCustomsHeat(ctx, portId, kilos * CUSTOMS_HEAT_PER_KG);
+}
+
+/** Ein Container ist aufgeflogen: der Zoll wird schärfer. */
+export function customsSeized(ctx: Ctx, portId: string): number {
+  return addCustomsHeat(ctx, portId, CUSTOMS_HEAT_SEIZED);
+}
+
+/** Stündlich: Die Zeit kühlt den Zoll in jedem Hafen ab. */
+function coolCustoms(ctx: Ctx): void {
+  const customs = ctx.state.modules.police.customs;
+  if (!customs) return;
+  for (const [portId, heat] of Object.entries(customs)) {
+    const next = Math.max(0, heat - (CUSTOMS_DECAY_PER_HOUR + CUSTOMS_DECAY_SHARE_PER_HOUR * heat));
+    customs[portId] = Math.round(next * 1000) / 1000;
   }
 }
 
@@ -898,6 +954,7 @@ function finishRaid(ctx: Ctx, veedelId: string): void {
 function tick(ctx: Ctx): void {
   const state = ctx.state;
   const police = state.modules.police;
+  coolCustoms(ctx);
   for (const [veedelId, tip] of Object.entries(police.tipOffs)) {
     if (tip.until <= ctx.now) delete police.tipOffs[veedelId];
   }
@@ -989,13 +1046,14 @@ function initialState(): PoliceState {
     majorRaid: null,
     majorReadyAt: 0,
     tiers: {},
+    customs: {},
     stats: { checks: 0, raids: 0, gangRaids: 0, arrests: 0, confiscatedGoods: 0, confiscatedMoney: 0 },
   };
 }
 
 export default defineModule({
   id: 'police',
-  version: 5,
+  version: 6,
   dependsOn: ['veedel', 'territory'],
   init: () => initialState(),
   tickEvery: 60,
@@ -1058,9 +1116,11 @@ export default defineModule({
       tier: null,
     }),
     // Version 5 (Auftrag 30): Stufe pro Stadt; die bisherige war Köln. Hamburgs Heat fehlt und zählt als 0.
-    5: (old: PoliceStateV4): PoliceState => {
+    5: (old: PoliceStateV4): PoliceStateV5 => {
       const { tier, ...rest } = old;
       return { ...rest, tiers: tier === null ? {} : { koeln: tier } };
     },
+    // Version 6 (Auftrag 40): Zoll-Heat pro Hafen, bisher überall ruhig.
+    6: (old: PoliceStateV5): PoliceState => ({ ...old, customs: {} }),
   },
 });
