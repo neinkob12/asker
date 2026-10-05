@@ -80,7 +80,7 @@ export const GANG_MEMORY_BLOCK = -20;
  * Auslieferung: Zollkontrolle auf der Autobahn mit dieser Chance pro 100 km (mal Kontrollfaktor des Fahrzeugs);
  * fliegt die Ladung mit SEIZE_ON_CHECK auf, ist sie weg (die Bestellung bleibt offen, solange die Frist läuft).
  */
-export const AUTOBAHN_CHECK_PER_100KM = 0.025;
+export const AUTOBAHN_CHECK_PER_100KM = 0.015;
 export const SEIZE_ON_CHECK = 0.45;
 /** Ohne eigenen Lkw fährt eine Spedition: Grundpreis plus pro Kilo und 100 km (Schwarzgeld). */
 export const FREIGHT_BASE = 800;

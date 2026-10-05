@@ -112,8 +112,9 @@ export function isChannelUnlocked(state: GameState, id: LaunderingChannelId): bo
 }
 
 /** Alle Wege in der Reihenfolge der Freischaltung. */
-export function getChannels(_state: GameState): readonly LaunderingChannel[] {
-  return LAUNDERING_CHANNELS;
+export function getChannels(state: GameState): readonly LaunderingChannel[] {
+  // Jansens Reederei (Auftrag 40) erst, wenn sie dir gehört.
+  return LAUNDERING_CHANNELS.filter((c) => !c.harborOnly || isChannelUnlocked(state, c.id));
 }
 
 /** Gebühr eines Wegs als Anteil (0,2 = 20 %), inklusive Rabatt durch Buchhalter. */
@@ -361,6 +362,18 @@ export default defineModule({
   commands: {
     'laundering.launder': (ctx, { amount, channel }) => launder(ctx, amount, channel),
     'laundering.unlock': (ctx, { channel, pay }) => unlock(ctx, channel, pay),
+  },
+  on: {
+    // Auftrag 40: Mit Rotterdam kommt Jansens Reederei als vierter Weg.
+    'business.sold': (ctx) => {
+      const s = ctx.state.modules.laundering;
+      for (const c of LAUNDERING_CHANNELS) {
+        if (c.harborOnly && !s.unlocked.includes(c.id)) {
+          s.unlocked.push(c.id);
+          ctx.emit('laundering.unlocked', { channel: c.id, pay: 'clean', cost: 0 });
+        }
+      }
+    },
   },
   migrations: {
     2: (old: LaunderingStateV1): LaunderingStateV2 => ({ ...old, batches: [] }),

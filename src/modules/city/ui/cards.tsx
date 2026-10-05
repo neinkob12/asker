@@ -85,7 +85,7 @@ export function cardModel(state: GameState, city: CityDef): CardModel {
       stats: customer ? [`Anteil ${Math.round(customer.share * 100)} %`, `Vertrauen ${customer.trust}`] : [],
       person: m ? { name: m.name, role: 'Statthalter', age: m.age } : null,
       pitch: null,
-      action: customer ? 'Kunde' : null,
+      action: null,
     };
   }
   const unlocked = citiesUnlocked(state).includes(city.id);

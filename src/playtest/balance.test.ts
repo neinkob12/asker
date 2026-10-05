@@ -6,12 +6,13 @@ import { describe, expect, it } from 'vitest';
 import type { GameEvent } from '../core';
 import { MONEY_CATEGORIES } from '../core';
 import { createTestGame } from '../core/testing';
-import { activeCity } from '../modules/city';
+import { activeCity, saleRecord } from '../modules/city';
 import { allProducts } from '../modules/goods';
 import { priceIndex } from '../modules/market';
 import { contractStats } from '../modules/quests';
+import { getCustomers, supplierReputation, totalStock, tradeStats } from '../modules/trade';
 import { type BotOptions, CAREFUL_BOT, DEFAULT_BOT, newBotStats, playFor, snapshot } from './bot';
-import { koelnKomplett } from './scenario';
+import { koelnKomplett, playToGermany, sellAndArrive } from './scenario';
 
 const DAY = 1440;
 
@@ -296,6 +297,62 @@ describe('Balancing', () => {
           `  Schwarzgeld je Tag: ${r.days.map((d) => d.dirty).join(' / ')}` +
             `\n  Umsatz neue Stadt je Tag: ${r.days.map((d) => d.revenue).join(' / ')}` +
             `\n  Ergebnis schlafende Städte je Tag: ${r.days.map((d) => d.sleepIncome).join(' / ')}`,
+        );
+      }
+    },
+    3_600_000,
+  );
+
+  it.skipIf(!process.env.BALANCE)(
+    'Bericht: Hafen-Phase (nach Deutschland)',
+    () => {
+      const seeds = (process.env.BALANCE_SEEDS ?? '1,2,3').split(',').map(Number);
+      const harborDays = Number(process.env.BALANCE_HARBOR_DAYS ?? 30);
+      for (const seed of seeds) {
+        const started = Date.now();
+        const sim = createTestGame({ seed });
+        const stats = newBotStats();
+        const germany = playToGermany(sim, stats);
+        if (germany === null) {
+          console.log(
+            `Hafen-Phase, Seed ${seed}: nicht Boss von Deutschland (${sim.state.outcome.gameOver?.reason ?? 'zu langsam'})`,
+          );
+          continue;
+        }
+        const before = Math.round(sim.state.wallet.dirty + sim.state.wallet.clean);
+        if (!sellAndArrive(sim, stats)) {
+          console.log(`Hafen-Phase, Seed ${seed}: Boss von Deutschland an Tag ${germany}, aber kein Verkauf`);
+          continue;
+        }
+        const sale = saleRecord(sim.state);
+        const arrived = Math.floor(sim.state.time / DAY) + 1;
+        const start = Math.round(sim.state.wallet.dirty + sim.state.wallet.clean);
+        const money: number[] = [];
+        for (let d = 0; d < harborDays && !sim.state.outcome.gameOver; d++) {
+          playFor(sim, DAY, stats);
+          money.push(Math.round((sim.state.wallet.dirty + sim.state.wallet.clean) / 1000));
+        }
+        const t = tradeStats(sim.state);
+        const rep = supplierReputation(sim.state);
+        const share = t.demand > 0 ? t.ordered / t.demand : 0;
+        const delivered = t.onTime + t.late;
+        console.log(
+          `Hafen-Phase, Seed ${seed}: Boss von Deutschland an Tag ${germany}, in Rotterdam an Tag ${arrived}` +
+            ` | Tagesgewinn ${sale?.dailyProfit ?? 0}, Verkauf ${sale?.price ?? 0}, Rotterdam ${sale?.rotterdamPrice ?? 0}` +
+            ` | Geld vorher ${before}, bei Ankunft ${start}, nach ${harborDays} Tagen ${money[money.length - 1] ?? 0} Tsd.` +
+            ` | Umsatz ${t.revenue} (${Math.round(t.revenue / Math.max(1, harborDays))}/Tag)` +
+            ` | Marktanteil ${Math.round(share * 100)} % | Lieferungen ${delivered} (pünktlich ${t.onTime}, zu spät ${t.late}, geplatzt ${t.failed}, gekippt ${t.tipped})` +
+            ` | Container ${t.containers}, aufgeflogen ${t.seized}, Lkw-Ladungen beschlagnahmt ${t.deliveriesSeized}` +
+            ` | Ruf pünktlich ${Math.round(rep.reliability * 100)} %, Qualität ${Math.round(rep.quality * 100)} %` +
+            ` | Ware im Hafen ${Math.round(totalStock(sim.state) / 1000)} kg` +
+            ` | ${sim.state.outcome.gameOver ? `Game Over (${sim.state.outcome.gameOver.reason})` : 'keine Pleite'}` +
+            ` | ${((Date.now() - started) / 1000).toFixed(1)} s`,
+        );
+        console.log(`  Geld je Tag (Tsd.): ${money.join(' / ')}`);
+        console.log(
+          `  Kunden (Vertrauen/Anteil): ${getCustomers(sim.state)
+            .map((c) => `${c.name} ${c.trust}/${Math.round(c.share * 100)} %`)
+            .join(', ')}`,
         );
       }
     },

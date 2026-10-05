@@ -3,11 +3,13 @@
 // Nur für Tests und den Balancing-Bericht; verändert den Zustand direkt wie die Dev-Abkürzungen im Browser.
 
 import type { Simulation } from '../core';
+import { isBossOfGermany, isBusinessSold, isPlayerTraveling } from '../modules/city';
 import { getRightHand, RIGHT_HAND_RANK_XP } from '../modules/hierarchy';
 import { getSpots } from '../modules/spots';
 import { enlist, generateProfile, getStaff } from '../modules/staff';
 import { addInfluence, factions, PLAYER_FACTION } from '../modules/territory';
 import { allVeedel } from '../modules/veedel';
+import { type BotOptions, type BotStats, DEFAULT_BOT, playFor } from './bot';
 
 /** Alle Veedel einer Stadt gehören dir. */
 export function takeCity(sim: Simulation, cityId: string): void {
@@ -56,4 +58,33 @@ export function rightHandReady(sim: Simulation, cityId = 'koeln'): void {
 export function koelnKomplett(sim: Simulation): void {
   rightHandReady(sim, 'koeln');
   takeCity(sim, 'koeln');
+}
+
+/**
+ * Nach Deutschland (Auftrag 40): Der Bot spielt Köln koelnDays Tage, dann ist Köln komplett (koelnKomplett), danach
+ * spielt er die übrigen Städte in seiner Reihenfolge, bis er Boss von Deutschland ist (höchstens maxDays Tage). Gibt den
+ * Tag zurück, an dem es so weit war (null, wenn nicht).
+ */
+export function playToGermany(
+  sim: Simulation,
+  stats: BotStats,
+  options: BotOptions = DEFAULT_BOT,
+  koelnDays = 25,
+  maxDays = 160,
+): number | null {
+  for (let d = 0; d < koelnDays; d++) playFor(sim, 1440, stats, options);
+  koelnKomplett(sim);
+  for (let d = koelnDays; d < maxDays && !isBossOfGermany(sim.state); d++) {
+    playFor(sim, 1440, stats, { ...options, sellBusiness: false });
+    if (sim.state.outcome.gameOver) return null;
+  }
+  return isBossOfGermany(sim.state) ? Math.floor(sim.state.time / 1440) + 1 : null;
+}
+
+/** Bis der Verkauf durch ist und du in Rotterdam bist (der Bot verkauft, sobald Jansen anruft). */
+export function sellAndArrive(sim: Simulation, stats: BotStats, options: BotOptions = DEFAULT_BOT): boolean {
+  for (let i = 0; i < 6 * 24 && (!isBusinessSold(sim.state) || isPlayerTraveling(sim.state)); i++) {
+    playFor(sim, 60, stats, options);
+  }
+  return isBusinessSold(sim.state) && !isPlayerTraveling(sim.state);
 }

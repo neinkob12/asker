@@ -18,6 +18,16 @@ export const TEST_SAVE_FILES: readonly TestSaveInfo[] = [
     title: 'Köln fast komplett',
     text: '50.000 € Schwarzgeld, 11 von 12 Veedeln, Rechte Hand auf höchster Stufe (Geldwäsche aus). Das zwölfte Veedel fällt gleich nach dem Laden.',
   },
+  {
+    id: 'deutschland',
+    title: 'Boss von Deutschland',
+    text: 'Alle fünf Städte komplett, vom Bot gespielt. In ein paar Stunden ruft Jansen aus Rotterdam an: Verkauf und Hafen.',
+  },
+  {
+    id: 'hafen',
+    title: 'Hafen-Phase',
+    text: 'Verkauft und in Rotterdam angekommen: Jansens Halle, die ersten Bestellungen, die App „Kunden“ im Dock.',
+  },
 ];
 
 /** Lädt einen Test-Spielstand (überschreibt den Autosave). Wirft mit Text für den Spieler. */

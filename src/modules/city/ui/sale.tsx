@@ -116,7 +116,7 @@ function SalePanel() {
     <div class="city-sale">
       <SummaryTiles
         items={[
-          { icon: 'handshake', color: 'money', value: formatEuro(offer.price), label: 'Statthalter zahlen' },
+          { icon: 'handshake', color: 'money', value: formatEuro(offer.price), label: 'Verkauf' },
           { icon: 'anchor', color: 'place', value: formatEuro(offer.rotterdamPrice), label: 'Rotterdam' },
           { icon: 'moneyBag', color: 'dirty', value: formatEuro(offer.rest), label: 'Bleibt dir' },
         ]}

@@ -20,6 +20,8 @@
 // kann (Vorlagen, die zu seinem Spiel passen, Umsatzziele nur bis zu seinem Umsatz der letzten Woche), und bei einer
 // Rabatt-Aktion kauft er das Paket einmal, wenn das Geld über der Reserve reicht und das Lager nicht voll ist.
 //
+// Verkauf und Hafen-Phase (Auftrag 40): botTrade.ts.
+//
 // Liegt außerhalb von src/modules, weil er alle Module zusammen benutzt (wie ein Spieler).
 
 import { type Command, type GameState, messages, type Simulation } from '../core';
@@ -30,6 +32,7 @@ import {
   cityContact,
   freeCities,
   getCity,
+  isBusinessSold,
   isPlayerIn,
   isPlayerTraveling,
   NEXT_CITY,
@@ -116,6 +119,7 @@ import {
 } from '../modules/suppliers';
 import { campaignProgress, controlledBy, PLAYER_FACTION } from '../modules/territory';
 import { allVeedel, neighborsOf } from '../modules/veedel';
+import { sellWhenOffered, tradeTurn } from './botTrade';
 
 export interface BotOptions {
   /** An so vielen Spots ohne Läufer verkauft der Bot selbst (ein Mensch schafft nicht alle gleichzeitig). */
@@ -135,6 +139,8 @@ export interface BotOptions {
    * günstigste zum Anfangen (chooseNextCity).
    */
   cityOrder?: readonly string[];
+  /** Verkauft der Bot das Geschäft, sobald Jansen anruft (Auftrag 40)? Fehlt: ja. */
+  sellBusiness?: boolean;
 }
 
 /**
@@ -889,6 +895,15 @@ const CITY_CONTACTS = new Set(NEXT_CITY.filter((id) => CITY_OFFERS[id]).map((id)
 /** Ein Blick aufs Spiel. */
 export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = DEFAULT_BOT): void {
   if (sim.state.outcome.gameOver) return;
+  // Auftrag 40: Als Boss von Deutschland verkauft er, danach spielt er die Hafen-Phase (botTrade.ts).
+  const command = (c: Command) => run(sim, stats, c);
+  if (options.sellBusiness !== false) sellWhenOffered(sim.state, command);
+  if (isBusinessSold(sim.state)) {
+    handleEncounters(sim, stats);
+    answerMessages(sim, stats, options);
+    if (!isPlayerTraveling(sim.state)) tradeTurn(sim.state, command);
+    return;
+  }
   moveOn(sim, stats, options);
   // Unterwegs zwischen den Städten: nur das Nötigste (Handy, Konfrontationen).
   if (isPlayerTraveling(sim.state)) {

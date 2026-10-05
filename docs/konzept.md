@@ -229,7 +229,17 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   Ware, der Zoll greift öfter zu), Toni zu Hause (schneller und billiger), Geldwäsche nimmt dort anderthalbmal so viel
   auf einmal, Messe und Museumsuferfest. Frankfurt meldet sich nach „<Stadt> komplett“ erst nach den anderen freien
   Städten.
-- **Noch nicht umgesetzt** (Aufträge 40 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen:
+- **Verkauf und Hafen (Auftrag 40):** Sind alle Städte komplett, bist du „Boss von Deutschland“. Jansen ruft an und
+  bietet seinen Hafen in Rotterdam: Das Geschäft wird verkauft (90 Tagesgewinne aller Städte, Schnitt der letzten sieben
+  Tage, mindestens 1 Mio.), Rotterdam kostet rund zwei Drittel davon, der Rest ist das Startkapital. Danach sind die alten
+  Städte Kunden: Die eigenen Organisationen, Gangs und fremde Städte in Deutschland und den Nachbarländern bestellen
+  montags, du nimmst an (ganz oder mit Abschlag), kaufst Container bei Produzenten in Übersee, sie kommen in Rotterdam,
+  Antwerpen oder Hamburg an, und Lkw oder Spedition liefern aus (auch teilweise). Der Zoll hat pro Hafen eigenes Heat,
+  Konkurrenten aus Frankfurt, Hamburg, Berlin und Amsterdam unterbieten dich, und weit herausgezoomt wird die
+  Deutschland-Ansicht zur Europa-Ansicht mit Häfen, Kunden und Wegen. Neue App „Kunden“ im Dock, Jansens Reederei als
+  vierter Weg der Geldwäsche.
+- **Noch nicht umgesetzt** (Aufträge 41 und 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Schiffe und
+  Europa, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen:
   Tarnfirmen, Charakter-Erstellung, Perks, Besitz, Akte, Korruption.
 
 ## Mehrere Städte (Auftrag 30 gebaut, Auftrag 31 für die Karte)

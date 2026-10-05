@@ -287,6 +287,8 @@ export function playerHeat(state: GameState): { veedelId: string; heat: number }
 /** Heißestes Veedel der Stadt, die live ist. */
 export function hottestVeedel(state: GameState): { veedelId: string; heat: number } {
   const veedel = liveVeedel(state);
+  // Ein Ort ohne Veedel (Rotterdam in der Hafen-Phase, Auftrag 40): ruhig.
+  if (veedel.length === 0) return { veedelId: '', heat: 0 };
   let best = { veedelId: veedel[0].id, heat: -1 };
   for (const v of veedel) {
     const heat = getHeat(state, v.id);

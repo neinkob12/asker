@@ -63,7 +63,9 @@ function TravelCard() {
   const progress = travelProgress(state.time, travel.departedAt, travel.arrivesAt);
   return (
     <div class="city-travel" role="status">
-      <span class="hud-label is-city">Unterwegs auf der A1</span>
+      <span class="hud-label is-city">
+        Unterwegs auf der {autobahnRefs(travel.from, travel.to)[0]?.replace(' ', '') ?? 'Autobahn'}
+      </span>
       <span class="city-travel__main">
         <IconChip icon="car" color="place" size="md" />
         <span class="city-travel__text">

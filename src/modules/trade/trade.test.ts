@@ -157,6 +157,29 @@ describe('Hafen-Phase: Bestellungen und Auslieferung', () => {
     expect(openOrders(sim.state)).toHaveLength(0);
   });
 
+  it('Teillieferung: was im Hafen liegt, fährt los; der Rest bleibt offen, bezahlt wird pro Lieferung', () => {
+    const sim = soldGame(12);
+    const order = openOrders(sim.state).find((o) => o.items.length > 1);
+    if (!order) throw new Error('keine Bestellung mit mehreren Waren');
+    sim.dispatch({ type: 'trade.answer', payload: { orderId: order.id, choice: 'accept' } });
+    // Nur die erste Ware liegt im Hafen.
+    const stock = sim.state.modules.trade.stock.rotterdam;
+    for (const id of Object.keys(stock)) delete stock[id];
+    const first = order.items[0];
+    stock[first.productId] = { amount: first.amount, quality: 0.7 };
+    expect(sim.dispatch({ type: 'trade.deliver', payload: { orderId: order.id } }).ok).toBe(true);
+    const after = getOrders(sim.state).find((o) => o.id === order.id);
+    expect(after?.status).toBe('accepted');
+    expect(after?.items.filter((i) => i.state === 'shipped')).toHaveLength(1);
+    expect(sim.dispatch({ type: 'trade.deliver', payload: { orderId: order.id } }).ok).toBe(false);
+    sim.advance(DAY);
+    const paid = getOrders(sim.state).find((o) => o.id === order.id);
+    if (paid?.items[0].state === 'delivered') {
+      expect(paid.revenue).toBe(Math.round(first.amount * first.offer));
+      expect(paid.status).toBe('accepted');
+    }
+  });
+
   it('nicht angenommen: die Bestellung verfällt; montags kommen neue', () => {
     const sim = soldGame(5);
     const events = recordEvents(sim);

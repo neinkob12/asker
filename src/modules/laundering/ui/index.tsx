@@ -86,7 +86,11 @@ function OpenChannel(props: { channel: LaunderingChannel }) {
       color="dirty"
       value={`Gebühr ${formatPercent(fee)}`}
       note={c.how}
-      more={`${c.who} Das Geschäft steht in ${veedelName(c.veedelId)}: Läuft dort zu viel auf einmal, steigt der Heat im Veedel. Kleinster Betrag ${formatEuro(c.minAmount)}, gleichzeitig höchstens ${formatEuro(capacity)}.`}
+      more={
+        c.veedelId
+          ? `${c.who} Das Geschäft steht in ${veedelName(c.veedelId)}: Läuft dort zu viel auf einmal, steigt der Heat im Veedel. Kleinster Betrag ${formatEuro(c.minAmount)}, gleichzeitig höchstens ${formatEuro(capacity)}.`
+          : `${c.who} Kleinster Betrag ${formatEuro(c.minAmount)}, gleichzeitig höchstens ${formatEuro(capacity)}.`
+      }
     >
       <Chips
         class="laundering-facts"
@@ -224,7 +228,7 @@ function LaunderingApp() {
   const batches = getBatches(state);
   const inProgress = amountInProgress(state);
   const open = LAUNDERING_CHANNELS.filter((c) => isChannelUnlocked(state, c.id));
-  const locked = LAUNDERING_CHANNELS.filter((c) => !isChannelUnlocked(state, c.id));
+  const locked = LAUNDERING_CHANNELS.filter((c) => !isChannelUnlocked(state, c.id) && !c.harborOnly);
   return (
     <div class="laundering-app">
       <SummaryTiles

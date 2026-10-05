@@ -63,20 +63,17 @@ function portCard(state: GameState, id: string): { title: string; lines: string[
   const port = harborPorts().find((p) => p.id === id);
   const stock = Object.values(portStock(state, id)).reduce((s, lot) => s + lot.amount, 0);
   const heat = customsHeat(state, id);
-  const lines = owned
-    ? [`Lager ${kg(stock)}`, `Zoll ${customsLevel(heat).label}`]
-    : [`Liegeplatz zu mieten`, port?.country ?? ''];
-  return { title: `Hafen ${port?.name ?? id}`, lines: lines.filter(Boolean), owned };
+  const lines = owned ? [kg(stock), `Zoll ${customsLevel(heat).label}`] : ['zu mieten'];
+  return { title: port?.name ?? id, lines, owned };
 }
 
 function cityCard(state: GameState, id: string): { title: string; lines: string[] } {
   const customer = getCustomer(state, `city:${id}`);
   const city = FOREIGN_CITIES.find((c) => c.id === id);
   if (!customer || !city) return { title: city?.name ?? id, lines: [] };
-  const open = openOrders(state).filter((o) => o.customerId === customer.id).length;
-  const lines = [`Anteil ${Math.round(customer.share * 100)} %`, `Vertrauen ${customer.trust}`];
-  if (open > 0) lines.push('Bestellung offen');
-  return { title: city.name, lines };
+  // Knapp halten: Die Karten stehen dicht (Ruhrgebiet, Rheinland).
+  const open = openOrders(state).some((o) => o.customerId === customer.id);
+  return { title: city.name, lines: [open ? 'Bestellung' : `Anteil ${Math.round(customer.share * 100)} %`] };
 }
 
 function renderCard(element: HTMLElement, title: string, lines: readonly string[]): void {
@@ -131,11 +128,12 @@ export const europeLayer: MapLayer = {
       },
     });
     const cards = new Map<string, Card>();
-    const addCard = (id: string, at: LngLat, onClick: () => void) => {
+    // Fremde Städte hängen unter ihrem Punkt, die alten Städte (city) stehen darüber: weniger Überlappung.
+    const addCard = (id: string, at: LngLat, onClick: () => void, anchor: 'top' | 'bottom' = 'bottom') => {
       const { element } = addHtmlMarker(map, {
         position: at,
         className: 'trade-card',
-        anchor: 'bottom',
+        anchor,
         tag: 'button',
         onClick,
       });
@@ -145,7 +143,9 @@ export const europeLayer: MapLayer = {
     for (const port of harborPorts()) {
       addCard(`port:${port.id}`, { lng: port.lng, lat: port.lat }, () => ctx.ui.openPhone('trade.app'));
     }
-    for (const city of FOREIGN_CITIES) addCard(`city:${city.id}`, city.at, () => ctx.ui.openPhone('trade.app'));
+    for (const city of FOREIGN_CITIES) {
+      addCard(`city:${city.id}`, city.at, () => ctx.ui.openPhone('trade.app'), 'top');
+    }
     let routesKey = '';
     const refresh = (state: GameState) => {
       const active = isTradeActive(state);

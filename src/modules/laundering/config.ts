@@ -12,7 +12,7 @@ export const LAUNDERING_CAPACITY_BY_CITY: Readonly<Record<string, number>> = { f
 /** Kleinster Betrag pro Wäsche (beim billigsten Weg). */
 export const MIN_LAUNDERING_AMOUNT = 100;
 
-export type LaunderingChannelId = 'kiosk' | 'laundromat' | 'construction';
+export type LaunderingChannelId = 'kiosk' | 'laundromat' | 'construction' | 'shipping';
 
 export interface LaunderingChannel {
   id: LaunderingChannelId;
@@ -39,6 +39,8 @@ export interface LaunderingChannel {
   heatAbove: number;
   /** Freischalten: Preis in sauberem oder in Schwarzgeld (eins von beiden), dazu Ruf oder Reviere. */
   unlock: null | { clean: number; dirty: number; reputation?: number; veedel?: number };
+  /** Erst in der Hafen-Phase (Auftrag 40): kommt mit dem Kauf von Rotterdam, vorher unsichtbar. Ohne Veedel. */
+  harborOnly?: boolean;
 }
 
 export const LAUNDERING_CHANNELS: readonly LaunderingChannel[] = [
@@ -89,5 +91,23 @@ export const LAUNDERING_CHANNELS: readonly LaunderingChannel[] = [
     heatPer1000: 2,
     heatAbove: 15000,
     unlock: { clean: 12000, dirty: 20000, reputation: 60, veedel: 2 },
+  },
+  {
+    // Auftrag 40 (plan.md): der vierte Weg mit höheren Obergrenzen, kommt mit Rotterdam.
+    id: 'shipping',
+    name: 'Jansens Reederei',
+    who: 'Jansens Reederei verchartert Schiffe und schreibt Rechnungen, die keiner prüft.',
+    how: 'Sehr große Beträge über Frachtraten und Charter. Niedrige Gebühr, einen Tag Dauer, kein Veedel, kein Heat.',
+    icon: 'ship',
+    veedelId: '',
+    fee: 0.07,
+    minAmount: 10000,
+    capacity: 400000,
+    baseMinutes: 1440,
+    minutesPer100: 0.1,
+    heatPer1000: 0,
+    heatAbove: 0,
+    unlock: null,
+    harborOnly: true,
   },
 ];

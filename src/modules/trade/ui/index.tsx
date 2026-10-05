@@ -51,6 +51,7 @@ import {
   harborPorts,
   isTradeActive,
   maxFactor,
+  openItems,
   openOrders,
   orderItemsText,
   orderValue,
@@ -62,6 +63,7 @@ import {
   pendingDeliveries,
   portFor,
   portStock,
+  shippableItems,
   supplierReputation,
   type TradeOrder,
   tradeStats,
@@ -95,7 +97,7 @@ function missingFor(state: GameState, order: TradeOrder): number {
   if (ports.length === 0) return order.amount;
   return Math.min(
     ...ports.map((id) =>
-      order.items.reduce(
+      openItems(order).reduce(
         (sum, item) => sum + Math.max(0, item.amount - (portStock(state, id)[item.productId]?.amount ?? 0)),
         0,
       ),
@@ -157,7 +159,8 @@ function OrdersView() {
   if (ask && customer && port) {
     const o = ask.order;
     const trip = deliveryEstimate(customer, port);
-    const freight = freightCost(o.amount, trip.km);
+    const grams = shippableItems(state, port, o).reduce((sum, i) => sum + i.amount, 0);
+    const freight = freightCost(grams, trip.km);
     actions.push({
       label: `Spedition (${formatEuro(freight)})`,
       icon: 'truck',
@@ -256,12 +259,14 @@ function OrdersView() {
             const c = getCustomer(state, o.customerId);
             if (!c) return null;
             const missing = missingFor(state, o);
+            const some = portFor(state, o) !== null;
             const late = state.time > o.dueAt;
+            const rest = openItems(o);
             return (
               <ListItem
                 key={o.id}
                 value={formatEuro(orderValue(o))}
-                onClick={missing === 0 ? () => setAsk({ order: o, mode: 'deliver' }) : undefined}
+                onClick={some ? () => setAsk({ order: o, mode: 'deliver' }) : undefined}
               >
                 <ItemContent
                   icon={kindIcon(c.kind)}
@@ -270,8 +275,11 @@ function OrdersView() {
                   tags={[
                     missing === 0
                       ? { label: 'Ware da', color: 'money', icon: 'check' }
-                      : { label: `fehlt ${kg(missing)}`, color: 'danger', icon: 'alert' },
-                    ...itemChips(o.items),
+                      : some
+                        ? { label: 'teilweise da', color: 'warn', icon: 'package' }
+                        : { label: `fehlt ${kg(missing)}`, color: 'danger', icon: 'alert' },
+                    rest.length < o.items.length && { label: 'Rest offen', color: 'place', icon: 'truck' },
+                    ...itemChips(rest),
                     {
                       label: late ? 'zu spät' : `bis ${clock.weekdayName(o.dueAt, true)}`,
                       color: late ? 'danger' : 'warn',
@@ -331,7 +339,7 @@ function OrdersView() {
           ask && customer
             ? ask.mode === 'answer'
               ? `${orderItemsText(ask.order.items)}. Höchstens ${formatEuro(orderValue(ask.order, maxFactor(ask.order)))}.`
-              : `${orderItemsText(ask.order.items)} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.`
+              : `${orderItemsText(port ? shippableItems(state, port, ask.order) : [])} aus ${harborName(port ?? 'rotterdam')}, Zahlung bei Ankunft.`
             : undefined
         }
         actions={actions}

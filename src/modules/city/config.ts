@@ -350,8 +350,12 @@ export const SALE_PROFIT_DAYS = 90;
 export const SALE_AVERAGE_DAYS = 7;
 /** Untergrenze des Verkaufspreises (falls die letzten Tage schlecht liefen, z.B. viele Razzien). */
 export const SALE_PRICE_MIN = 1_000_000;
-/** Rotterdam (Liegeplatz, Halle, Leute und Kunden von Jansen) kostet diesen Anteil des Verkaufspreises. */
-export const ROTTERDAM_SHARE = 0.75;
+/**
+ * Rotterdam (Liegeplatz, Halle, Leute und Kunden von Jansen) kostet diesen Anteil des Verkaufspreises. Mit dem Bot
+ * eingestellt (Auftrag 40): Bei drei Vierteln blieb die erste Woche im Hafen so knapp, dass Bestellungen platzten; mit
+ * 0,65 bleibt etwa ein Monat Tagesgewinn als Startkapital, genug für die ersten Container, nicht für alle Kunden.
+ */
+export const ROTTERDAM_SHARE = 0.65;
 /** So viele Spielminuten nach „Boss von Deutschland“ ruft Jansen an. */
 export const SALE_CALL_DELAY = 6 * 60;
 /** „Noch nicht“: So viele Spieltage später meldet er sich wieder. */

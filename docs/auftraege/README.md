@@ -235,6 +235,12 @@ Gang-Kriegen, in denen man Partei ergreifen kann; Stammabnehmer mit Vertrauen bi
 `hierarchy` (für Auftrag 36: `getCapos`, `isCapo`) und ein Satz Rat im Tagesbericht. Köln komplett im Schnitt Tag 22,65
 (vorher 22,85, 20 Seeds).
 
+**Stand Auftrag 40 (Welle 4):** umgesetzt in sechs Etappen (PR #64). Etappe 0: Würfe für Preisindex, Rabatte und
+Marktereignisse fest pro (Seed, Stadt, Tag, Zweck) (`cityDayDice` im Kern), Balancing über fünf Städte (Startgeld wächst
+mit der Zahl fertiger Städte, Schlafmodus ohne Ausbau und Anwerben). Danach Boss von Deutschland, Verkauf an Jansen,
+Rotterdam als Ausland, neues Modul `trade` (Kunden, Bestellungen, Container, Häfen, Konkurrenz), Zoll-Heat pro Hafen in
+`police`, Europa-Ansicht, Bot und Test-Spielstände `deutschland` und `hafen`.
+
 **Prüf-Loop:** Die Planungs-Session startet jede Welle als eigene Cloud-Sessions (je ein Branch `claude/auftrag-<nr>-…`
 und ein Draft-PR), schaut stündlich nach, prüft fertige PRs gegen ihren Auftrag (Checkliste „Fertig, wenn“, CI, Review
 des Diffs), schickt Änderungswünsche an die Session zurück und meldet dem Spieler, welche PRs bereit zum Mergen sind.

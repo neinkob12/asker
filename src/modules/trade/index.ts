@@ -144,6 +144,8 @@ export interface OrderItem {
   amount: number;
   /** Ihr Angebot pro Gramm. */
   offer: number;
+  /** Teillieferung: unterwegs ('shipped'), angekommen ('delivered') oder nicht mehr geliefert ('missed'). */
+  state?: 'shipped' | 'delivered' | 'missed';
 }
 
 /** Eine Bestellung pro Kunde und Woche, mit allen Waren, die er bei dir kauft. */
@@ -401,6 +403,11 @@ export function orderValue(order: TradeOrder, factor: number = order.factor ?? 1
 /** Waren einer Bestellung als Text, z.B. „11,5 kg Gras, 3 kg Hasch“. */
 export function orderItemsText(items: readonly { productId: string; amount: number }[]): string {
   return items.map((i) => `${formatKg(i.amount)} ${productName(i.productId)}`).join(', ');
+}
+
+/** Waren einer Bestellung, die noch nicht unterwegs oder geliefert sind (Teillieferung). */
+export function openItems(order: TradeOrder): OrderItem[] {
+  return order.items.filter((i) => i.state === undefined);
 }
 
 function formatKg(grams: number): string {
@@ -811,13 +818,25 @@ export function portHas(
   return items.every((i) => (lots[i.productId]?.amount ?? 0) >= i.amount);
 }
 
-/** Hafen mit allem für eine Bestellung, der nächste zuerst (null, wenn keiner alles hat). */
+/** Was von den offenen Waren einer Bestellung in diesem Hafen liegt (ganze Posten). */
+export function shippableItems(state: GameState, portId: string, order: TradeOrder): OrderItem[] {
+  const lots = portStock(state, portId);
+  return openItems(order).filter((i) => (lots[i.productId]?.amount ?? 0) >= i.amount);
+}
+
+/**
+ * Hafen für eine Lieferung: der mit den meisten Gramm der offenen Waren (Teillieferung geht), bei Gleichstand der
+ * nächste. null, wenn nirgends etwas davon ganz liegt.
+ */
 export function portFor(state: GameState, order: TradeOrder): string | null {
   const customer = getCustomer(state, order.customerId);
-  const ports = ownedPorts(state).filter((id) => portHas(state, id, order.items));
-  if (ports.length === 0 || !customer) return null;
+  if (!customer) return null;
+  const grams = (id: string) => shippableItems(state, id, order).reduce((sum, i) => sum + i.amount, 0);
+  const ports = ownedPorts(state).filter((id) => grams(id) > 0);
+  if (ports.length === 0) return null;
   return ports.sort(
-    (a, b) => deliveryEstimate(customer, a).km - deliveryEstimate(customer, b).km || a.localeCompare(b),
+    (a, b) =>
+      grams(b) - grams(a) || deliveryEstimate(customer, a).km - deliveryEstimate(customer, b).km || a.localeCompare(b),
   )[0];
 }
 
@@ -830,19 +849,21 @@ export function deliver(ctx: Ctx, orderId: number, portId?: string, vehicleId?: 
   const customer = s.customers.find((c) => c.id === order.customerId);
   if (!customer) return { ok: false, reason: 'Diesen Kunden gibt es nicht.' };
   const from = portId ?? portFor(ctx.state, order);
-  if (!from || !s.ports.includes(from) || !portHas(ctx.state, from, order.items)) {
-    return { ok: false, reason: `Nicht alles im Hafen: ${orderItemsText(order.items)}.` };
+  const ship = from && s.ports.includes(from) ? shippableItems(ctx.state, from, order) : [];
+  if (!from || ship.length === 0) {
+    return { ok: false, reason: `Nichts davon liegt im Hafen: ${orderItemsText(openItems(order))}.` };
   }
+  const grams = ship.reduce((sum, i) => sum + i.amount, 0);
   const trip = deliveryEstimate(customer, from);
   let vehicle: number | null = null;
   if (vehicleId !== undefined && vehicleId !== null) {
     const v = getVehicle(ctx.state, vehicleId);
     if (!v || v.cityId !== HARBOR_CITY) return { ok: false, reason: 'Dieser Lkw steht nicht in Rotterdam.' };
-    if (vehicleSpec(ctx.state, vehicleId).capacity < order.amount)
+    if (vehicleSpec(ctx.state, vehicleId).capacity < grams)
       return { ok: false, reason: 'Das passt nicht in den Wagen.' };
     vehicle = vehicleId;
   }
-  const freight = vehicle === null ? freightCost(order.amount, trip.km) : 0;
+  const freight = vehicle === null ? freightCost(grams, trip.km) : 0;
   if (freight > 0 && !wallet.canAfford(ctx.state, freight, 'dirty')) {
     return { ok: false, reason: `Die Spedition will ${formatEuro(freight)}.` };
   }
@@ -855,9 +876,10 @@ export function deliver(ctx: Ctx, orderId: number, portId?: string, vehicleId?: 
     });
   }
   const items: DeliveryItem[] = [];
-  for (const item of order.items) {
+  for (const item of ship) {
     const lot = takeStock(ctx, from, item.productId, item.amount);
     items.push({ productId: item.productId, amount: item.amount, quality: lot?.quality ?? START_QUALITY });
+    item.state = 'shipped';
   }
   const factor = vehicle === null ? 1 : vehicleSpec(ctx.state, vehicle).checkFactor;
   const checkChance = Math.min(0.8, (trip.km / 100) * AUTOBAHN_CHECK_PER_100KM * factor);
@@ -867,18 +889,16 @@ export function deliver(ctx: Ctx, orderId: number, portId?: string, vehicleId?: 
     orderId,
     customerId: customer.id,
     items,
-    amount: order.amount,
+    amount: grams,
     portId: from,
     departedAt: ctx.now,
     arrivesAt: ctx.now + trip.minutes,
     vehicleId: vehicle,
     checkAt,
   });
-  order.status = 'delivering';
-  journal.add(
-    ctx,
-    `${orderItemsText(order.items)} unterwegs nach ${customer.name} (${clock.formatDuration(trip.minutes)}).`,
-  );
+  // Ist alles unterwegs, wartet die Bestellung nur noch auf die Ankunft; sonst bleibt der Rest offen.
+  if (openItems(order).length === 0) order.status = 'delivering';
+  journal.add(ctx, `${orderItemsText(items)} unterwegs nach ${customer.name} (${clock.formatDuration(trip.minutes)}).`);
   return { ok: true, data: { deliveryId: id, arrivesAt: ctx.now + trip.minutes } };
 }
 
@@ -1025,6 +1045,20 @@ function onContainerCheck(ctx: Ctx, ref: string | undefined, outcome: string): v
   ctx.emit('trade.containerSeized', { shipmentId: shipment.id, portId: shipment.portId, amount: shipment.amount });
 }
 
+/** Waren einer Lieferung in der Bestellung als angekommen (bzw. verloren) markieren. */
+function markItems(order: TradeOrder, delivery: TradeDelivery, to: OrderItem['state']): void {
+  for (const d of delivery.items) {
+    const item = order.items.find((i) => i.productId === d.productId && i.state === 'shipped');
+    if (item) item.state = to;
+  }
+}
+
+/** Ist nichts mehr offen oder unterwegs, ist die Bestellung erledigt (geliefert, wenn etwas ankam). */
+function closeIfDone(order: TradeOrder): void {
+  if (order.items.some((i) => i.state === undefined || i.state === 'shipped')) return;
+  order.status = order.items.some((i) => i.state === 'delivered') ? 'delivered' : 'failed';
+}
+
 /** Lieferung angekommen: Zahlung, Vertrauen, Ruf. Bei Gangs kann der Deal kippen. */
 function deliveryArrives(ctx: Ctx, delivery: TradeDelivery): void {
   const s = ctx.state.modules.trade;
@@ -1036,6 +1070,8 @@ function deliveryArrives(ctx: Ctx, delivery: TradeDelivery): void {
   const late = ctx.now > order.dueAt;
   if (customer.kind === 'gang' && ctx.chance(GANG_TIP_CHANCE * (1 - customer.trust / 100))) {
     // Der Deal kippt: Die Gang nimmt die Ware und zahlt nicht.
+    markItems(order, delivery, 'missed');
+    for (const item of order.items) if (item.state === undefined) item.state = 'missed';
     order.status = 'failed';
     s.stats.tipped += 1;
     addTrust(customer, -10);
@@ -1043,10 +1079,17 @@ function deliveryArrives(ctx: Ctx, delivery: TradeDelivery): void {
     ctx.emit('trade.dealTipped', { orderId: order.id, customerId: customer.id, amount: delivery.amount });
     return;
   }
-  const revenue = Math.round(orderValue(order) * (late ? LATE_PRICE_FACTOR : 1));
+  const factor = (order.factor ?? 1) * (late ? LATE_PRICE_FACTOR : 1);
+  const revenue = Math.round(
+    delivery.items.reduce((sum, d) => {
+      const item = order.items.find((i) => i.productId === d.productId);
+      return sum + d.amount * (item?.offer ?? 0);
+    }, 0) * factor,
+  );
   wallet.earn(ctx, revenue, 'dirty', `Lieferung an ${customer.name}`, { category: 'sales.trade', cityId: HARBOR_CITY });
-  order.status = 'delivered';
-  order.revenue = revenue;
+  markItems(order, delivery, 'delivered');
+  order.revenue = (order.revenue ?? 0) + revenue;
+  closeIfDone(order);
   customer.delivered += 1;
   s.stats.revenue += revenue;
   s.stats.delivered += 1;
@@ -1066,10 +1109,10 @@ function deliveryArrives(ctx: Ctx, delivery: TradeDelivery): void {
   if (customer.kind === 'gang' && customer.gangId) remember(ctx, customer.gangId, 'deal');
   journal.add(
     ctx,
-    `${customer.name} hat ${orderItemsText(order.items)} bekommen: ${formatEuro(revenue)}${late ? ' (zu spät)' : ''}.`,
+    `${customer.name} hat ${orderItemsText(delivery.items)} bekommen: ${formatEuro(revenue)}${late ? ' (zu spät)' : ''}.`,
     late ? 'info' : 'good',
   );
-  ctx.emit('trade.delivered', { orderId: order.id, customerId: customer.id, amount: order.amount, revenue, late });
+  ctx.emit('trade.delivered', { orderId: order.id, customerId: customer.id, amount: delivery.amount, revenue, late });
 }
 
 function ema(old: number, value: number): number {
@@ -1092,7 +1135,14 @@ function deliveryCheck(ctx: Ctx, delivery: TradeDelivery): void {
     maybeSeize(ctx, delivery.vehicleId);
   }
   s.stats.deliveriesSeized += 1;
-  if (order) order.status = 'accepted';
+  if (order) {
+    // Die Waren sind wieder offen: Wer noch Ware hat, kann bis zur Frist neu liefern.
+    for (const d of delivery.items) {
+      const item = order.items.find((i) => i.productId === d.productId && i.state === 'shipped');
+      if (item) item.state = undefined;
+    }
+    if (order.status === 'delivering') order.status = 'accepted';
+  }
   journal.add(
     ctx,
     `Zollkontrolle auf der Autobahn: ${orderItemsText(delivery.items)} beschlagnahmt. Die Bestellung wartet noch.`,
@@ -1104,7 +1154,13 @@ function deliveryCheck(ctx: Ctx, delivery: TradeDelivery): void {
 function failOrder(ctx: Ctx, order: TradeOrder, reason: 'expired' | 'late'): void {
   const s = ctx.state.modules.trade;
   const customer = s.customers.find((c) => c.id === order.customerId);
-  order.status = reason === 'expired' ? 'expired' : 'failed';
+  if (reason === 'expired') order.status = 'expired';
+  else {
+    // Was nicht unterwegs ist, kommt nicht mehr; was schon ankam, bleibt bezahlt.
+    for (const item of order.items) if (item.state === undefined) item.state = 'missed';
+    closeIfDone(order);
+    if (order.status === 'accepted') order.status = 'delivering';
+  }
   if (customer) {
     addTrust(customer, reason === 'expired' ? TRUST.expired : TRUST.failed);
     if (reason === 'late') customer.failed += 1;

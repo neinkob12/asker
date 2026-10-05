@@ -43,7 +43,26 @@ const TARGETS = [
   { kind: 'phone', id: 'goods.app' },
   { kind: 'panel', id: 'goods.warehouse', params: { warehouseId: 'ehrenfeld' } },
   { kind: 'panel', id: 'goods.flow' },
+  // Auftrag 40: Verkauf (Boss von Deutschland, Jansen hat angerufen) und die App „Kunden“ der Hafen-Phase.
+  { kind: 'panel', id: 'city.sale', extra: 'germany' },
+  { kind: 'phone', id: 'trade.app', extra: 'sold' },
 ];
+
+/** Zusätzliche Ausgangslagen (Auftrag 40), nach SETUP. */
+const EXTRA = {
+  germany: `(() => {
+    window.koeln.dev.deutschlandKomplett();
+    window.koeln.session.sim.state.modules.city.sale = { status: 'calling', callAt: null, sold: null };
+    window.koeln.runtime.api.closeDialog();
+  })()`,
+  sold: `(() => {
+    const sim = window.koeln.session.sim;
+    window.koeln.dev.verkaufen();
+    while (sim.state.modules.city.travel) sim.advance(30);
+    sim.state.wallet.dirty += 300000;
+    window.koeln.runtime.api.closeDialog();
+  })()`,
+};
 const wanted = args.apps ? args.apps.split(',') : TARGETS.map((t) => t.id);
 
 /** Kleiner deterministischer Zufall (mulberry32). */
@@ -222,6 +241,7 @@ try {
         if (/Failed to load resource|tile|net::ERR|WebGL|maplibre|font/i.test(text)) return;
         note(`log:${text}`, `[${where}] Konsole: ${text.split('\n')[0].slice(0, 200)}`);
       });
+      const extra = target.extra;
       const enter = async (target) => {
         // Frisch ins Spiel (auch nach einem Neuladen, das selbst noch einmal nachlädt): ein paar Versuche.
         for (let attempt = 0; attempt < 4; attempt++) {
@@ -230,6 +250,7 @@ try {
             await target.waitForSelector('.shell-map', { timeout: 20000 });
             await target.waitForTimeout(1500);
             await target.evaluate(SETUP);
+            if (extra) await target.evaluate(EXTRA[extra]);
             return;
           } catch (error) {
             if (attempt === 3) throw error;
