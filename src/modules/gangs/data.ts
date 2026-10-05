@@ -271,7 +271,7 @@ export const GANGS: readonly Gang[] = [
     homeVeedelId: 'bahnhofsviertel',
     boss: 'Dragan Ilić, genannt „der Schaffner“',
     crew: 'Leute vom Kaisersack',
-    emblem: '🚉',
+    emblem: 'route',
     style:
       'Hält das Bahnhofsviertel von der Kaiserstraße bis zur Münchener. Was am Hauptbahnhof ankommt, geht durch ihre Hände.',
     strengths: ['viele Leute', 'Straßengeschäft'],
@@ -349,7 +349,7 @@ export const GANGS: readonly Gang[] = [
     homeVeedelId: 'hoechst',
     boss: 'Erkan Doğan, genannt „Chemie“',
     crew: 'Leute der Farbwerker',
-    emblem: '⚗',
+    emblem: 'flask',
     style:
       'Aus den Blocks hinter dem Industriepark, mit Cousins in der Cargo City. Was am Flughafen vom Band fällt, landet bei ihnen.',
     strengths: ['brutal', 'Leute am Flughafen'],

@@ -218,7 +218,7 @@ export const CITIES: readonly CityDef[] = [
     name: 'Frankfurt',
     center: { lng: 8.682, lat: 50.11 },
     // Blick nach Norden über den Main: Museumsufer vorn, Bahnhofsviertel, Innenstadt und die Türme dahinter.
-    view: { center: { lng: 8.672, lat: 50.106 }, zoom: 13.1, mobileZoom: 12.0, pitch: 50, bearing: -10 },
+    view: { center: { lng: 8.674, lat: 50.112 }, zoom: 13.1, mobileZoom: 12.2, pitch: 50, bearing: -10 },
     bounds: [8.51, 50.015, 8.75, 50.145],
     roadsNetworkId: 'frankfurt',
     portId: null,

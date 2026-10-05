@@ -190,6 +190,14 @@ Stadt“. Für Auftrag 34: Das Startpaket nimmt bis dahin einen Leutnant ab Leve
 Quest-Kapitel der Städte stehen schon; die Enden ihrer Autobahn-Linien in `build-roads.py` (`AUTOBAHNEN`) auf Punkte im
 neuen Straßennetz legen und `--autobahn all` neu bauen.
 
+**Stand Auftrag 39:** Frankfurt ist spielbar (PR #62): zwölf Stadtteile aus Overture, Straßennetz mit Zufahrten,
+31 Spots, fünf Lager, vier Gangs mit Stimmen, Stammabnehmer, Messe, Museumsuferfest und Eintracht, Wahrzeichen. Der
+Dreh als Daten: Banker-Kundschaft, Bahnhofsviertel als Brennpunkt, Kofi mit Luftfracht und scharfem Zoll
+(`Supplier.customs`, Weg `'air'`), Toni zu Hause, mehr Geldwäsche (`LAUNDERING_CAPACITY_BY_CITY`). Kleine allgemeine
+Erweiterungen: `CityDef.offerLast` (Frankfurt ruft nicht vor Hamburg an), `check-roads` ohne Hafen, Marktindex würfelt
+nur für freie Städte (neue Städte verschieben die Kölner Würfelfolge nicht mehr). Die Autobahn-Enden am Frankfurter
+Kreuz lagen schon im neuen Netz, `autobahn.ts` blieb. Screenshots in `docs/integration/auftrag-39/`.
+
 `src/core/`, `scripts/`, `package.json` und die Doku-Dateien gehören in den Wellen niemandem fest: nur erweitern, beim
 Mergen beide Seiten behalten. `CLAUDE.md`, `docs/architektur.md` und `docs/konzept.md` ergänzt jede Session in ihrem
 eigenen Abschnitt.

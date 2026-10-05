@@ -118,7 +118,7 @@ Wer eine Entscheidung ändert, ändert sie hier.
   - Gedämpft und übersichtlich ("Nachtschicht"): Grau- und Schieferflächen, runde Straßen, wenig Details,
     3D-Gebäude in Grautönen mit Schatten, Wahrzeichen (Dom, Hohenzollernbrücke, Colonius, Kranhäuser,
     KölnTriangle; in Hamburg Elbphilharmonie, Michel, Heinrich-Hertz-Turm, Köhlbrandbrücke, Landungsbrücken,
-    Elbbrücken) als schlichte Klötze. Vier Tageszeiten, nachts fast schwarz mit bernsteinfarben glühenden
+    Elbbrücken; in Frankfurt Commerzbank Tower, Main Tower, Messeturm, EZB, Römer) als schlichte Klötze. Vier Tageszeiten, nachts fast schwarz mit bernsteinfarben glühenden
     Hauptstraßen. Farbe tragen nur Reviere (feine Grenzen, schwach getönt), Spots und Gangs.
   - Das Überwachungs-Overlay (Scanlines, Koordinaten) gibt es noch als Schalter, standardmäßig aus.
 - **Kamera:** 3D schräg als Standard, per Knopf auf 2D-Draufsicht umschaltbar.
@@ -218,8 +218,13 @@ reicht, auf der Karte die Ebene „Lieferwege“, welcher Spot aus welchem Lager
   Zielstadt, Hamburg 45.000 €). Ränge des Spielers ohne
   Boni: Kleindealer, Händler, Großhändler, Boss von Köln, Boss von <Stadt>, Boss von Deutschland (ab vier Städten; dann Importeur und
   Produzent), mit Banner, im HUD und in der Bestenliste. Peter hat ein Kapitel pro Stadt.
-- **Noch nicht umgesetzt** (Aufträge 37 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Inhalt von
-  Berlin, München, Frankfurt, Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen:
+- **Frankfurt (Auftrag 39, optional):** spielbar mit zwölf Stadtteilen, Geld und Flughafen als Dreh: viele Banker an
+  den Spots, das Bahnhofsviertel mit der meisten Nachfrage und Polizei, Kofi am Flughafen (klein, schnell, teuer, beste
+  Ware, der Zoll greift öfter zu), Toni zu Hause (schneller und billiger), Geldwäsche nimmt dort anderthalbmal so viel
+  auf einmal, Messe und Museumsuferfest. Frankfurt meldet sich nach „<Stadt> komplett“ erst nach den anderen freien
+  Städten. Der Bot ist als dritte Stadt nach 6 bis 14 Tagen komplett.
+- **Noch nicht umgesetzt** (Aufträge 37, 38, 40 bis 42, siehe `docs/auftraege/README.md` und `docs/plan.md`): Inhalt von
+  Berlin, München, Verkauf und Hafen-Phase, Produktion im Ausland, KI-Porträts, Multiplayer. Verworfen:
   Tarnfirmen, Charakter-Erstellung, Perks, Besitz, Akte, Korruption.
 
 ## Mehrere Städte (Auftrag 30 gebaut, Auftrag 31 für die Karte)

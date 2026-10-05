@@ -91,6 +91,22 @@ export const PRELUDE = `
     run('customers.standAt', { spotId: 'hans-albers-platz' });
     sim.advance(60);
   };
+  /** Frankfurt (Auftrag 39): frei, aktiv, du bist dort; Keller im Bahnhofsviertel, Spots dort und am Main, Läufer, Ware. */
+  const frankfurt = async () => {
+    const goods = await import('/src/modules/goods/index.ts');
+    rich();
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'frankfurt' } }, { actor: 'system' });
+    run('city.switch', { cityId: 'frankfurt' });
+    state().modules.city.present = 'frankfurt';
+    run('goods.buyWarehouse', { warehouseId: 'keller-bahnhofsviertel' });
+    goods.store(sim.ctx('goods'), { productId: 'weed', amount: 800, warehouseId: 'keller-bahnhofsviertel', quality: 0.8 });
+    for (const id of ['kaiserstrasse', 'taunusstrasse', 'hauptwache', 'alt-sachsenhausen', 'museumsufer']) {
+      run('spots.unlock', { spotId: id });
+    }
+    run('staff.hireRunner', { spotId: 'kaiserstrasse' });
+    run('customers.standAt', { spotId: 'taunusstrasse' });
+    sim.advance(60);
+  };
 `;
 
 /** Tageszeiten: Spielminuten ab Start (Tag 1, Freitag 18:00). */
@@ -250,6 +266,17 @@ export const SCENES = [
   {
     name: 'hamburg-nacht',
     js: `sim.advance(${TIMES.nacht}); await hamburg(); render();`,
+    wait: 4500,
+  },
+  // Auftrag 39: Frankfurt bei Tag und Nacht.
+  {
+    name: 'frankfurt-tag',
+    js: `await frankfurt(); sim.advance(${TIMES.tag} - 60); render();`,
+    wait: 4500,
+  },
+  {
+    name: 'frankfurt-nacht',
+    js: `await frankfurt(); sim.advance(${TIMES.nacht} - 60); render();`,
     wait: 4500,
   },
   // Auftrag 31: Events auf der Karte. Die Uhr springt direkt auf den Event-Tag (nur für das Bild).
