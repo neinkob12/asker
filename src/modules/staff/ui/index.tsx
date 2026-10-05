@@ -175,7 +175,9 @@ function StaffOverview() {
   const current = everyone.filter((m) => m.cityId === city);
   const elsewhere = everyone.filter((m) => m.cityId !== city);
   const absent = current.filter(isAbsent);
-  const former = [...getStaff(state, { status: 'quit' }), ...getStaff(state, { status: 'dead' })];
+  const former = [...getStaff(state, { status: 'quit' }), ...getStaff(state, { status: 'dead' })].filter(
+    (m) => !isFarmRole(m.role),
+  );
   const group = ROLE_GROUPS.find((g) => g.id === filter);
   // Aufbau: Wer nicht im Baum steht (Leutnants, Rechte Hand, an Spots) und nicht ausfällt.
   const free = current.filter((m) => m.status === 'active' && !m.assignment && !isSpecialist(m.role));

@@ -116,6 +116,22 @@ describe('Produktion: Auslöser (Auftrag 42, Etappe 1)', () => {
     expect(sim.dispatch({ type: 'grow.openRegion', payload: { regionId: 'atlantis' } }).ok).toBe(false);
   });
 
+  it('wer das Angebot in der Kunden-App annimmt, bekommt keinen Rückruf mehr mit demselben Angebot', () => {
+    const sim = soldGame();
+    const events = recordEvents(sim);
+    readyForCalls(sim);
+    // Anruf aus Kolumbien verpassen: Esteban will später noch einmal anrufen.
+    sim.advance(3 * 60);
+    expect(sim.state.messages.calls.retries.some((r) => r.call.contact.id === 'grow:kolumbien')).toBe(true);
+    expect(sim.dispatch({ type: 'grow.openRegion', payload: { regionId: 'kolumbien' } }).ok).toBe(true);
+    expect(sim.state.messages.calls.retries.some((r) => r.call.contact.id === 'grow:kolumbien')).toBe(false);
+    const rings = () =>
+      eventsOfType(events, 'call.ringing').filter((e) => e.payload.contactId === 'grow:kolumbien').length;
+    const before = rings();
+    sim.advance(DAY);
+    expect(rings()).toBe(before);
+  });
+
   it('Cartagena hat einen Seeweg über den Atlantik: gut zwei Wochen bis Rotterdam, Tanger eine', () => {
     const cartagena = shippingMinutes('own-kolumbien', 'rotterdam');
     const tanger = shippingMinutes('own-marokko', 'rotterdam');

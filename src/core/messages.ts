@@ -347,6 +347,21 @@ export const messages = {
     return ring(ctx, call, 1, ctx.moduleId);
   },
 
+  /**
+   * Anrufe einer Figur beenden (Auftrag 42): Es klingelt nicht mehr, geplante Rückrufe fallen weg. Für Angebote, die
+   * der Spieler inzwischen anders angenommen hat (z.B. per Knopf in einer App). Die Nachricht bleibt im Chat.
+   */
+  cancelCalls(ctx: Ctx, contactId: string): void {
+    const calls = ctx.state.messages.calls;
+    for (const id of [...calls.ringing]) {
+      const message = messages.get(ctx.state, id);
+      if (message?.contactId !== contactId) continue;
+      if (message.call) message.call.state = 'declined';
+      stopRinging(ctx.state, id);
+    }
+    calls.retries = calls.retries.filter((r) => r.call.contact.id !== contactId);
+  },
+
   /** Klingelt gerade ein Anruf? (der älteste zuerst) */
   ringingCalls(state: GameState): Message[] {
     const ids = state.messages.calls?.ringing ?? [];
