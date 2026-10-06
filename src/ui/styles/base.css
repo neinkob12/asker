@@ -2,6 +2,12 @@
   box-sizing: border-box;
 }
 
+/* Das hidden-Attribut versteckt immer, auch wenn eine Klasse display setzt (Auftrag 43, M1: Karten-Marker). */
+[hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: hidden muss jede display-Regel einer Klasse schlagen */
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;

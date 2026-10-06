@@ -185,6 +185,7 @@ export {
   rightHandDetour,
   rightHandDriver,
   rightHandHandlesOrders,
+  rightHandMissing,
   rightHandOffered,
   rightHandOrderLimit,
   rightHandRank,

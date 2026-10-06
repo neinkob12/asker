@@ -65,6 +65,9 @@ export function HudSegments(props: { total: number; filled: number; label: strin
   );
 }
 
+/** Ab so vielen Buchstaben gilt ein Wort im Wert als lang (kleinere Schrift in schmalen Kacheln). */
+const LONG_WORD = 11;
+
 /**
  * Kennzahl: kleine Beschriftung, großer Wert. placement 'main' steht in der HUD-Leiste, 'more' als Kachel auf dem
  * Startbildschirm des Handys und (Look "Glas") als Kachel oben rechts über der Karte. Die Beschriftung trägt dort die
@@ -72,12 +75,16 @@ export function HudSegments(props: { total: number; filled: number; label: strin
  */
 export function HudPill(props: HudPillProps) {
   const style = { '--hud-tint': `var(--cat-${categoryOf(props.color ?? 'brand')})` } as JSX.CSSProperties;
+  // Ein langes Wort („Hafengeburtstag“) bekommt auf dem Handy eine kleinere Schrift statt „Hafengeburtst…“ (Auftrag 43).
+  const longWord = typeof props.value === 'string' && props.value.split(/\s+/).some((word) => word.length > LONG_WORD);
   const inner = (
     <>
       <IconChip icon={props.icon} color={props.color ?? 'yellow'} size="sm" class="hud-pill__chip" />
       <span class="hud-pill__text">
         <span class="hud-pill__label">{props.label}</span>
-        <span class={`hud-pill__value ${props.tone ? `is-${props.tone}` : ''}`}>{props.value}</span>
+        <span class={`hud-pill__value ${props.tone ? `is-${props.tone}` : ''} ${longWord ? 'is-long-word' : ''}`}>
+          {props.value}
+        </span>
       </span>
       {props.children}
     </>

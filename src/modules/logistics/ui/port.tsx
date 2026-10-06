@@ -20,7 +20,13 @@ import {
 import { activeCity } from '../../city';
 import { formatProductAmount, productName } from '../../goods';
 import { shipRoute } from '../../roads';
-import { expectedArrival, getSupplier, type Shipment, shipmentProgress, shipmentsInTransit } from '../../suppliers';
+import {
+  expectedArrival,
+  type Shipment,
+  shipmentProgress,
+  shipmentSupplier,
+  shipmentsInTransit,
+} from '../../suppliers';
 import { BERTH_LEVELS, berthLevel, berthUpgradeCost, hasBerth, PORTS, portName } from '../index';
 
 /** Liegeplatz ausbauen: Stufe, Wirkung und Preis der nächsten, Kauf mit Rückfrage. */
@@ -119,7 +125,7 @@ function ShipTracker() {
       <List>
         {ships.map((s) => {
           const at = shipPosition(state, s);
-          const supplier = getSupplier(state, s.supplierId);
+          const supplier = shipmentSupplier(state, s);
           return (
             <ListItem
               key={s.id}

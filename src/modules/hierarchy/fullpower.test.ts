@@ -78,7 +78,7 @@ describe('Vollmacht der Rechten Hand (Auftrag 30)', () => {
     withRightHand(sim, false);
     const missing = fullPowerMissing(sim.state);
     expect(missing.some((m) => m.includes('Stufe'))).toBe(true);
-    expect(missing.some((m) => m.includes('Aufgaben sind aus'))).toBe(true);
+    expect(missing.some((m) => /Aufgaben? aus: /.test(m))).toBe(true);
     expect(missing.some((m) => m.includes('Veedeln'))).toBe(true);
     const refused = sim.dispatch({ type: 'hierarchy.grantFullPower', payload: {} });
     expect(refused.ok).toBe(false);
@@ -128,6 +128,12 @@ describe('Vollmacht der Rechten Hand (Auftrag 30)', () => {
     sim.advance(9 * 60);
     const report = messages.thread(sim.state, `staff:${boss.id}`).find((m) => m.text.startsWith('Bericht aus Köln'));
     expect(report).toBeDefined();
+    // Ihr Anteil vom Vortag zählt im Bericht nicht als Kosten (Auftrag 43, M4).
+    const lossDay = dayReport(sim.state, 1);
+    expect(lossDay.rows.find((r) => r.category === 'share.righthand')?.amount).toBe(-amount);
+    const last = getRightHand(sim.state)?.lastReport;
+    expect(last?.costs).toBe(lossDay.expenses + lossDay.losses - amount);
+    expect(last?.profit).toBe(lossDay.profit + amount);
   });
 
   it('Nachschub: mit Vollmacht bestellt sie von jeder Ware kiloweise, nicht Kleinkram', () => {

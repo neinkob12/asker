@@ -29,7 +29,7 @@ export const STAFF_TEXTS = {
   /** Warnung vor einer Großrazzia. */
   majorRaidWarning: [
     'Großes Ding: Die Kripo plant für {time} eine Großrazzia, auch in {veedel}. Zieh die Leute dort vorher ab.',
-    'Die machen ernst: {time}, mehrere Veedel auf einmal, {veedel} ist dabei. Hol deine Leute runter.',
+    'Die machen ernst: {time}, mehrere Viertel auf einmal, {veedel} ist dabei. Hol deine Leute runter.',
     'Das kommt von ganz oben: Großrazzia, {time}, unter anderem {veedel}. Ich kann dir nicht mehr helfen als das.',
     'Hundertschaften für {time}. {veedel} steht auf der Liste. Wenn du da wen hast: weg damit.',
     'Ich riskier hier meinen Job: Großrazzia {time}, auch {veedel}. Mach sauber.',

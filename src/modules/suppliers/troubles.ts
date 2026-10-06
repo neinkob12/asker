@@ -39,10 +39,10 @@ import {
 } from './config';
 import {
   contactOf,
-  getSupplier,
   type Shipment,
   type Supplier,
   shipmentHere,
+  shipmentSupplier,
   supplierIn,
   supplierVia,
   tell,
@@ -109,7 +109,7 @@ function goodsOf(s: Pick<Shipment, 'productId' | 'amount'>): string {
 /** Grund eines Lieferproblems als kurzer Text (z.B. "Stau auf der A3"), null ohne bekannten Grund. */
 export function shipmentReason(state: GameState, s: Shipment): string | null {
   if (!s.route || !s.reasonId) return null;
-  const supplier = getSupplier(state, s.supplierId);
+  const supplier = shipmentSupplier(state, s);
   if (!supplier) return null;
   const kind: ProblemKind =
     s.problem === 'seized' || s.decision?.kind === 'seize' || s.choice === 'bribe'
@@ -259,7 +259,7 @@ export function resolveProblem(ctx: Ctx, shipmentId: number, choice: ProblemChoi
   const d = s?.decision;
   if (!s || !d) return { ok: false, reason: 'Diese Lieferung braucht keine Entscheidung.' };
   if (!d.choices.includes(choice)) return { ok: false, reason: 'Das geht bei dieser Lieferung nicht.' };
-  const supplier = getSupplier(ctx.state, s.supplierId);
+  const supplier = shipmentSupplier(ctx.state, s);
   if (!supplier) return { ok: false, reason: 'Unbekannter Lieferant.' };
   const cityId = s.cityId ?? 'koeln';
   if (choice === 'detour' || choice === 'bribe') {

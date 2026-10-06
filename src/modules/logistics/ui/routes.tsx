@@ -34,6 +34,7 @@ import {
   productName,
   unitWeight,
   warehouseCity,
+  warehouseFree,
 } from '../../goods';
 import { getStaff, getStaffMember, STATUS_NAMES } from '../../staff';
 import {
@@ -105,6 +106,9 @@ function loadText(route: Route): string {
   return parts.length === 0 ? 'leer hin' : parts.length <= 2 ? parts.join(', ') : `${parts.length} Waren`;
 }
 
+/** Weniger frei als das: Das Ziellager gilt als voll. */
+const TARGET_FULL_GRAMS = 50;
+
 function RouteGroup(props: { route: Route; onEdit: () => void }) {
   const { state, dispatch } = useGame();
   const { route } = props;
@@ -126,6 +130,9 @@ function RouteGroup(props: { route: Route; onEdit: () => void }) {
   if (fromCity !== toCity) chips.push({ label: 'über die A1', icon: 'route', color: 'place' });
   if (route.roundTrip) chips.push({ label: 'mit Rückfahrt', icon: 'refresh', color: 'goods' });
   if (last) chips.push({ label: last.label, color: last.color, icon: 'clock' });
+  // Ziellager voll: Die Route fährt leer hin (Auftrag 43, M6).
+  if (warehouseFree(state, route.toId) < TARGET_FULL_GRAMS)
+    chips.push({ label: 'Ziellager voll', icon: 'warehouse', color: 'warn' });
   return (
     <Group
       icon="route"
@@ -389,7 +396,16 @@ function RouteSheet(props: { open: boolean; routeId: number | null; onClose: () 
               </ItemContent>
             </ListItem>
             <ListItem>
-              <ItemContent icon="warehouse" color="goods" title="Nach">
+              <ItemContent
+                icon="warehouse"
+                color="goods"
+                title="Nach"
+                meta={
+                  draft.toId && warehouseFree(state, draft.toId) < TARGET_FULL_GRAMS
+                    ? 'voll, die Route fährt dann leer'
+                    : undefined
+                }
+              >
                 <Select
                   wide
                   label="Ziellager"

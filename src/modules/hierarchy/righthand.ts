@@ -164,6 +164,16 @@ export function rightHandRankProgress(state: GameState, cityId: string = activeC
  * braucht die höchste Stufe und alle Aufgaben an, und alle Veedel der Stadt müssen dir gehören.
  */
 export function fullPowerMissing(state: GameState, cityId = 'koeln'): string[] {
+  const missing = rightHandMissing(state, cityId);
+  const progress = campaignProgress(state, cityId);
+  if (progress.controlled < progress.total) {
+    missing.push(`Du hältst ${progress.controlled} von ${progress.total} Veedeln, es müssen alle sein.`);
+  }
+  return missing;
+}
+
+/** Der Teil von fullPowerMissing, den du bei der Rechten Hand erledigst (Stufe, Aufgaben; Auftrag 43, M7). */
+export function rightHandMissing(state: GameState, cityId = 'koeln'): string[] {
   const missing: string[] = [];
   const rh = activeRightHand(state, cityId);
   if (!rh) {
@@ -180,11 +190,10 @@ export function fullPowerMissing(state: GameState, cityId = 'koeln'): string[] {
     if (rank < RIGHT_HAND_MAX_RANK)
       missing.push(`${name} ist auf Stufe ${rank}, sie braucht Stufe ${RIGHT_HAND_MAX_RANK}.`);
     const off = RIGHT_HAND_TASKS.filter((t) => !rh.settings[t.key]).map((t) => t.name);
-    if (off.length > 0) missing.push(`Diese Aufgaben sind aus: ${off.join(', ')}.`);
-  }
-  const progress = campaignProgress(state, cityId);
-  if (progress.controlled < progress.total) {
-    missing.push(`Du hältst ${progress.controlled} von ${progress.total} Veedeln, es müssen alle sein.`);
+    if (off.length > 0)
+      missing.push(
+        `Bei ${name} ${off.length === 1 ? 'ist eine Aufgabe' : 'sind Aufgaben'} aus: ${off.join(', ')}. Schalt sie auf ihrer Seite an.`,
+      );
   }
   return missing;
 }
@@ -641,13 +650,16 @@ function rightHandTurn(ctx: Ctx, cityId: string): void {
  */
 export function buildReport(state: GameState, cityId: string = activeCity(state)): DailyReport {
   const yesterday = cityReport(state, cityId, 1, 1);
+  // Der Anteil des Statthalters ist keine Ausgabe des Geschäfts: Er steht im Bericht für sich, sonst zählte der Anteil
+  // vom Vortag als Kosten und neben „Mein Anteil“ stand eine zweite Zahl (Auftrag 43, M4).
+  const ownShare = -(yesterday.rows.find((r) => r.category === 'share.righthand')?.amount ?? 0);
   // Die Lohnreichweite gilt für die Stadt, in der du spielst (Auftrag 43: in den Berichten anderer Städte stand sonst
   // die Reserve der aktiven Stadt).
   const runway = cityId === activeCity(state) ? wageRunway(state) : { due: 0, days: null, warn: false };
   const advice: string[] = [];
-  if (yesterday.profit < 0) {
+  if (yesterday.profit + ownShare < 0) {
     const biggest = yesterday.rows
-      .filter((r) => r.group === 'expense' || r.group === 'loss')
+      .filter((r) => (r.group === 'expense' || r.group === 'loss') && r.category !== 'share.righthand')
       .sort((a, b) => a.amount - b.amount)[0];
     if (biggest) advice.push(`Gestern Minus, größter Posten: ${biggest.label} (${formatEuro(-biggest.amount)}).`);
   }
@@ -678,8 +690,8 @@ export function buildReport(state: GameState, cityId: string = activeCity(state)
     ...(done ? { done } : {}),
     day: yesterday.from,
     revenue: yesterday.income,
-    costs: yesterday.expenses + yesterday.losses,
-    profit: yesterday.profit,
+    costs: yesterday.expenses + yesterday.losses - ownShare,
+    profit: yesterday.profit + ownShare,
     cash: Math.round(state.wallet.dirty),
     runwayDays: runway.days,
     advice: advice.slice(0, 3),

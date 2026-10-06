@@ -406,6 +406,37 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   einen guten, Musiktitel „Sonnendeck Deutz“ in Berlin.
   Erledigt: Geldwäsche nennt das Frankfurter 1,5-Fache; der Rat „Ersten Spot freischalten“ nimmt den Spot mit dem meisten Andrang, der höchstens die Hälfte des Geldes kostet. Der Musiktitel bleibt (Musik gilt für alle Städte).
 
+## M Prüfer „Hamburg im Detail“ (Sonnet-Agent, `ankunft-hamburg`, `boss-von-hamburg`, `hamburg-komplett`, 06.10.2026)
+
+- [x] M1 Karten-Elemente mit `hidden` bleiben sichtbar: `.trade-card`, `.city-card` (und Regionen in grow) setzen
+  `display:flex`; leere Glas-Pillen auf jedem Hafen-Marker, Stadtkarte bleibt nach der Deutschland-Ansicht stehen.
+  Erledigt: Global `[hidden] { display: none !important }` in `src/ui/styles/base.css`; damit sind alle Karten-Marker mit `hidden` aus (Hafen-Pillen, Stadtkarten, Regionen).
+- [x] M2 Daans Hafenware in Hamburg fährt auf der Karte als Transporter über Land, Etikett „Schiff auf dem Rhein“,
+  „Lieferung live“ fehlt auf See (Lieferant ohne Stadt gelesen).
+  Erledigt: `shipmentSupplier(state, shipment)` in suppliers (Lieferant, wie er in der Stadt der Lieferung auftritt) für Karte, Insel, Tracker, Hafen-Seite und Lieferprobleme; Fluss pro Hafen (`PortConfig.river`, `portRiver`): „Schiff auf der Elbe“.
+- [x] M3 Hamburg-Anleitung schickt für Container zu Hein (Knopf „Zu Hein“), Container verkauft aber Daan; Fiete und
+  die Quest nennen Toni.
+  Erledigt: Hafen-Seite, leerer Kai und Rat nennen den Lieferanten, der per Schiff an den Kai liefert (aus den Daten: Daan in Hamburg, Jansen in Köln), Knopf „Zu Daan“; Fiete und die Quest nennen Hein für kleine Mengen.
+- [x] M4 Statthalter-Bericht: „Jeden Morgen kriegst du den Bericht“ stimmt nicht (nur bei Verlust); Anteil steht
+  doppelt verschieden und zählt in die Kosten; am Übergabetag 80 % vom ganzen Tag.
+  Erledigt: Der Bericht rechnet ihren Anteil nicht in die Kosten (Gewinn und „Mein Anteil“ passen zusammen), am Übergabetag zählt nur der Teil des Tages nach der Übergabe; Zusage: „Den Bericht findest du jeden Morgen auf meiner Seite, und wenn was schiefläuft, schreib ich dir.“ Test.
+- [x] M5 „Nicht alles passte in …“ alle zwei Stunden, Mengen als „Einheiten“ statt Gramm.
+  Erledigt: Rest am Kai nach Ware („600 g Gras stehen noch am Kai“), Nachricht und Banner nur in deiner Stadt und höchstens alle zwölf Stunden (`LEFT_BEHIND_NOTE_MINUTES`), Ankunft und volles Lager in Gramm; Test.
+- [x] M6 Route fährt „leer hin“, ohne zu sagen, dass das Ziellager voll ist.
+  Erledigt: Notiz und Journal sagen, warum („leer hin, Rückfracht holen (Lager Ehrenfeld voll)“, `planLoad` gibt `limitedBy`), Routen zeigen den Chip „Ziellager voll“, der Editor warnt beim Ziel.
+- [x] M7 Fietes „Haus in Ordnung bringen“: „Was mir fehlt: – Diese Aufgaben sind aus: Geldwäsche.“ ohne Weg zur Lösung.
+  Erledigt: „Was noch fehlt, bevor du kommen kannst“, Zeile „Bei <Name> ist eine Aufgabe aus: Geldwäsche. Schalt sie auf ihrer Seite an.“, Knopf „Rechte Hand ansehen“, wenn dort etwas fehlt (`rightHandMissing`).
+- [x] M8 Kleinigkeiten: Heins „Kaufen“ ohne Lager erst mit Banner; „Selbst abholen“ am Kai einer anderen Stadt; „hol
+  sie“-Warnung, obwohl du nicht dort bist.
+  Erledigt: Ohne Lager in der Stadt sind „Kaufen“ und „Kredit“ aus, mit Hinweis und Knopf „Lager kaufen“; „Selbst abholen“ (Hafen-Seite, Lieferung live) fragt dieselbe Regel wie der Befehl (`playerBusy`, auch „nicht in der Stadt“).
+- [x] M9 „Veedel“ in Hamburger Figurenrede.
+  Erledigt: Gang-Erinnerungen und die Razzia-Warnungen sagen „Viertel“; die Kölner Gang-Stimmen behalten ihr „Veedel“.
+- [x] M10 Reihenfolge bei Köln komplett (Dialog vor „Veedel übernommen“), Bestenliste doppelt erwähnt im Test-Stand.
+  Erledigt: Macht eine Übernahme die Stadt komplett, kommt nur „<Stadt> komplett“ (kein zweiter Dialog danach); im Test-Spielstand nur ein Hinweis zur Bestenliste. Der Anruf hinter dem Dialog bleibt (der Dialog hält das Spiel an, der Anruf klingelt danach weiter).
+- [x] M11 Handy: HUD-Kacheln abgeschnitten („Boss von Ham…“), Kopf „HAMBURGER HAFEN, SCHUPPEN 52 A…“, Fahrtkarte
+  unter dem Menü-Knopf.
+  Erledigt: HUD-Kacheln auf dem Handy brechen zwischen Wörtern auf zwei Zeilen um, ein langes Wort wird kleiner; Hafen-Kopf nur mit dem Namen, der Kai steht in der Erklärung; die Fahrtkarte sitzt über dem Dock neben den Karten-Knöpfen.
+
 ## Neue Funde
 
 - [x] N0 (Spieler, 05.10.2026) „Man kann im Hafen in Rotterdam keine Ware bestellen, es steht sogar, dass es keinen

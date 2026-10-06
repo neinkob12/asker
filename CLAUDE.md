@@ -125,6 +125,9 @@ dem Verkauf führen alte Hafen-Seite und Lieferanten-App in die App Handel, Apps
 zeitweise verschwinden, das HUD zeigt Zoll und Ruf als Lieferant. Beim Verkauf schaltet `city` sofort auf Rotterdam
 (die alte Stadt ist schon während der Fahrt nicht mehr live) und legt die alten Chats ab (`messages.archive`, Liste
 „Frühere Städte“); Slots können mit `hiddenWhen` verschwinden; Bestand der Häfen verteilt `trade.deliveryReadiness`.
+Liste M (Hamburg): Lieferungen lesen ihren Lieferanten mit `shipmentSupplier` (so, wie er in ihrer Stadt auftritt),
+Fluss pro Hafen `portRiver`; `[hidden]` versteckt global (auch Marker mit `display:flex`); `rightHandMissing` ist der
+Teil von `fullPowerMissing` bei der Rechten Hand; der Anteil des Statthalters zählt im Bericht nicht als Kosten.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

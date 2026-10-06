@@ -167,7 +167,7 @@ function rankIcon(rank: number): { icon: string; color: 'brand' | 'system' | 'go
 }
 
 /** Liste mit Laden, Fehler und eigenem Platz. */
-function BoardView(props: { limit?: number; submitFirst?: boolean }) {
+function BoardView(props: { limit?: number; submitFirst?: boolean; quietFail?: boolean }) {
   const { state } = useGame();
   const runId = state.meta.runId;
   const [board, setBoard] = useState<Board | null>(null);
@@ -187,7 +187,7 @@ function BoardView(props: { limit?: number; submitFirst?: boolean }) {
     };
   }, [runId]);
 
-  if (failed) return <Hint>Die Bestenliste ist gerade nicht erreichbar.</Hint>;
+  if (failed) return props.quietFail ? null : <Hint>Die Bestenliste ist gerade nicht erreichbar.</Hint>;
   if (!board) return <p class="lb__loading">Bestenliste lädt …</p>;
   if (board.entries.length === 0) return <Hint>Noch niemand drin. Du bist der Erste.</Hint>;
   const entries = board.entries.slice(0, props.limit ?? board.entries.length);
@@ -222,7 +222,8 @@ function EndingBoard() {
     <div class="lb-ending">
       <h3 class="lb-ending__title">Bestenliste</h3>
       {state.meta.scenario && <Hint>Test-Spielstand: Dieses Ergebnis kommt nicht in die Bestenliste.</Hint>}
-      <BoardView limit={10} submitFirst />
+      {/* Test-Spielstand: keine zweite Meldung über eine nicht erreichbare Liste (Auftrag 43, M10). */}
+      <BoardView limit={10} submitFirst quietFail={!!state.meta.scenario} />
     </div>
   );
 }

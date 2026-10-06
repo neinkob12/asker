@@ -183,7 +183,7 @@ export function planLoad(
   items: readonly RouteItem[],
   fillTo: readonly RouteFill[] = [],
   capacity = INTERCITY_CAPACITY,
-): { load: RouteItem[]; wanted: number; missing: string[] } {
+): { load: RouteItem[]; wanted: number; missing: string[]; limitedBy: 'warehouse' | 'vehicle' | null } {
   const want = new Map<string, number>();
   for (const i of items) want.set(i.productId, (want.get(i.productId) ?? 0) + i.amount);
   for (const f of fillTo) {
@@ -193,21 +193,31 @@ export function planLoad(
   }
   const load: RouteItem[] = [];
   const missing: string[] = [];
-  const limit = Math.min(capacity, roomFor(state, toId));
+  const space = roomFor(state, toId);
+  const limit = Math.min(capacity, space);
   let weight = 0;
   let wanted = 0;
+  // Hat der Platz (Ziellager oder Wagen) etwas abgeschnitten? Für „leer hin (Lager voll)“ (Auftrag 43, M6).
+  let cut = false;
   for (const [productId, amount] of want) {
     wanted += amount;
     const have = getStock(state, { warehouseId: fromId, productId });
     const per = unitWeight(productId);
     const room = Math.floor((limit - weight) / per);
+    if (room < Math.min(amount, have)) cut = true;
     const take = Math.max(0, Math.min(amount, have, room));
     if (have < amount) missing.push(productName(productId));
     if (take <= 0) continue;
     load.push({ productId, amount: take });
     weight += take * per;
   }
-  return { load, wanted, missing };
+  const limitedBy = cut ? (space < capacity ? 'warehouse' : 'vehicle') : null;
+  return { load, wanted, missing, limitedBy };
+}
+
+/** Erster Buchstabe groß („Im Lager Ehrenfeld …“). */
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /** Vorschau für die Oberfläche: was die Route jetzt laden würde. */
@@ -446,10 +456,10 @@ export function departRoute(ctx: Ctx, routeId: number, why: 'schedule' | 'now'):
   if (plan.load.length === 0 && !needsTour) {
     const reason =
       plan.wanted === 0
-        ? `Im ${to.name} liegt genug.`
+        ? `${capitalize(warehousePlace(to.name, 'in'))} liegt genug.`
         : plan.missing.length === 0
-          ? `Im ${to.name} ist kein Platz.`
-          : `Im ${from.name} fehlt die Ware (${plan.missing.join(', ')}).`;
+          ? `${capitalize(warehousePlace(to.name, 'in'))} ist kein Platz.`
+          : `${capitalize(warehousePlace(from.name, 'in'))} fehlt die Ware (${plan.missing.join(', ')}).`;
     return skip(ctx, route, reason, why);
   }
   const driverId = route.driverId as string;
@@ -471,8 +481,11 @@ export function departRoute(ctx: Ctx, routeId: number, why: 'schedule' | 'now'):
   });
   const loaded = tripAmount(trip);
   const partial = plan.missing.length > 0 && loaded < plan.wanted;
+  const limit = plan.limitedBy === 'warehouse' ? `${to.name} voll` : plan.limitedBy === 'vehicle' ? 'Wagen voll' : null;
   const note =
-    items.length === 0 ? 'leer hin, Rückfracht holen' : itemsText(items) + (partial ? ' (nicht alles da)' : '');
+    items.length === 0
+      ? `leer hin, Rückfracht holen${limit ? ` (${limit})` : ''}`
+      : itemsText(items) + (partial ? ' (nicht alles da)' : limit ? ` (${limit})` : '');
   route.last = { at: ctx.now, result: 'started', note };
   route.runs += 1;
   const interCity = warehouseCity(from.id) !== warehouseCity(to.id);
@@ -481,7 +494,8 @@ export function departRoute(ctx: Ctx, routeId: number, why: 'schedule' | 'now'):
     ctx,
     `Route ${routeName(state, route)}: ${driver} fährt mit ${items.length ? itemsText(items) : 'leerem Wagen'} los, ` +
       `Ankunft in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}` +
-      (partial ? ` Im ${from.name} fehlte etwas.` : ''),
+      (partial ? ` ${capitalize(warehousePlace(from.name, 'in'))} fehlte etwas.` : '') +
+      (plan.limitedBy === 'warehouse' ? ` ${capitalize(warehousePlace(to.name, 'in'))} ist kein Platz mehr.` : ''),
     partial ? 'bad' : 'info',
   );
   ctx.emit('route.departed', { routeId: route.id, tripId: trip.id, amount: loaded, interCity });

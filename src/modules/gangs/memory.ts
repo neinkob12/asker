@@ -46,9 +46,9 @@ export const MEMORY_TEXTS: Record<MemoryKind, readonly string[]> = {
     'Einmal hast du uns abgewehrt. Einmal.',
   ],
   takeover: [
-    'Das Veedel, das du uns abgenommen hast, holen wir uns wieder.',
+    'Das Viertel, das du uns abgenommen hast, holen wir uns wieder.',
     'Du sitzt auf unserem Pflaster. Noch.',
-    'Wir haben nicht vergessen, wem das Veedel mal gehört hat.',
+    'Wir haben nicht vergessen, wem das Viertel mal gehört hat.',
   ],
   threatened: [
     'Du hast uns gedroht. Schlechte Idee.',

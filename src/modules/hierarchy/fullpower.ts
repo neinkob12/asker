@@ -140,7 +140,7 @@ export function grantFullPower(ctx: Ctx, cityId: string, meta: CommandMeta): Com
   );
   messages.send(ctx, {
     contact: staffContact(m),
-    text: `${cityLabel(cityId)} ist bei mir in guten Händen. Jeden Morgen kriegst du den Bericht, und jeden Tag mein Anteil, wenn was übrig ist. Du kannst jederzeit zurückkommen.`,
+    text: `${cityLabel(cityId)} ist bei mir in guten Händen. Den Bericht findest du jeden Morgen auf meiner Seite, und wenn was schiefläuft, schreib ich dir. Jeden Tag nehm ich meinen Anteil, wenn was übrig ist. Du kannst jederzeit zurückkommen.`,
     silent: true,
   });
   ctx.emit('hierarchy.fullPowerGranted', { staffId: m.id, cityId });
@@ -190,7 +190,10 @@ export function payShare(ctx: Ctx, rh: RightHandPost, member: StaffMember): void
     // Nur ihre Stadt (Auftrag 30): eigenes Geschäft, im Schlafmodus das Tagesergebnis (income.city).
     const report = cityReport(ctx.state, fp.cityId, 1, today - day);
     const ownShare = report.rows.find((r) => r.category === 'share.righthand')?.amount ?? 0;
-    const profit = report.profit - ownShare;
+    // Am Tag der Übergabe zählt nur der Teil des Tages nach der Übergabe (Auftrag 43, M4: sonst nahm sie 80 % vom
+    // ganzen Tag, auch von den Stunden, in denen du die Stadt noch selbst geführt hast).
+    const part = day === clock.day(fp.since) ? 1 - clock.dayProgress(fp.since) : 1;
+    const profit = Math.round((report.profit - ownShare) * part);
     fp.paidDay = day;
     if (profit <= 0) {
       note(ctx, rh, `Tag ${day}: kein Gewinn, kein Anteil.`);

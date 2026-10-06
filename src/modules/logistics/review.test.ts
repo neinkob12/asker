@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { clock, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { storageStats, store, warehouseFree } from '../goods';
+import { storageStats, store, take, warehouseFree } from '../goods';
 import { NIGHT_START } from './config';
 import { effectiveChoice, getTrips, receiveCargo } from './index';
 
@@ -108,7 +108,27 @@ describe('logistics: Review Auftrag 33', () => {
     store(sim.ctx('test'), { productId: 'hash', amount: warehouseFree(sim.state, 'ehrenfeld') - 300 });
     expect(sim.dispatch({ type: 'logistics.pickup', payload: { by: 'player' } }).ok).toBe(true);
     sim.step();
-    expect(eventsOfType(events, 'cargo.leftBehind')[0].payload).toMatchObject({ amount: 600, reason: 'warehouse' });
-    expect(sim.state.messages.list.at(-1)?.text).toContain('600 Einheiten stehen noch am Kai');
+    expect(eventsOfType(events, 'cargo.leftBehind')[0].payload).toMatchObject({
+      amount: 600,
+      reason: 'warehouse',
+      items: [{ productId: 'weed', amount: 600 }],
+      notify: true,
+    });
+    expect(sim.state.messages.list.at(-1)?.text).toContain('600 g Gras stehen noch am Kai');
+    // Ein zweiter Rest kurz danach: nur Journal, keine zweite Nachricht (Auftrag 43, M5).
+    const before = sim.state.messages.list.length;
+    receiveCargo(sim.ctx('suppliers'), {
+      supplierId: 'rotterdam',
+      productId: 'weed',
+      amount: 900,
+      quality: 0.6,
+      unitCost: 2,
+    });
+    sim.advance(120);
+    take(sim.ctx('test'), { productId: 'hash', amount: 100, warehouseId: 'ehrenfeld' });
+    expect(sim.dispatch({ type: 'logistics.pickup', payload: { by: 'player' } }).ok).toBe(true);
+    sim.step();
+    expect(eventsOfType(events, 'cargo.leftBehind').at(-1)?.payload.notify).toBe(false);
+    expect(sim.state.messages.list.slice(before).some((m) => m.text.startsWith('Nicht alles passte'))).toBe(false);
   });
 });

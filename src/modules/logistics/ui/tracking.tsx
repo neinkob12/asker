@@ -1,5 +1,5 @@
 // Lieferung live (Look "Glas"): unten links über der Kartenfläche eine Tracking-Karte, solange eine Schiffslieferung
-// läuft, Ware am Kai steht oder eine Abholung unterwegs ist. Status als Zeile, darunter der Weg Rhein → Kai → Lager
+// läuft, Ware am Kai steht oder eine Abholung unterwegs ist. Status als Zeile, darunter der Weg Fluss → Kai → Lager
 // in zwei Teilen; am Kai der Gold-Knopf "Fahrer schicken" (logistics.pickup). Die Live-Aktivität in der Island bleibt,
 // die Karte ist die Ansicht am Desktop (am Handy-Bildschirm entfällt sie).
 
@@ -7,7 +7,14 @@ import { formatPercent, type GameState } from '../../../core';
 import { Icon, islandCountdown, registerSlot, useGame, useIsMobile } from '../../../ui';
 import { activeCity } from '../../city';
 import { formatProductAmount, productName, warehousePlace } from '../../goods';
-import { getSupplier, type Shipment, shipmentProgress, shipmentsInTransit } from '../../suppliers';
+import {
+  getSupplier,
+  type Shipment,
+  shipmentCity,
+  shipmentProgress,
+  shipmentSupplier,
+  shipmentsInTransit,
+} from '../../suppliers';
 import {
   cargoRisk,
   cargoRiskFrom,
@@ -16,6 +23,8 @@ import {
   getTrips,
   PORT_ID,
   placeOf,
+  playerBusy,
+  portRiver,
   type Trip,
   tripAmount,
   tripProgress,
@@ -28,7 +37,7 @@ interface Tracking {
   stage: Stage;
   title: string;
   status: string;
-  /** Rhein (0–1) und Straße ins Lager (0–1). */
+  /** Fluss (0–1) und Straße ins Lager (0–1). */
   sea: number;
   road: number;
   tone: 'info' | 'warn' | 'bad';
@@ -37,11 +46,11 @@ interface Tracking {
 
 function shipTracking(state: GameState, shipment: Shipment): Tracking {
   const progress = shipmentProgress(state, shipment);
-  const supplier = getSupplier(state, shipment.supplierId);
+  const supplier = shipmentSupplier(state, shipment);
   return {
     stage: 'sea',
     title: `${formatProductAmount(shipment.productId, shipment.amount)} ${productName(shipment.productId)} · ${supplier?.name ?? 'Lieferant'}`,
-    status: `Schiff auf dem Rhein · ${formatPercent(progress)}`,
+    status: `Schiff ${portRiver(shipmentCity(shipment)).on} · ${formatPercent(progress)}`,
     sea: progress,
     road: 0,
     tone: shipment.problem === 'delayed' && shipment.problemRevealed ? 'warn' : 'info',
@@ -73,7 +82,7 @@ function roadTracking(state: GameState, trip: Trip): Tracking {
   };
 }
 
-/** Was die Karte zeigt: die am weitesten fortgeschrittene Hafenlieferung (Straße vor Kai vor Rhein). */
+/** Was die Karte zeigt: die am weitesten fortgeschrittene Hafenlieferung (Straße vor Kai vor Fluss). */
 function currentTracking(state: GameState): Tracking | null {
   // Nur die Stadt, in der du spielst (Auftrag 43): Schiffe für eine andere Stadt sind Sache ihres Statthalters.
   const here = activeCity(state);
@@ -81,7 +90,7 @@ function currentTracking(state: GameState): Tracking | null {
     (t) => t.kind === 'pickup' && t.fromId === PORT_ID && t.status !== 'planned' && tripTouchesCity(state, t, here),
   );
   const cargo = getCargo(state, here);
-  const ships = shipmentsInTransit(state, here).filter((s) => getSupplier(state, s.supplierId)?.kind === 'port');
+  const ships = shipmentsInTransit(state, here).filter((s) => shipmentSupplier(state, s)?.kind === 'port');
   const total = pickups.length + cargo.length + ships.length;
   let tracking: Tracking | null = null;
   if (pickups.length > 0) tracking = roadTracking(state, pickups[0]);
@@ -113,6 +122,8 @@ function TrackingCard() {
   const tracking = mobile ? null : currentTracking(state);
   if (!tracking) return null;
   const drivers = freeDrivers(state).length;
+  // Selbst abholen nur, wenn du hier bist und frei (Auftrag 43, M8).
+  const busy = playerBusy(state, activeCity(state));
   return (
     <section class={`logi-track is-${tracking.stage} is-${tracking.tone}`} aria-label="Lieferung live">
       <header class="logi-track__head">
@@ -135,7 +146,7 @@ function TrackingCard() {
         </span>
       </div>
       <div class="logi-track__legend" aria-hidden="true">
-        <span>Rhein</span>
+        <span>{portRiver(activeCity(state)).name}</span>
         <span>Kai</span>
         <span>Lager</span>
       </div>
@@ -143,6 +154,8 @@ function TrackingCard() {
         <button
           type="button"
           class="logi-track__action"
+          disabled={drivers === 0 && !!busy}
+          title={drivers === 0 ? (busy ?? undefined) : undefined}
           onClick={() =>
             dispatch({ type: 'logistics.pickup', payload: drivers > 0 ? { by: 'driver' } : { by: 'player' } })
           }

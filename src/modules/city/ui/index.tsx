@@ -45,6 +45,7 @@ import {
   isBusinessSold,
   nextCityMissing,
   type OfferStatus,
+  OPEN_RIGHT_HAND,
   offerFrom,
   offerStatus,
   PLAYER_RANKS,
@@ -430,3 +431,8 @@ onGameEvent('player.rankUp', 'city.rankUp', (payload, ui) =>
   ui.toast(`Neuer Rang: ${payload.title}`, 'good', { urgent: true, icon: 'crown' }),
 );
 soundOnEvent('player.rankUp', 'win');
+
+// „Rechte Hand ansehen“ unter der Liste, was vor dem Umzug fehlt (Auftrag 43, M7).
+onGameEvent('message.answered', 'city.openRightHand', (payload, ui) => {
+  if (payload.source === 'city' && payload.optionId === OPEN_RIGHT_HAND) ui.openPanel('hierarchy.rightHand', {});
+});
