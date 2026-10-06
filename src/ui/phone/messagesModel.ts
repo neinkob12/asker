@@ -95,6 +95,8 @@ export interface ChatListItem {
   deadline?: number;
   /** Verbleibende Spielminuten bis zur Frist (nur mit deadline). */
   deadlineIn?: number;
+  /** Abgelegt (messages.archive): steht eingeklappt am Ende der Liste. */
+  archived?: boolean;
 }
 
 export interface ChatGroup {
@@ -111,7 +113,7 @@ export interface ChatGroup {
 export function groupChats(list: readonly ChatListItem[]): ChatGroup[] {
   const groups: ChatGroup[] = [];
   for (const kind of CONTACT_KIND_ORDER) {
-    const items = list.filter((c) => c.kind === kind);
+    const items = list.filter((c) => c.kind === kind && !c.archived);
     if (items.length === 0) continue;
     groups.push({
       kind,
@@ -190,13 +192,14 @@ function computeChatList(state: GameState): ChatListItem[] {
       item.deadline = Math.min(...deadlines);
       item.deadlineIn = item.deadline - state.time;
     }
+    if (open.length === 0 && messages.isArchived(state, thread.last.id)) item.archived = true;
     return item;
   });
 }
 
 /** Die zuletzt aktiven Kontakte (höchstens `limit`) für die Reihe oben in der Liste, neueste zuerst. */
 export function recentContacts(list: readonly ChatListItem[], limit = 5): ChatListItem[] {
-  return list.slice(0, limit);
+  return list.filter((c) => !c.archived).slice(0, limit);
 }
 
 /**

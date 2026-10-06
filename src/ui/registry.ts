@@ -92,6 +92,8 @@ export interface SlotContribution<N extends SlotName = SlotName> {
   /** Symbol und Bedeutungsfarbe des Beitrags, z.B. für den Abschnittskopf in den Einstellungen. */
   icon?: string;
   color?: string;
+  /** Zeitweise ausblenden (z.B. ein Abschnitt der Einstellungen, der nach dem Verkauf nicht mehr gilt). */
+  hiddenWhen?: (state: GameState) => boolean;
 }
 
 export interface PanelDefinition<K extends PanelId = PanelId> {

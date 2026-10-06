@@ -467,6 +467,7 @@ function FinanceApp() {
   // Ein Filter auf etwas, das es nicht mehr gibt (gelöschter Spot), fällt auf ganz Köln zurück.
   const current = options.some((o) => o.value === encoded) ? filter : ALL_FILTER;
   const report = reportOf(state, period, current);
+  const sold = isBusinessSold(state);
   return (
     <div class="fin-app">
       <SummaryTiles
@@ -490,22 +491,27 @@ function FinanceApp() {
         <Disclosure label="Was zählt hier?">
           Für ein Veedel, einen Spot oder einen Leutnant zeigt die Bilanz den Straßenverkauf dort, den Einkaufspreis der
           verkauften Ware, die Löhne der Leute vor Ort und einmalige Kosten (Anheuern, Freischalten). Schutzgeld,
-          Gebühren und Verluste bucht die Kasse nur für ganz Köln.
+          Gebühren und Verluste bucht die Kasse nur für die ganze Stadt.
         </Disclosure>
       )}
       <ProfitAndLoss report={report} period={period} filter={current} />
       <History period={period} filter={current} />
-      <PerSpot
-        period={period}
-        filter={current}
-        onPick={(f) => setFilter(f.kind === current.kind && encodeFilter(f) === encoded ? ALL_FILTER : f)}
-      />
-      <PerLieutenant
-        period={period}
-        filter={current}
-        onPick={(f) => setFilter(encodeFilter(f) === encoded ? ALL_FILTER : f)}
-      />
-      <Runway />
+      {/* Nach dem Verkauf (Auftrag 43, H8) gehören Spots, Leutnants und Löhne den Statthaltern. */}
+      {!sold && (
+        <PerSpot
+          period={period}
+          filter={current}
+          onPick={(f) => setFilter(f.kind === current.kind && encodeFilter(f) === encoded ? ALL_FILTER : f)}
+        />
+      )}
+      {!sold && (
+        <PerLieutenant
+          period={period}
+          filter={current}
+          onPick={(f) => setFilter(encodeFilter(f) === encoded ? ALL_FILTER : f)}
+        />
+      )}
+      {!sold && <Runway />}
       <Slot name="finance.app" />
     </div>
   );

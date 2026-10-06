@@ -1089,8 +1089,9 @@ kbd {
   .has-floating-island .hud-tiles {
     margin-top: var(--island-gap);
   }
-  /* Höchstens drei Kacheln pro Reihe (Auftrag 43: fünf in einer Reihe schnitten Rang, Event und Ruf ab) */
-  .hud-tiles .hud-pill-wrap {
+  /* Höchstens drei Kacheln pro Reihe (Auftrag 43: fünf in einer Reihe schnitten Rang, Event und Ruf ab). Für jedes Kind,
+     auch Kacheln ohne Karte (ohne .hud-pill-wrap), sonst stand jede davon über die ganze Breite (H13). */
+  .hud-tiles > * {
     flex: 1 1 calc((100% - 2 * var(--space-2)) / 3);
     min-width: 0;
   }

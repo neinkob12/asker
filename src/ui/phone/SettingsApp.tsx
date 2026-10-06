@@ -23,7 +23,7 @@ import {
   Tag,
   Toggle,
 } from '../components';
-import { useRuntime, useUi } from '../hooks';
+import { useGameSelector, useRuntime, useUi } from '../hooks';
 import { slotContributions } from '../registry';
 import { useAudio } from '../useAudio';
 import { top } from './navModel';
@@ -176,23 +176,32 @@ function Player() {
 
 /** Abschnitte der Module (Slot 'core.settings'): jeder mit eigenem Kopf aus Titel, Symbol und Farbe des Beitrags. */
 function ModuleSections() {
+  const all = slotContributions('core.settings');
+  const hidden = useGameSelector((state) =>
+    all
+      .filter((item) => item.hiddenWhen?.(state))
+      .map((item) => item.id)
+      .join(','),
+  );
   return (
     <>
-      {slotContributions('core.settings').map((item) => {
-        const Component = item.component as unknown as () => JSX.Element | null;
-        return (
-          <Section
-            key={item.id}
-            icon={item.icon ?? 'sliders'}
-            color={item.color && isChipColor(item.color) ? item.color : 'system'}
-            title={item.title ?? 'Weitere'}
-          >
-            <ErrorBoundary name={item.id}>
-              <Component />
-            </ErrorBoundary>
-          </Section>
-        );
-      })}
+      {all
+        .filter((item) => hidden === '' || !hidden.split(',').includes(item.id))
+        .map((item) => {
+          const Component = item.component as unknown as () => JSX.Element | null;
+          return (
+            <Section
+              key={item.id}
+              icon={item.icon ?? 'sliders'}
+              color={item.color && isChipColor(item.color) ? item.color : 'system'}
+              title={item.title ?? 'Weitere'}
+            >
+              <ErrorBoundary name={item.id}>
+                <Component />
+              </ErrorBoundary>
+            </Section>
+          );
+        })}
     </>
   );
 }

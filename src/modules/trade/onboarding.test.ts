@@ -4,7 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import { messages, type Simulation } from '../../core';
 import { createTestGame } from '../../core/testing';
-import { jansenContact, playableCities, presentCity } from '../city';
+import { activeCity, cityTravel, isCityLive, jansenContact, liveVeedel, playableCities, presentCity } from '../city';
+import { activeEncounters } from '../encounters';
 import { currentQuest, QUESTS } from '../quests';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
@@ -84,6 +85,30 @@ describe('Einführung in die Hafen-Phase (Auftrag 43)', () => {
     // Jansens Verkaufsanruf ruft nach dem Verkauf nicht noch einmal an.
     const again = sim.state.messages.list.filter((m) => m.time > soldAt && m.text.includes('Ich ruf nochmal an'));
     expect(again).toEqual([]);
+  });
+
+  it('während der Fahrt nach Rotterdam läuft die alte Stadt nicht mehr live (H3)', () => {
+    const sim = quietGame(3);
+    const ctx = sim.ctx('test');
+    for (const city of playableCities()) {
+      if (city.id !== 'koeln') sim.dispatch({ type: 'city.unlock', payload: { cityId: city.id } }, { actor: 'system' });
+      for (const v of allVeedel(city.id)) {
+        for (const f of factions(sim.state)) if (f !== PLAYER_FACTION) addInfluence(ctx, v.id, f, -100);
+        addInfluence(ctx, v.id, PLAYER_FACTION, 100);
+      }
+    }
+    sim.advance(60);
+    sim.state.modules.city.sale = { status: 'calling', callAt: null, sold: null };
+    expect(sim.dispatch({ type: 'city.sell', payload: {} }).ok).toBe(true);
+    expect(cityTravel(sim.state)?.to).toBe('rotterdam');
+    expect(activeCity(sim.state)).toBe('rotterdam');
+    expect(isCityLive(sim.state, 'koeln')).toBe(false);
+    expect(liveVeedel(sim.state)).toEqual([]);
+    while (cityTravel(sim.state)) {
+      sim.advance(30);
+      expect(activeEncounters(sim.state)).toEqual([]);
+    }
+    expect(presentCity(sim.state)).toBe('rotterdam');
   });
 
   it('kein Kunde hat zwei offene Bestellungen, auch wenn der erste Montag gleich nach der Ankunft kommt', () => {

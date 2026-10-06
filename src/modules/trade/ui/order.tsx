@@ -46,6 +46,7 @@ import {
   ownedPorts,
   ownOrigin,
   ownShips,
+  portRoom,
   type ShipVoyage,
   shippingMinutes,
   stockWithIncoming,
@@ -138,6 +139,22 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
   const risk = containerRisk(state, producer.id, size, target, cover, vesselId, stock[productId]?.pack ?? 1);
   const minutes = plan ? plan.minutes : shippingMinutes(producer.id, target);
   const fits = vesselId === null || n * container.grams <= capacity;
+  const arrives = state.time + minutes;
+  const grams = n * container.grams;
+  // Frist (Auftrag 43, H4): Bestellungen mit dieser Ware, die vor der Ankunft fällig sind.
+  const tooLate = getOrders(state)
+    .filter((o) => (o.status === 'open' || o.status === 'accepted') && o.dueAt < arrives)
+    .filter((o) => o.items.some((i) => i.productId === productId && i.state === undefined));
+  const firstDue = tooLate.length > 0 ? Math.min(...tooLate.map((o) => o.dueAt)) : null;
+  // Platz (H7): was noch in die Halle passt, wenn alles ankommt, was schon unterwegs ist oder am Kai wartet.
+  const incoming = getShipments(state)
+    .filter((x) => x.portId === target)
+    .reduce((sum, x) => sum + x.amount, 0);
+  const room = Math.max(0, portRoom(state, target) - incoming);
+  const missingDirty = Math.ceil(total - state.wallet.dirty);
+  // Mindestmenge (H7): Wer nur ein paar Kilo braucht, kauft trotzdem eine ganze Kiste.
+  const short = Math.max(0, needed - have);
+  const leftover = short > 0 ? grams - short : 0;
   const order = () => {
     const result =
       vesselId === null
@@ -179,6 +196,11 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
         {needed > 0 && (
           <Hint icon="inbox">
             {`Angenommen und noch offen: ${kg(needed)} ${productName(productId)}. Im Hafen oder unterwegs: ${kg(have)}.`}
+          </Hint>
+        )}
+        {!origin && leftover > short && (
+          <Hint icon="info">
+            {`Es fehlen nur ${kg(short)}, die kleinste Kiste hat ${kg(CONTAINER_SIZES[0].grams)}. Der Rest bleibt in der Halle, bis ihn jemand bestellt.`}
           </Hint>
         )}
       </Group>
@@ -258,7 +280,34 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
             />
           </ListItem>
           <ListItem value={days(minutes)}>
-            <ItemContent icon="clock" color="place" title={`Ankunft in ${portName(target)}`} />
+            <ItemContent
+              icon="clock"
+              color={firstDue !== null ? 'danger' : 'place'}
+              title={`Ankunft in ${portName(target)}`}
+              meta={`${clock.weekdayName(arrives, true)} ${clock.formatTime(arrives)}`}
+            />
+          </ListItem>
+          {firstDue !== null && (
+            <ListItem>
+              <ItemContent
+                icon="alert"
+                color="danger"
+                title={`Zu spät für ${tooLate.length === 1 ? 'eine Bestellung' : `${tooLate.length} Bestellungen`}`}
+                meta={`Die erste muss bis ${clock.weekdayName(firstDue, true)} ${clock.formatTime(firstDue)} raus. Ein schnellerer Produzent schafft es vielleicht.`}
+              />
+            </ListItem>
+          )}
+          <ListItem value={kg(room)}>
+            <ItemContent
+              icon="warehouse"
+              color={grams > room ? 'danger' : 'goods'}
+              title={`Platz in der Halle`}
+              meta={
+                grams > room
+                  ? `${kg(grams - room)} passen nicht und warten am Kai, das kostet Liegegeld.`
+                  : 'Mit allem, was schon unterwegs ist.'
+              }
+            />
           </ListItem>
           {plan && (
             <ListItem value={formatEuro(plan.cost)}>
@@ -280,6 +329,20 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
               ? `Verschiffen (${formatEuro(total)})`
               : `Bestellen (${formatEuro(total)})`}
         </Button>
+        {/* Grund unter dem gesperrten Knopf (Auftrag 43, H7). */}
+        {!fits && <p class="ui-hint">{`Passt nicht aufs Schiff: höchstens ${kg(capacity)} Ladung.`}</p>}
+        {missingDirty > 0 && (
+          <List>
+            <ListItem onClick={() => ui.openPhone('finance.app')}>
+              <ItemContent
+                icon="cash"
+                color="dirty"
+                title={`Dir fehlen ${formatEuro(missingDirty)} Schwarzgeld`}
+                meta="Ware kauft man bar. Weniger Container nehmen oder erst Bestellungen ausliefern."
+              />
+            </ListItem>
+          </List>
+        )}
       </Group>
     </div>
   );

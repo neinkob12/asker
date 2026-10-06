@@ -373,6 +373,10 @@
   font-size: var(--type-caption-2);
   letter-spacing: -0.01em;
 }
+/* Ein Segment mit Zahl (z.B. „Bestellungen 15“) bekommt mehr Platz, sonst klebte der Text am Rand (Auftrag 43, H13) */
+.ui-segmented--joined .ui-button:has(.ui-segmented__count) {
+  flex-grow: 1.4;
+}
 .ui-segmented--joined .ui-button.is-active {
   --btn-bg: var(--phone-thumb);
   --btn-hover: var(--phone-thumb);
@@ -1787,10 +1791,12 @@
   gap: var(--space-3);
   min-width: 0;
 }
-/* Alles außer Listen bekommt Rand zur Unterlage */
+/* Alles außer Listen bekommt Rand zur Unterlage. Breite Bausteine (width: 100 %, z.B. Auswahl oder Segmente) ragten
+   sonst um den Rand über die Gruppe hinaus (Auftrag 43, H13). */
 .ui-group__body > :not(.ui-list) {
   margin-left: 12px;
   margin-right: 12px;
+  max-width: calc(100% - 24px);
 }
 .ui-group__body > :first-child:not(.ui-list) {
   margin-top: 12px;

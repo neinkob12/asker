@@ -33,6 +33,8 @@ import {
   type ContainerSize,
   CUSTOMER_KINDS,
   type CustomerPlan,
+  containerCost,
+  contractEndsAt,
   customerBlocked,
   customerContact,
   DELIVER_LABELS,
@@ -134,13 +136,15 @@ export function DispatcherGroup() {
   const { state, dispatch } = useGame();
   const plan = state.modules.trade.defaultPlan;
   const own = Object.keys(state.modules.trade.plans ?? {}).length;
+  // Nur beim Öffnen der Seite (Auftrag 43, H5): sonst klappte die Gruppe beim ersten Tipp zu, mitten in der Wahl.
+  const [startOpen] = useState(plan.accept === 'off' && plan.deliver === 'off');
   return (
     <Group
       title="Fenna übernimmt"
       icon="users"
       color="people"
       collapsible
-      open={plan.accept === 'off' && plan.deliver === 'off'}
+      open={startOpen}
       note={
         own > 0
           ? `Für alle Kunden, ${own} mit eigenem Plan (auf ihrer Seite).`
@@ -156,9 +160,16 @@ export function DispatcherGroup() {
 /** Was diese Woche gebraucht wird, pro Ware: Bedarf (offen und angenommen), im Hafen, auf See, fehlt. */
 function weekRows(state: GameState) {
   const need = new Map<string, number>();
+  // Früheste und späteste Frist pro Ware (Auftrag 43, H4): Container, die erst danach ankommen, helfen nicht.
+  const firstDue = new Map<string, number>();
+  const lastDue = new Map<string, number>();
   for (const o of getOrders(state)) {
     if (o.status !== 'open' && o.status !== 'accepted') continue;
-    for (const item of openItems(o)) need.set(item.productId, (need.get(item.productId) ?? 0) + item.amount);
+    for (const item of openItems(o)) {
+      need.set(item.productId, (need.get(item.productId) ?? 0) + item.amount);
+      firstDue.set(item.productId, Math.min(firstDue.get(item.productId) ?? Infinity, o.dueAt));
+      lastDue.set(item.productId, Math.max(lastDue.get(item.productId) ?? 0, o.dueAt));
+    }
   }
   const stock = new Map<string, number>();
   for (const id of ownedPorts(state)) {
@@ -167,25 +178,57 @@ function weekRows(state: GameState) {
     }
   }
   const sea = new Map<string, number>();
-  for (const x of getShipments(state)) sea.set(x.productId, (sea.get(x.productId) ?? 0) + x.amount);
-  const ids = [...new Set([...need.keys(), ...stock.keys(), ...sea.keys()])];
+  const late = new Map<string, number>();
+  for (const x of getShipments(state)) {
+    const due = lastDue.get(x.productId);
+    const target = due !== undefined && x.arrivesAt > due ? late : sea;
+    target.set(x.productId, (target.get(x.productId) ?? 0) + x.amount);
+  }
+  const ids = [...new Set([...need.keys(), ...stock.keys(), ...sea.keys(), ...late.keys()])];
   return ids
     .map((productId) => {
       const n = need.get(productId) ?? 0;
       const s = stock.get(productId) ?? 0;
       const w = sea.get(productId) ?? 0;
-      return { productId, need: n, stock: s, sea: w, missing: Math.max(0, n - s - w) };
+      return {
+        productId,
+        need: n,
+        stock: s,
+        sea: w,
+        late: late.get(productId) ?? 0,
+        due: firstDue.get(productId) ?? null,
+        missing: Math.max(0, n - s - w),
+      };
     })
     .sort((a, b) => b.missing - a.missing || b.need - a.need);
 }
 
-/** Woher eine Ware am besten kommt: die eigene Ernte im Ausfuhrlager, sonst der schnellste Produzent. */
-function fastestProducer(state: GameState, productId: string, portId: string) {
+/** Preis pro Kilo einer Ware bei einem Produzenten (halber Container, mit Fracht). */
+export function pricePerKg(producerId: string, productId: string): number {
+  const size = CONTAINER_SIZES.find((c) => c.id === 'medium') ?? CONTAINER_SIZES[0];
+  const cost = containerCost(producerId, productId, size.id);
+  return ((cost.goods + cost.freight) / size.grams) * 1000;
+}
+
+/** „1 Tag“, „5 Tage“ für eine Fahrzeit in Minuten. */
+export function tripDays(minutes: number): string {
+  const days = Math.max(1, Math.round(minutes / 1440));
+  return days === 1 ? '1 Tag' : `${days} Tage`;
+}
+
+/**
+ * Woher eine Ware am besten kommt (Auftrag 43, H5): die eigene Ernte im Ausfuhrlager, sonst der günstigste Produzent, der
+ * bis `by` ankommt. Ohne Frist der günstigste, schafft es keiner rechtzeitig, der schnellste. Vorher war es immer der
+ * schnellste, also Jansens Netz zum doppelten Preis.
+ */
+export function bestProducer(state: GameState, productId: string, portId: string, by: number | null = null) {
   const own = OWN_ORIGINS.find((o) => (originStock(state, o.id)[productId]?.amount ?? 0) > 0);
   if (own) return own;
-  return PRODUCERS.filter((p) => p.products[productId] !== undefined).sort(
-    (a, b) => shippingMinutes(a.id, portId) - shippingMinutes(b.id, portId),
-  )[0];
+  const list = PRODUCERS.filter((p) => p.products[productId] !== undefined);
+  const inTime = by === null ? list : list.filter((p) => state.time + shippingMinutes(p.id, portId) <= by);
+  if (inTime.length > 0)
+    return [...inTime].sort((a, b) => pricePerKg(a.id, productId) - pricePerKg(b.id, productId))[0];
+  return [...list].sort((a, b) => shippingMinutes(a.id, portId) - shippingMinutes(b.id, portId))[0];
 }
 
 /** „Diese Woche“ (in den Bestellungen): Reicht die Ware für alles, was bestellt ist? */
@@ -202,11 +245,11 @@ export function WeekGroup() {
       icon="boxes"
       color="goods"
       value={short > 0 ? `${short} fehlen` : 'reicht'}
-      note="Bestellt (offen und angenommen) gegen Hafen und Container auf See."
+      note="Bestellt (offen und angenommen) gegen Hafen und Container, die vor der Frist ankommen."
     >
       <List>
         {rows.map((r) => {
-          const producer = r.missing > 0 ? fastestProducer(state, r.productId, port) : undefined;
+          const producer = r.missing > 0 ? bestProducer(state, r.productId, port, r.due) : undefined;
           return (
             <ListItem
               key={r.productId}
@@ -225,6 +268,7 @@ export function WeekGroup() {
                   { label: `bestellt ${kg(r.need)}`, color: 'warn', icon: 'inbox' },
                   { label: `im Hafen ${kg(r.stock)}`, color: 'goods', icon: 'warehouse' },
                   r.sea > 0 && { label: `auf See ${kg(r.sea)}`, color: 'place', icon: 'ship' },
+                  r.late > 0 && { label: `nach der Frist ${kg(r.late)}`, color: 'danger', icon: 'clock' },
                 ]}
               />
             </ListItem>
@@ -243,10 +287,14 @@ export function RestockGroup() {
   const [open, setOpen] = useState(false);
   const rules = restockRules(state);
   const port = ownedPorts(state)[0] ?? HARBOR_CITY;
-  const [draft, setDraft] = useState({ ...DEFAULT_RULE, producerId: fastestProducer(state, 'weed', port)?.id ?? '' });
+  const cheapest = (productId: string) =>
+    PRODUCERS.filter((p) => p.products[productId] !== undefined).sort(
+      (a, b) => pricePerKg(a.id, productId) - pricePerKg(b.id, productId),
+    )[0]?.id ?? '';
+  const [draft, setDraft] = useState({ ...DEFAULT_RULE, producerId: cheapest(DEFAULT_RULE.productId) });
   const products = [...new Set(PRODUCERS.flatMap((p) => Object.keys(p.products)))];
   const producers = PRODUCERS.filter((p) => p.products[draft.productId] !== undefined);
-  const producerId = producers.some((p) => p.id === draft.producerId) ? draft.producerId : (producers[0]?.id ?? '');
+  const producerId = producers.some((p) => p.id === draft.producerId) ? draft.producerId : cheapest(draft.productId);
   const save = () => {
     const done = dispatch({
       type: 'trade.addRestock',
@@ -319,7 +367,7 @@ export function RestockGroup() {
                   label="Ware"
                   value={draft.productId}
                   options={products.map((id) => ({ value: id, label: productName(id) }))}
-                  onChange={(productId) => setDraft({ ...draft, productId })}
+                  onChange={(productId) => setDraft({ ...draft, productId, producerId: cheapest(productId) })}
                 />
               </ItemContent>
             </ListItem>
@@ -331,7 +379,7 @@ export function RestockGroup() {
                   value={producerId}
                   options={producers.map((p) => ({
                     value: p.id,
-                    label: `${p.name} (${Math.round(shippingMinutes(p.id, port) / 1440)} Tage)`,
+                    label: `${p.name}, ${formatEuro(pricePerKg(p.id, draft.productId))}/kg, ${tripDays(shippingMinutes(p.id, port))}`,
                   }))}
                   onChange={(id) => setDraft({ ...draft, producerId: id })}
                 />
@@ -383,6 +431,11 @@ const STATUS_TEXT: Record<TradeOrder['status'], { label: string; color: Category
   failed: { label: 'geplatzt', color: 'danger' },
 };
 
+/** Ende des Abnahmevertrags, z.B. „Mo, Tag 31“. */
+export function contractText(at: number): string {
+  return `${clock.weekdayName(at, true)}, Tag ${clock.day(at)}`;
+}
+
 /** Seite eines Kunden (Auftrag 43). */
 function CustomerPanel(props: { customerId: string }) {
   const { state, dispatch } = useGame();
@@ -398,6 +451,7 @@ function CustomerPanel(props: { customerId: string }) {
     .slice(-6)
     .reverse();
   const total = c.delivered + c.late + c.failed;
+  const contractEnd = contractEndsAt(state);
   return (
     <div class="trade-app">
       <div class="trade-customer__head">
@@ -414,6 +468,11 @@ function CustomerPanel(props: { customerId: string }) {
         <Chip color={c.trust >= 50 ? 'people' : 'danger'} icon="handshake">
           Vertrauen {c.trust}
         </Chip>
+        {c.kind === 'org' && contractEnd !== null && (
+          <Chip color="brand" icon="handshake">
+            Vertrag bis {contractText(contractEnd)}
+          </Chip>
+        )}
         {c.topRival !== null && (
           <Chip color="danger" icon="trendDown">
             stärkste Konkurrenz: {c.topRival}

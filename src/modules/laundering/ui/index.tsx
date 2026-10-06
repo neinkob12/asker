@@ -228,8 +228,10 @@ function LaunderingApp() {
   const dirty = Math.floor(wallet.balance(state, 'dirty'));
   const batches = getBatches(state);
   const inProgress = amountInProgress(state);
+  const sold = isBusinessSold(state);
   const open = LAUNDERING_CHANNELS.filter((c) => isChannelUnlocked(state, c.id));
-  const locked = LAUNDERING_CHANNELS.filter((c) => !isChannelUnlocked(state, c.id) && !c.harborOnly);
+  // Nach dem Verkauf (Auftrag 43, H9) kommst du an die Geschäfte in den alten Veedeln nicht mehr heran.
+  const locked = LAUNDERING_CHANNELS.filter((c) => !isChannelUnlocked(state, c.id) && !c.harborOnly && !sold);
   return (
     <div class="laundering-app">
       <SummaryTiles
@@ -239,8 +241,9 @@ function LaunderingApp() {
         ]}
       />
       <p class="laundering-lead">
-        Schwarzgeld wird über Zeit zu sauberem Geld, das du für Legales brauchst (Lager, Liegeplatz, Einstieg bei
-        Geschäften).
+        {sold
+          ? 'Schwarzgeld wird über Zeit zu sauberem Geld, das du für Legales brauchst (Hallen, Lkw, Schiffe, Liegegeld).'
+          : 'Schwarzgeld wird über Zeit zu sauberem Geld, das du für Legales brauchst (Lager, Liegeplatz, Einstieg bei Geschäften).'}
       </p>
       {batches.length > 0 && (
         <Group

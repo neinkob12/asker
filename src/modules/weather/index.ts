@@ -11,6 +11,7 @@
 // Ereignis: 'weather.changed' { from, to, temperature, intensity }
 
 import { type Ctx, clock, defineModule, type GameState, journal, MINUTES_PER_DAY } from '../../core';
+import { activeCity, cityName } from '../city';
 import {
   DAY_AMPLITUDE,
   DELIVERY_DEMAND,
@@ -83,11 +84,11 @@ export const WEATHER_NAMES: Record<WeatherKind, string> = {
   heat: 'Hitze',
 };
 
-/** Journal-Einträge beim Umschlagen auf auffälliges Wetter. */
+/** Journal-Einträge beim Umschlagen auf auffälliges Wetter ({city}: die Stadt, in der du gerade bist, Auftrag 43). */
 const JOURNAL_TEXT: Partial<Record<WeatherKind, string>> = {
-  storm: 'Gewitter über Köln. Wer kann, bleibt drinnen.',
-  snow: 'Es schneit in Köln. Auf der Straße wird es ruhig.',
-  heat: 'Hitze in der Stadt. Parks und Rheinufer sind voll.',
+  storm: 'Gewitter über {city}. Wer kann, bleibt drinnen.',
+  snow: 'Es schneit in {city}. Auf der Straße wird es ruhig.',
+  heat: 'Hitze in {city}. Parks und Ufer sind voll.',
 };
 
 const FALLBACK: Weather = { kind: 'clear', temperature: 16, intensity: 0, since: 0 };
@@ -244,7 +245,7 @@ function tick(ctx: Ctx): void {
       s.since = slot.at;
       ctx.emit('weather.changed', { from, to: slot.kind, temperature: s.temperature, intensity: s.intensity });
       const text = JOURNAL_TEXT[slot.kind];
-      if (text) journal.add(ctx, text, 'info');
+      if (text) journal.add(ctx, text.replace('{city}', cityName(activeCity(ctx.state))), 'info');
     }
   }
   fillForecast(ctx, s);

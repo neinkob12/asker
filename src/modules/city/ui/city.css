@@ -232,6 +232,10 @@
   gap: var(--space-1);
   pointer-events: none;
 }
+/* Nach der Ankunft versteckt (Auftrag 43, H12): display: flex oben überschreibt sonst das hidden-Attribut. */
+.city-car[hidden] {
+  display: none;
+}
 
 .city-car__icon {
   display: grid;

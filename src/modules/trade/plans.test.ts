@@ -1,12 +1,15 @@
 // Lieferpläne und Nachkauf (Auftrag 43): Fenna nimmt an, liefert aus und kauft nach, so weit du es ihr sagst.
 
 import { describe, expect, it } from 'vitest';
-import { type GameState, loadSimulation, type Simulation } from '../../core';
+import { type GameState, loadSimulation, messages, type Simulation } from '../../core';
 import { createTestGame } from '../../core/testing';
 import { playableCities } from '../city';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
+import { CONTRACT_WARN_DAYS } from './config';
 import {
+  contractEndsAt,
+  deliveryReadiness,
   getDeliveries,
   getOrders,
   getShipments,
@@ -111,4 +114,58 @@ describe('Nachkauf (Auftrag 43)', () => {
     expect(loaded.state.modules.trade.defaultPlan).toEqual(NO_PLAN);
     expect(loaded.state.modules.trade.restock).toEqual([]);
   });
+
+  it('zwei Bestellungen zählen dieselben Kilo nicht doppelt (H1), Fenna wartet auf die ganze Bestellung (H6)', () => {
+    const sim = soldGame(6);
+    const [a, b] = openOrders(sim.state);
+    for (const o of [a, b]) {
+      o.items = [
+        { productId: 'weed', amount: 30_000, offer: o.items[0].offer },
+        { productId: 'hash', amount: 5_000, offer: o.items[0].offer },
+      ];
+      o.amount = 35_000;
+      o.status = 'accepted';
+      o.dueAt = sim.state.time + 5 * 1440;
+    }
+    const stock = sim.state.modules.trade.stock.rotterdam;
+    stock.weed = { ...(stock.weed ?? { quality: 0.6, own: 0 }), amount: 40_000 };
+    stock.hash = { ...(stock.hash ?? { quality: 0.6, own: 0 }), amount: 0 };
+    let ready = deliveryReadiness(sim.state);
+    // Für keine reicht alles (Hasch fehlt); Gras bekommt nur die erste, nicht beide.
+    expect(ready.get(a.id)).toMatchObject({ portId: 'rotterdam', full: false, missing: 5_000 });
+    expect(ready.get(b.id)).toMatchObject({ portId: null, full: false, missing: 35_000 });
+    sim.dispatch({ type: 'trade.setPlan', payload: { plan: { deliver: 'freight' } } });
+    sim.state.wallet.dirty = 500_000;
+    sim.advance(DISPATCH_EVERY + 5);
+    // Teile fährt Fenna noch nicht (die Frist ist weit).
+    expect(getDeliveries(sim.state).filter((d) => d.orderId === a.id)).toEqual([]);
+    stock.hash.amount = 5_000;
+    ready = deliveryReadiness(sim.state);
+    expect(ready.get(a.id)).toMatchObject({ full: true, missing: 0 });
+    sim.advance(DISPATCH_EVERY + 5);
+    expect(getDeliveries(sim.state).filter((d) => d.orderId === a.id)).toHaveLength(1);
+  });
+});
+
+describe('Keine stillen Verluste (Auftrag 43, H2)', () => {
+  it('verfallene Bestellungen meldet Fenna mit Wert, vor dem Ende des Abnahmevertrags warnt sie', () => {
+    const sim = soldGame();
+    const open = openOrders(sim.state);
+    expect(open.length).toBeGreaterThan(0);
+    const last = Math.max(...open.map((o) => o.answerBy));
+    while (sim.state.time <= last) sim.advance(60);
+    expect(open.every((o) => getOrders(sim.state).find((x) => x.id === o.id)?.status === 'expired')).toBe(true);
+    const fenna = () => messages.thread(sim.state, 'trade:dispo').map((m) => m.text);
+    expect(fenna().some((t) => t.includes('verfallen') && t.includes('€'))).toBe(true);
+    expect(sim.state.journal.some((e) => e.text.includes('ohne Antwort verfallen'))).toBe(true);
+
+    const until = contractEndsAt(sim.state);
+    expect(until).not.toBeNull();
+    while (sim.state.time < (until ?? 0) - CONTRACT_WARN_DAYS * 1440) sim.advance(60);
+    expect(fenna().filter((t) => t.includes('läuft in')).length).toBe(1);
+    while (sim.state.time < (until ?? 0) + 60) sim.advance(60);
+    expect(fenna().filter((t) => t.includes('läuft in')).length).toBe(1);
+    expect(fenna().some((t) => t.includes('ist ausgelaufen'))).toBe(true);
+    expect(contractEndsAt(sim.state)).toBeNull();
+  }, 60_000);
 });

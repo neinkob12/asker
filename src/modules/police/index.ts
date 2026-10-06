@@ -895,6 +895,9 @@ function majorRaid(ctx: Ctx, raid: MajorRaid): void {
  * steht im Journal.
  */
 function updateTier(ctx: Ctx): void {
+  // Nach dem Verkauf gibt es keinen Straßenhandel mehr, den die Polizei einstufen könnte (Auftrag 43, H9); im Hafen zählt
+  // der Zoll (customsHeat).
+  if (isBusinessSold(ctx.state)) return;
   const police = ctx.state.modules.police;
   const cityId = activeCity(ctx.state);
   const min = MIN_TIER_BY_CITY[cityId] ?? 0;

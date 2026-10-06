@@ -168,6 +168,15 @@ export const QUESTS_ADDED_IN_43: readonly string[] = [
   'pdDeliver',
 ];
 
+/**
+ * Umsatz bis zum Anruf der Produzenten, wie grow.CALL_MIN_REVENUE (als Zahl, weil das Kapitel beim Laden gebaut wird;
+ * quests.test.ts prüft, dass beide gleich sind).
+ */
+export const HARBOR_NAME_REVENUE = 1_500_000;
+
+/** Später dazugekommen (Auftrag 43, H15): Migration 6 schiebt den Index alter Stände darüber. */
+export const QUESTS_ADDED_IN_43_H = ['rtRevenue'] as const;
+
 /** So viele Quests gab es vor Auftrag 36 (alte Spielstände mit allem erledigt: index = diese Zahl). */
 export const QUEST_COUNT_BEFORE_36 = 32;
 
@@ -765,6 +774,22 @@ function harborChapter(): QuestDef[] {
       measure: (state) => (getVehicles(state, HARBOR_CITY).some((v) => !isShip(v)) ? 1 : 0),
       goTo: 'tradeHarbor',
       reward: [{ kind: 'money', money: 'clean', amount: 10000 }],
+    },
+    {
+      // Brücke bis zum Anruf der Produzenten (Auftrag 43, H15): sonst stand nach dem Lkw wochenlang kein Ziel da.
+      ...base,
+      id: 'rtRevenue',
+      icon: 'chart',
+      title: 'Mach dir einen Namen',
+      task:
+        'Wer im Hafen Umsatz macht, von dem hört man bis Südamerika. Bei anderthalb Millionen und nach drei Wochen ' +
+        'als Lieferant meldet sich dort jemand, der selbst anbaut. Bis dahin: liefern, liefern, liefern.',
+      hint: 'Umsatz als Lieferant, alle Kunden zusammen.',
+      target: HARBOR_NAME_REVENUE,
+      euro: true,
+      measure: (state) => (isGrowStarted(state) ? HARBOR_NAME_REVENUE : tradeStats(state).revenue),
+      goTo: 'trade',
+      reward: [{ kind: 'money', money: 'clean', amount: 25000 }],
       doneText:
         'Du hast es drauf. Der Hafen läuft über dich, ich bin raus. Pass auf den Zoll auf, der vergisst nichts. Und ' +
         'wenn mal einer aus Südamerika anruft: Geh ran.',
@@ -966,7 +991,7 @@ function growChapter(): QuestDef[] {
       task:
         'Wenn sie im Hafen ist, geht sie raus wie jede andere Ware. Nur dass sie dich fast nichts gekostet hat. Je mehr ' +
         'davon, desto näher bist du am Produzenten.',
-      hint: 'Handel › Bestellungen: ausliefern wie immer (oder Fenna machen lassen).',
+      hint: 'Handel › Aufträge (vorher „Bestellungen“): ausliefern wie immer (oder Fenna machen lassen).',
       measure: (state) => (tradeStats(state).ownDelivered > 0 ? 1 : 0),
       goTo: 'trade',
       reward: [{ kind: 'money', money: 'clean', amount: 50000 }],

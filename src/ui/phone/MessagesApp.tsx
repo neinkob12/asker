@@ -16,6 +16,7 @@ import {
   Button,
   type CategoryColor,
   ContextMenu,
+  Disclosure,
   Empty,
   Icon,
   IconButton,
@@ -189,13 +190,14 @@ function ChatList() {
   const [menu, setMenu] = useState(false);
   const [confirm, setConfirm] = useState<'all' | string | null>(null);
   // `all` ist pro Spielstand dieselbe Liste (chatList ist gemerkt): Filter und Gruppen nur bei Änderung neu bauen.
-  const { list, groups, recent, openCount } = useMemo(() => {
+  const { list, groups, archived, recent, openCount } = useMemo(() => {
     const list = (filter === 'open' ? all.filter((c) => c.awaitingAnswer || c.unread > 0) : all).filter((c) =>
       matches(c, query),
     );
     return {
       list,
       groups: groupChats(list),
+      archived: list.filter((c) => c.archived),
       recent: recentContacts(all),
       openCount: all.filter((c) => c.awaitingAnswer).length,
     };
@@ -283,6 +285,21 @@ function ChatList() {
           </section>
         );
       })}
+      {archived.length > 0 && (
+        <Disclosure
+          icon="clock"
+          label={`${state.messages.archive?.label ?? 'Früher'} (${archived.length})`}
+          open={query !== ''}
+        >
+          <ul class="msg-list">
+            {archived.map((c) => (
+              <li key={c.contactId}>
+                <ChatRow chat={c} tone={CONTACT_KIND_TONES[c.kind]} actions={rowActions} />
+              </li>
+            ))}
+          </ul>
+        </Disclosure>
+      )}
       <ActionSheet
         open={menu}
         onClose={() => setMenu(false)}
