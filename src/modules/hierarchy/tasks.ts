@@ -184,7 +184,8 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
       continue;
     }
     // Im Chat zusagen: mit der Antwort "Rechte Hand schicken", sonst (Anfrage von vor ihrer Ernennung) als "selbst".
-    const reply = big ? 'Meine Rechte Hand bringt die Ware.' : 'Rechte Hand hat zugesagt: Ich komm vorbei.';
+    // Sie spricht selbst, ihr Name steht schon davor (via): kein „Rechte Hand: Rechte Hand hat zugesagt …“ (J9).
+    const reply = big ? 'Ich bring die Ware vorbei.' : 'Ich komm vorbei.';
     if (!messages.answerAs(ctx, { messageId: order.messageId, optionId: 'rightHand', via: VIA, reply })) {
       messages.answerAs(ctx, { messageId: order.messageId, optionId: 'self', via: VIA, reply });
     }
