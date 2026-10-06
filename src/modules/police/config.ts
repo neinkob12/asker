@@ -194,3 +194,13 @@ export const CUSTOMS_LEVELS = [
   { min: 50, label: 'scharf' },
   { min: 75, label: 'Großkontrolle' },
 ] as const;
+
+// --- Razzia-Countdown (Auftrag 44, Minispiel 'stash') -----------------------------------------------------------
+
+/**
+ * Höchstens so viel einer Razzia lässt sich vorher verstecken (Anteil 0 bis 1): Der Score des Minispiels (geretteter
+ * Anteil nach Wert) mindert Beschlagnahme von Ware und Schwarzgeld um (1 − stash), begrenzt auf diesen Wert.
+ */
+export const STASH_MAX = 0.7;
+/** So viele Partien bekommt das Minispiel höchstens (die wertvollsten, je Ware zusammengefasst). */
+export const STASH_LOTS_MAX = 6;

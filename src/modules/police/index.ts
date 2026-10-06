@@ -9,6 +9,8 @@
 //   der Polizei-Kontakt (staff) warnen und die Leute können abtauchen. Wer dann nicht mehr da ist, verliert nichts.
 // - Folgen: Ware und Schwarzgeld werden beschlagnahmt (eigene Lager im Veedel werden mit durchsucht, dort ist ein
 //   Anteil des Bestands weg), Mitarbeiter festgenommen ('police.arrest', den Haft-Status setzt staff). Eine Kontrolle kann in eine Polizeiflucht kippen (Konfrontation 'policeChase' über encounters).
+// - Razzia-Countdown (Auftrag 44, stash.ts): Wird eine Razzia gegen dich geplant und du bist in der Stadt, wo Ware liegt,
+//   startet das Minispiel 'stash'. Was du versteckst (Anteil stash an der geplanten Razzia), finden sie nicht.
 // - Verpfeifen ('police.snitch'): Heat und ein Hinweis in allen Veedeln der Gang. Solange der Hinweis gilt, kann es
 //   dort eine Razzia gegen die Gang geben, die sie Einfluss kostet.
 //
@@ -117,6 +119,7 @@ import {
   VIOLENCE_HEAT,
 } from './config';
 
+import { maybeStartStash, onStashFinished } from './stash';
 import { nextTier, type OperationTier, operationFacts, tierInfo } from './tier';
 
 export {
@@ -127,7 +130,9 @@ export {
   OPERATION_TIERS,
   RAID_SCOPES,
   RAID_THRESHOLD,
+  STASH_MAX,
 } from './config';
+export { type StashLot, type StashParams, stashParams, stashShare } from './stash';
 export {
   nextTierHints,
   type OperationFacts,
@@ -146,12 +151,16 @@ export interface PlannedRaid {
   scope: 'spot' | 'veedel';
   /** Bei einer Razzia am Spot: welcher. */
   spotId: string | null;
+  /** Vorher versteckt (Minispiel 'stash', Auftrag 44): um diesen Anteil weniger Beschlagnahme (0 bis STASH_MAX). */
+  stash?: number;
 }
 
 /** Geplante Großrazzia (nur Großhändler). */
 export interface MajorRaid {
   at: number;
   veedelIds: string[];
+  /** Vorher versteckt (Minispiel 'stash', Auftrag 44): um diesen Anteil weniger Beschlagnahme (0 bis STASH_MAX). */
+  stash?: number;
 }
 
 export type HeatLevelId = (typeof HEAT_LEVELS)[number]['id'];
@@ -201,6 +210,9 @@ export interface PoliceState {
   customs: Record<string, number>;
   stats: PoliceStats;
 }
+
+/** Zustand in Version 6 (ohne versteckten Anteil an geplanten Razzien, Auftrag 44: gleiche Form, Feld optional). */
+type PoliceStateV6 = PoliceState;
 
 /** Zustand in Version 5 (Auftrag 30, ohne Zoll-Heat). */
 type PoliceStateV5 = Omit<PoliceState, 'customs'>;
@@ -257,6 +269,11 @@ declare module '../../core' {
       arrested?: string[];
       empty?: boolean;
       influenceLost?: number;
+      /**
+       * Vorher versteckt (Minispiel 'stash', Auftrag 44): Anteil und was dadurch nicht beschlagnahmt wurde (Ware in
+       * Einheiten, Geld in Euro). Fehlt, wenn nichts versteckt war.
+       */
+      stashed?: { share: number; goods: number; money: number };
     };
     /**
      * Eine Razzia gegen den Spieler ist geplant und kommt zur Zeit at (der Polizei-Kontakt kann warnen). Bei einer
@@ -579,25 +596,36 @@ function confiscateGoods(ctx: Ctx, amount: number, veedelId: string): number {
  * Eigene Lager im Veedel werden bei einer Razzia mit durchsucht: share jedes Postens ist weg, mit Tarnung weniger
  * (goods.warehouseModifiers, Auftrag 33).
  */
-function searchWarehouses(ctx: Ctx, veedelId: string, share: number): number {
-  if (share <= 0) return 0;
+function searchWarehouses(ctx: Ctx, veedelId: string, share: number, stash = 0): Seized {
+  if (share <= 0) return { taken: 0, saved: 0 };
   let taken = 0;
+  let saved = 0;
   for (const warehouse of getWarehouses(ctx.state)) {
     if (veedelAt(warehouse.lng, warehouse.lat)?.id !== veedelId) continue;
     const found = share * warehouseModifiers(ctx.state, warehouse.id).raidFactor;
     for (const lot of getLots(ctx.state, { warehouseId: warehouse.id })) {
-      const amount = Math.ceil(lot.amount * found);
-      taken += take(ctx, {
+      const full = Math.min(lot.amount, Math.ceil(lot.amount * found));
+      // Versteckt (Auftrag 44): um den Anteil stash weniger.
+      const amount = Math.ceil(lot.amount * found * (1 - stash));
+      const got = take(ctx, {
         productId: lot.productId,
         amount,
         warehouseId: warehouse.id,
         lotId: lot.id,
         partial: true,
       }).taken;
+      taken += got;
+      saved += Math.max(0, full - got);
     }
   }
   ctx.state.modules.police.stats.confiscatedGoods += taken;
-  return taken;
+  return { taken, saved };
+}
+
+/** Beschlagnahmt und (versteckt, Auftrag 44) nicht gefunden. */
+interface Seized {
+  taken: number;
+  saved: number;
 }
 
 function confiscateMoney(ctx: Ctx, amount: number): number {
@@ -610,31 +638,37 @@ function confiscateMoney(ctx: Ctx, amount: number): number {
  * Ware am Ort: ein Anteil vom Lager, das dem Ort am nächsten liegt (was die Leute dabeihaben), höchstens max Einheiten.
  * Das ist keine Lager-Durchsuchung, nur was auf der Straße ist.
  */
-function confiscateNear(ctx: Ctx, point: { lng: number; lat: number }, share: number, max: number): number {
+function confiscateNear(ctx: Ctx, point: { lng: number; lat: number }, share: number, max: number, stash = 0): Seized {
   const warehouse = nearestWarehouse(ctx.state, point);
-  if (!warehouse || share <= 0) return 0;
+  if (!warehouse || share <= 0) return { taken: 0, saved: 0 };
   let left = max;
   let taken = 0;
+  let saved = 0;
   for (const lot of getLots(ctx.state, { warehouseId: warehouse.id })) {
     if (left <= 0) break;
     const amount = Math.min(left, Math.ceil(lot.amount * share));
+    // Versteckt (Auftrag 44): um den Anteil stash weniger. Gezählt wird gegen die volle Menge (wie ohne Verstecken).
+    const full = Math.min(amount, lot.amount);
     const got = take(ctx, {
       productId: lot.productId,
-      amount,
+      amount: stash > 0 ? Math.ceil(full * (1 - stash)) : amount,
       warehouseId: warehouse.id,
       lotId: lot.id,
       partial: true,
     }).taken;
     taken += got;
-    left -= got;
+    saved += Math.max(0, full - got);
+    left -= stash > 0 ? full : got;
   }
   ctx.state.modules.police.stats.confiscatedGoods += taken;
-  return taken;
+  return { taken, saved };
 }
 
-/** Anteil vom Schwarzgeld, höchstens max. */
-function confiscateMoneyShare(ctx: Ctx, share: number, max: number): number {
-  return confiscateMoney(ctx, Math.min(max, Math.max(0, ctx.state.wallet.dirty) * share));
+/** Anteil vom Schwarzgeld, höchstens max; versteckt (Auftrag 44) um den Anteil stash weniger. */
+function confiscateMoneyShare(ctx: Ctx, share: number, max: number, stash = 0): Seized {
+  const full = Math.min(max, Math.max(0, ctx.state.wallet.dirty) * share);
+  const taken = confiscateMoney(ctx, full * (1 - stash));
+  return { taken, saved: stash > 0 ? Math.max(0, Math.round(full) - taken) : 0 };
 }
 
 function arrest(ctx: Ctx, staffId: string, veedelId: string): void {
@@ -766,9 +800,12 @@ function planRaid(ctx: Ctx, veedelId: string): void {
   const at = ctx.now + RAID_LEAD_TIME;
   const small = tierOf(ctx.state, veedelCity(veedelId)) === 0;
   const scope = small ? 'spot' : 'veedel';
-  police.plannedRaids[veedelId] = { at, scope, spotId: small ? raidSpot(ctx.state, veedelId) : null };
+  const spotId = small ? raidSpot(ctx.state, veedelId) : null;
+  police.plannedRaids[veedelId] = { at, scope, spotId };
   police.raidReadyAt[veedelId] = at;
   ctx.emit('police.raidPlanned', { veedelId, at, scope });
+  // Auftrag 44: Bist du selbst in der Stadt und liegt dort Ware, kannst du sie vorher verstecken (Minispiel).
+  maybeStartStash(ctx, { scope, veedelIds: [veedelId], spotId, at });
 }
 
 /** Ergebnis einer Razzia in einem Veedel (ohne Ereignis und Journal). */
@@ -777,13 +814,15 @@ interface RaidHaul {
   money: number;
   arrested: string[];
   empty: boolean;
+  /** Ware, die versteckt war und nicht gefunden wurde (Auftrag 44). */
+  saved: number;
 }
 
 /**
  * Durchsucht ein Veedel bzw. einen Spot: Festnahmen, Ware am Ort, Lager im Veedel (nicht beim Kleindealer). Geld
  * zieht der Aufrufer ab (einmal pro Razzia). Ist niemand mehr da (abgetaucht), geht sie ins Leere.
  */
-function searchPlace(ctx: Ctx, veedelId: string, scope: RaidScope, spotId: string | null): RaidHaul {
+function searchPlace(ctx: Ctx, veedelId: string, scope: RaidScope, spotId: string | null, stash = 0): RaidHaul {
   const state = ctx.state;
   const rules = RAID_SCOPES[scope];
   const underground = isLyingLow(state, veedelId);
@@ -791,11 +830,13 @@ function searchPlace(ctx: Ctx, veedelId: string, scope: RaidScope, spotId: strin
   let people = activeStaffIn(state, veedelId).filter((m) => !underground || m.assignment?.kind !== 'veedel');
   if (scope === 'spot') people = people.filter((m) => spotOf(m) === spotId);
   const nobody = people.length === 0 && (underground || !hasPlayerPresence(state, veedelId));
-  if (nobody && scope !== 'major') return { goods: 0, money: 0, arrested: [], empty: true };
+  if (nobody && scope !== 'major') return { goods: 0, money: 0, arrested: [], empty: true, saved: 0 };
   const spot = spotId ? getSpot(state, spotId) : undefined;
   const point = spot ?? getVeedel(veedelId)?.center;
-  let goods = searchWarehouses(ctx, veedelId, rules.warehouseShare);
-  if (!nobody && point) goods += confiscateNear(ctx, point, rules.goodsShare, rules.goodsMax);
+  const stored = searchWarehouses(ctx, veedelId, rules.warehouseShare, stash);
+  const near = !nobody && point ? confiscateNear(ctx, point, rules.goodsShare, rules.goodsMax, stash) : null;
+  const goods = stored.taken + (near?.taken ?? 0);
+  const saved = stored.saved + (near?.saved ?? 0);
   const arrested: string[] = [];
   for (const member of people) {
     if (ctx.chance(Math.min(1, rules.arrest * cautionFactor(state, member.id)))) {
@@ -803,7 +844,16 @@ function searchPlace(ctx: Ctx, veedelId: string, scope: RaidScope, spotId: strin
       arrest(ctx, member.id, veedelId);
     }
   }
-  return { goods, money: 0, arrested, empty: nobody && goods === 0 };
+  return { goods, money: 0, arrested, empty: nobody && goods === 0 && saved === 0, saved };
+}
+
+/** Was das Verstecken vor der Razzia gebracht hat (Auftrag 44), für 'police.raid'; nichts versteckt: kein Feld. */
+function stashedInfo(
+  stash: number,
+  goods: number,
+  money: number,
+): { stashed?: { share: number; goods: number; money: number } } {
+  return stash > 0 ? { stashed: { share: stash, goods: Math.round(goods), money: Math.round(money) } } : {};
 }
 
 /** Name der Razzia für Journal und Meldungen: "Razzia am Neumarkt", "Razzia auf der Uni-Wiese", "Razzia in Ehrenfeld", "Großrazzia in …". */
@@ -818,7 +868,8 @@ function raidPlayer(ctx: Ctx, veedelId: string, plan: PlannedRaid): void {
   const state = ctx.state;
   const scope: RaidScope = plan.scope;
   const spotId = scope === 'spot' ? plan.spotId : null;
-  const haul = searchPlace(ctx, veedelId, scope, spotId);
+  const stash = plan.stash ?? 0;
+  const haul = searchPlace(ctx, veedelId, scope, spotId, stash);
   if (haul.empty) {
     finishRaid(ctx, veedelId);
     journal.add(
@@ -831,7 +882,8 @@ function raidPlayer(ctx: Ctx, veedelId: string, plan: PlannedRaid): void {
     return;
   }
   const rules = RAID_SCOPES[scope];
-  const money = confiscateMoneyShare(ctx, rules.moneyShare, rules.moneyMax);
+  const cash = confiscateMoneyShare(ctx, rules.moneyShare, rules.moneyMax, stash);
+  const money = cash.taken;
   const where =
     spotId ?? spotOf(activeStaffIn(state, veedelId)[0] ?? null) ?? spotsInVeedel(state, veedelId)[0]?.id ?? null;
   finishRaid(ctx, veedelId);
@@ -839,7 +891,8 @@ function raidPlayer(ctx: Ctx, veedelId: string, plan: PlannedRaid): void {
   journal.add(
     ctx,
     `${raidTitle(state, scope, [veedelId], spotId)}! ${capitalize(lossText(haul.goods, money))} beschlagnahmt.` +
-      (haul.arrested.length > 0 ? ` ${names} ${haul.arrested.length === 1 ? 'wurde' : 'wurden'} festgenommen.` : ''),
+      (haul.arrested.length > 0 ? ` ${names} ${haul.arrested.length === 1 ? 'wurde' : 'wurden'} festgenommen.` : '') +
+      stashedText(haul.saved, cash.saved),
     'bad',
     { veedelId, ...(where ? { spotId: where } : {}) },
   );
@@ -851,7 +904,13 @@ function raidPlayer(ctx: Ctx, veedelId: string, plan: PlannedRaid): void {
     goods: haul.goods,
     money,
     arrested: haul.arrested,
+    ...stashedInfo(stash, haul.saved, cash.saved),
   });
+}
+
+/** Satz fürs Journal: was versteckt war und nicht gefunden wurde. */
+function stashedText(goods: number, money: number): string {
+  return goods > 0 || money > 0 ? ` Gut versteckt: ${lossText(goods, money)} haben sie nicht gefunden.` : '';
 }
 
 /** Großrazzia planen: die heißesten Veedel mit deinen Leuten, dazu Veedel mit deinen Lagern. */
@@ -875,26 +934,32 @@ function planMajorRaid(ctx: Ctx): void {
   police.majorRaid = { at, veedelIds };
   police.majorReadyAt = at + MAJOR_RAID_COOLDOWN;
   for (const veedelId of veedelIds) ctx.emit('police.raidPlanned', { veedelId, at, scope: 'major' });
+  maybeStartStash(ctx, { scope: 'major', veedelIds, spotId: null, at });
 }
 
 /** Großrazzia: mehrere Veedel und Lager zugleich, mehr Festnahmen, große Beschlagnahme. */
 function majorRaid(ctx: Ctx, raid: MajorRaid): void {
   const state = ctx.state;
   let goods = 0;
+  let saved = 0;
+  const stash = raid.stash ?? 0;
   const arrested: string[] = [];
   for (const veedelId of raid.veedelIds) {
-    const haul = searchPlace(ctx, veedelId, 'major', null);
+    const haul = searchPlace(ctx, veedelId, 'major', null, stash);
     goods += haul.goods;
+    saved += haul.saved;
     arrested.push(...haul.arrested);
     finishRaid(ctx, veedelId);
   }
   const rules = RAID_SCOPES.major;
-  const money = confiscateMoneyShare(ctx, rules.moneyShare, rules.moneyMax);
+  const cash = confiscateMoneyShare(ctx, rules.moneyShare, rules.moneyMax, stash);
+  const money = cash.taken;
   const names = arrested.map((id) => staffName(state, id)).join(', ');
   journal.add(
     ctx,
     `${raidTitle(state, 'major', raid.veedelIds, null)}! ${capitalize(lossText(goods, money))} beschlagnahmt.` +
-      (arrested.length > 0 ? ` ${names} ${arrested.length === 1 ? 'wurde' : 'wurden'} festgenommen.` : ''),
+      (arrested.length > 0 ? ` ${names} ${arrested.length === 1 ? 'wurde' : 'wurden'} festgenommen.` : '') +
+      stashedText(saved, cash.saved),
     'bad',
     { veedelId: raid.veedelIds[0] },
   );
@@ -906,6 +971,7 @@ function majorRaid(ctx: Ctx, raid: MajorRaid): void {
     goods,
     money,
     arrested,
+    ...stashedInfo(stash, saved, cash.saved),
     ...(goods === 0 && money === 0 && arrested.length === 0 ? { empty: true } : {}),
   });
 }
@@ -1083,7 +1149,7 @@ function initialState(): PoliceState {
 
 export default defineModule({
   id: 'police',
-  version: 6,
+  version: 7,
   dependsOn: ['veedel', 'territory'],
   init: () => initialState(),
   tickEvery: 60,
@@ -1119,6 +1185,8 @@ export default defineModule({
         police.majorRaid.at = endsAt + RAID_LEAD_TIME;
       }
     },
+    // Auftrag 44: Razzia-Countdown entschieden, der versteckte Anteil gilt für die geplante Razzia.
+    'minigame.finished': (ctx, payload) => onStashFinished(ctx, payload),
     'encounter.resolved': (ctx, { kind, outcome, request }) => {
       if (request.origin?.module === 'police') {
         if (request.origin.ref === 'check' && request.veedelId) {
@@ -1157,6 +1225,17 @@ export default defineModule({
       return { ...rest, tiers: tier === null ? {} : { koeln: tier } };
     },
     // Version 6 (Auftrag 40): Zoll-Heat pro Hafen, bisher überall ruhig.
-    6: (old: PoliceStateV5): PoliceState => ({ ...old, customs: {} }),
+    6: (old: PoliceStateV5): PoliceStateV6 => ({ ...old, customs: {} }),
+    // Version 7 (Auftrag 44): geplante Razzien können einen versteckten Anteil tragen (stash); alte haben keinen.
+    7: (old: PoliceStateV6): PoliceState => ({
+      ...old,
+      plannedRaids: Object.fromEntries(
+        Object.entries(old.plannedRaids).map(([id, plan]) => [
+          id,
+          { at: plan.at, scope: plan.scope, spotId: plan.spotId },
+        ]),
+      ),
+      majorRaid: old.majorRaid ? { at: old.majorRaid.at, veedelIds: [...old.majorRaid.veedelIds] } : null,
+    }),
   },
 });

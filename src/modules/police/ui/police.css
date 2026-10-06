@@ -210,6 +210,10 @@
   font-weight: 700;
   text-align: right;
 }
+/* Auftrag 44: Was im Razzia-Countdown versteckt war und nicht gefunden wurde. */
+.raid-report__rows dd.raid-report__saved {
+  color: var(--cat-money);
+}
 .raid-report__actions {
   display: flex;
   flex-wrap: wrap;
