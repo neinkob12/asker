@@ -286,6 +286,44 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 - [x] H15 Kein Ziel zwischen Lkw-Quest und Anbau-Anruf.
   Erledigt: Quest „Mach dir einen Namen“ (Umsatz bis zum Anruf, `HARBOR_NAME_REVENUE`), Migration 6 der Quests.
 
+## I Prüfer „Produktion und Europa“ (Sonnet-Agent, `hafen-europa` bis Rang Produzent, 06.10.2026)
+
+- [ ] I1 Quest „Verschiffe deine eigene Ware“ kommt bei der Ernte, die Ware trocknet aber noch 9–12 Tage; HUD „Anbau“
+  zeigt dann „Ernte in 42 T.“ statt „trocknet“.
+- [ ] I2 Ein dringendes Banner pro Container (Charter mit 4 Containern = 4 Banner), dazu zwei Banner beim Rang.
+- [ ] I3 Ziel „Europa“: Nenner springt (7, 21, 10, 24), Chips nennen alte Organisationen, Banner sagt „alle Kunden“, die
+  Regel verlangt die Hälfte.
+- [ ] I4 Nach Rang „Produzent“ kein Ziel Richtung „Europa“ (keine Quest, kein Rat), nach „Europa“ kein Abschluss.
+- [ ] I5 Mobil abgeschnitten: Hafen-Kacheln „Contai…“, „Aufgefl…“, „Zoll schaut rein (je Contain…“.
+- [ ] I6 „Grenze an der Grenze am Walserberg“ auf den Kundenseiten der Europa-Städte.
+- [ ] I7 Verschiffen eigener Ernte: Standard 50-kg-Container bei 10 kg, Hallen-Hinweis rechnet den ganzen Container.
+- [ ] I8 Einkauf „Im Hafen oder unterwegs“ zählt Container nach der Frist mit.
+- [ ] I9 Wetter füllt das Journal (21 von 60 Einträgen), Ernte und Verpacken fallen raus.
+- [ ] I10 „Aufträge“/„Bestellungen“ gemischt, Entwicklernotiz „(vorher „Bestellungen“)“ im Quest-Hinweis.
+- [ ] I11 Kleinigkeiten: Zoll-Heat durch die Menge im Kauf nicht erklärt; Region-Seite doppelt, wenn alles gepachtet;
+  eingeklappter Punkt liegt auf dem Text der Rotterdam-Karte; keine Rückmeldung bei „Verschiffen“/„Ablegen“; eigenes
+  Schiff gegen Charter nicht gegenübergestellt; Angebote im Anbau-Reiter weit unten; Lkw-Nummern mit Lücken.
+
+## J Prüfer „Anfang“ (Sonnet-Agent, Neustart Köln, `koeln-anfang`, `koeln-veedel`, `ankunft-hamburg`, 06.10.2026)
+
+- [ ] J1 Handy-HUD abgeschnitten: „Ruf · Reviere“ (0/12 über dem Rand), Lager „215 g Gras + 4 weitere“.
+- [ ] J2 Quest-Fortschritt geht verloren: Ereignisse in der Startminute der Quest zählen nicht; „Bestell Ware“ und
+  „Läufer anheuern“ zählen Vorheriges nicht (Köln ohne `measure`).
+- [ ] J3 Doppelter Punkt „6 Std. 15 Min..“ in Lieferanten-Texten.
+- [ ] J4 Falscher Artikel „am Uni-Wiese“, „am Neusser Straße“ (Spot-Name mit festem „am“).
+- [ ] J5 Dringend-Banner schneidet den Ort ab („2 Kunden warten am E…“).
+- [ ] J6 Intro: „Sieben davon, und Köln gehört dir“ (Köln komplett erst mit 12).
+- [ ] J7 Polizei-Stufe im Handy: Bedingungen abgeschnitten.
+- [ ] J8 Chat-Leiste kürzt „Der Holländer“ zu „Der“.
+- [ ] J9 „Rechte Hand: Rechte Hand hat zugesagt: …“ doppelt in der Chatvorschau.
+- [ ] J10 Neu eingestellter Läufer steht „ohne Einsatz“ herum, kein Rat, keine Spot-Wahl nach dem Einstellen.
+- [ ] J11 Lager-App in neuer Stadt: „Zu kaufen“ unter Warenfluss und Fahrzeugen; Kauf ohne Rückfrage.
+- [ ] J12 Hinführen der Fahrer-Quest landet auf „Hafen“ statt beim Anheuern.
+- [ ] J13 „Logistik-App“ in Texten, die es nicht gibt.
+- [ ] J14 In einer neuen Stadt: Chats der alten Stadt oben, offene Rückfrage von Jansen zu einer Kölner Lieferung.
+- [ ] J15 Kleinigkeiten: „1 Tage“ bei der Rechten Hand, Wochenverträge schon am ersten Montag, „Preise 90 %“ ohne
+  Erklärung.
+
 ## Neue Funde
 
 - [x] N0 (Spieler, 05.10.2026) „Man kann im Hafen in Rotterdam keine Ware bestellen, es steht sogar, dass es keinen
