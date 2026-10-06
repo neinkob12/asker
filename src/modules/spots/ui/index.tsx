@@ -81,6 +81,12 @@ function SpotPanel(props: { spotId: string }) {
           { icon: 'users', color: 'people', value: formatPercent(spot.demand), label: 'Andrang' },
         ]}
       />
+      {/* J15: „Preise 90 %“ stand ohne Erklärung da. */}
+      <Disclosure label="Was heißen Preise und Andrang?">
+        Preise {formatPercent(spot.priceMultiplier)}: was die Kunden hier zahlen, gemessen am Richtpreis des Veedels
+        (100 %){spot.priceMultiplier > 1 ? ', hier also mehr' : spot.priceMultiplier < 1 ? ', hier also weniger' : ''}.
+        Andrang {formatPercent(spot.demand)}: wie viele Kunden kommen, gemessen an einem gewöhnlichen Spot (100 %).
+      </Disclosure>
       <List>
         <ListItem onClick={() => ui.openPanel('veedel.veedel', { veedelId: spot.veedelId })}>
           <ItemContent
