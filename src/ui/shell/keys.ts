@@ -32,7 +32,9 @@ export function bindKeys(runtime: UiRuntime): () => void {
       else if (ui.palette) api.togglePalette(false);
       else if (ui.popover) api.setPopover(null);
       else if (ui.dialog) {
-        if (dialogs.get(ui.dialog.id)?.dismissable !== false) api.closeDialog();
+        const dismissable = dialogs.get(ui.dialog.id)?.dismissable;
+        const can = typeof dismissable === 'function' ? dismissable(ui.dialog.props as never) : dismissable !== false;
+        if (can) api.closeDialog();
       } else if (closeTopOverlay()) {
         // Blatt, Aktionsblatt, Kontextmenü oder Mitteilungszentrale geschlossen
       } else if (ui.panel) api.closePanel();

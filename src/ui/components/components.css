@@ -1272,6 +1272,10 @@
   animation: ui-dialog-in var(--duration-slow) var(--ease-out);
   overflow: hidden;
 }
+/* Spielende (Game Over, Stadt komplett): breit genug für drei Knöpfe in einer Reihe (Auftrag 43, N10). */
+.ui-dialog--ending {
+  width: min(580px, 100%);
+}
 .ui-dialog--wide {
   width: min(660px, 100%);
 }
@@ -1741,7 +1745,15 @@
   line-height: var(--type-footnote-lh, 18px);
   text-overflow: ellipsis;
   text-transform: uppercase;
-  white-space: nowrap;
+  /* Lange Titel („Waschsalon und Shisha-Bar“) dürfen zwischen Wörtern auf eine zweite Zeile, nie im Wort
+     (Auftrag 43, N9). */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: keep-all;
   color: var(--group-tint);
 }
 .ui-group__count {

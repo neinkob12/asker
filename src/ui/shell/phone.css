@@ -726,7 +726,8 @@
   text-transform: uppercase;
   color: var(--cat-brand);
 }
-/* Bis zu zwei Zeilen (J5: einzeilig fiel der Ort weg, „2 Kunden warten am E…“), umbrochen nur zwischen Wörtern. */
+/* Bis zu drei Zeilen (J5: einzeilig fiel der Ort weg, „2 Kunden warten am E…“; N9: im kleinen Handy fiel bei zwei
+   Zeilen „wartet“ weg), umbrochen nur zwischen Wörtern. */
 .phone__urgent-title {
   display: -webkit-box;
   overflow: hidden;
@@ -734,15 +735,16 @@
   font-weight: var(--font-weight-bold);
   line-height: var(--type-subhead-lh);
   overflow-wrap: normal;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 .phone__urgent-action {
   flex: none;
   padding: 6px 12px;
   border-radius: var(--radius-round);
-  background: var(--cat-brand);
-  color: var(--cat-brand-on, #1a1200);
+  /* Helles Gold in beiden Schemata (N11: im Hell-Modus war --cat-brand dunkel, die dunkle Schrift kam auf 3:1). */
+  background: var(--cat-brand-a);
+  color: var(--cat-brand-on);
   font-size: var(--type-footnote);
   font-weight: var(--font-weight-bold);
 }
@@ -808,7 +810,9 @@
 .phone__app-name {
   max-width: 100%;
   overflow: hidden;
-  font-size: var(--type-caption);
+  /* Kleines Handy (Fenster 1280 × 720): „Einstellungen“ passt mit 11 px ganz hinein statt „Einstellun…“ (N9). */
+  font-size: clamp(11px, 3.4cqw, var(--type-caption));
+  letter-spacing: -0.01em;
   font-weight: var(--font-weight-medium);
   line-height: 16px;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);

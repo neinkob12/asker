@@ -21,7 +21,8 @@ import { loadTestSave, TEST_SAVE_FILES, TEST_SAVE_PHASES } from './testSaves';
 
 declare module '../registry' {
   interface DialogRegistry {
-    'core.newGame': { firstStart?: boolean };
+    /** fromSaves: aus den Spielständen geöffnet, Abbrechen führt dorthin zurück (Auftrag 43, N7). */
+    'core.newGame': { firstStart?: boolean; fromSaves?: boolean };
     'core.saves': Record<string, never>;
     'core.gameOver': Record<string, never>;
     /** Eine Stadt ist komplett übernommen (Auftrag 30). Ohne Angaben: Köln. */
@@ -46,7 +47,7 @@ const MODES: { mode: GameMode; title: string; text: string; icon: string; color:
   },
 ];
 
-export function NewGameDialog(props: { firstStart?: boolean }) {
+export function NewGameDialog(props: { firstStart?: boolean; fromSaves?: boolean }) {
   const runtime = useRuntime();
   const [mode, setMode] = useState<GameMode>('normal');
   const start = () => {
@@ -56,7 +57,12 @@ export function NewGameDialog(props: { firstStart?: boolean }) {
     runtime.api.closePhone();
     runtime.api.setSpeed(1);
   };
-  const close = props.firstStart ? undefined : runtime.api.closeDialog;
+  // Aus den Spielständen geöffnet: Abbrechen führt dorthin zurück, nicht auf die Karte (N7).
+  const close = props.firstStart
+    ? undefined
+    : props.fromSaves
+      ? () => runtime.api.openDialog('core.saves', {})
+      : runtime.api.closeDialog;
   return (
     <Dialog
       title="Neues Spiel"
@@ -266,7 +272,7 @@ export function SavesDialog() {
           Importieren
           <input type="file" accept="application/json,.json" hidden onChange={onImport} />
         </label>
-        <Button variant="primary" onClick={() => api.openDialog('core.newGame', {})}>
+        <Button variant="primary" onClick={() => api.openDialog('core.newGame', { fromSaves: true })}>
           Neues Spiel
         </Button>
       </div>

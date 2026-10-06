@@ -43,8 +43,14 @@ export function registerBuiltins(): void {
     select: (api, ui) => api.setOverlay(!ui.overlay),
   });
 
-  registerDialog({ id: 'core.intro', component: IntroDialog, pausesGame: true, dismissable: false });
-  registerDialog({ id: 'core.newGame', component: NewGameDialog, pausesGame: true, dismissable: false });
+  // Beim ersten Start gibt es kein Zurück; aus den Einstellungen (Intro) bzw. den Spielständen schließt Esc (N7).
+  registerDialog({ id: 'core.intro', component: IntroDialog, pausesGame: true, dismissable: (p) => !!p.replay });
+  registerDialog({
+    id: 'core.newGame',
+    component: NewGameDialog,
+    pausesGame: true,
+    dismissable: (p) => !p.firstStart,
+  });
   registerDialog({ id: 'core.saves', component: SavesDialog, pausesGame: true });
   registerDialog({ id: 'core.gameOver', component: GameOverDialog, dismissable: false });
   registerDialog({ id: 'core.won', component: WonDialog, pausesGame: true });

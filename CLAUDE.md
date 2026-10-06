@@ -128,6 +128,9 @@ zeitweise verschwinden, das HUD zeigt Zoll und Ruf als Lieferant. Beim Verkauf s
 Liste M (Hamburg): Lieferungen lesen ihren Lieferanten mit `shipmentSupplier` (so, wie er in ihrer Stadt auftritt),
 Fluss pro Hafen `portRiver`; `[hidden]` versteckt global (auch Marker mit `display:flex`); `rightHandMissing` ist der
 Teil von `fullPowerMissing` bei der Rechten Hand; der Anteil des Statthalters zählt im Bericht nicht als Kosten.
+Liste N (Oberfläche): Dialoge können `dismissable` als Funktion der Angaben haben; Karten-Marker sind kein Tab-Stopp
+(Tastatur über die Suche); `HudPill`-Karten schließen bei Esc und Tipp daneben, nur eine offen; „Boss von <Stadt>“ bei
+der Mehrheit nur in Köln (`majorityMakesBoss`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

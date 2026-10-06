@@ -640,8 +640,9 @@ registerMapLayer({
         }
         const rows = stockSummary(state, w.id);
         const grams = rows.filter((r) => getProduct(r.productId)?.unit === 'g').reduce((sum, r) => sum + r.amount, 0);
-        const other = rows.reduce((sum, r) => sum + r.amount, 0) - grams;
-        const text = `${w.name} · ${formatProductAmount(DEFAULT_PRODUCT, grams)}${other > 0 ? ` +${other}` : ''}`;
+        // Ware ohne Gramm (Stück, ml, Pens) als Zahl der Sorten, nicht als Summe ohne Einheit („+1416“, N10).
+        const other = rows.filter((r) => r.amount > 0 && getProduct(r.productId)?.unit !== 'g').length;
+        const text = `${w.name} · ${formatProductAmount(DEFAULT_PRODUCT, grams)}${other > 0 ? ` + ${other} weitere` : ''}`;
         if (text !== entry.text) {
           entry.text = text;
           entry.name.textContent = text;

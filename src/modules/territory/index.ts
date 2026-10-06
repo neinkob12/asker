@@ -23,7 +23,7 @@
 // Ereignisse: 'territory.controlChanged'
 
 import { type Ctx, defineModule, type GameState, journal, outcome } from '../../core';
-import { activeCity, cityName, liveVeedel } from '../city';
+import { activeCity, cityName, liveVeedel, majorityMakesBoss } from '../city';
 import { getGang, getGangs } from '../gangs';
 import { lieutenantSpots, lieutenantSpotsIn, lieutenantsInVeedel } from '../hierarchy';
 import { getStaff, getStaffMember } from '../staff';
@@ -392,7 +392,7 @@ function checkMilestones(ctx: Ctx, cityId: string): void {
     m.majority = ctx.now;
     journal.add(
       ctx,
-      `Boss von ${name}: ${progress.controlled} von ${progress.total} Veedeln hören auf dich. Jetzt den Rest.`,
+      `${majorityMakesBoss(cityId) ? `Boss von ${name}` : `Mehrheit in ${name}`}: ${progress.controlled} von ${progress.total} Veedeln hören auf dich. Jetzt den Rest.`,
       'good',
     );
     ctx.emit('campaign.milestone', {

@@ -150,6 +150,11 @@
   color: var(--hud-ink);
   transition: right var(--dock-duration) var(--dock-ease);
 }
+/* Weggelegtes Handy: Die Lasche am rechten Rand (phone.css, .phone-tab) bekommt Platz, sonst lag sie auf der Kachel
+   „Ruf · Reviere“ und auf den aufgeklappten Karten (Auftrag 43, N6). */
+.shell.is-desktop:not(.has-phone) .hud {
+  right: calc(var(--map-right) + 52px);
+}
 .hud__grid {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
@@ -242,6 +247,10 @@
   .hud-tiles {
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+  /* Kacheln unter der Uhr: Platz für die schwebende Island darunter lassen (N1, sonst lag sie auf „Rang“). */
+  .has-floating-island .hud-tiles {
+    margin-top: calc(37px + var(--space-3));
   }
 }
 
@@ -608,6 +617,12 @@
   border: 0;
   cursor: default;
 }
+/* Offene Karte oder offenes Menü liegt über der schwebenden Island (Auftrag 43, N1: „Verlauf“ im Menü und der Kopf der
+   Rang-Karte lagen sonst darunter und waren nicht klickbar). */
+.hud:has(.hud-popover, .hud-flyout),
+.shell-mapctl:has(.hud-popover) {
+  z-index: calc(var(--z-notification) + 1);
+}
 .hud-popover {
   position: absolute;
   z-index: calc(var(--z-popover) + 1);
@@ -665,6 +680,21 @@
 .hud-menu__item .ui-badge,
 .hud-menu__item kbd {
   margin-left: auto;
+}
+/* Tastenkürzel unten im Menü (Auftrag 43, N10) */
+.hud-menu__keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3) var(--space-3) var(--space-2);
+  border-top: 1px solid var(--hud-glass-edge);
+  color: var(--hud-ink-2);
+  font-family: var(--font-hud);
+  font-size: 13px;
+}
+.hud-menu__keys > span {
+  white-space: nowrap;
 }
 kbd {
   padding: 1px 5px;

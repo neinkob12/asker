@@ -18,7 +18,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityName, isBusinessSold } from '../../city';
+import { activeCity, cityName, isBusinessSold, majorityMakesBoss } from '../../city';
 import { campaignProgress, controlledBy, PLAYER_FACTION } from '../../territory';
 import { supplierReputation } from '../../trade';
 import { veedelCity, veedelName } from '../../veedel';
@@ -117,9 +117,13 @@ function PlayerReputationHud() {
               {progress.controlled}/{progress.total}
               {progress.complete
                 ? ` · ${city} komplett`
-                : progress.majorityReached
-                  ? ` · Boss von ${city}`
-                  : ` · ab ${progress.majority} Boss`}
+                : !majorityMakesBoss(cityId)
+                  ? progress.majorityReached
+                    ? ' · Mehrheit'
+                    : ''
+                  : progress.majorityReached
+                    ? ` · Boss von ${city}`
+                    : ` · ab ${progress.majority} Boss`}
             </strong>
           </div>
           <p class="rep-flyout__text">

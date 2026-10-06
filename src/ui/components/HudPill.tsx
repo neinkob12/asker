@@ -1,5 +1,5 @@
 import type { ComponentChildren, JSX } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { type ChipColor, categoryOf, IconChip } from './Icon';
 import type { IconName } from './icons';
 
@@ -65,6 +65,9 @@ export function HudSegments(props: { total: number; filled: number; label: strin
   );
 }
 
+/** Schließt die gerade offene HUD-Karte: Es ist immer nur eine offen (Auftrag 43, N2). */
+let closeOpenCard: (() => void) | null = null;
+
 /** Ab so vielen Buchstaben gilt ein Wort im Wert als lang (kleinere Schrift in schmalen Kacheln). */
 const LONG_WORD = 11;
 
@@ -92,14 +95,45 @@ export function HudPill(props: HudPillProps) {
   const cls = `hud-pill hud-stat ${props.onClick || props.details ? 'is-button' : ''} ${props.class ?? ''}`;
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false);
+  const wrap = useRef<HTMLFieldSetElement>(null);
+  // Offen nach einem Tipp: Ein Tipp daneben oder Esc schließt (Auftrag 43, N2: Karten blieben sonst offen, mehrere
+  // übereinander). Esc schließt hier nur die Karte, nicht zugleich das Handy.
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    if (closeOpenCard && closeOpenCard !== close) closeOpenCard();
+    closeOpenCard = close;
+    const onPointer = (e: PointerEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    };
+    document.addEventListener('pointerdown', onPointer, true);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer, true);
+      window.removeEventListener('keydown', onKey, true);
+      if (closeOpenCard === close) closeOpenCard = null;
+    };
+  }, [open]);
   if (props.details) {
     // Drüberfahren klappt auf (Maus), Antippen schaltet um (Finger); die Karte selbst trägt den Weg zum Ziel.
     return (
       <fieldset
+        ref={wrap}
         class={`hud-pill-wrap ${open || hover ? 'is-open' : ''}`}
         aria-label={typeof props.label === 'string' ? props.label : undefined}
         onPointerEnter={(e) => hoversWith(e.pointerType) && setHover(true)}
-        onPointerLeave={(e) => hoversWith(e.pointerType) && setHover(false)}
+        onPointerLeave={(e) => {
+          // Mit der Maus gilt: weg von der Kachel, Karte zu (auch nach einem Klick).
+          if (!hoversWith(e.pointerType)) return;
+          setHover(false);
+          setOpen(false);
+        }}
       >
         <button
           type="button"
