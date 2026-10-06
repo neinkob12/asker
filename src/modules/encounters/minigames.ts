@@ -25,7 +25,7 @@ import { getStaffMember } from '../staff';
 import { getVeedel } from '../veedel';
 import { getWeather } from '../weather';
 import { ENCOUNTER_ACTIONS } from './actions';
-import { AGGRESSION_FIGHT, BRAWL_AFTER_AGGRESSION, BRAWL_DOWN_RESOLVE } from './config';
+import { AGGRESSION_FIGHT, BRAWL_AFTER_AGGRESSION, BRAWL_DOWN_RESOLVE, PROTECT_FACTOR } from './config';
 import {
   fillText,
   finish,
@@ -43,7 +43,7 @@ import {
   textVars,
 } from './engine';
 import { ENCOUNTER_INTENTS } from './intents';
-import { applyShift, edgeOf, foesIn, removeFoe, rollIntent } from './tactics';
+import { applyShift, damageStake, edgeOf, foesIn, removeFoe, rollIntent } from './tactics';
 import type { Encounter, EncounterKind, EncounterMinigame, GaugeShift, Participant } from './types';
 
 /** Situation in der Einleitung, wenn ein Minispiel mitten in der Konfrontation kommt (Platzhalter wie in kinds.ts). */
@@ -290,10 +290,12 @@ function hurt(p: Participant): void {
 
 /**
  * Straßenkampf. picks: 'down:<n>' (so viele Gegner am Boden), 'fled:<n>' (abgehauen), 'hurt:<staffId>' (eigene Leute
- * verletzt), 'playerHurt', 'ko' (du gehst zu Boden). Alle Gegner weg → Erfolg (beaten). ko → Niederlage (overrun), du
- * bist verletzt, stirbst aber nie durch ein Minispiel. Sonst: Aggression auf BRAWL_AFTER_AGGRESSION, Entschlossenheit
- * −BRAWL_DOWN_RESOLVE je Gegner am Boden, die Runden laufen weiter (der Kampf zählt als Runde). Ohne picks (Rechte
- * Hand) zählt der Score: Anteil der Gegner, die zu Boden gehen.
+ * verletzt, zweimal = außer Gefecht), 'playerHurt', 'ko' (du gehst zu Boden), 'grabbed' (einer ist mit der Beute weg:
+ * die Absicht der Runde trifft ihren Einsatz, geschützt nur zum Teil), 'sirens' (die Polizei-Uhr lief im Kampf ab).
+ * Alle Gegner weg → Erfolg (beaten). ko → Niederlage (overrun), du bist verletzt, stirbst aber nie durch ein Minispiel.
+ * sirens → die Uhr steht auf 0, die Konfrontation endet wie bei abgelaufener Uhr. Sonst: Aggression auf
+ * BRAWL_AFTER_AGGRESSION, Entschlossenheit −BRAWL_DOWN_RESOLVE je Gegner am Boden, die Runden laufen weiter (der Kampf
+ * zählt als Runde). Ohne picks (Rechte Hand) zählt der Score: Anteil der Gegner, die zu Boden gehen.
  */
 export function applyBrawl(
   ctx: Ctx,
@@ -325,6 +327,15 @@ export function applyBrawl(
       ? `${knocked} von ihnen ${knocked === 1 ? 'liegt' : 'liegen'} am Boden.`
       : 'Keiner von ihnen geht zu Boden.',
   ];
+  // Mit der Beute weg: Die Absicht trifft ihren Einsatz (Ware, Kasse), wie in einer Runde ohne Gegenmittel.
+  if (picks.includes('grabbed')) {
+    const intent = encounter.intent ? ENCOUNTER_INTENTS[encounter.intent] : undefined;
+    const stake = intent?.stake === 'cash' ? 'cash' : 'goods';
+    const shielded = encounter.protect === stake || open.protect === stake;
+    const cap = stake === 'goods' && encounter.goodsCap !== undefined ? encounter.goodsCap : 100;
+    damageStake(encounter, stake, (intent?.damage ?? 30) * (shielded ? PROTECT_FACTOR : 1), cap);
+    lines.push(stake === 'cash' ? 'Einer rennt mit dem Bargeld davon.' : 'Einer rennt mit einer Tasche Ware davon.');
+  }
   if (picks.includes('ko')) {
     lines.push('Ein Schlag zu viel. Du gehst zu Boden.');
     logMinigame(ctx, encounter, open, result, lines.join(' '), before, true);
@@ -342,6 +353,11 @@ export function applyBrawl(
   applyShift(encounter, { resolve: -BRAWL_DOWN_RESOLVE * knocked });
   encounter.brawl = encounter.aggression >= AGGRESSION_FIGHT;
   encounter.clock -= 1;
+  // Sirenen im Kampf: Die Uhr ist um, alle rennen (die Konfrontation endet wie bei abgelaufener Uhr).
+  if (picks.includes('sirens')) {
+    encounter.clock = 0;
+    lines.push('Sirenen. Alle rennen.');
+  }
   encounter.edge = edgeOf(encounter);
   encounter.maxRounds = encounter.round + 1 + Math.max(0, encounter.clock);
   logMinigame(ctx, encounter, open, result, lines.join(' '), before, true);

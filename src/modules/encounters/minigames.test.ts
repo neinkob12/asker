@@ -370,6 +370,38 @@ describe('applyBrawl', () => {
     expect(get(sim, e.id).round).toBe(round);
   });
 
+  it('grabbed: einer ist mit der Beute weg, der Einsatz der Absicht nimmt Schaden (geschützt nur zum Teil)', () => {
+    const damageOf = (protect: 'goods' | 'cash') => {
+      const sim = createTestGame();
+      const e = raid(sim, 4);
+      get(sim, e.id).intent = 'grabGoods';
+      get(sim, e.id).resolve = 95;
+      sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'fight', protect } });
+      finish(sim, challengeOf(get(sim, e.id)), 0.3, ['down:1', 'fled:1', 'grabbed']);
+      const after = get(sim, e.id);
+      expect(after.log.at(-1)?.text).toContain('Ware davon');
+      return after.stakes.find((s) => s.id === 'goods')?.damage ?? -1;
+    };
+    const open = damageOf('cash');
+    const shielded = damageOf('goods');
+    expect(open).toBeGreaterThan(0);
+    expect(shielded).toBeGreaterThan(0);
+    expect(shielded).toBeLessThan(open);
+  });
+
+  it('sirens: die Polizei-Uhr lief im Kampf ab, die Konfrontation endet wie bei abgelaufener Uhr', () => {
+    const sim = createTestGame();
+    const e = raid(sim, 4);
+    get(sim, e.id).resolve = 95;
+    get(sim, e.id).clock = 5;
+    sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'fight' } });
+    finish(sim, challengeOf(get(sim, e.id)), 0.3, ['down:1', 'sirens']);
+    const after = get(sim, e.id);
+    expect(after.phase).toBe('done');
+    expect(after.result?.ending).toBe('clock');
+    expect(after.opponent.down).toBe(1);
+  });
+
   it('die Rechte Hand übernimmt mit ihrem Score (ohne picks)', () => {
     const sim = createTestGame();
     rightHand(sim);

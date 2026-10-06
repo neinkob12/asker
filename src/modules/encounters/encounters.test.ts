@@ -51,6 +51,9 @@ function playOut(sim: Simulation, id: number, prefer?: string): void {
         : options.reduce((a, b) => (actionChance(e, b) > actionChance(e, a) ? b : a));
     const result = sim.dispatch({ type: 'encounters.act', payload: { encounterId: id, actionId } });
     expect(result.ok).toBe(true);
+    // Startet die Handlung ein Minispiel (Zuschlagen → Straßenkampf), gilt es als nicht gespielt: die alte Runde.
+    const open = encounter(sim, id).minigame;
+    if (open) sim.dispatch({ type: 'minigames.expire', payload: { id: open.challengeId } }, { actor: 'system' });
   }
 }
 
