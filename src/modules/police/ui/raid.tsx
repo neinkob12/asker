@@ -6,7 +6,7 @@
 
 import type { GeoJSONSource } from 'maplibre-gl';
 import { useEffect } from 'preact/hooks';
-import { formatAmount, formatEuro, type GameState } from '../../../core';
+import { formatAmount, formatEuro, formatPercent, type GameState } from '../../../core';
 import { ABOVE_LAND, type MapLayer, mapToken, registerMapLayer } from '../../../map';
 import { Icon, MapDialog, onGameEvent, registerDialog, registerSlot, type UiApi, useGame, useUi } from '../../../ui';
 import { atSpot, getSpot } from '../../spots';
@@ -40,6 +40,8 @@ export interface RaidRecord {
   goods: number;
   money: number;
   arrested: string[];
+  /** Vorher versteckt (Minispiel, Auftrag 44): was sie dadurch nicht gefunden haben. */
+  stashed?: { share: number; goods: number; money: number };
 }
 
 /** Letzte Razzia gegen dich (nur Oberfläche, nicht im Spielstand). */
@@ -62,6 +64,7 @@ function raidLine(state: GameState, raid: RaidRecord): string {
   const parts: string[] = [];
   if (raid.goods > 0) parts.push(`${formatAmount(raid.goods)} beschlagnahmt`);
   if (raid.arrested.length > 0) parts.push(`${raid.arrested.length} festgenommen`);
+  if (raid.stashed && (raid.stashed.goods > 0 || raid.stashed.money > 0)) parts.push('Verstecktes nicht gefunden');
   const where = spot
     ? `Zivile Beamte ${atSpot(spot)}`
     : raid.scope === 'major'
@@ -149,6 +152,21 @@ function RaidReport(props: RaidRecord) {
           <Icon name="moneyBag" /> Schwarzgeld weg
         </dt>
         <dd>{props.money > 0 ? `−${formatEuro(props.money)}` : 'nichts'}</dd>
+        {props.stashed && (
+          <>
+            <dt>
+              <Icon name="eyeOff" /> Versteckt, nicht gefunden
+            </dt>
+            <dd class="raid-report__saved">
+              {[
+                props.stashed.goods > 0 ? formatAmount(props.stashed.goods) : '',
+                props.stashed.money > 0 ? formatEuro(props.stashed.money) : '',
+              ]
+                .filter(Boolean)
+                .join(' und ') || formatPercent(props.stashed.share)}
+            </dd>
+          </>
+        )}
         <dt>
           <Icon name="jail" /> In Haft
         </dt>
@@ -259,6 +277,7 @@ onGameEvent('police.raid', 'police.raidLook', (payload, _ui, state) => {
     goods: Math.round(payload.goods ?? 0),
     money: Math.round(payload.money ?? 0),
     arrested: [...(payload.arrested ?? [])],
+    ...(payload.stashed ? { stashed: { ...payload.stashed } } : {}),
     reported: false,
   };
 });

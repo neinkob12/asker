@@ -45,6 +45,7 @@ import {
 export {
   CITY_EVENTS,
   type CityEventDef,
+  EVENT_CONTACTS,
   type EventEffects,
   MARKET_EVENTS,
   type MarketEventDef,
