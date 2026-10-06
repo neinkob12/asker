@@ -78,6 +78,7 @@ import {
 } from './config';
 import { crewCandidates, crewCost, SPECIAL_MOVES, specialMoveFor } from './crew';
 import { ENCOUNTER_KINDS } from './kinds';
+import { dropMinigame, maybeStartMinigame } from './minigames';
 import { chooseAuto, chooseMove } from './strategy';
 import {
   activeOwn,
@@ -140,7 +141,7 @@ export function activeParticipants(encounter: Encounter): Participant[] {
   return activeOwn(encounter);
 }
 
-function playerActive(encounter: Encounter): boolean {
+export function playerActive(encounter: Encounter): boolean {
   return encounter.participants.some((p) => p.isPlayer && p.condition !== 'down');
 }
 
@@ -176,7 +177,7 @@ export function actionChance(encounter: Encounter, actionId: string): number {
 // ---------------------------------------------------------------------------------------------
 // Hilfen
 
-function roll(ctx: Ctx, amount: Amount): number {
+export function roll(ctx: Ctx, amount: Amount): number {
   if (typeof amount === 'number') return amount;
   const [a, b] = amount;
   return ctx.randomInt(Math.min(a, b), Math.max(a, b));
@@ -214,7 +215,7 @@ function names(list: string[]): string {
   return `${list.slice(0, -1).join(', ')} und ${list[list.length - 1]}`;
 }
 
-function textVars(encounter: Encounter): Record<string, string> {
+export function textVars(encounter: Encounter): Record<string, string> {
   const stakes = encounter.request.stakes ?? {};
   const staff = encounter.participants.filter((p) => !p.isPlayer).map((p) => p.name);
   const us = encounter.participants.some((p) => p.isPlayer) ? 'dich' : staff.length ? names(staff) : 'deine Leute';
@@ -373,6 +374,8 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
   ctx.state.modules.encounters.active.push(encounter);
   ctx.emit('encounter.started', { encounterId: encounter.id, kind: request.kind, request: encounter.request });
   if (encounter.phase === 'rounds' && activeParticipants(encounter).length === 0) nobodyThere(ctx, encounter);
+  // Auftrag 44: Bist du selbst dabei, beginnt es mit einem Minispiel (z.B. die Verfolgungsjagd), wenn der Anlass eins hat.
+  if (encounter.phase === 'rounds') maybeStartMinigame(ctx, encounter, 'start');
   return encounter;
 }
 
@@ -651,7 +654,8 @@ function takeCrew(ctx: Ctx, encounter: Encounter, crew: readonly string[]): Comm
   return { ok: true };
 }
 
-function enterRounds(ctx: Ctx, encounter: Encounter): void {
+/** Runden beginnen. Mit minigame (Standard) startet ein Minispiel des Anlasses, wenn du selbst dabei bist. */
+function enterRounds(ctx: Ctx, encounter: Encounter, minigame = true): void {
   encounter.phase = 'rounds';
   const kind = getKind(encounter.kind);
   // Der Text bleibt, nur {us} kann sich ändern (jetzt weiß man, wer hingeht).
@@ -663,12 +667,17 @@ function enterRounds(ctx: Ctx, encounter: Encounter): void {
     setupRounds(ctx, encounter, kind);
   }
   if (activeParticipants(encounter).length === 0) nobodyThere(ctx, encounter);
+  else if (minigame) maybeStartMinigame(ctx, encounter, 'start');
 }
+
+/** Solange ein Minispiel läuft, geht keine Runde (Auftrag 44). */
+const WAIT_FOR_MINIGAME = 'Erst das Minispiel.';
 
 /** Einsatz wählen, den die eigene Seite ab jetzt schützt (kostet keine Runde). */
 export function protect(ctx: Ctx, encounterId: number, stake: StakeId): CommandResult {
   const encounter = findActive(ctx, encounterId);
   if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
+  if (encounter.minigame) return { ok: false, reason: WAIT_FOR_MINIGAME };
   if (!encounter.stakes.some((s) => s.id === stake))
     return { ok: false, reason: 'Das steht hier nicht auf dem Spiel.' };
   encounter.protect = stake;
@@ -680,6 +689,7 @@ export function act(ctx: Ctx, encounterId: number, actionId: string, guard?: Sta
   const encounter = findActive(ctx, encounterId);
   if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
   if (encounter.phase === 'briefing') return { ok: false, reason: 'Erst entscheiden, ob du selbst hingehst.' };
+  if (encounter.minigame) return { ok: false, reason: WAIT_FOR_MINIGAME };
   const kind = getKind(encounter.kind);
   const action = kind && resolveAction(kind, actionId);
   if (!kind || !action || !availableActions(encounter).includes(actionId)) {
@@ -693,11 +703,16 @@ export function act(ctx: Ctx, encounterId: number, actionId: string, guard?: Sta
     return { ok: false, reason: `Nicht genug Schwarzgeld (${formatEuro(encounter.bribeCost)}).` };
   }
   if (guard !== undefined) encounter.protect = guard;
+  // Auftrag 44: Diese Handlung ist ein Minispiel (z.B. Zuschlagen → Straßenkampf), wenn du selbst dabei bist.
+  if (maybeStartMinigame(ctx, encounter, 'action', actionId)) return { ok: true };
   if (action.costsBribe) {
     wallet.pay(ctx, encounter.bribeCost, 'dirty', 'Bestechung', lossCategory(encounter));
     encounter.bribeSpent += encounter.bribeCost;
   }
+  const wasBrawl = encounter.brawl;
   playRound(ctx, encounter, kind, actionId, action);
+  // Kippt die Aggression in dieser Runde in eine Schlägerei, wird vor der nächsten Runde geprügelt (Minispiel).
+  if (encounter.phase === 'rounds' && encounter.brawl && !wasBrawl) maybeStartMinigame(ctx, encounter, 'brawl');
   return { ok: true };
 }
 
@@ -784,7 +799,13 @@ function brawlHitChance(encounter: Encounter): number {
   return Math.min(0.9, (BRAWL_HIT / own) * (protectedPeople ? BRAWL_PROTECTED_FACTOR : 1));
 }
 
-function playRound(ctx: Ctx, encounter: Encounter, kind: EncounterKind, actionId: string, action: EncounterAction) {
+export function playRound(
+  ctx: Ctx,
+  encounter: Encounter,
+  kind: EncounterKind,
+  actionId: string,
+  action: EncounterAction,
+) {
   const intent = getIntent(encounter.intent);
   const before: GaugeShift = { aggression: encounter.aggression, resolve: encounter.resolve };
   const dice = rollDice(ctx);
@@ -905,7 +926,7 @@ function resolveIntent(
   void kind;
 }
 
-function logRound(
+export function logRound(
   ctx: Ctx,
   encounter: Encounter,
   actionId: string,
@@ -936,7 +957,7 @@ function logRound(
 }
 
 /** Ist die Konfrontation nach dieser Runde vorbei? Dann mit welchem Ausgang. */
-function roundOutcome(
+export function roundOutcome(
   encounter: Encounter,
   kind: EncounterKind,
   action: EncounterAction,
@@ -957,7 +978,9 @@ function roundOutcome(
 export function autoResolve(ctx: Ctx, encounterId: number): CommandResult {
   const encounter = findActive(ctx, encounterId);
   if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
-  if (encounter.phase === 'briefing') enterRounds(ctx, encounter);
+  // Ein offenes Minispiel gilt dann als nicht gespielt (timeout), danach wie bisher: So bleibt nichts hängen.
+  dropMinigame(ctx, encounter);
+  if (encounter.phase === 'briefing') enterRounds(ctx, encounter, false);
   const kind = getKind(encounter.kind);
   for (let guard = 0; encounter.phase === 'rounds' && kind && guard < 50; guard++) {
     // Spezialzüge kennen die Leute selbst (kosten keine Runde).
@@ -995,7 +1018,7 @@ function goodsScope(state: GameState, request: EncounterRequest): { cityId: stri
   return request.warehouseId ? { cityId, warehouseId: request.warehouseId } : { cityId };
 }
 
-function loseGoods(ctx: Ctx, amount: number, request: EncounterRequest): number {
+export function loseGoods(ctx: Ctx, amount: number, request: EncounterRequest): number {
   // Überfall auf ein Lager: Ein Tresor schützt einen Teil (goods.warehouseModifiers, Auftrag 33).
   const vault = request.warehouseId ? warehouseModifiers(ctx.state, request.warehouseId).lossFactor : 1;
   let left = Math.max(0, Math.round(amount * vault));
@@ -1017,7 +1040,7 @@ function loseGoods(ctx: Ctx, amount: number, request: EncounterRequest): number 
  * Kategorie für Geld, das bei einer Konfrontation weggeht (Kasse): wie in der Anfrage angegeben (z.B. Zoll), sonst
  * Überfall, Polizei oder sonst Konfrontation.
  */
-function lossCategory(encounter: Pick<Encounter, 'kind' | 'request'>): MoneyCategory {
+export function lossCategory(encounter: Pick<Encounter, 'kind' | 'request'>): MoneyCategory {
   if (encounter.request.lossCategory) return encounter.request.lossCategory;
   const kind = encounter.kind;
   if (kind === 'raidDefense') return 'loss.theft';
@@ -1279,7 +1302,7 @@ function resultParts(
 }
 
 /** Konfrontation beenden. override ersetzt die Folgen (z.B. die Wege im Briefing wie Freikaufen). */
-function finish(
+export function finish(
   ctx: Ctx,
   encounter: Encounter,
   outcome: EncounterOutcome,
@@ -1433,6 +1456,7 @@ export function availableMoves(encounter: Encounter): { participantId: string; m
 export function special(ctx: Ctx, encounterId: number, participantId: string): CommandResult {
   const encounter = findActive(ctx, encounterId);
   if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
+  if (encounter.minigame) return { ok: false, reason: WAIT_FOR_MINIGAME };
   const kind = getKind(encounter.kind);
   const p = encounter.participants.find((x) => x.id === participantId);
   if (!kind || !p?.move || !availableMoves(encounter).some((m) => m.participantId === participantId)) {

@@ -80,6 +80,8 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     actionOverrides: {
       bribe: { label: 'Freikaufen', hint: 'Zahlen, damit sie abziehen. Das Geld ist in jedem Fall weg.' },
     },
+    // Auftrag 44: Zuschlagen oder eine Schlägerei (Aggression ab 70) wird zum Straßenkampf, wenn du dabei bist.
+    minigames: { actions: { fight: 'brawl' }, brawl: 'brawl' },
     outcomes: {
       success: { influence: 2, reputation: 2, text: 'Überfall {place} abgewehrt. {opponent} ziehen ab.' },
       failure: {
@@ -152,6 +154,8 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
         hint: 'Schlechte Idee. Gewalt gegen Polizei bringt viel Heat.',
       },
     },
+    // Auftrag 44: Bist du selbst dabei, springst du in den Wagen.
+    minigames: { start: 'chase' },
     outcomes: {
       success: { text: 'Den Bullen {place} entkommen.' },
       failure: { reputation: -2, text: 'Gefasst {place}.' },
@@ -212,6 +216,8 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
       },
       fight: { strike: 0.25, heat: 20, hint: 'Ganz schlechte Idee. Gewalt gegen Polizei bringt viel Heat.' },
     },
+    // Auftrag 44: Fährst du selbst, kommt das Gespräch am Fenster; „Gas geben“ wird zur Verfolgungsjagd.
+    minigames: { start: 'traffic', actions: { speedOff: 'chase' } },
     outcomes: {
       success: { text: 'Kontrolle {place} überstanden. Weiter geht die Fahrt.' },
       failure: { text: 'Ladung {place} aufgeflogen.' },
@@ -279,6 +285,8 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     actionOverrides: {
       bribe: { hint: 'Kostet Schwarzgeld. Beim Zoll teuer, aber wirksam.' },
     },
+    // Auftrag 44: Stehst du selbst da, liegen die Papiere auf dem Tisch des Zolls.
+    minigames: { start: 'papers' },
     outcomes: {
       success: { text: 'Zoll {place} durch, die Ware kommt durch.' },
       failure: { text: 'Ladung {place} beim Zoll aufgeflogen.' },
@@ -329,6 +337,8 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
         endHit: 0,
       },
     },
+    // Auftrag 44: Zuschlagen oder eine Schlägerei (Aggression ab 70) wird zum Straßenkampf, wenn du dabei bist.
+    minigames: { actions: { fight: 'brawl' }, brawl: 'brawl' },
     outcomes: {
       success: { stakeMoney: 1, reputation: 2, text: 'Schulden {place} eingetrieben.' },
       failure: {
@@ -377,6 +387,8 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     briefingOptions: ['self', 'crew', 'backup', 'tipoff'],
     actions: ['negotiate', 'intimidate', 'talkNervous', 'bluff', 'hold', 'fight', 'callCops', 'flee'],
     remoteActions: ['negotiate', 'talkNervous', 'bluff', 'fight', 'flee'],
+    // Auftrag 44: Zuschlagen oder eine Schlägerei (Aggression ab 70) wird zum Straßenkampf, wenn du dabei bist.
+    minigames: { actions: { fight: 'brawl' }, brawl: 'brawl' },
     outcomes: {
       success: {
         stakeGoods: 1,
@@ -425,6 +437,8 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     briefingOptions: ['self', 'crew', 'backup'],
     actions: ['fight', 'intimidate', 'talkNervous', 'negotiate', 'hold', 'flee'],
     remoteActions: ['fight', 'talkNervous', 'negotiate', 'flee'],
+    // Auftrag 44: Zuschlagen oder eine Schlägerei (Aggression ab 70) wird zum Straßenkampf, wenn du dabei bist.
+    minigames: { actions: { fight: 'brawl' }, brawl: 'brawl' },
     outcomes: {
       success: { reputation: 1, text: 'Diebe {place} gestellt.' },
       failure: { reputation: -1, text: 'Die Diebe sind {place} entwischt.' },
@@ -467,6 +481,8 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     briefingOptions: ['self', 'crew', 'backup'],
     actions: ['fight', 'intimidate', 'talkNervous', 'bluff', 'hold', 'flee'],
     remoteActions: ['fight', 'talkNervous', 'bluff', 'flee'],
+    // Auftrag 44: Zuschlagen oder eine Schlägerei (Aggression ab 70) wird zum Straßenkampf, wenn du dabei bist.
+    minigames: { actions: { fight: 'brawl' }, brawl: 'brawl' },
     outcomes: {
       // Heat durch Gewalt meldet die Polizei selbst (reportViolence bei jeder Konfrontation im Veedel).
       success: {

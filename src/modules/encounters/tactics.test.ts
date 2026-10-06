@@ -297,7 +297,7 @@ describe('Konfrontationen neu: Migration', () => {
     }
     state.moduleVersions.encounters = 3;
     const loaded = loadSimulation(state as unknown as typeof sim.state, sim.modules);
-    expect(loaded.state.moduleVersions.encounters).toBe(4);
+    expect(loaded.state.moduleVersions.encounters).toBe(5);
     const e = get(loaded, id);
     expect(e).toMatchObject({ resolve: 40, clock: 4, brawl: false });
     expect(e.intent).not.toBeNull();

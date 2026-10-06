@@ -362,7 +362,7 @@ describe('encounters', () => {
     const loaded = loadSimulation(state as unknown as typeof sim.state, sim.modules);
     const old = getEncounter(loaded.state, 7);
     expect(old).toMatchObject({ kind: 'policeChase', phase: 'done', outcome: 'success', participants: [], mode: null });
-    expect(loaded.state.moduleVersions.encounters).toBe(4);
+    expect(loaded.state.moduleVersions.encounters).toBe(5);
   });
 
   it('Spielstände der Version 2 bekommen den Weg im Briefing und die Beziehung im Ergebnis', () => {

@@ -22,6 +22,7 @@
 // Auftrag 34: Gedächtnis (memory.ts: gangMemories, memoryScore, memoryPriceFactor, remember; Preise für Waffenstillstand
 //   und Bündnis hängen daran, allianceCost) und Gang-Kriege (war.ts: rivalry, rivalries, activeWars, pastWars; Befehl
 //   'gangs.supportWar', Ereignisse 'gang.remembered', 'gang.warStarted', 'gang.warEnded', 'gang.warSupported').
+// Auftrag 44: Tresor knacken nach einem Überfall auf einen Gang-Spot mit dir selbst dabei (safe.ts, Minispiel 'safe').
 //
 // Achtung Abhängigkeiten: territory hängt von gangs ab (Startverteilung der Reviere). gangs darf deshalb
 // nicht dependsOn: ['territory'] eintragen (Zyklus). Für API-Aufrufe zur Laufzeit ist das auch nicht nötig.
@@ -46,6 +47,7 @@ import {
 import { forgetFaded } from './memory';
 import { burgleNow, type IncidentKind, respond, runMethod } from './methods';
 import { onControlChanged, onEncounterResolved, onPoliceRaid, onSale, onTipOff } from './reactions';
+import { onSafeFinished } from './safe';
 import {
   type GangStage,
   type GangsState,
@@ -62,7 +64,18 @@ type GangsStateV3 = Pick<GangsState, 'gangs' | 'priceFactors'>;
 /** Zustand bis Version 4 (vor Auftrag 34). */
 type GangsStateV4 = Omit<GangsState, keyof ReturnType<typeof initialMemoryState>>;
 
-export { ALLIANCE_COST, GANG_SPOT_MIN_INFLUENCE, MEMORIES, type MemoryKind, WAR_AT, WARN_AT } from './config';
+export {
+  ALLIANCE_COST,
+  GANG_SPOT_MIN_INFLUENCE,
+  MEMORIES,
+  type MemoryKind,
+  SAFE_ALARM_HEAT,
+  SAFE_MAX,
+  SAFE_MIN,
+  SAFE_SHARE,
+  WAR_AT,
+  WARN_AT,
+} from './config';
 export type { Gang, GangMethod, GangTraits } from './data';
 export { GANG_RIVALRY } from './data';
 export { canJoinRaid, raidCrew } from './diplomacy';
@@ -81,6 +94,7 @@ export {
   intimidationFactor,
   openIncidents,
 } from './methods';
+export { safeAmount } from './safe';
 export {
   allianceCost,
   ceasefireCost,
@@ -233,6 +247,7 @@ export default defineModule({
     'police.tipOff': onTipOff,
     'police.raid': onPoliceRaid,
     'territory.controlChanged': onControlChanged,
+    'minigame.finished': onSafeFinished,
   },
   migrations: {
     // Version 1 (Fundament) hatte keinen Zustand.

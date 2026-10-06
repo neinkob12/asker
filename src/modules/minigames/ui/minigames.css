@@ -1,0 +1,309 @@
+/* Rahmen der Minispiele (Auftrag 44): Overlay über der Kartenfläche (am Handy bildschirmfüllend), Einleitung,
+   3-2-1, Bühne, Ergebnis. Look Glas: dunkles Glas, Barlow, Bedeutungsfarben. */
+
+.mg-overlay {
+  position: fixed;
+  /* über der schwebenden Island (weggelegtes Handy), wie die Akte der Konfrontation: Das Spiel pausiert */
+  z-index: calc(var(--z-notification) + 1);
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: max(0px, calc(var(--map-right) - var(--gap)));
+  display: grid;
+  font-family: var(--font-hud);
+  color: var(--hud-ink);
+  outline: none;
+  transition: right var(--dock-duration) var(--dock-ease);
+  animation: mg-fade var(--duration-slow) var(--ease-out);
+}
+.mg-overlay--stage {
+  /* Kein Weichzeichner über der Karte: Der kostet bei jedem Bild der Karte darunter (Handy, 4× CPU-Bremse). */
+  background: var(--file-backdrop);
+}
+/* Karte bleibt sichtbar (Verfolgungsjagd): nur ein Hauch Vignette. */
+.mg-overlay--map {
+  background: var(--map-vignette, transparent);
+}
+@keyframes mg-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.mg-run {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: var(--space-6);
+}
+
+/* Bühne: eigene Fläche über der abgedunkelten Karte. Glas darin ohne Weichzeichner: Der müsste bei jedem Bild der Karte
+   dahinter neu rechnen (Handy mit 4× CPU-Bremse), und auf der dunklen Bühne sieht man ihn kaum. */
+.mg-stage {
+  --hud-blur: none;
+  position: absolute;
+  inset: var(--space-6);
+  margin: auto;
+  max-width: 1120px;
+  max-height: 760px;
+  border-radius: var(--hud-radius);
+  overflow: hidden;
+  background: var(--hud-glass-solid);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  transition: filter var(--duration) var(--ease-out);
+}
+.mg-overlay--map .mg-stage {
+  inset: 0;
+  max-width: none;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.mg-run.is-intro .mg-stage,
+.mg-run.is-result .mg-stage {
+  filter: brightness(0.5) saturate(0.7);
+}
+
+/* ---------------------------------------------------------------- Karten: Einleitung und Ergebnis */
+.mg-card {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  gap: var(--space-4);
+  width: min(520px, 100%);
+  padding: var(--space-6);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  box-shadow: var(--hud-shadow);
+  animation: mg-rise var(--duration-slow) var(--ease-out);
+}
+@keyframes mg-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.mg-kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--hud-gold);
+}
+.mg-kicker__icon {
+  width: 16px;
+  height: 16px;
+}
+.mg-title {
+  margin: 0;
+  font-family: var(--font-hud-display);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+.mg-situation {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--hud-ink);
+  overflow-wrap: normal;
+  hyphens: manual;
+}
+.mg-controls {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  list-style: none;
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass-fill);
+  font-size: 15px;
+  color: var(--hud-ink-2);
+}
+.mg-controls li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.mg-controls li.is-second {
+  order: 2;
+}
+.mg-controls__icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--hud-ink-2);
+}
+.mg-more {
+  color: var(--hud-ink-2);
+  font-size: 15px;
+}
+.mg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.mg-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 0 var(--space-5);
+  border-radius: var(--hud-radius-button);
+  border: 1px solid var(--hud-glass-edge);
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink);
+  font: 700 15px var(--font-hud);
+  cursor: pointer;
+}
+.mg-button svg {
+  width: 20px;
+  height: 20px;
+}
+.mg-button--big {
+  flex: 1 1 200px;
+  min-height: 56px;
+  font-size: 17px;
+}
+.mg-button.is-gold {
+  background: var(--hud-gold);
+  color: var(--hud-gold-on);
+  border-color: transparent;
+}
+.mg-button:hover:not(:disabled) {
+  background: var(--hud-glass-fill-active);
+}
+.mg-button.is-gold:hover:not(:disabled) {
+  background: var(--hud-gold);
+  filter: brightness(1.06);
+}
+.mg-button:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 3px;
+}
+.mg-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.mg-result {
+  justify-items: center;
+  text-align: center;
+}
+.mg-result__text {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.4;
+}
+.mg-result__note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--hud-ink-2);
+}
+.mg-result .mg-actions {
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------- 3-2-1 */
+.mg-countdown {
+  position: relative;
+  z-index: 4;
+  pointer-events: none;
+}
+.mg-countdown__n {
+  display: block;
+  font-family: var(--font-hud-display);
+  font-size: 140px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--hud-ink);
+  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
+  animation: mg-count 0.9s var(--ease-out) both;
+}
+.mg-countdown__n.is-go {
+  color: var(--hud-gold);
+}
+@keyframes mg-count {
+  from {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0.85;
+    transform: scale(0.92);
+  }
+}
+
+/* ---------------------------------------------------------------- Hinweis im HUD, Platzhalter */
+.mg-hud-alert {
+  pointer-events: auto;
+}
+.mg-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: var(--space-5);
+  text-align: center;
+}
+.mg-placeholder__text {
+  margin: 0;
+  font-family: var(--font-hud-display);
+  font-size: 28px;
+}
+.mg-placeholder__buttons {
+  display: flex;
+  gap: var(--space-3);
+}
+
+/* ---------------------------------------------------------------- Handy: bildschirmfüllend */
+@media (max-width: 760px) {
+  .mg-overlay {
+    right: 0;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+      env(safe-area-inset-left, 0px);
+  }
+  .mg-run {
+    padding: var(--space-5);
+  }
+  .mg-stage {
+    inset: 0;
+    max-width: none;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+  .mg-card {
+    padding: var(--space-5);
+  }
+  .mg-title {
+    font-size: 30px;
+  }
+  .mg-countdown__n {
+    font-size: 110px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mg-overlay,
+  .mg-card,
+  .mg-countdown__n {
+    animation: none;
+  }
+}

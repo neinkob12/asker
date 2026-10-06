@@ -140,3 +140,11 @@ export const SPECIAL_CHARISMA = 70;
 export const SPECIAL_SPEED = 70;
 /** Ware in Sicherheit gebracht: Mehr als so viel Prozent der Ware kann nicht mehr verloren gehen. */
 export const STASH_CAP = 50;
+
+// ---------------------------------------------------------------------------------------------
+// Minispiele (Auftrag 44, minigames.ts)
+
+/** Nach einem Straßenkampf ohne Entscheidung: Aggression steht dann hier (unter AGGRESSION_FIGHT, die Fäuste ruhen). */
+export const BRAWL_AFTER_AGGRESSION = 60;
+/** Straßenkampf: so viel weniger Entschlossenheit pro Gegner am Boden. */
+export const BRAWL_DOWN_RESOLVE = 15;

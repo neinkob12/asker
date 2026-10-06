@@ -119,7 +119,15 @@ import {
 
 import { nextTier, type OperationTier, operationFacts, tierInfo } from './tier';
 
-export { CHECK_THRESHOLD, HEAT_LEVELS, MAX_HEAT, OPERATION_TIERS, RAID_SCOPES, RAID_THRESHOLD } from './config';
+export {
+  CHECK_FACTOR_BY_CITY,
+  CHECK_THRESHOLD,
+  HEAT_LEVELS,
+  MAX_HEAT,
+  OPERATION_TIERS,
+  RAID_SCOPES,
+  RAID_THRESHOLD,
+} from './config';
 export {
   nextTierHints,
   type OperationFacts,

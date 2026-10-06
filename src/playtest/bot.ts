@@ -904,9 +904,20 @@ function moveOn(sim: Simulation, stats: BotStats, options: BotOptions): void {
 /** Nachrichten der Städte (Angebote) beantwortet der Bot nicht im Chat: Er entscheidet selbst (moveOn). */
 const CITY_CONTACTS = new Set(NEXT_CITY.filter((id) => CITY_OFFERS[id]).map((id) => cityContact(id).id));
 
+/**
+ * Minispiele (Auftrag 44) spielt der Bot nicht: Er löst offene sofort als timeout auf (Befehl nur für das System).
+ * Dann gilt das alte Verhalten, Balancing und Szenarien bleiben wie vor den Minispielen.
+ */
+function handleMinigames(sim: Simulation): void {
+  for (const challenge of [...(sim.state.modules.minigames?.active ?? [])]) {
+    sim.dispatch({ type: 'minigames.expire', payload: { id: challenge.id } }, { actor: 'system' });
+  }
+}
+
 /** Ein Blick aufs Spiel. */
 export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = DEFAULT_BOT): void {
   if (sim.state.outcome.gameOver) return;
+  handleMinigames(sim);
   // Auftrag 40: Als Boss von Deutschland verkauft er, danach spielt er die Hafen-Phase (botTrade.ts).
   const command = (c: Command) => run(sim, stats, c);
   if (options.sellBusiness !== false) sellWhenOffered(sim.state, command);

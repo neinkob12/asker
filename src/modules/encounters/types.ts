@@ -1,6 +1,7 @@
 // Typen der Konfrontationen. Reine Daten (JSON), damit sie im Spielstand liegen können.
 
 import type { MoneyCategory } from '../../core';
+import type { MinigameKind } from '../minigames';
 
 export type EncounterOutcome = 'success' | 'failure' | 'retreat';
 
@@ -246,6 +247,30 @@ export type EncounterEnding =
   | 'briefing'
   | 'resolved';
 
+/**
+ * Ein Minispiel, auf das die Konfrontation gerade wartet (Auftrag 44, encounters/minigames.ts):
+ *   start   sobald die Runden beginnen (z.B. Polizeiflucht: du springst in den Wagen)
+ *   action  statt einer Runde mit dieser Handlung (z.B. „Zuschlagen“ startet den Straßenkampf); protect = Schutz dabei
+ *   brawl   die Aggression ist über AGGRESSION_FIGHT gekippt, vor der nächsten Runde wird geprügelt
+ */
+export interface EncounterMinigame {
+  challengeId: number;
+  kind: MinigameKind;
+  trigger: 'start' | 'action' | 'brawl';
+  actionId?: string;
+  protect?: StakeId;
+}
+
+/** Welche Minispiele ein Anlass startet, wenn der Spieler selbst dabei ist (Auftrag 44). */
+export interface EncounterMinigames {
+  /** Sobald die Runden beginnen. */
+  start?: MinigameKind;
+  /** Statt der Runde mit dieser Handlung (Schlüssel: ID aus actions.ts). */
+  actions?: Partial<Record<string, MinigameKind>>;
+  /** Wenn die Aggression in einer Runde über AGGRESSION_FIGHT kippt. */
+  brawl?: MinigameKind;
+}
+
 export interface Encounter {
   id: number;
   kind: string;
@@ -302,6 +327,8 @@ export interface Encounter {
   resolvedAt: number | null;
   playerKilled: boolean;
   result: EncounterResult | null;
+  /** Offenes Minispiel (Auftrag 44): Solange es läuft, gehen keine Runden. null bzw. fehlt = keins. */
+  minigame?: EncounterMinigame | null;
 }
 
 export interface EncountersState {
@@ -462,4 +489,6 @@ export interface EncounterKind {
   actionOverrides?: Record<string, Partial<Omit<EncounterAction, 'stat' | 'statMode'>>>;
   /** Folgen pro Ausgang. */
   outcomes: Record<EncounterOutcome, EncounterEffects>;
+  /** Minispiele, wenn der Spieler selbst dabei ist (Auftrag 44). Ohne Angabe keine. */
+  minigames?: EncounterMinigames;
 }

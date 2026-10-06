@@ -370,3 +370,14 @@ export const WAR_SPOILS_PEOPLE = 2;
 export const WAR_SPOILS_MONEY = 0.2;
 /** Höchstens so viele Leute gehen beim Überfall auf einen Spot der anderen mit. */
 export const WAR_RAID_CREW = 3;
+
+// --- Tresor knacken (Auftrag 44, safe.ts) ----------------------------------------------------------------------
+
+/** Im Tresor liegt höchstens so viel Schwarzgeld … */
+export const SAFE_MAX = 4000;
+/** … und dieser Anteil vom Geld der Gang (nach der Beute aus dem Überfall). */
+export const SAFE_SHARE = 0.1;
+/** Darunter lohnt kein Tresor (kein Minispiel). */
+export const SAFE_MIN = 200;
+/** Nicht geknackt: Der Alarm geht los, so viel Heat im Veedel. */
+export const SAFE_ALARM_HEAT = 8;
