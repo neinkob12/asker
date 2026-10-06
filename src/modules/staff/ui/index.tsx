@@ -2,7 +2,7 @@
 // Läufer und Sicherheit im Spot-Panel, Hinweise bei Level-Aufstieg, Haft, Verrat.
 
 import { useState } from 'preact/hooks';
-import { formatEuro, formatPercent, type GameState } from '../../../core';
+import { formatEuro, formatPercent, type GameState, withPeriod } from '../../../core';
 import {
   Button,
   Chips,
@@ -43,6 +43,8 @@ import {
   payrollDue,
   RUNNER_DAILY_WAGE,
   RUNNER_HIRE_COST,
+  RUNNER_HIRE_COST_MAX,
+  RUNNER_HIRE_COST_MIN,
   roleName,
   runnerAt,
   runnerHireCost,
@@ -350,6 +352,12 @@ function SpotStaff(props: { spotId: string }) {
           ? undefined
           : `Nach dem Anheuern ${formatEuro(RUNNER_DAILY_WAGE)} Lohn pro Tag. Der Preis hängt vom Spot ab.`
       }
+      // J10: Warum der Läufer hier mehr Handgeld kostet als ein Bewerber im Personal.
+      more={
+        runner
+          ? undefined
+          : `Von der Straße steht sofort jemand hier, der den Spot kennt: Das Handgeld richtet sich nach Andrang und Preisen (${formatEuro(RUNNER_HIRE_COST_MIN)} bis ${formatEuro(RUNNER_HIRE_COST_MAX)}). Bewerber unter Personal, „Könntest du einstellen“, kosten meist weniger, dafür wartest du, bis jemand Passendes kommt.`
+      }
     >
       <List>
         {runner && (
@@ -472,7 +480,8 @@ onGameEvent('staff.statusChanged', 'staff.status', (payload, ui, state) => {
 });
 onGameEvent('staff.betrayed', 'staff.betrayed', (payload, ui, state) => {
   const m = getStaffMember(state, payload.staffId);
-  if (m && here(state, m)) ui.toast(`Ärger mit ${m.name}. Schau in den Verlauf.`, 'bad', { urgent: false });
+  if (m && here(state, m))
+    ui.toast(`${withPeriod(`Ärger mit ${m.name}`)} Schau in den Verlauf.`, 'bad', { urgent: false });
 });
 
 // Empfehlungen, Suche und Statistik
@@ -495,6 +504,27 @@ registerAdvisor({
         ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
         ui.openPanel('spots.spot', { spotId: spot.id });
       },
+    };
+  },
+});
+
+// J10: Wer über die Bewerber kam, stand „Frei: ohne Einsatz“ herum und kostete Lohn, ohne dass es jemand sagte.
+registerAdvisor({
+  id: 'staff.idleRunner',
+  advise: (state) => {
+    const cityId = activeCity(state);
+    const idle = getStaff(state, { role: 'runner', status: 'active', cityId }).find((m) => !m.assignment);
+    if (!idle) return null;
+    // Nur, wenn es einen Spot gibt, an dem noch niemand steht (sonst holt ihn sich ein Leutnant).
+    if (!getSpots(state, cityId).some((spot) => !runnerAt(state, spot.id))) return null;
+    return {
+      id: 'staff.idleRunner',
+      priority: 72,
+      icon: 'runner',
+      title: `${idle.name} an einen Spot stellen`,
+      text: `${idle.name} ist ohne Einsatz: Ohne Spot verkauft niemand, der Lohn läuft trotzdem (${formatEuro(idle.wage)} am Tag).`,
+      actionLabel: 'Zur Akte',
+      action: (ui) => ui.openPanel('staff.profile', { staffId: idle.id }),
     };
   },
 });

@@ -17,10 +17,22 @@ import {
   ListItem,
   registerSlot,
   SegmentedControl,
+  Select,
   Sheet,
   useGame,
 } from '../../../ui';
-import { isSpecialist, roleName, STAT_KEYS, STAT_NAMES, type StaffRole, TRAITS, traitName } from '../../staff';
+import { activeCity } from '../../city';
+import { getSpots } from '../../spots';
+import {
+  isSpecialist,
+  roleName,
+  runnerAt,
+  STAT_KEYS,
+  STAT_NAMES,
+  type StaffRole,
+  TRAITS,
+  traitName,
+} from '../../staff';
 import {
   type Candidate,
   getContacts,
@@ -96,13 +108,31 @@ function CandidateRow(props: { candidate: Candidate; onOpen: () => void }) {
   );
 }
 
-/** Blatt mit allem zu einer Person: Werte (bekannte als Zahl), Hintergrund, Konditionen, Einstellen oder Ablehnen. */
+/** Auswahl „ohne Einsatz“ beim Einstellen eines Läufers. */
+const NO_SPOT = '';
+
+/**
+ * Blatt mit allem zu einer Person: Werte (bekannte als Zahl), Hintergrund, Konditionen, Einstellen oder Ablehnen.
+ * Läufer kommen gleich an einen Spot ohne Läufer (J10: vorher standen sie „Frei: ohne Einsatz“ und kosteten Lohn).
+ */
 function CandidateSheet(props: { candidate: Candidate | null; onClose: () => void }) {
   const { state, dispatch } = useGame();
+  const [spotChoice, setSpotChoice] = useState<string | null>(null);
   const c = props.candidate;
   const look = c ? ROLE_LOOK[c.role] : ROLE_LOOK.runner;
+  const freeSpots =
+    c?.role === 'runner' ? getSpots(state, activeCity(state)).filter((spot) => !runnerAt(state, spot.id)) : [];
+  // Ohne eigene Wahl der erste freie Spot; eine Wahl, die nicht mehr frei ist, fällt darauf zurück.
+  const spotId =
+    spotChoice === NO_SPOT || freeSpots.some((spot) => spot.id === spotChoice)
+      ? (spotChoice as string)
+      : (freeSpots[0]?.id ?? NO_SPOT);
+  const close = () => {
+    setSpotChoice(null);
+    props.onClose();
+  };
   return (
-    <Sheet open={!!c} onClose={props.onClose} title={c?.name ?? ''} detents={['medium', 'large']}>
+    <Sheet open={!!c} onClose={close} title={c?.name ?? ''} detents={['medium', 'large']}>
       {c && (
         <div class="rc-sheet">
           <header class="rc-sheet__head">
@@ -179,12 +209,42 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
               </ListItem>
             </List>
           </Group>
+          {freeSpots.length > 0 && (
+            <Group
+              title="Einsatz"
+              icon="pin"
+              color="place"
+              note={spotId === NO_SPOT ? 'Ohne Spot verkauft niemand, der Lohn läuft trotzdem.' : undefined}
+            >
+              <List>
+                <ListItem>
+                  <ItemContent icon="runner" color="people" title="Steht dann">
+                    <Select
+                      wide
+                      label="Spot"
+                      value={spotId}
+                      options={[
+                        ...freeSpots.map((spot) => ({ value: spot.id, label: spot.name })),
+                        { value: NO_SPOT, label: 'Erst mal ohne Einsatz' },
+                      ]}
+                      onChange={setSpotChoice}
+                    />
+                  </ItemContent>
+                </ListItem>
+              </List>
+            </Group>
+          )}
           <div class="rc-sheet__actions">
             <Button
               variant="primary"
               disabled={state.wallet.dirty < c.hireCost}
               onClick={() => {
-                if (dispatch({ type: 'recruiting.hire', payload: { candidateId: c.id } }).ok) props.onClose();
+                const assignment = spotId === NO_SPOT ? null : { kind: 'spot' as const, targetId: spotId };
+                const hired = dispatch({
+                  type: 'recruiting.hire',
+                  payload: assignment ? { candidateId: c.id, assignment } : { candidateId: c.id },
+                });
+                if (hired.ok) close();
               }}
             >
               Einstellen ({formatEuro(c.hireCost)})
@@ -193,7 +253,7 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
               variant="subtle"
               onClick={() => {
                 dispatch({ type: 'recruiting.decline', payload: { candidateId: c.id } });
-                props.onClose();
+                close();
               }}
             >
               Ablehnen
