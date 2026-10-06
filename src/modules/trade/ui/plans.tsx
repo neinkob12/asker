@@ -480,7 +480,7 @@ function CustomerPanel(props: { customerId: string }) {
         )}
         {europe && (
           <Chip color="law" icon="shield">
-            Grenze {europe.border.name}
+            Zoll {europe.border.name}
           </Chip>
         )}
       </Chips>

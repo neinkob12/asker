@@ -38,6 +38,7 @@ import {
   clock,
   defineModule,
   formatEuro,
+  formatNumber,
   type GameState,
   journal,
   type LngLat,
@@ -429,7 +430,16 @@ declare module '../../core' {
     'trade.orderFailed': { orderId: number; customerId: string; reason: 'expired' | 'late' };
     'trade.containerOrdered': { shipmentId: number; producerId: string; amount: number; portId: string; cost: number };
     /** stored: was davon gleich ins Lager passte (der Rest wartet am Kai, Auftrag 43). */
-    'trade.containerArrived': { shipmentId: number; portId: string; amount: number; stored: number; checked: boolean };
+    'trade.containerArrived': {
+      shipmentId: number;
+      portId: string;
+      productId: string;
+      amount: number;
+      stored: number;
+      checked: boolean;
+      /** Eigene Ernte (Auftrag 42). */
+      own: boolean;
+    };
     /** Auftrag 41: Das Lager ist voll, der Container (oder sein Rest) wartet am Kai. */
     /** arriving: gleich bei der Ankunft (das Banner der Ankunft sagt es schon). */
     'trade.containerWaiting': { shipmentId: number; portId: string; amount: number; arriving: boolean };
@@ -1568,6 +1578,13 @@ export function buyContainer(
   if (!wallet.canAfford(ctx.state, total, 'dirty')) return { ok: false, reason: `Das kostet ${formatEuro(total)}.` };
   const arrivesAt = ctx.now + shippingMinutes(producerId, portId);
   const list = shipContainers(ctx, checked.producer, portId, checked.containers, null, arrivesAt);
+  // Rückmeldung (Auftrag 43, I11): was unterwegs ist und wann es ankommt.
+  const grams = list.reduce((sum, x) => sum + x.amount, 0);
+  const own = ORIGIN_BY_ID.has(producerId);
+  journal.add(
+    ctx,
+    `${own ? 'Verschifft' : `Bei ${checked.producer.name} bestellt`}: ${list.length === 1 ? 'ein Container' : `${list.length} Container`} ${productName(productId)} (${formatNumber(Math.round(grams / 100) / 10, 1)} kg), Ankunft in ${harborPort(portId)?.name ?? portId} ${clock.weekdayName(arrivesAt, true)} ${clock.formatTime(arrivesAt)}.`,
+  );
   return { ok: true, data: { shipmentId: list[0].id, shipmentIds: list.map((x) => x.id), arrivesAt } };
 }
 
@@ -1724,9 +1741,11 @@ function landContainer(ctx: Ctx, shipment: TradeShipment, checked: boolean): voi
   ctx.emit('trade.containerArrived', {
     shipmentId: shipment.id,
     portId: shipment.portId,
+    productId: shipment.productId,
     amount: shipment.amount,
     stored: Math.min(shipment.amount, portRoom(ctx.state, shipment.portId)),
     checked,
+    own: shipment.own === true,
   });
   unload(ctx, shipment, true);
 }
@@ -1973,7 +1992,7 @@ function reportExpired(ctx: Ctx, orders: readonly TradeOrder[]): void {
   journal.add(ctx, `${count} ohne Antwort verfallen (${formatEuro(value)}): ${who}.`, 'bad');
   messages.send(ctx, {
     contact: dispatcherContact(),
-    text: `${count} sind verfallen, keiner hat geantwortet: ${who}. Das waren ${formatEuro(value)}, die kauft jetzt die Konkurrenz. Wenn du willst, nehm ich die Bestellungen für dich an (Bestellungen › Fenna übernimmt).`,
+    text: `${count} sind verfallen, keiner hat geantwortet: ${who}. Das waren ${formatEuro(value)}, die kauft jetzt die Konkurrenz. Wenn du willst, nehm ich die Bestellungen für dich an (Aufträge › Fenna übernimmt).`,
   });
 }
 

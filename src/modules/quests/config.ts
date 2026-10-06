@@ -6,7 +6,7 @@ import type { Contact, GameEvents, GameState, MoneyKind } from '../../core';
 import { HARBOR_CITY, isPlayerTraveling, presentCity } from '../city';
 import { getVehicles, isShip } from '../fleet';
 import { getWarehouses } from '../goods';
-import { fincaWorkers, getFincas, isGrowStarted, openRegions, workersNeeded } from '../grow';
+import { fincaWorkers, getFincas, growGoals, isGrowStarted, openRegions, workersNeeded } from '../grow';
 import { getLieutenants, getRightHand } from '../hierarchy';
 import { netWorth } from '../leaderboard';
 import { hasBerth } from '../logistics';
@@ -713,7 +713,7 @@ function harborChapter(): QuestDef[] {
         'Das ist die Halle. Hier kommt die Ware an, von hier geht sie raus. Montags rufen die Kunden an: wer, was, wie ' +
         'viel. Fenna hat dir die erste Liste geschickt. Nimm eine Bestellung an, für die die Ware schon da ist, da steht ' +
         '„Ware da“ dran.',
-      hint: 'Handel › Bestellungen: Tipp auf eine Bestellung mit „Ware da“.',
+      hint: 'Handel › Aufträge: Tipp auf eine Bestellung mit „Ware da“.',
       measure: (state) =>
         getOrders(state).some((o) => o.status === 'accepted' || o.status === 'delivering' || o.status === 'delivered')
           ? 1
@@ -729,7 +729,7 @@ function harborChapter(): QuestDef[] {
       task:
         'Angenommen ist noch nicht geliefert. Unter „Zu liefern“ schickst du die Ware los. Die Spedition kostet, wird ' +
         'aber selten kontrolliert. Bezahlt wird bei Ankunft.',
-      hint: 'Handel › Bestellungen › Zu liefern: Tipp auf den Kunden.',
+      hint: 'Handel › Aufträge › Zu liefern: Tipp auf den Kunden.',
       measure: (state) => (tradeStats(state).delivered > 0 || getDeliveries(state).length > 0 ? 1 : 0),
       goTo: 'trade',
       reward: [{ kind: 'money', money: 'clean', amount: 5000 }],
@@ -960,12 +960,13 @@ function growChapter(): QuestDef[] {
       ...base,
       id: 'pdHarvest',
       icon: 'package',
-      title: 'Bring die erste Ernte ein',
+      title: 'Bring die erste Ernte ins Ausfuhrlager',
       task:
         'Jetzt heißt es warten. Ernte, trocknen, bei Hasch pressen, verpacken: Dann liegt die Ware im Ausfuhrlager am ' +
         'Hafen. Die Verpackung entscheidet, wie oft der Zoll reinschaut.',
-      hint: 'Die Finca-Seite zeigt, wie lange es noch dauert.',
-      measure: (state) => (state.modules.grow.stats.harvested > 0 ? 1 : 0),
+      hint: 'Die Finca-Seite zeigt, wann die Ware im Ausfuhrlager liegt.',
+      // Erst verpackt im Ausfuhrlager (Auftrag 43, I1): nach der Ernte trocknet sie noch 9 bis 12 Tage.
+      measure: (state) => (state.modules.grow.stats.packed > 0 ? 1 : 0),
       goTo: 'grow',
       reward: [{ kind: 'money', money: 'clean', amount: 10000 }],
     },
@@ -991,13 +992,43 @@ function growChapter(): QuestDef[] {
       task:
         'Wenn sie im Hafen ist, geht sie raus wie jede andere Ware. Nur dass sie dich fast nichts gekostet hat. Je mehr ' +
         'davon, desto näher bist du am Produzenten.',
-      hint: 'Handel › Aufträge (vorher „Bestellungen“): ausliefern wie immer (oder Fenna machen lassen).',
+      hint: 'Handel › Aufträge: ausliefern wie immer (oder Fenna machen lassen).',
       measure: (state) => (tradeStats(state).ownDelivered > 0 ? 1 : 0),
       goTo: 'trade',
       reward: [{ kind: 'money', money: 'clean', amount: 50000 }],
       doneText:
         'Das ist der Anfang. Wenn die Hälfte deiner Lieferungen aus eigener Ernte kommt, bist du Produzent. Und dann ganz ' +
         'Europa.',
+    },
+    // Auftrag 43, I4: Ziele bis zum Ende, sonst stand nach der ersten eigenen Lieferung keine Quest mehr da.
+    {
+      ...base,
+      id: 'pdProducer',
+      icon: 'leaf',
+      title: 'Werde Produzent',
+      task:
+        'Mehr Fincas, mehr Ernte, weniger Einkauf. Wenn in zwei Wochen die Hälfte von dem, was du lieferst, von unseren ' +
+        'Feldern kommt, kauft keiner mehr bei Jansen. Dann bist du der, bei dem man kauft.',
+      hint: 'Handel › Anbau › Ziele: die Hälfte der gelieferten Gramm aus eigener Ernte.',
+      measure: (state) => (growGoals(state).producer ? 1 : 0),
+      goTo: 'grow',
+      reward: [{ kind: 'money', money: 'clean', amount: 100000 }],
+    },
+    {
+      ...base,
+      id: 'pdEurope',
+      icon: 'globe',
+      title: 'Versorge ganz Europa',
+      task:
+        'Jetzt der Rest. Jede Stadt in Europa soll bei dir kaufen, und jeder Kunde bekommt mindestens zur Hälfte Ware ' +
+        'von unseren Feldern. Dann gibt es keinen über dir.',
+      hint: 'Handel › Anbau › Ziele: welche Städte und Kunden noch fehlen.',
+      measure: (state) => (growGoals(state).europe ? 1 : 0),
+      goTo: 'grow',
+      reward: [{ kind: 'money', money: 'clean', amount: 250000 }],
+      doneText:
+        'Kolumbien, Marokko, Rotterdam, ganz Europa. Größer wird es nicht. Das Geschäft läuft weiter, so lange du willst, ' +
+        'und die Bestenliste zählt mit.',
     },
   ];
 }
