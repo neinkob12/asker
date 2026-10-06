@@ -22,6 +22,8 @@ import {
   useIsMobile,
   useUi,
 } from '../../../ui';
+import { activeRightHand } from '../../hierarchy';
+import { MINIGAME_KINDS } from '../../minigames';
 import { getSpot } from '../../spots';
 import { getStaffMember, roleName } from '../../staff';
 import { getVeedel, veedelName } from '../../veedel';
@@ -719,15 +721,52 @@ function Rounds(props: { encounter: Encounter; onPreview: (actionId: string | nu
           );
         })}
       </div>
-      {!encounter.playerPresent && (
-        <button
-          type="button"
-          class="enc-auto"
-          onClick={() => dispatch({ type: 'encounters.auto', payload: { encounterId: encounter.id } })}
-        >
-          <Icon name="dice" /> Deine Leute entscheiden lassen (auswürfeln)
-        </button>
-      )}
+      <AutoButton encounter={encounter} />
+    </section>
+  );
+}
+
+/**
+ * „Deine Leute entscheiden lassen“: ohne dich vor Ort wie bisher; bist du selbst dabei, nur mit aktiver Rechter Hand
+ * (Auftrag 44: Minispiele sind Pflicht, auswürfeln ginge sonst daran vorbei).
+ */
+function AutoButton(props: { encounter: Encounter }) {
+  const { state, dispatch } = useGame();
+  const { encounter } = props;
+  const post = encounter.playerPresent ? activeRightHand(state, requestCity(state, encounter.request)) : null;
+  const name = post ? getStaffMember(state, post.staffId)?.name.split(' ')[0] : undefined;
+  if (encounter.playerPresent && !name) return null;
+  return (
+    <button
+      type="button"
+      class="enc-auto"
+      onClick={() => dispatch({ type: 'encounters.auto', payload: { encounterId: encounter.id } })}
+    >
+      <Icon name="dice" />{' '}
+      {name ? `${name} entscheiden lassen (auswürfeln)` : 'Deine Leute entscheiden lassen (auswürfeln)'}
+    </button>
+  );
+}
+
+/** Ein Minispiel läuft (Auftrag 44): statt der Handlungen nur der Weg zurück ins Spiel. */
+function MinigameRunning(props: { encounter: Encounter }) {
+  const ui = useUi();
+  const open = props.encounter.minigame;
+  if (!open) return null;
+  return (
+    <section class="enc-minigame" aria-live="polite">
+      <Icon name="bolt" class="enc-minigame__icon" />
+      <p class="enc-minigame__text">
+        <strong class="enc-minigame__title">{MINIGAME_KINDS[open.kind].name} läuft …</strong>
+        <span>Erst wenn es entschieden ist, geht es hier weiter.</span>
+      </p>
+      <button
+        type="button"
+        class="enc-close enc-minigame__go"
+        onClick={() => ui.openDialog('minigames.play', { challengeId: open.challengeId })}
+      >
+        Zum Minispiel
+      </button>
     </section>
   );
 }
@@ -823,11 +862,16 @@ function FileBody(props: { encounter: Encounter; onClose: () => void }) {
     <div class={`enc enc--${encounter.phase}${encounter.playerPresent ? '' : ' enc--remote'}`}>
       <Head encounter={encounter} />
       {encounter.phase !== 'done' && (
-        <Board encounter={encounter} preview={preview} interactive={encounter.phase === 'rounds'} />
+        <Board
+          encounter={encounter}
+          preview={preview}
+          interactive={encounter.phase === 'rounds' && !encounter.minigame}
+        />
       )}
       {encounter.phase === 'briefing' && <Briefing encounter={encounter} />}
       {encounter.phase === 'rounds' && <Crew encounter={encounter} />}
-      {encounter.phase === 'rounds' && <Rounds encounter={encounter} onPreview={setHover} />}
+      {encounter.phase === 'rounds' && encounter.minigame && <MinigameRunning encounter={encounter} />}
+      {encounter.phase === 'rounds' && !encounter.minigame && <Rounds encounter={encounter} onPreview={setHover} />}
       {encounter.phase === 'done' && <Result encounter={encounter} onClose={props.onClose} />}
       <Log encounter={encounter} />
     </div>
@@ -909,6 +953,12 @@ registerHudItem({ id: 'encounters.pending', order: 50, placement: 'alert', compo
 onGameEvent('encounter.started', 'encounters.open', (payload, ui, state) => {
   if (state.outcome.gameOver) return;
   ui.openDialog('encounters.encounter', { encounterId: payload.encounterId });
+});
+// Nach einem Minispiel der Konfrontation (Auftrag 44) öffnet sich die Akte wieder: Runden oder Ergebnis.
+onGameEvent('minigame.finished', 'encounters.reopen', (payload, ui, state) => {
+  if (state.outcome.gameOver || payload.origin.module !== 'encounters') return;
+  const encounterId = Number(payload.origin.ref);
+  if (getEncounter(state, encounterId)) ui.openDialog('encounters.encounter', { encounterId });
 });
 // Konfrontation: Warnton und ein kurzer Blitz über der Karte, bei Gewalt ein Ping am Ort.
 soundOnEvent('encounter.started', 'alert');

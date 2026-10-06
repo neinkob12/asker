@@ -20,6 +20,7 @@ import {
 } from './config';
 import { remember } from './memory';
 import { onIntimidationResolved, onRecoverResolved } from './methods';
+import { maybeStartSafe } from './safe';
 import { getGang, veedelGang } from './state';
 
 /** Wirtschaftlich gegen die Gangs: Wer in ihrem Revier verkauft, fällt auf und drückt ihren Umsatz (siehe ai.ts). */
@@ -69,6 +70,8 @@ export function onEncounterResolved(ctx: Ctx, payload: GameEvents['encounter.res
     }
   } else if (kind === 'attack') {
     if (payload.outcome === 'success' && alive) say(ctx, gang, 'attacked');
+    // Auftrag 44: Warst du selbst dabei, steht im Hinterzimmer noch ein Tresor (Minispiel, safe.ts).
+    maybeStartSafe(ctx, payload);
   } else if (kind === 'collect') {
     if (s.protection && payload.outcome !== 'success') {
       s.protection = null;

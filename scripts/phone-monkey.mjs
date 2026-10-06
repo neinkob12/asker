@@ -157,8 +157,14 @@ const SCAN = `(() => {
 const COLLECT = `(() => {
   const SKIP = /neues spiel|neustart|zurücksetzen|spielstand|exportieren|importieren|datei|aufgeben|beenden|weglegen/i;
   // Liegt ein Blatt oder Dialog offen, ist alles dahinter (unter der Abdunklung) für den Spieler nicht erreichbar.
+  // Ein Minispiel (Auftrag 44, .mg-overlay) liegt über allem und lässt sich nur dort weiterspielen.
+  const minigame = !!document.querySelector('.mg-overlay');
   const layered = !!document.querySelector('.ui-sheet, .ui-dialog, .ui-action-sheet');
-  const base = layered ? ['.ui-dialog', '.ui-sheet', '.ui-action-sheet'] : ['.phone', '.ui-dialog', '.ui-sheet'];
+  const base = minigame
+    ? ['.mg-overlay']
+    : layered
+      ? ['.ui-dialog', '.ui-sheet', '.ui-action-sheet']
+      : ['.phone', '.ui-dialog', '.ui-sheet'];
   const sel = base
     .flatMap((root) => ['button', '[role="button"]', '[role="tab"]', '[role="switch"]', 'select', 'input'].map((k) => root + ' ' + k))
     .join(',');
@@ -254,7 +260,7 @@ const HIT = (index) => `(async () => {
   const inView = x >= 0 && y >= 0 && x <= innerWidth && y <= innerHeight;
   const top = document.elementFromPoint(x, y);
   const ok = !!top && (el === top || el.contains(top) || top.contains(el));
-  const overlay = !!top && !!top.closest('.island, .phone-notice, .ui-sheet-layer, .ui-sheet-backdrop, .ui-action-sheet, .ui-dialog-backdrop, .ui-dialog, .ui-menu, .ui-popover, .hud-flyout, .phone-notifications');
+  const overlay = !!top && !!top.closest('.island, .phone-notice, .ui-sheet-layer, .ui-sheet-backdrop, .ui-action-sheet, .ui-dialog-backdrop, .ui-dialog, .ui-menu, .ui-popover, .hud-flyout, .phone-notifications, .mg-overlay');
   const name = top ? (top.className && top.className.baseVal !== undefined ? top.className.baseVal : String(top.className)).slice(0, 60) || top.tagName : 'nichts';
   const chain = [];
   for (let n = el, i = 0; n && i < 4; n = n.parentElement, i++) chain.push(n.tagName.toLowerCase() + '.' + String(n.className?.baseVal ?? n.className).split(' ').filter(Boolean).slice(0, 2).join('.'));

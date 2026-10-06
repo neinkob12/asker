@@ -108,8 +108,9 @@ function audit() {
     return true;
   };
 
-  // Dazu die Akte einer Konfrontation (über der Karte bzw. als Blatt), Auftrag 35.
-  const roots = [...document.querySelectorAll('.phone, .phone-notice, .enc-overlay, .enc-sheet')];
+  // Dazu die Akte einer Konfrontation (über der Karte bzw. als Blatt), Auftrag 35, und der Rahmen eines Minispiels
+  // (Auftrag 44).
+  const roots = [...document.querySelectorAll('.phone, .phone-notice, .enc-overlay, .enc-sheet, .mg-overlay')];
   const issues = [];
   let textCount = 0;
   let unchecked = 0;

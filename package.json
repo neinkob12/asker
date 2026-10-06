@@ -14,6 +14,7 @@
     "screenshot": "node scripts/screenshot.mjs",
     "screenshot:phone": "node scripts/phone-shots.mjs",
     "screenshot:glas": "node scripts/glass-shots.mjs",
+    "screenshot:minigames": "node scripts/minigame-shots.mjs",
     "audit:phone": "node scripts/phone-audit.mjs",
     "monkey:phone": "node scripts/phone-monkey.mjs",
     "template:smoke": "node scripts/template-smoke.mjs",

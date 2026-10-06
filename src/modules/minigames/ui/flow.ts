@@ -1,0 +1,41 @@
+// Übergänge zwischen Minispiel und anderen Dialogen. Es gibt nur einen Dialog-Platz: Ein Minispiel ersetzt den offenen
+// Dialog (z.B. die Akte einer Konfrontation). Ist nach dem Minispiel keiner offen (die Folgen öffnen oft selbst einen,
+// z.B. die Akte), kommt der ersetzte zurück.
+
+import type { DialogId, UiApi, UiState } from '../../../ui';
+
+type OpenDialog = { id: DialogId; props: unknown };
+
+/** Live-Sicht auf die Oberfläche (von einem dauerhaft gezeigten HUD-Eintrag gesetzt, siehe index.tsx). */
+let live: (UiApi & { state: UiState }) | null = null;
+/** Der Dialog, den das laufende Minispiel ersetzt hat. */
+let replaced: OpenDialog | null = null;
+
+export function setLiveUi(ui: UiApi & { state: UiState }): void {
+  live = ui;
+}
+
+/** Vor dem Öffnen eines Minispiels: den offenen Dialog merken (außer es ist schon ein Minispiel). */
+export function rememberDialog(): void {
+  const open = live?.state.dialog;
+  replaced = open && open.id !== 'minigames.play' ? { id: open.id, props: open.props } : null;
+}
+
+/** Nach dem Minispiel: Ist kein Dialog offen, den ersetzten wieder zeigen. */
+export function restoreDialog(ui: UiApi): void {
+  const back = replaced;
+  replaced = null;
+  if (!back || live?.state.dialog) return;
+  ui.openDialog(back.id as never, back.props as never);
+}
+
+/** Für Screenshots und Playwright (nur Entwicklung): das laufende Spiel sofort gewinnen bzw. verlieren. */
+let devFinish: ((won: boolean) => void) | null = null;
+
+export function setDevFinish(fn: ((won: boolean) => void) | null): void {
+  devFinish = fn;
+}
+
+export function finishFromDev(won: boolean): void {
+  devFinish?.(won);
+}

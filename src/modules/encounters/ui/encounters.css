@@ -1053,3 +1053,37 @@
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------- Minispiel läuft (Auftrag 44) */
+.enc-minigame {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--file-rule);
+  border-radius: 12px;
+  background: var(--file-surface);
+}
+.enc-minigame__icon {
+  width: 24px;
+  height: 24px;
+  color: var(--hud-gold);
+}
+.enc-minigame__text {
+  flex: 1 1 220px;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-family: var(--font-hud);
+  font-size: 15px;
+  color: var(--file-ink-2);
+}
+.enc-minigame__title {
+  font-size: 17px;
+  color: var(--file-ink);
+}
+.enc-minigame__go {
+  margin: 0;
+}

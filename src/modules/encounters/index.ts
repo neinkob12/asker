@@ -19,6 +19,9 @@
 //   getEncounterAction(kindId, actionId), ENCOUNTER_KINDS, ENCOUNTER_ACTIONS, PLAYER_STATS
 // Befehle: 'encounters.join', 'encounters.act', 'encounters.auto'
 // Ereignisse: 'encounter.started', 'encounter.round', 'encounter.resolved'
+// Auftrag 44: Minispiele (minigames.ts). Anlässe mit EncounterKind.minigames starten sie, wenn du selbst dabei bist;
+//   solange eins läuft (encounter.minigame), lehnen act, protect und special ab. Folgen: applyChase, applyBrawl,
+//   applyTraffic, applyPapers (Ereignis 'minigame.finished').
 
 import { type Ctx, defineModule, type GameState } from '../../core';
 import {
@@ -35,6 +38,7 @@ import {
   start,
 } from './engine';
 import { ENCOUNTER_INTENTS } from './intents';
+import { onMinigameFinished } from './minigames';
 import { buildFoes, firstIntent } from './tactics';
 import type {
   Encounter,
@@ -88,6 +92,15 @@ export {
 } from './engine';
 export { ENCOUNTER_INTENTS } from './intents';
 export { ENCOUNTER_KINDS } from './kinds';
+export {
+  applyBrawl,
+  applyChase,
+  applyPapers,
+  applyTraffic,
+  encounterChallenge,
+  type MinigameResult,
+  minigameParams,
+} from './minigames';
 export { autoProtect, chooseAuto, chooseMove, scoreAction } from './strategy';
 export {
   foesIn,
@@ -106,6 +119,8 @@ export type {
   EncounterEnding,
   EncounterIntent,
   EncounterKind,
+  EncounterMinigame,
+  EncounterMinigames,
   EncounterMode,
   EncounterOpponentRequest,
   EncounterOutcome,
@@ -330,9 +345,14 @@ export function migrateV3(old: EncountersStateV3): EncountersState {
   return { active: old.active.map(upgrade), history: old.history.map(upgrade) };
 }
 
+/** Version 4 → 5 (Auftrag 44): offenes Minispiel einer Konfrontation (alte Stände haben keins). */
+export function migrateV4(old: EncountersState): EncountersState {
+  return { active: old.active.map((e) => ({ ...e, minigame: e.minigame ?? null })), history: old.history };
+}
+
 export default defineModule({
   id: 'encounters',
-  version: 4,
+  version: 5,
   init: () => ({ active: [], history: [] }),
   tick: (ctx) => {
     if (ctx.state.modules.encounters.active.length > 0) {
@@ -348,9 +368,13 @@ export default defineModule({
     'encounters.protect': (ctx, { encounterId, stake }) => protect(ctx, encounterId, stake),
     'encounters.auto': (ctx, { encounterId }) => autoResolve(ctx, encounterId),
   },
+  on: {
+    'minigame.finished': onMinigameFinished,
+  },
   migrations: {
     2: migrateV1,
     3: migrateV2,
     4: migrateV3,
+    5: migrateV4,
   },
 });

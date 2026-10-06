@@ -131,6 +131,14 @@ Teil von `fullPowerMissing` bei der Rechten Hand; der Anteil des Statthalters z�
 Liste N (Oberfläche): Dialoge können `dismissable` als Funktion der Angaben haben; Karten-Marker sind kein Tab-Stopp
 (Tastatur über die Suche); `HudPill`-Karten schließen bei Esc und Tipp daneben, nur eine offen; „Boss von <Stadt>“ bei
 der Mehrheit nur in Köln (`majorityMakesBoss`).
+Auftrag 44 (Minispiele, `docs/auftraege/44-minispiele.md`): Modul `minigames` (Arten als Daten in `kinds/<art>.ts`,
+eine Datei pro Art; `startMinigame`, Befehle `minigames.finish { id, score, picks }`, `minigames.delegate`, Ereignisse
+`minigame.started`/`minigame.finished`). **Pflicht**, wenn der Spieler selbst betroffen ist; nur die aktive Rechte Hand
+der Stadt kann übernehmen (Chance aus ihrem Wert, gewürfelt im Kern). Ohne Oberfläche läuft nach `MINIGAME_TIMEOUT` die
+Frist ab (`by: 'timeout'`), dann gilt genau das alte Verhalten. Eine Art startet erst mit `ready: true`. Konfrontationen
+starten Minispiele über `EncounterKind.minigames`, Folgen in `encounters/minigames.ts`. Oberfläche: Rahmen und Baukasten
+in `minigames/ui/` (`registerMinigameView`, `kit/`), Inhalte aus `challenge.seed` mit `createRng`, nie `ctx.random()`.
+Vorschau `?minispiel=<art>`, Bilder `npm run screenshot:minigames -- --kind=<art>`. Fertig: Tresor knacken (`safe`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
