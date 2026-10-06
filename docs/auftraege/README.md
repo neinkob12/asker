@@ -263,6 +263,15 @@ und ein Draft-PR), schaut stündlich nach, prüft fertige PRs gegen ihren Auftra
 des Diffs), schickt Änderungswünsche an die Session zurück und meldet dem Spieler, welche PRs bereit zum Mergen sind.
 Gemergt wird vom Spieler. Ist eine Welle gemergt, startet der Loop die nächste.
 
+### Nächste Runde: Minispiele (Feedback vom 06.10.2026)
+
+[Auftrag 44](44-minispiele.md): zehn Minispiele bei Ereignissen (Verfolgungsjagd, Razzia-Countdown, Verkehrskontrolle,
+Zivi oder Kunde, Straßenkampf, Tresor knacken, Bude durchsuchen, Container packen, Papiere fälschen,
+Bewerbungsgespräch). Pflicht, außer die Rechte Hand übernimmt (mit Wahrscheinlichkeit). Elf Teile in fünf Wellen, jeder
+Teil eine eigene Session mit eigenem Branch und PR. Eine steuernde Session schaut stündlich nach, schreibt bei rotem CI
+oder Konflikten die Session an und **mergt selbst nach `main`, sobald CI grün ist** (so vom Spieler gewünscht); ist
+eine Welle gemergt, startet sie die nächste.
+
 ## Mergen
 
 - Ein PR wird gemergt, sobald er fertig und die CI grün ist. Die Reihenfolge in Phase 1 ist egal.
