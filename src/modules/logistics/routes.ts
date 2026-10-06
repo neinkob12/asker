@@ -479,7 +479,7 @@ export function departRoute(ctx: Ctx, routeId: number, why: 'schedule' | 'now'):
   journal.add(
     ctx,
     `Route ${routeName(state, route)}: ${driver} fährt mit ${items.length ? itemsText(items) : 'leerem Wagen'} los, ` +
-      `Ankunft in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}.` +
+      `Ankunft in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}` +
       (partial ? ` Im ${from.name} fehlte etwas.` : ''),
     partial ? 'bad' : 'info',
   );
@@ -549,7 +549,7 @@ export function routeArrived(ctx: Ctx, trip: Trip, warehouseId: string): void {
   journal.add(
     ctx,
     `${driver.name} fährt zurück${items.length ? ` mit ${itemsText(items)}` : ''}, ` +
-      `Ankunft in ca. ${clock.formatDuration(back.arrivesAt - ctx.now)}.`,
+      `Ankunft in ca. ${clock.formatDuration(back.arrivesAt - ctx.now)}`,
   );
 }
 

@@ -898,7 +898,7 @@ export function travelTo(ctx: Ctx, cityId: string): CommandResult {
   c.travel = { from, to: cityId, departedAt: ctx.now, arrivesAt: ctx.now + minutes };
   journal.add(
     ctx,
-    `Du fährst über die ${roadName(from, cityId)} nach ${def.name}. Ankunft in ca. ${clock.formatDuration(minutes)}.`,
+    `Du fährst über die ${roadName(from, cityId)} nach ${def.name}. Ankunft in ca. ${clock.formatDuration(minutes)}`,
     'info',
   );
   ctx.emit('city.travelStarted', { from, to: cityId, arrivesAt: c.travel.arrivesAt });

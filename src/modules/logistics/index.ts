@@ -761,7 +761,7 @@ function pickDriver(ctx: Ctx, driverId: string | undefined, cityId: string): Sta
   }
   return (
     freeDrivers(ctx.state, cityId)[0] ??
-    `Kein freier Fahrer in ${cityName(cityId)}. Heuer einen an (Logistik-App oder Leute).`
+    `Kein freier Fahrer in ${cityName(cityId)}. Heuer einen an (Personal-App, Anheuern).`
   );
 }
 
@@ -1014,7 +1014,7 @@ function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandRes
   journal.add(
     ctx,
     `${who} ${driverId ? 'holt' : 'holst'} ${itemsText(trip.items)} am ${portName(cityId)} ab, ` +
-      `im ${warehouse.name} in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}.` +
+      `im ${warehouse.name} in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}` +
       (left > 0
         ? ` Der Rest passt nicht ${room < space ? `in den Wagen (${vehicleName(state, vehicle)})` : 'ins Lager'} und bleibt am Kai.`
         : ''),
@@ -1176,7 +1176,7 @@ function transfer(ctx: Ctx, payload: GameCommands['logistics.transfer']): Comman
     `${who} ${driverId ? 'bringt' : 'bringst'} ${itemsText(items)} vom ${from.name} ins ${to.name}, ` +
       (departAt > ctx.now
         ? `Abfahrt heute Nacht um ${clock.formatTime(departAt)}.`
-        : `Ankunft in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}.`),
+        : `Ankunft in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}`),
   );
   return { ok: true, data: { tripId: trip.id, arrivesAt: trip.arrivesAt } };
 }

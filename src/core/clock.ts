@@ -54,7 +54,10 @@ export const clock = {
   format: (time: number): string => `Tag ${clock.day(time)}, ${clock.formatTime(time)}`,
   /** "Fr, Tag 1, 18:05" */
   formatLong: (time: number): string => `${clock.weekdayName(time, true)}, ${clock.format(time)}`,
-  /** Dauer in Spielminuten als Text, z.B. "12 Std. 30 Min." */
+  /**
+   * Dauer in Spielminuten als Text, z.B. "12 Std. 30 Min.". Endet immer mit dem Punkt der Abkürzung: Am Satzende keinen
+   * zweiten setzen (in Vorlagen mit Platzhaltern fängt fillText das ab).
+   */
   formatDuration: (minutes: number): string => {
     const m = Math.max(0, Math.round(minutes));
     const h = Math.floor(m / 60);
