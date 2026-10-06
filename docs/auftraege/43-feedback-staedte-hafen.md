@@ -323,23 +323,38 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 
 ## J Prüfer „Anfang“ (Sonnet-Agent, Neustart Köln, `koeln-anfang`, `koeln-veedel`, `ankunft-hamburg`, 06.10.2026)
 
-- [ ] J1 Handy-HUD abgeschnitten: „Ruf · Reviere“ (0/12 über dem Rand), Lager „215 g Gras + 4 weitere“.
-- [ ] J2 Quest-Fortschritt geht verloren: Ereignisse in der Startminute der Quest zählen nicht; „Bestell Ware“ und
+- [x] J1 Handy-HUD abgeschnitten: „Ruf · Reviere“ (0/12 über dem Rand), Lager „215 g Gras + 4 weitere“.
+  Erledigt: Text und Zusatz bleiben in der Kachel und enden mit „…“, die Ruf-Leiste gibt nach, Lager „+3“.
+- [x] J2 Quest-Fortschritt geht verloren: Ereignisse in der Startminute der Quest zählen nicht; „Bestell Ware“ und
   „Läufer anheuern“ zählen Vorheriges nicht (Köln ohne `measure`).
-- [ ] J3 Doppelter Punkt „6 Std. 15 Min..“ in Lieferanten-Texten.
-- [ ] J4 Falscher Artikel „am Uni-Wiese“, „am Neusser Straße“ (Spot-Name mit festem „am“).
-- [ ] J5 Dringend-Banner schneidet den Ort ab („2 Kunden warten am E…“).
-- [ ] J6 Intro: „Sieben davon, und Köln gehört dir“ (Köln komplett erst mit 12).
-- [ ] J7 Polizei-Stufe im Handy: Bedingungen abgeschnitten.
-- [ ] J8 Chat-Leiste kürzt „Der Holländer“ zu „Der“.
-- [ ] J9 „Rechte Hand: Rechte Hand hat zugesagt: …“ doppelt in der Chatvorschau.
-- [ ] J10 Neu eingestellter Läufer steht „ohne Einsatz“ herum, kein Rat, keine Spot-Wahl nach dem Einstellen.
-- [ ] J11 Lager-App in neuer Stadt: „Zu kaufen“ unter Warenfluss und Fahrzeugen; Kauf ohne Rückfrage.
-- [ ] J12 Hinführen der Fahrer-Quest landet auf „Hafen“ statt beim Anheuern.
-- [ ] J13 „Logistik-App“ in Texten, die es nicht gibt.
-- [ ] J14 In einer neuen Stadt: Chats der alten Stadt oben, offene Rückfrage von Jansen zu einer Kölner Lieferung.
-- [ ] J15 Kleinigkeiten: „1 Tage“ bei der Rechten Hand, Wochenverträge schon am ersten Montag, „Preise 90 %“ ohne
+  Erledigt: Die Sperre hängt an `fresh` bis zum eigenen `quest.started` (Migration 7); „Bestell Ware“ und „Läufer anheuern“ zählen auch Vorheriges.
+- [x] J3 Doppelter Punkt „6 Std. 15 Min..“ in Lieferanten-Texten.
+  Erledigt: `fillText` setzt hinter einen Wert mit Punkt keinen zweiten, `withPeriod` im Kern; Tests füllen alle Vorlagen.
+- [x] J4 Falscher Artikel „am Uni-Wiese“, „am Neusser Straße“ (Spot-Name mit festem „am“).
+  Erledigt: `spots/places.ts` (`atSpot`, `atSpotStart`, `spotVars`, Feld `Spot.at`), alle festen „am“ und rund 110 Vorlagen umgestellt.
+- [x] J5 Dringend-Banner schneidet den Ort ab („2 Kunden warten am E…“).
+  Erledigt: Ort zuerst („Uni-Wiese: 2 Kunden warten“), bis zu zwei Zeilen.
+- [x] J6 Intro: „Sieben davon, und Köln gehört dir“ (Köln komplett erst mit 12).
+  Erledigt: Sieben Veedel machen dich zum Boss von Köln, alle zwölf gehören dir.
+- [x] J7 Polizei-Stufe im Handy: Bedingungen abgeschnitten.
+  Erledigt: Bedingung als Titel, Stand als Chips darunter.
+- [x] J8 Chat-Leiste kürzt „Der Holländer“ zu „Der“.
+  Erledigt: Nur Personen aufs erste Wort, sonst ganzer Name mit „…“.
+- [x] J9 „Rechte Hand: Rechte Hand hat zugesagt: …“ doppelt in der Chatvorschau.
+  Erledigt: „Ich komm vorbei.“ ohne Absender im Text.
+- [x] J10 Neu eingestellter Läufer steht „ohne Einsatz“ herum, kein Rat, keine Spot-Wahl nach dem Einstellen.
+  Erledigt: Spot-Wahl beim Einstellen eines Läufers, Rat „X an einen Spot stellen“, Preisunterschied erklärt.
+- [x] J11 Lager-App in neuer Stadt: „Zu kaufen“ unter Warenfluss und Fahrzeugen; Kauf ohne Rückfrage.
+  Erledigt: „Zu kaufen“ oben ohne Lager in der Stadt, Kauf mit Rückfrage.
+- [x] J12 Hinführen der Fahrer-Quest landet auf „Hafen“ statt beim Anheuern.
+  Erledigt: Die Fahrer-Quest führt ins Personal.
+- [x] J13 „Logistik-App“ in Texten, die es nicht gibt.
+  Erledigt: „Lieferanten-App, unter Logistik den Hafen“ bzw. „Personal-App“.
+- [x] J14 In einer neuen Stadt: Chats der alten Stadt oben, offene Rückfrage von Jansen zu einer Kölner Lieferung.
+  Erledigt: Bei jeder Ankunft liegen die Chats bis dahin unter „Vor der Fahrt nach …“, offen bleiben nur Fragen mit `city.`-Befehl.
+- [x] J15 Kleinigkeiten: „1 Tage“ bei der Rechten Hand, Wochenverträge schon am ersten Montag, „Preise 90 %“ ohne
   Erklärung.
+  Erledigt: `formatDays` im Kern, Wochenverträge erst nach Kapitel 1 (`CONTRACTS_FROM_CHAPTER`, Bot setzt einmal einen Preis), „Was heißen Preise und Andrang?“ am Spot.
 
 ## Neue Funde
 
