@@ -1,0 +1,284 @@
+/* Razzia-Countdown (Auftrag 44, Teil 3). Bühne als Canvas, HUD und Leiste im Look Glas. */
+
+.stash {
+  position: absolute;
+  inset: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: var(--font-hud);
+  color: var(--hud-ink);
+}
+.stash__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+.stash__canvas:active {
+  cursor: grabbing;
+}
+
+.stash__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-hud-display);
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.stash__count svg {
+  width: 18px;
+  height: 18px;
+  color: var(--cat-goods);
+}
+.stash__hud .mg-hud-meter {
+  min-width: 140px;
+}
+
+/* Namen der Verstecke über der Szene (nur Anzeige, Tippen geht an die Leinwand). */
+.stash__label {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, calc(-100% - 4px));
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 3px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.stash__label.is-blocked {
+  color: var(--cat-danger);
+}
+.stash kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: var(--hud-glass-fill);
+  border: 1px solid var(--hud-glass-line);
+  font-family: var(--font-hud-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--hud-gold);
+}
+
+/* Leiste: ausgewähltes Paket und Verstecke als Knöpfe (rechts am Desktop, unten am Handy). */
+.stash__panel {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  overflow: auto;
+}
+.stash__pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 52px;
+}
+.stash__swatch {
+  --swatch: var(--cat-goods);
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 2px solid var(--swatch);
+  background: color-mix(in srgb, var(--swatch) 30%, transparent);
+}
+.stash__swatch.is-1 {
+  width: 24px;
+  height: 24px;
+}
+.stash__swatch.is-3 {
+  width: 38px;
+  height: 38px;
+}
+.stash__pick-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.stash__pick-text strong {
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stash__pick-empty {
+  font-size: 14px;
+  color: var(--hud-ink-2);
+}
+.stash__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.stash__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-fill);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--hud-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.stash__chip.is-bad {
+  color: var(--cat-danger);
+}
+.stash__chip.is-wet {
+  color: var(--cat-sky);
+}
+
+.stash__hides {
+  display: grid;
+  gap: var(--space-2);
+}
+.stash__hide {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 6px 10px;
+  border-radius: var(--hud-radius-button);
+  border: 1px solid var(--hud-glass-line);
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.stash__hide:hover:not(:disabled),
+.stash__hide:focus-visible {
+  background: var(--hud-glass-fill-active);
+}
+.stash__hide.is-ok {
+  border-color: var(--hud-gold);
+}
+.stash__hide.is-blocked {
+  opacity: 0.6;
+}
+.stash__hide:disabled {
+  cursor: default;
+}
+.stash__hide-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stash__hide-meta {
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* Am Handy unten: Paket oben, Verstecke in zwei Spalten. */
+.stash__panel.is-bottom .stash__hides {
+  grid-template-columns: 1fr 1fr;
+}
+.stash__panel.is-bottom .stash__hide {
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  row-gap: 2px;
+  padding: 6px 8px;
+  font-size: 14px;
+}
+.stash__panel.is-bottom .stash__hide kbd {
+  display: none;
+}
+.stash__panel.is-bottom .stash__hide-name {
+  grid-column: 1 / -1;
+}
+.stash__panel.is-bottom .stash__hide-meta {
+  grid-column: 1 / -1;
+}
+
+.stash__message {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 84px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  animation: stash-pop 0.25s var(--ease-out);
+}
+.stash__message.is-good {
+  color: var(--cat-money);
+}
+.stash__message.is-bad {
+  color: var(--cat-danger);
+}
+.stash__message.is-warn {
+  color: var(--cat-warn);
+}
+@keyframes stash-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+@media (max-width: 760px) {
+  .stash__hud {
+    top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+  }
+  .stash__hud .mg-hud-meter {
+    min-width: 96px;
+  }
+  .stash__count {
+    font-size: 20px;
+  }
+  .stash__label {
+    font-size: 11px;
+    padding: 0 6px 0 2px;
+  }
+  .stash__label kbd {
+    display: none;
+  }
+  .stash__message {
+    top: 72px;
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stash__message {
+    animation: none;
+  }
+}
