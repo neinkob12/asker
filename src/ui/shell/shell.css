@@ -1115,6 +1115,21 @@ kbd {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* Mehrere Wörter dürfen auf zwei Zeilen („Boss von / Hamburg“), nie im Wort; ein langes Wort wird kleiner
+     (Auftrag 43, M11: „Boss von Ham…“, „Hafengeburtst…“). */
+  .hud-tiles .hud-pill__value:not(.is-long-word) {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: keep-all;
+    line-height: 1.05;
+  }
+  .hud-tiles .hud-pill__value.is-long-word {
+    font-size: 13px;
+  }
   .hud-flyout {
     right: auto;
     left: 0;

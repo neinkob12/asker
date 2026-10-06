@@ -7,7 +7,7 @@ import type { GameState, LngLat } from '../../../core';
 import { FAR_ZOOM, type MapLayer, mapToken } from '../../../map';
 import { getTrips, isInterCityTrip, originCity, tripCity } from '../../logistics';
 import { autobahnLines, autobahnPath } from '../../roads';
-import { getSupplier, shipmentsInTransit } from '../../suppliers';
+import { shipmentSupplier, shipmentsInTransit } from '../../suppliers';
 import { cityTravel, getCity, isBusinessSold, playableCities } from '../index';
 
 const AUTOBAHN_SOURCE = 'city.autobahn';
@@ -37,7 +37,7 @@ export function busyLines(state: GameState): Set<string> {
     if (isInterCityTrip(state, trip)) mark(originCity(state, trip), tripCity(state, trip));
   }
   for (const s of shipmentsInTransit(state)) {
-    const supplier = getSupplier(state, s.supplierId);
+    const supplier = shipmentSupplier(state, s);
     if (supplier?.kind !== 'city') continue;
     const from = cityContaining(supplier);
     const to = s.cityId ?? 'koeln';

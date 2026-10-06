@@ -168,7 +168,7 @@ describe('Test-Spielstände', () => {
     expect(events.some((e) => e.type === 'campaign.won')).toBe(true);
     expect(sim.state.outcome.gameOver).toBeNull();
     // Für die Vollmacht fehlt nur noch die Geldwäsche (aus, damit die 50.000 € stehen bleiben).
-    expect(fullPowerMissing(sim.state, 'koeln')).toEqual(['Diese Aufgaben sind aus: Geldwäsche.']);
+    expect(fullPowerMissing(sim.state, 'koeln')).toEqual([expect.stringMatching(/ist eine Aufgabe aus: Geldwäsche\./)]);
     expect(sim.state.wallet.dirty).toBeGreaterThan(KOELN_KOMPLETT_DIRTY - 1000);
 
     // Eine halbe Stunde später ruft Fiete aus Hamburg an.
@@ -191,7 +191,9 @@ describe('Test-Spielstände', () => {
     answerCall();
     // Erst das Haus in Ordnung bringen: Es fehlt nur die Geldwäsche (die Karte "Hamburg wartet" führt zur Rechten Hand).
     expect(offerStatus(sim.state)).toBe('house');
-    expect(hamburgMissing(sim.state)).toEqual(['Diese Aufgaben sind aus: Geldwäsche.']);
+    expect(hamburgMissing(sim.state)).toEqual([expect.stringMatching(/ist eine Aufgabe aus: Geldwäsche\./)]);
+    // Fietes Liste führt mit einem Knopf zur Rechten Hand (Auftrag 43, M7).
+    expect(sim.state.messages.list.some((m) => m.options?.some((o) => o.id === 'openRightHand'))).toBe(true);
     const rings = eventsOfType(events, 'call.ringing').length;
     expect(sim.dispatch({ type: 'hierarchy.configureRightHand', payload: { settings: { laundering: true } } }).ok).toBe(
       true,

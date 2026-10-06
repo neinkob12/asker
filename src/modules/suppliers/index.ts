@@ -423,6 +423,18 @@ export function getSupplier(state: GameState, id: string): Supplier | undefined 
   return getSuppliers(state).find((s) => s.id === id);
 }
 
+/**
+ * Lieferant einer Lieferung, so wie er in ihrer Stadt auftritt (Auftrag 43, M2: Daan ist in Köln ein Großhändler
+ * über die Straße, in Hamburg kommt seine Ware per Schiff an den Kai).
+ */
+export function shipmentSupplier(
+  _state: GameState,
+  shipment: Pick<Shipment, 'supplierId' | 'cityId'>,
+): Supplier | undefined {
+  const base = supplierById(shipment.supplierId);
+  return base ? supplierIn(base, shipment.cityId ?? 'koeln') : undefined;
+}
+
 /** Ein Angebot der Konkurrenz an einen Kunden der Hafen-Phase (Auftrag 40). */
 export interface RivalOffer {
   supplierId: string;

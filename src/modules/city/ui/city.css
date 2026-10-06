@@ -183,6 +183,17 @@
   pointer-events: auto;
 }
 
+/* Handy (Auftrag 43, M11): über dem Dock und links neben den Karten-Knöpfen, nicht unter Menü und „Nächster Schritt“. */
+@media (max-width: 760px) {
+  .city-travel {
+    left: calc(var(--gap) + var(--safe-left));
+    right: calc(var(--gap) * 2 + 48px + var(--safe-right));
+    bottom: calc(var(--mobile-dock-height) + var(--gap) * 2 + var(--safe-bottom));
+    width: auto;
+    transform: none;
+  }
+}
+
 .city-travel__main {
   display: flex;
   align-items: center;

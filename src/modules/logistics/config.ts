@@ -66,11 +66,16 @@ export const HARBOR_CONTACT: Contact = {
   },
 };
 
+/** Rest am Kai nach einer Abholung: So lange schreibt der Hafen nicht noch einmal (Auftrag 43, M5). */
+export const LEFT_BEHIND_NOTE_MINUTES = 12 * 60;
+
 /** Hafen einer Stadt (Auftrag 30): Liegeplatz, Kai und Zoll sind pro Stadt. */
 export interface PortConfig {
   /** Ort der Fahrten am Hafen (Trip.fromId); Köln behält 'port' aus alten Spielständen. */
   placeId: string;
   name: string;
+  /** Fluss, auf dem die Schiffe kommen, mit Präposition für Texte („Schiff auf dem Rhein“). */
+  river: { name: string; on: string };
   /** Lage; fehlt sie, gilt der Umschlagplatz der Lieferanten (Köln: Niehler Hafen). */
   lng?: number;
   lat?: number;
@@ -119,6 +124,7 @@ export const PORTS: Readonly<Record<string, PortConfig>> = {
   koeln: {
     placeId: 'port',
     name: 'Niehler Hafen',
+    river: { name: 'Rhein', on: 'auf dem Rhein' },
     berthCost: BERTH_COST,
     safeMinutes: CARGO_SAFE_MINUTES,
     customsChancePerHour: CUSTOMS_CHANCE_PER_HOUR,
@@ -140,6 +146,7 @@ export const PORTS: Readonly<Record<string, PortConfig>> = {
   hamburg: {
     placeId: 'port:hamburg',
     name: 'Hamburger Hafen',
+    river: { name: 'Elbe', on: 'auf der Elbe' },
     lng: 9.99978,
     lat: 53.52789,
     berthCost: 12000,

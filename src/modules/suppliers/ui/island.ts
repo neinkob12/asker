@@ -3,13 +3,13 @@
 import { islandCountdown, onGameEvent, registerLiveActivity } from '../../../ui';
 import { activeCity } from '../../city';
 import { formatProductAmount, productName } from '../../goods';
-import { expectedArrival, getSupplier, shipmentProgress, shipmentReason, shipmentsInTransit } from '../index';
+import { expectedArrival, shipmentProgress, shipmentReason, shipmentSupplier, shipmentsInTransit } from '../index';
 
 registerLiveActivity({
   id: 'suppliers.shipments',
   activities: (state) =>
     shipmentsInTransit(state, activeCity(state)).map((shipment) => {
-      const supplier = getSupplier(state, shipment.supplierId);
+      const supplier = shipmentSupplier(state, shipment);
       const left = expectedArrival(shipment) - state.time;
       const late = shipment.problem === 'delayed' && shipment.problemRevealed;
       return {

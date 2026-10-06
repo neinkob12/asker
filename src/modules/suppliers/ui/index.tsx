@@ -54,6 +54,7 @@ import {
   seizeChance,
   shipmentProgress,
   shipmentReason,
+  shipmentSupplier,
   shipmentsInTransit,
   supplierDescription,
   supplierDiscount,
@@ -71,7 +72,7 @@ const KIND_NAME: Record<Supplier['kind'], string> = { port: 'Hafen', city: 'GroÃ
 
 function ShipmentRow(props: { state: GameState; shipment: Shipment; showSupplier?: boolean }) {
   const { state, shipment: s } = props;
-  const supplier = getSupplier(state, s.supplierId);
+  const supplier = shipmentSupplier(state, s);
   const pkg = supplier?.packages.find((p) => p.id === s.packageId);
   const delayed = s.problem === 'delayed' && s.problemRevealed;
   const target = s.toPort ? 'an den Kai' : warehousePlace(getWarehouse(state, s.warehouseId)?.name ?? 'Lager', 'into');
@@ -379,6 +380,8 @@ function SupplierDetail(props: { supplierId: string }) {
   }
   const warehouses = getWarehouses(state, activeCity(state));
   const toPort = supplier.kind === 'port';
+  // Ohne Lager in der Stadt geht keine Lieferung (Auftrag 43, M8: sonst erst ein Banner nach dem Tippen).
+  const noWarehouse = warehouses.length === 0;
   const picked = warehouses.some((w) => w.id === target) ? target : undefined;
   // Schiffsware: Ohne Wahl zeigt die Auswahl (und bestellt) das Lager, in das die Abholung ohnehin fÃ¤hrt.
   const warehouseId = toPort && warehouses.length > 1 ? (picked ?? defaultPickupWarehouse(state)) : picked;
@@ -455,6 +458,14 @@ function SupplierDetail(props: { supplierId: string }) {
       )}
 
       <h4 class="sup-app__section">Angebot</h4>
+      {noWarehouse && (
+        <Hint icon="warehouse">{`In ${cityName(cityId)} hast du noch kein Lager. Ohne Lager kann nichts geliefert werden.`}</Hint>
+      )}
+      {noWarehouse && (
+        <Button icon="warehouse" onClick={() => ui.openPhone('goods.app')}>
+          Lager kaufen
+        </Button>
+      )}
       {toPort && (
         <Hint icon="ship">
           {hasBerth(state)
@@ -493,7 +504,7 @@ function SupplierDetail(props: { supplierId: string }) {
                   <div class="sup-buy">
                     <Button
                       small
-                      disabled={blocked || state.wallet.dirty < price || (toPort && !hasBerth(state))}
+                      disabled={blocked || noWarehouse || state.wallet.dirty < price || (toPort && !hasBerth(state))}
                       onClick={() =>
                         dispatch({
                           type: 'suppliers.order',
@@ -511,7 +522,7 @@ function SupplierDetail(props: { supplierId: string }) {
                       <Button
                         small
                         variant="subtle"
-                        disabled={blocked || credit < price || (toPort && !hasBerth(state))}
+                        disabled={blocked || noWarehouse || credit < price || (toPort && !hasBerth(state))}
                         onClick={() =>
                           dispatch({
                             type: 'suppliers.order',

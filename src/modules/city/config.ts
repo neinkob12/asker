@@ -217,8 +217,8 @@ export const WELCOME_TEXTS: Readonly<Record<string, readonly string[]>> = {
       'Wilhelmsburg, Barmbek oder Harburg, such dir was aus.',
     'Dann ein Spot. Auf dem Kiez ist am meisten los, aber da steht an jeder Tür einer von der Neonkrone. In der Schanze ' +
       'oder in Altona fällst du weniger auf.',
-    'Wenn das läuft: Liegeplatz bei uns im Hafen. Zwölftausend, sauber. Dann bestellst du bei Hein Container, ' +
-      'kiloweise, direkt an den Kai. Bis dahin liefert dir Toni aus Frankfurt.',
+    'Wenn das läuft: Liegeplatz bei uns im Hafen. Zwölftausend, sauber. Dann bestellst du bei Daan aus Amsterdam ' +
+      'Container, kiloweise, direkt an den Kai. Bis dahin bringt dir Hein kleine Mengen direkt ins Lager.',
   ],
 };
 

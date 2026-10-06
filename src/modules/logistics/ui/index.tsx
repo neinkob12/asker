@@ -26,7 +26,6 @@ import {
   useUi,
 } from '../../../ui';
 import { activeCity, cityName, isBusinessSold } from '../../city';
-import { isPlayerDelivering } from '../../customers';
 import { vehicleName } from '../../fleet';
 import {
   formatProductAmount,
@@ -40,6 +39,7 @@ import {
   warehouseSites,
 } from '../../goods';
 import { getStaff, getStaffMember } from '../../staff';
+import { getSuppliers } from '../../suppliers';
 import {
   berthCost,
   cargoRisk,
@@ -51,10 +51,11 @@ import {
   getTrips,
   hasBerth,
   isInterCityTrip,
-  isPlayerOnTheRoad,
+  itemsText,
   PORTS,
   placeCity,
   placeOf,
+  playerBusy,
   portName,
   ROUTE_CHOICES,
   type RouteChoice,
@@ -89,10 +90,9 @@ function who(state: GameState, driverId: string | null): string {
   return driverId ? (getStaffMember(state, driverId)?.name ?? 'Fahrer') : 'Du';
 }
 
+/** Warum du nicht selbst fahren kannst, auch wenn du gerade nicht in dieser Stadt bist (Auftrag 43, M8). */
 function playerBusyReason(state: GameState): string | null {
-  if (isPlayerOnTheRoad(state)) return 'Du bist schon unterwegs.';
-  if (isPlayerDelivering(state)) return 'Du lieferst gerade aus.';
-  return null;
+  return playerBusy(state, activeCity(state));
 }
 
 function TripRow(props: { trip: Trip }) {
@@ -195,6 +195,9 @@ function PortSection() {
   const cost = berthCost(cityId);
   const quay = PORTS[cityId]?.quay ?? 'Kai 7';
   const hamburg = cityId === 'hamburg';
+  // Wer hier per Schiff an den Kai liefert (Köln: Jansen aus Rotterdam, Hamburg: Daan aus Amsterdam; Auftrag 43, M3).
+  const shipper = getSuppliers(state, cityId).find((s) => s.kind === 'port');
+  const shipperName = shipper ? `${shipper.contactName} (${shipper.name})` : 'dein Lieferant';
   if (!hasBerth(state)) {
     const short = state.wallet.clean < cost;
     return (
@@ -224,8 +227,8 @@ function PortSection() {
           }
         >
           {hamburg
-            ? 'Mit eigenem Liegeplatz liefert dir Hein Container direkt an den Kai: kiloweise, in sechs Stunden. Der Zoll hier ist wacher als in Köln.'
-            : 'Mit eigenem Liegeplatz liefert Rotterdam große Mengen per Schiff, viel billiger als die Großstädte.'}{' '}
+            ? `Mit eigenem Liegeplatz liefert dir ${shipperName} Container direkt an den Kai: kiloweise, in sechs Stunden. Der Zoll hier ist wacher als in Köln.`
+            : `Mit eigenem Liegeplatz liefert ${shipperName} große Mengen per Schiff, viel billiger als die Großstädte.`}{' '}
           Der Hafen ist legal, gezahlt wird mit sauberem Geld.
         </Empty>
       </Group>
@@ -233,18 +236,20 @@ function PortSection() {
   }
   if (cargo.length === 0) {
     return (
-      <Group icon="ship" color="goods" title={`${port}, ${quay}`}>
+      <Group icon="ship" color="goods" title={port} note={`Dein Platz: ${quay}.`}>
         <Empty
           icon="ship"
           action={
-            <Button onClick={() => ui.openPhone('suppliers.app', { supplierId: hamburg ? 'hamburg' : 'rotterdam' })}>
-              {hamburg ? 'Zu Hein' : 'Zu Jansen'}
-            </Button>
+            shipper && (
+              <Button onClick={() => ui.openPhone('suppliers.app', { supplierId: shipper.id })}>
+                Zu {shipper.contactName}
+              </Button>
+            )
           }
         >
           {hamburg
-            ? 'Am Kai wartet nichts. Container bestellst du bei Hein.'
-            : 'Am Kai wartet nichts. Schiffsware bestellst du bei Jansen (Rotterdam).'}
+            ? `Am Kai wartet nichts. Container bestellst du bei ${shipperName}.`
+            : `Am Kai wartet nichts. Schiffsware bestellst du bei ${shipperName}.`}
         </Empty>
       </Group>
     );
@@ -257,9 +262,9 @@ function PortSection() {
     <Group
       icon="ship"
       color="goods"
-      title={`${port}, ${quay}`}
+      title={port}
       count={cargo.length}
-      note="Ware am Kai ist ein paar Stunden sicher, dann wird der Zoll neugierig."
+      note={`${quay}: Ware am Kai ist ein paar Stunden sicher, dann wird der Zoll neugierig.`}
       more="Mit Ware an Bord kann es unterwegs eine Verkehrskontrolle geben, vor allem bei viel Heat im Ziel-Veedel. Ein Fahrer holt ab, oder du fährst selbst."
     >
       <List>
@@ -723,10 +728,13 @@ registerAdvisor({
         priority: 45,
         icon: 'ship',
         title: `Liegeplatz im ${portName(cityId)} mieten`,
-        text:
-          cityId === 'hamburg'
-            ? 'Dann liefert Hein Container direkt an den Kai, kiloweise.'
-            : 'Dann liefert Rotterdam große Mengen per Schiff, viel billiger als die Großstädte.',
+        text: (() => {
+          const shipper = getSuppliers(state, cityId).find((s) => s.kind === 'port');
+          const who = shipper ? `${shipper.contactName} (${shipper.name})` : 'dein Lieferant';
+          return cityId === 'hamburg'
+            ? `Dann liefert ${who} Container direkt an den Kai, kiloweise.`
+            : `Dann liefert ${who} große Mengen per Schiff, viel billiger als die Großstädte.`;
+        })(),
         actionLabel: 'Ansehen',
         action: (ui) => ui.openPanel('logistics.port', {}),
       };
@@ -760,7 +768,12 @@ onGameEvent('transport.arrived', 'logistics.arrivedToast', (payload, ui, state) 
   const place = getWarehouse(state, payload.toId)?.name ?? 'Lager';
   // Routen in derselben Stadt sind Routine (still im Verlauf); eine Ankunft über die A1 ist ein Banner wert.
   const routine = payload.kind === 'route' && !payload.interCity;
-  ui.toast(`Fahrt angekommen: ${payload.amount} Einheiten ${warehousePlace(place, 'in')}.`, 'good', {
+  const items = payload.items ?? [];
+  const what =
+    items.length > 0 && items.reduce((sum, i) => sum + i.amount, 0) === payload.amount
+      ? itemsText(items)
+      : `${payload.amount} Einheiten`;
+  ui.toast(`Fahrt angekommen: ${what} ${warehousePlace(place, 'in')}.`, 'good', {
     urgent: !routine,
   });
 });
@@ -774,15 +787,19 @@ onGameEvent('transport.seized', 'logistics.seizedToast', (payload, ui) => {
 });
 // Auftrag 33: Rest am Kai und eigene Fahrt am vollen Lager melden (ein Fahrer schreibt selbst per Handy).
 onGameEvent('cargo.leftBehind', 'logistics.leftBehindToast', (payload, ui) => {
+  // Nur wenn der Hafen dir auch geschrieben hat (deine Stadt, nicht schon gemeldet; Auftrag 43, M5).
+  if (!payload.notify) return;
   ui.toast(
-    `${payload.amount} Einheiten bleiben am Kai: ${payload.reason === 'vehicle' ? 'Der Wagen ist voll.' : 'Das Lager ist voll.'}`,
+    `${itemsText(payload.items)} ${payload.items.length === 1 ? 'bleibt' : 'bleiben'} am Kai: ${payload.reason === 'vehicle' ? 'Der Wagen ist voll.' : 'Das Lager ist voll, bau es aus oder lager um.'}`,
     'warn',
   );
 });
 onGameEvent('transport.waiting', 'logistics.waitingToast', (payload, ui, state) => {
   if (payload.driverId !== null) return;
   const place = getWarehouse(state, payload.toId)?.name ?? 'Lager';
-  ui.toast(`${place} ist voll: ${payload.rest} Einheiten bleiben in deinem Wagen im Hof.`, 'warn');
+  const product = getTrips(state).find((t) => t.id === payload.tripId)?.items[0]?.productId;
+  const rest = product ? formatProductAmount(product, payload.rest) : `${payload.rest} Einheiten`;
+  ui.toast(`${place} ist voll: ${rest} bleiben in deinem Wagen im Hof.`, 'warn');
 });
 onGameEvent('transport.lost', 'logistics.lostToast', (_payload, ui) => {
   ui.toast('Fahrt geplatzt, die Ladung ist weg.', 'bad');

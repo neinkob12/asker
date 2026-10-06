@@ -191,6 +191,11 @@
 .logi-track__action:hover {
   filter: brightness(1.06);
 }
+.logi-track__action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: none;
+}
 @media (prefers-reduced-motion: reduce) {
   .logi-track {
     animation: none;

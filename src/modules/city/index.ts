@@ -64,7 +64,14 @@ import { bookDay, cityDayProfit, cityReport } from '../finance';
 import { freeVehicles, releaseVehicle } from '../fleet';
 import { getLots } from '../goods';
 import { growGoals } from '../grow';
-import { FULL_POWER_SHARE, fullPowerMissing, getRightHand, hasFullPower, rightHandTitle } from '../hierarchy';
+import {
+  FULL_POWER_SHARE,
+  fullPowerMissing,
+  getRightHand,
+  hasFullPower,
+  rightHandMissing,
+  rightHandTitle,
+} from '../hierarchy';
 import { getRoutes, getTrips } from '../logistics';
 import { restHeat } from '../police';
 import { autobahnRefs, interCityMinutes } from '../roads';
@@ -610,6 +617,9 @@ function answerOptions(state: GameState, cityId: string, which: 'all' | 'comeOnl
   return list.map((o) => (o.id === 'stay' ? { ...o, label: `${from} reicht mir`, reply: `${from} reicht mir.` } : o));
 }
 
+/** Antwort „Rechte Hand ansehen“ auf die Liste, was vor dem Umzug fehlt (die Oberfläche öffnet ihre Seite). */
+export const OPEN_RIGHT_HAND = 'openRightHand';
+
 /** Offene Fragen einer Stadt erledigen sich, sobald eine Antwort gefallen ist (egal in welchem Chat-Eintrag). */
 function retractOpenQuestions(ctx: Ctx, cityId: string): void {
   const contactId = cityContact(cityId).id;
@@ -673,13 +683,17 @@ export function answerOffer(ctx: Ctx, choice: OfferChoice, cityId: string): Comm
       offer.status = 'house';
       offer.remindAt = null;
       tell(ctx, cityId, offerText(ctx.state, cityId, 'notReady'));
-      tell(
-        ctx,
-        cityId,
-        `Was mir fehlt:\n${nextCityMissing(ctx.state)
+      // Mit Weg zur Lösung (Auftrag 43, M7): Fehlt etwas bei der Rechten Hand, führt ein Knopf zu ihrer Seite.
+      const atRightHand = rightHandMissing(ctx.state, from).length > 0;
+      messages.send(ctx, {
+        contact: cityContact(cityId),
+        text: `Was noch fehlt, bevor du kommen kannst:\n${nextCityMissing(ctx.state)
           .map((line) => `– ${line}`)
           .join('\n')}`,
-      );
+        ...(atRightHand
+          ? { options: [{ id: OPEN_RIGHT_HAND, label: 'Rechte Hand ansehen', reply: 'Ich kümmer mich drum.' }] }
+          : {}),
+      });
     }
   } else if (choice === 'later') {
     offer.status = 'later';

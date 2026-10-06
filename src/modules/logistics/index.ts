@@ -111,6 +111,7 @@ import {
   HARBOR_CONTACT,
   HARBOR_PORTS,
   type HarborPort,
+  LEFT_BEHIND_NOTE_MINUTES,
   LOAD_MINUTES,
   LOG_LIMIT,
   NIGHT_END,
@@ -351,7 +352,15 @@ declare module '../../core' {
     /** Verkehrskontrolle: Die Fahrt steht, bis die Konfrontation vorbei ist. */
     'transport.stopped': { tripId: number; encounterId: number };
     /** interCity: über die Autobahn aus einer anderen Stadt (Auftrag 30). */
-    'transport.arrived': { tripId: number; kind: TripKind; toId: string; amount: number; interCity?: boolean };
+    'transport.arrived': {
+      tripId: number;
+      kind: TripKind;
+      toId: string;
+      amount: number;
+      interCity?: boolean;
+      /** Was die Fahrt geladen hatte (für Texte in Gramm statt Einheiten, Auftrag 43, M5). */
+      items?: { productId: string; amount: number }[];
+    };
     /** Ladung bei einer Kontrolle aufgeflogen. */
     'transport.seized': { tripId: number; amount: number; arrested: boolean };
     /** Fahrer ausgefallen (gekündigt, verletzt …), die Ladung ist weg. */
@@ -359,7 +368,15 @@ declare module '../../core' {
     /** Angekommen, aber das Ziel-Lager ist voll: rest Einheiten warten beim Fahrer (Auftrag 33). */
     'transport.waiting': { tripId: number; toId: string; rest: number; driverId: string | null };
     /** Abholung: Ein Teil passte nicht ins Lager bzw. in den Wagen und bleibt am Kai (Auftrag 33). */
-    'cargo.leftBehind': { cityId: string; amount: number; reason: 'warehouse' | 'vehicle' };
+    'cargo.leftBehind': {
+      cityId: string;
+      amount: number;
+      reason: 'warehouse' | 'vehicle';
+      /** Der Rest nach Ware (Auftrag 43, M5). */
+      items: { productId: string; amount: number }[];
+      /** Hat der Hafen dir geschrieben? Sonst nur Journal (andere Stadt oder schon gemeldet). */
+      notify: boolean;
+    };
     /** Eine Route ist losgefahren (Hinfahrt). */
     'route.departed': { routeId: number; tripId: number; amount: number; interCity: boolean };
     /** Eine Route ist ausgefallen (kein Fahrer, keine Ware …). */
@@ -393,6 +410,11 @@ export function portPlace(cityId = 'koeln'): { name: string; lng: number; lat: n
 
 export function portName(cityId = 'koeln'): string {
   return portOf(cityId).name;
+}
+
+/** Fluss zum Hafen einer Stadt (Köln: Rhein, Hamburg: Elbe). */
+export function portRiver(cityId = 'koeln'): { name: string; on: string } {
+  return portOf(cityId).river;
 }
 
 /** Liegeplatz in sauberem Geld. */
@@ -776,7 +798,8 @@ function pickDriver(ctx: Ctx, driverId: string | undefined, cityId: string): Sta
   );
 }
 
-function playerBusy(state: GameState, cityId?: string): string | null {
+/** Warum du gerade nicht selbst fahren kannst (null: du kannst); mit Stadt auch, wenn du nicht dort bist. */
+export function playerBusy(state: GameState, cityId?: string): string | null {
   if (isPlayerTraveling(state)) return 'Du bist gerade zwischen den Städten unterwegs.';
   if (getTrips(state).some((t) => t.driverId === null && t.status === 'planned')) return 'Du fährst heute Nacht schon.';
   if (isPlayerOnTheRoad(state)) return 'Du bist schon mit einer Fahrt unterwegs.';
@@ -1007,8 +1030,12 @@ function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandRes
   const approach = travelMinutes(warehouse, port, speed);
   const delivery = travelMinutes(port, warehouse, speed, 0, roadOptions(choice));
   const total = cargo.reduce((sum, c) => sum + c.amount, 0);
+  const rest = new Map<string, number>();
+  for (const c of cargo) rest.set(c.productId, (rest.get(c.productId) ?? 0) + c.amount);
   const items = loadFromQuay(s, cargo, room);
   const left = total - items.reduce((sum, i) => sum + i.amount, 0);
+  for (const i of items) rest.set(i.productId, (rest.get(i.productId) ?? 0) - i.amount);
+  const leftItems = [...rest].filter(([, amount]) => amount > 0).map(([productId, amount]) => ({ productId, amount }));
   const trip = startTrip(ctx, {
     kind: 'pickup',
     driverId,
@@ -1031,15 +1058,30 @@ function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandRes
         : ''),
   );
   if (left > 0) {
-    // Rest am Kai (Auftrag 33): Der Hafen meldet sich, die Zoll-Uhr läuft weiter.
+    // Rest am Kai (Auftrag 33): Der Hafen meldet sich, die Zoll-Uhr läuft weiter. Nur in der Stadt, in der du bist, und
+    // höchstens alle LEFT_BEHIND_NOTE_MINUTES (Auftrag 43, M5: holt die Rechte Hand an ein volles Lager ab, kam die
+    // Meldung sonst alle zwei Stunden).
     const where =
       room < space ? `in den Wagen (${vehicleName(state, vehicle)})` : warehousePlace(warehouse.name, 'into');
-    messages.send(ctx, {
-      contact: portContact(cityId),
-      text: `Nicht alles passte ${where}. ${left} Einheiten stehen noch am Kai, hol sie, bevor der Zoll guckt.`,
-      silent: true,
+    const contact = portContact(cityId);
+    const toldLately = messages
+      .thread(state, contact.id)
+      .some((m) => m.text.startsWith('Nicht alles passte') && ctx.now - m.time < LEFT_BEHIND_NOTE_MINUTES);
+    const notify = cityId === activeCity(state) && !toldLately;
+    if (notify) {
+      messages.send(ctx, {
+        contact,
+        text: `Nicht alles passte ${where}: ${itemsText(leftItems)} ${leftItems.length === 1 && leftItems[0].amount === 1 ? 'steht' : 'stehen'} noch am Kai. Hol den Rest, bevor der Zoll guckt.`,
+        silent: true,
+      });
+    }
+    ctx.emit('cargo.leftBehind', {
+      cityId,
+      amount: left,
+      reason: room < space ? 'vehicle' : 'warehouse',
+      items: leftItems,
+      notify,
     });
-    ctx.emit('cargo.leftBehind', { cityId, amount: left, reason: room < space ? 'vehicle' : 'warehouse' });
   }
   return { ok: true, data: { tripId: trip.id, arrivesAt: trip.arrivesAt, left } };
 }
@@ -1281,6 +1323,7 @@ function arrive(ctx: Ctx, trip: Trip): void {
     toId: target?.id ?? trip.toId,
     amount: delivered,
     ...(isInterCityTrip(ctx.state, trip) ? { interCity: true } : {}),
+    items: trip.items.map((i) => ({ productId: i.productId, amount: i.amount })),
   });
   if (trip.kind === 'route') routeArrived(ctx, trip, target?.id ?? trip.toId);
 }

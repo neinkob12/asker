@@ -644,7 +644,7 @@ export const QUESTS: readonly QuestDef[] = [
     cityId: 'hamburg',
     icon: 'truck',
     title: 'Bestell Ware für Hamburg',
-    task: 'Und Nachschub bestellt dir hier keiner. Bestell selbst Ware für dein Hamburger Lager, Toni liefert auch an die Elbe.',
+    task: 'Und Nachschub bestellt dir hier keiner. Bestell selbst Ware für dein Hamburger Lager, Hein liefert dir in einer Stunde.',
     hint: 'Lieferanten-App: Paket bestellen, die Ware kommt in dein Lager in Hamburg.',
     target: 1,
     count: { 'shipment.ordered': (p) => (p.cityId === 'hamburg' ? 1 : 0) },

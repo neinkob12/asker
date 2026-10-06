@@ -32,6 +32,7 @@ import {
   type Shipment,
   type Supplier,
   shipmentProgress,
+  shipmentSupplier,
   shipmentsInTransit,
   supplierVia,
 } from '../index';
@@ -201,7 +202,7 @@ export const suppliersLayer: MapLayer = {
       const lines: { kind: 'ship' | 'road'; path: LngLat[] }[] = [];
       const rivers = new Set<string>();
       for (const s of transit) {
-        const supplier = getSuppliers(state).find((x) => x.id === s.supplierId);
+        const supplier = shipmentSupplier(state, s);
         const target = targetOf(state, s);
         if (!supplier || !target) continue;
         if (supplier.kind === 'port') {
@@ -262,7 +263,7 @@ export const suppliersLayer: MapLayer = {
           shown.delete(id);
         }
         for (const s of transit) {
-          const supplier = getSuppliers(state).find((x) => x.id === s.supplierId);
+          const supplier = shipmentSupplier(state, s);
           const target = targetOf(state, s);
           if (!supplier || !target) continue;
           const progress = shipmentProgress(state, s);

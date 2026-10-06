@@ -199,3 +199,9 @@ onGameEvent('territory.controlChanged', 'territory.takeover', (payload, ui, stat
   const first = isFirstTakeover(memory, state.meta.runId, payload.veedelId);
   last = { runId: state.meta.runId, at: state.time, veedelId: payload.veedelId, from: payload.from, shown: !first };
 });
+
+// Macht die Übernahme die Stadt komplett, zeigt „<Stadt> komplett“ den Moment; „Veedel übernommen“ käme sonst erst
+// danach (Auftrag 43, M10). Aufleuchten und Island bleiben.
+onGameEvent('campaign.won', 'territory.takeoverWon', () => {
+  if (last && !last.shown) last.shown = true;
+});
