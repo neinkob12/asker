@@ -553,6 +553,10 @@ export default defineModule({
     'recruiting.search': (ctx, { role }) => search(ctx, role),
   },
   on: {
+    // Nach dem Verkauf (Auftrag 43, H9): Bewerber und Kontakte gehen an die Statthalter, ohne Notizen im Verlauf.
+    'business.sold': (ctx) => {
+      ctx.state.modules.recruiting.candidates = [];
+    },
     'clock.dayStarted': (ctx) => {
       maybeReferral(ctx);
       maybeEventContact(ctx);

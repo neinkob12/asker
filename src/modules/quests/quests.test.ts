@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { type GameState, journal, loadSimulation, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { allProducts, getStock } from '../goods';
+import { CALL_MIN_REVENUE } from '../grow';
 import { addHeat } from '../police';
 import { addInfluence, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
-import { CHAPTERS, PETER, QUEST_COUNT_BEFORE_36, QUESTS, QUESTS_ADDED_IN_43 } from './config';
+import { CHAPTERS, HARBOR_NAME_REVENUE, PETER, QUEST_COUNT_BEFORE_36, QUESTS, QUESTS_ADDED_IN_43 } from './config';
 import {
   chapterName,
   completedQuests,
@@ -281,7 +282,7 @@ describe('quests', () => {
     // Neu: Nach 'order' folgt 'revenue1k', der Hafen kommt erst später.
     expect(currentQuest(loaded.state)?.id).toBe('revenue1k');
     expect(loaded.state.modules.quests.done).toEqual(['firstSales', 'setPrice', 'order']);
-    expect(loaded.state.moduleVersions.quests).toBe(5);
+    expect(loaded.state.moduleVersions.quests).toBe(6);
     // Alles durch: Index am Ende.
     raw.modules.quests = { index: 26, progress: 0, done: QUESTS.map((q) => q.id), skipped: [], title: 'Boss von Köln' };
     expect(currentQuest(loadSimulation(raw, sim.modules).state)).toBeNull();
@@ -316,6 +317,24 @@ describe('quests', () => {
     expect(questsWaiting(waiting.state)).toBe(true);
     waiting.advance(60);
     expect(currentQuest(waiting.state)).toBeNull();
+  });
+
+  it('Migration 5 → 6 (Auftrag 43, H15): „Mach dir einen Namen“ schiebt die Produktion eins weiter', () => {
+    const sim = createTestGame();
+    const v5 = QUESTS.filter((q) => q.id !== 'rtRevenue');
+    const raw = structuredClone(sim.state) as GameState;
+    raw.modules.quests = {
+      ...raw.modules.quests,
+      index: v5.findIndex((q) => q.id === 'pdFinca'),
+      done: ['rtTruck', 'pdOffer'],
+    };
+    raw.moduleVersions.quests = 5;
+    const loaded = loadSimulation(raw, sim.modules).state.modules.quests;
+    expect(QUESTS[loaded.index]?.id).toBe('pdFinca');
+    // Wer den Lkw schon hat, bekommt die neue Quest nicht später mit Belohnung nach.
+    expect(loaded.done).toContain('rtRevenue');
+    // Das Ziel ist der Umsatz, ab dem die Produzenten anrufen.
+    expect(HARBOR_NAME_REVENUE).toBe(CALL_MIN_REVENUE);
   });
 
   it('Kapitel pro Stadt (Auftrag 36): Wer nach Köln eine andere Stadt nimmt, bekommt deren Kapitel', () => {

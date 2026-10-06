@@ -1378,6 +1378,8 @@ export function sellBusiness(ctx: Ctx): CommandResult {
   messages.cancelCalls(ctx, contact.id);
   messages.retractWhere(ctx, () => true);
   for (const m of ctx.state.messages.list) m.read = true;
+  // Die alten Chats wandern in der Liste eingeklappt nach unten (Auftrag 43, H9), Jansen und Fenna stehen oben.
+  messages.archive(ctx, 'Frühere Städte');
   journal.add(
     ctx,
     `Verkauft: ${formatEuro(offer.price)} von den Statthaltern, ${formatEuro(offer.rotterdamPrice)} an Jansen. Dir bleiben ${formatEuro(offer.rest)}.`,

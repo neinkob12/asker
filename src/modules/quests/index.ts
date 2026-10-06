@@ -47,6 +47,7 @@ import {
   QUEST_COUNT_BEFORE_36,
   QUESTS,
   QUESTS_ADDED_IN_43,
+  QUESTS_ADDED_IN_43_H,
   type QuestDef,
   type QuestReward,
 } from './config';
@@ -714,7 +715,7 @@ function onCounted<K extends keyof GameEvents>(type: K) {
 
 export default defineModule({
   id: 'quests',
-  version: 5,
+  version: 6,
   dependsOn: ['goods', 'staff', 'territory', 'police', 'reputation', 'leaderboard'],
   init: () => ({
     index: 0,
@@ -799,13 +800,27 @@ export default defineModule({
     // zeigte in die alte Liste; dieselbe Quest in der neuen suchen. Die neuen Quests einer Stadt, die schon läuft,
     // kommen erst nach dem Ende der Liste wieder dran (nextIndex sucht Stadt-Quests auch vorne).
     5: (old: QuestsState): QuestsState => {
-      const added = new Set(QUESTS_ADDED_IN_43);
+      const added = new Set<string>([...QUESTS_ADDED_IN_43, ...QUESTS_ADDED_IN_43_H]);
       const before = QUESTS.filter((q) => !added.has(q.id));
+      // Ziel ist die Liste von Version 5 (ohne die Quests aus Version 6), Version 6 schiebt danach weiter.
+      const v5 = QUESTS.filter((q) => !(QUESTS_ADDED_IN_43_H as readonly string[]).includes(q.id));
       if (old.index < 0) return old;
       const id = before[old.index]?.id;
       // Alles durch: Jetzt wartet das Kapitel Rotterdam (es kommt nach dem Verkauf, sobald du dort bist).
       if (id === undefined) return { ...old, index: WAITING, progress: 0 };
-      return { ...old, index: QUESTS.findIndex((q) => q.id === id) };
+      return { ...old, index: v5.findIndex((q) => q.id === id) };
+    },
+    // Version 6 (Auftrag 43, H15): „Mach dir einen Namen“ nach dem Lkw. Indizes dahinter rücken eins weiter; wer den
+    // Lkw schon hat, bekommt die neue Quest als erledigt (sonst käme sie später mit Belohnung nach).
+    6: (old: QuestsState): QuestsState => {
+      const added = QUESTS_ADDED_IN_43_H as readonly string[];
+      const positions = added.map((id) => QUESTS.findIndex((q) => q.id === id)).sort((a, b) => a - b);
+      let index = old.index;
+      if (index >= 0) for (const pos of positions) if (index >= pos) index++;
+      const done = old.done.includes('rtTruck')
+        ? [...old.done, ...added.filter((id) => !old.done.includes(id))]
+        : old.done;
+      return { ...old, index, done };
     },
   },
 });

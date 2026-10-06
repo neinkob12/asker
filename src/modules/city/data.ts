@@ -271,7 +271,8 @@ export const ABROAD_CITIES: readonly CityDef[] = [
     name: 'Rotterdam',
     center: { lng: 4.3, lat: 51.92 },
     // Blick nach Westen über die Maasvlakte-Zufahrt: Waalhaven und Eemhaven vorn.
-    view: { center: { lng: 4.33, lat: 51.895 }, zoom: 11.6, mobileZoom: 10.6, pitch: 45, bearing: -60 },
+    // Mitte auf Jansens Liegeplatz (Auftrag 43, H12): sonst lag die Hafen-Kachel hinter den Kartenknöpfen.
+    view: { center: { lng: 4.39, lat: 51.9 }, zoom: 11.6, mobileZoom: 10.6, pitch: 45, bearing: -60 },
     bounds: [4.0, 51.85, 4.55, 51.99],
     roadsNetworkId: 'koeln',
     portId: 'rotterdam',

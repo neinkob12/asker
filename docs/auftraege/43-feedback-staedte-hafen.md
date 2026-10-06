@@ -264,16 +264,27 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   aufs Schiff“ unter dem Knopf, Hinweis, wenn nur ein Teil der Kiste gebraucht wird.
 - [x] H8 Kasse in Rotterdam: Pro Leutnant, Kundschaft, Pro Spot aus der Stadt-Phase.
   Erledigt: Nach dem Verkauf keine Abschnitte Pro Spot, Pro Leutnant, Löhne, Kundschaft und Stammabnehmer.
-- [ ] H9 Köln-Reste: Nachrichten-Liste, „Alle Quests“ mit alten Kapiteln und Wochenverträgen, Geldwäsche-Wege,
+- [x] H9 Köln-Reste: Nachrichten-Liste, „Alle Quests“ mit alten Kapiteln und Wochenverträgen, Geldwäsche-Wege,
   Wetter „über Köln“, Polizei-Stufe, Einstellung „Anfragen“.
+  Erledigt: `messages.archive` legt beim Verkauf alle Chats eingeklappt unter „Frühere Städte“ ab (Jansen und Fenna
+  oben); Quest-Seite zeigt nach dem Verkauf die Hafen-Kapitel, Deutschland eingeklappt, keine Wochenverträge;
+  Geldwäsche ohne gesperrte Wege aus den Veedeln, Text für den Hafen; Wetter nennt die Stadt; keine Polizei-Stufe und
+  keine Bewerber mehr nach dem Verkauf; „Anfragen“ in den Einstellungen ausgeblendet (`hiddenWhen` für Slots).
 - [x] H10 Banner „Container angekommen“ nennt den ganzen Container, nicht was ins Lager passte.
   Erledigt: `trade.containerArrived` trägt `stored`, ein Banner sagt „X im Lager, Y warten am Kai“.
 - [x] H11 Frist in „Zu liefern“ ohne Uhrzeit.
   Erledigt: „bis Di 06:00“ wie bei den neuen Bestellungen.
-- [ ] H12 Karte: Hafen-Kachel hinter den Knöpfen, Rotterdam-Karte unter der Quest-Karte, Auto-Marker bleibt sichtbar.
-- [ ] H13 Handy: HUD-Pillen der Hafen-Phase je eine Zeile, Namen und Auswahl abgeschnitten.
-- [ ] H14 Kleinigkeiten: doppelter Titel im Journal, Reiter „Aufträge“, Konkurrenz beim Vertrag, Guide „5 bis 9 Tage“.
-- [ ] H15 Kein Ziel zwischen Lkw-Quest und Anbau-Anruf.
+- [x] H12 Karte: Hafen-Kachel hinter den Knöpfen, Rotterdam-Karte unter der Quest-Karte, Auto-Marker bleibt sichtbar.
+  Erledigt: Kamera in Rotterdam mittig auf dem Liegeplatz, Übersicht mit Platz links für Geld und Quest,
+  `.city-car[hidden]`, Karten mit Text über den Fahrzeugen.
+- [x] H13 Handy: HUD-Pillen der Hafen-Phase je eine Zeile, Namen und Auswahl abgeschnitten.
+  Erledigt: drei Kacheln pro Reihe auch ohne Karte, breite Bausteine bleiben in der Gruppe, Segment mit Zahl breiter,
+  „Anteil“ statt „Marktanteil“, Organisationen in der Liste nur mit Stadt.
+- [x] H14 Kleinigkeiten: doppelter Titel im Journal, Reiter „Aufträge“, Konkurrenz beim Vertrag, Guide „5 bis 9 Tage“.
+  Erledigt: kein doppelter Titel, Quest-Hinweis im Anbau nennt „Aufträge“, unter Vertrag keine Konkurrenz, Guide mit
+  allen Wegen (1 Tag per Lkw), ein Gegenangebot, das immer verliert, als eine Zeile statt drei.
+- [x] H15 Kein Ziel zwischen Lkw-Quest und Anbau-Anruf.
+  Erledigt: Quest „Mach dir einen Namen“ (Umsatz bis zum Anruf, `HARBOR_NAME_REVENUE`), Migration 6 der Quests.
 
 ## Neue Funde
 

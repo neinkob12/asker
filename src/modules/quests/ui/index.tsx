@@ -6,6 +6,7 @@ import type { GameState } from '../../../core';
 import {
   ActionSheet,
   Chip,
+  Disclosure,
   Group,
   Icon,
   IconChip,
@@ -21,7 +22,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, cityOfSpot } from '../../city';
+import { activeCity, cityOfSpot, isBusinessSold } from '../../city';
 import { getWarehouses } from '../../goods';
 import { getSpots, lockedSpots } from '../../spots';
 import { CHAPTERS, chapterName, currentQuest, QUESTS, type QuestGoTo, questProgress, rewardText } from '../index';
@@ -205,55 +206,62 @@ function QuestList() {
   const ui = useUi();
   const q = state.modules.quests;
   const active = currentQuest(state);
+  // Nach dem Verkauf (Auftrag 43, H9) oben nur die Kapitel des Hafens (Quests mit Stimme), Deutschland eingeklappt
+  // darunter; Wochenverträge gibt es dann nicht mehr.
+  const sold = isBusinessSold(state);
+  const harbor = (chapter: number) => QUESTS.some((x) => x.chapter === chapter && x.voice !== undefined);
+  const chapters = CHAPTERS.map((name, chapter) => ({ name, chapter }));
+  const shown = sold ? chapters.filter((c) => harbor(c.chapter)) : chapters;
+  const earlier = sold ? chapters.filter((c) => !harbor(c.chapter)) : [];
+  const chapterGroup = ({ name, chapter }: { name: string; chapter: number }) => {
+    const quests = QUESTS.filter((x) => x.chapter === chapter);
+    const doneCount = quests.filter((x) => q.done.includes(x.id)).length;
+    return (
+      <Group
+        key={name}
+        title={`Kapitel ${chapter + 1}: ${name}`}
+        icon="flag"
+        color="brand"
+        value={`${doneCount}/${quests.length}`}
+        collapsible
+        open={active ? active.chapter === chapter : chapter === CHAPTERS.length - 1}
+      >
+        <List>
+          {quests.map((quest) => {
+            const done = q.done.includes(quest.id);
+            const skipped = q.skipped.includes(quest.id);
+            const isActive = active?.id === quest.id;
+            const [now, target] = isActive ? questProgress(state) : [0, quest.target];
+            return (
+              <ListItem
+                key={quest.id}
+                onClick={isActive ? () => goTo(ui, state, quest.goTo) : undefined}
+                value={
+                  done ? 'erledigt' : skipped ? 'übersprungen' : isActive ? formatProgress(now, target, quest.euro) : ''
+                }
+              >
+                <ItemContent
+                  icon={done ? 'checkCircle' : skipped ? 'skip' : isActive ? quest.icon : 'lock'}
+                  color={done ? 'money' : isActive ? 'brand' : 'system'}
+                  title={quest.title}
+                  tags={quest.reward.map((r) => ({ label: rewardText(r), color: 'brand' as const, icon: 'gift' }))}
+                />
+              </ListItem>
+            );
+          })}
+        </List>
+      </Group>
+    );
+  };
   return (
     <div class="quest-list">
-      <ContractsGroup />
-      {CHAPTERS.map((name, chapter) => {
-        const quests = QUESTS.filter((x) => x.chapter === chapter);
-        const doneCount = quests.filter((x) => q.done.includes(x.id)).length;
-        return (
-          <Group
-            key={name}
-            title={`Kapitel ${chapter + 1}: ${name}`}
-            icon="flag"
-            color="brand"
-            value={`${doneCount}/${quests.length}`}
-            collapsible
-            open={active ? active.chapter === chapter : chapter === CHAPTERS.length - 1}
-          >
-            <List>
-              {quests.map((quest) => {
-                const done = q.done.includes(quest.id);
-                const skipped = q.skipped.includes(quest.id);
-                const isActive = active?.id === quest.id;
-                const [now, target] = isActive ? questProgress(state) : [0, quest.target];
-                return (
-                  <ListItem
-                    key={quest.id}
-                    onClick={isActive ? () => goTo(ui, state, quest.goTo) : undefined}
-                    value={
-                      done
-                        ? 'erledigt'
-                        : skipped
-                          ? 'übersprungen'
-                          : isActive
-                            ? formatProgress(now, target, quest.euro)
-                            : ''
-                    }
-                  >
-                    <ItemContent
-                      icon={done ? 'checkCircle' : skipped ? 'skip' : isActive ? quest.icon : 'lock'}
-                      color={done ? 'money' : isActive ? 'brand' : 'system'}
-                      title={quest.title}
-                      tags={quest.reward.map((r) => ({ label: rewardText(r), color: 'brand' as const, icon: 'gift' }))}
-                    />
-                  </ListItem>
-                );
-              })}
-            </List>
-          </Group>
-        );
-      })}
+      {!sold && <ContractsGroup />}
+      {shown.map(chapterGroup)}
+      {earlier.length > 0 && (
+        <Disclosure icon="flag" label={`Frühere Kapitel (${earlier.length})`}>
+          {earlier.map(chapterGroup)}
+        </Disclosure>
+      )}
       {q.title && (
         <p class="quest-list__title">
           <Chip color="brand" icon="crown" label={q.title} />

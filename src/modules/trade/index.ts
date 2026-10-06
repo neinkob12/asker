@@ -1085,7 +1085,8 @@ export function placeOrders(ctx: Ctx, first = false): number {
     const guaranteed = contract && customer.kind === 'org';
     const mine = guaranteed ? Math.max(share, CONTRACT_SHARE) : share;
     customer.share = Math.round(mine * 1000) / 1000;
-    customer.topRival = topRival;
+    // Unter dem Abnahmevertrag gibt es keine Konkurrenz (Auftrag 43, H14).
+    customer.topRival = guaranteed ? null : topRival;
     const items: OrderItem[] = [];
     for (const [productId, weekly] of Object.entries(customer.weekly)) {
       // Kleine Schwankung von Woche zu Woche (±15 %).

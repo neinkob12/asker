@@ -292,7 +292,7 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
               <ItemContent
                 icon="alert"
                 color="danger"
-                title={`Kommt nach der Frist von ${tooLate.length === 1 ? 'einer Bestellung' : `${tooLate.length} Bestellungen`}`}
+                title={`Zu spät für ${tooLate.length === 1 ? 'eine Bestellung' : `${tooLate.length} Bestellungen`}`}
                 meta={`Die erste muss bis ${clock.weekdayName(firstDue, true)} ${clock.formatTime(firstDue)} raus. Ein schnellerer Produzent schafft es vielleicht.`}
               />
             </ListItem>

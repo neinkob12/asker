@@ -184,8 +184,15 @@ function producersFor(state: GameState, productId: string, portId: string) {
 /** Die Woche als Lieferant in vier Schritten (Auftrag 43): in den ersten zwei Wochen offen, danach eingeklappt. */
 /** Die Schritte im Hafen (Auftrag 43: mit Ort zum Tippen, Fristen, Folgen und sauberem Geld). */
 function harborSteps(): { icon: string; color: CategoryColor; title: string; text: string }[] {
-  const days = PRODUCERS.filter((p) => !p.byRoad).map((p) => Math.round(shippingMinutes(p.id, HARBOR_CITY) / 1440));
-  const sea = days.length > 0 ? `${Math.min(...days)} bis ${Math.max(...days)} Tage` : 'ein paar Tage';
+  // Alle Wege, auch per Lkw aus den Niederlanden (Auftrag 43, H14: Westland und Jansens Netz brauchen einen Tag).
+  const days = PRODUCERS.map((p) => Math.max(1, Math.round(shippingMinutes(p.id, HARBOR_CITY) / 1440)));
+  const fast = PRODUCERS.filter((p) => p.byRoad).map((p) => p.name);
+  const span =
+    days.length > 0 ? `${tripDays(Math.min(...days) * 1440)} bis ${Math.max(...days)} Tage` : 'ein paar Tage';
+  const sea =
+    fast.length > 0
+      ? `${span} unterwegs, am schnellsten per Lkw aus den Niederlanden (${fast.join(', ')})`
+      : `${span} unterwegs`;
   return [
     {
       icon: 'inbox',
@@ -197,7 +204,7 @@ function harborSteps(): { icon: string; color: CategoryColor; title: string; tex
       icon: 'ship',
       color: 'goods',
       title: 'Einkauf im Ausland',
-      text: `Reiter Hafen › Einkauf im Ausland: Container bei Produzenten, bezahlt mit Schwarzgeld, ${sea} auf See. Bestell, bevor die Halle leer ist.`,
+      text: `Reiter Hafen › Einkauf im Ausland: Container bei Produzenten, bezahlt mit Schwarzgeld, ${sea}. Bestell, bevor die Halle leer ist.`,
     },
     {
       icon: 'anchor',
@@ -292,13 +299,26 @@ function OrdersView(props: { onView: (view: View) => void }) {
     });
     if (!o.guaranteed) {
       const seen = new Set<number>();
+      const steps: { factor: number; rival: { name: string } | null }[] = [];
       for (const up of [0.05, 0.1, 0.15]) {
         const factor = Math.min(maxFactor(o), 1 + up);
         // Stößt der Aufschlag an seine Preisgrenze, wäre die nächste Stufe dieselbe (Auftrag 43: keine Doppelten).
         if (factor <= 1 || seen.has(factor)) continue;
         seen.add(factor);
         // Auftrag 43: vorher sagen, ob der Kunde dann lieber bei der Konkurrenz kauft; solche Stufen rot.
-        const rival = counterOutcome(state, o, factor).rival;
+        steps.push({ factor, rival: counterOutcome(state, o, factor).rival });
+      }
+      // Verliert schon die kleinste Stufe (H14), eine Zeile statt drei Sackgassen.
+      const lost = steps[0]?.rival;
+      if (lost && steps.every((x) => x.rival)) {
+        actions.push({
+          label: `Kein Gegenangebot: Schon +${Math.round((steps[0].factor - 1) * 100)} % treibt ihn zu ${lost.name}`,
+          icon: 'tag',
+          disabled: true,
+          onSelect: () => {},
+        });
+      }
+      for (const { factor, rival } of lost && steps.every((x) => x.rival) ? [] : steps) {
         const percent = Math.round((factor - 1) * 100);
         actions.push({
           label: `Gegenangebot ${formatEuro(orderValue(o, factor))} (+${percent} %): ${rival ? `dann kauft er bei ${rival.name}` : 'du bleibst vorn'}`,
@@ -695,7 +715,7 @@ function CustomersView() {
       <NextStageGroup />
       <SummaryTiles
         items={[
-          { icon: 'chart', color: 'money', value: pct(share), label: 'Marktanteil' },
+          { icon: 'chart', color: 'money', value: pct(share), label: 'Anteil' },
           { icon: 'clock', color: 'place', value: pct(rep.reliability), label: 'Pünktlich' },
           { icon: 'gem', color: 'goods', value: pct(rep.quality), label: 'Qualität' },
         ]}
@@ -746,7 +766,8 @@ function CustomersView() {
                     <ItemContent
                       icon={kindIcon(c.kind)}
                       color={KIND_COLOR[c.kind]}
-                      title={c.name}
+                      // Die Gruppe heißt schon „Alte Organisationen“: hier nur die Stadt (H13, sonst „Organisation Ha…“).
+                      title={c.kind === 'org' ? c.name.replace(/^Organisation /, '') : c.name}
                       meta={contact.name !== c.name ? contact.name : undefined}
                       tags={[
                         customerBlocked(state, c) && { label: 'kauft nicht bei dir', color: 'danger', icon: 'fist' },

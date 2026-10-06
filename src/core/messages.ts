@@ -126,6 +126,11 @@ export interface MessagesState {
   hidden: Record<string, number>;
   /** Anrufe: welche gerade klingeln (Nachrichten-IDs) und welche Rückrufe ausstehen. */
   calls: { ringing: number[]; retries: CallRetry[] };
+  /**
+   * Abgelegt (Auftrag 43): Chats, deren letzte Nachricht höchstens diese ID hat, stehen in der Liste eingeklappt unter
+   * `label` (z.B. „Frühere Städte“ nach dem Verkauf). Schreibt die Figur neu, ist der Chat wieder oben.
+   */
+  archive?: { upTo: number; label: string };
 }
 
 /** Anruf einer Figur (messages.call). */
@@ -441,6 +446,19 @@ export const messages = {
     for (const message of ctx.state.messages.list) {
       if (messages.canAnswer(ctx.state, message) && test(message)) message.expired = true;
     }
+  },
+
+  /** Alle Chats bis jetzt ablegen (eingeklappt unter `label`), z.B. beim Verkauf des Geschäfts. */
+  archive(ctx: Ctx, label: string): void {
+    const list = ctx.state.messages.list;
+    const upTo = list.length > 0 ? list[list.length - 1].id : 0;
+    ctx.state.messages.archive = { upTo, label };
+  },
+
+  /** Ist der Chat abgelegt (seine letzte Nachricht liegt vor dem Ablegen)? */
+  isArchived(state: GameState, lastMessageId: number): boolean {
+    const archive = state.messages.archive;
+    return archive !== undefined && lastMessageId <= archive.upTo;
   },
 
   /** Offene Fragen, die als Routine gekennzeichnet sind (die Rechte Hand darf sie beantworten). */

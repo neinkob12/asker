@@ -305,7 +305,11 @@ function rollMarketEvents(ctx: Ctx): void {
       endsAt: ctx.now + dice.randomInt(min, max) * MINUTES_PER_DAY,
     };
     s.market.push(run);
-    if (isCityLive(ctx.state, cityId)) journal.add(ctx, `${def.name}: ${marketEventText(run)}`, up ? 'good' : 'bad');
+    if (isCityLive(ctx.state, cityId)) {
+      // Fängt der Satz schon mit dem Namen an, nicht doppelt (Auftrag 43, H14).
+      const text = marketEventText(run);
+      journal.add(ctx, text.startsWith(def.name) ? text : `${def.name}: ${text}`, up ? 'good' : 'bad');
+    }
     ctx.emit('events.marketStarted', {
       runId: run.id,
       eventId: def.id,

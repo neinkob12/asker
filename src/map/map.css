@@ -617,3 +617,8 @@ button.map-target:hover .map-target__reticle {
 .map-card.is-tucked > * {
   display: none;
 }
+
+/* Karten mit Text liegen über Fahrzeugen und Punkten (Auftrag 43, H12: Lkw-Symbole deckten „Statthalter“ und Namen zu). */
+.maplibregl-marker.map-card:not(.is-tucked) {
+  z-index: 2;
+}

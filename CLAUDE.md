@@ -122,7 +122,9 @@ Test-Spielstände pro Stadt. Hafen-Phase: Kapitel „Rotterdam“ mit Jansen (`Q
 Bestellungen nur mit Ware aus der Halle; Fenna übernimmt Annehmen, Ausliefern und Nachkauf (`trade/plans.ts`,
 `trade.setPlan`, `trade.addRestock`); Kunden-Seite `trade.customer`; „Dein Preis“ wirkt auf den Preis pro Gramm; nach
 dem Verkauf führen alte Hafen-Seite und Lieferanten-App in die App Handel, Apps und Tabs können mit `hiddenWhen`
-zeitweise verschwinden, das HUD zeigt Zoll und Ruf als Lieferant.
+zeitweise verschwinden, das HUD zeigt Zoll und Ruf als Lieferant. Beim Verkauf schaltet `city` sofort auf Rotterdam
+(die alte Stadt ist schon während der Fahrt nicht mehr live) und legt die alten Chats ab (`messages.archive`, Liste
+„Frühere Städte“); Slots können mit `hiddenWhen` verschwinden; Bestand der Häfen verteilt `trade.deliveryReadiness`.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

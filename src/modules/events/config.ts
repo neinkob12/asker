@@ -313,7 +313,7 @@ export const MARKET_EVENTS: readonly MarketEventDef[] = [
     icon: 'leaf',
     products: ['haze', 'kush'],
     factor: 0.9,
-    text: 'Gute Ernte in den Niederlanden: Überall gibt es {product}, die Preise fallen.',
+    text: 'Überall gibt es {product}, die Preise fallen.',
   },
   {
     id: 'hashFlood',

@@ -241,3 +241,20 @@ describe('Nachrichten-App: Gruppen nach Kontaktart', () => {
     expect(recentContacts(chatList(sim.state), 2)).toHaveLength(2);
   });
 });
+
+describe('Nachrichten-App: abgelegte Chats (Auftrag 43)', () => {
+  it('abgelegte Chats stehen nicht in den Gruppen und nicht oben; schreibt die Figur neu, ist der Chat zurück', () => {
+    const { sim, ctx } = game();
+    messages.send(ctx, { contact: gang, text: 'Das ist unser Revier.' });
+    messages.send(ctx, { contact: lena, text: 'Hast du was?' });
+    messages.archive(ctx, 'Frühere Städte');
+    const before = chatList(sim.state);
+    expect(before.every((c) => c.archived)).toBe(true);
+    expect(groupChats(before)).toEqual([]);
+    expect(recentContacts(before)).toEqual([]);
+    messages.send(ctx, { contact: lena, text: 'Noch da?' });
+    const after = chatList(sim.state);
+    expect(after.find((c) => c.contactId === lena.id)?.archived).toBeUndefined();
+    expect(groupChats(after).map((g) => g.kind)).toEqual(['customer']);
+  });
+});

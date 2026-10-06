@@ -375,6 +375,8 @@ registerSlot('core.settings', {
   color: 'money',
   order: 30,
   component: OrderSettings,
+  // Nach dem Verkauf schreibt dir keine Laufkundschaft mehr (Auftrag 43, H9).
+  hiddenWhen: isBusinessSold,
 });
 registerMapLayer(deliveriesLayer);
 
