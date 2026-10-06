@@ -26,7 +26,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, citiesUnlocked, cityOfSpot } from '../../city';
+import { activeCity, citiesUnlocked, cityOfSpot, isBusinessSold } from '../../city';
 import { getGang } from '../../gangs';
 import { formatProductAmount, getProduct, productName } from '../../goods';
 import { activeRunnerAt } from '../../staff';
@@ -208,6 +208,8 @@ function SpotCustomers(props: { spotId: string }) {
 function CustomersSection() {
   const { state } = useGame();
   const ui = useUi();
+  // Nach dem Verkauf gibt es keine Laufkundschaft mehr (Auftrag 43, H8): Die Kasse zeigt den Großhandel.
+  if (isBusinessSold(state)) return null;
   const stats = getSalesStats(state);
   // Stammkunden der Stadt, in der du bist (Auftrag 43); die Zahlen darüber zählen über alle Städte.
   const city = activeCity(state);
@@ -296,7 +298,7 @@ function CustomersSection() {
 function DealersSection() {
   const { state, dispatch } = useGame();
   const dealers = getDealers(state);
-  if (dealers.length === 0) return null;
+  if (dealers.length === 0 || isBusinessSold(state)) return null;
   return (
     <Group
       title="Stammabnehmer"

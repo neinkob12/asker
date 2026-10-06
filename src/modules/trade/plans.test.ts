@@ -1,12 +1,14 @@
 // Lieferpläne und Nachkauf (Auftrag 43): Fenna nimmt an, liefert aus und kauft nach, so weit du es ihr sagst.
 
 import { describe, expect, it } from 'vitest';
-import { type GameState, loadSimulation, type Simulation } from '../../core';
+import { type GameState, loadSimulation, messages, type Simulation } from '../../core';
 import { createTestGame } from '../../core/testing';
 import { playableCities } from '../city';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
+import { CONTRACT_WARN_DAYS } from './config';
 import {
+  contractEndsAt,
   deliveryReadiness,
   getDeliveries,
   getOrders,
@@ -143,4 +145,27 @@ describe('Nachkauf (Auftrag 43)', () => {
     sim.advance(DISPATCH_EVERY + 5);
     expect(getDeliveries(sim.state).filter((d) => d.orderId === a.id)).toHaveLength(1);
   });
+});
+
+describe('Keine stillen Verluste (Auftrag 43, H2)', () => {
+  it('verfallene Bestellungen meldet Fenna mit Wert, vor dem Ende des Abnahmevertrags warnt sie', () => {
+    const sim = soldGame();
+    const open = openOrders(sim.state);
+    expect(open.length).toBeGreaterThan(0);
+    const last = Math.max(...open.map((o) => o.answerBy));
+    while (sim.state.time <= last) sim.advance(60);
+    expect(open.every((o) => getOrders(sim.state).find((x) => x.id === o.id)?.status === 'expired')).toBe(true);
+    const fenna = () => messages.thread(sim.state, 'trade:dispo').map((m) => m.text);
+    expect(fenna().some((t) => t.includes('verfallen') && t.includes('€'))).toBe(true);
+    expect(sim.state.journal.some((e) => e.text.includes('ohne Antwort verfallen'))).toBe(true);
+
+    const until = contractEndsAt(sim.state);
+    expect(until).not.toBeNull();
+    while (sim.state.time < (until ?? 0) - CONTRACT_WARN_DAYS * 1440) sim.advance(60);
+    expect(fenna().filter((t) => t.includes('läuft in')).length).toBe(1);
+    while (sim.state.time < (until ?? 0) + 60) sim.advance(60);
+    expect(fenna().filter((t) => t.includes('läuft in')).length).toBe(1);
+    expect(fenna().some((t) => t.includes('ist ausgelaufen'))).toBe(true);
+    expect(contractEndsAt(sim.state)).toBeNull();
+  }, 60_000);
 });

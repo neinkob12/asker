@@ -89,6 +89,8 @@ export const START_QUALITY = 0.7;
  */
 export const CONTRACT_WEEKS = 4;
 export const CONTRACT_SHARE = 0.6;
+/** So viele Tage vor dem Ende des Abnahmevertrags warnt Fenna (Auftrag 43). */
+export const CONTRACT_WARN_DAYS = 7;
 
 /** Gangs: Ein Deal kippt mit dieser Chance (mal (1 − Vertrauen/100)); unter dieser Erinnerung kaufen sie nicht. */
 export const GANG_TIP_CHANCE = 0.15;

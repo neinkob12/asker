@@ -51,6 +51,7 @@ import {
   CUSTOMER_KINDS,
   type CustomerKind,
   containerCost,
+  contractEndsAt,
   counterOutcome,
   customerBlocked,
   customerContact,
@@ -103,7 +104,7 @@ import {
 import { MissingClean } from './clean';
 import { europeLayer } from './map';
 import { ShipsGroup } from './order';
-import { DispatcherGroup, RestockGroup, WeekGroup } from './plans';
+import { bestProducer, contractText, DispatcherGroup, pricePerKg, RestockGroup, tripDays, WeekGroup } from './plans';
 import './trade.css';
 
 declare module '../../../ui' {
@@ -367,9 +368,15 @@ function OrdersView(props: { onView: (view: View) => void }) {
   if (ask && customer && ask.mode === 'buy') {
     const portId = ownedPorts(state)[0] ?? HARBOR_CITY;
     for (const item of missingItems(state, ask.order)) {
-      for (const p of producersFor(state, item.productId, portId).slice(0, 2)) {
+      // Der günstigste, der bis zur Frist ankommt, und der schnellste (Auftrag 43, H5), mit Preis und Fahrzeit.
+      const best = bestProducer(state, item.productId, portId, ask.order.dueAt);
+      const fastest = producersFor(state, item.productId, portId)[0];
+      const choices = [best, fastest].filter((p, i, all) => p && all.findIndex((x) => x?.id === p.id) === i);
+      for (const p of choices) {
+        if (!p) continue;
+        const price = 'products' in p ? `, ${formatEuro(pricePerKg(p.id, item.productId))}/kg` : '';
         actions.push({
-          label: `${productName(item.productId)} bei ${p.name} (${daysLabel(Math.round(shippingMinutes(p.id, portId) / 1440))})`,
+          label: `${productName(item.productId)} bei ${p.name} (${tripDays(shippingMinutes(p.id, portId))}${price})`,
           icon: p.byRoad ? 'truck' : 'ship',
           onSelect: () => {
             setAsk(null);
@@ -682,6 +689,7 @@ function CustomersView() {
   const stats = tradeStats(state);
   const level = state.modules.trade.priceLevel;
   const share = stats.demand > 0 ? stats.ordered / stats.demand : 0;
+  const contractEnd = contractEndsAt(state);
   return (
     <>
       <NextStageGroup />
@@ -721,7 +729,9 @@ function CustomersView() {
             icon={kindIcon(g.kind)}
             color={KIND_COLOR[g.kind]}
             count={list.length}
-            note={g.note}
+            note={
+              g.kind === 'org' && contractEnd !== null ? `Abnahmevertrag bis ${contractText(contractEnd)}.` : g.note
+            }
           >
             <List>
               {list.map((c) => {
@@ -1163,13 +1173,16 @@ registerAdvisor({
   id: 'trade.orders',
   advise(state) {
     if (!isTradeActive(state)) return null;
-    const open = openOrders(state).length;
+    const waiting = openOrders(state);
+    const open = waiting.length;
     if (open > 0) {
+      const by = Math.min(...waiting.map((o) => o.answerBy));
       return {
         id: 'trade.orders',
         priority: 82,
         icon: 'inbox',
         title: `${open} ${open === 1 ? 'Bestellung wartet' : 'Bestellungen warten'}`,
+        text: `Antworten bis ${answerByText(by)}, sonst kauft die Konkurrenz.`,
         action: (ui) => ui.openPhone(APP_ID, { view: 'orders' }),
       };
     }
@@ -1213,26 +1226,35 @@ registerAdvisor({
         action: (ui) => ui.openPhone(APP_ID, { view: 'orders' }),
       });
     }
-    // Ware, die für angenommene Bestellungen fehlt und auch nicht unterwegs ist.
+    // Ware, die für angenommene Bestellungen fehlt und auch nicht rechtzeitig unterwegs ist (Auftrag 43, H4).
     const need = new Map<string, number>();
+    const firstDue = new Map<string, number>();
+    const lastDue = new Map<string, number>();
     for (const o of pendingDeliveries(state)) {
-      for (const item of openItems(o)) need.set(item.productId, (need.get(item.productId) ?? 0) + item.amount);
+      for (const item of openItems(o)) {
+        need.set(item.productId, (need.get(item.productId) ?? 0) + item.amount);
+        firstDue.set(item.productId, Math.min(firstDue.get(item.productId) ?? Infinity, o.dueAt));
+        lastDue.set(item.productId, Math.max(lastDue.get(item.productId) ?? 0, o.dueAt));
+      }
     }
     for (const id of ownedPorts(state)) {
       for (const [productId, lot] of Object.entries(portStock(state, id))) {
         need.set(productId, (need.get(productId) ?? 0) - lot.amount);
       }
     }
-    for (const x of getShipments(state)) need.set(x.productId, (need.get(x.productId) ?? 0) - x.amount);
+    for (const x of getShipments(state)) {
+      if (x.arrivesAt <= (lastDue.get(x.productId) ?? Infinity))
+        need.set(x.productId, (need.get(x.productId) ?? 0) - x.amount);
+    }
     const [productId, missing] = [...need.entries()].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])[0] ?? [];
-    const producer = productId ? producersFor(state, productId, port)[0] : undefined;
+    const producer = productId ? bestProducer(state, productId, port, firstDue.get(productId) ?? null) : undefined;
     if (productId && missing && producer) {
       list.push({
         id: 'trade.missing',
         priority: 78,
         icon: 'ship',
         title: `${kg(missing)} ${productName(productId)} fehlen`,
-        text: `Für angenommene Bestellungen. ${producer.name} liefert in ${Math.round(shippingMinutes(producer.id, port) / 1440)} Tagen.`,
+        text: `Für angenommene Bestellungen. ${producer.name} braucht ${tripDays(shippingMinutes(producer.id, port))}.`,
         actionLabel: 'Einkaufen',
         action: (ui) => ui.openPanel('trade.order', { producerId: producer.id, productId }),
       });
@@ -1312,11 +1334,18 @@ onGameEvent('trade.dealTipped', 'trade.tippedToast', (payload, ui, state) => {
 // Auftrag 43: Was in der Hafen-Phase passiert, sagt ein Banner (Ware da ist dringend, Verluste auch).
 onGameEvent('trade.containerArrived', 'trade.arrivedToast', (payload, ui) => {
   if (payload.checked) return;
-  ui.toast(`Container in ${harborName(payload.portId)} angekommen: ${kg(payload.amount)} im Lager.`, 'good', {
-    urgent: true,
-  });
+  const quay = payload.amount - payload.stored;
+  // Was wirklich ins Lager passte (Auftrag 43, H10), der Rest im selben Banner statt in einem zweiten.
+  ui.toast(
+    quay > 0
+      ? `Container in ${harborName(payload.portId)} angekommen: ${kg(payload.stored)} im Lager, ${kg(quay)} warten am Kai (Liegegeld).`
+      : `Container in ${harborName(payload.portId)} angekommen: ${kg(payload.amount)} im Lager.`,
+    quay > 0 ? 'warn' : 'good',
+    { urgent: true },
+  );
 });
 onGameEvent('trade.containerWaiting', 'trade.waitingToast', (payload, ui) => {
+  if (payload.arriving) return;
   ui.toast(
     `Lager in ${harborName(payload.portId)} voll: ${kg(payload.amount)} warten am Kai, das kostet Liegegeld.`,
     'warn',

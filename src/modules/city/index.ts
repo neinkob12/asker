@@ -950,7 +950,8 @@ export function switchCity(ctx: Ctx, cityId: string): CommandResult {
   // Wer mitten am Tag umschaltet, hat von diesem Tag nur einen Teil gespielt: Er zählt nicht (siehe closeLiveDay).
   c.sleep[from].liveToday = false;
   c.sleep[cityId].liveToday = false;
-  journal.add(ctx, `Du schaust jetzt auf ${def.name}. ${cityName(from)} läuft im Hintergrund weiter.`, 'info');
+  if (!sold)
+    journal.add(ctx, `Du schaust jetzt auf ${def.name}. ${cityName(from)} läuft im Hintergrund weiter.`, 'info');
   ctx.emit('city.switched', { from, to: cityId });
   return { ok: true };
 }
@@ -1390,12 +1391,12 @@ export function sellBusiness(ctx: Ctx): CommandResult {
   });
   if (c.present !== HARBOR_CITY) {
     const travel = travelTo(ctx, HARBOR_CITY);
-    if (!travel.ok) {
-      // Kommt nicht vor (vorher geprüft); zur Sicherheit direkt in Rotterdam.
-      c.present = HARBOR_CITY;
-      switchCity(ctx, HARBOR_CITY);
-    }
+    // Kommt nicht vor (vorher geprüft); zur Sicherheit direkt in Rotterdam.
+    if (!travel.ok) c.present = HARBOR_CITY;
   }
+  // Die alte Stadt gehört ab jetzt dem Statthalter (Auftrag 43, H3): Sie läuft schon während der Fahrt nicht mehr live
+  // (keine Konfrontationen, Razzien oder Banner von dort), Handy und Karte zeigen Rotterdam.
+  switchCity(ctx, HARBOR_CITY);
   messages.send(ctx, { contact, text: SALE_TEXTS.done });
   updateRank(ctx);
   return { ok: true, data: { ...offer } };

@@ -72,6 +72,7 @@ import {
   AUTOBAHN_CHECK_PER_100KM,
   CHARTER_KM_PER_DAY,
   CONTRACT_SHARE,
+  CONTRACT_WARN_DAYS,
   CONTRACT_WEEKS,
   CUSTOMER_KINDS,
   DEMAND_SCALE,
@@ -427,9 +428,11 @@ declare module '../../core' {
     };
     'trade.orderFailed': { orderId: number; customerId: string; reason: 'expired' | 'late' };
     'trade.containerOrdered': { shipmentId: number; producerId: string; amount: number; portId: string; cost: number };
-    'trade.containerArrived': { shipmentId: number; portId: string; amount: number; checked: boolean };
+    /** stored: was davon gleich ins Lager passte (der Rest wartet am Kai, Auftrag 43). */
+    'trade.containerArrived': { shipmentId: number; portId: string; amount: number; stored: number; checked: boolean };
     /** Auftrag 41: Das Lager ist voll, der Container (oder sein Rest) wartet am Kai. */
-    'trade.containerWaiting': { shipmentId: number; portId: string; amount: number };
+    /** arriving: gleich bei der Ankunft (das Banner der Ankunft sagt es schon). */
+    'trade.containerWaiting': { shipmentId: number; portId: string; amount: number; arriving: boolean };
     'trade.hallBuilt': { portId: string; halls: number; cost: number };
     'trade.shipSailed': { vesselId: number; producerId: string; portId: string; containers: number; cost: number };
     'trade.shipReturned': { vesselId: number; portId: string };
@@ -445,6 +448,9 @@ declare module '../../core' {
 // Lesen
 
 /** Woher Container kommen können: Produzenten und (Auftrag 42) die eigenen Ausfuhrhäfen. */
+/** Takt des Hafens in Spielminuten. */
+const TICK_EVERY = 5;
+
 const SOURCE_BY_ID = new Map<string, Producer | OwnOrigin>([...PRODUCERS, ...OWN_ORIGINS].map((p) => [p.id, p]));
 const ORIGIN_BY_ID = new Map(OWN_ORIGINS.map((o) => [o.id, o]));
 const SIZE_BY_ID = new Map(CONTAINER_SIZES.map((c) => [c.id, c]));
@@ -457,6 +463,12 @@ function tradeState(state: GameState): TradeState | undefined {
 /** Läuft die Hafen-Phase? */
 export function isTradeActive(state: GameState): boolean {
   return (tradeState(state)?.startedAt ?? null) !== null;
+}
+
+/** Ende des Abnahmevertrags mit den alten Organisationen, null wenn keiner (mehr) läuft (Auftrag 43). */
+export function contractEndsAt(state: GameState): number | null {
+  const until = tradeState(state)?.contractUntil ?? null;
+  return until !== null && state.time < until ? until : null;
 }
 
 /** Woche seit Spielbeginn (Montag bis Sonntag), z.B. für die Bestellungen. */
@@ -1712,16 +1724,17 @@ function landContainer(ctx: Ctx, shipment: TradeShipment, checked: boolean): voi
     shipmentId: shipment.id,
     portId: shipment.portId,
     amount: shipment.amount,
+    stored: Math.min(shipment.amount, portRoom(ctx.state, shipment.portId)),
     checked,
   });
-  unload(ctx, shipment);
+  unload(ctx, shipment, true);
 }
 
 /**
  * Entladen, soweit das Lager Platz hat (Auftrag 41, wie storeFitting in goods): Der Rest wartet an Bord am Kai und
  * kommt herein, sobald Platz ist. Ist alles drin, wird das Liegegeld für die Wartezeit fällig.
  */
-function unload(ctx: Ctx, shipment: TradeShipment): void {
+function unload(ctx: Ctx, shipment: TradeShipment, arriving = false): void {
   const s = ctx.state.modules.trade;
   const name = harborPort(shipment.portId)?.name ?? shipment.portId;
   const room = portRoom(ctx.state, shipment.portId);
@@ -1738,7 +1751,12 @@ function unload(ctx: Ctx, shipment: TradeShipment): void {
         `Lager in ${name} voll: ${Math.round(shipment.amount / 1000)} kg ${productName(shipment.productId)} warten am Kai (Liegegeld ${formatEuro(QUAY_FEE_PER_DAY)} am Tag).`,
         'bad',
       );
-      ctx.emit('trade.containerWaiting', { shipmentId: shipment.id, portId: shipment.portId, amount: shipment.amount });
+      ctx.emit('trade.containerWaiting', {
+        shipmentId: shipment.id,
+        portId: shipment.portId,
+        amount: shipment.amount,
+        arriving,
+      });
     }
     return;
   }
@@ -1945,18 +1963,56 @@ function failOrder(ctx: Ctx, order: TradeOrder, reason: 'expired' | 'late'): voi
   ctx.emit('trade.orderFailed', { orderId: order.id, customerId: order.customerId, reason });
 }
 
+/** Verfallene Bestellungen gehen nicht still verloren (Auftrag 43): Fenna sagt, was die Konkurrenz bekommen hat. */
+function reportExpired(ctx: Ctx, orders: readonly TradeOrder[]): void {
+  const value = orders.reduce((sum, o) => sum + orderValue(o), 0);
+  const names = [...new Set(orders.map((o) => getCustomer(ctx.state, o.customerId)?.name ?? o.customerId))];
+  const who = names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} und ${names.length - 3} weitere`;
+  const count = orders.length === 1 ? 'Eine Bestellung' : `${orders.length} Bestellungen`;
+  journal.add(ctx, `${count} ohne Antwort verfallen (${formatEuro(value)}): ${who}.`, 'bad');
+  messages.send(ctx, {
+    contact: dispatcherContact(),
+    text: `${count} sind verfallen, keiner hat geantwortet: ${who}. Das waren ${formatEuro(value)}, die kauft jetzt die Konkurrenz. Wenn du willst, nehm ich die Bestellungen für dich an (Bestellungen › Fenna übernimmt).`,
+  });
+}
+
+/** Eine Woche vor dem Ende des Abnahmevertrags und am Ende selbst schreibt Fenna (Auftrag 43). */
+function contractReminders(ctx: Ctx): void {
+  const until = ctx.state.modules.trade.contractUntil;
+  if (until === null) return;
+  const crossed = (at: number) => ctx.now >= at && ctx.now - TICK_EVERY < at;
+  if (crossed(until - CONTRACT_WARN_DAYS * MINUTES_PER_DAY)) {
+    messages.send(ctx, {
+      contact: dispatcherContact(),
+      text: `Der Abnahmevertrag mit den alten Organisationen läuft in ${CONTRACT_WARN_DAYS} Tagen aus. Danach bestellen sie nur noch so viel bei dir, wie Preis und Vertrauen hergeben. Liefer bis dahin pünktlich.`,
+    });
+  } else if (crossed(until)) {
+    journal.add(ctx, 'Der Abnahmevertrag ist ausgelaufen. Ab jetzt zählen Preis und Vertrauen.', 'info');
+    messages.send(ctx, {
+      contact: dispatcherContact(),
+      text: 'Der Abnahmevertrag ist ausgelaufen. Ab der nächsten Runde kauft jeder, wo es am besten passt: Preis, Qualität, Pünktlichkeit.',
+    });
+  }
+}
+
 function tick(ctx: Ctx): void {
   const s = ctx.state.modules.trade;
   if (s.startedAt === null) return;
   // Montag früh: neue Bestellungen (einmal pro Woche).
   const week = weekOf(ctx.now);
   if (week > s.week && clock.weekday(ctx.now) === 0 && ctx.now % MINUTES_PER_DAY >= ORDER_HOUR) placeOrders(ctx);
+  const expired: TradeOrder[] = [];
   for (const order of s.orders) {
-    if (order.status === 'open' && ctx.now >= order.answerBy) failOrder(ctx, order, 'expired');
+    if (order.status === 'open' && ctx.now >= order.answerBy) {
+      failOrder(ctx, order, 'expired');
+      expired.push(order);
+    }
     // LATE_GRACE_DAYS nach der Frist ohne Lieferung: geplatzt (bis dahin geht es mit Abschlag).
     else if (order.status === 'accepted' && ctx.now >= order.dueAt + LATE_GRACE_DAYS * MINUTES_PER_DAY)
       failOrder(ctx, order, 'late');
   }
+  if (expired.length > 0) reportExpired(ctx, expired);
+  contractReminders(ctx);
   for (const shipment of [...s.shipments]) {
     if (shipment.status === 'sea' && ctx.now >= shipment.arrivesAt) containerArrives(ctx, shipment);
     // Am Kai: herein, sobald im Lager Platz ist (der älteste zuerst).
@@ -2027,7 +2083,7 @@ export default defineModule({
       restock: [],
     }),
   },
-  tickEvery: 5,
+  tickEvery: TICK_EVERY,
   tick,
   commands: {
     'trade.answer': (ctx, { orderId, choice, factor }) => answerOrder(ctx, orderId, choice, factor),
