@@ -509,8 +509,11 @@ function visitRegulars(ctx: Ctx): void {
 // ---------------------------------------------------------------------------------------------
 // Ablauf pro Spielminute
 
-/** So lange nach einem Eintrag "Kunde ist abgehauen" kommt für denselben Spot kein neuer. */
-const LOSS_JOURNAL_INTERVAL = 60;
+/**
+ * So lange nach einem Eintrag "Kunde ist abgehauen" kommt für denselben Spot kein neuer (Auftrag 43, K10: vorher jede
+ * Stunde, das füllte das Journal; der Rat „X hat keinen Läufer“ sagt es ohnehin).
+ */
+const LOSS_JOURNAL_INTERVAL = 4 * 60;
 const LOSS_JOURNAL_MARK = 'ist gegangen:';
 
 /** Warum ein Kunde ohne Ware gegangen ist, damit man im Journal versteht, was zu tun ist. */

@@ -1035,6 +1035,25 @@ export const DEFAULT_VOICE: GangVoice = Object.fromEntries(
 ) as unknown as GangVoice;
 
 /** Varianten einer Gang für einen Anlass. */
+const FORMAL = new Map<string, boolean>();
+
+/**
+ * Siezt die Gang (Auftrag 43, K3)? Ergibt sich aus ihren eigenen Texten: mehr „Sie/Ihnen/Ihr…“ als „du/dir/dein…“.
+ * So braucht eine neue Stadt dafür keine eigene Liste.
+ */
+export function formalVoice(gangId: string): boolean {
+  const known = FORMAL.get(gangId);
+  if (known !== undefined) return known;
+  const all = Object.values(GANG_VOICES[gangId] ?? DEFAULT_VOICE)
+    .flat()
+    .join(' ');
+  const sie = all.match(/\b(Sie|Ihnen|Ihren|Ihrem|Ihrer)\b/g)?.length ?? 0;
+  const du = all.match(/\b(du|dir|dich|dein|deine|deinen|deinem|deiner)\b/g)?.length ?? 0;
+  const formal = sie > du;
+  FORMAL.set(gangId, formal);
+  return formal;
+}
+
 export function gangVariants(gangId: string, key: GangTextKey): readonly string[] {
   return (GANG_VOICES[gangId] ?? DEFAULT_VOICE)[key];
 }

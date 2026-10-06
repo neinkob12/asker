@@ -2,7 +2,7 @@
 // Zustand ihrer Stadt und gibt Platzhalter zurück (oder null); die passende mit der höchsten Priorität gewinnt, der
 // Text kommt über den Text-Helfer (keine direkte Wiederholung). Neue Ratschläge sind neue Einträge in REPORT_TIPS.
 
-import { type Ctx, formatEuro, type GameState, texts } from '../../core';
+import { type Ctx, formatEuro, formatNumber, type GameState, texts } from '../../core';
 import { lieutenantResult } from '../finance';
 import { activeWars, ceasefireCost, getGang, getGangStatus, getGangs, isAtPeace } from '../gangs';
 import { getStock, usagePerDay } from '../goods';
@@ -25,6 +25,20 @@ function lieutenantsIn(state: GameState, cityId: string): string[] {
   return Object.keys(state.modules.hierarchy.posts)
     .sort()
     .filter((id) => (getStaffMember(state, id)?.cityId ?? 'koeln') === cityId);
+}
+
+/** Wie lange das Lager noch reicht, mit Einzahl und unter einem Tag in Stunden. */
+function stockLeft(days: number): { left: string; inLeft: string } {
+  if (days < 1) {
+    const hours = Math.max(1, Math.round(days * 24));
+    return hours === 1
+      ? { left: 'eine Stunde', inLeft: 'einer Stunde' }
+      : { left: `${hours} Stunden`, inLeft: `${hours} Stunden` };
+  }
+  const rounded = Math.round(days * 10) / 10;
+  if (rounded === 1) return { left: 'einen Tag', inLeft: 'einem Tag' };
+  const text = formatNumber(rounded, 1);
+  return { left: `${text} Tage`, inLeft: `${text} Tagen` };
 }
 
 export const REPORT_TIPS: readonly ReportTip[] = [
@@ -51,18 +65,13 @@ export const REPORT_TIPS: readonly ReportTip[] = [
       const usage = usagePerDay(state, { cityId });
       if (usage <= 0) return null;
       const days = getStock(state, { cityId }) / usage;
-      return days < 1.5
-        ? {
-            days: Math.max(0, Math.round(days * 10) / 10)
-              .toString()
-              .replace('.', ','),
-          }
-        : null;
+      return days < 1.5 ? stockLeft(days) : null;
     },
+    // {left} „1 Tag“, „5 Stunden“; {inLeft} „einem Tag“, „5 Stunden“ (Auftrag 43, K5: es stand „noch 1 Tage“).
     texts: [
-      'Mein Rat: Engpass. Das Lager reicht noch etwa {days} Tage, wir sollten nachbestellen.',
-      'Mein Rat: Bei dem Tempo ist das Lager in {days} Tagen leer. Bestell nach.',
-      'Mein Rat: Uns geht die Ware aus, noch {days} Tage. Lieber jetzt bestellen als später.',
+      'Mein Rat: Engpass. Das Lager reicht noch etwa {left}, wir sollten nachbestellen.',
+      'Mein Rat: Bei dem Tempo ist das Lager in {inLeft} leer. Bestell nach.',
+      'Mein Rat: Uns geht die Ware aus, noch {left}. Lieber jetzt bestellen als später.',
     ],
   },
   {

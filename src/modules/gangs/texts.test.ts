@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { fillText } from '../../core';
 import { GANGS } from './data';
-import { GANG_VOICES, type GangTextKey, INCIDENT_TEXTS } from './texts';
+import { MEMORY_TEXTS_FORMAL } from './memory';
+import { formalVoice, GANG_VOICES, type GangTextKey, INCIDENT_TEXTS } from './texts';
 
 /** Alle Platzhalter, die die Gang-Logik für Nachrichten mitgibt. */
 const VARS = {
@@ -98,6 +99,17 @@ describe('Texte zu Vorfällen (Nachbarin, Abwerben, Einschüchtern)', () => {
         expect(fillText(text, vars), key).not.toMatch(/\{\w*\}/);
         expect(text, key).not.toMatch(ARTICLE_BEFORE_SPOT);
       }
+    }
+  });
+});
+
+describe('Sie oder du (Auftrag 43, K3)', () => {
+  it('Gangs, die siezen, erinnern sich auch per Sie; die anderen per du', () => {
+    expect(formalVoice('west')).toBe(true);
+    expect(formalVoice('sued')).toBe(true);
+    expect(formalVoice('nord')).toBe(false);
+    for (const list of Object.values(MEMORY_TEXTS_FORMAL)) {
+      for (const line of list) expect(line).not.toMatch(/\b(du|dir|dich|dein|deine|deinen|deinem|deiner)\b/);
     }
   });
 });

@@ -19,7 +19,7 @@ export const START_DIRTY_MONEY = 1500;
 export const START_CLEAN_MONEY = 0;
 
 /** So viele Einträge behält das Journal. */
-export const JOURNAL_LIMIT = 60;
+export const JOURNAL_LIMIT = 120;
 
 /** So viele Handy-Nachrichten bleiben im Spielstand, ältere fallen weg. */
 export const MESSAGE_LIMIT = 300;

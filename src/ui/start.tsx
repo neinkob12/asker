@@ -65,6 +65,9 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
     loadTestSave(session, testSave)
       .then((info) => {
         runtime.api.closeDialog();
+        // ?tempo= gilt auch nach dem Laden (Auftrag 43, K11: das Schließen des Intros stellte Tempo 1 wieder her).
+        const tempo = params.get('tempo');
+        if (tempo !== null) runtime.api.setSpeed(Number(tempo));
         runtime.api.toast(`Test-Spielstand "${info.title}" geladen.`, 'good');
         // Neu laden spielt dann weiter, statt den Test-Spielstand noch einmal über den Autosave zu legen.
         const url = new URL(window.location.href);

@@ -299,6 +299,11 @@ function expand(ctx: Ctx, gang: Gang, s: GangStatus): void {
 }
 
 /** Ziel für einen Vorstoß: angrenzende oder herrenlose Veedel, bevorzugt schwach gehaltene. */
+/** Hast du das Veedel gerade erst übernommen (Schonfrist, Auftrag 43, K7)? */
+function inGrace(state: GameState, veedelId: string): boolean {
+  return (state.modules.gangs.graceUntil?.[veedelId] ?? -1) > state.time;
+}
+
 function pickTarget(ctx: Ctx, gang: Gang, s: GangStatus): string | null {
   const state = ctx.state;
   const own = new Set(gangVeedel(state, gang.id));
@@ -316,6 +321,8 @@ function pickTarget(ctx: Ctx, gang: Gang, s: GangStatus): string | null {
     if (controller === PLAYER_FACTION && isAtPeace(state, gang.id)) continue;
     const holder = controller ?? veedelGang(state, v);
     let score = 100 - (holder ? getInfluence(state, v, holder) : 0) + ctx.random() * 10;
+    // Schonfrist (Auftrag 43, K7), nach dem Wurf geprüft: Die Würfelfolge der Gangs bleibt dieselbe.
+    if (controller === PLAYER_FACTION && inGrace(state, v)) continue;
     if (controller === null) score += 20;
     if (v === gang.homeVeedelId || neighborsOf(gang.homeVeedelId).includes(v)) score += HOME_CLAIM_BONUS;
     if (holder && holder !== PLAYER_FACTION && getGang(state, holder)?.homeVeedelId === v) score -= HOME_TARGET_PENALTY;
@@ -364,7 +371,7 @@ function continuePush(ctx: Ctx, gang: Gang, s: GangStatus): void {
   const giveUp =
     ctx.now >= push.until ||
     s.people < HOME_PUSH_MIN_PEOPLE ||
-    (controller === PLAYER_FACTION && isAtPeace(ctx.state, gang.id));
+    (controller === PLAYER_FACTION && (isAtPeace(ctx.state, gang.id) || inGrace(ctx.state, veedelId)));
   if (giveUp) {
     end(false);
     return;

@@ -356,6 +356,47 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   Erklärung.
   Erledigt: `formatDays` im Kern, Wochenverträge erst nach Kapitel 1 (`CONTRACTS_FROM_CHAPTER`, Bot setzt einmal einen Preis), „Was heißen Preise und Andrang?“ am Spot.
 
+## K Prüfer „Systeme Köln Mitte“ (Sonnet-Agent, `koeln-veedel`, `boss-von-koeln`, `koeln-komplett`, 06.10.2026)
+
+- [x] K1 Dynamic Island bei einer Konfrontation: Symbol liegt auf dem Text, Ort abgeschnitten, Anlass fehlt.
+  Erledigt: Symbol behält seinen Platz, der Text wird mit „…“ gekürzt; in der Island steht der Anlass, der Ort davor (schwebend).
+- [x] K2 Briefing „Leute machen lassen“ mit Chip „Sicher“, obwohl niemand da ist (sicher verloren); Texte „Spot räumen“
+  und „anonym die Bullen rufen“ bei Lager-Überfällen.
+  Erledigt: Ohne Leute heißt der Weg „Alles weg“ (rot); bei Lagern „Ware retten, Lager räumen“ und eigener Ergebnistext.
+- [x] K3 Gang-Nachrichten mischen „Sie“ und „du“ (Gedächtnis-Zeilen immer in Du-Form).
+  Erledigt: `formalVoice` liest aus den Texten einer Gang, ob sie siezt; dann kommen die Gedächtnis-Zeilen aus `MEMORY_TEXTS_FORMAL`.
+- [x] K4 Jede Kleinlieferung der Rechten Hand bzw. Leutnants bringt ein dringendes Banner und Lieferanten-Chats.
+  Erledigt: Lieferungen tragen `orderedBy`, wenn Leute bestellt haben: kein Banner, keine Plauder-Chats, kein Journal (Beschlagnahme schon).
+- [x] K5 „noch 1 Tage“ / „in 1 Tagen leer“ im Rat der Rechten Hand (`hierarchy/advice.ts`).
+  Erledigt: `stockLeft`: „einen Tag“, „5 Stunden“, „1,2 Tage“.
+- [x] K6 Grammatik mit Gang-Labels in Konfrontationstexten („Leute der Schäl Sick ist das egal“, „bei Leute der …“).
+  Erledigt: Artikel des Gegners mitten im Satz klein (`fillText` in encounters), Dativ-Sätze umgebaut.
+- [x] K7 Frisch erobertes Veedel nach wenigen Stunden wieder verloren; Warnung ohne Handlungsangebot; „Keine Gang ist
+  stärker als du“ irreführend.
+  Erledigt: Schonfrist `TAKEOVER_GRACE` (12 Std.) nach deiner Übernahme, ein laufender Vorstoß bricht ab; Stärke-Satz ehrlicher. Test in `gangs.test.ts`.
+- [x] K8 Kein Rat bei freigeschaltetem Spot ohne Läufer, obwohl Kunden reihenweise gehen.
+  Erledigt: Rat „X hat keinen Läufer“ für offene Spots ohne Läufer.
+- [x] K9 Bei hoher Heat ein Chat pro Leutnant und Veedel, Kundenverluste ohne Sammelmeldung.
+  Erledigt: Heat-Rückzüge kommen als eine Nachricht pro Stadt (Rechte Hand bzw. erster Leutnant).
+- [x] K10 Journal (60 Einträge) reicht keinen Spieltag: Routine-Zeilen (Bewerber, Kunde gegangen, Lieferungen).
+  Erledigt: `JOURNAL_LIMIT` 120, Bewerber gehen still, Kundenverlust höchstens alle vier Stunden pro Spot, Lieferungen der Leute nicht im Journal.
+- [x] K11 Kleinigkeiten: Umbruch „(−2 / g Ware)“, `?spielstand=…&tempo=0` läuft mit Tempo 1 weiter.
+  Erledigt: Geschützte Leerzeichen im Ergebnis, `?tempo=` gilt auch nach dem Laden eines Test-Spielstands.
+
+## L Prüfer „Berlin, München, Frankfurt“ (Sonnet-Agent, Ankunft bis komplett, 06.10.2026)
+
+- [ ] L1 Berliner Clubs: Öffnungszeiten (`weekHours`) stehen nirgends, nur „zu“; kein „öffnet in …“.
+- [ ] L2 Köln-Reste in anderen Städten: Lager-Seite mit „Niehler Hafen“, fremde Fahrten unter „Unterwegs“, Panel
+  `logistics.port` und Aufgabe „Hafen abholen“ in Städten ohne Hafen.
+- [ ] L3 Falsche Artikel bei Lagernamen („ins Halle Cargo City“, „im Garage Barmbek“), auch in Gang-Texten.
+- [ ] L4 „über über den Potsdamer Platz“ bei den Nachbarn eines Veedels.
+- [ ] L5 Quest „Bestell Ware für <Stadt>“ zählt frühere Bestellungen in der Stadt nicht.
+- [ ] L6 Zoll an der Grenze (`Supplier.customs`) nirgends als Zahl.
+- [ ] L7 Tonis Beschreibung nennt immer die A3.
+- [ ] L8 Oktoberfest fällt für viele Spieler aus (fester Zyklus ab Tag 40), Leitner verspricht die Wiesn.
+- [ ] L9 Kleinigkeiten: Frankfurter Geldwäsche-Kapazität ohne Erklärung, erster Spot-Rat nimmt den billigsten statt
+  einen guten, Musiktitel „Sonnendeck Deutz“ in Berlin.
+
 ## Neue Funde
 
 - [x] N0 (Spieler, 05.10.2026) „Man kann im Hafen in Rotterdam keine Ware bestellen, es steht sogar, dass es keinen

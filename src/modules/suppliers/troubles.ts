@@ -199,7 +199,7 @@ export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier, ask?: b
     return;
   }
   shipments.shipments = shipments.shipments.filter((x) => x.id !== s.id);
-  tellAbout(ctx, supplier, s, voice(ctx, supplier, s.onCredit ? 'seizedCredit' : 'seized', { ...why, goods }));
+  tellAbout(ctx, supplier, s, voice(ctx, supplier, s.onCredit ? 'seizedCredit' : 'seized', { ...why, goods }), true);
   journal.add(ctx, `Lieferung von ${supplier.name} beschlagnahmt (${why.reasonLabel}): ${goods} verloren.`, 'bad');
   ctx.emit('shipment.problem', { shipmentId: s.id, supplierId: s.supplierId, kind: 'seized', reason: why.reasonLabel });
 }

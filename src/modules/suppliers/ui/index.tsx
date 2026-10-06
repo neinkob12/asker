@@ -632,8 +632,9 @@ onGameEvent('shipment.arrived', 'suppliers.arrivedToast', (payload, ui, state) =
   if (payload.atPort || (payload.cityId !== undefined && payload.cityId !== activeCity(state))) return;
   // Waren die Lager zu voll, steht im Banner, wo die Ware jetzt liegt (Auftrag 33).
   const where = payload.placedIn ? ` Lager voll, verteilt: ${payload.placedIn}.` : '';
+  // Banner nur für eigene Bestellungen (Auftrag 43, K4); was deine Leute bestellt haben, steht im Verlauf.
   ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.${where}`, 'good', {
-    urgent: true,
+    urgent: !payload.byStaff || payload.placedIn !== undefined,
   });
 });
 onGameEvent('supplier.unlocked', 'suppliers.unlockedToast', (payload, ui, state) => {

@@ -41,7 +41,7 @@ import {
 import { hireRunnerFor } from './hire';
 import { homeWarehouse, isLieutenant, lieutenantSpots, spotList, teamOf } from './index';
 import { runRestock } from './orders';
-import { isRightHand, leadSpendingLimit, recordLeadSpending } from './righthand';
+import { getRightHand, isRightHand, leadSpendingLimit, recordLeadSpending } from './righthand';
 import { HIERARCHY_TEXTS } from './texts';
 import type { CautionLevel, LieutenantPost } from './types';
 
@@ -101,8 +101,58 @@ function turnFor(ctx: Ctx, post: LieutenantPost, lt: StaffMember): Turn {
   };
 }
 
+/**
+ * Wer in diesem Schritt wegen Heat Leute von der Straße holt (Auftrag 43, K9): Statt eines Chats pro Leutnant und Veedel
+ * kommt am Ende des Schritts eine Nachricht pro Stadt (von der Rechten Hand, sonst vom ersten Leutnant).
+ */
+interface HeatPull {
+  cityId: string;
+  staffId: string;
+  veedelId: string;
+  heat: number;
+  pulled: number;
+}
+let heatPulls: HeatPull[] | null = null;
+
+function reportHeatPulls(ctx: Ctx, pulls: readonly HeatPull[]): void {
+  const cities = [...new Set(pulls.map((p) => p.cityId))].sort();
+  for (const cityId of cities) {
+    const here = pulls.filter((p) => p.cityId === cityId);
+    const veedels = [...new Set(here.map((p) => p.veedelId))];
+    const heat = (id: string) => Math.max(...here.filter((p) => p.veedelId === id).map((p) => p.heat));
+    const people = here.reduce((sum, p) => sum + p.pulled, 0);
+    const where = veedels.map((id) => `${veedelName(id)} (Heat ${heat(id)})`).join(', ');
+    const rightHand = getRightHand(ctx.state, cityId);
+    const from =
+      getStaffMember(ctx.state, rightHand?.staffId ?? here[0].staffId) ?? getStaffMember(ctx.state, here[0].staffId);
+    if (!from) continue;
+    const who =
+      people === 0
+        ? 'Keiner stand draußen'
+        : people === 1
+          ? 'Einen von der Straße geholt'
+          : `${people} Leute von der Straße geholt`;
+    messages.send(ctx, {
+      contact: staffContact(from),
+      text: `Zu heiß in ${where}. ${who}. Sie gehen wieder raus, wenn es abkühlt.`,
+      silent: true,
+    });
+  }
+}
+
 /** Alle paar Minuten: jeder Leutnant ordnet seine Spots (wenn es Zeit ist) und verkauft selbst. */
 export function tick(ctx: Ctx): void {
+  heatPulls = [];
+  try {
+    tickPosts(ctx);
+  } finally {
+    const pulls = heatPulls;
+    heatPulls = null;
+    if (pulls.length > 0) reportHeatPulls(ctx, pulls);
+  }
+}
+
+function tickPosts(ctx: Ctx): void {
   const h = ctx.state.modules.hierarchy;
   for (const staffId of Object.keys(h.posts).sort()) {
     const post = h.posts[staffId];
@@ -178,11 +228,14 @@ function handleHeat(turn: Turn): void {
     if (!hiding && heat >= threshold) {
       post.lyingLow.push(veedelId);
       const pulled = pullFromStreet(turn, veedelId);
+      // Aufs Handy gesammelt am Ende des Schritts (K9), sonst (Capo springt ein) wie bisher direkt.
+      const collect = heatPulls !== null;
+      heatPulls?.push({ cityId: lt.cityId ?? 'koeln', staffId: lt.id, veedelId, heat, pulled });
       note(
         turn,
         `Zu heiß in ${veedelName(veedelId)} (Heat ${heat}). ${pulled === 1 ? 'Einen' : pulled} von der Straße geholt.`,
         true,
-        true,
+        !collect,
       );
     } else if (hiding && heat >= threshold - HEAT_HYSTERESIS) {
       // Immer noch heiß: Wer inzwischen wieder dort steht (z.B. nach dem Abtauchen wegen einer Razzia), geht wieder runter.

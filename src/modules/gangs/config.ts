@@ -50,6 +50,11 @@ export const SATURATION_VEEDEL = 3;
 export const HOME_CLAIM_BONUS = 25;
 /** Höchstdauer eines Vorstoßes. */
 export const PUSH_DURATION = 30 * HOUR;
+/**
+ * Schonfrist nach deiner Übernahme eines Veedels (Auftrag 43, K7): So lange nimmt keine Gang es ins Visier, ein
+ * laufender Vorstoß dorthin bricht ab. Sonst ging ein frisch erobertes Veedel oft nach drei, vier Stunden wieder weg.
+ */
+export const TAKEOVER_GRACE = 12 * HOUR;
 /** Einfluss pro gewonnener bzw. verlorener Stunde im Vorstoß. */
 export const PUSH_GAIN = 4;
 export const PUSH_DEFENDER_LOSS = 2;

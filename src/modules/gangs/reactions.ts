@@ -15,6 +15,7 @@ import {
   RAID_GOODS_SHARE,
   RAID_MONEY_SHARE,
   RELATION_ON_SNITCH,
+  TAKEOVER_GRACE,
   TIPOFF_DISCOVERY_BASE,
 } from './config';
 import { remember } from './memory';
@@ -120,7 +121,12 @@ export function onPoliceRaid(ctx: Ctx, payload: GameEvents['police.raid']): void
 
 /** Nimmst du einer Gang ein Veedel ab, wird sie richtig sauer. */
 export function onControlChanged(ctx: Ctx, payload: GameEvents['territory.controlChanged']): void {
-  if (payload.to !== PLAYER_FACTION || !payload.from) return;
+  if (payload.to !== PLAYER_FACTION) return;
+  // Schonfrist (Auftrag 43, K7): Ein frisch erobertes Veedel greift eine Weile keiner an.
+  const g = ctx.state.modules.gangs;
+  g.graceUntil ??= {};
+  g.graceUntil[payload.veedelId] = ctx.now + TAKEOVER_GRACE;
+  if (!payload.from) return;
   const gang = getGang(ctx.state, payload.from);
   const s = gang ? statusOf(ctx, gang.id) : undefined;
   if (!gang || !s) return;

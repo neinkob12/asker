@@ -42,7 +42,7 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
         weather: ['rain', 'storm'],
       },
       {
-        text: 'Helllichter Tag {place}, Leute auf der Straße. {opponent} ist das egal: Sie kommen direkt auf euch zu.',
+        text: 'Helllichter Tag {place}, Leute auf der Straße. Das hält {opponent} nicht auf: Sie kommen direkt auf euch zu.',
         settings: ['spot'],
         phases: ['day'],
       },
@@ -349,7 +349,7 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
         text: 'Übergabe {place}: {stakeGoods} gegen {stakeMoney}. Plötzlich blitzt ein Messer. {opponent} wollen beides.',
       },
       {
-        text: 'Parkhaus {place}, Deck drei, nachts. {stakeGoods} gegen {stakeMoney}. Dann gehen bei {opponent} die Kofferräume auf, und da ist kein Geld drin.',
+        text: 'Parkhaus {place}, Deck drei, nachts. {stakeGoods} gegen {stakeMoney}. Dann gehen die Kofferräume auf, und da ist kein Geld drin.',
         phases: ['night'],
       },
       {
@@ -357,7 +357,7 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
         phases: ['day'],
       },
       {
-        text: 'Regen {place}, alle wollen schnell fertig werden. {stakeGoods} gegen {stakeMoney}. Dann zieht einer von {opponent} die Kapuze runter: Das wird kein Geschäft.',
+        text: 'Regen {place}, alle wollen schnell fertig werden. {stakeGoods} gegen {stakeMoney}. Dann zieht einer die Kapuze runter: Das wird kein Geschäft.',
         weather: ['rain', 'storm'],
       },
       {

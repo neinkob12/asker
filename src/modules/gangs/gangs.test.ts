@@ -5,7 +5,7 @@ import { activeEncounters, autoResolveEncounter, getEncounter, startEncounter } 
 import { getStock } from '../goods';
 import { getCompetitionFactor } from '../market';
 import { getSpot } from '../spots';
-import { controllerOf, getInfluence } from '../territory';
+import { addInfluence, controllerOf, getInfluence, PLAYER_FACTION } from '../territory';
 import { allVeedel, getVeedel } from '../veedel';
 import { crewFor, demandOptions, say } from './common';
 import {
@@ -652,5 +652,34 @@ describe('gangs: Überfall und Angebote (Fehler aus der Handy-Prüfung)', () => 
     richer(sim, 5000);
     const result = sim.dispatch({ type: 'gangs.ally', payload: { gangId: 'ost', againstGangId: other.id } });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('Schonfrist nach einer Übernahme (Auftrag 43, K7)', () => {
+  it('ein frisch erobertes Veedel greift keine Gang an, ein laufender Vorstoß dorthin bricht ab', () => {
+    const sim = createTestGame({ seed: 7 });
+    const ctx = sim.ctx('test');
+    const gang = getGangs(sim.state)[0];
+    // Ein Veedel, das nicht dieser Gang gehört: Du übernimmst es.
+    const target = allVeedel('koeln').find(
+      (v) => v.id !== gang.homeVeedelId && controllerOf(sim.state, v.id) !== gang.id,
+    );
+    expect(target).toBeDefined();
+    if (!target) return;
+    for (const f of Object.keys(sim.state.modules.territory.influence[target.id] ?? {})) {
+      addInfluence(ctx, target.id, f, -100);
+    }
+    addInfluence(ctx, target.id, PLAYER_FACTION, 60);
+    sim.advance(60);
+    expect(controllerOf(sim.state, target.id)).toBe(PLAYER_FACTION);
+    expect(sim.state.modules.gangs.graceUntil?.[target.id]).toBeGreaterThan(sim.state.time);
+    // Die Gang hat gerade einen Vorstoß dorthin: Er bricht in der Schonfrist ab.
+    status(sim, gang.id).push = { veedelId: target.id, startedAt: sim.state.time, until: sim.state.time + 30 * 60 };
+    const events = recordEvents(sim);
+    sim.advance(2 * 60);
+    expect(
+      eventsOfType(events, 'gang.pushEnded').some((e) => e.payload.veedelId === target.id && !e.payload.success),
+    ).toBe(true);
+    expect(controllerOf(sim.state, target.id)).toBe(PLAYER_FACTION);
   });
 });
