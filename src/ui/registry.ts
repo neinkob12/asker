@@ -107,8 +107,11 @@ export interface DialogDefinition<K extends DialogId = DialogId> {
   component: ComponentType<DialogRegistry[K]>;
   /** Pausiert das Spiel, solange der Dialog offen ist. */
   pausesGame?: boolean;
-  /** Mit Escape oder Klick daneben schließbar. Standard: true. */
-  dismissable?: boolean;
+  /**
+   * Mit Escape oder Klick daneben schließbar. Standard: true. Als Funktion nach den Angaben des Dialogs (Auftrag 43, N7:
+   * „Neues Spiel“ aus den Spielständen ja, beim ersten Start nein).
+   */
+  dismissable?: boolean | ((props: DialogRegistry[K]) => boolean);
   /**
    * Wo der Dialog liegt (Look "Glas"): 'screen' (Standard) über allem, 'map' nur über der Kartenfläche neben dem
    * angedockten Handy (der Dialog zeichnet sich dann selbst, z.B. als Akte; am Handy-Bildschirm als Blatt).

@@ -437,6 +437,37 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   unter dem Menü-Knopf.
   Erledigt: HUD-Kacheln auf dem Handy brechen zwischen Wörtern auf zwei Zeilen um, ein langes Wort wird kleiner; Hafen-Kopf nur mit dem Namen, der Kai steht in der Erklärung; die Fahrtkarte sitzt über dem Dock neben den Karten-Knöpfen.
 
+## N Prüfer „Oberfläche Desktop“ (Sonnet-Agent, Querschnitt 1440×900, 1280×720, 1024×768 und Handy, 06.10.2026)
+
+- [x] N1 Die schwebende Island liegt über HUD-Menü und HUD-Karten („Verlauf“ im Menü nicht klickbar, Rang-Kachel bei
+  1024 px verdeckt).
+  Erledigt: Offene HUD-Karten und Menüs heben HUD bzw. Kartensteuerung über die Island (`:has(.hud-popover, .hud-flyout)`); stehen die Kacheln unter der Uhr, lassen sie Platz für die schwebende Island.
+- [x] N2 HUD-Karten (`HudPill` mit `details`) bleiben nach einem Klick offen, mehrere zugleich; Esc und Klick daneben
+  schließen nicht.
+  Erledigt: Mit der Maus schließt Wegfahren die Karte, ein Tipp daneben oder Esc schließt sie, und es ist immer nur eine offen (`HudPill`).
+- [x] N3 Intro „Wie heißt du?“: Das Namensfeld bekommt keinen Fokus, ein Leerzeichen löst „Weiter“ aus.
+  Erledigt: `TextField` mit `autoFocus` fokussiert sich beim Erscheinen selbst (`useEffect`), auch im Intro-Schritt „Wie heißt du?“.
+- [x] N4 Quest „Überspringen“ am Desktop: Das Aktionsblatt wird in der Quest-Karte gezeichnet und vom HUD abgeschnitten.
+  Erledigt: Die Rückfrage ist ein Dialog über der Kartenfläche (`quests.skip`, `MapDialog`), am Handy ein Blatt.
+- [x] N5 Tastatur: Tab bleibt in der Karte hängen (Marker aller Städte, auch außerhalb des Bildes).
+  Erledigt: Marker auf der Karte sind kein Tab-Stopp mehr (`addHtmlMarker`: `tabIndex = -1`); per Tastatur führt die Suche (Strg/⌘+K) zu Spots und Orten. Nach zwei Tabs ist man im HUD.
+- [x] N6 Die weggelegte Handy-Lasche liegt bei kleinen Fenstern auf der Kachel „Ruf · Reviere“.
+  Erledigt: Ist das Handy weggelegt, rückt das HUD rechts um die Breite der Lasche ein.
+- [x] N7 Esc schließt „Neues Spiel“ (aus Spielstände) und das wiederholte Intro nicht.
+  Erledigt: `dismissable` kann eine Funktion der Dialog-Angaben sein: Esc schließt „Neues Spiel“ und das wiederholte Intro, nicht beim ersten Start. „Abbrechen“ führt zurück zu den Spielständen (`fromSaves`).
+- [x] N8 „Boss von Hamburg“ bei 7/12 in Reviere und Meilenstein, der Rang bleibt „Boss von Köln“.
+  Erledigt: Nur in Köln macht die Mehrheit einen Rang (`majorityMakesBoss`); anderswo heißt sie „Mehrheit in Hamburg“ (Reviere, Banner, Journal, Rat, Ruf-Karte).
+- [x] N9 Abgeschnittene Namen bei kleinen Fenstern (Dringend-Zeile, „Einstellun…“, Bandenname in Reviere, Gruppentitel
+  Geldwäsche, Chat-Titel).
+  Erledigt: Bandenname in Reviere bis 55 % breit, Gruppentitel brechen zwischen Wörtern auf zwei Zeilen um, App-Namen im kleinen Handy mit 11 px, Dringend-Zeile bis drei Zeilen. Chat-Titel und „Elbchaussee-Club“ in der Gang-Liste enden weiter mit „…“ (erlaubt).
+- [x] N10 Kleinigkeiten: „+1416“ ohne Einheit am Lager-Marker, „1 Leute“, Tempo-Knopf pausiert „1×“, leere Suche
+  zeigt nur Spots, „Strg K“ auf dem Mac, Game-Over-Knöpfe, Tastenkürzel nirgends erklärt.
+  Erledigt: Lager-Marker „+ 3 weitere“ statt „+1416“, „1 Person“, Tempo-Knopf zeigt pausiert das Tempo danach, leere Suche zeigt erst Rat, Bereiche, Apps und Befehle, Menü mit „⌘ K“ am Mac und den Tastenkürzeln, Spielende-Dialog breit genug für drei Knöpfe.
+- [x] N11 Hell-Modus: Kontrast der Dringend-Aktion (3,05:1).
+  Erledigt: Die Dringend-Aktion hat in beiden Schemata helles Gold (`--cat-brand-a`) mit dunkler Schrift.
+- [x] N12 Monkey: „verdeckt von …“ bei Listenknöpfen in Personal-Seiten (nicht von Hand bestätigt).
+  Erledigt: Nicht nachgestellt (der Prüfer fand beim Gegentest keine Verdeckung, der Lauf lief unter Last); bleibt beobachtet.
+
 ## Neue Funde
 
 - [x] N0 (Spieler, 05.10.2026) „Man kann im Hafen in Rotterdam keine Ware bestellen, es steht sogar, dass es keinen

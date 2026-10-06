@@ -43,6 +43,14 @@ export const PLAYER_RANKS: readonly PlayerRankDef[] = [
 /** Die Stadt, deren Mehrheit "Boss von Köln" macht. */
 const MILESTONE_CITY = 'koeln';
 
+/**
+ * Macht die Mehrheit der Veedel in dieser Stadt einen Rang („Boss von Köln“)? In den anderen Städten erst die ganze
+ * Stadt (Auftrag 43, N8: Reviere und Banner sagten „Boss von Hamburg“ schon bei 7 von 12).
+ */
+export function majorityMakesBoss(cityId: string): boolean {
+  return cityId === MILESTONE_CITY;
+}
+
 /** Wert eines Rangs zum Vergleichen: Platz in PLAYER_RANKS mal STEP, bei 'city' plus Zahl der weiteren Städte. */
 const STEP = 10;
 

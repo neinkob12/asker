@@ -238,7 +238,7 @@ function StaffOverview() {
               title="In anderen Städten"
               icon="building"
               color="system"
-              value={`${elsewhere.length} Leute`}
+              value={elsewhere.length === 1 ? '1 Person' : `${elsewhere.length} Leute`}
               note="Arbeiten dort für deine Statthalter. Wechsel die Stadt, um sie zu sehen."
             />
           )}

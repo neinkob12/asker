@@ -30,7 +30,12 @@ export interface HtmlMarkerOptions {
 export function addHtmlMarker(map: MapLibreMap, options: HtmlMarkerOptions): { marker: Marker; element: HTMLElement } {
   const element = document.createElement(options.tag ?? 'div');
   element.className = options.near ? `${options.className} map-near` : options.className;
-  if (options.tag === 'button') (element as HTMLButtonElement).type = 'button';
+  if (options.tag === 'button') {
+    (element as HTMLButtonElement).type = 'button';
+    // Kein Tab-Stopp (Auftrag 43, N5): Hunderte Marker aller Städte, viele außerhalb des Bildes, hielten die Tastatur
+    // in der Karte fest, HUD und Handy kamen nie dran. Per Tastatur erreicht man Spots und Orte über die Suche (Strg+K).
+    element.tabIndex = -1;
+  }
   if (options.title) element.title = options.title;
   for (const child of options.children ?? []) element.appendChild(child);
   if (options.onClick) {

@@ -46,7 +46,8 @@ export function Popover(props: { id: string; children: ComponentChildren; align?
 }
 
 function SpeedControl() {
-  const { session, api } = useRuntime();
+  const runtime = useRuntime();
+  const { session, api } = runtime;
   const mobile = useIsMobile();
   const speed = session.loop.speed;
   if (mobile) {
@@ -67,10 +68,15 @@ function SpeedControl() {
         <button
           type="button"
           class={`hud-speed__btn ${speed > 0 ? 'is-active' : ''}`}
-          aria-label={`Tempo ${SPEED_LABELS[speed] ?? speed}, tippen für schneller`}
-          onClick={() => api.setSpeed(speed === 0 ? 1 : next)}
+          aria-label={
+            speed === 0
+              ? `Weiter mit ${SPEED_LABELS[runtime.resumeSpeed] ?? runtime.resumeSpeed}`
+              : `Tempo ${SPEED_LABELS[speed] ?? speed}, tippen für schneller`
+          }
+          onClick={() => api.setSpeed(speed === 0 ? runtime.resumeSpeed : next)}
         >
-          <span class="hud-speed__label">{SPEED_LABELS[speed === 0 ? 1 : speed]}</span>
+          {/* Pausiert das Tempo, mit dem es weitergeht (vorher stand „1×“, Play lief aber mit 4× weiter). */}
+          <span class="hud-speed__label">{SPEED_LABELS[speed === 0 ? runtime.resumeSpeed : speed]}</span>
         </button>
       </fieldset>
     );
@@ -93,6 +99,9 @@ function SpeedControl() {
     </fieldset>
   );
 }
+
+/** Mac (⌘) oder PC (Strg) für die Tastenkürzel im Menü (Auftrag 43, N10). */
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 /** Menü (Verlauf, Suche, Spielstände, Einstellungen, Ton). Am Handy-Bildschirm steht es in der Kartensteuerung. */
 export function MenuButton(props: { up?: boolean }) {
@@ -122,7 +131,7 @@ export function MenuButton(props: { up?: boolean }) {
           <Badge count={unread} tone="warn" />
         </button>
         <button type="button" class="hud-menu__item" onClick={run(() => api.togglePalette(true))}>
-          <Icon name="search" /> Suchen <kbd>Strg K</kbd>
+          <Icon name="search" /> Suchen <kbd>{IS_MAC ? '⌘ K' : 'Strg K'}</kbd>
         </button>
         <button type="button" class="hud-menu__item" onClick={run(() => api.openDialog('core.saves', {}))}>
           <Icon name="save" /> Spielstände
@@ -134,6 +143,23 @@ export function MenuButton(props: { up?: boolean }) {
           <Icon name={muted ? 'volumeOff' : 'volume'} />
           {muted ? 'Ton an' : 'Ton aus'}
         </button>
+        {/* Tastenkürzel standen nirgends (N10); nur mit Tastatur, nicht in der Kartensteuerung am Handy. */}
+        {!props.up && (
+          <p class="hud-menu__keys">
+            <span>
+              <kbd>Leertaste</kbd> Pause
+            </span>
+            <span>
+              <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> Tempo
+            </span>
+            <span>
+              <kbd>T</kbd> Handy
+            </span>
+            <span>
+              <kbd>Esc</kbd> zurück
+            </span>
+          </p>
+        )}
       </Popover>
     </div>
   );

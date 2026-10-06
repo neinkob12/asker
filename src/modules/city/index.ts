@@ -131,7 +131,7 @@ export {
   SLEEP_AVERAGE_DAYS,
 } from './config';
 export { ABROAD_CITIES, CITIES, type CityDef, DEUTSCHLAND_VIEW } from './data';
-export { PLAYER_RANKS, type PlayerRank, type PlayerRankDef } from './ranks';
+export { majorityMakesBoss, PLAYER_RANKS, type PlayerRank, type PlayerRankDef } from './ranks';
 export { getRegion, isRegion, REGIONS, type RegionDef } from './regions';
 
 /**

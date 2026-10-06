@@ -24,7 +24,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, citiesUnlocked, cityName, isBusinessSold } from '../../city';
+import { activeCity, citiesUnlocked, cityName, isBusinessSold, majorityMakesBoss } from '../../city';
 import { getHeat, heatLevel } from '../../police';
 import { allVeedel, veedelName } from '../../veedel';
 import {
@@ -48,12 +48,17 @@ import './territory.css';
 import { getMapView, MAP_VIEW_OPTIONS, onMapViewChange, setMapView, type VeedelMapView } from './view';
 
 /** Ein Satz zum Kampagnenziel einer Stadt: Meilenstein bei der Mehrheit, Ziel sind alle Veedel. */
-export function campaignHint(progress: CampaignProgress, city = 'Köln'): string {
+export function campaignHint(progress: CampaignProgress, city = 'Köln', boss = true): string {
   const { controlled, total, majority } = progress;
   if (progress.complete) return `${city} gehört dir ganz. Du hältst ${controlled} von ${total} Veedeln.`;
+  // Nur in Köln macht die Mehrheit einen Rang; anderswo heißt sie Mehrheit (N8).
   if (progress.majorityReached)
-    return `Boss von ${city}: ${controlled} von ${total} Veedeln. Für ${city} komplett brauchst du alle ${total}.`;
-  return `Du kontrollierst ${controlled} von ${total} Veedeln. Ab ${majority} bist du Boss von ${city}, mit allen ${total} gehört dir die Stadt.`;
+    return boss
+      ? `Boss von ${city}: ${controlled} von ${total} Veedeln. Für ${city} komplett brauchst du alle ${total}.`
+      : `Mehrheit in ${city}: ${controlled} von ${total} Veedeln. Boss von ${city} bist du mit allen ${total}.`;
+  return boss
+    ? `Du kontrollierst ${controlled} von ${total} Veedeln. Ab ${majority} bist du Boss von ${city}, mit allen ${total} gehört dir die Stadt.`
+    : `Du kontrollierst ${controlled} von ${total} Veedeln. Mit allen ${total} gehört dir die Stadt, und du bist Boss von ${city}.`;
 }
 
 function FactionName(props: { state: GameState; faction: FactionId | null }) {
@@ -133,7 +138,7 @@ function TerritoryTab() {
     <>
       <Card title={progress.complete ? `${city} komplett` : `${city} übernehmen`}>
         <ProgressBar value={progress.controlled / progress.total} label="Kampagnenfortschritt" />
-        <Hint>{campaignHint(progress, city)}</Hint>
+        <Hint>{campaignHint(progress, city, majorityMakesBoss(cityId))}</Hint>
       </Card>
       <Card
         title="Veedel"
@@ -225,7 +230,9 @@ registerAdvisor({
       priority: 20,
       icon: 'flag',
       title: `Ziel: ${city} übernehmen`,
-      text: `Ab ${progress.majority} Veedeln bist du Boss von ${city}, mit allen ${progress.total} gehört dir die Stadt.`,
+      text: majorityMakesBoss(cityId)
+        ? `Ab ${progress.majority} Veedeln bist du Boss von ${city}, mit allen ${progress.total} gehört dir die Stadt.`
+        : `Mit allen ${progress.total} Veedeln gehört dir die Stadt, und du bist Boss von ${city}.`,
       actionLabel: 'Reviere',
       action: (ui) => ui.selectTab('territory'),
     };
@@ -249,8 +256,9 @@ registerGameStat({
 // Meilenstein "Boss von Köln" (Mehrheit der Veedel, Auftrag 30): Banner mit Ton, kein Sieg-Bildschirm.
 onGameEvent('campaign.milestone', 'territory.milestone', (payload, ui) => {
   if (payload.kind !== 'majority') return;
+  const city = cityName(payload.cityId);
   ui.toast(
-    `Boss von ${cityName(payload.cityId)}: ${payload.controlled} von ${payload.total} Veedeln gehören dir. Jetzt den Rest der Stadt.`,
+    `${majorityMakesBoss(payload.cityId) ? `Boss von ${city}` : `Mehrheit in ${city}`}: ${payload.controlled} von ${payload.total} Veedeln gehören dir. Jetzt den Rest der Stadt.`,
     'good',
     { urgent: true },
   );

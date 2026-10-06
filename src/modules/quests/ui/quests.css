@@ -245,3 +245,40 @@
   color: var(--color-muted);
   font-size: var(--type-subhead);
 }
+
+/* Rückfrage „Quest überspringen?“ über der Kartenfläche (Auftrag 43, N4) */
+.ui-map-dialog__card.quest-skip {
+  max-width: 420px;
+}
+.quest-skip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.quest-skip__kicker {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--hud-gold);
+}
+.quest-skip__title {
+  margin: 0;
+  font-family: var(--font-hud-display);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--hud-ink);
+}
+.quest-skip__text {
+  margin: 0;
+  color: var(--hud-ink-2);
+}
+.quest-skip__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}

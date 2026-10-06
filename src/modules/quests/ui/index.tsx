@@ -4,7 +4,7 @@
 import { useState } from 'preact/hooks';
 import type { GameState } from '../../../core';
 import {
-  ActionSheet,
+  Button,
   Chip,
   Disclosure,
   Group,
@@ -13,7 +13,9 @@ import {
   ItemContent,
   List,
   ListItem,
+  MapDialog,
   onGameEvent,
+  registerDialog,
   registerHudItem,
   registerPanel,
   registerSearch,
@@ -32,6 +34,9 @@ import './quests.css';
 declare module '../../../ui' {
   interface PanelRegistry {
     'quests.list': Record<string, never>;
+  }
+  interface DialogRegistry {
+    'quests.skip': Record<string, never>;
   }
 }
 
@@ -117,10 +122,9 @@ function formatProgress(now: number, target: number, euro: boolean | undefined):
 }
 
 function QuestHud() {
-  const { state, dispatch } = useGame();
+  const { state } = useGame();
   const ui = useUi();
   const [collapsed, setCollapsed] = useState(readCollapsed);
-  const [confirmSkip, setConfirmSkip] = useState(false);
   const quest = currentQuest(state);
   if (!quest) return null;
   const [now, target] = questProgress(state);
@@ -178,27 +182,51 @@ function QuestHud() {
         <button type="button" class="quest-hud__link" onClick={() => ui.openPanel('quests.list', {})}>
           Alle Quests
         </button>
-        <button type="button" class="quest-hud__link is-faint" onClick={() => setConfirmSkip(true)}>
+        <button type="button" class="quest-hud__link is-faint" onClick={() => ui.openDialog('quests.skip', {})}>
           Überspringen
         </button>
       </footer>
-      <ActionSheet
-        open={confirmSkip}
-        onClose={() => setConfirmSkip(false)}
-        title="Quest überspringen?"
-        message={`Dann gibt es keine Belohnung (${quest.reward.map(rewardText).join(' + ')}), und die Quest kommt nicht wieder.`}
-        actions={[
-          {
-            label: 'Überspringen',
-            icon: 'skip',
-            destructive: true,
-            onSelect: () => dispatch({ type: 'quests.skip', payload: {} }),
-          },
-        ]}
-      />
     </section>
   );
 }
+
+/**
+ * Rückfrage „Quest überspringen?“ über der Kartenfläche (Auftrag 43, N4): Als Aktionsblatt in der Quest-Karte lag sie
+ * am Desktop unter dem HUD und ohne Schleier. Am Handy-Bildschirm ist sie ein Blatt.
+ */
+function SkipDialog() {
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const quest = currentQuest(state);
+  const close = () => ui.closeDialog();
+  if (!quest) return null;
+  return (
+    <MapDialog label="Quest überspringen?" onClose={close} class="quest-skip" detent="medium">
+      <p class="quest-skip__kicker">{quest.title}</p>
+      <h2 class="quest-skip__title">Quest überspringen?</h2>
+      <p class="quest-skip__text">
+        Dann gibt es keine Belohnung ({quest.reward.map(rewardText).join(' + ')}), und die Quest kommt nicht wieder.
+      </p>
+      <div class="quest-skip__actions">
+        <Button variant="subtle" onClick={close}>
+          Abbrechen
+        </Button>
+        <Button
+          variant="danger"
+          icon="skip"
+          onClick={() => {
+            dispatch({ type: 'quests.skip', payload: {} });
+            close();
+          }}
+        >
+          Überspringen
+        </Button>
+      </div>
+    </MapDialog>
+  );
+}
+
+registerDialog({ id: 'quests.skip', component: SkipDialog, area: 'map', pausesGame: true, lockPhone: false });
 
 /** Seite im Handy: alle Kapitel und Quests mit Stand und Belohnung. */
 function QuestList() {

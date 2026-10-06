@@ -23,7 +23,8 @@
 }
 .territory-influence__row {
   display: grid;
-  grid-template-columns: minmax(70px, 40%) 1fr;
+  /* Namen wie „Marienburger Kreis“ passen hinein (vorher 40 %), die Balken stehen untereinander (Auftrag 43, N9). */
+  grid-template-columns: minmax(70px, 55%) minmax(64px, 1fr);
   align-items: center;
   gap: var(--space-3);
   min-width: 0;

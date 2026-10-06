@@ -330,6 +330,11 @@ export class UiRuntime {
   private renderQueued = false;
   private toastId = 0;
   private speedBeforePause = 1;
+
+  /** Tempo, mit dem es nach der Pause weitergeht (Handy-Knopf zeigt es pausiert an, Auftrag 43, N10). */
+  get resumeSpeed(): number {
+    return this.speedBeforePause;
+  }
   private speedBeforeDialog: number | null = null;
   private notificationId = 0;
   private lastQuietBanner = 0;

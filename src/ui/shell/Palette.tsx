@@ -115,6 +115,9 @@ function collect(runtime: UiRuntime): Entry[] {
   return entries;
 }
 
+/** Gruppen, die bei leerer Suche oben stehen. */
+const FIRST = new Set(['Nächster Schritt', 'Bereiche', 'Handy', 'Befehle']);
+
 export function Palette() {
   const { ui } = useRuntime();
   if (!ui.palette) return null;
@@ -131,7 +134,10 @@ function PaletteBox() {
   const all = useMemo(() => collect(runtime), [runtime]);
 
   const terms = normalize(query).split(/\s+/).filter(Boolean);
-  const results = all
+  // Ohne Eingabe zuerst Rat, Bereiche, Apps und Befehle (Auftrag 43, N10: sonst füllten Spots die 40 Plätze).
+  const pool =
+    terms.length === 0 ? [...all].sort((a, b) => Number(FIRST.has(b.group)) - Number(FIRST.has(a.group))) : all;
+  const results = pool
     .filter((e) => terms.every((t) => e.haystack.includes(t)))
     .sort(
       (a, b) =>
