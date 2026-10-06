@@ -107,6 +107,9 @@ describe('Minispiele: starten', () => {
 
   it('startet keine Art, die nicht scharf ist, und nur eine pro Auslöser', () => {
     const sim = createTestGame();
+    // Eine Art, die (noch) nicht scharf ist: hier die Verfolgungsjagd, kurz abgeschaltet.
+    restore.push(['chase', MINIGAME_KINDS.chase.ready]);
+    MINIGAME_KINDS.chase.ready = false;
     expect(start(sim, 'chase')).toBeNull();
     expect(start(sim)).not.toBeNull();
     expect(start(sim)).toBeNull();
