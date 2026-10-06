@@ -17,7 +17,7 @@ import {
   wallet,
 } from '../../core';
 import { cityName } from '../city';
-import { formatProductAmount, getWarehouse, getWarehouses, productName } from '../goods';
+import { fitArticles, formatProductAmount, getWarehouse, getWarehouses, productName } from '../goods';
 import { portName } from '../logistics';
 import {
   BRIBE_DELAY,
@@ -80,7 +80,10 @@ export type ShipmentLuck = 'early' | 'bonus' | 'betterQuality';
 
 /** Text in der Stimme des Lieferanten (voices.ts), ohne direkte Wiederholung. */
 export function voice(ctx: Ctx, supplier: Supplier, key: SupplierTextKey, vars: Record<string, string> = {}): string {
-  return texts.pick(ctx, `supplier:${supplier.id}:${key}`, supplierVariants(supplier.id, key), vars);
+  const list = supplierVariants(supplier.id, key);
+  // Artikel vor dem Lagernamen passend („zur Garage“ statt „zum Garage“, Auftrag 43, L3).
+  const fitted = vars.warehouse ? list.map((t) => fitArticles(t, 'warehouse', vars.warehouse)) : list;
+  return texts.pick(ctx, `supplier:${supplier.id}:${key}`, fitted, vars);
 }
 
 /** Grund für ein Problem auswürfeln (ohne direkte Wiederholung pro Weg) und an der Lieferung merken. */

@@ -14,6 +14,7 @@ import {
   chapterName,
   completedQuests,
   currentQuest,
+  orderedForCity,
   questProgress,
   questsWaiting,
   questTitle,
@@ -318,7 +319,9 @@ describe('quests', () => {
     raw.moduleVersions.quests = 6;
     const loaded = loadSimulation(raw, sim.modules);
     expect(loaded.state.modules.quests.fresh).toBe(false);
-    expect(loaded.state.moduleVersions.quests).toBe(7);
+    // Version 8 (L5): Städte mit Bestellung, alte Stände fangen leer an.
+    expect(loaded.state.modules.quests.orderedIn).toEqual([]);
+    expect(loaded.state.moduleVersions.quests).toBe(8);
   });
 
   it('Migration 1 → 2: Der Index folgt der neuen Reihenfolge, erledigte und übersprungene Quests bleiben', () => {
@@ -341,7 +344,7 @@ describe('quests', () => {
     // Neu: Nach 'order' folgt 'revenue1k', der Hafen kommt erst später.
     expect(currentQuest(loaded.state)?.id).toBe('revenue1k');
     expect(loaded.state.modules.quests.done).toEqual(['firstSales', 'setPrice', 'order']);
-    expect(loaded.state.moduleVersions.quests).toBe(7);
+    expect(loaded.state.moduleVersions.quests).toBe(8);
     // Alles durch: Index am Ende.
     raw.modules.quests = { index: 26, progress: 0, done: QUESTS.map((q) => q.id), skipped: [], title: 'Boss von Köln' };
     expect(currentQuest(loadSimulation(raw, sim.modules).state)).toBeNull();
@@ -439,5 +442,18 @@ describe('quests', () => {
     sim.dispatch({ type: 'city.switch', payload: { cityId: 'koeln' } });
     sim.advance(10);
     expect(currentQuest(sim.state)?.id).toBe('hhWarehouse');
+  });
+});
+
+describe('Bestellung für eine Stadt (Auftrag 43, L5)', () => {
+  it('quests merkt sich die Stadt, auch wenn die Lieferung längst da ist', () => {
+    const sim = createTestGame();
+    expect(orderedForCity(sim.state, 'berlin')).toBe(false);
+    sim
+      .ctx('suppliers')
+      .emit('shipment.ordered', { shipmentId: 1, supplierId: 'toni', amount: 10, price: 60, cityId: 'berlin' });
+    sim.advance(10);
+    expect(orderedForCity(sim.state, 'berlin')).toBe(true);
+    expect(orderedForCity(sim.state, 'koeln')).toBe(false);
   });
 });

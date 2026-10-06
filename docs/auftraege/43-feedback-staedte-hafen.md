@@ -385,17 +385,26 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
 
 ## L Prüfer „Berlin, München, Frankfurt“ (Sonnet-Agent, Ankunft bis komplett, 06.10.2026)
 
-- [ ] L1 Berliner Clubs: Öffnungszeiten (`weekHours`) stehen nirgends, nur „zu“; kein „öffnet in …“.
-- [ ] L2 Köln-Reste in anderen Städten: Lager-Seite mit „Niehler Hafen“, fremde Fahrten unter „Unterwegs“, Panel
+- [x] L1 Berliner Clubs: Öffnungszeiten (`weekHours`) stehen nirgends, nur „zu“; kein „öffnet in …“.
+  Erledigt: Spots mit `weekHours` zeigen ihre Zeiten, geschlossen „zu, öffnet Fr 22 Uhr“ (`spotOpensAt`).
+- [x] L2 Köln-Reste in anderen Städten: Lager-Seite mit „Niehler Hafen“, fremde Fahrten unter „Unterwegs“, Panel
   `logistics.port` und Aufgabe „Hafen abholen“ in Städten ohne Hafen.
-- [ ] L3 Falsche Artikel bei Lagernamen („ins Halle Cargo City“, „im Garage Barmbek“), auch in Gang-Texten.
-- [ ] L4 „über über den Potsdamer Platz“ bei den Nachbarn eines Veedels.
-- [ ] L5 Quest „Bestell Ware für <Stadt>“ zählt frühere Bestellungen in der Stadt nicht.
-- [ ] L6 Zoll an der Grenze (`Supplier.customs`) nirgends als Zahl.
-- [ ] L7 Tonis Beschreibung nennt immer die A3.
-- [ ] L8 Oktoberfest fällt für viele Spieler aus (fester Zyklus ab Tag 40), Leitner verspricht die Wiesn.
-- [ ] L9 Kleinigkeiten: Frankfurter Geldwäsche-Kapazität ohne Erklärung, erster Spot-Rat nimmt den billigsten statt
+  Erledigt: `hasPort`: in Städten ohne Hafen kein „Niehler Hafen“ auf der Lager-Seite und im Panel, keine Aufgabe „Hafen abholen“; Fahrten nur der Stadt.
+- [x] L3 Falsche Artikel bei Lagernamen („ins Halle Cargo City“, „im Garage Barmbek“), auch in Gang-Texten.
+  Erledigt: `warehousePlace` und `fitArticles` in goods (Geschlecht aus dem ersten Wort): feste Stellen umgestellt, Gang- und Lieferanten-Vorlagen passen den Artikel an; Test über alle Vorlagen und Lager.
+- [x] L4 „über über den Potsdamer Platz“ bei den Nachbarn eines Veedels.
+  Erledigt: Die Daten bringen die Präposition mit, die Oberfläche setzt kein zweites „über“; Test.
+- [x] L5 Quest „Bestell Ware für <Stadt>“ zählt frühere Bestellungen in der Stadt nicht.
+  Erledigt: quests merkt sich Städte mit Bestellung (`orderedIn`, Migration 8), die Quest zählt auch gelieferte Bestellungen.
+- [x] L6 Zoll an der Grenze (`Supplier.customs`) nirgends als Zahl.
+  Erledigt: Lieferanten-Seite: „Beschlagnahme x % je Lieferung, davon Zoll y %“ (`seizeChance`).
+- [x] L7 Tonis Beschreibung nennt immer die A3.
+  Erledigt: Beschreibung mit `{road}` (`supplierDescription`), pro Stadt die richtige Autobahn.
+- [x] L8 Oktoberfest fällt für viele Spieler aus (fester Zyklus ab Tag 40), Leitner verspricht die Wiesn.
+  Erledigt: Wiesn alle 45 Tage für zwei Wochen; „Feste und Spiele“ nennt große Feste auch, wenn sie weiter weg sind.
+- [x] L9 Kleinigkeiten: Frankfurter Geldwäsche-Kapazität ohne Erklärung, erster Spot-Rat nimmt den billigsten statt
   einen guten, Musiktitel „Sonnendeck Deutz“ in Berlin.
+  Erledigt: Geldwäsche nennt das Frankfurter 1,5-Fache; der Rat „Ersten Spot freischalten“ nimmt den Spot mit dem meisten Andrang, der höchstens die Hälfte des Geldes kostet. Der Musiktitel bleibt (Musik gilt für alle Städte).
 
 ## Neue Funde
 

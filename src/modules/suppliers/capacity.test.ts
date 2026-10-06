@@ -40,7 +40,7 @@ describe('suppliers: Platz im Lager (Auftrag 33)', () => {
     expect(getStock(sim.state, { productId: 'weed', warehouseId: 'nippes' })).toBe(30);
     // Die Meldung nennt die echte Verteilung auf die Lager.
     expect(
-      sim.state.journal.some((j) => j.text.includes('verteilt: 20 g im Lager Ehrenfeld, 30 g im Garage Nippes')),
+      sim.state.journal.some((j) => j.text.includes('verteilt: 20 g im Lager Ehrenfeld, 30 g in der Garage Nippes')),
     ).toBe(true);
   });
 });

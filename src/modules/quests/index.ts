@@ -98,6 +98,8 @@ export interface QuestsState {
    * vorher gemeldet waren (dieselbe Aktion, die die vorige Quest erledigt hat), zählen nicht für sie (J2, Version 7).
    */
   fresh: boolean;
+  /** Städte, für die du schon einmal bestellt hast (Auftrag 43, L5: zählt für „Bestell Ware für …“, auch geliefert). */
+  orderedIn: string[];
   /** Wochenverträge (Auftrag 32). */
   contracts: ContractsState;
 }
@@ -124,7 +126,9 @@ export interface ContractsState {
 type QuestsStateV1 = Omit<QuestsState, 'startedAt' | 'contracts' | 'fresh'>;
 type QuestsStateV2 = Omit<QuestsState, 'contracts' | 'fresh'>;
 /** Zustand bis Version 6 (ohne fresh). */
-type QuestsStateV6 = Omit<QuestsState, 'fresh'>;
+type QuestsStateV6 = Omit<QuestsState, 'fresh' | 'orderedIn'>;
+/** Zustand in Version 7 (ohne orderedIn). */
+type QuestsStateV7 = Omit<QuestsState, 'orderedIn'>;
 
 function newContracts(): ContractsState {
   return { offers: [], active: null, history: [], stats: { offered: 0, accepted: 0, done: 0, failed: 0 } };
@@ -733,14 +737,26 @@ function onCounted<K extends keyof GameEvents>(type: K) {
   const quest = COUNTED.includes(type) ? onEvent(type) : null;
   const contract = CONTRACT_COUNTED.includes(type) ? onContractEvent(type) : null;
   return (ctx: Ctx, payload: GameEvents[K]) => {
+    if (type === 'shipment.ordered') noteOrder(ctx, (payload as GameEvents['shipment.ordered']).cityId ?? 'koeln');
     quest?.(ctx, payload);
     contract?.(ctx, payload);
   };
 }
 
+/** Für diese Stadt wurde schon einmal bestellt (L5). */
+function noteOrder(ctx: Ctx, cityId: string): void {
+  const q = ctx.state.modules.quests;
+  if (!q.orderedIn.includes(cityId)) q.orderedIn.push(cityId);
+}
+
+/** Hast du für diese Stadt schon einmal bestellt? */
+export function orderedForCity(state: GameState, cityId: string): boolean {
+  return state.modules.quests.orderedIn?.includes(cityId) ?? false;
+}
+
 export default defineModule({
   id: 'quests',
-  version: 7,
+  version: 8,
   dependsOn: ['goods', 'staff', 'territory', 'police', 'reputation', 'leaderboard'],
   init: () => ({
     index: 0,
@@ -750,6 +766,7 @@ export default defineModule({
     title: null,
     startedAt: -1,
     fresh: false,
+    orderedIn: [],
     contracts: newContracts(),
   }),
   tickEvery: QUEST_CHECK_EVERY,
@@ -859,6 +876,8 @@ export default defineModule({
     },
     // Version 7 (J2): Die Sperre für Ereignisse derselben Aktion hängt nicht mehr an der Spielminute, sondern an fresh.
     // Gespeichert wird nie mitten in einer Aktion, also ist nichts mehr frisch.
-    7: (old: QuestsStateV6): QuestsState => ({ ...old, fresh: false }),
+    7: (old: QuestsStateV6): QuestsStateV7 => ({ ...old, fresh: false }),
+    // Version 8 (Auftrag 43, L5): Städte mit Bestellung; alte Stände wissen es nicht, die Quest zählt dann wie vorher.
+    8: (old: QuestsStateV7): QuestsState => ({ ...old, orderedIn: [] }),
   },
 });

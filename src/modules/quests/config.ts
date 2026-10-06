@@ -23,7 +23,15 @@ import { veedelCity } from '../veedel';
  * Lieferung für die Stadt noch unterwegs ist. Vorher blieb die Quest auf 0/1, wer zuerst bestellt hatte.
  */
 function orderedFor(cityId: string): (state: GameState) => number {
-  return (state) => Math.max(state.modules.quests.progress, shipmentsInTransit(state, cityId).length > 0 ? 1 : 0);
+  // Auch, wenn die Lieferung schon da ist (Auftrag 43, L5: In Berlin stand die Quest auf 0/1, obwohl Mirkos Ware schon
+  // im Lager lag): quests merkt sich die Städte mit Bestellung (orderedIn).
+  return (state) =>
+    Math.max(
+      state.modules.quests.progress,
+      shipmentsInTransit(state, cityId).length > 0 || (state.modules.quests.orderedIn?.includes(cityId) ?? false)
+        ? 1
+        : 0,
+    );
 }
 
 /**

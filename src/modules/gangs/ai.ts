@@ -6,7 +6,7 @@ import { type Ctx, clock, formatAmount, formatEuro, type GameState, journal, wal
 import { activeCity, liveVeedel } from '../city';
 import { activeEncounters, startEncounter } from '../encounters';
 import { eventFactor } from '../events';
-import { DEFAULT_PRODUCT, getStock, getWarehouses } from '../goods';
+import { DEFAULT_PRODUCT, getStock, getWarehouses, warehousePlace } from '../goods';
 import { referencePrice, setCompetitionFactor } from '../market';
 import { atSpot, getSpot, getSpots, spotModifiers } from '../spots';
 import { defenseStrength, getStaff, getStaffMember } from '../staff';
@@ -607,7 +607,7 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
       warehouseId: target.warehouseId,
       staffIds: target.staffIds,
       askPlayer: true,
-      place: `am ${target.name}`,
+      place: warehousePlace(target.name, 'at'),
       situation: '{opponent} brechen {place} das Rolltor auf. Drinnen liegt dein Vorrat.',
       opponent,
       origin,

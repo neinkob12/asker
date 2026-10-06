@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fillText } from '../../core';
+import { fitArticles, warehouseSites } from '../goods';
 import { GANGS } from './data';
 import { MEMORY_TEXTS_FORMAL } from './memory';
 import { formalVoice, GANG_VOICES, type GangTextKey, INCIDENT_TEXTS } from './texts';
@@ -110,6 +111,24 @@ describe('Sie oder du (Auftrag 43, K3)', () => {
     expect(formalVoice('nord')).toBe(false);
     for (const list of Object.values(MEMORY_TEXTS_FORMAL)) {
       for (const line of list) expect(line).not.toMatch(/\b(du|dir|dich|dein|deine|deinen|deinem|deiner)\b/);
+    }
+  });
+});
+
+describe('Artikel vor Lagernamen (Auftrag 43, L3)', () => {
+  it('keine Vorlage sagt „dein Garage“, „im Halle“ oder „der Lager“', () => {
+    const wrong =
+      /\b(dein|deinen|deinem|im|vom|zum|beim|am|den|Ihr|Ihren|Ihres)\s(Garage|Halle|Werkstatt|Remise)\b|\b(der|den)\s(Lager|Bootshaus)\b/i;
+    const all = [
+      ...Object.values(GANG_VOICES).flatMap((voice) => Object.values(voice).flat()),
+      ...Object.values(INCIDENT_TEXTS).flat(),
+    ].filter((t) => t.includes('{warehouse}'));
+    expect(all.length).toBeGreaterThan(50);
+    for (const site of warehouseSites()) {
+      for (const template of all) {
+        const text = fillText(fitArticles(template, 'warehouse', site.name), { ...VARS, warehouse: site.name });
+        expect(text, template).not.toMatch(wrong);
+      }
     }
   });
 });
