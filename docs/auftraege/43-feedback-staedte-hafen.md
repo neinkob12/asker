@@ -235,6 +235,33 @@ passende Liste. Regeln aus `CLAUDE.md` gelten wie immer (Befehle, Migrationen, O
   ohne Hinweis, HUD-Kacheln am Handy abgeschnitten.
   Erledigt: App „Handel“ vor dem Verkauf aus (`hiddenWhen`), eigene Lager in der Suche, Seite Rechte Hand sagt, wie man eine ernennt, HUD-Kacheln am Handy höchstens drei pro Reihe.
 
+## H Dritter Prüfer (Hafen-Phase nach den Fixes, 06.10.2026)
+
+- [x] H1 „Ware da“ und „Alle mit Ware ausliefern“ falsch: `missingFor` prüft jede Bestellung allein gegen den Bestand,
+  `ready` zählt schon Teile; „Ware da“ bei neuen Bestellungen schon mit Container auf See.
+  Erledigt: `deliveryReadiness` verteilt den Bestand der Häfen auf die angenommenen Bestellungen (Verträge zuerst, dann
+  nach Frist), „Alle mit Ware ausliefern“ nimmt nur ganz gedeckte, neue Bestellungen zeigen „Ware da“ nur für Ware in
+  der Halle, sonst „kommt rechtzeitig“ bzw. „fehlt“.
+- [ ] H2 Stille Verluste: verfallene Bestellungen (486.000 €) ohne Meldung, Ende des Abnahmevertrags ohne Hinweis,
+  Rat ohne Frist.
+- [ ] H3 Nach dem Verkauf läuft die alte Stadt während der Fahrt nach Rotterdam live (Dialoge, Banner).
+- [ ] H4 „Diese Woche: reicht“ zählt Container, die nach der Frist ankommen; Einkauf ohne Warnung zur Frist.
+- [ ] H5 Fenna-Gruppe klappt beim ersten Tipp zu; teuerster Produzent (Jansens Netz) als Standard; „1 Tage“.
+- [x] H6 Fenna liefert Teile aus (eine Fahrt pro Posten, je Grundfracht).
+  Erledigt: Fenna liefert nach `deliveryReadiness` nur ganze Bestellungen, Teile erst 24 Stunden vor der Frist
+  (`PARTIAL_DELIVERY_BEFORE`), Test in `trade/plans.test.ts`.
+- [ ] H7 Einkauf: keine Hallen-Warnung, gesperrter Knopf ohne Grund (Schwarzgeld), Mindestmenge 20 kg ohne Hinweis.
+- [ ] H8 Kasse in Rotterdam: Pro Leutnant, Kundschaft, Pro Spot aus der Stadt-Phase.
+- [ ] H9 Köln-Reste: Nachrichten-Liste, „Alle Quests“ mit alten Kapiteln und Wochenverträgen, Geldwäsche-Wege,
+  Wetter „über Köln“, Polizei-Stufe, Einstellung „Anfragen“.
+- [ ] H10 Banner „Container angekommen“ nennt den ganzen Container, nicht was ins Lager passte.
+- [x] H11 Frist in „Zu liefern“ ohne Uhrzeit.
+  Erledigt: „bis Di 06:00“ wie bei den neuen Bestellungen.
+- [ ] H12 Karte: Hafen-Kachel hinter den Knöpfen, Rotterdam-Karte unter der Quest-Karte, Auto-Marker bleibt sichtbar.
+- [ ] H13 Handy: HUD-Pillen der Hafen-Phase je eine Zeile, Namen und Auswahl abgeschnitten.
+- [ ] H14 Kleinigkeiten: doppelter Titel im Journal, Reiter „Aufträge“, Konkurrenz beim Vertrag, Guide „5 bis 9 Tage“.
+- [ ] H15 Kein Ziel zwischen Lkw-Quest und Anbau-Anruf.
+
 ## Neue Funde
 
 - [x] N0 (Spieler, 05.10.2026) „Man kann im Hafen in Rotterdam keine Ware bestellen, es steht sogar, dass es keinen

@@ -56,6 +56,7 @@ import {
   customerContact,
   deliveryCheckChance,
   deliveryEstimate,
+  deliveryReadiness,
   EUROPE_CITIES,
   EUROPE_MIN_RELIABILITY,
   europeCityOf,
@@ -319,7 +320,10 @@ function OrdersView(props: { onView: (view: View) => void }) {
       },
     });
   }
-  const port = ask && ask.mode === 'deliver' ? portFor(state, ask.order) : null;
+  // Lieferbereitschaft aller angenommenen Bestellungen zusammen (Auftrag 43, H1): Kein Kilo zählt doppelt.
+  const readiness = deliveryReadiness(state);
+  const port =
+    ask && ask.mode === 'deliver' ? (readiness.get(ask.order.id)?.portId ?? portFor(state, ask.order)) : null;
   if (ask && customer && port) {
     const o = ask.order;
     const trip = deliveryEstimate(customer, port);
@@ -376,8 +380,9 @@ function OrdersView(props: { onView: (view: View) => void }) {
     }
   }
   const guaranteed = open.filter((o) => o.guaranteed);
-  const ready = pending.filter((o) => portFor(state, o) !== null);
+  const ready = pending.filter((o) => readiness.get(o.id)?.full);
   const coverage = orderCoverage(state);
+  const inHarbor = orderCoverage(state, false);
   const covered = open.filter((o) => coverage.get(o.id) === 0);
   return (
     <>
@@ -448,9 +453,12 @@ function OrdersView(props: { onView: (view: View) => void }) {
                   title={c.name}
                   tags={[
                     o.guaranteed && { label: 'Vertrag', color: 'brand', icon: 'handshake' },
-                    (coverage.get(o.id) ?? 0) === 0
+                    // „Ware da“ nur, was schon im Hafen liegt; kommt es rechtzeitig per Container, steht das dran (H1).
+                    (inHarbor.get(o.id) ?? 0) === 0
                       ? { label: 'Ware da', color: 'money', icon: 'check' }
-                      : { label: `fehlt ${kg(coverage.get(o.id) ?? 0)}`, color: 'danger', icon: 'alert' },
+                      : (coverage.get(o.id) ?? 0) === 0
+                        ? { label: 'kommt rechtzeitig', color: 'place', icon: 'ship' }
+                        : { label: `fehlt ${kg(coverage.get(o.id) ?? 0)}`, color: 'danger', icon: 'alert' },
                     ...itemChips(o.items),
                     {
                       label: `bis ${clock.weekdayName(o.answerBy, true)} ${clock.formatTime(o.answerBy)}`,
@@ -478,7 +486,10 @@ function OrdersView(props: { onView: (view: View) => void }) {
               action
               icon="truck"
               onClick={() => {
-                for (const o of ready) dispatch({ type: 'trade.deliver', payload: { orderId: o.id } });
+                for (const o of ready) {
+                  const portId = readiness.get(o.id)?.portId ?? undefined;
+                  dispatch({ type: 'trade.deliver', payload: { orderId: o.id, ...(portId ? { portId } : {}) } });
+                }
               }}
             >
               {`Alle mit Ware ausliefern (${ready.length}, Spedition)`}
@@ -487,8 +498,9 @@ function OrdersView(props: { onView: (view: View) => void }) {
           {pending.map((o) => {
             const c = getCustomer(state, o.customerId);
             if (!c) return null;
-            const missing = missingFor(state, o);
-            const some = portFor(state, o) !== null;
+            const r = readiness.get(o.id);
+            const missing = r?.missing ?? missingFor(state, o);
+            const some = (r?.portId ?? null) !== null;
             const late = state.time > o.dueAt;
             const rest = openItems(o);
             return (
@@ -510,7 +522,8 @@ function OrdersView(props: { onView: (view: View) => void }) {
                     rest.length < o.items.length && { label: 'Rest offen', color: 'place', icon: 'truck' },
                     ...itemChips(rest),
                     {
-                      label: late ? 'zu spät' : `bis ${clock.weekdayName(o.dueAt, true)}`,
+                      // Mit Uhrzeit (H11): „bis Fr“ hieß oft schon die Nacht auf Freitag.
+                      label: late ? 'zu spät' : `bis ${answerByText(o.dueAt)}`,
                       color: late ? 'danger' : 'warn',
                       icon: 'clock',
                     },

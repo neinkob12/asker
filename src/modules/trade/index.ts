@@ -1221,18 +1221,21 @@ export function answerOrder(
  * Container, die vor der Frist ankommen, minus was angenommene Bestellungen schon brauchen. Die offenen Bestellungen
  * zählen der Reihe nach (wer vorn steht, bekommt die Ware zuerst), so wie „Gedeckte annehmen“ sie annimmt.
  */
-export function orderCoverage(state: GameState): Map<number, number> {
+export function orderCoverage(state: GameState, atSea = true): Map<number, number> {
   const reserved = new Map<string, number>();
   for (const order of getOrders(state)) {
     if (order.status !== 'accepted' && order.status !== 'delivering') continue;
     for (const item of openItems(order))
       reserved.set(item.productId, (reserved.get(item.productId) ?? 0) + item.amount);
   }
+  // atSea false (Auftrag 43, H1): nur was schon im Hafen liegt, für „Ware da“ statt „kommt rechtzeitig“.
   const supply = (productId: string, by: number) =>
     totalStock(state, productId) +
-    getShipments(state)
-      .filter((x) => x.productId === productId && x.arrivesAt <= by)
-      .reduce((sum, x) => sum + x.amount, 0) -
+    (atSea
+      ? getShipments(state)
+          .filter((x) => x.productId === productId && x.arrivesAt <= by)
+          .reduce((sum, x) => sum + x.amount, 0)
+      : 0) -
     (reserved.get(productId) ?? 0);
   const result = new Map<number, number>();
   // Verträge zuerst (Auftrag 43): Die alten Organisationen haben einen Abnahmevertrag, die Ware geht an sie vor den Gangs.
@@ -1247,6 +1250,52 @@ export function orderCoverage(state: GameState): Map<number, number> {
     if (missing === 0) {
       for (const item of order.items) reserved.set(item.productId, (reserved.get(item.productId) ?? 0) + item.amount);
     }
+  }
+  return result;
+}
+
+/** Wie weit eine angenommene Bestellung lieferbar ist (deliveryReadiness). */
+export interface DeliveryReadiness {
+  /** Hafen, aus dem geliefert würde (null: nichts davon liegt ganz da). */
+  portId: string | null;
+  /** Alle offenen Waren liegen in diesem Hafen. */
+  full: boolean;
+  /** Gramm, die noch fehlen. */
+  missing: number;
+}
+
+/**
+ * Lieferbereitschaft der angenommenen Bestellungen (Auftrag 43, H1): Der Bestand der Häfen wird der Reihe nach verteilt
+ * (Verträge zuerst, dann nach Frist), so dass zwei Bestellungen nie dieselben Kilo zählen. Vorher stand an allen 14
+ * „Ware da“, obwohl es nur für einen Teil reichte.
+ */
+export function deliveryReadiness(state: GameState): Map<number, DeliveryReadiness> {
+  const left = new Map<string, Map<string, number>>();
+  for (const portId of ownedPorts(state)) {
+    left.set(portId, new Map(Object.entries(portStock(state, portId)).map(([id, lot]) => [id, lot.amount])));
+  }
+  const result = new Map<number, DeliveryReadiness>();
+  const orders = [...pendingDeliveries(state)].sort(
+    (a, b) => Number(b.guaranteed) - Number(a.guaranteed) || a.dueAt - b.dueAt || a.id - b.id,
+  );
+  for (const order of orders) {
+    const items = openItems(order);
+    let best: { portId: string; fits: OrderItem[]; grams: number } | null = null;
+    for (const [portId, stock] of left) {
+      const fits = items.filter((i) => (stock.get(i.productId) ?? 0) >= i.amount);
+      const grams = fits.reduce((sum, i) => sum + i.amount, 0);
+      // Ein Hafen, der alles hat, vor einem mit mehr Gramm von einem Teil.
+      const full = fits.length === items.length;
+      const bestFull = best !== null && best.fits.length === items.length;
+      const better = best === null || (full && !bestFull) || (full === bestFull && grams > best.grams);
+      if (grams > 0 && better) best = { portId, fits, grams };
+    }
+    const missing = items.reduce((sum, i) => sum + i.amount, 0) - (best?.grams ?? 0);
+    if (best) {
+      const stock = left.get(best.portId);
+      for (const i of best.fits) stock?.set(i.productId, (stock.get(i.productId) ?? 0) - i.amount);
+    }
+    result.set(order.id, { portId: best?.portId ?? null, full: !!best && missing === 0, missing });
   }
   return result;
 }

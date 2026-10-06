@@ -7,6 +7,7 @@ import { playableCities } from '../city';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
 import {
+  deliveryReadiness,
   getDeliveries,
   getOrders,
   getShipments,
@@ -110,5 +111,36 @@ describe('Nachkauf (Auftrag 43)', () => {
     const loaded = loadSimulation(raw, sim.modules);
     expect(loaded.state.modules.trade.defaultPlan).toEqual(NO_PLAN);
     expect(loaded.state.modules.trade.restock).toEqual([]);
+  });
+
+  it('zwei Bestellungen zählen dieselben Kilo nicht doppelt (H1), Fenna wartet auf die ganze Bestellung (H6)', () => {
+    const sim = soldGame(6);
+    const [a, b] = openOrders(sim.state);
+    for (const o of [a, b]) {
+      o.items = [
+        { productId: 'weed', amount: 30_000, offer: o.items[0].offer },
+        { productId: 'hash', amount: 5_000, offer: o.items[0].offer },
+      ];
+      o.amount = 35_000;
+      o.status = 'accepted';
+      o.dueAt = sim.state.time + 5 * 1440;
+    }
+    const stock = sim.state.modules.trade.stock.rotterdam;
+    stock.weed = { ...(stock.weed ?? { quality: 0.6, own: 0 }), amount: 40_000 };
+    stock.hash = { ...(stock.hash ?? { quality: 0.6, own: 0 }), amount: 0 };
+    let ready = deliveryReadiness(sim.state);
+    // Für keine reicht alles (Hasch fehlt); Gras bekommt nur die erste, nicht beide.
+    expect(ready.get(a.id)).toMatchObject({ portId: 'rotterdam', full: false, missing: 5_000 });
+    expect(ready.get(b.id)).toMatchObject({ portId: null, full: false, missing: 35_000 });
+    sim.dispatch({ type: 'trade.setPlan', payload: { plan: { deliver: 'freight' } } });
+    sim.state.wallet.dirty = 500_000;
+    sim.advance(DISPATCH_EVERY + 5);
+    // Teile fährt Fenna noch nicht (die Frist ist weit).
+    expect(getDeliveries(sim.state).filter((d) => d.orderId === a.id)).toEqual([]);
+    stock.hash.amount = 5_000;
+    ready = deliveryReadiness(sim.state);
+    expect(ready.get(a.id)).toMatchObject({ full: true, missing: 0 });
+    sim.advance(DISPATCH_EVERY + 5);
+    expect(getDeliveries(sim.state).filter((d) => d.orderId === a.id)).toHaveLength(1);
   });
 });

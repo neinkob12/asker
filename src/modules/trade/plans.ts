@@ -14,11 +14,11 @@ import {
   answerOrder,
   buyContainer,
   deliver,
+  deliveryReadiness,
   getCustomer,
   getShipments,
   orderCoverage,
   ownedPorts,
-  portFor,
   portStock,
   shippableItems,
   type TradeOrder,
@@ -26,6 +26,8 @@ import {
 
 /** So oft (Spielminuten) schaut Fenna, was zu tun ist. */
 export const DISPATCH_EVERY = 60;
+/** Teillieferungen schickt Fenna erst so kurz vor der Frist (Spielminuten), sonst wartet sie auf die ganze Bestellung. */
+export const PARTIAL_DELIVERY_BEFORE = 24 * 60;
 
 /** Was Fenna für einen Kunden tut. */
 export interface CustomerPlan {
@@ -164,12 +166,16 @@ export function dispatcherTick(ctx: Ctx): void {
       done.push(`angenommen: ${getCustomer(ctx.state, order.customerId)?.name ?? 'Kunde'}`);
     }
   }
-  // Ausliefern, sobald Ware im Hafen liegt.
+  // Ausliefern, sobald die ganze Bestellung im Hafen liegt (Auftrag 43, H6: vorher fuhr jeder Posten einzeln, jedes Mal
+  // mit Grundfracht und Kontrolle); Teile erst kurz vor der Frist. Der Bestand wird der Reihe nach verteilt.
+  const readiness = deliveryReadiness(ctx.state);
   for (const order of s.orders.filter((o) => o.status === 'accepted')) {
     const plan = planFor(ctx.state, order.customerId);
     if (plan.deliver === 'off') continue;
-    const portId = portFor(ctx.state, order);
+    const ready = readiness.get(order.id);
+    const portId = ready?.portId ?? null;
     if (!portId) continue;
+    if (!ready?.full && order.dueAt - ctx.now > PARTIAL_DELIVERY_BEFORE) continue;
     const truck = plan.deliver === 'truck' ? truckFor(ctx.state, portId, order) : null;
     if (deliver(ctx, order.id, portId, truck).ok) {
       done.push(`ausgeliefert: ${getCustomer(ctx.state, order.customerId)?.name ?? 'Kunde'}`);
