@@ -9,7 +9,7 @@ import { useEffect } from 'preact/hooks';
 import { formatAmount, formatEuro, type GameState } from '../../../core';
 import { ABOVE_LAND, type MapLayer, mapToken, registerMapLayer } from '../../../map';
 import { Icon, MapDialog, onGameEvent, registerDialog, registerSlot, type UiApi, useGame, useUi } from '../../../ui';
-import { getSpot } from '../../spots';
+import { atSpot, getSpot } from '../../spots';
 import { bailCost, getStaffMember } from '../../staff';
 import { PLAYER_FACTION } from '../../territory';
 import { getBoundary, veedelName } from '../../veedel';
@@ -58,12 +58,12 @@ function raidTitle(raid: RaidRecord): string {
 }
 
 function raidLine(state: GameState, raid: RaidRecord): string {
-  const spot = raid.scope === 'spot' && raid.spotId ? getSpot(state, raid.spotId)?.name : undefined;
+  const spot = raid.scope === 'spot' && raid.spotId ? getSpot(state, raid.spotId) : undefined;
   const parts: string[] = [];
   if (raid.goods > 0) parts.push(`${formatAmount(raid.goods)} beschlagnahmt`);
   if (raid.arrested.length > 0) parts.push(`${raid.arrested.length} festgenommen`);
   const where = spot
-    ? `Zivile Beamte am ${spot}`
+    ? `Zivile Beamte ${atSpot(spot)}`
     : raid.scope === 'major'
       ? 'Die Kripo durchsucht deine Spots und Lager in mehreren Veedeln'
       : 'Die Polizei durchsucht deine Spots und Lager';

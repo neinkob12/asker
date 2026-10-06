@@ -40,7 +40,7 @@ import {
 } from '../../core';
 import { cityName } from '../city';
 import { nearestWarehouse, type Warehouse, warehouseCity } from '../goods';
-import { getSpot, isSpotActive, type Spot, spotCity, spotsInVeedel } from '../spots';
+import { atSpot, getSpot, isSpotActive, type Spot, spotCity, spotsInVeedel } from '../spots';
 import {
   addCareer,
   addLoyalty,
@@ -430,7 +430,8 @@ export function checkSpots(state: GameState, staffId: string, spotIds: readonly 
   for (const spotId of spotIds) {
     const spot = getSpot(state, spotId);
     if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
-    if (!isSpotActive(state, spotId)) return { ok: false, reason: `Der ${spot.name} ist noch nicht freigeschaltet.` };
+    if (!isSpotActive(state, spotId))
+      return { ok: false, reason: `Der Spot ${spot.name} ist noch nicht freigeschaltet.` };
     const city = spotCity(spot);
     if (spotsCity !== null && city !== spotsCity) {
       return { ok: false, reason: 'Die Spots eines Leutnants liegen alle in einer Stadt.' };
@@ -439,13 +440,13 @@ export function checkSpots(state: GameState, staffId: string, spotIds: readonly 
     if (member && memberCity !== city) {
       return {
         ok: false,
-        reason: `${member.name} ist in ${cityName(memberCity ?? 'koeln')}, der ${spot.name} liegt in ${cityName(city)}.`,
+        reason: `${member.name} ist in ${cityName(memberCity ?? 'koeln')}, der Spot ${spot.name} liegt in ${cityName(city)}.`,
       };
     }
     const other = lieutenantOfSpot(state, spotId);
     if (other && other !== staffId) {
       const name = getStaffMember(state, other)?.name ?? 'einem anderen Leutnant';
-      return { ok: false, reason: `Den ${spot.name} führt schon ${name}.` };
+      return { ok: false, reason: `Den Spot ${spot.name} führt schon ${name}.` };
     }
   }
   return { ok: true };
@@ -1050,8 +1051,8 @@ export default defineModule({
         if (hit.length === 0) continue;
         const kind = scope === 'major' ? 'Großrazzia' : scope === 'spot' ? 'Razzia am Spot' : 'Razzia';
         const text = empty
-          ? `${kind} am ${hit[0].name}, aber wir waren weg.`
-          : `${kind} am ${hit[0].name}. ${arrested?.length ? `${arrested.length} festgenommen.` : 'Keiner festgenommen.'}`;
+          ? `${kind} ${atSpot(hit[0])}, aber wir waren weg.`
+          : `${kind} ${atSpot(hit[0])}. ${arrested?.length ? `${arrested.length} festgenommen.` : 'Keiner festgenommen.'}`;
         post.log.unshift({ time: ctx.now, text });
       }
     },

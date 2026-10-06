@@ -28,7 +28,7 @@ import {
 } from '../../../ui';
 import { activeCity, isBusinessSold } from '../../city';
 import { getGang } from '../../gangs';
-import { getSpot } from '../../spots';
+import { atSpot, getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
 import { controllerOf, PLAYER_FACTION } from '../../territory';
 import { getVeedel, veedelCity, veedelName } from '../../veedel';
@@ -308,7 +308,7 @@ onGameEvent('police.raid', 'police.toast.raid', (payload, ui, state) => {
     payload.scope === 'major'
       ? `Großrazzia in ${(payload.veedelIds ?? [payload.veedelId]).map(veedelName).join(', ')}!`
       : spot
-        ? `Razzia am ${spot.name}!`
+        ? `Razzia ${atSpot(spot)}!`
         : `Razzia in ${veedelName(payload.veedelId)}!`;
   ui.toast(payload.empty ? `${title.slice(0, -1)}: niemand da.` : title, payload.empty ? 'info' : 'bad');
 });

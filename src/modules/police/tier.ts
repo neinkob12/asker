@@ -146,7 +146,7 @@ export function nextTierHints(state: GameState, tier: number, cityId: string = a
   const berth: TierHintPart = { label: f.berth ? 'Liegeplatz' : 'kein Liegeplatz', met: f.berth };
   if (tier === 0) {
     return [
-      { label: 'ein Veedel unter deiner Kontrolle', parts: [part(f.veedel, DEALER_UP.veedel, 'Veedel')] },
+      { label: 'ein eigenes Veedel', parts: [part(f.veedel, DEALER_UP.veedel, 'Veedel')] },
       { label: `${DEALER_UP.spots} besetzte Spots`, parts: [part(f.spots, DEALER_UP.spots, 'Spots')] },
       { label: `${DEALER_UP.people} Leute im Einsatz`, parts: [part(f.people, DEALER_UP.people, 'Leute')] },
       { label: 'ein Leutnant', parts: [part(f.lieutenants, DEALER_UP.lieutenants, 'Leutnant')] },
@@ -163,7 +163,7 @@ export function nextTierHints(state: GameState, tier: number, cityId: string = a
   if (tier === 1) {
     return [
       {
-        label: `${KINGPIN_UP_VEEDEL} Veedel und ${KINGPIN_MIN_PEOPLE} Leute im Einsatz`,
+        label: `${KINGPIN_UP_VEEDEL} Veedel, ${KINGPIN_MIN_PEOPLE} Leute im Einsatz`,
         parts: [part(f.veedel, KINGPIN_UP_VEEDEL, 'Veedel'), part(f.people, KINGPIN_MIN_PEOPLE, 'Leute')],
       },
       {

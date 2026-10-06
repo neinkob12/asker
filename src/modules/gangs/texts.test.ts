@@ -12,9 +12,19 @@ const VARS = {
   amount: '100 g',
   price: '400 €',
   enemy: 'Rivalen',
-  spot: 'Ebertplatz',
+  spot: 'Uni-Wiese',
+  atSpot: 'auf der Uni-Wiese',
+  AtSpot: 'Auf der Uni-Wiese',
   warehouse: 'Lager Ehrenfeld',
 };
+
+/** Ein Artikel oder „am“ fest vor dem Spot-Namen passt nicht zu jedem Spot („am Uni-Wiese“, J4): {atSpot} nehmen. */
+const ARTICLE_BEFORE_SPOT =
+  /\b(am|Am|an|An|der|Der|den|dem|deinem|deinen|dein|Dein|Ihr|Ihren|Ihrem|vom|im|Da)\s\{spot\}/;
+
+/** Nennt die Variante den Spot (als Name oder als Wendung)? */
+const mentions = (text: string, name: string) =>
+  name === 'spot' ? /\{(spot|atSpot|AtSpot)\}/.test(text) : text.includes(`{${name}}`);
 
 describe('Gang-Stimmen', () => {
   it('jede Gang hat für jeden Anlass mindestens fünf eigene Varianten', () => {
@@ -32,7 +42,10 @@ describe('Gang-Stimmen', () => {
   it('alle Platzhalter werden ersetzt', () => {
     for (const [id, voice] of Object.entries(GANG_VOICES)) {
       for (const [key, list] of Object.entries(voice)) {
-        for (const text of list) expect(fillText(text, VARS), `${id}:${key}`).not.toMatch(/\{\w*\}/);
+        for (const text of list) {
+          expect(fillText(text, VARS), `${id}:${key}`).not.toMatch(/\{\w*\}/);
+          expect(text, `${id}:${key}`).not.toMatch(ARTICLE_BEFORE_SPOT);
+        }
       }
     }
   });
@@ -57,7 +70,9 @@ describe('Texte zu Vorfällen (Nachbarin, Abwerben, Einschüchtern)', () => {
     gang: 'Hafenkolonne',
     name: 'Kalle',
     extra: '30 €',
-    spot: 'Ebertplatz',
+    spot: 'Landungsbrücken',
+    atSpot: 'an den Landungsbrücken',
+    AtSpot: 'An den Landungsbrücken',
   };
   /** Platzhalter, die in jeder Variante eines Anlasses vorkommen müssen. */
   const needs: Record<keyof typeof INCIDENT_TEXTS, string[]> = {
@@ -79,8 +94,9 @@ describe('Texte zu Vorfällen (Nachbarin, Abwerben, Einschüchtern)', () => {
   it('jede Variante nennt, was sie braucht, und alle Platzhalter werden ersetzt', () => {
     for (const [key, list] of Object.entries(INCIDENT_TEXTS) as [keyof typeof INCIDENT_TEXTS, readonly string[]][]) {
       for (const text of list) {
-        for (const name of needs[key]) expect(text, `${key}: {${name}}`).toContain(`{${name}}`);
+        for (const name of needs[key]) expect(mentions(text, name), `${key}: {${name}} in ${text}`).toBe(true);
         expect(fillText(text, vars), key).not.toMatch(/\{\w*\}/);
+        expect(text, key).not.toMatch(ARTICLE_BEFORE_SPOT);
       }
     }
   });

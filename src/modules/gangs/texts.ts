@@ -25,7 +25,10 @@ export type GangTextKey =
   | 'protectionRefused'
   | 'offer'
   | 'allianceOffer'
-  /** Auftrag 23: Gang-Leute stehen an deinem Spot ({spot}). */
+  /**
+   * Auftrag 23: Gang-Leute stehen an deinem Spot ({spot} der Name, {atSpot}/{AtSpot} „am Ebertplatz“ bzw. „An der
+   * Uni-Wiese“ am Satzanfang; nie „am {spot}“, J4).
+   */
   | 'intimidation'
   /** Auftrag 23: Tipp an die Polizei über dich ({veedel}). */
   | 'tipOff'
@@ -122,11 +125,11 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Feind von meinem Feind und so. {enemy}. {price}. Ja oder nein.',
     ],
     intimidation: [
-      'Meine Jungs stehen jetzt am {spot}. Mal sehen, wer da noch kauft.',
-      'Jupp hier. Am {spot} is ab heut Kolonne. Deine Kunden haben Angst, dat versteh ich.',
-      'Am {spot} stehen jetzt fünf Kerle mit Hafenjacke. Rate mal, für wen.',
-      'Wir passen ab jetzt auf deinen {spot} auf. Keiner kauft, solang wir gucken.',
-      'Kleiner Besuch am {spot}. Die Kundschaft bleibt heute lieber weg.',
+      'Meine Jungs stehen jetzt {atSpot}. Mal sehen, wer da noch kauft.',
+      'Jupp hier. {AtSpot} is ab heut Kolonne. Deine Kunden haben Angst, dat versteh ich.',
+      '{AtSpot} stehen jetzt fünf Kerle mit Hafenjacke. Rate mal, für wen.',
+      'Wir passen ab jetzt {atSpot} auf. Keiner kauft, solang wir gucken.',
+      'Kleiner Besuch {atSpot}. Die Kundschaft bleibt heute lieber weg.',
     ],
     tipOff: [
       'Hab den Bullen nen Tipp über {veedel} gegeben. Is nich unser Stil, aber du nervst.',
@@ -244,11 +247,11 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Strategische Kooperation, Ziel {enemy}, Kostenanteil {price}. Frau Schrader erwartet Ihre Antwort.',
     ],
     intimidation: [
-      'Frau Schrader hat zwei Herren an Ihren {spot} geschickt. Sie stehen dort einfach. Das reicht meist.',
-      'Am {spot} beobachten unsere Mitarbeiter ab sofort die Kundschaft. Die Kundschaft beobachtet zurück und geht.',
-      'Wir haben am {spot} Präsenz gezeigt. Diskret, aber unübersehbar.',
-      'Ihr {spot} wird heute von uns betreut. Ihre Kunden schätzen das weniger.',
-      'Im Auftrag: Am {spot} stehen unsere Leute. Bis auf Weiteres.',
+      'Frau Schrader hat zwei Herren geschickt. Sie stehen {atSpot} einfach herum. Das reicht meist.',
+      '{AtSpot} beobachten unsere Mitarbeiter ab sofort die Kundschaft. Die Kundschaft beobachtet zurück und geht.',
+      'Wir haben {atSpot} Präsenz gezeigt. Diskret, aber unübersehbar.',
+      '{AtSpot} betreuen heute wir. Ihre Kunden schätzen das weniger.',
+      'Im Auftrag: {AtSpot} stehen unsere Leute. Bis auf Weiteres.',
     ],
     tipOff: [
       'Frau Schrader hat einem Bekannten im Präsidium von {veedel} erzählt. Rein zufällig.',
@@ -366,11 +369,11 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Gemeinsam gegen {enemy}, Bruder? {price} und die Schäl Sick steht hinter dir.',
     ],
     intimidation: [
-      'Bruder, am {spot} stehen jetzt meine Jungs. Zwanzig Stück. Viel Spaß beim Verkaufen.',
-      'Kalle hat am {spot} nen Stand aufgemacht. Direkt neben dir. Halber Preis.',
-      'Ey, dein {spot}? Is jetzt voll mit uns. Kunden kommen da nich mehr durch.',
-      'Wir chillen jetzt am {spot}. Deine Kunden finden dat nich so chillig.',
-      'Am {spot} gibt et jetzt Masse. Unsere Masse.',
+      'Bruder, {atSpot} stehen jetzt meine Jungs. Zwanzig Stück. Viel Spaß beim Verkaufen.',
+      'Kalle hat {atSpot} nen Stand aufgemacht. Direkt neben dir. Halber Preis.',
+      'Ey, dein Spot {spot}? Is jetzt voll mit uns. Kunden kommen da nich mehr durch.',
+      'Wir chillen jetzt {atSpot}. Deine Kunden finden dat nich so chillig.',
+      '{AtSpot} gibt et jetzt Masse. Unsere Masse.',
     ],
     tipOff: [
       'Ey, hab den Bullen gesteckt, wat in {veedel} läuft. Konkurrenz belebt dat Geschäft, wa?',
@@ -488,11 +491,11 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Man könnte {enemy} gemeinsam beschneiden. Kosten für Sie: {price}.',
     ],
     intimidation: [
-      'Am {spot} stehen nun Herren in guten Mänteln. Sie sagen nichts. Ihre Kunden verstehen trotzdem.',
-      'Der Doktor hat am {spot} Präsenz angeordnet. Leise, aber wirksam.',
-      'Ihr {spot} ist heute nicht der richtige Ort für Geschäfte. Das haben wir dafür gesorgt.',
-      'Zwei unserer Leute beobachten Ihren {spot}. Die Kundschaft spürt das.',
-      'Der Kreis hat sich Ihren {spot} angesehen. Er bleibt dort eine Weile.',
+      '{AtSpot} stehen nun Herren in guten Mänteln. Sie sagen nichts. Ihre Kunden verstehen trotzdem.',
+      'Der Doktor hat {atSpot} Präsenz angeordnet. Leise, aber wirksam.',
+      'Ihr Spot {spot} ist heute nicht der richtige Ort für Geschäfte. Dafür haben wir gesorgt.',
+      'Zwei unserer Leute beobachten Ihren Spot {spot}. Die Kundschaft spürt das.',
+      'Der Kreis hat sich Ihren Spot {spot} angesehen. Er bleibt dort eine Weile.',
     ],
     tipOff: [
       'Dr. Aldenhoven hat beim Golf erwähnt, was in {veedel} vor sich geht. Der Polizeipräsident hört gut zu.',
@@ -610,11 +613,11 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Gemeinsam räumen wir {enemy} von der Straße. Kostet dich {price}.',
     ],
     intimidation: [
-      'Meine Türsteher stehen jetzt an deinem {spot}. Wer reinwill, muss an denen vorbei.',
-      'Rocco hier. Am {spot} ist ab heute Gesichtskontrolle. Deine Kunden fallen durch.',
-      'Der {spot} hat jetzt Security. Unsere.',
-      'Heute nicht. Sagt der Portier am {spot} zu deinen Kunden.',
-      'Am {spot} läuft jetzt unsere Tür. Viel Glück.',
+      'Meine Türsteher stehen jetzt {atSpot}. Wer reinwill, muss an denen vorbei.',
+      'Rocco hier. {AtSpot} ist ab heute Gesichtskontrolle. Deine Kunden fallen durch.',
+      '{AtSpot} gibt’s jetzt Security. Unsere.',
+      'Heute nicht. Sagt der Portier {atSpot} zu deinen Kunden.',
+      '{AtSpot} läuft jetzt unsere Tür. Viel Glück.',
     ],
     tipOff: [
       'Hab der Davidwache einen Tipp zu {veedel} gegeben. Wir kennen da ja alle.',
@@ -732,11 +735,11 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Zusammen versenken wir {enemy}. {price}.',
     ],
     intimidation: [
-      'Die Containerjungs stehen jetzt an deinem {spot}. Mit Hafenhaken.',
-      'Brecher hier. Am {spot} ist jetzt Hafen. Deine Kunden schwimmen weg.',
-      'Am {spot} parkt jetzt unser Gabelstapler. Ziemlich im Weg.',
-      'Wir stehen am {spot}. Mal sehen, wer sich traut.',
-      'Dein {spot} ist heute dicht. Wegen uns.',
+      'Die Containerjungs stehen jetzt {atSpot}. Mit Hafenhaken.',
+      'Brecher hier. {AtSpot} ist jetzt Hafen. Deine Kunden schwimmen weg.',
+      '{AtSpot} parkt jetzt unser Gabelstapler. Ziemlich im Weg.',
+      'Wir stehen {atSpot}. Mal sehen, wer sich traut.',
+      'Dein Spot {spot} ist heute dicht. Wegen uns.',
     ],
     tipOff: [
       'Hab der Wasserschutzpolizei was über {veedel} erzählt. Die freuen sich über Arbeit.',
@@ -854,11 +857,11 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Wir organisieren uns gegen {enemy}. Mach mit, für {price}.',
     ],
     intimidation: [
-      'Das Kollektiv hat eine Mahnwache an deinem {spot} angemeldet. Mit Transparent.',
-      'Merle hier. Am {spot} steht jetzt das halbe Plenum. Deine Kunden fühlen sich beobachtet.',
-      'Wir machen am {spot} eine Aktion. Deine Geschäfte stören dabei.',
-      'Am {spot} läuft jetzt Aufklärungsarbeit. Gegen dich.',
-      'Unser Infostand steht jetzt an deinem {spot}.',
+      'Das Kollektiv hat eine Mahnwache {atSpot} angemeldet. Mit Transparent.',
+      'Merle hier. {AtSpot} steht jetzt das halbe Plenum. Deine Kunden fühlen sich beobachtet.',
+      'Wir machen {atSpot} eine Aktion. Deine Geschäfte stören dabei.',
+      '{AtSpot} läuft jetzt Aufklärungsarbeit. Gegen dich.',
+      'Unser Infostand steht jetzt {atSpot}.',
     ],
     tipOff: [
       'Das Plenum hat beschlossen, der Polizei von {veedel} zu erzählen. Ausnahmsweise.',
@@ -976,11 +979,11 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Gemeinsam gegen {enemy}, für {price}. Der Club stellt das Personal.',
     ],
     intimidation: [
-      'Der Club hat an Ihrem {spot} Personal postiert. Teures Personal.',
-      'Herr Brodersen-Lüth lässt Ihren {spot} beobachten. Ihre Kundschaft fühlt sich unwohl.',
-      'Am {spot} stehen jetzt unsere Herren. Sie sind nicht zum Einkaufen da.',
-      'Ihr {spot} ist bis auf Weiteres unser Spot.',
-      'Der Club hat Ihren {spot} gebucht. Exklusiv.',
+      'Der Club hat {atSpot} Personal postiert. Teures Personal.',
+      'Herr Brodersen-Lüth lässt Ihren Spot {spot} beobachten. Ihre Kundschaft fühlt sich unwohl.',
+      '{AtSpot} stehen jetzt unsere Herren. Sie sind nicht zum Einkaufen da.',
+      '{AtSpot} stehen bis auf Weiteres wir.',
+      'Der Club hat Ihren Spot {spot} gebucht. Exklusiv.',
     ],
     tipOff: [
       'Unser Anwalt hat der Staatsanwaltschaft von {veedel} berichtet.',
@@ -1039,7 +1042,7 @@ export function gangVariants(gangId: string, key: GangTextKey): readonly string[
 /**
  * Texte zu Gang-Aktionen, die nicht der Boss schreibt (Auftrag 23): die Nachbarin am Lager meldet Einbrüche, deine
  * Leute melden Abwerbeversuche und Gang-Leute am Spot. Platzhalter: {warehouse}, {goods}, {gang}, {name}, {extra},
- * {spot}.
+ * {spot}, {atSpot}, {AtSpot} (siehe spotVars in spots).
  */
 export const INCIDENT_TEXTS = {
   burglaryGang: [
@@ -1077,10 +1080,10 @@ export const INCIDENT_TEXTS = {
     '{gang} zahlt {extra} mehr am Tag. Nur damit du Bescheid weißt.',
   ],
   intimidationReport: [
-    'Chef, am {spot} stehen Leute von {gang}. Die Kunden trauen sich nicht mehr her.',
-    'Hier am {spot} hängen fünf von {gang} rum. Keiner kauft mehr.',
-    'Ärger am {spot}: {gang} steht da und glotzt jeden Kunden an.',
-    '{gang} hat sich am {spot} breitgemacht. Ich verkauf hier gerade gar nichts.',
-    'Am {spot} ist {gang}. Die schicken meine Kunden weg.',
+    'Chef, {atSpot} stehen Leute von {gang}. Die Kunden trauen sich nicht mehr her.',
+    'Hier {atSpot} hängen fünf von {gang} rum. Keiner kauft mehr.',
+    'Ärger {atSpot}: {gang} steht da und glotzt jeden Kunden an.',
+    '{gang} hat sich {atSpot} breitgemacht. Ich verkauf hier gerade gar nichts.',
+    '{AtSpot} ist {gang}. Die schicken meine Kunden weg.',
   ],
 } as const;

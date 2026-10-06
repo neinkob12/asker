@@ -31,7 +31,7 @@
 import { type CommandResult, type Ctx, defineModule, type GameState, journal } from '../../core';
 import { cityName, cityOfSpot, isPlayerIn } from '../city';
 import { getStock } from '../goods';
-import { getSpot, getSpots, isSpotActive } from '../spots';
+import { atSpot, getSpot, getSpots, isSpotActive } from '../spots';
 import type { DealerStageId } from './config';
 import { CUSTOMER_TYPES, HANDOVER_MINUTES, WHOLESALE_HANDOVER_MINUTES } from './config';
 import { type DealerRelation, setExclusive, setMiddleman } from './dealers';
@@ -425,7 +425,7 @@ function standAt(ctx: Ctx, spotId: string | null): CommandResult {
     if (!self.spotId) return { ok: true };
     const spot = getSpot(ctx.state, self.spotId);
     self.spotId = null;
-    journal.add(ctx, `Du gehst vom ${spot?.name ?? 'Spot'} weg.`);
+    journal.add(ctx, spot ? `Du gehst vom Spot ${spot.name} weg.` : 'Du gehst vom Spot weg.');
     ctx.emit('customers.selfMoved', { spotId: null });
     return { ok: true };
   }
@@ -442,7 +442,7 @@ function standAt(ctx: Ctx, spotId: string | null): CommandResult {
   self.busyUntil = Math.min(self.busyUntil, ctx.now);
   journal.add(
     ctx,
-    `Du stellst dich an den ${spot.name} und verkaufst selbst.` +
+    `Du stehst jetzt ${atSpot(spot)} und verkaufst selbst.` +
       (isPlayerAway(ctx.state) ? ' Sobald du von deiner Fahrt zurück bist.' : ''),
     'info',
     { spotId },

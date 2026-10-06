@@ -179,6 +179,7 @@ export const PRESET_SPOTS_MUENCHEN: readonly PresetSpot[] = [
   {
     id: 'froettmaning',
     name: 'Fröttmaning (Arena)',
+    at: 'an der Arena in Fröttmaning',
     lng: 11.6232,
     lat: 48.2112,
     demand: 0.6,
@@ -229,6 +230,7 @@ export const PRESET_SPOTS_MUENCHEN: readonly PresetSpot[] = [
   {
     id: 'olympiadorf',
     name: 'Olympiadorf',
+    at: 'im Olympiadorf',
     lng: 11.55,
     lat: 48.1805,
     demand: 1.1,
