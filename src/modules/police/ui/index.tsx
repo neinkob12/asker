@@ -28,7 +28,7 @@ import {
 } from '../../../ui';
 import { activeCity, isBusinessSold } from '../../city';
 import { getGang } from '../../gangs';
-import { getSpot } from '../../spots';
+import { atSpot, getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
 import { controllerOf, PLAYER_FACTION } from '../../territory';
 import { getVeedel, veedelCity, veedelName } from '../../veedel';
@@ -253,9 +253,19 @@ function PoliceCard() {
           note="Eines davon reicht. Wer größer wird, bekommt härtere Razzien."
         >
           <List>
+            {/* Bedingung als Titel, der Stand darunter als Chips: Rechts neben dem Titel war am Handy kein Platz (J7). */}
             {hints.map((h) => (
-              <ListItem key={h.label} value={h.value}>
-                <ItemContent icon="arrowUp" color="warn" title={h.label} />
+              <ListItem key={h.label}>
+                <ItemContent
+                  icon="arrowUp"
+                  color="warn"
+                  title={h.label}
+                  tags={h.parts.map((p) => ({
+                    label: p.label,
+                    icon: p.met ? 'checkCircle' : undefined,
+                    color: p.met ? 'money' : 'system',
+                  }))}
+                />
               </ListItem>
             ))}
           </List>
@@ -298,7 +308,7 @@ onGameEvent('police.raid', 'police.toast.raid', (payload, ui, state) => {
     payload.scope === 'major'
       ? `Großrazzia in ${(payload.veedelIds ?? [payload.veedelId]).map(veedelName).join(', ')}!`
       : spot
-        ? `Razzia am ${spot.name}!`
+        ? `Razzia ${atSpot(spot)}!`
         : `Razzia in ${veedelName(payload.veedelId)}!`;
   ui.toast(payload.empty ? `${title.slice(0, -1)}: niemand da.` : title, payload.empty ? 'info' : 'bad');
 });

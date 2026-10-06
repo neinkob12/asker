@@ -417,7 +417,7 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier' 
   journal.add(
     ctx,
     `${name} ${courierId ? 'bringt' : 'bringst'} ${formatProductAmount(order.productId, order.amount)} ` +
-      `${productName(order.productId)} zu ${order.contactName}, Ankunft in ca. ${clock.formatDuration(order.arrivesAt - ctx.now)}.` +
+      `${productName(order.productId)} zu ${order.contactName}, Ankunft in ca. ${clock.formatDuration(order.arrivesAt - ctx.now)}` +
       (detour ? ' Hat sich erst mal verfahren.' : ''),
   );
   ctx.emit('order.accepted', { orderId: order.id, kind: order.kind, by: who, courierId });

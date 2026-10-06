@@ -45,7 +45,11 @@ const PAGES: readonly IntroPage[] = [
       },
       { icon: 'pin', color: 'place', text: 'An Spots auf der Karte verkaufen, erst selbst, dann mit Läufern.' },
       { icon: 'crew', color: 'people', text: 'Leute anheuern: Fahrer, Leutnants und eine Rechte Hand.' },
-      { icon: 'flag', color: 'brand', text: 'Veedel übernehmen. Sieben davon, und Köln gehört dir.' },
+      {
+        icon: 'flag',
+        color: 'brand',
+        text: 'Veedel übernehmen. Mit sieben bist du der Boss von Köln, mit allen zwölf gehört dir die Stadt.',
+      },
     ],
   },
   {

@@ -108,6 +108,53 @@ describe('Ankommen in Hamburg (Auftrag 30)', () => {
     expect(eventsOfType(events, 'city.arrived').filter((e) => e.payload.first)).toHaveLength(1);
   });
 
+  it('Ankunft (J14): alte Chats eingeklappt, Fragen der alten Stadt erledigt, nur Angebote der Städte bleiben offen', () => {
+    const sim = quietGame();
+    handOverKoeln(sim);
+    const ctx = sim.ctx('test');
+    const gang = messages.send(ctx, { contact: { id: 'gang:test', name: 'Testgang', kind: 'gang' }, text: 'Revier.' });
+    // Rückfrage zu einer Kölner Lieferung (Rhein-Niedrigwasser), Hafen-Frage von Fiete, Angebot einer Stadt.
+    const supplier = { id: 'supplier:rotterdam', name: 'Jansen (Hafen Rotterdam)', kind: 'supplier' as const };
+    const delay = messages.send(ctx, {
+      contact: supplier,
+      text: 'Niedrigwasser. Ihre Anweisung?',
+      options: [{ id: 'wait', label: 'Abwarten' }],
+      expiresIn: 600,
+    });
+    const port = messages.send(ctx, {
+      contact: HARBOR_CALLER,
+      text: 'Container ist da.',
+      options: [
+        {
+          id: 'self',
+          label: 'Ich hol ihn',
+          command: { type: 'logistics.pickup', payload: { by: 'player', cargoIds: [] } },
+        },
+      ],
+      expiresIn: 600,
+    });
+    const offer = messages.send(ctx, {
+      contact: HARBOR_CALLER,
+      text: 'Ruf mal an.',
+      options: [
+        { id: 'call', label: 'Anrufen', command: { type: 'city.requestCall', payload: { cityId: 'hamburg' } } },
+      ],
+    });
+    arriveInHamburg(sim);
+    const open = (id: number) => {
+      const m = messages.get(sim.state, id);
+      return !!m && messages.canAnswer(sim.state, m);
+    };
+    expect(open(delay)).toBe(false);
+    expect(open(port)).toBe(false);
+    expect(open(offer)).toBe(true);
+    // Die Kölner Chats stehen eingeklappt unten, Fietes Begrüßung danach nicht.
+    expect(sim.state.messages.archive?.label).toBe('Vor der Fahrt nach Hamburg');
+    expect(messages.isArchived(sim.state, gang)).toBe(true);
+    const welcome = messages.thread(sim.state, HARBOR_CALLER.id).at(-1);
+    expect(welcome && messages.isArchived(sim.state, welcome.id)).toBe(false);
+  });
+
   it('Aufenthalt: Selbst am Spot stehen, ausfahren und abholen nur in der Stadt, in der du bist', () => {
     const sim = quietGame();
     handOverKoeln(sim);

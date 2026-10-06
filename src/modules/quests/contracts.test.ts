@@ -5,14 +5,22 @@ import { clock, loadSimulation, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getRelation } from '../suppliers';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
-import { CONTRACT_CONTACTS, CONTRACT_TEMPLATES, contractRewards, contractTarget } from './contracts';
+import {
+  CONTRACT_CONTACTS,
+  CONTRACT_TEMPLATES,
+  CONTRACTS_FROM_CHAPTER,
+  contractRewards,
+  contractTarget,
+} from './contracts';
 import {
   activeContract,
   canAcceptContract,
   contractOffers,
   contractProgress,
   contractStats,
+  contractsOpen,
   contractValue,
+  currentQuest,
 } from './index';
 
 /** Tag 1 ist ein Freitag, Tag 4 der erste Montag. */
@@ -21,6 +29,20 @@ const NEXT_MONDAY = clock.at(11);
 
 function untilOffers(sim: Simulation): void {
   sim.advance(MONDAY_8 - sim.state.time);
+}
+
+/** Peters erstes Kapitel überspringen: Erst danach gibt es Verträge (J15). */
+function finishFirstChapter(sim: Simulation): void {
+  while ((currentQuest(sim.state)?.chapter ?? CONTRACTS_FROM_CHAPTER) < CONTRACTS_FROM_CHAPTER) {
+    sim.dispatch({ type: 'quests.skip', payload: {} });
+  }
+}
+
+/** Testspiel, in dem es schon Verträge gibt. */
+function game(seed?: number): Simulation {
+  const sim = createTestGame(seed === undefined ? {} : { seed });
+  finishFirstChapter(sim);
+  return sim;
 }
 
 describe('quests: Wochenverträge', () => {
@@ -39,7 +61,7 @@ describe('quests: Wochenverträge', () => {
   });
 
   it('Montag 8 Uhr: drei Angebote von drei Figuren, per Handy', () => {
-    const sim = createTestGame({ seed: 2 });
+    const sim = game(2);
     const events = recordEvents(sim);
     sim.advance(MONDAY_8 - sim.state.time - 1);
     expect(contractOffers(sim.state)).toHaveLength(0);
@@ -57,8 +79,22 @@ describe('quests: Wochenverträge', () => {
     expect(eventsOfType(events, 'contract.offered')).toHaveLength(1);
   });
 
-  it('einer wird angenommen, die anderen Angebote sind dann weg', () => {
+  it('erst nach Peters erstem Kapitel (J15): am ersten Montag ohne, am Montag danach mit Angeboten', () => {
     const sim = createTestGame({ seed: 2 });
+    untilOffers(sim);
+    expect(contractsOpen(sim.state)).toBe(false);
+    expect(contractOffers(sim.state)).toHaveLength(0);
+    finishFirstChapter(sim);
+    expect(contractsOpen(sim.state)).toBe(true);
+    // Mitten in der Woche kommt nichts nach, erst wieder am Montag.
+    sim.advance(60 * 24);
+    expect(contractOffers(sim.state)).toHaveLength(0);
+    sim.advance(NEXT_MONDAY + 8 * 60 - sim.state.time);
+    expect(contractOffers(sim.state)).toHaveLength(3);
+  });
+
+  it('einer wird angenommen, die anderen Angebote sind dann weg', () => {
+    const sim = game(2);
     untilOffers(sim);
     const [first, second] = contractOffers(sim.state);
     const answered = sim.dispatch({
@@ -75,7 +111,7 @@ describe('quests: Wochenverträge', () => {
   });
 
   it('Umsatz-Vertrag: Verkäufe zählen, bei Erfolg Belohnung und Vertrauen beim Lieferanten', () => {
-    const sim = createTestGame({ seed: 2 });
+    const sim = game(2);
     untilOffers(sim);
     const offer = contractOffers(sim.state)[0];
     // Den Umsatz-Vertrag erzwingen, damit der Test genau zählen kann.
@@ -136,7 +172,7 @@ describe('quests: Wochenverträge', () => {
   });
 
   it('„Ein Veedel dazugewinnen“ zählt ab dem Annehmen, nicht ab dem Angebot', () => {
-    const sim = createTestGame({ seed: 2 });
+    const sim = game(2);
     untilOffers(sim);
     const offer = contractOffers(sim.state)[0];
     // Angebot am Montag mit 0 Veedel, inzwischen hält der Spieler eins.
@@ -153,7 +189,7 @@ describe('quests: Wochenverträge', () => {
   });
 
   it('nicht mehr schaffbare Verträge lassen sich nicht annehmen', () => {
-    const sim = createTestGame({ seed: 2 });
+    const sim = game(2);
     untilOffers(sim);
     const [first, second] = contractOffers(sim.state);
     // Serie mit 120 Stunden, aber nur noch knapp sechs Tage bis Sonntag.
@@ -166,7 +202,7 @@ describe('quests: Wochenverträge', () => {
   });
 
   it('läuft die Frist ab, platzt der Vertrag, und am Montag kommen neue Angebote', () => {
-    const sim = createTestGame({ seed: 2 });
+    const sim = game(2);
     untilOffers(sim);
     const offer = contractOffers(sim.state)[0];
     Object.assign(offer, { templateId: 'revenue', target: 10_000_000 });
@@ -181,7 +217,7 @@ describe('quests: Wochenverträge', () => {
   });
 
   it('Angebote ohne Antwort verfallen am Ende der Woche', () => {
-    const sim = createTestGame({ seed: 2 });
+    const sim = game(2);
     untilOffers(sim);
     const ids = contractOffers(sim.state).map((o) => o.id);
     sim.advance(NEXT_MONDAY - sim.state.time + 60);
@@ -190,7 +226,7 @@ describe('quests: Wochenverträge', () => {
 
   it('gleicher Seed, gleiche Angebote; der Wert eines Angebots ist positiv', () => {
     const offers = () => {
-      const sim = createTestGame({ seed: 9 });
+      const sim = game(9);
       untilOffers(sim);
       return contractOffers(sim.state);
     };
@@ -208,6 +244,7 @@ describe('quests: Wochenverträge', () => {
     delete raw.modules.quests.contracts;
     raw.moduleVersions.quests = 2;
     const loaded = loadSimulation(raw, sim.modules);
+    finishFirstChapter(loaded);
     expect(loaded.state.modules.quests.contracts).toEqual({
       offers: [],
       active: null,

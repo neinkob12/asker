@@ -7,7 +7,14 @@
 
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
-import { formatEuro, type GameState, MONEY_CATEGORIES, type MoneyCategory, type MoneyGroup } from '../../../core';
+import {
+  formatDays,
+  formatEuro,
+  type GameState,
+  MONEY_CATEGORIES,
+  type MoneyCategory,
+  type MoneyGroup,
+} from '../../../core';
 import {
   Chip,
   Disclosure,
@@ -34,7 +41,7 @@ import {
 } from '../../../ui';
 import { activeCity, citiesUnlocked, cityName, cityOfSpot, isBusinessSold } from '../../city';
 import { getLieutenantIds, lieutenantOfSpot } from '../../hierarchy';
-import { getSpot } from '../../spots';
+import { atSpot, getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
 import { veedelName } from '../../veedel';
 import {
@@ -348,7 +355,8 @@ function PerSpot(props: { period: Period; filter: FinanceFilter; onPick: (f: Fin
   if (rows.length === 0) return null;
   // spotResults liefert das schwächste zuerst: Das Betriebsergebnis (ohne einmalige Kosten) entscheidet, wer "kostet".
   const worst = rows.find((r) => r.result < 0 && r.wages > 0);
-  const worstName = worst ? (getSpot(state, worst.spotId)?.name ?? worst.spotId) : null;
+  const worstSpot = worst ? getSpot(state, worst.spotId) : undefined;
+  const worstName = worst ? (worstSpot ? atSpot(worstSpot) : `am Spot ${worst.spotId}`) : null;
   const oneOff = rows.some((r) => r.invest > 0);
   return (
     <Group
@@ -358,7 +366,7 @@ function PerSpot(props: { period: Period; filter: FinanceFilter; onPick: (f: Fin
       count={rows.length}
       note={
         worstName
-          ? `Die Leute am ${worstName} kosten mehr, als sie bringen.`
+          ? `Die Leute ${worstName} kosten mehr, als sie bringen.`
           : oneOff
             ? 'Ergebnis = Umsatz − Ware − Löhne − Anheuern.'
             : 'Ergebnis = Umsatz − Ware − Löhne.'
@@ -438,12 +446,14 @@ function Runway() {
             color={runway.warn ? 'warn' : 'people'}
             title="Löhne heute Nacht"
             meta={
-              runway.warn ? 'Wer kein Geld kriegt, geht.' : `Die Kasse reicht für ${runway.days} Tage (ohne Einnahmen).`
+              runway.warn
+                ? 'Wer kein Geld kriegt, geht.'
+                : `Die Kasse reicht für ${formatDays(runway.days)} (ohne Einnahmen).`
             }
           >
             {runway.warn && (
               <Tag category="warn" icon="alert">
-                {runway.days === 1 ? 'reicht 1 Tag' : `reicht ${runway.days} Tage`}
+                reicht {formatDays(runway.days)}
               </Tag>
             )}
           </ItemContent>

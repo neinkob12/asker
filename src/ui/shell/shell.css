@@ -1102,6 +1102,12 @@ kbd {
     gap: 2px;
     padding: var(--space-2) var(--space-3);
   }
+  /* Text und Zusatz (Leiste, Revierzahl) bleiben in der Kachel: Ohne diese Grenze war der Textblock so breit wie sein
+     Inhalt, „255 g Gras + 3 weitere“ lief unter die Nachbarkachel, statt mit … zu enden (J1). */
+  .hud-tiles .hud-pill > :not(.hud-pill__chip) {
+    max-width: 100%;
+    min-width: 0;
+  }
   .hud-tiles .hud-pill__value {
     max-width: 100%;
     overflow: hidden;

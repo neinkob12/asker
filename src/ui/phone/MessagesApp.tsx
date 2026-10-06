@@ -40,6 +40,7 @@ import {
   groupChats,
   lookOf,
   recentContacts,
+  shortContactName,
 } from './messagesModel';
 import { PhoneScreen } from './PhoneScreen';
 
@@ -84,7 +85,7 @@ function RecentRow(props: { chats: ChatListItem[] }) {
               look={c.look}
               tone={CONTACT_KIND_TONES[c.kind]}
             />
-            <span class="msg-recent__name">{c.name.split(' ')[0]}</span>
+            <span class="msg-recent__name">{shortContactName(c)}</span>
             <Badge count={c.unread} />
           </button>
         </li>

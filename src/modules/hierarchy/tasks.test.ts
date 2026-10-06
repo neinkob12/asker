@@ -106,7 +106,8 @@ describe('Rechte Hand: Aufgaben (Auftrag 28)', () => {
     // Der Chat zeigt die Zusage im Namen der Rechten Hand.
     const thread = messages.thread(sim.state, order.contactId);
     expect(thread.at(-1)).toMatchObject({ from: 'player', via: 'Rechte Hand' });
-    expect(thread.at(-1)?.text).toMatch(/Rechte Hand hat zugesagt/);
+    // Sie spricht selbst: Die Vorschau zeigt „Rechte Hand: Ich komm vorbei.“, den Absender nur einmal (J9).
+    expect(thread.at(-1)?.text).toBe('Ich komm vorbei.');
     expect(messages.get(sim.state, order.messageId)?.answer).toBe('rightHand');
     expect(rh(sim).done.deliveries).toBe(1);
     expect(rh(sim).xp).toBeGreaterThan(0);

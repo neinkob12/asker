@@ -166,7 +166,9 @@ describe('Geschichten', () => {
       first: 'Kevin',
       other: 'Murat Ö.',
       amount: '500 €',
-      spot: 'Ring',
+      spot: 'Uni-Wiese',
+      atSpot: 'auf der Uni-Wiese',
+      AtSpot: 'Auf der Uni-Wiese',
       veedel: 'Nippes',
       gang: 'Hafenkolonne',
     };
@@ -178,8 +180,14 @@ describe('Geschichten', () => {
         t.choices.some((c) => c.id === t.fallback),
         id,
       ).toBe(true);
-      for (const text of [...t.texts, ...t.choices.flatMap((c) => [c.label, c.reply, ...(c.answer ?? [])])]) {
+      for (const text of [
+        ...t.texts,
+        ...(t.journal ? [t.journal] : []),
+        ...t.choices.flatMap((c) => [c.label, c.reply, ...(c.answer ?? [])]),
+      ]) {
         expect(fillText(text, vars), id).not.toMatch(/\{\w*\}/);
+        // Kein Artikel fest vor dem Spot-Namen („am Uni-Wiese“, J4): {atSpot} oder „den Spot {spot}“.
+        expect(text, id).not.toMatch(/\b(am|Am|der|Der|den|dem|vom|im)\s\{spot\}/);
       }
     }
   });

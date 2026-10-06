@@ -13,7 +13,7 @@ import { hasBerth } from '../logistics';
 import { hottestVeedel } from '../police';
 import { getSpots } from '../spots';
 import { getStaff } from '../staff';
-import { shipmentsInTransit } from '../suppliers';
+import { getRelation, getSuppliers, shipmentsInTransit } from '../suppliers';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import { getDeliveries, getOrders, getShipments, tradeStats } from '../trade';
 import { veedelCity } from '../veedel';
@@ -24,6 +24,21 @@ import { veedelCity } from '../veedel';
  */
 function orderedFor(cityId: string): (state: GameState) => number {
   return (state) => Math.max(state.modules.quests.progress, shipmentsInTransit(state, cityId).length > 0 ? 1 : 0);
+}
+
+/**
+ * Erste Bestellung in Köln (J2): Wer schon vor der Quest bestellt hat (z.B. auf Tonis Angebot im Chat), hat sie erfüllt,
+ * ob die Lieferung noch unterwegs oder schon im Lager ist. Köln ist die erste Stadt, also zählt jede Bestellung.
+ */
+function orderedInKoeln(state: GameState): number {
+  const ever = getSuppliers(state, 'koeln').some((s) => getRelation(state, s.id).orders > 0);
+  return Math.max(orderedFor('koeln')(state), ever ? 1 : 0);
+}
+
+/** Läufer in Köln (J2): Wer schon einen hat, bevor Peter danach fragt, hat die Quest erfüllt. */
+function runnerInKoeln(state: GameState): number {
+  const has = getStaff(state, { role: 'runner', cityId: 'koeln' }).length > 0;
+  return Math.max(state.modules.quests.progress, has ? 1 : 0);
 }
 
 export const PETER: Contact = {
@@ -224,6 +239,7 @@ export const QUESTS: readonly QuestDef[] = [
     hint: 'Lieferanten-App im Handy.',
     target: 1,
     count: { 'shipment.ordered': one },
+    measure: orderedInKoeln,
     goTo: 'suppliers',
     reward: [{ kind: 'money', money: 'dirty', amount: 300 }],
   },
@@ -251,6 +267,7 @@ export const QUESTS: readonly QuestDef[] = [
     hint: 'Im Spot-Fenster: Läufer anheuern.',
     target: 1,
     count: { 'staff.hired': (p) => (p.role === 'runner' ? 1 : 0) },
+    measure: runnerInKoeln,
     goTo: 'spot',
     reward: [{ kind: 'money', money: 'dirty', amount: 250 }],
   },
@@ -284,10 +301,11 @@ export const QUESTS: readonly QuestDef[] = [
     icon: 'truck',
     title: 'Stell einen Fahrer ein',
     task: 'Ständig selbst Ware herumzufahren nervt. Ein Fahrer holt sie später am Hafen ab und bringt sie zwischen deinen Lagern hin und her.',
-    hint: 'Am Hafen oder in der Personal-App.',
+    hint: 'Personal-App, unten bei Anheuern: Fahrer anheuern.',
     target: 1,
     count: { 'staff.hired': (p) => (p.role === 'driver' ? 1 : 0) },
-    goTo: 'port',
+    // Ins Personal, wo man ihn anheuert (J12: vorher die Hafen-Seite mit großem „Liegeplatz mieten“).
+    goTo: 'staff',
     reward: [{ kind: 'goods', productId: 'weed', amount: 20 }],
   },
   {
@@ -635,7 +653,7 @@ export const QUESTS: readonly QuestDef[] = [
     task:
       'Fiete sagt, ohne Platz am Kai bist du in Hamburg nur ein Tourist. Miet dir einen Liegeplatz, dann liefert Hein ' +
       'Container, kiloweise.',
-    hint: 'Logistik-App, Hafen: Liegeplatz mieten (12.000 € sauber).',
+    hint: 'Lieferanten-App, unter Logistik den Hafen öffnen: Liegeplatz mieten (12.000 € sauber).',
     target: 1,
     measure: (state) => (hasBerth(state, 'hamburg') ? 1 : 0),
     goTo: 'port',

@@ -28,7 +28,7 @@ import {
 import { hasFullPower } from '../hierarchy';
 import { addHeat } from '../police';
 import { changeReputation } from '../reputation';
-import { getSpot, spotCity } from '../spots';
+import { atSpot, getSpot, spotCity } from '../spots';
 import { getStaff, getStaffMember, setStatus } from '../staff';
 import { addInfluence, PLAYER_FACTION } from '../territory';
 import { veedelCity, veedelName } from '../veedel';
@@ -194,7 +194,7 @@ function goodsUnit(): string {
 function placeOf(state: GameState, request: EncounterRequest): string {
   if (request.place) return request.place;
   const spot = request.spotId ? getSpot(state, request.spotId) : undefined;
-  if (spot) return `am ${spot.name}`;
+  if (spot) return atSpot(spot);
   if (request.veedelId) return `in ${veedelName(request.veedelId)}`;
   return 'auf der Straße';
 }

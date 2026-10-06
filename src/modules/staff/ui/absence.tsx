@@ -16,7 +16,8 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { assignmentLabel, bailCost, effectiveWage, isAbsent, type StaffMember, talkChance } from '../index';
+import { atSpotStart, getSpot } from '../../spots';
+import { bailCost, effectiveWage, isAbsent, type StaffMember, talkChance } from '../index';
 
 /** Kurztext zum Ausfall: bis wann, was es pro Tag kostet. */
 export function absenceText(m: StaffMember): string {
@@ -54,9 +55,10 @@ export function AbsenceSheet(props: { member: StaffMember; open: boolean; onClos
     });
   }
   const atSpot = isAbsent(m) && m.returnTo?.kind === 'spot' && (m.role === 'runner' || m.role === 'security');
+  const spot = atSpot && m.returnTo ? getSpot(state, m.returnTo.targetId) : undefined;
   if (atSpot) {
     actions.push({
-      label: `Am ${assignmentLabel(state, m.returnTo)} ersetzen`,
+      label: spot ? `${atSpotStart(spot)} ersetzen` : 'Am Spot ersetzen',
       icon: 'userPlus',
       onSelect: () => dispatch({ type: 'staff.replace', payload: { staffId: m.id } }),
     });

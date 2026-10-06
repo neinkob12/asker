@@ -22,7 +22,7 @@ import {
 } from '../goods';
 import { amountInProgress, launderingCapacity, MIN_LAUNDERING_AMOUNT } from '../laundering';
 import { freeDrivers, getCargo, harborQuestions, portName } from '../logistics';
-import { getSpots } from '../spots';
+import { atSpot, getSpots } from '../spots';
 import {
   activeRunnerAt,
   freeStaff,
@@ -184,7 +184,8 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
       continue;
     }
     // Im Chat zusagen: mit der Antwort "Rechte Hand schicken", sonst (Anfrage von vor ihrer Ernennung) als "selbst".
-    const reply = big ? 'Meine Rechte Hand bringt die Ware.' : 'Rechte Hand hat zugesagt: Ich komm vorbei.';
+    // Sie spricht selbst, ihr Name steht schon davor (via): kein „Rechte Hand: Rechte Hand hat zugesagt …“ (J9).
+    const reply = big ? 'Ich bring die Ware vorbei.' : 'Ich komm vorbei.';
     if (!messages.answerAs(ctx, { messageId: order.messageId, optionId: 'rightHand', via: VIA, reply })) {
       messages.answerAs(ctx, { messageId: order.messageId, optionId: 'self', via: VIA, reply });
     }
@@ -361,14 +362,14 @@ function staffing(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor
       { type: 'staff.assign', payload: { staffId: free.id, assignment: { kind: 'spot', targetId: spot.id } } },
       { actor },
     );
-    if (placed.ok) log(ctx, rh, `${free.name} steht jetzt am ${spot.name}.`);
+    if (placed.ok) log(ctx, rh, `${free.name} steht jetzt ${atSpot(spot)}.`);
     return;
   }
   const hired = hireRunnerFor(ctx, actor, spot.id, budget);
   if (!hired) return;
   rh.done.hires += 1;
   addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
-  log(ctx, rh, `${hired.name} steht jetzt am ${spot.name}.`);
+  log(ctx, rh, `${hired.name} steht jetzt ${atSpot(spot)}.`);
 }
 
 /** Geldwäsche nach Regel: Liegt mehr Schwarzgeld da als ihre Grenze, geht ein Anteil des Überschusses in die Wäsche. */

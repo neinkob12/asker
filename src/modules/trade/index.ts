@@ -1625,7 +1625,7 @@ export function sail(
   ctx.state.modules.trade.stats.voyages += 1;
   journal.add(
     ctx,
-    `${name} legt ab nach ${checked.producer.from}: ${list.length} Container, zurück in ${harborPort(portId)?.name ?? portId} in ${clock.formatDuration(plan.minutes)}.`,
+    `${name} legt ab nach ${checked.producer.from}: ${list.length} Container, zurück in ${harborPort(portId)?.name ?? portId} in ${clock.formatDuration(plan.minutes)}`,
   );
   ctx.emit('trade.shipSailed', { vesselId, producerId, portId, containers: list.length, cost: total });
   return { ok: true, data: { shipmentIds: list.map((x) => x.id), arrivesAt: ctx.now + plan.minutes } };

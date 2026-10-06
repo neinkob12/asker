@@ -95,6 +95,7 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'stadtgarten',
     name: 'Stadtgarten',
+    at: 'im Stadtgarten',
     // Höchstens 60 m von der Ludolf-Camphausen-Straße (check-roads).
     lng: 6.93287,
     lat: 50.94224,
@@ -339,6 +340,8 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'grosse-bergstrasse',
     name: 'Große Bergstraße',
+    // Adjektiv im Namen wird gebeugt (J4).
+    at: 'an der Großen Bergstraße',
     lng: 9.944,
     lat: 53.552,
     demand: 1.0,
@@ -379,6 +382,7 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'lange-reihe',
     name: 'Lange Reihe',
+    at: 'an der Langen Reihe',
     lng: 10.014,
     lat: 53.557,
     demand: 1.2,
@@ -621,6 +625,7 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'alt-sachsenhausen',
     name: 'Alt-Sachsenhausen',
+    at: 'in Alt-Sachsenhausen',
     lng: 8.6895,
     lat: 50.1055,
     demand: 1.4,
@@ -701,6 +706,7 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'ezb',
     name: 'EZB',
+    at: 'an der EZB',
     lng: 8.7027,
     lat: 50.1107,
     demand: 0.8,
@@ -811,6 +817,7 @@ export const PRESET_SPOTS: readonly PresetSpot[] = [
   {
     id: 'squaire',
     name: 'The Squaire',
+    at: 'im Squaire',
     lng: 8.57,
     lat: 50.053,
     demand: 0.8,

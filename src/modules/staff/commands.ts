@@ -1,9 +1,9 @@
 // Befehle des Personals. Spieler und Leutnants schicken dieselben Befehle.
 
-import { type CommandMeta, type CommandResult, type Ctx, formatEuro, journal, wallet } from '../../core';
+import { type CommandMeta, type CommandResult, type Ctx, formatEuro, journal, wallet, withPeriod } from '../../core';
 import { activeCity, cityName } from '../city';
 import { getWarehouse } from '../goods';
-import { getSpot, isSpotActive } from '../spots';
+import { atSpot, atSpotStart, getSpot, isSpotActive } from '../spots';
 import { veedelCity } from '../veedel';
 import {
   DRIVER_HIRE_COST,
@@ -64,8 +64,8 @@ export function hireRunner(ctx: Ctx, spotId: string): CommandResult {
     cityId,
     knownStats: ['speed'],
     assignment: { kind: 'spot', targetId: spotId },
-    note: `Von der Straße, am ${spot.name}.`,
-    journalText: `Läufer ${profile.name} am ${spot.name} angeheuert.`,
+    note: `Von der Straße, ${atSpot(spot)}.`,
+    journalText: `Läufer ${profile.name} ${atSpot(spot)} angeheuert.`,
   });
   return { ok: true, data: { staffId: member.id } };
 }
@@ -124,7 +124,7 @@ export function setJailSupport(ctx: Ctx, staffId: string, enabled: boolean): Com
     ctx,
     enabled
       ? `${m.name} bekommt in Haft wieder Stillhaltegeld.`
-      : `Kein Stillhaltegeld mehr für ${m.name}. Wer sitzt und nichts kriegt, redet eher.`,
+      : `${withPeriod(`Kein Stillhaltegeld mehr für ${m.name}`)} Wer sitzt und nichts kriegt, redet eher.`,
     'info',
     { staffId },
   );
@@ -173,9 +173,9 @@ export function replaceAbsent(ctx: Ctx, staffId: string, fireToo: boolean, meta:
   }
   m.returnTo = null;
   const replacement = replacementId ? getStaffMember(ctx.state, replacementId) : undefined;
-  addCareer(ctx, staffId, `Am ${spot.name} ersetzt.`);
+  addCareer(ctx, staffId, `${atSpotStart(spot)} ersetzt.`);
   const by = meta.actor === 'player' ? '' : ` (${actorName(ctx, meta.actor)})`;
-  journal.add(ctx, `Für ${m.name} steht jetzt ${replacement?.name ?? 'jemand Neues'} am ${spot.name}${by}.`, 'info', {
+  journal.add(ctx, `Für ${m.name} steht jetzt ${replacement?.name ?? 'jemand Neues'} ${atSpot(spot)}${by}.`, 'info', {
     staffId,
     spotId,
   });
@@ -218,7 +218,7 @@ export function assignCommand(ctx: Ctx, staffId: string, assignment: StaffAssign
     }
     if (m.role === 'runner') {
       const other = activeRunnerAt(ctx.state, assignment.targetId);
-      if (other && other.id !== m.id) return { ok: false, reason: `Dort arbeitet schon ${other.name}.` };
+      if (other && other.id !== m.id) return { ok: false, reason: withPeriod(`Dort arbeitet schon ${other.name}`) };
     } else if (m.role === 'security') {
       const other = securityAt(ctx.state, { spotId: assignment.targetId }).find((s) => s.id !== m.id);
       if (other) return { ok: false, reason: `Dort passt schon ${other.name} auf.` };

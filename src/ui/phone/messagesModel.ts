@@ -197,6 +197,26 @@ function computeChatList(state: GameState): ChatListItem[] {
   });
 }
 
+/** Wörter vor einem Namen, die allein nichts sagen: „Der Holländer“ heißt kurz „Holländer“, nicht „Der“. */
+const NAME_PREFIXES = new Set(['der', 'die', 'das', 'frau', 'herr', 'dr.', 'don', 'onkel', 'tante']);
+
+/** Arten, die immer Personen sind (wie im Kern); 'other' nur mit Gesicht, Gangs nie. */
+const PERSON_KINDS: ReadonlySet<ContactKind> = new Set(['customer', 'supplier', 'staff', 'police']);
+
+/**
+ * Kurzer Name unter dem Avatar in der Reihe oben (J8): Personen mit dem ersten Wort ihres Namens („Jansen (Hafen
+ * Rotterdam)“ → „Jansen“, „Der Holländer“ → „Holländer“), Gangs und Sonstiges ohne Gesicht mit dem ganzen Namen ohne
+ * Klammerzusatz (die Zeile kürzt dann mit …), sonst stünde da „Marienburger“ für den Marienburger Kreis.
+ */
+export function shortContactName(chat: Pick<ChatListItem, 'name' | 'kind' | 'look'>): string {
+  const name = chat.name.replace(/\s*\(.*\)\s*$/, '').trim() || chat.name;
+  const person = chat.kind !== 'gang' && (PERSON_KINDS.has(chat.kind) || chat.look !== undefined);
+  if (!person) return name;
+  const words = name.split(/\s+/);
+  const first = words[0] ?? name;
+  return NAME_PREFIXES.has(first.toLocaleLowerCase('de')) && words[1] ? words[1] : first;
+}
+
 /** Die zuletzt aktiven Kontakte (höchstens `limit`) für die Reihe oben in der Liste, neueste zuerst. */
 export function recentContacts(list: readonly ChatListItem[], limit = 5): ChatListItem[] {
   return list.filter((c) => !c.archived).slice(0, limit);

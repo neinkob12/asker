@@ -18,16 +18,18 @@ import {
   type Ctx,
   clock,
   defineModule,
+  fillText,
   formatEuro,
   type GameState,
   journal,
   messages,
   wallet,
+  withPeriod,
 } from '../../core';
 import { activeCity, cityName, isBusinessSold } from '../city';
 import { getRegular } from '../customers';
 import { getReputation } from '../reputation';
-import { getSpot } from '../spots';
+import { atSpot, getSpot } from '../spots';
 import {
   addLoyalty,
   DEFAULT_STATS,
@@ -318,7 +320,7 @@ function maybeReferral(ctx: Ctx): void {
     // Alte Kuriere (vor Auftrag 28) empfehlen Läufer.
     const own = m.role === 'courier' ? 'runner' : m.role;
     const role = ctx.chance(0.6) ? own : pickWeighted(ctx, POOL_ROLE_WEIGHTS);
-    const c = addContact(ctx, role, 'referral', `Empfohlen von ${m.name}.`, m.id);
+    const c = addContact(ctx, role, 'referral', withPeriod(`Empfohlen von ${m.name}`), m.id);
     if (c) {
       announce(
         ctx,
@@ -336,7 +338,8 @@ function maybeEventContact(ctx: Ctx): void {
   if (isBusinessSold(ctx.state) || !ctx.chance(EVENT_CHANCE)) return;
   const c = addContact(ctx, pickWeighted(ctx, EVENT_ROLE_WEIGHTS), 'event', 'Hat sich von selbst gemeldet.');
   if (!c) return;
-  const intro = ctx.pick(EVENT_INTROS).replace('{name}', c.name);
+  // fillText: „{name}.“ mit „Nico R.“ wird kein „Nico R..“ (J3).
+  const intro = fillText(ctx.pick(EVENT_INTROS), { name: c.name });
   announce(ctx, c, { id: `recruit:${c.id}`, name: c.name, kind: 'other' }, `${intro} (${roleName(c.role)})`);
 }
 
@@ -348,7 +351,7 @@ function maybeRegular(ctx: Ctx, regularId: string, sellerId: string | null): voi
   const factor = seller ? 0.5 + seller.stats.charisma / 100 : 1;
   if (!ctx.chance(REGULAR_CHANCE_PER_SALE * factor)) return;
   const spot = getSpot(ctx.state, regular.spotId);
-  const where = spot ? ` vom ${spot.name}` : '';
+  const where = spot ? ` ${atSpot(spot)}` : '';
   const c = addContact(
     ctx,
     pickWeighted(ctx, POOL_ROLE_WEIGHTS),

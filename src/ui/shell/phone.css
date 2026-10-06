@@ -712,13 +712,16 @@
   text-transform: uppercase;
   color: var(--cat-brand);
 }
+/* Bis zu zwei Zeilen (J5: einzeilig fiel der Ort weg, „2 Kunden warten am E…“), umbrochen nur zwischen Wörtern. */
 .phone__urgent-title {
+  display: -webkit-box;
   overflow: hidden;
   font-size: var(--type-subhead);
   font-weight: var(--font-weight-bold);
   line-height: var(--type-subhead-lh);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: normal;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .phone__urgent-action {
   flex: none;

@@ -4,7 +4,7 @@
 // Nur das Nötigste (Auftrag 28); Optik übernimmt Auftrag 27.
 
 import { useState } from 'preact/hooks';
-import { clock, formatEuro, formatPercent } from '../../../core';
+import { clock, formatDays, formatEuro, formatPercent } from '../../../core';
 import {
   ActionSheet,
   Button,
@@ -439,7 +439,7 @@ function RightHandPage() {
                 title={report.profit >= 0 ? 'Gewinn' : 'Verlust'}
               />
             </ListItem>
-            <ListItem value={report.runwayDays === null ? '–' : `${report.runwayDays} Tage`}>
+            <ListItem value={report.runwayDays === null ? '–' : formatDays(report.runwayDays)}>
               <ItemContent
                 icon="clock"
                 color="people"

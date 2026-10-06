@@ -49,7 +49,7 @@ import { startEncounter } from '../encounters';
 import { eventFactor, raidsAllowed } from '../events';
 import { getGang } from '../gangs';
 import { allProducts, getLots, getWarehouses, nearestWarehouse, take, warehouseModifiers } from '../goods';
-import { getSpot, spotModifiers, spotsInVeedel } from '../spots';
+import { atSpot, getSpot, spotModifiers, spotsInVeedel } from '../spots';
 import {
   activeRunnerAt,
   bonusProvider,
@@ -120,7 +120,14 @@ import {
 import { nextTier, type OperationTier, operationFacts, tierInfo } from './tier';
 
 export { CHECK_THRESHOLD, HEAT_LEVELS, MAX_HEAT, OPERATION_TIERS, RAID_SCOPES, RAID_THRESHOLD } from './config';
-export { nextTierHints, type OperationFacts, type OperationTier, operationFacts } from './tier';
+export {
+  nextTierHints,
+  type OperationFacts,
+  type OperationTier,
+  operationFacts,
+  type TierHint,
+  type TierHintPart,
+} from './tier';
 
 /** Art einer Razzia gegen dich: an einem Spot, im ganzen Veedel oder Großrazzia (mehrere Veedel und Lager). */
 export type RaidScope = keyof typeof RAID_SCOPES;
@@ -637,7 +644,7 @@ function spotOf(member: StaffMember | null): string | null {
 
 function placeText(state: GameState, veedelId: string, spotId: string | null): string {
   const spot = spotId ? getSpot(state, spotId) : undefined;
-  return spot ? `am ${spot.name}` : `in ${veedelName(veedelId)}`;
+  return spot ? atSpot(spot) : `in ${veedelName(veedelId)}`;
 }
 
 /** Kontrolle bei eigenen Leuten im Veedel (oder beim Spieler, wenn er dort selbst verkauft hat). */
@@ -791,11 +798,11 @@ function searchPlace(ctx: Ctx, veedelId: string, scope: RaidScope, spotId: strin
   return { goods, money: 0, arrested, empty: nobody && goods === 0 };
 }
 
-/** Name der Razzia für Journal und Meldungen: "Razzia am Neumarkt", "Razzia in Ehrenfeld", "Großrazzia in …". */
+/** Name der Razzia für Journal und Meldungen: "Razzia am Neumarkt", "Razzia auf der Uni-Wiese", "Razzia in Ehrenfeld", "Großrazzia in …". */
 function raidTitle(state: GameState, scope: RaidScope, veedelIds: string[], spotId: string | null): string {
   if (scope === 'major') return `Großrazzia in ${veedelIds.map(veedelName).join(', ')}`;
   const spot = scope === 'spot' && spotId ? getSpot(state, spotId) : undefined;
-  return spot ? `Razzia am ${spot.name}` : `Razzia in ${veedelName(veedelIds[0])}`;
+  return spot ? `Razzia ${atSpot(spot)}` : `Razzia in ${veedelName(veedelIds[0])}`;
 }
 
 /** Geplante Razzia gegen deine Leute (am Spot oder im Veedel). */

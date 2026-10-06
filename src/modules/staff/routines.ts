@@ -1,7 +1,7 @@
 // Abläufe des Personals: Läufer bedienen Kunden, Haft und Verletzung laufen ab, Löhne, Loyalität,
 // Werte zeigen sich mit der Zeit, seltener Verrat und die Warnung des Polizei-Kontakts.
 
-import { type Ctx, clock, formatEuro, type GameState, journal, messages, texts, wallet } from '../../core';
+import { type Ctx, clock, formatEuro, type GameState, journal, messages, texts, wallet, withPeriod } from '../../core';
 import { cityName, raidWarningBonus } from '../city';
 import { canServeCustomer, waitingAt } from '../customers';
 import { formatProductAmount, getStock, stockSummary, take } from '../goods';
@@ -374,13 +374,15 @@ export function betray(ctx: Ctx, m: StaffMember, kind: BetrayalKind): number {
     amount = row && want > 0 ? take(ctx, { productId: row.productId, amount: want, partial: true }).taken : 0;
     if (!row || amount === 0) return betray(ctx, m, 'money');
     const what = formatProductAmount(row.productId, amount);
-    journal.add(ctx, `Im Lager fehlen ${what}. Verdacht: ${m.name}.`, 'bad', { staffId: m.id });
+    journal.add(ctx, withPeriod(`Im Lager fehlen ${what}. Verdacht: ${m.name}`), 'bad', { staffId: m.id });
     addCareer(ctx, m.id, `Hat ${what} Ware mitgehen lassen.`);
   } else if (kind === 'money') {
     const want = Math.min(THEFT_MONEY_MAX, Math.round(ctx.state.wallet.dirty * THEFT_MONEY_SHARE));
     amount = wallet.lose(ctx, want, 'dirty', `Diebstahl ${m.name}`, { category: 'loss.betrayal', staffId: m.id });
     if (amount === 0) return betray(ctx, m, 'quit');
-    journal.add(ctx, `In der Kasse fehlen ${formatEuro(amount)}. Verdacht: ${m.name}.`, 'bad', { staffId: m.id });
+    journal.add(ctx, withPeriod(`In der Kasse fehlen ${formatEuro(amount)}. Verdacht: ${m.name}`), 'bad', {
+      staffId: m.id,
+    });
     addCareer(ctx, m.id, `Hat ${formatEuro(amount)} aus der Kasse genommen.`);
   } else if (kind === 'quit') {
     messages.send(ctx, { contact: staffContact(m), text: texts.pick(ctx, 'staff:quit', STAFF_TEXTS.quit) });

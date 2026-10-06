@@ -123,35 +123,52 @@ export function tierInfo(index: number): OperationTier {
   return { index: i, id: t.id, name: t.name, hint: t.hint };
 }
 
+/** Ein Teil einer Bedingung mit Stand, z.B. "2/6 Veedel", und ob er schon erfüllt ist. */
+export interface TierHintPart {
+  label: string;
+  met: boolean;
+}
+
+/** Eine Bedingung für die nächste Stufe: kurz gesagt, was es braucht, dazu der Stand in Teilen (am Handy als Chips). */
+export interface TierHint {
+  label: string;
+  parts: TierHintPart[];
+}
+
+/** "2/6 Veedel" mit erfüllt, sobald der Stand das Ziel erreicht. */
+function part(now: number, target: number, what: string): TierHintPart {
+  return { label: `${now}/${target} ${what}`, met: now >= target };
+}
+
 /** Was zur nächsten Stufe führt (für das Polizei-Panel): Bedingungen mit Stand, jede reicht allein. */
-export function nextTierHints(
-  state: GameState,
-  tier: number,
-  cityId: string = activeCity(state),
-): { label: string; value: string }[] {
+export function nextTierHints(state: GameState, tier: number, cityId: string = activeCity(state)): TierHint[] {
   const f = operationFacts(state, cityId);
+  const berth: TierHintPart = { label: f.berth ? 'Liegeplatz' : 'kein Liegeplatz', met: f.berth };
   if (tier === 0) {
     return [
-      { label: 'ein Veedel unter deiner Kontrolle', value: `${f.veedel} von ${DEALER_UP.veedel}` },
-      { label: `${DEALER_UP.spots} besetzte Spots`, value: `${f.spots} von ${DEALER_UP.spots}` },
-      { label: `${DEALER_UP.people} Leute im Einsatz`, value: `${f.people} von ${DEALER_UP.people}` },
-      { label: 'ein Leutnant', value: `${f.lieutenants} von ${DEALER_UP.lieutenants}` },
-      { label: 'Liegeplatz oder zweites Lager', value: f.berth ? 'ja' : `${f.warehouses} Lager` },
+      { label: 'ein eigenes Veedel', parts: [part(f.veedel, DEALER_UP.veedel, 'Veedel')] },
+      { label: `${DEALER_UP.spots} besetzte Spots`, parts: [part(f.spots, DEALER_UP.spots, 'Spots')] },
+      { label: `${DEALER_UP.people} Leute im Einsatz`, parts: [part(f.people, DEALER_UP.people, 'Leute')] },
+      { label: 'ein Leutnant', parts: [part(f.lieutenants, DEALER_UP.lieutenants, 'Leutnant')] },
+      {
+        label: 'Liegeplatz oder zweites Lager',
+        parts: [berth, part(f.warehouses, DEALER_UP.warehouses, 'Lager')],
+      },
       {
         label: `${DEALER_UP.revenue.toLocaleString('de-DE')} € Umsatz am Tag`,
-        value: `${f.revenue.toLocaleString('de-DE')} €`,
+        parts: [{ label: `${f.revenue.toLocaleString('de-DE')} € am Tag`, met: f.revenue >= DEALER_UP.revenue }],
       },
     ];
   }
   if (tier === 1) {
     return [
       {
-        label: `${KINGPIN_UP_VEEDEL} Veedel unter deiner Kontrolle und ${KINGPIN_MIN_PEOPLE} Leute im Einsatz`,
-        value: `${f.veedel} Veedel, ${f.people} Leute`,
+        label: `${KINGPIN_UP_VEEDEL} Veedel, ${KINGPIN_MIN_PEOPLE} Leute im Einsatz`,
+        parts: [part(f.veedel, KINGPIN_UP_VEEDEL, 'Veedel'), part(f.people, KINGPIN_MIN_PEOPLE, 'Leute')],
       },
       {
-        label: `${KINGPIN_UP_SPOTS} Spots plus Liegeplatz und ${KINGPIN_UP_WAREHOUSES} Lager`,
-        value: `${f.spots} Spots, ${f.berth ? 'Liegeplatz' : 'kein Liegeplatz'}, ${f.warehouses} Lager`,
+        label: `${KINGPIN_UP_SPOTS} Spots, Liegeplatz, ${KINGPIN_UP_WAREHOUSES} Lager`,
+        parts: [part(f.spots, KINGPIN_UP_SPOTS, 'Spots'), berth, part(f.warehouses, KINGPIN_UP_WAREHOUSES, 'Lager')],
       },
     ];
   }

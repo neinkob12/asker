@@ -11,6 +11,14 @@ describe('Text-Helfer', () => {
     expect(fillText('{a} {b}', { a: 1 })).toBe('1 {b}');
   });
 
+  it('setzt hinter eine Abkürzung am Satzende keinen zweiten Punkt (J3)', () => {
+    expect(fillText('Rund {delay}.', { delay: '6 Std. 15 Min.' })).toBe('Rund 6 Std. 15 Min.');
+    expect(fillText('{delay}. Wie weiter?', { delay: '45 Min.' })).toBe('45 Min. Wie weiter?');
+    expect(fillText('Bis {veedel}.', { veedel: 'Kalk' })).toBe('Bis Kalk.');
+    expect(fillText('Na ja, {delay}...', { delay: '2 Std.' })).toBe('Na ja, 2 Std...');
+    expect(fillText('{x}.', {})).toBe('{x}.');
+  });
+
   it('wiederholt dieselbe Variante nicht direkt', () => {
     const sim = Simulation.create([], { seed: 3 });
     const ctx = sim.ctx('test');

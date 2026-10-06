@@ -4,7 +4,7 @@
 import { clock, formatEuro } from '../../../core';
 import { islandCountdown, type LiveActivity, registerLiveActivity } from '../../../ui';
 import { formatProductAmount, productName } from '../../goods';
-import { getSpot } from '../../spots';
+import { atSpot, getSpot } from '../../spots';
 import { getOrders, getSalesStats, isPlayerAway, orderProgress, playerSpot, waitingAt } from '../index';
 
 /** Umsatz zu Beginn des Tages (nur in dieser Sitzung gemerkt, nach dem Laden zählt der Tag ab dann). */
@@ -72,7 +72,7 @@ registerLiveActivity({
             tone: isPlayerAway(state) ? 'neutral' : 'accent',
             leading: 'Spot',
             trailing: String(waitingAt(state, spot.id).length),
-            title: `Du verkaufst am ${spot.name}`,
+            title: `Du verkaufst ${atSpot(spot)}`,
             detail: isPlayerAway(state) ? 'gerade unterwegs' : `${waitingAt(state, spot.id).length} warten`,
             open: (ui) => ui.openPanel('spots.spot', { spotId: spot.id }),
           },

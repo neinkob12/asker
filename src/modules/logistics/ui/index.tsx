@@ -6,6 +6,7 @@ import { useState } from 'preact/hooks';
 import { clock, formatEuro, type GameState } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import {
+  ActionSheet,
   Button,
   Empty,
   Group,
@@ -34,6 +35,7 @@ import {
   productName,
   qualityTier,
   stockSummary,
+  type Warehouse,
   warehouseSites,
 } from '../../goods';
 import { getStaff, getStaffMember } from '../../staff';
@@ -359,6 +361,8 @@ function WarehouseLogistics(props: { warehouseId: string }) {
   const [productId, setProductId] = useState('');
   const [vehicle, setVehicle] = useState(AUTO);
   const [choice, setChoice] = useState<RouteChoice>('autobahn');
+  // Kauf mit Rückfrage (J11): ein Tipp kaufte vorher sofort.
+  const [buying, setBuying] = useState<Warehouse | null>(null);
   const from = owned.find((w) => w.id === props.warehouseId) ?? owned[0];
   const targets = owned.filter((w) => w.id !== from?.id);
   const to = targets.find((w) => w.id === toId) ?? targets[0];
@@ -402,11 +406,7 @@ function WarehouseLogistics(props: { warehouseId: string }) {
               <ListItem
                 key={w.id}
                 aside={
-                  <Button
-                    small
-                    disabled={state.wallet.clean < w.cost}
-                    onClick={() => dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: w.id } })}
-                  >
+                  <Button small disabled={state.wallet.clean < w.cost} onClick={() => setBuying(w)}>
                     {formatEuro(w.cost)}
                   </Button>
                 }
@@ -422,6 +422,23 @@ function WarehouseLogistics(props: { warehouseId: string }) {
               </ListItem>
             ))}
           </List>
+          <ActionSheet
+            open={buying !== null}
+            onClose={() => setBuying(null)}
+            title={buying ? `${buying.name} kaufen?` : ''}
+            message={buying ? `Kostet ${formatEuro(buying.cost)} sauberes Geld. Gekauft ist gekauft.` : undefined}
+            actions={[
+              {
+                label: buying ? `Kaufen (${formatEuro(buying.cost)})` : 'Kaufen',
+                icon: 'building',
+                disabled: !buying || state.wallet.clean < buying.cost,
+                onSelect: () => {
+                  if (buying) dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: buying.id } });
+                  setBuying(null);
+                },
+              },
+            ]}
+          />
         </Group>
       )}
     </>
