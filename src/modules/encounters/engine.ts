@@ -182,9 +182,19 @@ function roll(ctx: Ctx, amount: Amount): number {
   return ctx.randomInt(Math.min(a, b), Math.max(a, b));
 }
 
-/** Ersetzt {name} durch Werte. Unbekannte Platzhalter bleiben stehen. */
+/**
+ * Ersetzt {name} durch Werte. Unbekannte Platzhalter bleiben stehen. {opponent} mit Artikel („Die Streife“) steht nur
+ * am Satzanfang groß, mitten im Satz klein („… haben die Angreifer gewartet“, Auftrag 43, K6).
+ */
 export function fillText(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match);
+  return template.replace(/\{(\w+)\}/g, (match, key: string, offset: number) => {
+    const value = vars[key];
+    if (value === undefined) return match;
+    if (key !== 'opponent' || !/^(Die|Der|Das) /.test(value)) return value;
+    const before = template.slice(0, offset).trimEnd();
+    const sentenceStart = before === '' || /[.!?…:“"]$/.test(before);
+    return sentenceStart ? value : value[0].toLowerCase() + value.slice(1);
+  });
 }
 
 function goodsUnit(): string {
@@ -584,7 +594,13 @@ export function join(ctx: Ctx, encounterId: number, mode: EncounterMode, crew?: 
         {
           moneyShare: -ABANDON_CASH_SHARE,
           moneyShareMax: ABANDON_CASH_MAX,
-          text: fillText('Spot {place} geräumt. Die Ware ist gerettet, die Kasse nicht.', vars()),
+          // Ein Lager hat keine Kasse (Auftrag 43, K2).
+          text: fillText(
+            settingOf(encounter.request) === 'warehouse'
+              ? 'Geräumt {place}. Ihr habt mitgenommen, was ihr tragen konntet.'
+              : 'Spot {place} geräumt. Die Ware ist gerettet, die Kasse nicht.',
+            vars(),
+          ),
         },
         'briefing',
       );
@@ -1174,9 +1190,11 @@ function describeResult(encounter: Encounter, result: EncounterResult, headline:
   const nameOf = (id: string) => encounter.participants.find((p) => p.id === id)?.name ?? id;
   const details: string[] = [];
   if (result.opponentLosses > 0) details.push(`${result.opponentLosses} Gegner ausgeschaltet`);
-  if (result.money !== 0) details.push(`${result.money > 0 ? '+' : '−'}${formatEuro(Math.abs(result.money))}`);
+  // Zahl, Einheit und Wort bleiben zusammen (Auftrag 43, K11: „−2 / g Ware“ brach um).
+  const keep = (text: string) => text.replace(/ /g, '\u00a0');
+  if (result.money !== 0) details.push(keep(`${result.money > 0 ? '+' : '−'}${formatEuro(Math.abs(result.money))}`));
   if (result.goods !== 0) {
-    details.push(`${result.goods > 0 ? '+' : '−'}${formatAmount(Math.abs(result.goods), goodsUnit())} Ware`);
+    details.push(keep(`${result.goods > 0 ? '+' : '−'}${formatAmount(Math.abs(result.goods), goodsUnit())} Ware`));
   }
   if (result.playerInjured) details.push('du bist verletzt');
   if (result.staffInjured.length) details.push(`${names(result.staffInjured.map(nameOf))} verletzt`);

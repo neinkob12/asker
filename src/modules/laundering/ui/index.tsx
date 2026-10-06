@@ -4,7 +4,7 @@
 // Freischalten mit sauberem oder Schwarzgeld. Schwarzgeld und sauberes Geld im HUD öffnen diese App.
 
 import { useState } from 'preact/hooks';
-import { clock, formatEuro, formatPercent, type GameState, wallet } from '../../../core';
+import { clock, formatEuro, formatNumber, formatPercent, type GameState, wallet } from '../../../core';
 import {
   Chips,
   Disclosure,
@@ -22,7 +22,7 @@ import {
   SummaryTiles,
   useGame,
 } from '../../../ui';
-import { isBusinessSold } from '../../city';
+import { cityName, isBusinessSold, presentCity } from '../../city';
 import { veedelName } from '../../veedel';
 import {
   amountInProgress,
@@ -39,6 +39,7 @@ import {
   LAUNDERING_CHANNELS,
   type LaunderingChannel,
   launderingCapacity,
+  launderingCityFactor,
 } from '../index';
 import './laundering.css';
 
@@ -244,6 +245,8 @@ function LaunderingApp() {
         {sold
           ? 'Schwarzgeld wird über Zeit zu sauberem Geld, das du für Legales brauchst (Hallen, Lkw, Schiffe, Liegegeld).'
           : 'Schwarzgeld wird über Zeit zu sauberem Geld, das du für Legales brauchst (Lager, Liegeplatz, Einstieg bei Geschäften).'}
+        {launderingCityFactor(state) > 1 &&
+          ` In ${cityName(presentCity(state))} fallen größere Summen weniger auf: Jeder Weg fasst das ${formatNumber(launderingCityFactor(state), 1)}-Fache.`}
       </p>
       {batches.length > 0 && (
         <Group

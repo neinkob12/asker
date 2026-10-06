@@ -66,6 +66,15 @@ export {
   type UpgradeLevel,
   WAREHOUSE_UPGRADES,
 } from './config';
+export {
+  fitArticles,
+  type WarehouseForm,
+  type WarehouseGender,
+  warehouseGender,
+  warehousePlace,
+} from './places';
+
+import { warehousePlace } from './places';
 
 export type ProductCategory = 'flower' | 'hash' | 'edible' | 'oil' | 'vape';
 
@@ -684,7 +693,8 @@ export function upgradeWarehouse(ctx: Ctx, warehouseId: string, kind: WarehouseU
   const site = getWarehouse(ctx.state, warehouseId);
   if (!site) return { ok: false, reason: 'Dieses Lager gehört dir nicht.' };
   const cost = upgradeCost(ctx.state, warehouseId, kind);
-  if (cost === null) return { ok: false, reason: `${def.name} im ${site.name} sind schon voll ausgebaut.` };
+  if (cost === null)
+    return { ok: false, reason: `${def.name} ${warehousePlace(site.name, 'in')} sind schon voll ausgebaut.` };
   if (!wallet.pay(ctx, cost, 'clean', `${def.name} ${site.name}`, { category: 'expansion', cityId: site.cityId })) {
     return { ok: false, reason: `Dafür brauchst du ${formatEuro(cost)} sauberes Geld. Wasch vorher Schwarzgeld.` };
   }

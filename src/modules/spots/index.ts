@@ -309,6 +309,20 @@ export function nextSpotOpening(spot: OpeningInfo, time: number): number {
 }
 
 /** Öffnungszeiten als Text ("21–5 Uhr", "Fr 22 – Mo 8 Uhr") oder null, wenn immer offen. */
+/**
+ * Wann ein geschlossener Spot wieder öffnet (Spielminute zur vollen Stunde), null wenn er offen ist oder immer offen
+ * (Auftrag 43, L1: Berliner Clubs standen nur „zu“ da, ohne zu sagen, ab wann).
+ */
+export function spotOpensAt(spot: OpeningInfo, time: number): number | null {
+  if (isSpotOpen(spot, time)) return null;
+  const start = time - (time % 60);
+  for (let h = 1; h <= 7 * 24; h++) {
+    const at = start + h * 60;
+    if (isSpotOpen(spot, at)) return at;
+  }
+  return null;
+}
+
 export function spotHoursLabel(spot: OpeningInfo): string | null {
   if (spot.weekHours) {
     const at = (h: number) => `${WEEKDAYS_SHORT[Math.floor(h / 24) % 7]} ${h % 24}`;

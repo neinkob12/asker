@@ -79,6 +79,7 @@ import {
   type Warehouse,
   warehouseCity,
   warehouseFree,
+  warehousePlace,
 } from '../goods';
 import { addHeat, arrestStaff, getHeat, recordConfiscation } from '../police';
 import { AVOID_MOTORWAY, type RoadOptions, type RoadRoute, roadRoute, travelMinutes } from '../roads';
@@ -368,6 +369,16 @@ declare module '../../core' {
 
 // ---------------------------------------------------------------------------------------------
 // Lesen
+
+/** Hat die Stadt einen Hafen mit Liegeplatz (PORTS)? Berlin, München und Frankfurt nicht (Auftrag 43, L2). */
+export function hasPort(cityId: string): boolean {
+  return PORTS[cityId] !== undefined;
+}
+
+/** Erster Buchstabe groß (für Knöpfe wie „In die Halle Kalk“). */
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 function portOf(cityId: string): PortConfig {
   return PORTS[cityId] ?? PORTS.koeln;
@@ -1014,14 +1025,15 @@ function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandRes
   journal.add(
     ctx,
     `${who} ${driverId ? 'holt' : 'holst'} ${itemsText(trip.items)} am ${portName(cityId)} ab, ` +
-      `im ${warehouse.name} in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}` +
+      `${warehousePlace(warehouse.name, 'in')} in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}` +
       (left > 0
         ? ` Der Rest passt nicht ${room < space ? `in den Wagen (${vehicleName(state, vehicle)})` : 'ins Lager'} und bleibt am Kai.`
         : ''),
   );
   if (left > 0) {
     // Rest am Kai (Auftrag 33): Der Hafen meldet sich, die Zoll-Uhr läuft weiter.
-    const where = room < space ? `in den Wagen (${vehicleName(state, vehicle)})` : `ins ${warehouse.name}`;
+    const where =
+      room < space ? `in den Wagen (${vehicleName(state, vehicle)})` : warehousePlace(warehouse.name, 'into');
     messages.send(ctx, {
       contact: portContact(cityId),
       text: `Nicht alles passte ${where}. ${left} Einheiten stehen noch am Kai, hol sie, bevor der Zoll guckt.`,
@@ -1173,7 +1185,7 @@ function transfer(ctx: Ctx, payload: GameCommands['logistics.transfer']): Comman
   const who = driverLabel(state, driverId);
   journal.add(
     ctx,
-    `${who} ${driverId ? 'bringt' : 'bringst'} ${itemsText(items)} vom ${from.name} ins ${to.name}, ` +
+    `${who} ${driverId ? 'bringt' : 'bringst'} ${itemsText(items)} ${warehousePlace(from.name, 'from')} ${warehousePlace(to.name, 'into')}, ` +
       (departAt > ctx.now
         ? `Abfahrt heute Nacht um ${clock.formatTime(departAt)}.`
         : `Ankunft in ca. ${clock.formatDuration(trip.arrivesAt - ctx.now)}`),
@@ -1262,7 +1274,7 @@ function arrive(ctx: Ctx, trip: Trip): void {
   logTrip(ctx, trip, 'done', delivered);
   if (trip.driverId) addXp(ctx, trip.driverId, XP_PER_TRIP);
   if (trip.items.length > 0)
-    journal.add(ctx, `${itemsText(trip.items)} im ${target?.name ?? 'Lager'} angekommen.`, 'good');
+    journal.add(ctx, `${itemsText(trip.items)} ${warehousePlace(target?.name ?? 'Lager', 'in')} angekommen.`, 'good');
   ctx.emit('transport.arrived', {
     tripId: trip.id,
     kind: trip.kind,
@@ -1299,13 +1311,13 @@ function startWaiting(ctx: Ctx, trip: Trip, here: Warehouse): void {
     messages.send(ctx, {
       contact: staffContact(driver),
       text:
-        `Bin am ${here.name}, aber da geht nix mehr rein. Ich hab noch ${goods} im Wagen. ` +
+        `Bin ${warehousePlace(here.name, 'at')}, aber da geht nix mehr rein. Ich hab noch ${goods} im Wagen. ` +
         (targets.length > 0 ? 'Soll ich woanders hin?' : 'Ich wart, bis Platz ist.'),
       options: [
         ...targets.map((w) => ({
           id: `to-${w.id}`,
-          label: `Ins ${w.name}`,
-          reply: `Fahr ins ${w.name}.`,
+          label: capitalize(warehousePlace(w.name, 'into')),
+          reply: `Fahr ${warehousePlace(w.name, 'into')}.`,
           command: { type: 'logistics.redirect' as const, payload: { tripId: trip.id, toId: w.id } },
         })),
         { id: 'wait', label: 'Warten', reply: 'Warte, ich mach Platz.' },
@@ -1337,7 +1349,7 @@ function redirect(ctx: Ctx, payload: { tripId: number; toId: string }): CommandR
   rollCheck(ctx, trip);
   journal.add(
     ctx,
-    `${driverLabel(ctx.state, trip.driverId)} ${trip.driverId ? 'fährt' : 'fährst'} mit ${itemsText(trip.items)} ins ${to.name}.`,
+    `${driverLabel(ctx.state, trip.driverId)} ${trip.driverId ? 'fährt' : 'fährst'} mit ${itemsText(trip.items)} ${warehousePlace(to.name, 'into')}.`,
   );
   return { ok: true, data: { tripId: trip.id, arrivesAt: trip.arrivesAt } };
 }

@@ -6,7 +6,7 @@
 import { formatPercent, type GameState } from '../../../core';
 import { Icon, islandCountdown, registerSlot, useGame, useIsMobile } from '../../../ui';
 import { activeCity } from '../../city';
-import { formatProductAmount, productName } from '../../goods';
+import { formatProductAmount, productName, warehousePlace } from '../../goods';
 import { getSupplier, type Shipment, shipmentProgress, shipmentsInTransit } from '../../suppliers';
 import {
   cargoRisk,
@@ -61,7 +61,7 @@ function roadTracking(state: GameState, trip: Trip): Tracking {
       ? `${who} zum Hafen · ${formatPercent(progress.total)}`
       : progress.leg === 'loading'
         ? `Am Kai wird geladen · ${formatPercent(progress.total)}`
-        : `${who} ins ${to} · ${formatPercent(progress.total)}`;
+        : `${who} ${warehousePlace(to, 'into')} · ${formatPercent(progress.total)}`;
   return {
     stage: 'road',
     title: `${item ? `${formatProductAmount(item.productId, tripAmount(trip))} ${productName(item.productId)}` : `${tripAmount(trip)} Einheiten`} · Abholung`,

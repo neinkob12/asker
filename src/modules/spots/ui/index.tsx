@@ -3,7 +3,7 @@
 // Das Panel hat den Slot 'spots.spotPanel', in den andere Module Abschnitte hängen (Kunden, Preise, Läufer …).
 
 import { useState } from 'preact/hooks';
-import { formatEuro, formatPercent } from '../../../core';
+import { clock, formatEuro, formatPercent } from '../../../core';
 import { mapEffects, registerMapLayer } from '../../../map';
 import {
   Card,
@@ -42,6 +42,7 @@ import {
   SPOT_TYPES,
   spotCity,
   spotHoursLabel,
+  spotOpensAt,
   spotType,
 } from '../index';
 import { recordSaleGlow, recordSpotRaid, syncSpotGlow } from './glow';
@@ -64,6 +65,17 @@ declare module '../../../ui' {
  * Spot-Seite im Handy: oben die Kennzahlen (wer wartet, Preisniveau, Andrang) und wo der Spot liegt, darunter die
  * Abschnitte der anderen Module als Gruppen (Selbst verkaufen, Kundschaft, Preise, Personal …).
  */
+
+/** „zu, öffnet in 3 Std.“ bzw. „zu, öffnet Fr 22 Uhr“ (Auftrag 43, L1). */
+function closedLabel(spot: Parameters<typeof spotOpensAt>[0], time: number): string {
+  const at = spotOpensAt(spot, time);
+  if (at === null) return 'zu';
+  const minutes = at - time;
+  return minutes < 24 * 60
+    ? `zu, öffnet in ${clock.formatDuration(minutes)}`
+    : `zu, öffnet ${clock.weekdayName(at, true)} ${clock.hour(at)} Uhr`;
+}
+
 function SpotPanel(props: { spotId: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
@@ -97,12 +109,15 @@ function SpotPanel(props: { spotId: string }) {
             tags={[
               spot.custom && { label: 'eigener Spot', icon: 'pinPlus', color: 'brand' },
               !isKneipe(spot) && { label: spotType(spot).name, icon: spotType(spot).icon, color: 'place' },
+              // Öffnungszeiten auch für feste Spots mit Wochenzeiten (Berliner Clubs, Auftrag 43, L1).
               !isKneipe(spot) &&
-                !!spot.custom &&
+                (!!spot.custom || !!spot.weekHours) &&
                 !!spotHoursLabel(spot) && { label: spotHoursLabel(spot) ?? '', icon: 'clock', color: 'system' },
-              !isKneipe(spot) && !isSpotOpen(spot, state.time) && { label: 'zu', color: 'system' },
+              !isKneipe(spot) &&
+                !isSpotOpen(spot, state.time) && { label: closedLabel(spot, state.time), color: 'system' },
               isKneipe(spot) && { label: `Kneipe ${KNEIPE.from}–${KNEIPE.to} Uhr`, icon: 'beer', color: 'goods' },
-              isKneipe(spot) && !isSpotOpen(spot, state.time) && { label: 'zu', color: 'system' },
+              isKneipe(spot) &&
+                !isSpotOpen(spot, state.time) && { label: closedLabel(spot, state.time), color: 'system' },
             ]}
           />
         </ListItem>
@@ -278,16 +293,21 @@ registerAdvisor({
     const city = activeCity(state);
     if (isBusinessSold(state) || getSpots(state, city).length > 0 || getWarehouses(state, city).length === 0)
       return null;
-    const spot = lockedSpots(state)
-      .filter((s) => spotCity(s) === city)
-      .sort((a, b) => (a.unlockCost ?? 0) - (b.unlockCost ?? 0))[0];
+    // Der beste, den du dir leisten kannst (Andrang je Euro), sonst der günstigste (Auftrag 43, L9: in Berlin war der
+    // billigste ein schwacher Spot mit 80 % Andrang, der Kotti mit 160 % kostete nur das Doppelte).
+    const candidates = lockedSpots(state).filter((s) => spotCity(s) === city);
+    // Höchstens die Hälfte des Geldes, damit noch Ware drin ist.
+    const affordable = candidates.filter((s) => (s.unlockCost ?? 0) <= state.wallet.dirty / 2);
+    const spot =
+      [...affordable].sort((a, b) => b.demand - a.demand || (a.unlockCost ?? 0) - (b.unlockCost ?? 0))[0] ??
+      [...candidates].sort((a, b) => (a.unlockCost ?? 0) - (b.unlockCost ?? 0))[0];
     if (!spot) return null;
     return {
       id: 'spots.firstSpot',
       priority: 68,
       icon: 'pin',
       title: `Ersten Spot in ${cityName(city)} freischalten`,
-      text: `Ohne Spot keine Kunden. Am günstigsten: ${spot.name}.`,
+      text: `Ohne Spot keine Kunden. Ein guter Anfang: ${spot.name} (Andrang ${formatPercent(spot.demand)}).`,
       ...(spot.unlockCost ? { cost: spot.unlockCost } : {}),
       actionLabel: 'Zum Spot',
       target: { lng: spot.lng, lat: spot.lat },

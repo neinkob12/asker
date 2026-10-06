@@ -20,6 +20,7 @@ import {
 import { activeCity } from '../city';
 import { activeEncounters, startEncounter } from '../encounters';
 import {
+  fitArticles,
   formatProductAmount,
   getLots,
   getStock,
@@ -30,6 +31,7 @@ import {
   take,
   type Warehouse,
   warehouseCity,
+  warehousePlace,
 } from '../goods';
 import { allRightHands, isLieutenant } from '../hierarchy';
 import { addHeat, canSnitch, tipOffAgainstPlayer } from '../police';
@@ -549,9 +551,14 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
     // Verscheucht.
     messages.send(ctx, {
       contact: neighbor,
-      text: texts.pick(ctx, 'gang:burglaryFoiled', INCIDENT_TEXTS.burglaryFoiled, { warehouse }),
+      text: texts.pick(
+        ctx,
+        'gang:burglaryFoiled',
+        INCIDENT_TEXTS.burglaryFoiled.map((t) => fitArticles(t, 'warehouse', warehouse)),
+        { warehouse },
+      ),
     });
-    journal.add(ctx, `Einbruchsversuch am ${warehouse}: Deine Wache hat sie verscheucht.`, 'good');
+    journal.add(ctx, `Einbruchsversuch ${warehousePlace(warehouse, 'at')}: Deine Wache hat sie verscheucht.`, 'good');
     removeIncident(ctx, incident.id);
     ctx.emit('gang.burglary', { gangId: incident.byGangId, warehouseId: incident.warehouseId ?? '', amount: 0 });
     return;
@@ -561,12 +568,17 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
   const insider = incident.staffId ? getStaffMember(ctx.state, incident.staffId) : undefined;
   const key =
     incident.trail === 'gang' ? 'burglaryGang' : incident.trail === 'insider' ? 'burglaryInsider' : 'burglaryJunkies';
-  const text = texts.pick(ctx, `gang:${key}`, INCIDENT_TEXTS[key], {
-    warehouse,
-    goods,
-    gang: gang?.name ?? '',
-    name: insider?.name ?? 'jemand',
-  });
+  const text = texts.pick(
+    ctx,
+    `gang:${key}`,
+    INCIDENT_TEXTS[key].map((t) => fitArticles(t, 'warehouse', warehouse)),
+    {
+      warehouse,
+      goods,
+      gang: gang?.name ?? '',
+      name: insider?.name ?? 'jemand',
+    },
+  );
   const options = incidentOptions(ctx.state, incident);
   incident.messageId = messages.send(ctx, {
     contact: neighbor,
@@ -576,11 +588,11 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
   });
   journal.add(
     ctx,
-    `Einbruch im ${warehouse}: ${goods} gestohlen.${gang ? ` Die Spur führt zu ${gang.name}.` : ''}`,
+    `Einbruch ${warehousePlace(warehouse, 'in')}: ${goods} gestohlen.${gang ? ` Die Spur führt zu ${gang.name}.` : ''}`,
     'bad',
   );
   // Ins Protokoll einer Gang nur, wenn die Spur zu ihr führt: Wer es wirklich war, weißt du sonst nicht.
-  if (gang) logAction(ctx, gang.id, `Einbruch im ${warehouse}: ${goods}`);
+  if (gang) logAction(ctx, gang.id, `Einbruch ${warehousePlace(warehouse, 'in')}: ${goods}`);
   ctx.emit('gang.burglary', {
     gangId: incident.byGangId,
     warehouseId: incident.warehouseId ?? '',
@@ -878,7 +890,7 @@ function resolveBlackmail(ctx: Ctx, incident: GangIncident, choice: string): Com
     const raid = tipOffAgainstPlayer(ctx, veedelId, BLACKMAIL_HEAT, ctx.chance(BLACKMAIL_RAID_CHANCE));
     journal.add(
       ctx,
-      `${gang.name} macht die Drohung wahr: Die Polizei weiß vom ${w.name}.${raid ? ' Eine Razzia ist geplant.' : ''}`,
+      `${gang.name} macht die Drohung wahr: Die Polizei weiß ${warehousePlace(w.name, 'of')}.${raid ? ' Eine Razzia ist geplant.' : ''}`,
       'bad',
       { veedelId },
     );
@@ -1118,7 +1130,7 @@ export function describeIncident(state: GameState, incident: GangIncident): stri
   const gang = incident.gangId ? getGang(state, incident.gangId) : undefined;
   switch (incident.kind) {
     case 'burglary':
-      return `Einbruch im ${getWarehouse(state, incident.warehouseId ?? '')?.name ?? 'Lager'}`;
+      return `Einbruch ${warehousePlace(getWarehouse(state, incident.warehouseId ?? '')?.name ?? 'Lager', 'in')}`;
     case 'poach':
       return `${gang?.name ?? 'Eine Gang'} will ${getStaffMember(state, incident.staffId ?? '')?.name ?? 'jemanden'} abwerben`;
     case 'intimidation': {

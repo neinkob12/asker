@@ -26,6 +26,7 @@ import {
   useUi,
 } from '../../../ui';
 import { activeCity, cityName, isBusinessSold, offerStatus } from '../../city';
+import { hasPort } from '../../logistics';
 import { getStaff, getStaffMember, roleName } from '../../staff';
 import { campaignProgress } from '../../territory';
 import {
@@ -458,7 +459,8 @@ function RightHandPage() {
         color="brand"
         note="Jede Aufgabe einzeln. Neue Aufgaben schaltet ihre Stufe frei."
       >
-        {RIGHT_HAND_TASKS.map((t) => {
+        {/* „Hafen abholen“ nur in Städten mit Hafen (Auftrag 43, L2). */}
+        {RIGHT_HAND_TASKS.filter((t) => t.key !== 'pickup' || hasPort(activeCity(state))).map((t) => {
           const unlocked = isTaskUnlocked(state, t.key);
           const on = rh.settings[t.key];
           const idle = unlocked && on ? taskIdleReason(state, t.key) : null;

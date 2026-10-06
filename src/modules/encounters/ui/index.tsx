@@ -444,6 +444,31 @@ const MODES: Record<EncounterMode, ModeView> = {
   },
 };
 
+/**
+ * Ein Weg im Briefing, passend zur Lage (Auftrag 43, K2): Ist niemand da und geht auch keiner hin, ist „Leute machen
+ * lassen“ nicht sicher, sondern verloren; bei einem Lager wird das Lager geräumt, nicht der Spot.
+ */
+function briefingView(mode: EncounterMode, encounter: Encounter, chosen: number): ModeView {
+  const view = MODES[mode];
+  if (mode === 'crew' && encounter.participants.length === 0 && chosen === 0) {
+    return {
+      ...view,
+      tag: () => 'Alles weg',
+      tone: 'danger',
+      text: () => 'Niemand von euch ist dort. Ohne Leute nehmen sie sich, was da ist.',
+    };
+  }
+  const warehouse = encounter.request.setting === 'warehouse' || encounter.request.warehouseId !== undefined;
+  if (mode === 'abandon' && warehouse) {
+    return {
+      ...view,
+      title: 'Ware retten, Lager räumen',
+      text: () => 'Ihr packt ein, was ihr tragen könnt, und verschwindet. Der Rest bleibt liegen.',
+    };
+  }
+  return view;
+}
+
 /** Wege, bei denen jemand hingeht (dort zählt die Crew). */
 const CREW_MODES: readonly EncounterMode[] = ['self', 'crew', 'backup'];
 
@@ -522,7 +547,7 @@ function Briefing(props: { encounter: Encounter }) {
       <h3 class="enc-question">Wie gehst du vor?</h3>
       <div class="enc-grid">
         {options.map((option) => {
-          const view = MODES[option.mode];
+          const view = briefingView(option.mode, encounter, chosen.length);
           return (
             <button
               key={option.mode}

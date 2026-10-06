@@ -76,7 +76,7 @@ export const SUPPLIERS: readonly Supplier[] = [
     priceLevel: 0.55,
     quality: 0.62,
     reliability: 0.88,
-    description: 'Kurierfahrer über die A3. Schnell und zuverlässig, dafür teuer.',
+    description: 'Kurierfahrer über die {road}. Schnell und zuverlässig, dafür teuer.',
     // Toni ist in Hamburg dein Startlieferant per Kurier: länger unterwegs, zehn Prozent Aufschlag.
     // In Berlin genauso weit weg wie in Hamburg, in München mit fünfzehn Prozent (Auftrag 38). In Frankfurt ist er zu
     // Hause (Auftrag 39): in einer Stunde da und zehn Prozent billiger.

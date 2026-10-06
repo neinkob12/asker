@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { fillText } from '../../core';
+import { clock, fillText } from '../../core';
 import { PRESET_SPOTS } from './config';
+import { isSpotOpen, spotHoursLabel, spotOpensAt } from './index';
 import { atSpot, atSpotStart, spotVars } from './places';
 
 describe('Wendung für Spots (J4)', () => {
@@ -41,5 +42,18 @@ describe('Wendung für Spots (J4)', () => {
       expect(text, spot.id).toMatch(start);
       expect(text, spot.id).not.toMatch(/^(am|an der|im|in der) (Am|An|Im|In) /);
     }
+  });
+});
+
+describe('Öffnungszeiten (Auftrag 43, L1)', () => {
+  it('ein Club mit Wochenzeiten sagt, wann er wieder öffnet', () => {
+    const club = { weekHours: [4 * 24 + 22, 8] as [number, number] };
+    // Tag 1 ist ein Freitag: Freitag 12 Uhr ist zu, öffnet um 22 Uhr.
+    const fridayNoon = 12 * 60;
+    expect(clock.weekday(fridayNoon)).toBe(4);
+    expect(isSpotOpen(club, fridayNoon)).toBe(false);
+    expect(spotOpensAt(club, fridayNoon)).toBe(22 * 60);
+    expect(spotOpensAt(club, 23 * 60)).toBeNull();
+    expect(spotHoursLabel(club)).toBe('Fr 22 – Mo 8 Uhr');
   });
 });

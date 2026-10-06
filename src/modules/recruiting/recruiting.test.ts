@@ -47,9 +47,9 @@ describe('recruiting: Bewerber-Pool', () => {
     const arrived = eventsOfType(events, 'recruiting.candidateArrived').filter((e) => e.payload.source === 'pool');
     expect(arrived.length).toBeGreaterThanOrEqual(4);
     expect(getPool(sim.state).length).toBeLessThanOrEqual(poolMax(sim.state));
-    // Abgelaufene gehen mit einer stillen Notiz.
+    // Abgelaufene gehen still, ohne Zeile im Journal (Auftrag 43, K10).
     expect(eventsOfType(events, 'recruiting.candidateLeft').length).toBeGreaterThan(0);
-    expect(sim.state.journal.some((e) => e.text.includes('anderweitig umgesehen'))).toBe(true);
+    expect(sim.state.journal.some((e) => e.text.includes('anderweitig umgesehen'))).toBe(false);
     expect(getPool(sim.state).some((c) => first.includes(c.id))).toBe(false);
     // Die Bewerber sind unterschiedlich.
     const stats = new Set(getCandidates(sim.state).map((c) => JSON.stringify(c.stats)));

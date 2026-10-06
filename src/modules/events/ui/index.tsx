@@ -21,7 +21,15 @@ import {
 } from '../../../ui';
 import { activeCity, bribeFactor, cityName, relationFactor } from '../../city';
 import { saleInfluenceFactor } from '../../territory';
-import { activeEvents, type CityEventDef, eventEnd, getEventDef, upcomingEvents } from '../index';
+import {
+  activeEvents,
+  CITY_EVENTS,
+  type CityEventDef,
+  eventEnd,
+  getEventDef,
+  nextEventStart,
+  upcomingEvents,
+} from '../index';
 import './events.css';
 import { eventsLayer } from './map';
 
@@ -117,7 +125,14 @@ function characterText(cityId: string): { title: string; text: string } {
 function CityLife() {
   const { state } = useGame();
   const cityId = activeCity(state);
-  const next = upcomingEvents(state, cityId, 21);
+  const soon = upcomingEvents(state, cityId, 21);
+  // Große Feste (Zyklus, z.B. Wiesn) stehen auch drin, wenn sie weiter weg sind (Auftrag 43, L8).
+  const later = CITY_EVENTS.filter(
+    (def) => def.cityId === cityId && def.schedule.kind === 'cycle' && !soon.some((e) => e.def.id === def.id),
+  )
+    .map((def) => ({ def, start: nextEventStart(def, state.time), running: false }))
+    .filter((e): e is { def: CityEventDef; start: number; running: false } => e.start !== null);
+  const next = [...soon, ...later];
   const character = characterText(cityId);
   return (
     <Card

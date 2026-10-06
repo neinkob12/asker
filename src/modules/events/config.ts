@@ -206,7 +206,9 @@ export const CITY_EVENTS: readonly CityEventDef[] = [
     cityId: 'muenchen',
     name: 'Oktoberfest',
     icon: 'party',
-    schedule: { kind: 'cycle', firstDay: 40, everyDays: 90, days: 16 },
+    // Alle 45 Tage für zwei Wochen (Auftrag 43, L8: alle 90 Tage verpassten viele Spieler die Wiesn ganz, obwohl Leitner
+    // sie bei der Ankunft verspricht).
+    schedule: { kind: 'cycle', firstDay: 40, everyDays: 45, days: 14 },
     area: { spots: WIESN_SPOTS },
     effects: { demand: 3, heatPerSale: 1.3, checks: 2 },
     text: 'Zwei Wochen Wiesn: dreimal so viel Kundschaft rund um die Theresienwiese, aber überall Polizei.',

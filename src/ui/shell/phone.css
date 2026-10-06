@@ -428,6 +428,20 @@
 .island__lead {
   min-width: 0;
 }
+/* Das Symbol behält seinen Platz, der Text danach wird gekürzt (Auftrag 43, K1: am Handy lag das Symbol auf dem Ort,
+   der Ort ragte aus der Pille). */
+.island__lead .ui-icon {
+  flex: none;
+}
+.island-wrap:not(.is-floating) .island__lead {
+  flex: none;
+}
+.island__compact .island__trail {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* Echtes Handy: keine Kamera-Attrappe, die Pille zeigt links die Spielzeit, daneben die wichtigste Aktivität */
 .island__clock {
   font-size: var(--type-subhead);

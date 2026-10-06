@@ -221,7 +221,7 @@ function PowerHeader() {
         <strong class="gangs-power__number">{Math.round(mine)}</strong>
         <span class="gangs-power__hint">
           {stronger === 0
-            ? 'Keine Gang ist stärker als du.'
+            ? 'Keine Gang ist insgesamt stärker. Einzelne Veedel kann man dir trotzdem abnehmen.'
             : stronger === 1
               ? 'Eine Gang ist stärker als du.'
               : `${stronger} Gangs sind stärker als du.`}

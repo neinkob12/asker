@@ -28,7 +28,8 @@ import {
   useUi,
 } from '../../../ui';
 import { activeCity, cityOfSpot, isBusinessSold } from '../../city';
-import { getSpots } from '../../spots';
+import { playerSpot } from '../../customers';
+import { getSpots, isSpotOpen } from '../../spots';
 import {
   activeRunnerAt,
   assignmentLabel,
@@ -525,6 +526,35 @@ registerAdvisor({
       text: `${idle.name} ist ohne Einsatz: Ohne Spot verkauft niemand, der Lohn läuft trotzdem (${formatEuro(idle.wage)} am Tag).`,
       actionLabel: 'Zur Akte',
       action: (ui) => ui.openPanel('staff.profile', { staffId: idle.id }),
+    };
+  },
+});
+
+// Auftrag 43, K8: Ein freigeschalteter Spot ohne Läufer verliert Kundschaft, und kein Rat sagte es (der Rat „Läufer
+// anheuern“ kommt nur, solange du noch gar keine Leute hast).
+registerAdvisor({
+  id: 'staff.spotWithoutRunner',
+  advise: (state) => {
+    const cityId = activeCity(state);
+    if (getStaff(state, { cityId }).length === 0) return null;
+    // Wer ohne Einsatz herumsteht, meldet staff.idleRunner.
+    if (getStaff(state, { role: 'runner', status: 'active', cityId }).some((m) => !m.assignment)) return null;
+    const here = playerSpot(state);
+    const spot = getSpots(state, cityId).find(
+      (s) => s.id !== here && !runnerAt(state, s.id) && isSpotOpen(s, state.time),
+    );
+    if (!spot) return null;
+    return {
+      id: 'staff.spotWithoutRunner',
+      priority: 64,
+      icon: 'runner',
+      title: `${spot.name} hat keinen Läufer`,
+      text: 'Dort geht die Kundschaft wieder. Am Spot einen Läufer anheuern oder jemanden hinstellen.',
+      actionLabel: 'Zum Spot',
+      action: (ui) => {
+        ui.flyTo({ lng: spot.lng, lat: spot.lat }, 16);
+        ui.openPanel('spots.spot', { spotId: spot.id });
+      },
     };
   },
 });

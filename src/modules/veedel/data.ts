@@ -206,7 +206,7 @@ export const VEEDEL: readonly Veedel[] = [
  * ohne diese Wege wären Nippes, Kalk und Mülheim Sackgassen. Zählen für neighborsOf() als Nachbarn.
  */
 export const LINKS: readonly { a: string; b: string; via: string }[] = [
-  { a: 'nippes', b: 'muelheim', via: 'Mülheimer Brücke (über Riehl)' },
+  { a: 'nippes', b: 'muelheim', via: 'über die Mülheimer Brücke (durch Riehl)' },
   { a: 'kalk', b: 'muelheim', via: 'über Buchforst' },
   { a: 'ehrenfeld', b: 'nippes', via: 'über Neuehrenfeld' },
   { a: 'suelz', b: 'bayenthal', via: 'über Zollstock und Raderberg' },

@@ -58,6 +58,7 @@ import {
   storeFitting,
   unitWeight,
   warehouseFree,
+  warehousePlace,
 } from '../goods';
 import { hasBerth, portName, receiveCargo } from '../logistics';
 import { purchaseIndex } from '../market';
@@ -212,6 +213,21 @@ export function supplierVia(supplier: Supplier, cityId: string): string | undefi
   return supplier.via?.[cityId];
 }
 
+/** Beschreibung für die Stadt: {road} ist die Autobahn, über die er dort ankommt (Auftrag 43, L7: immer „A3“). */
+export function supplierDescription(supplier: Supplier, cityId: string): string {
+  const road = supplierVia(supplier, cityId) ?? Object.values(supplier.via ?? {})[0] ?? 'Autobahn';
+  return supplier.description.replace('{road}', road);
+}
+
+/**
+ * Chance, dass eine Lieferung beschlagnahmt wird (Auftrag 43, L6: der Zoll an der Grenze stand nirgends als Zahl), mit
+ * dem Vertrauen von jetzt. Teil von rollShipmentProblem.
+ */
+export function seizeChance(supplier: Supplier, trust: number): number {
+  const risk = (1 - supplier.reliability) * (1 - trust / 200);
+  return risk * SEIZE_FACTOR + (supplier.kind === 'port' ? PORT_SEIZE_EXTRA : 0) + (supplier.customs ?? 0);
+}
+
 export type ShipmentProblem = 'delayed' | 'badQuality' | 'seized';
 
 export interface Shipment {
@@ -245,6 +261,8 @@ export interface Shipment {
   problemRevealed?: boolean;
   /** Versprochene Qualität, falls die Ware schlechter ankommt. */
   promisedQuality?: number;
+  /** Bestellt von Leuten (Rechte Hand, Leutnant), nicht vom Spieler (Auftrag 43, K4): kein Banner, keine Plauder-Chats. */
+  orderedBy?: string;
   /** Weg der Lieferung und Grund des Problems (Auftrag 23, problems.ts), gesetzt, sobald es bekannt ist. */
   route?: RouteKind;
   reasonId?: string;
@@ -336,6 +354,8 @@ declare module '../../core' {
       quality?: number;
       /** Schiffsware am Kai im Niehler Hafen (warehouseId ist dann 'port'). */
       atPort?: boolean;
+      /** Von deinen Leuten bestellt (Auftrag 43, K4). */
+      byStaff?: boolean;
       /** Lager waren zu voll, die Ware liegt in mehreren (Auftrag 33): "300 g im Lager Ehrenfeld, 200 g im …". */
       placedIn?: string;
       /** Stadt, für die bestellt wurde (Auftrag 43; die Oberfläche meldet nur die Stadt, in der du spielst). */
@@ -668,7 +688,7 @@ export function activeDeal(
  */
 export function rollShipmentProblem(roll: number, supplier: Supplier, trust: number): ShipmentProblem | null {
   const risk = (1 - supplier.reliability) * (1 - trust / 200);
-  const seize = risk * SEIZE_FACTOR + (supplier.kind === 'port' ? PORT_SEIZE_EXTRA : 0) + (supplier.customs ?? 0);
+  const seize = seizeChance(supplier, trust);
   const delay = seize + risk * DELAY_FACTOR;
   const bad = delay + risk * BAD_QUALITY_FACTOR;
   if (roll < seize) return 'seized';
@@ -717,19 +737,19 @@ export function supplierContact(supplier: Supplier): Contact {
 }
 
 /** Kontakt des Lieferanten im Handy (mit Aussehen). */
-export function contactOf(supplier: Supplier): Contact {
+export function contactOf(supplier: Supplier, cityId?: string): Contact {
   return {
     id: supplierContactId(supplier.id),
     name: `${supplier.contactName} (${supplier.name})`,
     kind: 'supplier',
     role: `Lieferant aus ${supplier.name}`,
-    about: supplier.description,
+    about: supplierDescription(supplier, cityId ?? supplier.home?.cityId ?? 'koeln'),
     look: SUPPLIER_LOOKS[supplier.id] ?? {},
   };
 }
 
 export function tell(ctx: Ctx, supplier: Supplier, text: string): void {
-  messages.send(ctx, { contact: contactOf(supplier), text });
+  messages.send(ctx, { contact: contactOf(supplier, activeCity(ctx.state)), text });
 }
 
 /** Liefert die Lieferung in die Stadt, in der du bist (und gehört das Geschäft noch dir)? */
@@ -741,7 +761,16 @@ export function shipmentHere(state: GameState, s: { cityId?: string }): boolean 
  * Über eine Lieferung schreiben, aber nur, wenn sie in die Stadt geht, in der du bist (Auftrag 43: nach dem Umzug
  * kamen Chats wie „Freie Bahn. Bin früher da.“ über Lieferungen nach Köln). Sonst steht es nur im Journal.
  */
-export function tellAbout(ctx: Ctx, supplier: Supplier, s: { cityId?: string }, text: string): void {
+export function tellAbout(
+  ctx: Ctx,
+  supplier: Supplier,
+  s: { cityId?: string; orderedBy?: string },
+  text: string,
+  important = false,
+): void {
+  // Was deine Leute bestellt haben, plaudert der Lieferant nicht mit dir aus, außer es ist etwas verloren (Auftrag 43,
+  // K4: Die Rechte Hand bestellte stündlich Kleinkram, und jede Lieferung brachte Chats und Banner).
+  if (s.orderedBy && !important) return;
   if (shipmentHere(ctx.state, s)) tell(ctx, supplier, text);
 }
 
@@ -751,6 +780,7 @@ function order(
   packageId: string,
   onCredit: boolean,
   warehouseId: string | undefined,
+  actor: string = 'player',
 ): CommandResult {
   const base = getSupplier(ctx.state, supplierId);
   const warehouse = warehouseId ? getWarehouse(ctx.state, warehouseId) : undefined;
@@ -819,6 +849,7 @@ function order(
     arrivesAt: ctx.now + supplier.deliveryTime,
   };
   if (cityId !== 'koeln') shipment.cityId = cityId;
+  if (actor.startsWith('staff:')) shipment.orderedBy = actor;
   if (onCredit) shipment.onCredit = true;
   if (sharedBust) shipment.shared = true;
   if (toPort) {
@@ -951,8 +982,10 @@ function unloadCourier(
 /** Wo die Ware einer Lieferung liegt, als Text: "im Lager Ehrenfeld" oder "300 g im Lager Ehrenfeld, 200 g im …". */
 function placedText(state: GameState, productId: string, placed: readonly { warehouseId: string; amount: number }[]) {
   const name = (id: string) => getWarehouse(state, id)?.name ?? 'Lager';
-  if (placed.length <= 1) return `im ${name(placed[0]?.warehouseId ?? '')}`;
-  return placed.map((p) => `${formatProductAmount(productId, p.amount)} im ${name(p.warehouseId)}`).join(', ');
+  if (placed.length <= 1) return warehousePlace(name(placed[0]?.warehouseId ?? ''), 'in');
+  return placed
+    .map((p) => `${formatProductAmount(productId, p.amount)} ${warehousePlace(name(p.warehouseId), 'in')}`)
+    .join(', ');
 }
 
 /** Abstand zweier Orte in Grad (reicht zum Sortieren innerhalb einer Stadt). */
@@ -1154,11 +1187,15 @@ function deliver(ctx: Ctx): void {
       // Aus einer anderen Stadt mit Stadtname (Auftrag 43, G10: im Hamburger Verlauf standen Kölner Lieferungen ohne Ort).
       const city = s.cityId ?? 'koeln';
       const prefix = city === activeCity(ctx.state) ? '' : `${cityName(city)}: `;
-      journal.add(
-        ctx,
-        `${prefix}Lieferung angekommen: ${goods}${placed.length > 1 ? ', verteilt: ' : ' '}${where}.`,
-        'good',
-      );
+      // Was deine Leute bestellt haben, steht nicht im Journal (Auftrag 43, K10: 16 von 60 Einträgen waren Lieferungen),
+      // außer die Ware musste verteilt werden.
+      if (!s.orderedBy || placed.length > 1) {
+        journal.add(
+          ctx,
+          `${prefix}Lieferung angekommen: ${goods}${placed.length > 1 ? ', verteilt: ' : ' '}${where}.`,
+          'good',
+        );
+      }
       if (placed.length > 1) placedIn.set(s.id, where);
     }
     if (s.problem === 'badQuality' && supplier) {
@@ -1182,6 +1219,7 @@ function deliver(ctx: Ctx): void {
       quality: s.quality,
       ...(s.toPort ? { atPort: true } : {}),
       ...(placedIn.has(s.id) ? { placedIn: placedIn.get(s.id) } : {}),
+      ...(s.orderedBy ? { byStaff: true } : {}),
       cityId: shipmentCity(s),
     });
   }
@@ -1270,8 +1308,8 @@ export default defineModule({
     if (ctx.now % MINUTES_PER_DAY === 0) rollDeals(ctx);
   },
   commands: {
-    'suppliers.order': (ctx, { supplierId, packageId, onCredit, warehouseId }) =>
-      order(ctx, supplierId, packageId, !!onCredit, warehouseId),
+    'suppliers.order': (ctx, { supplierId, packageId, onCredit, warehouseId }, meta) =>
+      order(ctx, supplierId, packageId, !!onCredit, warehouseId, meta.actor),
     'suppliers.repay': (ctx, { supplierId, amount }) => repay(ctx, supplierId, amount),
     'suppliers.resolveProblem': (ctx, { shipmentId, choice }) => resolveProblem(ctx, shipmentId, choice),
     'suppliers.unlock': (ctx, { supplierId }) => unlock(ctx, supplierId),

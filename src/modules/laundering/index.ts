@@ -147,6 +147,11 @@ function cityFactor(state: GameState): number {
   return LAUNDERING_CAPACITY_BY_CITY[presentCity(state)] ?? 1;
 }
 
+/** Faktor der Stadt, in der du bist, für die Anzeige (Auftrag 43, L9: in Frankfurt stand das 1,5-Fache unerklärt da). */
+export function launderingCityFactor(state: GameState): number {
+  return cityFactor(state);
+}
+
 /** Obergrenze eines Wegs (Auftrag 39): capacity mal dem Faktor der Stadt, in der du bist, in Frankfurt mehr. */
 export function channelCapacity(state: GameState, id: LaunderingChannelId): number {
   return Math.round(getChannel(id).capacity * cityFactor(state));

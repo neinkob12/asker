@@ -22,6 +22,7 @@ import {
   unitWeight,
   type Warehouse,
   warehouseCity,
+  warehousePlace,
 } from '../goods';
 import { travelMinutes } from '../roads';
 import { getStaffMember, isEmployed, STATUS_NAMES } from '../staff';
@@ -502,7 +503,10 @@ export function routeArrived(ctx: Ctx, trip: Trip, warehouseId: string): void {
     route.last = {
       at: ctx.now,
       result: 'done',
-      note: trip.leg === 'back' ? `zurück im ${getWarehouse(state, warehouseId)?.name ?? 'Lager'}` : 'angekommen',
+      note:
+        trip.leg === 'back'
+          ? `zurück ${warehousePlace(getWarehouse(state, warehouseId)?.name ?? 'Lager', 'in')}`
+          : 'angekommen',
     };
     return;
   }

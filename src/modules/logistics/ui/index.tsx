@@ -25,7 +25,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { activeCity, isBusinessSold } from '../../city';
+import { activeCity, cityName, isBusinessSold } from '../../city';
 import { isPlayerDelivering } from '../../customers';
 import { vehicleName } from '../../fleet';
 import {
@@ -36,6 +36,7 @@ import {
   qualityTier,
   stockSummary,
   type Warehouse,
+  warehousePlace,
   warehouseSites,
 } from '../../goods';
 import { getStaff, getStaffMember } from '../../staff';
@@ -371,8 +372,10 @@ function WarehouseLogistics(props: { warehouseId: string }) {
   const drivers = freeDrivers(state);
   const busy = playerBusyReason(state);
   const cargo = getCargo(state);
-  const trips = getTrips(state);
+  // Nur Fahrten dieser Stadt (Auftrag 43, L2: in Berlin stand eine Hamburger Fahrt unter „Unterwegs“).
+  const trips = getTrips(state).filter((t) => tripTouchesCity(state, t, activeCity(state)));
   const risky = cargo.some((c) => cargoRisk(state, c) === 'risky');
+  const port = !!PORTS[activeCity(state)];
   const transfer = (by: 'player' | 'driver') =>
     from &&
     to &&
@@ -446,38 +449,48 @@ function WarehouseLogistics(props: { warehouseId: string }) {
   return (
     <>
       {owned.length === 0 && buyList}
-      <Group icon="ship" color="goods" title="Hafen">
-        <List>
-          <ListItem
-            onClick={() => ui.openPanel('logistics.port', {})}
-            aside={
-              risky ? (
-                <Tag category="danger" icon="alert">
-                  Zoll
-                </Tag>
-              ) : cargo.length > 0 ? (
-                <Tag category="warn" icon="ship">
-                  {cargo.length} am Kai
-                </Tag>
-              ) : undefined
-            }
-          >
-            <ItemContent
-              icon="anchor"
-              color={risky ? 'danger' : 'goods'}
-              title={portName(activeCity(state))}
-              meta={
-                hasBerth(state)
-                  ? cargo.length > 0
-                    ? 'Ware am Kai wartet auf die Abholung'
-                    : 'Liegeplatz, nichts am Kai'
-                  : 'Noch kein Liegeplatz. Mit einem liefern Schiffe große Mengen.'
+      {/* Städte ohne Hafen (L2): nur Routen und Fahrer, kein „Niehler Hafen“. */}
+      {!port && (
+        <Group icon="route" color="goods" title="Logistik">
+          <List>
+            <LogisticsLinks />
+          </List>
+        </Group>
+      )}
+      {port && (
+        <Group icon="ship" color="goods" title="Hafen">
+          <List>
+            <ListItem
+              onClick={() => ui.openPanel('logistics.port', {})}
+              aside={
+                risky ? (
+                  <Tag category="danger" icon="alert">
+                    Zoll
+                  </Tag>
+                ) : cargo.length > 0 ? (
+                  <Tag category="warn" icon="ship">
+                    {cargo.length} am Kai
+                  </Tag>
+                ) : undefined
               }
-            />
-          </ListItem>
-          <LogisticsLinks />
-        </List>
-      </Group>
+            >
+              <ItemContent
+                icon="anchor"
+                color={risky ? 'danger' : 'goods'}
+                title={portName(activeCity(state))}
+                meta={
+                  hasBerth(state)
+                    ? cargo.length > 0
+                      ? 'Ware am Kai wartet auf die Abholung'
+                      : 'Liegeplatz, nichts am Kai'
+                    : 'Noch kein Liegeplatz. Mit einem liefern Schiffe große Mengen.'
+                }
+              />
+            </ListItem>
+            <LogisticsLinks />
+          </List>
+        </Group>
+      )}
       {trips.length > 0 && <TripsGroup trips={trips} />}
       {from && to && (
         <Group
@@ -580,8 +593,19 @@ function PortPanel() {
   return (
     <div class="logi-app">
       <Summary />
-      <PortSection />
-      <BerthGroup />
+      {PORTS[activeCity(state)] ? (
+        <>
+          <PortSection />
+          <BerthGroup />
+        </>
+      ) : (
+        <Group
+          icon="anchor"
+          color="system"
+          title={`Kein Hafen in ${cityName(activeCity(state))}`}
+          note={`Schiffe legen nur in ${Object.keys(PORTS).map(cityName).join(' und ')} an. Hier kommt die Ware über die Straße.`}
+        />
+      )}
       {trips.length > 0 && <TripsGroup trips={trips} />}
       <Group
         icon="route"
@@ -736,7 +760,9 @@ onGameEvent('transport.arrived', 'logistics.arrivedToast', (payload, ui, state) 
   const place = getWarehouse(state, payload.toId)?.name ?? 'Lager';
   // Routen in derselben Stadt sind Routine (still im Verlauf); eine Ankunft über die A1 ist ein Banner wert.
   const routine = payload.kind === 'route' && !payload.interCity;
-  ui.toast(`Fahrt angekommen: ${payload.amount} Einheiten im ${place}.`, 'good', { urgent: !routine });
+  ui.toast(`Fahrt angekommen: ${payload.amount} Einheiten ${warehousePlace(place, 'in')}.`, 'good', {
+    urgent: !routine,
+  });
 });
 onGameEvent('transport.stopped', 'logistics.customsStopToast', (payload, ui, state) => {
   const trip = getTrips(state).find((t) => t.id === payload.tripId);

@@ -390,9 +390,8 @@ function tick(ctx: Ctx): void {
   const gone = s.candidates.filter((c) => c.expiresAt <= ctx.now);
   if (gone.length > 0) {
     s.candidates = s.candidates.filter((c) => c.expiresAt > ctx.now);
-    // Wer abläuft, verschwindet mit einer stillen Notiz im Verlauf.
+    // Wer abläuft, verschwindet still (Auftrag 43, K10: bis zu zwölf Journal-Zeilen am Tag drängten Wichtiges heraus).
     for (const c of gone) {
-      journal.add(ctx, `${c.name} (${roleName(c.role)}) hat sich anderweitig umgesehen.`);
       ctx.emit('recruiting.candidateLeft', { candidateId: c.id, name: c.name, role: c.role, source: c.source });
     }
   }

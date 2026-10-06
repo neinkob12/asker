@@ -134,3 +134,9 @@ describe('veedel', () => {
     expect(neighborsOf('ottensen')).toContain('blankenese'); // Elbchaussee
   });
 });
+
+describe('Verbindungen (Auftrag 43, L4)', () => {
+  it('jede Verbindung bringt ihre Präposition mit, damit kein „über über …“ entsteht', () => {
+    for (const link of veedelLinks()) expect(link.via).toMatch(/^(über|durch|auf|an|entlang) /);
+  });
+});

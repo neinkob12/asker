@@ -27,7 +27,7 @@ import {
   useUi,
 } from '../../../ui';
 import { activeCity, cityName, isBusinessSold, relationFactor } from '../../city';
-import { getStock, getWarehouse, getWarehouses, productName, qualityTier } from '../../goods';
+import { getStock, getWarehouse, getWarehouses, productName, qualityTier, warehousePlace } from '../../goods';
 import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount, portName } from '../../logistics';
 import { indexTrend, purchaseIndex } from '../../market';
 import {
@@ -51,9 +51,11 @@ import {
   packagePrice,
   type Shipment,
   type Supplier,
+  seizeChance,
   shipmentProgress,
   shipmentReason,
   shipmentsInTransit,
+  supplierDescription,
   supplierDiscount,
   supplierIn,
   trustLabel,
@@ -72,7 +74,7 @@ function ShipmentRow(props: { state: GameState; shipment: Shipment; showSupplier
   const supplier = getSupplier(state, s.supplierId);
   const pkg = supplier?.packages.find((p) => p.id === s.packageId);
   const delayed = s.problem === 'delayed' && s.problemRevealed;
-  const target = s.toPort ? 'an den Kai' : `ins ${getWarehouse(state, s.warehouseId)?.name ?? 'Lager'}`;
+  const target = s.toPort ? 'an den Kai' : warehousePlace(getWarehouse(state, s.warehouseId)?.name ?? 'Lager', 'into');
   return (
     <div class="shipment">
       <div class="shipment__head">
@@ -358,7 +360,7 @@ function SupplierDetail(props: { supplierId: string }) {
   if (!deliversTo(base, cityId)) {
     return (
       <div class="sup-app">
-        <p class="ui-hint">{supplier.description}</p>
+        <p class="ui-hint">{supplierDescription(supplier, activeCity(state))}</p>
         <Hint icon="pin">{`${supplier.contactName} liefert nicht nach ${cityName(cityId)}.`}</Hint>
       </div>
     );
@@ -366,7 +368,7 @@ function SupplierDetail(props: { supplierId: string }) {
   if (!isUnlocked(state, supplier.id)) {
     return (
       <div class="sup-app">
-        <p class="ui-hint">{supplier.description}</p>
+        <p class="ui-hint">{supplierDescription(supplier, activeCity(state))}</p>
         <KeyValue label="Art" value={KIND_NAME[supplier.kind]} />
         <KeyValue label="Preis" value={`${formatPercent(supplier.priceLevel)} vom Straßenpreis`} />
         <KeyValue label="Qualität" value={qualityTier(supplier.quality).name} />
@@ -389,11 +391,16 @@ function SupplierDetail(props: { supplierId: string }) {
   const shipments = shipmentsInTransit(state, activeCity(state)).filter((s) => s.supplierId === supplier.id);
   return (
     <div class="sup-app">
-      <p class="ui-hint">{supplier.description}</p>
+      <p class="ui-hint">{supplierDescription(supplier, activeCity(state))}</p>
       <KeyValue label="Art" value={KIND_NAME[supplier.kind]} />
       <KeyValue label="Preis" value={`${formatPercent(supplier.priceLevel)} vom Straßenpreis`} />
       <KeyValue label="Qualität" value={qualityTier(supplier.quality).name} />
       <KeyValue label="Zuverlässigkeit" value={formatPercent(supplier.reliability)} />
+      {/* Risiko pro Lieferung mit dem Vertrauen von jetzt, Zoll an der Grenze extra genannt (Auftrag 43, L6). */}
+      <KeyValue
+        label="Beschlagnahme"
+        value={`${formatPercent(seizeChance(supplier, rel.trust))} je Lieferung${supplier.customs ? `, davon Zoll ${formatPercent(supplier.customs)}` : ''}`}
+      />
       <KeyValue label="Lieferzeit" value={clock.formatDuration(supplier.deliveryTime)} />
       <KeyValue label="Sortiment" value={assortment(supplier).map(productName).join(', ')} />
 
@@ -632,8 +639,9 @@ onGameEvent('shipment.arrived', 'suppliers.arrivedToast', (payload, ui, state) =
   if (payload.atPort || (payload.cityId !== undefined && payload.cityId !== activeCity(state))) return;
   // Waren die Lager zu voll, steht im Banner, wo die Ware jetzt liegt (Auftrag 33).
   const where = payload.placedIn ? ` Lager voll, verteilt: ${payload.placedIn}.` : '';
+  // Banner nur für eigene Bestellungen (Auftrag 43, K4); was deine Leute bestellt haben, steht im Verlauf.
   ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.${where}`, 'good', {
-    urgent: true,
+    urgent: !payload.byStaff || payload.placedIn !== undefined,
   });
 });
 onGameEvent('supplier.unlocked', 'suppliers.unlockedToast', (payload, ui, state) => {

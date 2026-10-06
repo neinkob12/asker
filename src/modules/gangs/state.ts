@@ -130,6 +130,8 @@ export interface GangsState {
   lastWarAskAt: Record<string, number>;
   /** Wie viele Kriege es gab (Messung). */
   warCount: number;
+  /** Auftrag 43, K7: Veedel, die du gerade übernommen hast → Ende der Schonfrist (Spielminute). Fehlt in alten Ständen. */
+  graceUntil?: Record<string, number>;
 }
 
 export function initialGangsState(): GangsState {

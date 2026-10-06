@@ -16,8 +16,9 @@ registerLiveActivity({
       priority: 95,
       icon: 'siren',
       tone: 'bad',
-      leading: ENCOUNTER_KINDS[encounter.kind]?.name ?? 'Konfrontation',
-      trailing: encounter.place,
+      // Der Anlass ist kurz und steht immer da, der Ort davor nur in der schwebenden Island (Auftrag 43, K1).
+      leading: encounter.place,
+      trailing: ENCOUNTER_KINDS[encounter.kind]?.name ?? 'Konfrontation',
       title: encounter.opponent.label,
       // Absicht der Gegenseite und Polizei-Uhr, kompakt (Auftrag 35).
       detail:

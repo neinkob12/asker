@@ -12,6 +12,7 @@ import {
   MEMORY_PRICE_RANGE,
   type MemoryKind,
 } from './config';
+import { formalVoice } from './texts';
 
 export interface GangMemory {
   kind: MemoryKind;
@@ -107,6 +108,98 @@ export const MEMORY_TEXTS: Record<MemoryKind, readonly string[]> = {
   ],
 };
 
+/**
+ * Dieselben Zeilen für Gangs, die siezen (Auftrag 43, K3: „Sie werden es nicht kommen sehen. Im Krieg hast du dich …“).
+ * Welche Gang siezt, ergibt sich aus ihren eigenen Texten (formalVoice in texts.ts).
+ */
+export const MEMORY_TEXTS_FORMAL: Record<MemoryKind, readonly string[]> = {
+  snitched: [
+    'Und dass Sie uns bei der Polizei angezeigt haben, ist nicht vergessen.',
+    'Wir wissen, wer geredet hat.',
+    'Sie haben uns verraten. Das merkt man sich.',
+  ],
+  agreementBroken: [
+    'Ihr Wort ist nichts wert, das haben Sie bewiesen.',
+    'Abmachungen mit Ihnen? Hatten wir schon.',
+    'Sie haben uns einmal hintergangen. Ein zweites Mal gibt es nicht.',
+  ],
+  spotRaided: [
+    'Unser Platz, Ihre Leute. Das vergessen wir nicht.',
+    'Sie haben uns überfallen lassen. Die Rechnung kommt noch.',
+    'Wer bei uns einsteigt, bekommt das zurück.',
+  ],
+  raidRepelled: [
+    'Beim letzten Mal hatten Sie Glück.',
+    'Dass Sie uns neulich abgewehrt haben, macht Sie nicht unverwundbar.',
+    'Einmal haben Sie uns abgewehrt. Einmal.',
+  ],
+  takeover: [
+    'Das Viertel, das Sie uns abgenommen haben, holen wir uns zurück.',
+    'Sie sitzen auf unserem Grund. Noch.',
+    'Wir haben nicht vergessen, wem das Viertel einmal gehört hat.',
+  ],
+  threatened: [
+    'Sie haben uns gedroht. Keine gute Idee.',
+    'Ihre Drohungen merken wir uns.',
+    'Wer uns droht, steht auf einer Liste.',
+  ],
+  chasedOff: [
+    'Dass Ihre Leute uns verjagt haben, war nicht klug.',
+    'Sie haben uns vertrieben. Wir kommen wieder.',
+    'Ihre Türsteher haben uns abgewiesen. Das merken wir uns.',
+  ],
+  hunted: [
+    'Sie haben Leute auf uns angesetzt.',
+    'Ihre Jagd auf uns hat niemand vergessen.',
+    'Wer uns jagt, wird gejagt.',
+  ],
+  blackmailRefused: [
+    'Sie zahlen nicht? Das wissen wir inzwischen.',
+    'Stur sind Sie. Das haben wir gelernt.',
+    'Beim letzten Mal haben Sie nicht gezahlt. Wir werden sehen.',
+  ],
+  warAgainst: [
+    'Im Krieg haben Sie sich gegen uns gestellt.',
+    'Sie haben unseren Feinden geholfen. Das wissen wir.',
+    'Auf welcher Seite Sie standen, wissen wir.',
+  ],
+  tributePaid: [
+    'Sie haben immer pünktlich gezahlt. Das rechnen wir Ihnen an.',
+    'Zuverlässig waren Sie bisher.',
+    'Sie zahlen, wir halten uns zurück. So soll es bleiben.',
+  ],
+  ceasefire: [
+    'Der Waffenstillstand mit Ihnen hat gehalten.',
+    'Mit Ihnen kann man reden, das hat man gesehen.',
+    'Unser letzter Frieden war gut für beide Seiten.',
+  ],
+  deal: [
+    'Unsere letzten Geschäfte liefen sauber.',
+    'Mit Ihnen macht man Geschäfte, das wissen wir.',
+    'Sie haben fair gekauft. Das zählt.',
+  ],
+  blackmailPaid: [
+    'Beim letzten Mal haben Sie gezahlt. Klug.',
+    'Sie wissen, wann man zahlt.',
+    'Sie haben verstanden, wie das läuft.',
+  ],
+  favor: [
+    'Sie haben uns einen Gefallen getan. Das vergessen wir nicht.',
+    'Wir stehen noch in Ihrer Schuld.',
+    'Ihr Gefallen neulich hat geholfen.',
+  ],
+  warned: [
+    'Sie haben auf unsere Warnung gehört.',
+    'Unser Hinweis neulich hat Ihnen geholfen, nicht wahr?',
+    'Sie hören zu, wenn wir etwas sagen. Gut.',
+  ],
+  warHelp: [
+    'Im Krieg standen Sie an unserer Seite.',
+    'Wer uns im Krieg hilft, ist ein Freund.',
+    'Ihre Hilfe gegen unsere Feinde bleibt unvergessen.',
+  ],
+};
+
 function memoriesOf(ctx: Ctx, gangId: string): GangMemory[] {
   const g = ctx.state.modules.gangs;
   g.memories ??= {};
@@ -183,5 +276,8 @@ export function forgetFaded(ctx: Ctx): void {
 export function memoryLine(ctx: Ctx, gangId: string): string {
   const strongest = gangMemories(ctx.state, gangId)[0];
   if (!strongest || Math.abs(strongest.value) < MEMORY_MENTION_AT) return '';
-  return texts.pick(ctx, `gang:memory:${strongest.kind}`, MEMORY_TEXTS[strongest.kind]);
+  // Wer siezt, erinnert sich auch per Sie (Auftrag 43, K3).
+  return formalVoice(gangId)
+    ? texts.pick(ctx, `gang:memory:formal:${strongest.kind}`, MEMORY_TEXTS_FORMAL[strongest.kind])
+    : texts.pick(ctx, `gang:memory:${strongest.kind}`, MEMORY_TEXTS[strongest.kind]);
 }

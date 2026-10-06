@@ -184,9 +184,9 @@ export const VEEDEL_HAMBURG: readonly Veedel[] = [
  * Elbe, entlang der Elbchaussee und durch die Viertel, die im Spiel fehlen. So hängen alle Hamburger Stadtteile zusammen.
  */
 export const LINKS_HAMBURG: readonly { a: string; b: string; why: string }[] = [
-  { a: 'st-pauli', b: 'wilhelmsburg', why: 'Elbbrücken und Alter Elbtunnel' },
-  { a: 'hafencity', b: 'wilhelmsburg', why: 'Elbbrücken' },
-  { a: 'st-pauli', b: 'hafencity', why: 'Baumwall und Landungsbrücken' },
+  { a: 'st-pauli', b: 'wilhelmsburg', why: 'über die Elbbrücken oder durch den Alten Elbtunnel' },
+  { a: 'hafencity', b: 'wilhelmsburg', why: 'über die Elbbrücken' },
+  { a: 'st-pauli', b: 'hafencity', why: 'über Baumwall und Landungsbrücken' },
   { a: 'hafencity', b: 'st-georg', why: 'über die Altstadt und den Hauptbahnhof' },
   { a: 'st-georg', b: 'barmbek-sued', why: 'über Uhlenhorst' },
   { a: 'eimsbuettel', b: 'eppendorf', why: 'über Hoheluft' },

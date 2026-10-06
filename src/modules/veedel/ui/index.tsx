@@ -108,7 +108,8 @@ function VeedelPanel(props: { veedelId: string }) {
                 icon={sharesBorder(veedel.id, id) ? 'map' : 'bridge'}
                 color="place"
                 title={veedelName(id)}
-                meta={sharesBorder(veedel.id, id) ? 'gemeinsame Grenze' : `über ${link(id)?.via ?? 'eine Verbindung'}`}
+                // Die Daten bringen die Präposition mit („über …“, „durch …“), Auftrag 43, L4: es stand „über über …“.
+                meta={sharesBorder(veedel.id, id) ? 'gemeinsame Grenze' : (link(id)?.via ?? 'über eine Verbindung')}
               />
             </ListItem>
           ))}

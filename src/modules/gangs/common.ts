@@ -2,7 +2,7 @@
 
 import { type Ctx, formatEuro, type GameState, journal, type MessageOption, messages, texts } from '../../core';
 import { activeCity } from '../city';
-import { warehouseCity } from '../goods';
+import { fitArticles, warehouseCity } from '../goods';
 import { getSpot, spotCity } from '../spots';
 import { getStaff } from '../staff';
 import { veedelName } from '../veedel';
@@ -109,7 +109,11 @@ export function say(
   expiresIn = MESSAGE_EXPIRY,
 ): number {
   // Eigene Stimme pro Gang, ohne dieselbe Variante direkt zu wiederholen (Text-Helfer des Kerns, Auftrag 23).
-  const base = texts.pick(ctx, `gang:${gang.id}:${key}`, gangVariants(gang.id, key), {
+  // Artikel vor dem Lagernamen passend („deine Garage“ statt „dein Garage“, Auftrag 43, L3).
+  const variants = vars.warehouse
+    ? gangVariants(gang.id, key).map((t) => fitArticles(t, 'warehouse', vars.warehouse))
+    : gangVariants(gang.id, key);
+  const base = texts.pick(ctx, `gang:${gang.id}:${key}`, variants, {
     boss: gang.boss,
     gang: gang.name,
     ...vars,
