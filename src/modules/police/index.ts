@@ -120,7 +120,14 @@ import {
 import { nextTier, type OperationTier, operationFacts, tierInfo } from './tier';
 
 export { CHECK_THRESHOLD, HEAT_LEVELS, MAX_HEAT, OPERATION_TIERS, RAID_SCOPES, RAID_THRESHOLD } from './config';
-export { nextTierHints, type OperationFacts, type OperationTier, operationFacts } from './tier';
+export {
+  nextTierHints,
+  type OperationFacts,
+  type OperationTier,
+  operationFacts,
+  type TierHint,
+  type TierHintPart,
+} from './tier';
 
 /** Art einer Razzia gegen dich: an einem Spot, im ganzen Veedel oder Großrazzia (mehrere Veedel und Lager). */
 export type RaidScope = keyof typeof RAID_SCOPES;

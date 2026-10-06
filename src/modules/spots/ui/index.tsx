@@ -311,7 +311,8 @@ registerAdvisor({
     }
     if (busiest) {
       const spot = busiest;
-      const title = `${most} ${most === 1 ? 'Kunde wartet' : 'Kunden warten'} am ${spot.name}`;
+      // Ort zuerst: Im schmalen Banner („Dringend“) bleibt so der Ort stehen, auch wenn der Rest gekürzt wird (J5).
+      const title = `${spot.name}: ${most} ${most === 1 ? 'Kunde wartet' : 'Kunden warten'}`;
       // Stehst du noch nirgends: hinstellen, dann verkaufst du dort automatisch. Sonst sofort alle bedienen.
       if (!mine && !isPlayerAway(state)) {
         return {

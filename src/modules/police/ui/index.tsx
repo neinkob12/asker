@@ -253,9 +253,19 @@ function PoliceCard() {
           note="Eines davon reicht. Wer größer wird, bekommt härtere Razzien."
         >
           <List>
+            {/* Bedingung als Titel, der Stand darunter als Chips: Rechts neben dem Titel war am Handy kein Platz (J7). */}
             {hints.map((h) => (
-              <ListItem key={h.label} value={h.value}>
-                <ItemContent icon="arrowUp" color="warn" title={h.label} />
+              <ListItem key={h.label}>
+                <ItemContent
+                  icon="arrowUp"
+                  color="warn"
+                  title={h.label}
+                  tags={h.parts.map((p) => ({
+                    label: p.label,
+                    icon: p.met ? 'checkCircle' : undefined,
+                    color: p.met ? 'money' : 'system',
+                  }))}
+                />
               </ListItem>
             ))}
           </List>

@@ -107,7 +107,10 @@ const stockView = memoState((state) => {
   return { cityId, rows, warehouses: getWarehouses(state, cityId) };
 });
 
-/** Kurzanzeige im HUD: "2,1 kg Gras + 489 Stück Pillen" (die zwei größten Posten), dazu die Aufstellung zum Aufklappen. */
+/**
+ * Kurzanzeige im HUD: "2,1 kg Gras + 489 Stück Pillen" (die zwei größten Posten), bei mehr "2,1 kg Gras +4" (am Handy
+ * ist die Kachel schmal), dazu die Aufstellung zum Aufklappen.
+ */
 const StockHud = memo(function StockHud() {
   const ui = useUi();
   // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen.
@@ -120,7 +123,7 @@ const StockHud = memo(function StockHud() {
         ? 'leer'
         : rows.length <= 2
           ? rows.map(stockText).join(' + ')
-          : `${stockText(rows[0])} + ${rows.length - 1} weitere`;
+          : `${stockText(rows[0])} +${rows.length - 1}`;
     return {
       value: warehouses.length === 0 ? 'kein Lager' : short,
       title: rows.map(stockText).join(', ') || 'Lager leer',

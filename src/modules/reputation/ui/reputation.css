@@ -6,17 +6,21 @@
   color: var(--cat-danger);
 }
 
-/* Kachel Ruf · Reviere im HUD: Leiste 0–100 und die Revierzahl daneben */
+/* Kachel Ruf · Reviere im HUD: Leiste 0–100 und die Revierzahl daneben. Wird die Kachel schmal (Handy, drei pro
+   Reihe), gibt die Leiste nach, die Revierzahl nie (sonst ragte „0/12“ über den Rand). */
 .hud-rep {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   width: 100%;
+  min-width: 0;
 }
 .hud-rep .hud-bar {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 24px;
 }
 .hud-rep__veedel {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -24,6 +28,11 @@
   font-size: 15px;
   font-weight: 600;
   color: var(--cat-place);
+}
+@media (max-width: 760px) {
+  .hud-rep {
+    gap: var(--space-2);
+  }
 }
 /* Aufgeklappte Karte: Stufe jetzt, darüber, darunter, Reviere */
 .rep-flyout {
