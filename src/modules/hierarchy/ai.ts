@@ -11,7 +11,7 @@ import { allWaiting, canServe, waitingAt } from '../customers';
 import { stockSummary } from '../goods';
 import { getSpotPrice, hasOwnPrice, priceRatio, roundPrice, spotReferencePrice } from '../market';
 import { getHeat } from '../police';
-import type { Spot } from '../spots';
+import { atSpot, type Spot } from '../spots';
 import {
   activeRunnerAt,
   freeStaff,
@@ -284,7 +284,8 @@ function handleAbsences(turn: Turn): void {
     if (policy === 'fireAndReplace' && ctx.now - absence.since >= post.settings.absentDays * 1440) {
       if (run({ type: 'staff.fire', payload: { staffId: m.id } })) {
         delete post.absences[m.id];
-        note(turn, `${m.name} ${what} seit ${post.settings.absentDays} Tagen. Hab ihn rausgeworfen.`, true, true);
+        const since = post.settings.absentDays === 1 ? 'einem Tag' : `${post.settings.absentDays} Tagen`;
+        note(turn, `${m.name} ${what} seit ${since}. Hab ihn rausgeworfen.`, true, true);
       }
     }
   }
@@ -299,7 +300,7 @@ function staffSpots(turn: Turn): void {
     if (post.settings.onAbsent === 'wait' && runnerAt(ctx.state, spot.id)) continue;
     const free = freeStaff(ctx.state, 'runner')[0];
     if (free) {
-      if (run(assignTo(free.id, spot))) note(turn, `${free.name} an den ${spot.name} gestellt.`);
+      if (run(assignTo(free.id, spot))) note(turn, `${free.name} steht jetzt ${atSpot(spot)}.`);
       continue;
     }
     if (post.settings.mayHire) hireFor(turn, spot);
@@ -321,8 +322,8 @@ function hireFor(turn: Turn, spot: Spot): void {
   note(
     turn,
     hired.fromPool
-      ? `${hired.name} eingestellt und an den ${spot.name} gestellt.`
-      : `Neuen Läufer von der Straße für den ${spot.name} angeheuert.`,
+      ? `${hired.name} eingestellt, steht jetzt ${atSpot(spot)}.`
+      : `Neuen Läufer von der Straße ${atSpot(spot)} angeheuert.`,
     true,
     true,
   );
@@ -358,7 +359,7 @@ function guardSpots(turn: Turn): void {
     if (securityAt(ctx.state, { spotId: spot.id }).length > 0) continue;
     const guard = freeStaff(ctx.state, 'security')[0];
     if (!guard) return;
-    if (run(assignTo(guard.id, spot))) note(turn, `${guard.name} passt jetzt am ${spot.name} auf.`);
+    if (run(assignTo(guard.id, spot))) note(turn, `${guard.name} passt jetzt ${atSpot(spot)} auf.`);
   }
 }
 

@@ -13,7 +13,7 @@
 //
 // Öffentliche API: currentQuest(state), questsWaiting(state), questProgress(state), completedQuests(state), questTitle(state),
 //   rewardText(reward), QUESTS, CHAPTERS,
-//   Verträge: contractOffers(state), activeContract(state), contractProgress(state), contractHistory(state),
+//   Verträge: contractsOpen(state), contractOffers(state), activeContract(state), contractProgress(state), contractHistory(state),
 //   contractStats(state), contractValue(offer), canAcceptContract(state, offer), getContractTemplate(id),
 //   getContractContact(id), CONTRACT_TEMPLATES
 // Befehle: 'quests.skip', 'quests.acceptContract'
@@ -58,6 +58,7 @@ import {
   CONTRACT_OFFERS,
   CONTRACT_TEMPLATES,
   CONTRACT_WEEKDAY,
+  CONTRACTS_FROM_CHAPTER,
   type ContractOffer,
   type ContractTemplate,
   contractRewards,
@@ -90,8 +91,13 @@ export interface QuestsState {
   skipped: string[];
   /** Titel für die Bestenliste (letzte Quest). */
   title: string | null;
-  /** Wann die aktive Quest begann (Spielminute): Ereignisse aus demselben Schritt zählen nicht für sie. */
+  /** Wann die aktive Quest begann (Spielminute). */
   startedAt: number;
+  /**
+   * Die aktive Quest hat gerade erst begonnen, ihr 'quest.started' ist noch nicht zugestellt: Ereignisse, die schon
+   * vorher gemeldet waren (dieselbe Aktion, die die vorige Quest erledigt hat), zählen nicht für sie (J2, Version 7).
+   */
+  fresh: boolean;
   /** Wochenverträge (Auftrag 32). */
   contracts: ContractsState;
 }
@@ -115,8 +121,10 @@ export interface ContractsState {
 }
 
 /** Zustand in Version 1 (ohne startedAt). */
-type QuestsStateV1 = Omit<QuestsState, 'startedAt' | 'contracts'>;
-type QuestsStateV2 = Omit<QuestsState, 'contracts'>;
+type QuestsStateV1 = Omit<QuestsState, 'startedAt' | 'contracts' | 'fresh'>;
+type QuestsStateV2 = Omit<QuestsState, 'contracts' | 'fresh'>;
+/** Zustand bis Version 6 (ohne fresh). */
+type QuestsStateV6 = Omit<QuestsState, 'fresh'>;
 
 function newContracts(): ContractsState {
   return { offers: [], active: null, history: [], stats: { offered: 0, accepted: 0, done: 0, failed: 0 } };
@@ -306,6 +314,17 @@ function grant(ctx: Ctx, reward: QuestReward, reason: string): string {
   }
 }
 
+/**
+ * Die aktive Quest (Index schon gesetzt) beginnt jetzt bei null. Bis ihr 'quest.started' zugestellt ist, zählen keine
+ * Ereignisse für sie: Was davor gemeldet war, gehört zur Aktion, die die vorige Quest erledigt hat.
+ */
+function begin(ctx: Ctx): void {
+  const q = ctx.state.modules.quests;
+  q.progress = 0;
+  q.startedAt = ctx.now;
+  q.fresh = true;
+}
+
 /** Peter (bzw. Jansen) schickt die aktive Quest. */
 function announce(ctx: Ctx): void {
   const quest = currentQuest(ctx.state);
@@ -332,8 +351,7 @@ function finish(ctx: Ctx, skipped: boolean): void {
     if (quest.doneText) messages.send(ctx, { contact: from, text: quest.doneText });
   }
   q.index = nextIndex(ctx.state, q.index + 1);
-  q.progress = 0;
-  q.startedAt = ctx.now;
+  begin(ctx);
   ctx.emit('quest.completed', { questId: quest.id, skipped });
   const next = currentQuest(ctx.state);
   // Jansens Kapitel endet mit seinem eigenen Satz (doneText), Peter mischt sich da nicht ein.
@@ -364,9 +382,11 @@ function onEvent<K extends keyof GameEvents>(type: K) {
     const quest = currentQuest(ctx.state);
     const counter = quest?.count?.[type] as ((p: GameEvents[K], s: GameState) => number) | undefined;
     if (!quest || !counter) return;
-    // Was im selben Schritt geschah, in dem die Quest begann, gehört noch zur vorigen (ein Läufer über "Leute finden"
-    // meldet staff.hired und recruiting.hired: Das darf nicht zwei Quests auf einmal erledigen).
-    if (ctx.state.modules.quests.startedAt === ctx.now) return;
+    // Was mit derselben Aktion gemeldet wurde, die die vorige Quest erledigt hat, gehört noch zu ihr (ein Läufer über
+    // "Leute finden" meldet staff.hired und recruiting.hired: Das darf nicht zwei Quests auf einmal erledigen). Früher
+    // galt die ganze Spielminute: Wer pausiert gleich die nächste Aufgabe erledigte, bekam 0/1 (J2).
+    const q = ctx.state.modules.quests;
+    if (q.fresh && q.startedAt === ctx.now) return;
     const delta = counter(payload, ctx.state);
     if (!(delta > 0)) return;
     ctx.state.modules.quests.progress += delta;
@@ -391,6 +411,13 @@ export function contractHistory(state: GameState): readonly ContractRecord[] {
 
 export function contractStats(state: GameState): ContractsState['stats'] {
   return state.modules.quests.contracts?.stats ?? newContracts().stats;
+}
+
+/** Gibt es schon Wochenverträge? Erst, wenn die ersten Kapitel durch sind (CONTRACTS_FROM_CHAPTER). */
+export function contractsOpen(state: GameState): boolean {
+  const q = state.modules.quests;
+  const finished = new Set([...q.done, ...q.skipped]);
+  return QUESTS.every((quest) => quest.chapter >= CONTRACTS_FROM_CHAPTER || finished.has(quest.id));
 }
 
 /** Fortschritt des laufenden Vertrags: [jetzt, Ziel], ohne Vertrag [0, 0]. */
@@ -527,7 +554,7 @@ export function acceptContract(ctx: Ctx, offerId: number): CommandResult {
   if (!offer) return { ok: false, reason: 'Das Angebot gibt es nicht mehr.' };
   const allowed = canAcceptContract(ctx.state, offer);
   if (!allowed.ok) return allowed;
-  c.active = { ...offer, progress: 0, acceptedAt: ctx.now };
+  c.active = { ...offer, progress: 0, acceptedAt: ctx.now, fresh: true };
   // Der Ausgangswert gilt ab dem Annehmen (z.B. Veedel jetzt), nicht ab dem Angebot am Montag.
   const template = getContractTemplate(offer.templateId);
   if (template?.param) {
@@ -590,7 +617,7 @@ function onContractEvent<K extends keyof GameEvents>(type: K) {
     const counter = template?.count?.[type] as
       | ((p: GameEvents[K], s: GameState, o: ContractOffer) => number)
       | undefined;
-    if (!active || !counter || active.acceptedAt === ctx.now) return;
+    if (!active || !counter || (active.fresh && active.acceptedAt === ctx.now)) return;
     const delta = counter(payload, ctx.state, active);
     if (!(delta > 0)) return;
     active.progress += delta;
@@ -609,9 +636,8 @@ function contractHour(ctx: Ctx): void {
     retractOffers(ctx);
     c.offers = [];
   }
-  if (clock.weekday(ctx.now) === CONTRACT_WEEKDAY && clock.hour(ctx.now) === CONTRACT_HOUR && !c.active) {
-    offerContracts(ctx);
-  }
+  const monday = clock.weekday(ctx.now) === CONTRACT_WEEKDAY && clock.hour(ctx.now) === CONTRACT_HOUR;
+  if (monday && !c.active && contractsOpen(ctx.state)) offerContracts(ctx);
 }
 
 /** Eine neue Stadt ist frei: Peter macht mit ihrem Kapitel weiter. */
@@ -620,8 +646,7 @@ function resume(ctx: Ctx): void {
   const index = nextIndex(ctx.state, QUESTS.length);
   if (index === WAITING) return;
   q.index = index;
-  q.progress = 0;
-  q.startedAt = ctx.now;
+  begin(ctx);
   const next = currentQuest(ctx.state);
   if (!next) return;
   messages.send(ctx, {
@@ -658,8 +683,7 @@ function followCity(ctx: Ctx): void {
     if (base && !finished.has(quest.id)) q.skipped.push(quest.id);
   }
   q.index = index;
-  q.progress = 0;
-  q.startedAt = ctx.now;
+  begin(ctx);
   const next = currentQuest(state);
   if (!next) return;
   messages.send(ctx, { contact: PETER, text: `Neue Stadt, neues Kapitel: „${chapterName(next.chapter)}“.` });
@@ -680,6 +704,7 @@ function leaveOldChapters(ctx: Ctx): void {
   q.index = WAITING;
   q.progress = 0;
   q.startedAt = ctx.now;
+  q.fresh = false;
   const c = q.contracts;
   if (c.active) {
     journal.add(ctx, `Vertrag beendet: ${c.active.title}. Das Geschäft ist verkauft.`, 'info');
@@ -715,7 +740,7 @@ function onCounted<K extends keyof GameEvents>(type: K) {
 
 export default defineModule({
   id: 'quests',
-  version: 6,
+  version: 7,
   dependsOn: ['goods', 'staff', 'territory', 'police', 'reputation', 'leaderboard'],
   init: () => ({
     index: 0,
@@ -724,6 +749,7 @@ export default defineModule({
     skipped: [],
     title: null,
     startedAt: -1,
+    fresh: false,
     contracts: newContracts(),
   }),
   tickEvery: QUEST_CHECK_EVERY,
@@ -755,6 +781,15 @@ export default defineModule({
   },
   on: {
     ...Object.fromEntries([...new Set([...COUNTED, ...CONTRACT_COUNTED])].map((type) => [type, onCounted(type)])),
+    // Ab hier zählt, was geschieht, für die neue Quest (alles davor Gemeldete ist zugestellt).
+    'quest.started': (ctx, { questId }) => {
+      if (currentQuest(ctx.state)?.id === questId) ctx.state.modules.quests.fresh = false;
+    },
+    // Dasselbe für einen eben angenommenen Wochenvertrag.
+    'contract.accepted': (ctx, { offerId }) => {
+      const active = ctx.state.modules.quests.contracts.active;
+      if (active?.id === offerId) active.fresh = false;
+    },
     // Meilenstein Mehrheit (Auftrag 30): Titel "Boss von Köln" für die Bestenliste, Peter gratuliert.
     'campaign.milestone': (ctx, { kind, cityId }) => {
       if (kind !== 'majority' || cityId !== 'koeln') return;
@@ -791,15 +826,15 @@ export default defineModule({
       return { ...old, index, progress: index === old.index ? old.progress : 0, startedAt: -1 };
     },
     // Version 3 (Auftrag 32): Wochenverträge, alte Stände fangen am nächsten Montag an.
-    3: (old: QuestsStateV2): QuestsState => ({ ...old, contracts: newContracts() }),
+    3: (old: QuestsStateV2): QuestsStateV6 => ({ ...old, contracts: newContracts() }),
     // Version 4 (Auftrag 36): Kapitel pro Stadt hinten an der Liste. Wer mit allem durch war, wartet jetzt auf die
     // nächste Stadt (sonst stünde er mitten im Kapitel einer Stadt, die noch gar nicht frei ist).
-    4: (old: QuestsState): QuestsState =>
+    4: (old: QuestsStateV6): QuestsStateV6 =>
       old.index >= QUEST_COUNT_BEFORE_36 ? { ...old, index: WAITING, progress: 0 } : old,
     // Version 5 (Auftrag 43): Jedes Stadt-Kapitel hat zwei Quests mehr (Läufer anheuern, selbst bestellen). Der Index
     // zeigte in die alte Liste; dieselbe Quest in der neuen suchen. Die neuen Quests einer Stadt, die schon läuft,
     // kommen erst nach dem Ende der Liste wieder dran (nextIndex sucht Stadt-Quests auch vorne).
-    5: (old: QuestsState): QuestsState => {
+    5: (old: QuestsStateV6): QuestsStateV6 => {
       const added = new Set<string>([...QUESTS_ADDED_IN_43, ...QUESTS_ADDED_IN_43_H]);
       const before = QUESTS.filter((q) => !added.has(q.id));
       // Ziel ist die Liste von Version 5 (ohne die Quests aus Version 6), Version 6 schiebt danach weiter.
@@ -812,7 +847,7 @@ export default defineModule({
     },
     // Version 6 (Auftrag 43, H15): „Mach dir einen Namen“ nach dem Lkw. Indizes dahinter rücken eins weiter; wer den
     // Lkw schon hat, bekommt die neue Quest als erledigt (sonst käme sie später mit Belohnung nach).
-    6: (old: QuestsState): QuestsState => {
+    6: (old: QuestsStateV6): QuestsStateV6 => {
       const added = QUESTS_ADDED_IN_43_H as readonly string[];
       const positions = added.map((id) => QUESTS.findIndex((q) => q.id === id)).sort((a, b) => a - b);
       let index = old.index;
@@ -822,5 +857,8 @@ export default defineModule({
         : old.done;
       return { ...old, index, done };
     },
+    // Version 7 (J2): Die Sperre für Ereignisse derselben Aktion hängt nicht mehr an der Spielminute, sondern an fresh.
+    // Gespeichert wird nie mitten in einer Aktion, also ist nichts mehr frisch.
+    7: (old: QuestsStateV6): QuestsState => ({ ...old, fresh: false }),
   },
 });

@@ -898,7 +898,7 @@ export function travelTo(ctx: Ctx, cityId: string): CommandResult {
   c.travel = { from, to: cityId, departedAt: ctx.now, arrivesAt: ctx.now + minutes };
   journal.add(
     ctx,
-    `Du fährst über die ${roadName(from, cityId)} nach ${def.name}. Ankunft in ca. ${clock.formatDuration(minutes)}.`,
+    `Du fährst über die ${roadName(from, cityId)} nach ${def.name}. Ankunft in ca. ${clock.formatDuration(minutes)}`,
     'info',
   );
   ctx.emit('city.travelStarted', { from, to: cityId, arrivesAt: c.travel.arrivesAt });
@@ -917,11 +917,15 @@ function arrive(ctx: Ctx): void {
   if (c.active !== travel.to) switchCity(ctx, travel.to);
   journal.add(ctx, `Angekommen in ${cityName(travel.to)}.`, 'good');
   // Was bei der Ankunft noch offen ist, gehört zur Stadt, die du verlassen hast (Auftrag 43, G3/G9): Dort entscheiden der
-  // Statthalter bzw. die Frist, die Fragen erledigen sich; der Verlauf bis hier gilt als gelesen. Angebote der Städte
-  // (Anrufe, Übergaben) bleiben offen.
-  const cityContacts = new Set(CITIES.map((c) => cityContact(c.id).id));
-  messages.retractWhere(ctx, (m) => !cityContacts.has(m.contactId));
+  // Statthalter bzw. die Frist, die Fragen erledigen sich; der Verlauf bis hier gilt als gelesen. Offen bleiben nur die
+  // Angebote der Städte (Anrufe, Übergaben, Verkauf: Antworten mit einem city-Befehl). Früher blieb alles von den
+  // Kontakten der Städte offen, auch Fietes Fragen zu Containern im Hamburger Hafen (J14).
+  messages.retractWhere(ctx, (m) => !m.options?.some((o) => o.command?.type.startsWith('city.')));
   for (const m of ctx.state.messages.list) m.read = true;
+  // Die Chats bis hierher (Gangs, Team, Lieferungen der alten Stadt) wandern eingeklappt nach unten; wer neu schreibt,
+  // steht wieder oben (J14). Bei jeder Ankunft, auch zurück in einer Stadt: Oben steht, was seit der Ankunft los ist.
+  // Nach dem Verkauf hat sellBusiness schon abgelegt („Frühere Städte“), das bleibt so.
+  if (!isBusinessSold(ctx.state)) messages.archive(ctx, `Vor der Fahrt nach ${cityName(travel.to)}`);
   ctx.emit('city.arrived', first ? { cityId: travel.to, first } : { cityId: travel.to });
   if (first) {
     // Nicht mehr still (Auftrag 43): Die Begrüßung sagt, wie es in der neuen Stadt anfängt.

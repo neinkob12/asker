@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clock, defineModule, messages, Simulation } from '../../core';
+import { clock, defineModule, type Look, messages, Simulation } from '../../core';
 import {
   CONTACT_KIND_ORDER,
   CONTACT_KIND_TONES,
@@ -9,6 +9,7 @@ import {
   groupChats,
   messageNotification,
   recentContacts,
+  shortContactName,
   timeLabel,
 } from './messagesModel';
 
@@ -239,6 +240,17 @@ describe('Nachrichten-App: Gruppen nach Kontaktart', () => {
     const recent = recentContacts(chatList(sim.state));
     expect(recent.map((c) => c.contactId)).toEqual(['other:6', 'other:5', 'other:4', 'other:3', 'other:2']);
     expect(recentContacts(chatList(sim.state), 2)).toHaveLength(2);
+  });
+
+  it('kürzt oben nur Personen aufs erste Wort, Gangs und Orte behalten den ganzen Namen (J8)', () => {
+    const face = {} as Look;
+    expect(shortContactName({ name: 'Jansen (Hafen Rotterdam)', kind: 'supplier' })).toBe('Jansen');
+    expect(shortContactName({ name: 'Fiete Lührs', kind: 'other', look: face })).toBe('Fiete');
+    expect(shortContactName({ name: 'Der Holländer', kind: 'customer' })).toBe('Holländer');
+    expect(shortContactName({ name: 'Frau Schrader', kind: 'other', look: face })).toBe('Schrader');
+    expect(shortContactName({ name: 'Marienburger Kreis', kind: 'gang' })).toBe('Marienburger Kreis');
+    expect(shortContactName({ name: 'Nordstadt Boys', kind: 'gang', look: face })).toBe('Nordstadt Boys');
+    expect(shortContactName({ name: 'Kölner Express', kind: 'other' })).toBe('Kölner Express');
   });
 });
 

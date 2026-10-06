@@ -26,6 +26,7 @@ import {
   contractHistory,
   contractOffers,
   contractProgress,
+  contractsOpen,
   getContractContact,
   getContractTemplate,
   rewardText,
@@ -161,7 +162,9 @@ export function ContractsGroup() {
       note={
         active || offers.length > 0
           ? 'Einer pro Woche, Frist Sonntag 23:59.'
-          : 'Jeden Montag um 8 Uhr kommen drei neue Angebote.'
+          : contractsOpen(state)
+            ? 'Jeden Montag um 8 Uhr kommen drei neue Angebote.'
+            : 'Die ersten Angebote kommen am Montag, nachdem du mit Peters erstem Kapitel durch bist.'
       }
     >
       <List>

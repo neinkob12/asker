@@ -21,7 +21,7 @@ import { activeCity } from '../city';
 import { getGangs } from '../gangs';
 import { isLieutenant, isRightHand } from '../hierarchy';
 import { addHeat, getHeat } from '../police';
-import { getSpot } from '../spots';
+import { getSpot, spotVars } from '../spots';
 import { veedelName } from '../veedel';
 import {
   STORY_CHANCE_PER_HOUR,
@@ -192,10 +192,10 @@ export const STORIES: Record<StoryId, StoryTemplate> = {
     id: 'drunk',
     fits: (_s, m) => hasTrait(m, 'drinker') && atSpot(m) && m.role === 'runner',
     start: { offHours: 4 },
-    journal: '{name} hat getrunken und den {spot} stehen lassen.',
+    journal: '{name} hat getrunken und den Spot {spot} stehen lassen.',
     texts: [
-      'Chef … hicks. Bin kurz weg vom {spot}. Paar Stunden. Ist nix.',
-      'Sorry, ich war mit Jungs im Brauhaus, ich kann grad nicht stehen. Der {spot} muss warten.',
+      'Chef … hicks. Bin ein paar Stunden nicht {atSpot}. Ist nix.',
+      'Sorry, ich war mit Jungs im Brauhaus, ich kann grad nicht stehen. Der Spot {spot} muss warten.',
       'Hab einen sitzen. Ich geh pennen, morgen bin ich wieder da, ehrlich.',
       'Ich weiß, ich weiß. Ein Bier zu viel. Heute Abend steht am Spot keiner: {spot}.',
     ],
@@ -417,10 +417,10 @@ export const STORIES: Record<StoryId, StoryTemplate> = {
       return !!veedelId && getHeat(s, veedelId) >= 35;
     },
     texts: [
-      'Chef, ich hab Schiss. Hier in {veedel} fahren dauernd Zivis rum. Kann ich ein paar Tage weg vom {spot}?',
+      'Chef, ich hab Schiss. Hier in {veedel} fahren dauernd Zivis rum. Kann ich ein paar Tage weg vom Spot {spot}?',
       'Ich halt das nicht aus, die Bullen gucken mich schon so an. Lass mich bitte woanders hin.',
       'Ehrlich, ich mach mir in die Hose. {veedel} ist zu heiß gerade.',
-      'Ich glaub, die beobachten den {spot}. Ich will da nicht mehr stehen.',
+      'Ich glaub, die beobachten den Spot {spot}. Ich will da nicht mehr stehen.',
     ],
     choices: [
       {
@@ -477,11 +477,11 @@ export const STORIES: Record<StoryId, StoryTemplate> = {
     id: 'hothead',
     fits: (_s, m) => hasTrait(m, 'hothead') && atSpot(m),
     start: { heat: 5 },
-    journal: '{name} hat am {spot} einen Kunden geschlagen.',
+    journal: '{name} hat {atSpot} einen Kunden geschlagen.',
     texts: [
       'Der Typ wollte nicht zahlen. Hab ihm eine verpasst. Problem gelöst.',
-      'Am {spot} hat einer rumgepöbelt. Liegt jetzt im Gebüsch. Gern geschehen.',
-      'Kleine Rangelei am {spot}. Der hat angefangen, ehrlich.',
+      '{AtSpot} hat einer rumgepöbelt. Liegt jetzt im Gebüsch. Gern geschehen.',
+      'Kleine Rangelei {atSpot}. Der hat angefangen, ehrlich.',
       'Einer wollte mich verarschen. Wollte. Der kommt nicht wieder.',
     ],
     choices: [
@@ -729,7 +729,7 @@ function storyVars(state: GameState, story: StaffStory): Record<string, string> 
   const other = story.otherId ? getStaffMember(state, story.otherId) : undefined;
   const veedelId = m ? (staffVeedel(state, m) ?? (story.story === 'loyalTip' ? hottestOwnVeedel(state) : null)) : null;
   const place = m?.assignment ?? m?.returnTo;
-  const spot = place?.kind === 'spot' ? getSpot(state, place.targetId)?.name : undefined;
+  const spot = place?.kind === 'spot' ? getSpot(state, place.targetId) : undefined;
   const gangs = getGangs(state, story.cityId);
   const gang = gangs.length > 0 ? gangs[(m ? m.id.length + m.name.length : 0) % gangs.length].name : 'der Konkurrenz';
   return {
@@ -737,7 +737,8 @@ function storyVars(state: GameState, story: StaffStory): Record<string, string> 
     first: m?.name.split(' ')[0] ?? '',
     other: other?.name ?? '',
     amount: formatEuro(story.amount),
-    spot: spot ?? 'Spot',
+    // {spot}, {atSpot} („am Ebertplatz“, „an der Uni-Wiese“), {AtSpot}: Geschichten mit Spot setzen einen voraus.
+    ...spotVars(spot ?? { name: 'Spot' }),
     veedel: veedelId ? veedelName(veedelId) : 'der Stadt',
     gang,
   };

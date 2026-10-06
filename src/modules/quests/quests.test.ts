@@ -4,6 +4,9 @@ import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { allProducts, getStock } from '../goods';
 import { CALL_MIN_REVENUE } from '../grow';
 import { addHeat } from '../police';
+import { getSpots } from '../spots';
+import { getStaff } from '../staff';
+import { getSuppliers, shipmentsInTransit } from '../suppliers';
 import { addInfluence, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
 import { CHAPTERS, HARBOR_NAME_REVENUE, PETER, QUEST_COUNT_BEFORE_36, QUESTS, QUESTS_ADDED_IN_43 } from './config';
@@ -262,6 +265,62 @@ describe('quests', () => {
     expect(sim.state.modules.quests.done).toEqual(['runner', 'recruit']);
   });
 
+  it('pausiert: Die nächste Aufgabe in derselben Spielminute zählt schon (J2)', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    jumpTo(sim, 'runner');
+    const minute = sim.state.time;
+    // Ein Befehl erledigt "Läufer anheuern" …
+    sim.ctx('staff').emit('staff.hired', { staffId: 's1', role: 'runner', origin: 'street' } as never);
+    sim.dispatch({ type: 'messages.markAllRead', payload: {} });
+    expect(currentQuest(sim.state)?.id).toBe('recruit');
+    // … der nächste, ohne dass Zeit vergeht (Tempo 0), zählt für "über Leute finden einstellen".
+    sim.ctx('recruiting').emit('recruiting.hired', { candidateId: 'c2', staffId: 's2' });
+    sim.dispatch({ type: 'messages.markAllRead', payload: {} });
+    expect(sim.state.time).toBe(minute);
+    expect(sim.state.modules.quests.done).toEqual(['runner', 'recruit']);
+    expect(sim.state.modules.quests.fresh).toBe(false);
+  });
+
+  it('Bestellen und Läufer zählen auch, wenn sie vor der Quest geschahen (J2)', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    // Tonis Angebot im Chat angenommen, bevor Peter nach einer Bestellung fragt.
+    const toni = getSuppliers(sim.state, 'koeln').find((x) => x.id === 'frankfurt');
+    if (!toni) throw new Error('Toni fehlt');
+    const ordered = sim.dispatch({
+      type: 'suppliers.order',
+      payload: { supplierId: toni.id, packageId: toni.packages[0].id },
+    });
+    expect(ordered.ok).toBe(true);
+    // Die Lieferung ist längst da, als die Quest drankommt: zählt trotzdem.
+    sim.advance(toni.deliveryTime + 120);
+    expect(shipmentsInTransit(sim.state, 'koeln')).toHaveLength(0);
+    jumpTo(sim, 'order');
+    sim.advance(5);
+    expect(sim.state.modules.quests.done).toContain('order');
+    // Ein Läufer, den es schon gibt, erledigt "Heuere einen Läufer an".
+    sim.state.wallet.dirty += 2000;
+    const spot = getSpots(sim.state, 'koeln')[0];
+    expect(sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: spot.id } }).ok).toBe(true);
+    expect(getStaff(sim.state, { role: 'runner' })).toHaveLength(1);
+    jumpTo(sim, 'runner');
+    sim.advance(5);
+    expect(sim.state.modules.quests.done).toContain('runner');
+    expect(currentQuest(sim.state)?.id).toBe('recruit');
+  });
+
+  it('Migration 6 → 7 (J2): alte Stände sind nicht mitten in einem Quest-Start', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    const raw = structuredClone(sim.state) as GameState;
+    delete (raw.modules.quests as { fresh?: boolean }).fresh;
+    raw.moduleVersions.quests = 6;
+    const loaded = loadSimulation(raw, sim.modules);
+    expect(loaded.state.modules.quests.fresh).toBe(false);
+    expect(loaded.state.moduleVersions.quests).toBe(7);
+  });
+
   it('Migration 1 → 2: Der Index folgt der neuen Reihenfolge, erledigte und übersprungene Quests bleiben', () => {
     const sim = createTestGame();
     sim.advance(10);
@@ -282,7 +341,7 @@ describe('quests', () => {
     // Neu: Nach 'order' folgt 'revenue1k', der Hafen kommt erst später.
     expect(currentQuest(loaded.state)?.id).toBe('revenue1k');
     expect(loaded.state.modules.quests.done).toEqual(['firstSales', 'setPrice', 'order']);
-    expect(loaded.state.moduleVersions.quests).toBe(6);
+    expect(loaded.state.moduleVersions.quests).toBe(7);
     // Alles durch: Index am Ende.
     raw.modules.quests = { index: 26, progress: 0, done: QUESTS.map((q) => q.id), skipped: [], title: 'Boss von Köln' };
     expect(currentQuest(loadSimulation(raw, sim.modules).state)).toBeNull();

@@ -38,6 +38,11 @@ export interface ContractOffer {
 export interface ActiveContract extends ContractOffer {
   progress: number;
   acceptedAt: number;
+  /**
+   * Eben angenommen, 'contract.accepted' noch nicht zugestellt: Was davor gemeldet war, zählt nicht (wie fresh bei den
+   * Quests, J2). Fehlt: nicht frisch (ältere Spielstände).
+   */
+  fresh?: boolean;
 }
 
 /** Zuwachs pro Ereignis für einen Vertrag. */
@@ -372,6 +377,11 @@ export const CONTRACT_OFFERS = 3;
 /** Montag (0) um 8 Uhr kommen die Angebote. */
 export const CONTRACT_WEEKDAY = 0;
 export const CONTRACT_HOUR = 8;
+/**
+ * Verträge erst, wenn alle Quests der Kapitel davor erledigt oder übersprungen sind (J15: Am ersten Montag, Tag 4,
+ * kamen sie, während Peter noch das Ankommen erklärte). 1 = nach dem Kapitel „Ankommen“ (Verkaufen, Preise, Bestellen).
+ */
+export const CONTRACTS_FROM_CHAPTER = 1;
 /** So viele erledigte bzw. geplatzte Verträge merkt sich der Spielstand. */
 export const CONTRACT_HISTORY = 8;
 

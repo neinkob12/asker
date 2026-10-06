@@ -16,6 +16,8 @@
 //   Auftrag 23: spotKind(spot), spotType(spot), SPOT_TYPES, SPOT_UPGRADES, spotAwareness(state, id),
 //   spotDemandFactor(state, spot, time) (Bekanntheit, Tageskurve, Wetter der Art), spotModifiers(state, id) (Heat,
 //   Späher, Versteck, Stammplatz), spotUpgrades(state, id), foundCost(kind)
+//   J4: atSpot(spot) („am Ebertplatz“, „an der Uni-Wiese“), atSpotStart(spot) (Satzanfang), spotVars(spot)
+//   (Platzhalter {spot}, {atSpot}, {AtSpot} für texts.pick). Nie „am ${spot.name}“ schreiben.
 // Befehle: 'spots.unlock', 'spots.found' (mit kind), Auftrag 23: 'spots.upgrade', 'spots.move', 'spots.rename',
 //   'spots.close'
 // Ereignisse: 'spots.unlocked', 'spots.founded', Auftrag 23: 'spots.upgraded', 'spots.moved', 'spots.closed'
@@ -67,6 +69,7 @@ import {
   type SpotUpgradeId,
   STASH_LOSS_FACTOR,
 } from './kinds';
+import { atSpot } from './places';
 
 export { CUSTOM_SPOT_DEMAND, FOUND_SPOT_COST, KNEIPE, MAX_CUSTOM_SPOTS } from './config';
 export {
@@ -80,6 +83,7 @@ export {
   type SpotUpgrade,
   type SpotUpgradeId,
 } from './kinds';
+export { atSpot, atSpotStart, type SpotPlace, spotVars } from './places';
 
 export interface Spot {
   id: string;
@@ -93,6 +97,11 @@ export interface Spot {
   priceMultiplier: number;
   /** Vorgegebene Spots: Preis fürs Freischalten (0 = von Anfang an offen). */
   unlockCost?: number;
+  /**
+   * Wie man sagt, dass etwas hier passiert, wenn die Regeln in places.ts nicht passen (J4), z.B. „auf dem Tempelhofer
+   * Feld“. Sonst atSpot(spot).
+   */
+  at?: string;
   /** Anteil der Kundentypen hier (Typ-ID → Faktor, 1 = normal). */
   audience?: Readonly<Record<string, number>>;
   /** true bei selbst gegründeten Spots. */
@@ -423,7 +432,7 @@ export function canFoundSpotAt(
   if (!veedel) return { ok: false, reason: 'Da ist kein Veedel. Such dir eine Stelle in einem Veedel im Spiel.' };
   if (!isCityUnlocked(state, veedel.cityId)) return { ok: false, reason: 'In dieser Stadt bist du noch nicht.' };
   const tooClose = getAllSpots(state).find((s) => distanceMeters(s, { lng, lat }) < MIN_SPOT_DISTANCE);
-  if (tooClose) return { ok: false, reason: `Zu nah am ${tooClose.name}.` };
+  if (tooClose) return { ok: false, reason: `Zu nah ${atSpot(tooClose)}.` };
   return { ok: true, veedelId: veedel.id };
 }
 
@@ -503,8 +512,8 @@ function upgrade(ctx: Ctx, spotId: string, id: SpotUpgradeId): CommandResult {
   if (!def) return { ok: false, reason: 'Unbekannter Ausbau.' };
   const state = ctx.state.modules.spots;
   const list = state.upgrades[spotId] ?? [];
-  if (list.includes(id)) return { ok: false, reason: `${def.name} gibt es am ${spot.name} schon.` };
-  if (!wallet.pay(ctx, def.cost, 'dirty', `${def.name} am ${spot.name}`, { category: 'expansion', spotId }))
+  if (list.includes(id)) return { ok: false, reason: `${def.name} gibt es ${atSpot(spot)} schon.` };
+  if (!wallet.pay(ctx, def.cost, 'dirty', `${def.name} ${atSpot(spot)}`, { category: 'expansion', spotId }))
     return { ok: false, reason: 'Nicht genug Geld.' };
   state.upgrades[spotId] = [...list, id];
   journal.add(ctx, `${spot.name}: ${def.name} eingerichtet (${formatEuro(def.cost)}).`, 'good', { spotId });
@@ -523,7 +532,7 @@ function move(ctx: Ctx, payload: { spotId: string; lng: number; lat: number }): 
   const tooClose = getAllSpots(ctx.state).find(
     (s) => s.id !== spot.id && distanceMeters(s, { lng, lat }) < MIN_SPOT_DISTANCE,
   );
-  if (tooClose) return { ok: false, reason: `Zu nah am ${tooClose.name}.` };
+  if (tooClose) return { ok: false, reason: `Zu nah ${atSpot(tooClose)}.` };
   if (!wallet.pay(ctx, MOVE_COST, 'dirty', `${spot.name} verlegt`, { category: 'expansion', spotId: spot.id }))
     return { ok: false, reason: 'Nicht genug Geld.' };
   const from = spot.veedelId;

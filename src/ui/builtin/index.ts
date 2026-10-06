@@ -5,7 +5,7 @@ import { clock, formatEuro, messages, wallet } from '../../core';
 import { registerContactProfile } from '../phone/ContactProfile';
 import { islandCountdown } from '../phone/islandModel';
 import { MessagesApp } from '../phone/MessagesApp';
-import { chatList, messageNotification } from '../phone/messagesModel';
+import { chatList, lookOf, messageNotification, shortContactName } from '../phone/messagesModel';
 import { SettingsApp } from '../phone/SettingsApp';
 import {
   onGameEvent,
@@ -165,7 +165,8 @@ export function registerBuiltins(): void {
     id: 'core.call',
     activities: (state) =>
       messages.ringingCalls(state).map((m) => {
-        const name = messages.contact(state, m.contactId)?.name ?? m.contactId;
+        const contact = messages.contact(state, m.contactId);
+        const name = contact?.name ?? m.contactId;
         return {
           id: `core.call.${m.id}`,
           // Unter 80: Die Island klappt nicht von selbst auf (sie würde den Namen im Anruf-Bildschirm verdecken).
@@ -173,7 +174,7 @@ export function registerBuiltins(): void {
           icon: 'call',
           tone: 'accent',
           leading: 'Anruf',
-          trailing: name.split(' ')[0],
+          trailing: contact ? shortContactName({ name, kind: contact.kind, look: lookOf(contact) ?? undefined }) : name,
           title: `${name} ruft an`,
           detail: m.text,
           open: (ui) => ui.showPhone(),

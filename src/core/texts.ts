@@ -20,11 +20,16 @@ export function createTextsState(): TextsState {
   return { recent: {} };
 }
 
-/** Platzhalter {name} ersetzen. */
+/**
+ * Platzhalter {name} ersetzen. Endet ein Wert mit einem Punkt (Abkürzung wie bei Dauern, „6 Std. 15 Min.“) und steht in
+ * der Vorlage ein Punkt dahinter, schließt der Punkt der Abkürzung den Satz: kein „Min..“ (J3).
+ */
 export function fillText(template: string, vars: TextVars = {}): string {
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => {
+  return template.replace(/\{(\w+)\}(\.?)/g, (match, key: string, dot: string) => {
     const value = vars[key];
-    return value === undefined ? match : String(value);
+    if (value === undefined) return match;
+    const text = String(value);
+    return dot && text.endsWith('.') ? text : text + dot;
   });
 }
 

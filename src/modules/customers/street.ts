@@ -19,6 +19,7 @@ import { isPlayerOnTheRoad } from '../logistics';
 import { getSpotPrice, priceRatio, spotReferencePrice } from '../market';
 import { changeReputation, reputationDemandFactor } from '../reputation';
 import {
+  atSpot,
   getSpot,
   getSpots,
   isKneipe,
@@ -314,7 +315,7 @@ export function serve(ctx: Ctx, customerId: number, sellerId: string | null): Co
   });
   if (taken === 0) return { ok: false, reason: 'Nicht genug im Lager.' };
   const revenue = Math.round(customer.amount * customer.pricePerUnit);
-  wallet.earn(ctx, revenue, 'dirty', `Verkauf am ${spot.name}`, {
+  wallet.earn(ctx, revenue, 'dirty', `Verkauf ${atSpot(spot)}`, {
     category: 'sales.street',
     spotId: spot.id,
     ...(sellerId ? { staffId: sellerId } : {}),
@@ -331,7 +332,7 @@ export function serve(ctx: Ctx, customerId: number, sellerId: string | null): Co
     quality,
     cut,
     priceRatio: reference > 0 ? customer.pricePerUnit / reference : 1,
-    where: `am ${spot.name}`,
+    where: atSpot(spot),
     spotId: spot.id,
   });
   const regular = customer.regularId ? state.regulars.find((r) => r.id === customer.regularId) : undefined;
@@ -405,7 +406,7 @@ function maybeBecomeRegular(ctx: Ctx, customer: Customer, spot: Spot, quality: n
   };
   scheduleVisit(ctx, regular, ctx.now);
   state.regulars.push(regular);
-  journal.add(ctx, `${name} (${type.name}) ist jetzt Stammkunde am ${spot.name}.`, 'good', { spotId: spot.id });
+  journal.add(ctx, `${name} (${type.name}) ist jetzt Stammkunde ${atSpot(spot)}.`, 'good', { spotId: spot.id });
   ctx.emit('customer.regularGained', { regularId: regular.id, spotId: spot.id });
 }
 
@@ -441,7 +442,7 @@ export function onSpotClosed(ctx: Ctx, spotId: string, where: { lng: number; lat
       .sort((a, b) => a.d - b.d || a.x.id.localeCompare(b.x.id))[0]?.x;
     if (next) {
       regular.spotId = next.id;
-      journal.add(ctx, `Stammkunde ${regular.name} kommt ab jetzt zum ${next.name}.`, 'info', { spotId: next.id });
+      journal.add(ctx, `Stammkunde ${regular.name} kauft ab jetzt ${atSpot(next)}.`, 'info', { spotId: next.id });
     } else loseRegular(ctx, regular, 'sein Spot ist zu');
   }
 }
@@ -541,14 +542,14 @@ function expireCustomers(ctx: Ctx): void {
     const spot = getSpot(ctx.state, c.spotId);
     const regular = c.regularId ? state.regulars.find((r) => r.id === c.regularId) : undefined;
     if (regular) {
-      journal.add(ctx, `Stammkunde ${regular.name} hat am ${spot?.name ?? c.spotId} umsonst gewartet.`, 'bad', {
+      journal.add(ctx, `Stammkunde ${regular.name} hat ${spot ? atSpot(spot) : 'am Spot'} umsonst gewartet.`, 'bad', {
         spotId: c.spotId,
       });
       regular.satisfaction = Math.max(0, Math.round((regular.satisfaction - 0.25) * 100) / 100);
       if (regular.satisfaction < REGULAR_LOST_BELOW) loseRegular(ctx, regular, 'zu lange gewartet');
     } else if (!recentlyReportedLoss(ctx, c.spotId)) {
       // Höchstens ein Eintrag pro Spot und Stunde, sonst verdrängt das alles andere im Journal.
-      journal.add(ctx, `Kunde am ${spot?.name ?? c.spotId} ${LOSS_JOURNAL_MARK} ${lossReason(ctx, c)}.`, 'bad', {
+      journal.add(ctx, `Kunde ${spot ? atSpot(spot) : 'am Spot'} ${LOSS_JOURNAL_MARK} ${lossReason(ctx, c)}.`, 'bad', {
         spotId: c.spotId,
       });
     }

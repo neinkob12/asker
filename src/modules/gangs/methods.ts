@@ -33,7 +33,7 @@ import {
 } from '../goods';
 import { allRightHands, isLieutenant } from '../hierarchy';
 import { addHeat, canSnitch, tipOffAgainstPlayer } from '../police';
-import { getSpot, getSpots } from '../spots';
+import { atSpot, getSpot, getSpots, spotVars } from '../spots';
 import {
   activeRunnerAt,
   addCareer,
@@ -740,17 +740,17 @@ function intimidate(ctx: Ctx, gang: Gang): boolean {
     ? messages.send(ctx, {
         contact: staffContact(runner),
         text: texts.pick(ctx, 'staff:intimidation', INCIDENT_TEXTS.intimidationReport, {
-          spot: spot.name,
+          ...spotVars(spot),
           gang: gang.name,
         }),
         options,
         expiresIn: INTIMIDATION_DURATION,
       })
-    : say(ctx, gang, 'intimidation', { spot: spot.name }, options, INTIMIDATION_DURATION);
+    : say(ctx, gang, 'intimidation', spotVars(spot), options, INTIMIDATION_DURATION);
   journal.add(ctx, `${gang.name} stellt sich an deinen Spot ${spot.name}. Die Kunden bleiben weg.`, 'bad', {
     spotId: spot.id,
   });
-  logAction(ctx, gang.id, `Hat am ${spot.name} eingeschüchtert`);
+  logAction(ctx, gang.id, `Hat ${atSpot(spot)} eingeschüchtert`);
   ctx.emit('gang.intimidation', { gangId: gang.id, spotId: spot.id, until });
   return true;
 }
@@ -768,7 +768,7 @@ function resolveIntimidation(ctx: Ctx, incident: GangIncident, choice: string): 
     const paid = ctx.dispatch({ type: 'gangs.payTribute', payload: { gangId: gang.id } });
     if (!paid.ok) return paid;
     endIntimidation(ctx, spot.id);
-    journal.add(ctx, `Schutzgeld an ${gang.name}: Ihre Leute ziehen vom ${spot.name} ab.`, 'info', {
+    journal.add(ctx, `Schutzgeld an ${gang.name}: Ihre Leute ziehen ${atSpot(spot)} ab.`, 'info', {
       spotId: spot.id,
     });
     return paid;
@@ -778,7 +778,7 @@ function resolveIntimidation(ctx: Ctx, incident: GangIncident, choice: string): 
   if (crew.length === 0) return { ok: false, reason: 'Du hast gerade keine freien Sicherheitsleute.' };
   if (ctx.chance(INTIMIDATION_LEAVE_CHANCE) || activeEncounters(ctx.state).length > 0) {
     endIntimidation(ctx, spot.id);
-    journal.add(ctx, `Deine Sicherheit taucht am ${spot.name} auf. ${gang.name} zieht ab.`, 'good', {
+    journal.add(ctx, `Deine Sicherheit taucht ${atSpot(spot)} auf. ${gang.name} zieht ab.`, 'good', {
       spotId: spot.id,
     });
     return { ok: true };
@@ -1121,8 +1121,10 @@ export function describeIncident(state: GameState, incident: GangIncident): stri
       return `Einbruch im ${getWarehouse(state, incident.warehouseId ?? '')?.name ?? 'Lager'}`;
     case 'poach':
       return `${gang?.name ?? 'Eine Gang'} will ${getStaffMember(state, incident.staffId ?? '')?.name ?? 'jemanden'} abwerben`;
-    case 'intimidation':
-      return `${gang?.name ?? 'Eine Gang'} am ${getSpot(state, incident.spotId ?? '')?.name ?? 'Spot'}`;
+    case 'intimidation': {
+      const spot = getSpot(state, incident.spotId ?? '');
+      return `${gang?.name ?? 'Eine Gang'} ${spot ? atSpot(spot) : 'an deinem Spot'}`;
+    }
     case 'blackmail':
       return `Erpressung (${formatEuro(incident.amount ?? 0)})`;
     case 'warnRival':

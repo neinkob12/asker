@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fillText } from '../../core';
+import { clock, fillText } from '../../core';
 import { SUPPLIERS } from './config';
 import { PROBLEM_REASONS, ROUTE_NAMES, type RouteKind } from './problems';
 import { SUPPLIER_VOICES, type SupplierTextKey } from './voices';
@@ -7,7 +7,8 @@ import { SUPPLIER_VOICES, type SupplierTextKey } from './voices';
 const VARS = {
   goods: '50 g Gras',
   reason: 'Stau',
-  delay: '1 Std.',
+  // Echte Dauer: endet wie jede mit einem Punkt (J3: „6 Std. 15 Min..“).
+  delay: clock.formatDuration(375),
   cost: '50 €',
   debt: '200 €',
   extra: '5 g Gras',
@@ -18,6 +19,9 @@ const VARS = {
   river: 'Rhein',
   port: 'Niehler Hafen',
 };
+
+/** Zwei Punkte hintereinander, die keine Auslassungspunkte („…“ als „...“) sind. */
+const DOUBLE_DOT = /(^|[^.])\.\.(?!\.)/;
 
 describe('Lieferanten-Stimmen und Gründe', () => {
   it('jeder Lieferant hat eine eigene Stimme für jeden Anlass', () => {
@@ -31,7 +35,10 @@ describe('Lieferanten-Stimmen und Gründe', () => {
           ? 4
           : 3;
         expect(voice[key].length, `${supplier.id}:${key}`).toBeGreaterThanOrEqual(min);
-        for (const text of voice[key]) expect(fillText(text, VARS), text).not.toMatch(/\{\w*\}/);
+        for (const text of voice[key]) {
+          expect(fillText(text, VARS), text).not.toMatch(/\{\w*\}/);
+          expect(fillText(text, VARS), text).not.toMatch(DOUBLE_DOT);
+        }
       }
     }
   });
@@ -47,6 +54,7 @@ describe('Lieferanten-Stimmen und Gründe', () => {
         for (const r of list) {
           expect(fillText(r.text, VARS), r.text).not.toMatch(/\{\w*\}/);
           expect(fillText(r.label, VARS), r.label).not.toMatch(/\{\w*\}/);
+          expect(fillText(r.text, VARS), r.text).not.toMatch(DOUBLE_DOT);
         }
       }
     }

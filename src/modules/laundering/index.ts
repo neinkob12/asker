@@ -312,7 +312,7 @@ function launder(ctx: Ctx, amount: number, channelId?: LaunderingChannelId): Com
   const where = parts.length === 1 ? ` (${parts[0].channel.name})` : ` (${parts.length} Wege)`;
   journal.add(
     ctx,
-    `${formatEuro(rounded)} in die Wäsche gegeben${where}, fertig in ca. ${clock.formatDuration(last - ctx.now)}.`,
+    `${formatEuro(rounded)} in die Wäsche gegeben${where}, fertig in ca. ${clock.formatDuration(last - ctx.now)}`,
   );
   return { ok: true, data: { batchId: batches[0].id, batchIds: batches.map((b) => b.id) } };
 }

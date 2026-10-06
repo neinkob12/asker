@@ -52,6 +52,7 @@ import {
   upgradeCost,
   upgradeLevel,
   WAREHOUSE_UPGRADES,
+  type Warehouse,
   type WarehouseUpgradeKind,
   warehouseCapacity,
   warehouseLoad,
@@ -107,7 +108,10 @@ const stockView = memoState((state) => {
   return { cityId, rows, warehouses: getWarehouses(state, cityId) };
 });
 
-/** Kurzanzeige im HUD: "2,1 kg Gras + 489 Stück Pillen" (die zwei größten Posten), dazu die Aufstellung zum Aufklappen. */
+/**
+ * Kurzanzeige im HUD: "2,1 kg Gras + 489 Stück Pillen" (die zwei größten Posten), bei mehr "2,1 kg Gras +4" (am Handy
+ * ist die Kachel schmal), dazu die Aufstellung zum Aufklappen.
+ */
 const StockHud = memo(function StockHud() {
   const ui = useUi();
   // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen.
@@ -120,7 +124,7 @@ const StockHud = memo(function StockHud() {
         ? 'leer'
         : rows.length <= 2
           ? rows.map(stockText).join(' + ')
-          : `${stockText(rows[0])} + ${rows.length - 1} weitere`;
+          : `${stockText(rows[0])} +${rows.length - 1}`;
     return {
       value: warehouses.length === 0 ? 'kein Lager' : short,
       title: rows.map(stockText).join(', ') || 'Lager leer',
@@ -482,15 +486,77 @@ function FlowLink() {
   );
 }
 
-/** Handy-App "Lager": deine Lager in der aktiven Stadt (Tipp öffnet die Lager-Seite) und die Standorte zum Kaufen. */
-function WarehouseApp() {
+/**
+ * Standorte zum Kaufen (sauberes Geld). Der Kauf fragt nach (J11: ein Tipp kaufte sofort für 3.000 €), das Blatt nennt
+ * Preis und Platz.
+ */
+function ForSaleGroup(props: { forSale: readonly Warehouse[] }) {
   const { state, dispatch } = useGame();
+  const [asked, setAsked] = useState<Warehouse | null>(null);
+  return (
+    <Group title="Zu kaufen (sauberes Geld)" icon="building" color="money" count={props.forSale.length}>
+      {props.forSale.length === 0 ? (
+        <Empty icon="building">Hier gibt es keinen Standort mehr zu kaufen.</Empty>
+      ) : (
+        <List>
+          {props.forSale.map((w) => (
+            <ListItem
+              key={w.id}
+              aside={
+                <Button small disabled={state.wallet.clean < w.cost} onClick={() => setAsked(w)}>
+                  {formatEuro(w.cost)}
+                </Button>
+              }
+            >
+              <ItemContent
+                icon="building"
+                color="money"
+                title={w.name}
+                meta={w.description}
+                tags={[{ label: `Platz ${formatAmount(w.capacity)}`, icon: 'boxes', color: 'goods' }]}
+              />
+            </ListItem>
+          ))}
+        </List>
+      )}
+      <ActionSheet
+        open={asked !== null}
+        onClose={() => setAsked(null)}
+        title={asked ? `${asked.name} kaufen?` : ''}
+        message={
+          asked
+            ? `Kostet ${formatEuro(asked.cost)} sauberes Geld, Platz für ${formatAmount(asked.capacity)}. Gekauft ist gekauft.`
+            : undefined
+        }
+        actions={[
+          {
+            label: asked ? `Kaufen (${formatEuro(asked.cost)})` : 'Kaufen',
+            icon: 'building',
+            disabled: !asked || state.wallet.clean < asked.cost,
+            onSelect: () => {
+              if (asked) dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: asked.id } });
+              setAsked(null);
+            },
+          },
+        ]}
+      />
+    </Group>
+  );
+}
+
+/**
+ * Handy-App "Lager": deine Lager in der aktiven Stadt (Tipp öffnet die Lager-Seite) und die Standorte zum Kaufen. Ohne
+ * Lager in der Stadt (neue Stadt) stehen die Standorte ganz oben (J11), vorher kamen erst Warenfluss und Fahrzeuge.
+ */
+function WarehouseApp() {
+  const { state } = useGame();
   const ui = useUi();
   const cityId = activeCity(state);
   const owned = getWarehouses(state, cityId);
   const forSale = warehouseSites(cityId).filter((w) => !owned.some((o) => o.id === w.id));
   return (
     <div class="goods-panel">
+      {owned.length === 0 && <ForSaleGroup forSale={forSale} />}
       {owned.length > 0 && (
         <Group title="Deine Lager" icon="warehouse" color="goods" count={owned.length}>
           <List>
@@ -520,36 +586,7 @@ function WarehouseApp() {
       )}
       <FlowLink />
       <Slot name="goods.app" props={{}} />
-      <Group title="Zu kaufen (sauberes Geld)" icon="building" color="money" count={forSale.length}>
-        {forSale.length === 0 ? (
-          <Empty icon="building">Hier gibt es keinen Standort mehr zu kaufen.</Empty>
-        ) : (
-          <List>
-            {forSale.map((w) => (
-              <ListItem
-                key={w.id}
-                aside={
-                  <Button
-                    small
-                    disabled={state.wallet.clean < w.cost}
-                    onClick={() => dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: w.id } })}
-                  >
-                    {formatEuro(w.cost)}
-                  </Button>
-                }
-              >
-                <ItemContent
-                  icon="building"
-                  color="money"
-                  title={w.name}
-                  meta={w.description}
-                  tags={[{ label: `Platz ${formatAmount(w.capacity)}`, icon: 'boxes', color: 'goods' }]}
-                />
-              </ListItem>
-            ))}
-          </List>
-        )}
-      </Group>
+      {owned.length > 0 && <ForSaleGroup forSale={forSale} />}
     </div>
   );
 }

@@ -2,13 +2,13 @@
 // reagieren, Veedel verteidigen, expandieren, drohen und überfallen, Ware anbieten. Danach die Preise setzen.
 // Alles deterministisch über ctx.random().
 
-import { type Ctx, clock, formatAmount, formatEuro, journal, wallet } from '../../core';
+import { type Ctx, clock, formatAmount, formatEuro, type GameState, journal, wallet } from '../../core';
 import { activeCity, liveVeedel } from '../city';
 import { activeEncounters, startEncounter } from '../encounters';
 import { eventFactor } from '../events';
 import { DEFAULT_PRODUCT, getStock, getWarehouses } from '../goods';
 import { referencePrice, setCompetitionFactor } from '../market';
-import { getSpot, getSpots, spotModifiers } from '../spots';
+import { atSpot, getSpot, getSpots, spotModifiers } from '../spots';
 import { defenseStrength, getStaff, getStaffMember } from '../staff';
 import {
   addInfluence,
@@ -505,6 +505,12 @@ function pickRaidTarget(ctx: Ctx, gang: Gang, s: GangStatus): RaidTarget | null 
   return null;
 }
 
+/** „am Ebertplatz“, „an der Uni-Wiese“ … (J4); ohne Spot „am Spot“. */
+function spotPhrase(state: GameState, spotId: string): string {
+  const spot = getSpot(state, spotId);
+  return spot ? atSpot(spot) : 'am Spot';
+}
+
 function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
   const target = pickRaidTarget(ctx, gang, s);
   if (!target) return;
@@ -516,7 +522,7 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
       ? `Überfall auf ${target.name}`
       : target.kind === 'courier'
         ? 'Überfall auf eine Auftragsfahrt'
-        : `Überfall am ${getSpot(ctx.state, target.spotId)?.name ?? 'Spot'}`,
+        : `Überfall ${spotPhrase(ctx.state, target.spotId)}`,
   );
   const count = Math.max(1, Math.min(s.people, ctx.randomInt(2, 3) + (s.hostility >= 90 ? 1 : 0)));
   const opponent = { factionId: gang.id, label: gang.crew, strength: gang.traits.fighting, count };
@@ -525,7 +531,7 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
   if (target.kind === 'spot') {
     journal.add(
       ctx,
-      `${gang.name} überfällt deinen Spot am ${getSpot(ctx.state, target.spotId)?.name ?? target.spotId}!`,
+      `${gang.name} überfällt deinen Spot ${getSpot(ctx.state, target.spotId)?.name ?? target.spotId}!`,
       'bad',
       {
         spotId: target.spotId,

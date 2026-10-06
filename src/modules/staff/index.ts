@@ -41,6 +41,7 @@ import {
   type MessageOption,
   messages,
   texts,
+  withPeriod,
 } from '../../core';
 import { absenceHandled, teamLeadOf } from '../hierarchy';
 import { PLAYER_FACTION } from '../territory';
@@ -106,6 +107,8 @@ export {
   ROLE_INFO,
   RUNNER_DAILY_WAGE,
   RUNNER_HIRE_COST,
+  RUNNER_HIRE_COST_MAX,
+  RUNNER_HIRE_COST_MIN,
   STAT_NAMES,
   STATUS_NAMES,
   TRAITS,
@@ -404,7 +407,7 @@ function onLeft(ctx: Ctx, staffId: string, reason: StaffLeaveReason): void {
         text: texts.pick(ctx, 'staff:leaveWith', STAFF_TEXTS.leaveWith, { other: gone.name.split(' ')[0] }),
         silent: true,
       });
-      journal.add(ctx, `${other.name} geht mit ${gone.name}.`, 'bad', { staffId: other.id });
+      journal.add(ctx, withPeriod(`${other.name} geht mit ${gone.name}`), 'bad', { staffId: other.id });
       removeMember(ctx, other.id, 'quit');
     }
   }

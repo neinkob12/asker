@@ -2,7 +2,7 @@
 
 import { islandCountdown, registerLiveActivity } from '../../../ui';
 import { activeCity } from '../../city';
-import { getSpot } from '../../spots';
+import { atSpot, getSpot } from '../../spots';
 import { controllerOf, PLAYER_FACTION } from '../../territory';
 import { veedelName } from '../../veedel';
 import { getGang, getGangStatus, getGangs } from '../index';
@@ -49,7 +49,7 @@ registerLiveActivity({
             tone: 'warn' as const,
             leading: 'Spot',
             trailing: islandCountdown(i.until - state.time),
-            title: `${gang.name} am ${spot.name}`,
+            title: `${gang.name} ${atSpot(spot)}`,
             detail: 'Kaum Kunden, solange sie dort stehen',
             open: (ui) => {
               ui.selectTab('gangs');

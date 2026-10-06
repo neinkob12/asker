@@ -15,6 +15,7 @@ import {
   type CommandResult,
   type Ctx,
   clock,
+  formatDays,
   formatEuro,
   type GameState,
   journal,
@@ -24,7 +25,7 @@ import {
 import { activeCity, cityName, isBusinessSold } from '../city';
 import { cityReport, spotResults, wageRunway } from '../finance';
 import { playerHeat } from '../police';
-import { getSpot, getSpots, spotCity } from '../spots';
+import { atSpot, getSpot, getSpots, spotCity } from '../spots';
 import {
   activeRunnerAt,
   addCareer,
@@ -657,7 +658,7 @@ export function buildReport(state: GameState, cityId: string = activeCity(state)
   });
   if (weakest) {
     const name = getSpot(state, weakest.spotId)?.name ?? weakest.spotId;
-    advice.push(`Der ${name} hat gestern ${formatEuro(-weakest.result)} mehr gekostet, als er gebracht hat.`);
+    advice.push(`Der Spot ${name} hat gestern ${formatEuro(-weakest.result)} mehr gekostet, als er gebracht hat.`);
   }
   const absent = getStaff(state, { cityId }).filter(isAbsent);
   if (absent.length > 0) {
@@ -670,7 +671,7 @@ export function buildReport(state: GameState, cityId: string = activeCity(state)
   const hot = playerHeat(state);
   if (hot && hot.heat >= 60 && veedelCity(hot.veedelId) === cityId)
     advice.push(`In ${veedelName(hot.veedelId)} ist es heiß (Heat ${Math.round(hot.heat)}).`);
-  if (runway.warn) advice.unshift(`Die Löhne reichen nur noch für ${runway.days ?? 0} Tage.`);
+  if (runway.warn) advice.unshift(`Die Löhne reichen nur noch für ${formatDays(runway.days ?? 0)}.`);
   const rh = getRightHand(state, cityId);
   const done = rh ? describeDone(rh.done) : '';
   return {
@@ -710,7 +711,7 @@ function sendReport(ctx: Ctx, rh: RightHandPost, cityId: string): void {
             : 'Kein Gewinn, also kein Anteil für mich.',
         ]
       : []),
-    `In der Kasse ${formatEuro(report.cash)}${report.runwayDays !== null ? `, die Löhne reichen ${report.runwayDays} Tage` : ''}.`,
+    `In der Kasse ${formatEuro(report.cash)}${report.runwayDays !== null ? `, die Löhne reichen ${formatDays(report.runwayDays)}` : ''}.`,
     ...(report.done ? [`Erledigt: ${report.done}.`] : []),
     ...(fpDone ? [`Mit Vollmacht: ${fpDone}.`] : []),
     ...report.advice,
@@ -783,7 +784,7 @@ function coordinate(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
       { type: 'staff.assign', payload: { staffId: runner.id, assignment: { kind: 'spot', targetId: spot.id } } },
       { actor },
     ).ok;
-    if (ok) note(ctx, rh, `${runner.name} an den ${spot.name} geschickt, da stand keiner.`);
+    if (ok) note(ctx, rh, `${runner.name} steht jetzt ${atSpot(spot)}, da stand keiner.`);
   }
 }
 
@@ -813,14 +814,14 @@ function handleAbsences(ctx: Ctx, rh: RightHandPost, actor: Actor): void {
       }
     }
     if (m.returnTo?.kind === 'spot') {
-      const spot = getSpot(ctx.state, m.returnTo.targetId)?.name ?? 'Spot';
+      const spot = getSpot(ctx.state, m.returnTo.targetId);
       // Ersetzen kostet nur, wenn niemand frei ist (Läufer von der Straße): nie an die Lohnsicherung.
       const freeOne = freeStaff(ctx.state, m.role).length > 0;
       const hireCost = m.role === 'runner' ? runnerHireCost(ctx.state, m.returnTo.targetId) : Number.POSITIVE_INFINITY;
       if (!freeOne && hireCost > leadSpendingLimit(ctx.state)) continue;
       if (ctx.dispatch({ type: 'staff.replace', payload: { staffId: m.id } }, { actor }).ok) {
         rh.handled.push(m.id);
-        note(ctx, rh, `${m.name} fällt aus, am ${spot} steht jetzt jemand anderes.`, true);
+        note(ctx, rh, `${m.name} fällt aus, ${spot ? atSpot(spot) : 'am Spot'} steht jetzt jemand anderes.`, true);
       }
     } else {
       rh.handled.push(m.id);

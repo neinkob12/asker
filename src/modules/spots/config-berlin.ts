@@ -24,6 +24,7 @@ export const PRESET_SPOTS_BERLIN: readonly PresetSpot[] = [
   {
     id: 'hackescher-markt',
     name: 'Hackescher Markt',
+    at: 'am Hackeschen Markt',
     lng: 13.4027,
     lat: 52.5234,
     demand: 1.3,
@@ -113,6 +114,7 @@ export const PRESET_SPOTS_BERLIN: readonly PresetSpot[] = [
   {
     id: 'raw-gelaende',
     name: 'RAW-Gelände',
+    at: 'auf dem RAW-Gelände',
     kind: 'club',
     lng: 13.4545,
     lat: 52.5075,
@@ -418,6 +420,7 @@ export const PRESET_SPOTS_BERLIN: readonly PresetSpot[] = [
   {
     id: 'tempelhofer-feld',
     name: 'Tempelhofer Feld',
+    at: 'auf dem Tempelhofer Feld',
     kind: 'park',
     lng: 13.3862,
     lat: 52.4795,
@@ -440,6 +443,7 @@ export const PRESET_SPOTS_BERLIN: readonly PresetSpot[] = [
   {
     id: 'alt-tempelhof',
     name: 'Alt-Tempelhof',
+    at: 'in Alt-Tempelhof',
     lng: 13.3855,
     lat: 52.4655,
     demand: 0.8,
