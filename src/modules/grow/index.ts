@@ -300,6 +300,20 @@ export function openRegions(state: GameState): string[] {
   return REGIONS.filter((r) => regionStatus(state, r.id) === 'open').map((r) => r.id);
 }
 
+/**
+ * Wann eine Ernte verpackt im Ausfuhrlager liegt (Auftrag 43, I1): Ende der laufenden Stufe plus die Stufen danach
+ * (Hasch: trocknen, pressen, verpacken; sonst trocknen, verpacken).
+ */
+export function batchStoredAt(batch: Batch): number {
+  const later =
+    batch.stage === 'drying'
+      ? (batch.productId === 'hash' ? PRESS_DAYS : 0) + PACK_DAYS
+      : batch.stage === 'pressing'
+        ? PACK_DAYS
+        : 0;
+  return batch.until + later * DAY;
+}
+
 export function getFincas(state: GameState, regionId?: string): readonly Finca[] {
   const list = growState(state)?.fincas ?? [];
   return regionId ? list.filter((f) => f.regionId === regionId) : list;
@@ -481,27 +495,63 @@ export function goalShares(
 }
 
 /** Wie weit „Europa“ ist: Kunden (beliefert in der Zeit) mit genug eigener Ware, Städte in Europa noch ohne. */
-export function europeProgress(state: GameState): { supplied: number; total: number; missing: string[] } {
+export function europeProgress(state: GameState): EuropeProgress {
   const { customers } = goalShares(state, EUROPE_WINDOW_DAYS, true);
   const all = getCustomers(state);
   const missing: string[] = [];
   let supplied = 0;
   let total = 0;
+  const customersOk: string[] = [];
+  const customersMissing: string[] = [];
   for (const customer of all) {
     const c = customers.get(customer.id);
     const isEurope = customer.kind === 'europe';
     if (!c && !isEurope) continue;
     total++;
     // Wer nur Laborware bekam (nichts zum Anbauen), ist versorgt; eine Stadt in Europa ohne Lieferung nicht.
-    if (c && (c.grams === 0 || c.own / c.grams >= EUROPE_SHARE)) supplied++;
-    else missing.push(customer.name);
+    if (c && (c.grams === 0 || c.own / c.grams >= EUROPE_SHARE)) {
+      supplied++;
+      customersOk.push(customer.name);
+    } else {
+      missing.push(customer.name);
+      customersMissing.push(customer.name);
+    }
   }
+  const citiesMissing: string[] = [];
   for (const city of EUROPE_CITIES) {
     if (all.some((c) => c.europeId === city.id)) continue;
     total++;
     missing.push(city.name);
+    citiesMissing.push(city.name);
   }
-  return { supplied, total, missing };
+  return {
+    supplied,
+    total,
+    missing,
+    cities: {
+      joined: EUROPE_CITIES.length - citiesMissing.length,
+      total: EUROPE_CITIES.length,
+      missing: citiesMissing,
+    },
+    customers: {
+      supplied: customersOk.length,
+      total: customersOk.length + customersMissing.length,
+      missing: customersMissing,
+    },
+  };
+}
+
+/**
+ * Stand des Ziels „Europa“ (Auftrag 43, I3): zusammen (supplied/total/missing) und getrennt nach den zwei Bedingungen,
+ * damit der Nenner nicht mit dem Lieferfenster springt: Städte in Europa, die kaufen (fest), und Kunden der letzten
+ * EUROPE_WINDOW_DAYS Tage, die zur Hälfte eigene Ware bekamen.
+ */
+export interface EuropeProgress {
+  supplied: number;
+  total: number;
+  missing: string[];
+  cities: { joined: number; total: number; missing: string[] };
+  customers: { supplied: number; total: number; missing: string[] };
 }
 
 /** Erreichte Ziele (für die Ränge in city und die Bestenliste). */

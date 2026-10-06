@@ -31,6 +31,7 @@ import {
   vehicleStatus,
 } from '../../fleet';
 import { productName } from '../../goods';
+import { customsHeat, customsHeatForArrival, customsLevel } from '../../police';
 import {
   CONTAINER_SIZES,
   COVERS,
@@ -96,7 +97,12 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
     : [];
   const ports = ownedPorts(state);
   const [productId, setProduct] = useState(wanted && products.includes(wanted) ? wanted : (products[0] ?? 'weed'));
-  const [size, setSize] = useState<ContainerSize['id']>('medium');
+  // Eigene Ernte (Auftrag 43, I7): der kleinste Container, in den alles passt (10 kg nicht im 50-kg-Container).
+  const [size, setSize] = useState<ContainerSize['id']>(() => {
+    if (!origin) return 'medium';
+    const amount = stock[productId]?.amount ?? 0;
+    return (CONTAINER_SIZES.find((c) => c.grams >= amount) ?? CONTAINER_SIZES[CONTAINER_SIZES.length - 1]).id;
+  });
   const [cover, setCover] = useState<Cover['id']>('none');
   const [vessel, setVessel] = useState<string>(CHARTER);
   // Aus dem eigenen Ausfuhrlager standardmäßig alles (Auftrag 43), sonst ein Container.
@@ -124,7 +130,15 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
     .flatMap((o) => o.items)
     .filter((i) => i.productId === productId && i.state === undefined)
     .reduce((sum, i) => sum + i.amount, 0);
-  const have = stockWithIncoming(state, target, productId);
+  // Nur, was bis zur frühesten Frist dieser Ware da ist (Auftrag 43, I8; wie „Diese Woche“).
+  const due = getOrders(state)
+    .filter((o) => o.status === 'accepted' && o.items.some((i) => i.productId === productId && i.state === undefined))
+    .reduce((min, o) => Math.min(min, o.dueAt), Infinity);
+  const have =
+    stockWithIncoming(state, target, productId) -
+    getShipments(state)
+      .filter((x) => x.portId === target && x.productId === productId && x.status === 'sea' && x.arrivesAt > due)
+      .reduce((sum, x) => sum + x.amount, 0);
   const container = CONTAINER_SIZES.find((c) => c.id === size) ?? CONTAINER_SIZES[0];
   const capacity = vesselId === null ? Infinity : vehicleSpec(state, vesselId).capacity;
   const onHand = origin ? (stock[productId]?.amount ?? 0) : Infinity;
@@ -140,7 +154,8 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
   const minutes = plan ? plan.minutes : shippingMinutes(producer.id, target);
   const fits = vesselId === null || n * container.grams <= capacity;
   const arrives = state.time + minutes;
-  const grams = n * container.grams;
+  // Aus dem Ausfuhrlager fährt höchstens, was dort liegt (I7: der Hallen-Hinweis rechnete den ganzen Container).
+  const grams = Math.min(n * container.grams, onHand);
   // Frist (Auftrag 43, H4): Bestellungen mit dieser Ware, die vor der Ankunft fällig sind.
   const tooLate = getOrders(state)
     .filter((o) => (o.status === 'open' || o.status === 'accepted') && o.dueAt < arrives)
@@ -163,7 +178,11 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
             payload: { producerId: producer.id, productId, size, cover, count: n, portId: target },
           })
         : dispatch({ type: 'trade.sail', payload: { vesselId, producerId: producer.id, portId: target, load } });
-    if (result.ok) ui.closePanel();
+    // Danach in den Hafen (Auftrag 43, I11): Dort steht der Container unter „Auf See“ mit Ankunft.
+    if (result.ok) {
+      ui.closePanel();
+      ui.openPhone('trade.app', { view: 'harbor' });
+    }
   };
   return (
     <div class="trade-app">
@@ -195,7 +214,7 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
         )}
         {needed > 0 && (
           <Hint icon="inbox">
-            {`Angenommen und noch offen: ${kg(needed)} ${productName(productId)}. Im Hafen oder unterwegs: ${kg(have)}.`}
+            {`Angenommen und noch offen: ${kg(needed)} ${productName(productId)}. Bis zur Frist im Hafen: ${kg(have)}.`}
           </Hint>
         )}
         {!origin && leftover > short && (
@@ -276,7 +295,9 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
             <ItemContent
               icon="anchor"
               color={risk >= 0.15 ? 'danger' : 'law'}
-              title="Zoll schaut rein (je Container)"
+              title="Zollrisiko je Container"
+              // Die Menge selbst weckt den Zoll (Auftrag 43, I11: 360 kg setzten Rotterdam von ruhig auf Großkontrolle).
+              meta={`Die Menge weckt den Zoll: +${Math.round(customsHeatForArrival(grams / 1000))} bei Ankunft, jetzt ${customsLevel(customsHeat(state, target)).label}`}
             />
           </ListItem>
           <ListItem value={days(minutes)}>
@@ -312,6 +333,17 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
           {plan && (
             <ListItem value={formatEuro(plan.cost)}>
               <ItemContent icon="ship" color="place" title="Crew und Diesel" />
+            </ListItem>
+          )}
+          {/* Eigenes Schiff gegen Linie (Auftrag 43, I11): Preis, Zeit und Zoll nebeneinander. */}
+          {plan && (
+            <ListItem value={formatEuro(loadCost(producer.id, load, false))}>
+              <ItemContent
+                icon="ship"
+                color="system"
+                title="Zum Vergleich: Linienschiff"
+                meta={`${days(shippingMinutes(producer.id, target))}, Zollrisiko ${pct(containerRisk(state, producer.id, size, target, cover, null, stock[productId]?.pack ?? 1))} je Container`}
+              />
             </ListItem>
           )}
         </List>

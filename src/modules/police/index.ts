@@ -358,6 +358,11 @@ export function customsHeat(state: GameState, portId: string): number {
   return state.modules.police.customs?.[portId] ?? 0;
 }
 
+/** Wie viel Zoll-Heat eine Ankunft mit so vielen Kilo bringt (Auftrag 43, I11: im Einkauf vorher zeigen). */
+export function customsHeatForArrival(kilos: number): number {
+  return Math.max(0, kilos) * CUSTOMS_HEAT_PER_KG;
+}
+
 /** Stufe des Zolls in einem Hafen für die Anzeige (0 ruhig … 3 Großkontrolle). */
 export function customsLevel(heat: number): { index: number; label: string } {
   let index = 0;

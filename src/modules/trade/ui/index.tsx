@@ -905,8 +905,9 @@ function HarborView() {
       <SummaryTiles
         items={[
           { icon: 'ship', color: 'place', value: shipments.filter((x) => x.status === 'sea').length, label: 'Auf See' },
-          { icon: 'boxes', color: 'goods', value: stats.containers, label: 'Container' },
-          { icon: 'anchor', color: 'danger', value: stats.seized, label: 'Aufgeflogen' },
+          // Kurze Wörter (Auftrag 43, I5: „Contai…“, „Aufgefl…“ am Handy).
+          { icon: 'boxes', color: 'goods', value: stats.containers, label: 'Gekauft' },
+          { icon: 'anchor', color: 'danger', value: stats.seized, label: 'Erwischt' },
         ]}
       />
       {ports.map((id) => {
@@ -1132,8 +1133,8 @@ function TradeApp() {
           aria-label="Bereich"
           value={view}
           options={[
-            // Mit dem vierten Bereich (Anbau) wird es eng: dann das kürzere Wort.
-            { value: 'orders', label: isGrowStarted(state) ? 'Aufträge' : 'Bestellungen', badge: waiting + toDeliver },
+            // Immer „Aufträge“ (Auftrag 43, I10): vorher wechselte das Wort mit dem Anbau, Quests und Fenna sagten das andere.
+            { value: 'orders', label: 'Aufträge', badge: waiting + toDeliver },
             { value: 'customers', label: 'Kunden' },
             { value: 'harbor', label: 'Hafen' },
             // Auftrag 42: eigene Produktion (Fincas, Kartell, Ausfuhr), sobald die Produzenten angerufen haben.
@@ -1353,17 +1354,44 @@ onGameEvent('trade.dealTipped', 'trade.tippedToast', (payload, ui, state) => {
   ui.toast(`${getCustomer(state, payload.customerId)?.name ?? 'Die Gang'} hat nicht gezahlt.`, 'bad');
 });
 // Auftrag 43: Was in der Hafen-Phase passiert, sagt ein Banner (Ware da ist dringend, Verluste auch).
+// Container, die im selben Schritt ankommen, melden sich mit einem Banner pro Hafen (Auftrag 43, I2: eine Charter mit
+// vier Containern brachte vier Banner). Gesammelt wird bis zum Ende der Zustellung, dann geht ein Banner raus.
+const arrivals = new Map<
+  string,
+  { amount: number; stored: number; count: number; own: boolean; products: Set<string> }
+>();
+let arrivalsFlush: ReturnType<typeof setTimeout> | null = null;
 onGameEvent('trade.containerArrived', 'trade.arrivedToast', (payload, ui) => {
   if (payload.checked) return;
-  const quay = payload.amount - payload.stored;
-  // Was wirklich ins Lager passte (Auftrag 43, H10), der Rest im selben Banner statt in einem zweiten.
-  ui.toast(
-    quay > 0
-      ? `Container in ${harborName(payload.portId)} angekommen: ${kg(payload.stored)} im Lager, ${kg(quay)} warten am Kai (Liegegeld).`
-      : `Container in ${harborName(payload.portId)} angekommen: ${kg(payload.amount)} im Lager.`,
-    quay > 0 ? 'warn' : 'good',
-    { urgent: true },
-  );
+  const entry = arrivals.get(payload.portId) ?? { amount: 0, stored: 0, count: 0, own: false, products: new Set() };
+  entry.amount += payload.amount;
+  entry.stored += payload.stored;
+  entry.count += 1;
+  entry.own ||= payload.own;
+  entry.products.add(payload.productId);
+  arrivals.set(payload.portId, entry);
+  if (arrivalsFlush !== null) return;
+  arrivalsFlush = setTimeout(() => {
+    arrivalsFlush = null;
+    for (const [portId, a] of arrivals) {
+      const quay = a.amount - a.stored;
+      const what = a.own
+        ? `Eigene Ernte in ${harborName(portId)} angekommen`
+        : a.count === 1
+          ? `Container in ${harborName(portId)} angekommen`
+          : `${a.count} Container in ${harborName(portId)} angekommen`;
+      const goods = [...a.products].map(productName).join(', ');
+      // Was wirklich ins Lager passte (H10), der Rest im selben Banner statt in einem zweiten.
+      ui.toast(
+        quay > 0
+          ? `${what}: ${kg(a.stored)} ${goods} im Lager, ${kg(quay)} warten am Kai (Liegegeld).`
+          : `${what}: ${kg(a.amount)} ${goods} im Lager.`,
+        quay > 0 ? 'warn' : 'good',
+        { urgent: true },
+      );
+    }
+    arrivals.clear();
+  }, 0);
 });
 onGameEvent('trade.containerWaiting', 'trade.waitingToast', (payload, ui) => {
   if (payload.arriving) return;

@@ -11,7 +11,7 @@
 // Ereignis: 'weather.changed' { from, to, temperature, intensity }
 
 import { type Ctx, clock, defineModule, type GameState, journal, MINUTES_PER_DAY } from '../../core';
-import { activeCity, cityName } from '../city';
+import { activeCity, cityName, isBusinessSold } from '../city';
 import {
   DAY_AMPLITUDE,
   DELIVERY_DEMAND,
@@ -245,7 +245,10 @@ function tick(ctx: Ctx): void {
       s.since = slot.at;
       ctx.emit('weather.changed', { from, to: slot.kind, temperature: s.temperature, intensity: s.intensity });
       const text = JOURNAL_TEXT[slot.kind];
-      if (text) journal.add(ctx, text.replace('{city}', cityName(activeCity(ctx.state))), 'info');
+      // Nach dem Verkauf kein Wetter im Journal (Auftrag 43, I9): Es betrifft keinen Straßenhandel mehr und drängte
+      // Ernte und Lieferungen aus dem Journal (21 von 60 Einträgen).
+      if (text && !isBusinessSold(ctx.state))
+        journal.add(ctx, text.replace('{city}', cityName(activeCity(ctx.state))), 'info');
     }
   }
   fillForecast(ctx, s);

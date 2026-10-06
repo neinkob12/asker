@@ -36,6 +36,7 @@ import { getRegion, REGIONS } from '../../city';
 import { getProduct, productName } from '../../goods';
 import { originStock, PRODUCERS, regionOrigin } from '../../trade';
 import {
+  batchStoredAt,
   bribeReadyAt,
   CARTEL_HIT_CHANCE,
   CARTEL_HIT_LOSS,
@@ -91,6 +92,12 @@ function purchasePerGram(productId: string): number | null {
   const base = getProduct(productId)?.basePrice ?? null;
   if (shares.length === 0 || base === null) return null;
   return Math.min(...shares) * base;
+}
+
+/** „1 Tag“, „5 Tagen“ für eine Restzeit in Minuten (mindestens ein Tag, solange noch etwas fehlt). */
+function daysText(minutes: number): string {
+  const days = Math.max(0, Math.ceil(minutes / DAY));
+  return days === 0 ? 'unter einem Tag' : days === 1 ? 'einem Tag' : `${days} Tagen`;
 }
 
 /** Wo eine Finca steht: Pflanzung, Ernte auf dem Weg, oder brach. */
@@ -150,6 +157,14 @@ function ExportRow({ regionId }: { regionId: string }) {
   );
 }
 
+/** Wer noch fehlt, als Chips (bis sechs, dann „+N“). */
+function missingTags(names: readonly string[]) {
+  return [
+    ...names.slice(0, 6).map((name) => ({ label: name, color: 'danger' as const })),
+    names.length > 6 && { label: `+${names.length - 6} weitere`, color: 'danger' as const },
+  ];
+}
+
 function GoalsGroup() {
   const { state } = useGame();
   const goals = growGoals(state);
@@ -173,30 +188,52 @@ function GoalsGroup() {
             {!goals.producer && <ProgressBar value={shares.share / PRODUCER_SHARE} label="Anteil eigener Ware" />}
           </ItemContent>
         </ListItem>
-        <ListItem value={goals.europe ? 'erreicht' : `${europe.supplied} von ${europe.total}`}>
+        <ListItem value={goals.europe ? 'erreicht' : undefined}>
           <ItemContent
             icon="globe"
             color={goals.europe ? 'money' : 'people'}
             title="Europa"
-            meta={goals.europe ? undefined : 'Jeder Kunde und jede Stadt in Europa zur Hälfte mit eigener Ware.'}
-            // Auftrag 43: wen du noch versorgen musst (bis sechs, dann „+N“).
-            tags={
+            meta={
               goals.europe
                 ? undefined
-                : [
-                    ...europe.missing.slice(0, 6).map((name) => ({ label: name, color: 'danger' as const })),
-                    europe.missing.length > 6 && {
-                      label: `+${europe.missing.length - 6} weitere`,
-                      color: 'danger' as const,
-                    },
-                  ]
+                : 'Zwei Bedingungen: Alle Städte in Europa kaufen bei dir, und wer in den letzten vier Wochen beliefert wurde, bekam zur Hälfte eigene Ware.'
             }
-          >
-            {!goals.europe && europe.total > 0 && (
-              <ProgressBar value={europe.supplied / europe.total} tone="info" label="Kunden aus eigener Produktion" />
-            )}
-          </ItemContent>
+          />
         </ListItem>
+        {/* Auftrag 43, I3: zwei Zeilen mit festem Nenner statt einer Zahl, die mit dem Lieferfenster springt. */}
+        {!goals.europe && (
+          <ListItem value={`${europe.cities.joined} von ${europe.cities.total}`}>
+            <ItemContent
+              icon="handshake"
+              color={europe.cities.missing.length === 0 ? 'money' : 'people'}
+              title="Städte in Europa kaufen"
+              tags={missingTags(europe.cities.missing)}
+            >
+              <ProgressBar value={europe.cities.joined / Math.max(1, europe.cities.total)} tone="info" label="Städte" />
+            </ItemContent>
+          </ListItem>
+        )}
+        {!goals.europe && (
+          <ListItem
+            value={europe.customers.total > 0 ? `${europe.customers.supplied} von ${europe.customers.total}` : '–'}
+          >
+            <ItemContent
+              icon="leaf"
+              color={europe.customers.total > 0 && europe.customers.missing.length === 0 ? 'money' : 'goods'}
+              title="Kunden mit eigener Ware"
+              meta="Zur Hälfte aus eigener Ernte: alle, die du in den letzten vier Wochen beliefert hast."
+              tags={missingTags(europe.customers.missing)}
+            >
+              {europe.customers.total > 0 && (
+                <ProgressBar
+                  value={europe.customers.supplied / europe.customers.total}
+                  tone="info"
+                  label="Kunden aus eigener Produktion"
+                />
+              )}
+            </ItemContent>
+          </ListItem>
+        )}
         {!goals.europe && europe.missing.length > 0 && (
           <ListItem>
             <ItemContent
@@ -219,6 +256,74 @@ function GrowView() {
   const fincas = getFincas(state);
   const cost = costPerGram(state, 4);
   const shares = goalShares(state);
+  const offersFirst = REGIONS.every(
+    (r) => regionStatus(state, r.id) === 'none' || regionStatus(state, r.id) === 'called',
+  );
+  const regions = REGIONS.map((region) => {
+    const status = regionStatus(state, region.id);
+    if (status === 'none') return null;
+    if (status === 'called') {
+      return (
+        <Group
+          key={region.id}
+          title={region.name}
+          icon="phone"
+          color="goods"
+          value={`Ernte bis Hafen ${harvestToHarborDays(region.id)} T.`}
+          note={region.pitch}
+        >
+          <List>
+            <ListItem
+              action
+              icon="check"
+              onClick={() => dispatch({ type: 'grow.openRegion', payload: { regionId: region.id } })}
+            >
+              {`Angebot von ${region.contact.name} annehmen`}
+            </ListItem>
+          </List>
+        </Group>
+      );
+    }
+    const list = getFincas(state, region.id);
+    return (
+      <Group
+        key={region.id}
+        title={region.name}
+        icon="leaf"
+        color="goods"
+        value={`Ernte bis Hafen ${harvestToHarborDays(region.id)} T.`}
+        note={list.length === 0 ? 'Noch keine Finca. Kaufen oder pachten unter Region.' : undefined}
+      >
+        <List>
+          {list.map((f) => (
+            <FincaRow key={f.id} finca={f} />
+          ))}
+          <ExportRow regionId={region.id} />
+          <ListItem onClick={() => ui.openPanel('grow.region', { regionId: region.id })}>
+            <ItemContent
+              icon="handshake"
+              color="danger"
+              title="Region, Kartell, Behörden"
+              tags={[
+                {
+                  label: cartelPaid(state, region.id)
+                    ? `Kartell ${pct(REGION_ECONOMY[region.id]?.cartelShare ?? 0)}`
+                    : 'Kartell ohne Anteil',
+                  color: cartelPaid(state, region.id) ? 'goods' : 'danger',
+                  icon: 'handshake',
+                },
+                {
+                  label: `Behörden ${Math.round(regionAttention(state, region.id))}`,
+                  color: regionAttention(state, region.id) >= 45 ? 'danger' : 'law',
+                  icon: 'shield',
+                },
+              ]}
+            />
+          </ListItem>
+        </List>
+      </Group>
+    );
+  });
   return (
     <>
       <SummaryTiles
@@ -228,72 +333,11 @@ function GrowView() {
           { icon: 'gem', color: 'brand', value: pct(shares.share), label: 'Eigen' },
         ]}
       />
+      {/* Solange nur Angebote da sind, stehen sie oben (Auftrag 43, I11: die Quest will das Annehmen, die Ziele sind
+          noch weit weg). */}
+      {offersFirst && regions}
       <GoalsGroup />
-      {REGIONS.map((region) => {
-        const status = regionStatus(state, region.id);
-        if (status === 'none') return null;
-        if (status === 'called') {
-          return (
-            <Group
-              key={region.id}
-              title={region.name}
-              icon="phone"
-              color="goods"
-              value={`Ernte bis Hafen ${harvestToHarborDays(region.id)} T.`}
-              note={region.pitch}
-            >
-              <List>
-                <ListItem
-                  action
-                  icon="check"
-                  onClick={() => dispatch({ type: 'grow.openRegion', payload: { regionId: region.id } })}
-                >
-                  {`Angebot von ${region.contact.name} annehmen`}
-                </ListItem>
-              </List>
-            </Group>
-          );
-        }
-        const list = getFincas(state, region.id);
-        return (
-          <Group
-            key={region.id}
-            title={region.name}
-            icon="leaf"
-            color="goods"
-            value={`Ernte bis Hafen ${harvestToHarborDays(region.id)} T.`}
-            note={list.length === 0 ? 'Noch keine Finca. Kaufen oder pachten unter Region.' : undefined}
-          >
-            <List>
-              {list.map((f) => (
-                <FincaRow key={f.id} finca={f} />
-              ))}
-              <ExportRow regionId={region.id} />
-              <ListItem onClick={() => ui.openPanel('grow.region', { regionId: region.id })}>
-                <ItemContent
-                  icon="handshake"
-                  color="danger"
-                  title="Region, Kartell, Behörden"
-                  tags={[
-                    {
-                      label: cartelPaid(state, region.id)
-                        ? `Kartell ${pct(REGION_ECONOMY[region.id]?.cartelShare ?? 0)}`
-                        : 'Kartell ohne Anteil',
-                      color: cartelPaid(state, region.id) ? 'goods' : 'danger',
-                      icon: 'handshake',
-                    },
-                    {
-                      label: `Behörden ${Math.round(regionAttention(state, region.id))}`,
-                      color: regionAttention(state, region.id) >= 45 ? 'danger' : 'law',
-                      icon: 'shield',
-                    },
-                  ]}
-                />
-              </ListItem>
-            </List>
-          </Group>
-        );
-      })}
+      {!offersFirst && regions}
       <Disclosure label="Wie lohnt sich das?">
         Eigene Ware kostet nur die Löhne, die Pacht und den Dünger: ein Bruchteil des Einkaufs. Kaufen statt pachten,
         Gewächshäuser und bessere Genetik drücken den Preis pro Gramm weiter. Von der Ernte bis in den Hafen dauert es
@@ -353,8 +397,9 @@ function RegionPanel({ regionId }: { regionId: string }) {
           <ExportRow regionId={regionId} />
         </List>
       </Group>
-      {/* Auftrag 43: Land zuerst, das ist der erste Schritt. */}
-      {open && (
+      {/* Auftrag 43: Land zuerst, das ist der erste Schritt. Ist alles deins, fällt die Gruppe weg (I11: sie listete nur
+          noch „deine“ und wiederholte die Fincas oben). */}
+      {open && fincaSites(regionId).some((site) => !siteTaken(state, site.id)) && (
         <Group
           title="Land kaufen oder pachten"
           icon="pin"
@@ -582,7 +627,7 @@ function FincaPanel({ fincaId }: { fincaId: number }) {
                 icon="package"
                 color="goods"
                 title={`${productName(finca.batch.productId)} ${phase.label}`}
-                meta={`fertig in ${Math.max(0, Math.ceil((finca.batch.until - state.time) / DAY))} Tagen`}
+                meta={`im Ausfuhrlager in ${daysText(batchStoredAt(finca.batch) - state.time)}`}
               />
             </ListItem>
           )}
@@ -874,9 +919,11 @@ onGameEvent('grow.raided', 'grow.raidedToast', (payload, ui, state) => {
 });
 onGameEvent('grow.goalReached', 'grow.goalToast', (payload, ui) => {
   ui.toast(
-    payload.goal === 'producer' ? 'Produzent: die Hälfte aus eigener Ernte.' : 'Europa: alle Kunden aus eigener Ernte.',
+    payload.goal === 'producer'
+      ? 'Produzent: die Hälfte aus eigener Ernte.'
+      : 'Europa: alle Städte kaufen, alle Kunden zur Hälfte aus eigener Ernte.',
     'good',
-    { urgent: true },
+    // Kein zweites Banner (Auftrag 43, I2): den Rang meldet city gleich danach mit Banner, das hier steht im Verlauf.
   );
 });
 soundOnEvent('grow.goalReached', 'cash');
@@ -901,17 +948,24 @@ function GrowHud() {
     .filter((at): at is number => at !== null)
     .sort((a, b) => a - b)[0];
   const days = next === undefined ? null : Math.max(0, Math.ceil((next - state.time) / 1440));
+  // Ernte auf dem Weg ins Ausfuhrlager (Auftrag 43, I1: vorher stand „Ernte in 42 T.“, während die Ware trocknete).
+  const stored = fincas
+    .map((f) => (f.batch ? batchStoredAt(f.batch) : null))
+    .filter((at): at is number => at !== null)
+    .sort((a, b) => a - b)[0];
+  const storedDays = stored === undefined ? null : Math.max(0, Math.ceil((stored - state.time) / 1440));
   const trouble =
     fincas.some((f) => f.unpaidLease > 0 || f.unpaidWages || f.stalled) ||
     REGIONS.some((r) => regionStatus(state, r.id) !== 'none' && regionAttention(state, r.id) >= 45);
   const harvest = days === null ? 'keine Ernte' : days === 0 ? 'Ernte heute' : `Ernte in ${days} T.`;
+  const drying = storedDays === null ? null : storedDays === 0 ? 'im Lager heute' : `im Lager in ${storedDays} T.`;
   return (
     <HudPill
       icon="leaf"
       color="goods"
       label="Anbau"
-      value={exported > 0 ? kg(exported) : harvest}
-      title={`${kg(exported)} im Ausfuhrlager, ${harvest}${trouble ? ', es gibt Ärger auf einer Finca' : ''}`}
+      value={exported > 0 ? kg(exported) : (drying ?? harvest)}
+      title={`${kg(exported)} im Ausfuhrlager, ${drying ? `Ernte ${drying}, ` : ''}${harvest}${trouble ? ', es gibt Ärger auf einer Finca' : ''}`}
       tone={trouble ? 'bad' : undefined}
       onClick={() => ui.openPhone('trade.app', { view: 'grow' })}
     />

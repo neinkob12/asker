@@ -462,6 +462,13 @@ describe('Geld, Pacht und Europa (Review zu Auftrag 42)', () => {
     });
     sim.advance(60);
     expect(europeProgress(sim.state).missing).not.toContain(other.name);
+    // Auftrag 43, I3: zwei Teile mit eigenem Nenner. Städte in Europa sind fest, Kunden nur die belieferten.
+    const progress = europeProgress(sim.state);
+    expect(progress.cities.total).toBe(EUROPE_CITIES.length);
+    expect(progress.cities.joined + progress.cities.missing.length).toBe(progress.cities.total);
+    expect(progress.customers.total).toBe(progress.customers.supplied + progress.customers.missing.length);
+    expect(progress.customers.missing).not.toContain(customer.name);
+    expect(progress.total).toBe(progress.customers.total + progress.cities.missing.length);
   });
 
   it('Arbeiter und Gärtner werden weder Leutnant noch Rechte Hand', () => {
