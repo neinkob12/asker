@@ -317,26 +317,19 @@ async function run() {
     await page.evaluate(() => window.koeln.runtime.api.closePhone());
   });
 
-  await check('Eigenen Spot mit Art gründen (Auftrag 23)', async () => {
-    // Den Klick auf die Karte ersetzt eine feste Stelle in Kalk; Art und Name kommen aus dem Blatt.
-    await page.evaluate(() => {
-      const rt = window.koeln.runtime;
-      rt.map.pickLocation = async () => ({ lng: 7.0035, lat: 50.9385 });
+  await check('Eigenen Spot mit Art gründen (Befehl; der Weg über die Karte ist seit Auftrag 46d weg)', async () => {
+    // Eine feste Stelle in Kalk: Der Shop-Platzhalter (46e) schickt denselben Befehl.
+    const result = await page.evaluate(() => {
       window.koeln.session.state.wallet.dirty += 3000;
-      rt.api.selectTab('territory');
+      return window.koeln.runtime.api.dispatch({
+        type: 'spots.found',
+        payload: { lng: 7.0035, lat: 50.9385, kind: 'park' },
+      });
     });
-    await page
-      .locator('.phone')
-      .getByRole('button', { name: /Eigenen Spot gründen/ })
-      .click();
-    const sheet = page.locator('.ui-sheet');
-    await sheet.getByRole('button', { name: /^Park/ }).click();
-    await sheet.getByRole('button', { name: 'Gründen', exact: true }).click();
+    assert.equal(result.ok, true, result.reason);
     const custom = await game(page, (s) => s.modules.spots.custom.map((x) => [x.kind, x.veedelId]));
     assert.deepEqual(custom, [['park', 'kalk']]);
-    await page.locator('.phone').getByText('Bekanntheit').first().waitFor();
-    await shot(page, 'spot-gegruendet');
-    await page.evaluate(() => window.koeln.runtime.api.closePhone());
+    assert.equal(await page.locator('.phone').getByRole('button', { name: /Eigenen Spot gründen/ }).count(), 0);
   });
 
   await check('Stadt wechseln: Hamburg frei, Stadt-Chip, Hamburg aktiv, zurück nach Köln', async () => {
