@@ -424,6 +424,7 @@ describe('customers: Lieferdienst und Großhandel', () => {
     }
     sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: ids[0], spotIds: ['uni'] } });
     sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: ids[1], spotIds: ['zuelpicher'] } });
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: ids[2], spotIds: ['ebertplatz'] } }); // Auftrag 46e
     const result = sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: ids[2] } });
     if (!result.ok) throw new Error(result.reason);
     sim.dispatch({ type: 'hierarchy.configureRightHand', payload: { settings: { orders: false } } });

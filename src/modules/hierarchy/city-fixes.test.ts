@@ -167,6 +167,7 @@ describe('Rechte Hand: Aufträge und Bestand der Stadt des Auftrags', () => {
     sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: a.id, spotIds: ['uni'] } });
     sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: b.id, spotIds: ['neumarkt'] } });
     const boss = recruit(sim, 'runner', 4);
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: ['ebertplatz'] } }); // Auftrag 46e: aus den Leutnants
     expect(sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } }).ok).toBe(true);
     const post = getRightHand(sim.state);
     if (!post) throw new Error('keine Rechte Hand');

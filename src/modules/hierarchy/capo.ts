@@ -20,6 +20,7 @@ import {
   setDemand,
   setWage,
 } from '../staff';
+import { tutorialAllows } from '../tutorial';
 import { neighborsOf, veedelName } from '../veedel';
 import { standIn } from './ai';
 import {
@@ -97,6 +98,8 @@ export function capoDistrict(state: GameState, staffId: string): string[] {
 
 /** Kann die Person Capo werden? Leutnant ab Level 5 mit drei Spots, einsatzbereit. */
 export function canBeCapo(state: GameState, staffId: string): CommandResult {
+  // Auftrag 46e: Solange das Tutorial läuft, gibt es keine Capos (die Rechte Hand kommt aus den Leutnants).
+  if (!tutorialAllows(state, 'staff.capos')) return { ok: false, reason: 'Dazu kommst du später.' };
   const m = getStaffMember(state, staffId);
   const p = post(state, staffId);
   if (!m || !isEmployed(state, staffId)) return { ok: false, reason: 'Diese Person arbeitet nicht für dich.' };

@@ -14,6 +14,10 @@
 //   talkChance(member) (redet beim Entlassen?), isAbsent(member), wageCategory(member) (Kategorie in der Kasse),
 //   speedFactor, riskFactor, combatValue, defenseStrength(state, { spotId | warehouseId | veedelId }),
 //   bonus(state, key), bonusProvider, bailCost, jailDuration, levelProgress, betrayalChance,
+//   Auftrag 46e (Wirkungen der Spezialisten, Werte in SPECIALIST_EFFECTS): specialistEffect(state, key, cityId?)
+//   (Anteil), specialistFactor (Faktor für Chance, Dauer, Betrag), specialistProvider (wer wirkt: die beste Person pro
+//   Stadt), specialistShareOf, specialistEffectsOf (für Profil und Kopf), isGoodSpecialist, keyStatMean,
+//   canHireRole(state, role) (nur ein Buchhalter pro Stadt), wageFactor(state, cityId) (Buchhalter spart Löhne),
 //   isSpecialist, isStatKnown, roleName, assignmentLabel, staffContact, ROLE_INFO, STAT_NAMES, STATUS_NAMES, STAT_KEYS
 // Öffentliche API (schreiben, mit ctx):
 //   assign(ctx, id, assignment), setStatus(ctx, id, status, until?), addXp, addLoyalty, setWage, setDemand,
@@ -102,6 +106,7 @@ export {
   INJURED_WAGE_FACTOR,
   JAIL_WAGE_FACTOR,
   MAX_LEVEL,
+  ONE_PER_CITY_ROLES,
   RELATIONS,
   type RelationInfo,
   ROLE_INFO,
@@ -109,6 +114,11 @@ export {
   RUNNER_HIRE_COST,
   RUNNER_HIRE_COST_MAX,
   RUNNER_HIRE_COST_MIN,
+  SPECIALIST_EFFECTS,
+  SPECIALIST_GOOD_STAT,
+  SPECIALIST_NORMAL_STAT,
+  type SpecialistEffect,
+  type SpecialistEffectDef,
   STAT_NAMES,
   STATUS_NAMES,
   TRAITS,

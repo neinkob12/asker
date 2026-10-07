@@ -40,7 +40,7 @@ import { averageReferencePrice, referencePrice } from '../market';
 import { changeReputation, getReputation, reputationDemandFactor } from '../reputation';
 import { travelMinutes } from '../roads';
 import { getSpot } from '../spots';
-import { assign, getStaffMember } from '../staff';
+import { assign, getStaffMember, specialistFactor } from '../staff';
 import { allVeedel, getVeedel, type Veedel } from '../veedel';
 import {
   CUSTOMER_TYPES,
@@ -529,7 +529,8 @@ function complete(ctx: Ctx, order: Order, afterFight = false): void {
   if (!afterFight && dealGoesWrong(ctx, order)) return;
   const s = ctx.state.modules.customers;
   const wholesale = order.kind === 'wholesale';
-  const due = order.price - (order.prepaid ?? 0);
+  // Auftrag 46e: Ein Buchhalter holt aus jedem Erlös ein paar Prozent mehr heraus (nur aus dem, was jetzt fließt).
+  const due = Math.round((order.price - (order.prepaid ?? 0)) * specialistFactor(ctx.state, 'revenue'));
   if (due > 0)
     wallet.earn(ctx, due, 'dirty', wholesale ? 'Großhandel' : 'Lieferung', {
       category: wholesale ? 'sales.wholesale' : 'sales.delivery',

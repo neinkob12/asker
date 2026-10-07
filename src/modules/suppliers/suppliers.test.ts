@@ -14,7 +14,9 @@ import {
   deliveryLeg,
   getRelation,
   getSupplier,
+  introText,
   isBlocked,
+  isIntroduced,
   isUnlocked,
   packagePrice,
   rollShipmentProblem,
@@ -24,7 +26,6 @@ import {
   shipmentsInTransit,
   supplierDiscount,
   UNLOADING_PORT,
-  unlockRequirements,
 } from './index';
 
 const small = SUPPLIERS[0].packages[0];
@@ -165,51 +166,54 @@ describe('suppliers', () => {
     expect(shipmentsInTransit(sim.state)).toHaveLength(1);
   });
 
-  it('Lieferanten melden sich, sobald die Bedingungen erfüllt sind, und wollen eine Vermittlungsgebühr', () => {
+  it('Hamburg meldet sich ab 1.500 € Umsatz: einmal als Pop-up (Ereignis), freischalten über die App gegen Gebühr', () => {
     const sim = createTestGame();
     const events = recordEvents(sim);
+    sim.advance(60);
     expect(canUnlock(sim.state, 'hamburg').ok).toBe(false);
-    expect(unlockRequirements(sim.state, 'hamburg')).toEqual([expect.objectContaining({ done: false, progress: 0 })]);
-    expect(unlockRequirements(sim.state, 'berlin')[0].label).toMatch(/Veedel/);
-    expect(unlockRequirements(sim.state, 'rotterdam')[0].label).toMatch(/Liegeplatz/);
-    // Genug Umsatz: Hein meldet sich zur vollen Stunde, einmal.
+    expect(isIntroduced(sim.state, 'hamburg')).toBe(false);
     sim.state.modules.customers.stats.revenue = 2000;
     sim.advance(60);
     expect(canUnlock(sim.state, 'hamburg').ok).toBe(true);
-    const thread = messages.thread(sim.state, 'supplier:hamburg');
-    expect(thread).toHaveLength(1);
-    sim.advance(120);
-    expect(messages.thread(sim.state, 'supplier:hamburg')).toHaveLength(1);
+    // Auftrag 46e: kein Chat-Gruß mehr, stattdessen das Ereignis fürs Pop-up, genau einmal.
+    expect(messages.thread(sim.state, 'supplier:hamburg')).toHaveLength(0);
+    const intros = eventsOfType(events, 'supplier.introduced').filter((e) => e.payload.supplierIds.includes('hamburg'));
+    expect(intros).toHaveLength(1);
+    expect(isIntroduced(sim.state, 'hamburg')).toBe(true);
+    sim.advance(240);
+    expect(
+      eventsOfType(events, 'supplier.introduced').filter((e) => e.payload.supplierIds.includes('hamburg')),
+    ).toHaveLength(1);
     const fee = getSupplier(sim.state, 'hamburg')?.unlock?.fee ?? 0;
     const money = sim.state.wallet.dirty;
-    const answer = sim.dispatch({ type: 'messages.answer', payload: { messageId: thread[0].id, optionId: 'unlock' } });
-    expect(answer.ok).toBe(true);
+    expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'hamburg' } }).ok).toBe(true);
     expect(isUnlocked(sim.state, 'hamburg')).toBe(true);
     expect(sim.state.wallet.dirty).toBe(money - fee);
     expect(availablePackages(sim.state, 'hamburg').length).toBeGreaterThan(0);
     expect(eventsOfType(events, 'supplier.unlocked')[0].payload).toEqual({ supplierId: 'hamburg', fee });
     expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'hamburg' } }).ok).toBe(false);
+    // Seine Antwort steht im Chat.
+    expect(messages.thread(sim.state, 'supplier:hamburg').at(-1)?.text).toMatch(/app/i);
   });
 
-  it('Schaltet man den Lieferanten über die App frei, ist sein Angebot im Chat erledigt; die Antwort steht vor seiner Reaktion', () => {
+  it('Kalle und Toni stellen sich beim ersten Tick vor (ein Pop-up für beide), mit Text in ihrer Stimme', () => {
     const sim = createTestGame();
-    sim.state.modules.customers.stats.revenue = 2000;
-    sim.advance(60);
-    const [offer] = messages.thread(sim.state, 'supplier:hamburg');
-    expect(sim.dispatch({ type: 'suppliers.unlock', payload: { supplierId: 'hamburg' } }).ok).toBe(true);
-    const stale = messages.get(sim.state, offer.id);
-    expect(stale && messages.canAnswer(sim.state, stale)).toBe(false);
-    // Über die Antwort im Chat: erst "Deal.", dann die Reaktion des Lieferanten.
-    const other = createTestGame();
-    other.state.modules.customers.stats.revenue = 2000;
-    other.advance(60);
-    const [pitch] = messages.thread(other.state, 'supplier:hamburg');
-    other.dispatch({ type: 'messages.answer', payload: { messageId: pitch.id, optionId: 'unlock' } });
-    const texts = messages
-      .thread(other.state, 'supplier:hamburg')
-      .map((m) => (m.from === 'player' ? `Du: ${m.text}` : m.text));
-    expect(texts[1]).toBe('Du: Deal.');
-    expect(texts[2]).toMatch(/app/i);
+    const events = recordEvents(sim);
+    sim.advance(5);
+    const [first] = eventsOfType(events, 'supplier.introduced');
+    expect(first.payload.supplierIds.sort()).toEqual(['frankfurt', 'koeln']);
+    for (const id of ['koeln', 'frankfurt']) {
+      const supplier = getSupplier(sim.state, id);
+      expect(supplier && introText(supplier)).toMatch(/\S/);
+    }
+    // Rotterdam braucht den Liegeplatz: noch nicht vorgestellt; mit Liegeplatz einmal.
+    expect(isIntroduced(sim.state, 'rotterdam')).toBe(false);
+    sim.state.modules.logistics.berths.koeln = { since: sim.state.time, level: 0 };
+    sim.advance(10);
+    expect(isIntroduced(sim.state, 'rotterdam')).toBe(true);
+    expect(eventsOfType(events, 'supplier.introduced').flatMap((e) => e.payload.supplierIds)).toEqual(
+      expect.arrayContaining(['rotterdam']),
+    );
   });
 
   it('Kuriere kommen in jeder Stadt über eine Autobahn herein, die es dort als Zufahrt gibt', () => {
@@ -461,7 +465,12 @@ describe('suppliers', () => {
     expect(isUnlocked(loaded.state, 'rotterdam')).toBe(true);
     expect(isUnlocked(loaded.state, 'amsterdam')).toBe(false);
     expect(loaded.state.modules.suppliers.offered).toContain('koeln');
-    expect(loaded.state.moduleVersions.suppliers).toBe(6);
+    expect(loaded.state.moduleVersions.suppliers).toBe(7);
+    // Auftrag 46e: Wer schon frei war oder sich gemeldet hat, gilt als vorgestellt (kein Pop-up für alte Stände).
+    expect(loaded.state.modules.suppliers.introduced).toEqual(
+      expect.arrayContaining(['rotterdam', 'frankfurt', 'berlin', 'hamburg', 'koeln']),
+    );
+    expect(loaded.state.modules.suppliers.introduced).not.toContain('amsterdam');
   });
 });
 

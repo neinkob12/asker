@@ -6,6 +6,7 @@ import { formatEuro } from '../../../core';
 import { ActionSheet, Button, Group, ItemContent, List, ListItem, Sheet, Toggle, useGame, useUi } from '../../../ui';
 import { lieutenantResult } from '../../finance';
 import { getStaffMember } from '../../staff';
+import { tutorialAllows } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
   CAPO_MAX_LIEUTENANTS,
@@ -89,6 +90,8 @@ export function CapoGroup(props: { staffId: string }) {
   const check = canBeCapo(state, props.staffId);
   const m = getStaffMember(state, props.staffId);
   if (!m) return null;
+  // Auftrag 46e: Im Tutorial werden Capos nicht angeboten (ein bestehender Capo bleibt sichtbar).
+  if (!capo && !above && !tutorialAllows(state, 'staff.capos')) return null;
   if (above) {
     const boss = getStaffMember(state, above);
     return (

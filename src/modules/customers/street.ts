@@ -32,6 +32,7 @@ import {
   spotDemandFactor,
   spotModifiers,
 } from '../spots';
+import { specialistFactor } from '../staff';
 import { nightlifeOf } from '../veedel';
 import { weatherDemandFactor } from '../weather';
 import {
@@ -314,7 +315,10 @@ export function serve(ctx: Ctx, customerId: number, sellerId: string | null): Co
     near: spot,
   });
   if (taken === 0) return { ok: false, reason: 'Nicht genug im Lager.' };
-  const revenue = Math.round(customer.amount * customer.pricePerUnit);
+  // Auftrag 46e: Ein Buchhalter in der Stadt holt aus jedem Erlös ein paar Prozent mehr heraus.
+  const revenue = Math.round(
+    customer.amount * customer.pricePerUnit * specialistFactor(ctx.state, 'revenue', spotCity(spot)),
+  );
   wallet.earn(ctx, revenue, 'dirty', `Verkauf ${atSpot(spot)}`, {
     category: 'sales.street',
     spotId: spot.id,

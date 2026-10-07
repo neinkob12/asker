@@ -21,7 +21,8 @@
 //   getHeat(state, veedelId), addHeat(ctx, veedelId, amount), reportViolence(ctx, veedelId, severity?),
 //   heatLevel(heat), playerHeat(state), hottestVeedel(state), snitchOnGang(ctx, gangId), canSnitch(state, gangId),
 //   activeTipOff(state, veedelId), plannedRaid(state, veedelId), plannedRaidInfo, plannedMajorRaid(state),
-//   getPoliceStats(state), arrestStaff(ctx, staffId, veedelId), recordConfiscation(ctx, goods),
+//   getPoliceStats(state), arrestStaff(ctx, staffId, veedelId), arrestChanceFor(state, staffId, base) (Vorsicht und
+//   Anwalt, Auftrag 46e), recordConfiscation(ctx, goods),
 //   operationTier(state, cityId?) (Kleindealer, Händler, Großhändler), operationFacts(state, cityId?),
 //   nextTierHints(state, tier, cityId?), restHeat(ctx, cityId),
 //   MAX_HEAT, CHECK_THRESHOLD, RAID_THRESHOLD, HEAT_LEVELS, OPERATION_TIERS
@@ -63,6 +64,7 @@ import {
   isLyingLow,
   riskFactor,
   type StaffMember,
+  specialistFactor,
   staffContact,
 } from '../staff';
 import {
@@ -465,10 +467,14 @@ export function getPoliceStats(state: GameState): PoliceStats {
   return state.modules.police.stats;
 }
 
-/** Heat erhöhen (negativ: senken), begrenzt auf 0–100. Gibt den neuen Wert zurück. */
+/**
+ * Heat erhöhen (negativ: senken), begrenzt auf 0–100. Gibt den neuen Wert zurück. Ein Polizei-Kontakt in der Stadt
+ * dämpft jeden Zuwachs (Auftrag 46e, specialistFactor 'heatGain'), den Abbau nicht.
+ */
 export function addHeat(ctx: Ctx, veedelId: string, amount: number): number {
   const police = ctx.state.modules.police;
-  const value = Math.min(MAX_HEAT, Math.max(0, (police.heat[veedelId] ?? 0) + amount));
+  const gain = amount > 0 ? amount * specialistFactor(ctx.state, 'heatGain', veedelCity(veedelId)) : amount;
+  const value = Math.min(MAX_HEAT, Math.max(0, (police.heat[veedelId] ?? 0) + gain));
   police.heat[veedelId] = Math.round(value * 1000) / 1000;
   updateLevel(ctx, veedelId);
   return police.heat[veedelId];
@@ -588,6 +594,16 @@ function rampedChance(heat: number, threshold: number, chance: number): number {
 function cautionFactor(state: GameState, staffId: string | null): number {
   if (!staffId || !getStaffMember(state, staffId)) return 1;
   return riskFactor(state, staffId);
+}
+
+/**
+ * Chance, dass diese Person bei base festgenommen wird: Vorsicht und Erfahrung (cautionFactor) und ein Anwalt in ihrer
+ * Stadt (Auftrag 46e, specialistFactor 'arrests'), höchstens 1. Auch für die Logistik (aufgeflogene Ladung).
+ */
+export function arrestChanceFor(state: GameState, staffId: string, base: number): number {
+  const m = getStaffMember(state, staffId);
+  const lawyer = m ? specialistFactor(state, 'arrests', m.cityId ?? 'koeln') : 1;
+  return Math.min(1, base * cautionFactor(state, staffId) * lawyer);
 }
 
 function staffName(state: GameState, staffId: string): string {
@@ -807,7 +823,7 @@ function runCheck(ctx: Ctx, veedelId: string, player?: { spotId: string }): void
       'bad',
       ref,
     );
-  } else if (ctx.chance(Math.min(1, CHECK_ARREST_CHANCE * cautionFactor(state, target.id)))) {
+  } else if (ctx.chance(arrestChanceFor(state, target.id, CHECK_ARREST_CHANCE))) {
     arrest(ctx, target.id, veedelId);
     journal.add(
       ctx,
@@ -903,7 +919,7 @@ function searchPlace(ctx: Ctx, veedelId: string, scope: RaidScope, spotId: strin
   const saved = stored.saved + (near?.saved ?? 0);
   const arrested: string[] = [];
   for (const member of people) {
-    if (ctx.chance(Math.min(1, rules.arrest * cautionFactor(state, member.id)))) {
+    if (ctx.chance(arrestChanceFor(state, member.id, rules.arrest))) {
       arrested.push(member.id);
       arrest(ctx, member.id, veedelId);
     }
@@ -1158,7 +1174,8 @@ function tick(ctx: Ctx): void {
   // Kontrollen: in manchen Städten öfter, nachts mal Nachtleben des Veedels.
   const hour = clock.hour(ctx.now);
   const night = hour >= NIGHT_HOURS.from || hour < NIGHT_HOURS.to;
-  const cityChecks = CHECK_FACTOR_BY_CITY[city] ?? 1;
+  // Auftrag 46e: Ein Polizei-Kontakt in der Stadt hält Kontrollen fern (Chance davor, ein Wurf wie sonst).
+  const cityChecks = (CHECK_FACTOR_BY_CITY[city] ?? 1) * specialistFactor(state, 'checks', city);
   for (const v of liveVeedel(state)) {
     const heat = addHeat(ctx, v.id, -(HEAT_DECAY_PER_HOUR + HEAT_DECAY_SHARE_PER_HOUR * getHeat(ctx.state, v.id)));
     const presence = v.policePresence;

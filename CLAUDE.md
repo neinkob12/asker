@@ -192,6 +192,19 @@ Auftrag 47 (Performance, `docs/auftraege/47-performance.md`): Leute haben einen 
 versetzt ticken (nur, wenn der Tick nicht an `now % MINUTES_PER_DAY` hängt). Spielstände liegen in IndexedDB
 (`openBrowserSaveStorage`, Spiegel im Arbeitsspeicher, Notfallspeicher im localStorage), der Autosave schreibt nur bei
 Änderung. Messen: `PERF=1 npm run perf:sim` (auch ein Spieltag je großem Test-Spielstand) und `scripts/perf-browser.mjs`.
+Auftrag 46e (Wirkungen, `docs/auftraege/46e-wirkungen.md`): Spezialisten wirken (`SPECIALIST_EFFECTS` in
+`staff/config.ts`, nur über `specialistFactor(state, key, cityId)` an der Stelle, die würfelt oder bucht; eine Person
+pro Stadt, die beste, skaliert mit dem Mittel ihrer Schlüsselwerte, „gut“ ab 70): Polizei-Kontakt gegen Zoll
+(`suppliers`, `logistics`), Heat-Zuwachs (`addHeat`) und Kontrollen; Anwalt gegen Festnahmen (`arrestChanceFor` in
+`police`) und halbe Haft; Buchhalter nur einer pro Stadt (`canHireRole`), mehr Erlös auf jeden Verkauf (`customers`),
+weniger Löhne (`wageFactor`, Kasse zeigt die Zeile „Buchhalter“), die Geldwäsche-Gebühr macht er nicht mehr billiger.
+Die Rechte Hand kommt aus den Leutnants (`canBeRightHand`: Leutnant der Stadt und Loyalität, kein Level mehr;
+`RIGHT_HAND_MIN_LIEUTENANTS` 1), Capos gibt es im Tutorial nicht (`tutorialAllows(state, 'staff.capos')`, `NEVER`).
+Lieferanten stellen sich einmal mit einem Pop-up vor (`supplier.introduced`, `SuppliersState.introduced`,
+`Supplier.intro`, kein Chat-Gruß und keine Chat-Vermittlung mehr; freischalten über die App), Stadt-Events kommen halb so
+oft mit mehr Nachfrage (`EVENT_DEMAND_BOOST`, `eventDemand`) und als Pop-up mit „Ware bestellen“ statt Ankündigung per
+Handy; Gangs und Polizei halb so oft, dafür größer (`RAID_EFFECTS`, `METHOD_INTERVAL_BY_CITY`, `CHECK_*`, `RAID_SCOPES`,
+Tests `frequency.test.ts`). Spot gründen ist ein Shop-Platzhalter (`spots.shop`, `SHOP_SPOT_PRICE_CENTS`, kein Kauf).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
