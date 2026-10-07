@@ -191,7 +191,9 @@ Auftrag 47 (Performance, `docs/auftraege/47-performance.md`): Leute haben einen 
 `liveMembers`; wer `cityId` einer Person direkt setzt, ruft `invalidateStaffIndex()`). Module können mit `tickOffset`
 versetzt ticken (nur, wenn der Tick nicht an `now % MINUTES_PER_DAY` hängt). Spielstände liegen in IndexedDB
 (`openBrowserSaveStorage`, Spiegel im Arbeitsspeicher, Notfallspeicher im localStorage), der Autosave schreibt nur bei
-Änderung. Messen: `PERF=1 npm run perf:sim` (auch ein Spieltag je großem Test-Spielstand) und `scripts/perf-browser.mjs`.
+Änderung. Spot-Marker nur für die aktive Stadt (`mapSpots`). Abgebrochene Sitzungen meldet der Verlauf, Fehler
+stehen in `koeln-tycoon:errors` (`src/ui/crashlog.ts`, Lebenszeichen je Tab `koeln-tycoon:alive:<tab>`). Messen: `PERF=1 npm run perf:sim` (auch ein Spieltag je
+großem Test-Spielstand) und `scripts/perf-browser.mjs`.
 Auftrag 46e (Wirkungen, `docs/auftraege/46e-wirkungen.md`): Spezialisten wirken (`SPECIALIST_EFFECTS` in
 `staff/config.ts`, nur über `specialistFactor(state, key, cityId)` an der Stelle, die würfelt oder bucht; eine Person
 pro Stadt, die beste, skaliert mit dem Mittel ihrer Schlüsselwerte, „gut“ ab 70): Polizei-Kontakt gegen Zoll

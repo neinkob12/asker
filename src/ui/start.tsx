@@ -14,6 +14,7 @@ import {
 import { dayPhase } from '../map/daylight';
 import { registerBuiltins } from './builtin';
 import { loadTestSave } from './builtin/testSaves';
+import { bindCrashLog } from './crashlog';
 import { SPRINGS, springEasing } from './phone/spring';
 import { introSeen } from './player';
 import { UiRuntime } from './runtime';
@@ -69,6 +70,8 @@ export async function startApp(root: HTMLElement, modules: readonly ModuleDefini
   // Alles, was global hängt (document, window), meldet sich hier ab, wenn das Modul im Entwicklungsserver ersetzt wird.
   const disposers: Array<() => void> = [bindClickSound()];
   disposers.push(bindPauseMarker(runtime), offMood);
+  // Abstürze sichtbar machen (Auftrag 47, Punkt 7): Fehler und abgebrochene Sitzungen landen im Verlauf.
+  disposers.push(bindCrashLog(runtime, storage));
 
   // ?neu=normal|hardcore&seed=123 startet sofort ein frisches Spiel (praktisch für Screenshots und Tests), mit
   // &tutorial=1 im Modus normal mit Tutorial (Auftrag 46b); ?spielstand=koeln-komplett lädt einen Test-Spielstand

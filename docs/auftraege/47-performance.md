@@ -61,15 +61,28 @@ Spiel über 20 Tage. Im Spätspiel stimmt sie nicht mehr. Ursachen, nach Gewicht
   und wird beim nächsten Start nachgetragen. Die Sitzung merkt sich, ob sich etwas geändert hat (`dirty`): Der Takt
   schreibt nur dann, dafür auch in der Pause (ein Kauf in der Pause ging beim Schließen des Tabs sonst verloren).
   Einstellungen bleiben im localStorage. `startApp` ist dafür asynchron.
-- [ ] 4. Marker nur für die aktive Stadt mounten (`spots/ui/map.ts`, `getAllSpots` → Spots der aktiven Stadt plus
-  eigene), dasselbe für Lager, Gangs, Lieferanten.
-- [ ] 5. Straßennetze und Sprachmodul als eigene Chunks laden (`import()` je Stadt in `roads`, Piper-Worker erst beim
-  ersten Anruf), MapLibre als eigener Chunk.
+- [x] **4. Marker nur für die aktive Stadt.** `spots/ui/map.ts` hängt Marker, Hotspots und Hover-Karte nur noch an die
+  Spots der aktiven Stadt (`mapSpots`), beim Wechsel der Stadt fallen die alten weg; Läufer je Spot und die Figuren
+  (`peopleModel.ts`) lesen nur diese Stadt. Deutschland: 31 statt 151 Spot-Marker im DOM. Gangs, Lieferanten und
+  Lager bleiben für alle Städte (je Stadt nur eine Handvoll, `near`, in der Deutschland-Ansicht aus).
+- [x] **5. Eigene Dateien im Build** (`vite.config.ts`, `advancedChunks`): `maplibre` (1 MB), `roads` (alle
+  Straßennetze, 1 MB) und `vendor` (Preact, ONNX-Hülle) neben dem Spielcode (jetzt 2,1 MB statt 4,2 MB). Sie bleiben
+  nach einem Deploy im Cache und laden parallel. Die Netze **nicht** je Stadt nachladen: Die Simulation braucht sie
+  synchron (Fahrten in schlafenden Städten, `interCityRoute` über mehrere Netze), dekodiert werden sie ohnehin erst beim
+  ersten Gebrauch (`graph.ts`). Der Piper-Worker war schon ein eigener Chunk.
 - [x] 6. Perf-Leitplanke um die großen Test-Spielstände erweitert (`perf.bench.test.ts`, `PERF=1 npm run perf:sim`:
   ein Spieltag je Stand mit Richtwert, schlägt bei mehr als dem Doppelten fehl).
-- [ ] 7. Absturz bei Hamburg aufklären: Fehlerfänger (`window.onerror`, `unhandledrejection`) in den Verlauf und den
-  Export; Ankunft in Hamburg mit Stimmen aus und mit Stimmen an auf dem Handy vergleichen; Sprachmodell erst laden,
-  wenn der Spieler den Anruf annimmt, statt beim Klingeln.
+- [x] **7. Absturz sichtbar machen** (`src/ui/crashlog.ts`): Fehler (`error`, `unhandledrejection`) landen in der
+  Konsole und in `koeln-tycoon:errors` (die letzten 20, derselbe höchstens dreimal), nicht im Verlauf (jeder Eintrag
+  dort zählt am Badge der Einstellungen). Dazu ein Lebenszeichen je Tab alle 5 Sekunden in `koeln-tycoon:alive:<tab>`
+  (Spieltag und Uhrzeit, offene App, ob ein Sprachmodell lädt, letzter Fehler), das bei `pagehide` wegfällt. Ist eines
+  älter als 15 Sekunden, sagt der Verlauf: „Die letzte Sitzung ist unerwartet beendet worden … Sprachmodell lud“
+  (geprüft beim Start und 20 Sekunden danach; ein zweiter offener Tab zählt nicht). Damit lässt sich der Verdacht beim
+  nächsten Absturz in Hamburg prüfen, bevor das Laden der Stimme umgebaut wird (das Modell lädt in einem Worker, ein
+  reiner Zeitpunkt-Wechsel spart keinen Speicher).
+- [x] **8. Läufer am Spot ohne Zwischenliste** (`activeRunnerAt`, `runnerAt`, `securityAt` lesen nur die Stadt des
+  Spots). Läuft pro Spot und Tick in Hierarchie, Rechter Hand und Gangs. Deutschland nach Punkt 1 bis 3: 870 → 716
+  ms/Tag (Node, ein Spieltag ohne Bot; vor Auftrag 47 1348).
 
 ## Offen und Entscheidungen
 
