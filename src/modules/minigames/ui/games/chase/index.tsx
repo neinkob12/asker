@@ -1,5 +1,6 @@
-// Verfolgungsjagd (Auftrag 44, Teil 1): Anmeldung der Ansicht. Spiel in ChaseGame.tsx, Logik als reines Modell
-// (model.ts und net.ts mit model.test.ts), Darstellung in scene.ts (WebGL-Ebene) und draw.ts, Ton in sounds.ts.
+// Verfolgungsjagd (Auftrag 44, Teil 1; neu nach dem Feedback vom 07.10.2026 als Arcade-Rennspiel von hinten):
+// Anmeldung der Ansicht. Spiel in ChaseGame.tsx, Logik als reines Modell (model.ts mit model.test.ts), Zeichnen im
+// Canvas (draw.ts), Funk in radio.ts, Ton in sounds.ts. Eigene Bühne (layout 'stage'): Die Karte bleibt unberührt.
 
 import { startEncounter } from '../../../../encounters';
 import { getSpots } from '../../../../spots';
@@ -13,30 +14,33 @@ registerChaseSounds();
 
 registerMinigameView('chase', {
   component: ChaseGame,
-  layout: 'map',
+  layout: 'stage',
   icon: 'siren',
   controls: {
-    keys: '←/→ Abbiegung wählen, ↑ Vollgas, ↓ oder Leertaste bremsen, Umschalt Turbo, X Ware raus.',
-    touch: 'Pfeile oder Wischen wählen die Abbiegung, Gas gibt der Wagen selbst. Bremse halten, Turbo halten.',
+    keys: '←/→ Spur wechseln, ↑ Vollgas, ↓ oder Leertaste bremsen, Umschalt Turbo, X Ware raus.',
+    touch: 'Pfeile oder Wischen wechseln die Spur, Gas und Bremse halten, Turbo tippen.',
     help:
-      'Du fährst auf echten Straßen: Die Abbiegung wählst du vor der Kreuzung, die Skizze unten zeigt, wohin es geht. ' +
-      'Zu schnell in die Kurve, und der Wagen rutscht. Im Stand die Bremse halten: wenden. ' +
-      'Um die Ecke biegen bricht den Sichtkontakt. Ohne Sichtkontakt füllt sich der Ring, nach 8 Sekunden bist du weg. ' +
-      'Im Versteck (goldener Ring, Pfeil am Rand) geht es sofort, wenn dich keiner sieht. ' +
-      'Später kommen Straßensperren und ein Hubschrauber mit Scheinwerfer. Ware aus dem Fenster: kurz schneller, ' +
-      'die Streifen zögern, die Ware ist weg.',
+      'Drei Spuren, dichter Verkehr, die Streifen im Rückspiegel. Weich dem Verkehr aus: Auffahren kostet Tempo und ' +
+      'Schaden, dann holen sie auf und rammen dich. Der Balken „Abhängen“ füllt sich, solange die nächste Streife weit ' +
+      'hinter dir liegt, und leert sich, wenn sie dir im Nacken sitzt. Voll: Du biegst in die Tiefgarage ab. ' +
+      'Straßensperren lassen eine Spur frei. Der Turbo lädt langsam nach. Ware aus dem Fenster: Turbo voll, die ' +
+      'Streifen zögern, die Ware ist weg. Gefasst, wenn die Karre kaputt ist, sie dich stellen oder die Zeit abläuft.',
   },
-  previewParams: () => ({ clock: 4, stakes: { ids: ['goods', 'people'], money: 0, goods: 120 } }),
-  previewSituation: 'Kontrolle am Spot. Du springst in den Wagen, die Streife ist direkt hinter dir.',
+  previewParams: (seed) => ({
+    clock: 4,
+    phase: seed % 3 === 0 ? 'night' : seed % 3 === 1 ? 'dusk' : 'day',
+    weather: seed % 4 === 2 ? 'rain' : 'clear',
+    stakes: { ids: ['goods', 'people'], money: 0, goods: 120 },
+  }),
+  previewSituation: 'Kontrolle am Spot. Du springst in die Karre, die Streife hängt dir schon im Nacken.',
   resultText: ({ won, picks }, challenge) => {
     const dumped = picks.includes('dumped') ? ' Die Ware liegt auf der Straße.' : '';
     if (won) {
-      const how = picks.includes('hideout') ? 'Rein ins Versteck, Motor aus. Die Sirenen fahren vorbei.' : 'Abgehängt.';
       const check = challenge.params.encounterKind === 'vehicleCheck' ? ' Die Ladung ist durch.' : '';
-      return `${how}${check}${dumped}`;
+      return `Abgehängt. Rein in die Tiefgarage, Motor aus. Die Sirenen fahren vorbei.${check}${dumped}`;
     }
     const how = picks.includes('time')
-      ? 'Zu lange gebraucht: Sie haben dich eingekreist.'
+      ? 'Zu lange gebraucht: Die Verstärkung hat dich eingekreist.'
       : 'Blaulicht von allen Seiten. Gefasst.';
     return `${how}${dumped}`;
   },

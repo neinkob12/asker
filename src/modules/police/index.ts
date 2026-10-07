@@ -104,6 +104,8 @@ import {
   MAX_HEAT,
   MIN_TIER_BY_CITY,
   NIGHT_HOURS,
+  PLAYER_CHASE_CHANCE,
+  PLAYER_CHECK_THRESHOLD,
   RAID_CHANCE_BY_TIER,
   RAID_CHANCE_PER_HOUR,
   RAID_COOLDOWN,
@@ -149,6 +151,7 @@ export {
   type TierHintPart,
 } from './tier';
 export {
+  startUndercoverShift,
   type UndercoverGood,
   type UndercoverOutcome,
   type UndercoverParams,
@@ -717,6 +720,49 @@ function placeText(state: GameState, veedelId: string, spotId: string | null): s
  * Kontrolle bei eigenen Leuten im Veedel (oder beim Spieler, wenn er dort selbst verkauft hat). player: die Kontrolle
  * gilt dir selbst an diesem Spot (Verkauf an einen Zivi, Auftrag 44); der Späher hilft dann nicht mehr, gekauft ist.
  */
+/** Kontrolle kippt in die Flucht: Journal, Ereignis und die Konfrontation (mit dir selbst, wenn kein Mitarbeiter dran ist). */
+function startChase(
+  ctx: Ctx,
+  veedelId: string,
+  spotId: string | null,
+  target: StaffMember | null,
+  place: string,
+  ref: { veedelId: string; spotId?: string; staffId?: string },
+): void {
+  const who = target ? `${target.name} rennt los` : 'Du rennst los';
+  journal.add(ctx, `Kontrolle ${place}: ${who}, die Bullen hinterher.`, 'bad', ref);
+  ctx.emit('police.check', { veedelId, spotId, staffId: target?.id ?? null, chase: true, goods: 0, money: 0 });
+  startEncounter(ctx, {
+    kind: 'policeChase',
+    veedelId,
+    ...(spotId ? { spotId } : {}),
+    staffIds: target ? [target.id] : [],
+    playerPresent: !target,
+    opponent: { label: 'Polizei', strength: getVeedel(veedelId)?.policePresence ?? 1 },
+    origin: { module: 'police', ref: 'check' },
+  });
+}
+
+/**
+ * Kontrolle an dem Spot, an dem du selbst stehst, und du rennst los (Verfolgungsjagd): wie runCheck, nur ohne die
+ * Würfe (Kontrolle, Flucht). Für die Test-Spielstände der Minispiele (src/playtest/minigameSaves.ts). false, wenn du
+ * dort nicht stehst oder nicht in der Stadt bist.
+ */
+export function playerChase(ctx: Ctx, spotId: string): boolean {
+  const spot = getSpot(ctx.state, spotId);
+  const standing = spot ? playerStandingIn(ctx.state, spot.veedelId) : undefined;
+  if (!spot || !standing || standing.spotId !== spotId) return false;
+  const police = ctx.state.modules.police;
+  police.checkReadyAt[spot.veedelId] = ctx.now + CHECK_COOLDOWN;
+  police.stats.checks += 1;
+  addHeat(ctx, spot.veedelId, -CHECK_HEAT_RELIEF);
+  startChase(ctx, spot.veedelId, spotId, null, placeText(ctx.state, spot.veedelId, spotId), {
+    veedelId: spot.veedelId,
+    spotId,
+  });
+  return true;
+}
+
 function runCheck(ctx: Ctx, veedelId: string, player?: { spotId: string }): void {
   const state = ctx.state;
   const police = state.modules.police;
@@ -739,19 +785,9 @@ function runCheck(ctx: Ctx, veedelId: string, player?: { spotId: string }): void
   addHeat(ctx, veedelId, -CHECK_HEAT_RELIEF);
   const ref = { veedelId, ...(spotId ? { spotId } : {}), ...(target ? { staffId: target.id } : {}) };
 
-  if (ctx.chance(CHASE_CHANCE)) {
-    const who = target ? `${target.name} rennt los` : 'Du rennst los';
-    journal.add(ctx, `Kontrolle ${place}: ${who}, die Bullen hinterher.`, 'bad', ref);
-    ctx.emit('police.check', { veedelId, spotId, staffId: target?.id ?? null, chase: true, goods: 0, money: 0 });
-    startEncounter(ctx, {
-      kind: 'policeChase',
-      veedelId,
-      ...(spotId ? { spotId } : {}),
-      staffIds: target ? [target.id] : [],
-      playerPresent: !target,
-      opponent: { label: 'Polizei', strength: getVeedel(veedelId)?.policePresence ?? 1 },
-      origin: { module: 'police', ref: 'check' },
-    });
+  // Bist du es selbst, rennst du öfter (Verfolgungsjagd als Minispiel, Feedback vom 07.10.2026).
+  if (ctx.chance(player ? PLAYER_CHASE_CHANCE : CHASE_CHANCE)) {
+    startChase(ctx, veedelId, spotId, target, place, ref);
     return;
   }
 
@@ -1147,9 +1183,12 @@ function tick(ctx: Ctx): void {
 
     if (playerThere && ctx.now >= (police.checkReadyAt[v.id] ?? 0)) {
       const factor = cityChecks * (night ? (v.nightlife ?? 1) : 1) * eventFactor(state, 'checks', { veedelId: v.id });
-      if (ctx.chance(rampedChance(heat, CHECK_THRESHOLD, CHECK_CHANCE_PER_HOUR) * presence * factor)) {
-        // Stehst du selbst dort an einem Spot, trifft die Kontrolle dich (dann auch mit Verfolgungsjagd).
-        runCheck(ctx, v.id, playerStandingIn(state, v.id));
+      // Stehst du selbst dort an einem Spot, trifft die Kontrolle dich (dann auch mit Verfolgungsjagd), und sie kommt
+      // schon bei weniger Heat (ein Wurf wie sonst auch: die Würfelfolge bleibt).
+      const standing = playerStandingIn(state, v.id);
+      const threshold = standing ? PLAYER_CHECK_THRESHOLD : CHECK_THRESHOLD;
+      if (ctx.chance(rampedChance(heat, threshold, CHECK_CHANCE_PER_HOUR) * presence * factor)) {
+        runCheck(ctx, v.id, standing);
       }
     }
   }

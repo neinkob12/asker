@@ -180,7 +180,22 @@ export function maybeStartUndercover(ctx: Ctx, heatOf: (veedelId: string) => num
   if (chance <= 0) return null;
   const key = `undercover:${state.meta.seed}:${spotId}:${Math.floor(ctx.now / 60)}`;
   if (!keyedDice(key).chance(chance)) return null;
-  const params = undercoverParams(state, spotId, heat, key);
+  return startUndercoverShift(ctx, spotId, heat, key);
+}
+
+/**
+ * Die Schicht Zivis an diesem Spot jetzt, ohne den Wurf: das Minispiel mit den Zahlen aus Heat und Spot, die Schicht
+ * im Zustand, Abklingzeit. null, wenn du dort nicht stehst, am Spot keine Ware ist oder schon ein Minispiel läuft.
+ * maybeStartUndercover ruft es nach dem Wurf, die Test-Spielstände der Minispiele (src/playtest/minigameSaves.ts) direkt.
+ */
+export function startUndercoverShift(ctx: Ctx, spotId: string, heat: number, key?: string): number | null {
+  const state = ctx.state;
+  const police = state.modules.police;
+  const spot = getSpot(state, spotId);
+  if (!spot || playerSpot(state) !== spotId || activeChallenge(state)) return null;
+  const cityId = spotCity(spot);
+  if (!isPlayerIn(state, cityId) || isPlayerAway(state)) return null;
+  const params = undercoverParams(state, spotId, heat, key ?? `undercover:${state.meta.seed}:${spotId}:${ctx.now}`);
   if (!params) return null;
   const zivis = params.zivis === 1 ? 'ist ein Zivi' : `sind ${params.zivis} Zivis`;
   const id = startMinigame(ctx, {

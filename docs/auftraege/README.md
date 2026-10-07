@@ -285,6 +285,13 @@ Tag 8), jetzt an Tag 1 bis 3; Lieferanten-Angebot nach Warenart mit Sammel- oder
 fälschen“ bei drohender Beschlagnahme; Handy Schritt für Schritt mit Peters Quests; Quests als goldenes Banner und
 auffällige Karte. Umgesetzt in einer Session, das Handy und die Quests parallel in einer zweiten Arbeitskopie.
 
+[Auftrag 46](46-feedback-minispiele.md): Minispiele kamen zu selten und sahen schlecht aus; keine Fragen mit Antworten
+mehr. Verfolgungsjagd als Arcade-Rennspiel von hinten (Spuren, Verkehr, Blaulicht, Turbo, Sperren, Abhängen-Balken),
+Verkehrskontrolle als „Verstecken und Nerven“ (Beamter mit Taschenlampe ums Auto, Pakete umräumen, Puls im Takt),
+Bewerbungsgespräch als Lügendetektor (Zeichen antippen), Razzia-Countdown neu gezeichnet, Auslöser etwa doppelt so oft
+auf den Pfaden des Spielers. Nachtrag: ein Test-Spielstand je Minispiel (`minispiel-<art>`, Gruppe „Minispiele“), der
+Rahmen öffnet sich nach dem Laden von selbst. Fragerunde als Pop-ups in der Session, eine Session.
+
 ## Mergen
 
 - Ein PR wird gemergt, sobald er fertig und die CI grün ist. Die Reihenfolge in Phase 1 ist egal.

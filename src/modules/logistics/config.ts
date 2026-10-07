@@ -22,6 +22,11 @@ export const UNLOAD_RETRY_MINUTES = 30;
 
 /** Chance auf eine Verkehrskontrolle pro Fahrt mit Ware (× Heat-Faktor × Vorsicht des Fahrers). */
 export const CHECK_CHANCE = 0.08;
+/**
+ * Fährst du selbst (Feedback vom 07.10.2026, Minispiele öfter): Kontrollen und Zoll treffen dich so viel öfter als
+ * einen durchschnittlichen Fahrer (Verkehrskontrolle, Papiere, Verfolgungsjagd als Minispiel). Der Bot fährt nie selbst.
+ */
+export const PLAYER_CHECK_FACTOR = 2;
 /** Heat im Ziel-Veedel erhöht die Chance: Faktor = 1 + Heat / HEAT_DIVISOR. */
 export const CHECK_HEAT_DIVISOR = 50;
 /** So lange hält eine Kontrolle die Fahrt auf (zusätzlich zur Dauer der Konfrontation). */

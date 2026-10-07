@@ -39,7 +39,7 @@ describe('logistics: Routenwahl (Auftrag 33)', () => {
   it('Landstraße und Nacht werden seltener kontrolliert', () => {
     const kalk = veedelAt(7.006, 50.9395)?.id ?? '';
     const checks = { autobahn: 0, country: 0, night: 0 };
-    for (let seed = 1; seed <= 40; seed++) {
+    for (let seed = 1; seed <= 80; seed++) {
       for (const choice of ['autobahn', 'country', 'night'] as const) {
         const sim = quietGame(seed);
         sim.state.modules.police.heat[kalk] = 100;

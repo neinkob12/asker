@@ -1,8 +1,9 @@
-// Bewerbungsgespräch (Auftrag 44, Teil 9): Anmeldung der Ansicht. Spiel in InterviewGame.tsx, Logik als reines Modell
-// (model.ts mit model.test.ts), Fragen und Antworten als Daten in recruiting (interview.ts), Klänge in sounds.ts.
-// Auslöser und Folgen: recruiting ('recruiting.interview', Ereignis 'minigame.finished').
+// Bewerbungsgespräch (Auftrag 44, Teil 9; neu nach dem Feedback vom 07.10.2026 als Lügendetektor): Anmeldung der
+// Ansicht. Spiel in InterviewGame.tsx, Logik als reines Modell (model.ts mit model.test.ts), Fragen und Antworten als
+// Daten in recruiting (interview.ts), Zeichen als Overlay (Tells.tsx), Klänge in sounds.ts. Auslöser und Folgen:
+// recruiting ('recruiting.interview', Ereignis 'minigame.finished').
 // Vorschau: ?minispiel=interview (Läufer mit zwei Eigenschaften), &seed=2 (gerade Seeds: Sicherheit, Level 2, eine
-// Eigenschaft schon bekannt), &schwer=0.9 (Köder aus derselben Frage).
+// Eigenschaft schon bekannt), &schwer=0.9 (kurze Zeichen, viele Gesten).
 
 import { personLook, voiceFor } from '../../../../../core';
 import { TRAITS, type TraitId, traitName } from '../../../../staff';
@@ -36,12 +37,14 @@ registerMinigameView('interview', {
   layout: 'stage',
   icon: 'message',
   controls: {
-    keys: '1 bis 3: Frage stellen, dann deuten. Leertaste: weiter.',
-    touch: 'Frage antippen, zuhören, dann antippen, was die Antwort verrät.',
+    keys: 'Leertaste: Zeichen! Sobald die Person beim Antworten ein Zeichen zeigt.',
+    touch: 'Die Person oder „Zeichen!“ antippen, sobald sie ein Zeichen zeigt.',
     help:
-      'Drei Runden. Jede Frage prüft zwei, drei Eigenschaften, das Stichwort auf der Karte sagt, worum es geht. ' +
-      'Hat die Person eine davon, verrät die Antwort sie; sonst ist sie unauffällig („Nichts davon“). Nur was du ' +
-      'richtig erkennst, kommt in die Akte. Zwei von drei richtig: Dazu zeigt sich ein Wert, den du vorher nicht sahst.',
+      'Drei Fragen, du hörst zu. Verrät eine Antwort etwas, zeigt die Person währenddessen kurz Zeichen: Blick weg, ' +
+      'Schwitzen, Zappeln, Kratzen am Hals, nervöses Grinsen. Tipp sofort. Nicken, ein Schluck aus dem Becher, ' +
+      'Schulterzucken oder Vorbeugen sind harmlos: Tippen ist dann ein Fehlalarm, zwei davon verderben die Runde. ' +
+      'Mindestens die Hälfte der Zeichen erwischt: Die Eigenschaft kommt in die Akte. Zwei von drei Runden richtig: ' +
+      'Dazu zeigt sich ein Wert, den du vorher nicht sahst.',
   },
   previewParams: (seed) => previewPerson(seed),
   previewSituation: 'Nico R., 22, will als Läufer bei dir anfangen. Drei Fragen, dann weißt du mehr.',
@@ -52,9 +55,9 @@ registerMinigameView('interview', {
     const learned = picks.filter((p): p is TraitId => p in TRAITS && traits.includes(p) && !known.includes(p));
     const right = Math.round(score * ROUNDS);
     const what = learned.length > 0 ? ` Erkannt: ${learned.map((t) => traitName(t, name)).join(', ')}.` : '';
-    if (won) return `${right} von ${ROUNDS} richtig gedeutet.${what} Dazu zeigt sich ein Wert.`;
+    if (won) return `${right} von ${ROUNDS} Runden richtig gelesen.${what} Dazu zeigt sich ein Wert.`;
     return right > 0
-      ? `Nur ${right} von ${ROUNDS} richtig gedeutet.${what}`
+      ? `Nur ${right} von ${ROUNDS} Runden richtig gelesen.${what}`
       : 'Nichts herausgefunden. Die Person bleibt ein Rätsel.';
   },
 });

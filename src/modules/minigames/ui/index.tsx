@@ -16,7 +16,17 @@ import {
   minigameStats,
 } from '../index';
 import { MinigameFrame } from './Frame';
-import { defer, finishFromDev, liveUi, rememberDialog, setLiveUi, shouldDefer, takeDeferred } from './flow';
+import {
+  defer,
+  finishFromDev,
+  liveUi,
+  markOpened,
+  rememberDialog,
+  setLiveUi,
+  shouldDefer,
+  takeDeferred,
+  wasOpened,
+} from './flow';
 import { registerMinigameSounds } from './kit/sounds';
 import { devClock } from './kit/useFrameLoop';
 import { isMinigameKind, previewChallenge, previewFromUrl } from './preview';
@@ -51,7 +61,10 @@ registerDialog({
   area: 'map',
 });
 
-/** Hinweis im HUD, wenn ein Minispiel offen ist, der Rahmen aber nicht (z.B. nach dem Laden eines Spielstands). */
+/**
+ * Ein offenes Minispiel ohne Rahmen: Nach dem Laden eines Spielstands (auch der Test-Spielstände „Minispiele“) öffnet
+ * er sich einmal von selbst, sonst bleibt ein Knopf im HUD (z.B. wenn gerade ein anderer Dialog offen war).
+ */
 function PendingHud() {
   const { state } = useGame();
   const ui = useUi();
@@ -59,9 +72,15 @@ function PendingHud() {
   setLiveUi(ui);
   const open = activeChallenge(state);
   const free = !ui.state.dialog;
-  // Hat das Minispiel auf das Schließen der Akte gewartet (flow.ts), kommt es jetzt von selbst.
+  // Hat das Minispiel auf das Schließen der Akte gewartet (flow.ts), kommt es jetzt von selbst; ebenso ein Minispiel,
+  // dessen Rahmen in diesem Spielzustand noch nie offen war (geladener Spielstand).
   useEffect(() => {
-    if (open && free && takeDeferred(open.id)) ui.openDialog('minigames.play', { challengeId: open.id });
+    if (!open || !free || state.outcome.gameOver) return;
+    if (takeDeferred(open.id) || !wasOpened(state, open.id)) {
+      markOpened(state, open.id);
+      rememberDialog();
+      ui.openDialog('minigames.play', { challengeId: open.id });
+    }
   }, [open?.id, free]);
   if (!open || ui.state.dialog?.id === 'minigames.play') return null;
   return (
@@ -99,12 +118,13 @@ registerHudItem({ id: 'minigames.pending', order: 49, placement: 'alert', compon
 registerHudItem({ id: 'minigames.preview', order: 48, placement: 'alert', component: PreviewLauncher });
 
 onGameEvent('minigame.started', 'minigames.open', (payload, ui, state) => {
-  if (state.outcome.gameOver || !getChallenge(state, payload.id)) return;
+  if (state.outcome.gameOver || !getChallenge(state, payload.id) || wasOpened(state, payload.id)) return;
   // Nach einer Konfrontation: erst die Akte mit dem Ausgang, dann das Minispiel.
   if (shouldDefer(payload.origin)) {
     defer(payload.id);
     return;
   }
+  markOpened(state, payload.id);
   rememberDialog();
   ui.openDialog('minigames.play', { challengeId: payload.id });
 });

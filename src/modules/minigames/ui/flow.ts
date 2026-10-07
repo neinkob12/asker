@@ -54,6 +54,26 @@ export function takeDeferred(challengeId: number): boolean {
   return deferred.delete(challengeId);
 }
 
+/**
+ * Minispiele, deren Rahmen sich schon von selbst geöffnet hat, je Spielzustand (ein geladener oder neuer Stand ist ein
+ * anderes Objekt): Ein offenes Minispiel aus einem Spielstand öffnet sich nach dem Laden genau einmal von selbst,
+ * danach bleibt der Knopf im HUD.
+ */
+const opened = new WeakMap<object, Set<number>>();
+
+export function markOpened(state: object, challengeId: number): void {
+  let ids = opened.get(state);
+  if (!ids) {
+    ids = new Set();
+    opened.set(state, ids);
+  }
+  ids.add(challengeId);
+}
+
+export function wasOpened(state: object, challengeId: number): boolean {
+  return opened.get(state)?.has(challengeId) ?? false;
+}
+
 /** Für Screenshots und Playwright (nur Entwicklung): das laufende Spiel sofort gewinnen bzw. verlieren. */
 let devFinish: ((won: boolean) => void) | null = null;
 
