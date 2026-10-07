@@ -43,7 +43,7 @@ function MeetDialog(props: { supplierIds: string[] }) {
       label={suppliers.length === 1 ? `${suppliers[0].contactName} stellt sich vor` : 'Neue Lieferanten'}
       onClose={close}
       class="sup-meet"
-      detent="medium"
+      detent="large"
     >
       <p class="sup-meet__kicker">{suppliers.length === 1 ? 'Neuer Lieferant' : 'Neue Lieferanten'}</p>
       {suppliers.map((supplier) => {
