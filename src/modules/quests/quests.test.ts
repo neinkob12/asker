@@ -9,13 +9,25 @@ import { getStaff } from '../staff';
 import { getSuppliers, shipmentsInTransit } from '../suppliers';
 import { addInfluence, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
-import { CHAPTERS, HARBOR_NAME_REVENUE, PETER, QUEST_COUNT_BEFORE_36, QUESTS, QUESTS_ADDED_IN_43 } from './config';
+import {
+  CHAPTERS,
+  HARBOR_NAME_REVENUE,
+  PETER,
+  PHONE_APP_STEPS,
+  QUEST_COUNT_BEFORE_36,
+  QUESTS,
+  QUESTS_ADDED_IN_43,
+} from './config';
 import {
   chapterName,
   completedQuests,
   currentQuest,
   orderedForCity,
+  phoneAppLocked,
+  phoneAppsOpenedBy,
+  phoneStepsActive,
   questProgress,
+  questReached,
   questsWaiting,
   questTitle,
   rewardText,
@@ -321,7 +333,7 @@ describe('quests', () => {
     expect(loaded.state.modules.quests.fresh).toBe(false);
     // Version 8 (L5): Städte mit Bestellung, alte Stände fangen leer an.
     expect(loaded.state.modules.quests.orderedIn).toEqual([]);
-    expect(loaded.state.moduleVersions.quests).toBe(8);
+    expect(loaded.state.moduleVersions.quests).toBe(9);
   });
 
   it('Migration 1 → 2: Der Index folgt der neuen Reihenfolge, erledigte und übersprungene Quests bleiben', () => {
@@ -344,7 +356,7 @@ describe('quests', () => {
     // Neu: Nach 'order' folgt 'revenue1k', der Hafen kommt erst später.
     expect(currentQuest(loaded.state)?.id).toBe('revenue1k');
     expect(loaded.state.modules.quests.done).toEqual(['firstSales', 'setPrice', 'order']);
-    expect(loaded.state.moduleVersions.quests).toBe(8);
+    expect(loaded.state.moduleVersions.quests).toBe(9);
     // Alles durch: Index am Ende.
     raw.modules.quests = { index: 26, progress: 0, done: QUESTS.map((q) => q.id), skipped: [], title: 'Boss von Köln' };
     expect(currentQuest(loadSimulation(raw, sim.modules).state)).toBeNull();
@@ -455,5 +467,83 @@ describe('Bestellung für eine Stadt (Auftrag 43, L5)', () => {
     sim.advance(10);
     expect(orderedForCity(sim.state, 'berlin')).toBe(true);
     expect(orderedForCity(sim.state, 'koeln')).toBe(false);
+  });
+});
+
+describe('Handy Schritt für Schritt (Feedback 07.10.2026)', () => {
+  const locked = (state: GameState) =>
+    PHONE_APP_STEPS.filter((s) => phoneAppLocked(state, s.appId)).map((s) => s.appId);
+
+  it('ein neues Spiel zeigt erst nur Nachrichten und Einstellungen, jede App kommt mit ihrer Quest', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    expect(phoneStepsActive(sim.state)).toBe(true);
+    expect(locked(sim.state)).toEqual(PHONE_APP_STEPS.map((s) => s.appId));
+    // Nachrichten und Einstellungen hängen an keiner Quest.
+    expect(phoneAppLocked(sim.state, 'core.messages')).toBe(false);
+    expect(phoneAppLocked(sim.state, 'core.settings')).toBe(false);
+    // Peter sagt gleich, dass das Handy erst nach und nach voll wird.
+    expect(messages.thread(sim.state, PETER.id)[0].text).toContain('Handy');
+    // Zwei Quests übersprungen: Jetzt ist „Bestell Ware“ dran, die Lieferanten sind da, die Kasse noch nicht.
+    sim.dispatch({ type: 'quests.skip', payload: {} });
+    sim.dispatch({ type: 'quests.skip', payload: {} });
+    expect(currentQuest(sim.state)?.id).toBe('order');
+    expect(phoneAppLocked(sim.state, 'suppliers.app')).toBe(false);
+    expect(phoneAppLocked(sim.state, 'finance.app')).toBe(true);
+    expect(phoneAppsOpenedBy(sim.state, 'order').map((s) => s.appId)).toEqual(['suppliers.app']);
+    // Peter erwähnt die neue App in der Quest.
+    const last = messages.thread(sim.state, PETER.id).at(-1);
+    expect(last?.text).toContain(PHONE_APP_STEPS[0].line);
+  });
+
+  it('jede App hängt an einer Quest aus Köln, in der Reihenfolge der Quests', () => {
+    const positions = PHONE_APP_STEPS.map((s) => QUESTS.findIndex((q) => q.id === s.questId));
+    expect(positions.every((i) => i >= 0 && QUESTS[i].cityId === undefined && QUESTS[i].voice === undefined)).toBe(
+      true,
+    );
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    expect(new Set(PHONE_APP_STEPS.map((s) => s.appId)).size).toBe(PHONE_APP_STEPS.length);
+  });
+
+  it('erreicht ist eine Quest auch, wenn eine spätere erledigt ist oder alles durch ist', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    expect(questReached(sim.state, 'encounter')).toBe(false);
+    sim.state.modules.quests.done.push('gangDeal');
+    expect(questReached(sim.state, 'encounter')).toBe(true);
+    sim.state.modules.quests.done = [];
+    sim.state.modules.quests.index = QUESTS.length;
+    expect(locked(sim.state)).toEqual([]);
+    expect(questReached(sim.state, 'gibt-es-nicht')).toBe(true);
+  });
+
+  it('aus in den Einstellungen, in einer anderen Stadt und nach dem Verkauf ist alles da', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    expect(sim.dispatch({ type: 'quests.setPhoneSteps', payload: { enabled: false } }).ok).toBe(true);
+    expect(phoneStepsActive(sim.state)).toBe(false);
+    expect(locked(sim.state)).toEqual([]);
+    // Keine neue App in Peters Nachricht, wenn es aus ist.
+    expect(phoneAppsOpenedBy(sim.state, 'order')).toEqual([]);
+    sim.dispatch({ type: 'quests.setPhoneSteps', payload: { enabled: true } });
+    expect(locked(sim.state).length).toBe(PHONE_APP_STEPS.length);
+    // Nach Köln kennt man sich aus.
+    sim.state.modules.city.active = 'hamburg';
+    expect(locked(sim.state)).toEqual([]);
+    sim.state.modules.city.active = 'koeln';
+    sim.state.modules.city.sale.sold = { at: 0, price: 1, rotterdamPrice: 1, dailyProfit: 1, cities: ['koeln'] };
+    expect(locked(sim.state)).toEqual([]);
+  });
+
+  it('Migration 8 → 9: Wer schon spielt, behält alle Apps', () => {
+    const sim = createTestGame();
+    sim.advance(10);
+    const raw = structuredClone(sim.state) as GameState;
+    delete (raw.modules.quests as { phoneSteps?: boolean }).phoneSteps;
+    raw.moduleVersions.quests = 8;
+    const loaded = loadSimulation(raw, sim.modules);
+    expect(loaded.state.modules.quests.phoneSteps).toBe(false);
+    expect(loaded.state.moduleVersions.quests).toBe(9);
+    expect(locked(loaded.state)).toEqual([]);
   });
 });

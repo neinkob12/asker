@@ -206,6 +206,71 @@ export const QUEST_COUNT_BEFORE_36 = 32;
 /** Titel für die Bestenliste, sobald die Mehrheit der Kölner Veedel dir gehört (Meilenstein, Auftrag 30). */
 export const MILESTONE_TITLE = 'Boss von Köln';
 
+/**
+ * Handy Schritt für Schritt (Feedback 07.10.2026: Wer zum ersten Mal spielt, erschlägt die Zahl der Apps). Zu Beginn
+ * zeigt das Handy nur Nachrichten und Einstellungen; jede weitere App kommt, sobald die Quest dran ist, die sie
+ * braucht. Gesperrt ist nur der Startbildschirm (und die Suche), Verweise aus Quests, HUD und Chats öffnen die App
+ * trotzdem. appId wie im Handy (Tabs als 'tab:<id>'), name und line für Peters Nachricht und den Hinweis.
+ */
+export interface PhoneAppStep {
+  appId: string;
+  questId: string;
+  name: string;
+  /** Was Peter zur neuen App schreibt (hinter der Quest). */
+  line: string;
+}
+
+export const PHONE_APP_STEPS: readonly PhoneAppStep[] = [
+  {
+    appId: 'suppliers.app',
+    questId: 'order',
+    name: 'Lieferanten',
+    line: 'Hab dir die Lieferanten aufs Handy gepackt, da bestellst du.',
+  },
+  {
+    appId: 'finance.app',
+    questId: 'revenue1k',
+    name: 'Kasse',
+    line: 'In der Kasse auf deinem Handy siehst du, was reinkommt und was rausgeht.',
+  },
+  {
+    appId: 'tab:staff',
+    questId: 'runner',
+    name: 'Personal',
+    line: 'Ab jetzt hast du die App Personal, da stehen deine Leute und alle, die für dich arbeiten wollen.',
+  },
+  {
+    appId: 'tab:territory',
+    questId: 'newSpot',
+    name: 'Reviere',
+    line: 'In der App Reviere siehst du jedes Veedel, deine Spots und wer da das Sagen hat.',
+  },
+  {
+    appId: 'laundering.app',
+    questId: 'launder',
+    name: 'Geldwäsche',
+    line: 'Die Geldwäsche hast du jetzt auch auf dem Handy.',
+  },
+  {
+    appId: 'goods.app',
+    questId: 'warehouse',
+    name: 'Lager',
+    line: 'Neu auf deinem Handy: die App Lager, mit allen Standorten.',
+  },
+  {
+    appId: 'tab:gangs',
+    questId: 'encounter',
+    name: 'Gangs',
+    line: 'In der App Gangs steht, wer wo das Sagen hat und wie die zu dir stehen.',
+  },
+];
+
+/**
+ * Städte, in denen das Handy Schritt für Schritt aufgeht: nur die erste. Wer weiterzieht, kennt sich aus (und nach dem
+ * Verkauf gibt es ohnehin andere Apps).
+ */
+export const PHONE_STEPS_CITIES: readonly string[] = ['koeln'];
+
 const one = () => 1;
 /** Kontrollierte Veedel in Köln (Hamburg zählt für die Kölner Quests nicht mit). */
 const koelnVeedel = (state: GameState) =>
@@ -283,9 +348,12 @@ export const QUESTS: readonly QuestDef[] = [
     id: 'recruit',
     chapter: 1,
     icon: 'userPlus',
-    title: 'Stell jemanden über "Leute finden" ein',
-    task: 'Gute Leute findest du nicht an jeder Ecke. Hör dich um und stell jemanden aus den Bewerbern ein.',
-    hint: 'Personal-App, Leute finden.',
+    // Feedback 07.10.2026: Das Gespräch führst du selbst (Minispiel), dann weißt du, wen du einstellst.
+    title: 'Stell jemanden nach einem Gespräch ein',
+    task:
+      'Gute Leute findest du nicht an jeder Ecke. Such dir einen Bewerber aus und führ das Gespräch selbst: drei ' +
+      'Fragen, dann weißt du, was in der Person steckt. Taugt sie was, stell sie ein.',
+    hint: 'Personal-App › Bewerber antippen › Gespräch führen, dann einstellen.',
     target: 1,
     count: { 'recruiting.hired': one },
     goTo: 'staff',
