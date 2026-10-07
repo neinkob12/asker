@@ -136,6 +136,7 @@ const StockHud = memo(function StockHud() {
   if (sold) return null;
   return (
     <HudPill
+      data-tour="hud.stock"
       icon="warehouse"
       color="goods"
       label="Lager"

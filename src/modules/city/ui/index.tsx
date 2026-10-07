@@ -402,6 +402,7 @@ function RankHud() {
   const reachedAt = PLAYER_RANKS.findIndex((r) => r.id === rank.id);
   return (
     <HudPill
+      data-tour="hud.rank"
       icon="crown"
       color="brand"
       label="Rang"

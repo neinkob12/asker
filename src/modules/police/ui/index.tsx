@@ -97,7 +97,7 @@ const HeatHud = memo(function HeatHud() {
       ? `Heat in ${veedelName(veedelId)} (heißestes Veedel, in dem du aktiv bist): ${levelLabel}`
       : 'Du bist gerade in keinem Veedel aktiv.';
   return (
-    <div class={`hud-heat-pill is-${FLAME_TONE[levelId]}`} title={title}>
+    <div class={`hud-heat-pill is-${FLAME_TONE[levelId]}`} data-tour="hud.heat" title={title}>
       <span class="hud-heat-pill__label">{customs ? 'Zoll' : 'Heat'}</span>
       <span class="hud-heat-pill__flames" role="img" aria-label={`Heat: ${filled} von ${FLAMES} Flammen`}>
         {Array.from({ length: FLAMES }, (_, i) => (

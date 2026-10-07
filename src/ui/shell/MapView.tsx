@@ -34,5 +34,5 @@ export function MapView() {
     if (state && gameMap.current) gameMap.current.update(state, runtime.ui);
   });
 
-  return <div ref={container} class="shell-map" />;
+  return <div ref={container} class="shell-map" data-tour="map" />;
 }

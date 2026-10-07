@@ -27,8 +27,12 @@ import { launchBrowser, restartWithProxySupport, routeExternal, startServer } fr
 restartWithProxySupport();
 
 // Mit --scenes übernimmt das Szenen-Skript des Looks "Glas" (Normalbetrieb Tag/Nacht, Spot-Hover, Konfrontation,
-// Razzia, Lieferung, Veedel übernommen; siehe glass-scenes.mjs).
+// Razzia, Lieferung, Veedel übernommen; siehe glass-scenes.mjs). --scenes=tour macht drei Bilder der Tour (unten).
 const sceneArg = process.argv.find((a) => a.startsWith('--scenes='));
+if (sceneArg === '--scenes=tour') {
+  await tourShots();
+  process.exit(0);
+}
 if (sceneArg) {
   const rest = process.argv.slice(2).filter((a) => a !== sceneArg || !a.endsWith('=alle'));
   const result = spawnSync(process.execPath, ['scripts/glass-shots.mjs', ...rest], { stdio: 'inherit' });
@@ -92,4 +96,73 @@ if (tileFailures > 0) console.warn(`Hinweis: ${tileFailures} Kartenkacheln konnt
 if (errors.length > 0) {
   console.error(`\nFehler im Browser:\n${errors.join('\n')}`);
   process.exit(1);
+}
+
+/**
+ * Szene "tour" (Auftrag 46a): drei Bilder der Demo-Tour (?tour=demo) nach screenshots/tour/: der erste Schritt mit
+ * HUD-Anker (Desktop), ein Schritt mit Handy-Anker (Desktop, die Personal-App) und das Blatt am Handy-Bildschirm.
+ */
+async function tourShots() {
+  const dir = 'screenshots/tour';
+  const query = '?neu=normal&seed=1&tempo=0&tour=demo';
+  const viewports = {
+    desktop: { viewport: { width: 1440, height: 900 } },
+    mobile: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
+  };
+  const tileError = (text) => text.includes('AJAXError') || text.includes('Failed to load resource');
+  const problems = [];
+  let tiles = 0;
+  mkdirSync(dir, { recursive: true });
+  const { server, base } = await startServer();
+  const browser = await launchBrowser();
+  const open = async (size) => {
+    const context = await browser.newContext(viewports[size]);
+    const failed = await routeExternal(context, base);
+    const page = await context.newPage();
+    page.on('pageerror', (e) => problems.push(`[${size}] ${e.message}`));
+    page.on('console', (m) => {
+      if (m.type() !== 'error') return;
+      if (tileError(m.text())) tiles++;
+      else problems.push(`[${size}] ${m.text()}`);
+    });
+    await page.goto(new URL(query, base).toString());
+    await page.waitForSelector('.tour-box', { timeout: 30000 });
+    // Die Karte braucht etwas, und der Ring wandert 250 ms.
+    await page.waitForTimeout(2500);
+    const close = async () => {
+      tiles += failed();
+      await context.close();
+    };
+    return { page, close };
+  };
+  const next = async (page, times) => {
+    for (let i = 0; i < times; i++) {
+      await page.getByRole('button', { name: 'Weiter' }).click();
+      await page.waitForTimeout(900);
+    }
+  };
+  const shot = async (page, name) => {
+    const file = `${dir}/${name}.png`;
+    await page.screenshot({ path: file });
+    console.log(`Screenshot: ${file}`);
+  };
+  try {
+    const desktop = await open('desktop');
+    await shot(desktop.page, 'tour-hud-desktop');
+    // Schritt 6 der Demo: das App-Symbol Personal auf dem Startbildschirm des Handys.
+    await next(desktop.page, 5);
+    await shot(desktop.page, 'tour-handy-desktop');
+    await desktop.close();
+    const mobile = await open('mobile');
+    await shot(mobile.page, 'tour-blatt-mobile');
+    await mobile.close();
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+  if (tiles > 0) console.warn(`Hinweis: ${tiles} Kartenkacheln konnten nicht geladen werden (Netz).`);
+  if (problems.length > 0) {
+    console.error(`\nFehler im Browser:\n${problems.join('\n')}`);
+    process.exit(1);
+  }
 }

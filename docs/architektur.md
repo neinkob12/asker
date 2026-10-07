@@ -299,6 +299,13 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
 - **Start** (`start.tsx`): Registriert die Kern-Oberflächen, lädt alle `src/modules/*/ui/index.ts(x)`, setzt den
   Autosave fort oder öffnet "Neues Spiel". URL-Parameter: `?neu=normal|hardcore&seed=123&tempo=0`.
   `window.koeln = { session, runtime }` zum Ausprobieren und für Playwright.
+- **Tour** (`tour/`, Auftrag 46a): Spotlight-Erklärungen über dem Spiel. Elemente tragen `data-tour="<id>"`
+  (`TOUR_ANCHORS`), eine Tour ist eine Liste von Schritten (`TourDef`, `TourStep`: Anker, ein, zwei Sätze, Sprecher
+  mit Porträt, `before`, `waitFor` als Weiter, Ereignis oder Bedingung am Zustand), das Overlay graut alles aus und
+  schneidet den Anker frei, die Box hat „Weiter“; die Uhr steht. `ui.tour.start(def)` reiht ein, `active()`, `skip()`.
+  Reine Oberfläche ohne Zustand im Spielstand; die Inhalte je Stufe kommen mit dem Modul `tutorial` (46b, 46c).
+  Details, Anker-Liste und Vorschau (`?tour=demo`, `npm run screenshot -- --scenes=tour`):
+  [`src/ui/README.md`](../src/ui/README.md), Abschnitt „Tour“.
 
 ## Karte (`src/map/`)
 

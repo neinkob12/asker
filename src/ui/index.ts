@@ -77,3 +77,15 @@ export { useIsMobile } from './shell/layout';
 export { Slot } from './shell/Slot';
 export { type SoundOnEventOptions, soundOnEvent } from './sound';
 export { memoState, memoStateKeyed } from './stateMemo';
+/** Tour (Auftrag 46a): Spotlight-Erklärungen, ui.tour.start(def); Anker als data-tour="<id>" aus TOUR_ANCHORS. */
+export {
+  phoneAppAnchor,
+  TOUR_ANCHORS,
+  type TourAnchor,
+  type TourApi,
+  type TourDef,
+  type TourOutcome,
+  type TourPlacement,
+  type TourStep,
+  type TourWait,
+} from './tour';

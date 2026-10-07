@@ -36,7 +36,14 @@ class PageLayer extends Component<LayerProps> {
   render() {
     const { entry, below } = this.props;
     return (
-      <div class="phone-page" data-kind={entry.kind} data-key={entry.key} ref={this.ref}>
+      <div
+        class="phone-page"
+        data-kind={entry.kind}
+        data-key={entry.key}
+        // Anker der Tour (Auftrag 46a): der Inhalt der offenen App ist die oberste Seite, der Startbildschirm nicht.
+        data-tour={this.props.live && entry.kind !== 'home' ? 'phone.screen' : undefined}
+        ref={this.ref}
+      >
         <PageContext.Provider value={{ entry, below }}>
           <ErrorBoundary name={entry.title}>{this.props.render(entry)}</ErrorBoundary>
         </PageContext.Provider>

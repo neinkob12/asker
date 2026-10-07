@@ -23,6 +23,8 @@ import {
   slotContributions,
 } from './registry';
 import { bumpStateRevision, enableStateMemo } from './stateMemo';
+import { TourRunner } from './tour/controller';
+import type { TourApi } from './tour/types';
 
 /** good/info: Routine (kurz, grau in der Alarm-Zentrale), warn: gelb, bad: rot. */
 export type ToastKind = 'info' | 'good' | 'warn' | 'bad';
@@ -303,6 +305,11 @@ export interface UiApi {
   zoomIn(): void;
   zoomOut(): void;
   resetNorth(): void;
+  /**
+   * Tour (Auftrag 46a): Spotlight-Erklärungen über dem Spiel, Schritt für Schritt mit „Weiter“. `start(def)` reiht ein,
+   * wenn schon eine läuft; `active()` nennt die laufende; `skip()` beendet sie. Reine Oberfläche, nichts im Spielstand.
+   */
+  tour: TourApi;
 }
 
 /** App-ID eines Tabs im Handy: 'tab:<id>', z.B. 'tab:territory'. */
@@ -333,6 +340,8 @@ const RENDER_INTERVAL_MS = 100;
 export class UiRuntime {
   readonly ui: UiState;
   readonly api: UiApi;
+  /** Touren (Auftrag 46a): Ablauf der laufenden Tour, gezeichnet von tour/TourHost.tsx. */
+  readonly tours: TourRunner;
   map: MapController | null = null;
   /** Zähler für Tests und das Durchspielen: wie viele Banner (Meldungen und Benachrichtigungen) erschienen sind. */
   readonly stats = { banners: 0 };
@@ -391,6 +400,18 @@ export class UiRuntime {
       call: null,
     };
     setHapticsEnabled(prefs.vibration);
+    this.tours = new TourRunner({
+      // Hält ein Dialog gerade an, zählt das Tempo, mit dem es nach ihm weitergeht.
+      speed: () => this.speedBeforeDialog ?? session.loop.speed,
+      setSpeed: (speed) => this.applySpeed(speed),
+      state: () => session.state,
+      onEvent: (type, fn) =>
+        session.onEvent((event) => {
+          if (event.type === type) fn();
+        }),
+      onChange: (fn) => this.subscribe(fn),
+      render: () => this.requestRender(),
+    });
     this.api = this.createApi();
     enableStateMemo();
     session.subscribe((change) => {
@@ -449,6 +470,17 @@ export class UiRuntime {
     ui.call = null;
     this.map?.cancelPick();
     this.setStack(nav.rootStack());
+    this.tours.reset();
+  }
+
+  /** Tempo setzen, mit Rücksicht auf einen Dialog, der gerade anhält (sein Tempo gilt, sobald er zu ist). */
+  private applySpeed(speed: number): void {
+    if (speed > 0) this.speedBeforePause = speed;
+    if (this.speedBeforeDialog !== null) {
+      if (speed > 0) this.speedBeforeDialog = speed;
+      return;
+    }
+    this.session.setSpeed(speed);
   }
 
   get state(): GameState | null {
@@ -838,14 +870,15 @@ export class UiRuntime {
         }),
       setSpeed: (speed) =>
         update(() => {
-          if (speed > 0) this.speedBeforePause = speed;
-          // Ein Dialog, der das Spiel anhält, behält seine Pause (z.B. "Weiterspielen" in der Suche); das gewünschte
-          // Tempo gilt, sobald er zu ist.
-          if (this.speedBeforeDialog !== null) {
-            if (speed > 0) this.speedBeforeDialog = speed;
+          // Während eine Tour die Uhr anhält, gilt ein Tempo-Wunsch nach der Tour (Tempo-Regler als Anker, Dialog).
+          if (this.tours.pausing()) {
+            if (speed > 0) this.speedBeforePause = speed;
+            this.tours.resumeWith(speed);
             return;
           }
-          session.setSpeed(speed);
+          // Ein Dialog, der das Spiel anhält, behält seine Pause (z.B. "Weiterspielen" in der Suche); das gewünschte
+          // Tempo gilt, sobald er zu ist.
+          this.applySpeed(speed);
         }),
       togglePause: () => api.setSpeed(session.loop.speed === 0 ? this.speedBeforePause : 0),
       pickLocation: async (prompt) => {
@@ -956,6 +989,11 @@ export class UiRuntime {
       zoomIn: () => this.map?.zoomIn(),
       zoomOut: () => this.map?.zoomOut(),
       resetNorth: () => this.map?.resetNorth(),
+      tour: {
+        start: (def) => this.tours.start(def),
+        active: () => this.tours.active(),
+        skip: () => this.tours.skip(),
+      },
     };
     return api;
   }
