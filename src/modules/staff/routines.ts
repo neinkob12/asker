@@ -52,6 +52,7 @@ import {
   staffVeedel,
   talkChance,
   wageCategory,
+  wageFactor,
 } from './members';
 import { STAFF_TEXTS } from './texts';
 import { relationsOf, traitFactor, traitLoyaltyDay } from './traits';
@@ -264,8 +265,9 @@ function payWages(ctx: Ctx): void {
   const quitting: StaffMember[] = [];
   let complained = 0;
   for (const m of members) {
-    // In Haft nur Stillhaltegeld, verletzt der halbe Lohn (effectiveWage).
-    const amount = effectiveWage(m);
+    // In Haft nur Stillhaltegeld, verletzt der halbe Lohn (effectiveWage); ein Buchhalter in der Stadt drückt alle
+    // Löhne dort um seinen Anteil (Auftrag 46e, wageFactor).
+    const amount = Math.round(effectiveWage(m) * wageFactor(ctx.state, m.cityId));
     const category = m.status === 'jailed' ? 'wages.jail' : m.status === 'injured' ? 'wages.injured' : wageCategory(m);
     const reason =
       m.status === 'jailed'

@@ -1,20 +1,25 @@
 // Gemeinsame Bausteine der Personal-Oberfläche: Porträt (Platzhalter), Status-Stempel, Werte-Balken.
 
 import type { JSX } from 'preact';
-import { personLook } from '../../../core';
+import { formatPercent, type GameState, personLook } from '../../../core';
 import { Avatar, type CategoryColor, type ChipSpec, Icon, ProgressBar, Tag } from '../../../ui';
 import {
+  bonus,
+  bonusProvider,
   RELATIONS,
   type RelationKind,
   ROLE_INFO,
   STAT_KEYS,
   STAT_NAMES,
   STATUS_NAMES,
+  type StaffMember,
   type StaffOrigin,
   type StaffRole,
   type StaffStats,
   type StaffStatus,
   type StatKey,
+  specialistEffectLabel,
+  specialistEffectsOf,
   TRAITS,
   type TraitId,
   traitName,
@@ -31,6 +36,37 @@ export function traitChips(person: { name: string; traits?: readonly TraitId[] }
     color: TONE_COLORS[TRAITS[t].tone],
     title: TRAITS[t].hint,
   }));
+}
+
+/**
+ * Wirkungen eines Spezialisten als Chips (Auftrag 46e), z.B. „Zoll −30 %“; dazu Kaution und Razzia-Warnung aus den
+ * alten Boni, wenn die Person sie liefert.
+ */
+export function effectChips(state: GameState, member: StaffMember): ChipSpec[] {
+  const chips: ChipSpec[] = specialistEffectsOf(member).map((line) => ({
+    label: specialistEffectLabel(line),
+    icon: line.def.icon,
+    color: line.def.kind === 'more' ? 'money' : 'law',
+    title: line.def.hint,
+  }));
+  const city = member.cityId ?? 'koeln';
+  if (member.role === 'lawyer' && bonusProvider(state, 'bailDiscount', city)?.id === member.id) {
+    chips.push({
+      label: `Kaution −${formatPercent(bonus(state, 'bailDiscount', city))}`,
+      icon: 'scale',
+      color: 'law',
+      title: 'Kaution für Leute in Haft',
+    });
+  }
+  if (member.role === 'policeContact' && bonusProvider(state, 'raidWarning', city)?.id === member.id) {
+    chips.push({
+      label: `Warnt zu ${formatPercent(bonus(state, 'raidWarning', city))}`,
+      icon: 'bell',
+      color: 'law',
+      title: 'Warnung vor einer geplanten Razzia',
+    });
+  }
+  return chips;
 }
 
 /** Symbol und Farbe einer Beziehung. */

@@ -303,7 +303,7 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
       if (!getRightHand(s.state)) {
         const ctx = s.ctx('dev');
         s.state.wallet.dirty = Math.max(s.state.wallet.dirty, 20000);
-        // Eine Rechte Hand gibt es erst ab zwei Leutnants.
+        // Zwei Leutnants bleiben, ein dritter steigt zur Rechten Hand auf (Auftrag 46e: aus den Leutnants).
         for (const spot of getSpots(s.state).slice(0, 2)) {
           if (lieutenantOfSpot(s.state, spot.id)) continue;
           const lt = enlist(ctx, generateProfile(ctx, 'runner', { level: 3 }), { origin: 'pool' });
@@ -312,6 +312,8 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
         }
         const boss = enlist(ctx, generateProfile(ctx, 'runner', { level: 5 }), { origin: 'pool' });
         boss.stats.loyalty = 90;
+        const free = getSpots(s.state).find((spot) => !lieutenantOfSpot(s.state, spot.id)) ?? getSpots(s.state)[0];
+        if (free) s.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: [free.id] } });
         s.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });
       }
       const rh = getRightHand(s.state);

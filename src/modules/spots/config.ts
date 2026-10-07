@@ -932,6 +932,13 @@ export const ORIGINAL_SPOT_IDS: readonly string[] = [
  */
 export const KNEIPE = { from: 17, to: 1, regularFactor: 2, reputationFactor: 2, priceSensitivity: 0.7 } as const;
 
+/**
+ * Shop-Platzhalter (Auftrag 46e): Spot gründen wird ein Kauf mit echtem Geld, so viel Cent pro Spot und höchstens so
+ * viele. Noch kein Kauf, keine Bezahlung, kein Netz; die Seite zeigt nur, dass es kommt.
+ */
+export const SHOP_SPOT_PRICE_CENTS = 99;
+export const SHOP_SPOT_MAX = 3;
+
 /** Eigenen Spot gründen kostet so viel Schwarzgeld. */
 export const FOUND_SPOT_COST = 800;
 /** Höchstens so viele eigene Spots. */

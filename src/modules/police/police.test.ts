@@ -349,7 +349,8 @@ describe('police', () => {
         addHeat(sim.ctx('test'), 'altstadt-nord', 55 - getHeat(sim.state, 'altstadt-nord'));
         return chases().length > 0;
       },
-      24 * 10,
+      // Auftrag 46e: Kontrollen kommen halb so oft, deshalb länger warten.
+      24 * 25,
     );
     expect(chases().length).toBeGreaterThan(0);
     expect(chases()[0].payload.request).toMatchObject({
@@ -491,11 +492,11 @@ describe('police: Härte nach Größe des Geschäfts (Auftrag 24)', () => {
     // Höchstens ein Anteil der Ware am Ort, nie ein Lager (Spot-Razzien sind klein).
     for (const raid of raids) expect(raid.payload.goods ?? 0).toBeLessThanOrEqual(RAID_SCOPES.spot.goodsMax);
     expect(eventsOfType(events, 'police.raidPlanned').some((e) => e.payload.scope === 'major')).toBe(false);
-    // Festnahmen nur am Spot der Razzia.
+    // Festnahmen nur am Spot der Razzia (wer schon wieder draußen ist, steht wieder dort).
     for (const raid of raids) {
       for (const id of raid.payload.arrested ?? []) {
         const m = sim.state.modules.staff.members.find((x) => x.id === id);
-        expect(m?.returnTo).toEqual({ kind: 'spot', targetId: raid.payload.spotId });
+        expect(m?.returnTo ?? m?.assignment).toEqual({ kind: 'spot', targetId: raid.payload.spotId });
       }
     }
   });

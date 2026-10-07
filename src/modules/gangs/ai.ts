@@ -68,6 +68,7 @@ import {
   PUSH_DURATION,
   PUSH_GAIN,
   PUSH_MIN_PEOPLE,
+  RAID_EFFECTS,
   RECRUIT_COST,
   RECRUITS_PER_DAY,
   RESTOCK_BELOW_HOURS,
@@ -569,22 +570,31 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
       ...(standingHere ? { playerPresent: true } : { askPlayer: true }),
       opponent,
       origin,
-      ...(stash < 1
-        ? {
-            effects: {
-              failure: {
-                goods: [Math.round(-25 * stash), Math.round(-10 * stash)] as const,
-                moneyShare: -0.1 * stash,
-                moneyShareMax: 1000,
-                influence: -3,
-                opponentInfluence: 3,
-                reputation: -3,
-                text: '{opponent} haben dich {place} ausgenommen. Das Versteck hat das Schlimmste verhindert.',
-              },
-              retreat: { goods: [Math.round(-12 * stash), Math.round(-5 * stash)] as const, influence: -1 },
-            },
-          }
-        : {}),
+      // Auftrag 46e: Beute aus RAID_EFFECTS (seltener, dafür größer), mit Versteck anteilig.
+      effects: {
+        failure: {
+          goods: [
+            Math.round(RAID_EFFECTS.spot.failure.goods[0] * stash),
+            Math.round(RAID_EFFECTS.spot.failure.goods[1] * stash),
+          ] as const,
+          moneyShare: RAID_EFFECTS.spot.failure.moneyShare * stash,
+          moneyShareMax: RAID_EFFECTS.spot.failure.moneyShareMax,
+          influence: -3,
+          opponentInfluence: 3,
+          reputation: -3,
+          text:
+            stash < 1
+              ? '{opponent} haben dich {place} ausgenommen. Das Versteck hat das Schlimmste verhindert.'
+              : '{opponent} haben dich {place} ausgenommen.',
+        },
+        retreat: {
+          goods: [
+            Math.round(RAID_EFFECTS.spot.retreat.goods[0] * stash),
+            Math.round(RAID_EFFECTS.spot.retreat.goods[1] * stash),
+          ] as const,
+          influence: -1,
+        },
+      },
     }).encounterId;
   } else if (target.kind === 'courier') {
     const driver = getStaffMember(ctx.state, target.staffId)?.name ?? 'deiner Rechten Hand';
@@ -605,13 +615,16 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
       origin,
       effects: {
         failure: {
-          goods: [-20, -8],
+          goods: RAID_EFFECTS.courier.failure.goods,
           influence: -2,
           opponentInfluence: 2,
           reputation: -2,
           text: 'Auftragsfahrt {place} ausgeraubt.',
         },
-        retreat: { goods: [-8, -3], text: `${driver} ist {place} entkommen, ein Teil der Ware nicht.` },
+        retreat: {
+          goods: RAID_EFFECTS.courier.retreat.goods,
+          text: `${driver} ist {place} entkommen, ein Teil der Ware nicht.`,
+        },
       },
     }).encounterId;
   } else {
@@ -628,15 +641,16 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
       origin,
       effects: {
         failure: {
-          goodsShare: -0.35,
-          moneyShare: -0.1,
-          moneyShareMax: 1500,
+          ...RAID_EFFECTS.warehouse.failure,
           influence: -2,
           opponentInfluence: 2,
           reputation: -3,
           text: '{opponent} haben dein Lager ausgeräumt.',
         },
-        retreat: { goodsShare: -0.15, text: 'Rückzug aus dem Lager. Sie haben mitgenommen, was sie tragen konnten.' },
+        retreat: {
+          ...RAID_EFFECTS.warehouse.retreat,
+          text: 'Rückzug aus dem Lager. Sie haben mitgenommen, was sie tragen konnten.',
+        },
       },
     }).encounterId;
   }

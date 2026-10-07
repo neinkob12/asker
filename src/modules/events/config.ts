@@ -37,13 +37,19 @@ export interface CityEventDef {
   /** Gebiet: Veedel (alle Spots dort) und/oder einzelne Spots. */
   area: { veedel?: readonly string[]; spots?: readonly string[] };
   effects: EventEffects;
-  /** Ein Satz, was passiert (HUD-Chip, Reviere). */
+  /** Ein Satz, was passiert (HUD-Chip, Reviere, Pop-up zum Start). */
   text: string;
-  /** Ankündigung einen Tag vorher per Handy (fehlt: keine, z.B. beim Kater). */
-  announce?: string;
 }
 
-/** Wer die Events ankündigt (frei erfunden): der Kiosk-Kumpel der Stadt. */
+/**
+ * Auftrag 46e: Stadt-Events kommen etwa halb so oft wie vorher (Zyklen 180 statt 90 Tage, Heimspiele alle vier statt
+ * zwei Wochen, Wiesn alle 90 statt 45, Messe alle 60 statt 30 Tage) und bringen dafür mehr Nachfrage: Jeder
+ * Nachfrage-Faktor über 1 wird um EVENT_DEMAND_BOOST gestreckt (Karneval 2 → 2,5). Statt der Ankündigung per Handy
+ * kommt zum Start ein Pop-up mit „Ware bestellen“ (events/ui).
+ */
+export const EVENT_DEMAND_BOOST = 1.5;
+
+/** Wer früher die Events ankündigte (frei erfunden): der Kiosk-Kumpel der Stadt. Bleibt als Kontakt für alte Chats. */
 export const EVENT_CONTACTS: Readonly<Record<string, Contact>> = {
   koeln: { id: 'other:buedchen', name: 'Ömer (Büdchen am Ring)', kind: 'other' },
   hamburg: { id: 'other:kiosk-kiez', name: 'Jens (Kiosk am Hans-Albers-Platz)', kind: 'other' },
@@ -91,19 +97,17 @@ export const CITY_EVENTS: readonly CityEventDef[] = [
     cityId: 'koeln',
     name: 'Karneval',
     icon: 'party',
-    schedule: { kind: 'cycle', firstDay: 30, everyDays: 90, days: 6 },
+    schedule: { kind: 'cycle', firstDay: 30, everyDays: 180, days: 6 },
     area: { veedel: KOELN_CENTER },
     effects: { demand: 2, heatPerSale: 0.7, checks: 0.5, noRaids: true },
     text: 'Die Innenstadt feiert: doppelt so viel Kundschaft, die Polizei hat anderes zu tun, keine Razzien.',
-    announce:
-      'Morgen geht der Karneval los. Innenstadt dicht, alle jeck, und die Bullen gucken weg. Füll die Lager auf.',
   },
   {
     id: 'kater',
     cityId: 'koeln',
     name: 'Kater nach Karneval',
     icon: 'frown',
-    schedule: { kind: 'cycle', firstDay: 36, everyDays: 90, days: 2 },
+    schedule: { kind: 'cycle', firstDay: 36, everyDays: 180, days: 2 },
     area: { veedel: KOELN_CENTER },
     effects: { demand: 0.8 },
     text: 'Aschermittwoch: Die Innenstadt schläft ihren Rausch aus, weniger Kundschaft.',
@@ -113,23 +117,20 @@ export const CITY_EVENTS: readonly CityEventDef[] = [
     cityId: 'koeln',
     name: 'FC-Heimspiel',
     icon: 'flag',
-    schedule: { kind: 'weekly', weekday: 5, everyWeeks: 2, offset: 0, fromHour: 15, toHour: 22 },
+    schedule: { kind: 'weekly', weekday: 5, everyWeeks: 4, offset: 0, fromHour: 15, toHour: 22 },
     area: { veedel: ['lindenthal', 'ehrenfeld'] },
     effects: { demand: 1.6, gangRaids: 1.5 },
     text: 'Der FC spielt zu Hause: viel Kundschaft rund ums Stadion, aber die Gangs sind auch unterwegs.',
-    announce:
-      'Morgen spielt der FC zu Hause. Ab drei ist Müngersdorf voll, und Ehrenfeld gleich mit. Pass auf deine Spots auf.',
   },
   {
     id: 'lichter',
     cityId: 'koeln',
     name: 'Kölner Lichter',
     icon: 'sparkles',
-    schedule: { kind: 'cycle', firstDay: 60, everyDays: 90, days: 1 },
+    schedule: { kind: 'cycle', firstDay: 60, everyDays: 180, days: 1 },
     area: { spots: RHINE_SPOTS },
     effects: { demand: 2.5, checks: 1.5 },
     text: 'Feuerwerk über dem Rhein: Am Ufer ist die Hölle los, aber auch die Polizei.',
-    announce: 'Morgen sind Kölner Lichter. Am Rhein stehen die Leute dicht an dicht. Polizei auch.',
   },
   // --- Hamburg ---
   {
@@ -137,33 +138,30 @@ export const CITY_EVENTS: readonly CityEventDef[] = [
     cityId: 'hamburg',
     name: 'Hafengeburtstag',
     icon: 'ship',
-    schedule: { kind: 'cycle', firstDay: 50, everyDays: 90, days: 3 },
+    schedule: { kind: 'cycle', firstDay: 50, everyDays: 180, days: 3 },
     area: { spots: HARBOR_SPOTS },
     effects: { demand: 2.5, checks: 1.5 },
     text: 'Drei Tage Schiffe, Bier und Menschenmassen an den Landungsbrücken, und überall Polizei.',
-    announce: 'Moin. Ab morgen ist Hafengeburtstag, drei Tage. An den Landungsbrücken kommst du nicht mehr durch.',
   },
   {
     id: 'schlagermove',
     cityId: 'hamburg',
     name: 'Schlagermove',
     icon: 'music',
-    schedule: { kind: 'cycle', firstDay: 75, everyDays: 90, days: 1 },
+    schedule: { kind: 'cycle', firstDay: 75, everyDays: 180, days: 1 },
     area: { veedel: ['st-pauli'] },
     effects: { demand: 2 },
     text: 'Schlagermove: St. Pauli in Schlaghosen, doppelt so viel Kundschaft.',
-    announce: 'Morgen ist Schlagermove. Ganz St. Pauli in Schlaghosen. Gutes Geschäft.',
   },
   {
     id: 'dom',
     cityId: 'hamburg',
     name: 'Hamburger Dom',
     icon: 'star',
-    schedule: { kind: 'cycle', firstDay: 10, everyDays: 90, days: 28 },
+    schedule: { kind: 'cycle', firstDay: 10, everyDays: 180, days: 28 },
     area: { veedel: ['st-pauli'] },
     effects: { demand: 1.4 },
     text: 'Vier Wochen Dom auf dem Heiligengeistfeld: Jeden Abend Leute, die noch was wollen.',
-    announce: 'Ab morgen ist wieder Dom auf dem Heiligengeistfeld. Vier Wochen lang.',
   },
   // --- Berlin (Auftrag 37): die Nacht, dreimal im Jahr noch größer ---
   {
@@ -171,34 +169,30 @@ export const CITY_EVENTS: readonly CityEventDef[] = [
     cityId: 'berlin',
     name: 'Fête de la Musique',
     icon: 'music',
-    schedule: { kind: 'cycle', firstDay: 40, everyDays: 90, days: 1 },
+    schedule: { kind: 'cycle', firstDay: 40, everyDays: 180, days: 1 },
     area: { veedel: BERLIN_PARTY },
     effects: { demand: 1.8, checks: 0.8 },
     text: 'Musik an jeder Ecke, von mittags bis in die Nacht: viel mehr Kundschaft in den Kiezen, die Polizei lässt laufen.',
-    announce: 'Morgen ist Fête de la Musique. Auf jeder Straße eine Bühne, und alle sind draußen. Füll die Lager auf.',
   },
   {
     id: 'csd',
     cityId: 'berlin',
     name: 'CSD',
     icon: 'flag',
-    schedule: { kind: 'cycle', firstDay: 55, everyDays: 90, days: 1 },
+    schedule: { kind: 'cycle', firstDay: 55, everyDays: 180, days: 1 },
     area: { veedel: ['schoeneberg', 'mitte'] },
     effects: { demand: 2.2, checks: 0.6, noRaids: true },
     text: 'Der CSD zieht vom Kudamm zum Brandenburger Tor: eine halbe Million Leute, die feiern wollen, keine Razzien.',
-    announce: 'Morgen ist CSD. Schöneberg und Mitte voll bis zum Rand, und danach geht es am Nolli weiter.',
   },
   {
     id: 'silvester',
     cityId: 'berlin',
     name: 'Silvester am Brandenburger Tor',
     icon: 'sparkles',
-    schedule: { kind: 'cycle', firstDay: 85, everyDays: 90, days: 1 },
+    schedule: { kind: 'cycle', firstDay: 85, everyDays: 180, days: 1 },
     area: { veedel: ['mitte', 'friedrichshain', 'kreuzberg'] },
     effects: { demand: 2.5, checks: 1.3, gangRaids: 1.5 },
     text: 'Silvester: Party am Tor, Böller in jedem Kiez. Riesiges Geschäft, aber auch Polizei und Gangs überall.',
-    announce:
-      'Morgen ist Silvester. Am Tor eine Million Leute, in Kreuzberg fliegen die Raketen. Pass auf deine Spots auf.',
   },
   // --- München (Auftrag 38) ---
   {
@@ -206,27 +200,22 @@ export const CITY_EVENTS: readonly CityEventDef[] = [
     cityId: 'muenchen',
     name: 'Oktoberfest',
     icon: 'party',
-    // Alle 45 Tage für zwei Wochen (Auftrag 43, L8: alle 90 Tage verpassten viele Spieler die Wiesn ganz, obwohl Leitner
-    // sie bei der Ankunft verspricht).
-    schedule: { kind: 'cycle', firstDay: 40, everyDays: 45, days: 14 },
+    // Zwei Wochen, alle 90 Tage (Auftrag 46e: halb so oft wie zuletzt, dafür mehr Nachfrage; Leitner verspricht sie bei
+    // der Ankunft, der Pop-up zum Start sagt dann Bescheid).
+    schedule: { kind: 'cycle', firstDay: 40, everyDays: 90, days: 14 },
     area: { spots: WIESN_SPOTS },
     effects: { demand: 3, heatPerSale: 1.3, checks: 2 },
     text: 'Zwei Wochen Wiesn: dreimal so viel Kundschaft rund um die Theresienwiese, aber überall Polizei.',
-    announce:
-      'Servus. Morgen ist Anstich, dann zwei Wochen Wiesn. Rund um die Theresienwiese ist die Hölle los, und die ' +
-      'Polizei steht an jedem Eingang. Füll die Lager auf.',
   },
   {
     id: 'bayern',
     cityId: 'muenchen',
     name: 'FC-Bayern-Heimspiel',
     icon: 'flag',
-    schedule: { kind: 'weekly', weekday: 5, everyWeeks: 2, offset: 1, fromHour: 14, toHour: 22 },
+    schedule: { kind: 'weekly', weekday: 5, everyWeeks: 4, offset: 1, fromHour: 14, toHour: 22 },
     area: { veedel: ['schwabing-freimann', 'milbertshofen'] },
     effects: { demand: 1.6, checks: 1.4, gangRaids: 1.3 },
     text: 'Heimspiel in der Arena: Die U6 ist voll, die Kundschaft auch, aber die Polizei fährt mit.',
-    announce:
-      'Morgen spielt der FC Bayern daheim. Ab zwei ist die U6 voll bis Fröttmaning, und die Polizei ist überall.',
   },
   // --- Frankfurt (Auftrag 39) ---
   {
@@ -234,34 +223,30 @@ export const CITY_EVENTS: readonly CityEventDef[] = [
     cityId: 'frankfurt',
     name: 'Messe',
     icon: 'briefcase',
-    schedule: { kind: 'cycle', firstDay: 20, everyDays: 30, days: 4 },
+    schedule: { kind: 'cycle', firstDay: 20, everyDays: 60, days: 4 },
     area: { spots: MESSE_SPOTS, veedel: ['bahnhofsviertel'] },
     effects: { demand: 1.8, checks: 1.2 },
     text: 'Messe: Die Hotels sind voll, und die Gäste auf Spesen wollen abends noch was. Mehr Kundschaft rund um die Messe.',
-    announce:
-      'Ab morgen ist wieder Messe. Hotels ausgebucht, die Anzugträger wollen abends feiern. Westend und Bahnhof, Ware bereithalten.',
   },
   {
     id: 'museumsuferfest',
     cityId: 'frankfurt',
     name: 'Museumsuferfest',
     icon: 'party',
-    schedule: { kind: 'cycle', firstDay: 45, everyDays: 90, days: 3 },
+    schedule: { kind: 'cycle', firstDay: 45, everyDays: 180, days: 3 },
     area: { spots: MAIN_SPOTS },
     effects: { demand: 2.5, checks: 1.5 },
     text: 'Drei Tage Museumsuferfest: Am Main stehen die Leute dicht an dicht, die Polizei auch.',
-    announce: 'Ab morgen ist Museumsuferfest. Drei Tage, das ganze Ufer voll. Polizei auch, sag ich nur.',
   },
   {
     id: 'eintracht',
     cityId: 'frankfurt',
     name: 'Eintracht-Heimspiel',
     icon: 'flag',
-    schedule: { kind: 'weekly', weekday: 6, everyWeeks: 2, offset: 1, fromHour: 13, toHour: 21 },
+    schedule: { kind: 'weekly', weekday: 6, everyWeeks: 4, offset: 1, fromHour: 13, toHour: 21 },
     area: { veedel: ['niederrad', 'sachsenhausen-nord'] },
     effects: { demand: 1.6, gangRaids: 1.5 },
     text: 'Die Eintracht spielt zu Hause: Kundschaft rund um Stadion und Sachsenhausen, aber die Gangs sind auch unterwegs.',
-    announce: 'Morgen spielt die Eintracht. Ab Mittag ist Niederrad dicht und Sachsenhausen gleich mit. Pass auf.',
   },
 ];
 

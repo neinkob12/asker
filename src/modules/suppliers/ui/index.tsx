@@ -84,6 +84,7 @@ import {
 } from '../index';
 import { suppliersLayer } from './map';
 import './island';
+import './meet';
 import './suppliers.css';
 
 const APP_ID = 'suppliers.app';

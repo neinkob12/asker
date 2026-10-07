@@ -1,6 +1,14 @@
 // Lese- und Schreib-API des Personals. Lesen mit state, schreiben mit ctx.
 
-import { type Contact, type Ctx, type GameState, journal, type MoneyCategory, personLook } from '../../core';
+import {
+  type CommandResult,
+  type Contact,
+  type Ctx,
+  type GameState,
+  journal,
+  type MoneyCategory,
+  personLook,
+} from '../../core';
 import { activeCity, bribeFactor, cityName, getCity, isCityLive } from '../city';
 import { getWarehouse } from '../goods';
 import { lieutenantOfSpot } from '../hierarchy';
@@ -19,6 +27,7 @@ import {
   JAIL_WAGE_FACTOR,
   LOYALTY,
   MIN_SERVE_TIME,
+  ONE_PER_CITY_ROLES,
   RELATIONS,
   ROLE_INFO,
   RUNNER_HIRE_COST,
@@ -26,6 +35,11 @@ import {
   RUNNER_HIRE_COST_MIN,
   RUNNER_SERVE_TIME,
   SPECIALIST_BONUS,
+  SPECIALIST_EFFECTS,
+  SPECIALIST_GOOD_STAT,
+  SPECIALIST_NORMAL_STAT,
+  type SpecialistEffect,
+  type SpecialistEffectDef,
   STAT_NAMES,
   UNSUPPORTED_TALK_CHANCE,
   UNSUPPORTED_TALK_LOYALTY,
@@ -311,7 +325,8 @@ export function effectiveWage(member: StaffMember): number {
 
 /** Was um Mitternacht an Löhnen fällig wird (Summe über alle aktuellen Mitarbeiter, Haft und Verletzung anteilig). */
 export function payrollDue(state: GameState): number {
-  return liveMembers(state).reduce((sum, m) => sum + effectiveWage(m), 0);
+  // Auftrag 46e: Ein Buchhalter in der Stadt macht die Löhne dort günstiger (wageFactor), so wie payWages sie bucht.
+  return liveMembers(state).reduce((sum, m) => sum + Math.round(effectiveWage(m) * wageFactor(state, m.cityId)), 0);
 }
 
 /**
@@ -437,9 +452,113 @@ export function bailCost(state: GameState, id: string): number {
   return Math.round((base * (1 - bonus(state, 'bailDiscount', m.cityId ?? 'koeln'))) / 10) * 10;
 }
 
-/** Haftdauer für eine neue Festnahme in der Stadt (ein Anwalt dort macht sie kürzer). */
+/** Haftdauer für eine neue Festnahme in der Stadt (ein Anwalt dort halbiert sie, Auftrag 46e). */
 export function jailDuration(state: GameState, cityId = activeCity(state)): number {
-  return Math.round(JAIL_DURATION * (1 - bonus(state, 'jailReduction', cityId)));
+  return Math.round(JAIL_DURATION * specialistFactor(state, 'jailTime', cityId));
+}
+
+// --- Wirkungen der Spezialisten (Auftrag 46e) ---
+
+/** Mittel der Schlüsselwerte einer Person (die Werte, auf die es bei ihrer Rolle ankommt). */
+export function keyStatMean(member: Pick<StaffMember, 'role' | 'stats'>): number {
+  const keys = ROLE_INFO[member.role].keyStats;
+  if (keys.length === 0) return 50;
+  return keys.reduce((sum, k) => sum + member.stats[k], 0) / keys.length;
+}
+
+/**
+ * Anteil einer Wirkung bei dieser Person: normal bis SPECIALIST_NORMAL_STAT, gut ab SPECIALIST_GOOD_STAT, dazwischen
+ * linear. 0, wenn die Rolle nicht passt.
+ */
+export function specialistShareOf(member: Pick<StaffMember, 'role' | 'stats'>, key: SpecialistEffect): number {
+  const def: SpecialistEffectDef = SPECIALIST_EFFECTS[key];
+  if (member.role !== def.role) return 0;
+  const span = SPECIALIST_GOOD_STAT - SPECIALIST_NORMAL_STAT;
+  const t = Math.min(1, Math.max(0, (keyStatMean(member) - SPECIALIST_NORMAL_STAT) / span));
+  return Math.round((def.normal + (def.good - def.normal) * t) * 1000) / 1000;
+}
+
+/** Gilt die Person als „gut“ in ihrer Rolle (Schlüsselwerte im Mittel ab SPECIALIST_GOOD_STAT)? */
+export function isGoodSpecialist(member: Pick<StaffMember, 'role' | 'stats'>): boolean {
+  return keyStatMean(member) >= SPECIALIST_GOOD_STAT;
+}
+
+/**
+ * Wer die Wirkung in der Stadt liefert (ohne Angabe die aktive): die beste aktive Person der Rolle. Eine Person wirkt,
+ * mehrere stapeln nicht. Wer in Haft oder verletzt ist, wirkt nicht.
+ */
+export function specialistProvider(
+  state: GameState,
+  key: SpecialistEffect,
+  cityId = activeCity(state),
+): StaffMember | undefined {
+  const role = SPECIALIST_EFFECTS[key].role;
+  let best: StaffMember | undefined;
+  let bestShare = -1;
+  for (const m of state.modules.staff.members) {
+    if (m.role !== role || m.status !== 'active' || (m.cityId ?? 'koeln') !== cityId) continue;
+    const share = specialistShareOf(m, key);
+    if (share > bestShare || (share === bestShare && best && m.id < best.id)) {
+      best = m;
+      bestShare = share;
+    }
+  }
+  return best;
+}
+
+/** Anteil der Wirkung in der Stadt (0 ohne passende Person). */
+export function specialistEffect(state: GameState, key: SpecialistEffect, cityId = activeCity(state)): number {
+  const provider = specialistProvider(state, key, cityId);
+  return provider ? specialistShareOf(provider, key) : 0;
+}
+
+/**
+ * Faktor der Wirkung in der Stadt: 'less' 1 − Anteil, 'more' 1 + Anteil, ohne Person 1. Die Module multiplizieren
+ * damit ihre Chance, Dauer oder ihren Betrag (eine Chance davor, ein Wurf wie sonst: die Würfelfolge bleibt).
+ */
+export function specialistFactor(state: GameState, key: SpecialistEffect, cityId = activeCity(state)): number {
+  const share = specialistEffect(state, key, cityId);
+  if (share === 0) return 1;
+  return SPECIALIST_EFFECTS[key].kind === 'less' ? 1 - share : 1 + share;
+}
+
+export interface SpecialistEffectLine {
+  key: SpecialistEffect;
+  def: SpecialistEffectDef;
+  /** Anteil bei dieser Person. */
+  share: number;
+}
+
+/** Alle Wirkungen einer Person (leer, wenn sie kein Spezialist ist), für Profil und Personal-Kopf. */
+export function specialistEffectsOf(member: Pick<StaffMember, 'role' | 'stats'>): SpecialistEffectLine[] {
+  return (Object.keys(SPECIALIST_EFFECTS) as SpecialistEffect[])
+    .filter((key) => SPECIALIST_EFFECTS[key].role === member.role)
+    .map((key) => ({ key, def: SPECIALIST_EFFECTS[key], share: specialistShareOf(member, key) }));
+}
+
+/** Kurztext einer Wirkung, z.B. „Zoll −30 %“ oder „Erlös +3 %“. */
+export function specialistEffectLabel(line: SpecialistEffectLine): string {
+  const sign = line.def.kind === 'less' ? '−' : '+';
+  return `${line.def.label} ${sign}${Math.round(line.share * 100)} %`;
+}
+
+/**
+ * Darf jemand mit dieser Rolle in der Stadt noch dazukommen? Vom Buchhalter gibt es nur einen (ONE_PER_CITY_ROLES),
+ * auch wenn er gerade in Haft sitzt oder verletzt ist.
+ */
+export function canHireRole(state: GameState, role: StaffRole, cityId = activeCity(state)): CommandResult {
+  if (!ONE_PER_CITY_ROLES.includes(role)) return { ok: true };
+  const current = state.modules.staff.members.find((m) => m.role === role && (m.cityId ?? 'koeln') === cityId);
+  if (!current) return { ok: true };
+  return {
+    ok: false,
+    reason: `Du hast schon ${current.name} als ${roleName(role)}. Mehr als ${ROLE_INFO[role].plural === ROLE_INFO[role].name ? 'einen' : 'eine Person'} bringt nichts.`,
+  };
+}
+
+/** Faktor auf die Löhne der Leute einer Stadt (Buchhalter dort: weniger). */
+export function wageFactor(state: GameState, cityId: string | undefined): number {
+  return specialistFactor(state, 'wages', cityId ?? 'koeln');
 }
 
 /** Kontakt fürs Handy, z.B. für Nachrichten von dieser Person. */

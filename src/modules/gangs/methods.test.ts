@@ -7,7 +7,7 @@ import { getHeat } from '../police';
 import { getSpot } from '../spots';
 import { getStaff, getStaffMember, invalidateStaffIndex, isEmployed } from '../staff';
 import { statusOf } from './common';
-import { METHOD_GLOBAL_GAP, METHOD_INTERVAL_BY_CITY, THREAT_AT } from './config';
+import { INTIMIDATION_DURATION, METHOD_GLOBAL_GAP, METHOD_INTERVAL_BY_CITY, THREAT_AT } from './config';
 import { GANGS, type Gang, type GangMethod } from './data';
 import {
   type GangIncident,
@@ -269,7 +269,7 @@ describe('Gang-Methoden (Auftrag 23)', () => {
     expect(intimidationFactor(sim.state, spotId)).toBeLessThan(1);
     // Ohne Sicherheitsleute gibt es die Antwort „Sicherheit hinschicken“ nicht.
     expect(incidentChoices(sim.state, incidents(sim)[0])).not.toContain('security');
-    sim.advance(9 * 60);
+    sim.advance(INTIMIDATION_DURATION + 60);
     expect(intimidationFactor(sim.state, spotId)).toBe(1);
     expect(incidents(sim)).toHaveLength(0);
   });
@@ -353,7 +353,7 @@ describe('Gang-Methoden (Auftrag 23)', () => {
     // Sechs Spiele über Wochen: unter Last knapp über den 5 Sekunden Standard.
   }, 30_000);
 
-  it('Abklingzeiten: eine drohende Gang zeigt in etwa acht Tagen eine Methode, aber es hagelt nicht', () => {
+  it('Abklingzeiten: eine drohende Gang zeigt binnen des Abstands ihrer Stadt eine Methode, aber es hagelt nicht', () => {
     let shown = 0;
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       const sim = createTestGame({ seed });
@@ -362,7 +362,9 @@ describe('Gang-Methoden (Auftrag 23)', () => {
       if (!g) throw new Error('nord');
       const times: number[] = [];
       const start = sim.state.time;
-      for (let hour = 0; hour < 20 * 24; hour++) {
+      // Auftrag 46e: Abstand verdoppelt (Köln 8 bis 16 Tage), deshalb über 40 Tage messen.
+      const span = METHOD_INTERVAL_BY_CITY.koeln[1] * 2.5;
+      for (let hour = 0; hour < span * 24; hour++) {
         // Hafenkolonne droht (Stufe 2), greift aber nicht an; Ware liegt im Lager.
         g.hostility = THREAT_AT + 5;
         g.stage = 2;
@@ -373,13 +375,13 @@ describe('Gang-Methoden (Auftrag 23)', () => {
         // Nur die Uhr weiterstellen: So zählt allein diese Gang, die übrige Simulation steht.
         sim.state.time += 60;
       }
-      // Erster Termin nach höchstens acht Tagen, dazu etwas Luft, falls gerade nichts geht.
-      const firstWithin8 = times.some((t) => t - start <= 8.5 * DAY);
-      if (firstWithin8) shown++;
+      // Erster Termin nach höchstens dem längsten Abstand der Stadt, dazu etwas Luft, falls gerade nichts geht.
+      const firstWithin = times.some((t) => t - start <= (METHOD_INTERVAL_BY_CITY.koeln[1] + 0.5) * DAY);
+      if (firstWithin) shown++;
       // Abstand pro Gang: zwischen zwei Methoden derselben Gang mindestens der kürzeste Abstand ihrer Stadt.
       const gap = Math.max(METHOD_INTERVAL_BY_CITY.koeln[0] * DAY, METHOD_GLOBAL_GAP);
       for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(gap);
-      expect(times.length).toBeLessThanOrEqual(Math.ceil((20 * DAY) / gap));
+      expect(times.length).toBeLessThanOrEqual(Math.ceil((span * DAY) / gap));
     }
     expect(shown).toBeGreaterThanOrEqual(5);
   });

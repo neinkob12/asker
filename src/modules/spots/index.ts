@@ -77,7 +77,14 @@ import {
 } from './kinds';
 import { atSpot } from './places';
 
-export { CUSTOM_SPOT_DEMAND, FOUND_SPOT_COST, KNEIPE, MAX_CUSTOM_SPOTS } from './config';
+export {
+  CUSTOM_SPOT_DEMAND,
+  FOUND_SPOT_COST,
+  KNEIPE,
+  MAX_CUSTOM_SPOTS,
+  SHOP_SPOT_MAX,
+  SHOP_SPOT_PRICE_CENTS,
+} from './config';
 export {
   MOVE_COST,
   SPOT_KINDS,

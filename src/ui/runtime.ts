@@ -130,6 +130,8 @@ export interface UiState {
   /** Oberste Seite, wenn sie Details (ein Panel) zeigt, sonst null. Folgt dem Stapel des Handys. */
   panel: { id: PanelId; props: unknown } | null;
   dialog: { id: DialogId; props: unknown } | null;
+  /** ID der laufenden Tour (Auftrag 46c), sonst null; Pop-ups über der Karte warten solange (popupMayOpen). */
+  tour: string | null;
   phone: PhoneState;
   /** Zuletzt geöffneter Tab (als App im Handy: 'tab:<id>'), null = keiner. */
   tab: string | null;
@@ -378,6 +380,7 @@ export class UiRuntime {
     this.ui = {
       panel: null,
       dialog: null,
+      tour: null,
       phone: { open: desktop, app: null, stack: nav.rootStack() },
       tab: null,
       section: null,
@@ -410,7 +413,10 @@ export class UiRuntime {
           if (event.type === type) fn();
         }),
       onChange: (fn) => this.subscribe(fn),
-      render: () => this.requestRender(),
+      render: () => {
+        this.ui.tour = this.tours.active();
+        this.requestRender();
+      },
     });
     this.api = this.createApi();
     enableStateMemo();

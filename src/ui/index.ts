@@ -20,6 +20,7 @@ export { islandCountdown } from './phone/islandModel';
 export { PhoneScreen, type PhoneScreenProps } from './phone/PhoneScreen';
 /** Handy-Aufbau (≤ 760 px): Module zeigen dann z.B. Blätter statt Dialogen über der Karte. */
 export { cleanPlayerName, getPlayerName, PLAYER_NAME_MAX, setPlayerName } from './player';
+export { popupMayOpen } from './popups';
 export {
   type Advice,
   type Advisor,

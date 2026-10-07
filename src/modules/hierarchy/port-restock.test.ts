@@ -44,6 +44,7 @@ function portGame(): Simulation {
   for (const id of [a.id, b.id])
     sim.dispatch({ type: 'hierarchy.configure', payload: { staffId: id, settings: { mayOrder: false } } });
   const boss = recruit(sim, 'runner', 4);
+  sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: ['ebertplatz'] } }); // Auftrag 46e: aus den Leutnants
   expect(sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } }).ok).toBe(true);
   recruit(sim, 'driver');
   const post = getRightHand(sim.state);

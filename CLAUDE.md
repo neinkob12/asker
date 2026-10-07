@@ -194,6 +194,19 @@ versetzt ticken (nur, wenn der Tick nicht an `now % MINUTES_PER_DAY` hängt). Sp
 Änderung. Spot-Marker nur für die aktive Stadt (`mapSpots`). Abgebrochene Sitzungen meldet der Verlauf, Fehler
 stehen in `koeln-tycoon:errors` (`src/ui/crashlog.ts`, Lebenszeichen je Tab `koeln-tycoon:alive:<tab>`). Messen: `PERF=1 npm run perf:sim` (auch ein Spieltag je
 großem Test-Spielstand) und `scripts/perf-browser.mjs`.
+Auftrag 46e (Wirkungen, `docs/auftraege/46e-wirkungen.md`): Spezialisten wirken (`SPECIALIST_EFFECTS` in
+`staff/config.ts`, nur über `specialistFactor(state, key, cityId)` an der Stelle, die würfelt oder bucht; eine Person
+pro Stadt, die beste, skaliert mit dem Mittel ihrer Schlüsselwerte, „gut“ ab 70): Polizei-Kontakt gegen Zoll
+(`suppliers`, `logistics`), Heat-Zuwachs (`addHeat`) und Kontrollen; Anwalt gegen Festnahmen (`arrestChanceFor` in
+`police`) und halbe Haft; Buchhalter nur einer pro Stadt (`canHireRole`), mehr Erlös auf jeden Verkauf (`customers`),
+weniger Löhne (`wageFactor`, Kasse zeigt die Zeile „Buchhalter“), die Geldwäsche-Gebühr macht er nicht mehr billiger.
+Die Rechte Hand kommt aus den Leutnants (`canBeRightHand`: Leutnant der Stadt und Loyalität, kein Level mehr;
+`RIGHT_HAND_MIN_LIEUTENANTS` 1), Capos gibt es im Tutorial nicht (`tutorialAllows(state, 'staff.capos')`, `NEVER`).
+Lieferanten stellen sich einmal mit einem Pop-up vor (`supplier.introduced`, `SuppliersState.introduced`,
+`Supplier.intro`, kein Chat-Gruß und keine Chat-Vermittlung mehr; freischalten über die App), Stadt-Events kommen halb so
+oft mit mehr Nachfrage (`EVENT_DEMAND_BOOST`, `eventDemand`) und als Pop-up mit „Ware bestellen“ statt Ankündigung per
+Handy; Gangs und Polizei halb so oft, dafür größer (`RAID_EFFECTS`, `METHOD_INTERVAL_BY_CITY`, `CHECK_*`, `RAID_SCOPES`,
+Tests `frequency.test.ts`). Spot gründen ist ein Shop-Platzhalter (`spots.shop`, `SHOP_SPOT_PRICE_CENTS`, kein Kauf).
 Auftrag 46c (Touren und Momente, `docs/auftraege/46c-touren-und-momente.md`): Das Spiel startet mit einer
 Willkommen-Seite (`IntroDialog.tsx`: Name, dann Modus), die Story-Seiten sind weg. Jede Stufe hat ihre Tour mit Peter
 als reine Daten (`tutorial/ui/tours.ts`, `stageTour`, höchstens 140 Zeichen pro Schritt, nur Anker aus `TOUR_ANCHORS`);
@@ -209,7 +222,8 @@ zufälliger Überfall), Beschlagnahme der zweiten Rotterdam-Lieferung am Kai (`s
 Belohnung ist eine Zeile im Chat. Wetter steht wieder im HUD neben der Uhr (`weather/ui`, Anker `hud.weather`,
 HUD-Platz `'time'` auch am Handy-Bildschirm). Neue Anker (nur Attribute): `spot.marker`, `chat.reply`,
 `staff.lieutenants`, `staff.hire`, `suppliers.shipments`, `suppliers.offer`, `suppliers.orderMode`,
-`laundering.kiosk`, `port.berth`, `routes.new`. Szenen `npm run screenshot -- --scenes=tutorial-tour,tutorial-tour-spot,tutorial-tour-handy`.
+`laundering.kiosk`, `port.berth`, `routes.new`. Pop-ups über der Karte warten, solange eine Tour läuft (`ui.state.tour`
+in `popupMayOpen`). Szenen `npm run screenshot -- --scenes=tutorial-tour,tutorial-tour-spot,tutorial-tour-handy`.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

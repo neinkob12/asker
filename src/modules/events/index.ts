@@ -3,7 +3,8 @@
 // folgt allein aus der Spielzeit. Der Zustand merkt sich nur, was schon gemeldet ist.
 //
 // Ein Event wirkt nur in seiner Stadt und dort in seinem Gebiet (Veedel oder Spots). Gemeldet wird nur in der Stadt, die
-// live ist (Etappe 4); angekündigt wird einen Tag vorher per Handy in jeder freien Stadt.
+// live ist (Etappe 4). Seit Auftrag 46e gibt es keine Ankündigung per Handy mehr: Zum Start öffnet die Oberfläche ein
+// Pop-up mit „Ware bestellen“; Events kommen halb so oft und bringen mehr Nachfrage (EVENT_DEMAND_BOOST, eventDemand).
 //
 // Öffentliche API:
 //   CITY_EVENTS, getEventDef(id), isEventActive(def, time), eventEnd(def, time), nextEventStart(def, time)
@@ -11,29 +12,21 @@
 //   upcomingEvents(state, cityId, days) nächste Termine
 //   eventFactor(state, effect, where)  Faktor für 'demand' | 'heatPerSale' | 'checks' | 'gangRaids' an einem Spot, in
 //                                      einem Veedel oder (gangRaids) in einer Stadt
+//   eventDemand(def)                   Nachfrage-Faktor eines Events, wie er wirkt (Auftrag 46e)
 //   raidsAllowed(state, cityId)        false, solange ein Event mit noRaids läuft (Karneval)
 //   Marktereignisse (Auftrag 32, ohne Gebiet, MARKET_EVENTS in config.ts): marketEvents(state, cityId?),
 //   marketEventFactor(state, productId, cityId) (Faktor auf den Preisindex), getMarketEventDef(id)
 // Ereignisse: 'events.started' { eventId, cityId, endsAt }, 'events.ended' { eventId, cityId },
 //   'events.marketStarted' { runId, eventId, cityId, productId, factor, endsAt }, 'events.marketEnded' { … }
 
-import {
-  type Ctx,
-  cityDayDice,
-  clock,
-  defineModule,
-  type GameState,
-  journal,
-  MINUTES_PER_DAY,
-  messages,
-} from '../../core';
-import { activeCity, citiesUnlocked, cityOfSpot, isBusinessSold, isCityLive } from '../city';
+import { type Ctx, cityDayDice, clock, defineModule, type GameState, journal, MINUTES_PER_DAY } from '../../core';
+import { citiesUnlocked, cityOfSpot, isCityLive } from '../city';
 import { allProducts, getProduct } from '../goods';
 import { getSpot } from '../spots';
 import {
   CITY_EVENTS,
   type CityEventDef,
-  EVENT_CONTACTS,
+  EVENT_DEMAND_BOOST,
   type EventEffects,
   MARKET_EVENT_CHANCE,
   MARKET_EVENT_DAYS,
@@ -46,6 +39,7 @@ export {
   CITY_EVENTS,
   type CityEventDef,
   EVENT_CONTACTS,
+  EVENT_DEMAND_BOOST,
   type EventEffects,
   MARKET_EVENTS,
   type MarketEventDef,
@@ -65,7 +59,7 @@ export interface MarketEventRun {
 export interface EventsState {
   /** Events, deren Start gemeldet ist (bis zu ihrem echten Ende, auch wenn die Stadt zwischendurch schläft). */
   running: string[];
-  /** Zuletzt angekündigter Termin pro Event (Startzeit). */
+  /** Zuletzt angekündigter Termin pro Event (Startzeit). Seit Auftrag 46e ohne Ankündigung per Handy, bleibt leer. */
   announced: Record<string, number>;
   /** Laufende Marktereignisse (Auftrag 32). */
   market: MarketEventRun[];
@@ -222,9 +216,17 @@ export function eventFactor(
       if (inArea(def, veedelId, where.spotId) || spotsHere) factor *= value;
       continue;
     }
-    if (inArea(def, veedelId, where.spotId)) factor *= value;
+    // Auftrag 46e: Events sind seltener, dafür bringen sie mehr Kundschaft (eventDemand).
+    if (inArea(def, veedelId, where.spotId)) factor *= effect === 'demand' ? eventDemand(def) : value;
   }
   return factor;
+}
+
+/** Nachfrage-Faktor eines Events, wie er wirkt: über 1 um EVENT_DEMAND_BOOST gestreckt (Auftrag 46e), sonst wie angegeben. */
+export function eventDemand(def: CityEventDef): number {
+  const value = def.effects.demand;
+  if (value === undefined) return 1;
+  return value > 1 ? Math.round((1 + (value - 1) * EVENT_DEMAND_BOOST) * 100) / 100 : value;
 }
 
 /** Razzien erlaubt? Nicht, solange in der Stadt ein Event mit noRaids läuft (Karneval). */
@@ -345,15 +347,7 @@ function tick(ctx: Ctx): void {
       if (live) journal.add(ctx, `${def.name} ist vorbei.`, 'info');
       ctx.emit('events.ended', { eventId: def.id, cityId: def.cityId });
     }
-    // Ankündigung einen Tag vorher (Kiosk-Kumpel der Stadt), still am Badge.
-    if (!def.announce) continue;
-    const next = nextEventStart(def, ctx.now);
-    if (next === null || next - ctx.now > MINUTES_PER_DAY || s.announced[def.id] === next) continue;
-    s.announced[def.id] = next;
-    const contact = EVENT_CONTACTS[def.cityId];
-    // Nur aus der Stadt, in der du bist (Auftrag 43), und nicht mehr nach dem Verkauf.
-    const here = def.cityId === activeCity(ctx.state) && !isBusinessSold(ctx.state);
-    if (contact && here) messages.send(ctx, { contact, text: def.announce, silent: true });
+    // Auftrag 46e: keine Ankündigung per Handy mehr; zum Start zeigt die Oberfläche ein Pop-up ('events.started').
   }
 }
 
