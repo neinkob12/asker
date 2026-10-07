@@ -232,3 +232,17 @@ Untergrenze.
 3. **Shop nur als Platzhalter.** Spot gründen zeigt im Handy einen Shop mit „0,99 € pro Spot, höchstens drei“, aber
    ohne Kauf. Bezahlung mit echtem Geld ist ein eigener Auftrag.
 4. **Rechte Hand aus den Leutnants**, ohne die Stufe Level 4 (angenommen, nicht widersprochen).
+
+## Umsetzung in Teilaufträgen
+
+Jeder Teil läuft in einer eigenen Session mit eigenem Branch und PR gegen `main`. Eine Routine („Korrektur-Loop
+Auftrag 46“, stündlich, sichtbar unter Routinen) prüft die Sessions und PRs gegen diesen Plan, schickt Korrekturen
+und startet den nächsten Teil, sobald der vorige gemergt ist.
+
+| Teil | Inhalt | Hängt ab von |
+| --- | --- | --- |
+| [46a](46a-tour-baukasten.md) | Tour-Baukasten in `src/ui/tour` (Overlay, Anker, Box mit Peter, Weiter, Uhr steht) | nichts |
+| [46b](46b-modul-tutorial.md) | Modul `tutorial`: Stufen, Missionen mit Belohnungsregel, Freischalt-Funktionen, Missions-Karte, `tutorial.start` | nichts (parallel zu 46a) |
+| 46c | Touren je Stufe mit Peters Texten, geskriptete Momente (erster Gang-Angriff, Beschlagnahme, Handy-Bestellung, Lager-Pop-up), Willkommen-Seite mit Name | 46a, 46b |
+| 46d | Rückbau: Quests, Konfrontationen (automatische Entscheidung plus Straßenkampf am Spot), Spot-Ausbau, Dynamic Island, Push-Banner, Chats (Bewerber, Geschichten, Marktbericht, Kneipen, Klüngel), Verträge nach Köln | 46b |
+| 46e | Wirkungen: Spezialisten, Buchhalter, Rechte Hand aus den Leutnants, Lieferanten-Kennenlern-Pop-up, Stadt-Event-Pop-up mit Bestell-Knopf, Shop-Platzhalter | 46b |
