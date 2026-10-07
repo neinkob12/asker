@@ -95,6 +95,13 @@ export const CHECK_ARREST_CHANCE = 0.2;
 export const CHASE_CHANCE = 0.3;
 /** Scheitert die Flucht, ist mehr weg. */
 export const FAILED_CHASE_FACTOR = 1.5;
+/**
+ * Stehst du selbst am Spot (Feedback vom 07.10.2026, Minispiele öfter): Kontrollen in diesem Veedel schon ab dieser
+ * Heat (statt CHECK_THRESHOLD), und eine Kontrolle gegen dich kippt mit dieser Chance in die Verfolgungsjagd. Der Bot
+ * steht nie selbst am Spot: Würfelfolge und Balancing bleiben gleich.
+ */
+export const PLAYER_CHECK_THRESHOLD = 15;
+export const PLAYER_CHASE_CHANCE = 0.5;
 
 // --- Razzien --------------------------------------------------------------------------------------------------
 
@@ -219,9 +226,9 @@ export const UNDERCOVER_CHANCE_PER_HOUR = 0.25;
  * 07.10.2026: Vorher kam das erste Minispiel für jemanden, der selbst am Spot steht, erst nach etwa einer Woche).
  * Darüber gilt der Anstieg nach Heat, nie weniger als das.
  */
-export const UNDERCOVER_BASE_CHANCE_PER_HOUR = 0.03;
+export const UNDERCOVER_BASE_CHANCE_PER_HOUR = 0.06;
 /** Nach einer Schicht mit Zivis ist so lange Ruhe (Spielminuten). */
-export const UNDERCOVER_COOLDOWN = 8 * 60;
+export const UNDERCOVER_COOLDOWN = 5 * 60;
 /** So viele Leute kommen in der Schicht an den Spot (Zivis mitgezählt). */
 export const UNDERCOVER_CUSTOMERS = { min: 6, max: 10 } as const;
 /** So viele davon sind Zivis: einer, ab dieser Heat je einer mehr (höchstens drei). */

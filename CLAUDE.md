@@ -159,6 +159,16 @@ für Schritt: In einem neuen Spiel kommen die Apps mit Peters Quests (`PHONE_APP
 jeder App; alte Stände und andere Städte haben alles, Einstellungen › Einstieg schaltet es ab). Neue Quests kommen als
 goldenes Banner (`ui.toast` mit `title`, `color`, `appId`, `duration`), die Quest-Karte klappt auf und hat in den
 ersten Kapiteln „Zeig mir wie“.
+Auftrag 46 (Feedback 07.10.2026, `docs/auftraege/46-feedback-minispiele.md`): Drei Minispiele neu, ohne Fragen mit
+Antworten (Wahrscheinlichkeit nur noch bei der Rechten Hand). Verfolgungsjagd als Arcade-Rennspiel von hinten im Canvas
+(`layout: 'stage'`, eigene Bühne statt Karte): drei Spuren, Verkehr, Streifen, die rammen, drängen und blockieren,
+Sperren, Turbo, Balken „Abhängen“ (`SHAKE_*`), Skyline je Stadt (`SKYLINES` in `chase/draw.ts`). Verkehrskontrolle als
+„Verstecken und Nerven“: Blick von oben ins Auto, der Beamte leuchtet Station für Station in Stellen (`traffic/model.ts`,
+Sätze in `lines.ts`), Pakete rechtzeitig umräumen, Puls im Takt; picks `flee`, `bribe`, `found:<n>`. Bewerbungsgespräch
+als Lügendetektor: Zeichen (`TELL_KINDS`) rechtzeitig antippen, Gesten sind Fehlalarme (`interview/model.ts`,
+Overlay `Tells.tsx`). Razzia-Countdown neu gezeichnet. Minispiele etwa doppelt so oft, nur auf Pfaden des Spielers
+(`PLAYER_CHECK_THRESHOLD`, `PLAYER_CHASE_CHANCE`, `UNDERCOVER_BASE_CHANCE_PER_HOUR` 6 %, `PLAYER_CHECK_FACTOR` in
+`logistics`, Überfall auf den Spot, an dem du stehst, mit dir drin).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

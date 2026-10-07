@@ -107,6 +107,8 @@ describe('logistics: Review Auftrag 33', () => {
     });
     store(sim.ctx('test'), { productId: 'hash', amount: warehouseFree(sim.state, 'ehrenfeld') - 300 });
     expect(sim.dispatch({ type: 'logistics.pickup', payload: { by: 'player' } }).ok).toBe(true);
+    // Keine Kontrolle unterwegs (du fährst selbst, die kommt öfter): Die Fahrt soll in Ruhe ankommen.
+    getTrips(sim.state)[0].checkAt = null;
     sim.step();
     expect(eventsOfType(events, 'cargo.leftBehind')[0].payload).toMatchObject({
       amount: 600,

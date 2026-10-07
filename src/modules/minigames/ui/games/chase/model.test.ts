@@ -1,307 +1,425 @@
 import { describe, expect, it } from 'vitest';
-import { roadGraph } from '../../../../roads';
 import {
-  ABTAUCHEN_SECONDS,
+  BLOCK_DAMAGE,
+  BLOCK_FIRST,
+  CAR_LENGTH,
+  CATCH_SECONDS,
   type ChaseInput,
-  type ChaseOptions,
   type ChaseState,
+  type Cop,
+  CRUISE,
   chasePicks,
   chaseScore,
-  choose,
   createChase,
   dumpGoods,
-  escaped,
   forceEnd,
   initChase,
+  LANES,
+  laneOf,
+  laneX,
+  RAM_DAMAGE,
+  ROAD_HALF,
+  SEGMENTS,
+  SHAKE_NEAR,
+  steer,
   stepChase,
   TIME_LIMIT,
-  upcoming,
+  TOP_SPEED,
+  TURBO_FACTOR,
+  type Vehicle,
 } from './model';
-import { branchesAfter, chaseNet, findPath, legLength, pickBranch, reverse } from './net';
 
-const net = chaseNet(roadGraph('koeln'));
-/** Ehrenfeld, Venloer Straße (in Metern des Kölner Graphen). */
-const START = net.g.toMeters({ lng: 6.9205, lat: 50.9455 });
-const base: ChaseOptions = { seed: 7, difficulty: 0.5, start: START };
 const GAS: ChaseInput = { gas: true, brake: false, turbo: false };
 const IDLE: ChaseInput = { gas: false, brake: false, turbo: false };
 const BRAKE: ChaseInput = { gas: false, brake: true, turbo: false };
+const TURBO: ChaseInput = { gas: true, brake: false, turbo: true };
 
-function run(state: ChaseState, setup: ReturnType<typeof createChase>, seconds: number, input: ChaseInput) {
-  for (let t = 0; t < seconds && !state.end; t += 1 / 30) stepChase(net, setup, state, input, 1 / 30);
+function run(setup: ReturnType<typeof createChase>, state: ChaseState, seconds: number, input: ChaseInput) {
+  for (let t = 0; t < seconds && !state.end; t += 1 / 60) stepChase(setup, state, input, 1 / 60);
 }
 
-describe('Netz der Verfolgungsjagd', () => {
-  it('kennt jede Kante an beiden Enden (keine Einbahnstraßen auf der Flucht)', () => {
-    const g = net.g;
-    for (let e = 0; e < g.edgeFrom.length; e += 97) {
-      for (const [node, dir] of [
-        [g.edgeFrom[e], 1],
-        [g.edgeTo[e], 0],
-      ] as const) {
-        let found = false;
-        for (let k = net.adjStart[node]; k < net.adjStart[node + 1]; k++) {
-          if (net.adjEdge[k] === e && net.adjDir[k] === dir) found = true;
-        }
-        expect(found).toBe(true);
-      }
-    }
+/** Fahren ohne Verfolger, ohne dass der Balken „Abhängen“ das Spiel beendet. */
+function runFree(setup: ReturnType<typeof createChase>, state: ChaseState, seconds: number, input: ChaseInput) {
+  for (let t = 0; t < seconds && !state.end; t += 1 / 60) {
+    state.shake = 0;
+    stepChase(setup, state, input, 1 / 60);
+  }
+}
+
+/** Alle Streifen weg (für Tests ohne Verfolger). */
+function noCops(state: ChaseState): void {
+  for (const cop of state.cops) {
+    cop.active = false;
+    cop.spawnAt = Infinity;
+  }
+}
+
+function cop(state: ChaseState, lane: number, behind: number, v: number): Cop {
+  const c: Cop = {
+    id: 900,
+    lane,
+    x: laneX(lane),
+    z: state.player.z - behind,
+    v,
+    state: 'chase',
+    spawnAt: 0,
+    active: true,
+    ramCooldown: 0,
+    hesitateUntil: 0,
+    wreckT: 0,
+  };
+  state.cops = [c];
+  return c;
+}
+
+function car(state: ChaseState, lane: number, ahead: number, v: number): Vehicle {
+  const vehicle: Vehicle = {
+    id: 800,
+    kind: 'car',
+    lane,
+    x: laneX(lane),
+    z: state.player.z + ahead,
+    v,
+    color: 0,
+    pushed: 0,
+    braking: false,
+  };
+  state.traffic = [vehicle];
+  return vehicle;
+}
+
+describe('Straße der Verfolgungsjagd', () => {
+  it('kommt fest aus dem Seed, mit Kurven in beide Richtungen und Kulisse', () => {
+    const a = createChase({ seed: 7, difficulty: 0.5 });
+    const b = createChase({ seed: 7, difficulty: 0.5 });
+    expect(a.road.length).toBe(SEGMENTS);
+    expect(a.road.map((s) => s.curve)).toEqual(b.road.map((s) => s.curve));
+    expect(a.road.some((s) => s.curve > 0.01)).toBe(true);
+    expect(a.road.some((s) => s.curve < -0.01)).toBe(true);
+    expect(Math.max(...a.road.map((s) => Math.abs(s.curve)))).toBeLessThan(0.05);
+    expect(a.road.filter((s) => s.scenery.length > 0).length).toBeGreaterThan(SEGMENTS / 4);
+    const other = createChase({ seed: 8, difficulty: 0.5 });
+    expect(other.road.map((s) => s.curve)).not.toEqual(a.road.map((s) => s.curve));
   });
 
-  it('findet einen Weg mit A* und meidet Sperren', () => {
-    const setup = createChase(net, base);
-    const from = net.g.edgeFrom[setup.startLeg.edge];
-    const state = initChase(net, setup);
-    const to = state.cops[0] ? net.g.edgeTo[state.cops[0].leg.edge] : from;
-    const path = findPath(net, from, to);
-    expect(path).not.toBeNull();
-    // Der Weg hängt zusammen.
-    let node = from;
-    for (const leg of path ?? []) {
-      expect(leg.dir ? net.g.edgeFrom[leg.edge] : net.g.edgeTo[leg.edge]).toBe(node);
-      node = leg.dir ? net.g.edgeTo[leg.edge] : net.g.edgeFrom[leg.edge];
-    }
-    expect(node).toBe(to);
-  });
-
-  it('wählt links, geradeaus und rechts nach dem Winkel', () => {
-    const branches = [
-      { leg: { edge: 1, dir: 1 }, angle: 1.5 },
-      { leg: { edge: 2, dir: 1 }, angle: 0.1 },
-      { leg: { edge: 3, dir: 1 }, angle: -1.6 },
-    ];
-    expect(pickBranch(branches, 'left')?.leg.edge).toBe(1);
-    expect(pickBranch(branches, 'straight')?.leg.edge).toBe(2);
-    expect(pickBranch(branches, 'right')?.leg.edge).toBe(3);
-    // Keine Abzweigung nach rechts: der, der am weitesten rechts liegt.
-    expect(pickBranch(branches.slice(0, 2), 'right')?.leg.edge).toBe(2);
-  });
-});
-
-describe('Aufbau', () => {
-  it('ist fest aus dem Seed', () => {
-    expect(createChase(net, base)).toEqual(createChase(net, base));
-    expect(createChase(net, { ...base, seed: 8 }).hideouts).not.toEqual(createChase(net, base).hideouts);
-  });
-
-  it('hat 2 bis 5 Streifen, Sperren erst ab mittlerer Schwierigkeit, Verstecke 350 bis 900 m entfernt', () => {
-    const easy = createChase(net, { ...base, difficulty: 0 });
-    const hard = createChase(net, { ...base, difficulty: 1 });
+  it('wird mit der Schwierigkeit härter: mehr Streifen, schnellere Streifen, mehr Verkehr, Sperren öfter', () => {
+    const easy = createChase({ seed: 1, difficulty: 0 });
+    const hard = createChase({ seed: 1, difficulty: 1 });
     expect(easy.cops).toBe(2);
-    expect(hard.cops).toBe(5);
-    expect(easy.roadblocks).toBe(0);
-    expect(hard.roadblocks).toBeGreaterThan(0);
-    expect(easy.heliAt).toBeGreaterThanOrEqual(40);
-    expect(easy.heliAt).toBeLessThanOrEqual(60);
-    expect(easy.hideouts.length).toBeGreaterThanOrEqual(2);
-    for (const h of easy.hideouts) {
-      const d = Math.hypot(h.x - START[0], h.y - START[1]);
-      expect(d).toBeGreaterThan(300);
-      expect(d).toBeLessThan(1000);
-    }
+    expect(hard.cops).toBe(4);
+    expect(hard.copFactor).toBeGreaterThan(easy.copFactor);
+    expect(hard.traffic).toBeGreaterThan(easy.traffic);
+    expect(hard.blockEvery).toBeLessThan(easy.blockEvery);
   });
 
-  it('nimmt eigene Lager in der Nähe als Versteck', () => {
-    const near = { id: 'w1', label: 'Lager Ehrenfeld', x: START[0] + 400, y: START[1] + 200 };
-    const far = { id: 'w2', label: 'Lager Porz', x: START[0] + 9000, y: START[1] };
-    const setup = createChase(net, { ...base, warehouses: [near, far] });
-    expect(setup.hideouts.map((h) => h.id)).toContain('w1');
-    expect(setup.hideouts.map((h) => h.id)).not.toContain('w2');
-    expect(setup.hideouts.find((h) => h.id === 'w1')?.kind).toBe('warehouse');
-  });
-
-  it('startet mit einer Streife direkt hinter dir (Sichtkontakt)', () => {
-    const setup = createChase(net, base);
-    const state = initChase(net, setup);
-    expect(state.cops.filter((c) => c.active)).toHaveLength(1);
-    stepChase(net, setup, state, IDLE, 1 / 30);
-    expect(state.sight).toBe(true);
-    expect(state.nearest).toBeLessThan(setup.sightRange);
+  it('kennt Spuren und ihre Mitte', () => {
+    expect(laneX(1)).toBe(0);
+    expect(laneX(0)).toBeLessThan(0);
+    expect(laneOf(laneX(2))).toBe(2);
+    expect(laneOf(-99)).toBe(0);
+    expect(laneOf(99)).toBe(LANES - 1);
   });
 });
 
 describe('Fahren', () => {
-  it('Gas beschleunigt, Bremse hält an, Turbo ist schneller und leert sich', () => {
-    const setup = createChase(net, base);
-    const a = initChase(net, setup);
-    run(a, setup, 1.5, GAS);
-    expect(a.player.v).toBeGreaterThan(5);
-    const b = initChase(net, setup);
-    run(b, setup, 1.5, { ...GAS, turbo: true });
-    expect(b.player.v).toBeGreaterThan(a.player.v);
-    expect(b.player.turbo).toBeLessThan(1);
-    run(a, setup, 1, BRAKE);
-    expect(a.player.v).toBeLessThan(1);
+  it('startet mit der ersten Streife im Nacken und Verkehr voraus', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    expect(state.cops.length).toBe(setup.cops);
+    expect(state.traffic.length).toBeGreaterThan(0);
+    expect(state.traffic.every((v) => v.z > state.player.z)).toBe(true);
+    stepChase(setup, state, GAS, 1 / 60);
+    expect(state.cops[0].active).toBe(true);
+    expect(state.nearest).toBeLessThan(SHAKE_NEAR);
+    expect(state.near).toBe(true);
   });
 
-  it('rollt ohne Vollgas mit gedrosseltem Tempo weiter (cruise)', () => {
-    const setup = createChase(net, base);
-    const full = initChase(net, setup);
-    const cruise = initChase(net, setup);
-    run(full, setup, 4, GAS);
-    run(cruise, setup, 4, { ...IDLE, cruise: true });
-    expect(cruise.player.v).toBeGreaterThan(3);
-    expect(cruise.player.v).toBeLessThan(full.player.v);
+  it('beschleunigt mit Gas auf das Höchsttempo, rollt ohne Gas langsamer und bremst', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    noCops(state);
+    state.traffic = [];
+    setup.traffic = 0;
+    runFree(setup, state, 12, GAS);
+    expect(state.player.v).toBeCloseTo(TOP_SPEED, 0);
+    const z = state.player.z;
+    runFree(setup, state, 10, IDLE);
+    expect(state.player.v).toBeLessThan(TOP_SPEED);
+    expect(state.player.v).toBeLessThanOrEqual(TOP_SPEED * CRUISE + 0.01);
+    expect(state.player.z).toBeGreaterThan(z);
+    runFree(setup, state, 5, BRAKE);
+    expect(state.player.v).toBe(0);
   });
 
-  it('nimmt an der Kreuzung die gewählte Abbiegung und setzt die Wahl danach zurück', () => {
-    const setup = createChase(net, base);
-    const state = initChase(net, setup);
-    choose(state, 'right');
-    const next = upcoming(net, state);
-    expect(state.player.choice).toBe('right');
-    const target = next.chosen?.leg;
-    let took = false;
-    for (let i = 0; i < 30 * 30 && !state.end; i++) {
-      stepChase(net, setup, state, GAS, 1 / 30);
-      if (target && state.player.leg.edge === target.edge) {
-        took = true;
-        break;
-      }
-    }
-    expect(took).toBe(true);
-    expect(state.player.choice).toBe('straight');
+  it('zündet den Turbo nur voll geladen, wird schneller als mit Gas und lädt nach', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    noCops(state);
+    state.traffic = [];
+    setup.traffic = 0;
+    runFree(setup, state, 2.5, TURBO);
+    expect(state.player.turboOn).toBe(true);
+    expect(state.player.v).toBeGreaterThan(TOP_SPEED * 1.05);
+    expect(state.player.v).toBeLessThanOrEqual(TOP_SPEED * TURBO_FACTOR + 0.01);
+    // Nach dem Turbo ist der Balken leer und lädt wieder.
+    runFree(setup, state, 1, TURBO);
+    expect(state.player.turboOn).toBe(false);
+    expect(state.player.turbo).toBeLessThan(0.6);
+    const before = state.player.turbo;
+    runFree(setup, state, 2, GAS);
+    expect(state.player.turbo).toBeGreaterThan(before);
   });
 
-  it('dieselbe Seite zweimal wählen heißt wieder geradeaus', () => {
-    const state = initChase(net, createChase(net, base));
-    choose(state, 'left');
-    choose(state, 'left');
-    expect(state.player.choice).toBe('straight');
-  });
-
-  it('rutscht, wenn es zu schnell in eine scharfe Kurve geht', () => {
-    const setup = createChase(net, base);
-    const state = initChase(net, setup);
-    let skidded = false;
-    // Mit Turbo immer scharf abbiegen.
-    for (let i = 0; i < 30 * 40 && !state.end && !skidded; i++) {
-      choose(state, i % 2 ? 'left' : 'right');
-      stepChase(net, setup, state, { gas: true, brake: false, turbo: true }, 1 / 30);
-      skidded = state.events.some((e) => e.kind === 'skid');
-    }
-    expect(skidded).toBe(true);
-  });
-
-  it('wendet im Stand mit gehaltener Bremse', () => {
-    const setup = createChase(net, base);
-    const state = initChase(net, setup);
-    const leg = state.player.leg;
-    run(state, setup, 0.6, BRAKE);
-    expect(state.player.leg).toEqual(reverse(leg));
-    expect(state.player.uturn).toBeGreaterThan(0);
-    // Weiter gehalten: kein zweites Wenden, erst nach dem Loslassen.
-    run(state, setup, 3, BRAKE);
-    expect(state.player.leg).toEqual(reverse(leg));
-    run(state, setup, 0.1, IDLE);
-    run(state, setup, 0.6, BRAKE);
-    expect(state.player.leg).toEqual(leg);
-  });
-
-  it('kennt die nächste Kreuzung mit Abstand und Abzweigen', () => {
-    const state = initChase(net, createChase(net, base));
-    const next = upcoming(net, state);
-    expect(next.distance).toBeGreaterThan(0);
-    expect(next.branches.length === 0 || next.branches.length >= 2).toBe(true);
-    expect(legLength(net, state.player.leg)).toBeGreaterThan(0);
-    expect(branchesAfter(net, state.player.leg).length).toBeGreaterThanOrEqual(0);
+  it('wechselt die Spur und bleibt auf der Straße', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    noCops(state);
+    state.traffic = [];
+    setup.traffic = 0;
+    expect(steer(state, 'left')).toBe(true);
+    expect(state.player.lane).toBe(0);
+    expect(steer(state, 'left')).toBe(false);
+    runFree(setup, state, 2, GAS);
+    expect(state.player.x).toBeCloseTo(laneX(0), 1);
+    expect(steer(state, 'right')).toBe(true);
+    expect(steer(state, 'right')).toBe(true);
+    expect(state.player.lane).toBe(LANES - 1);
+    runFree(setup, state, 2, GAS);
+    expect(state.player.x).toBeCloseTo(laneX(LANES - 1), 1);
+    expect(Math.abs(state.player.x)).toBeLessThan(ROAD_HALF);
   });
 });
 
-describe('Ende', () => {
-  it('wer stehen bleibt, wird gefasst (Score 0,05 bis 0,4)', () => {
-    const setup = createChase(net, base);
-    const state = initChase(net, setup);
-    run(state, setup, 30, IDLE);
+describe('Verkehr und Zusammenstöße', () => {
+  it('hält immer mindestens eine Spur frei und füllt den Verkehr nach', () => {
+    const setup = createChase({ seed: 5, difficulty: 1 });
+    const state = initChase(setup);
+    noCops(state);
+    runFree(setup, state, 20, GAS);
+    expect(state.traffic.length).toBeGreaterThanOrEqual(setup.traffic - 2);
+    // Kein Wagen weit hinter dir, alle Lagen plausibel.
+    expect(state.traffic.every((v) => v.z > state.player.z - 70)).toBe(true);
+    for (const v of state.traffic) {
+      const same = state.traffic.filter((o) => o !== v && Math.abs(o.z - v.z) < 20 && o.lane !== v.lane);
+      expect(same.length).toBeLessThan(LANES - 1 + 1);
+    }
+  });
+
+  it('kracht in einen langsamen Wagen: Tempo weg, Schaden, der andere wird angeschoben', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    noCops(state);
+    setup.traffic = 0;
+    state.player.v = TOP_SPEED;
+    const slow = car(state, 1, 30, 12);
+    const events: string[] = [];
+    for (let i = 0; i < 90 && !events.includes('crash'); i++) {
+      stepChase(setup, state, GAS, 1 / 60);
+      events.push(...state.events.map((e) => e.kind));
+    }
+    expect(events).toContain('crash');
+    expect(state.player.v).toBeLessThan(20);
+    expect(state.player.damage).toBeGreaterThan(0.05);
+    expect(slow.pushed).toBeGreaterThan(0);
+    expect(state.player.z).toBeLessThan(slow.z);
+  });
+
+  it('rollt bei kleinem Tempounterschied nur auf (kaum Schaden)', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    noCops(state);
+    setup.traffic = 0;
+    state.player.v = 24;
+    car(state, 1, 12, 20);
+    const events: string[] = [];
+    for (let i = 0; i < 120; i++) {
+      stepChase(setup, state, IDLE, 1 / 60);
+      events.push(...state.events.map((e) => e.kind));
+    }
+    expect(events).toContain('bump');
+    expect(events).not.toContain('crash');
+    expect(state.player.damage).toBeLessThan(0.05);
+  });
+});
+
+describe('Streifen', () => {
+  it('holt auf, rammt in deiner Spur und schiebt dich quer', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    setup.traffic = 0;
+    state.traffic = [];
+    state.player.v = 20;
+    cop(state, 1, 12, 40);
+    const events: string[] = [];
+    for (let i = 0; i < 240 && !events.includes('ram'); i++) {
+      stepChase(setup, state, { gas: false, brake: true, turbo: false }, 1 / 60);
+      events.push(...state.events.map((e) => e.kind));
+    }
+    expect(events).toContain('ram');
+    expect(state.player.damage).toBeCloseTo(RAM_DAMAGE, 2);
+    expect(Math.abs(state.player.vx)).toBeGreaterThan(0);
+  });
+
+  it('stellt dich, wenn sie dicht dran ist und du langsam bist', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    setup.traffic = 0;
+    state.traffic = [];
+    state.player.v = 0;
+    const c = cop(state, 1, 3, 0);
+    for (let t = 0; t < CATCH_SECONDS + 1 && !state.end; t += 1 / 60) {
+      // Die Streife klebt hinter dir.
+      c.z = state.player.z - 3;
+      c.v = 0;
+      stepChase(setup, state, BRAKE, 1 / 60);
+    }
     expect(state.end).toBe('caught');
-    expect(escaped(state)).toBe(false);
-    const score = chaseScore(state);
-    expect(score).toBeGreaterThanOrEqual(0.05);
-    expect(score).toBeLessThanOrEqual(0.4);
+    expect(chaseScore(state)).toBeLessThan(0.2);
   });
 
-  it('ohne Sichtkontakt füllt sich der Ring und man ist weg', () => {
-    const setup = createChase(net, base);
-    const state = initChase(net, setup);
-    // Alle Streifen weit weg und gebremst: nur die Zeit zählt.
-    for (const cop of state.cops) cop.spawnAt = 1e9;
-    state.cops[0].active = false;
-    run(state, setup, ABTAUCHEN_SECONDS + 1, IDLE);
-    expect(state.end).toBe('escaped');
-    expect(chaseScore(state)).toBeGreaterThan(0.9);
-  });
-
-  it('im Versteck ohne Sichtkontakt sofort entkommen', () => {
-    const setup = createChase(net, base);
-    const state = initChase(net, setup);
-    for (const cop of state.cops) cop.spawnAt = 1e9;
-    state.cops[0].active = false;
-    const h = setup.hideouts[0];
-    state.player.leg = { edge: net.adjEdge[net.adjStart[h.node]], dir: net.adjDir[net.adjStart[h.node]] };
-    state.player.s = 0;
-    stepChase(net, setup, state, IDLE, 1 / 30);
-    expect(state.end).toBe('hideout');
-    expect(chasePicks(state)).toContain('hideout');
-  });
-
-  it('läuft die Zeit ab, ist es vorbei', () => {
-    const setup = createChase(net, base);
-    const state = initChase(net, setup);
-    for (const cop of state.cops) cop.spawnAt = 1e9;
-    state.cops[0].active = false;
-    state.heli.active = true;
-    state.t = TIME_LIMIT - 0.01;
-    // Der Hubschrauber sieht dich: kein Abtauchen.
-    state.heli.x = state.player.x;
-    state.heli.y = state.player.y;
-    stepChase(net, setup, state, IDLE, 1 / 30);
-    expect(state.end).toBe('time');
-    expect(chasePicks(state)).toContain('time');
-  });
-
-  it('Ware aus dem Fenster geht einmal und kommt in die picks', () => {
-    const setup = createChase(net, base);
-    const state = initChase(net, setup);
+  it('zögert nach der Ware aus dem Fenster, und das geht nur einmal', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    state.player.turbo = 0.2;
     expect(dumpGoods(state)).toBe(true);
     expect(dumpGoods(state)).toBe(false);
-    forceEnd(state, 'escaped');
-    expect(chasePicks(state)).toEqual(['dumped']);
-  });
-
-  it('Score entkommen 0,6 + 0,4 · übrige Zeit', () => {
-    const state = initChase(net, createChase(net, base));
-    state.t = TIME_LIMIT / 2;
-    forceEnd(state, 'escaped');
-    expect(chaseScore(state)).toBeCloseTo(0.8, 5);
+    expect(state.player.turbo).toBe(1);
+    expect(state.hesitateUntil).toBeGreaterThan(state.t);
+    expect(chasePicks(state)).toContain('dumped');
   });
 });
 
-describe('Spielbarkeit', () => {
-  /** Ein einfacher Fahrer: Gas, Turbo auf Geraden, bremst vor Kurven, biegt ab, wenn die Streife nah ist. */
-  function drive(seed: number, difficulty: number): ChaseState {
-    const setup = createChase(net, { ...base, seed, difficulty });
-    const state = initChase(net, setup);
-    for (let i = 0; i < TIME_LIMIT * 30 && !state.end; i++) {
-      const next = upcoming(net, state);
-      if (next.distance > 60 && next.distance < 120)
-        choose(state, i % 3 === 0 ? 'left' : i % 3 === 1 ? 'right' : 'straight');
-      const tooFast = next.chosen && state.player.v > next.safe * 1.05 && next.distance < state.player.v * 1.4;
-      stepChase(
-        net,
-        setup,
-        state,
-        { gas: !tooFast, brake: !!tooFast, turbo: !tooFast && next.distance > 150 && state.sight },
-        1 / 30,
-      );
-    }
-    return state;
-  }
+describe('Abhängen und Ende', () => {
+  it('füllt den Balken ohne Verfolger und endet in der Tiefgarage', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    noCops(state);
+    setup.traffic = 0;
+    state.traffic = [];
+    run(setup, state, 30, GAS);
+    expect(state.end).toBe('escaped');
+    expect(chasePicks(state)).toContain('hideout');
+    expect(chaseScore(state)).toBeGreaterThanOrEqual(0.6);
+    expect(chaseScore(state)).toBeLessThanOrEqual(1);
+    // Nach dem Ende rollt der Wagen aus, die Zeit läuft noch (Zeitlupe).
+    const t = state.t;
+    stepChase(setup, state, GAS, 0.5);
+    expect(state.t).toBeGreaterThan(t);
+    expect(state.player.v).toBeLessThanOrEqual(TOP_SPEED);
+  });
 
-  it('ist mit vernünftigem Fahren zu schaffen, aber nicht immer', () => {
-    const results = [1, 2, 3, 4, 5, 6, 7, 8].map((seed) => drive(seed, 0.3));
-    const wins = results.filter(escaped).length;
-    expect(wins).toBeGreaterThan(0);
-    const hard = [1, 2, 3, 4, 5, 6, 7, 8].map((seed) => drive(seed, 0.95));
-    expect(hard.filter(escaped).length).toBeLessThanOrEqual(wins);
+  it('leert den Balken, wenn eine Streife im Nacken sitzt', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    setup.traffic = 0;
+    state.traffic = [];
+    state.shake = 0.5;
+    const c = cop(state, 0, 10, TOP_SPEED);
+    for (let i = 0; i < 60; i++) {
+      c.z = state.player.z - 10;
+      stepChase(setup, state, GAS, 1 / 60);
+    }
+    expect(state.shake).toBeLessThan(0.5);
+    expect(state.near).toBe(true);
+  });
+
+  it('ist bei vollem Schaden gefasst', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    state.player.damage = 0.99;
+    cop(state, 1, 5, 30);
+    state.player.v = 10;
+    run(setup, state, 4, BRAKE);
+    expect(state.end).toBe('caught');
+  });
+
+  it('läuft nach TIME_LIMIT ab', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    setup.traffic = 0;
+    state.traffic = [];
+    // Eine Streife, die immer gleich weit hinter dir bleibt (weder nah noch weit).
+    const c = cop(state, 0, 36, 0);
+    for (let t = 0; t < TIME_LIMIT + 2 && !state.end; t += 0.05) {
+      c.z = state.player.z - 36;
+      stepChase(setup, state, GAS, 0.05);
+    }
+    expect(state.end).toBe('time');
+    expect(chasePicks(state)).toContain('time');
+    expect(chaseScore(state)).toBeCloseTo(0.4, 1);
+  });
+
+  it('forceEnd beendet sofort (Screenshots)', () => {
+    const setup = createChase({ seed: 3, difficulty: 0.5 });
+    const state = initChase(setup);
+    forceEnd(state, 'escaped');
+    expect(state.end).toBe('escaped');
+    expect(state.events.some((e) => e.kind === 'escaped')).toBe(true);
+  });
+});
+
+describe('Straßensperren', () => {
+  it('kommen ab BLOCK_FIRST mit einer Lücke; durch die Lücke geht es, daneben kracht es', () => {
+    const setup = createChase({ seed: 11, difficulty: 0.6 });
+    const state = initChase(setup);
+    noCops(state);
+    setup.traffic = 0;
+    state.traffic = [];
+    const events: string[] = [];
+    while (state.t < BLOCK_FIRST + 1 && !events.includes('block')) {
+      state.shake = 0;
+      stepChase(setup, state, GAS, 1 / 30);
+      events.push(...state.events.map((e) => e.kind));
+    }
+    expect(events).toContain('block');
+    const block = state.blocks[0];
+    expect(block).toBeDefined();
+    expect(block.gap).toBeGreaterThanOrEqual(0);
+    expect(block.gap).toBeLessThan(LANES);
+    // In die Lücke fahren.
+    while (state.player.lane < block.gap) steer(state, 'right');
+    while (state.player.lane > block.gap) steer(state, 'left');
+    const damage = state.player.damage;
+    while (!block.passed && !state.end) {
+      state.shake = 0;
+      stepChase(setup, state, GAS, 1 / 30);
+      events.push(...state.events.map((e) => e.kind));
+    }
+    expect(events).toContain('blockPassed');
+    expect(state.player.damage).toBe(damage);
+
+    // Zweite Sperre: absichtlich daneben.
+    const state2 = initChase(setup);
+    noCops(state2);
+    state2.traffic = [];
+    const events2: string[] = [];
+    while (state2.blocks.length === 0 && state2.t < BLOCK_FIRST + 2) {
+      state2.shake = 0;
+      stepChase(setup, state2, GAS, 1 / 30);
+    }
+    const b2 = state2.blocks[0];
+    const wrong = b2.gap === 0 ? 1 : 0;
+    while (state2.player.lane < wrong) steer(state2, 'right');
+    while (state2.player.lane > wrong) steer(state2, 'left');
+    while (!b2.passed && !state2.end) {
+      state2.shake = 0;
+      stepChase(setup, state2, GAS, 1 / 30);
+      events2.push(...state2.events.map((e) => e.kind));
+    }
+    expect(events2).toContain('blockHit');
+    expect(state2.player.damage).toBeGreaterThanOrEqual(BLOCK_DAMAGE - 0.01);
+    expect(state2.player.v).toBeLessThan(TOP_SPEED * 0.3);
+  });
+
+  it('räumt den Verkehr an der Sperre weg', () => {
+    const setup = createChase({ seed: 11, difficulty: 0.9 });
+    const state = initChase(setup);
+    noCops(state);
+    while (state.blocks.length === 0 && state.t < BLOCK_FIRST + 2) {
+      state.shake = 0;
+      stepChase(setup, state, GAS, 1 / 30);
+    }
+    const b = state.blocks[0];
+    expect(state.traffic.every((v) => Math.abs(v.z - b.z) > CAR_LENGTH * 4)).toBe(true);
   });
 });

@@ -389,12 +389,12 @@ async function run() {
     await page.click('.mg-intro .mg-button.is-gold');
     await page.waitForSelector('.mg-run.is-play', { timeout: 10000 });
     await shot(page, 'minispiel-gespraech');
-    // Drei Runden: Frage wählen, Antwort überspringen, eine Deutung antippen.
-    const deadline = Date.now() + 90000;
+    // Drei Runden laufen von selbst (Lügendetektor): ab und zu „Zeichen!“ tippen, bis das Ergebnis steht.
+    const deadline = Date.now() + 120000;
     while (Date.now() < deadline && (await page.locator('.mg-result').count()) === 0) {
-      const next = page.locator('.iv-card:enabled, .iv-skip:enabled, .iv-reading:enabled').first();
-      if (await next.count()) await next.click({ timeout: 2000 }).catch(() => {});
-      else await page.waitForTimeout(200);
+      const mark = page.locator('.iv-mark:enabled').first();
+      if (await mark.count()) await mark.click({ timeout: 2000 }).catch(() => {});
+      await page.waitForTimeout(700);
     }
     await page.waitForSelector('.mg-result', { timeout: 5000 });
     await shot(page, 'minispiel-ergebnis');

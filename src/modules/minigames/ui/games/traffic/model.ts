@@ -1,570 +1,735 @@
-// Verkehrskontrolle (Auftrag 44, Teil 4) als reines Modell ohne DOM: Fragen in fester Folge aus dem Seed, Antworten
-// mit Frist, Misstrauen, Puls im Takt halten, was der Beamte tut (Laderaum, Funk, Papiere), Bestechen und Gas geben.
-// Die Oberfläche (TrafficGame.tsx) ruft advance() jedes Bild und answer()/tap()/bribe()/flee() bei Eingaben auf und
-// liest den Zustand. Alles hier ist deterministisch aus Seed, Schwierigkeit und Eingaben.
+// Verkehrskontrolle (Feedback vom 07.10.2026: keine Fragen mit Antworten mehr) als reines Modell ohne DOM: „Verstecken
+// und Nerven“. Blick von oben ins aufgeschnittene Auto. Der Beamte geht mit der Taschenlampe ums Auto, Station für
+// Station (Fahrerfenster, hinten links, Kofferraum, hinten rechts, Beifahrerfenster), und leuchtet an jeder Station in
+// ein, zwei Stellen. Du räumst die Pakete rechtzeitig dorthin, wo er nicht hinleuchtet (Handschuhfach, Konsole, unter
+// den Fahrersitz, Türfächer, Kofferraum, Reserveradmulde). Liegt etwas in einer Stelle, wenn der Lichtkegel kommt, ist
+// es gefunden: beim zweiten Fund „Aussteigen“. Nebenbei der Puls: im ruhigen Takt tippen hält ihn im grünen Bereich;
+// zittrig steigt das Misstrauen, und er schaut ein zweites Mal unter den Sitz. Jederzeit: Gas geben (→ Verfolgungsjagd)
+// und Schein zustecken (klappt nur bei mittlerem Misstrauen).
+//
+// Stationen, Stellen und Pakete kommen fest aus dem Seed (createRng). Die Oberfläche ruft advance() jedes Bild und
+// send()/tap()/bribe()/flee() bei Eingaben auf und liest den Zustand. Alles ist deterministisch aus Seed,
+// Schwierigkeit und Eingaben.
 
 import { createRng } from '../../../../../core';
-import { OFFICER_LINES, type OfficerLine, QUESTIONS, type QuestionDef, type Topic } from './questions';
 
-/** Antworten auf Rückfragen mit derselben Behauptung beruhigen, ein Widerspruch kostet so viel Misstrauen. */
-export const CONTRADICTION_SUS = 0.3;
-/** Ein Widerspruch zwischen zwei Fragen (Großmarkt, aber Umzugskartons). */
-export const MISMATCH_SUS = 0.1;
-/** „Leer“ gesagt, und er leuchtet in einen vollen Laderaum. */
-export const EMPTY_LIE_SUS = 0.35;
-/** Schweigen, bis die Frist um ist. */
-export const SILENCE_SUS = 0.16;
-/** Bestechen klappt nur bei mittlerem Misstrauen (dazwischen), sonst steigt es so stark. */
-export const BRIBE_MIN = 0.3;
-export const BRIBE_MAX = 0.75;
+// ---------------------------------------------------------------------------------------------- Stellschrauben
+
+/** Szene von oben in Einheiten (Breite × Höhe); das Auto steht mittig. */
+export const SCENE_W = 100;
+export const SCENE_H = 150;
+/** Begrüßung am Fenster (Sekunden), bevor er loslegt. */
+export const GREET = 2.4;
+/** Zu Fuß zur nächsten Station (leicht bis schwer, Sekunden) und Blick in eine Stelle. */
+export const WALK = { easy: 2, hard: 1.3 };
+export const LOOK = { easy: 3.4, hard: 2.2 };
+/** So viele Funde, dann lässt er aussteigen. */
+export const MAX_FOUND = 2;
+/** Misstrauen je Fund, bei abgelehntem Schein, pro Sekunde bei angespanntem bzw. zittrigem Puls. */
+export const FOUND_SUS = 0.45;
 export const BRIBE_FAIL_SUS = 0.3;
-/** Puls: bis GREEN ruhig, bis YELLOW angespannt, darüber zittrig. */
+export const YELLOW_SUS = 0.02;
+export const RED_SUS = 0.05;
+/** Bestechen klappt nur bei mittlerem Misstrauen (dazwischen). */
+export const BRIBE_MIN = 0.25;
+export const BRIBE_MAX = 0.75;
+/** Puls: bis GREEN ruhig, bis YELLOW angespannt, darüber zittrig; ab NERVOUS schaut er ein zweites Mal. */
 export const PULSE_GREEN = 100;
 export const PULSE_YELLOW = 120;
+export const PULSE_NERVOUS = 128;
 export const PULSE_MIN = 58;
 export const PULSE_MAX = 170;
-/** Ab diesem Puls fragt er, ob alles in Ordnung ist (einmal). */
-export const PULSE_NERVOUS = 128;
-/** Ruhiger Takt zum Tippen in Sekunden. */
+/** Ruhiger Takt zum Tippen in Sekunden; Treffer-Fenster um den Schlag. */
 export const BEAT = 1;
+export const BEAT_WINDOW = 0.2;
+export const TAP_CALM = 7;
+export const TAP_MISS = 4;
+/** Pakete tragen: Einheiten pro Sekunde. */
+export const CARRY_SPEED = 70;
 /** Score für die Fälle ohne Urteil des Beamten (applyTraffic schaut auf die picks). */
 export const BRIBE_SCORE = 0.6;
 export const FLEE_SCORE = 0.45;
 
-export type Zone = 'green' | 'yellow' | 'red';
-export type OfficerAction = 'flashlight' | 'radio' | 'papers';
-export type Outcome = 'pass' | 'fail' | 'flee' | 'bribe';
-export type Phase = 'ask' | 'react' | 'event' | 'end';
+// ---------------------------------------------------------------------------------------------- Typen
 
-/** Eine Frage in der Folge: welche, ob Rückfrage, Reihenfolge der Antworten. */
-export interface PlannedQuestion {
-  def: QuestionDef;
-  recheck: boolean;
-  /** IDs der Antworten in der Reihenfolge, in der sie stehen. */
-  order: string[];
+export type ZoneId =
+  | 'seat'
+  | 'floor'
+  | 'bench'
+  | 'glovebox'
+  | 'console'
+  | 'underDriver'
+  | 'doorL'
+  | 'doorR'
+  | 'trunk'
+  | 'spare';
+
+export type StopId = 'driverWindow' | 'rearLeft' | 'trunk' | 'rearRight' | 'passengerWindow';
+
+export type PacketSize = 1 | 2;
+
+export interface Zone {
+  id: ZoneId;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Platz in Größen-Einheiten (klein 1, mittel 2); offene Stellen fassen alles. */
+  capacity: number;
+  maxSize: PacketSize;
+  /** Sekunden zum Verstauen. */
+  stow: number;
+  /** Offen (Sitz, Fußraum, Bank): Da liegt es sichtbar. */
+  open: boolean;
+}
+
+export interface Stop {
+  id: StopId;
+  label: string;
+  /** Wo er steht (Szene). */
+  x: number;
+  y: number;
+  /** Stellen, in die er hier leuchtet, der Reihe nach. */
+  zones: ZoneId[];
+}
+
+export interface Packet {
+  id: number;
+  label: string;
+  size: PacketSize;
+  /** Gramm, nur zur Anzeige. */
+  grams: number;
 }
 
 export interface TrafficSetup {
   seed: number;
   difficulty: number;
-  /** Fragen in fester Folge (die Frage nach dem Schwitzen kommt nur bei hohem Puls dazu). */
-  questions: PlannedQuestion[];
-  nervous: PlannedQuestion | null;
-  /** Nach so vielen beantworteten Fragen tut der Beamte etwas. */
-  actions: { after: number; kind: OfficerAction }[];
-  /** Sekunden zum Antworten. */
-  answerTime: number;
-  /** Misstrauen am Schluss darunter: „Gute Fahrt“. Voll (1) ist sofort vorbei. */
-  limit: number;
-  /** Ruhepuls am Anfang und wohin er ohne Tippen treibt. */
-  startPulse: number;
-  stressPulse: number;
-  /** „Guten Tag“ bzw. „Guten Abend“. */
-  greeting: string;
+  zones: Zone[];
+  stops: Stop[];
+  packets: Packet[];
+  /** Startplätze der Pakete (offene Stellen). */
+  startZones: ZoneId[];
+  walk: number;
+  look: number;
+  night: boolean;
+  /** Zusätzliche Station, wenn du sichtbar schwitzt (einmal). */
+  nervousStop: Stop;
 }
+
+export interface Moving {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  zone: ZoneId;
+  total: number;
+  left: number;
+}
+
+export interface PacketState {
+  /** Wo es liegt (null: unterwegs oder gefunden). */
+  zone: ZoneId | null;
+  x: number;
+  y: number;
+  moving: Moving | null;
+  found: boolean;
+}
+
+export type Phase = 'greet' | 'walk' | 'look' | 'end';
+export type Outcome = 'pass' | 'fail' | 'flee' | 'bribe';
 
 export interface TrafficState {
   t: number;
   phase: Phase;
   phaseT: number;
   phaseLen: number;
-  /** Fragen, wie sie kommen (Kopie aus dem Setup, die Frage nach dem Schwitzen wird eingeschoben). */
-  queue: PlannedQuestion[];
-  index: number;
-  answered: number;
-  answerLeft: number;
-  suspicion: number;
+  /** Stationen, wie sie kommen (Kopie; die Nervös-Station wird eingeschoben). */
+  stops: Stop[];
+  stopIndex: number;
+  zoneIndex: number;
+  items: PacketState[];
+  /** Ausgewähltes Paket (Antippen, Tastatur), −1 = keins. */
+  selected: number;
   pulse: number;
-  claims: Partial<Record<Topic, string>>;
-  /** Was der Beamte gerade sagt (die Frage selbst steht in queue[index]). */
-  line: { key: OfficerLine; text: string } | null;
-  /** Was du zuletzt gesagt hast, und ob es zittrig klang. */
-  said: string | null;
-  /** ID der letzten Antwort (null nach Schweigen). */
-  lastAnswer: string | null;
-  shaky: boolean;
-  /** Was der Beamte gerade tut (Phase 'event'). */
-  action: OfficerAction | null;
-  radioed: boolean;
-  nervousAsked: boolean;
-  /** Nach der Reaktion dieselbe Frage noch einmal (abgelehnter Schein). */
-  repeat: boolean;
-  /** Takt, in dem zuletzt getippt wurde (ein Treffer pro Schlag). */
   lastTapBeat: number;
-  contradictions: number;
+  suspicion: number;
+  found: number;
+  nervousAsked: boolean;
   outcome: Outcome | null;
+  /** Letzte Zeile des Beamten (Schlüssel und Text) mit Zähler, damit die Sprechblase neu aufploppt. */
+  line: { text: string; n: number } | null;
 }
 
 /** Was im Schritt passiert ist (für Ton, Vibration, Optik). */
 export type Signal =
-  | 'ask'
-  | 'timeout'
-  | 'contradiction'
-  | 'mismatch'
-  | 'rude'
-  | 'calm'
-  | 'flashlight'
-  | 'radio'
-  | 'papers'
-  | 'caught'
-  | 'cleared'
-  | 'bribeRejected'
-  | 'bribeAccepted'
-  | 'flee'
+  | 'greet'
+  | 'walk'
+  | 'look'
+  | 'found'
+  | 'stowed'
+  | 'nervous'
   | 'pass'
   | 'fail'
+  | 'bribeAccepted'
+  | 'bribeRejected'
+  | 'flee'
   | 'done';
+
+export type SendCheck = 'ok' | 'full' | 'tooBig' | 'seen' | 'busy' | 'same' | 'done';
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-function shuffle<T>(list: T[], rnd: () => number): T[] {
-  for (let i = list.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    [list[i], list[j]] = [list[j], list[i]];
-  }
-  return list;
+// ---------------------------------------------------------------------------------------------- Daten
+
+const ZONES: readonly Zone[] = [
+  { id: 'seat', name: 'Beifahrersitz', x: 54, y: 56, w: 16, h: 22, capacity: 99, maxSize: 2, stow: 0.3, open: true },
+  { id: 'floor', name: 'Fußraum hinten', x: 30, y: 80, w: 40, h: 11, capacity: 99, maxSize: 2, stow: 0.3, open: true },
+  { id: 'bench', name: 'Rückbank', x: 27, y: 93, w: 46, h: 19, capacity: 99, maxSize: 2, stow: 0.3, open: true },
+  {
+    id: 'glovebox',
+    name: 'Handschuhfach',
+    x: 57,
+    y: 38,
+    w: 18,
+    h: 10,
+    capacity: 2,
+    maxSize: 1,
+    stow: 0.7,
+    open: false,
+  },
+  { id: 'console', name: 'Mittelkonsole', x: 44, y: 52, w: 12, h: 20, capacity: 1, maxSize: 1, stow: 0.5, open: false },
+  {
+    id: 'underDriver',
+    name: 'Unter dem Fahrersitz',
+    x: 30,
+    y: 56,
+    w: 16,
+    h: 22,
+    capacity: 2,
+    maxSize: 2,
+    stow: 0.9,
+    open: false,
+  },
+  { id: 'doorL', name: 'Türfach links', x: 24, y: 46, w: 5.5, h: 34, capacity: 1, maxSize: 1, stow: 0.5, open: false },
+  {
+    id: 'doorR',
+    name: 'Türfach rechts',
+    x: 70.5,
+    y: 46,
+    w: 5.5,
+    h: 34,
+    capacity: 1,
+    maxSize: 1,
+    stow: 0.5,
+    open: false,
+  },
+  { id: 'trunk', name: 'Kofferraum', x: 27, y: 114, w: 46, h: 12, capacity: 4, maxSize: 2, stow: 0.9, open: false },
+  {
+    id: 'spare',
+    name: 'Reserveradmulde',
+    x: 38,
+    y: 127,
+    w: 24,
+    h: 7.5,
+    capacity: 2,
+    maxSize: 1,
+    stow: 1.4,
+    open: false,
+  },
+];
+
+interface StopDef {
+  id: StopId;
+  label: string;
+  x: number;
+  y: number;
+  /** Stellen, in die er sicher leuchtet, und solche, die nur mit einer Chance drankommen. */
+  always: ZoneId[];
+  maybe: ZoneId[];
 }
 
-function planned(def: QuestionDef, recheck: boolean, rnd: () => number): PlannedQuestion {
-  return {
-    def,
-    recheck,
-    order: shuffle(
-      def.answers.map((a) => a.id),
-      rnd,
-    ),
-  };
-}
-
-const byId = (id: string): QuestionDef => {
-  const def = QUESTIONS.find((q) => q.id === id);
-  if (!def) throw new Error(`Frage ${id} fehlt`);
-  return def;
+const STOPS: Record<StopId, StopDef> = {
+  driverWindow: {
+    id: 'driverWindow',
+    label: 'am Fahrerfenster',
+    x: 14,
+    y: 64,
+    always: ['seat', 'console'],
+    maybe: ['doorL', 'underDriver', 'glovebox'],
+  },
+  rearLeft: { id: 'rearLeft', label: 'hinten links', x: 14, y: 102, always: ['bench', 'floor'], maybe: [] },
+  trunk: { id: 'trunk', label: 'am Kofferraum', x: 50, y: 146, always: ['trunk'], maybe: ['spare'] },
+  rearRight: { id: 'rearRight', label: 'hinten rechts', x: 86, y: 102, always: ['floor'], maybe: ['bench'] },
+  passengerWindow: {
+    id: 'passengerWindow',
+    label: 'am Beifahrerfenster',
+    x: 86,
+    y: 64,
+    always: ['seat'],
+    maybe: ['glovebox', 'doorR'],
+  },
 };
 
-/** Ablauf fest aus Seed und Schwierigkeit (4 bis 6 Fragen, eine Rückfrage, Laderaum und ab mittel der Funk). */
+const PACKET_LABELS = ['Päckchen', 'Beutel', 'Tüte', 'Block', 'Dose', 'Rolle'];
+
+export function zoneById(id: ZoneId): Zone {
+  const zone = ZONES.find((z) => z.id === id);
+  if (!zone) throw new Error(`Stelle ${id} fehlt`);
+  return zone;
+}
+
+// ---------------------------------------------------------------------------------------------- Aufbau
+
+/** Ablauf fest aus Seed und Schwierigkeit: Stationen mit ihren Stellen, Pakete und ihre Startplätze. */
 export function createTraffic(seed: number, difficulty: number, options: { night?: boolean } = {}): TrafficSetup {
   const d = clamp(Number.isFinite(difficulty) ? difficulty : 0.5, 0, 1);
   const rnd = createRng(seed);
-  const total = 4 + Math.round(2 * d);
-  // Woher zuerst, Laderaum immer, der Rest gemischt; danach eine Rückfrage zu etwas, das schon zwei Fragen her ist.
-  const optional = shuffle(
-    QUESTIONS.filter((q) => !q.always && !q.whenNervous).map((q) => q.id),
-    rnd,
-  );
-  const rest = shuffle(['cargo', ...optional.slice(0, total - 3)], rnd);
-  const base = [byId('origin'), ...rest.map(byId)];
-  const questions = base.map((def) => planned(def, false, rnd));
-  const candidates = base.map((def, i) => ({ def, i })).filter(({ def, i }) => def.recheck && i <= base.length - 2);
-  const pickRe = candidates[Math.floor(rnd() * candidates.length)] ?? { def: base[0], i: 0 };
-  const from = pickRe.i + 2;
-  const at = from + Math.floor(rnd() * (base.length - from + 1));
-  questions.splice(at, 0, planned(pickRe.def, true, rnd));
-
-  // Der Blick in den Laderaum kommt nach der Frage, was hinten drin ist (spätestens vor der letzten Frage).
-  const cargoAt = questions.findIndex((q) => q.def.topic === 'cargo' && !q.recheck);
-  const actions: TrafficSetup['actions'] = [{ after: Math.min(cargoAt + 1, questions.length - 1), kind: 'flashlight' }];
-  if (d >= 0.3) {
-    const free = [];
-    for (let after = 1; after < questions.length; after++) {
-      if (!actions.some((a) => a.after === after)) free.push(after);
-    }
-    if (free.length > 0) actions.push({ after: free[Math.floor(rnd() * free.length)], kind: 'radio' });
+  const pHidden = 0.25 + 0.6 * d;
+  const taken = new Set<ZoneId>();
+  const build = (def: StopDef): Stop => {
+    const zones: ZoneId[] = [...def.always];
+    for (const z of def.maybe) if (!taken.has(z) && rnd() < pHidden) zones.push(z);
+    for (const z of zones) if (!zoneById(z).open) taken.add(z);
+    return { id: def.id, label: def.label, x: def.x, y: def.y, zones };
+  };
+  // Erst das Fahrerfenster, dann einmal ums Auto (im oder gegen den Uhrzeigersinn); leicht: eine Seite weniger.
+  const clockwise = rnd() < 0.5;
+  const round: StopId[] = clockwise
+    ? ['rearLeft', 'trunk', 'rearRight', 'passengerWindow']
+    : ['passengerWindow', 'rearRight', 'trunk', 'rearLeft'];
+  const order: StopId[] = ['driverWindow', ...round];
+  if (d < 0.35) order.splice(order.indexOf(clockwise ? 'rearRight' : 'rearLeft'), 1);
+  const stops = order.map((id) => build(STOPS[id]));
+  // Pakete: 3 bis 6, mittlere eher bei leicht (die passen nicht überall hin).
+  const count = 3 + Math.round(3 * d);
+  const packets: Packet[] = [];
+  const startZones: ZoneId[] = [];
+  const opens: ZoneId[] = ['seat', 'bench', 'floor'];
+  for (let i = 0; i < count; i++) {
+    const size: PacketSize = rnd() < 0.35 ? 2 : 1;
+    packets.push({
+      id: i,
+      label: PACKET_LABELS[Math.floor(rnd() * PACKET_LABELS.length)],
+      size,
+      grams: size === 2 ? 150 + Math.floor(rnd() * 6) * 50 : 40 + Math.floor(rnd() * 6) * 10,
+    });
+    startZones.push(opens[Math.floor(rnd() * opens.length)]);
   }
-  const nervous = QUESTIONS.find((q) => q.whenNervous);
   return {
     seed,
     difficulty: d,
-    questions,
-    nervous: nervous ? planned(nervous, false, rnd) : null,
-    actions: actions.sort((a, b) => a.after - b.after),
-    answerTime: lerp(6, 4, d),
-    limit: lerp(0.72, 0.6, d),
-    startPulse: lerp(84, 96, d),
-    stressPulse: lerp(104, 128, d),
-    greeting: options.night ? 'Guten Abend' : 'Guten Tag',
+    zones: [...ZONES],
+    stops,
+    packets,
+    startZones,
+    walk: lerp(WALK.easy, WALK.hard, d),
+    look: lerp(LOOK.easy, LOOK.hard, d),
+    night: !!options.night,
+    nervousStop: {
+      id: 'driverWindow',
+      label: 'noch einmal am Fahrerfenster',
+      x: 14,
+      y: 64,
+      zones: ['underDriver', 'console', 'doorL'].filter((z) => !taken.has(z as ZoneId)) as ZoneId[],
+    },
   };
+}
+
+/** Platz eines Pakets in einer Stelle (Mitte), je nach Reihenfolge der Pakete dort. */
+export function slotIn(zone: Zone, index: number, size: PacketSize): { x: number; y: number } {
+  const across = zone.w >= zone.h;
+  const n = index;
+  const step = size === 2 ? 9 : 7;
+  if (across) {
+    const total = Math.max(1, Math.floor(zone.w / step));
+    const col = n % total;
+    const row = Math.floor(n / total);
+    return { x: zone.x + step / 2 + col * step + 1, y: zone.y + zone.h / 2 + (row % 2 === 0 ? 0 : 3) };
+  }
+  const total = Math.max(1, Math.floor(zone.h / step));
+  const row = n % total;
+  const col = Math.floor(n / total);
+  return { x: zone.x + zone.w / 2 + (col % 2 === 0 ? 0 : 3), y: zone.y + step / 2 + row * step + 1 };
 }
 
 export function initTraffic(setup: TrafficSetup): TrafficState {
+  const items: PacketState[] = [];
+  const perZone = new Map<ZoneId, number>();
+  setup.packets.forEach((p, i) => {
+    const zoneId = setup.startZones[i];
+    const zone = zoneById(zoneId);
+    const index = perZone.get(zoneId) ?? 0;
+    perZone.set(zoneId, index + 1);
+    const at = slotIn(zone, index, p.size);
+    items.push({ zone: zoneId, x: at.x, y: at.y, moving: null, found: false });
+  });
   return {
     t: 0,
-    phase: 'ask',
+    phase: 'greet',
     phaseT: 0,
-    phaseLen: 0,
-    queue: [...setup.questions],
-    index: 0,
-    answered: 0,
-    answerLeft: setup.answerTime,
-    suspicion: 0.08 + 0.1 * setup.difficulty,
-    pulse: setup.startPulse,
-    claims: {},
-    line: null,
-    said: null,
-    lastAnswer: null,
-    shaky: false,
-    action: null,
-    radioed: false,
-    nervousAsked: false,
-    repeat: false,
+    phaseLen: GREET,
+    stops: setup.stops.map((s) => ({ ...s, zones: [...s.zones] })),
+    stopIndex: -1,
+    zoneIndex: 0,
+    items,
+    selected: items.length > 0 ? 0 : -1,
+    pulse: lerp(84, 96, setup.difficulty),
     lastTapBeat: -1,
-    contradictions: 0,
+    suspicion: 0.05 + 0.1 * setup.difficulty,
+    found: 0,
+    nervousAsked: false,
     outcome: null,
+    line: null,
   };
 }
 
-export function zoneOf(pulse: number): Zone {
+// ---------------------------------------------------------------------------------------------- Lesen
+
+export function zoneOf(state: TrafficState, packetId: number): ZoneId | null {
+  return state.items[packetId]?.zone ?? null;
+}
+
+/** Pakete, die in einer Stelle liegen oder gerade dorthin unterwegs sind. */
+export function packetsIn(state: TrafficState, zoneId: ZoneId): number[] {
+  const ids: number[] = [];
+  state.items.forEach((it, i) => {
+    if (it.found) return;
+    if (it.zone === zoneId || it.moving?.zone === zoneId) ids.push(i);
+  });
+  return ids;
+}
+
+export function usedIn(setup: TrafficSetup, state: TrafficState, zoneId: ZoneId): number {
+  return packetsIn(state, zoneId).reduce((sum, id) => sum + setup.packets[id].size, 0);
+}
+
+export function currentStop(state: TrafficState): Stop | null {
+  return state.stops[state.stopIndex] ?? null;
+}
+
+export function nextStop(state: TrafficState): Stop | null {
+  return state.stops[state.stopIndex + 1] ?? null;
+}
+
+/** Stelle, in die er gerade leuchtet (null beim Gehen, Begrüßen, Ende). */
+export function litZone(state: TrafficState): ZoneId | null {
+  if (state.phase !== 'look') return null;
+  return currentStop(state)?.zones[state.zoneIndex] ?? null;
+}
+
+/** Stellen, die an der aktuellen Station noch drankommen (nach der aktuellen). */
+export function pendingZones(state: TrafficState): ZoneId[] {
+  const stop = currentStop(state);
+  if (!stop) return [];
+  const from = state.phase === 'look' ? state.zoneIndex + 1 : 0;
+  return stop.zones.slice(from);
+}
+
+export function isDone(state: TrafficState): boolean {
+  return state.phase === 'end' && state.phaseT >= state.phaseLen;
+}
+
+export type Zone3 = 'green' | 'yellow' | 'red';
+
+export function zoneOfPulse(pulse: number): Zone3 {
   return pulse < PULSE_GREEN ? 'green' : pulse < PULSE_YELLOW ? 'yellow' : 'red';
 }
 
-/** Hoher Puls macht jede verdächtige Antwort schlimmer. */
-export function zoneFactor(zone: Zone): number {
-  return zone === 'green' ? 1 : zone === 'yellow' ? 1.25 : 1.6;
-}
-
-export function currentQuestion(s: TrafficState): PlannedQuestion | undefined {
-  return s.queue[s.index];
-}
-
-/** Text der Frage, wie der Beamte sie stellt. */
-export function questionText(setup: TrafficSetup, q: PlannedQuestion): string {
-  if (q.recheck && q.def.recheck) return q.def.recheck;
-  return q.def.text.replace('{gruss}', setup.greeting);
-}
-
-/** Antworten der Frage in ihrer Reihenfolge. */
-export function answersOf(q: PlannedQuestion) {
-  return q.order.map((id) => q.def.answers.find((a) => a.id === id)).filter((a) => a !== undefined);
-}
-
-/** Zeit zum Antworten (nach dem Funk kürzer: Die Kollegen sind unterwegs). */
-export function answerTimeOf(setup: TrafficSetup, s: TrafficState): number {
-  return setup.answerTime * (s.radioed ? 0.75 : 1);
-}
-
 /** Wo im ruhigen Takt wir sind (0 = Schlag, 0,5 = genau dazwischen). */
-export function beatPhase(s: TrafficState): number {
-  return (s.t / BEAT) % 1;
+export function beatPhase(state: TrafficState): number {
+  return (state.t / BEAT) % 1;
 }
 
-/** Wie viele Fragen insgesamt (für „Frage 2 von 5“). */
-export function questionCount(s: TrafficState): number {
-  return s.queue.length;
+/** Wie weit die Runde ist (0 bis 1, für die Anzeige). */
+export function progress(state: TrafficState): number {
+  const total = state.stops.reduce((s, st) => s + st.zones.length, 0);
+  if (total === 0) return 1;
+  let done = 0;
+  for (let i = 0; i < state.stopIndex; i++) done += state.stops[i].zones.length;
+  if (state.phase === 'look') done += state.zoneIndex;
+  if (state.phase === 'end') return 1;
+  return clamp(done / total, 0, 1);
 }
 
-function say(setup: TrafficSetup, s: TrafficState, key: OfficerLine): void {
-  const list = OFFICER_LINES[key];
-  const text = list[(setup.seed + s.answered * 7 + key.length) % list.length];
-  s.line = { key, text };
+/** Paket an einem Punkt der Szene (nur liegende, offene), −1 = keins. */
+export function packetAt(setup: TrafficSetup, state: TrafficState, x: number, y: number): number {
+  let best = -1;
+  let bestD = 7;
+  state.items.forEach((it, i) => {
+    if (it.found || it.moving || !it.zone) return;
+    if (!zoneById(it.zone).open) return;
+    const d = Math.hypot(it.x - x, it.y - y);
+    const r = setup.packets[i].size === 2 ? 5 : 4;
+    if (d < r + 1.5 && d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  });
+  return best;
 }
 
-function setPhase(s: TrafficState, phase: Phase, length: number): void {
-  s.phase = phase;
-  s.phaseT = 0;
-  s.phaseLen = length;
+export function zoneAt(setup: TrafficSetup, x: number, y: number): ZoneId | null {
+  // Kleine Stellen zuerst (Reserveradmulde liegt im Kofferraum, Konsole zwischen den Sitzen).
+  const order = [...setup.zones].sort((a, b) => a.w * a.h - b.w * b.h);
+  const hit = order.find((z) => x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h);
+  return hit?.id ?? null;
 }
 
-function addSus(s: TrafficState, amount: number): void {
-  s.suspicion = clamp(s.suspicion + amount, 0, 1);
+// ---------------------------------------------------------------------------------------------- Schreiben
+
+function say(state: TrafficState, list: readonly string[], salt: number): void {
+  const text = list[(salt + state.found * 3 + state.stopIndex) % list.length];
+  state.line = { text, n: (state.line?.n ?? 0) + 1 };
 }
 
-function addPulse(s: TrafficState, amount: number): void {
-  s.pulse = clamp(s.pulse + amount, PULSE_MIN, PULSE_MAX);
+function setPhase(state: TrafficState, phase: Phase, len: number): void {
+  state.phase = phase;
+  state.phaseT = 0;
+  state.phaseLen = len;
 }
 
-function end(s: TrafficState, outcome: Outcome, length: number): void {
-  s.outcome = outcome;
-  s.action = null;
-  setPhase(s, 'end', length);
+function end(state: TrafficState, outcome: Outcome, len: number): void {
+  state.outcome = outcome;
+  setPhase(state, 'end', len);
 }
 
-/** Misstrauen voll: sofort vorbei. true = vorbei. */
-function checkFull(setup: TrafficSetup, s: TrafficState, out: Signal[]): boolean {
-  if (s.suspicion < 1) return false;
-  say(setup, s, 'fail');
-  end(s, 'fail', 2);
-  out.push('fail');
+export interface Lines {
+  greet: readonly string[];
+  walk: readonly string[];
+  found: readonly string[];
+  fail: readonly string[];
+  nervous: readonly string[];
+  pass: readonly string[];
+  look: Record<ZoneId, readonly string[]>;
+}
+
+/** Fund in der Stelle, in die er gerade leuchtet: Pakete dort sind weg. 'end', wenn es jetzt vorbei ist. */
+function inspect(
+  setup: TrafficSetup,
+  state: TrafficState,
+  zoneId: ZoneId,
+  lines: Lines,
+  out: Signal[],
+): 'none' | 'found' | 'end' {
+  const ids = packetsIn(state, zoneId);
+  if (ids.length === 0) return 'none';
+  for (const id of ids) {
+    const it = state.items[id];
+    it.found = true;
+    it.zone = null;
+    it.moving = null;
+  }
+  state.found += 1;
+  state.suspicion = clamp(state.suspicion + FOUND_SUS, 0, 1);
+  if (state.selected >= 0 && state.items[state.selected].found) state.selected = -1;
+  if (state.found >= MAX_FOUND || state.suspicion >= 1) {
+    say(state, lines.fail, 0);
+    end(state, 'fail', 2.2);
+    out.push('found', 'fail');
+    return 'end';
+  }
+  say(state, lines.found, setup.seed + state.found);
+  out.push('found');
+  return 'found';
+}
+
+/** Nächste Stelle an der Station, sonst zur nächsten Station gehen, sonst „Gute Fahrt“. */
+function nextLook(setup: TrafficSetup, state: TrafficState, lines: Lines, out: Signal[]): void {
+  const stop = currentStop(state);
+  if (stop && state.zoneIndex + 1 < stop.zones.length) {
+    state.zoneIndex += 1;
+    startLook(setup, state, lines, out);
+    return;
+  }
+  if (state.stopIndex + 1 < state.stops.length) {
+    state.stopIndex += 1;
+    state.zoneIndex = 0;
+    say(state, lines.walk, state.stopIndex);
+    setPhase(state, 'walk', setup.walk);
+    out.push('walk');
+    return;
+  }
+  say(state, lines.pass, setup.seed);
+  end(state, 'pass', 2);
+  out.push('pass');
+}
+
+function startLook(setup: TrafficSetup, state: TrafficState, lines: Lines, out: Signal[]): void {
+  const zoneId = currentStop(state)?.zones[state.zoneIndex];
+  if (!zoneId) {
+    nextLook(setup, state, lines, out);
+    return;
+  }
+  setPhase(state, 'look', setup.look);
+  out.push('look');
+  if (inspect(setup, state, zoneId, lines, out) === 'none')
+    say(state, lines.look[zoneId], setup.seed + state.zoneIndex);
+}
+
+/** Ein Schritt in echten Sekunden. */
+export function advance(setup: TrafficSetup, state: TrafficState, dt: number, lines: Lines): Signal[] {
+  const out: Signal[] = [];
+  if (state.phase === 'end' && state.phaseT >= state.phaseLen) return out;
+  state.t += dt;
+  state.phaseT += dt;
+  // Pakete unterwegs.
+  for (const it of state.items) {
+    const m = it.moving;
+    if (!m) continue;
+    m.left -= dt;
+    const k = clamp(1 - m.left / m.total, 0, 1);
+    it.x = lerp(m.from.x, m.to.x, Math.min(1, k * 1.4));
+    it.y = lerp(m.from.y, m.to.y, Math.min(1, k * 1.4));
+    if (m.left <= 0) {
+      it.zone = m.zone;
+      it.moving = null;
+      it.x = m.to.x;
+      it.y = m.to.y;
+      out.push('stowed');
+    }
+  }
+  if (state.phase === 'end') return out;
+  // Puls: steigt von selbst, mehr, wenn er gerade guckt und noch etwas offen liegt.
+  const lit = litZone(state);
+  const exposed = state.items.some((it) => !it.found && it.zone !== null && zoneById(it.zone).open);
+  const stress = 1 + (lit && exposed ? 1.8 : 0) + (lit ? 0.4 : 0);
+  state.pulse = clamp(state.pulse + stress * dt, PULSE_MIN, PULSE_MAX);
+  const zone = zoneOfPulse(state.pulse);
+  if (zone === 'yellow') state.suspicion = clamp(state.suspicion + YELLOW_SUS * dt, 0, 1);
+  else if (zone === 'red') state.suspicion = clamp(state.suspicion + RED_SUS * dt, 0, 1);
+  else state.suspicion = clamp(state.suspicion - 0.01 * dt, 0, 1);
+  if (state.suspicion >= 1) {
+    say(state, lines.fail, 0);
+    end(state, 'fail', 2.2);
+    out.push('fail');
+    return out;
+  }
+  // Sichtbar nervös: eine Station mehr (einmal), direkt nach der aktuellen.
+  if (
+    !state.nervousAsked &&
+    state.pulse >= PULSE_NERVOUS &&
+    state.stopIndex >= 0 &&
+    setup.nervousStop.zones.length > 0
+  ) {
+    state.nervousAsked = true;
+    state.stops.splice(state.stopIndex + 1, 0, { ...setup.nervousStop, zones: [...setup.nervousStop.zones] });
+    say(state, lines.nervous, setup.seed);
+    out.push('nervous');
+  }
+  // Ablauf.
+  if (state.phase === 'greet') {
+    if (state.phaseT === dt || state.line === null) {
+      say(state, lines.greet, 0);
+      out.push('greet');
+    }
+    if (state.phaseT >= state.phaseLen) {
+      state.stopIndex = 0;
+      state.zoneIndex = 0;
+      startLook(setup, state, lines, out);
+    }
+  } else if (state.phase === 'walk') {
+    if (state.phaseT >= state.phaseLen) startLook(setup, state, lines, out);
+  } else if (state.phase === 'look') {
+    if (state.phaseT >= state.phaseLen) nextLook(setup, state, lines, out);
+  }
+  return out;
+}
+
+/** Paket in eine Stelle bringen. 'seen', wenn er gerade dorthin oder von dort wegleuchtet. */
+export function send(setup: TrafficSetup, state: TrafficState, packetId: number, zoneId: ZoneId): SendCheck {
+  if (state.phase === 'end') return 'done';
+  const it = state.items[packetId];
+  const packet = setup.packets[packetId];
+  if (!it || !packet || it.found) return 'done';
+  if (it.moving) return 'busy';
+  if (it.zone === zoneId) return 'same';
+  const lit = litZone(state);
+  if (lit && (lit === zoneId || lit === it.zone)) return 'seen';
+  const zone = zoneById(zoneId);
+  if (packet.size > zone.maxSize) return 'tooBig';
+  if (usedIn(setup, state, zoneId) + packet.size > zone.capacity) return 'full';
+  const index = packetsIn(state, zoneId).length;
+  const to = slotIn(zone, index, packet.size);
+  const distance = Math.hypot(to.x - it.x, to.y - it.y);
+  const total = Math.max(0.25, distance / CARRY_SPEED) + zone.stow;
+  it.moving = { from: { x: it.x, y: it.y }, to, zone: zoneId, total, left: total };
+  it.zone = null;
+  return 'ok';
+}
+
+/** Im Takt tippen: Treffer beruhigt, daneben macht nervöser. null, wenn in diesem Schlag schon getippt. */
+export function tap(state: TrafficState): 'calm' | 'miss' | null {
+  if (state.phase === 'end') return null;
+  const beat = Math.floor(state.t / BEAT);
+  if (beat === state.lastTapBeat) return null;
+  state.lastTapBeat = beat;
+  const phase = beatPhase(state);
+  const hit = phase <= BEAT_WINDOW || phase >= 1 - BEAT_WINDOW;
+  state.pulse = clamp(state.pulse + (hit ? -TAP_CALM : TAP_MISS), PULSE_MIN, PULSE_MAX);
+  return hit ? 'calm' : 'miss';
+}
+
+/** Schein zustecken: klappt bei mittlerem Misstrauen, sonst steigt es. */
+export function bribe(
+  state: TrafficState,
+  lines: { ok: readonly string[]; low: readonly string[]; high: readonly string[] },
+) {
+  if (state.phase === 'end') return 'done' as const;
+  if (state.suspicion >= BRIBE_MIN && state.suspicion <= BRIBE_MAX) {
+    say(state, lines.ok, 0);
+    end(state, 'bribe', 1.8);
+    return 'ok' as const;
+  }
+  const low = state.suspicion < BRIBE_MIN;
+  say(state, low ? lines.low : lines.high, 0);
+  state.suspicion = clamp(state.suspicion + BRIBE_FAIL_SUS, 0, 1);
+  if (state.suspicion >= 1) {
+    end(state, 'fail', 2.2);
+    return 'fail' as const;
+  }
+  return low ? ('low' as const) : ('high' as const);
+}
+
+export function flee(state: TrafficState, lines: readonly string[]): boolean {
+  if (state.phase === 'end') return false;
+  say(state, lines, 0);
+  end(state, 'flee', 1.3);
   return true;
 }
 
-/** Nächste Frage stellen oder, wenn keine mehr kommt, das Urteil. */
-function nextQuestion(setup: TrafficSetup, s: TrafficState, out: Signal[]): void {
-  if (s.repeat) s.repeat = false;
-  else s.index += 1;
-  // Schwitzt du sichtbar, fragt er nach (einmal, nicht als letzte Frage).
-  if (
-    setup.nervous &&
-    !s.nervousAsked &&
-    s.pulse >= PULSE_NERVOUS &&
-    s.index > 0 &&
-    s.index < s.queue.length &&
-    !s.queue[s.index]?.recheck
-  ) {
-    s.queue.splice(s.index, 0, setup.nervous);
-    s.nervousAsked = true;
+/** Nächstes liegendes Paket (für die Tastatur), −1 ohne. */
+export function nextPacket(state: TrafficState, dir: 1 | -1): number {
+  const n = state.items.length;
+  for (let k = 1; k <= n; k++) {
+    const i = ((((state.selected < 0 ? (dir > 0 ? -1 : 0) : state.selected) + dir * k) % n) + n) % n;
+    const it = state.items[i];
+    if (!it.found && !it.moving && it.zone !== null) return i;
   }
-  s.action = null;
-  if (s.index >= s.queue.length) {
-    const pass = s.suspicion < setup.limit;
-    say(setup, s, pass ? 'pass' : 'fail');
-    end(s, pass ? 'pass' : 'fail', 2);
-    out.push(pass ? 'pass' : 'fail');
-    return;
-  }
-  s.line = null;
-  s.answerLeft = answerTimeOf(setup, s);
-  setPhase(s, 'ask', 0);
-  out.push('ask');
+  return -1;
 }
 
-/** Nach einer Reaktion: tut der Beamte jetzt etwas (Laderaum, Funk, Papiere)? Sonst die nächste Frage. */
-function afterReaction(setup: TrafficSetup, s: TrafficState, out: Signal[]): void {
-  const pending = s.repeat ? undefined : setup.actions.find((a) => a.after === s.answered && s.action !== a.kind);
-  // Papiere gereicht (nicht „vergessen“, nicht geschwiegen): Er liest.
-  const papers =
-    !s.repeat &&
-    s.action === null &&
-    currentQuestion(s)?.def.topic === 'papers' &&
-    (s.lastAnswer === 'here' || s.lastAnswer === 'glovebox');
-  if (pending && s.phase === 'react') {
-    startAction(setup, s, pending.kind, out);
-    return;
+// ---------------------------------------------------------------------------------------------- Ergebnis
+
+/**
+ * Score: „Gute Fahrt“ 0,6 bis 1 (weniger Misstrauen, nichts gefunden: mehr); Schein BRIBE_SCORE; Gas FLEE_SCORE;
+ * „Aussteigen“ 0,1 bis 0,4 nach dem Stand der Runde.
+ */
+export function trafficScore(state: TrafficState): number {
+  const o = state.outcome;
+  if (o === 'bribe') return BRIBE_SCORE;
+  if (o === 'flee') return FLEE_SCORE;
+  if (o === 'pass') {
+    const clean = state.found === 0 ? 1 : 0.7;
+    return Math.round((0.6 + 0.4 * (1 - state.suspicion) * clean) * 1000) / 1000;
   }
-  if (papers && s.phase === 'react') {
-    startAction(setup, s, 'papers', out);
-    return;
-  }
-  nextQuestion(setup, s, out);
+  return Math.round((0.1 + 0.3 * progress(state)) * 1000) / 1000;
 }
 
-function startAction(setup: TrafficSetup, s: TrafficState, kind: OfficerAction, out: Signal[]): void {
-  s.action = kind;
-  if (kind === 'radio') {
-    say(setup, s, 'radio');
-    s.radioed = true;
-    addSus(s, 0.04);
-    setPhase(s, 'event', 2.6);
-  } else if (kind === 'papers') {
-    say(setup, s, 'papers');
-    setPhase(s, 'event', 2.2);
-  } else {
-    s.line = null;
-    setPhase(s, 'event', 3.4);
-  }
-  out.push(kind);
-}
-
-/** Was der Beamte am Ende seiner Handlung feststellt. */
-function finishAction(setup: TrafficSetup, s: TrafficState, out: Signal[]): void {
-  const kind = s.action;
-  const zone = zoneOf(s.pulse);
-  if (kind === 'flashlight') {
-    if (s.claims.cargo === 'empty') {
-      addSus(s, EMPTY_LIE_SUS);
-      addPulse(s, 14);
-      s.contradictions += 1;
-      say(setup, s, 'flashlightEmpty');
-      out.push('caught');
-    } else if (zone === 'red') {
-      addSus(s, 0.12);
-      say(setup, s, 'flashlightShaky');
-      out.push('caught');
-    } else {
-      addSus(s, -0.03);
-      say(setup, s, 'flashlightOk');
-      out.push('cleared');
-    }
-  } else if (kind === 'papers') {
-    if (zone === 'red') addSus(s, 0.06);
-    s.line = null;
-  }
-  // Funk: Die Kollegen sind unterwegs (kürzere Frist ab jetzt), sonst nichts.
-  if (checkFull(setup, s, out)) return;
-  // Was er gefunden hat, steht kurz da, dann geht es weiter.
-  if (kind === 'flashlight') {
-    setPhase(s, 'react', 1.6);
-    s.repeat = false;
-    return;
-  }
-  nextQuestion(setup, s, out);
-}
-
-/** Ein Schritt (dt in echten Sekunden). Gibt zurück, was passiert ist. */
-export function advance(setup: TrafficSetup, s: TrafficState, dt: number): Signal[] {
-  const out: Signal[] = [];
-  if (s.phase === 'end') {
-    const was = s.phaseT;
-    s.phaseT += dt;
-    if (was < s.phaseLen && s.phaseT >= s.phaseLen) out.push('done');
-    return out;
-  }
-  s.t += dt;
-  s.phaseT += dt;
-  // Puls treibt zur Anspannung (mehr mit Misstrauen und wenn er etwas tut); Tippen im Takt hält ihn unten.
-  const target = setup.stressPulse + 30 * s.suspicion + (s.phase === 'event' ? 8 : 0);
-  s.pulse = clamp(s.pulse + (target - s.pulse) * Math.min(1, dt * 0.14), PULSE_MIN, PULSE_MAX);
-  if (s.phase === 'ask') {
-    // Zittrig: Er sieht es dir an.
-    if (zoneOf(s.pulse) === 'red') addSus(s, 0.014 * dt);
-    if (checkFull(setup, s, out)) return out;
-    s.answerLeft -= dt;
-    if (s.answerLeft <= 0) {
-      s.answerLeft = 0;
-      silence(setup, s, out);
-    }
-    return out;
-  }
-  if (s.phaseT < s.phaseLen) return out;
-  if (s.phase === 'event') finishAction(setup, s, out);
-  else afterReaction(setup, s, out);
-  return out;
-}
-
-function silence(setup: TrafficSetup, s: TrafficState, out: Signal[]): void {
-  const q = currentQuestion(s);
-  addSus(s, SILENCE_SUS * zoneFactor(zoneOf(s.pulse)) + (q?.recheck ? 0.08 : 0));
-  addPulse(s, 8);
-  s.said = '…';
-  s.lastAnswer = null;
-  s.shaky = false;
-  s.answered += 1;
-  say(setup, s, 'silent');
-  out.push('timeout');
-  if (checkFull(setup, s, out)) return;
-  setPhase(s, 'react', 1.6);
-}
-
-/** Antwort geben. Gibt zurück, was passiert ist (leer, wenn gerade keine Frage offen ist). */
-export function answer(setup: TrafficSetup, s: TrafficState, answerId: string): Signal[] {
-  const out: Signal[] = [];
-  const q = currentQuestion(s);
-  if (s.phase !== 'ask' || !q) return out;
-  const a = q.def.answers.find((x) => x.id === answerId);
-  if (!a) return out;
-  const zone = zoneOf(s.pulse);
-  const factor = zoneFactor(zone);
-  let sus = a.sus;
-  let line: OfficerLine = a.tone;
-  const topic = q.def.topic;
-  if (q.recheck) {
-    if (a.claim !== undefined && a.claim === s.claims[topic]) {
-      sus = -0.05;
-      line = 'consistent';
-    } else {
-      sus = CONTRADICTION_SUS;
-      line = 'contradiction';
-      s.contradictions += 1;
-      addPulse(s, 15);
-      out.push('contradiction');
-    }
-  } else {
-    if (a.claim !== undefined) s.claims[topic] = a.claim;
-    const other = a.fits ? s.claims[a.fits.topic] : undefined;
-    if (a.fits && other !== undefined) {
-      if (a.fits.claims.includes(other)) sus -= 0.03;
-      else {
-        sus += MISMATCH_SUS;
-        if (line === 'calm') line = 'mismatch';
-        out.push('mismatch');
-      }
-    }
-  }
-  // Zittrig: Puls im roten Bereich, er merkt es (bei ruhigen Antworten sagt er es auch).
-  s.shaky = zone === 'red';
-  if (s.shaky && line === 'calm') line = 'shaky';
-  addSus(s, sus > 0 ? sus * factor + (s.shaky ? 0.04 : 0) : sus);
-  if (a.tone === 'rude') addPulse(s, 4);
-  else if (a.tone === 'evasive') addPulse(s, 5);
-  s.said = a.text;
-  s.lastAnswer = a.id;
-  s.answered += 1;
-  say(setup, s, line);
-  out.push(a.tone === 'rude' ? 'rude' : 'calm');
-  if (checkFull(setup, s, out)) return out;
-  setPhase(s, 'react', 1.5);
-  return out;
-}
-
-/** Tippen im Takt. good/ok senken den Puls, daneben treibt ihn hoch; zweimal im selben Schlag zählt nicht. */
-export function tap(setup: TrafficSetup, s: TrafficState): 'good' | 'ok' | 'off' | 'ignored' {
-  if (s.phase === 'end') return 'ignored';
-  const beat = Math.round(s.t / BEAT);
-  const error = Math.abs(s.t - beat * BEAT);
-  const good = 0.13 + 0.07 * (1 - setup.difficulty);
-  const ok = 0.26;
-  if (beat === s.lastTapBeat) {
-    addPulse(s, 2);
-    return 'off';
-  }
-  if (error <= good) {
-    s.lastTapBeat = beat;
-    addPulse(s, -7);
-    return 'good';
-  }
-  if (error <= ok) {
-    s.lastTapBeat = beat;
-    addPulse(s, -3);
-    return 'ok';
-  }
-  addPulse(s, 3);
-  return 'off';
-}
-
-/** Schein zustecken: nur bei mittlerem Misstrauen, sonst steigt es stark. */
-export function bribe(setup: TrafficSetup, s: TrafficState): Signal[] {
-  const out: Signal[] = [];
-  if (s.phase === 'end') return out;
-  if (s.suspicion >= BRIBE_MIN && s.suspicion <= BRIBE_MAX) {
-    say(setup, s, 'bribeOk');
-    end(s, 'bribe', 2);
-    out.push('bribeAccepted');
-    return out;
-  }
-  const low = s.suspicion < BRIBE_MIN;
-  addSus(s, BRIBE_FAIL_SUS);
-  addPulse(s, 10);
-  say(setup, s, low ? 'bribeLow' : 'bribeHigh');
-  out.push('bribeRejected');
-  if (checkFull(setup, s, out)) return out;
-  // Dieselbe Frage kommt danach noch einmal (war er gerade mit etwas beschäftigt, macht er danach weiter).
-  if (s.phase === 'ask') s.repeat = true;
-  if (s.phase !== 'event') setPhase(s, 'react', 1.8);
-  return out;
-}
-
-/** Gas geben: weg hier (die Verfolgungsjagd übernimmt). */
-export function flee(s: TrafficState): Signal[] {
-  if (s.phase === 'end') return [];
-  s.line = null;
-  end(s, 'flee', 1.1);
-  return ['flee'];
-}
-
-/** Ist das Ende fertig gezeigt (dann onFinish)? */
-export function isDone(s: TrafficState): boolean {
-  return s.phase === 'end' && s.phaseT >= s.phaseLen;
-}
-
-/** Score: durch 0,55 bis 1 (je weniger Misstrauen, desto besser); rausgeholt 0,05 bis 0,45 nach Fortschritt. */
-export function trafficScore(setup: TrafficSetup, s: TrafficState): number {
-  switch (s.outcome) {
-    case 'pass':
-      return clamp(0.55 + 0.45 * (1 - s.suspicion / setup.limit), 0.55, 1);
-    case 'bribe':
-      return BRIBE_SCORE;
-    case 'flee':
-      return FLEE_SCORE;
-    default:
-      return clamp(0.05 + (0.4 * s.answered) / Math.max(1, s.queue.length), 0.05, 0.45);
-  }
-}
-
-/** picks für applyTraffic: flee, bribe; dazu zur Info die Widersprüche (lies:<n>). */
-export function trafficPicks(s: TrafficState): string[] {
+/** picks für den Kern: 'flee', 'bribe', 'found:<n>' (so viele Pakete hat er eingesackt). */
+export function trafficPicks(state: TrafficState): string[] {
   const picks: string[] = [];
-  if (s.outcome === 'flee') picks.push('flee');
-  if (s.outcome === 'bribe') picks.push('bribe');
-  if (s.contradictions > 0) picks.push(`lies:${s.contradictions}`);
+  if (state.outcome === 'flee') picks.push('flee');
+  if (state.outcome === 'bribe') picks.push('bribe');
+  if (state.found > 0) picks.push(`found:${state.found}`);
   return picks;
 }

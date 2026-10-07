@@ -1,20 +1,37 @@
-// Verkehrskontrolle (Auftrag 44, Teil 4): Zeichnen der Szene vom Fahrersitz. Hinten (back): Straße durch Seitenfenster
-// und Frontscheibe, Innenraum, Armaturen, Lenkrad, Rückspiegel mit Laderaum und Blaulicht. Vorne (front): Regen auf
-// den Scheiben, Taschenlampe, Blendung, Blaulicht im Innenraum, Rot am Ende. Der Beamte selbst ist DOM (Face) zwischen
-// beiden Ebenen, auf das Seitenfenster zugeschnitten.
+// Verkehrskontrolle (Feedback vom 07.10.2026): Zeichnen der Szene von oben. Das Auto aufgeschnitten (Dach weg): Sitze,
+// Armaturen mit Lenkrad, Handschuhfach, Konsole, Türfächer, Rückbank, Kofferraum mit Reserveradmulde. Draußen Asphalt
+// mit Bordstein, der Streifenwagen mit Blaulicht schräg dahinter, der Beamte als Figur von oben mit Taschenlampe, deren
+// Kegel die Stelle trifft, in die er gerade leuchtet. Nachts ist alles dunkel bis auf Laternenlicht, Innenlicht und
+// Kegel; am Tag ist der Kegel ein heller Fleck. Regen als Tropfenringe auf dem Asphalt.
 //
-// Farben der Bedeutung kommen aus den Tokens (mapToken). Himmel, Häuser und Innenraum sind Inhalt wie Haut- und
-// Haarfarben in Face.tsx: feste, gedeckte Werte hier. Statische Teile werden einmal pro Größe vorgerendert.
+// Farben der Bedeutung aus den Tokens (mapToken); Lack, Asphalt und Polster sind Inhalt wie in Face.tsx: feste,
+// gedeckte Werte. Der Hintergrund (Asphalt, Auto) liegt nach jeder Größenänderung fertig in einer eigenen Leinwand.
 
-import { createRng } from '../../../../../core';
 import { mapToken } from '../../../../../map';
+import { drawGoodsGlyph } from '../../kit/goods';
+import {
+  currentStop,
+  litZone,
+  type PacketSize,
+  pendingZones,
+  SCENE_H,
+  SCENE_W,
+  type Stop,
+  type TrafficSetup,
+  type TrafficState,
+  type Zone,
+  type ZoneId,
+  zoneById,
+} from './model';
 
 export interface TrafficPalette {
   gold: string;
   danger: string;
   money: string;
+  warn: string;
   blue: string;
   ink: string;
+  goods: string;
 }
 
 export function readPalette(): TrafficPalette {
@@ -22,712 +39,621 @@ export function readPalette(): TrafficPalette {
     gold: mapToken('--hud-gold', '#f2c766'),
     danger: mapToken('--cat-danger', '#ff7b73'),
     money: mapToken('--cat-money', '#30d158'),
+    warn: mapToken('--cat-warn', '#ff9f0a'),
     blue: mapToken('--color-police-blue', '#2f7bff'),
     ink: mapToken('--hud-ink', '#ffffff'),
+    goods: mapToken('--cat-goods', '#c8aa85'),
   };
 }
 
-export type Point = [number, number];
-
+/**
+ * Lage der Szene auf der Bühne (CSS-Pixel). Am Handy (schmal) steht das Auto hochkant (Szene 100 × 150), am Desktop
+ * liegt es quer (um 90° gedreht, Front nach rechts): So nutzt es die Breite.
+ */
 export interface TrafficLayout {
   width: number;
   height: number;
+  /** Pixel pro Szenen-Einheit. */
+  scale: number;
+  ox: number;
+  oy: number;
   narrow: boolean;
-  /** Seitenfenster (links, dort steht der Beamte), Frontscheibe, A-Säule dazwischen. */
-  side: Point[];
-  wind: Point[];
-  pillar: Point[];
-  /** Unterkante der Fenster (Brüstung) und Beginn des Armaturenbretts. */
-  belt: number;
-  dashTop: number;
-  horizon: number;
-  mirror: { x: number; y: number; w: number; h: number };
-  wheel: { x: number; y: number; r: number };
-  /** Kasten für das Porträt des Beamten (CSS-Pixel). */
-  officer: { x: number; y: number; size: number };
-  /** Kopf der Taschenlampe (in der Hand des Beamten). */
-  lamp: Point;
+  rotated: boolean;
 }
 
-/** Oben bleibt Platz für das HUD; am Handy (schmal) steht die Szene oben, das Gespräch darunter. */
+/** Oben Platz fürs HUD, unten für Puls und Knöpfe, rechts (breit) für die Leiste. */
 export function trafficLayout(width: number, height: number): TrafficLayout {
-  const narrow = width < 640;
-  const top = narrow ? 58 : 64;
+  const narrow = width < 700;
+  const top = narrow ? 118 : 86;
+  const bottom = narrow ? 150 : 110;
+  const avail = Math.max(120, height - top - bottom);
   if (narrow) {
-    const belt = top + Math.min(height * 0.36, width * 0.8);
-    const sideR = width * 0.66;
-    const side: Point[] = [
-      [0, top + 6],
-      [sideR - 18, top + 6],
-      [sideR, belt],
-      [0, belt],
-    ];
-    const wind: Point[] = [
-      [sideR + 22, top + 4],
-      [width, top + 2],
-      [width, belt - 6],
-      [sideR + 40, belt - 6],
-    ];
-    const pillar: Point[] = [
-      [sideR - 18, top + 6],
-      [sideR + 22, top + 4],
-      [sideR + 40, belt - 6],
-      [sideR, belt],
-    ];
-    const size = Math.min(sideR * 0.86, belt - top - 6);
+    const scale = Math.min(avail / SCENE_H, (width - 16) / SCENE_W);
+    const ox = (width - SCENE_W * scale) / 2;
+    const oy = top + (avail - SCENE_H * scale) / 2;
+    return { width, height, scale, ox, oy, narrow, rotated: false };
+  }
+  const room = width - 300;
+  const scale = Math.min(avail / SCENE_W, (room - 32) / SCENE_H);
+  const ox = 16 + (room - 32 - SCENE_H * scale) / 2;
+  const oy = top + (avail - SCENE_W * scale) / 2;
+  return { width, height, scale, ox, oy, narrow, rotated: true };
+}
+
+/** Bildschirm-Punkt in Szenen-Einheiten (gedreht: Front rechts). */
+export function toScene(l: TrafficLayout, px: number, py: number): { x: number; y: number } {
+  if (l.rotated) return { x: (py - l.oy) / l.scale, y: (l.ox + SCENE_H * l.scale - px) / l.scale };
+  return { x: (px - l.ox) / l.scale, y: (py - l.oy) / l.scale };
+}
+
+export function zoneScreen(l: TrafficLayout, z: Zone): { x: number; y: number; w: number; h: number } {
+  if (l.rotated) {
     return {
-      width,
-      height,
-      narrow,
-      side,
-      wind,
-      pillar,
-      belt,
-      dashTop: belt + 4,
-      horizon: top + (belt - top) * 0.62,
-      mirror: { x: sideR + 30, y: top + 10, w: width - sideR - 38, h: 34 },
-      wheel: { x: width * 0.3, y: height + width * 0.15, r: width * 0.62 },
-      officer: { x: sideR * 0.5 - size * 0.5 + 6, y: belt - size + size * 0.04, size },
-      lamp: [sideR * 0.86, belt - 6],
+      x: l.ox + (SCENE_H - (z.y + z.h)) * l.scale,
+      y: l.oy + z.x * l.scale,
+      w: z.h * l.scale,
+      h: z.w * l.scale,
     };
   }
-  const belt = top + (height - top) * 0.6;
-  const sideR = width * 0.38;
-  const side: Point[] = [
-    [0, top + 10],
-    [sideR - 36, top + 10],
-    [sideR, belt],
-    [0, belt],
-  ];
-  const wind: Point[] = [
-    [sideR + 10, top + 4],
-    [width, top],
-    [width, belt - 8],
-    [sideR + 62, belt - 8],
-  ];
-  const pillar: Point[] = [
-    [sideR - 36, top + 10],
-    [sideR + 10, top + 4],
-    [sideR + 62, belt - 8],
-    [sideR, belt],
-  ];
-  const size = Math.min(sideR * 0.9, (belt - top) * 0.98);
-  const mirrorW = Math.min(300, width * 0.24);
-  return {
-    width,
-    height,
-    narrow,
-    side,
-    wind,
-    pillar,
-    belt,
-    dashTop: belt + 6,
-    horizon: top + (belt - top) * 0.6,
-    mirror: { x: sideR + (width - sideR) * 0.5 - mirrorW / 2, y: top + 14, w: mirrorW, h: 58 },
-    wheel: { x: width * 0.6, y: height + height * 0.12, r: height * 0.5 },
-    officer: { x: sideR * 0.5 - size * 0.5, y: belt - size + size * 0.02, size },
-    lamp: [sideR * 0.84, belt - 8],
-  };
+  return { x: l.ox + z.x * l.scale, y: l.oy + z.y * l.scale, w: z.w * l.scale, h: z.h * l.scale };
 }
 
-/** Szene außen nach Tageszeit (Nacht, Dämmerung, Tag). */
-export type Light = 'night' | 'dusk' | 'day';
+const PAINT = '#1e2a3a';
+const PAINT_EDGE = '#0e141c';
+const SEAT = '#2b2b31';
+const SEAT_EDGE = '#1a1a1f';
+const DASH = '#15161b';
+const CARPET = '#23252b';
+const ASPHALT = '#2d2f36';
+const ASPHALT_DAY = '#5a5d64';
+const CURB = '#8d8f95';
+const LAMP = 'rgba(255, 214, 150, 0.16)';
 
-export function lightOf(phase: unknown): Light {
-  return phase === 'night' ? 'night' : phase === 'dawn' || phase === 'dusk' ? 'dusk' : 'day';
-}
-
-const SKY: Record<Light, [string, string]> = {
-  night: ['#05070d', '#1a1d2a'],
-  dusk: ['#1d2238', '#7a5a58'],
-  day: ['#8ea4b8', '#c9d1d6'],
-};
-const FACADE: Record<Light, string[]> = {
-  night: ['#0d0f15', '#11141b', '#0b0c11'],
-  dusk: ['#2b2a33', '#33313a', '#26252d'],
-  day: ['#9b9389', '#a8a198', '#8c857d', '#b3aa9c'],
-};
-const ROAD: Record<Light, string> = { night: '#0c0d11', dusk: '#2c2b30', day: '#5d5f62' };
-const WINDOW_LIT = '#e8b85c';
-const LAMP_GLOW = 'rgba(255, 196, 110, ';
-const INTERIOR = '#0b0c0f';
-const INTERIOR_2 = '#16181d';
-const DASH = '#111216';
-const DASH_EDGE = '#24262d';
-const BOX = '#6b5238';
-const BOX_DARK = '#3d2e20';
-
-/** Vieleck als Pfad; begin = false hängt es an den offenen Pfad an (für Zuschnitte aus mehreren Flächen). */
-function poly(ctx: CanvasRenderingContext2D, points: Point[], begin = true): void {
-  if (begin) ctx.beginPath();
-  points.forEach(([x, y], i) => {
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
   ctx.closePath();
 }
 
-function bounds(points: Point[]) {
-  const xs = points.map((p) => p[0]);
-  const ys = points.map((p) => p[1]);
-  return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+function offscreen(width: number, height: number, dpr: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width * dpr));
+  canvas.height = Math.max(1, Math.round(height * dpr));
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return [canvas, ctx];
 }
 
-function makeCanvas(width: number, height: number, dpr: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
-  const c = document.createElement('canvas');
-  c.width = Math.max(1, Math.round(width * dpr));
-  c.height = Math.max(1, Math.round(height * dpr));
-  const ctx = c.getContext('2d');
-  if (!ctx) throw new Error('Kein 2D-Kontext');
-  ctx.scale(dpr, dpr);
-  return [c, ctx];
+function sceneTransform(ctx: CanvasRenderingContext2D, l: TrafficLayout): void {
+  if (l.rotated) {
+    ctx.translate(l.ox + SCENE_H * l.scale, l.oy);
+    ctx.rotate(Math.PI / 2);
+  } else ctx.translate(l.ox, l.oy);
+  ctx.scale(l.scale, l.scale);
 }
 
-/** Straße draußen: Himmel, Häuserzeile mit Fenstern, Laternen, Fahrbahn (nass bei Regen). */
-function drawOutside(
-  ctx: CanvasRenderingContext2D,
-  area: Point[],
-  horizon: number,
-  light: Light,
-  wet: boolean,
-  rnd: () => number,
-  street: boolean,
-): void {
-  const b = bounds(area);
-  ctx.save();
-  poly(ctx, area);
-  ctx.clip();
-  const sky = ctx.createLinearGradient(0, b.y0, 0, horizon);
-  sky.addColorStop(0, SKY[light][0]);
-  sky.addColorStop(1, SKY[light][1]);
-  ctx.fillStyle = sky;
-  ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, horizon - b.y0 + 1);
-  // Häuser: Fassaden unterschiedlicher Höhe, Fenster (nachts teils erleuchtet).
-  let x = b.x0 - rnd() * 40;
-  while (x < b.x1) {
-    const w = 60 + rnd() * 90;
-    const h = (horizon - b.y0) * (0.55 + rnd() * 0.5);
-    const facade = FACADE[light][Math.floor(rnd() * FACADE[light].length)];
-    ctx.fillStyle = facade;
-    ctx.fillRect(x, horizon - h, w, h + 2);
-    const cols = Math.max(2, Math.floor(w / 22));
-    const rows = Math.max(2, Math.floor(h / 26));
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const wx = x + 8 + (c * (w - 16)) / cols;
-        const wy = horizon - h + 10 + r * 26;
-        if (wy > horizon - 14) continue;
-        const lit = light !== 'day' && rnd() < (light === 'night' ? 0.32 : 0.2);
-        ctx.fillStyle = lit ? WINDOW_LIT : light === 'day' ? 'rgba(40, 48, 60, 0.55)' : 'rgba(0, 0, 0, 0.35)';
-        ctx.globalAlpha = lit ? 0.55 + rnd() * 0.4 : 1;
-        ctx.fillRect(wx, wy, Math.max(6, (w - 16) / cols - 7), 14);
-        ctx.globalAlpha = 1;
-      }
-    }
-    x += w + 2 + rnd() * 6;
-  }
-  // Gehweg und Fahrbahn.
-  const road = ctx.createLinearGradient(0, horizon, 0, b.y1);
-  road.addColorStop(0, ROAD[light]);
-  road.addColorStop(1, light === 'day' ? '#3f4144' : '#050506');
-  ctx.fillStyle = road;
-  ctx.fillRect(b.x0, horizon, b.x1 - b.x0, b.y1 - horizon);
-  if (street) {
-    // Mittellinie zur Ferne hin (Frontscheibe).
-    const cx = (b.x0 + b.x1) / 2 + (b.x1 - b.x0) * 0.08;
-    ctx.fillStyle = light === 'day' ? 'rgba(235, 235, 225, 0.7)' : 'rgba(235, 220, 180, 0.35)';
-    for (let i = 0; i < 6; i++) {
-      const t0 = i / 6;
-      const t1 = t0 + 0.07;
-      const y0 = horizon + (b.y1 - horizon) * t0 ** 1.6;
-      const y1 = horizon + (b.y1 - horizon) * t1 ** 1.6;
-      const w0 = 1 + 7 * t0;
-      const w1 = 1 + 7 * t1;
-      ctx.beginPath();
-      ctx.moveTo(cx - w0 / 2, y0);
-      ctx.lineTo(cx + w0 / 2, y0);
-      ctx.lineTo(cx + w1 / 2 + (t1 - t0) * 6, y1);
-      ctx.lineTo(cx - w1 / 2 + (t1 - t0) * 6, y1);
-      ctx.fill();
-    }
-    // Geparkte Autos am Rand (Silhouetten).
-    ctx.fillStyle = light === 'day' ? '#3b3e44' : '#06070a';
-    for (let i = 0; i < 3; i++) {
-      const px = b.x0 + 20 + i * 70 + rnd() * 20;
-      const pw = 46 - i * 6;
-      const py = horizon + 4 + i * 6;
-      ctx.beginPath();
-      ctx.roundRect(px, py - 10 + i * 2, pw, 12 - i, 3);
-      ctx.fill();
-    }
-  } else {
-    // Bordstein am Seitenfenster.
-    ctx.fillStyle = light === 'day' ? 'rgba(200, 200, 195, 0.35)' : 'rgba(120, 120, 130, 0.18)';
-    ctx.fillRect(b.x0, horizon + (b.y1 - horizon) * 0.35, b.x1 - b.x0, 3);
-  }
-  // Laternen: Pfahl und warmer Lichtschein (nicht bei Tag).
-  if (light !== 'day') {
-    for (let i = 0; i < 2; i++) {
-      const lx = b.x0 + (b.x1 - b.x0) * (0.2 + 0.55 * i + rnd() * 0.1);
-      const ly = b.y0 + (horizon - b.y0) * (0.25 + rnd() * 0.15);
-      ctx.fillStyle = '#050608';
-      ctx.fillRect(lx - 1.5, ly, 3, horizon - ly + 10);
-      const glow = ctx.createRadialGradient(lx, ly, 0, lx, ly, 120);
-      glow.addColorStop(0, `${LAMP_GLOW}0.55)`);
-      glow.addColorStop(0.15, `${LAMP_GLOW}0.18)`);
-      glow.addColorStop(1, `${LAMP_GLOW}0)`);
-      ctx.fillStyle = glow;
-      ctx.fillRect(lx - 120, ly - 120, 240, 240);
-      ctx.fillStyle = '#ffe2a8';
-      ctx.beginPath();
-      ctx.ellipse(lx, ly, 7, 3, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Nasse Straße: Spiegelung des Lichts.
-      if (wet) {
-        const ry = horizon + (b.y1 - horizon) * 0.5;
-        const refl = ctx.createLinearGradient(0, horizon, 0, b.y1);
-        refl.addColorStop(0, `${LAMP_GLOW}0.3)`);
-        refl.addColorStop(1, `${LAMP_GLOW}0)`);
-        ctx.fillStyle = refl;
-        ctx.fillRect(lx - 6, horizon, 12, (ry - horizon) * 2);
-      }
-    }
-  }
-  // Leichter Dunst über allem (Glas).
-  ctx.fillStyle = light === 'day' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(30, 40, 60, 0.12)';
-  ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
-  ctx.restore();
-}
-
-/** Innenraum: Himmel, Türverkleidung, A-Säule, Armaturenbrett mit Tacho, Lenkrad. */
-function drawInterior(ctx: CanvasRenderingContext2D, l: TrafficLayout, p: TrafficPalette, light: Light): void {
-  const { width, height } = l;
-  // Alles außer den Fenstern: Innenraum.
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, 0, width, height);
-  poly(ctx, l.side, false);
-  poly(ctx, l.wind, false);
-  ctx.clip('evenodd');
-  const inside = ctx.createLinearGradient(0, 0, 0, height);
-  inside.addColorStop(0, INTERIOR_2);
-  inside.addColorStop(0.5, INTERIOR);
-  inside.addColorStop(1, '#060608');
-  ctx.fillStyle = inside;
-  ctx.fillRect(0, 0, width, height);
-  ctx.restore();
-  // A-Säule mit Kante.
-  poly(ctx, l.pillar);
-  ctx.fillStyle = '#08090b';
+/** Sitz von oben: Polster mit Kopfstütze und Naht. */
+function seat(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, front: boolean): void {
+  ctx.fillStyle = SEAT_EDGE;
+  roundRect(ctx, x - 0.6, y - 0.6, w + 1.2, h + 1.2, 2.4);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  // Dichtungen um die Fenster.
-  for (const area of [l.side, l.wind]) {
-    poly(ctx, area);
-    ctx.strokeStyle = '#020203';
-    ctx.lineWidth = 6;
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-  // Türverkleidung unter dem Seitenfenster mit Griff.
-  const sideB = bounds(l.side);
-  ctx.fillStyle = '#0e0f13';
-  ctx.fillRect(0, l.belt + 2, sideB.x1 - 10, height - l.belt);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-  ctx.fillRect(0, l.belt + 2, sideB.x1 - 10, 3);
-  ctx.fillStyle = '#1b1c22';
-  ctx.beginPath();
-  ctx.roundRect(sideB.x1 * 0.18, l.belt + (l.narrow ? 22 : 40), sideB.x1 * 0.32, 10, 5);
+  ctx.fillStyle = SEAT;
+  roundRect(ctx, x, y, w, h, 2);
   ctx.fill();
-  // Armaturenbrett: geschwungene Kante, Lüftung, Kombiinstrument.
-  const dashY = l.dashTop;
-  const dash = ctx.createLinearGradient(0, dashY, 0, height);
-  dash.addColorStop(0, DASH_EDGE);
-  dash.addColorStop(0.08, DASH);
-  dash.addColorStop(1, '#050506');
-  ctx.fillStyle = dash;
-  ctx.beginPath();
-  ctx.moveTo(sideB.x1 - 30, height);
-  ctx.lineTo(sideB.x1 - 30, dashY + 14);
-  ctx.quadraticCurveTo(sideB.x1, dashY - 6, sideB.x1 + 60, dashY - 4);
-  ctx.lineTo(width, dashY - 10);
-  ctx.lineTo(width, height);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(sideB.x1 - 30, dashY + 14);
-  ctx.quadraticCurveTo(sideB.x1, dashY - 6, sideB.x1 + 60, dashY - 4);
-  ctx.lineTo(width, dashY - 10);
-  ctx.stroke();
-  // Kombiinstrument hinter dem Lenkrad: zwei Rundinstrumente mit warmem Licht.
-  const w = l.wheel;
-  const gaugeY = Math.min(height - 30, dashY + (l.narrow ? 48 : 70));
-  for (const dx of [-0.32, 0.32]) {
-    const gx = w.x + w.r * dx;
-    const gr = l.narrow ? 22 : 34;
-    const g = ctx.createRadialGradient(gx, gaugeY, 0, gx, gaugeY, gr);
-    g.addColorStop(0, 'rgba(242, 199, 102, 0.22)');
-    g.addColorStop(1, 'rgba(242, 199, 102, 0.03)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(gx, gaugeY, gr, 0, Math.PI * 2);
+  // Kopfstütze (vorne oben).
+  if (front) {
+    ctx.fillStyle = SEAT_EDGE;
+    roundRect(ctx, x + w * 0.25, y - 2.6, w * 0.5, 3.2, 1.2);
     ctx.fill();
-    ctx.strokeStyle = p.gold;
-    ctx.globalAlpha = 0.5;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(gx, gaugeY, gr - 3, Math.PI * 0.8, Math.PI * 2.2);
-    ctx.stroke();
-    // Nadel (Motor läuft im Leerlauf).
-    ctx.globalAlpha = 0.85;
-    ctx.strokeStyle = p.danger;
-    ctx.beginPath();
-    ctx.moveTo(gx, gaugeY);
-    const a = dx < 0 ? Math.PI * 0.95 : Math.PI * 1.15;
-    ctx.lineTo(gx + Math.cos(a) * (gr - 7), gaugeY + Math.sin(a) * (gr - 7));
-    ctx.stroke();
-    ctx.globalAlpha = 1;
   }
-  // Lenkrad: dicker Kranz (nur oben sichtbar) mit Speichen.
-  ctx.save();
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = '#030304';
-  ctx.lineWidth = l.narrow ? 26 : 34;
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 0.35;
   ctx.beginPath();
-  ctx.arc(w.x, w.y, w.r, Math.PI * 1.08, Math.PI * 1.92);
+  ctx.moveTo(x + 1.5, y + h * 0.35);
+  ctx.lineTo(x + w - 1.5, y + h * 0.35);
+  ctx.moveTo(x + 1.5, y + h * 0.65);
+  ctx.lineTo(x + w - 1.5, y + h * 0.65);
   ctx.stroke();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(w.x, w.y, w.r + (l.narrow ? 11 : 15), Math.PI * 1.12, Math.PI * 1.88);
-  ctx.stroke();
-  ctx.restore();
-  // Bei Tag etwas heller (Licht fällt rein).
-  if (light === 'day') {
-    ctx.fillStyle = 'rgba(160, 170, 185, 0.05)';
-    ctx.fillRect(0, l.belt, width, height - l.belt);
-  }
 }
 
-export interface TrafficLayers {
-  layout: TrafficLayout;
-  back: HTMLCanvasElement;
-  /** Laderaum im Rückspiegel (ohne Licht). */
-  rear: HTMLCanvasElement;
-}
-
-/** Statische Teile einmal pro Größe. */
-export function renderTraffic(
-  layout: TrafficLayout,
-  palette: TrafficPalette,
-  dpr: number,
-  env: { light: Light; wet: boolean; seed: number },
-): TrafficLayers {
-  const [back, ctx] = makeCanvas(layout.width, layout.height, dpr);
-  const rnd = createRng(env.seed);
-  drawOutside(ctx, layout.side, layout.horizon, env.light, env.wet, rnd, false);
-  drawOutside(ctx, layout.wind, layout.horizon, env.light, env.wet, rnd, true);
-  drawInterior(ctx, layout, palette, env.light);
-  const m = layout.mirror;
-  const [rear, rc] = makeCanvas(m.w, m.h, dpr);
-  // Rückspiegel: Laderaum mit Kisten, hinten die Hecktüren mit zwei Scheiben.
-  rc.fillStyle = '#07080b';
-  rc.fillRect(0, 0, m.w, m.h);
-  rc.fillStyle = env.light === 'day' ? '#4a5160' : '#141823';
-  rc.fillRect(m.w * 0.3, m.h * 0.12, m.w * 0.18, m.h * 0.42);
-  rc.fillRect(m.w * 0.52, m.h * 0.12, m.w * 0.18, m.h * 0.42);
-  for (let i = 0; i < 7; i++) {
-    const bw = m.w * (0.12 + rnd() * 0.08);
-    const bh = m.h * (0.25 + rnd() * 0.2);
-    const bx = m.w * 0.04 + i * m.w * 0.13 + rnd() * 4;
-    const by = m.h - bh - (i % 2) * 3;
-    rc.fillStyle = i % 3 === 0 ? BOX_DARK : BOX;
-    rc.fillRect(bx, by, bw, bh);
-    rc.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    rc.fillRect(bx + bw * 0.45, by, 2, bh);
-  }
-  return { layout, back, rear };
-}
-
-/** Blaulicht: Doppelblitz, links und rechts versetzt. 0 bis 1. */
-export function blueFlash(t: number, side: 0 | 1, slow: boolean): number {
-  const period = slow ? 1.5 : 0.8;
-  const x = (t / period + side * 0.5) % 1;
-  if (x < 0.07) return 1 - x / 0.07;
-  if (x > 0.14 && x < 0.21) return 1 - (x - 0.14) / 0.07;
-  return 0;
-}
-
-export interface BackFrame {
-  t: number;
-  /** Taschenlampe im Laderaum (0 bis 1 Fortschritt des Schwenks, -1 = aus). */
-  sweep: number;
-  slow: boolean;
-  /** Bei der Flucht ruckt das Bild nach vorne (0 bis 1). */
-  surge: number;
-}
-
-/** Hintere Ebene jedes Bild: Standbild, Rückspiegel mit Blaulicht, Blau im Innenraum. */
-export function drawBack(
-  ctx: CanvasRenderingContext2D,
-  layers: TrafficLayers,
-  palette: TrafficPalette,
-  frame: BackFrame,
-): void {
-  const { layout: l } = layers;
-  ctx.clearRect(0, 0, l.width, l.height);
-  ctx.save();
-  if (frame.surge > 0) {
-    // Beschleunigen: Bild drückt nach hinten und zittert.
-    const k = frame.surge;
-    ctx.translate((Math.random() - 0.5) * 6 * k, 8 * k + (Math.random() - 0.5) * 4 * k);
-  }
-  ctx.drawImage(layers.back, 0, 0, l.width, l.height);
-  // Rückspiegel: Rahmen, Laderaum, Blaulicht durch die Hecktüren, bei der Kontrolle der Lichtkegel.
-  const m = l.mirror;
-  ctx.save();
-  ctx.fillStyle = '#050506';
-  ctx.beginPath();
-  ctx.roundRect(m.x - 4, m.y - 4, m.w + 8, m.h + 8, 10);
+/** Das Auto von oben, aufgeschnitten. */
+function drawCar(ctx: CanvasRenderingContext2D, setup: TrafficSetup, night: boolean): void {
+  // Karosserie: Umriss mit Motorhaube oben und Heck unten.
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  roundRect(ctx, 24.5, 15.5, 52, 122, 7);
   ctx.fill();
-  ctx.fillRect(m.x + m.w / 2 - 3, m.y - 18, 6, 16);
+  ctx.fillStyle = PAINT_EDGE;
+  roundRect(ctx, 23, 13, 54, 124, 7);
+  ctx.fill();
+  ctx.fillStyle = PAINT;
+  roundRect(ctx, 24, 14, 52, 122, 6.4);
+  ctx.fill();
+  // Motorhaube mit Sicke, Frontscheibe als Band.
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fillRect(28, 16, 44, 18);
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 0.4;
   ctx.beginPath();
-  ctx.roundRect(m.x, m.y, m.w, m.h, 7);
-  ctx.clip();
-  ctx.drawImage(layers.rear, m.x, m.y, m.w, m.h);
-  const left = blueFlash(frame.t, 0, frame.slow);
-  const right = blueFlash(frame.t, 1, frame.slow);
-  ctx.globalCompositeOperation = 'lighter';
-  for (const [k, cx] of [
-    [left, m.x + m.w * 0.36],
-    [right, m.x + m.w * 0.64],
-  ] as const) {
-    if (k <= 0) continue;
-    const g = ctx.createRadialGradient(cx, m.y + m.h * 0.3, 0, cx, m.y + m.h * 0.3, m.w * 0.5);
-    g.addColorStop(0, palette.blue);
-    g.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.globalAlpha = 0.9 * k;
-    ctx.fillStyle = g;
-    ctx.fillRect(m.x, m.y, m.w, m.h);
+  ctx.moveTo(50, 17);
+  ctx.lineTo(50, 33);
+  ctx.stroke();
+  ctx.fillStyle = night ? '#1b2a3f' : '#6f93b8';
+  roundRect(ctx, 27, 34, 46, 3.4, 1);
+  ctx.fill();
+  // Innenraum: Teppich.
+  ctx.fillStyle = CARPET;
+  roundRect(ctx, 26.5, 38, 47, 76, 1.5);
+  ctx.fill();
+  // Armaturenbrett mit Lenkrad links, Handschuhfach rechts.
+  ctx.fillStyle = DASH;
+  roundRect(ctx, 27, 38, 46, 11, 1.5);
+  ctx.fill();
+  ctx.strokeStyle = '#3b3d45';
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.ellipse(37.5, 48.5, 6.2, 3.1, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(31.3, 48.5);
+  ctx.lineTo(43.7, 48.5);
+  ctx.moveTo(37.5, 48.5);
+  ctx.lineTo(37.5, 51.4);
+  ctx.stroke();
+  // Türen (Innenverkleidung) mit Türfächern.
+  ctx.fillStyle = '#20222a';
+  ctx.fillRect(24, 44, 3.2, 70);
+  ctx.fillRect(72.8, 44, 3.2, 70);
+  // Sitze vorne, Konsole, Rückbank.
+  seat(ctx, 30, 56, 16, 22, true);
+  seat(ctx, 54, 56, 16, 22, true);
+  ctx.fillStyle = DASH;
+  roundRect(ctx, 44, 52, 12, 20, 1.5);
+  ctx.fill();
+  ctx.fillStyle = '#3a3d45';
+  roundRect(ctx, 47.5, 54, 5, 3, 0.8);
+  ctx.fill();
+  ctx.fillStyle = SEAT_EDGE;
+  roundRect(ctx, 26.5, 92, 47, 21, 2);
+  ctx.fill();
+  ctx.fillStyle = SEAT;
+  roundRect(ctx, 27.5, 93, 45, 19, 1.8);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 0.35;
+  ctx.beginPath();
+  ctx.moveTo(50, 94);
+  ctx.lineTo(50, 111);
+  ctx.moveTo(29, 100);
+  ctx.lineTo(71, 100);
+  ctx.stroke();
+  // Hutablage, Heckscheibe, Kofferraum mit Mulde.
+  ctx.fillStyle = DASH;
+  ctx.fillRect(26.5, 112.2, 47, 1.6);
+  ctx.fillStyle = CARPET;
+  roundRect(ctx, 26.5, 114, 47, 21, 1.5);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.lineWidth = 0.4;
+  roundRect(ctx, 38, 127, 24, 7.5, 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(50, 130.7, 3, 0, Math.PI * 2);
+  ctx.stroke();
+  // Rücklichter.
+  ctx.fillStyle = 'rgba(255,60,50,0.85)';
+  roundRect(ctx, 26, 134.5, 10, 1.4, 0.6);
+  ctx.fill();
+  roundRect(ctx, 64, 134.5, 10, 1.4, 0.6);
+  ctx.fill();
+  // Scheinwerfer.
+  ctx.fillStyle = 'rgba(255,245,210,0.9)';
+  roundRect(ctx, 26, 14.3, 9, 1.3, 0.5);
+  ctx.fill();
+  roundRect(ctx, 65, 14.3, 9, 1.3, 0.5);
+  ctx.fill();
+  // Umrisse der versteckten Stellen (dezent), damit man weiß, wo etwas hin kann.
+  for (const z of setup.zones) {
+    if (z.open) continue;
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.setLineDash([1.2, 1]);
+    ctx.lineWidth = 0.35;
+    roundRect(ctx, z.x, z.y, z.w, z.h, 1);
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
-  ctx.globalAlpha = 1;
-  if (frame.sweep >= 0) {
-    // Taschenlampe wandert über die Kisten (von rechts nach links und zurück).
-    const s = frame.sweep;
-    const bx = m.x + m.w * (0.85 - 0.7 * Math.sin(Math.min(1, s) * Math.PI));
-    const g = ctx.createRadialGradient(bx, m.y + m.h * 0.7, 0, bx, m.y + m.h * 0.7, m.w * 0.22);
-    g.addColorStop(0, 'rgba(255, 245, 215, 0.95)');
-    g.addColorStop(1, 'rgba(255, 245, 215, 0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(m.x, m.y, m.w, m.h);
-  }
-  ctx.globalCompositeOperation = 'source-over';
-  // Glas des Spiegels.
-  const glass = ctx.createLinearGradient(m.x, m.y, m.x + m.w, m.y + m.h);
-  glass.addColorStop(0, 'rgba(255, 255, 255, 0.1)');
-  glass.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
-  ctx.fillStyle = glass;
-  ctx.fillRect(m.x, m.y, m.w, m.h);
+}
+
+/** Streifenwagen von oben, schräg hinter dir am Straßenrand. */
+function patrolCar(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  roundRect(ctx, -11, -22, 22, 46, 4);
+  ctx.fill();
+  ctx.fillStyle = '#e8ebef';
+  roundRect(ctx, -10.5, -23, 21, 46, 4);
+  ctx.fill();
+  ctx.fillStyle = '#2458c9';
+  ctx.fillRect(-10.5, -4, 21, 5);
+  ctx.fillStyle = '#1b2638';
+  roundRect(ctx, -8.5, -8, 17, 7, 1.5);
+  ctx.fill();
+  roundRect(ctx, -8.5, 9, 17, 6, 1.5);
+  ctx.fill();
+  ctx.fillStyle = '#20232b';
+  roundRect(ctx, -3.5, -1.2, 7, 2.4, 0.8);
+  ctx.fill();
   ctx.restore();
-  // Blau im Innenraum (Dach, Säule, Armaturen): schwacher Schein von hinten.
-  const flash = Math.max(left, right);
-  if (flash > 0) {
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = (frame.slow ? 0.08 : 0.14) * flash;
-    const g = ctx.createRadialGradient(m.x + m.w / 2, 0, 0, m.x + m.w / 2, 0, l.width * 0.7);
-    g.addColorStop(0, palette.blue);
-    g.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, l.width, l.height);
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-  }
+}
+
+/** Figur von oben: Mütze mit Schirm, Schultern, Taschenlampe in der Hand Richtung Auto. */
+function officer(ctx: CanvasRenderingContext2D, x: number, y: number, facing: number, t: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(facing);
+  const sway = Math.sin(t * 2.2) * 0.4;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(0.6, 0.8, 6.2, 3.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Schultern (Uniformjacke).
+  ctx.fillStyle = '#1d2b4a';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 6, 3.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Arm mit Lampe nach vorne.
+  ctx.strokeStyle = '#1d2b4a';
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(3.6, -0.6);
+  ctx.lineTo(6.4, -4.2 + sway);
+  ctx.stroke();
+  ctx.fillStyle = '#d8d4cc';
+  ctx.beginPath();
+  ctx.arc(6.6, -4.6 + sway, 1.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#2a2d35';
+  roundRect(ctx, 6, -7.6 + sway, 1.6, 3, 0.5);
+  ctx.fill();
+  // Kopf mit Mütze (dunkelblau, Schirm nach vorne, Kokarde).
+  ctx.fillStyle = '#17213a';
+  ctx.beginPath();
+  ctx.arc(0, -0.4, 2.7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#0e1424';
+  ctx.beginPath();
+  ctx.ellipse(0, -2.9, 2.4, 0.9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#d9b74a';
+  ctx.beginPath();
+  ctx.arc(0, -1.5, 0.45, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
-/** Ein Tropfen auf der Scheibe (Optik, Math.random erlaubt). */
-export interface Drop {
-  x: number;
-  y: number;
-  r: number;
-  /** Rinnt gerade (px/s), 0 = haftet. */
-  v: number;
-}
-
-export function makeDrops(layout: TrafficLayout, count: number): Drop[] {
-  const drops: Drop[] = [];
-  for (let i = 0; i < count; i++) drops.push(newDrop(layout, true));
-  return drops;
-}
-
-function newDrop(l: TrafficLayout, anywhere: boolean): Drop {
-  const onSide = Math.random() < 0.55;
-  const b = bounds(onSide ? l.side : l.wind);
-  return {
-    x: b.x0 + Math.random() * (b.x1 - b.x0),
-    y: anywhere ? b.y0 + Math.random() * (b.y1 - b.y0) : b.y0 + Math.random() * 30,
-    r: 1.2 + Math.random() * 2.8,
-    v: Math.random() < 0.15 ? 20 + Math.random() * 60 : 0,
-  };
-}
-
-export function stepDrops(drops: Drop[], layout: TrafficLayout, dt: number, rate: number): void {
-  for (let i = 0; i < drops.length; i++) {
-    const d = drops[i];
-    if (d.v > 0) d.y += d.v * dt;
-    else if (Math.random() < 0.05 * dt) d.v = 25 + Math.random() * 50;
-    if (d.y > layout.belt || Math.random() < rate * dt * 0.02) drops[i] = newDrop(layout, false);
+/** Hintergrund (Asphalt, Bordstein, Streifenwagen, Auto) fertig gezeichnet. */
+export function renderBackground(l: TrafficLayout, setup: TrafficSetup, dpr: number): HTMLCanvasElement {
+  const [canvas, ctx] = offscreen(l.width, l.height, dpr);
+  const night = setup.night;
+  ctx.fillStyle = night ? ASPHALT : ASPHALT_DAY;
+  ctx.fillRect(0, 0, l.width, l.height);
+  ctx.save();
+  sceneTransform(ctx, l);
+  // Sichtbarer Ausschnitt in Szenen-Einheiten (gedreht: Ecken der Bühne zurückrechnen).
+  const corners = [toScene(l, 0, 0), toScene(l, l.width, 0), toScene(l, 0, l.height), toScene(l, l.width, l.height)];
+  const left = Math.min(...corners.map((c) => c.x));
+  const right = Math.max(...corners.map((c) => c.x));
+  const top = Math.min(...corners.map((c) => c.y));
+  const bottom = Math.max(...corners.map((c) => c.y));
+  // Körnung.
+  ctx.fillStyle = 'rgba(255,255,255,0.025)';
+  for (let i = 0; i < 260; i++) {
+    const gx = left + (((i * 73) % 1000) / 1000) * (right - left);
+    const gy = top + (((i * 131) % 1000) / 1000) * (bottom - top);
+    ctx.fillRect(gx, gy, 0.8, 0.8);
   }
+  // Bordstein und Gehweg rechts, Fahrbahnmarkierung links.
+  ctx.fillStyle = night ? '#3a3c43' : '#7a7c82';
+  ctx.fillRect(96, top, right - 96, bottom - top);
+  ctx.fillStyle = CURB;
+  ctx.fillRect(95, top, 1.4, bottom - top);
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([6, 6]);
+  ctx.beginPath();
+  ctx.moveTo(2, top);
+  ctx.lineTo(2, bottom);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Gully und Laterne (Lichtfleck).
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  roundRect(ctx, 88, 20, 6, 4, 0.6);
+  ctx.fill();
+  if (night) {
+    const lamp = ctx.createRadialGradient(100, 70, 2, 100, 70, 70);
+    lamp.addColorStop(0, LAMP);
+    lamp.addColorStop(1, 'rgba(255,214,150,0)');
+    ctx.fillStyle = lamp;
+    ctx.fillRect(left, top, right - left, bottom - top);
+  }
+  // Streifenwagen: hochkant neben dir am Rand, quer (Desktop) hinter dir auf der Fahrbahn.
+  if (l.rotated) patrolCar(ctx, 60, 172, -0.14);
+  else patrolCar(ctx, 112, 158, -0.22);
+  drawCar(ctx, setup, night);
+  ctx.restore();
+  return canvas;
 }
 
-export interface FrontFrame {
+export interface Fx {
   t: number;
-  /** Lampe auf dich gerichtet (0 bis 1), nach unten auf die Papiere (0 bis 1). */
-  glare: number;
-  down: number;
-  /** Ende: rot (Aussteigen) bzw. Erleichterung (grün), 0 bis 1. */
-  red: number;
-  relief: number;
-  drops: Drop[] | null;
-  /** Schnee draußen (Optik). */
-  snow: boolean;
+  reduced: boolean;
+  running: boolean;
+  /** Markierte Stelle beim Ziehen (passt oder nicht). */
+  hover: { id: ZoneId; ok: boolean } | null;
+  reject: { id: ZoneId; at: number } | null;
+  stowed: { id: ZoneId; at: number } | null;
+  /** Fund: Stelle rot aufblitzen lassen. */
+  found: { id: ZoneId; at: number } | null;
+  /** Wo der Beamte gerade steht (geglättet) und wohin er schaut. */
+  officer: { x: number; y: number };
+  rain: boolean;
 }
 
-/** Vordere Ebene jedes Bild: Taschenlampe, Tropfen, Ende. */
-export function drawFront(
+/** Lage des Beamten: an der Station, beim Gehen unterwegs (geglättet in der Oberfläche). */
+export function officerTarget(state: TrafficState): { x: number; y: number } {
+  const stop = currentStop(state);
+  if (!stop) return { x: 14, y: 64 };
+  return { x: stop.x, y: stop.y };
+}
+
+/** Mitte einer Stelle. */
+function center(z: Zone): { x: number; y: number } {
+  return { x: z.x + z.w / 2, y: z.y + z.h / 2 };
+}
+
+/** Punkt am Wegesrand zwischen zwei Stationen (um das Auto herum, nicht hindurch). */
+export function walkPoint(from: Stop, to: Stop, k: number): { x: number; y: number } {
+  // Über die Ecke gehen: erst zur Höhe der Zielstation, dann quer (am Heck vorbei).
+  const viaY = Math.max(from.y, to.y, 146);
+  const legs = [
+    { x: from.x, y: from.y },
+    { x: from.x, y: viaY },
+    { x: to.x, y: viaY },
+    { x: to.x, y: to.y },
+  ];
+  const lengths = legs.slice(1).map((p, i) => Math.hypot(p.x - legs[i].x, p.y - legs[i].y));
+  const total = lengths.reduce((s, v) => s + v, 0) || 1;
+  let d = k * total;
+  for (let i = 0; i < lengths.length; i++) {
+    if (d <= lengths[i] || i === lengths.length - 1) {
+      const a = legs[i];
+      const b = legs[i + 1];
+      const t = lengths[i] > 0 ? Math.min(1, d / lengths[i]) : 1;
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+    d -= lengths[i];
+  }
+  return { x: to.x, y: to.y };
+}
+
+function drawPacket(
+  ctx: CanvasRenderingContext2D,
+  p: TrafficPalette,
+  x: number,
+  y: number,
+  size: PacketSize,
+  opts: { selected: boolean; alpha: number; lifted: number },
+): void {
+  const half = (size === 2 ? 4.4 : 3.4) * (1 + 0.1 * opts.lifted);
+  ctx.save();
+  ctx.globalAlpha = opts.alpha;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  roundRect(ctx, x - half + 0.5 + opts.lifted, y - half + 0.8 + opts.lifted * 1.5, half * 2, half * 2, 1.2);
+  ctx.fill();
+  ctx.fillStyle = '#1a1b20';
+  roundRect(ctx, x - half, y - half, half * 2, half * 2, 1.2);
+  ctx.fill();
+  ctx.fillStyle = p.goods;
+  ctx.globalAlpha = opts.alpha * 0.35;
+  ctx.fill();
+  ctx.globalAlpha = opts.alpha;
+  ctx.strokeStyle = p.goods;
+  ctx.lineWidth = 0.45;
+  ctx.stroke();
+  if (size === 2) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(x - half, y);
+    ctx.lineTo(x + half, y);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = p.goods;
+  ctx.lineWidth = 0.5;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.translate(x, y);
+  drawGoodsGlyph(ctx, 'box', half * 0.5);
+  ctx.translate(-x, -y);
+  if (opts.selected) {
+    ctx.strokeStyle = p.gold;
+    ctx.lineWidth = 0.7;
+    roundRect(ctx, x - half - 1.2, y - half - 1.2, half * 2 + 2.4, half * 2 + 2.4, 1.8);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Ein Bild: Hintergrund, Lichtkegel, Stellen, Pakete, Beamter, Regen, Blaulicht. */
+export function drawScene(
   ctx: CanvasRenderingContext2D,
   l: TrafficLayout,
-  palette: TrafficPalette,
-  frame: FrontFrame,
+  p: TrafficPalette,
+  setup: TrafficSetup,
+  state: TrafficState,
+  bg: HTMLCanvasElement,
+  fx: Fx,
 ): void {
+  ctx.save();
   ctx.clearRect(0, 0, l.width, l.height);
-  // Taschenlampe: Kegel vom Fenster in den Wagen (auf dich) bzw. nach unten (Papiere).
-  const k = Math.max(frame.glare, frame.down);
-  if (k > 0.01) {
-    const [lx, ly] = l.lamp;
-    const wob = Math.sin(frame.t * 1.7) * 8 + Math.sin(frame.t * 3.1) * 3;
-    const tx = frame.down > frame.glare ? lx + l.width * 0.12 : l.width * (l.narrow ? 0.7 : 0.5) + wob;
-    const ty = frame.down > frame.glare ? l.height * 0.95 : l.height * (l.narrow ? 0.45 : 0.55) + wob * 0.5;
-    const ang = Math.atan2(ty - ly, tx - lx);
-    const len = Math.hypot(tx - lx, ty - ly) * 1.4;
-    const spread = 0.28;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(lx, ly, 0, lx, ly, len);
-    g.addColorStop(0, `rgba(255, 246, 220, ${0.32 * k})`);
-    g.addColorStop(0.6, `rgba(255, 246, 220, ${0.08 * k})`);
-    g.addColorStop(1, 'rgba(255, 246, 220, 0)');
-    ctx.fillStyle = g;
+  ctx.drawImage(bg, 0, 0, l.width, l.height);
+  ctx.save();
+  sceneTransform(ctx, l);
+  const night = setup.night;
+  const lit = litZone(state);
+  const pending = pendingZones(state);
+  const flick = fx.reduced ? 0.5 : 0.5 + 0.5 * Math.sin(fx.t * 9);
+  // Blaulicht des Streifenwagens auf Asphalt und Heck.
+  const blue = flick > 0.5;
+  const gx = l.rotated ? 60 : 112;
+  const gy = l.rotated ? 168 : 150;
+  const glow = ctx.createRadialGradient(gx, gy, 4, gx, gy, 75);
+  glow.addColorStop(0, blue ? 'rgba(70,140,255,0.32)' : 'rgba(255,70,70,0.26)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(gx - 80, gy - 80, 160, 160);
+  // Stellen: die, in die er gleich leuchtet (dezenter Rahmen), die aktuelle (Kegel), Zurückweisung, Verstauen, Fund.
+  for (const id of pending) {
+    const z = zoneById(id);
+    ctx.strokeStyle = p.warn;
+    ctx.globalAlpha = 0.55;
+    ctx.setLineDash([1.6, 1.2]);
+    ctx.lineWidth = 0.5;
+    roundRect(ctx, z.x - 0.8, z.y - 0.8, z.w + 1.6, z.h + 1.6, 1.4);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
+  const o = fx.officer;
+  if (lit) {
+    const z = zoneById(lit);
+    const c = center(z);
+    // Kegel von der Lampe zur Stelle.
+    const ang = Math.atan2(c.y - o.y, c.x - o.x);
+    const len = Math.hypot(c.x - o.x, c.y - o.y) + Math.max(z.w, z.h) * 0.6;
+    const spread = 0.42;
+    const cone = ctx.createLinearGradient(o.x, o.y, c.x, c.y);
+    cone.addColorStop(0, night ? 'rgba(255,240,200,0.55)' : 'rgba(255,240,200,0.3)');
+    cone.addColorStop(1, night ? 'rgba(255,240,200,0.12)' : 'rgba(255,240,200,0.08)');
+    ctx.fillStyle = cone;
     ctx.beginPath();
-    ctx.moveTo(lx, ly);
-    ctx.arc(lx, ly, len, ang - spread, ang + spread);
+    ctx.moveTo(o.x, o.y);
+    ctx.lineTo(o.x + Math.cos(ang - spread) * len, o.y + Math.sin(ang - spread) * len);
+    ctx.lineTo(o.x + Math.cos(ang + spread) * len, o.y + Math.sin(ang + spread) * len);
     ctx.closePath();
     ctx.fill();
-    // Kopf der Lampe: heller Punkt mit Blendung.
-    const head = ctx.createRadialGradient(lx, ly, 0, lx, ly, 46);
-    head.addColorStop(0, `rgba(255, 255, 255, ${0.95 * k})`);
-    head.addColorStop(0.2, `rgba(255, 248, 225, ${0.4 * k})`);
-    head.addColorStop(1, 'rgba(255, 248, 225, 0)');
-    ctx.fillStyle = head;
-    ctx.fillRect(lx - 46, ly - 46, 92, 92);
-    ctx.restore();
-    // Lampe selbst (dunkler Zylinder in der Hand).
-    ctx.save();
-    ctx.translate(lx, ly);
-    ctx.rotate(ang + Math.PI);
-    ctx.fillStyle = '#121317';
-    ctx.beginPath();
-    ctx.roundRect(4, -6, 38, 12, 4);
+    // Die Stelle selbst hell.
+    ctx.fillStyle = `rgba(255,240,200,${night ? 0.3 : 0.22})`;
+    roundRect(ctx, z.x, z.y, z.w, z.h, 1.2);
     ctx.fill();
-    ctx.fillStyle = '#2a2c33';
-    ctx.fillRect(4, -7, 8, 14);
-    ctx.restore();
+    ctx.strokeStyle = p.danger;
+    ctx.lineWidth = 0.7;
+    roundRect(ctx, z.x - 0.8, z.y - 0.8, z.w + 1.6, z.h + 1.6, 1.6);
+    ctx.stroke();
   }
-  // Regentropfen auf den Scheiben (mit kleinem Glanzpunkt).
-  if (frame.drops) {
-    ctx.save();
-    ctx.beginPath();
-    poly(ctx, l.side, false);
-    poly(ctx, l.wind, false);
-    ctx.clip();
-    for (const d of frame.drops) {
-      ctx.fillStyle = 'rgba(190, 205, 225, 0.22)';
+  if (fx.running && fx.hover) {
+    const z = zoneById(fx.hover.id);
+    ctx.strokeStyle = fx.hover.ok ? p.gold : p.danger;
+    ctx.lineWidth = 0.8;
+    ctx.setLineDash(fx.hover.ok ? [] : [1.4, 1.2]);
+    roundRect(ctx, z.x - 1.4, z.y - 1.4, z.w + 2.8, z.h + 2.8, 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if (fx.reject && fx.t - fx.reject.at < 0.5) {
+    const z = zoneById(fx.reject.id);
+    ctx.fillStyle = p.danger;
+    ctx.globalAlpha = 0.35 * (1 - (fx.t - fx.reject.at) / 0.5);
+    roundRect(ctx, z.x - 1, z.y - 1, z.w + 2, z.h + 2, 1.6);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  if (fx.stowed && fx.t - fx.stowed.at < 0.6) {
+    const z = zoneById(fx.stowed.id);
+    const k = (fx.t - fx.stowed.at) / 0.6;
+    ctx.strokeStyle = p.money;
+    ctx.globalAlpha = 1 - k;
+    ctx.lineWidth = 0.8;
+    roundRect(ctx, z.x - 1 - k * 3, z.y - 1 - k * 3, z.w + 2 + k * 6, z.h + 2 + k * 6, 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  if (fx.found && fx.t - fx.found.at < 0.9) {
+    const z = zoneById(fx.found.id);
+    const k = (fx.t - fx.found.at) / 0.9;
+    ctx.fillStyle = p.danger;
+    ctx.globalAlpha = 0.5 * (1 - k);
+    roundRect(ctx, z.x - 1, z.y - 1, z.w + 2, z.h + 2, 1.6);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  // Belegung versteckter Stellen als Punkte.
+  for (const z of setup.zones) {
+    if (z.open || z.capacity >= 99) continue;
+    const used = state.items.filter((it) => !it.found && (it.zone === z.id || it.moving?.zone === z.id)).length;
+    const gap = 1.7;
+    const x0 = z.x + z.w / 2 - ((z.capacity - 1) * gap) / 2;
+    for (let i = 0; i < z.capacity; i++) {
       ctx.beginPath();
-      ctx.ellipse(d.x, d.y, d.r, d.r * (d.v > 0 ? 1.5 : 1.1), 0, 0, Math.PI * 2);
+      ctx.arc(x0 + i * gap, z.y + z.h + 1.3, 0.55, 0, Math.PI * 2);
+      ctx.fillStyle = i < used ? p.money : 'rgba(255,255,255,0.25)';
       ctx.fill();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-      ctx.fillRect(d.x - d.r * 0.35, d.y - d.r * 0.45, 1, 1);
-      if (d.v > 0) {
-        ctx.fillStyle = 'rgba(190, 205, 225, 0.1)';
-        ctx.fillRect(d.x - 0.6, d.y - 26, 1.2, 24);
-      }
     }
-    ctx.restore();
   }
-  if (frame.snow) {
-    ctx.save();
-    ctx.beginPath();
-    poly(ctx, l.side, false);
-    poly(ctx, l.wind, false);
-    ctx.clip();
-    ctx.fillStyle = 'rgba(240, 244, 250, 0.7)';
-    for (let i = 0; i < 70; i++) {
-      const x = ((i * 97.3 + frame.t * (14 + (i % 5) * 4)) % l.width) + Math.sin(frame.t + i) * 6;
-      const y = (i * 53.1 + frame.t * (30 + (i % 7) * 6)) % l.belt;
-      ctx.fillRect(x, y, 2, 2);
+  // Pakete: offen liegende voll, versteckte halb durchsichtig (Röntgenblick), unterwegs gehoben.
+  state.items.forEach((it, i) => {
+    if (it.found) return;
+    const size = setup.packets[i].size;
+    const hidden = it.zone !== null && !zoneById(it.zone).open;
+    const moving = !!it.moving;
+    const k = it.moving ? 1 - Math.max(0, it.moving.left) / it.moving.total : 0;
+    drawPacket(ctx, p, it.x, it.y, size, {
+      selected: fx.running && state.selected === i && !moving,
+      alpha: hidden ? 0.45 : moving ? 0.9 : 1,
+      lifted: moving ? Math.sin(k * Math.PI) : 0,
+    });
+  });
+  // Der Beamte, zur Stelle gedreht.
+  const face = lit ? center(zoneById(lit)) : { x: 50, y: o.y };
+  officer(ctx, o.x, o.y, Math.atan2(face.y - o.y, face.x - o.x), fx.t);
+  // Regen: Ringe auf dem Asphalt.
+  if (fx.rain && !fx.reduced) {
+    ctx.strokeStyle = 'rgba(200,220,255,0.25)';
+    ctx.lineWidth = 0.3;
+    for (let i = 0; i < 14; i++) {
+      const life = (fx.t * 0.9 + i * 0.37) % 1;
+      const rx = ((i * 211) % 160) - 20;
+      const ry = ((i * 97 + Math.floor(fx.t * 0.9 + i * 0.37) * 53) % 190) - 20;
+      ctx.beginPath();
+      ctx.ellipse(rx, ry, life * 3, life * 1.6, 0, 0, Math.PI * 2);
+      ctx.stroke();
     }
-    ctx.restore();
   }
-  if (frame.red > 0) {
-    ctx.fillStyle = palette.danger;
-    ctx.globalAlpha = 0.22 * frame.red;
+  ctx.restore();
+  // Nachts: alles außerhalb des Kegels und der Lampen dunkler; Blaulicht am Bildrand.
+  if (night) {
+    ctx.fillStyle = 'rgba(5,8,20,0.22)';
     ctx.fillRect(0, 0, l.width, l.height);
-    ctx.globalAlpha = 1;
   }
-  if (frame.relief > 0) {
-    const g = ctx.createRadialGradient(l.width / 2, l.height / 2, 0, l.width / 2, l.height / 2, l.width * 0.7);
-    g.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    g.addColorStop(0.6, 'rgba(0, 0, 0, 0)');
-    g.addColorStop(1, palette.money);
-    ctx.globalAlpha = 0.12 * frame.relief;
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, l.width, l.height);
-    ctx.globalAlpha = 1;
-  }
-}
-
-/** CSS-Polygon für das Seitenfenster (Zuschnitt des Beamten), relativ zur Bühne. */
-export function clipPath(points: Point[]): string {
-  return `polygon(${points.map(([x, y]) => `${x.toFixed(1)}px ${y.toFixed(1)}px`).join(', ')})`;
-}
-
-/** Puls-Kurve (EKG) im kleinen Canvas: läuft von rechts nach links, Ausschlag je Herzschlag. */
-export function drawEcg(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  history: Float32Array,
-  head: number,
-  color: string,
-): void {
-  ctx.clearRect(0, 0, width, height);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  ctx.beginPath();
-  const n = history.length;
-  for (let i = 0; i < n; i++) {
-    const v = history[(head + i) % n];
-    const x = (i / (n - 1)) * width;
-    const y = height * 0.62 - v * height * 0.5;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.stroke();
+  const edge = ctx.createRadialGradient(
+    l.width / 2,
+    l.height / 2,
+    Math.min(l.width, l.height) * 0.4,
+    l.width / 2,
+    l.height / 2,
+    Math.max(l.width, l.height) * 0.72,
+  );
+  edge.addColorStop(0, 'rgba(0,0,0,0)');
+  edge.addColorStop(1, blue ? 'rgba(70,140,255,0.28)' : 'rgba(255,60,60,0.22)');
+  ctx.fillStyle = edge;
+  ctx.fillRect(0, 0, l.width, l.height);
+  ctx.restore();
 }

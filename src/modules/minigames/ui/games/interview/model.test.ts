@@ -1,177 +1,162 @@
 import { describe, expect, it } from 'vitest';
-import { INTERVIEW_QUESTIONS } from '../../../../recruiting';
-import type { TraitId } from '../../../../staff';
 import {
+  ASK_TIME,
+  activeCue,
   advance,
-  answerDuration,
-  CHOOSE_TIME,
-  choose,
   createInterview,
-  currentOffer,
   discovered,
+  FALSE_ALARMS_ALLOWED,
+  type InterviewState,
   initInterview,
   interviewPicks,
   interviewScore,
   isDone,
-  OFFERS_PER_ROUND,
+  mark,
   ROUNDS,
-  read,
-  skipAnswer,
-  timeLeft,
+  TELL_WINDOW,
   typedChars,
   VERDICT_TIME,
 } from './model';
 
-const PERSON = { traits: ['hothead', 'drinker'] as TraitId[] };
+const PERSON = { traits: ['drinker', 'charmer'] as const };
 
-/** Spielt eine Runde: Frage index, dann die Deutung, die pick wählt. */
-function playRound(
-  setup: ReturnType<typeof createInterview>,
-  s: ReturnType<typeof initInterview>,
-  index: number,
-  pick: 'right' | 'wrong' | 'late',
-) {
-  choose(setup, s, index);
-  skipAnswer(setup, s);
-  const offer = currentOffer(setup, s);
-  if (!offer) throw new Error('keine Frage');
-  if (pick === 'late') advance(setup, s, setup.readTime + 0.01);
-  else {
-    const i = offer.readings.findIndex((r) => (pick === 'right' ? r === offer.reveals : r !== offer.reveals));
-    read(setup, s, i);
+function run(setup: ReturnType<typeof createInterview>, s: InterviewState, seconds: number, onStep?: () => void) {
+  const signals: string[] = [];
+  for (let t = 0; t < seconds && !isDone(s); t += 1 / 60) {
+    signals.push(...advance(setup, s, 1 / 60));
+    onStep?.();
   }
-  advance(setup, s, VERDICT_TIME + 0.01);
+  return signals;
 }
 
-describe('Bewerbungsgespräch: Inhalt aus dem Seed', () => {
-  it('ist fest aus dem Seed und hat drei Runden mit je drei verschiedenen Fragen', () => {
+/** Spielt perfekt: tippt genau einmal in jedes Zeichen, nie in eine Geste. */
+function perfect(setup: ReturnType<typeof createInterview>, s: InterviewState) {
+  const active = activeCue(setup, s);
+  if (active?.cue.tell && !s.caught.includes(active.index)) mark(setup, s);
+}
+
+describe('Lügendetektor: Aufbau', () => {
+  it('kommt fest aus dem Seed, drei Runden, zuerst Fragen zu unbekannten Eigenschaften', () => {
     const a = createInterview(7, 0.5, PERSON);
     const b = createInterview(7, 0.5, PERSON);
-    expect(a).toEqual(b);
-    expect(a.rounds).toHaveLength(ROUNDS);
-    const ids = a.rounds.flat().map((o) => o.questionId);
-    expect(new Set(ids).size).toBe(ROUNDS * OFFERS_PER_ROUND);
-    expect(createInterview(8, 0.5, PERSON)).not.toEqual(a);
+    expect(a.rounds.length).toBe(ROUNDS);
+    expect(a.rounds.map((r) => r.questionId)).toEqual(b.rounds.map((r) => r.questionId));
+    expect(a.rounds.map((r) => r.answer)).toEqual(b.rounds.map((r) => r.answer));
+    const revealed = a.rounds.map((r) => r.reveals).filter((r) => r !== 'none');
+    expect(revealed.length).toBeGreaterThanOrEqual(1);
+    for (const r of revealed) expect(PERSON.traits as readonly string[]).toContain(r);
+    // Keine Eigenschaft zweimal.
+    expect(new Set(revealed).size).toBe(revealed.length);
+    expect(createInterview(8, 0.5, PERSON).rounds.map((r) => r.questionId)).not.toEqual(
+      a.rounds.map((r) => r.questionId),
+    );
   });
 
-  it('die Antwort verrät eine echte Eigenschaft unter den geprüften, sonst nichts', () => {
-    for (let seed = 1; seed <= 40; seed++) {
-      const setup = createInterview(seed, 0.5, PERSON);
-      for (const offer of setup.rounds.flat()) {
-        const q = INTERVIEW_QUESTIONS.find((x) => x.id === offer.questionId);
-        if (!q) throw new Error(offer.questionId);
-        const matching = q.probes.filter((t) => PERSON.traits.includes(t));
-        if (matching.length === 0) {
-          expect(offer.reveals).toBe('none');
-          expect(q.neutral).toContain(offer.answer);
-        } else {
-          expect(matching).toContain(offer.reveals);
-          expect(q.answers[offer.reveals as TraitId]).toContain(offer.answer);
+  it('zeigt bei Eigenschaften Zeichen und Gesten, bei unauffälligen Antworten nur Gesten, ohne Überlappung', () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const setup = createInterview(seed, 0.6, { traits: ['loyal'], known: ['loyal'] });
+      for (const round of setup.rounds) {
+        const tells = round.cues.filter((c) => c.tell);
+        if (round.reveals === 'none') expect(tells.length).toBe(0);
+        else expect(tells.length).toBeGreaterThanOrEqual(2);
+        expect(round.cues.some((c) => !c.tell)).toBe(true);
+        for (let i = 1; i < round.cues.length; i++) {
+          expect(round.cues[i].at).toBeGreaterThanOrEqual(round.cues[i - 1].at + round.cues[i - 1].len);
+        }
+        for (const c of round.cues) {
+          expect(c.at).toBeGreaterThanOrEqual(0);
+          expect(c.at + c.len).toBeLessThanOrEqual(round.duration + 0.01);
         }
       }
     }
   });
 
-  it('drei Deutungen, genau eine richtig, Köder nie eine echte Eigenschaft', () => {
-    for (let seed = 1; seed <= 40; seed++) {
-      for (const d of [0, 1]) {
-        for (const offer of createInterview(seed, d, PERSON).rounds.flat()) {
-          expect(offer.readings).toHaveLength(3);
-          expect(new Set(offer.readings).size).toBe(3);
-          expect(offer.readings.filter((r) => r === offer.reveals)).toHaveLength(1);
-          for (const r of offer.readings) {
-            if (r !== offer.reveals && r !== 'none') expect(PERSON.traits).not.toContain(r);
-          }
-        }
-      }
-    }
-  });
-
-  it('verrät lieber Unbekanntes', () => {
-    const known = { traits: ['hothead', 'coward'] as TraitId[], known: ['hothead'] as TraitId[] };
-    // Bei Fragen, die beide prüfen, kommt die unbekannte (coward).
-    for (let seed = 1; seed <= 30; seed++) {
-      for (const offer of createInterview(seed, 0.5, known).rounds.flat()) {
-        const q = INTERVIEW_QUESTIONS.find((x) => x.id === offer.questionId);
-        if (q?.probes.includes('coward')) expect(offer.reveals).toBe('coward');
-      }
-    }
-  });
-
-  it('schwer: Köder öfter aus derselben Frage', () => {
-    const near = (d: number) => {
-      let count = 0;
-      for (let seed = 1; seed <= 60; seed++) {
-        for (const offer of createInterview(seed, d, PERSON).rounds.flat()) {
-          const q = INTERVIEW_QUESTIONS.find((x) => x.id === offer.questionId);
-          count += offer.readings.filter((r) => r !== offer.reveals && r !== 'none' && q?.probes.includes(r)).length;
-        }
-      }
-      return count;
-    };
-    expect(near(1)).toBeGreaterThan(near(0));
+  it('wird mit der Schwierigkeit schwerer: kürzere Zeichen, mehr Gesten', () => {
+    const easy = createInterview(3, 0, PERSON);
+    const hard = createInterview(3, 1, PERSON);
+    const tellLen = (setup: typeof easy) => setup.rounds.flatMap((r) => r.cues.filter((c) => c.tell)).map((c) => c.len);
+    expect(Math.max(...tellLen(easy))).toBeCloseTo(TELL_WINDOW.easy, 2);
+    expect(Math.max(...tellLen(hard))).toBeCloseTo(TELL_WINDOW.hard, 2);
+    const gestures = (setup: typeof easy) => setup.rounds.reduce((n, r) => n + r.cues.filter((c) => !c.tell).length, 0);
+    expect(gestures(hard)).toBeGreaterThan(gestures(easy));
   });
 });
 
-describe('Bewerbungsgespräch: Ablauf', () => {
-  it('Frage wählen, Antwort tippt ab, dann deuten; alle richtig = Score 1', () => {
-    const setup = createInterview(3, 0.5, PERSON);
+describe('Lügendetektor: Ablauf', () => {
+  it('fragt, lässt antworten, urteilt, und mit perfektem Tippen stehen alle Eigenschaften in der Akte', () => {
+    const setup = createInterview(7, 0.5, PERSON);
     const s = initInterview();
-    expect(s.phase).toBe('choose');
-    expect(choose(setup, s, 1)).toEqual(['asked']);
-    expect(s.phase).toBe('answer');
-    const offer = currentOffer(setup, s);
-    if (!offer) throw new Error('keine Frage');
-    advance(setup, s, 0.5);
-    expect(typedChars(setup, s)).toBeGreaterThan(0);
-    expect(typedChars(setup, s)).toBeLessThan(offer.answer.length);
-    expect(advance(setup, s, answerDuration(offer))).toEqual(['typed', 'reading']);
-    expect(s.phase).toBe('read');
-    expect(timeLeft(setup, s)).toBe(setup.readTime);
-    const right = offer.readings.indexOf(offer.reveals);
-    expect(read(setup, s, right)).toEqual(['correct']);
-    expect(advance(setup, s, VERDICT_TIME)).toEqual(['round']);
-    playRound(setup, s, 0, 'right');
-    playRound(setup, s, 2, 'right');
+    const signals = run(setup, s, 60, () => perfect(setup, s));
+    expect(signals).toContain('asked');
+    expect(signals).toContain('answering');
+    expect(signals).toContain('verdict');
+    expect(signals).toContain('done');
+    expect(signals).not.toContain('miss');
     expect(isDone(s)).toBe(true);
+    expect(s.results.length).toBe(ROUNDS);
+    expect(s.results.every((r) => r.correct)).toBe(true);
     expect(interviewScore(setup, s)).toBe(1);
+    const expected = setup.rounds.map((r) => r.reveals).filter((r) => r !== 'none');
+    expect(discovered(s)).toEqual(expected);
+    expect(interviewPicks(s)).toEqual(expected);
   });
 
-  it('falsch und zu spät zählen nicht; picks sind nur angetippte Eigenschaften', () => {
-    const setup = createInterview(5, 0.5, PERSON);
+  it('ohne Tippen gehen die Zeichen verloren, unauffällige Runden sind trotzdem richtig', () => {
+    const setup = createInterview(7, 0.5, PERSON);
     const s = initInterview();
-    playRound(setup, s, 0, 'wrong');
-    playRound(setup, s, 1, 'late');
-    playRound(setup, s, 2, 'right');
-    expect(isDone(s)).toBe(true);
-    expect(interviewScore(setup, s)).toBeCloseTo(1 / 3);
-    expect(s.results.map((r) => r.correct)).toEqual([false, false, true]);
-    expect(s.results[1].picked).toBeNull();
-    const picks = interviewPicks(s);
-    expect(picks).not.toContain('none');
-    expect(picks.length).toBeLessThanOrEqual(2);
-    const last = s.results[2];
-    if (last.reveals !== 'none') {
-      expect(picks).toContain(last.reveals);
-      expect(discovered(s)).toEqual([last.reveals]);
+    const signals = run(setup, s, 60);
+    expect(signals.filter((x) => x === 'miss').length).toBeGreaterThan(0);
+    for (const r of s.results) expect(r.correct).toBe(r.reveals === 'none');
+    expect(discovered(s)).toEqual([]);
+    expect(interviewScore(setup, s)).toBeLessThan(1);
+  });
+
+  it('zählt Fehlalarme: zu viele, und die Runde ist falsch', () => {
+    const setup = createInterview(7, 0.5, PERSON);
+    const s = initInterview();
+    run(setup, s, ASK_TIME + 0.05);
+    expect(s.phase).toBe('answer');
+    // In eine Lücke tippen (kein Zeichen, keine Geste).
+    const round = setup.rounds[0];
+    const gap = round.cues.length > 0 ? Math.max(0.05, round.cues[0].at - 0.2) : 0.3;
+    while (s.t < gap) advance(setup, s, 1 / 60);
+    expect(activeCue(setup, s)).toBeNull();
+    for (let i = 0; i <= FALSE_ALARMS_ALLOWED; i++) expect(mark(setup, s)).toBe('falseAlarm');
+    expect(s.falseAlarms).toBe(FALSE_ALARMS_ALLOWED + 1);
+    run(setup, s, round.duration + 0.1, () => perfect(setup, s));
+    expect(s.results[0].correct).toBe(false);
+    expect(s.results[0].falseAlarms).toBe(FALSE_ALARMS_ALLOWED + 1);
+  });
+
+  it('ein Zeichen zählt nur einmal; eine Geste ist ein Fehlalarm', () => {
+    const setup = createInterview(7, 0.5, PERSON);
+    const s = initInterview();
+    run(setup, s, ASK_TIME + 0.05);
+    const round = setup.rounds[0];
+    const tell = round.cues.find((c) => c.tell);
+    const gesture = round.cues.find((c) => !c.tell);
+    if (tell) {
+      while (s.t < tell.at + 0.05) advance(setup, s, 1 / 60);
+      expect(mark(setup, s)).toBe('hit');
+      expect(mark(setup, s)).toBe('again');
     }
+    if (gesture) {
+      while (s.t < gesture.at + 0.05) advance(setup, s, 1 / 60);
+      expect(mark(setup, s)).toBe('falseAlarm');
+    }
+    expect(mark({ rounds: [], difficulty: 0 }, { ...s, phase: 'verdict' })).toBeNull();
   });
 
-  it('zu lange gezögert: die erste Frage wird gestellt', () => {
-    const setup = createInterview(9, 0.5, PERSON);
+  it('tippt die Antwort ab und steht am Ende ganz', () => {
+    const setup = createInterview(7, 0.5, PERSON);
     const s = initInterview();
-    expect(advance(setup, s, CHOOSE_TIME + 0.1)).toEqual(['asked']);
-    expect(s.chosen).toBe(0);
-  });
-
-  it('ignoriert Eingaben in der falschen Phase', () => {
-    const setup = createInterview(2, 0.5, PERSON);
-    const s = initInterview();
-    expect(read(setup, s, 0)).toEqual([]);
-    expect(skipAnswer(setup, s)).toEqual([]);
-    expect(choose(setup, s, 7)).toEqual([]);
-    choose(setup, s, 0);
-    expect(choose(setup, s, 1)).toEqual([]);
-    expect(read(setup, s, 0)).toEqual([]);
+    expect(typedChars(setup, s)).toBe(0);
+    run(setup, s, ASK_TIME + 1);
+    expect(typedChars(setup, s)).toBeGreaterThan(0);
+    run(setup, s, setup.rounds[0].duration + 0.2);
+    expect(s.phase).toBe('verdict');
+    expect(typedChars(setup, s)).toBe(setup.rounds[0].answer.length);
+    run(setup, s, VERDICT_TIME + 0.2);
+    expect(s.round).toBe(1);
   });
 });

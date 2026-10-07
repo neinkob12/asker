@@ -116,6 +116,7 @@ import {
   LOG_LIMIT,
   NIGHT_END,
   NIGHT_START,
+  PLAYER_CHECK_FACTOR,
   PLAYER_DRIVE_SPEED,
   PORTS,
   type PortConfig,
@@ -868,7 +869,8 @@ function cityHeat(state: GameState, cityId: string): number {
 function rollCheck(ctx: Ctx, trip: Trip): void {
   if (trip.items.length === 0) return;
   const caution =
-    (trip.driverId ? riskFactor(ctx.state, trip.driverId) : 1) * vehicleSpec(ctx.state, trip.vehicleId).checkFactor;
+    (trip.driverId ? riskFactor(ctx.state, trip.driverId) : PLAYER_CHECK_FACTOR) *
+    vehicleSpec(ctx.state, trip.vehicleId).checkFactor;
   let chance: number;
   if (isInterCityTrip(ctx.state, trip)) {
     const heat = cityHeat(ctx.state, tripCity(ctx.state, trip));

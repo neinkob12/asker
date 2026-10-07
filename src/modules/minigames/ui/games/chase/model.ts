@@ -1,1093 +1,856 @@
-// Spiellogik der Verfolgungsjagd (Auftrag 44, Teil 1) als reines Modell: kein DOM, keine Karte, testbar mit Vitest.
+// Spiellogik der Verfolgungsjagd (Feedback vom 07.10.2026: ein richtiges Autospiel) als reines Modell: kein DOM,
+// keine Karte, testbar mit Vitest.
 //
-// Man fährt auf dem echten Straßennetz der Stadt (net.ts): An jeder Kreuzung nimmt der Wagen den Abzweig, den man
-// vorher gewählt hat (links, geradeaus, rechts), dazu Gas, Bremse und ein Turbo, der langsam nachlädt. Zu schnell in
-// eine Kurve → Rutschen. Im Stand mit der Bremse: wenden.
+// Du sitzt in einer fetten Karre und fährst auf einer dreispurigen Stadtstraße (Blick von hinten, pseudo-3D). Du
+// wechselst die Spur (links/rechts), gibst Gas, bremst, zündest den Turbo. Verkehr muss umfahren werden, Streifen mit
+// Blaulicht hängen hinter dir, holen auf, rammen dich und schieben dich quer. Ab und zu steht eine Straßensperre:
+// Nur eine Spur ist frei. Ziel: der Balken „Abhängen“. Er füllt sich, solange die nächste Streife weit hinter dir
+// liegt, und leert sich, wenn sie dir im Nacken sitzt. Voll: Du biegst in eine Tiefgarage ab, entkommen. Gefasst, wenn
+// die Karre kaputt ist (Schaden 1), eine Streife dich länger bei langsamer Fahrt stellt oder die Zeit abläuft.
+// Ware aus dem Fenster (einmal): Turbo voll, die Streifen zögern, die Ware ist weg.
 //
-// Streifen erscheinen nacheinander 300 bis 600 m entfernt (die erste direkt hinter dir) und suchen per A* den Weg zum
-// Knoten vor dir. Sehen sie dich nicht mehr, fahren sie zur letzten bekannten Stelle und suchen dort. Ab mittlerer
-// Schwierigkeit gibt es Straßensperren an Kreuzungen vor dir, dazu Zivilverkehr (Zusammenstöße bremsen) und nach
-// 40 bis 60 s den Hubschrauber, dessen Lichtkegel dir mit Verzögerung folgt.
-//
-// Ziel: Sichtkontakt brechen und abtauchen (Ring füllt sich in ABTAUCHEN_SECONDS), im Versteck sofort. Gefasst, wenn eine
-// Streife länger als CATCH_SECONDS dicht bei dir ist, während du langsam bist, oder die Zeit abläuft.
-//
-// Inhalte (Startrichtung, Verstecke, Orte der Streifen) kommen aus dem Seed der Challenge (createRng). Die Zeit kommt
+// Die Straße (Kurven, Kulisse), der Verkehr und die Streifen kommen fest aus dem Seed (createRng). Die Zeit kommt
 // von außen (dt in echten Sekunden), deshalb hängt der Verlauf von der Bildrate ab: Nur der Score geht an den Kern.
 
 import { createRng } from '../../../../../core';
-import {
-  type Branch,
-  branchesAfter,
-  type ChaseNet,
-  cornerSpeed,
-  direction,
-  endNode,
-  findPath,
-  type Leg,
-  legLength,
-  nearestNode,
-  pickBranch,
-  pointOn,
-  reverse,
-  roadClass,
-  startNode,
-  type TurnChoice,
-  topSpeed,
-} from './net';
 
 // ---------------------------------------------------------------------------------------------- Stellschrauben
 
-/** Zeit bis die Streife dich sicher hat (Sekunden). */
-export const TIME_LIMIT = 120;
-/** So lange ohne Sichtkontakt, dann bist du weg (Sekunden). */
-export const ABTAUCHEN_SECONDS = 8;
-/** Sichtweite der Streife in Metern (leicht bis schwer). */
-export const SIGHT_RANGE = { min: 150, max: 200 };
-/** So nah sieht dich jede Streife, egal wohin sie schaut (Meter). */
-export const NEAR_SIGHT = 55;
-/** Kegel nach vorne, in dem eine Streife dich weiter weg sieht (Kosinus, etwa ±22 Grad). */
-export const SIGHT_CONE = 0.93;
-/** Gefasst: Streife näher als CATCH_DISTANCE, du langsamer als CATCH_SPEED, und das länger als CATCH_SECONDS. */
-export const CATCH_DISTANCE = 12;
-export const CATCH_SPEED = 15 / 3.6;
-export const CATCH_SECONDS = 1.5;
-/** Turbo: so viel schneller, so lange voll (Sekunden), so lange zum Nachladen (Sekunden). */
-export const TURBO_FACTOR = 1.35;
-export const TURBO_SECONDS = 3;
-export const TURBO_RECHARGE = 14;
-/** Im Versteck, wenn näher als so viele Meter am Knoten. */
-export const HIDEOUT_RADIUS = 22;
-/** Lichtkegel des Hubschraubers: Radius in Metern, Tempo in m/s (schneller als das nur mit Turbo auf großen Straßen). */
-export const HELI_RADIUS = 32;
-export const HELI_SPEED = 23;
-/** Ware aus dem Fenster: so lange schneller, so lange zögern die Streifen (Sekunden). */
-export const DUMP_BOOST = 4;
-export const DUMP_HESITATE = 3.5;
-/** Zivilverkehr in der Nähe: so viele Wagen (wenig bis viel). */
-export const CIVILIANS = { min: 10, max: 20 };
-
-const ACCEL = 8.5;
-/** Ohne Vollgas rollt der Wagen mit diesem Anteil des Höchsttempos (cruise). */
+/** Zeit, bis die Verstärkung da ist (Sekunden). */
+export const TIME_LIMIT = 90;
+export const LANES = 3;
+/** Breite einer Spur in Metern; die Straße hat dazu einen schmalen Streifen am Rand. */
+export const LANE_WIDTH = 3.5;
+export const ROAD_HALF = (LANES * LANE_WIDTH) / 2 + 0.7;
+/** Länge eines Straßenstücks in Metern (Kurven und Kulisse hängen daran). */
+export const SEGMENT = 10;
+/** Straßenstücke insgesamt; danach geht es von vorn (bei 90 s reichen sie dreimal). */
+export const SEGMENTS = 1200;
+/** Höchsttempo mit Vollgas (m/s), ohne Gas rollt der Wagen mit dem Anteil CRUISE. */
+export const TOP_SPEED = 56;
 export const CRUISE = 0.8;
-const TURBO_ACCEL = 13;
-const BRAKE = 17;
-const COAST = 2.2;
-/** Im Stand die Bremse so lange halten, dann wird gewendet; das Wenden selbst dauert UTURN_SECONDS. */
-const UTURN_HOLD = 0.35;
-const UTURN_SECONDS = 1.1;
-/** Rutschen: Tempo danach (Anteil), so lange kein Gas. */
-const SKID_KEEP = 0.55;
-const SKID_SECONDS = 0.8;
-/** Spurversatz des Zivilverkehrs nach Straßenart (Meter rechts der Mitte): Auf kleinen Straßen wird es eng. */
-const LANE_OFFSET: Record<string, number> = {
-  motorway: 4,
-  trunk: 3.5,
-  primary: 3.2,
-  secondary: 3,
-  tertiary: 2.6,
-  unclassified: 2,
-  residential: 1.4,
-  living_street: 0.8,
-};
-const BUMP_DISTANCE = 3.3;
+export const TURBO_FACTOR = 1.28;
+export const TURBO_SECONDS = 2.8;
+export const TURBO_RECHARGE = 10;
+/** Abhängen: Abstand der nächsten Streife, ab dem der Balken fällt bzw. steigt (Meter). */
+export const SHAKE_NEAR = 28;
+export const SHAKE_FAR = 45;
+/** Füllrate pro Sekunde bei vollem Vorsprung (SHAKE_FAR + SHAKE_LEAD Meter), Leeren pro Sekunde dicht dran. */
+export const SHAKE_RATE = 0.22;
+export const SHAKE_LEAD = 110;
+export const SHAKE_DRAIN = 0.14;
+/** Gestellt: Streife näher als CATCH_GAP, du langsamer als CATCH_SPEED, und das länger als CATCH_SECONDS. */
+export const CATCH_GAP = 7;
+export const CATCH_SPEED = 9;
+export const CATCH_SECONDS = 3;
+/** Ware aus dem Fenster: so lange zögern die Streifen (Sekunden). */
+export const DUMP_HESITATE = 3.5;
+/** Schaden: Rammen, Auffahren (nach Differenztempo), Sperre. Bei 1 ist die Karre hin. */
+export const RAM_DAMAGE = 0.06;
+export const BLOCK_DAMAGE = 0.3;
+export const CAR_LENGTH = 4.4;
+export const CAR_WIDTH = 1.9;
+/** Verkehr: so viele Wagen im Fenster vor dir (wenig bis viel), Fenster in Metern. */
+export const TRAFFIC = { min: 5, max: 10, window: 420, behind: 60 };
+/** Straßensperren: ab wann, Abstand dazwischen (leicht bis schwer), so weit vor dir stehen sie. */
+export const BLOCK_FIRST = 16;
+export const BLOCK_EVERY = { easy: 30, hard: 19 };
+export const BLOCK_AHEAD = 280;
+
+const ACCEL = 9;
+const TURBO_ACCEL = 15;
+const BRAKE = 20;
+const COAST = 3;
+/** Spurwechsel: Feder zur Spur (pro Sekunde), Tempo seitlich höchstens (m/s), und wie stark Kurven nach außen ziehen. */
+const STEER_SPRING = 6;
+const STEER_SPEED = 7;
+const CURVE_PULL = 110;
+/** Rutschen nach Zusammenstößen: so lange kein Gas (Sekunden). */
+const SKID_SECONDS = 0.7;
+/** Streifen: Tempo relativ zum Höchsttempo (leicht bis schwer), Gummiband weit hinten, Rammen. */
+const COP_SPEED = { easy: 0.9, hard: 1.03 };
+const COP_RUBBER_GAP = 140;
+const COP_RUBBER = 1.14;
+const RAM_COOLDOWN = 2.2;
+const RAM_PUSH = 1.4;
 
 // ---------------------------------------------------------------------------------------------- Typen
 
-export type HideoutKind = 'warehouse' | 'garage' | 'yard';
+export type SceneryKind = 'house' | 'tower' | 'lamp' | 'tree' | 'sign' | 'bridge' | 'kiosk';
 
-export interface Hideout {
-  id: string;
-  kind: HideoutKind;
-  label: string;
-  node: number;
-  x: number;
-  y: number;
+/** Kulisse an einem Straßenstück: Seite (−1 links, 1 rechts), Größe und Variante (Farbe, Form) aus dem Seed. */
+export interface Scenery {
+  kind: SceneryKind;
+  side: -1 | 1;
+  /** Abstand vom Straßenrand in Metern. */
+  offset: number;
+  size: number;
+  variant: number;
 }
 
-/** Ein Lager oder Ort, der als Versteck taugt (in Metern des Graphen). */
-export interface HideoutSpot {
-  id: string;
-  label: string;
+export interface RoadSegment {
+  /** Krümmung: Versatz pro Stück (negativ links). */
+  curve: number;
+  scenery: Scenery[];
+  /** Laterne bzw. Brückenbogen (für Licht und Schatten). */
+  lit: boolean;
+}
+
+export type TrafficKind = 'car' | 'van' | 'truck';
+
+export interface Vehicle {
+  id: number;
+  kind: TrafficKind;
+  lane: number;
+  /** Seitliche Lage in Metern (Spurmitte), bewegt sich beim Ausweichen. */
   x: number;
-  y: number;
+  /** Lage auf der Straße in Metern. */
+  z: number;
+  v: number;
+  color: number;
+  /** Nach einem Zusammenstoß: so lange angeschoben (Sekunden). */
+  pushed: number;
+  /** Bremst gerade (Rücklichter). */
+  braking: boolean;
+}
+
+export type CopState = 'chase' | 'hesitate' | 'wrecked';
+
+export interface Cop {
+  id: number;
+  lane: number;
+  x: number;
+  z: number;
+  v: number;
+  state: CopState;
+  /** Erscheint erst ab dieser Zeit (Sekunden). */
+  spawnAt: number;
+  active: boolean;
+  ramCooldown: number;
+  hesitateUntil: number;
+  /** Nach einem Crash: Restzeit, bis der Wagen aus dem Spiel ist. */
+  wreckT: number;
+}
+
+export interface Roadblock {
+  id: number;
+  z: number;
+  /** Diese Spur ist frei. */
+  gap: number;
+  /** Schon passiert oder getroffen. */
+  passed: boolean;
+  hit: boolean;
+}
+
+export interface Player {
+  /** Seitliche Lage in Metern (0 = Mitte der Straße). */
+  x: number;
+  /** Gewählte Spur (0 links bis LANES−1 rechts). */
+  lane: number;
+  /** Lage auf der Straße in Metern (gefahren). */
+  z: number;
+  v: number;
+  /** Seitliches Tempo (für Neigung der Karre). */
+  vx: number;
+  turbo: number;
+  turboOn: boolean;
+  turboLeft: number;
+  damage: number;
+  skid: number;
+  braking: boolean;
+}
+
+export type ChaseEventKind =
+  | 'steer'
+  | 'bump'
+  | 'crash'
+  | 'ram'
+  | 'sideswipe'
+  | 'block'
+  | 'blockPassed'
+  | 'blockHit'
+  | 'turbo'
+  | 'dump'
+  | 'cop'
+  | 'copCrash'
+  | 'near'
+  | 'clear'
+  | 'escaped'
+  | 'caught';
+
+export interface ChaseEvent {
+  kind: ChaseEventKind;
+  /** Stärke 0–1 (z.B. wie hart der Aufprall). */
+  power: number;
+  /** Seitliche Lage (Meter), wo es passiert ist (Funken). */
+  x: number;
+  /** Abstand vor dir (Meter; negativ hinter dir). */
+  ahead: number;
+}
+
+export type ChaseEnd = 'escaped' | 'caught' | 'time';
+
+export interface ChaseInput {
+  gas: boolean;
+  brake: boolean;
+  turbo: boolean;
 }
 
 export interface ChaseOptions {
   seed: number;
   difficulty: number;
-  /** Start in Metern des Graphen. */
-  start: [number, number];
-  /** Eigene Lager der Stadt (in Metern); weiter als 1,6 km zählen sie nicht. */
-  warehouses?: readonly HideoutSpot[];
-  /** Polizei-Uhr der Konfrontation (Runden, typisch 3 bis 5): weniger = Hubschrauber früher. */
+  /** Polizei-Uhr der Konfrontation (Runden, typisch 3 bis 5): weniger = mehr Streifen. */
   clock?: number;
-  /** Am Handy: weniger Zivilverkehr. */
+  /** Am Handy: etwas weniger Verkehr. */
   mobile?: boolean;
 }
 
 export interface ChaseSetup {
   seed: number;
   difficulty: number;
-  startLeg: Leg;
+  road: RoadSegment[];
   cops: number;
-  /** Ab hier kommt der Hubschrauber (Sekunden). */
-  heliAt: number;
-  sightRange: number;
-  /** Tempo der Streife relativ zum Höchsttempo der Straße. */
   copFactor: number;
-  roadblocks: number;
-  civilians: number;
-  hideouts: Hideout[];
+  traffic: number;
+  blockEvery: number;
 }
-
-export interface Mover {
-  leg: Leg;
-  /** Meter auf der Kante in Fahrtrichtung. */
-  s: number;
-  /** Tempo in m/s. */
-  v: number;
-  x: number;
-  y: number;
-  /** Kurs in Grad (0 = Norden). */
-  heading: number;
-}
-
-export interface Player extends Mover {
-  /** Gewählte Abbiegung für die nächste Kreuzung. */
-  choice: TurnChoice;
-  /** Turbo 0–1, läuft gerade? */
-  turbo: number;
-  turboOn: boolean;
-  skid: number;
-  stun: number;
-  /** Wenden: Restzeit (Sekunden) und wie lange schon im Stand gebremst. */
-  uturn: number;
-  brakeHold: number;
-  /** Bremse seit dem letzten Wenden losgelassen? */
-  uturnArmed: boolean;
-}
-
-export interface Cop extends Mover {
-  id: number;
-  path: Leg[];
-  repathIn: number;
-  /** Erscheint erst ab dieser Zeit (Sekunden). */
-  spawnAt: number;
-  active: boolean;
-  /** Sucht (ohne Sichtkontakt an der letzten bekannten Stelle angekommen). */
-  searching: boolean;
-  /** Vorbeirauschen an Zivilwagen bremst kurz. */
-  slow: number;
-}
-
-export interface Civilian extends Mover {
-  id: number;
-  next: Leg | null;
-  /** Steht nach einem Zusammenstoß (Sekunden). */
-  stopped: number;
-  /** Seitlicher Versatz (Meter, rechts positiv). */
-  lane: number;
-  color: number;
-  cooldown: number;
-}
-
-export interface Roadblock {
-  id: number;
-  node: number;
-  x: number;
-  y: number;
-  /** Kurs der Straße, auf der man kommt (die Wagen stehen quer dazu). */
-  heading: number;
-  until: number;
-  hit: boolean;
-}
-
-export interface Heli {
-  active: boolean;
-  x: number;
-  y: number;
-  /** Lichtkegel auf dir? */
-  onYou: boolean;
-}
-
-export type ChaseEventKind =
-  | 'skid'
-  | 'squeal'
-  | 'bump'
-  | 'crash'
-  | 'uturn'
-  | 'turn'
-  | 'turbo'
-  | 'dump'
-  | 'cop'
-  | 'heli'
-  | 'roadblock'
-  | 'spotted'
-  | 'lost'
-  | 'escaped'
-  | 'caught';
-
-export interface ChaseEvent {
-  kind: ChaseEventKind;
-  x: number;
-  y: number;
-  /** Stärke 0–1 (z.B. wie hart der Aufprall). */
-  power: number;
-}
-
-export type ChaseEnd = 'escaped' | 'hideout' | 'caught' | 'time';
 
 export interface ChaseState {
   t: number;
   player: Player;
+  traffic: Vehicle[];
   cops: Cop[];
-  civilians: Civilian[];
-  roadblocks: Roadblock[];
-  heli: Heli;
-  /** Sieht dich gerade jemand? */
-  sight: boolean;
-  /** Abstand zur nächsten Streife (Meter, Infinity ohne). */
+  blocks: Roadblock[];
+  /** Abhängen 0–1. */
+  shake: number;
+  /** Abstand zur nächsten aktiven Streife hinter dir (Meter, Infinity ohne). */
   nearest: number;
-  /** Abtauchen 0–1. */
-  hide: number;
-  /** Wie lange schon eine Streife dicht dran ist (für „gefasst“). */
+  /** Sitzt dir eine Streife im Nacken (unter SHAKE_NEAR)? */
+  near: boolean;
+  /** Wie lange schon gestellt (für „gefasst“). */
   contact: number;
-  /** Letzte bekannte Stelle (Knoten), zu der die Streifen fahren. */
-  known: number;
   dumped: boolean;
-  dumpUntil: number;
   hesitateUntil: number;
-  /** Im Versteck (Index in setup.hideouts) oder -1. */
-  inHideout: number;
+  nextBlockAt: number;
   end: ChaseEnd | null;
   endAt: number;
   /** Ereignisse dieses Schritts (für Ton und Effekte), werden bei jedem Schritt geleert. */
   events: ChaseEvent[];
-  /** Zähler für IDs und den Zufall der Kulisse (aus dem Seed). */
   nextId: number;
-  nextRoadblockAt: number;
-  roadblocksLeft: number;
   random: () => number;
 }
 
-export interface ChaseInput {
-  /** Vollgas. */
-  gas: boolean;
-  brake: boolean;
-  turbo: boolean;
-  /** Ohne Gas mit CRUISE des Höchsttempos weiterrollen (Tastatur: ↑ ist dann Vollgas, man bleibt nie aus Versehen stehen). */
-  cruise?: boolean;
-}
-
-/** Nächste echte Kreuzung vor dir: Abstand, Abzweige (Winkel) und welcher mit der Wahl genommen würde. */
-export interface Upcoming {
-  distance: number;
-  node: number;
-  branches: Branch[];
-  chosen: Branch | null;
-  /** Sicheres Tempo für den gewählten Abzweig (m/s). */
-  safe: number;
-  deadEnd: boolean;
-}
-
-// ---------------------------------------------------------------------------------------------- Aufbau
+// ---------------------------------------------------------------------------------------------- Hilfen
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-function degree(net: ChaseNet, node: number): number {
-  return net.adjStart[node + 1] - net.adjStart[node];
+/** Mitte einer Spur in Metern. */
+export function laneX(lane: number): number {
+  return (lane - (LANES - 1) / 2) * LANE_WIDTH;
 }
 
-/** Ist das eine ruhige Ecke (nur Wohnstraßen am Knoten)? */
-function quietNode(net: ChaseNet, node: number): boolean {
-  for (let k = net.adjStart[node]; k < net.adjStart[node + 1]; k++) {
-    const cls = roadClass(net, net.adjEdge[k]);
-    if (cls !== 'residential' && cls !== 'living_street' && cls !== 'unclassified') return false;
-  }
-  return degree(net, node) >= 2;
+/** Spur zu einer seitlichen Lage. */
+export function laneOf(x: number): number {
+  return clamp(Math.round(x / LANE_WIDTH + (LANES - 1) / 2), 0, LANES - 1);
 }
 
-/** Zufälliger Knoten im Ring [min, max] Meter um (x, y), der passt (oder -1). */
-function nodeInRing(
-  net: ChaseNet,
-  random: () => number,
-  x: number,
-  y: number,
-  min: number,
-  max: number,
-  ok: (node: number) => boolean,
-): number {
-  const g = net.g;
-  for (let tries = 0; tries < 400; tries++) {
-    const a = random() * Math.PI * 2;
-    const r = lerp(min, max, random());
-    const n = nearestNodeNear(net, x + Math.cos(a) * r, y + Math.sin(a) * r, 120);
-    if (n < 0) continue;
-    const d = Math.hypot(g.nodeX[n] - x, g.nodeY[n] - y);
-    if (d >= min && d <= max && ok(n)) return n;
-  }
-  return -1;
+const KINDS: Record<TrafficKind, { length: number; width: number; speed: [number, number] }> = {
+  car: { length: 4.4, width: 1.85, speed: [0.36, 0.52] },
+  van: { length: 5.2, width: 2.0, speed: [0.34, 0.46] },
+  truck: { length: 9, width: 2.5, speed: [0.3, 0.38] },
+};
+
+export function vehicleSize(kind: TrafficKind): { length: number; width: number } {
+  return KINDS[kind];
 }
 
-/** Raster über die Knoten (für die Suche in der Nähe), einmal je Netz. */
-const grids = new WeakMap<ChaseNet, Map<number, number[]>>();
-const CELL = 100;
-const cellKey = (cx: number, cy: number) => cx * 1_000_003 + cy;
+/** Straßenstück an einer Lage. */
+export function segmentIndex(z: number): number {
+  return ((Math.floor(z / SEGMENT) % SEGMENTS) + SEGMENTS) % SEGMENTS;
+}
 
-function gridOf(net: ChaseNet): Map<number, number[]> {
-  let grid = grids.get(net);
-  if (!grid) {
-    grid = new Map();
-    const g = net.g;
-    for (let n = 0; n < g.nodeX.length; n++) {
-      if (degree(net, n) === 0) continue;
-      const key = cellKey(Math.floor(g.nodeX[n] / CELL), Math.floor(g.nodeY[n] / CELL));
-      const list = grid.get(key);
-      if (list) list.push(n);
-      else grid.set(key, [n]);
+export function segmentAt(setup: ChaseSetup, z: number): RoadSegment {
+  return setup.road[segmentIndex(z)];
+}
+
+// ---------------------------------------------------------------------------------------------- Aufbau
+
+type Stretch = { kind: 'straight' | 'curve' | 's'; length: number; curve: number };
+
+/** Straße aus dem Seed: Geraden, Kurven und S-Kurven mit weichem Ein- und Auslauf. */
+function buildRoad(random: () => number): RoadSegment[] {
+  const road: RoadSegment[] = [];
+  const push = (curve: number) => road.push({ curve, scenery: [], lit: false });
+  const ease = (a: number, b: number, t: number) => a + ((b - a) * (1 - Math.cos(t * Math.PI))) / 2;
+  const stretch = (s: Stretch) => {
+    const n = s.length;
+    const lead = Math.max(4, Math.floor(n * 0.3));
+    for (let i = 0; i < n; i++) {
+      if (s.kind === 'straight') push(0);
+      else if (s.kind === 'curve') {
+        const t = i < lead ? i / lead : i >= n - lead ? (n - i) / lead : 1;
+        push(ease(0, s.curve, t));
+      } else {
+        // S-Kurve: erst in die eine, dann in die andere Richtung.
+        const t = (i / n) * Math.PI * 2;
+        push(Math.sin(t) * s.curve);
+      }
     }
-    grids.set(net, grid);
+  };
+  // Anfang: eine Gerade, damit man sich sortieren kann.
+  stretch({ kind: 'straight', length: 30, curve: 0 });
+  while (road.length < SEGMENTS) {
+    const r = random();
+    const dir = random() < 0.5 ? -1 : 1;
+    if (r < 0.32) stretch({ kind: 'straight', length: 18 + Math.floor(random() * 30), curve: 0 });
+    else if (r < 0.8) {
+      const strength = lerp(0.012, 0.034, random());
+      stretch({ kind: 'curve', length: 28 + Math.floor(random() * 34), curve: strength * dir });
+    } else stretch({ kind: 's', length: 50 + Math.floor(random() * 30), curve: lerp(0.014, 0.026, random()) * dir });
   }
-  return grid;
-}
-
-/** Nächster Knoten in höchstens radius Metern (oder -1). */
-export function nearestNodeNear(net: ChaseNet, x: number, y: number, radius: number): number {
-  const grid = gridOf(net);
-  const g = net.g;
-  const r = Math.ceil(radius / CELL);
-  const cx = Math.floor(x / CELL);
-  const cy = Math.floor(y / CELL);
-  let best = -1;
-  let bestD = radius * radius;
-  for (let dx = -r; dx <= r; dx++) {
-    for (let dy = -r; dy <= r; dy++) {
-      const list = grid.get(cellKey(cx + dx, cy + dy));
-      if (!list) continue;
-      for (const n of list) {
-        const d = (g.nodeX[n] - x) ** 2 + (g.nodeY[n] - y) ** 2;
-        if (d < bestD) {
-          bestD = d;
-          best = n;
+  road.length = SEGMENTS;
+  // Kulisse: Häuserzeilen, Laternen, Bäume, Schilder, Büdchen, ab und zu eine Brücke.
+  let i = 0;
+  while (i < SEGMENTS) {
+    const block = 40 + Math.floor(random() * 40);
+    const style = random();
+    for (let k = 0; k < block && i + k < SEGMENTS; k++) {
+      const seg = road[i + k];
+      if (k % 6 === 0) {
+        seg.lit = true;
+        seg.scenery.push({ kind: 'lamp', side: k % 12 === 0 ? -1 : 1, offset: 1.4, size: 1, variant: 0 });
+      }
+      for (const side of [-1, 1] as const) {
+        if (style < 0.55) {
+          // Gründerzeit und Nachkrieg: dichte Häuserzeile, alle drei Stücke ein Haus.
+          if (k % 3 === 1) {
+            seg.scenery.push({
+              kind: random() < 0.12 ? 'tower' : 'house',
+              side,
+              offset: 3.2 + random() * 2,
+              size: 0.8 + random() * 0.6,
+              variant: Math.floor(random() * 6),
+            });
+          }
+          if (k % 9 === 5 && random() < 0.35) {
+            seg.scenery.push({ kind: 'kiosk', side, offset: 2, size: 1, variant: Math.floor(random() * 3) });
+          }
+        } else if (style < 0.85) {
+          // Ring und Rheinufer: Bäume, dazwischen Schilder.
+          if (k % 4 === 2) {
+            seg.scenery.push({
+              kind: 'tree',
+              side,
+              offset: 2.2 + random() * 1.5,
+              size: 0.8 + random() * 0.5,
+              variant: Math.floor(random() * 3),
+            });
+          }
+          if (k % 14 === 7 && random() < 0.5) {
+            seg.scenery.push({ kind: 'sign', side, offset: 2.6, size: 1, variant: Math.floor(random() * 4) });
+          }
+        } else if (k % 5 === 0) {
+          // Brücke: Bögen links und rechts.
+          seg.scenery.push({ kind: 'bridge', side, offset: 0.6, size: 1, variant: 0 });
         }
       }
     }
+    i += block;
   }
-  return best;
+  return road;
 }
 
-const GARAGE_LABELS = ['Tiefgarage', 'Hinterhof', 'Parkhaus', 'Werkstatt-Hof'];
-
-/** Feste Inhalte aus Seed, Schwierigkeit und Start. */
-export function createChase(net: ChaseNet, options: ChaseOptions): ChaseSetup {
+/** Feste Inhalte aus Seed und Schwierigkeit. */
+export function createChase(options: ChaseOptions): ChaseSetup {
   const random = createRng(options.seed);
-  const difficulty = clamp(options.difficulty, 0, 1);
-  const g = net.g;
-  const [sx, sy] = options.start;
-  let node = nearestNodeNear(net, sx, sy, 600);
-  if (node < 0 || degree(net, node) < 2) node = nearestNode(net, sx, sy);
-  // Startrichtung: die größte Straße am Knoten (bei Gleichstand aus dem Seed).
-  const options0: Leg[] = [];
-  for (let k = net.adjStart[node]; k < net.adjStart[node + 1]; k++) {
-    options0.push({ edge: net.adjEdge[k], dir: net.adjDir[k] });
-  }
-  const rank = (leg: Leg) => topSpeed(roadClass(net, leg.edge)) + legLength(net, leg) / 40 + random() * 4;
-  options0.sort((a, b) => rank(b) - rank(a));
-  const startLeg = options0[0];
-
-  const hideouts: Hideout[] = [];
-  for (const w of options.warehouses ?? []) {
-    if (Math.hypot(w.x - sx, w.y - sy) > 1600) continue;
-    const n = nearestNodeNear(net, w.x, w.y, 200);
-    if (n < 0) continue;
-    hideouts.push({ id: w.id, kind: 'warehouse', label: w.label, node: n, x: g.nodeX[n], y: g.nodeY[n] });
-    if (hideouts.length >= 2) break;
-  }
-  const garages = 3 - Math.min(1, hideouts.length) - (difficulty > 0.7 ? 1 : 0);
-  for (let i = 0; i < garages; i++) {
-    const n = nodeInRing(net, random, sx, sy, 350, 900, (c) => {
-      if (!quietNode(net, c)) return false;
-      return hideouts.every((h) => Math.hypot(h.x - g.nodeX[c], h.y - g.nodeY[c]) > 250);
-    });
-    if (n < 0) continue;
-    const kind: HideoutKind = i % 2 === 0 ? 'garage' : 'yard';
-    const label = GARAGE_LABELS[(i + Math.floor(random() * GARAGE_LABELS.length)) % GARAGE_LABELS.length];
-    hideouts.push({ id: `hideout:${i}`, kind, label, node: n, x: g.nodeX[n], y: g.nodeY[n] });
-  }
-
-  const clockRounds = Number.isFinite(options.clock) ? (options.clock as number) : 4;
-  const heliAt = clamp(60 - difficulty * 14 - (4 - clockRounds) * 4, 40, 60);
+  const difficulty = clamp(Number.isFinite(options.difficulty) ? options.difficulty : 0.5, 0, 1);
+  const clock = clamp(Number.isFinite(options.clock) ? Number(options.clock) : 4, 2, 6);
+  const road = buildRoad(random);
   return {
     seed: options.seed,
     difficulty,
-    startLeg,
-    cops: Math.round(2 + 3 * difficulty),
-    heliAt,
-    sightRange: lerp(SIGHT_RANGE.min, SIGHT_RANGE.max, difficulty),
-    copFactor: lerp(0.88, 1.02, difficulty),
-    roadblocks: difficulty < 0.4 ? 0 : Math.round(1 + (difficulty - 0.4) * 3.4),
-    civilians: Math.round(lerp(CIVILIANS.min, CIVILIANS.max, 0.5) * (options.mobile ? 0.7 : 1)),
-    hideouts,
+    road,
+    cops: clamp(2 + Math.round(difficulty * 2) + (clock <= 3 ? 1 : 0), 2, 4),
+    copFactor: lerp(COP_SPEED.easy, COP_SPEED.hard, difficulty),
+    traffic: Math.round(lerp(TRAFFIC.min, TRAFFIC.max, difficulty) * (options.mobile ? 0.8 : 1)),
+    blockEvery: lerp(BLOCK_EVERY.easy, BLOCK_EVERY.hard, difficulty),
   };
 }
 
-function placeMover(net: ChaseNet, m: Mover): void {
-  const p = pointOn(net, m.leg, m.s);
-  const a = pointOn(net, m.leg, m.s - 4);
-  const b = pointOn(net, m.leg, m.s + 4);
-  m.x = p[0];
-  m.y = p[1];
-  if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 0.01) {
-    m.heading = ((Math.atan2(b[0] - a[0], b[1] - a[1]) * 180) / Math.PI + 360) % 360;
-  }
-}
-
-/** Ein Stück rückwärts von einer Stelle: Kante, auf der man dist Meter hinter (leg, s) wäre (in Fahrtrichtung). */
-function behind(net: ChaseNet, leg: Leg, s: number, dist: number, random: () => number): { leg: Leg; s: number } {
-  let cur = leg;
-  let rest = dist - s;
-  if (rest <= 0) return { leg: cur, s: s - dist };
-  for (let i = 0; i < 20; i++) {
-    const back = reverse(cur);
-    const options = branchesAfter(net, back);
-    if (options.length === 0) return { leg: cur, s: 0 };
-    // Rückwärts möglichst geradeaus.
-    const pick = pickBranch(options, random() < 0.7 ? 'straight' : random() < 0.5 ? 'left' : 'right');
-    if (!pick) return { leg: cur, s: 0 };
-    cur = reverse(pick.leg);
-    const len = legLength(net, cur);
-    if (rest <= len) return { leg: cur, s: len - rest };
-    rest -= len;
-  }
-  return { leg: cur, s: 0 };
-}
-
-export function initChase(net: ChaseNet, setup: ChaseSetup): ChaseState {
-  const random = createRng(setup.seed ^ 0x5eed);
-  const player: Player = {
-    leg: setup.startLeg,
-    s: Math.min(6, legLength(net, setup.startLeg) / 3),
+function makeCop(state: ChaseState, lane: number, behind: number, spawnAt: number): Cop {
+  return {
+    id: state.nextId++,
+    lane,
+    x: laneX(lane),
+    z: -behind,
     v: 0,
-    x: 0,
-    y: 0,
-    heading: 0,
-    choice: 'straight',
-    turbo: 1,
-    turboOn: false,
-    skid: 0,
-    stun: 0,
-    uturn: 0,
-    brakeHold: 0,
-    uturnArmed: true,
+    state: 'chase',
+    spawnAt,
+    active: false,
+    // Schonfrist am Anfang: Die erste Streife rammt nicht, bevor man das Lenkrad in der Hand hat.
+    ramCooldown: spawnAt === 0 ? 3 : 0,
+    hesitateUntil: 0,
+    wreckT: 0,
   };
-  placeMover(net, player);
-  const cops: Cop[] = [];
-  for (let i = 0; i < setup.cops; i++) {
-    const cop: Cop = {
-      id: i + 1,
-      leg: setup.startLeg,
-      s: 0,
-      v: 0,
-      x: player.x,
-      y: player.y,
-      heading: player.heading,
-      path: [],
-      repathIn: 0.05 * i,
-      // Die erste Streife steht schon hinter dir, die anderen kommen nach und nach dazu.
-      spawnAt: i === 0 ? 0 : 3 + i * lerp(7, 4.5, setup.difficulty) + random() * 2,
-      active: false,
-      searching: false,
-      slow: 0,
-    };
-    cops.push(cop);
-  }
+}
+
+export function initChase(setup: ChaseSetup): ChaseState {
+  const random = createRng(setup.seed ^ 0x5bd1e995);
   const state: ChaseState = {
     t: 0,
-    player,
-    cops,
-    civilians: [],
-    roadblocks: [],
-    heli: { active: false, x: player.x, y: player.y, onYou: false },
-    sight: true,
-    nearest: Infinity,
-    hide: 0,
+    player: {
+      x: laneX(1),
+      lane: 1,
+      z: 0,
+      v: TOP_SPEED * 0.45,
+      vx: 0,
+      turbo: 1,
+      turboOn: false,
+      turboLeft: 0,
+      damage: 0,
+      skid: 0,
+      braking: false,
+    },
+    traffic: [],
+    cops: [],
+    blocks: [],
+    shake: 0,
+    nearest: 18,
+    near: true,
     contact: 0,
-    known: endNode(net, player.leg),
     dumped: false,
-    dumpUntil: -1,
-    hesitateUntil: -1,
-    inHideout: -1,
+    hesitateUntil: 0,
+    nextBlockAt: setup.difficulty >= 0.3 ? BLOCK_FIRST : Infinity,
     end: null,
     endAt: -1,
     events: [],
-    nextId: 100,
-    nextRoadblockAt: 14 + random() * 6,
-    roadblocksLeft: setup.roadblocks,
+    nextId: 1,
     random,
   };
-  spawnCop(net, setup, state, cops[0]);
-  state.nearest = Math.hypot(cops[0].x - player.x, cops[0].y - player.y);
+  // Die erste Streife sitzt dir im Nacken, die anderen kommen nach und nach.
+  const spawnAt = [0, 5, 11, 18];
+  const behind = [18, 50, 80, 110];
+  for (let i = 0; i < setup.cops; i++) {
+    state.cops.push(makeCop(state, i % 2 === 0 ? 1 : i % 4 === 1 ? 0 : 2, behind[i], spawnAt[i]));
+  }
+  // Verkehr voraus; die ersten 200 m deiner Spur bleiben frei, damit du dich sortieren kannst.
+  for (let i = 0; i < setup.traffic; i++) {
+    const v = spawnTraffic(state, 70 + (i / setup.traffic) * TRAFFIC.window);
+    if (v && v.lane === 1 && v.z < 220) {
+      v.lane = state.random() < 0.5 ? 0 : 2;
+      v.x = laneX(v.lane);
+    }
+  }
   return state;
 }
 
-function emit(state: ChaseState, kind: ChaseEventKind, x: number, y: number, power = 1): void {
-  state.events.push({ kind, x, y, power });
+// ---------------------------------------------------------------------------------------------- Verkehr
+
+function trafficAt(state: ChaseState, lane: number, z: number, span: number): Vehicle | undefined {
+  return state.traffic.find((v) => v.lane === lane && Math.abs(v.z - z) < span);
 }
 
-function spawnCop(net: ChaseNet, setup: ChaseSetup, state: ChaseState, cop: Cop): void {
+/** Ein Wagen voraus an einer freien Stelle; es bleibt immer mindestens eine Spur frei. */
+function spawnTraffic(state: ChaseState, ahead: number): Vehicle | null {
+  const random = state.random;
+  const z = state.player.z + ahead;
+  if (state.blocks.some((b) => Math.abs(b.z - z) < 45)) return null;
+  const r = random();
+  const kind: TrafficKind = r < 0.68 ? 'car' : r < 0.9 ? 'van' : 'truck';
+  const free = [];
+  for (let lane = 0; lane < LANES; lane++) if (!trafficAt(state, lane, z, 28)) free.push(lane);
+  // Mindestens eine Spur bleibt in jedem Abschnitt frei.
+  if (free.length <= 1) return null;
+  const lane = free[Math.floor(random() * free.length)];
+  const [lo, hi] = KINDS[kind].speed;
+  const vehicle: Vehicle = {
+    id: state.nextId++,
+    kind,
+    lane,
+    x: laneX(lane),
+    z,
+    v: TOP_SPEED * lerp(lo, hi, random()),
+    color: Math.floor(random() * 5),
+    pushed: 0,
+    braking: false,
+  };
+  state.traffic.push(vehicle);
+  return vehicle;
+}
+
+function stepTraffic(setup: ChaseSetup, state: ChaseState, dt: number): void {
   const p = state.player;
-  if (cop.id === 1) {
-    // Direkt hinter dir: Die Kontrolle, der du gerade davonfährst.
-    const at = behind(net, p.leg, p.s, 55 + setup.difficulty * 25, state.random);
-    cop.leg = at.leg;
-    cop.s = at.s;
-    cop.v = 4;
-  } else {
-    // Um die letzte bekannte Stelle (nicht um dich: Wer abgetaucht ist, soll es bleiben).
-    const kx = net.g.nodeX[state.known];
-    const ky = net.g.nodeY[state.known];
-    const node = nodeInRing(net, state.random, kx, ky, 300, 600, (n) => degree(net, n) >= 2);
-    if (node < 0) {
-      cop.spawnAt = state.t + 2;
-      return;
-    }
-    const k = net.adjStart[node] + Math.floor(state.random() * degree(net, node));
-    cop.leg = { edge: net.adjEdge[k], dir: net.adjDir[k] };
-    cop.s = 0;
-    cop.v = topSpeed(roadClass(net, cop.leg.edge)) * 0.6;
+  for (const v of state.traffic) {
+    // Wer angeschoben wurde, rollt kurz schneller, dann wieder im eigenen Takt.
+    if (v.pushed > 0) {
+      v.pushed -= dt;
+      v.z += (v.v + 6) * dt;
+    } else v.z += v.v * dt;
+    // Langsamere voraus in derselben Spur: dranbleiben.
+    const front = state.traffic.find((o) => o !== v && o.lane === v.lane && o.z > v.z && o.z - v.z < 14);
+    v.braking = !!front && front.v < v.v;
+    if (front && front.z - v.z < 9) v.z = front.z - 9;
+    v.x += (laneX(v.lane) - v.x) * Math.min(1, 4 * dt);
   }
-  cop.active = true;
-  cop.path = [];
-  cop.repathIn = 0;
-  placeMover(net, cop);
-  emit(state, 'cop', cop.x, cop.y);
-}
-
-// ---------------------------------------------------------------------------------------------- Abfragen
-
-/** Nächste echte Kreuzung vor dir (Knoten mit mindestens zwei Abzweigen), höchstens 700 m weit. */
-export function upcoming(net: ChaseNet, state: ChaseState): Upcoming {
-  const p = state.player;
-  let leg = p.leg;
-  let distance = legLength(net, leg) - p.s;
-  for (let i = 0; i < 30 && distance < 700; i++) {
-    const branches = branchesAfter(net, leg);
-    if (branches.length !== 1) {
-      const chosen = pickBranch(branches, p.choice);
-      return {
-        distance,
-        node: endNode(net, leg),
-        branches,
-        chosen,
-        safe: chosen ? cornerSpeed(chosen.angle) : 0,
-        deadEnd: branches.length === 0,
-      };
-    }
-    leg = branches[0].leg;
-    distance += legLength(net, leg);
+  // Was hinter dir ist, kommt vorne neu.
+  state.traffic = state.traffic.filter((v) => v.z > p.z - TRAFFIC.behind);
+  let tries = 0;
+  while (state.traffic.length < setup.traffic && tries < 6) {
+    tries++;
+    spawnTraffic(state, TRAFFIC.window * (0.55 + 0.45 * state.random()));
   }
-  return { distance, node: endNode(net, leg), branches: [], chosen: null, safe: Infinity, deadEnd: false };
 }
 
-/**
- * Der Weg, den du mit der aktuellen Wahl nimmst: Punkte [x0, y0, x1, y1, …] alle step Meter von dir bis zur nächsten
- * Kreuzung und intoBranch Meter in den gewählten Abzweig (für die Linie auf der Straße).
- */
-export function routeAhead(net: ChaseNet, state: ChaseState, step = 6, intoBranch = 22): number[] {
+/** Überlappen zwei Wagen (Länge und Breite)? */
+function overlaps(ax: number, az: number, aw: number, al: number, bx: number, bz: number, bw: number, bl: number) {
+  return Math.abs(az - bz) < (al + bl) / 2 && Math.abs(ax - bx) < (aw + bw) / 2;
+}
+
+function emit(state: ChaseState, kind: ChaseEventKind, power: number, x = state.player.x, ahead = 0): void {
+  state.events.push({ kind, power: clamp(power, 0, 1), x, ahead });
+}
+
+function addDamage(state: ChaseState, amount: number): void {
+  state.player.damage = clamp(state.player.damage + amount, 0, 1);
+}
+
+/** Zusammenstöße mit dem Verkehr: auffahren (bremst, Schaden nach Differenztempo) oder seitlich streifen. */
+function collideTraffic(state: ChaseState): void {
   const p = state.player;
-  const out: number[] = [];
-  const pt: [number, number] = [0, 0];
-  let leg = p.leg;
-  let s = p.s;
-  for (let i = 0; i < 30 && out.length < 400; i++) {
-    const len = legLength(net, leg);
-    for (; s < len; s += step) {
-      pointOn(net, leg, s, pt);
-      out.push(pt[0], pt[1]);
+  for (const v of state.traffic) {
+    const size = KINDS[v.kind];
+    if (!overlaps(p.x, p.z, CAR_WIDTH, CAR_LENGTH, v.x, v.z, size.width, size.length)) continue;
+    const dz = v.z - p.z;
+    const dx = v.x - p.x;
+    const sideways = Math.abs(dz) < (CAR_LENGTH + size.length) / 2 - 1.2;
+    if (sideways && Math.abs(dx) > 0.4) {
+      // Seitlich gestreift: zurück in die alte Spur, etwas Tempo weg.
+      const away = dx > 0 ? -1 : 1;
+      p.x = v.x + away * ((CAR_WIDTH + size.width) / 2 + 0.05);
+      p.lane = laneOf(p.x);
+      p.vx = away * 2.5;
+      p.v = Math.max(v.v - 2, p.v - 4);
+      addDamage(state, 0.03);
+      emit(state, 'sideswipe', 0.4, p.x + dx / 2, dz);
+      continue;
     }
-    const branches = branchesAfter(net, leg);
-    if (branches.length === 0) break;
-    const pick = pickBranch(branches, branches.length === 1 ? 'straight' : p.choice) as Branch;
-    if (branches.length > 1) {
-      const into = Math.min(intoBranch, legLength(net, pick.leg));
-      for (let d = 0; d <= into; d += step) {
-        pointOn(net, pick.leg, d, pt);
-        out.push(pt[0], pt[1]);
+    if (dz <= 0) continue;
+    const closing = p.v - v.v;
+    if (closing > 10) {
+      // Aufgefahren: hart. Der andere wird angeschoben, du hängst dahinter und rutschst.
+      p.v = Math.max(4, v.v - 3);
+      p.z = v.z - (CAR_LENGTH + size.length) / 2;
+      p.skid = SKID_SECONDS;
+      v.pushed = 1;
+      v.z += 1.5;
+      addDamage(state, Math.min(0.25, 0.05 + closing / 200));
+      emit(state, 'crash', clamp(closing / 40, 0.3, 1), v.x, dz);
+    } else {
+      // Aufgerollt: du hängst hinter ihm.
+      p.v = Math.max(3, v.v - 1.5);
+      p.z = v.z - (CAR_LENGTH + size.length) / 2;
+      addDamage(state, 0.015);
+      emit(state, 'bump', 0.3, v.x, dz);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------- Streifen
+
+function activeCops(state: ChaseState): Cop[] {
+  return state.cops.filter((c) => c.active && c.state !== 'wrecked');
+}
+
+/** Freie Spur für eine Streife: am liebsten deine, sonst die nächste ohne Verkehr dicht voraus. */
+function copLane(state: ChaseState, cop: Cop): number {
+  const p = state.player;
+  const blocked = (lane: number) =>
+    state.traffic.some((v) => v.lane === lane && v.z > cop.z - 2 && v.z - cop.z < 30 && v.v < cop.v - 2) ||
+    state.blocks.some((b) => b.gap !== lane && !b.passed && b.z > cop.z && b.z - cop.z < 60);
+  const wanted = p.lane;
+  if (!blocked(wanted)) return wanted;
+  const order = [cop.lane, wanted - 1, wanted + 1, 0, LANES - 1].filter((l) => l >= 0 && l < LANES);
+  return order.find((l) => !blocked(l)) ?? cop.lane;
+}
+
+function stepCops(setup: ChaseSetup, state: ChaseState, dt: number): void {
+  const p = state.player;
+  const hesitate = state.t < state.hesitateUntil;
+  for (const cop of state.cops) {
+    if (!cop.active) {
+      if (state.t >= cop.spawnAt) {
+        cop.active = true;
+        cop.v = Math.max(p.v, TOP_SPEED * 0.6);
+        emit(state, 'cop', 0.5, cop.x, cop.z - p.z);
       }
-      break;
+      continue;
     }
-    s -= len;
-    leg = pick.leg;
+    if (cop.state === 'wrecked') {
+      cop.wreckT -= dt;
+      cop.v = Math.max(0, cop.v - 25 * dt);
+      cop.z += cop.v * dt;
+      continue;
+    }
+    cop.ramCooldown = Math.max(0, cop.ramCooldown - dt);
+    const gap = p.z - cop.z;
+    const slowed = hesitate || state.t < cop.hesitateUntil;
+    // Tempo: etwas langsamer als du mit Vollgas, weit hinten mit Gummiband, nach der Ware aus dem Fenster zögernd.
+    let target = TOP_SPEED * setup.copFactor;
+    if (gap > COP_RUBBER_GAP) target *= COP_RUBBER;
+    if (slowed) target *= 0.72;
+    if (gap < -1.5) {
+      // Vor dir: Sie bremst dich aus und zieht in deine Spur (Blockieren), bis du vorbei bist.
+      target = Math.max(6, p.v * 0.8);
+    } else if (gap < 40) {
+      // Aufschließen mit Maß: je näher, desto kleiner der Tempounterschied (sonst schießt sie vorbei). Dicht hinter dir
+      // in deiner Spur rammt sie; daneben bleibt sie auf gleicher Höhe und drückt dich zur Seite.
+      const sameLane = Math.abs(cop.x - p.x) < CAR_WIDTH;
+      const approach = p.v + Math.max(sameLane ? 1.5 : gap < 2.5 ? 0 : 0.6, gap * 0.8);
+      target = Math.min(target, approach);
+    }
+    cop.v += clamp(target - cop.v, -14 * dt, 7 * dt);
+    // Spur wählen und wechseln; dabei kann es krachen.
+    const lane = copLane(state, cop);
+    if (lane !== cop.lane) {
+      cop.lane = lane;
+      if (setup.difficulty < 0.85 && state.random() < 0.06 + 0.1 * (1 - setup.difficulty)) {
+        // Zu eng: Die Streife setzt den Wagen in den Verkehr.
+        cop.state = 'wrecked';
+        cop.wreckT = 4;
+        emit(state, 'copCrash', 0.8, cop.x, cop.z - p.z);
+        continue;
+      }
+    }
+    cop.x += clamp(laneX(cop.lane) - cop.x, -STEER_SPEED * dt, STEER_SPEED * dt);
+    // Verkehr voraus in der eigenen Spur bremst die Streife.
+    const front = state.traffic.find((v) => v.lane === cop.lane && v.z > cop.z && v.z - cop.z < 8);
+    if (front && front.z - cop.z < 7) {
+      cop.v = Math.min(cop.v, front.v);
+      cop.z = Math.min(cop.z, front.z - 7);
+    }
+    // Sperren bremsen auch die Streifen (sie müssen durch die Lücke).
+    const block = state.blocks.find((b) => b.z > cop.z && b.z - cop.z < 12);
+    if (block && cop.lane !== block.gap) cop.v = Math.min(cop.v, TOP_SPEED * 0.4);
+    cop.z += cop.v * dt;
+    const dz = cop.z - p.z;
+    const dx = cop.x - p.x;
+    if (cop.ramCooldown <= 0 && dz > -CAR_LENGTH - 0.6 && dz < 0.5 && Math.abs(dx) < CAR_WIDTH * 0.9) {
+      // Rammen: dicht hinter dir in deiner Spur.
+      cop.ramCooldown = RAM_COOLDOWN;
+      cop.v = Math.max(0, cop.v - 9);
+      cop.z = p.z - CAR_LENGTH - 0.8;
+      const side = dx > 0.15 ? -1 : dx < -0.15 ? 1 : state.random() < 0.5 ? -1 : 1;
+      p.vx += side * RAM_PUSH * 2.2;
+      p.v = Math.max(5, p.v - 6);
+      addDamage(state, RAM_DAMAGE);
+      emit(state, 'ram', 0.7, p.x, dz);
+    } else if (Math.abs(dz) < CAR_LENGTH * 0.9 && Math.abs(dx) < CAR_WIDTH + 0.15) {
+      // Neben dir: Sie drückt dich zur Seite (Blech an Blech).
+      const side = dx > 0 ? -1 : 1;
+      p.x = cop.x + side * (CAR_WIDTH + 0.15);
+      p.vx += side * 1.6 * dt * 10;
+      if (cop.ramCooldown <= 0) {
+        cop.ramCooldown = 0.8;
+        addDamage(state, 0.015);
+        emit(state, 'sideswipe', 0.5, p.x - side * CAR_WIDTH * 0.5, dz);
+      }
+    } else if (dz > -0.5 && dz < CAR_LENGTH + 0.5 && Math.abs(dx) < CAR_WIDTH * 0.95 && cop.v <= p.v + 0.5) {
+      // Vor dir in deiner Spur: du hängst hinter der Streife, sie zieht dich runter.
+      p.v = Math.max(4, Math.min(p.v, cop.v - 1));
+      p.z = Math.min(p.z, cop.z - CAR_LENGTH - 0.2);
+    }
   }
-  return out;
+  // Zerstörte Streifen verschwinden; bei hoher Schwierigkeit kommt Ersatz.
+  for (const cop of state.cops) {
+    if (cop.state === 'wrecked' && cop.wreckT <= 0 && cop.active) {
+      cop.active = false;
+      cop.spawnAt = Infinity;
+      if (setup.difficulty >= 0.5 && state.t < TIME_LIMIT - 20) {
+        state.cops.push(makeCop(state, state.random() < 0.5 ? 0 : 2, 95, state.t + 6));
+      }
+    }
+  }
 }
 
-/** Restzeit in Sekunden. */
-export function timeLeft(state: ChaseState): number {
-  return Math.max(0, TIME_LIMIT - state.t);
-}
+// ---------------------------------------------------------------------------------------------- Sperren
 
-/** Score: entkommen 0,6 + 0,4 · übrige Zeit; gefasst 0,05 bis 0,4 nach überstandener Zeit. */
-export function chaseScore(state: ChaseState): number {
-  if (state.end === 'escaped' || state.end === 'hideout')
-    return clamp(0.6 + 0.4 * (timeLeft(state) / TIME_LIMIT), 0, 1);
-  return clamp(0.05 + 0.35 * Math.min(1, state.endAt / TIME_LIMIT), 0.05, 0.4);
-}
-
-export function chasePicks(state: ChaseState): string[] {
-  const picks: string[] = [];
-  if (state.dumped) picks.push('dumped');
-  if (state.end === 'hideout') picks.push('hideout');
-  if (state.end === 'time') picks.push('time');
-  return picks;
-}
-
-export function escaped(state: ChaseState): boolean {
-  return state.end === 'escaped' || state.end === 'hideout';
-}
-
-// ---------------------------------------------------------------------------------------------- Eingaben
-
-/** Abbiegung für die nächste Kreuzung wählen (dieselbe Seite noch einmal: zurück auf geradeaus). */
-export function choose(state: ChaseState, choice: TurnChoice): void {
+function stepBlocks(setup: ChaseSetup, state: ChaseState): void {
   const p = state.player;
-  p.choice = p.choice === choice && choice !== 'straight' ? 'straight' : choice;
-}
-
-/** Ware aus dem Fenster: einmal, kurz schneller, die Streifen zögern. */
-export function dumpGoods(state: ChaseState): boolean {
-  if (state.dumped || state.end) return false;
-  state.dumped = true;
-  state.dumpUntil = state.t + DUMP_BOOST;
-  state.hesitateUntil = state.t + DUMP_HESITATE;
-  emit(state, 'dump', state.player.x, state.player.y);
-  return true;
+  if (state.t >= state.nextBlockAt && !state.end) {
+    state.nextBlockAt = state.t + setup.blockEvery;
+    const gap = Math.floor(state.random() * LANES);
+    const z = p.z + BLOCK_AHEAD;
+    state.blocks.push({ id: state.nextId++, z, gap, passed: false, hit: false });
+    // Verkehr an der Sperre räumt den Platz (der steht sonst mitten in der Lücke).
+    state.traffic = state.traffic.filter((v) => Math.abs(v.z - z) > 45);
+    emit(state, 'block', 0.5, laneX(gap), BLOCK_AHEAD);
+  }
+  for (const b of state.blocks) {
+    if (b.passed) continue;
+    const dz = b.z - p.z;
+    if (dz > CAR_LENGTH / 2 + 1) continue;
+    b.passed = true;
+    const gapX = laneX(b.gap);
+    if (Math.abs(p.x - gapX) < LANE_WIDTH / 2 + 0.25) {
+      emit(state, 'blockPassed', 0.6, gapX, dz);
+      // Die Streifen müssen auch durch die Lücke: Sie verlieren Zeit.
+      for (const cop of state.cops) cop.hesitateUntil = Math.max(cop.hesitateUntil, state.t + 1.6);
+    } else {
+      b.hit = true;
+      p.v = Math.min(p.v, 8);
+      p.skid = SKID_SECONDS;
+      p.x += (p.x < gapX ? -1 : 1) * 0.6;
+      addDamage(state, BLOCK_DAMAGE);
+      emit(state, 'blockHit', 1, p.x, dz);
+    }
+  }
+  state.blocks = state.blocks.filter((b) => b.z > p.z - 80);
 }
 
 // ---------------------------------------------------------------------------------------------- Schritt
 
-/** Weiterfahren über Kantengrenzen; onNode entscheidet am Ende einer Kante, wie es weitergeht (null = stehen). */
-function advance(net: ChaseNet, m: Mover, dist: number, onNode: (from: Leg) => Leg | null): boolean {
-  let move = dist;
-  for (let i = 0; i < 12 && move > 0; i++) {
-    const rest = legLength(net, m.leg) - m.s;
-    if (move < rest) {
-      m.s += move;
-      return true;
-    }
-    move -= rest;
-    const next = onNode(m.leg);
-    if (!next) {
-      m.s = legLength(net, m.leg);
-      return false;
-    }
-    m.leg = next;
-    m.s = 0;
-  }
+/** Spur wechseln (eine nach links oder rechts). true, wenn es eine Spur gab. */
+export function steer(state: ChaseState, dir: 'left' | 'right'): boolean {
+  const p = state.player;
+  if (state.end) return false;
+  const lane = clamp(p.lane + (dir === 'left' ? -1 : 1), 0, LANES - 1);
+  if (lane === p.lane) return false;
+  p.lane = lane;
+  emit(state, 'steer', 0.5);
   return true;
 }
 
-function stepPlayer(net: ChaseNet, state: ChaseState, input: ChaseInput, dt: number): void {
-  const p = state.player;
-  const cls = roadClass(net, p.leg.edge);
-  p.skid = Math.max(0, p.skid - dt);
-  p.stun = Math.max(0, p.stun - dt);
-
-  // Turbo: halten verbraucht, sonst lädt er nach.
-  const wantTurbo = input.turbo && p.turbo > 0.02 && p.stun <= 0 && p.uturn <= 0;
-  if (wantTurbo && !p.turboOn) emit(state, 'turbo', p.x, p.y);
-  p.turboOn = wantTurbo;
-  p.turbo = clamp(p.turbo + (wantTurbo ? -dt / TURBO_SECONDS : dt / TURBO_RECHARGE), 0, 1);
-
-  // Wenden.
-  if (p.uturn > 0) {
-    p.uturn -= dt;
-    p.v = 0;
-    if (p.uturn <= 0) p.uturn = 0;
-    return;
-  }
-  if (!input.brake) p.uturnArmed = true;
-  if (input.brake && p.v < 0.8 && p.uturnArmed) {
-    p.brakeHold += dt;
-    if (p.brakeHold >= UTURN_HOLD) {
-      p.brakeHold = 0;
-      const len = legLength(net, p.leg);
-      p.leg = reverse(p.leg);
-      p.s = Math.max(0, len - p.s);
-      p.v = 0;
-      p.uturn = UTURN_SECONDS;
-      // Noch einmal wenden erst nach Loslassen der Bremse (sonst dreht man sich im Kreis).
-      p.uturnArmed = false;
-      p.choice = 'straight';
-      emit(state, 'uturn', p.x, p.y);
-      return;
-    }
-  } else {
-    p.brakeHold = 0;
-  }
-
-  const boost = state.t < state.dumpUntil ? 1.15 : 1;
-  const cap = topSpeed(cls) * (p.turboOn ? TURBO_FACTOR : 1) * boost;
-  let a: number;
-  if (p.stun > 0) a = -BRAKE;
-  else if (input.brake) a = -BRAKE;
-  else if (p.v > cap) a = -6;
-  else if ((input.gas || (input.cruise && p.v < cap * CRUISE)) && p.skid <= 0) {
-    a = (p.turboOn ? TURBO_ACCEL : ACCEL) * Math.sqrt(Math.max(0, 1 - p.v / cap));
-  } else a = -COAST;
-  p.v = clamp(p.v + a * dt, 0, Math.max(cap, p.v));
-
-  advance(net, p, p.v * dt, (from) => {
-    const branches = branchesAfter(net, from);
-    const node = endNode(net, from);
-    const block = state.roadblocks.find((b) => b.node === node && !b.hit && b.until > state.t);
-    if (block) {
-      block.hit = true;
-      const power = clamp(p.v / 25, 0.3, 1);
-      p.v = 0;
-      p.stun = 1.3;
-      p.s = Math.max(0, legLength(net, from) - 7);
-      emit(state, 'crash', block.x, block.y, power);
-      return null;
-    }
-    if (branches.length === 0) {
-      // Sackgasse: stehen bleiben (wenden mit der Bremse).
-      if (p.v > 3) emit(state, 'bump', p.x, p.y, 0.3);
-      p.v = 0;
-      return null;
-    }
-    const pick = pickBranch(branches, branches.length === 1 ? 'straight' : p.choice) as Branch;
-    if (branches.length > 1) {
-      p.choice = 'straight';
-      emit(state, 'turn', p.x, p.y, Math.abs(pick.angle) / Math.PI);
-    }
-    const safe = cornerSpeed(pick.angle);
-    if (p.v > safe * 1.15) {
-      p.v = safe * SKID_KEEP + (p.v - safe) * 0.15;
-      p.skid = SKID_SECONDS;
-      emit(state, 'skid', p.x, p.y, clamp((p.v - safe) / 10 + 0.5, 0.4, 1));
-    } else if (p.v > safe * 0.85 && Math.abs(pick.angle) > 0.5) {
-      emit(state, 'squeal', p.x, p.y, 0.5);
-    }
-    return pick.leg;
-  });
-  placeMover(net, p);
+/** Ware aus dem Fenster: einmal, nur solange es läuft. */
+export function dumpGoods(state: ChaseState): boolean {
+  if (state.dumped || state.end) return false;
+  state.dumped = true;
+  state.player.turbo = 1;
+  state.hesitateUntil = state.t + DUMP_HESITATE;
+  emit(state, 'dump', 1, state.player.x, -2);
+  return true;
 }
 
-function nodeAhead(net: ChaseNet, state: ChaseState): number {
-  return endNode(net, state.player.leg);
-}
-
-function stepCops(net: ChaseNet, setup: ChaseSetup, state: ChaseState, dt: number): void {
-  const p = state.player;
-  const hesitate = state.t < state.hesitateUntil;
-  const avoid = new Set<number>();
-  for (const b of state.roadblocks) if (b.until > state.t) avoid.add(b.node);
-  for (const cop of state.cops) {
-    if (!cop.active) {
-      if (state.t >= cop.spawnAt) spawnCop(net, setup, state, cop);
-      continue;
-    }
-    cop.slow = Math.max(0, cop.slow - dt);
-    const sameEdge = cop.leg.edge === p.leg.edge;
-    const target = state.sight ? nodeAhead(net, state) : state.known;
-    cop.repathIn -= dt;
-    if (cop.repathIn <= 0) {
-      cop.repathIn = 0.3 + ((cop.id * 0.037) % 0.2);
-      const from = endNode(net, cop.leg);
-      const path = findPath(net, from, target, 5000, avoid);
-      cop.path = path ?? [];
-      // Ohne Sicht an der letzten bekannten Stelle angekommen: suchen (zufällig weiter).
-      cop.searching = !state.sight && from === state.known;
-    }
-    // Tempo: Straße × Faktor, weiter weg etwas schneller (sie holen auf), dicht hinter dir so schnell wie du.
-    const dx = p.x - cop.x;
-    const dy = p.y - cop.y;
-    const dist = Math.hypot(dx, dy);
-    let cap = topSpeed(roadClass(net, cop.leg.edge)) * setup.copFactor * (dist > 450 ? 1.2 : 1);
-    if (cop.searching) cap *= 0.55;
-    if (hesitate) cap *= 0.45;
-    if (cop.slow > 0) cap *= 0.6;
-    // Dicht hinter dir: nicht auffahren.
-    const rad = (cop.heading * Math.PI) / 180;
-    const ahead = dx * Math.sin(rad) + dy * Math.cos(rad);
-    if (dist < 10 && ahead > 0) cap = Math.min(cap, p.v + 0.5);
-    // Vor der nächsten Kurve bremsen (die Streife fährt Kurven besser als du).
-    const next = cop.path[0];
-    if (next) {
-      const toEnd = legLength(net, cop.leg) - cop.s;
-      const [ix, iy] = direction(net, cop.leg, true);
-      const [ox, oy] = direction(net, next, false);
-      const angle = Math.atan2(ix * oy - iy * ox, ix * ox + iy * oy);
-      const safe = cornerSpeed(angle) * 1.45;
-      if (toEnd < 40) cap = Math.min(cap, lerp(safe, cap, toEnd / 40));
-    }
-    // Auf deiner Kante dir entgegen: abbremsen und quer stellen (Blockade).
-    if (sameEdge && cop.leg.dir !== p.leg.dir && dist < 35) cap = Math.min(cap, 1.5);
-    const a = cop.v < cap ? 10 : -18;
-    cop.v = clamp(cop.v + a * dt, 0, Math.max(cap, 0));
-    advance(net, cop, cop.v * dt, (from) => {
-      const step = cop.path.shift();
-      if (step && startNode(net, step) === endNode(net, from)) return step;
-      // Kein Weg (oder falscher Anschluss): möglichst geradeaus weiter, beim Suchen zufällig.
-      const branches = branchesAfter(net, from);
-      if (branches.length === 0) return reverse(from);
-      if (cop.searching) return branches[Math.floor(state.random() * branches.length)].leg;
-      const pick = pickBranch(branches, 'straight');
-      return pick ? pick.leg : reverse(from);
-    });
-    placeMover(net, cop);
-  }
-}
-
-const CIV_COLORS = 6;
-
-function spawnCivilian(net: ChaseNet, state: ChaseState): Civilian | null {
-  const p = state.player;
-  const g = net.g;
-  const n = nodeInRing(net, state.random, p.x, p.y, 90, 420, (c) => g.adjStart[c + 1] - g.adjStart[c] > 0);
-  if (n < 0) return null;
-  // Zivilverkehr fährt nur in erlaubter Richtung (CSR des Graphen).
-  const count = g.adjStart[n + 1] - g.adjStart[n];
-  const k = g.adjStart[n] + Math.floor(state.random() * count);
-  const leg = { edge: g.adjEdge[k], dir: g.adjDir[k] };
-  const cls = roadClass(net, leg.edge);
-  if (cls === 'motorway') return null;
-  const civ: Civilian = {
-    id: state.nextId++,
-    leg,
-    s: state.random() * legLength(net, leg),
-    v: topSpeed(cls) * 0.55,
-    x: 0,
-    y: 0,
-    heading: 0,
-    next: null,
-    stopped: 0,
-    lane: LANE_OFFSET[cls] ?? 2,
-    color: Math.floor(state.random() * CIV_COLORS),
-    cooldown: 0,
-  };
-  placeMover(net, civ);
-  return civ;
-}
-
-/** Nächste Kante eines Zivilwagens: erlaubte Richtung, geradeaus bevorzugt. */
-function civilianNext(net: ChaseNet, state: ChaseState, leg: Leg): Leg | null {
-  const g = net.g;
-  const node = endNode(net, leg);
-  const [ix, iy] = direction(net, leg, true);
-  let best: Leg | null = null;
-  let bestW = -1;
-  for (let k = g.adjStart[node]; k < g.adjStart[node + 1]; k++) {
-    const cand = { edge: g.adjEdge[k], dir: g.adjDir[k] };
-    if (cand.edge === leg.edge) continue;
-    const [ox, oy] = direction(net, cand, false);
-    const w = Math.exp(-((Math.acos(clamp(ix * ox + iy * oy, -1, 1)) / 0.8) ** 2)) + state.random() * 0.6;
-    if (w > bestW) {
-      bestW = w;
-      best = cand;
-    }
-  }
-  return best;
-}
-
-function stepCivilians(net: ChaseNet, setup: ChaseSetup, state: ChaseState, dt: number): void {
-  const p = state.player;
-  const list = state.civilians;
-  for (let i = list.length - 1; i >= 0; i--) {
-    const c = list[i];
-    c.cooldown = Math.max(0, c.cooldown - dt);
-    if (c.stopped > 0) {
-      c.stopped -= dt;
-      c.v = 0;
-    } else {
-      const cap = topSpeed(roadClass(net, c.leg.edge)) * 0.55;
-      c.v = Math.min(cap, c.v + 4 * dt);
-    }
-    let gone = false;
-    advance(net, c, c.v * dt, (from) => {
-      const next = c.next ?? civilianNext(net, state, from);
-      c.next = null;
-      if (!next) gone = true;
-      return next;
-    });
-    placeMover(net, c);
-    // Spur: rechts versetzt.
-    const rad = (c.heading * Math.PI) / 180;
-    c.x += Math.cos(rad) * c.lane;
-    c.y -= Math.sin(rad) * c.lane;
-    const d = Math.hypot(c.x - p.x, c.y - p.y);
-    if (gone || d > 560) {
-      list.splice(i, 1);
-      continue;
-    }
-    const prad = (p.heading * Math.PI) / 180;
-    const inFront = (c.x - p.x) * Math.sin(prad) + (c.y - p.y) * Math.cos(prad) > -0.5;
-    if (d < BUMP_DISTANCE && c.cooldown <= 0 && p.uturn <= 0 && inFront) {
-      const power = clamp(Math.abs(p.v - c.v) / 20, 0.15, 1);
-      // Der Wagen steht kurz und weicht an den Rand aus (sonst rammt man ihn immer wieder).
-      c.cooldown = 4;
-      c.stopped = 2.5;
-      c.lane += c.lane >= 0 ? 2.5 : -2.5;
-      if (p.v > 3) {
-        p.v *= 0.42;
-        p.skid = Math.max(p.skid, 0.35);
-        emit(state, 'bump', (c.x + p.x) / 2, (c.y + p.y) / 2, power);
-      }
-    }
-    for (const cop of state.cops) {
-      if (cop.active && cop.slow <= 0 && Math.hypot(cop.x - c.x, cop.y - c.y) < BUMP_DISTANCE) cop.slow = 0.6;
-    }
-  }
-  for (let n = 0; n < 2 && list.length < setup.civilians; n++) {
-    const civ = spawnCivilian(net, state);
-    if (civ) list.push(civ);
-  }
-}
-
-/** Straßensperre an einer Kreuzung 120 bis 350 m vor dir (auf dem Weg, den du gerade nehmen würdest). */
-function stepRoadblocks(net: ChaseNet, state: ChaseState): void {
-  state.roadblocks = state.roadblocks.filter((b) => b.until > state.t);
-  if (state.roadblocksLeft <= 0 || state.t < state.nextRoadblockAt) return;
-  const p = state.player;
-  let leg = p.leg;
-  let distance = legLength(net, leg) - p.s;
-  let junctions = 0;
-  for (let i = 0; i < 30; i++) {
-    const branches = branchesAfter(net, leg);
-    if (branches.length === 0) break;
-    if (branches.length > 1) junctions += 1;
-    if (branches.length > 1 && distance >= 120 && junctions >= 2) {
-      const node = endNode(net, leg);
-      const [ix, iy] = direction(net, leg, true);
-      state.roadblocks.push({
-        id: state.nextId++,
-        node,
-        x: net.g.nodeX[node],
-        y: net.g.nodeY[node],
-        heading: ((Math.atan2(ix, iy) * 180) / Math.PI + 360) % 360,
-        until: state.t + 32,
-        hit: false,
-      });
-      state.roadblocksLeft -= 1;
-      state.nextRoadblockAt = state.t + 16 + state.random() * 8;
-      emit(state, 'roadblock', net.g.nodeX[node], net.g.nodeY[node]);
-      return;
-    }
-    if (distance > 350) break;
-    leg = (pickBranch(branches, 'straight') as Branch).leg;
-    distance += legLength(net, leg);
-  }
-  state.nextRoadblockAt = state.t + 3;
-}
-
-function stepHeli(net: ChaseNet, setup: ChaseSetup, state: ChaseState, dt: number): void {
-  const h = state.heli;
-  const p = state.player;
-  if (!h.active) {
-    if (state.t < setup.heliAt) return;
-    h.active = true;
-    // Kommt von der Seite herein.
-    h.x = p.x - 260;
-    h.y = p.y + 200;
-    emit(state, 'heli', h.x, h.y);
-  }
-  // Mit Sichtkontakt fliegt er dir nach, sonst sucht er im Kreis um die letzte bekannte Stelle.
-  let tx = p.x;
-  let ty = p.y;
-  if (!state.sight) {
-    const a = state.t * 0.7;
-    tx = net.g.nodeX[state.known] + Math.cos(a) * 70;
-    ty = net.g.nodeY[state.known] + Math.sin(a) * 70;
-  }
-  const dx = tx - h.x;
-  const dy = ty - h.y;
-  const d = Math.hypot(dx, dy);
-  const step = Math.min(d, HELI_SPEED * dt);
-  if (d > 0.01) {
-    h.x += (dx / d) * step;
-    h.y += (dy / d) * step;
-  }
-  h.onYou = Math.hypot(p.x - h.x, p.y - h.y) < HELI_RADIUS;
-}
-
-/**
- * Sieht diese Streife dich? Nah dran (NEAR_SIGHT) immer, weiter weg bis zur Sichtweite nur die Straße hinunter
- * (in einem schmalen Kegel vor ihr oder auf derselben Straße): Um die Ecke biegen bricht den Sichtkontakt.
- */
-function sees(setup: ChaseSetup, cop: Cop, p: Player, d: number): boolean {
-  if (d < NEAR_SIGHT) return true;
-  if (d > setup.sightRange) return false;
-  if (cop.leg.edge === p.leg.edge) return true;
-  const rad = (cop.heading * Math.PI) / 180;
-  const along = ((p.x - cop.x) * Math.sin(rad) + (p.y - cop.y) * Math.cos(rad)) / d;
-  return along > SIGHT_CONE;
-}
-
-function finishChase(state: ChaseState, end: ChaseEnd): void {
+function endChase(state: ChaseState, end: ChaseEnd): void {
   if (state.end) return;
   state.end = end;
   state.endAt = state.t;
-  emit(state, end === 'caught' || end === 'time' ? 'caught' : 'escaped', state.player.x, state.player.y);
+  emit(state, end === 'escaped' ? 'escaped' : 'caught', 1);
 }
 
-/** dt Sekunden weiter (echte Sekunden, vom Aufrufer gedeckelt). */
-export function stepChase(net: ChaseNet, setup: ChaseSetup, state: ChaseState, input: ChaseInput, dt: number): void {
-  state.events.length = 0;
-  if (state.end || dt <= 0) return;
-  state.t += dt;
-  stepPlayer(net, state, input, dt);
-  stepCops(net, setup, state, dt);
-  stepCivilians(net, setup, state, dt);
-  stepRoadblocks(net, state);
-  stepHeli(net, setup, state, dt);
-
+function stepPlayer(state: ChaseState, input: ChaseInput, dt: number): void {
   const p = state.player;
-  // Sichtkontakt: eine Streife sieht dich (nah dran oder die Straße hinunter) oder der Lichtkegel des Hubschraubers.
-  let nearest = Infinity;
-  let seen = state.heli.onYou;
-  for (const cop of state.cops) {
-    if (!cop.active) continue;
-    const d = Math.hypot(cop.x - p.x, cop.y - p.y);
-    nearest = Math.min(nearest, d);
-    if (!seen && sees(setup, cop, p, d)) seen = true;
+  // Turbo: zünden, läuft TURBO_SECONDS, lädt langsam nach.
+  if (input.turbo && !p.turboOn && p.turbo >= 0.999 && !state.end) {
+    p.turboOn = true;
+    p.turboLeft = TURBO_SECONDS;
+    emit(state, 'turbo', 1);
   }
-  for (const b of state.roadblocks) {
-    const d = Math.hypot(b.x - p.x, b.y - p.y);
-    if (d < NEAR_SIGHT * 1.6) seen = true;
-  }
-  state.nearest = nearest;
-  const sight = seen;
-  if (sight !== state.sight) emit(state, sight ? 'spotted' : 'lost', p.x, p.y);
-  state.sight = sight;
-  if (sight) state.known = nodeAhead(net, state);
-
-  state.inHideout = setup.hideouts.findIndex((h) => Math.hypot(h.x - p.x, h.y - p.y) < HIDEOUT_RADIUS);
-  if (!sight && state.inHideout >= 0) {
-    state.hide = 1;
-    finishChase(state, 'hideout');
-    return;
-  }
-  state.hide = clamp(state.hide + (sight ? -dt / 2 : dt / ABTAUCHEN_SECONDS), 0, 1);
-  if (state.hide >= 1) {
-    finishChase(state, 'escaped');
-    return;
-  }
-
-  // Gefasst: Streife dicht dran, du langsam.
-  const close = state.cops.some((c) => c.active && Math.hypot(c.x - p.x, c.y - p.y) < CATCH_DISTANCE);
-  if (close && p.v < CATCH_SPEED) state.contact += dt;
-  else state.contact = Math.max(0, state.contact - dt * 2);
-  if (state.contact >= CATCH_SECONDS) {
-    finishChase(state, 'caught');
-    return;
-  }
-  if (state.t >= TIME_LIMIT) finishChase(state, 'time');
+  if (p.turboOn) {
+    p.turboLeft -= dt;
+    p.turbo = Math.max(0, p.turboLeft / TURBO_SECONDS);
+    if (p.turboLeft <= 0) {
+      p.turboOn = false;
+      p.turbo = 0;
+    }
+  } else p.turbo = Math.min(1, p.turbo + dt / TURBO_RECHARGE);
+  // Tempo.
+  const top = TOP_SPEED * (p.turboOn ? TURBO_FACTOR : 1) * (1 - 0.25 * p.damage);
+  p.skid = Math.max(0, p.skid - dt);
+  p.braking = input.brake && !state.end;
+  if (state.end) {
+    p.v = Math.max(state.end === 'escaped' ? 12 : 0, p.v - (state.end === 'escaped' ? 10 : 16) * dt);
+  } else if (input.brake) p.v = Math.max(0, p.v - BRAKE * dt);
+  else if (p.skid > 0) p.v = Math.max(0, p.v - COAST * dt);
+  else if (input.gas || p.turboOn) p.v = Math.min(top, p.v + (p.turboOn ? TURBO_ACCEL : ACCEL) * dt);
+  else if (p.v < top * CRUISE) p.v = Math.min(top * CRUISE, p.v + ACCEL * 0.6 * dt);
+  else p.v = Math.max(top * CRUISE, p.v - COAST * dt);
+  p.z += p.v * dt;
+  // Seitlich: zur gewählten Spur, Kurven ziehen nach außen, Stöße (vx) klingen ab.
+  // Feder zur Spur mit Höchsttempo seitlich: schnell los, weich ankommen. Der Kurvenzug (curvePull) drückt dagegen.
+  const target = state.end === 'escaped' ? ROAD_HALF - 1.2 : laneX(p.lane);
+  const toTarget = clamp((target - p.x) * STEER_SPRING, -STEER_SPEED, STEER_SPEED) * dt;
+  p.x += toTarget + p.vx * dt;
+  p.vx *= Math.max(0, 1 - 6 * dt);
+  p.x = clamp(p.x, -ROAD_HALF + CAR_WIDTH / 2, ROAD_HALF - CAR_WIDTH / 2);
 }
 
-/** Für Tests und das Ende: sofort beenden. */
+/** Kurven ziehen bei hohem Tempo nach außen: Wer die Spur hält, muss gegenhalten (die Spur selbst bleibt gewählt). */
+function curvePull(setup: ChaseSetup, state: ChaseState, dt: number): void {
+  const p = state.player;
+  const curve = segmentAt(setup, p.z + 20).curve;
+  const pull = curve * (p.v / TOP_SPEED) ** 2 * CURVE_PULL * dt;
+  p.x = clamp(p.x + pull, -ROAD_HALF + CAR_WIDTH / 2, ROAD_HALF - CAR_WIDTH / 2);
+}
+
+function stepShake(state: ChaseState, dt: number): void {
+  const p = state.player;
+  const cops = activeCops(state);
+  let nearest = Infinity;
+  for (const cop of cops) nearest = Math.min(nearest, Math.max(0, p.z - cop.z));
+  state.nearest = nearest;
+  const near = nearest < SHAKE_NEAR;
+  if (near !== state.near) {
+    state.near = near;
+    emit(state, near ? 'near' : 'clear', 0.5);
+  }
+  let rate: number;
+  if (nearest === Infinity) rate = SHAKE_RATE;
+  else if (nearest >= SHAKE_FAR) rate = SHAKE_RATE * clamp((nearest - SHAKE_FAR) / SHAKE_LEAD, 0.15, 1);
+  else if (nearest < SHAKE_NEAR) rate = -SHAKE_DRAIN;
+  else rate = 0;
+  state.shake = clamp(state.shake + rate * dt, 0, 1);
+  // Gestellt: dicht dran und du bist langsam.
+  if (nearest < CATCH_GAP && p.v < CATCH_SPEED) state.contact += dt;
+  else state.contact = Math.max(0, state.contact - dt * 2);
+}
+
+/** Ein Schritt in echten Sekunden. Nach dem Ende laufen die Wagen noch aus (Zeitlupe in der Oberfläche). */
+export function stepChase(setup: ChaseSetup, state: ChaseState, input: ChaseInput, dt: number): void {
+  state.events.length = 0;
+  state.t += dt;
+  stepPlayer(state, state.end ? { gas: false, brake: false, turbo: false } : input, dt);
+  if (!state.end) curvePull(setup, state, dt);
+  stepTraffic(setup, state, dt);
+  stepBlocks(setup, state);
+  if (!state.end) collideTraffic(state);
+  stepCops(setup, state, dt);
+  if (state.end) return;
+  stepShake(state, dt);
+  if (state.player.damage >= 1) endChase(state, 'caught');
+  else if (state.contact >= CATCH_SECONDS) endChase(state, 'caught');
+  else if (state.shake >= 1) endChase(state, 'escaped');
+  else if (state.t >= TIME_LIMIT) endChase(state, 'time');
+}
+
+// ---------------------------------------------------------------------------------------------- Ergebnis
+
+export function timeLeft(state: ChaseState): number {
+  return Math.max(0, TIME_LIMIT - state.t);
+}
+
+export function escaped(state: ChaseState): boolean {
+  return state.end === 'escaped';
+}
+
+/** Score: entkommen 0,6 + 0,4 · übrige Zeit; gefasst 0,05 bis 0,4 nach überstandener Zeit. */
+export function chaseScore(state: ChaseState): number {
+  const left = timeLeft(state) / TIME_LIMIT;
+  if (state.end === 'escaped') return Math.round((0.6 + 0.4 * left) * 1000) / 1000;
+  const survived = clamp(Math.min(state.t, TIME_LIMIT) / TIME_LIMIT, 0, 1);
+  return Math.round((0.05 + 0.35 * survived) * 1000) / 1000;
+}
+
+/** picks für den Kern: 'dumped' (Ware weg), 'hideout' (in der Tiefgarage entkommen), 'time' (Zeit abgelaufen). */
+export function chasePicks(state: ChaseState): string[] {
+  const picks: string[] = [];
+  if (state.dumped) picks.push('dumped');
+  if (state.end === 'escaped') picks.push('hideout');
+  if (state.end === 'time') picks.push('time');
+  return picks;
+}
+
+/** Für Screenshots und Playwright: sofort beenden. */
 export function forceEnd(state: ChaseState, end: ChaseEnd): void {
-  finishChase(state, end);
+  endChase(state, end);
 }

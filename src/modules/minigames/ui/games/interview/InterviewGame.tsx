@@ -1,7 +1,9 @@
-// Bewerbungsgespräch (Auftrag 44, Teil 9): Hinterzimmer, Lampe über dem Tisch, gegenüber die Person (Face groß,
-// Ausdruck nach Antwort). Je Runde drei Fragekarten (1 bis 3 bzw. Tippen); die Antwort tippt sich in die Sprechblase
-// und kommt mit der Stimme der Figur (audio.speak, wenn verfügbar). Danach drei Deutungen mit Frist (1 bis 3), was die
-// Antwort verrät. Links die Akte: Was du schon weißt, und was du gerade erkannt hast. Spiellogik in model.ts.
+// Bewerbungsgespräch (Feedback vom 07.10.2026: Lügendetektor). Hinterzimmer, Lampe über dem Tisch, gegenüber die
+// Person (Face groß). Du stellst drei Fragen; die Antwort tippt sich in die Sprechblase und kommt mit der Stimme der
+// Figur (audio.speak, wenn verfügbar). Während die Person redet, zeigt sie kurz Zeichen (Blick weg, Schwitzen,
+// Zappeln, Kratzen, Grinsen) und harmlose Gesten (Nicken, Schluck, Schulterzucken, Vorbeugen). Zeichen rechtzeitig
+// antippen (Leertaste, „Zeichen!“ oder die Person antippen); Gesten sind Fehlalarme. Links die Akte. Spiellogik in
+// model.ts, die Zeichen sitzen als Overlay über dem Porträt (Tells.tsx).
 
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { type MouthStyle, personLook } from '../../../../../core';
@@ -13,30 +15,28 @@ import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
 import type { MinigameViewProps } from '../../registry';
 import {
+  activeCue,
   advance,
-  CHOOSE_TIME,
-  choose,
+  CUE_NAMES,
+  type CueKind,
   correctCount,
   createInterview,
-  currentOffer,
+  currentRound,
   discovered,
   type InterviewState,
   initInterview,
   interviewPicks,
   interviewScore,
   isDone,
-  offersOf,
+  mark,
   type Phase,
-  type Reading,
-  read,
   type Signal,
-  skipAnswer,
-  timeLeft,
   typedChars,
 } from './model';
 import { INTERVIEW_SOUNDS } from './sounds';
+import { TellMarks } from './Tells';
 
-const KEYS = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3', 'Space', 'Enter'];
+const KEYS = ['Space', 'Enter'];
 
 /** params, wie sie recruiting mitgibt (InterviewParams); alles geprüft, weil es aus dem Spielstand kommt. */
 interface Person {
@@ -70,15 +70,6 @@ function personOf(params: Record<string, unknown>): Person {
   };
 }
 
-/** Name einer Deutung. */
-function readingName(r: Reading, name: string): string {
-  return r === 'none' ? 'Nichts davon' : traitName(r, name);
-}
-
-function readingIcon(r: Reading): string {
-  return r === 'none' ? 'minus' : TRAITS[r].icon;
-}
-
 function toneOf(t: TraitId): 'good' | 'bad' | 'mixed' {
   return TRAITS[t].tone;
 }
@@ -86,14 +77,38 @@ function toneOf(t: TraitId): 'good' | 'bad' | 'mixed' {
 interface Hud {
   phase: Phase;
   round: number;
-  chosen: number | null;
   results: InterviewState['results'];
-  /** Zähler, damit Sprechblase und Karten bei jeder neuen Zeile neu aufploppen. */
+  /** Zeichen dieser Runde: getroffen, verpasst (nach dem Fenster), Fehlalarme. */
+  hits: number;
+  misses: number;
+  falseAlarms: number;
+  /** Zähler, damit Sprechblasen bei jeder neuen Runde neu aufploppen. */
   beat: number;
+  /** Letztes Tippen: Treffer oder Fehlalarm (für das Aufblitzen). */
+  flash: { kind: 'hit' | 'false'; key: number } | null;
 }
 
-function snapshot(s: InterviewState, beat: number): Hud {
-  return { phase: s.phase, round: s.round, chosen: s.chosen, results: [...s.results], beat };
+function snapshot(
+  setup: ReturnType<typeof createInterview>,
+  s: InterviewState,
+  beat: number,
+  flash: Hud['flash'],
+): Hud {
+  const round = currentRound(setup, s);
+  const misses =
+    round && s.phase === 'answer'
+      ? round.cues.filter((c, i) => c.tell && s.t >= c.at + c.len && !s.caught.includes(i)).length
+      : 0;
+  return {
+    phase: s.phase,
+    round: s.round,
+    results: [...s.results],
+    hits: s.caught.length,
+    misses,
+    falseAlarms: s.falseAlarms,
+    beat,
+    flash,
+  };
 }
 
 export function InterviewGame(props: MinigameViewProps) {
@@ -108,15 +123,26 @@ export function InterviewGame(props: MinigameViewProps) {
   const look = useMemo(() => personLook(person.name, person.age), [person]);
   const typed = useRef<HTMLSpanElement>(null);
   const timerBar = useRef<HTMLSpanElement>(null);
-  const fx = useRef({ t: 0, sent: false, beat: 0, lastTick: -1, speech: null as (() => void) | null, typed: -1 });
-  const [hud, setHud] = useState<Hud>(() => snapshot(game.current, 0));
+  const personBox = useRef<HTMLButtonElement>(null);
+  const fx = useRef({
+    t: 0,
+    sent: false,
+    beat: 0,
+    flashKey: 0,
+    speech: null as (() => void) | null,
+    typed: -1,
+    lastHud: -1,
+    cue: null as CueKind | null,
+  });
+  const [hud, setHud] = useState<Hud>(() => snapshot(setup, game.current, 0, null));
+  const [cue, setCue] = useState<{ kind: CueKind; tell: boolean; key: number } | null>(null);
 
-  // Stimme schon laden und alle möglichen Antworten vorrechnen (das Spiel steht still, solange es offen ist).
+  // Stimme schon laden und alle Antworten vorrechnen (das Spiel steht still, solange es offen ist).
   useEffect(() => {
     if (!person.voice) return;
     audio.prepareVoice(person.voice);
     audio.prepareSpeech(
-      setup.rounds.flat().map((o) => o.answer),
+      setup.rounds.map((r) => r.answer),
       person.voice,
     );
   }, [setup, person]);
@@ -141,11 +167,15 @@ export function InterviewGame(props: MinigameViewProps) {
     const f = fx.current;
     f.speech?.();
     f.speech = null;
-    const offer = currentOffer(setup, game.current);
-    if (!offer || !person.voice) return;
-    f.speech = audio.speak(offer.answer, person.voice, () => {
+    const round = currentRound(setup, game.current);
+    if (!round || !person.voice) return;
+    f.speech = audio.speak(round.answer, person.voice, () => {
       f.speech = null;
     });
+  };
+
+  const refresh = (flash: Hud['flash'] = null) => {
+    setHud((h) => snapshot(setup, game.current, fx.current.beat, flash ?? h.flash));
   };
 
   const react = (signals: Signal[]) => {
@@ -153,26 +183,31 @@ export function InterviewGame(props: MinigameViewProps) {
     for (const sig of signals) {
       switch (sig) {
         case 'asked':
-          audio.play(INTERVIEW_SOUNDS.slide, { volume: 0.7 });
+          audio.play(INTERVIEW_SOUNDS.slide, { volume: 0.6 });
           haptic('selection');
+          break;
+        case 'answering':
           speak();
           break;
-        case 'correct':
-          audio.play(INTERVIEW_SOUNDS.pen, { volume: 0.9 });
-          playSound(MINIGAME_SOUNDS.clunk, 0.4);
-          haptic('success');
+        case 'miss':
+          audio.play(INTERVIEW_SOUNDS.tick, { volume: 0.35 });
           break;
-        case 'wrong':
-          playSound(MINIGAME_SOUNDS.fail, 0.6);
-          haptic('error');
-          break;
-        case 'timeout':
-          playSound(MINIGAME_SOUNDS.fail, 0.5);
-          haptic('warning');
-          break;
-        case 'round':
+        case 'verdict': {
+          const last = game.current.results[game.current.results.length - 1];
           fx.current.speech?.();
           fx.current.speech = null;
+          if (last?.correct) {
+            audio.play(INTERVIEW_SOUNDS.pen, { volume: 0.9 });
+            playSound(MINIGAME_SOUNDS.clunk, 0.35);
+            haptic('success');
+          } else {
+            playSound(MINIGAME_SOUNDS.fail, 0.6);
+            haptic('error');
+          }
+          break;
+        }
+        case 'round':
+          fx.current.beat += 1;
           break;
         case 'done':
           finish();
@@ -181,30 +216,27 @@ export function InterviewGame(props: MinigameViewProps) {
           break;
       }
     }
-    fx.current.beat += 1;
-    setHud(snapshot(game.current, fx.current.beat));
+    refresh();
   };
 
-  const pick = (index: number) => {
+  const onMark = () => {
     if (!running) return;
-    const s = game.current;
-    if (s.phase === 'choose') react(choose(setup, s, index));
-    else if (s.phase === 'read') react(read(setup, s, index));
-    else if (s.phase === 'answer') react(skipAnswer(setup, s));
-  };
-  const skip = () => {
-    if (!running) return;
-    react(skipAnswer(setup, game.current));
+    const result = mark(setup, game.current);
+    const f = fx.current;
+    if (result === 'hit') {
+      audio.play(INTERVIEW_SOUNDS.pen, { volume: 0.7 });
+      haptic('success');
+      f.flashKey += 1;
+      refresh({ kind: 'hit', key: f.flashKey });
+    } else if (result === 'falseAlarm') {
+      playSound(MINIGAME_SOUNDS.fail, 0.5);
+      haptic('error');
+      f.flashKey += 1;
+      refresh({ kind: 'false', key: f.flashKey });
+    }
   };
 
-  useGameKeys(
-    KEYS,
-    (press) => {
-      if (press.code === 'Space' || press.code === 'Enter') skip();
-      else pick(Number(press.code.slice(-1)) - 1);
-    },
-    running,
-  );
+  useGameKeys(KEYS, () => onMark(), running);
 
   useFrameLoop((dt) => {
     const f = fx.current;
@@ -212,27 +244,28 @@ export function InterviewGame(props: MinigameViewProps) {
     f.t += dt;
     react(advance(setup, s, dt));
     // Abtippen und Frist direkt ins DOM (kein Rendern pro Bild).
-    const offer = currentOffer(setup, s);
-    if (typed.current && offer) {
+    const round = currentRound(setup, s);
+    if (typed.current && round) {
       const n = typedChars(setup, s);
       if (n !== f.typed) {
         f.typed = n;
-        typed.current.textContent = offer.answer.slice(0, n);
+        typed.current.textContent = round.answer.slice(0, n);
       }
     }
-    if (timerBar.current) {
-      const total = s.phase === 'choose' ? CHOOSE_TIME : setup.readTime;
-      const left = timeLeft(setup, s);
-      const share = s.phase === 'choose' || s.phase === 'read' ? left / total : 0;
-      timerBar.current.style.transform = `scaleX(${share.toFixed(3)})`;
-      const urgent = s.phase === 'read' && left < 3;
-      timerBar.current.parentElement?.classList.toggle('is-urgent', urgent);
-      // Die Uhr tickt in den letzten drei Sekunden des Deutens.
-      const second = Math.ceil(left);
-      if (urgent && second !== f.lastTick) {
-        f.lastTick = second;
-        audio.play(INTERVIEW_SOUNDS.tick, { volume: 0.7 });
-      }
+    if (timerBar.current && round) {
+      const share = s.phase === 'answer' ? 1 - s.t / round.duration : s.phase === 'ask' ? 1 : 0;
+      timerBar.current.style.transform = `scaleX(${Math.max(0, share).toFixed(3)})`;
+    }
+    // Zeichen bzw. Geste, die gerade zu sehen ist (als Zustand, damit das Overlay neu aufbaut).
+    const active = activeCue(setup, s);
+    const kind = active?.cue.kind ?? null;
+    if (kind !== f.cue) {
+      f.cue = kind;
+      setCue(active ? { kind: active.cue.kind, tell: active.cue.tell, key: active.index + s.round * 100 } : null);
+    }
+    if (f.t - f.lastHud > 0.2) {
+      f.lastHud = f.t;
+      refresh();
     }
     if (isDone(s)) finish();
   }, running);
@@ -240,25 +273,27 @@ export function InterviewGame(props: MinigameViewProps) {
   // Neue Antwort: Text von vorn (oder ganz, wenn die Phase schon weiter ist).
   useEffect(() => {
     fx.current.typed = -1;
-    const offer = currentOffer(setup, game.current);
-    if (typed.current) typed.current.textContent = offer ? offer.answer.slice(0, typedChars(setup, game.current)) : '';
-  }, [hud.round, hud.chosen, hud.phase]);
+    const round = currentRound(setup, game.current);
+    if (typed.current) typed.current.textContent = round ? round.answer.slice(0, typedChars(setup, game.current)) : '';
+  }, [hud.round, hud.phase]);
 
   const s = game.current;
-  const offer = currentOffer(setup, s);
-  const offers = offersOf(setup, s);
+  const round = currentRound(setup, s);
   const last = hud.phase === 'verdict' || hud.phase === 'end' ? hud.results[hud.results.length - 1] : undefined;
   const found = discovered(s);
   const mouth: MouthStyle =
-    hud.phase === 'verdict' && last && !last.correct
-      ? 'smirk'
-      : (hud.phase === 'answer' || hud.phase === 'read' || hud.phase === 'verdict') && offer
-        ? offer.mood
-        : 'neutral';
+    cue?.kind === 'grin'
+      ? 'grin'
+      : hud.phase === 'verdict' && last && !last.correct
+        ? 'smirk'
+        : hud.phase === 'answer' && round
+          ? round.mood
+          : 'neutral';
   const face = useMemo(() => ({ ...look, mouth }), [look, mouth]);
   const talking = hud.phase === 'answer' && !reduced;
   const unknown = Math.max(0, person.traits.length - person.known.length - found.length);
   const right = correctCount(s);
+  const tellsThisRound = round?.cues.filter((c) => c.tell).length ?? 0;
 
   return (
     <div class={`iv${reduced ? ' is-reduced' : ''}`}>
@@ -280,9 +315,24 @@ export function InterviewGame(props: MinigameViewProps) {
         </svg>
       </div>
 
-      <div class={`iv-person${talking ? ' is-talking' : ''}`} aria-hidden="true">
+      <button
+        ref={personBox}
+        type="button"
+        class={`iv-person${talking ? ' is-talking' : ''}${cue ? ` is-cue is-cue-${cue.kind}` : ''}${hud.flash ? ` is-flash-${hud.flash.kind}` : ''}`}
+        data-flash={hud.flash?.key ?? 0}
+        disabled={!running || hud.phase !== 'answer'}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          onMark();
+        }}
+        onClick={(e) => {
+          if ((e as MouseEvent).detail === 0) onMark();
+        }}
+        aria-label="Zeichen! Die Person antippen, wenn sie ein Zeichen zeigt"
+      >
         <Face look={face} />
-      </div>
+        {cue && <TellMarks key={cue.key} kind={cue.kind} look={look} />}
+      </button>
 
       <div class="iv-table" aria-hidden="true">
         <svg class="iv-table__ashtray" viewBox="0 0 60 24" aria-hidden="true" focusable="false">
@@ -307,7 +357,7 @@ export function InterviewGame(props: MinigameViewProps) {
           <Icon name="message" />
           {Math.min(hud.round + 1, setup.rounds.length)}/{setup.rounds.length}
         </span>
-        <span class="iv-hud__score" role="img" aria-label={`${right} richtig gedeutet`}>
+        <span class="iv-hud__score" role="img" aria-label={`${right} Runden richtig beurteilt`}>
           {setup.rounds.map((_, i) => {
             const r = hud.results[i];
             const state = r ? (r.correct ? 'is-right' : 'is-wrong') : i === hud.round ? 'is-now' : '';
@@ -354,89 +404,76 @@ export function InterviewGame(props: MinigameViewProps) {
       </aside>
 
       <section class="iv-talk" aria-live="polite">
-        {offer && hud.phase !== 'choose' && (
+        {round && (
           <>
             <p key={`q${hud.round}`} class="iv-bubble is-you">
               <span class="iv-bubble__who">Du</span>
-              {offer.text}
+              {round.text}
             </p>
-            <p key={`a${hud.round}`} class={`iv-bubble is-them${hud.phase === 'answer' ? ' is-typing' : ''}`}>
-              <span class="iv-bubble__who">{person.name.split(' ')[0]}</span>
-              <span ref={typed} class="iv-bubble__text" />
-              {hud.phase === 'answer' && <span class="iv-bubble__caret" />}
-            </p>
+            {hud.phase !== 'ask' && (
+              <p key={`a${hud.round}`} class={`iv-bubble is-them${hud.phase === 'answer' ? ' is-typing' : ''}`}>
+                <span class="iv-bubble__who">{person.name.split(' ')[0]}</span>
+                <span ref={typed} class="iv-bubble__text" />
+                {hud.phase === 'answer' && <span class="iv-bubble__caret" />}
+              </p>
+            )}
           </>
         )}
       </section>
 
       <section class={`iv-panel is-${hud.phase}`}>
-        {(hud.phase === 'choose' || hud.phase === 'read') && (
-          <span class="iv-timer" aria-hidden="true">
-            <span ref={timerBar} />
-          </span>
-        )}
-        {hud.phase === 'choose' && (
-          <>
-            <p class="iv-prompt">Was fragst du?</p>
-            <ol key={`c${hud.beat}`} class="iv-cards">
-              {offers.map((o, i) => (
-                <li key={o.questionId}>
-                  <button type="button" class="iv-card" disabled={!running} onClick={() => pick(i)}>
-                    <span class="iv-card__topic">
-                      <Icon name={o.icon} />
-                      {o.topic}
-                    </span>
-                    <span class="iv-card__text">{o.text}</span>
-                    <kbd class="iv-key">{i + 1}</kbd>
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </>
-        )}
-        {hud.phase === 'answer' && (
-          <button type="button" class="iv-skip" disabled={!running} onClick={skip}>
-            <span>Zuhören …</span>
-            <kbd class="iv-key">Leertaste</kbd>
-          </button>
-        )}
-        {(hud.phase === 'read' || hud.phase === 'verdict' || hud.phase === 'end') && offer && (
+        <span class="iv-timer" aria-hidden="true">
+          <span ref={timerBar} />
+        </span>
+        {(hud.phase === 'ask' || hud.phase === 'answer') && (
           <>
             <p class="iv-prompt">
-              {hud.phase === 'read'
-                ? 'Was verrät die Antwort?'
-                : last?.correct
-                  ? last.reveals === 'none'
-                    ? 'Richtig: nichts Auffälliges.'
-                    : `Erkannt: ${readingName(last.reveals, person.name)}.`
-                  : last?.picked === null
-                    ? 'Zu lange gezögert.'
+              {hud.phase === 'ask' ? 'Du fragst …' : 'Zuhören. Zeigt sie ein Zeichen, tipp sofort.'}
+            </p>
+            <div class="iv-watch">
+              <span class="iv-watch__tally" role="img" aria-label={`${hud.hits} Zeichen erwischt`}>
+                {Array.from({ length: Math.max(tellsThisRound, hud.hits) }, (_, i) => (
+                  <span key={i} class={`iv-watch__dot${i < hud.hits ? ' is-hit' : ''}`} />
+                ))}
+                {hud.falseAlarms > 0 && (
+                  <span class="iv-watch__false">
+                    <Icon name="alert" />
+                    {hud.falseAlarms}
+                  </span>
+                )}
+              </span>
+              <button type="button" class="iv-mark" disabled={!running || hud.phase !== 'answer'} onClick={onMark}>
+                <Icon name="eye" />
+                <span>Zeichen!</span>
+                <kbd class="iv-key">Leertaste</kbd>
+              </button>
+              <span class="iv-watch__cue" aria-live="polite">
+                {cue ? CUE_NAMES[cue.kind] : ' '}
+              </span>
+            </div>
+          </>
+        )}
+        {(hud.phase === 'verdict' || hud.phase === 'end') && last && (
+          <div class={`iv-verdict${last.correct ? ' is-right' : ' is-wrong'}`}>
+            <p class="iv-prompt">
+              {last.correct
+                ? last.exposed
+                  ? `Erkannt: ${traitName(last.exposed, person.name)}.`
+                  : 'Richtig: nichts Auffälliges.'
+                : last.falseAlarms > 1
+                  ? 'Zu oft daneben getippt: Du hast nur Gesten gesehen.'
+                  : last.tells > 0
+                    ? `Verpasst: ${last.hits} von ${last.tells} Zeichen erwischt.`
                     : 'Daneben.'}
             </p>
-            <ol class="iv-readings">
-              {offer.readings.map((r, i) => {
-                const verdict = hud.phase !== 'read';
-                const isAnswer = r === offer.reveals;
-                const isPicked = last?.picked === r;
-                const cls = verdict ? (isAnswer ? ' is-right' : isPicked ? ' is-wrong' : ' is-off') : '';
-                const tone = r === 'none' ? 'none' : toneOf(r);
-                return (
-                  <li key={r}>
-                    <button
-                      type="button"
-                      class={`iv-reading is-${tone}${cls}`}
-                      disabled={!running || verdict}
-                      onClick={() => pick(i)}
-                    >
-                      <Icon name={readingIcon(r)} />
-                      <span>{readingName(r, person.name)}</span>
-                      <kbd class="iv-key">{i + 1}</kbd>
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-          </>
+            <p class="iv-verdict__detail">
+              {last.reveals !== 'none' && !last.correct
+                ? `Die Antwort verriet: ${traitName(last.reveals, person.name)}. Nicht in der Akte.`
+                : last.reveals === 'none'
+                  ? 'Die Antwort war ehrlich.'
+                  : 'Kommt in die Akte.'}
+            </p>
+          </div>
         )}
       </section>
     </div>

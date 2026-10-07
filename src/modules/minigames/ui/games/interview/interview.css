@@ -124,14 +124,30 @@
 }
 
 /* ---------------------------------------------------------------- Person und Tisch */
+/* Die Person ist ein Knopf: antippen heißt „Zeichen!“. */
 .iv-person {
   position: absolute;
   left: 50%;
   top: calc(var(--iv-table) - var(--iv-face) * 0.86);
   width: var(--iv-face);
   height: var(--iv-face);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
   transform: translateX(-50%);
   filter: drop-shadow(0 18px 30px color-mix(in srgb, var(--hud-glass-solid) 80%, transparent));
+}
+.iv-person:disabled {
+  cursor: default;
+}
+.iv-person:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 6px;
+  border-radius: 50%;
 }
 .iv-person > svg,
 .iv-person > * {
@@ -281,6 +297,16 @@
 .iv-hud__who span {
   font-size: 12px;
   color: var(--hud-ink-2);
+}
+
+/* Symbole der unteren Leiste (vor der Akte, damit die Spezifität aufsteigt). */
+.iv-watch__false svg {
+  width: 14px;
+  height: 14px;
+}
+.iv-mark svg {
+  width: 22px;
+  height: 22px;
 }
 
 /* ---------------------------------------------------------------- Akte: liegt links auf dem Tisch */
@@ -441,12 +467,12 @@
   }
 }
 
-/* ---------------------------------------------------------------- Unten: Karten und Deutungen */
+/* ---------------------------------------------------------------- Unten: Zuhören, Zeichen!, Urteil */
 .iv-panel {
   position: absolute;
   left: 50%;
   bottom: var(--space-5);
-  width: min(900px, calc(100% - 2 * var(--space-5)));
+  width: min(760px, calc(100% - 2 * var(--space-5)));
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
@@ -473,183 +499,257 @@
   background: var(--hud-gold);
   transform-origin: left center;
 }
-.iv-timer.is-urgent span {
-  background: var(--cat-danger-a);
-}
-.iv-cards,
-.iv-readings {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.iv-cards li,
-.iv-readings li {
-  display: flex;
-  min-width: 0;
-}
-.iv-card,
-.iv-reading,
-.iv-skip {
-  position: relative;
-  width: 100%;
-  font: inherit;
-  color: var(--hud-ink);
-  cursor: pointer;
-  border-radius: var(--hud-radius-button);
-  background: var(--hud-glass-strong);
-  border: 1px solid var(--hud-glass-edge);
-  box-shadow: var(--hud-shadow);
-  transition:
-    transform var(--duration-fast, 120ms) var(--ease-out),
-    background var(--duration-fast, 120ms) var(--ease-out),
-    border-color var(--duration-fast, 120ms) var(--ease-out);
-}
-.iv-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 104px;
-  padding: var(--space-3) var(--space-4);
-  text-align: left;
-  animation: iv-deal 0.35s var(--ease-out) both;
-}
-.iv-cards li:nth-child(2) .iv-card {
-  animation-delay: 0.06s;
-}
-.iv-cards li:nth-child(3) .iv-card {
-  animation-delay: 0.12s;
-}
-@keyframes iv-deal {
-  from {
-    transform: translateY(24px) rotate(-2deg);
-    opacity: 0;
-  }
-}
-.iv-card:hover:not(:disabled),
-.iv-reading:hover:not(:disabled),
-.iv-skip:hover:not(:disabled) {
-  border-color: var(--hud-gold);
-  transform: translateY(-2px);
-}
-.iv-card:focus-visible,
-.iv-reading:focus-visible,
-.iv-skip:focus-visible {
-  outline: 2px solid var(--hud-gold);
-  outline-offset: 2px;
-}
-.iv-card:disabled,
-.iv-reading:disabled,
-.iv-skip:disabled {
-  cursor: default;
-}
-.iv-card__topic {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-hud-display);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--hud-gold);
-}
-.iv-card .iv-card__topic svg {
-  width: 16px;
-  height: 16px;
-}
-.iv-card__text {
-  padding-right: 28px;
-  font-size: 16px;
-  line-height: 1.3;
-}
 .iv-key {
-  position: absolute;
-  right: 10px;
-  top: 10px;
+  display: inline-grid;
+  place-items: center;
   min-width: 22px;
-  padding: 1px 6px;
+  height: 22px;
+  padding: 0 6px;
   border-radius: 6px;
+  background: var(--hud-glass-fill);
+  border: 1px solid var(--hud-glass-line);
   font-family: var(--font-hud-display);
   font-size: 12px;
   font-weight: 700;
-  text-align: center;
-  color: var(--hud-ink-2);
-  background: var(--hud-glass-fill);
-  border: 1px solid var(--hud-glass-line);
+  color: var(--hud-gold);
 }
-.iv-reading {
-  display: flex;
+.iv-watch {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 60px;
-  padding: var(--space-3) 40px var(--space-3) var(--space-4);
+  gap: var(--space-3);
+}
+.iv-watch__tally {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: end;
+}
+.iv-watch__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--hud-glass-line);
+}
+.iv-watch__dot.is-hit {
+  background: var(--cat-money-a);
+  border-color: var(--cat-money-a);
+}
+.iv-watch__false {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
   font-family: var(--font-hud-display);
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 700;
-  white-space: nowrap;
-  animation: iv-in 0.25s var(--ease-out) both;
-}
-.iv-reading .iv-key {
-  top: 50%;
-  transform: translateY(-50%);
-}
-.iv-panel .iv-reading svg {
-  width: 20px;
-  height: 20px;
-  flex: none;
-}
-.iv-reading.is-good svg {
-  color: var(--cat-money-a);
-}
-.iv-reading.is-bad svg {
   color: var(--cat-danger-a);
 }
-.iv-reading.is-mixed svg {
-  color: var(--cat-warn-a);
-}
-.iv-reading.is-none svg {
-  color: var(--hud-ink-2);
-}
-.iv-reading.is-right {
-  border-color: var(--cat-money-a);
-  background: color-mix(in srgb, var(--cat-money-a) 26%, var(--hud-glass-strong));
-}
-.iv-reading.is-wrong {
-  border-color: var(--cat-danger-a);
-  background: color-mix(in srgb, var(--cat-danger-a) 26%, var(--hud-glass-strong));
-  animation: iv-shake 0.4s ease-in-out;
-}
-.iv-reading.is-off {
-  opacity: 0.45;
-}
-@keyframes iv-shake {
-  20%,
-  60% {
-    transform: translateX(-6px);
-  }
-  40%,
-  80% {
-    transform: translateX(6px);
-  }
-}
-.iv-skip {
-  display: flex;
+.iv-mark {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
-  align-self: center;
-  width: auto;
-  min-height: 48px;
-  padding: var(--space-2) var(--space-5);
-  font-size: 16px;
+  gap: var(--space-2);
+  min-width: 180px;
+  min-height: 56px;
+  padding: 0 var(--space-5);
+  border-radius: var(--hud-radius-button);
+  border: 1px solid transparent;
+  background: var(--hud-gold);
+  color: var(--hud-gold-on);
+  font: 800 18px var(--font-hud-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: var(--hud-shadow);
+  touch-action: manipulation;
+}
+.iv-mark .iv-key {
+  color: inherit;
+  background: transparent;
+  border-color: currentColor;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.iv-mark:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.iv-mark:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.iv-mark:focus-visible {
+  outline: 2px solid var(--hud-ink);
+  outline-offset: 2px;
+}
+.iv-watch__cue {
+  justify-self: start;
+  min-height: 1.4em;
+  font-family: var(--font-hud-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   color: var(--hud-ink-2);
 }
-.iv-skip .iv-key {
-  position: static;
+.iv-verdict {
+  display: grid;
+  gap: 4px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  animation: iv-in 0.28s var(--ease-out) both;
+}
+.iv-verdict.is-right {
+  border-color: var(--cat-money-a);
+}
+.iv-verdict.is-wrong {
+  border-color: var(--cat-danger-a);
+}
+.iv-verdict__detail {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--hud-ink-2);
+}
+
+/* ---------------------------------------------------------------- Zeichen und Gesten am Porträt */
+.iv-tell {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.iv-tell__sweat path {
+  animation: iv-sweat 0.7s ease-in infinite;
+}
+.iv-tell__sweat .iv-tell__drop2 {
+  animation-delay: 0.3s;
+}
+@keyframes iv-sweat {
+  from {
+    transform: translateY(-2px);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(5px);
+    opacity: 0.2;
+  }
+}
+.iv-tell__hand {
+  transform-origin: 44px 46px;
+  animation: iv-scratch 0.28s ease-in-out infinite alternate;
+}
+@keyframes iv-scratch {
+  to {
+    transform: translateY(1.6px);
+  }
+}
+.iv-tell__cup {
+  animation: iv-sip 0.9s ease-in-out both;
+}
+@keyframes iv-sip {
+  0% {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  35% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+}
+.iv:not(.is-reduced) .iv-person.is-cue-eyesAway {
+  animation: iv-eyes-away 1s ease-in-out both;
+}
+@keyframes iv-eyes-away {
+  0% {
+    transform: translateX(-50%) perspective(600px) rotateY(0);
+  }
+  35% {
+    transform: translateX(-50%) perspective(600px) rotateY(28deg) translateX(4px);
+  }
+  70% {
+    transform: translateX(-50%) perspective(600px) rotateY(28deg) translateX(4px);
+  }
+  100% {
+    transform: translateX(-50%) perspective(600px) rotateY(0);
+  }
+}
+.iv:not(.is-reduced) .iv-person.is-cue-fidget {
+  animation: iv-fidget 0.12s linear infinite;
+}
+@keyframes iv-fidget {
+  0% {
+    transform: translateX(-50%) translate(-2px, 0) rotate(-0.8deg);
+  }
+  50% {
+    transform: translateX(-50%) translate(2px, 1px) rotate(0.8deg);
+  }
+  100% {
+    transform: translateX(-50%) translate(-1px, -1px) rotate(-0.4deg);
+  }
+}
+.iv:not(.is-reduced) .iv-person.is-cue-grin {
+  animation: iv-grin 0.9s ease-in-out both;
+}
+@keyframes iv-grin {
+  50% {
+    transform: translateX(-50%) rotate(-3deg) translateY(-3px);
+  }
+}
+.iv:not(.is-reduced) .iv-person.is-cue-nod {
+  animation: iv-nod 0.45s ease-in-out 2;
+}
+@keyframes iv-nod {
+  50% {
+    transform: translateX(-50%) translateY(6px) rotate(1deg);
+  }
+}
+.iv:not(.is-reduced) .iv-person.is-cue-shrug {
+  animation: iv-shrug 0.9s ease-in-out both;
+}
+@keyframes iv-shrug {
+  40% {
+    transform: translateX(-50%) translateY(-7px) scale(1.02);
+  }
+  60% {
+    transform: translateX(-50%) translateY(-7px) scale(1.02);
+  }
+}
+.iv:not(.is-reduced) .iv-person.is-cue-lean {
+  animation: iv-lean 0.9s ease-in-out both;
+}
+@keyframes iv-lean {
+  50% {
+    transform: translateX(-50%) translateY(10px) scale(1.07);
+  }
+}
+.iv-person.is-flash-hit .ui-face,
+.iv-person.is-flash-false .ui-face {
+  animation: iv-flash 0.45s ease-out both;
+}
+.iv-person.is-flash-hit .ui-face {
+  --iv-flash: var(--cat-money-a);
+}
+.iv-person.is-flash-false .ui-face {
+  --iv-flash: var(--cat-danger-a);
+}
+@keyframes iv-flash {
+  from {
+    filter: drop-shadow(0 0 0 var(--iv-flash)) drop-shadow(0 0 18px var(--iv-flash));
+  }
 }
 
 /* ---------------------------------------------------------------- Schmal (Handy): alles untereinander */
@@ -746,31 +846,38 @@
   .iv-prompt {
     font-size: 18px;
   }
-  .iv-cards,
-  .iv-readings {
-    grid-template-columns: 1fr;
-    gap: var(--space-2);
+  .iv-watch {
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "tally cue" "mark mark";
   }
-  .iv-card {
-    min-height: 0;
-    padding: var(--space-2) var(--space-3);
-    gap: 2px;
+  .iv-watch__tally {
+    grid-area: tally;
+    justify-self: start;
   }
-  .iv-card__text {
-    font-size: 15px;
+  .iv-watch__cue {
+    grid-area: cue;
+    justify-self: end;
+    font-size: 13px;
   }
-  .iv-reading {
-    min-height: 52px;
-    font-size: 17px;
+  .iv-mark {
+    grid-area: mark;
+    width: 100%;
+    min-height: 60px;
+  }
+  .iv-mark .iv-key {
+    display: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .iv-bubble,
-  .iv-card,
-  .iv-reading,
+  .iv-verdict,
   .iv-trait.is-new,
-  .iv-bubble__caret {
+  .iv-bubble__caret,
+  .iv-tell__sweat path,
+  .iv-tell__hand,
+  .iv-tell__cup,
+  .iv-person .ui-face {
     animation: none;
   }
 }

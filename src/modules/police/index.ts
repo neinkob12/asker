@@ -104,6 +104,8 @@ import {
   MAX_HEAT,
   MIN_TIER_BY_CITY,
   NIGHT_HOURS,
+  PLAYER_CHASE_CHANCE,
+  PLAYER_CHECK_THRESHOLD,
   RAID_CHANCE_BY_TIER,
   RAID_CHANCE_PER_HOUR,
   RAID_COOLDOWN,
@@ -739,7 +741,8 @@ function runCheck(ctx: Ctx, veedelId: string, player?: { spotId: string }): void
   addHeat(ctx, veedelId, -CHECK_HEAT_RELIEF);
   const ref = { veedelId, ...(spotId ? { spotId } : {}), ...(target ? { staffId: target.id } : {}) };
 
-  if (ctx.chance(CHASE_CHANCE)) {
+  // Bist du es selbst, rennst du öfter (Verfolgungsjagd als Minispiel, Feedback vom 07.10.2026).
+  if (ctx.chance(player ? PLAYER_CHASE_CHANCE : CHASE_CHANCE)) {
     const who = target ? `${target.name} rennt los` : 'Du rennst los';
     journal.add(ctx, `Kontrolle ${place}: ${who}, die Bullen hinterher.`, 'bad', ref);
     ctx.emit('police.check', { veedelId, spotId, staffId: target?.id ?? null, chase: true, goods: 0, money: 0 });
@@ -1147,9 +1150,12 @@ function tick(ctx: Ctx): void {
 
     if (playerThere && ctx.now >= (police.checkReadyAt[v.id] ?? 0)) {
       const factor = cityChecks * (night ? (v.nightlife ?? 1) : 1) * eventFactor(state, 'checks', { veedelId: v.id });
-      if (ctx.chance(rampedChance(heat, CHECK_THRESHOLD, CHECK_CHANCE_PER_HOUR) * presence * factor)) {
-        // Stehst du selbst dort an einem Spot, trifft die Kontrolle dich (dann auch mit Verfolgungsjagd).
-        runCheck(ctx, v.id, playerStandingIn(state, v.id));
+      // Stehst du selbst dort an einem Spot, trifft die Kontrolle dich (dann auch mit Verfolgungsjagd), und sie kommt
+      // schon bei weniger Heat (ein Wurf wie sonst auch: die Würfelfolge bleibt).
+      const standing = playerStandingIn(state, v.id);
+      const threshold = standing ? PLAYER_CHECK_THRESHOLD : CHECK_THRESHOLD;
+      if (ctx.chance(rampedChance(heat, threshold, CHECK_CHANCE_PER_HOUR) * presence * factor)) {
+        runCheck(ctx, v.id, standing);
       }
     }
   }

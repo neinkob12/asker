@@ -387,8 +387,9 @@ function payBribe(ctx: Ctx, encounter: Encounter): boolean {
  * Verkehrskontrolle. picks 'flee': Gas geben → Verfolgungsjagd (wie die Handlung speedOff; ist sie nicht scharf, die
  * Runde „Gas geben“ wie bisher würfeln). 'bribe': Bestechungsgeld (bribeCost) zahlen, Erfolg; reicht das Schwarzgeld
  * nicht mehr, ist der Versuch aufgeflogen (Niederlage). Sonst geschafft → weiterfahren (Erfolg), nicht geschafft →
- * Ladung aufgeflogen (Niederlage). 'lies:<n>' (Widersprüche im Gespräch): Bei Erfolg notiert er das Kennzeichen, etwas
- * Heat im Veedel (höchstens zwei zählen). Bei der Rechten Hand dasselbe mit ihrem Score (ohne picks).
+ * Ladung aufgeflogen (Niederlage). 'found:<n>' (Päckchen, die er eingesackt hat): Bei Erfolg ist etwas Ware weg und er
+ * notiert sich das Kennzeichen, etwas Heat im Veedel (höchstens zwei zählen; früher 'lies:<n>', gilt noch für alte
+ * Stände). Bei der Rechten Hand dasselbe mit ihrem Score (ohne picks).
  */
 export function applyTraffic(
   ctx: Ctx,
@@ -422,13 +423,17 @@ export function applyTraffic(
     return;
   }
   if (result.won) {
-    const lies = Math.min(2, count(result.picks, 'lies:'));
-    encounter.extraHeat += lies * TRAFFIC_NOTED_HEAT;
+    const found = Math.min(2, count(result.picks, 'found:'));
+    const noted = Math.min(2, found + count(result.picks, 'lies:'));
+    encounter.extraHeat += noted * TRAFFIC_NOTED_HEAT;
+    if (found > 0) encounter.goodsDropped += loseGoods(ctx, found * roll(ctx, [3, 6]), encounter.request);
     const text = rightHand
       ? 'Deine Rechte Hand bleibt ruhig. „Gute Fahrt.“ Die Kelle geht runter.'
-      : lies > 0
-        ? '„Gute Fahrt.“ Aber er schreibt sich das Kennzeichen auf.'
-        : '„Gute Fahrt.“ Die Kelle geht runter.';
+      : found > 0
+        ? '„Gute Fahrt.“ Aber ein Päckchen behält er, und er schreibt sich das Kennzeichen auf.'
+        : noted > 0
+          ? '„Gute Fahrt.“ Aber er schreibt sich das Kennzeichen auf.'
+          : '„Gute Fahrt.“ Die Kelle geht runter.';
     logMinigame(ctx, encounter, open, result, text, before);
     finish(ctx, encounter, 'success', undefined, 'resolved');
   } else {
