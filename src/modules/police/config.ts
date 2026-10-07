@@ -207,13 +207,19 @@ export const STASH_LOTS_MAX = 6;
 
 // --- Zivi oder Kunde (Auftrag 44, Minispiel 'undercover') -------------------------------------------------------
 
-/** Ab dieser Heat im Veedel schickt die Polizei Zivilfahnder an den Spot, an dem du selbst stehst. */
+/** Ab dieser Heat im Veedel schickt die Polizei öfter Zivilfahnder an den Spot, an dem du selbst stehst. */
 export const UNDERCOVER_HEAT = 20;
 /**
  * Chance pro Stunde bei Heat 100 und Präsenz 1 (ab UNDERCOVER_HEAT linear ansteigend, mal Präsenz). Gewürfelt fest aus
  * Seed, Spot und Stunde (keyedRandom), damit die Würfelfolge der Polizei gleich bleibt.
  */
 export const UNDERCOVER_CHANCE_PER_HOUR = 0.25;
+/**
+ * Grundrauschen: Auch unter UNDERCOVER_HEAT kommen ab und zu Zivis, Chance pro Stunde bei Präsenz 1 (Feedback vom
+ * 07.10.2026: Vorher kam das erste Minispiel für jemanden, der selbst am Spot steht, erst nach etwa einer Woche).
+ * Darüber gilt der Anstieg nach Heat, nie weniger als das.
+ */
+export const UNDERCOVER_BASE_CHANCE_PER_HOUR = 0.03;
 /** Nach einer Schicht mit Zivis ist so lange Ruhe (Spielminuten). */
 export const UNDERCOVER_COOLDOWN = 8 * 60;
 /** So viele Leute kommen in der Schicht an den Spot (Zivis mitgezählt). */

@@ -1,6 +1,6 @@
-// Zivi oder Kunde (Auftrag 44, Minispiel 'undercover'): Stehst du selbst an einem Spot in einem Veedel mit Heat ab
-// UNDERCOVER_HEAT, schickt die Polizei ab und zu eine Schicht Zivilfahnder (stündlich eine Chance nach Heat und
-// Präsenz, Abklingzeit UNDERCOVER_COOLDOWN). Im Minispiel kommen Kunden nacheinander, darunter ein bis drei Zivis; du
+// Zivi oder Kunde (Auftrag 44, Minispiel 'undercover'): Stehst du selbst an einem Spot, schickt die Polizei ab und zu
+// eine Schicht Zivilfahnder (stündlich eine Chance: ein kleines Grundrauschen, ab UNDERCOVER_HEAT mit der Heat
+// steigend, mal Präsenz; Abklingzeit UNDERCOVER_COOLDOWN). Im Minispiel kommen Kunden nacheinander, darunter ein bis drei Zivis; du
 // verkaufst oder wimmelst ab. Folgen: Ein Verkauf an einen Zivi ist eine Kontrolle gegen dich (wie runCheck, mit der
 // Chance auf die Polizeiflucht), alle Zivis erkannt kühlt das Veedel ab, abgewimmelte echte Kunden kosten etwas Ruf.
 // Rechte Hand: Score als Anteil richtig. Frist ohne Oberfläche (timeout): nichts, wie bisher.
@@ -18,6 +18,7 @@ import { atSpot, getSpot, spotCity, spotKind } from '../spots';
 import { getVeedel, veedelName } from '../veedel';
 import {
   MAX_HEAT,
+  UNDERCOVER_BASE_CHANCE_PER_HOUR,
   UNDERCOVER_CHANCE_PER_HOUR,
   UNDERCOVER_COOLDOWN,
   UNDERCOVER_CUSTOMERS,
@@ -92,11 +93,16 @@ export function ziviCount(heat: number): number {
   return Math.max(1, UNDERCOVER_ZIVI_HEAT_STEPS.filter((h) => heat >= h).length);
 }
 
-/** Chance pro Stunde auf eine Schicht mit Zivis: ab UNDERCOVER_HEAT ansteigend, mal Präsenz. */
+/**
+ * Chance pro Stunde auf eine Schicht mit Zivis, mal Präsenz: unter UNDERCOVER_HEAT das Grundrauschen
+ * (UNDERCOVER_BASE_CHANCE_PER_HOUR), ab da mit der Heat ansteigend (nie unter dem Grundrauschen).
+ */
 export function undercoverChance(heat: number, presence: number): number {
-  if (heat < UNDERCOVER_HEAT) return 0;
+  const factor = Math.max(0, presence);
+  const base = UNDERCOVER_BASE_CHANCE_PER_HOUR * factor;
+  if (heat < UNDERCOVER_HEAT) return Math.min(1, base);
   const ramp = (heat - UNDERCOVER_HEAT) / (MAX_HEAT - UNDERCOVER_HEAT);
-  return Math.min(1, UNDERCOVER_CHANCE_PER_HOUR * (0.25 + 0.75 * ramp) * Math.max(0, presence));
+  return Math.min(1, Math.max(base, UNDERCOVER_CHANCE_PER_HOUR * (0.25 + 0.75 * ramp) * factor));
 }
 
 /** Ware am Spot: was im nächsten Lager liegt (sonst in der Stadt), die wertvollsten zuerst. */
@@ -139,6 +145,19 @@ export function undercoverParams(state: GameState, spotId: string, heat: number,
     zivis,
     heat: Math.round(heat),
   };
+}
+
+/**
+ * Stehst du selbst an einem Spot in diesem Veedel (und bist in der Stadt, nicht unterwegs)? Dann trifft eine Kontrolle
+ * dort dich und nicht deine Leute (Feedback vom 07.10.2026: so kann es auch zur Verfolgungsjagd kommen).
+ */
+export function playerStandingIn(state: GameState, veedelId: string): { spotId: string } | undefined {
+  const spotId = playerSpot(state);
+  const spot = spotId ? getSpot(state, spotId) : undefined;
+  if (!spot || spot.veedelId !== veedelId || isPlayerAway(state) || !isPlayerIn(state, spotCity(spot))) {
+    return undefined;
+  }
+  return { spotId: spot.id };
 }
 
 /**

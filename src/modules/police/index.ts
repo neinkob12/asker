@@ -124,7 +124,7 @@ import {
 
 import { maybeStartStash, onStashFinished } from './stash';
 import { nextTier, type OperationTier, operationFacts, tierInfo } from './tier';
-import { maybeStartUndercover, onUndercoverFinished, type UndercoverState } from './undercover';
+import { maybeStartUndercover, onUndercoverFinished, playerStandingIn, type UndercoverState } from './undercover';
 
 export {
   CHECK_FACTOR_BY_CITY,
@@ -1148,7 +1148,8 @@ function tick(ctx: Ctx): void {
     if (playerThere && ctx.now >= (police.checkReadyAt[v.id] ?? 0)) {
       const factor = cityChecks * (night ? (v.nightlife ?? 1) : 1) * eventFactor(state, 'checks', { veedelId: v.id });
       if (ctx.chance(rampedChance(heat, CHECK_THRESHOLD, CHECK_CHANCE_PER_HOUR) * presence * factor)) {
-        runCheck(ctx, v.id);
+        // Stehst du selbst dort an einem Spot, trifft die Kontrolle dich (dann auch mit Verfolgungsjagd).
+        runCheck(ctx, v.id, playerStandingIn(state, v.id));
       }
     }
   }

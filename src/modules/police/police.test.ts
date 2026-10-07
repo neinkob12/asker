@@ -150,6 +150,25 @@ describe('police', () => {
     expect(eventsOfType(events, 'police.raid')).toHaveLength(0); // unter der Razzia-Schwelle
   });
 
+  it('stehst du selbst am Spot im Veedel, trifft die Kontrolle dich und nicht deinen Läufer', () => {
+    const sim = quietGame(3);
+    const events = recordEvents(sim);
+    sim.state.wallet.dirty = 100_000;
+    store(sim.ctx('goods'), { productId: 'weed', amount: 1000 });
+    expect(sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'neumarkt' } }).ok).toBe(true);
+    expect(sim.dispatch({ type: 'customers.standAt', payload: { spotId: 'neumarkt' } }).ok).toBe(true);
+    const checks = () => eventsOfType(events, 'police.check');
+    advanceUntil(
+      sim,
+      () => {
+        addHeat(sim.ctx('test'), 'altstadt-sued', 45 - getHeat(sim.state, 'altstadt-sued'));
+        return checks().length > 0;
+      },
+      24 * 10,
+    );
+    expect(checks()[0]?.payload).toMatchObject({ veedelId: 'altstadt-sued', spotId: 'neumarkt', staffId: null });
+  });
+
   it('Razzia: Ware und Geld werden beschlagnahmt, Leute festgenommen', () => {
     let found = false;
     for (let seed = 1; seed <= 10 && !found; seed++) {
