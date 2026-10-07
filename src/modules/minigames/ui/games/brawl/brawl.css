@@ -1,0 +1,453 @@
+/* Straßenkampf (Auftrag 44, Teil 2). Bühne als Canvas, HUD im Look Glas. Nur Tokens, keine freien Hex-Werte. */
+
+.brawl {
+  position: absolute;
+  inset: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: var(--font-hud);
+  color: var(--hud-ink);
+}
+.brawl__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* ---------------------------------------------------------------- HUD oben: ihr | Uhr und Kräfte | Gegner */
+.brawl__hud {
+  position: absolute;
+  z-index: 3;
+  top: var(--space-4);
+  left: var(--space-4);
+  right: var(--space-4);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-4);
+  pointer-events: none;
+}
+.brawl__team {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.brawl__team.is-foe {
+  justify-content: flex-end;
+}
+.brawl__card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 6px 10px 6px 6px;
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  transition: opacity var(--duration) var(--ease-out);
+}
+.brawl__card.is-main {
+  border-color: var(--hud-gold);
+}
+.brawl__card.is-out {
+  opacity: 0.5;
+}
+.brawl__card-body {
+  display: grid;
+  gap: 4px;
+  min-width: 64px;
+}
+.brawl__card.is-main .brawl__card-body {
+  min-width: 110px;
+}
+.brawl__card-name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.brawl__card.is-main .brawl__card-name {
+  color: var(--hud-gold);
+  font-size: 13px;
+}
+.brawl__card-out {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--hud-ink-2);
+}
+.brawl__hp {
+  --brawl-hp: var(--cat-money);
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hud-empty);
+  overflow: hidden;
+}
+.brawl__card.is-main .brawl__hp {
+  height: 8px;
+}
+.brawl__hp.is-warn {
+  --brawl-hp: var(--cat-warn);
+}
+.brawl__hp.is-danger {
+  --brawl-hp: var(--cat-danger);
+}
+.brawl__hp span {
+  display: block;
+  height: 100%;
+  background: var(--brawl-hp);
+  transform-origin: left center;
+  transition: transform 0.18s var(--ease-out);
+}
+
+.brawl__center {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  min-width: 220px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+}
+.brawl__center .ui-duel {
+  width: 100%;
+}
+.brawl__clock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.brawl__siren {
+  width: 20px;
+  height: 20px;
+  color: var(--cat-place);
+}
+
+/* ---------------------------------------------------------------- Ansagen */
+.brawl__callout {
+  position: absolute;
+  z-index: 3;
+  top: 132px;
+  left: 50%;
+  margin: 0;
+  max-width: calc(100% - 2 * var(--space-4));
+  padding: var(--space-2) var(--space-5);
+  transform: translateX(-50%);
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+  animation: brawl-pop 0.26s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  pointer-events: none;
+}
+.brawl__callout.is-bad {
+  border-color: var(--cat-danger);
+  color: var(--cat-danger);
+}
+.brawl__callout.is-good {
+  border-color: var(--hud-gold);
+  color: var(--hud-gold);
+}
+@keyframes brawl-pop {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.8);
+  }
+}
+.brawl__status {
+  position: absolute;
+  z-index: 3;
+  top: 180px;
+  left: 50%;
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.brawl__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-strong);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.brawl__chip svg {
+  width: 16px;
+  height: 16px;
+}
+.brawl__chip.is-gold {
+  color: var(--hud-gold);
+}
+.brawl__chip.is-people {
+  color: var(--cat-people);
+}
+
+/* ---------------------------------------------------------------- Spezialzüge der Crew */
+.brawl__specials {
+  position: absolute;
+  z-index: 3;
+  left: var(--space-4);
+  bottom: var(--space-4);
+  display: flex;
+  gap: var(--space-2);
+}
+.brawl__special {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 4px 10px;
+  border-radius: var(--hud-radius-button);
+  border: 1px solid var(--hud-glass-edge);
+  background: var(--hud-glass-strong);
+  color: var(--hud-ink);
+  font: 700 14px var(--font-hud);
+  touch-action: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+.brawl__special svg {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  color: var(--cat-people);
+}
+.brawl__special.is-ready {
+  border-color: var(--cat-people);
+}
+.brawl__special:disabled {
+  cursor: default;
+  color: var(--hud-ink-2);
+}
+.brawl__special:disabled svg {
+  color: var(--hud-ink-2);
+}
+.brawl__special:active:not(:disabled) {
+  transform: scale(0.96);
+  background: var(--hud-glass-fill-active);
+}
+.brawl__special:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 2px;
+}
+.brawl__special-text {
+  display: grid;
+  text-align: left;
+  line-height: 1.1;
+}
+.brawl__special-label {
+  white-space: nowrap;
+}
+.brawl__special-who {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--hud-ink-2);
+  white-space: nowrap;
+}
+.brawl__cd {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--hud-glass-strong);
+  font-family: var(--font-hud-display);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-ink);
+}
+.brawl__kbd,
+.brawl__keys kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 5px;
+  border: 1px solid var(--hud-glass-line);
+  background: var(--hud-glass-fill);
+  font: 700 11px var(--font-hud);
+  color: var(--hud-ink-2);
+}
+
+/* ---------------------------------------------------------------- Tasten (Desktop) */
+.brawl__keys {
+  position: absolute;
+  z-index: 3;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2) var(--space-4);
+  max-width: 60%;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  list-style: none;
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass);
+  font-size: 13px;
+  color: var(--hud-ink-2);
+  pointer-events: none;
+}
+.brawl__keys li {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- Touch: Steuerkreuz und vier Knöpfe */
+.brawl__touch .mg-touch__pad--full {
+  display: grid;
+  grid-template-columns: repeat(3, 56px);
+  grid-template-rows: repeat(2, 56px);
+  grid-template-areas:
+    ". up ."
+    "left down right";
+  gap: 4px;
+}
+.brawl__touch .mg-pad--left {
+  grid-area: left;
+}
+.brawl__touch .mg-pad--right {
+  grid-area: right;
+}
+.brawl__touch .mg-pad--up {
+  grid-area: up;
+}
+.brawl__touch .mg-pad--down {
+  grid-area: down;
+}
+.brawl__touch .mg-pad {
+  padding: 0;
+}
+.brawl__touch .mg-touch__buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 64px);
+  grid-template-rows: repeat(2, 56px);
+  gap: 6px;
+}
+.brawl__touch .mg-touch__buttons .mg-pad {
+  flex-direction: column;
+  gap: 0;
+  font-size: 11px;
+}
+.brawl__touch .mg-pad__label {
+  white-space: nowrap;
+}
+
+/* Touch-Knöpfe nur mit dem Finger bzw. am schmalen Bildschirm; am Desktop die Tasten-Leiste. */
+.brawl .brawl__touch {
+  display: none;
+}
+@media (pointer: coarse), (max-width: 760px) {
+  .brawl .brawl__touch {
+    display: flex;
+  }
+  .brawl__keys {
+    display: none;
+  }
+  .brawl__kbd {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Handy */
+@media (max-width: 760px) {
+  .brawl__hud {
+    top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
+    left: var(--space-3);
+    right: var(--space-3);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "center center"
+      "own foe";
+    gap: var(--space-2);
+  }
+  .brawl__center {
+    grid-area: center;
+    min-width: 0;
+    padding: var(--space-2) var(--space-3);
+  }
+  .brawl__center .mg-hud-timer__value {
+    font-size: 24px;
+  }
+  .brawl__team.is-own {
+    grid-area: own;
+  }
+  .brawl__team.is-foe {
+    grid-area: foe;
+  }
+  .brawl__team {
+    gap: 4px;
+  }
+  .brawl__card {
+    padding: 4px 6px 4px 4px;
+    gap: 4px;
+  }
+  .brawl__card .ui-avatar {
+    width: 26px;
+    height: 26px;
+  }
+  .brawl__card-body {
+    min-width: 40px;
+  }
+  .brawl__card.is-main .brawl__card-body {
+    min-width: 64px;
+  }
+  .brawl__card:not(.is-main) .brawl__card-name {
+    display: none;
+  }
+  .brawl__callout {
+    top: calc(196px + env(safe-area-inset-top, 0px));
+    font-size: 15px;
+  }
+  .brawl__status {
+    top: calc(244px + env(safe-area-inset-top, 0px));
+  }
+  .brawl__specials {
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: calc(136px + env(safe-area-inset-bottom, 0px));
+  }
+  .brawl__special {
+    min-height: 44px;
+  }
+  .brawl__touch {
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brawl__callout {
+    animation: none;
+  }
+  .brawl__hp span {
+    transition: none;
+  }
+}

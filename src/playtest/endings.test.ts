@@ -65,6 +65,9 @@ describe('Spielende', () => {
         const open = activeEncounters(sim.state).find((e) => e.id === encounter.id);
         if (!open) break;
         sim.dispatch({ type: 'encounters.act', payload: { encounterId: encounter.id, actionId: 'fight' } });
+        // Zuschlagen startet den Straßenkampf: nicht gespielt (timeout) gilt die Runde mit dem alten Würfel.
+        const fight = activeEncounters(sim.state).find((e) => e.id === encounter.id)?.minigame;
+        if (fight) sim.dispatch({ type: 'minigames.expire', payload: { id: fight.challengeId } }, { actor: 'system' });
       }
       if (sim.state.outcome.gameOver?.reason !== 'killed') continue;
       deaths++;

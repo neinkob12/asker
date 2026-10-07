@@ -2,4 +2,4 @@
 
 import type { MinigameKindDef } from '../types';
 
-export const brawl: MinigameKindDef = { name: 'Straßenkampf', stat: 'strength', ready: false };
+export const brawl: MinigameKindDef = { name: 'Straßenkampf', stat: 'strength', ready: true };
