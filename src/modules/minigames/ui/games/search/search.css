@@ -1,0 +1,137 @@
+/* Bude durchsuchen (Auftrag 44, Teil 6). Bühne als Canvas, HUD im Look Glas. */
+
+.search {
+  position: absolute;
+  inset: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.search__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.search__stashes {
+  display: inline-flex;
+  gap: 5px;
+}
+.search__stash {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 2px solid var(--hud-ink-2);
+  transform: rotate(45deg);
+}
+.search__stash.is-found {
+  border-color: var(--cat-money);
+  background: var(--cat-money);
+}
+
+.search__money {
+  display: grid;
+  line-height: 1;
+}
+.search__money-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+}
+.search__money-value {
+  min-width: 6.5ch;
+  margin-top: 3px;
+  font-family: var(--font-hud-display);
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--cat-money);
+}
+.search__noise {
+  width: 120px;
+}
+.search__noise .mg-hud-meter {
+  min-width: 0;
+}
+
+.search__message {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 2 * var(--space-4));
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  text-wrap: balance;
+  animation: search-pop 0.25s var(--ease-out);
+}
+.search__message.is-good {
+  color: var(--cat-money);
+}
+.search__message.is-warn {
+  color: var(--cat-warn);
+}
+.search__message.is-bad {
+  color: var(--cat-danger);
+}
+@keyframes search-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
+
+@media (max-width: 640px) {
+  .search__hud {
+    top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+  }
+  .search__money-label {
+    display: none;
+  }
+  .search__money-value {
+    min-width: 5.5ch;
+    margin-top: 0;
+    font-size: 22px;
+  }
+  .search__stashes {
+    gap: 3px;
+  }
+  .search__stash {
+    width: 10px;
+    height: 10px;
+  }
+  .search__noise {
+    width: 62px;
+  }
+  .search__message {
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search__message {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .search__hud .mg-hud-timer {
+    min-width: 70px;
+  }
+}

@@ -22,7 +22,8 @@
 // Auftrag 34: Gedächtnis (memory.ts: gangMemories, memoryScore, memoryPriceFactor, remember; Preise für Waffenstillstand
 //   und Bündnis hängen daran, allianceCost) und Gang-Kriege (war.ts: rivalry, rivalries, activeWars, pastWars; Befehl
 //   'gangs.supportWar', Ereignisse 'gang.remembered', 'gang.warStarted', 'gang.warEnded', 'gang.warSupported').
-// Auftrag 44: Tresor knacken nach einem Überfall auf einen Gang-Spot mit dir selbst dabei (safe.ts, Minispiel 'safe').
+// Auftrag 44: Tresor knacken nach einem Überfall auf einen Gang-Spot mit dir selbst dabei (safe.ts, Minispiel 'safe'),
+//   Bude durchsuchen nach dem Eintreiben mit dir selbst dabei (search.ts, Minispiel 'search').
 //
 // Achtung Abhängigkeiten: territory hängt von gangs ab (Startverteilung der Reviere). gangs darf deshalb
 // nicht dependsOn: ['territory'] eintragen (Zyklus). Für API-Aufrufe zur Laufzeit ist das auch nicht nötig.
@@ -48,6 +49,7 @@ import { forgetFaded } from './memory';
 import { burgleNow, type IncidentKind, respond, runMethod } from './methods';
 import { onControlChanged, onEncounterResolved, onPoliceRaid, onSale, onTipOff } from './reactions';
 import { onSafeFinished } from './safe';
+import { onSearchFinished } from './search';
 import {
   type GangStage,
   type GangsState,
@@ -73,6 +75,9 @@ export {
   SAFE_MAX,
   SAFE_MIN,
   SAFE_SHARE,
+  SEARCH_BONUS,
+  SEARCH_MIN,
+  SEARCH_NOISE_HEAT,
   WAR_AT,
   WARN_AT,
 } from './config';
@@ -95,6 +100,7 @@ export {
   openIncidents,
 } from './methods';
 export { safeAmount } from './safe';
+export { searchAmount } from './search';
 export {
   allianceCost,
   ceasefireCost,
@@ -247,7 +253,10 @@ export default defineModule({
     'police.tipOff': onTipOff,
     'police.raid': onPoliceRaid,
     'territory.controlChanged': onControlChanged,
-    'minigame.finished': onSafeFinished,
+    'minigame.finished': (ctx, payload) => {
+      onSafeFinished(ctx, payload);
+      onSearchFinished(ctx, payload);
+    },
   },
   migrations: {
     // Version 1 (Fundament) hatte keinen Zustand.

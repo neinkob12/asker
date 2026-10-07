@@ -21,6 +21,7 @@ import {
 import { remember } from './memory';
 import { onIntimidationResolved, onRecoverResolved } from './methods';
 import { maybeStartSafe } from './safe';
+import { maybeStartSearch } from './search';
 import { getGang, veedelGang } from './state';
 
 /** Wirtschaftlich gegen die Gangs: Wer in ihrem Revier verkauft, fällt auf und drückt ihren Umsatz (siehe ai.ts). */
@@ -79,6 +80,8 @@ export function onEncounterResolved(ctx: Ctx, payload: GameEvents['encounter.res
       journal.add(ctx, `${gang.name} zahlt dir kein Schutzgeld mehr.`, 'bad');
       ctx.emit('gang.diplomacyChanged', { gangId: gang.id, kind: 'protection', active: false });
     }
+    // Auftrag 44: Warst du selbst dabei, steht die Bude des Schuldners offen (Minispiel, search.ts).
+    maybeStartSearch(ctx, payload);
   } else if (kind === 'deal') {
     if (payload.outcome === 'success') {
       addHostility(s, 10);
