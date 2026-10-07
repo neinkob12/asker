@@ -1,5 +1,5 @@
 // HUD im Look "Glas": drei Gruppen in der freien Kartenfläche links vom Handy (--map-right ist die Grenze).
-//   oben links   Geld-Kapsel: Geld (Klick öffnet die Geldwäsche) und Heat (placement 'main'), darunter die Quest
+//   oben links   Geld-Kapsel: Geld (Klick öffnet die Geldwäsche) und Heat (placement 'main'), darunter die Mission
 //                ('below') und Warnungen
 //   oben Mitte   Uhr-Kapsel: Wochentag, Tag, Uhrzeit, Spieltempo, Menü ('time' ist seit Auftrag 26 leer)
 //   oben rechts  Kennzahl-Kacheln Lager und Ruf · Reviere ('more'), jede klappt beim Drüberfahren eine Karte auf

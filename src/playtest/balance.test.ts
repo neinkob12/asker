@@ -180,10 +180,10 @@ describe('Balancing', () => {
       // Das erste Veedel ist in Reichweite, die Gangs merken es und machen Druck.
       expect(Math.max(...r.days.map((d) => d.veedel)), `Seed ${seed}`).toBeGreaterThanOrEqual(1);
       expect(r.events['gang.escalated'] ?? 0, `Seed ${seed}`).toBeGreaterThan(0);
-      // Markt und Verträge (Auftrag 32): Der Index bewegt sich mild, der Bot nimmt am Montag einen Vertrag.
+      // Markt (Auftrag 32): Der Index bewegt sich mild. Wochenverträge gibt es erst nach Köln (Auftrag 46d).
       expect(Math.min(...r.index), `Seed ${seed}`).toBeGreaterThanOrEqual(0.85);
       expect(Math.max(...r.index), `Seed ${seed}`).toBeLessThanOrEqual(1.2);
-      expect(r.contracts.accepted, `Seed ${seed}`).toBeGreaterThanOrEqual(1);
+      expect(r.contracts.accepted, `Seed ${seed}`).toBe(0);
     }
   }, 120_000);
 

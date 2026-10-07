@@ -30,7 +30,7 @@ export const TOUR_ANCHORS = [
   'hud.rank',
   /** Die Revierzahl „4/7“ in der Kachel Ruf · Reviere (reputation/ui). */
   'hud.territory',
-  /** Die Karte unter Geld und Heat: heute die Quest-Karte (quests/ui), später die Missions-Karte (tutorial, 46b). */
+  /** Die Karte unter Geld und Heat: die Missions-Karte des Tutorials (46b). */
   'hud.mission',
   /** Das ganze Handy (phone/PhoneFrame.tsx). Liegt es weg, fehlt der Anker: vorher ui.showPhone(). */
   'phone',

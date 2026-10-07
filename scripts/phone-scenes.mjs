@@ -134,16 +134,6 @@ const RAID = `
 
 export const SCENES = [
   { name: 'home', js: 'window.koeln.runtime.api.openPhone(null)' },
-  // Wie ein neues Spiel es zeigt (Feedback 07.10.2026): Handy Schritt für Schritt, erst wenige Apps und Peters Quest.
-  {
-    name: 'home-anfang',
-    js: `(() => {
-      const api = window.koeln.runtime.api;
-      api.dispatch({ type: 'quests.setPhoneSteps', payload: { enabled: true } });
-      api.openPhone(null);
-      window.__sceneCleanup = () => api.dispatch({ type: 'quests.setPhoneSteps', payload: { enabled: false } });
-    })()`,
-  },
   { name: 'nachrichten', js: "window.koeln.runtime.api.openPhone('core.messages')" },
   {
     name: 'chat',
@@ -918,28 +908,32 @@ export const SCENES = [
       window.koeln.runtime.api.openDialog('encounters.encounter', { encounterId });
     })()`,
   },
-  // Wochenverträge (Auftrag 32): spult bis Montag 8 Uhr vor, deshalb hinten. Erst die Angebote, dann einer läuft.
+  // Wochenverträge (Auftrag 32): gibt es erst nach Köln (Auftrag 46d), die Szene stellt Köln auf komplett und spult
+  // bis Montag 8 Uhr vor, deshalb hinten. Erst die Angebote, dann einer läuft.
   {
     name: 'vertraege',
     js: `(() => {
       const sim = window.koeln.session.sim;
-      const q = sim.state.modules.quests.contracts;
+      const q = sim.state.modules.quests;
       if (q.offers.length === 0 && !q.active) {
+        const t0 = sim.state.time;
+        const m = (sim.state.modules.territory.milestones ??= {});
+        m.koeln = { majority: t0, complete: t0 };
         const t = sim.state.time;
         const monday8 = 3 * 1440 + 8 * 60;
         const next = monday8 + Math.max(0, Math.ceil((t - monday8) / 10080)) * 10080;
         if (next > t) sim.advance(next - t);
       }
-      window.koeln.runtime.api.openPanel('quests.list', {});
+      window.koeln.runtime.api.openPanel('quests.contracts', {});
     })()`,
   },
   {
     name: 'vertrag-laeuft',
     js: `(() => {
       const sim = window.koeln.session.sim;
-      const offer = sim.state.modules.quests.contracts.offers[0];
+      const offer = sim.state.modules.quests.offers[0];
       if (offer) sim.dispatch({ type: 'quests.acceptContract', payload: { offerId: offer.id } });
-      window.koeln.runtime.api.openPanel('quests.list', {});
+      window.koeln.runtime.api.openPanel('quests.contracts', {});
     })()`,
   },
   // Der Anruf aus Hamburg (macht Köln komplett, deshalb ganz am Ende)
@@ -1196,19 +1190,13 @@ export const SCENES = [
   },
 ];
 
-/**
- * Öffnet eine frische Sitzung (pausiert, fester Seed) und spult vor. Die Szenen zeigen alle Apps: Handy Schritt für
- * Schritt ist aus (die Szene 'home-anfang' schaltet es kurz an).
- */
+/** Öffnet eine frische Sitzung (pausiert, fester Seed) und spult vor. */
 export async function openGame(page, base, advance) {
   await page.goto(new URL('?neu=normal&seed=1&tempo=0', base).toString());
   await page.waitForSelector('.shell-map', { timeout: 15000 });
   await page.waitForTimeout(2500);
-  await page.evaluate(
-    "window.koeln.runtime.api.dispatch({ type: 'quests.setPhoneSteps', payload: { enabled: false } })",
-  );
   if (advance > 0) await page.evaluate(`window.koeln.session.sim.advance(${advance})`);
-  // Banner vom Vorspulen (z.B. Peters erste Quest) gehören nicht in die Szenen.
+  // Meldungen vom Vorspulen gehören nicht in die Szenen.
   await page.evaluate(() => {
     const { runtime } = window.koeln;
     while (runtime.ui.toasts.length > 0) runtime.api.dismissToast();

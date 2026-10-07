@@ -24,7 +24,6 @@ import { fullPowerMissing, getLieutenants, getRightHand } from '../modules/hiera
 import { getRoutes, getTrips } from '../modules/logistics';
 import { activeChallenge, MINIGAME_KIND_IDS, type MinigameKind } from '../modules/minigames';
 import { plannedRaidInfo } from '../modules/police';
-import { currentQuest } from '../modules/quests';
 import { getCandidate } from '../modules/recruiting';
 import { getSpots } from '../modules/spots';
 import { getStaff } from '../modules/staff';
@@ -237,8 +236,6 @@ describe('Test-Spielstände', () => {
     expect(presentCity(sim.state)).toBe('rotterdam');
     expect(isTradeActive(sim.state)).toBe(true);
     expect(openOrders(sim.state).length).toBeGreaterThan(0);
-    // Auftrag 43: Jansen führt durch den neuen Job, die alten Kapitel sind vorbei.
-    expect(currentQuest(sim.state)?.id).toBe('rtAnswer');
     sim.advance(24 * 60);
     expect(sim.state.outcome.gameOver).toBeNull();
   });

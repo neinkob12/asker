@@ -1,5 +1,5 @@
 // Oberfläche der Städte (Auftrag 30 und 36). Bis zur Übergabe: eine Glas-Karte unter Geld und Heat (wie die
-// Quest-Karte), solange eine Stadt wartet: was noch fehlt, und ein Tipp führt dorthin, wo man es erledigt (Rechte Hand,
+// Missions-Karte), solange eine Stadt wartet: was noch fehlt, und ein Tipp führt dorthin, wo man es erledigt (Rechte Hand,
 // Personal, Reviere; ist alles bereit, der Chat der Stadt bzw. die Übergabe). Ab zwei freien Städten: der Stadt-Chip
 // oben rechts (Köln ▾) mit den Städten und Deutschland; die Kamera folgt der aktiven Stadt (registerCityViews), in der
 // Deutschland-Ansicht stehen alle Städte als Glas-Karten auf der Karte (cards.tsx) über dem Autobahn-Netz (map.ts).

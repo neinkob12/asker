@@ -1,36 +1,20 @@
-// Quests (Auftrag 29): Peter führt dich mit einer Reihe von Aufgaben durchs Spiel. Immer eine Quest ist aktiv; ist
-// sie erledigt, gibt es die Belohnung (Ware, Geld, Ruf, weniger Heat, Erfahrung …) und Peter schickt die nächste.
-// Nichts ist Pflicht: Eine Quest lässt sich überspringen (ohne Belohnung).
+// Wochenverträge (Auftrag 32): Montag 8 Uhr drei Angebote von Figuren mit Gesicht, eins wird per Handy angenommen,
+// Frist Sonntag 23:59, Fortschritt über Ereignisse (count), ein Maß am Zustand (measure) oder eine Serie voller
+// Stunden (streak), Belohnung plus Vertrauen bei einem Lieferanten. Vorlagen und Figuren: contracts.ts.
 //
-// Fortschritt kommt auf drei Wegen (QuestDef in config.ts): Zähler über Ereignisse (ab Beginn der Quest), ein Maß
-// am Zustand (z.B. "Rechte Hand vorhanden") oder eine Serie voller Spielstunden.
+// Auftrag 46d: Peters Quests sind weg (das Tutorial führt in Köln, Auftrag 46b). Das Modul heißt weiter quests, damit
+// alte Spielstände ihre Verträge behalten (Migration 10 nimmt nur noch den Teil contracts). Angebote kommen erst nach
+// Köln: wenn Köln komplett ist oder die aktive Stadt nicht Köln ist (contractsOpen). Peters Kontakt (quest:peter) gehört
+// jetzt dem Tutorial (tutorial/config.ts); alte Quest-Chats bleiben im Spielstand lesbar.
 //
-// Wochenverträge (Auftrag 32, contracts.ts): Montag 8 Uhr drei Angebote von Figuren mit Gesicht, eins wird per Handy
-// angenommen, Frist Sonntag 23:59, Fortschritt wie bei den Quests, Belohnung plus Vertrauen bei einem Lieferanten.
-//
-// Kapitel pro Stadt (Auftrag 36): Nach Köln ist die Reihenfolge frei. Quests mit cityId kommen erst dran, wenn ihre Stadt
-// frei ist; bis dahin wartet Peter (questsWaiting) und macht mit dem Kapitel der Stadt weiter, in die du gehst.
-//
-// Handy Schritt für Schritt (Feedback 07.10.2026): Zu Beginn zeigt das Handy nur Nachrichten und Einstellungen, jede
-// weitere App kommt mit der Quest, die sie braucht (PHONE_APP_STEPS in config.ts). Abschaltbar ('quests.setPhoneSteps');
-// alte Spielstände haben es aus, nach Köln und nach dem Verkauf ist ohnehin alles da.
-//
-// Tutorial (Auftrag 46b): Läuft das Tutorial, schickt Peter keine Quests, keine Verträge und keine Handy-Schritte
-// (questsSuppressed); der Rückbau der Quests selbst ist Auftrag 46d.
-//
-// Öffentliche API: currentQuest(state), questsWaiting(state), questProgress(state), completedQuests(state), questTitle(state),
-//   rewardText(reward), QUESTS, CHAPTERS,
-//   Handy: phoneStepsActive(state), phoneStepsEnabled(state), questReached(state, questId), phoneAppLocked(state, appId),
-//   phoneAppsOpenedBy(state, questId), PHONE_APP_STEPS,
-//   Verträge: contractsOpen(state), contractOffers(state), activeContract(state), contractProgress(state), contractHistory(state),
-//   contractStats(state), contractValue(offer), canAcceptContract(state, offer), getContractTemplate(id),
-//   getContractContact(id), CONTRACT_TEMPLATES
-// Befehle: 'quests.skip', 'quests.acceptContract', 'quests.setPhoneSteps'
-// Ereignisse: 'quest.started', 'quest.completed', 'contract.offered', 'contract.accepted', 'contract.finished'
+// Öffentliche API: contractsOpen(state), contractOffers(state), activeContract(state), contractProgress(state),
+//   contractHistory(state), contractStats(state), canAcceptContract(state, offer), contractValue(offer),
+//   rewardText(reward), CONTRACT_TEMPLATES, CONTRACT_CONTACTS, getContractTemplate, getContractContact
+// Befehle: 'quests.acceptContract'
+// Ereignisse: 'contract.offered', 'contract.accepted', 'contract.finished'
 
 import {
   type CommandResult,
-  type Contact,
   type Ctx,
   clock,
   defineModule,
@@ -40,30 +24,13 @@ import {
   messages,
   wallet,
 } from '../../core';
-import { activeCity, isBusinessSold, isCityUnlocked, jansenContact, liveVeedel, presentCity, REGIONS } from '../city';
+import { activeCity, isBusinessSold, liveVeedel } from '../city';
 import { DEFAULT_WAREHOUSE, getWarehouses, productName, store, type Warehouse } from '../goods';
-import { regionStatus } from '../grow';
 import { addHeat, operationTier } from '../police';
 import { changeReputation } from '../reputation';
 import { addLoyalty, addXp, getStaff } from '../staff';
 import { addSupplierTrust, getRelation, getSuppliers, isUnlocked, supplierById } from '../suppliers';
-import { addInfluence, hasPlayerPresence, PLAYER_FACTION } from '../territory';
-import { tutorialEnabled } from '../tutorial';
-import {
-  CHAPTERS,
-  MILESTONE_TITLE,
-  PETER,
-  PHONE_APP_STEPS,
-  PHONE_STEPS_CITIES,
-  type PhoneAppStep,
-  QUEST_CHECK_EVERY,
-  QUEST_COUNT_BEFORE_36,
-  QUESTS,
-  QUESTS_ADDED_IN_43,
-  QUESTS_ADDED_IN_43_H,
-  type QuestDef,
-  type QuestReward,
-} from './config';
+import { addInfluence, campaignProgress, hasPlayerPresence, PLAYER_FACTION } from '../territory';
 import {
   type ActiveContract,
   CONTRACT_HISTORY,
@@ -71,8 +38,8 @@ import {
   CONTRACT_OFFERS,
   CONTRACT_TEMPLATES,
   CONTRACT_WEEKDAY,
-  CONTRACTS_FROM_CHAPTER,
   type ContractOffer,
+  type ContractReward,
   type ContractTemplate,
   contractRewards,
   contractTarget,
@@ -83,54 +50,16 @@ import {
 } from './contracts';
 
 export {
-  CHAPTERS,
-  MILESTONE_TITLE,
-  PETER,
-  PHONE_APP_STEPS,
-  type PhoneAppStep,
-  QUESTS,
-  type QuestDef,
-  type QuestGoTo,
-  type QuestReward,
-} from './config';
-export {
   type ActiveContract,
   CONTRACT_CONTACTS,
   CONTRACT_TEMPLATES,
   type ContractOffer,
+  type ContractReward,
   type ContractTemplate,
   getContractContact,
   getContractTemplate,
   rewardValue,
 } from './contracts';
-
-export interface QuestsState {
-  /** Index der aktiven Quest in QUESTS (= QUESTS.length, wenn alle durch sind). */
-  index: number;
-  /** Zähler bzw. Serie der aktiven Quest. */
-  progress: number;
-  /** Erledigte Quests (IDs), übersprungene stehen in skipped. */
-  done: string[];
-  skipped: string[];
-  /** Titel für die Bestenliste (letzte Quest). */
-  title: string | null;
-  /** Wann die aktive Quest begann (Spielminute). */
-  startedAt: number;
-  /**
-   * Die aktive Quest hat gerade erst begonnen, ihr 'quest.started' ist noch nicht zugestellt: Ereignisse, die schon
-   * vorher gemeldet waren (dieselbe Aktion, die die vorige Quest erledigt hat), zählen nicht für sie (J2, Version 7).
-   */
-  fresh: boolean;
-  /** Städte, für die du schon einmal bestellt hast (Auftrag 43, L5: zählt für „Bestell Ware für …“, auch geliefert). */
-  orderedIn: string[];
-  /** Wochenverträge (Auftrag 32). */
-  contracts: ContractsState;
-  /**
-   * Handy Schritt für Schritt (Feedback 07.10.2026): Apps kommen mit den Quests dazu (PHONE_APP_STEPS). Neue Spiele
-   * an, alte Spielstände aus (Version 9), damit mitten im Spiel keine App verschwindet.
-   */
-  phoneSteps: boolean;
-}
 
 /** Ein abgeschlossener Vertrag (für die Liste). */
 export interface ContractRecord {
@@ -141,7 +70,8 @@ export interface ContractRecord {
   at: number;
 }
 
-export interface ContractsState {
+/** Zustand des Moduls: nur noch die Wochenverträge (Auftrag 46d). */
+export interface QuestsState {
   /** Angebote dieser Woche (bis eins angenommen ist oder die Woche endet). */
   offers: ContractOffer[];
   active: ActiveContract | null;
@@ -150,17 +80,17 @@ export interface ContractsState {
   stats: { offered: number; accepted: number; done: number; failed: number };
 }
 
-/** Zustand in Version 1 (ohne startedAt). */
-type QuestsStateV1 = Omit<QuestsState, 'startedAt' | 'contracts' | 'fresh' | 'phoneSteps'>;
-type QuestsStateV2 = Omit<QuestsState, 'contracts' | 'fresh' | 'phoneSteps'>;
-/** Zustand bis Version 6 (ohne fresh). */
-type QuestsStateV6 = Omit<QuestsState, 'fresh' | 'orderedIn' | 'phoneSteps'>;
-/** Zustand in Version 7 (ohne orderedIn). */
-type QuestsStateV7 = Omit<QuestsState, 'orderedIn' | 'phoneSteps'>;
-/** Zustand in Version 8 (ohne phoneSteps). */
-type QuestsStateV8 = Omit<QuestsState, 'phoneSteps'>;
+/** Zustand bis Version 9: Peters Quests mit den Verträgen als Teil. Nur noch für die Migration. */
+interface QuestsStateV9 {
+  index?: number;
+  done?: string[];
+  skipped?: string[];
+  title?: string | null;
+  contracts?: QuestsState;
+  phoneSteps?: boolean;
+}
 
-function newContracts(): ContractsState {
+function newState(): QuestsState {
   return { offers: [], active: null, history: [], stats: { offered: 0, accepted: 0, done: 0, failed: 0 } };
 }
 
@@ -169,15 +99,10 @@ declare module '../../core' {
     quests: QuestsState;
   }
   interface GameCommands {
-    'quests.skip': Record<string, never>;
     /** Einen Wochenvertrag annehmen (eins der Angebote dieser Woche). */
     'quests.acceptContract': { offerId: number };
-    /** Handy Schritt für Schritt an oder aus (Einstellungen). */
-    'quests.setPhoneSteps': { enabled: boolean };
   }
   interface GameEvents {
-    'quest.started': { questId: string };
-    'quest.completed': { questId: string; skipped: boolean };
     'contract.offered': { offerIds: number[]; cityId: string };
     'contract.accepted': { offerId: number; templateId: string };
     'contract.finished': { offerId: number; templateId: string; result: 'done' | 'failed' };
@@ -187,133 +112,47 @@ declare module '../../core' {
 // ---------------------------------------------------------------------------------------------
 // Lesen
 
-/**
- * Ruhen die Quests (Auftrag 46b)? Ja, sobald das Tutorial einmal gestartet wurde: Seine Missionen ersetzen Peters
- * Quests, auch nach dem Ende des Tutorials (sonst kämen alle Kölner Kapitel auf einmal).
- */
-export function questsSuppressed(state: GameState): boolean {
-  return tutorialEnabled(state);
+export function contractOffers(state: GameState): readonly ContractOffer[] {
+  return state.modules.quests?.offers ?? [];
 }
 
-export function currentQuest(state: GameState): QuestDef | null {
-  if (questsSuppressed(state)) return null;
-  return QUESTS[state.modules.quests.index] ?? null;
+export function activeContract(state: GameState): ActiveContract | null {
+  return state.modules.quests?.active ?? null;
 }
 
-/** Index, solange Peter auf die nächste Stadt wartet (alle Quests bis dahin durch, die nächsten hängen an einer Stadt). */
-const WAITING = -1;
-
-/** Wartet Peter auf die nächste Stadt (Auftrag 36)? Dann gibt es gerade keine Quest, aber es kommen noch welche. */
-export function questsWaiting(state: GameState): boolean {
-  return state.modules.quests.index === WAITING;
+export function contractHistory(state: GameState): readonly ContractRecord[] {
+  return state.modules.quests?.history ?? [];
 }
 
-/** Kann die Quest jetzt dran sein? Kapitel einer Stadt erst, wenn die Stadt frei ist (und ihre Bedingung gilt). */
-function eligible(state: GameState, quest: QuestDef): boolean {
-  return (!quest.cityId || isCityUnlocked(state, quest.cityId)) && (!quest.requires || quest.requires(state));
+export function contractStats(state: GameState): QuestsState['stats'] {
+  return state.modules.quests?.stats ?? newState().stats;
 }
 
 /**
- * Wer die Quest schickt: Peter, im Kapitel Rotterdam Jansen, in der Produktion der Anrufer der Region, die zuerst
- * angerufen hat (Auftrag 43).
+ * Gibt es schon Wochenverträge? Erst nach Köln (Auftrag 46d): wenn Köln komplett ist oder die aktive Stadt nicht Köln
+ * ist. In der Hafen-Phase sind die Verträge in den Bestellungen der Kunden aufgegangen (trade).
  */
-export function questContact(state: GameState, quest: QuestDef | null): Contact {
-  if (quest?.voice === 'jansen') return jansenContact(state);
-  if (quest?.voice === 'grow') {
-    const region = REGIONS.find((r) => regionStatus(state, r.id) !== 'none') ?? REGIONS[0];
-    return region?.contact ?? PETER;
-  }
-  return PETER;
+export function contractsOpen(state: GameState): boolean {
+  if (isBusinessSold(state)) return false;
+  return activeCity(state) !== 'koeln' || campaignProgress(state, 'koeln').complete;
 }
 
-/**
- * Die nächste Quest nach der Stelle from: die nächste in der Liste, die weder erledigt noch übersprungen ist und dran
- * sein kann; sonst ein Stadt-Kapitel weiter vorn, das inzwischen dran sein kann (nach Köln ist die Reihenfolge der
- * Städte frei). Hängen alle übrigen an Städten, die noch nicht frei sind: WAITING. Alles durch: QUESTS.length.
- */
-function nextIndex(state: GameState, from: number): number {
-  const q = state.modules.quests;
-  const finished = new Set([...q.done, ...q.skipped]);
-  let waiting = false;
-  for (let i = Math.max(0, from); i < QUESTS.length; i++) {
-    if (finished.has(QUESTS[i].id)) continue;
-    if (eligible(state, QUESTS[i])) return i;
-    waiting = true;
-  }
-  for (let i = 0; i < Math.min(from, QUESTS.length); i++) {
-    const quest = QUESTS[i];
-    // Weiter vorn kommen nur Kapitel, die warten mussten: an einer Stadt oder einer Bedingung (Auftrag 43).
-    if ((!quest.cityId && !quest.requires) || finished.has(quest.id)) continue;
-    if (eligible(state, quest)) return i;
-    waiting = true;
-  }
-  return waiting ? WAITING : QUESTS.length;
+/** Fortschritt des laufenden Vertrags: [jetzt, Ziel], ohne Vertrag [0, 0]. */
+export function contractProgress(state: GameState): [number, number] {
+  const active = activeContract(state);
+  const template = active ? getContractTemplate(active.templateId) : undefined;
+  if (!active || !template) return [0, 0];
+  const now = template.measure ? template.measure(state, active) : active.progress;
+  return [Math.min(active.target, Math.max(0, now)), active.target];
 }
 
-/** Fortschritt der aktiven Quest: [jetzt, Ziel]. */
-export function questProgress(state: GameState): [number, number] {
-  const quest = currentQuest(state);
-  if (!quest) return [0, 0];
-  const now = quest.measure ? quest.measure(state) : state.modules.quests.progress;
-  return [Math.min(quest.target, Math.max(0, now)), quest.target];
-}
-
-export function completedQuests(state: GameState): readonly string[] {
-  return state.modules.quests.done;
-}
-
-export function questTitle(state: GameState): string | null {
-  return state.modules.quests.title;
-}
-
-export function chapterName(chapter: number): string {
-  return CHAPTERS[chapter] ?? '';
-}
-
-// ---------------------------------------------------------------------------------------------
-// Handy Schritt für Schritt (Feedback 07.10.2026)
-
-/** Ist „Handy Schritt für Schritt“ eingeschaltet (die Einstellung, egal in welcher Stadt)? */
-export function phoneStepsEnabled(state: GameState): boolean {
-  return state.modules.quests?.phoneSteps === true;
-}
-
-/**
- * Kommen die Apps gerade Schritt für Schritt dazu? Nur eingeschaltet, in der ersten Stadt (PHONE_STEPS_CITIES) und vor
- * dem Verkauf. Sonst ist alles da.
- */
-export function phoneStepsActive(state: GameState): boolean {
-  if (questsSuppressed(state)) return false;
-  return phoneStepsEnabled(state) && !isBusinessSold(state) && PHONE_STEPS_CITIES.includes(activeCity(state));
-}
-
-/**
- * Ist Peter schon bei dieser Quest angekommen? Ja, wenn sie dran, erledigt oder übersprungen ist oder eine spätere es
- * ist. Ohne Quest-Zustand und für unbekannte Quests: ja.
- */
-export function questReached(state: GameState, questId: string): boolean {
-  const q = state.modules.quests;
-  const position = QUESTS.findIndex((x) => x.id === questId);
-  if (!q || position < 0 || q.index >= position) return true;
-  const finished = new Set([...q.done, ...q.skipped]);
-  return QUESTS.slice(position).some((x) => finished.has(x.id));
-}
-
-/** Fehlt die App (ID wie im Handy, Tabs als 'tab:<id>') noch auf dem Startbildschirm, weil ihre Quest noch aussteht? */
-export function phoneAppLocked(state: GameState, appId: string): boolean {
-  if (!phoneStepsActive(state)) return false;
-  const step = PHONE_APP_STEPS.find((s) => s.appId === appId);
-  return !!step && !questReached(state, step.questId);
-}
-
-/** Apps, die mit dieser Quest aufs Handy kommen (leer, solange nicht Schritt für Schritt gilt). */
-export function phoneAppsOpenedBy(state: GameState, questId: string): PhoneAppStep[] {
-  if (!phoneStepsActive(state)) return [];
-  return PHONE_APP_STEPS.filter((s) => s.questId === questId);
+/** Ungefährer Wert eines Angebots in Euro (Summe der Belohnungen). */
+export function contractValue(offer: Pick<ContractOffer, 'rewards'>): number {
+  return Math.round(offer.rewards.reduce((sum, r) => sum + rewardValue(r), 0));
 }
 
 /** Kurzer Text einer Belohnung, z.B. "10 g Gras" oder "+5 Ruf". */
-export function rewardText(reward: QuestReward): string {
+export function rewardText(reward: ContractReward): string {
   const euro = (n: number) => `${n.toLocaleString('de-DE')} €`;
   switch (reward.kind) {
     case 'goods':
@@ -330,8 +169,6 @@ export function rewardText(reward: QuestReward): string {
       return `+${reward.amount} Loyalität fürs Team`;
     case 'influence':
       return `+${reward.amount} Einfluss in deinen Veedeln`;
-    case 'title':
-      return `Titel „${reward.title}“`;
     case 'trust': {
       const supplier = supplierById(reward.supplierId);
       return `+${reward.amount} Vertrauen bei ${supplier?.contactName ?? reward.supplierId}`;
@@ -352,11 +189,10 @@ function rewardWarehouse(state: GameState): Warehouse | null {
 }
 
 /** Zahlt eine Belohnung aus und gibt den Text zurück, der dem Spieler sagt, was wirklich angekommen ist. */
-function grant(ctx: Ctx, reward: QuestReward, reason: string): string {
+function grant(ctx: Ctx, reward: ContractReward, reason: string): string {
   const text = rewardText(reward);
   switch (reward.kind) {
     case 'goods': {
-      // Früher verpuffte die Ware still, wenn es in der aktiven Stadt kein eigenes Lager gab (Hamburg ohne Lager).
       const warehouse = rewardWarehouse(ctx.state);
       if (!warehouse) return `${text} (verfallen, du hast kein Lager)`;
       store(ctx, {
@@ -371,7 +207,7 @@ function grant(ctx: Ctx, reward: QuestReward, reason: string): string {
       wallet.earn(ctx, reward.amount, reward.money, reason, 'income.other');
       return text;
     case 'reputation':
-      changeReputation(ctx, reward.amount, 'Quest');
+      changeReputation(ctx, reward.amount, 'Wochenvertrag');
       return text;
     case 'heat':
       for (const v of liveVeedel(ctx.state)) addHeat(ctx, v.id, -reward.amount);
@@ -392,133 +228,10 @@ function grant(ctx: Ctx, reward: QuestReward, reason: string): string {
         if (hasPlayerPresence(ctx.state, v.id)) addInfluence(ctx, v.id, PLAYER_FACTION, reward.amount);
       }
       return text;
-    case 'title':
-      ctx.state.modules.quests.title = reward.title;
-      return text;
     case 'trust':
       addSupplierTrust(ctx, reward.supplierId, reward.amount);
       return text;
   }
-}
-
-/**
- * Die aktive Quest (Index schon gesetzt) beginnt jetzt bei null. Bis ihr 'quest.started' zugestellt ist, zählen keine
- * Ereignisse für sie: Was davor gemeldet war, gehört zur Aktion, die die vorige Quest erledigt hat.
- */
-function begin(ctx: Ctx): void {
-  const q = ctx.state.modules.quests;
-  q.progress = 0;
-  q.startedAt = ctx.now;
-  q.fresh = true;
-}
-
-/** Peter (bzw. Jansen) schickt die aktive Quest. */
-function announce(ctx: Ctx): void {
-  const quest = currentQuest(ctx.state);
-  if (!quest) return;
-  const rewards = quest.reward.map(rewardText).join(', ');
-  // Neue App fürs Handy (Schritt für Schritt): Peter sagt es gleich dazu.
-  const apps = phoneAppsOpenedBy(ctx.state, quest.id).map((step) => step.line);
-  const text = [quest.task, ...apps, rewards ? `Dafür gibt's von mir: ${rewards}.` : ''].filter(Boolean).join('\n\n');
-  messages.send(ctx, { contact: questContact(ctx.state, quest), text });
-  ctx.emit('quest.started', { questId: quest.id });
-}
-
-function finish(ctx: Ctx, skipped: boolean): void {
-  const q = ctx.state.modules.quests;
-  const quest = currentQuest(ctx.state);
-  if (!quest) return;
-  if (skipped) {
-    q.skipped.push(quest.id);
-  } else {
-    q.done.push(quest.id);
-    const from = questContact(ctx.state, quest);
-    const rewards = quest.reward.map((reward) => grant(ctx, reward, `Belohnung von ${from.name}`)).join(', ');
-    journal.add(ctx, `Quest erledigt: ${quest.title}.${rewards ? ` Belohnung: ${rewards}.` : ''}`, 'good');
-    if (quest.doneText) messages.send(ctx, { contact: from, text: quest.doneText });
-  }
-  q.index = nextIndex(ctx.state, q.index + 1);
-  begin(ctx);
-  ctx.emit('quest.completed', { questId: quest.id, skipped });
-  const next = currentQuest(ctx.state);
-  // Jansens Kapitel endet mit seinem eigenen Satz (doneText), Peter mischt sich da nicht ein.
-  if (!skipped && quest.voice === undefined && (!next || next.chapter !== quest.chapter)) {
-    messages.send(ctx, {
-      contact: PETER,
-      text: next
-        ? `Stark. Kapitel „${chapterName(quest.chapter)}“ ist durch. Jetzt kommt „${chapterName(next.chapter)}“.`
-        : questsWaiting(ctx.state)
-          ? `Stark. Kapitel „${chapterName(quest.chapter)}“ ist durch. Wenn du in einer neuen Stadt bist, meld ich mich.`
-          : 'Das war alles, was ich dir beibringen kann. Ab jetzt bist du auf dich gestellt, Boss.',
-    });
-  }
-  announce(ctx);
-  // Die nächste Quest kann schon erfüllt sein (z.B. Rechte Hand gab es schon).
-  check(ctx);
-}
-
-/** Ist die aktive Quest erfüllt? Dann abschließen (auch mehrere hintereinander). */
-function check(ctx: Ctx): void {
-  const [now, target] = questProgress(ctx.state);
-  if (target > 0 && now >= target) finish(ctx, false);
-}
-
-/** Zähler der aktiven Quest für ein Ereignis. */
-function onEvent<K extends keyof GameEvents>(type: K) {
-  return (ctx: Ctx, payload: GameEvents[K]) => {
-    const quest = currentQuest(ctx.state);
-    const counter = quest?.count?.[type] as ((p: GameEvents[K], s: GameState) => number) | undefined;
-    if (!quest || !counter) return;
-    // Was mit derselben Aktion gemeldet wurde, die die vorige Quest erledigt hat, gehört noch zu ihr (ein Läufer über
-    // "Leute finden" meldet staff.hired und recruiting.hired: Das darf nicht zwei Quests auf einmal erledigen). Früher
-    // galt die ganze Spielminute: Wer pausiert gleich die nächste Aufgabe erledigte, bekam 0/1 (J2).
-    const q = ctx.state.modules.quests;
-    if (q.fresh && q.startedAt === ctx.now) return;
-    const delta = counter(payload, ctx.state);
-    if (!(delta > 0)) return;
-    ctx.state.modules.quests.progress += delta;
-    check(ctx);
-  };
-}
-
-// ---------------------------------------------------------------------------------------------
-// Wochenverträge (Auftrag 32)
-
-export function contractOffers(state: GameState): readonly ContractOffer[] {
-  return state.modules.quests.contracts?.offers ?? [];
-}
-
-export function activeContract(state: GameState): ActiveContract | null {
-  return state.modules.quests.contracts?.active ?? null;
-}
-
-export function contractHistory(state: GameState): readonly ContractRecord[] {
-  return state.modules.quests.contracts?.history ?? [];
-}
-
-export function contractStats(state: GameState): ContractsState['stats'] {
-  return state.modules.quests.contracts?.stats ?? newContracts().stats;
-}
-
-/** Gibt es schon Wochenverträge? Erst, wenn die ersten Kapitel durch sind (CONTRACTS_FROM_CHAPTER). */
-export function contractsOpen(state: GameState): boolean {
-  const q = state.modules.quests;
-  const finished = new Set([...q.done, ...q.skipped]);
-  return QUESTS.every((quest) => quest.chapter >= CONTRACTS_FROM_CHAPTER || finished.has(quest.id));
-}
-
-/** Fortschritt des laufenden Vertrags: [jetzt, Ziel], ohne Vertrag [0, 0]. */
-export function contractProgress(state: GameState): [number, number] {
-  const active = activeContract(state);
-  const template = active ? getContractTemplate(active.templateId) : undefined;
-  if (!active || !template) return [0, 0];
-  const now = template.measure ? template.measure(state, active) : active.progress;
-  return [Math.min(active.target, Math.max(0, now)), active.target];
-}
-
-/** Ungefährer Wert eines Angebots in Euro (Summe der Belohnungen). */
-export function contractValue(offer: Pick<ContractOffer, 'rewards'>): number {
-  return Math.round(offer.rewards.reduce((sum, r) => sum + rewardValue(r), 0));
 }
 
 /** Beginn des nächsten Montags nach time (die Frist: Sonntag 23:59 ist das letzte erlaubte). */
@@ -539,13 +252,7 @@ function trustSupplier(ctx: Ctx, cityId: string): string | null {
 
 /** Montag 8 Uhr: drei Angebote von verschiedenen Figuren für die aktive Stadt. */
 function offerContracts(ctx: Ctx): void {
-  const c = ctx.state.modules.quests.contracts;
-  // Hafen-Phase (Auftrag 40): Die Wochenverträge sind in den Bestellungen der Kunden aufgegangen (trade).
-  if (isBusinessSold(ctx.state)) {
-    retractOffers(ctx);
-    c.offers = [];
-    return;
-  }
+  const c = ctx.state.modules.quests;
   const cityId = activeCity(ctx.state);
   const tier = operationTier(ctx.state, cityId).index;
   const deadline = nextMonday(ctx.now);
@@ -615,8 +322,7 @@ function retractOffers(ctx: Ctx): void {
  * so viele Veedel wie beim Angebot, Vorlagen mit Bedingung (z.B. „ein Veedel dazugewinnen“) müssen sie noch erfüllen.
  */
 export function canAcceptContract(state: GameState, offer: ContractOffer): CommandResult {
-  const c = state.modules.quests.contracts;
-  if (c.active) return { ok: false, reason: 'Du hast diese Woche schon einen Vertrag.' };
+  if (activeContract(state)) return { ok: false, reason: 'Du hast diese Woche schon einen Vertrag.' };
   if (state.time >= offer.deadline) return { ok: false, reason: 'Die Woche ist vorbei.' };
   const template = getContractTemplate(offer.templateId);
   if (!template) return { ok: false, reason: 'Diesen Vertrag gibt es nicht mehr.' };
@@ -635,7 +341,7 @@ export function canAcceptContract(state: GameState, offer: ContractOffer): Comma
 }
 
 export function acceptContract(ctx: Ctx, offerId: number): CommandResult {
-  const c = ctx.state.modules.quests.contracts;
+  const c = ctx.state.modules.quests;
   if (c.active) return { ok: false, reason: 'Du hast diese Woche schon einen Vertrag.' };
   const offer = c.offers.find((o) => o.id === offerId);
   if (!offer) return { ok: false, reason: 'Das Angebot gibt es nicht mehr.' };
@@ -663,7 +369,7 @@ export function acceptContract(ctx: Ctx, offerId: number): CommandResult {
 }
 
 function finishContract(ctx: Ctx, result: 'done' | 'failed'): void {
-  const c = ctx.state.modules.quests.contracts;
+  const c = ctx.state.modules.quests;
   const active = c.active;
   if (!active) return;
   const template = getContractTemplate(active.templateId);
@@ -689,7 +395,7 @@ function finishContract(ctx: Ctx, result: 'done' | 'failed'): void {
 
 /** Erfüllt? Dann auszahlen. Frist vorbei? Dann geplatzt. */
 function checkContract(ctx: Ctx): void {
-  const active = ctx.state.modules.quests.contracts.active;
+  const active = ctx.state.modules.quests.active;
   if (!active) return;
   const [now, target] = contractProgress(ctx.state);
   if (target > 0 && now >= target) finishContract(ctx, 'done');
@@ -699,11 +405,12 @@ function checkContract(ctx: Ctx): void {
 /** Zähler des laufenden Vertrags für ein Ereignis. */
 function onContractEvent<K extends keyof GameEvents>(type: K) {
   return (ctx: Ctx, payload: GameEvents[K]) => {
-    const active = ctx.state.modules.quests.contracts?.active;
+    const active = ctx.state.modules.quests.active;
     const template = active ? getContractTemplate(active.templateId) : undefined;
     const counter = template?.count?.[type] as
       | ((p: GameEvents[K], s: GameState, o: ContractOffer) => number)
       | undefined;
+    // Eben angenommen, 'contract.accepted' noch nicht zugestellt: Was davor gemeldet war, zählt nicht.
     if (!active || !counter || (active.fresh && active.acceptedAt === ctx.now)) return;
     const delta = counter(payload, ctx.state, active);
     if (!(delta > 0)) return;
@@ -713,7 +420,7 @@ function onContractEvent<K extends keyof GameEvents>(type: K) {
 }
 
 function contractHour(ctx: Ctx): void {
-  const c = ctx.state.modules.quests.contracts;
+  const c = ctx.state.modules.quests;
   const active = c.active;
   const template = active ? getContractTemplate(active.templateId) : undefined;
   if (active && template?.streak) active.progress = template.streak(ctx.state, active) ? active.progress + 1 : 0;
@@ -727,72 +434,9 @@ function contractHour(ctx: Ctx): void {
   if (monday && !c.active && contractsOpen(ctx.state)) offerContracts(ctx);
 }
 
-/** Eine neue Stadt ist frei: Peter macht mit ihrem Kapitel weiter. */
-function resume(ctx: Ctx): void {
-  const q = ctx.state.modules.quests;
-  const index = nextIndex(ctx.state, QUESTS.length);
-  if (index === WAITING) return;
-  q.index = index;
-  begin(ctx);
-  const next = currentQuest(ctx.state);
-  if (!next) return;
-  messages.send(ctx, {
-    contact: questContact(ctx.state, next),
-    text:
-      next.voice === 'jansen'
-        ? 'Willkommen in der Halle. Ich zeig dir, wie das hier läuft, Schritt für Schritt. Danach bist du allein.'
-        : next.voice === 'grow'
-          ? 'Ich zeig dir, wie das mit dem Anbau läuft. Vom Feld bis in deinen Hafen, Schritt für Schritt.'
-          : `Neue Stadt, neues Kapitel: „${chapterName(next.chapter)}“.`,
-  });
-  announce(ctx);
-  check(ctx);
-}
-
-/**
- * Du bist in einer Stadt mit eigenem Kapitel, die aktive Quest gehört aber woanders hin (Auftrag 43: in Hamburg
- * stand noch „Setz einen eigenen Preis“ aus Köln): Peter macht mit dem Kapitel der Stadt weiter. Was aus Köln liegen
- * geblieben ist, gilt als übersprungen (die Stadt führt jetzt der Statthalter); offene Kapitel anderer Städte kommen
- * wieder dran, wenn du dort bist.
- */
-function followCity(ctx: Ctx): void {
-  const state = ctx.state;
-  const current = currentQuest(state);
-  if (!current || current.voice !== undefined || isBusinessSold(state)) return;
-  const here = presentCity(state);
-  if ((current.cityId ?? 'koeln') === here) return;
-  const q = state.modules.quests;
-  const finished = new Set([...q.done, ...q.skipped]);
-  const index = QUESTS.findIndex((x) => x.cityId === here && !finished.has(x.id) && eligible(state, x));
-  if (index < 0) return;
-  for (const quest of QUESTS.slice(0, index)) {
-    const base = quest.cityId === undefined && quest.requires === undefined && quest.voice === undefined;
-    if (base && !finished.has(quest.id)) q.skipped.push(quest.id);
-  }
-  q.index = index;
-  begin(ctx);
-  const next = currentQuest(state);
-  if (!next) return;
-  messages.send(ctx, { contact: PETER, text: `Neue Stadt, neues Kapitel: „${chapterName(next.chapter)}“.` });
-  announce(ctx);
-  check(ctx);
-}
-
-/**
- * Das Geschäft ist verkauft (Auftrag 43): Was von den Kapiteln in Deutschland noch offen war, fällt weg (ohne
- * Belohnung), ebenso ein laufender Wochenvertrag. Peter wartet, bis Jansen in Rotterdam mit seinem Kapitel anfängt.
- */
-function leaveOldChapters(ctx: Ctx): void {
-  const q = ctx.state.modules.quests;
-  const finished = new Set([...q.done, ...q.skipped]);
-  for (const quest of QUESTS) {
-    if (quest.voice === undefined && !finished.has(quest.id)) q.skipped.push(quest.id);
-  }
-  q.index = WAITING;
-  q.progress = 0;
-  q.startedAt = ctx.now;
-  q.fresh = false;
-  const c = q.contracts;
+/** Das Geschäft ist verkauft (Auftrag 43): Ein laufender Wochenvertrag und offene Angebote fallen weg. */
+function leaveContracts(ctx: Ctx): void {
+  const c = ctx.state.modules.quests;
   if (c.active) {
     journal.add(ctx, `Vertrag beendet: ${c.active.title}. Das Geschäft ist verkauft.`, 'info');
     c.active = null;
@@ -801,182 +445,56 @@ function leaveOldChapters(ctx: Ctx): void {
   c.offers = [];
 }
 
-export function skipQuest(ctx: Ctx): CommandResult {
-  if (!currentQuest(ctx.state)) return { ok: false, reason: 'Keine Quest offen.' };
-  finish(ctx, true);
-  return { ok: true };
-}
-
-/** Alle Ereignisse, auf die irgendeine Quest bzw. irgendein Vertrag hört. */
-const COUNTED: (keyof GameEvents)[] = [
-  ...new Set(QUESTS.flatMap((q) => Object.keys(q.count ?? {}) as (keyof GameEvents)[])),
-];
+/** Alle Ereignisse, auf die irgendein Vertrag hört. */
 const CONTRACT_COUNTED: (keyof GameEvents)[] = [
   ...new Set(CONTRACT_TEMPLATES.flatMap((t) => Object.keys(t.count ?? {}) as (keyof GameEvents)[])),
 ];
 
-/** Quest- und Vertrags-Zähler für ein Ereignis zusammen (ein Handler pro Ereignis). */
-function onCounted<K extends keyof GameEvents>(type: K) {
-  const quest = COUNTED.includes(type) ? onEvent(type) : null;
-  const contract = CONTRACT_COUNTED.includes(type) ? onContractEvent(type) : null;
-  return (ctx: Ctx, payload: GameEvents[K]) => {
-    if (questsSuppressed(ctx.state)) return;
-    if (type === 'shipment.ordered') noteOrder(ctx, (payload as GameEvents['shipment.ordered']).cityId ?? 'koeln');
-    quest?.(ctx, payload);
-    contract?.(ctx, payload);
-  };
-}
-
-/** Für diese Stadt wurde schon einmal bestellt (L5). */
-function noteOrder(ctx: Ctx, cityId: string): void {
-  const q = ctx.state.modules.quests;
-  if (!q.orderedIn.includes(cityId)) q.orderedIn.push(cityId);
-}
-
-/** Hast du für diese Stadt schon einmal bestellt? */
-export function orderedForCity(state: GameState, cityId: string): boolean {
-  return state.modules.quests.orderedIn?.includes(cityId) ?? false;
-}
-
 export default defineModule({
   id: 'quests',
-  version: 9,
+  version: 10,
   dependsOn: ['goods', 'staff', 'territory', 'police', 'reputation', 'leaderboard'],
-  init: () => ({
-    index: 0,
-    progress: 0,
-    done: [],
-    skipped: [],
-    title: null,
-    startedAt: -1,
-    fresh: false,
-    orderedIn: [],
-    contracts: newContracts(),
-    // Auftrag 46b: Das Handy kommt mit den Stufen des Tutorials (tutorialAllows), nicht mehr mit den Quests.
-    phoneSteps: false,
-  }),
-  tickEvery: QUEST_CHECK_EVERY,
+  init: newState,
   tick: (ctx) => {
-    // Auftrag 46b: Läuft das Tutorial, ruhen die Quests und die Wochenverträge.
-    if (questsSuppressed(ctx.state)) return;
-    // Beim ersten Schritt schickt Peter die erste Quest.
-    const q = ctx.state.modules.quests;
-    if (q.index === 0 && q.done.length === 0 && q.skipped.length === 0 && !ctx.state.messages.contacts[PETER.id]) {
-      const greeting =
-        "Ey, ich bin's, Peter. Hab gehört, du willst in Köln groß rauskommen. Ich zeig dir, wie das läuft. Mach, was ich sag, dann gibt's auch was für dich.";
-      messages.send(ctx, {
-        contact: PETER,
-        text: phoneStepsActive(ctx.state)
-          ? `${greeting}\n\nDein Handy ist noch ziemlich leer. Mit jeder Aufgabe kommt die passende App dazu, dann suchst du nicht lange.`
-          : greeting,
-      });
-      announce(ctx);
-    }
-    // Nach dem Verkauf zählen nur noch Jansens Schritte in Rotterdam (Auftrag 43, auch für alte Spielstände).
-    if (isBusinessSold(ctx.state) && currentQuest(ctx.state)?.voice === undefined && q.index !== WAITING) {
-      leaveOldChapters(ctx);
-    }
-    // Peter wartet auf die nächste Stadt (Auftrag 36): Ist sie frei, kommt ihr Kapitel.
-    if (q.index === WAITING) resume(ctx);
-    // In einer neuen Stadt geht ihr Kapitel vor (Auftrag 43).
-    followCity(ctx);
-    if (currentQuest(ctx.state)?.measure) check(ctx);
-    const contract = ctx.state.modules.quests.contracts.active;
+    const contract = ctx.state.modules.quests.active;
     if (contract && getContractTemplate(contract.templateId)?.measure) checkContract(ctx);
   },
   commands: {
-    'quests.skip': (ctx) => skipQuest(ctx),
     'quests.acceptContract': (ctx, { offerId }) => acceptContract(ctx, offerId),
-    'quests.setPhoneSteps': (ctx, { enabled }) => {
-      ctx.state.modules.quests.phoneSteps = enabled === true;
-      return { ok: true };
-    },
   },
   on: {
-    ...Object.fromEntries([...new Set([...COUNTED, ...CONTRACT_COUNTED])].map((type) => [type, onCounted(type)])),
-    // Ab hier zählt, was geschieht, für die neue Quest (alles davor Gemeldete ist zugestellt).
-    'quest.started': (ctx, { questId }) => {
-      if (currentQuest(ctx.state)?.id === questId) ctx.state.modules.quests.fresh = false;
-    },
-    // Dasselbe für einen eben angenommenen Wochenvertrag.
+    ...Object.fromEntries(CONTRACT_COUNTED.map((type) => [type, onContractEvent(type)])),
+    // Ab hier zählt, was geschieht, für den eben angenommenen Vertrag (alles davor Gemeldete ist zugestellt).
     'contract.accepted': (ctx, { offerId }) => {
-      const active = ctx.state.modules.quests.contracts.active;
+      const active = ctx.state.modules.quests.active;
       if (active?.id === offerId) active.fresh = false;
     },
-    // Meilenstein Mehrheit (Auftrag 30): Titel "Boss von Köln" für die Bestenliste, Peter gratuliert.
-    'campaign.milestone': (ctx, { kind, cityId }) => {
-      if (kind !== 'majority' || cityId !== 'koeln') return;
-      ctx.state.modules.quests.title = MILESTONE_TITLE;
-      messages.send(ctx, {
-        contact: PETER,
-        text: 'Sieben Veedel. Du bist jetzt der Boss von Köln, das sagen sie überall. Aber die anderen fünf schlafen nicht.',
-      });
-    },
-    // Verkauft (Auftrag 43): Die Kapitel in Deutschland und der Wochenvertrag sind vorbei.
-    'business.sold': (ctx) => leaveOldChapters(ctx),
+    // Verkauft (Auftrag 43): Der Wochenvertrag ist vorbei.
+    'business.sold': (ctx) => leaveContracts(ctx),
     // "Nein danke" auf ein Vertragsangebot: Das Angebot ist weg.
     'message.answered': (ctx, { messageId, optionId }) => {
-      const c = ctx.state.modules.quests.contracts;
+      const c = ctx.state.modules.quests;
       if (optionId === 'no') c.offers = c.offers.filter((o) => o.messageId !== messageId);
     },
-    'clock.hourStarted': (ctx) => {
-      if (questsSuppressed(ctx.state)) return;
-      contractHour(ctx);
-      const quest = currentQuest(ctx.state);
-      if (!quest?.streak) return;
-      const q = ctx.state.modules.quests;
-      q.progress = quest.streak(ctx.state) ? q.progress + 1 : 0;
-      check(ctx);
-    },
+    'clock.hourStarted': (ctx) => contractHour(ctx),
   },
   migrations: {
-    // Version 2: Die Quests haben eine neue Reihenfolge (der Hafen und die Rechte Hand kamen vor dem, was sie brauchen).
-    // Der Index zählt die Liste, also neu bestimmen: die erste Quest in der neuen Reihenfolge, die noch nicht erledigt
-    // oder übersprungen ist. Fortschritt bleibt nur, wenn es dieselbe Stelle ist.
-    2: (old: QuestsStateV1): QuestsStateV2 => {
-      const finished = new Set([...old.done, ...old.skipped]);
-      const found = QUESTS.findIndex((q) => !finished.has(q.id));
-      const index = found < 0 ? QUESTS.length : found;
-      return { ...old, index, progress: index === old.index ? old.progress : 0, startedAt: -1 };
-    },
-    // Version 3 (Auftrag 32): Wochenverträge, alte Stände fangen am nächsten Montag an.
-    3: (old: QuestsStateV2): QuestsStateV6 => ({ ...old, contracts: newContracts() }),
-    // Version 4 (Auftrag 36): Kapitel pro Stadt hinten an der Liste. Wer mit allem durch war, wartet jetzt auf die
-    // nächste Stadt (sonst stünde er mitten im Kapitel einer Stadt, die noch gar nicht frei ist).
-    4: (old: QuestsStateV6): QuestsStateV6 =>
-      old.index >= QUEST_COUNT_BEFORE_36 ? { ...old, index: WAITING, progress: 0 } : old,
-    // Version 5 (Auftrag 43): Jedes Stadt-Kapitel hat zwei Quests mehr (Läufer anheuern, selbst bestellen). Der Index
-    // zeigte in die alte Liste; dieselbe Quest in der neuen suchen. Die neuen Quests einer Stadt, die schon läuft,
-    // kommen erst nach dem Ende der Liste wieder dran (nextIndex sucht Stadt-Quests auch vorne).
-    5: (old: QuestsStateV6): QuestsStateV6 => {
-      const added = new Set<string>([...QUESTS_ADDED_IN_43, ...QUESTS_ADDED_IN_43_H]);
-      const before = QUESTS.filter((q) => !added.has(q.id));
-      // Ziel ist die Liste von Version 5 (ohne die Quests aus Version 6), Version 6 schiebt danach weiter.
-      const v5 = QUESTS.filter((q) => !(QUESTS_ADDED_IN_43_H as readonly string[]).includes(q.id));
-      if (old.index < 0) return old;
-      const id = before[old.index]?.id;
-      // Alles durch: Jetzt wartet das Kapitel Rotterdam (es kommt nach dem Verkauf, sobald du dort bist).
-      if (id === undefined) return { ...old, index: WAITING, progress: 0 };
-      return { ...old, index: v5.findIndex((q) => q.id === id) };
-    },
-    // Version 6 (Auftrag 43, H15): „Mach dir einen Namen“ nach dem Lkw. Indizes dahinter rücken eins weiter; wer den
-    // Lkw schon hat, bekommt die neue Quest als erledigt (sonst käme sie später mit Belohnung nach).
-    6: (old: QuestsStateV6): QuestsStateV6 => {
-      const added = QUESTS_ADDED_IN_43_H as readonly string[];
-      const positions = added.map((id) => QUESTS.findIndex((q) => q.id === id)).sort((a, b) => a - b);
-      let index = old.index;
-      if (index >= 0) for (const pos of positions) if (index >= pos) index++;
-      const done = old.done.includes('rtTruck')
-        ? [...old.done, ...added.filter((id) => !old.done.includes(id))]
-        : old.done;
-      return { ...old, index, done };
-    },
-    // Version 7 (J2): Die Sperre für Ereignisse derselben Aktion hängt nicht mehr an der Spielminute, sondern an fresh.
-    // Gespeichert wird nie mitten in einer Aktion, also ist nichts mehr frisch.
-    7: (old: QuestsStateV6): QuestsStateV7 => ({ ...old, fresh: false }),
-    // Version 8 (Auftrag 43, L5): Städte mit Bestellung; alte Stände wissen es nicht, die Quest zählt dann wie vorher.
-    8: (old: QuestsStateV7): QuestsStateV8 => ({ ...old, orderedIn: [] }),
-    // Version 9 (Feedback 07.10.2026): Handy Schritt für Schritt nur für neue Spiele. Wer schon spielt, behält alle Apps.
-    9: (old: QuestsStateV8): QuestsState => ({ ...old, phoneSteps: false }),
+    // Versionen 2 bis 9 sortierten Peters Quests um (Index, Verträge, Handy-Schritte). Die Quests sind weg (Auftrag
+    // 46d), Version 10 nimmt nur noch die Verträge: Hier muss nichts mehr gerechnet werden.
+    2: keep,
+    3: keep,
+    4: keep,
+    5: keep,
+    6: keep,
+    7: keep,
+    8: keep,
+    9: keep,
+    // Version 10 (Auftrag 46d): Nur noch die Wochenverträge. Peters Quests, Titel und Handy-Schritte fallen weg (den
+    // Titel „Boss von Köln“ kennt territory über seine Meilensteine).
+    10: (old: QuestsStateV9 | undefined): QuestsState => old?.contracts ?? newState(),
   },
 });
+
+function keep(old: QuestsStateV9): QuestsStateV9 {
+  return old;
+}

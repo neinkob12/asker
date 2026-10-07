@@ -91,8 +91,7 @@ import {
   inTransitAmount,
   PORTS,
 } from '../modules/logistics';
-import { getSpotPrice } from '../modules/market';
-import { activeContract, contractOffers, contractValue, currentQuest } from '../modules/quests';
+import { activeContract, contractOffers, contractValue } from '../modules/quests';
 import { getCandidates } from '../modules/recruiting';
 import {
   canFoundSpotAt,
@@ -292,20 +291,6 @@ const BOT_CONTRACTS = new Set([
   'spots',
   'quiet',
 ]);
-
-/**
- * Peters Quest „Setz einen eigenen Preis“ erledigt der Bot sonst nie (er verkauft zum Richtpreis). Die Wochenverträge
- * kommen aber erst nach Peters erstem Kapitel (J15): Wie ein Neuling probiert er es einmal aus und stellt gleich zurück.
- */
-function tryOwnPrice(sim: Simulation, stats: BotStats): void {
-  if (currentQuest(sim.state)?.id !== 'setPrice') return;
-  const spot = getSpots(sim.state, activeCity(sim.state))[0];
-  if (!spot) return;
-  const price = getSpotPrice(sim.state, spot.id, 'weed');
-  if (run(sim, stats, { type: 'market.setPrice', payload: { spotId: spot.id, productId: 'weed', price } })) {
-    run(sim, stats, { type: 'market.setPrice', payload: { spotId: spot.id, productId: 'weed', price: null } });
-  }
-}
 
 /** Montags: den Vertrag mit der höchsten Belohnung nehmen, den er schaffen kann. */
 function takeContract(sim: Simulation, stats: BotStats): void {
@@ -938,7 +923,6 @@ export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = 
     return;
   }
   handleEncounters(sim, stats);
-  tryOwnPrice(sim, stats);
   takeContract(sim, stats);
   answerMessages(sim, stats, options);
   sellPersonally(sim, stats, options);

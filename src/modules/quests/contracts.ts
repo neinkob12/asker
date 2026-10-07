@@ -1,17 +1,31 @@
 // Wochenverträge (Auftrag 32): Jeden Montag um 8 Uhr bieten drei Figuren je einen Vertrag an, einer wird per Handy
-// angenommen ('quests.acceptContract'), Frist Sonntag 23:59. Fortschritt wie bei Peters Quests: Zähler über Ereignisse
-// (count), ein Maß am Zustand (measure) oder eine Serie voller Stunden (streak). Ziele skalieren mit der Größe des
-// Geschäfts (police.operationTier: Kleindealer, Händler, Großhändler) und gelten für die Stadt, die beim Angebot aktiv
-// war. Belohnungen wie bei den Quests, dazu Vertrauen bei einem Lieferanten.
+// angenommen ('quests.acceptContract'), Frist Sonntag 23:59. Fortschritt: Zähler über Ereignisse (count), ein Maß am
+// Zustand (measure) oder eine Serie voller Stunden (streak). Ziele skalieren mit der Größe des Geschäfts
+// (police.operationTier: Kleindealer, Händler, Großhändler) und gelten für die Stadt, die beim Angebot aktiv war.
+// Belohnungen: Ware, Geld, Ruf, Heat, Erfahrung, Loyalität, Einfluss, dazu Vertrauen bei einem Lieferanten.
 //
 // Hier stehen nur Daten und reine Funktionen (Vorlagen, Figuren, Werte); den Ablauf macht index.ts.
 
-import type { Contact, GameEvents, GameState } from '../../core';
+import type { Contact, GameEvents, GameState, MoneyKind } from '../../core';
 import { getProduct, QUALITY_TIERS } from '../goods';
 import { hottestVeedel } from '../police';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import { allVeedel, veedelCity } from '../veedel';
-import type { QuestReward } from './config';
+
+export type ContractReward =
+  | { kind: 'goods'; productId: string; amount: number; quality?: number }
+  | { kind: 'money'; money: MoneyKind; amount: number }
+  | { kind: 'reputation'; amount: number }
+  /** Senkt die Heat in allen Veedeln. */
+  | { kind: 'heat'; amount: number }
+  /** Erfahrung für alle aktiven Leute im Team. */
+  | { kind: 'teamXp'; amount: number }
+  /** Loyalität für alle aktiven Leute im Team. */
+  | { kind: 'loyalty'; amount: number }
+  /** Einfluss in allen Veedeln, in denen du schon präsent bist. */
+  | { kind: 'influence'; amount: number }
+  /** Vertrauen bei einem Lieferanten. */
+  | { kind: 'trust'; supplierId: string; amount: number };
 
 /** Ein Angebot, so wie es im Spielstand liegt (nur Daten). */
 export interface ContractOffer {
@@ -27,7 +41,7 @@ export interface ContractOffer {
   productId?: string;
   /** Zusatzwert der Vorlage, z.B. wie viele Veedel zu halten sind. */
   param?: number;
-  rewards: QuestReward[];
+  rewards: ContractReward[];
   contactId: string;
   /** Frist: Beginn des nächsten Montags (Sonntag 23:59 ist das letzte erlaubte). */
   deadline: number;
@@ -377,11 +391,6 @@ export const CONTRACT_OFFERS = 3;
 /** Montag (0) um 8 Uhr kommen die Angebote. */
 export const CONTRACT_WEEKDAY = 0;
 export const CONTRACT_HOUR = 8;
-/**
- * Verträge erst, wenn alle Quests der Kapitel davor erledigt oder übersprungen sind (J15: Am ersten Montag, Tag 4,
- * kamen sie, während Peter noch das Ankommen erklärte). 1 = nach dem Kapitel „Ankommen“ (Verkaufen, Preise, Bestellen).
- */
-export const CONTRACTS_FROM_CHAPTER = 1;
 /** So viele erledigte bzw. geplatzte Verträge merkt sich der Spielstand. */
 export const CONTRACT_HISTORY = 8;
 
@@ -391,10 +400,10 @@ export function contractRewards(
   tier: number,
   supplierId: string | null,
   productId?: string,
-): QuestReward[] {
+): ContractReward[] {
   const t = Math.max(0, Math.min(2, tier));
   const money = Math.round((CONTRACT_MONEY[t] * template.weight) / 50) * 50;
-  const rewards: QuestReward[] = [];
+  const rewards: ContractReward[] = [];
   switch (template.bonus) {
     case 'clean':
       rewards.push({ kind: 'money', money: 'clean', amount: Math.round(money / 2 / 50) * 50 });
@@ -431,7 +440,7 @@ export function contractRewards(
 }
 
 /** Ungefährer Wert einer Belohnung in Euro (zum Vergleichen, z.B. für den Bot). */
-export function rewardValue(reward: QuestReward): number {
+export function rewardValue(reward: ContractReward): number {
   switch (reward.kind) {
     case 'money':
       return reward.money === 'clean' ? reward.amount * 1.3 : reward.amount;
@@ -449,7 +458,5 @@ export function rewardValue(reward: QuestReward): number {
       return reward.amount * 80;
     case 'trust':
       return reward.amount * 120;
-    case 'title':
-      return 0;
   }
 }

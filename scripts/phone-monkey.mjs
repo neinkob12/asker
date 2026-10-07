@@ -114,7 +114,6 @@ function rng(start) {
 const SETUP = `(() => {
   const sim = window.koeln.session.sim;
   // Alle Apps auf dem Startbildschirm (Handy Schritt für Schritt aus, sonst fehlen am Anfang die meisten Kacheln).
-  sim.dispatch({ type: 'quests.setPhoneSteps', payload: { enabled: false } });
   sim.state.wallet.dirty += 30000;
   sim.state.wallet.clean = (sim.state.wallet.clean ?? 0) + 8000;
   const spots = sim.state.modules.spots.unlocked;

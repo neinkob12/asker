@@ -4,7 +4,6 @@ import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { DEFAULT_WAREHOUSE, getStock, store, warehouseCapacity } from '../goods';
 import { getLieutenants } from '../hierarchy';
 import { hasBerth } from '../logistics';
-import { currentQuest, PETER as QUEST_PETER, questsSuppressed } from '../quests';
 import { getAllSpots, getSpots, isSpotActive, lockedSpots, spotCity } from '../spots';
 import { enlist, generateProfile, getStaff, type StaffMember } from '../staff';
 import { getRelation, getSuppliers } from '../suppliers';
@@ -98,12 +97,11 @@ describe('tutorial: Start und Stufen', () => {
       return copy;
     };
     expect(strip(withModule.state)).toEqual(strip(without.state));
-    // Die vier Start-Spots offen, Peter schickt Quests.
+    // Die vier Start-Spots offen.
     expect(KOELN(withModule.state).sort()).toEqual(['ebertplatz', 'neumarkt', 'uni', 'zuelpicher']);
-    expect(currentQuest(withModule.state)).not.toBeNull();
   });
 
-  it('startet mit 700 € mehr, nur dem Neumarkt und ohne Quests', () => {
+  it('startet mit 700 € mehr und nur dem Neumarkt', () => {
     const sim = start();
     expect(tutorialEnabled(sim.state)).toBe(true);
     expect(tutorialStage(sim.state)).toBe(0);
@@ -118,9 +116,7 @@ describe('tutorial: Start und Stufen', () => {
     ).toEqual(['neumarkt']);
     expect(sim.dispatch({ type: 'tutorial.start', payload: {} }).ok).toBe(false);
     sim.advance(60);
-    expect(questsSuppressed(sim.state)).toBe(true);
-    expect(currentQuest(sim.state)).toBeNull();
-    expect(messages.thread(sim.state, QUEST_PETER.id).some((m) => m.text.includes('Dafür gibt'))).toBe(false);
+    expect(messages.thread(sim.state, PETER.id).some((m) => m.text.includes('Dafür gibt'))).toBe(false);
   });
 
   it('die Stufe steigt mit advance; eine Stufe mit Mission braucht erst die Mission', () => {
@@ -137,7 +133,7 @@ describe('tutorial: Start und Stufen', () => {
     expect(tutorialStage(sim.state)).toBe(1);
   });
 
-  it('skip gibt alles frei, öffnet die Start-Spots wieder und lässt die Quests ruhen', () => {
+  it('skip gibt alles frei und öffnet die Start-Spots wieder', () => {
     const sim = start();
     sim.dispatch({ type: 'tutorial.advance', payload: {} });
     expect(sim.dispatch({ type: 'tutorial.skip', payload: {} }).ok).toBe(true);
@@ -149,7 +145,6 @@ describe('tutorial: Start und Stufen', () => {
     expect(KOELN(sim.state).sort()).toEqual(['ebertplatz', 'neumarkt', 'uni', 'zuelpicher']);
     sim.advance(60);
     expect(currentMission(sim.state)).toBeNull();
-    expect(questsSuppressed(sim.state)).toBe(true);
     expect(sim.dispatch({ type: 'tutorial.skip', payload: {} }).ok).toBe(false);
   });
 

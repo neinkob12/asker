@@ -6,7 +6,6 @@ import { messages, type Simulation } from '../../core';
 import { createTestGame } from '../../core/testing';
 import { activeCity, cityTravel, isCityLive, jansenContact, liveVeedel, playableCities, presentCity } from '../city';
 import { activeEncounters } from '../encounters';
-import { currentQuest, QUESTS } from '../quests';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
 import { FIRST_ORDER_ANSWER_MINUTES, START_STOCK } from './config';
@@ -51,22 +50,6 @@ function soldAndArrived(sim: Simulation): void {
 }
 
 describe('Einführung in die Hafen-Phase (Auftrag 43)', () => {
-  it('nach dem Verkauf fallen die alten Kapitel weg, in Rotterdam schickt Jansen die Schritte', () => {
-    const sim = quietGame();
-    soldAndArrived(sim);
-    const quest = currentQuest(sim.state);
-    expect(quest?.id).toBe('rtAnswer');
-    expect(quest?.voice).toBe('jansen');
-    // Alles aus Deutschland ist erledigt oder übersprungen, nichts mehr offen.
-    const q = sim.state.modules.quests;
-    const finished = new Set([...q.done, ...q.skipped]);
-    expect(QUESTS.filter((x) => x.voice === undefined && !finished.has(x.id))).toEqual([]);
-    expect(q.contracts.active).toBeNull();
-    // Jansen schreibt die Aufgabe.
-    const thread = messages.thread(sim.state, jansenContact(sim.state).id).map((m) => m.text);
-    expect(thread.some((t) => t.includes('Das ist die Halle'))).toBe(true);
-  });
-
   it('nach dem Verkauf schweigen die alten Städte: alte Chats gelesen, keine Berichte, Aktionen oder Empfehlungen', () => {
     const sim = quietGame(5);
     soldAndArrived(sim);
@@ -142,19 +125,15 @@ describe('Einführung in die Hafen-Phase (Auftrag 43)', () => {
     if (!covered) throw new Error('keine gedeckte Bestellung');
     expect(sim.dispatch({ type: 'trade.answer', payload: { orderId: covered.id, choice: 'accept' } }).ok).toBe(true);
     sim.advance(10);
-    expect(currentQuest(sim.state)?.id).toBe('rtDeliver');
     const order = pendingDeliveries(sim.state)[0];
     expect(sim.dispatch({ type: 'trade.deliver', payload: { orderId: order.id } }).ok).toBe(true);
     sim.advance(10);
-    expect(currentQuest(sim.state)?.id).toBe('rtBuy');
     const producer = PRODUCERS.find((p) => p.products.weed !== undefined && !p.byRoad);
     if (!producer) throw new Error('kein Produzent');
     expect(
       sim.dispatch({ type: 'trade.buy', payload: { producerId: producer.id, productId: 'weed', size: 'small' } }).ok,
     ).toBe(true);
     sim.advance(10);
-    // Erst pünktlich liefern, der eigene Lkw kommt zuletzt (Auftrag 43: er lohnt sich erst bei vielen Fahrten).
-    expect(currentQuest(sim.state)?.id).toBe('rtOnTime');
     expect(sim.dispatch({ type: 'fleet.buy', payload: { model: 'truck', cityId: 'rotterdam' } }).ok).toBe(true);
     sim.advance(10);
     // Pünktliche Lieferungen zählen, nach fünf ist Jansen raus.

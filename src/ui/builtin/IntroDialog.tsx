@@ -69,9 +69,8 @@ const PAGES: readonly IntroPage[] = [
     color: 'chat',
     kicker: 'Dein Handy',
     title: 'Alles läuft übers Handy',
-    // Feedback 07.10.2026: Das Handy fängt fast leer an, die Apps kommen mit Peters Quests (abschaltbar in den
-    // Einstellungen, Einstieg).
-    text: 'Lieferanten, Leute und Gangs schreiben dir. Peter schickt dir Quests mit Belohnungen, die dich durchs Spiel führen, und mit ihnen kommen nach und nach die Apps aufs Handy. Die aktuelle Quest steht oben links unter deinem Geld.',
+    // Auftrag 46d: Peters Quests sind weg, im Modus normal führt das Tutorial (Missionen unter dem Geld).
+    text: 'Lieferanten, Leute und Gangs schreiben dir. Im Modus normal zeigt dir Peter Schritt für Schritt, wie das Geschäft läuft, und schaltet die Apps nach und nach frei.',
   },
 ];
 
