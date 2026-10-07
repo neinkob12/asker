@@ -8,6 +8,7 @@
 
 import {
   type CommandResult,
+  type Contact,
   type Ctx,
   clock,
   formatEuro,
@@ -22,6 +23,7 @@ import { cityName } from '../city';
 import { fitArticles, formatProductAmount, getWarehouse, getWarehouses, productName } from '../goods';
 import { portName } from '../logistics';
 import { isMinigameReady, MINIGAME_TIMEOUT, startMinigame } from '../minigames';
+import { SCRIPTED_SEIZURE, scriptedDone, tutorialActive, tutorialStage } from '../tutorial';
 import {
   BRIBE_DELAY,
   BRIBE_MIN,
@@ -214,6 +216,48 @@ export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier, ask?: b
   tellAbout(ctx, supplier, s, voice(ctx, supplier, s.onCredit ? 'seizedCredit' : 'seized', { ...why, goods }), true);
   journal.add(ctx, `Lieferung von ${supplier.name} beschlagnahmt (${why.reasonLabel}): ${goods} verloren.`, 'bad');
   ctx.emit('shipment.problem', { shipmentId: s.id, supplierId: s.supplierId, kind: 'seized', reason: why.reasonLabel });
+}
+
+/** Auftrag 46c: der Zoll als Kontakt im Handy, wenn die geskriptete Beschlagnahme kommt. */
+const CUSTOMS_CONTACT: Contact = { id: 'police:zoll', name: 'Zollfahndung', kind: 'police', role: 'Zoll am Hafen' };
+
+/**
+ * Auftrag 46c, geskriptete Beschlagnahme im Tutorial: Die zweite Lieferung von Jansen (SCRIPTED_SEIZURE) wird am Kai
+ * vollständig beschlagnahmt, ohne Wahl „Papiere fälschen“ (die gibt es ab Stufe 9 für alle weiteren). Läuft bei
+ * aktivem Tutorial ab Stufe 9 genau einmal; gibt zurück, ob die Lieferung weg ist (dann nichts abladen). Die Zahl
+ * der Lieferungen davor (`earlier`) zählt der Aufrufer.
+ */
+export function scriptedSeizure(ctx: Ctx, s: Shipment, supplier: Supplier, earlier: number): boolean {
+  const state = ctx.state;
+  if (!tutorialActive(state) || tutorialStage(state) < SCRIPTED_SEIZURE.stage) return false;
+  if (supplier.id !== SCRIPTED_SEIZURE.supplierId || earlier + 1 < SCRIPTED_SEIZURE.ordinal) return false;
+  if (scriptedDone(state, 'seizure')) return false;
+  const goods = goodsOf(s);
+  const port = portName(s.cityId ?? 'koeln');
+  messages.send(ctx, {
+    contact: CUSTOMS_CONTACT,
+    text: `Zollfahndung. Ihr Container am ${port} wurde heute kontrolliert und vollständig sichergestellt: ${goods}. Ein Verfahren ist eingeleitet.`,
+  });
+  tellAbout(
+    ctx,
+    supplier,
+    s,
+    voice(ctx, supplier, s.onCredit ? 'seizedCredit' : 'seized', {
+      goods,
+      reason: 'Zollkontrolle am Kai',
+      reasonLabel: 'Zollkontrolle am Kai',
+    }),
+    true,
+  );
+  journal.add(ctx, `Lieferung von ${supplier.name} am ${port} beschlagnahmt: ${goods} verloren.`, 'bad');
+  ctx.emit('shipment.problem', {
+    shipmentId: s.id,
+    supplierId: s.supplierId,
+    kind: 'seized',
+    reason: 'Zollkontrolle am Kai',
+  });
+  ctx.dispatch({ type: 'tutorial.scripted', payload: { key: 'seizure' } }, { actor: 'system' });
+  return true;
 }
 
 /** Was bei dieser Verspätung geht: laut Grund, Umleiten nur mit einem zweiten Lager in der Stadt, nicht bei Schiffen. */

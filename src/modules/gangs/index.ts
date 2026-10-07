@@ -100,6 +100,8 @@ export {
   openIncidents,
 } from './methods';
 export { safeAmount } from './safe';
+/** Auftrag 46c: fester Überfall ohne Konfrontation (erster Gang-Angriff im Tutorial). */
+export { type ScriptedRaidRequest, type ScriptedRaidResult, scriptedRaid } from './scripted';
 export { searchAmount } from './search';
 export {
   allianceCost,

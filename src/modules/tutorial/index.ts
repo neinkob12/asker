@@ -17,8 +17,13 @@
 //   tutorialSpotOpen(state, spotId), tutorialSpotCost(state, spotId), tutorialSupplierOpen(state, supplierId),
 //   currentMission(state), missionProgress(state), missionReward(state), scriptedDone(state, key), stageInfo(stage),
 //   STAGES, MISSIONS, FEATURE_STAGE, PETER, LAST_STAGE
-// Befehle: 'tutorial.start', 'tutorial.advance', 'tutorial.skip', 'tutorial.scripted'
-// Ereignisse: 'tutorial.stageReached', 'tutorial.missionStarted', 'tutorial.missionDone'
+// Befehle: 'tutorial.start', 'tutorial.advance', 'tutorial.skip', 'tutorial.scripted', 'tutorial.tourSeen'
+// Ereignisse: 'tutorial.stageReached', 'tutorial.missionStarted', 'tutorial.missionDone', 'tutorial.scriptedMoment'
+//
+// Auftrag 46c: Die Touren je Stufe und die Pop-ups leben in ui/ (tours.ts); die geskripteten Momente (Handy-Bestellung,
+// Lager fast leer, erster Gang-Angriff) prüft scripted.ts jede Spielminute, die Beschlagnahme meldet suppliers mit
+// 'tutorial.scripted'. Welche Tour schon lief, steht im Zustand (toursSeen), damit sie nach dem Laden nicht noch einmal
+// kommt bzw. nachgeholt wird, wenn sie fehlte.
 
 import {
   type CommandResult,
@@ -26,6 +31,7 @@ import {
   defineModule,
   distanceMeters,
   formatEuro,
+  type GameCommands,
   type GameEvents,
   type GameState,
   journal,
@@ -58,15 +64,21 @@ import {
 } from './config';
 import { MISSIONS, type MissionDef, type MissionState, missionById, missionForStage } from './missions';
 import { type MissionReward, missionReward, recentSales, type SaleRecord } from './reward';
+import { runScriptedMoments } from './scripted';
 
 export {
   FEATURE_STAGE,
   LAST_STAGE,
+  LOW_STOCK_POPUP,
   PETER,
+  SCRIPTED_FIRST_ATTACK,
+  SCRIPTED_PHONE_ORDER,
+  SCRIPTED_SEIZURE,
   STAGES,
   type StageDef,
   TUTORIAL_SPOT_COST,
   TUTORIAL_START_MONEY,
+  TUTORIAL_START_SPOT,
   type TutorialFeature,
 } from './config';
 export {
@@ -80,8 +92,11 @@ export {
 } from './missions';
 export { type MissionReward, missionReward, rewardGoods, rewardMoney } from './reward';
 
-/** Geskriptete Momente (46c setzt sie über 'tutorial.scripted', jeder genau einmal). */
+/** Geskriptete Momente (46c: scripted.ts bzw. 'tutorial.scripted' aus suppliers, jeder genau einmal). */
 export type ScriptedKey = 'firstAttack' | 'seizure' | 'phoneOrder' | 'lowStockPopup';
+
+/** Touren außerhalb der Stufen (Auftrag 46c): nach der ersten Lieferung, nach dem ersten Fahrer. */
+export type ExtraTour = 'delivery' | 'driver';
 
 export interface TutorialState {
   /** false: alles frei (Hardcore, alte Stände, Bot, andere Städte). */
@@ -95,8 +110,18 @@ export interface TutorialState {
   skipped: boolean;
   /** Spots, die beim Start gesperrt wurden (sonst von Anfang an offen); skip öffnet sie wieder. */
   lockedAtStart: string[];
-  /** Geskriptete Momente, jeder genau einmal (46c setzt sie, 46b legt die Felder an). */
-  scripted: { firstAttack: boolean; seizure: boolean; phoneOrder: boolean; lowStockPopups: number };
+  /** Geskriptete Momente, jeder genau einmal; lowStockDay: Spieltag des letzten Pop-ups (höchstens eins pro Tag). */
+  scripted: {
+    firstAttack: boolean;
+    seizure: boolean;
+    phoneOrder: boolean;
+    lowStockPopups: number;
+    lowStockDay: number;
+  };
+  /** Stufen, deren Tour schon gelaufen ist (Auftrag 46c); beim Laden holt die Oberfläche die fehlende nach. */
+  toursSeen: number[];
+  /** Touren außerhalb der Stufen, die schon gelaufen sind (Auftrag 46c). */
+  extraToursSeen: ExtraTour[];
   /** Features, die ein Ereignis freigeschaltet hat (Ruf beim ersten Stammkunden, Rang beim ersten Aufstieg). */
   unlocked: TutorialFeature[];
   /** Verkäufe der letzten 24 Stunden für die Belohnung (nur solange das Tutorial läuft). */
@@ -114,13 +139,17 @@ declare module '../../core' {
     'tutorial.advance': Record<string, never>;
     /** Tutorial beenden: alles frei, Stufe 12 (Einstellungen › Einstieg, Entwicklung). */
     'tutorial.skip': Record<string, never>;
-    /** Einen geskripteten Moment als erledigt markieren (46c). */
+    /** Einen geskripteten Moment als erledigt markieren (46c; suppliers meldet so die Beschlagnahme). */
     'tutorial.scripted': { key: ScriptedKey };
+    /** Eine Tour ist durch (46c, aus der Oberfläche): die einer Stufe oder eine der weiteren. */
+    'tutorial.tourSeen': { stage?: number; extra?: ExtraTour };
   }
   interface GameEvents {
     'tutorial.stageReached': { stage: number };
     'tutorial.missionStarted': { id: string };
     'tutorial.missionDone': { id: string; reward: MissionReward };
+    /** Ein geskripteter Moment ist passiert (46c); ref: Kontakt der Bestellung bzw. die Gang. */
+    'tutorial.scriptedMoment': { key: ScriptedKey; ref?: string };
   }
 }
 
@@ -248,6 +277,18 @@ export function scriptedDone(state: GameState, key: ScriptedKey): boolean {
   return key === 'lowStockPopup' ? s.lowStockPopups > 0 : s[key];
 }
 
+/** Lief die Tour dieser Stufe schon (Auftrag 46c)? Ohne Tutorial immer. */
+export function tourSeen(state: GameState, stage: number): boolean {
+  const t = state.modules.tutorial;
+  return !t?.enabled || t.toursSeen.includes(stage);
+}
+
+/** Lief eine der weiteren Touren schon (Auftrag 46c)? */
+export function extraTourSeen(state: GameState, extra: ExtraTour): boolean {
+  const t = state.modules.tutorial;
+  return !t?.enabled || t.extraToursSeen.includes(extra);
+}
+
 export function stageInfo(stage: number): StageDef {
   return STAGES[Math.max(0, Math.min(STAGES.length - 1, stage))];
 }
@@ -265,7 +306,7 @@ function startMissionFor(ctx: Ctx): void {
   const def = missionForStage(t.stage);
   if (!def || t.skipped || t.done.includes(def.id) || t.mission?.id === def.id) return;
   t.mission = { id: def.id, progress: 0, startedAt: ctx.now, seen: [], reached: [] };
-  messages.send(ctx, { contact: PETER, text: def.task });
+  // Auftrag 46c: Peter schreibt nicht, was die Tour sagt; die Aufgabe steht auf der Missions-Karte.
   ctx.emit('tutorial.missionStarted', { id: def.id });
 }
 
@@ -295,7 +336,8 @@ function finish(ctx: Ctx, def: MissionDef): void {
   t.mission = null;
   const got = grant(ctx, reward);
   journal.add(ctx, `Mission erledigt: ${def.title}. Belohnung: ${got}.`, 'good');
-  messages.send(ctx, { contact: PETER, text: `${def.doneText}\n\nDafür gibt's von mir: ${got}.` });
+  // Auftrag 46c: die Belohnung als eine Zeile im Chat von Peter.
+  messages.send(ctx, { contact: PETER, text: `${def.doneText} Dafür gibt's von mir: ${got}.` });
   ctx.emit('tutorial.missionDone', { id: def.id, reward });
   // Die nächste Stufe kommt von selbst (ihre Tour zeigt 46c beim Ereignis stageReached).
   if (t.stage === def.stage && t.stage < LAST_STAGE) advanceTo(ctx, t.stage + 1);
@@ -362,6 +404,8 @@ function skip(ctx: Ctx): CommandResult {
   t.skipped = true;
   t.mission = null;
   t.stage = LAST_STAGE;
+  // Keine Tour mehr nachholen (Auftrag 46c).
+  t.toursSeen = Array.from({ length: LAST_STAGE + 1 }, (_, i) => i);
   // Die am Anfang gesperrten Spots sind ohne Tutorial offen (ihr Preis ist 0).
   for (const spotId of t.lockedAtStart) {
     if (!isSpotActive(ctx.state, spotId))
@@ -377,6 +421,24 @@ function scripted(ctx: Ctx, key: ScriptedKey): CommandResult {
   if (key === 'lowStockPopup') s.lowStockPopups += 1;
   else if (key === 'firstAttack' || key === 'seizure' || key === 'phoneOrder') s[key] = true;
   else return { ok: false, reason: 'Unbekannter Moment.' };
+  ctx.emit('tutorial.scriptedMoment', { key });
+  return { ok: true };
+}
+
+/** Eine Tour ist durch (Auftrag 46c): merken, damit sie nach dem Laden nicht noch einmal kommt. */
+function tourSeenCommand(ctx: Ctx, payload: GameCommands['tutorial.tourSeen']): CommandResult {
+  const t = ctx.state.modules.tutorial;
+  if (!t.enabled) return { ok: false, reason: 'Kein Tutorial.' };
+  if (payload.stage !== undefined) {
+    if (!Number.isInteger(payload.stage) || payload.stage < 0 || payload.stage > LAST_STAGE) {
+      return { ok: false, reason: 'Unbekannte Stufe.' };
+    }
+    if (!t.toursSeen.includes(payload.stage)) t.toursSeen.push(payload.stage);
+  }
+  if (payload.extra !== undefined) {
+    if (payload.extra !== 'delivery' && payload.extra !== 'driver') return { ok: false, reason: 'Unbekannte Tour.' };
+    if (!t.extraToursSeen.includes(payload.extra)) t.extraToursSeen.push(payload.extra);
+  }
   return { ok: true };
 }
 
@@ -434,25 +496,51 @@ function checkNow(ctx: Ctx): void {
   if (ctx.state.modules.tutorial.enabled) check(ctx);
 }
 
-export default defineModule({
-  id: 'tutorial',
-  version: 1,
-  dependsOn: ['spots', 'goods', 'suppliers', 'customers', 'staff', 'territory', 'hierarchy', 'logistics', 'laundering'],
-  init: () => ({
+/** Anfangszustand (auch für die Migration alter Stände). */
+function initialState(): TutorialState {
+  return {
     enabled: false,
     stage: 0,
     mission: null,
     done: [],
     skipped: false,
     lockedAtStart: [],
-    scripted: { firstAttack: false, seizure: false, phoneOrder: false, lowStockPopups: 0 },
+    scripted: { firstAttack: false, seizure: false, phoneOrder: false, lowStockPopups: 0, lowStockDay: -1 },
     unlocked: [],
     sales: [],
-  }),
-  tickEvery: TUTORIAL_CHECK_EVERY,
+    toursSeen: [],
+    extraToursSeen: [],
+  };
+}
+
+/** Zustand der Version 1 (Auftrag 46b), ohne die Felder der Touren. */
+type TutorialStateV1 = Omit<TutorialState, 'toursSeen' | 'extraToursSeen' | 'scripted'> & {
+  scripted: Omit<TutorialState['scripted'], 'lowStockDay'>;
+};
+
+export default defineModule({
+  id: 'tutorial',
+  version: 2,
+  dependsOn: [
+    'spots',
+    'goods',
+    'suppliers',
+    'customers',
+    'staff',
+    'territory',
+    'hierarchy',
+    'logistics',
+    'laundering',
+    'gangs',
+  ],
+  init: () => initialState(),
+  // Jede Spielminute: die Momente (scripted.ts); die Mission alle TUTORIAL_CHECK_EVERY Minuten wie bisher.
+  tickEvery: 1,
   tick: (ctx) => {
     const t = ctx.state.modules.tutorial;
     if (!t.enabled) return;
+    runScriptedMoments(ctx);
+    if (Math.floor(ctx.now) % TUTORIAL_CHECK_EVERY !== 0) return;
     // Nur die Verkäufe der letzten 24 Stunden behalten.
     if (t.sales.length > 0 && t.sales[0].at <= ctx.now - REWARD.hours * 60) t.sales = [...recentSales(ctx.state)];
     if (!t.mission) startMissionFor(ctx);
@@ -463,6 +551,7 @@ export default defineModule({
     'tutorial.advance': (ctx) => advance(ctx),
     'tutorial.skip': (ctx) => skip(ctx),
     'tutorial.scripted': (ctx, { key }) => scripted(ctx, key),
+    'tutorial.tourSeen': (ctx, payload) => tourSeenCommand(ctx, payload),
   },
   on: {
     ...Object.fromEntries(CHECK_AFTER.map((type) => [type, checkNow])),
@@ -474,5 +563,18 @@ export default defineModule({
       ]),
     ),
   },
-  migrations: {},
+  migrations: {
+    // Auftrag 46c: Touren im Zustand, Tag des letzten Lager-Pop-ups. Ein Stand, der schon lief, hat seine Touren
+    // gesehen (sonst kämen beim Laden alle bis zur Stufe auf einmal); ein frischer Stand (enabled: false) nicht.
+    2: (old: TutorialStateV1 | undefined): TutorialState => {
+      if (!old) return initialState();
+      const seen = old.enabled ? Array.from({ length: old.stage + 1 }, (_, i) => i) : [];
+      return {
+        ...old,
+        scripted: { ...old.scripted, lowStockDay: -1 },
+        toursSeen: seen,
+        extraToursSeen: old.enabled ? ['delivery', 'driver'] : [],
+      };
+    },
+  },
 });

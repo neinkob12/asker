@@ -186,6 +186,22 @@ dann ein `if (!tutorialAllows(state, '…')) return` an der Stelle, die es anbie
 sperrt sich mit `spots.lock` (nur ohne Leute und Verkäufe). Solange das Tutorial je gestartet wurde, ruhen Peters
 Quests (`questsSuppressed`); der Kern-HUD blendet Teile über `registerHudPartHidden` aus (sauberes Geld). Dev-Haken
 `window.koeln.dev.tutorialStage(n)`, Szenen `npm run screenshot -- --scenes=tutorial,tutorial-teilziele`.
+Auftrag 46c (Touren und Momente, `docs/auftraege/46c-touren-und-momente.md`): Das Spiel startet mit einer
+Willkommen-Seite (`IntroDialog.tsx`: Name, dann Modus), die Story-Seiten sind weg. Jede Stufe hat ihre Tour mit Peter
+als reine Daten (`tutorial/ui/tours.ts`, `stageTour`, höchstens 140 Zeichen pro Schritt, nur Anker aus `TOUR_ANCHORS`);
+`TourStarter` im HUD startet sie, sobald der Zustand eine Stufe ohne gesehene Tour zeigt (`toursSeen`, Befehl
+`tutorial.tourSeen`, Migration 2), also beim Erreichen und nach dem Laden. Erklär-Stufen (0, 3, 4, 10) enden mit
+`tutorial.advance` aus der Tour, nach Stufe 0 steht das Tempo auf 1. Touren, in denen der Spieler selbst etwas tun muss,
+laufen mit laufender Uhr (`pause: false`) und sind überspringbar. Die geskripteten Momente prüft `tutorial/scripted.ts`
+jede Spielminute (Ereignis `tutorial.scriptedMoment`): Handy-Bestellung bei 3.000 € (`customers.scriptedOrder`),
+Pop-up „Lager fast leer“ (Dialog `tutorial.lowStock`, bis zu dreimal, eins pro Tag, `LOW_STOCK_POPUP`), erster
+Gang-Angriff bei 6.000 € (`gangs.scriptedRaid`, Kategorie `loss.gang`, Ereignis `gang.raided`; bis dahin kein
+zufälliger Überfall), Beschlagnahme der zweiten Rotterdam-Lieferung am Kai (`scriptedSeizure` in `suppliers`,
+`SCRIPTED_SEIZURE`), die die Tour der Stufe 9 startet. Peter schreibt im Tutorial nicht, was die Tour sagt; die
+Belohnung ist eine Zeile im Chat. Wetter steht wieder im HUD neben der Uhr (`weather/ui`, Anker `hud.weather`,
+HUD-Platz `'time'` auch am Handy-Bildschirm). Neue Anker (nur Attribute): `spot.marker`, `chat.reply`,
+`staff.lieutenants`, `staff.hire`, `suppliers.shipments`, `suppliers.offer`, `suppliers.orderMode`,
+`laundering.kiosk`, `port.berth`, `routes.new`. Szenen `npm run screenshot -- --scenes=tutorial-tour,tutorial-tour-spot,tutorial-tour-handy`.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

@@ -384,7 +384,7 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 | `hierarchy` | `posts` nach Mitarbeiter (Spots, Einstellungen mit Bestellregeln (optional `maxIndex`: nur bestellen, wenn der Preisindex darunter liegt, Auftrag 32), Team, Ausfälle, Protokoll), `rightHands` pro Stadt (Einstellungen mit Aufgaben, Erfahrung `xp`, Erledigtes `done`, Bericht, `fullPower`), `orderTemplate`, `capos` (Auftrag 34) (7) | `getPost`, `getLieutenants`, `getLieutenantIds`, `isLieutenant`, `lieutenantOfSpot`, `lieutenantSpots`, `lieutenantVeedels`, `lieutenantsInVeedel`, `teamOf`, `teamLeadOf`, `handlesAbsence`, `canBeLieutenant`, `checkSpots`, `lieutenantDemand`, `lieutenantSatisfaction`, `homeWarehouse`, `orderRuleLabel`, `ruleStock`, `isPortSupplierAllowed`, `getRightHand(state, cityId?)`, `allRightHands`, `rightHandCityOf`, Vollmacht (Auftrag 30): `hasFullPower`, `fullPowerMissing`, `FULL_POWER_SHARE`, Übergabe (Auftrag 36): `rightHandTitle` (Statthalter), `canBeRightHand`, `rightHandOffered`, `rightHandSatisfaction`, `payrollReserve`, `rightHandBudgetLeft`, `absenceHandled`, `buildReport`, Aufgaben: `RIGHT_HAND_TASKS`, `isTaskUnlocked`, `isTaskActive`, `rightHandRank`, `rightHandRankProgress`, `rightHandDriver`, `rightHandOrderLimit`, `rightHandSpeedFactor`, `rightHandHandlesOrders`, `restockBudgetLeft`, `describeDone`; Capo (Auftrag 34): `getCapos(state, cityId?)`, `isCapo`, `capoOf`, `capoDistrict`, `canBeCapo`, `capoCandidates`, `capoInCharge`; Rat: `REPORT_TIPS`, `reportTipFor`; alt: `getLieutenant(veedelId)`, `lieutenantVeedel` | `hierarchy.appoint` (`staffId`, `spotIds`), `.setSpots`, `.dismiss`, `.configure` (`settings` mit `orderRules`, `onAbsent` …), `.appointRightHand`, `.dismissRightHand`, `.configureRightHand` (auch Aufgaben und ihre Regeln; `cityId?`), `.grantFullPower`, `.revokeFullPower`, `.appointCapo`, `.dismissCapo`, `.revokeFullPower` | `hierarchy.appointed` (`spotIds`), `.dismissed`, `.configured`, `.spotsChanged`, `.rightHandAppointed`, `.rightHandDismissed`, `.dailyReport`, `.rightHandRankUp`, `.fullPowerGranted`, `.fullPowerRevoked`, `.shareTaken` |
 | `finance` | `days`: Tagesbücher der letzten 30 Tage (Kategorien, pro Spot, pro Leutnant, pro Stadt `cities`; Buchungstexte nur sieben Tage) (2) | `currentDay`, `bookDay`, `dayReport(state, daysAgo)`, `periodReport(state, days)`, `dailyProfits`, `categoryLines`, `spotResult`, `spotResults`, `lieutenantResult`, `wageRunway`; Bilanz (Auftrag 27): `PERIODS`, `periodSpan`, `balance(state, period, filter)` mit `FinanceFilter` (alles, Stadt, Veedel, Spot, Leutnant), `balanceHistory`, `explainReport`; Städte (Auftrag 30): `cityReport(state, cityId, days)`, `cityDayProfit`, `bookingCity` | | |
 | `quests` | `index`, `progress`, `done`, `skipped`, `title`, `startedAt`, `fresh` (Version 7), `phoneSteps` (Version 9), `contracts` (Wochenverträge: `offers`, `active`, `history`, `stats`, Auftrag 32) (4; Auftrag 36: Kapitel pro Stadt mit `cityId`, index -1 = wartet auf die nächste Stadt). Peter (Kontakt `quest:peter`) schickt 26 Quests in fünf Kapiteln der Reihe nach (`config.ts`: `QUESTS`, `CHAPTERS`); Fortschritt über Ereignis-Zähler (`count`), ein Maß am Zustand (`measure`) oder eine Serie voller Stunden (`streak`). Belohnungen: Ware, Geld (schwarz/sauber), Ruf, weniger Heat, Erfahrung und Loyalität fürs Team, Einfluss, Titel Wochenverträge in `contracts.ts` (14 Vorlagen `CONTRACT_TEMPLATES`, sechs Figuren `CONTRACT_CONTACTS`, Ziele nach `operationTier`, Belohnung `trust` beim Lieferanten) | `currentQuest`, `questsWaiting` (Auftrag 36: Kapitel der nächsten Stadt), `questProgress`, `completedQuests`, `questTitle`, `chapterName`, `rewardText`, `QUESTS`, `CHAPTERS`, `PETER`; Handy Schritt für Schritt: `phoneStepsActive`, `phoneStepsEnabled`, `questReached`, `phoneAppLocked`, `phoneAppsOpenedBy`, `PHONE_APP_STEPS`; `contractsOpen`, `contractOffers`, `activeContract`, `contractProgress`, `contractHistory`, `contractStats`, `contractValue`, `getContractTemplate`, `getContractContact`, `rewardValue` | `quests.skip`, `quests.acceptContract` (`offerId`), `quests.setPhoneSteps` (`enabled`) | `quest.started`, `quest.completed`, `contract.offered`, `contract.accepted`, `contract.finished` (`result`: `done`/`failed`) |
-| `tutorial` | `enabled`, `stage` (0–12), `mission` (`id`, `progress`, `startedAt`, `seen`, `reached`), `done`, `skipped`, `lockedAtStart`, `scripted` (`firstAttack`, `seizure`, `phoneOrder`, `lowStockPopups`), `unlocked` (Features aus Ereignissen), `sales` (Verkäufe der letzten 24 Stunden) (1; Auftrag 46b). Alte Stände: `enabled: false`. Stufen und Missionen als Daten (`config.ts`: `STAGES`, `FEATURE_STAGE`; `missions.ts`: `MISSIONS` mit Teilzielen `parts`, Zähler `count`), Belohnung `reward.ts` | `tutorialEnabled`, `tutorialActive`, `tutorialStage`, `tutorialFinished`, `tutorialAllows`, `tutorialAllowsRole`, `tutorialSpotOpen`, `tutorialSpotCost`, `tutorialSupplierOpen`, `currentMission`, `missionProgress`, `missionReward`, `rewardText`, `scriptedDone`, `stageInfo`, `STAGES`, `MISSIONS`, `FEATURE_STAGE`, `PETER`, `LAST_STAGE` | `tutorial.start`, `tutorial.advance`, `tutorial.skip`, `tutorial.scripted` (`key`) | `tutorial.stageReached` (`stage`), `tutorial.missionStarted` (`id`), `tutorial.missionDone` (`id`, `reward`) |
+| `tutorial` | `enabled`, `stage` (0–12), `mission` (`id`, `progress`, `startedAt`, `seen`, `reached`), `done`, `skipped`, `lockedAtStart`, `scripted` (`firstAttack`, `seizure`, `phoneOrder`, `lowStockPopups`, `lowStockDay`), `unlocked` (Features aus Ereignissen), `sales` (Verkäufe der letzten 24 Stunden), `toursSeen`, `extraToursSeen` (2; Auftrag 46b, 46c). Alte Stände: `enabled: false`. Stufen und Missionen als Daten (`config.ts`: `STAGES`, `FEATURE_STAGE`, Momente `SCRIPTED_*`, `LOW_STOCK_POPUP`; `missions.ts`: `MISSIONS` mit Teilzielen `parts`, Zähler `count`), Belohnung `reward.ts`, Momente `scripted.ts`, Touren `ui/tours.ts` | `tutorialEnabled`, `tutorialActive`, `tutorialStage`, `tutorialFinished`, `tutorialAllows`, `tutorialAllowsRole`, `tutorialSpotOpen`, `tutorialSpotCost`, `tutorialSupplierOpen`, `currentMission`, `missionProgress`, `missionReward`, `rewardText`, `scriptedDone`, `tourSeen`, `extraTourSeen`, `stageInfo`, `STAGES`, `MISSIONS`, `FEATURE_STAGE`, `PETER`, `LAST_STAGE`, `SCRIPTED_SEIZURE` | `tutorial.start`, `tutorial.advance`, `tutorial.skip`, `tutorial.scripted` (`key`), `tutorial.tourSeen` (`stage` oder `extra`) | `tutorial.stageReached` (`stage`), `tutorial.missionStarted` (`id`), `tutorial.missionDone` (`id`, `reward`), `tutorial.scriptedMoment` (`key`, `ref`) |
 | `leaderboard` | `peakWorth`, `peakVeedel` (1). Merkt sich das höchste Vermögen im Durchgang; die Oberfläche schickt das Ergebnis an `api/leaderboard.ts` (Vercel Function mit Upstash Redis) bei Game Over, Sieg und zu jedem Spieltag. Der Server drosselt pro IP (429), gibt keine `runId` mehr aus und verlangt für Updates eines Durchgangs ein Token (nur der Hash liegt in Redis); Ware zählt im Vermögen zum Einkaufspreis (`leaderboard/config.ts`) | `netWorth`, `getRecord`, `runSummary` (mit `title` = Rang des Spielers und `rank`, Auftrag 36) | | |
 | `recruiting` | Bewerber-Pool und Kontakte, Bewerber mit `traits` (4; Pool größer mit Veedeln und Ruf, `poolMax`) | `getCandidates`, `getCandidate`, `getPool`, `getContacts`, `searchReadyAt`, `poolMax`, `searchPreview(state, role?)`, `SEARCH_ROLES` | `recruiting.hire`, `.decline`, `.search` (`role?`: Läufer, Fahrer, Sicherheit) | `recruiting.candidateArrived`, `recruiting.hired`, `recruiting.candidateLeft` |
 | `weather` | aktuelles Wetter, Vorhersage (2) | `getWeather`, `getForecast`, `weatherDemandFactor(state, channel?)`, `WEATHER_NAMES`, `isPrecipitation` | | `weather.changed` |
@@ -1460,6 +1460,58 @@ Peters Porträt, Teilzielen als Liste mit Haken oder Fortschrittsbalken, Belohnu
 zur passenden Stelle (`goTo`); erledigt leuchtet die neue Karte golden und es gibt einen Ton, keine Banner, keine
 Dynamic Island. Einstellungen › Einstieg: „Tutorial beenden“. Dev-Haken `window.koeln.dev.tutorialStage(n)`,
 Szenen `npm run screenshot -- --scenes=tutorial,tutorial-teilziele`, e2e-Fall „Tutorial“.
+
+### Touren und Momente (Auftrag 46c)
+
+**Willkommen.** Beim ersten Start gibt es statt der Story-Seiten eine Seite („Willkommen in Kölle. Du bist Dealer am
+Neumarkt. Wie heißt du?“, `src/ui/builtin/IntroDialog.tsx`, Regeln `cleanPlayerName`, `PLAYER_NAME_MAX`), danach die
+Wahl des Modus; Einstellungen › „Intro“ zeigt nur noch diese Seite.
+
+**Touren je Stufe** (`tutorial/ui/tours.ts`, reine Daten): `stageTour(stage, { ui, state })` liefert die `TourDef`
+der Stufe, Sprecher immer `PETER`, jeder Schritt ein, zwei Sätze (`TOUR_TEXT_MAX` 140 Zeichen, `tours.test.ts` prüft
+Anker, Länge und dass jede Stufe 0 bis 12 eine Tour hat). Schritte öffnen Handy, App, Seite oder fahren die Kamera
+selbst im `before` (am Handy-Bildschirm legt `onMap` das Handy für Karte und HUD weg). Gestartet wird vom Zustand her:
+`TourStarter` (unsichtbar im HUD-Eintrag der Missions-Karte) startet die Tour der aktuellen Stufe, wenn sie nicht in
+`toursSeen` steht; das deckt das Erreichen der Stufe (`tutorial.stageReached`) und das Laden eines Spielstands ab. Am
+Ende schickt die Oberfläche `tutorial.tourSeen { stage }`, bei Erklär-Stufen (`EXPLAIN_STAGES` 0, 3, 4, 10) dazu
+`tutorial.advance`, nach Stufe 0 `ui.setSpeed(1)`. Der „Weiter“-Knopf der Stufen-Karte erscheint nur noch, wenn die
+Tour schon gelaufen ist. Muss der Spieler selbst etwas tun (`waitFor`: Stufe 1 der erste Verkauf, 7 ein Leutnant, 10
+ein Buchhalter, 11 die Rechte Hand, erster Gang-Angriff die Sicherheit), läuft die Uhr (`pause: false`) und die Tour ist
+überspringbar, falls die Voraussetzung fehlt. Die Tour der Stufe 9 startet erst mit der Beschlagnahme
+(`MOMENT_STAGES`). Zwei weitere Touren hängen an Ereignissen und merken sich in `extraToursSeen`: nach der ersten
+Lieferung in Köln (`shipment.arrived`, Lager im HUD) und nach dem ersten Fahrer (`staff.hired`, Abholen am Kai und
+Routen; Routen gibt es nur zwischen zwei Lagern, der Kai ist keins). „Tutorial beenden“ beendet auch die Tour und
+markiert alle als gesehen; die Migration 2 markiert in laufenden Ständen alle Touren bis zur Stufe als gesehen.
+
+**Geskriptete Momente** (`tutorial/scripted.ts`, jede Spielminute im Tick, nur bei `tutorialActive`, jeder genau
+einmal, Ereignis `tutorial.scriptedMoment { key, ref }`):
+- `phoneOrder` (`SCRIPTED_PHONE_ORDER`): beim ersten Mal 3.000 € Schwarzgeld ab Stufe 6 erzeugt
+  `customers.scriptedOrder(ctx, { veedelId })` eine Lieferanfrage aus dem Veedel des Neumarkts mit dem Produkt, das am
+  meisten auf Lager liegt, in kleiner Menge; die Tour zeigt auf die Antwortknöpfe (`chat.reply`).
+- `lowStockPopup` (`LOW_STOCK_POPUP`): Bestand in Köln unter `goods.usagePerDay`, ab Stufe 5, an den ersten fünf
+  Spieltagen, höchstens eins pro Tag (`scripted.lowStockDay`) und dreimal (`scripted.lowStockPopups`); Dialog
+  `tutorial.lowStock` mit Peter, „Zu den Lieferanten“ und „Später“.
+- `firstAttack` (`SCRIPTED_FIRST_ATTACK`): beim ersten Mal 6.000 € ab Stufe 7 ruft `gangs.scriptedRaid(ctx, { spotId,
+  goodsShare: 0.3, cashShare: 0.4 })`: Die Gang mit Anspruch auf das Veedel (sonst die mit dem meisten Einfluss dort)
+  überfällt den Neumarkt ohne Konfrontation, 30 % jeder Ware in allen Kölner Lagern (`goods.take`) und 40 % des
+  Schwarzgelds (`wallet.lose`, Kategorie `loss.gang`) sind weg, Nachricht in ihrer Stimme (`raidLost`), Journal,
+  Ereignis `gang.raided`. Bis dahin startet `gangs` keinen zufälligen Überfall (`scriptedDone(state, 'firstAttack')`,
+  solange das Tutorial aktiv ist). Die Tour erklärt die Hotspot-Regel und wartet, bis Sicherheit eingestellt und am
+  Neumarkt eingesetzt ist.
+- `seizure` (`SCRIPTED_SEIZURE`): `suppliers` entscheidet beim Abladen am Kai (`deliver`, `scriptedSeizure` in
+  `troubles.ts`): bei aktivem Tutorial ab Stufe 9 wird die zweite Lieferung von Jansen (Rotterdam) komplett
+  beschlagnahmt, ohne Wahl „Papiere fälschen“ (Zoll als Kontakt `police:zoll`, Nachricht von Jansen, Journal,
+  `shipment.problem` `seized`, dann `tutorial.scripted { key: 'seizure' }`); darauf läuft die Tour der Stufe 9
+  (Polizei-Intro, Spezialisten, Einzeln oder Sammelbestellung).
+
+**Nachrichten:** Solange das Tutorial läuft, schreibt Peter die Aufgabe einer Mission nicht mehr per Chat (sie steht
+auf der Karte, die Tour erklärt sie); die Belohnung kommt als eine Zeile. **Wetter:** wieder im HUD neben der Uhr
+(`weather/ui`, HUD-Platz `'time'`, seit 46c auch am Handy-Bildschirm), Anker `hud.weather`.
+
+**Prüfen:** `tutorial/scripted.test.ts` (Bedingung, genau einmal, Beträge, nicht ohne Tutorial), `ui/tours.test.ts`,
+e2e-Fall „Tutorial“ (Tour der Stufe 0 mit Enter, Stufe 1 bis zum ersten Verkauf, Stufe 2), Szenen
+`npm run screenshot -- --scenes=tutorial-tour,tutorial-tour-spot,tutorial-tour-handy` (Stufe 0 am HUD, Stufe 1 am
+Spot, Stufe 5 im Handy, Desktop und Handy-Bildschirm), `npm run balance` unverändert (Bot ohne Tutorial).
 
 ## Qualität
 

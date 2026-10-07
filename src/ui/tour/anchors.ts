@@ -50,6 +50,27 @@ export const TOUR_ANCHORS = [
   'spot.runner',
   /** Die Kartenfläche (shell/MapView.tsx). */
   'map',
+  // Auftrag 46c: Anker für die Touren je Stufe (jeweils nur das Attribut im ui/-Ordner des Moduls).
+  /** Der Marker eines Spots auf der Karte (spots/ui/map.ts, mit data-tour-key = Spot-ID), z.B. gesperrte Spots zum Kauf. */
+  'spot.marker',
+  /** Die Antwortknöpfe unter einem Chat mit offener Frage (phone/MessagesApp.tsx), z.B. eine Bestellung per Handy. */
+  'chat.reply',
+  /** Bereich Leutnants im Personal: Gruppe „Ohne Leutnant“ mit „Leutnant ernennen“ (hierarchy/ui/Tree.tsx). */
+  'staff.lieutenants',
+  /** Gruppe „Anheuern“ im Personal mit „Fahrer anheuern“ (staff/ui). */
+  'staff.hire',
+  /** Gruppe „Unterwegs“ in der Lieferanten-App (suppliers/ui). */
+  'suppliers.shipments',
+  /** Das Angebot eines Lieferanten: die Pakete nach Warenart (suppliers/ui, Seite des Lieferanten). */
+  'suppliers.offer',
+  /** Umschalter „Einzeln | Sammelbestellung“ auf der Seite des Lieferanten (suppliers/ui). */
+  'suppliers.orderMode',
+  /** Der Kiosk in der App Geldwäsche (laundering/ui, erster Weg). */
+  'laundering.kiosk',
+  /** Liegeplatz auf der Hafen-Seite: zu mieten oder, gemietet, sein Ausbau (logistics/ui). */
+  'port.berth',
+  /** Knopf „Neue Route“ auf der Routen-Seite (logistics/ui/routes.tsx). */
+  'routes.new',
 ] as const;
 
 /**

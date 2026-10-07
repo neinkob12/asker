@@ -281,7 +281,7 @@ function SupplierList(props: { onSelect: (id: string) => void }) {
     <div class="sup-groups">
       <Slot name="suppliers.top" props={{}} />
       {shipments.length > 0 && (
-        <Group icon="route" color="goods" title="Unterwegs" count={shipments.length}>
+        <Group data-tour="suppliers.shipments" icon="route" color="goods" title="Unterwegs" count={shipments.length}>
           {shipments.map((s) => (
             <ShipmentRow key={s.id} state={state} shipment={s} showSupplier />
           ))}
@@ -535,7 +535,8 @@ function Offer(props: { supplier: Supplier; draft: OrderDraft; update: UpdateDra
 
   return (
     <>
-      <div class="sup-mode">
+      {/* Auftrag 46c: Anker der Tour (Stufe 9 erklärt Einzeln oder Sammelbestellung). */}
+      <div class="sup-mode" data-tour="suppliers.orderMode">
         <SegmentedControl
           wide
           aria-label="Bestellart"
@@ -548,31 +549,34 @@ function Offer(props: { supplier: Supplier; draft: OrderDraft; update: UpdateDra
         />
         <p class="ui-hint">{MODE_NOTE[draft.mode]}</p>
       </div>
-      {categories.map((c) => (
-        <Group key={c.id} title={c.name} icon={c.icon} color="goods">
-          <List>
-            {c.packages.map((p) => {
-              const price = packagePrice(state, supplier.id, p.id);
-              return (
-                <ListItem key={p.id} aside={aside(p)}>
-                  <div class={offered.has(p.id) ? 'sup-pkg' : 'sup-pkg is-locked'}>
-                    <strong>{p.label}</strong>
-                    <span class="sup-pkg__price">
-                      {price < p.price && <s>{formatEuro(p.price)}</s>} {formatEuro(price)}
-                    </span>
-                    <PackageChips
-                      supplierId={supplier.id}
-                      packageId={p.id}
-                      productId={p.productId}
-                      {...(p.container ? { container: p.container } : {})}
-                    />
-                  </div>
-                </ListItem>
-              );
-            })}
-          </List>
-        </Group>
-      ))}
+      {/* Auftrag 46c: Anker der Tour (Stufe 5 zeigt das Angebot). */}
+      <div class="sup-offer" data-tour="suppliers.offer">
+        {categories.map((c) => (
+          <Group key={c.id} title={c.name} icon={c.icon} color="goods">
+            <List>
+              {c.packages.map((p) => {
+                const price = packagePrice(state, supplier.id, p.id);
+                return (
+                  <ListItem key={p.id} aside={aside(p)}>
+                    <div class={offered.has(p.id) ? 'sup-pkg' : 'sup-pkg is-locked'}>
+                      <strong>{p.label}</strong>
+                      <span class="sup-pkg__price">
+                        {price < p.price && <s>{formatEuro(p.price)}</s>} {formatEuro(price)}
+                      </span>
+                      <PackageChips
+                        supplierId={supplier.id}
+                        packageId={p.id}
+                        productId={p.productId}
+                        {...(p.container ? { container: p.container } : {})}
+                      />
+                    </div>
+                  </ListItem>
+                );
+              })}
+            </List>
+          </Group>
+        ))}
+      </div>
       {draft.mode === 'group' && (
         <Group
           class="sup-cart"

@@ -82,7 +82,7 @@ export {
   typeDemandWeight,
 } from './decisions';
 // Für Tests und Skripte: eine Anfrage erzwingen (force = true).
-export { offerDelivery, offerWholesale } from './orders';
+export { offerDelivery, offerWholesale, scriptedOrder } from './orders';
 export { qualityDemandFactor, qualityDemandFor, spotQuality, spotReputation } from './quality';
 export { isPlayerAway, rateSale } from './street';
 

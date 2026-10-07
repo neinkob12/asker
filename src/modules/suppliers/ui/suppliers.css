@@ -143,3 +143,8 @@
 .sup-redirect {
   padding: var(--space-4);
 }
+
+/* Auftrag 46c: das Angebot als ein Block (Anker der Tour) */
+.sup-offer {
+  display: contents;
+}

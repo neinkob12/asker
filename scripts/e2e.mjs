@@ -70,6 +70,18 @@ async function shot(page, name) {
   console.log(`  Screenshot: ${file}`);
 }
 
+/** Eine laufende Tour mit Enter zu Ende klicken (Auftrag 46c); hält an, wenn sie auf den Spieler wartet. */
+async function nextTour(page) {
+  for (let i = 0; i < 20; i++) {
+    const box = page.locator('.tour-box');
+    if (!(await box.isVisible().catch(() => false))) return;
+    const next = box.getByRole('button', { name: 'Weiter', exact: true });
+    if (!(await next.isVisible().catch(() => false))) return;
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(450);
+  }
+}
+
 /** Spielstände liegen im Menü (Hamburger-Knopf im HUD). */
 async function openSaves(page) {
   await page.getByRole('button', { name: 'Menü' }).click();
@@ -82,10 +94,14 @@ async function check(name, fn) {
   console.log('ok');
 }
 
+/** Die offene Seite, für ein Bild beim Fehlschlag. */
+let currentPage = null;
+
 async function run() {
   const context = await browser.newContext(VIEWPORTS[size]);
   await routeExternal(context, base);
   const page = await context.newPage();
+  currentPage = page;
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {
     if (m.type() !== 'error' || isTileError(m.text())) return;
@@ -96,13 +112,11 @@ async function run() {
     );
   });
 
-  await check('Intro beim ersten Start, Name für die Bestenliste', async () => {
+  await check('Willkommen beim ersten Start (Auftrag 46c): eine Seite mit dem Namen für die Bestenliste', async () => {
     await page.goto(base);
-    await page.getByRole('button', { name: 'Weiter' }).click();
-    await page.getByRole('button', { name: 'Zurück' }).click();
-    await page.getByRole('button', { name: 'Überspringen' }).click();
+    await page.getByText('Willkommen in Kölle').waitFor();
     await page.getByLabel('Dein Name').fill('E2E Tester');
-    await page.getByRole('button', { name: 'Weiter' }).click();
+    await page.getByRole('button', { name: "Los geht's" }).click();
     const name = await page.evaluate(() => localStorage.getItem('koeln-tycoon:player-name'));
     assert.equal(name, 'E2E Tester');
   });
@@ -139,17 +153,27 @@ async function run() {
       assert.equal(await home.getByRole('button', { name: /^Gangs/ }).count(), 0, 'Gangs fehlt am Anfang');
       assert.equal(await home.getByRole('button', { name: /^Lieferanten/ }).count(), 0, 'Lieferanten fehlen am Anfang');
       if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
-      // Stufe 0 ist eine Erklär-Stufe: „Weiter“ auf der Karte bringt Mission 1.
+      // Auftrag 46c: Stufe 0 ist Peters Tour durchs HUD und Handy (zehn Schritte, mit Enter weiter); am Ende schaltet
+      // die Tour selbst auf Stufe 1 und stellt das Tempo auf 1.
       const card = page.locator('.tutorial-hud');
-      await card.getByRole('button', { name: 'Weiter', exact: true }).click();
+      await page.locator('.tour-box').waitFor({ timeout: 15000 });
+      assert.equal(await page.evaluate(() => window.koeln.runtime.api.tour.active()), 'tutorial:0');
+      await shot(page, 'tutorial-tour-0');
+      await nextTour(page);
+      await page.waitForFunction(() => window.koeln.session.state.modules.tutorial.stage === 1);
+      assert.deepEqual(await game(page, (s) => s.modules.tutorial.toursSeen), [0]);
+      await page.evaluate(() => window.koeln.runtime.api.setSpeed(0));
       await card.getByText('Drei Kunden bedienen').waitFor();
       assert.equal(await game(page, (s) => s.modules.tutorial.mission?.id), 'serve3');
       await page.waitForTimeout(800);
       await shot(page, 'tutorial-mission-1');
       const before = await game(page, (s) => s.wallet.dirty);
-      // Am Handy-Bildschirm liegt der Neumarkt sonst unter dem HUD: Kamera hin.
-      await page.evaluate(() => window.koeln.runtime.api.flyTo({ lng: 6.9476, lat: 50.9362 }, 16));
-      await page.waitForTimeout(1500);
+      // Die Tour der Stufe 1 fährt die Kamera selbst zum Neumarkt und öffnet das Spot-Fenster; sie wartet dann auf
+      // den ersten Verkauf (die Uhr läuft dabei, der Test spult trotzdem selbst vor).
+      await page.waitForFunction(() => window.koeln.runtime.api.tour.active() === 'tutorial:1');
+      await page.getByText('Verkauf einmal selbst').waitFor({ timeout: 15000 });
+      await page.waitForTimeout(1200);
+      await shot(page, 'tutorial-tour-1');
       for (let sold = 0; sold < 3; sold++) {
         for (let i = 0; i < 60; i++) {
           const waiting = await game(
@@ -163,7 +187,10 @@ async function run() {
         const sell = page.getByRole('button', { name: 'Verkaufen', exact: true }).first();
         if (!(await sell.isVisible())) await page.locator('.spot-marker[aria-label*="Neumarkt"]').click();
         await sell.click();
+        // Nach dem ersten Verkauf erklärt die Tour noch Preis und Läufer (Enter), dann ist sie durch.
+        if (sold === 0) await nextTour(page);
       }
+      assert.deepEqual(await game(page, (s) => s.modules.tutorial.toursSeen), [0, 1]);
       const after = await game(page, (s) => ({
         dirty: s.wallet.dirty,
         done: s.modules.tutorial.done,
@@ -175,7 +202,12 @@ async function run() {
       assert.equal(after.mission, 'buySpots');
       assert.ok(after.dirty >= before + 100, 'Belohnung (mindestens 100 €) nach drei Verkäufen');
       await card.getByText('Zwei Spots kaufen').waitFor();
+      // Stufe 2: zwei Schritte an den Markern der Spots zum Kauf.
+      await page.waitForFunction(() => window.koeln.runtime.api.tour.active() === 'tutorial:2');
+      await page.getByText('Zülpicher Platz, zu haben').waitFor();
       await shot(page, 'tutorial-mission-2');
+      await nextTour(page);
+      assert.deepEqual(await game(page, (s) => s.modules.tutorial.toursSeen), [0, 1, 2]);
       // Der Rest des Tests braucht alle Spots und Apps: beenden wie ein Spieler, der sich auskennt.
       await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
       await home.getByRole('button', { name: 'Einstellungen', exact: true }).click();
@@ -530,6 +562,14 @@ try {
   }
 } catch (error) {
   console.error(`\nFehlgeschlagen: ${error.message}`);
+  // Ein Bild vom Moment des Fehlschlags hilft beim Nachstellen.
+  try {
+    const file = `${outDir}/e2e-fehler-${size}.png`;
+    await currentPage?.screenshot({ path: file });
+    console.error(`  Screenshot: ${file}`);
+  } catch {
+    // Kein Bild mehr möglich (Seite schon zu).
+  }
   process.exitCode = 1;
 } finally {
   await Promise.all(pendingChecks);

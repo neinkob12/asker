@@ -72,7 +72,7 @@ import { hasBerth, portName, receiveCargo } from '../logistics';
 import { purchaseIndex } from '../market';
 import { getReputation } from '../reputation';
 import { controlledBy, PLAYER_FACTION } from '../territory';
-import { tutorialAllows, tutorialSupplierOpen } from '../tutorial';
+import { SCRIPTED_SEIZURE, tutorialAllows, tutorialSupplierOpen } from '../tutorial';
 import {
   BAD_QUALITY_FACTOR,
   BAD_QUALITY_LOSS,
@@ -121,6 +121,7 @@ import {
   rollReason,
   type ShipmentDecision,
   type ShipmentLuck,
+  scriptedSeizure,
   upkeepDecisions,
   voice,
 } from './troubles';
@@ -1533,8 +1534,16 @@ function deliver(ctx: Ctx): void {
   if (arrived.length === 0) return;
   state.shipments = state.shipments.filter((s) => s.arrivesAt > ctx.now);
   const placedIn = new Map<number, string>();
+  // Auftrag 46c: Wie viele Lieferungen des Lieferanten der geskripteten Beschlagnahme schon da waren (angekommen oder
+  // beschlagnahmt): alle Bestellungen minus die noch unterwegs minus die in dieser Runde.
+  const seizureId = SCRIPTED_SEIZURE.supplierId;
+  const countOf = (list: readonly Shipment[]) => list.filter((x) => x.supplierId === seizureId).length;
+  let earlier = getRelation(ctx.state, seizureId).orders - countOf(state.shipments) - countOf(arrived);
   for (const s of arrived) {
     const supplier = getSupplier(ctx.state, s.supplierId);
+    if (s.supplierId === seizureId) earlier += 1;
+    // Auftrag 46c: Im Tutorial nimmt der Zoll die zweite Lieferung von Jansen am Kai komplett (ohne Wahl).
+    if (s.toPort && supplier && scriptedSeizure(ctx, s, supplier, earlier - 1)) continue;
     if (supplier) applyArrivalLuck(ctx, s, supplier);
     // Eine Sammellieferung bringt mehrere Pakete (shipmentItems), sonst ist es genau eins.
     const items = shipmentItems(s);

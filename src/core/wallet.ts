@@ -51,6 +51,8 @@ export type MoneyCategory =
   // Verluste
   | 'loss.police'
   | 'loss.theft'
+  /** Auftrag 46c: der geskriptete erste Gang-Angriff im Tutorial (Ware und Bargeld). */
+  | 'loss.gang'
   | 'loss.betrayal'
   | 'loss.encounter'
   | 'loss.customs'
@@ -106,6 +108,7 @@ export const MONEY_CATEGORIES: Record<MoneyCategory, MoneyCategoryInfo> = {
   'grow.bribe': { label: 'Schmiergeld im Ausland', group: 'expense', icon: 'handshake' },
   'loss.police': { label: 'Polizei', group: 'loss', icon: 'siren' },
   'loss.theft': { label: 'Überfälle und Diebstahl', group: 'loss', icon: 'alert' },
+  'loss.gang': { label: 'Gang-Angriffe', group: 'loss', icon: 'skull' },
   'loss.betrayal': { label: 'Verrat', group: 'loss', icon: 'userMinus' },
   'loss.encounter': { label: 'Konfrontationen', group: 'loss', icon: 'swords' },
   'loss.customs': { label: 'Zoll (Autobahn und Kai)', group: 'loss', icon: 'anchor' },

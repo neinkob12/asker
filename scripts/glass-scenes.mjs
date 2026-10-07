@@ -25,6 +25,16 @@ export const PRELUDE = `
     sim.advance(50);
   };
   const render = () => k.runtime.requestRender();
+  /** Tutorial auf Stufe n (Auftrag 46b/46c): Missionen davor erledigt, Touren bis dahin gesehen (sonst nur die genannten). */
+  const tutorialAt = (stage, done = [], seen) => {
+    run('tutorial.start', {});
+    const t = state().modules.tutorial;
+    t.stage = stage;
+    t.mission = null;
+    t.done = done;
+    t.toursSeen = seen ?? Array.from({ length: stage + 1 }, (_, i) => i);
+    t.extraToursSeen = ['delivery', 'driver'];
+  };
   /** Liegeplatz, Rotterdam frei, ein Container bestellt. */
   const harbor = () => {
     rich();
@@ -376,17 +386,39 @@ export const SCENES = [
     hover: '.spot-marker[aria-label*="Neumarkt"]',
     sizes: ['desktop'],
   },
-  // Tutorial (Auftrag 46b): Missions-Karte mit Mission 1 (nur der Neumarkt) und mit Teilzielen (Stufe 6).
+  // Tutorial (Auftrag 46b): Missions-Karte mit Mission 1 (nur der Neumarkt) und mit Teilzielen (Stufe 6). Die Touren
+  // (Auftrag 46c) gelten hier als gesehen, sonst läge Peters Box über dem Bild.
   {
     name: 'tutorial',
-    js: "run('tutorial.start', {}); run('tutorial.advance', {}); sim.advance(30); api.flyTo({ lng: 6.9476, lat: 50.9362 }, 15.5);",
+    js: 'tutorialAt(1); sim.advance(30); api.flyTo({ lng: 6.9476, lat: 50.9362 }, 15.5);',
     wait: 3500,
   },
   {
     name: 'tutorial-teilziele',
     js:
-      "run('tutorial.start', {}); const t = state().modules.tutorial; t.stage = 6; t.done = ['serve3', 'buySpots', 'threeProducts'];" +
+      "tutorialAt(6, ['serve3', 'buySpots', 'threeProducts']);" +
       " for (const id of ['zuelpicher', 'rudolfplatz']) run('spots.unlock', { spotId: id }); sim.advance(5); state().wallet.dirty = 4000; run('staff.hireRunner', { spotId: 'neumarkt' }); sim.advance(5);",
     wait: 3000,
+  },
+  // Touren des Tutorials (Auftrag 46c): Stufe 0 am HUD (erster Schritt, das Schwarzgeld), Stufe 1 am Spot (die
+  // Kundenanzeige am Neumarkt), Stufe 5 im Handy (das App-Symbol Lieferanten). Die Tour startet, sobald der Zustand
+  // die Stufe ohne gesehene Tour zeigt; render() stößt sie an.
+  {
+    name: 'tutorial-tour',
+    js: "run('tutorial.start', {}); render(); await sleep(400);",
+    wait: 3500,
+    live: true,
+  },
+  {
+    name: 'tutorial-tour-spot',
+    js: 'tutorialAt(1, [], [0]); sim.advance(30); render(); await sleep(400);',
+    wait: 4000,
+    live: true,
+  },
+  {
+    name: 'tutorial-tour-handy',
+    js: "tutorialAt(5, ['serve3', 'buySpots'], [0, 1, 2, 3, 4]); sim.advance(5); render(); await sleep(400);",
+    wait: 3500,
+    live: true,
   },
 ];
