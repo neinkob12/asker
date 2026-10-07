@@ -1,5 +1,5 @@
-// Papiere fälschen (Teil 8). Wert der Rechten Hand: Vorsicht. Scharf erst mit ready: true.
+// Papiere fälschen (Teil 8, fertig). Wert der Rechten Hand: Vorsicht.
 
 import type { MinigameKindDef } from '../types';
 
-export const papers: MinigameKindDef = { name: 'Papiere fälschen', stat: 'caution', ready: false };
+export const papers: MinigameKindDef = { name: 'Papiere fälschen', stat: 'caution', ready: true };

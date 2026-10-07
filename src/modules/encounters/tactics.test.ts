@@ -361,6 +361,9 @@ describe('Anlässe: Situationen und Zoll', () => {
       playerPresent: true,
       skipEffects: true,
     }).encounterId;
+    // Auftrag 44, Teil 8: Erst kommt das Minispiel „Papiere fälschen“; ohne Oberfläche verfällt es, dann die Runden.
+    const open = get(sim, id).minigame;
+    if (open) sim.dispatch({ type: 'minigames.expire', payload: { id: open.challengeId } }, { actor: 'system' });
     act(sim, id, 'giveUp');
     expect(get(sim, id)).toMatchObject({ phase: 'done', outcome: 'failure', result: { ending: 'surrendered' } });
   });

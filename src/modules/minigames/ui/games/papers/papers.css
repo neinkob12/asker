@@ -1,0 +1,905 @@
+/* Papiere fälschen (Auftrag 44, Teil 8). Schreibtisch (Canvas) mit Papieren (DOM), Zöllner hinter der Scheibe, Waage,
+   Kalender und Kamera im Look Glas. Inhaltsfarben (Papier, Tinte, Stempel, Haut) kommen als --pp-* vom Spiel
+   (draw.ts, DESK_COLORS), Bedeutungsfarben aus den Tokens. Am Desktop: links Zöllner, Vorlagen und Auswege, rechts
+   drei Papiere. Am Handy (is-narrow): untereinander, die Papiere als Stapel mit Reitern. */
+
+.papers {
+  --pp-row: 46px;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    "booth docs"
+    "refs docs"
+    "ways docs";
+  column-gap: var(--space-5);
+  row-gap: var(--space-3);
+  padding: 78px var(--space-5) var(--space-5);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.papers__desk {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+.papers__booth,
+.papers__refs,
+.papers__tabs,
+.papers__docs,
+.papers__ways {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------------------------------------------------------------- HUD oben */
+.papers__hud {
+  gap: var(--space-5);
+}
+.papers__count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-hud-display);
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.papers__count svg {
+  width: 18px;
+  height: 18px;
+  align-self: center;
+  color: var(--hud-ink-2);
+}
+.papers__count small,
+.papers__hits small {
+  font-family: var(--font-hud);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+}
+.papers__hits {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.papers__pip {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--hud-ink-2);
+  transition:
+    background var(--duration) var(--ease-out),
+    border-color var(--duration) var(--ease-out);
+}
+.papers__pip.is-on {
+  border-color: var(--cat-danger);
+  background: var(--cat-danger);
+  box-shadow: 0 0 10px var(--cat-danger);
+}
+
+/* ---------------------------------------------------------------- Zöllner hinter der Scheibe */
+.papers__booth {
+  grid-area: booth;
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+.papers__window {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--hud-radius-tile);
+  overflow: hidden;
+  border: 3px solid var(--hud-glass-edge);
+  background: linear-gradient(180deg, var(--hud-glass-fill-active), var(--hud-glass-solid));
+  box-shadow: var(--hud-shadow);
+  transition: border-color var(--duration) var(--ease-out);
+}
+/* Spiegelung der Scheibe. */
+.papers__window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.1) 42%, transparent 52%);
+  pointer-events: none;
+}
+.papers__window.is-cross {
+  border-color: var(--cat-danger);
+}
+.papers__window.is-bribed {
+  border-color: var(--cat-money);
+}
+.papers-officer {
+  position: absolute;
+  left: 50%;
+  bottom: -8%;
+  width: 82%;
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+}
+.papers-officer .ui-face,
+.papers-officer__cap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.papers.is-night .papers-officer {
+  filter: brightness(0.85) saturate(0.9);
+}
+.papers__bubble {
+  position: relative;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-ink);
+  color: var(--hud-glass-solid);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: normal;
+  hyphens: manual;
+  animation: papers-pop 0.22s var(--ease-out);
+}
+.papers__bubble::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: 30px;
+  border: 8px solid transparent;
+  border-top: 0;
+  border-bottom-color: var(--hud-ink);
+}
+.papers__bubble.is-bad {
+  background: var(--cat-danger);
+  color: var(--hud-ink);
+}
+.papers__bubble.is-bad::before {
+  border-bottom-color: var(--cat-danger);
+}
+.papers__bubble.is-good {
+  background: var(--cat-money);
+  color: var(--hud-glass-solid);
+}
+.papers__bubble.is-good::before {
+  border-bottom-color: var(--cat-money);
+}
+@keyframes papers-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+
+/* ---------------------------------------------------------------- Vorlagen: Waage, Kalender, Kamera */
+.papers__refs {
+  grid-area: refs;
+  display: grid;
+  gap: var(--space-2);
+}
+.pp-ref {
+  display: grid;
+  gap: 4px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+}
+.pp-ref__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+}
+.pp-ref__label svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.pp-ref__lcd {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--pp-lcd);
+  color: var(--pp-lcd-ink);
+  font-family: var(--font-hud-display);
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-shadow: 0 0 8px var(--pp-lcd-ink);
+}
+.pp-ref__value {
+  font-family: var(--font-hud-display);
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pp-ref__plate {
+  position: relative;
+  justify-self: start;
+  padding: 1px 8px 1px 18px;
+  border: 2px solid var(--pp-ink);
+  border-radius: 4px;
+  background: var(--pp-paper);
+  color: var(--pp-ink);
+  font-family: var(--font-hud-display);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+/* EU-Streifen am Kennzeichen. */
+.pp-ref__plate::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  background: var(--pp-eu);
+}
+.pp-ref__plate.is-container {
+  padding-left: 8px;
+  border-radius: 2px;
+}
+.pp-ref__plate.is-container::before {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- Auswege */
+.papers__ways {
+  grid-area: ways;
+  align-self: end;
+  display: grid;
+  gap: var(--space-2);
+}
+.papers__way {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 0 var(--space-3);
+  border-radius: var(--hud-radius-button);
+  border: 1px solid var(--hud-glass-edge);
+  background: var(--hud-glass-strong);
+  color: var(--hud-ink);
+  font: 700 15px var(--font-hud);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.papers__way svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.papers__way.is-danger svg {
+  color: var(--cat-danger);
+}
+.papers__way.is-money svg {
+  color: var(--cat-money);
+}
+/* Er hat etwas gefunden: Jetzt würde er den Schein nehmen. */
+.papers__way.is-money.is-open {
+  border-color: var(--cat-money);
+  box-shadow: 0 0 0 1px var(--cat-money);
+}
+.papers__way:hover:not(:disabled) {
+  background: var(--hud-glass-fill-active);
+}
+.papers__way:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.papers__way:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 2px;
+}
+.papers__key {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--hud-glass-fill-active);
+  color: var(--hud-gold);
+  font: 700 13px var(--font-hud-display);
+}
+
+/* ---------------------------------------------------------------- Papiere */
+.papers__docs {
+  grid-area: docs;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+  min-height: 0;
+}
+.pp-sheet {
+  position: relative;
+  padding: 10px 12px 14px 14px;
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, transparent 0 46px, var(--pp-paper-edge) 46px 47px, transparent 47px),
+    linear-gradient(170deg, var(--pp-paper), var(--pp-paper-shade));
+  color: var(--pp-ink);
+  box-shadow:
+    0 1px 0 var(--pp-paper-edge),
+    0 14px 30px rgba(0, 0, 0, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.3);
+  transform: rotate(var(--tilt, 0deg));
+  transition:
+    transform 0.35s var(--ease-out),
+    box-shadow 0.35s var(--ease-out),
+    filter 0.35s var(--ease-out);
+}
+.pp-sheet--0 {
+  --tilt: -0.8deg;
+}
+.pp-sheet--1 {
+  --tilt: 0.6deg;
+}
+.pp-sheet--2 {
+  --tilt: -0.4deg;
+}
+/* Das Papier in seiner Hand: angehoben, Lampe drauf. */
+.pp-sheet.is-reading {
+  transform: rotate(0deg) translateY(-4px) scale(1.015);
+  box-shadow:
+    0 0 0 2px var(--hud-gold),
+    0 22px 40px rgba(0, 0, 0, 0.5);
+}
+.pp-sheet.is-checked {
+  filter: brightness(0.86) saturate(0.85);
+}
+.pp-sheet.is-shake-a {
+  animation: papers-shake-a 0.4s linear;
+}
+.pp-sheet.is-shake-b {
+  animation: papers-shake-b 0.4s linear;
+}
+@keyframes papers-shake-a {
+  20%,
+  60% {
+    transform: translateX(-6px) rotate(-1deg);
+  }
+  40%,
+  80% {
+    transform: translateX(6px) rotate(1deg);
+  }
+}
+@keyframes papers-shake-b {
+  20%,
+  60% {
+    transform: translateX(-6px) rotate(-1deg);
+  }
+  40%,
+  80% {
+    transform: translateX(6px) rotate(1deg);
+  }
+}
+.pp-sheet__head {
+  display: grid;
+  height: 38px;
+  align-content: center;
+  margin-bottom: 6px;
+}
+.pp-sheet__title {
+  font-family: var(--font-hud-display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+}
+.pp-sheet__sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pp-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pp-sheet__rows {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pp-field {
+  position: relative;
+  display: grid;
+  align-content: center;
+  width: 100%;
+  height: var(--pp-row);
+  padding: 0 6px 0 8px;
+  border: 0;
+  border-bottom: 1px dashed var(--pp-paper-edge);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--pp-ink);
+  font-family: var(--font-hud);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration) var(--ease-out);
+}
+.pp-field:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+}
+.pp-field:disabled {
+  cursor: default;
+}
+.pp-field:focus-visible,
+.pp-field.is-selected {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: -2px;
+}
+.pp-field.is-picking {
+  background: rgba(0, 0, 0, 0.1);
+  outline: 2px solid var(--hud-gold);
+  outline-offset: -2px;
+}
+.pp-field__label {
+  padding-right: 22px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  color: var(--pp-ink-2);
+}
+.pp-field__value {
+  min-width: 0;
+  font-family: var(--font-hud-display);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Umgeschrieben: Tipp-Ex drunter, Kuli drüber. */
+.pp-field.is-edited .pp-field__text {
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--pp-pen);
+  font-style: italic;
+}
+/* Haken bzw. Kreuz des Zöllners oben rechts in der Zeile (der Wert behält die ganze Breite). */
+.pp-field__mark {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+}
+.pp-field__mark.is-ok {
+  color: var(--pp-ok);
+}
+.pp-field__mark.is-hit {
+  color: var(--pp-stamp);
+}
+.pp-field.is-hit {
+  background: rgba(176, 38, 28, 0.14);
+}
+.pp-field.is-flash {
+  animation: papers-flash 0.9s var(--ease-out);
+}
+@keyframes papers-flash {
+  from {
+    background: rgba(176, 38, 28, 0.55);
+  }
+}
+.pp-field__missing {
+  display: inline-block;
+  padding: 0 10px;
+  border: 2px dashed var(--pp-ink-2);
+  border-radius: 999px;
+  color: var(--pp-ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Ausfuhrstempel */
+.pp-stamp {
+  display: inline-flex;
+  color: var(--pp-stamp);
+  transform: rotate(-6deg);
+}
+.pp-stamp__ring {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0 8px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  font-family: var(--font-hud-display);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+.pp-stamp__top {
+  font-size: 11px;
+  font-weight: 700;
+}
+.pp-field.is-stamped .pp-stamp {
+  animation: papers-stamp 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+@keyframes papers-stamp {
+  from {
+    opacity: 0;
+    transform: rotate(-6deg) scale(1.8);
+  }
+}
+
+/* Der Finger des Zöllners an der Zeile, die er gerade liest, und wie lange noch (Balken). */
+.pp-reader {
+  position: absolute;
+  left: -30px;
+  right: 0;
+  top: 0;
+  height: var(--pp-row);
+  transform: translateY(calc(var(--line, 0) * var(--pp-row)));
+  transition: transform 0.35s var(--ease-out);
+  pointer-events: none;
+}
+.pp-reader__finger {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 34px;
+  height: 22px;
+  margin-top: -11px;
+  fill: var(--pp-skin);
+  stroke: var(--pp-skin-shade);
+  stroke-width: 1;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.45));
+  animation: papers-finger 1.2s ease-in-out infinite;
+}
+@keyframes papers-finger {
+  50% {
+    transform: translateX(5px);
+  }
+}
+.pp-reader__bar {
+  position: absolute;
+  left: 30px;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.08);
+}
+.pp-reader__bar > span {
+  display: block;
+  height: 100%;
+  background: var(--pp-stamp);
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+}
+
+/* Großer Stempel am Ende. */
+.pp-sheet__cleared {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  padding: 4px 14px;
+  border: 4px double var(--pp-ok);
+  border-radius: 8px;
+  color: var(--pp-ok);
+  font-family: var(--font-hud-display);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transform: translate(-50%, -50%) rotate(-12deg);
+  animation: papers-cleared 0.35s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  pointer-events: none;
+}
+@keyframes papers-cleared {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-12deg) scale(2.2);
+  }
+}
+
+/* ---------------------------------------------------------------- Wert wählen */
+.papers__picker {
+  position: absolute;
+  z-index: 3;
+  left: calc(236px + 2 * var(--space-5));
+  right: var(--space-5);
+  bottom: var(--space-5);
+  margin: 0 auto;
+  max-width: 520px;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass-solid);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  animation: papers-pop 0.18s var(--ease-out);
+}
+.papers__picker-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-family: var(--font-hud-display);
+  font-size: 20px;
+  font-weight: 700;
+}
+.papers .papers__picker-head svg {
+  width: 20px;
+  height: 20px;
+  color: var(--hud-gold);
+}
+.papers__picker-head small {
+  margin-left: auto;
+  font-family: var(--font-hud);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+}
+.papers__options {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.papers__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--hud-radius-button);
+  border: 1px solid transparent;
+  background: var(--pp-paper);
+  color: var(--pp-ink);
+  font: 600 17px var(--font-hud-display);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.papers__option > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.papers__option .papers__key {
+  margin-left: 0;
+  background: var(--pp-ink);
+}
+.papers__option.is-current {
+  border-color: var(--hud-gold);
+  box-shadow: inset 0 0 0 1px var(--hud-gold);
+}
+.papers__option:hover {
+  filter: brightness(1.05);
+}
+.papers__option:focus-visible,
+.papers__cancel:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 2px;
+}
+.papers__cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  border-radius: var(--hud-radius-button);
+  border: 1px solid var(--hud-glass-edge);
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink);
+  font: 700 15px var(--font-hud);
+  cursor: pointer;
+}
+.papers__cancel .papers__key {
+  margin-left: 0;
+}
+
+/* ---------------------------------------------------------------- Reiter (Handy) */
+.papers__tabs {
+  grid-area: tabs;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.papers__tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 6px;
+  border-radius: var(--hud-radius-button);
+  border: 1px solid var(--hud-glass-edge);
+  background: var(--hud-glass-strong);
+  color: var(--hud-ink-2);
+  font: 700 13px var(--font-hud);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.papers__tab span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.papers .papers__tab svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.papers__tab.is-active {
+  background: var(--pp-paper);
+  color: var(--pp-ink);
+  border-color: transparent;
+}
+.papers__tab.is-reading svg {
+  color: var(--cat-danger);
+}
+.papers__tab:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- Handy */
+.papers.is-narrow {
+  --pp-row: 44px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto auto;
+  grid-template-areas:
+    "booth"
+    "refs"
+    "tabs"
+    "docs"
+    "ways";
+  align-content: start;
+  row-gap: var(--space-2);
+  padding: 62px var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+}
+.papers.is-narrow .papers__hud {
+  top: var(--space-2);
+  gap: var(--space-4);
+  padding: 6px var(--space-3);
+}
+.papers.is-narrow .papers__count {
+  font-size: 20px;
+}
+.papers.is-narrow .papers__booth {
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+.papers.is-narrow .papers__window {
+  aspect-ratio: 1;
+}
+.papers.is-narrow .papers-officer {
+  width: 96%;
+  bottom: -10%;
+}
+.papers.is-narrow .papers__bubble {
+  font-size: 15px;
+}
+.papers.is-narrow .papers__bubble::before {
+  top: 50%;
+  left: -8px;
+  margin-top: -8px;
+  border: 8px solid transparent;
+  border-left: 0;
+  border-right-color: var(--hud-ink);
+}
+.papers.is-narrow .papers__bubble.is-bad::before {
+  border-right-color: var(--cat-danger);
+}
+.papers.is-narrow .papers__bubble.is-good::before {
+  border-right-color: var(--cat-money);
+}
+.papers.is-narrow .papers__refs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.papers.is-narrow .pp-ref {
+  padding: 6px 8px;
+  min-width: 0;
+}
+.papers.is-narrow .pp-ref__label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.papers.is-narrow .pp-ref__lcd,
+.papers.is-narrow .pp-ref__value,
+.papers.is-narrow .pp-ref__plate {
+  font-size: 14px;
+}
+.papers.is-narrow .pp-ref__lcd {
+  padding: 1px 6px;
+}
+.papers.is-narrow .pp-ref__plate {
+  padding-right: 4px;
+  letter-spacing: 0.02em;
+}
+.papers.is-narrow .pp-ref__plate.is-container {
+  padding-left: 4px;
+}
+.papers.is-narrow .papers__docs {
+  grid-template-columns: minmax(0, 1fr);
+}
+.papers.is-narrow .pp-sheet {
+  margin-left: 28px;
+}
+.papers.is-narrow .pp-sheet.is-reading {
+  transform: none;
+}
+.papers.is-narrow .papers__ways {
+  grid-template-columns: 1fr 1fr;
+}
+.papers.is-narrow .papers__way {
+  font-size: 14px;
+  padding: 0 var(--space-2);
+  min-height: 48px;
+}
+.papers.is-narrow .papers__way span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.papers.is-narrow .papers__way .papers__key {
+  display: none;
+}
+.papers.is-narrow .papers__picker {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: none;
+  border-radius: var(--hud-radius) var(--hud-radius) 0 0;
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+}
+.papers.is-narrow .papers__option .papers__key,
+.papers.is-narrow .papers__cancel .papers__key {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-sheet.is-shake-a,
+  .pp-sheet.is-shake-b,
+  .pp-reader__finger,
+  .pp-field.is-stamped .pp-stamp,
+  .pp-sheet__cleared,
+  .papers__bubble {
+    animation: none;
+  }
+  .pp-reader,
+  .pp-sheet {
+    transition-duration: 0.01s;
+  }
+}
