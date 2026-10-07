@@ -273,9 +273,22 @@ async function run() {
       window.koeln.runtime.requestRender();
     });
     const chip = page.locator('.hud-pill', { hasText: 'Köln ▾' }).first();
-    // Am linken Rand antippen: Am Handy-Bildschirm kann die schwebende Island die Mitte der Kachelreihe verdecken.
-    await chip.click({ position: { x: 14, y: 20 } });
-    await page.locator('.city-menu__item', { hasText: 'Hamburg' }).first().click();
+    // Nach dem Freischalten kommen noch Nachrichten und das HUD ordnet sich neu: Geht die Karte des Stadt-Chips dabei
+    // gleich wieder zu (das Menü-Element verschwindet, während es noch einfliegt), noch einmal öffnen.
+    await chip.waitFor();
+    await page.waitForTimeout(500);
+    for (let attempt = 1; ; attempt++) {
+      // Am linken Rand antippen: Am Handy-Bildschirm kann die schwebende Island die Mitte der Kachelreihe verdecken.
+      await chip.click({ position: { x: 14, y: 20 } });
+      try {
+        await page.locator('.city-menu__item', { hasText: 'Hamburg' }).first().click({ timeout: 5000 });
+        break;
+      } catch (error) {
+        if (attempt >= 3) throw error;
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(500);
+      }
+    }
     assert.equal(await game(page, (s) => s.modules.city.active), 'hamburg');
     await page.waitForFunction(() => window.koeln.runtime.api.mapView() === 'city:hamburg', null, { timeout: 15000 });
     await shot(page, 'hamburg');
