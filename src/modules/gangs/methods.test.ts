@@ -4,7 +4,7 @@ import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getStock, getWarehouses, store } from '../goods';
 import { getHeat } from '../police';
 import { getSpot } from '../spots';
-import { getStaff, getStaffMember, isEmployed } from '../staff';
+import { getStaff, getStaffMember, invalidateStaffIndex, isEmployed } from '../staff';
 import { statusOf } from './common';
 import { METHOD_GLOBAL_GAP, METHOD_INTERVAL_BY_CITY, THREAT_AT } from './config';
 import { GANGS, type Gang, type GangMethod } from './data';
@@ -149,6 +149,7 @@ describe('Gang-Methoden (Auftrag 23)', () => {
     advanceToHour(sim, 8);
     if (!incident.amount) throw new Error('nichts gestohlen');
     for (const m of getStaff(sim.state)) m.cityId = 'hamburg';
+    invalidateStaffIndex();
     const before = getStock(sim.state, { cityId: 'koeln' });
     const events = recordEvents(sim);
     expect(respond(sim, incident, 'hunt').ok).toBe(true);

@@ -59,7 +59,9 @@ Dasselbe gilt in der UI für `PanelRegistry`, `DialogRegistry` und `SlotRegistry
   (`clock.hourStarted`) und neue Tage (`clock.dayStarted`), lässt alle Module ticken, stellt Ereignisse zu und
   prüft die Pleite-Regel.
 - Module ticken in Abhängigkeits-Reihenfolge (`dependsOn`, bei Gleichstand nach ID). Mit `tickEvery: 60`
-  tickt ein Modul nur zur vollen Stunde, mit `1440` um Mitternacht.
+  tickt ein Modul nur zur vollen Stunde, mit `1440` um Mitternacht. `tickOffset: 7` verschiebt das auf x:07
+  (Auftrag 47): So fallen nicht alle Stunden-Ticks in dieselbe Minute. Nur für Ticks, die nicht an der Minute hängen
+  (kein `now % MINUTES_PER_DAY === 0`; `clock.hour(now)` bleibt innerhalb der Stunde gleich).
 - `GameLoop` rechnet echte Zeit in Schritte um: bei 1x 5 Spielminuten pro Sekunde, 2x und 4x entsprechend,
   Pause = 0. Die Bildrate spielt keine Rolle, Reste werden übertragen, Unterbrechungen (Tab im Hintergrund)
   laufen nicht nach. Die Zeit läuft also nur, solange gespielt wird.
@@ -134,9 +136,13 @@ zählt, ob das Geld für Schulden plus Paket reicht).
 
 ### Spielstände (`persistence.ts`, `saves.ts`, `session.ts`)
 
-- Speicherplätze `slot-1` bis `slot-3` plus `autosave` in `localStorage` (`koeln-tycoon:save:<slot>`).
-  Autosave alle 10 echten Sekunden beim Spielen, beim Laden/Neuanfang und wenn der Tab verlassen wird.
-  Ein beendetes Spiel überschreibt den Autosave nicht.
+- Speicherplätze `slot-1` bis `slot-3` plus `autosave` (`koeln-tycoon:save:<slot>`) in IndexedDB (Auftrag 47;
+  Datenbank `koeln-tycoon`, Store `kv`), sonst `localStorage`. `openBrowserSaveStorage` liest beim Start einmal alles in
+  einen Spiegel (`mirroredStorage`, synchron lesbar) und schreibt danach im Hintergrund; alte Spielstände wandern beim
+  ersten Start aus dem localStorage herüber, noch nicht bestätigte Schreibvorgänge gehen beim Verlassen in den
+  Notfallspeicher (`koeln-tycoon:pending:*`, `persistPending`) und werden beim nächsten Start nachgetragen.
+  Einstellungen bleiben im localStorage. Autosave alle 10 echten Sekunden, wenn sich etwas geändert hat (auch in der
+  Pause), beim Laden/Neuanfang und wenn der Tab verlassen wird. Ein beendetes Spiel überschreibt den Autosave nicht.
 - **Modus** beim Anlegen: Normal (nach Game Over älteren Stand laden) oder Hardcore (alle Stände desselben
   Durchgangs, erkannt an `meta.runId`, werden bei Game Over gelöscht).
 - Export/Import als JSON-Datei (`{ format: 'koeln-tycoon-save', formatVersion, savedAt, label, state }`).
@@ -180,7 +186,7 @@ defineModule({
   id, version,              // Pflicht
   dependsOn?,               // vorher initialisieren und ticken
   init?(ctx) → State,       // Anfangszustand, landet in state.modules[id]
-  tick?(ctx), tickEvery?,
+  tick?(ctx), tickEvery?, tickOffset?,
   commands?: { '<id>.<verb>': (ctx, payload, meta) => CommandResult },
   on?: { '<event>': (ctx, payload, event) => void },
   migrations?: { [zielVersion]: (alt, state) => neu },

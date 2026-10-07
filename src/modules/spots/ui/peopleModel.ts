@@ -4,10 +4,11 @@
 // die Figuren auf jeder Zoomstufe nebeneinander stehen.
 
 import type { GameState, LngLat } from '../../../core';
+import { activeCity } from '../../city';
 import { allWaiting } from '../../customers';
 import { CHECK_THRESHOLD, getHeat } from '../../police';
 import { getStaff } from '../../staff';
-import { getAllSpots, getSpots, type Spot } from '../index';
+import { getAllSpots, getSpots, type Spot, spotCity } from '../index';
 
 export type FigureKind = 'staff' | 'customer' | 'patrol';
 
@@ -61,8 +62,9 @@ export function planFigures(
   inView: (p: LngLat) => boolean,
   limit = MAX_FIGURES,
 ): Figure[] {
+  const cityId = activeCity(state);
   const staffBySpot = new Map<string, string[]>();
-  for (const m of getStaff(state, { status: 'active' })) {
+  for (const m of getStaff(state, { status: 'active', cityId })) {
     if ((m.role !== 'runner' && m.role !== 'security') || m.assignment?.kind !== 'spot') continue;
     const list = staffBySpot.get(m.assignment.targetId) ?? [];
     list.push(m.id);
@@ -75,7 +77,7 @@ export function planFigures(
     waitingBySpot.set(c.spotId, list);
   }
   const dist = (s: Spot) => (s.lng - center.lng) ** 2 + ((s.lat - center.lat) * 1.6) ** 2;
-  const spots = getSpots(state)
+  const spots = getSpots(state, cityId)
     .filter((s) => inView(s) && (staffBySpot.has(s.id) || waitingBySpot.has(s.id)))
     .sort((a, b) => dist(a) - dist(b));
   const figures: Figure[] = [];
@@ -111,7 +113,10 @@ export function planFigures(
  */
 export function patrolRounds(state: GameState): { veedelId: string; spots: Spot[] }[] {
   const byVeedel = new Map<string, Spot[]>();
+  // Nur die aktive Stadt (Auftrag 47): Streifen in anderen Städten sieht man nicht.
+  const cityId = activeCity(state);
   for (const spot of getAllSpots(state)) {
+    if (spotCity(spot) !== cityId) continue;
     const list = byVeedel.get(spot.veedelId) ?? [];
     list.push(spot);
     byVeedel.set(spot.veedelId, list);

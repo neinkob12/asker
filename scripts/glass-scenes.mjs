@@ -77,6 +77,8 @@ export const PRELUDE = `
       opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 55, count: 3 },
       origin: { module: 'gangs', ref: 'raid:nord' },
     });
+    // Das Ereignis 'encounter.resolved' (öffnet die Ergebnis-Karte) kommt erst mit dem nächsten Schritt an.
+    sim.advance(1);
     return encounterId;
   };
   /** Hamburg (Auftrag 30): frei, aktiv, du bist dort; Lager in Ottensen, drei Spots auf dem Kiez, Läufer, Ware. */

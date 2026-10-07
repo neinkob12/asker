@@ -1232,6 +1232,8 @@ export default defineModule({
   dependsOn: ['veedel', 'territory'],
   init: () => initialState(),
   tickEvery: 60,
+  // Versatz (Auftrag 47): nicht mit allen anderen in derselben Minute ticken.
+  tickOffset: 7,
   tick,
   commands: {
     'police.snitch': (ctx, { gangId }) => snitchOnGang(ctx, gangId),

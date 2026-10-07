@@ -146,3 +146,205 @@ export function browserStorage(): KeyValueStorage {
     return memoryStorage();
   }
 }
+
+// --- Asynchroner Speicher mit Spiegel (Auftrag 47) ---
+//
+// localStorage ist synchron und auf etwa 5 MB begrenzt: Ein Spielstand mit allen Städten hat 1,4 MB, Autosave plus drei
+// Speicherplätze passen nicht mehr hinein, und jeder Autosave blockierte den Hauptthread. Deshalb liegen die Spielstände
+// in IndexedDB. Damit SaveStore und Sitzung synchron bleiben, liest alles aus einem Spiegel im Arbeitsspeicher, der beim
+// Start einmal gefüllt wird; Schreibvorgänge laufen danach im Hintergrund. Noch nicht bestätigte Schreibvorgänge werden
+// beim Verlassen der Seite in den Notfallspeicher (localStorage) gelegt und beim nächsten Start nachgetragen.
+
+/** Ein Schlüssel-Wert-Speicher, der asynchron arbeitet (IndexedDB, in Tests ein Map). */
+export interface AsyncKeyValueBackend {
+  readAll(): Promise<Map<string, string>>;
+  write(key: string, value: string): Promise<void>;
+  remove(key: string): Promise<void>;
+}
+
+export interface MirroredStorage extends KeyValueStorage {
+  /** Wartet, bis alle angestoßenen Schreibvorgänge durch sind (Tests, Export). */
+  flush(): Promise<void>;
+  /** Noch nicht bestätigte Schreibvorgänge in den Notfallspeicher legen (beim Verlassen der Seite). */
+  persistPending(): void;
+  /** Wie viele Schreibvorgänge noch ausstehen. */
+  readonly pendingCount: number;
+}
+
+export interface MirroredStorageOptions {
+  /** Schreibfehler im Hintergrund (Speicher voll, Datenbank weg). Wird je Fehler einmal gerufen. */
+  onError?: (error: unknown) => void;
+  /** Synchroner Notfallspeicher (localStorage) für ausstehende Schreibvorgänge und alte Spielstände. */
+  emergency?: KeyValueStorage | null;
+  /** Schlüssel, die aus dem Notfallspeicher übernommen werden (alte Spielstände aus localStorage). */
+  migratePrefix?: string;
+}
+
+/** Präfix für ausstehende Schreibvorgänge im Notfallspeicher. */
+export const PENDING_PREFIX = 'koeln-tycoon:pending:';
+/** Markierung für ein ausstehendes Löschen. */
+const PENDING_DELETE = '\u0000delete';
+
+/**
+ * Spiegel über einem asynchronen Speicher. Liest alles einmal ein, trägt ausstehende und alte Einträge aus dem
+ * Notfallspeicher nach und liefert dann einen synchronen Speicher, dessen Schreibvorgänge im Hintergrund laufen.
+ */
+export async function mirroredStorage(
+  backend: AsyncKeyValueBackend,
+  options: MirroredStorageOptions = {},
+): Promise<MirroredStorage> {
+  const mirror = await backend.readAll();
+  const emergency = options.emergency ?? null;
+  /** Schreibvorgänge, die der Speicher noch nicht bestätigt hat (Wert oder Löschen). */
+  const pending = new Map<string, string>();
+  let chain: Promise<void> = Promise.resolve();
+
+  const enqueue = (key: string, value: string) => {
+    pending.set(key, value);
+    chain = chain.then(async () => {
+      try {
+        if (value === PENDING_DELETE) await backend.remove(key);
+        else await backend.write(key, value);
+        // Inzwischen etwas Neues für den Schlüssel? Dann bleibt das ausstehend.
+        if (pending.get(key) === value) pending.delete(key);
+        emergency?.removeItem(PENDING_PREFIX + key);
+      } catch (error) {
+        options.onError?.(error);
+      }
+    });
+  };
+
+  // Beim letzten Verlassen der Seite nicht mehr bestätigte Schreibvorgänge und alte Spielstände nachtragen.
+  if (emergency) {
+    for (const key of emergency.keys()) {
+      if (key.startsWith(PENDING_PREFIX)) {
+        const value = emergency.getItem(key);
+        const real = key.slice(PENDING_PREFIX.length);
+        if (value === PENDING_DELETE) mirror.delete(real);
+        else if (value !== null) mirror.set(real, value);
+        if (value !== null) enqueue(real, value);
+      } else if (options.migratePrefix && key.startsWith(options.migratePrefix) && !mirror.has(key)) {
+        const value = emergency.getItem(key);
+        if (value === null) continue;
+        mirror.set(key, value);
+        enqueue(key, value);
+        // Erst aus dem alten Speicher nehmen, wenn der neue ihn hat (sonst wäre er bei einem Fehler weg).
+        chain = chain.then(() => {
+          if (!pending.has(key)) emergency.removeItem(key);
+        });
+      }
+    }
+  }
+
+  return {
+    getItem: (key) => mirror.get(key) ?? null,
+    setItem: (key, value) => {
+      mirror.set(key, value);
+      enqueue(key, value);
+    },
+    removeItem: (key) => {
+      mirror.delete(key);
+      enqueue(key, PENDING_DELETE);
+    },
+    keys: () => [...mirror.keys()],
+    flush: () => chain,
+    persistPending: () => {
+      if (!emergency) return;
+      for (const [key, value] of pending) {
+        try {
+          emergency.setItem(PENDING_PREFIX + key, value);
+        } catch {
+          // Notfallspeicher voll: Dann bleibt nur der letzte bestätigte Stand.
+        }
+      }
+    },
+    get pendingCount() {
+      return pending.size;
+    },
+  };
+}
+
+const DB_NAME = 'koeln-tycoon';
+const DB_STORE = 'kv';
+/** Länger darf das Öffnen der Datenbank nicht dauern, sonst bleibt es beim localStorage. */
+const OPEN_TIMEOUT_MS = 4000;
+
+function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB-Fehler'));
+  });
+}
+
+function transactionDone(tx: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error('IndexedDB-Fehler'));
+    tx.onabort = () => reject(tx.error ?? new Error('IndexedDB-Transaktion abgebrochen'));
+  });
+}
+
+/** IndexedDB als asynchroner Speicher. Wirft, wenn sie sich nicht öffnen lässt (privates Fenster, Zeitüberschreitung). */
+export async function indexedDbBackend(): Promise<AsyncKeyValueBackend> {
+  if (typeof indexedDB === 'undefined') throw new Error('IndexedDB gibt es hier nicht.');
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('IndexedDB antwortet nicht.')), OPEN_TIMEOUT_MS);
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(DB_STORE)) request.result.createObjectStore(DB_STORE);
+    };
+    request.onsuccess = () => {
+      clearTimeout(timer);
+      resolve(request.result);
+    };
+    request.onerror = () => {
+      clearTimeout(timer);
+      reject(request.error ?? new Error('IndexedDB ließ sich nicht öffnen.'));
+    };
+    request.onblocked = () => {
+      clearTimeout(timer);
+      reject(new Error('IndexedDB ist blockiert.'));
+    };
+  });
+  return {
+    async readAll() {
+      const tx = db.transaction(DB_STORE, 'readonly');
+      const store = tx.objectStore(DB_STORE);
+      const [keys, values] = await Promise.all([
+        requestToPromise(store.getAllKeys()),
+        requestToPromise(store.getAll() as IDBRequest<unknown[]>),
+      ]);
+      const map = new Map<string, string>();
+      keys.forEach((key, i) => {
+        const value = values[i];
+        if (typeof key === 'string' && typeof value === 'string') map.set(key, value);
+      });
+      return map;
+    },
+    async write(key, value) {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).put(value, key);
+      await transactionDone(tx);
+    },
+    async remove(key) {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).delete(key);
+      await transactionDone(tx);
+    },
+  };
+}
+
+/**
+ * Speicher für die Spielstände im Browser: IndexedDB mit Spiegel, sonst localStorage wie bisher. Alte Spielstände aus
+ * dem localStorage wandern beim ersten Start in die Datenbank.
+ */
+export async function openBrowserSaveStorage(onError?: (error: unknown) => void): Promise<KeyValueStorage> {
+  const local = browserStorage();
+  try {
+    const backend = await indexedDbBackend();
+    return await mirroredStorage(backend, { onError, emergency: local, migratePrefix: 'koeln-tycoon:save:' });
+  } catch (error) {
+    console.warn('Spielstände bleiben im localStorage (IndexedDB nicht verfügbar).', error);
+    return local;
+  }
+}

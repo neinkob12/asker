@@ -220,6 +220,14 @@ die Karte dazu kommt mit 46e). Gangs und Polizei melden sich höchstens einmal p
 `messages.sentToday(state, contactId)`; `say()` in `gangs/common.ts` lässt Nachrichten ohne Antwortmöglichkeit aus, wenn
 die Gang heute schon geschrieben hat (Fragen mit Antworten gehen immer durch), die Polizei-Nachricht zur Stufe ebenso.
 Tagesberichte der Rechten Hand bleiben.
+Auftrag 47 (Performance, `docs/auftraege/47-performance.md`): Leute haben einen Index nach ID und Stadt
+(`staff/members.ts`; `getStaff` mit `cityId`/`spotId`/`veedelId` liest nur diese Stadt, Routinen laufen über
+`liveMembers`; wer `cityId` einer Person direkt setzt, ruft `invalidateStaffIndex()`). Module können mit `tickOffset`
+versetzt ticken (nur, wenn der Tick nicht an `now % MINUTES_PER_DAY` hängt). Spielstände liegen in IndexedDB
+(`openBrowserSaveStorage`, Spiegel im Arbeitsspeicher, Notfallspeicher im localStorage), der Autosave schreibt nur bei
+Änderung. Spot-Marker nur für die aktive Stadt (`mapSpots`). Abgebrochene Sitzungen meldet der Verlauf, Fehler
+stehen in `koeln-tycoon:errors` (`src/ui/crashlog.ts`, Lebenszeichen je Tab `koeln-tycoon:alive:<tab>`). Messen: `PERF=1 npm run perf:sim` (auch ein Spieltag je
+großem Test-Spielstand) und `scripts/perf-browser.mjs`.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
@@ -275,7 +283,7 @@ declare module '../../core' {
 export default defineModule({
   id: 'casino', version: 1, dependsOn: ['goods'],
   init: (ctx) => ({ ... }),                        // Anfangszustand
-  tick: (ctx) => { ... }, tickEvery: 60,           // optional, Standard jede Spielminute
+  tick: (ctx) => { ... }, tickEvery: 60,           // optional, Standard jede Spielminute; tickOffset: 7 = um x:07
   commands: { 'casino.bet': (ctx, payload, meta) => ({ ok: true }) },   // oder { ok: false, reason: '…' }
   on: { 'sale.completed': (ctx, payload) => { ... } },
   migrations: { 2: (old: CasinoStateV1) => ({ ...old, neu: 0 }) },
