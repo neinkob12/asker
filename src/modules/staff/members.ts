@@ -153,20 +153,36 @@ export function getStats(state: GameState, id: string): StaffStats | null {
 export function runnerAt(state: GameState, spotId: string): StaffMember | undefined {
   return (
     activeRunnerAt(state, spotId) ??
-    state.modules.staff.members.find(
+    membersAtSpot(state, spotId).find(
       (m) => m.role === 'runner' && m.returnTo?.kind === 'spot' && m.returnTo.targetId === spotId,
     )
   );
 }
 
-/** Läufer, der gerade an einem Spot arbeitet (eingesetzt und aktiv). */
+/** Leute, die an einem Spot stehen können: die seiner Stadt (Leute bleiben in ihrer Stadt), ohne Spot alle. */
+function membersAtSpot(state: GameState, spotId: string): readonly StaffMember[] {
+  const spot = getSpot(state, spotId);
+  return spot ? membersOfCity(state, spotCity(spot)) : state.modules.staff.members;
+}
+
+/** Läufer, der gerade an einem Spot arbeitet (eingesetzt und aktiv). Ohne Zwischenliste, läuft pro Spot und Tick. */
 export function activeRunnerAt(state: GameState, spotId: string): StaffMember | undefined {
-  return getStaff(state, { role: 'runner', spotId }).find((m) => m.status === 'active');
+  for (const m of membersAtSpot(state, spotId)) {
+    if (
+      m.role === 'runner' &&
+      m.status === 'active' &&
+      m.assignment?.kind === 'spot' &&
+      m.assignment.targetId === spotId
+    )
+      return m;
+  }
+  return undefined;
 }
 
 /** Sicherheit an einem Spot oder in einem Lager. */
 export function securityAt(state: GameState, target: { spotId?: string; warehouseId?: string }): StaffMember[] {
-  return state.modules.staff.members.filter(
+  const base = target.spotId && !target.warehouseId ? membersAtSpot(state, target.spotId) : state.modules.staff.members;
+  return base.filter(
     (m) =>
       m.role === 'security' &&
       m.status === 'active' &&
