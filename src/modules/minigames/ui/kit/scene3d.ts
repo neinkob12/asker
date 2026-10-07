@@ -5,6 +5,7 @@
 
 import {
   BoxGeometry,
+  CanvasTexture,
   Color,
   CylinderGeometry,
   DirectionalLight,
@@ -17,8 +18,10 @@ import {
   MeshStandardMaterial,
   type Object3D,
   PointLight,
+  RepeatWrapping,
   type Scene,
   SphereGeometry,
+  SRGBColorSpace,
 } from 'three';
 
 export type DayPhase = 'day' | 'dusk' | 'night';
@@ -64,6 +67,56 @@ export function lightScene(
   scene.add(sun);
   scene.add(sun.target);
   return sun;
+}
+
+// ---------------------------------------------------------------------------------------------- Texturen
+
+/** Fassade: 4 × 4 Fenster je Kachel (eine Kachel = 12 × 12 Meter). Zwei Texturen: Farbe und Leuchten (nachts). */
+export function facadeTiles(): { map: CanvasTexture; emissive: CanvasTexture } {
+  const S = 256;
+  const make = (lit: boolean) => {
+    const c = document.createElement('canvas');
+    c.width = S;
+    c.height = S;
+    const g = c.getContext('2d');
+    if (!g) return new CanvasTexture(c);
+    g.fillStyle = lit ? '#000' : '#d9d4c8';
+    g.fillRect(0, 0, S, S);
+    if (!lit) {
+      for (let i = 0; i < 1500; i++) {
+        g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+        g.fillRect(Math.random() * S, Math.random() * S, 2, 2);
+      }
+    }
+    const cell = S / 4;
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        const x = i * cell + cell * 0.22;
+        const y = j * cell + cell * 0.2;
+        const w = cell * 0.56;
+        const h = cell * 0.6;
+        if (lit) {
+          const on = Math.random() < 0.55;
+          g.fillStyle = on ? (Math.random() < 0.7 ? '#ffd9a0' : '#cfe3ff') : '#000';
+          g.fillRect(x, y, w, h);
+        } else {
+          g.fillStyle = '#2a3340';
+          g.fillRect(x, y, w, h);
+          g.fillStyle = 'rgba(255,255,255,0.25)';
+          g.fillRect(x + 2, y + 2, w - 4, h * 0.35);
+          g.fillStyle = 'rgba(0,0,0,0.35)';
+          g.fillRect(x - 2, y + h, w + 4, 3);
+        }
+      }
+    }
+    const tex = new CanvasTexture(c);
+    tex.wrapS = RepeatWrapping;
+    tex.wrapT = RepeatWrapping;
+    tex.colorSpace = SRGBColorSpace;
+    tex.anisotropy = 4;
+    return tex;
+  };
+  return { map: make(false), emissive: make(true) };
 }
 
 // ---------------------------------------------------------------------------------------------- Materialien

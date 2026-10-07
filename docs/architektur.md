@@ -1409,6 +1409,69 @@ Sammellieferung einmal, mit `items` und der Summe in `amount`. Eine Teillieferun
 Bestellregeln, Warenfluss und Dynamic Island zählen alle Pakete. Ein `Shipment` ohne `extra` ist genau wie vorher, es
 braucht keine Migration.
 
+### Auftrag 47: Minispiele in 3D (Fragerunde vom 07.10.2026)
+
+Vier Runden Pop-ups ergaben: Design-Art fotorealistisch, echtes 3D mit three.js, Modelle aus Grundformen im Code,
+Jagd und Kontrolle zuerst (dieser Auftrag), Razzia-Lauf, Bude in Ego-Sicht, Gespräch mit Druck und die Optik der
+2D-Spiele als Auftrag 48 (`docs/auftraege/47-minispiele-3d.md`).
+
+**Fundament.** `three` ist eine Abhängigkeit und wie `preact` und `maplibre-gl` nur im `ui/`-Ordner eines Moduls
+erlaubt (`UI_PACKAGES` in `scripts/check-boundaries.mjs`). Baukasten in `minigames/ui/kit/`:
+
+| Was | Wo |
+| --- | --- |
+| Renderer an einem `<canvas>`, Größe über ResizeObserver, Pixelverhältnis bis `MAX_DPR`, ACES-Tonemapping, Schatten, Aufräumen | `stage3d.ts`: `useStage3d(ref, onResize)` → `stage.current.renderer` |
+| Autos aus Grundformen (`buildCar(kind, color)`: Pkw, Transporter, Lkw, Streife mit Lichtbalken, deine Karre), `spinWheels`, `setBlueLight` | `scene3d.ts` |
+| Himmel, Nebel, Hemisphärenlicht und Sonne je Tageszeit (`lightScene`, `SKY`, `phaseOf`), Lack (`paint`), Leuchten (`glow`), Fassaden-Texturen (`facadeTiles`), `disposeObject` | `scene3d.ts` |
+
+Eine Szene liest den Zustand des Modells und ändert ihn nie; Math.random nur für Optik (Fenster, Funken). Bloom über
+`EffectComposer` aus `three/addons`, bei `prefers-reduced-motion` ohne.
+
+**Verfolgungsjagd** (`minigames/ui/games/chase/`): freies Lenken im Straßennetz. Modell (`model.ts`): Stadt als Raster
+`GRID` × `GRID` Blöcke mit Abstand `PITCH`, Straßen `ROAD_W` breit, Blöcke mit Häuserzeilen, Türmen, Parks und einer
+Fluss-Spalte (`riverCol`, die Straßen darüber sind Brücken), harte Wände (`City.walls`, Kreis gegen Rechteck);
+Fahren mit `steer` −1 bis 1 (Gierrate nach Tempo, `YAW_MAX`), Drift (die Fahrtrichtung `course` folgt der Nase
+`heading` mit Verzug, beim Bremsen und Lenken stärker), Vollgas, Bremse, rückwärts, Turbo; Aufprall nach Tempo
+(`IMPACT_*`, Schonfrist `crashCooldown`); Verkehr fährt rechts (`LANE_OFF`), bremst vor dir, biegt an Kreuzungen
+ab, wird fern neu gesetzt; Streifen (`stepCop`): Sichtkontakt auf derselben Straße (`seesPlayer`) = direkt auf dich
+zu, sonst Wegsuche über das Raster (`chooseNode`: die Kreuzung, die den Abstand verkleinert), rammen von hinten,
+stellen (Tempo angleichen, `CATCH_*`), im Verkehr verunglücken; Sperren an der nächsten Kreuzung vor dir mit einer
+Lücke (`nodeAhead`, `BLOCK_*`); Balken „Abhängen“ (`SHAKE_*`), voll = Tiefgarage (`pickHideout`: Straßenseite eines
+Blocks `HIDEOUT_MIN` bis `HIDEOUT_MAX` voraus), rein = entkommen, fällt der Balken unter `HIDEOUT_LOST`, ist sie
+weg. Score und picks wie bisher; `applyChase` in `encounters` unverändert. Szene (`scene.ts`): Boden mit
+Straßen-Kachel (`roadTile`: Fahrbahn, Gehweg, Markierungen, Zebrastreifen), Gebäude als eine zusammengeführte
+Geometrie mit Fenster-UVs und Farbe je Eckpunkt, Dächer, Bäume, Fluss, Brückengeländer, Laternen mit Lichtkegeln,
+Wahrzeichen am Nordrand (`landmark`), Sterne und Mond bzw. Sonne, Regen als Striche, Scheinwerfer (SpotLights) und
+Fülllicht an deiner Karre, Streifen mit Blaulicht, Sperren mit Streifenwagen, Tiefgarage mit Goldrahmen und
+Lichtsäule, Funken, Kamera hinter dem Wagen (zieht nach, weiter und flacher mit Tempo, Blickwinkel beim Turbo, rollt
+in Kurven, wackelt bei Treffern), Schattenfenster folgt dir. Komponente (`ChaseGame.tsx`): Tastatur ←/→ oder A/D
+lenken, ↑ Gas, ↓/Leertaste Bremse, Umschalt Turbo, X Ware raus; Touch: linke Hälfte ziehen lenkt (`STEER_PX`),
+rechts Bremse und Turbo, Gas von selbst; HUD mit Minikarte (`drawMinimap`: Raster, Fluss, Sperren, Tiefgarage,
+Streifen, du), Funk, Ton-Schleifen, Blaulicht-Wash am Ende (CSS), Dev-Haken `window.chase`.
+
+**Verkehrskontrolle** (`minigames/ui/games/traffic/`): Gespräch mit Widersprüchen aus dem Auto. Daten
+(`questions.ts`): `Evidence` (Stunde, Kennzeichen eigene oder fremde Stadt, Fahrzeugart, was hinten sichtbar liegt),
+`Story` (woher, wohin, wessen Wagen, Ladung, Zweck, festgelegt durch deine Antworten), `QUESTIONS` mit `ask(ev,
+story)` und Antworten mit `claims` und `fits(ev, story)` (null = passt, sonst der Satz des Beamten), Nachfragen
+(`repeat`) mit `repeatContradiction`, `OFFICER_LINES`. Modell (`model.ts`): `createTraffic(seed, difficulty, {
+hour, homeCity, otherCities })` würfelt Fakten und Reihenfolge (Ladungsfrage nach dem Blick nach hinten, Nachfragen
+ab Schwierigkeit), `buildQuestion` mischt eine passende und zwei widersprechende Antworten (`good` nur für Tests),
+Ablauf `greet → ask → react → (walk | radio) → … → end`, `answer` (Treffer: Misstrauen `HIT_SUS`, `MAX_HITS` =
+Aussteigen; passend: `OK_SUS`), Warten kostet (`WAIT_SUS`, ab `SLOW_AFTER` ein Satz), `bribe` nur zwischen
+`BRIBE_MIN` und `BRIBE_MAX`, `flee`, Score `PASS_SCORE` (mit Treffer `noted`, pick `lies:<n>`: er notiert das
+Kennzeichen), `applyTraffic` unverändert. Szene (`scene.ts`): Ego-Blick vom Fahrersitz nach links (Tür, Fensterrahmen,
+A- und B-Säule, Dach, Armaturenbrett mit Tacho-Glühen, Lenkrad, Außenspiegel, Scheibe mit Tropfen), draußen Fahrbahn
+(nass glänzend bei Regen), Gehweg, Fassaden mit Fenstern, Laterne, parkendes Auto, Streifenwagen mit Blaulicht hinter
+dir, der Beamte aus Grundformen (Uniform, Weste, Reflexstreifen, Funkgerät, Taschenlampe mit Lichtkegel) an drei
+Plätzen (`SPOTS`: Fenster, hinten, Funk), beugt sich beim Fragen zum Fenster; `head` liefert die projizierte
+Kopfposition für das HTML-Gesicht (`Officer`, `Face` mit `hat: 'police'`). Komponente (`TrafficGame.tsx`): Fakten-Karte
+(was er sieht), Sprechblase, drei Antworten (1 bis 3), Misstrauen und Treffer im HUD, Schein (B), Gas (G); Zeilen
+spricht der Beamte mit `audio.speak` (Stimme `voiceFor` aus dem Seed), roter Blitz bei einem Treffer.
+
+**Tresor leichter** (`safe/model.ts`): Toleranz 4 bis 2 Striche, Strafsekunden 2 bzw. 3, Zeit 50 bzw. 36 s, Nähe
+über `PROXIMITY_RANGE` (16) Striche; `crossedTarget` meldet das Überfahren der richtigen Zahl in der richtigen
+Richtung (eigener Klick, Ausschlag am Stethoskop).
+
 ## Qualität
 
 - `npm run check` = Typecheck + `npm run lint` (Biome + `scripts/check-boundaries.mjs`) + Tests.

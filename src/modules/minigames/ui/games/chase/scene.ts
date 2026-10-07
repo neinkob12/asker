@@ -45,6 +45,7 @@ import {
   type CarParts,
   type DayPhase,
   disposeObject,
+  facadeTiles,
   glow,
   lightScene,
   matte,
@@ -173,54 +174,6 @@ function roadTile(night: boolean): CanvasTexture {
   return tex;
 }
 
-/** Fassade: 4 × 4 Fenster je Kachel (eine Kachel = 12 × 12 Meter). Zwei Texturen: Farbe und Leuchten (nachts). */
-function facadeTiles(): { map: CanvasTexture; emissive: CanvasTexture } {
-  const S = 256;
-  const make = (lit: boolean) => {
-    const c = document.createElement('canvas');
-    c.width = S;
-    c.height = S;
-    const g = c.getContext('2d');
-    if (!g) return new CanvasTexture(c);
-    g.fillStyle = lit ? '#000' : '#d9d4c8';
-    g.fillRect(0, 0, S, S);
-    if (!lit) {
-      for (let i = 0; i < 1500; i++) {
-        g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
-        g.fillRect(Math.random() * S, Math.random() * S, 2, 2);
-      }
-    }
-    const cell = S / 4;
-    for (let i = 0; i < 4; i++) {
-      for (let j = 0; j < 4; j++) {
-        const x = i * cell + cell * 0.22;
-        const y = j * cell + cell * 0.2;
-        const w = cell * 0.56;
-        const h = cell * 0.6;
-        if (lit) {
-          const on = Math.random() < 0.55;
-          g.fillStyle = on ? (Math.random() < 0.7 ? '#ffd9a0' : '#cfe3ff') : '#000';
-          g.fillRect(x, y, w, h);
-        } else {
-          g.fillStyle = '#2a3340';
-          g.fillRect(x, y, w, h);
-          g.fillStyle = 'rgba(255,255,255,0.25)';
-          g.fillRect(x + 2, y + 2, w - 4, h * 0.35);
-          g.fillStyle = 'rgba(0,0,0,0.35)';
-          g.fillRect(x - 2, y + h, w + 4, 3);
-        }
-      }
-    }
-    const tex = new CanvasTexture(c);
-    tex.wrapS = RepeatWrapping;
-    tex.wrapT = RepeatWrapping;
-    tex.colorSpace = SRGBColorSpace;
-    tex.anisotropy = 4;
-    return tex;
-  };
-  return { map: make(false), emissive: make(true) };
-}
-
 // ---------------------------------------------------------------------------------------------- Stadt
 
 /** Box mit Fenster-UVs nach Größe (eine Kachel = 12 m) und Farbe je Eckpunkt. */
@@ -295,7 +248,7 @@ function buildCity(setup: ChaseSetup, phase: DayPhase, root: Group): void {
       map,
       emissiveMap: emissive,
       emissive: new Color(0xffe2b0),
-      emissiveIntensity: night ? 1.4 : phase === 'dusk' ? 0.5 : 0,
+      emissiveIntensity: night ? 0.85 : phase === 'dusk' ? 0.4 : 0,
       vertexColors: true,
       roughness: 0.75,
       metalness: 0.05,
@@ -375,7 +328,7 @@ function buildCity(setup: ChaseSetup, phase: DayPhase, root: Group): void {
       const coneMat = new MeshBasicMaterial({
         color: 0xffd79a,
         transparent: true,
-        opacity: 0.045,
+        opacity: 0.018,
         blending: AdditiveBlending,
         depthWrite: false,
         side: 2,
@@ -610,7 +563,7 @@ export function createChaseScene(setup: ChaseSetup, options: SceneOptions): Chas
     lastRenderer = stage.renderer;
     composer = new EffectComposer(stage.renderer);
     composer.addPass(new RenderPass(scene, camera));
-    bloom = new UnrealBloomPass(new Vector2(stage.width, stage.height), night ? 0.55 : 0.3, 0.5, night ? 0.6 : 0.9);
+    bloom = new UnrealBloomPass(new Vector2(stage.width, stage.height), night ? 0.35 : 0.25, 0.45, night ? 0.82 : 0.92);
     composer.addPass(bloom);
     composer.addPass(new OutputPass());
     composer.setPixelRatio(stage.dpr);

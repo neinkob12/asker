@@ -1,303 +1,257 @@
 import { describe, expect, it } from 'vitest';
-import { LOOK_LINES, OFFICER_LINES } from './lines';
 import {
   advance,
+  answer,
   BRIBE_MAX,
   BRIBE_MIN,
   BRIBE_SCORE,
   bribe,
+  buildQuestion,
+  contradiction,
   createTraffic,
   FLEE_SCORE,
-  FOUND_SUS,
   flee,
   GREET,
   initTraffic,
   isDone,
-  type Lines,
-  litZone,
-  MAX_FOUND,
-  nextPacket,
-  PULSE_NERVOUS,
-  packetAt,
-  packetsIn,
+  MAX_HITS,
+  PASS_SCORE,
   progress,
-  send,
+  questionDef,
   type TrafficState,
-  tap,
   trafficPicks,
   trafficScore,
-  zoneAt,
-  zoneById,
-  zoneOfPulse,
 } from './model';
+import { QUESTIONS, type Story } from './questions';
 
-const LINES: Lines = {
-  greet: OFFICER_LINES.greetNight,
-  walk: OFFICER_LINES.walk,
-  found: OFFICER_LINES.found,
-  fail: OFFICER_LINES.fail,
-  nervous: OFFICER_LINES.nervous,
-  pass: OFFICER_LINES.pass,
-  look: LOOK_LINES,
-};
-const BRIBE_LINES = { ok: OFFICER_LINES.bribeOk, low: OFFICER_LINES.bribeLow, high: OFFICER_LINES.bribeHigh };
+const OPTIONS = { hour: 14, homeCity: 'Köln' };
 
 type Setup = ReturnType<typeof createTraffic>;
 
-function run(setup: Setup, state: TrafficState, seconds: number, calm = true, smart = false) {
-  const signals: string[] = [];
-  for (let t = 0; t < seconds && !isDone(state); t += 1 / 30) {
-    signals.push(...advance(setup, state, 1 / 30, LINES));
-    // Ruhig bleiben: immer genau auf den Schlag tippen.
-    if (calm && Math.abs(state.t - Math.round(state.t)) < 1 / 60) tap(state);
-    if (smart) smartMove(setup, state);
-  }
+function run(setup: Setup, state: TrafficState, seconds: number) {
+  const signals = [];
+  for (let t = 0; t < seconds && !isDone(state); t += 1 / 30) signals.push(...advance(setup, state, 1 / 30));
   return signals;
 }
 
-/** Stellen, in die er schon geleuchtet hat (danach sicher). */
-function inspected(state: TrafficState): Set<string> {
-  const done = new Set<string>();
-  for (let i = 0; i < state.stopIndex; i++) for (const z of state.stops[i].zones) done.add(z);
-  const stop = state.stops[state.stopIndex];
-  if (stop) for (let k = 0; k < (state.phase === 'look' ? state.zoneIndex : 0); k++) done.add(stop.zones[k]);
-  return done;
+/** Eine Antwort, die wirklich widerspricht (−1, wenn alle passen). */
+function badIndex(setup: Setup, state: TrafficState): number {
+  const q = state.question;
+  if (!q) return -1;
+  const def = questionDef(q.id);
+  return q.answers.findIndex((a) => {
+    const full = def.answers.find((x) => x.text === a.text);
+    return full ? contradiction(def, full, setup.evidence, state.story) !== null : false;
+  });
 }
 
-/**
- * Ein guter Spieler: Was offen liegt oder an der aktuellen bzw. nächsten Station drankommt, wandert in eine Stelle, in
- * die er schon geleuchtet hat, sonst in eine, die an diesen beiden Stationen nicht drankommt.
- */
-function smartMove(setup: Setup, state: TrafficState): void {
-  const done = inspected(state);
-  const soon = new Set<string>([
-    ...(state.stops[state.stopIndex]?.zones ?? []),
-    ...(state.stops[state.stopIndex + 1]?.zones ?? []),
-  ]);
-  for (const [i, p] of setup.packets.entries()) {
-    const it = state.items[i];
-    if (it.found || it.moving || !it.zone) continue;
-    const zone = zoneById(it.zone);
-    const atRisk = zone.open || (soon.has(it.zone) && !done.has(it.zone));
-    if (!atRisk) continue;
-    const candidates = setup.zones
-      .filter((z) => !z.open && z.id !== it.zone && p.size <= z.maxSize)
-      .sort(
-        (a, b) => Number(done.has(b.id)) - Number(done.has(a.id)) || Number(soon.has(a.id)) - Number(soon.has(b.id)),
-      );
-    for (const z of candidates) {
-      if (!done.has(z.id) && soon.has(z.id)) continue;
-      if (send(setup, state, i, z.id) === 'ok') break;
-    }
-  }
+/** Bis zur nächsten Frage vorspulen. */
+function untilAsk(setup: Setup, state: TrafficState) {
+  for (let t = 0; t < 30 && state.phase !== 'ask' && !isDone(state); t += 1 / 30) advance(setup, state, 1 / 30);
 }
 
-/** Alle Pakete sofort in versteckte Stellen, die an der ersten Station nicht drankommen (danach spielt smartMove). */
-function hideAll(setup: Setup, state: TrafficState): void {
-  const first = new Set(setup.stops[0].zones);
-  const safe = setup.zones.filter((z) => !z.open && !first.has(z.id));
-  for (const [i, p] of setup.packets.entries()) {
-    const zone = safe.find((z) => p.size <= z.maxSize && send(setup, state, i, z.id) === 'ok');
-    if (!zone) throw new Error(`kein Platz für Paket ${i}`);
-  }
-}
-
-describe('Verkehrskontrolle: Aufbau', () => {
-  it('kommt fest aus dem Seed: Fahrerfenster zuerst, dann einmal ums Auto, Kofferraum immer dabei', () => {
-    const a = createTraffic(7, 0.5);
-    const b = createTraffic(7, 0.5);
-    expect(a.stops.map((s) => s.id)).toEqual(b.stops.map((s) => s.id));
-    expect(a.stops[0].id).toBe('driverWindow');
-    expect(a.stops.some((s) => s.id === 'trunk')).toBe(true);
-    expect(a.stops.every((s) => s.zones.length > 0)).toBe(true);
-    // Versteckte Stellen kommen höchstens einmal dran.
-    const hidden = a.stops.flatMap((s) => s.zones).filter((z) => !zoneById(z).open);
-    expect(new Set(hidden).size).toBe(hidden.length);
+describe('Verkehrskontrolle: Aufbau aus dem Seed', () => {
+  it('gleicher Seed, gleiche Fakten und Reihenfolge; anderer Seed anders', () => {
+    const a = createTraffic(7, 0.5, OPTIONS);
+    const b = createTraffic(7, 0.5, OPTIONS);
+    const c = createTraffic(9, 0.5, OPTIONS);
+    expect(a.evidence).toEqual(b.evidence);
+    expect(a.order).toEqual(b.order);
+    expect([a.evidence, a.order]).not.toEqual([c.evidence, c.order]);
+    expect(a.evidence.hour).toBe(14);
+    expect(a.evidence.homeCity).toBe('Köln');
   });
 
-  it('wird mit der Schwierigkeit härter: mehr Pakete, mehr Stationen, weniger Zeit', () => {
-    const easy = createTraffic(3, 0);
-    const hard = createTraffic(3, 1);
-    expect(hard.packets.length).toBeGreaterThan(easy.packets.length);
-    expect(hard.stops.length).toBeGreaterThanOrEqual(easy.stops.length);
-    expect(hard.look).toBeLessThan(easy.look);
-    expect(hard.walk).toBeLessThan(easy.walk);
+  it('die Ladungsfrage kommt nach dem Blick nach hinten, Nachfragen erst mit der Schwierigkeit', () => {
+    const easy = createTraffic(3, 0, OPTIONS);
+    const hard = createTraffic(3, 1, OPTIONS);
+    expect(easy.order.indexOf('cargo')).toBe(easy.walkAfter + 1);
+    expect(easy.order.length).toBe(5);
+    expect(hard.order.length).toBe(7);
+    expect(hard.order.filter((id) => questionDef(id).repeat).length).toBe(2);
+    expect(hard.waitSus).toBeGreaterThan(easy.waitSus);
   });
 
-  it('legt die Pakete sichtbar auf Sitz, Bank oder in den Fußraum', () => {
-    const setup = createTraffic(5, 0.6);
-    const state = initTraffic(setup);
-    for (const it of state.items) {
-      expect(it.zone).not.toBeNull();
-      expect(zoneById(it.zone as never).open).toBe(true);
-      expect(it.found).toBe(false);
+  it('jede Frage hat zu jeder Lage mindestens eine passende Antwort', () => {
+    const stories: Story[] = [{}, { from: 'club', to: 'home' }, { owner: 'kumpel', from: 'arbeit' }];
+    for (let seed = 1; seed <= 30; seed++) {
+      for (let hour = 0; hour < 24; hour += 3) {
+        const setup = createTraffic(seed, 0.5, { ...OPTIONS, hour });
+        for (const def of QUESTIONS) {
+          for (const story of stories) {
+            const ok = def.answers.some((a) => contradiction(def, a, setup.evidence, story) === null);
+            expect(ok, `${def.id} h${hour} ${JSON.stringify(story)}`).toBe(true);
+          }
+        }
+      }
     }
-    expect(packetAt(setup, state, state.items[0].x, state.items[0].y)).toBe(0);
-    expect(zoneAt(setup, 60, 42)).toBe('glovebox');
-    expect(zoneAt(setup, 50, 130)).toBe('spare');
-    expect(zoneAt(setup, 50, 118)).toBe('trunk');
-    expect(zoneAt(setup, 5, 5)).toBeNull();
   });
 });
 
-describe('Verkehrskontrolle: Ablauf', () => {
-  it('begrüßt, geht dann Station für Station und leuchtet in jede Stelle', () => {
-    const setup = createTraffic(7, 0.5);
+describe('Verkehrskontrolle: Gespräch', () => {
+  it('Begrüßung, dann die erste Frage mit drei Antworten, genau eine passt', () => {
+    const setup = createTraffic(5, 0.5, OPTIONS);
     const state = initTraffic(setup);
-    hideAll(setup, state);
-    const signals = run(setup, state, 2, true, true);
+    const signals = run(setup, state, GREET + 0.1);
     expect(signals).toContain('greet');
-    expect(state.phase).toBe('greet');
-    run(setup, state, GREET, true, true);
-    expect(state.phase).toBe('look');
-    expect(litZone(state)).toBe(setup.stops[0].zones[0]);
-    const all = run(setup, state, 120, true, true);
-    expect(all).toContain('walk');
-    expect(all).toContain('pass');
+    expect(signals).toContain('ask');
+    expect(state.phase).toBe('ask');
+    const q = state.question;
+    expect(q).not.toBeNull();
+    expect(q?.answers.length).toBe(3);
+    const def = questionDef(q?.id ?? '');
+    const fitting = q?.answers.filter(
+      (a) =>
+        contradiction(
+          def,
+          def.answers.find((x) => x.text === a.text) ?? def.answers[0],
+          setup.evidence,
+          state.story,
+        ) === null,
+    );
+    expect(fitting?.length).toBe(1);
+    expect(q?.answers[q.good].text).toBe(fitting?.[0].text);
+  });
+
+  it('die passende Antwort: Misstrauen fällt, es geht weiter; alle passend = Gute Fahrt mit hohem Score', () => {
+    const setup = createTraffic(5, 0.5, OPTIONS);
+    const state = initTraffic(setup);
+    untilAsk(setup, state);
+    const s0 = state.suspicion;
+    expect(answer(setup, state, state.question?.good ?? 0)).toBe('ok');
+    expect(state.suspicion).toBeLessThan(s0);
+    let guard = 0;
+    while (!isDone(state) && guard++ < 20) {
+      untilAsk(setup, state);
+      if (state.phase === 'ask') expect(answer(setup, state, state.question?.good ?? 0)).toBe('ok');
+      run(setup, state, 0.2);
+    }
+    run(setup, state, 5);
     expect(state.outcome).toBe('pass');
-    expect(state.found).toBe(0);
-    expect(trafficScore(state)).toBeGreaterThanOrEqual(0.6);
+    expect(state.hits).toBe(0);
+    expect(trafficScore(state)).toBe(PASS_SCORE.clean);
     expect(trafficPicks(state)).toEqual([]);
-    expect(isDone(state)).toBe(true);
-    expect(progress(state)).toBe(1);
+    expect(progress(setup, state)).toBe(1);
   });
 
-  it('findet, was offen liegt: zwei Funde heißen Aussteigen', () => {
-    const setup = createTraffic(7, 0.8);
+  it('ein Widerspruch zu Sichtbarem: Treffer mit Satz; der zweite: Aussteigen', () => {
+    const setup = createTraffic(5, 0.5, OPTIONS);
     const state = initTraffic(setup);
-    const signals = run(setup, state, 120);
-    expect(signals.filter((s) => s === 'found').length).toBeGreaterThanOrEqual(MAX_FOUND);
+    untilAsk(setup, state);
+    const bad = badIndex(setup, state);
+    expect(bad).toBeGreaterThanOrEqual(0);
+    expect(answer(setup, state, bad)).toBe('hit');
+    expect(state.hits).toBe(1);
+    expect(state.line?.text.length).toBeGreaterThan(5);
+    untilAsk(setup, state);
+    const bad2 = badIndex(setup, state);
+    expect(bad2).toBeGreaterThanOrEqual(0);
+    expect(answer(setup, state, bad2)).toBe('fail');
     expect(state.outcome).toBe('fail');
-    expect(state.found).toBe(MAX_FOUND);
-    expect(trafficPicks(state)).toContain(`found:${MAX_FOUND}`);
-    expect(trafficScore(state)).toBeLessThan(0.5);
-    expect(state.items.filter((it) => it.found).length).toBeGreaterThanOrEqual(MAX_FOUND);
-  });
-
-  it('ein Fund kostet Misstrauen, aber die Runde geht weiter', () => {
-    const setup = createTraffic(11, 0.4);
-    const state = initTraffic(setup);
-    hideAll(setup, state);
-    // Ein Paket zurück auf den Sitz legen, bevor er dort hinleuchtet (danach wieder schlau spielen).
-    run(setup, state, 1.8, true, false);
-    const victim = state.items.findIndex((it) => it.zone !== null && !it.moving);
-    expect(send(setup, state, victim, 'seat')).toBe('ok');
-    const before = state.suspicion;
-    run(setup, state, GREET + 0.2, true, false);
-    expect(state.found).toBe(1);
-    const signals = run(setup, state, 120, true, true);
-    expect(signals).not.toContain('found');
-    expect(state.found).toBe(1);
-    expect(state.outcome).toBe('pass');
-    expect(state.suspicion).toBeGreaterThan(before);
-    expect(trafficPicks(state)).toEqual(['found:1']);
-    expect(FOUND_SUS).toBeGreaterThan(0.3);
-  });
-});
-
-describe('Verkehrskontrolle: Pakete bewegen', () => {
-  it('prüft Größe, Platz und ob er gerade hinleuchtet', () => {
-    const setup = createTraffic(7, 0.5);
-    const state = initTraffic(setup);
-    const small = setup.packets.findIndex((p) => p.size === 1);
-    const big = setup.packets.findIndex((p) => p.size === 2);
-    if (big >= 0) expect(send(setup, state, big, 'glovebox')).toBe('tooBig');
-    expect(send(setup, state, small, 'console')).toBe('ok');
-    expect(send(setup, state, small, 'trunk')).toBe('busy');
-    run(setup, state, 2);
-    expect(state.items[small].zone).toBe('console');
-    expect(send(setup, state, small, 'console')).toBe('same');
-    const other = setup.packets.findIndex((p, i) => p.size === 1 && i !== small);
-    if (other >= 0) expect(send(setup, state, other, 'console')).toBe('full');
-    // Während er in eine Stelle leuchtet, geht da nichts rein und nichts raus.
-    run(setup, state, GREET);
-    const lit = litZone(state);
-    expect(lit).not.toBeNull();
-    const free = state.items.findIndex((it) => it.zone !== null && it.zone !== lit && !it.moving);
-    if (free >= 0 && lit) expect(send(setup, state, free, lit)).toBe('seen');
-  });
-
-  it('zählt Pakete unterwegs schon zur Stelle', () => {
-    const setup = createTraffic(7, 0.5);
-    const state = initTraffic(setup);
-    const small = setup.packets.findIndex((p) => p.size === 1);
-    expect(send(setup, state, small, 'trunk')).toBe('ok');
-    expect(packetsIn(state, 'trunk')).toEqual([small]);
-    const signals = run(setup, state, 3);
-    expect(signals).toContain('stowed');
-    expect(state.items[small].moving).toBeNull();
-  });
-
-  it('wandert mit der Tastatur durch die liegenden Pakete', () => {
-    const setup = createTraffic(7, 0.9);
-    const state = initTraffic(setup);
-    const first = nextPacket(state, 1);
-    expect(first).toBeGreaterThanOrEqual(0);
-    state.selected = first;
-    const second = nextPacket(state, 1);
-    expect(second).not.toBe(first);
-    state.items[second].found = true;
-    expect(nextPacket(state, 1)).not.toBe(second);
-  });
-});
-
-describe('Verkehrskontrolle: Puls, Schein, Gas', () => {
-  it('bleibt mit Tippen im Takt ruhig und wird ohne zittrig; zittrig schaut er noch einmal', () => {
-    const setup = createTraffic(7, 0.5);
-    const calm = initTraffic(setup);
-    hideAll(setup, calm);
-    run(setup, calm, 12, true, true);
-    expect(zoneOfPulse(calm.pulse)).toBe('green');
-    const nervous = initTraffic(setup);
-    // Alles offen liegen lassen und nie tippen: Der Puls geht hoch.
-    run(setup, nervous, 20, false);
-    expect(nervous.pulse).toBeGreaterThan(calm.pulse);
-    // Daneben tippen macht es schlimmer.
-    const state = initTraffic(setup);
-    state.t = 0.5;
-    const before = state.pulse;
-    expect(tap(state)).toBe('miss');
-    expect(state.pulse).toBeGreaterThan(before);
-    expect(tap(state)).toBeNull();
-    state.t = 1.02;
-    expect(tap(state)).toBe('calm');
-    // Sichtbar nervös: eine Station mehr.
-    const sweaty = initTraffic(setup);
-    hideAll(setup, sweaty);
-    run(setup, sweaty, GREET + 0.5, false, true);
-    const stops = sweaty.stops.length;
-    sweaty.pulse = PULSE_NERVOUS + 1;
-    const signals = run(setup, sweaty, 0.2, false);
-    expect(signals).toContain('nervous');
-    expect(sweaty.stops.length).toBe(stops + 1);
-  });
-
-  it('nimmt den Schein nur bei mittlerem Misstrauen', () => {
-    const setup = createTraffic(7, 0.5);
-    const low = initTraffic(setup);
-    low.suspicion = BRIBE_MIN - 0.1;
-    expect(bribe(low, BRIBE_LINES)).toBe('low');
-    expect(low.outcome).toBeNull();
-    expect(low.suspicion).toBeGreaterThan(BRIBE_MIN - 0.1);
-    const mid = initTraffic(setup);
-    mid.suspicion = (BRIBE_MIN + BRIBE_MAX) / 2;
-    expect(bribe(mid, BRIBE_LINES)).toBe('ok');
-    expect(mid.outcome).toBe('bribe');
-    expect(trafficScore(mid)).toBe(BRIBE_SCORE);
-    expect(trafficPicks(mid)).toContain('bribe');
-    const high = initTraffic(setup);
-    high.suspicion = BRIBE_MAX + 0.2;
-    expect(['high', 'fail']).toContain(bribe(high, BRIBE_LINES));
-  });
-
-  it('Gas geben beendet sofort mit dem pick flee', () => {
-    const setup = createTraffic(7, 0.5);
-    const state = initTraffic(setup);
-    expect(flee(state, OFFICER_LINES.flee)).toBe(true);
-    expect(state.outcome).toBe('flee');
-    expect(flee(state, OFFICER_LINES.flee)).toBe(false);
-    run(setup, state, 3);
+    expect(state.hits).toBe(MAX_HITS);
+    run(setup, state, 5);
     expect(isDone(state)).toBe(true);
+    expect(trafficScore(state)).toBeLessThan(0.5);
+  });
+
+  it('ein Treffer, sonst alles passend: durch, aber er notiert das Kennzeichen (lies:1)', () => {
+    const setup = createTraffic(8, 0.5, OPTIONS);
+    const state = initTraffic(setup);
+    untilAsk(setup, state);
+    const bad = badIndex(setup, state);
+    expect(bad).toBeGreaterThanOrEqual(0);
+    answer(setup, state, bad);
+    let guard = 0;
+    while (!isDone(state) && guard++ < 20) {
+      untilAsk(setup, state);
+      if (state.phase === 'ask') answer(setup, state, state.question?.good ?? 0);
+      run(setup, state, 0.2);
+    }
+    run(setup, state, 5);
+    expect(state.outcome).toBe('pass');
+    expect(trafficScore(state)).toBe(PASS_SCORE.noted);
+    expect(trafficPicks(state)).toEqual(['lies:1']);
+  });
+
+  it('Widerspruch zu einer früheren Antwort: die Nachfrage muss zur ersten passen', () => {
+    const setup = createTraffic(2, 1, OPTIONS);
+    const state = initTraffic(setup);
+    // Erst 'from' beantworten, dann eine Nachfrage dazu bauen.
+    state.story = { from: 'kumpel' };
+    const q = buildQuestion(setup, state, 'from2');
+    expect(q.answers[q.good].claims.from).toBe('kumpel');
+    const other = q.answers.find((a) => a.claims.from !== 'kumpel');
+    expect(other).toBeDefined();
+    const def = questionDef('from2');
+    const full = def.answers.find((a) => a.text === other?.text);
+    expect(full && contradiction(def, full, setup.evidence, state.story)).toMatch(/Vorhin sagten Sie/);
+  });
+
+  it('Nachfragen ohne erste Antwort werden übersprungen', () => {
+    const setup = createTraffic(2, 1, OPTIONS);
+    // Nur Nachfragen übrig lassen.
+    setup.order = ['from2', 'to2'];
+    setup.radioAfter = 99;
+    const state = initTraffic(setup);
+    run(setup, state, GREET + 1);
+    expect(state.outcome).toBe('pass');
+  });
+
+  it('lange überlegen: er sagt etwas, Misstrauen steigt', () => {
+    const setup = createTraffic(5, 0.5, OPTIONS);
+    const state = initTraffic(setup);
+    untilAsk(setup, state);
+    const s0 = state.suspicion;
+    const signals = run(setup, state, 16);
+    expect(signals).toContain('slow');
+    expect(state.suspicion).toBeGreaterThan(s0 + 0.05);
+    expect(state.phase).toBe('ask');
+  });
+
+  it('nach hinten schauen und funken kommen als Zwischenschritte', () => {
+    const setup = createTraffic(5, 1, OPTIONS);
+    const state = initTraffic(setup);
+    const all: string[] = [];
+    let guard = 0;
+    while (!isDone(state) && guard++ < 30) {
+      all.push(...run(setup, state, 30));
+      if (state.phase === 'ask') answer(setup, state, state.question?.good ?? 0);
+    }
+    expect(all).toContain('walk');
+    expect(all).toContain('radio');
+    expect(all).toContain('pass');
+    expect(all).toContain('done');
+  });
+});
+
+describe('Verkehrskontrolle: Schein und Gas', () => {
+  it('Schein zu früh: abgelehnt und schlimmer; dazwischen: durch; zu spät: vorbei', () => {
+    const setup = createTraffic(5, 0.5, OPTIONS);
+    const state = initTraffic(setup);
+    untilAsk(setup, state);
+    state.suspicion = BRIBE_MIN - 0.1;
+    expect(bribe(state)).toBe('low');
+    expect(state.suspicion).toBeGreaterThan(BRIBE_MIN - 0.1);
+    state.suspicion = (BRIBE_MIN + BRIBE_MAX) / 2;
+    expect(bribe(state)).toBe('ok');
+    expect(state.outcome).toBe('bribe');
+    expect(trafficScore(state)).toBe(BRIBE_SCORE);
+    expect(trafficPicks(state)).toEqual(['bribe']);
+    expect(bribe(state)).toBe('done');
+    const late = initTraffic(setup);
+    untilAsk(setup, late);
+    late.suspicion = BRIBE_MAX + 0.1;
+    expect(bribe(late)).toBe('high');
+    expect(late.outcome).toBe('fail');
+  });
+
+  it('Gas geben: pick flee, Score FLEE_SCORE, danach nichts mehr', () => {
+    const setup = createTraffic(5, 0.5, OPTIONS);
+    const state = initTraffic(setup);
+    untilAsk(setup, state);
+    expect(flee(state)).toBe(true);
+    expect(flee(state)).toBe(false);
+    expect(answer(setup, state, 0)).toBe('none');
     expect(trafficScore(state)).toBe(FLEE_SCORE);
     expect(trafficPicks(state)).toEqual(['flee']);
   });

@@ -28,6 +28,7 @@ import {
   confirm,
   cracked,
   createSafe,
+  crossedTarget,
   dialNumber,
   initSafe,
   onTarget,
@@ -124,7 +125,13 @@ export function SafeGame(props: MinigameViewProps) {
     // Klicken im Ton: lauter, je näher. Beim schnellen Drehen höchstens alle 30 ms.
     audio.playThrottled(MINIGAME_SOUNDS.click, 30, { volume: 0.1 + 0.9 * p });
     fx.current.spike = Math.min(1, fx.current.spike + 0.3 + p);
-    if (onTarget(setup, s)) haptic('selection');
+    // Die richtige Zahl in der richtigen Richtung überfahren: ein eigener, satter Klick und das Stethoskop schlägt aus.
+    if (crossedTarget(setup, s, crossed)) {
+      playSound(MINIGAME_SOUNDS.clunk, 0.5);
+      haptic('medium');
+      fx.current.spike = 1;
+      fx.current.flash = Math.max(fx.current.flash, 0.5);
+    } else if (onTarget(setup, s)) haptic('selection');
   };
 
   const finish = () => {

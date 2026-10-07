@@ -74,7 +74,8 @@ export function requiredDir(step: number): TurnDir {
 
 /**
  * Tresor aus Seed und Schwierigkeit. Die Zahlen liegen weit genug auseinander (mindestens 18 Striche), damit jede
- * Drehung ein Stück Weg ist; Zeit 45 s, schwer (ab etwa 0,8) 30 s; Toleranz 3 Striche (leicht) bis 1 (schwer).
+ * Drehung ein Stück Weg ist; Zeit 50 s, schwer (ab etwa 0,8) 36 s; Toleranz 4 Striche (leicht) bis 2 (schwer),
+ * Fehler kosten 2 bzw. 3 Sekunden (Auftrag 47: leichter, mehr Hinweise).
  */
 export function createSafe(seed: number, difficulty: number): SafeSetup {
   const random = createRng(seed);
@@ -91,9 +92,9 @@ export function createSafe(seed: number, difficulty: number): SafeSetup {
   const hard = clamp01((d - 0.4) / 0.4);
   return {
     combo: combo as [number, number, number],
-    tolerance: Math.round((3 - 2 * d) * 10) / 10,
-    duration: Math.round(45 - 15 * hard),
-    penalty: d >= 0.6 ? 5 : 3,
+    tolerance: Math.round((4 - 2 * d) * 10) / 10,
+    duration: Math.round(50 - 14 * hard),
+    penalty: d >= 0.6 ? 3 : 2,
     start,
   };
 }
@@ -138,16 +139,25 @@ export function turn(state: SafeState, delta: number): number[] {
   return crossed;
 }
 
+/** Über so viele Striche steigt die Nähe an (Stethoskop, Klicken, Zittern). */
+export const PROXIMITY_RANGE = 16;
+
 /**
- * Wie nah das Rad an der Zahl dieses Schritts ist (0 = weit weg, 1 = genau drauf), über etwa zwölf Striche
+ * Wie nah das Rad an der Zahl dieses Schritts ist (0 = weit weg, 1 = genau drauf), über PROXIMITY_RANGE Striche
  * ansteigend. Für Ton, Zittern und den Ausschlag am Stethoskop. Aus der falschen Richtung nur halb so deutlich.
  */
 export function proximity(setup: SafeSetup, state: SafeState): number {
   if (state.step > 2) return 0;
   const target = setup.combo[state.step];
   const d = dialDistance(state.pos, target);
-  const near = clamp01(1 - d / 12) ** 2;
+  const near = clamp01(1 - d / PROXIMITY_RANGE) ** 1.6;
   return state.lastDir === requiredDir(state.step) || state.lastDir === 0 ? near : near * 0.5;
+}
+
+/** Hat die Drehung (crossed aus turn) die Zahl dieses Schritts in der richtigen Richtung überfahren? Dann klickt es. */
+export function crossedTarget(setup: SafeSetup, state: SafeState, crossed: readonly number[]): boolean {
+  if (state.step > 2 || state.lastDir !== requiredDir(state.step)) return false;
+  return crossed.includes(setup.combo[state.step]);
 }
 
 /** Liegt das Rad gerade innerhalb der Toleranz? */
