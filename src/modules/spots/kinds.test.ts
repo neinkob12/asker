@@ -10,7 +10,6 @@ import {
   isSpotOpen,
   MOVE_COST,
   SPOT_TYPES,
-  SPOT_UPGRADES,
   spotAwareness,
   spotDemandFactor,
   spotKind,
@@ -87,24 +86,6 @@ describe('Spot-Arten, Bekanntheit, Ausbau (Auftrag 23)', () => {
     expect(spotAwareness(sim.state, id)).toBeGreaterThan(before);
   });
 
-  it('Ausbau kostet Geld und wirkt über spotModifiers', () => {
-    const sim = createTestGame();
-    wallet.earn(sim.ctx('test'), 5000, 'dirty', 'Test');
-    const money = sim.state.wallet.dirty;
-    expect(spotModifiers(sim.state, 'ebertplatz')).toMatchObject({ checkAvoid: 0, lossFactor: 1, regularFactor: 1 });
-    for (const upgrade of ['lookout', 'stash', 'regular'] as const) {
-      expect(sim.dispatch({ type: 'spots.upgrade', payload: { spotId: 'ebertplatz', upgrade } }).ok).toBe(true);
-    }
-    const cost = SPOT_UPGRADES.lookout.cost + SPOT_UPGRADES.stash.cost + SPOT_UPGRADES.regular.cost;
-    expect(sim.state.wallet.dirty).toBe(money - cost);
-    const mods = spotModifiers(sim.state, 'ebertplatz');
-    expect(mods.checkAvoid).toBeGreaterThan(0);
-    expect(mods.lossFactor).toBeLessThan(1);
-    expect(mods.regularFactor).toBeGreaterThan(1);
-    expect(sim.dispatch({ type: 'spots.upgrade', payload: { spotId: 'ebertplatz', upgrade: 'stash' } }).ok).toBe(false);
-    expect(sim.dispatch({ type: 'spots.upgrade', payload: { spotId: 'rheinpark', upgrade: 'stash' } }).ok).toBe(false);
-  });
-
   it('verlegen kostet und behält einen Teil der Bekanntheit, umbenennen ist kostenlos', () => {
     const sim = createTestGame();
     const id = foundIn(sim);
@@ -160,9 +141,25 @@ describe('Spot-Arten, Bekanntheit, Ausbau (Auftrag 23)', () => {
     delete state.modules.spots.custom[0].kind;
     state.moduleVersions.spots = 3;
     const loaded = loadSimulation(state, sim.modules);
-    expect(loaded.state.moduleVersions.spots).toBe(4);
+    expect(loaded.state.moduleVersions.spots).toBe(5);
     expect(spotKind(getSpot(loaded.state, id))).toBe('corner');
     expect(spotAwareness(loaded.state, id)).toBe(1);
-    expect(loaded.state.modules.spots.upgrades).toEqual({});
+    expect('upgrades' in loaded.state.modules.spots).toBe(false);
+  });
+
+  it('Spielstände der Version 4 (Auftrag 46d): Der Ausbau fällt weg, spotModifiers bleiben neutral', () => {
+    const sim = createTestGame();
+    const state = JSON.parse(JSON.stringify(sim.state));
+    state.modules.spots.upgrades = { ebertplatz: ['lookout', 'stash', 'regular'] };
+    state.moduleVersions.spots = 4;
+    const loaded = loadSimulation(state, sim.modules);
+    expect(loaded.state.moduleVersions.spots).toBe(5);
+    expect('upgrades' in loaded.state.modules.spots).toBe(false);
+    expect(spotModifiers(loaded.state, 'ebertplatz')).toEqual({
+      heatFactor: 1,
+      checkAvoid: 0,
+      lossFactor: 1,
+      regularFactor: 1,
+    });
   });
 });

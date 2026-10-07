@@ -745,25 +745,6 @@ export const SCENES = [
     })()`,
     wait: 900,
   },
-  {
-    name: 'spot-ausbau',
-    js: `(async () => {
-      ${STEPS}
-      const sim = window.koeln.session.sim;
-      let spot = sim.state.modules.spots.custom[0];
-      if (!spot) {
-        sim.state.wallet.dirty += 3000;
-        sim.dispatch({ type: 'spots.found', payload: { lng: 7.0035, lat: 50.9385, kind: 'club', name: 'Keller in Kalk' } });
-        spot = sim.state.modules.spots.custom[0];
-      }
-      if (!spot) return;
-      sim.state.wallet.dirty += 2000;
-      sim.dispatch({ type: 'spots.upgrade', payload: { spotId: spot.id, upgrade: 'lookout' } });
-      window.koeln.runtime.api.openPanel('spots.spot', { spotId: spot.id });
-      const head = await until(() => [...document.querySelectorAll('.phone .ui-group__title')].find((h) => h.textContent.includes('Bekanntheit')));
-      head?.scrollIntoView({ block: 'start' });
-    })()`,
-  },
   ...['nord', 'west', 'ost', 'sued'].map((gangId) => ({
     name: `gang-chat-${gangId}`,
     js: `(() => {

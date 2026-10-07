@@ -1,12 +1,11 @@
-// Auftrag 23: Spot gründen mit Art-Auswahl (Blatt nach dem Klick auf die Karte), Bekanntheit, Ausbau, Verlegen,
-// Umbenennen und Aufgeben auf der Spot-Seite.
+// Auftrag 23: Bekanntheit, Verlegen, Umbenennen und Aufgeben auf der Spot-Seite. Spot gründen über die Karte ist weg
+// (Auftrag 46d), der Befehl 'spots.found' bleibt für den Shop-Platzhalter (46e).
 
 import { useState } from 'preact/hooks';
 import { formatEuro, formatPercent } from '../../../core';
 import {
   ActionSheet,
   Button,
-  Disclosure,
   Group,
   ItemContent,
   List,
@@ -17,118 +16,10 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { getVeedel, veedelName } from '../../veedel';
-import {
-  CUSTOM_SPOT_DEMAND,
-  canFoundSpotAt,
-  getSpot,
-  isSpotActive,
-  MOVE_COST,
-  SPOT_KINDS,
-  SPOT_TYPES,
-  SPOT_UPGRADE_IDS,
-  SPOT_UPGRADES,
-  type SpotKind,
-  spotAwareness,
-  spotHoursLabel,
-  spotType,
-  spotUpgrades,
-} from '../index';
+import { veedelName } from '../../veedel';
+import { getSpot, isSpotActive, MOVE_COST, spotAwareness, spotType } from '../index';
 
-/** Andrang eines neuen Spots dieser Art im Veedel (wie spots.found ihn setzt, als Prozent von normal). */
-function expectedDemand(kind: SpotKind, veedelId: string): number {
-  return CUSTOM_SPOT_DEMAND * SPOT_TYPES[kind].demand * (getVeedel(veedelId)?.density ?? 1);
-}
-
-/** Blatt nach dem Klick auf die Karte: Art wählen, Name optional, bestätigen. */
-export function FoundSheet(props: {
-  at: { lng: number; lat: number } | null;
-  onClose: () => void;
-  onFounded: (spotId: string) => void;
-}) {
-  const { state, dispatch } = useGame();
-  const ui = useUi();
-  const [kind, setKind] = useState<SpotKind>('corner');
-  const [name, setName] = useState('');
-  const at = props.at;
-  const check = at ? canFoundSpotAt(state, at.lng, at.lat) : null;
-  const veedelId = check?.ok ? check.veedelId : null;
-  const type = SPOT_TYPES[kind];
-  const found = () => {
-    if (!at) return;
-    const r = dispatch({
-      type: 'spots.found',
-      payload: { lng: at.lng, lat: at.lat, kind, name: name.trim() || undefined },
-    });
-    if (!r.ok) {
-      ui.toast(r.reason, 'warn');
-      return;
-    }
-    setName('');
-    props.onFounded((r.data as { spotId: string }).spotId);
-  };
-  return (
-    <Sheet
-      open={!!at}
-      onClose={props.onClose}
-      title={veedelId ? `Neuer Spot in ${veedelName(veedelId)}` : 'Neuer Spot'}
-      detents={['large']}
-      action={
-        <Button variant="primary" small disabled={!veedelId || state.wallet.dirty < type.foundCost} onClick={found}>
-          Gründen
-        </Button>
-      }
-    >
-      {check && !check.ok ? (
-        <p class="spot-found__error">{check.reason}</p>
-      ) : (
-        <>
-          <Group title="Was für ein Spot?" icon="pinPlus" color="place">
-            <List>
-              {SPOT_KINDS.filter((k) => SPOT_TYPES[k].foundable).map((k) => {
-                const t = SPOT_TYPES[k];
-                const hours = spotHoursLabel({ kind: k, custom: true });
-                const heat = t.heatFactor > 1.05 ? 'viel Heat' : t.heatFactor < 0.95 ? 'wenig Heat' : null;
-                return (
-                  <ListItem
-                    key={k}
-                    active={k === kind}
-                    onClick={() => setKind(k)}
-                    value={formatEuro(t.foundCost)}
-                    disabled={state.wallet.dirty < t.foundCost}
-                  >
-                    <ItemContent
-                      icon={t.icon}
-                      color={k === kind ? 'brand' : 'place'}
-                      title={t.name}
-                      tags={[
-                        !!veedelId && {
-                          label: `Andrang ${formatPercent(expectedDemand(k, veedelId))}`,
-                          icon: 'users',
-                          color: 'people',
-                        },
-                        { label: hours ?? 'immer offen', icon: 'clock', color: 'system' },
-                        heat && { label: heat, icon: 'flame', color: t.heatFactor > 1 ? 'danger' : 'money' },
-                      ]}
-                    />
-                  </ListItem>
-                );
-              })}
-            </List>
-          </Group>
-          <p class="spot-found__hint">{type.description}</p>
-          <TextField label="Name (optional)" value={name} onInput={setName} maxLength={40} onSubmit={found} />
-          <Disclosure label="Wie läuft ein neuer Spot an?" icon="info">
-            Am Anfang kennt den Spot kaum jemand: Es kommen weniger Kunden. Verkäufe, Stammkunden und Tage mit deinen
-            Leuten dort sprechen sich herum. Steht dort tagelang niemand, gerät er wieder in Vergessenheit.
-          </Disclosure>
-        </>
-      )}
-    </Sheet>
-  );
-}
-
-/** Abschnitte der Spot-Seite: Bekanntheit (eigene Spots), Ausbau, Verwalten (eigene Spots). */
+/** Abschnitte der Spot-Seite: Bekanntheit und Verwalten (nur eigene Spots). */
 export function SpotManage(props: { spotId: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
@@ -138,7 +29,6 @@ export function SpotManage(props: { spotId: string }) {
   const spot = getSpot(state, props.spotId);
   if (!spot || !isSpotActive(state, spot.id)) return null;
   const awareness = spotAwareness(state, spot.id);
-  const owned = spotUpgrades(state, spot.id);
   const run = (result: { ok: boolean; reason?: string }, good?: string) => {
     if (!result.ok) ui.toast(result.reason ?? 'Geht nicht.', 'warn');
     else if (good) ui.toast(good, 'good', { urgent: false });
@@ -168,29 +58,6 @@ export function SpotManage(props: { spotId: string }) {
           </List>
         </Group>
       )}
-      <Group title="Ausbau" icon="building" color="brand">
-        <List>
-          {SPOT_UPGRADE_IDS.map((id) => {
-            const u = SPOT_UPGRADES[id];
-            const has = owned.includes(id);
-            return (
-              <ListItem
-                key={id}
-                action={!has}
-                disabled={!has && state.wallet.dirty < u.cost}
-                value={has ? 'eingerichtet' : formatEuro(u.cost)}
-                onClick={
-                  has
-                    ? undefined
-                    : () => run(dispatch({ type: 'spots.upgrade', payload: { spotId: spot.id, upgrade: id } }))
-                }
-              >
-                <ItemContent icon={u.icon} color={has ? 'money' : 'brand'} title={u.name} meta={u.description} />
-              </ListItem>
-            );
-          })}
-        </List>
-      </Group>
       {spot.custom && (
         <Group title="Spot verwalten" icon="sliders" color="system">
           <List>
@@ -235,7 +102,7 @@ export function SpotManage(props: { spotId: string }) {
         open={closing}
         onClose={() => setClosing(false)}
         title={`${spot.name} aufgeben?`}
-        message={`${spotType(spot).name} in ${veedelName(spot.veedelId)}. Deine Leute dort werden frei, Stammkunden gehen zum nächsten Spot oder sind weg. Das Geld für Gründung und Ausbau ist verloren.`}
+        message={`${spotType(spot).name} in ${veedelName(spot.veedelId)}. Deine Leute dort werden frei, Stammkunden gehen zum nächsten Spot oder sind weg. Das Geld für die Gründung ist verloren.`}
         actions={[
           {
             label: 'Aufgeben',

@@ -142,7 +142,7 @@ describe('spots', () => {
     const loaded = loadSimulation(raw, sim.modules);
     expect(getSpots(loaded.state).map((s) => s.id)).toEqual(['ebertplatz', 'rheinpark']);
     expect(lockedSpots(loaded.state).map((s) => s.id)).toContain('kalk-post');
-    expect(loaded.state.moduleVersions.spots).toBe(4);
+    expect(loaded.state.moduleVersions.spots).toBe(5);
   });
 });
 

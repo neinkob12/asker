@@ -460,8 +460,7 @@ describe('tutorial: Freischalten', () => {
     expect(allowedAt(9, 'police.raids')).toBe(true);
   });
 
-  it('Spots: Ausbau und Gründen nie im Tutorial, Geldwäsche alle Wege und Sammelbestellung ab 9', () => {
-    expect(allowedAt(11, 'spots.upgrade')).toBe(false);
+  it('Spots: Gründen nie im Tutorial, Geldwäsche alle Wege und Sammelbestellung ab 9', () => {
     expect(allowedAt(11, 'spots.found')).toBe(false);
     expect(allowedAt(LAST_STAGE, 'spots.found')).toBe(true);
     expect(allowedAt(8, 'laundering.allWays')).toBe(false);
@@ -471,7 +470,7 @@ describe('tutorial: Freischalten', () => {
     const sim = start();
     jump(sim, 2);
     sim.state.wallet.dirty = 50000;
-    expect(sim.dispatch({ type: 'spots.upgrade', payload: { spotId: 'neumarkt', upgrade: 'lookout' } }).ok).toBe(false);
+    expect(sim.dispatch({ type: 'spots.found', payload: { lng: 7.0035, lat: 50.9385 } }).ok).toBe(false);
     expect(sim.dispatch({ type: 'laundering.unlock', payload: { channel: 'laundromat', pay: 'dirty' } }).ok).toBe(
       false,
     );

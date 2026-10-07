@@ -95,13 +95,9 @@ import { activeContract, contractOffers, contractValue } from '../modules/quests
 import { getCandidates } from '../modules/recruiting';
 import {
   canFoundSpotAt,
-  customSpots,
   getSpots,
   lockedSpots,
-  SPOT_UPGRADES,
-  spotAwareness,
   spotCity,
-  spotUpgrades,
 } from '../modules/spots';
 import { bailCost, getStaff, openStories, runnerHireCost, type StoryId, securityAt } from '../modules/staff';
 import {
@@ -515,13 +511,6 @@ function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
         break;
       }
     }
-  }
-
-  // Auftrag 23: Eigene Spots mit Stammplatz ausbauen, damit sie sich schneller herumsprechen.
-  for (const spot of customSpots(state)) {
-    if (spotAwareness(state, spot.id) >= 0.8 || spotUpgrades(state, spot.id).includes('regular')) continue;
-    if (money(state) < reserve(state) + SPOT_UPGRADES.regular.cost + 1000) break;
-    run(sim, stats, { type: 'spots.upgrade', payload: { spotId: spot.id, upgrade: 'regular' } });
   }
 
   appointLieutenants(sim, stats);

@@ -13,17 +13,18 @@
 //   getSpot(state, id)    sucht in allen Spots (auch gesperrten), isSpotActive(state, id)
 //   spotsInVeedel(state, veedelId), lockedSpots(state), customSpots(state), canFoundSpotAt(state, lng, lat)
 //   FOUND_SPOT_COST, MAX_CUSTOM_SPOTS
-//   Auftrag 23: spotKind(spot), spotType(spot), SPOT_TYPES, SPOT_UPGRADES, spotAwareness(state, id),
-//   spotDemandFactor(state, spot, time) (Bekanntheit, Tageskurve, Wetter der Art), spotModifiers(state, id) (Heat,
-//   Späher, Versteck, Stammplatz), spotUpgrades(state, id), foundCost(kind)
+//   Auftrag 23: spotKind(spot), spotType(spot), SPOT_TYPES, spotAwareness(state, id),
+//   spotDemandFactor(state, spot, time) (Bekanntheit, Tageskurve, Wetter der Art), spotModifiers(state, id) (Heat der
+//   Art), foundCost(kind). Der Spot-Ausbau (Späher, Versteck, Stammplatz) ist weg (Auftrag 46d).
 //   J4: atSpot(spot) („am Ebertplatz“, „an der Uni-Wiese“), atSpotStart(spot) (Satzanfang), spotVars(spot)
 //   (Platzhalter {spot}, {atSpot}, {AtSpot} für texts.pick). Nie „am ${spot.name}“ schreiben.
-// Befehle: 'spots.unlock', 'spots.found' (mit kind), Auftrag 23: 'spots.upgrade', 'spots.move', 'spots.rename',
+// Befehle: 'spots.unlock', 'spots.found' (mit kind; nur noch über den Shop-Platzhalter, Auftrag 46d/46e), Auftrag 23:
+//   'spots.move', 'spots.rename',
 //   'spots.close', Auftrag 46b: 'spots.lock' (einen offenen Spot wieder sperren, nur solange dort niemand steht und
 //   nichts verkauft wurde; das Tutorial sperrt damit am Anfang alle bis auf den Neumarkt)
 // Tutorial (Auftrag 46b): lockedSpots und getAllSpots zeigen nur Spots, die tutorialSpotOpen erlaubt; der Preis fürs
-//   Freischalten kommt aus unlockCostOf(state, spot) (tutorialSpotCost geht vor); Ausbau und Gründen fragen tutorialAllows.
-// Ereignisse: 'spots.unlocked', 'spots.founded', Auftrag 23: 'spots.upgraded', 'spots.moved', 'spots.closed'
+//   Freischalten kommt aus unlockCostOf(state, spot) (tutorialSpotCost geht vor); Gründen fragt tutorialAllows.
+// Ereignisse: 'spots.unlocked', 'spots.founded', Auftrag 23: 'spots.moved', 'spots.closed'
 
 import {
   type CommandResult,
@@ -63,32 +64,17 @@ import {
   AWARENESS_PER_STAFFED_DAY,
   AWARENESS_PER_UNIT,
   AWARENESS_START,
-  LOOKOUT_AVOID,
   MOVE_COST,
   MOVE_KEEP_AWARENESS,
   PRESET_KINDS,
-  REGULAR_PLACE_FACTOR,
   SPOT_TYPES,
-  SPOT_UPGRADES,
   type SpotKind,
   type SpotType,
-  type SpotUpgradeId,
-  STASH_LOSS_FACTOR,
 } from './kinds';
 import { atSpot } from './places';
 
 export { CUSTOM_SPOT_DEMAND, FOUND_SPOT_COST, KNEIPE, MAX_CUSTOM_SPOTS } from './config';
-export {
-  MOVE_COST,
-  SPOT_KINDS,
-  SPOT_TYPES,
-  SPOT_UPGRADE_IDS,
-  SPOT_UPGRADES,
-  type SpotKind,
-  type SpotType,
-  type SpotUpgrade,
-  type SpotUpgradeId,
-} from './kinds';
+export { MOVE_COST, SPOT_KINDS, SPOT_TYPES, type SpotKind, type SpotType } from './kinds';
 export { atSpot, atSpotStart, type SpotPlace, spotVars } from './places';
 
 export interface Spot {
@@ -134,12 +120,12 @@ export interface SpotsState {
   custom: Spot[];
   /** Bekanntheit eigener Spots (0–1, Auftrag 23). Fehlt ein Spot: voll bekannt. */
   awareness: Record<string, number>;
-  /** Ausbau pro Spot (Auftrag 23). */
-  upgrades: Record<string, SpotUpgradeId[]>;
 }
 
 /** Zustand bis Version 3 (vor Auftrag 23). */
 type SpotsStateV3 = Pick<SpotsState, 'unlocked' | 'custom'>;
+/** Zustand in Version 4 (Auftrag 23 bis 46d): mit Ausbau pro Spot. */
+type SpotsStateV4 = SpotsState & { upgrades?: Record<string, string[]> };
 
 declare module '../../core' {
   interface ModuleStates {
@@ -149,8 +135,6 @@ declare module '../../core' {
     'spots.unlock': { spotId: string };
     /** Eigenen Spot an dieser Stelle gründen. name optional, sonst nach dem Veedel benannt; kind Standard Straßenecke. */
     'spots.found': { lng: number; lat: number; name?: string; kind?: SpotKind };
-    /** Spot ausbauen (Auftrag 23): Späher, Versteck, Stammplatz. */
-    'spots.upgrade': { spotId: string; upgrade: SpotUpgradeId };
     /** Eigenen Spot verlegen (kostet, behält einen Teil der Bekanntheit). */
     'spots.move': { spotId: string; lng: number; lat: number };
     /** Eigenen Spot umbenennen (kostenlos). */
@@ -163,7 +147,6 @@ declare module '../../core' {
   interface GameEvents {
     'spots.unlocked': { spotId: string; veedelId: string };
     'spots.founded': { spotId: string; veedelId: string; kind?: SpotKind };
-    'spots.upgraded': { spotId: string; upgrade: SpotUpgradeId };
     'spots.moved': { spotId: string; fromVeedelId: string; veedelId: string };
     'spots.closed': { spotId: string; veedelId: string; lng: number; lat: number };
     'spots.locked': { spotId: string; veedelId: string };
@@ -372,14 +355,6 @@ export function spotAwareness(state: GameState, spotId: string): number {
   return state.modules.spots.awareness?.[spotId] ?? 1;
 }
 
-export function spotUpgrades(state: GameState, spotId: string): readonly SpotUpgradeId[] {
-  return state.modules.spots.upgrades?.[spotId] ?? [];
-}
-
-export function hasSpotUpgrade(state: GameState, spotId: string, upgrade: SpotUpgradeId): boolean {
-  return spotUpgrades(state, spotId).includes(upgrade);
-}
-
 /**
  * Faktor auf den Andrang eines Spots (customers fragt beim Erzeugen der Kunden): Bekanntheit, bei eigenen Spots dazu
  * Tageskurve, Wochenende und Wetter ihrer Art. Vorgegebene, voll bekannte Spots: 1.
@@ -402,26 +377,23 @@ export function spotDemandFactor(state: GameState, spot: Spot, time: number): nu
 export interface SpotModifiers {
   /** Heat pro Verkauf (Art, nur eigene Spots). */
   heatFactor: number;
-  /** Chance, dass eine Kontrolle am Spot ins Leere geht (Späher). */
+  /** Chance, dass eine Kontrolle am Spot ins Leere geht. Seit Auftrag 46d (kein Ausbau mehr) immer 0. */
   checkAvoid: number;
-  /** Faktor auf Verluste bei Kontrolle oder Überfall (Versteck). */
+  /** Faktor auf Verluste bei Kontrolle oder Überfall. Seit Auftrag 46d immer 1. */
   lossFactor: number;
-  /** Faktor auf neue Stammkunden (Stammplatz). */
+  /** Faktor auf neue Stammkunden. Seit Auftrag 46d immer 1. */
   regularFactor: number;
 }
 
-/** Wirkung von Art und Ausbau eines Spots; police, customers und gangs fragen das zur Laufzeit. */
+/**
+ * Wirkung der Art eines Spots; police, customers und gangs fragen das zur Laufzeit. Der Ausbau (Späher, Versteck,
+ * Stammplatz) ist weg (Auftrag 46d), die Felder bleiben neutral, damit die Aufrufer nichts ändern müssen.
+ */
 export function spotModifiers(state: GameState, spotId: string | null | undefined): SpotModifiers {
   const none = { heatFactor: 1, checkAvoid: 0, lossFactor: 1, regularFactor: 1 };
   if (!spotId) return none;
   const spot = getSpot(state, spotId);
-  const upgrades = spotUpgrades(state, spotId);
-  return {
-    heatFactor: spot?.custom ? spotType(spot).heatFactor : 1,
-    checkAvoid: upgrades.includes('lookout') ? LOOKOUT_AVOID : 0,
-    lossFactor: upgrades.includes('stash') ? STASH_LOSS_FACTOR : 1,
-    regularFactor: upgrades.includes('regular') ? REGULAR_PLACE_FACTOR : 1,
-  };
+  return { ...none, heatFactor: spot?.custom ? spotType(spot).heatFactor : 1 };
 }
 
 /** Wo die Plakette eines Spots auf der Karte steht (Seite, Versatz in px). Nur Darstellung. */
@@ -564,24 +536,6 @@ function ownSpot(ctx: Ctx, spotId: string): Spot | string {
   return spot;
 }
 
-function upgrade(ctx: Ctx, spotId: string, id: SpotUpgradeId): CommandResult {
-  // Auftrag 46b: im Tutorial nicht (der Ausbau fällt mit 46d weg).
-  if (!tutorialAllows(ctx.state, 'spots.upgrade')) return { ok: false, reason: 'Dazu kommst du später.' };
-  const spot = getSpot(ctx.state, spotId);
-  const def = SPOT_UPGRADES[id];
-  if (!spot || !isSpotActive(ctx.state, spotId)) return { ok: false, reason: 'Diesen Spot hast du nicht.' };
-  if (!def) return { ok: false, reason: 'Unbekannter Ausbau.' };
-  const state = ctx.state.modules.spots;
-  const list = state.upgrades[spotId] ?? [];
-  if (list.includes(id)) return { ok: false, reason: `${def.name} gibt es ${atSpot(spot)} schon.` };
-  if (!wallet.pay(ctx, def.cost, 'dirty', `${def.name} ${atSpot(spot)}`, { category: 'expansion', spotId }))
-    return { ok: false, reason: 'Nicht genug Geld.' };
-  state.upgrades[spotId] = [...list, id];
-  journal.add(ctx, `${spot.name}: ${def.name} eingerichtet (${formatEuro(def.cost)}).`, 'good', { spotId });
-  ctx.emit('spots.upgraded', { spotId, upgrade: id });
-  return { ok: true };
-}
-
 function move(ctx: Ctx, payload: { spotId: string; lng: number; lat: number }): CommandResult {
   const spot = ownSpot(ctx, payload.spotId);
   if (typeof spot === 'string') return { ok: false, reason: spot };
@@ -635,7 +589,6 @@ function close(ctx: Ctx, spotId: string): CommandResult {
   const state = ctx.state.modules.spots;
   state.custom = state.custom.filter((s) => s.id !== spotId);
   delete state.awareness[spotId];
-  delete state.upgrades[spotId];
   journal.add(
     ctx,
     `${spot.name} aufgegeben.${freed > 0 ? ` ${freed === 1 ? 'Eine Person ist' : `${freed} Leute sind`} wieder frei.` : ''}`,
@@ -646,14 +599,13 @@ function close(ctx: Ctx, spotId: string): CommandResult {
   return { ok: true };
 }
 
-/** Bekanntheit wächst mit Verkäufen (customers meldet sale.completed), Stammplatz beschleunigt. */
+/** Bekanntheit wächst mit Verkäufen (customers meldet sale.completed). */
 function grow(ctx: Ctx, spotId: string | null | undefined, amount: number): void {
   if (!spotId) return;
   const state = ctx.state.modules.spots;
   const current = state.awareness[spotId];
   if (current === undefined || current >= 1) return;
-  const factor = hasSpotUpgrade(ctx.state, spotId, 'regular') ? REGULAR_PLACE_FACTOR : 1;
-  state.awareness[spotId] = Math.round(Math.min(1, current + amount * factor) * 1000) / 1000;
+  state.awareness[spotId] = Math.round(Math.min(1, current + amount) * 1000) / 1000;
 }
 
 /** Um Mitternacht: Tage mit Leuten am Spot machen ihn bekannter, leere Tage lassen ihn vergessen. */
@@ -671,13 +623,12 @@ function dailyAwareness(ctx: Ctx): void {
 
 export default defineModule({
   id: 'spots',
-  version: 4,
+  version: 5,
   dependsOn: ['veedel'],
   init: () => ({
     unlocked: PRESET_SPOTS.filter((s) => !s.unlockCost).map((s) => s.id),
     custom: [],
     awareness: {},
-    upgrades: {},
   }),
   tickEvery: 60,
   tick: (ctx) => {
@@ -686,7 +637,6 @@ export default defineModule({
   commands: {
     'spots.unlock': (ctx, { spotId }) => unlock(ctx, spotId),
     'spots.found': (ctx, payload) => found(ctx, payload),
-    'spots.upgrade': (ctx, { spotId, upgrade: id }) => upgrade(ctx, spotId, id),
     'spots.move': (ctx, payload) => move(ctx, payload),
     'spots.rename': (ctx, { spotId, name }) => rename(ctx, spotId, name),
     'spots.close': (ctx, { spotId }) => close(ctx, spotId),
@@ -705,12 +655,15 @@ export default defineModule({
       ...old,
       unlocked: old.unlocked.filter((id) => PRESET_SPOTS.some((s) => s.id === id)),
     }),
-    // Version 4 (Auftrag 23): Art, Bekanntheit und Ausbau. Alte eigene Spots sind Straßenecken und voll bekannt.
-    4: (old: SpotsStateV3): SpotsState => ({
+    // Version 4 (Auftrag 23): Art und Bekanntheit (damals auch Ausbau). Alte eigene Spots sind Straßenecken und voll
+    // bekannt.
+    4: (old: SpotsStateV3): SpotsStateV4 => ({
       ...old,
       custom: old.custom.map((s) => ({ ...s, kind: s.kind ?? 'corner' })),
       awareness: {},
       upgrades: {},
     }),
+    // Version 5 (Auftrag 46d): Der Ausbau ist weg, der Spielstand vergisst ihn.
+    5: ({ upgrades: _upgrades, ...rest }: SpotsStateV4): SpotsState => rest,
   },
 });

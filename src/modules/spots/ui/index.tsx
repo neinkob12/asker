@@ -1,8 +1,7 @@
 // Oberfläche der Spots: Marker und Hotspots auf der Karte, das Spot-Panel (freischalten oder Slot für Kunden, Preise, Läufer)
-// und die Spot-Liste im Tab "Geschäft" mit "Eigenen Spot gründen" per Klick auf die Karte.
+// und die Spot-Liste im Tab "Geschäft". Spot gründen über die Karte ist weg (Auftrag 46d), es kommt als Shop (46e).
 // Das Panel hat den Slot 'spots.spotPanel', in den andere Module Abschnitte hängen (Kunden, Preise, Läufer …).
 
-import { useState } from 'preact/hooks';
 import { clock, formatEuro, formatPercent } from '../../../core';
 import { mapEffects, registerMapLayer } from '../../../map';
 import {
@@ -29,7 +28,6 @@ import { formatProductAmount, getWarehouses } from '../../goods';
 import { activeRunnerAt } from '../../staff';
 import { veedelName } from '../../veedel';
 import {
-  customSpots,
   getSpot,
   getSpots,
   isKneipe,
@@ -37,9 +35,6 @@ import {
   isSpotOpen,
   KNEIPE,
   lockedSpots,
-  MAX_CUSTOM_SPOTS,
-  SPOT_KINDS,
-  SPOT_TYPES,
   spotCity,
   spotHoursLabel,
   spotOpensAt,
@@ -47,7 +42,7 @@ import {
   unlockCostOf,
 } from '../index';
 import { recordSaleGlow, recordSpotRaid, syncSpotGlow } from './glow';
-import { FoundSheet, SpotManage } from './manage';
+import { SpotManage } from './manage';
 import { spotsLayer } from './map';
 import { peopleLayer } from './people';
 import './spots.css';
@@ -167,16 +162,8 @@ function SpotsSection() {
   const ui = useUi();
   const spots = getSpots(state, activeCity(state));
   const locked = lockedSpots(state).filter((s) => spotCity(s) === activeCity(state));
-  const canFound = customSpots(state).length < MAX_CUSTOM_SPOTS;
   const waiting = spots.reduce((sum, s) => sum + waitingAt(state, s.id).length, 0);
   const mine = playerSpot(state);
-  const [pending, setPending] = useState<{ lng: number; lat: number } | null>(null);
-  // Auftrag 23: erst den Ort auf der Karte, dann im Blatt die Art (Kosten, Andrang, Heat, Öffnungszeiten) und den Namen.
-  const found = async () => {
-    const pos = await ui.pickLocation('Klick auf die Karte, wo dein neuer Spot hin soll.');
-    if (pos) setPending(pos);
-  };
-  const cheapest = Math.min(...SPOT_KINDS.filter((k) => SPOT_TYPES[k].foundable).map((k) => SPOT_TYPES[k].foundCost));
   return (
     <Card
       title="Spots"
@@ -232,30 +219,6 @@ function SpotsSection() {
           })}
         </List>
       </Group>
-      <List>
-        <ListItem
-          action
-          disabled={!canFound || state.wallet.dirty < cheapest}
-          value={`ab ${formatEuro(cheapest)}`}
-          onClick={found}
-        >
-          <ItemContent
-            icon="pinPlus"
-            color="brand"
-            title="Eigenen Spot gründen"
-            meta={canFound ? 'Klick auf die Karte, dann die Art wählen' : `Höchstens ${MAX_CUSTOM_SPOTS} eigene Spots`}
-          />
-        </ListItem>
-      </List>
-      <FoundSheet
-        at={pending}
-        onClose={() => setPending(null)}
-        onFounded={(spotId) => {
-          setPending(null);
-          ui.toast('Neuer Spot gegründet.', 'good');
-          ui.openPanel('spots.spot', { spotId });
-        }}
-      />
     </Card>
   );
 }
