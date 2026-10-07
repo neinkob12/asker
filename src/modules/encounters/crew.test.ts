@@ -7,7 +7,7 @@ import { MINIGAME_KINDS } from '../minigames';
 import { getStaffMember } from '../staff';
 import { CREW_TRAVEL_COST } from './config';
 import { crewCandidates, specialMoves, suggestedCrew } from './crew';
-import { act as engineAct, availableMoves, special } from './engine';
+import { availableMoves, act as engineAct, special } from './engine';
 import { type Encounter, getEncounter, startEncounter } from './index';
 
 const brawlReady = MINIGAME_KINDS.brawl.ready;

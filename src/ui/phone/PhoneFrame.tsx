@@ -47,6 +47,7 @@ import { SectionContent, TabContent } from '../shell/TabContent';
 import { stateRevision } from '../stateMemo';
 import { CallScreen } from './CallScreen';
 import { startDrag } from './drag';
+import { PhoneErrorNotice } from './ErrorNotice';
 import {
   EDGE_ZONE,
   edgeSwipeCommits,
@@ -56,7 +57,6 @@ import {
   rubberBand,
 } from './gestureModel';
 import { chatList } from './messagesModel';
-import { PhoneErrorNotice } from './ErrorNotice';
 import { type NavEntry, top as topEntry } from './navModel';
 import { appIdOf, PageStack, type PageStackHandle } from './PageStack';
 import { PhoneScreen } from './PhoneScreen';

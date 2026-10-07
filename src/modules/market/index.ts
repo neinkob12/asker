@@ -15,7 +15,8 @@
 //   spotReferencePrice(state, spotId, productId), getSpotPrice(state, spotId, productId),
 //   hasOwnPrice(state, spotId, productId), priceRatio(state, spotId, productId), roundPrice(price),
 //   priceIndex(state, productId, cityId?), purchaseIndex(state, productId, cityId?), indexTrend(state, productId, cityId?),
-//   driftIndex(state, productId, cityId?), marketReport(state, cityId?) (Text des Marktberichts am Montag)
+//   driftIndex(state, productId, cityId?). Den Marktbericht per Handy (Montag 9 Uhr) gibt es seit Auftrag 46d nicht
+//   mehr; der Index steht in der Lieferanten-App.
 // Befehle: 'market.setPrice'
 // Ereignisse: 'market.competitionChanged', 'market.priceSet'
 
@@ -23,18 +24,15 @@ import {
   type CommandResult,
   type Ctx,
   cityDayDice,
-  clock,
   defineModule,
   formatEuro,
   type GameState,
   MINUTES_PER_DAY,
-  messages,
 } from '../../core';
 import { activeCity, citiesUnlocked, isVeedelLive } from '../city';
 import { marketEventFactor } from '../events';
 import { allProducts, getProduct } from '../goods';
 import { getSpot } from '../spots';
-import { getDeals, getRelation, getSuppliers, isUnlocked, supplierContact } from '../suppliers';
 import { allVeedel, getVeedel, veedelCity } from '../veedel';
 import {
   INDEX_CHIP_FROM,
@@ -50,9 +48,6 @@ import {
   PRICE_STEP,
   PURCHASE_INDEX_SHARE,
   PURCHASING_POWER_WEIGHT,
-  REPORT_HOUR,
-  REPORT_MIN_CHANGE,
-  REPORT_WEEKDAY,
   SATURATION_EUR,
   SUPPLY_DEMAND_RANGE,
 } from './config';
@@ -223,51 +218,6 @@ export function priceRatio(state: GameState, spotId: string, productId: string):
 }
 
 // ---------------------------------------------------------------------------------------------
-// Marktbericht (Auftrag 32): Montag 9 Uhr vom Lieferanten mit dem meisten Vertrauen, zwei Sätze.
-
-/** Die zwei Sätze des Berichts für eine Stadt (ohne Absender). */
-export function marketReport(state: GameState, cityId: string = activeCity(state)): string {
-  const moves = allProducts()
-    .map((p) => ({ name: p.name, change: priceIndex(state, p.id, cityId) - 1 }))
-    .filter((m) => Math.abs(m.change) >= REPORT_MIN_CHANGE);
-  const pct = (c: number) => `${Math.round(Math.abs(c) * 100)} %`;
-  const up = [...moves].sort((a, b) => b.change - a.change).find((m) => m.change > 0);
-  const down = [...moves].sort((a, b) => a.change - b.change).find((m) => m.change < 0);
-  const parts = [
-    up && `${up.name} zieht an (+${pct(up.change)})`,
-    down && `${down.name} gibt nach (−${pct(down.change)})`,
-  ].filter(Boolean);
-  const first = parts.length > 0 ? `${parts.join(', ')}.` : 'Der Markt ist ruhig, die Preise stehen normal.';
-  const deal = getDeals(state, cityId)[0];
-  // So, wie der Lieferant in der Stadt auftritt (in Hamburg andere Pakete, z.B. Daan am Kai).
-  const supplier = deal ? getSuppliers(state, cityId).find((s) => s.id === deal.supplierId) : undefined;
-  const pkg = supplier?.packages.find((p) => p.id === deal?.packageId);
-  const second =
-    deal && supplier && pkg
-      ? `Aktion: ${pkg.label} bei ${supplier.contactName} ${Math.round(deal.discount * 100)} % billiger bis ${clock.weekdayName(deal.endsAt - 1)}.`
-      : 'Aktionen gibt es gerade keine.';
-  return `${first} ${second}`;
-}
-
-/** Wer den Bericht schickt: der freie Lieferant der Stadt mit dem meisten Vertrauen. */
-function reportSender(state: GameState, cityId: string) {
-  return getSuppliers(state, cityId)
-    .filter((s) => isUnlocked(state, s.id))
-    .sort((a, b) => getRelation(state, b.id).trust - getRelation(state, a.id).trust)[0];
-}
-
-function sendReport(ctx: Ctx): void {
-  const cityId = activeCity(ctx.state);
-  const sender = reportSender(ctx.state, cityId);
-  if (!sender) return;
-  messages.send(ctx, {
-    contact: supplierContact(sender),
-    text: `Marktbericht ${clock.weekdayName(ctx.now)}: ${marketReport(ctx.state, cityId)}`,
-    silent: true,
-  });
-}
-
-// ---------------------------------------------------------------------------------------------
 // Schreiben
 
 /** Konkurrenzdruck setzen, z.B. wenn eine Gang die Preise drückt. */
@@ -333,7 +283,6 @@ export default defineModule({
   tick: (ctx) => {
     decay(ctx);
     if (ctx.now % MINUTES_PER_DAY === 0) stepIndex(ctx);
-    if (clock.weekday(ctx.now) === REPORT_WEEKDAY && clock.hour(ctx.now) === REPORT_HOUR) sendReport(ctx);
   },
   commands: {
     'market.setPrice': (ctx, { spotId, productId, price }) => setPrice(ctx, spotId, productId, price),

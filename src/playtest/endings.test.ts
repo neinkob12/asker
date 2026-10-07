@@ -6,8 +6,8 @@ import { discoverModules } from '../core/discover';
 import { createTestGame, eventsOfType, recordEvents } from '../core/testing';
 import { getEncounter, startEncounter } from '../modules/encounters';
 import { act } from '../modules/encounters/engine';
-import { MINIGAME_KINDS } from '../modules/minigames';
 import { getLots, take } from '../modules/goods';
+import { MINIGAME_KINDS } from '../modules/minigames';
 import { addInfluence, campaignProgress, controlledBy, PLAYER_FACTION } from '../modules/territory';
 import { allVeedel } from '../modules/veedel';
 

@@ -529,7 +529,14 @@ export class UiRuntime {
           // Auftrag 46d: kein Banner mehr, nur der Verlauf (Einstellungen › Verlauf). Wichtiges zählt dort ungelesen.
           if (options.log === false) return;
           const urgent = options.urgent ?? (kind === 'bad' || kind === 'warn');
-          const alert: Alert = { id: ++this.alertId, text, kind, time: session.state?.time ?? 0, read: !urgent, urgent };
+          const alert: Alert = {
+            id: ++this.alertId,
+            text,
+            kind,
+            time: session.state?.time ?? 0,
+            read: !urgent,
+            urgent,
+          };
           if (options.icon) alert.icon = options.icon;
           if (options.target) alert.target = options.target;
           ui.alerts = [alert, ...ui.alerts].slice(0, ALERT_LIMIT);

@@ -78,7 +78,10 @@ describe('logistics: Review Auftrag 33', () => {
         },
       });
       if (!added.ok) throw new Error(added.reason);
-      sim.dispatch({ type: 'logistics.runRouteNow', payload: { routeId: (added.data as { routeId: number }).routeId } });
+      sim.dispatch({
+        type: 'logistics.runRouteNow',
+        payload: { routeId: (added.data as { routeId: number }).routeId },
+      });
       const [trip] = getTrips(sim.state);
       expect(trip.vehicleId).toBe(vehicleId);
       trip.checkAt = sim.state.time + 30;

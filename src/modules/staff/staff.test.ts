@@ -210,7 +210,7 @@ describe('staff', () => {
     expect(find(idle.id)?.career.at(-1)?.text).toMatch(/Rechte Hand/);
     expect(getStaff(loaded.state, { status: 'quit' }).find((m) => m.id === gone.id)?.role).toBe('runner');
     expect(getStaff(loaded.state, { role: 'courier' })).toHaveLength(0);
-    expect(loaded.state.moduleVersions.staff).toBe(7);
+    expect(loaded.state.moduleVersions.staff).toBe(8);
     expect(getStaff(loaded.state).every((m) => m.cityId === 'koeln')).toBe(true);
   });
 

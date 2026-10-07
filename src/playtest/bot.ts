@@ -85,13 +85,8 @@ import {
 } from '../modules/logistics';
 import { activeContract, contractOffers, contractValue } from '../modules/quests';
 import { getCandidates } from '../modules/recruiting';
-import {
-  canFoundSpotAt,
-  getSpots,
-  lockedSpots,
-  spotCity,
-} from '../modules/spots';
-import { bailCost, getStaff, openStories, runnerHireCost, type StoryId, securityAt } from '../modules/staff';
+import { canFoundSpotAt, getSpots, lockedSpots, spotCity } from '../modules/spots';
+import { bailCost, getStaff, runnerHireCost, securityAt } from '../modules/staff';
 import {
   availableCredit,
   availablePackages,
@@ -638,47 +633,6 @@ function mayReplace(state: GameState, options: BotOptions): boolean {
 }
 
 /**
- * Geschichten der Leute (Auftrag 34): kleine Geldbitten aus der Portokasse (höchstens ein Zehntel), Kaution für
- * Geschwister bis zu einem Viertel, frei geben, verwarnen statt kürzen, versprechen statt Lohn. Gibt true zurück, wenn
- * die Nachricht eine Geschichte war.
- */
-function answerStory(
-  sim: Simulation,
-  stats: BotStats,
-  messageId: number,
-  options: readonly { id: string; command?: Command }[],
-): boolean {
-  const command = options.find((o) => o.command?.type === 'staff.storyChoice')?.command;
-  if (command?.type !== 'staff.storyChoice') return false;
-  const story = openStories(sim.state).find((s) => s.id === command.payload.storyId);
-  if (!story) return false;
-  const cheap = story.amount <= money(sim.state) / 10;
-  const PREFER: Record<StoryId, string[]> = {
-    loan: cheap ? ['give'] : ['refuse'],
-    familyTime: ['off'],
-    drunk: ['warn'],
-    hangover: ['ok'],
-    debt: cheap ? ['pay'] : ['refuse'],
-    gamblerWin: ['cheer'],
-    promotion: ['promise'],
-    raise: ['yes'],
-    bragged: ['shut'],
-    scared: ['pull'],
-    loyalTip: ['hide'],
-    hothead: ['warn'],
-    rivalsFight: ['both'],
-    friendsParty: cheap ? ['pay'] : ['no'],
-    coupleMoveIn: cheap ? ['pay'] : ['no'],
-    siblingJailed: story.amount <= money(sim.state) / 4 ? ['bail', 'wait'] : ['wait'],
-  };
-  for (const optionId of [...PREFER[story.story], ...options.map((o) => o.id)]) {
-    if (!options.some((o) => o.id === optionId)) continue;
-    if (run(sim, stats, { type: 'messages.answer', payload: { messageId, optionId } })) break;
-  }
-  return true;
-}
-
-/**
  * Offene Handy-Nachrichten beantworten. Schutzgeld und Waffenstillstand nur, wenn es aus der Portokasse geht
  * (höchstens ein Viertel des Geldes), sonst ablehnen. Aufträge und Angebote lehnt er ab, Warnungen nimmt er ernst.
  */
@@ -705,8 +659,6 @@ function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions
   for (const m of [...state.messages.list]) {
     if (!messages.canAnswer(state, m)) continue;
     if (CITY_CONTACTS.has(m.contactId)) continue;
-    // Auftrag 34: Geschichten der Leute beantwortet er wie ein vernünftiger Chef.
-    if (answerStory(sim, stats, m.id, m.options ?? [])) continue;
     // Auftrag 34: Großhandel von Dealern: mit der Rechten Hand immer, selbst nur für Stammabnehmer (ab „regelmäßig“).
     // Fremde Dealer lehnt er ohne Rechte Hand höflich ab (ablehnen kostet weniger Vertrauen als hängenlassen).
     if (
@@ -852,7 +804,7 @@ export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = 
   const command = (c: Command) => run(sim, stats, c);
   if (options.sellBusiness !== false) sellWhenOffered(sim.state, command);
   if (isBusinessSold(sim.state)) {
-      answerMessages(sim, stats, options);
+    answerMessages(sim, stats, options);
     if (!isPlayerTraveling(sim.state)) {
       tradeTurn(sim.state, command);
       if (options.grow !== false) growTurn(sim.state, command);
@@ -862,7 +814,7 @@ export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = 
   moveOn(sim, stats, options);
   // Unterwegs zwischen den Städten: nur das Nötigste (Handy, Konfrontationen).
   if (isPlayerTraveling(sim.state)) {
-      answerMessages(sim, stats, options);
+    answerMessages(sim, stats, options);
     return;
   }
   takeContract(sim, stats);

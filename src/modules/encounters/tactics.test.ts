@@ -9,7 +9,7 @@ import { MINIGAME_KINDS } from '../minigames';
 import { getHeat } from '../police';
 import { ENCOUNTER_ACTIONS } from './actions';
 import { AGGRESSION_FIGHT, PROTECT_FACTOR, RETREAT_AT } from './config';
-import { act as engineAct, availableActions } from './engine';
+import { availableActions, act as engineAct } from './engine';
 import { ENCOUNTER_KINDS, type Encounter, getEncounter, startEncounter } from './index';
 import { ENCOUNTER_INTENTS } from './intents';
 import { previewShift, startClock } from './tactics';

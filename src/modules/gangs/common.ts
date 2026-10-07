@@ -98,7 +98,11 @@ export function demandOptions(ctx: Ctx, gang: Gang, s: GangStatus): MessageOptio
   return options;
 }
 
-/** Nachricht des Bosses schicken. */
+/**
+ * Nachricht des Bosses schicken. Auftrag 46d: Ohne Antwortmöglichkeit (Drohung, Spruch, Nachtreten) höchstens eine
+ * pro Gang und Spieltag; danach kommt nichts mehr (0). Fragen mit Antworten gehen immer durch, damit keine Frist ohne
+ * Frage läuft.
+ */
 export function say(
   ctx: Ctx,
   gang: Gang,
@@ -108,6 +112,8 @@ export function say(
   /** Antwortfrist der Nachricht; bei Angeboten die des Angebots (sonst gilt "Deal" in der Nachricht länger als das Angebot). */
   expiresIn = MESSAGE_EXPIRY,
 ): number {
+  const contact = gangContact(gang);
+  if (!options?.length && messages.sentToday(ctx.state, contact.id)) return 0;
   // Eigene Stimme pro Gang, ohne dieselbe Variante direkt zu wiederholen (Text-Helfer des Kerns, Auftrag 23).
   // Artikel vor dem Lagernamen passend („deine Garage“ statt „dein Garage“, Auftrag 43, L3).
   const variants = vars.warehouse
@@ -122,7 +128,7 @@ export function say(
   const memory = MEMORY_KEYS.includes(key) ? memoryLine(ctx, gang.id) : '';
   const text = memory ? `${base} ${memory}` : base;
   return messages.send(ctx, {
-    contact: gangContact(gang),
+    contact,
     text,
     ...(options?.length ? { options, expiresIn } : {}),
   });

@@ -17,23 +17,13 @@
 // Ereignisse: 'events.started' { eventId, cityId, endsAt }, 'events.ended' { eventId, cityId },
 //   'events.marketStarted' { runId, eventId, cityId, productId, factor, endsAt }, 'events.marketEnded' { … }
 
-import {
-  type Ctx,
-  cityDayDice,
-  clock,
-  defineModule,
-  type GameState,
-  journal,
-  MINUTES_PER_DAY,
-  messages,
-} from '../../core';
+import { type Ctx, cityDayDice, clock, defineModule, type GameState, journal, MINUTES_PER_DAY } from '../../core';
 import { activeCity, citiesUnlocked, cityOfSpot, isBusinessSold, isCityLive } from '../city';
 import { allProducts, getProduct } from '../goods';
 import { getSpot } from '../spots';
 import {
   CITY_EVENTS,
   type CityEventDef,
-  EVENT_CONTACTS,
   type EventEffects,
   MARKET_EVENT_CHANCE,
   MARKET_EVENT_DAYS,
@@ -78,6 +68,8 @@ declare module '../../core' {
     events: EventsState;
   }
   interface GameEvents {
+    /** Ein Stadt-Event steht an (einen Tag vorher, Auftrag 46d; text ist die Ankündigung des Kiosk-Kumpels). */
+    'events.announced': { eventId: string; cityId: string; startsAt: number; text: string };
     'events.started': { eventId: string; cityId: string; endsAt: number };
     'events.ended': { eventId: string; cityId: string };
     'events.marketStarted': {
@@ -345,15 +337,15 @@ function tick(ctx: Ctx): void {
       if (live) journal.add(ctx, `${def.name} ist vorbei.`, 'info');
       ctx.emit('events.ended', { eventId: def.id, cityId: def.cityId });
     }
-    // Ankündigung einen Tag vorher (Kiosk-Kumpel der Stadt), still am Badge.
+    // Ankündigung einen Tag vorher: seit Auftrag 46d keine Nachricht mehr (die Karte dazu baut 46e auf das Ereignis
+    // 'events.announced'); gemerkt wird der Termin wie bisher, jeder nur einmal.
     if (!def.announce) continue;
     const next = nextEventStart(def, ctx.now);
     if (next === null || next - ctx.now > MINUTES_PER_DAY || s.announced[def.id] === next) continue;
     s.announced[def.id] = next;
-    const contact = EVENT_CONTACTS[def.cityId];
     // Nur aus der Stadt, in der du bist (Auftrag 43), und nicht mehr nach dem Verkauf.
     const here = def.cityId === activeCity(ctx.state) && !isBusinessSold(ctx.state);
-    if (contact && here) messages.send(ctx, { contact, text: def.announce, silent: true });
+    if (here) ctx.emit('events.announced', { eventId: def.id, cityId: def.cityId, startsAt: next, text: def.announce });
   }
 }
 

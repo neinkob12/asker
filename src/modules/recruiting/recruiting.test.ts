@@ -143,7 +143,7 @@ describe('recruiting: Bewerber-Pool', () => {
 });
 
 describe('recruiting: Kontakte', () => {
-  it('loyale Mitarbeiter empfehlen Leute: selten, aber besser, mit Nachricht zum Einstellen', () => {
+  it('loyale Mitarbeiter empfehlen Leute: selten, aber besser, ohne Chat (Auftrag 46d)', () => {
     const sim = quietGame();
     const loyal: StaffMember[] = [];
     for (let i = 0; i < 4; i++) {
@@ -163,10 +163,9 @@ describe('recruiting: Kontakte', () => {
     expect(referral.visibleStats.loyalty).toBeDefined();
     expect(referral.note).toMatch(/Empfohlen von/);
     const referrer = loyal.find((m) => m.id === referral?.referrerId) as StaffMember;
-    const msg = messages.thread(sim.state, `staff:${referrer.id}`).find((m) => m.options?.length);
-    expect(msg?.text).toContain(referral.name);
-    // Über die Nachricht einstellen.
-    const result = sim.dispatch({ type: 'messages.answer', payload: { messageId: msg?.id ?? 0, optionId: 'hire' } });
+    // Kein Chat dazu: Die Empfehlung steht nur in der Personal-App (Auftrag 46d).
+    expect(messages.thread(sim.state, `staff:${referrer.id}`).some((m) => m.options?.length)).toBe(false);
+    const result = sim.dispatch({ type: 'recruiting.hire', payload: { candidateId: referral.id } });
     expect(result.ok).toBe(true);
     expect(getStaff(sim.state).some((m) => m.name === referral?.name && m.origin === 'referral')).toBe(true);
   });
@@ -217,36 +216,8 @@ describe('recruiting: Kontakte', () => {
     const sources = new Set(eventsOfType(events, 'recruiting.candidateArrived').map((e) => e.payload.source));
     expect(sources).toContain('regular');
     expect(sources).toContain('event');
-    // Der Stammkunde meldet sich unter seinem Kontakt aus dem Kundenmodul.
-    expect(messages.thread(sim.state, 'customer:r1').length).toBeGreaterThan(0);
-  });
-});
-
-describe('recruiting: Fragen im Chat', () => {
-  const hireQuestions = (sim: Simulation, candidateId: string) =>
-    messages
-      .threads(sim.state)
-      .flatMap((t) => messages.thread(sim.state, t.contact.id))
-      .filter(
-        (m) =>
-          messages.canAnswer(sim.state, m) &&
-          m.options?.some(
-            (o) => o.command?.type === 'recruiting.hire' && o.command.payload.candidateId === candidateId,
-          ),
-      );
-
-  it('Wer über die App eingestellt wird, steht im Chat nicht mehr zur Wahl', () => {
-    let checked = false;
-    for (let seed = 1; seed <= 20 && !checked; seed++) {
-      const sim = quietGame(seed);
-      sim.advance(48 * 60);
-      const contact = getContacts(sim.state).find((c) => hireQuestions(sim, c.id).length > 0);
-      if (!contact) continue;
-      expect(sim.dispatch({ type: 'recruiting.hire', payload: { candidateId: contact.id } }).ok).toBe(true);
-      expect(hireQuestions(sim, contact.id)).toHaveLength(0);
-      checked = true;
-    }
-    expect(checked).toBe(true);
+    // Kein Chat dazu (Auftrag 46d): Der Kumpel steht nur in der Personal-App.
+    expect(messages.thread(sim.state, 'customer:r1').some((m) => m.options?.length)).toBe(false);
   });
 });
 

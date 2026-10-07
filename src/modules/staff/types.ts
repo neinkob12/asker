@@ -132,51 +132,6 @@ export interface StaffRelation {
   since: number;
 }
 
-/** Arten der Geschichten (Ereignisse aus Eigenschaften und Beziehungen, Auftrag 34), Vorlagen in stories.ts. */
-export type StoryId =
-  | 'loan'
-  | 'familyTime'
-  | 'drunk'
-  | 'hangover'
-  | 'debt'
-  | 'gamblerWin'
-  | 'promotion'
-  | 'raise'
-  | 'bragged'
-  | 'scared'
-  | 'loyalTip'
-  | 'hothead'
-  | 'rivalsFight'
-  | 'friendsParty'
-  | 'coupleMoveIn'
-  | 'siblingJailed';
-
-/** Eine offene Geschichte: Nachricht mit Antworten, wartet auf die Wahl des Spielers. */
-export interface StaffStory {
-  id: string;
-  story: StoryId;
-  staffId: string;
-  /** Die zweite Person (Beziehung), sonst null. */
-  otherId: string | null;
-  /** Betrag, um den es geht (Geldbitte, Lohn …), sonst 0. */
-  amount: number;
-  messageId: number;
-  createdAt: number;
-  cityId: string;
-}
-
-export interface StaffStories {
-  open: StaffStory[];
-  /** Letzte Geschichte pro Stadt (Spielminute), für den Abstand. */
-  lastAt: Record<string, number>;
-  /** Letzte Geschichte pro Person. */
-  byPerson: Record<string, number>;
-  /** Letzte Geschichte pro Vorlage. */
-  byStory: Record<string, number>;
-  /** Wie viele es bisher gab (für die Messung). */
-  count: number;
-}
-
 export interface StaffState {
   /** Aktuelle Mitarbeiter (aktiv, verletzt, in Haft). */
   members: StaffMember[];
@@ -186,8 +141,6 @@ export interface StaffState {
   hiding: Record<string, StaffHiding>;
   /** Beziehungen zwischen Leuten (Auftrag 34), auch mit Ehemaligen (die zählen nicht mehr). */
   relations: StaffRelation[];
-  /** Geschichten der Leute (Auftrag 34). */
-  stories: StaffStories;
 }
 
 export interface StaffHiding {

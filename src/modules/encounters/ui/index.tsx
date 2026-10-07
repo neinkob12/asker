@@ -5,17 +5,7 @@
 
 import { formatAmount, formatEuro, type GameState } from '../../../core';
 import { mapEffects } from '../../../map';
-import {
-  Button,
-  Chips,
-  Icon,
-  MapDialog,
-  onGameEvent,
-  registerDialog,
-  soundOnEvent,
-  useGame,
-  useUi,
-} from '../../../ui';
+import { Button, Chips, Icon, MapDialog, onGameEvent, registerDialog, soundOnEvent, useGame, useUi } from '../../../ui';
 import { getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
 import { getVeedel, veedelName } from '../../veedel';
@@ -71,7 +61,8 @@ function costChips(state: GameState, encounter: Encounter) {
   for (const id of r.staffKilled) chips.push({ label: `${name(id)} tot`, icon: 'skull', color: 'danger' });
   for (const id of r.staffInjured) chips.push({ label: `${name(id)} verletzt`, icon: 'bandage', color: 'warn' });
   for (const id of r.staffArrested) chips.push({ label: `${name(id)} festgenommen`, icon: 'siren', color: 'law' });
-  if (r.playerInjured && !encounter.playerKilled) chips.push({ label: 'Du bist verletzt', icon: 'bandage', color: 'warn' });
+  if (r.playerInjured && !encounter.playerKilled)
+    chips.push({ label: 'Du bist verletzt', icon: 'bandage', color: 'warn' });
   if (r.heat > 0) chips.push({ label: `+${Math.round(r.heat)} Heat`, icon: 'flame', color: 'warn' });
   if (r.opponentLosses > 0) {
     chips.push({ label: `${r.opponentLosses} von ihnen am Boden`, icon: 'users', color: 'people' });
@@ -89,7 +80,12 @@ function ResultDialog(props: { encounterId: number }) {
   const stamp = stampOf(encounter);
   const parts = encounter.result?.parts ?? [];
   return (
-    <MapDialog label={`${kind?.name ?? 'Konfrontation'}: ${stamp.label}`} onClose={close} class="enc-result" detent="medium">
+    <MapDialog
+      label={`${kind?.name ?? 'Konfrontation'}: ${stamp.label}`}
+      onClose={close}
+      class="enc-result"
+      detent="medium"
+    >
       <p class="enc-result__kicker">
         {kind?.name ?? 'Konfrontation'} · {placeName(state, encounter)}
       </p>

@@ -212,4 +212,3 @@ export const AWARENESS_MIN = 0.1;
 /** Verlegen kostet so viel Schwarzgeld und behält diesen Anteil der Bekanntheit. */
 export const MOVE_COST = 400;
 export const MOVE_KEEP_AWARENESS = 0.6;
-

@@ -286,4 +286,3 @@ export function callEntry(m: Message): NonNullable<Extract<ChatEntry, { type: 'm
 export function firstUnread(state: GameState, contactId: string): number | null {
   return messages.thread(state, contactId).find((m) => !m.read)?.id ?? null;
 }
-

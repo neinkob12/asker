@@ -85,20 +85,20 @@ describe('Stadt-Events (Auftrag 30)', () => {
     expect(eventFactor(sim.state, 'checks', { veedelId: getSpot(sim.state, spot)?.veedelId })).toBe(1.5);
   });
 
-  it('kündigt einen Tag vorher per Handy an und meldet Start und Ende', () => {
+  it('kündigt einen Tag vorher als Ereignis an (keine Nachricht, Auftrag 46d) und meldet Start und Ende', () => {
     const sim = createTestGame();
     const events = recordEvents(sim);
     sim.advance(clock.at(29, 1) - sim.state.time);
-    const thread = messages.thread(sim.state, EVENT_CONTACTS.koeln.id).map((m) => m.text);
-    expect(thread).toContain(def('karneval').announce);
+    const announced = eventsOfType(events, 'events.announced').filter((e) => e.payload.eventId === 'karneval');
+    expect(announced).toHaveLength(1);
+    expect(announced[0].payload.text).toBe(def('karneval').announce);
+    expect(messages.thread(sim.state, EVENT_CONTACTS.koeln.id)).toHaveLength(0);
     sim.advance(clock.at(30, 1) - sim.state.time);
     expect(eventsOfType(events, 'events.started').map((e) => e.payload.eventId)).toContain('karneval');
     sim.advance(clock.at(36, 1) - sim.state.time);
     expect(eventsOfType(events, 'events.ended').map((e) => e.payload.eventId)).toContain('karneval');
     // Angekündigt wird jeder Termin nur einmal.
-    expect(
-      messages.thread(sim.state, EVENT_CONTACTS.koeln.id).filter((m) => m.text === def('karneval').announce),
-    ).toHaveLength(1);
+    expect(eventsOfType(events, 'events.announced').filter((e) => e.payload.eventId === 'karneval')).toHaveLength(1);
   });
 
   it('Stadtwechsel mitten im Karneval meldet den Start nicht noch einmal', () => {

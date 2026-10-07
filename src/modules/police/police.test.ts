@@ -526,7 +526,13 @@ describe('police: Härte nach Größe des Geschäfts (Auftrag 24)', () => {
       { from: 0, to: 1, cityId: 'koeln' },
       { from: 1, to: 2, cityId: 'koeln' },
     ]);
-    expect(sim.state.messages.list.some((m) => m.text.includes('Ermittlungsgruppe'))).toBe(true);
+    // Aufs Handy höchstens eine Polizei-Nachricht am Tag (Auftrag 46d): die zur ersten Stufe; die zweite steht im Verlauf.
+    const police = sim.state.messages.list.filter((m) => m.text.includes('Polizei') || m.text.includes('Kripo'));
+    expect(police).toHaveLength(1);
+    expect(police[0].text).toContain('Händler');
+    expect(eventsOfType(events, 'journal.added').some((e) => e.payload.entry.text.includes('Ermittlungsgruppe'))).toBe(
+      true,
+    );
     // Mit Polizei-Kontakt kommt die Warnung einen Tag vorher.
     const ctx = sim.ctx('staff');
     const contact = enlist(ctx, generateProfile(ctx, 'policeContact'), { origin: 'pool' });

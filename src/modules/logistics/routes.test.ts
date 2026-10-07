@@ -221,7 +221,6 @@ describe('Routen mit Fahrplan (Auftrag 30)', () => {
     expect(results.size).toBe(2);
   });
 
-
   it('schlafendes Köln: Was die Route nimmt, kauft die Rechte Hand um Mitternacht nach', () => {
     const sim = twoCities();
     const driverId = hireDriver(sim);
