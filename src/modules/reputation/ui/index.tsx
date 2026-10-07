@@ -21,6 +21,7 @@ import {
 import { activeCity, cityName, isBusinessSold, majorityMakesBoss } from '../../city';
 import { campaignProgress, controlledBy, PLAYER_FACTION } from '../../territory';
 import { supplierReputation } from '../../trade';
+import { tutorialAllows } from '../../tutorial';
 import { veedelCity, veedelName } from '../../veedel';
 import { getReputation, recentReputationChanges, reputationLabel, reputationTier, reputationTiers } from '../index';
 import './reputation.css';
@@ -54,6 +55,8 @@ function SupplierReputationHud() {
 
 function ReputationHud() {
   const { state } = useGame();
+  // Auftrag 46b: Im Tutorial erscheint der Ruf mit dem ersten Stammkunden.
+  if (!tutorialAllows(state, 'hud.reputation')) return null;
   if (isBusinessSold(state)) return <SupplierReputationHud />;
   return <PlayerReputationHud />;
 }
@@ -76,6 +79,7 @@ function PlayerReputationHud() {
     .sort();
   return (
     <HudPill
+      data-tour="hud.reputation"
       icon="star"
       color="brand"
       label="Ruf · Reviere"
@@ -134,7 +138,11 @@ function PlayerReputationHud() {
     >
       <span class="hud-rep">
         <HudBar value={value} label="Ruf" marks={tiers.slice(1).map((t) => t.min)} />
-        <span class="hud-rep__veedel" title={`${progress.controlled} von ${progress.total} Veedeln`}>
+        <span
+          class="hud-rep__veedel"
+          data-tour="hud.territory"
+          title={`${progress.controlled} von ${progress.total} Veedeln`}
+        >
           <Icon name="flag" />
           {progress.controlled}/{progress.total}
         </span>

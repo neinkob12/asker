@@ -25,6 +25,7 @@ export {
   type Advisor,
   type CityCamera,
   type CityViews,
+  type CoreHudPart,
   type DialogDefinition,
   type DialogId,
   type DialogRegistry,
@@ -32,6 +33,7 @@ export {
   type GameStat,
   getCityViews,
   type HudItem,
+  isHudPartHidden,
   type LiveActivity,
   type LiveActivitySource,
   type MapLayerOption,
@@ -45,6 +47,7 @@ export {
   registerDialog,
   registerGameStat,
   registerHudItem,
+  registerHudPartHidden,
   registerLiveActivity,
   registerMapLayerOption,
   registerPanel,
@@ -77,3 +80,15 @@ export { useIsMobile } from './shell/layout';
 export { Slot } from './shell/Slot';
 export { type SoundOnEventOptions, soundOnEvent } from './sound';
 export { memoState, memoStateKeyed } from './stateMemo';
+/** Tour (Auftrag 46a): Spotlight-Erklärungen, ui.tour.start(def); Anker als data-tour="<id>" aus TOUR_ANCHORS. */
+export {
+  phoneAppAnchor,
+  TOUR_ANCHORS,
+  type TourAnchor,
+  type TourApi,
+  type TourDef,
+  type TourOutcome,
+  type TourPlacement,
+  type TourStep,
+  type TourWait,
+} from './tour';

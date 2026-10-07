@@ -72,6 +72,7 @@ import { hasBerth, portName, receiveCargo } from '../logistics';
 import { purchaseIndex } from '../market';
 import { getReputation } from '../reputation';
 import { controlledBy, PLAYER_FACTION } from '../territory';
+import { tutorialAllows, tutorialSupplierOpen } from '../tutorial';
 import {
   BAD_QUALITY_FACTOR,
   BAD_QUALITY_LOSS,
@@ -441,10 +442,14 @@ declare module '../../core' {
 // ---------------------------------------------------------------------------------------------
 // Lesen
 
-/** Alle Lieferanten, mit Stadt nur die, die dorthin liefern (so, wie sie dort auftreten). */
-export function getSuppliers(_state: GameState, cityId?: string): readonly Supplier[] {
-  if (cityId === undefined) return SUPPLIERS;
-  return SUPPLIERS.filter((s) => deliversTo(s, cityId)).map((s) => supplierIn(s, cityId));
+/**
+ * Alle Lieferanten, mit Stadt nur die, die dorthin liefern (so, wie sie dort auftreten). Im Tutorial (Auftrag 46b) nur
+ * die, die seine Stufe schon kennt (tutorialSupplierOpen).
+ */
+export function getSuppliers(state: GameState, cityId?: string): readonly Supplier[] {
+  const known = SUPPLIERS.filter((s) => tutorialSupplierOpen(state, s.id));
+  if (cityId === undefined) return known;
+  return known.filter((s) => deliversTo(s, cityId)).map((s) => supplierIn(s, cityId));
 }
 
 /** Liefert der Lieferant in diese Stadt? */
@@ -968,6 +973,8 @@ function order(
   const supplier = base ? supplierIn(base, cityId) : undefined;
   const pkg = supplier?.packages.find((p) => p.id === packageId);
   if (!base || !supplier || !pkg) return { ok: false, reason: 'Unbekanntes Paket.' };
+  // Auftrag 46b: Im Tutorial kommen die Lieferanten nach und nach.
+  if (!tutorialSupplierOpen(ctx.state, supplierId)) return { ok: false, reason: 'Dazu kommst du später.' };
   if (!isUnlocked(ctx.state, supplierId)) {
     return { ok: false, reason: `${supplier.contactName} macht noch keine Geschäfte mit dir.` };
   }
@@ -1116,6 +1123,11 @@ function orderBatch(
   if (!base || !supplier || pkgs.some((p) => !p)) return { ok: false, reason: 'Unbekanntes Paket.' };
   const packages = pkgs as SupplierPackage[];
   if (packages.some((p) => p.container)) return { ok: false, reason: 'Container gehen nur einzeln.' };
+  // Auftrag 46b: Im Tutorial kommen die Lieferanten nach und nach, die Sammelbestellung erst mit der Beschlagnahme.
+  if (!tutorialSupplierOpen(ctx.state, supplierId)) return { ok: false, reason: 'Dazu kommst du später.' };
+  if (mode === 'group' && !tutorialAllows(ctx.state, 'suppliers.groupOrder')) {
+    return { ok: false, reason: 'Sammelbestellungen kommen später.' };
+  }
   if (!isUnlocked(ctx.state, supplierId)) {
     return { ok: false, reason: `${supplier.contactName} macht noch keine Geschäfte mit dir.` };
   }

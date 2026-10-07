@@ -171,6 +171,21 @@ Overlay `Tells.tsx`). Razzia-Countdown neu gezeichnet. Minispiele etwa doppelt s
 `logistics`, Überfall auf den Spot, an dem du stehst, mit dir drin). Test-Spielstände je Minispiel (`?spielstand=minispiel-<art>`,
 Gruppe „Minispiele“, `src/playtest/minigameSaves.ts`): Das Spiel steht an und öffnet sich nach dem Laden von selbst; Auslöser ohne
 Wurf dafür in `police` (`playerChase`, `startUndercoverShift`).
+Auftrag 46b (Modul `tutorial`, Teil von Auftrag 46 „Intro neu“, `docs/auftraege/46-intro-neu.md`): Stufen 0 bis 12 und
+Missionen mit Teilzielen als Daten (`tutorial/config.ts`, `missions.ts`), Belohnung aus den Verkäufen der letzten 24
+Stunden (`missionReward`, `reward.ts`), Missions-Karte im HUD (`placement: 'below'`, Anker `data-tour="hud.mission"`).
+**Startet nur über `tutorial.start`** aus der Oberfläche (Dialog „Neues Spiel“ im Modus normal, `?neu=normal&tutorial=1`);
+Bot, Tests, Test-Spielstände, `npm run balance` und Hardcore laufen mit `enabled: false`, dann ist alles frei. Befehle
+`tutorial.advance` (Erklär-Stufen 0, 3, 4, 10 enden damit; eine erledigte Mission schaltet von selbst weiter),
+`tutorial.skip` (Einstellungen › Einstieg), `tutorial.scripted { key }` (46c). **Freischalten:** Was eine Stufe
+freigibt, steht in `FEATURE_STAGE`; Module fragen `tutorialAllows(state, feature)` am Anfang ihres Ablaufs bzw. im
+`hiddenWhen` der App (ersetzt `phoneAppLocked` aus `quests`), `tutorialAllowsRole(state, role)` beim Personal,
+`spots` fragt `tutorialSpotOpen`/`tutorialSpotCost` (`lockedSpots`, `getAllSpots`, `unlockCostOf`), `suppliers`
+`tutorialSupplierOpen` (`getSuppliers`). Ein neues Feature anhängen: Eintrag in `TutorialFeature` und `FEATURE_STAGE`,
+dann ein `if (!tutorialAllows(state, '…')) return` an der Stelle, die es anbietet (Kommentar „Auftrag 46b“). Der Spot
+sperrt sich mit `spots.lock` (nur ohne Leute und Verkäufe). Solange das Tutorial je gestartet wurde, ruhen Peters
+Quests (`questsSuppressed`); der Kern-HUD blendet Teile über `registerHudPartHidden` aus (sauberes Geld). Dev-Haken
+`window.koeln.dev.tutorialStage(n)`, Szenen `npm run screenshot -- --scenes=tutorial,tutorial-teilziele`.
 Auftrag 47 (Performance, `docs/auftraege/47-performance.md`): Leute haben einen Index nach ID und Stadt
 (`staff/members.ts`; `getStaff` mit `cityId`/`spotId`/`veedelId` liest nur diese Stadt, Routinen laufen über
 `liveMembers`; wer `cityId` einer Person direkt setzt, ruft `invalidateStaffIndex()`). Module können mit `tickOffset`

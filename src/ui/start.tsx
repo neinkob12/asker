@@ -19,6 +19,7 @@ import { introSeen } from './player';
 import { UiRuntime } from './runtime';
 import { App } from './shell/App';
 import { bindKeys } from './shell/keys';
+import { demoTour } from './tour/demo';
 import './styles/tokens.css';
 import './styles/base.css';
 import './shell/shell.css';
@@ -69,8 +70,9 @@ export async function startApp(root: HTMLElement, modules: readonly ModuleDefini
   const disposers: Array<() => void> = [bindClickSound()];
   disposers.push(bindPauseMarker(runtime), offMood);
 
-  // ?neu=normal|hardcore&seed=123 startet sofort ein frisches Spiel (praktisch für Screenshots und Tests),
-  // ?spielstand=koeln-komplett lädt einen Test-Spielstand (builtin/testSaves.ts).
+  // ?neu=normal|hardcore&seed=123 startet sofort ein frisches Spiel (praktisch für Screenshots und Tests), mit
+  // &tutorial=1 im Modus normal mit Tutorial (Auftrag 46b); ?spielstand=koeln-komplett lädt einen Test-Spielstand
+  // (builtin/testSaves.ts).
   const params = new URLSearchParams(window.location.search);
   const fresh = params.get('neu');
   const testSave = params.get('spielstand');
@@ -94,7 +96,9 @@ export async function startApp(root: HTMLElement, modules: readonly ModuleDefini
       );
   } else if (fresh !== null) {
     const seed = params.get('seed');
-    session.newGame(fresh === 'hardcore' ? 'hardcore' : ('normal' as GameMode), seed ? Number(seed) : undefined);
+    const mode: GameMode = fresh === 'hardcore' ? 'hardcore' : 'normal';
+    session.newGame(mode, seed ? Number(seed) : undefined);
+    if (mode === 'normal' && params.get('tutorial') === '1') startTutorial(session);
   } else if (!session.continueAutosave()) {
     // Ließ sich der letzte Spielstand nicht laden, sagen wir es (und dass eine Kopie bleibt), statt still neu anzufangen.
     if (session.loadError) {
@@ -110,6 +114,8 @@ export async function startApp(root: HTMLElement, modules: readonly ModuleDefini
   }
   const speed = params.get('tempo');
   if (speed !== null) runtime.api.setSpeed(Number(speed));
+  // ?tour=demo (Auftrag 46a): Demo-Tour über HUD, Handy und Karte, sobald das Spiel steht (mit ?neu=… kombinieren).
+  if (params.get('tour') === 'demo') disposers.push(startDemoTour(runtime));
 
   disposers.push(bindKeys(runtime));
   applyDockSpring();
@@ -145,6 +151,36 @@ export async function startApp(root: HTMLElement, modules: readonly ModuleDefini
   });
   return runtime;
 }
+
+/**
+ * Tutorial einschalten (Auftrag 46b): direkt nach einem neuen Spiel im Modus normal. Nur hier und im Dialog „Neues
+ * Spiel“; Bot, Tests und Test-Spielstände laufen ohne.
+ */
+export function startTutorial(session: GameSession): void {
+  session.dispatch({ type: 'tutorial.start', payload: {} });
+}
+
+/**
+ * Startet die Demo-Tour, sobald ein Spiel geladen ist und die Oberfläche einmal gezeichnet wurde (kein Dialog offen).
+ * Gibt die Abmeldung zurück.
+ */
+function startDemoTour(runtime: UiRuntime): () => void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const off = runtime.subscribe(() => {
+    if (!runtime.state || runtime.ui.dialog || timer) return;
+    timer = setTimeout(() => {
+      off();
+      if (runtime.state && !runtime.ui.dialog) void runtime.api.tour.start(demoTour(runtime.api));
+    }, DEMO_TOUR_DELAY_MS);
+  });
+  return () => {
+    off();
+    if (timer) clearTimeout(timer);
+  };
+}
+
+/** So lange nach dem ersten Bild wartet die Demo-Tour, damit HUD und Handy stehen. */
+const DEMO_TOUR_DELAY_MS = 800;
 
 /**
  * Setzt `data-paused` am Wurzelelement, solange das Spiel steht (Tempo 0, z.B. Pause oder ein Dialog, der es anhält):

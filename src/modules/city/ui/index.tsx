@@ -29,6 +29,7 @@ import { getSpots } from '../../spots';
 import { enlist, generateProfile } from '../../staff';
 import { addInfluence, campaignProgress, factions, PLAYER_FACTION } from '../../territory';
 import { EUROPE_CITIES, FOREIGN_CITIES, getCustomer } from '../../trade';
+import { tutorialAllows } from '../../tutorial';
 import { allVeedel } from '../../veedel';
 import {
   ABROAD_CITIES,
@@ -398,10 +399,13 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 
 function RankHud() {
   const { state } = useGame();
+  // Auftrag 46b: Im Tutorial erscheint der Rang mit dem ersten Aufstieg.
+  if (!tutorialAllows(state, 'hud.rank')) return null;
   const rank = playerRank(state);
   const reachedAt = PLAYER_RANKS.findIndex((r) => r.id === rank.id);
   return (
     <HudPill
+      data-tour="hud.rank"
       icon="crown"
       color="brand"
       label="Rang"

@@ -474,8 +474,11 @@ describe('Handy Schritt für Schritt (Feedback 07.10.2026)', () => {
   const locked = (state: GameState) =>
     PHONE_APP_STEPS.filter((s) => phoneAppLocked(state, s.appId)).map((s) => s.appId);
 
-  it('ein neues Spiel zeigt erst nur Nachrichten und Einstellungen, jede App kommt mit ihrer Quest', () => {
+  it('eingeschaltet zeigt das Handy erst nur Nachrichten und Einstellungen, jede App kommt mit ihrer Quest', () => {
     const sim = createTestGame();
+    // Seit Auftrag 46b ist es aus (das Tutorial schaltet die Apps frei); die Quests können es noch.
+    expect(phoneStepsActive(sim.state)).toBe(false);
+    sim.dispatch({ type: 'quests.setPhoneSteps', payload: { enabled: true } });
     sim.advance(10);
     expect(phoneStepsActive(sim.state)).toBe(true);
     expect(locked(sim.state)).toEqual(PHONE_APP_STEPS.map((s) => s.appId));

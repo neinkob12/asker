@@ -306,6 +306,29 @@ export function registerHudItem(item: HudItem): void {
   hudItems.register(item);
 }
 
+/**
+ * Teile des Kern-HUD, die ein Modul zeitweise ausblenden darf (Auftrag 46b: Das Tutorial zeigt sauberes Geld erst
+ * mit der Geldwäsche). Die Oberfläche fragt isHudPartHidden; mehrere Regeln gelten gemeinsam (eine reicht).
+ */
+export type CoreHudPart = 'cleanMoney';
+const hudPartRules = new Map<CoreHudPart, Map<string, (state: GameState) => boolean>>();
+
+export function registerHudPartHidden(part: CoreHudPart, id: string, hiddenWhen: (state: GameState) => boolean): void {
+  let rules = hudPartRules.get(part);
+  if (!rules) {
+    rules = new Map();
+    hudPartRules.set(part, rules);
+  }
+  rules.set(id, hiddenWhen);
+}
+
+export function isHudPartHidden(state: GameState, part: CoreHudPart): boolean {
+  const rules = hudPartRules.get(part);
+  if (!rules) return false;
+  for (const rule of rules.values()) if (rule(state)) return true;
+  return false;
+}
+
 export function registerTab(tab: SidebarTab): void {
   sidebarTabs.register(tab);
 }

@@ -27,7 +27,6 @@ import {
   registerSearch,
   registerSlot,
   soundOnEvent,
-  Toggle,
   type UiApi,
   useGame,
   useUi,
@@ -43,12 +42,12 @@ import {
   phoneAppLocked,
   phoneAppsOpenedBy,
   phoneStepsActive,
-  phoneStepsEnabled,
   QUESTS,
   type QuestDef,
   type QuestGoTo,
   questContact,
   questProgress,
+  questsSuppressed,
   rewardText,
 } from '../index';
 import { ContractsGroup } from './contracts';
@@ -160,7 +159,8 @@ function formatProgress(now: number, target: number, euro: boolean | undefined):
 
 function QuestHud() {
   const { state } = useGame();
-  const quest = currentQuest(state);
+  // Auftrag 46b: Läuft das Tutorial, steht hier seine Missions-Karte.
+  const quest = questsSuppressed(state) ? null : currentQuest(state);
   if (!quest) return null;
   // Pro Quest neu: Die Karte geht für jede neue Quest auf und leuchtet kurz (Animation beim Einhängen).
   return <QuestCard key={quest.id} quest={quest} />;
@@ -182,7 +182,13 @@ function QuestCard(props: { quest: QuestDef }) {
   const go = () => goTo(ui, state, quest.goTo);
   if (collapsed) {
     return (
-      <button type="button" class="quest-hud quest-hud--mini" onClick={toggle} aria-label="Quest aufklappen">
+      <button
+        type="button"
+        class="quest-hud quest-hud--mini"
+        data-tour="hud.mission"
+        onClick={toggle}
+        aria-label="Quest aufklappen"
+      >
         <Icon name="target" />
         <span class="quest-hud__mini-title">{quest.title}</span>
         <span class="quest-hud__count">{formatProgress(now, target, quest.euro)}</span>
@@ -191,7 +197,7 @@ function QuestCard(props: { quest: QuestDef }) {
     );
   }
   return (
-    <section class={`quest-hud is-new ${guide ? 'is-guide' : ''}`} aria-label="Aktuelle Quest">
+    <section class={`quest-hud is-new ${guide ? 'is-guide' : ''}`} data-tour="hud.mission" aria-label="Aktuelle Quest">
       <header class="quest-hud__head">
         <span class="hud-label is-quest">
           Quest {number}/{QUESTS.length} · {chapterName(quest.chapter)}
@@ -429,29 +435,8 @@ onGameEvent('quest.started', 'quests.startedToast', (payload, ui, state) => {
   audio.play('notification', { delay: 0.5 });
 });
 
-/** Einstellungen › Einstieg: Handy Schritt für Schritt an oder aus. */
-function PhoneStepsSettings() {
-  const { state, dispatch } = useGame();
-  return (
-    <Toggle
-      label="Handy Schritt für Schritt"
-      hint="Neue Apps kommen mit Peters Quests dazu, aus heißt alle sofort."
-      checked={phoneStepsEnabled(state)}
-      onChange={(enabled) => dispatch({ type: 'quests.setPhoneSteps', payload: { enabled } })}
-    />
-  );
-}
-
-registerSlot('core.settings', {
-  id: 'quests.phoneSteps',
-  title: 'Einstieg',
-  icon: 'target',
-  color: 'brand',
-  order: 6,
-  component: PhoneStepsSettings,
-  // Nach dem Verkauf gibt es die Apps aus Deutschland nicht mehr, da gibt es nichts freizuschalten.
-  hiddenWhen: isBusinessSold,
-});
+// Einstellungen › Einstieg gehört seit Auftrag 46b dem Tutorial („Tutorial beenden“); Handy Schritt für Schritt
+// über die Quests ist aus (der Rückbau kommt mit 46d).
 
 /**
  * Startbildschirm, solange Apps fehlen (Handy Schritt für Schritt): Peters Quest als Zeile, damit der leere

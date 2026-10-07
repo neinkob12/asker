@@ -19,7 +19,10 @@
 //   J4: atSpot(spot) („am Ebertplatz“, „an der Uni-Wiese“), atSpotStart(spot) (Satzanfang), spotVars(spot)
 //   (Platzhalter {spot}, {atSpot}, {AtSpot} für texts.pick). Nie „am ${spot.name}“ schreiben.
 // Befehle: 'spots.unlock', 'spots.found' (mit kind), Auftrag 23: 'spots.upgrade', 'spots.move', 'spots.rename',
-//   'spots.close'
+//   'spots.close', Auftrag 46b: 'spots.lock' (einen offenen Spot wieder sperren, nur solange dort niemand steht und
+//   nichts verkauft wurde; das Tutorial sperrt damit am Anfang alle bis auf den Neumarkt)
+// Tutorial (Auftrag 46b): lockedSpots und getAllSpots zeigen nur Spots, die tutorialSpotOpen erlaubt; der Preis fürs
+//   Freischalten kommt aus unlockCostOf(state, spot) (tutorialSpotCost geht vor); Ausbau und Gründen fragen tutorialAllows.
 // Ereignisse: 'spots.unlocked', 'spots.founded', Auftrag 23: 'spots.upgraded', 'spots.moved', 'spots.closed'
 
 import {
@@ -36,7 +39,10 @@ import {
   wallet,
 } from '../../core';
 import { isCityLive, isCityUnlocked } from '../city';
+import { playerSpot } from '../customers';
+import { DAYS_KEPT, spotResult } from '../finance';
 import { activeRunnerAt, assign, getStaff } from '../staff';
+import { tutorialAllows, tutorialSpotCost, tutorialSpotOpen } from '../tutorial';
 import { getVeedel, veedelAt, veedelCity, veedelName } from '../veedel';
 import { getWeather, isPrecipitation } from '../weather';
 import {
@@ -151,6 +157,8 @@ declare module '../../core' {
     'spots.rename': { spotId: string; name: string };
     /** Eigenen Spot aufgeben: Leute dort werden frei, Stammkunden wechseln (customers). */
     'spots.close': { spotId: string };
+    /** Einen offenen vorgegebenen Spot wieder sperren (Auftrag 46b, Tutorial). */
+    'spots.lock': { spotId: string };
   }
   interface GameEvents {
     'spots.unlocked': { spotId: string; veedelId: string };
@@ -158,6 +166,7 @@ declare module '../../core' {
     'spots.upgraded': { spotId: string; upgrade: SpotUpgradeId };
     'spots.moved': { spotId: string; fromVeedelId: string; veedelId: string };
     'spots.closed': { spotId: string; veedelId: string; lng: number; lat: number };
+    'spots.locked': { spotId: string; veedelId: string };
   }
 }
 
@@ -246,9 +255,18 @@ function activeSpots(state: GameState): readonly Spot[] {
   return spots;
 }
 
-/** Alle bekannten Spots, auch die noch gesperrten. */
+/** Alle bekannten Spots, auch die noch gesperrten (im Tutorial nur die, die es schon anbietet, Auftrag 46b). */
 export function getAllSpots(state: GameState): readonly Spot[] {
-  return [...presetSpots(), ...state.modules.spots.custom];
+  const unlocked = state.modules.spots.unlocked;
+  return [
+    ...presetSpots().filter((s) => unlocked.includes(s.id) || tutorialSpotOpen(state, s.id)),
+    ...state.modules.spots.custom,
+  ];
+}
+
+/** Preis fürs Freischalten: im Tutorial der Preis der Stufe (Auftrag 46b), sonst der des Spots. */
+export function unlockCostOf(state: GameState, spot: Pick<Spot, 'id' | 'unlockCost'>): number {
+  return tutorialSpotCost(state, spot.id) ?? spot.unlockCost ?? 0;
 }
 
 /** Spot nach ID, auch gesperrte (für Namen und Veedel). Ob dort verkauft wird: isSpotActive. */
@@ -421,7 +439,8 @@ export function isSpotActive(state: GameState, id: string): boolean {
 }
 
 export function lockedSpots(state: GameState): Spot[] {
-  return presetSpots().filter((s) => !state.modules.spots.unlocked.includes(s.id));
+  // Auftrag 46b: Das Tutorial bietet Spots erst nach und nach an.
+  return presetSpots().filter((s) => !state.modules.spots.unlocked.includes(s.id) && tutorialSpotOpen(state, s.id));
 }
 
 export function customSpots(state: GameState): readonly Spot[] {
@@ -456,7 +475,8 @@ function unlock(ctx: Ctx, spotId: string): CommandResult {
   if (!isCityUnlocked(ctx.state, spotCity(spot))) return { ok: false, reason: 'In dieser Stadt bist du noch nicht.' };
   const state = ctx.state.modules.spots;
   if (state.unlocked.includes(spotId)) return { ok: false, reason: 'Der Spot ist schon offen.' };
-  const cost = spot.unlockCost ?? 0;
+  if (!tutorialSpotOpen(ctx.state, spotId)) return { ok: false, reason: 'Diesen Spot gibt es noch nicht.' };
+  const cost = unlockCostOf(ctx.state, spot);
   if (!wallet.pay(ctx, cost, 'dirty', `Spot ${spot.name}`, { category: 'expansion', spotId: spot.id }))
     return { ok: false, reason: 'Nicht genug Geld.' };
   state.unlocked.push(spotId);
@@ -468,9 +488,34 @@ function unlock(ctx: Ctx, spotId: string): CommandResult {
   return { ok: true };
 }
 
+/**
+ * Einen offenen vorgegebenen Spot wieder sperren (Auftrag 46b): nur, solange dort niemand steht (keine Leute, nicht du
+ * selbst) und nichts verkauft wurde (Bekanntheit unberührt). Kein Geld zurück.
+ */
+function lock(ctx: Ctx, spotId: string): CommandResult {
+  const spot = presetById(spotId);
+  if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
+  const state = ctx.state.modules.spots;
+  if (!state.unlocked.includes(spotId)) return { ok: false, reason: 'Der Spot ist schon gesperrt.' };
+  if (getStaff(ctx.state, { spotId, status: 'active' }).length > 0 || playerSpot(ctx.state) === spotId) {
+    return { ok: false, reason: 'Da steht noch jemand.' };
+  }
+  if (spotSalesSoFar(ctx.state, spotId) > 0) return { ok: false, reason: 'Hier wurde schon verkauft.' };
+  state.unlocked = state.unlocked.filter((id) => id !== spotId);
+  ctx.emit('spots.locked', { spotId, veedelId: spot.veedelId });
+  return { ok: true };
+}
+
+/** Verkäufe an diesem Spot bisher (Kasse). Nur in Funktionen, Ordnerregel 6. */
+function spotSalesSoFar(state: GameState, spotId: string): number {
+  return spotResult(state, spotId, DAYS_KEPT + 1).sales;
+}
+
 function found(ctx: Ctx, payload: { lng: number; lat: number; name?: string; kind?: SpotKind }): CommandResult {
   const { lng, lat } = payload;
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return { ok: false, reason: 'Ungültiger Ort.' };
+  // Auftrag 46b: im Tutorial nicht (der Shop kommt mit 46e).
+  if (!tutorialAllows(ctx.state, 'spots.found')) return { ok: false, reason: 'Dazu kommst du später.' };
   const kind = payload.kind ?? 'corner';
   const type = SPOT_TYPES[kind];
   if (!type?.foundable) return { ok: false, reason: 'So einen Spot kannst du nicht selbst gründen.' };
@@ -520,6 +565,8 @@ function ownSpot(ctx: Ctx, spotId: string): Spot | string {
 }
 
 function upgrade(ctx: Ctx, spotId: string, id: SpotUpgradeId): CommandResult {
+  // Auftrag 46b: im Tutorial nicht (der Ausbau fällt mit 46d weg).
+  if (!tutorialAllows(ctx.state, 'spots.upgrade')) return { ok: false, reason: 'Dazu kommst du später.' };
   const spot = getSpot(ctx.state, spotId);
   const def = SPOT_UPGRADES[id];
   if (!spot || !isSpotActive(ctx.state, spotId)) return { ok: false, reason: 'Diesen Spot hast du nicht.' };
@@ -641,6 +688,7 @@ export default defineModule({
     'spots.move': (ctx, payload) => move(ctx, payload),
     'spots.rename': (ctx, { spotId, name }) => rename(ctx, spotId, name),
     'spots.close': (ctx, { spotId }) => close(ctx, spotId),
+    'spots.lock': (ctx, { spotId }) => lock(ctx, spotId),
   },
   on: {
     'sale.completed': (ctx, { spotId, amount }) => grow(ctx, spotId, Math.max(0, amount) * AWARENESS_PER_UNIT),

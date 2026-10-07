@@ -59,6 +59,7 @@ import {
   setWage,
   staffContact,
 } from '../staff';
+import { tutorialAllows } from '../tutorial';
 import { getVeedel, veedelName } from '../veedel';
 import { tick as lieutenantTick, onRaidWarning } from './ai';
 import { appointCapo, capoDemand, capoTick, cleanupCapos, dismissCapo, isCapo } from './capo';
@@ -403,6 +404,8 @@ export function handlesAbsence(state: GameState, lieutenantId: string, staffId: 
 
 /** Kann die Person Leutnant werden? */
 export function canBeLieutenant(state: GameState, staffId: string): CommandResult {
+  // Auftrag 46b: Leutnants gibt es im Tutorial erst ab Stufe 7.
+  if (!tutorialAllows(state, 'staff.lieutenants')) return { ok: false, reason: 'Dazu kommst du später.' };
   const m = getStaffMember(state, staffId);
   if (!m || !isEmployed(state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
   // Arbeiter und Gärtner (Auftrag 42) bleiben auf ihrer Finca.

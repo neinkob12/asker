@@ -66,7 +66,7 @@ function StandHere(props: { spotId: string }) {
   const away = isPlayerAway(state);
   const stand = (spotId: string | null) => dispatch({ type: 'customers.standAt', payload: { spotId } });
   return (
-    <Group title="Selbst verkaufen" icon="runner" color="brand">
+    <Group data-tour="spot.sell" title="Selbst verkaufen" icon="runner" color="brand">
       <List>
         {here ? (
           <ListItem

@@ -74,6 +74,7 @@ import {
   hasPlayerPresence,
   PLAYER_FACTION,
 } from '../territory';
+import { tutorialAllows } from '../tutorial';
 import { allVeedel, getVeedel, veedelAt, veedelCity, veedelName } from '../veedel';
 import {
   CHASE_CHANCE,
@@ -1117,7 +1118,13 @@ function tick(ctx: Ctx): void {
   updateTier(ctx);
   for (const [veedelId, plan] of Object.entries(police.plannedRaids).sort()) {
     // In einer schlafenden Stadt wartet die Razzia, bis du wieder hinschaust; im Karneval auch (Etappe 7).
-    if (plan.at > ctx.now || !isVeedelLive(state, veedelId) || !raidsAllowed(state, veedelCity(veedelId))) continue;
+    if (
+      plan.at > ctx.now ||
+      !isVeedelLive(state, veedelId) ||
+      !raidsAllowed(state, veedelCity(veedelId)) ||
+      !tutorialAllows(state, 'police.raids')
+    )
+      continue;
     delete police.plannedRaids[veedelId];
     raidPlayer(ctx, veedelId, plan);
   }
@@ -1134,7 +1141,9 @@ function tick(ctx: Ctx): void {
   const city = activeCity(state);
   const tier = tierOf(state, city);
   // Stadt-Events (Etappe 7): Im Karneval plant die Polizei keine Razzien gegen dich.
-  const raidsOn = raidsAllowed(state, city);
+  // Auftrag 46b: Im Tutorial gibt es Razzien und Kontrollen erst ab Stufe 9.
+  const raidsOn = raidsAllowed(state, city) && tutorialAllows(state, 'police.raids');
+  const checksOn = tutorialAllows(state, 'police.checks');
   // Großrazzia nur gegen Großhändler: je heißer deine Veedel im Schnitt, desto eher.
   // Eine Großrazzia, die in einer schlafenden Stadt wartet, hält die Stadt, in der du bist, nicht frei (Auftrag 43):
   // Es gibt nur einen Platz, eine neue Planung ersetzt sie.
@@ -1181,7 +1190,7 @@ function tick(ctx: Ctx): void {
       }
     }
 
-    if (playerThere && ctx.now >= (police.checkReadyAt[v.id] ?? 0)) {
+    if (playerThere && checksOn && ctx.now >= (police.checkReadyAt[v.id] ?? 0)) {
       const factor = cityChecks * (night ? (v.nightlife ?? 1) : 1) * eventFactor(state, 'checks', { veedelId: v.id });
       // Stehst du selbst dort an einem Spot, trifft die Kontrolle dich (dann auch mit Verfolgungsjagd), und sie kommt
       // schon bei weniger Heat (ein Wurf wie sonst auch: die Würfelfolge bleibt).
@@ -1193,7 +1202,7 @@ function tick(ctx: Ctx): void {
     }
   }
   // Auftrag 44: Zivilfahnder am Spot, an dem du selbst stehst (fester Wurf, verschiebt die Würfel oben nicht).
-  maybeStartUndercover(ctx, (veedelId) => getHeat(ctx.state, veedelId));
+  if (tutorialAllows(state, 'police.undercover')) maybeStartUndercover(ctx, (veedelId) => getHeat(ctx.state, veedelId));
 }
 
 /** Anlässe, bei denen die Polizei selbst die Gegenseite ist. */

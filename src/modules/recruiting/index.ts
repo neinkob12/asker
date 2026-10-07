@@ -64,6 +64,7 @@ import {
   traitName,
 } from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
+import { tutorialAllowsRole } from '../tutorial';
 import {
   CANDIDATE_LIFETIME,
   CONTACT_HIRE_COST_DAYS,
@@ -184,7 +185,10 @@ function candidateCity(c: Candidate): string {
 
 /** Kandidaten einer Stadt (ohne Angabe die aktive): Bewerber aus dem Pool und Kontakte. */
 export function getCandidates(state: GameState, cityId = activeCity(state)): readonly Candidate[] {
-  return state.modules.recruiting.candidates.filter((c) => candidateCity(c) === cityId);
+  // Auftrag 46b: Im Tutorial nur Rollen, die seine Stufe schon kennt.
+  return state.modules.recruiting.candidates.filter(
+    (c) => candidateCity(c) === cityId && tutorialAllowsRole(state, c.role),
+  );
 }
 
 export function getCandidate(state: GameState, id: string): Candidate | undefined {
@@ -472,6 +476,8 @@ function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null,
   if (candidateCity(c) !== activeCity(ctx.state)) {
     return { ok: false, reason: `${c.name} sucht in ${cityName(candidateCity(c))} Arbeit.` };
   }
+  // Auftrag 46b: Im Tutorial kommen die Rollen nach und nach.
+  if (!tutorialAllowsRole(ctx.state, c.role)) return { ok: false, reason: 'Dazu kommst du später.' };
   // Kommt die Person an einen Spot, gehört das Handgeld zu dessen Kosten (Kasse: Pro Spot und Pro Leutnant).
   const tag = assignment?.kind === 'spot' ? { category: 'hiring' as const, spotId: assignment.targetId } : 'hiring';
   if (!wallet.pay(ctx, c.hireCost, 'dirty', `Handgeld ${c.name}`, tag)) {
@@ -501,6 +507,7 @@ function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null,
 function search(ctx: Ctx, role?: SearchRole): CommandResult {
   const s = ctx.state.modules.recruiting;
   if (role && !SEARCH_ROLES.some((r) => r.value === role)) return { ok: false, reason: 'Diese Rolle gibt es nicht.' };
+  if (role && !tutorialAllowsRole(ctx.state, role)) return { ok: false, reason: 'Dazu kommst du später.' }; // Auftrag 46b
   if (ctx.now < s.searchReadyAt) {
     return { ok: false, reason: `Du hast gerade erst rumgefragt. Wieder ab ${clock.formatTime(s.searchReadyAt)}.` };
   }
