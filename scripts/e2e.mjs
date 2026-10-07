@@ -464,8 +464,20 @@ async function run() {
     };
     await closeFlyouts();
     await page.evaluate(() => window.koeln.runtime.api.openPhone('tab:staff'));
-    await centered(page.locator('.phone').getByText(candidate, { exact: true }).first());
-    await centered(page.getByText('Gespräch führen', { exact: true }));
+    // Der Tipp auf den Bewerber öffnet sein Blatt. Landet er, während die Seite noch hereinfährt (CI am
+    // Handy-Bildschirm), geht das Blatt nicht auf: dann noch einmal tippen, statt 30 s auf „Gespräch führen“ zu warten.
+    const interview = page.getByText('Gespräch führen', { exact: true });
+    for (let attempt = 1; ; attempt++) {
+      await centered(page.locator('.phone').getByText(candidate, { exact: true }).first());
+      try {
+        await interview.waitFor({ timeout: 5000 });
+        break;
+      } catch (error) {
+        if (attempt >= 3) throw error;
+        await page.waitForTimeout(500);
+      }
+    }
+    await centered(interview);
     await page.waitForSelector('.mg-intro');
     assert.equal(await page.locator('.mg-overlay').count(), 1, 'Rahmen offen');
     // Spielzeit in Echtzeit (headless mit wenigen Bildern pro Sekunde wäre sie sonst gedeckelt und langsam).
