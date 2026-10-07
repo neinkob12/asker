@@ -10,9 +10,21 @@ import {
   serializeSave,
 } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
+import { activeChallenge, MINIGAME_KINDS, MINIGAME_TIMEOUT } from '../minigames';
 import { enlist, generateProfile, getStaff, getStaffMember, runnerAt, STAT_KEYS, type StaffMember } from '../staff';
 import { POOL_START, SEARCH_COST, SEARCH_COUNT } from './config';
-import { type Candidate, getCandidate, getCandidates, getContacts, getPool, poolMax, searchPreview } from './index';
+import {
+  type Candidate,
+  getCandidate,
+  getCandidates,
+  getContacts,
+  getPool,
+  hiddenStatToReveal,
+  interviewOutcome,
+  knownTraits,
+  poolMax,
+  searchPreview,
+} from './index';
 
 function quietGame(seed = 1): Simulation {
   const sim = createTestGame({ seed });
@@ -265,7 +277,7 @@ describe('recruiting: Spielstände aus dem Fundament', () => {
     const loaded = loadSimulation(file.state, sim.modules);
     expect(getCandidate(loaded.state, 'alt-kurier')).toBeUndefined();
     expect(getCandidate(loaded.state, keep.id)).toBeDefined();
-    expect(loaded.state.moduleVersions.recruiting).toBe(5);
+    expect(loaded.state.moduleVersions.recruiting).toBe(6);
   });
 
   it('Version 3 → 4 (Auftrag 34): Bewerber ohne Eigenschaften bekommen zwei bis drei, bei jedem Laden dieselben', () => {
@@ -315,5 +327,119 @@ describe('Bewerber pro Stadt (Auftrag 43)', () => {
     expect(hire.ok).toBe(false);
     expect(sim.dispatch({ type: 'recruiting.hire', payload: { candidateId: hamburg[0].id } }).ok).toBe(true);
     expect(sim.state.modules.staff.members.find((m) => m.name === hamburg[0].name)?.cityId).toBe('hamburg');
+  });
+});
+
+describe('Bewerbungsgespräch (Auftrag 44, Teil 9)', () => {
+  function interviewed(sim: Simulation, c: Candidate): number {
+    const result = sim.dispatch({ type: 'recruiting.interview', payload: { candidateId: c.id } });
+    expect(result.ok).toBe(true);
+    const challenge = activeChallenge(sim.state);
+    expect(challenge).toMatchObject({ kind: 'interview', origin: { module: 'recruiting', ref: c.id } });
+    return challenge?.id ?? -1;
+  }
+
+  it('neue Bewerber zeigen keine Eigenschaften, alte Stände (Migration 6) alle', () => {
+    const sim = quietGame();
+    for (const c of getPool(sim.state)) {
+      expect(c.revealedTraits).toEqual([]);
+      expect(knownTraits(c)).toEqual([]);
+    }
+    const state = structuredClone(sim.state) as GameState;
+    for (const c of state.modules.recruiting.candidates) delete c.revealedTraits;
+    state.moduleVersions.recruiting = 5;
+    const loaded = loadSimulation(parseSaveFile(serializeSave(createSaveFile(state, 'alt', 0))).state, sim.modules);
+    for (const c of getPool(loaded.state)) {
+      expect(c.revealedTraits).toEqual(c.traits);
+      expect(knownTraits(c)).toEqual(c.traits);
+    }
+  });
+
+  it('startet das Minispiel mit den Angaben zur Person, einmal je Bewerber', () => {
+    expect(MINIGAME_KINDS.interview.ready).toBe(true);
+    const sim = quietGame();
+    const c = getPool(sim.state)[0];
+    interviewed(sim, c);
+    const challenge = activeChallenge(sim.state);
+    expect(challenge?.params).toMatchObject({
+      candidateId: c.id,
+      name: c.name,
+      age: c.age,
+      traits: c.traits,
+      known: [],
+    });
+    expect(challenge?.difficulty).toBeGreaterThan(0);
+    expect(getCandidate(sim.state, c.id)?.interviewed).toBe(true);
+    const again = sim.dispatch({ type: 'recruiting.interview', payload: { candidateId: c.id } });
+    expect(again.ok).toBe(false);
+    expect(sim.dispatch({ type: 'recruiting.interview', payload: { candidateId: 'gibtsnicht' } }).ok).toBe(false);
+  });
+
+  it('richtig erkannte Eigenschaften werden sichtbar, falsche nicht; gut gelaufen zeigt einen Wert', () => {
+    const sim = quietGame();
+    const c = getPool(sim.state)[0];
+    const id = interviewed(sim, c);
+    const hiddenBefore = visibleKeys(c).length;
+    const wrong = (['family', 'drinker', 'gambler', 'loyal', 'nimble'] as const).find((t) => !c.traits.includes(t));
+    const picks = [c.traits[0], wrong ?? 'none', 'unsinn'];
+    expect(sim.dispatch({ type: 'minigames.finish', payload: { id, score: 2 / 3, picks } }).ok).toBe(true);
+    const after = getCandidate(sim.state, c.id) as Candidate;
+    expect(knownTraits(after)).toEqual([c.traits[0]]);
+    expect(visibleKeys(after).length).toBe(hiddenBefore + 1);
+    expect(sim.state.journal.at(-1)?.text).toContain(`Gespräch mit ${c.name}`);
+    // Nach der Einstellung ist alles sichtbar wie bisher.
+    const hired = sim.dispatch({ type: 'recruiting.hire', payload: { candidateId: c.id } });
+    if (!hired.ok) throw new Error(hired.reason);
+    const m = getStaffMember(sim.state, (hired.data as { staffId: string }).staffId) as StaffMember;
+    expect(m.traits).toEqual(c.traits);
+    expect(m.knownStats.length).toBe(hiddenBefore + 1);
+  });
+
+  it('schlecht gelaufen: nur Eigenschaften, kein Wert; Frist ohne Oberfläche: nichts', () => {
+    const sim = quietGame();
+    const [a, b] = getPool(sim.state);
+    const id = interviewed(sim, a);
+    sim.dispatch({ type: 'minigames.finish', payload: { id, score: 1 / 3, picks: [a.traits[0]] } });
+    expect(knownTraits(getCandidate(sim.state, a.id) as Candidate)).toEqual([a.traits[0]]);
+    expect(visibleKeys(getCandidate(sim.state, a.id) as Candidate)).toEqual(visibleKeys(a));
+    interviewed(sim, b);
+    sim.advance(MINIGAME_TIMEOUT + 60);
+    expect(activeChallenge(sim.state)).toBeUndefined();
+    const after = getCandidate(sim.state, b.id) as Candidate;
+    expect(knownTraits(after)).toEqual([]);
+    expect(visibleKeys(after)).toEqual(visibleKeys(b));
+  });
+
+  it('Rechte Hand: geschafft deckt eine Eigenschaft auf, sonst nichts', () => {
+    const sim = quietGame();
+    const [a, b] = getPool(sim.state);
+    const finished = (c: Candidate, won: boolean) =>
+      sim.ctx('minigames').emit('minigame.finished', {
+        id: 99,
+        kind: 'interview',
+        origin: { module: 'recruiting', ref: c.id },
+        cityId: 'koeln',
+        score: won ? 0.7 : 0.25,
+        won,
+        by: 'rightHand',
+        picks: [],
+      });
+    finished(a, true);
+    finished(b, false);
+    sim.advance(1);
+    expect(knownTraits(getCandidate(sim.state, a.id) as Candidate)).toEqual([a.traits[0]]);
+    expect(knownTraits(getCandidate(sim.state, b.id) as Candidate)).toEqual([]);
+  });
+
+  it('reine Folge: interviewOutcome und hiddenStatToReveal', () => {
+    const sim = quietGame();
+    const c = getPool(sim.state)[0];
+    const stat = hiddenStatToReveal(c);
+    expect(stat && c.visibleStats[stat]).toBeUndefined();
+    expect(interviewOutcome(c, { by: 'timeout', won: false, picks: c.traits })).toEqual({ traits: [], stat: null });
+    expect(interviewOutcome(c, { by: 'player', won: true, picks: [...c.traits, ...c.traits] })).toEqual({
+      traits: c.traits,
+      stat,
+    });
   });
 });

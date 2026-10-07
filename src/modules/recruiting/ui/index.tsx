@@ -20,6 +20,7 @@ import {
   Select,
   Sheet,
   useGame,
+  useUi,
 } from '../../../ui';
 import { activeCity } from '../../city';
 import { getSpots } from '../../spots';
@@ -31,12 +32,15 @@ import {
   STAT_NAMES,
   type StaffRole,
   TRAITS,
+  type TraitId,
   traitName,
 } from '../../staff';
 import {
   type Candidate,
+  canInterview,
   getContacts,
   getPool,
+  knownTraits,
   SEARCH_ROLES,
   type SearchRole,
   SOURCE_NAMES,
@@ -74,12 +78,29 @@ function matchesFilter(c: Candidate, filter: RoleFilter): boolean {
   return c.role === filter;
 }
 
+/** Chip einer Eigenschaft (Farbe nach gut, schlecht oder beides). */
+function traitChip(t: TraitId, name: string) {
+  return {
+    label: traitName(t, name),
+    icon: TRAITS[t].icon,
+    color:
+      TRAITS[t].tone === 'good'
+        ? ('money' as const)
+        : TRAITS[t].tone === 'bad'
+          ? ('danger' as const)
+          : ('warn' as const),
+    title: TRAITS[t].hint,
+  };
+}
+
 /** Eine Person als Zeile: Avatar, Name, Rolle und Level als Chips, Handgeld, Ablauf; Lohn rechts. */
 function CandidateRow(props: { candidate: Candidate; onOpen: () => void }) {
   const { state } = useGame();
   const c = props.candidate;
   const left = c.expiresAt - state.time;
   const look = ROLE_LOOK[c.role];
+  const known = knownTraits(c);
+  const hidden = (c.traits ?? []).length - known.length;
   return (
     <ListItem onClick={props.onOpen} value={`${formatEuro(c.wage)}/Tag`}>
       <span class="ui-item">
@@ -99,12 +120,72 @@ function CandidateRow(props: { candidate: Candidate; onOpen: () => void }) {
               { label: `Level ${c.level}` },
               { label: `Handgeld ${formatEuro(c.hireCost)}`, icon: 'coins', color: 'money' },
               c.source !== 'pool' && { label: SOURCE_NAMES[c.source], icon: 'star', color: 'brand' },
+              ...known.map((t) => traitChip(t, c.name)),
+              hidden > 0 && { label: '?', icon: 'sparkles', color: 'system', title: 'Eigenschaften noch unbekannt' },
               { label: `noch ${clock.formatDuration(left)}`, icon: 'timer', color: left < 6 * 60 ? 'warn' : 'system' },
             ]}
           />
         </span>
       </span>
     </ListItem>
+  );
+}
+
+/**
+ * Eigenschaften im Blatt (Auftrag 44, Teil 9): nur die im Gespräch erkannten, sonst „?“ (wie bei den Werten). Dazu
+ * „Gespräch führen“ (einmal je Person), das das Bewerbungsgespräch als Minispiel startet.
+ */
+function Traits(props: { candidate: Candidate; onInterview: () => void }) {
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const c = props.candidate;
+  const known = knownTraits(c);
+  const hidden = (c.traits ?? []).length - known.length;
+  const allowed = canInterview(state, c);
+  const note = c.interviewed
+    ? 'Gespräch geführt. Den Rest merkst du nach der Einstellung.'
+    : hidden > 0
+      ? 'Was in der Person steckt, zeigt erst ein Gespräch.'
+      : undefined;
+  return (
+    <Group title="Eigenschaften" icon="sparkles" color="people" note={note}>
+      <Chips
+        items={[
+          ...known.map((t) => traitChip(t, c.name)),
+          ...Array.from({ length: hidden }, () => ({
+            label: '?',
+            icon: 'sparkles',
+            color: 'system' as const,
+            title: 'Noch unbekannt',
+          })),
+        ]}
+      />
+      {known.length > 0 && (
+        <Disclosure>
+          {known.map((t) => (
+            <p key={t}>
+              <strong>{traitName(t, c.name)}:</strong> {TRAITS[t].hint}
+            </p>
+          ))}
+        </Disclosure>
+      )}
+      {!c.interviewed && allowed.ok && (
+        <List>
+          <ListItem
+            action
+            onClick={() => {
+              const started = dispatch({ type: 'recruiting.interview', payload: { candidateId: c.id } });
+              if (!started.ok) return;
+              // Das Gespräch läuft über der Karte: Blatt und Handy gehen zu.
+              props.onInterview();
+              ui.closePhone();
+            }}
+          >
+            <ItemContent icon="message" color="chat" title="Gespräch führen" meta="Drei Fragen, einmal pro Person" />
+          </ListItem>
+        </List>
+      )}
+    </Group>
   );
 }
 
@@ -159,6 +240,7 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
           <p class="rc-sheet__text">
             {c.note} {c.background}
           </p>
+          <Traits candidate={c} onInterview={close} />
           <Group
             title="Werte"
             icon="gauge"
@@ -172,25 +254,6 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
               }))}
             />
           </Group>
-          {(c.traits ?? []).length > 0 && (
-            <Group title="Eigenschaften" icon="sparkles" color="people">
-              <Chips
-                items={(c.traits ?? []).map((t) => ({
-                  label: traitName(t, c.name),
-                  icon: TRAITS[t].icon,
-                  color: TRAITS[t].tone === 'good' ? 'money' : TRAITS[t].tone === 'bad' ? 'danger' : 'warn',
-                  title: TRAITS[t].hint,
-                }))}
-              />
-              <Disclosure>
-                {(c.traits ?? []).map((t) => (
-                  <p key={t}>
-                    <strong>{traitName(t, c.name)}:</strong> {TRAITS[t].hint}
-                  </p>
-                ))}
-              </Disclosure>
-            </Group>
-          )}
           <Group title="Konditionen" icon="coinEuro" color="money">
             <List>
               <ListItem value={`${formatEuro(c.wage)}/Tag`}>

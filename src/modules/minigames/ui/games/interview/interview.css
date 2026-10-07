@@ -1,0 +1,776 @@
+/* Bewerbungsgespräch (Auftrag 44, Teil 9). Hinterzimmer mit Lampe über dem Tisch, gegenüber die Person, links die Akte,
+   rechts das Gespräch, unten Fragekarten bzw. Deutungen. Look Glas, Farben nur über Tokens. Schmal (Handy): alles
+   untereinander. */
+
+.iv {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  container-type: size;
+  container-name: iv;
+  font-family: var(--font-hud);
+  color: var(--hud-ink);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Größen hängen an der Bühne (Container); der Container selbst kann nicht abfragen, deshalb an den Kindern. */
+.iv > * {
+  --iv-face: min(380px, 50cqh, 36cqw);
+  --iv-table: 60cqh;
+}
+
+/* ---------------------------------------------------------------- Raum */
+.iv-room {
+  position: absolute;
+  inset: 0;
+}
+.iv-room__wall {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 46% 52% at 50% 28%,
+      color-mix(in srgb, var(--cat-warn-a) 16%, transparent) 0%,
+      transparent 70%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--cat-warn-b) 14%, var(--hud-glass-solid)) 0%,
+      color-mix(in srgb, var(--cat-system-b) 18%, var(--hud-glass-solid)) 60%
+    );
+}
+/* Fugen in der Wand: Kacheln wie in einem alten Hinterzimmer. */
+.iv-room__wall::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 calc(100% - var(--iv-table)) 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 79px, color-mix(in srgb, var(--hud-ink) 5%, transparent) 79px 80px),
+    repeating-linear-gradient(0deg, transparent 0 39px, color-mix(in srgb, var(--hud-ink) 5%, transparent) 39px 40px);
+  mask-image: radial-gradient(ellipse 70% 80% at 50% 30%, black 20%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 80% at 50% 30%, black 20%, transparent 80%);
+}
+.iv-room__window {
+  position: absolute;
+  left: 9%;
+  top: 16%;
+  width: min(150px, 14cqw);
+  opacity: 0.8;
+}
+.iv-room__pane {
+  fill: color-mix(in srgb, var(--cat-law-b) 40%, var(--hud-glass-solid));
+  stroke: color-mix(in srgb, var(--hud-ink) 18%, transparent);
+  stroke-width: 3;
+}
+.iv-room__bars {
+  stroke: var(--hud-glass-solid);
+  stroke-width: 4;
+  fill: none;
+}
+.iv-room__clock {
+  position: absolute;
+  left: 63%;
+  top: 14%;
+  width: min(54px, 6cqw);
+  opacity: 0.85;
+}
+.iv-room__clock-face {
+  fill: color-mix(in srgb, var(--hud-ink) 12%, var(--hud-glass-solid));
+  stroke: color-mix(in srgb, var(--hud-ink) 30%, transparent);
+  stroke-width: 2;
+}
+.iv-room__clock-hand {
+  stroke: var(--hud-ink-2);
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+}
+.iv-room__lamp {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 150px;
+  transform: translateX(-50%);
+  overflow: visible;
+}
+.iv-room__cord {
+  stroke: var(--hud-glass-solid);
+  stroke-width: 2;
+}
+.iv-room__shade {
+  fill: color-mix(in srgb, var(--cat-goods-b) 50%, var(--hud-glass-solid));
+}
+.iv-room__bulb {
+  fill: var(--cat-warn-a);
+  filter: drop-shadow(0 0 10px var(--cat-warn-a));
+}
+/* Lichtkegel der Lampe bis auf den Tisch. */
+.iv-room__cone {
+  position: absolute;
+  left: 50%;
+  top: 70px;
+  width: min(760px, 80cqw);
+  height: calc(var(--iv-table) + 10cqh);
+  transform: translateX(-50%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cat-warn-a) 20%, transparent) 0%,
+    color-mix(in srgb, var(--cat-warn-a) 6%, transparent) 70%,
+    transparent 100%
+  );
+  clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- Person und Tisch */
+.iv-person {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--iv-table) - var(--iv-face) * 0.86);
+  width: var(--iv-face);
+  height: var(--iv-face);
+  transform: translateX(-50%);
+  filter: drop-shadow(0 18px 30px color-mix(in srgb, var(--hud-glass-solid) 80%, transparent));
+}
+.iv-person > svg,
+.iv-person > * {
+  width: 100%;
+  height: 100%;
+}
+.iv:not(.is-reduced) .iv-person {
+  animation: iv-breathe 4.2s ease-in-out infinite;
+}
+.iv:not(.is-reduced) .iv-person.is-talking {
+  animation: iv-talk 0.32s ease-in-out infinite alternate;
+}
+@keyframes iv-breathe {
+  50% {
+    transform: translateX(-50%) translateY(2px) scale(1.006);
+  }
+}
+@keyframes iv-talk {
+  to {
+    transform: translateX(-50%) translateY(-2px) rotate(-0.6deg);
+  }
+}
+
+.iv-table {
+  position: absolute;
+  left: -4%;
+  right: -4%;
+  top: var(--iv-table);
+  bottom: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cat-goods-b) 34%, var(--hud-glass-solid)) 0%,
+    color-mix(in srgb, var(--cat-goods-b) 16%, var(--hud-glass-solid)) 40%,
+    var(--hud-glass-solid) 100%
+  );
+  border-top: 2px solid color-mix(in srgb, var(--cat-warn-a) 30%, transparent);
+  box-shadow: 0 -12px 30px color-mix(in srgb, var(--hud-glass-solid) 70%, transparent);
+}
+.iv-table__ashtray {
+  position: absolute;
+  right: 22%;
+  top: 4%;
+  width: 72px;
+}
+.iv-table__tray {
+  fill: color-mix(in srgb, var(--hud-ink) 22%, var(--hud-glass-solid));
+}
+.iv-table__tray-in {
+  fill: var(--hud-glass-solid);
+}
+.iv-table__cig {
+  fill: color-mix(in srgb, var(--hud-ink) 80%, transparent);
+}
+.iv-table__smoke {
+  position: absolute;
+  right: calc(22% + 6px);
+  top: calc(4% - 70px);
+  width: 30px;
+  height: 80px;
+  pointer-events: none;
+}
+.iv-table__smoke span {
+  position: absolute;
+  bottom: 0;
+  left: 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--hud-ink) 30%, transparent);
+  filter: blur(4px);
+  animation: iv-smoke 3.6s ease-out infinite;
+}
+.iv-table__smoke span:nth-child(2) {
+  animation-delay: 1.8s;
+}
+@keyframes iv-smoke {
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate(8px, -70px) scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- HUD */
+.iv-hud {
+  gap: var(--space-4);
+}
+.iv-hud__round {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-hud-display);
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.iv-hud__round svg {
+  width: 18px;
+  height: 18px;
+  color: var(--cat-chat-a);
+}
+.iv-hud__score {
+  display: inline-flex;
+  gap: 6px;
+}
+.iv-hud__dot {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--hud-glass-line);
+  color: var(--hud-glass-solid);
+}
+.iv-hud__dot svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 3;
+}
+.iv-hud__dot.is-now {
+  border-color: var(--hud-gold);
+}
+.iv-hud__dot.is-right {
+  background: var(--cat-money-a);
+  border-color: var(--cat-money-a);
+}
+.iv-hud__dot.is-wrong {
+  background: var(--cat-danger-a);
+  border-color: var(--cat-danger-a);
+}
+.iv-hud__who {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.iv-hud__who strong {
+  font-family: var(--font-hud-display);
+  font-size: 16px;
+}
+.iv-hud__who span {
+  font-size: 12px;
+  color: var(--hud-ink-2);
+}
+
+/* ---------------------------------------------------------------- Akte: liegt links auf dem Tisch */
+.iv-file {
+  position: absolute;
+  left: var(--space-5);
+  top: calc(var(--iv-table) + var(--space-4));
+  max-width: calc(50% - var(--iv-face) / 2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  transform: rotate(-1.5deg);
+}
+.iv-file__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-family: var(--font-hud-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+}
+.iv-file__head svg {
+  width: 16px;
+  height: 16px;
+}
+.iv-file__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.iv-trait {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--hud-glass-fill);
+  border: 1px solid var(--hud-glass-line);
+}
+.iv-trait svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.iv-trait.is-good svg {
+  color: var(--cat-money-a);
+}
+.iv-trait.is-bad svg {
+  color: var(--cat-danger-a);
+}
+.iv-trait.is-mixed svg {
+  color: var(--cat-warn-a);
+}
+.iv-trait.is-known {
+  color: var(--hud-ink-2);
+}
+.iv-trait.is-new {
+  border-color: var(--cat-money-a);
+  background: color-mix(in srgb, var(--cat-money-a) 18%, transparent);
+  animation: iv-pop 0.45s var(--ease-out) both;
+}
+.iv-trait.is-unknown {
+  color: var(--hud-ink-2);
+  border-style: dashed;
+}
+@keyframes iv-pop {
+  0% {
+    transform: scale(1.5) rotate(-4deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.95);
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------- Gespräch */
+.iv-talk {
+  position: absolute;
+  top: 84px;
+  right: var(--space-5);
+  width: min(360px, 32cqw);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.iv-bubble {
+  position: relative;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--hud-radius-tile);
+  font-size: 16px;
+  line-height: 1.35;
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  animation: iv-in 0.28s var(--ease-out) both;
+}
+.iv-bubble.is-you {
+  align-self: flex-end;
+  max-width: 88%;
+  font-size: 14px;
+  color: var(--hud-ink-2);
+  background: var(--hud-glass);
+}
+.iv-bubble.is-them {
+  min-height: 4.2em;
+  font-size: 17px;
+  border-color: color-mix(in srgb, var(--cat-chat-a) 50%, var(--hud-glass-edge));
+}
+.iv-bubble__who {
+  display: block;
+  margin-bottom: 2px;
+  font-family: var(--font-hud-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cat-chat-a);
+}
+.iv-bubble.is-you .iv-bubble__who {
+  color: var(--hud-gold);
+}
+.iv-bubble__caret {
+  display: inline-block;
+  width: 8px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--hud-ink-2);
+  animation: iv-caret 0.8s steps(2) infinite;
+}
+@keyframes iv-caret {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes iv-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- Unten: Karten und Deutungen */
+.iv-panel {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-5);
+  width: min(900px, calc(100% - 2 * var(--space-5)));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.iv-prompt {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-hud-display);
+  font-size: 20px;
+  font-weight: 700;
+  text-shadow: 0 2px 8px var(--hud-glass-solid);
+}
+.iv-timer {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--hud-glass-fill);
+}
+.iv-timer span {
+  display: block;
+  height: 100%;
+  background: var(--hud-gold);
+  transform-origin: left center;
+}
+.iv-timer.is-urgent span {
+  background: var(--cat-danger-a);
+}
+.iv-cards,
+.iv-readings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.iv-cards li,
+.iv-readings li {
+  display: flex;
+  min-width: 0;
+}
+.iv-card,
+.iv-reading,
+.iv-skip {
+  position: relative;
+  width: 100%;
+  font: inherit;
+  color: var(--hud-ink);
+  cursor: pointer;
+  border-radius: var(--hud-radius-button);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  transition:
+    transform var(--duration-fast, 120ms) var(--ease-out),
+    background var(--duration-fast, 120ms) var(--ease-out),
+    border-color var(--duration-fast, 120ms) var(--ease-out);
+}
+.iv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 104px;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  animation: iv-deal 0.35s var(--ease-out) both;
+}
+.iv-cards li:nth-child(2) .iv-card {
+  animation-delay: 0.06s;
+}
+.iv-cards li:nth-child(3) .iv-card {
+  animation-delay: 0.12s;
+}
+@keyframes iv-deal {
+  from {
+    transform: translateY(24px) rotate(-2deg);
+    opacity: 0;
+  }
+}
+.iv-card:hover:not(:disabled),
+.iv-reading:hover:not(:disabled),
+.iv-skip:hover:not(:disabled) {
+  border-color: var(--hud-gold);
+  transform: translateY(-2px);
+}
+.iv-card:focus-visible,
+.iv-reading:focus-visible,
+.iv-skip:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 2px;
+}
+.iv-card:disabled,
+.iv-reading:disabled,
+.iv-skip:disabled {
+  cursor: default;
+}
+.iv-card__topic {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-hud-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-gold);
+}
+.iv-card .iv-card__topic svg {
+  width: 16px;
+  height: 16px;
+}
+.iv-card__text {
+  padding-right: 28px;
+  font-size: 16px;
+  line-height: 1.3;
+}
+.iv-key {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-family: var(--font-hud-display);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--hud-ink-2);
+  background: var(--hud-glass-fill);
+  border: 1px solid var(--hud-glass-line);
+}
+.iv-reading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 60px;
+  padding: var(--space-3) 40px var(--space-3) var(--space-4);
+  font-family: var(--font-hud-display);
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+  animation: iv-in 0.25s var(--ease-out) both;
+}
+.iv-reading .iv-key {
+  top: 50%;
+  transform: translateY(-50%);
+}
+.iv-panel .iv-reading svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.iv-reading.is-good svg {
+  color: var(--cat-money-a);
+}
+.iv-reading.is-bad svg {
+  color: var(--cat-danger-a);
+}
+.iv-reading.is-mixed svg {
+  color: var(--cat-warn-a);
+}
+.iv-reading.is-none svg {
+  color: var(--hud-ink-2);
+}
+.iv-reading.is-right {
+  border-color: var(--cat-money-a);
+  background: color-mix(in srgb, var(--cat-money-a) 26%, var(--hud-glass-strong));
+}
+.iv-reading.is-wrong {
+  border-color: var(--cat-danger-a);
+  background: color-mix(in srgb, var(--cat-danger-a) 26%, var(--hud-glass-strong));
+  animation: iv-shake 0.4s ease-in-out;
+}
+.iv-reading.is-off {
+  opacity: 0.45;
+}
+@keyframes iv-shake {
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+.iv-skip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  align-self: center;
+  width: auto;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-5);
+  font-size: 16px;
+  color: var(--hud-ink-2);
+}
+.iv-skip .iv-key {
+  position: static;
+}
+
+/* ---------------------------------------------------------------- Schmal (Handy): alles untereinander */
+@container iv (max-width: 640px) {
+  .iv > * {
+    --iv-face: min(200px, 24cqh, 56cqw);
+    --iv-table: calc(66px + var(--iv-face) * 0.95);
+  }
+  .iv-room__window {
+    left: 5%;
+    top: 70px;
+    width: 64px;
+  }
+  .iv-room__clock {
+    left: auto;
+    right: 5%;
+    top: 74px;
+    width: 34px;
+  }
+  .iv-room__lamp {
+    width: 96px;
+  }
+  .iv-room__cone {
+    top: 44px;
+  }
+  .iv-table__ashtray {
+    right: 6%;
+    top: 10px;
+    width: 52px;
+  }
+  .iv-table__smoke {
+    right: calc(6% + 4px);
+  }
+  .iv-hud {
+    gap: var(--space-3);
+  }
+  .iv-hud__who {
+    display: none;
+  }
+  /* Akte als Leiste unter dem Tischrand. */
+  .iv-file {
+    left: var(--space-4);
+    right: var(--space-4);
+    top: calc(var(--iv-table) + var(--space-2));
+    max-width: none;
+    padding: 6px var(--space-2);
+    gap: var(--space-2);
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    transform: none;
+  }
+  .iv-file__head {
+    margin: 0;
+    font-size: 12px;
+  }
+  .iv-file__list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .iv-trait {
+    min-height: 26px;
+    padding: 2px 8px;
+    font-size: 12px;
+  }
+  .iv-trait svg {
+    width: 14px;
+    height: 14px;
+  }
+  .iv-talk {
+    left: var(--space-4);
+    right: var(--space-4);
+    top: calc(var(--iv-table) + 48px);
+    width: auto;
+    gap: var(--space-2);
+  }
+  .iv-bubble {
+    padding: var(--space-2) var(--space-3);
+    font-size: 15px;
+  }
+  .iv-bubble.is-you {
+    font-size: 13px;
+  }
+  .iv-bubble.is-them {
+    font-size: 16px;
+    min-height: 3.4em;
+  }
+  .iv-panel {
+    bottom: var(--space-4);
+    width: calc(100% - 2 * var(--space-4));
+    gap: var(--space-2);
+  }
+  .iv-prompt {
+    font-size: 18px;
+  }
+  .iv-cards,
+  .iv-readings {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+  .iv-card {
+    min-height: 0;
+    padding: var(--space-2) var(--space-3);
+    gap: 2px;
+  }
+  .iv-card__text {
+    font-size: 15px;
+  }
+  .iv-reading {
+    min-height: 52px;
+    font-size: 17px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iv-bubble,
+  .iv-card,
+  .iv-reading,
+  .iv-trait.is-new,
+  .iv-bubble__caret {
+    animation: none;
+  }
+}
