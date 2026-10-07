@@ -59,19 +59,24 @@ function bannerContent(ui: ReturnType<typeof useRuntime>['ui'], api: UiApi): Ban
   }
   const t = ui.toasts[0];
   if (!t) return null;
-  return {
+  // Eigene Farbe (z.B. Gold für Quests) wie bei den Apps: Bedeutungsfarbe oder, für alte Module, eine CSS-Farbe.
+  const tile = t.color ? tileColor(t.color) : { color: TOAST_CHIPS[t.kind] };
+  const content: BannerContent = {
     key: `t${t.id}`,
-    title: TOAST_TITLES[t.kind],
+    title: t.title ?? TOAST_TITLES[t.kind],
     text: t.text,
     icon: t.icon ?? TOAST_ICONS[t.kind],
-    color: TOAST_CHIPS[t.kind],
+    color: tile.color,
     open: () => {
       api.dismissToast(t.id);
-      if (t.target) api.flyTo(t.target, 15.5);
+      if (t.appId) api.openPhone(t.appId, t.params);
+      else if (t.target) api.flyTo(t.target, 15.5);
       else api.openPhone('core.history');
     },
     dismiss: () => api.dismissToast(t.id),
   };
+  if (tile.style) content.style = tile.style;
+  return content;
 }
 
 /** Maus (nicht Finger oder Stift): Nur sie schwebt über dem Banner, ein Tipp löst sonst ein Pausieren ohne Ende aus. */

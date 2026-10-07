@@ -30,6 +30,7 @@ import { activeCity, cityName, isBusinessSold, relationFactor } from '../../city
 import { getStock, getWarehouse, getWarehouses, productName, qualityTier, warehousePlace } from '../../goods';
 import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount, portName } from '../../logistics';
 import { indexTrend, purchaseIndex } from '../../market';
+import { phoneAppLocked } from '../../quests';
 import {
   activeDeal,
   assortment,
@@ -624,7 +625,7 @@ registerPhoneApp({
   chrome: 'none',
   component: SuppliersApp,
   // Nach dem Verkauf kauft man in der App Handel ein (Auftrag 43); die Seite verweist dorthin, falls sie jemand öffnet.
-  hiddenWhen: isBusinessSold,
+  hiddenWhen: (state) => isBusinessSold(state) || phoneAppLocked(state, APP_ID),
   // Gesperrt wegen Schulden oder bereit zum Freischalten.
   badge: (state) =>
     getSuppliers(state, activeCity(state)).filter(

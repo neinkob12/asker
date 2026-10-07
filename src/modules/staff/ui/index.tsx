@@ -29,6 +29,7 @@ import {
 } from '../../../ui';
 import { activeCity, cityOfSpot, isBusinessSold } from '../../city';
 import { playerSpot } from '../../customers';
+import { phoneAppLocked } from '../../quests';
 import { getSpots, isSpotOpen } from '../../spots';
 import {
   activeRunnerAt,
@@ -456,8 +457,9 @@ registerTab({
   order: 30,
   // Nur die Stadt, in der du bist (Auftrag 43: in Rotterdam stand die Zahl aller Inhaftierten Deutschlands).
   badge: (state) => getStaff(state, { status: 'jailed', cityId: activeCity(state) }).length,
-  // Nach dem Verkauf gehören die Leute den Statthaltern; Arbeiter für Fincas stellst du im Anbau ein.
-  hiddenWhen: isBusinessSold,
+  // Nach dem Verkauf gehören die Leute den Statthaltern; Arbeiter für Fincas stellst du im Anbau ein. Am Anfang kommt
+  // die App mit Peters Quest.
+  hiddenWhen: (state) => isBusinessSold(state) || phoneAppLocked(state, 'tab:staff'),
 });
 registerSlot('tab:staff', { id: 'staff.overview', order: 10, component: StaffOverview });
 registerSlot('spots.spotPanel', { id: 'staff.runner', order: 50, component: SpotStaff });

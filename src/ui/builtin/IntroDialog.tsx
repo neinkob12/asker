@@ -69,7 +69,9 @@ const PAGES: readonly IntroPage[] = [
     color: 'chat',
     kicker: 'Dein Handy',
     title: 'Alles läuft übers Handy',
-    text: 'Lieferanten, Leute und Gangs schreiben dir. Peter schickt dir Quests, die dich durchs Spiel führen, mit Belohnungen. Die aktuelle Quest steht oben links unter deinem Geld.',
+    // Feedback 07.10.2026: Das Handy fängt fast leer an, die Apps kommen mit Peters Quests (abschaltbar in den
+    // Einstellungen, Einstieg).
+    text: 'Lieferanten, Leute und Gangs schreiben dir. Peter schickt dir Quests mit Belohnungen, die dich durchs Spiel führen, und mit ihnen kommen nach und nach die Apps aufs Handy. Die aktuelle Quest steht oben links unter deinem Geld.',
   },
 ];
 

@@ -1,9 +1,15 @@
 // Oberfläche der Quests: Glas-Karte direkt unter Geld und Heat (HUD, placement 'below'), Übersicht aller Quests als
-// Seite im Handy, Banner und Ton, wenn eine Quest erledigt ist. Ein Tipp auf die Karte führt zur passenden Stelle.
+// Seite im Handy, Banner und Ton, wenn eine Quest beginnt oder erledigt ist. Ein Tipp auf die Karte führt zur
+// passenden Stelle.
+//
+// Einstieg (Feedback 07.10.2026): Jede neue Quest kommt als Banner, die Karte klappt auf und leuchtet kurz. In den
+// ersten Kapiteln ist sie golden umrandet und hat einen Knopf „Zeig mir wie“. Handy Schritt für Schritt: Kommt mit
+// einer Quest eine App dazu, sagt es das Banner; der Startbildschirm zeigt, solange Apps fehlen, Peters Quest.
 
 import { useState } from 'preact/hooks';
 import type { GameState } from '../../../core';
 import {
+  audio,
   Button,
   Chip,
   Disclosure,
@@ -19,7 +25,9 @@ import {
   registerHudItem,
   registerPanel,
   registerSearch,
+  registerSlot,
   soundOnEvent,
+  Toggle,
   type UiApi,
   useGame,
   useUi,
@@ -27,7 +35,22 @@ import {
 import { activeCity, cityOfSpot, isBusinessSold } from '../../city';
 import { getWarehouses } from '../../goods';
 import { getSpots, lockedSpots } from '../../spots';
-import { CHAPTERS, chapterName, currentQuest, QUESTS, type QuestGoTo, questProgress, rewardText } from '../index';
+import {
+  CHAPTERS,
+  chapterName,
+  currentQuest,
+  PHONE_APP_STEPS,
+  phoneAppLocked,
+  phoneAppsOpenedBy,
+  phoneStepsActive,
+  phoneStepsEnabled,
+  QUESTS,
+  type QuestDef,
+  type QuestGoTo,
+  questContact,
+  questProgress,
+  rewardText,
+} from '../index';
 import { ContractsGroup } from './contracts';
 import './quests.css';
 
@@ -40,22 +63,36 @@ declare module '../../../ui' {
   }
 }
 
+/**
+ * Eingeklappt merkt sich die Karte pro Quest (ID der Quest, die eingeklappt wurde): Eine neue Quest klappt sie wieder
+ * auf, damit niemand sie übersieht (Feedback 07.10.2026).
+ */
 const COLLAPSED_KEY = 'koeln-tycoon:quests-collapsed';
 
-function readCollapsed(): boolean {
+function readCollapsed(questId: string): boolean {
   try {
-    return localStorage.getItem(COLLAPSED_KEY) === '1';
+    return localStorage.getItem(COLLAPSED_KEY) === questId;
   } catch {
     return false;
   }
 }
 
-function writeCollapsed(value: boolean): void {
+function writeCollapsed(questId: string | null): void {
   try {
-    localStorage.setItem(COLLAPSED_KEY, value ? '1' : '0');
+    localStorage.setItem(COLLAPSED_KEY, questId ?? '');
   } catch {
     // Kein Speicher: gilt dann nur bis zum Neuladen.
   }
+}
+
+/** Bis zu diesem Kapitel (0 = Ankommen, 1 = Dein Team) ist die Karte golden umrandet und hat „Zeig mir wie“. */
+const GUIDE_UNTIL_CHAPTER = 1;
+
+/** So lange steht das Banner einer neuen Quest (Millisekunden), länger als eine Routine-Meldung. */
+const QUEST_BANNER_MS = 4500;
+
+function isGuide(quest: QuestDef): boolean {
+  return quest.chapter <= GUIDE_UNTIL_CHAPTER && quest.cityId === undefined && quest.voice === undefined;
 }
 
 /** Führt zur Stelle, an der die Quest erledigt wird. */
@@ -123,17 +160,26 @@ function formatProgress(now: number, target: number, euro: boolean | undefined):
 
 function QuestHud() {
   const { state } = useGame();
-  const ui = useUi();
-  const [collapsed, setCollapsed] = useState(readCollapsed);
   const quest = currentQuest(state);
   if (!quest) return null;
+  // Pro Quest neu: Die Karte geht für jede neue Quest auf und leuchtet kurz (Animation beim Einhängen).
+  return <QuestCard key={quest.id} quest={quest} />;
+}
+
+function QuestCard(props: { quest: QuestDef }) {
+  const { state } = useGame();
+  const ui = useUi();
+  const { quest } = props;
+  const [collapsed, setCollapsed] = useState(() => readCollapsed(quest.id));
   const [now, target] = questProgress(state);
   const share = target > 0 ? now / target : 0;
   const number = QUESTS.indexOf(quest) + 1;
+  const guide = isGuide(quest);
   const toggle = () => {
     setCollapsed(!collapsed);
-    writeCollapsed(!collapsed);
+    writeCollapsed(collapsed ? null : quest.id);
   };
+  const go = () => goTo(ui, state, quest.goTo);
   if (collapsed) {
     return (
       <button type="button" class="quest-hud quest-hud--mini" onClick={toggle} aria-label="Quest aufklappen">
@@ -145,7 +191,7 @@ function QuestHud() {
     );
   }
   return (
-    <section class="quest-hud" aria-label="Aktuelle Quest">
+    <section class={`quest-hud is-new ${guide ? 'is-guide' : ''}`} aria-label="Aktuelle Quest">
       <header class="quest-hud__head">
         <span class="hud-label is-quest">
           Quest {number}/{QUESTS.length} · {chapterName(quest.chapter)}
@@ -154,7 +200,7 @@ function QuestHud() {
           <Icon name="chevronUp" />
         </button>
       </header>
-      <button type="button" class="quest-hud__main" onClick={() => goTo(ui, state, quest.goTo)}>
+      <button type="button" class="quest-hud__main" onClick={go}>
         <IconChip icon={quest.icon} color="brand" size="md" />
         <span class="quest-hud__text">
           <strong class="quest-hud__title">{quest.title}</strong>
@@ -174,10 +220,18 @@ function QuestHud() {
         </span>
         <span class="quest-hud__count">{formatProgress(now, target, quest.euro)}</span>
       </div>
-      <div class="quest-hud__reward">
-        <Icon name="gift" />
-        <span>{quest.reward.map(rewardText).join(' + ')}</span>
-      </div>
+      {quest.reward.length > 0 && (
+        <div class="quest-hud__reward">
+          <Icon name="gift" />
+          <span>{quest.reward.map(rewardText).join(' + ')}</span>
+        </div>
+      )}
+      {guide && (
+        <button type="button" class="quest-hud__cta" onClick={go}>
+          Zeig mir wie
+          <Icon name="chevronRight" />
+        </button>
+      )}
       <footer class="quest-hud__foot">
         <button type="button" class="quest-hud__link" onClick={() => ui.openPanel('quests.list', {})}>
           Alle Quests
@@ -332,3 +386,99 @@ onGameEvent('quest.completed', 'quests.toast', (payload, ui) => {
   });
 });
 soundOnEvent('quest.completed', 'success', { when: (p) => !p.skipped });
+
+/**
+ * Neue Quest (Feedback 07.10.2026: zu unauffällig): Banner „Neue Quest: …“ von Peter in Gold mit Ton, ein Tipp öffnet
+ * seinen Chat. Kommt mit der Quest eine App aufs Handy, sagt es das Banner („Neu im Handy: Lieferanten“), ein Tipp
+ * öffnet die App. Erledigt eine Aktion mehrere Quests auf einmal, gibt es nur das Banner der Quest, die jetzt dran ist
+ * (Apps ausgenommen). Nicht im Verlauf: Peters Chat hält die Quest fest (sonst stünde gleich zu Beginn eine Zahl an den
+ * Einstellungen).
+ */
+onGameEvent('quest.started', 'quests.startedToast', (payload, ui, state) => {
+  const quest = QUESTS.find((x) => x.id === payload.questId);
+  if (!quest) return;
+  const current = currentQuest(state)?.id === quest.id;
+  const apps = phoneAppsOpenedBy(state, quest.id);
+  if (apps.length > 0) {
+    ui.toast(current ? `Neue Quest: ${quest.title}` : apps.map((a) => a.line).join(' '), 'good', {
+      urgent: true,
+      title: `Neu im Handy: ${apps.map((a) => a.name).join(', ')}`,
+      icon: 'phone',
+      color: 'brand',
+      appId: apps[0].appId,
+      duration: QUEST_BANNER_MS,
+      log: false,
+    });
+  } else if (current) {
+    // Wie eine Nachricht von Peter (bzw. Jansen): Absender oben, darunter die Quest.
+    const contact = questContact(state, quest);
+    ui.toast(`Neue Quest: ${quest.title}`, 'good', {
+      urgent: true,
+      title: contact.name,
+      icon: quest.icon,
+      color: 'brand',
+      appId: 'core.messages',
+      params: { contactId: contact.id },
+      duration: QUEST_BANNER_MS,
+      log: false,
+    });
+  } else {
+    return;
+  }
+  // Nach dem Ton der erledigten Quest, nicht darüber.
+  audio.play('notification', { delay: 0.5 });
+});
+
+/** Einstellungen › Einstieg: Handy Schritt für Schritt an oder aus. */
+function PhoneStepsSettings() {
+  const { state, dispatch } = useGame();
+  return (
+    <Toggle
+      label="Handy Schritt für Schritt"
+      hint="Neue Apps kommen mit Peters Quests dazu, aus heißt alle sofort."
+      checked={phoneStepsEnabled(state)}
+      onChange={(enabled) => dispatch({ type: 'quests.setPhoneSteps', payload: { enabled } })}
+    />
+  );
+}
+
+registerSlot('core.settings', {
+  id: 'quests.phoneSteps',
+  title: 'Einstieg',
+  icon: 'target',
+  color: 'brand',
+  order: 6,
+  component: PhoneStepsSettings,
+  // Nach dem Verkauf gibt es die Apps aus Deutschland nicht mehr, da gibt es nichts freizuschalten.
+  hiddenWhen: isBusinessSold,
+});
+
+/**
+ * Startbildschirm, solange Apps fehlen (Handy Schritt für Schritt): Peters Quest als Zeile, damit der leere
+ * Bildschirm erklärt, warum, und wohin es weitergeht.
+ */
+function QuestHomeWidget() {
+  const { state } = useGame();
+  const ui = useUi();
+  const quest = currentQuest(state);
+  if (!quest || !phoneStepsActive(state)) return null;
+  const missing = PHONE_APP_STEPS.filter((step) => phoneAppLocked(state, step.appId)).length;
+  if (missing === 0) return null;
+  return (
+    <Group
+      title="Peters Quest"
+      icon="target"
+      color="brand"
+      class="quest-home"
+      note={`Noch ${missing} ${missing === 1 ? 'App kommt' : 'Apps kommen'} mit den nächsten Quests dazu.`}
+    >
+      <List>
+        <ListItem action onClick={() => goTo(ui, state, quest.goTo)}>
+          <ItemContent icon={quest.icon} color="brand" title={quest.title} meta={quest.hint} />
+        </ListItem>
+      </List>
+    </Group>
+  );
+}
+
+registerSlot('phone.home', { id: 'quests.home', order: 10, component: QuestHomeWidget });

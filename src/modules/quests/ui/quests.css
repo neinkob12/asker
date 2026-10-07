@@ -162,6 +162,57 @@
   text-decoration: underline;
 }
 
+/* Neue Quest (Feedback 07.10.2026): Die Karte leuchtet beim Erscheinen dreimal golden auf. */
+.quest-hud.is-new {
+  animation:
+    pop-in var(--duration-slow) var(--ease-out),
+    quest-glow 1.4s var(--ease-out) 0.3s 3;
+}
+@keyframes quest-glow {
+  0% {
+    box-shadow:
+      var(--hud-shadow),
+      0 0 0 0 color-mix(in srgb, var(--hud-gold) 75%, transparent);
+  }
+  100% {
+    box-shadow:
+      var(--hud-shadow),
+      0 0 0 14px color-mix(in srgb, var(--hud-gold) 0%, transparent);
+  }
+}
+
+/* Erste Kapitel: goldener Rand und Knopf „Zeig mir wie“, damit Neue die Quest nicht übersehen. */
+.quest-hud.is-guide {
+  border-color: color-mix(in srgb, var(--hud-gold) 70%, transparent);
+  box-shadow:
+    var(--hud-shadow),
+    0 0 28px -8px color-mix(in srgb, var(--hud-gold) 55%, transparent);
+}
+.quest-hud.is-guide .quest-hud__go {
+  color: var(--hud-gold);
+}
+
+.quest-hud__cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--hud-radius-button);
+  background: var(--hud-gold);
+  color: var(--hud-gold-on);
+  font-family: var(--font-hud);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.quest-hud__cta:hover {
+  filter: brightness(1.08);
+}
+
 /* Eingeklappt: eine Zeile mit Ziel und Stand */
 .quest-hud--mini {
   display: flex;
@@ -205,6 +256,16 @@
   .quest-hud__hint,
   .quest-hud__foot {
     display: none;
+  }
+  /* Erste Kapitel: Der Tipp bleibt stehen, dafür rückt die Belohnung in die Übersicht (Platz für „Zeig mir wie“). */
+  .quest-hud.is-guide .quest-hud__hint {
+    display: block;
+  }
+  .quest-hud.is-guide .quest-hud__reward {
+    display: none;
+  }
+  .quest-hud__cta {
+    min-height: var(--touch-target-phone);
   }
 }
 
