@@ -1,6 +1,7 @@
-// Ende-zu-Ende-Test im echten Browser (Playwright): neues Spiel, selbst verkaufen, Läufer anheuern, Ware bestellen,
-// speichern, laden und nach dem Neuladen der Seite den Autosave fortsetzen. Bedient die Oberfläche wie ein Mensch
-// (Klicks auf Karte, Handy, Dialoge); nur zum Vorspulen der Zeit wird die Simulation direkt angestoßen.
+// Ende-zu-Ende-Test im echten Browser (Playwright): neues Spiel (Handy Schritt für Schritt, dann abgeschaltet),
+// selbst verkaufen, Läufer anheuern, Ware bestellen, speichern, laden und nach dem Neuladen der Seite den Autosave
+// fortsetzen. Bedient die Oberfläche wie ein Mensch (Klicks auf Karte, Handy, Dialoge); nur zum Vorspulen der Zeit
+// wird die Simulation direkt angestoßen.
 // Speichert Screenshots nach screenshots/e2e-*.png und schlägt fehl, wenn etwas nicht klappt oder der Browser
 // Fehler meldet.
 //
@@ -116,6 +117,31 @@ async function run() {
     assert.equal(state.dirty, 1500);
     await page.waitForSelector('.spot-marker');
     await shot(page, 'neues-spiel');
+  });
+
+  await check('Handy Schritt für Schritt: Am Anfang fehlen Apps, in den Einstellungen abschaltbar', async () => {
+    // Feedback 07.10.2026: Ein neues Spiel zeigt erst Nachrichten und Einstellungen, der Rest kommt mit den Quests.
+    const wasOpen = await page.evaluate(() => window.koeln.runtime.ui.phone.open);
+    await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
+    const home = page.locator('.phone__home');
+    await home.getByRole('button', { name: 'Einstellungen', exact: true }).waitFor();
+    assert.equal(await home.getByRole('button', { name: /^Gangs/ }).count(), 0, 'Gangs fehlt am Anfang');
+    assert.equal(await home.getByRole('button', { name: /^Lieferanten/ }).count(), 0, 'Lieferanten fehlen am Anfang');
+    await home.getByText('Peters Quest').first().waitFor();
+    // Am Desktop fährt das weggelegte Handy erst herein.
+    await page.waitForTimeout(800);
+    await shot(page, 'handy-anfang');
+    // Der Rest des Tests braucht alle Apps: abschalten wie ein Spieler, der sich auskennt.
+    await home.getByRole('button', { name: 'Einstellungen', exact: true }).click();
+    const steps = page.locator('.phone').getByRole('switch', { name: /Handy Schritt für Schritt/ });
+    assert.equal(await steps.getAttribute('aria-checked'), 'true');
+    await steps.click();
+    assert.equal(await game(page, (s) => s.modules.quests.phoneSteps), false);
+    await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
+    await home.getByRole('button', { name: /^Gangs/ }).waitFor();
+    assert.equal(await home.getByText('Peters Quest').count(), 0, 'kein Quest-Hinweis mehr auf dem Startbildschirm');
+    // Wie vorher: Lag das Handy weg, kommt es wieder weg.
+    if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
   });
 
   await check('Selbst am Spot verkaufen', async () => {

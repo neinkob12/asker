@@ -1,6 +1,7 @@
 // Layout-Hilfen der Shell: Handy- oder Desktop-Aufbau, Icons und Kürzel der Tabs, Einordnung der HUD-Einträge.
 
 import { useEffect, useState } from 'preact/hooks';
+import type { GameState } from '../../core';
 import { type HudItem, type SidebarTab, sidebarTabs } from '../registry';
 
 /** Gleiche Breite wie MOBILE_BREAKPOINT in src/map/config.ts und die Media Queries in tokens.css. */
@@ -74,8 +75,12 @@ export function tabIcon(tab: SidebarTab): string {
 /** Buchstaben, die schon anders belegt sind (T = Handy, K = Suche mit ⌘/Strg). */
 const RESERVED = new Set(['T', 'K']);
 
-/** Tastenkürzel aller Tabs: eigenes shortcut oder erster freier Buchstabe des Titels. */
-export function tabShortcuts(): Map<string, string> {
+/**
+ * Tastenkürzel aller Tabs: eigenes shortcut oder erster freier Buchstabe des Titels. Mit Zustand fehlen Tabs, die
+ * gerade ausgeblendet sind (hiddenWhen, z.B. am Anfang noch nicht freigeschaltet); die Buchstaben der übrigen bleiben
+ * dabei dieselben.
+ */
+export function tabShortcuts(state?: GameState | null): Map<string, string> {
   const used = new Set(RESERVED);
   const result = new Map<string, string>();
   const tabs = sidebarTabs.list().filter((t) => !t.hidden);
@@ -94,6 +99,7 @@ export function tabShortcuts(): Map<string, string> {
       result.set(tab.id, letter);
     }
   }
+  if (state) for (const tab of tabs) if (tab.hiddenWhen?.(state)) result.delete(tab.id);
   return result;
 }
 

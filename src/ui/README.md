@@ -49,7 +49,10 @@ Spielzeit (gleiche Live-Aktivitäten), unten steht statt des Home-Balkens eine L
     schließt sie.
   - Der Startbildschirm ist seit Auftrag 26 **schwarz und ruhig**: sechs Apps im Raster (Kasse, Reviere, Gangs,
     Personal, Geldwäsche, Einstellungen; `HOME_ORDER`), unten das **Dock** (Nachrichten, Lieferanten, Personal, Kasse;
-    `DOCK`), dazwischen die Widgets (`phone.home`, derzeit keine). Keine Heute-Zeile, keine Kennzahlen, keine Skyline.
+    `DOCK`), dazwischen die Widgets (`phone.home`: nur „Peters Quest“, solange Apps fehlen). Keine Heute-Zeile, keine
+    Kennzahlen, keine Skyline. **Handy Schritt für Schritt** (Feedback 07.10.2026): In einem neuen Spiel stehen erst nur
+    Nachrichten und Einstellungen da, jede weitere App kommt mit der Quest, die sie braucht (`PHONE_APP_STEPS` in
+    `quests/config.ts`, über `hiddenWhen` der App bzw. des Tabs; abschaltbar in Einstellungen › Einstieg).
     Nur ein **dringender Rat** (`registerAdvisor`, Priorität ab 80, z.B. Chat mit Frist, Ware alle) steht als
     wegwischbare Zeile ganz oben; alle Empfehlungen stehen in der Suche (Strg/⌘+K). Apps und Tabs mit `hidden: true`
     (Verlauf, Lieferanten-Detail …) fehlen im Raster und in der Suche, `ui.openPhone(id)` öffnet sie trotzdem.
@@ -65,13 +68,16 @@ Spielzeit (gleiche Live-Aktivitäten), unten steht statt des Home-Balkens eine L
   (über dem sicheren Bereich, `env(safe-area-inset-*)`). In der Tasche zeigt eine Leiste unten den Nächsten Schritt und
   den Handy-Knopf mit Uhrzeit und ungelesenen Nachrichten.
 - **Tastatur (Desktop):** Leertaste Pause, 1/2/3 Tempo, T Handy, Buchstabe eines Tabs öffnet dessen App (noch
-  einmal: zurück zum Startbildschirm), Strg/⌘+K Suche. Esc schließt zuerst ein offenes Blatt oder Menü, geht sonst
+  einmal: zurück zum Startbildschirm; nicht für Tabs, die gerade `hiddenWhen` ausblendet), Strg/⌘+K Suche. Esc schließt zuerst ein offenes Blatt oder Menü, geht sonst
   eine Seite zurück und legt am Ende das Handy weg.
 - **Meldungen und Banner (Auftrag 26: nur das Allerwichtigste stört):** `ui.toast(text, kind, { urgent? })` bleibt
   die API. Als Banner im Handy (bzw. oben rechts, wenn es weggelegt ist; höchstens eines, weitere warten) erscheint
   eine Meldung nur, wenn sie dringend ist: Standard bei `'bad'` und `'warn'` (Razzia, Kontrolle, Festnahme,
   Lieferung verloren), erzwingbar mit `urgent: true` (Lieferung ist da, Fahrt angekommen, Löhne nicht gedeckt),
-  unterdrückbar mit `urgent: false` (Ärger, der nur ins Journal gehört). Alles landet im **Verlauf** (Einstellungen ›
+  unterdrückbar mit `urgent: false` (Ärger, der nur ins Journal gehört). Weitere Optionen: `title` (Überschrift statt
+  „Meldung“, z.B. der Absender), `color` (Kachel in einer Bedeutungsfarbe, z.B. `'brand'` für Quests), `appId` und
+  `params` (ein Tipp öffnet die App statt des Verlaufs) und `duration` (Millisekunden, länger als die Routine). Alles
+  landet im **Verlauf** (Einstellungen ›
   Verlauf bzw. Seite `core.history`: Journal, Meldungen und Auftrags-Historie mit Filter). Fehlermeldungen von
   Befehlen erscheinen als Banner, landen aber nicht im Verlauf. `ui.notify({ …, urgent? })` ebenso: Nachrichten
   vibrieren nur mit Antwortfrist, der Rest zählt still am Badge und steht in der Mitteilungszentrale. Die Einstellung

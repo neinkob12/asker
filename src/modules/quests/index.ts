@@ -11,12 +11,18 @@
 // Kapitel pro Stadt (Auftrag 36): Nach Köln ist die Reihenfolge frei. Quests mit cityId kommen erst dran, wenn ihre Stadt
 // frei ist; bis dahin wartet Peter (questsWaiting) und macht mit dem Kapitel der Stadt weiter, in die du gehst.
 //
+// Handy Schritt für Schritt (Feedback 07.10.2026): Zu Beginn zeigt das Handy nur Nachrichten und Einstellungen, jede
+// weitere App kommt mit der Quest, die sie braucht (PHONE_APP_STEPS in config.ts). Abschaltbar ('quests.setPhoneSteps');
+// alte Spielstände haben es aus, nach Köln und nach dem Verkauf ist ohnehin alles da.
+//
 // Öffentliche API: currentQuest(state), questsWaiting(state), questProgress(state), completedQuests(state), questTitle(state),
 //   rewardText(reward), QUESTS, CHAPTERS,
+//   Handy: phoneStepsActive(state), phoneStepsEnabled(state), questReached(state, questId), phoneAppLocked(state, appId),
+//   phoneAppsOpenedBy(state, questId), PHONE_APP_STEPS,
 //   Verträge: contractsOpen(state), contractOffers(state), activeContract(state), contractProgress(state), contractHistory(state),
 //   contractStats(state), contractValue(offer), canAcceptContract(state, offer), getContractTemplate(id),
 //   getContractContact(id), CONTRACT_TEMPLATES
-// Befehle: 'quests.skip', 'quests.acceptContract'
+// Befehle: 'quests.skip', 'quests.acceptContract', 'quests.setPhoneSteps'
 // Ereignisse: 'quest.started', 'quest.completed', 'contract.offered', 'contract.accepted', 'contract.finished'
 
 import {
@@ -43,6 +49,9 @@ import {
   CHAPTERS,
   MILESTONE_TITLE,
   PETER,
+  PHONE_APP_STEPS,
+  PHONE_STEPS_CITIES,
+  type PhoneAppStep,
   QUEST_CHECK_EVERY,
   QUEST_COUNT_BEFORE_36,
   QUESTS,
@@ -69,7 +78,17 @@ import {
   rewardValue,
 } from './contracts';
 
-export { CHAPTERS, MILESTONE_TITLE, PETER, QUESTS, type QuestDef, type QuestGoTo, type QuestReward } from './config';
+export {
+  CHAPTERS,
+  MILESTONE_TITLE,
+  PETER,
+  PHONE_APP_STEPS,
+  type PhoneAppStep,
+  QUESTS,
+  type QuestDef,
+  type QuestGoTo,
+  type QuestReward,
+} from './config';
 export {
   type ActiveContract,
   CONTRACT_CONTACTS,
@@ -102,6 +121,11 @@ export interface QuestsState {
   orderedIn: string[];
   /** Wochenverträge (Auftrag 32). */
   contracts: ContractsState;
+  /**
+   * Handy Schritt für Schritt (Feedback 07.10.2026): Apps kommen mit den Quests dazu (PHONE_APP_STEPS). Neue Spiele
+   * an, alte Spielstände aus (Version 9), damit mitten im Spiel keine App verschwindet.
+   */
+  phoneSteps: boolean;
 }
 
 /** Ein abgeschlossener Vertrag (für die Liste). */
@@ -123,12 +147,14 @@ export interface ContractsState {
 }
 
 /** Zustand in Version 1 (ohne startedAt). */
-type QuestsStateV1 = Omit<QuestsState, 'startedAt' | 'contracts' | 'fresh'>;
-type QuestsStateV2 = Omit<QuestsState, 'contracts' | 'fresh'>;
+type QuestsStateV1 = Omit<QuestsState, 'startedAt' | 'contracts' | 'fresh' | 'phoneSteps'>;
+type QuestsStateV2 = Omit<QuestsState, 'contracts' | 'fresh' | 'phoneSteps'>;
 /** Zustand bis Version 6 (ohne fresh). */
-type QuestsStateV6 = Omit<QuestsState, 'fresh' | 'orderedIn'>;
+type QuestsStateV6 = Omit<QuestsState, 'fresh' | 'orderedIn' | 'phoneSteps'>;
 /** Zustand in Version 7 (ohne orderedIn). */
-type QuestsStateV7 = Omit<QuestsState, 'orderedIn'>;
+type QuestsStateV7 = Omit<QuestsState, 'orderedIn' | 'phoneSteps'>;
+/** Zustand in Version 8 (ohne phoneSteps). */
+type QuestsStateV8 = Omit<QuestsState, 'phoneSteps'>;
 
 function newContracts(): ContractsState {
   return { offers: [], active: null, history: [], stats: { offered: 0, accepted: 0, done: 0, failed: 0 } };
@@ -142,6 +168,8 @@ declare module '../../core' {
     'quests.skip': Record<string, never>;
     /** Einen Wochenvertrag annehmen (eins der Angebote dieser Woche). */
     'quests.acceptContract': { offerId: number };
+    /** Handy Schritt für Schritt an oder aus (Einstellungen). */
+    'quests.setPhoneSteps': { enabled: boolean };
   }
   interface GameEvents {
     'quest.started': { questId: string };
@@ -227,6 +255,47 @@ export function questTitle(state: GameState): string | null {
 
 export function chapterName(chapter: number): string {
   return CHAPTERS[chapter] ?? '';
+}
+
+// ---------------------------------------------------------------------------------------------
+// Handy Schritt für Schritt (Feedback 07.10.2026)
+
+/** Ist „Handy Schritt für Schritt“ eingeschaltet (die Einstellung, egal in welcher Stadt)? */
+export function phoneStepsEnabled(state: GameState): boolean {
+  return state.modules.quests?.phoneSteps === true;
+}
+
+/**
+ * Kommen die Apps gerade Schritt für Schritt dazu? Nur eingeschaltet, in der ersten Stadt (PHONE_STEPS_CITIES) und vor
+ * dem Verkauf. Sonst ist alles da.
+ */
+export function phoneStepsActive(state: GameState): boolean {
+  return phoneStepsEnabled(state) && !isBusinessSold(state) && PHONE_STEPS_CITIES.includes(activeCity(state));
+}
+
+/**
+ * Ist Peter schon bei dieser Quest angekommen? Ja, wenn sie dran, erledigt oder übersprungen ist oder eine spätere es
+ * ist. Ohne Quest-Zustand und für unbekannte Quests: ja.
+ */
+export function questReached(state: GameState, questId: string): boolean {
+  const q = state.modules.quests;
+  const position = QUESTS.findIndex((x) => x.id === questId);
+  if (!q || position < 0 || q.index >= position) return true;
+  const finished = new Set([...q.done, ...q.skipped]);
+  return QUESTS.slice(position).some((x) => finished.has(x.id));
+}
+
+/** Fehlt die App (ID wie im Handy, Tabs als 'tab:<id>') noch auf dem Startbildschirm, weil ihre Quest noch aussteht? */
+export function phoneAppLocked(state: GameState, appId: string): boolean {
+  if (!phoneStepsActive(state)) return false;
+  const step = PHONE_APP_STEPS.find((s) => s.appId === appId);
+  return !!step && !questReached(state, step.questId);
+}
+
+/** Apps, die mit dieser Quest aufs Handy kommen (leer, solange nicht Schritt für Schritt gilt). */
+export function phoneAppsOpenedBy(state: GameState, questId: string): PhoneAppStep[] {
+  if (!phoneStepsActive(state)) return [];
+  return PHONE_APP_STEPS.filter((s) => s.questId === questId);
 }
 
 /** Kurzer Text einer Belohnung, z.B. "10 g Gras" oder "+5 Ruf". */
@@ -334,10 +403,10 @@ function announce(ctx: Ctx): void {
   const quest = currentQuest(ctx.state);
   if (!quest) return;
   const rewards = quest.reward.map(rewardText).join(', ');
-  messages.send(ctx, {
-    contact: questContact(ctx.state, quest),
-    text: rewards ? `${quest.task}\n\nDafür gibt's von mir: ${rewards}.` : quest.task,
-  });
+  // Neue App fürs Handy (Schritt für Schritt): Peter sagt es gleich dazu.
+  const apps = phoneAppsOpenedBy(ctx.state, quest.id).map((step) => step.line);
+  const text = [quest.task, ...apps, rewards ? `Dafür gibt's von mir: ${rewards}.` : ''].filter(Boolean).join('\n\n');
+  messages.send(ctx, { contact: questContact(ctx.state, quest), text });
   ctx.emit('quest.started', { questId: quest.id });
 }
 
@@ -756,7 +825,7 @@ export function orderedForCity(state: GameState, cityId: string): boolean {
 
 export default defineModule({
   id: 'quests',
-  version: 8,
+  version: 9,
   dependsOn: ['goods', 'staff', 'territory', 'police', 'reputation', 'leaderboard'],
   init: () => ({
     index: 0,
@@ -768,15 +837,20 @@ export default defineModule({
     fresh: false,
     orderedIn: [],
     contracts: newContracts(),
+    phoneSteps: true,
   }),
   tickEvery: QUEST_CHECK_EVERY,
   tick: (ctx) => {
     // Beim ersten Schritt schickt Peter die erste Quest.
     const q = ctx.state.modules.quests;
     if (q.index === 0 && q.done.length === 0 && q.skipped.length === 0 && !ctx.state.messages.contacts[PETER.id]) {
+      const greeting =
+        "Ey, ich bin's, Peter. Hab gehört, du willst in Köln groß rauskommen. Ich zeig dir, wie das läuft. Mach, was ich sag, dann gibt's auch was für dich.";
       messages.send(ctx, {
         contact: PETER,
-        text: "Ey, ich bin's, Peter. Hab gehört, du willst in Köln groß rauskommen. Ich zeig dir, wie das läuft. Mach, was ich sag, dann gibt's auch was für dich.",
+        text: phoneStepsActive(ctx.state)
+          ? `${greeting}\n\nDein Handy ist noch ziemlich leer. Mit jeder Aufgabe kommt die passende App dazu, dann suchst du nicht lange.`
+          : greeting,
       });
       announce(ctx);
     }
@@ -795,6 +869,10 @@ export default defineModule({
   commands: {
     'quests.skip': (ctx) => skipQuest(ctx),
     'quests.acceptContract': (ctx, { offerId }) => acceptContract(ctx, offerId),
+    'quests.setPhoneSteps': (ctx, { enabled }) => {
+      ctx.state.modules.quests.phoneSteps = enabled === true;
+      return { ok: true };
+    },
   },
   on: {
     ...Object.fromEntries([...new Set([...COUNTED, ...CONTRACT_COUNTED])].map((type) => [type, onCounted(type)])),
@@ -878,6 +956,8 @@ export default defineModule({
     // Gespeichert wird nie mitten in einer Aktion, also ist nichts mehr frisch.
     7: (old: QuestsStateV6): QuestsStateV7 => ({ ...old, fresh: false }),
     // Version 8 (Auftrag 43, L5): Städte mit Bestellung; alte Stände wissen es nicht, die Quest zählt dann wie vorher.
-    8: (old: QuestsStateV7): QuestsState => ({ ...old, orderedIn: [] }),
+    8: (old: QuestsStateV7): QuestsStateV8 => ({ ...old, orderedIn: [] }),
+    // Version 9 (Feedback 07.10.2026): Handy Schritt für Schritt nur für neue Spiele. Wer schon spielt, behält alle Apps.
+    9: (old: QuestsStateV8): QuestsState => ({ ...old, phoneSteps: false }),
   },
 });

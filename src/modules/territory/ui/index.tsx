@@ -26,6 +26,7 @@ import {
 } from '../../../ui';
 import { activeCity, citiesUnlocked, cityName, isBusinessSold, majorityMakesBoss } from '../../city';
 import { getHeat, heatLevel } from '../../police';
+import { phoneAppLocked } from '../../quests';
 import { allVeedel, veedelName } from '../../veedel';
 import {
   type CampaignProgress,
@@ -194,8 +195,8 @@ registerTab({
   title: 'Reviere',
   order: 20,
   component: TerritoryTab,
-  // Nach dem Verkauf gibt es keine Veedel mehr (Auftrag 43).
-  hiddenWhen: isBusinessSold,
+  // Nach dem Verkauf gibt es keine Veedel mehr (Auftrag 43). Am Anfang kommt die App mit Peters Quest.
+  hiddenWhen: (state) => isBusinessSold(state) || phoneAppLocked(state, 'tab:territory'),
 });
 
 onGameEvent('territory.controlChanged', 'territory.toast', (payload, ui) => {
