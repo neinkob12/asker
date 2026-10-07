@@ -204,3 +204,27 @@ export const CUSTOMS_LEVELS = [
 export const STASH_MAX = 0.7;
 /** So viele Partien bekommt das Minispiel höchstens (die wertvollsten, je Ware zusammengefasst). */
 export const STASH_LOTS_MAX = 6;
+
+// --- Zivi oder Kunde (Auftrag 44, Minispiel 'undercover') -------------------------------------------------------
+
+/** Ab dieser Heat im Veedel schickt die Polizei Zivilfahnder an den Spot, an dem du selbst stehst. */
+export const UNDERCOVER_HEAT = 20;
+/**
+ * Chance pro Stunde bei Heat 100 und Präsenz 1 (ab UNDERCOVER_HEAT linear ansteigend, mal Präsenz). Gewürfelt fest aus
+ * Seed, Spot und Stunde (keyedRandom), damit die Würfelfolge der Polizei gleich bleibt.
+ */
+export const UNDERCOVER_CHANCE_PER_HOUR = 0.25;
+/** Nach einer Schicht mit Zivis ist so lange Ruhe (Spielminuten). */
+export const UNDERCOVER_COOLDOWN = 8 * 60;
+/** So viele Leute kommen in der Schicht an den Spot (Zivis mitgezählt). */
+export const UNDERCOVER_CUSTOMERS = { min: 6, max: 10 } as const;
+/** So viele davon sind Zivis: einer, ab dieser Heat je einer mehr (höchstens drei). */
+export const UNDERCOVER_ZIVI_HEAT_STEPS = [20, 45, 70] as const;
+/** Alle Zivis erkannt: So viel Heat weniger im Veedel (sie ziehen ab und melden: nichts los). */
+export const UNDERCOVER_RELIEF = 12;
+/** Ruf pro echtem Kunden, den du abgewimmelt hast (wie Kunden warten lassen, etwas weniger). */
+export const UNDERCOVER_REP_TURNED_AWAY = -0.3;
+/** Verkauf an einen Zivi: Score halbiert (das ist immer „nicht geschafft“, auch wenn sonst alles stimmte). */
+export const UNDERCOVER_SOLD_PENALTY = 0.5;
+/** Ware am Spot, die die Kunden verlangen können (die meisten im nächsten Lager). */
+export const UNDERCOVER_GOODS_MAX = 4;
