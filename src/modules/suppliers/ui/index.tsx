@@ -384,26 +384,106 @@ const MODE_NOTE: Record<OrderMode, string> = {
 };
 
 /**
- * Angebot nach Warenart (Blüten, Hasch, Edibles, Öl, Vapes) mit der Wahl der Bestellart: einzeln kauft jedes Paket
- * sofort als eigene Lieferung, gesammelt kommen die gewählten Pakete in einer Lieferung (Rabatt, aber alles auf einmal
- * in Gefahr). Die Auswahl der Sammelbestellung lebt nur hier in der Oberfläche, bis bestellt wird.
+ * Bestellung in Arbeit, nur in der Oberfläche (bis bestellt wird): Bestellart, Auswahl der Sammelbestellung und das
+ * gewählte Lager. Liegt in der App, damit die Fußzeile mit „Bestellen“ dieselbe Auswahl sieht.
  */
-function Offer(props: { supplier: Supplier; warehouseId: string | undefined; canOrder: boolean }) {
+interface OrderDraft {
+  supplierId: string;
+  mode: OrderMode;
+  cart: Record<string, number>;
+  target: string;
+}
+
+type UpdateDraft = (patch: Partial<OrderDraft>) => void;
+
+function emptyDraft(supplierId: string): OrderDraft {
+  return { supplierId, mode: 'single', cart: {}, target: '' };
+}
+
+/** Wohin geliefert wird und ob überhaupt bestellt werden kann (Lager, Liegeplatz, Schulden). */
+function orderTarget(state: GameState, supplier: Supplier, target: string) {
+  const warehouses = getWarehouses(state, activeCity(state));
+  const toPort = supplier.kind === 'port';
+  // Ohne Lager in der Stadt geht keine Lieferung (Auftrag 43, M8: sonst erst ein Banner nach dem Tippen).
+  const noWarehouse = warehouses.length === 0;
+  const picked = warehouses.some((w) => w.id === target) ? target : undefined;
+  // Schiffsware: Ohne Wahl zeigt die Auswahl (und bestellt) das Lager, in das die Abholung ohnehin fährt.
+  const warehouseId = toPort && warehouses.length > 1 ? (picked ?? defaultPickupWarehouse(state)) : picked;
+  const canOrder = !isBlocked(state, supplier.id) && !noWarehouse && !(toPort && !hasBerth(state));
+  return { warehouses, toPort, noWarehouse, warehouseId, canOrder };
+}
+
+/** Die gewählten Pakete der Sammelbestellung (nur, was der Lieferant dir gerade anbietet). */
+function draftLines(state: GameState, supplier: Supplier, draft: OrderDraft): OrderLine[] {
+  const offered = new Set(availablePackages(state, supplier.id).map((p) => p.id));
+  return supplier.packages
+    .filter((p) => (draft.cart[p.id] ?? 0) > 0 && offered.has(p.id))
+    .map((p) => ({ packageId: p.id, count: draft.cart[p.id] }));
+}
+
+/** Sammelbestellung abschicken; danach ist die Auswahl leer, sonst sagt ein Hinweis, was fehlt. */
+function useGroupOrder(supplier: Supplier, draft: OrderDraft, update: UpdateDraft) {
   const { state, dispatch } = useGame();
   const ui = useUi();
-  const [mode, setMode] = useState<OrderMode>('single');
-  const [cart, setCart] = useState<Record<string, number>>({});
-  const { supplier, warehouseId } = props;
+  return (onCredit: boolean) => {
+    const { warehouseId } = orderTarget(state, supplier, draft.target);
+    const r = dispatch({
+      type: 'suppliers.orderBatch',
+      payload: {
+        supplierId: supplier.id,
+        lines: draftLines(state, supplier, draft),
+        mode: 'group',
+        ...(onCredit ? { onCredit: true } : {}),
+        ...(warehouseId ? { warehouseId } : {}),
+      },
+    });
+    if (r.ok) update({ cart: {} });
+    else ui.toast(r.reason, 'warn');
+  };
+}
+
+/** Fußzeile der Sammelbestellung: Pakete, Preis und „Bestellen“, immer sichtbar, solange etwas gewählt ist. */
+function GroupOrderBar(props: { supplier: Supplier; draft: OrderDraft; update: UpdateDraft }) {
+  const { state } = useGame();
+  const { supplier, draft } = props;
+  const quote = orderQuote(state, supplier.id, draftLines(state, supplier, draft), 'group');
+  const send = useGroupOrder(supplier, draft, props.update);
+  const { canOrder } = orderTarget(state, supplier, draft.target);
+  return (
+    <div class="sup-bar">
+      <span class="sup-bar__sum">
+        <strong>{quote.packages === 1 ? '1 Paket' : `${quote.packages} Pakete`}</strong>
+        {quote.discount > 0 && <span class="sup-bar__discount">{formatPercent(quote.discount)} Rabatt</span>}
+      </span>
+      <Button
+        variant="primary"
+        icon="package"
+        disabled={!canOrder || state.wallet.dirty < quote.price}
+        onClick={() => send(false)}
+      >
+        Bestellen {formatEuro(quote.price)}
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Angebot nach Warenart (Blüten, Hasch, Edibles, Öl, Vapes) mit der Wahl der Bestellart: einzeln kauft jedes Paket
+ * sofort als eigene Lieferung, gesammelt kommen die gewählten Pakete in einer Lieferung (Rabatt, aber alles auf einmal
+ * in Gefahr). Bestellt wird die Sammelbestellung über die Fußzeile (GroupOrderBar) oder auf Kredit hier unten.
+ */
+function Offer(props: { supplier: Supplier; draft: OrderDraft; update: UpdateDraft }) {
+  const { state, dispatch } = useGame();
+  const { supplier, draft, update } = props;
+  const { warehouseId, canOrder } = orderTarget(state, supplier, draft.target);
   const offered = new Set(availablePackages(state, supplier.id).map((p) => p.id));
   const limit = creditLimit(state, supplier.id);
   const credit = availableCredit(state, supplier.id);
-  const lines: OrderLine[] = supplier.packages
-    .filter((p) => (cart[p.id] ?? 0) > 0 && offered.has(p.id))
-    .map((p) => ({ packageId: p.id, count: cart[p.id] }));
+  const lines = draftLines(state, supplier, draft);
   const quote = orderQuote(state, supplier.id, lines, 'group');
   const single = orderQuote(state, supplier.id, lines, 'single');
   const room = GROUP_ORDER.maxPackages - quote.packages;
-  const target = warehouseId ? { warehouseId } : {};
+  const sendGroup = useGroupOrder(supplier, draft, update);
   const categories = PRODUCT_CATEGORIES.map((c) => ({
     ...c,
     packages: supplier.packages.filter((p) => getProduct(p.productId)?.category === c.id),
@@ -412,23 +492,20 @@ function Offer(props: { supplier: Supplier; warehouseId: string | undefined; can
   const buy = (packageId: string, onCredit: boolean) =>
     dispatch({
       type: 'suppliers.order',
-      payload: { supplierId: supplier.id, packageId, ...(onCredit ? { onCredit: true } : {}), ...target },
+      payload: {
+        supplierId: supplier.id,
+        packageId,
+        ...(onCredit ? { onCredit: true } : {}),
+        ...(warehouseId ? { warehouseId } : {}),
+      },
     });
-  const orderGroup = (onCredit: boolean) => {
-    const r = dispatch({
-      type: 'suppliers.orderBatch',
-      payload: { supplierId: supplier.id, lines, mode: 'group', ...(onCredit ? { onCredit: true } : {}), ...target },
-    });
-    if (r.ok) setCart({});
-    else ui.toast(r.reason, 'warn');
-  };
 
   const aside = (p: SupplierPackage) => {
     if (!offered.has(p.id)) return <span class="ui-hint">ab Vertrauen {p.minTrust}</span>;
     const price = packagePrice(state, supplier.id, p.id);
-    if (mode === 'group') {
+    if (draft.mode === 'group') {
       if (p.container) return <span class="ui-hint">nur einzeln</span>;
-      const count = cart[p.id] ?? 0;
+      const count = draft.cart[p.id] ?? 0;
       return (
         <Stepper
           value={count}
@@ -436,18 +513,18 @@ function Offer(props: { supplier: Supplier; warehouseId: string | undefined; can
           max={count + room}
           label={`Anzahl ${p.label}`}
           format={(n) => `${n}×`}
-          disabled={!props.canOrder}
-          onChange={(n) => setCart({ ...cart, [p.id]: n })}
+          disabled={!canOrder}
+          onChange={(n) => update({ cart: { ...draft.cart, [p.id]: n } })}
         />
       );
     }
     return (
       <div class="sup-buy">
-        <Button small disabled={!props.canOrder || state.wallet.dirty < price} onClick={() => buy(p.id, false)}>
+        <Button small disabled={!canOrder || state.wallet.dirty < price} onClick={() => buy(p.id, false)}>
           Kaufen
         </Button>
         {limit > 0 && (
-          <Button small variant="subtle" disabled={!props.canOrder || credit < price} onClick={() => buy(p.id, true)}>
+          <Button small variant="subtle" disabled={!canOrder || credit < price} onClick={() => buy(p.id, true)}>
             Kredit
           </Button>
         )}
@@ -461,14 +538,14 @@ function Offer(props: { supplier: Supplier; warehouseId: string | undefined; can
         <SegmentedControl
           wide
           aria-label="Bestellart"
-          value={mode}
-          onChange={setMode}
+          value={draft.mode}
+          onChange={(mode) => update({ mode })}
           options={[
             { value: 'single', label: 'Einzeln' },
             { value: 'group', label: 'Sammelbestellung' },
           ]}
         />
-        <p class="ui-hint">{MODE_NOTE[mode]}</p>
+        <p class="ui-hint">{MODE_NOTE[draft.mode]}</p>
       </div>
       {categories.map((c) => (
         <Group key={c.id} title={c.name} icon={c.icon} color="goods">
@@ -495,7 +572,7 @@ function Offer(props: { supplier: Supplier; warehouseId: string | undefined; can
           </List>
         </Group>
       ))}
-      {mode === 'group' && (
+      {draft.mode === 'group' && (
         <Group
           class="sup-cart"
           title="Sammelbestellung"
@@ -536,26 +613,14 @@ function Offer(props: { supplier: Supplier; warehouseId: string | undefined; can
                 value={`${formatEuro(single.price)}, ${formatPercent(single.seize)} je Paket`}
               />
               <div class="sup-actions">
-                <Button variant="subtle" onClick={() => setCart({})}>
+                <Button variant="subtle" onClick={() => update({ cart: {} })}>
                   Leeren
                 </Button>
                 {limit > 0 && (
-                  <Button
-                    variant="subtle"
-                    disabled={!props.canOrder || credit < quote.price}
-                    onClick={() => orderGroup(true)}
-                  >
+                  <Button variant="subtle" disabled={!canOrder || credit < quote.price} onClick={() => sendGroup(true)}>
                     Auf Kredit
                   </Button>
                 )}
-                <Button
-                  variant="primary"
-                  icon="package"
-                  disabled={!props.canOrder || state.wallet.dirty < quote.price}
-                  onClick={() => orderGroup(false)}
-                >
-                  Bestellen
-                </Button>
               </div>
             </>
           )}
@@ -565,14 +630,13 @@ function Offer(props: { supplier: Supplier; warehouseId: string | undefined; can
   );
 }
 
-function SupplierDetail(props: { supplierId: string }) {
+function SupplierDetail(props: { supplierId: string; draft: OrderDraft; update: UpdateDraft }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
   // So, wie der Lieferant in der aktiven Stadt auftritt (Lieferzeit, Sortiment; Hein in Hamburg am Kai).
   const cityId = activeCity(state);
   const base = getSupplier(state, props.supplierId);
   const supplier = base ? supplierIn(base, cityId) : undefined;
-  const [target, setTarget] = useState('');
   if (!supplier || !base) return null;
   if (!deliversTo(base, cityId)) {
     return (
@@ -594,13 +658,7 @@ function SupplierDetail(props: { supplierId: string }) {
       </div>
     );
   }
-  const warehouses = getWarehouses(state, activeCity(state));
-  const toPort = supplier.kind === 'port';
-  // Ohne Lager in der Stadt geht keine Lieferung (Auftrag 43, M8: sonst erst ein Banner nach dem Tippen).
-  const noWarehouse = warehouses.length === 0;
-  const picked = warehouses.some((w) => w.id === target) ? target : undefined;
-  // Schiffsware: Ohne Wahl zeigt die Auswahl (und bestellt) das Lager, in das die Abholung ohnehin fährt.
-  const warehouseId = toPort && warehouses.length > 1 ? (picked ?? defaultPickupWarehouse(state)) : picked;
+  const { warehouses, toPort, noWarehouse, warehouseId } = orderTarget(state, supplier, props.draft.target);
   const rel = getRelation(state, supplier.id);
   const limit = creditLimit(state, supplier.id);
   const credit = availableCredit(state, supplier.id);
@@ -702,14 +760,10 @@ function SupplierDetail(props: { supplierId: string }) {
             value: w.id,
             label: `${toPort ? 'abholen nach' : 'liefern an'} ${w.name}`,
           }))}
-          onChange={setTarget}
+          onChange={(target) => props.update({ target })}
         />
       )}
-      <Offer
-        supplier={supplier}
-        warehouseId={warehouseId}
-        canOrder={!blocked && !noWarehouse && !(toPort && !hasBerth(state))}
-      />
+      <Offer supplier={supplier} draft={props.draft} update={props.update} />
 
       {shipments.length > 0 && (
         <>
@@ -734,6 +788,10 @@ function SuppliersApp() {
   const supplierId =
     ui.state.phone.app === APP_ID ? (ui.state.phone.params?.supplierId as string | undefined) : undefined;
   const supplier = supplierId ? getSupplier(state, supplierId) : undefined;
+  // Bestellung in Arbeit gilt nur für den offenen Lieferanten (ein anderer fängt leer an).
+  const [saved, setDraft] = useState<OrderDraft | null>(null);
+  const draft = supplier && saved?.supplierId === supplier.id ? saved : emptyDraft(supplier?.id ?? '');
+  const update: UpdateDraft = (patch) => setDraft({ ...draft, ...patch });
   // Nach dem Verkauf (Auftrag 43) kaufst du nicht mehr bei Lieferanten, sondern bei Produzenten im Ausland ein.
   if (isBusinessSold(state)) {
     return (
@@ -754,9 +812,15 @@ function SuppliersApp() {
     );
   }
   if (supplier) {
+    const groupPicked = draft.mode === 'group' && Object.values(draft.cart).some((n) => n > 0);
+    const local = supplierIn(supplier, activeCity(state));
     return (
-      <PhoneScreen title={`${supplier.contactName} (${supplier.name})`} onBack={() => ui.openPhone(APP_ID)}>
-        <SupplierDetail key={supplier.id} supplierId={supplier.id} />
+      <PhoneScreen
+        title={`${supplier.contactName} (${supplier.name})`}
+        onBack={() => ui.openPhone(APP_ID)}
+        footer={groupPicked ? <GroupOrderBar supplier={local} draft={draft} update={update} /> : undefined}
+      >
+        <SupplierDetail key={supplier.id} supplierId={supplier.id} draft={draft} update={update} />
       </PhoneScreen>
     );
   }

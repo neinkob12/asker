@@ -1222,11 +1222,11 @@ Zähler `nextId`), `difficulty` (0 bis 1), `title`, `situation`, `params` (JSON 
 | `brawl` Straßenkampf | strength | „Zuschlagen“ oder Aggression ab `AGGRESSION_FIGHT` in fünf Gang-Anlässen | `applyBrawl`: alle Gegner weg = Erfolg, `ko` = Niederlage (verletzt, nie tot), sonst Aggression `BRAWL_AFTER_AGGRESSION`, Entschlossenheit −`BRAWL_DOWN_RESOLVE` je Gegner am Boden | `down:<n>`, `fled:<n>`, `hurt:<staffId>`, `playerHurt`, `ko`, `grabbed`, `sirens` |
 | `stash` Razzia-Countdown | caution | `planRaid`/`planMajorRaid`, wenn du in der Stadt bist und dort Ware liegt (`police/stash.ts`) | `PlannedRaid.stash`/`MajorRaid.stash` = `min(STASH_MAX, Score)`, die Razzia nimmt so viel weniger; `'police.raid'.stashed` | – |
 | `traffic` Verkehrskontrolle | charisma | `vehicleCheck` beim Start, wenn du selbst fährst | `applyTraffic`: durch = Erfolg, sonst Niederlage; `lies:<n>` gibt `TRAFFIC_NOTED_HEAT` je Widerspruch (höchstens zwei) | `flee` (weiter mit der Jagd), `bribe`, `lies:<n>` |
-| `undercover` Zivi oder Kunde | caution | Du stehst selbst an einem Spot mit Heat ab `UNDERCOVER_HEAT`; stündlich gewürfelt fest aus Seed, Spot und Stunde (`police/undercover.ts`) | Verkauf an einen Zivi → Kontrolle gegen dich am Spot (`runCheck` mit `player`), alle erkannt → Heat −`UNDERCOVER_RELIEF`, abgewimmelte Kunden kosten Ruf | `soldZivi:<n>`, `spotted:<n>`, `turnedAway:<n>`, `sold:<n>`, `missed:<n>` |
+| `undercover` Zivi oder Kunde | caution | Du stehst selbst an einem Spot: stündlich gewürfelt fest aus Seed, Spot und Stunde, Grundrauschen `UNDERCOVER_BASE_CHANCE_PER_HOUR`, ab `UNDERCOVER_HEAT` mit der Heat steigend (`police/undercover.ts`) | Verkauf an einen Zivi → Kontrolle gegen dich am Spot (`runCheck` mit `player`), alle erkannt → Heat −`UNDERCOVER_RELIEF`, abgewimmelte Kunden kosten Ruf | `soldZivi:<n>`, `spotted:<n>`, `turnedAway:<n>`, `sold:<n>`, `missed:<n>` |
 | `safe` Tresor knacken | caution | Gewonnener Überfall auf einen Gang-Spot mit dir (`gangs/safe.ts`), Inhalt `min(SAFE_MAX, SAFE_SHARE · Geld der Gang)`, unter 200 € keiner | `max · Score` Schwarzgeld aus der Kasse der Gang, nicht geschafft: Alarm (`SAFE_ALARM_HEAT`) | – |
 | `search` Bude durchsuchen | caution | Schutzgeld selbst eingetrieben mit Erfolg oder Rückzug, nicht bei abgelaufener Polizei-Uhr (`gangs/search.ts`, `searchAmount`) | `max · Score` Schwarzgeld, mit `noise` und nicht geschafft Heat (`SEARCH_NOISE_HEAT`) | `found:<n>`, `hidden:<n>`, `noise` |
 | `container` Container packen | caution | `trade.buy` oder `trade.sail` mit Actor `player` (`trade/packing.ts`), ein Minispiel je Bestellung | `TradeShipment.packing` = Score, Zollrisiko × `packingFactor` (`PACKING_FACTOR`: 1,25 bis 0,55) | – |
-| `papers` Papiere fälschen | caution | `customsCheck` beim Start, wenn du selbst dabei bist (am Kai in Rotterdam; Autobahn ist angeschlossen, im Spiel fährt dort aber noch niemand selbst) | `applyPapers`: durch = Erfolg, sonst Niederlage | `bribe`, `giveUp`, zur Info `fixed:<n>`, `hits:<n>` |
+| `papers` Papiere fälschen | caution | `customsCheck` beim Start, wenn du selbst dabei bist (am Kai in Rotterdam; Autobahn ist angeschlossen, im Spiel fährt dort aber noch niemand selbst); seit Auftrag 45 auch die Wahl „Papiere fälschen“, wenn einer Lieferung die Beschlagnahme droht (`suppliers/troubles.ts`, origin `suppliers`, `shipment:<id>`) | `applyPapers`: durch = Erfolg, sonst Niederlage; bei Lieferungen `onPapersFinished`: geschafft = durch, `bribe` kostet das Schmiergeld, sonst beschlagnahmt | `bribe`, `giveUp`, zur Info `fixed:<n>`, `hits:<n>` |
 | `interview` Bewerbungsgespräch | charisma | Knopf „Gespräch führen“ im Bewerber-Blatt (`recruiting.interview`, einmal je Bewerber, nur in deiner Stadt) | Erkannte Eigenschaften werden aufgedeckt (`revealedTraits`), geschafft zeigt einen versteckten Wert | angetippte Eigenschaften |
 
 **Konfrontationen.** `EncounterKind.minigames` (`start`, `actions`, `brawl`) sind Daten in `encounters/kinds.ts`.
@@ -1318,6 +1318,34 @@ Minispiele.
    `createRng(challenge.seed)`), Zeichnen (`draw.ts`), Komponente, Klänge, `index.tsx` mit `registerMinigameView` und
    `previewParams`. Vorbild: `games/safe/`.
 5. Selbst ausprobieren (Vorschau, Screenshots, echter Weg), dann `ready: true`. Erst ab dann startet der Kern die Art.
+
+### Feedback vom 07.10.2026 (Auftrag 45)
+
+**Minispiele kommen früher.** Gemessen mit dem Bot (14 Tage, drei Seeds, der Spieler steht selbst am Spot): Vorher
+kam das erste Minispiel frühestens an Tag 8, weil die Zivis erst ab Heat 20 kamen und Kontrollen immer deine Leute
+trafen. Jetzt gibt es bei den Zivis ein Grundrauschen (`UNDERCOVER_BASE_CHANCE_PER_HOUR` 0,03 pro Stunde, ab Heat 20
+wie bisher steigend), eine Kontrolle im Veedel, in dem du selbst stehst, trifft dich (`playerStandingIn` in
+`police/undercover.ts`, mit 30 % Verfolgungsjagd), und eine drohende Beschlagnahme bei einer Lieferung lässt sich mit
+dem Minispiel Papiere abwenden. Danach: erstes Minispiel an Tag 1 bis 3, eins bis zwei pro Spieltag am Spot. Der Bot
+steht nie selbst am Spot und bestellt einzeln: Würfelfolgen, Szenarien und `npm run balance` bleiben gleich.
+
+**Sammel- und Einzelbestellung (`suppliers`).** Das Angebot steht nach Warenart (`PRODUCT_CATEGORIES` in `goods`:
+Blüten, Hasch, Edibles, Öl, Vapes). Über „Einzeln | Sammelbestellung“ wählt der Spieler, wie mehrere Pakete kommen:
+
+| | Sammelbestellung (`mode: 'group'`) | Einzeln (`mode: 'single'`) |
+| --- | --- | --- |
+| Lieferungen | eine, die weiteren Pakete in `Shipment.extra` (`shipmentItems` liest alle) | eine pro Paket, wie `suppliers.order` |
+| Preis | `groupDiscount(n)`: 5 % pro Paket ab dem zweiten, höchstens 15 % | normaler Preis |
+| Beschlagnahme | `seizeChance · groupRiskFactor(n)` (1,5 pro weiterem Paket, höchstens 3), ein Wurf für alles; fliegt sie auf, ist alles weg | je Lieferung `seizeChance` |
+| Drohende Beschlagnahme | fragt immer (Schmieren, Papiere fälschen, Aufgeben) | wie bisher die Hälfte (`DECISION_SHARE_SEIZE`) |
+
+Werte in `GROUP_ORDER` (`suppliers/config.ts`). Befehl `suppliers.orderBatch { supplierId, lines: [{ packageId, count }],
+mode, onCredit?, warehouseId? }` prüft erst alles (höchstens 8 Pakete, keine Container, Vertrauen, Geld bzw. Kredit,
+Platz im Lager), dann wird bestellt. `orderQuote(state, supplierId, lines, mode)` rechnet Preis und Risiko genau wie
+der Befehl (die Oberfläche zeigt beides nebeneinander). `shipment.ordered` und `shipment.arrived` kommen bei einer
+Sammellieferung einmal, mit `items` und der Summe in `amount`. Eine Teillieferung gibt es nur bei einem Paket.
+Bestellregeln, Warenfluss und Dynamic Island zählen alle Pakete. Ein `Shipment` ohne `extra` ist genau wie vorher, es
+braucht keine Migration.
 
 ## Qualität
 
