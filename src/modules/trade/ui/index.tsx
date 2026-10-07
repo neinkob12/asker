@@ -1,7 +1,7 @@
 // Oberfläche der Hafen-Phase (Auftrag 40): die App „Kunden“ steht dann im Dock statt der Lieferanten. Drei Bereiche:
 // Bestellungen (annehmen, ablehnen, Gegenangebot; ausliefern), Kunden (Anteil, Vertrauen, Konkurrenz, dein Preis) und
 // Hafen (Ware pro Hafen mit Zoll-Heat, Einkauf bei Produzenten, Container auf See, weitere Häfen). Dazu ein Rat, wenn
-// Bestellungen warten, Lieferungen in der Dynamic Island, die Europa-Ansicht auf der Karte (map.ts).
+// Bestellungen warten, die Europa-Ansicht auf der Karte (map.ts).
 
 import { useEffect, useState } from 'preact/hooks';
 import { clock, formatEuro, formatNumber, type GameState } from '../../../core';
@@ -22,7 +22,6 @@ import {
   ProgressBar,
   registerAdvisor,
   registerHudItem,
-  registerLiveActivity,
   registerPhoneApp,
   SegmentedControl,
   type SheetAction,
@@ -1319,28 +1318,6 @@ registerAdvisor({
       });
     }
     return list;
-  },
-});
-
-registerLiveActivity({
-  id: 'trade.deliveries',
-  activities(state) {
-    const list = getDeliveries(state);
-    if (list.length === 0) return null;
-    const next = [...list].sort((a, b) => a.arrivesAt - b.arrivesAt)[0];
-    const total = Math.max(1, next.arrivesAt - next.departedAt);
-    return {
-      id: 'trade.delivery',
-      priority: 50,
-      icon: 'truck',
-      tone: 'info',
-      leading: 'Lkw',
-      trailing: clock.formatDuration(Math.max(0, next.arrivesAt - state.time)),
-      title: `Lieferung an ${getCustomer(state, next.customerId)?.name ?? ''}`,
-      detail: `${orderItemsText(next.items)}${list.length > 1 ? `, ${list.length - 1} weitere` : ''}`,
-      progress: Math.min(1, (state.time - next.departedAt) / total),
-      open: (ui) => ui.openPhone(APP_ID),
-    };
   },
 });
 

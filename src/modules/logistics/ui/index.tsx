@@ -67,7 +67,6 @@ import {
   tripProgress,
   tripTouchesCity,
 } from '../index';
-import './island';
 import { BerthGroup } from './port';
 import { LogisticsLinks } from './routes';
 import { AUTO, ChoiceControl, VehicleSelect, vehicleChoice } from './vehicles';

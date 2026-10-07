@@ -1,13 +1,13 @@
 /*
  * Das Spiel-Handy als iPhone (Pro): Titanrahmen mit Tasten, Bildschirm mit gerundeten Ecken, Statusleiste in drei
- * Spalten (Uhrzeit | Dynamic Island | Empfang, WLAN, Akku), Startbildschirm mit Kölner Skyline, Heute-Zeile,
+ * Spalten (Uhrzeit | Anzeige | Empfang, WLAN, Akku), Startbildschirm mit Kölner Skyline, Heute-Zeile,
  * Kennzahlen, App-Raster und Glas-Dock, App-Seiten mit iOS-Navigationsleiste und großen Titeln, Inhalte als
  * eingerückte Gruppen wie in der Einstellungen-App. Maße in px entsprechen etwa iOS-Punkten.
  * Am Desktop rechts angedockt, am Handy bildschirmfüllend unter dem HUD. Nur Tokens verwenden (styles/tokens.css).
  * Die Apps (Einstellungen, Ereignisse, Nachrichten, Meldungen, Banner) stehen in phone-apps.css.
  *
  * Schichten: Inhalt (flach, Gruppen und Zeilen) unten, darüber die schwebende Ebene aus Glas: Navigationsleiste
- * beim Scrollen, Dock, Antwortblatt, Banner, Island. Bei reduzierter Transparenz oder mehr Kontrast ist Glas deckend.
+ * beim Scrollen, Dock, Antwortblatt. Bei reduzierter Transparenz oder mehr Kontrast ist Glas deckend.
  */
 
 /* ---------------------------------------------------------------- Gehäuse */
@@ -74,33 +74,6 @@
   top: 25%;
   height: 10%;
 }
-.phone__device.is-buzzing-0 {
-  animation: phone-shake-a 360ms ease-in-out;
-}
-.phone__device.is-buzzing-1 {
-  animation: phone-shake-b 360ms ease-in-out;
-}
-@keyframes phone-shake-a {
-  20%,
-  60% {
-    transform: translateX(-3px);
-  }
-  40%,
-  80% {
-    transform: translateX(3px);
-  }
-}
-@keyframes phone-shake-b {
-  20%,
-  60% {
-    transform: translateX(3px);
-  }
-  40%,
-  80% {
-    transform: translateX(-3px);
-  }
-}
-
 /*
  * Im Handy gelten die Textgrößen von iOS (Body 17, Subhead 15, Footnote 13): Bausteine und Module, die die
  * --font-size-*-Tokens nutzen, wachsen hier mit. Kleiner als 11 px wird nie gesetzt.
@@ -127,19 +100,19 @@
 
 /* ---------------------------------------------------------------- Statusleiste */
 /*
- * Drei Spalten wie bei iOS: links die Uhrzeit, in der Mitte Platz für die Island, rechts Empfang, WLAN und Akku.
- * Die mittlere Spalte ist so breit wie die größte kompakte Island (230 pt, HIG Live Activities), auf schmalen
- * Bildschirmen schmaler, damit Uhrzeit und Symbole immer frei bleiben. Alles ohne Überlappung mit der Island.
+ * Drei Spalten wie bei iOS: links die Uhrzeit, in der Mitte Platz für die Anzeige (Auftrag 46d, statt der Island),
+ * rechts Empfang, WLAN und Akku. Die mittlere Spalte ist höchstens 230 pt breit (HIG Live Activities), auf schmalen
+ * Bildschirmen schmaler, damit Uhrzeit und Symbole immer frei bleiben.
  */
 .phone__status {
-  --island-max: min(230px, calc(100cqw - 156px));
+  --pill-max: min(230px, calc(100cqw - 156px));
   position: absolute;
   z-index: 6;
   top: 0;
   left: 0;
   right: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--island-max) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) var(--pill-max) minmax(0, 1fr);
   align-items: start;
   height: var(--phone-status-height);
   padding: 11px max(4px, var(--safe-left)) 0 max(4px, var(--safe-right));
@@ -178,12 +151,6 @@
 .phone__status--pill {
   display: block;
 }
-/* Zwei Aktivitäten: Der Kreis der zweiten sitzt neben der Island, Empfang und WLAN weichen, der Akku bleibt. */
-.phone__status:has(.island-minimal) .phone__signal,
-.phone__status:has(.island-minimal) .phone__wifi {
-  display: none;
-}
-
 /* Home-Balken (134 × 5 pt) als Knopf: auf dem Startbildschirm Handy weglegen, sonst Startbildschirm */
 .phone__nav {
   position: absolute;
@@ -292,10 +259,10 @@
   background: var(--phone-fill);
 }
 
-/* ---------------------------------------------------------------- Dynamic Island */
-/* Maße nach HIG (Live Activities): kompakt 37 pt hoch, Radius 44, aufgeklappt ca. 371 × 84–160, Rand 14 */
-.island-wrap {
-  /* Die Island ist immer schwarz: Bedeutungsfarben (light-dark) auch im hellen Modus in der dunklen Fassung */
+/* ---------------------------------------------------------------- Anzeige oben (Auftrag 46d, statt der Dynamic Island) */
+/* Schwarze Pille wie die Hardware: 37 pt hoch, Radius 44, Zahl und Symbol in kräftigen Farben. Kein Aufklappen. */
+.status-pill-wrap {
+  /* Die Pille ist immer schwarz: Bedeutungsfarben (light-dark) auch im hellen Modus in der dunklen Fassung */
   color-scheme: dark;
   position: absolute;
   z-index: 8;
@@ -303,358 +270,65 @@
   left: 50%;
   display: flex;
   align-items: flex-start;
-  gap: 6px;
   transform: translateX(-50%);
   pointer-events: auto;
 }
-.island-wrap.is-floating {
+.status-pill-wrap.is-floating {
   position: fixed;
   z-index: var(--z-notification);
   /* unter der Uhr-Kapsel des HUD (Look "Glas"), sonst lägen Tempo und Menü darunter */
   top: calc(var(--top) + var(--hud-height) + var(--space-3));
   left: calc((100% - var(--map-right) + var(--gap)) / 2);
 }
-/*
- * Die Island ist eine Form: Wechselt sie zwischen kompakt und aufgeklappt, springt ihr Kasten sofort auf die neue
- * Größe, und die schwarze Fläche (__shape) wächst oder schrumpft per Feder dorthin (nur transform, dazu der Radius;
- * DynamicIsland.tsx). Der Inhalt blendet versetzt ein. In Ruhe trägt der Kasten selbst die Fläche.
- */
-.island {
+.status-pill {
   position: relative;
-  min-width: 126px;
-  height: 37px;
-  background: var(--hw-black);
-  border-radius: 44px;
-  box-shadow: 0 0 0 1px var(--hw-rim);
-  color: var(--hw-white);
-  overflow: hidden;
-}
-.island__shape {
-  position: absolute;
-  inset: 0;
-  display: none;
-  border-radius: inherit;
-  background: var(--hw-black);
-  box-shadow: 0 0 0 1px var(--hw-rim);
-  transform-origin: 50% 0;
-  pointer-events: none;
-}
-.is-floating .island,
-.is-floating .island__shape {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.1),
-    0 8px 24px rgba(0, 0, 0, 0.5);
-}
-.island.is-morphing {
-  background: transparent;
-  box-shadow: none;
-  overflow: visible;
-}
-.island.is-morphing .island__shape {
-  display: block;
-}
-.island > :not(.island__shape) {
-  position: relative;
-}
-.island.is-idle {
-  width: 126px;
-}
-.island.is-compact,
-.island.is-pulse {
-  width: auto;
-  max-width: var(--island-max, 230px);
-  /* Die Trefferfläche (::after am Knopf) ragt 4 px über die Island hinaus */
-  overflow: visible;
-}
-/* Mit zweiter Aktivität wird die Island schmaler: zusammen mit dem Kreis bleibt sie in der mittleren Spalte. */
-.island-wrap:has(.island-minimal) .island {
-  max-width: calc(var(--island-max, 230px) - 43px);
-}
-.is-floating .island.is-compact,
-.is-floating .island.is-pulse {
-  max-width: 360px;
-}
-.island.is-expanded,
-.island.is-alert {
-  width: min(371px, calc(100cqw - 20px));
-  height: auto;
-  border-radius: 40px;
-}
-.is-floating .island.is-expanded,
-.is-floating .island.is-alert {
-  width: 371px;
-}
-.island__compact {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  height: 37px;
-  padding: 0 14px 0 12px;
-  border: 0;
-  background: none;
-  color: inherit;
-  font-weight: var(--font-weight-bold);
-  white-space: nowrap;
-  cursor: pointer;
-}
-/* Trefferfläche mindestens 44 pt hoch, ohne die Island größer zu zeichnen */
-.island__compact::after {
-  content: "";
-  position: absolute;
-  inset: -4px -6px;
-  border-radius: 26px;
-}
-.island__lead,
-.island__trail {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: var(--type-subhead);
-  font-variant-numeric: tabular-nums;
-}
-.island__lead .ui-icon {
-  font-size: 17px;
-}
-.island__trail {
-  animation: island-value var(--duration) var(--ease-out);
-}
-/* Die Kamera sitzt in der Mitte der Island: Platz dafür freihalten */
-.island__cam {
-  width: 56px;
-  flex: none;
-}
-.island__lead {
-  min-width: 0;
-}
-/* Das Symbol behält seinen Platz, der Text danach wird gekürzt (Auftrag 43, K1: am Handy lag das Symbol auf dem Ort,
-   der Ort ragte aus der Pille). */
-.island__lead .ui-icon {
-  flex: none;
-}
-.island-wrap:not(.is-floating) .island__lead {
-  flex: none;
-}
-.island__compact .island__trail {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Echtes Handy: keine Kamera-Attrappe, die Pille zeigt links die Spielzeit, daneben die wichtigste Aktivität */
-.island__clock {
-  font-size: var(--type-subhead);
-  font-weight: var(--font-weight-bold);
-  font-variant-numeric: tabular-nums;
-  color: var(--hw-white);
-}
-.island__idle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 37px;
-  padding: 0 16px;
-}
-/* Im Handy ist wenig Platz: links nur das Symbol, rechts der Wert (HIG: schmal und ausgewogen um die Kamera). */
-.island-wrap:not(.is-floating) .island__lead-text {
-  display: none;
-}
-.island__lead-text {
-  min-width: 0;
-  max-width: 96px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-@keyframes island-value {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-}
-.island__expanded {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 44px 14px 14px;
-  animation: island-content 220ms var(--ease-out) 110ms both;
-}
-.island__compact {
-  animation: island-compact 180ms var(--ease-out) 60ms both;
-}
-@keyframes island-compact {
-  from {
-    opacity: 0;
-  }
-}
-@keyframes island-content {
-  from {
-    opacity: 0;
-    filter: blur(4px);
-  }
-}
-.is-floating .island__expanded {
-  padding-top: 14px;
-}
-/* Echtes Handy: Die Pille schwebt knapp unter dem oberen Rand, im Ruhezustand so breit wie die Uhrzeit */
-.island-wrap.is-pill {
-  top: 6px;
-}
-.island-wrap.is-pill .island.is-idle {
-  width: auto;
-  min-width: 0;
-}
-.island-wrap.is-pill .island__compact {
   justify-content: center;
   gap: 10px;
-  padding: 0 16px;
-}
-.island-wrap.is-pill .island__expanded {
-  padding-top: 14px;
-}
-.island__more {
-  padding: 2px 6px 0;
-  font-size: var(--type-footnote);
-  color: var(--phone-label-2);
-}
-.island-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 48px;
-  padding: 6px;
-  border: 0;
-  border-radius: 26px;
-  background: none;
-  color: var(--hw-white);
-  text-align: left;
-  cursor: pointer;
-}
-.island-row:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-.island-row__icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: color-mix(in srgb, currentColor 18%, transparent);
-  font-size: 18px;
-}
-.island-row__text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.island-row__title {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: var(--type-subhead);
-  font-weight: var(--font-weight-bold);
-  line-height: 1.25;
-  color: var(--hw-white);
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.island-row__detail {
-  overflow: hidden;
-  font-size: var(--type-footnote);
-  color: var(--phone-label-2);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.island-row__bar {
-  display: block;
-  height: 4px;
-  margin-top: 4px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.16);
-  overflow: hidden;
-}
-.island-row__bar span {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-  background: currentColor;
-  transition: width var(--duration-slow) var(--ease-out);
-}
-.island-row__value {
-  flex: none;
-  padding-right: 8px;
-  font-size: var(--type-title-3);
-  font-weight: var(--font-weight-bold);
-  font-variant-numeric: tabular-nums;
-}
-/* Zweite Aktivität: kleiner Kreis neben der Island (minimale Darstellung) */
-.island-minimal {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 37px;
+  min-width: 126px;
   height: 37px;
-  padding: 0;
+  padding: 0 16px;
   border: 0;
-  border-radius: 50%;
+  border-radius: 44px;
   background: var(--hw-black);
   box-shadow: 0 0 0 1px var(--hw-rim);
-  color: inherit;
-  font-size: 17px;
+  color: var(--hw-white);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
-  animation: island-minimal-in 360ms var(--ease-ios);
 }
-/* Trefferfläche mindestens 44 pt, ohne den Kreis größer zu zeichnen */
-.island-minimal::after {
+.status-pill.is-idle {
+  cursor: default;
+}
+/* Trefferfläche mindestens 44 pt hoch, ohne die Pille größer zu zeichnen */
+.status-pill::after {
   content: "";
   position: absolute;
-  inset: -5px;
-  border-radius: 50%;
+  inset: -4px;
 }
-.island-minimal__count {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  background: var(--hw-white);
-  color: var(--hw-black);
-  font-size: var(--type-caption-2);
-  font-weight: var(--font-weight-black);
-  line-height: 16px;
+.status-pill__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--cat-goods-dark, #7cc4ff);
 }
-@keyframes island-minimal-in {
-  from {
-    opacity: 0;
-    transform: translateX(-24px) scale(0.6);
-  }
+.status-pill__item .ui-icon {
+  font-size: 17px;
 }
-/* Kräftige Bedeutungsfarben auf Schwarz (die Island ist immer dunkel) */
-.island-wrap .tone-accent {
-  color: var(--cat-money);
-}
-.island-wrap .tone-warn {
-  color: var(--cat-warn);
-}
-.island-wrap .tone-bad {
-  color: var(--cat-danger);
-}
-.island-wrap .tone-info {
-  color: var(--cat-sky);
-}
-.island-wrap .tone-neutral {
+.status-pill__clock {
   color: var(--hw-white);
 }
-.island-row.tone-accent .island-row__value,
-.island-row.tone-warn .island-row__value,
-.island-row.tone-bad .island-row__value,
-.island-row.tone-info .island-row__value {
-  color: inherit;
+.status-pill-wrap.is-pill .status-pill {
+  min-width: 0;
+  padding: 0 14px;
+}
+.is-floating .status-pill {
+  box-shadow:
+    0 0 0 1px var(--hw-rim),
+    var(--hud-shadow);
 }
 
 /* ---------------------------------------------------------------- Startbildschirm */
@@ -886,12 +560,6 @@
   position: absolute;
   top: -7px;
   left: -7px;
-}
-.phone-tab.is-buzzing-0 {
-  animation: phone-shake-a 360ms ease-in-out;
-}
-.phone-tab.is-buzzing-1 {
-  animation: phone-shake-b 360ms ease-in-out;
 }
 
 /* ---------------------------------------------------------------- App-Seiten */
@@ -1522,9 +1190,6 @@ html.is-dragging {
 .phone .phone-screen__back.is-pressed {
   opacity: 0.35;
 }
-.island-row.is-pressed {
-  background: rgba(255, 255, 255, 0.14);
-}
 .phone .ui-row .ui-chip {
   --chip-size: 30px;
   --chip-radius: 8px;
@@ -1637,12 +1302,6 @@ html.is-dragging {
   top: -6px;
   right: -6px;
 }
-.mobile-dock__phone.is-buzzing-0 {
-  animation: phone-shake-a 360ms ease-in-out;
-}
-.mobile-dock__phone.is-buzzing-1 {
-  animation: phone-shake-b 360ms ease-in-out;
-}
 
 /*
  * Kleine Fenster: Ist das Handy niedrig (unter ca. 800 px) oder schmal (unter 360 px), wird der Startbildschirm
@@ -1692,20 +1351,11 @@ html.is-dragging {
     border-radius: 22px 22px 0 0;
   }
   .phone__status {
-    --island-max: min(230px, calc(100cqw - 156px));
+    --pill-max: min(230px, calc(100cqw - 156px));
   }
-  .island-wrap {
-    top: 11px;
-  }
-  .island-wrap.is-floating {
+  .status-pill-wrap.is-floating {
     top: calc(var(--top) + var(--hud-height) + var(--space-3));
     left: 50%;
-  }
-  .island.is-expanded,
-  .island.is-alert,
-  .is-floating .island.is-expanded,
-  .is-floating .island.is-alert {
-    width: calc(100vw - 20px);
   }
   /* Unten die Leiste mit "Start" und "Weglegen" (über dem sicheren Bereich des Geräts) */
   .phone {
@@ -1731,16 +1381,7 @@ html.is-dragging {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .phone__device.is-buzzing-0,
-  .phone__device.is-buzzing-1,
-  .phone-tab.is-buzzing-0,
-  .phone-tab.is-buzzing-1,
-  .mobile-dock__phone.is-buzzing-0,
-  .mobile-dock__phone.is-buzzing-1 {
-    animation: none;
-  }
-  .phone-screen__footer,
-  .island-minimal {
+  .phone-screen__footer {
     animation: none;
   }
   .phone-screen__bar,

@@ -6,21 +6,6 @@ export const VIEWPORTS = {
   mobile: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
 };
 
-/** JavaScript für die Island-Szenen: legt offene Nachrichten mit Frist an (das ergibt Live-Aktivitäten). */
-const deadlines = (count) => `(() => {
-  const s = window.koeln.session.sim.state;
-  const now = s.time;
-  const names = ['Nordstadt Boys', 'Jansen (Hafen Rotterdam)'];
-  for (let i = 0; i < ${count}; i++) {
-    const id = 'gang:demo' + i;
-    s.messages.contacts[id] = { id, name: names[i], kind: i === 0 ? 'gang' : 'supplier' };
-    s.messages.list.push({
-      id: 9000 + i, contactId: id, time: now, from: 'contact', text: 'Das läuft ab, antworte schnell.', read: false,
-      options: [{ id: 'yes', label: 'Ja' }], expiresAt: now + 130 + i * 300, source: 'demo',
-    });
-  }
-})()`;
-
 /** JavaScript: synthetische Zeiger-Ereignisse (Maus und Touch gehen über dieselben Pointer Events). */
 const POINTER = `
   const pointer = (type, target, x, y) => target.dispatchEvent(new PointerEvent(type, {
@@ -277,7 +262,7 @@ export const SCENES = [
       sim.state.modules.suppliers.relations.rotterdam.trust = 30;
       sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'container' } });
       sim.dispatch({ type: 'suppliers.order', payload: { supplierId: 'rotterdam', packageId: 'shared' } });
-      // Das erste Schiff ist schon vier Stunden unterwegs (ohne Vorspulen, damit die Island ruhig bleibt).
+      // Das erste Schiff ist schon vier Stunden unterwegs (ohne Vorspulen).
       const [first] = sim.state.modules.suppliers.shipments;
       first.orderedAt -= 240;
       first.arrivesAt -= 240;
@@ -430,17 +415,6 @@ export const SCENES = [
       await until(() => document.querySelector('.ui-ctx-menu'));
     })()`,
   },
-  // Mitteilungszentrale: Banner herunterziehen (hier direkt geöffnet)
-  {
-    name: 'mitteilungen',
-    js: `(() => {
-      const api = window.koeln.runtime.api;
-      api.openPhone(null);
-      api.notify({ title: 'Toni (Frankfurt)', text: 'Ware ist unterwegs, morgen früh da.', icon: 'truck', appId: 'core.messages', sound: null });
-      api.notify({ title: 'Nordstadt Boys', text: 'Halt dich vom Ebertplatz fern.', icon: 'skull', appId: 'core.messages', sound: null });
-      api.toggleNotificationCenter(true);
-    })()`,
-  },
   // Rand-Wischen zurück, auf halbem Weg festgehalten (Vorseite parallax, Titel wandert)
   {
     name: 'rand-wischen',
@@ -520,26 +494,6 @@ export const SCENES = [
       sim.dispatch({ type: 'laundering.unlock', payload: { channel: 'laundromat', pay: 'dirty' } });
       sim.dispatch({ type: 'laundering.launder', payload: { amount: 1200, channel: 'kiosk' } });
       window.koeln.runtime.api.openPhone('laundering.app');
-    })()`,
-  },
-  {
-    name: 'island-kompakt',
-    js: `${deadlines(1)}; window.koeln.runtime.api.openPhone(null)`,
-  },
-  {
-    name: 'island-zwei',
-    js: `${deadlines(2)}; window.koeln.runtime.api.openPhone(null)`,
-  },
-  {
-    name: 'island-offen',
-    js: `${deadlines(2)}; window.koeln.runtime.api.openPhone(null); window.koeln.runtime.api.toggleIsland(true)`,
-  },
-  {
-    name: 'island',
-    js: `(() => {
-      const api = window.koeln.runtime.api;
-      api.openPhone(null);
-      api.pulseIsland({ kind: 'earn.dirty', amount: 450, icon: 'moneyBag', tone: 'accent', text: '' });
     })()`,
   },
   // Ausfälle: ein Läufer in Haft (ohne Stillhaltegeld), einer verletzt, die Nachricht nach der Festnahme
@@ -1177,25 +1131,17 @@ export async function openGame(page, base, advance) {
   await page.waitForSelector('.shell-map', { timeout: 15000 });
   await page.waitForTimeout(2500);
   if (advance > 0) await page.evaluate(`window.koeln.session.sim.advance(${advance})`);
-  // Meldungen vom Vorspulen gehören nicht in die Szenen.
-  await page.evaluate(() => {
-    const { runtime } = window.koeln;
-    while (runtime.ui.toasts.length > 0) runtime.api.dismissToast();
-  });
+  // Eine Rückmeldung vom Vorspulen gehört nicht in die Szenen.
+  await page.evaluate('window.koeln.runtime.api.dismissError()');
 }
 
-/**
- * Wechselt in die Szene und wartet, bis Animationen durch sind. Jede Szene beginnt auf dem Startbildschirm mit
- * zugeklappter Island.
- */
+/** Wechselt in die Szene und wartet, bis Animationen durch sind. Jede Szene beginnt auf dem Startbildschirm. */
 export async function showScene(page, scene) {
   await page.evaluate(`(() => {
     window.__sceneCleanup?.();
     window.__sceneCleanup = undefined;
     const api = window.koeln.runtime.api;
-    api.toggleNotificationCenter(false);
     api.openPhone(null);
-    api.toggleIsland(false);
     api.closePhone();
   })()`);
   await page.waitForTimeout(100);
@@ -1205,7 +1151,7 @@ export async function showScene(page, scene) {
 }
 
 /**
- * Wartet, bis keine Feder im Handy mehr läuft (Übergänge, Island; siehe src/ui/phone/motion.ts), und spult endliche
+ * Wartet, bis keine Feder im Handy mehr läuft (Übergänge; siehe src/ui/phone/motion.ts), und spult endliche
  * CSS-Animationen (Einblenden) ans Ende. Ohne GPU zeichnet Chromium so langsam, dass sie sonst auf dem Bild noch
  * halb durchsichtig sind.
  */

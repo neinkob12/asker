@@ -75,13 +75,6 @@ export function homeSwipeCommits(dy: number, height: number, vy: number): boolea
   return -dy > height / 8;
 }
 
-/** Banner: hoch wischen = weg, herunterziehen = Mitteilungszentrale, sonst zurück. */
-export function bannerSwipe(dy: number, vy: number): 'dismiss' | 'center' | 'stay' {
-  if (dy < -24 || vy < -FLING) return 'dismiss';
-  if (dy > 56 || vy > FLING) return 'center';
-  return 'stay';
-}
-
 /** Gummiband wie bei iOS: über die Grenze hinaus folgt die Fläche immer zäher. */
 export function rubberBand(offset: number, dimension: number, constant = 0.55): number {
   if (offset === 0) return 0;

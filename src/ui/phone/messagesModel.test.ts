@@ -7,7 +7,6 @@ import {
   chatList,
   firstUnread,
   groupChats,
-  messageNotification,
   recentContacts,
   shortContactName,
   timeLabel,
@@ -161,29 +160,6 @@ describe('Nachrichten-App: Chat', () => {
     expect(sim.dispatch({ type: 'messages.answer', payload: { messageId: id, optionId: 'pay' } }).ok).toBe(false);
     const [entry] = chatEntries(sim.state, gang.id).filter((e) => e.type === 'message');
     expect(entry.type === 'message' && entry.options).toHaveLength(1);
-  });
-});
-
-describe('Nachrichten-App: Benachrichtigung', () => {
-  it('nennt Absender, Text und öffnet den passenden Chat', () => {
-    const { sim, ctx } = game();
-    const id = messages.send(ctx, { contact: gang, text: 'Wir müssen reden.', options: [{ id: 'ok', label: 'Okay' }] });
-    expect(messageNotification(sim.state, id)).toEqual({
-      title: 'Nordstadt Boys · Antwort erwartet',
-      text: 'Wir müssen reden.',
-      icon: 'skull',
-      appId: 'core.messages',
-      params: { contactId: 'gang:nord' },
-    });
-    expect(messageNotification(sim.state, 9999)).toBeNull();
-  });
-
-  it('stille Nachrichten zählen als ungelesen, lösen aber kein Banner aus', () => {
-    const { sim, ctx } = game();
-    const id = messages.send(ctx, { contact: gang, text: 'Nur zur Info.', silent: true });
-    expect(messages.get(sim.state, id)?.silent).toBe(true);
-    expect(messages.unreadCount(sim.state)).toBe(1);
-    expect(messageNotification(sim.state, id)).toBeNull();
   });
 });
 

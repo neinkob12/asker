@@ -182,7 +182,6 @@ try {
   await shot('ende');
 
   const seen = await page.evaluate(() => window.playtest.seen);
-  const banners = await page.evaluate(() => window.koeln.runtime.stats.banners);
   const systems = {
     'Verkäufe (Straße)': seen['sale.completed'],
     'Lieferungen angekommen': seen['shipment.arrived'],
@@ -203,7 +202,6 @@ try {
     Stammkunden: seen['customer.regularGained'],
   };
   console.log(`\nNach ${days} Spieltagen (Seed ${seed}): ${JSON.stringify(last)}`);
-  console.log(`  Banner im Handy: ${banners} (${(banners / (days * 24)).toFixed(2)} pro Spielstunde)`);
   for (const [name, count] of Object.entries(systems)) console.log(`  ${name}: ${count ?? 0}`);
   await context.close();
 } finally {

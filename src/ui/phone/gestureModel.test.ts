@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  bannerSwipe,
   dragAxis,
   edgeSwipeCommits,
   edgeSwipeProgress,
@@ -76,14 +75,7 @@ describe('Home-Balken', () => {
   });
 });
 
-describe('Banner und Achsen', () => {
-  it('hoch = weg, runter = Mitteilungszentrale', () => {
-    expect(bannerSwipe(-40, 0)).toBe('dismiss');
-    expect(bannerSwipe(-5, -0.8)).toBe('dismiss');
-    expect(bannerSwipe(80, 0)).toBe('center');
-    expect(bannerSwipe(10, 0)).toBe('stay');
-  });
-
+describe('Achsen und Gummiband', () => {
   it('Achse erst ab der Schwelle', () => {
     expect(dragAxis(3, 2)).toBeNull();
     expect(dragAxis(20, 4)).toBe('x');

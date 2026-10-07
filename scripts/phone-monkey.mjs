@@ -188,7 +188,7 @@ const COLLECT = `(() => {
 
 /**
  * Läuft im Browser: liegt der Mittelpunkt des Elements (nach Scrollen) wirklich auf ihm? Verdeckt es nur eine
- * vorübergehende Ebene (Island, Banner, Blatt, Dialog), ist das kein Fund (overlay).
+ * vorübergehende Ebene (Rückmeldung, Blatt, Dialog), ist das kein Fund (overlay).
  */
 const HIT = (index) => `(async () => {
   const el = document.querySelector('[data-monkey="${index}"]');
@@ -261,7 +261,7 @@ const HIT = (index) => `(async () => {
   const inView = x >= 0 && y >= 0 && x <= innerWidth && y <= innerHeight;
   const top = document.elementFromPoint(x, y);
   const ok = !!top && (el === top || el.contains(top) || top.contains(el));
-  const overlay = !!top && !!top.closest('.island, .phone-notice, .ui-sheet-layer, .ui-sheet-backdrop, .ui-action-sheet, .ui-dialog-backdrop, .ui-dialog, .ui-menu, .ui-popover, .hud-flyout, .phone-notifications, .mg-overlay');
+  const overlay = !!top && !!top.closest('.status-pill-wrap, .ui-error-notice, .ui-sheet-layer, .ui-sheet-backdrop, .ui-action-sheet, .ui-dialog-backdrop, .ui-dialog, .ui-menu, .ui-popover, .hud-flyout, .mg-overlay');
   const name = top ? (top.className && top.className.baseVal !== undefined ? top.className.baseVal : String(top.className)).slice(0, 60) || top.tagName : 'nichts';
   const chain = [];
   for (let n = el, i = 0; n && i < 4; n = n.parentElement, i++) chain.push(n.tagName.toLowerCase() + '.' + String(n.className?.baseVal ?? n.className).split(' ').filter(Boolean).slice(0, 2).join('.'));
@@ -316,7 +316,7 @@ try {
           if (step % 25 === 0) {
             await page.evaluate(`(() => {
             const api = window.koeln.runtime.api;
-            api.closeDialog(); api.closePanel(); api.toggleNotificationCenter(false); api.openPhone(null);
+            api.closeDialog(); api.closePanel(); api.openPhone(null);
             ${
               target.kind === 'tab'
                 ? `api.selectTab('${target.id}')`
@@ -328,9 +328,7 @@ try {
             await page.waitForTimeout(500);
           }
           if (step % 10 === 0) await page.evaluate('window.koeln.session.sim.advance(25)');
-          await page.evaluate(
-            'window.koeln.runtime.api.toggleIsland(false); window.koeln.runtime.api.dismissNotification()',
-          );
+          await page.evaluate('window.koeln.runtime.api.dismissError()');
           // Das Handy liegt am Handy-Bildschirm manchmal in der Tasche (der Klicktest drückt auch "Weglegen"): holen.
           await page.evaluate('(() => { const r = window.koeln.runtime; if (!r.ui.phone.open) r.api.showPhone(); })()');
           const items = await page.evaluate(COLLECT);

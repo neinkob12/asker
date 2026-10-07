@@ -47,7 +47,6 @@ import {
   playerHeat,
   RAID_THRESHOLD,
 } from '../index';
-import './island';
 import './raid';
 import './police.css';
 

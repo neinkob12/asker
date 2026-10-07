@@ -1,5 +1,5 @@
 // Deine Fahrt zwischen den Städten (Auftrag 30, Etappe 5): Karte über der Kartenfläche mit Ziel, Ankunft und
-// "Fahrt überspringen" (Tempo auf Maximum bis zur Ankunft, kein Zeitsprung), Live-Aktivität in der Dynamic Island,
+// "Fahrt überspringen" (Tempo auf Maximum bis zur Ankunft, kein Zeitsprung),
 // das Auto auf der Deutschland-Karte (die Kamera fliegt beim Losfahren dorthin und folgt ihm). Ankunft: Banner, die
 // Kamera fliegt in die Zielstadt (CitySync, weil sie dort aktiv wird).
 
@@ -8,11 +8,10 @@ import { clock, type LngLat, SPEEDS } from '../../../core';
 import { addHtmlMarker, createVehicle, el, FAR_ZOOM, type MapLayer, onMapFrame, pointAlong } from '../../../map';
 import {
   Button,
+  hourCountdown,
   IconChip,
   iconElement,
-  islandCountdown,
   onGameEvent,
-  registerLiveActivity,
   registerSlot,
   soundOnEvent,
   useGame,
@@ -73,7 +72,7 @@ function TravelCard() {
             {cityName(travel.from)} → {cityName(travel.to)}
           </strong>
           <span class="city-travel__hint">
-            Ankunft {clock.formatTime(travel.arrivesAt)} (noch {islandCountdown(travel.arrivesAt - state.time)})
+            Ankunft {clock.formatTime(travel.arrivesAt)} (noch {hourCountdown(travel.arrivesAt - state.time)})
           </span>
         </span>
       </span>
@@ -93,28 +92,6 @@ function TravelCard() {
 }
 
 registerSlot('map.overlay', { id: 'city.travel', order: 20, component: TravelCard });
-
-registerLiveActivity({
-  id: 'city.travel',
-  activities: (state) => {
-    const travel = cityTravel(state);
-    if (!travel) return null;
-    return {
-      id: 'city.travel',
-      priority: 60,
-      icon: 'car',
-      tone: 'info',
-      leading: autobahnRefs(travel.from, travel.to)[0]?.replace(' ', '') ?? 'Autobahn',
-      trailing: islandCountdown(travel.arrivesAt - state.time),
-      title: `Unterwegs nach ${cityName(travel.to)}`,
-      detail: `Ankunft ${clock.formatTime(travel.arrivesAt)}`,
-      progress: travelProgress(state.time, travel.departedAt, travel.arrivesAt),
-      open: () => {
-        following = true;
-      },
-    };
-  },
-});
 
 onGameEvent('city.travelStarted', 'city.travel.camera', () => {
   following = true;

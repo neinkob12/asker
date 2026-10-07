@@ -3,7 +3,7 @@
 
 .mg-overlay {
   position: fixed;
-  /* über der schwebenden Island (weggelegtes Handy), wie die Akte der Konfrontation: Das Spiel pausiert */
+  /* über der schwebenden Anzeige (weggelegtes Handy): Das Spiel pausiert */
   z-index: calc(var(--z-notification) + 1);
   top: 0;
   bottom: 0;

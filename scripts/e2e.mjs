@@ -351,7 +351,7 @@ async function run() {
     await chip.waitFor();
     await page.waitForTimeout(500);
     for (let attempt = 1; ; attempt++) {
-      // Am linken Rand antippen: Am Handy-Bildschirm kann die schwebende Island die Mitte der Kachelreihe verdecken.
+      // Am linken Rand antippen: Am Handy-Bildschirm kann die schwebende Anzeige die Mitte der Kachelreihe verdecken.
       await chip.click({ position: { x: 14, y: 20 } });
       try {
         await page.locator('.city-menu__item', { hasText: 'Hamburg' }).first().click({ timeout: 5000 });

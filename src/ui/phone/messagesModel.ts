@@ -1,5 +1,5 @@
 // Ansicht der Nachrichten-App als reine Daten (ohne DOM, getestet in messagesModel.test.ts):
-// Chat-Liste, Verlauf eines Chats mit Tagestrennern, Antwort-Optionen und Fristen, Benachrichtigungen.
+// Chat-Liste, Verlauf eines Chats mit Tagestrennern, Antwort-Optionen und Fristen.
 // Die Nachrichten selbst verwaltet der Nachrichtendienst im Kern (src/core/messages.ts).
 
 import {
@@ -287,25 +287,3 @@ export function firstUnread(state: GameState, contactId: string): number | null 
   return messages.thread(state, contactId).find((m) => !m.read)?.id ?? null;
 }
 
-export interface MessageNotification {
-  title: string;
-  text: string;
-  icon: string;
-  appId: 'core.messages';
-  params: { contactId: string };
-}
-
-/** Banner für eine neu eingegangene Nachricht. */
-export function messageNotification(state: GameState, messageId: number): MessageNotification | null {
-  const message = messages.get(state, messageId);
-  if (!message || message.silent) return null;
-  const contact = messages.contact(state, message.contactId);
-  const answer = messages.canAnswer(state, message) ? ' · Antwort erwartet' : '';
-  return {
-    title: `${contact?.name ?? 'Unbekannt'}${answer}`,
-    text: message.text,
-    icon: contact?.avatar ?? CONTACT_KIND_ICONS[contact?.kind ?? 'other'],
-    appId: 'core.messages',
-    params: { contactId: message.contactId },
-  };
-}

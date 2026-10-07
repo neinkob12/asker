@@ -248,8 +248,8 @@
     flex-wrap: wrap;
     justify-content: flex-end;
   }
-  /* Kacheln unter der Uhr: Platz für die schwebende Island darunter lassen (N1, sonst lag sie auf „Rang“). */
-  .has-floating-island .hud-tiles {
+  /* Kacheln unter der Uhr: Platz für die schwebende Anzeige darunter lassen (N1, sonst lag sie auf „Rang“). */
+  .has-floating-pill .hud-tiles {
     margin-top: calc(37px + var(--space-3));
   }
 }
@@ -637,7 +637,7 @@
   border: 0;
   cursor: default;
 }
-/* Offene Karte oder offenes Menü liegt über der schwebenden Island (Auftrag 43, N1: „Verlauf“ im Menü und der Kopf der
+/* Offene Karte oder offenes Menü liegt über der schwebenden Anzeige (Auftrag 43, N1: „Verlauf“ im Menü und der Kopf der
    Rang-Karte lagen sonst darunter und waren nicht klickbar). */
 .hud:has(.hud-popover, .hud-flyout),
 .shell-mapctl:has(.hud-popover) {
@@ -1135,8 +1135,8 @@ kbd {
     flex-wrap: wrap;
     gap: var(--space-2);
   }
-  /* Schwebt die Dynamic Island unter Geld und Uhr, rücken die Kacheln darunter (sonst lägen Stadt, Lager, Ruf darunter) */
-  .has-floating-island .hud-tiles {
+  /* Schwebt die Anzeige unter Geld und Uhr, rücken die Kacheln darunter (sonst lägen Stadt, Lager, Ruf darunter) */
+  .has-floating-pill .hud-tiles {
     margin-top: var(--island-gap);
   }
   /* Höchstens drei Kacheln pro Reihe (Auftrag 43: fünf in einer Reihe schnitten Rang, Event und Ruf ab). Für jedes Kind,
@@ -1239,7 +1239,7 @@ kbd {
     bottom: calc(var(--mobile-dock-height) + var(--gap));
     right: 0;
   }
-  /* Platz für die schwebende Dynamic Island unter dem HUD */
+  /* Platz für die schwebende Anzeige unter dem HUD */
   .shell-map .maplibregl-ctrl-top-left {
     top: calc(var(--top) + var(--hud-height) + 52px);
   }
