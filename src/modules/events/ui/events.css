@@ -24,3 +24,48 @@
   font-size: 13px;
   line-height: 1.35;
 }
+
+/* Pop-up zum Start eines Stadt-Events (Auftrag 46e): Glas-Karte über der Karte. Nur Tokens. */
+.ui-map-dialog__card.events-start {
+  width: min(480px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.events-start__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.events-start__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.events-start__kicker {
+  margin: 0;
+  font-family: var(--font-hud);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cat-place);
+}
+.events-start__name {
+  margin: 0;
+  font-family: var(--font-hud-display);
+  font-size: 28px;
+  line-height: 1.05;
+}
+.events-start__line {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.events-start__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}

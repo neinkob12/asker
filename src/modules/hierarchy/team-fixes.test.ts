@@ -75,6 +75,9 @@ describe('Teams: Wer selbst führt, gehört zu keinem Team', () => {
     const x = recruit(sim, 'runner', 4);
     getPost(sim.state, a.id)?.team.push(x.id);
     expect(teamOf(sim.state, a.id).map((m) => m.id)).toContain(x.id);
+    // Auftrag 46e: Die Rechte Hand kommt aus den Leutnants; der Leutnant A hat sie trotzdem noch im Team stehen.
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: x.id, spotIds: ['ebertplatz'] } });
+    getPost(sim.state, a.id)?.team.push(x.id);
     expect(sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: x.id } }).ok).toBe(true);
     expect(getPost(sim.state, a.id)?.team).not.toContain(x.id);
     expect(teamOf(sim.state, a.id).map((m) => m.id)).not.toContain(x.id);
@@ -123,6 +126,7 @@ describe('Rechte Hand und Leutnant zugleich geht nicht', () => {
     const sim = quietGame();
     twoLieutenants(sim);
     const boss = recruit(sim, 'runner', 4);
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: ['ebertplatz'] } }); // Auftrag 46e: aus den Leutnants
     expect(sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } }).ok).toBe(true);
     const m = getStaffMember(sim.state, boss.id);
     if (!m) throw new Error('weg');
@@ -150,6 +154,7 @@ describe('Ausfälle: Wer fragt dich, wenn niemand handelt?', () => {
     const [a] = twoLieutenants(sim);
     sim.dispatch({ type: 'hierarchy.configure', payload: { staffId: a.id, settings: { onAbsent } } });
     const boss = recruit(sim, 'runner', 4);
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: ['ebertplatz'] } }); // Auftrag 46e: aus den Leutnants
     sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });
     sim.dispatch({ type: 'hierarchy.configureRightHand', payload: { settings: { absences: true } } });
     sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'uni' } });
@@ -195,6 +200,7 @@ describe('Abtauchen: Die Rechte Hand schickt niemanden in ein Veedel, das gerade
     const sim = quietGame();
     const [a] = twoLieutenants(sim);
     const boss = recruit(sim, 'runner', 4);
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: ['ebertplatz'] } }); // Auftrag 46e: aus den Leutnants
     sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });
     sim.dispatch({
       type: 'hierarchy.configureRightHand',
@@ -249,6 +255,7 @@ describe('Rechte Hand: Personal und Erfahrung', () => {
     const sim = quietGame();
     const [a] = twoLieutenants(sim);
     const boss = recruit(sim, 'runner', 4);
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: ['ebertplatz'] } }); // Auftrag 46e: aus den Leutnants
     sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });
     const rh = getRightHand(sim.state);
     if (rh) rh.xp = RIGHT_HAND_RANK_XP[2];
@@ -276,6 +283,7 @@ describe('Rechte Hand: Personal und Erfahrung', () => {
     const sim = quietGame();
     twoLieutenants(sim);
     const boss = recruit(sim, 'runner', 4);
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: ['ebertplatz'] } }); // Auftrag 46e: aus den Leutnants
     sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });
     const rh = getRightHand(sim.state);
     if (rh) rh.xp = RIGHT_HAND_RANK_XP[2];
@@ -316,6 +324,7 @@ describe('Rechte Hand: Einstellungen und Rückmeldung', () => {
     const sim = quietGame();
     twoLieutenants(sim);
     const boss = recruit(sim, 'runner', 4);
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: ['ebertplatz'] } }); // Auftrag 46e: aus den Leutnants
     sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });
     const rh = getRightHand(sim.state);
     if (rh) rh.xp = RIGHT_HAND_RANK_XP[3];

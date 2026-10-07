@@ -2,7 +2,7 @@
 // Läufer und Sicherheit im Spot-Panel, Hinweise bei Level-Aufstieg, Haft, Verrat.
 
 import { useState } from 'preact/hooks';
-import { formatEuro, formatPercent, type GameState, withPeriod } from '../../../core';
+import { formatEuro, type GameState, withPeriod } from '../../../core';
 import {
   Button,
   Chips,
@@ -34,13 +34,12 @@ import { tutorialAllowsRole } from '../../tutorial';
 import {
   activeRunnerAt,
   assignmentLabel,
-  bonus,
-  bonusProvider,
   DRIVER_HIRE_COST,
   getStaff,
   getStaffMember,
   isAbsent,
   isFarmRole,
+  isGoodSpecialist,
   isSpecialist,
   payrollDue,
   RUNNER_DAILY_WAGE,
@@ -53,9 +52,10 @@ import {
   STATUS_NAMES,
   type StaffMember,
   securityAt,
+  specialistProvider,
 } from '../index';
 import { AbsenceSheet, AbsentGroup } from './absence';
-import { Portrait, ROLE_ICONS, ROLE_TONES, StatusTag, traitChips } from './common';
+import { effectChips, Portrait, ROLE_ICONS, ROLE_TONES, StatusTag, traitChips } from './common';
 import { StaffProfile } from './Profile';
 import './staff.css';
 
@@ -305,31 +305,41 @@ function PeopleGroup(props: { title: string; icon: string; members: StaffMember[
   );
 }
 
+/**
+ * Wirkung der Spezialisten im Personal-Kopf (Auftrag 46e): pro Rolle die Person, die in der Stadt wirkt, mit ihren
+ * Chips (Zoll, Heat, Kontrollen; Verhaftungen, Haft, Kaution; Erlös, Löhne). Ohne Spezialisten ein Satz.
+ */
 function SpecialistBonuses() {
   const { state } = useGame();
-  const lines: string[] = [];
-  const lawyer = bonusProvider(state, 'bailDiscount');
-  if (lawyer) {
-    lines.push(
-      `${lawyer.name}: Kaution −${formatPercent(bonus(state, 'bailDiscount'))}, Haft −${formatPercent(bonus(state, 'jailReduction'))}`,
+  const ui = useUi();
+  const city = activeCity(state);
+  const providers = (['seizure', 'arrests', 'revenue'] as const)
+    .map((key) => specialistProvider(state, key, city))
+    .filter((m): m is StaffMember => !!m);
+  if (providers.length === 0) {
+    return (
+      <Hint icon="scale">
+        Spezialisten wirken in ihrer Stadt: Der Polizei-Kontakt hält Zoll, Heat und Kontrollen klein, der Anwalt holt
+        deine Leute raus, der Buchhalter bringt mehr Erlös und spart Löhne.
+      </Hint>
     );
   }
-  const accountant = bonusProvider(state, 'launderingFeeDiscount');
-  if (accountant) {
-    lines.push(`${accountant.name}: Geldwäsche-Gebühr −${formatPercent(bonus(state, 'launderingFeeDiscount'))}`);
-  }
-  const contact = bonusProvider(state, 'raidWarning');
-  if (contact) {
-    lines.push(`${contact.name}: warnt zu ${formatPercent(bonus(state, 'raidWarning'))} vor Razzien`);
-  }
-  if (lines.length === 0)
-    return <Hint>Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt) geben Boni, jeweils in ihrer Stadt.</Hint>;
   return (
-    <div class="staff-bonuses">
-      {lines.map((l) => (
-        <Hint key={l}>{l}</Hint>
-      ))}
-    </div>
+    <Group title="Wirkung der Spezialisten" icon="scale" color="law" count={providers.length}>
+      <List>
+        {providers.map((m) => (
+          <ListItem key={m.id} onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}>
+            <ItemContent
+              icon={ROLE_ICONS[m.role]}
+              color="law"
+              title={m.name}
+              meta={isGoodSpecialist(m) ? `${roleName(m.role)}, gut` : roleName(m.role)}
+              tags={effectChips(state, m)}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Group>
   );
 }
 

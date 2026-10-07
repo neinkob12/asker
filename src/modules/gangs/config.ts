@@ -35,8 +35,11 @@ export const DEFEND_TARGET = 60;
 /** So viel Einfluss pro Stunde, und was ein Punkt kostet. */
 export const DEFEND_RATE = 0.5;
 export const DEFEND_COST = 40;
-/** Chance pro Stunde (mal Expansionsdrang), einen Vorstoß zu beginnen. */
-export const EXPAND_CHANCE = 0.01;
+/**
+ * Chance pro Stunde (mal Expansionsdrang), einen Vorstoß zu beginnen. Auftrag 46e: halbiert (vorher 0,01), Übernahmen
+ * kommen halb so oft.
+ */
+export const EXPAND_CHANCE = 0.005;
 /** Mindestens so viele Leute und so viel Geld braucht ein Vorstoß; das Geld kostet er. */
 export const PUSH_MIN_PEOPLE = 8;
 export const PUSH_COST = 1500;
@@ -109,8 +112,27 @@ export const ATTACK_AT = 70;
 export const STAGE_HYSTERESIS = 10;
 /** Dieselbe Stufe wird höchstens so oft per Nachricht angekündigt. */
 export const ANNOUNCE_INTERVAL = 2 * DAY;
-/** Chance pro Stunde auf einen Überfall bei voller Feindseligkeit (mal Aggression). */
-export const ATTACK_CHANCE = 0.02;
+/**
+ * Chance pro Stunde auf einen Überfall bei voller Feindseligkeit (mal Aggression). Auftrag 46e: halbiert (vorher 0,02),
+ * dafür nimmt ein Überfall mehr mit (RAID_EFFECTS).
+ */
+export const ATTACK_CHANCE = 0.01;
+/**
+ * Folgen eines Überfalls der Gang auf dich (Auftrag 46e: seltener, dafür größer; vorher Spot [−25, −10] Ware und 10 %
+ * Bargeld bis 1.000 €, Fahrt [−20, −8], Lager 35 % des Bestands). Negative Werte sind Verluste; am Spot mal lossFactor
+ * des Verstecks. 'failure' bei Niederlage, 'retreat' bei Rückzug.
+ */
+export const RAID_EFFECTS = {
+  spot: {
+    failure: { goods: [-40, -16] as const, moneyShare: -0.15, moneyShareMax: 1500 },
+    retreat: { goods: [-18, -8] as const },
+  },
+  courier: { failure: { goods: [-30, -12] as const }, retreat: { goods: [-12, -5] as const } },
+  warehouse: {
+    failure: { goodsShare: -0.5, moneyShare: -0.15, moneyShareMax: 2500 },
+    retreat: { goodsShare: -0.25 },
+  },
+} as const;
 /** Mindestabstand zwischen zwei Überfällen derselben Gang. */
 export const ATTACK_COOLDOWN = 4 * DAY;
 /** Nach einem gelungenen Überfall ist die Gang erst mal zufrieden: so viel weniger Feindseligkeit. */
@@ -133,8 +155,8 @@ export const CEASEFIRE_COOLDOWN_AFTER_ATTACK = DAY;
 export const MIN_RELATION_TO_TALK = -60;
 
 /** Schutzgeld zahlen: Grundbetrag plus pro Punkt Feindseligkeit, für eine Woche. */
-export const TRIBUTE_BASE = 250;
-export const TRIBUTE_PER_HOSTILITY = 10;
+export const TRIBUTE_BASE = 300;
+export const TRIBUTE_PER_HOSTILITY = 12;
 export const TRIBUTE_DURATION = 7 * DAY;
 /** Schutzgeld steigt pro Veedel, das du kontrollierst (wer mehr hat, zahlt mehr). */
 export const TRIBUTE_PER_PLAYER_VEEDEL = 250;
@@ -231,12 +253,13 @@ export const VEEDEL_POWER = 15;
  * Hamburgs Gangs sind ohnehin stärker und härter, dort kommen die Methoden seltener dazu.
  */
 export const METHOD_INTERVAL_BY_CITY: Readonly<Record<string, readonly [number, number]>> = {
-  koeln: [4, 8],
-  hamburg: [6, 12],
+  // Auftrag 46e: doppelt so lang wie vorher (Köln [4, 8]): Forderungen kommen halb so oft, dafür größer.
+  koeln: [8, 16],
+  hamburg: [12, 24],
   // Berlin (Auftrag 37): starke Gangs, die oft Druck machen.
-  berlin: [5, 10],
-  muenchen: [6, 12],
-  frankfurt: [5, 10],
+  berlin: [10, 20],
+  muenchen: [12, 24],
+  frankfurt: [10, 20],
 };
 /** Geht zum Termin nichts (kein Ziel, eine andere Gang war gerade dran), versucht sie es so viel später wieder. */
 export const METHOD_RETRY = 6 * HOUR;
@@ -255,8 +278,8 @@ export const INCIDENT_EXPIRY = 8 * HOUR;
 
 /** Einbruch: nur nachts (Stunden), Anteil des Lagerbestands, höchstens so viel. */
 export const BURGLARY_HOURS: readonly [number, number] = [1, 5];
-export const BURGLARY_SHARE = 0.15;
-export const BURGLARY_MAX = 150;
+export const BURGLARY_SHARE = 0.25; // Auftrag 46e: vorher 0,15
+export const BURGLARY_MAX = 250; // vorher 150
 /** Jede Wache am Lager verscheucht Einbrecher mit dieser Chance (sonst halbiert sie den Verlust). */
 export const BURGLARY_GUARD_STOP = 0.6;
 /** Bemerkt wird der Einbruch um diese Uhrzeit. */
@@ -277,8 +300,8 @@ export const POACH_TALK_HEAT = 8;
 export const POACH_RAISE_LOYALTY = 10;
 
 /** Einschüchtern: so viele Kunden kommen noch (Faktor), so lange. */
-export const INTIMIDATION_FACTOR = 0.75;
-export const INTIMIDATION_DURATION = 6 * HOUR;
+export const INTIMIDATION_FACTOR = 0.6; // Auftrag 46e: vorher 0,75
+export const INTIMIDATION_DURATION = 9 * HOUR; // vorher 6 Stunden
 /** Sicherheit hinschicken: Chance, dass sie ohne Kampf abziehen (sonst Konfrontation). */
 export const INTIMIDATION_LEAVE_CHANCE = 0.5;
 
@@ -287,9 +310,9 @@ export const TIPOFF_HEAT = 6;
 export const TIPOFF_RAID_CHANCE = 0.1;
 
 /** Erpressung: Grundbetrag plus Anteil am Warenwert des Lagers (Einkauf), gerundet; bei Weigerung Heat und Razzia. */
-export const BLACKMAIL_BASE = 300;
-export const BLACKMAIL_STOCK_SHARE = 0.1;
-export const BLACKMAIL_MAX = 3000;
+export const BLACKMAIL_BASE = 500; // Auftrag 46e: vorher 300
+export const BLACKMAIL_STOCK_SHARE = 0.15; // vorher 0,1
+export const BLACKMAIL_MAX = 4500; // vorher 3.000
 export const BLACKMAIL_HEAT = 12;
 /** Abgelehnte Erpressung: Chance, dass die Polizei daraufhin eine Razzia plant (Heat gibt es immer). */
 export const BLACKMAIL_RAID_CHANCE = 0.35;

@@ -122,10 +122,12 @@ export const HIDE_AFTER_RAID = 60;
 
 // --- Rechte Hand ---
 
-/** Voraussetzungen für die Rechte Hand: Level, Loyalität und so viele Leutnants (dann bietet das Handy die Stelle an). */
-export const RIGHT_HAND_MIN_LEVEL = 4;
+/**
+ * Voraussetzungen für die Rechte Hand (Auftrag 46e): Sie kommt aus den Leutnants der Stadt (ein Level braucht sie nicht
+ * mehr), ab dieser Loyalität; sobald es so viele Leutnants gibt, bietet das Handy die Stelle an.
+ */
 export const RIGHT_HAND_MIN_LOYALTY = 50;
-export const RIGHT_HAND_MIN_LIEUTENANTS = 2;
+export const RIGHT_HAND_MIN_LIEUTENANTS = 1;
 /** Lohnanspruch der Rechten Hand. */
 export const RIGHT_HAND_DEMAND = 2.5;
 /** Die Rechte Hand hält immer die Löhne für so viele Tage zurück (gegen Anheuern und Kaution). */

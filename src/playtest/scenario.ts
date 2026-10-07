@@ -22,8 +22,8 @@ export function takeCity(sim: Simulation, cityId: string): void {
 }
 
 /**
- * Eine Rechte Hand in der Stadt bereit für die Vollmacht: Gibt es noch keine, kommen zwei Leutnants und eine Rechte Hand
- * dazu. Höchste Stufe, alle Aufgaben an.
+ * Eine Rechte Hand in der Stadt bereit für die Vollmacht: Gibt es noch keine, kommen zwei Leutnants dazu, und ein
+ * dritter steigt gleich zur Rechten Hand auf (Auftrag 46e: Sie kommt aus den Leutnants). Höchste Stufe, alle Aufgaben an.
  */
 export function rightHandReady(sim: Simulation, cityId = 'koeln'): void {
   const ctx = sim.ctx('scenario');
@@ -35,6 +35,8 @@ export function rightHandReady(sim: Simulation, cityId = 'koeln'): void {
     }
     const boss = enlist(ctx, generateProfile(ctx, 'runner', { level: 5 }), { origin: 'pool', cityId });
     boss.stats.loyalty = 92;
+    const third = getSpots(sim.state, cityId)[2] ?? getSpots(sim.state, cityId)[0];
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: [third.id] } });
     sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });
   }
   const rh = getRightHand(sim.state, cityId);

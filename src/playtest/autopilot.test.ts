@@ -14,7 +14,7 @@ import {
   getRightHand,
   RIGHT_HAND_RANK_XP,
 } from '../modules/hierarchy';
-import { enlist, generateProfile, getStaff } from '../modules/staff';
+import { enlist, generateProfile, getStaff, getStaffMember } from '../modules/staff';
 import { addInfluence, factions, PLAYER_FACTION } from '../modules/territory';
 import { allVeedel } from '../modules/veedel';
 import { newBotStats, playFor, snapshot } from './bot';
@@ -32,11 +32,11 @@ describe('Köln läuft allein', () => {
     playFor(sim, 10 * DAY, stats);
     expect(sim.state.outcome.gameOver).toBeNull();
 
-    // Rechte Hand sicherstellen (der Bot ernennt meist selbst eine; sonst bekommt er eine erfahrene Person).
+    // Rechte Hand sicherstellen (der Bot ernennt meist selbst eine; sonst steigt ein Leutnant auf, Auftrag 46e).
     if (!getRightHand(sim.state)) {
       expect(getLieutenantIds(sim.state).length).toBeGreaterThanOrEqual(2);
-      const ctx = sim.ctx('staff');
-      const boss = enlist(ctx, generateProfile(ctx, 'runner', { level: 5 }), { origin: 'pool' });
+      const boss = getStaffMember(sim.state, getLieutenantIds(sim.state)[0]);
+      if (!boss) throw new Error('kein Leutnant');
       boss.stats.loyalty = 85;
       expect(canBeRightHand(sim.state, boss.id).ok).toBe(true);
       expect(sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } }).ok).toBe(true);

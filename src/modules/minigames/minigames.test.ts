@@ -56,6 +56,8 @@ function rightHand(sim: Simulation) {
     ok(sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: recruit(sim, 4).id, spotIds: [spot.id] } }));
   }
   const m = recruit(sim, 5);
+  // Auftrag 46e: Die Rechte Hand kommt aus den Leutnants.
+  ok(sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: m.id, spotIds: [spots[2].id] } }));
   ok(sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: m.id } }));
   return m;
 }

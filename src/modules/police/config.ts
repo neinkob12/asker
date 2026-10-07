@@ -79,16 +79,19 @@ export const HEAT_DECAY_SHARE_PER_HOUR = 0.04;
 
 /** Ab diesem Heat gibt es Kontrollen. */
 export const CHECK_THRESHOLD = 30;
-/** Wahrscheinlichkeit pro Stunde bei Heat 100 und Präsenz 1 (darunter anteilig ab der Schwelle). */
-export const CHECK_CHANCE_PER_HOUR = 0.08;
+/**
+ * Wahrscheinlichkeit pro Stunde bei Heat 100 und Präsenz 1 (darunter anteilig ab der Schwelle). Auftrag 46e: halbiert
+ * (vorher 0,08), dafür nimmt eine Kontrolle mehr mit (CHECK_GOODS, CHECK_MONEY).
+ */
+export const CHECK_CHANCE_PER_HOUR = 0.04;
 /** Nach einer Kontrolle ist im Veedel so lange Ruhe. */
 export const CHECK_COOLDOWN = 12 * 60;
 /** Die Polizei ist erst mal zufrieden: Heat sinkt um so viel. */
-export const CHECK_HEAT_RELIEF = 6;
-/** Beschlagnahmte Ware bei einer Kontrolle (Einheiten). */
-export const CHECK_GOODS = { min: 2, max: 8 } as const;
-/** Beschlagnahmtes Schwarzgeld bei einer Kontrolle (Euro). */
-export const CHECK_MONEY = { min: 30, max: 150 } as const;
+export const CHECK_HEAT_RELIEF = 10; // Auftrag 46e: vorher 6
+/** Beschlagnahmte Ware bei einer Kontrolle (Einheiten). Auftrag 46e: doppelt (vorher 2 bis 8). */
+export const CHECK_GOODS = { min: 4, max: 16 } as const;
+/** Beschlagnahmtes Schwarzgeld bei einer Kontrolle (Euro). Auftrag 46e: doppelt (vorher 30 bis 150). */
+export const CHECK_MONEY = { min: 60, max: 300 } as const;
 /** Festnahme bei einer Kontrolle ohne Flucht (bei Vorsicht 50). */
 export const CHECK_ARREST_CHANCE = 0.2;
 /** So oft versucht der Kontrollierte zu fliehen (Konfrontation "Polizeiflucht"). */
@@ -107,13 +110,16 @@ export const PLAYER_CHASE_CHANCE = 0.5;
 
 /** Ab diesem Heat gibt es Razzien. */
 export const RAID_THRESHOLD = 60;
-/** Wahrscheinlichkeit pro Stunde bei Heat 100 und Präsenz 1 (darunter anteilig ab der Schwelle). */
-export const RAID_CHANCE_PER_HOUR = 0.06;
+/**
+ * Wahrscheinlichkeit pro Stunde bei Heat 100 und Präsenz 1 (darunter anteilig ab der Schwelle). Auftrag 46e: halbiert
+ * (vorher 0,06), dafür nimmt eine Razzia mehr mit (RAID_SCOPES) und bringt mehr Ruhe (RAID_HEAT_RELIEF).
+ */
+export const RAID_CHANCE_PER_HOUR = 0.03;
 /** Eine Razzia gegen den Spieler wird so lange vorher geplant (Zeit für die Warnung des Polizei-Kontakts). */
 export const RAID_LEAD_TIME = 3 * 60;
 /** Nach einer Razzia ist im Veedel so lange Ruhe. */
 export const RAID_COOLDOWN = 24 * 60;
-export const RAID_HEAT_RELIEF = 25;
+export const RAID_HEAT_RELIEF = 35; // Auftrag 46e: vorher 25
 /** Razzien je Stufe so viel seltener bzw. häufiger (Kleindealer, Händler, Großhändler). */
 export const RAID_CHANCE_BY_TIER = [0.4, 1, 1.5] as const;
 /**
@@ -126,10 +132,12 @@ export const SALE_HEAT_BY_TIER = [0.4, 0.5, 0.6] as const;
  * nächsten liegt, höchstens goodsMax), warehouseShare: Anteil des Bestands in eigenen Lagern im Veedel (0 = keine
  * Durchsuchung), moneyShare: Anteil vom Schwarzgeld (höchstens moneyMax), arrest: Festnahme pro Person (Vorsicht 50).
  */
+// Auftrag 46e: etwa anderthalbfache Beute (vorher spot 0,08/15/–/0,03/250, veedel 0,08/25/0,25/0,08/800,
+// major 0,15/150/0,5/0,2/15.000), Festnahmen wie gehabt.
 export const RAID_SCOPES = {
-  spot: { goodsShare: 0.08, goodsMax: 15, warehouseShare: 0, moneyShare: 0.03, moneyMax: 250, arrest: 0.5 },
-  veedel: { goodsShare: 0.08, goodsMax: 25, warehouseShare: 0.25, moneyShare: 0.08, moneyMax: 800, arrest: 0.55 },
-  major: { goodsShare: 0.15, goodsMax: 150, warehouseShare: 0.5, moneyShare: 0.2, moneyMax: 15000, arrest: 0.75 },
+  spot: { goodsShare: 0.12, goodsMax: 25, warehouseShare: 0, moneyShare: 0.05, moneyMax: 400, arrest: 0.5 },
+  veedel: { goodsShare: 0.12, goodsMax: 40, warehouseShare: 0.35, moneyShare: 0.12, moneyMax: 1200, arrest: 0.55 },
+  major: { goodsShare: 0.2, goodsMax: 200, warehouseShare: 0.6, moneyShare: 0.25, moneyMax: 20000, arrest: 0.75 },
 } as const;
 /** Kompatibilität: Anteil des Lagerbestands bei einer Razzia im Veedel. */
 export const RAID_WAREHOUSE_SHARE = RAID_SCOPES.veedel.warehouseShare;
@@ -138,8 +146,11 @@ export const RAID_ARREST_CHANCE = RAID_SCOPES.veedel.arrest;
 
 // --- Großrazzia (nur Großhändler) ------------------------------------------------------------------------------
 
-/** Wahrscheinlichkeit pro Stunde, dass die Kripo zuschlägt (bei Heat 100 im Schnitt deiner Veedel, anteilig ab 40). */
-export const MAJOR_RAID_CHANCE_PER_HOUR = 0.06;
+/**
+ * Wahrscheinlichkeit pro Stunde, dass die Kripo zuschlägt (bei Heat 100 im Schnitt deiner Veedel, anteilig ab 30).
+ * Auftrag 46e: halbiert (vorher 0,06).
+ */
+export const MAJOR_RAID_CHANCE_PER_HOUR = 0.03;
 export const MAJOR_RAID_MIN_HEAT = 30;
 /** Vorlauf: Die Großrazzia wird so lange vorher geplant (der Polizei-Kontakt warnt dann einen Tag vorher). */
 export const MAJOR_RAID_LEAD_TIME = 24 * 60;

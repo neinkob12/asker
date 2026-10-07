@@ -214,6 +214,15 @@ describe('gangs: KI', () => {
       .filter((e) => e.payload.gangId === 'nord')
       .map((e) => e.payload.stage);
     expect(stages.slice(0, 3)).toEqual([1, 2, 3]);
+    // Auftrag 46e: Überfälle und Methoden kommen halb so oft; tageweise weiterverkaufen, bis die Hafenkolonne zuschlägt.
+    const actions = () =>
+      [
+        ...eventsOfType(events, 'gang.raidStarted'),
+        ...eventsOfType(events, 'gang.intimidation'),
+        ...eventsOfType(events, 'gang.burglary'),
+        ...eventsOfType(events, 'gang.poachAttempt'),
+      ].filter((e) => e.payload.gangId === 'nord').length;
+    for (let day = 0; day < 20 && actions() === 0; day++) sellHours(sim, 'ebertplatz', 15, 24);
     const fromNord = messages.thread(sim.state, 'gang:nord');
     expect(fromNord.length).toBeGreaterThanOrEqual(3);
     // Die Drohung bietet Diplomatie als Antwort an.
