@@ -130,7 +130,7 @@ async function run() {
     'Tutorial: nur der Neumarkt, Mission 1 auf der Karte, drei Verkäufe erledigen sie, Belohnung kommt',
     async () => {
       // Auftrag 46b: Am Anfang gibt es nur den Neumarkt, Apps wie Gangs und Lieferanten fehlen noch.
-      // Marker gibt es für jeden Spot jeder Stadt (gesperrte grau); offen ist nur der Neumarkt.
+      // Marker gibt es für jeden Spot der aktiven Stadt (gesperrte grau, Auftrag 47); offen ist nur der Neumarkt.
       assert.equal(await page.locator('.spot-marker:not(.is-locked)').count(), 1, 'nur ein offener Spot');
       const wasOpen = await page.evaluate(() => window.koeln.runtime.ui.phone.open);
       await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
