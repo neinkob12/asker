@@ -135,7 +135,7 @@ async function run() {
       const wasOpen = await page.evaluate(() => window.koeln.runtime.ui.phone.open);
       await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
       const home = page.locator('.phone__home');
-      await home.getByRole('button', { name: 'Einstellungen', exact: true }).waitFor();
+      await home.getByRole('button', { name: /^Einstellungen/ }).waitFor();
       assert.equal(await home.getByRole('button', { name: /^Gangs/ }).count(), 0, 'Gangs fehlt am Anfang');
       assert.equal(await home.getByRole('button', { name: /^Lieferanten/ }).count(), 0, 'Lieferanten fehlen am Anfang');
       if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
@@ -178,7 +178,8 @@ async function run() {
       await shot(page, 'tutorial-mission-2');
       // Der Rest des Tests braucht alle Spots und Apps: beenden wie ein Spieler, der sich auskennt.
       await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
-      await home.getByRole('button', { name: 'Einstellungen', exact: true }).click();
+      // Mit Badge heißt die Kachel "Einstellungen, 1 neu" (ein Ereignis im Verlauf, z.B. eine Gang drängt).
+      await home.getByRole('button', { name: /^Einstellungen/ }).click();
       await page.locator('.phone').getByRole('button', { name: 'Tutorial beenden', exact: true }).click();
       assert.equal(await game(page, (s) => s.modules.tutorial.stage), 12);
       await page.evaluate(() => window.koeln.runtime.api.openPhone(null));

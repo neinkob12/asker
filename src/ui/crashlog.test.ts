@@ -61,7 +61,7 @@ describe('Fehlerfänger (Auftrag 47)', () => {
     expect(second.toasts).toEqual([]);
   });
 
-  it('schreibt Fehler in den Verlauf, denselben höchstens dreimal', () => {
+  it('merkt sich Fehler (denselben höchstens dreimal) und nennt den letzten nach einem Absturz', () => {
     const storage = memoryStorage();
     const { runtime, toasts } = fakeRuntime();
     bindCrashLog(runtime, storage);
@@ -70,10 +70,16 @@ describe('Fehlerfänger (Auftrag 47)', () => {
       const event = Object.assign(new Event('error'), { error: new Error('kaputt'), message: 'kaputt' });
       win.dispatchEvent(event);
     }
-    expect(toasts).toEqual(['Fehler im Spiel: kaputt', 'Fehler im Spiel: kaputt', 'Fehler im Spiel: kaputt']);
+    // Kein Eintrag im Verlauf (der zählt am Badge), nur die Liste.
+    expect(toasts).toEqual([]);
     const saved = JSON.parse(storage.getItem('koeln-tycoon:errors') ?? '[]');
     expect(saved).toHaveLength(3);
     expect(saved[0].message).toBe('kaputt');
+    vi.clearAllTimers();
+    const next = fakeRuntime();
+    bindCrashLog(next.runtime, storage);
+    vi.advanceTimersByTime(STALE_MS + 5000);
+    expect(next.toasts[0]).toContain('letzter Fehler: kaputt');
   });
 
   it('beschreibt den Moment ohne leere Teile', () => {

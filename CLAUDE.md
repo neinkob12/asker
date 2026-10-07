@@ -191,8 +191,8 @@ Auftrag 47 (Performance, `docs/auftraege/47-performance.md`): Leute haben einen 
 `liveMembers`; wer `cityId` einer Person direkt setzt, ruft `invalidateStaffIndex()`). Module können mit `tickOffset`
 versetzt ticken (nur, wenn der Tick nicht an `now % MINUTES_PER_DAY` hängt). Spielstände liegen in IndexedDB
 (`openBrowserSaveStorage`, Spiegel im Arbeitsspeicher, Notfallspeicher im localStorage), der Autosave schreibt nur bei
-Änderung. Spot-Marker nur für die aktive Stadt (`mapSpots`). Fehler und abgebrochene Sitzungen landen im Verlauf
-(`src/ui/crashlog.ts`, Lebenszeichen `koeln-tycoon:alive`). Messen: `PERF=1 npm run perf:sim` (auch ein Spieltag je
+Änderung. Spot-Marker nur für die aktive Stadt (`mapSpots`). Abgebrochene Sitzungen meldet der Verlauf, Fehler
+stehen in `koeln-tycoon:errors` (`src/ui/crashlog.ts`, Lebenszeichen je Tab `koeln-tycoon:alive:<tab>`). Messen: `PERF=1 npm run perf:sim` (auch ein Spieltag je
 großem Test-Spielstand) und `scripts/perf-browser.mjs`.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 

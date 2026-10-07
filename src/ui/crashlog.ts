@@ -1,5 +1,6 @@
 // Fehlerfänger (Auftrag 47, Punkt 7): Abstürze sollen sichtbar werden. Fehler im Browser (window 'error',
-// 'unhandledrejection') landen im Verlauf (Einstellungen › Verlauf) und in einer kurzen Liste im localStorage. Dazu ein
+// 'unhandledrejection') landen in der Konsole und in einer kurzen Liste im localStorage (nicht im Verlauf: Dort zählt
+// jeder Eintrag am Badge, und ein fehlgeschlagener Abruf im Hintergrund ist keine Nachricht für den Spieler). Dazu ein
 // Lebenszeichen je Tab: Solange die Seite läuft, steht alle paar Sekunden im localStorage, was gerade los ist (Spieltag,
 // Uhrzeit, offene App, Sprachmodell lädt). Wird die Seite ordentlich verlassen (pagehide), fällt es weg. Ein
 // Lebenszeichen, das länger als STALE_MS nicht erneuert wurde, gehört zu einer Sitzung, die abgebrochen ist (Absturz,
@@ -31,6 +32,8 @@ export interface CrashContext {
   phone: string | null;
   /** Lädt gerade ein Sprachmodell? */
   voiceLoading: boolean;
+  /** Letzter Fehler dieser Sitzung, falls einer kam. */
+  lastError?: string;
 }
 
 export interface LoggedError {
@@ -57,7 +60,7 @@ function write(storage: Storage, key: string, value: unknown): void {
   }
 }
 
-function context(runtime: UiRuntime): CrashContext {
+function context(runtime: UiRuntime, lastError?: string): CrashContext {
   const state = runtime.state;
   let voiceLoading = false;
   try {
@@ -70,12 +73,18 @@ function context(runtime: UiRuntime): CrashContext {
     game: state ? clock.format(state.time) : null,
     phone: runtime.ui.phone.open ? runtime.ui.phone.app : null,
     voiceLoading,
+    ...(lastError ? { lastError } : {}),
   };
 }
 
 /** Text für den Verlauf, wenn die letzte Sitzung abgebrochen ist. */
 export function crashText(last: CrashContext): string {
-  const parts = [last.game, last.phone ? `Handy: ${last.phone}` : null, last.voiceLoading ? 'Sprachmodell lud' : null];
+  const parts = [
+    last.game,
+    last.phone ? `Handy: ${last.phone}` : null,
+    last.voiceLoading ? 'Sprachmodell lud' : null,
+    last.lastError ? `letzter Fehler: ${last.lastError}` : null,
+  ];
   const where = parts.filter(Boolean).join(', ');
   return `Die letzte Sitzung ist unerwartet beendet worden (Absturz oder vom Browser geschlossen)${where ? `: ${where}` : ''}.`;
 }
@@ -116,21 +125,24 @@ export function bindCrashLog(runtime: UiRuntime, storage: Storage): () => void {
   const recheck = setTimeout(checkStale, STALE_MS + HEARTBEAT_MS);
 
   const counts = new Map<string, number>();
+  let lastError: string | undefined;
   const report = (reason: unknown) => {
     const message = describe(reason);
     const seen = (counts.get(message) ?? 0) + 1;
     counts.set(message, seen);
+    lastError = message.slice(0, 200);
     if (seen > SAME_ERROR_LIMIT) return;
     const entry: LoggedError = { at: Date.now(), message, game: context(runtime).game };
     const list = read<LoggedError[]>(storage, ERRORS_KEY) ?? [];
     write(storage, ERRORS_KEY, [entry, ...list].slice(0, ERROR_LIMIT));
-    // Nur in den Verlauf (kein Banner): Ein Fehler stört das Spiel meist nicht, soll aber auffindbar sein.
-    runtime.api.toast(`Fehler im Spiel: ${message}`, 'info', { log: true });
+    beat();
   };
   const onError = (event: ErrorEvent) => report(event.error ?? event.message);
   const onRejection = (event: PromiseRejectionEvent) => report(event.reason);
 
-  const beat = () => write(storage, ownKey, context(runtime));
+  function beat() {
+    write(storage, ownKey, context(runtime, lastError));
+  }
   const leave = () => write(storage, ownKey, null);
   const onVisible = () => {
     if (document.visibilityState === 'visible') beat();

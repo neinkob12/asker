@@ -72,12 +72,14 @@ Spiel über 20 Tage. Im Spätspiel stimmt sie nicht mehr. Ursachen, nach Gewicht
   ersten Gebrauch (`graph.ts`). Der Piper-Worker war schon ein eigener Chunk.
 - [x] 6. Perf-Leitplanke um die großen Test-Spielstände erweitert (`perf.bench.test.ts`, `PERF=1 npm run perf:sim`:
   ein Spieltag je Stand mit Richtwert, schlägt bei mehr als dem Doppelten fehl).
-- [x] **7. Absturz sichtbar machen** (`src/ui/crashlog.ts`): Fehler (`error`, `unhandledrejection`) landen im
-  Verlauf und in `koeln-tycoon:errors` (die letzten 20, derselbe höchstens dreimal). Dazu ein Lebenszeichen alle 5
-  Sekunden in `koeln-tycoon:alive` (Spieltag und Uhrzeit, offene App, ob ein Sprachmodell lädt), das bei `pagehide`
-  wegfällt. Steht es beim nächsten Start noch da, sagt der Verlauf: „Die letzte Sitzung ist unerwartet beendet
-  worden … Sprachmodell lud“. Damit lässt sich der Verdacht beim nächsten Absturz in Hamburg prüfen, bevor das Laden
-  der Stimme umgebaut wird (das Modell lädt in einem Worker, ein reiner Zeitpunkt-Wechsel spart keinen Speicher).
+- [x] **7. Absturz sichtbar machen** (`src/ui/crashlog.ts`): Fehler (`error`, `unhandledrejection`) landen in der
+  Konsole und in `koeln-tycoon:errors` (die letzten 20, derselbe höchstens dreimal), nicht im Verlauf (jeder Eintrag
+  dort zählt am Badge der Einstellungen). Dazu ein Lebenszeichen je Tab alle 5 Sekunden in `koeln-tycoon:alive:<tab>`
+  (Spieltag und Uhrzeit, offene App, ob ein Sprachmodell lädt, letzter Fehler), das bei `pagehide` wegfällt. Ist eines
+  älter als 15 Sekunden, sagt der Verlauf: „Die letzte Sitzung ist unerwartet beendet worden … Sprachmodell lud“
+  (geprüft beim Start und 20 Sekunden danach; ein zweiter offener Tab zählt nicht). Damit lässt sich der Verdacht beim
+  nächsten Absturz in Hamburg prüfen, bevor das Laden der Stimme umgebaut wird (das Modell lädt in einem Worker, ein
+  reiner Zeitpunkt-Wechsel spart keinen Speicher).
 - [x] **8. Läufer am Spot ohne Zwischenliste** (`activeRunnerAt`, `runnerAt`, `securityAt` lesen nur die Stadt des
   Spots). Läuft pro Spot und Tick in Hierarchie, Rechter Hand und Gangs. Deutschland nach Punkt 1 bis 3: 870 → 716
   ms/Tag (Node, ein Spieltag ohne Bot; vor Auftrag 47 1348).
