@@ -86,7 +86,7 @@ function SpotPanel(props: { spotId: string }) {
   const waiting = waitingAt(state, spot.id).length;
   const cost = unlockCostOf(state, spot);
   return (
-    <div class="spot-panel">
+    <div class="spot-panel" data-tour="spot.panel">
       <SummaryTiles
         items={[
           { icon: 'smile', color: waiting > 0 ? 'warn' : 'money', value: waiting, label: 'warten' },

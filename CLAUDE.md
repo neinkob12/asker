@@ -159,6 +159,18 @@ für Schritt: In einem neuen Spiel kommen die Apps mit Peters Quests (`PHONE_APP
 jeder App; alte Stände und andere Städte haben alles, Einstellungen › Einstieg schaltet es ab). Neue Quests kommen als
 goldenes Banner (`ui.toast` mit `title`, `color`, `appId`, `duration`), die Quest-Karte klappt auf und hat in den
 ersten Kapiteln „Zeig mir wie“.
+Auftrag 46 (Feedback 07.10.2026, `docs/auftraege/46-feedback-minispiele.md`): Drei Minispiele neu, ohne Fragen mit
+Antworten (Wahrscheinlichkeit nur noch bei der Rechten Hand). Verfolgungsjagd als Arcade-Rennspiel von hinten im Canvas
+(`layout: 'stage'`, eigene Bühne statt Karte): drei Spuren, Verkehr, Streifen, die rammen, drängen und blockieren,
+Sperren, Turbo, Balken „Abhängen“ (`SHAKE_*`), Skyline je Stadt (`SKYLINES` in `chase/draw.ts`). Verkehrskontrolle als
+„Verstecken und Nerven“: Blick von oben ins Auto, der Beamte leuchtet Station für Station in Stellen (`traffic/model.ts`,
+Sätze in `lines.ts`), Pakete rechtzeitig umräumen, Puls im Takt; picks `flee`, `bribe`, `found:<n>`. Bewerbungsgespräch
+als Lügendetektor: Zeichen (`TELL_KINDS`) rechtzeitig antippen, Gesten sind Fehlalarme (`interview/model.ts`,
+Overlay `Tells.tsx`). Razzia-Countdown neu gezeichnet. Minispiele etwa doppelt so oft, nur auf Pfaden des Spielers
+(`PLAYER_CHECK_THRESHOLD`, `PLAYER_CHASE_CHANCE`, `UNDERCOVER_BASE_CHANCE_PER_HOUR` 6 %, `PLAYER_CHECK_FACTOR` in
+`logistics`, Überfall auf den Spot, an dem du stehst, mit dir drin). Test-Spielstände je Minispiel (`?spielstand=minispiel-<art>`,
+Gruppe „Minispiele“, `src/playtest/minigameSaves.ts`): Das Spiel steht an und öffnet sich nach dem Laden von selbst; Auslöser ohne
+Wurf dafür in `police` (`playerChase`, `startUndercoverShift`).
 Auftrag 46b (Modul `tutorial`, Teil von Auftrag 46 „Intro neu“, `docs/auftraege/46-intro-neu.md`): Stufen 0 bis 12 und
 Missionen mit Teilzielen als Daten (`tutorial/config.ts`, `missions.ts`), Belohnung aus den Verkäufen der letzten 24
 Stunden (`missionReward`, `reward.ts`), Missions-Karte im HUD (`placement: 'below'`, Anker `data-tour="hud.mission"`).
@@ -333,7 +345,7 @@ Selbst ausprobieren:
 Im Browser: `?neu=normal&seed=1&tempo=0` startet ein frisches Spiel; `window.koeln.session` in der Konsole.
 Test-Spielstände (vom Bot gespielt, nicht in der Bestenliste), einer für jeden Abschnitt des Bogens (`koeln-anfang` bis
 `europa`; jede Stadt in der Reihenfolge Hamburg, Berlin, München, Frankfurt mit `ankunft-<stadt>`, `boss-von-<stadt>`
-und `<stadt>-komplett`): `?spielstand=koeln-komplett` oder Spielstände › Test-Spielstände; Liste in `src/playtest/testSaves.ts` und
+und `<stadt>-komplett`) und einer je Minispiel (`minispiel-<art>`): `?spielstand=koeln-komplett` oder Spielstände › Test-Spielstände; Liste in `src/playtest/testSaves.ts` und
 `src/ui/builtin/testSaves.ts`, Dateien in `public/spielstaende/`, neu erzeugen mit `npm run saves:build` (etwa zwei
 Minuten; `testSaves.test.ts` prüft, dass sie laden und den Moment zeigen; Übersicht in `docs/architektur.md`, Abschnitt
 "Spielstände").

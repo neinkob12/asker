@@ -264,6 +264,7 @@ const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void;
         type="button"
         class={`phone__app ${props.dock ? 'is-dock' : ''}`}
         data-app-id={app.id}
+        data-tour={`phone.app.${app.id}`}
         onClick={(e) => {
           markTapped(e.currentTarget);
           props.onOpen();
@@ -378,7 +379,7 @@ const HomeScreen = memo(function HomeScreen() {
     .sort((a, b) => rank(a) - rank(b));
   const urgent = urgentAdvice(state);
   return (
-    <div class="phone__home">
+    <div class="phone__home" data-tour="phone.home">
       <div class="phone__home-scroll">
         {urgent && <UrgentAdvice key={urgent.id} advice={urgent} />}
         <div class="phone__widgets">
@@ -721,6 +722,7 @@ export function PhoneFrame() {
   return (
     <section
       class={`phone ${device ? 'phone--device' : ''} ${locked ? 'is-locked' : ''}`}
+      data-tour="phone"
       aria-label="Handy"
       inert={locked}
     >

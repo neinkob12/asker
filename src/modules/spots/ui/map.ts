@@ -205,6 +205,9 @@ export const spotsLayer: MapLayer = {
       const lock = iconElement('lock', { class: 'spot-lock', strokeWidth: 2.4 });
       const bubble = el('span', 'spot-bubble');
       bubble.append(badge, lock);
+      // Anker der Tour (Auftrag 46a): die Kundenanzeige dieses Spots, Schlüssel ist die Spot-ID.
+      bubble.dataset.tour = 'spot.customer';
+      bubble.dataset.tourKey = spot.id;
       const sign = el('span', 'spot-sign');
       sign.append(bubble);
       // Kneipen (Auftrag 30, Etappe 7) tragen ein Bierglas an der Blase, seit Auftrag 23 jede Art außer der Straßenecke

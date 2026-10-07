@@ -153,9 +153,11 @@ zählt, ob das Geld für Schulden plus Paket reicht).
   | Köln (stundenweise bis 11 von 12 Veedeln) | `koeln-anfang` (Tag 3), `koeln-veedel` (erstes Veedel), `boss-von-koeln` (im Schritt der Mehrheit), `koeln-komplett` (zurechtgerückt: 50.000 €, das zwölfte Veedel fällt nach einer Spielminute, ein paar Stunden ruhig) |
   | Deutschland (`playToGermany` mit `cityOrder` = `ARRIVAL_CITIES`: Hamburg, Berlin, München, Frankfurt) | pro Stadt `ankunft-<stadt>` (erste Ankunft, `city.arrived`, bevor der Bot dort etwas tut: keine Leute, keine Rechte Hand, keine Routen), `boss-von-<stadt>` (im Schritt der Mehrheit) und `<stadt>-komplett` (Stand beim vorletzten Veedel, zurechtgerückt wie Köln mit `nearlyComplete`: Rechte Hand bereit, das letzte Veedel fällt nach einer Spielminute, danach meldet sich die nächste Stadt bzw. Jansen); `deutschland` (Boss von Deutschland, Jansen ruft gleich an) |
   | Hafen (Verkauf bis zum Titel Europa) | `hafen` (Ankunft in Rotterdam), `hafen-europa` (eigenes Schiff, Kunden in Europa), `produktion` (zwei Fincas, erste Ernte im Ausfuhrlager), `produzent`, `europa` |
+  | Minispiele (Auftrag 46, `src/playtest/minigameSaves.ts`, kein eigener Lauf: aus `boss-von-koeln` bzw. `hafen`) | `minispiel-<art>` für jede der zehn Arten: Das Minispiel steht an, ausgelöst auf dem echten Weg des Moduls (Kontrolle am Spot ohne Wurf `police.playerChase`, Überfall mit Zuschlagen, Tipp `tipOffAgainstPlayer`, eigene Fahrt mit `checkAt`, Zivis ohne Wurf `startUndercoverShift`, Überfall bzw. Eintreiben auf einer Kopie so oft gespielt, bis Tresor bzw. Bude anstehen, `trade.buy`, Sammellieferung mit `problem: 'seized'` und Antwort „Papiere fälschen“, `recruiting.interview`). Nach dem Laden öffnet sich der Rahmen von selbst, die Folgen laufen wie im Spiel |
 
   Neu erzeugen mit `npm run saves:build` (alle in etwa zwei Minuten, einzelne mit `node scripts/build-test-saves.mjs <id> …`);
-  `testSaves.test.ts` lädt jede Datei, lässt sie einen Tag laufen und prüft den Moment, für den sie gemacht ist. Die
+  `testSaves.test.ts` lädt jede Datei, lässt sie einen Tag laufen und prüft den Moment, für den sie gemacht ist (bei den
+  Minispiel-Ständen: das Spiel steht an, ein Sieg wirkt im auslösenden Modul, danach ein Tag ohne Game Over). Die
   Reihenfolge der Städte steht fest (`ARRIVAL_CITIES`); wer sie ändert, passt die Texte in `src/ui/builtin/testSaves.ts`
   an.
 
@@ -299,6 +301,13 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
 - **Start** (`start.tsx`): Registriert die Kern-Oberflächen, lädt alle `src/modules/*/ui/index.ts(x)`, setzt den
   Autosave fort oder öffnet "Neues Spiel". URL-Parameter: `?neu=normal|hardcore&seed=123&tempo=0`.
   `window.koeln = { session, runtime }` zum Ausprobieren und für Playwright.
+- **Tour** (`tour/`, Auftrag 46a): Spotlight-Erklärungen über dem Spiel. Elemente tragen `data-tour="<id>"`
+  (`TOUR_ANCHORS`), eine Tour ist eine Liste von Schritten (`TourDef`, `TourStep`: Anker, ein, zwei Sätze, Sprecher
+  mit Porträt, `before`, `waitFor` als Weiter, Ereignis oder Bedingung am Zustand), das Overlay graut alles aus und
+  schneidet den Anker frei, die Box hat „Weiter“; die Uhr steht. `ui.tour.start(def)` reiht ein, `active()`, `skip()`.
+  Reine Oberfläche ohne Zustand im Spielstand; die Inhalte je Stufe kommen mit dem Modul `tutorial` (46b, 46c).
+  Details, Anker-Liste und Vorschau (`?tour=demo`, `npm run screenshot -- --scenes=tour`):
+  [`src/ui/README.md`](../src/ui/README.md), Abschnitt „Tour“.
 
 ## Karte (`src/map/`)
 
@@ -1228,16 +1237,16 @@ Zähler `nextId`), `difficulty` (0 bis 1), `title`, `situation`, `params` (JSON 
 
 | Art | Wert | Auslöser | Folgen | Wichtige picks |
 | --- | --- | --- | --- | --- |
-| `chase` Verfolgungsjagd | speed | `policeChase` beim Start, `vehicleCheck` mit „Gas geben“ (`speedOff`) oder `flee` aus der Kontrolle | `applyChase` in `encounters/minigames.ts`: entkommen = Erfolg bzw. Rückzug, gefasst = Niederlage | `dumped` (Ware weg), zur Info `hideout`, `time` |
+| `chase` Verfolgungsjagd | speed | `policeChase` beim Start, `vehicleCheck` mit „Gas geben“ (`speedOff`) oder `flee` aus der Kontrolle | `applyChase` in `encounters/minigames.ts`: entkommen (Balken „Abhängen“ voll, Tiefgarage) = Erfolg bzw. Rückzug, gefasst (Karre kaputt, gestellt, Zeit um) = Niederlage | `dumped` (Ware weg), zur Info `hideout`, `time` |
 | `brawl` Straßenkampf | strength | „Zuschlagen“ oder Aggression ab `AGGRESSION_FIGHT` in fünf Gang-Anlässen | `applyBrawl`: alle Gegner weg = Erfolg, `ko` = Niederlage (verletzt, nie tot), sonst Aggression `BRAWL_AFTER_AGGRESSION`, Entschlossenheit −`BRAWL_DOWN_RESOLVE` je Gegner am Boden | `down:<n>`, `fled:<n>`, `hurt:<staffId>`, `playerHurt`, `ko`, `grabbed`, `sirens` |
 | `stash` Razzia-Countdown | caution | `planRaid`/`planMajorRaid`, wenn du in der Stadt bist und dort Ware liegt (`police/stash.ts`) | `PlannedRaid.stash`/`MajorRaid.stash` = `min(STASH_MAX, Score)`, die Razzia nimmt so viel weniger; `'police.raid'.stashed` | – |
-| `traffic` Verkehrskontrolle | charisma | `vehicleCheck` beim Start, wenn du selbst fährst | `applyTraffic`: durch = Erfolg, sonst Niederlage; `lies:<n>` gibt `TRAFFIC_NOTED_HEAT` je Widerspruch (höchstens zwei) | `flee` (weiter mit der Jagd), `bribe`, `lies:<n>` |
+| `traffic` Verkehrskontrolle | charisma | `vehicleCheck` beim Start, wenn du selbst fährst | `applyTraffic`: durch = Erfolg, sonst Niederlage; `found:<n>` (Päckchen, die er eingesackt hat) kostet bei Erfolg etwas Ware und gibt `TRAFFIC_NOTED_HEAT` (höchstens zwei; früher `lies:<n>`) | `flee` (weiter mit der Jagd), `bribe`, `found:<n>` |
 | `undercover` Zivi oder Kunde | caution | Du stehst selbst an einem Spot: stündlich gewürfelt fest aus Seed, Spot und Stunde, Grundrauschen `UNDERCOVER_BASE_CHANCE_PER_HOUR`, ab `UNDERCOVER_HEAT` mit der Heat steigend (`police/undercover.ts`) | Verkauf an einen Zivi → Kontrolle gegen dich am Spot (`runCheck` mit `player`), alle erkannt → Heat −`UNDERCOVER_RELIEF`, abgewimmelte Kunden kosten Ruf | `soldZivi:<n>`, `spotted:<n>`, `turnedAway:<n>`, `sold:<n>`, `missed:<n>` |
 | `safe` Tresor knacken | caution | Gewonnener Überfall auf einen Gang-Spot mit dir (`gangs/safe.ts`), Inhalt `min(SAFE_MAX, SAFE_SHARE · Geld der Gang)`, unter 200 € keiner | `max · Score` Schwarzgeld aus der Kasse der Gang, nicht geschafft: Alarm (`SAFE_ALARM_HEAT`) | – |
 | `search` Bude durchsuchen | caution | Schutzgeld selbst eingetrieben mit Erfolg oder Rückzug, nicht bei abgelaufener Polizei-Uhr (`gangs/search.ts`, `searchAmount`) | `max · Score` Schwarzgeld, mit `noise` und nicht geschafft Heat (`SEARCH_NOISE_HEAT`) | `found:<n>`, `hidden:<n>`, `noise` |
 | `container` Container packen | caution | `trade.buy` oder `trade.sail` mit Actor `player` (`trade/packing.ts`), ein Minispiel je Bestellung | `TradeShipment.packing` = Score, Zollrisiko × `packingFactor` (`PACKING_FACTOR`: 1,25 bis 0,55) | – |
 | `papers` Papiere fälschen | caution | `customsCheck` beim Start, wenn du selbst dabei bist (am Kai in Rotterdam; Autobahn ist angeschlossen, im Spiel fährt dort aber noch niemand selbst); seit Auftrag 45 auch die Wahl „Papiere fälschen“, wenn einer Lieferung die Beschlagnahme droht (`suppliers/troubles.ts`, origin `suppliers`, `shipment:<id>`) | `applyPapers`: durch = Erfolg, sonst Niederlage; bei Lieferungen `onPapersFinished`: geschafft = durch, `bribe` kostet das Schmiergeld, sonst beschlagnahmt | `bribe`, `giveUp`, zur Info `fixed:<n>`, `hits:<n>` |
-| `interview` Bewerbungsgespräch | charisma | Knopf „Gespräch führen“ im Bewerber-Blatt (`recruiting.interview`, einmal je Bewerber, nur in deiner Stadt) | Erkannte Eigenschaften werden aufgedeckt (`revealedTraits`), geschafft zeigt einen versteckten Wert | angetippte Eigenschaften |
+| `interview` Bewerbungsgespräch | charisma | Knopf „Gespräch führen“ im Bewerber-Blatt (`recruiting.interview`, einmal je Bewerber, nur in deiner Stadt) | Erkannte Eigenschaften (Zeichen rechtzeitig angetippt) werden aufgedeckt (`revealedTraits`), geschafft zeigt einen versteckten Wert | aufgedeckte Eigenschaften |
 
 **Konfrontationen.** `EncounterKind.minigames` (`start`, `actions`, `brawl`) sind Daten in `encounters/kinds.ts`.
 Ein Minispiel startet nur, wenn du aktiv dabei bist (`playerPresent`, nicht am Boden) und die Art `ready` ist.
@@ -1262,8 +1271,8 @@ den Dialog, den die Folgen öffnen). Übergänge (`ui/flow.ts`):
 - Ein offenes Minispiel ohne Rahmen (z.B. nach dem Laden) zeigt eine Warnung im HUD, die ihn öffnet.
 - Hat die Rechte Hand übernommen, sagt ein Banner, wie es ausging.
 
-**Karte gehört dem Minispiel.** Für `layout: 'map'` (Verfolgungsjagd) übernimmt der Rahmen die Karte, bevor das Spiel
-startet (`useMapTakeover` in `kit/mapTakeover.ts` mit `takeOverMap` aus `src/map`): keine Bedienung der Karte, Kulisse
+**Karte gehört dem Minispiel.** Für `layout: 'map'` (seit Auftrag 46 nutzt es kein Spiel mehr; die Verfolgungsjagd hat
+eine eigene Bühne) übernimmt der Rahmen die Karte, bevor das Spiel startet (`useMapTakeover` in `kit/mapTakeover.ts` mit `takeOverMap` aus `src/map`): keine Bedienung der Karte, Kulisse
 aus (`MAP_DECOR_LAYERS`: Verkehr, Leute an Spots), Marker geparkt (`parkMarkers` in `src/map/markers.ts`: von der
 Karte genommen, danach wieder angehängt; das spart am Handy gut 10 ms pro Bild), HUD, Kartenknöpfe und Dock versteckt
 (Klasse `is-map-taken` an `<html>`). Beim Schließen kommen Bedienung, Ebenen, Kamera und Ränder zurück. Das Spiel holt
@@ -1310,9 +1319,7 @@ Minispiele.
   Zustand einzelner Spiele.
 - `npm run e2e` spielt das Bewerbungsgespräch über die Oberfläche (Personal › Bewerber › „Gespräch führen“).
 - Leistung der Jagd: `npm run perf:browser -- --scenes=jagd --mobile --throttle=4` (Bilder pro Sekunde, Rechenzeit
-  der Jagd pro Bild, MapLibre zeichnen, Long Tasks). Gemessen am 07.10.2026 headless mit Software-Grafik: 6,1 ms pro
-  Bild für die Jagd (vorher 17,6 ms, als die Marker nur versteckt waren), 7 Long Tasks in 20 s (vorher 63); die Bilder
-  pro Sekunde (3,5) begrenzt dort das Zeichnen der Karte ohne GPU.
+  der Jagd pro Bild, Long Tasks). Seit Auftrag 46 zeichnet die Jagd in einem eigenen Canvas (kein MapLibre im Bild).
 
 **Ein elftes Minispiel anlegen.**
 
@@ -1338,6 +1345,59 @@ wie bisher steigend), eine Kontrolle im Veedel, in dem du selbst stehst, trifft 
 `police/undercover.ts`, mit 30 % Verfolgungsjagd), und eine drohende Beschlagnahme bei einer Lieferung lässt sich mit
 dem Minispiel Papiere abwenden. Danach: erstes Minispiel an Tag 1 bis 3, eins bis zwei pro Spieltag am Spot. Der Bot
 steht nie selbst am Spot und bestellt einzeln: Würfelfolgen, Szenarien und `npm run balance` bleiben gleich.
+
+### Feedback vom 07.10.2026 (Auftrag 46): Minispiele neu
+
+Kein Minispiel stellt mehr Fragen mit Antworten; Wahrscheinlichkeit gibt es nur noch, wenn die Rechte Hand übernimmt.
+
+**Verfolgungsjagd** (`minigames/ui/games/chase/`): Arcade-Rennspiel von hinten in einem eigenen Canvas
+(`layout: 'stage'`). Modell (`model.ts`): Straße aus `SEGMENTS` Stücken mit Kurven und Kulisse aus dem Seed, drei
+Spuren (`LANES`, `laneX`), Spurwechsel mit Feder (`steer`), Vollgas, Bremse, Turbo (`TURBO_*`), Kurvenzug nach außen,
+Verkehr (`spawnTraffic`, immer eine Spur frei, auffahren und streifen), Streifen (`stepCops`: aufschließen mit Maß,
+rammen in deiner Spur, neben dir drücken, vor dir blockieren, Gummiband weit hinten, zögern nach der Ware aus dem
+Fenster, Crash im Verkehr), Sperren mit einer Lücke (`BLOCK_*`), Balken „Abhängen“ (`SHAKE_*`: steigt ab `SHAKE_FAR`
+Metern Vorsprung, fällt unter `SHAKE_NEAR`; voll = entkommen), gefasst bei Schaden 1, gestellt (`CATCH_*`) oder Zeit um.
+Zeichnen (`draw.ts`): Projektion mit Horizont, Maßstab aus Bühne und Orientierung (hochkant höhere Kamera), Himmel nach
+Tageszeit, Skyline der Stadt (`SKYLINES`, Fallback Köln), Häuserzeilen mit Seitenwand, Laternen, Bäume, Schilder,
+Brücken, Wagen von hinten (`drawCar`, Polizei mit Lichtbalken), deine Karre (`drawPlayerCar`), Rückspiegel, Funken,
+Rauch, Regen, Tempo-Linien, Blaulicht-Wash, Ende. Komponente (`ChaseGame.tsx`): Bildschleife, Tasten, Touch (am Handy
+Gas von selbst), HUD, Funk (`radio.ts`), Ton-Schleifen (`sounds.ts`), Dev-Haken `window.chase` mit `advance` und
+`forceEnd`. `applyChase` in `encounters` ist unverändert.
+
+**Verkehrskontrolle** (`minigames/ui/games/traffic/`): „Verstecken und Nerven“. Modell (`model.ts`): Szene 100 × 150
+von oben, Stellen (`ZONES`: offen Sitz, Fußraum, Bank; versteckt Handschuhfach, Konsole, unter dem Fahrersitz,
+Türfächer, Kofferraum, Reserveradmulde, mit Platz, Größe und Verstauzeit), Stationen (`STOPS`, Reihenfolge aus dem
+Seed, versteckte Stellen mit Chance nach Schwierigkeit, jede versteckte höchstens einmal), Pakete (3 bis 6, klein oder
+mittel), Ablauf `greet → look/walk … → end`, Fund bei Licht in der Stelle (`inspect`, `MAX_FOUND`), `send` mit Prüfung
+(`seen`, `tooBig`, `full`, `busy`), Puls mit Takt (`tap`, `BEAT`, Zonen), Nervös-Station ab `PULSE_NERVOUS`, `bribe`
+(nur zwischen `BRIBE_MIN` und `BRIBE_MAX`), `flee`. Sätze in `lines.ts` (`OFFICER_LINES`, `LOOK_LINES`). Zeichnen
+(`draw.ts`): Auto aufgeschnitten, am Desktop quer gedreht (`TrafficLayout.rotated`, `toScene`, `zoneScreen`),
+Streifenwagen, Beamter mit Lampe und Kegel, Regen. Komponente: Paket antippen oder ziehen, Stelle antippen oder 1 bis 7,
+Leiste mit Belegung, Herz im Takt, Gas geben, Schein.
+
+**Bewerbungsgespräch** (`minigames/ui/games/interview/`): Lügendetektor. Modell (`model.ts`): drei Fragen aus dem
+Seed (zuerst zu unbekannten Eigenschaften, `INTERVIEW_QUESTIONS` aus `recruiting`), Antwort mit Dauer aus dem Text
+(mindestens so lang, dass alle Zeichen hineinpassen), Zeichen (`TELL_KINDS`) und Gesten (`GESTURE_KINDS`) ohne
+Überlappung (`Cue`), `mark` (Treffer einmal je Zeichen, sonst Fehlalarm), Urteil je Runde (`judge`: mindestens die
+Hälfte der Zeichen, höchstens `FALSE_ALARMS_ALLOWED` Fehlalarme; ehrliche Antworten nur Gesten), Score = richtige
+Runden / 3, picks = aufgedeckte Eigenschaften. Zeichen am Porträt: `Tells.tsx` (Schweiß, Hand am Hals, Becher) und
+CSS-Bewegungen (`is-cue-<art>`), nervöses Grinsen über den Mund im Look.
+
+**Test-Spielstände je Minispiel** (`src/playtest/minigameSaves.ts`, Gruppe „Minispiele“ im Spielstände-Dialog,
+`?spielstand=minispiel-<art>`): siehe Abschnitt „Spielstände“. Dafür neu in `police`: `playerChase(ctx, spotId)`
+(Kontrolle am Spot, an dem du stehst, ohne die Würfe) und `startUndercoverShift(ctx, spotId, heat)` (die Schicht Zivis
+ohne den Wurf; `maybeStartUndercover` ruft es nach dem Wurf). Ein offenes Minispiel im geladenen Spielstand öffnet den
+Rahmen einmal von selbst (`PendingHud`, `markOpened`/`wasOpened` in `ui/flow.ts`, je Spielzustand), danach bleibt der
+Knopf im HUD.
+
+**Razzia-Countdown** (`stash/draw.ts`): Lager und Straße neu gezeichnet (Paletten, Regale mit Kisten, Tresor mit
+Zahlenrad, Lieferwagen, Schaufenster, Bank, Blumenkübel, Briefkasten, Mülltonne, Pakete mit Klebeband und Etikett).
+
+**Öfter** (nur Pfade des Spielers, Bot und Balancing unverändert): `UNDERCOVER_BASE_CHANCE_PER_HOUR` 0,06 und
+`UNDERCOVER_COOLDOWN` 5 h; stehst du selbst am Spot, Kontrollen ab `PLAYER_CHECK_THRESHOLD` (15) mit
+`PLAYER_CHASE_CHANCE` (0,5) Verfolgungsjagd (derselbe Wurf, keine Verschiebung); fährst du selbst,
+`PLAYER_CHECK_FACTOR` (2) auf Kontrolle und Zoll (`logistics/rollCheck`); überfällt eine Gang den Spot, an dem du
+stehst, bist du dabei (`gangs/ai.ts`, `playerPresent` statt `askPlayer`).
 
 **Sammel- und Einzelbestellung (`suppliers`).** Das Angebot steht nach Warenart (`PRODUCT_CATEGORIES` in `goods`:
 Blüten, Hasch, Edibles, Öl, Vapes). Über „Einzeln | Sammelbestellung“ wählt der Spieler, wie mehrere Pakete kommen:

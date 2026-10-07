@@ -9,8 +9,8 @@
 //     [--mobile] [--throttle=4] [--gpu] [--reduced-motion] [--traffic=off|low|normal] [--hour=8] [--city=hamburg]
 //     [--scenes=ui,karte,jagd]
 //
-// Verfolgungsjagd (Auftrag 44): --scenes=jagd öffnet die Jagd (Vorschau im laufenden Spiel), fährt SECONDS Sekunden
-// mit Gas und wechselnden Abzweigen und meldet Bilder pro Sekunde, die Rechenzeit der Jagd pro Bild (Modell, Ebene,
+// Verfolgungsjagd (Auftrag 44, seit Auftrag 46 ein Rennspiel im Canvas): --scenes=jagd öffnet die Jagd (Vorschau im
+// laufenden Spiel), fährt SECONDS Sekunden mit Gas und Spurwechseln und meldet Bilder pro Sekunde, die Rechenzeit der Jagd pro Bild (Modell, Zeichnen,
 // Kamera mit map.jumpTo, HUD), MapLibre zeichnen und Long Tasks. Am Handy: --mobile --throttle=4.
 //
 // Karte (Auftrag 31): --scenes=karte misst den Normalbetrieb auf der Karte (zehn offene Aufträge, eine laufende

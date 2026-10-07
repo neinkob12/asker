@@ -18,6 +18,7 @@ import { introSeen } from './player';
 import { UiRuntime } from './runtime';
 import { App } from './shell/App';
 import { bindKeys } from './shell/keys';
+import { demoTour } from './tour/demo';
 import './styles/tokens.css';
 import './styles/base.css';
 import './shell/shell.css';
@@ -103,6 +104,8 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
   }
   const speed = params.get('tempo');
   if (speed !== null) runtime.api.setSpeed(Number(speed));
+  // ?tour=demo (Auftrag 46a): Demo-Tour über HUD, Handy und Karte, sobald das Spiel steht (mit ?neu=… kombinieren).
+  if (params.get('tour') === 'demo') disposers.push(startDemoTour(runtime));
 
   disposers.push(bindKeys(runtime));
   applyDockSpring();
@@ -137,6 +140,28 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
 export function startTutorial(session: GameSession): void {
   session.dispatch({ type: 'tutorial.start', payload: {} });
 }
+
+/**
+ * Startet die Demo-Tour, sobald ein Spiel geladen ist und die Oberfläche einmal gezeichnet wurde (kein Dialog offen).
+ * Gibt die Abmeldung zurück.
+ */
+function startDemoTour(runtime: UiRuntime): () => void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const off = runtime.subscribe(() => {
+    if (!runtime.state || runtime.ui.dialog || timer) return;
+    timer = setTimeout(() => {
+      off();
+      if (runtime.state && !runtime.ui.dialog) void runtime.api.tour.start(demoTour(runtime.api));
+    }, DEMO_TOUR_DELAY_MS);
+  });
+  return () => {
+    off();
+    if (timer) clearTimeout(timer);
+  };
+}
+
+/** So lange nach dem ersten Bild wartet die Demo-Tour, damit HUD und Handy stehen. */
+const DEMO_TOUR_DELAY_MS = 800;
 
 /**
  * Setzt `data-paused` am Wurzelelement, solange das Spiel steht (Tempo 0, z.B. Pause oder ein Dialog, der es anhält):

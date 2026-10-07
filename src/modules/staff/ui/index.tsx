@@ -349,6 +349,7 @@ function SpotStaff(props: { spotId: string }) {
   const open = (m: StaffMember) => ui.openPanel('staff.profile', { staffId: m.id });
   return (
     <Group
+      data-tour="spot.runner"
       title="Personal"
       icon="users"
       color="people"

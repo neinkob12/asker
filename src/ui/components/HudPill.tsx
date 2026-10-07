@@ -25,6 +25,8 @@ export interface HudPillProps {
   details?: ComponentChildren;
   /** Beschriftung des Knopfs unten in der Karte, der onClick auslöst (z.B. "Öffnen"). */
   detailsAction?: string;
+  /** Anker der Tour (Auftrag 46a), z.B. "hud.stock"; steht am äußersten Element. */
+  'data-tour'?: string;
 }
 
 /**
@@ -126,6 +128,7 @@ export function HudPill(props: HudPillProps) {
       <fieldset
         ref={wrap}
         class={`hud-pill-wrap ${open || hover ? 'is-open' : ''}`}
+        data-tour={props['data-tour']}
         aria-label={typeof props.label === 'string' ? props.label : undefined}
         onPointerEnter={(e) => hoversWith(e.pointerType) && setHover(true)}
         onPointerLeave={(e) => {
@@ -167,11 +170,18 @@ export function HudPill(props: HudPillProps) {
     );
   }
   return props.onClick ? (
-    <button type="button" class={cls} style={style} title={props.title} onClick={props.onClick}>
+    <button
+      type="button"
+      class={cls}
+      style={style}
+      title={props.title}
+      data-tour={props['data-tour']}
+      onClick={props.onClick}
+    >
       {inner}
     </button>
   ) : (
-    <div class={cls} style={style} title={props.title}>
+    <div class={cls} style={style} title={props.title} data-tour={props['data-tour']}>
       {inner}
     </div>
   );

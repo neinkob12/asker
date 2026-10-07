@@ -584,6 +584,26 @@
   color: var(--hud-gold-on);
   background: var(--hud-gold);
 }
+/* Tour (Auftrag 46a): gesperrt, solange sie die Uhr anhält; is-queued ist das Tempo, das nach der Tour gilt. */
+.hud-speed[disabled] .hud-speed__btn {
+  cursor: default;
+}
+.hud-speed[disabled] .hud-speed__btn:hover {
+  background: transparent;
+  color: inherit;
+}
+.hud-speed[disabled] .hud-speed__btn.is-active:hover {
+  background: var(--hud-glass-fill-active);
+  color: var(--hud-ink);
+}
+.hud-speed[disabled] .hud-speed__btn.is-pause.is-active:hover {
+  color: var(--hud-gold-on);
+  background: var(--hud-gold);
+}
+.hud-speed__btn.is-queued {
+  box-shadow: 0 0 0 2px var(--hud-gold) inset;
+  color: var(--hud-ink);
+}
 .hud-speed__btn .ui-icon {
   font-size: 16px;
 }

@@ -2,7 +2,8 @@
 // echte Durchgänge, und an den Abschnitten des Bogens wird ein Stand festgehalten (manche danach für einen Moment
 // zurechtgerückt). Drei Läufe pro Seed reichen für alle: Köln (bis kurz vor komplett), Deutschland (alle Städte in der
 // festen Reihenfolge ARRIVAL_CITIES, in jeder die Ankunft, die Mehrheit und „fast komplett“) und der Hafen (Verkauf bis
-// zum Titel Europa). Die fertigen Dateien liegen in
+// zum Titel Europa). Dazu ein Stand je Minispiel (minigameSaves.ts, aus „Boss von Köln“ bzw. der Hafen-Phase). Die
+// fertigen Dateien liegen in
 // public/spielstaende/ (neu erzeugen mit `npm run saves:build`, scripts/build-test-saves.mjs); testSaves.test.ts prüft,
 // dass sie sich laden lassen und tun, was sie sollen. Test-Spielstände tragen meta.scenario und kommen nicht in die
 // Bestenliste.
@@ -17,6 +18,7 @@ import { campaignProgress, controllerOf, PLAYER_FACTION } from '../modules/terri
 import { getCustomers, OWN_ORIGINS, originStock } from '../modules/trade';
 import { allVeedel } from '../modules/veedel';
 import { DEFAULT_BOT, newBotStats, playFor } from './bot';
+import { type MinigameBases, minigameSaves } from './minigameSaves';
 import { playToGermany, rightHandReady, sellAndArrive } from './scenario';
 
 /** Ein Test-Spielstand: Kennung (Dateiname), Name im Spielstände-Dialog und wie er entsteht. */
@@ -282,6 +284,8 @@ export const buildCityNearlyComplete = (cityId: string, seed = 1) =>
 export const buildDeutschland = (seed = 1) => take(germanyRun(seed), 'deutschland', seed);
 /** Abschnitte der Hafen-Phase und der Produktion (siehe harborRun). */
 export const buildHarbor = (id: string, seed = 1) => take(harborRun(seed), id, seed);
+/** Ausgangsstände der Minispiel-Stände (minigameSaves.ts): Boss von Köln und die Hafen-Phase. */
+const MINIGAME_BASES: MinigameBases = { koeln: () => buildBossVonKoeln(), harbor: () => buildHarbor('hafen') };
 
 export const TEST_SAVES: readonly TestSave[] = [
   { id: 'koeln-anfang', label: 'Test: Köln, die ersten Tage', build: () => buildKoelnAnfang() },
@@ -303,4 +307,6 @@ export const TEST_SAVES: readonly TestSave[] = [
   { id: 'produktion', label: 'Test: Produktion', build: () => buildHarbor('produktion') },
   { id: 'produzent', label: 'Test: Produzent', build: () => buildHarbor('produzent') },
   { id: 'europa', label: 'Test: Europa', build: () => buildHarbor('europa') },
+  // Auftrag 46: ein Stand je Minispiel (minispiel-<art>), siehe minigameSaves.ts.
+  ...minigameSaves(MINIGAME_BASES),
 ];

@@ -149,57 +149,134 @@ function grain(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h
   }
 }
 
-function crate(ctx: CanvasRenderingContext2D, p: StashPalette, x: number, y: number, w: number, h: number): void {
-  ctx.fillStyle = p.goods;
-  ctx.globalAlpha = 0.32;
-  roundRect(ctx, x, y, w, h, 0.6);
+/** Farben der Kulisse (Inhalt wie Haut- und Haarfarben in Face.tsx): Beton, Holz, Stahl, Lack. */
+const CONCRETE = '#3a3d44';
+const CONCRETE_LIGHT = '#464a52';
+const WOOD = '#8a6a44';
+const WOOD_DARK = '#5e4528';
+const STEEL = '#5f6672';
+const STEEL_LIGHT = '#8a929e';
+const PAVING = '#4b4d53';
+const PAVING_LINE = 'rgba(255,255,255,0.07)';
+const ASPHALT = '#2b2d33';
+const CRATE_COLORS = ['#8c6d4a', '#6b7c8f', '#7a5d7e', '#6f7a55', '#9a7a4a'];
+
+/** Kiste von oben: Holz mit Deckelbrettern und Beschlag. */
+function crate(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string): void {
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  roundRect(ctx, x + 0.4, y + 0.6, w, h, 0.5);
   ctx.fill();
-  ctx.globalAlpha = 0.55;
-  ctx.strokeStyle = p.goods;
-  ctx.lineWidth = 0.3;
+  ctx.fillStyle = color;
+  roundRect(ctx, x, y, w, h, 0.5);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 0.25;
   ctx.stroke();
+  // Bretter.
+  ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+  for (let i = 1; i < 3; i++) {
+    const yy = y + (i * h) / 3;
+    ctx.beginPath();
+    ctx.moveTo(x + 0.3, yy);
+    ctx.lineTo(x + w - 0.3, yy);
+    ctx.stroke();
+  }
+  // Lichtkante.
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
   ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x + w, y + h);
-  ctx.moveTo(x + w, y);
-  ctx.lineTo(x, y + h);
-  ctx.globalAlpha = 0.22;
+  ctx.moveTo(x + 0.4, y + 0.35);
+  ctx.lineTo(x + w - 0.4, y + 0.35);
   ctx.stroke();
-  ctx.globalAlpha = 1;
 }
 
-/** Regal von oben: Rahmen mit Kisten. */
+/** Palette (Holz) unter einem Paket. */
+function pallet(ctx: CanvasRenderingContext2D, x: number, y: number, half: number): void {
+  const w = half * 2 + 2.4;
+  const x0 = x - w / 2;
+  const y0 = y - w / 2;
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(x0 + 0.5, y0 + 0.7, w, w);
+  ctx.fillStyle = WOOD_DARK;
+  ctx.fillRect(x0, y0, w, w);
+  ctx.fillStyle = WOOD;
+  const boards = 5;
+  for (let i = 0; i < boards; i++) {
+    const bw = w / boards;
+    ctx.fillRect(x0 + i * bw + 0.25, y0, bw - 0.5, w);
+  }
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(x0, y0 + w * 0.3, w, 0.6);
+  ctx.fillRect(x0, y0 + w * 0.7, w, 0.6);
+}
+
+/** Regal von oben: Stahlrahmen mit Kisten, Säcken und Lücken. */
 function shelf(ctx: CanvasRenderingContext2D, p: StashPalette, x: number, y: number, w: number, h: number): void {
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-  roundRect(ctx, x + 0.6, y + 0.8, w, h, 0.8);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  roundRect(ctx, x + 0.7, y + 1, w, h, 0.8);
   ctx.fill();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.fillStyle = STEEL;
   roundRect(ctx, x, y, w, h, 0.8);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  roundRect(ctx, x + 0.9, y + 0.9, w - 1.8, h - 1.8, 0.5);
+  ctx.fill();
+  ctx.strokeStyle = STEEL_LIGHT;
   ctx.lineWidth = 0.35;
+  roundRect(ctx, x, y, w, h, 0.8);
   ctx.stroke();
   const horizontal = w > h;
   const n = Math.max(1, Math.floor((horizontal ? w : h) / 6));
   for (let i = 0; i < n; i++) {
     const t = (i + 0.5) / n;
-    const cs = Math.min(horizontal ? h : w, 5) - 1.6;
+    const cs = Math.min(horizontal ? h : w, 5.4) - 1.8;
     const cx = horizontal ? x + t * w - cs / 2 : x + (w - cs) / 2;
     const cy = horizontal ? y + (h - cs) / 2 : y + t * h - cs / 2;
-    if ((i * 7 + 3) % 5 !== 0) crate(ctx, p, cx, cy, cs, cs);
+    const kind = (i * 7 + 3) % 6;
+    if (kind === 0) continue;
+    if (kind === 4) {
+      // Sack.
+      ctx.fillStyle = p.goods;
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath();
+      ctx.ellipse(cx + cs / 2, cy + cs / 2, cs * 0.55, cs * 0.42, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      continue;
+    }
+    crate(ctx, cx, cy, cs, cs, CRATE_COLORS[(i + Math.round(x)) % CRATE_COLORS.length]);
+  }
+  // Querstreben.
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 0.3;
+  const steps = Math.max(1, Math.floor((horizontal ? w : h) / 6));
+  for (let i = 1; i < steps; i++) {
+    ctx.beginPath();
+    if (horizontal) {
+      const sx = x + (i * w) / steps;
+      ctx.moveTo(sx, y);
+      ctx.lineTo(sx, y + h);
+    } else {
+      const sy = y + (i * h) / steps;
+      ctx.moveTo(x, sy);
+      ctx.lineTo(x + w, sy);
+    }
+    ctx.stroke();
   }
 }
 
-/** Gully: Rost mit Stäben. */
+/** Gully: Gusseisen-Rost mit Stäben und Rahmen, nass glänzend. */
 function drainGrate(ctx: CanvasRenderingContext2D, h: StashHide): void {
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  roundRect(ctx, h.x - 0.6, h.y - 0.6, h.w + 1.2, h.h + 1.2, 1.2);
+  ctx.fill();
+  ctx.fillStyle = '#1b1c20';
   roundRect(ctx, h.x, h.y, h.w, h.h, 1);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+  ctx.strokeStyle = STEEL_LIGHT;
   ctx.lineWidth = 0.5;
   ctx.stroke();
-  ctx.lineWidth = 0.7;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+  ctx.lineWidth = 0.9;
+  ctx.strokeStyle = STEEL;
   for (let i = 1; i < 6; i++) {
     const x = h.x + (i * h.w) / 6;
     ctx.beginPath();
@@ -207,72 +284,103 @@ function drainGrate(ctx: CanvasRenderingContext2D, h: StashHide): void {
     ctx.lineTo(x, h.y + h.h - 1.2);
     ctx.stroke();
   }
+  // Nasser Glanz.
+  ctx.fillStyle = 'rgba(160,190,230,0.12)';
+  ctx.beginPath();
+  ctx.ellipse(h.x + h.w * 0.35, h.y + h.h * 0.3, h.w * 0.25, h.h * 0.15, -0.4, 0, Math.PI * 2);
+  ctx.fill();
 }
 
-/** Tresor von oben: Stahlkasten mit Rad. */
+/** Tresor von oben: Stahlkasten mit Zahlenrad, Griff und Scharnieren. */
 function vaultBox(ctx: CanvasRenderingContext2D, p: StashPalette, h: StashHide): void {
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  roundRect(ctx, h.x + 0.8, h.y + 1, h.w, h.h, 1.2);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  roundRect(ctx, h.x + 1, h.y + 1.3, h.w, h.h, 1.4);
   ctx.fill();
   const g = ctx.createLinearGradient(h.x, h.y, h.x + h.w, h.y + h.h);
-  g.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
-  g.addColorStop(1, 'rgba(255, 255, 255, 0.08)');
-  ctx.fillStyle = p.base;
-  roundRect(ctx, h.x, h.y, h.w, h.h, 1.2);
-  ctx.fill();
+  g.addColorStop(0, '#7b838f');
+  g.addColorStop(0.5, '#4e5560');
+  g.addColorStop(1, '#353a43');
   ctx.fillStyle = g;
+  roundRect(ctx, h.x, h.y, h.w, h.h, 1.4);
   ctx.fill();
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-  ctx.lineWidth = 0.4;
+  ctx.lineWidth = 0.45;
   ctx.stroke();
-  const cx = h.x + h.w * 0.62;
+  // Tür mit Fuge.
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = 0.4;
+  roundRect(ctx, h.x + 1.6, h.y + 1.6, h.w - 3.2, h.h - 3.2, 0.8);
+  ctx.stroke();
+  // Scharniere links.
+  ctx.fillStyle = STEEL_LIGHT;
+  ctx.fillRect(h.x + 0.6, h.y + 2.5, 1.2, 2.6);
+  ctx.fillRect(h.x + 0.6, h.y + h.h - 5.1, 1.2, 2.6);
+  // Zahlenrad.
+  const cx = h.x + h.w * 0.6;
   const cy = h.y + h.h / 2;
+  const r = Math.min(h.w, h.h) * 0.22;
   ctx.beginPath();
-  ctx.arc(cx, cy, Math.min(h.w, h.h) * 0.22, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#1f2228';
   ctx.fill();
   ctx.strokeStyle = p.gold;
   ctx.lineWidth = 0.5;
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-  ctx.fillRect(h.x + h.w * 0.18, cy - 0.5, h.w * 0.16, 1);
-}
-
-/** Doppelter Boden: Dielen mit Fugen und Zugring. */
-function floorHatch(ctx: CanvasRenderingContext2D, p: StashPalette, h: StashHide): void {
-  ctx.fillStyle = p.goods;
-  ctx.globalAlpha = 0.18;
-  roundRect(ctx, h.x, h.y, h.w, h.h, 0.6);
-  ctx.fill();
-  ctx.globalAlpha = 0.5;
-  ctx.strokeStyle = p.goods;
-  ctx.lineWidth = 0.35;
-  ctx.stroke();
-  ctx.globalAlpha = 0.3;
-  for (let i = 1; i < 4; i++) {
-    const y = h.y + (i * h.h) / 4;
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 0.3;
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
     ctx.beginPath();
-    ctx.moveTo(h.x, y);
-    ctx.lineTo(h.x + h.w, y);
+    ctx.moveTo(cx + Math.cos(a) * r * 0.7, cy + Math.sin(a) * r * 0.7);
+    ctx.lineTo(cx + Math.cos(a) * r * 0.92, cy + Math.sin(a) * r * 0.92);
     ctx.stroke();
   }
-  ctx.globalAlpha = 0.8;
+  // Griff.
+  ctx.strokeStyle = STEEL_LIGHT;
+  ctx.lineWidth = 0.9;
+  ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.arc(h.x + h.w - 2.4, h.y + h.h / 2, 1, 0, Math.PI * 2);
+  ctx.moveTo(h.x + h.w * 0.2, cy - 2.2);
+  ctx.lineTo(h.x + h.w * 0.2, cy + 2.2);
   ctx.stroke();
-  ctx.globalAlpha = 1;
+  ctx.lineCap = 'butt';
 }
 
-/** Lüftungsschacht: Gitter mit Lamellen in der Wand. */
-function ventGrille(ctx: CanvasRenderingContext2D, h: StashHide): void {
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+/** Doppelter Boden: Dielen mit Fugen, Zugring und einer leicht offenen Ecke. */
+function floorHatch(ctx: CanvasRenderingContext2D, p: StashPalette, h: StashHide): void {
+  ctx.fillStyle = WOOD_DARK;
   roundRect(ctx, h.x, h.y, h.w, h.h, 0.6);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-  ctx.lineWidth = 0.4;
+  const boards = 4;
+  for (let i = 0; i < boards; i++) {
+    ctx.fillStyle = i % 2 === 0 ? WOOD : '#7d5f3c';
+    ctx.fillRect(h.x + 0.3, h.y + (i * h.h) / boards + 0.3, h.w - 0.6, h.h / boards - 0.6);
+  }
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+  ctx.lineWidth = 0.35;
+  roundRect(ctx, h.x, h.y, h.w, h.h, 0.6);
   ctx.stroke();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
-  ctx.lineWidth = 0.6;
+  // Offene Ecke: dunkler Spalt.
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(h.x + h.w - 3.6, h.y + 0.3, 0.7, h.h - 0.6);
+  // Zugring.
+  ctx.strokeStyle = p.gold;
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.arc(h.x + h.w - 2.2, h.y + h.h / 2, 1, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/** Lüftungsschacht: Gitter mit Lamellen in der Wand, Schrauben in den Ecken. */
+function ventGrille(ctx: CanvasRenderingContext2D, h: StashHide): void {
+  ctx.fillStyle = '#15171c';
+  roundRect(ctx, h.x, h.y, h.w, h.h, 0.6);
+  ctx.fill();
+  ctx.strokeStyle = STEEL_LIGHT;
+  ctx.lineWidth = 0.45;
+  ctx.stroke();
+  ctx.strokeStyle = STEEL;
+  ctx.lineWidth = 0.7;
   for (let i = 1; i < 8; i++) {
     const x = h.x + (i * h.w) / 8;
     ctx.beginPath();
@@ -280,59 +388,91 @@ function ventGrille(ctx: CanvasRenderingContext2D, h: StashHide): void {
     ctx.lineTo(x + 0.8, h.y + h.h - 1.2);
     ctx.stroke();
   }
+  ctx.fillStyle = STEEL_LIGHT;
+  for (const [sx, sy] of [
+    [h.x + 0.8, h.y + 0.8],
+    [h.x + h.w - 0.8, h.y + 0.8],
+    [h.x + 0.8, h.y + h.h - 0.8],
+    [h.x + h.w - 0.8, h.y + h.h - 0.8],
+  ]) {
+    ctx.beginPath();
+    ctx.arc(sx, sy, 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
-/** Lieferwagen von oben, Heck links (dort der Kofferraum). */
+/** Lieferwagen von oben, Heck links (dort der Kofferraum, Türen offen). */
 function van(ctx: CanvasRenderingContext2D, p: StashPalette, x: number, y: number, w: number, h: number): void {
+  // Räder.
+  ctx.fillStyle = '#121317';
+  for (const wx of [x + 6, x + w - 9]) {
+    roundRect(ctx, wx, y - 0.9, 4.2, 1.6, 0.5);
+    ctx.fill();
+    roundRect(ctx, wx, y + h - 0.7, 4.2, 1.6, 0.5);
+    ctx.fill();
+  }
   ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
   roundRect(ctx, x + 1, y + 1.4, w, h, 2.4);
   ctx.fill();
   const g = ctx.createLinearGradient(x, y, x, y + h);
-  g.addColorStop(0, 'rgba(255, 255, 255, 0.34)');
-  g.addColorStop(0.5, 'rgba(255, 255, 255, 0.22)');
-  g.addColorStop(1, 'rgba(255, 255, 255, 0.14)');
-  ctx.fillStyle = p.base;
+  g.addColorStop(0, '#e8e9ea');
+  g.addColorStop(0.5, '#d4d6d9');
+  g.addColorStop(1, '#b9bcc1');
+  ctx.fillStyle = g;
   roundRect(ctx, x, y, w, h, 2.4);
   ctx.fill();
-  ctx.fillStyle = g;
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 0.3;
+  ctx.stroke();
+  // Windschutzscheibe vorn (rechts), Motorhaube, Dach mit Rippen.
+  ctx.fillStyle = '#20303f';
+  roundRect(ctx, x + w - 8, y + 1.6, 4.2, h - 3.2, 1.2);
   ctx.fill();
-  // Windschutzscheibe vorn (rechts), Dach mit Rippen.
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-  roundRect(ctx, x + w - 7.5, y + 1.6, 4.5, h - 3.2, 1.2);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  roundRect(ctx, x + w - 7.4, y + 2.2, 1.2, h - 4.4, 0.5);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.fillRect(x + w - 3.4, y + 1, 2.6, h - 2);
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
   ctx.lineWidth = 0.4;
-  for (let i = 0; i < 4; i++) {
-    const rx = x + 16 + i * 3.4;
+  for (let i = 0; i < 5; i++) {
+    const rx = x + 14 + i * 3.4;
     ctx.beginPath();
     ctx.moveTo(rx, y + 2);
     ctx.lineTo(rx, y + h - 2);
     ctx.stroke();
   }
-  // Spiegel.
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-  ctx.fillRect(x + w - 8, y - 1, 1.6, 1.2);
-  ctx.fillRect(x + w - 8, y + h - 0.2, 1.6, 1.2);
-  // Offene Hecktüren.
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-  roundRect(ctx, x + 0.8, y + 1.6, 12, h - 3.2, 1);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.24)';
-  ctx.fillRect(x - 3.4, y + 0.2, 3.6, 1.1);
-  ctx.fillRect(x - 3.4, y + h - 1.3, 3.6, 1.1);
+  // Zierstreifen.
   ctx.fillStyle = p.gold;
-  ctx.globalAlpha = 0.6;
-  ctx.fillRect(x + w - 1.4, y + 2, 1, 2.2);
-  ctx.fillRect(x + w - 1.4, y + h - 4.2, 1, 2.2);
+  ctx.globalAlpha = 0.7;
+  ctx.fillRect(x + 13, y + 0.7, w - 22, 0.6);
+  ctx.fillRect(x + 13, y + h - 1.3, w - 22, 0.6);
   ctx.globalAlpha = 1;
+  // Spiegel.
+  ctx.fillStyle = '#2a2d33';
+  ctx.fillRect(x + w - 8.6, y - 1.1, 1.8, 1.3);
+  ctx.fillRect(x + w - 8.6, y + h - 0.2, 1.8, 1.3);
+  // Laderaum mit offenen Hecktüren (Innenraum dunkel, Matte).
+  ctx.fillStyle = '#1b1d22';
+  roundRect(ctx, x + 0.8, y + 1.6, 12.4, h - 3.2, 1);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(x + 2, y + 2.6, 10, h - 5.2);
+  ctx.fillStyle = '#c9ccd1';
+  ctx.fillRect(x - 3.6, y + 0.2, 3.8, 1.2);
+  ctx.fillRect(x - 3.6, y + h - 1.4, 3.8, 1.2);
+  // Warnblinker.
+  ctx.fillStyle = p.warn;
+  ctx.fillRect(x + w - 1.4, y + 1.6, 1, 2.4);
+  ctx.fillRect(x + w - 1.4, y + h - 4, 1, 2.4);
+  ctx.fillStyle = p.danger;
+  ctx.fillRect(x + 0.2, y + 1.2, 0.9, 2.2);
+  ctx.fillRect(x + 0.2, y + h - 3.4, 0.9, 2.2);
 }
 
 /** Hintergrund des Lagers (Szene plus Umgebung bis zum Rand der Bühne). */
 function renderWarehouse(ctx: CanvasRenderingContext2D, l: StashLayout, p: StashPalette, setup: StashSetup): void {
-  // Draußen: Asphalt über die ganze Bühne.
-  ctx.fillStyle = p.base;
-  ctx.fillRect(0, 0, l.width, l.height);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+  ctx.fillStyle = ASPHALT;
   ctx.fillRect(0, 0, l.width, l.height);
   ctx.save();
   toScene(ctx, l);
@@ -340,26 +480,41 @@ function renderWarehouse(ctx: CanvasRenderingContext2D, l: StashLayout, p: Stash
   const right = (l.width - l.ox) / l.scale;
   const top = -l.oy / l.scale;
   const bottom = (l.height - l.oy) / l.scale;
-  // Dächer der Nachbarhäuser links und rechts der Halle, oben drüber.
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  // Dächer der Nachbarhäuser links, rechts und oben: Ziegelbahnen, Dachrinne zur Straße.
+  ctx.fillStyle = '#2f2a2a';
   ctx.fillRect(left, top, right - left, 68 - top);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
   ctx.lineWidth = 0.3;
-  for (let x = Math.floor(left / 6) * 6; x < right; x += 6) {
-    if (x > 0 && x < SCENE) continue;
+  for (let yy = Math.floor(top / 2.6) * 2.6; yy < 68; yy += 2.6) {
     ctx.beginPath();
-    ctx.moveTo(x, top);
-    ctx.lineTo(x, 68);
+    ctx.moveTo(left, yy);
+    ctx.lineTo(right, yy);
     ctx.stroke();
   }
-  // Gehweg und Bordstein.
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  for (let xx = Math.floor(left / 9) * 9; xx < right; xx += 9) ctx.fillRect(xx, top, 4.5, 68 - top);
+  ctx.fillStyle = STEEL;
+  ctx.fillRect(left, 66.6, right - left, 1.4);
+  // Gehweg mit Platten und Bordstein.
+  ctx.fillStyle = PAVING;
   ctx.fillRect(left, 68, right - left, 6);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
-  ctx.fillRect(left, 73.6, right - left, 0.5);
-  // Fahrbahn mit Mittellinie.
-  grain(ctx, left, 74, right - left, Math.min(40, bottom - 74), 0.035);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+  ctx.strokeStyle = PAVING_LINE;
+  ctx.lineWidth = 0.3;
+  for (let xx = Math.floor(left / 4) * 4; xx < right; xx += 4) {
+    ctx.beginPath();
+    ctx.moveTo(xx, 68);
+    ctx.lineTo(xx, 74);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(left, 71);
+  ctx.lineTo(right, 71);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+  ctx.fillRect(left, 73.6, right - left, 0.6);
+  // Fahrbahn mit Körnung, Mittellinie, Laternenlicht.
+  grain(ctx, left, 74, right - left, Math.max(0, bottom - 74), 0.04);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
   ctx.lineWidth = 0.6;
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
@@ -367,46 +522,85 @@ function renderWarehouse(ctx: CanvasRenderingContext2D, l: StashLayout, p: Stash
   ctx.lineTo(right, 97);
   ctx.stroke();
   ctx.setLineDash([]);
-  // Halle: Boden aus Beton mit Fugen.
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.09)';
+  const lamp = ctx.createRadialGradient(100, 76, 1, 100, 76, 36);
+  lamp.addColorStop(0, 'rgba(255, 214, 150, 0.22)');
+  lamp.addColorStop(1, 'rgba(255, 214, 150, 0)');
+  ctx.fillStyle = lamp;
+  ctx.fillRect(60, 60, 80, 50);
+  // Halle: Betonboden mit Dehnungsfugen, Ölflecken, Deckenlampen als Lichtpfützen.
+  ctx.fillStyle = CONCRETE;
   ctx.fillRect(3, 3, 94, 64);
-  const light = ctx.createRadialGradient(48, 36, 4, 48, 36, 60);
-  light.addColorStop(0, 'rgba(255, 236, 200, 0.07)');
-  light.addColorStop(1, 'rgba(0, 0, 0, 0.18)');
-  ctx.fillStyle = light;
-  ctx.fillRect(3, 3, 94, 64);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
-  ctx.lineWidth = 0.25;
-  for (let x = 13; x < 97; x += 10) {
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)';
+  ctx.lineWidth = 0.35;
+  for (let xx = 13; xx < 97; xx += 10) {
     ctx.beginPath();
-    ctx.moveTo(x, 3);
-    ctx.lineTo(x, 67);
+    ctx.moveTo(xx, 3);
+    ctx.lineTo(xx, 67);
     ctx.stroke();
   }
-  for (let y = 13; y < 67; y += 10) {
+  for (let yy = 13; yy < 67; yy += 10) {
     ctx.beginPath();
-    ctx.moveTo(3, y);
-    ctx.lineTo(97, y);
+    ctx.moveTo(3, yy);
+    ctx.lineTo(97, yy);
     ctx.stroke();
   }
-  grain(ctx, 3, 3, 94, 64, 0.03);
-  // Bereich, in dem die Ware liegt (Paletten).
-  ctx.strokeStyle = p.gold;
-  ctx.globalAlpha = 0.22;
-  ctx.lineWidth = 0.4;
-  ctx.setLineDash([1.6, 1.4]);
-  roundRect(ctx, 24.5, 15.5, 47, 47, 2);
+  grain(ctx, 3, 3, 94, 64, 0.035);
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  for (const [ox, oy, rx, ry] of [
+    [40, 60, 6, 2.6],
+    [78, 24, 4, 2],
+    [20, 50, 3, 1.6],
+  ]) {
+    ctx.beginPath();
+    ctx.ellipse(ox, oy, rx, ry, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (const [lx, ly] of [
+    [30, 22],
+    [66, 22],
+    [48, 50],
+  ]) {
+    const light = ctx.createRadialGradient(lx, ly, 2, lx, ly, 30);
+    light.addColorStop(0, 'rgba(255, 236, 200, 0.14)');
+    light.addColorStop(1, 'rgba(255, 236, 200, 0)');
+    ctx.fillStyle = light;
+    ctx.fillRect(3, 3, 94, 64);
+  }
+  // Gelbe Bodenmarkierung um den Warenbereich, Warnstreifen vor dem Tor.
+  ctx.strokeStyle = p.warn;
+  ctx.globalAlpha = 0.35;
+  ctx.lineWidth = 0.6;
+  ctx.setLineDash([2.2, 1.4]);
+  roundRect(ctx, 24.5, 15.5, 47, 47, 1);
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
-  // Regale an den Wänden.
+  for (let xx = 32; xx < 52; xx += 2.4) {
+    ctx.fillStyle = (xx / 2.4) % 2 < 1 ? p.warn : '#1a1b1f';
+    ctx.globalAlpha = 0.45;
+    ctx.fillRect(xx, 62.6, 2.4, 1.2);
+  }
+  ctx.globalAlpha = 1;
+  // Paletten unter den Startplätzen der Pakete.
+  for (const pkg of setup.packages) pallet(ctx, pkg.x, pkg.y, PACKAGE_HALF[pkg.size]);
+  // Regale an den Wänden, Werkbank mit Werkzeug.
   shelf(ctx, p, 5, 26, 8, 36);
   shelf(ctx, p, 27, 5, 40, 7);
   shelf(ctx, p, 87, 53, 8, 12);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  roundRect(ctx, 88.6, 20.8, 7, 14, 0.6);
+  ctx.fill();
+  ctx.fillStyle = WOOD;
+  roundRect(ctx, 88, 20, 7, 14, 0.6);
+  ctx.fill();
+  ctx.fillStyle = STEEL_LIGHT;
+  ctx.fillRect(89, 22, 2.2, 0.6);
+  ctx.fillRect(89, 24, 3.4, 0.6);
+  ctx.fillRect(91.6, 27, 1.4, 4);
   // Wände mit Tor unten.
   const gate = { x0: 32, x1: 52 };
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
-  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = '#8c929c';
+  ctx.lineWidth = 1.8;
   ctx.lineCap = 'square';
   ctx.beginPath();
   ctx.moveTo(gate.x0, 67);
@@ -416,13 +610,29 @@ function renderWarehouse(ctx: CanvasRenderingContext2D, l: StashLayout, p: Stash
   ctx.lineTo(97, 67);
   ctx.lineTo(gate.x1, 67);
   ctx.stroke();
-  // Rolltor (halb offen, gestreift).
-  ctx.fillStyle = p.warn;
-  ctx.globalAlpha = 0.5;
-  for (let x = gate.x0; x < gate.x1; x += 2.4) ctx.fillRect(x, 66.2, 1.2, 1.6);
-  ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = 0.4;
+  ctx.beginPath();
+  ctx.moveTo(gate.x0, 66.2);
+  ctx.lineTo(3.8, 66.2);
+  ctx.lineTo(3.8, 3.8);
+  ctx.lineTo(96.2, 3.8);
+  ctx.lineTo(96.2, 66.2);
+  ctx.lineTo(gate.x1, 66.2);
+  ctx.stroke();
+  // Rolltor (halb offen, Lamellen).
+  ctx.fillStyle = STEEL;
+  ctx.fillRect(gate.x0, 65.4, gate.x1 - gate.x0, 2.4);
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 0.25;
+  for (let yy = 65.8; yy < 67.8; yy += 0.6) {
+    ctx.beginPath();
+    ctx.moveTo(gate.x0, yy);
+    ctx.lineTo(gate.x1, yy);
+    ctx.stroke();
+  }
   // Fenster (für das Blaulicht): oben und links.
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.fillStyle = '#0d1420';
   for (const [x, y, w, h] of WINDOWS) ctx.fillRect(x, y, w, h);
   // Verstecke.
   for (const h of setup.hides) {
@@ -449,9 +659,9 @@ const WINDOWS: readonly (readonly [number, number, number, number])[] = [
   [96.2, 38, 1.6, 8],
 ];
 
-/** Hintergrund am Spot: Hauswand oben, Gehweg mit Bank, Fahrbahn unten. */
+/** Hintergrund am Spot: Hausfassade oben mit Läden, Gehweg mit Bank und Laterne, Fahrbahn unten. */
 function renderStreet(ctx: CanvasRenderingContext2D, l: StashLayout, p: StashPalette, setup: StashSetup): void {
-  ctx.fillStyle = p.base;
+  ctx.fillStyle = ASPHALT;
   ctx.fillRect(0, 0, l.width, l.height);
   ctx.save();
   toScene(ctx, l);
@@ -459,37 +669,57 @@ function renderStreet(ctx: CanvasRenderingContext2D, l: StashLayout, p: StashPal
   const right = (l.width - l.ox) / l.scale;
   const top = -l.oy / l.scale;
   const bottom = (l.height - l.oy) / l.scale;
-  // Häuser oben (Dach), Fassade mit Eingängen.
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  // Häuser oben: Dach, Fassadenkante mit Schaufenstern und Markisen.
+  ctx.fillStyle = '#2f2a2a';
   ctx.fillRect(left, top, right - left, 8 - top);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-  ctx.fillRect(left, 8, right - left, 1);
-  // Gehweg mit Platten.
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-  ctx.fillRect(left, 9, right - left, 70);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-  ctx.lineWidth = 0.25;
-  for (let x = Math.floor(left / 8) * 8; x < right; x += 8) {
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 0.3;
+  for (let yy = Math.floor(top / 2.4) * 2.4; yy < 6; yy += 2.4) {
     ctx.beginPath();
-    ctx.moveTo(x, 9);
-    ctx.lineTo(x, 79);
+    ctx.moveTo(left, yy);
+    ctx.lineTo(right, yy);
     ctx.stroke();
   }
-  for (let y = 17; y < 79; y += 8) {
-    ctx.beginPath();
-    ctx.moveTo(left, y);
-    ctx.lineTo(right, y);
-    ctx.stroke();
+  ctx.fillStyle = '#4d4038';
+  ctx.fillRect(left, 5.4, right - left, 3.6);
+  // Schaufenster warm erleuchtet, Markisen gestreift, Hauseingänge dunkel.
+  for (const sx of [8, 40, 74]) {
+    ctx.fillStyle = 'rgba(255, 214, 150, 0.55)';
+    ctx.fillRect(sx, 5.8, 12, 3);
+    ctx.fillStyle = (sx / 8) % 2 < 1 ? p.danger : p.place;
+    ctx.globalAlpha = 0.55;
+    for (let k = 0; k < 6; k++) ctx.fillRect(sx - 1 + k * 2.4, 8.6, 1.2, 1.6);
+    ctx.globalAlpha = 1;
   }
-  // Hauseingänge.
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-  ctx.fillRect(24, 5.6, 10, 3.4);
-  ctx.fillRect(58, 5.6, 10, 3.4);
-  // Bordstein und Fahrbahn.
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-  ctx.fillRect(left, 79, right - left, 0.7);
-  grain(ctx, left, 80, right - left, Math.min(40, bottom - 80), 0.035);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+  ctx.fillStyle = '#15161a';
+  ctx.fillRect(24, 5.6, 8, 3.4);
+  ctx.fillRect(58, 5.6, 8, 3.4);
+  ctx.fillStyle = 'rgba(255,255,255,0.14)';
+  ctx.fillRect(left, 9, right - left, 0.6);
+  // Gehweg mit Platten (versetzt) und Bordstein.
+  ctx.fillStyle = PAVING;
+  ctx.fillRect(left, 9.6, right - left, 69.4);
+  ctx.strokeStyle = PAVING_LINE;
+  ctx.lineWidth = 0.3;
+  for (let yy = 17; yy < 79; yy += 8) {
+    ctx.beginPath();
+    ctx.moveTo(left, yy);
+    ctx.lineTo(right, yy);
+    ctx.stroke();
+    const shift = ((yy - 17) / 8) % 2 === 0 ? 0 : 4;
+    for (let xx = Math.floor(left / 8) * 8 + shift; xx < right; xx += 8) {
+      ctx.beginPath();
+      ctx.moveTo(xx, yy - 8);
+      ctx.lineTo(xx, yy);
+      ctx.stroke();
+    }
+  }
+  grain(ctx, left, 9.6, right - left, 69.4, 0.025);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+  ctx.fillRect(left, 79, right - left, 0.8);
+  // Fahrbahn mit Körnung, Mittellinie, parkendes Auto rechts.
+  grain(ctx, left, 80, right - left, Math.max(0, bottom - 80), 0.04);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
   ctx.lineWidth = 0.6;
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
@@ -497,25 +727,51 @@ function renderStreet(ctx: CanvasRenderingContext2D, l: StashLayout, p: StashPal
   ctx.lineTo(right, 99);
   ctx.stroke();
   ctx.setLineDash([]);
-  // Bank und Laterne in der Mitte (dort steht ihr sonst).
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-  roundRect(ctx, 37.6, 22.8, 26, 5, 1);
+  parkedCar(ctx, 104, 82, 22, 10);
+  // Laterne mit Lichtpfütze, Bank mit Latten, Fahrrad am Laternenmast.
+  const lamp = ctx.createRadialGradient(70, 26, 1, 70, 26, 26);
+  lamp.addColorStop(0, 'rgba(255, 236, 200, 0.22)');
+  lamp.addColorStop(1, 'rgba(255, 236, 200, 0)');
+  ctx.fillStyle = lamp;
+  ctx.fillRect(40, 0, 60, 56);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  roundRect(ctx, 37.8, 23, 26, 5, 1);
   ctx.fill();
-  ctx.fillStyle = p.goods;
-  ctx.globalAlpha = 0.4;
+  ctx.fillStyle = WOOD;
   roundRect(ctx, 37, 22, 26, 5, 1);
   ctx.fill();
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = 'rgba(255, 236, 200, 0.08)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 0.3;
+  for (let k = 1; k < 4; k++) {
+    ctx.beginPath();
+    ctx.moveTo(37.4, 22 + (k * 5) / 4);
+    ctx.lineTo(62.6, 22 + (k * 5) / 4);
+    ctx.stroke();
+  }
+  ctx.fillStyle = STEEL;
+  ctx.fillRect(38, 21.2, 1.2, 6.6);
+  ctx.fillRect(60.8, 21.2, 1.2, 6.6);
+  ctx.fillStyle = '#23252a';
   ctx.beginPath();
-  ctx.arc(70, 26, 16, 0, Math.PI * 2);
+  ctx.arc(70, 26, 1.4, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.fillStyle = 'rgba(255, 236, 200, 0.9)';
   ctx.beginPath();
-  ctx.arc(70, 26, 1.2, 0, Math.PI * 2);
+  ctx.arc(70, 26, 0.8, 0, Math.PI * 2);
   ctx.fill();
+  ctx.strokeStyle = '#23252a';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.arc(74.5, 29, 2, 0, Math.PI * 2);
+  ctx.arc(78.5, 29, 2, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(74.5, 29);
+  ctx.lineTo(78.5, 29);
+  ctx.stroke();
+  // Bereich, in dem die Pakete liegen (dezent).
   ctx.strokeStyle = p.gold;
-  ctx.globalAlpha = 0.22;
+  ctx.globalAlpha = 0.2;
   ctx.lineWidth = 0.4;
   ctx.setLineDash([1.6, 1.4]);
   roundRect(ctx, 25.5, 30.5, 50, 33, 2);
@@ -524,51 +780,91 @@ function renderStreet(ctx: CanvasRenderingContext2D, l: StashLayout, p: StashPal
   ctx.globalAlpha = 1;
   for (const h of setup.hides) {
     if (h.id === 'planter') {
+      // Blumenkübel aus Beton mit Erde und Blüten.
       ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
       ctx.beginPath();
       ctx.arc(h.x + h.w / 2 + 0.6, h.y + h.h / 2 + 0.8, h.w / 2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+      ctx.fillStyle = CONCRETE_LIGHT;
       ctx.beginPath();
       ctx.arc(h.x + h.w / 2, h.y + h.h / 2, h.w / 2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = p.money;
-      ctx.globalAlpha = 0.45;
-      for (let i = 0; i < 7; i++) {
-        const a = (i / 7) * Math.PI * 2;
+      ctx.fillStyle = '#3a2d22';
+      ctx.beginPath();
+      ctx.arc(h.x + h.w / 2, h.y + h.h / 2, h.w / 2 - 1.6, 0, Math.PI * 2);
+      ctx.fill();
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        const rr = i % 3 === 0 ? 1.6 : 3.6;
+        ctx.fillStyle = '#4d7a3a';
         ctx.beginPath();
-        ctx.arc(h.x + h.w / 2 + Math.cos(a) * 3, h.y + h.h / 2 + Math.sin(a) * 3, 2.6, 0, Math.PI * 2);
+        ctx.arc(h.x + h.w / 2 + Math.cos(a) * rr, h.y + h.h / 2 + Math.sin(a) * rr, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = i % 2 === 0 ? p.danger : p.warn;
+        ctx.beginPath();
+        ctx.arc(h.x + h.w / 2 + Math.cos(a) * rr, h.y + h.h / 2 + Math.sin(a) * rr, 0.9, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.globalAlpha = 1;
     } else if (h.id === 'mailbox') {
-      ctx.fillStyle = p.warn;
-      ctx.globalAlpha = 0.55;
-      roundRect(ctx, h.x, h.y, h.w, h.h, 1);
+      // Gelber Briefkasten mit Schlitz und Posthorn-Plakette.
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      roundRect(ctx, h.x + 0.6, h.y + 0.8, h.w, h.h, 1.2);
       ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillStyle = '#e3b618';
+      roundRect(ctx, h.x, h.y, h.w, h.h, 1.2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      roundRect(ctx, h.x + 0.6, h.y + 0.6, h.w - 1.2, h.h * 0.35, 0.8);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
       ctx.fillRect(h.x + 2, h.y + h.h / 2 - 0.6, h.w - 4, 1.2);
-    } else if (h.id === 'bin') {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      roundRect(ctx, h.x + 0.6, h.y + 0.8, h.w, h.h, 1.4);
-      ctx.fill();
-      ctx.fillStyle = p.people;
-      ctx.globalAlpha = 0.3;
-      roundRect(ctx, h.x, h.y, h.w, h.h, 1.4);
-      ctx.fill();
-      ctx.globalAlpha = 0.6;
-      ctx.strokeStyle = p.people;
-      ctx.lineWidth = 0.4;
-      ctx.stroke();
+      ctx.fillStyle = '#1c1c20';
       ctx.beginPath();
-      ctx.moveTo(h.x + 1.5, h.y + 3);
-      ctx.lineTo(h.x + h.w - 1.5, h.y + 3);
+      ctx.arc(h.x + h.w - 2.4, h.y + h.h - 2.2, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (h.id === 'bin') {
+      // Mülltonne mit Deckel, Griff und Rädern.
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      roundRect(ctx, h.x + 0.6, h.y + 0.8, h.w, h.h, 1.6);
+      ctx.fill();
+      ctx.fillStyle = '#2f5f4a';
+      roundRect(ctx, h.x, h.y, h.w, h.h, 1.6);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      roundRect(ctx, h.x + 0.8, h.y + 0.8, h.w - 1.6, h.h - 1.6, 1.2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.lineWidth = 0.4;
+      ctx.beginPath();
+      ctx.moveTo(h.x + 1.2, h.y + 3.2);
+      ctx.lineTo(h.x + h.w - 1.2, h.y + 3.2);
       ctx.stroke();
-      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#15161a';
+      ctx.fillRect(h.x + 1.6, h.y - 1, 2.4, 1.4);
+      ctx.fillRect(h.x + h.w - 4, h.y - 1, 2.4, 1.4);
+      ctx.fillStyle = STEEL_LIGHT;
+      ctx.fillRect(h.x + h.w / 2 - 2.5, h.y + 1.2, 5, 0.7);
     } else if (h.id === 'drain') drainGrate(ctx, h);
   }
   ctx.restore();
+}
+
+/** Parkendes Auto von oben (dunkler Lack). */
+function parkedCar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  roundRect(ctx, x + 0.8, y + 1, w, h, 2.6);
+  ctx.fill();
+  ctx.fillStyle = '#3c3f4a';
+  roundRect(ctx, x, y, w, h, 2.6);
+  ctx.fill();
+  ctx.fillStyle = '#1d2a3a';
+  roundRect(ctx, x + 5, y + 1.3, 4, h - 2.6, 1);
+  ctx.fill();
+  roundRect(ctx, x + w - 8, y + 1.3, 3.2, h - 2.6, 1);
+  ctx.fill();
+  ctx.fillStyle = '#4a4e5a';
+  roundRect(ctx, x + 9.6, y + 1, w - 18, h - 2, 1.4);
+  ctx.fill();
 }
 
 /** Fertiger Hintergrund in einer eigenen Leinwand (nach jeder Größenänderung neu). */
@@ -598,7 +894,7 @@ export interface DrawFx {
   running: boolean;
 }
 
-/** Ein Paket an seiner Stelle (Mitte x, y in der Szene). */
+/** Ein Paket an seiner Stelle (Mitte x, y in der Szene): Karton in Warenfarbe, Klebeband, Etikett, Symbol. */
 function drawPackage(
   ctx: CanvasRenderingContext2D,
   p: StashPalette,
@@ -612,40 +908,48 @@ function drawPackage(
   ctx.save();
   ctx.globalAlpha = opts.alpha;
   // Schatten (gehoben weiter weg).
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  roundRect(ctx, x - half + 0.6 + opts.lifted * 1.4, y - half + 0.9 + opts.lifted * 2, half * 2, half * 2, 1.4);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  roundRect(ctx, x - half + 0.6 + opts.lifted * 1.6, y - half + 1 + opts.lifted * 2.2, half * 2, half * 2, 1.2);
   ctx.fill();
-  // Paket: dunkler Grund, darüber die Farbe der Ware, oben ein Lichtrand.
-  ctx.fillStyle = p.base;
-  roundRect(ctx, x - half, y - half, half * 2, half * 2, 1.4);
+  // Karton: Grundfarbe aus der Ware, abgedunkelt, mit Lichtkante oben links.
+  ctx.fillStyle = '#1a1b20';
+  roundRect(ctx, x - half, y - half, half * 2, half * 2, 1.2);
   ctx.fill();
   ctx.fillStyle = look.color;
-  ctx.globalAlpha = opts.alpha * 0.32;
+  ctx.globalAlpha = opts.alpha * 0.42;
   ctx.fill();
   ctx.globalAlpha = opts.alpha;
-  ctx.strokeStyle = look.color;
-  ctx.lineWidth = 0.5;
-  ctx.stroke();
-  // Klebeband über Kreuz bei großen Paketen.
-  if (pkg.size >= 2) {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-    ctx.lineWidth = 1.1;
-    ctx.beginPath();
-    ctx.moveTo(x - half, y);
-    ctx.lineTo(x + half, y);
-    ctx.stroke();
-  }
+  const sheen = ctx.createLinearGradient(x - half, y - half, x + half, y + half);
+  sheen.addColorStop(0, 'rgba(255,255,255,0.16)');
+  sheen.addColorStop(0.5, 'rgba(255,255,255,0)');
+  sheen.addColorStop(1, 'rgba(0,0,0,0.18)');
+  ctx.fillStyle = sheen;
+  ctx.fill();
   ctx.strokeStyle = look.color;
   ctx.lineWidth = 0.55;
+  ctx.stroke();
+  // Klebeband über Kreuz (groß) bzw. einmal quer (mittel).
+  ctx.fillStyle = 'rgba(255, 245, 220, 0.22)';
+  ctx.fillRect(x - half, y - 0.9, half * 2, 1.8);
+  if (pkg.size >= 3) ctx.fillRect(x - 0.9, y - half, 1.8, half * 2);
+  // Etikett unten rechts.
+  ctx.fillStyle = 'rgba(245, 242, 232, 0.85)';
+  ctx.fillRect(x + half * 0.2, y + half * 0.42, half * 0.65, half * 0.36);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(x + half * 0.28, y + half * 0.52, half * 0.45, 0.25);
+  ctx.fillRect(x + half * 0.28, y + half * 0.64, half * 0.3, 0.25);
+  // Symbol der Ware.
+  ctx.strokeStyle = look.color;
+  ctx.lineWidth = 0.6;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  ctx.translate(x, y);
-  drawGoodsGlyph(ctx, look.glyph, half * 0.55);
-  ctx.translate(-x, -y);
+  ctx.translate(x - half * 0.1, y - half * 0.12);
+  drawGoodsGlyph(ctx, look.glyph, half * 0.58);
+  ctx.translate(-(x - half * 0.1), -(y - half * 0.12));
   if (opts.selected) {
     ctx.strokeStyle = p.gold;
-    ctx.lineWidth = 0.7;
-    roundRect(ctx, x - half - 1.3, y - half - 1.3, half * 2 + 2.6, half * 2 + 2.6, 2.2);
+    ctx.lineWidth = 0.8;
+    roundRect(ctx, x - half - 1.4, y - half - 1.4, half * 2 + 2.8, half * 2 + 2.8, 2.2);
     ctx.stroke();
   }
   if (opts.lost > 0) {
@@ -694,10 +998,17 @@ function patrolCar(ctx: CanvasRenderingContext2D, p: StashPalette, x: number, y:
   roundRect(ctx, x + 14, y + 1.2, 3.4, 7.6, 1);
   ctx.fill();
   const on = Math.sin(t * 12) > 0;
+  ctx.fillStyle = '#2458c9';
+  ctx.fillRect(x, y + 4.2, 22, 1.6);
   ctx.fillStyle = on ? p.place : p.danger;
   ctx.fillRect(x + 10, y + 1.5, 2.8, 3.2);
   ctx.fillStyle = on ? p.danger : p.place;
   ctx.fillRect(x + 10, y + 5.3, 2.8, 3.2);
+  const glow = ctx.createRadialGradient(x + 11.4, y + 5, 1, x + 11.4, y + 5, 14);
+  glow.addColorStop(0, on ? 'rgba(70,140,255,0.45)' : 'rgba(255,70,70,0.4)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x - 4, y - 10, 30, 30);
 }
 
 /** Ein Bild: Hintergrund, Verstecke mit Belegung, Pakete, Blaulicht, Stürmen. */

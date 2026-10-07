@@ -3,7 +3,8 @@
 // Alles deterministisch über ctx.random().
 
 import { type Ctx, clock, formatAmount, formatEuro, type GameState, journal, wallet } from '../../core';
-import { activeCity, liveVeedel } from '../city';
+import { activeCity, isPlayerIn, liveVeedel } from '../city';
+import { isPlayerAway, playerSpot } from '../customers';
 import { activeEncounters, startEncounter } from '../encounters';
 import { eventFactor } from '../events';
 import { DEFAULT_PRODUCT, getStock, getWarehouses, warehousePlace } from '../goods';
@@ -20,7 +21,7 @@ import {
   PLAYER_FACTION,
 } from '../territory';
 import { tutorialAllows } from '../tutorial';
-import { allVeedel, getVeedel, neighborsOf, veedelAt, veedelName } from '../veedel';
+import { allVeedel, getVeedel, neighborsOf, veedelAt, veedelCity, veedelName } from '../veedel';
 import { addHostility, commandOption, crewFor, demandOptions, focusVeedel, say, statusOf } from './common';
 import {
   ALLIANCE_MAX_HOSTILITY,
@@ -552,12 +553,18 @@ function launchRaid(ctx: Ctx, gang: Gang, s: GangStatus): void {
     );
     // Auftrag 23: Mit Versteck am Spot nehmen sie nur halb so viel Ware mit.
     const stash = spotModifiers(ctx.state, target.spotId).lossFactor;
+    // Stehst du selbst an diesem Spot, bist du mittendrin (Feedback vom 07.10.2026: Straßenkampf als Minispiel);
+    // sonst fragt die Akte, ob du hinfährst.
+    const standingHere =
+      playerSpot(ctx.state) === target.spotId &&
+      !isPlayerAway(ctx.state) &&
+      isPlayerIn(ctx.state, veedelCity(target.veedelId));
     encounterId = startEncounter(ctx, {
       kind: 'raidDefense',
       spotId: target.spotId,
       veedelId: target.veedelId,
       staffIds: target.staffIds,
-      askPlayer: true,
+      ...(standingHere ? { playerPresent: true } : { askPlayer: true }),
       opponent,
       origin,
       ...(stash < 1
