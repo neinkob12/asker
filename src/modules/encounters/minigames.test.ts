@@ -7,6 +7,7 @@ import { loadSimulation, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getStock, store } from '../goods';
 import { getChallenge, MINIGAME_KINDS, MINIGAME_TIMEOUT, type MinigameKind } from '../minigames';
+import { getHeat } from '../police';
 import { getAllSpots, spotCity } from '../spots';
 import { enlist, generateProfile, getStaffMember } from '../staff';
 import { AGGRESSION_FIGHT, BRAWL_AFTER_AGGRESSION, DECISION_TIMEOUT } from './config';
@@ -262,6 +263,52 @@ describe('applyTraffic', () => {
     const after = get(sim, e.id);
     expect(after.log.some((l) => l.actionId === 'speedOff')).toBe(true);
     expect(after.round).toBe(1);
+  });
+});
+
+describe('applyTraffic (Teil 4)', () => {
+  it('Schein ohne genug Schwarzgeld: aufgeflogen, nichts bezahlt', () => {
+    const sim = createTestGame();
+    const e = begin(sim, trafficRequest);
+    const dirty = wallet.balance(sim.state, 'dirty');
+    wallet.pay(sim.ctx('test'), dirty, 'dirty', 'Test', 'loss.police');
+    finish(sim, challengeOf(e), 0.6, ['bribe']);
+    const after = get(sim, e.id);
+    expect(after.outcome).toBe('failure');
+    expect(after.bribeSpent).toBe(0);
+    expect(after.log.at(-1)?.text).toContain('Schein fehlt');
+  });
+
+  it('durch, aber mit Widersprüchen: er notiert das Kennzeichen (Heat, höchstens zwei zählen)', () => {
+    const sim = createTestGame();
+    const clean = begin(sim, trafficRequest);
+    finish(sim, challengeOf(clean), 0.8);
+    expect(get(sim, clean.id)).toMatchObject({ outcome: 'success', extraHeat: 0 });
+    const heat = getHeat(sim.state, 'ehrenfeld');
+    const noted = begin(sim, { ...trafficRequest, origin: { module: 'test', ref: 'trip:7' } });
+    finish(sim, challengeOf(noted), 0.6, ['lies:5']);
+    const after = get(sim, noted.id);
+    expect(after.outcome).toBe('success');
+    expect(after.extraHeat).toBe(6);
+    expect(after.log.at(-1)?.text).toContain('Kennzeichen');
+    expect(getHeat(sim.state, 'ehrenfeld')).toBeGreaterThan(heat);
+  });
+
+  it('die Rechte Hand redet mit ihrem Score; timeout lässt die Runden laufen wie bisher', () => {
+    const sim = createTestGame();
+    rightHand(sim);
+    const e = begin(sim, trafficRequest);
+    expect(sim.dispatch({ type: 'minigames.delegate', payload: { id: challengeOf(e) } }).ok).toBe(true);
+    const after = get(sim, e.id);
+    expect(after.phase).toBe('done');
+    expect(after.log.at(-1)?.text).toContain('Rechte Hand');
+
+    const waiting = begin(sim, { ...trafficRequest, origin: { module: 'test', ref: 'trip:8' } });
+    get(sim, waiting.id).deadline += 1000;
+    sim.advance(MINIGAME_TIMEOUT);
+    const timedOut = get(sim, waiting.id);
+    expect(timedOut.minigame).toBeNull();
+    expect(timedOut).toMatchObject({ phase: 'rounds', round: 0 });
   });
 });
 
