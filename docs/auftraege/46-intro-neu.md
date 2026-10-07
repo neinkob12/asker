@@ -241,8 +241,8 @@ und startet den nächsten Teil, sobald der vorige gemergt ist.
 
 | Teil | Inhalt | Hängt ab von |
 | --- | --- | --- |
-| [46a](46a-tour-baukasten.md) | Tour-Baukasten in `src/ui/tour` (Overlay, Anker, Box mit Peter, Weiter, Uhr steht) | nichts |
-| [46b](46b-modul-tutorial.md) | Modul `tutorial`: Stufen, Missionen mit Belohnungsregel, Freischalt-Funktionen, Missions-Karte, `tutorial.start` | nichts (parallel zu 46a) |
-| 46c | Touren je Stufe mit Peters Texten, geskriptete Momente (erster Gang-Angriff, Beschlagnahme, Handy-Bestellung, Lager-Pop-up), Willkommen-Seite mit Name | 46a, 46b |
-| 46d | Rückbau: Quests, Konfrontationen (automatische Entscheidung plus Straßenkampf am Spot), Spot-Ausbau, Dynamic Island, Push-Banner, Chats (Bewerber, Geschichten, Marktbericht, Kneipen, Klüngel), Verträge nach Köln | 46b |
-| 46e | Wirkungen: Spezialisten, Buchhalter, Rechte Hand aus den Leutnants, Lieferanten-Kennenlern-Pop-up, Stadt-Event-Pop-up mit Bestell-Knopf, Shop-Platzhalter | 46b |
+| [46a](46a-tour-baukasten.md) (PR #92, gemergt) | Tour-Baukasten in `src/ui/tour` (Overlay, Anker, Box mit Peter, Weiter, Uhr steht) | nichts |
+| [46b](46b-modul-tutorial.md) (PR #93, gemergt) | Modul `tutorial`: Stufen, Missionen mit Belohnungsregel, Freischalt-Funktionen, Missions-Karte, `tutorial.start` | nichts (parallel zu 46a) |
+| [46c](46c-touren-und-momente.md) | Touren je Stufe mit Peters Texten, geskriptete Momente (erster Gang-Angriff, Beschlagnahme, Handy-Bestellung, Lager-Pop-up), Willkommen-Seite mit Name | 46a, 46b |
+| [46d](46d-rueckbau.md) | Rückbau: Quests, Konfrontationen (automatische Entscheidung plus Straßenkampf am Spot), Spot-Ausbau, Dynamic Island, Push-Banner, Chats (Bewerber, Geschichten, Marktbericht, Kneipen, Klüngel), Verträge nach Köln | 46b |
+| [46e](46e-wirkungen.md) | Wirkungen: Spezialisten, Buchhalter, Rechte Hand aus den Leutnants, Lieferanten-Kennenlern-Pop-up, Stadt-Event-Pop-up mit Bestell-Knopf, Shop-Platzhalter | 46b |
