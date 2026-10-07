@@ -23,7 +23,8 @@
 // Öffentliche API: isTradeActive, getCustomers, getCustomer, customerName, customerContact, getOrders, getOrder,
 //   openOrders, pendingDeliveries, orderCoverage, getShipments, getDeliveries, portStock, totalStock, ownedPorts, fairPrice,
 //   customerOffer, priceCap, orderValue, playerScore, rivalScores, shareFor, supplierReputation, tradeStats,
-//   containerCost, containerRisk, deliveryEstimate, freightCost, weekOf, PRODUCERS, CONTAINER_SIZES, FOREIGN_CITIES
+//   containerCost, containerRisk, deliveryEstimate, freightCost, weekOf, PRODUCERS, CONTAINER_SIZES, FOREIGN_CITIES;
+//   Auftrag 44, Teil 7 (packing.ts): packingFactor, packingParams, maybeStartPacking (Minispiel Container packen)
 // Befehle: 'trade.answer', 'trade.acceptAll', 'trade.deliver', 'trade.buy', 'trade.sail', 'trade.rentBerth',
 //   'trade.buildHall', 'trade.setPriceLevel'; Auftrag 43 (plans.ts, Fenna): 'trade.setPlan', 'trade.addRestock',
 //   'trade.removeRestock'
@@ -125,6 +126,7 @@ import {
   type Producer,
   type WeeklyDemand,
 } from './data';
+import { maybeStartPacking, onPackingFinished, packingFactor } from './packing';
 import {
   addRestock,
   type CustomerPlan,
@@ -162,6 +164,14 @@ export {
   PRODUCERS,
   type Producer,
 } from './data';
+export {
+  maybeStartPacking,
+  type PackingParams,
+  packingFactor,
+  packingIds,
+  packingParams,
+  packingRef,
+} from './packing';
 export {
   ACCEPT_LABELS,
   type CustomerPlan,
@@ -267,6 +277,11 @@ export interface TradeShipment {
   /** Auftrag 42: eigene Ware aus den Fincas (grow), mit dem Faktor der Verpackung auf die Chance einer Kontrolle. */
   own?: boolean;
   pack?: number;
+  /**
+   * Auftrag 44, Teil 7: Score beim Packen (0 bis 1), wenn du selbst gepackt hast (Minispiel 'container'). Faktor auf
+   * die Chance einer Kontrolle über packingFactor; fehlt = 1. Nicht zu verwechseln mit pack (eigene Ware aus grow).
+   */
+  packing?: number;
 }
 
 /** Ein Container für eine Bestellung beim Produzenten (trade.buy, trade.sail). */
@@ -684,7 +699,8 @@ export function containerCost(
 
 /**
  * Chance, dass der Zoll einen Container in diesem Hafen kontrolliert (0–1): Grundrisiko der Herkunft × Größe × Hafen ×
- * Deckladung × Schiff (Linie 1, eigenes Schiff sein Kontrollfaktor) × (1 + Zoll-Heat/50).
+ * Deckladung × Schiff (Linie 1, eigenes Schiff sein Kontrollfaktor) × Verpackung eigener Ware (pack) × Packen im
+ * Minispiel (packingFactor aus packing, ohne Wert 1) × (1 + Zoll-Heat/50).
  */
 export function containerRisk(
   state: GameState,
@@ -694,6 +710,7 @@ export function containerRisk(
   cover: Cover['id'] = 'none',
   vesselId: number | null = null,
   pack = 1,
+  packing?: number,
 ): number {
   const producer = SOURCE_BY_ID.get(producerId);
   const container = SIZE_BY_ID.get(size);
@@ -704,7 +721,14 @@ export function containerRisk(
   const tarn = COVER_BY_ID.get(cover)?.riskFactor ?? 1;
   return Math.min(
     0.9,
-    producer.risk * container.riskFactor * port.customsFactor * tarn * ship * pack * (1 + heat / 50),
+    producer.risk *
+      container.riskFactor *
+      port.customsFactor *
+      tarn *
+      ship *
+      pack *
+      packingFactor(packing) *
+      (1 + heat / 50),
   );
 }
 
@@ -1698,6 +1722,7 @@ function containerArrives(ctx: Ctx, shipment: TradeShipment): void {
     shipment.cover,
     shipment.vesselId,
     shipment.pack ?? 1,
+    shipment.packing,
   );
   customsArrival(ctx, shipment.portId, shipment.amount / 1000);
   // Das Schiff ist im Hafen: Kontrolliert wird am Kai.
@@ -2110,10 +2135,23 @@ export default defineModule({
     'trade.acceptAll': (ctx, payload) =>
       acceptAll(ctx, payload?.guaranteedOnly === true, payload?.coveredOnly === true),
     'trade.deliver': (ctx, { orderId, portId, vehicleId }) => deliver(ctx, orderId, portId, vehicleId),
-    'trade.buy': (ctx, { producerId, productId, size, portId, cover, count }) =>
-      buyContainer(ctx, producerId, productId, size, portId, cover, count),
-    'trade.sail': (ctx, { vesselId, producerId, portId, load }) =>
-      sail(ctx, vesselId, producerId, portId ?? HARBOR_CITY, Array.isArray(load) ? load : []),
+    // Auftrag 44, Teil 7: Bestellst du selbst, packst du den Container im Minispiel (Fenna ruft buyContainer direkt).
+    'trade.buy': (ctx, { producerId, productId, size, portId, cover, count }, meta) =>
+      packAfter(
+        ctx,
+        meta.actor,
+        buyContainer(ctx, producerId, productId, size, portId, cover, count),
+        producerId,
+        null,
+      ),
+    'trade.sail': (ctx, { vesselId, producerId, portId, load }, meta) =>
+      packAfter(
+        ctx,
+        meta.actor,
+        sail(ctx, vesselId, producerId, portId ?? HARBOR_CITY, Array.isArray(load) ? load : []),
+        producerId,
+        vehicleName(ctx.state, vesselId),
+      ),
     'trade.rentBerth': (ctx, { portId }) => rentBerth(ctx, portId),
     'trade.buildHall': (ctx, { portId }) => buildHall(ctx, portId),
     'trade.setPriceLevel': (ctx, { level }) => setPriceLevel(ctx, level),
@@ -2131,12 +2169,29 @@ export default defineModule({
     'encounter.resolved': (ctx, { request, outcome }) => {
       if (request.origin?.module === 'trade') onContainerCheck(ctx, request.origin.ref, outcome);
     },
+    // Auftrag 44, Teil 7: Container gepackt, der Score gilt für alle Container der Bestellung.
+    'minigame.finished': (ctx, payload) => onPackingFinished(ctx, payload),
   },
   // Pleite-Regel: Ware in einem Hafen, ein Container unterwegs oder eine Lieferung auf der Straße.
   solvency: (state) =>
     isBusinessSold(state) &&
     (totalStock(state) > 0 || getShipments(state).length > 0 || getDeliveries(state).length > 0),
 });
+
+/** Nach einer erfolgreichen Bestellung des Spielers selbst: Container packen (Minispiel, Auftrag 44, Teil 7). */
+function packAfter(
+  ctx: Ctx,
+  actor: string,
+  result: CommandResult,
+  producerId: string,
+  vessel: string | null,
+): CommandResult {
+  if (!result.ok || actor !== 'player') return result;
+  const ids = new Set((result.data as { shipmentIds?: number[] } | undefined)?.shipmentIds ?? []);
+  const shipments = ctx.state.modules.trade.shipments.filter((x) => ids.has(x.id));
+  maybeStartPacking(ctx, shipments, SOURCE_BY_ID.get(producerId)?.from ?? producerId, vessel);
+  return result;
+}
 
 /** Ein Container wartet am Kai auf die Entscheidung in der Zollkontrolle (für die Oberfläche). */
 export function containerInCustoms(state: GameState): TradeShipment | undefined {

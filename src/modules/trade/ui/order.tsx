@@ -47,6 +47,7 @@ import {
   ownedPorts,
   ownOrigin,
   ownShips,
+  packingFactor,
   portRoom,
   type ShipVoyage,
   shippingMinutes,
@@ -151,6 +152,9 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
   const plan = vesselId === null ? null : voyagePlan(state, vesselId, producer.id, target);
   const total = loadCost(producer.id, load, vesselId !== null) + (plan?.cost ?? 0);
   const risk = containerRisk(state, producer.id, size, target, cover, vesselId, stock[productId]?.pack ?? 1);
+  // Auftrag 44, Teil 7: Du packst selbst (Minispiel). Gut gepackt bzw. schlecht gepackt, ohne Packen gilt risk.
+  const packed = (score: number) =>
+    containerRisk(state, producer.id, size, target, cover, vesselId, stock[productId]?.pack ?? 1, score);
   const minutes = plan ? plan.minutes : shippingMinutes(producer.id, target);
   const fits = vesselId === null || n * container.grams <= capacity;
   const arrives = state.time + minutes;
@@ -298,6 +302,14 @@ function OrderPanel({ producerId, productId: wanted }: { producerId: string; pro
               title="Zollrisiko je Container"
               // Die Menge selbst weckt den Zoll (Auftrag 43, I11: 360 kg setzten Rotterdam von ruhig auf Großkontrolle).
               meta={`Die Menge weckt den Zoll: +${Math.round(customsHeatForArrival(grams / 1000))} bei Ankunft, jetzt ${customsLevel(customsHeat(state, target)).label}`}
+            />
+          </ListItem>
+          <ListItem value={`${pct(packed(1))} bis ${pct(packed(0))}`}>
+            <ItemContent
+              icon="boxes"
+              color="goods"
+              title="Nach dem Packen"
+              meta={`Du packst selbst: sauber gepackt × ${formatNumber(packingFactor(1), 2)}, schlecht × ${formatNumber(packingFactor(0), 2)}.`}
             />
           </ListItem>
           <ListItem value={days(minutes)}>
@@ -456,6 +468,12 @@ export function ShipsGroup() {
                   icon: 'shield',
                 },
                 { label: `nach ${portName(x.portId)}`, color: 'place', icon: 'anchor' },
+                // Auftrag 44, Teil 7: selbst gepackt, Faktor auf die Chance einer Kontrolle.
+                x.packing !== undefined && {
+                  label: `gepackt × ${formatNumber(packingFactor(x.packing), 2)}`,
+                  color: packingFactor(x.packing) <= 1 ? 'money' : 'danger',
+                  icon: 'boxes',
+                },
               ]}
             />
           </ListItem>

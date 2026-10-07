@@ -132,3 +132,9 @@ export const MAX_HALLS = 2;
 export const UNATTENDED_CUSTOMS_PASS = 0.5;
 /** Passt ein Container nicht mehr ins Lager, wartet der Rest an Bord: Liegegeld pro Tag und Container (sauberes Geld). */
 export const QUAY_FEE_PER_DAY = 1_500;
+
+/**
+ * Auftrag 44, Teil 7 (Container packen): Faktor auf die Chance einer Zollkontrolle aus dem Score des Packens,
+ * base − perScore · Score (0 → 1,25, 0,5 → 0,9, 1 → 0,55). Ohne Score (nicht selbst gepackt, timeout) 1.
+ */
+export const PACKING_FACTOR = { base: 1.25, perScore: 0.7 } as const;
