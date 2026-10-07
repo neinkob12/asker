@@ -7,7 +7,11 @@
 //
 //   node scripts/perf-browser.mjs [--save=pfad.json] [--days=3] [--seconds=25] [--speed=4] [--width=700 --height=500]
 //     [--mobile] [--throttle=4] [--gpu] [--reduced-motion] [--traffic=off|low|normal] [--hour=8] [--city=hamburg]
-//     [--scenes=ui,karte]
+//     [--scenes=ui,karte,jagd]
+//
+// Verfolgungsjagd (Auftrag 44): --scenes=jagd öffnet die Jagd (Vorschau im laufenden Spiel), fährt SECONDS Sekunden
+// mit Gas und wechselnden Abzweigen und meldet Bilder pro Sekunde, die Rechenzeit der Jagd pro Bild (Modell, Ebene,
+// Kamera mit map.jumpTo, HUD), MapLibre zeichnen und Long Tasks. Am Handy: --mobile --throttle=4.
 //
 // Karte (Auftrag 31): --scenes=karte misst den Normalbetrieb auf der Karte (zehn offene Aufträge, eine laufende
 // Lieferung, Tempo --speed, Zoom 14,5 an den Ringen) über die Messhilfe aus src/map/perf.ts (?perf=1): Bilder pro
@@ -595,6 +599,66 @@ if (SCENES.has('karte')) {
   await closeDialogs();
   await page.waitForTimeout(3000);
   await measureMap('Karte Normalbetrieb, zehn offene Aufträge, eine Lieferung');
+}
+
+if (SCENES.has('jagd')) {
+  await closeDialogs();
+  await page.evaluate(() => window.koeln.dev.minigamePreview('chase', { schwer: 0.6 }));
+  await page.waitForSelector('.mg-intro', { timeout: 20000 });
+  await page.waitForTimeout(2500);
+  await page.click('.mg-intro .mg-button.is-gold');
+  await page.waitForSelector('.mg-run.is-play', { timeout: 20000 });
+  await page.evaluate(() => {
+    const chase = window.chase;
+    if (chase) chase.view.current.perf = { frames: 0, total: 0, max: 0 };
+    window.__ktMapPerf?.reset();
+    window.__perf.reset();
+    window.__jagd = { frames: 0, start: performance.now(), worst: 0, last: performance.now() };
+    const tick = (now) => {
+      const j = window.__jagd;
+      if (!j || j.stop) return;
+      j.frames += 1;
+      j.worst = Math.max(j.worst, now - j.last);
+      j.last = now;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await page.keyboard.down('ArrowUp');
+  for (let i = 0; i < SECONDS; i++) {
+    await page.waitForTimeout(1000);
+    if (i % 3 === 2) await page.keyboard.press(i % 6 === 2 ? 'ArrowLeft' : 'ArrowRight');
+    if (await page.locator('.mg-result').count()) break;
+  }
+  await page.keyboard.up('ArrowUp');
+  const info = await page.evaluate(() => {
+    const j = window.__jagd;
+    j.stop = true;
+    const seconds = (performance.now() - j.start) / 1000;
+    const perf = window.chase?.view.current.perf ?? null;
+    const st = window.__ktMapPerf?.stats() ?? null;
+    return {
+      seconds,
+      fps: j.frames / seconds,
+      worst: j.worst,
+      perf,
+      maplibre: st?.maplibre ?? null,
+      longTasks: window.__perf.longTasks,
+      ended: !!document.querySelector('.mg-result'),
+    };
+  });
+  const lt = info.longTasks;
+  const line = [
+    `\n######## "Verfolgungsjagd" (${info.seconds.toFixed(0)} s, ${WIDTH}x${HEIGHT}${MOBILE ? ' Handy' : ''}${THROTTLE > 1 ? `, CPU ${THROTTLE}x gedrosselt` : ''}${info.ended ? ', vorzeitig zu Ende' : ''}) ########`,
+    `Bilder: ${info.fps.toFixed(1)} fps, längster Abstand ${info.worst.toFixed(0)} ms`,
+    `Jagd pro Bild (Modell, Ebene, Kamera, HUD): ${info.perf ? `${(info.perf.total / Math.max(1, info.perf.frames)).toFixed(2)} ms im Mittel, schlimmstes ${info.perf.max.toFixed(1)} ms über ${info.perf.frames} Bilder` : '–'}`,
+    `MapLibre zeichnen: ${info.maplibre ? `${(info.maplibre.ms / Math.max(1, info.maplibre.calls)).toFixed(2)} ms/Bild im Mittel, schlimmstes ${info.maplibre.max.toFixed(1)} ms` : '–'}`,
+    `Long Tasks: ${lt.length}, max ${Math.max(0, ...lt).toFixed(0)} ms (über 50 ms: ${lt.filter((d) => d > 50).length})`,
+  ].join('\n');
+  console.log(line);
+  summary.push(
+    `Jagd: ${info.fps.toFixed(1)} fps, ${info.perf ? (info.perf.total / Math.max(1, info.perf.frames)).toFixed(2) : '–'} ms/Bild`,
+  );
 }
 
 console.log(`\n######## Zusammenfassung ########\n${summary.join('\n')}`);

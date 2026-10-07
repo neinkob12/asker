@@ -1,8 +1,9 @@
 // Klänge der Verfolgungsjagd, als Synth angemeldet (audio.registerSound). Dauerklänge (Motor, Martinshorn,
-// Hubschrauber) laufen als kurze, überlappende Stücke, die die Bildschleife nachlegt: So gelten Lautstärke-Regler und
-// Stummschalten wie für alle Effekte, und Tonhöhe bzw. Lautstärke folgen dem Spiel ohne eigene Audio-Knoten.
+// Hubschrauber) sind Ton-Schleifen (`kind: 'loop'`, gestartet mit audio.loop): Die Bildschleife führt Drehzahl,
+// Tonhöhe und Lautstärke nach. Sie laufen über den Effekt-Bus, Lautstärke-Regler und Stummschalten gelten wie für alle
+// Effekte.
 
-import { audio } from '../../../../../ui';
+import { audio, type LoopParams } from '../../../../../ui';
 
 export const CHASE_SOUNDS = {
   engine: 'minigames.chase.engine',
@@ -17,27 +18,10 @@ export const CHASE_SOUNDS = {
   dump: 'minigames.chase.dump',
 } as const;
 
-/** Länge eines Motor-Stücks; nachgelegt wird alle ENGINE_STEP Sekunden (die Stücke überlappen sich). */
-export const ENGINE_CHUNK = 0.34;
-export const ENGINE_STEP = 0.26;
 /** Martinshorn: ein Ton-Paar (tatü-tata) dauert so lange. */
-export const SIREN_CHUNK = 1.3;
-export const HELI_CHUNK = 0.5;
-
-/** Werte für das nächste Motor-Stück (setzt die Bildschleife vor audio.play). */
-const engine = { from: 50, to: 50, load: 0.5 };
-/** Tonhöhe des Martinshorns (Doppler: näher kommend höher). */
-const siren = { pitch: 1 };
-
-export function setEngine(from: number, to: number, load: number): void {
-  engine.from = from;
-  engine.to = to;
-  engine.load = load;
-}
-
-export function setSirenPitch(pitch: number): void {
-  siren.pitch = pitch;
-}
+export const SIREN_PERIOD = 1.3;
+/** So schnell folgen Drehzahl und Tonhöhe (Zeitkonstante in Sekunden). */
+const GLIDE = 0.08;
 
 function noiseBuffer(ctx: AudioContext, seconds: number): AudioBuffer {
   const length = Math.max(1, Math.round(ctx.sampleRate * seconds));
@@ -82,72 +66,117 @@ export function registerChaseSounds(): void {
   const s = CHASE_SOUNDS;
 
   audio.registerSound(s.engine, {
-    kind: 'synth',
-    play: (ctx, out, t) => {
-      const { from, to, load } = engine;
-      const env = envelope(ctx, t, 0.06, ENGINE_CHUNK - 0.14, 0.08, 0.16 + 0.1 * load);
-      const lp = filter(ctx, 'lowpass', 380 + 1300 * load, 2.5);
-      for (const [type, mult, gain] of [
-        ['sawtooth', 1, 0.55],
-        ['square', 0.5, 0.45],
-        ['sawtooth', 2.01, 0.18],
-      ] as const) {
+    kind: 'loop',
+    start: (ctx, out, t) => {
+      // Drei Oszillatoren (Grundton, Unterton, Oberton) durch einen Tiefpass, der mit der Last aufgeht.
+      const lp = filter(ctx, 'lowpass', 600, 2.5);
+      const level = ctx.createGain();
+      level.gain.value = 0.2;
+      lp.connect(level).connect(out);
+      const parts = (
+        [
+          ['sawtooth', 1, 0.55],
+          ['square', 0.5, 0.45],
+          ['sawtooth', 2.01, 0.18],
+        ] as const
+      ).map(([type, mult, gain]) => {
         const o = ctx.createOscillator();
         o.type = type;
-        o.frequency.setValueAtTime(from * mult, t);
-        o.frequency.linearRampToValueAtTime(to * mult, t + ENGINE_CHUNK);
+        o.frequency.value = 40 * mult;
         const g = ctx.createGain();
         g.gain.value = gain;
         o.connect(g).connect(lp);
         o.start(t);
-        o.stop(t + ENGINE_CHUNK + 0.02);
-      }
-      lp.connect(env).connect(out);
+        return { o, mult };
+      });
+      return {
+        set: (p: LoopParams, at: number) => {
+          if (p.rpm !== undefined)
+            for (const { o, mult } of parts) o.frequency.setTargetAtTime(p.rpm * mult, at, GLIDE);
+          if (p.load !== undefined) {
+            lp.frequency.setTargetAtTime(380 + 1300 * p.load, at, GLIDE);
+            level.gain.setTargetAtTime(0.16 + 0.1 * p.load, at, GLIDE);
+          }
+        },
+        stop: (at: number) => {
+          for (const { o } of parts) o.stop(at);
+        },
+      };
     },
   });
 
   audio.registerSound(s.siren, {
-    kind: 'synth',
-    play: (ctx, out, t) => {
-      // Martinshorn: zwei Töne im Quartabstand, je eine halbe Länge.
-      const half = SIREN_CHUNK / 2;
-      const p = siren.pitch;
-      const env = envelope(ctx, t, 0.04, SIREN_CHUNK - 0.1, 0.06, 0.12);
+    kind: 'loop',
+    start: (ctx, out, t) => {
+      // Martinshorn: zwei Töne im Quartabstand (440 und 587 Hz), umgeschaltet von einem langsamen Rechteck.
       const lp = filter(ctx, 'lowpass', 2200, 1.2);
-      for (const [type, gain] of [
-        ['sawtooth', 0.6],
-        ['square', 0.25],
-      ] as const) {
+      const level = ctx.createGain();
+      level.gain.value = 0.12;
+      lp.connect(level).connect(out);
+      const lfo = ctx.createOscillator();
+      lfo.type = 'square';
+      lfo.frequency.value = 1 / SIREN_PERIOD;
+      const depth = ctx.createGain();
+      depth.gain.value = 73.5;
+      lfo.connect(depth);
+      lfo.start(t);
+      const tones = (
+        [
+          ['sawtooth', 0.6],
+          ['square', 0.25],
+        ] as const
+      ).map(([type, gain]) => {
         const o = ctx.createOscillator();
         o.type = type;
-        o.frequency.setValueAtTime(440 * p, t);
-        o.frequency.setValueAtTime(587 * p, t + half);
+        o.frequency.value = 513.5;
+        depth.connect(o.frequency);
         const g = ctx.createGain();
         g.gain.value = gain;
         o.connect(g).connect(lp);
         o.start(t);
-        o.stop(t + SIREN_CHUNK + 0.02);
-      }
-      lp.connect(env).connect(out);
+        return o;
+      });
+      return {
+        set: (p: LoopParams, at: number) => {
+          if (p.pitch === undefined) return;
+          for (const o of tones) o.frequency.setTargetAtTime(513.5 * p.pitch, at, GLIDE);
+          depth.gain.setTargetAtTime(73.5 * p.pitch, at, GLIDE);
+        },
+        stop: (at: number) => {
+          lfo.stop(at);
+          for (const o of tones) o.stop(at);
+        },
+      };
     },
   });
 
   audio.registerSound(s.heli, {
-    kind: 'synth',
-    play: (ctx, out, t) => {
-      // Rotor: tiefes Rauschen, 13-mal pro Sekunde zerhackt.
-      const src = noise(ctx, t, HELI_CHUNK + 0.05);
+    kind: 'loop',
+    start: (ctx, out, t) => {
+      // Rotor: tiefes Rauschen, 13-mal pro Sekunde zerhackt (Sägezahn auf die Lautstärke).
+      const src = ctx.createBufferSource();
+      src.buffer = noiseBuffer(ctx, 1);
+      src.loop = true;
       const lp = filter(ctx, 'lowpass', 260, 1);
       const chop = ctx.createGain();
-      chop.gain.setValueAtTime(0, t);
-      const beats = Math.round(HELI_CHUNK * 13);
-      for (let i = 0; i < beats; i++) {
-        const at = t + i / 13;
-        chop.gain.linearRampToValueAtTime(1, at + 0.012);
-        chop.gain.linearRampToValueAtTime(0.15, at + 0.06);
-      }
-      const env = envelope(ctx, t, 0.03, HELI_CHUNK - 0.07, 0.04, 0.9);
-      src.connect(lp).connect(chop).connect(env).connect(out);
+      chop.gain.value = 0.55;
+      const lfo = ctx.createOscillator();
+      lfo.type = 'sawtooth';
+      lfo.frequency.value = 13;
+      const depth = ctx.createGain();
+      depth.gain.value = -0.42;
+      lfo.connect(depth).connect(chop.gain);
+      const level = ctx.createGain();
+      level.gain.value = 0.9;
+      src.connect(lp).connect(chop).connect(level).connect(out);
+      src.start(t);
+      lfo.start(t);
+      return {
+        stop: (at: number) => {
+          src.stop(at);
+          lfo.stop(at);
+        },
+      };
     },
   });
 

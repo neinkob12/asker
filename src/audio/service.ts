@@ -20,7 +20,28 @@ export type AudioStatus = 'locked' | 'running' | 'suspended' | 'unsupported';
 /** Eigener Sound eines Moduls: Erzeugung per Web Audio oder eine Datei (URL, z.B. aus public/audio/). */
 export type CustomSound =
   | { kind: 'synth'; play: (ctx: AudioContext, destination: AudioNode, time: number) => void }
-  | { kind: 'file'; url: string; volume?: number };
+  | { kind: 'file'; url: string; volume?: number }
+  | { kind: 'loop'; start: (ctx: AudioContext, destination: AudioNode, time: number) => LoopVoice };
+
+/** Werte einer Ton-Schleife (z.B. Drehzahl, Tonhöhe). `volume` (0–1) regelt der Dienst selbst. */
+export type LoopParams = Record<string, number>;
+
+/** Die Knoten einer laufenden Schleife (vom Modul gebaut): Werte nachführen und zum Zeitpunkt anhalten. */
+export interface LoopVoice {
+  set?(params: LoopParams, time: number): void;
+  stop(time: number): void;
+}
+
+/** Griff auf eine laufende Schleife (audio.loop). Ohne Ton (gesperrt, kein AudioContext) tut er nichts. */
+export interface LoopHandle {
+  set(params: LoopParams): void;
+  stop(): void;
+}
+
+const SILENT_LOOP: LoopHandle = { set: () => {}, stop: () => {} };
+/** Ein- und Ausblenden einer Schleife (Sekunden, Zeitkonstante bzw. Länge). */
+const LOOP_SMOOTH = 0.06;
+const LOOP_FADE_OUT = 0.12;
 
 export interface PlayOptions {
   /** Lautstärke 0–1 relativ zur Effekt-Lautstärke. */
@@ -260,12 +281,14 @@ export class AudioService {
     if (!ctx || !this.core || !this.sfxBus || this.status !== 'running' || this.settings.muted) return;
     // Im Gespräch gibt es nur die Stimme.
     if (this.callActive) return;
+    const custom = this.custom.get(id);
+    // Schleifen laufen nur über loop().
+    if (custom?.kind === 'loop') return;
     const t = ctx.currentTime + 0.01 + (options.delay ?? 0);
     const out = ctx.createGain();
     out.gain.value = options.volume ?? 1;
     out.connect(this.sfxBus);
     setTimeout(() => out.disconnect(), 6000 + (options.delay ?? 0) * 1000);
-    const custom = this.custom.get(id);
     if (custom?.kind === 'synth') {
       custom.play(ctx, out, t);
     } else if (custom?.kind === 'file') {
@@ -289,6 +312,49 @@ export class AudioService {
     if (now - last < minIntervalMs) return;
     this.lastPlayed.set(id, now);
     this.play(id, options);
+  }
+
+  /**
+   * Ton-Schleife starten (mit registerSound als `kind: 'loop'` angemeldet), z.B. Motor oder Martinshorn:
+   * `const engine = audio.loop('minigames.chase.engine', { volume: 0.7 })`, dann pro Bild `engine.set({ rpm })` und
+   * am Ende `engine.stop()`. Läuft über den Effekt-Bus: Lautstärke, Stummschalten und Gespräch gelten wie für alle
+   * Effekte. Vor der ersten Interaktion kommt ein Griff zurück, der nichts tut.
+   */
+  loop(id: string, params: LoopParams = {}): LoopHandle {
+    const ctx = this.ctx;
+    const custom = this.custom.get(id);
+    if (!ctx || !this.sfxBus || this.status !== 'running' || custom?.kind !== 'loop') return SILENT_LOOP;
+    const out = ctx.createGain();
+    const t = ctx.currentTime + 0.01;
+    out.gain.setValueAtTime(0, t);
+    out.gain.setTargetAtTime(params.volume ?? 1, t, LOOP_SMOOTH);
+    out.connect(this.sfxBus);
+    let voice: LoopVoice;
+    try {
+      voice = custom.start(ctx, out, t);
+      voice.set?.(params, t);
+    } catch {
+      out.disconnect();
+      return SILENT_LOOP;
+    }
+    let stopped = false;
+    return {
+      set: (next) => {
+        if (stopped) return;
+        const now = ctx.currentTime;
+        if (next.volume !== undefined) out.gain.setTargetAtTime(Math.max(0, next.volume), now, LOOP_SMOOTH);
+        voice.set?.(next, now);
+      },
+      stop: () => {
+        if (stopped) return;
+        stopped = true;
+        const now = ctx.currentTime;
+        out.gain.cancelScheduledValues(now);
+        out.gain.setTargetAtTime(0, now, LOOP_FADE_OUT / 3);
+        voice.stop(now + LOOP_FADE_OUT + 0.05);
+        setTimeout(() => out.disconnect(), (LOOP_FADE_OUT + 0.3) * 1000);
+      },
+    };
   }
 
   /** Eigenen Sound anmelden, z.B. registerSound('gangs.gunshot', { kind: 'file', url: 'audio/sfx/schuss.ogg' }). */

@@ -42,6 +42,11 @@ registerMinigameView('papers', {
   },
   previewSituation:
     'Zollkontrolle auf der A1 bei Münster. Der Zoll winkt den Transporter auf den Parkplatz. Hinten drin: 1,2 kg Ware.',
+  resultLabel: ({ picks }) => {
+    if (picks.includes('bribe')) return { label: 'Bestochen', tone: 'warn', icon: 'money' };
+    if (picks.includes('giveUp')) return { label: 'Aufgegeben', tone: 'lost', icon: 'flag' };
+    return undefined;
+  },
   resultText: ({ won, picks }, challenge) => {
     const port = challenge.params.setting === 'port';
     if (picks.includes('bribe')) {

@@ -1193,34 +1193,131 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
   der Handel still, auch ohne Produktion).
 - **Test-Spielstand** `produktion`: zwei Fincas, die erste Ernte im Ausfuhrlager.
 
-### Minispiele (Auftrag 44, Teil 0)
+### Minispiele (Auftrag 44)
 
-Kurzfassung des Fundaments; den vollständigen Abschnitt schreibt Teil 10.
+Zehn Minispiele kommen bei Ereignissen im Spiel, wenn **der Spieler selbst betroffen ist** (Feedback vom 06.10.2026).
+Sie sind Pflicht; nur die aktive Rechte Hand der Stadt kann übernehmen. Ohne Oberfläche gilt genau das alte Verhalten.
 
-- **Pflicht:** Ein Minispiel kommt nur, wenn der Spieler selbst betroffen ist, und nur für Arten mit `ready: true`
-  (`minigames/kinds/<art>.ts`). Der Rahmen (`minigames/ui/Frame.tsx`, Dialog `'minigames.play'`, nicht schließbar,
-  pausiert) zeigt Einleitung, „Los“ und mit aktiver Rechter Hand der Stadt „<Name> übernimmt (xx %)“ (Würfel im Kern,
-  `minigames.delegate`), dann 3-2-1, Spiel und Ergebnis; erst „Weiter“ schickt `minigames.finish { id, score, picks }`.
-- **Ohne Oberfläche** (Tests, Bot, Autopilot) läuft nach `MINIGAME_TIMEOUT` (60 Spielminuten) die Frist ab:
-  `by: 'timeout'`, `score: null`, und es gilt genau das alte Verhalten. Der Bot löst offene sofort auf
-  (`minigames.expire` mit Actor `system`).
-- **Determinismus:** Seed fest aus Spiel-Seed und ID (`keyedRandom`), IDs aus einem eigenen Zähler; die Oberfläche
-  erzeugt Inhalte mit `createRng(challenge.seed)`. Ein Minispiel verschiebt weder Würfelfolge noch IDs anderer Module.
-- **Konfrontationen:** `EncounterKind.minigames` (`start`, `actions`, `brawl`) als Daten in `encounters/kinds.ts`;
-  solange `encounter.minigame` gesetzt ist, lehnen `act`, `protect` und `special` ab, `encounters.auto` und die Frist
-  lösen es vorher als timeout auf. Folgen je Art in `encounters/minigames.ts` (`applyChase`, `applyBrawl`,
-  `applyTraffic`, `applyPapers`). Der Spieler stirbt nie durch ein Minispiel.
-- **Oberfläche:** `registerMinigameView(kind, { component, controls, layout: 'map' | 'stage', previewParams,
-  resultText })` in `minigames/ui/games/<art>/index.tsx` (automatisch geladen), Vertrag `MinigameViewProps`
-  (`challenge`, `preview`, `running`, `onFinish`). Baukasten `minigames/ui/kit/`: `useFrameLoop` (eigene Bildschleife,
-  `dt` gedeckelt), `useGameKeys` (Capture-Phase), `TouchControls`/`useSwipe`, `useStageCanvas` (ResizeObserver,
-  Pixelverhältnis), `HudTimer`, `HudMeter`, `ResultStamp`, Klänge `MINIGAME_SOUNDS`.
-- **Vorschau:** `?neu=normal&seed=1&tempo=0&minispiel=<art>` (optional `&schwer=0.7`), Bilder mit
-  `npm run screenshot:minigames -- --kind=<art>|alle`; im Entwicklungsserver beenden `window.koeln.dev.minigameWin()`
-  bzw. `minigameLose()` das laufende Spiel.
-- **Tresor knacken** (`safe`, fertig): nach einem gewonnenen Überfall auf einen Gang-Spot mit dir selbst
-  (`gangs/safe.ts`), Geld `max · Score` aus der Kasse der Gang oder Alarm (Heat). Vorbild für die anderen Teile:
-  Logik als reines Modell (`games/safe/model.ts` mit Test), Zeichnen getrennt (`draw.ts`), Komponente `SafeGame.tsx`.
+**Modul `minigames` (Kern).** Eine Challenge (`active`) hat Art, `origin { module, ref }` (wer sie gestartet hat und
+auf das Ergebnis hört), Stadt und Veedel, `seed` (fest aus Spiel-Seed und ID über `keyedRandom`, IDs aus eigenem
+Zähler `nextId`), `difficulty` (0 bis 1), `title`, `situation`, `params` (JSON je Art) und eine Frist. Dazu `history`
+(die letzten 30, **neueste zuerst**) und `stats` pro Art.
+
+| Was | Wo |
+| --- | --- |
+| Arten als Daten, eine Datei pro Art | `minigames/kinds/<art>.ts` (`name`, `stat` der Rechten Hand, `ready`, `winAt`), gesammelt in `MINIGAME_KINDS` |
+| Starten | `startMinigame(ctx, { kind, origin, cityId?, veedelId?, difficulty?, title, situation, params? })`: `null`, wenn die Art nicht `ready` ist, das Spiel vorbei ist oder für denselben `origin` schon eine offen ist |
+| Lesen | `getChallenge`, `activeChallenge` (älteste offene), `isMinigameReady`, `delegateInfo` (Name und Chance der Rechten Hand, sonst `null`), `minigameDifficulty` (Präsenz, Heat, Polizei-Härte, `CHECK_FACTOR_BY_CITY`; 0,2 bis 0,95), `minigameStats` |
+| Befehle | `minigames.finish { id, score, picks }` (Spieler; Score endlich, auf 0 bis 1 begrenzt, höchstens 20 picks mit je 40 Zeichen), `minigames.delegate { id }` (nur mit aktiver Rechter Hand der Stadt), `minigames.expire { id }` (nur Actor `system`: Bot, Tests) |
+| Ereignisse | `minigame.started { id, kind, origin, cityId }` öffnet den Rahmen; `minigame.finished { id, kind, origin, cityId, score, won, by, picks }` mit `by` `'player'`, `'rightHand'` oder `'timeout'` (dann `score: null`, `won: false`) |
+| Frist | `MINIGAME_TIMEOUT` (60 Spielminuten) im `tick`, kürzer als `DECISION_TIMEOUT` der Konfrontationen; `resolveMinigameNow(ctx, id)` für Tests |
+| Rechte Hand | Chance `clamp(0,3 + 0,5 · Wert/100 + 0,03 · Rang, 0,25, 0,85)` (`RIGHT_HAND_CHANCE`), Score `RIGHT_HAND_WIN_SCORE` 0,7 bzw. `RIGHT_HAND_LOSE_SCORE` 0,25, ohne picks; gewürfelt mit `ctx.random` im Befehl |
+
+**Die zehn Arten, Auslöser und Folgen.** Folgen hängen am `origin` und laufen im Modul, das gestartet hat
+(`on['minigame.finished']`). `timeout` heißt überall: nichts Neues, die alte Regel gilt.
+
+| Art | Wert | Auslöser | Folgen | Wichtige picks |
+| --- | --- | --- | --- | --- |
+| `chase` Verfolgungsjagd | speed | `policeChase` beim Start, `vehicleCheck` mit „Gas geben“ (`speedOff`) oder `flee` aus der Kontrolle | `applyChase` in `encounters/minigames.ts`: entkommen = Erfolg bzw. Rückzug, gefasst = Niederlage | `dumped` (Ware weg), zur Info `hideout`, `time` |
+| `brawl` Straßenkampf | strength | „Zuschlagen“ oder Aggression ab `AGGRESSION_FIGHT` in fünf Gang-Anlässen | `applyBrawl`: alle Gegner weg = Erfolg, `ko` = Niederlage (verletzt, nie tot), sonst Aggression `BRAWL_AFTER_AGGRESSION`, Entschlossenheit −`BRAWL_DOWN_RESOLVE` je Gegner am Boden | `down:<n>`, `fled:<n>`, `hurt:<staffId>`, `playerHurt`, `ko`, `grabbed`, `sirens` |
+| `stash` Razzia-Countdown | caution | `planRaid`/`planMajorRaid`, wenn du in der Stadt bist und dort Ware liegt (`police/stash.ts`) | `PlannedRaid.stash`/`MajorRaid.stash` = `min(STASH_MAX, Score)`, die Razzia nimmt so viel weniger; `'police.raid'.stashed` | – |
+| `traffic` Verkehrskontrolle | charisma | `vehicleCheck` beim Start, wenn du selbst fährst | `applyTraffic`: durch = Erfolg, sonst Niederlage; `lies:<n>` gibt `TRAFFIC_NOTED_HEAT` je Widerspruch (höchstens zwei) | `flee` (weiter mit der Jagd), `bribe`, `lies:<n>` |
+| `undercover` Zivi oder Kunde | caution | Du stehst selbst an einem Spot mit Heat ab `UNDERCOVER_HEAT`; stündlich gewürfelt fest aus Seed, Spot und Stunde (`police/undercover.ts`) | Verkauf an einen Zivi → Kontrolle gegen dich am Spot (`runCheck` mit `player`), alle erkannt → Heat −`UNDERCOVER_RELIEF`, abgewimmelte Kunden kosten Ruf | `soldZivi:<n>`, `spotted:<n>`, `turnedAway:<n>`, `sold:<n>`, `missed:<n>` |
+| `safe` Tresor knacken | caution | Gewonnener Überfall auf einen Gang-Spot mit dir (`gangs/safe.ts`), Inhalt `min(SAFE_MAX, SAFE_SHARE · Geld der Gang)`, unter 200 € keiner | `max · Score` Schwarzgeld aus der Kasse der Gang, nicht geschafft: Alarm (`SAFE_ALARM_HEAT`) | – |
+| `search` Bude durchsuchen | caution | Schutzgeld selbst eingetrieben mit Erfolg oder Rückzug, nicht bei abgelaufener Polizei-Uhr (`gangs/search.ts`, `searchAmount`) | `max · Score` Schwarzgeld, mit `noise` und nicht geschafft Heat (`SEARCH_NOISE_HEAT`) | `found:<n>`, `hidden:<n>`, `noise` |
+| `container` Container packen | caution | `trade.buy` oder `trade.sail` mit Actor `player` (`trade/packing.ts`), ein Minispiel je Bestellung | `TradeShipment.packing` = Score, Zollrisiko × `packingFactor` (`PACKING_FACTOR`: 1,25 bis 0,55) | – |
+| `papers` Papiere fälschen | caution | `customsCheck` beim Start, wenn du selbst dabei bist (am Kai in Rotterdam; Autobahn ist angeschlossen, im Spiel fährt dort aber noch niemand selbst) | `applyPapers`: durch = Erfolg, sonst Niederlage | `bribe`, `giveUp`, zur Info `fixed:<n>`, `hits:<n>` |
+| `interview` Bewerbungsgespräch | charisma | Knopf „Gespräch führen“ im Bewerber-Blatt (`recruiting.interview`, einmal je Bewerber, nur in deiner Stadt) | Erkannte Eigenschaften werden aufgedeckt (`revealedTraits`), geschafft zeigt einen versteckten Wert | angetippte Eigenschaften |
+
+**Konfrontationen.** `EncounterKind.minigames` (`start`, `actions`, `brawl`) sind Daten in `encounters/kinds.ts`.
+Ein Minispiel startet nur, wenn du aktiv dabei bist (`playerPresent`, nicht am Boden) und die Art `ready` ist.
+Solange `encounter.minigame` gesetzt ist, lehnen `act`, `protect` und `special` ab („Erst das Minispiel.“);
+`encounters.auto` und die Frist (`expireDecisions`) lösen es vorher als timeout auf. Bei timeout: `start` → Runden wie
+bisher, `action` → die Runde mit dem alten Würfel, `brawl` → weiter wie bisher. Die Akte zeigt „… läuft“ mit „Zum
+Minispiel“ und öffnet sich nach `minigame.finished` wieder. Bist du selbst dabei, gibt es „Entscheiden lassen“ nur mit
+aktiver Rechter Hand. `params`, die der Kern mitgibt: Ort, Setting, Tageszeit, Wetter, Gegner mit Rollen, Absicht,
+Crew mit Werten und Spezialzug, Einsätze, Bestechungsgeld, Polizei-Uhr.
+
+**Rahmen (`minigames/ui/Frame.tsx`).** Dialog `'minigames.play'` mit `pausesGame`, `dismissable: false`,
+`area: 'map'`; eigenes Overlay `.mg-overlay` (kein `MapDialog`/`Sheet`, die haben am Handy einen Schließen-Knopf), am
+Handy bildschirmfüllend, Fokus setzt der Rahmen. Abfolge: Einleitung (Titel, Situation, Steuerung für Tastatur und
+Touch, mehr hinter „Mehr dazu“, „Los“ und „<Name> übernimmt (xx %)“) → 3-2-1 (echte Sekunden) → Spiel → Ergebnis
+(Stempel, ein Satz, „Weiter“). Erst „Weiter“ schließt den Rahmen und schickt dann `minigames.finish` (sonst schlösse man
+den Dialog, den die Folgen öffnen). Übergänge (`ui/flow.ts`):
+
+- Ein Minispiel ersetzt den offenen Dialog; öffnen die Folgen keinen eigenen, kommt der ersetzte nach „Weiter“ zurück.
+- Kommt ein Minispiel aus dem Ausgang einer Konfrontation (Tresor, Bude), wartet es, bis die Akte mit dem Ergebnis zu
+  ist (`shouldDefer`, `takeDeferred`): erst „Erfolg, +1.200 €“ lesen, mit „Akte schließen“ dann das Minispiel.
+- Nach dem Bewerbungsgespräch geht das Handy wieder beim Blatt der Person auf (`recruiting/ui`).
+- Ein offenes Minispiel ohne Rahmen (z.B. nach dem Laden) zeigt eine Warnung im HUD, die ihn öffnet.
+- Hat die Rechte Hand übernommen, sagt ein Banner, wie es ausging.
+
+**Karte gehört dem Minispiel.** Für `layout: 'map'` (Verfolgungsjagd) übernimmt der Rahmen die Karte, bevor das Spiel
+startet (`useMapTakeover` in `kit/mapTakeover.ts` mit `takeOverMap` aus `src/map`): keine Bedienung der Karte, Kulisse
+aus (`MAP_DECOR_LAYERS`: Verkehr, Leute an Spots), Marker geparkt (`parkMarkers` in `src/map/markers.ts`: von der
+Karte genommen, danach wieder angehängt; das spart am Handy gut 10 ms pro Bild), HUD, Kartenknöpfe und Dock versteckt
+(Klasse `is-map-taken` an `<html>`). Beim Schließen kommen Bedienung, Ebenen, Kamera und Ränder zurück. Das Spiel holt
+sich die Karte mit `activeMap()` aus `src/map` und führt nur noch Kamera und eigene Ebene.
+
+**Ansichten und Baukasten (`minigames/ui/`).** Jede Art meldet sich in `games/<art>/index.tsx` an (automatisch geladen):
+`registerMinigameView(kind, { component, controls: { keys, touch, help? }, layout: 'map' | 'stage', icon,
+previewParams, previewSituation, resultText, resultLabel })`. `resultLabel` gibt besonderen Ausgängen einen eigenen
+Stempel (z.B. „Gas!“ oder „Bestochen“ in Gelb, `tone: 'warn'`; „Aufgegeben“). Vertrag `MinigameViewProps`:
+`challenge`, `preview`, `running` (Bildschleife, Tasten und Zeit nur, solange es läuft), `onFinish(score, picks)`
+(einmal). Baukasten `kit/`:
+
+- `useFrameLoop(cb, running)`: eigene Bildschleife (die Spielzeit steht still, also laufen `onMapFrame` und die
+  Karten-Ebenen nicht), `dt` in echten Sekunden, gedeckelt auf `MAX_DT` 0,05, Pause bei verstecktem Tab.
+- `useGameKeys` (Capture-Phase, ohne Wiederholung), `TouchControls` (Knöpfe ab 56 px, Halten), `useSwipe`, `capture`.
+- `useStageCanvas` (ResizeObserver, Pixelverhältnis bis `MAX_DPR`), `HudBar`, `HudTimer`, `HudMeter`, `ResultStamp`.
+- `goods.ts`: Farbe und Symbol je Ware (`productColor` für die Oberfläche, `packageLook`, `readGoodsPalette`,
+  `drawGoodsGlyph` für den Canvas), gleich in Razzia und Container.
+- Klänge: `MINIGAME_SOUNDS` (Synth); eigene Klänge je Spiel in `games/<art>/sounds.ts` über `audio.registerSound`.
+  Dauerklänge (Motor, Martinshorn, Rotor) sind Ton-Schleifen: `registerSound(id, { kind: 'loop', start })`, gestartet
+  mit `audio.loop(id, params)`, nachgeführt mit `set({ … , volume })`, beendet mit `stop()`; sie laufen über den
+  Effekt-Bus (Lautstärke, Stummschalten und Gespräch gelten).
+- Gesichter aus dem Look-System (`Face`, `personLook`, `lookFor`), Ausdruck über eine Kopie des Looks; Polizei- und
+  Zollmütze als `hat: 'police' | 'customs'` (nie gewürfelt). Figuren im Canvas nehmen die Farben aus `LOOK_COLORS`.
+- Farben im Canvas über `mapToken`, keine Emojis; `prefers-reduced-motion` schwächt eigene Effekte ab, Spielzeit nie
+  über CSS-Animationen.
+
+**Determinismus und Balancing.** Inhalte erzeugt die Oberfläche aus `challenge.seed` mit `createRng` (nie
+`ctx.random()`; `Math.random()` nur für Optik). Würfe im Kern nur im Befehl bzw. fest aus einem Schlüssel
+(`keyedDice` bei den Zivis), damit kein Minispiel die Würfelfolge anderer Module verschiebt. Der Bot löst offene
+Minispiele sofort als timeout auf (`src/playtest/bot.ts`); `npm run balance` zeigt deshalb dieselben Zahlen wie ohne
+Minispiele.
+
+**Ausprobieren.**
+
+- Vorschau: `?neu=normal&seed=1&tempo=0&minispiel=<art>` (optional `&schwer=0.7`, `&seed=2` für andere Lagen).
+- Bilder: `npm run screenshot:minigames -- --kind=<art>|alle` (Einleitung, Spiel, Ergebnis für Desktop und Handy nach
+  `screenshots/minispiele/`), dazu `--uhr=23` (Spieluhr und Tageszeit der Lage) und `--spielstand=<id>` (Vorschau
+  nach dem Laden eines Test-Spielstands, z.B. die Jagd in Hamburg), `--ergebnis=verloren`, `--schwer`, `--seed`.
+- Dev-Haken im Entwicklungsserver (`window.koeln.dev`): `minigameWin()`/`minigameLose()` beenden das laufende Spiel,
+  `minigamePreview(art, { schwer, seed, uhr })` öffnet die Vorschau im laufenden Spiel, `minigameRealtime(true)` lässt
+  die Spielzeit auch bei wenigen Bildern pro Sekunde (headless) in Echtzeit laufen, `minigameAdvance(s)` spult vor.
+  Echte Wege: `verfolgung()`, `verkehrskontrolle()`; `container.pack(n)`, `brawl` und `window.chase` zeigen den
+  Zustand einzelner Spiele.
+- `npm run e2e` spielt das Bewerbungsgespräch über die Oberfläche (Personal › Bewerber › „Gespräch führen“).
+- Leistung der Jagd: `npm run perf:browser -- --scenes=jagd --mobile --throttle=4` (Bilder pro Sekunde, Rechenzeit
+  der Jagd pro Bild, MapLibre zeichnen, Long Tasks). Gemessen am 07.10.2026 headless mit Software-Grafik: 6,1 ms pro
+  Bild für die Jagd (vorher 17,6 ms, als die Marker nur versteckt waren), 7 Long Tasks in 20 s (vorher 63); die Bilder
+  pro Sekunde (3,5) begrenzt dort das Zeichnen der Karte ohne GPU.
+
+**Ein elftes Minispiel anlegen.**
+
+1. Art in `MinigameKind` (`minigames/types.ts`) und eine Datei `kinds/<art>.ts` mit `name`, `stat` und `ready: false`,
+   Eintrag in `kinds/index.ts`. Keine Migration: `stats` für eine neue Art legt der Kern bei Bedarf an.
+2. Auslöser im Modul, das es betrifft: nur wenn der Spieler selbst betroffen ist, `startMinigame` mit eigenem
+   `origin` (z.B. `{ module: 'casino', ref: 'table:3' }`) und `params` als JSON. Würfe für den Auslöser fest aus einem
+   Schlüssel, wenn sie die Würfelfolge sonst verschieben würden.
+3. Folgen in `on['minigame.finished']` desselben Moduls (nur der eigene `origin`): Spieler und Rechte Hand mit Score,
+   `timeout` = altes Verhalten. Tests mit festen Scores (geschafft, nicht geschafft, Rechte Hand, timeout); in Tests vor
+   `ready: true` die Art kurz scharf schalten (`MINIGAME_KINDS[kind].ready = true`, danach zurück).
+4. Spiel in `minigames/ui/games/<art>/`: Logik als reines Modell (`model.ts` mit `model.test.ts`, Inhalte aus
+   `createRng(challenge.seed)`), Zeichnen (`draw.ts`), Komponente, Klänge, `index.tsx` mit `registerMinigameView` und
+   `previewParams`. Vorbild: `games/safe/`.
+5. Selbst ausprobieren (Vorschau, Screenshots, echter Weg), dann `ready: true`. Erst ab dann startet der Kern die Art.
 
 ## Qualität
 

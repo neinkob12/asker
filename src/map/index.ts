@@ -17,6 +17,7 @@ export { currentMood, type Precipitation, type PrecipitationKind, setMapMood, se
 export { EUROPA_VIEW, FAR_ZOOM, isMobile, KOELN_CENTER } from './config';
 export { DAY_PHASE_NAMES, type DayPhase, daylight, daylightAt, dayPhase, twilight } from './daylight';
 export {
+  activeMap,
   type BlueLightOptions,
   blueLight,
   type EffectHandle,
@@ -60,6 +61,7 @@ export {
 } from './markers';
 export { type MapLayer, type MapLayerContext, type MapLayerInstance, registerMapLayer } from './registry';
 export { ABOVE_LAND, BASE_LAYERS, BELOW_BUILDINGS, BELOW_ROADS } from './style';
+export { MAP_TAKEN_CLASS, type MapTakeoverOptions, takeOverMap } from './takeover';
 export { darkVariant, mapToken } from './tokens';
 export {
   type AnimateVehicleOptions,

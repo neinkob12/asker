@@ -33,7 +33,12 @@ declare global {
      * Zum Ausprobieren in der Konsole und für Playwright: window.koeln.session, window.koeln.runtime, window.koeln.audio. Im Dev-Build
      * hängen Module unter dev Abkürzungen an (z.B. window.koeln.dev.koelnKomplett(), siehe src/modules/city/ui).
      */
-    koeln?: { session: GameSession; runtime: UiRuntime; audio?: typeof audio; dev?: Record<string, () => void> };
+    koeln?: {
+      session: GameSession;
+      runtime: UiRuntime;
+      audio?: typeof audio;
+      dev?: Record<string, (...args: never[]) => unknown>;
+    };
   }
 }
 

@@ -4,7 +4,8 @@
 // der Scanner, der einmal über den Container fährt. Farben aus den Design-Tokens (mapToken über readPalette), keine
 // freien Farben außer Schwarz/Weiß mit Deckkraft.
 
-import { packageLook, type StashPalette } from '../stash/draw';
+import { drawGoodsGlyph, packageLook } from '../../kit/goods';
+import type { StashPalette } from '../stash/draw';
 import {
   type CellExposure,
   type CoverKind,
@@ -309,32 +310,6 @@ export function renderBackground(l: PackLayout, p: PackPalette, setup: PackSetup
   return canvas;
 }
 
-/** Symbol der Ware (Blatt, Platte, Tropfen …), Mitte (0, 0), Größe s. */
-function glyph(ctx: CanvasRenderingContext2D, kind: string, s: number): void {
-  ctx.beginPath();
-  if (kind === 'leaf') {
-    for (const a of [-1.1, -0.55, 0, 0.55, 1.1]) {
-      const len = s * (a === 0 ? 1 : Math.abs(a) > 1 ? 0.6 : 0.85);
-      const ang = -Math.PI / 2 + a;
-      ctx.moveTo(0, s * 0.25);
-      ctx.lineTo(Math.cos(ang) * len, s * 0.25 + Math.sin(ang) * len);
-    }
-    ctx.moveTo(0, s * 0.25);
-    ctx.lineTo(0, s * 0.7);
-  } else if (kind === 'brick') {
-    ctx.rect(-s * 0.7, -s * 0.4, s * 1.4, s * 0.8);
-    ctx.moveTo(-s * 0.7, 0);
-    ctx.lineTo(s * 0.7, 0);
-  } else if (kind === 'drop') {
-    ctx.moveTo(0, -s * 0.75);
-    ctx.bezierCurveTo(s * 0.6, -s * 0.1, s * 0.6, s * 0.7, 0, s * 0.7);
-    ctx.bezierCurveTo(-s * 0.6, s * 0.7, -s * 0.6, -s * 0.1, 0, -s * 0.75);
-  } else {
-    ctx.arc(0, 0, s * 0.5, 0, Math.PI * 2);
-  }
-  ctx.stroke();
-}
-
 /** Farbe und Muster eines Teils. */
 export function pieceColor(p: PackPalette, piece: Pick<PackPiece, 'kind' | 'productId'>, cover: CoverKind): string {
   if (piece.kind === 'goods') return packageLook(p, piece.productId).color;
@@ -419,7 +394,7 @@ export function drawPiece(
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
       ctx.lineWidth = Math.max(1.2, cell * 0.04);
       ctx.lineJoin = 'round';
-      glyph(ctx, packageLook(p, piece.productId).glyph, cell * 0.15);
+      drawGoodsGlyph(ctx, packageLook(p, piece.productId).glyph, cell * 0.15);
       ctx.restore();
     } else if (cover === 'bananas') {
       // Kiste mit Griffloch und Aufdruck.

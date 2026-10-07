@@ -1,6 +1,7 @@
 // Vorschau für Entwicklung und Screenshots: ?minispiel=<art> (optional &schwer=0.7, &seed=…) öffnet den Rahmen mit
 // einer erfundenen Challenge, die nicht im Spielstand liegt. Das Ergebnis wird nur angezeigt, nichts geschickt.
 
+import { clock } from '../../../core';
 import { type Challenge, MINIGAME_KIND_IDS, MINIGAME_KINDS, type MinigameKind } from '../index';
 import { minigameView } from './registry';
 
@@ -11,9 +12,17 @@ export function isMinigameKind(value: string | null): value is MinigameKind {
   return value !== null && (MINIGAME_KIND_IDS as string[]).includes(value);
 }
 
-/** Erfundene Challenge einer Art für die Vorschau. */
-export function previewChallenge(kind: MinigameKind, difficulty = 0.5, seed = 1): Challenge {
+/**
+ * Erfundene Challenge einer Art für die Vorschau. Mit `hour` (0 bis 23, z.B. aus --uhr der Screenshots) gelten
+ * Tageszeit und Stunde von dort statt aus dem Seed (params.phase, params.hour).
+ */
+export function previewChallenge(kind: MinigameKind, difficulty = 0.5, seed = 1, hour?: number): Challenge {
   const view = minigameView(kind);
+  const base = view.previewParams?.(seed) ?? {};
+  const params =
+    hour === undefined || !Number.isFinite(hour)
+      ? base
+      : { ...base, phase: clock.dayPhase(Math.floor(hour) * 60), hour: Math.floor(hour) };
   return {
     id: PREVIEW_ID,
     kind,
@@ -24,7 +33,7 @@ export function previewChallenge(kind: MinigameKind, difficulty = 0.5, seed = 1)
     difficulty: Math.min(1, Math.max(0, difficulty)),
     title: MINIGAME_KINDS[kind].name,
     situation: view.previewSituation ?? 'Vorschau: erfundene Lage, nichts davon zählt.',
-    params: view.previewParams?.(seed) ?? {},
+    params,
     startedAt: 0,
     deadline: 0,
   };

@@ -8,6 +8,7 @@
 import type { ComponentType } from 'preact';
 import type { Challenge, MinigameKind } from '../index';
 import { Placeholder } from './games/placeholder';
+import type { StampTone } from './kit/hud';
 
 /** Vertrag für jedes Spiel. */
 export interface MinigameViewProps {
@@ -43,6 +44,14 @@ export interface MinigameView {
   previewParams?: (seed: number) => Record<string, unknown>;
   /** Situation in der Vorschau. */
   previewSituation?: string;
+  /**
+   * Eigener Stempel für besondere Ausgänge (z.B. „Gas!“ nach Gas geben, „Bestochen“), sonst „Geschafft“ bzw. „Nicht
+   * geschafft“. tone 'warn' färbt ihn gelb (weder Sieg noch Niederlage).
+   */
+  resultLabel?: (
+    result: { won: boolean; score: number; picks: readonly string[] },
+    challenge: Challenge,
+  ) => { label: string; tone?: StampTone; icon?: string } | undefined;
   /** Ein Satz unter dem Stempel: was das Ergebnis bedeutet. */
   resultText?: (result: { won: boolean; score: number; picks: readonly string[] }, challenge: Challenge) => string;
 }

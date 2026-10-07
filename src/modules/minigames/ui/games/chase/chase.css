@@ -12,17 +12,6 @@
   color: var(--hud-ink);
 }
 
-/* Während der Jagd gehört die Karte der Jagd: keine Schilder und Marker der Stadt, kein HUD des Spiels, keine
-   Kartenknöpfe (das Spiel steht ohnehin still). Die Quellenangabe der Karte bleibt. */
-.is-chasing .maplibregl-marker,
-.is-chasing .hud,
-.is-chasing .shell-mapctl,
-.is-chasing .shell-map-overlays,
-.is-chasing .map-surveillance,
-.is-chasing .mobile-dock {
-  visibility: hidden;
-}
-
 /* ---------------------------------------------------------------- Effekte über der Karte */
 .chase-vignette,
 .chase-lines,

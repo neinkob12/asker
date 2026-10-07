@@ -309,6 +309,52 @@ async function run() {
     await page.evaluate(() => window.koeln.runtime.api.closePhone());
   });
 
+  await check('Minispiel: Bewerbungsgespräch selbst führen (Auftrag 44)', async () => {
+    // Echter Weg über die Oberfläche: Personal › Bewerber › „Gespräch führen“ startet das Minispiel über der Karte.
+    const candidate = await game(
+      page,
+      (s) =>
+        s.modules.recruiting.candidates.find((c) => c.source === 'pool' && !c.interviewed && c.expiresAt > s.time)
+          ?.name ?? null,
+    );
+    assert.ok(candidate, 'ein Bewerber wartet');
+    await page.evaluate(() => window.koeln.runtime.api.openPhone('tab:staff'));
+    await page.locator('.phone').getByText(candidate, { exact: true }).first().click();
+    await page.getByText('Gespräch führen', { exact: true }).click();
+    await page.waitForSelector('.mg-intro');
+    assert.equal(await page.locator('.mg-overlay').count(), 1, 'Rahmen offen');
+    // Spielzeit in Echtzeit (headless mit wenigen Bildern pro Sekunde wäre sie sonst gedeckelt und langsam).
+    await page.evaluate(() => window.koeln.dev.minigameRealtime(true));
+    await page.click('.mg-intro .mg-button.is-gold');
+    await page.waitForSelector('.mg-run.is-play', { timeout: 10000 });
+    await shot(page, 'minispiel-gespraech');
+    // Drei Runden: Frage wählen, Antwort überspringen, eine Deutung antippen.
+    const deadline = Date.now() + 90000;
+    while (Date.now() < deadline && (await page.locator('.mg-result').count()) === 0) {
+      const next = page.locator('.iv-card:enabled, .iv-skip:enabled, .iv-reading:enabled').first();
+      if (await next.count()) await next.click({ timeout: 2000 }).catch(() => {});
+      else await page.waitForTimeout(200);
+    }
+    await page.waitForSelector('.mg-result', { timeout: 5000 });
+    await shot(page, 'minispiel-ergebnis');
+    await page
+      .locator('.mg-result')
+      .getByRole('button', { name: /Weiter/ })
+      .click();
+    const last = await game(page, (s) => s.modules.minigames.history[0] ?? null);
+    assert.equal(last?.kind, 'interview');
+    assert.equal(last?.by, 'player');
+    assert.ok(Number.isFinite(last?.score), 'Score gezählt');
+    assert.equal(await game(page, (s) => s.modules.minigames.active.length), 0, 'kein Minispiel mehr offen');
+    // Danach geht das Handy wieder beim Blatt der Person auf.
+    await page.getByText('Gespräch geführt', { exact: false }).first().waitFor({ timeout: 5000 });
+    await shot(page, 'minispiel-zurueck');
+    await page.evaluate(() => {
+      window.koeln.dev.minigameRealtime(false);
+      window.koeln.runtime.api.closePhone();
+    });
+  });
+
   let saved;
   await check('Speichern und Laden', async () => {
     saved = await game(page, (s) => ({ time: s.time, dirty: s.wallet.dirty, staff: s.modules.staff.members.length }));

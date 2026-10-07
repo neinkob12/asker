@@ -165,6 +165,13 @@ export function setActiveMap(map: MapLibreMap | null): void {
   activeMap = map;
 }
 
+/** Die MapLibre-Karte des laufenden Spiels (null, solange sie noch nicht steht). Für Minispiele auf der Karte. */
+function currentMap(): MapLibreMap | null {
+  return activeMap;
+}
+
+export { currentMap as activeMap };
+
 /** Tageszeit an die Effekte weitergeben (Scheinwerfer, Leuchten der Hotspots). Setzt GameMap. */
 export function setEffectsLook(look: Pick<MapLook, 'night'>): void {
   setHotspotNight(look.night);

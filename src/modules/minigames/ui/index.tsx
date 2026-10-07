@@ -16,9 +16,10 @@ import {
   minigameStats,
 } from '../index';
 import { MinigameFrame } from './Frame';
-import { finishFromDev, rememberDialog, setLiveUi } from './flow';
+import { defer, finishFromDev, liveUi, rememberDialog, setLiveUi, shouldDefer, takeDeferred } from './flow';
 import { registerMinigameSounds } from './kit/sounds';
-import { previewFromUrl } from './preview';
+import { devClock } from './kit/useFrameLoop';
+import { isMinigameKind, previewChallenge, previewFromUrl } from './preview';
 import './kit/kit.css';
 import './minigames.css';
 
@@ -57,6 +58,11 @@ function PendingHud() {
   // Live-Sicht für die Übergänge (flow.ts): Dieser Eintrag steht immer im HUD.
   setLiveUi(ui);
   const open = activeChallenge(state);
+  const free = !ui.state.dialog;
+  // Hat das Minispiel auf das Schließen der Akte gewartet (flow.ts), kommt es jetzt von selbst.
+  useEffect(() => {
+    if (open && free && takeDeferred(open.id)) ui.openDialog('minigames.play', { challengeId: open.id });
+  }, [open?.id, free]);
   if (!open || ui.state.dialog?.id === 'minigames.play') return null;
   return (
     <Button
@@ -94,6 +100,11 @@ registerHudItem({ id: 'minigames.preview', order: 48, placement: 'alert', compon
 
 onGameEvent('minigame.started', 'minigames.open', (payload, ui, state) => {
   if (state.outcome.gameOver || !getChallenge(state, payload.id)) return;
+  // Nach einer Konfrontation: erst die Akte mit dem Ausgang, dann das Minispiel.
+  if (shouldDefer(payload.origin)) {
+    defer(payload.id);
+    return;
+  }
   rememberDialog();
   ui.openDialog('minigames.play', { challengeId: payload.id });
 });
@@ -123,10 +134,40 @@ registerGameStat({
   },
 });
 
-// Entwicklung: window.koeln.dev.minigameWin() / minigameLose() beenden das laufende Spiel (Screenshots, Playwright).
+// Entwicklung (Screenshots, Playwright, Konsole):
+// - minigameWin() / minigameLose(): das laufende Spiel sofort beenden.
+// - minigamePreview(art, { schwer, seed, uhr }): Vorschau öffnen, wenn das Spiel schon steht (z.B. nach einem
+//   Test-Spielstand); `uhr` setzt vorher die Spieluhr (Tageszeit der Karte, params.phase und params.hour).
+// - minigameRealtime(true): Spielzeit läuft auch bei wenigen Bildern pro Sekunde in Echtzeit (headless).
+// - minigameAdvance(s): beim nächsten Bild s Sekunden vorspulen.
 if (import.meta.env.DEV && typeof window !== 'undefined') {
+  const minigamePreview = (kind: string, options: { schwer?: number; seed?: number; uhr?: number } = {}) => {
+    const ui = liveUi();
+    if (!ui || !isMinigameKind(kind)) return false;
+    const sim = window.koeln?.session.sim;
+    const hour = options.uhr;
+    if (sim && hour !== undefined) {
+      const day = Math.floor(sim.state.time / 1440);
+      sim.state.time = day * 1440 + Math.floor(hour) * 60;
+    }
+    const preview = previewChallenge(kind, options.schwer ?? 0.5, options.seed ?? 1, hour);
+    ui.openDialog('minigames.play', { challengeId: preview.id, preview });
+    return true;
+  };
   window.koeln = {
     ...window.koeln,
-    dev: { ...window.koeln?.dev, minigameWin: () => finishFromDev(true), minigameLose: () => finishFromDev(false) },
+    dev: {
+      ...window.koeln?.dev,
+      minigameWin: () => finishFromDev(true),
+      minigameLose: () => finishFromDev(false),
+      minigamePreview,
+      minigameRealtime: (on = true) => {
+        devClock.realtime = on;
+      },
+      minigameAdvance: (seconds: number) => {
+        devClock.pending += Math.max(0, seconds);
+        devClock.at = -1;
+      },
+    },
   } as typeof window.koeln;
 }

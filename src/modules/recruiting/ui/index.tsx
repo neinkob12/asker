@@ -15,6 +15,7 @@ import {
   ItemContent,
   List,
   ListItem,
+  onGameEvent,
   registerSlot,
   SegmentedControl,
   Select,
@@ -178,6 +179,7 @@ function Traits(props: { candidate: Candidate; onInterview: () => void }) {
               if (!started.ok) return;
               // Das Gespräch läuft über der Karte: Blatt und Handy gehen zu.
               props.onInterview();
+              reopenAfterInterview = c.id;
               ui.closePhone();
             }}
           >
@@ -188,6 +190,21 @@ function Traits(props: { candidate: Candidate; onInterview: () => void }) {
     </Group>
   );
 }
+
+/**
+ * Nach dem Bewerbungsgespräch (Minispiel über der Karte) geht das Handy wieder beim Blatt dieser Person auf: Dort steht,
+ * was man erkannt hat.
+ */
+let reopenAfterInterview: string | null = null;
+
+onGameEvent('minigame.finished', 'recruiting.reopen', (payload, ui) => {
+  if (payload.origin.module !== 'recruiting' || payload.origin.ref !== reopenAfterInterview) return;
+  if (payload.by === 'timeout') {
+    reopenAfterInterview = null;
+    return;
+  }
+  ui.openPhone('tab:staff');
+});
 
 /** Auswahl „ohne Einsatz“ beim Einstellen eines Läufers. */
 const NO_SPOT = '';
@@ -332,7 +349,12 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
 function Candidates() {
   const { state } = useGame();
   const [filter, setFilter] = useState<RoleFilter>('all');
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(() => {
+    // Zurück vom Bewerbungsgespräch: gleich wieder beim Blatt.
+    const back = reopenAfterInterview;
+    reopenAfterInterview = null;
+    return back;
+  });
   const all = [...getContacts(state), ...getPool(state)];
   const list = all.filter((c) => matchesFilter(c, filter));
   const open = all.find((c) => c.id === openId) ?? null;

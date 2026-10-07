@@ -148,3 +148,5 @@ export const STASH_CAP = 50;
 export const BRAWL_AFTER_AGGRESSION = 60;
 /** Straßenkampf: so viel weniger Entschlossenheit pro Gegner am Boden. */
 export const BRAWL_DOWN_RESOLVE = 15;
+/** Verkehrskontrolle durch, aber mit Widersprüchen (picks 'lies:<n>'): Er notiert das Kennzeichen, Heat je Widerspruch. */
+export const TRAFFIC_NOTED_HEAT = 3;

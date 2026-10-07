@@ -272,6 +272,12 @@ Teil eine eigene Session mit eigenem Branch und PR. Eine steuernde Session schau
 oder Konflikten die Session an und **mergt selbst nach `main`, sobald CI grün ist** (so vom Spieler gewünscht); ist
 eine Welle gemergt, startet sie die nächste.
 
+**Stand:** Auftrag 44 ist erledigt. Alle zehn Minispiele sind scharf (Teile 0 bis 9, PRs #78 bis #87), Teil 10 hat den
+Abschluss gemacht: Rahmen mit „Die Karte gehört dem Minispiel“ (`takeOverMap`, `activeMap`), eigene Stempel je Ausgang
+(`resultLabel`), Ton-Schleifen (`audio.loop`), Akte vor Tresor und Bude, zurück ins Bewerber-Blatt, Mützen im
+Look-System, geteilter Baukasten (`kit/goods.ts`, `LOOK_COLORS`), Dev-Haken und Optionen für Screenshots, ein e2e-Schritt
+mit einem gespielten Minispiel und der vollständige Abschnitt „Minispiele“ in `docs/architektur.md`.
+
 ## Mergen
 
 - Ein PR wird gemergt, sobald er fertig und die CI grün ist. Die Reihenfolge in Phase 1 ist egal.
