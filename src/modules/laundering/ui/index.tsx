@@ -23,7 +23,7 @@ import {
   useGame,
 } from '../../../ui';
 import { cityName, isBusinessSold, presentCity } from '../../city';
-import { phoneAppLocked } from '../../quests';
+import { tutorialAllows } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
   amountInProgress,
@@ -306,7 +306,8 @@ registerPhoneApp({
   color: 'money',
   component: LaunderingApp,
   // Handy Schritt für Schritt: kommt mit Peters Quest „Wasch 500 €“ (quests, PHONE_APP_STEPS).
-  hiddenWhen: (state) => phoneAppLocked(state, 'laundering.app'),
+  // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
+  hiddenWhen: (state) => !tutorialAllows(state, 'app.laundering'),
 });
 registerSearch({
   id: 'laundering.search',

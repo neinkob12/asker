@@ -159,6 +159,21 @@ für Schritt: In einem neuen Spiel kommen die Apps mit Peters Quests (`PHONE_APP
 jeder App; alte Stände und andere Städte haben alles, Einstellungen › Einstieg schaltet es ab). Neue Quests kommen als
 goldenes Banner (`ui.toast` mit `title`, `color`, `appId`, `duration`), die Quest-Karte klappt auf und hat in den
 ersten Kapiteln „Zeig mir wie“.
+Auftrag 46b (Modul `tutorial`, Teil von Auftrag 46 „Intro neu“, `docs/auftraege/46-intro-neu.md`): Stufen 0 bis 12 und
+Missionen mit Teilzielen als Daten (`tutorial/config.ts`, `missions.ts`), Belohnung aus den Verkäufen der letzten 24
+Stunden (`missionReward`, `reward.ts`), Missions-Karte im HUD (`placement: 'below'`, Anker `data-tour="hud.mission"`).
+**Startet nur über `tutorial.start`** aus der Oberfläche (Dialog „Neues Spiel“ im Modus normal, `?neu=normal&tutorial=1`);
+Bot, Tests, Test-Spielstände, `npm run balance` und Hardcore laufen mit `enabled: false`, dann ist alles frei. Befehle
+`tutorial.advance` (Erklär-Stufen 0, 3, 4, 10 enden damit; eine erledigte Mission schaltet von selbst weiter),
+`tutorial.skip` (Einstellungen › Einstieg), `tutorial.scripted { key }` (46c). **Freischalten:** Was eine Stufe
+freigibt, steht in `FEATURE_STAGE`; Module fragen `tutorialAllows(state, feature)` am Anfang ihres Ablaufs bzw. im
+`hiddenWhen` der App (ersetzt `phoneAppLocked` aus `quests`), `tutorialAllowsRole(state, role)` beim Personal,
+`spots` fragt `tutorialSpotOpen`/`tutorialSpotCost` (`lockedSpots`, `getAllSpots`, `unlockCostOf`), `suppliers`
+`tutorialSupplierOpen` (`getSuppliers`). Ein neues Feature anhängen: Eintrag in `TutorialFeature` und `FEATURE_STAGE`,
+dann ein `if (!tutorialAllows(state, '…')) return` an der Stelle, die es anbietet (Kommentar „Auftrag 46b“). Der Spot
+sperrt sich mit `spots.lock` (nur ohne Leute und Verkäufe). Solange das Tutorial je gestartet wurde, ruhen Peters
+Quests (`questsSuppressed`); der Kern-HUD blendet Teile über `registerHudPartHidden` aus (sauberes Geld). Dev-Haken
+`window.koeln.dev.tutorialStage(n)`, Szenen `npm run screenshot -- --scenes=tutorial,tutorial-teilziele`.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

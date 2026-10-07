@@ -21,6 +21,7 @@ import {
 import { activeCity, cityName, isBusinessSold, majorityMakesBoss } from '../../city';
 import { campaignProgress, controlledBy, PLAYER_FACTION } from '../../territory';
 import { supplierReputation } from '../../trade';
+import { tutorialAllows } from '../../tutorial';
 import { veedelCity, veedelName } from '../../veedel';
 import { getReputation, recentReputationChanges, reputationLabel, reputationTier, reputationTiers } from '../index';
 import './reputation.css';
@@ -54,6 +55,8 @@ function SupplierReputationHud() {
 
 function ReputationHud() {
   const { state } = useGame();
+  // Auftrag 46b: Im Tutorial erscheint der Ruf mit dem ersten Stammkunden.
+  if (!tutorialAllows(state, 'hud.reputation')) return null;
   if (isBusinessSold(state)) return <SupplierReputationHud />;
   return <PlayerReputationHud />;
 }

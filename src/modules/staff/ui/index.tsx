@@ -29,8 +29,8 @@ import {
 } from '../../../ui';
 import { activeCity, cityOfSpot, isBusinessSold } from '../../city';
 import { playerSpot } from '../../customers';
-import { phoneAppLocked } from '../../quests';
 import { getSpots, isSpotOpen } from '../../spots';
+import { tutorialAllowsRole } from '../../tutorial';
 import {
   activeRunnerAt,
   assignmentLabel,
@@ -262,23 +262,26 @@ function HireGroup() {
       note="Läufer heuerst du am Spot an, alle anderen unten bei „Könntest du einstellen“."
     >
       <List>
-        <ListItem
-          action
-          disabled={state.wallet.dirty < DRIVER_HIRE_COST}
-          value={formatEuro(DRIVER_HIRE_COST)}
-          onClick={() => dispatch({ type: 'staff.hireDriver', payload: {} })}
-        >
-          <ItemContent
-            icon="truck"
-            color="goods"
-            title="Fahrer anheuern"
-            meta={
-              drivers === 0
-                ? 'Holt Schiffsware am Hafen ab und lagert um. Ohne Fahrer fährst du selbst.'
-                : `${drivers} ${drivers === 1 ? 'Fahrer' : 'Fahrer'} im Team`
-            }
-          />
-        </ListItem>
+        {/* Auftrag 46b: Fahrer gibt es im Tutorial erst mit dem Hafen. */}
+        {tutorialAllowsRole(state, 'driver') && (
+          <ListItem
+            action
+            disabled={state.wallet.dirty < DRIVER_HIRE_COST}
+            value={formatEuro(DRIVER_HIRE_COST)}
+            onClick={() => dispatch({ type: 'staff.hireDriver', payload: {} })}
+          >
+            <ItemContent
+              icon="truck"
+              color="goods"
+              title="Fahrer anheuern"
+              meta={
+                drivers === 0
+                  ? 'Holt Schiffsware am Hafen ab und lagert um. Ohne Fahrer fährst du selbst.'
+                  : `${drivers} ${drivers === 1 ? 'Fahrer' : 'Fahrer'} im Team`
+              }
+            />
+          </ListItem>
+        )}
       </List>
     </Group>
   );
@@ -459,7 +462,7 @@ registerTab({
   badge: (state) => getStaff(state, { status: 'jailed', cityId: activeCity(state) }).length,
   // Nach dem Verkauf gehören die Leute den Statthaltern; Arbeiter für Fincas stellst du im Anbau ein. Am Anfang kommt
   // die App mit Peters Quest.
-  hiddenWhen: (state) => isBusinessSold(state) || phoneAppLocked(state, 'tab:staff'),
+  hiddenWhen: (state) => isBusinessSold(state),
 });
 registerSlot('tab:staff', { id: 'staff.overview', order: 10, component: StaffOverview });
 registerSlot('spots.spotPanel', { id: 'staff.runner', order: 50, component: SpotStaff });

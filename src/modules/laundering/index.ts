@@ -30,6 +30,7 @@ import { addHeat } from '../police';
 import { getReputation, reputationLabel } from '../reputation';
 import { bonus } from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
+import { tutorialAllows } from '../tutorial';
 import {
   LAUNDERING_CAPACITY_BY_CITY,
   LAUNDERING_CHANNELS,
@@ -210,6 +211,8 @@ export function getLaunderingStats(state: GameState): LaunderingState {
 export function canUnlockChannel(state: GameState, id: LaunderingChannelId): CommandResult {
   const c = getChannel(id);
   if (isChannelUnlocked(state, id)) return { ok: false, reason: 'Schon freigeschaltet.' };
+  // Auftrag 46b: Im Tutorial erst der Kiosk, die anderen Wege ab Stufe 9.
+  if (!tutorialAllows(state, 'laundering.allWays')) return { ok: false, reason: 'Dazu kommst du später.' };
   if (!c.unlock) return { ok: true };
   const needsRep = c.unlock.reputation !== undefined;
   const needsVeedel = c.unlock.veedel !== undefined;

@@ -36,6 +36,7 @@ import {
   type TraitId,
   traitName,
 } from '../../staff';
+import { tutorialAllowsRole } from '../../tutorial';
 import {
   type Candidate,
   canInterview,
@@ -409,7 +410,11 @@ function Search() {
         aria-label="Wen suchst du?"
         options={[
           { value: 'any' as const, label: 'Egal wen' },
-          ...SEARCH_ROLES.map((r) => ({ value: r.value, label: r.label.replace(' suchen', '') })),
+          // Auftrag 46b: Im Tutorial nur Rollen, die seine Stufe schon kennt.
+          ...SEARCH_ROLES.filter((r) => tutorialAllowsRole(state, r.value)).map((r) => ({
+            value: r.value,
+            label: r.label.replace(' suchen', ''),
+          })),
         ]}
         value={role}
         onChange={setRole}

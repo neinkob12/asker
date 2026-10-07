@@ -4,6 +4,7 @@ import { type CommandMeta, type CommandResult, type Ctx, formatEuro, journal, wa
 import { activeCity, cityName } from '../city';
 import { getWarehouse } from '../goods';
 import { atSpot, atSpotStart, getSpot, isSpotActive } from '../spots';
+import { tutorialAllowsRole } from '../tutorial';
 import { veedelCity } from '../veedel';
 import {
   DRIVER_HIRE_COST,
@@ -72,6 +73,8 @@ export function hireRunner(ctx: Ctx, spotId: string): CommandResult {
 
 /** Fahrer von der Straße anheuern (ohne Einsatz, die Logistik schickt ihn los). */
 export function hireDriver(ctx: Ctx): CommandResult {
+  // Auftrag 46b: Fahrer gibt es im Tutorial erst mit dem Hafen.
+  if (!tutorialAllowsRole(ctx.state, 'driver')) return { ok: false, reason: 'Dazu kommst du später.' };
   if (!wallet.pay(ctx, DRIVER_HIRE_COST, 'dirty', 'Fahrer angeheuert', 'hiring')) {
     return { ok: false, reason: `Nicht genug Geld (${formatEuro(DRIVER_HIRE_COST)}).` };
   }
