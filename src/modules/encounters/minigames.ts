@@ -377,10 +377,15 @@ function payBribe(ctx: Ctx, encounter: Encounter): boolean {
   return true;
 }
 
+/** Verkehrskontrolle durch, aber mit Widersprüchen (picks 'lies:<n>'): Er notiert das Kennzeichen, Heat je Widerspruch. */
+const TRAFFIC_NOTED_HEAT = 3;
+
 /**
  * Verkehrskontrolle. picks 'flee': Gas geben → Verfolgungsjagd (wie die Handlung speedOff; ist sie nicht scharf, die
- * Runde „Gas geben“ wie bisher würfeln). 'bribe': Bestechungsgeld (bribeCost) zahlen, Erfolg. Sonst geschafft →
- * weiterfahren (Erfolg), nicht geschafft → Ladung aufgeflogen (Niederlage).
+ * Runde „Gas geben“ wie bisher würfeln). 'bribe': Bestechungsgeld (bribeCost) zahlen, Erfolg; reicht das Schwarzgeld
+ * nicht mehr, ist der Versuch aufgeflogen (Niederlage). Sonst geschafft → weiterfahren (Erfolg), nicht geschafft →
+ * Ladung aufgeflogen (Niederlage). 'lies:<n>' (Widersprüche im Gespräch): Bei Erfolg notiert er das Kennzeichen, etwas
+ * Heat im Veedel (höchstens zwei zählen). Bei der Rechten Hand dasselbe mit ihrem Score (ohne picks).
  */
 export function applyTraffic(
   ctx: Ctx,
@@ -390,21 +395,44 @@ export function applyTraffic(
   result: MinigameResult,
 ): void {
   const before = gauges(encounter);
+  const rightHand = result.by === 'rightHand';
   if (result.picks.includes('flee')) {
     logMinigame(ctx, encounter, open, result, 'Du legst den Gang ein und trittst aufs Gas.', before);
     if (!startChaseFrom(ctx, encounter)) playOldRound(ctx, encounter, kind, 'speedOff', open.protect);
     return;
   }
-  if (result.picks.includes('bribe') && payBribe(ctx, encounter)) {
-    logMinigame(ctx, encounter, open, result, 'Ein Schein im Fahrzeugschein. Der Beamte winkt dich durch.', before);
-    finish(ctx, encounter, 'success', undefined, 'resolved');
+  if (result.picks.includes('bribe')) {
+    if (payBribe(ctx, encounter)) {
+      logMinigame(ctx, encounter, open, result, 'Ein Schein im Fahrzeugschein. Der Beamte winkt dich durch.', before);
+      finish(ctx, encounter, 'success', undefined, 'resolved');
+    } else {
+      logMinigame(
+        ctx,
+        encounter,
+        open,
+        result,
+        'Der Schein fehlt in der Tasche. „Aussteigen. Kofferraum auf.“',
+        before,
+      );
+      finish(ctx, encounter, 'failure', undefined, 'resolved');
+    }
     return;
   }
   if (result.won) {
-    logMinigame(ctx, encounter, open, result, '„Gute Fahrt.“ Die Kelle geht runter.', before);
+    const lies = Math.min(2, count(result.picks, 'lies:'));
+    encounter.extraHeat += lies * TRAFFIC_NOTED_HEAT;
+    const text = rightHand
+      ? 'Deine Rechte Hand bleibt ruhig. „Gute Fahrt.“ Die Kelle geht runter.'
+      : lies > 0
+        ? '„Gute Fahrt.“ Aber er schreibt sich das Kennzeichen auf.'
+        : '„Gute Fahrt.“ Die Kelle geht runter.';
+    logMinigame(ctx, encounter, open, result, text, before);
     finish(ctx, encounter, 'success', undefined, 'resolved');
   } else {
-    logMinigame(ctx, encounter, open, result, '„Aussteigen. Kofferraum auf.“', before);
+    const text = rightHand
+      ? 'Deine Rechte Hand verhaspelt sich. „Aussteigen. Kofferraum auf.“'
+      : '„Aussteigen. Kofferraum auf.“';
+    logMinigame(ctx, encounter, open, result, text, before);
     finish(ctx, encounter, 'failure', undefined, 'resolved');
   }
 }
