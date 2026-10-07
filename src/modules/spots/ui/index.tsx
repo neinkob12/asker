@@ -5,6 +5,7 @@
 import { clock, formatEuro, formatPercent } from '../../../core';
 import { mapEffects, registerMapLayer } from '../../../map';
 import {
+  Button,
   Card,
   ContextMenu,
   Disclosure,
@@ -35,6 +36,8 @@ import {
   isSpotOpen,
   KNEIPE,
   lockedSpots,
+  SHOP_SPOT_MAX,
+  SHOP_SPOT_PRICE_CENTS,
   spotCity,
   spotHoursLabel,
   spotOpensAt,
@@ -50,6 +53,8 @@ import './spots.css';
 declare module '../../../ui' {
   interface PanelRegistry {
     'spots.spot': { spotId: string };
+    /** Shop-Platzhalter „Spot gründen“ (Auftrag 46e). */
+    'spots.shop': Record<string, never>;
   }
   interface SlotRegistry {
     /** Abschnitte im Spot-Panel (nur bei offenen Spots). */
@@ -219,7 +224,48 @@ function SpotsSection() {
           })}
         </List>
       </Group>
+      {/* Auftrag 46e: Spot gründen kommt als Shop (Platzhalter), der alte Weg über die Karte ist weg. */}
+      <List>
+        <ListItem action value={shopPrice()} onClick={() => ui.openPanel('spots.shop', {})}>
+          <ItemContent icon="pinPlus" color="brand" title="Spot gründen" meta={`Im Shop, höchstens ${SHOP_SPOT_MAX}`} />
+        </ListItem>
+      </List>
     </Card>
+  );
+}
+
+/** „0,99 €“ aus den Cent der Konfiguration. */
+function shopPrice(): string {
+  return `${(SHOP_SPOT_PRICE_CENTS / 100).toFixed(2).replace('.', ',')} €`;
+}
+
+/**
+ * Shop-Platzhalter (Auftrag 46e): Spot gründen wird ein Kauf mit echtem Geld. Hier nur die Seite mit Preis, drei
+ * Plätzen und einem gesperrten Knopf; kein Kauf, keine Bezahlung, kein Netz (Bezahlung ist ein eigener Auftrag).
+ */
+function ShopPanel() {
+  const slots = Array.from({ length: SHOP_SPOT_MAX }, (_, i) => i + 1);
+  return (
+    <div class="spot-shop">
+      <Group
+        title="Spot gründen"
+        icon="pinPlus"
+        color="brand"
+        value={`${shopPrice()} pro Spot`}
+        note={`Bald kannst du dir bis zu ${SHOP_SPOT_MAX} eigene Spots kaufen und auf der Karte setzen, wo du willst.`}
+      >
+        <div class="spot-shop__slots">
+          {slots.map((n) => (
+            <Card key={n} class="spot-shop__slot" icon="pin" color="brand" title={`Spot ${n}`}>
+              <p class="ui-hint">{shopPrice()} · frei</p>
+            </Card>
+          ))}
+        </div>
+        <Button wide variant="primary" icon="lock" disabled>
+          Bald verfügbar
+        </Button>
+      </Group>
+    </div>
   );
 }
 
@@ -228,6 +274,7 @@ registerPanel({
   title: (props, state) => getSpot(state, props.spotId)?.name ?? 'Spot',
   component: SpotPanel,
 });
+registerPanel({ id: 'spots.shop', title: () => 'Spot gründen', component: ShopPanel });
 registerSlot('tab:territory', { id: 'spots.list', title: 'Spots', order: 10, component: SpotsSection });
 registerMapLayer(spotsLayer);
 registerMapLayer(peopleLayer);

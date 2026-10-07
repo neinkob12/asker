@@ -18,6 +18,7 @@ import { activeCity, isCityLive } from '../city';
 import { getGang, getGangs, veedelGang } from '../gangs';
 import { allProducts, formatProductAmount, getStock, productName, take } from '../goods';
 import { averageReferencePrice } from '../market';
+import { specialistFactor } from '../staff';
 import { addInfluence, PLAYER_FACTION } from '../territory';
 import { veedelName } from '../veedel';
 import {
@@ -365,7 +366,10 @@ export function dealersTick(ctx: Ctx): void {
       continue;
     }
     const taken = take(ctx, { productId: m.productId, amount: m.amount }).taken;
-    const price = Math.round((middlemanPrice(ctx.state, m) * taken) / m.amount);
+    // Auftrag 46e: Buchhalter, ein paar Prozent mehr Erlös.
+    const price = Math.round(
+      ((middlemanPrice(ctx.state, m) * taken) / m.amount) * specialistFactor(ctx.state, 'revenue'),
+    );
     wallet.earn(ctx, price, 'dirty', `Zwischenhandel ${d.name}`, 'sales.wholesale');
     addInfluence(ctx, d.veedelId, PLAYER_FACTION, MIDDLEMAN_INFLUENCE);
     r.deals += 1;

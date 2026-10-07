@@ -40,6 +40,7 @@ import { getReputation } from '../reputation';
 import { atSpot, getSpot } from '../spots';
 import {
   addLoyalty,
+  canHireRole,
   DEFAULT_STATS,
   enlist,
   generateProfile,
@@ -418,6 +419,9 @@ function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null,
   }
   // Auftrag 46b: Im Tutorial kommen die Rollen nach und nach.
   if (!tutorialAllowsRole(ctx.state, c.role)) return { ok: false, reason: 'Dazu kommst du später.' };
+  // Auftrag 46e: Vom Buchhalter gibt es nur einen pro Stadt.
+  const roleCheck = canHireRole(ctx.state, c.role, candidateCity(c));
+  if (!roleCheck.ok) return roleCheck;
   // Kommt die Person an einen Spot, gehört das Handgeld zu dessen Kosten (Kasse: Pro Spot und Pro Leutnant).
   const tag = assignment?.kind === 'spot' ? { category: 'hiring' as const, spotId: assignment.targetId } : 'hiring';
   if (!wallet.pay(ctx, c.hireCost, 'dirty', `Handgeld ${c.name}`, tag)) {

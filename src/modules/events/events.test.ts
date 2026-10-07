@@ -8,6 +8,8 @@ import { EVENT_CONTACTS } from './config';
 import {
   activeEvents,
   CITY_EVENTS,
+  EVENT_DEMAND_BOOST,
+  eventDemand,
   eventFactor,
   getEventDef,
   isEventActive,
@@ -25,7 +27,7 @@ function def(id: string) {
 }
 
 describe('Stadt-Events (Auftrag 30)', () => {
-  it('Kalender: Karneval ab Tag 30 alle 90 Tage sechs Tage, danach zwei Tage Kater, Lichter an Tag 60', () => {
+  it('Kalender: Karneval ab Tag 30 alle 180 Tage sechs Tage, danach zwei Tage Kater, Lichter an Tag 60', () => {
     const karneval = def('karneval');
     expect(isEventActive(karneval, clock.at(29, 23, 59))).toBe(false);
     expect(isEventActive(karneval, clock.at(30))).toBe(true);
@@ -33,23 +35,25 @@ describe('Stadt-Events (Auftrag 30)', () => {
     expect(isEventActive(karneval, clock.at(36))).toBe(false);
     expect(isEventActive(def('kater'), clock.at(36))).toBe(true);
     expect(isEventActive(def('kater'), clock.at(38))).toBe(false);
-    expect(isEventActive(karneval, clock.at(120, 12))).toBe(true);
+    // Auftrag 46e: halb so oft wie vorher (alle 180 statt 90 Tage).
+    expect(isEventActive(karneval, clock.at(120, 12))).toBe(false);
+    expect(isEventActive(karneval, clock.at(210, 12))).toBe(true);
     expect(nextEventStart(karneval, clock.at(1))).toBe(clock.at(30));
-    expect(nextEventStart(karneval, clock.at(30))).toBe(clock.at(120));
+    expect(nextEventStart(karneval, clock.at(30))).toBe(clock.at(210));
     expect(isEventActive(def('lichter'), clock.at(60, 20))).toBe(true);
     expect(isEventActive(def('lichter'), clock.at(61))).toBe(false);
   });
 
-  it('FC-Heimspiel: jeden zweiten Samstag von 15 bis 22 Uhr', () => {
+  it('FC-Heimspiel: jeden vierten Samstag von 15 bis 22 Uhr (Auftrag 46e: halb so oft)', () => {
     const fc = def('fc');
     const saturdays: number[] = [];
-    for (let day = 1; day <= 42; day++) {
+    for (let day = 1; day <= 84; day++) {
       const at = clock.at(day, 16);
       if (clock.weekday(at) === 5) saturdays.push(day);
     }
     const playing = saturdays.filter((day) => isEventActive(fc, clock.at(day, 16)));
     expect(playing.length).toBe(3);
-    expect(playing[1] - playing[0]).toBe(14);
+    expect(playing[1] - playing[0]).toBe(28);
     expect(isEventActive(fc, clock.at(playing[0], 14, 59))).toBe(false);
     expect(isEventActive(fc, clock.at(playing[0], 22))).toBe(false);
     expect(nextEventStart(fc, clock.at(playing[0], 10))).toBe(clock.at(playing[0], 15));
@@ -59,7 +63,10 @@ describe('Stadt-Events (Auftrag 30)', () => {
     const sim = createTestGame();
     sim.state.time = clock.at(31, 12);
     expect(activeEvents(sim.state, 'koeln').map((e) => e.id)).toContain('karneval');
-    expect(eventFactor(sim.state, 'demand', { veedelId: 'altstadt-nord' })).toBe(2);
+    // Auftrag 46e: Nachfrage-Faktoren über 1 sind um EVENT_DEMAND_BOOST gestreckt (2 → 2,5).
+    expect(eventFactor(sim.state, 'demand', { veedelId: 'altstadt-nord' })).toBe(eventDemand(def('karneval')));
+    expect(eventDemand(def('karneval'))).toBe(1 + (2 - 1) * EVENT_DEMAND_BOOST);
+    expect(eventDemand(def('kater'))).toBe(0.8);
     expect(eventFactor(sim.state, 'demand', { veedelId: 'kalk' })).toBe(1);
     expect(eventFactor(sim.state, 'checks', { veedelId: 'neustadt-sued' })).toBe(0.5);
     expect(eventFactor(sim.state, 'heatPerSale', { veedelId: 'altstadt-sued' })).toBe(0.7);
@@ -67,7 +74,7 @@ describe('Stadt-Events (Auftrag 30)', () => {
     expect(raidsAllowed(sim.state, 'hamburg')).toBe(true);
     // Der Dom läuft an Tag 31 nicht; an Tag 12 schon, aber nur in St. Pauli.
     sim.state.time = clock.at(12, 20);
-    expect(eventFactor(sim.state, 'demand', { veedelId: 'st-pauli' })).toBe(1.4);
+    expect(eventFactor(sim.state, 'demand', { veedelId: 'st-pauli' })).toBe(eventDemand(def('dom')));
     expect(eventFactor(sim.state, 'demand', { veedelId: 'altstadt-nord' })).toBe(1);
     // Hamburg ist noch nicht frei: keine laufenden Events dort.
     expect(activeEvents(sim.state).map((e) => e.cityId)).not.toContain('hamburg');
@@ -81,24 +88,20 @@ describe('Stadt-Events (Auftrag 30)', () => {
     const sim = createTestGame();
     sim.state.time = clock.at(60, 21);
     const spot = lichter.area.spots?.[0] ?? '';
-    expect(eventFactor(sim.state, 'demand', { spotId: spot })).toBe(2.5);
+    expect(eventFactor(sim.state, 'demand', { spotId: spot })).toBe(eventDemand(lichter));
     expect(eventFactor(sim.state, 'checks', { veedelId: getSpot(sim.state, spot)?.veedelId })).toBe(1.5);
   });
 
-  it('kündigt einen Tag vorher als Ereignis an (keine Nachricht, Auftrag 46d) und meldet Start und Ende', () => {
+  it('meldet Start und Ende als Ereignis, ohne Ankündigung per Handy (Auftrag 46e: Pop-up statt Chat)', () => {
     const sim = createTestGame();
     const events = recordEvents(sim);
     sim.advance(clock.at(29, 1) - sim.state.time);
-    const announced = eventsOfType(events, 'events.announced').filter((e) => e.payload.eventId === 'karneval');
-    expect(announced).toHaveLength(1);
-    expect(announced[0].payload.text).toBe(def('karneval').announce);
     expect(messages.thread(sim.state, EVENT_CONTACTS.koeln.id)).toHaveLength(0);
     sim.advance(clock.at(30, 1) - sim.state.time);
     expect(eventsOfType(events, 'events.started').map((e) => e.payload.eventId)).toContain('karneval');
     sim.advance(clock.at(36, 1) - sim.state.time);
     expect(eventsOfType(events, 'events.ended').map((e) => e.payload.eventId)).toContain('karneval');
-    // Angekündigt wird jeder Termin nur einmal.
-    expect(eventsOfType(events, 'events.announced').filter((e) => e.payload.eventId === 'karneval')).toHaveLength(1);
+    expect(messages.thread(sim.state, EVENT_CONTACTS.koeln.id)).toHaveLength(0);
   });
 
   it('Stadtwechsel mitten im Karneval meldet den Start nicht noch einmal', () => {

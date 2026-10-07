@@ -35,7 +35,8 @@
 // Befehle: 'suppliers.order' (onCredit für Kredit, warehouseId als Ziel), 'suppliers.orderBatch' (mode 'group' oder
 //   'single'), 'suppliers.repay', 'suppliers.unlock'
 // Ereignisse: 'shipment.ordered', 'shipment.arrived' (atPort bei Schiffsware), 'shipment.problem',
-//   'supplier.trustChanged', 'supplier.repaid', 'supplier.overdue', 'supplier.unlocked', 'supplier.dealStarted'
+//   'supplier.trustChanged', 'supplier.repaid', 'supplier.overdue', 'supplier.unlocked', 'supplier.dealStarted',
+//   'supplier.introduced' (Auftrag 46e: Lieferant kennenlernen als Pop-up statt Chat-Gruß; isIntroduced, introText)
 
 import {
   type CommandResult,
@@ -71,6 +72,7 @@ import {
 import { hasBerth, portName, receiveCargo } from '../logistics';
 import { purchaseIndex } from '../market';
 import { getReputation } from '../reputation';
+import { specialistFactor } from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import { tutorialAllows, tutorialSupplierOpen } from '../tutorial';
 import {
@@ -124,6 +126,7 @@ import {
   upkeepDecisions,
   voice,
 } from './troubles';
+import { supplierVariants } from './voices';
 
 export { CITY_APPROACH_SHARE, GROUP_ORDER, SHIP_SHARE, UNLOADING_PORT, UNLOADING_SHARE } from './config';
 export { PROBLEM_REASONS, type ProblemReason, ROUTE_NAMES, type RouteKind, routeKindOf } from './problems';
@@ -217,6 +220,11 @@ export interface Supplier {
    * PORT_SEIZE_EXTRA am Hafen. Fehlt: 0.
    */
   customs?: number;
+  /**
+   * Ein, zwei Sätze in seiner Stimme fürs Kennenlernen (Pop-up, Auftrag 46e). Fehlt: sein Angebot (unlock.pitch) bzw.
+   * seine erste Antwort nach dem Freischalten.
+   */
+  intro?: string;
 }
 
 /** Autobahn, über die der Kurier in die Stadt kommt (supplier.via), oder undefined. */
@@ -353,14 +361,17 @@ export interface SuppliersState {
   unlocked: string[];
   /** Lieferanten, die sich schon mit einem Angebot gemeldet haben. */
   offered: string[];
+  /** Lieferanten, die sich schon vorgestellt haben (Pop-up „Lieferant kennenlernen“, Auftrag 46e). */
+  introduced: string[];
 }
 
 interface SuppliersStateV1 {
   shipments: Shipment[];
 }
 
-type SuppliersStateV2 = Omit<SuppliersState, 'unlocked' | 'offered' | 'deals'>;
-type SuppliersStateV4 = Omit<SuppliersState, 'deals'>;
+type SuppliersStateV2 = Omit<SuppliersState, 'unlocked' | 'offered' | 'deals' | 'introduced'>;
+type SuppliersStateV4 = Omit<SuppliersState, 'deals' | 'introduced'>;
+type SuppliersStateV6 = Omit<SuppliersState, 'introduced'>;
 
 declare module '../../core' {
   interface ModuleStates {
@@ -428,6 +439,8 @@ declare module '../../core' {
     'supplier.repaid': { supplierId: string; amount: number; debt: number };
     'supplier.overdue': { supplierId: string; debt: number };
     'supplier.unlocked': { supplierId: string; fee: number };
+    /** Lieferanten stellen sich vor (Pop-up „Lieferant kennenlernen“, Auftrag 46e; mehrere auf einmal als eins). */
+    'supplier.introduced': { supplierIds: string[] };
     'supplier.dealStarted': {
       dealId: number;
       supplierId: string;
@@ -438,6 +451,9 @@ declare module '../../core' {
     };
   }
 }
+
+/** Alle so viele Spielminuten schauen Lieferanten, ob sie sich vorstellen (Auftrag 46e). */
+const INTRODUCE_EVERY = 5;
 
 // ---------------------------------------------------------------------------------------------
 // Lesen
@@ -538,6 +554,18 @@ export function supplierContactId(supplierId: string): string {
 /** Macht der Lieferant schon Geschäfte mit dir? */
 export function isUnlocked(state: GameState, supplierId: string): boolean {
   return state.modules.suppliers.unlocked.includes(supplierId);
+}
+
+/** Hat sich der Lieferant schon vorgestellt (Pop-up, Auftrag 46e)? */
+export function isIntroduced(state: GameState, supplierId: string): boolean {
+  return state.modules.suppliers.introduced.includes(supplierId);
+}
+
+/** Ein, zwei Sätze zum Kennenlernen in seiner Stimme: intro, sonst sein Angebot, sonst seine erste Antwort. */
+export function introText(supplier: Supplier): string {
+  if (supplier.intro) return supplier.intro;
+  if (supplier.unlock) return supplier.unlock.pitch.replace('{fee}', formatEuro(supplier.unlock.fee));
+  return supplierVariants(supplier.id, 'unlocked')[0];
 }
 
 /** Bedingungen fürs Freischalten mit Stand, z.B. "1 von 3 Veedeln". Leer bei Lieferanten ohne Bedingungen. */
@@ -832,7 +860,15 @@ export function orderQuote(
     ? linePrices(state, supplierId, known, discount, cityId).reduce((sum, p) => sum + p, 0)
     : listPrice;
   const trust = getRelation(state, supplierId).trust;
-  const seize = supplier ? Math.min(1, seizeChance(supplier, trust) * (group ? groupRiskFactor(packages) : 1)) : 0;
+  // Auftrag 46e: Ein Polizei-Kontakt in der Zielstadt hält den Zoll von der Lieferung fern.
+  const seize = supplier
+    ? Math.min(
+        1,
+        seizeChance(supplier, trust) *
+          (group ? groupRiskFactor(packages) : 1) *
+          specialistFactor(state, 'seizure', cityId),
+      )
+    : 0;
   const weight = known.reduce((sum, l) => {
     const pkg = supplier?.packages.find((p) => p.id === l.packageId);
     return sum + (pkg ? pkg.amount * unitWeight(pkg.productId) * l.count : 0);
@@ -1017,7 +1053,8 @@ function order(
   const quality = clampQuality(
     supplier.quality + supplierQualityBonus(ctx.state, supplierId) + (ctx.random() * 2 - 1) * QUALITY_SPREAD,
   );
-  let problem = rollShipmentProblem(ctx.random(), supplier, rel.trust);
+  // Auftrag 46e: Polizei-Kontakt in der Zielstadt, weniger Zoll.
+  let problem = rollShipmentProblem(ctx.random(), supplier, rel.trust, specialistFactor(ctx.state, 'seizure', cityId));
   // Geteilter Container: Fliegt die fremde Hälfte auf, ist die eigene mit weg (Auftrag 33).
   const sharedBust = pkg.container === 'shared' && problem !== 'seized' && ctx.chance(SHARED_CONTAINER_RISK);
   if (sharedBust) problem = 'seized';
@@ -1214,7 +1251,12 @@ function orderGroup(
     quality: clampQuality(supplier.quality + bonus + (ctx.random() * 2 - 1) * QUALITY_SPREAD),
     price: prices[i],
   }));
-  const problem = rollShipmentProblem(ctx.random(), supplier, rel.trust, groupRiskFactor(quote.packages));
+  const problem = rollShipmentProblem(
+    ctx.random(),
+    supplier,
+    rel.trust,
+    groupRiskFactor(quote.packages) * specialistFactor(ctx.state, 'seizure', cityId),
+  );
   const [lead, ...extra] = items;
   const shipment: Shipment = {
     id: ctx.nextId(),
@@ -1467,28 +1509,33 @@ function unlock(ctx: Ctx, supplierId: string): CommandResult {
   return { ok: true };
 }
 
-/** Wer die Bedingungen erfüllt und sich noch nicht gemeldet hat, schreibt dem Spieler (einmal). */
-function offerUnlocks(ctx: Ctx): void {
+/**
+ * Lieferant kennenlernen (Auftrag 46e): Wer in der Stadt, in der du bist, zu haben ist (ohne Bedingungen, schon
+ * freigeschaltet oder Bedingungen erfüllt) und sich noch nicht vorgestellt hat, stellt sich einmal vor: Ereignis
+ * 'supplier.introduced', die Oberfläche zeigt das Pop-up mit Porträt, Stimme und „Angebot ansehen“. Kein Chat-Gruß mehr;
+ * freischalten (Vermittlung) geht über die App. Mehrere auf einmal (Kalle und Toni in Stufe 5) sind ein Pop-up.
+ */
+function introduceSuppliers(ctx: Ctx): void {
   const s = ctx.state.modules.suppliers;
+  if (isBusinessSold(ctx.state)) return;
+  const cityId = activeCity(ctx.state);
+  const fresh: string[] = [];
   for (const supplier of getSuppliers(ctx.state)) {
-    if (!supplier.unlock || s.offered.includes(supplier.id) || !canUnlock(ctx.state, supplier.id).ok) continue;
-    s.offered.push(supplier.id);
-    const fee = supplier.unlock.fee;
-    messages.send(ctx, {
-      contact: contactOf(supplier),
-      text: supplier.unlock.pitch.replace('{fee}', formatEuro(fee)),
-      options: [
-        {
-          id: 'unlock',
-          label: fee > 0 ? `Einsteigen (${formatEuro(fee)})` : 'Geschäfte machen',
-          reply: 'Deal.',
-          command: { type: 'suppliers.unlock', payload: { supplierId: supplier.id } },
-        },
-        { id: 'later', label: 'Später', reply: 'Ich überleg es mir.' },
-      ],
-    });
-    journal.add(ctx, `${supplier.contactName} aus ${supplier.name} will mit dir Geschäfte machen.`, 'good');
+    if (s.introduced.includes(supplier.id) || !deliversTo(supplier, cityId)) continue;
+    const open = !supplier.unlock || s.unlocked.includes(supplier.id) || canUnlock(ctx.state, supplier.id).ok;
+    if (!open) continue;
+    s.introduced.push(supplier.id);
+    if (!s.offered.includes(supplier.id)) s.offered.push(supplier.id);
+    fresh.push(supplier.id);
+    journal.add(
+      ctx,
+      supplier.unlock && !s.unlocked.includes(supplier.id)
+        ? `${supplier.contactName} aus ${supplier.name} will mit dir Geschäfte machen.`
+        : `${supplier.contactName} (${supplier.name}) liefert an dich.`,
+      'good',
+    );
   }
+  if (fresh.length > 0) ctx.emit('supplier.introduced', { supplierIds: fresh });
 }
 
 function repay(ctx: Ctx, supplierId: string, amount?: number): CommandResult {
@@ -1660,7 +1707,7 @@ function canRestock(state: GameState, supplier: Supplier): boolean {
 
 export default defineModule({
   id: 'suppliers',
-  version: 6,
+  version: 7,
   dependsOn: ['goods'],
   // Auftrag 46d: Tonis Begrüßung zum Spielstart gibt es nicht mehr (das Kennenlernen baut 46e als Karte).
   init: () => ({
@@ -1669,13 +1716,15 @@ export default defineModule({
     relations: initialRelations(),
     unlocked: openFromStart(),
     offered: openFromStart(),
+    // Vorstellen tun sie sich beim ersten Tick (im Tutorial erst, wenn ihre Stufe sie kennt, Auftrag 46e).
+    introduced: [],
   }),
   tick: (ctx) => {
     revealProblems(ctx);
     upkeepDecisions(ctx);
     deliver(ctx);
     checkDebts(ctx);
-    if (ctx.now % 60 === 0) offerUnlocks(ctx);
+    if (ctx.now % INTRODUCE_EVERY === 0) introduceSuppliers(ctx);
     if (ctx.now % MINUTES_PER_DAY === 0) rollDeals(ctx);
   },
   commands: {
@@ -1688,6 +1737,8 @@ export default defineModule({
     'suppliers.unlock': (ctx, { supplierId }) => unlock(ctx, supplierId),
   },
   on: {
+    // Auftrag 46e: Schaltet das Tutorial eine Stufe weiter (Kalle und Toni in Stufe 5), stellen sie sich sofort vor.
+    'tutorial.stageReached': (ctx) => introduceSuppliers(ctx),
     'city.unlocked': (ctx, { cityId }) => onCityUnlocked(ctx, cityId),
     'city.arrived': (ctx, { cityId, first }) => {
       if (first) onCityArrived(ctx, cityId);
@@ -1710,12 +1761,18 @@ export default defineModule({
       return { ...old, unlocked: withOpen(old.unlocked), offered: withOpen(old.offered) };
     },
     // Version 5 (Auftrag 32): Rabatt-Aktionen.
-    5: (old: SuppliersStateV4): SuppliersState => ({ ...old, deals: [] }),
+    5: (old: SuppliersStateV4): SuppliersStateV6 => ({ ...old, deals: [] }),
     // Version 6 (Auftrag 23): Lieferungen tragen Weg, Grund, Rückfrage, Antwort und Chance (alles optional). Alte
     // Lieferungen laufen ohne Grund weiter; eine schon bekannte Verspätung bekommt keine Rückfrage mehr.
-    6: (old: SuppliersState): SuppliersState => ({
+    6: (old: SuppliersStateV6): SuppliersStateV6 => ({
       ...old,
       shipments: old.shipments.map((s) => ({ ...s })),
+    }),
+    // Version 7 (Auftrag 46e): Lieferanten stellen sich einmal mit einem Pop-up vor. Wer heute schon frei ist oder sich
+    // gemeldet hat, gilt als vorgestellt (kein Pop-up für alte Spielstände).
+    7: (old: SuppliersStateV6): SuppliersState => ({
+      ...old,
+      introduced: [...new Set([...old.unlocked, ...old.offered])],
     }),
   },
   // Pleite-Regel: Wer eine Lieferung erwartet oder sich eine leisten kann (bar oder auf Kredit), macht weiter.

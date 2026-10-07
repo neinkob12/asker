@@ -51,6 +51,7 @@ function handOverKoeln(sim: Simulation): StaffMember {
   sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: a.id, spotIds: ['uni'] } });
   sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: b.id, spotIds: ['neumarkt'] } });
   const boss = hire(sim, 5, 95);
+  sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: ['ebertplatz'] } }); // Auftrag 46e: aus den Leutnants
   expect(sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } }).ok).toBe(true);
   const rh = getRightHand(sim.state);
   if (!rh) throw new Error('keine Rechte Hand');
@@ -212,13 +213,15 @@ describe('Ankommen in Hamburg (Auftrag 30)', () => {
     sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'keller-st-georg' } });
     sim.dispatch({ type: 'spots.unlock', payload: { spotId: 'hansaplatz' } });
     sim.dispatch({ type: 'spots.unlock', payload: { spotId: 'lange-reihe' } });
-    // In Hamburg angeheuert (aktive Stadt), zwei Leutnants und eine Rechte Hand.
+    sim.dispatch({ type: 'spots.unlock', payload: { spotId: 'spielbudenplatz' } });
+    // In Hamburg angeheuert (aktive Stadt), zwei Leutnants und eine Rechte Hand (aus einem dritten Leutnant, 46e).
     const a = hire(sim, 2, 80);
     const b = hire(sim, 2, 80);
     expect(a.cityId).toBe('hamburg');
     sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: a.id, spotIds: ['hansaplatz'] } });
     sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: b.id, spotIds: ['lange-reihe'] } });
     const hhBoss = hire(sim, 5, 95);
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: hhBoss.id, spotIds: ['spielbudenplatz'] } }); // Auftrag 46e: aus den Leutnants
     expect(sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: hhBoss.id } }).ok).toBe(true);
     expect(getRightHand(sim.state, 'hamburg')?.staffId).toBe(hhBoss.id);
     expect(getRightHand(sim.state, 'koeln')?.staffId).toBe(koelnBoss.id);

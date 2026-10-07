@@ -594,15 +594,20 @@ function appointCapo(sim: Simulation, stats: BotStats): void {
 }
 
 /**
- * Später: eine Rechte Hand, sobald es zwei Leutnants gibt und jemand die Voraussetzungen erfüllt. Der Bot gibt ihr
- * alle Aufgaben (sie laufen an, sobald ihre Stufe reicht): Aufträge fährt sie, den Hafen holt sie ab, bestellt nach,
- * stellt ein, macht Großhandel bis 10.000 € und wäscht über 8.000 € die Hälfte.
+ * Später: eine Rechte Hand aus den Leutnants (Auftrag 46e), sobald es zwei gibt (einer bleibt Leutnant, die Spots des
+ * anderen besetzt der Bot neu). Der Bot gibt ihr alle Aufgaben (sie laufen an, sobald ihre Stufe reicht): Aufträge
+ * fährt sie, den Hafen holt sie ab, bestellt nach, stellt ein, macht Großhandel bis 10.000 € und wäscht über 8.000 €
+ * die Hälfte.
  */
 function appointRightHand(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
   if (getRightHand(state) || money(state) <= reserve(state) + 500) return;
-  const candidate = getStaff(state, { status: 'active', cityId: activeCity(state) })
-    .filter((m) => canBeRightHand(state, m.id).ok && !isLieutenant(state, m.id))
+  const lieutenants = getStaff(state, { status: 'active', cityId: activeCity(state) }).filter((m) =>
+    isLieutenant(state, m.id),
+  );
+  if (lieutenants.length < 2) return;
+  const candidate = lieutenants
+    .filter((m) => canBeRightHand(state, m.id).ok)
     .sort((a, b) => b.level - a.level || a.id.localeCompare(b.id))[0];
   if (!candidate) return;
   if (!run(sim, stats, { type: 'hierarchy.appointRightHand', payload: { staffId: candidate.id } })) return;

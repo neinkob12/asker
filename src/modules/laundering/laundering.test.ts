@@ -175,18 +175,15 @@ describe('laundering', () => {
     expect(getBatches(sim.state)).toHaveLength(0);
   });
 
-  it('mit Buchhalter kosten alle Wege gleich viel: ohne Wegangabe geht kleines Geld zum schnellen Kiosk', () => {
+  it('ein Buchhalter macht die Gebühr nicht mehr billiger (Auftrag 46e: er bringt Erlös und spart Löhne)', () => {
     const sim = createTestGame();
     sim.state.wallet.dirty = 40000;
     sim.state.modules.laundering.unlocked = ['kiosk', 'laundromat', 'construction'];
+    const before = LAUNDERING_CHANNELS.map((c) => channelFee(sim.state, c.id));
     const ctx = sim.ctx('staff');
     const accountant = enlist(ctx, generateProfile(ctx, 'accountant', { level: 5 }), { origin: 'pool' });
-    accountant.stats.caution = 50;
-    // Der Rabatt drückt alle drei Wege auf die Mindestgebühr ...
-    expect(new Set(LAUNDERING_CHANNELS.map((c) => channelFee(sim.state, c.id))).size).toBe(1);
-    // ... dann entscheidet die Dauer, nicht die Grundgebühr: Der Bauunternehmer bräuchte über zwölf Stunden und bringt
-    // ab 15.000 € Heat, der Kiosk ist gleich billig, viel schneller und ohne Risiko.
-    expect(sim.dispatch({ type: 'laundering.launder', payload: { amount: 2500 } }).ok).toBe(true);
-    expect(getBatches(sim.state)[0].channel).toBe('kiosk');
+    accountant.stats.caution = 90;
+    expect(LAUNDERING_CHANNELS.map((c) => channelFee(sim.state, c.id))).toEqual(before);
+    expect(before.map((fee, i) => fee === LAUNDERING_CHANNELS[i].fee).every(Boolean)).toBe(true);
   });
 });

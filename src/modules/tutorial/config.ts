@@ -74,6 +74,8 @@ export type TutorialFeature =
   | 'staff.specialist'
   | 'staff.accountant'
   | 'staff.rightHand'
+  /** Auftrag 46e: Capos werden in Köln nicht mehr angeboten, solange das Tutorial läuft. */
+  | 'staff.capos'
   | 'gangs.threats'
   | 'gangs.attacks'
   | 'gangs.protection'
@@ -110,6 +112,7 @@ export const FEATURE_STAGE: Readonly<Record<TutorialFeature, number>> = {
   'staff.specialist': 9,
   'staff.accountant': 10,
   'staff.rightHand': 11,
+  'staff.capos': NEVER, // Auftrag 46e
   'gangs.threats': 4,
   'gangs.attacks': 7,
   'gangs.protection': 7,

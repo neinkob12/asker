@@ -170,9 +170,9 @@ describe('Kaution', () => {
     lawyer.stats.charisma = 50;
     lawyer.stats.caution = 50;
     expect(bonus(sim.state, 'bailDiscount')).toBe(0.2);
-    expect(bonus(sim.state, 'jailReduction')).toBe(0.25);
     expect(bailCost(sim.state, runner.id)).toBe(Math.round((expensive * 0.8) / 10) * 10);
-    expect(jailDuration(sim.state)).toBe(Math.round(withoutLawyer * 0.75));
+    // Auftrag 46e: Haft halb so lang (SPECIALIST_EFFECTS.jailTime).
+    expect(jailDuration(sim.state)).toBe(Math.round(withoutLawyer * 0.5));
     // Nur in seiner Stadt (Auftrag 43): In Hamburg hilft der Kölner Anwalt nicht.
     expect(bonus(sim.state, 'bailDiscount', 'hamburg')).toBe(0);
     expect(jailDuration(sim.state, 'hamburg')).toBe(withoutLawyer);
@@ -181,18 +181,14 @@ describe('Kaution', () => {
     expect(bonus(sim.state, 'bailDiscount')).toBe(0);
   });
 
-  it('Buchhalter und Polizei-Kontakt geben ihre Boni, bessere Spezialisten mehr', () => {
+  it('der Polizei-Kontakt warnt vor Razzien, bessere Kontakte öfter', () => {
     const sim = quietGame();
-    expect(bonus(sim.state, 'launderingFeeDiscount')).toBe(0);
     expect(bonus(sim.state, 'raidWarning')).toBe(0);
-    const accountant = recruit(sim, 'accountant');
-    accountant.stats.caution = 50;
     const contact = recruit(sim, 'policeContact');
     contact.stats.charisma = 50;
-    expect(bonus(sim.state, 'launderingFeeDiscount')).toBe(0.2);
     expect(bonus(sim.state, 'raidWarning')).toBe(0.5);
-    accountant.level = 5;
-    expect(bonus(sim.state, 'launderingFeeDiscount')).toBeGreaterThan(0.3);
+    contact.level = 5;
+    expect(bonus(sim.state, 'raidWarning')).toBeGreaterThan(0.6);
   });
 
   it('der Polizei-Kontakt warnt vor einer geplanten Razzia, abtauchen lässt sie ins Leere laufen', () => {

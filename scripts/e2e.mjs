@@ -1,6 +1,7 @@
 // Ende-zu-Ende-Test im echten Browser (Playwright): neues Spiel mit Tutorial (nur der Neumarkt, Mission 1 mit drei
 // Verkäufen und Belohnung, dann in den Einstellungen beendet), selbst verkaufen, Läufer anheuern, Ware bestellen,
-// speichern, laden und nach dem Neuladen der Seite den Autosave fortsetzen. Bedient die Oberfläche wie ein Mensch (Klicks auf Karte, Handy, Dialoge); nur zum Vorspulen der Zeit
+// Shop-Platzhalter „Spot gründen“ (Auftrag 46e), speichern, laden und nach dem Neuladen der Seite den Autosave
+// fortsetzen. Pop-ups (Lieferant kennenlernen, Stadt-Event) klickt jeder Schritt vorher weg (dismissPopups). Bedient die Oberfläche wie ein Mensch (Klicks auf Karte, Handy, Dialoge); nur zum Vorspulen der Zeit
 // wird die Simulation direkt angestoßen.
 // Speichert Screenshots nach screenshots/e2e-*.png und schlägt fehl, wenn etwas nicht klappt oder der Browser
 // Fehler meldet.
@@ -52,6 +53,8 @@ const isForeignAjaxError = (arg) =>
 /** Noch laufende Prüfungen von Konsolen-Fehlern (vor dem Schließen des Browsers abwarten). */
 const pendingChecks = [];
 let step = 0;
+/** Die Seite des laufenden Durchgangs, für einen Screenshot beim Fehlschlag. */
+let currentPage = null;
 
 /** Zustand aus dem Spiel lesen (nur lesen, wie die Oberfläche). */
 const game = (page, fn) => page.evaluate(`(${fn})(window.koeln.session.state)`);
@@ -72,12 +75,54 @@ async function shot(page, name) {
 
 /** Spielstände liegen im Menü (Hamburger-Knopf im HUD). */
 async function openSaves(page) {
-  await page.getByRole('button', { name: 'Menü' }).click();
+  await clickSafe(page, page.getByRole('button', { name: 'Menü' }));
   await page.getByRole('button', { name: 'Spielstände' }).click();
+}
+
+/**
+ * Pop-ups über der Karte wegklicken, falls eins offen ist (Auftrag 46e: Lieferant kennenlernen nach dem Freischalten,
+ * Stadt-Event zum Start). Sie öffnen sich kurz verzögert, sobald kein anderer Dialog offen ist.
+ */
+async function dismissPopups(page, patience = 6) {
+  // Am Desktop eine Glas-Karte über der Karte, am Handy-Bildschirm ein Blatt (nie die Antworten im Chat). Das Pop-up
+  // kommt kurz verzögert, sobald kein anderer Dialog mehr offen ist: knapp zwei Sekunden lang hinschauen.
+  const card = page.locator('.ui-map-dialog__card, .ui-map-sheet');
+  const later = card.getByRole('button', { name: /^(Später|Okay)$/ });
+  let quiet = 0;
+  for (let i = 0; i < 16 && quiet < patience; i++) {
+    if ((await later.count()) > 0) {
+      const label = await card
+        .first()
+        .getAttribute('aria-label')
+        .catch(() => null);
+      console.log(`  (Pop-up weggeklickt: ${label ?? '?'})`);
+      await later.first().click();
+      quiet = 0;
+      await page.waitForTimeout(400);
+    } else {
+      quiet++;
+      await page.waitForTimeout(300);
+    }
+  }
+}
+
+/** Klick, der ein gerade aufgehendes Pop-up wegklickt und es noch einmal versucht. */
+async function clickSafe(page, locator) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await locator.click({ timeout: 4000 });
+      return;
+    } catch (error) {
+      if (attempt >= 3) throw error;
+      await dismissPopups(page, 3);
+    }
+  }
 }
 
 async function check(name, fn) {
   process.stdout.write(`- ${name} … `);
+  // Ein Pop-up vom vorigen Schritt (Lieferant, Stadt-Event) darf den nächsten nicht blockieren.
+  if (currentPage) await dismissPopups(currentPage);
   await fn();
   console.log('ok');
 }
@@ -86,6 +131,7 @@ async function run() {
   const context = await browser.newContext(VIEWPORTS[size]);
   await routeExternal(context, base);
   const page = await context.newPage();
+  currentPage = page;
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {
     if (m.type() !== 'error' || isTileError(m.text())) return;
@@ -184,6 +230,9 @@ async function run() {
       assert.equal(await game(page, (s) => s.modules.tutorial.stage), 12);
       await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
       await home.getByRole('button', { name: /^Gangs/ }).waitFor();
+      // Kalle und Toni stellen sich jetzt vor (Pop-up, Auftrag 46e): Später.
+      await dismissPopups(page);
+      await shot(page, 'tutorial-beendet');
       await page.waitForFunction(() => document.querySelectorAll('.spot-marker:not(.is-locked)').length >= 4);
       // Wie vorher: Lag das Handy weg, kommt es wieder weg; die Kamera zurück zum Zülpicher Platz (nächster Schritt).
       if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
@@ -193,6 +242,7 @@ async function run() {
   );
 
   await check('Selbst am Spot verkaufen', async () => {
+    await dismissPopups(page);
     // Warten, bis am Zülpicher Platz jemand steht.
     for (let i = 0; i < 48; i++) {
       const waiting = await game(
@@ -225,9 +275,20 @@ async function run() {
     for (let i = 0; i < 48; i++) {
       if ((await game(page, (s) => s.modules.customers.stats.customersServed)) > served) break;
       await advance(page, 10);
+      // Wer selbst am Spot steht, bekommt mit kleiner Chance Zivis (Minispiel über der Karte, fest aus Seed und
+      // Stunde gewürfelt): Das Spiel ist hier nicht Thema, der Dev-Haken beendet es.
+      if (await page.locator('.mg-run').count()) {
+        await page.evaluate(() => window.koeln.dev.minigameWin());
+        const next = page.locator('.mg-result').getByRole('button', { name: /Weiter/ });
+        if (await next.count()) await next.click().catch(() => {});
+        await page
+          .locator('.mg-run')
+          .waitFor({ state: 'detached', timeout: 10000 })
+          .catch(() => {});
+      }
     }
     assert.ok((await game(page, (s) => s.modules.customers.stats.customersServed)) > served, 'automatisch verkauft');
-    await page.getByRole('button', { name: 'Weggehen', exact: true }).click();
+    await clickSafe(page, page.getByRole('button', { name: 'Weggehen', exact: true }));
     assert.equal(await game(page, (s) => s.modules.customers.self.spotId), null);
   });
 
@@ -318,25 +379,21 @@ async function run() {
     await page.evaluate(() => window.koeln.runtime.api.closePhone());
   });
 
-  await check('Eigenen Spot mit Art gründen (Befehl; der Weg über die Karte ist seit Auftrag 46d weg)', async () => {
-    // Eine feste Stelle in Kalk: Der Shop-Platzhalter (46e) schickt denselben Befehl.
-    const result = await page.evaluate(() => {
-      window.koeln.session.state.wallet.dirty += 3000;
-      return window.koeln.runtime.api.dispatch({
-        type: 'spots.found',
-        payload: { lng: 7.0035, lat: 50.9385, kind: 'park' },
-      });
-    });
-    assert.equal(result.ok, true, result.reason);
-    const custom = await game(page, (s) => s.modules.spots.custom.map((x) => [x.kind, x.veedelId]));
-    assert.deepEqual(custom, [['park', 'kalk']]);
-    assert.equal(
-      await page
-        .locator('.phone')
-        .getByRole('button', { name: /Eigenen Spot gründen/ })
-        .count(),
-      0,
-    );
+  await check('Spot gründen: der Shop-Platzhalter (Auftrag 46e), kein Kauf', async () => {
+    await page.evaluate(() => window.koeln.runtime.api.selectTab('territory'));
+    await page
+      .locator('.phone')
+      .getByRole('button', { name: /^Spot gründen/ })
+      .click();
+    const phone = page.locator('.phone');
+    await phone.getByText('0,99 € pro Spot').first().waitFor();
+    const soon = phone.getByRole('button', { name: 'Bald verfügbar', exact: true });
+    await soon.waitFor();
+    assert.equal(await soon.isDisabled(), true, 'noch kein Kauf');
+    assert.equal(await phone.getByText(/^Spot [123]$/).count(), 3, 'drei Plätze');
+    assert.deepEqual(await game(page, (s) => s.modules.spots.custom), [], 'nichts gegründet');
+    await shot(page, 'spot-shop');
+    await page.evaluate(() => window.koeln.runtime.api.closePhone());
   });
 
   await check('Stadt wechseln: Hamburg frei, Stadt-Chip, Hamburg aktiv, zurück nach Köln', async () => {
@@ -530,6 +587,8 @@ try {
   }
 } catch (error) {
   console.error(`\nFehlgeschlagen: ${error.message}`);
+  // Was war gerade zu sehen? (hilft beim Nachstellen)
+  if (currentPage) await currentPage.screenshot({ path: `${outDir}/e2e-fehler-${size}.png` }).catch(() => {});
   process.exitCode = 1;
 } finally {
   await Promise.all(pendingChecks);

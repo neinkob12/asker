@@ -42,7 +42,7 @@ import {
 import { activeCity, citiesUnlocked, cityName, cityOfSpot, isBusinessSold } from '../../city';
 import { getLieutenantIds, lieutenantOfSpot } from '../../hierarchy';
 import { atSpot, getSpot } from '../../spots';
-import { getStaffMember } from '../../staff';
+import { getStaffMember, isGoodSpecialist, specialistEffect, specialistProvider } from '../../staff';
 import { tutorialAllows } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
@@ -433,6 +433,52 @@ function PerLieutenant(props: { period: Period; filter: FinanceFilter; onPick: (
   );
 }
 
+/**
+ * Zeile „Buchhalter“ (Auftrag 46e): Was er im Zeitraum pro Tag mehr an Erlös gebracht und an Löhnen gespart hat, aus
+ * der Bilanz zurückgerechnet (Erlös × Anteil / (1 + Anteil), Löhne × Anteil / (1 − Anteil)). Ohne Buchhalter nichts.
+ */
+function Accountant(props: { report: Report; period: Period }) {
+  const { state } = useGame();
+  const ui = useUi();
+  const city = activeCity(state);
+  const accountant = specialistProvider(state, 'revenue', city);
+  if (!accountant) return null;
+  const revenueShare = specialistEffect(state, 'revenue', city);
+  const wageShare = specialistEffect(state, 'wages', city);
+  const { days } = periodSpan(props.period);
+  const sales = props.report.rows.filter((r) => r.category.startsWith('sales.')).reduce((sum, r) => sum + r.amount, 0);
+  const extra = Math.round((sales * revenueShare) / (1 + revenueShare) / days);
+  const saved = Math.round((props.report.wages * wageShare) / (1 - wageShare) / days);
+  return (
+    <Group
+      title="Buchhalter"
+      icon="scale"
+      color="law"
+      value={formatEuro(extra + saved)}
+      note={`${accountant.name}${isGoodSpecialist(accountant) ? ' (gut)' : ''}: pro Tag im Zeitraum.`}
+    >
+      <List>
+        <ListItem onClick={() => ui.openPanel('staff.profile', { staffId: accountant.id })} value={formatEuro(extra)}>
+          <ItemContent
+            icon="cash"
+            color="money"
+            title="Mehrerlös"
+            meta={`+${Math.round(revenueShare * 100)} % auf jeden Verkauf`}
+          />
+        </ListItem>
+        <ListItem onClick={() => ui.openPanel('staff.profile', { staffId: accountant.id })} value={formatEuro(saved)}>
+          <ItemContent
+            icon="users"
+            color="people"
+            title="Gesparte Löhne"
+            meta={`−${Math.round(wageShare * 100)} % auf alle Löhne`}
+          />
+        </ListItem>
+      </List>
+    </Group>
+  );
+}
+
 /** Reichweite: Was heute Nacht an Löhnen fällig wird und wie lange die Kasse reicht. */
 function Runway() {
   const { state } = useGame();
@@ -506,6 +552,7 @@ function FinanceApp() {
         </Disclosure>
       )}
       <ProfitAndLoss report={report} period={period} filter={current} />
+      {!sold && <Accountant report={report} period={period} />}
       <History period={period} filter={current} />
       {/* Nach dem Verkauf (Auftrag 43, H8) gehören Spots, Leutnants und Löhne den Statthaltern. */}
       {!sold && (

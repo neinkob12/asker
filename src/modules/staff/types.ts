@@ -148,14 +148,13 @@ export interface StaffHiding {
   returns: { staffId: string; assignment: StaffAssignment }[];
 }
 
-/** Boni von Spezialisten, die andere Module abfragen. Alle Werte sind Anteile von 0 bis 1. */
+/**
+ * Boni von Spezialisten, die andere Module abfragen. Alle Werte sind Anteile von 0 bis 1. Haftdauer, Zoll, Heat,
+ * Kontrollen, Verhaftungen, Erlös und Löhne laufen seit Auftrag 46e über SPECIALIST_EFFECTS (specialistFactor).
+ */
 export type StaffBonus =
   /** Anwalt: Kaution wird um diesen Anteil billiger. */
   | 'bailDiscount'
-  /** Anwalt: Haft wird um diesen Anteil kürzer. */
-  | 'jailReduction'
-  /** Buchhalter: Geldwäsche-Gebühr sinkt um diesen Anteil (0,25 = ein Viertel weniger Gebühr). */
-  | 'launderingFeeDiscount'
   /** Polizei-Kontakt: Wahrscheinlichkeit, vor einer Razzia gewarnt zu werden. */
   | 'raidWarning';
 
