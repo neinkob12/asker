@@ -1,0 +1,588 @@
+/* Verkehrskontrolle (Auftrag 44, Teil 4). Szene als zwei Canvas mit dem Beamten (DOM) dazwischen, Gespräch und Puls
+   im Look Glas. Am Desktop: Gespräch links unten (unter dem Beamten), Puls und Auswege rechts unten. Am Handy: Szene
+   oben, Gespräch darunter, Puls und Auswege am unteren Rand. */
+
+.traffic {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.traffic__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+.traffic__front {
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- Der Beamte im Seitenfenster */
+.traffic__window {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.traffic__officer {
+  position: absolute;
+  transform-origin: 50% 100%;
+  transition:
+    transform 0.6s var(--ease-out),
+    opacity 0.6s var(--ease-out),
+    filter 0.4s var(--ease-out);
+}
+.traffic.is-night .traffic__officer,
+.traffic.is-dusk .traffic__officer {
+  filter: brightness(0.78) saturate(0.85);
+}
+.traffic__officer.is-away {
+  transform: translateX(-70%) scale(0.72);
+  opacity: 0.35;
+}
+.traffic__officer.is-radio {
+  transform: translateX(-4%) rotate(-5deg);
+}
+.traffic__officer.is-papers {
+  transform: translateY(6%) rotate(3deg);
+}
+.traffic__officer.is-staring {
+  transform: scale(1.05);
+}
+.traffic__officer.is-leaving {
+  transform: translateX(-30%) scale(0.86);
+  opacity: 0.7;
+}
+.traffic__officer.is-angry {
+  transform: scale(1.12) translateY(-3%);
+}
+.traffic__officer.is-jump {
+  transform: translateX(-90%) rotate(-12deg) scale(0.8);
+  opacity: 0;
+  transition-duration: 0.35s;
+}
+.traffic-officer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.traffic-officer .ui-face,
+.traffic-officer__cap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+/* Blaulicht von hinten auf dem Beamten (Deckkraft setzt die Bildschleife). */
+.traffic__tint {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(closest-side at 62% 40%, var(--color-police-blue), transparent);
+  mix-blend-mode: screen;
+}
+
+/* ---------------------------------------------------------------- HUD oben */
+.traffic__hud {
+  gap: var(--space-4);
+}
+.traffic__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-hud-display);
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.traffic__count svg {
+  width: 18px;
+  height: 18px;
+  color: var(--hud-ink-2);
+}
+.traffic-sus {
+  display: grid;
+  gap: 4px;
+  width: 220px;
+}
+.traffic-sus__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+}
+.traffic-sus__value {
+  font-family: var(--font-hud-display);
+  font-size: 18px;
+  color: var(--hud-ink);
+  font-variant-numeric: tabular-nums;
+}
+.traffic-sus__bar {
+  position: relative;
+  height: 8px;
+  border-radius: var(--radius-round);
+  background: var(--hud-empty);
+  overflow: visible;
+}
+.traffic-sus__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--cat-warn);
+  transform-origin: 0 50%;
+  transition: transform 0.25s var(--ease-out);
+}
+.traffic-sus__fill.is-over {
+  background: var(--cat-danger);
+}
+/* Grenze: darunter „Gute Fahrt“. */
+.traffic-sus__limit {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: var(--limit);
+  width: 2px;
+  border-radius: 1px;
+  background: var(--hud-ink);
+}
+.traffic__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-round);
+  background: var(--cat-law-soft);
+  color: var(--cat-law);
+  font-size: 13px;
+  font-weight: 700;
+}
+.traffic__chip svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------------------------------------------------------------- Gespräch */
+.traffic__talk {
+  position: absolute;
+  z-index: 3;
+  left: var(--space-5);
+  bottom: var(--space-5);
+  width: min(560px, 54%);
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+}
+.traffic__bubble {
+  position: relative;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-ink);
+  color: var(--color-ink, #121316);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: normal;
+  hyphens: manual;
+  animation: traffic-pop 0.22s var(--ease-out);
+}
+/* Spitze der Sprechblase zeigt nach oben zum Beamten. */
+.traffic__bubble::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: 34px;
+  border: 8px solid transparent;
+  border-top: 0;
+  border-bottom-color: var(--hud-ink);
+}
+.traffic__bubble.is-bad {
+  background: var(--cat-danger);
+  color: var(--hud-ink);
+  font-size: 22px;
+}
+.traffic__bubble.is-bad::before {
+  border-bottom-color: var(--cat-danger);
+}
+.traffic__bubble.is-good {
+  background: var(--cat-money);
+  color: var(--hud-glass-solid);
+  font-size: 22px;
+}
+.traffic__bubble.is-good::before {
+  border-bottom-color: var(--cat-money);
+}
+.traffic__bubble.is-action {
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink-2);
+  font-style: italic;
+  font-weight: 500;
+}
+.traffic__bubble.is-action::before {
+  border-bottom-color: var(--hud-glass-fill);
+}
+@keyframes traffic-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+.traffic__note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--hud-ink-2);
+}
+.traffic__note svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+/* Frist der Antwort (Breite setzt die Bildschleife). */
+.traffic__timer {
+  display: block;
+  height: 4px;
+  border-radius: var(--radius-round);
+  background: var(--hud-empty);
+  overflow: hidden;
+}
+.traffic__timer > span {
+  display: block;
+  height: 100%;
+  background: var(--hud-gold);
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+}
+.traffic__timer.is-urgent > span {
+  background: var(--cat-danger);
+}
+.traffic__answers {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.traffic__answer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--hud-radius-button);
+  border: 1px solid var(--hud-glass-edge);
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink);
+  font: 600 16px / 1.25 var(--font-hud);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--duration) var(--ease-out),
+    transform var(--duration-fast, 0.1s) var(--ease-out);
+}
+.traffic__answer:hover:not(:disabled),
+.traffic__answer:focus-visible {
+  background: var(--hud-glass-fill-active);
+}
+.traffic__answer:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.traffic__answer:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 2px;
+}
+.traffic__answer.is-shaky span {
+  animation: traffic-shake 0.18s linear infinite;
+}
+.traffic__key {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 7px;
+  background: var(--hud-glass-fill-active);
+  color: var(--hud-gold);
+  font: 700 14px var(--font-hud-display);
+}
+.traffic__said {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-height: 48px;
+  margin: 0;
+  font-size: 16px;
+  font-style: italic;
+  line-height: 1.35;
+  color: var(--hud-ink-2);
+}
+.traffic__said.is-shaky {
+  animation: traffic-shake 0.18s linear 4;
+}
+.traffic__you {
+  flex: none;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-gold);
+}
+@keyframes traffic-shake {
+  25% {
+    transform: translate(-1px, 1px);
+  }
+  50% {
+    transform: translate(1px, -1px);
+  }
+  75% {
+    transform: translate(-1px, -1px);
+  }
+}
+
+/* ---------------------------------------------------------------- Puls und Auswege */
+.traffic__side {
+  position: absolute;
+  z-index: 3;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  width: 340px;
+  display: grid;
+  gap: var(--space-3);
+}
+.traffic-pulse {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  --pulse-color: var(--cat-money);
+}
+.traffic-pulse.is-yellow {
+  --pulse-color: var(--hud-gold);
+}
+.traffic-pulse.is-red {
+  --pulse-color: var(--cat-danger);
+}
+.traffic-pulse__heart {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px solid var(--pulse-color);
+  background: var(--hud-glass-fill);
+  color: var(--pulse-color);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background var(--duration) var(--ease-out);
+}
+.traffic-pulse__heart svg {
+  width: 34px;
+  height: 34px;
+}
+.traffic-pulse__heart:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 3px;
+}
+.traffic-pulse__heart[data-tap="good"] {
+  background: var(--cat-money);
+  color: var(--hud-glass-solid);
+}
+.traffic-pulse__heart[data-tap="ok"] {
+  background: var(--hud-glass-fill-active);
+}
+.traffic-pulse__heart[data-tap="off"] {
+  animation: traffic-shake 0.18s linear 1;
+}
+/* Leitring: zieht sich bis zum ruhigen Schlag aufs Herz zusammen (Größe setzt die Bildschleife). */
+.traffic-pulse__ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid var(--hud-ink);
+  pointer-events: none;
+}
+.traffic-pulse__read {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  column-gap: var(--space-3);
+  min-width: 0;
+  flex: 1;
+}
+.traffic-pulse__bpm {
+  font-family: var(--font-hud-display);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--pulse-color);
+}
+.traffic-pulse__bpm small {
+  margin-left: 4px;
+  font-family: var(--font-hud);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hud-ink-2);
+}
+.traffic-pulse__zone {
+  justify-self: end;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pulse-color);
+}
+.traffic-pulse__ecg {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 34px;
+}
+.traffic__ways {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+.traffic__way {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 52px;
+  padding: 0 var(--space-3);
+  border-radius: var(--hud-radius-button);
+  border: 1px solid var(--hud-glass-edge);
+  background: var(--hud-glass-strong);
+  color: var(--hud-ink);
+  font: 700 15px var(--font-hud);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.traffic__way svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.traffic__way.is-danger svg {
+  color: var(--cat-danger);
+}
+.traffic__way.is-money svg {
+  color: var(--cat-money);
+}
+/* Mittleres Misstrauen: Jetzt würde er den Schein nehmen. */
+.traffic__way.is-money.is-open {
+  border-color: var(--cat-money);
+}
+.traffic__way:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.traffic__way:focus-visible {
+  outline: 2px solid var(--hud-gold);
+  outline-offset: 2px;
+}
+.traffic__way .traffic__key {
+  margin-left: auto;
+}
+
+/* ---------------------------------------------------------------- Handy */
+.traffic.is-narrow .traffic__hud {
+  top: var(--space-2);
+  gap: var(--space-3);
+  padding: 6px var(--space-3);
+}
+.traffic.is-narrow .traffic-sus {
+  width: 150px;
+}
+.traffic.is-narrow .traffic__count {
+  font-size: 20px;
+}
+.traffic.is-narrow .traffic__talk {
+  left: var(--space-3);
+  right: var(--space-3);
+  top: calc(var(--belt, 360px) - 14px);
+  bottom: auto;
+  max-height: calc(100% - var(--belt, 360px) - 118px - env(safe-area-inset-bottom, 0px));
+  width: auto;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  overflow-y: auto;
+}
+.traffic.is-narrow .traffic__bubble {
+  font-size: 16px;
+  padding: var(--space-2) var(--space-3);
+}
+.traffic.is-narrow .traffic__answer {
+  min-height: 46px;
+  font-size: 15px;
+}
+.traffic.is-narrow .traffic__key {
+  display: none;
+}
+.traffic.is-narrow .traffic__side {
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  width: auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+}
+.traffic.is-narrow .traffic-pulse {
+  padding: var(--space-2) var(--space-3);
+  gap: var(--space-3);
+}
+.traffic.is-narrow .traffic-pulse__heart {
+  width: 60px;
+  height: 60px;
+}
+.traffic.is-narrow .traffic-pulse__bpm {
+  font-size: 26px;
+}
+.traffic.is-narrow .traffic-pulse__ecg {
+  height: 24px;
+}
+.traffic.is-narrow .traffic__ways {
+  grid-template-columns: 1fr;
+  align-content: stretch;
+}
+.traffic.is-narrow .traffic__way {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  font-size: 14px;
+  justify-content: flex-start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .traffic__answer.is-shaky span,
+  .traffic__said.is-shaky,
+  .traffic-pulse__heart[data-tap="off"] {
+    animation: none;
+  }
+  .traffic__officer {
+    transition-duration: 0.01s;
+  }
+}

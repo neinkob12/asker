@@ -250,6 +250,8 @@ describe('encounters', () => {
     // Ruhig bleiben: Eine Kontrolle ist keine Gewalt im Veedel (die Polizei bekam sonst +15 Heat gemeldet).
     const calm = createTestGame();
     const quiet = startEncounter(calm.ctx('logistics'), request).encounterId;
+    // Die Verkehrskontrolle (Minispiel, Auftrag 44) verfällt wie ohne Oberfläche, dann die Runden wie bisher.
+    skipMinigame(calm, quiet);
     playOut(calm, quiet, 'negotiate');
     calm.advance(1);
     expect(encounter(calm, quiet).phase).toBe('done');
@@ -257,6 +259,7 @@ describe('encounters', () => {
     // Mit der Faust auf die Streife: Der angekündigte Heat der Handlung gilt, auch wenn der Auslöser die Folgen regelt.
     const fight = createTestGame();
     const brawl = startEncounter(fight.ctx('logistics'), request).encounterId;
+    skipMinigame(fight, brawl);
     playOut(fight, brawl, 'fight');
     fight.advance(1);
     const e = encounter(fight, brawl);
