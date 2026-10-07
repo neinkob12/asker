@@ -76,7 +76,18 @@ const hourly = defineModule({
   },
 });
 
-const modules = [hourly, counter] as ModuleDefinition[];
+const offset = defineModule({
+  id: 'testOffset',
+  version: 1,
+  dependsOn: ['testCounter'],
+  tickEvery: 60,
+  tickOffset: 7,
+  tick: (ctx) => {
+    ctx.state.modules.testCounter.seen.push(`offset:${clock.formatTime(ctx.now)}`);
+  },
+});
+
+const modules = [hourly, counter, offset] as ModuleDefinition[];
 const create = (seed = 1) => Simulation.create(modules, { seed });
 
 describe('Simulation: feste Zeitschritte', () => {
@@ -101,6 +112,13 @@ describe('Simulation: feste Zeitschritte', () => {
     expect(sim.state.modules.testCounter.hourly).toBe(6);
   });
 
+  it('tickOffset verschiebt den Tick um Minuten (Auftrag 47), hier auf x:07', () => {
+    const sim = create();
+    sim.advance(2 * 60);
+    const ticks = sim.state.modules.testCounter.seen.filter((s) => s.startsWith('offset:'));
+    expect(ticks).toEqual(['offset:18:07', 'offset:19:07']);
+  });
+
   it('meldet volle Stunden und neue Tage', () => {
     const sim = create();
     const events = recordEvents(sim);
@@ -113,7 +131,7 @@ describe('Simulation: feste Zeitschritte', () => {
   });
 
   it('läuft in Abhängigkeits-Reihenfolge, bei Gleichstand nach ID', () => {
-    expect(sortModules(modules).map((m) => m.id)).toEqual(['testCounter', 'testHourly']);
+    expect(sortModules(modules).map((m) => m.id)).toEqual(['testCounter', 'testHourly', 'testOffset']);
     const a = defineModule({ id: 'a', version: 1 });
     const b = defineModule({ id: 'b', version: 1, dependsOn: ['c'] });
     const c = defineModule({ id: 'c', version: 1 });

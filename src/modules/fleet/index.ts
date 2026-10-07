@@ -274,6 +274,8 @@ export default defineModule({
   version: 1,
   init: () => ({ vehicles: [] }),
   tickEvery: 60,
+  // Versatz (Auftrag 47): nicht mit allen anderen in derselben Minute ticken.
+  tickOffset: 29,
   tick: (ctx) => {
     // Beschlagnahmte Fahrzeuge verschwinden nach ein paar Tagen aus der Liste.
     const s = ctx.state.modules.fleet;

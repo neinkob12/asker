@@ -1304,6 +1304,8 @@ export default defineModule({
     }),
   },
   tickEvery: 60,
+  // Versatz (Auftrag 47): nicht mit allen anderen in derselben Minute ticken.
+  tickOffset: 41,
   tick,
   commands: {
     'grow.openRegion': (ctx, { regionId }) => openRegion(ctx, regionId),

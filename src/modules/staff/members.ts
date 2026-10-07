@@ -4,8 +4,8 @@ import { type Contact, type Ctx, type GameState, journal, type MoneyCategory, pe
 import { activeCity, bribeFactor, cityName, getCity, isCityLive } from '../city';
 import { getWarehouse } from '../goods';
 import { lieutenantOfSpot } from '../hierarchy';
-import { getSpot, isSpotActive } from '../spots';
-import { veedelAt, veedelName } from '../veedel';
+import { getSpot, isSpotActive, spotCity } from '../spots';
+import { veedelAt, veedelCity, veedelName } from '../veedel';
 import {
   BAIL_BASE,
   BAIL_PER_LEVEL,
@@ -46,31 +46,98 @@ import type {
   StatKey,
 } from './types';
 
+// --- Index (Auftrag 47) ---
+
+/**
+ * Nachschlagetabellen über die aktuellen Leute (nach ID und nach Stadt), gültig, bis die Liste wächst, neu gebaut
+ * wird oder jemand die Stadt wechselt. Leute kommen nur über push dazu (Länge ändert sich) und gehen nur über eine neue
+ * Liste (removeMember), die Stadt ändert sich nur über invalidateStaffIndex. Alles andere (Einsatz, Status) steht nicht
+ * im Index und wird bei jeder Abfrage frisch gelesen, deshalb dürfen Tests das direkt setzen.
+ */
+interface StaffIndex {
+  list: readonly StaffMember[];
+  length: number;
+  version: number;
+  byId: Map<string, StaffMember>;
+  byCity: Map<string, StaffMember[]>;
+}
+
+const indexes = new WeakMap<object, StaffIndex>();
+let indexVersion = 0;
+const NO_MEMBERS: readonly StaffMember[] = [];
+
+/** Jemand hat die Stadt gewechselt: Der Index nach Stadt gilt nicht mehr. */
+export function invalidateStaffIndex(): void {
+  indexVersion++;
+}
+
+function indexOf(state: GameState): StaffIndex {
+  const s = state.modules.staff;
+  const known = indexes.get(s);
+  if (known && known.list === s.members && known.length === s.members.length && known.version === indexVersion) {
+    return known;
+  }
+  const byId = new Map<string, StaffMember>();
+  const byCity = new Map<string, StaffMember[]>();
+  for (const m of s.members) {
+    byId.set(m.id, m);
+    const cityId = m.cityId ?? 'koeln';
+    let list = byCity.get(cityId);
+    if (!list) {
+      list = [];
+      byCity.set(cityId, list);
+    }
+    list.push(m);
+  }
+  const index: StaffIndex = { list: s.members, length: s.members.length, version: indexVersion, byId, byCity };
+  indexes.set(s, index);
+  return index;
+}
+
+/** Aktuelle Leute einer Stadt in der Reihenfolge der Liste. Nur lesen, die Liste gehört dem Index. */
+export function membersOfCity(state: GameState, cityId: string): readonly StaffMember[] {
+  return indexOf(state).byCity.get(cityId) ?? NO_MEMBERS;
+}
+
+/** Aktuelle Leute der Stadt, die live ist (Ticks arbeiten nur über die). Nur lesen. */
+export function liveMembers(state: GameState): readonly StaffMember[] {
+  return membersOfCity(state, activeCity(state));
+}
+
 // --- Lesen ---
+
+function matchesFilter(state: GameState, m: StaffMember, filter: StaffFilter): boolean {
+  if (filter.role && m.role !== filter.role) return false;
+  if (filter.status && m.status !== filter.status) return false;
+  if (filter.spotId && !(m.assignment?.kind === 'spot' && m.assignment.targetId === filter.spotId)) return false;
+  if (filter.veedelId && staffVeedel(state, m) !== filter.veedelId) return false;
+  if (filter.cityId && (m.cityId ?? 'koeln') !== filter.cityId) return false;
+  return true;
+}
 
 /** Aktuelle Mitarbeiter, gefiltert. Mit status 'quit' oder 'dead' die Ehemaligen. */
 export function getStaff(state: GameState, filter: StaffFilter = {}): StaffMember[] {
   const s = state.modules.staff;
-  const source = filter.status === 'quit' || filter.status === 'dead' ? s.former : s.members;
-  return source.filter((m) => {
-    if (filter.role && m.role !== filter.role) return false;
-    if (filter.status && m.status !== filter.status) return false;
-    if (filter.spotId && !(m.assignment?.kind === 'spot' && m.assignment.targetId === filter.spotId)) return false;
-    if (filter.veedelId && staffVeedel(state, m) !== filter.veedelId) return false;
-    if (filter.cityId && (m.cityId ?? 'koeln') !== filter.cityId) return false;
-    return true;
-  });
+  if (filter.status === 'quit' || filter.status === 'dead')
+    return s.former.filter((m) => matchesFilter(state, m, filter));
+  // Mit Stadt, Spot oder Veedel reicht die Liste dieser Stadt (Leute bleiben in ihrer Stadt, Auftrag 43).
+  let base: readonly StaffMember[] = s.members;
+  if (filter.cityId) base = membersOfCity(state, filter.cityId);
+  else if (filter.spotId) {
+    const spot = getSpot(state, filter.spotId);
+    if (spot) base = membersOfCity(state, spotCity(spot));
+  } else if (filter.veedelId) base = membersOfCity(state, veedelCity(filter.veedelId));
+  return base.filter((m) => matchesFilter(state, m, filter));
 }
 
 /** Mitarbeiter nach ID, auch Ehemalige. */
 export function getStaffMember(state: GameState, id: string): StaffMember | undefined {
-  const s = state.modules.staff;
-  return s.members.find((m) => m.id === id) ?? s.former.find((m) => m.id === id);
+  return indexOf(state).byId.get(id) ?? state.modules.staff.former.find((m) => m.id === id);
 }
 
 /** Arbeitet die Person gerade für dich (aktiv, verletzt oder in Haft)? */
 export function isEmployed(state: GameState, id: string): boolean {
-  return state.modules.staff.members.some((m) => m.id === id);
+  return indexOf(state).byId.has(id);
 }
 
 /** Werte eines Mitarbeiters, z.B. für Konfrontationen. */
@@ -228,7 +295,7 @@ export function effectiveWage(member: StaffMember): number {
 
 /** Was um Mitternacht an Löhnen fällig wird (Summe über alle aktuellen Mitarbeiter, Haft und Verletzung anteilig). */
 export function payrollDue(state: GameState): number {
-  return state.modules.staff.members.reduce((sum, m) => sum + (isMemberLive(state, m) ? effectiveWage(m) : 0), 0);
+  return liveMembers(state).reduce((sum, m) => sum + effectiveWage(m), 0);
 }
 
 /**
