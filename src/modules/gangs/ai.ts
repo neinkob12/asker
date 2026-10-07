@@ -20,7 +20,7 @@ import {
   influenceIn,
   PLAYER_FACTION,
 } from '../territory';
-import { tutorialAllows } from '../tutorial';
+import { scriptedDone, tutorialActive, tutorialAllows } from '../tutorial';
 import { allVeedel, getVeedel, neighborsOf, veedelAt, veedelCity, veedelName } from '../veedel';
 import { addHostility, commandOption, crewFor, demandOptions, focusVeedel, say, statusOf } from './common';
 import {
@@ -445,6 +445,8 @@ function reactToPlayer(ctx: Ctx, gang: Gang, s: GangStatus): void {
   }
   if (s.stage < 3 || isAtPeace(ctx.state, gang.id) || s.people < 2) return;
   if (!tutorialAllows(ctx.state, 'gangs.attacks')) return;
+  // Auftrag 46c: Der erste Angriff im Tutorial ist geskriptet (tutorial, bei 6.000 €); bis dahin kein zufälliger.
+  if (tutorialActive(ctx.state) && !scriptedDone(ctx.state, 'firstAttack')) return;
   if (activeEncounters(ctx.state).length > 0) return;
   if (s.lastAttackAt !== null && ctx.now - s.lastAttackAt < ATTACK_COOLDOWN) return;
   // Stadt-Events (Auftrag 30, Etappe 7): Beim FC-Heimspiel sind die Gangs öfter unterwegs.

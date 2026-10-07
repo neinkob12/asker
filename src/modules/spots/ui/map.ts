@@ -258,6 +258,9 @@ export const spotsLayer: MapLayer = {
         },
       });
       element.setAttribute('aria-label', `Spot ${spot.name} im Handy öffnen`);
+      // Auftrag 46c: Anker der Tour am Marker selbst (Stufe 2 zeigt die Spots zum Kauf), Schlüssel ist die Spot-ID.
+      element.dataset.tour = 'spot.marker';
+      element.dataset.tourKey = spot.id;
       if (canHover()) {
         // Statt des Browser-Tooltips zeigt die Hover-Karte den Namen.
         element.removeAttribute('title');

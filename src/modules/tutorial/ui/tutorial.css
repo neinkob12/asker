@@ -274,3 +274,14 @@ div.tutorial-hud__main {
     min-height: var(--touch-target-phone);
   }
 }
+
+/* Auftrag 46c: Pop-up „Lager fast leer“ mit Peter */
+.tutorial-popup__body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.tutorial-popup__text {
+  margin: 0;
+  line-height: 1.5;
+}

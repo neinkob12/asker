@@ -164,6 +164,7 @@ export function StaffTree() {
       ))}
       {(unled.length > 0 || anyone) && (
         <Group
+          data-tour="staff.lieutenants"
           title="Ohne Leutnant"
           icon="pin"
           color="place"

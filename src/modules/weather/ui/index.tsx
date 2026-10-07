@@ -3,7 +3,7 @@
 
 import { clock, formatPercent } from '../../../core';
 import { type MapMood, mapEffects, registerMapLayer, setMapMood, setPrecipitation } from '../../../map';
-import { audio, Icon, KeyValue, registerSlot, useGame } from '../../../ui';
+import { audio, Icon, KeyValue, registerHudItem, registerSlot, useGame, useGameSelector } from '../../../ui';
 import {
   getForecast,
   getWeather,
@@ -68,6 +68,29 @@ function WeatherWidget() {
 
 const pct = (f: number) =>
   Math.abs(f - 1) < 0.005 ? 'unverändert' : `${f >= 1 ? '+' : '−'}${formatPercent(Math.abs(f - 1))}`;
+
+/**
+ * Auftrag 46c: kleine Wetter-Anzeige neben der Uhr (Symbol und Grad, Look Glas), Anker der Tour hud.weather. Mehr
+ * (Vorhersage, Wirkung) steht in den Einstellungen.
+ */
+function WeatherHud() {
+  const view = useGameSelector((state) => {
+    const w = getWeather(state);
+    return `${iconFor(w.kind, state.time)}|${Math.round(w.temperature)}|${WEATHER_NAMES[w.kind]}`;
+  });
+  const [icon, degrees, name] = view.split('|');
+  return (
+    <div class="hud-weather" data-tour="hud.weather" title={`${name}, ${degrees}°`}>
+      <Icon name={icon} size={20} />
+      <span class="hud-weather__temp">
+        <span class="visually-hidden">Wetter: {name}, </span>
+        {degrees}°
+      </span>
+    </div>
+  );
+}
+
+registerHudItem({ id: 'weather.hud', order: 10, placement: 'time', icon: 'sun', component: WeatherHud });
 
 /** Abschnitt "Wetter" in den Einstellungen: jetzt und Vorhersage, Auswirkung aufs Geschäft. */
 function WeatherSettings() {

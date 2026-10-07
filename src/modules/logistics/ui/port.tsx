@@ -40,6 +40,7 @@ export function BerthGroup() {
   const next = BERTH_LEVELS[level + 1];
   return (
     <Group
+      data-tour="port.berth"
       title="Liegeplatz"
       icon="anchor"
       color="money"

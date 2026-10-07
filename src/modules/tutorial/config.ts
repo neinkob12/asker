@@ -176,3 +176,30 @@ export const REWARD = {
   /** Ware in Gramm ebenso. */
   goods: { smallBelow: 100, smallStep: 5, bigStep: 10, min: 10 },
 } as const;
+
+// ---------------------------------------------------------------------------------------------
+// Geskriptete Momente (Auftrag 46c): hängen an Bedingungen im Zustand, nie an der Uhr, jeder genau einmal.
+
+/** Handy-Bestellung: sobald zum ersten Mal so viel Schwarzgeld da ist (ab dieser Stufe). */
+export const SCRIPTED_PHONE_ORDER = { stage: 6, money: 3000 } as const;
+
+/** Erster Gang-Angriff auf den Neumarkt: fest 30 % der Ware in allen Kölner Lagern und 40 % des Schwarzgelds weg. */
+export const SCRIPTED_FIRST_ATTACK = {
+  stage: 7,
+  money: 6000,
+  spotId: TUTORIAL_START_SPOT,
+  goodsShare: 0.3,
+  cashShare: 0.4,
+} as const;
+
+/**
+ * Pop-up „Lager fast leer“: Bestand in Köln unter dem Verbrauch eines Tages, an den ersten Spieltagen bis zu dreimal,
+ * höchstens eins pro Spieltag, erst wenn es die Lieferanten-App gibt.
+ */
+export const LOW_STOCK_POPUP = { stage: 5, days: 5, max: 3 } as const;
+
+/**
+ * Beschlagnahme: die zweite Lieferung von Jansen (Rotterdam) nach dem Liegeplatz wird am Kai komplett beschlagnahmt,
+ * ab dieser Stufe, ohne Wahl „Papiere fälschen“ (suppliers fragt hier nach).
+ */
+export const SCRIPTED_SEIZURE = { stage: 9, supplierId: 'rotterdam', ordinal: 2 } as const;

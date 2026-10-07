@@ -77,7 +77,7 @@ export type {
   UiApi,
   UiState,
 } from './runtime';
-export { useIsMobile } from './shell/layout';
+export { isMobileLayout, useIsMobile } from './shell/layout';
 export { Slot } from './shell/Slot';
 export { type SoundOnEventOptions, soundOnEvent } from './sound';
 export { memoState, memoStateKeyed } from './stateMemo';

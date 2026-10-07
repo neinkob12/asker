@@ -587,14 +587,17 @@ function RoutesPanel() {
         </Hint>
       )}
       {drivers === 0 && <Hint icon="truck">Ohne Fahrer fährt keine Route. Fahrer heuerst du im Personal an.</Hint>}
-      <Button
-        variant="primary"
-        icon="plus"
-        disabled={!canStart}
-        onClick={() => setSheet({ open: true, routeId: null })}
-      >
-        Neue Route
-      </Button>
+      {/* Auftrag 46c: Anker der Tour (Stufe 8: Route Hafen → Lager anlegen). */}
+      <div class="logi-new-route" data-tour="routes.new">
+        <Button
+          variant="primary"
+          icon="plus"
+          disabled={!canStart}
+          onClick={() => setSheet({ open: true, routeId: null })}
+        >
+          Neue Route
+        </Button>
+      </div>
       <RouteSheet open={sheet.open} routeId={sheet.routeId} onClose={() => setSheet((s) => ({ ...s, open: false }))} />
     </div>
   );

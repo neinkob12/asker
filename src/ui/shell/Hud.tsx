@@ -195,7 +195,8 @@ export function Hud() {
         </div>
         <div class="hud-capsule hud-capsule--clock">
           <ClockHud />
-          {!mobile && time.length > 0 && (
+          {/* Auftrag 46c: auch am Handy-Bildschirm (Wetter neben der Uhr), die Anzeigen bleiben dort klein. */}
+          {time.length > 0 && (
             <div class="hud-capsule__time">
               <HudItems items={time} />
             </div>

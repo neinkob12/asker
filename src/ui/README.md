@@ -363,13 +363,17 @@ ui.tour.skip();                    // beendet die laufende Tour
   der Tour, `is-queued`). Ton: ein kurzer Klick je Schritt; hat der Sprecher eine `voice` und ist die Sprachausgabe an,
   spricht er den Text (`audio.speak`), aber nur mit fertig geladenem Modell oder der Browser-Stimme, nie mit Wartezeit.
 - **Anker** (`tour/anchors.ts`, `TOUR_ANCHORS`, jeweils mit Ort): `hud.money`, `hud.money.dirty`, `hud.money.clean`,
-  `hud.heat`, `hud.clock`, `hud.weather` (noch ohne Element: das Wetter steht seit Auftrag 26 in den Einstellungen),
-  `hud.speed`, `hud.stock`, `hud.reputation`, `hud.rank`, `hud.territory`, `hud.mission` (Quest-Karte, später die
-  Missions-Karte), `phone`, `phone.home`, `phone.app.<appId>` (jedes App-Symbol, `appId` wie bei `registerPhoneApp`
-  bzw. `tab:<id>`, Helfer `phoneAppAnchor`), `phone.screen` (oberste Seite im Stapel), `spot.panel`, `spot.customer`
-  (Blase mit Zähler am Spot-Marker, `data-tour-key` = Spot-ID), `spot.sell`, `spot.price`, `spot.runner`, `map`.
+  `hud.heat`, `hud.clock`, `hud.weather` (seit Auftrag 46c die Wetter-Anzeige neben der Uhr, `weather/ui`),
+  `hud.speed`, `hud.stock`, `hud.reputation`, `hud.rank`, `hud.territory`, `hud.mission` (Missions-Karte des
+  Tutorials bzw. Quest-Karte), `phone`, `phone.home`, `phone.app.<appId>` (jedes App-Symbol, `appId` wie bei
+  `registerPhoneApp` bzw. `tab:<id>`, Helfer `phoneAppAnchor`), `phone.screen` (oberste Seite im Stapel), `spot.panel`,
+  `spot.customer` (Blase mit Zähler am Spot-Marker, `data-tour-key` = Spot-ID), `spot.sell`, `spot.price`,
+  `spot.runner`, `map`; seit Auftrag 46c dazu `spot.marker` (der Marker selbst, `data-tour-key` = Spot-ID),
+  `chat.reply` (Antwortknöpfe im Chat), `staff.lieutenants`, `staff.hire`, `suppliers.shipments`, `suppliers.offer`,
+  `suppliers.orderMode`, `laundering.kiosk`, `port.berth`, `routes.new`.
   Elemente tragen `data-tour="<id>"`; `Group` und `HudPill` reichen die Prop `data-tour` an ihr äußerstes Element
-  durch. Neue Anker: in `TOUR_ANCHORS` eintragen, im `ui/`-Ordner nur das Attribut setzen.
+  durch. Neue Anker: in `TOUR_ANCHORS` eintragen, im `ui/`-Ordner nur das Attribut setzen. Die Touren des Tutorials
+  (eine pro Stufe, Momente) stehen als Daten in `src/modules/tutorial/ui/tours.ts` (Auftrag 46c).
 - **Ausprobieren:** `?neu=normal&seed=1&tempo=0&tour=demo` startet die Demo-Tour (`tour/demo.ts`: HUD, Handy mit der
   Personal-App, Karte). `npm run screenshot -- --scenes=tour` macht drei Bilder nach `screenshots/tour/` (HUD-Anker,
   Handy-Anker, Blatt am Handy-Bildschirm). Tests: `tour/placement.test.ts` (Lage der Box), `tour/controller.test.ts`
