@@ -327,17 +327,33 @@ async function run() {
     const candidate = await game(
       page,
       (s) =>
-        s.modules.recruiting.candidates.find((c) => c.source === 'pool' && !c.interviewed && c.expiresAt > s.time)
-          ?.name ?? null,
+        s.modules.recruiting.candidates.find(
+          (c) => c.source === 'pool' && c.cityId === s.modules.city.active && !c.interviewed && c.expiresAt > s.time,
+        )?.name ?? null,
     );
     assert.ok(candidate, 'ein Bewerber wartet');
-    await page.evaluate(() => window.koeln.runtime.api.openPhone('tab:staff'));
-    // In die Mitte scrollen: Am Handy-Bildschirm liegen oben das HUD (seit Hamburg frei mit einer Zeile mehr) und
-    // unten die Handy-Leiste über dem Inhalt, Playwright scrollt ein Ziel sonst nur knapp ins Bild.
-    const centered = async (locator) => {
-      await locator.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-      await locator.click();
+    // Offene HUD-Karten (z.B. „Ruf · Reviere“ aus einem früheren Schritt) liegen am Handy-Bildschirm über dem Handy:
+    // erst schließen (Esc), dann das Ziel in die Mitte scrollen (oben HUD, unten Handy-Leiste) und antippen.
+    // Nur ein Esc, dann warten, bis die Karte weg ist: Ein zweites Esc ginge ans Handy und legte es weg.
+    const closeFlyouts = async () => {
+      if ((await page.locator('.hud-flyout').count()) === 0) return;
+      await page.keyboard.press('Escape');
+      await page.locator('.hud-flyout').first().waitFor({ state: 'detached', timeout: 5000 });
     };
+    const centered = async (locator) => {
+      for (let attempt = 1; ; attempt++) {
+        await closeFlyouts();
+        await locator.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        try {
+          await locator.click({ timeout: 5000 });
+          return;
+        } catch (error) {
+          if (attempt >= 3) throw error;
+        }
+      }
+    };
+    await closeFlyouts();
+    await page.evaluate(() => window.koeln.runtime.api.openPhone('tab:staff'));
     await centered(page.locator('.phone').getByText(candidate, { exact: true }).first());
     await centered(page.getByText('Gespräch führen', { exact: true }));
     await page.waitForSelector('.mg-intro');
