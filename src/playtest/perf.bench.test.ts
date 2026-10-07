@@ -1,13 +1,15 @@
 // Messung der Simulation ohne Oberfläche (`npm run perf:sim`): Der Bot spielt mehrere Spieltage, gemessen werden
 // ms pro Spieltag, Zeit pro Modul-Tick, pro Ereignis-Handler und pro Befehl. Läuft nur mit PERF=1, weil Zeitmessung
 // auf CI-Rechnern flattert. Umgebung: PERF_DAYS (Standard 20), PERF_SEED (11), PERF_SAVE=<pfad> schreibt den Endstand
-// als Spielstand-Datei für `npm run perf:browser`. Bericht und Hotspots: docs/perf/2026-10-messung.md.
+// als Spielstand-Datei für `npm run perf:browser`. Dazu (Auftrag 47) ein Spieltag je großem Test-Spielstand.
+// Bericht und Hotspots: docs/perf/2026-10-messung.md.
 // Leitplanke: Mit den Standardwerten schlägt die Messung fehl, wenn ein Spieltag mehr als doppelt so lange dauert wie
 // der Richtwert unten (Auftrag 30, Etappe 0).
 
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { createSaveFile, serializeSave } from '../core/persistence';
+import { discoverModules } from '../core/discover';
+import { createSaveFile, loadSimulation, parseSaveFile, serializeSave } from '../core/persistence';
 import { createTestGame } from '../core/testing';
 import { newBotStats, playFor, snapshot } from './bot';
 
@@ -123,6 +125,56 @@ describe('Performance der Simulation', () => {
         writeFileSync(process.env.PERF_SAVE, serializeSave(createSaveFile(sim.state, 'perf', 0)));
         console.log(`Spielstand geschrieben: ${process.env.PERF_SAVE}`);
       }
+    },
+    600_000,
+  );
+
+  /**
+   * Richtwerte je Test-Spielstand (Auftrag 47): ms pro Spieltag ohne Bot, gemessen nach dem Personal-Index auf der
+   * Entwicklungsmaschine (vorher: Köln komplett 389, Deutschland 1064, Hafen 173). Das Spätspiel wächst mit den
+   * Städten, das sieht die Messung oben (neues Spiel, 20 Tage) nicht.
+   */
+  const SAVE_REFERENCE_MS_PER_DAY: Record<string, number> = {
+    'koeln-komplett': 400,
+    'hamburg-komplett': 380,
+    deutschland: 600,
+    hafen: 70,
+  };
+
+  it.skipIf(!process.env.PERF)(
+    'misst ms pro Spieltag in den großen Test-Spielständen (Spätspiel, alle Städte)',
+    () => {
+      const out: string[] = ['=== ms pro Spieltag je Test-Spielstand (ohne Bot) ==='];
+      for (const [name, reference] of Object.entries(SAVE_REFERENCE_MS_PER_DAY)) {
+        const file = parseSaveFile(readFileSync(`public/spielstaende/${name}.json`, 'utf8'));
+        const sim = loadSimulation(file.state, discoverModules());
+        const ticks = bucket();
+        const internals = sim as unknown as { modules: { id: string; tick?: Timed }[] };
+        for (const m of internals.modules) if (m.tick) m.tick = timed(ticks, m.id, m.tick);
+        // Warmlaufen (Graphen, JIT), dann ein voller Spieltag.
+        sim.advance(2 * 60);
+        for (const key of Object.keys(ticks.ms)) ticks.ms[key] = 0;
+        const t0 = performance.now();
+        let maxStep = 0;
+        for (let i = 0; i < DAY && !sim.isOver; i++) {
+          const s0 = performance.now();
+          sim.step();
+          maxStep = Math.max(maxStep, performance.now() - s0);
+        }
+        const ms = performance.now() - t0;
+        const top = Object.entries(ticks.ms)
+          .sort((a, c) => c[1] - a[1])
+          .slice(0, 5)
+          .map(([k, v]) => `${k}=${v.toFixed(0)}`)
+          .join(' ');
+        out.push(
+          `${name.padEnd(18)} ${ms.toFixed(0).padStart(5)} ms/Tag (Richtwert ${reference}) | längster Schritt ${maxStep.toFixed(1)} ms | json=${(JSON.stringify(sim.state).length / 1024).toFixed(0)} kB | ${top}`,
+        );
+        expect(ms, `${name}: langsamer als ${ALLOWED_FACTOR}× Richtwert (${reference} ms/Tag)`).toBeLessThan(
+          reference * ALLOWED_FACTOR,
+        );
+      }
+      console.log(out.join('\n'));
     },
     600_000,
   );

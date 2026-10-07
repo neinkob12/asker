@@ -201,3 +201,27 @@ Was geändert wurde:
   Kontextmenüs der App-Kacheln rechnen ihre Aktionen erst beim Öffnen.
 - **Leitplanke:** `src/playtest/perf.bench.test.ts` schlägt fehl, wenn ein Spieltag mehr als doppelt so lange dauert wie
   der Richtwert (90 ms).
+
+## Spätspiel (Auftrag 47, Oktober 2026)
+
+Das Kurzfazit oben („die Simulation ist nicht das Problem“) galt für ein neues Spiel über 20 Tage. Mit den
+Test-Spielständen aller Städte sah es anders aus (Node, Entwicklungsmaschine, ein Spieltag ohne Bot):
+
+| Spielstand | vorher ms/Tag | nachher ms/Tag | längster Schritt vorher → nachher | Leute im Zustand |
+| --- | --- | --- | --- | --- |
+| Köln komplett | 389 | 408 | 11 → 14 ms | 60 |
+| Hamburg komplett | 400 | 360 | 12 → 11 ms | 110 |
+| Deutschland | 1064 | 592 | 50 → 40 ms (erste Mitternacht), danach Mitternacht 80 → 10 ms, volle Stunde 23 → 6 ms | 672 |
+| Hafen | 173 | 60 | 4 → 3 ms | 675 |
+
+Ursache: Alle Leute aller Städte lagen in einer Liste, und `getStaff` filterte sie bei jedem Aufruf (119 Stellen); im
+Browser-Profil des Deutschland-Standes war das die teuerste Spielfunktion (etwa 10 % der beschäftigten Zeit). Jetzt gibt
+es einen Index nach ID und Stadt (`staff/members.ts`), die Routinen des Personals laufen über `liveMembers`. Dazu
+`tickOffset` für Stunden-Ticks (police, gangs, recruiting, fleet, grow) und Spielstände in IndexedDB statt localStorage
+(Schreiben im Hintergrund, keine 5-MB-Grenze; `setItem` hatte im Profil 89 ms je 12 s gekostet). Browser-Messung des
+Deutschland-Standes (`perf-browser.mjs --save=public/spielstaende/deutschland.json --seconds=12 --speed=4 --scenes=ui`,
+Headless ohne GPU), Startbildschirm vorher → nachher: Simulation 2,3 → 1,5 ms pro Schritt, Preact 2,2 → 1,2 ms pro
+Neuzeichnen, Long Tasks in 12 s 22 → 8 (Summe 1.526 → 475 ms); `getStaff` ist aus den teuersten Funktionen
+verschwunden. DOM unverändert (5.200 Knoten, Nachrichten-App 9.400): das ist Punkt 4. Die Leitplanke in `perf.bench.test.ts` misst jetzt auch einen Spieltag je
+großem Test-Spielstand. Offen (Punkte 4, 5 und 7 in `docs/auftraege/47-performance.md`): Marker nur für die aktive Stadt,
+Chunks je Stadt, Absturz bei Hamburg aufklären.

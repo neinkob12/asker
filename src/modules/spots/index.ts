@@ -629,9 +629,7 @@ function close(ctx: Ctx, spotId: string): CommandResult {
   if (typeof spot === 'string') return { ok: false, reason: spot };
   // Leute dort werden frei.
   let freed = 0;
-  for (const m of getStaff(ctx.state)) {
-    if (m.assignment?.kind === 'spot' && m.assignment.targetId === spotId && assign(ctx, m.id, null)) freed++;
-  }
+  for (const m of getStaff(ctx.state, { spotId })) if (assign(ctx, m.id, null)) freed++;
   const state = ctx.state.modules.spots;
   state.custom = state.custom.filter((s) => s.id !== spotId);
   delete state.awareness[spotId];

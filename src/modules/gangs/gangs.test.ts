@@ -5,6 +5,7 @@ import { activeEncounters, autoResolveEncounter, getEncounter, startEncounter } 
 import { getStock } from '../goods';
 import { getCompetitionFactor } from '../market';
 import { getSpot } from '../spots';
+import { invalidateStaffIndex } from '../staff';
 import { addInfluence, controllerOf, getInfluence, PLAYER_FACTION } from '../territory';
 import { allVeedel, getVeedel } from '../veedel';
 import { crewFor, demandOptions, say } from './common';
@@ -552,6 +553,7 @@ describe('gangs: Überfall und Angebote (Fehler aus der Handy-Prüfung)', () => 
       find(id).cityId = 'hamburg';
       find(id).assignment = null;
     }
+    invalidateStaffIndex();
     find(awaySecurity).role = 'security';
     expect(raidCrew(sim.state).map((m) => m.id)).toEqual([here]);
     expect(canJoinRaid(find(away), 'koeln')).toBe(false);
