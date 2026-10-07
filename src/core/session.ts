@@ -30,6 +30,8 @@ export class GameSession {
   private readonly changeListeners = new Set<(change: SessionChange) => void>();
   private readonly eventListeners = new Set<(event: GameEvent) => void>();
   private sinceAutosave = 0;
+  /** Hat sich seit dem letzten Autosave etwas geändert (Schritte, Befehle)? Sonst schreibt der Takt nichts. */
+  private dirty = false;
   private readonly now: () => number;
   /** Wurde der Spielstand wegen Hardcore gelöscht? */
   hardcoreDeleted = false;
@@ -47,6 +49,7 @@ export class GameSession {
       step: (n) => {
         const sim = this.current;
         if (!sim) return;
+        if (n > 0) this.dirty = true;
         // Wirft ein Schritt, gehen die übrigen Schritte dieses Bilds nicht verloren (der Fehler wird gemeldet).
         for (let i = 0; i < n && !sim.isOver; i++) {
           try {
@@ -57,9 +60,11 @@ export class GameSession {
         }
       },
       frame: (dt) => {
-        if (this.current && !this.current.isOver && this.loop.speed > 0) {
+        // Auch in der Pause: Wer pausiert, etwas kauft und den Tab schließt, verliert sonst den Kauf. Ohne Änderung
+        // (Pause, nichts getan) wird nichts geschrieben (Auftrag 47).
+        if (this.current && !this.current.isOver) {
           this.sinceAutosave += dt;
-          if (this.sinceAutosave >= AUTOSAVE_INTERVAL_SECONDS) this.autosave();
+          if (this.dirty && this.sinceAutosave >= AUTOSAVE_INTERVAL_SECONDS) this.autosave();
         }
         this.emitChange('frame');
       },
@@ -124,6 +129,7 @@ export class GameSession {
   /** Aktuellen Stand in den Autosave schreiben. Ein beendetes Spiel wird nicht mehr überschrieben. */
   autosave(): void {
     this.sinceAutosave = 0;
+    this.dirty = false;
     const sim = this.current;
     if (!sim || sim.isOver) return;
     try {
@@ -171,6 +177,7 @@ export class GameSession {
   dispatch(command: Command, meta?: Partial<CommandMeta>): CommandResult {
     if (!this.current) return { ok: false, reason: 'Kein Spiel geladen.' };
     const result = this.current.dispatch(command, meta);
+    this.dirty = true;
     this.emitChange('dispatch');
     return result;
   }
@@ -197,6 +204,7 @@ export class GameSession {
     this.current = sim;
     this.hardcoreDeleted = false;
     this.sinceAutosave = 0;
+    this.dirty = true;
     this.detachSim = sim.onEvent((event) => {
       // Zuerst die Hardcore-Regel (Spielstände löschen), damit kein UI-Zuhörer sie verhindern kann.
       if (event.type === 'game.over') {

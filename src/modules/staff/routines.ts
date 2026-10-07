@@ -40,8 +40,9 @@ import {
   effectiveWage,
   expectedWage,
   hidingReturn,
-  isMemberLive,
+  invalidateStaffIndex,
   isSpecialist,
+  liveMembers,
   relationPace,
   removeMember,
   revealStat,
@@ -73,6 +74,7 @@ function arriveFromTravel(ctx: Ctx): void {
     const from = m.cityId;
     const to = m.assignment.targetId;
     m.cityId = to;
+    invalidateStaffIndex();
     assign(ctx, m.id, null);
     addCareer(ctx, m.id, `Nach ${cityName(to)} gegangen.`);
     journal.add(ctx, `${m.name} ist in ${cityName(to)} angekommen.`, 'good', { staffId: m.id });
@@ -81,10 +83,10 @@ function arriveFromTravel(ctx: Ctx): void {
 }
 
 function releaseDue(ctx: Ctx): void {
-  for (const m of [...ctx.state.modules.staff.members]) {
+  // Nur die Stadt, die live ist (schlafende Stadt: keine Haft-Ereignisse, entlassen wird beim Aufwachen). Die Liste
+  // gehört dem Index und bleibt, auch wenn jemand dabei geht.
+  for (const m of liveMembers(ctx.state)) {
     if (m.statusUntil === null || m.statusUntil > ctx.now) continue;
-    // Schlafende Stadt: keine Haft-Ereignisse, entlassen wird beim Aufwachen.
-    if (!isMemberLive(ctx.state, m)) continue;
     if (m.status !== 'jailed' && m.status !== 'injured') continue;
     const wasJailed = m.status === 'jailed';
     // Ohne Stillhaltegeld hat die Person in der Haft eher geredet.
@@ -112,9 +114,8 @@ function serveCustomers(ctx: Ctx): void {
     }
     return amount;
   };
-  for (const member of [...ctx.state.modules.staff.members]) {
+  for (const member of liveMembers(ctx.state)) {
     if (member.role !== 'runner' || member.status !== 'active' || member.assignment?.kind !== 'spot') continue;
-    if (!isMemberLive(ctx.state, member)) continue;
     if (member.busyUntil > ctx.now) continue;
     const customer = waitingAt(ctx.state, member.assignment.targetId).find((c) =>
       canServeCustomer(ctx.state, c, stockOf),
@@ -133,10 +134,9 @@ function serveCustomers(ctx: Ctx): void {
 
 /** Zur vollen Stunde: Sicherheit im Einsatz sammelt Erfahrung, Abgetauchte kehren zurück. */
 export function hourly(ctx: Ctx): void {
-  for (const m of ctx.state.modules.staff.members) {
-    // Nur in der Stadt, die live ist (Auftrag 43): Eine schlafende Stadt steht still, auch für die Erfahrung.
-    const onDuty = m.role === 'security' && m.status === 'active' && m.assignment;
-    if (onDuty && isMemberLive(ctx.state, m)) addXp(ctx, m.id, XP_PER_DUTY_HOUR);
+  // Nur in der Stadt, die live ist (Auftrag 43): Eine schlafende Stadt steht still, auch für die Erfahrung.
+  for (const m of liveMembers(ctx.state)) {
+    if (m.role === 'security' && m.status === 'active' && m.assignment) addXp(ctx, m.id, XP_PER_DUTY_HOUR);
   }
   returnFromHiding(ctx);
 }
@@ -231,14 +231,13 @@ function returnFromHiding(ctx: Ctx): void {
 /** Um Mitternacht: Löhne, Loyalität, neue Erkenntnisse, Erfahrung der Spezialisten, Verrat. */
 export function daily(ctx: Ctx): void {
   payWages(ctx);
-  for (const m of [...ctx.state.modules.staff.members]) {
-    // Schlafende Stadt: keine Loyalitätsverluste, kein Verrat (die Löhne stecken im Tagesergebnis).
-    if (!isMemberLive(ctx.state, m)) continue;
+  // Schlafende Stadt: keine Loyalitätsverluste, kein Verrat (die Löhne stecken im Tagesergebnis).
+  for (const m of liveMembers(ctx.state)) {
     dailyLoyalty(ctx, m);
     if (ctx.chance(REVEAL_CHANCE)) revealStat(ctx, m.id);
     if (isSpecialist(m.role) && m.status === 'active') addXp(ctx, m.id, XP_PER_SPECIALIST_DAY);
   }
-  for (const m of [...ctx.state.modules.staff.members]) if (isMemberLive(ctx.state, m)) maybeBetray(ctx, m);
+  for (const m of liveMembers(ctx.state)) maybeBetray(ctx, m);
 }
 
 /**
@@ -256,9 +255,9 @@ function wageSpot(state: GameState, m: StaffMember): string | null {
  */
 function payWages(ctx: Ctx): void {
   // Nur die Leute in der Stadt, die live ist: In einer schlafenden Stadt stecken die Löhne im Tagesergebnis (city).
-  const members = ctx.state.modules.staff.members
-    .filter((m) => isMemberLive(ctx.state, m))
-    .sort((a, b) => b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id));
+  const members = [...liveMembers(ctx.state)].sort(
+    (a, b) => b.stats.loyalty - a.stats.loyalty || a.id.localeCompare(b.id),
+  );
   if (members.length === 0) return;
   let paid = 0;
   let total = 0;

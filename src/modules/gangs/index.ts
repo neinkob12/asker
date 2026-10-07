@@ -229,6 +229,8 @@ export default defineModule({
   dependsOn: ['veedel'],
   init: () => initialGangsState(),
   tickEvery: 60,
+  // Versatz (Auftrag 47): nicht mit allen anderen in derselben Minute ticken.
+  tickOffset: 19,
   tick: gangsTick,
   commands: {
     'gangs.ceasefire': (ctx, { gangId }) => ceasefire(ctx, gangId),

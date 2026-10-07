@@ -46,6 +46,12 @@ export interface ModuleDefinition<Id extends string = string> {
   tick?: (ctx: Ctx) => void;
   /** tick nur alle n Spielminuten, z.B. 60 = zur vollen Stunde, 1440 = um Mitternacht. */
   tickEvery?: number;
+  /**
+   * Versatz in Spielminuten (Auftrag 47): Mit tickEvery 60 und tickOffset 7 tickt das Modul um x:07 statt zur vollen
+   * Stunde. So fallen nicht alle Stunden-Ticks in dieselbe Minute (ein Ruckler pro Stunde). Nur für Module, deren Tick
+   * nicht an der Minute hängt (kein `now % MINUTES_PER_DAY === 0`; `clock.hour(now)` bleibt innerhalb der Stunde gleich).
+   */
+  tickOffset?: number;
   /** Befehle, die dieses Modul verarbeitet. Jeder Befehlstyp gehört genau einem Modul. */
   commands?: { [K in CommandType]?: CommandHandler<K> };
   /** Reaktionen auf Ereignisse. */

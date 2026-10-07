@@ -345,7 +345,9 @@ export function lieutenantVeedel(state: GameState, staffId: string): string | nu
 export function teamOf(state: GameState, staffId: string): StaffMember[] {
   const post = getPost(state, staffId);
   if (!post) return [];
-  return getStaff(state).filter((m) => {
+  // Sein Team ist in seiner Stadt (Leute bleiben in ihrer Stadt, Auftrag 43).
+  const cityId = getStaffMember(state, staffId)?.cityId ?? 'koeln';
+  return getStaff(state, { cityId }).filter((m) => {
     if (m.id === staffId) return false;
     const place = m.assignment ?? m.returnTo;
     if (place?.kind === 'spot' && post.spotIds.includes(place.targetId)) return true;

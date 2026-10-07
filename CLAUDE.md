@@ -186,6 +186,12 @@ dann ein `if (!tutorialAllows(state, '…')) return` an der Stelle, die es anbie
 sperrt sich mit `spots.lock` (nur ohne Leute und Verkäufe). Solange das Tutorial je gestartet wurde, ruhen Peters
 Quests (`questsSuppressed`); der Kern-HUD blendet Teile über `registerHudPartHidden` aus (sauberes Geld). Dev-Haken
 `window.koeln.dev.tutorialStage(n)`, Szenen `npm run screenshot -- --scenes=tutorial,tutorial-teilziele`.
+Auftrag 47 (Performance, `docs/auftraege/47-performance.md`): Leute haben einen Index nach ID und Stadt
+(`staff/members.ts`; `getStaff` mit `cityId`/`spotId`/`veedelId` liest nur diese Stadt, Routinen laufen über
+`liveMembers`; wer `cityId` einer Person direkt setzt, ruft `invalidateStaffIndex()`). Module können mit `tickOffset`
+versetzt ticken (nur, wenn der Tick nicht an `now % MINUTES_PER_DAY` hängt). Spielstände liegen in IndexedDB
+(`openBrowserSaveStorage`, Spiegel im Arbeitsspeicher, Notfallspeicher im localStorage), der Autosave schreibt nur bei
+Änderung. Messen: `PERF=1 npm run perf:sim` (auch ein Spieltag je großem Test-Spielstand) und `scripts/perf-browser.mjs`.
 Auftrag 46c (Touren und Momente, `docs/auftraege/46c-touren-und-momente.md`): Das Spiel startet mit einer
 Willkommen-Seite (`IntroDialog.tsx`: Name, dann Modus), die Story-Seiten sind weg. Jede Stufe hat ihre Tour mit Peter
 als reine Daten (`tutorial/ui/tours.ts`, `stageTour`, höchstens 140 Zeichen pro Schritt, nur Anker aus `TOUR_ANCHORS`);
@@ -257,7 +263,7 @@ declare module '../../core' {
 export default defineModule({
   id: 'casino', version: 1, dependsOn: ['goods'],
   init: (ctx) => ({ ... }),                        // Anfangszustand
-  tick: (ctx) => { ... }, tickEvery: 60,           // optional, Standard jede Spielminute
+  tick: (ctx) => { ... }, tickEvery: 60,           // optional, Standard jede Spielminute; tickOffset: 7 = um x:07
   commands: { 'casino.bet': (ctx, payload, meta) => ({ ok: true }) },   // oder { ok: false, reason: '…' }
   on: { 'sale.completed': (ctx, payload) => { ... } },
   migrations: { 2: (old: CasinoStateV1) => ({ ...old, neu: 0 }) },

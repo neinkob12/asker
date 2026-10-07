@@ -3,7 +3,7 @@ import { loadSimulation, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getStock, store } from '../goods';
 import { getHeat } from '../police';
-import { getStaffMember } from '../staff';
+import { getStaffMember, invalidateStaffIndex } from '../staff';
 import { getInfluence, PLAYER_FACTION } from '../territory';
 import { DECISION_TIMEOUT } from './config';
 import { backupCandidates } from './engine';
@@ -614,6 +614,7 @@ describe('Ware und Leute nach Stadt', () => {
     const away = getStaffMember(sim.state, extra[0]);
     if (!away) throw new Error('Person fehlt');
     away.cityId = 'hamburg';
+    invalidateStaffIndex();
     expect(backupCandidates(sim.state, encounter(sim, encounterId))).toEqual([extra[1]]);
   });
 });
