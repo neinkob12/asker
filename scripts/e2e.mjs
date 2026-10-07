@@ -332,8 +332,14 @@ async function run() {
     );
     assert.ok(candidate, 'ein Bewerber wartet');
     await page.evaluate(() => window.koeln.runtime.api.openPhone('tab:staff'));
-    await page.locator('.phone').getByText(candidate, { exact: true }).first().click();
-    await page.getByText('Gespräch führen', { exact: true }).click();
+    // In die Mitte scrollen: Am Handy-Bildschirm liegen oben das HUD (seit Hamburg frei mit einer Zeile mehr) und
+    // unten die Handy-Leiste über dem Inhalt, Playwright scrollt ein Ziel sonst nur knapp ins Bild.
+    const centered = async (locator) => {
+      await locator.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await locator.click();
+    };
+    await centered(page.locator('.phone').getByText(candidate, { exact: true }).first());
+    await centered(page.getByText('Gespräch führen', { exact: true }));
     await page.waitForSelector('.mg-intro');
     assert.equal(await page.locator('.mg-overlay').count(), 1, 'Rahmen offen');
     // Spielzeit in Echtzeit (headless mit wenigen Bildern pro Sekunde wäre sie sonst gedeckelt und langsam).
