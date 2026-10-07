@@ -219,7 +219,9 @@ Browser-Profil des Deutschland-Standes war das die teuerste Spielfunktion (etwa 
 es einen Index nach ID und Stadt (`staff/members.ts`), die Routinen des Personals laufen über `liveMembers`. Dazu
 `tickOffset` für Stunden-Ticks (police, gangs, recruiting, fleet, grow) und Spielstände in IndexedDB statt localStorage
 (Schreiben im Hintergrund, keine 5-MB-Grenze; `setItem` hatte im Profil 89 ms je 12 s gekostet). Browser-Messung des
-Deutschland-Standes vorher: Startbildschirm 2,3 ms Simulation pro Schritt, 22 Long Tasks in 12 s (Summe 1.526 ms),
-DOM 5.186 Knoten; Nachrichten-App 9.368 Knoten. Die Leitplanke in `perf.bench.test.ts` misst jetzt auch einen Spieltag je
+Deutschland-Standes (`perf-browser.mjs --save=public/spielstaende/deutschland.json --seconds=12 --speed=4 --scenes=ui`,
+Headless ohne GPU), Startbildschirm vorher → nachher: Simulation 2,3 → 1,5 ms pro Schritt, Preact 2,2 → 1,2 ms pro
+Neuzeichnen, Long Tasks in 12 s 22 → 8 (Summe 1.526 → 475 ms); `getStaff` ist aus den teuersten Funktionen
+verschwunden. DOM unverändert (5.200 Knoten, Nachrichten-App 9.400): das ist Punkt 4. Die Leitplanke in `perf.bench.test.ts` misst jetzt auch einen Spieltag je
 großem Test-Spielstand. Offen (Punkte 4, 5 und 7 in `docs/auftraege/47-performance.md`): Marker nur für die aktive Stadt,
 Chunks je Stadt, Absturz bei Hamburg aufklären.
