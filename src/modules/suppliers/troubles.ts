@@ -3,6 +3,8 @@
 // Optionen und Frist ('suppliers.resolveProblem'): Umweg gegen Aufpreis, Teillieferung, Umleiten in ein anderes Lager,
 // Schmieren. Ohne Antwort gilt "abwarten" (wie vorher: Verspätung bzw. Beschlagnahme). Dazu Chancen: früher da, Ware
 // obendrauf, bessere Qualität. Die Wahrscheinlichkeiten der Probleme (rollShipmentProblem) bleiben gleich.
+// Feedback vom 07.10.2026: Bei drohender Beschlagnahme kannst du die Papiere für den Zoll auch selbst fälschen
+// (Minispiel 'papers'). Eine Sammellieferung fragt dann immer nach, es steht ja alles auf einmal auf dem Spiel.
 
 import {
   type CommandResult,
@@ -19,6 +21,7 @@ import {
 import { cityName } from '../city';
 import { fitArticles, formatProductAmount, getWarehouse, getWarehouses, productName } from '../goods';
 import { portName } from '../logistics';
+import { isMinigameReady, MINIGAME_TIMEOUT, startMinigame } from '../minigames';
 import {
   BRIBE_DELAY,
   BRIBE_MIN,
@@ -41,6 +44,7 @@ import {
   contactOf,
   type Shipment,
   type Supplier,
+  shipmentGoods,
   shipmentHere,
   shipmentSupplier,
   supplierIn,
@@ -51,14 +55,15 @@ import {
 import { type DelayChoice, findReason, PROBLEM_REASONS, type ProblemKind, reasonVars, routeKindOf } from './problems';
 import { type SupplierTextKey, supplierVariants } from './voices';
 
-/** Antworten auf ein Lieferproblem. 'wait' ist die Wahl ohne Antwort. */
-export type ProblemChoice = DelayChoice | 'bribe' | 'wait';
+/** Antworten auf ein Lieferproblem. 'wait' ist die Wahl ohne Antwort, 'papers' die Papiere selbst (Minispiel). */
+export type ProblemChoice = DelayChoice | 'bribe' | 'papers' | 'wait';
 
 export const CHOICE_NAMES: Readonly<Record<ProblemChoice, string>> = {
   detour: 'Umweg',
   partial: 'Teillieferung',
   redirect: 'Umgeleitet',
   bribe: 'Geschmiert',
+  papers: 'Papiere selbst gemacht',
   wait: 'Abgewartet',
 };
 
@@ -102,7 +107,8 @@ function roadVar(supplier: Supplier, s: Shipment): { road: string } {
   return { road: supplierVia(supplier, s.cityId ?? 'koeln') ?? 'Autobahn' };
 }
 
-function goodsOf(s: Pick<Shipment, 'productId' | 'amount'>): string {
+function goodsOf(s: Pick<Shipment, 'productId' | 'amount' | 'extra'>): string {
+  if (s.extra?.length) return shipmentGoods(s);
   return `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)}`;
 }
 
@@ -186,12 +192,15 @@ export function revealProblem(ctx: Ctx, s: Shipment, supplier: Supplier, ask?: b
     });
     return;
   }
-  // Beschlagnahme: mit Rückfrage erst eine Drohung (Schmieren), sonst wie vorher sofort weg.
+  // Beschlagnahme: mit Rückfrage erst eine Drohung (Schmieren, Papiere selbst machen), sonst wie vorher sofort weg.
+  // Eine Sammellieferung fragt immer (Feedback vom 07.10.2026: da steht alles auf einmal auf dem Spiel).
   const why = rollReason(ctx, s, supplier, 'seize');
   const time = Math.min(DECISION_TIME, remaining - 1);
-  if (shipmentHere(ctx.state, s) && time >= 15 && (ask ?? ctx.chance(DECISION_SHARE_SEIZE))) {
+  const group = (s.extra?.length ?? 0) > 0;
+  if (shipmentHere(ctx.state, s) && time >= 15 && (ask ?? (group || ctx.chance(DECISION_SHARE_SEIZE)))) {
     const cost = Math.max(BRIBE_MIN, Math.round((s.price * BRIBE_SHARE) / 10) * 10);
-    s.decision = { kind: 'seize', until: ctx.now + time, choices: ['bribe', 'wait'], cost };
+    const choices: ProblemChoice[] = isMinigameReady('papers') ? ['bribe', 'papers', 'wait'] : ['bribe', 'wait'];
+    s.decision = { kind: 'seize', until: ctx.now + time, choices, cost };
     messages.send(ctx, {
       contact: contactOf(supplier),
       text: voice(ctx, supplier, 'seizeThreat', { ...why, goods, cost: formatEuro(cost) }),
@@ -215,7 +224,8 @@ function delayChoices(state: GameState, s: Shipment): DelayChoice[] {
   return base.filter((c) => {
     if (c === 'redirect') return !s.toPort && otherWarehouse(state, s) !== null;
     if (c === 'detour') return s.route !== 'ship';
-    return s.amount >= 2;
+    // Teillieferung nur bei einem Paket: Eine Sammellieferung ist eine Fuhre.
+    return s.amount >= 2 && !s.extra?.length;
   });
 }
 
@@ -242,6 +252,7 @@ function decisionOptions(state: GameState, s: Shipment): MessageOption[] {
       return option(c, `Ins ${name ?? 'andere Lager'}`, 'Fahr ins andere Lager.');
     }
     if (c === 'bribe') return option(c, `Schmieren (${formatEuro(d.cost)})`, 'Mach es. Ich zahl.');
+    if (c === 'papers') return option(c, 'Papiere fälschen', 'Ich mach dir die Papiere. Halt sie hin.');
     return option(
       c,
       d.kind === 'seize' ? 'Aufgeben' : 'Abwarten',
@@ -262,6 +273,7 @@ export function resolveProblem(ctx: Ctx, shipmentId: number, choice: ProblemChoi
   const supplier = shipmentSupplier(ctx.state, s);
   if (!supplier) return { ok: false, reason: 'Unbekannter Lieferant.' };
   const cityId = s.cityId ?? 'koeln';
+  if (choice === 'papers') return startPapers(ctx, s, supplier, d);
   if (choice === 'detour' || choice === 'bribe') {
     const why = choice === 'detour' ? `Umweg ${supplier.name}` : `Schmiergeld ${supplier.name}`;
     if (
@@ -314,6 +326,79 @@ export function resolveProblem(ctx: Ctx, shipmentId: number, choice: ProblemChoi
   }
   ctx.emit('shipment.decided', { shipmentId: s.id, supplierId: s.supplierId, choice });
   return { ok: true };
+}
+
+/** Origin-Ref der Papiere einer Lieferung (Minispiel). */
+export function papersRef(shipmentId: number): string {
+  return `shipment:${shipmentId}`;
+}
+
+/**
+ * Papiere selbst fälschen (Minispiel 'papers'): Der Zoll hält die Lieferung fest, bis das Spiel entschieden ist. Ohne
+ * Oberfläche läuft nach der Frist ein timeout ab, dann gilt wie bei "Aufgeben" die Beschlagnahme.
+ */
+function startPapers(ctx: Ctx, s: Shipment, supplier: Supplier, d: ShipmentDecision): CommandResult {
+  const cityId = s.cityId ?? 'koeln';
+  const id = startMinigame(ctx, {
+    kind: 'papers',
+    origin: { module: 'suppliers', ref: papersRef(s.id) },
+    cityId,
+    title: 'Papiere für den Zoll',
+    situation: `Der Zoll hat die Lieferung von ${supplier.contactName} rausgewunken: ${goodsOf(s)}. Stimmen die Papiere, geht sie durch.`,
+    params: {
+      setting: s.toPort ? 'port' : 'autobahn',
+      phase: clock.dayPhase(ctx.now),
+      time: ctx.now,
+      bribeCost: d.cost,
+    },
+  });
+  if (id === null) return { ok: false, reason: 'Gerade geht das nicht.' };
+  s.decision = undefined;
+  s.choice = 'papers';
+  s.papers = { challengeId: id, cost: d.cost, arrivesAt: s.arrivesAt };
+  // Ankommen kann die Ware erst, wenn das Spiel entschieden ist.
+  s.arrivesAt = Math.max(s.arrivesAt, ctx.now + MINIGAME_TIMEOUT + 1);
+  retract(ctx, s.id);
+  ctx.emit('shipment.decided', { shipmentId: s.id, supplierId: s.supplierId, choice: 'papers' });
+  return { ok: true, data: { challengeId: id } };
+}
+
+/**
+ * Ausgang der Papiere ('minigame.finished' mit origin suppliers): geschafft heißt durch (wie gut geschmiert), ein
+ * Umschlag im Spiel kostet das Schmiergeld, aufgegeben, verloren oder ohne Oberfläche abgelaufen heißt beschlagnahmt.
+ */
+export function onPapersFinished(
+  ctx: Ctx,
+  payload: { id: number; origin: { module: string; ref: string }; won: boolean; picks: readonly string[] },
+): void {
+  if (payload.origin.module !== 'suppliers') return;
+  const s = ctx.state.modules.suppliers.shipments.find((x) => papersRef(x.id) === payload.origin.ref);
+  const open = s?.papers;
+  if (!s || !open || open.challengeId !== payload.id) return;
+  s.papers = undefined;
+  const supplier = shipmentSupplier(ctx.state, s);
+  if (!supplier) return;
+  const cityId = s.cityId ?? 'koeln';
+  const through = (key: SupplierTextKey, text: string) => {
+    s.problem = undefined;
+    s.arrivesAt = Math.max(open.arrivesAt, ctx.now + BRIBE_DELAY);
+    tell(ctx, supplier, voice(ctx, supplier, key, { goods: goodsOf(s) }));
+    journal.add(ctx, text, 'good');
+  };
+  if (payload.picks.includes('bribe')) {
+    const paid = wallet.pay(ctx, open.cost, 'dirty', `Schmiergeld ${supplier.name}`, {
+      category: 'loss.police',
+      cityId,
+    });
+    if (paid) through('bribeSaved', `Umschlag zu den Papieren: Die Lieferung von ${supplier.name} ist durch.`);
+    else seize(ctx, s, supplier, 'bribeFailed');
+    return;
+  }
+  if (payload.won) {
+    through('papersSaved', `Papiere selbst gemacht: Die Lieferung von ${supplier.name} ist durch.`);
+    return;
+  }
+  seize(ctx, s, supplier, payload.picks.includes('giveUp') ? null : 'papersFailed');
 }
 
 function seize(ctx: Ctx, s: Shipment, supplier: Supplier, key: SupplierTextKey | null): void {

@@ -61,7 +61,8 @@ export function bindKeys(runtime: UiRuntime): () => void {
       else api.openPhone();
       return;
     }
-    for (const [tabId, letter] of tabShortcuts()) {
+    // Nur Tabs, die gerade auf dem Startbildschirm stehen (hiddenWhen: z.B. am Anfang noch nicht freigeschaltet).
+    for (const [tabId, letter] of tabShortcuts(runtime.state)) {
       if (letter !== key || !sidebarTabs.get(tabId)) continue;
       // Gleiche Taste noch einmal: zurück zum Startbildschirm.
       const inTab = ui.phone.stack[1]?.kind === 'tab' && ui.phone.stack[1].id === tabId;

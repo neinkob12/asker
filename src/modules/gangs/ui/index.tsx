@@ -35,6 +35,7 @@ import {
 } from '../../../ui';
 import { activeCity, cityName, isBusinessSold, relationFactor } from '../../city';
 import { canSnitch } from '../../police';
+import { phoneAppLocked } from '../../quests';
 import { veedelName } from '../../veedel';
 import {
   activeWars,
@@ -846,8 +847,9 @@ registerTab({
   title: 'Gangs',
   order: 30,
   component: GangsTab,
-  // Nach dem Verkauf sind die Gangs Kunden (App Handel), keine Gegner auf der Straße mehr (Auftrag 43).
-  hiddenWhen: isBusinessSold,
+  // Nach dem Verkauf sind die Gangs Kunden (App Handel), keine Gegner auf der Straße mehr (Auftrag 43). Am Anfang
+  // kommt die App mit Peters Quest.
+  hiddenWhen: (state) => isBusinessSold(state) || phoneAppLocked(state, 'tab:gangs'),
   badge: (state) =>
     getGangs(state, activeCity(state)).filter((g) => (getGangStatus(state, g.id)?.stage ?? 0) >= 2).length,
 });

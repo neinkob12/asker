@@ -149,6 +149,16 @@ Ausgang einer Konfrontation warten, bis die Akte zu ist (`ui/flow.ts`). Polizei-
 'customs'`, Figurenfarben `LOOK_COLORS` aus `src/ui`. Vorschau `?minispiel=<art>`, Bilder `npm run screenshot:minigames
 -- --kind=<art>|alle` (auch `--uhr`, `--spielstand`), Dev-Haken `window.koeln.dev.minigame*`. Elftes Minispiel:
 `docs/architektur.md`, Abschnitt "Minispiele".
+Auftrag 45 (Feedback 07.10.2026, `docs/auftraege/45-feedback-bestellung-handy-quests.md`): Minispiele kommen früher
+(Zivis mit Grundrauschen `UNDERCOVER_BASE_CHANCE_PER_HOUR`, eine Kontrolle trifft dich, wenn du selbst am Spot stehst,
+`playerStandingIn`). Lieferanten-Angebot nach Warenart (`PRODUCT_CATEGORIES` in `goods`) mit „Einzeln |
+Sammelbestellung“: `suppliers.orderBatch { lines, mode: 'group' | 'single' }`, Sammellieferung mit Rabatt und höherer
+Beschlagnahme in einer Lieferung (`Shipment.extra`, **alle Pakete einer Lieferung über `shipmentItems` lesen**, Werte
+`GROUP_ORDER`), bei drohender Beschlagnahme die Wahl „Papiere fälschen“ (Minispiel, origin `suppliers`). Handy Schritt
+für Schritt: In einem neuen Spiel kommen die Apps mit Peters Quests (`PHONE_APP_STEPS`, `phoneAppLocked` im `hiddenWhen`
+jeder App; alte Stände und andere Städte haben alles, Einstellungen › Einstieg schaltet es ab). Neue Quests kommen als
+goldenes Banner (`ui.toast` mit `title`, `color`, `appId`, `duration`), die Quest-Karte klappt auf und hat in den
+ersten Kapiteln „Zeig mir wie“.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

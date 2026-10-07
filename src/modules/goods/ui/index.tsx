@@ -63,6 +63,7 @@ import { daysText, flowRows } from './flow';
 import { supplyRoutesLayer } from './map';
 import './goods.css';
 import { activeCity, cityName, isBusinessSold } from '../../city';
+import { phoneAppLocked } from '../../quests';
 
 declare module '../../../ui' {
   interface PanelRegistry {
@@ -598,8 +599,8 @@ registerPhoneApp({
   order: 25,
   color: 'goods',
   component: WarehouseApp,
-  // Nach dem Verkauf liegt die Ware in den Häfen (Handel › Hafen, Auftrag 43).
-  hiddenWhen: isBusinessSold,
+  // Nach dem Verkauf liegt die Ware in den Häfen (Handel › Hafen, Auftrag 43). Am Anfang kommt sie mit Peters Quest.
+  hiddenWhen: (state) => isBusinessSold(state) || phoneAppLocked(state, 'goods.app'),
 });
 registerHudItem({ id: 'goods.stock', order: 20, placement: 'more', icon: 'warehouse', component: StockHud });
 registerPanel({

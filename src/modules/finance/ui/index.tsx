@@ -41,6 +41,7 @@ import {
 } from '../../../ui';
 import { activeCity, citiesUnlocked, cityName, cityOfSpot, isBusinessSold } from '../../city';
 import { getLieutenantIds, lieutenantOfSpot } from '../../hierarchy';
+import { phoneAppLocked } from '../../quests';
 import { atSpot, getSpot } from '../../spots';
 import { getStaffMember } from '../../staff';
 import { veedelName } from '../../veedel';
@@ -596,6 +597,8 @@ registerPhoneApp({
   color: 'money',
   component: FinanceApp,
   badge: (state) => (wageRunway(state).warn ? 1 : 0),
+  // Handy Schritt für Schritt: kommt mit Peters Quest „1.000 € Umsatz“ (quests, PHONE_APP_STEPS).
+  hiddenWhen: (state) => phoneAppLocked(state, 'finance.app'),
 });
 registerPanel({
   id: 'finance.category',

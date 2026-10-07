@@ -69,6 +69,32 @@
   display: flex;
   gap: var(--space-1);
 }
+/* Bestellart (einzeln oder gesammelt) über dem Angebot, darunter ein Satz, was das heißt. */
+.sup-mode {
+  margin-bottom: var(--space-3);
+}
+.sup-mode .ui-hint {
+  margin: var(--space-2) 0 0;
+}
+.sup-cart .ui-chips {
+  margin-bottom: var(--space-2);
+}
+/* Fußzeile der Sammelbestellung: Zahl der Pakete und Rabatt links, „Bestellen“ mit Preis rechts. */
+.sup-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.sup-bar__sum {
+  display: flex;
+  flex-direction: column;
+  white-space: nowrap;
+}
+.sup-bar__discount {
+  color: var(--cat-money);
+  font-size: var(--font-size-sm);
+}
 
 .map-place--port,
 .map-place--city,

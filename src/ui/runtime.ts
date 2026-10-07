@@ -74,6 +74,15 @@ export interface ToastOptions {
    * unterdrücken (z.B. Ärger, der nur ins Journal gehört).
    */
   urgent?: boolean;
+  /** Überschrift im Banner statt „Meldung“ bzw. „Achtung“ (z.B. „Neue Quest“). */
+  title?: string;
+  /** Bedeutungsfarbe der Kachel im Banner statt der Farbe der Art (z.B. 'brand' für Peters Quests). */
+  color?: string;
+  /** Ein Tipp aufs Banner öffnet diese App (samt Parametern), wie bei ui.notify, statt des Verlaufs. */
+  appId?: string;
+  params?: Record<string, unknown>;
+  /** So lange steht das Banner (Millisekunden), Standard nach Art; z.B. länger für Hinweise beim Einstieg. */
+  duration?: number;
 }
 
 export interface Toast {
@@ -82,6 +91,11 @@ export interface Toast {
   kind: ToastKind;
   icon?: string;
   target?: LngLat;
+  title?: string;
+  color?: string;
+  appId?: string;
+  params?: Record<string, unknown>;
+  duration?: number;
 }
 
 /** Eintrag der Alarm-Zentrale (Glocke im HUD). */
@@ -472,7 +486,7 @@ export class UiRuntime {
       this.ui.toasts = this.ui.toasts.filter((t) => t.id !== current.id);
       this.requestRender();
       this.scheduleToast();
-    }, TOAST_MS[current.kind]);
+    }, current.duration ?? TOAST_MS[current.kind]);
   }
 
   /** Blendet das Banner mit dieser ID nach `ms` aus (außer es ist angehalten, dann erst nach dem Loslassen). */
@@ -623,6 +637,11 @@ export class UiRuntime {
           const toast: Toast = { id, text, kind };
           if (options.icon) toast.icon = options.icon;
           if (options.target) toast.target = options.target;
+          if (options.title) toast.title = options.title;
+          if (options.color) toast.color = options.color;
+          if (options.appId) toast.appId = options.appId;
+          if (options.params) toast.params = options.params;
+          if (options.duration) toast.duration = options.duration;
           // Banner nur für Dringendes (Razzia, Festnahme, Lieferung …); Routine landet still im Verlauf.
           let urgent = options.urgent ?? (kind === 'bad' || kind === 'warn');
           // Ruhig: nur Schlimmes, und nicht im Sekundentakt (der Rest bleibt im Verlauf).

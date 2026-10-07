@@ -6,6 +6,7 @@
 //
 // Platzhalter: {goods} (z.B. "50 g Gras"), {reason} (Grund aus problems.ts, als Satzteil), {delay} (Dauer),
 // {cost} (Aufpreis oder Schmiergeld), {debt}, {extra} (Ware obendrauf), {warehouse}, {share} (Teillieferung).
+// papersSaved/papersFailed (Feedback vom 07.10.2026): Ausgang, wenn du die Papiere für den Zoll selbst machst.
 
 export type SupplierTextKey =
   /** Nach dem Freischalten. */
@@ -21,6 +22,9 @@ export type SupplierTextKey =
   | 'seizeThreat'
   | 'bribeSaved'
   | 'bribeFailed'
+  /** Papiere selbst gefälscht (Minispiel): durch bzw. aufgeflogen. */
+  | 'papersSaved'
+  | 'papersFailed'
   /** Schlechte Ware bei der Ankunft. */
   | 'badQuality'
   /** Schulden überfällig (erstes Mal / danach). */
@@ -84,6 +88,16 @@ export const SUPPLIER_VOICES: Readonly<Record<string, SupplierVoice>> = {
       'Haben das Geld genommen und trotzdem alles eingesackt! Schweine! {goods} weg.',
       'Hat nicht geklappt! Geld weg, Ware weg. Ich kotz gleich.',
       'Die wollten nicht! {goods} sind weg. Sorry, sorry, sorry!',
+    ],
+    papersSaved: [
+      'Wahnsinn! Die haben deine Papiere geschluckt, Stempel drauf, ich fahr weiter!',
+      'Durch! Papiere sauber, die {goods} kommen! Du bist ein Künstler!',
+      'Ha! Der Zöllner hat nix gemerkt! Bin wieder auf der Bahn!',
+    ],
+    papersFailed: [
+      'Die Papiere sind aufgeflogen! Alles eingesackt, die {goods} sind weg!',
+      'Mist, Mist, Mist! Die haben den Fehler gesehen. {goods} weg!',
+      'Aus! Falscher Stempel, die haben alles aufgemacht. {goods} weg!',
     ],
     badQuality: [
       'Ich sag’s lieber gleich: {reason}. Die Ware ist nicht so gut wie versprochen. Mein Fehler!',
@@ -181,6 +195,16 @@ export const SUPPLIER_VOICES: Readonly<Record<string, SupplierVoice>> = {
       'Hat nicht gereicht. Die {goods} sind beim Zoll.',
       'Falscher Kollege. Geld weg, Ware weg.',
     ],
+    papersSaved: [
+      'Papiere geprüft. Freigabe erteilt. {goods} unterwegs.',
+      'Zoll: abgefertigt. Ware fährt.',
+      'Status: frei. Papiere waren sauber.',
+    ],
+    papersFailed: [
+      'Papiere beanstandet. {goods} beschlagnahmt.',
+      'Zoll: Fehler gefunden. Ware einbehalten.',
+      'Status: beschlagnahmt. {goods} verloren.',
+    ],
     badQuality: [
       'Kofi. {reason}. Die Ware ist nicht wie bestellt. Nächste Lieferung gleiche ich aus.',
       'Ehrlich: {reason}. Qualität unter Standard.',
@@ -261,6 +285,8 @@ export const SUPPLIER_VOICES: Readonly<Record<string, SupplierVoice>> = {
     ],
     bribeSaved: ['Hat geklappt. Komme.', 'Jo. Durch.', 'Läuft. Bin unterwegs.'],
     bribeFailed: ['Hat nix genützt. Weg.', 'Geld genommen, Ware auch. Mist.', 'Nee. Alles weg.'],
+    papersSaved: ['Papiere passen. Fahr weiter.', 'Jo. Durch.', 'Stempel drauf. Komme.'],
+    papersFailed: ['Papiere falsch. Alles weg.', 'Nee. Haben’s gemerkt. {goods} weg.', 'Aufgeflogen. Weg.'],
     badQuality: [
       'Ehrlich: {reason}. Ware is nich so gut.',
       '{reason}. Qualität mäßig. Tut mir leid.',
@@ -328,6 +354,16 @@ export const SUPPLIER_VOICES: Readonly<Record<string, SupplierVoice>> = {
       'Die ham die Kohle jenommen und die Ware ooch. Wat für Halunken.',
       'Nüscht. Allet weg.',
       'Hat nich jeklappt. {goods} weg.',
+    ],
+    papersSaved: [
+      'Die Papiere ham jezogen, Keule! Bin unterwegs.',
+      'Stempel druff, weiter jeht’s!',
+      'Der Zöllner hat nüscht jemerkt. Läuft.',
+    ],
+    papersFailed: [
+      'Die Papiere warn Murks. Allet weg.',
+      'Ham den Fehler jesehen. {goods} weg.',
+      'Nüscht zu machen, Papiere uffjeflogen. {goods} futsch.',
     ],
     badQuality: [
       'Ehrlich jesacht: {reason}. Dit Zeug is nich der Hit.',
@@ -405,6 +441,16 @@ export const SUPPLIER_VOICES: Readonly<Record<string, SupplierVoice>> = {
     ],
     bribeSaved: ['Lekker, hat geklappt! Ich komme.', 'Geregeld, man. Bin unterwegs.', 'Top, durch!'],
     bribeFailed: ['Jammer, Geld weg und Ware weg.', 'Nee man, die haben alles.', 'Hat nicht geklappt. {goods} weg.'],
+    papersSaved: [
+      'Papiere waren top, man. Ich fahr weiter.',
+      'Gestempelt, alles oké. {goods} kommen.',
+      'Lekker, die haben nichts gemerkt.',
+    ],
+    papersFailed: [
+      'Sorry, man, die Papiere sind aufgeflogen. {goods} weg.',
+      'Die haben den Fehler gesehen. Alles weg, jammer.',
+      'Niet goed. Papiere falsch, Ware weg.',
+    ],
     badQuality: [
       'Eerlijk gezegd: {reason}. Die Ware ist nicht top.',
       'Daan hier. {reason}. Qualität ist meh, sorry.',
@@ -472,6 +518,16 @@ export const SUPPLIER_VOICES: Readonly<Record<string, SupplierVoice>> = {
       'Erfolglos. Das Geld ist weg, die Ware auch.',
       'Bedauerlich: abgelehnt. {goods} beschlagnahmt.',
       'Leider kein Erfolg.',
+    ],
+    papersSaved: [
+      'Die Papiere wurden akzeptiert. Die Ware ist freigegeben.',
+      'Zollabfertigung erfolgt. {goods} sind unterwegs.',
+      'Dokumente in Ordnung befunden. Weiter wie geplant.',
+    ],
+    papersFailed: [
+      'Die Dokumente wurden beanstandet. {goods} sind beschlagnahmt.',
+      'Der Zoll hat die Unstimmigkeiten bemerkt. Die Ware ist verloren.',
+      'Abfertigung verweigert. {goods} einbehalten.',
     ],
     badQuality: [
       'Zur Kenntnis: {reason}. Die Qualität liegt unter der Zusage.',
@@ -549,6 +605,16 @@ export const SUPPLIER_VOICES: Readonly<Record<string, SupplierVoice>> = {
     ],
     bribeSaved: ['Jeklappt! Kölsche Lösung. Bin unterwegs.', 'Klüngel wirkt. Ware kommt.', 'Läuft, Jung!'],
     bribeFailed: ['Hätt nit jeklappt. Allet wesch.', 'Der Kollesch wollt nit. {goods} wesch.', 'Nix. Wesch.'],
+    papersSaved: [
+      'Dä Zöllner hätt nix jemerkt. Isch komm!',
+      'Papiere jot, Stempel drop. {goods} kumme.',
+      'Et hätt noch immer jot jejange. Bin ungerwegs.',
+    ],
+    papersFailed: [
+      'Die Papiere wore nix. {goods} sin fott.',
+      'Dat is opjefloge. Alles fott.',
+      'Dä hätt dä Fehler jesinn. {goods} fott.',
+    ],
     badQuality: [
       'Kalle, ehrlich: {reason}. Dat Zeuch is nit so jut.',
       '{reason}. Qualität mau, Jung. Tut mir leid.',
@@ -613,6 +679,16 @@ export const SUPPLIER_VOICES: Readonly<Record<string, SupplierVoice>> = {
     ],
     bribeSaved: ['Fatto! Wir fahren weiter.', 'Perfetto, durch. Arrivo.', 'Grazie, amico. Alles gut.'],
     bribeFailed: ['Niente. Geld weg, Ware weg.', 'Madonna. Hat nicht geklappt.', 'Mi dispiace. Nix zu machen.'],
+    papersSaved: [
+      'Perfetto! Die Papiere waren bellissimo, ich fahre weiter.',
+      'Timbro drauf, alles gut! {goods} kommen.',
+      'Mamma mia, das war knapp. Aber durch!',
+    ],
+    papersFailed: [
+      'Madonna! Die Papiere sind aufgeflogen. {goods} weg.',
+      'Che peccato, der Zoll hat alles genommen.',
+      'Niente da fare. Papiere falsch, {goods} verloren.',
+    ],
     badQuality: [
       'Sincero: {reason}. Die Ware ist nicht wie sonst.',
       '{reason}. Qualität mittel, scusa.',

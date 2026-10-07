@@ -515,6 +515,22 @@ export const SUPPLIER_LOOKS: Readonly<Record<string, Partial<Look>>> = {
   },
 };
 
+// Sammel- und Einzelbestellung (Feedback vom 07.10.2026): Mehrere Pakete auf einmal bestellen. Als Sammelbestellung
+// kommt alles in einer Lieferung, billiger, weil der Lieferant eine große Fuhre machen kann. Aber eine große Fuhre
+// fällt auf, und fliegt sie auf, ist alles auf einmal weg. Einzeln kommt jedes Paket für sich zum normalen Preis; der
+// Zoll erwischt dann höchstens einen Teil.
+
+/** Rabatt der Sammelbestellung pro Paket ab dem zweiten (höchstens maxDiscount), Aufschlag auf die Beschlagnahme. */
+export const GROUP_ORDER = {
+  discountPerPackage: 0.05,
+  maxDiscount: 0.15,
+  /** Beschlagnahme-Chance mal (1 + riskPerPackage je Paket ab dem zweiten), höchstens maxRisk. */
+  riskPerPackage: 0.5,
+  maxRisk: 3,
+  /** Höchstens so viele Pakete in einer Bestellung (Container gehen nur einzeln). */
+  maxPackages: 8,
+} as const;
+
 // Lieferprobleme mit Entscheidungen (Auftrag 23, troubles.ts). Die Wahrscheinlichkeiten der Probleme bleiben, ein Teil
 // kommt als Nachricht mit Optionen und Frist; ohne Antwort gilt "abwarten" wie vorher.
 

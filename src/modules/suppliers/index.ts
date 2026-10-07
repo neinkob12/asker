@@ -12,6 +12,10 @@
 // (deliveryTimes) und Aufschlag (priceFactors); in einer Stadt kann er anders auftreten (inCity, z.B. ein Hafen-Großhändler
 // in einer Stadt). Bestellt wird für die Stadt des Ziel-Lagers, ohne Lager für die aktive. Freigeschaltete
 // Lieferanten und Vertrauen gelten in allen Städten. Hein schaltet sich mit Hamburg frei.
+// Sammel- und Einzelbestellung (Feedback vom 07.10.2026, 'suppliers.orderBatch'): mehrere Pakete auf einmal, entweder
+// in einer Lieferung (Rabatt nach GROUP_ORDER, höhere Beschlagnahme-Chance, fliegt sie auf, ist alles weg; die weiteren
+// Pakete stehen in Shipment.extra) oder jedes für sich zum normalen Preis. Droht die Beschlagnahme, kann der Spieler
+// statt zu schmieren die Papiere selbst fälschen (Minispiel 'papers', troubles.ts).
 //
 // Öffentliche API:
 //   getSuppliers(state, cityId?), getSupplier(state, id), supplierIn(supplier, cityId), deliversTo(supplier, cityId),
@@ -22,11 +26,14 @@
 //   cheapestPackagePrice(state), getRelation(state, id), trustLabel(trust), supplierDiscount(state, id),
 //   supplierQualityBonus(state, id), creditLimit(state, id), availableCredit(state, id), isBlocked(state, id),
 //   availablePackages(state, id), packagePrice(state, supplierId, packageId), rollShipmentProblem(...),
+//   Sammelbestellung: shipmentItems(shipment), shipmentGoods(shipment), groupDiscount(n), groupRiskFactor(n),
+//   orderQuote(state, supplierId, lines, mode, cityId?),
 //   Rabatt-Aktionen (Auftrag 32): getDeals(state, cityId?), activeDeal(state, supplierId, packageId, cityId?),
 //   supplierContact(supplier) (Kontakt im Handy, z.B. für den Marktbericht), addSupplierTrust(ctx, id, amount), supplierById(id)
 //   deliveryLeg(supplier, progress, toPort?) (Darstellung: Schiff, Umladen oder Straße; Weg: roads.shipRoute,
 //   UNLOADING_PORT)
-// Befehle: 'suppliers.order' (onCredit für Kredit, warehouseId als Ziel), 'suppliers.repay', 'suppliers.unlock'
+// Befehle: 'suppliers.order' (onCredit für Kredit, warehouseId als Ziel), 'suppliers.orderBatch' (mode 'group' oder
+//   'single'), 'suppliers.repay', 'suppliers.unlock'
 // Ereignisse: 'shipment.ordered', 'shipment.arrived' (atPort bei Schiffsware), 'shipment.problem',
 //   'supplier.trustChanged', 'supplier.repaid', 'supplier.overdue', 'supplier.unlocked', 'supplier.dealStarted'
 
@@ -57,6 +64,7 @@ import {
   store,
   storeFitting,
   unitWeight,
+  type Warehouse,
   warehouseFree,
   warehousePlace,
 } from '../goods';
@@ -78,6 +86,7 @@ import {
   DELAY_FACTOR,
   DELAY_RANGE,
   DISCOUNT_FROM_TRUST,
+  GROUP_ORDER,
   LATE_INTEREST,
   MAX_DISCOUNT,
   MAX_QUALITY_BONUS,
@@ -103,6 +112,7 @@ import {
 import type { RouteKind } from './problems';
 import {
   applyArrivalLuck,
+  onPapersFinished,
   type ProblemChoice,
   resolveProblem,
   revealProblem,
@@ -114,7 +124,7 @@ import {
   voice,
 } from './troubles';
 
-export { CITY_APPROACH_SHARE, SHIP_SHARE, UNLOADING_PORT, UNLOADING_SHARE } from './config';
+export { CITY_APPROACH_SHARE, GROUP_ORDER, SHIP_SHARE, UNLOADING_PORT, UNLOADING_SHARE } from './config';
 export { PROBLEM_REASONS, type ProblemReason, ROUTE_NAMES, type RouteKind, routeKindOf } from './problems';
 export {
   CHOICE_NAMES,
@@ -230,6 +240,27 @@ export function seizeChance(supplier: Supplier, trust: number): number {
 
 export type ShipmentProblem = 'delayed' | 'badQuality' | 'seized';
 
+/** Ein Paket einer Lieferung (bei der Sammellieferung mehrere, siehe shipmentItems). */
+export interface ShipmentItem {
+  packageId: string;
+  productId: string;
+  amount: number;
+  quality: number;
+  /** Anteil am Preis der Lieferung (nach allen Rabatten). */
+  price: number;
+  /** Versprochene Qualität, falls die Ware schlechter ankommt. */
+  promisedQuality?: number;
+}
+
+/** Wie mehrere Pakete kommen: alles in einer Lieferung (Sammelbestellung) oder jedes für sich (Einzelbestellung). */
+export type OrderMode = 'group' | 'single';
+
+/** Eine Zeile einer Bestellung über mehrere Pakete. */
+export interface OrderLine {
+  packageId: string;
+  count: number;
+}
+
 export interface Shipment {
   id: number;
   supplierId: string;
@@ -274,6 +305,16 @@ export interface Shipment {
   luckShown?: boolean;
   /** Rest einer Teillieferung: ID der Lieferung, von der er abgeteilt wurde. */
   partOf?: number;
+  /**
+   * Sammellieferung (Feedback vom 07.10.2026): die weiteren Pakete derselben Lieferung. Oben steht das erste Paket
+   * (packageId, productId, amount, quality), price gilt für die ganze Lieferung. Fliegt sie auf, ist alles weg.
+   */
+  extra?: ShipmentItem[];
+  /**
+   * Papiere für den Zoll (Minispiel statt Schmieren, troubles.ts): offenes Minispiel, Schmiergeld, falls im Spiel doch
+   * ein Umschlag dazukommt, und wann die Lieferung ohne den Halt angekommen wäre.
+   */
+  papers?: { challengeId: number; cost: number; arrivesAt: number };
 }
 
 export interface SupplierRelation {
@@ -327,6 +368,17 @@ declare module '../../core' {
   interface GameCommands {
     /** Paket bestellen. onCredit: jetzt liefern, später zahlen (braucht Vertrauen). */
     'suppliers.order': { supplierId: string; packageId: string; onCredit?: boolean; warehouseId?: string };
+    /**
+     * Mehrere Pakete auf einmal (höchstens GROUP_ORDER.maxPackages, keine Container): 'group' als Sammelbestellung in
+     * einer Lieferung (Rabatt, aber fliegt sie auf, ist alles weg), 'single' als einzelne Lieferungen zum normalen Preis.
+     */
+    'suppliers.orderBatch': {
+      supplierId: string;
+      lines: OrderLine[];
+      mode: OrderMode;
+      onCredit?: boolean;
+      warehouseId?: string;
+    };
     /** Lieferanten freischalten (Bedingungen erfüllt, Vermittlungsgebühr zahlen). */
     'suppliers.unlock': { supplierId: string };
     /** Antwort auf ein Lieferproblem mit Rückfrage (Auftrag 23): Umweg, Teillieferung, Umleiten, Schmieren, abwarten. */
@@ -344,6 +396,8 @@ declare module '../../core' {
       onCredit?: boolean;
       /** Stadt, für die bestellt wurde (Auftrag 43). */
       cityId?: string;
+      /** Sammellieferung: alle Pakete (amount ist dann die Summe). */
+      items?: { productId: string; amount: number }[];
     };
     'shipment.arrived': {
       shipmentId: number;
@@ -360,6 +414,8 @@ declare module '../../core' {
       placedIn?: string;
       /** Stadt, für die bestellt wurde (Auftrag 43; die Oberfläche meldet nur die Stadt, in der du spielst). */
       cityId?: string;
+      /** Sammellieferung: alle Pakete (productId und amount oben sind das erste). */
+      items?: { productId: string; amount: number }[];
     };
     /** Lieferproblem ist eingetreten. */
     'shipment.problem': { shipmentId: number; supplierId: string; kind: ShipmentProblem; reason?: string };
@@ -675,6 +731,110 @@ export function packagePrice(
   return Math.round(pkg.price * factor * (1 - supplierDiscount(state, supplierId)) * (1 - deal));
 }
 
+/** Alle Pakete einer Lieferung, das erste zuerst (bei einer Sammellieferung mit den weiteren aus extra). */
+export function shipmentItems(s: Shipment): ShipmentItem[] {
+  const extra = s.extra ?? [];
+  const lead: ShipmentItem = {
+    packageId: s.packageId,
+    productId: s.productId,
+    amount: s.amount,
+    quality: s.quality,
+    price: s.price - extra.reduce((sum, x) => sum + x.price, 0),
+    ...(s.promisedQuality !== undefined ? { promisedQuality: s.promisedQuality } : {}),
+  };
+  return [lead, ...extra];
+}
+
+/** Ware einer Lieferung als Text, z.B. "50 g Gras" oder "50 g Gras, 20 g Hasch und 10 Stück Edibles". */
+export function shipmentGoods(s: Pick<Shipment, 'productId' | 'amount' | 'extra'>): string {
+  const parts = [s, ...(s.extra ?? [])].map(
+    (x) => `${formatProductAmount(x.productId, x.amount)} ${productName(x.productId)}`,
+  );
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} und ${parts[parts.length - 1]}` : (parts[0] ?? '');
+}
+
+/** Rabatt einer Sammelbestellung mit so vielen Paketen (0 bei einem). */
+export function groupDiscount(packages: number): number {
+  const g = GROUP_ORDER;
+  return Math.min(g.maxDiscount, Math.max(0, packages - 1) * g.discountPerPackage);
+}
+
+/** Faktor auf die Beschlagnahme-Chance einer Sammellieferung mit so vielen Paketen (1 bei einem): Sie fällt auf. */
+export function groupRiskFactor(packages: number): number {
+  const g = GROUP_ORDER;
+  return Math.min(g.maxRisk, 1 + Math.max(0, packages - 1) * g.riskPerPackage);
+}
+
+/** Zeilen zusammenfassen (gleiche Pakete addiert), nur ganze Anzahlen ab 1. */
+export function normalizeLines(lines: readonly OrderLine[]): OrderLine[] {
+  const counts = new Map<string, number>();
+  for (const line of lines) {
+    const count = Number.isFinite(line?.count) ? Math.floor(line.count) : 0;
+    if (typeof line?.packageId !== 'string' || count < 1) continue;
+    counts.set(line.packageId, (counts.get(line.packageId) ?? 0) + count);
+  }
+  return [...counts.entries()].map(([packageId, count]) => ({ packageId, count }));
+}
+
+/** Was eine Bestellung über mehrere Pakete kostet und wie riskant sie ist (orderQuote). */
+export interface OrderQuote {
+  /** Pakete insgesamt. */
+  packages: number;
+  /** Lieferungen: eine bei der Sammelbestellung, sonst eine pro Paket. */
+  shipments: number;
+  /** Summe der Einzelpreise (mit Vertrauen und Aktionen). */
+  listPrice: number;
+  /** Preis der Bestellung. */
+  price: number;
+  /** Rabatt der Sammelbestellung (0 einzeln). */
+  discount: number;
+  /** Beschlagnahme-Chance je Lieferung (bei der Sammellieferung für alles auf einmal). */
+  seize: number;
+  /** Gewicht in Gramm. */
+  weight: number;
+}
+
+/** Preis jeder Zeile nach dem Rabatt der Sammelbestellung (so rechnet auch der Befehl). */
+function linePrices(
+  state: GameState,
+  supplierId: string,
+  lines: readonly OrderLine[],
+  discount: number,
+  cityId: string,
+): number[] {
+  return lines.map((l) => Math.round(packagePrice(state, supplierId, l.packageId, cityId) * l.count * (1 - discount)));
+}
+
+/**
+ * Preis und Risiko einer Bestellung über mehrere Pakete, so wie der Befehl 'suppliers.orderBatch' sie rechnet (Stadt
+ * Standard: die aktive). Unbekannte Pakete zählen nicht.
+ */
+export function orderQuote(
+  state: GameState,
+  supplierId: string,
+  lines: readonly OrderLine[],
+  mode: OrderMode,
+  cityId: string = activeCity(state),
+): OrderQuote {
+  const base = getSupplier(state, supplierId);
+  const supplier = base ? supplierIn(base, cityId) : undefined;
+  const known = normalizeLines(lines).filter((l) => supplier?.packages.some((p) => p.id === l.packageId));
+  const packages = known.reduce((sum, l) => sum + l.count, 0);
+  const group = mode === 'group';
+  const discount = group ? groupDiscount(packages) : 0;
+  const listPrice = linePrices(state, supplierId, known, 0, cityId).reduce((sum, p) => sum + p, 0);
+  const price = group
+    ? linePrices(state, supplierId, known, discount, cityId).reduce((sum, p) => sum + p, 0)
+    : listPrice;
+  const trust = getRelation(state, supplierId).trust;
+  const seize = supplier ? Math.min(1, seizeChance(supplier, trust) * (group ? groupRiskFactor(packages) : 1)) : 0;
+  const weight = known.reduce((sum, l) => {
+    const pkg = supplier?.packages.find((p) => p.id === l.packageId);
+    return sum + (pkg ? pkg.amount * unitWeight(pkg.productId) * l.count : 0);
+  }, 0);
+  return { packages, shipments: group ? (packages > 0 ? 1 : 0) : packages, listPrice, price, discount, seize, weight };
+}
+
 /** Laufende Rabatt-Aktionen, in einer Stadt oder überall. */
 export function getDeals(state: GameState, cityId?: string): readonly SupplierDeal[] {
   const deals = (state.modules.suppliers.deals ?? []).filter((d) => d.endsAt > state.time);
@@ -698,9 +858,15 @@ export function activeDeal(
  * Wahrscheinlichkeit steigt mit schlechter Zuverlässigkeit, sinkt mit Vertrauen; am Hafen kommt der Zoll dazu, bei
  * Lieferanten mit eigenem Zoll (customs, z.B. Fracht am Flughafen) dessen Zusatz.
  */
-export function rollShipmentProblem(roll: number, supplier: Supplier, trust: number): ShipmentProblem | null {
+export function rollShipmentProblem(
+  roll: number,
+  supplier: Supplier,
+  trust: number,
+  /** Aufschlag auf die Beschlagnahme (Sammellieferung, groupRiskFactor). */
+  seizeFactor = 1,
+): ShipmentProblem | null {
   const risk = (1 - supplier.reliability) * (1 - trust / 200);
-  const seize = seizeChance(supplier, trust);
+  const seize = Math.min(1, seizeChance(supplier, trust) * seizeFactor);
   const delay = seize + risk * DELAY_FACTOR;
   const bad = delay + risk * BAD_QUALITY_FACTOR;
   if (roll < seize) return 'seized';
@@ -868,20 +1034,7 @@ function order(
     shipment.toPort = true;
     if (warehouse) shipment.destinationId = warehouse.id;
   }
-  if (problem) {
-    shipment.problem = problem;
-    shipment.problemAt = ctx.now + Math.round(supplier.deliveryTime * PROBLEM_AT);
-    if (problem === 'delayed') {
-      const [min, max] = DELAY_RANGE;
-      shipment.delayMinutes = Math.round(supplier.deliveryTime * (min + ctx.random() * (max - min)));
-      shipment.arrivesAt += shipment.delayMinutes;
-    }
-    if (problem === 'badQuality') {
-      const [min, max] = BAD_QUALITY_LOSS;
-      shipment.promisedQuality = quality;
-      shipment.quality = clampQuality(quality - (min + ctx.random() * (max - min)));
-    }
-  } else rollLuck(ctx, shipment, supplier.deliveryTime);
+  settleProblem(ctx, shipment, supplier, problem);
   ctx.state.modules.suppliers.shipments.push(shipment);
 
   rel.orders += 1;
@@ -906,6 +1059,199 @@ function order(
     cityId,
   });
   return { ok: true, data: { shipmentId: shipment.id } };
+}
+
+/**
+ * Ausgewürfeltes Problem an die Lieferung schreiben: wann es eintritt, wie lange die Verspätung ist, wie viel schlechter
+ * die Ware ankommt (bei der Sammellieferung alle Pakete gleich). Ohne Problem vielleicht eine Chance.
+ */
+function settleProblem(ctx: Ctx, shipment: Shipment, supplier: Supplier, problem: ShipmentProblem | null): void {
+  if (!problem) {
+    rollLuck(ctx, shipment, supplier.deliveryTime);
+    return;
+  }
+  shipment.problem = problem;
+  shipment.problemAt = ctx.now + Math.round(supplier.deliveryTime * PROBLEM_AT);
+  if (problem === 'delayed') {
+    const [min, max] = DELAY_RANGE;
+    shipment.delayMinutes = Math.round(supplier.deliveryTime * (min + ctx.random() * (max - min)));
+    shipment.arrivesAt += shipment.delayMinutes;
+  }
+  if (problem === 'badQuality') {
+    const [min, max] = BAD_QUALITY_LOSS;
+    const loss = min + ctx.random() * (max - min);
+    for (const item of [shipment, ...(shipment.extra ?? [])]) {
+      item.promisedQuality = item.quality;
+      item.quality = clampQuality(item.quality - loss);
+    }
+  }
+}
+
+/**
+ * Mehrere Pakete auf einmal (Befehl 'suppliers.orderBatch'). Erst wird alles geprüft (Pakete, Vertrauen, Geld bzw.
+ * Kredit, Platz im Lager), dann bestellt: einzeln als normale Bestellungen, als Sammelbestellung in einer Lieferung.
+ */
+function orderBatch(
+  ctx: Ctx,
+  supplierId: string,
+  rawLines: readonly OrderLine[],
+  mode: OrderMode,
+  onCredit: boolean,
+  warehouseId: string | undefined,
+  actor: string = 'player',
+): CommandResult {
+  if (mode !== 'group' && mode !== 'single') return { ok: false, reason: 'Unbekannte Bestellart.' };
+  const lines = normalizeLines(Array.isArray(rawLines) ? rawLines : []);
+  const total = lines.reduce((sum, l) => sum + l.count, 0);
+  if (total === 0) return { ok: false, reason: 'Du hast noch nichts ausgewählt.' };
+  if (total > GROUP_ORDER.maxPackages) {
+    return { ok: false, reason: `Höchstens ${GROUP_ORDER.maxPackages} Pakete auf einmal.` };
+  }
+  const base = getSupplier(ctx.state, supplierId);
+  const warehouse = warehouseId ? getWarehouse(ctx.state, warehouseId) : undefined;
+  if (warehouseId && !warehouse) return { ok: false, reason: 'Dieses Lager gehört dir nicht.' };
+  const cityId = warehouse?.cityId ?? activeCity(ctx.state);
+  const supplier = base ? supplierIn(base, cityId) : undefined;
+  const pkgs = lines.map((l) => supplier?.packages.find((p) => p.id === l.packageId));
+  if (!base || !supplier || pkgs.some((p) => !p)) return { ok: false, reason: 'Unbekanntes Paket.' };
+  const packages = pkgs as SupplierPackage[];
+  if (packages.some((p) => p.container)) return { ok: false, reason: 'Container gehen nur einzeln.' };
+  if (!isUnlocked(ctx.state, supplierId)) {
+    return { ok: false, reason: `${supplier.contactName} macht noch keine Geschäfte mit dir.` };
+  }
+  if (!deliversTo(base, cityId))
+    return { ok: false, reason: `${supplier.contactName} liefert nicht nach ${cityName(cityId)}.` };
+  const toPort = supplier.kind === 'port';
+  if (toPort && !hasBerth(ctx.state, cityId)) {
+    return { ok: false, reason: `Ohne eigenen Liegeplatz im ${portName(cityId)} kann kein Schiff für dich anlegen.` };
+  }
+  const quote = orderQuote(ctx.state, supplierId, lines, mode, cityId);
+  const target = toPort ? null : (warehouse?.id ?? defaultWarehouse(ctx.state, cityId, quote.weight));
+  if (!toPort && !target) return { ok: false, reason: `In ${cityName(cityId)} hast du noch kein Lager.` };
+  if (target && courierRoom(ctx.state, target) < quote.weight) {
+    const name = getWarehouse(ctx.state, target)?.name ?? 'Lager';
+    return {
+      ok: false,
+      reason: `Im ${name} ist kein Platz mehr für die ganze Bestellung. Bau Regale ein oder lager um.`,
+    };
+  }
+  const trust = getRelation(ctx.state, supplierId).trust;
+  if (packages.some((p) => (p.minTrust ?? 0) > trust)) {
+    return { ok: false, reason: `Dafür vertraut dir ${supplier.contactName} noch nicht genug.` };
+  }
+  if (isBlocked(ctx.state, supplierId)) {
+    return { ok: false, reason: `${supplier.contactName} liefert erst wieder, wenn du deine Schulden bezahlt hast.` };
+  }
+  if (onCredit) {
+    if (creditLimit(ctx.state, supplierId) === 0) {
+      return { ok: false, reason: `${supplier.contactName} gibt dir noch keinen Kredit.` };
+    }
+    if (quote.price > availableCredit(ctx.state, supplierId)) {
+      return { ok: false, reason: `So viel Kredit gibt dir ${supplier.contactName} nicht.` };
+    }
+  } else if (ctx.state.wallet.dirty < quote.price) {
+    return { ok: false, reason: 'Nicht genug Geld.' };
+  }
+
+  // Einzeln: jedes Paket als eigene Bestellung, ins selbe Lager (Schiffsware wie gewählt an den Kai).
+  if (mode === 'single') {
+    const shipmentIds: number[] = [];
+    for (const line of lines) {
+      for (let i = 0; i < line.count; i++) {
+        const result = order(ctx, supplierId, line.packageId, onCredit, target ?? warehouseId, actor);
+        if (!result.ok) return shipmentIds.length > 0 ? { ok: true, data: { shipmentIds } } : result;
+        shipmentIds.push((result.data as { shipmentId: number }).shipmentId);
+      }
+    }
+    return { ok: true, data: { shipmentIds } };
+  }
+  return orderGroup(ctx, { supplier, lines, packages, quote, cityId, target, warehouse, toPort, onCredit, actor });
+}
+
+/** Sammelbestellung: alles in einer Lieferung, mit Rabatt; ein Wurf auf Probleme für alles, mit Aufschlag. */
+function orderGroup(
+  ctx: Ctx,
+  o: {
+    supplier: Supplier;
+    lines: readonly OrderLine[];
+    packages: readonly SupplierPackage[];
+    quote: OrderQuote;
+    cityId: string;
+    target: string | null;
+    warehouse: Warehouse | undefined;
+    toPort: boolean;
+    onCredit: boolean;
+    actor: string;
+  },
+): CommandResult {
+  const { supplier, quote, cityId } = o;
+  const rel = relationFor(ctx, supplier.id);
+  const price = quote.price;
+  if (o.onCredit) {
+    rel.debt += price;
+    rel.dueAt = Math.max(rel.dueAt ?? 0, ctx.now + CREDIT_TERM);
+  } else if (!wallet.pay(ctx, price, 'dirty', `Sammelbestellung ${supplier.name}`, 'goods.purchase')) {
+    return { ok: false, reason: 'Nicht genug Geld.' };
+  }
+  const prices = linePrices(ctx.state, supplier.id, o.lines, quote.discount, cityId);
+  const bonus = supplierQualityBonus(ctx.state, supplier.id);
+  const items: ShipmentItem[] = o.lines.map((line, i) => ({
+    packageId: line.packageId,
+    productId: o.packages[i].productId,
+    amount: o.packages[i].amount * line.count,
+    quality: clampQuality(supplier.quality + bonus + (ctx.random() * 2 - 1) * QUALITY_SPREAD),
+    price: prices[i],
+  }));
+  const problem = rollShipmentProblem(ctx.random(), supplier, rel.trust, groupRiskFactor(quote.packages));
+  const [lead, ...extra] = items;
+  const shipment: Shipment = {
+    id: ctx.nextId(),
+    supplierId: supplier.id,
+    packageId: lead.packageId,
+    productId: lead.productId,
+    amount: lead.amount,
+    quality: lead.quality,
+    warehouseId: o.target ?? 'port',
+    price: prices.reduce((sum, p) => sum + p, 0),
+    orderedAt: ctx.now,
+    arrivesAt: ctx.now + supplier.deliveryTime,
+  };
+  if (extra.length > 0) shipment.extra = extra;
+  if (cityId !== 'koeln') shipment.cityId = cityId;
+  if (o.actor.startsWith('staff:')) shipment.orderedBy = o.actor;
+  if (o.onCredit) shipment.onCredit = true;
+  if (o.toPort) {
+    shipment.toPort = true;
+    if (o.warehouse) shipment.destinationId = o.warehouse.id;
+  }
+  settleProblem(ctx, shipment, supplier, problem);
+  ctx.state.modules.suppliers.shipments.push(shipment);
+
+  rel.orders += 1;
+  rel.spent += shipment.price;
+  addTrust(
+    ctx,
+    supplier.id,
+    TRUST_PER_ORDER + (shipment.price / 1000) * TRUST_PER_1000_EUR + (o.onCredit ? 0 : TRUST_CASH_BONUS),
+    cityId,
+  );
+  journal.add(
+    ctx,
+    `Sammelbestellung bei ${supplier.name}: ${shipmentGoods(shipment)} (${formatEuro(shipment.price)}, ` +
+      `${Math.round(quote.discount * 100)} % Rabatt${o.onCredit ? ', auf Kredit' : ''}).`,
+  );
+  const all = shipmentItems(shipment);
+  ctx.emit('shipment.ordered', {
+    shipmentId: shipment.id,
+    supplierId: supplier.id,
+    amount: all.reduce((sum, x) => sum + x.amount, 0),
+    price: shipment.price,
+    productId: lead.productId,
+    onCredit: o.onCredit,
+    cityId,
+    ...(extra.length > 0 ? { items: all.map((x) => ({ productId: x.productId, amount: x.amount })) } : {}),
+  });
+  return { ok: true, data: { shipmentId: shipment.id, shipmentIds: [shipment.id] } };
 }
 
 /**
@@ -942,7 +1288,8 @@ function defaultWarehouse(state: GameState, cityId: string, weight = 0): string 
 function courierRoom(state: GameState, warehouseId: string): number {
   let inbound = 0;
   for (const s of state.modules.suppliers.shipments) {
-    if (!s.toPort && s.warehouseId === warehouseId) inbound += s.amount * unitWeight(s.productId);
+    if (s.toPort || s.warehouseId !== warehouseId) continue;
+    for (const item of shipmentItems(s)) inbound += item.amount * unitWeight(item.productId);
   }
   return warehouseFree(state, warehouseId) - inbound;
 }
@@ -954,7 +1301,7 @@ function courierRoom(state: GameState, warehouseId: string): number {
  */
 function unloadCourier(
   ctx: Ctx,
-  s: Shipment,
+  s: ShipmentItem,
   first: string,
   cityId: string,
 ): { warehouseId: string; amount: number }[] {
@@ -1177,38 +1524,52 @@ function deliver(ctx: Ctx): void {
   for (const s of arrived) {
     const supplier = getSupplier(ctx.state, s.supplierId);
     if (supplier) applyArrivalLuck(ctx, s, supplier);
+    // Eine Sammellieferung bringt mehrere Pakete (shipmentItems), sonst ist es genau eins.
+    const items = shipmentItems(s);
     if (s.toPort) {
       // Schiffsware: am Kai abladen, abholen muss der Spieler (logistics schreibt Journal und Nachricht).
-      receiveCargo(ctx, {
-        supplierId: s.supplierId,
-        productId: s.productId,
-        amount: s.amount,
-        quality: s.quality,
-        unitCost: Math.round((s.price / s.amount) * 100) / 100,
-        cityId: s.cityId ?? 'koeln',
-        ...(s.destinationId && getWarehouse(ctx.state, s.destinationId) ? { warehouseId: s.destinationId } : {}),
-      });
+      for (const item of items) {
+        receiveCargo(ctx, {
+          supplierId: s.supplierId,
+          productId: item.productId,
+          amount: item.amount,
+          quality: item.quality,
+          unitCost: Math.round((item.price / item.amount) * 100) / 100,
+          cityId: s.cityId ?? 'koeln',
+          ...(s.destinationId && getWarehouse(ctx.state, s.destinationId) ? { warehouseId: s.destinationId } : {}),
+        });
+      }
     } else {
       // Gehört das Ziel-Lager nicht mehr dir, geht die Ware ins nächste eigene.
       const warehouse =
         getWarehouse(ctx.state, s.warehouseId) ??
         nearestWarehouse(ctx.state, getCity(s.cityId ?? 'koeln')?.center ?? supplier ?? { lng: 0, lat: 0 });
-      const placed = unloadCourier(ctx, s, warehouse?.id ?? s.warehouseId, s.cityId ?? 'koeln');
-      const goods = `${formatProductAmount(s.productId, s.amount)} ${productName(s.productId)}`;
-      const where = placedText(ctx.state, s.productId, placed);
+      const unloaded = items.map((item) => ({
+        item,
+        placed: unloadCourier(ctx, item, warehouse?.id ?? s.warehouseId, s.cityId ?? 'koeln'),
+      }));
+      const goods = shipmentGoods(s);
+      // Verteilt: Ein Paket passte nicht mehr in ein Lager allein (bei mehreren Paketen pro Ware genannt).
+      const spread = unloaded.some((u) => u.placed.length > 1);
+      const where =
+        spread && unloaded.length > 1
+          ? unloaded
+              .map((u) => `${productName(u.item.productId)}: ${placedText(ctx.state, u.item.productId, u.placed)}`)
+              .join('; ')
+          : placedText(ctx.state, s.productId, unloaded[0]?.placed ?? []);
       // Aus einer anderen Stadt mit Stadtname (Auftrag 43, G10: im Hamburger Verlauf standen Kölner Lieferungen ohne Ort).
       const city = s.cityId ?? 'koeln';
       const prefix = city === activeCity(ctx.state) ? '' : `${cityName(city)}: `;
       // Was deine Leute bestellt haben, steht nicht im Journal (Auftrag 43, K10: 16 von 60 Einträgen waren Lieferungen),
       // außer die Ware musste verteilt werden.
-      if (!s.orderedBy || placed.length > 1) {
+      if (!s.orderedBy || spread) {
         journal.add(
           ctx,
-          `${prefix}Lieferung angekommen: ${goods}${placed.length > 1 ? ', verteilt: ' : ' '}${where}.`,
+          `${prefix}${s.extra ? 'Sammellieferung' : 'Lieferung'} angekommen: ${goods}${spread ? ', verteilt: ' : ' '}${where}.`,
           'good',
         );
       }
-      if (placed.length > 1) placedIn.set(s.id, where);
+      if (spread) placedIn.set(s.id, where);
     }
     if (s.problem === 'badQuality' && supplier) {
       s.problemRevealed = true;
@@ -1233,6 +1594,7 @@ function deliver(ctx: Ctx): void {
       ...(placedIn.has(s.id) ? { placedIn: placedIn.get(s.id) } : {}),
       ...(s.orderedBy ? { byStaff: true } : {}),
       cityId: shipmentCity(s),
+      ...(s.extra ? { items: items.map((x) => ({ productId: x.productId, amount: x.amount })) } : {}),
     });
   }
 }
@@ -1320,6 +1682,8 @@ export default defineModule({
     if (ctx.now % MINUTES_PER_DAY === 0) rollDeals(ctx);
   },
   commands: {
+    'suppliers.orderBatch': (ctx, { supplierId, lines, mode, onCredit, warehouseId }, meta) =>
+      orderBatch(ctx, supplierId, lines, mode, !!onCredit, warehouseId, meta.actor),
     'suppliers.order': (ctx, { supplierId, packageId, onCredit, warehouseId }, meta) =>
       order(ctx, supplierId, packageId, !!onCredit, warehouseId, meta.actor),
     'suppliers.repay': (ctx, { supplierId, amount }) => repay(ctx, supplierId, amount),
@@ -1331,6 +1695,8 @@ export default defineModule({
     'city.arrived': (ctx, { cityId, first }) => {
       if (first) onCityArrived(ctx, cityId);
     },
+    // Papiere für den Zoll selbst gemacht (Minispiel, troubles.ts).
+    'minigame.finished': (ctx, payload) => onPapersFinished(ctx, payload),
   },
   migrations: {
     2: (old: SuppliersStateV1): SuppliersStateV2 => ({ shipments: old.shipments, relations: initialRelations() }),

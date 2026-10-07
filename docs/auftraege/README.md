@@ -278,6 +278,13 @@ Abschluss gemacht: Rahmen mit „Die Karte gehört dem Minispiel“ (`takeOverMa
 Look-System, geteilter Baukasten (`kit/goods.ts`, `LOOK_COLORS`), Dev-Haken und Optionen für Screenshots, ein e2e-Schritt
 mit einem gespielten Minispiel und der vollständige Abschnitt „Minispiele“ in `docs/architektur.md`.
 
+### Nächste Runde: Feedback vom 07.10.2026
+
+[Auftrag 45](45-feedback-bestellung-handy-quests.md): Minispiele kamen im normalen Spiel kaum (erstes frühestens an
+Tag 8), jetzt an Tag 1 bis 3; Lieferanten-Angebot nach Warenart mit Sammel- oder Einzelbestellung und „Papiere
+fälschen“ bei drohender Beschlagnahme; Handy Schritt für Schritt mit Peters Quests; Quests als goldenes Banner und
+auffällige Karte. Umgesetzt in einer Session, das Handy und die Quests parallel in einer zweiten Arbeitskopie.
+
 ## Mergen
 
 - Ein PR wird gemergt, sobald er fertig und die CI grün ist. Die Reihenfolge in Phase 1 ist egal.

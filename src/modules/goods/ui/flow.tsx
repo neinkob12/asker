@@ -21,7 +21,7 @@ import {
 import { activeCity } from '../../city';
 import { cargoAmount, getTrips, isInterCityTrip, tripCity } from '../../logistics';
 import { getSpots } from '../../spots';
-import { shipmentsInTransit } from '../../suppliers';
+import { shipmentItems, shipmentsInTransit } from '../../suppliers';
 import {
   formatProductAmount,
   getStock,
@@ -63,7 +63,8 @@ function inboundTo(state: GameState, cityId: string, productId: string): number 
     for (const item of trip.items) if (item.productId === productId) n += item.amount;
   }
   for (const s of shipmentsInTransit(state)) {
-    if ((s.cityId ?? 'koeln') === cityId && s.productId === productId) n += s.amount;
+    if ((s.cityId ?? 'koeln') !== cityId) continue;
+    for (const item of shipmentItems(s)) if (item.productId === productId) n += item.amount;
   }
   return n;
 }

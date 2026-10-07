@@ -134,6 +134,16 @@ const RAID = `
 
 export const SCENES = [
   { name: 'home', js: 'window.koeln.runtime.api.openPhone(null)' },
+  // Wie ein neues Spiel es zeigt (Feedback 07.10.2026): Handy Schritt für Schritt, erst wenige Apps und Peters Quest.
+  {
+    name: 'home-anfang',
+    js: `(() => {
+      const api = window.koeln.runtime.api;
+      api.dispatch({ type: 'quests.setPhoneSteps', payload: { enabled: true } });
+      api.openPhone(null);
+      window.__sceneCleanup = () => api.dispatch({ type: 'quests.setPhoneSteps', payload: { enabled: false } });
+    })()`,
+  },
   { name: 'nachrichten', js: "window.koeln.runtime.api.openPhone('core.messages')" },
   {
     name: 'chat',
@@ -1186,12 +1196,23 @@ export const SCENES = [
   },
 ];
 
-/** Öffnet eine frische Sitzung (pausiert, fester Seed) und spult vor. */
+/**
+ * Öffnet eine frische Sitzung (pausiert, fester Seed) und spult vor. Die Szenen zeigen alle Apps: Handy Schritt für
+ * Schritt ist aus (die Szene 'home-anfang' schaltet es kurz an).
+ */
 export async function openGame(page, base, advance) {
   await page.goto(new URL('?neu=normal&seed=1&tempo=0', base).toString());
   await page.waitForSelector('.shell-map', { timeout: 15000 });
   await page.waitForTimeout(2500);
+  await page.evaluate(
+    "window.koeln.runtime.api.dispatch({ type: 'quests.setPhoneSteps', payload: { enabled: false } })",
+  );
   if (advance > 0) await page.evaluate(`window.koeln.session.sim.advance(${advance})`);
+  // Banner vom Vorspulen (z.B. Peters erste Quest) gehören nicht in die Szenen.
+  await page.evaluate(() => {
+    const { runtime } = window.koeln;
+    while (runtime.ui.toasts.length > 0) runtime.api.dismissToast();
+  });
 }
 
 /**

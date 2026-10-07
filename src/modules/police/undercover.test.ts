@@ -7,7 +7,7 @@ import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { store } from '../goods';
 import { activeChallenge, type Challenge, MINIGAME_KINDS, MINIGAME_TIMEOUT, resolveMinigameNow } from '../minigames';
 import { getReputation } from '../reputation';
-import { UNDERCOVER_COOLDOWN, UNDERCOVER_HEAT, UNDERCOVER_RELIEF } from './config';
+import { UNDERCOVER_BASE_CHANCE_PER_HOUR, UNDERCOVER_COOLDOWN, UNDERCOVER_HEAT, UNDERCOVER_RELIEF } from './config';
 import {
   getHeat,
   type UndercoverParams,
@@ -67,9 +67,11 @@ describe('Zivi oder Kunde', () => {
     expect(MINIGAME_KINDS.undercover).toMatchObject({ ready: true, stat: 'caution' });
   });
 
-  it('Chance erst ab UNDERCOVER_HEAT, steigt mit Heat und Präsenz; Zivis nach Heat', () => {
-    expect(undercoverChance(UNDERCOVER_HEAT - 1, 1)).toBe(0);
-    expect(undercoverChance(UNDERCOVER_HEAT, 1)).toBeGreaterThan(0);
+  it('Grundrauschen ohne Heat, ab UNDERCOVER_HEAT steigend mit Heat und Präsenz; Zivis nach Heat', () => {
+    expect(undercoverChance(0, 1)).toBe(UNDERCOVER_BASE_CHANCE_PER_HOUR);
+    expect(undercoverChance(UNDERCOVER_HEAT - 1, 1)).toBe(UNDERCOVER_BASE_CHANCE_PER_HOUR);
+    expect(undercoverChance(UNDERCOVER_HEAT, 1)).toBeGreaterThanOrEqual(UNDERCOVER_BASE_CHANCE_PER_HOUR);
+    expect(undercoverChance(0, 0)).toBe(0);
     expect(undercoverChance(80, 1)).toBeGreaterThan(undercoverChance(40, 1));
     expect(undercoverChance(80, 1.5)).toBeGreaterThan(undercoverChance(80, 1));
     expect([ziviCount(20), ziviCount(50), ziviCount(90)]).toEqual([1, 2, 3]);
@@ -96,9 +98,11 @@ describe('Zivi oder Kunde', () => {
     expect(eventsOfType(events, 'minigame.started')).toHaveLength(1);
   });
 
-  it('ohne Heat oder ohne dich am Spot: keine Zivis', () => {
-    const cold = game();
-    expect(untilShift(cold, UNDERCOVER_HEAT - 5, 72)).toBeUndefined();
+  it('ohne Heat seltener, ohne dich am Spot nie', () => {
+    // Grundrauschen: Auch ohne Heat kommt irgendwann eine Schicht, mit einem Zivi (Feedback vom 07.10.2026).
+    const cold = untilShift(game(), 0, 24 * 14);
+    if (!cold) throw new Error('keine Schicht ohne Heat');
+    expect((cold.params as unknown as UndercoverParams).zivis).toBe(1);
     const away = game();
     away.dispatch({ type: 'customers.standAt', payload: { spotId: null } });
     expect(untilShift(away, 90, 72)).toBeUndefined();
