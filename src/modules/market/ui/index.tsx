@@ -77,6 +77,7 @@ function SpotPrices(props: { spotId: string }) {
     dispatch({ type: 'market.setPrice', payload: { spotId: props.spotId, productId, price } });
   return (
     <Group
+      data-tour="spot.price"
       title="Preise"
       icon="tag"
       color="money"

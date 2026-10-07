@@ -318,6 +318,63 @@ zeigt den Titel der Seite darunter (bis 14 Zeichen, sonst „Zurück“; neben e
   Offene Fragen tragen den Stempel "Antwort!", die Antwortknöpfe stehen als Glasblatt unten (erster Knopf Gold). Die
   Aufbereitung ist in `messagesModel.ts` (getestet).
 
+## Tour (Auftrag 46a)
+
+Spotlight-Erklärungen über dem Spiel (`src/ui/tour/`): Eine Tour ist eine Liste von Schritten, jeder zeigt auf ein
+Element der Oberfläche. Das Element ist freigeschnitten, umrandet (2 px in der `tint`-Farbe) und leicht eingefärbt, der
+Rest ist ausgegraut (dunkles Glas), daneben die Box im Look Glas mit Porträt des Sprechers, ein, zwei Sätzen und
+„Weiter“. Am Handy-Bildschirm (`useIsMobile`) ist die Box ein Blatt unten, der Ausschnitt bleibt. Während der Tour
+steht die Uhr. **Reine Oberfläche**: nichts im Spielstand, kein `ctx`; wer eine Tour zu einem Zeitpunkt braucht,
+startet sie aus seinem `ui/`-Ordner (später das Modul `tutorial`, Teilaufträge 46b und 46c).
+
+```ts
+const result = await ui.tour.start({
+  id: 'hud',
+  skippable: true,                 // kleiner Knopf „Überspringen“, Standard false
+  pause: true,                     // Uhr anhalten (Standard), Tempo kommt am Ende zurück
+  steps: [
+    { id: 'money', anchor: 'hud.money', speaker: PETER, text: 'Das ist dein Schwarzgeld.' },
+    { id: 'heat', anchor: 'hud.heat', tint: 'danger', text: 'Steigt die Heat, kommen Kontrollen.' },
+    { id: 'staff', anchor: 'phone.screen', before: () => ui.openPhone('tab:staff'), text: 'Deine Leute.' },
+    { id: 'sell', anchor: 'spot.sell', waitFor: { event: 'sale.completed' }, text: 'Verkauf einmal selbst.' },
+  ],
+});                                // 'done' | 'skipped'
+ui.tour.active();                  // ID der laufenden Tour oder null
+ui.tour.skip();                    // beendet die laufende Tour
+```
+
+- **Schritte** (`TourStep`): `anchor` aus `TOUR_ANCHORS` (ohne Anker steht die Box mittig), `anchorKey` (trägt
+  derselbe Anker an mehreren Elementen, z.B. die Kundenanzeige an jedem Spot, wählt der Schlüssel `data-tour-key`),
+  `text` (ein, zwei Sätze), `title`, `speaker` (Kontakt mit `look` und `voice`, sonst eine neutrale Box), `before`
+  (läuft vor dem Schritt, darf ein Promise sein), `waitFor` (`'next'` Standard: Weiter-Knopf; `{ event }` oder
+  `{ state }`: kein Knopf, Hinweis „Mach das jetzt“, nur der Anker ist bedienbar, weiter beim Ereignis bzw. sobald die
+  Bedingung gilt, die wird sofort und nach jeder Änderung geprüft), `placement` (`auto`, `top`, `bottom`, `left`,
+  `right`), `tint` (Bedeutungsfarbe, Standard `brand`).
+- **Ablauf** (`tour/controller.ts`, `TourRunner`, getestet): Läuft schon eine Tour, wird die neue eingereiht. `pause`
+  hält die Uhr an; ein Tempo-Wunsch währenddessen (Regler als Anker, Dialog) gilt nach der Tour. Ein neues oder
+  geladenes Spiel beendet alle Touren als `'skipped'`.
+- **Oberfläche** (`tour/TourHost.tsx`, in `shell/App.tsx` über Handy, HUD und Suche, unter den Dialogen des Kerns,
+  `--z-tour`): Der Anker wird Bild für Bild verfolgt (Handy federt, Karte fliegt, Fenster ändert sich), der Ausschnitt
+  wandert in 250 ms (bei „Bewegung reduzieren“ sofort). Fehlt der Anker, wartet der Schritt bis zu zwei Sekunden und
+  zeigt die Box dann mittig ohne Umrandung, nie ein Fehler. Vier unsichtbare Blocker fangen Klicks neben dem Anker ab
+  (bei `'next'` auch auf dem Anker). Tastatur: Enter oder Leertaste = Weiter, Esc tut nichts, andere Kürzel sind
+  gesperrt (`shell/keys.ts`); der Fokus bleibt in der Box (`role="dialog"`, Text `aria-live="polite"`). Der
+  Tempo-Regler zeigt „Pause“ und ist gesperrt, außer er ist selbst der Anker (dann merkt ein Tipp das Tempo für nach
+  der Tour, `is-queued`). Ton: ein kurzer Klick je Schritt; hat der Sprecher eine `voice` und ist die Sprachausgabe an,
+  spricht er den Text (`audio.speak`), aber nur mit fertig geladenem Modell oder der Browser-Stimme, nie mit Wartezeit.
+- **Anker** (`tour/anchors.ts`, `TOUR_ANCHORS`, jeweils mit Ort): `hud.money`, `hud.money.dirty`, `hud.money.clean`,
+  `hud.heat`, `hud.clock`, `hud.weather` (noch ohne Element: das Wetter steht seit Auftrag 26 in den Einstellungen),
+  `hud.speed`, `hud.stock`, `hud.reputation`, `hud.rank`, `hud.territory`, `hud.mission` (Quest-Karte, später die
+  Missions-Karte), `phone`, `phone.home`, `phone.app.<appId>` (jedes App-Symbol, `appId` wie bei `registerPhoneApp`
+  bzw. `tab:<id>`, Helfer `phoneAppAnchor`), `phone.screen` (oberste Seite im Stapel), `spot.panel`, `spot.customer`
+  (Blase mit Zähler am Spot-Marker, `data-tour-key` = Spot-ID), `spot.sell`, `spot.price`, `spot.runner`, `map`.
+  Elemente tragen `data-tour="<id>"`; `Group` und `HudPill` reichen die Prop `data-tour` an ihr äußerstes Element
+  durch. Neue Anker: in `TOUR_ANCHORS` eintragen, im `ui/`-Ordner nur das Attribut setzen.
+- **Ausprobieren:** `?neu=normal&seed=1&tempo=0&tour=demo` startet die Demo-Tour (`tour/demo.ts`: HUD, Handy mit der
+  Personal-App, Karte). `npm run screenshot -- --scenes=tour` macht drei Bilder nach `screenshots/tour/` (HUD-Anker,
+  Handy-Anker, Blatt am Handy-Bildschirm). Tests: `tour/placement.test.ts` (Lage der Box), `tour/controller.test.ts`
+  (Reihenfolge, Warten, Tempo, ohne Anker).
+
 ## Neuzeichnen und Selektoren
 
 Die `UiRuntime` zeichnet nach Simulationsschritten höchstens zehnmal pro Sekunde neu, `App` und alles darunter ohne

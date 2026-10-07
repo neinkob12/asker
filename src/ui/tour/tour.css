@@ -1,0 +1,276 @@
+/*
+ * Tour (Auftrag 46a), Look „Glas“: Der Ring schneidet den Anker frei (sein Schatten graut den Rest aus), vier
+ * unsichtbare Blocker fangen Klicks ab, die Box steht daneben (am Handy-Bildschirm als Blatt unten).
+ * Ebene: über Handy, HUD und Popovern, unter den Dialogen des Kerns (--z-tour).
+ */
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-tour);
+  pointer-events: none;
+  font-family: var(--font-hud);
+  color: var(--hud-ink);
+  --tour-dim: var(--hud-glass);
+  --tour-fill: color-mix(in srgb, var(--tour-tint) 12%, transparent);
+  --tour-duration: 250ms;
+}
+.tour--still {
+  --tour-duration: 0ms;
+}
+
+.tour-block {
+  position: fixed;
+  pointer-events: auto;
+  /* Kein Hintergrund: Das Ausgrauen macht der Ring, die Blocker fangen nur Klicks. */
+  background: transparent;
+}
+
+/* Ganzer Bildschirm ausgegraut, wenn es keinen Anker gibt. */
+.tour-dim {
+  position: fixed;
+  inset: 0;
+  background: var(--tour-dim);
+  animation: tour-fade var(--tour-duration) ease-out;
+}
+
+/* Ausschnitt: Der Ring liegt auf dem Anker, sein riesiger Schatten dunkelt alles andere ab. */
+.tour-ring {
+  position: fixed;
+  box-sizing: border-box;
+  border: 2px solid var(--tour-tint);
+  background: var(--tour-fill);
+  box-shadow:
+    0 0 0 9999px var(--tour-dim),
+    0 0 0 1px rgba(0, 0, 0, 0.35) inset,
+    0 0 24px color-mix(in srgb, var(--tour-tint) 45%, transparent);
+  transition:
+    left var(--tour-duration) var(--ease-out),
+    top var(--tour-duration) var(--ease-out),
+    width var(--tour-duration) var(--ease-out),
+    height var(--tour-duration) var(--ease-out),
+    border-radius var(--tour-duration) var(--ease-out);
+}
+
+/* Box aus dunklem Glas */
+.tour-box {
+  position: fixed;
+  pointer-events: auto;
+  box-sizing: border-box;
+  width: min(380px, calc(100vw - 24px));
+  padding: 16px 18px 14px;
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass-strong);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  outline: none;
+  animation: tour-pop var(--tour-duration) var(--ease-out);
+}
+.tour-box:focus-visible {
+  box-shadow:
+    var(--hud-shadow),
+    0 0 0 2px var(--tour-tint);
+}
+.tour--desktop .tour-box {
+  transition:
+    left var(--tour-duration) var(--ease-out),
+    top var(--tour-duration) var(--ease-out);
+}
+
+/* Keil zeigt zum Anker: an der Kante, die dem Anker zugewandt ist. */
+.tour-box__arrow {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: var(--hud-glass-strong);
+  border-left: 1px solid var(--hud-glass-edge);
+  border-top: 1px solid var(--hud-glass-edge);
+  transform: rotate(45deg);
+  left: calc(var(--tour-arrow-x, 50%) - 7px);
+  top: calc(var(--tour-arrow-y, 0px) - 7px);
+}
+.tour-box[data-side="top"] .tour-box__arrow {
+  transform: rotate(225deg);
+}
+.tour-box[data-side="left"] .tour-box__arrow {
+  transform: rotate(135deg);
+}
+.tour-box[data-side="right"] .tour-box__arrow {
+  transform: rotate(-45deg);
+}
+.tour-box[data-side="center"] .tour-box__arrow {
+  display: none;
+}
+
+.tour-box__body {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.tour-box__avatar {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--tour-tint);
+}
+.tour-box__avatar .ui-avatar {
+  width: 44px;
+  height: 44px;
+}
+.tour-box__text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.tour-box__kicker {
+  display: block;
+  font-family: var(--font-hud-display);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tour-tint);
+  margin-bottom: 2px;
+}
+.tour-box__line {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.4;
+  /* Nie mitten im Wort umbrechen (Optik-Regel). */
+  overflow-wrap: normal;
+  hyphens: manual;
+  text-wrap: pretty;
+}
+
+.tour-box__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+}
+.tour-box__progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.tour-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+.tour-dots__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--hud-empty);
+  transition: background var(--tour-duration) var(--ease-out);
+}
+.tour-dots__dot.is-on {
+  background: var(--tour-tint);
+}
+.tour-dots__dot.is-done {
+  background: color-mix(in srgb, var(--tour-tint) 55%, transparent);
+}
+.tour-box__skip {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--hud-ink-2);
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 4px;
+  min-height: 32px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.tour-box__skip:hover,
+.tour-box__skip:focus-visible {
+  color: var(--hud-ink);
+  background: var(--hud-glass-fill);
+  outline: none;
+}
+.tour-box__next.ui-button {
+  --btn-bg: var(--hud-gold);
+  --btn-fg: var(--hud-gold-on);
+  --btn-border: var(--hud-gold);
+  --btn-hover: var(--hud-gold);
+  min-width: 96px;
+  font-family: var(--font-hud);
+  font-weight: 700;
+}
+.tour-box__do {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-hud-display);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tour-tint);
+  animation: tour-nudge 1.4s ease-in-out infinite;
+}
+.tour--still .tour-box__do {
+  animation: none;
+}
+
+/* Handy-Bildschirm: Die Box ist ein Blatt unten, der Ausschnitt bleibt. */
+.tour--mobile .tour-box {
+  left: 8px;
+  right: 8px;
+  bottom: calc(8px + var(--safe-bottom, 0px));
+  top: auto;
+  width: auto;
+  border-radius: 22px;
+  padding-bottom: 16px;
+}
+.tour--mobile .tour-box__line {
+  font-size: 16px;
+}
+
+@keyframes tour-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tour-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes tour-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour {
+    --tour-duration: 0ms;
+  }
+  .tour-box__do {
+    animation: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .tour {
+    --tour-dim: rgba(10, 11, 14, 0.82);
+  }
+  .tour-box {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

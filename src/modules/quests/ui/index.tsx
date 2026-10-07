@@ -182,7 +182,13 @@ function QuestCard(props: { quest: QuestDef }) {
   const go = () => goTo(ui, state, quest.goTo);
   if (collapsed) {
     return (
-      <button type="button" class="quest-hud quest-hud--mini" onClick={toggle} aria-label="Quest aufklappen">
+      <button
+        type="button"
+        class="quest-hud quest-hud--mini"
+        data-tour="hud.mission"
+        onClick={toggle}
+        aria-label="Quest aufklappen"
+      >
         <Icon name="target" />
         <span class="quest-hud__mini-title">{quest.title}</span>
         <span class="quest-hud__count">{formatProgress(now, target, quest.euro)}</span>
@@ -191,7 +197,7 @@ function QuestCard(props: { quest: QuestDef }) {
     );
   }
   return (
-    <section class={`quest-hud is-new ${guide ? 'is-guide' : ''}`} aria-label="Aktuelle Quest">
+    <section class={`quest-hud is-new ${guide ? 'is-guide' : ''}`} data-tour="hud.mission" aria-label="Aktuelle Quest">
       <header class="quest-hud__head">
         <span class="hud-label is-quest">
           Quest {number}/{QUESTS.length} · {chapterName(quest.chapter)}

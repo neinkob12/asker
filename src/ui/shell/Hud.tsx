@@ -47,15 +47,20 @@ export function Popover(props: { id: string; children: ComponentChildren; align?
 
 function SpeedControl() {
   const runtime = useRuntime();
-  const { session, api } = runtime;
+  const { session, api, tours } = runtime;
   const mobile = useIsMobile();
   const speed = session.loop.speed;
+  // Tour (Auftrag 46a): Hält sie die Uhr an, zeigt der Regler „Pause“ und lässt sich nicht bedienen, außer er ist
+  // selbst der Anker; dann merkt ein Tipp das Tempo für nach der Tour (is-queued), die Uhr steht weiter.
+  const tourPause = tours.pausing();
+  const locked = tourPause && tours.current()?.step.anchor !== 'hud.speed';
+  const queued = tourPause ? tours.resumeSpeed() : null;
   if (mobile) {
     // Am Handy nur Pause und ein Knopf, der durch 1×, 2×, 4× schaltet.
     const running = SPEEDS.filter((x) => x > 0);
     const next = running[(running.indexOf(speed as (typeof running)[number]) + 1) % running.length];
     return (
-      <fieldset class="hud-speed" aria-label="Spielgeschwindigkeit">
+      <fieldset class="hud-speed" aria-label="Spielgeschwindigkeit" data-tour="hud.speed" disabled={locked}>
         <button
           type="button"
           class={`hud-speed__btn is-pause ${speed === 0 ? 'is-active' : ''}`}
@@ -67,7 +72,7 @@ function SpeedControl() {
         </button>
         <button
           type="button"
-          class={`hud-speed__btn ${speed > 0 ? 'is-active' : ''}`}
+          class={`hud-speed__btn ${speed > 0 ? 'is-active' : ''} ${queued !== null && queued > 0 ? 'is-queued' : ''}`}
           aria-label={
             speed === 0
               ? `Weiter mit ${SPEED_LABELS[runtime.resumeSpeed] ?? runtime.resumeSpeed}`
@@ -82,12 +87,14 @@ function SpeedControl() {
     );
   }
   return (
-    <fieldset class="hud-speed" aria-label="Spielgeschwindigkeit">
+    <fieldset class="hud-speed" aria-label="Spielgeschwindigkeit" data-tour="hud.speed" disabled={locked}>
       {SPEEDS.map((s, i) => (
         <button
           key={s}
           type="button"
-          class={`hud-speed__btn ${s === speed ? 'is-active' : ''} ${s === 0 ? 'is-pause' : ''}`}
+          class={`hud-speed__btn ${s === speed ? 'is-active' : ''} ${s === 0 ? 'is-pause' : ''} ${
+            queued !== null && s === queued && s > 0 ? 'is-queued' : ''
+          }`}
           aria-pressed={s === speed}
           aria-label={s === 0 ? 'Pause' : `Tempo ${SPEED_LABELS[s] ?? s}`}
           title={`${s === 0 ? 'Pause (Leertaste)' : `Tempo ${SPEED_LABELS[s] ?? s}`}${s > 0 ? ` (Taste ${i})` : ''}`}

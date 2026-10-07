@@ -4,6 +4,7 @@ import { RuntimeContext } from '../hooks';
 import { NotificationBanner } from '../phone/Notification';
 import { PhoneFrame } from '../phone/PhoneFrame';
 import type { UiRuntime } from '../runtime';
+import { TourHost } from '../tour/TourHost';
 import { DialogHost, PickBanner } from './Hosts';
 import { Hud } from './Hud';
 import { useIsMobile } from './layout';
@@ -54,6 +55,10 @@ export function App(props: { runtime: UiRuntime }) {
             </ErrorBoundary>
             <ErrorBoundary name="Suche" silent>
               <Palette />
+            </ErrorBoundary>
+            {/* Tour (Auftrag 46a): über Handy, HUD und Suche, unter den Dialogen des Kerns (die sperren sie mit inert). */}
+            <ErrorBoundary name="Tour" silent>
+              <TourHost />
             </ErrorBoundary>
           </>
         )}

@@ -258,6 +258,8 @@ export function Group(props: {
   open?: boolean;
   children?: ComponentChildren;
   class?: string;
+  /** Anker der Tour (Auftrag 46a), z.B. "spot.sell". */
+  'data-tour'?: string;
 }) {
   const color = categoryOf(props.color ?? 'system');
   const cls = `ui-group ui-group--${color} ${props.collapsible ? 'ui-group--collapsible' : ''} ${props.class ?? ''}`;
@@ -279,14 +281,14 @@ export function Group(props: {
   );
   if (props.collapsible) {
     return (
-      <details class={cls} open={props.open ?? true}>
+      <details class={cls} open={props.open ?? true} data-tour={props['data-tour']}>
         <summary class="ui-group__head">{head}</summary>
         {body}
       </details>
     );
   }
   return (
-    <section class={cls}>
+    <section class={cls} data-tour={props['data-tour']}>
       <header class="ui-group__head">{head}</header>
       {body}
     </section>

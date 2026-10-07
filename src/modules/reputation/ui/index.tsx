@@ -76,6 +76,7 @@ function PlayerReputationHud() {
     .sort();
   return (
     <HudPill
+      data-tour="hud.reputation"
       icon="star"
       color="brand"
       label="Ruf · Reviere"
@@ -134,7 +135,11 @@ function PlayerReputationHud() {
     >
       <span class="hud-rep">
         <HudBar value={value} label="Ruf" marks={tiers.slice(1).map((t) => t.min)} />
-        <span class="hud-rep__veedel" title={`${progress.controlled} von ${progress.total} Veedeln`}>
+        <span
+          class="hud-rep__veedel"
+          data-tour="hud.territory"
+          title={`${progress.controlled} von ${progress.total} Veedeln`}
+        >
           <Icon name="flag" />
           {progress.controlled}/{progress.total}
         </span>
