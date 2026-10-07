@@ -66,7 +66,7 @@ function StandHere(props: { spotId: string }) {
   const away = isPlayerAway(state);
   const stand = (spotId: string | null) => dispatch({ type: 'customers.standAt', payload: { spotId } });
   return (
-    <Group data-tour="spot.sell" title="Selbst verkaufen" icon="runner" color="brand">
+    <Group title="Selbst verkaufen" icon="runner" color="brand">
       <List>
         {here ? (
           <ListItem
@@ -137,7 +137,9 @@ function SpotCustomers(props: { spotId: string }) {
   const regulars = getRegulars(state, { spotId: props.spotId, status: 'active' }).length;
   const total = waiting.reduce((sum, c) => sum + customerRevenue(c), 0);
   return (
-    <>
+    // Auftrag 46c: Der Anker spot.sell umfasst „Selbst verkaufen“ und die Kundschaft mit „Verkaufen“ (die Tour der
+    // Stufe 1 wartet hier auf den ersten Verkauf, beides muss bedienbar bleiben).
+    <div class="customers-sell" data-tour="spot.sell">
       <StandHere spotId={props.spotId} />
       <Group
         title="Kundschaft"
@@ -201,7 +203,7 @@ function SpotCustomers(props: { spotId: string }) {
           )}
         </List>
       </Group>
-    </>
+    </div>
   );
 }
 

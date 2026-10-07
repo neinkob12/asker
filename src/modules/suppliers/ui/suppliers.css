@@ -144,7 +144,8 @@
   padding: var(--space-4);
 }
 
-/* Auftrag 46c: das Angebot als ein Block (Anker der Tour) */
-.sup-offer {
-  display: contents;
+/* Auftrag 46c: das Angebot als ein Block (Anker der Tour; ein echter Kasten, display: contents hätte keine Maße),
+   die Gruppen darin mit demselben Abstand wie direkt in der App */
+.sup-offer > .ui-group {
+  margin-top: var(--space-5);
 }

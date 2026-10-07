@@ -149,7 +149,7 @@ async function run() {
       const wasOpen = await page.evaluate(() => window.koeln.runtime.ui.phone.open);
       await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
       const home = page.locator('.phone__home');
-      await home.getByRole('button', { name: 'Einstellungen', exact: true }).waitFor();
+      await home.getByRole('button', { name: /^Einstellungen/ }).waitFor();
       assert.equal(await home.getByRole('button', { name: /^Gangs/ }).count(), 0, 'Gangs fehlt am Anfang');
       assert.equal(await home.getByRole('button', { name: /^Lieferanten/ }).count(), 0, 'Lieferanten fehlen am Anfang');
       if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
@@ -186,6 +186,8 @@ async function run() {
         // Die Spot-Seite bleibt nach dem ersten Verkauf offen (am Handy-Bildschirm über der Karte).
         const sell = page.getByRole('button', { name: 'Verkaufen', exact: true }).first();
         if (!(await sell.isVisible())) await page.locator('.spot-marker[aria-label*="Neumarkt"]').click();
+        // Am Handy-Bildschirm liegt Peters Blatt unten über der Seite: den Knopf in die Mitte rollen.
+        await sell.evaluate((el) => el.scrollIntoView({ block: 'center' }));
         await sell.click();
         // Nach dem ersten Verkauf erklärt die Tour noch Preis und Läufer (Enter), dann ist sie durch.
         if (sold === 0) await nextTour(page);
@@ -208,9 +210,11 @@ async function run() {
       await shot(page, 'tutorial-mission-2');
       await nextTour(page);
       assert.deepEqual(await game(page, (s) => s.modules.tutorial.toursSeen), [0, 1, 2]);
-      // Der Rest des Tests braucht alle Spots und Apps: beenden wie ein Spieler, der sich auskennt.
+      // Der Rest des Tests braucht alle Spots und Apps: beenden wie ein Spieler, der sich auskennt. Die Symbole auf dem
+      // Startbildschirm federn kurz nach dem Öffnen, der Klick wartet, bis sie stehen.
       await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
-      await home.getByRole('button', { name: 'Einstellungen', exact: true }).click();
+      await page.waitForTimeout(700);
+      await home.getByRole('button', { name: /^Einstellungen/ }).click();
       await page.locator('.phone').getByRole('button', { name: 'Tutorial beenden', exact: true }).click();
       assert.equal(await game(page, (s) => s.modules.tutorial.stage), 12);
       await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
@@ -522,7 +526,9 @@ async function run() {
       window.koeln.session.autosave();
       return window.koeln.session.state.time;
     });
-    await page.reload();
+    // Neu laden mit ?tempo=0: Sonst läuft die Uhr sofort weiter, und der Leutnant stellt in der Zwischenzeit schon
+    // jemanden ein (die Zahl der Leute wäre dann Glückssache).
+    await page.goto(`${base}?tempo=0`);
     await page.waitForFunction(() => window.koeln?.session?.state?.time > 0);
     const resumed = await game(page, (s) => ({ time: s.time, staff: s.modules.staff.members.length }));
     // Nach dem Laden kann die Uhr schon wieder ein paar Minuten gelaufen sein.
