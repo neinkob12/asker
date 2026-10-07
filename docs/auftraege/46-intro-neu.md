@@ -1,247 +1,236 @@
-# Auftrag 46: Intro neu – Tour, Tutorial und Freischalten Schritt für Schritt
+# Auftrag 46: Intro neu – Tour, Missionen und Freischalten Schritt für Schritt
 
-**Entwurf** aus dem Gespräch vom 07.10.2026 (Sprachnachricht, sinngemäß). Das Papier und das Brainstorming vom
-Vortag kommen noch dazu. Offene Punkte stehen bei der jeweiligen Stufe unter „Offen“; sobald sie geklärt sind,
-wird daraus der eigentliche Auftrag.
+Stand 07.10.2026, zweite Fassung: der Flow aus dem Gespräch plus die Antworten auf die Rückfragen. Was noch
+offen ist, steht ganz unten unter „Noch offen“. Das Papier und das Brainstorming vom Vortag werden eingearbeitet,
+sobald sie da sind.
 
 ## Warum
 
 Spieler sehen die Zahlen im HUD, denken aber nicht darüber nach, was da steht. An sehr vielen Stellen ist viel zu
-viel Text. Das Quest-System hat zu viele Quests (zweistellig allein in Köln, mit allen Städten über 60) in der
-falschen Reihenfolge, und am ersten Tag ist das Postfach voll, bevor man drei Verkäufe gemacht hat. Ziel ist eine
-kurze Einführung, die mit dem natürlichen Spielfluss nach und nach die Funktionen freischaltet und jede Funktion
-genau dann erklärt, wenn sie dran ist.
+viel Text. Das Quest-System hat zu viele Quests in der falschen Reihenfolge, und am ersten Tag ist das Postfach voll,
+bevor man drei Verkäufe gemacht hat. Ziel ist eine kurze Einführung, die mit dem natürlichen Spielfluss nach und nach
+die Funktionen freischaltet und jede Funktion genau dann erklärt, wenn sie dran ist. **Die Quests von Peter fallen
+weg**, an ihre Stelle treten die Missionen unten.
 
 ## Grundregeln
 
 1. **Tour statt Text.** Wird etwas erklärt, ist genau dieses Element umrandet und leicht eingefärbt, der Rest des
    Bildschirms ist ausgegraut, daneben eine Box mit ein, zwei Sätzen und „Weiter“. Beim nächsten Schritt wandert die
-   Umrandung weiter (z.B. vom Schwarzgeld zur Heat). Der Fokus liegt auf dem Grafischen, nicht auf dem Lesen.
-2. **Freischalten statt Erklären auf Vorrat.** Was noch nicht dran ist, ist unsichtbar: Teile des HUD (sauberes Geld
-   bis zur Geldwäsche), Apps im Handy, der Spot-Ausbau, Lieferanten, Gangs, Polizei. Jede Stufe schaltet frei, erklärt
-   kurz und verlangt direkt die erste Benutzung (einmal bestellen, einmal einstellen, einmal einsetzen).
-3. **Missionen mit saftiger Belohnung.** Jede Mission unten wird spürbar belohnt, damit man sich darauf freut.
-4. **Ruhe im Handy.** Keine Push-Banner mehr, keine Dynamic Island, deutlich weniger Chats. Nur wer neu dazukommt
-   (vor allem Lieferanten), meldet sich mit einem Pop-up, mit dem man kurz interagieren muss.
+   Umrandung weiter (vom Schwarzgeld zur Heat). Der Fokus liegt auf dem Grafischen, nicht auf dem Lesen. Während
+   einer Tour steht die Uhr.
+2. **Freischalten statt Erklären auf Vorrat.** Was noch nicht dran ist, ist unsichtbar: Teile des HUD, Apps und
+   Bereiche im Handy, Lieferanten, Gangs, Polizei. Jede Stufe schaltet frei, erklärt kurz und verlangt direkt die
+   erste Benutzung (einmal bestellen, einmal einstellen, einmal einsetzen).
+3. **Missionen mit saftiger Belohnung.** Jede Mission wird spürbar belohnt (Regel unten).
+4. **Ruhe im Handy.** Keine Push-Banner, keine Dynamic Island, deutlich weniger Chats. Wer neu dazukommt (vor allem
+   Lieferanten), meldet sich mit einem Pop-up, mit dem man kurz interagieren muss.
 5. **Kurze Erklärungen.** Ein, zwei Sätze pro Schritt, mehr nicht.
+6. **Nur im Modus normal.** Hardcore hat keine Tour und keine Missionen, da ist alles von Anfang an frei. Alte
+   Spielstände und spätere Städte ebenso.
 
 ## Was heute da ist (Stand `main`, 07.10.2026)
 
-- Erster Start: Intro-Dialog mit Story-Seiten und Name für die Bestenliste (`src/ui/builtin/IntroDialog.tsx`), danach
-  die Wahl des Modus (normal, hardcore). Es gibt keine weitere Schwierigkeit.
-- Quests von Peter (`src/modules/quests/config.ts`): fünf Kölner Kapitel (Ankommen, Dein Team, Wachsen, Die Straße,
-  Boss von Köln, Ganz Köln), dazu ein Kapitel pro Stadt, Rotterdam, Produktion. Karte unter Geld und Heat, in den
-  ersten zwei Kapiteln golden mit „Zeig mir wie“ (springt zur Stelle, erklärt aber nichts).
-- Handy Schritt für Schritt (Auftrag 45): `PHONE_APP_STEPS` hängt sieben Apps an Quests (Lieferanten, Kasse, Personal,
-  Reviere, Geldwäsche, Lager, Gangs). Nachrichten und Einstellungen sind immer da.
-- Am Start sind drei Spots offen (Ebertplatz, Neumarkt, Zülpicher Platz), Rudolfplatz kostet 600 €, Aachener Weiher
-  450 €. Startgeld 1.500 € schwarz, 0 € sauber, 40 g Gras.
-- Lieferanten in Köln: Kalle (Köln) und Toni (Frankfurt) von Anfang an; Berlin ab einem Veedel, Hamburg ab 1.500 €
-  Umsatz, Amsterdam ab drei Veedeln und 15.000 € Umsatz, Jansen (Rotterdam) mit Liegeplatz im Niehler Hafen
+- Erster Start: Intro-Dialog mit Story-Seiten und Name für die Bestenliste, danach die Wahl des Modus.
+- Quests von Peter (`src/modules/quests`): fünf Kölner Kapitel, ein Kapitel pro Stadt, Rotterdam, Produktion. Handy
+  Schritt für Schritt (`PHONE_APP_STEPS`) hängt sieben Apps an Quests.
+- Am Start drei Spots offen (Ebertplatz, Neumarkt, Zülpicher Platz), Startgeld 1.500 € schwarz, 40 g Gras.
+- Lieferanten in Köln: Kalle (Köln, nur Gras) und Toni (Frankfurt) von Anfang an; Berlin ab einem Veedel, Hamburg ab
+  1.500 € Umsatz, Amsterdam ab drei Veedeln und 15.000 € Umsatz, Jansen (Rotterdam) mit Liegeplatz im Niehler Hafen
   (4.000 € sauber).
-- Rechte Hand braucht heute Level 4, Loyalität und zwei Leutnants. Leutnants führen bis zu drei Spots, Capos führen
-  Leutnants.
-- Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt) lassen sich einstellen und kosten Lohn, **haben im Code aber
-  keine Wirkung**. Der Buchhalter braucht also ohnehin ein Konzept.
-- Gangs und Polizei laufen vom ersten Tag an (Zivis seit Auftrag 45 schon ab Tag 1 bis 3, wenn man selbst am Spot
-  steht).
-- Umfang der Meldungen: 72 Stellen rufen `ui.toast`, 74 schicken Chat-Nachrichten, 11 melden sich an der Dynamic
-  Island an (vor allem Fahrten und Handel).
+- Rechte Hand braucht Level 4, Loyalität und zwei Leutnants. Capos führen Leutnants.
+- Spezialisten (Anwalt, Buchhalter, Polizei-Kontakt) kosten Lohn, **haben im Code aber keine Wirkung**.
+- Gangs und Polizei laufen vom ersten Tag an. Konfrontationen (Akte mit Absichten, Zeigern, Crew) sind der Weg für
+  Gang-Angriffe, Räuber, Polizeikontrollen und Zollkontrollen.
+- Meldungen: 72 Stellen rufen `ui.toast`, 74 schicken Chat-Nachrichten, 11 melden sich an der Dynamic Island an.
 
 ## Der Flow
 
-Jede Stufe: was frei wird, was die Tour zeigt, welche Mission läuft, was offen ist.
+### Stufe 0: Willkommen, Name, Tour durchs Interface
 
-### Stufe 0: Modus wählen, dann die Tour durchs Interface
-
-- Nach der Wahl des Modus geht es nicht direkt ins Spiel, sondern in eine Tour über das ganze HUD, Element für
-  Element: Schwarzgeld, Heat (wie sie steigt und warum), Uhrzeit, Wetter, Tempo-Regler, dann das Handy (was es ist,
-  die wenigen Apps öffnen und kurz hineinsehen: Nachrichten, Einstellungen), Rang, Lager, Ruf.
-- Sauberes Geld ist am Anfang 0 und bleibt ausgeblendet, bis die Geldwäsche frei ist (Stufe 8).
-- Offen:
-  - Läuft das Spiel während der Tour oder steht die Uhr (Vorschlag: Tempo 0, bis die Tour durch ist)?
-  - Bleibt das Story-Intro mit dem Namen davor, oder rückt die Namenseingabe woanders hin?
-  - Gilt das Tutorial auch im Modus hardcore, und gibt es „Überspringen“ für Leute, die es kennen (Vorschlag: ja, in
-    den Einstellungen ein Schalter wie heute bei „Einstieg“)?
-  - Rang, Lager und Ruf: Sind sie Teil der ersten Tour, oder kommen sie erst, wenn sie etwas bedeuten (Lager bei der
-    ersten Lieferung, Ruf beim ersten Stammkunden, Rang beim ersten Aufstieg)?
+- Das Story-Intro fällt weg. Stattdessen eine Seite: „Willkommen in Kölle. Du bist Dealer am Neumarkt. Wie heißt
+  du?“ mit der Eingabe des Namens. Dann die Wahl des Modus.
+- Im Modus normal folgt die Tour über das HUD, Element für Element: Schwarzgeld, Heat (wie sie steigt und warum),
+  Uhrzeit, Wetter, Tempo-Regler, dann das Handy (was es ist, die Apps öffnen und kurz hineinsehen: Nachrichten,
+  Personal mit Läufern, Einstellungen).
+- **Die App Personal ist von Anfang an frei, zeigt aber nur Läufer.** Bewerber und Rumfragen werden hier gleich mit
+  erklärt. Leutnants kommen in Stufe 7 dazu, Sicherheit in Stufe 7, Fahrer in Stufe 8, Spezialisten in Stufe 9,
+  Buchhalter in Stufe 10, Rechte Hand in Stufe 11.
+- Sauberes Geld ist 0 und bleibt ausgeblendet bis zur Geldwäsche (Stufe 8). Lager, Ruf und Rang kommen erst, wenn sie
+  etwas bedeuten: Lager bei der ersten Lieferung (Stufe 5), Ruf beim ersten Stammkunden, Rang beim ersten Aufstieg.
 
 ### Stufe 1: Ein einziger Spot, der Neumarkt
 
 - Es gibt nur den Neumarkt. Die Kamera zoomt auf ihn, man wird hingeleitet.
 - Tour am Spot, im Spiel: Hier kommen Kunden. Steht ein Kunde da, erscheint die 1. Läuft die Zeit ab, wird es rot.
-  Dann das ganze Spot-Menü, Schritt für Schritt: selbst verkaufen, Preis ändern, Läufer einstellen (kurz
-  angeschnitten, kommt später richtig). Der Spot-Ausbau ist im Menü noch nicht da.
-- Mission: drei Kunden selbst bedienen.
-- Offen:
-  - Im Brainstorming hieß es „Erklärung des Bezirks direkt nach dem ersten Spot“ (Nachfrage, Kaufkraft, Polizei, wer
-    herrscht, gewinnen und verlieren), im späteren Flow kommen die Reviere erst nach den drei Spots mit der App
-    (Stufe 3). Was gilt: ein kurzer Blick aufs Veedel schon hier und die App später, oder alles in Stufe 3?
-  - Wann kommt der Spot-Ausbau zurück ins Menü (Vorschlag: mit Stufe 6, wenn man Geld verdienen soll)?
+  Dann das Spot-Menü Schritt für Schritt: selbst verkaufen, Preis ändern, Läufer einstellen (kurz angeschnitten).
+  **Der Spot-Ausbau fällt als Feature weg.**
+- Mission 1: drei Kunden selbst bedienen.
 
 ### Stufe 2: Rauszoomen, zwei Spots kaufen
 
-- Die Karte zoomt raus. Zum Verkauf stehen nur Zülpicher Platz und Rudolfplatz, alle anderen Spots sind unsichtbar
-  oder gesperrt.
-- Mission: beide kaufen. Belohnung.
-- Offen:
-  - Im Brainstorming hatte man nach dem Rauszoomen vier Spots und sollte als Erstes bestellen; im Flow sind es ein
-    Spot plus zwei zu kaufende und die Bestellung kommt erst in Stufe 5. Welche Fassung gilt?
-  - Zülpicher Platz ist heute kostenlos, Rudolfplatz 600 €. Sollen beide etwas kosten (mit 1.500 € Startgeld und
-    Umsatz von drei Kunden), und wenn ja, wie viel?
-  - Mit 40 g Gras am Start und drei Spots ohne Nachschub bis Stufe 5: Reicht die Ware, oder gibt es als Belohnung
-    Ware dazu?
+- Die Karte zoomt raus. Zum Verkauf stehen nur Zülpicher Platz und Rudolfplatz, je **350 €**, alle anderen Spots
+  sind unsichtbar. Dafür gibt es **700 € mehr Startgeld (2.200 € statt 1.500 €)**.
+- Mission 2: beide kaufen. Belohnung mit Ware, damit der Vorrat bis zur ersten Bestellung reicht.
 
 ### Stufe 3: Reviere
 
-- App Reviere wird frei. Tour: Was ist ein Revier, wie übernimmt man es, wie verliert man es.
-- Offen: Gibt es hier schon eine Mission (z.B. „Schau dir dein Veedel an“), oder nur die Erklärung?
+- App Reviere wird frei. Tour: Was ist ein Revier (Nachfrage, Kaufkraft, Polizei, wer herrscht), wie übernimmt man
+  es, wie verliert man es.
 
 ### Stufe 4: Gangs
 
 - App Gangs wird frei. Tour: Wer ist stärker, wie schlägt man sie, wie erhöht man die eigene Stärke.
-- Offen:
-  - Gangs sollen nach einer ersten Nachricht erst an Tag 2 oder 3 „eingeführt“ werden. Ist das die Stufe hier (App
-    plus Erklärung), und bleiben Gangs bis zum ersten Angriff (Stufe 7) sonst still: keine Drohungen, keine
-    Übernahmen, keine Schutzgeld-Forderungen?
-  - Das Konfrontations-System (Akte mit Absichten, Zeigern, Crew) kommt im Flow nicht vor. Wird es beim ersten Angriff
-    erklärt, oder ist der erste Angriff fest geskriptet ohne Akte?
+- Bis zum ersten Angriff (Stufe 7) kommen von Gangs nur **Drohungen per SMS**: kein Angriff, kein Schutzgeld, keine
+  Übernahme. Schutzgeld gibt es nach dem ersten Angriff, auch als Konsequenz.
 
-### Stufe 5: Lieferanten
+### Stufe 5: Lieferanten und Lager
 
-- App Lieferanten wird frei. Tour. Mission: drei verschiedene Produkte kaufen.
-- Deutliche, leichte Hinweise: Mehr Produkte bringen mehr Kunden, es lohnt sich, Ware auf Lager zu haben.
-- Kommt die Lieferung an, wird das Lieferungs-Menü einmal mit allem erklärt, was darin steht.
-- Am Anfang nur zwei Lieferanten; der dritte und vierte kommen nach und nach. Wer neu dazukommt, meldet sich mit
-  einem Pop-up, mit dem man kurz interagieren muss.
-- Offen:
-  - Welche zwei Lieferanten am Anfang (Vorschlag: Kalle und Toni wie heute), und woran hängen die nächsten (Stufe,
-    Umsatz, Veedel)?
-  - Kalle verkauft heute nur Gras. „Drei verschiedene Produkte“ heißt also: Toni muss von Anfang an dabei sein, oder
-    Kalle bekommt mehr Sortiment. Was ist gewollt?
-  - Einzeln oder Sammelbestellung (Auftrag 45): hier schon erklären oder erst, wenn die Beschlagnahme droht
-    (Stufe 9)?
+- App Lieferanten wird frei. Tour. Mission 3: drei verschiedene Produkte kaufen (Kalle und Toni sind von Anfang an
+  da, zusammen haben sie genug Sortiment).
+- Leichte, deutliche Hinweise: Mehr Produkte bringen mehr Kunden, Ware auf Lager lohnt sich.
+- Kommt die Lieferung an, wird das Lieferungs-Menü einmal mit allem erklärt, was darin steht. Jetzt erscheint auch
+  das Lager im HUD. Einzeln oder Sammelbestellung wird erst in Stufe 9 erklärt, wenn die Beschlagnahme droht.
+- Lieferanten: am Anfang nur Kalle und Toni; die weiteren kommen nach und nach (Hamburg ab Stufe 6, Berlin ab dem
+  ersten Veedel, Amsterdam ab drei Veedeln) und melden sich mit einem Pop-up, mit dem man kurz interagieren muss.
 
 ### Stufe 6: Geld verdienen
 
-- Mission: 4.000 € Schwarzgeld, vier weitere Spots freischalten, drei Läufer einstellen.
-- Ist das Lager zu niedrig, kommt in den ersten Tagen bis zu dreimal ein Pop-up („Dein Lager ist fast leer, bestell
-  nach“), das man wegklicken kann.
-- Beim ersten Mal 3.000 € Schwarzgeld kommt die erste Handy-Bestellung. Tour: So funktioniert das, du musst selbst
-  hinfahren (Läufer gibt es noch nicht als Fahrer).
-- Offen:
-  - Läufer stellt man heute im Spot-Menü ein, die App Personal kommt erst in Stufe 7. Bleibt das so (Läufer über den
-    Spot, Personal-App danach für alles andere)?
-  - Welche vier Spots stehen jetzt zum Verkauf: alles im eigenen Veedel, oder die Karte gibt alles frei?
-  - Welcher Lagerstand gilt als „zu niedrig“ (Vorschlag: unter Tagesverbrauch), und was heißt „in den ersten Tagen“?
+- Mission 4: 4.000 € Schwarzgeld, vier weitere Spots freischalten, drei Läufer einstellen. Jetzt stehen alle Spots im
+  eigenen Veedel und den Nachbarveedeln zum Verkauf.
+- Ist das Lager zu niedrig (unter dem Verbrauch eines Tages), kommt in den ersten Tagen bis zu dreimal ein Pop-up
+  („Dein Lager ist fast leer, bestell nach“) mit Knopf zur Lieferanten-App, wegklickbar.
+- Beim ersten Mal 3.000 € Schwarzgeld kommt die erste Handy-Bestellung. Tour: So funktioniert das, du fährst selbst
+  hin.
 
-### Stufe 7: Leute, erster Gang-Angriff, Sicherheit
+### Stufe 7: Leutnants, erster Gang-Angriff, Sicherheit
 
-- Ist Stufe 6 erfüllt, wird die App Personal erklärt (Leute und Läufer darin), und man soll direkt jemanden
-  einsetzen.
-- Mission: einmal 10.000 € Schwarzgeld auf dem Konto, ein Veedel übernehmen (das, in dem man steht), fünf weitere
-  Spots freischalten.
-- Auf dem Weg dahin findet der erste Gang-Angriff statt, auf dem Neumarkt. Er kostet fest 30 % der Ware und 40 % des
-  Bargelds. Dann wird die Hotspot-Regel erklärt (an Hotspots passiert mehr, da lohnt Sicherheit), Sicherheit wird
-  frei, und man muss mindestens eine Person einstellen und auf den Neumarkt setzen.
-- Offen:
-  - „Man soll direkt einen … einsetzen“: Wen genau, einen Läufer oder einen Fahrer?
-  - Ist der erste Angriff nicht zu gewinnen (fester Verlust, auch mit Glück), und zu welchem Zeitpunkt kommt er
-    (Vorschlag: sobald man zum ersten Mal 6.000 € hat, damit 40 % wehtun, aber die Mission bleibt erreichbar)?
-  - Ware: 30 % vom Lager oder nur von dem, was am Neumarkt liegt?
+- Ist Mission 4 erfüllt, bekommt die App Personal den Bereich **Leutnants**. Tour: Ein Leutnant führt bis zu drei
+  Spots mit eigenen Leuten. Man ernennt direkt einen.
+- Mission 5: einmal 10.000 € Schwarzgeld auf dem Konto, das eigene Veedel übernehmen, fünf weitere Spots.
+- Auf dem Weg dahin, sobald man zum ersten Mal 6.000 € hat, der **erste Gang-Angriff auf dem Neumarkt**: fest 30 %
+  der Ware im ganzen Lager und 40 % des Bargelds weg, nicht zu gewinnen. Dann die Hotspot-Regel (an Hotspots
+  passiert mehr, da lohnt Sicherheit), Sicherheit wird frei, mindestens eine Person einstellen und auf den Neumarkt
+  setzen.
+- Ab jetzt sind Gangs scharf: Angriffe, Schutzgeld, Übernahmen. Seltener als heute, dafür größer.
 
 ### Stufe 8: Geldwäsche, Hafen, Fahrer
 
-- Ist Stufe 7 erfüllt, wird die App Geldwäsche frei und erklärt. Sauberes Geld erscheint jetzt im HUD.
-- Mission: den Niehler Hafen kaufen (Liegeplatz, 4.000 € sauber, also erst waschen), Rotterdam freischalten und dort
-  mindestens einmal bestellen. Highlight: der Preis dort ist gut.
-- Dann werden Fahrer frei: einen einstellen und direkt auf diese Route setzen.
-- Offen:
-  - Soll die Mission das Waschen ausdrücklich enthalten („Wasch 4.000 €“), weil der Liegeplatz sauberes Geld kostet?
-  - Welcher der drei Wäsche-Wege ist am Anfang offen (Vorschlag: nur der Kiosk)?
-  - Fahrer und Routen hängen an `logistics` (Fahrplan, Fahrzeug, Zoll). Reicht „Fahrer auf die Route Hafen → Lager
-    setzen“, oder soll die Tour Fahrzeuge und Fahrplan auch zeigen?
+- Ist Mission 5 erfüllt, wird die App Geldwäsche frei und erklärt, zunächst nur der Kiosk. Sauberes Geld erscheint im
+  HUD.
+- Mission 6: 4.000 € waschen, den Liegeplatz im Niehler Hafen kaufen, Rotterdam freischalten und dort mindestens
+  einmal bestellen. Highlight: der Preis dort ist gut. Mit dem Hafen kommen das zweite Lager, die Lager-App und der
+  Lager-Ausbau (Platz, Regale, Tresor).
+- Dann werden Fahrer frei: einen einstellen, und direkt danach die Route Hafen → Lager anlegen und ihn draufsetzen.
+  Fahrzeuge und Fahrplan werden in diesem Schritt mit gezeigt.
 
-### Stufe 9: Zwei weitere Veedel, Beschlagnahme, Spezialisten
+### Stufe 9: Vier Leutnants, Beschlagnahme, Spezialisten
 
-- Mission: zwei weitere Veedel gewinnen und „mindestens vier … haben“.
-- Die zweite Hafen-Bestellung wird von der Polizei beschlagnahmt, die ganze Ware ist weg. Intro der Polizei. Dann
-  werden Spezialisten frei: Man lernt, dass man mit ihnen die Polizei umgeht, und stellt direkt einen ein.
-- Offen:
-  - „Mindestens vier Hand haben“ war nicht zu verstehen. Vier Fahrer, vier Lager, vier Läufer, 40.000 €?
-  - Welcher Spezialist: Anwalt, Polizei-Kontakt oder beide? Und was tun sie konkret (heute nichts)? Vorschlag: der
-    Polizei-Kontakt senkt die Beschlagnahme-Chance am Hafen, der Anwalt holt Ware und Leute schneller frei.
-  - Soll bis hierher wirklich gar keine Polizei laufen: keine Heat, keine Zivis, keine Kontrollen, keine Razzien? Dann
-    ist Heat in der Tour aus Stufe 0 nur Theorie. Alternative: Heat läuft ab Stufe 3, Konsequenzen erst ab hier.
-  - Beschlagnahme als Minispiel (Papiere fälschen) oder fest geskriptet?
+- Mission 7: zwei weitere Veedel gewinnen, mindestens vier Leutnants.
+- Polizei bis hierher: Heat und Zivis laufen, aber keine Kontrollen und keine Razzia. Wird ein Läufer erwischt, ist
+  nur seine Ware weg.
+- Die zweite Hafen-Bestellung wird beschlagnahmt, die ganze Ware ist weg. Intro der Polizei: ab jetzt Kontrollen und
+  Razzien, Heat unter 40 halten lohnt sich. Die Beschlagnahme läuft fest ab, davor die Wahl „Papiere fälschen“
+  (Minispiel) wie heute, und hier wird Einzeln oder Sammelbestellung erklärt.
+- Spezialisten werden frei, einen einstellen. Wirkung (neu, heute keine):
+  - **Polizei-Kontakt:** weniger Zoll (Beschlagnahme am Hafen), weniger Heat, weniger Polizeikontrollen.
+  - **Anwalt:** weniger Verhaftungen, Leute und Ware schneller frei.
 
 ### Stufe 10: Buchhalter und Kasse
 
-- Nach Stufe 9 wird der Buchhalter frei, man stellt einen ein, damit geht die App Kasse auf.
-- Neues Konzept Buchhalter: senkt Kosten am Tag, bessere Geldwäsche, bessere Planung. In Zahlen: ein Buchhalter 3 %
-  mehr Gewinn, ein guter 7 %, dazu alles etwas günstiger.
-- Offen:
-  - „Alles etwas günstiger“: Löhne, Einkauf, Wäsche-Gebühr, oder nur die Wäsche-Gebühr?
-  - Mehrere Buchhalter: stapelt sich das oder zählt nur der beste?
+- Nach Mission 7 wird der Buchhalter frei, man stellt einen ein, damit geht die App Kasse auf.
+- Wirkung (neu): **nur einer** gleichzeitig, kein Stapeln. Ein Buchhalter bringt 3 % mehr Gewinn, ein guter 7 %,
+  und die Leute, die man einstellt, sind etwas günstiger (Löhne). Sonst wird nichts günstiger.
 
 ### Stufe 11: Alle sieben Veedel, Rechte Hand
 
-- Mission: sieben Veedel (Meilenstein „Boss von Köln“). Dann wird die Rechte Hand frei, man muss sie einstellen und
+- Mission 8: sieben Veedel (Meilenstein „Boss von Köln“). Dann wird die Rechte Hand frei, man muss sie einstellen und
   bekommt erklärt, was sie tut (Aufträge ausfahren, Aufgaben, Vollmacht).
-- Offen:
-  - Die Rechte Hand braucht heute Level 4 und zwei Leutnants. Leutnants und Capos kommen im Flow gar nicht vor. Wann
-    werden sie erklärt, und bleibt die Bedingung, oder reicht ab jetzt „einen aus dem Team ernennen“?
+- Bedingung neu: Die Rechte Hand wird aus den Leutnants gewählt (vier hat man seit Mission 7), die Stufe Level 4
+  entfällt. Capos kommen, falls nötig, später nach der Rechten Hand, sonst fliegen sie aus dem Spiel.
 
 ### Stufe 12: Köln fertig, Hamburg
 
-- Letzte Mission in Köln: 50.000 € schwarz, 12.000 € sauber, alle Spots, alle zwölf Veedel, überall ein Läufer,
-  alles automatisiert. Dann wird Hamburg frei.
-- Offen: „Alles automatisiert“ heißt heute: Bestellregeln bei Lieferanten, Aufgaben der Rechten Hand, Fahrer auf
-  Routen. Welche davon sind Pflicht für die Mission?
+- Mission 9: 50.000 € schwarz, 12.000 € sauber, alle Spots, alle zwölf Veedel, überall ein Läufer, alles
+  automatisiert: Bestellregeln bei den Lieferanten, Aufgaben der Rechten Hand, Fahrer auf allen Routen in Köln.
+  Routen in andere Städte gehören nicht dazu. Dann wird Hamburg frei.
 
-## Querschnitt
+## Belohnungen
 
-- **Belohnungen.** Für jede Mission ein Vorschlag, bevor wir bauen (Geld, Ware, Ruf, Heat runter, Titel). Heute sind
-  es 250 bis 500 € oder 10 bis 40 g, das ist nicht „saftig“. Was ist die Größenordnung: ein Tagesgewinn, zwei?
-- **Nachrichten.** Welche Chats bleiben in Köln? Vorschlag: Peter (Missionen), Lieferanten (nur bei Kennenlernen,
-  Lieferung, Problem), Gangs (ab Stufe 4, Drohungen ab Stufe 7), Polizei (ab Stufe 9). Alles andere (Bewerber, Leute
-  mit Geschichten, Stadt-Events, Marktbericht, Verträge, Kneipen, Klüngel) still oder erst nach Köln.
-- **Banner und Dynamic Island.** Beide weg, oder Dynamic Island nur noch für laufende Fahrten?
-- **Alte Spielstände und andere Städte.** Wer schon spielt oder in Hamburg ankommt, hat alles frei und keine Tour
-  (wie heute bei den Handy-Schritten).
+Regel: **20 % des Umsatzes der letzten 24 Stunden als Schwarzgeld, dazu 20 % der in den letzten 24 Stunden
+verkauften Gramm als Ware**, Geld aufgerundet auf 50 bzw. 100 €, Ware auf 5 bzw. 10 g. Mindestens 100 € und 10 g,
+sonst gibt es in Stufe 1 (drei Kunden) nur ein paar Euro.
 
-## Noch nicht einsortiert
+Durchgerechnet an den Test-Spielständen (Bot, Seed 12; „Umsatz“ und „Gewinn“ sind der letzte volle Tag, „Gewinn“
+nach Einkauf, Löhnen, Spots):
 
-Diese Systeme kommen im Flow nicht vor. Für jedes brauchen wir: wann (welche Stufe oder erst nach Köln) und ob es
-erklärt wird oder still mitläuft.
+| Stand | Tag | Schwarz | Umsatz/Tag | Gewinn/Tag | g/Tag | Lager g | 20 % € | 20 % g |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Köln, die ersten Tage (Stufe 5–6) | 3 | 1.155 | 2.145 | −290 | 184 | 262 | 450 | 35 |
+| Erstes Veedel (Stufe 7) | 6 | 790 | 3.430 | 1.198 | 280 | 602 | 700 | 55 |
+| Boss von Köln (Stufe 11) | 16 | 7.526 | 30.133 | −189 | 2.184 | 123 | 6.050 | 435 |
+| Köln komplett (Stufe 12) | 22 | 50.000 | 24.612 | 6.110 | 1.825 | 2.602 | 4.900 | 365 |
 
-| System | Heute | Vorschlag |
-| --- | --- | --- |
-| Leutnants und Capos (`hierarchy`) | Quest in Kapitel 2, Bedingung für die Rechte Hand | Stufe 11 vor der Rechten Hand, oder Bedingung streichen |
-| Zweites Lager, Lager-App, Lager-Ausbau (`goods`) | Quest in Kapitel 3 | Stufe 8 mit dem Hafen |
-| Ware strecken, Qualität | Quest in Kapitel 3 | still, erst nach Köln erklären |
-| Stammkunden, Dealer (Stammabnehmer) | Quest in Kapitel 2 | still |
-| Markt-Index, Marktbericht, Rabatt-Aktionen, Wochenverträge (`market`, `quests/contracts`) | laufen ab Tag 1 | erst nach Stufe 8 |
-| Minispiele (Zivi, Kontrolle, Razzia, Gespräch, Papiere, Schlägerei) | ab Tag 1 bis 3 | Schlägerei beim ersten Angriff, Papiere bei der Beschlagnahme, Rest ab Stufe 9 |
-| Konfrontationen (Akte) | ab dem ersten Kontakt | Stufe 7 |
-| Heat unter 40 halten, Razzia | Quest in Kapitel 4 | Stufe 9 |
-| Fahrzeuge (`fleet`), Routen mit Fahrplan | frei | Stufe 8 nur ein Fahrer auf eine Route |
-| Kneipen, Klüngel, Stadt-Events, Wetter-Wirkung | laufen | still bis nach Köln |
-| Bewerber, Rumfragen, Bewerbungsgespräch (`recruiting`) | Quest in Kapitel 2 | Stufe 7 mit der Personal-App |
-| Spot-Arten, Spot-Ausbau, Spot gründen | frei | Ausbau ab Stufe 6, gründen nach Köln |
-| Bestenliste | ab Start | unverändert |
+Einordnung: Das Geld entspricht ungefähr einem Tagesgewinn an einem guten Tag, nie mehr als einem Fünftel des
+Kontostands bei den großen Missionen und nie mehr als dem Umsatz eines Tages. Die Ware ist ein Fünftel der
+Tagesnachfrage, also ein spürbarer Puffer, kein Lagerfüller (nur bei „Boss von Köln“ war das Bot-Lager fast leer, da
+wären 435 g das Dreifache des Bestands, aber immer noch nur ein Fünftel eines Tages). **Die Regel verzerrt den
+Fortschritt nicht**, weil die Missionen Tage auseinanderliegen und die Zielbeträge (4.000, 10.000, 50.000 €) jeweils
+deutlich über der Belohnung der Mission davor liegen. Zwei Feinheiten: Die Ware kommt als das Produkt, das man am
+meisten verkauft hat (sonst landet Vape im Lager, das keiner nimmt), und für die Missionen 1 und 2 greift die
+Untergrenze.
 
-## Technik (grob, noch ohne Auftrag)
+## Nachrichten, Pop-ups, Meldungen
+
+- **Bleibt im Chat:** Peter als Stimme der Tour und der Missionen (oder die Tour-Box selbst, siehe offen),
+  Lieferanten (Kennenlernen als Pop-up, Lieferung da, Problem), Gangs (Drohungen ab Stufe 4, Forderungen ab Stufe 7),
+  Polizei (ab Stufe 9). Polizei und Gangs seltener als heute, dafür größere Ereignisse mit mehr Wirkung.
+- **Raus:** Bewerber-Chats, Geschichten der Leute, Marktbericht, Kneipen, Klüngel. Wochenverträge erst nach Köln.
+- **Stadt-Events:** als Ankündigungs-Pop-up, seltener als heute, mit Hinweis „mehr Ware bestellen“ und einem Knopf
+  direkt dafür.
+- **Push-Banner:** weg (die Tour-Boxen ersetzen sie). **Dynamic Island:** weg. Die kleine Anzeige oben, wie viele
+  Bestellungen unterwegs sind, bleibt als Zahl, nur das Aufklappen fällt weg.
+
+## Was aus dem Spiel fliegt oder still wird
+
+| System | Entscheidung |
+| --- | --- |
+| Quests von Peter (alle Kapitel) | weg, ersetzt durch die Missionen (für die Städte nach Köln siehe offen) |
+| Konfrontationen (Akte) | weg als Feature. Gang-Angriffe, Räuber, Kontrollen und Zoll werden aus Stärke, Sicherheit und Heat automatisch entschieden, mit einem kurzen Ergebnis-Pop-up; steht man selbst am Spot, kommt das Minispiel Straßenkampf |
+| Spot-Ausbau | weg |
+| Spot gründen | nur im Shop für echtes Geld, 0,99 € pro Spot, höchstens drei (eigener Auftrag, braucht Bezahlung) |
+| Capos | später nach der Rechten Hand, falls nötig, sonst weg |
+| Markt-Index, Rabatt-Aktionen | still: Preise bewegen sich weiter, Aktionen nur als Badge im Angebot, keine Nachricht |
+| Marktbericht | weg |
+| Wochenverträge | erst nach Köln |
+| Ware strecken, Qualität | still, nach Köln erklärt; Strecken später als Slider (Design-Rework Handy) |
+| Stammkunden, Dealer | still |
+| Minispiele | bleiben, jedes wird beim ersten Mal kurz erklärt |
+| Kneipen, Klüngel, Stadt-Events, Wetter-Wirkung | still oder weg, keine Nachrichten |
+| Bestenliste | unverändert |
+
+## Technik (grob)
 
 - **Tour-Baukasten in `src/ui`:** Elemente tragen einen Anker (`data-tour="hud.dirty"`), eine Tour ist eine Liste
   von Schritten (Anker, ein, zwei Sätze, optional „muss man selbst tun“), ein Overlay graut alles aus und schneidet
   den Anker frei (umrandet, leicht eingefärbt), dazu die Box mit „Weiter“. Öffnet ein Schritt eine App oder ein
-  Panel, tut die Tour das selbst.
-- **Tutorial-Zustand im Spielstand:** Stufe 0 bis 12 als Zustand (eigenes Modul `tutorial` oder Kapitel in
-  `quests`), deterministisch wie alles andere. Die Stufe steuert `hiddenWhen` von Apps, HUD-Teilen, Spot-Ausbau,
-  welche Spots und Lieferanten es gibt, und ob Gangs und Polizei schon laufen.
-- **Geskriptete Momente:** erster Gang-Angriff am Neumarkt, Beschlagnahme der zweiten Hafen-Bestellung,
-  Handy-Bestellung bei 3.000 €, Lager-niedrig-Pop-up. Jedes hängt an einer Bedingung im Zustand, nicht an der Uhr.
-- **Was weg kann:** Push-Banner außer in der Tour, Dynamic Island, die alten Kölner Quest-Kapitel (werden durch die
-  Missionen ersetzt), große Teile der Chats am ersten Tag.
-- Bot, Szenario-Tests und `npm run balance` laufen ohne Tutorial (Stufe „alles frei“), damit Würfelfolgen bleiben.
+  Panel, tut die Tour das selbst. Tempo 0 während der Tour.
+- **Modul `tutorial` statt `quests`:** Stufe 0 bis 12 und die Missionen als Zustand, deterministisch. Die Stufe
+  steuert `hiddenWhen` von Apps, Bereichen und HUD-Teilen, welche Spots und Lieferanten es gibt, ob Gangs und Polizei
+  scharf sind. Im Modus hardcore, in alten Ständen und in späteren Städten steht die Stufe auf „alles frei“.
+- **Geskriptete Momente** (an Bedingungen im Zustand, nicht an der Uhr): erster Gang-Angriff bei 6.000 €,
+  Beschlagnahme der zweiten Hafen-Bestellung, Handy-Bestellung bei 3.000 €, Lager-niedrig-Pop-up.
+- **Umbauten an bestehenden Modulen:** `encounters` wird zu automatischen Entscheidungen; Spezialisten und Buchhalter
+  bekommen Wirkung (`staff`, `police`, `suppliers`, `finance`); Rechte Hand aus den Leutnants (`hierarchy`); Shop
+  für Spots (`spots`, Bezahlung offen); Spot-Ausbau raus (`spots/kinds.ts`, `spotModifiers`).
+- Bot, Szenario-Tests und `npm run balance` laufen mit „alles frei“, damit Würfelfolgen bleiben.
+
+## Noch offen
+
+1. **Städte nach Köln:** Heute führen Peters Kapitel durch Hamburg bis Frankfurt, Jansen durch Rotterdam und die
+   Produzenten durch den Anbau. Fallen die mit weg (jede neue Stadt ohne Führung), oder bekommt jede Stadt zwei, drei
+   Missionen im neuen System? Vorschlag: pro Stadt drei Missionen (ankommen, Mehrheit, komplett), Rotterdam und
+   Produktion später.
+2. **Wer spricht in der Tour:** Peter als Figur in der Box (Porträt, Stimme) oder eine neutrale Box ohne Figur?
+3. **Shop mit echtem Geld:** Das ist ein eigener Auftrag (Bezahlung, Konto, Server). Bis dahin ein Shop-Platzhalter
+   ohne Kauf, oder Spot gründen erst mal ganz raus?
+4. **Rechte Hand aus den Leutnants ohne Level 4:** so angenommen, bitte bestätigen.
