@@ -100,3 +100,9 @@ export const EVENT_INTROS = [
   '{name}. Ich hab früher für die Konkurrenz gearbeitet. Die zahlen schlecht. Du auch?',
   'Man sagt, du bist der Neue in der Stadt. {name}, ich kann dir helfen. Nicht umsonst.',
 ];
+
+/**
+ * Bewerbungsgespräch (Auftrag 44, Teil 9): Schwierigkeit aus Level und Herkunft. Wer schon Erfahrung hat oder aus dem
+ * Milieu kommt, lässt sich weniger in die Karten schauen.
+ */
+export const INTERVIEW_DIFFICULTY = { base: 0.3, perLevel: 0.12, contact: 0.1, min: 0.2, max: 0.85 } as const;

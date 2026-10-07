@@ -4,11 +4,17 @@
 // Kontakte sind oft besser. Vor der Einstellung sieht man nur einen Teil der Werte, der Rest zeigt sich
 // mit der Zeit (siehe staff: knownStats, revealStat).
 //
+// Bewerbungsgespräch (Auftrag 44, Teil 9): Eigenschaften sieht man vor der Einstellung erst, wenn man sie im Gespräch
+// erkannt hat (revealedTraits). 'recruiting.interview' startet einmal je Bewerber das Minispiel 'interview'; was der
+// Spieler richtig antippt, wird aufgedeckt, ein gutes Gespräch zeigt dazu einen versteckten Wert. Die Rechte Hand deckt
+// mit ihrer Chance eine Eigenschaft auf. Ohne Oberfläche (Frist): nichts. Nach der Einstellung ist alles sichtbar.
+//
 // Öffentliche API:
 //   getCandidates(state, cityId?), getCandidate(state, id), getPool(state, cityId?), getContacts(state, cityId?),
-//   searchReadyAt(state),
-//   poolMax(state), searchPreview(state, role?), SOURCE_NAMES, SEARCH_COST, SEARCH_ROLES
-// Befehle: 'recruiting.hire', 'recruiting.decline', 'recruiting.search' (mit role: gezielt nach einer Rolle)
+//   searchReadyAt(state), knownTraits(candidate), canInterview(state, candidate),
+//   poolMax(state), searchPreview(state, role?), SOURCE_NAMES, SEARCH_COST, SEARCH_ROLES, INTERVIEW_QUESTIONS
+// Befehle: 'recruiting.hire', 'recruiting.decline', 'recruiting.search' (mit role: gezielt nach einer Rolle),
+//   'recruiting.interview' (Gespräch führen, einmal je Bewerber)
 // Ereignisse: 'recruiting.candidateArrived', 'recruiting.hired', 'recruiting.candidateLeft'
 
 import {
@@ -20,14 +26,18 @@ import {
   defineModule,
   fillText,
   formatEuro,
+  type GameEvents,
   type GameState,
   journal,
   messages,
+  personLook,
+  voiceFor,
   wallet,
   withPeriod,
 } from '../../core';
 import { activeCity, cityName, isBusinessSold } from '../city';
 import { getRegular } from '../customers';
+import { isMinigameReady, startMinigame } from '../minigames';
 import { getReputation } from '../reputation';
 import { atSpot, getSpot } from '../spots';
 import {
@@ -44,12 +54,14 @@ import {
   roleName,
   rollTraits,
   STAT_KEYS,
+  STAT_NAMES,
   type StaffAssignment,
   type StaffRole,
   type StaffStats,
   type StatKey,
   staffContact,
   type TraitId,
+  traitName,
 } from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
 import {
@@ -63,6 +75,7 @@ import {
   EVENT_INTROS,
   EVENT_ROLE_WEIGHTS,
   HIRE_COST_DAYS,
+  INTERVIEW_DIFFICULTY,
   JAIL_CONTACT_CHANCE,
   POOL_ARRIVALS,
   POOL_INTERVAL,
@@ -87,6 +100,7 @@ import {
 } from './config';
 
 export { SEARCH_COST, SEARCH_COUNT, SEARCH_ROLES, type SearchRole, SOURCE_NAMES } from './config';
+export { INTERVIEW_QUESTIONS, type InterviewQuestion, interviewQuestion, TRAIT_MOOD } from './interview';
 
 /** Woher ein Kandidat kommt: Pool (Bewerbung) oder Kontakt (Empfehlung, Stammkunde, Ereignis). */
 export type CandidateSource = 'pool' | 'referral' | 'regular' | 'event';
@@ -115,8 +129,15 @@ export interface Candidate {
   arrivedAt: number;
   /** Wer ihn empfohlen hat (Mitarbeiter-ID). */
   referrerId: string | null;
-  /** Eigenschaften (Auftrag 34), sichtbar schon vor der Einstellung. */
+  /** Eigenschaften (Auftrag 34). Vor der Einstellung sieht man nur revealedTraits. */
   traits: TraitId[];
+  /**
+   * Im Bewerbungsgespräch erkannte Eigenschaften (Auftrag 44, Teil 9). Fehlt das Feld, ist alles sichtbar (alte Stände
+   * bekommen es von der Migration 6 mit allen Eigenschaften).
+   */
+  revealedTraits?: TraitId[];
+  /** Gespräch schon geführt (einmal je Bewerber). */
+  interviewed?: boolean;
   /**
    * Stadt, in der die Person Arbeit sucht (Auftrag 43). Jede Stadt hat ihre eigenen Bewerber, mit Lohn und Handgeld von
    * dort; eingestellt wird nur, wer in der Stadt ist, in der du bist.
@@ -143,6 +164,8 @@ declare module '../../core' {
     'recruiting.decline': { candidateId: string };
     /** Rumfragen: kostet Geld, bringt sofort neue Bewerber; mit role meist welche in dieser Rolle. */
     'recruiting.search': { role?: SearchRole };
+    /** Bewerbungsgespräch führen (Minispiel 'interview', einmal je Bewerber, nur in der Stadt, in der du bist). */
+    'recruiting.interview': { candidateId: string };
   }
   interface GameEvents {
     'recruiting.candidateArrived': { candidateId: string; source: CandidateSource };
@@ -176,6 +199,24 @@ export function getPool(state: GameState, cityId = activeCity(state)): Candidate
 /** Kontakte einer Stadt (ohne Angabe die aktive): Empfehlungen, Stammkunden, Ereignisse (noch verfügbar). */
 export function getContacts(state: GameState, cityId = activeCity(state)): Candidate[] {
   return getCandidates(state, cityId).filter((c) => c.source !== 'pool' && c.expiresAt > state.time);
+}
+
+/** Eigenschaften, die man vor der Einstellung sieht (im Gespräch erkannt; alte Stände: alle). */
+export function knownTraits(c: Candidate): TraitId[] {
+  const all = c.traits ?? [];
+  if (!c.revealedTraits) return [...all];
+  return all.filter((t) => c.revealedTraits?.includes(t));
+}
+
+/** Kann man mit dieser Person ein Gespräch führen? Sonst der Grund (für Oberfläche und Befehl). */
+export function canInterview(state: GameState, c: Candidate): { ok: true } | { ok: false; reason: string } {
+  if (c.expiresAt <= state.time) return { ok: false, reason: 'Die Person ist nicht mehr zu haben.' };
+  if (c.interviewed) return { ok: false, reason: `Mit ${c.name} hast du schon gesprochen.` };
+  if (candidateCity(c) !== activeCity(state)) {
+    return { ok: false, reason: `${c.name} sucht in ${cityName(candidateCity(c))} Arbeit.` };
+  }
+  if (!state.modules.minigames || !isMinigameReady('interview')) return { ok: false, reason: 'Gerade nicht.' };
+  return { ok: true };
 }
 
 export function searchReadyAt(state: GameState): number {
@@ -255,6 +296,8 @@ function addCandidate(ctx: Ctx, role: StaffRole, source: CandidateSource, option
     arrivedAt: ctx.now,
     referrerId: options.referrerId ?? null,
     traits: profile.traits ? [...profile.traits] : [],
+    // Auftrag 44, Teil 9: erst im Gespräch zu erkennen.
+    revealedTraits: [],
     cityId: activeCity(ctx.state),
   };
   ctx.state.modules.recruiting.candidates.push(candidate);
@@ -475,6 +518,104 @@ function search(ctx: Ctx, role?: SearchRole): CommandResult {
   return { ok: true, data: { candidateIds: added.map((c) => c.id) } };
 }
 
+// --- Bewerbungsgespräch (Auftrag 44, Teil 9) ---
+
+/** params des Minispiels 'interview' (nur JSON, für die Oberfläche). */
+export interface InterviewParams {
+  candidateId: string;
+  name: string;
+  /** Alter: Mit dem Namen ergibt es das Gesicht (personLook) wie im Personal. */
+  age: number;
+  role: StaffRole;
+  roleName: string;
+  level: number;
+  /** Alle Eigenschaften (die Antworten hängen davon ab). */
+  traits: TraitId[];
+  /** Schon bekannte Eigenschaften. */
+  known: TraitId[];
+  /** Stimme der Figur (audio.speak). */
+  voice: { feminine: boolean; pitch: number; rate: number };
+}
+
+function interviewDifficulty(c: Candidate): number {
+  const d = INTERVIEW_DIFFICULTY;
+  const raw = d.base + d.perLevel * (c.level - 1) + (c.source === 'pool' ? 0 : d.contact);
+  return Math.min(d.max, Math.max(d.min, raw));
+}
+
+function interview(ctx: Ctx, candidateId: string): CommandResult {
+  const c = getCandidate(ctx.state, candidateId);
+  if (!c) return { ok: false, reason: 'Die Person ist nicht mehr zu haben.' };
+  const allowed = canInterview(ctx.state, c);
+  if (!allowed.ok) return allowed;
+  const look = personLook(c.name, c.age);
+  const params: InterviewParams = {
+    candidateId: c.id,
+    name: c.name,
+    age: c.age,
+    role: c.role,
+    roleName: roleName(c.role),
+    level: c.level,
+    traits: [...(c.traits ?? [])],
+    known: knownTraits(c),
+    voice: voiceFor(`recruit:${c.id}`, look),
+  };
+  const id = startMinigame(ctx, {
+    kind: 'interview',
+    origin: { module: 'recruiting', ref: c.id },
+    cityId: candidateCity(c),
+    difficulty: interviewDifficulty(c),
+    title: `Gespräch mit ${c.name}`,
+    situation: `${c.name}, ${c.age}, will als ${roleName(c.role)} bei dir anfangen. Drei Fragen, dann weißt du mehr.`,
+    params: params as unknown as Record<string, unknown>,
+  });
+  if (id === null) return { ok: false, reason: 'Gerade nicht.' };
+  c.interviewed = true;
+  return { ok: true, data: { challengeId: id } };
+}
+
+/** Welcher versteckte Wert sich in einem guten Gespräch zeigt: erst die wichtigen der Rolle, dann der Reihe nach. */
+export function hiddenStatToReveal(c: Candidate): StatKey | null {
+  const hidden = (k: StatKey) => c.visibleStats[k] === undefined;
+  return ROLE_INFO[c.role].keyStats.find(hidden) ?? STAT_KEYS.find(hidden) ?? null;
+}
+
+/** Was ein Gespräch aufdeckt (rein, für Tests): Eigenschaften und höchstens einen Wert. */
+export function interviewOutcome(
+  c: Candidate,
+  result: Pick<GameEvents['minigame.finished'], 'by' | 'won' | 'picks'>,
+): { traits: TraitId[]; stat: StatKey | null } {
+  const real = c.traits ?? [];
+  const known = knownTraits(c);
+  const fresh = (t: string): t is TraitId => (real as string[]).includes(t) && !(known as string[]).includes(t);
+  if (result.by === 'timeout') return { traits: [], stat: null };
+  if (result.by === 'rightHand') {
+    const next = real.find(fresh);
+    return { traits: result.won && next ? [next] : [], stat: null };
+  }
+  const traits = [...new Set(result.picks.filter(fresh))];
+  return { traits, stat: result.won ? hiddenStatToReveal(c) : null };
+}
+
+function onInterviewFinished(ctx: Ctx, payload: GameEvents['minigame.finished']): void {
+  const c = getCandidate(ctx.state, payload.origin.ref);
+  if (!c || payload.by === 'timeout') return;
+  const { traits, stat } = interviewOutcome(c, payload);
+  if (traits.length > 0) c.revealedTraits = [...knownTraits(c), ...traits];
+  if (stat) c.visibleStats = { ...c.visibleStats, [stat]: c.stats[stat] };
+  const learned = [
+    ...traits.map((t) => traitName(t, c.name)),
+    ...(stat ? [`${STAT_NAMES[stat]} ${c.stats[stat]}`] : []),
+  ];
+  journal.add(
+    ctx,
+    learned.length > 0
+      ? `Gespräch mit ${c.name}: ${learned.join(', ')}.`
+      : `Gespräch mit ${c.name}: nichts Neues erfahren.`,
+    learned.length > 0 ? 'good' : 'info',
+  );
+}
+
 // --- Migration vom Fundament (Version 1) ---
 
 interface CandidateV1 {
@@ -530,9 +671,14 @@ export function migrateRecruitingV4(old: RecruitingStateV4, state: GameState): R
   return { ...old, candidates: old.candidates.map((c) => ({ ...c, cityId })) };
 }
 
+/** Version 5 → 6 (Auftrag 44, Teil 9): Wer schon wartet, behält alle Eigenschaften sichtbar. */
+export function migrateRecruitingV5(old: RecruitingState): RecruitingState {
+  return { ...old, candidates: old.candidates.map((c) => ({ ...c, revealedTraits: [...(c.traits ?? [])] })) };
+}
+
 export default defineModule({
   id: 'recruiting',
-  version: 5,
+  version: 6,
   dependsOn: ['staff', 'territory', 'reputation'],
   init: (ctx) => {
     const state: RecruitingState = { candidates: [], nextPoolAt: 0, searchReadyAt: 0 };
@@ -553,6 +699,7 @@ export default defineModule({
       return { ok: true };
     },
     'recruiting.search': (ctx, { role }) => search(ctx, role),
+    'recruiting.interview': (ctx, { candidateId }) => interview(ctx, candidateId),
   },
   on: {
     // Nach dem Verkauf (Auftrag 43, H9): Bewerber und Kontakte gehen an die Statthalter, ohne Notizen im Verlauf.
@@ -572,6 +719,9 @@ export default defineModule({
     // In einer neuen Stadt warten gleich ein paar Bewerber von dort (Auftrag 43), nicht erst nach Stunden.
     'city.arrived': (ctx, { cityId }) => freshPool(ctx, cityId),
     'city.switched': (ctx, { to }) => freshPool(ctx, to),
+    'minigame.finished': (ctx, payload) => {
+      if (payload.origin.module === 'recruiting') onInterviewFinished(ctx, payload);
+    },
   },
   migrations: {
     2: migrateRecruitingV1,
@@ -583,5 +733,6 @@ export default defineModule({
     }),
     4: migrateRecruitingV3,
     5: migrateRecruitingV4,
+    6: migrateRecruitingV5,
   },
 });
