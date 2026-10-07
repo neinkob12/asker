@@ -337,6 +337,53 @@ describe('applyPapers', () => {
   });
 });
 
+describe('applyPapers (Teil 8)', () => {
+  it('der Zoll am Kai gibt Ort und Bestechungsgeld mit', () => {
+    const sim = createTestGame();
+    const e = begin(sim, { ...customsRequest, setting: 'port', place: 'in Rotterdam' });
+    const c = getChallenge(sim.state, challengeOf(e));
+    expect(c?.kind).toBe('papers');
+    expect(c?.params).toMatchObject({ setting: 'port', bribeCost: e.bribeCost });
+    expect(e.bribeCost).toBeGreaterThan(0);
+  });
+
+  it('Schein ohne genug Schwarzgeld: aufgeflogen, nichts bezahlt', () => {
+    const sim = createTestGame();
+    const e = begin(sim, customsRequest);
+    wallet.pay(sim.ctx('test'), wallet.balance(sim.state, 'dirty'), 'dirty', 'Test', 'loss.police');
+    finish(sim, challengeOf(e), 0.6, ['bribe', 'hits:1']);
+    const after = get(sim, e.id);
+    expect(after).toMatchObject({ outcome: 'failure', bribeSpent: 0 });
+    expect(after.log.at(-1)?.text).toContain('Umschlag ist leer');
+  });
+
+  it('mit einem Fehler durch: abgefertigt, er notiert sich die Spedition', () => {
+    const sim = createTestGame();
+    const e = begin(sim, customsRequest);
+    finish(sim, challengeOf(e), 0.5, ['fixed:2', 'hits:1']);
+    const after = get(sim, e.id);
+    expect(after.outcome).toBe('success');
+    expect(after.log.at(-1)?.text).toContain('Spedition');
+  });
+
+  it('die Rechte Hand mit ihrem Score; timeout lässt die Runden laufen wie bisher', () => {
+    const sim = createTestGame();
+    rightHand(sim);
+    const e = begin(sim, customsRequest);
+    expect(sim.dispatch({ type: 'minigames.delegate', payload: { id: challengeOf(e) } }).ok).toBe(true);
+    const after = get(sim, e.id);
+    expect(after.phase).toBe('done');
+    expect(after.log.at(-1)?.text).toContain('Rechte Hand');
+
+    const waiting = begin(sim, { ...customsRequest, origin: { module: 'test', ref: 'trip:9' } });
+    get(sim, waiting.id).deadline += 1000;
+    sim.advance(MINIGAME_TIMEOUT);
+    const timedOut = get(sim, waiting.id);
+    expect(timedOut.minigame).toBeNull();
+    expect(timedOut).toMatchObject({ phase: 'rounds', round: 0 });
+  });
+});
+
 describe('applyBrawl', () => {
   it('Zuschlagen startet den Straßenkampf statt der Runde (mit Schutz)', () => {
     const sim = createTestGame();

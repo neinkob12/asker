@@ -443,8 +443,11 @@ function startChaseFrom(ctx: Ctx, encounter: Encounter): boolean {
 }
 
 /**
- * Papiere fälschen (Zoll). picks 'bribe': zahlen, Erfolg. 'giveUp': Ladung aufgeben (Niederlage surrendered: Ware weg,
- * niemand festgenommen). Sonst geschafft → Erfolg, nicht geschafft → Niederlage.
+ * Papiere fälschen (Zoll). picks 'bribe': Schein ins Papier (bribeCost), Erfolg; reicht das Schwarzgeld nicht mehr, ist
+ * der Versuch aufgeflogen (Niederlage, nichts bezahlt). 'giveUp': Ladung aufgeben (Niederlage surrendered: Ware weg,
+ * niemand festgenommen). Sonst geschafft → Erfolg (abgefertigt), nicht geschafft → Niederlage (Ladung wird geöffnet).
+ * Zur Info 'hits:<n>' (Fehler, die er gefunden hat) und 'fixed:<n>' (rechtzeitig umgeschrieben): Mit einem Fehler
+ * durch, notiert er sich die Spedition (nur Text: Der Zoll hat kein Veedel für Heat). Rechte Hand: ihr Score, ohne picks.
  */
 export function applyPapers(
   ctx: Ctx,
@@ -454,9 +457,15 @@ export function applyPapers(
   result: MinigameResult,
 ): void {
   const before = gauges(encounter);
-  if (result.picks.includes('bribe') && payBribe(ctx, encounter)) {
-    logMinigame(ctx, encounter, open, result, 'Ein Umschlag zwischen den Papieren. Der Stempel kommt.', before);
-    finish(ctx, encounter, 'success', undefined, 'resolved');
+  const rightHand = result.by === 'rightHand';
+  if (result.picks.includes('bribe')) {
+    if (payBribe(ctx, encounter)) {
+      logMinigame(ctx, encounter, open, result, 'Ein Umschlag zwischen den Papieren. Der Stempel kommt.', before);
+      finish(ctx, encounter, 'success', undefined, 'resolved');
+    } else {
+      logMinigame(ctx, encounter, open, result, 'Der Umschlag ist leer. „Jetzt machen wir auf.“', before);
+      finish(ctx, encounter, 'failure', undefined, 'resolved');
+    }
     return;
   }
   if (result.picks.includes('giveUp')) {
@@ -465,10 +474,19 @@ export function applyPapers(
     return;
   }
   if (result.won) {
-    logMinigame(ctx, encounter, open, result, 'Die Papiere stimmen. Stempel, weiter.', before);
+    const hits = count(result.picks, 'hits:');
+    const text = rightHand
+      ? 'Deine Rechte Hand hat die Papiere gerade gezogen. Stempel, weiter.'
+      : hits > 0
+        ? 'Abgefertigt. Aber er notiert sich die Spedition.'
+        : 'Die Papiere stimmen. Stempel, weiter.';
+    logMinigame(ctx, encounter, open, result, text, before);
     finish(ctx, encounter, 'success', undefined, 'resolved');
   } else {
-    logMinigame(ctx, encounter, open, result, 'Der Zöllner hat den Fehler gefunden. Die Ladung ist fällig.', before);
+    const text = rightHand
+      ? 'Deine Rechte Hand hat einen Fehler übersehen. Die Ladung wird geöffnet.'
+      : 'Zwei Fehler in den Papieren. Die Ladung wird geöffnet.';
+    logMinigame(ctx, encounter, open, result, text, before);
     finish(ctx, encounter, 'failure', undefined, 'resolved');
   }
 }
