@@ -1506,7 +1506,10 @@ mehr, freischalten geht über die App. Stadt-Events: `events/ui` öffnet zum Sta
 einen Dialog mit Titel, einem Satz (`meaning`), Chips, „Ware bestellen“ und „Okay“; die Ankündigung per Handy und das
 Feld `announce` sind weg (`announced` bleibt leer im Zustand). Events kommen halb so oft (Zyklen 180 statt 90 Tage,
 Heimspiele alle vier Wochen, Wiesn alle 90, Messe alle 60 Tage) mit mehr Nachfrage (`EVENT_DEMAND_BOOST` 1,5,
-`eventDemand(def)`; `eventFactor('demand')` nutzt sie).
+`eventDemand(def)`; `eventFactor('demand')` nutzt sie). Beide Pop-ups öffnen ihre Öffner (Slots in `map.overlay`)
+erst, wenn der Spieler frei ist: `popupMayOpen(ui.state, mobile)` aus `src/ui` (kein Dialog, kein Menü oder Popover,
+keine Suche, kein Kartenklick, kein Gespräch, keine Mitteilungszentrale; am Handy-Bildschirm auch nicht bei offenem
+Handy), sonst warten sie in ihrer Warteschlange.
 
 **Gangs und Polizei seltener, größer.** `gangs/config.ts`: `ATTACK_CHANCE` 0,01 (vorher 0,02), `EXPAND_CHANCE` 0,005
 (0,01), `METHOD_INTERVAL_BY_CITY` doppelt (Köln 8 bis 16 Tage), Beute in `RAID_EFFECTS` (Spot [−40, −16] Ware und 15 %

@@ -1,11 +1,23 @@
 // Lieferant kennenlernen (Auftrag 46e): Wird ein Lieferant frei, stellt er sich einmal mit einem Pop-up über der
 // Karte vor (Look Glas): Porträt, Name, Rolle, ein, zwei Sätze in seiner Stimme, „Angebot ansehen“ öffnet die
 // Lieferanten-App bei ihm, „Später“ schließt. Kommen mehrere auf einmal (Kalle und Toni in Stufe 5), ist es ein Pop-up.
-// Das Pop-up wartet, bis kein anderer Dialog offen ist (Konfrontation, Razzia-Bilanz).
+// Das Pop-up wartet, bis der Spieler frei ist (kein anderer Dialog wie Konfrontation oder Razzia-Bilanz, kein Menü,
+// am Handy-Bildschirm das Handy zu; popupMayOpen aus src/ui).
 
 import { useEffect } from 'preact/hooks';
 import { lookFor } from '../../../core';
-import { Avatar, Button, MapDialog, onGameEvent, registerDialog, registerSlot, useGame, useUi } from '../../../ui';
+import {
+  Avatar,
+  Button,
+  MapDialog,
+  onGameEvent,
+  popupMayOpen,
+  registerDialog,
+  registerSlot,
+  useGame,
+  useIsMobile,
+  useUi,
+} from '../../../ui';
 import { contactOf, getSupplier, introText, isUnlocked, type Supplier } from '../index';
 
 declare module '../../../ui' {
@@ -80,17 +92,19 @@ function MeetDialog(props: { supplierIds: string[] }) {
 function MeetOpener() {
   const ui = useUi();
   const { state } = useGame();
+  const mobile = useIsMobile();
   const pending = queue.find((p) => !p.shown && p.runId === state.meta.runId) ?? null;
-  const dialogOpen = ui.state.dialog !== null;
+  // Erst, wenn der Spieler frei ist (kein Dialog, kein Menü, am Handy-Bildschirm das Handy zu): popupMayOpen.
+  const free = popupMayOpen(ui.state, mobile);
   useEffect(() => {
-    if (!pending || dialogOpen) return;
+    if (!pending || !free) return;
     const timer = window.setTimeout(() => {
-      if (pending.shown || ui.state.dialog) return;
+      if (pending.shown || !popupMayOpen(ui.state, mobile)) return;
       pending.shown = true;
       ui.openDialog('suppliers.meet', { supplierIds: pending.supplierIds });
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [pending, dialogOpen, ui]);
+  }, [pending, free, mobile, ui]);
   return null;
 }
 

@@ -19,10 +19,12 @@ import {
   ListItem,
   MapDialog,
   onGameEvent,
+  popupMayOpen,
   registerDialog,
   registerHudItem,
   registerSlot,
   useGame,
+  useIsMobile,
   useUi,
 } from '../../../ui';
 import { activeCity, bribeFactor, cityName, relationFactor } from '../../city';
@@ -250,21 +252,23 @@ interface PendingStart {
 /** Starts, die noch kein Pop-up hatten (nur Oberfläche). */
 const pendingStarts: PendingStart[] = [];
 
-/** Öffnet das Pop-up zum nächsten Start, sobald kein anderer Dialog offen ist. */
+/** Öffnet das Pop-up zum nächsten Start, sobald der Spieler frei ist (kein Dialog, kein Menü, Handy zu am Handy-Bildschirm). */
 function EventStartOpener() {
   const ui = useUi();
   const { state } = useGame();
+  const mobile = useIsMobile();
   const pending = pendingStarts.find((p) => !p.shown && p.runId === state.meta.runId) ?? null;
-  const dialogOpen = ui.state.dialog !== null;
+  // Erst, wenn der Spieler frei ist (kein Dialog, kein Menü, am Handy-Bildschirm das Handy zu): popupMayOpen.
+  const free = popupMayOpen(ui.state, mobile);
   useEffect(() => {
-    if (!pending || dialogOpen) return;
+    if (!pending || !free) return;
     const timer = window.setTimeout(() => {
-      if (pending.shown || ui.state.dialog) return;
+      if (pending.shown || !popupMayOpen(ui.state, mobile)) return;
       pending.shown = true;
       ui.openDialog('events.started', { eventId: pending.eventId });
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [pending, dialogOpen, ui]);
+  }, [pending, free, mobile, ui]);
   return null;
 }
 
