@@ -153,9 +153,11 @@ zählt, ob das Geld für Schulden plus Paket reicht).
   | Köln (stundenweise bis 11 von 12 Veedeln) | `koeln-anfang` (Tag 3), `koeln-veedel` (erstes Veedel), `boss-von-koeln` (im Schritt der Mehrheit), `koeln-komplett` (zurechtgerückt: 50.000 €, das zwölfte Veedel fällt nach einer Spielminute, ein paar Stunden ruhig) |
   | Deutschland (`playToGermany` mit `cityOrder` = `ARRIVAL_CITIES`: Hamburg, Berlin, München, Frankfurt) | pro Stadt `ankunft-<stadt>` (erste Ankunft, `city.arrived`, bevor der Bot dort etwas tut: keine Leute, keine Rechte Hand, keine Routen), `boss-von-<stadt>` (im Schritt der Mehrheit) und `<stadt>-komplett` (Stand beim vorletzten Veedel, zurechtgerückt wie Köln mit `nearlyComplete`: Rechte Hand bereit, das letzte Veedel fällt nach einer Spielminute, danach meldet sich die nächste Stadt bzw. Jansen); `deutschland` (Boss von Deutschland, Jansen ruft gleich an) |
   | Hafen (Verkauf bis zum Titel Europa) | `hafen` (Ankunft in Rotterdam), `hafen-europa` (eigenes Schiff, Kunden in Europa), `produktion` (zwei Fincas, erste Ernte im Ausfuhrlager), `produzent`, `europa` |
+  | Minispiele (Auftrag 46, `src/playtest/minigameSaves.ts`, kein eigener Lauf: aus `boss-von-koeln` bzw. `hafen`) | `minispiel-<art>` für jede der zehn Arten: Das Minispiel steht an, ausgelöst auf dem echten Weg des Moduls (Kontrolle am Spot ohne Wurf `police.playerChase`, Überfall mit Zuschlagen, Tipp `tipOffAgainstPlayer`, eigene Fahrt mit `checkAt`, Zivis ohne Wurf `startUndercoverShift`, Überfall bzw. Eintreiben auf einer Kopie so oft gespielt, bis Tresor bzw. Bude anstehen, `trade.buy`, Sammellieferung mit `problem: 'seized'` und Antwort „Papiere fälschen“, `recruiting.interview`). Nach dem Laden öffnet sich der Rahmen von selbst, die Folgen laufen wie im Spiel |
 
   Neu erzeugen mit `npm run saves:build` (alle in etwa zwei Minuten, einzelne mit `node scripts/build-test-saves.mjs <id> …`);
-  `testSaves.test.ts` lädt jede Datei, lässt sie einen Tag laufen und prüft den Moment, für den sie gemacht ist. Die
+  `testSaves.test.ts` lädt jede Datei, lässt sie einen Tag laufen und prüft den Moment, für den sie gemacht ist (bei den
+  Minispiel-Ständen: das Spiel steht an, ein Sieg wirkt im auslösenden Modul, danach ein Tag ohne Game Over). Die
   Reihenfolge der Städte steht fest (`ARRIVAL_CITIES`); wer sie ändert, passt die Texte in `src/ui/builtin/testSaves.ts`
   an.
 
@@ -1372,6 +1374,13 @@ Seed (zuerst zu unbekannten Eigenschaften, `INTERVIEW_QUESTIONS` aus `recruiting
 Hälfte der Zeichen, höchstens `FALSE_ALARMS_ALLOWED` Fehlalarme; ehrliche Antworten nur Gesten), Score = richtige
 Runden / 3, picks = aufgedeckte Eigenschaften. Zeichen am Porträt: `Tells.tsx` (Schweiß, Hand am Hals, Becher) und
 CSS-Bewegungen (`is-cue-<art>`), nervöses Grinsen über den Mund im Look.
+
+**Test-Spielstände je Minispiel** (`src/playtest/minigameSaves.ts`, Gruppe „Minispiele“ im Spielstände-Dialog,
+`?spielstand=minispiel-<art>`): siehe Abschnitt „Spielstände“. Dafür neu in `police`: `playerChase(ctx, spotId)`
+(Kontrolle am Spot, an dem du stehst, ohne die Würfe) und `startUndercoverShift(ctx, spotId, heat)` (die Schicht Zivis
+ohne den Wurf; `maybeStartUndercover` ruft es nach dem Wurf). Ein offenes Minispiel im geladenen Spielstand öffnet den
+Rahmen einmal von selbst (`PendingHud`, `markOpened`/`wasOpened` in `ui/flow.ts`, je Spielzustand), danach bleibt der
+Knopf im HUD.
 
 **Razzia-Countdown** (`stash/draw.ts`): Lager und Straße neu gezeichnet (Paletten, Regale mit Kisten, Tresor mit
 Zahlenrad, Lieferwagen, Schaufenster, Bank, Blumenkübel, Briefkasten, Mülltonne, Pakete mit Klebeband und Etikett).

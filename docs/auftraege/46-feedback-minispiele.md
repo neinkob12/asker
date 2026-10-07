@@ -116,3 +116,19 @@ Nur Pfade, die der Spieler selbst auslöst; Bot, Würfelfolgen, Szenario-Tests u
 - [x] `scripts/perf-browser.mjs --scenes=jagd` misst die neue Jagd (Tasten wie bisher, `window.chase.view.current.perf`).
 - [x] `CLAUDE.md`, `docs/architektur.md` (Abschnitt „Minispiele“), `docs/auftraege/README.md`.
 - [x] `npm run check`, `npm run build`, `npm run e2e`, Screenshots mit `npm run screenshot:minigames`.
+
+## G. Test-Spielstände je Minispiel (Nachtrag)
+
+Zum Ausprobieren jedes Minispiels gibt es im Spielstände-Dialog die Gruppe „Minispiele“ (`?spielstand=minispiel-<art>`):
+ein Stand je Art, in dem das Spiel gerade ansteht, aus „Boss von Köln“ (Rechte Hand, Lager, Gangs) bzw. der Hafen-Phase
+(Container). Nach dem Laden öffnet sich der Rahmen von selbst, die Folgen laufen wie im Spiel.
+
+- [x] `src/playtest/minigameSaves.ts`: ein Bauer je Art über den echten Auslöser des Moduls; Konfrontationen mit
+  offenem Ausgang (Tresor, Bude) auf einer Kopie so oft gespielt, bis das Minispiel ansteht (`untilPending`).
+- [x] `police`: `playerChase` und `startUndercoverShift` (Auslöser ohne Wurf, `runCheck` und `maybeStartUndercover`
+  nutzen dieselben Teile).
+- [x] `minigames/ui`: Ein offenes Minispiel im geladenen Stand öffnet den Rahmen einmal von selbst (`PendingHud`,
+  `markOpened`/`wasOpened` je Spielzustand).
+- [x] Liste in `src/ui/builtin/testSaves.ts` (Gruppe „Minispiele“), Prüfung in `testSaves.test.ts` (Art steht an, Sieg
+  wirkt, ein Tag ohne Game Over), Dateien mit `npm run saves:build`.
+

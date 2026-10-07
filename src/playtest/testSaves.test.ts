@@ -17,16 +17,27 @@ import {
   presentCity,
   saleStatus,
 } from '../modules/city';
+import { activeEncounters } from '../modules/encounters';
 import { getShips } from '../modules/fleet';
 import { getFincas, growGoals } from '../modules/grow';
 import { fullPowerMissing, getLieutenants, getRightHand } from '../modules/hierarchy';
-import { getRoutes } from '../modules/logistics';
+import { getRoutes, getTrips } from '../modules/logistics';
+import { activeChallenge, MINIGAME_KIND_IDS, type MinigameKind } from '../modules/minigames';
+import { plannedRaidInfo } from '../modules/police';
 import { currentQuest } from '../modules/quests';
+import { getCandidate } from '../modules/recruiting';
 import { getSpots } from '../modules/spots';
 import { getStaff } from '../modules/staff';
 import { campaignProgress, cityMilestones } from '../modules/territory';
-import { isTradeActive, OWN_ORIGINS, openOrders, originStock } from '../modules/trade';
+import {
+  getShipments as getTradeShipments,
+  isTradeActive,
+  OWN_ORIGINS,
+  openOrders,
+  originStock,
+} from '../modules/trade';
 import { TEST_SAVE_FILES, TEST_SAVE_PHASES } from '../ui/builtin/testSaves';
+import { isMinigameSave, MINIGAME_SAVE_IDS, minigameSaveId } from './minigameSaves';
 import {
   ARRIVAL_CITIES,
   europeCustomers,
@@ -60,7 +71,8 @@ describe('Test-Spielstände', () => {
   });
 
   it('jeder Test-Spielstand trägt seine Kennung und läuft einen Tag ohne Game Over', { timeout: 120_000 }, () => {
-    for (const save of TEST_SAVES) {
+    // Die Minispiel-Stände prüft der eigene Block unten (ohne Spieler liefe ihre Konfrontation auf Würfel hinaus).
+    for (const save of TEST_SAVES.filter((s) => !isMinigameSave(s.id))) {
       const sim = loadFile(save.id);
       expect(sim.state.meta.scenario, save.id).toBe(save.id);
       expect(sim.state.outcome.gameOver, save.id).toBeNull();
@@ -260,5 +272,86 @@ describe('Test-Spielstände', () => {
     const europe = loadFile('europa');
     expect(playerRank(europe.state).id).toBe('europe');
     expect(growGoals(europe.state).europe).toBe(true);
+  });
+});
+
+/** Was ein gewonnenes Minispiel im Stand bewirkt haben muss (die Folgen laufen im auslösenden Modul). */
+const AFTER_WIN: Record<MinigameKind, (state: GameState, before: GameState) => void> = {
+  // Die Konfrontation wartet nicht mehr auf das Minispiel (abgehängt bzw. der Kampf ist entschieden).
+  chase: (state) => expect(activeEncounters(state).some((e) => e.minigame)).toBe(false),
+  brawl: (state) => expect(activeEncounters(state).some((e) => e.minigame)).toBe(false),
+  traffic: (state) => {
+    expect(activeEncounters(state).some((e) => e.minigame)).toBe(false);
+    expect(getTrips(state).some((t) => t.driverId === null)).toBe(true);
+  },
+  // Die Razzia ist noch geplant, der versteckte Anteil steht.
+  stash: (state) => {
+    const raid = state.modules.police.plannedRaids;
+    const veedelId = Object.keys(raid)[0];
+    expect(veedelId).toBeDefined();
+    expect(plannedRaidInfo(state, veedelId)?.stash).toBeGreaterThan(0);
+  },
+  undercover: (state) => expect(state.modules.police.undercover.shift).toBeNull(),
+  // Tresor und Bude: Schwarzgeld aus der Kasse der Gang.
+  safe: (state, before) => expect(state.wallet.dirty).toBeGreaterThan(before.wallet.dirty),
+  search: (state, before) => expect(state.wallet.dirty).toBeGreaterThan(before.wallet.dirty),
+  container: (state) => expect(getTradeShipments(state).some((x) => x.packing !== undefined)).toBe(true),
+  papers: (state) => expect(state.modules.suppliers.shipments.some((x) => x.papers)).toBe(false),
+  interview: (state) => {
+    const candidate = state.modules.recruiting.candidates.find((c) => c.interviewed);
+    expect(candidate).toBeDefined();
+  },
+};
+
+describe('Test-Spielstände: Minispiele (Auftrag 46)', () => {
+  it('es gibt einen Stand je Art, in der Reihenfolge der Arten, in der Gruppe „Minispiele“', () => {
+    expect(MINIGAME_SAVE_IDS).toEqual(MINIGAME_KIND_IDS.map((k) => `minispiel-${k}`));
+    for (const id of MINIGAME_SAVE_IDS) expect(TEST_SAVE_FILES.find((t) => t.id === id)?.phase, id).toBe('minigames');
+  });
+
+  for (const kind of MINIGAME_KIND_IDS) {
+    const id = minigameSaveId(kind);
+    it(`${id}: das Minispiel steht an, ein Sieg wirkt, danach läuft das Spiel einen Tag weiter`, () => {
+      const sim = loadFile(id);
+      const state = sim.state;
+      expect(state.meta.scenario).toBe(id);
+      expect(state.outcome.gameOver).toBeNull();
+      const open = activeChallenge(state);
+      expect(open?.kind).toBe(kind);
+      if (!open) return;
+      // Nur dieses eine Minispiel, mit Frist in der Zukunft, in der Stadt, in der du bist.
+      expect(state.modules.minigames.active).toHaveLength(1);
+      expect(open.deadline).toBeGreaterThan(state.time);
+      expect(open.cityId).toBe(presentCity(state));
+      expect(open.title.length).toBeGreaterThan(0);
+      expect(open.situation.length).toBeGreaterThan(0);
+      // Gewonnen: Die Folgen laufen im auslösenden Modul (nach dem Kampf kann gleich der Tresor anstehen).
+      const before = structuredClone(state);
+      expect(sim.dispatch({ type: 'minigames.finish', payload: { id: open.id, score: 0.9, picks: [] } }).ok).toBe(true);
+      expect(activeChallenge(state)?.id).not.toBe(open.id);
+      AFTER_WIN[kind](state, before);
+      sim.advance(24 * 60);
+      expect(state.outcome.gameOver).toBeNull();
+    });
+  }
+
+  it('die Stände aus Köln spielen in Köln mit Rechter Hand, der Container in Rotterdam', () => {
+    for (const kind of MINIGAME_KIND_IDS) {
+      const sim = loadFile(minigameSaveId(kind));
+      if (kind === 'container') {
+        expect(presentCity(sim.state)).toBe('rotterdam');
+        expect(isBusinessSold(sim.state)).toBe(true);
+      } else {
+        expect(presentCity(sim.state), kind).toBe('koeln');
+        expect(getRightHand(sim.state, 'koeln'), kind).not.toBeNull();
+      }
+    }
+  });
+
+  it('Gespräch: der Bewerber steht nach dem Stand noch zur Verfügung', () => {
+    const sim = loadFile(minigameSaveId('interview'));
+    const open = activeChallenge(sim.state);
+    const candidate = getCandidate(sim.state, String(open?.origin.ref));
+    expect(candidate?.interviewed).toBe(true);
   });
 });

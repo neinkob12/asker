@@ -289,7 +289,8 @@ auffällige Karte. Umgesetzt in einer Session, das Handy und die Quests parallel
 mehr. Verfolgungsjagd als Arcade-Rennspiel von hinten (Spuren, Verkehr, Blaulicht, Turbo, Sperren, Abhängen-Balken),
 Verkehrskontrolle als „Verstecken und Nerven“ (Beamter mit Taschenlampe ums Auto, Pakete umräumen, Puls im Takt),
 Bewerbungsgespräch als Lügendetektor (Zeichen antippen), Razzia-Countdown neu gezeichnet, Auslöser etwa doppelt so oft
-auf den Pfaden des Spielers. Fragerunde als Pop-ups in der Session, eine Session.
+auf den Pfaden des Spielers. Nachtrag: ein Test-Spielstand je Minispiel (`minispiel-<art>`, Gruppe „Minispiele“), der
+Rahmen öffnet sich nach dem Laden von selbst. Fragerunde als Pop-ups in der Session, eine Session.
 
 ## Mergen
 

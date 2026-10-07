@@ -168,7 +168,9 @@ Sätze in `lines.ts`), Pakete rechtzeitig umräumen, Puls im Takt; picks `flee`,
 als Lügendetektor: Zeichen (`TELL_KINDS`) rechtzeitig antippen, Gesten sind Fehlalarme (`interview/model.ts`,
 Overlay `Tells.tsx`). Razzia-Countdown neu gezeichnet. Minispiele etwa doppelt so oft, nur auf Pfaden des Spielers
 (`PLAYER_CHECK_THRESHOLD`, `PLAYER_CHASE_CHANCE`, `UNDERCOVER_BASE_CHANCE_PER_HOUR` 6 %, `PLAYER_CHECK_FACTOR` in
-`logistics`, Überfall auf den Spot, an dem du stehst, mit dir drin).
+`logistics`, Überfall auf den Spot, an dem du stehst, mit dir drin). Test-Spielstände je Minispiel (`?spielstand=minispiel-<art>`,
+Gruppe „Minispiele“, `src/playtest/minigameSaves.ts`): Das Spiel steht an und öffnet sich nach dem Laden von selbst; Auslöser ohne
+Wurf dafür in `police` (`playerChase`, `startUndercoverShift`).
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
@@ -328,7 +330,7 @@ Selbst ausprobieren:
 Im Browser: `?neu=normal&seed=1&tempo=0` startet ein frisches Spiel; `window.koeln.session` in der Konsole.
 Test-Spielstände (vom Bot gespielt, nicht in der Bestenliste), einer für jeden Abschnitt des Bogens (`koeln-anfang` bis
 `europa`; jede Stadt in der Reihenfolge Hamburg, Berlin, München, Frankfurt mit `ankunft-<stadt>`, `boss-von-<stadt>`
-und `<stadt>-komplett`): `?spielstand=koeln-komplett` oder Spielstände › Test-Spielstände; Liste in `src/playtest/testSaves.ts` und
+und `<stadt>-komplett`) und einer je Minispiel (`minispiel-<art>`): `?spielstand=koeln-komplett` oder Spielstände › Test-Spielstände; Liste in `src/playtest/testSaves.ts` und
 `src/ui/builtin/testSaves.ts`, Dateien in `public/spielstaende/`, neu erzeugen mit `npm run saves:build` (etwa zwei
 Minuten; `testSaves.test.ts` prüft, dass sie laden und den Moment zeigen; Übersicht in `docs/architektur.md`, Abschnitt
 "Spielstände").

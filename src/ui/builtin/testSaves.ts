@@ -1,5 +1,7 @@
 // Test-Spielstände zum Ausprobieren, einer für jeden Abschnitt des Bogens: vom Bot gespielt und manche für einen Moment
 // zurechtgerückt (src/playtest/testSaves.ts, Dateien in public/spielstaende/, neu erzeugen mit `npm run saves:build`).
+// Dazu die Gruppe „Minispiele“ (Auftrag 46): ein Stand je Art, in dem das Minispiel gerade ansteht und sich nach dem
+// Laden von selbst öffnet (src/playtest/minigameSaves.ts).
 // Zu laden im Spielstände-Dialog unter "Test-Spielstände" (nach Stadt bzw. Phase gruppiert) oder direkt mit ?spielstand=<id> in der
 // Adresse. Sie kommen nicht in die Bestenliste.
 
@@ -15,7 +17,8 @@ export type TestSavePhase =
   | 'frankfurt'
   | 'germany'
   | 'harbor'
-  | 'production';
+  | 'production'
+  | 'minigames';
 
 export const TEST_SAVE_PHASES: readonly { id: TestSavePhase; title: string; icon: IconName; color: CategoryColor }[] = [
   { id: 'koeln', title: 'Köln', icon: 'dom', color: 'place' },
@@ -26,6 +29,7 @@ export const TEST_SAVE_PHASES: readonly { id: TestSavePhase; title: string; icon
   { id: 'germany', title: 'Deutschland', icon: 'map', color: 'place' },
   { id: 'harbor', title: 'Hafen', icon: 'ship', color: 'goods' },
   { id: 'production', title: 'Produktion', icon: 'leaf', color: 'goods' },
+  { id: 'minigames', title: 'Minispiele', icon: 'bolt', color: 'danger' },
 ];
 
 export interface TestSaveInfo {
@@ -170,6 +174,67 @@ export const TEST_SAVE_FILES: readonly TestSaveInfo[] = [
     phase: 'production',
     title: 'Europa',
     text: 'Das Ende des Bogens: Jeder Kunde in Europa bekommt Ware aus deinen Fincas. Von hier geht es offen weiter.',
+  },
+  // Minispiele (Auftrag 46), in der Reihenfolge der Arten (MINIGAME_KIND_IDS): Das Spiel öffnet sich nach dem Laden.
+  {
+    id: 'minispiel-chase',
+    phase: 'minigames',
+    title: 'Verfolgungsjagd',
+    text: 'Boss von Köln, 22 Uhr: Kontrolle an deinem Spot, du rennst los. Blaulicht im Nacken, drei Spuren, Turbo.',
+  },
+  {
+    id: 'minispiel-brawl',
+    phase: 'minigames',
+    title: 'Straßenkampf',
+    text: 'Überfall auf den Spot einer Gang, du bist dabei und schlägst zu. Danach geht die Akte weiter.',
+  },
+  {
+    id: 'minispiel-stash',
+    phase: 'minigames',
+    title: 'Razzia-Countdown',
+    text: 'Tipp vom Kontakt: Die Razzia kommt. Im Lager liegt noch Ware, versteck sie, bevor die Bullen da sind.',
+  },
+  {
+    id: 'minispiel-traffic',
+    phase: 'minigames',
+    title: 'Verkehrskontrolle',
+    text: 'Du fährst nachts selbst Ware von einem Lager ins andere und wirst rausgewunken. Verstecken und ruhig bleiben.',
+  },
+  {
+    id: 'minispiel-undercover',
+    phase: 'minigames',
+    title: 'Zivi oder Kunde',
+    text: 'Abends an deinem Spot: Unter den nächsten Kunden sind Zivis. Verkauf nur an echte.',
+  },
+  {
+    id: 'minispiel-safe',
+    phase: 'minigames',
+    title: 'Tresor knacken',
+    text: 'Der Überfall auf den Gang-Spot ist gewonnen, im Hinterzimmer steht der Tresor.',
+  },
+  {
+    id: 'minispiel-search',
+    phase: 'minigames',
+    title: 'Bude durchsuchen',
+    text: 'Schutzgeld eingetrieben, du warst dabei: Die Bude des Schuldners steht offen, irgendwo liegt sein Rest.',
+  },
+  {
+    id: 'minispiel-container',
+    phase: 'minigames',
+    title: 'Container packen',
+    text: 'Hafen-Phase: ein Container bei einem Produzenten bestellt. Pack ihn so, dass der Zoll nichts findet.',
+  },
+  {
+    id: 'minispiel-papers',
+    phase: 'minigames',
+    title: 'Papiere fälschen',
+    text: 'Der Zoll hält eine Sammellieferung fest. Du machst die Papiere selbst, statt zu schmieren.',
+  },
+  {
+    id: 'minispiel-interview',
+    phase: 'minigames',
+    title: 'Bewerbungsgespräch',
+    text: 'Ein Bewerber aus dem Pool: drei Fragen, Zeichen rechtzeitig tippen, Eigenschaften in die Akte.',
   },
 ];
 
