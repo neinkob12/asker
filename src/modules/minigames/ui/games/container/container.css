@@ -1,0 +1,372 @@
+/* Container packen (Auftrag 44, Teil 7). Bühne als Canvas, HUD und Leiste im Look Glas. */
+
+.pack {
+  position: absolute;
+  inset: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: var(--font-hud);
+  color: var(--hud-ink);
+}
+.pack__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.pack__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-hud-display);
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pack__count svg {
+  width: 18px;
+  height: 18px;
+  color: var(--cat-goods);
+}
+.pack__hud .mg-hud-meter {
+  min-width: 140px;
+}
+
+/* Beschriftung an Container und Scanner (nur Anzeige). */
+.pack__label {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  font-family: var(--font-hud-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.pack__label svg {
+  width: 14px;
+  height: 14px;
+}
+.pack__label.is-xray {
+  color: var(--cat-sky);
+}
+.pack__label.is-door {
+  color: var(--hud-gold);
+}
+.pack__label.is-turned {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+/* Leiste: Auswahl, Teile, Knöpfe (rechts am Desktop, unten am Handy). */
+.pack__panel {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  overflow: auto;
+}
+.pack__pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+}
+.pack__pick-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.pack__pick-text strong {
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pack__pick-empty {
+  font-size: 14px;
+  color: var(--hud-ink-2);
+}
+.pack__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.pack__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-fill);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--hud-ink-2);
+}
+.pack__chip.is-goods {
+  color: var(--cat-goods);
+}
+
+/* Kleine Form aus Kästchen. */
+.pack__mini {
+  --swatch: var(--cat-goods);
+  display: inline-grid;
+  gap: 1px;
+  flex: none;
+}
+.pack__mini span {
+  border-radius: 2px;
+  border: 1px solid var(--swatch);
+  background: color-mix(in srgb, var(--swatch) 55%, transparent);
+}
+
+.pack__tray {
+  display: grid;
+  gap: var(--space-3);
+}
+.pack__group {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.pack__group-title {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+  white-space: nowrap;
+}
+.pack__pieces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.pack__piece {
+  display: inline-grid;
+  grid-auto-flow: row;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  min-width: 56px;
+  min-height: 56px;
+  padding: 6px 8px;
+  border-radius: var(--hud-radius-button);
+  border: 1px solid var(--hud-glass-line);
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: grab;
+  touch-action: none;
+}
+.pack__piece:hover:not(:disabled),
+.pack__piece:focus-visible {
+  background: var(--hud-glass-fill-active);
+}
+.pack__piece.is-selected {
+  border-color: var(--hud-gold);
+  box-shadow: 0 0 0 1px var(--hud-gold) inset;
+}
+.pack__piece:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.pack__piece-name {
+  max-width: 88px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.pack__buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+.pack__buttons .pack__button:last-child {
+  grid-column: 1 / -1;
+}
+.pack__panel.is-bottom .pack__buttons {
+  grid-template-columns: repeat(3, 1fr);
+}
+.pack__panel.is-bottom .pack__buttons .pack__button:last-child {
+  grid-column: auto;
+}
+.pack__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 6px 8px;
+  border-radius: var(--hud-radius-button);
+  border: 1px solid var(--hud-glass-line);
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pack__button svg {
+  width: 18px;
+  height: 18px;
+}
+.pack__button:hover:not(:disabled),
+.pack__button:focus-visible {
+  background: var(--hud-glass-fill-active);
+}
+.pack__button.is-gold {
+  border-color: var(--hud-gold);
+  background: var(--hud-gold);
+  color: var(--hud-gold-on);
+}
+.pack__button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.pack kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: var(--hud-glass-fill);
+  border: 1px solid var(--hud-glass-line);
+  font-family: var(--font-hud-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--hud-gold);
+}
+.pack__button.is-gold kbd {
+  color: inherit;
+  border-color: currentColor;
+  background: transparent;
+}
+
+/* Am Handy unten: Teile in einer Reihe zum Wischen, Knöpfe darunter (56 px für den Daumen). */
+.pack__panel.is-bottom {
+  gap: 10px;
+  padding: var(--space-3);
+  overflow: hidden;
+}
+.pack__panel.is-bottom .pack__tray {
+  display: flex;
+  gap: var(--space-2);
+  min-height: 76px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.pack__panel.is-bottom .pack__tray::-webkit-scrollbar {
+  display: none;
+}
+.pack__panel.is-bottom .pack__group {
+  flex: none;
+}
+.pack__panel.is-bottom .pack__group + .pack__group {
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--hud-glass-line);
+}
+.pack__panel.is-bottom .pack__pieces {
+  flex-wrap: nowrap;
+}
+.pack__panel.is-bottom .pack__piece {
+  min-height: 72px;
+}
+.pack__panel.is-bottom .pack__button {
+  min-height: 56px;
+}
+
+.pack__message {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 84px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: var(--radius-round);
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  animation: pack-pop 0.25s var(--ease-out);
+}
+.pack__message.is-good {
+  color: var(--cat-money);
+}
+.pack__message.is-bad {
+  color: var(--cat-danger);
+}
+.pack__message.is-warn {
+  color: var(--cat-warn);
+}
+@keyframes pack-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+@media (max-width: 760px) {
+  .pack__hud {
+    top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+  }
+  .pack__hud .mg-hud-meter {
+    min-width: 96px;
+  }
+  .pack__count {
+    font-size: 20px;
+  }
+  .pack__label {
+    font-size: 11px;
+    padding: 0 6px;
+  }
+  .pack__message {
+    top: 72px;
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pack__message {
+    animation: none;
+  }
+}
