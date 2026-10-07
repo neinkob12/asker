@@ -80,6 +80,18 @@ export const PRODUCTS: readonly Product[] = [
 export const DEFAULT_PRODUCT = 'weed';
 
 /**
+ * Warenarten in Listen (Feedback vom 07.10.2026: die Lieferanten-App ordnet ihr Angebot danach), in dieser Reihenfolge,
+ * mit Namen und Icon.
+ */
+export const PRODUCT_CATEGORIES: readonly { id: ProductCategory; name: string; icon: string }[] = [
+  { id: 'flower', name: 'Blüten', icon: 'leaf' },
+  { id: 'hash', name: 'Hasch', icon: 'cube' },
+  { id: 'edible', name: 'Edibles', icon: 'pill' },
+  { id: 'oil', name: 'Öl', icon: 'drop' },
+  { id: 'vape', name: 'Vapes', icon: 'flask' },
+];
+
+/**
  * Gewicht pro Einheit in Gramm nach Warenart (Auftrag 30: Ladung einer Fahrt zwischen den Städten, INTERCITY_CAPACITY
  * in logistics): Gras und Hasch pro Gramm, ein Edible 5 g, ein Vape-Pen 20 g, Öl 1 g je ml.
  */

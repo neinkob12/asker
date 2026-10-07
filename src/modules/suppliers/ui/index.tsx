@@ -1,5 +1,6 @@
 // Oberfläche der Lieferanten: Handy-App "Lieferanten" (freischalten, bestellen, Beziehung, Kredit), Lieferungen im
-// Tab "Geschäft", Routen und Transporter auf der Karte, Hinweise bei Lieferproblemen.
+// Tab "Geschäft", Routen und Transporter auf der Karte, Hinweise bei Lieferproblemen. Das Angebot steht nach Warenart
+// geordnet, bestellt wird einzeln oder als Sammelbestellung (Feedback vom 07.10.2026).
 
 import { useState } from 'preact/hooks';
 import { clock, formatEuro, formatPercent, type GameState } from '../../../core';
@@ -19,15 +20,27 @@ import {
   ProgressBar,
   registerAdvisor,
   registerPhoneApp,
+  SegmentedControl,
   Select,
   Slot,
+  Stepper,
   soundOnEvent,
   Tag,
   useGame,
   useUi,
 } from '../../../ui';
 import { activeCity, cityName, isBusinessSold, relationFactor } from '../../city';
-import { getStock, getWarehouse, getWarehouses, productName, qualityTier, warehousePlace } from '../../goods';
+import {
+  formatProductAmount,
+  getProduct,
+  getStock,
+  getWarehouse,
+  getWarehouses,
+  PRODUCT_CATEGORIES,
+  productName,
+  qualityTier,
+  warehousePlace,
+} from '../../goods';
 import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount, portName } from '../../logistics';
 import { indexTrend, purchaseIndex } from '../../market';
 import {
@@ -41,17 +54,23 @@ import {
   deliversTo,
   expectedArrival,
   forceShipmentProblem,
+  GROUP_ORDER,
   getDeals,
   getRelation,
   getSupplier,
   getSuppliers,
   isBlocked,
   isUnlocked,
+  type OrderLine,
+  type OrderMode,
+  orderQuote,
   type ProblemChoice,
   packagePrice,
   type Shipment,
   type Supplier,
+  type SupplierPackage,
   seizeChance,
+  shipmentItems,
   shipmentProgress,
   shipmentReason,
   shipmentSupplier,
@@ -80,13 +99,21 @@ function ShipmentRow(props: { state: GameState; shipment: Shipment; showSupplier
     <div class="shipment">
       <div class="shipment__head">
         <span>
-          {pkg?.label ?? productName(s.productId)}
+          {s.extra ? 'Sammellieferung' : (pkg?.label ?? productName(s.productId))}
           {props.showSupplier && supplier ? ` aus ${supplier.name}` : ''} {target}
         </span>
         <span class={delayed ? 'shipment__eta is-late' : 'shipment__eta'}>
           {delayed ? 'verspätet, ' : ''}an {clock.formatTime(expectedArrival(s))}
         </span>
       </div>
+      {s.extra && (
+        <Chips
+          items={shipmentItems(s).map((x) => ({
+            label: `${formatProductAmount(x.productId, x.amount)} ${productName(x.productId)}`,
+            color: 'goods' as const,
+          }))}
+        />
+      )}
       <ProgressBar value={shipmentProgress(state, s)} tone={delayed ? 'warn' : 'accent'} label="Lieferung" />
       <ShipmentTrouble state={state} shipment={s} />
     </div>
@@ -134,6 +161,7 @@ function choiceLabel(state: GameState, s: Shipment, choice: ProblemChoice): stri
   const cost = s.decision ? formatEuro(s.decision.cost) : '';
   if (choice === 'detour') return `Umweg (${cost})`;
   if (choice === 'bribe') return `Schmieren (${cost})`;
+  if (choice === 'papers') return 'Papiere fälschen';
   if (choice === 'partial') return 'Teillieferung';
   if (choice === 'redirect') {
     const target = s.decision?.redirectTo ? getWarehouse(state, s.decision.redirectTo)?.name : undefined;
@@ -349,6 +377,194 @@ function LockedSupplier(props: { supplierId: string }) {
   );
 }
 
+/** Was einzeln bzw. gesammelt passiert, in einem Satz. */
+const MODE_NOTE: Record<OrderMode, string> = {
+  single: 'Jedes Paket kommt für sich. Erwischt der Zoll eins, ist nur das weg.',
+  group: 'Alles in einer Fuhre, billiger. Fliegt sie auf, ist alles auf einmal weg.',
+};
+
+/**
+ * Angebot nach Warenart (Blüten, Hasch, Edibles, Öl, Vapes) mit der Wahl der Bestellart: einzeln kauft jedes Paket
+ * sofort als eigene Lieferung, gesammelt kommen die gewählten Pakete in einer Lieferung (Rabatt, aber alles auf einmal
+ * in Gefahr). Die Auswahl der Sammelbestellung lebt nur hier in der Oberfläche, bis bestellt wird.
+ */
+function Offer(props: { supplier: Supplier; warehouseId: string | undefined; canOrder: boolean }) {
+  const { state, dispatch } = useGame();
+  const ui = useUi();
+  const [mode, setMode] = useState<OrderMode>('single');
+  const [cart, setCart] = useState<Record<string, number>>({});
+  const { supplier, warehouseId } = props;
+  const offered = new Set(availablePackages(state, supplier.id).map((p) => p.id));
+  const limit = creditLimit(state, supplier.id);
+  const credit = availableCredit(state, supplier.id);
+  const lines: OrderLine[] = supplier.packages
+    .filter((p) => (cart[p.id] ?? 0) > 0 && offered.has(p.id))
+    .map((p) => ({ packageId: p.id, count: cart[p.id] }));
+  const quote = orderQuote(state, supplier.id, lines, 'group');
+  const single = orderQuote(state, supplier.id, lines, 'single');
+  const room = GROUP_ORDER.maxPackages - quote.packages;
+  const target = warehouseId ? { warehouseId } : {};
+  const categories = PRODUCT_CATEGORIES.map((c) => ({
+    ...c,
+    packages: supplier.packages.filter((p) => getProduct(p.productId)?.category === c.id),
+  })).filter((c) => c.packages.length > 0);
+
+  const buy = (packageId: string, onCredit: boolean) =>
+    dispatch({
+      type: 'suppliers.order',
+      payload: { supplierId: supplier.id, packageId, ...(onCredit ? { onCredit: true } : {}), ...target },
+    });
+  const orderGroup = (onCredit: boolean) => {
+    const r = dispatch({
+      type: 'suppliers.orderBatch',
+      payload: { supplierId: supplier.id, lines, mode: 'group', ...(onCredit ? { onCredit: true } : {}), ...target },
+    });
+    if (r.ok) setCart({});
+    else ui.toast(r.reason, 'warn');
+  };
+
+  const aside = (p: SupplierPackage) => {
+    if (!offered.has(p.id)) return <span class="ui-hint">ab Vertrauen {p.minTrust}</span>;
+    const price = packagePrice(state, supplier.id, p.id);
+    if (mode === 'group') {
+      if (p.container) return <span class="ui-hint">nur einzeln</span>;
+      const count = cart[p.id] ?? 0;
+      return (
+        <Stepper
+          value={count}
+          min={0}
+          max={count + room}
+          label={`Anzahl ${p.label}`}
+          format={(n) => `${n}×`}
+          disabled={!props.canOrder}
+          onChange={(n) => setCart({ ...cart, [p.id]: n })}
+        />
+      );
+    }
+    return (
+      <div class="sup-buy">
+        <Button small disabled={!props.canOrder || state.wallet.dirty < price} onClick={() => buy(p.id, false)}>
+          Kaufen
+        </Button>
+        {limit > 0 && (
+          <Button small variant="subtle" disabled={!props.canOrder || credit < price} onClick={() => buy(p.id, true)}>
+            Kredit
+          </Button>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <div class="sup-mode">
+        <SegmentedControl
+          wide
+          aria-label="Bestellart"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'single', label: 'Einzeln' },
+            { value: 'group', label: 'Sammelbestellung' },
+          ]}
+        />
+        <p class="ui-hint">{MODE_NOTE[mode]}</p>
+      </div>
+      {categories.map((c) => (
+        <Group key={c.id} title={c.name} icon={c.icon} color="goods">
+          <List>
+            {c.packages.map((p) => {
+              const price = packagePrice(state, supplier.id, p.id);
+              return (
+                <ListItem key={p.id} aside={aside(p)}>
+                  <div class={offered.has(p.id) ? 'sup-pkg' : 'sup-pkg is-locked'}>
+                    <strong>{p.label}</strong>
+                    <span class="sup-pkg__price">
+                      {price < p.price && <s>{formatEuro(p.price)}</s>} {formatEuro(price)}
+                    </span>
+                    <PackageChips
+                      supplierId={supplier.id}
+                      packageId={p.id}
+                      productId={p.productId}
+                      {...(p.container ? { container: p.container } : {})}
+                    />
+                  </div>
+                </ListItem>
+              );
+            })}
+          </List>
+        </Group>
+      ))}
+      {mode === 'group' && (
+        <Group
+          class="sup-cart"
+          title="Sammelbestellung"
+          icon="package"
+          color="money"
+          count={quote.packages}
+          value={quote.packages > 0 ? formatEuro(quote.price) : undefined}
+          note={
+            quote.packages === 0
+              ? `Wähl mit + die Pakete aus, ab zwei gibt es Rabatt (höchstens ${GROUP_ORDER.maxPackages}).`
+              : undefined
+          }
+        >
+          {quote.packages > 0 && (
+            <>
+              <Chips
+                items={lines.map((l) => ({
+                  label: `${l.count}× ${supplier.packages.find((p) => p.id === l.packageId)?.label ?? l.packageId}`,
+                  icon: 'package',
+                  color: 'goods' as const,
+                }))}
+              />
+              <KeyValue
+                label="Rabatt"
+                value={
+                  quote.discount > 0
+                    ? `${formatPercent(quote.discount)}, ${formatEuro(quote.listPrice - quote.price)} gespart`
+                    : 'ab zwei Paketen'
+                }
+              />
+              <KeyValue
+                label="Beschlagnahme"
+                value={`${formatPercent(quote.seize)} für alles`}
+                tone={quote.packages > 1 ? 'warn' : undefined}
+              />
+              <KeyValue
+                label="Einzeln"
+                value={`${formatEuro(single.price)}, ${formatPercent(single.seize)} je Paket`}
+              />
+              <div class="sup-actions">
+                <Button variant="subtle" onClick={() => setCart({})}>
+                  Leeren
+                </Button>
+                {limit > 0 && (
+                  <Button
+                    variant="subtle"
+                    disabled={!props.canOrder || credit < quote.price}
+                    onClick={() => orderGroup(true)}
+                  >
+                    Auf Kredit
+                  </Button>
+                )}
+                <Button
+                  variant="primary"
+                  icon="package"
+                  disabled={!props.canOrder || state.wallet.dirty < quote.price}
+                  onClick={() => orderGroup(false)}
+                >
+                  Bestellen
+                </Button>
+              </div>
+            </>
+          )}
+        </Group>
+      )}
+    </>
+  );
+}
+
 function SupplierDetail(props: { supplierId: string }) {
   const { state, dispatch } = useGame();
   const ui = useUi();
@@ -389,7 +605,6 @@ function SupplierDetail(props: { supplierId: string }) {
   const limit = creditLimit(state, supplier.id);
   const credit = availableCredit(state, supplier.id);
   const blocked = isBlocked(state, supplier.id);
-  const offered = new Set(availablePackages(state, supplier.id).map((p) => p.id));
   const discount = supplierDiscount(state, supplier.id);
   const shipments = shipmentsInTransit(state, activeCity(state)).filter((s) => s.supplierId === supplier.id);
   return (
@@ -490,74 +705,11 @@ function SupplierDetail(props: { supplierId: string }) {
           onChange={setTarget}
         />
       )}
-      <List>
-        {supplier.packages.map((p) => {
-          const locked = !offered.has(p.id);
-          const price = packagePrice(state, supplier.id, p.id);
-          return (
-            <ListItem
-              key={p.id}
-              aside={
-                locked ? (
-                  <span class="ui-hint">ab Vertrauen {p.minTrust}</span>
-                ) : (
-                  <div class="sup-buy">
-                    <Button
-                      small
-                      disabled={blocked || noWarehouse || state.wallet.dirty < price || (toPort && !hasBerth(state))}
-                      onClick={() =>
-                        dispatch({
-                          type: 'suppliers.order',
-                          payload: {
-                            supplierId: supplier.id,
-                            packageId: p.id,
-                            ...(warehouseId ? { warehouseId } : {}),
-                          },
-                        })
-                      }
-                    >
-                      Kaufen
-                    </Button>
-                    {limit > 0 && (
-                      <Button
-                        small
-                        variant="subtle"
-                        disabled={blocked || noWarehouse || credit < price || (toPort && !hasBerth(state))}
-                        onClick={() =>
-                          dispatch({
-                            type: 'suppliers.order',
-                            payload: {
-                              supplierId: supplier.id,
-                              packageId: p.id,
-                              onCredit: true,
-                              ...(warehouseId ? { warehouseId } : {}),
-                            },
-                          })
-                        }
-                      >
-                        Kredit
-                      </Button>
-                    )}
-                  </div>
-                )
-              }
-            >
-              <div class={locked ? 'sup-pkg is-locked' : 'sup-pkg'}>
-                <strong>{p.label}</strong>
-                <span class="sup-pkg__price">
-                  {price < p.price && <s>{formatEuro(p.price)}</s>} {formatEuro(price)}
-                </span>
-                <PackageChips
-                  supplierId={supplier.id}
-                  packageId={p.id}
-                  productId={p.productId}
-                  {...(p.container ? { container: p.container } : {})}
-                />
-              </div>
-            </ListItem>
-          );
-        })}
-      </List>
+      <Offer
+        supplier={supplier}
+        warehouseId={warehouseId}
+        canOrder={!blocked && !noWarehouse && !(toPort && !hasBerth(state))}
+      />
 
       {shipments.length > 0 && (
         <>
@@ -651,7 +803,8 @@ onGameEvent('shipment.arrived', 'suppliers.arrivedToast', (payload, ui, state) =
   // Waren die Lager zu voll, steht im Banner, wo die Ware jetzt liegt (Auftrag 33).
   const where = payload.placedIn ? ` Lager voll, verteilt: ${payload.placedIn}.` : '';
   // Banner nur für eigene Bestellungen (Auftrag 43, K4); was deine Leute bestellt haben, steht im Verlauf.
-  ui.toast(`Lieferung aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.${where}`, 'good', {
+  const what = payload.items ? 'Sammellieferung' : 'Lieferung';
+  ui.toast(`${what} aus ${getSupplier(state, payload.supplierId)?.name ?? 'dem Ausland'} ist da.${where}`, 'good', {
     urgent: !payload.byStaff || payload.placedIn !== undefined,
   });
 });

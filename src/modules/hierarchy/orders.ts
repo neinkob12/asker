@@ -18,8 +18,10 @@ import {
   isBlocked,
   isUnlocked,
   packagePrice,
+  type Shipment,
   type Supplier,
   type SupplierPackage,
+  shipmentItems,
   shipmentsInTransit,
 } from '../suppliers';
 import { isTaskActive } from './righthand';
@@ -124,13 +126,18 @@ export function ruleWarehouse(state: GameState, rule: OrderRule, home: string | 
 export function ruleStock(state: GameState, warehouseId: string, productId: string | null): number {
   const product = productId ?? undefined;
   const stock = getStock(state, { warehouseId, ...(product ? { productId: product } : {}) });
+  // Eine Sammellieferung bringt mehrere Waren (shipmentItems).
+  const amountOf = (s: Shipment) =>
+    shipmentItems(s)
+      .filter((x) => !product || x.productId === product)
+      .reduce((sum, x) => sum + x.amount, 0);
   const shipped = shipmentsInTransit(state)
-    .filter((s) => !s.toPort && s.warehouseId === warehouseId && (!product || s.productId === product))
-    .reduce((sum, s) => sum + s.amount, 0);
+    .filter((s) => !s.toPort && s.warehouseId === warehouseId)
+    .reduce((sum, s) => sum + amountOf(s), 0);
   // Schiffsware für dieses Lager zählt auf See und am Kai mit, sonst bestellt die Regel bis zur Abholung immer wieder.
   const atSea = shipmentsInTransit(state)
-    .filter((s) => s.toPort && s.destinationId === warehouseId && (!product || s.productId === product))
-    .reduce((sum, s) => sum + s.amount, 0);
+    .filter((s) => s.toPort && s.destinationId === warehouseId)
+    .reduce((sum, s) => sum + amountOf(s), 0);
   const onQuay = getCargo(state)
     .filter((c) => c.warehouseId === warehouseId && (!product || c.productId === product))
     .reduce((sum, c) => sum + c.amount, 0);

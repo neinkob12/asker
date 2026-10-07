@@ -2,8 +2,14 @@
 
 import { islandCountdown, onGameEvent, registerLiveActivity } from '../../../ui';
 import { activeCity } from '../../city';
-import { formatProductAmount, productName } from '../../goods';
-import { expectedArrival, shipmentProgress, shipmentReason, shipmentSupplier, shipmentsInTransit } from '../index';
+import {
+  expectedArrival,
+  shipmentGoods,
+  shipmentProgress,
+  shipmentReason,
+  shipmentSupplier,
+  shipmentsInTransit,
+} from '../index';
 
 registerLiveActivity({
   id: 'suppliers.shipments',
@@ -17,9 +23,9 @@ registerLiveActivity({
         priority: late ? 58 : 50,
         icon: supplier?.kind === 'port' ? 'ship' : 'truck',
         tone: late ? 'warn' : 'info',
-        leading: 'Lieferung',
+        leading: shipment.extra ? 'Sammellieferung' : 'Lieferung',
         trailing: islandCountdown(left),
-        title: `${formatProductAmount(shipment.productId, shipment.amount)} ${productName(shipment.productId)}`,
+        title: shipmentGoods(shipment),
         // Auftrag 23: bei einer Verspätung mit Grund.
         detail: late
           ? `Verspätet: ${shipmentReason(state, shipment) ?? supplier?.name ?? 'unterwegs'}`

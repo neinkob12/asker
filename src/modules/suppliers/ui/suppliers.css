@@ -69,6 +69,16 @@
   display: flex;
   gap: var(--space-1);
 }
+/* Bestellart (einzeln oder gesammelt) über dem Angebot, darunter ein Satz, was das heißt. */
+.sup-mode {
+  margin-bottom: var(--space-3);
+}
+.sup-mode .ui-hint {
+  margin: var(--space-2) 0 0;
+}
+.sup-cart .ui-chips {
+  margin-bottom: var(--space-2);
+}
 
 .map-place--port,
 .map-place--city,
