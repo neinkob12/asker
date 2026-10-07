@@ -8,7 +8,7 @@ import { createTestGame } from '../../core/testing';
 import { getOrders, offerDelivery } from '../customers';
 import { getStock, store } from '../goods';
 import { changeReputation } from '../reputation';
-import { enlist, generateProfile, type StaffMember, type StaffRole, setStatus } from '../staff';
+import { enlist, generateProfile, invalidateStaffIndex, type StaffMember, type StaffRole, setStatus } from '../staff';
 import { getSuppliers } from '../suppliers';
 import { RIGHT_HAND_RANK_XP } from './config';
 import {
@@ -43,6 +43,7 @@ function recruit(sim: Simulation, role: StaffRole, level = 2, cityId = 'koeln'):
   member.stats.loyalty = 80;
   member.stats.caution = 90;
   member.cityId = cityId;
+  invalidateStaffIndex();
   return member;
 }
 

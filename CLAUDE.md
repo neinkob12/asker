@@ -171,6 +171,12 @@ Overlay `Tells.tsx`). Razzia-Countdown neu gezeichnet. Minispiele etwa doppelt s
 `logistics`, Überfall auf den Spot, an dem du stehst, mit dir drin). Test-Spielstände je Minispiel (`?spielstand=minispiel-<art>`,
 Gruppe „Minispiele“, `src/playtest/minigameSaves.ts`): Das Spiel steht an und öffnet sich nach dem Laden von selbst; Auslöser ohne
 Wurf dafür in `police` (`playerChase`, `startUndercoverShift`).
+Auftrag 47 (Performance, `docs/auftraege/47-performance.md`): Leute haben einen Index nach ID und Stadt
+(`staff/members.ts`; `getStaff` mit `cityId`/`spotId`/`veedelId` liest nur diese Stadt, Routinen laufen über
+`liveMembers`; wer `cityId` einer Person direkt setzt, ruft `invalidateStaffIndex()`). Module können mit `tickOffset`
+versetzt ticken (nur, wenn der Tick nicht an `now % MINUTES_PER_DAY` hängt). Spielstände liegen in IndexedDB
+(`openBrowserSaveStorage`, Spiegel im Arbeitsspeicher, Notfallspeicher im localStorage), der Autosave schreibt nur bei
+Änderung. Messen: `PERF=1 npm run perf:sim` (auch ein Spieltag je großem Test-Spielstand) und `scripts/perf-browser.mjs`.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze
@@ -226,7 +232,7 @@ declare module '../../core' {
 export default defineModule({
   id: 'casino', version: 1, dependsOn: ['goods'],
   init: (ctx) => ({ ... }),                        // Anfangszustand
-  tick: (ctx) => { ... }, tickEvery: 60,           // optional, Standard jede Spielminute
+  tick: (ctx) => { ... }, tickEvery: 60,           // optional, Standard jede Spielminute; tickOffset: 7 = um x:07
   commands: { 'casino.bet': (ctx, payload, meta) => ({ ok: true }) },   // oder { ok: false, reason: '…' }
   on: { 'sale.completed': (ctx, payload) => { ... } },
   migrations: { 2: (old: CasinoStateV1) => ({ ...old, neu: 0 }) },

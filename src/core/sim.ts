@@ -176,7 +176,7 @@ export class Simulation {
       this.tickers ??= this.modules.filter((m) => m.tick).map((module) => ({ module, ctx: this.ctx(module.id) }));
       for (const { module, ctx } of this.tickers) {
         // module.tick erst hier lesen (Messungen umhüllen es nachträglich, siehe perf.bench.test.ts).
-        if (state.time % (module.tickEvery ?? 1) === 0) module.tick?.(ctx);
+        if ((state.time - (module.tickOffset ?? 0)) % (module.tickEvery ?? 1) === 0) module.tick?.(ctx);
       }
       expireMessages(core);
       processCalls(core);

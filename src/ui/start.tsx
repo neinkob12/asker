@@ -9,6 +9,7 @@ import {
   type GameMode,
   GameSession,
   type ModuleDefinition,
+  openBrowserSaveStorage,
 } from '../core';
 import { dayPhase } from '../map/daylight';
 import { registerBuiltins } from './builtin';
@@ -42,10 +43,19 @@ declare global {
   }
 }
 
-export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]): UiRuntime {
+export async function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]): Promise<UiRuntime> {
   registerBuiltins();
+  // Einstellungen bleiben im localStorage, die Spielstände liegen in IndexedDB (Auftrag 47): Schreiben läuft im
+  // Hintergrund, und die 5-MB-Grenze gilt nicht mehr. Ein Fehler dort kommt als Banner, wie ein voller Speicher.
   const storage = browserStorage();
-  const session = new GameSession({ modules, storage, scheduler: animationFrameScheduler() });
+  let reported: string | null = null;
+  const saveStorage = await openBrowserSaveStorage((error) => {
+    const text = `Speichern hat nicht geklappt: ${error instanceof Error ? error.message : String(error)}. Exportiere den Spielstand als Datei (Einstellungen › Verlauf).`;
+    if (reported === text) return;
+    reported = text;
+    window.koeln?.runtime.api.toast(text, 'bad', { urgent: true });
+  });
+  const session = new GameSession({ modules, storage: saveStorage, scheduler: animationFrameScheduler() });
   const runtime = new UiRuntime(session, storage);
 
   // Ton: Einstellungen laden, Start nach der ersten Interaktion, Musik-Stimmung folgt der Spieluhr.
@@ -103,14 +113,23 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
 
   disposers.push(bindKeys(runtime));
   applyDockSpring();
-  const saveOnUnload = () => session.autosave();
+  // Beim Verlassen: Autosave, und was die Datenbank noch nicht bestätigt hat, in den Notfallspeicher (saves.ts).
+  const persistPending = () => {
+    if ('persistPending' in saveStorage) (saveStorage as { persistPending(): void }).persistPending();
+  };
+  const saveOnUnload = () => {
+    session.autosave();
+    persistPending();
+  };
   const saveOnHide = () => {
-    if (document.visibilityState === 'hidden') session.autosave();
+    if (document.visibilityState === 'hidden') saveOnUnload();
   };
   window.addEventListener('beforeunload', saveOnUnload);
+  window.addEventListener('pagehide', saveOnUnload);
   document.addEventListener('visibilitychange', saveOnHide);
   disposers.push(
     () => window.removeEventListener('beforeunload', saveOnUnload),
+    () => window.removeEventListener('pagehide', saveOnUnload),
     () => document.removeEventListener('visibilitychange', saveOnHide),
   );
 

@@ -690,6 +690,8 @@ export default defineModule({
   },
   tick,
   tickEvery: 60,
+  // Versatz (Auftrag 47): nicht mit allen anderen in derselben Minute ticken.
+  tickOffset: 23,
   commands: {
     'recruiting.hire': (ctx, { candidateId, assignment }, meta) => hire(ctx, candidateId, assignment ?? null, meta),
     'recruiting.decline': (ctx, { candidateId }) => {
