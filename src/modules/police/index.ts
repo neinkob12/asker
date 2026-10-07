@@ -11,6 +11,9 @@
 //   Anteil des Bestands weg), Mitarbeiter festgenommen ('police.arrest', den Haft-Status setzt staff). Eine Kontrolle kann in eine Polizeiflucht kippen (Konfrontation 'policeChase' über encounters).
 // - Razzia-Countdown (Auftrag 44, stash.ts): Wird eine Razzia gegen dich geplant und du bist in der Stadt, wo Ware liegt,
 //   startet das Minispiel 'stash'. Was du versteckst (Anteil stash an der geplanten Razzia), finden sie nicht.
+// - Zivi oder Kunde (Auftrag 44, undercover.ts): Stehst du selbst an einem Spot in einem heißen Veedel, kommt ab und zu
+//   eine Schicht Zivilfahnder (Minispiel 'undercover'). Verkauf an einen Zivi = Kontrolle gegen dich (runCheck), alle
+//   erkannt = weniger Heat, abgewimmelte echte Kunden kosten Ruf.
 // - Verpfeifen ('police.snitch'): Heat und ein Hinweis in allen Veedeln der Gang. Solange der Hinweis gilt, kann es
 //   dort eine Razzia gegen die Gang geben, die sie Einfluss kostet.
 //
@@ -121,6 +124,7 @@ import {
 
 import { maybeStartStash, onStashFinished } from './stash';
 import { nextTier, type OperationTier, operationFacts, tierInfo } from './tier';
+import { maybeStartUndercover, onUndercoverFinished, type UndercoverState } from './undercover';
 
 export {
   CHECK_FACTOR_BY_CITY,
@@ -131,6 +135,9 @@ export {
   RAID_SCOPES,
   RAID_THRESHOLD,
   STASH_MAX,
+  UNDERCOVER_COOLDOWN,
+  UNDERCOVER_HEAT,
+  UNDERCOVER_RELIEF,
 } from './config';
 export { type StashLot, type StashParams, stashParams, stashShare } from './stash';
 export {
@@ -141,6 +148,18 @@ export {
   type TierHint,
   type TierHintPart,
 } from './tier';
+export {
+  type UndercoverGood,
+  type UndercoverOutcome,
+  type UndercoverParams,
+  type UndercoverShift,
+  type UndercoverState,
+  undercoverChance,
+  undercoverOutcome,
+  undercoverParams,
+  undercoverScore,
+  ziviCount,
+} from './undercover';
 
 /** Art einer Razzia gegen dich: an einem Spot, im ganzen Veedel oder Großrazzia (mehrere Veedel und Lager). */
 export type RaidScope = keyof typeof RAID_SCOPES;
@@ -208,11 +227,16 @@ export interface PoliceState {
   tiers: Record<string, number>;
   /** Zoll-Heat pro Hafen der Hafen-Phase (Auftrag 40, 0–100). */
   customs: Record<string, number>;
+  /** Zivilfahnder am Spot (Minispiel 'undercover', Auftrag 44): Abklingzeit und laufende Schicht. */
+  undercover: UndercoverState;
   stats: PoliceStats;
 }
 
+/** Zustand in Version 7 (ohne Zivilfahnder). */
+type PoliceStateV7 = Omit<PoliceState, 'undercover'>;
+
 /** Zustand in Version 6 (ohne versteckten Anteil an geplanten Razzien, Auftrag 44: gleiche Form, Feld optional). */
-type PoliceStateV6 = PoliceState;
+type PoliceStateV6 = PoliceStateV7;
 
 /** Zustand in Version 5 (Auftrag 30, ohne Zoll-Heat). */
 type PoliceStateV5 = Omit<PoliceState, 'customs'>;
@@ -689,17 +713,20 @@ function placeText(state: GameState, veedelId: string, spotId: string | null): s
   return spot ? atSpot(spot) : `in ${veedelName(veedelId)}`;
 }
 
-/** Kontrolle bei eigenen Leuten im Veedel (oder beim Spieler, wenn er dort selbst verkauft hat). */
-function runCheck(ctx: Ctx, veedelId: string): void {
+/**
+ * Kontrolle bei eigenen Leuten im Veedel (oder beim Spieler, wenn er dort selbst verkauft hat). player: die Kontrolle
+ * gilt dir selbst an diesem Spot (Verkauf an einen Zivi, Auftrag 44); der Späher hilft dann nicht mehr, gekauft ist.
+ */
+function runCheck(ctx: Ctx, veedelId: string, player?: { spotId: string }): void {
   const state = ctx.state;
   const police = state.modules.police;
-  const people = activeStaffIn(state, veedelId);
+  const people = player ? [] : activeStaffIn(state, veedelId);
   const target = people.length > 0 ? ctx.pick(people) : null;
-  const spotId = spotOf(target) ?? spotsInVeedel(state, veedelId)[0]?.id ?? null;
+  const spotId = player?.spotId ?? spotOf(target) ?? spotsInVeedel(state, veedelId)[0]?.id ?? null;
   const place = placeText(state, veedelId, spotId);
   const mods = spotModifiers(state, spotId);
   // Auftrag 23: Ein Späher am Spot sieht die Streife kommen, die Kontrolle geht ins Leere.
-  if (mods.checkAvoid > 0 && ctx.chance(mods.checkAvoid)) {
+  if (!player && mods.checkAvoid > 0 && ctx.chance(mods.checkAvoid)) {
     police.checkReadyAt[veedelId] = ctx.now + CHECK_COOLDOWN;
     journal.add(ctx, `Kontrolle ${place}: Der Späher hat die Streife früh gesehen, alle waren weg.`, 'good', {
       veedelId,
@@ -1125,6 +1152,8 @@ function tick(ctx: Ctx): void {
       }
     }
   }
+  // Auftrag 44: Zivilfahnder am Spot, an dem du selbst stehst (fester Wurf, verschiebt die Würfel oben nicht).
+  maybeStartUndercover(ctx, (veedelId) => getHeat(ctx.state, veedelId));
 }
 
 /** Anlässe, bei denen die Polizei selbst die Gegenseite ist. */
@@ -1143,13 +1172,14 @@ function initialState(): PoliceState {
     majorReadyAt: 0,
     tiers: {},
     customs: {},
+    undercover: { readyAt: 0, shift: null },
     stats: { checks: 0, raids: 0, gangRaids: 0, arrests: 0, confiscatedGoods: 0, confiscatedMoney: 0 },
   };
 }
 
 export default defineModule({
   id: 'police',
-  version: 7,
+  version: 8,
   dependsOn: ['veedel', 'territory'],
   init: () => initialState(),
   tickEvery: 60,
@@ -1186,7 +1216,14 @@ export default defineModule({
       }
     },
     // Auftrag 44: Razzia-Countdown entschieden, der versteckte Anteil gilt für die geplante Razzia.
-    'minigame.finished': (ctx, payload) => onStashFinished(ctx, payload),
+    'minigame.finished': (ctx, payload) => {
+      onStashFinished(ctx, payload);
+      // Zivi oder Kunde: Verkauf an einen Zivi ist eine Kontrolle gegen dich am Spot.
+      onUndercoverFinished(ctx, payload, {
+        addHeat,
+        checkPlayer: (c, veedelId, spotId) => runCheck(c, veedelId, { spotId }),
+      });
+    },
     'encounter.resolved': (ctx, { kind, outcome, request }) => {
       if (request.origin?.module === 'police') {
         if (request.origin.ref === 'check' && request.veedelId) {
@@ -1227,7 +1264,7 @@ export default defineModule({
     // Version 6 (Auftrag 40): Zoll-Heat pro Hafen, bisher überall ruhig.
     6: (old: PoliceStateV5): PoliceStateV6 => ({ ...old, customs: {} }),
     // Version 7 (Auftrag 44): geplante Razzien können einen versteckten Anteil tragen (stash); alte haben keinen.
-    7: (old: PoliceStateV6): PoliceState => ({
+    7: (old: PoliceStateV6): PoliceStateV7 => ({
       ...old,
       plannedRaids: Object.fromEntries(
         Object.entries(old.plannedRaids).map(([id, plan]) => [
@@ -1237,5 +1274,7 @@ export default defineModule({
       ),
       majorRaid: old.majorRaid ? { at: old.majorRaid.at, veedelIds: [...old.majorRaid.veedelIds] } : null,
     }),
+    // Version 8 (Auftrag 44): Zivilfahnder am Spot, bisher nie dagewesen.
+    8: (old: PoliceStateV7): PoliceState => ({ ...old, undercover: { readyAt: 0, shift: null } }),
   },
 });

@@ -227,7 +227,7 @@ describe('Razzia-Countdown', () => {
     old.modules.police.plannedRaids = { kalk: { at: 500, scope: 'veedel', spotId: null } };
     old.modules.police.majorRaid = { at: 900, veedelIds: ['kalk', 'mülheim'] };
     const loaded = loadSimulation(old, sim.modules);
-    expect(loaded.state.moduleVersions.police).toBe(7);
+    expect(loaded.state.moduleVersions.police).toBe(8);
     expect(loaded.state.modules.police.plannedRaids.kalk).toEqual({ at: 500, scope: 'veedel', spotId: null });
     expect(loaded.state.modules.police.majorRaid).toEqual({ at: 900, veedelIds: ['kalk', 'mülheim'] });
   });
