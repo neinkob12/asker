@@ -14,6 +14,7 @@ import type { Marker } from 'maplibre-gl';
 import { formatEuro, type GameState } from '../../../core';
 import { addHtmlMarker, createHotspots, el, type Hotspot, type MapLayer, setText } from '../../../map';
 import { iconElement } from '../../../ui';
+import { activeCity } from '../../city';
 import { allWaiting, CUSTOMER_PATIENCE, type Customer, playerSpot, spotDemand, waitingAt } from '../../customers';
 import { activeEncounters } from '../../encounters';
 import { DEFAULT_PRODUCT } from '../../goods';
@@ -27,6 +28,7 @@ import {
   isSpotActive,
   type Spot,
   spotAwareness,
+  spotCity,
   spotKind,
   spotLabelPlacement,
   spotType,
@@ -40,6 +42,15 @@ const NAMES_ZOOM = 13;
 const HOTSPOT_SCALE = 0.45;
 
 export type SpotLook = 'idle' | 'waiting' | 'urgent' | 'raid';
+
+/**
+ * Spots mit Marker: nur die der aktiven Stadt (Auftrag 47, Punkt 4). Die anderen Städte sieht man nur aus der
+ * Deutschland-Ansicht, und dort sind Spot-Marker ohnehin aus (zoomed-out); vorher hingen alle Städte im DOM.
+ */
+export function mapSpots(state: GameState): Spot[] {
+  const cityId = activeCity(state);
+  return getAllSpots(state).filter((s) => spotCity(s) === cityId);
+}
 
 /** Wartende Kunden aller Spots in einem Durchlauf, je Spot dringendste zuerst (statt waitingAt pro Spot). */
 export function waitingBySpot(state: GameState): Map<string, Customer[]> {
@@ -94,7 +105,7 @@ const LOOK_TEXT: Record<SpotLook, string> = {
 function runnersBySpot(state: GameState): Map<string, StaffMember> {
   const working = new Map<string, StaffMember>();
   const returning = new Map<string, StaffMember>();
-  for (const m of getStaff(state, { role: 'runner' })) {
+  for (const m of getStaff(state, { role: 'runner', cityId: activeCity(state) })) {
     if (m.assignment?.kind === 'spot' && m.status === 'active') {
       if (!working.has(m.assignment.targetId)) working.set(m.assignment.targetId, m);
     } else if (m.returnTo?.kind === 'spot' && !returning.has(m.returnTo.targetId)) {
@@ -156,7 +167,7 @@ export const spotsLayer: MapLayer = {
     const showCard = (spotId: string | null) => {
       hovered = spotId;
       const state = ctx.getState();
-      const spot = spotId && state ? getAllSpots(state).find((s) => s.id === spotId) : undefined;
+      const spot = spotId && state ? mapSpots(state).find((s) => s.id === spotId) : undefined;
       if (!spot || !state) {
         hoverCard.element.hidden = true;
         return;
@@ -172,7 +183,7 @@ export const spotsLayer: MapLayer = {
       // Nachfrage und Verkäufe ändern sich nur mit der Spielzeit.
       if (state.time === lastTime) return;
       lastTime = state.time;
-      const list: Hotspot[] = getAllSpots(state).map((spot) => ({
+      const list: Hotspot[] = mapSpots(state).map((spot) => ({
         position: spot,
         intensity: Math.round(spotActivity(state, spot.id, waiting.get(spot.id) ?? []) * HOTSPOT_SCALE * 20) / 20,
       }));
@@ -185,7 +196,7 @@ export const spotsLayer: MapLayer = {
     const ensureMarkers = () => {
       const state = ctx.getState();
       if (!state) return;
-      const spots = getAllSpots(state);
+      const spots = mapSpots(state);
       // Eigene Spots eines anderen Spielstands wieder entfernen.
       for (const [id, entry] of markers) {
         if (!spots.some((s) => s.id === id)) {
@@ -268,7 +279,7 @@ export const spotsLayer: MapLayer = {
         const runners = runnersBySpot(state);
         drawHotspots(state, waitingMap);
         const selected = ui.panel?.id === 'spots.spot' ? (ui.panel.props as { spotId: string }).spotId : null;
-        for (const spot of getAllSpots(state)) {
+        for (const spot of mapSpots(state)) {
           const entry = markers.get(spot.id);
           if (!entry) continue;
           const active = isSpotActive(state, spot.id);
@@ -301,7 +312,7 @@ export const spotsLayer: MapLayer = {
           entry.plate.hidden = who.kind === 'free' && !lieutenant;
         }
         if (hovered && !hoverCard.element.hidden) {
-          const spot = getAllSpots(state).find((s) => s.id === hovered);
+          const spot = mapSpots(state).find((s) => s.id === hovered);
           if (spot) fillHoverCard(card, state, spot);
         }
       },

@@ -191,7 +191,9 @@ Auftrag 47 (Performance, `docs/auftraege/47-performance.md`): Leute haben einen 
 `liveMembers`; wer `cityId` einer Person direkt setzt, ruft `invalidateStaffIndex()`). Module können mit `tickOffset`
 versetzt ticken (nur, wenn der Tick nicht an `now % MINUTES_PER_DAY` hängt). Spielstände liegen in IndexedDB
 (`openBrowserSaveStorage`, Spiegel im Arbeitsspeicher, Notfallspeicher im localStorage), der Autosave schreibt nur bei
-Änderung. Messen: `PERF=1 npm run perf:sim` (auch ein Spieltag je großem Test-Spielstand) und `scripts/perf-browser.mjs`.
+Änderung. Spot-Marker nur für die aktive Stadt (`mapSpots`). Abgebrochene Sitzungen meldet der Verlauf, Fehler
+stehen in `koeln-tycoon:errors` (`src/ui/crashlog.ts`, Lebenszeichen je Tab `koeln-tycoon:alive:<tab>`). Messen: `PERF=1 npm run perf:sim` (auch ein Spieltag je
+großem Test-Spielstand) und `scripts/perf-browser.mjs`.
 Auftrag 46c (Touren und Momente, `docs/auftraege/46c-touren-und-momente.md`): Das Spiel startet mit einer
 Willkommen-Seite (`IntroDialog.tsx`: Name, dann Modus), die Story-Seiten sind weg. Jede Stufe hat ihre Tour mit Peter
 als reine Daten (`tutorial/ui/tours.ts`, `stageTour`, höchstens 140 Zeichen pro Schritt, nur Anker aus `TOUR_ANCHORS`);
