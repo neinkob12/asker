@@ -1,0 +1,436 @@
+/* Verfolgungsjagd (Auftrag 44, Teil 1): HUD im Look Glas über der Karte. Nur Tokens, keine freien Hex-Werte.
+   Werte, die sich jedes Bild ändern (Tempo, Turbo, Ring, Pulsieren, Pfeil), setzt die Bildschleife direkt. */
+
+.chase {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: var(--font-hud);
+  color: var(--hud-ink);
+}
+
+/* Während der Jagd gehört die Karte der Jagd: keine Schilder und Marker der Stadt, kein HUD des Spiels, keine
+   Kartenknöpfe (das Spiel steht ohnehin still). Die Quellenangabe der Karte bleibt. */
+.is-chasing .maplibregl-marker,
+.is-chasing .hud,
+.is-chasing .shell-mapctl,
+.is-chasing .shell-map-overlays,
+.is-chasing .map-surveillance,
+.is-chasing .mobile-dock {
+  visibility: hidden;
+}
+
+/* ---------------------------------------------------------------- Effekte über der Karte */
+.chase-vignette,
+.chase-lines,
+.chase-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+.chase-vignette {
+  --chase-edge: var(--cat-danger);
+  box-shadow:
+    inset 0 0 36px 4px color-mix(in srgb, var(--chase-edge) 60%, transparent),
+    inset 0 0 110px 10px color-mix(in srgb, var(--chase-edge) 16%, transparent);
+}
+.chase-vignette[data-side="blue"] {
+  --chase-edge: var(--cat-law);
+}
+.chase-lines {
+  background: repeating-conic-gradient(
+    from 0deg at 50% 62%,
+    transparent 0deg 3.2deg,
+    color-mix(in srgb, var(--hud-ink) 22%, transparent) 3.4deg 3.7deg,
+    transparent 3.9deg 7deg
+  );
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 62%, transparent 45%, black 95%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 62%, transparent 45%, black 95%);
+}
+.chase-flash {
+  background: var(--hud-ink);
+}
+
+/* ---------------------------------------------------------------- Oben: Zeit, Sichtkontakt, Abtauchen, Hubschrauber */
+.chase-top {
+  gap: var(--space-4);
+}
+.chase-mirror {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 190px;
+  height: 40px;
+  padding: 0 var(--space-3);
+  border-radius: 10px;
+  background: var(--hud-glass-fill);
+  border: 1px solid var(--hud-glass-edge);
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--hud-ink-2);
+  --chase-red: 0;
+  --chase-blue: 0;
+}
+/* Rückspiegel: Blaulicht links rot, rechts blau. */
+.chase-mirror::before,
+.chase-mirror::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.chase-mirror::before {
+  background: radial-gradient(circle at 18% 50%, var(--cat-danger), transparent 62%);
+  opacity: var(--chase-red);
+}
+.chase-mirror::after {
+  background: radial-gradient(circle at 82% 50%, var(--cat-law), transparent 62%);
+  opacity: var(--chase-blue);
+}
+.chase-mirror.is-seen {
+  color: var(--hud-ink);
+}
+.chase-mirror__icon,
+.chase-mirror__text {
+  position: relative;
+  z-index: 1;
+}
+.chase-mirror__icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+.chase-mirror__text {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.chase-hide {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--hud-ink-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.chase-hide.is-active {
+  color: var(--cat-money);
+}
+.chase-hide__ring {
+  width: 38px;
+  height: 38px;
+  transform: rotate(-90deg);
+}
+.chase-hide__track,
+.chase-hide__fill {
+  fill: none;
+  stroke-width: 4.5;
+}
+.chase-hide__track {
+  stroke: var(--hud-empty);
+}
+.chase-hide__fill {
+  stroke: var(--cat-money);
+  stroke-linecap: butt;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+}
+
+.chase-heli {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--hud-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.chase-heli__icon {
+  width: 18px;
+  height: 18px;
+}
+.chase-heli.is-on {
+  color: var(--cat-warn);
+}
+
+/* ---------------------------------------------------------------- Funk */
+.chase-radio {
+  position: absolute;
+  top: 92px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: calc(100% - 2 * var(--space-4));
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--hud-glass);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hud-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: chase-radio 0.35s var(--ease-out);
+}
+.chase-radio__icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--cat-law);
+}
+@keyframes chase-radio {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+/* ---------------------------------------------------------------- Pfeil zum Versteck */
+.chase-arrow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin: -22px 0 0 -60px;
+  width: 120px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--duration) var(--ease-out);
+  --chase-dir: 0deg;
+}
+.chase-arrow__tip {
+  width: 0;
+  height: 0;
+  border-left: 11px solid transparent;
+  border-right: 11px solid transparent;
+  border-bottom: 20px solid var(--hud-gold);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+  transform: rotate(var(--chase-dir));
+}
+.chase-arrow__label {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--hud-glass-strong);
+  border: 1px solid var(--hud-glass-edge);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--hud-gold);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- Unten: Abbiegung, Tacho, Ware */
+.chase-turn,
+.chase-speedo {
+  position: absolute;
+  bottom: var(--space-5);
+  display: grid;
+  justify-items: center;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+}
+.chase-turn {
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 124px;
+  gap: 2px;
+}
+.chase-turn__sketch {
+  width: 72px;
+  height: 72px;
+  overflow: visible;
+}
+.chase-turn__road {
+  stroke: var(--hud-ink-2);
+  stroke-width: 7;
+  stroke-linecap: round;
+  opacity: 0.45;
+}
+.chase-turn__pick line {
+  stroke: var(--hud-gold);
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+.chase-turn__pick polygon {
+  fill: var(--hud-gold);
+}
+.chase-turn__pick.is-fast line {
+  stroke: var(--cat-danger);
+}
+.chase-turn__pick.is-fast polygon {
+  fill: var(--cat-danger);
+}
+.chase-turn__dead {
+  stroke: var(--cat-danger);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.chase-turn__text {
+  font-family: var(--font-hud-display);
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.chase-turn.is-fast .chase-turn__text {
+  color: var(--cat-danger);
+}
+
+.chase-speedo {
+  left: var(--space-5);
+  justify-items: start;
+  gap: 4px;
+  min-width: 132px;
+}
+.chase-speedo__value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-hud-display);
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.chase-speedo__unit {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hud-ink-2);
+}
+.chase-speedo__turbo {
+  display: block;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hud-empty);
+  overflow: hidden;
+}
+.chase-speedo__turbo span {
+  display: block;
+  height: 100%;
+  background: var(--hud-gold);
+  transform-origin: left center;
+}
+.chase-speedo__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+}
+
+.chase-dump {
+  position: absolute;
+  right: var(--space-5);
+  bottom: var(--space-5);
+}
+
+/* Touch-Knöpfe nur mit dem Finger (am Desktop gibt es die Tastatur und den Knopf „Ware raus“). */
+.chase .chase-touch {
+  display: none;
+}
+.chase.is-touch .chase-touch {
+  display: flex;
+}
+.chase.is-touch .chase-touch {
+  left: var(--space-3);
+  right: var(--space-3);
+  gap: var(--space-2);
+}
+.chase.is-touch .chase-touch .mg-touch__pad,
+.chase.is-touch .chase-touch .mg-touch__buttons {
+  gap: var(--space-2);
+}
+/* Daumen links: Abbiegung; Daumen rechts: Bremse und Turbo (Symbol über kurzem Wort). */
+.chase.is-touch .chase-touch .mg-pad {
+  flex-direction: column;
+  gap: 2px;
+  min-width: 76px;
+  min-height: 76px;
+  padding: 0 var(--space-2);
+  font-size: 13px;
+}
+.chase.is-touch .chase-touch .mg-pad svg {
+  width: 28px;
+  height: 28px;
+}
+
+/* ---------------------------------------------------------------- Handy */
+@media (max-width: 760px) {
+  .chase-top {
+    top: calc(var(--space-2) + env(safe-area-inset-top, 0px));
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+  }
+  .chase-top .mg-hud-timer {
+    min-width: 70px;
+  }
+  .chase-top .mg-hud-timer__value {
+    font-size: 24px;
+  }
+  .chase-mirror {
+    min-width: 0;
+    height: 36px;
+    font-size: 13px;
+  }
+  .chase-hide__label,
+  .chase-heli span {
+    display: none;
+  }
+  .chase-heli.is-on .chase-heli__icon {
+    color: var(--cat-warn);
+  }
+  .chase-radio {
+    top: calc(76px + env(safe-area-inset-top, 0px));
+    font-size: 12px;
+  }
+}
+
+/* Mit dem Finger: Knöpfe unten, darüber Tacho, Abbiegung und Ware. */
+.chase.is-touch .chase-speedo,
+.chase.is-touch .chase-turn,
+.chase.is-touch .chase-dump {
+  bottom: calc(var(--space-4) + 76px + var(--space-3) + env(safe-area-inset-bottom, 0px));
+}
+.chase.is-touch .chase-speedo {
+  left: var(--space-4);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+}
+.chase.is-touch .chase-speedo__value {
+  font-size: 32px;
+}
+.chase.is-touch .chase-dump {
+  right: var(--space-4);
+}
+.chase.is-touch .chase-turn {
+  min-width: 96px;
+  padding: var(--space-2) var(--space-3);
+}
+.chase.is-touch .chase-turn__sketch {
+  width: 56px;
+  height: 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chase-radio {
+    animation: none;
+  }
+}

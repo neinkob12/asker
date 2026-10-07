@@ -54,6 +54,15 @@ function playOut(sim: Simulation, id: number, prefer?: string): void {
   }
 }
 
+/** Ein offenes Minispiel der Konfrontation verfallen lassen (wie ohne Oberfläche). */
+function skipMinigame(sim: Simulation, encounterId: number): void {
+  const open = sim.state.modules.encounters.active.find((e) => e.id === encounterId)?.minigame;
+  if (open)
+    expect(sim.dispatch({ type: 'minigames.expire', payload: { id: open.challengeId } }, { actor: 'system' }).ok).toBe(
+      true,
+    );
+}
+
 describe('encounters', () => {
   it('kennt die vier Anlässe aus dem Konzept plus den Gang-Überfall, alle als reine Daten', () => {
     for (const id of ['raidDefense', 'policeChase', 'debtCollection', 'dealGoneWrong', 'gangSpotRaid']) {
@@ -272,6 +281,8 @@ describe('encounters', () => {
   it('Bestechen kostet Schwarzgeld, ohne Geld geht es nicht', () => {
     const sim = createTestGame();
     const { encounterId } = startEncounter(sim.ctx('police'), { kind: 'policeChase', playerPresent: true });
+    // Mit dir selbst startet erst die Verfolgungsjagd (Auftrag 44); ungespielt laufen die Runden wie bisher.
+    skipMinigame(sim, encounterId);
     const e = encounter(sim, encounterId);
     // 500 + 2 × 200, in Köln ein Viertel günstiger (Klüngel, Auftrag 30).
     expect(e.bribeCost).toBe(675);
@@ -284,6 +295,7 @@ describe('encounters', () => {
     expect(after.phase === 'done' || after.resolve < resolve - 10).toBe(true);
     const poor = createTestGame();
     const id = startEncounter(poor.ctx('police'), { kind: 'policeChase', playerPresent: true }).encounterId;
+    skipMinigame(poor, id);
     wallet.lose(poor.ctx('test'), wallet.balance(poor.state, 'dirty') - 100, 'dirty', 'Test', 'loss.encounter');
     const result = poor.dispatch({ type: 'encounters.act', payload: { encounterId: id, actionId: 'bribe' } });
     expect(result).toEqual({ ok: false, reason: 'Nicht genug Schwarzgeld (675 €).' });
