@@ -1,7 +1,7 @@
 # Auftrag 46: Intro neu – Tour, Missionen und Freischalten Schritt für Schritt
 
-Stand 07.10.2026, zweite Fassung: der Flow aus dem Gespräch plus die Antworten auf die Rückfragen. Was noch
-offen ist, steht ganz unten unter „Noch offen“. Das Papier und das Brainstorming vom Vortag werden eingearbeitet,
+Stand 07.10.2026, dritte Fassung: der Flow aus dem Gespräch plus die Antworten auf alle Rückfragen. Nichts ist
+mehr offen. Das Papier und das Brainstorming vom Vortag werden eingearbeitet,
 sobald sie da sind.
 
 ## Warum
@@ -181,7 +181,7 @@ Untergrenze.
 
 ## Nachrichten, Pop-ups, Meldungen
 
-- **Bleibt im Chat:** Peter als Stimme der Tour und der Missionen (oder die Tour-Box selbst, siehe offen),
+- **Bleibt im Chat:** Peter als Stimme der Tour und der Missionen (Porträt in der Tour-Box),
   Lieferanten (Kennenlernen als Pop-up, Lieferung da, Problem), Gangs (Drohungen ab Stufe 4, Forderungen ab Stufe 7),
   Polizei (ab Stufe 9). Polizei und Gangs seltener als heute, dafür größere Ereignisse mit mehr Wirkung.
 - **Raus:** Bewerber-Chats, Geschichten der Leute, Marktbericht, Kneipen, Klüngel. Wochenverträge erst nach Köln.
@@ -194,10 +194,10 @@ Untergrenze.
 
 | System | Entscheidung |
 | --- | --- |
-| Quests von Peter (alle Kapitel) | weg, ersetzt durch die Missionen (für die Städte nach Köln siehe offen) |
+| Quests von Peter (alle Kapitel) | weg, ersetzt durch die Missionen in Köln; die Städte danach bekommen später eine eigene Story-Linie |
 | Konfrontationen (Akte) | weg als Feature. Gang-Angriffe, Räuber, Kontrollen und Zoll werden aus Stärke, Sicherheit und Heat automatisch entschieden, mit einem kurzen Ergebnis-Pop-up; steht man selbst am Spot, kommt das Minispiel Straßenkampf |
 | Spot-Ausbau | weg |
-| Spot gründen | nur im Shop für echtes Geld, 0,99 € pro Spot, höchstens drei (eigener Auftrag, braucht Bezahlung) |
+| Spot gründen | nur im Shop, 0,99 € pro Spot, höchstens drei; vorerst Platzhalter ohne Kauf (Bezahlung ist ein eigener Auftrag) |
 | Capos | später nach der Rechten Hand, falls nötig, sonst weg |
 | Markt-Index, Rabatt-Aktionen | still: Preise bewegen sich weiter, Aktionen nur als Badge im Angebot, keine Nachricht |
 | Marktbericht | weg |
@@ -221,16 +221,14 @@ Untergrenze.
   Beschlagnahme der zweiten Hafen-Bestellung, Handy-Bestellung bei 3.000 €, Lager-niedrig-Pop-up.
 - **Umbauten an bestehenden Modulen:** `encounters` wird zu automatischen Entscheidungen; Spezialisten und Buchhalter
   bekommen Wirkung (`staff`, `police`, `suppliers`, `finance`); Rechte Hand aus den Leutnants (`hierarchy`); Shop
-  für Spots (`spots`, Bezahlung offen); Spot-Ausbau raus (`spots/kinds.ts`, `spotModifiers`).
+  für Spots als Platzhalter (`spots`); Spot-Ausbau raus (`spots/kinds.ts`, `spotModifiers`).
 - Bot, Szenario-Tests und `npm run balance` laufen mit „alles frei“, damit Würfelfolgen bleiben.
 
-## Noch offen
+## Entschieden am 07.10.2026 (zweite Runde)
 
-1. **Städte nach Köln:** Heute führen Peters Kapitel durch Hamburg bis Frankfurt, Jansen durch Rotterdam und die
-   Produzenten durch den Anbau. Fallen die mit weg (jede neue Stadt ohne Führung), oder bekommt jede Stadt zwei, drei
-   Missionen im neuen System? Vorschlag: pro Stadt drei Missionen (ankommen, Mehrheit, komplett), Rotterdam und
-   Produktion später.
-2. **Wer spricht in der Tour:** Peter als Figur in der Box (Porträt, Stimme) oder eine neutrale Box ohne Figur?
-3. **Shop mit echtem Geld:** Das ist ein eigener Auftrag (Bezahlung, Konto, Server). Bis dahin ein Shop-Platzhalter
-   ohne Kauf, oder Spot gründen erst mal ganz raus?
-4. **Rechte Hand aus den Leutnants ohne Level 4:** so angenommen, bitte bestätigen.
+1. **Nur Köln.** Für die Städte nach Köln fallen Peters Kapitel, Rotterdam und Produktion mit den Quests weg; dort
+   gibt es vorerst keine Führung. Eine eigene Story-Linie für die anderen Städte wird später überlegt.
+2. **Peter spricht in der Tour**, mit Porträt in der Box (und Stimme wie im Anruf, wenn das ohne Aufwand geht).
+3. **Shop nur als Platzhalter.** Spot gründen zeigt im Handy einen Shop mit „0,99 € pro Spot, höchstens drei“, aber
+   ohne Kauf. Bezahlung mit echtem Geld ist ein eigener Auftrag.
+4. **Rechte Hand aus den Leutnants**, ohne die Stufe Level 4 (angenommen, nicht widersprochen).
