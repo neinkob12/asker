@@ -52,6 +52,8 @@ export function NewGameDialog(props: { firstStart?: boolean; fromSaves?: boolean
   const [mode, setMode] = useState<GameMode>('normal');
   const start = () => {
     runtime.session.newGame(mode);
+    // Auftrag 46b: Im Modus normal führt das Tutorial durch Köln (Hardcore: alles frei).
+    if (mode === 'normal') runtime.session.dispatch({ type: 'tutorial.start', payload: {} });
     runtime.api.closeDialog();
     runtime.api.closePanel();
     runtime.api.closePhone();

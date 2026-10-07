@@ -1,6 +1,6 @@
-// Ende-zu-Ende-Test im echten Browser (Playwright): neues Spiel (Handy Schritt für Schritt, dann abgeschaltet),
-// selbst verkaufen, Läufer anheuern, Ware bestellen, speichern, laden und nach dem Neuladen der Seite den Autosave
-// fortsetzen. Bedient die Oberfläche wie ein Mensch (Klicks auf Karte, Handy, Dialoge); nur zum Vorspulen der Zeit
+// Ende-zu-Ende-Test im echten Browser (Playwright): neues Spiel mit Tutorial (nur der Neumarkt, Mission 1 mit drei
+// Verkäufen und Belohnung, dann in den Einstellungen beendet), selbst verkaufen, Läufer anheuern, Ware bestellen,
+// speichern, laden und nach dem Neuladen der Seite den Autosave fortsetzen. Bedient die Oberfläche wie ein Mensch (Klicks auf Karte, Handy, Dialoge); nur zum Vorspulen der Zeit
 // wird die Simulation direkt angestoßen.
 // Speichert Screenshots nach screenshots/e2e-*.png und schlägt fehl, wenn etwas nicht klappt oder der Browser
 // Fehler meldet.
@@ -112,37 +112,84 @@ async function run() {
     await page.waitForFunction(() => window.koeln?.session?.state?.time > 0);
     // Pause, damit der Test nicht vom Tempo abhängt; die Zeit spulen wir gezielt vor.
     await page.evaluate(() => window.koeln.runtime.api.setSpeed(0));
-    const state = await game(page, (s) => ({ time: s.time, mode: s.meta.mode, dirty: s.wallet.dirty }));
+    const state = await game(page, (s) => ({
+      time: s.time,
+      mode: s.meta.mode,
+      dirty: s.wallet.dirty,
+      tutorial: s.modules.tutorial.enabled,
+    }));
     assert.equal(state.mode, 'normal');
-    assert.equal(state.dirty, 1500);
+    // Auftrag 46b: Im Modus normal läuft das Tutorial, mit 700 € mehr Startgeld.
+    assert.equal(state.tutorial, true);
+    assert.equal(state.dirty, 2200);
     await page.waitForSelector('.spot-marker');
     await shot(page, 'neues-spiel');
   });
 
-  await check('Handy Schritt für Schritt: Am Anfang fehlen Apps, in den Einstellungen abschaltbar', async () => {
-    // Feedback 07.10.2026: Ein neues Spiel zeigt erst Nachrichten und Einstellungen, der Rest kommt mit den Quests.
-    const wasOpen = await page.evaluate(() => window.koeln.runtime.ui.phone.open);
-    await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
-    const home = page.locator('.phone__home');
-    await home.getByRole('button', { name: 'Einstellungen', exact: true }).waitFor();
-    assert.equal(await home.getByRole('button', { name: /^Gangs/ }).count(), 0, 'Gangs fehlt am Anfang');
-    assert.equal(await home.getByRole('button', { name: /^Lieferanten/ }).count(), 0, 'Lieferanten fehlen am Anfang');
-    await home.getByText('Peters Quest').first().waitFor();
-    // Am Desktop fährt das weggelegte Handy erst herein.
-    await page.waitForTimeout(800);
-    await shot(page, 'handy-anfang');
-    // Der Rest des Tests braucht alle Apps: abschalten wie ein Spieler, der sich auskennt.
-    await home.getByRole('button', { name: 'Einstellungen', exact: true }).click();
-    const steps = page.locator('.phone').getByRole('switch', { name: /Handy Schritt für Schritt/ });
-    assert.equal(await steps.getAttribute('aria-checked'), 'true');
-    await steps.click();
-    assert.equal(await game(page, (s) => s.modules.quests.phoneSteps), false);
-    await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
-    await home.getByRole('button', { name: /^Gangs/ }).waitFor();
-    assert.equal(await home.getByText('Peters Quest').count(), 0, 'kein Quest-Hinweis mehr auf dem Startbildschirm');
-    // Wie vorher: Lag das Handy weg, kommt es wieder weg.
-    if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
-  });
+  await check(
+    'Tutorial: nur der Neumarkt, Mission 1 auf der Karte, drei Verkäufe erledigen sie, Belohnung kommt',
+    async () => {
+      // Auftrag 46b: Am Anfang gibt es nur den Neumarkt, Apps wie Gangs und Lieferanten fehlen noch.
+      // Marker gibt es für jeden Spot jeder Stadt (gesperrte grau); offen ist nur der Neumarkt.
+      assert.equal(await page.locator('.spot-marker:not(.is-locked)').count(), 1, 'nur ein offener Spot');
+      const wasOpen = await page.evaluate(() => window.koeln.runtime.ui.phone.open);
+      await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
+      const home = page.locator('.phone__home');
+      await home.getByRole('button', { name: 'Einstellungen', exact: true }).waitFor();
+      assert.equal(await home.getByRole('button', { name: /^Gangs/ }).count(), 0, 'Gangs fehlt am Anfang');
+      assert.equal(await home.getByRole('button', { name: /^Lieferanten/ }).count(), 0, 'Lieferanten fehlen am Anfang');
+      if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
+      // Stufe 0 ist eine Erklär-Stufe: „Weiter“ auf der Karte bringt Mission 1.
+      const card = page.locator('.tutorial-hud');
+      await card.getByRole('button', { name: 'Weiter', exact: true }).click();
+      await card.getByText('Drei Kunden bedienen').waitFor();
+      assert.equal(await game(page, (s) => s.modules.tutorial.mission?.id), 'serve3');
+      await page.waitForTimeout(800);
+      await shot(page, 'tutorial-mission-1');
+      const before = await game(page, (s) => s.wallet.dirty);
+      // Am Handy-Bildschirm liegt der Neumarkt sonst unter dem HUD: Kamera hin.
+      await page.evaluate(() => window.koeln.runtime.api.flyTo({ lng: 6.9476, lat: 50.9362 }, 16));
+      await page.waitForTimeout(1500);
+      for (let sold = 0; sold < 3; sold++) {
+        for (let i = 0; i < 60; i++) {
+          const waiting = await game(
+            page,
+            (s) => s.modules.customers.waiting.filter((c) => c.spotId === 'neumarkt').length,
+          );
+          if (waiting > 0) break;
+          await advance(page, 10);
+        }
+        // Die Spot-Seite bleibt nach dem ersten Verkauf offen (am Handy-Bildschirm über der Karte).
+        const sell = page.getByRole('button', { name: 'Verkaufen', exact: true }).first();
+        if (!(await sell.isVisible())) await page.locator('.spot-marker[aria-label*="Neumarkt"]').click();
+        await sell.click();
+      }
+      const after = await game(page, (s) => ({
+        dirty: s.wallet.dirty,
+        done: s.modules.tutorial.done,
+        stage: s.modules.tutorial.stage,
+        mission: s.modules.tutorial.mission?.id,
+      }));
+      assert.deepEqual(after.done, ['serve3'], 'Mission 1 erledigt');
+      assert.equal(after.stage, 2);
+      assert.equal(after.mission, 'buySpots');
+      assert.ok(after.dirty >= before + 100, 'Belohnung (mindestens 100 €) nach drei Verkäufen');
+      await card.getByText('Zwei Spots kaufen').waitFor();
+      await shot(page, 'tutorial-mission-2');
+      // Der Rest des Tests braucht alle Spots und Apps: beenden wie ein Spieler, der sich auskennt.
+      await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
+      await home.getByRole('button', { name: 'Einstellungen', exact: true }).click();
+      await page.locator('.phone').getByRole('button', { name: 'Tutorial beenden', exact: true }).click();
+      assert.equal(await game(page, (s) => s.modules.tutorial.stage), 12);
+      await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
+      await home.getByRole('button', { name: /^Gangs/ }).waitFor();
+      await page.waitForFunction(() => document.querySelectorAll('.spot-marker:not(.is-locked)').length >= 4);
+      // Wie vorher: Lag das Handy weg, kommt es wieder weg; die Kamera zurück zum Zülpicher Platz (nächster Schritt).
+      if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
+      await page.evaluate(() => window.koeln.runtime.api.flyTo({ lng: 6.9398, lat: 50.9317 }, 16));
+      await page.waitForTimeout(1500);
+    },
+  );
 
   await check('Selbst am Spot verkaufen', async () => {
     // Warten, bis am Zülpicher Platz jemand steht.

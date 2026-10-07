@@ -15,6 +15,9 @@
 // weitere App kommt mit der Quest, die sie braucht (PHONE_APP_STEPS in config.ts). Abschaltbar ('quests.setPhoneSteps');
 // alte Spielstände haben es aus, nach Köln und nach dem Verkauf ist ohnehin alles da.
 //
+// Tutorial (Auftrag 46b): Läuft das Tutorial, schickt Peter keine Quests, keine Verträge und keine Handy-Schritte
+// (questsSuppressed); der Rückbau der Quests selbst ist Auftrag 46d.
+//
 // Öffentliche API: currentQuest(state), questsWaiting(state), questProgress(state), completedQuests(state), questTitle(state),
 //   rewardText(reward), QUESTS, CHAPTERS,
 //   Handy: phoneStepsActive(state), phoneStepsEnabled(state), questReached(state, questId), phoneAppLocked(state, appId),
@@ -45,6 +48,7 @@ import { changeReputation } from '../reputation';
 import { addLoyalty, addXp, getStaff } from '../staff';
 import { addSupplierTrust, getRelation, getSuppliers, isUnlocked, supplierById } from '../suppliers';
 import { addInfluence, hasPlayerPresence, PLAYER_FACTION } from '../territory';
+import { tutorialEnabled } from '../tutorial';
 import {
   CHAPTERS,
   MILESTONE_TITLE,
@@ -183,7 +187,16 @@ declare module '../../core' {
 // ---------------------------------------------------------------------------------------------
 // Lesen
 
+/**
+ * Ruhen die Quests (Auftrag 46b)? Ja, sobald das Tutorial einmal gestartet wurde: Seine Missionen ersetzen Peters
+ * Quests, auch nach dem Ende des Tutorials (sonst kämen alle Kölner Kapitel auf einmal).
+ */
+export function questsSuppressed(state: GameState): boolean {
+  return tutorialEnabled(state);
+}
+
 export function currentQuest(state: GameState): QuestDef | null {
+  if (questsSuppressed(state)) return null;
   return QUESTS[state.modules.quests.index] ?? null;
 }
 
@@ -270,6 +283,7 @@ export function phoneStepsEnabled(state: GameState): boolean {
  * dem Verkauf. Sonst ist alles da.
  */
 export function phoneStepsActive(state: GameState): boolean {
+  if (questsSuppressed(state)) return false;
   return phoneStepsEnabled(state) && !isBusinessSold(state) && PHONE_STEPS_CITIES.includes(activeCity(state));
 }
 
@@ -806,6 +820,7 @@ function onCounted<K extends keyof GameEvents>(type: K) {
   const quest = COUNTED.includes(type) ? onEvent(type) : null;
   const contract = CONTRACT_COUNTED.includes(type) ? onContractEvent(type) : null;
   return (ctx: Ctx, payload: GameEvents[K]) => {
+    if (questsSuppressed(ctx.state)) return;
     if (type === 'shipment.ordered') noteOrder(ctx, (payload as GameEvents['shipment.ordered']).cityId ?? 'koeln');
     quest?.(ctx, payload);
     contract?.(ctx, payload);
@@ -837,10 +852,13 @@ export default defineModule({
     fresh: false,
     orderedIn: [],
     contracts: newContracts(),
-    phoneSteps: true,
+    // Auftrag 46b: Das Handy kommt mit den Stufen des Tutorials (tutorialAllows), nicht mehr mit den Quests.
+    phoneSteps: false,
   }),
   tickEvery: QUEST_CHECK_EVERY,
   tick: (ctx) => {
+    // Auftrag 46b: Läuft das Tutorial, ruhen die Quests und die Wochenverträge.
+    if (questsSuppressed(ctx.state)) return;
     // Beim ersten Schritt schickt Peter die erste Quest.
     const q = ctx.state.modules.quests;
     if (q.index === 0 && q.done.length === 0 && q.skipped.length === 0 && !ctx.state.messages.contacts[PETER.id]) {
@@ -902,6 +920,7 @@ export default defineModule({
       if (optionId === 'no') c.offers = c.offers.filter((o) => o.messageId !== messageId);
     },
     'clock.hourStarted': (ctx) => {
+      if (questsSuppressed(ctx.state)) return;
       contractHour(ctx);
       const quest = currentQuest(ctx.state);
       if (!quest?.streak) return;

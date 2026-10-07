@@ -384,6 +384,7 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 | `hierarchy` | `posts` nach Mitarbeiter (Spots, Einstellungen mit Bestellregeln (optional `maxIndex`: nur bestellen, wenn der Preisindex darunter liegt, Auftrag 32), Team, Ausfälle, Protokoll), `rightHands` pro Stadt (Einstellungen mit Aufgaben, Erfahrung `xp`, Erledigtes `done`, Bericht, `fullPower`), `orderTemplate`, `capos` (Auftrag 34) (7) | `getPost`, `getLieutenants`, `getLieutenantIds`, `isLieutenant`, `lieutenantOfSpot`, `lieutenantSpots`, `lieutenantVeedels`, `lieutenantsInVeedel`, `teamOf`, `teamLeadOf`, `handlesAbsence`, `canBeLieutenant`, `checkSpots`, `lieutenantDemand`, `lieutenantSatisfaction`, `homeWarehouse`, `orderRuleLabel`, `ruleStock`, `isPortSupplierAllowed`, `getRightHand(state, cityId?)`, `allRightHands`, `rightHandCityOf`, Vollmacht (Auftrag 30): `hasFullPower`, `fullPowerMissing`, `FULL_POWER_SHARE`, Übergabe (Auftrag 36): `rightHandTitle` (Statthalter), `canBeRightHand`, `rightHandOffered`, `rightHandSatisfaction`, `payrollReserve`, `rightHandBudgetLeft`, `absenceHandled`, `buildReport`, Aufgaben: `RIGHT_HAND_TASKS`, `isTaskUnlocked`, `isTaskActive`, `rightHandRank`, `rightHandRankProgress`, `rightHandDriver`, `rightHandOrderLimit`, `rightHandSpeedFactor`, `rightHandHandlesOrders`, `restockBudgetLeft`, `describeDone`; Capo (Auftrag 34): `getCapos(state, cityId?)`, `isCapo`, `capoOf`, `capoDistrict`, `canBeCapo`, `capoCandidates`, `capoInCharge`; Rat: `REPORT_TIPS`, `reportTipFor`; alt: `getLieutenant(veedelId)`, `lieutenantVeedel` | `hierarchy.appoint` (`staffId`, `spotIds`), `.setSpots`, `.dismiss`, `.configure` (`settings` mit `orderRules`, `onAbsent` …), `.appointRightHand`, `.dismissRightHand`, `.configureRightHand` (auch Aufgaben und ihre Regeln; `cityId?`), `.grantFullPower`, `.revokeFullPower`, `.appointCapo`, `.dismissCapo`, `.revokeFullPower` | `hierarchy.appointed` (`spotIds`), `.dismissed`, `.configured`, `.spotsChanged`, `.rightHandAppointed`, `.rightHandDismissed`, `.dailyReport`, `.rightHandRankUp`, `.fullPowerGranted`, `.fullPowerRevoked`, `.shareTaken` |
 | `finance` | `days`: Tagesbücher der letzten 30 Tage (Kategorien, pro Spot, pro Leutnant, pro Stadt `cities`; Buchungstexte nur sieben Tage) (2) | `currentDay`, `bookDay`, `dayReport(state, daysAgo)`, `periodReport(state, days)`, `dailyProfits`, `categoryLines`, `spotResult`, `spotResults`, `lieutenantResult`, `wageRunway`; Bilanz (Auftrag 27): `PERIODS`, `periodSpan`, `balance(state, period, filter)` mit `FinanceFilter` (alles, Stadt, Veedel, Spot, Leutnant), `balanceHistory`, `explainReport`; Städte (Auftrag 30): `cityReport(state, cityId, days)`, `cityDayProfit`, `bookingCity` | | |
 | `quests` | `index`, `progress`, `done`, `skipped`, `title`, `startedAt`, `fresh` (Version 7), `phoneSteps` (Version 9), `contracts` (Wochenverträge: `offers`, `active`, `history`, `stats`, Auftrag 32) (4; Auftrag 36: Kapitel pro Stadt mit `cityId`, index -1 = wartet auf die nächste Stadt). Peter (Kontakt `quest:peter`) schickt 26 Quests in fünf Kapiteln der Reihe nach (`config.ts`: `QUESTS`, `CHAPTERS`); Fortschritt über Ereignis-Zähler (`count`), ein Maß am Zustand (`measure`) oder eine Serie voller Stunden (`streak`). Belohnungen: Ware, Geld (schwarz/sauber), Ruf, weniger Heat, Erfahrung und Loyalität fürs Team, Einfluss, Titel Wochenverträge in `contracts.ts` (14 Vorlagen `CONTRACT_TEMPLATES`, sechs Figuren `CONTRACT_CONTACTS`, Ziele nach `operationTier`, Belohnung `trust` beim Lieferanten) | `currentQuest`, `questsWaiting` (Auftrag 36: Kapitel der nächsten Stadt), `questProgress`, `completedQuests`, `questTitle`, `chapterName`, `rewardText`, `QUESTS`, `CHAPTERS`, `PETER`; Handy Schritt für Schritt: `phoneStepsActive`, `phoneStepsEnabled`, `questReached`, `phoneAppLocked`, `phoneAppsOpenedBy`, `PHONE_APP_STEPS`; `contractsOpen`, `contractOffers`, `activeContract`, `contractProgress`, `contractHistory`, `contractStats`, `contractValue`, `getContractTemplate`, `getContractContact`, `rewardValue` | `quests.skip`, `quests.acceptContract` (`offerId`), `quests.setPhoneSteps` (`enabled`) | `quest.started`, `quest.completed`, `contract.offered`, `contract.accepted`, `contract.finished` (`result`: `done`/`failed`) |
+| `tutorial` | `enabled`, `stage` (0–12), `mission` (`id`, `progress`, `startedAt`, `seen`, `reached`), `done`, `skipped`, `lockedAtStart`, `scripted` (`firstAttack`, `seizure`, `phoneOrder`, `lowStockPopups`), `unlocked` (Features aus Ereignissen), `sales` (Verkäufe der letzten 24 Stunden) (1; Auftrag 46b). Alte Stände: `enabled: false`. Stufen und Missionen als Daten (`config.ts`: `STAGES`, `FEATURE_STAGE`; `missions.ts`: `MISSIONS` mit Teilzielen `parts`, Zähler `count`), Belohnung `reward.ts` | `tutorialEnabled`, `tutorialActive`, `tutorialStage`, `tutorialFinished`, `tutorialAllows`, `tutorialAllowsRole`, `tutorialSpotOpen`, `tutorialSpotCost`, `tutorialSupplierOpen`, `currentMission`, `missionProgress`, `missionReward`, `rewardText`, `scriptedDone`, `stageInfo`, `STAGES`, `MISSIONS`, `FEATURE_STAGE`, `PETER`, `LAST_STAGE` | `tutorial.start`, `tutorial.advance`, `tutorial.skip`, `tutorial.scripted` (`key`) | `tutorial.stageReached` (`stage`), `tutorial.missionStarted` (`id`), `tutorial.missionDone` (`id`, `reward`) |
 | `leaderboard` | `peakWorth`, `peakVeedel` (1). Merkt sich das höchste Vermögen im Durchgang; die Oberfläche schickt das Ergebnis an `api/leaderboard.ts` (Vercel Function mit Upstash Redis) bei Game Over, Sieg und zu jedem Spieltag. Der Server drosselt pro IP (429), gibt keine `runId` mehr aus und verlangt für Updates eines Durchgangs ein Token (nur der Hash liegt in Redis); Ware zählt im Vermögen zum Einkaufspreis (`leaderboard/config.ts`) | `netWorth`, `getRecord`, `runSummary` (mit `title` = Rang des Spielers und `rank`, Auftrag 36) | | |
 | `recruiting` | Bewerber-Pool und Kontakte, Bewerber mit `traits` (4; Pool größer mit Veedeln und Ruf, `poolMax`) | `getCandidates`, `getCandidate`, `getPool`, `getContacts`, `searchReadyAt`, `poolMax`, `searchPreview(state, role?)`, `SEARCH_ROLES` | `recruiting.hire`, `.decline`, `.search` (`role?`: Läufer, Fahrer, Sicherheit) | `recruiting.candidateArrived`, `recruiting.hired`, `recruiting.candidateLeft` |
 | `weather` | aktuelles Wetter, Vorhersage (2) | `getWeather`, `getForecast`, `weatherDemandFactor(state, channel?)`, `WEATHER_NAMES`, `isPrecipitation` | | `weather.changed` |
@@ -1415,6 +1416,50 @@ der Befehl (die Oberfläche zeigt beides nebeneinander). `shipment.ordered` und 
 Sammellieferung einmal, mit `items` und der Summe in `amount`. Eine Teillieferung gibt es nur bei einem Paket.
 Bestellregeln, Warenfluss und Dynamic Island zählen alle Pakete. Ein `Shipment` ohne `extra` ist genau wie vorher, es
 braucht keine Migration.
+
+### Tutorial (Auftrag 46b)
+
+Teil von Auftrag 46 „Intro neu“ (`docs/auftraege/46-intro-neu.md`): Statt Peters Quests führt ein Tutorial in zwölf
+Stufen durch Köln und schaltet Funktionen Schritt für Schritt frei. Dieses Modul hält die Stufe, die Mission und das
+Freischalten; die Touren (Erklärungen mit Overlay) kommen mit 46c über den Tour-Baukasten aus 46a, der Rückbau der
+Quests mit 46d, neue Wirkungen mit 46e.
+
+**Start und Stufen.** `init` gibt `enabled: false`: Bot, Szenario-Tests, Test-Spielstände, `npm run balance`,
+Hardcore und alte Spielstände laufen unverändert (Würfelfolgen bleiben, `tutorial.test.ts` vergleicht einen Lauf mit
+und ohne das Modul). Nur die Oberfläche schickt `tutorial.start` direkt nach `session.newGame('normal', …)` (Dialog
+„Neues Spiel“, `?neu=normal&tutorial=1`): 700 € Schwarzgeld dazu (2.200 €), alle offenen Kölner Spots außer dem
+Neumarkt werden mit `spots.lock` gesperrt (`lockedAtStart`), Stufe 0. Stufen ohne Mission (0, 3, 4, 10) enden mit
+`tutorial.advance` (die Karte hat dafür „Weiter“, bis die Tour aus 46c das übernimmt); eine erledigte Mission zahlt
+die Belohnung und schaltet von selbst eine Stufe weiter (`tutorial.stageReached`). `tutorial.skip` setzt Stufe 12,
+öffnet die gesperrten Start-Spots wieder und beendet die Missionen. Ab Stufe 12 ist `tutorialActive` falsch (alles
+frei), die Mission „Köln komplett“ läuft noch.
+
+**Missionen** (`missions.ts`, eine pro Stufe mit Mission): Teilziele `parts` messen am Zustand (`measure`) oder
+zählen Ereignisse (`count`, Zuwachs oder Schlüssel wie Produkt-IDs, die nur einmal zählen); `once` hält ein erreichtes
+Teilziel fest (Geld, das man gleich ausgibt). Geprüft wird alle fünf Minuten und sofort nach passenden Ereignissen
+(`CHECK_AFTER`). **Belohnung** (`reward.ts`): 20 % des Umsatzes der letzten 24 Stunden als Schwarzgeld (unter 1.000 €
+auf 50 € aufgerundet, sonst auf 100 €, mindestens 100 €) und 20 % der verkauften Gramm als Ware (unter 100 g auf 5 g,
+sonst auf 10 g, mindestens 10 g) im meistverkauften Produkt; die Verkäufe hält das Modul selbst (`sales`, aus
+`sale.completed`). Ware geht mit `storeFitting` in die Kölner Lager, was nicht passt, sagt Peter.
+
+**Freischalten.** `FEATURE_STAGE` (`config.ts`) sagt, ab welcher Stufe ein `TutorialFeature` frei ist (`NEVER`: erst
+nach dem Tutorial, z.B. Spot-Ausbau und Gründen; Ruf und Rang über Ereignisse `EVENT_FEATURES`). `tutorialAllows` ist
+ohne aktives Tutorial immer wahr. Eingebaut (jeweils mit Kommentar „Auftrag 46b“): `hiddenWhen` der Apps Reviere,
+Gangs, Lieferanten, Geldwäsche, Lager, Kasse; HUD Lager, Ruf, Rang und sauberes Geld (Kern-HUD über
+`registerHudPartHidden`); `staff.hireDriver`, `recruiting` (`getCandidates`, `hire`, `search`), `canBeLieutenant`,
+`canBeRightHand`; Gangs (`reactToPlayer`: Drohungen, Überfälle; `pickTarget`: Übernahmen; `maybePressure`: Schutzgeld
+und Methoden); Polizei (Kontrollen, Razzien, Zivis); `canUnlockChannel` (Geldwäsche-Wege); `suppliers.orderBatch`
+(Sammelbestellung); Spots: `lockedSpots` und `getAllSpots` zeigen nur, was `tutorialSpotOpen` erlaubt (Stufe 1
+Neumarkt, 2 Zülpicher Platz und Rudolfplatz je 350 € über `tutorialSpotCost` und `unlockCostOf`, 6 eigenes Veedel und
+Nachbarn bzw. Luftlinie unter 2 km, ab 7 alle), `getSuppliers` nur, was `tutorialSupplierOpen` erlaubt (Kalle und Toni
+ab 5, Hein ab 6, der Rest wie heute über `requires`). Solange das Tutorial je gestartet wurde, ruhen die Quests und
+Wochenverträge (`questsSuppressed` in `quests`); „Handy Schritt für Schritt“ über die Quests ist aus.
+
+**Oberfläche** (`tutorial/ui`): Missions-Karte im HUD (`placement: 'below'`, Anker `data-tour="hud.mission"`) mit
+Peters Porträt, Teilzielen als Liste mit Haken oder Fortschrittsbalken, Belohnung live aus `missionReward` und Knopf
+zur passenden Stelle (`goTo`); erledigt leuchtet die neue Karte golden und es gibt einen Ton, keine Banner, keine
+Dynamic Island. Einstellungen › Einstieg: „Tutorial beenden“. Dev-Haken `window.koeln.dev.tutorialStage(n)`,
+Szenen `npm run screenshot -- --scenes=tutorial,tutorial-teilziele`, e2e-Fall „Tutorial“.
 
 ## Qualität
 

@@ -376,4 +376,17 @@ export const SCENES = [
     hover: '.spot-marker[aria-label*="Neumarkt"]',
     sizes: ['desktop'],
   },
+  // Tutorial (Auftrag 46b): Missions-Karte mit Mission 1 (nur der Neumarkt) und mit Teilzielen (Stufe 6).
+  {
+    name: 'tutorial',
+    js: "run('tutorial.start', {}); run('tutorial.advance', {}); sim.advance(30); api.flyTo({ lng: 6.9476, lat: 50.9362 }, 15.5);",
+    wait: 3500,
+  },
+  {
+    name: 'tutorial-teilziele',
+    js:
+      "run('tutorial.start', {}); const t = state().modules.tutorial; t.stage = 6; t.done = ['serve3', 'buySpots', 'threeProducts'];" +
+      " for (const id of ['zuelpicher', 'rudolfplatz']) run('spots.unlock', { spotId: id }); sim.advance(5); state().wallet.dirty = 4000; run('staff.hireRunner', { spotId: 'neumarkt' }); sim.advance(5);",
+    wait: 3000,
+  },
 ];

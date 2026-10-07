@@ -43,7 +43,7 @@ import {
 } from '../../goods';
 import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount, portName } from '../../logistics';
 import { indexTrend, purchaseIndex } from '../../market';
-import { phoneAppLocked } from '../../quests';
+import { tutorialAllows } from '../../tutorial';
 import {
   activeDeal,
   assortment,
@@ -841,7 +841,8 @@ registerPhoneApp({
   chrome: 'none',
   component: SuppliersApp,
   // Nach dem Verkauf kauft man in der App Handel ein (Auftrag 43); die Seite verweist dorthin, falls sie jemand öffnet.
-  hiddenWhen: (state) => isBusinessSold(state) || phoneAppLocked(state, APP_ID),
+  // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
+  hiddenWhen: (state) => isBusinessSold(state) || !tutorialAllows(state, 'app.suppliers'),
   // Gesperrt wegen Schulden oder bereit zum Freischalten.
   badge: (state) =>
     getSuppliers(state, activeCity(state)).filter(

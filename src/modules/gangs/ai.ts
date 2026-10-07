@@ -20,6 +20,7 @@ import {
   influenceIn,
   PLAYER_FACTION,
 } from '../territory';
+import { tutorialAllows } from '../tutorial';
 import { allVeedel, getVeedel, neighborsOf, veedelAt, veedelCity, veedelName } from '../veedel';
 import { addHostility, commandOption, crewFor, demandOptions, focusVeedel, say, statusOf } from './common';
 import {
@@ -320,6 +321,8 @@ function pickTarget(ctx: Ctx, gang: Gang, s: GangStatus): string | null {
   for (const v of candidates) {
     const controller = controllerOf(state, v);
     if (controller === PLAYER_FACTION && isAtPeace(state, gang.id)) continue;
+    // Auftrag 46b: Im Tutorial übernehmen Gangs dein Revier erst ab Stufe 7.
+    if (controller === PLAYER_FACTION && !tutorialAllows(state, 'gangs.takeover')) continue;
     const holder = controller ?? veedelGang(state, v);
     let score = 100 - (holder ? getInfluence(state, v, holder) : 0) + ctx.random() * 10;
     // Schonfrist (Auftrag 43, K7), nach dem Wurf geprüft: Die Würfelfolge der Gangs bleibt dieselbe.
@@ -430,6 +433,8 @@ function allyStrike(ctx: Ctx, gang: Gang, s: GangStatus): void {
 // Reaktion auf den Spieler: warnen, drohen, überfallen
 
 function reactToPlayer(ctx: Ctx, gang: Gang, s: GangStatus): void {
+  // Auftrag 46b: Bis Stufe 4 bleiben die Gangs still, bis Stufe 7 drohen sie nur (kein Überfall).
+  if (!tutorialAllows(ctx.state, 'gangs.threats')) return;
   const target = stageFor(s.hostility);
   if (target > s.stage) {
     s.stage = target;
@@ -438,6 +443,7 @@ function reactToPlayer(ctx: Ctx, gang: Gang, s: GangStatus): void {
     s.stage = (s.stage - 1) as GangStage;
   }
   if (s.stage < 3 || isAtPeace(ctx.state, gang.id) || s.people < 2) return;
+  if (!tutorialAllows(ctx.state, 'gangs.attacks')) return;
   if (activeEncounters(ctx.state).length > 0) return;
   if (s.lastAttackAt !== null && ctx.now - s.lastAttackAt < ATTACK_COOLDOWN) return;
   // Stadt-Events (Auftrag 30, Etappe 7): Beim FC-Heimspiel sind die Gangs öfter unterwegs.

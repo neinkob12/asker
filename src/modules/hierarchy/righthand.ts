@@ -52,6 +52,7 @@ import {
   staffContact,
 } from '../staff';
 import { campaignProgress } from '../territory';
+import { tutorialAllows } from '../tutorial';
 import { veedelCity, veedelName } from '../veedel';
 import { reportTip } from './advice';
 import { capoInCharge, cleanupCapos, dismissCapo, isCapo } from './capo';
@@ -248,6 +249,8 @@ export function rightHandDriver(
 
 /** Kann die Person Rechte Hand werden? (Level, Loyalität und genug Leutnants, die sie führen kann) */
 export function canBeRightHand(state: GameState, staffId: string): CommandResult {
+  // Auftrag 46b: Die Rechte Hand gibt es im Tutorial erst ab Stufe 11.
+  if (!tutorialAllows(state, 'staff.rightHand')) return { ok: false, reason: 'Dazu kommst du später.' };
   const m = getStaffMember(state, staffId);
   if (!m || !isEmployed(state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
   if (isRightHand(state, staffId)) return { ok: false, reason: `${m.name} ist schon deine Rechte Hand.` };

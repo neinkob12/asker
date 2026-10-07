@@ -63,7 +63,7 @@ import { daysText, flowRows } from './flow';
 import { supplyRoutesLayer } from './map';
 import './goods.css';
 import { activeCity, cityName, isBusinessSold } from '../../city';
-import { phoneAppLocked } from '../../quests';
+import { tutorialAllows } from '../../tutorial';
 
 declare module '../../../ui' {
   interface PanelRegistry {
@@ -115,8 +115,9 @@ const stockView = memoState((state) => {
  */
 const StockHud = memo(function StockHud() {
   const ui = useUi();
-  // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen.
-  const sold = useGameSelector((state) => isBusinessSold(state));
+  // In der Hafen-Phase (Auftrag 40) zeigt trade die Ware in den Häfen; im Tutorial (Auftrag 46b) kommt das Lager mit
+  // der ersten Lieferung.
+  const sold = useGameSelector((state) => isBusinessSold(state) || !tutorialAllows(state, 'hud.stock'));
   // Nur die angezeigten Texte lesen: Die Kachel zeichnet neu, wenn sich Wert, Titel oder Ziel ändern.
   const view = useGameSelector((state) => {
     const { cityId, rows, warehouses } = stockView(state);
@@ -601,7 +602,8 @@ registerPhoneApp({
   color: 'goods',
   component: WarehouseApp,
   // Nach dem Verkauf liegt die Ware in den Häfen (Handel › Hafen, Auftrag 43). Am Anfang kommt sie mit Peters Quest.
-  hiddenWhen: (state) => isBusinessSold(state) || phoneAppLocked(state, 'goods.app'),
+  // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
+  hiddenWhen: (state) => isBusinessSold(state) || !tutorialAllows(state, 'app.goods'),
 });
 registerHudItem({ id: 'goods.stock', order: 20, placement: 'more', icon: 'warehouse', component: StockHud });
 registerPanel({

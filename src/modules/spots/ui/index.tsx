@@ -44,6 +44,7 @@ import {
   spotHoursLabel,
   spotOpensAt,
   spotType,
+  unlockCostOf,
 } from '../index';
 import { recordSaleGlow, recordSpotRaid, syncSpotGlow } from './glow';
 import { FoundSheet, SpotManage } from './manage';
@@ -83,7 +84,7 @@ function SpotPanel(props: { spotId: string }) {
   if (!spot) return null;
   const active = isSpotActive(state, spot.id);
   const waiting = waitingAt(state, spot.id).length;
-  const cost = spot.unlockCost ?? 0;
+  const cost = unlockCostOf(state, spot);
   return (
     <div class="spot-panel" data-tour="spot.panel">
       <SummaryTiles
@@ -191,7 +192,7 @@ function SpotsSection() {
         count={spots.length}
         note={
           locked.length > 0
-            ? `${locked.length} weitere Spots kannst du freischalten (grau auf der Karte, ab ${formatEuro(Math.min(...locked.map((s) => s.unlockCost ?? 0)))}).`
+            ? `${locked.length} weitere Spots kannst du freischalten (grau auf der Karte, ab ${formatEuro(Math.min(...locked.map((s) => unlockCostOf(state, s))))}).`
             : undefined
         }
       >
@@ -297,18 +298,20 @@ registerAdvisor({
     // billigste ein schwacher Spot mit 80 % Andrang, der Kotti mit 160 % kostete nur das Doppelte).
     const candidates = lockedSpots(state).filter((s) => spotCity(s) === city);
     // Höchstens die Hälfte des Geldes, damit noch Ware drin ist.
-    const affordable = candidates.filter((s) => (s.unlockCost ?? 0) <= state.wallet.dirty / 2);
+    const costOf = (s: { id: string; unlockCost?: number }) => unlockCostOf(state, s);
+    const affordable = candidates.filter((s) => costOf(s) <= state.wallet.dirty / 2);
     const spot =
-      [...affordable].sort((a, b) => b.demand - a.demand || (a.unlockCost ?? 0) - (b.unlockCost ?? 0))[0] ??
-      [...candidates].sort((a, b) => (a.unlockCost ?? 0) - (b.unlockCost ?? 0))[0];
+      [...affordable].sort((a, b) => b.demand - a.demand || costOf(a) - costOf(b))[0] ??
+      [...candidates].sort((a, b) => costOf(a) - costOf(b))[0];
     if (!spot) return null;
+    const cost = costOf(spot);
     return {
       id: 'spots.firstSpot',
       priority: 68,
       icon: 'pin',
       title: `Ersten Spot in ${cityName(city)} freischalten`,
       text: `Ohne Spot keine Kunden. Ein guter Anfang: ${spot.name} (Andrang ${formatPercent(spot.demand)}).`,
-      ...(spot.unlockCost ? { cost: spot.unlockCost } : {}),
+      ...(cost ? { cost } : {}),
       actionLabel: 'Zum Spot',
       target: { lng: spot.lng, lat: spot.lat },
       action: (ui) => {

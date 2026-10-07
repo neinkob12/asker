@@ -60,8 +60,9 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
   const disposers: Array<() => void> = [bindClickSound()];
   disposers.push(bindPauseMarker(runtime), offMood);
 
-  // ?neu=normal|hardcore&seed=123 startet sofort ein frisches Spiel (praktisch für Screenshots und Tests),
-  // ?spielstand=koeln-komplett lädt einen Test-Spielstand (builtin/testSaves.ts).
+  // ?neu=normal|hardcore&seed=123 startet sofort ein frisches Spiel (praktisch für Screenshots und Tests), mit
+  // &tutorial=1 im Modus normal mit Tutorial (Auftrag 46b); ?spielstand=koeln-komplett lädt einen Test-Spielstand
+  // (builtin/testSaves.ts).
   const params = new URLSearchParams(window.location.search);
   const fresh = params.get('neu');
   const testSave = params.get('spielstand');
@@ -85,7 +86,9 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
       );
   } else if (fresh !== null) {
     const seed = params.get('seed');
-    session.newGame(fresh === 'hardcore' ? 'hardcore' : ('normal' as GameMode), seed ? Number(seed) : undefined);
+    const mode: GameMode = fresh === 'hardcore' ? 'hardcore' : 'normal';
+    session.newGame(mode, seed ? Number(seed) : undefined);
+    if (mode === 'normal' && params.get('tutorial') === '1') startTutorial(session);
   } else if (!session.continueAutosave()) {
     // Ließ sich der letzte Spielstand nicht laden, sagen wir es (und dass eine Kopie bleibt), statt still neu anzufangen.
     if (session.loadError) {
@@ -128,6 +131,14 @@ export function startApp(root: HTMLElement, modules: readonly ModuleDefinition[]
     render(null, root);
   });
   return runtime;
+}
+
+/**
+ * Tutorial einschalten (Auftrag 46b): direkt nach einem neuen Spiel im Modus normal. Nur hier und im Dialog „Neues
+ * Spiel“; Bot, Tests und Test-Spielstände laufen ohne.
+ */
+export function startTutorial(session: GameSession): void {
+  session.dispatch({ type: 'tutorial.start', payload: {} });
 }
 
 /**
