@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { loadSimulation, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { activeEncounters, autoResolveEncounter, getEncounter, startEncounter } from '../encounters';
+import { autoResolveEncounter, getEncounter, startEncounter } from '../encounters';
 import { getStock } from '../goods';
 import { getCompetitionFactor } from '../market';
 import { getSpot } from '../spots';
@@ -383,7 +383,8 @@ describe('gangs: Diplomatie', () => {
       st.relation = -100;
       st.offer = { id: 5, amount: 100, price: 400, expiresAt: sim.state.time + 60 };
       sim.dispatch({ type: 'gangs.acceptOffer', payload: { gangId: 'ost', offerId: 5 } });
-      const encounter = activeEncounters(sim.state)[0];
+      // Auftrag 46d: sofort entschieden, die Konfrontation steht in der Liste der vergangenen.
+      const encounter = sim.state.modules.encounters.history[0];
       if (!encounter) continue;
       betrayed = true;
       expect(encounter.kind).toBe('dealGoneWrong');
@@ -533,7 +534,7 @@ describe('gangs: Überfall und Angebote (Fehler aus der Handy-Prüfung)', () => 
       },
     });
     expect(result.ok).toBe(true);
-    expect(activeEncounters(sim.state)[0]?.request.staffIds).toEqual([runner]);
+    expect(sim.state.modules.encounters.history[0]?.request.staffIds).toEqual([runner]);
   });
 
   it('Crew und Verstärkung kommen aus der Stadt des Anlasses, nicht aus der schlafenden', () => {
@@ -565,7 +566,7 @@ describe('gangs: Überfall und Angebote (Fehler aus der Handy-Prüfung)', () => 
       payload: { gangId: 'ost', veedelId: 'kalk', staffIds: [here, away], playerPresent: false },
     });
     expect(result.ok).toBe(true);
-    expect(activeEncounters(sim.state)[0]?.request.staffIds).toEqual([here]);
+    expect(sim.state.modules.encounters.history[0]?.request.staffIds).toEqual([here]);
   });
 
   it('ein Überfall nur mit Leuten, die nicht mitgehen dürfen, geht nicht', () => {
@@ -591,7 +592,7 @@ describe('gangs: Überfall und Angebote (Fehler aus der Handy-Prüfung)', () => 
       payload: { gangId: 'ost', veedelId: 'kalk', staffIds: [runner], playerPresent: false },
     });
     expect(result.ok).toBe(true);
-    expect(activeEncounters(sim.state)[0]?.request.stakes).toMatchObject({ money: 0, goods: 0 });
+    expect(sim.state.modules.encounters.history[0]?.request.stakes).toMatchObject({ money: 0, goods: 0 });
   });
 
   it('Ziele des Überfalls: dieselbe Liste für Oberfläche und Befehl', () => {

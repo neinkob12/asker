@@ -42,14 +42,6 @@ import {
   travelMinutesBetween,
 } from '../modules/city';
 import { allWaiting, canServe, dealerStage } from '../modules/customers';
-import {
-  activeEncounters,
-  chooseAuto,
-  chooseMove,
-  getEncounter,
-  requestCity,
-  suggestedCrew,
-} from '../modules/encounters';
 import { periodReport } from '../modules/finance';
 import { freeVehicles, getVehicles, VEHICLE_MODELS, vehiclePrice } from '../modules/fleet';
 import { ceasefireCost, getGangs, tributeAmount } from '../modules/gangs';
@@ -777,42 +769,6 @@ function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions
   }
 }
 
-/**
- * Konfrontationen (Auftrag 35): Der Bot geht nie selbst hin, schickt aber die vorgeschlagene Crew und gibt per Handy
- * Anweisungen wie ein guter Spieler (Absicht abwenden, Einsatz schützen, Spezialzüge nutzen). Was übrig bleibt,
- * würfeln die Leute aus.
- */
-function handleEncounters(sim: Simulation, stats: BotStats): void {
-  for (const e of [...activeEncounters(sim.state)]) {
-    if (e.phase === 'done') continue;
-    if (e.phase === 'briefing') {
-      const crew = suggestedCrew(sim.state, e, requestCity(sim.state, e.request));
-      const joined = run(sim, stats, { type: 'encounters.join', payload: { encounterId: e.id, mode: 'crew', crew } });
-      if (!joined) run(sim, stats, { type: 'encounters.join', payload: { encounterId: e.id, present: false } });
-    }
-    for (let i = 0; i < 20; i++) {
-      const current = getEncounter(sim.state, e.id);
-      if (current?.phase !== 'rounds') break;
-      const move = chooseMove(current, true);
-      if (move) {
-        if (!run(sim, stats, { type: 'encounters.special', payload: { encounterId: e.id, participantId: move } }))
-          break;
-        continue;
-      }
-      const choice = chooseAuto(sim.state, current, true);
-      const payload = {
-        encounterId: e.id,
-        actionId: choice?.actionId ?? '',
-        ...(choice?.protect ? { protect: choice.protect } : {}),
-      };
-      if (!choice || !run(sim, stats, { type: 'encounters.act', payload })) break;
-    }
-    if (getEncounter(sim.state, e.id)?.phase === 'rounds') {
-      run(sim, stats, { type: 'encounters.auto', payload: { encounterId: e.id } });
-    }
-  }
-}
-
 /** Kredit bei Lieferanten zurückzahlen, sobald das Geld reicht. */
 function repay(sim: Simulation, stats: BotStats): void {
   const state = sim.state;
@@ -896,8 +852,7 @@ export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = 
   const command = (c: Command) => run(sim, stats, c);
   if (options.sellBusiness !== false) sellWhenOffered(sim.state, command);
   if (isBusinessSold(sim.state)) {
-    handleEncounters(sim, stats);
-    answerMessages(sim, stats, options);
+      answerMessages(sim, stats, options);
     if (!isPlayerTraveling(sim.state)) {
       tradeTurn(sim.state, command);
       if (options.grow !== false) growTurn(sim.state, command);
@@ -907,11 +862,9 @@ export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = 
   moveOn(sim, stats, options);
   // Unterwegs zwischen den Städten: nur das Nötigste (Handy, Konfrontationen).
   if (isPlayerTraveling(sim.state)) {
-    handleEncounters(sim, stats);
-    answerMessages(sim, stats, options);
+      answerMessages(sim, stats, options);
     return;
   }
-  handleEncounters(sim, stats);
   takeContract(sim, stats);
   answerMessages(sim, stats, options);
   sellPersonally(sim, stats, options);

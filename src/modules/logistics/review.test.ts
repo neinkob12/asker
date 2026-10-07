@@ -52,46 +52,49 @@ describe('logistics: Review Auftrag 33', () => {
   });
 
   it('fliegt eine Route zwischen den Städten auf, bleibt das Fahrzeug in der Startstadt', () => {
-    const sim = quietGame(5);
-    sim.state.wallet.dirty = 50_000;
-    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
-    sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'werkstatt-ottensen' } });
-    const hired = sim.dispatch({ type: 'staff.hireDriver', payload: {} });
-    if (!hired.ok) throw new Error(hired.reason);
-    const driverId = (hired.data as { staffId: string }).staffId;
-    const bought = sim.dispatch({ type: 'fleet.buy', payload: { model: 'kombi' } });
-    if (!bought.ok) throw new Error(bought.reason);
-    const vehicleId = (bought.data as { vehicleId: number }).vehicleId;
-    store(sim.ctx('test'), { productId: 'weed', amount: 2000, warehouseId: 'ehrenfeld' });
-    const added = sim.dispatch({
-      type: 'logistics.addRoute',
-      payload: {
-        driverId,
-        vehicleId,
-        fromId: 'ehrenfeld',
-        toId: 'werkstatt-ottensen',
-        items: [{ productId: 'weed', amount: 1000 }],
-        departure: (clock.minuteOfDay(sim.state.time) + 10) % 1440,
-      },
-    });
-    if (!added.ok) throw new Error(added.reason);
-    sim.dispatch({ type: 'logistics.runRouteNow', payload: { routeId: (added.data as { routeId: number }).routeId } });
-    const [trip] = getTrips(sim.state);
-    expect(trip.vehicleId).toBe(vehicleId);
-    trip.checkAt = sim.state.time + 30;
-    trip.loadedAt = sim.state.time;
-    sim.advance(31);
-    expect(trip.status).toBe('stopped');
-    // Kontrolle verloren, das Fahrzeug wird zufällig nicht beschlagnahmt: Es steht wieder in Köln.
-    sim.ctx('test').emit('encounter.resolved', {
-      encounterId: trip.encounterId ?? 0,
-      request: { kind: 'vehicleCheck', origin: { module: 'logistics', ref: `trip:${trip.id}` } },
-      outcome: 'defeat',
-    } as never);
-    sim.step();
-    const vehicle = sim.state.modules.fleet.vehicles[0];
-    expect(vehicle.tripId).toBeNull();
-    if (vehicle.seizedAt === null) expect(vehicle.cityId).toBe('koeln');
+    let seized = false;
+    for (let seed = 1; seed <= 12 && !seized; seed++) {
+      const sim = quietGame(seed);
+      const events = recordEvents(sim);
+      sim.state.wallet.dirty = 50_000;
+      sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+      sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'werkstatt-ottensen' } });
+      const hired = sim.dispatch({ type: 'staff.hireDriver', payload: {} });
+      if (!hired.ok) throw new Error(hired.reason);
+      const driverId = (hired.data as { staffId: string }).staffId;
+      const bought = sim.dispatch({ type: 'fleet.buy', payload: { model: 'kombi' } });
+      if (!bought.ok) throw new Error(bought.reason);
+      const vehicleId = (bought.data as { vehicleId: number }).vehicleId;
+      store(sim.ctx('test'), { productId: 'weed', amount: 2000, warehouseId: 'ehrenfeld' });
+      const added = sim.dispatch({
+        type: 'logistics.addRoute',
+        payload: {
+          driverId,
+          vehicleId,
+          fromId: 'ehrenfeld',
+          toId: 'werkstatt-ottensen',
+          items: [{ productId: 'weed', amount: 1000 }],
+          departure: (clock.minuteOfDay(sim.state.time) + 10) % 1440,
+        },
+      });
+      if (!added.ok) throw new Error(added.reason);
+      sim.dispatch({ type: 'logistics.runRouteNow', payload: { routeId: (added.data as { routeId: number }).routeId } });
+      const [trip] = getTrips(sim.state);
+      expect(trip.vehicleId).toBe(vehicleId);
+      trip.checkAt = sim.state.time + 30;
+      trip.loadedAt = sim.state.time;
+      sim.advance(31);
+      // Auftrag 46d: Die Kontrolle ist sofort entschieden.
+      const resolved = eventsOfType(events, 'encounter.resolved')[0]?.payload;
+      expect(resolved?.kind).toBe('customsCheck');
+      if (resolved?.outcome !== 'failure') continue;
+      seized = true;
+      // Kontrolle verloren, das Fahrzeug wird zufällig nicht beschlagnahmt: Es steht wieder in Köln.
+      const vehicle = sim.state.modules.fleet.vehicles[0];
+      expect(vehicle.tripId).toBeNull();
+      if (vehicle.seizedAt === null) expect(vehicle.cityId).toBe('koeln');
+    }
+    expect(seized).toBe(true);
   });
 
   it('Rest am Kai wird gemeldet (Hafen schreibt, Ereignis für das Banner)', () => {

@@ -212,18 +212,13 @@ describe('logistics: Fahrten', () => {
       expect(sim.dispatch({ type: 'logistics.pickup', payload: { by: 'driver' } }).ok).toBe(true);
       const trip = getTrips(sim.state)[0];
       trip.checkAt = trip.loadedAt + 3;
+      const arrivesAt = trip.arrivesAt;
       sim.advance(trip.checkAt - sim.state.time);
-      expect(getTrip(sim.state, trip.id)?.status).toBe('stopped');
-      expect(tripProgress(sim.state, trip).leg).toBe('stopped');
       const started = eventsOfType(events, 'encounter.started')[0].payload;
       expect(started.kind).toBe('vehicleCheck');
       expect(started.request).toMatchObject({ staffIds: [driverId], playerPresent: false, stakes: { goods: 400 } });
-      // Die Fahrt steht, solange die Konfrontation läuft.
-      const arrivesAt = trip.arrivesAt;
-      sim.advance(5);
-      expect(getTrip(sim.state, trip.id)?.arrivesAt).toBe(arrivesAt);
-      const encounterId = activeEncounters(sim.state)[0].id;
-      expect(sim.dispatch({ type: 'encounters.auto', payload: { encounterId } }).ok).toBe(true);
+      // Auftrag 46d: Die Kontrolle ist sofort entschieden, die Fahrt stand nur die Wartezeit.
+      expect(activeEncounters(sim.state)).toHaveLength(0);
       const outcome = eventsOfType(events, 'encounter.resolved')[0].payload.outcome;
       if (outcome === 'failure') {
         expect(getTrips(sim.state)).toHaveLength(0);

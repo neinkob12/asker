@@ -1,6 +1,7 @@
-// Konfrontationen und Minispiele (Auftrag 44, Teil 0): starten, warten, Folgen je Art mit festen Scores, Rechte Hand,
-// timeout, encounters.auto und Migration. Die Arten außer dem Tresor sind in Teil 0 noch nicht scharf; die Tests
-// schalten sie für sich ein (MINIGAME_KINDS ist reine Daten) und danach wieder aus.
+// Konfrontationen und Minispiele (Auftrag 44): starten, warten, Folgen je Art mit festen Scores, Rechte Hand, timeout,
+// encounters.auto und Migration. Die Tests schalten die Arten für sich scharf (MINIGAME_KINDS ist reine Daten) und
+// danach zurück. Seit Auftrag 46d gibt es keine Akte: Was nach dem Minispiel noch offen ist, spielen die Leute sofort
+// aus (playOut), ein Minispiel ohne Ausgang (timeout) ebenso.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadSimulation, type Simulation, wallet } from '../../core';
@@ -10,8 +11,10 @@ import { getChallenge, MINIGAME_KINDS, MINIGAME_TIMEOUT, type MinigameKind } fro
 import { getHeat } from '../police';
 import { getAllSpots, spotCity } from '../spots';
 import { enlist, generateProfile, getStaffMember } from '../staff';
-import { AGGRESSION_FIGHT, BRAWL_AFTER_AGGRESSION, DECISION_TIMEOUT } from './config';
+import { AGGRESSION_FIGHT, DECISION_TIMEOUT } from './config';
+import { act as engineAct } from './engine';
 import {
+  applyBrawl,
   ENCOUNTER_KINDS,
   type Encounter,
   type EncounterRequest,
@@ -126,39 +129,41 @@ describe('Konfrontationen mit Minispielen: Daten', () => {
 });
 
 describe('Konfrontationen mit Minispielen: starten und warten', () => {
-  it('ohne den Spieler oder mit einer Art, die nicht scharf ist, bleibt alles wie bisher', () => {
+  it('ohne den Spieler oder mit einer Art, die nicht scharf ist, ist alles sofort entschieden', () => {
     const sim = createTestGame();
     const remote = begin(sim, { ...chaseRequest, playerPresent: false, staffIds: [hireRunner(sim)] });
     expect(remote.minigame ?? null).toBeNull();
+    expect(remote.phase).toBe('done');
     MINIGAME_KINDS.chase.ready = false;
     const off = begin(sim, { ...chaseRequest, origin: { module: 'police', ref: 'check2' } });
     expect(off.minigame ?? null).toBeNull();
-    expect(off.phase).toBe('rounds');
+    expect(off.phase).toBe('done');
   });
 
-  it('Polizeiflucht mit dir: die Verfolgungsjagd startet sofort, Runden, Schutz und Spezialzüge warten', () => {
+  it('Polizeiflucht mit dir: die Verfolgungsjagd startet sofort, die Konfrontation wartet auf ihren Ausgang', () => {
     const sim = createTestGame();
     const events = recordEvents(sim);
     const e = begin(sim, chaseRequest);
+    expect(e.phase).toBe('rounds');
     expect(e.minigame).toMatchObject({ kind: 'chase', trigger: 'start' });
     const c = getChallenge(sim.state, challengeOf(e));
     expect(c).toMatchObject({ kind: 'chase', origin: { module: 'encounters', ref: String(e.id) }, cityId: 'koeln' });
     expect(c?.params).toMatchObject({ encounterKind: 'policeChase', setting: 'street', clock: e.clock });
     expect(c?.params.start).toHaveLength(2);
     expect(eventsOfType(events, 'minigame.started')).toHaveLength(1);
-    const act = sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'run' } });
-    expect(act).toEqual({ ok: false, reason: 'Erst das Minispiel.' });
-    expect(sim.dispatch({ type: 'encounters.protect', payload: { encounterId: e.id, stake: 'goods' } }).ok).toBe(false);
+    expect(eventsOfType(events, 'encounter.resolved')).toHaveLength(0);
+    // Die Runde läuft nicht, solange das Minispiel offen ist.
+    expect(engineAct(sim.ctx('police'), e.id, 'run')).toEqual({ ok: false, reason: 'Erst das Minispiel.' });
   });
 
-  it('timeout beim Start: die Runden laufen wie bisher weiter', () => {
+  it('timeout beim Start: die Leute spielen sofort aus (Auftrag 46d)', () => {
     const sim = createTestGame();
     const e = begin(sim, chaseRequest);
     sim.advance(MINIGAME_TIMEOUT);
     const after = get(sim, e.id);
     expect(after.minigame).toBeNull();
-    expect(after.phase).toBe('rounds');
-    expect(sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'run' } }).ok).toBe(true);
+    expect(after.phase).toBe('done');
+    expect(after.round).toBeGreaterThan(0);
   });
 
   it('encounters.auto löst ein offenes Minispiel als timeout auf und würfelt wie bisher aus', () => {
@@ -237,7 +242,7 @@ describe('applyTraffic', () => {
     expect(get(sim, e.id)).toMatchObject({ phase: 'done', outcome: 'retreat' });
   });
 
-  it('flee ohne scharfe Verfolgungsjagd: die Runde „Gas geben“ wie bisher', () => {
+  it('flee ohne scharfe Verfolgungsjagd: die Runde „Gas geben“ wie bisher, danach entschieden', () => {
     const sim = createTestGame();
     MINIGAME_KINDS.chase.ready = false;
     const e = begin(sim, trafficRequest);
@@ -245,24 +250,20 @@ describe('applyTraffic', () => {
     const after = get(sim, e.id);
     expect(after.minigame).toBeNull();
     expect(after.log.some((l) => l.actionId === 'speedOff')).toBe(true);
+    expect(after.phase).toBe('done');
   });
 
-  it('„Gas geben“ in der Runde startet die Verfolgungsjagd; timeout spielt die Runde mit dem alten Würfel', () => {
+  it('timeout der Verkehrskontrolle: die Leute spielen sofort aus; nur „Gas geben“ wartet wieder auf dich', () => {
     const sim = createTestGame();
     const e = begin(sim, trafficRequest);
-    // Die Frist der Konfrontation soll hier nicht dazwischenkommen.
     get(sim, e.id).deadline += 1000;
     sim.advance(MINIGAME_TIMEOUT);
-    expect(get(sim, e.id).minigame).toBeNull();
-    expect(sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'speedOff' } }).ok).toBe(
-      true,
-    );
-    expect(get(sim, e.id).minigame).toMatchObject({ kind: 'chase', trigger: 'action', actionId: 'speedOff' });
-    expect(get(sim, e.id).round).toBe(0);
-    sim.advance(MINIGAME_TIMEOUT);
     const after = get(sim, e.id);
-    expect(after.log.some((l) => l.actionId === 'speedOff')).toBe(true);
-    expect(after.round).toBe(1);
+    const waiting = after.phase === 'rounds';
+    if (waiting) expect(after.minigame).toMatchObject({ kind: 'chase', trigger: 'action', actionId: 'speedOff' });
+    expect(sim.dispatch({ type: 'encounters.auto', payload: { encounterId: e.id } }).ok).toBe(waiting);
+    expect(get(sim, e.id).phase).toBe('done');
+    expect(sim.state.modules.minigames.active).toHaveLength(0);
   });
 });
 
@@ -294,21 +295,22 @@ describe('applyTraffic (Teil 4)', () => {
     expect(getHeat(sim.state, 'ehrenfeld')).toBeGreaterThan(heat);
   });
 
-  it('die Rechte Hand redet mit ihrem Score; timeout lässt die Runden laufen wie bisher', () => {
+  it('die Rechte Hand redet mit ihrem Score; timeout entscheidet sofort', () => {
     const sim = createTestGame();
     rightHand(sim);
     const e = begin(sim, trafficRequest);
     expect(sim.dispatch({ type: 'minigames.delegate', payload: { id: challengeOf(e) } }).ok).toBe(true);
     const after = get(sim, e.id);
     expect(after.phase).toBe('done');
-    expect(after.log.at(-1)?.text).toContain('Rechte Hand');
+    expect(after.log.some((l) => l.text.includes('Rechte Hand'))).toBe(true);
 
     const waiting = begin(sim, { ...trafficRequest, origin: { module: 'test', ref: 'trip:8' } });
     get(sim, waiting.id).deadline += 1000;
     sim.advance(MINIGAME_TIMEOUT);
     const timedOut = get(sim, waiting.id);
-    expect(timedOut.minigame).toBeNull();
-    expect(timedOut).toMatchObject({ phase: 'rounds', round: 0 });
+    // Entschieden, oder die Leute sind in die Verfolgungsjagd gefahren (die wartet wieder auf dich).
+    if (timedOut.minigame) expect(timedOut.minigame.kind).toBe('chase');
+    else expect(timedOut.phase).toBe('done');
   });
 });
 
@@ -366,37 +368,32 @@ describe('applyPapers (Teil 8)', () => {
     expect(after.log.at(-1)?.text).toContain('Spedition');
   });
 
-  it('die Rechte Hand mit ihrem Score; timeout lässt die Runden laufen wie bisher', () => {
+  it('die Rechte Hand mit ihrem Score; timeout entscheidet sofort', () => {
     const sim = createTestGame();
     rightHand(sim);
     const e = begin(sim, customsRequest);
     expect(sim.dispatch({ type: 'minigames.delegate', payload: { id: challengeOf(e) } }).ok).toBe(true);
     const after = get(sim, e.id);
     expect(after.phase).toBe('done');
-    expect(after.log.at(-1)?.text).toContain('Rechte Hand');
+    expect(after.log.some((l) => l.text.includes('Rechte Hand'))).toBe(true);
 
     const waiting = begin(sim, { ...customsRequest, origin: { module: 'test', ref: 'trip:9' } });
     get(sim, waiting.id).deadline += 1000;
     sim.advance(MINIGAME_TIMEOUT);
     const timedOut = get(sim, waiting.id);
     expect(timedOut.minigame).toBeNull();
-    expect(timedOut).toMatchObject({ phase: 'rounds', round: 0 });
+    expect(timedOut.phase).toBe('done');
   });
 });
 
 describe('applyBrawl', () => {
-  it('Zuschlagen startet den Straßenkampf statt der Runde (mit Schutz)', () => {
+  it('Überfall mit dir vor Ort: der Straßenkampf startet sofort, mit dem Schutz der Runde (Auftrag 46d)', () => {
     const sim = createTestGame();
     const e = raid(sim);
-    const act = sim.dispatch({
-      type: 'encounters.act',
-      payload: { encounterId: e.id, actionId: 'fight', protect: 'cash' },
-    });
-    expect(act.ok).toBe(true);
-    const after = get(sim, e.id);
-    expect(after.minigame).toMatchObject({ kind: 'brawl', trigger: 'action', actionId: 'fight', protect: 'cash' });
-    expect(after.round).toBe(0);
-    const c = getChallenge(sim.state, challengeOf(after));
+    expect(e.minigame).toMatchObject({ kind: 'brawl', trigger: 'brawl', protect: e.protect });
+    expect(e.round).toBe(0);
+    expect(e.phase).toBe('rounds');
+    const c = getChallenge(sim.state, challengeOf(e));
     expect(c?.params).toMatchObject({ opponent: { count: 3 } });
     expect(c?.params.crew).toHaveLength(1);
   });
@@ -404,7 +401,6 @@ describe('applyBrawl', () => {
   it('alle Gegner am Boden: Erfolg (beaten)', () => {
     const sim = createTestGame();
     const e = raid(sim);
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'fight' } });
     finish(sim, challengeOf(get(sim, e.id)), 1, ['down:2', 'fled:1']);
     const after = get(sim, e.id);
     expect(after).toMatchObject({ phase: 'done', outcome: 'success' });
@@ -415,7 +411,6 @@ describe('applyBrawl', () => {
   it('ko: Niederlage, du bist verletzt, stirbst aber nie', () => {
     const sim = createTestGame();
     const e = raid(sim);
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'fight' } });
     finish(sim, challengeOf(get(sim, e.id)), 0, ['ko', 'playerHurt']);
     const after = get(sim, e.id);
     expect(after).toMatchObject({ phase: 'done', outcome: 'failure', playerKilled: false });
@@ -424,57 +419,61 @@ describe('applyBrawl', () => {
     expect(sim.state.outcome.gameOver).toBeNull();
   });
 
-  it('sonst: Aggression auf 60, Entschlossenheit −15 je Gegner am Boden, eigene Verletzte, die Runden laufen weiter', () => {
+  it('sonst: der Kampf zählt als Runde, eigene Verletzte bleiben, die Leute spielen den Rest sofort aus (46d)', () => {
     const sim = createTestGame();
     const e = raid(sim, 4);
     const staffId = e.participants.find((p) => !p.isPlayer)?.id ?? '';
     get(sim, e.id).resolve = 90;
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'fight' } });
-    const mid = get(sim, e.id);
-    const resolve = mid.resolve;
-    const clock = mid.clock;
-    finish(sim, challengeOf(mid), 0.4, ['down:1', `hurt:${staffId}`]);
+    finish(sim, challengeOf(get(sim, e.id)), 0.4, ['down:1', `hurt:${staffId}`]);
     const after = get(sim, e.id);
-    expect(after.phase).toBe('rounds');
-    expect(after.minigame).toBeNull();
-    expect(after.aggression).toBeLessThanOrEqual(BRAWL_AFTER_AGGRESSION);
-    expect(after.resolve).toBe(resolve - 15);
-    expect(after.round).toBe(1);
-    expect(after.clock).toBe(clock - 1);
-    expect(after.participants.find((p) => p.id === staffId)?.condition).toBe('injured');
-    expect(sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'hold' } }).ok).toBe(true);
+    // Entschieden, oder die Leute schlagen wieder zu (ein neuer Straßenkampf wartet auf dich).
+    if (after.minigame) expect(after.minigame).toMatchObject({ kind: 'brawl' });
+    else expect(after.phase).toBe('done');
+    expect(after.log[0]).toMatchObject({ round: 1, actionId: 'minigame:brawl' });
+    expect(after.round).toBeGreaterThanOrEqual(1);
+    expect(after.participants.find((p) => p.id === staffId)?.condition).not.toBe('ok');
+    expect(after.opponent.down).toBeGreaterThanOrEqual(1);
   });
 
   it('kippt die Aggression in einer Runde in eine Schlägerei, kommt vor der nächsten Runde der Kampf', () => {
     const sim = createTestGame();
     const e = raid(sim, 4);
+    // Den Kampf vom Start wegnehmen, damit eine Runde von Hand läuft.
+    const open = challengeOf(e);
+    get(sim, e.id).minigame = null;
+    sim.state.modules.minigames.active = sim.state.modules.minigames.active.filter((c) => c.id !== open);
     const live = get(sim, e.id);
     live.aggression = AGGRESSION_FIGHT + 20;
     live.resolve = 95;
     live.clock = 6;
     expect(live.brawl).toBe(false);
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'hold' } });
+    expect(engineAct(sim.ctx('gangs'), e.id, 'hold').ok).toBe(true);
     const after = get(sim, e.id);
     expect(after).toMatchObject({ phase: 'rounds', brawl: true });
     expect(after.minigame).toMatchObject({ kind: 'brawl', trigger: 'brawl' });
-    // timeout: weiter wie bisher (keine Runde dazu)
-    const round = after.round;
+    // timeout: die Leute spielen den Rest aus.
     sim.advance(MINIGAME_TIMEOUT);
     expect(get(sim, e.id).minigame).toBeNull();
-    expect(get(sim, e.id).round).toBe(round);
+    expect(get(sim, e.id).phase).toBe('done');
   });
 
   it('grabbed: einer ist mit der Beute weg, der Einsatz der Absicht nimmt Schaden (geschützt nur zum Teil)', () => {
+    // Die Folge direkt anwenden: So ist der Schaden am Einsatz zu sehen, bevor die Leute weiterspielen.
     const damageOf = (protect: 'goods' | 'cash') => {
       const sim = createTestGame();
       const e = raid(sim, 4);
-      get(sim, e.id).intent = 'grabGoods';
-      get(sim, e.id).resolve = 95;
-      sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'fight', protect } });
-      finish(sim, challengeOf(get(sim, e.id)), 0.3, ['down:1', 'fled:1', 'grabbed']);
-      const after = get(sim, e.id);
-      expect(after.log.at(-1)?.text).toContain('Ware davon');
-      return after.stakes.find((s) => s.id === 'goods')?.damage ?? -1;
+      const live = get(sim, e.id);
+      const open = live.minigame;
+      if (!open) throw new Error('kein Kampf');
+      live.minigame = null;
+      live.intent = 'grabGoods';
+      live.resolve = 95;
+      live.protect = protect;
+      const kind = ENCOUNTER_KINDS.raidDefense;
+      const result = { score: 0.3, won: false, picks: ['down:1', 'fled:1', 'grabbed'], by: 'player' as const };
+      applyBrawl(sim.ctx('gangs'), live, kind, { ...open, protect }, result);
+      expect(live.log.at(-1)?.text).toContain('Ware davon');
+      return live.stakes.find((s) => s.id === 'goods')?.damage ?? -1;
     };
     const open = damageOf('cash');
     const shielded = damageOf('goods');
@@ -488,7 +487,6 @@ describe('applyBrawl', () => {
     const e = raid(sim, 4);
     get(sim, e.id).resolve = 95;
     get(sim, e.id).clock = 5;
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'fight' } });
     finish(sim, challengeOf(get(sim, e.id)), 0.3, ['down:1', 'sirens']);
     const after = get(sim, e.id);
     expect(after.phase).toBe('done');
@@ -500,12 +498,11 @@ describe('applyBrawl', () => {
     const sim = createTestGame();
     rightHand(sim);
     const e = raid(sim, 2);
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId: e.id, actionId: 'fight' } });
     const id = challengeOf(get(sim, e.id));
     expect(sim.dispatch({ type: 'minigames.delegate', payload: { id } }).ok).toBe(true);
     const after = get(sim, e.id);
     expect(after.minigame).toBeNull();
-    expect(after.log.at(-1)?.actionId).toBe('minigame:brawl');
+    expect(after.log[0]?.actionId).toBe('minigame:brawl');
     expect(getStaffMember(sim.state, after.participants[1]?.id ?? '')).toBeDefined();
   });
 });
@@ -518,7 +515,7 @@ describe('Konfrontationen mit Minispielen: Spielstand', () => {
     for (const x of state.modules.encounters.active) delete x.minigame;
     state.moduleVersions.encounters = 4;
     const loaded = loadSimulation(state, sim.modules);
-    expect(loaded.state.moduleVersions.encounters).toBe(5);
+    expect(loaded.state.moduleVersions.encounters).toBe(6);
     expect(get(loaded, e.id).minigame).toBeNull();
     expect(migrateV4({ active: [], history: [] })).toEqual({ active: [], history: [] });
   });

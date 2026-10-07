@@ -1,23 +1,13 @@
-// Messung der Konfrontationen (Auftrag 24 und 35): 300 Überfälle, nur die Leute vor Ort, ausgewürfelt mit der
-// Strategie der Leute (wie beim Bot und ohne Boss), dazu ein Spieler, der zufällig tippt, und einer, der gut spielt.
-// Läuft mit `npm run balance` (BALANCE=1), sonst übersprungen.
+// Messung der Konfrontationen (Auftrag 24, 35 und 46d): 300 Überfälle, ein Läufer vor Ort, sofort entschieden mit der
+// klugen Strategie der Leute (so, wie seit Auftrag 46d jede Konfrontation läuft). Läuft mit `npm run balance`
+// (BALANCE=1), sonst übersprungen.
 
 import { describe, it } from 'vitest';
 import type { Simulation } from '../core';
 import { createTestGame } from '../core/testing';
-import {
-  autoResolveEncounter,
-  availableActions,
-  chooseAuto,
-  chooseMove,
-  type Encounter,
-  getEncounter,
-  startEncounter,
-} from '../modules/encounters';
+import { type Encounter, getEncounter, startEncounter } from '../modules/encounters';
 
 const RUNS = 300;
-
-type Player = 'auto' | 'random' | 'good';
 
 interface Tally {
   success: number;
@@ -26,13 +16,11 @@ interface Tally {
   hurt: number;
 }
 
-function raid(seed: number, player: Player): Encounter | undefined {
+function raid(seed: number): Encounter | undefined {
   const sim: Simulation = createTestGame({ seed });
   const ids: string[] = [];
-  for (let i = 0; i < 1; i++) {
-    const r = sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'ebertplatz' } });
-    if (r.ok) ids.push((r.data as { staffId: string }).staffId);
-  }
+  const r = sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'ebertplatz' } });
+  if (r.ok) ids.push((r.data as { staffId: string }).staffId);
   const ctx = sim.ctx('gangs');
   const { encounterId } = startEncounter(ctx, {
     kind: 'raidDefense',
@@ -41,42 +29,13 @@ function raid(seed: number, player: Player): Encounter | undefined {
     staffIds: ids,
     opponent: { factionId: 'nord', label: 'Die Angreifer', strength: 50, count: ctx.randomInt(2, 4) },
   });
-  if (player === 'auto') autoResolveEncounter(ctx, encounterId);
-  // Eigener Zufall für den Spieler, damit er die Würfel der Simulation nicht verschiebt.
-  let s = seed * 9301 + 49297;
-  const rnd = () => {
-    s = (s * 9301 + 49297) % 233280;
-    return s / 233280;
-  };
-  for (let i = 0; i < 30; i++) {
-    const e = getEncounter(sim.state, encounterId);
-    if (e?.phase !== 'rounds') break;
-    const options = availableActions(e).filter((a) => a !== 'bribe');
-    if (player === 'random') {
-      const actionId = options[Math.floor(rnd() * options.length)];
-      const protect = e.stakes[Math.floor(rnd() * e.stakes.length)]?.id;
-      sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId, ...(protect ? { protect } : {}) } });
-    } else {
-      const move = chooseMove(e, true);
-      if (move) {
-        sim.dispatch({ type: 'encounters.special', payload: { encounterId, participantId: move } });
-        continue;
-      }
-      const choice = chooseAuto(sim.state, e, true);
-      if (!choice) break;
-      sim.dispatch({
-        type: 'encounters.act',
-        payload: { encounterId, actionId: choice.actionId, ...(choice.protect ? { protect: choice.protect } : {}) },
-      });
-    }
-  }
   return getEncounter(sim.state, encounterId);
 }
 
-function measure(player: Player): Tally {
+function measure(): Tally {
   const tally: Tally = { success: 0, retreat: 0, failure: 0, hurt: 0 };
   for (let seed = 1; seed <= RUNS; seed++) {
-    const e = raid(seed, player);
+    const e = raid(seed);
     if (!e?.outcome) continue;
     tally[e.outcome] += 1;
     if (e.participants.some((p) => p.condition !== 'ok')) tally.hurt += 1;
@@ -85,9 +44,7 @@ function measure(player: Player): Tally {
 }
 
 describe.skipIf(!process.env.BALANCE)('Konfrontationen messen', () => {
-  it('300 Überfälle: ausgewürfelt, zufällig getippt, gut gespielt', () => {
-    for (const player of ['auto', 'random', 'good'] as const) {
-      console.log(`Überfälle (${RUNS}, ein Läufer vor Ort, ${player}):`, measure(player));
-    }
+  it('300 Überfälle, sofort entschieden', () => {
+    console.log(`Überfälle (${RUNS}, ein Läufer vor Ort, sofort entschieden):`, measure());
   });
 });
