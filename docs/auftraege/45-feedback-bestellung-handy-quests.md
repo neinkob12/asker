@@ -52,8 +52,32 @@ parallel in einer zweiten Arbeitskopie, danach zusammengeführt.
 
 ## C. Handy Schritt für Schritt
 
-(siehe unten, Stand nach dem Zusammenführen)
+- [x] C1 Ein neues Spiel zeigt im Handy erst nur Nachrichten und Einstellungen. Jede weitere App kommt mit der Quest,
+  die sie braucht (`PHONE_APP_STEPS` in `quests/config.ts`): Lieferanten mit „Bestell Ware“, Kasse mit „1.000 €
+  Umsatz“, Personal mit „Läufer“, Reviere mit „Neuer Spot“, Geldwäsche, Lager, Gangs mit „Konfrontation“. Die Apps
+  lesen `phoneAppLocked(state, appId)` in `hiddenWhen`; gesperrt ist nur der Startbildschirm (mit Suche und
+  Tastenkürzeln), Verweise aus Quests, HUD und Chats öffnen die App trotzdem.
+- [x] C2 Peter sagt in seiner Nachricht, welche App neu ist; ein Banner „Neu im Handy: …“ öffnet sie. Solange Apps
+  fehlen, steht auf dem Startbildschirm „Peters Quest“ mit „Noch n Apps kommen mit den nächsten Quests dazu“.
+- [x] C3 Nur in neuen Spielen und nur in Köln (`PHONE_STEPS_CITIES`), vor dem Verkauf. Alte Spielstände behalten alle
+  Apps (Migration `quests` 9). Abschaltbar in Einstellungen › Einstieg („Handy Schritt für Schritt“, Befehl
+  `quests.setPhoneSteps`). Das Intro sagt, dass die Apps nach und nach kommen.
 
 ## D. Quests im Vordergrund
 
-(siehe unten, Stand nach dem Zusammenführen)
+- [x] D1 Jede neue Quest kommt als goldenes Banner „Neue Quest: …“ von Peter mit Ton; ein Tipp öffnet seinen Chat
+  (`ui.toast` kann dafür `title`, `color`, `appId`/`params` und `duration`).
+- [x] D2 Die Quest-Karte im HUD klappt für jede neue Quest wieder auf und leuchtet kurz. In den ersten zwei Kapiteln ist
+  sie golden umrandet und hat den Knopf „Zeig mir wie“, am Handy-Bildschirm bleibt dann auch der Hinweis sichtbar.
+- [x] D3 Die Quest „Stell jemanden ein“ führt jetzt über das Bewerbungsgespräch (Minispiel): „Personal-App › Bewerber
+  antippen › Gespräch führen, dann einstellen.“ ID, Zähler und Platz in der Liste bleiben (der Index steht im
+  Spielstand).
+- Nicht gebaut: Peters erste Begrüßung als Anruf (der Anruf übernähme direkt nach dem Start-Dialog das Handy und lüde
+  gleich das Sprachmodell), ein „Neu“-Punkt an den Kacheln (passt nicht zum Zähler am Symbol).
+
+## Offen
+
+- Safari auf dem iPad selbst ließ sich hier nicht testen. Kommen dort weiterhin keine Minispiele, obwohl man am Spot
+  steht, braucht es einen Blick in die Browser-Konsole des iPad.
+- `npm run saves:build` legt die Test-Spielstände neu an; dann haben auch sie „Handy Schritt für Schritt“ an (bis
+  dahin aus, weil sie vor Version 9 entstanden sind).
