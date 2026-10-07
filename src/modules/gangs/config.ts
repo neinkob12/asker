@@ -381,3 +381,12 @@ export const SAFE_SHARE = 0.1;
 export const SAFE_MIN = 200;
 /** Nicht geknackt: Der Alarm geht los, so viel Heat im Veedel. */
 export const SAFE_ALARM_HEAT = 8;
+
+// --- Bude durchsuchen (Auftrag 44, search.ts) ------------------------------------------------------------------
+
+/** Neben dem offenen Rest der Schulden liegt in der Bude noch seine Reserve: dieser Anteil vom Einsatz obendrauf. */
+export const SEARCH_BONUS = 0.3;
+/** Darunter lohnt die Suche nicht (kein Minispiel). */
+export const SEARCH_MIN = 50;
+/** Nicht geschafft und die Nachbarn gehört (picks 'noise'): so viel Heat im Veedel. */
+export const SEARCH_NOISE_HEAT = 6;
