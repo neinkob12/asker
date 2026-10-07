@@ -41,11 +41,16 @@ export function HudMeter(props: { label: string; value: number; color: MeterColo
 }
 
 /** Stempel „Geschafft“ / „Nicht geschafft“ (oder ein eigenes Wort), knallt beim Erscheinen auf. */
-export function ResultStamp(props: { won: boolean; label?: string }) {
+/** Farbe des Stempels: geschafft (grün), nicht geschafft (rot), weder noch (gelb, z.B. „Gas!“, „Bestochen“). */
+export type StampTone = 'won' | 'lost' | 'warn';
+
+export function ResultStamp(props: { won: boolean; label?: string; tone?: StampTone; icon?: string }) {
   const text = props.label ?? (props.won ? 'Geschafft' : 'Nicht geschafft');
+  const tone = props.tone ?? (props.won ? 'won' : 'lost');
+  const icon = props.icon ?? (tone === 'won' ? 'checkCircle' : tone === 'warn' ? 'alert' : 'xCircle');
   return (
-    <span class={`mg-stamp ${props.won ? 'is-won' : 'is-lost'}`} role="img" aria-label={`Ergebnis: ${text}`}>
-      <Icon name={props.won ? 'checkCircle' : 'xCircle'} class="mg-stamp__icon" />
+    <span class={`mg-stamp is-${tone}`} role="img" aria-label={`Ergebnis: ${text}`}>
+      <Icon name={icon} class="mg-stamp__icon" />
       {text}
     </span>
   );

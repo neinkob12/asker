@@ -8,10 +8,19 @@
 import { memo } from 'preact/compat';
 import type { FaceShape, Look } from '../../core';
 
-const SKIN = ['#efcdb0', '#e0b18f', '#c8946c', '#a5704b', '#815034', '#5a3623'];
-const HAIR = ['#1a1514', '#35241a', '#5f3f28', '#c6a35c', '#9d4327', '#8f8f8f', '#e1ded6'];
-/** Passend zu TOP_COLOR_NAMES im Kern: Dunkelblau, Schwarz, Grau, Oliv, Weinrot, Senfgelb, Weiß, Petrol. */
-const TOP = ['#22304c', '#1b1b20', '#565c66', '#4f5a3e', '#672632', '#bf9834', '#e4e0d8', '#1d575c'];
+/**
+ * Farben des Look-Systems (Inhalt, keine Bedeutungsfarben), auch für Figuren im Canvas (z.B. Straßenkampf):
+ * Hauttöne (Look.skin), Haarfarben (Look.hairColor) und Oberteile (Look.topColor, passend zu TOP_COLOR_NAMES im Kern:
+ * Dunkelblau, Schwarz, Grau, Oliv, Weinrot, Senfgelb, Weiß, Petrol).
+ */
+export const LOOK_COLORS = {
+  skin: ['#efcdb0', '#e0b18f', '#c8946c', '#a5704b', '#815034', '#5a3623'],
+  hair: ['#1a1514', '#35241a', '#5f3f28', '#c6a35c', '#9d4327', '#8f8f8f', '#e1ded6'],
+  top: ['#22304c', '#1b1b20', '#565c66', '#4f5a3e', '#672632', '#bf9834', '#e4e0d8', '#1d575c'],
+} as const;
+const SKIN = LOOK_COLORS.skin;
+const HAIR = LOOK_COLORS.hair;
+const TOP = LOOK_COLORS.top;
 const INK = '#1c1513';
 const GOLD = '#e0b24a';
 const GOLD_DARK = '#a77d26';
@@ -749,9 +758,42 @@ function HatBack(props: { look: Look; top: string }) {
   }
 }
 
+/** Schirmmützen im Dienst (nie gewürfelt): Polizei dunkelblau mit Stern, Zoll grün mit Emblem. */
+const SERVICE_CAP = {
+  police: { cap: '#1f2a44', band: '#141b2e', badge: '#d9b24a' },
+  customs: { cap: '#2c4a3a', band: '#1b2f25', badge: '#d9b24a' },
+} as const;
+const VISOR = '#08090c';
+
+function ServiceCap(props: { kind: keyof typeof SERVICE_CAP }) {
+  const c = SERVICE_CAP[props.kind];
+  return (
+    <g>
+      <path d="M16.2 14.6 Q14.6 7.4 32 6.2 Q49.4 7.4 47.8 14.6 Q32 12.4 16.2 14.6 Z" fill={c.cap} />
+      <path d="M19 12.6 Q32 10.2 45 12.6 L45.2 17.6 Q32 15.6 18.8 17.6 Z" fill={c.band} />
+      {props.kind === 'police' ? (
+        <>
+          <circle cx="32" cy="13.9" r="2.3" fill={c.badge} />
+          <circle cx="32" cy="13.9" r="1.1" fill={c.band} />
+        </>
+      ) : (
+        <>
+          <circle cx="32" cy="13.9" r="2.6" fill="none" stroke={c.badge} stroke-width="0.9" />
+          <circle cx="32" cy="13.9" r="1" fill={c.badge} />
+        </>
+      )}
+      <path d="M19.4 17.2 Q32 14.8 44.6 17.2 Q40 21.4 32 21.2 Q24 21.4 19.4 17.2 Z" fill={VISOR} />
+      <path d="M22 18 Q32 16.4 42 18" stroke="rgba(255,255,255,0.18)" stroke-width="0.6" fill="none" />
+    </g>
+  );
+}
+
 function Hat(props: { look: Look; top: string; skin: string }) {
   const { look, top } = props;
   switch (look.hat) {
+    case 'police':
+    case 'customs':
+      return <ServiceCap kind={look.hat} />;
     case 'cap': {
       const cap = tint(top, 1.12);
       return (

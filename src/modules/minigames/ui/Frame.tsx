@@ -10,6 +10,7 @@ import { Disclosure, haptic, Icon, useGame, useUi } from '../../../ui';
 import { type Challenge, delegateInfo, getChallenge, MINIGAME_KINDS, winAt } from '../index';
 import { restoreDialog, setDevFinish } from './flow';
 import { HudBar, ResultStamp } from './kit/hud';
+import { useMapTakeover } from './kit/mapTakeover';
 import { MINIGAME_SOUNDS, playSound } from './kit/sounds';
 import { useFrameLoop } from './kit/useFrameLoop';
 import { minigameView } from './registry';
@@ -65,7 +66,9 @@ function Intro(props: {
         {delegate && (
           <button type="button" class="mg-button mg-button--big" onClick={props.onDelegate}>
             <Icon name="crew" />
-            {delegate.name.split(' ')[0]} übernimmt ({formatPercent(delegate.chance)})
+            <span class="mg-button__label">
+              {delegate.name.split(' ')[0]} übernimmt ({formatPercent(delegate.chance)})
+            </span>
           </button>
         )}
       </div>
@@ -122,9 +125,10 @@ function Result(props: {
   const text =
     view.resultText?.({ won: outcome.won, score: outcome.score, picks: outcome.picks }, challenge) ??
     (outcome.won ? 'Das hat geklappt.' : 'Das ging schief.');
+  const stamp = view.resultLabel?.({ won: outcome.won, score: outcome.score, picks: outcome.picks }, challenge);
   return (
     <section class={`mg-card mg-result ${outcome.won ? 'is-won' : 'is-lost'}`} aria-live="polite">
-      <ResultStamp won={outcome.won} />
+      <ResultStamp won={outcome.won} {...stamp} />
       <p class="mg-result__text">{text}</p>
       {props.preview && <p class="mg-result__note">Vorschau: Score {outcome.score.toFixed(2)}, nichts wird gezählt.</p>}
       <div class="mg-actions">
@@ -226,6 +230,9 @@ export function MinigameFrame(props: { challengeId: number; preview?: Challenge 
   if (live && live.id !== kept.current?.id) kept.current = live;
   const challenge = kept.current;
   const view = challenge ? minigameView(challenge.kind) : null;
+  // layout 'map': Die Karte gehört dem Minispiel (keine Bedienung, keine Marker, kein HUD), bis der Rahmen zugeht. Das
+  // Spiel startet erst danach (es führt die Kamera ab dem ersten Bild).
+  const mapReady = useMapTakeover(view?.layout === 'map');
   // Fokus in den Rahmen (area 'map' hat keine Fokus-Falle), außer die Einleitung hat ihn schon auf „Los“ gesetzt.
   useEffect(() => {
     if (!root.current?.contains(document.activeElement)) root.current?.focus();
@@ -239,7 +246,7 @@ export function MinigameFrame(props: { challengeId: number; preview?: Challenge 
       aria-labelledby="mg-title"
       tabIndex={-1}
     >
-      {challenge ? (
+      {challenge && !mapReady ? null : challenge ? (
         <Run
           key={`${challenge.id}:${round}`}
           challenge={challenge}

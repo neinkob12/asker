@@ -282,6 +282,16 @@ Bei „Bewegung reduzieren“ gibt es keinen Blitz und kein Feuerwerk. Die Stadt
 Feuerwerk über dem Rhein ab 21 Uhr, Hafengeburtstag mit Schiffen auf der Elbe) zeichnet das Modul `events`
 (`events/ui/map.ts`). Konfetti und Blaulicht-Ringe auf der Karte kommen in einem späteren Auftrag.
 
+## Karte für ein Minispiel (Auftrag 44)
+
+Minispiele auf der Karte (Verfolgungsjagd, `layout: 'map'`) holen sich die Karte mit `activeMap()` und übernehmen sie
+mit `takeOverMap({ hideLayers, restoreDuration })`: keine Bedienung (Ziehen, Zoomen, Drehen, Tastatur), die genannten
+Ebenen aus, alle Marker aus `addHtmlMarker` geparkt (`parkMarkers`: von der Karte genommen, sonst hängt jeder Marker bei
+jedem Kamerabild einen `move`-Listener ab, am Handy mit 4× CPU-Bremse waren das gut 10 ms pro Bild), Klasse
+`is-map-taken` an `<html>` (neue Marker `display: none`, das HUD blendet der Rahmen der Minispiele aus).
+Die zurückgegebene Funktion stellt Bedienung, Ebenen, Kamera und Ränder wieder her. Den Aufruf macht der Rahmen
+(`minigames/ui/kit/mapTakeover.ts`), das Spiel führt danach nur Kamera und eigene Ebene.
+
 ## Marker
 
 Marker im Look „Glas“: Namen auf Glas-Pillen (`--spot-plate`, `--hud-glass-edge`, Barlow), Orte als runde Kachel mit

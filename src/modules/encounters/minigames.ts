@@ -25,7 +25,13 @@ import { getStaffMember } from '../staff';
 import { getVeedel } from '../veedel';
 import { getWeather } from '../weather';
 import { ENCOUNTER_ACTIONS } from './actions';
-import { AGGRESSION_FIGHT, BRAWL_AFTER_AGGRESSION, BRAWL_DOWN_RESOLVE, PROTECT_FACTOR } from './config';
+import {
+  AGGRESSION_FIGHT,
+  BRAWL_AFTER_AGGRESSION,
+  BRAWL_DOWN_RESOLVE,
+  PROTECT_FACTOR,
+  TRAFFIC_NOTED_HEAT,
+} from './config';
 import {
   fillText,
   finish,
@@ -376,9 +382,6 @@ function payBribe(ctx: Ctx, encounter: Encounter): boolean {
   encounter.bribeSpent += cost;
   return true;
 }
-
-/** Verkehrskontrolle durch, aber mit Widersprüchen (picks 'lies:<n>'): Er notiert das Kennzeichen, Heat je Widerspruch. */
-const TRAFFIC_NOTED_HEAT = 3;
 
 /**
  * Verkehrskontrolle. picks 'flee': Gas geben → Verfolgungsjagd (wie die Handlung speedOff; ist sie nicht scharf, die

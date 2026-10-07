@@ -131,14 +131,24 @@ Teil von `fullPowerMissing` bei der Rechten Hand; der Anteil des Statthalters z�
 Liste N (Oberfläche): Dialoge können `dismissable` als Funktion der Angaben haben; Karten-Marker sind kein Tab-Stopp
 (Tastatur über die Suche); `HudPill`-Karten schließen bei Esc und Tipp daneben, nur eine offen; „Boss von <Stadt>“ bei
 der Mehrheit nur in Köln (`majorityMakesBoss`).
-Auftrag 44 (Minispiele, `docs/auftraege/44-minispiele.md`): Modul `minigames` (Arten als Daten in `kinds/<art>.ts`,
-eine Datei pro Art; `startMinigame`, Befehle `minigames.finish { id, score, picks }`, `minigames.delegate`, Ereignisse
-`minigame.started`/`minigame.finished`). **Pflicht**, wenn der Spieler selbst betroffen ist; nur die aktive Rechte Hand
-der Stadt kann übernehmen (Chance aus ihrem Wert, gewürfelt im Kern). Ohne Oberfläche läuft nach `MINIGAME_TIMEOUT` die
-Frist ab (`by: 'timeout'`), dann gilt genau das alte Verhalten. Eine Art startet erst mit `ready: true`. Konfrontationen
-starten Minispiele über `EncounterKind.minigames`, Folgen in `encounters/minigames.ts`. Oberfläche: Rahmen und Baukasten
-in `minigames/ui/` (`registerMinigameView`, `kit/`), Inhalte aus `challenge.seed` mit `createRng`, nie `ctx.random()`.
-Vorschau `?minispiel=<art>`, Bilder `npm run screenshot:minigames -- --kind=<art>`. Fertig: Tresor knacken (`safe`).
+Auftrag 44 (Minispiele, `docs/auftraege/44-minispiele.md`, fertig): Modul `minigames` (Arten als Daten in
+`kinds/<art>.ts`, eine Datei pro Art; `startMinigame`, Befehle `minigames.finish { id, score, picks }`,
+`minigames.delegate`, Ereignisse `minigame.started`/`minigame.finished`, `history` neueste zuerst). **Pflicht**, wenn
+der Spieler selbst betroffen ist; nur die aktive Rechte Hand der Stadt kann übernehmen (Chance aus ihrem Wert, gewürfelt
+im Kern). Ohne Oberfläche läuft nach `MINIGAME_TIMEOUT` die Frist ab (`by: 'timeout'`), dann gilt genau das alte
+Verhalten (Bot löst sofort auf, `npm run balance` unverändert). Eine Art startet erst mit `ready: true`; alle zehn sind
+scharf: Verfolgungsjagd (`chase`), Straßenkampf (`brawl`), Razzia-Countdown (`stash`, `police/stash.ts`),
+Verkehrskontrolle (`traffic`), Zivi oder Kunde (`undercover`, `police/undercover.ts`), Tresor (`safe`, `gangs/safe.ts`),
+Bude (`search`, `gangs/search.ts`), Container (`container`, `trade/packing.ts`), Papiere (`papers`), Bewerbungsgespräch
+(`interview`, `recruiting`). Folgen hängen am `origin` und laufen im startenden Modul; Konfrontationen starten über
+`EncounterKind.minigames`, Folgen in `encounters/minigames.ts`. Oberfläche: Rahmen und Baukasten in `minigames/ui/`
+(`registerMinigameView` mit `resultLabel` für eigene Stempel, `kit/` mit `useFrameLoop`, `goods.ts` …), Inhalte aus
+`challenge.seed` mit `createRng`, nie `ctx.random()`. `layout: 'map'`: Der Rahmen übernimmt die Karte (`takeOverMap`,
+`activeMap()` aus `src/map`). Dauerklänge mit `audio.loop(id)` (`registerSound` mit `kind: 'loop'`). Minispiele aus dem
+Ausgang einer Konfrontation warten, bis die Akte zu ist (`ui/flow.ts`). Polizei- und Zollmütze als `hat: 'police' |
+'customs'`, Figurenfarben `LOOK_COLORS` aus `src/ui`. Vorschau `?minispiel=<art>`, Bilder `npm run screenshot:minigames
+-- --kind=<art>|alle` (auch `--uhr`, `--spielstand`), Dev-Haken `window.koeln.dev.minigame*`. Elftes Minispiel:
+`docs/architektur.md`, Abschnitt "Minispiele".
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

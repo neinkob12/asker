@@ -24,6 +24,15 @@
 .mg-overlay--map {
   background: var(--map-vignette, transparent);
 }
+/* Minispiel auf der Karte (layout 'map', takeOverMap): Die Karte gehört dem Spiel. Kein HUD des Spiels, keine
+   Kartenknöpfe, kein Dock (das Spiel steht ohnehin still); die Marker blendet src/map aus. */
+.is-map-taken .hud,
+.is-map-taken .shell-mapctl,
+.is-map-taken .shell-map-overlays,
+.is-map-taken .map-surveillance,
+.is-map-taken .mobile-dock {
+  visibility: hidden;
+}
 @keyframes mg-fade {
   from {
     opacity: 0;
@@ -168,12 +177,21 @@
   font: 700 15px var(--font-hud);
   cursor: pointer;
 }
+.mg-button__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .mg-button svg {
   width: 20px;
   height: 20px;
 }
 .mg-button--big {
-  flex: 1 1 200px;
+  /* Breite nach dem Inhalt (nie unter 200 px): Passt „Kalle übernimmt (60 %)“ nicht neben „Los“, rutscht der Knopf
+     in die nächste Zeile, statt im Knopf umzubrechen. */
+  flex: 1 1 auto;
+  min-width: min(200px, 100%);
+  max-width: 100%;
+  white-space: nowrap;
   min-height: 56px;
   font-size: 17px;
 }

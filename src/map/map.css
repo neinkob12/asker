@@ -622,3 +622,10 @@ button.map-target:hover .map-target__reticle {
 .maplibregl-marker.map-card:not(.is-tucked) {
   z-index: 2;
 }
+
+/* Die Karte gehört zeitweise einem Minispiel (takeOverMap): keine Marker der Stadt. Die vorhandenen parkt
+   takeOverMap (von der Karte genommen), das hier gilt für Marker, die währenddessen neu dazukommen. Die Quellenangabe
+   bleibt. */
+.is-map-taken .maplibregl-marker {
+  display: none;
+}

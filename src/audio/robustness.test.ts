@@ -223,47 +223,47 @@ describe('Geräusch-Schleifen', () => {
   });
 });
 
-describe('Kontext-Zustand', () => {
-  /** Ein AudioContext, dessen Zustand der Test steuert. */
-  function fakeContext(initial: AudioContextState) {
-    const listeners: (() => void)[] = [];
-    const g = () => ({
-      gain: { value: 0, setValueAtTime: () => {}, setTargetAtTime: () => {}, cancelScheduledValues: () => {} },
+/** Ein AudioContext, dessen Zustand der Test steuert. */
+function fakeContext(initial: AudioContextState) {
+  const listeners: (() => void)[] = [];
+  const g = () => ({
+    gain: { value: 0, setValueAtTime: () => {}, setTargetAtTime: () => {}, cancelScheduledValues: () => {} },
+    connect: (to: unknown) => to,
+    disconnect: () => {},
+  });
+  const ctx = {
+    state: initial,
+    currentTime: 0,
+    destination: {},
+    resumeCalls: 0,
+    createDynamicsCompressor: () => ({ threshold: { value: 0 }, ratio: { value: 0 }, connect: (to: unknown) => to }),
+    createGain: g,
+    createBufferSource: () => ({
       connect: (to: unknown) => to,
+      start: () => {},
+      stop: () => {},
       disconnect: () => {},
-    });
-    const ctx = {
-      state: initial,
-      currentTime: 0,
-      destination: {},
-      resumeCalls: 0,
-      createDynamicsCompressor: () => ({ threshold: { value: 0 }, ratio: { value: 0 }, connect: (to: unknown) => to }),
-      createGain: g,
-      createBufferSource: () => ({
-        connect: (to: unknown) => to,
-        start: () => {},
-        stop: () => {},
-        disconnect: () => {},
-      }),
-      createConvolver: () => ({ connect: (to: unknown) => to, buffer: null }),
-      createBuffer: (_c: number, length: number) => ({ getChannelData: () => new Float32Array(length) }),
-      createDelay: () => ({ delayTime: { value: 0, setValueAtTime: () => {} }, connect: (to: unknown) => to }),
-      createBiquadFilter: () => ({ frequency: { value: 0 }, Q: { value: 0 }, connect: (to: unknown) => to }),
-      sampleRate: 44100,
-      addEventListener: (_type: string, fn: () => void) => listeners.push(fn),
-      resume: () => {
-        ctx.resumeCalls++;
-        return Promise.resolve();
-      },
-      suspend: () => Promise.resolve(),
-      change(state: AudioContextState) {
-        ctx.state = state;
-        for (const fn of listeners) fn();
-      },
-    };
-    return ctx;
-  }
+    }),
+    createConvolver: () => ({ connect: (to: unknown) => to, buffer: null }),
+    createBuffer: (_c: number, length: number) => ({ getChannelData: () => new Float32Array(length) }),
+    createDelay: () => ({ delayTime: { value: 0, setValueAtTime: () => {} }, connect: (to: unknown) => to }),
+    createBiquadFilter: () => ({ frequency: { value: 0 }, Q: { value: 0 }, connect: (to: unknown) => to }),
+    sampleRate: 44100,
+    addEventListener: (_type: string, fn: () => void) => listeners.push(fn),
+    resume: () => {
+      ctx.resumeCalls++;
+      return Promise.resolve();
+    },
+    suspend: () => Promise.resolve(),
+    change(state: AudioContextState) {
+      ctx.state = state;
+      for (const fn of listeners) fn();
+    },
+  };
+  return ctx;
+}
 
+describe('Kontext-Zustand', () => {
   it('meldet "running" erst, wenn der Kontext wirklich läuft, und folgt späteren Änderungen', () => {
     const ctx = fakeContext('suspended');
     const service = new AudioService({
@@ -285,6 +285,47 @@ describe('Kontext-Zustand', () => {
     expect(ctx.resumeCalls).toBe(before + 1);
     ctx.change('running');
     expect(service.status).toBe('running');
+  });
+});
+
+describe('Ton-Schleifen (audio.loop)', () => {
+  it('startet über den Effekt-Bus, führt Werte nach und hält beim Stoppen an', () => {
+    vi.useFakeTimers();
+    const ctx = fakeContext('running');
+    const service = new AudioService({
+      createContext: () => ctx as unknown as AudioContext,
+      createEngine: () => null,
+      speaker: new Speaker(null),
+    });
+    service.init(memoryStorage());
+    service.update({ musicOn: false });
+    // Vor dem Entsperren: ein Griff, der nichts tut.
+    const silent = service.loop('test.motor', { rpm: 1 });
+    silent.set({ rpm: 2 });
+    silent.stop();
+    service.unlock();
+    const calls: string[] = [];
+    service.registerSound('test.motor', {
+      kind: 'loop',
+      start: () => {
+        calls.push('start');
+        return {
+          set: (p) => calls.push(`set:${p.rpm ?? '-'}`),
+          stop: () => calls.push('stop'),
+        };
+      },
+    });
+    // play() spielt keine Schleife.
+    service.play('test.motor');
+    expect(calls).toEqual([]);
+    const loop = service.loop('test.motor', { rpm: 40, volume: 0.5 });
+    loop.set({ rpm: 60 });
+    loop.stop();
+    loop.stop();
+    loop.set({ rpm: 80 });
+    expect(calls).toEqual(['start', 'set:40', 'set:60', 'stop']);
+    // Unbekannte Schleife: stumm, kein Fehler.
+    expect(() => service.loop('test.gibtsnicht').set({ rpm: 1 })).not.toThrow();
   });
 });
 

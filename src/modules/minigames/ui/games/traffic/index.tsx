@@ -36,6 +36,11 @@ registerMinigameView('traffic', {
     clock: 3,
   }),
   previewSituation: 'Kelle raus in Ehrenfeld. Die Streife winkt den Transporter raus. Hinten drin: 400 g Ware.',
+  resultLabel: ({ picks }) => {
+    if (picks.includes('flee')) return { label: 'Gas!', tone: 'warn', icon: 'car' };
+    if (picks.includes('bribe')) return { label: 'Bestochen', tone: 'warn', icon: 'money' };
+    return undefined;
+  },
   resultText: ({ won, picks }, challenge) => {
     if (picks.includes('flee')) return 'Du trittst aufs Gas. Jetzt musst du sie abhängen.';
     if (picks.includes('bribe')) {

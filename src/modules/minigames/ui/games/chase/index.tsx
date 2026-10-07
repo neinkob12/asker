@@ -7,7 +7,6 @@ import { getVeedel } from '../../../../veedel';
 import { registerMinigameView } from '../../registry';
 import { ChaseGame } from './ChaseGame';
 import { registerChaseSounds } from './sounds';
-import './map';
 import './chase.css';
 
 registerChaseSounds();

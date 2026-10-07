@@ -49,7 +49,10 @@ export type HatStyle =
   | 'durag'
   | 'bandana'
   /** Sturmhaube: nur bei Unbekannten aus dem Gangs-Umfeld (ID `gang:…`) oder ausdrücklich gesetzt. */
-  | 'balaclava';
+  | 'balaclava'
+  /** Schirmmütze der Polizei (dunkelblau, Stern) und des Zolls (grün, Emblem): nie gewürfelt, nur ausdrücklich. */
+  | 'police'
+  | 'customs';
 export type TopStyle =
   | 'tee'
   /** Muskelshirt. */
@@ -667,6 +670,8 @@ const HAT_TEXT: Record<HatStyle, string> = {
   durag: 'Durag',
   bandana: 'Bandana',
   balaclava: 'Sturmhaube',
+  police: 'Polizeimütze',
+  customs: 'Dienstmütze vom Zoll',
 };
 
 const TOP_TEXT: Record<TopStyle, string> = {

@@ -6,6 +6,7 @@
 import { useMemo, useRef, useState } from 'preact/hooks';
 import { formatAmount, formatEuro } from '../../../../../core';
 import { audio, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
+import { productColor } from '../../kit/goods';
 import { HudBar, HudMeter, HudTimer } from '../../kit/hud';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { capture } from '../../kit/TouchControls';
@@ -75,20 +76,6 @@ const KEYS = [
 const DRAG_PX = 8;
 /** Abstand der Sirene in Sekunden. */
 const SIREN_EVERY = 1.25;
-
-/** Bedeutungsfarbe einer Ware für die Leiste (wie packageLook in draw.ts). */
-export function productColor(productId: string | null): string {
-  const map: Record<string, string> = {
-    weed: 'money',
-    haze: 'chat',
-    kush: 'people',
-    hash: 'goods',
-    edibles: 'media',
-    oil: 'warn',
-    vape: 'sky',
-  };
-  return productId === null ? 'dirty' : (map[productId] ?? 'goods');
-}
 
 /** params aus police (StashParams) lesen, ohne sich auf ihre Form zu verlassen (alte Stände, Vorschau). */
 export function inputFrom(params: Record<string, unknown>): StashInput {

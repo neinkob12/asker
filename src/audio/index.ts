@@ -17,7 +17,15 @@ import { AudioService } from './service';
 
 export type { PiperEngine, VoiceModelState } from './piper/engine';
 export { formatMegabytes, PIPER_VOICES, type PiperVoice, type PiperVoiceId, piperVoiceFor } from './piper/voices';
-export type { AudioStatus, CustomSound, NowPlaying, PlayOptions } from './service';
+export type {
+  AudioStatus,
+  CustomSound,
+  LoopHandle,
+  LoopParams,
+  LoopVoice,
+  NowPlaying,
+  PlayOptions,
+} from './service';
 export { AudioService, busLevels } from './service';
 export { type AudioSettings, DEFAULT_AUDIO_SETTINGS } from './settings';
 export { type AmbienceId, SOUND_IDS, type SoundId } from './synth';

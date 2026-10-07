@@ -15,6 +15,11 @@ export function setLiveUi(ui: UiApi & { state: UiState }): void {
   live = ui;
 }
 
+/** Die Oberfläche (für Dev-Haken außerhalb von Komponenten); null, bevor das HUD steht. */
+export function liveUi(): (UiApi & { state: UiState }) | null {
+  return live;
+}
+
 /** Vor dem Öffnen eines Minispiels: den offenen Dialog merken (außer es ist schon ein Minispiel). */
 export function rememberDialog(): void {
   const open = live?.state.dialog;
@@ -27,6 +32,26 @@ export function restoreDialog(ui: UiApi): void {
   replaced = null;
   if (!back || live?.state.dialog) return;
   ui.openDialog(back.id as never, back.props as never);
+}
+
+/**
+ * Minispiele, die nach einer Konfrontation kommen (Tresor nach dem Überfall, Bude nach dem Eintreiben), warten, bis die
+ * Akte mit dem Ausgang zu ist: erst „Erfolg, +1.200 €“ lesen, mit „Akte schließen“ dann das Minispiel.
+ */
+const deferred = new Set<number>();
+
+/** Soll das Minispiel warten? Ja, wenn gerade die Akte einer Konfrontation offen ist und es nicht zu ihr gehört. */
+export function shouldDefer(origin: { module: string }): boolean {
+  return live?.state.dialog?.id === 'encounters.encounter' && origin.module !== 'encounters';
+}
+
+export function defer(challengeId: number): void {
+  deferred.add(challengeId);
+}
+
+/** Wartet dieses Minispiel auf das Schließen der Akte? Liefert true genau einmal (dann öffnet es der Aufrufer). */
+export function takeDeferred(challengeId: number): boolean {
+  return deferred.delete(challengeId);
 }
 
 /** Für Screenshots und Playwright (nur Entwicklung): das laufende Spiel sofort gewinnen bzw. verlieren. */

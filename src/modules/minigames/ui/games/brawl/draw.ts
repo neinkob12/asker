@@ -3,20 +3,20 @@
 // Oberteil und Farbe). Statische Teile (Himmel, Häuser, Kulisse) liegen nach jeder Größenänderung fertig in eigenen
 // Leinwänden; pro Bild werden sie nur verschoben zusammengesetzt, dazu die Figuren und die Effekte.
 //
-// Farben der Szene aus den Design-Tokens (mapToken). Haut-, Haar- und Kleidungsfarben sind Inhalt wie in Face.tsx
-// (feste, gedeckte Werte, dieselben Listen), keine Bedeutungsfarben.
+// Farben der Szene aus den Design-Tokens (mapToken). Haut-, Haar- und Kleidungsfarben kommen aus dem Look-System
+// (LOOK_COLORS, dieselben Listen wie Face), keine Bedeutungsfarben.
 
 import { createRng, type Look } from '../../../../../core';
 import { mapToken } from '../../../../../map';
+import { LOOK_COLORS } from '../../../../../ui';
 import { ARENA_W, type AttackId, type Fighter, type FighterState } from './model';
 
 // ---------------------------------------------------------------------------------------------
 // Farben
 
-/** Wie in Face.tsx (Inhalt, keine Bedeutungsfarben): Hauttöne, Haarfarben, Oberteile. */
-const SKIN = ['#efcdb0', '#e0b18f', '#c8946c', '#a5704b', '#815034', '#5a3623'];
-const HAIR = ['#1a1514', '#35241a', '#5f3f28', '#c6a35c', '#9d4327', '#8f8f8f', '#e1ded6'];
-const TOP = ['#22304c', '#1b1b20', '#565c66', '#4f5a3e', '#672632', '#bf9834', '#e4e0d8', '#1d575c'];
+const SKIN = LOOK_COLORS.skin;
+const HAIR = LOOK_COLORS.hair;
+const TOP = LOOK_COLORS.top;
 /** Hosen: Jeans, Schwarz, Grau, Oliv (aus dem Seed). */
 const PANTS = ['#2c3a55', '#18181c', '#3c3f45', '#3b4230', '#26324a'];
 const INK = '#120d0c';

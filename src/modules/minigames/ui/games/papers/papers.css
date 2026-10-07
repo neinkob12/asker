@@ -127,8 +127,7 @@
   aspect-ratio: 1;
   transform: translateX(-50%);
 }
-.papers-officer .ui-face,
-.papers-officer__cap {
+.papers-officer .ui-face {
   position: absolute;
   inset: 0;
   width: 100%;

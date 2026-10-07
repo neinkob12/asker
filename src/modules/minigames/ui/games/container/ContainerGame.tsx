@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { audio, haptic, Icon, prefersReducedMotion } from '../../../../../ui';
+import { productColor } from '../../kit/goods';
 import { HudBar, HudMeter, HudTimer, type MeterColor } from '../../kit/hud';
 import { MINIGAME_SOUNDS, playSound } from '../../kit/sounds';
 import { capture } from '../../kit/TouchControls';
@@ -13,7 +14,6 @@ import { useGameKeys } from '../../kit/useGameKeys';
 import { useStageCanvas } from '../../kit/useStageCanvas';
 import type { MinigameViewProps } from '../../registry';
 import { readPalette } from '../stash/draw';
-import { productColor } from '../stash/StashGame';
 import {
   cellAt,
   drawScene,

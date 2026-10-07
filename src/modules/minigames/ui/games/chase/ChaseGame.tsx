@@ -8,8 +8,8 @@
 
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { daylightAt, mapToken, metersPerPixel } from '../../../../../map';
-import { audio, haptic, Icon, prefersReducedMotion, useGame } from '../../../../../ui';
+import { activeMap, daylightAt, mapToken, metersPerPixel } from '../../../../../map';
+import { audio, haptic, Icon, type LoopHandle, prefersReducedMotion, useGame } from '../../../../../ui';
 import { activeCity, getCity } from '../../../../city';
 import { getWarehouses } from '../../../../goods';
 import { roadGraph } from '../../../../roads';
@@ -20,7 +20,6 @@ import { useFrameLoop } from '../../kit/useFrameLoop';
 import { useGameKeys } from '../../kit/useGameKeys';
 import type { MinigameViewProps } from '../../registry';
 import { ChaseFx, drawChase, type Palette } from './draw';
-import { chaseMap } from './map';
 import {
   ABTAUCHEN_SECONDS,
   type ChaseState,
@@ -41,7 +40,7 @@ import {
 import { chaseNet, toLngLat } from './net';
 import { radioLine } from './radio';
 import { ChaseScene, mountScene, rgbOf } from './scene';
-import { CHASE_SOUNDS, ENGINE_STEP, HELI_CHUNK, SIREN_CHUNK, setEngine, setSirenPitch } from './sounds';
+import { CHASE_SOUNDS } from './sounds';
 
 const KEYS = [
   'ArrowLeft',
@@ -65,8 +64,6 @@ const HUD_RATE = 8;
 /** Zoom der Kamera im Stand (schneller = bis zu eine Stufe weiter weg). */
 const CAMERA_ZOOM = { desktop: 18.9, mobile: 18.5 };
 /** Ebenen der Karte, die während der Jagd stören (Verkehr als Kulisse, Leute an Spots). */
-const HIDDEN_LAYERS = ['roads.traffic', 'spots.people'];
-
 interface Hud {
   left: number;
   sight: boolean;
@@ -210,10 +207,6 @@ export function ChaseGame(props: MinigameViewProps) {
     tooFast: false,
     /** Entwicklung: Rechenzeit der Bildschleife (ohne das Zeichnen der Karte). */
     perf: { frames: 0, total: 0, max: 0 },
-    lastEngine: -1,
-    lastFreq: 40,
-    lastSiren: -1,
-    lastHeli: -1,
     lastVeedel: '',
     lastVeedelCheck: -1,
     radioCount: 0,
@@ -240,19 +233,14 @@ export function ChaseGame(props: MinigameViewProps) {
 
   const lngLatOf = (x: number, y: number) => toLngLat(net, x, y);
 
-  // ------------------------------------------------------------------ Karte übernehmen und zurückgeben
+  // ------------------------------------------------------------------ Kamera und Szene auf der Karte
+  // Die Karte gehört schon dem Minispiel (der Rahmen übernimmt sie für layout 'map': keine Bedienung, keine Marker,
+  // kein HUD, Kulisse aus; danach kommen Kamera und Ränder zurück). Hier nur Szene und Kamera.
   useEffect(() => {
-    const map = chaseMap();
+    const map = activeMap();
     if (!map) return;
     const v = view.current;
     v.map = map;
-    const saved = {
-      center: map.getCenter(),
-      zoom: map.getZoom(),
-      bearing: map.getBearing(),
-      pitch: map.getPitch(),
-      padding: map.getPadding(),
-    };
     // Ränder der Karte (HUD oben, Dock unten am Handy) gelten während der Jagd nicht: Die Mitte ist die Mitte der
     // Fläche, die das Minispiel bedeckt (einmal gemessen, nicht pro Bild).
     const width = map.getContainer().clientWidth;
@@ -261,26 +249,6 @@ export function ChaseGame(props: MinigameViewProps) {
     // Der Wagen sitzt unter der Mitte (hochkant noch tiefer): Man sieht mehr von der Straße voraus.
     const top = Math.round(height * (height > covered ? 0.3 : 0.12));
     v.padding = { top, bottom: 0, left: 0, right: Math.max(0, width - covered) };
-    const handlers = [
-      map.dragPan,
-      map.scrollZoom,
-      map.boxZoom,
-      map.dragRotate,
-      map.keyboard,
-      map.doubleClickZoom,
-      map.touchZoomRotate,
-      map.touchPitch,
-    ];
-    const wasOn = handlers.map((h) => h.isEnabled());
-    for (const h of handlers) h.disable();
-    const hidden: string[] = [];
-    for (const id of HIDDEN_LAYERS) {
-      if (!map.getLayer(id)) continue;
-      if (map.getLayoutProperty(id, 'visibility') === 'none') continue;
-      map.setLayoutProperty(id, 'visibility', 'none');
-      hidden.push(id);
-    }
-    document.documentElement.classList.add('is-chasing');
     const scene = new ChaseScene('minigames.chase', net.mLng);
     v.scene = scene;
     const unmount = mountScene(map, scene);
@@ -325,13 +293,6 @@ export function ChaseGame(props: MinigameViewProps) {
       unmount();
       v.scene = null;
       v.map = null;
-      document.documentElement.classList.remove('is-chasing');
-      for (const id of hidden) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible');
-      handlers.forEach((h, i) => {
-        if (wasOn[i]) h.enable();
-      });
-      map.stop();
-      map.easeTo({ ...saved, duration: reduced ? 0 : 700 });
     };
   }, []);
 
@@ -419,32 +380,36 @@ export function ChaseGame(props: MinigameViewProps) {
   };
 
   // ------------------------------------------------------------------ Ton
+  // Dauerklänge als Ton-Schleifen (audio.loop): beim ersten Bild des Spiels gestartet, beim Ergebnis bzw. Schließen
+  // gestoppt.
+  const loops = useRef<{ engine: LoopHandle; siren: LoopHandle; heli: LoopHandle } | null>(null);
+  const stopLoops = () => {
+    const l = loops.current;
+    loops.current = null;
+    if (!l) return;
+    l.engine.stop();
+    l.siren.stop();
+    l.heli.stop();
+  };
   const sound = () => {
-    const v = view.current;
     const g = game.current;
     const p = g.player;
-    if (v.t - v.lastEngine >= ENGINE_STEP) {
-      // Drehzahl: steigt mit dem Tempo, fällt beim Hochschalten etwas ab (drei Gänge).
-      const gear = p.v < 9 ? 0 : p.v < 18 ? 1 : 2;
-      const freq = (38 + (p.v - [0, 7, 15][gear]) * [5.2, 3.6, 2.8][gear]) * (p.turboOn ? 1.1 : 1);
-      setEngine(v.lastFreq, freq, clamp(p.v / 30 + (p.turboOn ? 0.3 : 0), 0, 1));
-      v.lastFreq = freq;
-      audio.play(CHASE_SOUNDS.engine, { volume: g.end ? 0.35 : 0.7 });
-      v.lastEngine = v.t;
-    }
-    // Martinshorn: lauter je näher, verstummt nach der Flucht.
+    loops.current ??= {
+      engine: audio.loop(CHASE_SOUNDS.engine, { rpm: 40, load: 0, volume: 0.7 }),
+      siren: audio.loop(CHASE_SOUNDS.siren, { pitch: 1, volume: 0 }),
+      heli: audio.loop(CHASE_SOUNDS.heli, { volume: 0 }),
+    };
+    const l = loops.current;
+    // Drehzahl: steigt mit dem Tempo, fällt beim Hochschalten etwas ab (drei Gänge).
+    const gear = p.v < 9 ? 0 : p.v < 18 ? 1 : 2;
+    const rpm = (38 + (p.v - [0, 7, 15][gear]) * [5.2, 3.6, 2.8][gear]) * (p.turboOn ? 1.1 : 1);
+    l.engine.set({ rpm, load: clamp(p.v / 30 + (p.turboOn ? 0.3 : 0), 0, 1), volume: g.end ? 0.35 : 0.7 });
+    // Martinshorn: lauter je näher (Doppler: ganz nah etwas höher), verstummt nach der Flucht.
     const near = g.nearest;
-    if (v.t - v.lastSiren >= SIREN_CHUNK && Number.isFinite(near) && !(g.end && escaped(g))) {
-      const vol = clamp(1 - near / 520, 0.08, 1);
-      setSirenPitch(near < 60 ? 1.03 : 1);
-      audio.play(CHASE_SOUNDS.siren, { volume: vol * 0.9 });
-      v.lastSiren = v.t;
-    }
-    if (g.heli.active && v.t - v.lastHeli >= HELI_CHUNK - 0.04) {
-      const d = Math.hypot(g.heli.x - p.x, g.heli.y - p.y);
-      audio.play(CHASE_SOUNDS.heli, { volume: clamp(1 - d / 400, 0.15, 0.85) });
-      v.lastHeli = v.t;
-    }
+    const sirenOn = Number.isFinite(near) && !(g.end && escaped(g));
+    l.siren.set({ pitch: near < 60 ? 1.03 : 1, volume: sirenOn ? clamp(1 - near / 520, 0.08, 1) * 0.9 : 0 });
+    const d = g.heli.active ? Math.hypot(g.heli.x - p.x, g.heli.y - p.y) : Infinity;
+    l.heli.set({ volume: g.heli.active ? clamp(1 - d / 400, 0.15, 0.85) : 0 });
   };
 
   const onEvents = () => {
@@ -694,8 +659,11 @@ export function ChaseGame(props: MinigameViewProps) {
     renderFrame(0);
   }, !running && !view.current.sent);
 
-  // Am Ende aufräumen: nichts mehr nachlegen (Ton läuft in kurzen Stücken aus).
-  useEffect(() => () => setEngine(40, 40, 0), []);
+  // Dauerklänge aus, sobald das Spiel nicht mehr läuft (Ergebnis) und beim Schließen.
+  useEffect(() => {
+    if (!running) stopLoops();
+  }, [running]);
+  useEffect(() => stopLoops, []);
 
   // Für Screenshots und Tests (Rahmen: koeln.dev.minigameWin/-Lose geht über onFinish direkt).
   const g = game.current;

@@ -158,6 +158,7 @@
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  white-space: nowrap;
   transform: rotate(-6deg);
   animation: mg-stamp 0.32s cubic-bezier(0.2, 1.6, 0.4, 1) both;
 }
@@ -167,9 +168,23 @@
 .mg-stamp.is-lost {
   color: var(--cat-danger);
 }
+.mg-stamp.is-warn {
+  color: var(--cat-warn);
+}
 .mg-stamp__icon {
   width: 30px;
   height: 30px;
+}
+@media (max-width: 760px) {
+  .mg-stamp {
+    gap: var(--space-2);
+    padding: 4px 12px;
+    font-size: 26px;
+  }
+  .mg-stamp__icon {
+    width: 24px;
+    height: 24px;
+  }
 }
 @keyframes mg-stamp {
   from {

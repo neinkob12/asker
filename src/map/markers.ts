@@ -26,6 +26,32 @@ export interface HtmlMarkerOptions {
   near?: boolean;
 }
 
+/** Alle Marker, die gerade an einer Karte hängen sollen (von ihrem Modul nicht entfernt). */
+const live = new Set<Marker>();
+/** Das echte remove jedes Markers (remove ist umgehängt, damit live stimmt). */
+const removeOf = new WeakMap<Marker, () => void>();
+/** Geparkte Marker (parkMarkers): von der Karte genommen, kommen bei unpark zurück. */
+let parked: { map: MapLibreMap; markers: Marker[] } | null = null;
+
+/**
+ * Alle Marker von der Karte nehmen, bis die zurückgegebene Funktion sie wieder anhängt (für takeOverMap): Jeder Marker
+ * hängt sonst bei jedem Kamerabild einen move-Listener ab (bei 200 Markern am Handy etwa 5 ms pro Bild). Marker, die ihr
+ * Modul in der Zwischenzeit selbst entfernt, kommen nicht zurück; neue bleiben, wie sie sind.
+ */
+export function parkMarkers(map: MapLibreMap): (reattach?: boolean) => void {
+  if (parked) return () => {};
+  const markers = [...live];
+  for (const marker of markers) removeOf.get(marker)?.();
+  parked = { map, markers };
+  // reattach false: Die Karte ist inzwischen weg (neues Spiel), dann nur vergessen.
+  return (reattach = true) => {
+    const back = parked;
+    parked = null;
+    if (!back || !reattach) return;
+    for (const marker of back.markers) if (live.has(marker)) marker.addTo(back.map);
+  };
+}
+
 /** Marker mit eigenem HTML-Element anlegen und zur Karte hinzufügen. */
 export function addHtmlMarker(map: MapLibreMap, options: HtmlMarkerOptions): { marker: Marker; element: HTMLElement } {
   const element = document.createElement(options.tag ?? 'div');
@@ -54,6 +80,14 @@ export function addHtmlMarker(map: MapLibreMap, options: HtmlMarkerOptions): { m
   })
     .setLngLat([options.position.lng, options.position.lat])
     .addTo(map);
+  const remove = marker.remove.bind(marker);
+  removeOf.set(marker, remove);
+  live.add(marker);
+  marker.remove = () => {
+    live.delete(marker);
+    remove();
+    return marker;
+  };
   return { marker, element };
 }
 
