@@ -35,9 +35,3 @@ export const INDEX_STEP = 0.04;
 export const PURCHASE_INDEX_SHARE = 0.5;
 /** Ab dieser Abweichung zeigt die Oberfläche einen Chip ("Gras ↑ 8 %"). */
 export const INDEX_CHIP_FROM = 0.05;
-
-/** Marktbericht per Handy: Wochentag (0 = Montag) und Stunde. */
-export const REPORT_WEEKDAY = 0;
-export const REPORT_HOUR = 9;
-/** Ab dieser Abweichung nennt der Bericht eine Ware. */
-export const REPORT_MIN_CHANGE = 0.03;

@@ -31,32 +31,46 @@ function recruit(sim: Simulation, role: StaffRole, level = 1, loyalty = 60): Sta
   return member;
 }
 
-/** Zwei Leutnants (Uni und Neumarkt) und eine Kandidatin für die Rechte Hand. */
+/** Zwei Leutnants (Uni und Neumarkt) und ein dritter (Ebertplatz) als Kandidat für die Rechte Hand (Auftrag 46e). */
 function setup(sim: Simulation) {
   sim.state.wallet.dirty = 20000;
   const a = recruit(sim, 'runner', 2);
   const b = recruit(sim, 'runner', 2);
   sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: a.id, spotIds: ['uni'] } });
   sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: b.id, spotIds: ['neumarkt'] } });
-  const boss = recruit(sim, 'runner', 4, 70);
+  sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: b.id, spotIds: ['neumarkt'] } });
+  const boss = recruit(sim, 'runner', 2, 70);
+  sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: ['ebertplatz'] } });
   return { a, b, boss };
 }
 
 describe('Rechte Hand', () => {
-  it('Voraussetzungen, Ernennen mit hohem Anspruch, steht an keinem Spot', () => {
+  it('Voraussetzungen (Leutnant, treu, kein Level), Ernennen mit hohem Anspruch, gibt Spots ab', () => {
     const sim = quietGame();
     const events = recordEvents(sim);
     const weak = recruit(sim, 'runner', 4, 70);
-    expect(canBeRightHand(sim.state, weak.id).ok).toBe(false); // noch keine zwei Leutnants
-    expect(rightHandOffered(sim.state)).toBe(false);
+    expect(canBeRightHand(sim.state, weak.id)).toMatchObject({
+      ok: false,
+      reason: expect.stringMatching(/kein Leutnant/),
+    });
+    expect(rightHandOffered(sim.state)).toBe(false); // noch kein Leutnant
     const { boss } = setup(sim);
     expect(rightHandOffered(sim.state)).toBe(true);
     const rookie = recruit(sim, 'runner', 3, 70);
     const disloyal = recruit(sim, 'runner', 5, 30);
-    expect(canBeRightHand(sim.state, rookie.id)).toMatchObject({ ok: false, reason: expect.stringMatching(/Level 4/) });
+    sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: disloyal.id, spotIds: ['zuelpicher'] } });
+    disloyal.stats.loyalty = 30; // die Beförderung hat sie kurz gefreut
+    expect(canBeRightHand(sim.state, rookie.id)).toMatchObject({
+      ok: false,
+      reason: expect.stringMatching(/kein Leutnant/),
+    });
     expect(canBeRightHand(sim.state, disloyal.id)).toMatchObject({ ok: false, reason: expect.stringMatching(/treu/) });
+    // Level 2 (Leutnant) reicht, Level 4 braucht es nicht mehr: Die Rechte Hand kommt aus den Leutnants (Auftrag 46e).
+    expect(canBeRightHand(sim.state, boss.id).ok).toBe(true);
     expect(sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } }).ok).toBe(true);
     expect(getRightHand(sim.state)?.staffId).toBe(boss.id);
+    // Der Leutnant hat seine Spots abgegeben.
+    expect(getPost(sim.state, boss.id)).toBeUndefined();
     const member = getStaffMember(sim.state, boss.id) as StaffMember;
     expect(member.assignment).toEqual({ kind: 'office', targetId: 'rightHand' });
     expect(member.demand).toBe(RIGHT_HAND_DEMAND);

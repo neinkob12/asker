@@ -302,20 +302,8 @@ export function SettingsApp() {
 
       <Section icon="gear" color="system" title="Spiel">
         <Toggle
-          label="Mehr Benachrichtigungen"
-          hint="Auch Routine als Banner (Lieferung bestellt, Level-Aufstieg, jede Nachricht). Sonst nur Dringendes."
-          checked={ui.state.moreNotifications}
-          onChange={ui.setMoreNotifications}
-        />
-        <Toggle
-          label="Ruhiger Modus"
-          hint="Banner nur für Schlimmes (Razzia, Festnahme), höchstens eins alle 15 Sekunden. Alles andere bleibt im Verlauf und am Badge."
-          checked={ui.state.quietNotifications}
-          onChange={ui.setQuietNotifications}
-        />
-        <Toggle
           label="Vibrieren"
-          hint="Wackeln bei neuen Nachrichten, leise Klicks bei Schaltern und Gesten"
+          hint="Leise Klicks bei Schaltern und Gesten"
           checked={ui.state.vibration}
           onChange={ui.setVibration}
         />

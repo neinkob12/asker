@@ -67,7 +67,6 @@ import {
   tripProgress,
   tripTouchesCity,
 } from '../index';
-import './island';
 import { BerthGroup } from './port';
 import { LogisticsLinks } from './routes';
 import { AUTO, ChoiceControl, VehicleSelect, vehicleChoice } from './vehicles';
@@ -202,6 +201,7 @@ function PortSection() {
     const short = state.wallet.clean < cost;
     return (
       <Group
+        data-tour="port.berth"
         icon="ship"
         color="goods"
         title={port}

@@ -26,7 +26,7 @@ export const PLAYER_HIT_WEIGHT = 1.5;
 /** Trifft es einen verletzten Mitarbeiter: so wahrscheinlich stirbt er (sonst schwer verletzt). */
 export const STAFF_DEATH_CHANCE = 0.3;
 
-/** Ohne Entscheidung (z.B. ohne Oberfläche) handeln die Leute nach dieser Zeit selbst. Der Dialog pausiert das Spiel. */
+/** Sicherheitsnetz: Wartet eine Konfrontation so lange auf ein Minispiel, handeln die Leute selbst (Spielminuten). */
 export const DECISION_TIMEOUT = 120;
 
 /** Gegnerstärken bis zu diesem Wert gelten als Faktor auf die Standardstärke des Anlasses. */
@@ -35,29 +35,11 @@ export const STRENGTH_FACTOR_LIMIT = 5;
 /** So viele abgeschlossene Konfrontationen bleiben im Spielstand. */
 export const HISTORY_LIMIT = 20;
 
-// ---------------------------------------------------------------------------------------------
-// Wege im Briefing ("Wie gehst du vor?"). Welche ein Anlass anbietet: briefingOptions in kinds.ts.
-
-/** Verstärkung schicken: kostet Schwarzgeld (Taxi, Werkzeug), so viele freie Leute fahren zusätzlich hin. */
-export const BACKUP_COST = 300;
-export const BACKUP_MAX_PEOPLE = 2;
-/** Wer als Verstärkung infrage kommt (aktiv, ohne Einsatz), die Stärksten zuerst. */
-export const BACKUP_ROLES = ['security', 'runner', 'driver'] as const;
-
-/** Sofort freikaufen: mindestens so viel, sonst die Bestechung des Anlasses mal PAYOFF_FACTOR. */
-export const PAYOFF_MIN = 600;
-export const PAYOFF_FACTOR = 1;
-/** Wer zahlt, wird nicht ernst genommen: Beziehung zur Gegenseite und Ruf sinken. */
-export const PAYOFF_RELATION = -8;
-export const PAYOFF_REPUTATION = -1;
-
-/** Anonym die Bullen rufen: Heat im Veedel, und etwas Ware bleibt bei der Durchsuchung auf der Strecke. */
+/**
+ * Heat im Veedel, wenn jemand anonym die Polizei ruft (gangs nutzt den Wert, Auftrag 23). Der Weg im Briefing dazu ist
+ * mit der Akte weg (Auftrag 46d).
+ */
 export const TIPOFF_HEAT = 15;
-export const TIPOFF_GOODS: readonly [number, number] = [-12, -4];
-
-/** Ware retten, Spot räumen: Die Ware bleibt, die Kasse vor Ort ist weg (Anteil am Schwarzgeld, gedeckelt). */
-export const ABANDON_CASH_SHARE = 0.08;
-export const ABANDON_CASH_MAX = 900;
 
 // ---------------------------------------------------------------------------------------------
 // Zeiger, Absicht, Polizei-Uhr, Einsätze (Auftrag 35). Siehe tactics.ts.
@@ -74,9 +56,6 @@ export const GAUGE_START_MAX = 85;
 export const START_RESOLVE_PER_PERSON = 6;
 /** Start: pro Punkt Kraftunterschied (Gegenseite minus eure Seite) so viel mehr Entschlossenheit. */
 export const START_RESOLVE_PER_STRENGTH = 0.25;
-/** Verstärkung im Briefing: die Gegenseite startet so viel weniger entschlossen. */
-export const BACKUP_RESOLVE_BONUS = 10;
-
 /** Würfel: Stärke einer Runde zwischen diesen Faktoren (1 = mittel). */
 export const DICE_MIN = 0.5;
 export const DICE_MAX = 1.5;

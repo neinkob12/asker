@@ -40,8 +40,8 @@ import { averageReferencePrice, referencePrice } from '../market';
 import { changeReputation, getReputation, reputationDemandFactor } from '../reputation';
 import { travelMinutes } from '../roads';
 import { getSpot } from '../spots';
-import { assign, getStaffMember } from '../staff';
-import { allVeedel, getVeedel, type Veedel } from '../veedel';
+import { assign, getStaffMember, specialistFactor } from '../staff';
+import { allVeedel, getVeedel, type Veedel, veedelCity } from '../veedel';
 import {
   CUSTOMER_TYPES,
   DEALER_PREPAY_SHARE,
@@ -295,6 +295,49 @@ export function offerDelivery(ctx: Ctx, force = false): Order | null {
 }
 
 /**
+ * Auftrag 46c: eine feste Lieferanfrage aus einem Veedel (die erste Handy-Bestellung im Tutorial), ohne Würfel für
+ * Kunde und Ware: das Produkt mit dem meisten Bestand in der Stadt des Veedels, eine kleine Menge (die untere
+ * übliche Menge des Produkts, höchstens der Bestand). Nimmt keine Rücksicht auf Ruf oder Einstellungen; null ohne
+ * Ware oder bei zu vielen offenen Anfragen.
+ */
+export function scriptedOrder(ctx: Ctx, request: { veedelId: string }): Order | null {
+  const state = ctx.state;
+  const veedel = getVeedel(request.veedelId);
+  if (!veedel) return null;
+  const cityId = veedelCity(veedel.id);
+  if (state.modules.customers.orders.filter(isOpen).length >= MAX_OPEN_ORDERS) return null;
+  const stocked = allProducts()
+    .map((p) => ({ product: p, stock: getStock(state, { productId: p.id, cityId }) }))
+    .filter((x) => x.stock > 0)
+    .sort((a, b) => b.stock - a.stock || a.product.id.localeCompare(b.product.id));
+  const best = stocked[0];
+  if (!best) return null;
+  const product = best.product;
+  const [min] = product.typicalAmount;
+  const amount = Math.max(1, Math.min(best.stock, Math.round(min)));
+  const type = CUSTOMER_TYPES.find((t) => productsFor(t.id, [product]).length > 0) ?? CUSTOMER_TYPES[0];
+  const place = placeIn(ctx, veedel);
+  const price = Math.round(amount * referencePrice(state, product.id, veedel.id) * DELIVERY_MARKUP);
+  const goods = `${formatProductAmount(product.id, amount)} ${product.name}`;
+  return createOrder(
+    ctx,
+    {
+      kind: 'delivery',
+      contactId: `customer:area-${veedel.id}`,
+      contactName: `Kundschaft ${veedel.name}`,
+      typeId: type.id,
+      regularId: null,
+      productId: product.id,
+      amount,
+      price,
+      veedelId: veedel.id,
+      ...place,
+    },
+    `Hab deine Nummer von einem Kumpel. Kannst du mir ${goods} nach ${veedel.name} bringen? Ich zahl ${formatEuro(price)}.`,
+  );
+}
+
+/**
  * Großhandelsanfrage eines anderen Dealers: große Menge mit Rabatt. Auftrag 34: Wer fragt, hängt am Vertrauen
  * (pickDealer); mit dealerId fragt genau dieser (regelmäßige Anfragen der Stammabnehmer).
  */
@@ -529,7 +572,8 @@ function complete(ctx: Ctx, order: Order, afterFight = false): void {
   if (!afterFight && dealGoesWrong(ctx, order)) return;
   const s = ctx.state.modules.customers;
   const wholesale = order.kind === 'wholesale';
-  const due = order.price - (order.prepaid ?? 0);
+  // Auftrag 46e: Ein Buchhalter holt aus jedem Erlös ein paar Prozent mehr heraus (nur aus dem, was jetzt fließt).
+  const due = Math.round((order.price - (order.prepaid ?? 0)) * specialistFactor(ctx.state, 'revenue'));
   if (due > 0)
     wallet.earn(ctx, due, 'dirty', wholesale ? 'Großhandel' : 'Lieferung', {
       category: wholesale ? 'sales.wholesale' : 'sales.delivery',

@@ -1,4 +1,4 @@
-import type { RelationKind, StaffRole, StaffStats, StaffStatus, StatKey, StoryId, TraitId } from './types';
+import type { RelationKind, StaffRole, StaffStats, StaffStatus, StatKey, TraitId } from './types';
 
 // Einstellbare Werte des Personals. Zeiten in Spielminuten, Geld in Euro (Schwarzgeld), Werte von 0 bis 100.
 
@@ -246,13 +246,123 @@ export const BAIL_PER_LEVEL = 200;
 
 // --- Spezialisten ---
 
-/** Bonus = Grundwert + pro Level darüber + (Wert − 50) / Teiler, gedeckelt. */
+/**
+ * Bonus = Grundwert + pro Level darüber + (Wert − 50) / Teiler, gedeckelt. Nur noch Kaution und Razzia-Warnung; die
+ * Wirkungen auf Zoll, Heat, Kontrollen, Verhaftungen, Haft, Erlös und Löhne stehen in SPECIALIST_EFFECTS (Auftrag 46e).
+ * Die Geldwäsche-Gebühr macht der Buchhalter seit Auftrag 46e nicht mehr billiger („sonst wird nichts günstiger“).
+ */
 export const SPECIALIST_BONUS = {
   bailDiscount: { role: 'lawyer', stat: 'charisma', base: 0.2, perLevel: 0.04, divisor: 250, max: 0.6 },
-  jailReduction: { role: 'lawyer', stat: 'caution', base: 0.25, perLevel: 0.04, divisor: 250, max: 0.6 },
-  launderingFeeDiscount: { role: 'accountant', stat: 'caution', base: 0.2, perLevel: 0.04, divisor: 250, max: 0.6 },
   raidWarning: { role: 'policeContact', stat: 'charisma', base: 0.5, perLevel: 0.05, divisor: 200, max: 0.9 },
 } as const;
+
+// --- Wirkungen der Spezialisten (Auftrag 46e) ---
+
+/** Eine Wirkung eines Spezialisten: Rolle, Richtung und Anteil (normal bzw. gut), dazu Texte für die Oberfläche. */
+export interface SpecialistEffectDef {
+  role: StaffRole;
+  /** 'less': Chance, Dauer oder Betrag mal (1 − Anteil); 'more': mal (1 + Anteil). */
+  kind: 'less' | 'more';
+  /** Anteil bei Schlüsselwerten um SPECIALIST_NORMAL_STAT … */
+  normal: number;
+  /** … und ab SPECIALIST_GOOD_STAT („gut“), dazwischen linear. */
+  good: number;
+  /** Kurz für den Chip („Zoll −30 %“). */
+  label: string;
+  /** Ein Satzteil für „Mehr dazu“ („Beschlagnahme am Kai und auf Routen“). */
+  hint: string;
+  icon: string;
+}
+
+/**
+ * Mittel der Schlüsselwerte (ROLE_INFO.keyStats), bis zu dem die normale Wirkung gilt, und ab dem die gute gilt.
+ * Dazwischen skaliert die Wirkung linear mit der Person (wie bei traitFactor zählen die Werte, auf die es ankommt).
+ */
+export const SPECIALIST_NORMAL_STAT = 50;
+export const SPECIALIST_GOOD_STAT = 70;
+
+/**
+ * Was Polizei-Kontakt, Anwalt und Buchhalter bewirken (Auftrag 46e). Pro Stadt wirkt eine Person, die beste ihrer
+ * Rolle; mehrere stapeln nicht. Die Module fragen specialistFactor(state, key, cityId) an der Stelle, an der sie
+ * würfeln oder buchen, nie `if (role === 'accountant')` im Ablauf.
+ */
+export const SPECIALIST_EFFECTS = {
+  /** Polizei-Kontakt: Beschlagnahme am Kai und auf Routen (Zoll), auch bei Lieferungen über eine Grenze. */
+  seizure: {
+    role: 'policeContact',
+    kind: 'less',
+    normal: 0.3,
+    good: 0.5,
+    label: 'Zoll',
+    hint: 'Beschlagnahme am Kai, auf Routen und an der Grenze',
+    icon: 'anchor',
+  },
+  /** Polizei-Kontakt: Heat-Zuwachs in der Stadt. */
+  heatGain: {
+    role: 'policeContact',
+    kind: 'less',
+    normal: 0.15,
+    good: 0.25,
+    label: 'Heat',
+    hint: 'jeder Heat-Zuwachs in der Stadt',
+    icon: 'flame',
+  },
+  /** Polizei-Kontakt: Chance auf Polizei- und Verkehrskontrollen. */
+  checks: {
+    role: 'policeContact',
+    kind: 'less',
+    normal: 0.25,
+    good: 0.4,
+    label: 'Kontrollen',
+    hint: 'Polizei- und Verkehrskontrollen',
+    icon: 'siren',
+  },
+  /** Anwalt: Festnahmen der eigenen Leute (Kontrollen, Razzien, aufgeflogene Ladungen). */
+  arrests: {
+    role: 'lawyer',
+    kind: 'less',
+    normal: 0.3,
+    good: 0.5,
+    label: 'Verhaftungen',
+    hint: 'Festnahmen deiner Leute bei Kontrollen, Razzien und aufgeflogenen Ladungen',
+    icon: 'jail',
+  },
+  /** Anwalt: Haft halb so lang. */
+  jailTime: {
+    role: 'lawyer',
+    kind: 'less',
+    normal: 0.5,
+    good: 0.5,
+    label: 'Haft',
+    hint: 'Haftdauer deiner Leute',
+    icon: 'clock',
+  },
+  /** Buchhalter: jeder Verkaufserlös (Straße, Lieferungen, Großhandel). */
+  revenue: {
+    role: 'accountant',
+    kind: 'more',
+    normal: 0.03,
+    good: 0.07,
+    label: 'Erlös',
+    hint: 'jeder Verkaufserlös (Straße, Lieferungen, Großhandel)',
+    icon: 'cash',
+  },
+  /** Buchhalter: Löhne aller Leute der Stadt. */
+  wages: {
+    role: 'accountant',
+    kind: 'less',
+    normal: 0.05,
+    good: 0.1,
+    label: 'Löhne',
+    hint: 'die Löhne aller Leute in der Stadt',
+    icon: 'users',
+  },
+} as const satisfies Record<string, SpecialistEffectDef>;
+
+export type SpecialistEffect = keyof typeof SPECIALIST_EFFECTS;
+
+/** Rollen, von denen es pro Stadt nur eine Person geben darf (Auftrag 46e: nur ein Buchhalter, kein Stapeln). */
+export const ONE_PER_CITY_ROLES: readonly StaffRole[] = ['accountant'];
 
 /** Nach der angekündigten Razzia bleiben abgetauchte Leute noch so lange weg, dann gehen sie zurück an ihren Platz. */
 export const HIDE_AFTER_RAID = 60;
@@ -611,38 +721,3 @@ export const REFERRAL_FRIENDS_SHARE = 0.7;
 export const RELATIONS_PER_PERSON = 2;
 /** Höchstens eine Beziehung auf so viele Leute im Team (wenige pro Team). */
 export const RELATION_TEAM_SHARE = 3;
-
-// --- Geschichten (Auftrag 34) ---
-
-/** Mindestabstand zwischen zwei Geschichten in einer Stadt. */
-export const STORY_GAP = 1.5 * 1440;
-/** Danach pro Stunde (tagsüber) diese Chance auf eine Geschichte. */
-export const STORY_CHANCE_PER_HOUR = 0.06;
-/** Geschichten kommen zwischen diesen Stunden. */
-export const STORY_HOURS: [number, number] = [9, 22];
-/** Abstand pro Person und pro Vorlage. */
-export const STORY_PERSON_GAP = 7 * 1440;
-export const STORY_TEMPLATE_GAP = 4 * 1440;
-/** Antwortfrist. */
-export const STORY_EXPIRES = 8 * 60;
-/** Ab so vielen Leuten in der Stadt gibt es Geschichten. */
-export const STORY_MIN_TEAM = 2;
-/** Gewichte der Vorlagen beim Würfeln (Vorlagen in stories.ts). */
-export const STORY_WEIGHTS: Record<StoryId, number> = {
-  loan: 3,
-  familyTime: 2,
-  drunk: 3,
-  hangover: 2,
-  debt: 3,
-  gamblerWin: 1,
-  promotion: 3,
-  raise: 2,
-  bragged: 3,
-  scared: 3,
-  loyalTip: 2,
-  hothead: 3,
-  rivalsFight: 4,
-  friendsParty: 2,
-  coupleMoveIn: 2,
-  siblingJailed: 4,
-};

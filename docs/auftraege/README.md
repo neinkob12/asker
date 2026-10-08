@@ -313,3 +313,12 @@ eigene Produktion) mit den Aufträgen 32 bis 42 steht in [`docs/plan.md`](../pla
 Die alte Liste der späteren Themen ist durch den Plan ersetzt: Tarnfirmen, Charakter-Erstellung, Upgrade-Baum und
 Immobilien sind verworfen, Fuhrpark, Städte und Anbau stehen in den Aufträgen 33, 36 bis 39 und 42. Offen bleiben
 KI-Porträts, Hosting mit Passwortschutz und Multiplayer.
+
+### Performance (Feedback vom 07.10.2026)
+
+[Auftrag 47](47-performance.md): Das Spätspiel ruckelte, weil die Simulation mit den Städten wuchs (alle Leute aller
+Städte in einer Liste), alle Stunden-Ticks in dieselbe Minute fielen und der Autosave bis 1,4 MB synchron in den
+localStorage schrieb (Grenze etwa 5 MB). Erledigt: Personal-Index je Stadt, `tickOffset` im Modul-Vertrag, Spielstände
+in IndexedDB mit Spiegel und Notfallspeicher, Perf-Leitplanke mit den großen Test-Spielständen, Spot-Marker nur für
+die aktive Stadt, eigene Build-Dateien für MapLibre und Straßennetze, Fehlerfänger mit Lebenszeichen (`src/ui/crashlog.ts`).
+Offen: Ursache des Absturzes bei Hamburg (der Verlauf meldet ihn jetzt mit Moment und Sprachmodell).

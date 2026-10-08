@@ -1,5 +1,6 @@
 // Registries für Oberflächen. Module melden hier aus src/modules/<id>/ui/index.tsx an, was sie zeigen:
-// HUD-Anzeigen, Seitenleisten-Tabs, Beiträge zu Slots, Panels, Dialoge, Handy-Apps und Reaktionen auf Ereignisse.
+// HUD-Anzeigen, Seitenleisten-Tabs, Beiträge zu Slots, Panels, Dialoge, Handy-Apps, die Anzeige oben im Handy und
+// Reaktionen auf Ereignisse.
 // Anmelden mit derselben ID ersetzt den alten Eintrag (wichtig für Hot Reload).
 
 import type { ComponentType } from 'preact';
@@ -190,33 +191,18 @@ export interface Advisor {
 }
 
 /**
- * Live-Aktivität für die Dynamic Island des Spiel-Handys (wie bei iOS): laufende Dinge mit Anfang und Ende,
- * die man auf einen Blick sehen will (Überfall, Lieferung unterwegs, Frist, hohe Heat …).
- * Kompakt stehen links neben der Kamera `leading` (Icon + kurzes Wort), rechts `trailing` (Wert, z.B. "1:20 h").
- * Aufgeklappt zeigt die Island Titel, Text und Fortschritt. Ein Tipp führt mit `open` zur passenden Stelle.
+ * Kleine feste Anzeige oben im Handy (Auftrag 46d, an der Stelle der Dynamic Island): nur eine Zahl mit Symbol, z.B.
+ * „3 Lieferungen unterwegs“. Sichtbar nur, wenn count größer 0 ist; ein Tipp öffnet die passende App.
  */
-export interface LiveActivity {
-  /** Eindeutig, z.B. 'suppliers.shipment.12'. */
+export interface StatusCounter {
+  /** Eindeutig, z.B. 'suppliers.shipments'. */
   id: string;
-  /** Höher = wichtiger. Richtwerte: 90 Gefahr (Überfall), 70 Frist, 50 Lieferung, 30 Status. */
-  priority: number;
+  order: number;
   icon: string;
-  /** Farbe der Glyphe und des Werts (kräftig auf Schwarz). */
-  tone?: 'accent' | 'warn' | 'bad' | 'info' | 'neutral';
-  /** Sehr kurz, links der Kamera, z.B. 'Lieferung'. */
-  leading: string;
-  /** Sehr kurz, rechts der Kamera, z.B. '1:20 h' oder '+120 €'. */
-  trailing: string;
-  title: string;
-  detail?: string;
-  /** Fortschritt 0–1 (aufgeklappt als Balken). */
-  progress?: number;
+  count: (state: GameState) => number;
+  /** Beschriftung für Screenreader und Tooltip, z.B. (n) => `${n} Lieferungen unterwegs`. */
+  label: (count: number) => string;
   open?: (ui: UiApi) => void;
-}
-
-export interface LiveActivitySource {
-  id: string;
-  activities: (state: GameState) => LiveActivity | LiveActivity[] | null;
 }
 
 /** Treffer der Suche (⌘K / Strg+K). */
@@ -295,7 +281,7 @@ export const panels = new Registry<PanelDefinition>();
 export const dialogs = new Registry<DialogDefinition>();
 export const phoneApps = new Registry<PhoneApp>();
 export const advisors = new Registry<Advisor>();
-export const liveActivitySources = new Registry<LiveActivitySource>();
+export const statusCounters = new Registry<StatusCounter>();
 export const searchProviders = new Registry<SearchProvider>();
 export const gameStats = new Registry<GameStat>();
 export const mapLayerOptions = new Registry<MapLayerOption>();
@@ -304,6 +290,29 @@ const reactions = new Map<string, Map<string, EventReaction<EventType>>>();
 
 export function registerHudItem(item: HudItem): void {
   hudItems.register(item);
+}
+
+/**
+ * Teile des Kern-HUD, die ein Modul zeitweise ausblenden darf (Auftrag 46b: Das Tutorial zeigt sauberes Geld erst
+ * mit der Geldwäsche). Die Oberfläche fragt isHudPartHidden; mehrere Regeln gelten gemeinsam (eine reicht).
+ */
+export type CoreHudPart = 'cleanMoney';
+const hudPartRules = new Map<CoreHudPart, Map<string, (state: GameState) => boolean>>();
+
+export function registerHudPartHidden(part: CoreHudPart, id: string, hiddenWhen: (state: GameState) => boolean): void {
+  let rules = hudPartRules.get(part);
+  if (!rules) {
+    rules = new Map();
+    hudPartRules.set(part, rules);
+  }
+  rules.set(id, hiddenWhen);
+}
+
+export function isHudPartHidden(state: GameState, part: CoreHudPart): boolean {
+  const rules = hudPartRules.get(part);
+  if (!rules) return false;
+  for (const rule of rules.values()) if (rule(state)) return true;
+  return false;
 }
 
 export function registerTab(tab: SidebarTab): void {
@@ -344,29 +353,26 @@ export function registerAdvisor(advisor: Advisor): void {
   advisors.register(advisor);
 }
 
-/** Live-Aktivitäten für die Dynamic Island des Handys anmelden (siehe LiveActivity). */
-export function registerLiveActivity(source: LiveActivitySource): void {
-  liveActivitySources.register(source);
+/** Eine Zahl für die feste Anzeige oben im Handy anmelden (siehe StatusCounter). */
+export function registerStatusCounter(counter: StatusCounter): void {
+  statusCounters.register(counter);
 }
 
-/**
- * Alle laufenden Live-Aktivitäten, wichtigste zuerst. Fehler einzelner Module werden ignoriert. Einmal pro Spielstand
- * gerechnet (Island im Handy und über der Karte fragen beide), nicht verändern.
- */
-export const collectLiveActivities: (state: GameState) => LiveActivity[] = memoState(computeLiveActivities);
+/** Die angemeldeten Zähler mit ihrem Stand, nur die über 0. Fehler einzelner Module werden ignoriert. */
+export const collectStatusCounters: (state: GameState) => { counter: StatusCounter; count: number }[] =
+  memoState(computeStatusCounters);
 
-function computeLiveActivities(state: GameState): LiveActivity[] {
-  const all: LiveActivity[] = [];
-  for (const source of liveActivitySources.list()) {
+function computeStatusCounters(state: GameState): { counter: StatusCounter; count: number }[] {
+  const all: { counter: StatusCounter; count: number }[] = [];
+  for (const counter of statusCounters.list()) {
     try {
-      const result = source.activities(state);
-      if (Array.isArray(result)) all.push(...result);
-      else if (result) all.push(result);
+      const count = Math.max(0, Math.floor(counter.count(state)));
+      if (count > 0) all.push({ counter, count });
     } catch (error) {
-      console.error(`Live-Aktivität "${source.id}"`, error);
+      console.error(`Anzeige "${counter.id}"`, error);
     }
   }
-  return all.sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
+  return all;
 }
 
 /** Einträge für die Suche (⌘K / Strg+K) anmelden, z.B. Spots, Veedel, Personen. */

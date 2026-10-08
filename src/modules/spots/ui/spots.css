@@ -426,18 +426,30 @@
   font-size: var(--font-size-xs);
 }
 
-/* Auftrag 23: Blatt zum Gründen eines Spots. */
-.spot-found__hint,
-.spot-found__error {
-  margin: var(--space-2) var(--space-4);
-  color: var(--color-muted);
-  font-size: var(--font-size-sm);
-}
-.spot-found__error {
-  color: var(--cat-danger);
-}
-
 /* Auftrag 23: Ein eigener Spot, den kaum jemand kennt, ist blasser. */
 .spot-marker.is-faint .spot-sign {
   opacity: 0.6;
+}
+
+/* Shop-Platzhalter „Spot gründen“ (Auftrag 46e): drei Plätze als Karten, Knopf gesperrt. Nur Tokens. */
+.spot-shop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.spot-shop__slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.spot-shop__slot {
+  text-align: center;
+}
+.spot-shop__slot .ui-hint {
+  margin: 0;
+  white-space: nowrap;
+}
+.spot-shop__slot .ui-card__title {
+  white-space: nowrap;
 }

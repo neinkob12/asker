@@ -100,6 +100,8 @@ export {
   openIncidents,
 } from './methods';
 export { safeAmount } from './safe';
+/** Auftrag 46c: fester Überfall ohne Konfrontation (erster Gang-Angriff im Tutorial). */
+export { type ScriptedRaidRequest, type ScriptedRaidResult, scriptedRaid } from './scripted';
 export { searchAmount } from './search';
 export {
   allianceCost,
@@ -227,6 +229,8 @@ export default defineModule({
   dependsOn: ['veedel'],
   init: () => initialGangsState(),
   tickEvery: 60,
+  // Versatz (Auftrag 47): nicht mit allen anderen in derselben Minute ticken.
+  tickOffset: 19,
   tick: gangsTick,
   commands: {
     'gangs.ceasefire': (ctx, { gangId }) => ceasefire(ctx, gangId),

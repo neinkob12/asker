@@ -14,6 +14,10 @@
 //   talkChance(member) (redet beim Entlassen?), isAbsent(member), wageCategory(member) (Kategorie in der Kasse),
 //   speedFactor, riskFactor, combatValue, defenseStrength(state, { spotId | warehouseId | veedelId }),
 //   bonus(state, key), bonusProvider, bailCost, jailDuration, levelProgress, betrayalChance,
+//   Auftrag 46e (Wirkungen der Spezialisten, Werte in SPECIALIST_EFFECTS): specialistEffect(state, key, cityId?)
+//   (Anteil), specialistFactor (Faktor für Chance, Dauer, Betrag), specialistProvider (wer wirkt: die beste Person pro
+//   Stadt), specialistShareOf, specialistEffectsOf (für Profil und Kopf), isGoodSpecialist, keyStatMean,
+//   canHireRole(state, role) (nur ein Buchhalter pro Stadt), wageFactor(state, cityId) (Buchhalter spart Löhne),
 //   isSpecialist, isStatKnown, roleName, assignmentLabel, staffContact, ROLE_INFO, STAT_NAMES, STATUS_NAMES, STAT_KEYS
 // Öffentliche API (schreiben, mit ctx):
 //   assign(ctx, id, assignment), setStatus(ctx, id, status, until?), addXp, addLoyalty, setWage, setDemand,
@@ -21,8 +25,8 @@
 //   isLyingLow(state, veedelId), lieLow(ctx, veedelId, until)
 // Auftrag 34 (Leute mit Geschichte): Eigenschaften (traits, TRAITS in config.ts) mit kleinen Faktoren (traitFactor,
 //   hasTrait, traitName, rollTraits fest aus einem Schlüssel), Beziehungen (relationsOf, relationBetween, relationLabel,
-//   RELATIONS: Wirkung beim Entlassen, in Haft, am selben Spot), Geschichten (stories.ts: STORIES, openStories,
-//   storyChoices, startStory) mit Antwort 'staff.storyChoice' und Ereignissen 'staff.story', 'staff.storyResolved'.
+//   RELATIONS: Wirkung beim Entlassen, in Haft, am selben Spot). Die Geschichten der Leute im Chat (stories.ts) sind
+//   seit Auftrag 46d weg; Version 8 nimmt den Zustand `stories` aus alten Spielständen heraus.
 // Befehle: 'staff.hireRunner', 'staff.hireDriver', 'staff.fire', 'staff.assign', 'staff.setWage', 'staff.bail', 'staff.lieLow',
 //   (Leute bleiben in der Stadt, in der du sie angeheuert hast; 'staff.relocate' gibt es seit dem 05.10.2026 nicht mehr),
 //   'staff.setJailSupport' (Stillhaltegeld), 'staff.replace' (Ausfall am Spot ersetzen, optional entlassen)
@@ -81,7 +85,6 @@ import {
 } from './members';
 import { STAT_KEYS } from './profile';
 import { daily, hourly, lieLow, tick, warnOfRaid } from './routines';
-import { chooseStory, dropStoriesOf, expireStory, maybeStartStory } from './stories';
 import { STAFF_TEXTS } from './texts';
 import { relationsOf, rollTraits, traitFactor } from './traits';
 import type {
@@ -93,7 +96,6 @@ import type {
   StaffState,
   StaffStats,
   StaffStatus,
-  StoryId,
 } from './types';
 
 export {
@@ -102,6 +104,7 @@ export {
   INJURED_WAGE_FACTOR,
   JAIL_WAGE_FACTOR,
   MAX_LEVEL,
+  ONE_PER_CITY_ROLES,
   RELATIONS,
   type RelationInfo,
   ROLE_INFO,
@@ -109,6 +112,11 @@ export {
   RUNNER_HIRE_COST,
   RUNNER_HIRE_COST_MAX,
   RUNNER_HIRE_COST_MIN,
+  SPECIALIST_EFFECTS,
+  SPECIALIST_GOOD_STAT,
+  SPECIALIST_NORMAL_STAT,
+  type SpecialistEffect,
+  type SpecialistEffectDef,
   STAT_NAMES,
   STATUS_NAMES,
   TRAITS,
@@ -126,15 +134,6 @@ export {
   STAT_KEYS,
 } from './profile';
 export { betrayalChance, isLyingLow, lieLow } from './routines';
-export {
-  openStories,
-  STORIES,
-  type StoryChoice,
-  type StoryEffect,
-  type StoryTemplate,
-  startStory,
-  storyChoices,
-} from './stories';
 export {
   hasTrait,
   keyedRandom,
@@ -172,8 +171,6 @@ declare module '../../core' {
     'staff.replace': { staffId: string; fire?: boolean };
     /** Alle Leute an den Spots eines Veedels bis until von der Straße holen (z.B. nach einer Razzia-Warnung). */
     'staff.lieLow': { veedelId: string; until: number };
-    /** Antwort auf eine Geschichte (Auftrag 34; kommt aus der Handy-Antwort). */
-    'staff.storyChoice': { storyId: string; choice: string };
   }
   interface GameEvents {
     'staff.hired': { staffId: string; role: StaffRole };
@@ -190,10 +187,6 @@ declare module '../../core' {
     'staff.wentUnderground': { veedelId: string; until: number; pulled: number };
     /** Jemand ist in einer anderen Stadt angekommen (nur noch Leute, die in einem alten Spielstand unterwegs waren). */
     'staff.relocated': { staffId: string; from: string; to: string };
-    /** Eine Geschichte hat angefangen (Auftrag 34). */
-    'staff.story': { storyId: string; story: StoryId; staffId: string; otherId: string | null };
-    /** Auf eine Geschichte wurde geantwortet (oder die Frist ist abgelaufen). */
-    'staff.storyResolved': { storyId: string; story: StoryId; staffId: string; choice: string };
   }
 }
 
@@ -243,12 +236,12 @@ function upgradeMember(m: StaffMemberV1, state: GameState): StaffMemberV3 {
 
 /** Person bis Version 5 (ohne Stadt). */
 type StaffMemberV5 = Omit<StaffMember, 'cityId' | 'traits'>;
-type StaffStateV5 = Omit<StaffState, 'members' | 'former' | 'relations' | 'stories'> & {
+type StaffStateV5 = Omit<StaffState, 'members' | 'former' | 'relations'> & {
   members: StaffMemberV5[];
   former: StaffMemberV5[];
 };
 type StaffMemberV3 = Omit<StaffMemberV5, 'jailSupport'>;
-type StaffStateV3 = Omit<StaffState, 'members' | 'former' | 'relations' | 'stories'> & {
+type StaffStateV3 = Omit<StaffState, 'members' | 'former' | 'relations'> & {
   members: StaffMemberV3[];
   former: StaffMemberV3[];
 };
@@ -391,7 +384,6 @@ function lieLowCommand(ctx: Ctx, veedelId: string, until: number, actor: string)
  * einer Entlassung geht manchmal jemand mit; Rivalen freuen sich.
  */
 function onLeft(ctx: Ctx, staffId: string, reason: StaffLeaveReason): void {
-  dropStoriesOf(ctx, staffId);
   const gone = getStaffMember(ctx.state, staffId);
   if (!gone) return;
   for (const r of ctx.state.modules.staff.relations ?? []) {
@@ -415,14 +407,14 @@ function onLeft(ctx: Ctx, staffId: string, reason: StaffLeaveReason): void {
 
 /** Person bis Version 6 (ohne Eigenschaften). */
 type StaffMemberV6 = Omit<StaffMember, 'traits'>;
-type StaffStateV6 = Omit<StaffState, 'members' | 'former' | 'relations' | 'stories'> & {
+type StaffStateV6 = Omit<StaffState, 'members' | 'former' | 'relations'> & {
   members: StaffMemberV6[];
   former: StaffMemberV6[];
 };
 
 /**
  * Version 6 → 7 (Auftrag 34): Eigenschaften fest aus der ID (gleicher Stand = gleiche Eigenschaften), noch keine
- * Beziehungen und Geschichten. Der erwartete Lohn bleibt, wie er war (Anspruch geteilt durch den Lohnfaktor).
+ * Beziehungen. Der erwartete Lohn bleibt, wie er war (Anspruch geteilt durch den Lohnfaktor).
  */
 export function migrateStaffV6(old: StaffStateV6, state: GameState): StaffState {
   // Der Lohnwunsch der neuen Eigenschaften wird über den Anspruch ausgeglichen: Alte Stände bleiben ruhig, niemand ist
@@ -437,20 +429,26 @@ export function migrateStaffV6(old: StaffStateV6, state: GameState): StaffState 
     members: old.members.map(withTraits),
     former: old.former.map(withTraits),
     relations: [],
-    stories: { open: [], lastAt: {}, byPerson: {}, byStory: {}, count: 0 },
   };
+}
+
+/** Stand bis Version 7: mit den Geschichten der Leute (Auftrag 34, weg mit Auftrag 46d). */
+type StaffStateV7 = StaffState & { stories?: unknown };
+
+/** Version 7 → 8 (Auftrag 46d): Die Geschichten der Leute gibt es nicht mehr, der Zustand dazu fällt weg. */
+export function migrateStaffV7({ stories: _stories, ...rest }: StaffStateV7): StaffState {
+  return rest;
 }
 
 export default defineModule({
   id: 'staff',
-  version: 7,
+  version: 8,
   dependsOn: ['spots', 'customers'],
   init: () => ({
     members: [],
     former: [],
     hiding: {},
     relations: [],
-    stories: { open: [], lastAt: {}, byPerson: {}, byStory: {}, count: 0 },
   }),
   tick,
   commands: {
@@ -463,17 +461,10 @@ export default defineModule({
     'staff.setWage': (ctx, { staffId, wage }) => setWageCommand(ctx, staffId, wage),
     'staff.bail': (ctx, { staffId }, meta) => bail(ctx, staffId, meta),
     'staff.lieLow': (ctx, { veedelId, until }, meta) => lieLowCommand(ctx, veedelId, until, meta.actor),
-    'staff.storyChoice': (ctx, { storyId, choice }) => chooseStory(ctx, storyId, choice),
   },
   on: {
     'clock.dayStarted': daily,
-    'clock.hourStarted': (ctx) => {
-      hourly(ctx);
-      maybeStartStory(ctx);
-    },
-    'message.expired': (ctx, { messageId, source }) => {
-      if (source === 'staff') expireStory(ctx, messageId);
-    },
+    'clock.hourStarted': hourly,
     'staff.left': (ctx, { staffId, reason }) => onLeft(ctx, staffId, reason),
     'police.arrest': (ctx, { staffId, veedelId }) => onArrest(ctx, staffId, veedelId),
     'police.raidPlanned': (ctx, { veedelId, at, scope }) => warnOfRaid(ctx, veedelId, at, scope === 'major'),
@@ -513,5 +504,6 @@ export default defineModule({
       return { ...old, members: old.members.map(inKoeln), former: old.former.map(inKoeln) };
     },
     7: migrateStaffV6,
+    8: migrateStaffV7,
   },
 });

@@ -2,6 +2,7 @@ import { memo } from 'preact/compat';
 import { clock, formatEuro, wallet } from '../../core';
 import { CountUp, FloatingNumber, Icon } from '../components';
 import { useGameSelector, useRuntime } from '../hooks';
+import { isHudPartHidden } from '../registry';
 
 const euro = (v: number) => formatEuro(Math.round(v));
 const delta = (d: number) => `${d > 0 ? '+' : '−'}${euro(Math.abs(d))}`;
@@ -16,9 +17,11 @@ export const MoneyHud = memo(function MoneyHud() {
   const { api } = useRuntime();
   const dirty = useGameSelector((state) => wallet.balance(state, 'dirty'));
   const clean = useGameSelector((state) => wallet.balance(state, 'clean'));
+  // Auftrag 46b: Das Tutorial blendet sauberes Geld aus, bis es die Geldwäsche gibt.
+  const hideClean = useGameSelector((state) => isHudPartHidden(state, 'cleanMoney'));
   const openLaundering = () => api.openPhone('laundering.app');
   return (
-    <div class="hud-money">
+    <div class="hud-money" data-tour="hud.money">
       <span class="hud-money__tile" aria-hidden="true">
         <Icon name="moneyBag" strokeWidth={2} />
       </span>
@@ -26,6 +29,7 @@ export const MoneyHud = memo(function MoneyHud() {
         <button
           type="button"
           class="hud-money__row"
+          data-tour="hud.money.dirty"
           title="Schwarzgeld: damit bezahlst du alles Illegale. Klick: Geldwäsche"
           onClick={openLaundering}
         >
@@ -35,18 +39,21 @@ export const MoneyHud = memo(function MoneyHud() {
           </span>
           <FloatingNumber value={dirty} format={delta} min={5} />
         </button>
-        <button
-          type="button"
-          class="hud-money__row hud-money__row--clean"
-          title="Sauberes Geld: für alles Legale. Klick: Geldwäsche"
-          onClick={openLaundering}
-        >
-          <span class="hud-label is-money">Sauber</span>
-          <span class="hud-money__clean">
-            <CountUp value={clean} format={euro} />
-          </span>
-          <FloatingNumber value={clean} format={delta} min={5} />
-        </button>
+        {!hideClean && (
+          <button
+            type="button"
+            class="hud-money__row hud-money__row--clean"
+            data-tour="hud.money.clean"
+            title="Sauberes Geld: für alles Legale. Klick: Geldwäsche"
+            onClick={openLaundering}
+          >
+            <span class="hud-label is-money">Sauber</span>
+            <span class="hud-money__clean">
+              <CountUp value={clean} format={euro} />
+            </span>
+            <FloatingNumber value={clean} format={delta} min={5} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -57,7 +64,7 @@ export const ClockHud = memo(function ClockHud() {
   // Nur beim Minutenwechsel neu zeichnen (Spielzeit kann zwischen den Minuten Bruchteile haben).
   const time = useGameSelector((state) => Math.floor(state.time));
   return (
-    <div class="hud-clock" title={clock.formatLong(time)}>
+    <div class="hud-clock" data-tour="hud.clock" title={clock.formatLong(time)}>
       <span class="hud-label">
         {clock.weekdayName(time, true)} · Tag {clock.day(time)}
       </span>

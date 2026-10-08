@@ -16,15 +16,17 @@ export {
 export * from './components';
 export { HAPTIC_PATTERNS, type HapticKind, haptic } from './haptics';
 export { shallowEqual, useGame, useGameSelector, useSession, useUi } from './hooks';
-export { islandCountdown } from './phone/islandModel';
+export { hourCountdown } from './phone/countdown';
 export { PhoneScreen, type PhoneScreenProps } from './phone/PhoneScreen';
 /** Handy-Aufbau (≤ 760 px): Module zeigen dann z.B. Blätter statt Dialogen über der Karte. */
 export { cleanPlayerName, getPlayerName, PLAYER_NAME_MAX, setPlayerName } from './player';
+export { popupMayOpen } from './popups';
 export {
   type Advice,
   type Advisor,
   type CityCamera,
   type CityViews,
+  type CoreHudPart,
   type DialogDefinition,
   type DialogId,
   type DialogRegistry,
@@ -32,8 +34,7 @@ export {
   type GameStat,
   getCityViews,
   type HudItem,
-  type LiveActivity,
-  type LiveActivitySource,
+  isHudPartHidden,
   type MapLayerOption,
   onGameEvent,
   type PanelDefinition,
@@ -45,12 +46,13 @@ export {
   registerDialog,
   registerGameStat,
   registerHudItem,
-  registerLiveActivity,
+  registerHudPartHidden,
   registerMapLayerOption,
   registerPanel,
   registerPhoneApp,
   registerSearch,
   registerSlot,
+  registerStatusCounter,
   registerTab,
   type SearchProvider,
   type SearchResult,
@@ -59,21 +61,32 @@ export {
   type SlotName,
   type SlotProps,
   type SlotRegistry,
+  type StatusCounter,
 } from './registry';
 export type {
   Alert,
   CameraMode,
-  IslandPulse,
   MapController,
-  PhoneNotification,
-  Toast,
   ToastKind,
   ToastOptions,
   TrafficLevel,
   UiApi,
+  UiError,
   UiState,
 } from './runtime';
-export { useIsMobile } from './shell/layout';
+export { isMobileLayout, useIsMobile } from './shell/layout';
 export { Slot } from './shell/Slot';
 export { type SoundOnEventOptions, soundOnEvent } from './sound';
 export { memoState, memoStateKeyed } from './stateMemo';
+/** Tour (Auftrag 46a): Spotlight-Erklärungen, ui.tour.start(def); Anker als data-tour="<id>" aus TOUR_ANCHORS. */
+export {
+  phoneAppAnchor,
+  TOUR_ANCHORS,
+  type TourAnchor,
+  type TourApi,
+  type TourDef,
+  type TourOutcome,
+  type TourPlacement,
+  type TourStep,
+  type TourWait,
+} from './tour';

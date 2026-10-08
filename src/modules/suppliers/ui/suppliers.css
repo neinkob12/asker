@@ -143,3 +143,61 @@
 .sup-redirect {
   padding: var(--space-4);
 }
+
+/* Auftrag 46c: das Angebot als ein Block (Anker der Tour; ein echter Kasten, display: contents hätte keine Maße),
+   die Gruppen darin mit demselben Abstand wie direkt in der App */
+.sup-offer > .ui-group {
+  margin-top: var(--space-5);
+}
+
+/* Lieferant kennenlernen (Auftrag 46e): Glas-Karte über der Karte mit Porträt und Stimme. Nur Tokens. */
+.ui-map-dialog__card.sup-meet {
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.sup-meet__kicker {
+  margin: 0;
+  font-family: var(--font-hud);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cat-goods);
+}
+.sup-meet__person {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.sup-meet__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.sup-meet__name {
+  font-family: var(--font-hud-display);
+  font-size: 24px;
+  line-height: 1.1;
+}
+.sup-meet__role {
+  font-size: 12px;
+  color: var(--hud-muted, var(--color-muted));
+}
+.sup-meet__quote {
+  margin: var(--space-1) 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.sup-meet__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+/* Am Handy-Bildschirm trägt das Blatt den Titel schon in seiner Kopfzeile. */
+.ui-map-sheet .sup-meet__kicker {
+  display: none;
+}

@@ -23,7 +23,7 @@ import {
   useGame,
 } from '../../../ui';
 import { cityName, isBusinessSold, presentCity } from '../../city';
-import { phoneAppLocked } from '../../quests';
+import { tutorialAllows } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
   amountInProgress,
@@ -84,6 +84,8 @@ function OpenChannel(props: { channel: LaunderingChannel }) {
   const options = presets(max, c.minAmount);
   return (
     <Group
+      // Auftrag 46c: Anker der Tour (Stufe 8 zeigt den Kiosk).
+      data-tour={c.id === 'kiosk' ? 'laundering.kiosk' : undefined}
       title={c.name}
       icon={c.icon}
       color="dirty"
@@ -305,8 +307,8 @@ registerPhoneApp({
   order: 40,
   color: 'money',
   component: LaunderingApp,
-  // Handy Schritt für Schritt: kommt mit Peters Quest „Wasch 500 €“ (quests, PHONE_APP_STEPS).
-  hiddenWhen: (state) => phoneAppLocked(state, 'laundering.app'),
+  // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
+  hiddenWhen: (state) => !tutorialAllows(state, 'app.laundering'),
 });
 registerSearch({
   id: 'laundering.search',

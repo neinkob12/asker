@@ -215,6 +215,17 @@ function cityVeedel(cityId: string): readonly { id: string }[] {
   return allVeedel(cityId);
 }
 
+/** Titel für die Bestenliste, sobald die Mehrheit der Kölner Veedel dir gehört (Meilenstein, Auftrag 30). */
+export const MILESTONE_TITLE = 'Boss von Köln';
+
+/**
+ * Titel aus den Meilensteinen (Auftrag 46d, früher aus den Quests): „Boss von Köln“, sobald die Mehrheit in Köln
+ * erreicht ist, sonst null. Die Bestenliste nimmt ihn, wenn es keinen Rang gibt.
+ */
+export function milestoneTitle(state: GameState): string | null {
+  return cityMilestones(state, DEFAULT_CITY).majority !== null ? MILESTONE_TITLE : null;
+}
+
 /** Meilensteine einer Stadt (leer, solange nichts erreicht ist). */
 export function cityMilestones(state: GameState, cityId: string = DEFAULT_CITY): CityMilestones {
   return state.modules.territory.milestones?.[cityId] ?? { majority: null, complete: null };

@@ -35,7 +35,7 @@ import {
 } from '../../../ui';
 import { activeCity, cityName, isBusinessSold, relationFactor } from '../../city';
 import { canSnitch } from '../../police';
-import { phoneAppLocked } from '../../quests';
+import { tutorialAllows } from '../../tutorial';
 import { veedelName } from '../../veedel';
 import {
   activeWars,
@@ -74,7 +74,6 @@ import {
   WARN_AT,
 } from '../index';
 import { gangsLayer } from './map';
-import './island';
 import './gangs.css';
 
 declare module '../../../ui' {
@@ -849,7 +848,8 @@ registerTab({
   component: GangsTab,
   // Nach dem Verkauf sind die Gangs Kunden (App Handel), keine Gegner auf der Straße mehr (Auftrag 43). Am Anfang
   // kommt die App mit Peters Quest.
-  hiddenWhen: (state) => isBusinessSold(state) || phoneAppLocked(state, 'tab:gangs'),
+  // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
+  hiddenWhen: (state) => isBusinessSold(state) || !tutorialAllows(state, 'app.gangs'),
   badge: (state) =>
     getGangs(state, activeCity(state)).filter((g) => (getGangStatus(state, g.id)?.stage ?? 0) >= 2).length,
 });
@@ -863,7 +863,7 @@ registerMapLayer(gangsLayer);
 
 onGameEvent('gang.pushStarted', 'gangs.pushToast', (p, ui, state) => {
   const gang = getGang(state, p.gangId);
-  // Vorstöße zeigt die Island live; hier nur der Eintrag für den Verlauf.
+  // Der Eintrag für den Verlauf.
   if (gang) {
     ui.toast(`${gang.name} drängt nach ${veedelName(p.veedelId)}`, p.against === 'player' ? 'bad' : 'info', {
       urgent: false,

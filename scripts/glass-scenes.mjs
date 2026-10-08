@@ -25,6 +25,16 @@ export const PRELUDE = `
     sim.advance(50);
   };
   const render = () => k.runtime.requestRender();
+  /** Tutorial auf Stufe n (Auftrag 46b/46c): Missionen davor erledigt, Touren bis dahin gesehen (sonst nur die genannten). */
+  const tutorialAt = (stage, done = [], seen) => {
+    run('tutorial.start', {});
+    const t = state().modules.tutorial;
+    t.stage = stage;
+    t.mission = null;
+    t.done = done;
+    t.toursSeen = seen ?? Array.from({ length: stage + 1 }, (_, i) => i);
+    t.extraToursSeen = ['delivery', 'driver'];
+  };
   /** Liegeplatz, Rotterdam frei, ein Container bestellt. */
   const harbor = () => {
     rich();
@@ -58,7 +68,10 @@ export const PRELUDE = `
     // Ereignisse aus sim.ctx kommen erst mit dem nächsten Schritt an.
     sim.advance(1);
   };
-  /** Überfall der Hafenkolonne auf den Neumarkt, mit Briefing; Läufer vor Ort. Gibt die ID zurück. */
+  /**
+   * Überfall der Hafenkolonne auf den Neumarkt, Läufer vor Ort. Wird sofort entschieden (Auftrag 46d), die
+   * Ergebnis-Karte öffnet sich über das Ereignis von selbst. Gibt die ID zurück.
+   */
   const raid = async () => {
     const enc = await import('/src/modules/encounters/index.ts');
     const spots = await import('/src/modules/spots/index.ts');
@@ -74,7 +87,8 @@ export const PRELUDE = `
       opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 55, count: 3 },
       origin: { module: 'gangs', ref: 'raid:nord' },
     });
-    api.openDialog('encounters.encounter', { encounterId });
+    // Das Ereignis 'encounter.resolved' (öffnet die Ergebnis-Karte) kommt erst mit dem nächsten Schritt an.
+    sim.advance(1);
     return encounterId;
   };
   /** Hamburg (Auftrag 30): frei, aktiv, du bist dort; Lager in Ottensen, drei Spots auf dem Kiez, Läufer, Ware. */
@@ -221,22 +235,8 @@ export const SCENES = [
     wait: 4500,
   },
   {
-    name: 'konfrontation-briefing',
-    js: `sim.advance(${TIMES.nacht}); busy(); await raid();`,
-  },
-  {
-    name: 'konfrontation-runde',
-    js:
-      'sim.advance(' +
-      TIMES.tag +
-      '); busy(); const id = await raid(); run("encounters.join", { encounterId: id, mode: "self" }); run("encounters.act", { encounterId: id, actionId: "hold" });',
-  },
-  {
     name: 'konfrontation-ergebnis',
-    js:
-      'sim.advance(' +
-      TIMES.nacht +
-      '); busy(); const id = await raid(); run("encounters.join", { encounterId: id, mode: "crew" }); run("encounters.auto", { encounterId: id });',
+    js: `sim.advance(${TIMES.nacht}); busy(); await raid();`,
   },
   {
     name: 'konfrontation-weggelegt',
@@ -375,5 +375,40 @@ export const SCENES = [
     js: `sim.advance(${TIMES.nacht}); busy();`,
     hover: '.spot-marker[aria-label*="Neumarkt"]',
     sizes: ['desktop'],
+  },
+  // Tutorial (Auftrag 46b): Missions-Karte mit Mission 1 (nur der Neumarkt) und mit Teilzielen (Stufe 6). Die Touren
+  // (Auftrag 46c) gelten hier als gesehen, sonst läge Peters Box über dem Bild.
+  {
+    name: 'tutorial',
+    js: 'tutorialAt(1); sim.advance(30); api.flyTo({ lng: 6.9476, lat: 50.9362 }, 15.5);',
+    wait: 3500,
+  },
+  {
+    name: 'tutorial-teilziele',
+    js:
+      "tutorialAt(6, ['serve3', 'buySpots', 'threeProducts']);" +
+      " for (const id of ['zuelpicher', 'rudolfplatz']) run('spots.unlock', { spotId: id }); sim.advance(5); state().wallet.dirty = 4000; run('staff.hireRunner', { spotId: 'neumarkt' }); sim.advance(5);",
+    wait: 3000,
+  },
+  // Touren des Tutorials (Auftrag 46c): Stufe 0 am HUD (erster Schritt, das Schwarzgeld), Stufe 1 am Spot (die
+  // Kundenanzeige am Neumarkt), Stufe 5 im Handy (das App-Symbol Lieferanten). Die Tour startet, sobald der Zustand
+  // die Stufe ohne gesehene Tour zeigt; render() stößt sie an.
+  {
+    name: 'tutorial-tour',
+    js: "run('tutorial.start', {}); render(); await sleep(400);",
+    wait: 3500,
+    live: true,
+  },
+  {
+    name: 'tutorial-tour-spot',
+    js: 'tutorialAt(1, [], [0]); sim.advance(30); render(); await sleep(400);',
+    wait: 4000,
+    live: true,
+  },
+  {
+    name: 'tutorial-tour-handy',
+    js: "tutorialAt(5, ['serve3', 'buySpots'], [0, 1, 2, 3, 4]); sim.advance(5); render(); await sleep(400);",
+    wait: 3500,
+    live: true,
   },
 ];

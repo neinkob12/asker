@@ -145,7 +145,7 @@ Bude (`search`, `gangs/search.ts`), Container (`container`, `trade/packing.ts`),
 (`registerMinigameView` mit `resultLabel` für eigene Stempel, `kit/` mit `useFrameLoop`, `goods.ts` …), Inhalte aus
 `challenge.seed` mit `createRng`, nie `ctx.random()`. `layout: 'map'`: Der Rahmen übernimmt die Karte (`takeOverMap`,
 `activeMap()` aus `src/map`). Dauerklänge mit `audio.loop(id)` (`registerSound` mit `kind: 'loop'`). Minispiele aus dem
-Ausgang einer Konfrontation warten, bis die Akte zu ist (`ui/flow.ts`). Polizei- und Zollmütze als `hat: 'police' |
+Ausgang einer Konfrontation warten, bis die Ergebnis-Karte zu ist (`ui/flow.ts`). Polizei- und Zollmütze als `hat: 'police' |
 'customs'`, Figurenfarben `LOOK_COLORS` aus `src/ui`. Vorschau `?minispiel=<art>`, Bilder `npm run screenshot:minigames
 -- --kind=<art>|alle` (auch `--uhr`, `--spielstand`), Dev-Haken `window.koeln.dev.minigame*`. Elftes Minispiel:
 `docs/architektur.md`, Abschnitt "Minispiele".
@@ -171,6 +171,92 @@ Overlay `Tells.tsx`). Razzia-Countdown neu gezeichnet. Minispiele etwa doppelt s
 `logistics`, Überfall auf den Spot, an dem du stehst, mit dir drin). Test-Spielstände je Minispiel (`?spielstand=minispiel-<art>`,
 Gruppe „Minispiele“, `src/playtest/minigameSaves.ts`): Das Spiel steht an und öffnet sich nach dem Laden von selbst; Auslöser ohne
 Wurf dafür in `police` (`playerChase`, `startUndercoverShift`).
+Auftrag 46b (Modul `tutorial`, Teil von Auftrag 46 „Intro neu“, `docs/auftraege/46-intro-neu.md`): Stufen 0 bis 12 und
+Missionen mit Teilzielen als Daten (`tutorial/config.ts`, `missions.ts`), Belohnung aus den Verkäufen der letzten 24
+Stunden (`missionReward`, `reward.ts`), Missions-Karte im HUD (`placement: 'below'`, Anker `data-tour="hud.mission"`).
+**Startet nur über `tutorial.start`** aus der Oberfläche (Dialog „Neues Spiel“ im Modus normal, `?neu=normal&tutorial=1`);
+Bot, Tests, Test-Spielstände, `npm run balance` und Hardcore laufen mit `enabled: false`, dann ist alles frei. Befehle
+`tutorial.advance` (Erklär-Stufen 0, 3, 4, 10 enden damit; eine erledigte Mission schaltet von selbst weiter),
+`tutorial.skip` (Einstellungen › Einstieg), `tutorial.scripted { key }` (46c). **Freischalten:** Was eine Stufe
+freigibt, steht in `FEATURE_STAGE`; Module fragen `tutorialAllows(state, feature)` am Anfang ihres Ablaufs bzw. im
+`hiddenWhen` der App (ersetzt `phoneAppLocked` aus `quests`), `tutorialAllowsRole(state, role)` beim Personal,
+`spots` fragt `tutorialSpotOpen`/`tutorialSpotCost` (`lockedSpots`, `getAllSpots`, `unlockCostOf`), `suppliers`
+`tutorialSupplierOpen` (`getSuppliers`). Ein neues Feature anhängen: Eintrag in `TutorialFeature` und `FEATURE_STAGE`,
+dann ein `if (!tutorialAllows(state, '…')) return` an der Stelle, die es anbietet (Kommentar „Auftrag 46b“). Der Spot
+sperrt sich mit `spots.lock` (nur ohne Leute und Verkäufe). Der Kern-HUD blendet Teile über
+`registerHudPartHidden` aus (sauberes Geld). Dev-Haken
+`window.koeln.dev.tutorialStage(n)`, Szenen `npm run screenshot -- --scenes=tutorial,tutorial-teilziele`.
+Auftrag 46d (Rückbau, `docs/auftraege/46d-rueckbau.md`): Weg sind Peters Quests (Quest-Karte, „Alle Quests“,
+`PHONE_APP_STEPS`, `phoneAppLocked`, `phoneStepsEnabled`, `questsSuppressed`, Einstellungen › Einstieg für die Handy-Schritte,
+Quest-Belohnungen). Das Modul `quests` heißt weiter so, enthält aber nur noch die Wochenverträge (`quests/contracts.ts`,
+Befehl `quests.acceptContract`, Ereignisse `contract.offered/accepted/finished`, Zustand `{ offers, active, history, stats }`,
+Version 10 mit Migration aus dem alten Zustand); Verträge gibt es erst nach Köln (`contractsOpen(state)`: Geschäft nicht
+verkauft und aktive Stadt nicht Köln oder Köln komplett), HUD-Karte „Wochenvertrag“ (`quests.contract`, Platz `'below'`),
+Panel `quests.contracts`. „Boss von Köln“ (`MILESTONE_TITLE`, `milestoneTitle(state)`) liegt in `territory`, Peter als
+Kontakt nur noch in `tutorial/config.ts`, alte Quest-Chats bleiben lesbar. **Konfrontationen ohne Akte:** Jede wird beim
+Start sofort automatisch entschieden (`resolveNow`/`playOut` in `encounters/engine.ts`; Absichten, Zeiger, Handlungen,
+Taktik und Crew laufen als innere Automatik weiter); steht der Spieler selbst am Spot, startet zuerst das Minispiel
+(Straßenkampf) über `EncounterKind.minigames`, danach spielt der Rest automatisch zu Ende. Das Ergebnis ist eine kurze
+Glas-Karte über der Karte (Dialog `encounters.result`: Stempel Erfolg/Rückzug/Verloren, Kosten, „Okay“). Schnittstelle
+für Module unverändert (`encounters.start`, Ereignis `encounter.resolved`), einziger Befehl `encounters.auto`, Version 6
+schließt offene Konfrontationen alter Stände beim ersten Tick; `TIPOFF_HEAT` bleibt. **Spot-Ausbau weg** (`spots.upgrade`,
+`spots.upgraded`, Zustand `upgrades`; Version 5), `spotModifiers` liefert nur noch `heatFactor` aus Art und Bekanntheit,
+Spot gründen geht nicht mehr über die Karte (Platzhalter im Shop mit 46e). **Dynamic Island weg** (`registerLiveActivity`,
+`pulseIsland`): An ihrer Stelle oben im Handy die feste `StatusPill` (`src/ui/phone/StatusPill.tsx`) mit Zählern, die Module
+über `registerStatusCounter({ id, order, icon, count(state), label(count), open?(ui) })` aus `src/ui` anmelden; der
+einzige ist „n Lieferungen unterwegs“ (`suppliers/ui/island.ts`, Tipp öffnet die Lieferanten-App), sichtbar nur bei n > 0;
+liegt das Handy weg, schwebt sie über der Karte. **Keine Push-Banner:** `ui.toast(text, kind, options)` schreibt nur noch
+in den Verlauf (Einstellungen › Verlauf, Badge an den Einstellungen), `urgent` markiert den Eintrag nur als ungelesen;
+`PhoneNotification`, `ui.notify`, `holdBanner`, die Mitteilungszentrale (`NotificationCenter`), `soundOnEvent`-Banner und
+die Einstellungen dazu sind weg. Einzige Einblendung: die kurze Fehlermeldung zu einem fehlgeschlagenen Befehl des
+Spielers (`ui.error`, `ErrorNotice.tsx`, oben im Handy bzw. über der Karte). Neue Nachricht: nur Badge an der
+Nachrichten-App, kurzer Ton nur bei Fragen mit Frist. Missions-Karte und Tour-Box des Tutorials bleiben. Restzeiten mit
+`hourCountdown` (`src/ui/phone/countdown.ts`). **Chats, die es nicht mehr gibt:** Bewerber-Chats aus `recruiting`
+(Empfehlungen, Milieu, Kumpel von Stammkunden, Knast-Kontakt stehen nur in der Personal-App; `EVENT_INTROS` weg),
+Geschichten der Leute (`staff/stories.ts`, `staff.storyChoice`, `staff.story`/`staff.storyResolved`, `STORY_*`; staff
+Version 8 nimmt `stories` heraus), Marktbericht montags (`marketReport`, `REPORT_*`), Tonis Begrüßung beim Spielstart,
+Ankündigung der Stadt-Events per Handy (das Pop-up zum Start kommt aus 46e). Gangs und Polizei melden sich höchstens einmal pro Spieltag von selbst: Kern-Helfer
+`messages.sentToday(state, contactId)`; `say()` in `gangs/common.ts` lässt Nachrichten ohne Antwortmöglichkeit aus, wenn
+die Gang heute schon geschrieben hat (Fragen mit Antworten gehen immer durch), die Polizei-Nachricht zur Stufe ebenso.
+Tagesberichte der Rechten Hand bleiben.
+Auftrag 47 (Performance, `docs/auftraege/47-performance.md`): Leute haben einen Index nach ID und Stadt
+(`staff/members.ts`; `getStaff` mit `cityId`/`spotId`/`veedelId` liest nur diese Stadt, Routinen laufen über
+`liveMembers`; wer `cityId` einer Person direkt setzt, ruft `invalidateStaffIndex()`). Module können mit `tickOffset`
+versetzt ticken (nur, wenn der Tick nicht an `now % MINUTES_PER_DAY` hängt). Spielstände liegen in IndexedDB
+(`openBrowserSaveStorage`, Spiegel im Arbeitsspeicher, Notfallspeicher im localStorage), der Autosave schreibt nur bei
+Änderung. Spot-Marker nur für die aktive Stadt (`mapSpots`). Abgebrochene Sitzungen meldet der Verlauf, Fehler
+stehen in `koeln-tycoon:errors` (`src/ui/crashlog.ts`, Lebenszeichen je Tab `koeln-tycoon:alive:<tab>`). Messen: `PERF=1 npm run perf:sim` (auch ein Spieltag je
+großem Test-Spielstand) und `scripts/perf-browser.mjs`.
+Auftrag 46e (Wirkungen, `docs/auftraege/46e-wirkungen.md`): Spezialisten wirken (`SPECIALIST_EFFECTS` in
+`staff/config.ts`, nur über `specialistFactor(state, key, cityId)` an der Stelle, die würfelt oder bucht; eine Person
+pro Stadt, die beste, skaliert mit dem Mittel ihrer Schlüsselwerte, „gut“ ab 70): Polizei-Kontakt gegen Zoll
+(`suppliers`, `logistics`), Heat-Zuwachs (`addHeat`) und Kontrollen; Anwalt gegen Festnahmen (`arrestChanceFor` in
+`police`) und halbe Haft; Buchhalter nur einer pro Stadt (`canHireRole`), mehr Erlös auf jeden Verkauf (`customers`),
+weniger Löhne (`wageFactor`, Kasse zeigt die Zeile „Buchhalter“), die Geldwäsche-Gebühr macht er nicht mehr billiger.
+Die Rechte Hand kommt aus den Leutnants (`canBeRightHand`: Leutnant der Stadt und Loyalität, kein Level mehr;
+`RIGHT_HAND_MIN_LIEUTENANTS` 1), Capos gibt es im Tutorial nicht (`tutorialAllows(state, 'staff.capos')`, `NEVER`).
+Lieferanten stellen sich einmal mit einem Pop-up vor (`supplier.introduced`, `SuppliersState.introduced`,
+`Supplier.intro`, kein Chat-Gruß und keine Chat-Vermittlung mehr; freischalten über die App), Stadt-Events kommen halb so
+oft mit mehr Nachfrage (`EVENT_DEMAND_BOOST`, `eventDemand`) und als Pop-up mit „Ware bestellen“ statt Ankündigung per
+Handy; Gangs und Polizei halb so oft, dafür größer (`RAID_EFFECTS`, `METHOD_INTERVAL_BY_CITY`, `CHECK_*`, `RAID_SCOPES`,
+Tests `frequency.test.ts`). Spot gründen ist ein Shop-Platzhalter (`spots.shop`, `SHOP_SPOT_PRICE_CENTS`, kein Kauf).
+Auftrag 46c (Touren und Momente, `docs/auftraege/46c-touren-und-momente.md`): Das Spiel startet mit einer
+Willkommen-Seite (`IntroDialog.tsx`: Name, dann Modus), die Story-Seiten sind weg. Jede Stufe hat ihre Tour mit Peter
+als reine Daten (`tutorial/ui/tours.ts`, `stageTour`, höchstens 140 Zeichen pro Schritt, nur Anker aus `TOUR_ANCHORS`);
+`TourStarter` im HUD startet sie, sobald der Zustand eine Stufe ohne gesehene Tour zeigt (`toursSeen`, Befehl
+`tutorial.tourSeen`, Migration 2), also beim Erreichen und nach dem Laden. Erklär-Stufen (0, 3, 4, 10) enden mit
+`tutorial.advance` aus der Tour, nach Stufe 0 steht das Tempo auf 1. Touren, in denen der Spieler selbst etwas tun muss,
+laufen mit laufender Uhr (`pause: false`) und sind überspringbar. Die geskripteten Momente prüft `tutorial/scripted.ts`
+jede Spielminute (Ereignis `tutorial.scriptedMoment`): Handy-Bestellung bei 3.000 € (`customers.scriptedOrder`),
+Pop-up „Lager fast leer“ (Dialog `tutorial.lowStock`, bis zu dreimal, eins pro Tag, `LOW_STOCK_POPUP`), erster
+Gang-Angriff bei 6.000 € (`gangs.scriptedRaid`, Kategorie `loss.gang`, Ereignis `gang.raided`; bis dahin kein
+zufälliger Überfall), Beschlagnahme der zweiten Rotterdam-Lieferung am Kai (`scriptedSeizure` in `suppliers`,
+`SCRIPTED_SEIZURE`), die die Tour der Stufe 9 startet. Peter schreibt im Tutorial nicht, was die Tour sagt; die
+Belohnung ist eine Zeile im Chat. Wetter steht wieder im HUD neben der Uhr (`weather/ui`, Anker `hud.weather`,
+HUD-Platz `'time'` auch am Handy-Bildschirm). Neue Anker (nur Attribute): `spot.marker`, `chat.reply`,
+`staff.lieutenants`, `staff.hire`, `suppliers.shipments`, `suppliers.offer`, `suppliers.orderMode`,
+`laundering.kiosk`, `port.berth`, `routes.new`. Pop-ups über der Karte warten, solange eine Tour läuft (`ui.state.tour`
+in `popupMayOpen`). Szenen `npm run screenshot -- --scenes=tutorial-tour,tutorial-tour-spot,tutorial-tour-handy`.
 Auftrag 47 (Fragerunde 07.10.2026, `docs/auftraege/47-minispiele-3d.md`): Minispiele in 3D mit three.js (Paket nur im
 `ui/`-Ordner eines Moduls erlaubt, Modelle aus Grundformen im Code, nichts wird geladen). Baukasten `minigames/ui/kit/stage3d.ts`
 (`useStage3d`: Renderer, Größe, Pixelverhältnis) und `kit/scene3d.ts` (`buildCar`, `lightScene`, `setBlueLight`,
@@ -196,7 +282,7 @@ src/modules/   Spielsysteme, je ein Ordner = ein Modul (veedel, spots, staff, ro
   <id>/*.test.ts    Tests neben dem Code
   <id>/ui/index.tsx Oberfläche des Moduls (Panels, Tabs, HUD, Karten-Layer …), automatisch geladen
   _template/        kommentierte Kopiervorlage (wird nicht registriert)
-src/ui/        Oberfläche (dunkel; iPhone mit Dynamic Island als Zentrale): Shell, Registries, Bausteine, Design-Tokens (styles/), Handy (phone/)
+src/ui/        Oberfläche (dunkel; iPhone als Zentrale): Shell, Registries, Bausteine, Design-Tokens (styles/), Handy (phone/)
 src/map/       Grundkarte (MapLibre, gedämpfter Look), Registry für Karten-Layer, Effekt-Werkzeuge (3D-Fahrzeuge, Hotspots …)
 src/audio/     Musik und Soundeffekte (für Module über src/ui erreichbar)
 src/playtest/  Tests über alle Module: Bot fürs Balancing (bot.ts), Spielende (endings.test.ts)
@@ -238,7 +324,7 @@ declare module '../../core' {
 export default defineModule({
   id: 'casino', version: 1, dependsOn: ['goods'],
   init: (ctx) => ({ ... }),                        // Anfangszustand
-  tick: (ctx) => { ... }, tickEvery: 60,           // optional, Standard jede Spielminute
+  tick: (ctx) => { ... }, tickEvery: 60,           // optional, Standard jede Spielminute; tickOffset: 7 = um x:07
   commands: { 'casino.bet': (ctx, payload, meta) => ({ ok: true }) },   // oder { ok: false, reason: '…' }
   on: { 'sale.completed': (ctx, payload) => { ... } },
   migrations: { 2: (old: CasinoStateV1) => ({ ...old, neu: 0 }) },
@@ -282,8 +368,9 @@ export default defineModule({
   Häfen müssen `scripts/check-roads.mjs` bestehen (höchstens 60 m bis zur nächsten Straße).
   Nachrichten: `messages.send(ctx, { contact, text, options, expiresIn?, silent? })` – alle Figuren reden per Handy mit
   dem Spieler. Benannte Figuren geben im Kontakt Aussehen und Stimme mit (`look`, `voice`, `role`, `about`), nie ein
-  Emoji als Gesicht. Ein Banner mit Ton gibt es nur für Nachrichten mit Antwortfrist (`options` + `expiresIn`), alles andere
-  zählt still am Badge (`silent` ist damit nur noch für die Mitteilungszentrale relevant). Gelöschte Chats bleiben im
+  Emoji als Gesicht. Banner gibt es seit Auftrag 46d nicht mehr: Eine neue Nachricht zählt am Badge der Nachrichten-App,
+  einen kurzen Ton gibt es nur für Fragen mit Antwortfrist (`options` + `expiresIn`). Gangs und Polizei melden sich
+  höchstens einmal pro Spieltag von selbst (`messages.sentToday(state, contactId)`). Gelöschte Chats bleiben im
   Zustand (`messages.hidden`) und kommen wieder, sobald die Figur neu schreibt. Spielende: `outcome.gameOver(ctx, 'killed')`,
   `outcome.win(ctx)`.
 
@@ -301,7 +388,7 @@ In `src/modules/<id>/ui/index.tsx` (Beispiel in `_template/ui/`): `registerHudIt
 (unten in der Kasse), `'core.settings'` (eigener Abschnitt in den Einstellungen mit `title`, `icon`, `color`) oder `'map.overlay'`
 über der Kartenfläche), `registerPanel`,
 `registerDialog` (mit `area: 'map'` nur über der Kartenfläche, dazu `MapDialog`), `registerMapLayerOption` (Menü Ebenen),
-`registerPhoneApp`, `registerLiveActivity` (Dynamic Island), `registerAdvisor` (Karte "Nächster Schritt"), `registerSearch` (Strg/⌘+K), `registerGameStat`
+`registerPhoneApp`, `registerStatusCounter` (Zähler in der festen Anzeige oben im Handy), `registerAdvisor` (Karte "Nächster Schritt"), `registerSearch` (Strg/⌘+K), `registerGameStat`
 (Game-Over-Bildschirm), `onGameEvent`, `soundOnEvent` aus `src/ui`, `registerMapLayer` und `mapEffects` aus `src/map`.
 **Optik-Regeln (Auftrag 27):** Eigenschaften in Listen als Chips (`ItemContent tags`, `Chip`/`Chips`), nie als „a · b · c“;
 Abschnitte als `Group` (Unterlage, farbige Kopfzeile, `value`, `collapsible`); höchstens ein Satz Erklärung sichtbar, mehr in
@@ -309,9 +396,10 @@ Abschnitte als `Group` (Unterlage, farbige Kopfzeile, `value`, `collapsible`); h
 HUD-Anzeigen mit `<HudPill>` (mit `details` klappt beim Drüberfahren eine Glas-Karte auf). **Das Handy hat seit Auftrag 26 sechs Apps**
 (Kasse, Reviere, Gangs, Personal, Geldwäsche, Einstellungen), dazu seit dem Hamburger Lager-Kauf die App „Lager“ (`goods.app`: eigene Lager, Standorte kaufen) und vier im Dock (Nachrichten, Lieferanten, Personal,
 Kasse): Neues hängt sich als Abschnitt oder Seite an eine davon (Slots oben, `registerPanel`), eine neue App braucht einen Grund;
-`hidden: true` hält eine App vom Startbildschirm fern, `ui.openPhone(id)` öffnet sie trotzdem. **Banner nur für Dringendes:**
-`ui.toast(text, kind, { urgent })` erscheint als Banner nur bei `'bad'`/`'warn'` oder `urgent: true` (Lieferung da, Löhne nicht
-gedeckt), Routine landet still im Verlauf (Einstellungen › Verlauf, Seite `core.history`).
+`hidden: true` hält eine App vom Startbildschirm fern, `ui.openPhone(id)` öffnet sie trotzdem. **Keine Banner (Auftrag 46d):**
+`ui.toast(text, kind, { urgent })` schreibt nur in den Verlauf (Einstellungen › Verlauf, Seite `core.history`); `urgent`
+(Standard bei `'bad'`/`'warn'`) zählt den Eintrag ungelesen am Badge der Einstellungen. Die einzige Einblendung ist die
+kurze Fehlermeldung zu einem fehlgeschlagenen Befehl des Spielers (`ui.error`).
 Nur Bausteine aus `src/ui/components` (auch `Select`, `Avatar`, `Icon` …) und Design-Tokens (`var(--color-…)`,
 `var(--space-…)`) verwenden. **Farben tragen Bedeutung**: `color="money" | "dirty" | "danger" | "warn" | "place" | "goods" | "people" | "chat" | "law" …`
 (Bedeutungsfarben `--cat-*`, Hell und Dunkel, Kontrast geprüft), möglichst keine freien Hex-Werte in Modul-UIs. Eine Karte

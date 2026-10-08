@@ -1,0 +1,287 @@
+/* Missions-Karte des Tutorials unter Geld und Heat (Look "Glas"): dunkles Glas, Barlow, Gold wie die Quest-Karte. */
+
+.tutorial-hud {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 300px;
+  max-width: 100%;
+  padding: var(--space-3) var(--space-4) var(--space-3);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid color-mix(in srgb, var(--hud-gold) 60%, transparent);
+  box-shadow:
+    var(--hud-shadow),
+    0 0 28px -8px color-mix(in srgb, var(--hud-gold) 45%, transparent);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  animation: pop-in var(--duration-slow) var(--ease-out);
+}
+
+.hud-label.is-tutorial {
+  color: var(--hud-gold);
+}
+
+.tutorial-hud__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 24px;
+}
+
+.tutorial-hud__icon-btn,
+.tutorial-hud__main,
+.tutorial-hud--mini {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tutorial-hud__icon-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-right: -6px;
+  border-radius: 50%;
+  color: var(--hud-ink-2);
+}
+.tutorial-hud__icon-btn:hover {
+  background: var(--hud-glass-fill);
+  color: var(--hud-ink);
+}
+
+.tutorial-hud__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: left;
+  border-radius: var(--hud-radius-button);
+}
+div.tutorial-hud__main {
+  cursor: default;
+}
+
+.tutorial-hud__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tutorial-hud__title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  hyphens: none;
+}
+
+.tutorial-hud__hint {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--hud-ink-2);
+}
+
+.tutorial-hud__go {
+  flex: none;
+  color: var(--hud-gold);
+  transition: transform var(--duration) var(--ease-out);
+}
+.tutorial-hud__main:hover .tutorial-hud__go {
+  transform: translateX(2px);
+}
+
+.tutorial-hud__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.tutorial-hud__bar {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hud-empty);
+  overflow: hidden;
+}
+
+.tutorial-hud__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--hud-gold);
+  transition: width var(--duration-slow) var(--ease-out);
+}
+
+.tutorial-hud__count {
+  font-family: var(--font-hud-display);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Teilziele als Liste mit Haken */
+.tutorial-hud__parts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tutorial-hud__part {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.tutorial-hud__check {
+  flex: none;
+  color: var(--hud-ink-2);
+}
+.tutorial-hud__part.is-done .tutorial-hud__check {
+  color: var(--hud-gold);
+}
+.tutorial-hud__part-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tutorial-hud__part.is-done .tutorial-hud__part-label {
+  color: var(--hud-ink-2);
+  text-decoration: line-through;
+}
+.tutorial-hud__part .tutorial-hud__count {
+  font-size: 13px;
+}
+
+.tutorial-hud__reward {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--hud-radius-button);
+  background: var(--hud-glass-fill);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hud-gold);
+  white-space: nowrap;
+}
+
+.tutorial-hud__cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--hud-radius-button);
+  background: var(--hud-gold);
+  color: var(--hud-gold-on);
+  font-family: var(--font-hud);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tutorial-hud__cta:hover {
+  filter: brightness(1.08);
+}
+
+/* Neue Mission oder Stufe: Die Karte leuchtet beim Erscheinen dreimal golden auf (auch nach einer erledigten). */
+.tutorial-hud.is-new {
+  animation:
+    pop-in var(--duration-slow) var(--ease-out),
+    tutorial-glow 1.4s var(--ease-out) 0.3s 3;
+}
+@keyframes tutorial-glow {
+  0% {
+    box-shadow:
+      var(--hud-shadow),
+      0 0 0 0 color-mix(in srgb, var(--hud-gold) 75%, transparent);
+  }
+  100% {
+    box-shadow:
+      var(--hud-shadow),
+      0 0 0 14px color-mix(in srgb, var(--hud-gold) 0%, transparent);
+  }
+}
+
+/* Eingeklappt: eine Zeile mit Ziel und Stand */
+.tutorial-hud--mini {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 300px;
+  min-height: 40px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--hud-radius-tile);
+  background: var(--hud-glass);
+  -webkit-backdrop-filter: var(--hud-blur);
+  backdrop-filter: var(--hud-blur);
+  border: 1px solid var(--hud-glass-edge);
+  color: var(--hud-ink);
+  font-family: var(--font-hud);
+  font-size: 13px;
+  font-weight: 600;
+}
+.tutorial-hud--mini > .ui-icon:first-child {
+  color: var(--hud-gold);
+}
+.tutorial-hud__mini-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Einstellungen › Einstieg */
+.tutorial-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Handy-Bildschirm: volle Breite, kompakter */
+@media (max-width: 760px) {
+  .tutorial-hud,
+  .tutorial-hud--mini {
+    width: 100%;
+    max-width: none;
+  }
+  .tutorial-hud {
+    gap: 6px;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--hud-radius-tile);
+  }
+  .tutorial-hud__cta {
+    min-height: var(--touch-target-phone);
+  }
+}
+
+/* Auftrag 46c: Pop-up „Lager fast leer“ mit Peter */
+.tutorial-popup__body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.tutorial-popup__text {
+  margin: 0;
+  line-height: 1.5;
+}

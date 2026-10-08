@@ -1,10 +1,11 @@
 // Das Spiel-Handy ist die Schaltzentrale: Alle Bereiche der Module (Tabs) und die Handy-Apps laufen hier, dazu
 // die Details von Spots, Veedeln und Personen (Panels). Am Desktop ist es rechts fest angedockt (weglegen klappt
-// es an den Rand), am Handy füllt es den Bildschirm unter dem HUD. Look: iPhone (Pro) mit Dynamic Island.
-// Statusleiste in drei Spalten (Uhrzeit links, Island Mitte, Empfang/WLAN/Akku rechts). Der Startbildschirm ist
+// es an den Rand), am Handy füllt es den Bildschirm unter dem HUD. Look: iPhone (Pro); oben statt der Dynamic Island
+// eine feste Anzeige mit Zahl und Symbol (StatusPill.tsx, Auftrag 46d).
+// Statusleiste in drei Spalten (Uhrzeit links, Anzeige Mitte, Empfang/WLAN/Akku rechts). Der Startbildschirm ist
 // bewusst ruhig (Auftrag 26): schwarzer Hintergrund, sechs Apps im Raster, vier im Glas-Dock, kein Widget. Nur ein
 // dringender Rat (Priorität ab 80, z.B. ein Chat mit Frist) erscheint als eine wegwischbare Zeile ganz oben.
-// Liegt das Handy weg, schwebt die Island oben über der Karte.
+// Liegt das Handy weg, schwebt die Anzeige oben über der Karte, wenn es etwas zu zeigen gibt.
 //
 // Navigation: Seiten liegen als Stapel übereinander (navModel.ts, PageStack.tsx): Startbildschirm, Wurzel einer App,
 // darüber Abschnitte, Details und Unterseiten. Das Dock gibt es nur auf dem Startbildschirm (wie bei iOS). Apps sind
@@ -22,8 +23,6 @@ import {
   Icon,
   IconChip,
   type MenuAction,
-  NotificationCenter,
-  type NotificationItem,
   PortalHostContext,
   SwipeRow,
 } from '../components';
@@ -47,23 +46,22 @@ import { Slot } from '../shell/Slot';
 import { SectionContent, TabContent } from '../shell/TabContent';
 import { stateRevision } from '../stateMemo';
 import { CallScreen } from './CallScreen';
-import { DynamicIsland } from './DynamicIsland';
 import { startDrag } from './drag';
+import { PhoneErrorNotice } from './ErrorNotice';
 import {
   EDGE_ZONE,
   edgeSwipeCommits,
   edgeSwipeProgress,
-  FLING,
   homeSwipeCommits,
   homeSwipeOpenness,
   rubberBand,
 } from './gestureModel';
 import { chatList } from './messagesModel';
-import { PhoneNotice } from './Notification';
 import { type NavEntry, top as topEntry } from './navModel';
 import { appIdOf, PageStack, type PageStackHandle } from './PageStack';
 import { PhoneScreen } from './PhoneScreen';
 import { bindPressFeedback } from './press';
+import { StatusPill } from './StatusPill';
 import { tileColor } from './tile';
 
 /** Apps im Dock unten auf dem Startbildschirm: Nachrichten, Lieferanten, Personal, Kasse (sofern vorhanden). */
@@ -133,13 +131,13 @@ function homeApps(state: GameState, ui: UiState): HomeApp[] {
 }
 
 /**
- * Oben auf einem echten Handy: keine zweite Statusleiste (die echte ist ja da), nur die Live-Aktivitäten als
- * schwebende Pille mit der Spielzeit.
+ * Oben auf einem echten Handy: keine zweite Statusleiste (die echte ist ja da), nur die Anzeige als schwebende Pille
+ * mit der Spielzeit.
  */
 function PillBar(props: { time: number }) {
   return (
     <header class="phone__status phone__status--pill">
-      <DynamicIsland clock={clock.formatTime(props.time)} />
+      <StatusPill clock={clock.formatTime(props.time)} />
     </header>
   );
 }
@@ -190,7 +188,7 @@ function StatusBar(props: { time: number }) {
         <Icon name="wifi" class="phone__wifi" />
         <Icon name="battery" class="phone__battery" />
       </span>
-      <DynamicIsland />
+      <StatusPill />
     </header>
   );
 }
@@ -264,6 +262,7 @@ const AppTile = memo(function AppTile(props: { app: HomeApp; onOpen: () => void;
         type="button"
         class={`phone__app ${props.dock ? 'is-dock' : ''}`}
         data-app-id={app.id}
+        data-tour={`phone.app.${app.id}`}
         onClick={(e) => {
           markTapped(e.currentTarget);
           props.onOpen();
@@ -378,7 +377,7 @@ const HomeScreen = memo(function HomeScreen() {
     .sort((a, b) => rank(a) - rank(b));
   const urgent = urgentAdvice(state);
   return (
-    <div class="phone__home">
+    <div class="phone__home" data-tour="phone.home">
       <div class="phone__home-scroll">
         {urgent && <UrgentAdvice key={urgent.id} advice={urgent} />}
         <div class="phone__widgets">
@@ -484,11 +483,11 @@ function MissingPage(props: { entry: NavEntry }) {
 
 /** Weggelegtes Handy am Desktop: schmale Lasche am rechten Rand mit Uhrzeit und ungelesenen Nachrichten. */
 function PhoneTab(props: { time: number; unread: number }) {
-  const { api, ui } = useRuntime();
+  const { api } = useRuntime();
   return (
     <button
       type="button"
-      class={`phone-tab ${ui.buzz > 0 ? `is-buzzing-${ui.buzz % 2}` : ''}`}
+      class="phone-tab"
       onClick={api.showPhone}
       aria-label={props.unread > 0 ? `Handy, ${props.unread} ungelesen` : 'Handy'}
       title="Handy (T)"
@@ -502,7 +501,7 @@ function PhoneTab(props: { time: number; unread: number }) {
 
 /** Handy in der Tasche (Handy-Bildschirm): Leiste unten mit dem nächsten Schritt und dem Handy-Knopf. */
 function MobileDock(props: { state: GameState; unread: number }) {
-  const { api, ui } = useRuntime();
+  const { api } = useRuntime();
   const top = collectAdvice(props.state)[0];
   return (
     <nav class="mobile-dock" aria-label="Handy">
@@ -525,7 +524,7 @@ function MobileDock(props: { state: GameState; unread: number }) {
       )}
       <button
         type="button"
-        class={`mobile-dock__phone ${ui.buzz > 0 ? `is-buzzing-${ui.buzz % 2}` : ''}`}
+        class="mobile-dock__phone"
         onClick={() => api.openPhone()}
         aria-label={props.unread > 0 ? `Handy, ${props.unread} ungelesen` : 'Handy'}
       >
@@ -536,9 +535,6 @@ function MobileDock(props: { state: GameState; unread: number }) {
     </nav>
   );
 }
-
-/** Statusleiste: Herunterziehen in diesem Streifen öffnet die Mitteilungszentrale. */
-const STATUS_PULL_ZONE = 44;
 
 /**
  * Gesten des Bildschirms (Pointer Events, Maus und Touch gleich): Rand-Wischen zurück (Start höchstens 24 px vom
@@ -556,21 +552,8 @@ function usePhoneGestures(screen: { current: HTMLDivElement | null }, stack: { c
       if (!animator || !e.isPrimary || e.button !== 0 || hasOverlay()) return;
       const rect = el.getBoundingClientRect();
       const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
       const target = e.target as Element;
-      if (target.closest('.phone__nav, .phone__toolbar, .phone-notice, .island-wrap')) return;
-      // Statusleiste herunterziehen: Mitteilungszentrale (wie bei iOS von oben)
-      if (y < STATUS_PULL_ZONE && !target.closest('input, textarea')) {
-        startDrag(e, el, {
-          axis: 'y',
-          accept: (_dx, dy) => dy > 0,
-          onMove: () => {},
-          onEnd: ({ dy, vy }, cancelled) => {
-            if (!cancelled && (dy > 40 || vy > FLING)) runtime.api.toggleNotificationCenter(true);
-          },
-        });
-        return;
-      }
+      if (target.closest('.phone__nav, .phone__toolbar, .ui-error-notice, .status-pill-wrap')) return;
       const pages = runtime.ui.phone.stack;
       if (x > EDGE_ZONE || pages.length < 2) return;
       const front = pages[pages.length - 1].key;
@@ -625,33 +608,7 @@ function usePhoneGestures(screen: { current: HTMLDivElement | null }, stack: { c
   };
 }
 
-/** Bildschirm des offenen Handys: Seitenstapel, Statusleiste, Banner, Home-Balken. */
-/** Mitteilungszentrale: alle Benachrichtigungen, neueste zuerst (Banner oder Statusleiste herunterziehen). */
-function Center(props: { state: GameState }) {
-  const { ui, api } = useRuntime();
-  const items: NotificationItem[] = ui.notifications.map((n) => {
-    const tile = tileColor((n.appId ? phoneApps.get(n.appId)?.color : undefined) ?? 'chat');
-    const item: NotificationItem = { id: n.id, title: n.title, text: n.text, color: tile.color, style: tile.style };
-    if (n.icon) item.icon = n.icon;
-    if (n.time !== undefined) item.time = clock.formatTime(n.time);
-    return item;
-  });
-  return (
-    <NotificationCenter
-      open={ui.notificationCenter}
-      items={items}
-      heading={`${clock.weekdayName(props.state.time)}, Tag ${clock.day(props.state.time)}`}
-      onClose={() => api.toggleNotificationCenter(false)}
-      onClear={api.clearNotifications}
-      onOpen={(item) => {
-        const n = ui.notifications.find((x) => x.id === item.id);
-        api.toggleNotificationCenter(false);
-        if (n) api.openPhone(n.appId ?? null, n.params);
-      }}
-    />
-  );
-}
-
+/** Bildschirm des offenen Handys: Seitenstapel, Statusleiste, Rückmeldung, Home-Balken. */
 function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boolean }) {
   const { ui, api } = useRuntime();
   const inCall = messages.ringingCalls(props.state).length > 0 || ui.call !== null;
@@ -676,10 +633,9 @@ function PhoneScreenArea(props: { state: GameState; mobile: boolean; device: boo
       <ErrorBoundary name="Anruf" silent>
         <CallScreen state={props.state} />
       </ErrorBoundary>
-      <Center state={props.state} />
       {props.device ? <PillBar time={props.state.time} /> : <StatusBar time={props.state.time} />}
-      {/* Wie beim iPhone: Während eines Anrufs keine Banner über dem Anrufer (sie bleiben in der Mitteilungszentrale). */}
-      {!inCall && <PhoneNotice />}
+      {/* Während eines Anrufs nichts über dem Anrufer. */}
+      {!inCall && <PhoneErrorNotice />}
       {props.mobile ? (
         <PhoneToolbar atHome={atHome} onHomeDown={homeSwipe} />
       ) : (
@@ -713,7 +669,7 @@ export function PhoneFrame() {
   if (!ui.phone.open) {
     return (
       <>
-        <DynamicIsland floating />
+        <StatusPill floating />
         {mobile ? <MobileDock state={state} unread={unread} /> : <PhoneTab time={state.time} unread={unread} />}
       </>
     );
@@ -721,10 +677,11 @@ export function PhoneFrame() {
   return (
     <section
       class={`phone ${device ? 'phone--device' : ''} ${locked ? 'is-locked' : ''}`}
+      data-tour="phone"
       aria-label="Handy"
       inert={locked}
     >
-      <div class={`phone__device ${ui.buzz > 0 ? `is-buzzing-${ui.buzz % 2}` : ''}`}>
+      <div class="phone__device">
         <PhoneScreenArea state={state} mobile={mobile} device={device} />
       </div>
       {/* Weglegen am Desktop: neben dem Gerät, damit der Knopf nie über dem Inhalt liegt */}

@@ -28,8 +28,8 @@ import {
 import { activeCity, presentCity } from '../city';
 import { addHeat } from '../police';
 import { getReputation, reputationLabel } from '../reputation';
-import { bonus } from '../staff';
 import { controlledBy, PLAYER_FACTION } from '../territory';
+import { tutorialAllows } from '../tutorial';
 import {
   LAUNDERING_CAPACITY_BY_CITY,
   LAUNDERING_CHANNELS,
@@ -122,10 +122,12 @@ export function getChannels(state: GameState): readonly LaunderingChannel[] {
   return LAUNDERING_CHANNELS.filter((c) => !c.harborOnly || isChannelUnlocked(state, c.id));
 }
 
-/** Gebühr eines Wegs als Anteil (0,2 = 20 %), inklusive Rabatt durch Buchhalter. */
-export function channelFee(state: GameState, id: LaunderingChannelId): number {
-  const fee = getChannel(id).fee - bonus(state, 'launderingFeeDiscount');
-  return Math.round(Math.max(MIN_LAUNDERING_FEE, fee) * 1000) / 1000;
+/**
+ * Gebühr eines Wegs als Anteil (0,2 = 20 %). Der Buchhalter macht sie seit Auftrag 46e nicht mehr billiger (er bringt
+ * mehr Erlös und spart Löhne, sonst wird nichts günstiger); state bleibt für die Aufrufer in der Schnittstelle.
+ */
+export function channelFee(_state: GameState, id: LaunderingChannelId): number {
+  return Math.round(Math.max(MIN_LAUNDERING_FEE, getChannel(id).fee) * 1000) / 1000;
 }
 
 /** Dauer einer Wäsche über einen Weg in Spielminuten. */
@@ -210,6 +212,8 @@ export function getLaunderingStats(state: GameState): LaunderingState {
 export function canUnlockChannel(state: GameState, id: LaunderingChannelId): CommandResult {
   const c = getChannel(id);
   if (isChannelUnlocked(state, id)) return { ok: false, reason: 'Schon freigeschaltet.' };
+  // Auftrag 46b: Im Tutorial erst der Kiosk, die anderen Wege ab Stufe 9.
+  if (!tutorialAllows(state, 'laundering.allWays')) return { ok: false, reason: 'Dazu kommst du später.' };
   if (!c.unlock) return { ok: true };
   const needsRep = c.unlock.reputation !== undefined;
   const needsVeedel = c.unlock.veedel !== undefined;

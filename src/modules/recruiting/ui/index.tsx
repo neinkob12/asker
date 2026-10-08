@@ -12,6 +12,7 @@ import {
   Disclosure,
   Empty,
   Group,
+  Hint,
   ItemContent,
   List,
   ListItem,
@@ -26,6 +27,7 @@ import {
 import { activeCity } from '../../city';
 import { getSpots } from '../../spots';
 import {
+  canHireRole,
   isSpecialist,
   roleName,
   runnerAt,
@@ -36,6 +38,7 @@ import {
   type TraitId,
   traitName,
 } from '../../staff';
+import { tutorialAllowsRole } from '../../tutorial';
 import {
   type Candidate,
   canInterview,
@@ -229,6 +232,7 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
     setSpotChoice(null);
     props.onClose();
   };
+  const roleCheck = c ? canHireRole(state, c.role) : { ok: true as const };
   return (
     <Sheet open={!!c} onClose={close} title={c?.name ?? ''} detents={['medium', 'large']}>
       {c && (
@@ -314,10 +318,12 @@ function CandidateSheet(props: { candidate: Candidate | null; onClose: () => voi
               </List>
             </Group>
           )}
+          {/* Auftrag 46e: nur ein Buchhalter pro Stadt, der Grund steht dabei. */}
+          {!roleCheck.ok && <Hint icon="alert">{roleCheck.reason}</Hint>}
           <div class="rc-sheet__actions">
             <Button
               variant="primary"
-              disabled={state.wallet.dirty < c.hireCost}
+              disabled={state.wallet.dirty < c.hireCost || !roleCheck.ok}
               onClick={() => {
                 const assignment = spotId === NO_SPOT ? null : { kind: 'spot' as const, targetId: spotId };
                 const hired = dispatch({
@@ -409,7 +415,11 @@ function Search() {
         aria-label="Wen suchst du?"
         options={[
           { value: 'any' as const, label: 'Egal wen' },
-          ...SEARCH_ROLES.map((r) => ({ value: r.value, label: r.label.replace(' suchen', '') })),
+          // Auftrag 46b: Im Tutorial nur Rollen, die seine Stufe schon kennt.
+          ...SEARCH_ROLES.filter((r) => tutorialAllowsRole(state, r.value)).map((r) => ({
+            value: r.value,
+            label: r.label.replace(' suchen', ''),
+          })),
         ]}
         value={role}
         onChange={setRole}

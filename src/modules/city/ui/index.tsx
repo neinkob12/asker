@@ -1,5 +1,5 @@
 // Oberfläche der Städte (Auftrag 30 und 36). Bis zur Übergabe: eine Glas-Karte unter Geld und Heat (wie die
-// Quest-Karte), solange eine Stadt wartet: was noch fehlt, und ein Tipp führt dorthin, wo man es erledigt (Rechte Hand,
+// Missions-Karte), solange eine Stadt wartet: was noch fehlt, und ein Tipp führt dorthin, wo man es erledigt (Rechte Hand,
 // Personal, Reviere; ist alles bereit, der Chat der Stadt bzw. die Übergabe). Ab zwei freien Städten: der Stadt-Chip
 // oben rechts (Köln ▾) mit den Städten und Deutschland; die Kamera folgt der aktiven Stadt (registerCityViews), in der
 // Deutschland-Ansicht stehen alle Städte als Glas-Karten auf der Karte (cards.tsx) über dem Autobahn-Netz (map.ts).
@@ -29,6 +29,7 @@ import { getSpots } from '../../spots';
 import { enlist, generateProfile } from '../../staff';
 import { addInfluence, campaignProgress, factions, PLAYER_FACTION } from '../../territory';
 import { EUROPE_CITIES, FOREIGN_CITIES, getCustomer } from '../../trade';
+import { tutorialAllows } from '../../tutorial';
 import { allVeedel } from '../../veedel';
 import {
   ABROAD_CITIES,
@@ -302,7 +303,7 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
       if (!getRightHand(s.state)) {
         const ctx = s.ctx('dev');
         s.state.wallet.dirty = Math.max(s.state.wallet.dirty, 20000);
-        // Eine Rechte Hand gibt es erst ab zwei Leutnants.
+        // Zwei Leutnants bleiben, ein dritter steigt zur Rechten Hand auf (Auftrag 46e: aus den Leutnants).
         for (const spot of getSpots(s.state).slice(0, 2)) {
           if (lieutenantOfSpot(s.state, spot.id)) continue;
           const lt = enlist(ctx, generateProfile(ctx, 'runner', { level: 3 }), { origin: 'pool' });
@@ -311,6 +312,8 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
         }
         const boss = enlist(ctx, generateProfile(ctx, 'runner', { level: 5 }), { origin: 'pool' });
         boss.stats.loyalty = 90;
+        const free = getSpots(s.state).find((spot) => !lieutenantOfSpot(s.state, spot.id)) ?? getSpots(s.state)[0];
+        if (free) s.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: [free.id] } });
         s.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });
       }
       const rh = getRightHand(s.state);
@@ -398,10 +401,13 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 
 function RankHud() {
   const { state } = useGame();
+  // Auftrag 46b: Im Tutorial erscheint der Rang mit dem ersten Aufstieg.
+  if (!tutorialAllows(state, 'hud.rank')) return null;
   const rank = playerRank(state);
   const reachedAt = PLAYER_RANKS.findIndex((r) => r.id === rank.id);
   return (
     <HudPill
+      data-tour="hud.rank"
       icon="crown"
       color="brand"
       label="Rang"

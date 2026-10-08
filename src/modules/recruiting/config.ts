@@ -93,14 +93,6 @@ export const SOURCE_NAMES: Record<CandidateSource, string> = {
   event: 'Kontakt',
 };
 
-/** Texte für Kontakte aus dem Milieu. {name} wird ersetzt. */
-export const EVENT_INTROS = [
-  'Hab gehört, du suchst Leute. Ich bin {name}. Meld dich, wenn du was Ernstes hast.',
-  'Ein Freund von einem Freund sagt, bei dir gibt es Arbeit. {name} hier. Ich mach keinen Kinderkram.',
-  '{name}. Ich hab früher für die Konkurrenz gearbeitet. Die zahlen schlecht. Du auch?',
-  'Man sagt, du bist der Neue in der Stadt. {name}, ich kann dir helfen. Nicht umsonst.',
-];
-
 /**
  * Bewerbungsgespräch (Auftrag 44, Teil 9): Schwierigkeit aus Level und Herkunft. Wer schon Erfahrung hat oder aus dem
  * Milieu kommt, lässt sich weniger in die Karten schauen.

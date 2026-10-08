@@ -52,6 +52,7 @@ import {
   staffContact,
 } from '../staff';
 import { campaignProgress } from '../territory';
+import { tutorialAllows } from '../tutorial';
 import { veedelCity, veedelName } from '../veedel';
 import { reportTip } from './advice';
 import { capoInCharge, cleanupCapos, dismissCapo, isCapo } from './capo';
@@ -72,7 +73,6 @@ import {
   RIGHT_HAND_INTERVAL,
   RIGHT_HAND_LAUNDER_SHARE_OPTIONS,
   RIGHT_HAND_MAX_RANK,
-  RIGHT_HAND_MIN_LEVEL,
   RIGHT_HAND_MIN_LIEUTENANTS,
   RIGHT_HAND_MIN_LOYALTY,
   RIGHT_HAND_ORDER_LIMIT_BY_RANK,
@@ -246,8 +246,13 @@ export function rightHandDriver(
   return { ok: true, member: m };
 }
 
-/** Kann die Person Rechte Hand werden? (Level, Loyalität und genug Leutnants, die sie führen kann) */
+/**
+ * Kann die Person Rechte Hand werden? Seit Auftrag 46e kommt sie aus den Leutnants der Stadt (kein Level mehr), treu
+ * muss sie sein (RIGHT_HAND_MIN_LOYALTY). Ein Leutnant, der aufsteigt, gibt seine Spots ab (installPost).
+ */
 export function canBeRightHand(state: GameState, staffId: string): CommandResult {
+  // Auftrag 46b: Die Rechte Hand gibt es im Tutorial erst ab Stufe 11.
+  if (!tutorialAllows(state, 'staff.rightHand')) return { ok: false, reason: 'Dazu kommst du später.' };
   const m = getStaffMember(state, staffId);
   if (!m || !isEmployed(state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
   if (isRightHand(state, staffId)) return { ok: false, reason: `${m.name} ist schon deine Rechte Hand.` };
@@ -260,21 +265,17 @@ export function canBeRightHand(state: GameState, staffId: string): CommandResult
     return { ok: false, reason: `${roleName(m.role)} führen keine Leutnants.` };
   }
   if (m.status !== 'active') return { ok: false, reason: `${m.name} ist gerade nicht einsatzbereit.` };
-  if (m.level < RIGHT_HAND_MIN_LEVEL) return { ok: false, reason: `${m.name} braucht Level ${RIGHT_HAND_MIN_LEVEL}.` };
+  // Auftrag 46e: aus den Leutnants, kein Level mehr.
+  if (!isLieutenant(state, staffId)) {
+    return { ok: false, reason: `${m.name} ist kein Leutnant. Die Rechte Hand kommt aus deinen Leutnants.` };
+  }
   if (m.stats.loyalty < RIGHT_HAND_MIN_LOYALTY) {
     return { ok: false, reason: `${m.name} ist dir nicht treu genug (Loyalität ab ${RIGHT_HAND_MIN_LOYALTY}).` };
-  }
-  // Leutnants in ihrer Stadt (Auftrag 30: eine Rechte Hand pro Stadt).
-  const others = getLieutenantIds(state).filter(
-    (id) => id !== staffId && getStaffMember(state, id)?.cityId === m.cityId,
-  ).length;
-  if (others < RIGHT_HAND_MIN_LIEUTENANTS) {
-    return { ok: false, reason: `Eine Rechte Hand lohnt sich erst ab ${RIGHT_HAND_MIN_LIEUTENANTS} Leutnants.` };
   }
   return { ok: true };
 }
 
-/** Bietet das Handy die Stelle an? (genug Leutnants, noch keine Rechte Hand) */
+/** Bietet das Handy die Stelle an? (mindestens ein Leutnant in der Stadt, noch keine Rechte Hand) */
 export function rightHandOffered(state: GameState): boolean {
   const city = activeCity(state);
   const lieutenants = getLieutenantIds(state).filter((id) => getStaffMember(state, id)?.cityId === city);

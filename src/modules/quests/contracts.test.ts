@@ -5,13 +5,7 @@ import { clock, loadSimulation, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getRelation } from '../suppliers';
 import { addInfluence, factions, PLAYER_FACTION } from '../territory';
-import {
-  CONTRACT_CONTACTS,
-  CONTRACT_TEMPLATES,
-  CONTRACTS_FROM_CHAPTER,
-  contractRewards,
-  contractTarget,
-} from './contracts';
+import { CONTRACT_CONTACTS, CONTRACT_TEMPLATES, contractRewards, contractTarget } from './contracts';
 import {
   activeContract,
   canAcceptContract,
@@ -20,7 +14,6 @@ import {
   contractStats,
   contractsOpen,
   contractValue,
-  currentQuest,
 } from './index';
 
 /** Tag 1 ist ein Freitag, Tag 4 der erste Montag. */
@@ -31,21 +24,21 @@ function untilOffers(sim: Simulation): void {
   sim.advance(MONDAY_8 - sim.state.time);
 }
 
-/** Peters erstes Kapitel überspringen: Erst danach gibt es Verträge (J15). */
-function finishFirstChapter(sim: Simulation): void {
-  while ((currentQuest(sim.state)?.chapter ?? CONTRACTS_FROM_CHAPTER) < CONTRACTS_FROM_CHAPTER) {
-    sim.dispatch({ type: 'quests.skip', payload: {} });
-  }
+/** Köln auf komplett stellen (Meilenstein in territory): Erst danach gibt es Verträge (Auftrag 46d). */
+function finishKoeln(sim: Simulation): void {
+  const t = sim.state.modules.territory;
+  t.milestones ??= {};
+  t.milestones.koeln = { majority: sim.state.time, complete: sim.state.time };
 }
 
 /** Testspiel, in dem es schon Verträge gibt. */
 function game(seed?: number): Simulation {
   const sim = createTestGame(seed === undefined ? {} : { seed });
-  finishFirstChapter(sim);
+  finishKoeln(sim);
   return sim;
 }
 
-describe('quests: Wochenverträge', () => {
+describe('quests: Wochenverträge (nur noch die, Auftrag 46d)', () => {
   it('mindestens zwölf Vorlagen, gemischt, jede mit Figur mit Gesicht und Stimme', () => {
     expect(CONTRACT_TEMPLATES.length).toBeGreaterThanOrEqual(12);
     for (const t of CONTRACT_TEMPLATES) {
@@ -79,12 +72,12 @@ describe('quests: Wochenverträge', () => {
     expect(eventsOfType(events, 'contract.offered')).toHaveLength(1);
   });
 
-  it('erst nach Peters erstem Kapitel (J15): am ersten Montag ohne, am Montag danach mit Angeboten', () => {
+  it('erst nach Köln (Auftrag 46d): am ersten Montag ohne, ist Köln komplett, am Montag danach mit Angeboten', () => {
     const sim = createTestGame({ seed: 2 });
     untilOffers(sim);
     expect(contractsOpen(sim.state)).toBe(false);
     expect(contractOffers(sim.state)).toHaveLength(0);
-    finishFirstChapter(sim);
+    finishKoeln(sim);
     expect(contractsOpen(sim.state)).toBe(true);
     // Mitten in der Woche kommt nichts nach, erst wieder am Montag.
     sim.advance(60 * 24);
@@ -235,23 +228,48 @@ describe('quests: Wochenverträge', () => {
     for (const o of a) expect(contractValue(o)).toBeGreaterThan(0);
   });
 
-  it('migriert Version 2 (ohne Verträge)', () => {
-    const sim = createTestGame();
+  it('in einer anderen Stadt als Köln gibt es Verträge auch ohne Köln komplett', () => {
+    const sim = createTestGame({ seed: 2 });
+    expect(contractsOpen(sim.state)).toBe(false);
+    sim.state.modules.city.active = 'hamburg';
+    expect(contractsOpen(sim.state)).toBe(true);
+  });
+
+  it('migriert Version 9 (Peters Quests mit Verträgen als Teil) auf Version 10: nur noch die Verträge', () => {
+    const sim = game();
+    untilOffers(sim);
+    const offers = contractOffers(sim.state);
+    expect(offers).toHaveLength(3);
     const raw = structuredClone(sim.state) as unknown as {
       modules: Record<string, Record<string, unknown>>;
       moduleVersions: Record<string, number>;
     };
-    delete raw.modules.quests.contracts;
-    raw.moduleVersions.quests = 2;
+    raw.modules.quests = {
+      index: 7,
+      progress: 2,
+      done: ['sell10'],
+      skipped: [],
+      title: 'Boss von Köln',
+      startedAt: 0,
+      fresh: false,
+      orderedIn: ['koeln'],
+      contracts: structuredClone(sim.state.modules.quests),
+      phoneSteps: true,
+    };
+    raw.moduleVersions.quests = 9;
     const loaded = loadSimulation(raw, sim.modules);
-    finishFirstChapter(loaded);
-    expect(loaded.state.modules.quests.contracts).toEqual({
+    expect(loaded.state.modules.quests).toEqual(sim.state.modules.quests);
+    expect(contractOffers(loaded.state)).toHaveLength(3);
+    expect(loaded.state.moduleVersions.quests).toBe(10);
+    // Noch ältere Stände ohne Verträge fangen leer an.
+    raw.modules.quests = { index: 0, progress: 0, done: [], skipped: [], title: null };
+    raw.moduleVersions.quests = 2;
+    const older = loadSimulation(raw, sim.modules);
+    expect(older.state.modules.quests).toEqual({
       offers: [],
       active: null,
       history: [],
       stats: { offered: 0, accepted: 0, done: 0, failed: 0 },
     });
-    loaded.advance(MONDAY_8 - loaded.state.time);
-    expect(contractOffers(loaded.state)).toHaveLength(3);
   });
 });

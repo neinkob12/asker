@@ -47,6 +47,7 @@ import {
   setWage,
   staffContact,
 } from '../staff';
+import { tutorialAllows } from '../tutorial';
 import { veedelAt, veedelName } from '../veedel';
 import { addHostility, addRelation, crewFor, say, statusOf } from './common';
 import type { MemoryKind } from './config';
@@ -415,6 +416,8 @@ export function maybePressure(ctx: Ctx, gang: Gang, s: GangStatus): void {
   const g = ctx.state.modules.gangs;
   if (
     s.stage < 1 ||
+    // Auftrag 46b: Schutzgeld und Methoden gegen dich erst ab Stufe 7.
+    !tutorialAllows(ctx.state, 'gangs.protection') ||
     isAtPeace(ctx.state, gang.id) ||
     s.people < METHOD_MIN_PEOPLE ||
     isGangBroken(ctx.state, gang.id)

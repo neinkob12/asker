@@ -192,6 +192,7 @@ describe('Rat im Tagesbericht', () => {
     const rh = recruit(sim, 5);
     appoint(sim, a, [spots[0].id]);
     appoint(sim, b, [spots[1].id]);
+    appoint(sim, rh, [spots[2].id]); // Auftrag 46e: aus den Leutnants
     sim.state.modules.gangs.gangs.nord.stage = 2;
     sim.state.modules.gangs.gangs.nord.hostility = 60;
     expect(sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: rh.id } }).ok).toBe(true);

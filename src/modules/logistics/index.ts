@@ -81,7 +81,7 @@ import {
   warehouseFree,
   warehousePlace,
 } from '../goods';
-import { addHeat, arrestStaff, getHeat, recordConfiscation } from '../police';
+import { addHeat, arrestChanceFor, arrestStaff, getHeat, recordConfiscation } from '../police';
 import { AVOID_MOTORWAY, type RoadOptions, type RoadRoute, roadRoute, travelMinutes } from '../roads';
 import {
   addXp,
@@ -91,6 +91,7 @@ import {
   riskFactor,
   roleName,
   type StaffMember,
+  specialistFactor,
   staffContact,
 } from '../staff';
 import { UNLOADING_PORT } from '../suppliers';
@@ -872,13 +873,16 @@ function rollCheck(ctx: Ctx, trip: Trip): void {
     (trip.driverId ? riskFactor(ctx.state, trip.driverId) : PLAYER_CHECK_FACTOR) *
     vehicleSpec(ctx.state, trip.vehicleId).checkFactor;
   let chance: number;
+  // Auftrag 46e: Ein Polizei-Kontakt in der Zielstadt hält den Zoll (Autobahn) bzw. die Streife (Stadt) fern.
+  const city = tripCity(ctx.state, trip);
   if (isInterCityTrip(ctx.state, trip)) {
-    const heat = cityHeat(ctx.state, tripCity(ctx.state, trip));
-    chance = AUTOBAHN_CHECK_CHANCE * (1 + heat / CHECK_HEAT_DIVISOR) * caution;
+    const heat = cityHeat(ctx.state, city);
+    chance =
+      AUTOBAHN_CHECK_CHANCE * (1 + heat / CHECK_HEAT_DIVISOR) * caution * specialistFactor(ctx.state, 'seizure', city);
   } else {
     const veedelId = destinationVeedel(ctx.state, trip.toId);
     const heat = veedelId ? getHeat(ctx.state, veedelId) : 0;
-    chance = CHECK_CHANCE * (1 + heat / CHECK_HEAT_DIVISOR) * caution;
+    chance = CHECK_CHANCE * (1 + heat / CHECK_HEAT_DIVISOR) * caution * specialistFactor(ctx.state, 'checks', city);
   }
   chance *= ROUTE_CHOICES[effectiveChoice(trip.choice, trip.startedAt)].checkFactor;
   if (!ctx.chance(Math.min(0.9, chance))) return;
@@ -1473,11 +1477,8 @@ function onCheckResolved(ctx: Ctx, ref: string | undefined, outcome: string, end
   if (trip.driverId && ending !== 'surrendered') {
     const m = getStaffMember(ctx.state, trip.driverId);
     const factor = autobahn ? AUTOBAHN_ARREST_FACTOR : 1;
-    if (
-      m &&
-      m.status === 'active' &&
-      ctx.chance(Math.min(1, SEIZE_ARREST_CHANCE * factor * riskFactor(ctx.state, m.id)))
-    ) {
+    // Auftrag 46e: Vorsicht des Fahrers und ein Anwalt in seiner Stadt (arrestChanceFor aus police).
+    if (m && m.status === 'active' && ctx.chance(arrestChanceFor(ctx.state, m.id, SEIZE_ARREST_CHANCE * factor))) {
       arrestStaff(ctx, m.id, veedelId ?? '');
       arrested = true;
     }
@@ -1601,7 +1602,11 @@ function customs(ctx: Ctx): void {
   for (const cargo of [...s.cargo]) {
     if (!isCityLive(ctx.state, cargo.cityId)) continue;
     const port = portOf(cargo.cityId);
-    const chance = port.customsChancePerHour * berthEffect(ctx.state, cargo.cityId).customsFactor;
+    // Auftrag 46e: Ein Polizei-Kontakt in der Stadt hält den Zoll vom Kai fern.
+    const chance =
+      port.customsChancePerHour *
+      berthEffect(ctx.state, cargo.cityId).customsFactor *
+      specialistFactor(ctx.state, 'seizure', cargo.cityId);
     if (ctx.now < cargoRiskFrom(cargo, ctx.state) || !ctx.chance(chance)) continue;
     s.cargo = s.cargo.filter((c) => c.id !== cargo.id);
     s.stats.seized += cargo.amount;

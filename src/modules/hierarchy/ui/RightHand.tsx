@@ -27,11 +27,12 @@ import {
 } from '../../../ui';
 import { activeCity, cityName, isBusinessSold, offerStatus } from '../../city';
 import { hasPort } from '../../logistics';
-import { getStaff, getStaffMember, roleName } from '../../staff';
+import { getStaff, getStaffMember, roleName, type StaffMember } from '../../staff';
 import { campaignProgress } from '../../territory';
 import {
   canBeRightHand,
   cityLabel,
+  getLieutenantIds,
   getRightHand,
   hasFullPower,
   isTaskUnlocked,
@@ -41,8 +42,6 @@ import {
   RIGHT_HAND_LAUNDER_ABOVE_OPTIONS,
   RIGHT_HAND_LAUNDER_SHARE_OPTIONS,
   RIGHT_HAND_MAX_RANK,
-  RIGHT_HAND_MIN_LEVEL,
-  RIGHT_HAND_MIN_LIEUTENANTS,
   RIGHT_HAND_MIN_LOYALTY,
   RIGHT_HAND_ORDER_PRICE_OPTIONS,
   RIGHT_HAND_RESTOCK_BUDGET_OPTIONS,
@@ -72,10 +71,11 @@ declare module '../../../ui' {
 /** Blatt: Wer wird Rechte Hand? */
 export function RightHandSheet(props: { open: boolean; onClose: () => void }) {
   const { state, dispatch } = useGame();
-  // Nur Leute der Stadt, in der du spielst (Auftrag 43).
-  const people = getStaff(state, { cityId: activeCity(state) })
+  // Nur Leutnants der Stadt, in der du spielst (Auftrag 43; Auftrag 46e: Die Rechte Hand kommt aus den Leutnants).
+  const people = getLieutenantIds(state)
+    .map((id) => getStaffMember(state, id))
+    .filter((m): m is StaffMember => !!m && m.cityId === activeCity(state))
     .map((m) => ({ m, check: canBeRightHand(state, m.id) }))
-    .filter(({ m }) => m.role === 'runner' || m.role === 'security' || m.role === 'driver')
     .sort((a, b) => Number(b.check.ok) - Number(a.check.ok) || b.m.level - a.m.level);
   return (
     <Sheet open={props.open} onClose={props.onClose} title="Rechte Hand ernennen" detents={['large']}>
@@ -84,11 +84,11 @@ export function RightHandSheet(props: { open: boolean; onClose: () => void }) {
           title="Wer hält dir den Rücken frei?"
           icon="crown"
           color="brand"
-          note={`Ab Level ${RIGHT_HAND_MIN_LEVEL} und Loyalität ${RIGHT_HAND_MIN_LOYALTY}.`}
-          more={`Die Rechte Hand will etwa das 2,5-Fache vom Lohn und steht an keinem Spot. Nur sie nimmt Aufträge an und fährt sie aus; mit ihren Aufgaben hält sie ${cityName(activeCity(state))} am Laufen.`}
+          note={`Einer deiner Leutnants, ab Loyalität ${RIGHT_HAND_MIN_LOYALTY}.`}
+          more={`Die Rechte Hand will etwa das 2,5-Fache vom Lohn, gibt ihre Spots ab und steht an keinem Spot mehr. Nur sie nimmt Aufträge an und fährt sie aus; mit ihren Aufgaben hält sie ${cityName(activeCity(state))} am Laufen.`}
         >
           {people.length === 0 ? (
-            <Empty icon="users">Niemand im Team.</Empty>
+            <Empty icon="users">Du hast noch keinen Leutnant.</Empty>
           ) : (
             <List>
               {people.map(({ m, check }) => (
@@ -164,7 +164,7 @@ export function RightHandRow() {
           icon="crown"
           color="brand"
           title="Rechte Hand ernennen"
-          meta={`Ab ${RIGHT_HAND_MIN_LIEUTENANTS} Leutnants: fährt Aufträge, Tagesbericht, Koordination, Lohnsicherung`}
+          meta="Einer deiner Leutnants: fährt Aufträge, Tagesbericht, Koordination, Lohnsicherung"
         />
       </ListItem>
       <RightHandSheet open={open} onClose={() => setOpen(false)} />
@@ -363,7 +363,7 @@ function RightHandPage() {
     // Auftrag 43 (G12): sagen, wie man eine bekommt, statt nur „keine“.
     return (
       <Empty icon="crown">
-        {`In ${cityName(activeCity(state))} hast du keine Rechte Hand. Ernennen kannst du sie im Personal, ab Level ${RIGHT_HAND_MIN_LEVEL} und Loyalität ${RIGHT_HAND_MIN_LOYALTY}.`}
+        {`In ${cityName(activeCity(state))} hast du keine Rechte Hand. Ernennen kannst du im Personal einen deiner Leutnants, ab Loyalität ${RIGHT_HAND_MIN_LOYALTY}.`}
       </Empty>
     );
   }

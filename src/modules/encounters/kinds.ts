@@ -72,7 +72,6 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     intents: [...GANG_INTENTS, 'wreck'],
     maxRounds: 10,
     joinable: true,
-    briefingOptions: ['self', 'crew', 'backup', 'payoff', 'tipoff', 'abandon'],
     actions: ['negotiate', 'intimidate', 'talkNervous', 'bluff', 'hold', 'fight', 'bribe', 'callCops', 'flee'],
     // Per Handy geht fast alles, nur Einschüchtern braucht den Boss vor Ort.
     remoteActions: ['negotiate', 'talkNervous', 'bluff', 'hold', 'fight', 'bribe', 'callCops', 'flee'],
@@ -137,8 +136,6 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     intents: ['search', 'radio', 'askPapers', 'grab', 'hesitate'],
     maxRounds: 8,
     joinable: false,
-    // Ohne Briefing (nicht joinable); falls doch: Bullen rufen und Freikaufen ergeben hier keinen Sinn.
-    briefingOptions: ['self', 'crew', 'abandon'],
     // Festnahme, Beschlagnahme und Heat regelt der Auslöser (police), hier nur was die Flucht selbst kostet.
     draw: 'failure',
     lethal: false,
@@ -327,7 +324,6 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     maxRounds: 10,
     joinable: true,
     ifNobody: 'retreat',
-    briefingOptions: ['self', 'crew', 'backup'],
     actions: ['intimidate', 'negotiate', 'bluff', 'fight', 'hold', 'flee'],
     remoteActions: ['negotiate', 'bluff', 'fight', 'flee'],
     actionOverrides: {
@@ -384,7 +380,6 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     maxRounds: 10,
     joinable: true,
     ifNobody: 'retreat',
-    briefingOptions: ['self', 'crew', 'backup', 'tipoff'],
     actions: ['negotiate', 'intimidate', 'talkNervous', 'bluff', 'hold', 'fight', 'callCops', 'flee'],
     remoteActions: ['negotiate', 'talkNervous', 'bluff', 'fight', 'flee'],
     // Auftrag 44: Zuschlagen oder eine Schlägerei (Aggression ab 70) wird zum Straßenkampf, wenn du dabei bist.
@@ -434,7 +429,6 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     maxRounds: 8,
     joinable: true,
     ifNobody: 'retreat',
-    briefingOptions: ['self', 'crew', 'backup'],
     actions: ['fight', 'intimidate', 'talkNervous', 'negotiate', 'hold', 'flee'],
     remoteActions: ['fight', 'talkNervous', 'negotiate', 'flee'],
     // Auftrag 44: Zuschlagen oder eine Schlägerei (Aggression ab 70) wird zum Straßenkampf, wenn du dabei bist.
@@ -478,7 +472,6 @@ export const ENCOUNTER_KINDS: Record<string, EncounterKind> = {
     maxRounds: 10,
     joinable: true,
     ifNobody: 'retreat',
-    briefingOptions: ['self', 'crew', 'backup'],
     actions: ['fight', 'intimidate', 'talkNervous', 'bluff', 'hold', 'flee'],
     remoteActions: ['fight', 'talkNervous', 'bluff', 'flee'],
     // Auftrag 44: Zuschlagen oder eine Schlägerei (Aggression ab 70) wird zum Straßenkampf, wenn du dabei bist.

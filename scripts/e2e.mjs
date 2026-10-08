@@ -1,6 +1,7 @@
-// Ende-zu-Ende-Test im echten Browser (Playwright): neues Spiel (Handy Schritt für Schritt, dann abgeschaltet),
-// selbst verkaufen, Läufer anheuern, Ware bestellen, speichern, laden und nach dem Neuladen der Seite den Autosave
-// fortsetzen. Bedient die Oberfläche wie ein Mensch (Klicks auf Karte, Handy, Dialoge); nur zum Vorspulen der Zeit
+// Ende-zu-Ende-Test im echten Browser (Playwright): neues Spiel mit Tutorial (nur der Neumarkt, Mission 1 mit drei
+// Verkäufen und Belohnung, dann in den Einstellungen beendet), selbst verkaufen, Läufer anheuern, Ware bestellen,
+// Shop-Platzhalter „Spot gründen“ (Auftrag 46e), speichern, laden und nach dem Neuladen der Seite den Autosave
+// fortsetzen. Pop-ups (Lieferant kennenlernen, Stadt-Event) klickt jeder Schritt vorher weg (dismissPopups). Bedient die Oberfläche wie ein Mensch (Klicks auf Karte, Handy, Dialoge); nur zum Vorspulen der Zeit
 // wird die Simulation direkt angestoßen.
 // Speichert Screenshots nach screenshots/e2e-*.png und schlägt fehl, wenn etwas nicht klappt oder der Browser
 // Fehler meldet.
@@ -52,6 +53,8 @@ const isForeignAjaxError = (arg) =>
 /** Noch laufende Prüfungen von Konsolen-Fehlern (vor dem Schließen des Browsers abwarten). */
 const pendingChecks = [];
 let step = 0;
+/** Die Seite des laufenden Durchgangs, für einen Screenshot beim Fehlschlag. */
+let currentPage = null;
 
 /** Zustand aus dem Spiel lesen (nur lesen, wie die Oberfläche). */
 const game = (page, fn) => page.evaluate(`(${fn})(window.koeln.session.state)`);
@@ -70,14 +73,83 @@ async function shot(page, name) {
   console.log(`  Screenshot: ${file}`);
 }
 
+/** Eine laufende Tour mit Enter zu Ende klicken (Auftrag 46c); hält an, wenn sie auf den Spieler wartet. */
+async function nextTour(page) {
+  for (let i = 0; i < 20; i++) {
+    const box = page.locator('.tour-box');
+    if (!(await box.isVisible().catch(() => false))) return;
+    const next = box.getByRole('button', { name: 'Weiter', exact: true });
+    if (!(await next.isVisible().catch(() => false))) return;
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(450);
+  }
+}
+
 /** Spielstände liegen im Menü (Hamburger-Knopf im HUD). */
 async function openSaves(page) {
-  await page.getByRole('button', { name: 'Menü' }).click();
+  await clickSafe(page, page.getByRole('button', { name: 'Menü' }));
   await page.getByRole('button', { name: 'Spielstände' }).click();
+}
+
+/**
+ * Pop-ups über der Karte wegklicken, falls eins offen ist (Auftrag 46e: Lieferant kennenlernen nach dem Freischalten,
+ * Stadt-Event zum Start). Sie öffnen sich kurz verzögert, sobald kein anderer Dialog offen ist.
+ */
+async function dismissPopups(page, patience = 6) {
+  // Am Desktop eine Glas-Karte über der Karte, am Handy-Bildschirm ein Blatt (nie die Antworten im Chat). Das Pop-up
+  // kommt kurz verzögert, sobald kein anderer Dialog mehr offen ist: knapp zwei Sekunden lang hinschauen.
+  const card = page.locator('.ui-map-dialog__card, .ui-map-sheet');
+  const later = card.getByRole('button', { name: /^(Später|Okay)$/ });
+  let quiet = 0;
+  for (let i = 0; i < 16 && quiet < patience; i++) {
+    if ((await later.count()) > 0) {
+      const label = await card
+        .first()
+        .getAttribute('aria-label')
+        .catch(() => null);
+      console.log(`  (Pop-up weggeklickt: ${label ?? '?'})`);
+      await later.first().click();
+      quiet = 0;
+      await page.waitForTimeout(400);
+    } else {
+      quiet++;
+      await page.waitForTimeout(300);
+    }
+  }
+}
+
+/**
+ * Wer selbst am Spot steht, bekommt mit kleiner Chance Zivis (Minispiel über der Karte, fest aus Seed und Stunde
+ * gewürfelt): Das Spiel ist hier nicht Thema, der Dev-Haken beendet es.
+ */
+async function finishMinigame(page) {
+  if (!(await page.locator('.mg-run').count())) return;
+  await page.evaluate(() => window.koeln.dev.minigameWin());
+  const next = page.locator('.mg-result').getByRole('button', { name: /Weiter/ });
+  if (await next.count()) await next.click().catch(() => {});
+  await page
+    .locator('.mg-run')
+    .waitFor({ state: 'detached', timeout: 10000 })
+    .catch(() => {});
+}
+
+/** Klick, der ein gerade aufgehendes Pop-up wegklickt und es noch einmal versucht. */
+async function clickSafe(page, locator) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await locator.click({ timeout: 4000 });
+      return;
+    } catch (error) {
+      if (attempt >= 3) throw error;
+      await dismissPopups(page, 3);
+    }
+  }
 }
 
 async function check(name, fn) {
   process.stdout.write(`- ${name} … `);
+  // Ein Pop-up vom vorigen Schritt (Lieferant, Stadt-Event) darf den nächsten nicht blockieren.
+  if (currentPage) await dismissPopups(currentPage);
   await fn();
   console.log('ok');
 }
@@ -86,6 +158,7 @@ async function run() {
   const context = await browser.newContext(VIEWPORTS[size]);
   await routeExternal(context, base);
   const page = await context.newPage();
+  currentPage = page;
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {
     if (m.type() !== 'error' || isTileError(m.text())) return;
@@ -96,13 +169,11 @@ async function run() {
     );
   });
 
-  await check('Intro beim ersten Start, Name für die Bestenliste', async () => {
+  await check('Willkommen beim ersten Start (Auftrag 46c): eine Seite mit dem Namen für die Bestenliste', async () => {
     await page.goto(base);
-    await page.getByRole('button', { name: 'Weiter' }).click();
-    await page.getByRole('button', { name: 'Zurück' }).click();
-    await page.getByRole('button', { name: 'Überspringen' }).click();
+    await page.getByText('Willkommen in Kölle').waitFor();
     await page.getByLabel('Dein Name').fill('E2E Tester');
-    await page.getByRole('button', { name: 'Weiter' }).click();
+    await page.getByRole('button', { name: "Los geht's" }).click();
     const name = await page.evaluate(() => localStorage.getItem('koeln-tycoon:player-name'));
     assert.equal(name, 'E2E Tester');
   });
@@ -112,39 +183,113 @@ async function run() {
     await page.waitForFunction(() => window.koeln?.session?.state?.time > 0);
     // Pause, damit der Test nicht vom Tempo abhängt; die Zeit spulen wir gezielt vor.
     await page.evaluate(() => window.koeln.runtime.api.setSpeed(0));
-    const state = await game(page, (s) => ({ time: s.time, mode: s.meta.mode, dirty: s.wallet.dirty }));
+    const state = await game(page, (s) => ({
+      time: s.time,
+      mode: s.meta.mode,
+      dirty: s.wallet.dirty,
+      tutorial: s.modules.tutorial.enabled,
+    }));
     assert.equal(state.mode, 'normal');
-    assert.equal(state.dirty, 1500);
+    // Auftrag 46b: Im Modus normal läuft das Tutorial, mit 700 € mehr Startgeld.
+    assert.equal(state.tutorial, true);
+    assert.equal(state.dirty, 2200);
     await page.waitForSelector('.spot-marker');
     await shot(page, 'neues-spiel');
   });
 
-  await check('Handy Schritt für Schritt: Am Anfang fehlen Apps, in den Einstellungen abschaltbar', async () => {
-    // Feedback 07.10.2026: Ein neues Spiel zeigt erst Nachrichten und Einstellungen, der Rest kommt mit den Quests.
-    const wasOpen = await page.evaluate(() => window.koeln.runtime.ui.phone.open);
-    await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
-    const home = page.locator('.phone__home');
-    await home.getByRole('button', { name: 'Einstellungen', exact: true }).waitFor();
-    assert.equal(await home.getByRole('button', { name: /^Gangs/ }).count(), 0, 'Gangs fehlt am Anfang');
-    assert.equal(await home.getByRole('button', { name: /^Lieferanten/ }).count(), 0, 'Lieferanten fehlen am Anfang');
-    await home.getByText('Peters Quest').first().waitFor();
-    // Am Desktop fährt das weggelegte Handy erst herein.
-    await page.waitForTimeout(800);
-    await shot(page, 'handy-anfang');
-    // Der Rest des Tests braucht alle Apps: abschalten wie ein Spieler, der sich auskennt.
-    await home.getByRole('button', { name: 'Einstellungen', exact: true }).click();
-    const steps = page.locator('.phone').getByRole('switch', { name: /Handy Schritt für Schritt/ });
-    assert.equal(await steps.getAttribute('aria-checked'), 'true');
-    await steps.click();
-    assert.equal(await game(page, (s) => s.modules.quests.phoneSteps), false);
-    await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
-    await home.getByRole('button', { name: /^Gangs/ }).waitFor();
-    assert.equal(await home.getByText('Peters Quest').count(), 0, 'kein Quest-Hinweis mehr auf dem Startbildschirm');
-    // Wie vorher: Lag das Handy weg, kommt es wieder weg.
-    if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
-  });
+  await check(
+    'Tutorial: nur der Neumarkt, Mission 1 auf der Karte, drei Verkäufe erledigen sie, Belohnung kommt',
+    async () => {
+      // Auftrag 46b: Am Anfang gibt es nur den Neumarkt, Apps wie Gangs und Lieferanten fehlen noch.
+      // Marker gibt es für jeden Spot der aktiven Stadt (gesperrte grau, Auftrag 47); offen ist nur der Neumarkt.
+      assert.equal(await page.locator('.spot-marker:not(.is-locked)').count(), 1, 'nur ein offener Spot');
+      const wasOpen = await page.evaluate(() => window.koeln.runtime.ui.phone.open);
+      await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
+      const home = page.locator('.phone__home');
+      await home.getByRole('button', { name: /^Einstellungen/ }).waitFor();
+      assert.equal(await home.getByRole('button', { name: /^Gangs/ }).count(), 0, 'Gangs fehlt am Anfang');
+      assert.equal(await home.getByRole('button', { name: /^Lieferanten/ }).count(), 0, 'Lieferanten fehlen am Anfang');
+      if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
+      // Auftrag 46c: Stufe 0 ist Peters Tour durchs HUD und Handy (zehn Schritte, mit Enter weiter); am Ende schaltet
+      // die Tour selbst auf Stufe 1 und stellt das Tempo auf 1.
+      const card = page.locator('.tutorial-hud');
+      await page.locator('.tour-box').waitFor({ timeout: 15000 });
+      assert.equal(await page.evaluate(() => window.koeln.runtime.api.tour.active()), 'tutorial:0');
+      await shot(page, 'tutorial-tour-0');
+      await nextTour(page);
+      await page.waitForFunction(() => window.koeln.session.state.modules.tutorial.stage === 1);
+      assert.deepEqual(await game(page, (s) => s.modules.tutorial.toursSeen), [0]);
+      await page.evaluate(() => window.koeln.runtime.api.setSpeed(0));
+      await card.getByText('Drei Kunden bedienen').waitFor();
+      assert.equal(await game(page, (s) => s.modules.tutorial.mission?.id), 'serve3');
+      await page.waitForTimeout(800);
+      await shot(page, 'tutorial-mission-1');
+      const before = await game(page, (s) => s.wallet.dirty);
+      // Die Tour der Stufe 1 fährt die Kamera selbst zum Neumarkt und öffnet das Spot-Fenster; sie wartet dann auf
+      // den ersten Verkauf (die Uhr läuft dabei, der Test spult trotzdem selbst vor).
+      await page.waitForFunction(() => window.koeln.runtime.api.tour.active() === 'tutorial:1');
+      await page.getByText('Verkauf einmal selbst').waitFor({ timeout: 15000 });
+      await page.waitForTimeout(1200);
+      await shot(page, 'tutorial-tour-1');
+      for (let sold = 0; sold < 3; sold++) {
+        for (let i = 0; i < 60; i++) {
+          const waiting = await game(
+            page,
+            (s) => s.modules.customers.waiting.filter((c) => c.spotId === 'neumarkt').length,
+          );
+          if (waiting > 0) break;
+          await advance(page, 10);
+        }
+        // Die Spot-Seite bleibt nach dem ersten Verkauf offen (am Handy-Bildschirm über der Karte).
+        const sell = page.getByRole('button', { name: 'Verkaufen', exact: true }).first();
+        if (!(await sell.isVisible())) await page.locator('.spot-marker[aria-label*="Neumarkt"]').click();
+        // Am Handy-Bildschirm liegt Peters Blatt unten über der Seite: den Knopf in die Mitte rollen.
+        await sell.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        await sell.click();
+        // Nach dem ersten Verkauf erklärt die Tour noch Preis und Läufer (Enter), dann ist sie durch.
+        if (sold === 0) await nextTour(page);
+      }
+      assert.deepEqual(await game(page, (s) => s.modules.tutorial.toursSeen), [0, 1]);
+      const after = await game(page, (s) => ({
+        dirty: s.wallet.dirty,
+        done: s.modules.tutorial.done,
+        stage: s.modules.tutorial.stage,
+        mission: s.modules.tutorial.mission?.id,
+      }));
+      assert.deepEqual(after.done, ['serve3'], 'Mission 1 erledigt');
+      assert.equal(after.stage, 2);
+      assert.equal(after.mission, 'buySpots');
+      assert.ok(after.dirty >= before + 100, 'Belohnung (mindestens 100 €) nach drei Verkäufen');
+      await card.getByText('Zwei Spots kaufen').waitFor();
+      // Stufe 2: zwei Schritte an den Markern der Spots zum Kauf.
+      await page.waitForFunction(() => window.koeln.runtime.api.tour.active() === 'tutorial:2');
+      await page.getByText('Zülpicher Platz, zu haben').waitFor();
+      await shot(page, 'tutorial-mission-2');
+      await nextTour(page);
+      assert.deepEqual(await game(page, (s) => s.modules.tutorial.toursSeen), [0, 1, 2]);
+      // Der Rest des Tests braucht alle Spots und Apps: beenden wie ein Spieler, der sich auskennt. Die Symbole auf dem
+      // Startbildschirm federn kurz nach dem Öffnen, der Klick wartet, bis sie stehen.
+      await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
+      // Mit Badge heißt die Kachel "Einstellungen, 1 neu" (ein Ereignis im Verlauf, z.B. eine Gang drängt).
+      await page.waitForTimeout(700);
+      await home.getByRole('button', { name: /^Einstellungen/ }).click();
+      await page.locator('.phone').getByRole('button', { name: 'Tutorial beenden', exact: true }).click();
+      assert.equal(await game(page, (s) => s.modules.tutorial.stage), 12);
+      await page.evaluate(() => window.koeln.runtime.api.openPhone(null));
+      await home.getByRole('button', { name: /^Gangs/ }).waitFor();
+      // Kalle und Toni stellen sich jetzt vor (Pop-up, Auftrag 46e): Später.
+      await dismissPopups(page);
+      await shot(page, 'tutorial-beendet');
+      await page.waitForFunction(() => document.querySelectorAll('.spot-marker:not(.is-locked)').length >= 4);
+      // Wie vorher: Lag das Handy weg, kommt es wieder weg; die Kamera zurück zum Zülpicher Platz (nächster Schritt).
+      if (!wasOpen) await page.evaluate(() => window.koeln.runtime.api.closePhone());
+      await page.evaluate(() => window.koeln.runtime.api.flyTo({ lng: 6.9398, lat: 50.9317 }, 16));
+      await page.waitForTimeout(1500);
+    },
+  );
 
   await check('Selbst am Spot verkaufen', async () => {
+    await dismissPopups(page);
     // Warten, bis am Zülpicher Platz jemand steht.
     for (let i = 0; i < 48; i++) {
       const waiting = await game(
@@ -177,9 +322,12 @@ async function run() {
     for (let i = 0; i < 48; i++) {
       if ((await game(page, (s) => s.modules.customers.stats.customersServed)) > served) break;
       await advance(page, 10);
+      await finishMinigame(page);
     }
     assert.ok((await game(page, (s) => s.modules.customers.stats.customersServed)) > served, 'automatisch verkauft');
-    await page.getByRole('button', { name: 'Weggehen', exact: true }).click();
+    // Die Zivis können auch nach dem letzten Verkauf noch kommen; ihr Blatt läge sonst über dem Knopf.
+    await finishMinigame(page);
+    await clickSafe(page, page.getByRole('button', { name: 'Weggehen', exact: true }));
     assert.equal(await game(page, (s) => s.modules.customers.self.spotId), null);
   });
 
@@ -270,25 +418,20 @@ async function run() {
     await page.evaluate(() => window.koeln.runtime.api.closePhone());
   });
 
-  await check('Eigenen Spot mit Art gründen (Auftrag 23)', async () => {
-    // Den Klick auf die Karte ersetzt eine feste Stelle in Kalk; Art und Name kommen aus dem Blatt.
-    await page.evaluate(() => {
-      const rt = window.koeln.runtime;
-      rt.map.pickLocation = async () => ({ lng: 7.0035, lat: 50.9385 });
-      window.koeln.session.state.wallet.dirty += 3000;
-      rt.api.selectTab('territory');
-    });
+  await check('Spot gründen: der Shop-Platzhalter (Auftrag 46e), kein Kauf', async () => {
+    await page.evaluate(() => window.koeln.runtime.api.selectTab('territory'));
     await page
       .locator('.phone')
-      .getByRole('button', { name: /Eigenen Spot gründen/ })
+      .getByRole('button', { name: /^Spot gründen/ })
       .click();
-    const sheet = page.locator('.ui-sheet');
-    await sheet.getByRole('button', { name: /^Park/ }).click();
-    await sheet.getByRole('button', { name: 'Gründen', exact: true }).click();
-    const custom = await game(page, (s) => s.modules.spots.custom.map((x) => [x.kind, x.veedelId]));
-    assert.deepEqual(custom, [['park', 'kalk']]);
-    await page.locator('.phone').getByText('Bekanntheit').first().waitFor();
-    await shot(page, 'spot-gegruendet');
+    const phone = page.locator('.phone');
+    await phone.getByText('0,99 € pro Spot').first().waitFor();
+    const soon = phone.getByRole('button', { name: 'Bald verfügbar', exact: true });
+    await soon.waitFor();
+    assert.equal(await soon.isDisabled(), true, 'noch kein Kauf');
+    assert.equal(await phone.getByText(/^Spot [123]$/).count(), 3, 'drei Plätze');
+    assert.deepEqual(await game(page, (s) => s.modules.spots.custom), [], 'nichts gegründet');
+    await shot(page, 'spot-shop');
     await page.evaluate(() => window.koeln.runtime.api.closePhone());
   });
 
@@ -304,7 +447,7 @@ async function run() {
     await chip.waitFor();
     await page.waitForTimeout(500);
     for (let attempt = 1; ; attempt++) {
-      // Am linken Rand antippen: Am Handy-Bildschirm kann die schwebende Island die Mitte der Kachelreihe verdecken.
+      // Am linken Rand antippen: Am Handy-Bildschirm kann die schwebende Anzeige die Mitte der Kachelreihe verdecken.
       await chip.click({ position: { x: 14, y: 20 } });
       try {
         await page.locator('.city-menu__item', { hasText: 'Hamburg' }).first().click({ timeout: 5000 });
@@ -380,8 +523,20 @@ async function run() {
     };
     await closeFlyouts();
     await page.evaluate(() => window.koeln.runtime.api.openPhone('tab:staff'));
-    await centered(page.locator('.phone').getByText(candidate, { exact: true }).first());
-    await centered(page.getByText('Gespräch führen', { exact: true }));
+    // Der Tipp auf den Bewerber öffnet sein Blatt. Landet er, während die Seite noch hereinfährt (CI am
+    // Handy-Bildschirm), geht das Blatt nicht auf: dann noch einmal tippen, statt 30 s auf „Gespräch führen“ zu warten.
+    const interview = page.getByText('Gespräch führen', { exact: true });
+    for (let attempt = 1; ; attempt++) {
+      await centered(page.locator('.phone').getByText(candidate, { exact: true }).first());
+      try {
+        await interview.waitFor({ timeout: 5000 });
+        break;
+      } catch (error) {
+        if (attempt >= 3) throw error;
+        await page.waitForTimeout(500);
+      }
+    }
+    await centered(interview);
     await page.waitForSelector('.mg-intro');
     assert.equal(await page.locator('.mg-overlay').count(), 1, 'Rahmen offen');
     // Spielzeit in Echtzeit (headless mit wenigen Bildern pro Sekunde wäre sie sonst gedeckelt und langsam).
@@ -443,7 +598,9 @@ async function run() {
       window.koeln.session.autosave();
       return window.koeln.session.state.time;
     });
-    await page.reload();
+    // Neu laden mit ?tempo=0: Sonst läuft die Uhr sofort weiter, und der Leutnant stellt in der Zwischenzeit schon
+    // jemanden ein (die Zahl der Leute wäre dann Glückssache).
+    await page.goto(`${base}?tempo=0`);
     await page.waitForFunction(() => window.koeln?.session?.state?.time > 0);
     const resumed = await game(page, (s) => ({ time: s.time, staff: s.modules.staff.members.length }));
     // Nach dem Laden kann die Uhr schon wieder ein paar Minuten gelaufen sein.
@@ -483,6 +640,8 @@ try {
   }
 } catch (error) {
   console.error(`\nFehlgeschlagen: ${error.message}`);
+  // Was war gerade zu sehen? (hilft beim Nachstellen)
+  if (currentPage) await currentPage.screenshot({ path: `${outDir}/e2e-fehler-${size}.png` }).catch(() => {});
   process.exitCode = 1;
 } finally {
   await Promise.all(pendingChecks);

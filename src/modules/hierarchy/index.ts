@@ -59,6 +59,7 @@ import {
   setWage,
   staffContact,
 } from '../staff';
+import { tutorialAllows } from '../tutorial';
 import { getVeedel, veedelName } from '../veedel';
 import { tick as lieutenantTick, onRaidWarning } from './ai';
 import { appointCapo, capoDemand, capoTick, cleanupCapos, dismissCapo, isCapo } from './capo';
@@ -148,7 +149,6 @@ export {
   RIGHT_HAND_LAUNDER_ABOVE_OPTIONS,
   RIGHT_HAND_LAUNDER_SHARE_OPTIONS,
   RIGHT_HAND_MAX_RANK,
-  RIGHT_HAND_MIN_LEVEL,
   RIGHT_HAND_MIN_LIEUTENANTS,
   RIGHT_HAND_MIN_LOYALTY,
   RIGHT_HAND_ORDER_LIMIT_BY_RANK,
@@ -344,7 +344,9 @@ export function lieutenantVeedel(state: GameState, staffId: string): string | nu
 export function teamOf(state: GameState, staffId: string): StaffMember[] {
   const post = getPost(state, staffId);
   if (!post) return [];
-  return getStaff(state).filter((m) => {
+  // Sein Team ist in seiner Stadt (Leute bleiben in ihrer Stadt, Auftrag 43).
+  const cityId = getStaffMember(state, staffId)?.cityId ?? 'koeln';
+  return getStaff(state, { cityId }).filter((m) => {
     if (m.id === staffId) return false;
     const place = m.assignment ?? m.returnTo;
     if (place?.kind === 'spot' && post.spotIds.includes(place.targetId)) return true;
@@ -401,6 +403,8 @@ export function handlesAbsence(state: GameState, lieutenantId: string, staffId: 
 
 /** Kann die Person Leutnant werden? */
 export function canBeLieutenant(state: GameState, staffId: string): CommandResult {
+  // Auftrag 46b: Leutnants gibt es im Tutorial erst ab Stufe 7.
+  if (!tutorialAllows(state, 'staff.lieutenants')) return { ok: false, reason: 'Dazu kommst du später.' };
   const m = getStaffMember(state, staffId);
   if (!m || !isEmployed(state, staffId)) return { ok: false, reason: NOT_EMPLOYED };
   // Arbeiter und Gärtner (Auftrag 42) bleiben auf ihrer Finca.

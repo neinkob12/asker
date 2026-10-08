@@ -59,7 +59,9 @@ Dasselbe gilt in der UI für `PanelRegistry`, `DialogRegistry` und `SlotRegistry
   (`clock.hourStarted`) und neue Tage (`clock.dayStarted`), lässt alle Module ticken, stellt Ereignisse zu und
   prüft die Pleite-Regel.
 - Module ticken in Abhängigkeits-Reihenfolge (`dependsOn`, bei Gleichstand nach ID). Mit `tickEvery: 60`
-  tickt ein Modul nur zur vollen Stunde, mit `1440` um Mitternacht.
+  tickt ein Modul nur zur vollen Stunde, mit `1440` um Mitternacht. `tickOffset: 7` verschiebt das auf x:07
+  (Auftrag 47): So fallen nicht alle Stunden-Ticks in dieselbe Minute. Nur für Ticks, die nicht an der Minute hängen
+  (kein `now % MINUTES_PER_DAY === 0`; `clock.hour(now)` bleibt innerhalb der Stunde gleich).
 - `GameLoop` rechnet echte Zeit in Schritte um: bei 1x 5 Spielminuten pro Sekunde, 2x und 4x entsprechend,
   Pause = 0. Die Bildrate spielt keine Rolle, Reste werden übertragen, Unterbrechungen (Tab im Hintergrund)
   laufen nicht nach. Die Zeit läuft also nur, solange gespielt wird.
@@ -77,7 +79,7 @@ ctx.dispatch(command, { actor: 'staff:s12' })                            // aus 
 
 - Serialisierbar (`{ type, payload }`), jeder Typ gehört genau einem Modul (doppelte Handler → Fehler beim Start).
 - Handler bekommen `(ctx, payload, meta)`, `meta.actor` ist `'player'`, `'system'` oder `'staff:<id>'`.
-- Rückgabe `{ ok: false, reason }` mit deutschem Text; die UI zeigt ihn als Toast. `undefined` zählt als Erfolg.
+- Rückgabe `{ ok: false, reason }` mit deutschem Text; die UI zeigt ihn kurz als Fehlermeldung (`ui.error`). `undefined` zählt als Erfolg.
 - Nach Game Over schlagen alle Befehle fehl.
 
 ### Ereignisse
@@ -110,8 +112,9 @@ sim.on('game.over', (payload) => ...)    // außerhalb (UI, Tests), nur lesen
 `customer:<Stammkunde>`, `customer:area-<veedel>`, `dealer:<id>`. Kontaktarten (`ContactKind`): `customer`,
 `supplier`, `gang`, `staff`, `police`, `other`. Eine Antwort-Option kann einen `command` tragen; beim Antworten
 (`messages.answer`) wird er als Spieler ausgeführt. Schlägt er fehl, bleibt die Nachricht unbeantwortet.
-`silent: true` stellt still zu (ungelesen, ohne Eintrag in der Mitteilungszentrale). Ein Banner mit Ton gibt es seit
-Auftrag 26 ohnehin nur für Nachrichten mit Antwortfrist, der Rest zählt still am Badge. Gelöschte Chats bleiben im
+`silent: true` stellt still zu (ungelesen, ohne Ton). Banner gibt es seit Auftrag 46d nicht mehr: Eine neue Nachricht zählt
+am Badge der Nachrichten-App, einen kurzen Ton gibt es nur für Fragen mit Antwortfrist. Gangs und Polizei melden sich
+höchstens einmal pro Spieltag von selbst (`messages.sentToday(state, contactId)`). Gelöschte Chats bleiben im
 Zustand: `messages.hidden[contactId]` ist die ID der letzten ausgeblendeten Nachricht; `thread`, `threads` und
 `unreadCount` lassen alles bis dahin weg, und schreibt die Figur neu, ist der Chat wieder da (Kernschema 2, Migration
 in `persistence.ts`). `routine: true` kennzeichnet eine Frage als **Routine**: Die Rechte Hand darf sie beantworten
@@ -133,9 +136,13 @@ zählt, ob das Geld für Schulden plus Paket reicht).
 
 ### Spielstände (`persistence.ts`, `saves.ts`, `session.ts`)
 
-- Speicherplätze `slot-1` bis `slot-3` plus `autosave` in `localStorage` (`koeln-tycoon:save:<slot>`).
-  Autosave alle 10 echten Sekunden beim Spielen, beim Laden/Neuanfang und wenn der Tab verlassen wird.
-  Ein beendetes Spiel überschreibt den Autosave nicht.
+- Speicherplätze `slot-1` bis `slot-3` plus `autosave` (`koeln-tycoon:save:<slot>`) in IndexedDB (Auftrag 47;
+  Datenbank `koeln-tycoon`, Store `kv`), sonst `localStorage`. `openBrowserSaveStorage` liest beim Start einmal alles in
+  einen Spiegel (`mirroredStorage`, synchron lesbar) und schreibt danach im Hintergrund; alte Spielstände wandern beim
+  ersten Start aus dem localStorage herüber, noch nicht bestätigte Schreibvorgänge gehen beim Verlassen in den
+  Notfallspeicher (`koeln-tycoon:pending:*`, `persistPending`) und werden beim nächsten Start nachgetragen.
+  Einstellungen bleiben im localStorage. Autosave alle 10 echten Sekunden, wenn sich etwas geändert hat (auch in der
+  Pause), beim Laden/Neuanfang und wenn der Tab verlassen wird. Ein beendetes Spiel überschreibt den Autosave nicht.
 - **Modus** beim Anlegen: Normal (nach Game Over älteren Stand laden) oder Hardcore (alle Stände desselben
   Durchgangs, erkannt an `meta.runId`, werden bei Game Over gelöscht).
 - Export/Import als JSON-Datei (`{ format: 'koeln-tycoon-save', formatVersion, savedAt, label, state }`).
@@ -179,7 +186,7 @@ defineModule({
   id, version,              // Pflicht
   dependsOn?,               // vorher initialisieren und ticken
   init?(ctx) → State,       // Anfangszustand, landet in state.modules[id]
-  tick?(ctx), tickEvery?,
+  tick?(ctx), tickEvery?, tickOffset?,
   commands?: { '<id>.<verb>': (ctx, payload, meta) => CommandResult },
   on?: { '<event>': (ctx, payload, event) => void },
   migrations?: { [zielVersion]: (alt, state) => neu },
@@ -205,14 +212,14 @@ logistics/goods` (Größe des Geschäfts), `finance → hierarchy/staff` (Ergebn
 suppliers → roads` (Routen), `suppliers ↔ logistics` (Liegeplatz, Ware am Kai), `customers ↔ logistics` (bist du
 unterwegs?), `suppliers → customers/territory/reputation` (Freischalt-Bedingungen). `logistics` hängt per `dependsOn`
 an `goods`, `suppliers`, `staff` und `fleet` (alte Spielstände: Liegeplatz, wenn schon in Rotterdam bestellt wurde).
-Seit Auftrag 32: `market → events/suppliers` (Marktereignisse, Marktbericht), `suppliers → market` (`purchaseIndex`),
-`events → goods`, `hierarchy → market` (Preisgrenze der Bestellregeln), `quests → suppliers/police` (Vertrauen als
-Belohnung, Größe des Geschäfts).
+Seit Auftrag 32: `market → events/suppliers` (Marktereignisse), `suppliers → market` (`purchaseIndex`),
+`events → goods`, `hierarchy → market` (Preisgrenze der Bestellregeln), `quests → suppliers/police/city` (Vertrauen als
+Belohnung der Wochenverträge, Größe des Geschäfts, erst nach Köln).
 
 
 ## Oberfläche (`src/ui/`)
 
-Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`src/map/README.md`](../src/map/README.md). Das Spiel-Handy ist die Schaltzentrale und folgt den iOS-Mustern (Apple HIG): iPhone-Seitenverhältnis (`--phone-ratio` 0,49), Statusleiste mit Uhrzeit links, Dynamic Island in der Mitte und Empfang/WLAN/Akku rechts, Startbildschirm mit App-Raster und Dock, gruppierte Listen mit Icon-Kacheln, Large Title mit Übergang zur schmalen Titelleiste. Glas (`backdrop-filter`) gibt es nur auf der schwebenden Ebene (Statusleiste, Island, Dock, Fußleisten); Inhalte liegen auf ruhigen Flächen. **Eine Farbe hat eine Bedeutung** (`--cat-money`, `--cat-dirty`, `--cat-danger` …, je mit Hell-/Dunkel-Variante und geprüftem Kontrast). Plan, Ableitung aus der HIG und Prüfung: [`handy-design.md`](handy-design.md). Details zu Tokens, Bausteinen, Handy und Ton: [`src/ui/README.md`](../src/ui/README.md).
+Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`src/map/README.md`](../src/map/README.md). Das Spiel-Handy ist die Schaltzentrale und folgt den iOS-Mustern (Apple HIG): iPhone-Seitenverhältnis (`--phone-ratio` 0,49), Statusleiste mit Uhrzeit links, einer kleinen festen Anzeige (`StatusPill`, seit Auftrag 46d statt der Dynamic Island) in der Mitte und Empfang/WLAN/Akku rechts, Startbildschirm mit App-Raster und Dock, gruppierte Listen mit Icon-Kacheln, Large Title mit Übergang zur schmalen Titelleiste. Glas (`backdrop-filter`) gibt es nur auf der schwebenden Ebene (Statusleiste, Dock, Fußleisten); Inhalte liegen auf ruhigen Flächen. **Eine Farbe hat eine Bedeutung** (`--cat-money`, `--cat-dirty`, `--cat-danger` …, je mit Hell-/Dunkel-Variante und geprüftem Kontrast). Plan, Ableitung aus der HIG und Prüfung: [`handy-design.md`](handy-design.md). Details zu Tokens, Bausteinen, Handy und Ton: [`src/ui/README.md`](../src/ui/README.md).
 
 - **Look „Glas“ über der Karte** (Auftrag 24, Details in [`src/ui/README.md`](../src/ui/README.md)): HUD,
   Kartensteuerung, Marker, Überlagerungen und Dialoge über der Karte sind dunkles Glas mit Barlow/Barlow Condensed
@@ -224,8 +231,9 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
   (`phone/PhoneFrame.tsx`): Tabs der Module sind Apps (`tab:<id>`), Panels erscheinen als Seite im Handy, dazu die
   Handy-Apps, der Verlauf (`core.history`) und ein dringender Rat auf dem Startbildschirm. Desktop: Handy rechts fest angedockt, weggelegt eine Lasche am Rand. Handy-Bildschirm: Handy
   bildschirmfüllend unter dem HUD, in der Tasche eine Leiste unten mit Nächstem Schritt und Handy-Knopf. Dazu Suche
-  (`Palette.tsx`, Strg/⌘+K) und der Hinweis beim Karten-Klick. Meldungen (`ui.toast`) erscheinen als Banner im Handy
-  (einer sichtbar, Rest in der Warteschlange), nicht mehr über der Karte.
+  (`Palette.tsx`, Strg/⌘+K) und der Hinweis beim Karten-Klick. Meldungen (`ui.toast`) landen seit Auftrag 46d nur im
+  Verlauf; eingeblendet wird allein die kurze Fehlermeldung zu einem fehlgeschlagenen Befehl des Spielers (`ui.error`,
+  `phone/ErrorNotice.tsx`, oben im Handy bzw. über der Karte, wenn es weggelegt ist).
   Tastatur in `keys.ts`. Größe des Handys: `min(440px, (100dvh − 24px) × Seitenverhältnis)`, es fällt also nie aus
   dem Fenster; in kleinen Fenstern verkleinern Container-Queries (`container: phone`) Abstände und Kacheln.
 - **Startbildschirm** (`phone/PhoneFrame.tsx`, seit Auftrag 26): schwarz, Statusleiste, ganz oben höchstens ein
@@ -234,39 +242,40 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
   Personal, Kasse). Keine Heute-Zeile, keine Kennzahlen, keine Skyline mehr. Apps und Tabs mit `hidden: true` fehlen im
   Raster und in der Suche, bleiben aber per `openPhone` erreichbar. Ein Tab-Bar-Muster gibt es bewusst nicht: jede App
   ist eine eigene Seite mit Zurück-Knopf, das Dock ersetzt die Tab-Leiste (Begründung in `handy-design.md`).
-- **Statusleiste und Island:** `phone/PhoneFrame.tsx` (`StatusBar`, Grid mit drei Spalten: Uhrzeit | Island | Symbole)
-  hält die Sicherheitszone ein, die Island verdeckt nichts. Die Island zeigt Fristen nur in Stunden
-  (`islandCountdown(minutes)` in `phone/islandModel.ts`: "2 Std.", unter einer Stunde "< 1 Std.").
+- **Statusleiste und Anzeige:** `phone/PhoneFrame.tsx` (`StatusBar`, Grid mit drei Spalten: Uhrzeit | Anzeige | Symbole)
+  hält die Sicherheitszone ein. In der Mitte steht seit Auftrag 46d statt der Dynamic Island die feste `StatusPill`
+  (`phone/StatusPill.tsx`): die Zähler aus `registerStatusCounter`, nur die über 0, ohne Aufklappen und Puls; ein Tipp
+  öffnet die App des ersten Zählers. Liegt das Handy weg, schwebt sie über der Karte, wenn es etwas zu zeigen gibt.
+  Restzeiten nur in Stunden (`hourCountdown(minutes)` in `phone/countdown.ts`: "2 Std.", unter einer Stunde "< 1 Std.").
 - **Seiten im Handy** (`phone/PhoneScreen.tsx`): Large Title, der beim Scrollen in die Titelleiste wandert
   (`is-collapsed`), Zurück-Knopf als Glas-Taste, Fußleiste mit Aktionen als Glas-Blatt. Zieltreffer sind im Handy
   mindestens 44 × 44 px.
 - **Laufzeit** (`runtime.ts`): `UiRuntime` hält den reinen UI-Zustand (`UiState`: Panel, Dialog, Tab, Handy,
-  Tempo, `camera`, `overlay`, `vibration`, `moreNotifications`, `notification`, `picking`) und die `UiApi`.
-  Banner-Regel (Auftrag 26): `toast(text, kind, { urgent? })` erscheint als Banner nur bei `'bad'`/`'warn'` oder
-  `urgent: true`, Routine landet still in `ui.alerts` (Verlauf); `notify({ …, urgent: false })` geht nur in die
-  Mitteilungszentrale. „Mehr Benachrichtigungen“ (pro Gerät) schaltet alles wieder auf Banner. `runtime.stats.banners`
-  zählt. Neuzeichnen nach
+  Tempo, `camera`, `overlay`, `vibration`, `alerts`, `error`, `picking`) und die `UiApi`.
+  Meldungen (Auftrag 46d): `toast(text, kind, { urgent?, icon?, target?, log? })` schreibt nur in `ui.alerts` (Verlauf);
+  `urgent` (Standard bei `'bad'`/`'warn'`) zählt den Eintrag ungelesen am Badge der Einstellungen, `log: false` verwirft
+  ihn. Keine Banner, keine Mitteilungszentrale. Neuzeichnen nach
   Simulationsschritten, gedrosselt auf ca. 10 Mal pro Sekunde; in der Pause nur bei UI-Änderungen.
 - **Hooks** (`hooks.ts`): `useGame()` → `{ state, dispatch }`, `useUi()` → `UiApi` + `state`, `useSession()`.
-- **UiApi:** `dispatch` (Toast bei Fehler), `openPanel/closePanel`, `openDialog/closeDialog`, `toast(text, kind, options)`,
-  `notify({ title, text, icon, appId, params, sound, urgent })`, `openPhone(appId?, params?)/closePhone`, `selectTab`
+- **UiApi:** `dispatch` (kurze Fehlermeldung bei Misserfolg), `openPanel/closePanel`, `openDialog/closeDialog`,
+  `toast(text, kind, options)` (nur Verlauf), `dismissError`, `openPhone(appId?, params?)/closePhone`, `selectTab`
   (öffnet den Tab als App im Handy), `openSection(id)`, `togglePalette`, `setPopover`,
-  `dismissToast`, `markAlertsRead`, `clearAlerts`, `setSpeed`, `togglePause`, `pickLocation(prompt)` (nächster Karten-Klick als Promise),
+  `markAlertsRead`, `clearAlerts`, `setSpeed`, `togglePause`, `pickLocation(prompt)` (nächster Karten-Klick als Promise),
   `cancelPick`, `flyTo`, `flyToKoeln`, `flyToEuropa`, `setCameraMode`, `toggleCamera`, `setOverlay`,
-  `setVibration`, `setMoreNotifications`, `zoomIn`, `zoomOut`, `resetNorth`.
+  `setVibration`, `zoomIn`, `zoomOut`, `resetNorth`.
 - **Registries** (`registry.ts`, alle über `src/ui/index.ts`):
 
 | Funktion | Wofür | Einträge |
 | --- | --- | --- |
-| `registerHudItem({ id, order, placement?, icon?, component })` | Kennzahl (`placement`: `main` in der Geld-Kapsel des HUD, `more` als Kachel oben rechts über der Karte (am Handy-Bildschirm flach unter Geld und Uhr), `time` in der Uhr-Kapsel, `alert` als Warnung im HUD). `HudPill` mit `details` klappt beim Drüberfahren eine Glas-Karte auf | Geld (10, Klick öffnet die Geldwäsche), Lager (20, mit Aufstellung und „Bestellen“), Heat (30), Ruf · Reviere (40, Leiste 0–100 mit Stufen und Revierzahl), offene Konfrontation (50) |
+| `registerHudItem({ id, order, placement?, icon?, component })` | Kennzahl (`placement`: `main` in der Geld-Kapsel des HUD, `more` als Kachel oben rechts über der Karte (am Handy-Bildschirm flach unter Geld und Uhr), `time` in der Uhr-Kapsel, `alert` als Warnung im HUD, `below` als Karte unter Geld und Heat). `HudPill` mit `details` klappt beim Drüberfahren eine Glas-Karte auf | Geld (10, Klick öffnet die Geldwäsche), Lager (20, mit Aufstellung und „Bestellen“), Heat (30), Ruf · Reviere (40, Leiste 0–100 mit Stufen und Revierzahl), Missions-Karte des Tutorials und Wochenvertrag (`below`), offenes Minispiel (`alert`) |
 | `registerTab({ id, title, order, icon?, layout?, shortcut?, component?, badge?, hidden? })` | Bereich als App im Handy (`tab:<id>`); ohne `component` zeigt er den Slot `tab:<id>`; `layout: 'rows'` zeigt jede Card als tippbare Zeile; `hidden` hält ihn vom Startbildschirm fern | Reviere (20, mit Slot `tab:territory` für Spots, Ruf, Polizei), Personal (30, mit Slot `tab:staff` für „Leute finden“), Gangs |
 | `registerSlot(name, { id, order, component, title?, icon?, color? })` | Abschnitt in einem Slot | `map.overlay` (über der freien Kartenfläche: Razzia-Banner, Tracking-Karte der Lieferung), `tab:territory` (Spots, Ruf, Polizei), `tab:staff` (Leute finden), `spots.spotPanel` (Kunden mit „Hier hinstellen“, Preise, Läufer, Leutnant), `veedel.veedelPanel` (Revier, Polizei, Leutnant), `staff.profile`, `goods.warehouse` (Lager-Seite: Hafen, Umlagern, Lager kaufen, Markt), `goods.app` (Lager-App: Fahrzeuge), `suppliers.top` (Schiffs-Tracker), `finance.app` (unten in der Kasse: Kundschaft), `phone.home` (Widgets), `core.settings` (eigener Abschnitt in den Einstellungen mit `title`, `icon`, `color`: Wetter, Anfragen) |
 | `registerPanel({ id, title, component })` | Detailansicht als Seite im Handy, `ui.openPanel(id, props)` | `spots.spot`, `veedel.veedel`, `goods.warehouse` (mit Platz und Ausbau), `goods.flow` (Warenfluss), `logistics.port` (Hafen, mit Liegeplatz-Ausbau), `staff.profile`, `hierarchy.lieutenant`, `hierarchy.rightHand`, `market.overview`, `finance.category` |
-| `registerDialog({ id, component, pausesGame?, dismissable?, area?, lockPhone? })` | Dialog, `ui.openDialog(id, props)`; `area: 'map'` liegt nur über der Kartenfläche (Darstellung mit `MapDialog`, am Handy-Bildschirm ein Blatt), `lockPhone` (Standard wie `pausesGame`) dunkelt das Handy ab und sperrt es | `core.newGame`, `core.saves`, `core.gameOver`, `core.won`, `encounters.encounter` (Karte, pausiert, sperrt das Handy), `police.raidReport` (Karte), `territory.takeover` (Karte, pausiert, nur beim ersten Mal je Veedel), `gangs.attack` |
+| `registerDialog({ id, component, pausesGame?, dismissable?, area?, lockPhone? })` | Dialog, `ui.openDialog(id, props)`; `area: 'map'` liegt nur über der Kartenfläche (Darstellung mit `MapDialog`, am Handy-Bildschirm ein Blatt), `lockPhone` (Standard wie `pausesGame`) dunkelt das Handy ab und sperrt es | `core.newGame`, `core.saves`, `core.gameOver`, `core.won`, `encounters.result` (Karte, pausiert, Handy frei: Ergebnis einer Konfrontation mit „Okay“), `police.raidReport` (Karte), `territory.takeover` (Karte, pausiert, nur beim ersten Mal je Veedel), `gangs.attack` |
 | `registerMapLayerOption({ id, order, group, label, icon?, toggle?, active, select })` | Eintrag im Menü „Ebenen“ der Kartensteuerung | Veedel nach Kontrolle oder Heat (territory), Überwachung (Kern) |
-| `registerLiveActivity({ id, activities })` | Live-Aktivität in der Dynamic Island des Handys (`LiveActivity`: `priority`, `icon`, `tone`, `leading`, `trailing`, `title`, `detail`, `progress`, `open`) | Überfall, Razzia, Heat, Gang-Vorstoß, Chat-Frist, Auftrag, Kurier, Lieferung, Ware am Kai, Fahrt/Kontrolle, du am Spot, Umsatz heute |
+| `registerStatusCounter({ id, order, icon, count(state), label(count), open?(ui) })` | Zähler in der festen Anzeige oben im Handy (`StatusPill`, seit Auftrag 46d statt der Dynamic Island): nur Zahl und Symbol, sichtbar nur über 0, ein Tipp ruft `open` | Lieferungen unterwegs (`suppliers/ui/island.ts`, öffnet die Lieferanten-App) |
 | `registerPhoneApp({ id, name, icon, order, color?, chrome?, component, badge?, hidden? })` | App im Spiel-Handy; `color` ist eine Bedeutungsfarbe (`money`, `dirty`, `danger`, `warn`, `place`, `goods`, `people`, `chat`, `sky`, `law`, `media`, `system`, `log`, `brand`) oder eine CSS-Farbe (dann wird die Schrift automatisch lesbar gewählt); `badge(state, ui)` liefert die Zahl auf dem Icon; `hidden` nur per `openPhone` | Nachrichten (Mint), Lieferanten (Waren), Kasse (Geld), Geldwäsche (Geld), Einstellungen (Grau: Ton & Musik, Anzeige, Wetter, Anfragen, Verlauf, Spiel), Verlauf (Papier, versteckt) |
-| `onGameEvent(type, id, (payload, ui, state) => …)` | Reaktion auf Ereignisse (Toast, Dialog, Effekt) | Game Over, Sieg, neue Nachricht (Banner), Toasts der Module, Karten-Effekte |
+| `onGameEvent(type, id, (payload, ui, state) => …)` | Reaktion auf Ereignisse (Meldung im Verlauf, Dialog, Effekt) | Game Over, Sieg, Ergebnis-Karte der Konfrontation, Meldungen der Module, Karten-Effekte |
 | `registerAdvisor({ id, advise(state) })` | Empfehlung (`Advice`: priority, icon, title, cost?, action?, highlight?): ab Priorität 80 als dringende Zeile auf dem Startbildschirm, sonst in der Suche und in der Leiste am Handy-Bildschirm | Antworten (Kern, 90 nur mit Frist), Verkauf (an den Spot stellen oder alle bedienen) und Läufer (Spots, Personal), Nachschub (Lieferanten), Ware am Hafen abholen, Liegeplatz (Logistik), Geldwäsche, Löhne (Kasse), Rechte Hand, Kampagnenziel |
 | `registerSearch({ id, label, order, items(state) })` | Einträge der Suche (Strg/⌘+K) | Spots, Veedel, Leute, Gangs |
 | `registerGameStat({ id, order, icon, label, value(state) })` | Kennzahl auf dem Game-Over- und Sieg-Bildschirm | Tage, Schwarzgeld, Veedel, Kunden, Team |
@@ -301,6 +310,13 @@ Look "Nachtschicht": dunkel und gedämpft über der gedämpften Karte, siehe [`s
 - **Start** (`start.tsx`): Registriert die Kern-Oberflächen, lädt alle `src/modules/*/ui/index.ts(x)`, setzt den
   Autosave fort oder öffnet "Neues Spiel". URL-Parameter: `?neu=normal|hardcore&seed=123&tempo=0`.
   `window.koeln = { session, runtime }` zum Ausprobieren und für Playwright.
+- **Tour** (`tour/`, Auftrag 46a): Spotlight-Erklärungen über dem Spiel. Elemente tragen `data-tour="<id>"`
+  (`TOUR_ANCHORS`), eine Tour ist eine Liste von Schritten (`TourDef`, `TourStep`: Anker, ein, zwei Sätze, Sprecher
+  mit Porträt, `before`, `waitFor` als Weiter, Ereignis oder Bedingung am Zustand), das Overlay graut alles aus und
+  schneidet den Anker frei, die Box hat „Weiter“; die Uhr steht. `ui.tour.start(def)` reiht ein, `active()`, `skip()`.
+  Reine Oberfläche ohne Zustand im Spielstand; die Inhalte je Stufe kommen mit dem Modul `tutorial` (46b, 46c).
+  Details, Anker-Liste und Vorschau (`?tour=demo`, `npm run screenshot -- --scenes=tour`):
+  [`src/ui/README.md`](../src/ui/README.md), Abschnitt „Tour“.
 
 ## Karte (`src/map/`)
 
@@ -365,25 +381,26 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
 | `territory` | `influence`, `controller`, `lastSaleAt`, `milestones` (7; Versionen 4 bis 7 tragen die Veedel jeder neuen Stadt nach) | `PLAYER_FACTION`, `CONTROL_THRESHOLD`, `LOSE_CONTROL_THRESHOLD`, `getInfluence`, `influenceIn`, `addInfluence`, `controllerOf`, `controlledBy`, `factions`, `factionName`, `factionColor`, `playerPresence`, `hasPlayerPresence`, `lieutenantInfluence`, `campaignProgress` | | `territory.controlChanged` |
 | `police` | `heat`, `level`, Sperrzeiten, `tipOffs`, `plannedRaids` (mit `scope`, `spotId`), `majorRaid`, `majorReadyAt`, `tier`, `stats` (4) | `getHeat`, `addHeat`, `reportViolence`, `heatLevel`, `playerHeat`, `hottestVeedel`, `snitchOnGang`, `canSnitch`, `tipOffAgainstPlayer` (Auftrag 23: eine Gang schwärzt dich an), `activeTipOff`, `plannedRaid`, `plannedRaidInfo`, `plannedMajorRaid`, `operationTier`, `operationFacts`, `nextTierHints`, `OPERATION_TIERS`, `RAID_SCOPES`, `getPoliceStats`, `arrestStaff`, `recordConfiscation`; Auftrag 40 (Version 6, `customs` pro Hafen): `customsHeat`, `customsLevel`, `addCustomsHeat`, `customsArrival`, `customsSeized` | `police.snitch` | `police.check`, `police.raidPlanned` (`scope`), `police.raid` (`scope`: `spot`/`veedel`/`major`, `veedelIds`; `empty` wenn niemand da war), `police.arrest`, `police.tipOff`, `police.heatLevelChanged`, `police.tierChanged` |
 | `gangs` | `gangs[id]` (Geld, Leute, Ware, Feindseligkeit, Beziehung, Abkommen, Vorstoß), `priceFactors`, seit Auftrag 23 `incidents` (Vorfälle mit Antwort), `intimidations`, `log` (letzte Aktionen gegen dich), `nextMethodAt`, `lastMethodAt`, Auftrag 34: `memories`, `rivalry`, `wars`, `warLog`, `lastWarAskAt`, `warCount` (8; Versionen 6 bis 8 tragen die Gangs von Berlin, München und Frankfurt nach); Stimmen pro Gang in `texts.ts` (Frankfurt in `texts-frankfurt.ts`), Methoden-Gewichte in `data.ts` (`traits.methods`) | `getGangs`, `getGang`, `getGangStatus`, `gangVeedel`, `veedelGang`, `gangPower`, `playerPower`, `isAtPeace`, `tributeAmount`, `ceasefireCost`, `protectionAmount`, `gangContact`, Auftrag 23: `intimidationFactor(state, spotId)`, `intimidationAt`, `gangActions`, `openIncidents`, `describeIncident`, `INCIDENT_CHOICES`, `runGangMethod`, `sendGangMessage` …; Auftrag 34: `gangMemories`, `memoryScore`, `memoryPriceFactor`, `remember`, `MEMORIES`, `allianceCost`, `GANG_RIVALRY`, `rivalry`, `rivalries`, `activeWars`, `pastWars` | `gangs.ceasefire`, `.payTribute`, `.refuse`, `.demandProtection`, `.collect`, `.releaseProtection`, `.ally`, `.attack`, `.acceptOffer`, `.respond`, `.supportWar` | `gang.pushStarted`, `gang.pushEnded`, `gang.escalated`, `gang.raidStarted`, `gang.diplomacyChanged`, `gang.busted`, Auftrag 23: `gang.burglary`, `gang.poachAttempt`, `gang.intimidation`, `gang.tipOff`, `gang.blackmail`, `gang.goodTurn`, `gang.incidentResolved`, Auftrag 34: `gang.remembered`, `gang.warStarted`, `gang.warEnded`, `gang.warSupported` |
-| `encounters` | `active`, `history`, je Konfrontation `mode`, Zeiger `aggression`/`resolve`, Polizei-Uhr `clock`, `intent`, `foes` (Rollen), `stakes` (Schaden), `protect`, `brawl` (4) | `startEncounter(ctx, request)` (mit `askPlayer`, `place`, `situation`, `setting`, `stakes`, `effects`, `skipEffects`), `getEncounter`, `activeEncounters`, `pendingEncounter`, `availableActions`, `availableMoves`, `previewShift` (Pfeile vor dem Tippen), `actionChance` (Stärke 0–1), `briefingOptions`, `payoffCost`, `crewCandidates`, `suggestedCrew`, `specialMoves(member)` (Haken für Auftrag 34), `rightHandAdvice`, `chooseAuto`/`chooseMove` (Strategie), `autoResolveEncounter`, `ENCOUNTER_KINDS`, `ENCOUNTER_ACTIONS`, `ENCOUNTER_INTENTS`, `SPECIAL_MOVES`, `ADVICE_RULES`, `PLAYER_STATS` | `encounters.join` (`mode`: self, crew, backup, payoff, tipoff, abandon; alt `present`; `crew` bis zu drei), `.act` (`protect`), `.protect`, `.special`, `.auto` | `encounter.started`, `encounter.round` (Zeiger, Uhr), `encounter.resolved` (`result` mit `relation`, `parts`, `ending`, `mode`) |
+| `encounters` | `active`, `history`, je Konfrontation Runden, Zeiger `aggression`/`resolve`, Polizei-Uhr `clock`, `intent`, `foes` (Rollen), `stakes` (Schaden), `protect`, `brawl`, `minigame` (6; Auftrag 46d: keine Akte mehr, Version 6 schließt offene Konfrontationen alter Stände beim ersten Tick) | `startEncounter(ctx, request)` (mit `askPlayer`, `place`, `situation`, `setting`, `stakes`, `effects`, `skipEffects`; entscheidet sofort über `resolveNow`/`playOut` in `engine.ts`, bei dir am Spot zuerst das Minispiel aus `EncounterKind.minigames`), `getEncounter`, `activeEncounters`, `autoResolveEncounter`, `ENCOUNTER_KINDS`, `PLAYER_STATS`, `TIPOFF_HEAT`, `ROLE_NAMES`, Brücke zu den Minispielen `encounterChallenge`, `minigameParams`, `applyBrawl`/`applyChase`/`applyTraffic`/`applyPapers` | `encounters.auto` (wartendes Minispiel sofort auswürfeln) | `encounter.started`, `encounter.round` (Zeiger, Uhr; innere Automatik), `encounter.resolved` (`result` mit `relation`, `parts`, `ending`, `mode`) |
 | `goods` | Posten pro Lager mit Qualität, Streckanteil, Einkaufspreis, eigene Lager `owned`, Ausbau `upgrades`, Einlagern `storage`, Verbrauch `usage` (5; Auftrag 33) | `allProducts`, `getProduct`, `productName`, `getWarehouses` (eigene), `warehouseSites` (alle Standorte mit Preis), `isWarehouseOwned`, `nearestWarehouse(state, point, { productId?, amount? })`, `getStock`, `getLots`, `stockSummary`, `averageQuality`, `qualityTier`, `cutPreview`, `store`, `take` (mit `near`: nächstes Lager zuerst; → `taken`, `quality`, `cut`, `unitCost`), `cutLot`; Auftrag 33: `storeFitting` (nur, was passt, mit Rest), `warehouseLoad`, `warehouseCapacity`, `warehouseFree`, `fitsInto`, `warehouseModifiers` (Kapazität, `lossFactor` für Einbruch und Überfall, `raidFactor` für Razzien), `upgradeLevel`, `upgradeCost`, `storageStats`, `usagePerDay`, `usedProducts`, `servingWarehouse`, `stockWeight` | `goods.cut`, `goods.buyWarehouse` (sauberes Geld), `goods.upgradeWarehouse` (Regale, Tresor, Tarnung; sauberes Geld) | `goods.stored`, `goods.taken`, `goods.cut`, `goods.warehouseBought`, `goods.warehouseUpgraded`, `goods.storeRejected` |
-| `market` | `competition`, `pressure`, `prices`, `index` (Preisindex Stadt → Ware, Auftrag 32) (3) | `referencePrice` (mal Preisindex der Stadt), `averageReferencePrice`, `purchasingPowerFactor`, `supplyDemandFactor`, `getPressure`, `getCompetitionFactor`, `setCompetitionFactor`, `spotReferencePrice`, `getSpotPrice`, `hasOwnPrice`, `priceRatio`, `roundPrice`; Auftrag 32: `priceIndex(state, productId, cityId?)` (Pfad mal Marktereignisse, 0,85–1,2), `driftIndex`, `purchaseIndex` (halbe Ausschläge für den Einkauf), `indexTrend` (Chip ab ±5 %), `marketReport` (Text des Marktberichts) | `market.setPrice` | `market.competitionChanged`, `market.priceSet` |
-| `suppliers` | `shipments` (`toPort` bei Schiffsware), `relations` (Vertrauen, Schulden), `unlocked`, `offered`, `deals` (Rabatt-Aktionen, Auftrag 32), an Lieferungen seit Auftrag 23 `route`, `reasonId`, `decision`, `choice`, `luck`, `partOf` (Gründe in `problems.ts` pro Weg `road`, `border`, `ship`, `local`, `alps`, `air`, Stimmen in `voices.ts`, Entscheidungen in `troubles.ts`; `Supplier.customs` zusätzliche Beschlagnahme-Chance, `Supplier.home` zu Hause in einer Stadt) (6; Pakete mit `container` (`'full'` oder `'shared'`), Lieferung `shared` bei aufgeflogenem geteiltem Container, Auftrag 33) | `getSuppliers`, `getSupplier`, `isUnlocked`, `unlockRequirements` (Stand der Bedingungen), `canUnlock`, `shipmentsInTransit`, `shipmentProgress`, `deliveryLeg` (Schiff/Umladen/Straße, nur Darstellung; Weg des Schiffs: `roads.shipRoute`), `UNLOADING_PORT`, `CITY_APPROACH_SHARE`, `expectedArrival`, `cheapestPackagePrice`, `getRelation`, `supplierDiscount`, `creditLimit`, `availableCredit`, `isBlocked`, `availablePackages` (leer, solange gesperrt), `packagePrice` (mit `purchaseIndex` und Rabatt-Aktion), `supplierVia(supplier, cityId)` (Autobahn des Kuriers in die Stadt, nur Karte), `Supplier.home` (Auftrag 37: in einer Stadt zu Hause, beim ersten Betreten ohne Vermittlung dabei; Hein in Hamburg, Mirko in Berlin); Auftrag 38: `Supplier.customs` (Zoll an einer Grenze, Zusatz auf die Beschlagnahme), `requires.city` (meldet sich erst in dieser Stadt), Weg `alps` (Brenner); Auftrag 32: `getDeals(state, cityId?)`, `activeDeal(state, supplierId, packageId, cityId?)`, `supplierContact`, `supplierById`, `addSupplierTrust(ctx, id, amount)`; Auftrag 40: `rivalOffers(state, week)` (Konkurrenz der Hafen-Phase, `RIVALS`) | `suppliers.order` (`onCredit`, `warehouseId`), `suppliers.repay`, `suppliers.unlock` | `shipment.ordered`, `shipment.arrived` (`atPort`), `shipment.problem`, `supplier.trustChanged`, `supplier.repaid`, `supplier.overdue`, `supplier.unlocked`, `supplier.dealStarted` |
+| `market` | `competition`, `pressure`, `prices`, `index` (Preisindex Stadt → Ware, Auftrag 32) (3) | `referencePrice` (mal Preisindex der Stadt), `averageReferencePrice`, `purchasingPowerFactor`, `supplyDemandFactor`, `getPressure`, `getCompetitionFactor`, `setCompetitionFactor`, `spotReferencePrice`, `getSpotPrice`, `hasOwnPrice`, `priceRatio`, `roundPrice`; Auftrag 32: `priceIndex(state, productId, cityId?)` (Pfad mal Marktereignisse, 0,85–1,2), `driftIndex`, `purchaseIndex` (halbe Ausschläge für den Einkauf), `indexTrend` (Chip ab ±5 %) | `market.setPrice` | `market.competitionChanged`, `market.priceSet` |
+| `suppliers` | `shipments` (`toPort` bei Schiffsware), `relations` (Vertrauen, Schulden), `unlocked`, `offered`, `introduced` (vorgestellt, Auftrag 46e), `deals` (Rabatt-Aktionen, Auftrag 32), an Lieferungen seit Auftrag 23 `route`, `reasonId`, `decision`, `choice`, `luck`, `partOf` (Gründe in `problems.ts` pro Weg `road`, `border`, `ship`, `local`, `alps`, `air`, Stimmen in `voices.ts`, Entscheidungen in `troubles.ts`; `Supplier.customs` zusätzliche Beschlagnahme-Chance, `Supplier.home` zu Hause in einer Stadt) (6; Pakete mit `container` (`'full'` oder `'shared'`), Lieferung `shared` bei aufgeflogenem geteiltem Container, Auftrag 33) | `getSuppliers`, `getSupplier`, `isUnlocked`, `isIntroduced`, `introText` (Auftrag 46e), `unlockRequirements` (Stand der Bedingungen), `canUnlock`, `shipmentsInTransit`, `shipmentProgress`, `deliveryLeg` (Schiff/Umladen/Straße, nur Darstellung; Weg des Schiffs: `roads.shipRoute`), `UNLOADING_PORT`, `CITY_APPROACH_SHARE`, `expectedArrival`, `cheapestPackagePrice`, `getRelation`, `supplierDiscount`, `creditLimit`, `availableCredit`, `isBlocked`, `availablePackages` (leer, solange gesperrt), `packagePrice` (mit `purchaseIndex` und Rabatt-Aktion), `supplierVia(supplier, cityId)` (Autobahn des Kuriers in die Stadt, nur Karte), `Supplier.home` (Auftrag 37: in einer Stadt zu Hause, beim ersten Betreten ohne Vermittlung dabei; Hein in Hamburg, Mirko in Berlin); Auftrag 38: `Supplier.customs` (Zoll an einer Grenze, Zusatz auf die Beschlagnahme), `requires.city` (meldet sich erst in dieser Stadt), Weg `alps` (Brenner); Auftrag 32: `getDeals(state, cityId?)`, `activeDeal(state, supplierId, packageId, cityId?)`, `supplierContact`, `supplierById`, `addSupplierTrust(ctx, id, amount)`; Auftrag 40: `rivalOffers(state, week)` (Konkurrenz der Hafen-Phase, `RIVALS`) | `suppliers.order` (`onCredit`, `warehouseId`), `suppliers.repay`, `suppliers.unlock` | `shipment.ordered`, `shipment.arrived` (`atPort`), `shipment.problem`, `supplier.trustChanged`, `supplier.repaid`, `supplier.overdue`, `supplier.unlocked`, `supplier.dealStarted`, `supplier.introduced` (Auftrag 46e) |
 | `customers` | `waiting`, `nextSpawnAt`, `stats`, `regulars`, `orders` (mit `fromWarehouseId`, `deliveredBy` `player`/`rightHand`), `self` (Spot, an dem du stehst), `directOrders`, `quality` (gleitender Schnitt der Qualität pro Spot und Ware, Auftrag 32), `dealers` (Stammabnehmer, Auftrag 34) (6; Auftragsstatus zusätzlich `contested`) | `waitingAt`, `allWaiting`, `spotDemand` (aktuelle Nachfrage), Qualität (`quality.ts`): `spotQuality`, `qualityDemandFactor`, `qualityDemandFor`, `spotReputation`, `canServe`, `getSalesStats`, `getRegulars`, `getOrders`, `orderProgress`, `isPlayerDelivering`, `playerSpot`, `isPlayerAway`, `offerDelivery`/`offerWholesale` (Tests), Kundenentscheidung als reine Funktionen; Stammabnehmer (`dealers.ts`): `DEALERS` pro Stadt, `DEALER_STAGES`, `getDealers`, `dealerRelation`, `dealerStage`, `dealerPrepays`, `middlemanPrice` | `customers.serve` (`sellerId`), `.serveAll`, `.standAt`, `.setDirectOrders`, `.acceptOrder` (`by: 'player'` oder `'rightHand'`, alt `'courier'` = Spieler), `.declineOrder`, `.dealerExclusive`, `.dealerMiddleman` | `sale.completed` (`street`/`delivery`/`wholesale`), `customer.arrived`, `customer.left`, `customer.missed`, `customer.regularGained/Lost`, `customers.selfMoved`, `order.received/accepted/finished`, `dealer.stageChanged`, `dealer.left`, `dealer.middlemanDelivered` |
-| `spots` | `unlocked`, `custom` (3; jedes Veedel hat mindestens zwei vorgegebene Spots, Auftrag 28; Hamburg 25 Spots zum Freischalten, Berlin 40 (`config-berlin.ts`), Frankfurt 31 (Auftrag 39); Spot-Art `kind: 'kneipe'` seit Auftrag 30; seit Auftrag 23 Arten in `kinds.ts`, `awareness` (Bekanntheit eigener Spots), `upgrades` (Ausbau), Version 4) | `getSpots(state, cityId?)` (aktive), `getAllSpots`, `getSpot`, `isSpotActive`, `spotsInVeedel`, `lockedSpots`, `customSpots`, `canFoundSpotAt`, `spotCity`, Kneipen: `isKneipe`, `isSpotOpen`, `nextSpotOpening`, `spotHoursLabel`, `KNEIPE`; Öffnungszeiten über die Woche mit `Spot.weekHours` (Auftrag 37, Berliner Clubs Fr 22 bis Mo 8 Uhr); das Veedel eines Spots kommt aus `veedelAt` | `spots.unlock`, `spots.found` (mit `kind`), `spots.upgrade`, `spots.move`, `spots.rename`, `spots.close` | `spots.unlocked`, `spots.founded` (mit `kind`), `spots.upgraded`, `spots.moved`, `spots.closed` |
+| `spots` | `unlocked`, `custom` (3; jedes Veedel hat mindestens zwei vorgegebene Spots, Auftrag 28; Hamburg 25 Spots zum Freischalten, Berlin 40 (`config-berlin.ts`), Frankfurt 31 (Auftrag 39); Spot-Art `kind: 'kneipe'` seit Auftrag 30; seit Auftrag 23 Arten in `kinds.ts`, `awareness` (Bekanntheit eigener Spots); Version 5 nimmt `upgrades` heraus, der Spot-Ausbau ist weg, Auftrag 46d) | `getSpots(state, cityId?)` (aktive), `getAllSpots`, `getSpot`, `isSpotActive`, `spotsInVeedel`, `lockedSpots`, `customSpots`, `canFoundSpotAt`, `spotCity`, `spotKind`, `spotType`, `spotAwareness`, `spotDemandFactor`, `spotModifiers` (nur noch `heatFactor` aus der Art, der Rest neutral), Kneipen: `isKneipe`, `isSpotOpen`, `nextSpotOpening`, `spotHoursLabel`, `KNEIPE`; Öffnungszeiten über die Woche mit `Spot.weekHours` (Auftrag 37, Berliner Clubs Fr 22 bis Mo 8 Uhr); das Veedel eines Spots kommt aus `veedelAt` | `spots.unlock`, `spots.found` (mit `kind`; Oberfläche nur noch der Shop-Platzhalter `spots.shop`, Auftrag 46e), `spots.move`, `spots.rename`, `spots.close`, `spots.lock` (Tutorial) | `spots.unlocked`, `spots.founded` (mit `kind`), `spots.moved`, `spots.closed`, `spots.locked` |
 | `reputation` | `value`, `recent` (2) | `getReputation`, `changeReputation(ctx, delta, reason)`, `reputationDemandFactor`, `reputationLabel`, `reputationTier`, `reputationTiers`, `recentReputationChanges` | | `reputation.changed` |
 | `laundering` | `batches` (mit `channel`), `unlocked` (3; drei Wege in `config.ts`: Kumpel mit Kiosk, Waschsalon, Bauunternehmer mit Gebühr, Dauer, Obergrenze, Heat-Risiko, Freischalten) | `getChannels`, `getChannel`, `isChannelUnlocked`, `channelFee`, `channelDuration`, `channelCapacity`, `channelHeatAbove` (Auftrag 39: mal `LAUNDERING_CAPACITY_BY_CITY` der Stadt, in der du bist), `channelFree`, `canUnlockChannel`, `launderingFee`, `launderingDuration`, `launderingCapacity`, `amountInProgress(state, channel?)`, `getBatches`, `batchProgress`, `LAUNDERING_CHANNELS` | `laundering.launder` (`amount`, `channel?`; ohne Weg der billigste freie, große Beträge werden aufgeteilt), `laundering.unlock` (`channel`, `pay`: sauber oder schwarz) | `laundering.started`, `laundering.completed`, `laundering.unlocked` |
-| `staff` (Auftrag 42: Rollen `worker` und `gardener` für die Fincas, `isFarmRole`; ihre `cityId` ist eine Region, nie live, Löhne zahlt grow) | `members` (mit `jailSupport`), `former`, `hiding`, Auftrag 34: `relations`, `stories`, an jeder Person `traits` (7; Rollen `runner`, `driver`, `security`, Spezialisten; `courier` nur als Altlast im Typ, alte Kuriere werden Läufer; Einsatz `delivery` hat nur die Rechte Hand, dazu `transport` und `office`) | `getStaff`, `getStaffMember`, `getStats`, `runnerAt`, `activeRunnerAt`, `securityAt`, `findAvailable`, `assign`, `setStatus`, `speedFactor`, `riskFactor`, `combatValue`, `defenseStrength`, `bonus`, `bailCost`, `dailyWages`, `effectiveWage`, `payrollDue`, `wageCategory`, `isAbsent`, `talkChance`, `staffContact`, `isLyingLow`, `lieLow`, `DRIVER_HIRE_COST`, `JAIL_WAGE_FACTOR`, `INJURED_WAGE_FACTOR` …; Auftrag 34: `TRAITS`, `traitFactor`, `hasTrait`, `traitName`, `rollTraits`, `RELATIONS`, `relationsOf`, `relationBetween`, `relationLabel`, `STORIES`, `openStories`, `storyChoices`, `startStory` | `staff.hireRunner`, `.hireDriver`, `.fire`, `.assign`, `.setWage`, `.bail`, `.setJailSupport`, `.replace` (`fire?`), `.lieLow`, `.relocate`, `.storyChoice` | `staff.hired`, `.left`, `.statusChanged`, `.assigned`, `.levelUp`, `.bailed`, `.betrayed`, `.raidWarning`, `.wentUnderground`, `.relocated`, `.story`, `.storyResolved` |
-| `hierarchy` | `posts` nach Mitarbeiter (Spots, Einstellungen mit Bestellregeln (optional `maxIndex`: nur bestellen, wenn der Preisindex darunter liegt, Auftrag 32), Team, Ausfälle, Protokoll), `rightHands` pro Stadt (Einstellungen mit Aufgaben, Erfahrung `xp`, Erledigtes `done`, Bericht, `fullPower`), `orderTemplate`, `capos` (Auftrag 34) (7) | `getPost`, `getLieutenants`, `getLieutenantIds`, `isLieutenant`, `lieutenantOfSpot`, `lieutenantSpots`, `lieutenantVeedels`, `lieutenantsInVeedel`, `teamOf`, `teamLeadOf`, `handlesAbsence`, `canBeLieutenant`, `checkSpots`, `lieutenantDemand`, `lieutenantSatisfaction`, `homeWarehouse`, `orderRuleLabel`, `ruleStock`, `isPortSupplierAllowed`, `getRightHand(state, cityId?)`, `allRightHands`, `rightHandCityOf`, Vollmacht (Auftrag 30): `hasFullPower`, `fullPowerMissing`, `FULL_POWER_SHARE`, Übergabe (Auftrag 36): `rightHandTitle` (Statthalter), `canBeRightHand`, `rightHandOffered`, `rightHandSatisfaction`, `payrollReserve`, `rightHandBudgetLeft`, `absenceHandled`, `buildReport`, Aufgaben: `RIGHT_HAND_TASKS`, `isTaskUnlocked`, `isTaskActive`, `rightHandRank`, `rightHandRankProgress`, `rightHandDriver`, `rightHandOrderLimit`, `rightHandSpeedFactor`, `rightHandHandlesOrders`, `restockBudgetLeft`, `describeDone`; Capo (Auftrag 34): `getCapos(state, cityId?)`, `isCapo`, `capoOf`, `capoDistrict`, `canBeCapo`, `capoCandidates`, `capoInCharge`; Rat: `REPORT_TIPS`, `reportTipFor`; alt: `getLieutenant(veedelId)`, `lieutenantVeedel` | `hierarchy.appoint` (`staffId`, `spotIds`), `.setSpots`, `.dismiss`, `.configure` (`settings` mit `orderRules`, `onAbsent` …), `.appointRightHand`, `.dismissRightHand`, `.configureRightHand` (auch Aufgaben und ihre Regeln; `cityId?`), `.grantFullPower`, `.revokeFullPower`, `.appointCapo`, `.dismissCapo`, `.revokeFullPower` | `hierarchy.appointed` (`spotIds`), `.dismissed`, `.configured`, `.spotsChanged`, `.rightHandAppointed`, `.rightHandDismissed`, `.dailyReport`, `.rightHandRankUp`, `.fullPowerGranted`, `.fullPowerRevoked`, `.shareTaken` |
+| `staff` (Auftrag 42: Rollen `worker` und `gardener` für die Fincas, `isFarmRole`; ihre `cityId` ist eine Region, nie live, Löhne zahlt grow) | `members` (mit `jailSupport`), `former`, `hiding`, Auftrag 34: `relations`, an jeder Person `traits` (8; Version 8 nimmt `stories` heraus, die Geschichten der Leute sind weg, Auftrag 46d; Rollen `runner`, `driver`, `security`, Spezialisten; `courier` nur als Altlast im Typ, alte Kuriere werden Läufer; Einsatz `delivery` hat nur die Rechte Hand, dazu `transport` und `office`) | `getStaff`, `getStaffMember`, `getStats`, `runnerAt`, `activeRunnerAt`, `securityAt`, `findAvailable`, `assign`, `setStatus`, `speedFactor`, `riskFactor`, `combatValue`, `defenseStrength`, `bonus`, `bailCost`, `dailyWages`, `effectiveWage`, `payrollDue`, `wageCategory`, Auftrag 46e: `SPECIALIST_EFFECTS`, `specialistEffect`, `specialistFactor`, `specialistProvider`, `specialistEffectsOf`, `isGoodSpecialist`, `canHireRole`, `wageFactor`, `isAbsent`, `talkChance`, `staffContact`, `isLyingLow`, `lieLow`, `DRIVER_HIRE_COST`, `JAIL_WAGE_FACTOR`, `INJURED_WAGE_FACTOR` …; Auftrag 34: `TRAITS`, `traitFactor`, `hasTrait`, `traitName`, `rollTraits`, `RELATIONS`, `relationsOf`, `relationBetween`, `relationLabel` | `staff.hireRunner`, `.hireDriver`, `.fire`, `.assign`, `.setWage`, `.bail`, `.setJailSupport`, `.replace` (`fire?`), `.lieLow` | `staff.hired`, `.left`, `.statusChanged`, `.assigned`, `.levelUp`, `.bailed`, `.betrayed`, `.raidWarning`, `.wentUnderground`, `.relocated` (nur noch Altlast) |
+| `hierarchy` | `posts` nach Mitarbeiter (Spots, Einstellungen mit Bestellregeln (optional `maxIndex`: nur bestellen, wenn der Preisindex darunter liegt, Auftrag 32), Team, Ausfälle, Protokoll), `rightHands` pro Stadt (Einstellungen mit Aufgaben, Erfahrung `xp`, Erledigtes `done`, Bericht, `fullPower`), `orderTemplate`, `capos` (Auftrag 34) (7) | `getPost`, `getLieutenants`, `getLieutenantIds`, `isLieutenant`, `lieutenantOfSpot`, `lieutenantSpots`, `lieutenantVeedels`, `lieutenantsInVeedel`, `teamOf`, `teamLeadOf`, `handlesAbsence`, `canBeLieutenant`, `checkSpots`, `lieutenantDemand`, `lieutenantSatisfaction`, `homeWarehouse`, `orderRuleLabel`, `ruleStock`, `isPortSupplierAllowed`, `getRightHand(state, cityId?)`, `allRightHands`, `rightHandCityOf`, Vollmacht (Auftrag 30): `hasFullPower`, `fullPowerMissing`, `FULL_POWER_SHARE`, Übergabe (Auftrag 36): `rightHandTitle` (Statthalter), `canBeRightHand` (Auftrag 46e: aus den Leutnants, ohne Level), `rightHandOffered`, `rightHandSatisfaction`, `payrollReserve`, `rightHandBudgetLeft`, `absenceHandled`, `buildReport`, Aufgaben: `RIGHT_HAND_TASKS`, `isTaskUnlocked`, `isTaskActive`, `rightHandRank`, `rightHandRankProgress`, `rightHandDriver`, `rightHandOrderLimit`, `rightHandSpeedFactor`, `rightHandHandlesOrders`, `restockBudgetLeft`, `describeDone`; Capo (Auftrag 34): `getCapos(state, cityId?)`, `isCapo`, `capoOf`, `capoDistrict`, `canBeCapo`, `capoCandidates`, `capoInCharge`; Rat: `REPORT_TIPS`, `reportTipFor`; alt: `getLieutenant(veedelId)`, `lieutenantVeedel` | `hierarchy.appoint` (`staffId`, `spotIds`), `.setSpots`, `.dismiss`, `.configure` (`settings` mit `orderRules`, `onAbsent` …), `.appointRightHand`, `.dismissRightHand`, `.configureRightHand` (auch Aufgaben und ihre Regeln; `cityId?`), `.grantFullPower`, `.revokeFullPower`, `.appointCapo`, `.dismissCapo`, `.revokeFullPower` | `hierarchy.appointed` (`spotIds`), `.dismissed`, `.configured`, `.spotsChanged`, `.rightHandAppointed`, `.rightHandDismissed`, `.dailyReport`, `.rightHandRankUp`, `.fullPowerGranted`, `.fullPowerRevoked`, `.shareTaken` |
 | `finance` | `days`: Tagesbücher der letzten 30 Tage (Kategorien, pro Spot, pro Leutnant, pro Stadt `cities`; Buchungstexte nur sieben Tage) (2) | `currentDay`, `bookDay`, `dayReport(state, daysAgo)`, `periodReport(state, days)`, `dailyProfits`, `categoryLines`, `spotResult`, `spotResults`, `lieutenantResult`, `wageRunway`; Bilanz (Auftrag 27): `PERIODS`, `periodSpan`, `balance(state, period, filter)` mit `FinanceFilter` (alles, Stadt, Veedel, Spot, Leutnant), `balanceHistory`, `explainReport`; Städte (Auftrag 30): `cityReport(state, cityId, days)`, `cityDayProfit`, `bookingCity` | | |
-| `quests` | `index`, `progress`, `done`, `skipped`, `title`, `startedAt`, `fresh` (Version 7), `phoneSteps` (Version 9), `contracts` (Wochenverträge: `offers`, `active`, `history`, `stats`, Auftrag 32) (4; Auftrag 36: Kapitel pro Stadt mit `cityId`, index -1 = wartet auf die nächste Stadt). Peter (Kontakt `quest:peter`) schickt 26 Quests in fünf Kapiteln der Reihe nach (`config.ts`: `QUESTS`, `CHAPTERS`); Fortschritt über Ereignis-Zähler (`count`), ein Maß am Zustand (`measure`) oder eine Serie voller Stunden (`streak`). Belohnungen: Ware, Geld (schwarz/sauber), Ruf, weniger Heat, Erfahrung und Loyalität fürs Team, Einfluss, Titel Wochenverträge in `contracts.ts` (14 Vorlagen `CONTRACT_TEMPLATES`, sechs Figuren `CONTRACT_CONTACTS`, Ziele nach `operationTier`, Belohnung `trust` beim Lieferanten) | `currentQuest`, `questsWaiting` (Auftrag 36: Kapitel der nächsten Stadt), `questProgress`, `completedQuests`, `questTitle`, `chapterName`, `rewardText`, `QUESTS`, `CHAPTERS`, `PETER`; Handy Schritt für Schritt: `phoneStepsActive`, `phoneStepsEnabled`, `questReached`, `phoneAppLocked`, `phoneAppsOpenedBy`, `PHONE_APP_STEPS`; `contractsOpen`, `contractOffers`, `activeContract`, `contractProgress`, `contractHistory`, `contractStats`, `contractValue`, `getContractTemplate`, `getContractContact`, `rewardValue` | `quests.skip`, `quests.acceptContract` (`offerId`), `quests.setPhoneSteps` (`enabled`) | `quest.started`, `quest.completed`, `contract.offered`, `contract.accepted`, `contract.finished` (`result`: `done`/`failed`) |
+| `quests` (seit Auftrag 46d nur noch die Wochenverträge; Peters Quests, Quest-Karte, „Alle Quests“ und „Handy Schritt für Schritt“ sind weg) | `offers`, `active`, `history`, `stats` (10; Migration aus dem alten Zustand mit Quests und `contracts`). Vorlagen in `contracts.ts` (14 `CONTRACT_TEMPLATES`, sechs Figuren `CONTRACT_CONTACTS`, Ziele nach `operationTier`, Belohnung `trust` beim Lieferanten); Fortschritt über Ereignis-Zähler (`count`), ein Maß am Zustand (`measure`) oder eine Serie voller Stunden (`streak`) | `contractsOpen` (Geschäft nicht verkauft und aktive Stadt nicht Köln oder Köln komplett), `contractOffers`, `activeContract`, `contractProgress`, `contractHistory`, `contractStats`, `contractValue`, `rewardText`, `canAcceptContract`, `getContractTemplate`, `getContractContact`, `rewardValue`, `CONTRACT_TEMPLATES`, `CONTRACT_CONTACTS` | `quests.acceptContract` (`offerId`) | `contract.offered` (`offerIds`, `cityId`), `contract.accepted`, `contract.finished` (`result`: `done`/`failed`) |
+| `tutorial` | `enabled`, `stage` (0–12), `mission` (`id`, `progress`, `startedAt`, `seen`, `reached`), `done`, `skipped`, `lockedAtStart`, `scripted` (`firstAttack`, `seizure`, `phoneOrder`, `lowStockPopups`, `lowStockDay`), `unlocked` (Features aus Ereignissen), `sales` (Verkäufe der letzten 24 Stunden), `toursSeen`, `extraToursSeen` (2; Auftrag 46b, 46c). Alte Stände: `enabled: false`. Stufen und Missionen als Daten (`config.ts`: `STAGES`, `FEATURE_STAGE`, Momente `SCRIPTED_*`, `LOW_STOCK_POPUP`; `missions.ts`: `MISSIONS` mit Teilzielen `parts`, Zähler `count`), Belohnung `reward.ts`, Momente `scripted.ts`, Touren `ui/tours.ts` | `tutorialEnabled`, `tutorialActive`, `tutorialStage`, `tutorialFinished`, `tutorialAllows`, `tutorialAllowsRole`, `tutorialSpotOpen`, `tutorialSpotCost`, `tutorialSupplierOpen`, `currentMission`, `missionProgress`, `missionReward`, `rewardText`, `scriptedDone`, `tourSeen`, `extraTourSeen`, `stageInfo`, `STAGES`, `MISSIONS`, `FEATURE_STAGE`, `PETER`, `LAST_STAGE`, `SCRIPTED_SEIZURE` | `tutorial.start`, `tutorial.advance`, `tutorial.skip`, `tutorial.scripted` (`key`), `tutorial.tourSeen` (`stage` oder `extra`) | `tutorial.stageReached` (`stage`), `tutorial.missionStarted` (`id`), `tutorial.missionDone` (`id`, `reward`), `tutorial.scriptedMoment` (`key`, `ref`) |
 | `leaderboard` | `peakWorth`, `peakVeedel` (1). Merkt sich das höchste Vermögen im Durchgang; die Oberfläche schickt das Ergebnis an `api/leaderboard.ts` (Vercel Function mit Upstash Redis) bei Game Over, Sieg und zu jedem Spieltag. Der Server drosselt pro IP (429), gibt keine `runId` mehr aus und verlangt für Updates eines Durchgangs ein Token (nur der Hash liegt in Redis); Ware zählt im Vermögen zum Einkaufspreis (`leaderboard/config.ts`) | `netWorth`, `getRecord`, `runSummary` (mit `title` = Rang des Spielers und `rank`, Auftrag 36) | | |
 | `recruiting` | Bewerber-Pool und Kontakte, Bewerber mit `traits` (4; Pool größer mit Veedeln und Ruf, `poolMax`) | `getCandidates`, `getCandidate`, `getPool`, `getContacts`, `searchReadyAt`, `poolMax`, `searchPreview(state, role?)`, `SEARCH_ROLES` | `recruiting.hire`, `.decline`, `.search` (`role?`: Läufer, Fahrer, Sicherheit) | `recruiting.candidateArrived`, `recruiting.hired`, `recruiting.candidateLeft` |
 | `weather` | aktuelles Wetter, Vorhersage (2) | `getWeather`, `getForecast`, `weatherDemandFactor(state, channel?)`, `WEATHER_NAMES`, `isPrecipitation` | | `weather.changed` |
 | `roads` | statisch (1): Straßennetze der Städte (`network.ts` Köln, 14.377 Knoten, 19.840 Kanten, ca. 2.250 km, mit Parkzufahrten im Rheinpark und Autobahn-Zufahrten `ROAD_APPROACHES`; `network-hamburg.ts`, 14.723 Knoten, 2.707 km, mit Zufahrten A1, A7, A23, A24, A25, A26; `network-berlin.ts` (Auftrag 37), 16.548 Knoten, 3.385 km, mit Zufahrten A111, A115, A113; `network-muenchen.ts` (Auftrag 38), 15.459 Knoten, 2.953 km, mit Zufahrten A8, A9, A94, A95, A96, A995; `network-frankfurt.ts` (Auftrag 39), 12.573 Knoten, 2.179 km, mit Zufahrten A3, A5, A648, A661; Autobahn bis Wohnstraße, Einbahnstraßen), das Autobahn-Netz (`autobahn.ts`, Auftrag 36: sechs Linien zwischen Köln, Hamburg, Berlin, München und Frankfurt, A1 409 km, A3 172 km, A3/A9 381 km, A24 272 km, A9 562 km, A7/A5 486 km), Wasserwege (`waterways.ts`: Rotterdam – Köln bis Niehl, Nordsee – Hamburg bis zum O'Swaldkai, aus Overture) | `roadRoute(from, to, options?)` (Auftrag 33: `options.weights` Gewicht pro Straßenart, `AVOID_MOTORWAY`) (→ `path`, `meters`, `onRoads`, `drive` (Teil auf der Straße), `walkFrom`/`walkTo` (Fußwege an den Enden); Netz nach Ausschnitt, A* nach Fahrzeit, gemerkt; zwischen Städten automatisch `interCityRoute`), `roadDistance`, `travelMinutes(from, to, metersPerMinute, extra?)` (zwischen Städten `interCityMinutes`), `interCityRoute` (über das Netz, auch durch eine Stadt hindurch; `via`, `refs`), `interCityMinutes`, `autobahnBetween(a, b)` (direkte Linie), `autobahnPath(a, b)`, `autobahnRefs`, `autobahnLines`, `autobahnCities`, `roadNetworkAt(point)`, `roadEntryFrom(far, via?, into?)` und `roadApproach(far, via?, into?)` (Autobahn-Zufahrt der Richtung bzw. der Autobahn `via` in die Stadt von `into`, Standard Köln), `roadApproaches(cityId?)`, `shipRoute(cityId)`, `shipMinutes(cityId)`, `SHIP_SPEED`, `roadGraph(cityId?)` (Lesesicht für den Verkehr), `nearestRoadPoint`, `networkStats(id?)`, `ROAD_SPEEDS`; Prüfung `tools/check.ts` (`scripts/check-roads.mjs`); Auftrag 41: Seewege `seaRoute(from, portId)`, `seaNodes`, `seaLanes`, `seaPorts` (`seaways.ts` aus Overture-Tiefen, `build-water.py --sea`), Fahrwasser nach Rotterdam und Antwerpen in `WATERWAYS`, Autobahn-Linien nach Amsterdam, Brüssel, Paris, Kopenhagen, Wien, Mailand (Brenner) und Zürich | | |
 | `fleet` | `vehicles` (Modell, Stadt, laufende Fahrt, beschlagnahmt seit) (1) | `VEHICLE_MODELS`, `PRIVATE_CAR`, `vehicleModel`, `getVehicles(state, cityId?)`, `getVehicle`, `freeVehicles` (ohne Schiffe), Auftrag 41: `isShip`, `getShips`, `VehicleModel.ship` (`kmPerDay`, `costPerDay`; Küstenmotorschiff, Frachter, nur in der Hafen-Phase), `vehicleSpec` (Modell oder Privatauto), `pickVehicle` (kleinstes passendes freies), `vehicleStatus`, `vehicleName`, `vehiclePrice`, `useVehicle`, `releaseVehicle`, `seizeVehicle`, `maybeSeize` | `fleet.buy` (sauberes Geld), `fleet.sell` | `fleet.bought`, `fleet.sold`, `fleet.seized` |
 | `city` (Auftrag 42: Regionen im Ausland `REGIONS`, `getRegion`, `isRegion` in `regions.ts`; `cityName` kennt sie; Ränge Produzent und Europa aus `grow.growGoals`) | `offers` (Angebot pro freier Stadt), `offerFrom` (komplette Stadt der laufenden Runde), `rounds`, `startMoneyPaid`, `rank` (dein höchster Rang), `active` (live), `present` (wo du bist), `unlocked`, `travel`, `sleep` (Ergebnisse pro Stadt), `visited` (5) | `CITIES` (mit `contact` und `pitch`), `CITY_OFFERS`, `NEXT_CITY` (Liste), `getCity`, `cityName`, `cityContact`, `playableCities`, `activeCity`, `presentCity`, `citiesUnlocked`, `isCityUnlocked`, `isCityLive`, `cityOf(veedelId)`, `cityOfSpot`, `cityAt(lng, lat)`, `isVeedelLive`, `liveVeedel`, `sleepInfo`, `sleepResult` (Razzia im Schlaf), `cityTravel`, `isPlayerTraveling`, `isPlayerIn`, `travelMinutesBetween`, Angebote (Auftrag 36): `offerStatus(state, cityId?)`, `offerFrom`, `offerCities`, `freeCities`, `currentOffer`, `acceptedCity`, `nextCityAfter`, `nextCityMissing` (alt `hamburgMissing`), `startMoneyFor`, `startMoneyDue`, `packVehicles`, Ränge: `playerRank`, `currentRank`, `PLAYER_RANKS`, Charakter: `relationFactor`, `bribeFactor`, `raidWarningBonus`; Auftrag 40: `isBossOfGermany`, `isBusinessSold`, `saleRecord`, `saleStatus`, `saleOffer`, `salePriceFor`, `businessDailyProfit`, `saleBlocker`, `ownedCities`, `jansenContact`, `ABROAD_CITIES` | `city.answerOffer` (`choice`, `cityId?`), `city.requestCall` (`cityId`), `city.handOver` (`cityId?`, `toCityId?`, `pack?` mit `vehicleIds`; nur der Spieler), `city.switch` (nur der Spieler), `city.unlock` (nur `system`), `city.travel`, Auftrag 40: `city.sell`, `city.postponeSale` (nur der Spieler) | `city.offerAnswered` (`cityId`), `city.offerAccepted` (`cityId`, `from`), `city.switched`, `city.unlocked`, `city.slept` (`raid?`), `city.travelStarted`, `city.arrived`, `player.rankUp` (`rankId`, `title`, `score`), Auftrag 40: `city.saleOffered`, `business.sold` (`price`, `rotterdamPrice`, `dailyProfit`, `cities`) |
-| `events` | `running`, `announced`, `market` (laufende Marktereignisse, Auftrag 32) (2); Kalender in `config.ts` (`CITY_EVENTS`: Karneval, Kater, FC, Kölner Lichter, Hafengeburtstag, Schlagermove, Dom, Oktoberfest, FC-Bayern-Heimspiel; `MARKET_EVENTS`: Zollfund, Großrazzia bei einer Gang, Semesterstart, gute Ernte, Schwemme aus Marokko, Billigware aus dem Netz) | `activeEvents(state, cityId?)`, `upcomingEvents`, `eventFactor(state, 'demand' \| 'heatPerSale' \| 'checks' \| 'gangRaids', where)`, `raidsAllowed(state, cityId)`, `isEventActive`, `nextEventStart`, `eventEnd`, `getEventDef`; Auftrag 32: `marketEvents(state, cityId?)`, `marketEventFactor(state, productId, cityId)`, `marketEventText`, `getMarketEventDef` | | `events.started`, `events.ended`, `events.marketStarted`, `events.marketEnded` |
+| `events` | `running`, `announced`, `market` (laufende Marktereignisse, Auftrag 32) (2); Kalender in `config.ts` (`CITY_EVENTS`: Karneval, Kater, FC, Kölner Lichter, Hafengeburtstag, Schlagermove, Dom, Oktoberfest, FC-Bayern-Heimspiel; `MARKET_EVENTS`: Zollfund, Großrazzia bei einer Gang, Semesterstart, gute Ernte, Schwemme aus Marokko, Billigware aus dem Netz) | `activeEvents(state, cityId?)`, `upcomingEvents`, `eventFactor(state, 'demand' \| 'heatPerSale' \| 'checks' \| 'gangRaids', where)`, `raidsAllowed(state, cityId)`, `eventDemand(def)` und `EVENT_DEMAND_BOOST` (Auftrag 46e), `isEventActive`, `nextEventStart`, `eventEnd`, `getEventDef`; Auftrag 32: `marketEvents(state, cityId?)`, `marketEventFactor(state, productId, cityId)`, `marketEventText`, `getMarketEventDef` | | `events.started`, `events.ended`, `events.marketStarted`, `events.marketEnded` |
 | `logistics` | `berths` pro Stadt (mit Stufe `level`: Kai, Halle am Kai, Kran), `cargo` (Ware am Kai, mit `cityId`), `trips` (Fahrten, auch `kind: 'route'` mit `routeId`, `leg`), `log`, `stats`, `routes` (Fahrplan), `restock` (Nachkauf für schlafende Städte) (6; Fahrten mit `vehicleId`, `choice`, Status `planned`/`waiting`; Routen mit `vehicleId`, `choice`) | `hasBerth(state, cityId?)`, `getCargo`, `cargoAmount`, `cargoRisk`, `getTrips`, `tripProgress`, `tripRoute` (Wege über Straßen und A1, mit `routes` für Fahrweg und Fußwege), `tripCity`, `isInterCityTrip`, `inTransitAmount`, `isPlayerOnTheRoad`, `freeDrivers(state, cityId?)`, `portPlace(cityId)`, `PORTS`, `receiveCargo` (für suppliers), Routen: `getRoutes`, `getRoute`, `nextDeparture`, `routeLoadPreview`, `driverWhereabouts`, `routeName`, `INTERCITY_CAPACITY`; Auftrag 33: `roomFor`, `inboundWeight`, `chooseVehicle`, `departureFor`, `roadOptions`, `reservedCargo`, `berthLevel`, `berthEffect`, `berthUpgradeCost`, `cargoRiskFrom(cargo, state?)`, `ROUTE_CHOICES`, `BERTH_LEVELS`; Auftrag 40: `HARBOR_PORTS` (Häfen der Hafen-Phase; Auftrag 41: `capacity`, `hallCapacity`, `hallCost` statt `shipDays`), `harborPort`, `CUSTOMS_OPPONENT` | `logistics.buyBerth` (`cityId?`, sauberes Geld), `.upgradeBerth`, `.pickup`, `.transfer` (beide mit `vehicleId?`, `choice?`), `.redirect` (wartende Fahrt umleiten) (nur in einer Stadt), `.addRoute`, `.updateRoute`, `.removeRoute`, `.runRouteNow` | `logistics.berthBought`, `cargo.docked`, `cargo.seized` (Zoll), `transport.started`, `.stopped` (Kontrolle, zwischen Städten Zoll), `.arrived` (`interCity`), `.seized`, `.lost`, `route.departed`, `route.skipped`, `transport.waiting`, `logistics.berthUpgraded` |
 | `trade` | Hafen-Phase (Auftrag 40; Version 2 seit Auftrag 41: `halls`, Container mit `cover` und `vesselId`, Status `quay`, `stats.voyages`): `startedAt`, `contractUntil` (Abnahmevertrag), `week`, `customers` (alte Organisationen, je Stadt die stärkste Gang, sieben fremde Städte; Vertrauen, Anteil, stärkster Konkurrent), `orders` (eine pro Kunde und Woche, Waren als `OrderItem` mit Teillieferung, Faktor auf ihr Angebot, Frist), `shipments` (Container auf See oder beim Zoll), `deliveries` (Lkw oder Spedition), `stock` pro Hafen, `ports`, `priceLevel`, Ruf `reliability`/`quality`, `stats`; Daten in `data.ts` (`FOREIGN_CITIES`, `ORG_DEMAND`, `GANG_DEMAND`, `PRODUCERS`, `CONTAINER_SIZES`, Seewege), Werte in `config.ts` | `isTradeActive`, `getCustomers`, `getCustomer`, `customerContact`, `getOrders`, `openOrders`, `pendingDeliveries`, `openItems`, `shippableItems`, `portFor`, `portHas`, `orderValue`, `maxFactor`, `orderItemsText`, `getShipments`, `getDeliveries`, `portStock`, `totalStock`, `ownedPorts`, `fairPrice`, `customerOffer`, `playerScore`, `rivalScores`, `shareFor`, `supplierReputation`, `tradeStats`, `containerCost`, `containerRisk`, `shippingMinutes`, `deliveryEstimate`, `freightCost`, `shipmentPath`, `deliveryPath`, `weekOf`, `harborPorts`, `getProducer`, `containerInCustoms`; Auftrag 41: `producerSeaRoute`, `portCapacity`, `portLoad`, `portRoom`, `portHalls`, `voyagePlan`, `shipVoyage`, `ownShips`, `loadCost`, `getCover`, `COVERS`, `EUROPE_CITIES`, `europeCityOf`, `europeStatus` | `trade.answer` (`accept`, `decline`, `counter` mit `factor`), `.acceptAll` (`guaranteedOnly?`), `.deliver` (`portId?`, `vehicleId?`), `.buy` (`producerId`, `productId`, `size`, `portId?`), `.rentBerth`, `.setPriceLevel`, Auftrag 41: `.buy` mit `cover`, `count`; `.sail` (`vesselId`, `producerId`, `portId?`, `load`), `.buildHall` | `trade.started`, `.orderPlaced`, `.orderAnswered`, `.delivered`, `.orderFailed`, `.containerOrdered`, `.containerArrived`, `.containerSeized`, `.deliverySeized`, `.dealTipped`, Auftrag 41: `.containerWaiting`, `.hallBuilt`, `.shipSailed`, `.shipReturned`, `.customerJoined`; Auftrag 43 (Version 4, `plans.ts`): `defaultPlan`, `plans`, `restock`, `planFor`, `hasOwnPlan`, `restockRules`, `stockWithIncoming`, `counterOutcome`, Befehle `trade.setPlan`, `.addRestock`, `.removeRestock`; Auftrag 42 (Version 3): Ausfuhrhäfen `OWN_ORIGINS` (Cartagena, Tanger) als Quelle für `.buy`/`.sail`, Ausfuhrlager `origins` (`storeExport`, `originStock`, `takeOrigin`, `loseOrigin`, `ownOrigin`, `regionOrigin`), eigene Ware `StockLot.own`, `DeliveryItem.own`, `stats.deliveredGrams`/`ownDelivered`, `trade.delivered` mit `ownAmount`, `containerRisk(…, pack)` |
 | `grow` | Eigene Produktion (Auftrag 42, Version 2): `startedAt` (Anrufe ausgelöst), `regions` (Status `none`/`called`/`open`, `callAt`, `cartelPaid`, `attention`, `bribedAt`), `fincas` (Lage, Hektar, gekauft oder gepachtet mit `leasePaidUntil` und `unpaidLease`, `unpaidWages`, `stalled`, Gewächshaus, Genetik, `plan`, `crop` mit `loss`, `batch` mit Stufe trocknen/pressen/verpacken, Verpackung, `workerIds`, `gardenerId`, `spent`), `harvests` (Kosten und Gramm je Ernte), `deliveries` (aus `trade.delivered`, 28 Tage, mit `crop`/`cropOwn`), `goals` (`producer`, `europe`), `day`, `stats`; Daten in `data.ts` (`FINCA_SITES`, `PACKINGS`, Namen vor Ort, Anrufe), Werte in `config.ts` (`REGION_ECONOMY` pro Region) | `isGrowStarted`, `regionStatus`, `openRegions`, `getFincas`, `getFinca`, `fincaSites`, `siteTaken`, `landPrice`, `leasePerWeek`, `greenhouseCost`, `nextGenetics`, `workersNeeded`, `fincaWorkers`, `fincaGardener`, `cropDays`, `fincaQuality`, `expectedHarvest`, `fincaRunningCost`, `regionAttention`, `cartelPaid`, `bribeReadyAt`, `harvestLog`, `costPerGram`, `growStats`, `goalShares`, `europeProgress`, `harvestToHarborDays`, `CROP_PRODUCTS`, `growGoals`, `REGION_ECONOMY`, `GENETICS`, `PACKINGS`, `FINCA_SITES` | `grow.openRegion`, `.buyFinca`, `.leaseFinca`, `.hire`, `.dismiss` (`role` `worker`/`gardener`), `.plant`, `.buildGreenhouse`, `.upgradeGenetics`, `.setPacking`, `.setCartel`, `.bribe` | `grow.called`, `.regionOpened`, `.fincaAcquired`, `.planted`, `.harvested`, `.packed`, `.raided`, `.cartelHit`, `.goalReached` |
@@ -457,7 +474,8 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   Razzia-Warnung abtauchen. Einfluss (`lieutenantInfluence`) verteilen sie auf die Veedel ihrer Spots, mit Bonus, wenn
   mehrere Spots in einem Veedel liegen. Je mehr Spots, desto höher ihr Anspruch (`lieutenantDemand`). Alte
   Spielstände: Leutnant eines Veedels → Leutnant seiner (bis zu drei) Spots dort.
-- **Rechte Hand:** Ab zwei Leutnants bietet sich jemand ab Level 4 mit Loyalität 50 an (`hierarchy.appointRightHand`,
+- **Rechte Hand:** Einer deiner Leutnants mit Loyalität 50 (seit Auftrag 46e; vorher jemand ab Level 4 bei zwei
+  Leutnants) steigt auf und gibt seine Spots ab (`hierarchy.appointRightHand`,
   Einsatz `office`). Sie hält die Lohnreserve für zwei Nächte zurück (Leutnants geben nur aus, was darüber liegt),
   verteilt freie Leute auf leere Spots, regelt Ausfälle ohne Leutnant (Kaution ab Level 3 im Rahmen ihres Budgets),
   warnt vor Razzien und schickt jeden Morgen um 8 einen Tagesbericht (`hierarchy.dailyReport`): Ergebnis, Löhne,
@@ -486,26 +504,17 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   (Rückkehr zur Mitte `INDEX_REVERSION`, Schritt `INDEX_STEP`, Grenzen `INDEX_MIN`/`INDEX_MAX`), auch für schlafende
   Städte. `events` würfelt Marktereignisse (`MARKET_EVENT_CHANCE` pro Stadt und Tag, höchstens zwei, Faktor auf den
   Index der Ware), `suppliers` Rabatt-Aktionen (`DEAL_CHANCE_PER_DAY`, still per Handy). `priceIndex` = Pfad mal
-  Ereignisse, `referencePrice` folgt ganz, `packagePrice` mit `purchaseIndex` zur Hälfte. Montags um 9 schickt der
-  Lieferant mit dem meisten Vertrauen den Marktbericht (`marketReport`). Leutnants und die Rechte Hand bestellen mit
+  Ereignisse, `referencePrice` folgt ganz, `packagePrice` mit `purchaseIndex` zur Hälfte (den Marktbericht per Handy gibt es
+  seit Auftrag 46d nicht mehr). Leutnants und die Rechte Hand bestellen mit
   `maxIndex` nur unter einer Preisgrenze (`planOrder` pausiert die Regel sonst).
 - **Wochenverträge (Auftrag 32):** `quests` bietet montags um 8 (`clock.hourStarted`) drei Verträge von verschiedenen
   Figuren an (Nachricht mit „Annehmen“ = `quests.acceptContract`, „Nein danke“ nimmt das Angebot heraus). Einer läuft,
-  gezählt wie Peters Quests (`count` mit Ereignis, Zustand und Angebot, `measure`, `streak`), nur in der Stadt des
-  Angebots; erfüllt zahlt er sofort aus, Montag 0 Uhr platzt er. Angebote ohne Antwort verfallen dann auch. Die ersten
-  Angebote kommen erst, wenn Peters erstes Kapitel durch ist (`contractsOpen`, `CONTRACTS_FROM_CHAPTER`).
-- **Quest-Zähler:** Eine neue Quest (und ein eben angenommener Vertrag) ist `fresh`, bis ihr `quest.started` bzw.
-  `contract.accepted` zugestellt ist: Ereignisse, die mit derselben Aktion gemeldet wurden, zählen nicht für sie (ein
-  Läufer über „Leute finden“ erledigt nicht zwei Quests). Was danach kommt, zählt, auch in derselben Spielminute.
-- **Handy Schritt für Schritt (Feedback 07.10.2026):** In einem neuen Spiel zeigt das Handy erst nur Nachrichten und
-  Einstellungen. Jede weitere App kommt, sobald die Quest dran ist, die sie braucht (`PHONE_APP_STEPS` in
-  `quests/config.ts`: Lieferanten mit „Bestell Ware“, Kasse mit „1.000 € Umsatz“, Personal mit „Läufer“, Reviere mit
-  „Neuer Spot“, Geldwäsche, Lager, Gangs mit „Konfrontation“). Die Apps lesen `phoneAppLocked(state, appId)` in ihrem
-  `hiddenWhen`; gesperrt ist nur der Startbildschirm (mit Suche und Tastenkürzeln), Verweise öffnen die App trotzdem.
-  Gilt nur mit `quests.phoneSteps` (neue Spiele an, alte Stände aus, Befehl `quests.setPhoneSteps`, Einstellungen ›
-  Einstieg), in der ersten Stadt (`PHONE_STEPS_CITIES`) und vor dem Verkauf. Peter nennt die neue App in seiner
-  Nachricht, das Banner „Neu im Handy“ öffnet sie. Jede neue Quest kommt als Banner (`ui.toast` mit `title`, `color`,
-  `appId`), die Quest-Karte klappt auf und leuchtet; in den ersten zwei Kapiteln ist sie golden mit „Zeig mir wie“.
+  gezählt über Ereignisse, Zustand und Serien (`count` mit Ereignis, Zustand und Angebot, `measure`, `streak`), nur in
+  der Stadt des Angebots; erfüllt zahlt er sofort aus, Montag 0 Uhr platzt er. Angebote ohne Antwort verfallen dann
+  auch. Angebote gibt es erst nach Köln (`contractsOpen`: Geschäft nicht verkauft und aktive Stadt nicht Köln oder Köln
+  komplett; Auftrag 46d). HUD-Karte „Wochenvertrag“ (`quests.contract`, Platz `'below'`), Seite `quests.contracts`.
+- **Vertrags-Zähler:** Ein eben angenommener Vertrag ist `fresh`, bis `contract.accepted` zugestellt ist: Ereignisse,
+  die mit derselben Aktion gemeldet wurden, zählen nicht für ihn. Was danach kommt, zählt, auch in derselben Spielminute.
 - **Polizei:** Heat aus Verkäufen und Gewalt. Sie sinkt pro Stunde um einen festen Wert plus einen Anteil der
   aktuellen Heat (`HEAT_DECAY_PER_HOUR`, `HEAT_DECAY_SHARE_PER_HOUR`), pendelt sich also bei gleichem Geschäft ein.
   Kontrollen (mit Polizeiflucht), geplante Razzien
@@ -517,33 +526,23 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   zu vier Veedeln zugleich mit einem Tag Vorlauf). Beute anteilig (`RAID_SCOPES`): Ware am Ort, Lagerbestand,
   Schwarzgeld. Der Polizei-Kontakt (staff, Bonus `raidWarning`) warnt per Handy mit der Antwort "Leute abziehen"
   (`staff.lieLow`), vor einer Großrazzia immer; wer abgetaucht ist, verliert bei der Razzia nichts.
-- **Konfrontationen** (Auftrag 35) zeigen, was als Nächstes passiert, und lassen den Spieler darauf antworten. Jede
-  Runde steht die **Absicht** der Gegenseite als Chip im Dialog (`encounters/intents.ts`, gewürfelt nach den Zeigern):
-  „Sie gehen auf die Kasse“, „Der Anführer will reden“, „Einer zieht ein Messer“, „Sie suchen den Ausgang“ … Zwei
-  **Zeiger** 0–100: Aggression (ab `AGGRESSION_FIGHT` 70 Schlägerei, beide Seiten schlagen zu) und Entschlossenheit
-  (die Bereitschaft zu bleiben; unter `RETREAT_AT` 30 zieht die Gegenseite ab bzw. gibt nach). Jede Handlung verschiebt
-  beide (`actions.ts`), die echten Werte der Beteiligten (Tempo, Vorsicht, Stärke, Charisma) und die Absicht verstärken
-  oder dämpfen; der **Würfel entscheidet nur die Stärke** (Gutes mal M, Schlechtes mal 2 − M, `tactics.ts`), der
-  Dialog zeigt die Spanne vorher als Pfeile. Die **Polizei-Uhr** zählt Runden bis zur Streife (aus Polizeipräsenz und
-  Heat, „Bullen rufen“ stellt sie auf 1); läuft sie ab, verlieren beide (Festnahme-Chance, Ware weg, Heat), bei
-  Polizei und Zoll kommt deren Verstärkung. **Einsätze** Ware, Kasse, Leute, Spot, Lärm: pro Runde schützt man einen
-  (nimmt nur `PROTECT_FACTOR` des Schadens), die passende Handlung wendet eine Absicht ganz ab (`counters`); haben sie
-  genug erbeutet (`lootLimit`), ziehen sie mit der Beute ab. Das Ergebnis ist eine Mischung (`result.parts`): Verluste
-  aus `effects` zählen anteilig zum Schaden des Einsatzes, Gewinne schrumpfen damit, `effects` der Aufrufer bleiben
-  gültig. **Gegner mit Rollen** (Anführer, Nervöser, Schläger; `roles` je Anlass): den Anführer einschüchtern (nur als
-  Boss vor Ort), den Nervösen bearbeiten (geht), Schläger heizen jede Runde ein. Im Briefing wählt der Spieler einen
-  Weg (je Anlass `briefingOptions`: selbst hin, Leute machen lassen, Verstärkung, sofort freikaufen, anonym die Bullen
-  rufen, Ware retten und den Spot räumen) und eine **Crew** aus bis zu drei Leuten (`crew.ts`: wer vor Ort ist plus
-  freie Leute der Stadt mit Taxi, Vorschlag vorbelegt). Jede Person bringt einen **Spezialzug** (einmal pro
-  Konfrontation, `SPECIAL_MOVE_RULES`): Sicherheit fängt einen Treffer ab, Fahrer machen die Flucht sicher, hohes
-  Charisma gibt eine zweite Verhandlung, hohes Tempo bringt die halbe Ware weg; `specialMoves(member)` ist der Haken
-  für Eigenschaften aus Auftrag 34. Ist eine **Rechte Hand** in der Stadt, kommentiert sie die Lage in einem Satz
-  (`advice.ts`, Regeln als Daten). Ohne Boss entscheiden die Leute mit einer einfachen Strategie (`strategy.ts`,
-  `autoResolveEncounter`), der Bot spielt mit der klugen. Anlässe: Überfall abwehren, Polizeiflucht,
-  Verkehrskontrolle, **Zollkontrolle** (`customsCheck`, Autobahn und Hafen: Papiere zeigen, bestechen, ablenken,
-  Ladung aufgeben), Schulden eintreiben, Deal kippt, Überfall auf einen Gang-Spot, je mit mindestens vier
-  Situationstexten nach Ort (`request.setting`), Tageszeit und Wetter. Konfrontationen bringen Erfahrung und kosten
-  Loyalität.
+- **Konfrontationen** (Auftrag 35, seit Auftrag 46d ohne Akte): Jede Konfrontation wird beim Start sofort automatisch
+  entschieden (`resolveNow`/`playOut` in `encounters/engine.ts`), es gibt keine Entscheidung des Spielers mehr. Die
+  Runden-Maschinerie aus Auftrag 35 läuft dabei als innere Automatik weiter: je Runde die **Absicht** der Gegenseite
+  (`intents.ts`, gewürfelt nach den Zeigern), zwei **Zeiger** 0–100 (Aggression ab `AGGRESSION_FIGHT` 70 Schlägerei,
+  Entschlossenheit unter `RETREAT_AT` 30 Abzug), **Handlungen**, die beide verschieben (`actions.ts`), der **Würfel nur
+  für die Stärke** (`tactics.ts`), die **Polizei-Uhr** (läuft sie ab, verlieren beide, bei Polizei und Zoll kommt deren
+  Verstärkung), die **Einsätze** Ware, Kasse, Leute, Spot, Lärm (`PROTECT_FACTOR`, `lootLimit`; das Ergebnis ist eine
+  Mischung `result.parts`, `effects` der Aufrufer bleiben gültig), **Gegner mit Rollen** (Anführer, Nervöser, Schläger)
+  und eine **Crew** aus bis zu drei Leuten vor Ort mit je einem **Spezialzug** (`crew.ts`, `SPECIAL_MOVE_RULES`, Haken
+  für die Eigenschaften aus Auftrag 34); die eigene Seite zieht mit der Strategie aus `strategy.ts`. Steht der Spieler
+  selbst am Spot, startet zuerst das passende Minispiel über `EncounterKind.minigames` (Straßenkampf), danach spielt der
+  Rest automatisch zu Ende. Das Ergebnis erscheint als kurze Glas-Karte über der Karte (Dialog `encounters.result`:
+  Stempel Erfolg/Rückzug/Verloren, was es gekostet hat, Knopf „Okay“). Aufrufer (`gangs`, `police`, `logistics`,
+  `trade`) nutzen unverändert `encounters.start` und `encounter.resolved`; einziger Befehl ist `encounters.auto`.
+  Anlässe: Überfall abwehren, Polizeiflucht, Verkehrskontrolle, **Zollkontrolle** (`customsCheck`, Autobahn und Hafen),
+  Schulden eintreiben, Deal kippt, Überfall auf einen Gang-Spot, je mit Situationstexten nach Ort (`request.setting`),
+  Tageszeit und Wetter. Konfrontationen bringen Erfahrung und kosten Loyalität.
 - **Löhne:** Wer um Mitternacht nicht bezahlt werden kann, ist sauer und schreibt; am zweiten Tag ohne Lohn oder
   unter Loyalität 30 kündigt er. Fällig ist `payrollDue` (Haft und Verletzung anteilig); die Kasse warnt, wenn das
   Schwarzgeld nicht mehr für zwei Nächte reicht.
@@ -583,7 +582,8 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   Eigene Spots nehmen Kosten, Andrang, Kundschaft, Preis, Heat, Öffnungszeiten, Tageskurve und Wetter ihrer Art;
   vorgegebene Spots tragen die Art nur als Bezeichnung. **Bekanntheit** eigener Spots (Start 0,2) wächst mit
   Verkäufen, Stammkunden und Tagen mit Leuten dort und sinkt an leeren Tagen; `spotDemandFactor` (customers).
-  **Ausbau** für jeden Spot: Späher, Versteck, Stammplatz (`spotModifiers`, gefragt von police, customers und gangs).
+  `spotModifiers` (gefragt von police, customers und gangs) liefert seit Auftrag 46d nur noch `heatFactor` aus der Art,
+  der Spot-Ausbau (Späher, Versteck, Stammplatz) ist weg.
   Eigene Spots lassen sich verlegen (Teil der Bekanntheit bleibt), umbenennen und aufgeben (`spots.closed`: Leute
   werden frei, customers verlegt die Stammkunden zum nächsten Spot im Umkreis oder verliert sie).
 - **Kunden-Anfragen** (Etappe 4) blieben, wie sie seit Auftrag 28 sind: Seitdem schreiben Kunden nur, wenn du es
@@ -604,10 +604,8 @@ Alle Module sind ausgebaut. Die Kopfkommentare der `index.ts` beschreiben jeweil
   `RELATION_CHANCE` zu jemandem im Team (höchstens eine auf drei Leute), Empfehlungen (`EnlistOptions.referrerId`) immer
   mit der empfehlenden Person. Wirkung beim Entlassen und Sterben (`staff.left`: Loyalität, manchmal geht jemand mit),
   in Haft (`police.arrest`, Tagesloyalität) und am selben Spot (`relationPace`: Läufer, Sicherheit, Leutnant des Spots).
-- **Geschichten** (`staff/stories.ts`, `STORIES`): 16 Vorlagen als Daten (wer passt, was sofort passiert, Antworten mit
-  Wirkung, Rückfall-Wahl ohne Antwort). Zur vollen Stunde zwischen 9 und 22 Uhr in der Stadt, die live ist, nach
-  `STORY_GAP` mit `STORY_CHANCE_PER_HOUR`, pro Person und Vorlage mit Abklingzeit. Texte über `texts.pick`
-  (`staff:story:<vorlage>`), Antwort `staff.storyChoice` aus dem Chat, Geld als `wages.extra` (neue Kategorie im Kern).
+- **Geschichten** der Leute (`staff/stories.ts`, `staff.storyChoice`) gibt es seit Auftrag 46d nicht mehr; die Kategorie
+  `wages.extra` im Kern bleibt.
 - **Gedächtnis der Gangs** (`gangs/memory.ts`, `MEMORIES` in `config.ts`): Erinnerungen mit Wirkung und linearem
   Verfall, gleiche summieren sich bis `stack`. Aus Ereignissen (verpfiffen, Abkommen gebrochen, Überfall abgewehrt,
   Spot überfallen, Veedel abgenommen, Schutzgeld, Waffenstillstand, Deal) und den Antworten auf Vorfälle aus Auftrag 23
@@ -1030,10 +1028,10 @@ Geld und Flughafen, nur als Daten:
 - **Ränge** (`city/ranks.ts`): Kleindealer, Händler, Großhändler (höchste `operationTier` deiner Städte), Boss von Köln
   (Mehrheit), Boss von <Stadt> (jede weitere komplette Stadt), Boss von Deutschland (alle spielbaren komplett, mindestens
   `GERMANY_MIN_CITIES` = 4),
-  Importeur und Produzent (Platzhalter). Höchster Rang bleibt (`rank`), `player.rankUp` mit Banner und Ton, Titel im
+  Importeur und Produzent (Platzhalter). Höchster Rang bleibt (`rank`), `player.rankUp` mit Ton und Eintrag im Verlauf, Titel im
   HUD (Rang) und in der Bestenliste (`runSummary.title`, `rank`).
-- **Quests**: Kapitel pro Stadt (`cityId` an der Quest); Peter wartet nach „Ganz Köln“ (`questsWaiting`) und macht mit
-  dem Kapitel der Stadt weiter, die du freischaltest.
+- **Quests**: Die Kapitel pro Stadt sind mit Auftrag 46d weg; `quests` bietet nur noch Wochenverträge an, ab der
+  zweiten Stadt oder sobald Köln komplett ist (`contractsOpen`).
 
 ### München (Auftrag 38)
 
@@ -1060,7 +1058,7 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
 ### Verkauf und Hafen (Auftrag 40)
 
 - **Boss von Deutschland** (`isBossOfGermany`: alle spielbaren Städte komplett, mindestens `GERMANY_MIN_CITIES`): Rang mit
-  Banner und Bestenliste wie gehabt, `SALE_CALL_DELAY` später ruft Jansen an (`messages.call`, Kontakt wie im Lieferanten-Chat,
+  Eintrag im Verlauf und Bestenliste wie gehabt, `SALE_CALL_DELAY` später ruft Jansen an (`messages.call`, Kontakt wie im Lieferanten-Chat,
   `jansenContact`), die Statthalter schreiben ihr Angebot. Antworten: `city.sell` oder `city.postponeSale` (er meldet sich
   nach `SALE_REMINDER_DAYS` wieder). Karte unter Geld und Heat und Seite „Verkauf“ mit der Rechnung (`city/ui/sale.tsx`).
 - **Verkaufsformel** (`city/config.ts`): Preis = `SALE_PROFIT_DAYS` (90) Tagesgewinne aller Städte; Tagesgewinn =
@@ -1075,8 +1073,8 @@ Freikaufen teurer (`bribeFactor` 1,5). Weniger Spots als in Hamburg (24, zwei pr
   (`ABROAD_CITIES`, `CityDef.abroad`, keine Veedel), du fährst hin, die Stadt wird aktiv. Die deutschen Städte schlafen
   nicht mehr für dich (`closeSleepers` und `closeLiveDay` ruhen, keine Kasse pro Stadt), Fahrten und Wechsel dorthin gehen
   nicht mehr, Rang Importeur. Module räumen per Ereignis auf: `logistics` (Routen, Nachkauf), `laundering` (Jansens
-  Reederei als vierter Weg, `harborOnly`), `trade` (Kunden, Abnahmevertrag, Jansens Halle mit `START_STOCK`). Die Quests
-  bieten keine Wochenverträge mehr an. Code, der die Veedel der aktiven Stadt nimmt, muss mit einer leeren Liste leben
+  Reederei als vierter Weg, `harborOnly`), `trade` (Kunden, Abnahmevertrag, Jansens Halle mit `START_STOCK`). `quests`
+  bietet keine Wochenverträge mehr an (`contractsOpen`). Code, der die Veedel der aktiven Stadt nimmt, muss mit einer leeren Liste leben
   (z.B. `police.hottestVeedel`, `territory.checkMilestones`).
 - **Die Woche** (`trade`): Montag `ORDER_HOUR` eine Bestellung pro Kunde mit seinem Anteil am Wochenbedarf: weiche
   Aufteilung nach Punkten (`SCORE_WEIGHTS`: Qualität, Zuverlässigkeit, Preis als Faktor auf den fairen Preis, Vertrauen;
@@ -1241,12 +1239,12 @@ Zähler `nextId`), `difficulty` (0 bis 1), `title`, `situation`, `params` (JSON 
 | `interview` Bewerbungsgespräch | charisma | Knopf „Gespräch führen“ im Bewerber-Blatt (`recruiting.interview`, einmal je Bewerber, nur in deiner Stadt) | Erkannte Eigenschaften (Zeichen rechtzeitig angetippt) werden aufgedeckt (`revealedTraits`), geschafft zeigt einen versteckten Wert | aufgedeckte Eigenschaften |
 
 **Konfrontationen.** `EncounterKind.minigames` (`start`, `actions`, `brawl`) sind Daten in `encounters/kinds.ts`.
-Ein Minispiel startet nur, wenn du aktiv dabei bist (`playerPresent`, nicht am Boden) und die Art `ready` ist.
-Solange `encounter.minigame` gesetzt ist, lehnen `act`, `protect` und `special` ab („Erst das Minispiel.“);
-`encounters.auto` und die Frist (`expireDecisions`) lösen es vorher als timeout auf. Bei timeout: `start` → Runden wie
-bisher, `action` → die Runde mit dem alten Würfel, `brawl` → weiter wie bisher. Die Akte zeigt „… läuft“ mit „Zum
-Minispiel“ und öffnet sich nach `minigame.finished` wieder. Bist du selbst dabei, gibt es „Entscheiden lassen“ nur mit
-aktiver Rechter Hand. `params`, die der Kern mitgibt: Ort, Setting, Tageszeit, Wetter, Gegner mit Rollen, Absicht,
+Ein Minispiel startet nur, wenn du aktiv dabei bist (`playerPresent`, nicht am Boden) und die Art `ready` ist; seit
+Auftrag 46d ist das der einzige Moment, in dem eine Konfrontation auf dich wartet. Solange `encounter.minigame` gesetzt
+ist, steht sie; `encounters.auto` und die Frist (`expireDecisions`) lösen das Minispiel vorher als timeout auf, danach
+spielt `playOut` den Rest automatisch zu Ende (bei timeout: `start` → Runden mit dem alten Würfel, `brawl` → weiter wie
+bisher). Die Ergebnis-Karte (`encounters.result`) kommt nach `minigame.finished`. Bist du selbst dabei, gibt es
+„Entscheiden lassen“ nur mit aktiver Rechter Hand. `params`, die der Kern mitgibt: Ort, Setting, Tageszeit, Wetter, Gegner mit Rollen, Absicht,
 Crew mit Werten und Spezialzug, Einsätze, Bestechungsgeld, Polizei-Uhr.
 
 **Rahmen (`minigames/ui/Frame.tsx`).** Dialog `'minigames.play'` mit `pausesGame`, `dismissable: false`,
@@ -1257,11 +1255,11 @@ Touch, mehr hinter „Mehr dazu“, „Los“ und „<Name> übernimmt (xx %)“
 den Dialog, den die Folgen öffnen). Übergänge (`ui/flow.ts`):
 
 - Ein Minispiel ersetzt den offenen Dialog; öffnen die Folgen keinen eigenen, kommt der ersetzte nach „Weiter“ zurück.
-- Kommt ein Minispiel aus dem Ausgang einer Konfrontation (Tresor, Bude), wartet es, bis die Akte mit dem Ergebnis zu
-  ist (`shouldDefer`, `takeDeferred`): erst „Erfolg, +1.200 €“ lesen, mit „Akte schließen“ dann das Minispiel.
+- Kommt ein Minispiel aus dem Ausgang einer Konfrontation (Tresor, Bude), wartet es, bis die Ergebnis-Karte der
+  Konfrontation zu ist (`shouldDefer`, `takeDeferred`): erst „Erfolg, +1.200 €“ lesen, mit „Okay“ dann das Minispiel.
 - Nach dem Bewerbungsgespräch geht das Handy wieder beim Blatt der Person auf (`recruiting/ui`).
 - Ein offenes Minispiel ohne Rahmen (z.B. nach dem Laden) zeigt eine Warnung im HUD, die ihn öffnet.
-- Hat die Rechte Hand übernommen, sagt ein Banner, wie es ausging.
+- Hat die Rechte Hand übernommen, steht im Verlauf, wie es ausging.
 
 **Karte gehört dem Minispiel.** Für `layout: 'map'` (seit Auftrag 46 nutzt es kein Spiel mehr; die Verfolgungsjagd hat
 eine eigene Bühne) übernimmt der Rahmen die Karte, bevor das Spiel startet (`useMapTakeover` in `kit/mapTakeover.ts` mit `takeOverMap` aus `src/map`): keine Bedienung der Karte, Kulisse
@@ -1406,9 +1404,190 @@ mode, onCredit?, warehouseId? }` prüft erst alles (höchstens 8 Pakete, keine C
 Platz im Lager), dann wird bestellt. `orderQuote(state, supplierId, lines, mode)` rechnet Preis und Risiko genau wie
 der Befehl (die Oberfläche zeigt beides nebeneinander). `shipment.ordered` und `shipment.arrived` kommen bei einer
 Sammellieferung einmal, mit `items` und der Summe in `amount`. Eine Teillieferung gibt es nur bei einem Paket.
-Bestellregeln, Warenfluss und Dynamic Island zählen alle Pakete. Ein `Shipment` ohne `extra` ist genau wie vorher, es
+Bestellregeln, Warenfluss und die Anzeige „Lieferungen unterwegs“ zählen alle Pakete. Ein `Shipment` ohne `extra` ist genau wie vorher, es
 braucht keine Migration.
 
+### Tutorial (Auftrag 46b)
+
+Teil von Auftrag 46 „Intro neu“ (`docs/auftraege/46-intro-neu.md`): Statt Peters Quests führt ein Tutorial in zwölf
+Stufen durch Köln und schaltet Funktionen Schritt für Schritt frei. Dieses Modul hält die Stufe, die Mission und das
+Freischalten; die Touren (Erklärungen mit Overlay) kommen mit 46c über den Tour-Baukasten aus 46a, der Rückbau der
+Quests kam mit 46d (Abschnitt „Rückbau“), neue Wirkungen mit 46e.
+
+**Start und Stufen.** `init` gibt `enabled: false`: Bot, Szenario-Tests, Test-Spielstände, `npm run balance`,
+Hardcore und alte Spielstände laufen unverändert (Würfelfolgen bleiben, `tutorial.test.ts` vergleicht einen Lauf mit
+und ohne das Modul). Nur die Oberfläche schickt `tutorial.start` direkt nach `session.newGame('normal', …)` (Dialog
+„Neues Spiel“, `?neu=normal&tutorial=1`): 700 € Schwarzgeld dazu (2.200 €), alle offenen Kölner Spots außer dem
+Neumarkt werden mit `spots.lock` gesperrt (`lockedAtStart`), Stufe 0. Stufen ohne Mission (0, 3, 4, 10) enden mit
+`tutorial.advance` (die Karte hat dafür „Weiter“, bis die Tour aus 46c das übernimmt); eine erledigte Mission zahlt
+die Belohnung und schaltet von selbst eine Stufe weiter (`tutorial.stageReached`). `tutorial.skip` setzt Stufe 12,
+öffnet die gesperrten Start-Spots wieder und beendet die Missionen. Ab Stufe 12 ist `tutorialActive` falsch (alles
+frei), die Mission „Köln komplett“ läuft noch.
+
+**Missionen** (`missions.ts`, eine pro Stufe mit Mission): Teilziele `parts` messen am Zustand (`measure`) oder
+zählen Ereignisse (`count`, Zuwachs oder Schlüssel wie Produkt-IDs, die nur einmal zählen); `once` hält ein erreichtes
+Teilziel fest (Geld, das man gleich ausgibt). Geprüft wird alle fünf Minuten und sofort nach passenden Ereignissen
+(`CHECK_AFTER`). **Belohnung** (`reward.ts`): 20 % des Umsatzes der letzten 24 Stunden als Schwarzgeld (unter 1.000 €
+auf 50 € aufgerundet, sonst auf 100 €, mindestens 100 €) und 20 % der verkauften Gramm als Ware (unter 100 g auf 5 g,
+sonst auf 10 g, mindestens 10 g) im meistverkauften Produkt; die Verkäufe hält das Modul selbst (`sales`, aus
+`sale.completed`). Ware geht mit `storeFitting` in die Kölner Lager, was nicht passt, sagt Peter.
+
+**Freischalten.** `FEATURE_STAGE` (`config.ts`) sagt, ab welcher Stufe ein `TutorialFeature` frei ist (`NEVER`: erst
+nach dem Tutorial, z.B. Spot gründen; Ruf und Rang über Ereignisse `EVENT_FEATURES`). `tutorialAllows` ist
+ohne aktives Tutorial immer wahr. Eingebaut (jeweils mit Kommentar „Auftrag 46b“): `hiddenWhen` der Apps Reviere,
+Gangs, Lieferanten, Geldwäsche, Lager, Kasse; HUD Lager, Ruf, Rang und sauberes Geld (Kern-HUD über
+`registerHudPartHidden`); `staff.hireDriver`, `recruiting` (`getCandidates`, `hire`, `search`), `canBeLieutenant`,
+`canBeRightHand`; Gangs (`reactToPlayer`: Drohungen, Überfälle; `pickTarget`: Übernahmen; `maybePressure`: Schutzgeld
+und Methoden); Polizei (Kontrollen, Razzien, Zivis); `canUnlockChannel` (Geldwäsche-Wege); `suppliers.orderBatch`
+(Sammelbestellung); Spots: `lockedSpots` und `getAllSpots` zeigen nur, was `tutorialSpotOpen` erlaubt (Stufe 1
+Neumarkt, 2 Zülpicher Platz und Rudolfplatz je 350 € über `tutorialSpotCost` und `unlockCostOf`, 6 eigenes Veedel und
+Nachbarn bzw. Luftlinie unter 2 km, ab 7 alle), `getSuppliers` nur, was `tutorialSupplierOpen` erlaubt (Kalle und Toni
+ab 5, Hein ab 6, der Rest wie heute über `requires`). Peters Quests und „Handy Schritt für Schritt“ gibt es seit
+Auftrag 46d nicht mehr; Wochenverträge kommen erst nach Köln (`contractsOpen`).
+
+**Oberfläche** (`tutorial/ui`): Missions-Karte im HUD (`placement: 'below'`, Anker `data-tour="hud.mission"`) mit
+Peters Porträt, Teilzielen als Liste mit Haken oder Fortschrittsbalken, Belohnung live aus `missionReward` und Knopf
+zur passenden Stelle (`goTo`); erledigt leuchtet die neue Karte golden und es gibt einen Ton, keine Banner, keine
+Dynamic Island. Einstellungen › Einstieg: „Tutorial beenden“. Dev-Haken `window.koeln.dev.tutorialStage(n)`,
+Szenen `npm run screenshot -- --scenes=tutorial,tutorial-teilziele`, e2e-Fall „Tutorial“.
+
+### Rückbau (Auftrag 46d)
+
+Teil von Auftrag 46 „Intro neu“ (`docs/auftraege/46d-rueckbau.md`): Weg mit allem, was den Einstieg zutextet oder den
+Spielfluss stört. Was wegfiel, fiel mit Migration weg; alte Stände laden weiter.
+
+- **Quests:** Peters Quests, die Quest-Karte, „Alle Quests“, `PHONE_APP_STEPS`, `phoneAppLocked`, `phoneStepsEnabled`,
+  `questsSuppressed`, Einstellungen › Einstieg für die Handy-Schritte und die Quest-Belohnungen sind weg. `quests`
+  (Version 10) hält nur noch die Wochenverträge (siehe Modul-Tabelle), erst nach Köln (`contractsOpen`). „Boss von
+  Köln“ (`MILESTONE_TITLE`, `milestoneTitle`) liegt in `territory`, Peter als Kontakt nur in `tutorial/config.ts`;
+  alte Quest-Chats bleiben lesbar.
+- **Konfrontationen:** keine Akte, kein Rat der Rechten Hand (`advice.ts`), kein Briefing (Verstärkung, Schmiergeld,
+  Aufgeben), keine Befehle `encounters.act/join/protect/special`. Sofortige Entscheidung über `resolveNow`/`playOut`,
+  bei dir am Spot zuerst das Minispiel, Ergebnis als Glas-Karte `encounters.result` (Abschnitt „Zusammenspiel“).
+  Version 6 schließt offene Konfrontationen alter Stände beim ersten Tick.
+- **Spots:** Spot-Ausbau weg (`spots.upgrade`, `spots.upgraded`, `upgrades`; Version 5), `spotModifiers` nur noch mit
+  `heatFactor`; Spot gründen nicht mehr über die Karte (Platzhalter im Shop mit 46e). Tutorial-Feature `spots.upgrade`
+  entfällt.
+- **Oberfläche:** Dynamic Island weg (`registerLiveActivity`, `pulseIsland`, `DynamicIsland.tsx`, `islandModel.ts`),
+  stattdessen die feste `StatusPill` mit `registerStatusCounter` (einziger Zähler: Lieferungen unterwegs). Keine
+  Push-Banner, keine Mitteilungszentrale, kein `ui.notify`, `PhoneNotification`, `holdBanner`, keine
+  `soundOnEvent`-Banner: `ui.toast` schreibt nur in den Verlauf, `urgent` heißt ungelesen. Einzige Einblendung ist
+  `ui.error` (`ErrorNotice.tsx`) zu einem fehlgeschlagenen Befehl des Spielers; Missions-Karte und Tour-Box des
+  Tutorials bleiben. `hourCountdown` (`src/ui/phone/countdown.ts`) für Restzeiten in Stunden.
+- **Chats:** keine Bewerber-Chats aus `recruiting` (`EVENT_INTROS`; Bewerber stehen nur in der Personal-App), keine
+  Geschichten der Leute (`staff/stories.ts`, `staff.storyChoice`, `STORY_*`; staff Version 8), kein Marktbericht
+  (`marketReport`, `REPORT_*`), keine Begrüßung von Toni beim Start, keine Ankündigung der Stadt-Events per Handy
+  (das Pop-up zum Start kommt aus 46e). Gangs und Polizei melden sich höchstens einmal pro
+  Spieltag von selbst (`messages.sentToday(state, contactId)`; `say()` in `gangs/common.ts` lässt Nachrichten ohne
+  Antwort aus, Fragen mit Antworten gehen immer durch). Tagesberichte der Rechten Hand bleiben.
+
+### Wirkungen (Auftrag 46e)
+
+Teil von Auftrag 46 „Intro neu“ (`docs/auftraege/46e-wirkungen.md`): Die Rollen und Ereignisse, die das Tutorial
+freischaltet, bewirken etwas.
+
+**Spezialisten.** `SPECIALIST_EFFECTS` in `staff/config.ts` beschreibt jede Wirkung als Daten (Rolle, Richtung
+`less`/`more`, Anteil normal und gut, Texte). Pro Stadt wirkt die beste aktive Person einer Rolle, mehrere stapeln
+nicht; der Anteil skaliert linear mit dem Mittel ihrer Schlüsselwerte (`ROLE_INFO.keyStats`) von
+`SPECIALIST_NORMAL_STAT` (50) bis `SPECIALIST_GOOD_STAT` (70, „gut“). Die Module fragen `specialistFactor(state, key,
+cityId)` genau dort, wo sie würfeln oder buchen (eine Chance davor, ein Wurf wie sonst: Würfelfolgen bleiben), nie
+`if (role === …)`: Polizei-Kontakt `seizure` (Zoll am Kai in `logistics.customs`, Autobahn-Zoll in `rollCheck`,
+Beschlagnahme einer Lieferung in `suppliers.orderQuote`/`rollShipmentProblem`), `heatGain` (jeder positive `addHeat`),
+`checks` (Polizei-Tick und Verkehrskontrollen); Anwalt `arrests` (`police.arrestChanceFor(state, staffId, base)`, auch
+für aufgeflogene Ladungen) und `jailTime` (`jailDuration` halb); Buchhalter `revenue` (jeder Verkaufserlös in
+`customers`: Straße, Lieferungen, Großhandel, Zwischenhandel) und `wages` (`wageFactor` in `payWages` und
+`payrollDue`). Nur ein Buchhalter pro Stadt (`ONE_PER_CITY_ROLES`, `canHireRole`; `recruiting.hire` lehnt mit Grund
+ab). Die Geldwäsche-Gebühr bleibt unverändert (`channelFee` ohne Bonus); `SPECIALIST_BONUS` hält nur noch Kaution und
+Razzia-Warnung. Oberfläche: Chips und „Mehr dazu“ im Profil (`EffectsSection`), Gruppe „Wirkung der Spezialisten“ im
+Personal-Kopf, Zeile „Buchhalter“ in der Kasse (Mehrerlös und gesparte Löhne pro Tag, aus der Bilanz zurückgerechnet).
+Einen Spieler in Haft und eine Rückgabe beschlagnahmter Ware gibt es im Code nicht; kommt beides, hängt es an
+`specialistFactor(state, 'jailTime')`.
+
+**Rechte Hand aus den Leutnants.** `canBeRightHand` verlangt einen Leutnant der aktiven Stadt und Loyalität
+`RIGHT_HAND_MIN_LOYALTY`; die Stufe Level 4 ist weg, `rightHandOffered` ab `RIGHT_HAND_MIN_LIEUTENANTS` (1). Ein
+Leutnant, der aufsteigt, gibt seine Spots ab (`installPost`). Der Bot wartet auf zwei Leutnants und befördert den
+erfahreneren. Capos bleiben im Code, werden aber mit aktivem Tutorial nicht angeboten (`TutorialFeature`
+`staff.capos`, `FEATURE_STAGE` `NEVER`; `canBeCapo`, `CapoGroup`, Rat im Tagesbericht).
+
+**Pop-ups (Look Glas, `registerDialog` mit `area: 'map'`).** Lieferanten stellen sich einmal vor: `suppliers` führt
+`introduced` (Version 7; Migration: alles heute Freie oder Gemeldete gilt als vorgestellt), `introduceSuppliers` läuft
+alle fünf Minuten und bei `tutorial.stageReached` für Lieferanten, die in die aktive Stadt liefern und zu haben sind
+(ohne Bedingungen, freigeschaltet oder `canUnlock`), meldet `supplier.introduced { supplierIds }`; `suppliers/ui/meet.tsx`
+zeigt Porträt, Rolle, `introText` (`Supplier.intro`, sonst `unlock.pitch`, sonst die erste Antwort) mit „Angebot
+ansehen“ (`ui.openPhone('suppliers.app', { supplierId })`) und „Später“. Den Chat-Pitch mit Vermittlung gibt es nicht
+mehr, freischalten geht über die App. Stadt-Events: `events/ui` öffnet zum Start (`events.started` in der aktiven Stadt)
+einen Dialog mit Titel, einem Satz (`meaning`), Chips, „Ware bestellen“ und „Okay“; die Ankündigung per Handy und das
+Feld `announce` sind weg (`announced` bleibt leer im Zustand). Events kommen halb so oft (Zyklen 180 statt 90 Tage,
+Heimspiele alle vier Wochen, Wiesn alle 90, Messe alle 60 Tage) mit mehr Nachfrage (`EVENT_DEMAND_BOOST` 1,5,
+`eventDemand(def)`; `eventFactor('demand')` nutzt sie). Beide Pop-ups öffnen ihre Öffner (Slots in `map.overlay`)
+erst, wenn der Spieler frei ist: `popupMayOpen(ui.state, mobile)` aus `src/ui` (kein Dialog, kein Menü oder Popover,
+keine Suche, kein Kartenklick, kein Gespräch, keine laufende Tour (`ui.state.tour`, Auftrag
+46c: Peters Erklärung geht vor); am Handy-Bildschirm auch nicht bei offenem Handy), sonst warten sie in ihrer
+Warteschlange.
+
+**Gangs und Polizei seltener, größer.** `gangs/config.ts`: `ATTACK_CHANCE` 0,01 (vorher 0,02), `EXPAND_CHANCE` 0,005
+(0,01), `METHOD_INTERVAL_BY_CITY` doppelt (Köln 8 bis 16 Tage), Beute in `RAID_EFFECTS` (Spot [−40, −16] Ware und 15 %
+Bargeld bis 1.500 €, Fahrt [−30, −12], Lager 50 %), Einbruch 25 % bis 250, Erpressung ab 500 €, Einschüchtern 0,6 für
+neun Stunden, Schutzgeld 300 + 12 je Punkt. `police/config.ts`: `CHECK_CHANCE_PER_HOUR` 0,04 (0,08),
+`RAID_CHANCE_PER_HOUR` 0,03 (0,06), `MAJOR_RAID_CHANCE_PER_HOUR` 0,03, Kontrolle nimmt 4 bis 16 Einheiten und 60 bis
+300 € (doppelt), `RAID_SCOPES` etwa anderthalbfach, `CHECK_HEAT_RELIEF` 10, `RAID_HEAT_RELIEF` 35. Erwartungswerte prüfen
+`police/frequency.test.ts` und `gangs/frequency.test.ts`.
+
+**Shop-Platzhalter.** In den Revieren öffnet „Spot gründen“ die Seite `spots.shop`: ein Satz, `SHOP_SPOT_PRICE_CENTS`
+(0,99 €) pro Spot, `SHOP_SPOT_MAX` (3) Plätze als Karten, Knopf „Bald verfügbar“ gesperrt. Kein Kauf, kein Netz;
+`tutorialAllows('spots.found')` bleibt gesperrt, der Weg über die Karte ist aus der Oberfläche raus.
+
+### Touren und Momente (Auftrag 46c)
+
+**Willkommen.** Beim ersten Start gibt es statt der Story-Seiten eine Seite („Willkommen in Kölle. Du bist Dealer am
+Neumarkt. Wie heißt du?“, `src/ui/builtin/IntroDialog.tsx`, Regeln `cleanPlayerName`, `PLAYER_NAME_MAX`), danach die
+Wahl des Modus; Einstellungen › „Intro“ zeigt nur noch diese Seite.
+
+**Touren je Stufe** (`tutorial/ui/tours.ts`, reine Daten): `stageTour(stage, { ui, state })` liefert die `TourDef`
+der Stufe, Sprecher immer `PETER`, jeder Schritt ein, zwei Sätze (`TOUR_TEXT_MAX` 140 Zeichen, `tours.test.ts` prüft
+Anker, Länge und dass jede Stufe 0 bis 12 eine Tour hat). Schritte öffnen Handy, App, Seite oder fahren die Kamera
+selbst im `before` (am Handy-Bildschirm legt `onMap` das Handy für Karte und HUD weg). Gestartet wird vom Zustand her:
+`TourStarter` (unsichtbar im HUD-Eintrag der Missions-Karte) startet die Tour der aktuellen Stufe, wenn sie nicht in
+`toursSeen` steht; das deckt das Erreichen der Stufe (`tutorial.stageReached`) und das Laden eines Spielstands ab. Am
+Ende schickt die Oberfläche `tutorial.tourSeen { stage }`, bei Erklär-Stufen (`EXPLAIN_STAGES` 0, 3, 4, 10) dazu
+`tutorial.advance`, nach Stufe 0 `ui.setSpeed(1)`. Der „Weiter“-Knopf der Stufen-Karte erscheint nur noch, wenn die
+Tour schon gelaufen ist. Muss der Spieler selbst etwas tun (`waitFor`: Stufe 1 der erste Verkauf, 7 ein Leutnant, 10
+ein Buchhalter, 11 die Rechte Hand, erster Gang-Angriff die Sicherheit), läuft die Uhr (`pause: false`) und die Tour ist
+überspringbar, falls die Voraussetzung fehlt. Die Tour der Stufe 9 startet erst mit der Beschlagnahme
+(`MOMENT_STAGES`). Zwei weitere Touren hängen an Ereignissen und merken sich in `extraToursSeen`: nach der ersten
+Lieferung in Köln (`shipment.arrived`, Lager im HUD) und nach dem ersten Fahrer (`staff.hired`, Abholen am Kai und
+Routen; Routen gibt es nur zwischen zwei Lagern, der Kai ist keins). „Tutorial beenden“ beendet auch die Tour und
+markiert alle als gesehen; die Migration 2 markiert in laufenden Ständen alle Touren bis zur Stufe als gesehen.
+
+**Geskriptete Momente** (`tutorial/scripted.ts`, jede Spielminute im Tick, nur bei `tutorialActive`, jeder genau
+einmal, Ereignis `tutorial.scriptedMoment { key, ref }`):
+- `phoneOrder` (`SCRIPTED_PHONE_ORDER`): beim ersten Mal 3.000 € Schwarzgeld ab Stufe 6 erzeugt
+  `customers.scriptedOrder(ctx, { veedelId })` eine Lieferanfrage aus dem Veedel des Neumarkts mit dem Produkt, das am
+  meisten auf Lager liegt, in kleiner Menge; die Tour zeigt auf die Antwortknöpfe (`chat.reply`).
+- `lowStockPopup` (`LOW_STOCK_POPUP`): Bestand in Köln unter `goods.usagePerDay`, ab Stufe 5, an den ersten fünf
+  Spieltagen, höchstens eins pro Tag (`scripted.lowStockDay`) und dreimal (`scripted.lowStockPopups`); Dialog
+  `tutorial.lowStock` mit Peter, „Zu den Lieferanten“ und „Später“.
+- `firstAttack` (`SCRIPTED_FIRST_ATTACK`): beim ersten Mal 6.000 € ab Stufe 7 ruft `gangs.scriptedRaid(ctx, { spotId,
+  goodsShare: 0.3, cashShare: 0.4 })`: Die Gang mit Anspruch auf das Veedel (sonst die mit dem meisten Einfluss dort)
+  überfällt den Neumarkt ohne Konfrontation, 30 % jeder Ware in allen Kölner Lagern (`goods.take`) und 40 % des
+  Schwarzgelds (`wallet.lose`, Kategorie `loss.gang`) sind weg, Nachricht in ihrer Stimme (`raidLost`), Journal,
+  Ereignis `gang.raided`. Bis dahin startet `gangs` keinen zufälligen Überfall (`scriptedDone(state, 'firstAttack')`,
+  solange das Tutorial aktiv ist). Die Tour erklärt die Hotspot-Regel und wartet, bis Sicherheit eingestellt und am
+  Neumarkt eingesetzt ist.
+- `seizure` (`SCRIPTED_SEIZURE`): `suppliers` entscheidet beim Abladen am Kai (`deliver`, `scriptedSeizure` in
+  `troubles.ts`): bei aktivem Tutorial ab Stufe 9 wird die zweite Lieferung von Jansen (Rotterdam) komplett
+  beschlagnahmt, ohne Wahl „Papiere fälschen“ (Zoll als Kontakt `police:zoll`, Nachricht von Jansen, Journal,
+  `shipment.problem` `seized`, dann `tutorial.scripted { key: 'seizure' }`); darauf läuft die Tour der Stufe 9
+  (Polizei-Intro, Spezialisten, Einzeln oder Sammelbestellung).
+
+**Nachrichten:** Solange das Tutorial läuft, schreibt Peter die Aufgabe einer Mission nicht mehr per Chat (sie steht
+auf der Karte, die Tour erklärt sie); die Belohnung kommt als eine Zeile. **Wetter:** wieder im HUD neben der Uhr
+(`weather/ui`, HUD-Platz `'time'`, seit 46c auch am Handy-Bildschirm), Anker `hud.weather`.
+
+**Prüfen:** `tutorial/scripted.test.ts` (Bedingung, genau einmal, Beträge, nicht ohne Tutorial), `ui/tours.test.ts`,
+e2e-Fall „Tutorial“ (Tour der Stufe 0 mit Enter, Stufe 1 bis zum ersten Verkauf, Stufe 2), Szenen
+`npm run screenshot -- --scenes=tutorial-tour,tutorial-tour-spot,tutorial-tour-handy` (Stufe 0 am HUD, Stufe 1 am
+Spot, Stufe 5 im Handy, Desktop und Handy-Bildschirm), `npm run balance` unverändert (Bot ohne Tutorial).
 ### Auftrag 47: Minispiele in 3D (Fragerunde vom 07.10.2026)
 
 Vier Runden Pop-ups ergaben: Design-Art fotorealistisch, echtes 3D mit three.js, Modelle aus Grundformen im Code,
@@ -1486,14 +1665,13 @@ Richtung (eigener Klick, Ausschlag am Stethoskop).
   - `npm run e2e`: neues Spiel, selbst verkaufen, Läufer anheuern, im Handy bestellen, Kasse öffnen, Leutnant mit
     zwei Spots ernennen, speichern, laden, Autosave nach dem Neuladen; Desktop und Handy.
   - `npm run playthrough`: Der Bot spielt im Browser eine Session (Standard 8 Spieltage ≈ 20 Minuten bei 2x) und
-    macht Screenshots der wichtigen Momente, am Ende steht die Zahl der Banner im Handy (`--banner=alle` zählt wie vor
-    Auftrag 26). Belege der Integration liegen in `docs/integration/`.
+    macht Screenshots der wichtigen Momente. Belege der Integration liegen in `docs/integration/`.
   - `npm run screenshot`: Desktop und Handy nach `screenshots/`. Mit `--eval="window.koeln.session.sim.advance(480)"`
     springt die Uhr z.B. in die Nacht (Start 18 Uhr). Mit `--scenes=alle` (oder Namen) die Szenen des Looks „Glas“
     (`scripts/glass-scenes.mjs`: Normalbetrieb in vier Tageszeiten, weggelegt, Spot-Hover, Orte, Konfrontation,
     Razzia, Lieferung, Übernahme) nach `screenshots/glas/`, auch als `npm run screenshot:glas`.
   - `npm run screenshot:phone`: alle Handy-Seiten (Startbildschirm, Nachrichten, Chat, Personal mit Leute finden,
-    Reviere, Hafen, Geldwäsche, Einstellungen mit Verlauf, Panels, Island-Zustände) für Desktop und Handy-Bildschirm nach
+    Reviere, Hafen, Geldwäsche, Einstellungen mit Verlauf, Panels) für Desktop und Handy-Bildschirm nach
     `screenshots/handy/`, mit festem Seed und pausiert (Vorher/Nachher vergleichbar). Optionen `--out`, `--scenes`,
     `--sizes`, `--time`, `--appearance=light|dark`. Szenen und Ansichten stehen in `scripts/phone-scenes.mjs`.
   - `npm run audit:phone`: misst dieselben Seiten am laufenden Spiel: Zieltreffer ≥ 44 × 44 px, Schrift ≥ 11 px,
@@ -1502,5 +1680,5 @@ Richtung (eigener Klick, Ausschlag am Stethoskop).
   - `npm run monkey:phone`: klickt zufällig (fester Seed, also wiederholbar) durch jede Handy-App und jeden Tab, in
     Desktop- und Handy-Größe, und meldet Fehler im Browser, Bedienelemente, die von etwas anderem verdeckt oder auch nach
     dem Scrollen nicht erreichbar sind, ungültige Zahlen (NaN, Infinity) im Spielstand und Sackgassen. Er wartet, bis
-    Blätter eingeglitten sind, prüft nur die oberste Ebene (Blatt, Dialog) und bricht "Spot gründen" wie Esc ab. Optionen
+    Blätter eingeglitten sind, prüft nur die oberste Ebene (Blatt, Dialog) und bricht eine Ortswahl auf der Karte (Spot verlegen) wie Esc ab. Optionen
     `--apps=a,b`, `--sizes=mobile,desktop`, `--steps=N`, `--seed=N`; endet mit Fehlercode 1, wenn etwas auffällt.

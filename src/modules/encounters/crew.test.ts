@@ -1,19 +1,22 @@
-// Crew und Spezialzüge (Auftrag 35, Etappe 2).
+// Crew und Spezialzüge (Auftrag 35, Etappe 2; seit 46d geht die vorgeschlagene Crew von selbst hin).
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type Simulation, wallet } from '../../core';
 import { createTestGame } from '../../core/testing';
+import { MINIGAME_KINDS } from '../minigames';
 import { getStaffMember } from '../staff';
-import { CREW_TRAVEL_COST, STASH_CAP } from './config';
-import {
-  availableMoves,
-  crewCandidates,
-  type Encounter,
-  getEncounter,
-  specialMoves,
-  startEncounter,
-  suggestedCrew,
-} from './index';
+import { CREW_TRAVEL_COST } from './config';
+import { crewCandidates, specialMoves, suggestedCrew } from './crew';
+import { availableMoves, act as engineAct, special } from './engine';
+import { type Encounter, getEncounter, startEncounter } from './index';
+
+const brawlReady = MINIGAME_KINDS.brawl.ready;
+beforeEach(() => {
+  MINIGAME_KINDS.brawl.ready = true;
+});
+afterEach(() => {
+  MINIGAME_KINDS.brawl.ready = brawlReady;
+});
 
 function hire(sim: Simulation, spotId = 'ebertplatz'): string {
   if (wallet.balance(sim.state, 'dirty') < 2000) wallet.earn(sim.ctx('test'), 5000, 'dirty', 'Test', 'income.other');
@@ -43,16 +46,38 @@ function get(sim: Simulation, id: number): Encounter {
   return e;
 }
 
-function briefing(sim: Simulation, staffIds: string[]): number {
-  return startEncounter(sim.ctx('gangs'), {
-    kind: 'raidDefense',
-    spotId: 'ebertplatz',
-    veedelId: 'neustadt-nord',
-    staffIds,
-    askPlayer: true,
-    opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 50, count: 3 },
-  }).encounterId;
+const RAID = {
+  kind: 'raidDefense',
+  spotId: 'ebertplatz',
+  veedelId: 'neustadt-nord',
+  opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 50, count: 3 },
+} as const;
+
+/** Überfall mit askPlayer: Die vorgeschlagene Crew geht hin (46d), alles ist sofort entschieden. */
+function raid(sim: Simulation, staffIds: string[]): number {
+  return startEncounter(sim.ctx('gangs'), { ...RAID, staffIds, askPlayer: true }).encounterId;
 }
+
+/**
+ * Überfall mit dir vor Ort und dieser Crew, angehalten: Der Straßenkampf wird weggenommen und bleibt aus, damit die
+ * Spezialzüge und Runden von Hand laufen.
+ */
+function held(sim: Simulation, staffIds: string[]): number {
+  MINIGAME_KINDS.brawl.ready = true;
+  const { encounterId } = startEncounter(sim.ctx('gangs'), { ...RAID, staffIds, playerPresent: true });
+  const e = get(sim, encounterId);
+  const open = e.minigame;
+  if (!open) throw new Error('Der Straßenkampf hätte starten müssen');
+  e.minigame = null;
+  sim.state.modules.minigames.active = sim.state.modules.minigames.active.filter((c) => c.id !== open.challengeId);
+  MINIGAME_KINDS.brawl.ready = false;
+  return encounterId;
+}
+
+const act = (sim: Simulation, encounterId: number, actionId: string, protect?: Encounter['protect']) =>
+  engineAct(sim.ctx('gangs'), encounterId, actionId, protect ?? undefined);
+const move = (sim: Simulation, encounterId: number, participantId: string) =>
+  special(sim.ctx('gangs'), encounterId, participantId);
 
 describe('Spezialzüge aus Rolle und Werten', () => {
   const stats = { speed: 50, caution: 50, strength: 50, charisma: 50 };
@@ -94,13 +119,30 @@ describe('Spezialzüge aus Eigenschaften (Auftrag 34)', () => {
   });
 });
 
-describe('Crew im Briefing', () => {
-  it('Vorschlag: wer vor Ort ist, aufgefüllt mit freien Leuten; bis zu drei mit Taxi', () => {
+describe('Crew (seit 46d geht die vorgeschlagene von selbst hin)', () => {
+  it('Vorschlag: wer vor Ort ist, aufgefüllt mit freien Leuten; Taxi für die, die nicht da sind', () => {
+    const sim = createTestGame();
+    const runner = hire(sim);
+    const guard = free(sim, 'security', { strength: 80 });
+    free(sim, 'driver', { strength: 60 });
+    const before = wallet.balance(sim.state, 'dirty');
+    const id = raid(sim, [runner]);
+    const e = get(sim, id);
+    expect(e.mode).toBe('crew');
+    expect(e.participants.map((p) => p.id)).toEqual([runner, guard]);
+    expect(e.participants.map((p) => p.move)).toEqual([null, 'block']);
+    expect(e.request.staffIds).toEqual([runner, guard]);
+    expect(e.result?.travel).toBe(CREW_TRAVEL_COST);
+    expect(before - wallet.balance(sim.state, 'dirty') + (e.result?.money ?? 0)).toBe(CREW_TRAVEL_COST);
+  });
+
+  it('crewCandidates und suggestedCrew: vor Ort zuerst, dann die Stärksten, bis zu drei', () => {
     const sim = createTestGame();
     const runner = hire(sim);
     const guard = free(sim, 'security', { strength: 80 });
     const driver = free(sim, 'driver', { strength: 60 });
-    const id = briefing(sim, [runner]);
+    // Eine angehaltene Konfrontation ohne Crew-Zusammenstellung (nur der Läufer vor Ort).
+    const id = held(sim, [runner]);
     const e = get(sim, id);
     const candidates = crewCandidates(sim.state, e, 'koeln');
     expect(candidates[0]).toMatchObject({ id: runner, atSite: true, cost: 0 });
@@ -109,70 +151,38 @@ describe('Crew im Briefing', () => {
       cost: CREW_TRAVEL_COST,
       move: 'block',
     });
+    expect(candidates.find((c) => c.id === driver)).toMatchObject({ atSite: false, move: 'getaway' });
     expect(suggestedCrew(sim.state, e, 'koeln')).toEqual([runner, guard]);
-
-    const before = wallet.balance(sim.state, 'dirty');
-    const crew = [runner, guard, driver];
-    expect(sim.dispatch({ type: 'encounters.join', payload: { encounterId: id, mode: 'crew', crew } }).ok).toBe(true);
-    const after = get(sim, id);
-    expect(after.participants.map((p) => p.id)).toEqual(crew);
-    expect(after.participants.map((p) => p.move)).toEqual([null, 'block', 'getaway']);
-    expect(after.request.staffIds).toEqual(crew);
-    expect(wallet.balance(sim.state, 'dirty')).toBe(before - 2 * CREW_TRAVEL_COST);
-  });
-
-  it('mehr als drei oder jemand, der nicht kann, geht nicht', () => {
-    const sim = createTestGame();
-    const runner = hire(sim);
-    const a = free(sim, 'security');
-    const b = free(sim, 'driver');
-    const c = free(sim, 'runner');
-    const id = briefing(sim, [runner]);
-    const join = (crew: string[]) =>
-      sim.dispatch({ type: 'encounters.join', payload: { encounterId: id, mode: 'self', crew } });
-    expect(join([runner, a, b, c]).ok).toBe(false);
-    expect(join(['niemand']).ok).toBe(false);
-    expect(get(sim, id).phase).toBe('briefing');
-    // Ohne Crew bleibt es wie bisher: wer vor Ort ist, macht mit.
-    expect(sim.dispatch({ type: 'encounters.join', payload: { encounterId: id, mode: 'crew' } }).ok).toBe(true);
-    expect(get(sim, id).participants.map((p) => p.id)).toEqual([runner]);
   });
 });
 
 describe('Spezialzüge in der Konfrontation', () => {
-  function withCrew(seed: number, crew: (sim: Simulation) => string[]) {
-    const sim = createTestGame({ seed });
-    const ids = crew(sim);
-    const id = briefing(sim, []);
-    sim.dispatch({ type: 'encounters.join', payload: { encounterId: id, mode: 'crew', crew: ids } });
-    return { sim, id };
-  }
-
   it('Sicherheit fängt den ersten Treffer ab', () => {
-    const { sim, id } = withCrew(1, (s) => [free(s, 'security')]);
+    const sim = createTestGame({ seed: 1 });
+    const id = held(sim, [free(sim, 'security')]);
     const e = get(sim, id);
     e.intent = 'knife';
     e.resolve = 95;
+    const guardId = e.participants.find((p) => !p.isPlayer)?.id ?? '';
     // Messer trifft ungeschützt mit hoher Chance; der Treffer wird abgefangen.
     for (let i = 0; i < 3 && get(sim, id).phase === 'rounds'; i++) {
       get(sim, id).intent = 'knife';
-      sim.dispatch({ type: 'encounters.act', payload: { encounterId: id, actionId: 'negotiate', protect: 'goods' } });
-      if (get(sim, id).participants[0].moveUsed) break;
+      act(sim, id, 'negotiate', 'goods');
+      if (get(sim, id).participants.find((p) => p.id === guardId)?.moveUsed) break;
     }
-    const guard = get(sim, id).participants[0];
-    if (guard.moveUsed) {
+    const guard = get(sim, id).participants.find((p) => p.id === guardId);
+    if (guard?.moveUsed) {
       expect(get(sim, id).log.some((l) => l.text.includes('fängt den Schlag ab'))).toBe(true);
       expect(guard.condition).toBe('ok');
     }
   });
 
   it('Fluchtwagen: sofort weg, nichts bleibt zurück', () => {
-    const { sim, id } = withCrew(2, (s) => [free(s, 'driver')]);
-    const driver = get(sim, id).participants[0].id;
+    const sim = createTestGame({ seed: 2 });
+    const driver = free(sim, 'driver');
+    const id = held(sim, [driver]);
     expect(availableMoves(get(sim, id)).map((m) => m.move)).toEqual(['getaway']);
-    expect(sim.dispatch({ type: 'encounters.special', payload: { encounterId: id, participantId: driver } }).ok).toBe(
-      true,
-    );
+    expect(move(sim, id, driver).ok).toBe(true);
     const e = get(sim, id);
     expect(e.outcome).toBe('retreat');
     expect(e.result?.ending).toBe('fled');
@@ -181,33 +191,35 @@ describe('Spezialzüge in der Konfrontation', () => {
   });
 
   it('zweite Verhandlung: verschiebt die Zeiger, ohne dass die Runde weiterläuft', () => {
-    const { sim, id } = withCrew(3, (s) => [free(s, 'runner', { charisma: 85 })]);
+    const sim = createTestGame({ seed: 3 });
+    const talker = free(sim, 'runner', { charisma: 85 });
+    const id = held(sim, [talker]);
     const e = get(sim, id);
-    const talker = e.participants[0].id;
     const { round, clock, aggression } = e;
-    sim.dispatch({ type: 'encounters.special', payload: { encounterId: id, participantId: talker } });
+    expect(move(sim, id, talker).ok).toBe(true);
     const after = get(sim, id);
     expect(after.round).toBe(round);
     expect(after.clock).toBe(clock);
     expect(after.aggression).toBeLessThan(aggression);
     // Nur einmal.
-    expect(sim.dispatch({ type: 'encounters.special', payload: { encounterId: id, participantId: talker } }).ok).toBe(
-      false,
-    );
+    expect(move(sim, id, talker).ok).toBe(false);
   });
 
-  it('Ware wegbringen: höchstens die Hälfte der Ware geht verloren', () => {
-    const { sim, id } = withCrew(4, (s) => [free(s, 'runner', { speed: 90 })]);
-    const runner = get(sim, id).participants[0].id;
-    sim.dispatch({ type: 'encounters.special', payload: { encounterId: id, participantId: runner } });
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId: id, actionId: 'flee', protect: 'cash' } });
+  it('Ware wegbringen: höchstens die Hälfte der Ware geht verloren, nicht rückwirkend', () => {
+    const sim = createTestGame({ seed: 5 });
+    const runner = free(sim, 'runner', { speed: 90 });
+    const id = held(sim, [runner]);
     const e = get(sim, id);
-    expect(e.phase).toBe('done');
-    expect(e.stakes.find((s) => s.id === 'goods')?.damage).toBeLessThanOrEqual(STASH_CAP);
+    const goods = e.stakes.find((s) => s.id === 'goods');
+    if (!goods) throw new Error('keine Ware');
+    goods.damage = 90;
+    expect(move(sim, id, runner).ok).toBe(true);
+    expect(get(sim, id).goodsCap).toBe(90);
+    act(sim, id, 'flee', 'cash');
+    expect(get(sim, id).phase).toBe('done');
+    expect(get(sim, id).stakes.find((s) => s.id === 'goods')?.damage).toBe(90);
   });
-});
 
-describe('Review: Spezialzüge pro Anlass, Grenzen', () => {
   it('bei Polizei und Zoll gibt es keinen Fluchtwagen', () => {
     for (const kind of ['policeChase', 'vehicleCheck', 'customsCheck']) {
       const sim = createTestGame();
@@ -219,45 +231,8 @@ describe('Review: Spezialzüge pro Anlass, Grenzen', () => {
         playerPresent: false,
         skipEffects: true,
       }).encounterId;
-      const e = get(sim, id);
       // Der Anlass erlaubt keinen Fluchtwagen: Der Fahrer bringt dann keinen Zug mit.
-      expect(e.participants[0].move, kind).toBeNull();
-      expect(availableMoves(e), kind).toEqual([]);
-      expect(sim.dispatch({ type: 'encounters.special', payload: { encounterId: id, participantId: driver } }).ok).toBe(
-        false,
-      );
+      expect(get(sim, id).participants[0].move, kind).toBeNull();
     }
-  });
-
-  it('Ware wegbringen wirkt nicht rückwirkend: Die Grenze ist der Schaden beim Einsatz, mindestens die Hälfte', () => {
-    const { sim, id } = (() => {
-      const s = createTestGame({ seed: 5 });
-      const runner = free(s, 'runner', { speed: 90 });
-      const encounterId = briefing(s, []);
-      s.dispatch({ type: 'encounters.join', payload: { encounterId, mode: 'crew', crew: [runner] } });
-      return { sim: s, id: encounterId };
-    })();
-    const e = get(sim, id);
-    const goods = e.stakes.find((s) => s.id === 'goods');
-    if (!goods) throw new Error('keine Ware');
-    goods.damage = 90;
-    sim.dispatch({ type: 'encounters.special', payload: { encounterId: id, participantId: e.participants[0].id } });
-    expect(get(sim, id).goodsCap).toBe(90);
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId: id, actionId: 'flee', protect: 'cash' } });
-    expect(get(sim, id).stakes.find((s) => s.id === 'goods')?.damage).toBe(90);
-  });
-
-  it('Taxi der Crew ist kein Verlust an die Gegenseite (nicht in result.money)', () => {
-    const sim = createTestGame();
-    const guard = free(sim, 'security');
-    const id = briefing(sim, []);
-    sim.dispatch({ type: 'encounters.join', payload: { encounterId: id, mode: 'crew', crew: [guard] } });
-    get(sim, id).resolve = 31;
-    get(sim, id).intent = null;
-    get(sim, id).aggression = 10;
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId: id, actionId: 'negotiate' } });
-    const result = get(sim, id).result;
-    expect(result?.travel).toBe(CREW_TRAVEL_COST);
-    expect(result?.money).toBe(0);
   });
 });

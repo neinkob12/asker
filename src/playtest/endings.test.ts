@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { GameSession, MANUAL_SLOTS, memoryStorage, type Simulation, wallet } from '../core';
 import { discoverModules } from '../core/discover';
 import { createTestGame, eventsOfType, recordEvents } from '../core/testing';
-import { activeEncounters } from '../modules/encounters';
+import { getEncounter, startEncounter } from '../modules/encounters';
+import { act } from '../modules/encounters/engine';
 import { getLots, take } from '../modules/goods';
+import { MINIGAME_KINDS } from '../modules/minigames';
 import { addInfluence, campaignProgress, controlledBy, PLAYER_FACTION } from '../modules/territory';
 import { allVeedel } from '../modules/veedel';
 
@@ -41,37 +43,38 @@ describe('Spielende', () => {
   });
 
   it('Tod: Wer bei einem Überfall selbst hingeht, kann sterben → Game Over "killed"', () => {
+    // Auftrag 46d: Mit dir vor Ort kommt der Straßenkampf (Minispiel). Hier wird er weggenommen, und du prügelst
+    // Runde für Runde (act aus der Engine), bis es vorbei ist.
+    const brawlReady = MINIGAME_KINDS.brawl.ready;
     let deaths = 0;
-    for (let seed = 1; seed <= 40 && deaths === 0; seed++) {
-      const sim = createTestGame({ seed });
-      sim.dispatch({ type: 'staff.hireRunner', payload: { spotId: 'ebertplatz' } });
-      const gangs = sim.state.modules.gangs.gangs;
-      // Die Hafenkolonne verliert die Geduld und überfällt den Spot.
-      for (let i = 0; i < 200 && activeEncounters(sim.state).length === 0; i++) {
-        gangs.nord.hostility = 100;
-        gangs.nord.stage = 3;
-        gangs.nord.lastAttackAt = null;
-        gangs.nord.lastSaleSpotId = 'ebertplatz';
-        sim.advance(60);
+    try {
+      for (let seed = 1; seed <= 60 && deaths === 0; seed++) {
+        MINIGAME_KINDS.brawl.ready = true;
+        const sim = createTestGame({ seed });
+        const { encounterId } = startEncounter(sim.ctx('gangs'), {
+          kind: 'gangSpotRaid',
+          veedelId: 'kalk',
+          playerPresent: true,
+          opponent: { factionId: 'ost', label: 'Die Wachen', strength: 85, count: 5 },
+        });
+        const encounter = getEncounter(sim.state, encounterId);
+        const open = encounter?.minigame;
+        if (encounter && open) {
+          encounter.minigame = null;
+          sim.state.modules.minigames.active = sim.state.modules.minigames.active.filter(
+            (c) => c.id !== open.challengeId,
+          );
+        }
+        MINIGAME_KINDS.brawl.ready = false;
+        for (let round = 0; round < 20 && encounter?.phase === 'rounds'; round++) {
+          act(sim.ctx('gangs'), encounterId, 'fight');
+        }
+        if (sim.state.outcome.gameOver?.reason !== 'killed') continue;
+        deaths++;
+        expect(sim.isOver).toBe(true);
       }
-      const encounter = activeEncounters(sim.state)[0];
-      if (!encounter) continue;
-      if (encounter.phase === 'briefing') {
-        expect(
-          sim.dispatch({ type: 'encounters.join', payload: { encounterId: encounter.id, present: true } }).ok,
-        ).toBe(true);
-      }
-      for (let round = 0; round < 10 && !sim.state.outcome.gameOver; round++) {
-        const open = activeEncounters(sim.state).find((e) => e.id === encounter.id);
-        if (!open) break;
-        sim.dispatch({ type: 'encounters.act', payload: { encounterId: encounter.id, actionId: 'fight' } });
-        // Zuschlagen startet den Straßenkampf: nicht gespielt (timeout) gilt die Runde mit dem alten Würfel.
-        const fight = activeEncounters(sim.state).find((e) => e.id === encounter.id)?.minigame;
-        if (fight) sim.dispatch({ type: 'minigames.expire', payload: { id: fight.challengeId } }, { actor: 'system' });
-      }
-      if (sim.state.outcome.gameOver?.reason !== 'killed') continue;
-      deaths++;
-      expect(sim.isOver).toBe(true);
+    } finally {
+      MINIGAME_KINDS.brawl.ready = brawlReady;
     }
     expect(deaths).toBeGreaterThan(0);
   }, 60_000);

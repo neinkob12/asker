@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { loadSimulation, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { activeEncounters, autoResolveEncounter, getEncounter, startEncounter } from '../encounters';
+import { autoResolveEncounter, getEncounter, startEncounter } from '../encounters';
 import { getStock } from '../goods';
 import { getCompetitionFactor } from '../market';
 import { getSpot } from '../spots';
+import { invalidateStaffIndex } from '../staff';
 import { addInfluence, controllerOf, getInfluence, PLAYER_FACTION } from '../territory';
 import { allVeedel, getVeedel } from '../veedel';
 import { crewFor, demandOptions, say } from './common';
@@ -213,6 +214,15 @@ describe('gangs: KI', () => {
       .filter((e) => e.payload.gangId === 'nord')
       .map((e) => e.payload.stage);
     expect(stages.slice(0, 3)).toEqual([1, 2, 3]);
+    // Auftrag 46e: Überfälle und Methoden kommen halb so oft; tageweise weiterverkaufen, bis die Hafenkolonne zuschlägt.
+    const actions = () =>
+      [
+        ...eventsOfType(events, 'gang.raidStarted'),
+        ...eventsOfType(events, 'gang.intimidation'),
+        ...eventsOfType(events, 'gang.burglary'),
+        ...eventsOfType(events, 'gang.poachAttempt'),
+      ].filter((e) => e.payload.gangId === 'nord').length;
+    for (let day = 0; day < 20 && actions() === 0; day++) sellHours(sim, 'ebertplatz', 15, 24);
     const fromNord = messages.thread(sim.state, 'gang:nord');
     expect(fromNord.length).toBeGreaterThanOrEqual(3);
     // Die Drohung bietet Diplomatie als Antwort an.
@@ -383,7 +393,8 @@ describe('gangs: Diplomatie', () => {
       st.relation = -100;
       st.offer = { id: 5, amount: 100, price: 400, expiresAt: sim.state.time + 60 };
       sim.dispatch({ type: 'gangs.acceptOffer', payload: { gangId: 'ost', offerId: 5 } });
-      const encounter = activeEncounters(sim.state)[0];
+      // Auftrag 46d: sofort entschieden, die Konfrontation steht in der Liste der vergangenen.
+      const encounter = sim.state.modules.encounters.history[0];
       if (!encounter) continue;
       betrayed = true;
       expect(encounter.kind).toBe('dealGoneWrong');
@@ -533,7 +544,7 @@ describe('gangs: Überfall und Angebote (Fehler aus der Handy-Prüfung)', () => 
       },
     });
     expect(result.ok).toBe(true);
-    expect(activeEncounters(sim.state)[0]?.request.staffIds).toEqual([runner]);
+    expect(sim.state.modules.encounters.history[0]?.request.staffIds).toEqual([runner]);
   });
 
   it('Crew und Verstärkung kommen aus der Stadt des Anlasses, nicht aus der schlafenden', () => {
@@ -552,6 +563,7 @@ describe('gangs: Überfall und Angebote (Fehler aus der Handy-Prüfung)', () => 
       find(id).cityId = 'hamburg';
       find(id).assignment = null;
     }
+    invalidateStaffIndex();
     find(awaySecurity).role = 'security';
     expect(raidCrew(sim.state).map((m) => m.id)).toEqual([here]);
     expect(canJoinRaid(find(away), 'koeln')).toBe(false);
@@ -565,7 +577,7 @@ describe('gangs: Überfall und Angebote (Fehler aus der Handy-Prüfung)', () => 
       payload: { gangId: 'ost', veedelId: 'kalk', staffIds: [here, away], playerPresent: false },
     });
     expect(result.ok).toBe(true);
-    expect(activeEncounters(sim.state)[0]?.request.staffIds).toEqual([here]);
+    expect(sim.state.modules.encounters.history[0]?.request.staffIds).toEqual([here]);
   });
 
   it('ein Überfall nur mit Leuten, die nicht mitgehen dürfen, geht nicht', () => {
@@ -591,7 +603,7 @@ describe('gangs: Überfall und Angebote (Fehler aus der Handy-Prüfung)', () => 
       payload: { gangId: 'ost', veedelId: 'kalk', staffIds: [runner], playerPresent: false },
     });
     expect(result.ok).toBe(true);
-    expect(activeEncounters(sim.state)[0]?.request.stakes).toMatchObject({ money: 0, goods: 0 });
+    expect(sim.state.modules.encounters.history[0]?.request.stakes).toMatchObject({ money: 0, goods: 0 });
   });
 
   it('Ziele des Überfalls: dieselbe Liste für Oberfläche und Befehl', () => {

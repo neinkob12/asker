@@ -1,96 +1,41 @@
-// Konfrontationen: taktische, rundenbasierte Situationen wie Überfälle, Polizeiflucht, Schulden eintreiben
-// oder ein Deal, der kippt. Anlässe und Handlungen sind reine Daten (kinds.ts, actions.ts).
+// Konfrontationen: Überfälle, Polizeiflucht, Verkehrs- und Zollkontrollen, Schulden eintreiben, Übernahmen. Anlässe,
+// Handlungen und Absichten sind reine Daten (kinds.ts, actions.ts, intents.ts).
 //
-// Ablauf für Aufrufer: startEncounter(ctx, {...}) liefert eine ID. Mit askPlayer (und einem Anlass mit "joinable")
-// entscheidet der Spieler zuerst, wie er vorgeht (briefing, 'encounters.join' mit mode): selbst hin, Leute machen
-// lassen, Verstärkung schicken, sofort freikaufen, anonym die Bullen rufen oder Ware retten und den Spot räumen
-// (welche Wege ein Anlass anbietet: briefingOptions in kinds.ts, Werte in config.ts). Dann laufen Runden, in denen er
-// Handlungen wählt ('encounters.act') oder seine Leute machen lässt ('encounters.auto'). Das Ergebnis kommt als
-// Ereignis 'encounter.resolved' (mit derselben ID, dem origin und dem Ergebnis). Ohne Entscheidung (keine
-// Oberfläche, z.B. in Tests) würfeln die Leute nach DECISION_TIMEOUT Spielminuten selbst aus; sofort geht das
-// mit autoResolveEncounter(ctx, id).
+// Auftrag 46d: Die Akte (Briefing, Handlungen wählen, Zeiger beobachten) ist als Oberfläche weg. Jede Konfrontation
+// wird sofort beim Start entschieden (engine.ts resolveNow): Stärke, Sicherheit am Spot, Heat und Würfel, die Leute
+// spielen mit der klugen Strategie (strategy.ts), die bisher der Bot nutzte. Bist du selbst vor Ort (playerPresent),
+// kommt stattdessen zuerst das Minispiel des Anlasses (EncounterKind.minigames: Straßenkampf, Verfolgungsjagd,
+// Verkehrskontrolle, Papiere), und sein Ausgang bestimmt die Folgen. Das Ergebnis zeigt eine kurze Karte über der
+// Karte (ui/). Ohne Oberfläche läuft ein Minispiel nach seiner Frist ab, dann würfeln die Leute aus.
+//
+// Ablauf für Aufrufer: startEncounter(ctx, {...}) liefert eine ID; das Ergebnis kommt als Ereignis 'encounter.resolved'
+// (mit derselben ID, dem origin und dem Ergebnis), in der Regel noch im selben Aufruf. Nur mit dir vor Ort und einem
+// scharfen Minispiel wartet die Konfrontation (encounter.minigame); 'encounters.auto' bzw. autoResolveEncounter(ctx, id)
+// löst sie vorher auf (das Minispiel gilt dann als nicht gespielt).
 //
 // Der Spieler kann nur sterben, wenn er selbst dabei ist. Dann löst das Modul Game Over mit 'killed' aus.
 //
 // Öffentliche API:
-//   startEncounter(ctx, request), getEncounter(state, id), activeEncounters(state), pendingEncounter(state),
-//   availableActions(encounter), actionChance(encounter, actionId), autoResolveEncounter(ctx, id),
-//   briefingOptions(state, encounter) (Wege mit Kosten und ob sie gehen), payoffCost(encounter),
-//   getEncounterAction(kindId, actionId), ENCOUNTER_KINDS, ENCOUNTER_ACTIONS, PLAYER_STATS
-// Befehle: 'encounters.join', 'encounters.act', 'encounters.auto'
+//   startEncounter(ctx, request), getEncounter(state, id), activeEncounters(state), autoResolveEncounter(ctx, id),
+//   ENCOUNTER_KINDS, ROLE_NAMES, PLAYER_STATS, TIPOFF_HEAT, minigameParams, apply* (Folgen der Minispiele)
+// Befehle: 'encounters.auto'
 // Ereignisse: 'encounter.started', 'encounter.round', 'encounter.resolved'
-// Auftrag 44: Minispiele (minigames.ts). Anlässe mit EncounterKind.minigames starten sie, wenn du selbst dabei bist;
-//   solange eins läuft (encounter.minigame), lehnen act, protect und special ab. Folgen: applyChase, applyBrawl,
-//   applyTraffic, applyPapers (Ereignis 'minigame.finished').
 
 import { type Ctx, defineModule, type GameState } from '../../core';
-import {
-  act,
-  autoResolve,
-  delegateAbsent,
-  expireDecisions,
-  getKind,
-  join,
-  protect,
-  resolveAction,
-  special,
-  stakesFor,
-  start,
-} from './engine';
+import { autoResolve, expireDecisions, getKind, stakesFor, start } from './engine';
 import { ENCOUNTER_INTENTS } from './intents';
 import { onMinigameFinished } from './minigames';
 import { buildFoes, firstIntent } from './tactics';
 import type {
   Encounter,
-  EncounterAction,
   EncounterMode,
   EncounterOutcome,
   EncounterRequest,
   EncounterResult,
   EncountersState,
-  StakeId,
 } from './types';
 
-export { ENCOUNTER_ACTIONS } from './actions';
-export { ADVICE_RULES, type Advice, type AdviceRule, adviceText, rightHandAdvice } from './advice';
-export {
-  ABANDON_CASH_MAX,
-  ABANDON_CASH_SHARE,
-  AGGRESSION_FIGHT,
-  BACKUP_COST,
-  BACKUP_MAX_PEOPLE,
-  CREW_MAX,
-  CREW_TRAVEL_COST,
-  PAYOFF_RELATION,
-  PLAYER_STATS,
-  RETREAT_AT,
-  TIPOFF_HEAT,
-} from './config';
-export {
-  type CrewCandidate,
-  type CrewMemberInfo,
-  crewCandidates,
-  SPECIAL_MOVE_RULES,
-  SPECIAL_MOVES,
-  type SpecialMove,
-  type SpecialMoveRule,
-  specialMoveFor,
-  specialMoveOf,
-  specialMoves,
-  suggestedCrew,
-} from './crew';
-export {
-  actionChance,
-  activeParticipants,
-  availableActions,
-  availableMoves,
-  type BriefingOption,
-  briefingOptions,
-  PLAYER_ID,
-  payoffCost,
-  requestCity,
-} from './engine';
-export { ENCOUNTER_INTENTS } from './intents';
+export { PLAYER_STATS, TIPOFF_HEAT } from './config';
 export { ENCOUNTER_KINDS } from './kinds';
 export {
   applyBrawl,
@@ -101,16 +46,7 @@ export {
   type MinigameResult,
   minigameParams,
 } from './minigames';
-export { autoProtect, chooseAuto, chooseMove, scoreAction } from './strategy';
-export {
-  foesIn,
-  getIntent,
-  previewShift,
-  ROLE_NAMES,
-  type ShiftPreview,
-  STAKE_NAMES,
-  stakeName,
-} from './tactics';
+export { ROLE_NAMES } from './tactics';
 export type {
   Amount,
   Encounter,
@@ -149,18 +85,7 @@ declare module '../../core' {
     encounters: EncountersState;
   }
   interface GameCommands {
-    /**
-     * Spieler entscheidet im Briefing, wie er vorgeht (mode, siehe EncounterMode). Die alte Form present: true/false
-     * gilt weiter als 'self' bzw. 'crew'.
-     */
-    'encounters.join': { encounterId: number; mode?: EncounterMode; present?: boolean; crew?: string[] };
-    /** Spezialzug einer Person aus der Crew spielen (einmal pro Konfrontation, kostet keine Runde). */
-    'encounters.special': { encounterId: number; participantId: string };
-    /** Eine Runde mit dieser Handlung spielen, optional mit neuem Schutz (Einsatz). */
-    'encounters.act': { encounterId: number; actionId: string; protect?: StakeId };
-    /** Einsatz wählen, den die eigene Seite ab jetzt schützt (kostet keine Runde). */
-    'encounters.protect': { encounterId: number; stake: StakeId };
-    /** Die Leute entscheiden selbst, der Rest wird ausgewürfelt. */
+    /** Eine wartende Konfrontation (offenes Minispiel) sofort auswürfeln lassen. */
     'encounters.auto': { encounterId: number };
   }
   interface GameEvents {
@@ -187,18 +112,18 @@ declare module '../../core' {
        * immer; optional, damit andere Module (und Tests) das Ereignis weiter ohne auslösen können.
        */
       result?: EncounterResult;
-      /** Wie der Spieler im Briefing vorgegangen ist (fehlt ohne Briefing). */
+      /** Wie die eigene Seite vorgegangen ist (fehlt ohne Briefing; seit Auftrag 46d immer 'crew' oder 'self'). */
       mode?: EncounterMode;
     };
   }
 }
 
-/** Konfrontation starten. Das Ergebnis kommt als 'encounter.resolved'. Wirft bei unbekanntem Anlass. */
+/** Konfrontation starten. Das Ergebnis kommt als 'encounter.resolved', meist noch im selben Aufruf. Wirft bei unbekanntem Anlass. */
 export function startEncounter(ctx: Ctx, request: EncounterRequest): { encounterId: number } {
   return { encounterId: start(ctx, request).id };
 }
 
-/** Sofort auswürfeln, ohne auf den Spieler zu warten (z.B. für Tests anderer Module). */
+/** Eine wartende Konfrontation sofort auswürfeln, ohne auf den Spieler zu warten (z.B. für Tests anderer Module). */
 export function autoResolveEncounter(ctx: Ctx, encounterId: number): void {
   autoResolve(ctx, encounterId);
 }
@@ -208,19 +133,9 @@ export function getEncounter(state: GameState, id: number): Encounter | undefine
   return s.active.find((e) => e.id === id) ?? s.history.find((e) => e.id === id);
 }
 
+/** Konfrontationen, die noch auf ein Minispiel warten (sonst ist alles sofort entschieden). */
 export function activeEncounters(state: GameState): readonly Encounter[] {
   return state.modules.encounters.active;
-}
-
-/** Die älteste laufende Konfrontation, die auf den Spieler wartet (für die Oberfläche). */
-export function pendingEncounter(state: GameState): Encounter | undefined {
-  return state.modules.encounters.active[0];
-}
-
-/** Handlung mit den Anpassungen des Anlasses (Beschriftung, Hinweis …). */
-export function getEncounterAction(kindId: string, actionId: string): EncounterAction | undefined {
-  const kind = getKind(kindId);
-  return kind && resolveAction(kind, actionId);
 }
 
 // Spielstand-Formate älterer Versionen.
@@ -350,22 +265,26 @@ export function migrateV4(old: EncountersState): EncountersState {
   return { active: old.active.map((e) => ({ ...e, minigame: e.minigame ?? null })), history: old.history };
 }
 
+/**
+ * Version 5 → 6 (Auftrag 46d): Ohne Akte wartet nichts mehr auf den Spieler. Laufende Konfrontationen alter Stände
+ * (Briefing oder Runden ohne Minispiel) werden beim ersten Schritt ausgewürfelt: Ihre Frist ist abgelaufen
+ * (expireDecisions). Nur eine mit offenem Minispiel wartet weiter auf dessen Ausgang.
+ */
+export function migrateV5(old: EncountersState): EncountersState {
+  return {
+    active: old.active.map((e) => (e.minigame ? e : { ...e, deadline: Math.min(e.deadline, e.startedAt) })),
+    history: old.history,
+  };
+}
+
 export default defineModule({
   id: 'encounters',
-  version: 5,
+  version: 6,
   init: () => ({ active: [], history: [] }),
   tick: (ctx) => {
-    if (ctx.state.modules.encounters.active.length > 0) {
-      delegateAbsent(ctx);
-      expireDecisions(ctx);
-    }
+    if (ctx.state.modules.encounters.active.length > 0) expireDecisions(ctx);
   },
   commands: {
-    'encounters.join': (ctx, { encounterId, mode, present, crew }) =>
-      join(ctx, encounterId, mode ?? (present ? 'self' : 'crew'), crew),
-    'encounters.special': (ctx, { encounterId, participantId }) => special(ctx, encounterId, participantId),
-    'encounters.act': (ctx, { encounterId, actionId, protect: guard }) => act(ctx, encounterId, actionId, guard),
-    'encounters.protect': (ctx, { encounterId, stake }) => protect(ctx, encounterId, stake),
     'encounters.auto': (ctx, { encounterId }) => autoResolve(ctx, encounterId),
   },
   on: {
@@ -376,5 +295,6 @@ export default defineModule({
     3: migrateV2,
     4: migrateV3,
     5: migrateV4,
+    6: migrateV5,
   },
 });

@@ -1,6 +1,6 @@
-/* Quest-Karte unter Geld und Heat (Look "Glas"): dunkles Glas, Barlow, Gold für die Quest. */
+/* Vertrags-Karte unter Geld und Heat (Look "Glas"): dunkles Glas, Barlow, Grün für den Vertrag. */
 
-.quest-hud {
+.contract-hud {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -18,11 +18,11 @@
   animation: pop-in var(--duration-slow) var(--ease-out);
 }
 
-.hud-label.is-quest {
-  color: var(--hud-gold);
+.hud-label.is-contract {
+  color: var(--map-money);
 }
 
-.quest-hud__head {
+.contract-hud__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -30,82 +30,54 @@
   min-height: 24px;
 }
 
-.quest-hud__icon-btn,
-.quest-hud__main,
-.quest-hud__link,
-.quest-hud--mini {
-  padding: 0;
+.contract-hud__main,
+.contract-hud--mini {
   border: 0;
   background: none;
   color: inherit;
   font: inherit;
   cursor: pointer;
+  text-align: left;
 }
 
-.quest-hud__icon-btn {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  margin-right: -6px;
-  border-radius: 50%;
-  color: var(--hud-ink-2);
-}
-.quest-hud__icon-btn:hover {
-  background: var(--hud-glass-fill);
-  color: var(--hud-ink);
-}
-
-.quest-hud__main {
+.contract-hud__main {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  text-align: left;
+  padding: 0;
   border-radius: var(--hud-radius-button);
 }
 
-.quest-hud__text {
+.contract-hud__text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   min-width: 0;
   flex: 1;
 }
 
-.quest-hud__title {
-  font-size: 16px;
+.contract-hud__title {
+  font-family: var(--font-hud-display);
+  font-size: 17px;
   font-weight: 700;
-  line-height: 1.2;
-  overflow-wrap: normal;
-  word-break: keep-all;
-  hyphens: none;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
-.quest-hud__hint {
-  font-size: 12px;
-  line-height: 1.3;
+.contract-hud__go {
   color: var(--hud-ink-2);
 }
 
-.quest-hud__go {
-  flex: none;
-  color: var(--hud-ink-2);
-  transition:
-    transform var(--duration) var(--ease-out),
-    color var(--duration) var(--ease-out);
-}
-.quest-hud__main:hover .quest-hud__go {
-  transform: translateX(2px);
-  color: var(--hud-gold);
+.contract-hud__main:hover .contract-hud__go {
+  color: var(--hud-ink);
 }
 
-.quest-hud__progress {
+.contract-hud__progress {
   display: flex;
   align-items: center;
   gap: var(--space-3);
 }
 
-.quest-hud__bar {
+.contract-hud__bar {
   position: relative;
   flex: 1;
   height: 6px;
@@ -114,15 +86,15 @@
   overflow: hidden;
 }
 
-.quest-hud__fill {
+.contract-hud__fill {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: inherit;
-  background: var(--hud-gold);
+  background: var(--map-money);
   transition: width var(--duration-slow) var(--ease-out);
 }
 
-.quest-hud__count {
+.contract-hud__count {
   font-family: var(--font-hud-display);
   font-size: 15px;
   font-weight: 600;
@@ -130,91 +102,8 @@
   white-space: nowrap;
 }
 
-.quest-hud__reward {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--hud-radius-button);
-  background: var(--hud-glass-fill);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--hud-gold);
-}
-
-.quest-hud__foot {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.quest-hud__link {
-  min-height: 28px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--hud-ink);
-}
-.quest-hud__link.is-faint {
-  color: var(--hud-ink-2);
-}
-.quest-hud__link:hover {
-  text-decoration: underline;
-}
-
-/* Neue Quest (Feedback 07.10.2026): Die Karte leuchtet beim Erscheinen dreimal golden auf. */
-.quest-hud.is-new {
-  animation:
-    pop-in var(--duration-slow) var(--ease-out),
-    quest-glow 1.4s var(--ease-out) 0.3s 3;
-}
-@keyframes quest-glow {
-  0% {
-    box-shadow:
-      var(--hud-shadow),
-      0 0 0 0 color-mix(in srgb, var(--hud-gold) 75%, transparent);
-  }
-  100% {
-    box-shadow:
-      var(--hud-shadow),
-      0 0 0 14px color-mix(in srgb, var(--hud-gold) 0%, transparent);
-  }
-}
-
-/* Erste Kapitel: goldener Rand und Knopf „Zeig mir wie“, damit Neue die Quest nicht übersehen. */
-.quest-hud.is-guide {
-  border-color: color-mix(in srgb, var(--hud-gold) 70%, transparent);
-  box-shadow:
-    var(--hud-shadow),
-    0 0 28px -8px color-mix(in srgb, var(--hud-gold) 55%, transparent);
-}
-.quest-hud.is-guide .quest-hud__go {
-  color: var(--hud-gold);
-}
-
-.quest-hud__cta {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
-  width: 100%;
-  min-height: 40px;
-  padding: 0 var(--space-3);
-  border: 0;
-  border-radius: var(--hud-radius-button);
-  background: var(--hud-gold);
-  color: var(--hud-gold-on);
-  font-family: var(--font-hud);
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.quest-hud__cta:hover {
-  filter: brightness(1.08);
-}
-
-/* Eingeklappt: eine Zeile mit Ziel und Stand */
-.quest-hud--mini {
+/* Nur Angebote: eine Zeile */
+.contract-hud--mini {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -231,115 +120,53 @@
   font-size: 13px;
   font-weight: 600;
 }
-.quest-hud--mini > .ui-icon:first-child {
-  color: var(--hud-gold);
+.contract-hud--mini > .ui-icon:first-child {
+  color: var(--map-money);
 }
-.quest-hud__mini-title {
+.contract-hud__mini-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Handy-Bildschirm: volle Breite, kompakter */
-@media (max-width: 760px) {
-  .quest-hud,
-  .quest-hud--mini {
-    width: 100%;
-    max-width: none;
-  }
-  .quest-hud {
-    gap: 6px;
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--hud-radius-tile);
-  }
-  .quest-hud__hint,
-  .quest-hud__foot {
-    display: none;
-  }
-  /* Erste Kapitel: Der Tipp bleibt stehen, dafür rückt die Belohnung in die Übersicht (Platz für „Zeig mir wie“). */
-  .quest-hud.is-guide .quest-hud__hint {
-    display: block;
-  }
-  .quest-hud.is-guide .quest-hud__reward {
-    display: none;
-  }
-  .quest-hud__cta {
-    min-height: var(--touch-target-phone);
-  }
-}
-
-.quest-list {
+/* Seite „Wochenverträge“ */
+.contract-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
 }
-.quest-list__title {
-  display: flex;
-  justify-content: center;
-}
-
-/* Wochenverträge (Auftrag 32): gleiche Glas-Karte, Grün statt Gold. */
-.hud-label.is-contract {
-  color: var(--map-money);
-}
-.quest-hud--contract .quest-hud__fill {
-  background: var(--map-money);
-}
-.quest-contract {
+.contract-row {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
   min-width: 0;
 }
-.quest-contract__main {
+.contract-row__main {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-1);
   min-width: 0;
 }
-.quest-contract__title {
+.contract-row__title {
   font-weight: 600;
 }
-.quest-contract__meta {
+.contract-row__meta {
   color: var(--color-muted);
   font-size: var(--type-subhead);
 }
 
-/* Rückfrage „Quest überspringen?“ über der Kartenfläche (Auftrag 43, N4) */
-.ui-map-dialog__card.quest-skip {
-  max-width: 420px;
-}
-.quest-skip {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.quest-skip__kicker {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--hud-gold);
-}
-.quest-skip__title {
-  margin: 0;
-  font-family: var(--font-hud-display);
-  font-size: 30px;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--hud-ink);
-}
-.quest-skip__text {
-  margin: 0;
-  color: var(--hud-ink-2);
-}
-.quest-skip__actions {
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 4px;
+/* Handy-Bildschirm: volle Breite, kompakter */
+@media (max-width: 760px) {
+  .contract-hud,
+  .contract-hud--mini {
+    width: 100%;
+    max-width: none;
+  }
+  .contract-hud {
+    gap: 6px;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--hud-radius-tile);
+  }
 }

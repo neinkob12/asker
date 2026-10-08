@@ -36,13 +36,13 @@ export function restoreDialog(ui: UiApi): void {
 
 /**
  * Minispiele, die nach einer Konfrontation kommen (Tresor nach dem Überfall, Bude nach dem Eintreiben), warten, bis die
- * Akte mit dem Ausgang zu ist: erst „Erfolg, +1.200 €“ lesen, mit „Akte schließen“ dann das Minispiel.
+ * Ergebnis-Karte zu ist (Auftrag 46d, früher die Akte): erst „Erfolg, +1.200 €“ lesen, mit „Okay“ dann das Minispiel.
  */
 const deferred = new Set<number>();
 
-/** Soll das Minispiel warten? Ja, wenn gerade die Akte einer Konfrontation offen ist und es nicht zu ihr gehört. */
+/** Soll das Minispiel warten? Ja, wenn gerade das Ergebnis einer Konfrontation offen ist und es nicht zu ihr gehört. */
 export function shouldDefer(origin: { module: string }): boolean {
-  return live?.state.dialog?.id === 'encounters.encounter' && origin.module !== 'encounters';
+  return live?.state.dialog?.id === 'encounters.result' && origin.module !== 'encounters';
 }
 
 export function defer(challengeId: number): void {

@@ -17,7 +17,12 @@ function status(sim: Simulation, gangId: string) {
   return sim.state.modules.gangs.gangs[gangId];
 }
 
-/** „ost“ schuldet dir Schutzgeld, du treibst selbst ein; ending wie gewünscht. */
+/**
+ * „ost“ schuldet dir Schutzgeld, du treibst selbst ein. Mit dir vor Ort wartet der Straßenkampf (Auftrag 46d): Ohne
+ * Treffer wackelt er danach und gibt nach (gaveUp). Rückzug und abgelaufene Uhr lassen sich nicht mehr von Hand
+ * spielen; dafür wird das Ereignis der entschiedenen Konfrontation nachgestellt (die Konfrontation selbst endet
+ * verloren, ohne Bude).
+ */
 function collect(sim: Simulation, how: 'gaveUp' | 'flee' | 'clock' = 'gaveUp', playerPresent = true): number {
   const s = status(sim, 'ost');
   s.money = 20000;
@@ -30,20 +35,33 @@ function collect(sim: Simulation, how: 'gaveUp' | 'flee' | 'clock' = 'gaveUp', p
   const encounterId = (result.data as { encounterId: number }).encounterId;
   const e = getEncounter(sim.state, encounterId);
   if (!e) throw new Error('Konfrontation fehlt');
-  e.aggression = 0;
-  e.intent = null;
+  if (!playerPresent) return encounterId;
+  const open = e.minigame;
+  if (!open) throw new Error('Der Straßenkampf hätte starten müssen');
   if (how === 'gaveUp') {
-    // Er wackelt schon: Eine Runde Einschüchtern reicht, und niemand prügelt.
+    // Er wackelt schon: Nach dem Kampf ohne Treffer gibt er nach.
     e.resolve = 1;
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId: 'intimidate' } });
-  } else if (how === 'flee') {
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId: 'flee' } });
-  } else {
-    e.resolve = 100;
-    e.clock = 1;
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId: 'hold' } });
+    e.aggression = 0;
+    e.intent = null;
+    sim.dispatch({ type: 'minigames.finish', payload: { id: open.challengeId, score: 0.5, picks: [] } });
+    expect(getEncounter(sim.state, encounterId)?.outcome).toBe('success');
+    return encounterId;
   }
-  expect(getEncounter(sim.state, encounterId)?.outcome).not.toBeNull();
+  // Du gehst zu Boden: verloren, keine Bude. Dann das Ereignis nachstellen, um das es geht.
+  sim.dispatch({ type: 'minigames.finish', payload: { id: open.challengeId, score: 0, picks: ['ko'] } });
+  const done = getEncounter(sim.state, encounterId);
+  if (!done?.result) throw new Error('nicht entschieden');
+  expect(activeChallenge(sim.state)).toBeUndefined();
+  sim.ctx('encounters').emit('encounter.resolved', {
+    encounterId,
+    kind: done.kind,
+    outcome: 'retreat',
+    request: done.request,
+    playerKilled: false,
+    result: { ...done.result, money: 0, ending: how === 'flee' ? 'fled' : 'clock' },
+    mode: 'self',
+  });
+  sim.advance(1);
   return encounterId;
 }
 
@@ -61,7 +79,10 @@ function rightHand(sim: Simulation) {
     const r = sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: recruit(4).id, spotIds: [spot.id] } });
     if (!r.ok) throw new Error(r.reason);
   }
-  const r = sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: recruit(5).id } });
+  // Auftrag 46e: Die Rechte Hand kommt aus den Leutnants.
+  const boss = recruit(5);
+  sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: boss.id, spotIds: [spots[2].id] } });
+  const r = sim.dispatch({ type: 'hierarchy.appointRightHand', payload: { staffId: boss.id } });
   if (!r.ok) throw new Error(r.reason);
 }
 
@@ -92,18 +113,17 @@ describe('Bude durchsuchen', () => {
     expect(c?.params.max).toBe(searchAmount(STAKE, e?.result?.money ?? 0, status(sim, 'ost').money));
     expect(Number(c?.params.max)).toBeGreaterThanOrEqual(Math.round(STAKE * SEARCH_BONUS));
     expect(c?.params.phase).toEqual(expect.any(String));
-    expect(eventsOfType(events, 'minigame.started')).toHaveLength(1);
+    // Erst der Straßenkampf beim Eintreiben (Auftrag 46d), dann die Bude.
+    expect(eventsOfType(events, 'minigame.started').map((e) => e.payload.kind)).toEqual(['brawl', 'search']);
   });
 
   it('auch beim Rückzug (er haut ab), aber nicht, wenn die Polizei-Uhr abläuft oder du nicht dabei bist', () => {
     const fled = createTestGame({ seed: 11 });
-    const id = collect(fled, 'flee');
-    expect(getEncounter(fled.state, id)?.outcome).toBe('retreat');
+    collect(fled, 'flee');
     expect(activeChallenge(fled.state)?.kind).toBe('search');
 
     const clock = createTestGame({ seed: 11 });
-    const clockId = collect(clock, 'clock');
-    expect(getEncounter(clock.state, clockId)?.result?.ending).toBe('clock');
+    collect(clock, 'clock');
     expect(activeChallenge(clock.state)).toBeUndefined();
 
     const away = createTestGame({ seed: 11 });
@@ -117,7 +137,6 @@ describe('Bude durchsuchen', () => {
       payload: { gangId: 'ost', staffIds: [runner], playerPresent: false },
     });
     const awayId = r.ok ? (r.data as { encounterId: number }).encounterId : 0;
-    away.dispatch({ type: 'encounters.auto', payload: { encounterId: awayId } });
     expect(getEncounter(away.state, awayId)?.outcome).not.toBeNull();
     expect(activeChallenge(away.state)).toBeUndefined();
   });

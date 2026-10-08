@@ -171,6 +171,54 @@ describe('GameSession: Speicherplätze, Autosave, Export und Hardcore', () => {
     expect(second.state?.time).toBe(first.state?.time);
   });
 
+  it('der Takt schreibt den Autosave nur, wenn sich etwas geändert hat, auch in der Pause (Auftrag 47)', () => {
+    const memory = memoryStorage();
+    let writes = 0;
+    const storage = {
+      ...memory,
+      setItem: (k: string, v: string) => {
+        writes++;
+        memory.setItem(k, v);
+      },
+    };
+    // Bilder von Hand auslösen: Jedes Bild fordert das nächste an, hier mit 200 ms Abstand.
+    let frame: ((now: number) => void) | null = null;
+    let now = 0;
+    const scheduler = {
+      request: (cb: (now: number) => void) => {
+        frame = cb;
+        return 1;
+      },
+      cancel: () => {},
+    };
+    const session = new GameSession({ modules: [notesV2], storage, scheduler, now: () => now });
+    const frames = (count: number) => {
+      for (let i = 0; i < count; i++) {
+        now += 200;
+        frame?.(now);
+      }
+    };
+    session.newGame('normal', 5);
+    session.loop.start();
+    expect(writes).toBe(1);
+    // Pause, nichts getan: Der Takt läuft, schreibt aber nichts.
+    session.setSpeed(0);
+    frames(100);
+    expect(writes).toBe(1);
+    // Ein Befehl in der Pause: beim nächsten Takt nach dem Intervall gespeichert.
+    session.dispatch({ type: 'notes.add', payload: { text: 'gekauft' } } as never);
+    frames(60);
+    expect(writes).toBe(2);
+    // Danach wieder Ruhe.
+    frames(60);
+    expect(writes).toBe(2);
+    // Läuft das Spiel, ändert sich die Zeit: wieder gespeichert (die Wartezeit aus der Pause zählt mit).
+    session.setSpeed(1);
+    frames(60);
+    expect(writes).toBeGreaterThanOrEqual(3);
+    session.loop.stop();
+  });
+
   it('ein Autosave, den das Spiel nicht lesen kann, wird gesichert, bevor ein neues Spiel ihn überschreibt', () => {
     const storage = memoryStorage();
     const first = makeSession(storage);

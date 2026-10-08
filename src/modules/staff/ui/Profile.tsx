@@ -34,21 +34,28 @@ import {
   getStaffMember,
   isAbsent,
   isEmployed,
+  isGoodSpecialist,
   JAIL_WAGE_FACTOR,
   levelProgress,
   MAX_LEVEL,
   RELATIONS,
+  ROLE_INFO,
   relationLabel,
   relationsOf,
   roleName,
+  SPECIALIST_GOOD_STAT,
+  STAT_NAMES,
   type StaffAssignment,
   type StaffMember,
   securityAt,
+  specialistEffectLabel,
+  specialistEffectsOf,
+  specialistProvider,
   TRAITS,
   traitName,
 } from '../index';
 import { AbsenceSheet } from './absence';
-import { ORIGIN_NAMES, Portrait, relationLook, StatBars, StatusTag, traitChips } from './common';
+import { effectChips, ORIGIN_NAMES, Portrait, relationLook, StatBars, StatusTag, traitChips } from './common';
 
 export function StaffProfile(props: { staffId: string }) {
   const { state } = useGame();
@@ -92,6 +99,7 @@ export function StaffProfile(props: { staffId: string }) {
       </Chips>
 
       <PeopleSection member={m} />
+      <EffectsSection member={m} />
 
       <section class="staff-file__section">
         <KeyValue label="Herkunft" value={ORIGIN_NAMES[m.origin]} />
@@ -187,6 +195,53 @@ function PeopleSection(props: { member: StaffMember }) {
         </Group>
       )}
     </>
+  );
+}
+
+/**
+ * Wirkung eines Spezialisten (Auftrag 46e): Chips, in „Mehr dazu“ je ein Satz, und ob gerade jemand anderes der Rolle
+ * in der Stadt wirkt (pro Stadt zählt die beste Person, mehrere stapeln nicht).
+ */
+function EffectsSection(props: { member: StaffMember }) {
+  const { state } = useGame();
+  const m = props.member;
+  const lines = specialistEffectsOf(m);
+  if (lines.length === 0) return null;
+  const city = m.cityId ?? 'koeln';
+  const active = specialistProvider(state, lines[0].key, city);
+  const employed = isEmployed(state, m.id);
+  const good = isGoodSpecialist(m);
+  return (
+    <Group
+      title="Wirkung"
+      icon="scale"
+      color="law"
+      value={good ? 'gut' : 'normal'}
+      note={
+        !employed
+          ? undefined
+          : m.status !== 'active'
+            ? `${m.name} fällt gerade aus und wirkt nicht.`
+            : active && active.id !== m.id
+              ? `Gerade wirkt ${active.name}: Pro Stadt zählt die beste Person dieser Rolle.`
+              : undefined
+      }
+    >
+      <Chips items={effectChips(state, m)} />
+      <Disclosure>
+        {lines.map((line) => (
+          <p key={line.key}>
+            <strong>{specialistEffectLabel(line)}:</strong> {line.def.hint}.
+          </p>
+        ))}
+        <p>
+          Wie stark, hängt von den Schlüsselwerten ab (
+          {ROLE_INFO[m.role].keyStats.map((k) => STAT_NAMES[k]).join(' und ')}
+          ): „gut“ ab einem Mittel von {SPECIALIST_GOOD_STAT}. Es wirkt nur in {cityName(city)}, und nur eine Person pro
+          Rolle.
+        </p>
+      </Disclosure>
+    </Group>
   );
 }
 

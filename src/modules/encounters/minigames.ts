@@ -8,6 +8,7 @@
 // Die Folgen je Art: applyChase, applyBrawl, applyTraffic, applyPapers. Die Teile 1, 2, 4 und 8 von Auftrag 44
 // verfeinern nur ihre eigene Funktion. Bei der Rechten Hand gilt dasselbe mit ihrem Score (ohne picks). Bei timeout:
 // start → die Runden laufen wie bisher; action → die Runde mit dem alten Würfel; brawl → weiter wie bisher.
+// Auftrag 46d: Danach spielen die Leute sofort aus, was noch offen ist (playOut), es gibt keine Akte mehr.
 
 import { type Ctx, clock, type GameEvents, type GameState, wallet } from '../../core';
 import { getWarehouse } from '../goods';
@@ -40,6 +41,7 @@ import {
   loseGoods,
   lossCategory,
   playerActive,
+  playOut,
   playRound,
   requestCity,
   resolveAction,
@@ -199,25 +201,27 @@ export function onMinigameFinished(ctx: Ctx, payload: GameEvents['minigame.finis
   if (!kind) return;
   if (payload.by === 'timeout' || payload.score === null) {
     onTimeout(ctx, encounter, kind, open);
-    return;
+  } else {
+    const result: MinigameResult = { score: payload.score, won: payload.won, picks: payload.picks, by: payload.by };
+    switch (open.kind) {
+      case 'chase':
+        applyChase(ctx, encounter, kind, open, result);
+        break;
+      case 'brawl':
+        applyBrawl(ctx, encounter, kind, open, result);
+        break;
+      case 'traffic':
+        applyTraffic(ctx, encounter, kind, open, result);
+        break;
+      case 'papers':
+        applyPapers(ctx, encounter, kind, open, result);
+        break;
+      default:
+        onTimeout(ctx, encounter, kind, open);
+    }
   }
-  const result: MinigameResult = { score: payload.score, won: payload.won, picks: payload.picks, by: payload.by };
-  switch (open.kind) {
-    case 'chase':
-      applyChase(ctx, encounter, kind, open, result);
-      break;
-    case 'brawl':
-      applyBrawl(ctx, encounter, kind, open, result);
-      break;
-    case 'traffic':
-      applyTraffic(ctx, encounter, kind, open, result);
-      break;
-    case 'papers':
-      applyPapers(ctx, encounter, kind, open, result);
-      break;
-    default:
-      onTimeout(ctx, encounter, kind, open);
-  }
+  // Auftrag 46d: Was nach dem Minispiel noch offen ist, spielen die Leute sofort aus (keine Akte mehr).
+  if (encounter.phase === 'rounds' && !encounter.minigame) playOut(ctx, encounter);
 }
 
 /** Nicht gespielt (Frist): wie bisher. Bei einer Handlung wird die Runde mit dem alten Würfel gespielt. */

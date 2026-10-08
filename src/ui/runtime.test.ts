@@ -17,7 +17,8 @@ function fakeSession() {
     setSpeed(speed: number) {
       session.loop.speed = speed;
     },
-    dispatch: () => ({ ok: true }),
+    dispatch: (command: { type: string }) =>
+      command.type === 'test.fail' ? { ok: false, reason: 'geht nicht' } : { ok: true },
     subscribe(listener: (change: string) => void) {
       changeListeners.add(listener);
       return () => changeListeners.delete(listener);
@@ -57,24 +58,44 @@ describe('UiRuntime', () => {
     vi.restoreAllMocks();
   });
 
-  it('ein neues, geladenes oder importiertes Spiel räumt Meldungen, Mitteilungen, Banner und Seiten des alten weg', () => {
+  it('ein neues, geladenes oder importiertes Spiel räumt Meldungen, Rückmeldung und Seiten des alten weg', () => {
     const { api, ui, change } = make();
     api.toast('Razzia in Ehrenfeld', 'bad');
-    api.notify({ appId: 'core.messages', title: 'Nord', text: 'Du schuldest uns was', time: 5, urgent: true });
+    api.dispatch({ type: 'test.fail', payload: {} } as never);
     api.openPhone('core.messages', { contactId: 'gang:a' });
-    api.toggleIsland(true);
     expect(ui.alerts).toHaveLength(1);
-    expect(ui.notifications).toHaveLength(1);
-    expect(ui.toasts).toHaveLength(1);
+    expect(ui.error?.text).toBe('geht nicht');
     expect(ui.phone.stack.length).toBeGreaterThan(1);
     change('sim');
     expect(ui.alerts).toEqual([]);
-    expect(ui.notifications).toEqual([]);
-    expect(ui.notification).toBeNull();
-    expect(ui.toasts).toEqual([]);
+    expect(ui.error).toBeNull();
     expect(ui.phone.stack).toHaveLength(1);
-    expect(ui.island.expanded).toBe(false);
-    expect(ui.notificationCenter).toBe(false);
+  });
+
+  it('Meldungen landen nur im Verlauf (Auftrag 46d): Wichtiges ungelesen, Routine gelesen, log false verpufft', () => {
+    const { api, ui } = make();
+    api.toast('Razzia in Ehrenfeld', 'bad');
+    api.toast('Lieferung bestellt', 'good');
+    api.toast('Lieferung da', 'good', { urgent: true });
+    api.toast('Nur kurz', 'info', { log: false });
+    expect(ui.alerts.map((a) => [a.text, a.urgent, a.read])).toEqual([
+      ['Lieferung da', true, false],
+      ['Lieferung bestellt', false, true],
+      ['Razzia in Ehrenfeld', true, false],
+    ]);
+  });
+
+  it('die Rückmeldung zu einem fehlgeschlagenen Befehl steht kurz und verschwindet dann', () => {
+    const { api, ui } = make();
+    api.dispatch({ type: 'test.fail', payload: {} } as never);
+    expect(ui.error?.text).toBe('geht nicht');
+    vi.advanceTimersByTime(2000);
+    expect(ui.error).not.toBeNull();
+    vi.advanceTimersByTime(1000);
+    expect(ui.error).toBeNull();
+    api.dispatch({ type: 'test.fail', payload: {} } as never);
+    api.dismissError();
+    expect(ui.error).toBeNull();
   });
 
   it('eine Reaktion, die wirft, reißt die anderen nicht mit', () => {
@@ -90,27 +111,6 @@ describe('UiRuntime', () => {
     emit({ type: 'clock.hourStarted', payload: { day: 1, hour: 1, time: 60 } } as unknown as GameEvent);
     expect(seen).toEqual(['weiter']);
     expect(api).toBeDefined();
-  });
-
-  it('ein dringender Toast verliert seine Zeit nicht hinter einem Nachrichten-Banner', () => {
-    const { api, ui, runtime } = make();
-    api.notify({ appId: 'core.messages', title: 'Nord', text: 'Antworte', time: 1, urgent: true });
-    expect(ui.notification).not.toBeNull();
-    api.toast('Razzia!', 'bad');
-    expect(ui.toasts).toHaveLength(1);
-    // Das Banner steht 5 Sekunden, der Toast (3,4 s) darf in der Zeit nicht ablaufen.
-    vi.advanceTimersByTime(4000);
-    expect(ui.toasts).toHaveLength(1);
-    // Das Banner ist weg: Jetzt läuft die Zeit des Toasts.
-    api.dismissNotification();
-    runtime.requestRender();
-    return Promise.resolve().then(() => {
-      expect(ui.toasts).toHaveLength(1);
-      vi.advanceTimersByTime(3000);
-      expect(ui.toasts).toHaveLength(1);
-      vi.advanceTimersByTime(1500);
-      expect(ui.toasts).toHaveLength(0);
-    });
   });
 
   it('Karte anklicken (Spot gründen) legt das Handy am Handy-Bildschirm weg und holt es danach zurück', async () => {

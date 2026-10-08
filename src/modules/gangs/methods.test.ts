@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { clock, MINUTES_PER_DAY as DAY, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { activeEncounters, autoResolveEncounter } from '../encounters';
 import { getStock, getWarehouses, store } from '../goods';
 import { getHeat } from '../police';
 import { getSpot } from '../spots';
-import { getStaff, getStaffMember, isEmployed } from '../staff';
+import { getStaff, getStaffMember, invalidateStaffIndex, isEmployed } from '../staff';
 import { statusOf } from './common';
-import { METHOD_GLOBAL_GAP, METHOD_INTERVAL_BY_CITY, THREAT_AT } from './config';
+import { INTIMIDATION_DURATION, METHOD_GLOBAL_GAP, METHOD_INTERVAL_BY_CITY, THREAT_AT } from './config';
 import { GANGS, type Gang, type GangMethod } from './data';
 import {
   type GangIncident,
@@ -121,9 +120,9 @@ describe('Gang-Methoden (Auftrag 23)', () => {
       if (!incident.amount) continue;
       const stolen = getStock(sim.state, { cityId: 'koeln' });
       expect(respond(sim, incident, 'hunt').ok).toBe(true);
-      const [encounter] = activeEncounters(sim.state);
+      // Auftrag 46d: sofort entschieden.
+      const encounter = sim.state.modules.encounters.history[0];
       expect(encounter.kind).toBe('recoverLoot');
-      autoResolveEncounter(sim.ctx('test'), encounter.id);
       sim.advance(1);
       expect(incidents(sim)).toHaveLength(0);
       if (getStock(sim.state, { cityId: 'koeln' }) > stolen) return; // Erfolg gesehen.
@@ -150,12 +149,12 @@ describe('Gang-Methoden (Auftrag 23)', () => {
     advanceToHour(sim, 8);
     if (!incident.amount) throw new Error('nichts gestohlen');
     for (const m of getStaff(sim.state)) m.cityId = 'hamburg';
+    invalidateStaffIndex();
     const before = getStock(sim.state, { cityId: 'koeln' });
     const events = recordEvents(sim);
     expect(respond(sim, incident, 'hunt').ok).toBe(true);
-    const [encounter] = activeEncounters(sim.state);
+    const encounter = sim.state.modules.encounters.history[0];
     expect(encounter.request.staffIds ?? []).toHaveLength(0);
-    autoResolveEncounter(sim.ctx('test'), encounter.id);
     sim.advance(1);
     expect(eventsOfType(events, 'encounter.resolved')[0]?.payload.outcome).not.toBe('success');
     expect(getStock(sim.state, { cityId: 'koeln' })).toBe(before);
@@ -268,7 +267,7 @@ describe('Gang-Methoden (Auftrag 23)', () => {
     expect(intimidationFactor(sim.state, spotId)).toBeLessThan(1);
     // Ohne Sicherheitsleute gibt es die Antwort „Sicherheit hinschicken“ nicht.
     expect(incidentChoices(sim.state, incidents(sim)[0])).not.toContain('security');
-    sim.advance(9 * 60);
+    sim.advance(INTIMIDATION_DURATION + 60);
     expect(intimidationFactor(sim.state, spotId)).toBe(1);
     expect(incidents(sim)).toHaveLength(0);
   });
@@ -352,7 +351,7 @@ describe('Gang-Methoden (Auftrag 23)', () => {
     // Sechs Spiele über Wochen: unter Last knapp über den 5 Sekunden Standard.
   }, 30_000);
 
-  it('Abklingzeiten: eine drohende Gang zeigt in etwa acht Tagen eine Methode, aber es hagelt nicht', () => {
+  it('Abklingzeiten: eine drohende Gang zeigt binnen des Abstands ihrer Stadt eine Methode, aber es hagelt nicht', () => {
     let shown = 0;
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       const sim = createTestGame({ seed });
@@ -361,7 +360,9 @@ describe('Gang-Methoden (Auftrag 23)', () => {
       if (!g) throw new Error('nord');
       const times: number[] = [];
       const start = sim.state.time;
-      for (let hour = 0; hour < 20 * 24; hour++) {
+      // Auftrag 46e: Abstand verdoppelt (Köln 8 bis 16 Tage), deshalb über 40 Tage messen.
+      const span = METHOD_INTERVAL_BY_CITY.koeln[1] * 2.5;
+      for (let hour = 0; hour < span * 24; hour++) {
         // Hafenkolonne droht (Stufe 2), greift aber nicht an; Ware liegt im Lager.
         g.hostility = THREAT_AT + 5;
         g.stage = 2;
@@ -372,13 +373,13 @@ describe('Gang-Methoden (Auftrag 23)', () => {
         // Nur die Uhr weiterstellen: So zählt allein diese Gang, die übrige Simulation steht.
         sim.state.time += 60;
       }
-      // Erster Termin nach höchstens acht Tagen, dazu etwas Luft, falls gerade nichts geht.
-      const firstWithin8 = times.some((t) => t - start <= 8.5 * DAY);
-      if (firstWithin8) shown++;
+      // Erster Termin nach höchstens dem längsten Abstand der Stadt, dazu etwas Luft, falls gerade nichts geht.
+      const firstWithin = times.some((t) => t - start <= (METHOD_INTERVAL_BY_CITY.koeln[1] + 0.5) * DAY);
+      if (firstWithin) shown++;
       // Abstand pro Gang: zwischen zwei Methoden derselben Gang mindestens der kürzeste Abstand ihrer Stadt.
       const gap = Math.max(METHOD_INTERVAL_BY_CITY.koeln[0] * DAY, METHOD_GLOBAL_GAP);
       for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(gap);
-      expect(times.length).toBeLessThanOrEqual(Math.ceil((20 * DAY) / gap));
+      expect(times.length).toBeLessThanOrEqual(Math.ceil((span * DAY) / gap));
     }
     expect(shown).toBeGreaterThanOrEqual(5);
   });

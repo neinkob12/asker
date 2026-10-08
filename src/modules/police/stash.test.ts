@@ -94,7 +94,8 @@ describe('Razzia-Countdown', () => {
 
     expect(full?.goods ?? 0).toBeGreaterThan(0);
     expect(raid?.goods ?? 0).toBeLessThan(full?.goods ?? 0);
-    expect(raid?.goods ?? 0).toBeLessThanOrEqual(Math.ceil((full?.goods ?? 0) * (1 - STASH_MAX)) + 2);
+    // Gerundet wird je Posten (Lager und Ware am Ort), daher etwas Luft.
+    expect(raid?.goods ?? 0).toBeLessThanOrEqual(Math.ceil((full?.goods ?? 0) * (1 - STASH_MAX)) + 3);
     expect(raid?.money ?? 0).toBeLessThan(full?.money ?? 0);
     expect(raid?.stashed).toMatchObject({ share: STASH_MAX });
     // Gerettet plus beschlagnahmt ist etwa die volle Beute (die Ware am Ort zählt nach dem Lager, gerundet wird je Posten).

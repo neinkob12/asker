@@ -273,3 +273,11 @@ fieldset.logi-days {
 .logi-redirect {
   padding: var(--space-4);
 }
+
+/* Auftrag 46c: Knopf „Neue Route“ als Anker der Tour */
+.logi-new-route {
+  display: flex;
+}
+.logi-new-route > .ui-button {
+  flex: 1;
+}

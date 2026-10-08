@@ -12,13 +12,6 @@ import { tabShortcuts } from './layout';
 export function bindKeys(runtime: UiRuntime): () => void {
   const onKeyDown = (e: KeyboardEvent) => {
     const { ui, api } = runtime;
-    // Suche öffnen geht immer, auch im Textfeld.
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-      if (!runtime.state) return;
-      e.preventDefault();
-      api.togglePalette();
-      return;
-    }
     const target = e.target as HTMLElement | null;
     const typing =
       !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
@@ -27,6 +20,27 @@ export function bindKeys(runtime: UiRuntime): () => void {
     const onControl = !!target?.closest(
       'button, select, summary, a[href], [role="button"], [role="switch"], [role="tab"]',
     );
+    // Tour (Auftrag 46a): Enter oder Leertaste = Weiter, Esc tut nichts, alle anderen Kürzel sind gesperrt. Auf einem
+    // Knopf (Weiter, Überspringen, der Anker) bleibt die Taste dem Knopf.
+    if (runtime.tours.active()) {
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        return;
+      }
+      if (typing || onControl || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.code === 'Enter' || e.code === 'Space') {
+        e.preventDefault();
+        if (!e.repeat) runtime.tours.next();
+      }
+      return;
+    }
+    // Suche öffnen geht immer, auch im Textfeld.
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      if (!runtime.state) return;
+      e.preventDefault();
+      api.togglePalette();
+      return;
+    }
     if (e.code === 'Escape') {
       if (ui.picking) api.cancelPick();
       else if (ui.palette) api.togglePalette(false);
@@ -36,9 +50,9 @@ export function bindKeys(runtime: UiRuntime): () => void {
         const can = typeof dismissable === 'function' ? dismissable(ui.dialog.props as never) : dismissable !== false;
         if (can) api.closeDialog();
       } else if (closeTopOverlay()) {
-        // Blatt, Aktionsblatt, Kontextmenü oder Mitteilungszentrale geschlossen
+        // Blatt, Aktionsblatt oder Kontextmenü geschlossen
       } else if (ui.panel) api.closePanel();
-      else if (ui.notification) api.dismissNotification();
+      else if (ui.error) api.dismissError();
       // Im Handy eine Seite zurück (Details, Abschnitt, Chat, App), auf dem Startbildschirm weglegen.
       else if (ui.phone.open) api.back();
       return;

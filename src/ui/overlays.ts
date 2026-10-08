@@ -1,4 +1,4 @@
-// Offene Überlagerungen (Blatt, Aktionsblatt, Kontextmenü, Mitteilungszentrale) als Stapel: Esc schließt die oberste,
+// Offene Überlagerungen (Blatt, Aktionsblatt, Kontextmenü) als Stapel: Esc schließt die oberste,
 // ein Wechsel der Seite im Handy schließt alle (sonst stünde ein Menü über der falschen Seite), und Gesten wie das
 // Rand-Wischen ruhen, solange eine offen ist.
 
