@@ -2,10 +2,18 @@
 
 import type { Contact, GameEvents, GameState } from '../../core';
 import type { ChipColor } from '../components';
+import type { UiState } from '../runtime';
 import type { TourAnchor } from './anchors';
 
-/** Wie es nach einem Schritt weitergeht. */
-export type TourWait = 'next' | { event: keyof GameEvents } | { state: (state: GameState) => boolean };
+/**
+ * Wie es nach einem Schritt weitergeht: Weiter-Knopf, ein Ereignis, eine Bedingung am Spielzustand oder eine an der
+ * Oberfläche (`ui`: z.B. der Spieler hat im Handy eine bestimmte Seite geöffnet; geprüft nach jeder Änderung).
+ */
+export type TourWait =
+  | 'next'
+  | { event: keyof GameEvents }
+  | { state: (state: GameState) => boolean }
+  | { ui: (ui: UiState) => boolean };
 
 export type TourPlacement = 'auto' | 'top' | 'bottom' | 'left' | 'right';
 
@@ -28,7 +36,7 @@ export interface TourStep {
   /**
    * 'next' (Standard): Weiter-Knopf. Sonst muss der Spieler selbst etwas tun: Die Box zeigt keinen Weiter-Knopf,
    * der Anker bleibt bedienbar, alles andere ist gesperrt; weiter geht es, sobald das Ereignis kommt oder die
-   * Bedingung am Zustand gilt.
+   * Bedingung am Spielzustand bzw. an der Oberfläche gilt.
    */
   waitFor?: TourWait;
   /** Lage der Box zum Anker, Standard automatisch (wo Platz ist). */

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GameState } from '../../core';
+import type { UiState } from '../runtime';
 import { type TourHost, TourRunner } from './controller';
 import type { TourDef } from './types';
 
@@ -10,18 +11,21 @@ function fakeHost() {
   const host: TourHost & {
     speedValue: number;
     stateValue: GameState;
+    uiValue: UiState;
     emit(type: string): void;
     change(): void;
     renders: number;
   } = {
     speedValue: 2,
     stateValue: { time: 0, modules: {} } as unknown as GameState,
+    uiValue: { phone: { open: false, app: null, stack: [] } } as unknown as UiState,
     renders: 0,
     speed: () => host.speedValue,
     setSpeed: (speed) => {
       host.speedValue = speed;
     },
     state: () => host.stateValue,
+    ui: () => host.uiValue,
     onEvent: (type, fn) => {
       const set = events.get(type) ?? new Set<() => void>();
       events.set(type, set);
@@ -158,6 +162,28 @@ describe('TourRunner', () => {
     // b gilt sofort und wird übersprungen.
     expect(runner.current()?.step.id).toBe('c');
     expect(runner.current()?.manual).toBe(false);
+  });
+
+  it('wartet auf eine Bedingung an der Oberfläche (z.B. eine Seite im Handy)', async () => {
+    const host = fakeHost();
+    const runner = new TourRunner(host);
+    void runner.start({
+      id: 't',
+      steps: [
+        { id: 'a', text: 'Tipp auf Kalle.', waitFor: { ui: (ui) => ui.phone.app === 'suppliers.app' } },
+        { id: 'b', text: 'Fertig.' },
+      ],
+    });
+    await flush();
+    expect(runner.current()?.step.id).toBe('a');
+    expect(runner.current()?.manual).toBe(true);
+    runner.next();
+    await flush();
+    expect(runner.current()?.step.id).toBe('a');
+    host.uiValue = { ...host.uiValue, phone: { ...host.uiValue.phone, open: true, app: 'suppliers.app' } };
+    host.change();
+    await flush();
+    expect(runner.current()?.step.id).toBe('b');
   });
 
   it('führt before vor dem Schritt aus und wartet auf Promises', async () => {
