@@ -144,6 +144,12 @@
   padding: var(--space-4);
 }
 
+/* Auftrag 46c: das Angebot als ein Block (Anker der Tour; ein echter Kasten, display: contents hätte keine Maße),
+   die Gruppen darin mit demselben Abstand wie direkt in der App */
+.sup-offer > .ui-group {
+  margin-top: var(--space-5);
+}
+
 /* Lieferant kennenlernen (Auftrag 46e): Glas-Karte über der Karte mit Porträt und Stimme. Nur Tokens. */
 .ui-map-dialog__card.sup-meet {
   width: min(520px, 100%);

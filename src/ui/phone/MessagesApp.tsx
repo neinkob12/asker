@@ -413,7 +413,8 @@ function Chat(props: { contactId: string }) {
       onBack={() => ui.back()}
       footer={
         question?.type === 'message' ? (
-          <div class="msg-options">
+          // Auftrag 46c: Anker der Tour (Bestellung per Handy).
+          <div class="msg-options" data-tour="chat.reply">
             <span class="msg-question-meta">
               <Tag icon={question.routine ? 'users' : 'crown'} category={question.routine ? 'people' : 'brand'}>
                 {question.routine ? 'Routine' : 'Chefsache'}

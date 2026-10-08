@@ -84,6 +84,8 @@ function OpenChannel(props: { channel: LaunderingChannel }) {
   const options = presets(max, c.minAmount);
   return (
     <Group
+      // Auftrag 46c: Anker der Tour (Stufe 8 zeigt den Kiosk).
+      data-tour={c.id === 'kiosk' ? 'laundering.kiosk' : undefined}
       title={c.name}
       icon={c.icon}
       color="dirty"

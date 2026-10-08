@@ -201,6 +201,7 @@ function PortSection() {
     const short = state.wallet.clean < cost;
     return (
       <Group
+        data-tour="port.berth"
         icon="ship"
         color="goods"
         title={port}

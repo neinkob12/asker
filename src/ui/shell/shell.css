@@ -1254,7 +1254,7 @@ kbd {
   }
 }
 
-/* ---------------------------------------------------------------- Intro beim ersten Start */
+/* ---------------------------------------------------------------- Willkommen beim ersten Start (Auftrag 46c) */
 .intro .ui-dialog__body {
   display: flex;
   flex-direction: column;
@@ -1267,37 +1267,12 @@ kbd {
 }
 .intro__text {
   margin: 0;
-  line-height: 1.5;
-  color: var(--color-muted);
-}
-.intro__points {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.intro__points li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  font-size: var(--font-size-lg);
   line-height: 1.4;
 }
-.intro__dots {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-}
-.intro__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-line);
-  transition: width var(--duration) var(--ease-out);
-}
-.intro__dot.is-on {
-  width: 18px;
-  border-radius: 3px;
-  background: var(--color-accent);
+.intro__note {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  color: var(--color-muted);
 }

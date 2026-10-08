@@ -10,6 +10,7 @@ function uiWith(partial: Partial<UiState>): UiState {
     palette: false,
     picking: null,
     call: null,
+    tour: null,
     phone: { open: false, app: null, stack: [] },
     ...partial,
   } as UiState;
@@ -27,6 +28,10 @@ describe('popupMayOpen (Auftrag 46e)', () => {
     expect(popupMayOpen(uiWith({ palette: true }))).toBe(false);
     expect(popupMayOpen(uiWith({ picking: { prompt: 'Wo?' } }))).toBe(false);
     expect(popupMayOpen(uiWith({ call: { messageId: 1 } }))).toBe(false);
+  });
+
+  it('wartet, solange eine Tour läuft (Auftrag 46c)', () => {
+    expect(popupMayOpen(uiWith({ tour: 'tutorial:5' }))).toBe(false);
   });
 
   it('wartet am Handy-Bildschirm, solange das Handy offen ist, am Desktop nicht', () => {

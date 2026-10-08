@@ -40,3 +40,11 @@
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
 }
+
+/* Auftrag 46c: Verkaufen als ein Block (Anker der Tour; ein echter Kasten, display: contents hätte keine Maße),
+   derselbe Abstand wie im Spot-Fenster */
+.customers-sell {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}

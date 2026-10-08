@@ -256,6 +256,7 @@ function HireGroup() {
   const drivers = getStaff(state, { role: 'driver', cityId: activeCity(state) }).length;
   return (
     <Group
+      data-tour="staff.hire"
       title="Anheuern"
       icon="userPlus"
       color="people"

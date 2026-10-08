@@ -127,7 +127,8 @@ describe('tutorial: Start und Stufen', () => {
     expect(currentMission(sim.state)?.id).toBe('serve3');
     expect(eventsOfType(events, 'tutorial.stageReached').map((e) => e.payload.stage)).toEqual([1]);
     expect(eventsOfType(events, 'tutorial.missionStarted').map((e) => e.payload.id)).toEqual(['serve3']);
-    expect(messages.thread(sim.state, PETER.id).at(-1)?.text).toContain('Bedien drei');
+    // Auftrag 46c: Die Aufgabe steht auf der Karte, Peter schreibt sie nicht noch einmal.
+    expect(messages.thread(sim.state, PETER.id)).toEqual([]);
     const refused = sim.dispatch({ type: 'tutorial.advance', payload: {} });
     expect(refused.ok).toBe(false);
     expect(tutorialStage(sim.state)).toBe(1);
@@ -195,7 +196,12 @@ describe('tutorial: Missionen', () => {
     expect(getStock(sim.state, { productId: 'weed' })).toBe(stock + 10);
     expect(tutorialStage(sim.state)).toBe(2);
     expect(currentMission(sim.state)?.id).toBe('buySpots');
-    expect(messages.thread(sim.state, PETER.id).at(-2)?.text).toContain('Drei Kunden');
+    // Auftrag 46c: Belohnung als eine Zeile im Chat, keine Aufgabe der nächsten Mission.
+    const thread = messages.thread(sim.state, PETER.id);
+    expect(thread).toHaveLength(1);
+    expect(thread[0].text).toContain('Drei Kunden, drei Scheine');
+    expect(thread[0].text).toContain('100 €');
+    expect(thread[0].text).not.toContain('\n');
   });
 
   it('Mission 2: Zülpicher Platz und Rudolfplatz für je 350 €, danach die Erklär-Stufen 3 und 4', () => {
@@ -286,6 +292,9 @@ describe('tutorial: Missionen', () => {
     sim.state.modules.spots.unlocked.push(
       ...['zuelpicher', 'rudolfplatz', 'aachener-weiher', 'friesenplatz', 'breslauer', 'rheinpark', 'stadtgarten'],
     );
+    // Auftrag 46c: Der geskriptete erste Gang-Angriff (6.000 €) ist hier schon vorbei, sonst nähme er 40 % mit.
+    sim.state.modules.tutorial.scripted.firstAttack = true;
+    sim.state.modules.tutorial.scripted.phoneOrder = true;
     sim.state.wallet.dirty = 10000;
     sim.advance(5);
     expect(missionProgress(sim.state).parts.map((p) => p.done)).toEqual([true, false, false]);
