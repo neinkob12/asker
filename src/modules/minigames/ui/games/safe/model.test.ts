@@ -48,10 +48,10 @@ describe('Tresor: Aufbau', () => {
   it('schwerer: weniger Zeit und schmalere Toleranz', () => {
     const easy = createSafe(1, 0.2);
     const hard = createSafe(1, 0.9);
-    expect(easy.duration).toBe(45);
-    expect(hard.duration).toBe(30);
+    expect(easy.duration).toBe(50);
+    expect(hard.duration).toBe(36);
     expect(hard.tolerance).toBeLessThan(easy.tolerance);
-    expect(hard.tolerance).toBeGreaterThanOrEqual(1);
+    expect(hard.tolerance).toBeGreaterThanOrEqual(2);
     expect(hard.penalty).toBeGreaterThan(easy.penalty);
   });
 

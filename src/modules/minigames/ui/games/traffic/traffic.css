@@ -1,13 +1,15 @@
-/* Verkehrskontrolle (Feedback vom 07.10.2026): Auto von oben im Canvas, HUD, Sprechblase, Stellen-Leiste, Puls und
+/* Verkehrskontrolle (Auftrag 47): 3D-Blick aus dem Auto im Canvas, darüber HUD, Fakten, Sprechblase, Antworten und
    Knöpfe im Look Glas. Nur Tokens, keine freien Hex-Werte. */
 
 .traffic {
   position: absolute;
   inset: 0;
+  overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
   font-family: var(--font-hud);
   color: var(--hud-ink);
+  background: var(--hud-glass-solid);
 }
 .traffic__canvas {
   position: absolute;
@@ -16,11 +18,55 @@
   height: 100%;
   display: block;
   touch-action: none;
-  cursor: grab;
 }
-.traffic__canvas:active {
-  cursor: grabbing;
+
+/* Gesicht des Beamten über dem Kopf in der Szene (Lage setzt die Bildschleife). */
+.traffic__face {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  will-change: transform;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
+  transition: opacity var(--duration) var(--ease-out);
 }
+.traffic-officer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.traffic-officer .ui-face,
+.traffic-officer__cap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Roter Blitz bei einem Widerspruch, Blaulicht-Wash am Ende. */
+.traffic__wash {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 30% 50%, transparent 40%, var(--cat-danger));
+  opacity: calc(var(--traffic-flash, 0) * 0.45);
+}
+.traffic.is-fail .traffic__wash {
+  background: radial-gradient(ellipse at 50% 60%, transparent 30%, color-mix(in srgb, var(--cat-law) 55%, transparent));
+  opacity: 0.8;
+  animation: traffic-blue 0.5s steps(2) infinite;
+}
+@keyframes traffic-blue {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ---------------------------------------------------------------- HUD */
 .traffic__hud .mg-hud-meter {
   min-width: 130px;
 }
@@ -39,58 +85,66 @@
   height: 12px;
   border-radius: 50%;
   border: 2px solid var(--cat-danger);
+  background: transparent;
 }
 .traffic__found-dot.is-hit {
   background: var(--cat-danger);
 }
 
-/* ---------------------------------------------------------------- Der Beamte spricht */
-.traffic__officer-card {
+/* ---------------------------------------------------------------- Fakten: Was er sieht */
+.traffic__facts {
   position: absolute;
   z-index: 3;
-  top: 72px;
+  top: 84px;
   left: var(--space-4);
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  width: min(300px, calc(100% - 2 * var(--space-4)));
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+  display: grid;
+  gap: 4px;
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--hud-radius);
   background: var(--hud-glass);
   border: 1px solid var(--hud-glass-edge);
   box-shadow: var(--hud-shadow);
   pointer-events: none;
 }
-.traffic__portrait {
-  flex: none;
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--hud-glass-fill);
+.traffic__fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--hud-ink-2);
+  white-space: nowrap;
 }
-.traffic-officer {
-  position: relative;
-  width: 100%;
-  height: 100%;
+.traffic__fact svg {
+  width: 14px;
+  height: 14px;
+  color: var(--hud-gold);
 }
-.traffic-officer .ui-face,
-.traffic-officer__cap {
+.traffic__fact.is-warn {
+  color: var(--cat-warn);
+}
+
+/* ---------------------------------------------------------------- Sprechblase */
+.traffic__speech-card {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-.traffic__speech {
+  z-index: 3;
+  top: 84px;
+  right: var(--space-4);
   display: grid;
   gap: 2px;
-  min-width: 0;
+  width: min(360px, calc(100% - 2 * var(--space-4)));
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--hud-radius);
+  background: var(--hud-glass);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  pointer-events: none;
 }
 .traffic__line {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.3;
   animation: traffic-pop var(--duration) var(--ease-out);
 }
 .traffic__where {
@@ -105,273 +159,22 @@
   }
 }
 
-/* ---------------------------------------------------------------- Namen der Stellen über der Szene */
-.traffic__label {
-  position: absolute;
-  z-index: 2;
-  transform: translate(-50%, calc(-100% - 2px));
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 6px 1px 3px;
-  border-radius: var(--radius-round);
-  background: var(--hud-glass-strong);
-  border: 1px solid var(--hud-glass-edge);
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  pointer-events: none;
-}
-.traffic__label.is-lit {
-  color: var(--cat-danger-on);
-  background: var(--cat-danger-b);
-  border-color: transparent;
-}
-.traffic__label.is-pending {
-  color: var(--cat-warn);
-}
-.traffic kbd {
-  display: inline-grid;
-  place-items: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: 6px;
-  background: var(--hud-glass-fill);
-  border: 1px solid var(--hud-glass-line);
-  font-family: var(--font-hud-display);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--hud-gold);
-}
-.traffic__actions kbd {
-  color: inherit;
-  background: transparent;
-  border-color: currentColor;
-  opacity: 0.75;
-}
-.traffic__label.is-lit kbd {
-  color: inherit;
-  background: transparent;
-  border-color: currentColor;
-}
-
-/* ---------------------------------------------------------------- Leiste: Paket und Stellen */
-.traffic__panel {
-  position: absolute;
-  z-index: 3;
-  top: 86px;
-  right: var(--space-4);
-  bottom: 110px;
-  width: 268px;
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--hud-radius);
-  background: var(--hud-glass);
-  border: 1px solid var(--hud-glass-edge);
-  box-shadow: var(--hud-shadow);
-  overflow: hidden;
-}
-.traffic__pick {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 44px;
-}
-.traffic__swatch {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--cat-goods) 35%, transparent);
-  border: 2px solid var(--cat-goods);
-}
-.traffic__swatch.is-2 {
-  width: 30px;
-  height: 30px;
-}
-.traffic__pick-text {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.traffic__pick-text strong {
-  font-size: 15px;
-}
-.traffic__pick-empty {
-  font-size: 13px;
-  color: var(--hud-ink-2);
-}
-.traffic__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.traffic__chip {
-  padding: 1px 7px;
-  border-radius: var(--radius-round);
-  background: var(--hud-glass-fill);
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.traffic__chip.is-bad {
-  color: var(--cat-danger);
-}
-.traffic__chip.is-warn {
-  color: var(--cat-warn);
-}
-.traffic__hides {
-  display: grid;
-  gap: 6px;
-  align-content: start;
-  overflow: auto;
-}
-.traffic__hide {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 40px;
-  padding: 4px 8px;
-  border-radius: 10px;
-  border: 1px solid var(--hud-glass-line);
-  background: var(--hud-glass-fill);
-  color: var(--hud-ink);
-  font: 600 13px var(--font-hud);
-  text-align: left;
-  cursor: pointer;
-  min-width: 0;
-  overflow: hidden;
-}
-.traffic__hide.is-ok {
-  border-color: var(--hud-gold);
-}
-.traffic__hide.is-lit {
-  border-color: var(--cat-danger);
-  background: color-mix(in srgb, var(--cat-danger) 18%, transparent);
-}
-.traffic__hide.is-pending {
-  border-color: var(--cat-warn);
-}
-.traffic__hide:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.traffic__hide-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.traffic__hide-meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px;
-  min-width: 0;
-}
-
-/* ---------------------------------------------------------------- Unten: Puls und Knöpfe */
-.traffic__bottom {
-  position: absolute;
-  z-index: 3;
-  left: var(--space-4);
-  right: var(--space-4);
-  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.traffic__heart {
-  position: relative;
-  flex: none;
-  width: 64px;
-  height: 64px;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid var(--hud-glass-edge);
-  background: var(--hud-glass-strong);
-  color: var(--cat-money);
-  cursor: pointer;
-  touch-action: none;
-}
-.traffic__heart svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-.traffic__heart-ring {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  opacity: 0.8;
-}
-.traffic__heart-core {
-  fill: color-mix(in srgb, currentColor 18%, transparent);
-}
-.traffic__heart-icon {
-  position: absolute;
-  inset: 0;
-  width: 26px;
-  height: 26px;
-  margin: auto;
-}
-.traffic__heart[data-zone="yellow"] {
-  color: var(--cat-warn);
-}
-.traffic__heart[data-zone="red"] {
-  color: var(--cat-danger);
-}
-.traffic__heart:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.traffic__pulse {
-  display: grid;
-  min-width: 70px;
-  font-family: var(--font-hud-display);
-  line-height: 1;
-}
-.traffic__pulse strong {
-  font-size: 28px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-.traffic__pulse-zone {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--hud-ink-2);
-}
-.traffic__actions {
-  display: flex;
-  gap: var(--space-3);
-  margin-left: auto;
-}
-.traffic__actions .mg-pad {
-  gap: var(--space-2);
-}
-
-/* ---------------------------------------------------------------- Meldungen */
 .traffic__message {
   position: absolute;
-  z-index: 4;
+  z-index: 3;
   left: 50%;
-  bottom: 118px;
+  bottom: calc(var(--space-4) + 150px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   margin: 0;
   padding: 6px 14px;
-  border-radius: var(--radius-round);
-  background: var(--hud-glass-strong);
+  border-radius: 999px;
+  background: var(--hud-glass);
   border: 1px solid var(--hud-glass-edge);
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
   animation: traffic-pop var(--duration) var(--ease-out);
+  pointer-events: none;
 }
 .traffic__message.is-good {
   color: var(--cat-money);
@@ -383,107 +186,119 @@
   color: var(--cat-warn);
 }
 
-/* ---------------------------------------------------------------- Handy (schmal): Leiste unten als Streifen */
-@media (max-width: 699px) {
+/* ---------------------------------------------------------------- Unten: Antworten und Knöpfe */
+.traffic__bottom {
+  position: absolute;
+  z-index: 3;
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-4);
+}
+.traffic__answers {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 56px;
+}
+.traffic__answer {
+  justify-content: flex-start;
+  gap: var(--space-3);
+  min-height: 48px;
+  padding: 0 var(--space-3);
+  text-align: left;
+  font-size: 15px;
+}
+.traffic__answer span {
+  white-space: normal;
+}
+.traffic__waiting {
+  margin: 0;
+  padding: var(--space-2) 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hud-ink-2);
+}
+.traffic kbd {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--hud-glass-fill);
+  border: 1px solid var(--hud-glass-edge);
+  font: 700 12px var(--font-hud);
+  color: var(--hud-ink-2);
+}
+.traffic__actions {
+  display: grid;
+  gap: var(--space-2);
+}
+.traffic__actions .mg-pad {
+  justify-content: flex-start;
+  gap: var(--space-2);
+  min-height: 48px;
+}
+.traffic__actions kbd {
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
   .traffic__hud .mg-hud-meter {
     min-width: 96px;
   }
-  .traffic__officer-card {
-    top: 64px;
-    width: calc(100% - 2 * var(--space-3));
-    left: var(--space-3);
-    padding: 6px;
+  .traffic__facts {
+    top: 78px;
+    gap: 2px;
+    padding: 6px var(--space-2);
   }
-  .traffic__portrait {
-    width: 40px;
-    height: 40px;
+  .traffic__fact {
+    font-size: 11px;
+  }
+  .traffic__speech-card {
+    top: auto;
+    right: var(--space-3);
+    left: var(--space-3);
+    bottom: calc(var(--space-3) + 230px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+    padding: var(--space-2) var(--space-3);
   }
   .traffic__line {
-    font-size: 13px;
-  }
-  .traffic__where {
-    display: none;
-  }
-  .traffic__panel {
-    top: auto;
-    right: var(--space-2);
-    left: var(--space-2);
-    bottom: 84px;
-    width: auto;
-    grid-template-rows: auto;
-    grid-template-columns: 1fr;
-    padding: 6px;
-    gap: 6px;
-  }
-  .traffic__pick {
-    min-height: 32px;
-  }
-  .traffic__pick-text strong {
-    font-size: 13px;
-  }
-  .traffic__hides {
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(118px, 1fr);
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-  }
-  .traffic__hide {
-    grid-template-columns: auto 1fr;
-    grid-template-rows: auto auto;
-    min-height: 56px;
-    padding: 4px 8px;
-  }
-  .traffic__hide-meta {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-  .traffic__hide-name {
-    font-size: 12px;
-  }
-  .traffic__label {
-    font-size: 10px;
-    padding: 0 5px 0 2px;
-  }
-  .traffic__label kbd {
-    min-width: 15px;
-    height: 15px;
-    font-size: 10px;
-  }
-  .traffic__bottom {
-    left: var(--space-2);
-    right: var(--space-2);
-    gap: var(--space-2);
-  }
-  .traffic__heart {
-    width: 56px;
-    height: 56px;
-  }
-  .traffic__pulse {
-    min-width: 54px;
-  }
-  .traffic__pulse strong {
-    font-size: 22px;
-  }
-  .traffic__actions .mg-pad span {
-    display: none;
-  }
-  .traffic__actions .mg-pad {
-    min-width: 56px;
-    padding: 0 var(--space-3);
+    font-size: 15px;
   }
   .traffic__message {
-    bottom: 196px;
+    bottom: calc(var(--space-3) + 300px + env(safe-area-inset-bottom, 0px));
     font-size: 12px;
-    white-space: normal;
-    text-align: center;
-    max-width: calc(100% - 2 * var(--space-4));
+  }
+  .traffic__bottom {
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+  .traffic__actions {
+    grid-template-columns: 1fr 1fr;
+  }
+  .traffic__actions kbd,
+  .traffic__answer kbd {
+    display: none;
+  }
+}
+@media (pointer: coarse) {
+  .traffic kbd {
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .traffic__line,
-  .traffic__message {
+  .traffic__message,
+  .traffic.is-fail .traffic__wash {
     animation: none;
   }
 }

@@ -1,5 +1,5 @@
-/* Verfolgungsjagd (Feedback vom 07.10.2026): Arcade-Rennspiel im Canvas, HUD im Look Glas. Nur Tokens, keine freien
-   Hex-Werte. Werte, die sich jedes Bild ändern (Tempo, Turbo, Balken), setzt die Bildschleife direkt. */
+/* Verfolgungsjagd (Auftrag 47): 3D-Szene (three.js) im Canvas, HUD im Look Glas. Nur Tokens, keine freien Hex-Werte.
+   Werte, die sich jedes Bild ändern (Tempo, Turbo, Balken), setzt die Bildschleife direkt. */
 
 .chase {
   position: absolute;
@@ -19,6 +19,78 @@
   height: 100%;
   display: block;
   touch-action: none;
+}
+
+/* Blaulicht-Wash am Ende (gefasst) bzw. Dunkel mit Gold (Tiefgarage): nur Deckkraft, keine Spielzeit. */
+.chase-wash {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.2s var(--ease-out);
+}
+.chase.is-caught .chase-wash {
+  opacity: 1;
+  background: radial-gradient(ellipse at 50% 60%, transparent 30%, color-mix(in srgb, var(--cat-law) 55%, transparent));
+  animation: chase-blue 0.5s steps(2) infinite;
+}
+.chase.is-escaped .chase-wash {
+  opacity: 1;
+  background: radial-gradient(ellipse at 50% 55%, transparent 20%, color-mix(in srgb, var(--hud-gold) 25%, black 60%));
+}
+@keyframes chase-blue {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Linke Hälfte: Lenken mit dem Finger (unsichtbar, unter den Knöpfen). */
+.chase-steer {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  touch-action: none;
+}
+@media (pointer: fine) and (min-width: 761px) {
+  .chase-steer {
+    width: 40%;
+  }
+}
+.chase-hint {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-ink-2);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Minikarte: Raster, du, Streifen, Tiefgarage. */
+.chase-minimap {
+  position: absolute;
+  z-index: 3;
+  right: var(--space-4);
+  top: calc(var(--space-4) + 70px);
+  width: 128px;
+  height: 128px;
+  border-radius: var(--hud-radius);
+  border: 1px solid var(--hud-glass-edge);
+  box-shadow: var(--hud-shadow);
+  pointer-events: none;
+}
+.chase.has-hideout .chase-minimap {
+  border-color: var(--hud-gold);
 }
 
 /* ---------------------------------------------------------------- Oben: Zeit, Abhängen, Karre */
@@ -60,6 +132,9 @@
 }
 .chase.is-near .chase-meter--shake .chase-meter__status {
   color: var(--cat-danger);
+}
+.chase.has-hideout .chase-meter--shake .chase-meter__status {
+  color: var(--hud-gold);
 }
 .chase-meter__bar {
   display: block;
@@ -213,6 +288,14 @@
     min-width: 96px;
     bottom: calc(var(--space-4) + 84px + env(safe-area-inset-bottom, 0px));
   }
+  .chase-minimap {
+    width: 96px;
+    height: 96px;
+    top: calc(var(--space-4) + 64px);
+  }
+  .chase-hint {
+    display: none;
+  }
   .chase-speedo__value {
     font-size: 30px;
   }
@@ -222,7 +305,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .chase-radio {
+  .chase-radio,
+  .chase.is-caught .chase-wash {
     animation: none;
   }
 }

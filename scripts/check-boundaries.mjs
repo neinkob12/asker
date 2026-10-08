@@ -3,7 +3,7 @@
 //   1. Module importieren andere Module nur über deren index.ts.
 //   2. Module importieren den Kern nur über src/core/index.ts (Tests zusätzlich src/core/testing.ts).
 //   3. Nur der ui/-Ordner eines Moduls darf Oberfläche und Karte nutzen (src/ui/index.ts, src/map/index.ts,
-//      preact, maplibre-gl). Der Rest eines Moduls bleibt DOM-frei, damit die Simulation überall läuft.
+//      preact, maplibre-gl, three). Der Rest eines Moduls bleibt DOM-frei, damit die Simulation überall läuft.
 //   4. Der Kern importiert keine Module, keine UI und keine Karte.
 //   5. UI und Karte importieren keine Module (die werden automatisch gefunden) und den Kern nur über index.ts.
 //
@@ -14,7 +14,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const UI_PACKAGES = ['preact', 'maplibre-gl'];
+const UI_PACKAGES = ['preact', 'maplibre-gl', 'three'];
 
 /** Pfad relativ zum Repo mit '/' als Trenner und ohne Dateiendung / ohne '/index'. */
 function normalize(absPath) {

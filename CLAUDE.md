@@ -257,6 +257,18 @@ HUD-Platz `'time'` auch am Handy-Bildschirm). Neue Anker (nur Attribute): `spot.
 `staff.lieutenants`, `staff.hire`, `suppliers.shipments`, `suppliers.offer`, `suppliers.orderMode`,
 `laundering.kiosk`, `port.berth`, `routes.new`. Pop-ups über der Karte warten, solange eine Tour läuft (`ui.state.tour`
 in `popupMayOpen`). Szenen `npm run screenshot -- --scenes=tutorial-tour,tutorial-tour-spot,tutorial-tour-handy`.
+Auftrag 47 (Fragerunde 07.10.2026, `docs/auftraege/47-minispiele-3d.md`): Minispiele in 3D mit three.js (Paket nur im
+`ui/`-Ordner eines Moduls erlaubt, Modelle aus Grundformen im Code, nichts wird geladen). Baukasten `minigames/ui/kit/stage3d.ts`
+(`useStage3d`: Renderer, Größe, Pixelverhältnis) und `kit/scene3d.ts` (`buildCar`, `lightScene`, `setBlueLight`,
+`facadeTiles`, `disposeObject`). Verfolgungsjagd mit freiem Lenken im Straßennetz (`chase/model.ts`: Raster `GRID` × `PITCH`,
+Gebäude, Parks, Fluss mit Brücken, `steer` −1 bis 1 mit Drift, Verkehr biegt ab, Streifen suchen über das Raster und rammen,
+Sperren mit Lücke, Balken „Abhängen“, voll = Tiefgarage `hideout` leuchtet, rein = entkommen; `chase/scene.ts` mit Kamera
+hinter dem Wagen, Wahrzeichen je Stadt, Regen, Bloom; Touch: linke Hälfte lenken, Minikarte). Verkehrskontrolle als Gespräch mit
+Widersprüchen aus dem Auto (`traffic/questions.ts`: Fragen und Antworten als Daten mit `fits(ev, story)`; `traffic/model.ts`:
+Fakten aus dem Seed, genau eine passende Antwort, zwei Treffer = Aussteigen, Nachfragen zu früheren Antworten, Schein nur bei
+mittlerem Misstrauen, Gas = Jagd; `traffic/scene.ts`: Ego-Blick aus dem Fenster, Gesicht des Beamten aus dem Look-System als
+HTML über dem projizierten Kopf, Stimme über `audio.speak`). Tresor leichter (`PROXIMITY_RANGE`, `crossedTarget`). Noch offen
+(Auftrag 48): Razzia-Lauf, Bude in Ego-Sicht, Gespräch mit Druck, Licht und Material der 2D-Spiele.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

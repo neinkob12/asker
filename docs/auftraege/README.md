@@ -292,6 +292,11 @@ Bewerbungsgespräch als Lügendetektor (Zeichen antippen), Razzia-Countdown neu 
 auf den Pfaden des Spielers. Nachtrag: ein Test-Spielstand je Minispiel (`minispiel-<art>`, Gruppe „Minispiele“), der
 Rahmen öffnet sich nach dem Laden von selbst. Fragerunde als Pop-ups in der Session, eine Session.
 
+[Auftrag 47](47-minispiele-3d.md): Fragerunde vom 07.10.2026 (vier Runden Pop-ups): Design-Art fotorealistisch, echtes
+3D mit three.js (Modelle im Code aus Grundformen), Verfolgungsjagd mit freiem Lenken im Straßennetz, Verkehrskontrolle
+als Gespräch mit Widersprüchen aus dem Auto, Tresor leichter. Razzia-Lauf, Bude in Ego-Sicht, Gespräch mit Druck und die
+Optik der 2D-Spiele folgen als Auftrag 48. Eine Session.
+
 ## Mergen
 
 - Ein PR wird gemergt, sobald er fertig und die CI grün ist. Die Reihenfolge in Phase 1 ist egal.

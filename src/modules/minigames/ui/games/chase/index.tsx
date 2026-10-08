@@ -1,6 +1,6 @@
-// Verfolgungsjagd (Auftrag 44, Teil 1; neu nach dem Feedback vom 07.10.2026 als Arcade-Rennspiel von hinten):
-// Anmeldung der Ansicht. Spiel in ChaseGame.tsx, Logik als reines Modell (model.ts mit model.test.ts), Zeichnen im
-// Canvas (draw.ts), Funk in radio.ts, Ton in sounds.ts. Eigene Bühne (layout 'stage'): Die Karte bleibt unberührt.
+// Verfolgungsjagd (Auftrag 44, Teil 1; seit Auftrag 47 freies Lenken im Straßennetz in 3D): Anmeldung der Ansicht.
+// Spiel in ChaseGame.tsx, Logik als reines Modell (model.ts mit model.test.ts), 3D-Szene mit three.js (scene.ts),
+// Funk in radio.ts, Ton in sounds.ts. Eigene Bühne (layout 'stage'): Die Karte bleibt unberührt.
 
 import { startEncounter } from '../../../../encounters';
 import { getSpots } from '../../../../spots';
@@ -17,14 +17,16 @@ registerMinigameView('chase', {
   layout: 'stage',
   icon: 'siren',
   controls: {
-    keys: '←/→ Spur wechseln, ↑ Vollgas, ↓ oder Leertaste bremsen, Umschalt Turbo, X Ware raus.',
-    touch: 'Pfeile oder Wischen wechseln die Spur, Gas und Bremse halten, Turbo tippen.',
+    keys: '←/→ oder A/D lenken, ↑ Vollgas, ↓ oder Leertaste bremsen, Umschalt Turbo, X Ware raus.',
+    touch: 'Linke Hälfte: Finger ziehen lenkt. Rechts Bremse und Turbo halten, Gas gibt der Wagen von selbst.',
     help:
-      'Drei Spuren, dichter Verkehr, die Streifen im Rückspiegel. Weich dem Verkehr aus: Auffahren kostet Tempo und ' +
-      'Schaden, dann holen sie auf und rammen dich. Der Balken „Abhängen“ füllt sich, solange die nächste Streife weit ' +
-      'hinter dir liegt, und leert sich, wenn sie dir im Nacken sitzt. Voll: Du biegst in die Tiefgarage ab. ' +
-      'Straßensperren lassen eine Spur frei. Der Turbo lädt langsam nach. Ware aus dem Fenster: Turbo voll, die ' +
-      'Streifen zögern, die Ware ist weg. Gefasst, wenn die Karre kaputt ist, sie dich stellen oder die Zeit abläuft.',
+      'Du fährst frei durch die Stadt: Kreuzungen, Querverkehr, der Fluss mit seinen Brücken. Bremsen und lenken ' +
+      'lässt die Karre driften. Gebäude und Verkehr sind hart: Aufprall kostet Tempo und Schaden, dann holen die ' +
+      'Streifen auf und rammen dich. Der Balken „Abhängen“ füllt sich, solange die nächste Streife weit weg ist, und ' +
+      'leert sich, wenn sie dir im Nacken sitzt. Voll: Die nächste Tiefgarage leuchtet (gold auf der Minikarte), rein ' +
+      'und du bist weg. Sperren stehen an Kreuzungen vor dir mit einer Lücke. Der Turbo lädt langsam nach. Ware aus dem ' +
+      'Fenster: Turbo voll, die Streifen zögern, die Ware ist weg. Gefasst, wenn die Karre kaputt ist, sie dich stellen ' +
+      'oder die Zeit abläuft.',
   },
   previewParams: (seed) => ({
     clock: 4,
