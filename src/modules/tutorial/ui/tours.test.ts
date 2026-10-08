@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createTestGame } from '../../../core/testing';
-import { TOUR_ANCHORS, type UiApi } from '../../../ui';
+import { TOUR_ANCHORS, type UiApi, type UiState } from '../../../ui';
 import { LAST_STAGE } from '../config';
 import { allTours, EXPLAIN_STAGES, stageTour, TOUR_TEXT_MAX, type TourContext } from './tours';
 
@@ -54,12 +54,12 @@ describe('tutorial: Touren', () => {
   it('Erklär-Stufen halten die Uhr an; wer selbst etwas tun muss, spielt mit laufender Uhr und darf überspringen', () => {
     const ctx = context();
     expect(EXPLAIN_STAGES).toEqual([0, 3, 4, 10]);
-    for (const stage of [0, 2, 3, 4, 5, 6, 8, 9, 12]) {
+    for (const stage of [0, 2, 3, 4, 6, 8, 9, 12]) {
       const tour = stageTour(stage, ctx);
       expect(tour.pause, `Stufe ${stage}`).toBe(true);
       expect(tour.skippable, `Stufe ${stage}`).toBe(false);
     }
-    for (const stage of [1, 7, 10, 11]) {
+    for (const stage of [1, 5, 7, 10, 11]) {
       const tour = stageTour(stage, ctx);
       expect(tour.pause, `Stufe ${stage}`).toBe(false);
       expect(tour.skippable, `Stufe ${stage}`).toBe(true);
@@ -78,5 +78,21 @@ describe('tutorial: Touren', () => {
       ['spot.marker', 'zuelpicher'],
       ['spot.marker', 'rudolfplatz'],
     ]);
+  });
+  it('Stufe 5: Der Spieler tippt selbst einen Lieferanten an und bestellt einmal (Anker bleibt frei)', () => {
+    const ctx = context();
+    const steps = stageTour(5, ctx).steps;
+    const list = steps.find((s) => s.id === 'list');
+    const offer = steps.find((s) => s.id === 'offer');
+    expect(list?.waitFor && typeof list.waitFor === 'object' && 'ui' in list.waitFor).toBe(true);
+    expect(offer?.anchor).toBe('suppliers.offer');
+    expect(offer?.waitFor).toEqual({ event: 'shipment.ordered' });
+    // Die Bedingung der Liste: erfüllt, sobald im Handy ein Lieferant offen ist.
+    const wait = list?.waitFor as { ui: (ui: UiState) => boolean };
+    const phone = (app: string | null, params?: Record<string, unknown>) =>
+      ({ phone: { open: true, app, params, stack: [] } }) as unknown as UiState;
+    expect(wait.ui(phone('suppliers.app'))).toBe(false);
+    expect(wait.ui(phone('tab:staff', { supplierId: 'koeln' }))).toBe(false);
+    expect(wait.ui(phone('suppliers.app', { supplierId: 'koeln' }))).toBe(true);
   });
 });

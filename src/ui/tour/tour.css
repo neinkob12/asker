@@ -228,6 +228,11 @@
   border-radius: 22px;
   padding-bottom: 16px;
 }
+/* Deckt das Blatt den Anker zu, liegt es oben (TourHost setzt data-side). */
+.tour--mobile .tour-box[data-side="top"] {
+  top: calc(8px + var(--safe-top, 0px));
+  bottom: auto;
+}
 .tour--mobile .tour-box__line {
   font-size: 16px;
 }

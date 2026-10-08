@@ -304,10 +304,12 @@ export class UiRuntime {
       speed: () => this.speedBeforeDialog ?? session.loop.speed,
       setSpeed: (speed) => this.applySpeed(speed),
       state: () => session.state,
+      ui: () => this.ui,
       onEvent: (type, fn) =>
         session.onEvent((event) => {
           if (event.type === type) fn();
         }),
+      // Feuert nach jeder Änderung von Spiel und Oberfläche (requestRender), also auch für `waitFor { ui }`.
       onChange: (fn) => this.subscribe(fn),
       render: () => {
         this.ui.tour = this.tours.active();
