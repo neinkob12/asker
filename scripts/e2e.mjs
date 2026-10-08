@@ -242,10 +242,14 @@ async function run() {
         }
         // Die Spot-Seite bleibt nach dem ersten Verkauf offen (am Handy-Bildschirm über der Karte).
         const sell = page.getByRole('button', { name: 'Verkaufen', exact: true }).first();
-        if (!(await sell.isVisible())) await page.locator('.spot-marker[aria-label*="Neumarkt"]').click();
-        // Am Handy-Bildschirm liegt Peters Blatt unten über der Seite: den Knopf in die Mitte rollen.
-        await sell.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-        await sell.click();
+        if (await sell.isVisible()) {
+          // Am Handy-Bildschirm liegt Peters Blatt unten über der Seite: den Knopf in die Mitte rollen.
+          await sell.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+          await sell.click();
+        } else {
+          // Ohne offenes Spot-Fenster: Ein Klick auf den Spot verkauft direkt (Feedback vom 08.10.2026).
+          await page.locator('.spot-marker[aria-label*="Neumarkt"]').click();
+        }
         // Nach dem ersten Verkauf erklärt die Tour noch Preis und Läufer (Enter), dann ist sie durch.
         if (sold === 0) await nextTour(page);
       }
@@ -303,9 +307,9 @@ async function run() {
       dirty: s.wallet.dirty,
       served: s.modules.customers.stats.customersServed,
     }));
-    // Die Plakette zeigt seit #41 nur Symbole: Der Name steht im aria-label des Markers.
-    await page.locator('.spot-marker[aria-label*="Zülpicher Platz"]').click();
-    await page.getByRole('button', { name: 'Verkaufen', exact: true }).first().click();
+    // Die Plakette zeigt seit #41 nur Symbole: Der Name steht im aria-label des Markers. Wartet jemand, verkauft
+    // ein Klick auf den Spot direkt, ohne das Spot-Fenster (Feedback vom 08.10.2026).
+    await page.locator('.spot-marker[aria-label*="Zülpicher Platz"][aria-label*="verkaufen"]').click();
     const after = await game(page, (s) => ({
       dirty: s.wallet.dirty,
       served: s.modules.customers.stats.customersServed,
@@ -316,6 +320,8 @@ async function run() {
   });
 
   await check('Selbst an den Spot stellen, dann verkauft es sich von allein', async () => {
+    // Der Verkauf davor lief per Klick auf den Spot, ohne Fenster: Das Spot-Fenster jetzt öffnen.
+    await page.evaluate(() => window.koeln.runtime.api.openPanel('spots.spot', { spotId: 'zuelpicher' }));
     await page.getByRole('button', { name: 'Hier hinstellen', exact: true }).click();
     assert.equal(await game(page, (s) => s.modules.customers.self.spotId), 'zuelpicher');
     const served = await game(page, (s) => s.modules.customers.stats.customersServed);

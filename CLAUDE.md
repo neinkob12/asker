@@ -271,6 +271,10 @@ Fakten aus dem Seed, genau eine passende Antwort, zwei Treffer = Aussteigen, Nac
 mittlerem Misstrauen, Gas = Jagd; `traffic/scene.ts`: Ego-Blick aus dem Fenster, Gesicht des Beamten aus dem Look-System als
 HTML über dem projizierten Kopf, Stimme über `audio.speak`). Tresor leichter (`PROXIMITY_RANGE`, `crossedTarget`). Noch offen
 (Auftrag 48): Razzia-Lauf, Bude in Ego-Sicht, Gespräch mit Druck, Licht und Material der 2D-Spiele.
+Feedback vom 08.10.2026: Ein Klick auf einen Spot mit wartenden Kunden verkauft direkt an den dringendsten, den die
+Ware bedienen kann (`clickSaleCustomer` in `spots/ui/map.ts`, fehlt die Ware, meldet `customers.serve` das); ohne
+Kunden öffnet er das Spot-Fenster. Zivis kommen nicht mehr von selbst (`UNDERCOVER_SHIFTS` in `police/config.ts`),
+das Minispiel bleibt über Vorschau und Test-Spielstand spielbar.
 Wie alles zusammenspielt: `docs/architektur.md`, Abschnitte "Zusammenspiel der Systeme" und "Städte".
 
 ## Architektur in Kürze

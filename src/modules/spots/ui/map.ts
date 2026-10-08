@@ -15,7 +15,15 @@ import { formatEuro, type GameState } from '../../../core';
 import { addHtmlMarker, createHotspots, el, type Hotspot, type MapLayer, setText } from '../../../map';
 import { iconElement } from '../../../ui';
 import { activeCity } from '../../city';
-import { allWaiting, CUSTOMER_PATIENCE, type Customer, playerSpot, spotDemand, waitingAt } from '../../customers';
+import {
+  allWaiting,
+  CUSTOMER_PATIENCE,
+  type Customer,
+  canServeCustomer,
+  playerSpot,
+  spotDemand,
+  waitingAt,
+} from '../../customers';
 import { activeEncounters } from '../../encounters';
 import { DEFAULT_PRODUCT } from '../../goods';
 import { lieutenantOfSpot } from '../../hierarchy';
@@ -42,6 +50,22 @@ const NAMES_ZOOM = 13;
 const HOTSPOT_SCALE = 0.45;
 
 export type SpotLook = 'idle' | 'waiting' | 'urgent' | 'raid';
+
+/**
+ * Wem ein Klick auf den Spot verkauft (Feedback vom 08.10.2026: verkaufen, ohne erst das Spot-Fenster zu öffnen): dem
+ * dringendsten wartenden Kunden, den die Ware im Lager bedienen kann, sonst dem dringendsten überhaupt (dann kommt die
+ * Meldung, dass die Ware fehlt). null, wenn niemand wartet oder der Spot zu ist: Dann öffnet der Klick das Fenster.
+ */
+export function clickSaleCustomer(state: GameState, spotId: string): Customer | null {
+  if (!isSpotActive(state, spotId)) return null;
+  const queue = waitingAt(state, spotId);
+  return queue.find((c) => canServeCustomer(state, c)) ?? queue[0] ?? null;
+}
+
+/** Name des Markers für Vorleser: was ein Klick tut. */
+function markerLabel(name: string, waiting: number): string {
+  return waiting > 0 ? `Spot ${name}: an wartende Kunden verkaufen` : `Spot ${name} im Handy öffnen`;
+}
 
 /**
  * Spots mit Marker: nur die der aktiven Stadt (Auftrag 47, Punkt 4). Die anderen Städte sieht man nur aus der
@@ -254,10 +278,15 @@ export const spotsLayer: MapLayer = {
           plate,
         ],
         onClick: () => {
-          if (!ctx.isPicking()) ctx.ui.openPanel('spots.spot', { spotId: spot.id });
+          if (ctx.isPicking()) return;
+          // Wartet jemand, verkauft der Klick direkt (Fehler wie fehlende Ware meldet dispatch als Banner).
+          const state = ctx.getState();
+          const customer = state ? clickSaleCustomer(state, spot.id) : null;
+          if (customer) ctx.ui.dispatch({ type: 'customers.serve', payload: { customerId: customer.id } });
+          else ctx.ui.openPanel('spots.spot', { spotId: spot.id });
         },
       });
-      element.setAttribute('aria-label', `Spot ${spot.name} im Handy öffnen`);
+      element.setAttribute('aria-label', markerLabel(spot.name, 0));
       // Auftrag 46c: Anker der Tour am Marker selbst (Stufe 2 zeigt die Spots zum Kauf), Schlüssel ist die Spot-ID.
       element.dataset.tour = 'spot.marker';
       element.dataset.tourKey = spot.id;
@@ -297,7 +326,7 @@ export const spotsLayer: MapLayer = {
           entry.key = key;
           entry.marker.setLngLat([spot.lng, spot.lat]);
           // Umbenannte Spots (Auftrag 23): Name für Vorleser und, ohne Maus, als Tooltip.
-          entry.element.setAttribute('aria-label', `Spot ${spot.name} im Handy öffnen`);
+          entry.element.setAttribute('aria-label', markerLabel(spot.name, waiting));
           if (entry.element.hasAttribute('title')) entry.element.title = spot.name;
           entry.element.classList.toggle('is-faint', faint);
           entry.element.style.setProperty('--fill', String(fill));
@@ -334,6 +363,7 @@ interface HoverCard {
   waiting: HTMLElement;
   seller: HTMLElement;
   price: HTMLElement;
+  foot: HTMLElement;
 }
 
 function buildHoverCard(): HoverCard {
@@ -351,13 +381,14 @@ function buildHoverCard(): HoverCard {
   const price = row('Preis');
   const foot = el('div', 'spot-hover__foot', 'Klick: im Handy öffnen ›');
   root.append(title, sub, rows, foot);
-  return { root, title, sub, waiting, seller, price };
+  return { root, title, sub, waiting, seller, price, foot };
 }
 
 function fillHoverCard(card: HoverCard, state: GameState, spot: Spot): void {
   const active = isSpotActive(state, spot.id);
   setText(card.title, spot.name);
   setText(card.sub, `${veedelName(spot.veedelId)} · ${active ? LOOK_TEXT[spotLook(state, spot.id)] : 'gesperrt'}`);
+  setText(card.foot, clickSaleCustomer(state, spot.id) ? 'Klick: verkaufen ›' : 'Klick: im Handy öffnen ›');
   if (!active) {
     setText(card.waiting, '–');
     setText(card.seller, '–');
