@@ -13,7 +13,7 @@ import {
   RELATION_ON_BETRAYAL,
   WARN_AT,
 } from './config';
-import type { Gang } from './data';
+import { type Gang, gangNameIn } from './data';
 import { memoryLine, remember } from './memory';
 import { ceasefireCost, type GangStatus, gangContact, hasCeasefire, paysTribute, tributeAmount } from './state';
 import { type GangTextKey, gangVariants } from './texts';
@@ -155,7 +155,7 @@ export function breakAgreements(ctx: Ctx, gang: Gang, s: GangStatus, why: string
   if (had) {
     addRelation(s, RELATION_ON_BETRAYAL);
     remember(ctx, gang.id, 'agreementBroken');
-    journal.add(ctx, `${why}: Alle Abmachungen mit ${gang.name} sind geplatzt.`, 'bad');
+    journal.add(ctx, `${why}: Alle Abmachungen mit ${gangNameIn(gang, 'dative')} sind geplatzt.`, 'bad');
   }
   return had;
 }

@@ -156,6 +156,60 @@ describe('Nach dem Aufprall läuft der Kurs entlang der Wand', () => {
   });
 });
 
+describe('Nach dem Aufprall zeigt auch die Nase entlang der Wand', () => {
+  /** Quer stehende Wand nördlich von dir (Normale nach Süden). */
+  const NORTH_WALL: Wall = { x0: -1000, z0: 390, x1: 1000, z1: 400, kind: 'building' };
+  const BRAKE: ChaseInput = { steer: 0, gas: false, brake: true, turbo: false };
+
+  /** Acht Sekunden mit gehaltener Eingabe gegen die Wand: Zeitpunkte der Aufpralle, Nase direkt nach dem ersten. */
+  function holdAgainstWall(hz: number, heading: number, v: number, input: ChaseInput) {
+    const { setup, state } = bareChase([NORTH_WALL]);
+    placePlayer(state, 300, 400 + CAR_RADIUS + 0.3, heading, v);
+    const crashes: number[] = [];
+    let noseAfterFirst = Number.NaN;
+    let damageAfterFirst = Number.NaN;
+    for (let i = 0; i < 8 * hz; i++) {
+      stepChase(setup, state, input, 1 / hz);
+      if (!state.events.some((e) => e.kind === 'crash')) continue;
+      crashes.push(state.t);
+      if (crashes.length === 1) {
+        noseAfterFirst = state.player.heading;
+        damageAfterFirst = state.player.damage;
+      }
+    }
+    return { crashes, noseAfterFirst, damageAfterFirst, damage: state.player.damage };
+  }
+
+  for (const hz of [30, 60, 120]) {
+    it(`frontal mit 40 m/s und gehaltenem Gas: ein Aufprall in acht Sekunden, nicht alle 0,5 s (${hz} Hz)`, () => {
+      const r = holdAgainstWall(hz, 0, 40, GAS);
+      expect(r.crashes.length).toBe(1);
+      expect(r.damage).toBe(r.damageAfterFirst);
+      // Die Nase steht parallel zur Wand, der Griff zieht den Kurs nicht mehr hinein.
+      expect(Math.abs(forward(r.noseAfterFirst).z)).toBeLessThan(1e-9);
+    });
+  }
+
+  it('rückwärts mit gehaltener Bremse gegen die Wand: ebenso nur ein Aufprall', () => {
+    const r = holdAgainstWall(60, Math.PI, -6, BRAKE);
+    expect(r.crashes.length).toBe(1);
+    expect(Math.abs(forward(r.noseAfterFirst).z)).toBeLessThan(1e-9);
+  });
+
+  it('zeigt die Nase beim Rutschen schon von der Wand weg, bleibt sie, wie sie ist', () => {
+    const { setup, state } = bareChase([NORTH_WALL]);
+    // Kurs nach Norden in die Wand, Nase nach Ostsüdost (von der Wand weg).
+    placePlayer(state, 300, 400 + CAR_RADIUS + 0.3, 1.7, 40);
+    state.player.course = 0;
+    stepChase(setup, state, IDLE, 1 / 60);
+    expect(state.events.some((e) => e.kind === 'crash')).toBe(true);
+    expect(state.player.heading).toBe(1.7);
+    // Frontaler Aufprall nach vorn dagegen: Die Nase dreht mit (ohne die Änderung bleibt sie bei 0).
+    const r = holdAgainstWall(60, 0, 40, IDLE);
+    expect(Math.abs(wrapAngle(r.noseAfterFirst))).toBeCloseTo(Math.PI / 2, 9);
+  });
+});
+
 describe('Ladungsfrage hat immer eine passende Antwort', () => {
   const values = (fact: keyof Story): (string | undefined)[] => {
     const set = new Set<string>();
@@ -272,6 +326,50 @@ describe('Reibung an Wänden hängt nicht von der Bildrate ab', () => {
     expect(Math.abs(v30 - v60)).toBeLessThan(0.2);
     expect(Math.abs(v120 - v60)).toBeLessThan(0.2);
   });
+});
+
+describe('Streife gegen Verkehr wirkt je Kontakt gleich, unabhängig von der Bildrate', () => {
+  /**
+   * Streife fährt mit `speed` nach Osten an einem stehenden Wagen vorbei, `offset` Meter seitlich versetzt. Du stehst
+   * weit genug weg (kein Sichtkontakt), der Zufall lässt sie nie verunglücken. Ergebnis: kleinstes Tempo der Streife
+   * und wie oft auf den Unfall gewürfelt wurde.
+   */
+  function copThroughTraffic(hz: number, speed: number, offset: number) {
+    const { setup, state } = bareChase();
+    placePlayer(state, 303, 420, 0, 0);
+    const cop = state.cops[0] as Cop;
+    state.cops = [cop];
+    Object.assign(cop, { active: true, spawnAt: 0, state: 'chase', pursuit: false, x: 290, z: 300 });
+    Object.assign(cop, { heading: Math.PI / 2, v: speed, ramCooldown: 10, tx: 600, tz: 300, axis: 'x', dir: 1 });
+    state.traffic.push(car({ x: 300, z: 300 + offset, v: 0, cruise: 0, pushed: 10 }));
+    let rolls = 0;
+    state.random = () => {
+      rolls++;
+      return 0.9;
+    };
+    let minV = Infinity;
+    for (let i = 0; i < Math.round(0.6 * hz); i++) {
+      stepChase(setup, state, IDLE, 1 / hz);
+      minV = Math.min(minV, cop.v);
+    }
+    return { minV, rolls };
+  }
+
+  for (const [speed, offset] of [
+    [25, 2],
+    [40, 2],
+    [40, 1],
+  ] as const) {
+    it(`${speed} m/s, ${offset} m versetzt: gleiches Tempo und gleich viele Würfe bei 30, 60 und 120 Hz`, () => {
+      const at60 = copThroughTraffic(60, speed, offset);
+      expect(at60.minV).toBeLessThan(speed * 0.7); // der Kontakt bremst wirklich
+      for (const hz of [30, 120]) {
+        const r = copThroughTraffic(hz, speed, offset);
+        expect(Math.abs(r.minV - at60.minV), `${hz} Hz`).toBeLessThan(0.5);
+        expect(r.rolls, `${hz} Hz`).toBe(at60.rolls);
+      }
+    });
+  }
 });
 
 describe('Nach dem Turbo läuft das Tempo aus, statt zu springen', () => {

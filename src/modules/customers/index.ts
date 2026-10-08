@@ -528,9 +528,9 @@ export default defineModule({
     'customers.dealerMiddleman': (ctx, { dealerId, accept }) => setMiddleman(ctx, dealerId, accept),
   },
   on: {
-    'message.expired': (ctx, { messageId, source }) => {
-      if (source === 'customers') expireOrderMessage(ctx, messageId);
-    },
+    // Nach der Nachricht, nicht nach ihrer Quelle: Die Handy-Bestellung des Tutorials schickt tutorial. Abgelaufen
+    // ohne dieses Ereignis heißt dann sicher zurückgezogen (isWithdrawn in orders.ts).
+    'message.expired': (ctx, { messageId }) => expireOrderMessage(ctx, messageId),
     'city.switched': (ctx, { from, to }) => onCitySwitched(ctx, from, to),
     // Stadt-Events (Etappe 7): Die Laufkundschaft passt sich sofort der neuen Nachfrage an.
     'events.started': (ctx, { cityId }) => onCityEventChanged(ctx, cityId),

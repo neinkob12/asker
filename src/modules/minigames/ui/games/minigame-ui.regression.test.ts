@@ -111,6 +111,74 @@ describe('Tastendruck während einer Trefferpause im Straßenkampf', () => {
     expect(p.state).toBe('windup');
     expect(state.held).toBeNull();
   });
+
+  /** Bilder weiter, bis dein Schlag sitzt; danach steht der Treffer-Stopp. */
+  function untilOwnHit(s: BrawlSetup, state: BrawlState): void {
+    for (let i = 0; i < 120; i++) {
+      const events = stepBrawl(s, state, DT, { dx: 0 });
+      if (events.some((e) => e.type === 'hit' && e.attacker === 'player')) return;
+    }
+    throw new Error('kein eigener Treffer');
+  }
+
+  /** Wie oft du in dieser Zeit neu ausholst (ohne weitere Eingaben). */
+  function windups(s: BrawlSetup, state: BrawlState, p: Fighter, seconds: number): number {
+    let count = 0;
+    let last = p.state;
+    for (let t = 0; t < seconds; t += DT) {
+      stepBrawl(s, state, DT, { dx: 0 });
+      if (p.state === 'windup' && last !== 'windup') count += 1;
+      last = p.state;
+    }
+    return count;
+  }
+
+  for (const [attack, label] of [
+    ['light', 'leichten'],
+    ['heavy', 'schweren'],
+  ] as const) {
+    it(`nach deinem eigenen ${label} Treffer: ein Schlag aus der Pause kommt, sobald du wieder frei bist`, () => {
+      const { s, state, p } = duel();
+      stepBrawl(s, state, DT, { dx: 0, [attack]: true });
+      expect(p.state).toBe('windup');
+      untilOwnHit(s, state);
+      // Du stehst noch im Schlag; Schlag und Erholung dauern länger als ein fester Puffer von 0,25 s.
+      expect(state.hitStop).toBeGreaterThan(0);
+      expect(p.state).toBe('strike');
+      stepBrawl(s, state, DT, { dx: 0, light: true });
+      expect(windups(s, state, p, 1)).toBe(1);
+      expect(state.buffered).toBeNull();
+    });
+  }
+
+  it('ein Schlag kurz nach der Pause, noch im eigenen Schlag, kommt ebenso (und nur einmal)', () => {
+    const { s, state, p } = duel();
+    stepBrawl(s, state, DT, { dx: 0, heavy: true });
+    untilOwnHit(s, state);
+    // Pause (0,1 s) und Schlag vorbei, die Erholung dauert noch gut 0,25 s.
+    run(s, state, 0.25);
+    expect(state.hitStop).toBe(0);
+    expect(p.state).toBe('recover');
+    expect(p.dur - p.t).toBeGreaterThan(0.25);
+    stepBrawl(s, state, DT, { dx: 0, light: true });
+    expect(windups(s, state, p, 1)).toBe(1);
+  });
+
+  it('Ausweichen aus der Pause nach deinem eigenen Treffer wartet, bis du ausweichen kannst', () => {
+    const { s, state, p } = duel();
+    const before = p.dodgeSince;
+    stepBrawl(s, state, DT, { dx: 0, light: true });
+    untilOwnHit(s, state);
+    expect(p.state).toBe('strike');
+    stepBrawl(s, state, DT, { dx: 0, dodge: true });
+    run(s, state, 0.3);
+    expect(p.dodgeSince).toBeGreaterThan(before);
+    expect(state.held).toBeNull();
+    // Nur einmal: danach weicht er nicht erneut aus.
+    const first = p.dodgeSince;
+    run(s, state, 1);
+    expect(p.dodgeSince).toBe(first);
+  });
 });
 
 describe('Razzia-Countdown, Ware unterwegs, wenn die Straße zu ist', () => {

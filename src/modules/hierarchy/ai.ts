@@ -303,7 +303,8 @@ function handleAbsences(turn: Turn): void {
       // an: Dann kostet es nichts (sonst ging der Preis eines Läufers vom Tagesbudget ab).
       const occupied = m.role === 'runner' ? activeRunnerAt(ctx.state, spotId) : securityAt(ctx.state, { spotId })[0];
       const cost = free || occupied || m.role !== 'runner' ? 0 : runnerHireCost(ctx.state, spotId);
-      const canHire = free || (post.settings.mayHire && cost <= budget(turn, true));
+      // Steht dort schon jemand, wird niemand angeheuert: Das geht auch, wenn er nicht anheuern darf.
+      const canHire = free || occupied || (post.settings.mayHire && cost <= budget(turn, true));
       if (canHire && run({ type: 'staff.replace', payload: { staffId: m.id, fire: fireNow } })) {
         absence.replaced = true;
         if (cost > 0) spend(turn, cost, true);

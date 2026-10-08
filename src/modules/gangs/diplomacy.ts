@@ -38,7 +38,7 @@ import {
   TRIBUTE_DURATION,
   TRIBUTE_HOSTILITY_DROP,
 } from './config';
-import type { Gang } from './data';
+import { type Gang, gangNameIn } from './data';
 import { remember } from './memory';
 import {
   allianceCost,
@@ -83,7 +83,8 @@ export function ceasefire(ctx: Ctx, gangId: string): CommandResult {
   const blocked = ceasefireBlock(ctx.state, ctx.now, gang, s);
   if (blocked) return { ok: false, reason: blocked };
   const cost = ceasefireCost(ctx.state, gangId);
-  if (!wallet.pay(ctx, cost, 'dirty', `Waffenstillstand mit ${gang.name}`, 'tribute')) return notEnoughMoney(cost);
+  if (!wallet.pay(ctx, cost, 'dirty', `Waffenstillstand mit ${gangNameIn(gang, 'dative')}`, 'tribute'))
+    return notEnoughMoney(cost);
   s.money += cost;
   s.ceasefireUntil = ctx.now + CEASEFIRE_DURATION;
   s.quote = null;
@@ -93,7 +94,7 @@ export function ceasefire(ctx: Ctx, gangId: string): CommandResult {
   remember(ctx, gangId, 'ceasefire');
   journal.add(
     ctx,
-    `Waffenstillstand mit ${gang.name} für ${formatEuro(cost)}, bis ${clock.format(s.ceasefireUntil)}.`,
+    `Waffenstillstand mit ${gangNameIn(gang, 'dative')} für ${formatEuro(cost)}, bis ${clock.format(s.ceasefireUntil)}.`,
     'good',
   );
   ctx.emit('gang.diplomacyChanged', { gangId, kind: 'ceasefire', active: true });
@@ -109,14 +110,19 @@ export function payTribute(ctx: Ctx, gangId: string): CommandResult {
   const { gang, s } = found;
   if (paysTribute(ctx.state, gangId)) return { ok: false, reason: `Du zahlst ${gang.name} schon.` };
   const amount = tributeAmount(ctx.state, gangId);
-  if (!wallet.pay(ctx, amount, 'dirty', `Schutzgeld an ${gang.name}`, 'tribute')) return notEnoughMoney(amount);
+  if (!wallet.pay(ctx, amount, 'dirty', `Schutzgeld an ${gangNameIn(gang, 'accusative')}`, 'tribute'))
+    return notEnoughMoney(amount);
   s.money += amount;
   s.tribute = { amount, until: ctx.now + TRIBUTE_DURATION };
   s.quote = null;
   addHostility(s, -TRIBUTE_HOSTILITY_DROP);
   addRelation(s, 10);
   remember(ctx, gangId, 'tributePaid');
-  journal.add(ctx, `Du zahlst ${gang.name} ${formatEuro(amount)} Schutzgeld. Eine Woche Ruhe.`, 'info');
+  journal.add(
+    ctx,
+    `Du zahlst ${gangNameIn(gang, 'dative')} ${formatEuro(amount)} Schutzgeld. Eine Woche Ruhe.`,
+    'info',
+  );
   ctx.emit('gang.diplomacyChanged', { gangId, kind: 'tribute', active: true });
   return { ok: true };
 }
@@ -129,7 +135,7 @@ export function refuse(ctx: Ctx, gangId: string): CommandResult {
   s.quote = null;
   addHostility(s, 10);
   addRelation(s, -5);
-  journal.add(ctx, `Du hast ${gang.name} abblitzen lassen.`, 'info');
+  journal.add(ctx, `Du hast ${gangNameIn(gang, 'accusative')} abblitzen lassen.`, 'info');
   return { ok: true };
 }
 
@@ -155,7 +161,7 @@ export function demandProtection(ctx: Ctx, gangId: string): CommandResult {
   const amount = protectionAmount(ctx.state, gangId);
   const paid = Math.min(amount, Math.max(0, s.money));
   s.money -= paid;
-  if (paid > 0) wallet.earn(ctx, paid, 'dirty', `Schutzgeld von ${gang.name}`, 'income.other');
+  if (paid > 0) wallet.earn(ctx, paid, 'dirty', `Schutzgeld von ${gangNameIn(gang, 'dative')}`, 'income.other');
   s.protection = { amount, nextDueAt: ctx.now + PROTECTION_INTERVAL, overdue: false };
   addHostility(s, 15);
   addRelation(s, -20);
@@ -200,7 +206,7 @@ export function releaseProtection(ctx: Ctx, gangId: string): CommandResult {
   if (!s.protection) return { ok: false, reason: `${gang.name} zahlt dir nichts.` };
   s.protection = null;
   addHostility(s, -10);
-  journal.add(ctx, `Du verzichtest auf das Schutzgeld von ${gang.name}.`, 'info');
+  journal.add(ctx, `Du verzichtest auf das Schutzgeld von ${gangNameIn(gang, 'dative')}.`, 'info');
   ctx.emit('gang.diplomacyChanged', { gangId, kind: 'protection', active: false });
   return { ok: true };
 }
@@ -226,7 +232,8 @@ export function ally(ctx: Ctx, gangId: string, againstGangId: string): CommandRe
   if (s.hostility > ALLIANCE_MAX_HOSTILITY) return { ok: false, reason: `${gang.name} ist zu sauer auf dich.` };
   // Auftrag 34: Der Preis hängt am Gedächtnis der Gang.
   const cost = allianceCost(ctx.state, gangId);
-  if (!wallet.pay(ctx, cost, 'dirty', `Bündnis mit ${gang.name}`, 'tribute')) return notEnoughMoney(cost);
+  if (!wallet.pay(ctx, cost, 'dirty', `Bündnis mit ${gangNameIn(gang, 'dative')}`, 'tribute'))
+    return notEnoughMoney(cost);
   s.money += cost;
   s.alliance = { againstGangId, until: ctx.now + ALLIANCE_DURATION };
   addRelation(s, 10);
@@ -235,7 +242,11 @@ export function ally(ctx: Ctx, gangId: string, againstGangId: string): CommandRe
   addHostility(enemyStatus, 15);
   addRelation(enemyStatus, -10);
   if (isAllied(ctx.state, againstGangId)) breakAgreements(ctx, enemy, enemyStatus, 'Bündnis mit ihren Feinden');
-  journal.add(ctx, `Bündnis mit ${gang.name} gegen ${enemy.name}, bis ${clock.format(s.alliance.until)}.`, 'good');
+  journal.add(
+    ctx,
+    `Bündnis mit ${gangNameIn(gang, 'dative')} gegen ${gangNameIn(enemy, 'accusative')}, bis ${clock.format(s.alliance.until)}.`,
+    'good',
+  );
   ctx.emit('gang.diplomacyChanged', { gangId, kind: 'alliance', active: true });
   return { ok: true };
 }
@@ -310,7 +321,9 @@ export function attack(
     stakes: { money, goods },
     origin: { module: 'gangs', ref: `attack:${gang.id}` },
   });
-  journal.add(ctx, `Du schlägst gegen ${gang.name} in ${veedelName(veedelId)} los.`, 'info', { veedelId });
+  journal.add(ctx, `Du schlägst gegen ${gangNameIn(gang, 'accusative')} in ${veedelName(veedelId)} los.`, 'info', {
+    veedelId,
+  });
   return { ok: true, data: { encounterId } };
 }
 
@@ -354,7 +367,7 @@ export function acceptOffer(ctx: Ctx, gangId: string, offerId: number): CommandR
     });
     return { ok: true };
   }
-  wallet.pay(ctx, offer.price, 'dirty', `Ware von ${gang.name}`, 'goods.purchase');
+  wallet.pay(ctx, offer.price, 'dirty', `Ware von ${gangNameIn(gang, 'dative')}`, 'goods.purchase');
   let rest = offer.amount;
   for (const w of warehouses) {
     const amount = fitsInto(ctx.state, w.id, DEFAULT_PRODUCT, rest);
@@ -373,6 +386,10 @@ export function acceptOffer(ctx: Ctx, gangId: string, offerId: number): CommandR
   s.goods = Math.max(0, s.goods - offer.amount);
   addRelation(s, RELATION_ON_DEAL * relationFactor(gang.cityId));
   remember(ctx, gangId, 'deal');
-  journal.add(ctx, `Deal mit ${gang.name}: ${formatAmount(offer.amount)} für ${formatEuro(offer.price)}.`, 'good');
+  journal.add(
+    ctx,
+    `Deal mit ${gangNameIn(gang, 'dative')}: ${formatAmount(offer.amount)} für ${formatEuro(offer.price)}.`,
+    'good',
+  );
   return { ok: true };
 }

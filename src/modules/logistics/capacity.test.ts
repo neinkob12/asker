@@ -78,7 +78,12 @@ describe('logistics: Lager mit Kapazität (Auftrag 33)', () => {
     expect(getTrips(sim.state)).toHaveLength(0);
     expect(getStock(sim.state, { productId: 'hash', warehouseId: 'kalk' })).toBe(200);
     expect(getStaffMember(sim.state, driverId)?.assignment).toBeNull();
-    expect(eventsOfType(events, 'transport.arrived')[0].payload).toMatchObject({ amount: 300 });
+    // Die 100 g liegen schon in Ehrenfeld; die Ankunft in Kalk meldet nur, was dort ankommt.
+    expect(eventsOfType(events, 'transport.arrived')[0].payload).toMatchObject({
+      toId: 'kalk',
+      amount: 200,
+      items: [{ productId: 'hash', amount: 200 }],
+    });
   });
 
   it('wartende Fahrt lädt von selbst ab, sobald Platz ist; deine eigene blockiert dich dabei nicht', () => {

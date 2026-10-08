@@ -7,7 +7,7 @@ import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getEventDef, isEventActive } from '../events';
 import { store } from '../goods';
 import { activeChallenge } from '../minigames';
-import { spotsInVeedel } from '../spots';
+import { getSpot, spotsInVeedel } from '../spots';
 import { enlist, generateProfile, getStaffMember } from '../staff';
 import { MISSIONS } from '../tutorial';
 import { DEALER_DOWN, DEALER_UP, RAID_LEAD_TIME } from './config';
@@ -239,5 +239,46 @@ describe('Statistik zählt nur wirksame Festnahmen und Razzien gegen dich', () =
     expect(gangRaids.length).toBeGreaterThan(0);
     expect(getPoliceStats(snitched.state).gangRaids).toBe(gangRaids.length);
     expect(getPoliceStats(snitched.state).raids).toBe(0);
+  });
+
+  it('geplante Razzia und Großrazzia im selben Schritt nehmen niemanden zweimal fest', () => {
+    let both = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const sim = quietGame(seed);
+      noRandomPolice(sim);
+      const veedelId = getSpot(sim.state, 'neumarkt')?.veedelId;
+      if (!veedelId) throw new Error('Neumarkt fehlt');
+      const ctx = sim.ctx('staff');
+      // Läufer und Sicherheit am Neumarkt: zwei Leute, die beide Razzien treffen können.
+      for (const role of ['runner', 'security'] as const) {
+        const member = enlist(ctx, generateProfile(ctx, role), { origin: 'pool' });
+        const assigned = sim.dispatch({
+          type: 'staff.assign',
+          payload: { staffId: member.id, assignment: { kind: 'spot', targetId: 'neumarkt' } },
+        });
+        if (!assigned.ok) throw new Error(assigned.reason);
+      }
+      const police = sim.state.modules.police;
+      const before = getPoliceStats(sim.state).arrests;
+      const events = recordEvents(sim);
+      // Beide warten (Karneval, schlafende Stadt) und fallen dann in denselben Schritt.
+      police.plannedRaids[veedelId] = { at: sim.state.time, scope: 'veedel', spotId: null };
+      police.majorRaid = { at: sim.state.time, veedelIds: [veedelId] };
+      sim.advance(60);
+      const raids = eventsOfType(events, 'police.raid').filter((e) => e.payload.veedelId === veedelId);
+      expect(
+        raids.map((e) => e.payload.scope),
+        `Seed ${seed}`,
+      ).toEqual(['veedel', 'major']);
+      expect(raids[0].time, `Seed ${seed}`).toBe(raids[1].time);
+      const inRaids = raids.flatMap((e) => e.payload.arrested ?? []);
+      expect(new Set(inRaids).size, `Seed ${seed}`).toBe(inRaids.length);
+      const arrests = eventsOfType(events, 'police.arrest').map((e) => e.payload.staffId);
+      expect(new Set(arrests).size, `Seed ${seed}`).toBe(arrests.length);
+      expect(getPoliceStats(sim.state).arrests - before, `Seed ${seed}`).toBe(arrests.length);
+      if ((raids[0].payload.arrested?.length ?? 0) > 0 && (raids[1].payload.arrested?.length ?? 0) > 0) both += 1;
+    }
+    // Die Seeds treffen auch Fälle, in denen beide Razzien jemanden festnehmen.
+    expect(both).toBeGreaterThan(0);
   });
 });

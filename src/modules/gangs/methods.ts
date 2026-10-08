@@ -91,7 +91,7 @@ import {
   WARN_AT,
   WARN_PREPARE_COST,
 } from './config';
-import { GANGS, type Gang, type GangMethod } from './data';
+import { GANGS, type Gang, type GangMethod, gangNameIn } from './data';
 import { remember } from './memory';
 import { type GangStatus, gangVeedel, getGang, isAtPeace, isGangBroken } from './state';
 import { INCIDENT_TEXTS } from './texts';
@@ -592,7 +592,7 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
   });
   journal.add(
     ctx,
-    `Einbruch ${warehousePlace(warehouse, 'in')}: ${goods} gestohlen.${gang ? ` Die Spur führt zu ${gang.name}.` : ''}`,
+    `Einbruch ${warehousePlace(warehouse, 'in')}: ${goods} gestohlen.${gang ? ` Die Spur führt zu ${gangNameIn(gang, 'dative')}.` : ''}`,
     'bad',
   );
   // Ins Protokoll einer Gang nur, wenn die Spur zu ihr führt: Wer es wirklich war, weißt du sonst nicht.
@@ -725,7 +725,7 @@ function resolvePoach(ctx: Ctx, incident: GangIncident, choice: string): Command
     if (veedelId) addHeat(ctx, veedelId, POACH_TALK_HEAT);
     journal.add(
       ctx,
-      `${m.name} lässt sich nicht drohen und geht zu ${gang?.name ?? 'der Konkurrenz'}. Und redet.`,
+      `${m.name} lässt sich nicht drohen und geht zu ${gang ? gangNameIn(gang, 'dative') : 'der Konkurrenz'}. Und redet.`,
       'bad',
       {
         staffId: m.id,
@@ -734,7 +734,9 @@ function resolvePoach(ctx: Ctx, incident: GangIncident, choice: string): Command
     return { ok: true };
   }
   removeMember(ctx, m.id, 'quit');
-  journal.add(ctx, `${m.name} wechselt zu ${gang?.name ?? 'der Konkurrenz'}.`, 'bad', { staffId: m.id });
+  journal.add(ctx, `${m.name} wechselt zu ${gang ? gangNameIn(gang, 'dative') : 'der Konkurrenz'}.`, 'bad', {
+    staffId: m.id,
+  });
   const s = gang ? statusOf(ctx, gang.id) : undefined;
   if (s) s.people += 1;
   return { ok: true };
@@ -792,7 +794,7 @@ function resolveIntimidation(ctx: Ctx, incident: GangIncident, choice: string): 
     const paid = ctx.dispatch({ type: 'gangs.payTribute', payload: { gangId: gang.id } });
     if (!paid.ok) return paid;
     endIntimidation(ctx, spot.id);
-    journal.add(ctx, `Schutzgeld an ${gang.name}: Ihre Leute ziehen ${atSpot(spot)} ab.`, 'info', {
+    journal.add(ctx, `Schutzgeld an ${gangNameIn(gang, 'accusative')}: Ihre Leute ziehen ${atSpot(spot)} ab.`, 'info', {
       spotId: spot.id,
     });
     return paid;
@@ -891,12 +893,13 @@ function resolveBlackmail(ctx: Ctx, incident: GangIncident, choice: string): Com
   if (!gang || !w) return { ok: true };
   if (choice === 'pay') {
     const amount = incident.amount ?? 0;
-    if (!wallet.pay(ctx, amount, 'dirty', `Schweigegeld ${gang.name}`, { category: 'tribute', cityId: w.cityId })) {
+    const to = gangNameIn(gang, 'accusative');
+    if (!wallet.pay(ctx, amount, 'dirty', `Schweigegeld an ${to}`, { category: 'tribute', cityId: w.cityId })) {
       return { ok: false, reason: 'Nicht genug Geld.' };
     }
     const s = statusOf(ctx, gang.id);
     if (s) s.money += amount;
-    journal.add(ctx, `Schweigegeld an ${gang.name} gezahlt (${formatEuro(amount)}). Der ${w.name} bleibt geheim.`);
+    journal.add(ctx, `Schweigegeld an ${to} gezahlt (${formatEuro(amount)}). Der ${w.name} bleibt geheim.`);
     return { ok: true };
   }
   const veedelId = warehouseVeedel(w);
@@ -959,7 +962,7 @@ function warnRival(ctx: Ctx, gang: Gang): boolean {
     incidentOptions(ctx.state, incident),
     INCIDENT_EXPIRY,
   );
-  journal.add(ctx, `${gang.name} warnt dich vor ${enemy.name}.`, 'good');
+  journal.add(ctx, `${gang.name} warnt dich vor ${gangNameIn(enemy, 'dative')}.`, 'good');
   ctx.emit('gang.goodTurn', { gangId: gang.id, kind: 'warnRival' });
   return true;
 }
@@ -1016,14 +1019,17 @@ function resolveGoodTurn(ctx: Ctx, incident: GangIncident, choice: string): Comm
     const amount = Math.min(incident.amount ?? 0, Math.max(0, s.money));
     s.money -= amount;
     if (amount > 0) {
-      wallet.earn(ctx, amount, 'dirty', `Gefallen für ${gang.name}`, { category: 'income.other', cityId: gang.cityId });
+      wallet.earn(ctx, amount, 'dirty', `Gefallen für ${gangNameIn(gang, 'accusative')}`, {
+        category: 'income.other',
+        cityId: gang.cityId,
+      });
     }
     addRelation(s, FAVOR_RELATION);
     const veedelId = w ? warehouseVeedel(w) : null;
     if (veedelId) addHeat(ctx, veedelId, FAVOR_HEAT);
     journal.add(
       ctx,
-      `Ware von ${gang.name} zwischengelagert: ${formatEuro(amount)}, die Beziehung wird besser.`,
+      `Ware von ${gangNameIn(gang, 'dative')} zwischengelagert: ${formatEuro(amount)}, die Beziehung wird besser.`,
       'good',
     );
     return { ok: true };

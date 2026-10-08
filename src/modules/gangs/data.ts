@@ -51,6 +51,12 @@ export interface Gang {
   boss: string;
   /** Ihre Leute als Satzanfang im Plural, z.B. in Konfrontationen: "Leute der Hafenkolonne tauchen auf." */
   crew: string;
+  /**
+   * Nur bei Namen mit Artikel („Die Türsteher“): der Name mitten im Satz, mit kleinem, gebeugtem Artikel, im Dativ
+   * („mit den Türstehern“) und im Akkusativ („gegen die Türsteher“). Fehlt die Angabe, steht der Name unverändert
+   * (siehe gangNameIn).
+   */
+  nameIn?: { dative: string; accusative: string };
   /** Emblem (Emoji), bis es Grafiken gibt. */
   emblem: string;
   /** Stil in einem Satz. */
@@ -222,6 +228,7 @@ export const GANGS: readonly Gang[] = [
     homeVeedelId: 'sternschanze',
     boss: 'Merle Asmussen, genannt „die Kassenwartin“',
     crew: 'Leute vom Kollektiv',
+    nameIn: { dative: 'dem Kollektiv', accusative: 'das Kollektiv' },
     emblem: '✊',
     style: 'Vernetzt bis in jede WG der Schanze. Wenn die Polizei kommt, wissen sie es eine Stunde vorher.',
     strengths: ['bestens vernetzt', 'gute Ware'],
@@ -273,6 +280,7 @@ export const GANGS: readonly Gang[] = [
     homeVeedelId: 'friedrichshain',
     boss: 'Goran „Gästeliste“ Vuković',
     crew: 'Leute von der Tür',
+    nameIn: { dative: 'den Türstehern', accusative: 'die Türsteher' },
     emblem: '🎧',
     style: 'Wer am Wochenende in einen Club will, kommt an ihnen vorbei. Und wer drinnen verkauft, zahlt an sie.',
     strengths: ['Nachtgeschäft', 'Türsteher'],
@@ -529,6 +537,7 @@ export const GANGS: readonly Gang[] = [
     homeVeedelId: 'sachsenhausen-nord',
     boss: 'Gisela Hartmann, genannt „Mutter Bembel“',
     crew: 'Leute der Bembel',
+    nameIn: { dative: 'den Bembeln', accusative: 'die Bembel' },
     emblem: '🍺',
     style:
       'Wirte und Türsteher aus Alt-Sachsenhausen. Jede Kneipe am Main zahlt, und jeder Wirt erzählt ihnen, wer was verkauft.',
@@ -617,6 +626,15 @@ export const GANG_RIVALRY: Readonly<Record<string, number>> = {
   'ff-hoechst|ff-sachsenhausen': -20,
   'ff-sachsenhausen|ff-westend': 30,
 };
+
+/**
+ * Name der Gang mitten im Satz, nach einer Präposition oder als Objekt: „mit den Türstehern“, „Schutzgeld an die
+ * Bembel“, „Die Spur führt zu dem Kollektiv“. Namen ohne Artikel („Hafenkolonne“) bleiben, wie sie sind; nur am
+ * Satzanfang steht immer gang.name.
+ */
+export function gangNameIn(gang: Gang, grammaticalCase: 'dative' | 'accusative'): string {
+  return gang.nameIn?.[grammaticalCase] ?? gang.name;
+}
 
 /** Schlüssel eines Gang-Paars (alphabetisch). */
 export function rivalryKey(a: string, b: string): string {

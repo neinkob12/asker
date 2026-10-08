@@ -1,17 +1,17 @@
-// Regressionstests zu Befunden aus dem Bugreview (Gangs): je Befund ein Block mit seiner ID.
+// Regressionstests aus dem Bugreview (Gangs): je Fehler ein Block, benannt nach dem Verhalten, das er absichert.
 
 import { describe, expect, it } from 'vitest';
 import { fillText, type GameEvents, type Simulation, wallet } from '../../core';
-import { createTestGame } from '../../core/testing';
+import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { activeCity, unlockCity } from '../city';
 import { activeEncounters } from '../encounters';
 import { fitsInto, formatProductAmount, getStock, productName, store, warehouseSites } from '../goods';
 import { getStaffMember, invalidateStaffIndex, isEmployed } from '../staff';
 import { addInfluence, controllerOf, getInfluence, PLAYER_FACTION } from '../territory';
 import { allVeedel } from '../veedel';
-import { pickRaidTarget, pickTarget } from './ai';
+import { gangsTick, pickRaidTarget, pickTarget } from './ai';
 import { statusOf } from './common';
-import { GANGS, type Gang } from './data';
+import { GANGS, type Gang, gangNameIn, rivalryKey } from './data';
 import {
   type GangStatus,
   gangMemories,
@@ -23,8 +23,11 @@ import {
 } from './index';
 import { type GangIncident, runMethod } from './methods';
 import { onEncounterResolved } from './reactions';
+import { onSafeFinished } from './safe';
+import { onSearchFinished } from './search';
 import { gangVeedel } from './state';
 import { GANG_VOICES, INCIDENT_TEXTS } from './texts';
+import { endWar, onPushIntoGang } from './war';
 
 function gang(id: string): Gang {
   const g = GANGS.find((x) => x.id === id);
@@ -404,4 +407,166 @@ describe('Angebote und Erpressungen nennen keine feste Zeit, die nicht zur Frist
       for (const text of [...voice.offer, ...voice.blackmail]) expect(text, id).not.toMatch(fixed);
     }
   });
+
+  it('auch keine Tageszeit wie „heute Nacht“ oder „bis Sperrstunde“: Angebote kommen zu jeder Stunde', () => {
+    const timeOfDay = /\bhe[ui]te?\s+Nacht\b|\bheute?\s+Abend\b|Sperrstund|Feierabend/i;
+    for (const [id, voice] of Object.entries(GANG_VOICES)) {
+      for (const text of [...voice.offer, ...voice.blackmail]) expect(text, id).not.toMatch(timeOfDay);
+    }
+  });
+});
+
+describe('Gangs mit Artikel im Namen in Journal und Kasse', () => {
+  const withArticle = GANGS.filter((g) => /^(Die|Das|Der)\s/.test(g.name));
+
+  /** Der Name mit großem Artikel mitten im Satz, etwa „mit Die Türsteher“ oder „Du hast Das Kollektiv …“. */
+  function midSentence(g: Gang): RegExp {
+    return new RegExp(`[a-zäöüß,]\\s${g.name}\\b`);
+  }
+
+  it('jede Gang mit Artikel im Namen hat eine Form für mitten im Satz, klein und gebeugt', () => {
+    expect(withArticle.map((g) => g.id).sort()).toEqual(['be-tuer', 'ff-sachsenhausen', 'hh-schanze']);
+    for (const g of withArticle) {
+      for (const grammaticalCase of ['dative', 'accusative'] as const) {
+        const form = gangNameIn(g, grammaticalCase);
+        expect(form, `${g.id} ${grammaticalCase}`).toMatch(/^(die|das|der|dem|den)\s/);
+      }
+    }
+  });
+
+  for (const id of ['hh-schanze', 'be-tuer', 'ff-sachsenhausen']) {
+    it(`${id}: Abmachungen, Deals, Vorfälle, Krieg, Tresor und Bude ohne großen Artikel mitten im Satz`, () => {
+      const g = gang(id);
+      const sim = createTestGame({ seed: 5 });
+      // Ein Kölner Mann für das Abwerben, bevor die Stadt wechselt.
+      const member = hire(sim, 'ebertplatz', 10);
+      unlockCity(sim.ctx('city'), g.cityId);
+      expect(sim.dispatch({ type: 'city.switch', payload: { cityId: g.cityId } }).ok).toBe(true);
+      const site = warehouseSites(g.cityId)[0];
+      sim.state.modules.goods.owned.push(site.id);
+      store(sim.ctx('test'), { productId: 'weed', amount: 500, warehouseId: site.id });
+      wallet.earn(sim.ctx('test'), 200_000, 'dirty', 'Test');
+      const events = recordEvents(sim);
+      const ok = (result: { ok: boolean; reason?: string }) => expect(result.reason).toBeUndefined();
+      const s = status(sim, g.id);
+      const partner = GANGS.find((x) => x.cityId === g.cityId && x.id !== g.id);
+      if (!partner) throw new Error('keine zweite Gang');
+      const ps = status(sim, partner.id);
+      const now = () => sim.state.time;
+
+      // Waffenstillstand, Schutzgeld zahlen, ablehnen, aufs Schutzgeld verzichten.
+      s.hostility = 50;
+      s.relation = 0;
+      s.lastPlayerAttackAt = null;
+      ok(sim.dispatch({ type: 'gangs.ceasefire', payload: { gangId: g.id } }));
+      ok(sim.dispatch({ type: 'gangs.payTribute', payload: { gangId: g.id } }));
+      ok(sim.dispatch({ type: 'gangs.refuse', payload: { gangId: g.id } }));
+      s.protection = { amount: 500, nextDueAt: now() + 10_000, overdue: false };
+      ok(sim.dispatch({ type: 'gangs.releaseProtection', payload: { gangId: g.id } }));
+
+      // Bündnis mit ihr, dann eins gegen sie (das bricht alle Abmachungen mit ihr).
+      s.relation = 100;
+      s.hostility = 0;
+      ok(sim.dispatch({ type: 'gangs.ally', payload: { gangId: g.id, againstGangId: partner.id } }));
+      ps.relation = 100;
+      ps.hostility = 0;
+      ok(sim.dispatch({ type: 'gangs.ally', payload: { gangId: partner.id, againstGangId: g.id } }));
+
+      // Ware kaufen (ohne Groll kippt der Deal nicht).
+      s.relation = 100;
+      s.hostility = 0;
+      s.offer = { id: 77, amount: 50, price: 200, expiresAt: now() + 60 };
+      ok(sim.dispatch({ type: 'gangs.acceptOffer', payload: { gangId: g.id, offerId: 77 } }));
+
+      // Vorfälle: Gefallen, Schweigegeld, Warnung vor ihr, Abwerben.
+      s.money = 50_000;
+      const incident = (fields: Partial<GangIncident> & Pick<GangIncident, 'id' | 'kind'>): GangIncident => {
+        const full: GangIncident = {
+          gangId: g.id,
+          byGangId: g.id,
+          cityId: g.cityId,
+          at: now(),
+          expiresAt: now() + 8 * 60,
+          ...fields,
+        };
+        sim.state.modules.gangs.incidents.push(full);
+        return full;
+      };
+      ok(respond(sim, incident({ id: 9101, kind: 'favor', warehouseId: site.id, amount: 300 }), 'accept'));
+      ok(respond(sim, incident({ id: 9102, kind: 'blackmail', warehouseId: site.id, amount: 300 }), 'pay'));
+      ok(respond(sim, incident({ id: 9103, kind: 'poach', staffId: member, extra: 30 }), 'release'));
+
+      // Gang-Krieg: die andere Gang drängt in ihr Revier; du lieferst Ware, einmal an jede Seite.
+      const gangsCtx = sim.ctx('gangs');
+      sim.state.modules.gangs.rivalry = { [rivalryKey(g.id, partner.id)]: -100 };
+      onPushIntoGang(gangsCtx, partner, g.id, g.homeVeedelId);
+      const war = sim.state.modules.gangs.wars?.find((w) => w.attacker === partner.id);
+      if (!war) throw new Error('kein Krieg');
+      war.asker = partner.id;
+      war.support = null;
+      ok(sim.dispatch({ type: 'gangs.supportWar', payload: { warId: war.id, kind: 'goods' } }));
+      sim.state.modules.gangs.wars?.push({
+        id: 4343,
+        cityId: g.cityId,
+        attacker: g.id,
+        defender: partner.id,
+        veedelId: partner.homeVeedelId,
+        startedAt: now(),
+        asker: g.id,
+        support: null,
+      });
+      ok(sim.dispatch({ type: 'gangs.supportWar', payload: { warId: 4343, kind: 'goods' } }));
+      endWar(gangsCtx, partner.id, g.homeVeedelId, true);
+      endWar(gangsCtx, g.id, partner.homeVeedelId, false);
+
+      // Tresor und Bude der Gang, einmal gewonnen und einmal nicht.
+      const finished = (kind: 'safe' | 'search', won: boolean): GameEvents['minigame.finished'] => ({
+        id: 1,
+        kind,
+        origin: { module: 'gangs', ref: `${kind}:${g.id}:0` },
+        cityId: g.cityId,
+        score: won ? 1 : 0,
+        won,
+        by: 'player',
+        picks: [],
+      });
+      onSafeFinished(gangsCtx, finished('safe', true));
+      onSafeFinished(gangsCtx, finished('safe', false));
+      onSearchFinished(gangsCtx, finished('search', true));
+      onSearchFinished(gangsCtx, finished('search', false));
+
+      // Einbruch mit Spur zu ihr, abgelaufener Waffenstillstand und abgelaufenes Bündnis (Tick der Gangs).
+      incident({
+        id: 9104,
+        kind: 'burglary',
+        reportAt: now(),
+        reported: false,
+        warehouseId: site.id,
+        productId: 'weed',
+        amount: 20,
+        trail: 'gang',
+      });
+      s.ceasefireUntil = now();
+      s.alliance = { againstGangId: partner.id, until: now() };
+      ps.alliance = { againstGangId: g.id, until: now() };
+      gangsTick(gangsCtx);
+      // Ereignisse aus den direkten Aufrufen zustellen.
+      ok(sim.dispatch({ type: 'gangs.refuse', payload: { gangId: g.id } }));
+
+      const journal = sim.state.journal.map((j) => j.text).filter((t) => t.includes(g.name.split(' ')[1]));
+      const ledger = eventsOfType(events, 'wallet.changed')
+        .map((e) => e.payload.reason)
+        .filter((t) => t.includes(g.name.split(' ')[1]));
+      expect(journal.length).toBeGreaterThanOrEqual(20);
+      expect(ledger.length).toBeGreaterThanOrEqual(8);
+      for (const text of [...journal, ...ledger]) expect(text).not.toMatch(midSentence(g));
+      const dative = gangNameIn(g, 'dative');
+      const accusative = gangNameIn(g, 'accusative');
+      expect(journal).toContain(`Du hast ${accusative} abblitzen lassen.`);
+      expect(journal.some((t) => t.includes(`Die Spur führt zu ${dative}.`))).toBe(true);
+      expect(journal.some((t) => t.startsWith(`Gang-Krieg vorbei: ${partner.name} hat ${accusative} aus`))).toBe(true);
+      expect(ledger).toContain(`Ware von ${dative}`);
+      expect(ledger).toContain(`Schutzgeld an ${accusative}`);
+    });
+  }
 });

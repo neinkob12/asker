@@ -160,6 +160,43 @@ describe('Hafen abholen bleibt nicht am vollen Ziel-Lager hängen', () => {
     expect(getTrips(sim.state)).toHaveLength(0);
     expect(taskIdleReason(sim.state, 'pickup')).toMatch(/kein Lager/);
   });
+
+  it('hat das bestellte Lager weniger Platz als ein Stück wiegt, fährt der Fahrer ins nächste, in das es passt', () => {
+    const sim = portSetup();
+    // 10 g frei, ein Vape-Pen wiegt 20 g: Für logistics ist das Lager „nicht voll“, hinein passt trotzdem nichts.
+    fill(sim, 'ehrenfeld', 10);
+    receiveCargo(sim.ctx('suppliers'), {
+      supplierId: 'rotterdam',
+      productId: 'vape',
+      amount: 50,
+      quality: 0.6,
+      unitCost: 3,
+      warehouseId: 'ehrenfeld',
+    });
+    expect(taskIdleReason(sim.state, 'pickup')).toBeNull();
+    sim.advance(5);
+    expect(getCargo(sim.state)).toHaveLength(0);
+    expect(getTrips(sim.state).map((t) => t.toId)).toEqual(['nippes']);
+    expect(rh(sim).done.pickups).toBe(1);
+  });
+
+  it('übergeht auch ein Ausweich-Lager, in das kein Stück mehr passt', () => {
+    const sim = portSetup();
+    expect(sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'suelz' } }).ok).toBe(true);
+    fill(sim, 'ehrenfeld');
+    fill(sim, 'nippes', 10);
+    receiveCargo(sim.ctx('suppliers'), {
+      supplierId: 'rotterdam',
+      productId: 'vape',
+      amount: 50,
+      quality: 0.6,
+      unitCost: 3,
+      warehouseId: 'ehrenfeld',
+    });
+    sim.advance(5);
+    expect(getCargo(sim.state)).toHaveLength(0);
+    expect(getTrips(sim.state).map((t) => t.toId)).toEqual(['suelz']);
+  });
 });
 
 describe('Hafen abholen übergeht Ware, die eine Nachtfahrt eingeteilt hat', () => {
@@ -437,5 +474,40 @@ describe('Ersetzen ohne Anheuern kostet den Leutnant nichts', () => {
     expect(post.absences[runner.id]?.replaced).toBe(true);
     expect(post.hireSpent).toBe(0);
     expect(post.team).not.toContain(other.id);
+  });
+
+  it('darf er nicht anheuern, übernimmt trotzdem, wer schon am Spot steht', () => {
+    const sim = quietGame();
+    const lt = recruit(sim, 'runner', 2);
+    expect(sim.dispatch({ type: 'hierarchy.appoint', payload: { staffId: lt.id, spotIds: ['uni'] } }).ok).toBe(true);
+    sim.dispatch({
+      type: 'hierarchy.configure',
+      payload: { staffId: lt.id, settings: { onAbsent: 'replace', mayOrder: false, mayHire: false } },
+    });
+    const runner = recruit(sim, 'runner', 1);
+    expect(
+      sim.dispatch({
+        type: 'staff.assign',
+        payload: { staffId: runner.id, assignment: { kind: 'spot', targetId: 'uni' } },
+      }).ok,
+    ).toBe(true);
+    setStatus(sim.ctx('staff'), runner.id, 'jailed');
+    sim.advance(1);
+    const other = recruit(sim, 'runner', 1);
+    expect(
+      sim.dispatch({
+        type: 'staff.assign',
+        payload: { staffId: other.id, assignment: { kind: 'spot', targetId: 'uni' } },
+      }).ok,
+    ).toBe(true);
+    const post = getPost(sim.state, lt.id);
+    if (!post) throw new Error('kein Leutnant');
+    post.nextActionAt = sim.state.time;
+    sim.advance(60);
+    expect(post.absences[runner.id]?.replaced).toBe(true);
+    expect(post.absences[runner.id]?.stuck).toBeFalsy();
+    expect(post.log.some((e) => /niemand einspringen/.test(e.text))).toBe(false);
+    expect(post.log.some((e) => e.text.includes(`${other.name} übernimmt`))).toBe(true);
+    expect(post.hireSpent).toBe(0);
   });
 });

@@ -3,13 +3,14 @@
 import { describe, expect, it } from 'vitest';
 import type { Ctx, Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
+import { cityAt, cityTravel } from '../city';
 import { bookingCity } from '../finance';
 import { store } from '../goods';
 import { changeReputation, getReputation, recentReputationChanges } from '../reputation';
 import { getSpots } from '../spots';
 import { weatherDemandFactor } from '../weather';
 import { type Customer, customerRevenue, dealerRelation, getOrder, servableAt, waitingAt } from './index';
-import { offerDelivery, offerWholesale, onDealResolved } from './orders';
+import { offerDelivery, offerWholesale, onDealResolved, scriptedOrder } from './orders';
 import { onCityEventChanged } from './street';
 
 /** Spiel ohne zufällig auftauchende Kunden, damit die Tests genau zählen können. */
@@ -251,5 +252,78 @@ describe('Ende eines Stadt-Events würfelt den nächsten Kunden neu aus', () => 
     expect(next.every((t) => t >= now)).toBe(true);
     // Mit Math.min läge jeder Termin bei höchstens now + 0,5.
     expect(next.some((t) => t > now + 0.5)).toBe(true);
+  });
+});
+
+describe('Anfragen, die bei der Ankunft in einer anderen Stadt zurückgezogen werden', () => {
+  /**
+   * Köln ist aktiv, du fährst nach Hamburg. Eine Stunde vor der Ankunft kommen eine Großhandelsanfrage von Pitter und
+   * eine Lieferanfrage (beide noch in Köln). Bei der Ankunft zieht city die Fragen zurück.
+   */
+  function withdrawnOnArrival(seed = 1) {
+    const sim = quietGame(seed);
+    changeReputation(sim.ctx('test'), 50);
+    store(sim.ctx('test'), { productId: 'weed', amount: 3000, quality: 0.6 });
+    sim.state.modules.customers.dealers.pitter = { ...dealerRelation(sim.state, 'pitter'), trust: 55 };
+    sim.dispatch({ type: 'city.unlock', payload: { cityId: 'hamburg' } }, { actor: 'system' });
+    expect(sim.dispatch({ type: 'city.travel', payload: { cityId: 'hamburg' } }).ok).toBe(true);
+    const arrivesAt = cityTravel(sim.state)?.arrivesAt ?? 0;
+    sim.advance(arrivesAt - 60 - sim.state.time);
+    const wholesale = offerWholesale(sim.ctx('customers'), true, 'pitter');
+    const delivery = offerDelivery(sim.ctx('customers'), true);
+    if (!wholesale || !delivery) throw new Error('keine Anfrage');
+    sim.advance(arrivesAt - sim.state.time);
+    expect(cityTravel(sim.state)).toBeNull();
+    for (const order of [wholesale, delivery]) {
+      const message = sim.state.messages.list.find((m) => m.id === order.messageId);
+      expect(message?.expired).toBe(true);
+      expect(getOrder(sim.state, order.id)?.status).toBe('offered');
+    }
+    return { sim, wholesale, delivery };
+  }
+
+  it('bei Fristende kein Ruf-Abzug und kein Hängenlassen beim Stammabnehmer, eine ignorierte Anfrage kostet weiter', () => {
+    const { sim, wholesale, delivery } = withdrawnOnArrival();
+    const trust = dealerRelation(sim.state, 'pitter').trust;
+    sim.advance(wholesale.expiresAt - sim.state.time + 1);
+    for (const order of [wholesale, delivery]) expect(getOrder(sim.state, order.id)?.status).toBe('expired');
+    expect(recentReputationChanges(sim.state).some((c) => c.reason === 'Anfragen ignoriert')).toBe(false);
+    expect(dealerRelation(sim.state, 'pitter').trust).toBe(trust);
+    expect(dealerRelation(sim.state, 'pitter').letdowns).toEqual([]);
+
+    // Gegenprobe ohne Reise: Wer eine beantwortbare Anfrage liegen lässt, verliert Ruf und Vertrauen wie bisher.
+    const home = quietGame();
+    changeReputation(home.ctx('test'), 50);
+    store(home.ctx('test'), { productId: 'weed', amount: 3000, quality: 0.6 });
+    home.state.modules.customers.dealers.pitter = { ...dealerRelation(home.state, 'pitter'), trust: 55 };
+    const ignored = offerWholesale(home.ctx('customers'), true, 'pitter');
+    if (!ignored) throw new Error('keine Anfrage');
+    home.advance(ignored.expiresAt - home.state.time + 1);
+    expect(getOrder(home.state, ignored.id)?.status).toBe('expired');
+    expect(recentReputationChanges(home.state).some((c) => c.reason === 'Anfragen ignoriert')).toBe(true);
+    expect(dealerRelation(home.state, 'pitter').trust).toBeLessThan(55);
+    expect(dealerRelation(home.state, 'pitter').letdowns).toHaveLength(1);
+
+    // Die Handy-Bestellung des Tutorials (Nachricht von tutorial): Wer ihren Chat löscht, lässt sie ebenfalls liegen.
+    const tutorial = quietGame();
+    changeReputation(tutorial.ctx('test'), 50);
+    store(tutorial.ctx('test'), { productId: 'weed', amount: 300 });
+    const veedelId = getSpots(tutorial.state, 'koeln')[0]?.veedelId ?? '';
+    const scripted = scriptedOrder(tutorial.ctx('tutorial'), { veedelId });
+    if (!scripted) throw new Error('keine Anfrage');
+    expect(tutorial.dispatch({ type: 'messages.delete', payload: { contactId: scripted.contactId } }).ok).toBe(true);
+    tutorial.advance(scripted.expiresAt - tutorial.state.time + 1);
+    expect(getOrder(tutorial.state, scripted.id)?.status).toBe('expired');
+    expect(recentReputationChanges(tutorial.state).some((c) => c.reason === 'Anfragen ignoriert')).toBe(true);
+  });
+
+  it('belegen keinen der offenen Plätze: In Hamburg kommen gleich neue Anfragen', () => {
+    const { sim } = withdrawnOnArrival();
+    sim.state.wallet.clean = 20_000;
+    expect(sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'keller-st-georg' } }).ok).toBe(true);
+    store(sim.ctx('test'), { productId: 'weed', amount: 500, warehouseId: 'keller-st-georg' });
+    const next = offerDelivery(sim.ctx('customers'), true);
+    expect(next).not.toBeNull();
+    expect(cityAt(next?.lng ?? 0, next?.lat ?? 0)).toBe('hamburg');
   });
 });

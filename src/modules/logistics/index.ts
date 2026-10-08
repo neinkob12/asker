@@ -241,7 +241,7 @@ export interface Trip {
   /** Fahrt einer Route: welche, und ob Hin- oder Rückfahrt. */
   routeId?: number;
   leg?: 'out' | 'back';
-  /** Schon abgeladene Einheiten, solange die Fahrt am vollen Lager wartet (Auftrag 33). */
+  /** Schon abgeladene Einheiten, solange die Fahrt am vollen Lager wartet (Auftrag 33); Umleiten setzt sie zurück. */
   unloaded?: number;
   /** Dasselbe nach Ware, für Ankunft und Journal in Gramm (fehlt bei alten Ständen und ohne Teillieferung). */
   unloadedItems?: { productId: string; amount: number }[];
@@ -1484,7 +1484,9 @@ function redirect(ctx: Ctx, payload: { tripId: number; toId: string }): CommandR
   const from = here ?? to;
   trip.fromId = from.id;
   trip.toId = to.id;
-  // Was schon abgeladen ist, liegt im alten Lager; Ankunft und Journal im neuen nennen nur, was dort ankommt.
+  // Was schon abgeladen ist, liegt im alten Lager; Ankunft (Menge und Liste), Journal und Fahrtenbuch im neuen nennen
+  // nur, was dort ankommt.
+  delete trip.unloaded;
   delete trip.unloadedItems;
   trip.status = 'enRoute';
   trip.startedAt = ctx.now;

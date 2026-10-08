@@ -9,6 +9,7 @@ import { addHeat } from '../police';
 import { veedelName } from '../veedel';
 import { statusOf } from './common';
 import { SAFE_ALARM_HEAT, SAFE_MAX, SAFE_MIN, SAFE_SHARE } from './config';
+import { gangNameIn } from './data';
 import { getGang } from './state';
 
 /** So viel liegt im Tresor einer Gang mit diesem Geld (0 = kein Tresor, der sich lohnt). */
@@ -51,11 +52,12 @@ export function onSafeFinished(ctx: Ctx, payload: GameEvents['minigame.finished'
   // Das Veedel des Überfalls (der Tresor steht im Spot der Gang dort).
   const veedelId = getEncounter(ctx.state, Number(encounterId))?.request.veedelId ?? null;
   const who = payload.by === 'rightHand' ? 'Deine Rechte Hand' : 'Du';
+  const of = gangNameIn(gang, 'dative');
   if (payload.won) {
     // Was im Tresor liegt, aus der Kasse der Gang (das Spiel steht still, solange der Tresor offen ist).
     const amount = Math.min(Math.max(0, Math.round(s.money)), Math.round(safeAmount(s.money) * payload.score));
     if (amount > 0) {
-      wallet.earn(ctx, amount, 'dirty', `Tresor von ${gang.name}`, {
+      wallet.earn(ctx, amount, 'dirty', `Tresor von ${of}`, {
         category: 'income.other',
         cityId: payload.cityId,
       });
@@ -64,8 +66,8 @@ export function onSafeFinished(ctx: Ctx, payload: GameEvents['minigame.finished'
     journal.add(
       ctx,
       amount > 0
-        ? `${who} ${payload.by === 'rightHand' ? 'knackt' : 'knackst'} den Tresor von ${gang.name}: ${formatEuro(amount)}.`
-        : `Der Tresor von ${gang.name} ist offen, aber leer.`,
+        ? `${who} ${payload.by === 'rightHand' ? 'knackt' : 'knackst'} den Tresor von ${of}: ${formatEuro(amount)}.`
+        : `Der Tresor von ${of} ist offen, aber leer.`,
       'good',
       veedelId ? { veedelId } : undefined,
     );
@@ -74,7 +76,7 @@ export function onSafeFinished(ctx: Ctx, payload: GameEvents['minigame.finished'
   if (veedelId) addHeat(ctx, veedelId, SAFE_ALARM_HEAT);
   journal.add(
     ctx,
-    `Der Tresor von ${gang.name} hält. Alarm${veedelId ? ` in ${veedelName(veedelId)}` : ''}, ihr müsst raus.`,
+    `Der Tresor von ${of} hält. Alarm${veedelId ? ` in ${veedelName(veedelId)}` : ''}, ihr müsst raus.`,
     'bad',
     veedelId ? { veedelId } : undefined,
   );

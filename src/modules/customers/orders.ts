@@ -9,6 +9,7 @@ import {
   clock,
   formatEuro,
   formatNumber,
+  type GameState,
   journal,
   type MessageOption,
   messages,
@@ -90,11 +91,31 @@ import { pickWeighted, rateSale, updateRegularAfterSale } from './street';
 
 const isOpen = (o: Order) => o.status === 'offered' || o.status === 'enRoute' || o.status === 'contested';
 
+/**
+ * Anfrage, deren Frage im Handy zurückgezogen ist (bei der Ankunft in einer anderen Stadt, Auftrag 43, oder beim
+ * Verkauf des Geschäfts): Du kannst weder annehmen noch ablehnen, nur die Rechte Hand der Stadt nimmt sie bis zur
+ * Frist noch an. Zurückziehen setzt die Nachricht ohne Ereignis auf abgelaufen; die Frist selbst markiert der Kern erst
+ * nach den Ticks und mit Ereignis (expireOrderMessage). Fehlt die Nachricht, gilt die Anfrage nicht als zurückgezogen.
+ */
+function isWithdrawn(state: GameState, o: Order): boolean {
+  if (o.status !== 'offered') return false;
+  const message = messages.get(state, o.messageId);
+  return !!message?.expired && !message.answer;
+}
+
+/** Belegt der Auftrag einen der offenen Plätze (MAX_OPEN_ORDERS)? Zurückgezogene nicht, sie sperrten die neue Stadt. */
+const takesSlot = (state: GameState, o: Order) => isOpen(o) && !isWithdrawn(state, o);
+
 function findOrder(ctx: Ctx, orderId: number): Order | undefined {
   return ctx.state.modules.customers.orders.find((o) => o.id === orderId);
 }
 
-function finish(ctx: Ctx, order: Order, status: 'done' | 'declined' | 'expired' | 'failed'): void {
+function finish(
+  ctx: Ctx,
+  order: Order,
+  status: 'done' | 'declined' | 'expired' | 'failed',
+  options: { dealerCounts?: boolean } = {},
+): void {
   order.status = status;
   order.finishedAt = ctx.now;
   // Auftrag 34: Platzt ein vorab bezahlter Deal, bekommt der Dealer seine Vorkasse zurück (sonst verlöre er Geld und
@@ -107,8 +128,8 @@ function finish(ctx: Ctx, order: Order, status: 'done' | 'declined' | 'expired' 
     });
     order.prepaid = Math.max(0, order.prepaid - back);
   }
-  // Stammabnehmer merken sich, wie es lief.
-  if (order.kind === 'wholesale') onDealerOrderFinished(ctx, order.contactId, status);
+  // Stammabnehmer merken sich, wie es lief (nicht bei einer zurückgezogenen Anfrage: Da konntest du nicht antworten).
+  if (order.kind === 'wholesale' && options.dealerCounts !== false) onDealerOrderFinished(ctx, order.contactId, status);
   ctx.emit('order.finished', { orderId: order.id, kind: order.kind, status });
 }
 
@@ -222,7 +243,7 @@ export function offerDelivery(ctx: Ctx, force = false): Order | null {
   // Kunden schreiben direkt, wenn du es eingeschaltet hast oder deine Rechte Hand die Aufträge übernimmt.
   const viaRightHand = rightHandHandlesOrders(state);
   if (!force && !s.directOrders && !viaRightHand) return null;
-  if (s.orders.filter(isOpen).length >= MAX_OPEN_ORDERS) return null;
+  if (s.orders.filter((o) => takesSlot(state, o)).length >= MAX_OPEN_ORDERS) return null;
   // Anfragen kommen aus der Stadt, die live ist, und nur für Ware, die dort im Lager liegt (Auftrag 30).
   const cityId = activeCity(state);
   if (getReputation(state) < DELIVERY_MIN_REPUTATION || getStock(state, { cityId }) <= 0) return null;
@@ -312,7 +333,7 @@ export function scriptedOrder(ctx: Ctx, request: { veedelId: string }): Order | 
   const veedel = getVeedel(request.veedelId);
   if (!veedel) return null;
   const cityId = veedelCity(veedel.id);
-  if (state.modules.customers.orders.filter(isOpen).length >= MAX_OPEN_ORDERS) return null;
+  if (state.modules.customers.orders.filter((o) => takesSlot(state, o)).length >= MAX_OPEN_ORDERS) return null;
   const stocked = allProducts()
     .map((p) => ({ product: p, stock: getStock(state, { productId: p.id, cityId }) }))
     .filter((x) => x.stock > 0)
@@ -351,8 +372,8 @@ export function scriptedOrder(ctx: Ctx, request: { veedelId: string }): Order | 
 export function offerWholesale(ctx: Ctx, force = false, dealerId?: string): Order | null {
   const state = ctx.state;
   const s = state.modules.customers;
-  if (s.orders.some((o) => isOpen(o) && o.kind === 'wholesale')) return null;
-  if (s.orders.filter(isOpen).length >= MAX_OPEN_ORDERS) return null;
+  if (s.orders.some((o) => takesSlot(state, o) && o.kind === 'wholesale')) return null;
+  if (s.orders.filter((o) => takesSlot(state, o)).length >= MAX_OPEN_ORDERS) return null;
   if (getReputation(state) < WHOLESALE_MIN_REPUTATION) return null;
   if (!force && !ctx.chance(WHOLESALE_CHANCE_PER_HOUR * reputationDemandFactor(state))) return null;
   const cityId = activeCity(state);
@@ -656,10 +677,14 @@ export function ordersTick(ctx: Ctx): void {
   const s = ctx.state.modules.customers;
   for (const order of [...s.orders]) {
     if (order.status === 'enRoute' && order.arrivesAt !== null && order.arrivesAt <= ctx.now) complete(ctx, order);
-    // Sicherheitsnetz, falls das Ablaufen der Nachricht nicht ankam.
+    // Sicherheitsnetz, falls das Ablaufen der Nachricht nicht ankam. Eine zurückgezogene Anfrage (die Rechte Hand hat
+    // sie bis zur Frist nicht angenommen) läuft still ab: kein Ruf-Abzug, kein Hängenlassen beim Stammabnehmer.
     else if (order.status === 'offered' && order.expiresAt <= ctx.now) {
-      changeReputation(ctx, REP_ORDER_EXPIRED, 'Anfragen ignoriert');
-      finish(ctx, order, 'expired');
+      if (isWithdrawn(ctx.state, order)) finish(ctx, order, 'expired', { dealerCounts: false });
+      else {
+        changeReputation(ctx, REP_ORDER_EXPIRED, 'Anfragen ignoriert');
+        finish(ctx, order, 'expired');
+      }
     }
   }
   if (ctx.now % 60 === 0) {

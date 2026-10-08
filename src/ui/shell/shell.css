@@ -106,7 +106,8 @@
   background: radial-gradient(ellipse at 36% 45%, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.6) 75%);
   animation: ui-fade-in var(--duration) var(--ease-out);
 }
-/* Ohne Schleier bleibt die Karte bedienbar: Klicks und Ziehen gehen an sie und schließen den Dialog nicht. */
+/* Ohne Schleier bleibt die Karte bedienbar: Klicks und Ziehen gehen an sie. Ziehen und Zoomen schließen den Dialog
+   nicht; ein Klick auf ein Gebiet öffnet dessen Seite im Handy und schließt ihn wie jeder Seitenwechsel. */
 .ui-map-dialog__scrim.is-none {
   pointer-events: none;
 }

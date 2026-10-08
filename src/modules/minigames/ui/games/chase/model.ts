@@ -783,6 +783,9 @@ function collideWalls(setup: ChaseSetup, state: ChaseState, dt: number): void {
       p.z += hit.nz * hit.depth;
       const into = -(c.x * hit.nx + c.z * hit.nz) * p.v; // Tempo gegen die Wand
       if (into > IMPACT_FREE && p.crashCooldown <= 0) {
+        // Zieht der Griff in die Wand (Nase in Fahrtrichtung, rückwärts das Heck, zeigt hinein)?
+        const nose = forward(p.heading);
+        const noseInto = -(nose.x * hit.nx + nose.z * hit.nz) * p.v > 0;
         p.crashCooldown = 0.5;
         const power = clamp((into - IMPACT_FREE) / (IMPACT_FULL - IMPACT_FREE), 0, 1);
         const blockWall = w.kind === 'block';
@@ -802,6 +805,9 @@ function collideWalls(setup: ChaseSetup, state: ChaseState, dt: number): void {
         const a = wrapAngle(headingTo(-hit.nz, hit.nx));
         const b = wrapAngle(a + Math.PI);
         p.course = Math.abs(wrapAngle(a - p.course)) < Math.abs(wrapAngle(b - p.course)) ? a : b;
+        // Die Nase dreht mit, sonst zöge der Griff den Kurs in einer halben Sekunde zurück in die Wand, und mit
+        // gehaltenem Gas folgte nach jeder Sperrzeit ein neuer Aufprall. Zeigt sie schon von der Wand weg, bleibt sie.
+        if (noseInto) p.heading = p.course;
       } else if (Math.abs(p.v) > 3) {
         // Schrammen entlang (je Sekunde gleich viel, unabhängig von der Bildrate; bei 60 Hz wie bisher 0,985 je Bild).
         p.v *= 0.985 ** (dt * 60);
@@ -1001,7 +1007,10 @@ function stepCop(setup: ChaseSetup, state: ChaseState, cop: Cop, dt: number): vo
         state.events.push({ kind: 'copCrash', power: 1, x: cop.x, z: cop.z });
       } else {
         v.pushed = Math.max(v.pushed, 1);
-        cop.v *= 0.6 ** (dt * 60); // je Sekunde gleich viel, bei 60 Hz wie bisher 0,6 je Bild
+        // Je Bild mit Kontakt, nicht je Sekunde: Der Schub unten trennt die Wagen um fest 0,5 m je Bild, ein Kontakt
+        // dauert also bei jeder Bildrate gleich viele Bilder. So bremst er gleich stark, und auf den Unfall oben wird
+        // gleich oft gewürfelt.
+        cop.v *= 0.6;
         const nx = (cop.x - v.x) / Math.max(d, 1e-6);
         const nz = (cop.z - v.z) / Math.max(d, 1e-6);
         cop.x += nx * 0.5;

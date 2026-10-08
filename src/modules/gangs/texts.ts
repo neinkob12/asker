@@ -603,7 +603,7 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Rocco. {amount} für {price}. Hinterausgang, {veedel}.',
       'Aus der Bar-Kasse: {amount}, {price}. In {veedel}, frag nach dem Portier.',
       'Party war kleiner als gedacht. {amount} übrig, {price}. {veedel}.',
-      'Kiez-Angebot: {amount} für {price}. Nur heute Nacht, in {veedel}.',
+      'Kiez-Angebot: {amount} für {price}. Nur kurz zu haben, in {veedel}.',
     ],
     allianceOffer: [
       '{enemy} macht uns die Türen streitig. {price} und du stehst mit uns an der Tür.',

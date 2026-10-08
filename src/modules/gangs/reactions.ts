@@ -46,9 +46,10 @@ export function onEncounterResolved(ctx: Ctx, payload: GameEvents['encounter.res
   if (!gang || !s) return;
   const r = payload.result;
   if (r) {
-    // Was du gewinnst, verliert die Gang, und umgekehrt.
+    // Was du gewinnst, verliert die Gang, und umgekehrt. Beute, die bei dir mangels Lager verfallen ist, hat die Gang
+    // trotzdem verloren.
     s.people = Math.max(0, s.people - r.opponentLosses);
-    s.goods = Math.max(0, s.goods - r.goods);
+    s.goods = Math.max(0, s.goods - r.goods - (r.goodsForfeited ?? 0));
     s.money = Math.max(0, s.money - r.money);
     // Beziehung aus dem Ergebnis, z.B. wenn du dich freigekauft hast (encounters, Weg "payoff").
     if (r.relation) addRelation(s, r.relation);

@@ -17,7 +17,8 @@ export interface MapDialogProps {
   class?: string;
   /**
    * Hintergrund über der Kartenfläche: 'dim' (abgedunkelt, Klick schließt) oder 'none' (Karte bleibt sichtbar und
-   * bedienbar, ein Klick auf sie schließt nicht).
+   * bedienbar: Ziehen und Zoomen schließen den Dialog nicht; ein Klick auf ein Gebiet öffnet dessen Seite im Handy
+   * und schließt ihn wie jeder Seitenwechsel).
    */
   scrim?: 'dim' | 'none';
   /** Höhe als Blatt am Handy-Bildschirm. */

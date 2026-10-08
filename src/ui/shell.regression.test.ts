@@ -1,7 +1,10 @@
-// Regressionstests zu Befunden aus dem Bugreview (Oberfläche ohne Browser): Kartenauswahl und Filter „Offen“.
+// Regressionstests zu Befunden aus dem Bugreview (Oberfläche ohne Browser): Kartenauswahl, Filter „Offen“ und
+// Kartendialog ohne Schleier.
 
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GameSession, GameState } from '../core';
+import { pushOverlay } from './overlays';
 import { isOpenChat } from './phone/messagesModel';
 import { UiRuntime } from './runtime';
 
@@ -93,5 +96,35 @@ describe('Filter „Offen“ in den Nachrichten', () => {
       { id: 'gelesen', awaitingAnswer: false, unread: 0 },
     ];
     expect(chats.filter(isOpenChat).map((c) => c.id)).toEqual(['frage', 'info']);
+  });
+});
+
+describe('Kartendialog ohne Schleier', () => {
+  beforeEach(() => {
+    vi.stubGlobal('window', { matchMedia: () => ({ matches: false }) });
+    vi.stubGlobal('navigator', {});
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('lässt Ziehen und Zoomen an die Karte durch: der Schleier nimmt keine Zeiger an', () => {
+    const css = readFileSync(new URL('./shell/shell.css', import.meta.url), 'utf8');
+    const rule = css.match(/\.ui-map-dialog__scrim\.is-none\s*\{([^}]*)\}/);
+    expect(rule?.[1]).toMatch(/pointer-events:\s*none/);
+  });
+
+  it('schließt, wenn ein Klick auf ein Gebiet dessen Seite im Handy öffnet', () => {
+    const runtime = new UiRuntime(fakeSession() as unknown as GameSession, null);
+    // So meldet sich MapDialog am Desktop an (useOverlay): Navigation ruft onClose.
+    const onClose = vi.fn();
+    const release = pushOverlay(onClose);
+    try {
+      // Wie der Klick auf die Veedel-Fläche der Karte.
+      runtime.api.openPanel('veedel.veedel', { veedelId: 'ehrenfeld' });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+    }
   });
 });

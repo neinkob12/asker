@@ -21,7 +21,7 @@ import {
   WAR_SPOILS_PEOPLE,
   WAR_SUPPORT_FACTOR,
 } from './config';
-import { GANG_RIVALRY, GANGS, type Gang, rivalryKey } from './data';
+import { GANG_RIVALRY, GANGS, type Gang, gangNameIn, rivalryKey } from './data';
 import { attack, raidCrew } from './diplomacy';
 import { memoryScore, remember } from './memory';
 import { getGang, isGangBroken, raidTargets } from './state';
@@ -112,7 +112,12 @@ export function onPushIntoGang(ctx: Ctx, gang: Gang, defenderId: string, veedelI
   g.wars ??= [];
   g.wars.push(war);
   g.warCount = (g.warCount ?? 0) + 1;
-  journal.add(ctx, `Gang-Krieg: ${gang.name} gegen ${defender.name} in ${veedelName(veedelId)}.`, 'info', { veedelId });
+  journal.add(
+    ctx,
+    `Gang-Krieg: ${gang.name} gegen ${gangNameIn(defender, 'accusative')} in ${veedelName(veedelId)}.`,
+    'info',
+    { veedelId },
+  );
   ctx.emit('gang.warStarted', { warId: war.id, attacker: gang.id, defender: defender.id, veedelId });
   askForHelp(ctx, war);
 }
@@ -191,10 +196,10 @@ export function supportWar(ctx: Ctx, warId: number, kind: WarSupport): CommandRe
     const price = Math.min(Math.round(taken * side.traits.goodsCost), Math.max(0, s.money));
     s.goods += taken;
     s.money -= price;
-    if (price > 0) wallet.earn(ctx, price, 'dirty', `Ware an ${side.name}`, 'sales.wholesale');
+    if (price > 0) wallet.earn(ctx, price, 'dirty', `Ware an ${gangNameIn(side, 'accusative')}`, 'sales.wholesale');
     journal.add(
       ctx,
-      `Ware an ${side.name} gegen ${enemy.name}: ${formatAmount(taken)} für ${formatEuro(price)}.`,
+      `Ware an ${gangNameIn(side, 'accusative')} gegen ${gangNameIn(enemy, 'accusative')}: ${formatAmount(taken)} für ${formatEuro(price)}.`,
       'info',
     );
   } else {
@@ -250,8 +255,8 @@ export function endWar(ctx: Ctx, attacker: string, veedelId: string, success: bo
   if (g.warLog.length > 6) g.warLog.length = 6;
   if (a && d) {
     const text = success
-      ? `Gang-Krieg vorbei: ${a.name} hat ${d.name} aus ${veedelName(veedelId)} vertrieben.`
-      : `Gang-Krieg vorbei: ${d.name} hat ${veedelName(veedelId)} gegen ${a.name} gehalten.`;
+      ? `Gang-Krieg vorbei: ${a.name} hat ${gangNameIn(d, 'accusative')} aus ${veedelName(veedelId)} vertrieben.`
+      : `Gang-Krieg vorbei: ${d.name} hat ${veedelName(veedelId)} gegen ${gangNameIn(a, 'accusative')} gehalten.`;
     const helped = war.support?.side;
     journal.add(ctx, text, helped ? (helped === winner ? 'good' : 'bad') : 'info', { veedelId });
   }

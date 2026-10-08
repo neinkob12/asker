@@ -10,7 +10,7 @@ import { getSpot, spotCity } from '../spots';
 import { getInfluence } from '../territory';
 import { veedelName } from '../veedel';
 import { say } from './common';
-import type { Gang } from './data';
+import { type Gang, gangNameIn } from './data';
 import { getGangStatus, getGangs, veedelGang } from './state';
 
 export interface ScriptedRaidRequest {
@@ -86,7 +86,7 @@ export function scriptedRaid(ctx: Ctx, request: ScriptedRaidRequest): ScriptedRa
     ctx,
     Math.floor(wallet.balance(ctx.state, 'dirty') * request.cashShare),
     'dirty',
-    `Überfall von ${gang.name}`,
+    `Überfall von ${gangNameIn(gang, 'dative')}`,
     { category: 'loss.gang', spotId: spot.id },
   );
 

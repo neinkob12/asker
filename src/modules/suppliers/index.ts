@@ -28,6 +28,7 @@
 //   availablePackages(state, id), packagePrice(state, supplierId, packageId), rollShipmentProblem(...),
 //   Sammelbestellung: shipmentItems(shipment), shipmentGoods(shipment), groupDiscount(n), groupRiskFactor(n),
 //   orderQuote(state, supplierId, lines, mode, cityId?), defaultWarehouse(state, cityId, weight?) (Lager ohne Angabe),
+//   orderDestination(state, supplierId, lines, picked?) (Lager, das die App für diese Pakete zeigt und mitschickt),
 //   Rabatt-Aktionen (Auftrag 32): getDeals(state, cityId?), activeDeal(state, supplierId, packageId, cityId?),
 //   supplierContact(supplier) (Kontakt im Handy), addSupplierTrust(ctx, id, amount), supplierById(id)
 //   deliveryLeg(supplier, progress, toPort?) (Darstellung: Schiff, Umladen oder Straße; Weg: roads.shipRoute,
@@ -69,7 +70,7 @@ import {
   warehouseFree,
   warehousePlace,
 } from '../goods';
-import { hasBerth, portName, receiveCargo } from '../logistics';
+import { defaultPickupWarehouse, hasBerth, portName, receiveCargo } from '../logistics';
 import { purchaseIndex } from '../market';
 import { getReputation } from '../reputation';
 import { specialistFactor } from '../staff';
@@ -1343,6 +1344,27 @@ export function defaultWarehouse(state: GameState, cityId: string, weight = 0): 
   const first = standard && standard.cityId === cityId ? standard.id : (getWarehouses(state, cityId)[0]?.id ?? null);
   if (!first || courierRoom(state, first) >= weight) return first;
   return getWarehouses(state, cityId).find((w) => courierRoom(state, w.id) >= weight)?.id ?? first;
+}
+
+/**
+ * Lager, das die Lieferanten-App in der aktiven Stadt zeigt und mitschickt: das gewählte, sonst (bei mehr als einem
+ * Lager) das, das der Befehl ohne Angabe nähme. Schiffsware geht in das Lager, in das die Abholung fährt, Kurierware
+ * nach `defaultWarehouse` mit dem Gewicht genau dieser Pakete (Sammelbestellung: alle, Einzeln: das eine Paket). Mit
+ * einem anderen Gewicht ginge ein Paket ausdrücklich in ein Lager ohne Platz, und die Bestellung scheiterte.
+ */
+export function orderDestination(
+  state: GameState,
+  supplierId: string,
+  lines: readonly OrderLine[],
+  picked?: string,
+): string | undefined {
+  const cityId = activeCity(state);
+  const warehouses = getWarehouses(state, cityId);
+  if (picked && warehouses.some((w) => w.id === picked)) return picked;
+  if (warehouses.length < 2) return undefined;
+  const base = getSupplier(state, supplierId);
+  if (base && supplierIn(base, cityId).kind === 'port') return defaultPickupWarehouse(state, cityId);
+  return defaultWarehouse(state, cityId, orderQuote(state, supplierId, lines, 'single', cityId).weight) ?? undefined;
 }
 
 /** Platz in einem Lager in Gramm, abzüglich der Kurier-Lieferungen, die schon dorthin unterwegs sind. */

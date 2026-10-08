@@ -34,8 +34,14 @@ import { cityName, cityTravel, getCity } from '../index';
 /** Tempo vor "Fahrt überspringen", damit es nach der Ankunft wieder gilt (pro Durchgang). */
 let skipped: { runId: string; speed: number } | null = null;
 
-/** Kamera klebt am Auto (Draufsicht); Ziehen an der Karte löst sie, "Folgen" holt sie zurück. */
+/**
+ * Kamera klebt am Auto (Draufsicht); Ziehen an der Karte oder ein Flug woandershin (Übersicht, Stadtmenü, ein Spot) löst
+ * sie, "Folgen" holt sie zurück.
+ */
 let following = true;
+
+/** Kennzeichen am eigenen jumpTo der Verfolgung: Nur Ziehen und Zoomen ohne dieses Kennzeichen lösen die Kamera. */
+const FOLLOW_EVENT = { cityTravelFollow: true } as const;
 
 /**
  * Kamerafahrt (immer Draufsicht, Norden oben): Die ersten Sekunden klebt sie nah am Auto, wie man losfährt, dann zieht sie
@@ -155,9 +161,11 @@ export const travelLayer: MapLayer = {
     const syncMarker = () => {
       element.hidden = !travelling || map.getZoom() > FAR_ZOOM;
     };
-    // Wer selbst an der Karte zieht oder zoomt, will nicht mehr verfolgt werden.
-    const release = (e: { originalEvent?: unknown }) => {
-      if (e.originalEvent) following = false;
+    // Wer selbst an der Karte zieht oder zoomt, will nicht mehr verfolgt werden. Ebenso, wer die Kamera woandershin
+    // schickt: Flüge (flyTo, Zoom-Knöpfe) haben kein originalEvent, starten aber immer mit zoomstart. Liefe die
+    // Verfolgung weiter, bräche ihr jumpTo den Flug im nächsten Bild ab. Das eigene jumpTo trägt FOLLOW_EVENT.
+    const release = (e: { type: string; cityTravelFollow?: boolean }) => {
+      if (!e.cityTravelFollow) following = false;
     };
     const frame = (now: number, dt: number) => {
       if (!trip || !car) return;
@@ -174,12 +182,15 @@ export const travelLayer: MapLayer = {
       // Die ersten Momente gleitet die Kamera zum Auto, danach sitzt sie fest auf ihm.
       const k = elapsed < 1.2 ? 1 - Math.exp(-dt * 5) : 1;
       const c = map.getCenter();
-      map.jumpTo({
-        center: [c.lng + (position.lng - c.lng) * k, c.lat + (position.lat - c.lat) * k],
-        zoom,
-        pitch: 0,
-        bearing: 0,
-      });
+      map.jumpTo(
+        {
+          center: [c.lng + (position.lng - c.lng) * k, c.lat + (position.lat - c.lat) * k],
+          zoom,
+          pitch: 0,
+          bearing: 0,
+        },
+        FOLLOW_EVENT,
+      );
     };
     const stopFrame = onMapFrame(frame, 'city.travel');
     map.on('zoomend', syncMarker);

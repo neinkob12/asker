@@ -15,14 +15,27 @@ import {
   allProducts,
   DEFAULT_WAREHOUSE,
   getStock,
+  getWarehouse,
   getWarehouses,
   isWarehouseOwned,
+  nearestWarehouse,
   productName,
   unitWeight,
+  type Warehouse,
   warehouseCity,
 } from '../goods';
 import { amountInProgress, launderingCapacity, MIN_LAUNDERING_AMOUNT } from '../laundering';
-import { freeDrivers, getCargo, harborQuestions, portName, reservedCargo, roomFor } from '../logistics';
+import {
+  freeDrivers,
+  getCargo,
+  harborQuestions,
+  type PortCargo,
+  portName,
+  portPlace,
+  reservedCargo,
+  roomFor,
+} from '../logistics';
+import { travelMinutes } from '../roads';
 import { atSpot, getSpots } from '../spots';
 import {
   activeRunnerAt,
@@ -204,26 +217,58 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
   }
 }
 
-/** Ware am Kai, die keine geplante Nachtfahrt schon für sich eingeteilt hat (älteste zuerst). */
-function waitingCargo(state: GameState) {
+/**
+ * Ware am Kai, die keine geplante Nachtfahrt schon für sich eingeteilt hat, in Gruppen nach bestelltem Lager (die
+ * älteste Ware zuerst).
+ */
+function waitingGroups(state: GameState): PortCargo[][] {
   const reserved = reservedCargo(state);
-  return getCargo(state).filter((c) => !reserved.has(c.id));
+  const groups = new Map<string | undefined, PortCargo[]>();
+  for (const c of getCargo(state)) {
+    if (reserved.has(c.id)) continue;
+    const group = groups.get(c.warehouseId);
+    if (group) group.push(c);
+    else groups.set(c.warehouseId, [c]);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * Wohin eine Gruppe vom Kai fährt. Ohne Angabe nimmt logistics das bestellte Lager (bzw. das nächste am Hafen), solange
+ * dort überhaupt etwas frei ist, auch wenn kein Stück der Gruppe mehr hineinpasst (10 g frei, ein Vape-Pen wiegt 20 g);
+ * die Abholung scheitert dann. Passt das leichteste Stück dort nicht, nennt sie deshalb selbst das nächste Lager der
+ * Stadt, in das es passt. Leeres Objekt: ohne Angabe abholen; null: Die Gruppe passt in kein Lager.
+ */
+function pickupDestination(state: GameState, group: readonly PortCargo[]): { warehouseId?: string } | null {
+  const cityId = group[0].cityId;
+  const smallest = Math.min(...group.map((c) => unitWeight(c.productId)));
+  const fits = (w: Warehouse) => warehouseCity(w.id) === cityId && roomFor(state, w.id) >= smallest;
+  const port = portPlace(cityId);
+  const wished = group[0].warehouseId ? getWarehouse(state, group[0].warehouseId) : undefined;
+  const first = wished ?? nearestWarehouse(state, port);
+  if (first && fits(first)) return {};
+  const withRoom = getWarehouses(state, cityId).filter(fits);
+  const best = withRoom.sort((a, b) => travelMinutes(port, a, 300) - travelMinutes(port, b, 300))[0];
+  return best ? { warehouseId: best.id } : null;
 }
 
 /**
  * Hafen abholen: Liegt Ware am Kai und ist ein Fahrer frei, schickt sie ihn los (eine Fahrt pro Ziel-Lager, die älteste
- * Ware zuerst) und beantwortet die Hafen-Fragen zu dieser Ware. Was eine Nachtfahrt eingeteilt hat, bleibt für sie
- *. Das Ziel wählt logistics wie bei deiner Abholung ohne Angabe: das bestellte Lager, ist es voll, das nächste
- * mit Platz; geht es für eine Gruppe gar nicht, versucht sie die nächste (sonst hing alles an der ersten Gruppe).
+ * Ware zuerst) und beantwortet die Hafen-Fragen zu dieser Ware. Was eine Nachtfahrt eingeteilt hat, bleibt für die
+ * Nachtfahrt. Ziel ist das bestellte Lager, ist es voll, das nächste, in das noch ein Stück passt
+ * (`pickupDestination`); geht es für eine Gruppe gar nicht, versucht sie die nächste (sonst hing alles an der ersten).
  */
 function handlePickup(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
   const state = ctx.state;
   if (!isTaskActive(state, 'pickup') || getCargo(state).length === 0 || freeDrivers(state).length === 0) return;
-  const waiting = waitingCargo(state);
-  for (const target of new Set(waiting.map((c) => c.warehouseId))) {
-    const group = waiting.filter((c) => c.warehouseId === target);
+  for (const group of waitingGroups(state)) {
+    const destination = pickupDestination(state, group);
+    if (!destination) continue;
     const cargoIds = group.map((c) => c.id);
-    const result = ctx.dispatch({ type: 'logistics.pickup', payload: { by: 'driver', cargoIds } }, { actor });
+    const result = ctx.dispatch(
+      { type: 'logistics.pickup', payload: { by: 'driver', cargoIds, ...destination } },
+      { actor },
+    );
     if (!result.ok) continue;
     for (const m of harborQuestions(state, cargoIds)) {
       messages.answerAs(ctx, { messageId: m.id, optionId: 'driver', via: VIA });
@@ -235,12 +280,13 @@ function handlePickup(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
   }
 }
 
-/** Liegt am Kai Ware, die in kein Lager der Stadt mehr passt? Dann holt auch ein freier Fahrer nichts ab. */
+/**
+ * Liegt am Kai Ware, die in kein Lager der Stadt mehr passt? Dann holt auch ein freier Fahrer nichts ab. Gerechnet pro
+ * Gruppe wie beim Abholen (`pickupDestination`).
+ */
 function pickupBlocked(state: GameState): string | null {
-  const waiting = waitingCargo(state);
-  if (waiting.length === 0) return null;
-  const smallest = Math.min(...waiting.map((c) => unitWeight(c.productId)));
-  if (getWarehouses(state, activeCity(state)).some((w) => roomFor(state, w.id) >= smallest)) return null;
+  const groups = waitingGroups(state);
+  if (groups.length === 0 || groups.some((g) => pickupDestination(state, g) !== null)) return null;
   return 'Die Ware am Kai passt in kein Lager: Bau Regale ein, lager um oder kauf ein Lager dazu.';
 }
 

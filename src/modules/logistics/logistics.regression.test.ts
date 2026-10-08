@@ -14,6 +14,7 @@ import {
   warehouseCapacity,
   warehouseFree,
   warehouseLoad,
+  warehousePlace,
 } from '../goods';
 import { getStaffMember, setStatus } from '../staff';
 import { LOAD_MINUTES } from './config';
@@ -259,6 +260,40 @@ describe('Ankunft nach Teillieferung am vollen Lager', () => {
     expect(arrived).toMatchObject({ amount: 300, items: [{ productId: 'hash', amount: 300 }] });
     const text = `${itemsText([{ productId: 'hash', amount: 300 }])} im Lager Ehrenfeld angekommen.`;
     expect(sim.state.journal.some((e) => e.text === text)).toBe(true);
+  });
+
+  it('nach dem Umleiten nennen Menge, Liste, Journal und Fahrtenbuch nur, was im neuen Lager ankommt', () => {
+    const sim = quietGame(6);
+    const events = recordEvents(sim);
+    hireDriver(sim);
+    expect(sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'nippes' } }).ok).toBe(true);
+    store(sim.ctx('test'), { productId: 'hash', amount: 300, warehouseId: 'kalk' });
+    expect(
+      sim.dispatch({ type: 'logistics.transfer', payload: { fromId: 'kalk', toId: 'ehrenfeld', by: 'driver' } }).ok,
+    ).toBe(true);
+    noChecks(sim);
+    const [trip] = getTrips(sim.state);
+    fillUp(sim, 'ehrenfeld', 100);
+    sim.advance(trip.arrivesAt - sim.state.time);
+    expect(trip.status).toBe('waiting');
+    expect(getStock(sim.state, { productId: 'hash', warehouseId: 'ehrenfeld' })).toBe(100);
+    expect(sim.dispatch({ type: 'logistics.redirect', payload: { tripId: trip.id, toId: 'nippes' } }).ok).toBe(true);
+    noChecks(sim);
+    sim.advance(trip.arrivesAt - sim.state.time);
+    expect(getTrips(sim.state)).toHaveLength(0);
+    expect(getStock(sim.state, { productId: 'hash', warehouseId: 'nippes' })).toBe(200);
+    const arrived = eventsOfType(events, 'transport.arrived')[0]?.payload;
+    expect(arrived).toMatchObject({ toId: 'nippes', amount: 200, items: [{ productId: 'hash', amount: 200 }] });
+    // Die Meldung „Fahrt angekommen“ nennt die Ware nur, wenn Menge und Liste zusammenpassen.
+    expect(arrived?.items?.reduce((sum, i) => sum + i.amount, 0)).toBe(arrived?.amount);
+    const text = `${itemsText([{ productId: 'hash', amount: 200 }])} ${warehousePlace('Garage Nippes', 'in')} angekommen.`;
+    expect(sim.state.journal.some((e) => e.text === text)).toBe(true);
+    expect(sim.state.modules.logistics.log[0]).toMatchObject({
+      id: trip.id,
+      result: 'done',
+      toId: 'nippes',
+      amount: 200,
+    });
   });
 });
 

@@ -94,6 +94,8 @@ export const PARRY_WINDOW = 0.22;
 export const DODGE_TIME = 0.34;
 export const DODGE_COOLDOWN = 0.45;
 export const COUNTER_TIME = 1.4;
+/** Ein zu früher Angriff gilt, bis du wieder frei bist, und danach noch so lange (Spielzeit). */
+export const ATTACK_BUFFER = 0.25;
 /** Zeitlupe nach einem Konter und am Ende (Sekunden echter Zeit, Faktor). */
 export const SLOWMO = 0.28;
 /** So lange braucht einer, um die Beute zu greifen. */
@@ -227,9 +229,12 @@ export interface BrawlState {
   endT: number;
   /** Zufall aus dem Seed (Zustand des Generators lebt in der Funktion). */
   combo: number;
-  /** Dein letzter Angriff wurde gepuffert (kam zu früh): so lange gilt er noch. */
+  /** Dein letzter Angriff wurde gepuffert (kam zu früh): so lange gilt er noch (bis du frei bist plus ATTACK_BUFFER). */
   buffered: { attack: AttackId; until: number } | null;
-  /** Tasten-Drücke aus dem Treffer-Stopp: Sie gelten im ersten Bild danach (sonst gingen sie verloren). */
+  /**
+   * Tasten-Drücke aus dem Treffer-Stopp: Sie gelten im ersten Bild danach (sonst gingen sie verloren). Ausweichen
+   * wartet hier, solange du noch ausholst, zuschlägst oder taumelst.
+   */
   held: BrawlInput | null;
 }
 
@@ -587,6 +592,29 @@ function free(f: Fighter): boolean {
   return f.state === 'idle' || f.state === 'walk' || f.state === 'block';
 }
 
+/** Spielzeit, bis f wieder frei ist (Ausholen, Schlag und Erholung zusammen; Taumeln, Ausweichen). */
+function busyLeft(f: Fighter): number {
+  const left = Math.max(0, f.dur - f.t);
+  const def = f.attack ? ATTACKS[f.attack] : null;
+  switch (f.state) {
+    case 'windup':
+      return left + (def ? def.active + def.recover : 0);
+    case 'strike':
+      return left + (def ? def.recover : 0);
+    case 'recover':
+    case 'hit':
+    case 'dodge':
+      return left;
+    default:
+      return 0;
+  }
+}
+
+/** Aus diesen Zuständen kannst du noch nicht ausweichen, kommst aber von selbst wieder heraus. */
+function dodgeLater(f: Fighter): boolean {
+  return f.state === 'windup' || f.state === 'strike' || f.state === 'hit';
+}
+
 function startAttack(c: Ctx, f: Fighter, attack: AttackId): void {
   const def = ATTACKS[attack];
   const tell = f.side === 'foe' ? FOE_TELL[attack] * (1 - 0.35 * c.setup.difficulty) : def.windup;
@@ -775,7 +803,8 @@ function playerStep(c: Ctx, p: Fighter, input: BrawlInput, dt: number): void {
     p.lane = lane;
   }
   let want: AttackId | null = input.heavy ? 'heavy' : input.light ? 'light' : null;
-  if (want) state.buffered = { attack: want, until: state.time + 0.25 };
+  // Zu früh gedrückt (noch im eigenen Schlag, beim Taumeln): gilt, bis du wieder frei bist, sonst verfiele er vorher.
+  if (want) state.buffered = { attack: want, until: state.time + busyLeft(p) + ATTACK_BUFFER };
   else if (state.buffered && state.time <= state.buffered.until) want = state.buffered.attack;
   if (input.dodge && (free(p) || p.state === 'recover') && state.time - p.dodgeSince > DODGE_COOLDOWN) {
     setState(p, 'dodge', DODGE_TIME);
@@ -1082,10 +1111,13 @@ export function stepBrawl(setup: BrawlSetup, state: BrawlState, rawDt: number, i
 
   const p = playerOf(state);
   if (!state.end) {
+    // Ausweichen aus der Pause geht im eigenen Schlag oder beim Taumeln noch nicht: Es wartet, bis du ausweichen kannst.
+    const waitDodge = state.held?.dodge === true && dodgeLater(p);
     const now = withPresses(input, state.held);
     state.held = null;
     if (now.special) triggerSpecial(c, now.special);
     playerStep(c, p, now, dt);
+    if (waitDodge) state.held = { dx: 0, dodge: true };
   }
   for (const f of state.fighters) {
     if (f.kind !== 'player' && (!state.end || f.state === 'run')) aiStep(c, f, dt);

@@ -86,7 +86,7 @@ import {
   WAREHOUSE_RAID_CHANCE,
   WARN_AT,
 } from './config';
-import { GANGS, type Gang } from './data';
+import { GANGS, type Gang, gangNameIn } from './data';
 import { goodTurns, logAction, maybePressure, upkeepIncidents } from './methods';
 import {
   allianceCost,
@@ -146,7 +146,7 @@ function upkeepAgreements(ctx: Ctx, gang: Gang, s: GangStatus): void {
   const now = ctx.now;
   if (s.ceasefireUntil !== null && s.ceasefireUntil <= now) {
     s.ceasefireUntil = null;
-    journal.add(ctx, `Der Waffenstillstand mit ${gang.name} ist abgelaufen.`, 'info');
+    journal.add(ctx, `Der Waffenstillstand mit ${gangNameIn(gang, 'dative')} ist abgelaufen.`, 'info');
     ctx.emit('gang.diplomacyChanged', { gangId: gang.id, kind: 'ceasefire', active: false });
   }
   if (s.tribute && s.tribute.until <= now) {
@@ -159,7 +159,11 @@ function upkeepAgreements(ctx: Ctx, gang: Gang, s: GangStatus): void {
   if (s.alliance && s.alliance.until <= now) {
     const enemy = getGang(ctx.state, s.alliance.againstGangId);
     s.alliance = null;
-    journal.add(ctx, `Das Bündnis mit ${gang.name}${enemy ? ` gegen ${enemy.name}` : ''} ist ausgelaufen.`, 'info');
+    journal.add(
+      ctx,
+      `Das Bündnis mit ${gangNameIn(gang, 'dative')}${enemy ? ` gegen ${gangNameIn(enemy, 'accusative')}` : ''} ist ausgelaufen.`,
+      'info',
+    );
     ctx.emit('gang.diplomacyChanged', { gangId: gang.id, kind: 'alliance', active: false });
   }
   if (s.protection && s.protection.nextDueAt <= now) collectProtection(ctx, gang, s);
@@ -183,7 +187,7 @@ function collectProtection(ctx: Ctx, gang: Gang, s: GangStatus): void {
   const stillStrong = playerPower(ctx.state) >= gangPower(ctx.state, gang.id) * PROTECTION_KEEP_RATIO;
   if (stillStrong && s.money >= amount) {
     s.money -= amount;
-    wallet.earn(ctx, amount, 'dirty', `Schutzgeld von ${gang.name}`, 'income.other');
+    wallet.earn(ctx, amount, 'dirty', `Schutzgeld von ${gangNameIn(gang, 'dative')}`, 'income.other');
     protection.overdue = false;
     journal.add(ctx, `${gang.name} zahlt dir ${formatEuro(amount)} Schutzgeld.`, 'good');
     return;
@@ -293,7 +297,7 @@ function expand(ctx: Ctx, gang: Gang, s: GangStatus): void {
     against === PLAYER_FACTION
       ? `${gang.name} drängt nach ${veedelName(target)}, in dein Revier.`
       : againstGang
-        ? `${gang.name} drängt nach ${veedelName(target)}, ins Revier von ${againstGang.name}.`
+        ? `${gang.name} drängt nach ${veedelName(target)}, ins Revier von ${gangNameIn(againstGang, 'dative')}.`
         : `${gang.name} drängt nach ${veedelName(target)}.`;
   journal.add(ctx, text, against === PLAYER_FACTION ? 'bad' : 'info', { veedelId: target });
   ctx.emit('gang.pushStarted', { gangId: gang.id, veedelId: target, against });
@@ -436,7 +440,11 @@ function allyStrike(ctx: Ctx, gang: Gang, s: GangStatus): void {
   if (!enemy || !target || target.people <= 0 || !ctx.chance(ALLY_STRIKE_CHANCE)) return;
   target.people -= 1;
   target.goods = Math.round(target.goods * 0.95);
-  journal.add(ctx, `${gang.name} hat einen Laden von ${enemy.name} zerlegt. Dein Bündnis wirkt.`, 'good');
+  journal.add(
+    ctx,
+    `${gang.name} hat einen Laden von ${gangNameIn(enemy, 'dative')} zerlegt. Dein Bündnis wirkt.`,
+    'good',
+  );
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -718,7 +718,8 @@ function confiscateMoneyShare(ctx: Ctx, share: number, max: number, stash = 0): 
 }
 
 function arrest(ctx: Ctx, staffId: string, veedelId: string): void {
-  // Nur zählen, wen staff auch in Haft nimmt: wer noch im Team ist und nicht schon sitzt.
+  // Nur zählen, wen staff auch in Haft nimmt: wer noch im Team ist und nicht schon sitzt. Den Status setzt staff erst
+  // am Ende des Schritts; doppelte Festnahmen durch zwei Razzien im selben Schritt verhindert der Tick (taken).
   const member = getStaffMember(ctx.state, staffId);
   if (member && member.leftAt === null && member.status !== 'jailed') ctx.state.modules.police.stats.arrests += 1;
   ctx.emit('police.arrest', { staffId, veedelId });
@@ -914,8 +915,18 @@ interface RaidHaul {
 /**
  * Durchsucht ein Veedel bzw. einen Spot: Festnahmen, Ware am Ort, Lager im Veedel (nicht beim Kleindealer). Geld
  * zieht der Aufrufer ab (einmal pro Razzia). Ist niemand mehr da (abgetaucht), geht sie ins Leere.
+ * taken: wer in diesem Schritt schon festgenommen wurde. Den Haft-Status setzt staff erst, wenn die Ereignisse am Ende
+ * des Schritts zugestellt werden; ohne die Liste nähme eine zweite Razzia im selben Schritt (geplante Razzia und
+ * Großrazzia im selben Veedel) dieselbe Person noch einmal fest.
  */
-function searchPlace(ctx: Ctx, veedelId: string, scope: RaidScope, spotId: string | null, stash = 0): RaidHaul {
+function searchPlace(
+  ctx: Ctx,
+  veedelId: string,
+  scope: RaidScope,
+  spotId: string | null,
+  taken: Set<string>,
+  stash = 0,
+): RaidHaul {
   const state = ctx.state;
   const rules = RAID_SCOPES[scope];
   const underground = isLyingLow(state, veedelId);
@@ -933,8 +944,10 @@ function searchPlace(ctx: Ctx, veedelId: string, scope: RaidScope, spotId: strin
   const saved = stored.saved + (near?.saved ?? 0);
   const arrested: string[] = [];
   for (const member of people) {
+    if (taken.has(member.id)) continue;
     if (ctx.chance(arrestChanceFor(state, member.id, rules.arrest))) {
       arrested.push(member.id);
+      taken.add(member.id);
       arrest(ctx, member.id, veedelId);
     }
   }
@@ -957,15 +970,15 @@ function raidTitle(state: GameState, scope: RaidScope, veedelIds: string[], spot
   return spot ? `Razzia ${atSpot(spot)}` : `Razzia in ${veedelName(veedelIds[0])}`;
 }
 
-/** Geplante Razzia gegen deine Leute (am Spot oder im Veedel). */
-function raidPlayer(ctx: Ctx, veedelId: string, plan: PlannedRaid): void {
+/** Geplante Razzia gegen deine Leute (am Spot oder im Veedel). taken: in diesem Schritt schon festgenommen. */
+function raidPlayer(ctx: Ctx, veedelId: string, plan: PlannedRaid, taken: Set<string>): void {
   const state = ctx.state;
   const scope: RaidScope = plan.scope;
   const spotId = scope === 'spot' ? plan.spotId : null;
   const stash = plan.stash ?? 0;
   // stats.raids zählt Razzien gegen dich, eine pro Razzia (Razzien gegen Gangs stehen in gangRaids).
   state.modules.police.stats.raids += 1;
-  const haul = searchPlace(ctx, veedelId, scope, spotId, stash);
+  const haul = searchPlace(ctx, veedelId, scope, spotId, taken, stash);
   if (haul.empty) {
     finishRaid(ctx, veedelId);
     journal.add(
@@ -1033,8 +1046,11 @@ function planMajorRaid(ctx: Ctx): void {
   maybeStartStash(ctx, { scope: 'major', veedelIds, spotId: null, at });
 }
 
-/** Großrazzia: mehrere Veedel und Lager zugleich, mehr Festnahmen, große Beschlagnahme. */
-function majorRaid(ctx: Ctx, raid: MajorRaid): void {
+/**
+ * Großrazzia: mehrere Veedel und Lager zugleich, mehr Festnahmen, große Beschlagnahme. taken: in diesem Schritt schon
+ * festgenommen (etwa bei einer geplanten Razzia im selben Veedel).
+ */
+function majorRaid(ctx: Ctx, raid: MajorRaid, taken: Set<string>): void {
   const state = ctx.state;
   let goods = 0;
   let saved = 0;
@@ -1043,7 +1059,7 @@ function majorRaid(ctx: Ctx, raid: MajorRaid): void {
   // Eine Großrazzia zählt einmal, egal wie viele Veedel sie trifft.
   state.modules.police.stats.raids += 1;
   for (const veedelId of raid.veedelIds) {
-    const haul = searchPlace(ctx, veedelId, 'major', null, stash);
+    const haul = searchPlace(ctx, veedelId, 'major', null, taken, stash);
     goods += haul.goods;
     saved += haul.saved;
     arrested.push(...haul.arrested);
@@ -1149,6 +1165,9 @@ function tick(ctx: Ctx): void {
     if (tip.until <= ctx.now) delete police.tipOffs[veedelId];
   }
   updateTier(ctx);
+  // Wer in diesem Schritt schon festgenommen wurde: Fallen geplante Razzia und Großrazzia auf dasselbe Veedel (beide
+  // haben im Karneval oder in einer schlafenden Stadt gewartet), nimmt die zweite niemanden noch einmal fest.
+  const taken = new Set<string>();
   for (const [veedelId, plan] of Object.entries(police.plannedRaids).sort()) {
     // In einer schlafenden Stadt wartet die Razzia, bis du wieder hinschaust; im Karneval auch (Etappe 7).
     if (
@@ -1159,7 +1178,7 @@ function tick(ctx: Ctx): void {
     )
       continue;
     delete police.plannedRaids[veedelId];
-    raidPlayer(ctx, veedelId, plan);
+    raidPlayer(ctx, veedelId, plan, taken);
   }
   if (
     police.majorRaid &&
@@ -1169,7 +1188,7 @@ function tick(ctx: Ctx): void {
   ) {
     const raid = police.majorRaid;
     police.majorRaid = null;
-    majorRaid(ctx, raid);
+    majorRaid(ctx, raid, taken);
   }
   const city = activeCity(state);
   const tier = tierOf(state, city);

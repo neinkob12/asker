@@ -14,6 +14,7 @@ import {
   introText,
   isUnlocked,
   type OrderLine,
+  orderDestination,
   orderQuote,
   type Shipment,
   shipmentsInTransit,
@@ -68,6 +69,49 @@ describe('Liefern an zeigt das Lager, in das der Befehl liefert', () => {
     expect(shown).toBe('nippes');
     expect(group(sim, lines).ok).toBe(true);
     expect(shipmentsInTransit(sim.state)[0].warehouseId).toBe(shown);
+  });
+
+  /** Einzeln kaufen, wie die App es tut: mit dem Lager, das orderDestination für genau dieses Paket nennt. */
+  function buySingle(sim: Simulation, packageId: string) {
+    const target = orderDestination(sim.state, 'frankfurt', [{ packageId, count: 1 }]);
+    const r = sim.dispatch({
+      type: 'suppliers.order',
+      payload: { supplierId: 'frankfurt', packageId, ...(target ? { warehouseId: target } : {}) },
+    });
+    return { target, ok: r.ok };
+  }
+
+  it('Einzeln ohne Wahl: Ehrenfeld voll, Nippes frei, die App schickt Nippes mit und die Bestellung klappt', () => {
+    const sim = rich();
+    expect(sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'nippes' } }).ok).toBe(true);
+    store(sim.ctx('test'), { productId: 'hash', amount: warehouseFree(sim.state, 'ehrenfeld') - 10 });
+    // Ausdrücklich ins volle Standardlager scheitert die Bestellung: Das darf die App ohne Wahl nicht mitschicken.
+    expect(
+      sim.dispatch({
+        type: 'suppliers.order',
+        payload: { supplierId: 'frankfurt', packageId: 'weed25', warehouseId: 'ehrenfeld' },
+      }).ok,
+    ).toBe(false);
+    expect(buySingle(sim, 'weed25')).toEqual({ target: 'nippes', ok: true });
+    expect(shipmentsInTransit(sim.state)[0].warehouseId).toBe('nippes');
+  });
+
+  it('Einzeln ohne Wahl: jedes Paket rechnet mit seinem Gewicht, das leichte bleibt im Standardlager', () => {
+    const sim = rich();
+    expect(sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'nippes' } }).ok).toBe(true);
+    store(sim.ctx('test'), { productId: 'hash', amount: warehouseFree(sim.state, 'ehrenfeld') - 30 });
+    expect(buySingle(sim, 'weed50')).toEqual({ target: 'nippes', ok: true });
+    expect(buySingle(sim, 'weed25')).toEqual({ target: 'ehrenfeld', ok: true });
+    expect(shipmentsInTransit(sim.state).map((s) => s.warehouseId)).toEqual(['nippes', 'ehrenfeld']);
+  });
+
+  it('gewähltes Lager bleibt gewählt, mit nur einem Lager schickt die App keins mit', () => {
+    const sim = rich();
+    const line: OrderLine[] = [{ packageId: 'weed25', count: 1 }];
+    expect(orderDestination(sim.state, 'frankfurt', line)).toBeUndefined();
+    expect(sim.dispatch({ type: 'goods.buyWarehouse', payload: { warehouseId: 'nippes' } }).ok).toBe(true);
+    expect(orderDestination(sim.state, 'frankfurt', line, 'nippes')).toBe('nippes');
+    expect(orderDestination(sim.state, 'frankfurt', line, 'gibtsnicht')).toBe('ehrenfeld');
   });
 });
 

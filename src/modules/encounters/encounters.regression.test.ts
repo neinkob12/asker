@@ -95,6 +95,49 @@ describe('Beute landet in der Stadt der Konfrontation', () => {
     expect(e.result?.goods).toBe(80);
     expect(getStock(sim.state, { warehouseId: 'ehrenfeld' })).toBe(ehrenfeld + 80);
   });
+
+  it('ohne eigenes Lager in Hamburg verfällt die Beute: nichts nach Köln, Hinweis im Ergebnis', () => {
+    const sim = withHamburg(false);
+    const koeln = getStock(sim.state, { cityId: 'koeln' });
+    const e = begin(sim, request, 'gangs');
+    expect(getStock(sim.state, { cityId: 'koeln' })).toBe(koeln);
+    expect(getStock(sim.state, { cityId: 'hamburg' })).toBe(0);
+    expect(e.result?.goods).toBe(0);
+    expect(e.result?.goodsForfeited).toBe(80);
+    expect(e.result?.text).toContain('verfallen');
+    expect(e.result?.text).toContain('Hamburg');
+    expect(e.result?.text).not.toContain('+80');
+  });
+
+  it('Überfall auf einen Gang-Spot in Hamburg ohne Lager: Beute „verfallen“, die Gang verliert sie trotzdem', () => {
+    const sim = withHamburg(false);
+    const koeln = getStock(sim.state, { cityId: 'koeln' });
+    const gangGoods = sim.state.modules.gangs.gangs['hh-kiez']?.goods ?? 0;
+    expect(gangGoods).toBeGreaterThan(80);
+    const loot: EncounterEffects = { stakeGoods: 1 };
+    // Niemand geht hin: sofort entschieden (Rückzug), ohne Runden, also ohne Schaden an der Beute.
+    const e = begin(
+      sim,
+      {
+        kind: 'gangSpotRaid',
+        veedelId: 'st-pauli',
+        playerPresent: false,
+        opponent: { factionId: 'hh-kiez', label: 'Die Jungs vom Kiez', strength: 50, count: 2 },
+        stakes: { goods: 80, money: 0 },
+        effects: { success: loot, failure: loot, retreat: loot },
+        origin: { module: 'gangs', ref: 'test' },
+      },
+      'gangs',
+    );
+    expect(e.phase).toBe('done');
+    expect(getStock(sim.state, { cityId: 'koeln' })).toBe(koeln);
+    expect(e.result?.goods).toBe(0);
+    expect(e.result?.goodsForfeited).toBe(80);
+    const part = e.result?.parts?.find((p) => p.stake === 'goods');
+    expect(part?.state).toBe('lost');
+    expect(part?.text).toContain('verfallen');
+    expect(sim.state.modules.gangs.gangs['hh-kiez']?.goods).toBe(gangGoods - 80);
+  });
 });
 
 describe('Ergebnis-Karte einer verlorenen Polizeiflucht zeigt Beschlagnahme und Festnahme', () => {
