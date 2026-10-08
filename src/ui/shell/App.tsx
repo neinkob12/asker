@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { ErrorBoundary } from '../components';
 import { RuntimeContext } from '../hooks';
-import { NotificationBanner } from '../phone/Notification';
+import { FloatingErrorNotice } from '../phone/ErrorNotice';
 import { PhoneFrame } from '../phone/PhoneFrame';
 import type { UiRuntime } from '../runtime';
 import { TourHost } from '../tour/TourHost';
@@ -16,7 +16,8 @@ import { Slot } from './Slot';
 
 /**
  * Oberste Komponente: Karte, HUD, Kartensteuerung, Handy (mit allen Bereichen und Details), Suche, Dialoge.
- * Meldungen (ui.toast) erscheinen als Banner des Handys (phone/Notification.tsx), nicht über der Karte.
+ * Meldungen (ui.toast) stehen im Verlauf (Auftrag 46d: keine Banner); nur ein fehlgeschlagener Befehl meldet sich kurz
+ * (phone/ErrorNotice.tsx).
  */
 export function App(props: { runtime: UiRuntime }) {
   const [, setVersion] = useState(0);
@@ -27,7 +28,6 @@ export function App(props: { runtime: UiRuntime }) {
   const ui = runtime.ui;
   const classes = ['shell', mobile ? 'is-mobile' : 'is-desktop'];
   if (ui.phone.open) classes.push('has-phone');
-  if (ui.notification) classes.push('has-notice');
   return (
     <RuntimeContext.Provider value={runtime}>
       <div class={classes.join(' ')}>
@@ -47,8 +47,8 @@ export function App(props: { runtime: UiRuntime }) {
             <ErrorBoundary name="Handy">
               <PhoneFrame />
             </ErrorBoundary>
-            <ErrorBoundary name="Benachrichtigung" silent>
-              <NotificationBanner />
+            <ErrorBoundary name="Rückmeldung" silent>
+              <FloatingErrorNotice />
             </ErrorBoundary>
             <ErrorBoundary name="Hinweis" silent>
               <CoachHighlight />

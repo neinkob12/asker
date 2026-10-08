@@ -1,11 +1,11 @@
 // Oberflächen des Kerns: Geld und Uhr im HUD, Spielstand-Dialoge, die Handy-Apps Nachrichten und Einstellungen
-// (mit Ton und Musik, Wetter, Verlauf), die Verlauf-Seite, Benachrichtigungen und Sounds für die Ereignisse des Kerns.
+// (mit Ton und Musik, Wetter, Verlauf), die Verlauf-Seite und Sounds für die Ereignisse des Kerns.
 
+import { audio } from '../../audio';
 import { clock, formatEuro, messages, wallet } from '../../core';
 import { registerContactProfile } from '../phone/ContactProfile';
-import { islandCountdown } from '../phone/islandModel';
 import { MessagesApp } from '../phone/MessagesApp';
-import { chatList, lookOf, messageNotification, shortContactName } from '../phone/messagesModel';
+import { chatList } from '../phone/messagesModel';
 import { SettingsApp } from '../phone/SettingsApp';
 import {
   onGameEvent,
@@ -13,7 +13,6 @@ import {
   registerDialog,
   registerGameStat,
   registerHudItem,
-  registerLiveActivity,
   registerMapLayerOption,
   registerPhoneApp,
   registerSearch,
@@ -24,8 +23,6 @@ import { GameOverDialog, NewGameDialog, SavesDialog, WonDialog } from './GameDia
 import { HistoryApp } from './HistoryApp';
 import { IntroDialog } from './IntroDialog';
 
-/** Ab diesem Betrag erscheint eine Einnahme kurz in der Dynamic Island. */
-const ISLAND_EARN_MIN = 150;
 /** Eine Frist unter dieser Zahl Spielminuten macht die Antwort dringend (Zeile auf dem Startbildschirm). */
 const URGENT_REPLY_MINUTES = 120;
 
@@ -100,17 +97,6 @@ export function registerBuiltins(): void {
         run: (ui) => ui.openPhone('core.history'),
       },
       {
-        id: 'notifications',
-        title: 'Mitteilungen',
-        subtitle: 'Mitteilungszentrale öffnen (sonst Banner oder Statusleiste herunterziehen)',
-        icon: 'bell',
-        keywords: 'benachrichtigungen banner mitteilungszentrale nachrichten',
-        run: (ui) => {
-          ui.showPhone();
-          ui.toggleNotificationCenter(true);
-        },
-      },
-      {
         id: 'weather',
         title: 'Wetter',
         subtitle: 'Vorhersage in den Einstellungen',
@@ -146,48 +132,8 @@ export function registerBuiltins(): void {
     },
   });
 
-  // Dynamic Island: Chats, deren Antwort eine Frist hat. Kunden zeigt "Kundschaft" (mit Ware und Preis) schon selbst.
-  registerLiveActivity({
-    id: 'core.deadlines',
-    activities: (state) =>
-      chatList(state)
-        .filter((c) => c.kind !== 'customer' && c.awaitingAnswer && c.deadline !== undefined && c.deadline > state.time)
-        .map((c) => ({
-          id: `core.deadline.${c.contactId}`,
-          priority: 75,
-          icon: 'message',
-          tone: 'warn',
-          leading: 'Antwort',
-          trailing: islandCountdown((c.deadline ?? state.time) - state.time),
-          title: `${c.name} wartet auf Antwort`,
-          detail: `Frist bis ${clock.formatTime(c.deadline ?? state.time)}`,
-          open: (ui) => ui.openPhone('core.messages', { contactId: c.contactId }),
-        })),
-  });
-
   // Anrufe (Auftrag 30): Klingelt es, klappt das Handy auf (das Klingeln selbst zeigt CallScreen im Handy).
   onGameEvent('call.ringing', 'core.callRinging', (_payload, ui) => ui.showPhone());
-  registerLiveActivity({
-    id: 'core.call',
-    activities: (state) =>
-      messages.ringingCalls(state).map((m) => {
-        const contact = messages.contact(state, m.contactId);
-        const name = contact?.name ?? m.contactId;
-        return {
-          id: `core.call.${m.id}`,
-          // Unter 80: Die Island klappt nicht von selbst auf (sie würde den Namen im Anruf-Bildschirm verdecken).
-          priority: 79,
-          icon: 'call',
-          tone: 'accent',
-          leading: 'Anruf',
-          trailing: contact ? shortContactName({ name, kind: contact.kind, look: lookOf(contact) ?? undefined }) : name,
-          title: `${name} ruft an`,
-          detail: m.text,
-          open: (ui) => ui.showPhone(),
-        };
-      }),
-  });
-
   registerGameStat({
     id: 'core.days',
     order: 10,
@@ -211,30 +157,12 @@ export function registerBuiltins(): void {
     ui.openDialog('core.won', props);
   });
 
-  // Neue Nachricht: Banner mit Vibrieren und Ton nur, wenn eine Antwort mit Frist erwartet wird (Auftrag 26); alles
-  // andere still (Badge an der App, Mitteilungszentrale). Ist der Chat gerade offen, nur ein leiser Ton.
-  onGameEvent('message.received', 'core.messageNotification', (payload, ui, state) => {
+  // Neue Nachricht (Auftrag 46d: kein Banner mehr, nur das Badge an der App): Ein kurzer Ton, wenn eine Antwort mit
+  // Frist erwartet wird, damit die Frage nicht ungehört verstreicht. Anrufe klingeln selbst (CallScreen).
+  onGameEvent('message.received', 'core.messageSound', (payload, _ui, state) => {
     const message = messages.get(state, payload.messageId);
-    // Anrufe kommen nicht als Banner, sondern bildschirmfüllend (CallScreen, siehe call.ringing).
-    if (message?.call) return;
-    const notification = messageNotification(state, payload.messageId);
-    if (!notification) return;
-    const urgent = !!message && messages.canAnswer(state, message) && message.expiresAt !== undefined;
-    ui.notify({ ...notification, sound: 'message', urgent });
-  });
-
-  // Große Einnahmen (Deals, Großhandel, Geldwäsche) kurz in der Dynamic Island. Straßenverkäufe zählen in den
-  // Umsatz des Tages (Kundschaft), sonst stünde die Island abends dauernd auf "+… €".
-  onGameEvent('wallet.changed', 'core.islandEarn', (payload, ui) => {
-    if (payload.amount >= ISLAND_EARN_MIN) {
-      ui.pulseIsland({
-        kind: `earn.${payload.kind}`,
-        amount: payload.amount,
-        icon: payload.kind === 'clean' ? 'euro' : 'moneyBag',
-        tone: 'accent',
-        text: '',
-      });
-    }
+    if (!message || message.call || message.silent) return;
+    if (messages.canAnswer(state, message) && message.expiresAt !== undefined) audio.play('message');
   });
 
   soundOnEvent('game.over', 'gameOver');

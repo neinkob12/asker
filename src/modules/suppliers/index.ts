@@ -29,7 +29,7 @@
 //   Sammelbestellung: shipmentItems(shipment), shipmentGoods(shipment), groupDiscount(n), groupRiskFactor(n),
 //   orderQuote(state, supplierId, lines, mode, cityId?),
 //   Rabatt-Aktionen (Auftrag 32): getDeals(state, cityId?), activeDeal(state, supplierId, packageId, cityId?),
-//   supplierContact(supplier) (Kontakt im Handy, z.B. für den Marktbericht), addSupplierTrust(ctx, id, amount), supplierById(id)
+//   supplierContact(supplier) (Kontakt im Handy), addSupplierTrust(ctx, id, amount), supplierById(id)
 //   deliveryLeg(supplier, progress, toPort?) (Darstellung: Schiff, Umladen oder Straße; Weg: roads.shipRoute,
 //   UNLOADING_PORT)
 // Befehle: 'suppliers.order' (onCredit für Kredit, warehouseId als Ziel), 'suppliers.orderBatch' (mode 'group' oder
@@ -951,7 +951,7 @@ export function addSupplierTrust(ctx: Ctx, supplierId: string, amount: number): 
   addTrust(ctx, supplierId, amount);
 }
 
-/** Kontakt des Lieferanten im Handy (für Nachrichten anderer Module, z.B. den Marktbericht). */
+/** Kontakt des Lieferanten im Handy (für Nachrichten anderer Module). */
 export function supplierContact(supplier: Supplier): Contact {
   return contactOf(supplier);
 }
@@ -1718,31 +1718,16 @@ export default defineModule({
   id: 'suppliers',
   version: 7,
   dependsOn: ['goods'],
-  init: (ctx) => {
-    const frankfurt = SUPPLIERS.find((s) => s.id === 'frankfurt') ?? SUPPLIERS[0];
-    const fast = frankfurt.packages[0];
-    messages.send(ctx, {
-      contact: contactOf(frankfurt),
-      text: `Brauchst du schnell was? Ich bin in ca. ${clock.formatDuration(frankfurt.deliveryTime)} in Köln. Kostet halt.`,
-      options: [
-        {
-          id: 'order',
-          label: `${fast.label} bestellen (${formatEuro(fast.price)})`,
-          command: { type: 'suppliers.order', payload: { supplierId: frankfurt.id, packageId: fast.id } },
-        },
-        { id: 'later', label: 'Später', reply: 'Melde mich.' },
-      ],
-    });
-    return {
-      deals: [],
-      shipments: [],
-      relations: initialRelations(),
-      unlocked: openFromStart(),
-      offered: openFromStart(),
-      // Vorstellen tun sie sich beim ersten Tick (im Tutorial erst, wenn ihre Stufe sie kennt, Auftrag 46e).
-      introduced: [],
-    };
-  },
+  // Auftrag 46d: Tonis Begrüßung zum Spielstart gibt es nicht mehr (das Kennenlernen baut 46e als Karte).
+  init: () => ({
+    deals: [],
+    shipments: [],
+    relations: initialRelations(),
+    unlocked: openFromStart(),
+    offered: openFromStart(),
+    // Vorstellen tun sie sich beim ersten Tick (im Tutorial erst, wenn ihre Stufe sie kennt, Auftrag 46e).
+    introduced: [],
+  }),
   tick: (ctx) => {
     revealProblems(ctx);
     upkeepDecisions(ctx);

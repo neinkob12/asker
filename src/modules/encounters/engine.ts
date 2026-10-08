@@ -1,5 +1,11 @@
-// Ablauf einer Konfrontation: anlegen, Spieler entscheidet (selbst hin oder nicht), Runden, Auflösung mit Folgen.
+// Ablauf einer Konfrontation: anlegen, sofort entscheiden (Auftrag 46d), Auflösung mit Folgen.
 // Alles deterministisch über ctx.random(). Folgen gehen über die APIs der anderen Module.
+//
+// Auftrag 46d: Die Akte (Briefing, Handlungen, Zeiger) ist als Oberfläche weg. start() entscheidet jede Konfrontation
+// sofort so, wie es der Bot bisher tat (resolveNow): die vorgeschlagene Crew geht hin, die Leute spielen die Runden
+// mit der klugen Strategie (strategy.ts), der Rest wird ausgewürfelt. Bist du selbst vor Ort, kommt zuerst das
+// Minispiel des Anlasses (minigames.ts); sein Ausgang bestimmt die Folgen, was danach noch offen ist, läuft von selbst.
+// join, act, special und protect sind nur noch intern (die Strategie ruft sie), Befehl von außen ist nur 'encounters.auto'.
 
 import {
   type CommandResult,
@@ -13,7 +19,7 @@ import {
   type MoneyCategory,
   wallet,
 } from '../../core';
-import { activeCity, bribeFactor, cityName, isPlayerIn } from '../city';
+import { activeCity, bribeFactor, isPlayerIn } from '../city';
 import {
   allProducts,
   DEFAULT_PRODUCT,
@@ -25,23 +31,16 @@ import {
   warehouseCity,
   warehouseModifiers,
 } from '../goods';
-import { hasFullPower } from '../hierarchy';
 import { addHeat } from '../police';
 import { changeReputation } from '../reputation';
 import { atSpot, getSpot, spotCity } from '../spots';
-import { getStaff, getStaffMember, setStatus } from '../staff';
+import { getStaffMember, setStatus } from '../staff';
 import { addInfluence, PLAYER_FACTION } from '../territory';
 import { veedelCity, veedelName } from '../veedel';
 import { getWeather } from '../weather';
 import { ENCOUNTER_ACTIONS } from './actions';
 import {
-  ABANDON_CASH_MAX,
-  ABANDON_CASH_SHARE,
   AGGRESSION_FIGHT,
-  BACKUP_COST,
-  BACKUP_MAX_PEOPLE,
-  BACKUP_RESOLVE_BONUS,
-  BACKUP_ROLES,
   BRAWL_HIT,
   BRAWL_PROTECTED_FACTOR,
   BRAWL_STRIKE,
@@ -58,10 +57,6 @@ import {
   HISTORY_LIMIT,
   KNOCKDOWN_RESOLVE,
   OWN_DOWN_RESOLVE,
-  PAYOFF_FACTOR,
-  PAYOFF_MIN,
-  PAYOFF_RELATION,
-  PAYOFF_REPUTATION,
   PLAYER_FIRST_HIT_LETHAL,
   PLAYER_HIT_WEIGHT,
   PLAYER_LETHAL_CHANCE,
@@ -73,10 +68,8 @@ import {
   STAFF_DEATH_CHANCE,
   STASH_CAP,
   STRENGTH_FACTOR_LIMIT,
-  TIPOFF_GOODS,
-  TIPOFF_HEAT,
 } from './config';
-import { crewCandidates, crewCost, SPECIAL_MOVES, specialMoveFor } from './crew';
+import { crewCandidates, crewCost, SPECIAL_MOVES, specialMoveFor, suggestedCrew } from './crew';
 import { ENCOUNTER_KINDS } from './kinds';
 import { dropMinigame, maybeStartMinigame } from './minigames';
 import { chooseAuto, chooseMove } from './strategy';
@@ -107,7 +100,6 @@ import type {
   EncounterEffects,
   EncounterEnding,
   EncounterKind,
-  EncounterMode,
   EncounterOutcome,
   EncounterRequest,
   EncounterResult,
@@ -374,9 +366,44 @@ export function start(ctx: Ctx, request: EncounterRequest): Encounter {
   ctx.state.modules.encounters.active.push(encounter);
   ctx.emit('encounter.started', { encounterId: encounter.id, kind: request.kind, request: encounter.request });
   if (encounter.phase === 'rounds' && activeParticipants(encounter).length === 0) nobodyThere(ctx, encounter);
-  // Auftrag 44: Bist du selbst dabei, beginnt es mit einem Minispiel (z.B. die Verfolgungsjagd), wenn der Anlass eins hat.
-  if (encounter.phase === 'rounds') maybeStartMinigame(ctx, encounter, 'start');
+  // Auftrag 46d: keine Akte mehr, es wird sofort entschieden (mit dir vor Ort erst das Minispiel).
+  resolveNow(ctx, encounter);
   return encounter;
+}
+
+/**
+ * Sofort entscheiden (Auftrag 46d). Im Briefing geht die vorgeschlagene Crew hin (reicht das Geld fürs Taxi nicht, die
+ * Leute vor Ort). Bist du selbst dabei, startet das Minispiel des Anlasses (Verfolgungsjagd, Verkehrskontrolle, Papiere;
+ * bei Gangs gleich der Straßenkampf) und die Konfrontation wartet auf seinen Ausgang. Sonst spielen die Leute aus.
+ */
+export function resolveNow(ctx: Ctx, encounter: Encounter): void {
+  if (encounter.phase === 'briefing') {
+    const crew = suggestedCrew(ctx.state, encounter, encounterCity(encounter, ctx.state));
+    if (!join(ctx, encounter.id, crew).ok) join(ctx, encounter.id);
+  }
+  if (encounter.phase !== 'rounds' || encounter.minigame) return;
+  // Auftrag 44: Bist du selbst dabei, beginnt es mit einem Minispiel, wenn der Anlass eins hat; beim Überfall mit dir
+  // vor Ort (nur Zuschlagen hat eins) gleich der Straßenkampf.
+  if (maybeStartMinigame(ctx, encounter, 'start') || maybeStartMinigame(ctx, encounter, 'brawl')) return;
+  playOut(ctx, encounter);
+}
+
+/**
+ * Die Leute spielen die Runden wie ein guter Spieler (Absicht abwenden, Einsatz schützen, Spezialzüge nutzen; so
+ * spielte bisher der Bot), was übrig bleibt, würfeln sie aus. Startet eine Handlung ein Minispiel (du bist dabei,
+ * Zuschlagen → Straßenkampf), wartet die Konfrontation auf dessen Ausgang.
+ */
+export function playOut(ctx: Ctx, encounter: Encounter): void {
+  for (let i = 0; i < 20 && encounter.phase === 'rounds' && !encounter.minigame; i++) {
+    const move = chooseMove(encounter, true);
+    if (move) {
+      if (!special(ctx, encounter.id, move).ok) break;
+      continue;
+    }
+    const choice = chooseAuto(ctx.state, encounter, true);
+    if (!choice || !act(ctx, encounter.id, choice.actionId, choice.protect ?? undefined).ok) break;
+  }
+  if (encounter.phase === 'rounds' && !encounter.minigame) autoResolve(ctx, encounter.id);
 }
 
 function nobodyThere(ctx: Ctx, encounter: Encounter): void {
@@ -395,16 +422,6 @@ function findActive(ctx: Ctx, encounterId: number): Encounter | undefined {
   return ctx.state.modules.encounters.active.find((e) => e.id === encounterId);
 }
 
-/** Wege im Briefing eines Anlasses (Standard: selbst hin, Leute machen lassen). */
-export function briefingModes(kind: EncounterKind | undefined): readonly EncounterMode[] {
-  return kind?.briefingOptions ?? ['self', 'crew'];
-}
-
-/** Was "Sofort freikaufen" kostet: mindestens PAYOFF_MIN, sonst die Bestechung des Anlasses mal PAYOFF_FACTOR. */
-export function payoffCost(encounter: Encounter): number {
-  return Math.max(PAYOFF_MIN, Math.round(encounter.bribeCost * PAYOFF_FACTOR));
-}
-
 /** Stadt, in der eine Konfrontation spielt: aus Lager, Spot oder Veedel der Anfrage, sonst die aktive Stadt. */
 export function requestCity(state: GameState, request: EncounterRequest): string {
   if (request.warehouseId) return warehouseCity(request.warehouseId);
@@ -412,58 +429,6 @@ export function requestCity(state: GameState, request: EncounterRequest): string
   if (spot) return spotCity(spot);
   if (request.veedelId) return veedelCity(request.veedelId);
   return activeCity(state);
-}
-
-/**
- * Freie Leute, die als Verstärkung hinfahren könnten (aktiv, ohne Einsatz, noch nicht dabei, in der Stadt der
- * Konfrontation), Stärkste zuerst.
- */
-export function backupCandidates(state: GameState, encounter: Encounter): string[] {
-  const roles: readonly string[] = BACKUP_ROLES;
-  const there = new Set(encounter.participants.map((p) => p.id));
-  const cityId = requestCity(state, encounter.request);
-  return getStaff(state, { cityId })
-    .filter((m) => m.status === 'active' && !m.assignment && roles.includes(m.role) && !there.has(m.id))
-    .sort((a, b) => b.stats.strength - a.stats.strength || a.id.localeCompare(b.id))
-    .slice(0, BACKUP_MAX_PEOPLE)
-    .map((m) => m.id);
-}
-
-export interface BriefingOption {
-  mode: EncounterMode;
-  /** Schwarzgeld, das der Weg sofort kostet (0 = nichts). */
-  cost: number;
-  /** Geht der Weg gerade? Sonst steht in reason, warum nicht. */
-  ok: boolean;
-  reason?: string;
-}
-
-/** Die Wege im Briefing mit Kosten und ob sie gerade gehen (für die Oberfläche und für join). */
-export function briefingOptions(state: GameState, encounter: Encounter): BriefingOption[] {
-  if (encounter.phase !== 'briefing') return [];
-  const money = wallet.balance(state, 'dirty');
-  return briefingModes(getKind(encounter.kind)).map((mode): BriefingOption => {
-    if (mode === 'backup') {
-      const free = backupCandidates(state, encounter).length;
-      if (free === 0) return { mode, cost: BACKUP_COST, ok: false, reason: 'Niemand frei, der hinfahren kann.' };
-      if (money < BACKUP_COST) {
-        return { mode, cost: BACKUP_COST, ok: false, reason: `Nicht genug Schwarzgeld (${formatEuro(BACKUP_COST)}).` };
-      }
-      return { mode, cost: BACKUP_COST, ok: true };
-    }
-    if (mode === 'payoff') {
-      const cost = payoffCost(encounter);
-      if (money < cost) return { mode, cost, ok: false, reason: `Nicht genug Schwarzgeld (${formatEuro(cost)}).` };
-      return { mode, cost, ok: true };
-    }
-    if (mode === 'tipoff' && !encounter.request.veedelId) {
-      return { mode, cost: 0, ok: false, reason: 'Kein Veedel, in das die Polizei kommen könnte.' };
-    }
-    if (mode === 'self' && !playerCanBeThere(state, encounter)) {
-      return { mode, cost: 0, ok: false, reason: `Du bist nicht in ${cityName(encounterCity(encounter, state))}.` };
-    }
-    return { mode, cost: 0, ok: true };
-  });
 }
 
 /** Stadt einer Konfrontation (Lager, Spot oder Veedel der Anfrage; sonst die aktive Stadt). */
@@ -477,138 +442,23 @@ function playerCanBeThere(state: GameState, encounter: Encounter): boolean {
 }
 
 /**
- * In einer Stadt, in der du nicht bist: Hat die Rechte Hand dort Vollmacht, entscheidet sie sofort (ihre Leute machen),
- * sonst bleibt es beim Standardweg (Frist, dann entscheiden die Leute selbst).
+ * Die Crew geht hin (seit Auftrag 46d der einzige Weg aus dem Briefing; resolveNow ruft ihn mit der vorgeschlagenen
+ * Crew). Mit crew kommen diese Leute dazu (Taxi kostet, wer nicht vor Ort ist), ohne machen die mit, die schon da sind.
  */
-export function delegateAbsent(ctx: Ctx): void {
-  for (const encounter of [...ctx.state.modules.encounters.active]) {
-    if (encounter.phase !== 'briefing' || playerCanBeThere(ctx.state, encounter)) continue;
-    if (!hasFullPower(ctx.state, encounterCity(encounter, ctx.state))) continue;
-    join(ctx, encounter.id, 'crew');
-  }
-}
-
-/**
- * Spieler entscheidet im Briefing, wie er vorgeht (siehe EncounterMode). Die alte Form (present: true/false) gilt als
- * 'self' bzw. 'crew'. Freikaufen, Bullen rufen und Spot räumen beenden die Konfrontation sofort.
- */
-export function join(ctx: Ctx, encounterId: number, mode: EncounterMode, crew?: readonly string[]): CommandResult {
+export function join(ctx: Ctx, encounterId: number, crew?: readonly string[]): CommandResult {
   const encounter = findActive(ctx, encounterId);
   if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
   if (encounter.phase !== 'briefing') return { ok: false, reason: 'Das ist schon entschieden.' };
-  const option = briefingOptions(ctx.state, encounter).find((o) => o.mode === mode);
-  if (!option) return { ok: false, reason: 'Das geht hier nicht.' };
-  if (!option.ok) return { ok: false, reason: option.reason ?? 'Das geht gerade nicht.' };
-  // Crew nur bei den Wegen, bei denen jemand hingeht.
-  if (crew && (mode === 'self' || mode === 'crew' || mode === 'backup')) {
-    const extra = mode === 'backup' ? option.cost : 0;
+  if (crew) {
     const cityId = requestCity(ctx.state, encounter.request);
-    if (wallet.balance(ctx.state, 'dirty') < crewCost(ctx.state, encounter, cityId, crew) + extra) {
-      return { ok: false, reason: 'Nicht genug Schwarzgeld für Taxi und Verstärkung.' };
+    if (wallet.balance(ctx.state, 'dirty') < crewCost(ctx.state, encounter, cityId, crew)) {
+      return { ok: false, reason: 'Nicht genug Schwarzgeld für das Taxi.' };
     }
     const taken = takeCrew(ctx, encounter, crew);
     if (!taken.ok) return taken;
   }
-  encounter.mode = mode;
-  const vars = () => textVars(encounter);
-  switch (mode) {
-    case 'self':
-      addPlayer(encounter);
-      enterRounds(ctx, encounter);
-      break;
-    case 'crew':
-      enterRounds(ctx, encounter);
-      break;
-    case 'backup': {
-      if (!wallet.pay(ctx, option.cost, 'dirty', 'Verstärkung', lossCategory(encounter)))
-        return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
-      // Fahrtkosten: kein Verlust an die Gegenseite, deshalb nicht in result.money.
-      encounter.travelSpent = (encounter.travelSpent ?? 0) + option.cost;
-      const ids = backupCandidates(ctx.state, encounter);
-      for (const id of ids) addStaff(ctx.state, encounter, id);
-      // Die Verstärkung gehört dazu (Erfahrung, Loyalität, Verletzungen wie bei allen Beteiligten).
-      encounter.request.staffIds = [...(encounter.request.staffIds ?? []), ...ids];
-      enterRounds(ctx, encounter);
-      if (!encounter.outcome) {
-        encounter.resolve = Math.max(0, encounter.resolve - BACKUP_RESOLVE_BONUS);
-        encounter.edge = edgeOf(encounter);
-      }
-      break;
-    }
-    case 'payoff': {
-      if (!wallet.pay(ctx, option.cost, 'dirty', 'Freikaufen', lossCategory(encounter)))
-        return { ok: false, reason: 'Nicht genug Schwarzgeld.' };
-      encounter.bribeSpent += option.cost;
-      encounter.phase = 'rounds';
-      encounter.log.push({
-        round: 0,
-        actionId: 'payoff',
-        success: true,
-        chance: 1,
-        text: 'Ein Umschlag. Sie ziehen ab.',
-      });
-      finish(
-        ctx,
-        encounter,
-        'success',
-        {
-          relation: PAYOFF_RELATION,
-          reputation: PAYOFF_REPUTATION,
-          text: fillText('Freigekauft {place}. {opponent} ziehen ab, mit deinem Geld.', vars()),
-        },
-        'briefing',
-      );
-      break;
-    }
-    case 'tipoff':
-      encounter.phase = 'rounds';
-      encounter.log.push({
-        round: 0,
-        actionId: 'tipoff',
-        success: true,
-        chance: 1,
-        text: 'Ein Anruf aus der Telefonzelle. Zehn Minuten später: Blaulicht. Alle rennen.',
-      });
-      finish(
-        ctx,
-        encounter,
-        'retreat',
-        {
-          heat: TIPOFF_HEAT,
-          goods: TIPOFF_GOODS,
-          text: fillText('Bullen gerufen {place}. {opponent} sind weg, die Polizei ist da.', vars()),
-        },
-        'briefing',
-      );
-      break;
-    case 'abandon':
-      encounter.phase = 'rounds';
-      encounter.log.push({
-        round: 0,
-        actionId: 'abandon',
-        success: true,
-        chance: 1,
-        text: 'Ware in die Tasche, ab durch den Hinterhof. Die Kasse bleibt liegen.',
-      });
-      finish(
-        ctx,
-        encounter,
-        'retreat',
-        {
-          moneyShare: -ABANDON_CASH_SHARE,
-          moneyShareMax: ABANDON_CASH_MAX,
-          // Ein Lager hat keine Kasse (Auftrag 43, K2).
-          text: fillText(
-            settingOf(encounter.request) === 'warehouse'
-              ? 'Geräumt {place}. Ihr habt mitgenommen, was ihr tragen konntet.'
-              : 'Spot {place} geräumt. Die Ware ist gerettet, die Kasse nicht.',
-            vars(),
-          ),
-        },
-        'briefing',
-      );
-      break;
-  }
+  encounter.mode = 'crew';
+  enterRounds(ctx, encounter);
   return { ok: true };
 }
 
@@ -974,7 +824,10 @@ export function roundOutcome(
   return null;
 }
 
-/** Die Leute handeln selbst: Runden mit einer einfachen Strategie (strategy.ts), bis es vorbei ist. */
+/**
+ * Die Leute handeln selbst: Runden mit der einfachen Strategie (strategy.ts), bis es vorbei ist. Ein offenes Minispiel
+ * gilt dann als nicht gespielt ('encounters.auto', Sicherheitsnetz der Frist).
+ */
 export function autoResolve(ctx: Ctx, encounterId: number): CommandResult {
   const encounter = findActive(ctx, encounterId);
   if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
@@ -1002,7 +855,7 @@ export function autoResolve(ctx: Ctx, encounterId: number): CommandResult {
   return { ok: true };
 }
 
-/** Konfrontationen, auf die zu lange niemand reagiert hat, entscheiden die Leute selbst. */
+/** Sicherheitsnetz: Wartet eine Konfrontation zu lange auf ein Minispiel, entscheiden die Leute selbst. */
 export function expireDecisions(ctx: Ctx): void {
   for (const encounter of [...ctx.state.modules.encounters.active]) {
     if (encounter.phase !== 'done' && encounter.deadline <= ctx.now) autoResolve(ctx, encounter.id);

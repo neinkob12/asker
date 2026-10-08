@@ -16,7 +16,7 @@ export {
 export * from './components';
 export { HAPTIC_PATTERNS, type HapticKind, haptic } from './haptics';
 export { shallowEqual, useGame, useGameSelector, useSession, useUi } from './hooks';
-export { islandCountdown } from './phone/islandModel';
+export { hourCountdown } from './phone/countdown';
 export { PhoneScreen, type PhoneScreenProps } from './phone/PhoneScreen';
 /** Handy-Aufbau (≤ 760 px): Module zeigen dann z.B. Blätter statt Dialogen über der Karte. */
 export { cleanPlayerName, getPlayerName, PLAYER_NAME_MAX, setPlayerName } from './player';
@@ -35,8 +35,6 @@ export {
   getCityViews,
   type HudItem,
   isHudPartHidden,
-  type LiveActivity,
-  type LiveActivitySource,
   type MapLayerOption,
   onGameEvent,
   type PanelDefinition,
@@ -49,12 +47,12 @@ export {
   registerGameStat,
   registerHudItem,
   registerHudPartHidden,
-  registerLiveActivity,
   registerMapLayerOption,
   registerPanel,
   registerPhoneApp,
   registerSearch,
   registerSlot,
+  registerStatusCounter,
   registerTab,
   type SearchProvider,
   type SearchResult,
@@ -63,18 +61,17 @@ export {
   type SlotName,
   type SlotProps,
   type SlotRegistry,
+  type StatusCounter,
 } from './registry';
 export type {
   Alert,
   CameraMode,
-  IslandPulse,
   MapController,
-  PhoneNotification,
-  Toast,
   ToastKind,
   ToastOptions,
   TrafficLevel,
   UiApi,
+  UiError,
   UiState,
 } from './runtime';
 export { isMobileLayout, useIsMobile } from './shell/layout';

@@ -123,7 +123,6 @@ async function openSection(page) {
     page,
     `(() => {
       const api = window.koeln.runtime.api;
-      api.toggleNotificationCenter(false);
       api.openPhone(null);
       api.selectTab('territory');
       api.openPanel('goods.warehouse', { warehouseId: 'ehrenfeld' });

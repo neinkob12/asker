@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { clock, MINUTES_PER_DAY as DAY, messages, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { activeEncounters, autoResolveEncounter } from '../encounters';
 import { getStock, getWarehouses, store } from '../goods';
 import { getHeat } from '../police';
 import { getSpot } from '../spots';
@@ -121,9 +120,9 @@ describe('Gang-Methoden (Auftrag 23)', () => {
       if (!incident.amount) continue;
       const stolen = getStock(sim.state, { cityId: 'koeln' });
       expect(respond(sim, incident, 'hunt').ok).toBe(true);
-      const [encounter] = activeEncounters(sim.state);
+      // Auftrag 46d: sofort entschieden.
+      const encounter = sim.state.modules.encounters.history[0];
       expect(encounter.kind).toBe('recoverLoot');
-      autoResolveEncounter(sim.ctx('test'), encounter.id);
       sim.advance(1);
       expect(incidents(sim)).toHaveLength(0);
       if (getStock(sim.state, { cityId: 'koeln' }) > stolen) return; // Erfolg gesehen.
@@ -154,9 +153,8 @@ describe('Gang-Methoden (Auftrag 23)', () => {
     const before = getStock(sim.state, { cityId: 'koeln' });
     const events = recordEvents(sim);
     expect(respond(sim, incident, 'hunt').ok).toBe(true);
-    const [encounter] = activeEncounters(sim.state);
+    const encounter = sim.state.modules.encounters.history[0];
     expect(encounter.request.staffIds ?? []).toHaveLength(0);
-    autoResolveEncounter(sim.ctx('test'), encounter.id);
     sim.advance(1);
     expect(eventsOfType(events, 'encounter.resolved')[0]?.payload.outcome).not.toBe('success');
     expect(getStock(sim.state, { cityId: 'koeln' })).toBe(before);

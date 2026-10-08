@@ -1,31 +1,24 @@
+// Konfrontationen (Auftrag 46d): sofort entschieden, Folgen über die anderen Module, Migrationen.
+
 import { describe, expect, it } from 'vitest';
 import { loadSimulation, type Simulation, wallet } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { getStock, store } from '../goods';
+import { MINIGAME_KINDS } from '../minigames';
 import { getHeat } from '../police';
-import { getStaffMember, invalidateStaffIndex } from '../staff';
+import { getStaffMember } from '../staff';
 import { getInfluence, PLAYER_FACTION } from '../territory';
-import { DECISION_TIMEOUT } from './config';
-import { backupCandidates } from './engine';
+import { ENCOUNTER_ACTIONS } from './actions';
+import { CREW_TRAVEL_COST } from './config';
+import { act } from './engine';
 import {
-  ABANDON_CASH_MAX,
-  ABANDON_CASH_SHARE,
-  actionChance,
   activeEncounters,
   autoResolveEncounter,
-  availableActions,
-  BACKUP_COST,
-  briefingOptions,
-  ENCOUNTER_ACTIONS,
   ENCOUNTER_KINDS,
   type Encounter,
   type EncounterEffects,
-  type EncounterMode,
   getEncounter,
-  PAYOFF_RELATION,
-  payoffCost,
   startEncounter,
-  TIPOFF_HEAT,
 } from './index';
 
 function hireRunner(sim: Simulation, spotId: string): string {
@@ -38,32 +31,6 @@ function encounter(sim: Simulation, id: number): Encounter {
   const e = getEncounter(sim.state, id);
   if (!e) throw new Error('Konfrontation fehlt');
   return e;
-}
-
-/** Spielt Runden mit der jeweils besten angebotenen Handlung (ohne Bestechung), bis es vorbei ist. */
-function playOut(sim: Simulation, id: number, prefer?: string): void {
-  for (let i = 0; i < 20 && encounter(sim, id).phase !== 'done' && !sim.isOver; i++) {
-    const e = encounter(sim, id);
-    const options = availableActions(e).filter((a) => a !== 'bribe');
-    const actionId =
-      prefer && options.includes(prefer)
-        ? prefer
-        : options.reduce((a, b) => (actionChance(e, b) > actionChance(e, a) ? b : a));
-    const result = sim.dispatch({ type: 'encounters.act', payload: { encounterId: id, actionId } });
-    expect(result.ok).toBe(true);
-    // Startet die Handlung ein Minispiel (Zuschlagen → Straßenkampf), gilt es als nicht gespielt: die alte Runde.
-    const open = encounter(sim, id).minigame;
-    if (open) sim.dispatch({ type: 'minigames.expire', payload: { id: open.challengeId } }, { actor: 'system' });
-  }
-}
-
-/** Ein offenes Minispiel der Konfrontation verfallen lassen (wie ohne Oberfläche). */
-function skipMinigame(sim: Simulation, encounterId: number): void {
-  const open = sim.state.modules.encounters.active.find((e) => e.id === encounterId)?.minigame;
-  if (open)
-    expect(sim.dispatch({ type: 'minigames.expire', payload: { id: open.challengeId } }, { actor: 'system' }).ok).toBe(
-      true,
-    );
 }
 
 describe('encounters', () => {
@@ -106,49 +73,13 @@ describe('encounters', () => {
         playerPresent: true,
       });
       expect(encounter(sim, encounterId).situation).toBe('Ein Türsteher steht in Kalk im Weg.');
-      playOut(sim, encounterId);
       expect(encounter(sim, encounterId).outcome).not.toBeNull();
     } finally {
       delete ENCOUNTER_KINDS.testKind;
     }
   });
 
-  it('Anlass mit offener Teilnahme: erst entscheidet der Spieler, selbst dabei gibt es mehr Möglichkeiten', () => {
-    const sim = createTestGame();
-    const runner = hireRunner(sim, 'ebertplatz');
-    const start = () =>
-      startEncounter(sim.ctx('gangs'), {
-        kind: 'raidDefense',
-        spotId: 'ebertplatz',
-        veedelId: 'neustadt-nord',
-        staffIds: [runner],
-        askPlayer: true,
-        opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 50, count: 3 },
-      }).encounterId;
-
-    const alone = start();
-    expect(encounter(sim, alone).phase).toBe('briefing');
-    expect(availableActions(encounter(sim, alone))).toEqual([]);
-    expect(sim.dispatch({ type: 'encounters.act', payload: { encounterId: alone, actionId: 'fight' } }).ok).toBe(false);
-    expect(sim.dispatch({ type: 'encounters.join', payload: { encounterId: alone, present: false } }).ok).toBe(true);
-    const remote = availableActions(encounter(sim, alone));
-    // Per Handy geht fast alles, nur Einschüchtern braucht den Boss vor Ort.
-    expect(remote).toEqual(['negotiate', 'talkNervous', 'bluff', 'hold', 'fight', 'bribe', 'callCops', 'flee']);
-    expect(remote).not.toContain('intimidate');
-    const remoteChance = actionChance(encounter(sim, alone), 'fight');
-
-    const together = start();
-    sim.dispatch({ type: 'encounters.join', payload: { encounterId: together, present: true } });
-    const e = encounter(sim, together);
-    expect(e.participants.map((p) => p.id)).toEqual(['player', runner]);
-    expect(availableActions(e)).toEqual(expect.arrayContaining(['intimidate', 'negotiate', 'bribe']));
-    expect(actionChance(e, 'fight')).toBeGreaterThan(remoteChance);
-    expect(sim.dispatch({ type: 'encounters.join', payload: { encounterId: together, present: false } }).ok).toBe(
-      false,
-    );
-  });
-
-  it('Runden bis zum Ende: Ergebnis mit Auslöser, Journal und Folgen für die Beteiligten', () => {
+  it('sofort entschieden (Auftrag 46d): Ergebnis mit Auslöser, Journal und Folgen für die Beteiligten im selben Aufruf', () => {
     const sim = createTestGame({ seed: 3 });
     const events = recordEvents(sim);
     const runner = hireRunner(sim, 'ebertplatz');
@@ -157,26 +88,75 @@ describe('encounters', () => {
       spotId: 'ebertplatz',
       veedelId: 'neustadt-nord',
       staffIds: [runner],
-      playerPresent: true,
+      playerPresent: false,
       opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 50, count: 3 },
       origin: { module: 'gangs', ref: 'raid:nord' },
     });
-    playOut(sim, encounterId);
     const e = encounter(sim, encounterId);
     expect(e.phase).toBe('done');
-    expect(e.log.length).toBe(e.round);
+    expect(e.round).toBeGreaterThan(0);
+    expect(e.log.length).toBeGreaterThanOrEqual(e.round);
     expect(activeEncounters(sim.state)).toHaveLength(0);
+    expect(sim.state.journal[0].text).toBe(e.result?.text);
+    // Ereignisse aus einem direkten Aufruf kommen mit dem nächsten Schritt an.
+    sim.advance(1);
     const resolved = eventsOfType(events, 'encounter.resolved');
     expect(resolved).toHaveLength(1);
     expect(resolved[0].payload.request.origin).toEqual({ module: 'gangs', ref: 'raid:nord' });
     expect(resolved[0].payload.outcome).toBe(e.outcome);
     expect(resolved[0].payload.result).toEqual(e.result);
     expect(eventsOfType(events, 'encounter.round')).toHaveLength(e.round);
-    expect(sim.state.journal[0].text).toBe(e.result?.text);
     // Verletzungen landen beim Mitarbeiter.
     const status = getStaffMember(sim.state, runner)?.status;
     if (e.result?.staffInjured.includes(runner)) expect(status).toBe('injured');
     if (e.result?.staffKilled.includes(runner)) expect(status).toBe('dead');
+  });
+
+  it('Anlass mit offener Teilnahme (askPlayer): die vorgeschlagene Crew geht hin, Taxi für die, die nicht da sind', () => {
+    const sim = createTestGame({ seed: 2 });
+    sim.state.wallet.dirty = 10_000;
+    const runner = hireRunner(sim, 'ebertplatz');
+    const guard = hireRunner(sim, 'neumarkt');
+    const m = getStaffMember(sim.state, guard);
+    if (!m) throw new Error('fehlt');
+    m.assignment = null;
+    (m as { role: string }).role = 'security';
+    m.stats.strength = 80;
+    const before = wallet.balance(sim.state, 'dirty');
+    const { encounterId } = startEncounter(sim.ctx('gangs'), {
+      kind: 'raidDefense',
+      spotId: 'ebertplatz',
+      veedelId: 'neustadt-nord',
+      staffIds: [runner],
+      askPlayer: true,
+      opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 50, count: 3 },
+    });
+    const e = encounter(sim, encounterId);
+    expect(e).toMatchObject({ phase: 'done', mode: 'crew', playerPresent: false });
+    expect(e.participants.map((p) => p.id)).toEqual([runner, guard]);
+    expect(e.request.staffIds).toEqual([runner, guard]);
+    expect(e.result?.travel).toBe(CREW_TRAVEL_COST);
+    // Das Taxi ist kein Verlust an die Gegenseite.
+    expect(before - wallet.balance(sim.state, 'dirty') + (e.result?.money ?? 0)).toBe(CREW_TRAVEL_COST);
+    // Ohne Geld fürs Taxi gehen nur die, die vor Ort sind.
+    const poor = createTestGame({ seed: 2 });
+    const r2 = hireRunner(poor, 'ebertplatz');
+    const g2 = hireRunner(poor, 'neumarkt');
+    const m2 = getStaffMember(poor.state, g2);
+    if (!m2) throw new Error('fehlt');
+    m2.assignment = null;
+    (m2 as { role: string }).role = 'security';
+    poor.state.wallet.dirty = 10;
+    const id2 = startEncounter(poor.ctx('gangs'), {
+      kind: 'raidDefense',
+      spotId: 'ebertplatz',
+      veedelId: 'neustadt-nord',
+      staffIds: [r2],
+      askPlayer: true,
+      opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 50, count: 3 },
+    }).encounterId;
+    expect(encounter(poor, id2).participants.map((p) => p.id)).toEqual([r2]);
+    expect(encounter(poor, id2).phase).toBe('done');
   });
 
   it('niemand da: sofort verloren, die Folgen des Anlasses greifen', () => {
@@ -196,7 +176,7 @@ describe('encounters', () => {
     expect(getInfluence(sim.state, 'nippes', 'nord')).toBeGreaterThan(60);
   });
 
-  it('ohne Entscheidung würfeln die Leute nach der Frist selbst aus (für Aufrufer ohne Oberfläche)', () => {
+  it('autoResolveEncounter ist auf eine entschiedene Konfrontation ohne Wirkung', () => {
     const sim = createTestGame();
     const events = recordEvents(sim);
     const runner = hireRunner(sim, 'neumarkt');
@@ -206,14 +186,14 @@ describe('encounters', () => {
       staffIds: [runner],
       origin: { module: 'police', ref: 'kontrolle-1' },
     });
-    expect(encounter(sim, encounterId).phase).toBe('rounds');
-    sim.advance(DECISION_TIMEOUT);
+    expect(encounter(sim, encounterId).phase).toBe('done');
+    sim.advance(1);
     expect(eventsOfType(events, 'encounter.resolved')).toHaveLength(1);
     expect(eventsOfType(events, 'encounter.resolved')[0].payload.playerKilled).toBe(false);
-
-    const second = startEncounter(sim.ctx('police'), { kind: 'policeChase', staffIds: [runner] }).encounterId;
-    autoResolveEncounter(sim.ctx('police'), second);
-    expect(encounter(sim, second).phase).toBe('done');
+    autoResolveEncounter(sim.ctx('police'), encounterId);
+    expect(sim.dispatch({ type: 'encounters.auto', payload: { encounterId } }).ok).toBe(false);
+    sim.advance(1);
+    expect(eventsOfType(events, 'encounter.resolved')).toHaveLength(1);
   });
 
   it('Folgen laufen über die APIs der anderen Module, der Auslöser kann sie ersetzen oder abschalten', () => {
@@ -245,27 +225,22 @@ describe('encounters', () => {
     expect(getHeat(sim.state, 'kalk')).toBe(5);
   });
 
-  it('Verkehrskontrolle: friedlich ohne Heat, "Gewalt gegen Polizei" bringt ihn trotz skipEffects', () => {
-    const request = { kind: 'vehicleCheck', veedelId: 'kalk', playerPresent: true, skipEffects: true } as const;
-    // Ruhig bleiben: Eine Kontrolle ist keine Gewalt im Veedel (die Polizei bekam sonst +15 Heat gemeldet).
-    const calm = createTestGame();
-    const quiet = startEncounter(calm.ctx('logistics'), request).encounterId;
-    // Die Verkehrskontrolle (Minispiel, Auftrag 44) verfällt wie ohne Oberfläche, dann die Runden wie bisher.
-    skipMinigame(calm, quiet);
-    playOut(calm, quiet, 'negotiate');
-    calm.advance(1);
-    expect(encounter(calm, quiet).phase).toBe('done');
-    expect(getHeat(calm.state, 'kalk')).toBe(0);
-    // Mit der Faust auf die Streife: Der angekündigte Heat der Handlung gilt, auch wenn der Auslöser die Folgen regelt.
-    const fight = createTestGame();
-    const brawl = startEncounter(fight.ctx('logistics'), request).encounterId;
-    skipMinigame(fight, brawl);
-    playOut(fight, brawl, 'fight');
-    fight.advance(1);
-    const e = encounter(fight, brawl);
-    expect(e.extraHeat).toBeGreaterThanOrEqual(20);
-    expect(e.result?.heat).toBe(e.extraHeat);
-    expect(getHeat(fight.state, 'kalk')).toBe(Math.min(100, e.extraHeat));
+  it('Verkehrskontrolle mit skipEffects: nur der Heat aus den Handlungen ("Gewalt gegen Polizei") zählt', () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const sim = createTestGame({ seed });
+      const id = startEncounter(sim.ctx('logistics'), {
+        kind: 'vehicleCheck',
+        veedelId: 'kalk',
+        playerPresent: true,
+        skipEffects: true,
+      }).encounterId;
+      // Mit dir vor Ort wartet die Verkehrskontrolle (Minispiel); ungespielt würfeln die Leute aus.
+      autoResolveEncounter(sim.ctx('logistics'), id);
+      const e = encounter(sim, id);
+      expect(e.phase).toBe('done');
+      expect(e.result?.heat).toBe(e.extraHeat);
+      expect(getHeat(sim.state, 'kalk')).toBe(Math.min(100, e.extraHeat));
+    }
   });
 
   it('Ruf aus einer Konfrontation steht mit Grund in der Liste "Zuletzt"', () => {
@@ -284,49 +259,39 @@ describe('encounters', () => {
     expect(recent[0].reason).toMatch(/^Schulden eintreiben \((geschafft|verloren|Rückzug)\)$/);
   });
 
-  it('Bestechen kostet Schwarzgeld, ohne Geld geht es nicht', () => {
-    const sim = createTestGame();
-    const { encounterId } = startEncounter(sim.ctx('police'), { kind: 'policeChase', playerPresent: true });
-    // Mit dir selbst startet erst die Verfolgungsjagd (Auftrag 44); ungespielt laufen die Runden wie bisher.
-    skipMinigame(sim, encounterId);
-    const e = encounter(sim, encounterId);
-    // 500 + 2 × 200, in Köln ein Viertel günstiger (Klüngel, Auftrag 30).
-    expect(e.bribeCost).toBe(675);
-    const before = wallet.balance(sim.state, 'dirty');
-    const resolve = e.resolve;
-    expect(sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId: 'bribe' } }).ok).toBe(true);
-    expect(wallet.balance(sim.state, 'dirty')).toBe(before - 675);
-    // Bestechen senkt die Entschlossenheit stark (oder beendet die Sache gleich).
-    const after = encounter(sim, encounterId);
-    expect(after.phase === 'done' || after.resolve < resolve - 10).toBe(true);
-    const poor = createTestGame();
-    const id = startEncounter(poor.ctx('police'), { kind: 'policeChase', playerPresent: true }).encounterId;
-    skipMinigame(poor, id);
-    wallet.lose(poor.ctx('test'), wallet.balance(poor.state, 'dirty') - 100, 'dirty', 'Test', 'loss.encounter');
-    const result = poor.dispatch({ type: 'encounters.act', payload: { encounterId: id, actionId: 'bribe' } });
-    expect(result).toEqual({ ok: false, reason: 'Nicht genug Schwarzgeld (675 €).' });
-  });
-
   it('wer selbst dabei ist, kann sterben: Game Over mit Grund killed', () => {
+    // Mit dir vor Ort kommt der Straßenkampf (Minispiel); hier wird er weggenommen, und du prügelst Runde für Runde.
+    const brawlReady = MINIGAME_KINDS.brawl.ready;
     let deaths = 0;
-    for (let seed = 1; seed <= 60; seed++) {
-      const sim = createTestGame({ seed });
-      const events = recordEvents(sim);
-      const { encounterId } = startEncounter(sim.ctx('gangs'), {
-        kind: 'gangSpotRaid',
-        veedelId: 'kalk',
-        playerPresent: true,
-        opponent: { factionId: 'ost', label: 'Die Wachen', strength: 85, count: 5 },
-      });
-      playOut(sim, encounterId, 'fight');
-      const e = encounter(sim, encounterId);
-      if (!e.playerKilled) continue;
-      deaths++;
-      expect(e.outcome).toBe('failure');
-      expect(sim.isOver).toBe(true);
-      expect(sim.state.outcome.gameOver?.reason).toBe('killed');
-      expect(eventsOfType(events, 'game.over')[0].payload.reason).toBe('killed');
-      expect(eventsOfType(events, 'encounter.resolved')[0].payload.playerKilled).toBe(true);
+    try {
+      for (let seed = 1; seed <= 60; seed++) {
+        MINIGAME_KINDS.brawl.ready = true;
+        const sim = createTestGame({ seed });
+        const { encounterId } = startEncounter(sim.ctx('gangs'), {
+          kind: 'gangSpotRaid',
+          veedelId: 'kalk',
+          playerPresent: true,
+          opponent: { factionId: 'ost', label: 'Die Wachen', strength: 85, count: 5 },
+        });
+        const e = encounter(sim, encounterId);
+        const open = e.minigame;
+        if (open) {
+          e.minigame = null;
+          sim.state.modules.minigames.active = sim.state.modules.minigames.active.filter(
+            (c) => c.id !== open.challengeId,
+          );
+        }
+        MINIGAME_KINDS.brawl.ready = false;
+        for (let i = 0; i < 20 && e.phase === 'rounds'; i++) act(sim.ctx('gangs'), encounterId, 'fight');
+        if (!e.playerKilled) continue;
+        deaths++;
+        expect(e.outcome).toBe('failure');
+        expect(sim.isOver).toBe(true);
+        expect(sim.state.outcome.gameOver?.reason).toBe('killed');
+        expect(e.result?.text.length ?? 0).toBeGreaterThan(0);
+      }
+    } finally {
+      MINIGAME_KINDS.brawl.ready = brawlReady;
     }
     expect(deaths).toBeGreaterThan(0);
   });
@@ -342,7 +307,6 @@ describe('encounters', () => {
         playerPresent: false,
         opponent: { factionId: 'ost', strength: 90, count: 6 },
       });
-      playOut(sim, encounterId, 'fight');
       expect(encounter(sim, encounterId).playerKilled).toBe(false);
       expect(sim.isOver).toBe(false);
     }
@@ -358,7 +322,6 @@ describe('encounters', () => {
           staffIds: [runner],
           playerPresent: true,
         });
-        playOut(sim, encounterId);
         return JSON.stringify(encounter(sim, encounterId));
       });
     };
@@ -380,7 +343,7 @@ describe('encounters', () => {
     const loaded = loadSimulation(state as unknown as typeof sim.state, sim.modules);
     const old = getEncounter(loaded.state, 7);
     expect(old).toMatchObject({ kind: 'policeChase', phase: 'done', outcome: 'success', participants: [], mode: null });
-    expect(loaded.state.moduleVersions.encounters).toBe(5);
+    expect(loaded.state.moduleVersions.encounters).toBe(6);
   });
 
   it('Spielstände der Version 2 bekommen den Weg im Briefing und die Beziehung im Ergebnis', () => {
@@ -392,9 +355,6 @@ describe('encounters', () => {
       askPlayer: true,
       spotId: 'ebertplatz',
     });
-    sim.dispatch({ type: 'encounters.join', payload: { encounterId, present: false } });
-    playOut(sim, encounterId);
-    const pending = startEncounter(sim.ctx('gangs'), { kind: 'raidDefense', staffIds: [runner], askPlayer: true });
     const state = structuredClone(sim.state) as unknown as {
       modules: { encounters: { active: Record<string, unknown>[]; history: Record<string, unknown>[] } };
       moduleVersions: Record<string, number>;
@@ -406,151 +366,40 @@ describe('encounters', () => {
     state.moduleVersions.encounters = 2;
     const loaded = loadSimulation(state as unknown as typeof sim.state, sim.modules);
     expect(getEncounter(loaded.state, encounterId)).toMatchObject({ mode: 'crew', result: { relation: 0 } });
-    expect(getEncounter(loaded.state, pending.encounterId)).toMatchObject({ phase: 'briefing', mode: null });
   });
-});
 
-describe('Wege im Briefing', () => {
-  const raid = (sim: Simulation, staffIds: string[], extra: Partial<Parameters<typeof startEncounter>[1]> = {}) =>
-    startEncounter(sim.ctx('gangs'), {
+  it('Version 5 → 6 (Auftrag 46d): Eine offene Akte aus einem alten Stand wird beim ersten Schritt ausgewürfelt', () => {
+    const sim = createTestGame({ seed: 3 });
+    const runner = hireRunner(sim, 'ebertplatz');
+    const { encounterId } = startEncounter(sim.ctx('gangs'), {
       kind: 'raidDefense',
       spotId: 'ebertplatz',
       veedelId: 'neustadt-nord',
-      staffIds,
-      askPlayer: true,
-      opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 50, count: 3 },
-      ...extra,
-    }).encounterId;
-  const join = (sim: Simulation, encounterId: number, mode: EncounterMode) =>
-    sim.dispatch({ type: 'encounters.join', payload: { encounterId, mode } });
-
-  it('jeder Anlass bietet nur seine Wege an; der Überfall alle sechs, die Polizeiflucht keine Bullen', () => {
-    expect(ENCOUNTER_KINDS.raidDefense.briefingOptions).toEqual([
-      'self',
-      'crew',
-      'backup',
-      'payoff',
-      'tipoff',
-      'abandon',
-    ]);
-    expect(ENCOUNTER_KINDS.policeChase.briefingOptions).not.toContain('tipoff');
-    const sim = createTestGame();
-    const runner = hireRunner(sim, 'ebertplatz');
-    const debt = startEncounter(sim.ctx('gangs'), { kind: 'debtCollection', staffIds: [runner], askPlayer: true });
-    const result = join(sim, debt.encounterId, 'payoff');
-    expect(result.ok).toBe(false);
-    expect(briefingOptions(sim.state, encounter(sim, debt.encounterId)).map((o) => o.mode)).toEqual([
-      'self',
-      'crew',
-      'backup',
-    ]);
-  });
-
-  it('die alte Form { present } geht weiter', () => {
-    const sim = createTestGame();
-    const runner = hireRunner(sim, 'ebertplatz');
-    const id = raid(sim, [runner]);
-    expect(sim.dispatch({ type: 'encounters.join', payload: { encounterId: id, present: true } }).ok).toBe(true);
-    expect(encounter(sim, id)).toMatchObject({ phase: 'rounds', mode: 'self', playerPresent: true });
-  });
-
-  it('Verstärkung: kostet Schwarzgeld, freie Leute fahren hin, die Lage startet besser', () => {
-    const sim = createTestGame({ seed: 4 });
-    sim.state.wallet.dirty = 10_000;
-    const runner = hireRunner(sim, 'ebertplatz');
-    const plain = raid(sim, [runner]);
-    join(sim, plain, 'crew');
-    // Ohne freie Leute geht es nicht.
-    const noFree = raid(sim, [runner]);
-    expect(join(sim, noFree, 'backup').ok).toBe(false);
-    // Zwei Leute ohne Einsatz.
-    const extra = [hireRunner(sim, 'neumarkt'), hireRunner(sim, 'zuelpicher')];
-    for (const id of extra) sim.dispatch({ type: 'staff.assign', payload: { staffId: id, assignment: null } });
-    const before = wallet.balance(sim.state, 'dirty');
-    const events = recordEvents(sim);
-    expect(join(sim, noFree, 'backup').ok).toBe(true);
-    const e = encounter(sim, noFree);
-    expect(wallet.balance(sim.state, 'dirty')).toBe(before - BACKUP_COST);
-    expect(e.participants.map((p) => p.id).sort()).toEqual([runner, ...extra].sort());
-    expect(e.request.staffIds?.sort()).toEqual([runner, ...extra].sort());
-    expect(e.playerPresent).toBe(false);
-    expect(e.edge).toBeGreaterThan(encounter(sim, plain).edge);
-    autoResolveEncounter(sim.ctx('gangs'), noFree);
-    sim.advance(1);
-    // Die Verstärkung bekommt Erfahrung wie alle Beteiligten.
-    for (const id of extra) expect(getStaffMember(sim.state, id)?.xp ?? 0).toBeGreaterThan(0);
-    expect(eventsOfType(events, 'encounter.resolved')[0].payload.mode).toBe('backup');
-  });
-
-  it('Sofort freikaufen: Erfolg ohne Runde, Geld weg, Beziehung zur Gang sinkt', () => {
-    const sim = createTestGame();
-    sim.state.wallet.dirty = 5_000;
-    const runner = hireRunner(sim, 'ebertplatz');
-    const id = raid(sim, [runner]);
-    const cost = payoffCost(encounter(sim, id));
-    expect(cost).toBeGreaterThanOrEqual(600);
-    const relation = sim.state.modules.gangs.gangs.nord.relation;
-    const hostility = sim.state.modules.gangs.gangs.nord.hostility;
-    const before = wallet.balance(sim.state, 'dirty');
-    const events = recordEvents(sim);
-    expect(join(sim, id, 'payoff').ok).toBe(true);
-    sim.advance(1);
-    const e = encounter(sim, id);
-    expect(e).toMatchObject({ phase: 'done', outcome: 'success', round: 0, mode: 'payoff' });
-    expect(wallet.balance(sim.state, 'dirty')).toBe(before - cost);
-    expect(e.result?.money).toBe(-cost);
-    expect(e.result?.relation).toBe(PAYOFF_RELATION);
-    expect(sim.state.modules.gangs.gangs.nord.relation).toBeLessThan(relation);
-    // Keine neue Wut wie nach einem abgewehrten Überfall.
-    expect(sim.state.modules.gangs.gangs.nord.hostility).toBeLessThanOrEqual(hostility);
-    expect(eventsOfType(events, 'encounter.resolved')[0].payload).toMatchObject({ outcome: 'success', mode: 'payoff' });
-    // Zu wenig Geld: geht nicht.
-    sim.state.wallet.dirty = 10;
-    expect(join(sim, raid(sim, [runner]), 'payoff').ok).toBe(false);
-  });
-
-  it('Anonym die Bullen rufen: Rückzug, Heat im Veedel steigt, etwas Ware ist weg', () => {
-    const sim = createTestGame();
-    const runner = hireRunner(sim, 'ebertplatz');
-    const id = raid(sim, [runner]);
-    const heat = getHeat(sim.state, 'neustadt-nord');
-    const stock = getStock(sim.state);
-    expect(join(sim, id, 'tipoff').ok).toBe(true);
-    const e = encounter(sim, id);
-    expect(e).toMatchObject({ phase: 'done', outcome: 'retreat', mode: 'tipoff' });
-    expect(getHeat(sim.state, 'neustadt-nord')).toBeGreaterThanOrEqual(heat + TIPOFF_HEAT);
-    expect(getStock(sim.state)).toBeLessThan(stock);
-  });
-
-  it('Ware retten, Spot räumen: Rückzug, die Ware bleibt, die Kasse ist weg', () => {
-    const sim = createTestGame();
-    sim.state.wallet.dirty = 4_000;
-    const runner = hireRunner(sim, 'ebertplatz');
-    const id = raid(sim, [runner]);
-    const stock = getStock(sim.state);
-    const before = wallet.balance(sim.state, 'dirty');
-    expect(join(sim, id, 'abandon').ok).toBe(true);
-    const e = encounter(sim, id);
-    expect(e).toMatchObject({ phase: 'done', outcome: 'retreat', mode: 'abandon' });
-    expect(getStock(sim.state)).toBe(stock);
-    const lost = before - wallet.balance(sim.state, 'dirty');
-    expect(lost).toBe(Math.min(ABANDON_CASH_MAX, Math.round(before * ABANDON_CASH_SHARE)));
-  });
-
-  it('deterministisch: gleicher Seed, gleiche Wege, gleiches Ergebnis', () => {
-    const run = () => {
-      const sim = createTestGame({ seed: 9 });
-      sim.state.wallet.dirty = 10_000;
-      const runner = hireRunner(sim, 'ebertplatz');
-      const results = (['tipoff', 'abandon', 'payoff', 'crew'] as const).map((mode) => {
-        const id = raid(sim, [runner]);
-        join(sim, id, mode);
-        if (encounter(sim, id).phase !== 'done') autoResolveEncounter(sim.ctx('gangs'), id);
-        return JSON.stringify(encounter(sim, id).result);
-      });
-      return results;
-    };
-    expect(run()).toEqual(run());
+      staffIds: [runner],
+      playerPresent: false,
+    });
+    const state = structuredClone(sim.state);
+    // So sah eine Konfrontation aus, die in der Akte auf den Spieler wartete.
+    const done = state.modules.encounters.history.find((e) => e.id === encounterId);
+    if (!done) throw new Error('fehlt');
+    state.modules.encounters.history = state.modules.encounters.history.filter((e) => e.id !== encounterId);
+    state.modules.encounters.active.push({
+      ...done,
+      phase: 'briefing',
+      outcome: null,
+      resolvedAt: null,
+      result: null,
+      deadline: state.time + 120,
+    });
+    state.moduleVersions.encounters = 5;
+    const loaded = loadSimulation(state, sim.modules);
+    expect(loaded.state.moduleVersions.encounters).toBe(6);
+    expect(activeEncounters(loaded.state)).toHaveLength(1);
+    const events = recordEvents(loaded);
+    loaded.advance(1);
+    expect(activeEncounters(loaded.state)).toHaveLength(0);
+    expect(getEncounter(loaded.state, encounterId)?.phase).toBe('done');
+    expect(eventsOfType(events, 'encounter.resolved')).toHaveLength(1);
   });
 });
 
@@ -595,26 +444,5 @@ describe('Ware und Leute nach Stadt', () => {
     expect(encounter(sim, encounterId).result?.goods).toBe(-200);
     expect(getStock(sim.state, { cityId: 'hamburg' })).toBe(200);
     expect(getStock(sim.state, { cityId: 'koeln' })).toBe(koeln);
-  });
-
-  it('Verstärkung kommt aus der Stadt der Konfrontation, nicht aus der schlafenden', () => {
-    const sim = createTestGame({ seed: 4 });
-    sim.state.wallet.dirty = 10_000;
-    const runner = hireRunner(sim, 'ebertplatz');
-    const extra = [hireRunner(sim, 'neumarkt'), hireRunner(sim, 'zuelpicher')];
-    for (const id of extra) sim.dispatch({ type: 'staff.assign', payload: { staffId: id, assignment: null } });
-    const { encounterId } = startEncounter(sim.ctx('gangs'), {
-      kind: 'raidDefense',
-      spotId: 'ebertplatz',
-      veedelId: 'neustadt-nord',
-      staffIds: [runner],
-      askPlayer: true,
-    });
-    expect(backupCandidates(sim.state, encounter(sim, encounterId)).sort()).toEqual([...extra].sort());
-    const away = getStaffMember(sim.state, extra[0]);
-    if (!away) throw new Error('Person fehlt');
-    away.cityId = 'hamburg';
-    invalidateStaffIndex();
-    expect(backupCandidates(sim.state, encounter(sim, encounterId))).toEqual([extra[1]]);
   });
 });

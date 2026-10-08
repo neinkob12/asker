@@ -12,7 +12,10 @@ function status(sim: Simulation, gangId: string) {
   return sim.state.modules.gangs.gangs[gangId];
 }
 
-/** Überfall auf den Spot von „ost“ in Kalk mit dir selbst; die Gegenseite zieht in der ersten Runde ab. */
+/**
+ * Überfall auf den Spot von „ost“ in Kalk mit dir selbst. Mit dir vor Ort wartet der Straßenkampf (Auftrag 46d); alle
+ * Gegner gehen zu Boden, der Überfall ist gewonnen.
+ */
 function raidWon(sim: Simulation, gangMoney = 20000, playerPresent = true): number {
   const s = status(sim, 'ost');
   s.money = gangMoney;
@@ -24,11 +27,12 @@ function raidWon(sim: Simulation, gangMoney = 20000, playerPresent = true): numb
   const encounterId = (result.data as { encounterId: number }).encounterId;
   const e = getEncounter(sim.state, encounterId);
   if (!e) throw new Error('Konfrontation fehlt');
-  // Sie wackeln schon: Eine Runde Einschüchtern reicht, und niemand prügelt.
-  e.resolve = 1;
-  e.aggression = 0;
-  e.intent = null;
-  sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId: 'intimidate' } });
+  const open = e.minigame;
+  if (!open) throw new Error('Der Straßenkampf hätte starten müssen');
+  sim.dispatch({
+    type: 'minigames.finish',
+    payload: { id: open.challengeId, score: 1, picks: [`down:${e.opponent.count}`] },
+  });
   expect(getEncounter(sim.state, encounterId)?.outcome).toBe('success');
   return encounterId;
 }
@@ -54,7 +58,8 @@ describe('Tresor knacken', () => {
       veedelId: 'kalk',
     });
     expect(c?.params.max).toBe(safeAmount(status(sim, 'ost').money));
-    expect(eventsOfType(events, 'minigame.started')).toHaveLength(1);
+    // Erst der Straßenkampf des Überfalls (Auftrag 46d), dann der Tresor.
+    expect(eventsOfType(events, 'minigame.started').map((e) => e.payload.kind)).toEqual(['brawl', 'safe']);
   });
 
   it('ohne dich, bei einer armen Gang oder verlorenem Überfall kein Tresor', () => {
@@ -67,10 +72,8 @@ describe('Tresor knacken', () => {
       payload: { gangId: 'ost', veedelId: 'kalk', staffIds: [runner], playerPresent: false },
     });
     const id = result.ok ? (result.data as { encounterId: number }).encounterId : 0;
-    const e = getEncounter(sim.state, id);
-    if (e) e.resolve = 1;
-    sim.dispatch({ type: 'encounters.act', payload: { encounterId: id, actionId: 'talkNervous' } });
-    sim.dispatch({ type: 'encounters.auto', payload: { encounterId: id } });
+    // Ohne dich ist der Überfall sofort entschieden (Auftrag 46d), wie auch immer: kein Tresor.
+    expect(getEncounter(sim.state, id)?.phase).toBe('done');
     expect(activeChallenge(sim.state)).toBeUndefined();
 
     const poor = createTestGame({ seed: 11 });

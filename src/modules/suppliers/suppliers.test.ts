@@ -150,7 +150,7 @@ describe('suppliers', () => {
     expect(order(sim, 'frankfurt', 'weed25')).toEqual({ ok: false, reason: 'Nicht genug Geld.' });
   });
 
-  it('zu Beginn liefern Köln und Frankfurt, Toni schreibt eine Nachricht, über die man bestellen kann', () => {
+  it('zu Beginn liefern Köln und Frankfurt, ohne Begrüßung per Handy (Auftrag 46d)', () => {
     const sim = createTestGame();
     // Kofi am Frankfurter Flughafen ist ohne Bedingungen zu haben, liefert aber nur nach Frankfurt (Auftrag 39).
     expect(SUPPLIERS.filter((s) => isUnlocked(sim.state, s.id)).map((s) => s.id)).toEqual([
@@ -159,10 +159,8 @@ describe('suppliers', () => {
       'koeln',
     ]);
     expect(order(sim, 'hamburg', 'weed50')).toEqual({ ok: false, reason: 'Hein macht noch keine Geschäfte mit dir.' });
-    const [thread] = messages.threads(sim.state);
-    expect(thread.contact.id).toBe('supplier:frankfurt');
-    const result = sim.dispatch({ type: 'messages.answer', payload: { messageId: thread.last.id, optionId: 'order' } });
-    expect(result.ok).toBe(true);
+    expect(messages.threads(sim.state).some((t) => t.contact.id === 'supplier:frankfurt')).toBe(false);
+    expect(order(sim, 'frankfurt', 'weed25').ok).toBe(true);
     expect(shipmentsInTransit(sim.state)).toHaveLength(1);
   });
 

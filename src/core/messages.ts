@@ -10,6 +10,7 @@
 // CALL_RETRY_MINUTES später noch einmal an, höchstens CALL_MAX_ATTEMPTS-mal; danach (oder nach 'messages.declineCall')
 // bleibt der Chat mit denselben Antworten. Klingelnde Anrufe und Rückrufe stehen in `calls` (Kernschema 3).
 
+import { MINUTES_PER_DAY } from './clock';
 import { CALL_MAX_ATTEMPTS, CALL_RETRY_MINUTES, CALL_RING_MINUTES, MESSAGE_LIMIT } from './config';
 import { type Look, lookFor, personLook, type VoiceSpec, voiceFor } from './looks';
 import type { Command, CommandResult, Ctx, GameState } from './types';
@@ -408,6 +409,21 @@ export const messages = {
     }
     for (const list of index.byContact.values()) for (const m of list) if (!m.read) unread++;
     return unread;
+  },
+
+  /**
+   * Hat die Figur heute (am laufenden Spieltag) schon geschrieben oder angerufen? Auftrag 46d: Gangs und Polizei
+   * melden sich höchstens einmal am Tag von selbst. Zählt auch Nachrichten in gelöschten Chats.
+   */
+  sentToday(state: GameState, contactId: string): boolean {
+    const dayStart = Math.floor(state.time / MINUTES_PER_DAY) * MINUTES_PER_DAY;
+    const list = state.messages.list;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const m = list[i];
+      if (m.time < dayStart) break;
+      if (m.contactId === contactId && m.from === 'contact') return true;
+    }
+    return false;
   },
 
   /** Wartet in diesem Chat eine Frage mit Frist auf Antwort? (Für die Rückfrage vor dem Löschen.) */

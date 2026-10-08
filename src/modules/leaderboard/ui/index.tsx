@@ -23,7 +23,7 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { completedQuests, questTitle } from '../../quests';
+import { milestoneTitle } from '../../territory';
 import { runSummary } from '../index';
 import './leaderboard.css';
 
@@ -112,9 +112,8 @@ function submit(state: GameState): Promise<void> {
     ...summary,
     token: token(runId),
     name: getPlayerName(),
-    // Titel ist der Rang (Auftrag 36); alte Durchgänge ohne Rang hatten den Titel aus den Quests.
-    title: summary.title || questTitle(state),
-    quests: completedQuests(state).length,
+    // Titel ist der Rang (Auftrag 36); ohne Rang der Meilenstein „Boss von Köln“ (Auftrag 46d: früher aus den Quests).
+    title: summary.title || milestoneTitle(state),
   });
   if (lastSent.get(runId) === body) return Promise.resolve();
   const request = fetch(ENDPOINT, {

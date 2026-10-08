@@ -2,7 +2,8 @@
 // In regelmäßigen Abständen kommen neue Bewerber mit unterschiedlichen Werten. Seltener tauchen Kontakte auf:
 // Empfehlungen von loyalen Mitarbeitern, Kumpels von Stammkunden, Leute aus dem Milieu oder aus dem Knast.
 // Kontakte sind oft besser. Vor der Einstellung sieht man nur einen Teil der Werte, der Rest zeigt sich
-// mit der Zeit (siehe staff: knownStats, revealStat).
+// mit der Zeit (siehe staff: knownStats, revealStat). Bewerber und Kontakte stehen nur in der Personal-App; Chats dazu
+// gibt es seit Auftrag 46d nicht mehr (kein „Soll ich das klarmachen?“, keine Nachricht aus dem Milieu).
 //
 // Bewerbungsgespräch (Auftrag 44, Teil 9): Eigenschaften sieht man vor der Einstellung erst, wenn man sie im Gespräch
 // erkannt hat (revealedTraits). 'recruiting.interview' startet einmal je Bewerber das Minispiel 'interview'; was der
@@ -20,16 +21,13 @@
 import {
   type CommandMeta,
   type CommandResult,
-  type Contact,
   type Ctx,
   clock,
   defineModule,
-  fillText,
   formatEuro,
   type GameEvents,
   type GameState,
   journal,
-  messages,
   personLook,
   voiceFor,
   wallet,
@@ -60,7 +58,6 @@ import {
   type StaffRole,
   type StaffStats,
   type StatKey,
-  staffContact,
   type TraitId,
   traitName,
 } from '../staff';
@@ -74,7 +71,6 @@ import {
   CONTACT_MAX,
   CONTACT_QUALITY,
   EVENT_CHANCE,
-  EVENT_INTROS,
   EVENT_ROLE_WEIGHTS,
   HIRE_COST_DAYS,
   INTERVIEW_DIFFICULTY,
@@ -331,30 +327,6 @@ function addContact(
   return addCandidate(ctx, role, source, { quality, level, note, referrerId });
 }
 
-/** Antwortmöglichkeiten für die Nachricht zu einem Kontakt. */
-function contactOptions(c: Candidate) {
-  return [
-    {
-      id: 'hire',
-      label: `Einstellen (${formatEuro(c.hireCost)} Handgeld)`,
-      command: { type: 'recruiting.hire' as const, payload: { candidateId: c.id } },
-      reply: 'Schick vorbei, ich stell ein.',
-    },
-    {
-      id: 'decline',
-      label: 'Kein Bedarf',
-      command: { type: 'recruiting.decline' as const, payload: { candidateId: c.id } },
-      reply: 'Kein Bedarf.',
-    },
-  ];
-}
-
-function announce(ctx: Ctx, c: Candidate, contact: Contact, text: string): void {
-  messages.send(ctx, { contact, text, options: contactOptions(c), expiresIn: c.expiresAt - ctx.now });
-}
-
-const describe = (c: Candidate) => `${c.name}, ${c.age}, ${roleName(c.role)}`;
-
 /** Empfehlung eines loyalen Mitarbeiters (höchstens eine pro Tag). */
 function maybeReferral(ctx: Ctx): void {
   // Nur Leute der Stadt, in der du bist, kennen dort wen (Auftrag 43); nach dem Verkauf niemand mehr.
@@ -368,15 +340,7 @@ function maybeReferral(ctx: Ctx): void {
     // Alte Kuriere (vor Auftrag 28) empfehlen Läufer.
     const own = m.role === 'courier' ? 'runner' : m.role;
     const role = ctx.chance(0.6) ? own : pickWeighted(ctx, POOL_ROLE_WEIGHTS);
-    const c = addContact(ctx, role, 'referral', withPeriod(`Empfohlen von ${m.name}`), m.id);
-    if (c) {
-      announce(
-        ctx,
-        c,
-        staffContact(m),
-        `Chef, ich kenn da wen: ${describe(c)}. ${c.background} Soll ich das klarmachen?`,
-      );
-    }
+    addContact(ctx, role, 'referral', withPeriod(`Empfohlen von ${m.name}`), m.id);
     return;
   }
 }
@@ -384,11 +348,7 @@ function maybeReferral(ctx: Ctx): void {
 /** Jemand aus dem Milieu meldet sich. */
 function maybeEventContact(ctx: Ctx): void {
   if (isBusinessSold(ctx.state) || !ctx.chance(EVENT_CHANCE)) return;
-  const c = addContact(ctx, pickWeighted(ctx, EVENT_ROLE_WEIGHTS), 'event', 'Hat sich von selbst gemeldet.');
-  if (!c) return;
-  // fillText: „{name}.“ mit „Nico R.“ wird kein „Nico R..“ (J3).
-  const intro = fillText(ctx.pick(EVENT_INTROS), { name: c.name });
-  announce(ctx, c, { id: `recruit:${c.id}`, name: c.name, kind: 'other' }, `${intro} (${roleName(c.role)})`);
+  addContact(ctx, pickWeighted(ctx, EVENT_ROLE_WEIGHTS), 'event', 'Hat sich von selbst gemeldet.');
 }
 
 /** Ein Stammkunde (customers) kennt jemanden. Charismatische Verkäufer bringen öfter Kontakte. */
@@ -400,20 +360,7 @@ function maybeRegular(ctx: Ctx, regularId: string, sellerId: string | null): voi
   if (!ctx.chance(REGULAR_CHANCE_PER_SALE * factor)) return;
   const spot = getSpot(ctx.state, regular.spotId);
   const where = spot ? ` ${atSpot(spot)}` : '';
-  const c = addContact(
-    ctx,
-    pickWeighted(ctx, POOL_ROLE_WEIGHTS),
-    'regular',
-    `Kumpel von Stammkunde ${regular.name}${where}.`,
-  );
-  if (!c) return;
-  announce(
-    ctx,
-    c,
-    // Derselbe Kontakt wie im Kundenmodul (Lieferdienst), damit es ein Chat bleibt.
-    { id: `customer:${regular.id}`, name: regular.name, kind: 'customer' },
-    `Ey, kurze Frage: Ein Kumpel sucht Arbeit. ${describe(c)}. Soll ich die Nummer weitergeben?`,
-  );
+  addContact(ctx, pickWeighted(ctx, POOL_ROLE_WEIGHTS), 'regular', `Kumpel von Stammkunde ${regular.name}${where}.`);
 }
 
 /** Wer aus der Haft kommt, hat dort manchmal jemanden kennengelernt. */
@@ -421,14 +368,7 @@ function maybeJailContact(ctx: Ctx, staffId: string): void {
   const m = getStaffMember(ctx.state, staffId);
   // Den Kontakt gibt es nur, wenn die Person in der Stadt ist, in der du bist (Auftrag 43).
   if (!m || (m.cityId ?? 'koeln') !== activeCity(ctx.state) || !ctx.chance(JAIL_CONTACT_CHANCE)) return;
-  const c = addContact(ctx, pickWeighted(ctx, EVENT_ROLE_WEIGHTS), 'event', `Hat ${m.name} im Knast kennengelernt.`);
-  if (!c) return;
-  announce(
-    ctx,
-    c,
-    staffContact(m),
-    `Bin wieder draußen. Drinnen hab ich wen kennengelernt: ${describe(c)}. Taugt was.`,
-  );
+  addContact(ctx, pickWeighted(ctx, EVENT_ROLE_WEIGHTS), 'event', `Hat ${m.name} im Knast kennengelernt.`);
 }
 
 // --- Ablauf ---
@@ -498,11 +438,6 @@ function hire(ctx: Ctx, candidateId: string, assignment: StaffAssignment | null,
     referrerId: c.referrerId && isEmployed(ctx.state, c.referrerId) ? c.referrerId : null,
   });
   if (c.referrerId && isEmployed(ctx.state, c.referrerId)) addLoyalty(ctx, c.referrerId, 3);
-  // Fragen im Chat zu genau diesem Bewerber (Empfehlung, Bewerbung) sind erledigt, auch wenn er über die App kam.
-  messages.retractWhere(
-    ctx,
-    (m) => !!m.options?.some((o) => o.command?.type === 'recruiting.hire' && o.command.payload.candidateId === c.id),
-  );
   ctx.emit('recruiting.hired', { candidateId: c.id, staffId: member.id });
   if (assignment) ctx.dispatch({ type: 'staff.assign', payload: { staffId: member.id, assignment } }, meta);
   return { ok: true, data: { staffId: member.id } };

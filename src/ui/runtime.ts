@@ -1,5 +1,9 @@
 // Laufzeit der Oberfläche: verbindet die Spielsitzung mit Preact. Hält den reinen UI-Zustand
-// (offenes Panel, Dialog, Handy, Toasts …) und stößt das Neuzeichnen an, gedrosselt auf ca. 10 Mal pro Sekunde.
+// (offenes Panel, Dialog, Handy, Verlauf …) und stößt das Neuzeichnen an, gedrosselt auf ca. 10 Mal pro Sekunde.
+//
+// Auftrag 46d: Keine Push-Banner, keine Mitteilungszentrale, keine Dynamic Island mehr. ui.toast schreibt nur noch in
+// den Verlauf (Einstellungen › Verlauf); nur die Antwort auf einen fehlgeschlagenen Befehl des Spielers erscheint kurz
+// im Handy (ui.error), sonst stünde er ohne Rückmeldung da.
 
 import { audio } from '../audio';
 import type { Command, CommandResult, GameSession, GameState, KeyValueStorage, LngLat } from '../core';
@@ -26,81 +30,26 @@ import { bumpStateRevision, enableStateMemo } from './stateMemo';
 import { TourRunner } from './tour/controller';
 import type { TourApi } from './tour/types';
 
-/** good/info: Routine (kurz, grau in der Alarm-Zentrale), warn: gelb, bad: rot. */
+/** good/info: Routine (grau im Verlauf), warn: gelb, bad: rot. */
 export type ToastKind = 'info' | 'good' | 'warn' | 'bad';
 
 export type { CameraMode, TrafficLevel } from './prefs';
 
-/** Benachrichtigung, die oben aus dem Spiel-Handy herausragt (Banner). Klick öffnet die App. */
-export interface PhoneNotification {
-  id: number;
-  title: string;
-  text: string;
-  /** Icon-Name aus dem Icon-Set oder Emoji. */
-  icon?: string;
-  /** App, die sich beim Klick öffnet, samt Parametern (z.B. { contactId }). */
-  appId?: string;
-  params?: Record<string, unknown>;
-  /** Ton (Name aus SOUND_IDS oder registerSound), Standard 'notification'. null = still. */
-  sound?: string | null;
-  /** Spielzeit, zu der die Benachrichtigung kam (setzt notify selbst). */
-  time?: number;
-  /**
-   * Dringend (Standard): Banner, Ton, Vibrieren. Nicht dringend: nur in die Mitteilungszentrale, kein Banner,
-   * außer die Einstellung "Mehr Benachrichtigungen" ist an (Auftrag 26: nur das Allerwichtigste stört).
-   */
-  urgent?: boolean;
-}
-
-/** Kurzer Auftritt in der Dynamic Island (z.B. "+120 €" nach Verkäufen, "Lieferung da"). */
-export interface IslandPulse {
-  id: number;
-  icon: string;
-  text: string;
-  tone?: 'accent' | 'warn' | 'bad' | 'info' | 'neutral';
-  /** Gleiche Art (z.B. 'earn'): Beträge werden zusammengezählt, solange der Auftritt läuft. */
-  kind?: string;
-  amount?: number;
-}
-
 export interface ToastOptions {
-  /** Ort des Geschehens: Die Alarm-Zentrale bietet dann "Hinzoomen" an. */
+  /** Ort des Geschehens: Der Verlauf bietet dann "Hinzoomen" an. */
   target?: LngLat;
   /** Icon-Name statt des Standard-Icons der Art. */
   icon?: string;
-  /** In der Alarm-Zentrale festhalten? Standard: ja (Fehlermeldungen von Befehlen nicht). */
+  /** Im Verlauf festhalten? Standard: ja. Mit false verpufft die Meldung (seit Auftrag 46d gibt es keine Banner). */
   log?: boolean;
   /**
-   * Als Banner zeigen? Standard: nur 'bad' und 'warn'. Routine ('good', 'info') landet still im Verlauf, außer die
-   * Einstellung "Mehr Benachrichtigungen" ist an. Mit true erzwingen (z.B. "Lieferung ist da"), mit false
-   * unterdrücken (z.B. Ärger, der nur ins Journal gehört).
+   * Wichtig? Standard: 'bad' und 'warn'. Wichtige Meldungen zählen am Badge der Einstellungen als ungelesen; Routine
+   * ('good', 'info') steht nur im Verlauf. Mit true erzwingen (z.B. "Lieferung ist da"), mit false unterdrücken.
    */
   urgent?: boolean;
-  /** Überschrift im Banner statt „Meldung“ bzw. „Achtung“ (z.B. „Neue Quest“). */
-  title?: string;
-  /** Bedeutungsfarbe der Kachel im Banner statt der Farbe der Art (z.B. 'brand' für Peters Quests). */
-  color?: string;
-  /** Ein Tipp aufs Banner öffnet diese App (samt Parametern), wie bei ui.notify, statt des Verlaufs. */
-  appId?: string;
-  params?: Record<string, unknown>;
-  /** So lange steht das Banner (Millisekunden), Standard nach Art; z.B. länger für Hinweise beim Einstieg. */
-  duration?: number;
 }
 
-export interface Toast {
-  id: number;
-  text: string;
-  kind: ToastKind;
-  icon?: string;
-  target?: LngLat;
-  title?: string;
-  color?: string;
-  appId?: string;
-  params?: Record<string, unknown>;
-  duration?: number;
-}
-
-/** Eintrag der Alarm-Zentrale (Glocke im HUD). */
+/** Eintrag im Verlauf (Einstellungen › Verlauf). */
 export interface Alert {
   id: number;
   text: string;
@@ -110,6 +59,14 @@ export interface Alert {
   icon?: string;
   target?: LngLat;
   read: boolean;
+  /** Wichtig (zählt ungelesen am Badge der Einstellungen). */
+  urgent: boolean;
+}
+
+/** Kurze Rückmeldung im Handy, wenn ein Befehl des Spielers fehlschlägt (z.B. „Nicht genug Geld.“). */
+export interface UiError {
+  id: number;
+  text: string;
 }
 
 export type { NavEntry, NavKind } from './phone/navModel';
@@ -137,14 +94,10 @@ export interface UiState {
   tab: string | null;
   /** Geöffneter Abschnitt eines Listen-Tabs (ID des Slot-Beitrags), null = Übersicht. Folgt dem Stapel. */
   section: string | null;
-  /** Warteschlange: Sichtbar ist nur der erste Eintrag. */
-  toasts: Toast[];
-  /** Alarm-Zentrale, neueste zuerst. */
+  /** Verlauf der Meldungen, neueste zuerst. */
   alerts: Alert[];
-  /** Gestapelte Benachrichtigungen fürs Handy (Mitteilungszentrale), neueste zuerst. */
-  notifications: PhoneNotification[];
-  /** Mitteilungszentrale im Handy offen (Banner oder Statusleiste herunterziehen)? */
-  notificationCenter: boolean;
+  /** Fehlgeschlagener Befehl des Spielers: kurz sichtbar im Handy (Auftrag 46d: das einzige Banner). */
+  error: UiError | null;
   /** Suche (⌘K / Strg+K) offen? */
   palette: boolean;
   /** Offenes Popover im HUD (z.B. 'more', 'alerts', 'menu'). */
@@ -157,18 +110,8 @@ export interface UiState {
   overlay: boolean;
   /** Verkehr als Kulisse auf der Karte: aus, wenig, normal. Pro Gerät gemerkt. */
   traffic: TrafficLevel;
-  /** Handy vibriert bei Benachrichtigungen. Pro Gerät gemerkt. */
+  /** Leise Klicks bei Schaltern und Gesten. Pro Gerät gemerkt. */
   vibration: boolean;
-  /** Auch Routine als Banner zeigen (sonst nur Dringendes). Pro Gerät gemerkt. */
-  moreNotifications: boolean;
-  /** Nur Wichtiges als Banner, höchstens eins alle QUIET_GAP_MS. Pro Gerät gemerkt. */
-  quietNotifications: boolean;
-  /** Aktuelles Banner des Spiel-Handys. */
-  notification: PhoneNotification | null;
-  /** Zählt jedes Vibrieren hoch (für die Animation). */
-  buzz: number;
-  /** Dynamic Island: aufgeklappt (alle Live-Aktivitäten) und aktueller kurzer Auftritt. */
-  island: { expanded: boolean; pulse: IslandPulse | null };
   /**
    * Laufendes Gespräch im Handy (Auftrag 30): Nachricht des angenommenen Anrufs. Das Handy zeigt dann das Gespräch
    * bildschirmfüllend, bis aufgelegt wird. Ein klingelnder Anruf braucht das nicht (der steht im Spielzustand).
@@ -223,13 +166,11 @@ export interface UiApi {
   closePanel(): void;
   openDialog<K extends DialogId>(id: K, props: DialogRegistry[K]): void;
   closeDialog(): void;
+  /** Meldung in den Verlauf schreiben (seit Auftrag 46d kein Banner mehr). */
   toast(text: string, kind?: ToastKind, options?: ToastOptions): void;
-  /**
-   * Toast sofort ausblenden (der nächste aus der Warteschlange folgt). Mit `id` nur genau diesen: Ein Banner, das
-   * inzwischen von einem neueren abgelöst wurde (Wischen, Tipp), räumt so nicht das neue ungesehen weg.
-   */
-  dismissToast(id?: number): void;
-  /** Alarm-Zentrale: alles als gelesen markieren bzw. leeren. */
+  /** Die Rückmeldung zu einem fehlgeschlagenen Befehl ausblenden. */
+  dismissError(): void;
+  /** Verlauf: alles als gelesen markieren bzw. leeren. */
   markAlertsRead(): void;
   clearAlerts(): void;
   /**
@@ -242,30 +183,10 @@ export interface UiApi {
   closePhone(): void;
   /** Im Handy eine Seite zurück (wie der Zurück-Knopf); auf dem Startbildschirm wird das Handy weggelegt. */
   back(): void;
-  /** Banner am Spiel-Handy zeigen (mit Vibrieren). Sound spielt, wer es auslöst (siehe src/audio). */
-  notify(notification: Omit<PhoneNotification, 'id'>): void;
-  /** Banner ausblenden. Mit `id` nur, wenn gerade dieses Banner zu sehen ist (siehe dismissToast). */
-  dismissNotification(id?: number): void;
-  /**
-   * Banner anhalten, solange der Zeiger darüber steht oder der Fokus darin liegt (Barrierefreiheit: Zeit zum Lesen).
-   * Die Anzeigezeit läuft erst weiter, wenn es wieder losgelassen wird.
-   */
-  holdBanner(held: boolean): void;
-  /** Mitteilungszentrale öffnen oder schließen (ohne Argument umschalten). */
-  toggleNotificationCenter(open?: boolean): void;
-  /** Alle Mitteilungen löschen. */
-  clearNotifications(): void;
-  /**
-   * Kurzer Auftritt in der Dynamic Island. Mit kind und amount werden Beträge gleicher Art zusammengezählt,
-   * z.B. pulseIsland({ kind: 'earn', amount: 35, icon: 'euro', tone: 'accent', text: '' }) → "+35 €".
-   */
-  pulseIsland(pulse: Omit<IslandPulse, 'id'>): void;
   /** Gespräch eines angenommenen Anrufs im Handy zeigen (öffnet das Handy). */
   openCall(messageId: number): void;
   /** Auflegen: Das Gespräch bleibt als Chat beim Kontakt. */
   endCall(): void;
-  /** Dynamic Island auf- oder zuklappen (ohne Argument umschalten). */
-  toggleIsland(expanded?: boolean): void;
   /** Tab (Bereich eines Moduls) als App im Handy öffnen. */
   selectTab(id: string): void;
   /** Abschnitt eines Listen-Tabs öffnen (ID des Slot-Beitrags), null = zurück zur Übersicht. */
@@ -302,8 +223,6 @@ export interface UiApi {
   /** Verkehr auf der Karte: 'off', 'low' oder 'normal'. */
   setTraffic(level: TrafficLevel): void;
   setVibration(enabled: boolean): void;
-  setMoreNotifications(enabled: boolean): void;
-  setQuietNotifications(enabled: boolean): void;
   zoomIn(): void;
   zoomOut(): void;
   resetNorth(): void;
@@ -326,17 +245,9 @@ function isMobileScreen(): boolean {
   }
 }
 
-/** Anzeigedauer: Routine kurz, Warnungen länger. */
-const TOAST_MS: Record<ToastKind, number> = { good: 1900, info: 2200, warn: 3000, bad: 3400 };
-const TOAST_QUEUE = 5;
 const ALERT_LIMIT = 60;
-const NOTIFICATION_STACK = 12;
-const NOTIFICATION_MS = 5000;
-/** Nach dem Loslassen eines angehaltenen Banners bleibt noch kurz Zeit, bevor es verschwindet. */
-const BANNER_RELEASE_MS = 2500;
-/** Im ruhigen Modus: Mindestabstand zwischen zwei Bannern (echte Millisekunden). */
-const QUIET_GAP_MS = 15000;
-const ISLAND_PULSE_MS = 2600;
+/** So lange steht die Rückmeldung zu einem fehlgeschlagenen Befehl (Millisekunden). */
+const ERROR_MS = 2800;
 const RENDER_INTERVAL_MS = 100;
 
 export class UiRuntime {
@@ -345,15 +256,14 @@ export class UiRuntime {
   /** Touren (Auftrag 46a): Ablauf der laufenden Tour, gezeichnet von tour/TourHost.tsx. */
   readonly tours: TourRunner;
   map: MapController | null = null;
-  /** Zähler für Tests und das Durchspielen: wie viele Banner (Meldungen und Benachrichtigungen) erschienen sind. */
-  readonly stats = { banners: 0 };
 
   private readonly listeners = new Set<() => void>();
   private lastRender = 0;
   private lastRenderedTime: number | null = null;
   private lastSeenTime: number | null = null;
   private renderQueued = false;
-  private toastId = 0;
+  private errorId = 0;
+  private errorTimer: ReturnType<typeof setTimeout> | null = null;
   private speedBeforePause = 1;
 
   /** Tempo, mit dem es nach der Pause weitergeht (Handy-Knopf zeigt es pausiert an, Auftrag 43, N10). */
@@ -361,14 +271,7 @@ export class UiRuntime {
     return this.speedBeforePause;
   }
   private speedBeforeDialog: number | null = null;
-  private notificationId = 0;
-  private lastQuietBanner = 0;
-  private notificationTimer: ReturnType<typeof setTimeout> | null = null;
-  private bannerHeld = false;
-  private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private alertId = 0;
-  private pulseId = 0;
-  private pulseTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     readonly session: GameSession,
@@ -384,10 +287,8 @@ export class UiRuntime {
       phone: { open: desktop, app: null, stack: nav.rootStack() },
       tab: null,
       section: null,
-      toasts: [],
       alerts: [],
-      notifications: [],
-      notificationCenter: false,
+      error: null,
       palette: false,
       popover: null,
       picking: null,
@@ -395,11 +296,6 @@ export class UiRuntime {
       overlay: prefs.overlay,
       traffic: prefs.traffic,
       vibration: prefs.vibration,
-      moreNotifications: prefs.moreNotifications,
-      quietNotifications: prefs.quietNotifications,
-      notification: null,
-      buzz: 0,
-      island: { expanded: false, pulse: null },
       call: null,
     };
     setHapticsEnabled(prefs.vibration);
@@ -428,7 +324,7 @@ export class UiRuntime {
         bumpStateRevision();
       }
       this.lastSeenTime = time;
-      // Neues, geladenes oder importiertes Spiel: Meldungen, Banner und Seiten des alten Spiels gehören nicht mehr dazu.
+      // Neues, geladenes oder importiertes Spiel: Meldungen und Seiten des alten Spiels gehören nicht mehr dazu.
       if (change === 'sim') this.resetForNewGame();
       // Der Autosave klappt nicht (Speicher voll): einmal sagen, sonst geht Fortschritt still verloren.
       if (change === 'autosave' && session.autosaveError)
@@ -457,22 +353,15 @@ export class UiRuntime {
     });
   }
 
-  /** Alles, was zum alten Spiel gehörte, weg: Meldungen, Mitteilungen, Banner, Island und alle offenen Seiten. */
+  /** Alles, was zum alten Spiel gehörte, weg: Meldungen, Rückmeldung und alle offenen Seiten. */
   private resetForNewGame(): void {
     const ui = this.ui;
-    for (const timer of [this.toastTimer, this.notificationTimer, this.pulseTimer]) if (timer) clearTimeout(timer);
-    this.toastTimer = null;
-    this.notificationTimer = null;
-    this.pulseTimer = null;
-    this.bannerHeld = false;
-    ui.toasts = [];
+    if (this.errorTimer) clearTimeout(this.errorTimer);
+    this.errorTimer = null;
     ui.alerts = [];
-    ui.notifications = [];
-    ui.notification = null;
-    ui.notificationCenter = false;
+    ui.error = null;
     ui.popover = null;
     ui.palette = false;
-    ui.island = { expanded: false, pulse: null };
     ui.call = null;
     this.map?.cancelPick();
     this.setStack(nav.rootStack());
@@ -499,8 +388,6 @@ export class UiRuntime {
     this.renderQueued = true;
     queueMicrotask(() => {
       this.renderQueued = false;
-      // Ist ein Banner weg, kann der Toast dahinter seine Zeit bekommen.
-      this.scheduleToast();
       this.lastRender = performance.now();
       this.lastRenderedTime = this.session.state?.time ?? null;
       for (const listener of this.listeners) listener();
@@ -512,39 +399,15 @@ export class UiRuntime {
     return () => this.listeners.delete(listener);
   }
 
-  /** Zeigt den ersten Toast der Warteschlange für seine Dauer, danach den nächsten. */
-  private scheduleToast(): void {
-    if (this.toastTimer || this.bannerHeld) return;
-    const current = this.ui.toasts[0];
-    if (!current) return;
-    // Ein Banner (Nachricht) hat Vorrang und verdeckt den Toast: Seine Zeit läuft erst, wenn er zu sehen ist.
-    if (this.ui.notification) return;
-    this.toastTimer = setTimeout(() => {
-      this.toastTimer = null;
-      this.ui.toasts = this.ui.toasts.filter((t) => t.id !== current.id);
+  /** Rückmeldung zu einem fehlgeschlagenen Befehl: kurz im Handy, die nächste ersetzt die vorige. */
+  private showError(text: string): void {
+    this.ui.error = { id: ++this.errorId, text };
+    if (this.errorTimer) clearTimeout(this.errorTimer);
+    this.errorTimer = setTimeout(() => {
+      this.errorTimer = null;
+      this.ui.error = null;
       this.requestRender();
-      this.scheduleToast();
-    }, current.duration ?? TOAST_MS[current.kind]);
-  }
-
-  /** Blendet das Banner mit dieser ID nach `ms` aus (außer es ist angehalten, dann erst nach dem Loslassen). */
-  private startNotificationTimer(id: number, ms: number): void {
-    if (this.notificationTimer) clearTimeout(this.notificationTimer);
-    this.notificationTimer = null;
-    if (this.bannerHeld) return;
-    this.notificationTimer = setTimeout(() => {
-      this.notificationTimer = null;
-      if (this.ui.notification?.id === id) this.ui.notification = null;
-      this.requestRender();
-    }, ms);
-  }
-
-  /** Ruhiger Modus: Darf jetzt ein Banner erscheinen? Merkt sich den Zeitpunkt, wenn ja. */
-  private quietBannerAllowed(): boolean {
-    const now = performance.now();
-    if (now - this.lastQuietBanner < QUIET_GAP_MS) return false;
-    this.lastQuietBanner = now;
-    return true;
+    }, ERROR_MS);
   }
 
   private navKey = 0;
@@ -616,8 +479,6 @@ export class UiRuntime {
       camera: this.ui.camera,
       traffic: this.ui.traffic,
       vibration: this.ui.vibration,
-      moreNotifications: this.ui.moreNotifications,
-      quietNotifications: this.ui.quietNotifications,
     };
     savePrefs(this.storage, prefs);
   }
@@ -635,7 +496,7 @@ export class UiRuntime {
         update(() => {
           const result = session.dispatch(command);
           if (!result.ok) {
-            api.toast(result.reason, 'bad', { log: false });
+            this.showError(result.reason);
             audio.play('error', { volume: 0.5 });
           }
           return result;
@@ -671,49 +532,26 @@ export class UiRuntime {
         }),
       toast: (text, kind = 'info', options = {}) =>
         update(() => {
-          const id = ++this.toastId;
-          const toast: Toast = { id, text, kind };
-          if (options.icon) toast.icon = options.icon;
-          if (options.target) toast.target = options.target;
-          if (options.title) toast.title = options.title;
-          if (options.color) toast.color = options.color;
-          if (options.appId) toast.appId = options.appId;
-          if (options.params) toast.params = options.params;
-          if (options.duration) toast.duration = options.duration;
-          // Banner nur für Dringendes (Razzia, Festnahme, Lieferung …); Routine landet still im Verlauf.
-          let urgent = options.urgent ?? (kind === 'bad' || kind === 'warn');
-          // Ruhig: nur Schlimmes, und nicht im Sekundentakt (der Rest bleibt im Verlauf).
-          if (ui.quietNotifications && urgent) urgent = kind === 'bad' && this.quietBannerAllowed();
-          // Gleicher Text schon in der Schlange: nicht doppelt zeigen.
-          if ((urgent || (ui.moreNotifications && !ui.quietNotifications)) && !ui.toasts.some((t) => t.text === text)) {
-            this.stats.banners++;
-            let queue = [...ui.toasts, toast];
-            // Zu voll: Routine-Meldungen (nicht die sichtbare) fliegen zuerst raus.
-            while (queue.length > TOAST_QUEUE) {
-              const drop = queue.findIndex((t, i) => i > 0 && (t.kind === 'good' || t.kind === 'info'));
-              queue = queue.filter((_, i) => i !== (drop > 0 ? drop : 1));
-            }
-            ui.toasts = queue;
-            this.scheduleToast();
-          }
-          if (options.log !== false) {
-            const alert: Alert = { id: ++this.alertId, text, kind, time: session.state?.time ?? 0, read: false };
-            if (options.icon) alert.icon = options.icon;
-            if (options.target) alert.target = options.target;
-            ui.alerts = [alert, ...ui.alerts].slice(0, ALERT_LIMIT);
-          }
+          // Auftrag 46d: kein Banner mehr, nur der Verlauf (Einstellungen › Verlauf). Wichtiges zählt dort ungelesen.
+          if (options.log === false) return;
+          const urgent = options.urgent ?? (kind === 'bad' || kind === 'warn');
+          const alert: Alert = {
+            id: ++this.alertId,
+            text,
+            kind,
+            time: session.state?.time ?? 0,
+            read: !urgent,
+            urgent,
+          };
+          if (options.icon) alert.icon = options.icon;
+          if (options.target) alert.target = options.target;
+          ui.alerts = [alert, ...ui.alerts].slice(0, ALERT_LIMIT);
         }),
-      dismissToast: (id) =>
+      dismissError: () =>
         update(() => {
-          // Mit ID nur diesen Toast (er kann schon von allein weg sein, dann ist der nächste nicht gemeint).
-          if (id !== undefined && ui.toasts[0]?.id !== id) {
-            ui.toasts = ui.toasts.filter((t) => t.id !== id);
-            return;
-          }
-          if (this.toastTimer) clearTimeout(this.toastTimer);
-          this.toastTimer = null;
-          ui.toasts = ui.toasts.slice(1);
-          this.scheduleToast();
+          if (this.errorTimer) clearTimeout(this.errorTimer);
+          this.errorTimer = null;
+          ui.error = null;
         }),
       markAlertsRead: () =>
         update(() => {
@@ -737,13 +575,6 @@ export class UiRuntime {
                 : undefined;
             this.setStack(nav.openApp(stack, this.appRoot(appId), detail));
           }
-          if (ui.notification && (!appId || ui.notification.appId === appId)) ui.notification = null;
-          // Geöffnete App: Ihre Benachrichtigungen verschwinden vom Stapel (bei Chats nur die des Chats).
-          if (appId) {
-            const same = (n: PhoneNotification) =>
-              n.appId === appId && (!params || JSON.stringify(n.params ?? {}) === JSON.stringify(params));
-            if (ui.notifications.some(same)) ui.notifications = ui.notifications.filter((n) => !same(n));
-          }
         }),
       showPhone: () =>
         update(() => {
@@ -753,7 +584,6 @@ export class UiRuntime {
       closePhone: () =>
         update(() => {
           ui.phone = { ...ui.phone, open: false };
-          ui.notificationCenter = false;
           this.setStack(nav.withoutPanels(ui.phone.stack));
         }),
       back: () => {
@@ -761,59 +591,6 @@ export class UiRuntime {
         if (ui.phone.stack.length <= 1) api.closePhone();
         else update(() => this.setStack(nav.pop(ui.phone.stack)));
       },
-      notify: (notification) =>
-        update(() => {
-          // Ist genau diese App (bzw. dieser Chat) offen, braucht es kein Banner.
-          const here =
-            ui.phone.open &&
-            // Liegt eine Detailseite (Spot, Veedel …) über dem Chat, schaut man ihn nicht an.
-            ui.panel === null &&
-            ui.phone.app === notification.appId &&
-            JSON.stringify(ui.phone.params ?? {}) === JSON.stringify(notification.params ?? {});
-          if (here) {
-            audio.play('tap');
-            return;
-          }
-          const id = ++this.notificationId;
-          const entry: PhoneNotification = { ...notification, id, time: notification.time ?? session.state?.time ?? 0 };
-          ui.notifications = [entry, ...ui.notifications].slice(0, NOTIFICATION_STACK);
-          // Nicht dringend: still in die Mitteilungszentrale (Badge an der App), kein Banner, kein Ton.
-          if (notification.urgent === false && !ui.moreNotifications) return;
-          if (ui.quietNotifications && !this.quietBannerAllowed()) return;
-          this.stats.banners++;
-          ui.notification = entry;
-          // Ein Toast, der gerade lief, ist jetzt verdeckt: Seine Zeit beginnt neu, sobald das Banner weg ist.
-          if (this.toastTimer) {
-            clearTimeout(this.toastTimer);
-            this.toastTimer = null;
-          }
-          if (notification.sound !== null) audio.play(notification.sound ?? 'notification');
-          if (ui.vibration) {
-            ui.buzz++;
-            audio.play('vibrate', { volume: 0.6, delay: 0.05 });
-            try {
-              navigator.vibrate?.([60, 40, 60]);
-            } catch {
-              // Nicht jedes Gerät kann vibrieren.
-            }
-          }
-          this.startNotificationTimer(id, NOTIFICATION_MS);
-        }),
-      pulseIsland: (pulse) =>
-        update(() => {
-          const current = ui.island.pulse;
-          const next: IslandPulse = { ...pulse, id: ++this.pulseId };
-          if (current && pulse.kind && current.kind === pulse.kind && pulse.amount !== undefined) {
-            next.amount = (current.amount ?? 0) + pulse.amount;
-            next.id = current.id;
-          }
-          ui.island = { ...ui.island, pulse: next };
-          if (this.pulseTimer) clearTimeout(this.pulseTimer);
-          this.pulseTimer = setTimeout(() => {
-            ui.island = { ...ui.island, pulse: null };
-            this.requestRender();
-          }, ISLAND_PULSE_MS);
-        }),
       openCall: (messageId) =>
         update(() => {
           ui.call = { messageId };
@@ -822,39 +599,6 @@ export class UiRuntime {
       endCall: () =>
         update(() => {
           ui.call = null;
-        }),
-      toggleIsland: (expanded) =>
-        update(() => {
-          ui.island = { ...ui.island, expanded: expanded ?? !ui.island.expanded };
-        }),
-      dismissNotification: (id) =>
-        update(() => {
-          // Mit ID nur das Banner, das gemeint war: Ein neues, das während der Wisch-Animation kam, bleibt.
-          if (id === undefined || ui.notification?.id === id) ui.notification = null;
-        }),
-      holdBanner: (held) => {
-        if (held === this.bannerHeld) return;
-        update(() => {
-          this.bannerHeld = held;
-          if (held) {
-            if (this.notificationTimer) clearTimeout(this.notificationTimer);
-            if (this.toastTimer) clearTimeout(this.toastTimer);
-            this.notificationTimer = null;
-            this.toastTimer = null;
-          } else if (ui.notification) {
-            this.startNotificationTimer(ui.notification.id, BANNER_RELEASE_MS);
-          }
-          // Ein Toast bekommt seine Zeit beim nächsten Zeichnen (scheduleToast in requestRender).
-        });
-      },
-      toggleNotificationCenter: (open) =>
-        update(() => {
-          ui.notificationCenter = open ?? !ui.notificationCenter;
-          if (ui.notificationCenter) ui.notification = null;
-        }),
-      clearNotifications: () =>
-        update(() => {
-          ui.notifications = [];
         }),
       // Bereiche der Module (Tabs) sind Apps im Handy.
       selectTab: (id) => api.openPhone(`${TAB_APP_PREFIX}${id}`),
@@ -980,16 +724,6 @@ export class UiRuntime {
         update(() => {
           ui.vibration = enabled;
           setHapticsEnabled(enabled);
-          this.savePrefs();
-        }),
-      setMoreNotifications: (enabled) =>
-        update(() => {
-          ui.moreNotifications = enabled;
-          this.savePrefs();
-        }),
-      setQuietNotifications: (enabled) =>
-        update(() => {
-          ui.quietNotifications = enabled;
           this.savePrefs();
         }),
       zoomIn: () => this.map?.zoomIn(),

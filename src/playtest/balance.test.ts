@@ -180,10 +180,10 @@ describe('Balancing', () => {
       // Das erste Veedel ist in Reichweite, die Gangs merken es und machen Druck.
       expect(Math.max(...r.days.map((d) => d.veedel)), `Seed ${seed}`).toBeGreaterThanOrEqual(1);
       expect(r.events['gang.escalated'] ?? 0, `Seed ${seed}`).toBeGreaterThan(0);
-      // Markt und Verträge (Auftrag 32): Der Index bewegt sich mild, der Bot nimmt am Montag einen Vertrag.
+      // Markt (Auftrag 32): Der Index bewegt sich mild. Wochenverträge gibt es erst nach Köln (Auftrag 46d).
       expect(Math.min(...r.index), `Seed ${seed}`).toBeGreaterThanOrEqual(0.85);
       expect(Math.max(...r.index), `Seed ${seed}`).toBeLessThanOrEqual(1.2);
-      expect(r.contracts.accepted, `Seed ${seed}`).toBeGreaterThanOrEqual(1);
+      expect(r.contracts.accepted, `Seed ${seed}`).toBe(0);
     }
   }, 120_000);
 
@@ -209,7 +209,7 @@ describe('Balancing', () => {
             ` | Veedel 1/3/5/7/9/12 ab Tag ${firstDay(1)}/${firstDay(3)}/${firstDay(5)}/${firstDay(7)}/${firstDay(9)}/${firstDay(12)}` +
             ` | Umsatz/Tag T1-5 ${avg(0, 5)}, T6-15 ${avg(5, 15)}, T16-30 ${avg(15, 30)}, danach ${avg(30, r.days.length)}` +
             ` | Gang-Überfälle ${e('gang.raidStarted')}, Vorstöße ${e('gang.pushStarted')}, Eskalationen ${e('gang.escalated')}` +
-            ` | Gang-Kriege ${e('gang.warStarted')} (geholfen ${e('gang.warSupported')}), Geschichten ${e('staff.story')}` +
+            ` | Gang-Kriege ${e('gang.warStarted')} (geholfen ${e('gang.warSupported')})` +
             ` | Stammabnehmer: Stufen ${e('dealer.stageChanged')}, weg ${e('dealer.left')}, Zwischenhandel ${e('dealer.middlemanDelivered')}` +
             ` | Capos ${e('hierarchy.capoAppointed')}` +
             ` | Razzien ${e('police.raidPlanned')}, Kontrollen ${e('police.check')}, Festnahmen ${e('police.arrest')}` +

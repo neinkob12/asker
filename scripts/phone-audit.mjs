@@ -129,7 +129,7 @@ function audit() {
         !el.closest('[inert]');
       if (interactive && !el.matches('input[type="range"]')) {
         const r = el.getBoundingClientRect();
-        // Eine Trefferfläche darf über ::before/::after größer sein als das sichtbare Element (z.B. die Island)
+        // Eine Trefferfläche darf über ::before/::after größer sein als das sichtbare Element (z.B. die Anzeige oben im Handy)
         let w = r.width;
         let h = r.height;
         for (const pseudo of ['::before', '::after']) {

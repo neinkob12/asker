@@ -307,7 +307,6 @@ registerPhoneApp({
   order: 40,
   color: 'money',
   component: LaunderingApp,
-  // Handy Schritt für Schritt: kommt mit Peters Quest „Wasch 500 €“ (quests, PHONE_APP_STEPS).
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
   hiddenWhen: (state) => !tutorialAllows(state, 'app.laundering'),
 });

@@ -173,7 +173,7 @@
   /* Auswahl in Segmenten (gewählter Abschnitt) */
   --phone-thumb: light-dark(#ffffff, #636366);
 
-  /* Handy-Hardware: Gehäuse, Rahmen und Island sehen in jedem Schema gleich aus */
+  /* Handy-Hardware: Gehäuse, Rahmen und die Anzeige oben sehen in jedem Schema gleich aus */
   --hw-black: #000000;
   --hw-frame: #5a5a5e;
   --hw-frame-edge: #2a2a2c;
@@ -524,8 +524,8 @@
 .phone[data-appearance="auto"] {
   color-scheme: light dark;
 }
-/* Die Island ist Hardware (schwarz) und bleibt in beiden Schemata dunkel. */
-.island-wrap {
+/* Die Anzeige oben ist Hardware (schwarz) und bleibt in beiden Schemata dunkel. */
+.status-pill-wrap {
   color-scheme: dark;
 }
 
@@ -538,7 +538,7 @@
 @media (max-width: 760px) {
   :root {
     --hud-height: 52px;
-    /* Platz unter Geld und Uhr für die schwebende Dynamic Island (37 px hoch, mit Luft), siehe shell.css */
+    /* Platz unter Geld und Uhr für die schwebende Anzeige (37 px hoch, mit Luft), siehe shell.css */
     --island-gap: 45px;
     --gutter: 8px;
   }

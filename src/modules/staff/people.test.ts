@@ -1,9 +1,9 @@
-// Auftrag 34, Etappe 1: Leute mit Geschichte (Eigenschaften, Beziehungen, Geschichten).
+// Auftrag 34, Etappe 1: Leute mit Geschichte (Eigenschaften, Beziehungen). Die Geschichten im Chat sind seit Auftrag 46d weg.
 
 import { describe, expect, it } from 'vitest';
-import { fillText, loadSimulation, type Simulation, wallet } from '../../core';
-import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
-import { STORY_GAP, TRAIT_EXCLUDES, TRAITS } from './config';
+import { loadSimulation, type Simulation } from '../../core';
+import { createTestGame } from '../../core/testing';
+import { TRAIT_EXCLUDES, TRAITS } from './config';
 import {
   betrayalChance,
   enlist,
@@ -11,18 +11,12 @@ import {
   generateProfile,
   getStaff,
   getStaffMember,
-  openStories,
   relationBetween,
   relationsOf,
   rollTraits,
-  STORIES,
   type StaffMember,
   type StaffRole,
-  type StoryId,
   serveTime,
-  startStory,
-  storyChoices,
-  type TraitId,
   talkChance,
 } from './index';
 import { addRelation } from './traits';
@@ -40,10 +34,6 @@ function recruit(sim: Simulation, role: StaffRole, patch: Partial<StaffMember> =
   const member = enlist(ctx, generateProfile(ctx, role), { origin: 'pool' });
   Object.assign(member, patch);
   return member;
-}
-
-function answer(sim: Simulation, storyId: string, choice: string) {
-  return sim.dispatch({ type: 'staff.storyChoice', payload: { storyId, choice } });
 }
 
 describe('Eigenschaften', () => {
@@ -89,12 +79,11 @@ describe('Eigenschaften', () => {
     const a = recruit(sim, 'runner', { traits: [] });
     const raw = structuredClone(sim.state) as unknown as {
       moduleVersions: Record<string, number>;
-      modules: { staff: { members: Partial<StaffMember>[]; relations?: unknown; stories?: unknown } };
+      modules: { staff: { members: Partial<StaffMember>[]; relations?: unknown } };
     };
     raw.moduleVersions.staff = 6;
     for (const m of raw.modules.staff.members) delete m.traits;
     delete raw.modules.staff.relations;
-    delete raw.modules.staff.stories;
     const one = loadSimulation(structuredClone(raw), sim.modules);
     const two = loadSimulation(structuredClone(raw), sim.modules);
     const traits = getStaffMember(one.state, a.id)?.traits ?? [];
@@ -103,7 +92,21 @@ describe('Eigenschaften', () => {
     expect(one.state.modules.staff.relations).toEqual([]);
     // Der erwartete Lohn bleibt, wie er vorher war (Anspruch gleicht den Lohnfaktor der Eigenschaften aus).
     expect(Math.abs(expectedWage(one.state, a.id) - expectedWage(sim.state, a.id))).toBeLessThanOrEqual(5);
-    expect(openStories(one.state)).toEqual([]);
+  });
+
+  it('Version 7 → 8 (Auftrag 46d): die Geschichten der Leute fallen aus dem Zustand', () => {
+    const sim = quietGame();
+    recruit(sim, 'runner');
+    const raw = structuredClone(sim.state) as unknown as {
+      moduleVersions: Record<string, number>;
+      modules: { staff: Record<string, unknown> };
+    };
+    raw.moduleVersions.staff = 7;
+    raw.modules.staff.stories = { open: [{ id: 'st1' }], lastAt: {}, byPerson: {}, byStory: {}, count: 3 };
+    const loaded = loadSimulation(raw, sim.modules);
+    expect('stories' in loaded.state.modules.staff).toBe(false);
+    expect(loaded.state.moduleVersions.staff).toBe(8);
+    expect(getStaff(loaded.state)).toHaveLength(1);
   });
 
   it('jede Eigenschaft hat Namen, Satz und Symbol', () => {
@@ -154,104 +157,5 @@ describe('Beziehungen', () => {
     sim.ctx('police').emit('police.arrest', { staffId: runner.id, veedelId: 'altstadt-nord' } as never);
     sim.advance(1);
     expect(getStaffMember(sim.state, guard.id)?.stats.loyalty).toBeLessThan(60);
-  });
-});
-
-describe('Geschichten', () => {
-  it('mindestens zwölf Vorlagen, je mit Varianten, Antworten und gültiger Rückfall-Wahl', () => {
-    const ids = Object.keys(STORIES) as StoryId[];
-    expect(ids.length).toBeGreaterThanOrEqual(12);
-    const vars = {
-      name: 'Kevin K.',
-      first: 'Kevin',
-      other: 'Murat Ö.',
-      amount: '500 €',
-      spot: 'Uni-Wiese',
-      atSpot: 'auf der Uni-Wiese',
-      AtSpot: 'Auf der Uni-Wiese',
-      veedel: 'Nippes',
-      gang: 'Hafenkolonne',
-    };
-    for (const id of ids) {
-      const t = STORIES[id];
-      expect(t.texts.length, id).toBeGreaterThanOrEqual(3);
-      expect(t.choices.length, id).toBeGreaterThanOrEqual(2);
-      expect(
-        t.choices.some((c) => c.id === t.fallback),
-        id,
-      ).toBe(true);
-      for (const text of [
-        ...t.texts,
-        ...(t.journal ? [t.journal] : []),
-        ...t.choices.flatMap((c) => [c.label, c.reply, ...(c.answer ?? [])]),
-      ]) {
-        expect(fillText(text, vars), id).not.toMatch(/\{\w*\}/);
-        // Kein Artikel fest vor dem Spot-Namen („am Uni-Wiese“, J4): {atSpot} oder „den Spot {spot}“.
-        expect(text, id).not.toMatch(/\b(am|Am|der|Der|den|dem|vom|im)\s\{spot\}/);
-      }
-    }
-  });
-
-  it('Geldbitte: Zahlen kostet und freut, Ablehnen ärgert, ohne Antwort gilt die Rückfall-Wahl', () => {
-    const sim = quietGame();
-    const m = recruit(sim, 'runner', { traits: ['family'] });
-    m.stats.loyalty = 50;
-    const story = startStory(sim.ctx('staff'), 'loan', m.id);
-    if (!story) throw new Error('keine Geschichte');
-    expect(story.amount).toBeGreaterThan(0);
-    const msg = sim.state.messages.list.find((x) => x.id === story.messageId);
-    expect(msg?.options?.map((o) => o.id)).toEqual(['give', 'work', 'refuse']);
-    wallet.earn(sim.ctx('test'), 10_000, 'dirty', 'Test', 'income.other');
-    const before = sim.state.wallet.dirty;
-    expect(answer(sim, story.id, 'give').ok).toBe(true);
-    expect(sim.state.wallet.dirty).toBe(before - story.amount);
-    expect(getStaffMember(sim.state, m.id)?.stats.loyalty).toBe(65);
-    expect(openStories(sim.state)).toHaveLength(0);
-
-    const other = recruit(sim, 'runner', { traits: ['family'] });
-    other.stats.loyalty = 50;
-    const late = startStory(sim.ctx('staff'), 'loan', other.id);
-    if (!late) throw new Error('keine Geschichte');
-    sim.advance(9 * 60);
-    expect(openStories(sim.state)).toHaveLength(0);
-    expect(getStaffMember(sim.state, other.id)?.stats.loyalty).toBeLessThan(50);
-  });
-
-  it('Zahlen ohne Geld geht nicht; Kaution für Geschwister nur, wenn das Geld reicht', () => {
-    const sim = quietGame();
-    const m = recruit(sim, 'runner', { traits: ['gambler'] });
-    const story = startStory(sim.ctx('staff'), 'debt', m.id);
-    if (!story) throw new Error('keine Geschichte');
-    wallet.lose(sim.ctx('test'), sim.state.wallet.dirty, 'dirty', 'Test', 'expense.other');
-    expect(answer(sim, story.id, 'pay').ok).toBe(false);
-    const sib = recruit(sim, 'runner', { traits: [] });
-    const jailed = recruit(sim, 'runner', { traits: [] });
-    jailed.status = 'jailed';
-    jailed.statusUntil = sim.state.time + 2000;
-    const s2 = startStory(sim.ctx('staff'), 'siblingJailed', sib.id, jailed.id);
-    if (!s2) throw new Error('keine Geschichte');
-    expect(storyChoices(sim.state, s2).map((c) => c.id)).toEqual(['wait']);
-  });
-
-  it('kommen spürbar, aber nicht hagelnd, und sind deterministisch', () => {
-    const run = () => {
-      const sim = quietGame(3);
-      const events = recordEvents(sim);
-      for (const trait of ['family', 'drinker', 'gambler', 'ambitious', 'braggart', 'hothead'] as TraitId[]) {
-        recruit(sim, 'runner', {
-          traits: [trait, 'loyal'],
-          level: 4,
-          assignment: { kind: 'spot', targetId: 'neumarkt' },
-        });
-      }
-      wallet.earn(sim.ctx('test'), 50_000, 'dirty', 'Test', 'income.other');
-      sim.advance(28 * 1440);
-      return eventsOfType(events, 'staff.story').map((e) => `${e.time}:${e.payload.story}:${e.payload.staffId}`);
-    };
-    const first = run();
-    expect(run()).toEqual(first);
-    // Vier Wochen: mindestens eine pro Woche, höchstens eine alle STORY_GAP.
-    expect(first.length).toBeGreaterThanOrEqual(4);
-    expect(first.length).toBeLessThanOrEqual(Math.ceil((28 * 1440) / STORY_GAP));
   });
 });

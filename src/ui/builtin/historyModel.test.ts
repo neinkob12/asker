@@ -40,9 +40,9 @@ describe('Verlauf nach Tagen', () => {
 describe('Verlauf aus Journal, Meldungen und Aufträgen', () => {
   const t = (h: number) => clock.at(2, h, 0);
   const alerts: Alert[] = [
-    { id: 1, text: 'Kontrolle in Ehrenfeld.', kind: 'bad', time: t(10), read: false },
+    { id: 1, text: 'Kontrolle in Ehrenfeld.', kind: 'bad', time: t(10), read: false, urgent: true },
     // wortgleich zur selben Minute wie der Journaleintrag: fällt weg
-    { id: 2, text: 'Razzia!', kind: 'bad', time: t(12), read: false },
+    { id: 2, text: 'Razzia!', kind: 'bad', time: t(12), read: false, urgent: true },
   ];
   const orders: HistoryOrder[] = [
     { id: 7, contactName: 'Mehmet', kind: 'delivery', status: 'done', price: 120, createdAt: t(8), finishedAt: t(9) },

@@ -644,7 +644,6 @@ registerPhoneApp({
   color: 'money',
   component: FinanceApp,
   badge: (state) => (wageRunway(state).warn ? 1 : 0),
-  // Handy Schritt für Schritt: kommt mit Peters Quest „1.000 € Umsatz“ (quests, PHONE_APP_STEPS).
   // Auftrag 46b: Im Tutorial kommt die App mit ihrer Stufe.
   hiddenWhen: (state) => !tutorialAllows(state, 'app.finance'),
 });

@@ -83,7 +83,6 @@ export type TutorialFeature =
   | 'police.undercover'
   | 'police.checks'
   | 'police.raids'
-  | 'spots.upgrade'
   | 'spots.found'
   | 'laundering.allWays'
   | 'suppliers.groupOrder';
@@ -92,8 +91,8 @@ export type TutorialFeature =
 export const NEVER = Number.POSITIVE_INFINITY;
 
 /**
- * Ab welcher Stufe ein Feature frei ist (Auftrag 46, „Der Flow“). NEVER: erst nach dem Tutorial (Spot-Ausbau fällt
- * weg, Spot gründen kommt als Shop in 46e) oder über ein Ereignis (EVENT_FEATURES: Ruf beim ersten Stammkunden, Rang
+ * Ab welcher Stufe ein Feature frei ist (Auftrag 46, „Der Flow“). NEVER: erst nach dem Tutorial (Spot gründen kommt
+ * als Shop in 46e; der Spot-Ausbau ist mit 46d weg) oder über ein Ereignis (EVENT_FEATURES: Ruf beim ersten Stammkunden, Rang
  * beim ersten Aufstieg).
  */
 export const FEATURE_STAGE: Readonly<Record<TutorialFeature, number>> = {
@@ -121,7 +120,6 @@ export const FEATURE_STAGE: Readonly<Record<TutorialFeature, number>> = {
   'police.undercover': 0,
   'police.checks': 9,
   'police.raids': 9,
-  'spots.upgrade': NEVER,
   'spots.found': NEVER,
   'laundering.allWays': 9,
   'suppliers.groupOrder': 9,

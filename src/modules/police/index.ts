@@ -1090,10 +1090,10 @@ function updateTier(ctx: Ctx): void {
   const ticker = TICKERS[cityId] ?? TICKERS.koeln;
   // Aufs Handy nur aus der Stadt, in der du bist, und nicht mehr nach dem Verkauf (Auftrag 43).
   if (cityId !== activeCity(ctx.state) || isBusinessSold(ctx.state)) return;
-  messages.send(ctx, {
-    contact: contact ? staffContact(contact) : { ...ticker, kind: 'other' as const },
-    text: contact ? `Hör zu: ${text}` : text,
-  });
+  const sender = contact ? staffContact(contact) : { ...ticker, kind: 'other' as const };
+  // Auftrag 46d: Polizei-Nachrichten höchstens eine am Tag; der Verlauf hat die Stufe ohnehin.
+  if (messages.sentToday(ctx.state, sender.id)) return;
+  messages.send(ctx, { contact: sender, text: contact ? `Hör zu: ${text}` : text });
 }
 
 /** Razzia gegen eine Gang: Sie verliert Einfluss im Veedel. */

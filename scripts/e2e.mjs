@@ -118,6 +118,21 @@ async function dismissPopups(page, patience = 6) {
   }
 }
 
+/**
+ * Wer selbst am Spot steht, bekommt mit kleiner Chance Zivis (Minispiel über der Karte, fest aus Seed und Stunde
+ * gewürfelt): Das Spiel ist hier nicht Thema, der Dev-Haken beendet es.
+ */
+async function finishMinigame(page) {
+  if (!(await page.locator('.mg-run').count())) return;
+  await page.evaluate(() => window.koeln.dev.minigameWin());
+  const next = page.locator('.mg-result').getByRole('button', { name: /Weiter/ });
+  if (await next.count()) await next.click().catch(() => {});
+  await page
+    .locator('.mg-run')
+    .waitFor({ state: 'detached', timeout: 10000 })
+    .catch(() => {});
+}
+
 /** Klick, der ein gerade aufgehendes Pop-up wegklickt und es noch einmal versucht. */
 async function clickSafe(page, locator) {
   for (let attempt = 1; ; attempt++) {
@@ -307,19 +322,11 @@ async function run() {
     for (let i = 0; i < 48; i++) {
       if ((await game(page, (s) => s.modules.customers.stats.customersServed)) > served) break;
       await advance(page, 10);
-      // Wer selbst am Spot steht, bekommt mit kleiner Chance Zivis (Minispiel über der Karte, fest aus Seed und
-      // Stunde gewürfelt): Das Spiel ist hier nicht Thema, der Dev-Haken beendet es.
-      if (await page.locator('.mg-run').count()) {
-        await page.evaluate(() => window.koeln.dev.minigameWin());
-        const next = page.locator('.mg-result').getByRole('button', { name: /Weiter/ });
-        if (await next.count()) await next.click().catch(() => {});
-        await page
-          .locator('.mg-run')
-          .waitFor({ state: 'detached', timeout: 10000 })
-          .catch(() => {});
-      }
+      await finishMinigame(page);
     }
     assert.ok((await game(page, (s) => s.modules.customers.stats.customersServed)) > served, 'automatisch verkauft');
+    // Die Zivis können auch nach dem letzten Verkauf noch kommen; ihr Blatt läge sonst über dem Knopf.
+    await finishMinigame(page);
     await clickSafe(page, page.getByRole('button', { name: 'Weggehen', exact: true }));
     assert.equal(await game(page, (s) => s.modules.customers.self.spotId), null);
   });
@@ -440,7 +447,7 @@ async function run() {
     await chip.waitFor();
     await page.waitForTimeout(500);
     for (let attempt = 1; ; attempt++) {
-      // Am linken Rand antippen: Am Handy-Bildschirm kann die schwebende Island die Mitte der Kachelreihe verdecken.
+      // Am linken Rand antippen: Am Handy-Bildschirm kann die schwebende Anzeige die Mitte der Kachelreihe verdecken.
       await chip.click({ position: { x: 14, y: 20 } });
       try {
         await page.locator('.city-menu__item', { hasText: 'Hamburg' }).first().click({ timeout: 5000 });

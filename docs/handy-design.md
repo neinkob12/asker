@@ -279,9 +279,9 @@ Ankommen, Überschwingen, Startgeschwindigkeit, Umlenken mitten in der Bewegung,
 | --- | --- | --- | --- |
 | `push` | 0,35 s | 0,86 | Seiten vor und zurück. Fast kritisch: Die Seite darf nicht über den Rand schwingen (sonst blitzt die Vorseite rechts auf). Fühlt sich an wie UINavigationController. |
 | `app` | 0,45 s | 0,8 | App aus der Kachel öffnen und hinein schließen. Größere Fläche, etwas träger, mit ca. 1,5 % Nachfedern („Aufploppen“). |
-| `sheet` | 0,4 s | 0,85 | Blätter, Mitteilungszentrale. Rasten spürbar, aber nicht wackelig. |
-| `island` | 0,3 s | 0,7 | Dynamic Island. Klein und lebendig, ca. 5 % Überschwingen. |
-| `snap` | 0,25 s | 1 | Kleine Rückmeldungen (Zeile, Banner zurück). |
+| `sheet` | 0,4 s | 0,85 | Blätter. Rasten spürbar, aber nicht wackelig. |
+| `island` | 0,3 s | 0,7 | Früher die Dynamic Island (seit Auftrag 46d ohne Verwendung, Abschnitt 10). |
+| `snap` | 0,25 s | 1 | Kleine Rückmeldungen (Zeile zurück). |
 
 Eine Geste übergibt beim Loslassen ihre Geschwindigkeit, eine laufende Bewegung lässt sich jederzeit umkehren (zweimal
 schnell Zurück und wieder hinein springt nicht). Bewegt werden nur `transform`, `opacity` und `clip-path`;
@@ -300,8 +300,8 @@ App öffnen 5 Layouts (zusammen 11 ms, längstes 6–8 ms, das ist der Aufbau de
   wie bei iOS-Sheets. Die Seite dahinter ist dann `inert` (modal) und trägt `data-modal`, damit der Seitenstapel
   (`stackAnimator.ts`) sie beim nächsten Zeichnen nicht wieder bedienbar macht.
 - **Drücken:** Kacheln schrumpfen auf 96 %, Zeilen werden grau, sofort beim Aufsetzen, Loslassen federt zurück.
-- **Island:** eine einzige Form, die zwischen kompakt, Puls und aufgeklappt morpht (FLIP mit `island`-Feder), statt zwei
-  Kästen, die überblenden.
+- **Anzeige oben:** seit Auftrag 46d eine feste Pille ohne Bewegung (`StatusPill`, Abschnitt 10); die morphende Island
+  ist weg.
 - **Reduzierte Bewegung:** Seiten blenden in 160 ms über, nichts gleitet oder federt.
 
 ### 7.4 Gesten
@@ -313,8 +313,6 @@ Abkürzung: Es gibt immer auch einen Knopf oder eine Taste.
 | --- | --- | --- | --- |
 | Rand-Wischen zurück | Start höchstens 24 px vom linken Rand | über die Hälfte oder schneller als 0,5 px/ms; die Seite folgt dem Finger | „‹ Titel“, Esc |
 | Hochwischen | Home-Balken (Desktop) bzw. „Start“ (Handy-Bildschirm) | ein Achtel der Höhe oder schnell; die App schrumpft dabei auf ihre Kachel | Antippen, Esc |
-| Herunterziehen | Statusleiste oben, Banner | 40 bzw. 56 px oder schnell | — (Mitteilungen auch in der App „Meldungen“) |
-| Banner hoch | Banner | 24 px oder schnell | verschwindet von selbst |
 | Blatt ziehen | Griff und Kopf des Blatts | rastet bei mittel und groß; mehr als ein Drittel unter „mittel“ (mit Schwung gerechnet): zu | ×, Esc, Tipp daneben |
 | Langer Druck | Kacheln, Chats, Spots, Leute | 500 ms ohne Bewegung (auch Rechtsklick, Shift+F10) | die Aktionen gibt es auf der Seite selbst |
 | Zeile nach links | Chats, Aufträge | Aktion freilegen, ganz durchziehen löst die erste aus | Knopf in der Zeile bzw. auf der Seite |
@@ -334,11 +332,11 @@ nur der Klick.
 ### 7.6 Echtes Handy
 
 Auf schmalen Bildschirmen mit Touch (`(max-width: 760px) and (pointer: coarse)`) zeichnet das Spiel keine zweite
-Statusleiste (Uhrzeit, Empfang, Akku) und keine Kamera-Attrappe mehr. Die Island wird eine schwebende Pille mit der
-Spielzeit und denselben Live-Aktivitäten. Statt des gezeichneten Home-Balkens (er läge direkt über dem echten) steht
+Statusleiste (Uhrzeit, Empfang, Akku) und keine Kamera-Attrappe mehr. Oben schwebt eine Pille mit der Spielzeit und
+der festen Anzeige (`StatusPill`, Abschnitt 10). Statt des gezeichneten Home-Balkens (er läge direkt über dem echten) steht
 unten eine Leiste „Start“ / „Weglegen“ über dem sicheren Bereich; Hochwischen auf „Start“ wirkt wie der Home-Balken.
-Nachgestellt mit iPhone-Rändern (oben 59 px, unten 34 px): HUD, Pille und Leiste bleiben frei von Island und
-Home-Balken. Am Desktop bleibt das Gerät mit Rahmen, Statusleiste und Island; der Knopf zum Weglegen sitzt jetzt neben
+Nachgestellt mit iPhone-Rändern (oben 59 px, unten 34 px): HUD, Pille und Leiste bleiben frei von Dynamic Island und
+Home-Balken des echten Geräts. Am Desktop bleibt das Gerät mit Rahmen, Statusleiste und Anzeige; der Knopf zum Weglegen sitzt jetzt neben
 dem Gerät statt über dem Inhalt.
 
 ### 7.7 Was bewusst fehlt und warum
@@ -398,8 +396,8 @@ alles außerhalb des Handys. Das Handy selbst bleibt, wie es ist; neu ist nur, w
   das Glas deckend (`#16181d`).
 - **HUD in drei Gruppen** links vom Handy (Geld mit Heat, Uhr mit Wetter und Tempo, Kennzahl-Kacheln). Die Kacheln
   stehen zusätzlich weiter auf dem Startbildschirm des Handys.
-- **Keine Meldungsliste über der Karte:** `ui.toast` landet als Banner im Handy (Glas, Kachel in der Farbe der Meldung,
-  Wischen wie bei Benachrichtigungen) bzw. oben rechts, wenn es weggelegt ist, und in der App Meldungen.
+- **Keine Meldungsliste über der Karte:** `ui.toast` landete damals als Banner im Handy bzw. oben rechts, wenn es
+  weggelegt war; seit Auftrag 46d nur noch im Verlauf (Abschnitt 10).
 - **Folgen mit derselben Feder:** HUD, Kartensteuerung, Überlagerungen, Dialoge über der Karte und die Kamera der Karte
   halten sich an `--map-right` und gleiten beim Ein- und Ausklappen mit `SPRINGS.app` (als CSS-Kurve, `springEasing`);
   das Handy blendet mit derselben Kurve ein.
@@ -408,13 +406,14 @@ alles außerhalb des Handys. Das Handy selbst bleibt, wie es ist; neu ist nur, w
   und „Veedel übernommen“ lassen es bedienbar. Am Handy-Bildschirm sind dieselben Inhalte Blätter (`Sheet`, `MapDialog`).
 - **Klicks auf der Karte** öffnen die passende Seite im Handy als Push mit stimmendem Zurück-Titel: Spot und Veedel
   (`openPanel`), Gang (`gangs.gang`, neu statt des ganzen Tabs), Lager (`goods.warehouse`), Hafen (`openPhone`).
-- **Island bleibt die Quelle** für das Live-Geschehen (Razzia, Konfrontation, Lieferung; die Übernahme als kurzer
-  Auftritt); die Karte zeigt dieselben Daten groß (Banner, Akte, Tracking-Karte, goldener Schein).
+- **Island als Quelle** für das Live-Geschehen (Razzia, Konfrontation, Lieferung) galt bis Auftrag 46d; seitdem steht
+  oben nur die feste Anzeige (Abschnitt 10), die Karte zeigt das Geschehen selbst (Razzia-Banner, Ergebnis-Karte der
+  Konfrontation, Tracking-Karte, goldener Schein).
 - **Handy-Bildschirm:** oben nur Geld und Uhr, Spots ohne Plakette über der Blase (Ring und Zahl), Menü in der Kartensteuerung.
   Nichts liegt unter der echten Statusleiste oder dem Home-Balken (sichere Bereiche über `--top` und `--safe-*`).
 
 Geprüft: Kontrast-Test für alle neuen Tokens (Text auf Glas über der hellsten und dunkelsten Kartenfarbe 4,5:1, Zahl auf
-jeder Spot-Farbe 4,5:1, Akte, Razzia-Banner, Gold-Knöpfe), `npm run audit:phone` ohne Verstöße, Bilder aller Momente in
+jeder Spot-Farbe 4,5:1, Akten-Tokens, Razzia-Banner, Gold-Knöpfe), `npm run audit:phone` ohne Verstöße, Bilder aller Momente in
 vier Tageszeiten (`npm run screenshot -- --scenes=alle`), „Bewegung reduzieren“ ohne Pulse, Sirenenschein und Federn.
 
 ## 9. Aufräumen (Auftrag 26)
@@ -436,3 +435,22 @@ Was dabei an Regeln hinzukam: Eine neue App braucht einen Grund, Neues hängt si
 an die richtige Stelle im Handy (Geld → Geldwäsche, Lager → Lager-Seite, Ruf → Reviere, Hafen-Marker → Hafen-Seite).
 Die Signature (Abschnitt 3.4) ist damit bewusst weg: Der Spieler wollte einen schwarzen Startbildschirm, Köln steht
 auf der Karte. Geprüft wie bisher: `npm run audit:phone` ohne Verstöße, `npm run e2e`, Bilder in `screenshots/handy/`.
+
+## 10. Rückbau (Auftrag 46d)
+
+Beim Probespielen des Intros (Auftrag 46) störte, was das Handy von sich aus tut. Deshalb ist weg, was Aufmerksamkeit
+zieht, ohne dass der Spieler gefragt hat (`docs/auftraege/46d-rueckbau.md`):
+
+| | Vorher | Nachher |
+| --- | --- | --- |
+| Dynamic Island | Live-Aktivitäten der Module (`registerLiveActivity`), Aufklappen, Puls (`pulseIsland`), `islandCountdown` | Feste Anzeige `StatusPill` (`src/ui/phone/StatusPill.tsx`) in der Pille der Hardware: Zähler aus `registerStatusCounter({ id, order, icon, count, label, open? })`, nur Zahl und Symbol, sichtbar nur über 0, ein Tipp öffnet die App. Einziger Zähler: „n Lieferungen unterwegs“ (Lieferanten-App). Liegt das Handy weg, schwebt sie über der Karte. Restzeiten mit `hourCountdown` (`phone/countdown.ts`) |
+| Banner | `ui.toast` und `ui.notify` als Glas-Banner oben im Handy bzw. über der Karte, nur Dringendes (Auftrag 26), Einstellung „Mehr Benachrichtigungen“ | Keine Banner. `ui.toast` schreibt nur in den Verlauf (Einstellungen › Verlauf, Badge an den Einstellungen; `urgent` heißt ungelesen). `ui.notify`, `PhoneNotification`, `holdBanner` und die Einstellung sind weg |
+| Mitteilungszentrale | Statusleiste oder Banner herunterziehen, `NotificationCenter` | Weg, samt den Gesten Herunterziehen und Banner hoch |
+| Einblendungen | Banner, Island-Auftritte | Nur noch die kurze Fehlermeldung zu einem fehlgeschlagenen Befehl des Spielers (`ui.error`, `ErrorNotice.tsx`, oben im Handy bzw. über der Karte, Tipp blendet aus). Missions-Karte und Tour-Box des Tutorials bleiben |
+| Neue Nachricht | Banner mit Ton bei Antwortfrist, sonst Badge | Nur Badge an der Nachrichten-App, kurzer Ton nur bei Fragen mit Frist; Gangs und Polizei schreiben höchstens einmal pro Spieltag von selbst |
+| Konfrontation | Akte über der Karte (Briefing, Runden, Rat der Rechten Hand), Handy gesperrt | Kurze Glas-Karte mit dem Ergebnis (`encounters.result`: Stempel, Kosten, „Okay“), Handy bleibt frei; am Spot selbst zuerst das Minispiel |
+| Startbildschirm | Widget „Peters Quest“, Apps Schritt für Schritt über die Quests | Kein Widget; die Apps kommen im Tutorial Stufe für Stufe (`tutorialAllows`) |
+
+Die Regel „every element earning its place“ (Abschnitt 9) gilt damit auch für alles, was von selbst erscheint: Das
+Handy meldet sich nur noch über Badges, der Rest wartet im Verlauf, bis der Spieler nachsieht. Geprüft wie bisher:
+`npm run audit:phone`, `npm run monkey:phone`, `npm run screenshot -- --scenes=alle` (keine Island, keine Banner).

@@ -68,7 +68,10 @@ export const PRELUDE = `
     // Ereignisse aus sim.ctx kommen erst mit dem nächsten Schritt an.
     sim.advance(1);
   };
-  /** Überfall der Hafenkolonne auf den Neumarkt, mit Briefing; Läufer vor Ort. Gibt die ID zurück. */
+  /**
+   * Überfall der Hafenkolonne auf den Neumarkt, Läufer vor Ort. Wird sofort entschieden (Auftrag 46d), die
+   * Ergebnis-Karte öffnet sich über das Ereignis von selbst. Gibt die ID zurück.
+   */
   const raid = async () => {
     const enc = await import('/src/modules/encounters/index.ts');
     const spots = await import('/src/modules/spots/index.ts');
@@ -84,7 +87,8 @@ export const PRELUDE = `
       opponent: { factionId: 'nord', label: 'Leute der Hafenkolonne', strength: 55, count: 3 },
       origin: { module: 'gangs', ref: 'raid:nord' },
     });
-    api.openDialog('encounters.encounter', { encounterId });
+    // Das Ereignis 'encounter.resolved' (öffnet die Ergebnis-Karte) kommt erst mit dem nächsten Schritt an.
+    sim.advance(1);
     return encounterId;
   };
   /** Hamburg (Auftrag 30): frei, aktiv, du bist dort; Lager in Ottensen, drei Spots auf dem Kiez, Läufer, Ware. */
@@ -231,22 +235,8 @@ export const SCENES = [
     wait: 4500,
   },
   {
-    name: 'konfrontation-briefing',
-    js: `sim.advance(${TIMES.nacht}); busy(); await raid();`,
-  },
-  {
-    name: 'konfrontation-runde',
-    js:
-      'sim.advance(' +
-      TIMES.tag +
-      '); busy(); const id = await raid(); run("encounters.join", { encounterId: id, mode: "self" }); run("encounters.act", { encounterId: id, actionId: "hold" });',
-  },
-  {
     name: 'konfrontation-ergebnis',
-    js:
-      'sim.advance(' +
-      TIMES.nacht +
-      '); busy(); const id = await raid(); run("encounters.join", { encounterId: id, mode: "crew" }); run("encounters.auto", { encounterId: id });',
+    js: `sim.advance(${TIMES.nacht}); busy(); await raid();`,
   },
   {
     name: 'konfrontation-weggelegt',

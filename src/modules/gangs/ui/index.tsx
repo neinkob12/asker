@@ -74,7 +74,6 @@ import {
   WARN_AT,
 } from '../index';
 import { gangsLayer } from './map';
-import './island';
 import './gangs.css';
 
 declare module '../../../ui' {
@@ -864,7 +863,7 @@ registerMapLayer(gangsLayer);
 
 onGameEvent('gang.pushStarted', 'gangs.pushToast', (p, ui, state) => {
   const gang = getGang(state, p.gangId);
-  // Vorstöße zeigt die Island live; hier nur der Eintrag für den Verlauf.
+  // Der Eintrag für den Verlauf.
   if (gang) {
     ui.toast(`${gang.name} drängt nach ${veedelName(p.veedelId)}`, p.against === 'player' ? 'bad' : 'info', {
       urgent: false,

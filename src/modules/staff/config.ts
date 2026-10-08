@@ -1,4 +1,4 @@
-import type { RelationKind, StaffRole, StaffStats, StaffStatus, StatKey, StoryId, TraitId } from './types';
+import type { RelationKind, StaffRole, StaffStats, StaffStatus, StatKey, TraitId } from './types';
 
 // Einstellbare Werte des Personals. Zeiten in Spielminuten, Geld in Euro (Schwarzgeld), Werte von 0 bis 100.
 
@@ -721,38 +721,3 @@ export const REFERRAL_FRIENDS_SHARE = 0.7;
 export const RELATIONS_PER_PERSON = 2;
 /** Höchstens eine Beziehung auf so viele Leute im Team (wenige pro Team). */
 export const RELATION_TEAM_SHARE = 3;
-
-// --- Geschichten (Auftrag 34) ---
-
-/** Mindestabstand zwischen zwei Geschichten in einer Stadt. */
-export const STORY_GAP = 1.5 * 1440;
-/** Danach pro Stunde (tagsüber) diese Chance auf eine Geschichte. */
-export const STORY_CHANCE_PER_HOUR = 0.06;
-/** Geschichten kommen zwischen diesen Stunden. */
-export const STORY_HOURS: [number, number] = [9, 22];
-/** Abstand pro Person und pro Vorlage. */
-export const STORY_PERSON_GAP = 7 * 1440;
-export const STORY_TEMPLATE_GAP = 4 * 1440;
-/** Antwortfrist. */
-export const STORY_EXPIRES = 8 * 60;
-/** Ab so vielen Leuten in der Stadt gibt es Geschichten. */
-export const STORY_MIN_TEAM = 2;
-/** Gewichte der Vorlagen beim Würfeln (Vorlagen in stories.ts). */
-export const STORY_WEIGHTS: Record<StoryId, number> = {
-  loan: 3,
-  familyTime: 2,
-  drunk: 3,
-  hangover: 2,
-  debt: 3,
-  gamblerWin: 1,
-  promotion: 3,
-  raise: 2,
-  bragged: 3,
-  scared: 3,
-  loyalTip: 2,
-  hothead: 3,
-  rivalsFight: 4,
-  friendsParty: 2,
-  coupleMoveIn: 2,
-  siblingJailed: 4,
-};

@@ -208,8 +208,7 @@ const BUILDERS: Record<MinigameKind, Build> = {
       payload: { gangId, veedelId, staffIds, playerPresent: true },
     });
     ok(attacked, id, 'Überfall');
-    const encounterId = encounterIdOf(attacked);
-    ok(sim.dispatch({ type: 'encounters.act', payload: { encounterId, actionId: 'fight' } }), id, 'Zuschlagen');
+    // Auftrag 46d: Mit dir vor Ort startet der Straßenkampf sofort.
     return pending(sim, id, 'brawl');
   },
   // Tipp vom Kontakt: Razzia in einem eigenen Veedel (am liebsten mit Lager), Ware liegt noch da.

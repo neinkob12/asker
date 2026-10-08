@@ -10,32 +10,25 @@ Warum das Handy so aussieht, wie es aussieht (HIG-Ableitungen, Plan, Kritik, Pr�
 ## Aufbau: Das Handy ist die Schaltzentrale
 
 Das Spiel-Handy ist ein **iPhone (Pro)**: Titanrahmen mit Tasten, Gehäuse im Verhältnis 0,49 (`--phone-ratio`; ein
-iPhone 16 Pro hat 0,478), Statusleiste mit **Dynamic Island**, App-Kacheln mit Farbverlauf, Glas-Dock,
+iPhone 16 Pro hat 0,478), Statusleiste mit einer kleinen festen Anzeige in der Mitte, App-Kacheln mit Farbverlauf, Glas-Dock,
 Navigationsleiste "‹ Zurück" mit großen Titeln, Listen als eingerückte Gruppen wie in der Einstellungen-App.
 
-**Statusleiste** (`phone/PhoneFrame.tsx`): drei Spalten wie bei iOS. Links die Uhrzeit, in der Mitte Platz für die
-Island (so breit wie die größte kompakte Island, 230 pt, auf schmalen Handys schmaler), rechts Empfang, WLAN und Akku.
-Uhrzeit und Symbole werden nie von der Island verdeckt. Bei einer zweiten Aktivität weichen Empfang und WLAN, der
-Akku bleibt. **Auf einem echten Handy** (schmal und `pointer: coarse`, `useIsPhoneDevice()`) gibt es weder diese
-Statusleiste noch die Kamera-Attrappe: Das Gerät hat beides selbst. Oben schwebt dann nur die Island als Pille mit der
-Spielzeit (gleiche Live-Aktivitäten), unten steht statt des Home-Balkens eine Leiste mit „Start“ und „Weglegen“.
+**Statusleiste** (`phone/PhoneFrame.tsx`): drei Spalten wie bei iOS. Links die Uhrzeit, in der Mitte die schwarze
+Pille der Hardware mit der festen Anzeige (höchstens 230 pt breit, auf schmalen Handys schmaler), rechts Empfang, WLAN
+und Akku. Uhrzeit und Symbole werden nie verdeckt. **Auf einem echten Handy** (schmal und `pointer: coarse`,
+`useIsPhoneDevice()`) gibt es weder diese Statusleiste noch die Kamera-Attrappe: Das Gerät hat beides selbst. Oben
+schwebt dann nur die Pille mit der Spielzeit und derselben Anzeige, unten steht statt des Home-Balkens eine Leiste mit
+„Start“ und „Weglegen“.
 
-**Dynamic Island** (`phone/DynamicIsland.tsx`): zeigt laufende Live-Aktivitäten der Module.
-- Anmelden mit `registerLiveActivity({ id, activities: (state) => LiveActivity | LiveActivity[] | null })`.
-  Eine Aktivität hat `priority` (90 Gefahr, 70 Frist, 50 Lieferung, 30 Status), `icon`, `tone`, `leading`
-  (kurzes Wort), `trailing` (Wert, z.B. `islandCountdown(minuten)`), `title`, `detail`, `progress` und `open(ui)`.
-- **Restzeiten nur in Stunden:** `islandCountdown(minuten)` liefert `"2 Std."` (aufgerundet, "2 Std." sind höchstens
-  zwei) und unter einer Stunde `"< 1 Std."`, nie Minuten. Der Wert springt so nur einmal pro Spielstunde und zappelt
-  nicht mehr (`phone/islandModel.ts`, getestet).
-- Kompakt: Symbol links, Wert rechts der Kamera, höchstens 230 pt breit. Eine zweite Aktivität hängt als Kreis daneben.
-- Aufgeklappt: Maus drüber bzw. Tipp. Dann stehen alle Aktivitäten mit Fortschritt untereinander.
-- Neue Aktivitäten ab Priorität 80 klappen kurz von selbst auf.
-- `ui.pulseIsland({ icon, text, tone, kind?, amount? })` zeigt einen kurzen Auftritt, z.B. „+450 €“.
-  Beträge gleicher `kind` werden dabei zusammengezählt.
-- Liegt das Handy weg, schwebt die Island oben über der Karte, aber nur, wenn es etwas zu zeigen gibt.
-- Bisher angemeldet: Überfälle, Razzia und hohe Heat, Gang-Vorstöße, Chat-Fristen, Aufträge mit Frist, Kuriere,
-  Lieferungen mit Restzeit, Ware am Kai (Zeit bis zum Zoll), Fahrten und Verkehrskontrollen, der Spot, an dem du
-  selbst stehst, und der Umsatz des Tages.
+**Feste Anzeige** (`phone/StatusPill.tsx`, Auftrag 46d an der Stelle der Dynamic Island): Zähler der Module, nur Zahl
+und Symbol, kein Aufklappen, kein Puls.
+- Anmelden mit `registerStatusCounter({ id, order, icon, count(state), label(count), open?(ui) })`. Gezeigt werden nur
+  Zähler über 0; ein Tipp öffnet die App des ersten (`open`). Einziger Zähler bisher: „n Lieferungen unterwegs“
+  (`suppliers/ui/island.ts`, öffnet die Lieferanten-App).
+- Liegt das Handy weg, schwebt die Anzeige oben über der Karte, aber nur, wenn es etwas zu zeigen gibt.
+- **Restzeiten nur in Stunden:** `hourCountdown(minuten)` (`phone/countdown.ts`, getestet) liefert `"2 Std."`
+  (aufgerundet, "2 Std." sind höchstens zwei) und unter einer Stunde `"< 1 Std."`, nie Minuten, damit der Wert nur
+  einmal pro Spielstunde springt (Fahrt-Karte, Ware am Kai).
 
 - **Über der Karte** steht das HUD im Look **„Glas“** (Abschnitt unten): Geld-Kapsel mit Heat (`placement: 'main'`;
   Schwarzgeld und sauberes Geld öffnen per Klick die Geldwäsche), Uhr-Kapsel mit Tempo und Menü (`'time'` ist seit
@@ -49,10 +42,9 @@ Spielzeit (gleiche Live-Aktivitäten), unten steht statt des Home-Balkens eine L
     schließt sie.
   - Der Startbildschirm ist seit Auftrag 26 **schwarz und ruhig**: sechs Apps im Raster (Kasse, Reviere, Gangs,
     Personal, Geldwäsche, Einstellungen; `HOME_ORDER`), unten das **Dock** (Nachrichten, Lieferanten, Personal, Kasse;
-    `DOCK`), dazwischen die Widgets (`phone.home`: nur „Peters Quest“, solange Apps fehlen). Keine Heute-Zeile, keine
-    Kennzahlen, keine Skyline. **Handy Schritt für Schritt** (Feedback 07.10.2026): In einem neuen Spiel stehen erst nur
-    Nachrichten und Einstellungen da, jede weitere App kommt mit der Quest, die sie braucht (`PHONE_APP_STEPS` in
-    `quests/config.ts`, über `hiddenWhen` der App bzw. des Tabs; abschaltbar in Einstellungen › Einstieg).
+    `DOCK`), dazwischen Platz für Widgets (Slot `phone.home`, derzeit ohne Beiträge). Keine Heute-Zeile, keine
+    Kennzahlen, keine Skyline. Im Tutorial (Auftrag 46b) kommen die Apps Stufe für Stufe über `tutorialAllows` im
+    `hiddenWhen` der App bzw. des Tabs.
     Nur ein **dringender Rat** (`registerAdvisor`, Priorität ab 80, z.B. Chat mit Frist, Ware alle) steht als
     wegwischbare Zeile ganz oben; alle Empfehlungen stehen in der Suche (Strg/⌘+K). Apps und Tabs mit `hidden: true`
     (Verlauf, Lieferanten-Detail …) fehlen im Raster und in der Suche, `ui.openPhone(id)` öffnet sie trotzdem.
@@ -70,21 +62,16 @@ Spielzeit (gleiche Live-Aktivitäten), unten steht statt des Home-Balkens eine L
 - **Tastatur (Desktop):** Leertaste Pause, 1/2/3 Tempo, T Handy, Buchstabe eines Tabs öffnet dessen App (noch
   einmal: zurück zum Startbildschirm; nicht für Tabs, die gerade `hiddenWhen` ausblendet), Strg/⌘+K Suche. Esc schließt zuerst ein offenes Blatt oder Menü, geht sonst
   eine Seite zurück und legt am Ende das Handy weg.
-- **Meldungen und Banner (Auftrag 26: nur das Allerwichtigste stört):** `ui.toast(text, kind, { urgent? })` bleibt
-  die API. Als Banner im Handy (bzw. oben rechts, wenn es weggelegt ist; höchstens eines, weitere warten) erscheint
-  eine Meldung nur, wenn sie dringend ist: Standard bei `'bad'` und `'warn'` (Razzia, Kontrolle, Festnahme,
-  Lieferung verloren), erzwingbar mit `urgent: true` (Lieferung ist da, Fahrt angekommen, Löhne nicht gedeckt),
-  unterdrückbar mit `urgent: false` (Ärger, der nur ins Journal gehört). Weitere Optionen: `title` (Überschrift statt
-  „Meldung“, z.B. der Absender), `color` (Kachel in einer Bedeutungsfarbe, z.B. `'brand'` für Quests), `appId` und
-  `params` (ein Tipp öffnet die App statt des Verlaufs) und `duration` (Millisekunden, länger als die Routine). Alles
-  landet im **Verlauf** (Einstellungen ›
-  Verlauf bzw. Seite `core.history`: Journal, Meldungen und Auftrags-Historie mit Filter). Fehlermeldungen von
-  Befehlen erscheinen als Banner, landen aber nicht im Verlauf. `ui.notify({ …, urgent? })` ebenso: Nachrichten
-  vibrieren nur mit Antwortfrist, der Rest zählt still am Badge und steht in der Mitteilungszentrale. Die Einstellung
-  **„Mehr Benachrichtigungen“** (pro Gerät, `UiState.moreNotifications`) holt das alte Verhalten zurück.
-  `runtime.stats.banners` zählt die Banner (das Durchspielen gibt die Zahl aus).
-- **Benachrichtigungen** erscheinen wie bei iOS oben im Handy (Glas, Kachel in der Farbe der App). Liegt es weg,
-  erscheinen sie oben rechts über der Karte.
+- **Meldungen (Auftrag 46d: keine Banner mehr):** `ui.toast(text, kind, { urgent?, icon?, target?, log? })` bleibt
+  die API, zeigt aber nichts mehr über der Karte oder im Handy. Alles landet im **Verlauf** (Einstellungen › Verlauf
+  bzw. Seite `core.history`: Journal, Meldungen und Auftrags-Historie mit Filter). `urgent` (Standard bei `'bad'` und
+  `'warn'`, erzwingbar mit `true`, unterdrückbar mit `false`) markiert den Eintrag nur als ungelesen (Badge an den
+  Einstellungen), `log: false` verwirft die Meldung. Mitteilungszentrale, `ui.notify`, `PhoneNotification`,
+  `holdBanner` und die Einstellung „Mehr Benachrichtigungen“ gibt es nicht mehr.
+- **Einzige Einblendung:** die kurze Fehlermeldung zu einem fehlgeschlagenen Befehl des Spielers (`ui.error`,
+  `phone/ErrorNotice.tsx`; `dispatch` setzt sie, `dismissError` nimmt sie weg), oben im Handy bzw. oben über der Karte,
+  wenn es weggelegt ist; ein Tipp blendet sie aus. Ausnahmen bleiben die Missions-Karte und die Tour-Box des Tutorials.
+- **Neue Nachricht:** nur ein Badge an der Nachrichten-App, ein kurzer Ton nur bei Fragen mit Antwortfrist.
 - **Nächster Schritt:** kommt aus `registerAdvisor`. In den ersten zwei Spieltagen pulsiert das Ziel (`highlight`)
   sanft. Es wird nichts gesperrt. Auf dem Startbildschirm steht nur ein dringender Rat (ab Priorität 80), am
   Handy-Bildschirm der wichtigste in der Leiste unten, alle in der Suche.
@@ -97,8 +84,8 @@ Spielzeit (gleiche Live-Aktivitäten), unten steht statt des Home-Balkens eine L
 | App | Farbe | Inhalt |
 | --- | --- | --- |
 | Nachrichten (`core.messages`) | Mint | Oben die fünf zuletzt aktiven Kontakte als Avatare, darunter die Chats kompakt nach Kontaktart gruppiert (Gangs, Polizei, Lieferanten, Team, Kunden, Kontakte), Avatar in der Farbe der Art, Fristen, ungelesen; „Alle gelesen“, Löschen per Wischen oder Kontextmenü, „Alle löschen“ im Menü (Aktionsblatt, Rückfrage bei offener Frist); Chat mit Antwortblatt |
-| Einstellungen (`core.settings`) | Grau | Abschnitte **Ton & Musik** (Lautstärken, Musik, kleiner Player), **Anzeige** (Overlay, Kamera), die Abschnitte der Module (Slot `core.settings` mit `title`, `icon`, `color`: **Wetter** mit Vorhersage, **Anfragen** der Kunden), **Verlauf** (Journal, Meldungen, Aufträge mit Filter; Spielstand exportieren) und **Spiel** (Mehr Benachrichtigungen, Vibrieren, Spielstände, Export) |
-| Verlauf (`core.history`, versteckt) | Papier | Die ganze Zeitachse nach Tagen mit Filter (Alles, Geld, Leute, Polizei, Gangs, Aufträge) und Export; öffnet sich aus den Einstellungen, dem Menü über der Karte, Banner-Meldungen und der Suche (`builtin/historyModel.ts`, getestet) |
+| Einstellungen (`core.settings`) | Grau | Abschnitte **Ton & Musik** (Lautstärken, Musik, kleiner Player), **Anzeige** (Overlay, Kamera), die Abschnitte der Module (Slot `core.settings` mit `title`, `icon`, `color`: **Wetter** mit Vorhersage, **Anfragen** der Kunden), **Verlauf** (Journal, Meldungen, Aufträge mit Filter; Spielstand exportieren) und **Spiel** (Vibrieren, Spielstände, Export) |
+| Verlauf (`core.history`, versteckt) | Papier | Die ganze Zeitachse nach Tagen mit Filter (Alles, Geld, Leute, Polizei, Gangs, Aufträge) und Export; öffnet sich aus den Einstellungen, dem Menü über der Karte und der Suche (`builtin/historyModel.ts`, getestet) |
 
 Musik ist keine eigene App mehr, sondern ein Abschnitt der Einstellungen. Meldungen, Ereignisse, Wetter, Aufträge,
 Kontakte und Logistik sind seit Auftrag 26 keine Apps mehr: Sie sind in Verlauf, Einstellungen, Personal, Lager- und
@@ -121,7 +108,8 @@ Alles außerhalb des Handys (HUD, Kartensteuerung, Marker, Überlagerungen, Dial
 - **Spot-Zustände:** `--spot-idle/-waiting/-urgent/-raid` (Füllung), `-on` (Zahl, 4,5:1), `-glow` (Schein am Boden),
   `-edge` (Stiel, Ring, Kante); `--spot-ring`, `--spot-plate`, `--spot-locked(-edge)`, `--spot-shadow`. Rot und Blau
   sind als Füllung eine Spur dunkler als im Entwurf (#d93025, #1f6cf0), sonst hätte die weiße Zahl nur 3,4:1 bzw. 3,9:1.
-- **Weitere:** Geld-Popup `--map-money(-on)`, `--map-money-loss(-on)`; Vignette `--map-vignette`; Akte `--file-*`,
+- **Weitere:** Geld-Popup `--map-money(-on)`, `--map-money-loss(-on)`; Vignette `--map-vignette`; Akten-Tokens `--file-*`
+  (die Akte der Konfrontation ist seit Auftrag 46d weg, die Tokens bleiben),
   Kräftebalken `--duel-*`; Razzia `--raid-glass`, `--raid-edge`; Übernahme `--takeover-glow`. Bewegung mit dem Handy:
   `--dock-ease`, `--dock-duration` (Feder `SPRINGS.app` als CSS-Kurve, `springEasing()` in `phone/spring.ts`).
 
@@ -146,9 +134,9 @@ Kontrolle oder Heat (territory) und das Überwachungs-Overlay (Kern).
 | Baustein | Wofür |
 | --- | --- |
 | `registerSlot('map.overlay', { id, order, component })` | Elemente über der freien Kartenfläche (Razzia-Banner, Tracking-Karte einer Lieferung). Der Bereich reicht bis `--map-right` und folgt dem Handy; Beiträge positionieren sich selbst und setzen `pointer-events` für Knöpfe. |
-| `registerDialog({ …, area: 'map', lockPhone? })` | Dialog nur über der Kartenfläche, das Handy bleibt sichtbar. `lockPhone` (Standard: wie `pausesGame`) dunkelt das Handy ab und macht es `inert` (`dialogLocksPhone`). Konfrontation: gesperrt; Razzia-Bilanz und Übernahme: frei. |
+| `registerDialog({ …, area: 'map', lockPhone? })` | Dialog nur über der Kartenfläche, das Handy bleibt sichtbar. `lockPhone` (Standard: wie `pausesGame`) dunkelt das Handy ab und macht es `inert` (`dialogLocksPhone`). Ergebnis-Karte der Konfrontation, Razzia-Bilanz und Übernahme: frei. |
 | `MapDialog({ label, onClose, scrim?, detent?, class? })` | Darstellung dazu: Glas-Karte in der Mitte der Kartenfläche, am Handy-Bildschirm ein Blatt (`Sheet`). |
-| `useIsMobile()` | Handy-Aufbau (≤ 760 px), z.B. um statt einer Akte ein Blatt zu zeigen. |
+| `useIsMobile()` | Handy-Aufbau (≤ 760 px), z.B. um statt einer Glas-Karte ein Blatt zu zeigen. |
 | `iconElement(name, { size?, strokeWidth?, class? })` | Icon als DOM-Element für Karten-Marker, die ohne Preact gebaut werden. |
 
 ## Tokens (`styles/tokens.css`)
@@ -195,7 +183,7 @@ Nur Variablen verwenden.
   aus, `prefers-reduced-transparency` und `prefers-contrast: more` machen Glas deckend.
 - **Layout:** `--phone-ratio`, `--phone-width`, `--phone-status-height`, `--phone-nav-height`, `--phone-home-inset`,
   `--hud-height`, `--touch-target` (am Handy 44 px), `--touch-target-phone` (44 px), `--safe-*`, `--z-*`.
-- **Hardware und Wallpaper:** `--hw-*` (Gehäuse, Island), `--wall-*` und `--home-*` (Himmel und Schrift des
+- **Hardware und Wallpaper:** `--hw-*` (Gehäuse), `--wall-*` und `--home-*` (Himmel und Schrift des
   Startbildschirms, immer dunkel bzw. hell).
 
 **Optik-Regeln (Auftrag 27):**
@@ -208,7 +196,7 @@ Nur Variablen verwenden.
 **Farbe sparsam:**
 - Farbe steht in Kacheln (`IconChip`), Zeichen und Etiketten, nie als Vollfläche im Inhalt. Jede Farbe kommt mit Symbol
   oder Beschriftung, nie allein.
-- Glas nur auf der schwebenden Ebene (Navigationsleiste beim Scrollen, Dock, Antwortblatt, Banner, Island).
+- Glas nur auf der schwebenden Ebene (Navigationsleiste beim Scrollen, Dock, Antwortblatt, Statusleiste).
 - Keine Emojis als Schmuck.
 
 **Karte:** Sie hat ihren eigenen gedämpften Look (`src/map`).
@@ -246,8 +234,8 @@ Handy-Startbildschirm).
 gehen nur noch durch die Tabelle `EMOJI_ICONS` (alte Daten wie Gang-Wappen), unbekannte werden als Text gezeigt.
 Neue Icons in `icons.ts` ergänzen (Symbole für Geld: `coinEuro` sauber, `moneyBag` Schwarzgeld).
 
-**Wie bei iOS** (Auftrag 22, alles in `src/ui/components/`, Aussehen in `overlays.css`). Blätter, Menüs und die
-Mitteilungszentrale liegen im Handy in einer eigenen Ebene (`Portal`), Esc schließt immer das oberste
+**Wie bei iOS** (Auftrag 22, alles in `src/ui/components/`, Aussehen in `overlays.css`). Blätter und Menüs liegen
+im Handy in einer eigenen Ebene (`Portal`), Esc schließt immer das oberste
 (`overlays.ts`: `useOverlay(open, onClose)`), jeder Seitenwechsel schließt alle.
 
 | Baustein | Wofür | Wichtigste Props |
@@ -258,7 +246,6 @@ Mitteilungszentrale liegen im Handy in einer eigenen Ebene (`Portal`), Esc schli
 | `SwipeRow` | Zeile nach links wischen gibt Aktionen frei (nur für vorhandene Befehle) | `actions: { label, onSelect, icon?, color? }[]`, `fullSwipe` |
 | `Stepper` | − \| + statt zweier loser Knöpfe (Preise, Lohn, Beträge), gedrückt halten wiederholt | `value`, `onChange`, `label`, `min`, `max`, `step`, `format?` |
 | `SearchField` | graue Suchpille mit Lupe und Löschen; im Handy über `PhoneScreen search` | `value`, `onInput`, `placeholder`, `onEscape?` |
-| `NotificationCenter` | Mitteilungszentrale (Banner oder Statusleiste herunterziehen) | `open`, `items`, `onOpen`, `onClear`, `onClose`, `heading` |
 
 - **Gefährliches nie direkt:** Entlassen, Verpfeifen & Co. laufen über ein `ActionSheet` (rote Aktion, „Abbrechen“).
 - **Wischaktionen und Kontextmenüs** bieten nur an, was es schon als Knopf oder Befehl gibt. Sie sind Abkürzungen,
@@ -289,7 +276,6 @@ zeigt den Titel der Seite darunter (bis 14 Zeichen, sonst „Zurück“; neben e
 - vom linken Rand (≤ 24 px) wischen: eine Seite zurück, die Seite folgt dem Finger (über die Hälfte oder schneller
   als 0,5 px/ms zählt);
 - am Home-Balken bzw. auf „Start“ hochwischen: App schrumpft auf ihre Kachel, auf dem Startbildschirm: weglegen;
-- Statusleiste oder Banner herunterziehen: Mitteilungszentrale; Banner hoch: weg;
 - Blatt am Griff ziehen (rastet bei mittel/groß, nach unten zu); langer Druck: Kontextmenü; Zeile nach links:
   Wischaktionen.
 
@@ -310,9 +296,7 @@ zeigt den Titel der Seite darunter (bis 14 Zeichen, sonst „Zurück“; neben e
 - Tabs der Module erscheinen automatisch als Apps (`tab:<id>`), Panels als Seiten über der aktuellen App.
 - `ui.openPhone(appId, params)` öffnet eine App, z.B. `ui.openPhone('core.messages', { contactId: 'gang:nord' })`.
 - Widgets auf dem Startbildschirm: `registerSlot('phone.home', { id, order, component })`.
-- `ui.notify({ title, text, icon, appId, params, sound, urgent? })` zeigt ein Banner, lässt das Handy vibrieren und
-  spielt einen Ton; mit `urgent: false` nur still in die Mitteilungszentrale. Neue Nachrichten lösen das automatisch
-  aus (Banner nur mit Antwortfrist).
+- Zähler in der festen Anzeige oben: `registerStatusCounter({ id, order, icon, count, label, open? })` (Abschnitt oben).
 - **Nachrichten:** Kontakte "tippen" (drei Punkte, nur Optik) bevor eine neue Nachricht erscheint. Kontaktart und Farbe:
   Gang rot, Polizei indigo, Team türkis, Lieferant braun, Kunde grün (Avatar, Gruppenkopf, Streifen an der Blase).
   Offene Fragen tragen den Stempel "Antwort!", die Antwortknöpfe stehen als Glasblatt unten (erster Knopf Gold). Die
@@ -365,7 +349,7 @@ ui.tour.skip();                    // beendet die laufende Tour
 - **Anker** (`tour/anchors.ts`, `TOUR_ANCHORS`, jeweils mit Ort): `hud.money`, `hud.money.dirty`, `hud.money.clean`,
   `hud.heat`, `hud.clock`, `hud.weather` (seit Auftrag 46c die Wetter-Anzeige neben der Uhr, `weather/ui`),
   `hud.speed`, `hud.stock`, `hud.reputation`, `hud.rank`, `hud.territory`, `hud.mission` (Missions-Karte des
-  Tutorials bzw. Quest-Karte), `phone`, `phone.home`, `phone.app.<appId>` (jedes App-Symbol, `appId` wie bei
+  Tutorials), `phone`, `phone.home`, `phone.app.<appId>` (jedes App-Symbol, `appId` wie bei
   `registerPhoneApp` bzw. `tab:<id>`, Helfer `phoneAppAnchor`), `phone.screen` (oberste Seite im Stapel), `spot.panel`,
   `spot.customer` (Blase mit Zähler am Spot-Marker, `data-tour-key` = Spot-ID), `spot.sell`, `spot.price`,
   `spot.runner`, `map`; seit Auftrag 46c dazu `spot.marker` (der Marker selbst, `data-tour-key` = Spot-ID),
@@ -401,11 +385,11 @@ einer Komponente **ohne Props** überspringt das auch das Neuzeichnen von oben.
 ## Prüfen
 
 - `npm test` prüft u.a. `styles/contrast.test.ts` (Kontrast aller Farbpaare, Hell und Dunkel, dazu Glas über der hellsten
-  und dunkelsten Kartenfarbe, Zahl auf jeder Spot-Farbe, Akte, Razzia-Banner), `phone/islandModel.test.ts`
+  und dunkelsten Kartenfarbe, Zahl auf jeder Spot-Farbe, Akten-Tokens, Razzia-Banner), `phone/countdown.test.ts`
   (Stunden statt Minuten), `phone/messagesModel.test.ts`, `builtin/historyModel.test.ts`.
 - `npm run screenshot:phone` (alle Handy-Seiten, Desktop und Handy-Bildschirm, `--appearance=light` für Hell).
 - `npm run screenshot -- --scenes=alle` bzw. `npm run screenshot:glas` (Look Glas: Normalbetrieb in vier Tageszeiten,
-  weggelegt, Spot-Hover, Orte, Konfrontation Briefing/Runde/Ergebnis, Razzia Alarm/Bilanz, Lieferung See/Kai/Lkw,
+  weggelegt, Spot-Hover, Orte, Konfrontation (Ergebnis-Karte), Razzia Alarm/Bilanz, Lieferung See/Kai/Lkw,
   Veedel übernommen; Desktop und Handy-Bildschirm nach `screenshots/glas/`, `--motion=reduce` für weniger Bewegung).
 - `npm run audit:phone` misst am laufenden Spiel Zielgrößen (mindestens 44 px), Schriftgrößen (nie unter 11 px) und
   Textkontrast (4.5:1) in jeder Handy-Seite und endet mit Fehlercode bei Verstößen.
@@ -439,5 +423,5 @@ Laden und Entfernen; `CallScreen` zeigt „Stimme wird geladen …“ unter dem 
 
 ## Einstellungen pro Gerät
 
-`UiState.overlay`, `camera`, `vibration`, `moreNotifications` (`prefs.ts`, `localStorage` `koeln-tycoon:ui`), Ton unter
+`UiState.overlay`, `camera`, `vibration` (`prefs.ts`, `localStorage` `koeln-tycoon:ui`), Ton unter
 `koeln-tycoon:audio`.

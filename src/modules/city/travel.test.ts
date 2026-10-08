@@ -185,13 +185,9 @@ describe('Ankommen in Hamburg (Auftrag 30)', () => {
       askPlayer: true,
       opponent: { label: 'Leute der Schäl Sick', strength: 40, count: 2 },
     });
-    const started = sim.state.modules.encounters.active.find((x) => x.id === encounterId);
-    expect(started?.playerPresent).toBe(false);
-    sim.advance(2);
-    const e = sim.state.modules.encounters.active.find((x) => x.id === encounterId);
-    // Die Rechte Hand hat entschieden: Ihre Leute machen (oder es ist schon vorbei).
-    expect(e === undefined || e.phase !== 'briefing').toBe(true);
-    if (e) expect(e.mode).toBe('crew');
+    // Auftrag 46d: sofort entschieden, du warst nicht dabei, die Leute haben es gemacht.
+    const e = sim.state.modules.encounters.history.find((x) => x.id === encounterId);
+    expect(e).toMatchObject({ phase: 'done', playerPresent: false, mode: 'crew' });
   });
 
   it('Leute bleiben in ihrer Stadt: Versetzen gibt es nicht, wer in einem alten Stand unterwegs war, kommt an', () => {

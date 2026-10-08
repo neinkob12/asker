@@ -50,9 +50,9 @@ export function bindKeys(runtime: UiRuntime): () => void {
         const can = typeof dismissable === 'function' ? dismissable(ui.dialog.props as never) : dismissable !== false;
         if (can) api.closeDialog();
       } else if (closeTopOverlay()) {
-        // Blatt, Aktionsblatt, Kontextmenü oder Mitteilungszentrale geschlossen
+        // Blatt, Aktionsblatt oder Kontextmenü geschlossen
       } else if (ui.panel) api.closePanel();
-      else if (ui.notification) api.dismissNotification();
+      else if (ui.error) api.dismissError();
       // Im Handy eine Seite zurück (Details, Abschnitt, Chat, App), auf dem Startbildschirm weglegen.
       else if (ui.phone.open) api.back();
       return;

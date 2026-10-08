@@ -5,15 +5,15 @@ import type { MinigameKind } from '../minigames';
 
 export type EncounterOutcome = 'success' | 'failure' | 'retreat';
 
-/** briefing: Spieler entscheidet, ob er selbst hingeht. rounds: Runden laufen. done: vorbei. */
+/**
+ * briefing: die Crew wird zusammengestellt (seit Auftrag 46d nur noch ein Zwischenschritt im selben Aufruf). rounds:
+ * Runden laufen (bzw. ein Minispiel wartet). done: vorbei.
+ */
 export type EncounterPhase = 'briefing' | 'rounds' | 'done';
 
 /**
- * Wie der Spieler im Briefing vorgeht ("Wie gehst du vor?"):
- *   self     selbst hin (Tod möglich)            crew     die Leute machen lassen
- *   backup   Verstärkung schicken (kostet)       payoff   sofort freikaufen (Erfolg, Beziehung sinkt)
- *   tipoff   anonym die Bullen rufen (Rückzug, Heat, etwas Ware weg)
- *   abandon  Ware retten, Spot räumen (Rückzug, die Kasse ist weg)
+ * Wie die eigene Seite vorgegangen ist. Seit Auftrag 46d entsteht nur noch 'crew' (die Leute machen es); die anderen
+ * Werte stehen in alten Spielständen (Wege der früheren Akte: selbst hin, Verstärkung, freikaufen, Bullen rufen, räumen).
  */
 export type EncounterMode = 'self' | 'crew' | 'backup' | 'payoff' | 'tipoff' | 'abandon';
 
@@ -104,8 +104,8 @@ export interface EncounterRequest {
   /** Ist der Spieler selbst dabei? Ohne Angabe nicht (wie beim Stub), außer askPlayer fragt ihn. */
   playerPresent?: boolean;
   /**
-   * Den Spieler zu Beginn fragen, ob er selbst hingeht (nur bei Anlässen mit joinable und ohne playerPresent).
-   * Z.B. bei einem Überfall der Gangs: selbst hin (Todesgefahr) oder die Leute machen lassen.
+   * Früher: den Spieler fragen, ob er selbst hingeht. Seit Auftrag 46d heißt es bei Anlässen mit joinable: Die
+   * vorgeschlagene Crew geht hin (wer vor Ort ist, aufgefüllt mit freien Leuten per Taxi), ohne askPlayer nur staffIds.
    */
   askPlayer?: boolean;
   /** Gegenseite, z.B. eine Gang oder die Polizei. Fehlende Werte kommen aus dem Anlass. */
@@ -466,11 +466,6 @@ export interface EncounterKind {
   maxRounds: number;
   /** Kann der Spieler dazukommen, wenn der Auslöser ihn fragen lässt (askPlayer)? */
   joinable: boolean;
-  /**
-   * Wege im Briefing ("Wie gehst du vor?"), in dieser Reihenfolge. Standard: selbst hin und Leute machen lassen.
-   * Nicht jeder Anlass hat alle (z.B. bei der Polizei keine Bullen rufen).
-   */
-  briefingOptions?: readonly EncounterMode[];
   /** Ausgang, wenn niemand von euch da ist. Standard: 'failure'. */
   ifNobody?: EncounterOutcome;
   /** Ausgang, wenn die Rundengrenze erreicht ist. Standard: 'retreat'. */

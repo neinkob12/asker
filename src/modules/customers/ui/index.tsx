@@ -51,7 +51,6 @@ import {
   waitingAt,
 } from '../index';
 import { deliveriesLayer } from './map';
-import './island';
 import './customers.css';
 
 /**

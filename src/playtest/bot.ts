@@ -42,14 +42,6 @@ import {
   travelMinutesBetween,
 } from '../modules/city';
 import { allWaiting, canServe, dealerStage } from '../modules/customers';
-import {
-  activeEncounters,
-  chooseAuto,
-  chooseMove,
-  getEncounter,
-  requestCity,
-  suggestedCrew,
-} from '../modules/encounters';
 import { periodReport } from '../modules/finance';
 import { freeVehicles, getVehicles, VEHICLE_MODELS, vehiclePrice } from '../modules/fleet';
 import { ceasefireCost, getGangs, tributeAmount } from '../modules/gangs';
@@ -91,20 +83,10 @@ import {
   inTransitAmount,
   PORTS,
 } from '../modules/logistics';
-import { getSpotPrice } from '../modules/market';
-import { activeContract, contractOffers, contractValue, currentQuest } from '../modules/quests';
+import { activeContract, contractOffers, contractValue } from '../modules/quests';
 import { getCandidates } from '../modules/recruiting';
-import {
-  canFoundSpotAt,
-  customSpots,
-  getSpots,
-  lockedSpots,
-  SPOT_UPGRADES,
-  spotAwareness,
-  spotCity,
-  spotUpgrades,
-} from '../modules/spots';
-import { bailCost, getStaff, openStories, runnerHireCost, type StoryId, securityAt } from '../modules/staff';
+import { canFoundSpotAt, getSpots, lockedSpots, spotCity } from '../modules/spots';
+import { bailCost, getStaff, runnerHireCost, securityAt } from '../modules/staff';
 import {
   availableCredit,
   availablePackages,
@@ -292,20 +274,6 @@ const BOT_CONTRACTS = new Set([
   'spots',
   'quiet',
 ]);
-
-/**
- * Peters Quest „Setz einen eigenen Preis“ erledigt der Bot sonst nie (er verkauft zum Richtpreis). Die Wochenverträge
- * kommen aber erst nach Peters erstem Kapitel (J15): Wie ein Neuling probiert er es einmal aus und stellt gleich zurück.
- */
-function tryOwnPrice(sim: Simulation, stats: BotStats): void {
-  if (currentQuest(sim.state)?.id !== 'setPrice') return;
-  const spot = getSpots(sim.state, activeCity(sim.state))[0];
-  if (!spot) return;
-  const price = getSpotPrice(sim.state, spot.id, 'weed');
-  if (run(sim, stats, { type: 'market.setPrice', payload: { spotId: spot.id, productId: 'weed', price } })) {
-    run(sim, stats, { type: 'market.setPrice', payload: { spotId: spot.id, productId: 'weed', price: null } });
-  }
-}
 
 /** Montags: den Vertrag mit der höchsten Belohnung nehmen, den er schaffen kann. */
 function takeContract(sim: Simulation, stats: BotStats): void {
@@ -532,13 +500,6 @@ function grow(sim: Simulation, stats: BotStats, options: BotOptions): void {
     }
   }
 
-  // Auftrag 23: Eigene Spots mit Stammplatz ausbauen, damit sie sich schneller herumsprechen.
-  for (const spot of customSpots(state)) {
-    if (spotAwareness(state, spot.id) >= 0.8 || spotUpgrades(state, spot.id).includes('regular')) continue;
-    if (money(state) < reserve(state) + SPOT_UPGRADES.regular.cost + 1000) break;
-    run(sim, stats, { type: 'spots.upgrade', payload: { spotId: spot.id, upgrade: 'regular' } });
-  }
-
   appointLieutenants(sim, stats);
   appointRightHand(sim, stats);
   appointCapo(sim, stats);
@@ -677,47 +638,6 @@ function mayReplace(state: GameState, options: BotOptions): boolean {
 }
 
 /**
- * Geschichten der Leute (Auftrag 34): kleine Geldbitten aus der Portokasse (höchstens ein Zehntel), Kaution für
- * Geschwister bis zu einem Viertel, frei geben, verwarnen statt kürzen, versprechen statt Lohn. Gibt true zurück, wenn
- * die Nachricht eine Geschichte war.
- */
-function answerStory(
-  sim: Simulation,
-  stats: BotStats,
-  messageId: number,
-  options: readonly { id: string; command?: Command }[],
-): boolean {
-  const command = options.find((o) => o.command?.type === 'staff.storyChoice')?.command;
-  if (command?.type !== 'staff.storyChoice') return false;
-  const story = openStories(sim.state).find((s) => s.id === command.payload.storyId);
-  if (!story) return false;
-  const cheap = story.amount <= money(sim.state) / 10;
-  const PREFER: Record<StoryId, string[]> = {
-    loan: cheap ? ['give'] : ['refuse'],
-    familyTime: ['off'],
-    drunk: ['warn'],
-    hangover: ['ok'],
-    debt: cheap ? ['pay'] : ['refuse'],
-    gamblerWin: ['cheer'],
-    promotion: ['promise'],
-    raise: ['yes'],
-    bragged: ['shut'],
-    scared: ['pull'],
-    loyalTip: ['hide'],
-    hothead: ['warn'],
-    rivalsFight: ['both'],
-    friendsParty: cheap ? ['pay'] : ['no'],
-    coupleMoveIn: cheap ? ['pay'] : ['no'],
-    siblingJailed: story.amount <= money(sim.state) / 4 ? ['bail', 'wait'] : ['wait'],
-  };
-  for (const optionId of [...PREFER[story.story], ...options.map((o) => o.id)]) {
-    if (!options.some((o) => o.id === optionId)) continue;
-    if (run(sim, stats, { type: 'messages.answer', payload: { messageId, optionId } })) break;
-  }
-  return true;
-}
-
-/**
  * Offene Handy-Nachrichten beantworten. Schutzgeld und Waffenstillstand nur, wenn es aus der Portokasse geht
  * (höchstens ein Viertel des Geldes), sonst ablehnen. Aufträge und Angebote lehnt er ab, Warnungen nimmt er ernst.
  */
@@ -744,8 +664,6 @@ function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions
   for (const m of [...state.messages.list]) {
     if (!messages.canAnswer(state, m)) continue;
     if (CITY_CONTACTS.has(m.contactId)) continue;
-    // Auftrag 34: Geschichten der Leute beantwortet er wie ein vernünftiger Chef.
-    if (answerStory(sim, stats, m.id, m.options ?? [])) continue;
     // Auftrag 34: Großhandel von Dealern: mit der Rechten Hand immer, selbst nur für Stammabnehmer (ab „regelmäßig“).
     // Fremde Dealer lehnt er ohne Rechte Hand höflich ab (ablehnen kostet weniger Vertrauen als hängenlassen).
     if (
@@ -804,42 +722,6 @@ function answerMessages(sim: Simulation, stats: BotStats, botOptions: BotOptions
     const choices = PREFERENCE.filter((p) => options.some((o) => o.id === p) && affordable(p));
     for (const optionId of choices) {
       if (run(sim, stats, { type: 'messages.answer', payload: { messageId: m.id, optionId } })) break;
-    }
-  }
-}
-
-/**
- * Konfrontationen (Auftrag 35): Der Bot geht nie selbst hin, schickt aber die vorgeschlagene Crew und gibt per Handy
- * Anweisungen wie ein guter Spieler (Absicht abwenden, Einsatz schützen, Spezialzüge nutzen). Was übrig bleibt,
- * würfeln die Leute aus.
- */
-function handleEncounters(sim: Simulation, stats: BotStats): void {
-  for (const e of [...activeEncounters(sim.state)]) {
-    if (e.phase === 'done') continue;
-    if (e.phase === 'briefing') {
-      const crew = suggestedCrew(sim.state, e, requestCity(sim.state, e.request));
-      const joined = run(sim, stats, { type: 'encounters.join', payload: { encounterId: e.id, mode: 'crew', crew } });
-      if (!joined) run(sim, stats, { type: 'encounters.join', payload: { encounterId: e.id, present: false } });
-    }
-    for (let i = 0; i < 20; i++) {
-      const current = getEncounter(sim.state, e.id);
-      if (current?.phase !== 'rounds') break;
-      const move = chooseMove(current, true);
-      if (move) {
-        if (!run(sim, stats, { type: 'encounters.special', payload: { encounterId: e.id, participantId: move } }))
-          break;
-        continue;
-      }
-      const choice = chooseAuto(sim.state, current, true);
-      const payload = {
-        encounterId: e.id,
-        actionId: choice?.actionId ?? '',
-        ...(choice?.protect ? { protect: choice.protect } : {}),
-      };
-      if (!choice || !run(sim, stats, { type: 'encounters.act', payload })) break;
-    }
-    if (getEncounter(sim.state, e.id)?.phase === 'rounds') {
-      run(sim, stats, { type: 'encounters.auto', payload: { encounterId: e.id } });
     }
   }
 }
@@ -927,7 +809,6 @@ export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = 
   const command = (c: Command) => run(sim, stats, c);
   if (options.sellBusiness !== false) sellWhenOffered(sim.state, command);
   if (isBusinessSold(sim.state)) {
-    handleEncounters(sim, stats);
     answerMessages(sim, stats, options);
     if (!isPlayerTraveling(sim.state)) {
       tradeTurn(sim.state, command);
@@ -938,12 +819,9 @@ export function botTurn(sim: Simulation, stats: BotStats, options: BotOptions = 
   moveOn(sim, stats, options);
   // Unterwegs zwischen den Städten: nur das Nötigste (Handy, Konfrontationen).
   if (isPlayerTraveling(sim.state)) {
-    handleEncounters(sim, stats);
     answerMessages(sim, stats, options);
     return;
   }
-  handleEncounters(sim, stats);
-  tryOwnPrice(sim, stats);
   takeContract(sim, stats);
   answerMessages(sim, stats, options);
   sellPersonally(sim, stats, options);

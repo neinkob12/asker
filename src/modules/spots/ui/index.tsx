@@ -1,5 +1,5 @@
 // Oberfläche der Spots: Marker und Hotspots auf der Karte, das Spot-Panel (freischalten oder Slot für Kunden, Preise, Läufer)
-// und die Spot-Liste im Tab "Geschäft" mit "Eigenen Spot gründen" per Klick auf die Karte.
+// und die Spot-Liste im Tab "Geschäft". Spot gründen über die Karte ist weg (Auftrag 46d), es kommt als Shop (46e).
 // Das Panel hat den Slot 'spots.spotPanel', in den andere Module Abschnitte hängen (Kunden, Preise, Läufer …).
 
 import { clock, formatEuro, formatPercent } from '../../../core';

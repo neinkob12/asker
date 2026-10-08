@@ -1,5 +1,4 @@
-// Einstellungen der Oberfläche pro Gerät (localStorage): Überwachungs-Overlay, Kamera, Verkehr auf der Karte, Vibration,
-// Benachrichtigungen.
+// Einstellungen der Oberfläche pro Gerät (localStorage): Überwachungs-Overlay, Kamera, Verkehr auf der Karte, Vibration.
 // Ton und Musik merkt sich der Audio-Dienst selbst (src/audio).
 
 import type { KeyValueStorage } from '../core';
@@ -14,12 +13,8 @@ export interface UiPrefs {
   overlay: boolean;
   camera: CameraMode;
   traffic: TrafficLevel;
-  /** Handy vibriert bei neuen Nachrichten (Animation und, wo möglich, echtes Vibrieren). */
+  /** Leise Klicks bei Schaltern und Gesten (Haptik). */
   vibration: boolean;
-  /** Auch Routine als Banner (altes Verhalten). Standard: nur Dringendes, der Rest still (Badge, Verlauf). */
-  moreNotifications: boolean;
-  /** Ruhig: Banner nur für Schlimmes ('bad') und höchstens eins alle paar Sekunden, der Rest still (Badge, Verlauf). */
-  quietNotifications: boolean;
 }
 
 export const DEFAULT_PREFS: UiPrefs = {
@@ -27,8 +22,6 @@ export const DEFAULT_PREFS: UiPrefs = {
   camera: '3d',
   traffic: 'normal',
   vibration: true,
-  moreNotifications: false,
-  quietNotifications: false,
 };
 
 const KEY = 'koeln-tycoon:ui';
@@ -47,10 +40,6 @@ export function loadPrefs(storage: KeyValueStorage | null): UiPrefs {
       camera: data.camera === '2d' ? '2d' : '3d',
       traffic: data.traffic === 'off' || data.traffic === 'low' ? data.traffic : 'normal',
       vibration: typeof data.vibration === 'boolean' ? data.vibration : DEFAULT_PREFS.vibration,
-      moreNotifications:
-        typeof data.moreNotifications === 'boolean' ? data.moreNotifications : DEFAULT_PREFS.moreNotifications,
-      quietNotifications:
-        typeof data.quietNotifications === 'boolean' ? data.quietNotifications : DEFAULT_PREFS.quietNotifications,
     };
   } catch {
     return { ...DEFAULT_PREFS };

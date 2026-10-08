@@ -191,17 +191,15 @@ registerDialog({
 registerSlot('map.overlay', { id: 'territory.takeoverOpener', order: 40, component: TakeoverOpener });
 registerMapLayer(takeoverLayer);
 
-onGameEvent('territory.controlChanged', 'territory.takeover', (payload, ui, state) => {
+onGameEvent('territory.controlChanged', 'territory.takeover', (payload, _ui, state) => {
   if (payload.to !== PLAYER_FACTION || state.outcome.gameOver) return;
-  // Die Island bleibt die Quelle für das Live-Geschehen: kurzer Auftritt mit dem Veedel.
-  ui.pulseIsland({ icon: 'flag', tone: 'accent', text: `${veedelName(payload.veedelId)} gehört dir` });
   // Das Aufleuchten auf der Karte gibt es immer, den pausierenden Dialog nur beim ersten Mal in diesem Veedel.
   const first = isFirstTakeover(memory, state.meta.runId, payload.veedelId);
   last = { runId: state.meta.runId, at: state.time, veedelId: payload.veedelId, from: payload.from, shown: !first };
 });
 
 // Macht die Übernahme die Stadt komplett, zeigt „<Stadt> komplett“ den Moment; „Veedel übernommen“ käme sonst erst
-// danach (Auftrag 43, M10). Aufleuchten und Island bleiben.
+// danach (Auftrag 43, M10). Das Aufleuchten bleibt.
 onGameEvent('campaign.won', 'territory.takeoverWon', () => {
   if (last && !last.shown) last.shown = true;
 });

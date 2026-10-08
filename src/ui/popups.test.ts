@@ -10,7 +10,6 @@ function uiWith(partial: Partial<UiState>): UiState {
     palette: false,
     picking: null,
     call: null,
-    notificationCenter: false,
     tour: null,
     phone: { open: false, app: null, stack: [] },
     ...partial,
@@ -23,13 +22,12 @@ describe('popupMayOpen (Auftrag 46e)', () => {
     expect(popupMayOpen(uiWith({}), true)).toBe(true);
   });
 
-  it('wartet bei Dialog, Menü, Suche, Kartenklick, Gespräch und Mitteilungszentrale', () => {
+  it('wartet bei Dialog, Menü, Suche, Kartenklick und Gespräch', () => {
     expect(popupMayOpen(uiWith({ dialog: { id: 'core.saves', props: {} } }))).toBe(false);
     expect(popupMayOpen(uiWith({ popover: 'menu' }))).toBe(false);
     expect(popupMayOpen(uiWith({ palette: true }))).toBe(false);
     expect(popupMayOpen(uiWith({ picking: { prompt: 'Wo?' } }))).toBe(false);
     expect(popupMayOpen(uiWith({ call: { messageId: 1 } }))).toBe(false);
-    expect(popupMayOpen(uiWith({ notificationCenter: true }))).toBe(false);
   });
 
   it('wartet, solange eine Tour läuft (Auftrag 46c)', () => {
