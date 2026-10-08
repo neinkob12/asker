@@ -56,6 +56,7 @@ import { isPlayerDelivering } from '../customers';
 import { startEncounter } from '../encounters';
 import {
   getVehicle,
+  isShip,
   maybeSeize,
   pickVehicle,
   releaseVehicle,
@@ -131,12 +132,15 @@ import {
 } from './config';
 import {
   departRoute,
+  driverWhereabouts,
+  getRoutes,
   type RestockDue,
   type Route,
   type RouteInput,
   removeRoute,
   routeArrived,
   routeLost,
+  routeName,
   routesTick,
   saveRoute,
   settleRestock,
@@ -239,12 +243,19 @@ export interface Trip {
   leg?: 'out' | 'back';
   /** Schon abgeladene Einheiten, solange die Fahrt am vollen Lager wartet (Auftrag 33). */
   unloaded?: number;
+  /** Dasselbe nach Ware, für Ankunft und Journal in Gramm (fehlt bei alten Ständen und ohne Teillieferung). */
+  unloadedItems?: { productId: string; amount: number }[];
   /** Eigenes Fahrzeug (fleet), fehlt = Privatauto des Fahrers (Auftrag 33). */
   vehicleId?: number;
   /** Wahl der Strecke (Auftrag 33), fehlt = Autobahn. */
   choice?: RouteChoice;
   /** Geplante Abholung: Diese Container am Kai holt die Fahrt bei der Abfahrt (bis dahin stehen sie dort). */
   cargoIds?: number[];
+  /**
+   * Abholung am Hafen: Minuten zum Laden, wie bei der Abfahrt gerechnet (ein Kran, der während der Fahrt fertig
+   * wird, verschiebt die Anzeige nicht mehr). Fehlt bei alten Ständen, dann gilt die Stufe von jetzt.
+   */
+  loadingMinutes?: number;
 }
 
 /** Fahrzeugwahl einer Fahrt: eigenes Fahrzeug (ID), 'private' = Privatauto, ohne Angabe das passende freie. */
@@ -536,9 +547,30 @@ export function roomFor(state: GameState, warehouseId: string): number {
   return Math.max(0, warehouseFree(state, warehouseId) - inboundWeight(state, warehouseId));
 }
 
-/** Fahrer ohne Einsatz in einer Stadt (Standard: die aktive), die sofort losfahren können. */
+/**
+ * Fahrer ohne Einsatz in einer Stadt (Standard: die aktive), die sofort losfahren können. Wer keine feste Route fährt,
+ * steht vorn, dann die, deren Route am spätesten losfährt (sonst schickte „Fahrer schicken“ den Stammfahrer).
+ */
 export function freeDrivers(state: GameState, cityId: string = activeCity(state)): StaffMember[] {
-  return getStaff(state, { role: 'driver', status: 'active', cityId }).filter((m) => !m.assignment);
+  const free = getStaff(state, { role: 'driver', status: 'active', cityId }).filter((m) => !m.assignment);
+  if (free.length < 2 || getRoutes(state).length === 0) return free;
+  const next = new Map(free.map((m) => [m.id, driverWhereabouts(state, m.id).next?.at ?? Number.POSITIVE_INFINITY]));
+  return free.sort((a, b) => {
+    const at = next.get(a.id) ?? 0;
+    const bt = next.get(b.id) ?? 0;
+    return at === bt ? 0 : at > bt ? -1 : 1;
+  });
+}
+
+/**
+ * Fährt dieser Fahrer eine feste Route, die losfährt, bevor er von einer Fahrt bis zurück ist? Dann bleibt
+ * er für die Route, sonst fiele sie aus („ist gerade woanders im Einsatz“). Gibt den Grund zurück, sonst null.
+ */
+function routeConflict(state: GameState, staffId: string, until: number): string | null {
+  const next = driverWhereabouts(state, staffId).next;
+  if (!next || next.at >= until) return null;
+  const name = getStaffMember(state, staffId)?.name ?? 'Der Fahrer';
+  return `${name} fährt um ${clock.formatTime(next.at)} die Route ${routeName(state, next.route)}.`;
 }
 
 export function getLogisticsLog(state: GameState): readonly TripLogEntry[] {
@@ -664,7 +696,7 @@ export function tripRoute(
 /** Ankunft am Abholort: bei der Abholung am Hafen vor dem Laden, beim Umlagern sofort (Laden im Startlager). */
 function arriveAtPickup(state: GameState, trip: Trip): number {
   if (trip.kind !== 'pickup') return trip.startedAt;
-  return Math.max(trip.startedAt, trip.loadedAt - loadMinutes(state, tripCity(state, trip)));
+  return Math.max(trip.startedAt, trip.loadedAt - (trip.loadingMinutes ?? loadMinutes(state, tripCity(state, trip))));
 }
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
@@ -783,8 +815,16 @@ function upgradeBerth(ctx: Ctx, cityId: string): CommandResult {
   return { ok: true };
 }
 
-/** Fahrer für eine Fahrt aussuchen: der gewünschte oder der erste freie. */
-function pickDriver(ctx: Ctx, driverId: string | undefined, cityId: string): StaffMember | string {
+/**
+ * Fahrer für eine Fahrt aussuchen: der gewünschte oder der erste freie. until sagt, wann die Fahrt mit diesem Fahrer
+ * vorbei wäre: Wer vorher seine feste Route fahren muss, bleibt dafür.
+ */
+function pickDriver(
+  ctx: Ctx,
+  driverId: string | undefined,
+  cityId: string,
+  until: (staffId: string) => number,
+): StaffMember | string {
   if (driverId) {
     const m = getStaffMember(ctx.state, driverId);
     if (!m || m.leftAt !== null) return 'Diesen Fahrer gibt es nicht.';
@@ -792,12 +832,13 @@ function pickDriver(ctx: Ctx, driverId: string | undefined, cityId: string): Sta
     if (m.status !== 'active') return `${m.name} kann gerade nicht fahren.`;
     if (m.assignment) return `${m.name} ist schon unterwegs.`;
     if (m.cityId !== cityId) return `${m.name} ist in ${cityName(m.cityId)}.`;
-    return m;
+    return routeConflict(ctx.state, m.id, until(m.id)) ?? m;
   }
-  return (
-    freeDrivers(ctx.state, cityId)[0] ??
-    `Kein freier Fahrer in ${cityName(cityId)}. Heuer einen an (Personal-App, Anheuern).`
-  );
+  const free = freeDrivers(ctx.state, cityId);
+  const fit = free.find((m) => routeConflict(ctx.state, m.id, until(m.id)) === null);
+  if (fit) return fit;
+  if (free.length > 0) return routeConflict(ctx.state, free[0].id, until(free[0].id)) ?? free[0];
+  return `Kein freier Fahrer in ${cityName(cityId)}. Heuer einen an (Personal-App, Anheuern).`;
 }
 
 /** Warum du gerade nicht selbst fahren kannst (null: du kannst); mit Stadt auch, wenn du nicht dort bist. */
@@ -843,6 +884,8 @@ export function chooseVehicle(
   if (wanted === undefined) return pickVehicle(state, cityId, grams, Number.POSITIVE_INFINITY);
   const vehicle = getVehicle(state, wanted);
   if (!vehicle) return 'Dieses Fahrzeug gibt es nicht.';
+  // Seeschiffe holen Container für trade, sie fahren nie auf der Straße (wie freeVehicles in fleet).
+  if (isShip(vehicle)) return 'Schiffe fahren nicht auf der Straße.';
   const name = vehicleName(state, wanted);
   if (vehicleStatus(vehicle) === 'seized') return `${name} ist beschlagnahmt.`;
   if (vehicleStatus(vehicle) === 'busy') return `${name} ist gerade unterwegs.`;
@@ -924,12 +967,15 @@ export function startTrip(ctx: Ctx, trip: Omit<Trip, 'id' | 'checkAt' | 'status'
   else rollCheck(ctx, full);
   ctx.state.modules.logistics.trips.push(full);
   if (full.driverId) assign(ctx, full.driverId, { kind: 'transport', targetId: String(full.id) });
-  ctx.emit('transport.started', {
-    tripId: full.id,
-    kind: full.kind,
-    driverId: full.driverId,
-    arrivesAt: full.arrivesAt,
-  });
+  // Eine Nachtfahrt meldet sich erst bei der echten Abfahrt (departPlanned), sonst zählte sie doppelt.
+  if (full.status !== 'planned') {
+    ctx.emit('transport.started', {
+      tripId: full.id,
+      kind: full.kind,
+      driverId: full.driverId,
+      arrivesAt: full.arrivesAt,
+    });
+  }
   return full;
 }
 
@@ -1013,14 +1059,9 @@ function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandRes
       reason: `Im ${warehouse.name} ist kein Platz. Bau Regale ein, lager um oder wähl ein anderes Lager.`,
     };
   }
-  let driverId: string | null = null;
   if (payload.by === 'player') {
     const busy = playerBusy(state, cityId);
     if (busy) return { ok: false, reason: busy };
-  } else {
-    const driver = pickDriver(ctx, payload.driverId, cityId);
-    if (typeof driver === 'string') return { ok: false, reason: driver };
-    driverId = driver.id;
   }
   const grams = Math.min(
     space,
@@ -1031,6 +1072,22 @@ function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandRes
   const room = Math.min(space, cityLoadCapacity(state, vehicle));
   const choice = payload.choice ?? 'autobahn';
   const departAt = departureFor(ctx.now, choice);
+  let driverId: string | null = null;
+  if (payload.by !== 'player') {
+    // Hin, laden, zurück: So lange ist der Fahrer weg (vor seiner festen Route muss er zurück sein).
+    const until = (staffId: string) => {
+      const speed = speedOf(state, staffId, vehicle);
+      return (
+        departAt +
+        travelMinutes(warehouse, port, speed) +
+        loadMinutes(state, cityId) +
+        travelMinutes(port, warehouse, speed, 0, roadOptions(choice))
+      );
+    };
+    const driver = pickDriver(ctx, payload.driverId, cityId, until);
+    if (typeof driver === 'string') return { ok: false, reason: driver };
+    driverId = driver.id;
+  }
   if (departAt > ctx.now) return planPickup(ctx, { cargo, cityId, warehouse, driverId, vehicle, choice, departAt });
   const speed = speedOf(state, driverId, vehicle);
   const approach = travelMinutes(warehouse, port, speed);
@@ -1053,6 +1110,7 @@ function pickup(ctx: Ctx, payload: GameCommands['logistics.pickup']): CommandRes
     startedAt: ctx.now,
     loadedAt: ctx.now + approach + loadMinutes(state, cityId),
     arrivesAt: ctx.now + approach + loadMinutes(state, cityId) + delivery,
+    loadingMinutes: loadMinutes(state, cityId),
   });
   const who = driverLabel(state, driverId);
   journal.add(
@@ -1144,7 +1202,8 @@ function departPlanned(ctx: Ctx, trip: Trip): void {
       return;
     }
     const approach = travelMinutes(to, from, speed);
-    trip.loadedAt = ctx.now + approach + loadMinutes(state, tripCity(state, trip));
+    trip.loadingMinutes = loadMinutes(state, tripCity(state, trip));
+    trip.loadedAt = ctx.now + approach + trip.loadingMinutes;
     trip.arrivesAt = trip.loadedAt + travelMinutes(from, to, speed, 0, roadOptions(trip.choice));
   } else {
     const wait = trip.loadedAt - trip.startedAt;
@@ -1176,14 +1235,9 @@ function transfer(ctx: Ctx, payload: GameCommands['logistics.transfer']): Comman
   if (available <= 0) return { ok: false, reason: `Im ${from.name} liegt davon nichts.` };
   if (payload.amount !== undefined && !(payload.amount > 0)) return { ok: false, reason: 'Ungültige Menge.' };
   if (payload.amount !== undefined && !payload.productId) return { ok: false, reason: 'Welche Ware?' };
-  let driverId: string | null = null;
   if (payload.by === 'player') {
     const busy = playerBusy(state, from.cityId);
     if (busy) return { ok: false, reason: busy };
-  } else {
-    const driver = pickDriver(ctx, payload.driverId, from.cityId);
-    if (typeof driver === 'string') return { ok: false, reason: driver };
-    driverId = driver.id;
   }
   // Fahrzeug: das gewünschte, sonst das passende für die Ware im Lager (höchstens so viel, wie ins Ziel passt).
   const movable = Math.min(
@@ -1194,6 +1248,20 @@ function transfer(ctx: Ctx, payload: GameCommands['logistics.transfer']): Comman
   );
   const vehicle = chooseVehicle(state, from.cityId, payload.vehicleId, movable);
   if (typeof vehicle === 'string') return { ok: false, reason: vehicle };
+  const choice = payload.choice ?? 'autobahn';
+  // Nachts (Auftrag 33): Die Ware ist geladen, der Wagen steht bis zur Abfahrt im Hof.
+  const departAt = departureFor(ctx.now, choice);
+  let driverId: string | null = null;
+  if (payload.by !== 'player') {
+    // Bis zur Ankunft ist der Fahrer weg (vor seiner festen Route muss er zurück sein).
+    const until = (staffId: string) =>
+      departAt +
+      TRANSFER_LOAD_MINUTES +
+      travelMinutes(from, to, speedOf(state, staffId, vehicle), 0, roadOptions(choice));
+    const driver = pickDriver(ctx, payload.driverId, from.cityId, until);
+    if (typeof driver === 'string') return { ok: false, reason: driver };
+    driverId = driver.id;
+  }
   // Ware raus aus dem Startlager, pro Produkt als ein Posten, so viel ins Ziel-Lager und ins Fahrzeug passt.
   let room = Math.min(roomFor(state, to.id), cityLoadCapacity(state, vehicle));
   const products = [...new Set(lots.map((l) => l.productId))];
@@ -1215,9 +1283,6 @@ function transfer(ctx: Ctx, payload: GameCommands['logistics.transfer']): Comman
     };
   }
   const speed = speedOf(state, driverId, vehicle);
-  const choice = payload.choice ?? 'autobahn';
-  // Nachts (Auftrag 33): Die Ware ist geladen, der Wagen steht bis zur Abfahrt im Hof.
-  const departAt = departureFor(ctx.now, choice);
   const trip = startTrip(ctx, {
     kind: 'transfer',
     driverId,
@@ -1308,6 +1373,12 @@ function arrive(ctx: Ctx, trip: Trip): void {
     // Lager voll (Auftrag 33): Der Rest wartet beim Fahrer, bis Platz ist oder du die Fahrt umleitest.
     const waitedBefore = trip.status === 'waiting';
     trip.unloaded = (trip.unloaded ?? 0) + before - tripAmount({ items: rest });
+    // Was schon im Lager ist, nach Ware merken (die Ankunft meldet am Ende die ganze Ladung).
+    const unloadedNow = addItems(
+      trip.items,
+      rest.map((i) => ({ productId: i.productId, amount: -i.amount })),
+    );
+    if (unloadedNow.length > 0) trip.unloadedItems = addItems(trip.unloadedItems ?? [], unloadedNow);
     trip.items = rest;
     trip.toId = target.id;
     trip.status = 'waiting';
@@ -1315,21 +1386,44 @@ function arrive(ctx: Ctx, trip: Trip): void {
     if (!waitedBefore) startWaiting(ctx, trip, target);
     return;
   }
-  const delivered = (trip.unloaded ?? 0) + before;
   removeTrip(ctx, trip, true);
+  tripDone(ctx, trip, target, true);
+}
+
+/** Ware nach Sorte zusammenzählen; was auf 0 oder darunter fällt, fehlt in der Liste. */
+function addItems(
+  base: readonly Pick<TripItem, 'productId' | 'amount'>[],
+  more: readonly Pick<TripItem, 'productId' | 'amount'>[],
+): { productId: string; amount: number }[] {
+  const sum = new Map<string, number>();
+  for (const i of [...base, ...more]) sum.set(i.productId, (sum.get(i.productId) ?? 0) + i.amount);
+  return [...sum].filter(([, amount]) => amount > 0).map(([productId, amount]) => ({ productId, amount }));
+}
+
+/**
+ * Fahrt ist ganz abgeladen (nach removeTrip): Statistik, Protokoll, Journal, Ereignis 'transport.arrived' und die Route
+ * (auch, wenn der Fahrer am vollen Lager ausfällt und die Ware trotzdem abgeladen wird). Erfahrung (xp) nur für
+ * eine echte Ankunft.
+ */
+function tripDone(ctx: Ctx, trip: Trip, target: Warehouse | undefined, xp: boolean): void {
+  const delivered = (trip.unloaded ?? 0) + tripAmount(trip);
+  // Nach Teillieferungen am vollen Lager nennen Ankunft und Journal die ganze Ladung, nicht nur den Rest.
+  const arrived = trip.unloadedItems
+    ? addItems(trip.unloadedItems, trip.items)
+    : trip.items.map((i) => ({ productId: i.productId, amount: i.amount }));
   const s = ctx.state.modules.logistics;
   s.stats.trips += 1;
   logTrip(ctx, trip, 'done', delivered);
-  if (trip.driverId) addXp(ctx, trip.driverId, XP_PER_TRIP);
-  if (trip.items.length > 0)
-    journal.add(ctx, `${itemsText(trip.items)} ${warehousePlace(target?.name ?? 'Lager', 'in')} angekommen.`, 'good');
+  if (xp && trip.driverId) addXp(ctx, trip.driverId, XP_PER_TRIP);
+  if (arrived.length > 0)
+    journal.add(ctx, `${itemsText(arrived)} ${warehousePlace(target?.name ?? 'Lager', 'in')} angekommen.`, 'good');
   ctx.emit('transport.arrived', {
     tripId: trip.id,
     kind: trip.kind,
     toId: target?.id ?? trip.toId,
     amount: delivered,
     ...(isInterCityTrip(ctx.state, trip) ? { interCity: true } : {}),
-    items: trip.items.map((i) => ({ productId: i.productId, amount: i.amount })),
+    items: arrived,
   });
   if (trip.kind === 'route') routeArrived(ctx, trip, target?.id ?? trip.toId);
 }
@@ -1390,6 +1484,8 @@ function redirect(ctx: Ctx, payload: { tripId: number; toId: string }): CommandR
   const from = here ?? to;
   trip.fromId = from.id;
   trip.toId = to.id;
+  // Was schon abgeladen ist, liegt im alten Lager; Ankunft und Journal im neuen nennen nur, was dort ankommt.
+  delete trip.unloadedItems;
   trip.status = 'enRoute';
   trip.startedAt = ctx.now;
   trip.loadedAt = ctx.now;
@@ -1455,6 +1551,12 @@ function onCheckResolved(ctx: Ctx, ref: string | undefined, outcome: string, end
     trip.stoppedAt = null;
     trip.encounterId = null;
     if (outcome === 'retreat' && veedelId) addHeat(ctx, veedelId, ESCAPE_HEAT);
+    // Ist der Fahrer in der Kontrolle ausgefallen (verletzt, weg …), fährt die Fahrt nicht weiter. driverGone hat
+    // sie übersprungen, solange sie stand; jetzt platzt sie wie jede Fahrt, deren Fahrer ausfällt.
+    if (trip.driverId && !canStillDrive(ctx.state, trip.driverId)) {
+      driverGone(ctx, trip.driverId);
+      return;
+    }
     journal.add(
       ctx,
       outcome === 'success'
@@ -1499,6 +1601,12 @@ function onCheckResolved(ctx: Ctx, ref: string | undefined, outcome: string, end
   ctx.emit('transport.seized', { tripId: trip.id, amount, arrested });
 }
 
+/** Ist der Fahrer noch dabei und einsatzbereit (nicht gegangen, verletzt, in Haft …)? */
+function canStillDrive(state: GameState, staffId: string): boolean {
+  const m = getStaffMember(state, staffId);
+  return !!m && m.leftAt === null && m.status === 'active';
+}
+
 /** Ein Fahrer fällt unterwegs aus (gekündigt, verletzt …): Die Ladung ist verloren. */
 function driverGone(ctx: Ctx, staffId: string): void {
   for (const trip of [...ctx.state.modules.logistics.trips]) {
@@ -1511,10 +1619,11 @@ function driverGone(ctx: Ctx, staffId: string): void {
       continue;
     }
     if (trip.status === 'waiting') {
-      // Der Wagen steht schon im Hof: Die Ware wird abgeladen, auch wenn das Lager dann übervoll ist.
+      // Der Wagen steht schon im Hof: Die Ware wird abgeladen, auch wenn das Lager dann übervoll ist. Das ist eine
+      // Ankunft (Statistik, Ereignis, Route fertig), nur ohne Erfahrung für den Fahrer.
       for (const item of trip.items) store(ctx, { ...item, warehouseId: trip.toId });
       removeTrip(ctx, trip);
-      logTrip(ctx, trip, 'done', (trip.unloaded ?? 0) + tripAmount(trip));
+      tripDone(ctx, trip, getWarehouse(ctx.state, trip.toId), false);
       continue;
     }
     const amount = tripAmount(trip);
@@ -1569,21 +1678,26 @@ function retractStaleQuestions(ctx: Ctx): void {
 
 /**
  * Ware am Kai einer schlafenden Stadt (Auftrag 43): Der Statthalter holt sie ins Lager der Stadt, so weit Platz ist.
- * true, wenn nichts mehr am Kai steht.
+ * true, wenn nichts mehr am Kai steht. retry: erneuter Versuch derselben Ware (stündlich), zählt in der Lagerstatistik
+ * nicht noch einmal als angeboten und abgewiesen (nur der erste Eingang am Kai zählt).
  */
-function collectSleeping(ctx: Ctx, cargo: PortCargo): boolean {
+function collectSleeping(ctx: Ctx, cargo: PortCargo, retry = false): boolean {
   const s = ctx.state.modules.logistics;
   const warehouseId = defaultPickupWarehouse(ctx.state, cargo.cityId);
   // Ist das Lager voll, wartet die Ware ohne neuen Versuch (sonst zählte jede Stunde als abgewiesen, die Statistik stand
   // bei über 90 % und der Bot baute deshalb Regale in der aktiven Stadt).
   if (!warehouseId || warehouseFree(ctx.state, warehouseId) <= 0) return false;
-  const result = storeFitting(ctx, {
-    productId: cargo.productId,
-    amount: cargo.amount,
-    warehouseId,
-    quality: cargo.quality,
-    unitCost: cargo.unitCost,
-  });
+  const result = storeFitting(
+    ctx,
+    {
+      productId: cargo.productId,
+      amount: cargo.amount,
+      warehouseId,
+      quality: cargo.quality,
+      unitCost: cargo.unitCost,
+    },
+    { retry },
+  );
   const taken = cargo.amount - result.rest;
   if (taken <= 0) return false;
   const goods = `${formatProductAmount(cargo.productId, taken)} ${productName(cargo.productId)}`;
@@ -1645,7 +1759,7 @@ function tick(ctx: Ctx): void {
   if (ctx.now % 60 === 0) {
     customs(ctx);
     // Alte Stände: Ware am Kai einer schlafenden Stadt holt ihr Statthalter (Auftrag 43).
-    for (const cargo of [...s.cargo]) if (!isCityLive(ctx.state, cargo.cityId)) collectSleeping(ctx, cargo);
+    for (const cargo of [...s.cargo]) if (!isCityLive(ctx.state, cargo.cityId)) collectSleeping(ctx, cargo, true);
   }
   routesTick(ctx);
   if (ctx.now % MINUTES_PER_DAY === 0) settleRestock(ctx);

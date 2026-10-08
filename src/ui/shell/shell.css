@@ -65,7 +65,9 @@
   pointer-events: none;
 }
 
-/* Überlagerungen der freien Kartenfläche (Slot map.overlay): Razzia-Banner, Tracking-Karte … */
+/* Überlagerungen der freien Kartenfläche (Slot map.overlay): Razzia-Banner, Tracking-Karte …
+   Die Beiträge erben pointer-events: none und setzen selbst auto für Karten mit Knöpfen. Keine eigene Regel für die
+   Kinder: Das Modul-CSS lädt vor diesem, eine gleich spezifische Regel hier überstimmte sonst ihr auto. */
 .shell-map-overlays {
   position: fixed;
   z-index: calc(var(--z-hud) - 1);
@@ -75,9 +77,6 @@
   right: max(0px, calc(var(--map-right) - var(--gap)));
   pointer-events: none;
   transition: right var(--dock-duration) var(--dock-ease);
-}
-.shell-map-overlays > * {
-  pointer-events: none;
 }
 
 /*
@@ -106,6 +105,10 @@
 .ui-map-dialog__scrim.is-dim {
   background: radial-gradient(ellipse at 36% 45%, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.6) 75%);
   animation: ui-fade-in var(--duration) var(--ease-out);
+}
+/* Ohne Schleier bleibt die Karte bedienbar: Klicks und Ziehen gehen an sie und schließen den Dialog nicht. */
+.ui-map-dialog__scrim.is-none {
+  pointer-events: none;
 }
 .ui-map-dialog__card {
   position: relative;
@@ -517,6 +520,23 @@
   font-family: var(--font-hud);
   animation: pop-in var(--duration) var(--ease-out);
 }
+/* Unsichtbare Brücke über die 8 px zwischen Kachel und Karte, unter der Kachel und über der Breite der Karte: Mit der
+   Maus schließt die Karte, sobald der Zeiger Kachel und Karte verlässt (HudPill), auf dem Weg zum Knopf sonst schon in
+   der Lücke. */
+.hud-pill-wrap.is-open::after,
+.hud-flyout::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 9px;
+}
+.hud-pill-wrap.is-open::after {
+  top: 100%;
+}
+.hud-flyout::before {
+  bottom: 100%;
+}
 .hud-flyout__action {
   display: block;
   width: 100%;
@@ -642,6 +662,15 @@
 .hud:has(.hud-popover, .hud-flyout),
 .shell-mapctl:has(.hud-popover) {
   z-index: calc(var(--z-notification) + 1);
+}
+/* Offenes Menü: Der Kasten darum verliert solange seinen backdrop-filter (dafür dichteres Glas). Mit Filter ist er der
+   Bezugsrahmen des Schleiers (position: fixed), der deckte dann nur den Kasten, und ein Klick daneben ging an die Karte
+   statt das Menü zu schließen. */
+.hud-capsule:has(.hud-popover),
+.shell-mapctl__group:has(.hud-popover) {
+  background: var(--hud-glass-strong);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .hud-popover {
   position: absolute;

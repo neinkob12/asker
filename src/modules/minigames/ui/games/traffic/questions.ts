@@ -54,6 +54,19 @@ export const VISIBLE_NAMES: Record<Visible, string> = {
   nichts: 'nichts',
 };
 
+/** Adjektiv zur Stadt (Kennzeichen), wo es nicht einfach Name + „er“ heißt. */
+const PLATE_ADJECTIVES: Record<string, string> = {
+  München: 'Münchner',
+};
+
+/** „Kölner“, „Münchner“ …: Adjektiv zum Namen der Stadt auf dem Kennzeichen. */
+export function plateAdjective(city: string): string {
+  return PLATE_ADJECTIVES[city] ?? `${city}er`;
+}
+
+/** Die Stadt in der Antwort „gerade angekommen“; in dieser Stadt selbst passt die Antwort nicht. */
+const ARRIVED_FROM = 'Hamburg';
+
 const FROM_NAMES: Record<string, string> = {
   arbeit: 'von der Arbeit',
   kumpel: 'von einem Kumpel',
@@ -112,9 +125,14 @@ export const QUESTIONS: QuestionDef[] = [
             : null,
       },
       {
-        text: 'Aus Hamburg, gerade angekommen.',
+        text: `Aus ${ARRIVED_FROM}, gerade angekommen.`,
         claims: { from: 'fremd' },
-        fits: (ev) => (ev.plateHome ? `Aus Hamburg, mit ${ev.homeCity}er Kennzeichen?` : null),
+        fits: (ev) =>
+          ev.homeCity === ARRIVED_FROM
+            ? `Aus ${ARRIVED_FROM}? Wir sind hier in ${ARRIVED_FROM}.`
+            : ev.plateHome
+              ? `Aus ${ARRIVED_FROM}, mit ${plateAdjective(ev.homeCity)} Kennzeichen?`
+              : null,
       },
     ],
   },
@@ -145,9 +163,11 @@ export const QUESTIONS: QuestionDef[] = [
         fits: (ev, story) =>
           story.from === 'club'
             ? 'Vom Club in den Club?'
-            : ev.hour >= 21 || ev.hour <= 2
-              ? null
-              : `In den Club? ${capital(hourText(ev.hour))}?`,
+            : !(ev.hour >= 21 || ev.hour <= 2)
+              ? `In den Club? ${capital(hourText(ev.hour))}?`
+              : (story.cargo ?? ev.visible) === 'kartons'
+                ? 'Mit Umzugskartons in den Club?'
+                : null,
       },
       {
         text: 'Zum Flughafen.',
@@ -179,7 +199,8 @@ export const QUESTIONS: QuestionDef[] = [
       {
         text: 'Ja, meiner.',
         claims: { owner: 'own' },
-        fits: (ev) => (ev.plateHome ? null : `Ihrer? Mit ${ev.plateCity}er Kennzeichen, und Sie wohnen hier?`),
+        fits: (ev) =>
+          ev.plateHome ? null : `Ihrer? Mit ${plateAdjective(ev.plateCity)} Kennzeichen, und Sie wohnen hier?`,
       },
       { text: 'Von einem Kumpel geliehen.', claims: { owner: 'kumpel' }, fits: () => null },
       {
@@ -204,36 +225,24 @@ export const QUESTIONS: QuestionDef[] = [
     id: 'cargo',
     fact: 'cargo',
     ask: () => 'Was haben Sie hinten drin?',
+    // Er hat hinten reingeschaut: Die Antwort, die zum Sichtbaren passt, passt immer. Widersprüche zwischen Ladung und
+    // Geschichte (Kartons und Club, Werkzeug und Flughafen, Taschen und Umzug) fallen schon bei der Antwort auf, die
+    // sie behauptet; hier gäbe es sonst keine passende Antwort mehr.
     answers: [
       {
         text: 'Umzugskartons.',
         claims: { cargo: 'kartons' },
-        fits: (ev, story) =>
-          ev.visible !== 'kartons'
-            ? `Ich sehe aber ${VISIBLE_NAMES[ev.visible]}.`
-            : story.purpose === 'club' || story.to === 'club'
-              ? 'Mit Umzugskartons in den Club?'
-              : null,
+        fits: (ev) => (ev.visible !== 'kartons' ? `Ich sehe aber ${VISIBLE_NAMES[ev.visible]}.` : null),
       },
       {
         text: 'Werkzeug.',
         claims: { cargo: 'werkzeug' },
-        fits: (ev, story) =>
-          ev.visible !== 'werkzeug'
-            ? `Ich sehe aber ${VISIBLE_NAMES[ev.visible]}.`
-            : story.from === 'flughafen' || story.to === 'flughafen'
-              ? 'Werkzeug zum Flughafen?'
-              : null,
+        fits: (ev) => (ev.visible !== 'werkzeug' ? `Ich sehe aber ${VISIBLE_NAMES[ev.visible]}.` : null),
       },
       {
         text: 'Taschen, Klamotten.',
         claims: { cargo: 'taschen' },
-        fits: (ev, story) =>
-          ev.visible !== 'taschen'
-            ? `Ich sehe aber ${VISIBLE_NAMES[ev.visible]}.`
-            : story.purpose === 'umzug'
-              ? 'Ein Umzug mit zwei Reisetaschen?'
-              : null,
+        fits: (ev) => (ev.visible !== 'taschen' ? `Ich sehe aber ${VISIBLE_NAMES[ev.visible]}.` : null),
       },
       {
         text: 'Nichts.',
@@ -278,7 +287,9 @@ export const QUESTIONS: QuestionDef[] = [
             ? `Vom Club abholen ${hourText(ev.hour)}?`
             : story.to === 'arbeit' || story.to === 'baustelle'
               ? `Sie wollten doch ${TO_NAMES[story.to]}?`
-              : null,
+              : (story.cargo ?? ev.visible) === 'kartons'
+                ? 'Mit Umzugskartons einen Kumpel vom Club abholen?'
+                : null,
       },
       {
         text: 'Nachtschicht auf der Baustelle.',
@@ -304,7 +315,7 @@ export const QUESTIONS: QuestionDef[] = [
       { text: 'Aus dem Club.', claims: { from: 'club' }, fits: () => null },
       { text: 'Vom Baumarkt.', claims: { from: 'baumarkt' }, fits: () => null },
       { text: 'Vom Flughafen.', claims: { from: 'flughafen' }, fits: () => null },
-      { text: 'Aus Hamburg.', claims: { from: 'fremd' }, fits: () => null },
+      { text: `Aus ${ARRIVED_FROM}.`, claims: { from: 'fremd' }, fits: () => null },
     ],
   },
   {

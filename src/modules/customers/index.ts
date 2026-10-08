@@ -8,6 +8,7 @@
 //
 // Öffentliche API:
 //   waitingAt(state, spotId), allWaiting(state), getCustomer(state, id), canServe(state, customerId), canServeCustomer,
+//   servableAt(state, spotId) (wen „Alle bedienen“ bedient),
 //   customerRevenue(customer), getSalesStats(state), getCustomerTypes(), customerType(id),
 //   getRegulars(state, { spotId?, status? }), getRegular(state, id),
 //   getOrders(state, { status?, kind? }), getOrder(state, id), orderProgress(state, order), isPlayerDelivering(state),
@@ -44,6 +45,7 @@ import {
   onCityEventChanged,
   onCitySwitched,
   onSpotClosed,
+  onSpotUnlocked,
   serve,
   streetTick,
 } from './street';
@@ -352,6 +354,24 @@ export function canServeCustomer(
   return stockOf(c.productId, cityOfSpot(state, c.spotId)) >= c.amount;
 }
 
+/**
+ * Die Kunden an einem Spot, die „Alle bedienen“ ('customers.serveAll') wirklich bedient: der Reihe nach wie dort
+ * (dringendste zuerst), jeder nur, wenn die Ware nach den Kunden davor noch für ihn reicht.
+ */
+export function servableAt(state: GameState, spotId: string): Customer[] {
+  const cityId = cityOfSpot(state, spotId);
+  const left: Record<string, number> = {};
+  return waitingAt(state, spotId).filter((c) => {
+    const stock = left[c.productId] ?? getStock(state, { productId: c.productId, cityId });
+    if (stock < c.amount) {
+      left[c.productId] = stock;
+      return false;
+    }
+    left[c.productId] = stock - c.amount;
+    return true;
+  });
+}
+
 export function customerRevenue(customer: Pick<Customer, 'amount' | 'pricePerUnit'>): number {
   return Math.round(customer.amount * customer.pricePerUnit);
 }
@@ -488,10 +508,13 @@ export default defineModule({
     'customers.serve': (ctx, { customerId, sellerId }) => serve(ctx, customerId, sellerId ?? null),
     'customers.serveAll': (ctx, { spotId }) => {
       let served = 0;
+      let reason = 'Nicht genug im Lager.';
       for (const c of waitingAt(ctx.state, spotId)) {
-        if (serve(ctx, c.id, null).ok) served++;
+        const result = serve(ctx, c.id, null);
+        if (result.ok) served++;
+        else reason = result.reason;
       }
-      if (served === 0) return { ok: false, reason: 'Nicht genug im Lager.' };
+      if (served === 0) return { ok: false, reason };
       return { ok: true, data: { served } };
     },
     'customers.standAt': (ctx, { spotId }) => standAt(ctx, spotId),
@@ -514,6 +537,8 @@ export default defineModule({
     'events.ended': (ctx, { cityId }) => onCityEventChanged(ctx, cityId),
     // Auftrag 23: Ein eigener Spot wird aufgegeben.
     'spots.closed': (ctx, { spotId, lng, lat }) => onSpotClosed(ctx, spotId, { lng, lat }),
+    // Auftrag 46b: Ein gesperrter Spot ist wieder frei, Kunden kommen ab jetzt (ohne die Sperrzeit nachzuholen).
+    'spots.unlocked': (ctx, { spotId }) => onSpotUnlocked(ctx, spotId),
     'staff.statusChanged': (ctx, { staffId, to }) => {
       if (to !== 'active') courierGone(ctx, staffId, true);
     },

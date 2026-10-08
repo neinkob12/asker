@@ -322,7 +322,7 @@ const result = await ui.tour.start({
     { id: 'staff', anchor: 'phone.screen', before: () => ui.openPhone('tab:staff'), text: 'Deine Leute.' },
     { id: 'sell', anchor: 'spot.sell', waitFor: { event: 'sale.completed' }, text: 'Verkauf einmal selbst.' },
   ],
-});                                // 'done' | 'skipped'
+});                                // 'done' | 'skipped' | 'reset'
 ui.tour.active();                  // ID der laufenden Tour oder null
 ui.tour.skip();                    // beendet die laufende Tour
 ```
@@ -336,7 +336,7 @@ ui.tour.skip();                    // beendet die laufende Tour
   `right`), `tint` (Bedeutungsfarbe, Standard `brand`).
 - **Ablauf** (`tour/controller.ts`, `TourRunner`, getestet): Läuft schon eine Tour, wird die neue eingereiht. `pause`
   hält die Uhr an; ein Tempo-Wunsch währenddessen (Regler als Anker, Dialog) gilt nach der Tour. Ein neues oder
-  geladenes Spiel beendet alle Touren als `'skipped'`.
+  geladenes Spiel beendet alle Touren als `'reset'` (nicht `'skipped'`) und gibt das Tempo von vor der Tour zurück.
 - **Oberfläche** (`tour/TourHost.tsx`, in `shell/App.tsx` über Handy, HUD und Suche, unter den Dialogen des Kerns,
   `--z-tour`): Der Anker wird Bild für Bild verfolgt (Handy federt, Karte fliegt, Fenster ändert sich), der Ausschnitt
   wandert in 250 ms (bei „Bewegung reduzieren“ sofort). Fehlt der Anker, wartet der Schritt bis zu zwei Sekunden und

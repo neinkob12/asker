@@ -27,7 +27,7 @@
 //   supplierQualityBonus(state, id), creditLimit(state, id), availableCredit(state, id), isBlocked(state, id),
 //   availablePackages(state, id), packagePrice(state, supplierId, packageId), rollShipmentProblem(...),
 //   Sammelbestellung: shipmentItems(shipment), shipmentGoods(shipment), groupDiscount(n), groupRiskFactor(n),
-//   orderQuote(state, supplierId, lines, mode, cityId?),
+//   orderQuote(state, supplierId, lines, mode, cityId?), defaultWarehouse(state, cityId, weight?) (Lager ohne Angabe),
 //   Rabatt-Aktionen (Auftrag 32): getDeals(state, cityId?), activeDeal(state, supplierId, packageId, cityId?),
 //   supplierContact(supplier) (Kontakt im Handy), addSupplierTrust(ctx, id, amount), supplierById(id)
 //   deliveryLeg(supplier, progress, toPort?) (Darstellung: Schiff, Umladen oder Straße; Weg: roads.shipRoute,
@@ -562,10 +562,13 @@ export function isIntroduced(state: GameState, supplierId: string): boolean {
   return state.modules.suppliers.introduced.includes(supplierId);
 }
 
-/** Ein, zwei Sätze zum Kennenlernen in seiner Stimme: intro, sonst sein Angebot, sonst seine erste Antwort. */
-export function introText(supplier: Supplier): string {
+/**
+ * Ein, zwei Sätze zum Kennenlernen in seiner Stimme: intro, sonst sein Angebot (nur, solange er noch gesperrt ist, es
+ * nennt die Vermittlung), sonst seine erste Antwort.
+ */
+export function introText(supplier: Supplier, unlocked = false): string {
   if (supplier.intro) return supplier.intro;
-  if (supplier.unlock) return supplier.unlock.pitch.replace('{fee}', formatEuro(supplier.unlock.fee));
+  if (supplier.unlock && !unlocked) return supplier.unlock.pitch.replace('{fee}', formatEuro(supplier.unlock.fee));
   return supplierVariants(supplier.id, 'unlocked')[0];
 }
 
@@ -1047,7 +1050,7 @@ function order(
     rel.debt += price;
     // Ein neuer Kredit schiebt die Frist hinaus: Er erbt nicht die der ältesten offenen Schuld (sonst wäre er sofort fällig).
     rel.dueAt = Math.max(rel.dueAt ?? 0, ctx.now + CREDIT_TERM);
-  } else if (!wallet.pay(ctx, price, 'dirty', `Bestellung ${supplier.name}`, 'goods.purchase')) {
+  } else if (!wallet.pay(ctx, price, 'dirty', `Bestellung ${supplier.name}`, { category: 'goods.purchase', cityId })) {
     return { ok: false, reason: 'Nicht genug Geld.' };
   }
 
@@ -1240,7 +1243,9 @@ function orderGroup(
   if (o.onCredit) {
     rel.debt += price;
     rel.dueAt = Math.max(rel.dueAt ?? 0, ctx.now + CREDIT_TERM);
-  } else if (!wallet.pay(ctx, price, 'dirty', `Sammelbestellung ${supplier.name}`, 'goods.purchase')) {
+  } else if (
+    !wallet.pay(ctx, price, 'dirty', `Sammelbestellung ${supplier.name}`, { category: 'goods.purchase', cityId })
+  ) {
     return { ok: false, reason: 'Nicht genug Geld.' };
   }
   const prices = linePrices(ctx.state, supplier.id, o.lines, quote.discount, cityId);
@@ -1330,9 +1335,10 @@ export function forceShipmentProblem(ctx: Ctx, shipmentId: number, problem: 'del
 
 /**
  * Lager, in das Lieferungen ohne Angabe gehen: in Köln das Standardlager, sonst das erste eigene der Stadt. Passt die
- * Ware (weight Gramm) dort nicht mehr hinein, das erste Lager der Stadt, in das sie passt.
+ * Ware (weight Gramm) dort nicht mehr hinein, das erste Lager der Stadt, in das sie passt. Öffentlich, damit die
+ * Lieferanten-App ohne Wahl dasselbe Lager zeigt, in das sie bestellt.
  */
-function defaultWarehouse(state: GameState, cityId: string, weight = 0): string | null {
+export function defaultWarehouse(state: GameState, cityId: string, weight = 0): string | null {
   const standard = getWarehouse(state, DEFAULT_WAREHOUSE);
   const first = standard && standard.cityId === cityId ? standard.id : (getWarehouses(state, cityId)[0]?.id ?? null);
   if (!first || courierRoom(state, first) >= weight) return first;
@@ -1617,8 +1623,11 @@ function deliver(ctx: Ctx): void {
         placed: unloadCourier(ctx, item, warehouse?.id ?? s.warehouseId, s.cityId ?? 'koeln'),
       }));
       const goods = shipmentGoods(s);
-      // Verteilt: Ein Paket passte nicht mehr in ein Lager allein (bei mehreren Paketen pro Ware genannt).
-      const spread = unloaded.some((u) => u.placed.length > 1);
+      // Verteilt: Ein Paket passte nicht mehr in ein Lager allein, oder die Pakete liegen in verschiedenen Lagern (bei
+      // mehreren Paketen pro Ware genannt).
+      const spread =
+        unloaded.some((u) => u.placed.length > 1) ||
+        new Set(unloaded.flatMap((u) => u.placed.map((p) => p.warehouseId))).size > 1;
       const where =
         spread && unloaded.length > 1
           ? unloaded

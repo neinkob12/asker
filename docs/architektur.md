@@ -1553,8 +1553,9 @@ Ende schickt die Oberfläche `tutorial.tourSeen { stage }`, bei Erklär-Stufen (
 `tutorial.advance`, nach Stufe 0 `ui.setSpeed(1)`. Der „Weiter“-Knopf der Stufen-Karte erscheint nur noch, wenn die
 Tour schon gelaufen ist. Muss der Spieler selbst etwas tun (`waitFor`: Stufe 1 der erste Verkauf, 7 ein Leutnant, 10
 ein Buchhalter, 11 die Rechte Hand, erster Gang-Angriff die Sicherheit), läuft die Uhr (`pause: false`) und die Tour ist
-überspringbar, falls die Voraussetzung fehlt. Die Tour der Stufe 9 startet erst mit der Beschlagnahme
-(`MOMENT_STAGES`). Zwei weitere Touren hängen an Ereignissen und merken sich in `extraToursSeen`: nach der ersten
+überspringbar, falls die Voraussetzung fehlt; Überspringen zählt als gesehen, ein neues oder geladenes Spiel beendet
+die Tour mit `'reset'` und vermerkt nichts. Die Tour der Stufe 9 startet erst mit der Beschlagnahme
+(`MOMENT_STAGES`); geht das Tutorial ohne sie weiter, kommt sie mit Stufe 10 (ohne den Satz zum Zoll). Zwei weitere Touren hängen an Ereignissen und merken sich in `extraToursSeen`: nach der ersten
 Lieferung in Köln (`shipment.arrived`, Lager im HUD) und nach dem ersten Fahrer (`staff.hired`, Abholen am Kai und
 Routen; Routen gibt es nur zwischen zwei Lagern, der Kai ist keins). „Tutorial beenden“ beendet auch die Tour und
 markiert alle als gesehen; die Migration 2 markiert in laufenden Ständen alle Touren bis zur Stufe als gesehen.

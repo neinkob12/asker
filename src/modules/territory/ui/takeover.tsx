@@ -7,7 +7,17 @@ import type { GeoJSONSource } from 'maplibre-gl';
 import { useEffect } from 'preact/hooks';
 import type { GameState } from '../../../core';
 import { type MapLayer, mapToken, registerMapLayer } from '../../../map';
-import { HudSegments, MapDialog, onGameEvent, registerDialog, registerSlot, useGame, useUi } from '../../../ui';
+import {
+  HudSegments,
+  isMobileLayout,
+  MapDialog,
+  onGameEvent,
+  popupMayOpen,
+  registerDialog,
+  registerSlot,
+  useGame,
+  useUi,
+} from '../../../ui';
 import { cityName } from '../../city';
 import { getGang, getGangStatus } from '../../gangs';
 import { getReputation, reputationLabel } from '../../reputation';
@@ -74,7 +84,7 @@ function TakeoverDialog(props: { veedelId: string; from: string | null }) {
         <div class="takeover__stat">
           <span class="takeover__label is-brand">Ruf</span>
           <strong>
-            {Math.round(reputation)} {reputationLabel(reputation)}
+            {Math.round(reputation)} {reputationLabel(Math.round(reputation))}
           </strong>
         </div>
         <div class="takeover__stat is-wide">
@@ -89,7 +99,10 @@ function TakeoverDialog(props: { veedelId: string; from: string | null }) {
   );
 }
 
-/** Öffnet die Übernahme, sobald kein anderer Dialog offen ist (z.B. erst nach einer Konfrontation). */
+/**
+ * Öffnet die Übernahme, sobald der Spieler frei ist (popupMayOpen: kein anderer Dialog wie eine Konfrontation, kein
+ * Menü, keine Suche, kein Gespräch, keine laufende Tour, am Handy-Bildschirm das Handy zu).
+ */
 function TakeoverOpener() {
   const ui = useUi();
   const { state } = useGame();
@@ -98,7 +111,7 @@ function TakeoverOpener() {
     if (!pending) return;
     let timer = window.setTimeout(function tryOpen() {
       if (pending !== last || pending.shown) return;
-      if (ui.state.dialog) {
+      if (!popupMayOpen(ui.state, isMobileLayout())) {
         timer = window.setTimeout(tryOpen, 1000);
         return;
       }

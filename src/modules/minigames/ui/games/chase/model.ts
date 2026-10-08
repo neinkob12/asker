@@ -669,7 +669,8 @@ function stepTraffic(setup: ChaseSetup, state: ChaseState, dt: number): void {
     const nodeBefore = Math.floor(before / PITCH + (v.dir > 0 ? 0 : 1));
     const nodeAfter = Math.floor(after / PITCH + (v.dir > 0 ? 0 : 1));
     if (nodeAfter !== nodeBefore) {
-      const node = v.dir > 0 ? nodeAfter : nodeBefore;
+      // Die überquerte Kreuzung ist in beiden Richtungen nodeAfter (in −x/−z läge nodeBefore eine Kreuzung zurück).
+      const node = nodeAfter;
       if (node <= 0 || node >= GRID) {
         // Am Rand: umdrehen.
         v.dir = v.dir > 0 ? -1 : 1;
@@ -714,8 +715,9 @@ function stepPlayer(state: ChaseState, input: ChaseInput, dt: number): void {
     else p.v = Math.max(-REVERSE_SPEED, p.v - ACCEL * 0.5 * dt);
   } else if (input.gas || p.turboOn) {
     const accel = (p.turboOn ? TURBO_ACCEL : ACCEL) * clamp(1.2 - p.v / top, 0.25, 1.2);
-    p.v = Math.min(top, p.v + accel * dt);
+    // Über dem Höchsttempo (Turbo vorbei, Schaden, angeschoben): auslaufen statt in einem Bild auf top springen.
     if (p.v > top) p.v = Math.max(top, p.v - COAST * dt);
+    else p.v = Math.min(top, p.v + accel * dt);
   } else {
     p.v = p.v > 0 ? Math.max(0, p.v - COAST * dt) : Math.min(0, p.v + COAST * dt);
   }
@@ -795,14 +797,14 @@ function collideWalls(setup: ChaseSetup, state: ChaseState, dt: number): void {
         // Abprallen: Fahrtrichtung weg von der Wand, Tempo runter.
         p.v = Math.max(0, p.v * (1 - 0.55 * power) - into * 0.3);
         p.skid = Math.max(p.skid, SKID_SECONDS * power);
-        const tangent = Math.atan2(-hit.nz, hit.nx); // entlang der Wand
-        // Kurs entlang der Wand drehen, in die Richtung, die näher an der bisherigen liegt.
-        const a = wrapAngle(headingTo(Math.cos(tangent), Math.sin(tangent)));
+        // Kurs entlang der Wand drehen (Tangente (−nz, nx) steht senkrecht auf der Normalen), in die Richtung, die
+        // näher an der bisherigen liegt.
+        const a = wrapAngle(headingTo(-hit.nz, hit.nx));
         const b = wrapAngle(a + Math.PI);
         p.course = Math.abs(wrapAngle(a - p.course)) < Math.abs(wrapAngle(b - p.course)) ? a : b;
       } else if (Math.abs(p.v) > 3) {
-        // Schrammen entlang.
-        p.v *= 0.985;
+        // Schrammen entlang (je Sekunde gleich viel, unabhängig von der Bildrate; bei 60 Hz wie bisher 0,985 je Bild).
+        p.v *= 0.985 ** (dt * 60);
         state.events.push({ kind: 'scrape', power: 0.3, x: p.x, z: p.z });
       }
     }
@@ -826,8 +828,10 @@ function collideTraffic(state: ChaseState): void {
     const push = r - d;
     p.x -= nx * push * 0.8;
     p.z -= nz * push * 0.8;
-    v.x += nx * push * 0.2;
-    v.z += nz * push * 0.2;
+    // Der Wagen rutscht nur entlang seiner Fahrachse: Quer bliebe er sonst neben seiner Spur, die stepTraffic nicht
+    // zurücksetzt.
+    if (v.axis === 'x') v.x += nx * push * 0.2;
+    else v.z += nz * push * 0.2;
     v.pushed = Math.max(v.pushed, 1.5);
     const frontal = Math.abs(c.x * nx + c.z * nz) > 0.7;
     if (v.hitCooldown > 0) {
@@ -970,7 +974,7 @@ function stepCop(setup: ChaseSetup, state: ChaseState, cop: Cop, dt: number): vo
     if (!hit) continue;
     cop.x += hit.nx * hit.depth;
     cop.z += hit.nz * hit.depth;
-    cop.v *= 0.8;
+    cop.v *= 0.8 ** (dt * 60); // je Sekunde gleich viel, bei 60 Hz wie bisher 0,8 je Bild
   }
   // Rammen: dicht hinter dir mit Tempo.
   if (sees && cop.state === 'chase' && cop.ramCooldown <= 0 && gap < CAR_RADIUS * 2 + 0.6 && !state.end) {
@@ -997,7 +1001,7 @@ function stepCop(setup: ChaseSetup, state: ChaseState, cop: Cop, dt: number): vo
         state.events.push({ kind: 'copCrash', power: 1, x: cop.x, z: cop.z });
       } else {
         v.pushed = Math.max(v.pushed, 1);
-        cop.v *= 0.6;
+        cop.v *= 0.6 ** (dt * 60); // je Sekunde gleich viel, bei 60 Hz wie bisher 0,6 je Bild
         const nx = (cop.x - v.x) / Math.max(d, 1e-6);
         const nz = (cop.z - v.z) / Math.max(d, 1e-6);
         cop.x += nx * 0.5;
@@ -1223,8 +1227,13 @@ export function stepChase(setup: ChaseSetup, state: ChaseState, input: ChaseInpu
 
 // ---------------------------------------------------------------------------------------------- Ergebnis
 
+/** Gefahrene Zeit: Nach dem Ende zählt die Zeitlupe der Oberfläche nicht mehr mit (endAt). */
+function chaseTime(state: ChaseState): number {
+  return state.end && state.endAt >= 0 ? state.endAt : state.t;
+}
+
 export function timeLeft(state: ChaseState): number {
-  return Math.max(0, TIME_LIMIT - state.t);
+  return Math.max(0, TIME_LIMIT - chaseTime(state));
 }
 
 export function escaped(state: ChaseState): boolean {
@@ -1235,7 +1244,7 @@ export function escaped(state: ChaseState): boolean {
 export function chaseScore(state: ChaseState): number {
   const left = timeLeft(state) / TIME_LIMIT;
   if (state.end === 'escaped') return Math.round((0.6 + 0.4 * left) * 1000) / 1000;
-  const survived = clamp(Math.min(state.t, TIME_LIMIT) / TIME_LIMIT, 0, 1);
+  const survived = clamp(Math.min(chaseTime(state), TIME_LIMIT) / TIME_LIMIT, 0, 1);
   return Math.round((0.05 + 0.35 * survived) * 1000) / 1000;
 }
 

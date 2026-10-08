@@ -61,12 +61,13 @@ export function onEncounterResolved(ctx: Ctx, payload: GameEvents['encounter.res
     // Freigekauft: Sie haben bekommen, was sie wollten. Kein Sieg für dich, keine neue Wut, keine Nachricht.
     if (payload.mode === 'payoff') return;
     if (payload.outcome === 'success') {
+      // Du hast den Überfall abgewehrt: Das merkt sich die Gang (nicht, wenn sie gewonnen hat).
       addHostility(s, 10);
       addRelation(s, -5);
+      remember(ctx, gang.id, 'raidRepelled');
       if (alive) say(ctx, gang, 'raidWon');
     } else if (payload.outcome === 'failure') {
       addHostility(s, -HOSTILITY_AFTER_LESSON);
-      remember(ctx, gang.id, 'raidRepelled');
       if (alive) say(ctx, gang, 'raidLost');
     }
   } else if (kind === 'attack') {

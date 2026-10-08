@@ -98,9 +98,11 @@ export async function startApp(root: HTMLElement, modules: readonly ModuleDefini
         runtime.api.toast(error instanceof Error ? error.message : 'Laden fehlgeschlagen.', 'bad', { urgent: true }),
       );
   } else if (fresh !== null) {
-    const seed = params.get('seed');
+    // Nur eine endliche Zahl gilt als Seed, sonst ein zufälliger: NaN wurde beim Speichern zu null, und die
+    // festen Würfe aus `${seed}` fielen nach dem Laden anders.
+    const seed = Number(params.get('seed') || Number.NaN);
     const mode: GameMode = fresh === 'hardcore' ? 'hardcore' : 'normal';
-    session.newGame(mode, seed ? Number(seed) : undefined);
+    session.newGame(mode, Number.isFinite(seed) ? seed : undefined);
     if (mode === 'normal' && params.get('tutorial') === '1') startTutorial(session);
   } else if (!session.continueAutosave()) {
     // Ließ sich der letzte Spielstand nicht laden, sagen wir es (und dass eine Kopie bleibt), statt still neu anzufangen.

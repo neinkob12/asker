@@ -101,16 +101,20 @@ export class TourRunner implements TourApi {
     }
   }
 
-  /** Neues oder geladenes Spiel: Alle Touren gehören zum alten (ohne das Tempo anzufassen). */
+  /**
+   * Neues oder geladenes Spiel: Alle Touren gehören zum alten (Ergebnis 'reset', nicht 'skipped': Der Spieler hat
+   * nichts übersprungen). Hielt die laufende die Uhr an, gilt wieder das Tempo von vorher, wie am Ende einer Tour.
+   */
   reset(): void {
     const run = this.running;
     if (run) {
       this.generation++;
       this.clearStep(run);
       this.running = null;
-      run.resolve('skipped');
+      if (run.resumeSpeed !== null) this.host.setSpeed(run.resumeSpeed);
+      run.resolve('reset');
     }
-    for (const waiting of this.queue.splice(0)) waiting.resolve('skipped');
+    for (const waiting of this.queue.splice(0)) waiting.resolve('reset');
     this.notify();
   }
 

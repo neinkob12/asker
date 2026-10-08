@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact';
-import { useId } from 'preact/hooks';
+import { useId, useRef } from 'preact/hooks';
 import { type ChipColor, Icon, IconChip } from './Icon';
 import type { IconName } from './icons';
 
@@ -32,11 +32,24 @@ const TONE_CHIP: Record<string, ChipColor> = { accent: 'money', warn: 'warn', ba
 export function Dialog(props: DialogProps) {
   const tone = props.tone ?? 'accent';
   const titleId = useId();
+  // Begann der Druck auf dem Hintergrund? Endet eine Textauswahl aus dem Dialog daneben, landet der Klick sonst auch
+  // auf dem Hintergrund (gemeinsamer Vorfahre) und schloss den Dialog.
+  const downOnBackdrop = useRef(false);
   return (
     // Klick daneben schließt; per Tastatur schließt Escape (global in src/ui/start.tsx).
     // biome-ignore lint/a11y/noStaticElementInteractions: Hintergrund, Tastatur über Escape
     // biome-ignore lint/a11y/useKeyWithClickEvents: Hintergrund, Tastatur über Escape
-    <div class="ui-dialog-backdrop" onClick={(e) => e.target === e.currentTarget && props.onClose?.()}>
+    <div
+      class="ui-dialog-backdrop"
+      onPointerDown={(e) => {
+        downOnBackdrop.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        const fromBackdrop = downOnBackdrop.current;
+        downOnBackdrop.current = false;
+        if (fromBackdrop && e.target === e.currentTarget) props.onClose?.();
+      }}
+    >
       <div
         class={`ui-dialog ui-dialog--${props.size ?? 'narrow'} ui-dialog--${tone} ${props.class ?? ''}`}
         role="dialog"

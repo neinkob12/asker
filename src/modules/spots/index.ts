@@ -42,6 +42,7 @@ import {
 import { isCityLive, isCityUnlocked } from '../city';
 import { playerSpot } from '../customers';
 import { DAYS_KEPT, spotResult } from '../finance';
+import { getReputation } from '../reputation';
 import { activeRunnerAt, assign, getStaff } from '../staff';
 import { tutorialAllows, tutorialSpotCost, tutorialSpotOpen } from '../tutorial';
 import { getVeedel, veedelAt, veedelCity, veedelName } from '../veedel';
@@ -63,6 +64,8 @@ import {
   AWARENESS_PER_REGULAR,
   AWARENESS_PER_STAFFED_DAY,
   AWARENESS_PER_UNIT,
+  AWARENESS_REPUTATION_BASE,
+  AWARENESS_REPUTATION_MAX,
   AWARENESS_START,
   MOVE_COST,
   MOVE_KEEP_AWARENESS,
@@ -604,13 +607,17 @@ function close(ctx: Ctx, spotId: string): CommandResult {
   return { ok: true };
 }
 
-/** Bekanntheit wächst mit Verkäufen (customers meldet sale.completed). */
+/**
+ * Bekanntheit wächst mit Verkäufen (customers meldet sale.completed), Stammkunden und Tagen mit Leuten dort. Der Ruf
+ * beschleunigt (Auftrag 23): Zuwachs mal Ruf/50, höchstens 1,5; bei Ruf 50 gelten die Werte aus kinds.ts genau.
+ */
 function grow(ctx: Ctx, spotId: string | null | undefined, amount: number): void {
   if (!spotId) return;
   const state = ctx.state.modules.spots;
   const current = state.awareness[spotId];
   if (current === undefined || current >= 1) return;
-  state.awareness[spotId] = Math.round(Math.min(1, current + amount) * 1000) / 1000;
+  const factor = Math.min(AWARENESS_REPUTATION_MAX, getReputation(ctx.state) / AWARENESS_REPUTATION_BASE);
+  state.awareness[spotId] = Math.round(Math.min(1, current + amount * factor) * 1000) / 1000;
 }
 
 /** Um Mitternacht: Tage mit Leuten am Spot machen ihn bekannter, leere Tage lassen ihn vergessen. */

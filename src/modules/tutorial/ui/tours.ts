@@ -57,7 +57,10 @@ function flyToStage2(ctx: TourContext): void {
 /** Erklär-Stufen (0, 3, 4, 10): Ihre Tour schickt am Ende 'tutorial.advance'. */
 export const EXPLAIN_STAGES: readonly number[] = [0, 3, 4, 10];
 
-/** Stufen, deren Tour ein Moment startet statt das Erreichen der Stufe (9: die Beschlagnahme). */
+/**
+ * Stufen, deren Tour ein Moment startet statt das Erreichen der Stufe (9: die Beschlagnahme). Kam der Moment nicht,
+ * kommt die Tour spätestens mit der nächsten Stufe.
+ */
 export const MOMENT_STAGES: readonly number[] = [9];
 
 function stage0(ctx: TourContext): TourStep[] {
@@ -354,16 +357,21 @@ function stage8(ctx: TourContext): TourStep[] {
   ];
 }
 
-/** Stufe 9: nach der Beschlagnahme (startet mit dem Moment 'seizure', nicht mit der Stufe). */
+/**
+ * Stufe 9: nach der Beschlagnahme (startet mit dem Moment 'seizure', nicht mit der Stufe). Kam keine, holt die
+ * Oberfläche die Tour mit dem Wechsel auf Stufe 10 nach, dann ohne den Satz zum Zoll.
+ */
 function stage9(ctx: TourContext): TourStep[] {
   const { ui } = ctx;
+  const police = 'Ab jetzt ist die Polizei scharf: Kontrollen, Razzien. Heat unter 40!';
+  const seized = ctx.state.modules.tutorial?.scripted.seizure === true;
   return [
     step({
       id: 'police',
       anchor: 'hud.heat',
       tint: 'danger',
       before: () => onMap(ui),
-      text: 'Der Zoll hat deinen Container kassiert. Ab jetzt ist die Polizei scharf: Kontrollen, Razzien. Heat unter 40!',
+      text: seized ? `Der Zoll hat deinen Container kassiert. ${police}` : police,
     }),
     step({
       id: 'specialists',

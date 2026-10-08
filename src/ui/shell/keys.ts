@@ -28,6 +28,8 @@ export function bindKeys(runtime: UiRuntime): () => void {
         return;
       }
       if (typing || onControl || e.metaKey || e.ctrlKey || e.altKey) return;
+      // Liegt ein Dialog oder die Suche über der Tour, gehört die Taste nicht der verdeckten Tour.
+      if (ui.dialog || ui.palette) return;
       if (e.code === 'Enter' || e.code === 'Space') {
         e.preventDefault();
         if (!e.repeat) runtime.tours.next();

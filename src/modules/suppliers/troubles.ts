@@ -12,6 +12,7 @@ import {
   type Ctx,
   clock,
   formatEuro,
+  type GameEvents,
   type GameState,
   journal,
   type MessageOption,
@@ -410,10 +411,11 @@ function startPapers(ctx: Ctx, s: Shipment, supplier: Supplier, d: ShipmentDecis
 /**
  * Ausgang der Papiere ('minigame.finished' mit origin suppliers): geschafft heißt durch (wie gut geschmiert), ein
  * Umschlag im Spiel kostet das Schmiergeld, aufgegeben, verloren oder ohne Oberfläche abgelaufen heißt beschlagnahmt.
+ * Hat die Rechte Hand übernommen (by 'rightHand'), nennt das Journal sie statt dich.
  */
 export function onPapersFinished(
   ctx: Ctx,
-  payload: { id: number; origin: { module: string; ref: string }; won: boolean; picks: readonly string[] },
+  payload: Pick<GameEvents['minigame.finished'], 'id' | 'origin' | 'won' | 'picks' | 'by'>,
 ): void {
   if (payload.origin.module !== 'suppliers') return;
   const s = ctx.state.modules.suppliers.shipments.find((x) => papersRef(x.id) === payload.origin.ref);
@@ -439,7 +441,8 @@ export function onPapersFinished(
     return;
   }
   if (payload.won) {
-    through('papersSaved', `Papiere selbst gemacht: Die Lieferung von ${supplier.name} ist durch.`);
+    const who = payload.by === 'rightHand' ? 'Papiere von deiner Rechten Hand' : 'Papiere selbst gemacht';
+    through('papersSaved', `${who}: Die Lieferung von ${supplier.name} ist durch.`);
     return;
   }
   seize(ctx, s, supplier, payload.picks.includes('giveUp') ? null : 'papersFailed');
@@ -505,7 +508,11 @@ export function applyArrivalLuck(ctx: Ctx, s: Shipment, supplier: Supplier): voi
     text = voice(ctx, supplier, 'bonus', { extra: goodsOf({ productId: s.productId, amount: extra }) });
   } else if (s.luck === 'betterQuality') {
     const [min, max] = LUCK_QUALITY;
-    s.quality = Math.round(Math.min(0.98, s.quality + min + ctx.random() * (max - min)) * 100) / 100;
+    const roll = ctx.random();
+    // Die ganze Charge: bei einer Sammellieferung auch die weiteren Pakete (wie badQuality in settleProblem).
+    for (const item of [s, ...(s.extra ?? [])]) {
+      item.quality = Math.round(Math.min(0.98, item.quality + min + roll * (max - min)) * 100) / 100;
+    }
     text = voice(ctx, supplier, 'betterQuality');
   } else {
     text = voice(ctx, supplier, 'early', { goods: goodsOf(s), ...roadVar(supplier, s) });

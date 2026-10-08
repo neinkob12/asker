@@ -42,6 +42,7 @@ import { travelMinutes } from '../roads';
 import { getSpot } from '../spots';
 import { assign, getStaffMember, specialistFactor } from '../staff';
 import { allVeedel, getVeedel, type Veedel, veedelCity } from '../veedel';
+import { weatherDemandFactor } from '../weather';
 import {
   CUSTOMER_TYPES,
   DEALER_PREPAY_SHARE,
@@ -99,7 +100,11 @@ function finish(ctx: Ctx, order: Order, status: 'done' | 'declined' | 'expired' 
   // Auftrag 34: Platzt ein vorab bezahlter Deal, bekommt der Dealer seine Vorkasse zurück (sonst verlöre er Geld und
   // Vertrauen zugleich). Gebucht gegen den Großhandel, so bleibt der Umsatz in der Kasse ehrlich.
   if (status === 'failed' && order.prepaid && order.prepaid > 0) {
-    const back = wallet.lose(ctx, order.prepaid, 'dirty', `Vorkasse zurück an ${order.contactName}`, 'sales.wholesale');
+    // In die Kasse der Stadt, in der der Deal lief (wie die Vorkasse), nicht in die gerade aktive.
+    const back = wallet.lose(ctx, order.prepaid, 'dirty', `Vorkasse zurück an ${order.contactName}`, {
+      category: 'sales.wholesale',
+      cityId: cityAt(order.lng, order.lat),
+    });
     order.prepaid = Math.max(0, order.prepaid - back);
   }
   // Stammabnehmer merken sich, wie es lief.
@@ -227,6 +232,8 @@ export function offerDelivery(ctx: Ctx, force = false): Order | null {
     DELIVERY_CHANCE_PER_HOUR *
     (viaRightHand ? RIGHT_HAND_ORDER_FACTOR : 1) *
     reputationDemandFactor(state) *
+    // Bei Regen, Schnee oder Gewitter bleiben die Leute drinnen und bestellen lieber (weather, DELIVERY_DEMAND).
+    weatherDemandFactor(state, 'delivery') *
     (hourDemandMultiplier(hour) / 1.6) *
     (1 + 0.04 * active.length);
   if (!force && !ctx.chance(chance)) return null;
@@ -454,7 +461,10 @@ export function acceptOrder(ctx: Ctx, orderId: number, by: 'player' | 'courier' 
   const dealerId = order.kind === 'wholesale' ? dealerOfContact(order.contactId) : null;
   if (dealerId && dealerPrepays(state, dealerId)) {
     order.prepaid = Math.round(order.price * DEALER_PREPAY_SHARE);
-    wallet.earn(ctx, order.prepaid, 'dirty', `Vorkasse ${order.contactName}`, 'sales.wholesale');
+    wallet.earn(ctx, order.prepaid, 'dirty', `Vorkasse ${order.contactName}`, {
+      category: 'sales.wholesale',
+      cityId: cityAt(order.lng, order.lat),
+    });
   }
   const name = courierId ? (getStaffMember(state, courierId)?.name ?? 'Deine Rechte Hand') : 'Du';
   journal.add(
@@ -564,7 +574,7 @@ export function onDealResolved(ctx: Ctx, ref: string | undefined, outcome: strin
       ...(order.cut !== null ? { cut: order.cut } : {}),
     });
   }
-  changeReputation(ctx, REP_ORDER_FAILED, 'Deal geplatzt');
+  // Den Ruf für den geplatzten Deal bucht die Konfrontation selbst (effects in dealGoesWrong), hier nicht noch einmal.
   finish(ctx, order, 'failed');
 }
 
@@ -573,10 +583,13 @@ function complete(ctx: Ctx, order: Order, afterFight = false): void {
   const s = ctx.state.modules.customers;
   const wholesale = order.kind === 'wholesale';
   // Auftrag 46e: Ein Buchhalter holt aus jedem Erlös ein paar Prozent mehr heraus (nur aus dem, was jetzt fließt).
-  const due = Math.round((order.price - (order.prepaid ?? 0)) * specialistFactor(ctx.state, 'revenue'));
+  // Buchhalter und Kasse der Stadt des Auftrags, nicht der gerade aktiven.
+  const cityId = cityAt(order.lng, order.lat);
+  const due = Math.round((order.price - (order.prepaid ?? 0)) * specialistFactor(ctx.state, 'revenue', cityId));
   if (due > 0)
     wallet.earn(ctx, due, 'dirty', wholesale ? 'Großhandel' : 'Lieferung', {
       category: wholesale ? 'sales.wholesale' : 'sales.delivery',
+      cityId,
       ...(order.courierId ? { staffId: order.courierId } : {}),
     });
   s.stats.unitsSold += order.amount;

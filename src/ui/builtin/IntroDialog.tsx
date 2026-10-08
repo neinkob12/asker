@@ -48,7 +48,12 @@ export function IntroDialog(props: { replay?: boolean }) {
         placeholder="z.B. Jakob"
         maxLength={PLAYER_NAME_MAX}
         autoFocus
-        onInput={setName}
+        onInput={(value) => {
+          setName(value);
+          // Aus den Einstellungen gilt der Name sofort: Esc schließt ohne finish (shell/keys.ts), der Name soll trotzdem
+          // bleiben wie beim Schließen-Knopf.
+          if (props.replay) setPlayerName(value);
+        }}
         onSubmit={finish}
       />
       <p class="intro__note">Unter diesem Namen landet dein Ergebnis in der Bestenliste, die alle sehen.</p>

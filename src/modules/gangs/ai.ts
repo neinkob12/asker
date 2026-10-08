@@ -307,11 +307,20 @@ function inGrace(state: GameState, veedelId: string): boolean {
   return (state.modules.gangs.graceUntil?.[veedelId] ?? -1) > state.time;
 }
 
-function pickTarget(ctx: Ctx, gang: Gang, s: GangStatus): string | null {
+/** Ziel für einen Vorstoß (exportiert für Tests). */
+export function pickTarget(ctx: Ctx, gang: Gang, s: GangStatus): string | null {
   const state = ctx.state;
   const own = new Set(gangVeedel(state, gang.id));
   const candidates = new Set<string>();
-  if (own.size === 0) return gang.homeVeedelId;
+  if (own.size === 0) {
+    // Ohne Revier zurück ins Heimat-Veedel, aber nicht in deins, solange Frieden, Tutorial-Sperre oder Schonfrist
+    // gelten (dieselben Regeln wie unten).
+    const home = gang.homeVeedelId;
+    const blocked =
+      controllerOf(state, home) === PLAYER_FACTION &&
+      (isAtPeace(state, gang.id) || !tutorialAllows(state, 'gangs.takeover') || inGrace(state, home));
+    return blocked ? null : home;
+  }
   for (const v of own) for (const n of neighborsOf(v)) if (!own.has(n)) candidates.add(n);
   for (const v of allVeedel(gang.cityId))
     if (!own.has(v.id) && controllerOf(state, v.id) === null) candidates.add(v.id);
@@ -481,7 +490,8 @@ type RaidTarget =
   | { kind: 'courier'; staffId: string; veedelId: string }
   | { kind: 'warehouse'; warehouseId: string; name: string; veedelId: string; staffIds: string[] };
 
-function pickRaidTarget(ctx: Ctx, gang: Gang, s: GangStatus): RaidTarget | null {
+/** Ziel für einen Überfall auf dich (exportiert für Tests). */
+export function pickRaidTarget(ctx: Ctx, gang: Gang, s: GangStatus): RaidTarget | null {
   const state = ctx.state;
   const turf = new Set(gangVeedel(state, gang.id));
   const staffed = getSpots(state, gang.cityId).filter(
@@ -490,7 +500,8 @@ function pickRaidTarget(ctx: Ctx, gang: Gang, s: GangStatus): RaidTarget | null 
   const couriers = getStaff(state, { status: 'active', cityId: gang.cityId }).filter(
     (m) => m.assignment?.kind === 'delivery',
   );
-  const warehouses = getWarehouses(state, gang.cityId).filter(() => getStock(state, { cityId: gang.cityId }) > 0);
+  // Nur Lager, in denen etwas liegt (ein leeres zu überfallen, kostete Ruf für nichts).
+  const warehouses = getWarehouses(state, gang.cityId).filter((w) => getStock(state, { warehouseId: w.id }) > 0);
   const turfList = [...turf];
   const raidWarehouse = warehouses.length > 0 && ctx.chance(WAREHOUSE_RAID_CHANCE);
   if (staffed.length > 0 && !raidWarehouse) {

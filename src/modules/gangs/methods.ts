@@ -17,7 +17,7 @@ import {
   texts,
   wallet,
 } from '../../core';
-import { activeCity } from '../city';
+import { activeCity, isCityLive } from '../city';
 import { activeEncounters, startEncounter } from '../encounters';
 import {
   fitArticles,
@@ -579,6 +579,7 @@ function reportBurglary(ctx: Ctx, incident: GangIncident): void {
       warehouse,
       goods,
       gang: gang?.name ?? '',
+      crew: gang?.crew ?? '',
       name: insider?.name ?? 'jemand',
     },
   );
@@ -684,7 +685,11 @@ function poach(ctx: Ctx, gang: Gang): boolean {
   });
   incident.messageId = messages.send(ctx, {
     contact: staffContact(m),
-    text: texts.pick(ctx, 'staff:poach', INCIDENT_TEXTS.poach, { gang: gang.name, extra: formatEuro(extra) }),
+    text: texts.pick(ctx, 'staff:poach', INCIDENT_TEXTS.poach, {
+      gang: gang.name,
+      crew: gang.crew,
+      extra: formatEuro(extra),
+    }),
     options: incidentOptions(ctx.state, incident),
     expiresIn: INCIDENT_EXPIRY,
   });
@@ -714,6 +719,9 @@ function resolvePoach(ctx: Ctx, incident: GangIncident, choice: string): Command
     }
     const veedelId = m.assignment?.kind === 'spot' ? getSpot(ctx.state, m.assignment.targetId)?.veedelId : undefined;
     removeMember(ctx, m.id, 'quit');
+    // Er geht zur Gang wie beim Gehenlassen: Sie hat einen Mann mehr.
+    const joined = gang ? statusOf(ctx, gang.id) : undefined;
+    if (joined) joined.people += 1;
     if (veedelId) addHeat(ctx, veedelId, POACH_TALK_HEAT);
     journal.add(
       ctx,
@@ -757,6 +765,7 @@ function intimidate(ctx: Ctx, gang: Gang): boolean {
         text: texts.pick(ctx, 'staff:intimidation', INCIDENT_TEXTS.intimidationReport, {
           ...spotVars(spot),
           gang: gang.name,
+          crew: gang.crew,
         }),
         options,
         expiresIn: INTIMIDATION_DURATION,
@@ -791,7 +800,9 @@ function resolveIntimidation(ctx: Ctx, incident: GangIncident, choice: string): 
   if (choice !== 'security') return { ok: true };
   const crew = securityCrew(ctx.state, spot.id);
   if (crew.length === 0) return { ok: false, reason: 'Du hast gerade keine freien Sicherheitsleute.' };
-  if (ctx.chance(INTIMIDATION_LEAVE_CHANCE) || activeEncounters(ctx.state).length > 0) {
+  // Läuft schon eine Konfrontation, kann keine zweite starten: erst die klären (sonst zögen sie ohne Wurf ab).
+  if (activeEncounters(ctx.state).length > 0) return { ok: false, reason: 'Gerade läuft schon eine Konfrontation.' };
+  if (ctx.chance(INTIMIDATION_LEAVE_CHANCE)) {
     endIntimidation(ctx, spot.id);
     journal.add(ctx, `Deine Sicherheit taucht ${atSpot(spot)} auf. ${gang.name} zieht ab.`, 'good', {
       spotId: spot.id,
@@ -1001,8 +1012,12 @@ function resolveGoodTurn(ctx: Ctx, incident: GangIncident, choice: string): Comm
   if (incident.kind === 'favor') {
     if (choice !== 'accept') return { ok: true };
     const w = incident.warehouseId ? getWarehouse(ctx.state, incident.warehouseId) : undefined;
-    const amount = incident.amount ?? 0;
-    wallet.earn(ctx, amount, 'dirty', `Gefallen für ${gang.name}`, { category: 'income.other', cityId: gang.cityId });
+    // Bezahlt wird aus der Kasse der Gang, höchstens so viel, wie drin ist.
+    const amount = Math.min(incident.amount ?? 0, Math.max(0, s.money));
+    s.money -= amount;
+    if (amount > 0) {
+      wallet.earn(ctx, amount, 'dirty', `Gefallen für ${gang.name}`, { category: 'income.other', cityId: gang.cityId });
+    }
     addRelation(s, FAVOR_RELATION);
     const veedelId = w ? warehouseVeedel(w) : null;
     if (veedelId) addHeat(ctx, veedelId, FAVOR_HEAT);
@@ -1110,6 +1125,8 @@ export function upkeepIncidents(ctx: Ctx): void {
       removeIncident(ctx, incident.id);
       continue;
     }
+    // Nur die Stadt, die live ist (Auftrag 30): Vorfälle der schlafenden Stadt ruhen bis zum Aufwachen.
+    if (incident.cityId && !isCityLive(ctx.state, incident.cityId)) continue;
     if (incident.reported === false) {
       if (incident.plannedAt !== undefined) {
         if (incident.plannedAt <= ctx.now) runBurglary(ctx, incident);

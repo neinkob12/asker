@@ -2,7 +2,7 @@
 // Lieferungen auf der Karte. Die App "Aufträge" steht seit Auftrag 26 nicht mehr auf dem Startbildschirm: Offene
 // Anfragen kommen als Chat, die Historie steht im Verlauf (Einstellungen).
 
-import { formatEuro, formatNumber } from '../../../core';
+import { formatEuro, formatNumber, messages } from '../../../core';
 import { registerMapLayer } from '../../../map';
 import {
   Badge,
@@ -47,6 +47,7 @@ import {
   isPlayerAway,
   MIDDLEMAN_AMOUNT,
   playerSpot,
+  servableAt,
   spotReputation,
   waitingAt,
 } from '../index';
@@ -134,7 +135,9 @@ function SpotCustomers(props: { spotId: string }) {
   const { state, dispatch } = useGame();
   const waiting = waitingAt(state, props.spotId);
   const regulars = getRegulars(state, { spotId: props.spotId, status: 'active' }).length;
-  const total = waiting.reduce((sum, c) => sum + customerRevenue(c), 0);
+  // Nur wen „Alle bedienen“ wirklich bedient: Reicht die Ware nicht für alle, bleibt der Rest stehen.
+  const servable = servableAt(state, props.spotId);
+  const total = servable.reduce((sum, c) => sum + customerRevenue(c), 0);
   return (
     // Auftrag 46c: Der Anker spot.sell umfasst „Selbst verkaufen“ und die Kundschaft mit „Verkaufen“ (die Tour der
     // Stufe 1 wartet hier auf den ersten Verkauf, beides muss bedienbar bleiben).
@@ -197,7 +200,16 @@ function SpotCustomers(props: { spotId: string }) {
               value={formatEuro(total)}
               onClick={() => dispatch({ type: 'customers.serveAll', payload: { spotId: props.spotId } })}
             >
-              <ItemContent icon="cash" color="brand" title="Alle bedienen" meta={`${waiting.length} Kunden`} />
+              <ItemContent
+                icon="cash"
+                color="brand"
+                title="Alle bedienen"
+                meta={
+                  servable.length < waiting.length
+                    ? `${servable.length} von ${waiting.length} Kunden, die Ware reicht nicht für alle`
+                    : `${waiting.length} Kunden`
+                }
+              />
             </ListItem>
           )}
         </List>
@@ -216,7 +228,12 @@ function CustomersSection() {
   const city = activeCity(state);
   const regulars = getRegulars(state, { status: 'active' }).filter((r) => cityOfSpot(state, r.spotId) === city);
   const allCities = citiesUnlocked(state).length > 1;
-  const offered = getOrders(state, { status: 'offered' }).length;
+  // Nur Anfragen, auf die du noch antworten kannst: Bei der Ankunft in einer anderen Stadt zieht city die Fragen der
+  // alten zurück (Auftrag 43, G3), dort entscheidet die Frist.
+  const offered = getOrders(state, { status: 'offered' }).filter((o) => {
+    const message = messages.get(state, o.messageId);
+    return !!message && messages.canAnswer(state, message);
+  }).length;
   const waitingNow = state.modules.customers.waiting.length;
   const missed = Object.entries(stats.missedByProduct)
     .sort((a, b) => b[1] - a[1])

@@ -12,9 +12,9 @@ import {
   journal,
   wallet,
 } from '../../core';
-import { activeCity, relationFactor } from '../city';
+import { activeCity, cityName, isPlayerIn, relationFactor } from '../city';
 import { activeEncounters, ENCOUNTER_KINDS, startEncounter } from '../encounters';
-import { DEFAULT_PRODUCT, store } from '../goods';
+import { DEFAULT_PRODUCT, fitsInto, getWarehouses, storeFitting } from '../goods';
 import { getStaff, getStaffMember, type StaffMember } from '../staff';
 import { veedelCity, veedelName } from '../veedel';
 import { addHostility, addRelation, breakAgreements, ceasefireBlock, crewFor, statusOf } from './common';
@@ -174,6 +174,8 @@ export function collect(ctx: Ctx, gangId: string, staffIds?: string[], playerPre
   if (!isFound(found)) return found;
   const { gang, s } = found;
   if (!s.protection?.overdue) return { ok: false, reason: `${gang.name} schuldet dir gerade nichts.` };
+  // Nur in der Stadt, die live ist (Auftrag 30): Die Gangs der schlafenden Stadt sind eingefroren.
+  if (gang.cityId !== activeCity(ctx.state)) return { ok: false, reason: 'Du bist nicht in der Stadt.' };
   if (activeEncounters(ctx.state).length > 0) return { ok: false, reason: 'Erst die laufende Konfrontation klären.' };
   const crew = staffIds ?? crewFor(ctx.state, { cityId: gang.cityId });
   const request = {
@@ -271,6 +273,8 @@ export function attack(
   if (!raidTargets(ctx.state, gangId).includes(veedelId)) {
     return { ok: false, reason: `${gang.name} hat in ${veedelName(veedelId)} keinen Spot.` };
   }
+  // Nur in der Stadt, die live ist (Auftrag 30): Die Gangs der schlafenden Stadt sind eingefroren.
+  if (gang.cityId !== activeCity(ctx.state)) return { ok: false, reason: 'Du bist nicht in der Stadt.' };
   if (activeEncounters(ctx.state).length > 0) return { ok: false, reason: 'Erst die laufende Konfrontation klären.' };
   // Nur wer mitgehen darf (Läufer und Sicherheit am Spot, im Lager oder ohne Einsatz): nicht die Rechte Hand, Leutnants
   // oder Fahrer auf einer Fahrt (stirbt oder verletzt sich jemand, wäre dort Lieferung oder Fahrt weg).
@@ -278,7 +282,14 @@ export function attack(
     const m = getStaffMember(ctx.state, id);
     return !!m && canJoinRaid(m, veedelCity(veedelId));
   });
-  if (crew.length === 0 && !playerPresent) return { ok: false, reason: 'Du brauchst Leute oder musst selbst mit.' };
+  // Selbst mitgehen kannst du nur, wenn du in der Stadt bist (nicht unterwegs zwischen den Städten).
+  const present = playerPresent && isPlayerIn(ctx.state, gang.cityId);
+  if (crew.length === 0 && !present) {
+    return {
+      ok: false,
+      reason: playerPresent ? 'Du bist gerade nicht in der Stadt.' : 'Du brauchst Leute oder musst selbst mit.',
+    };
+  }
 
   // Eine Gang mit leerer (oder, bis Mitternacht, negativer) Kasse hat nichts zu holen: Die Beute ist nie negativ.
   const money = Math.min(RAID_LOOT_MONEY_MAX, Math.max(0, Math.round(s.money * RAID_LOOT_MONEY_SHARE)));
@@ -316,6 +327,14 @@ export function acceptOffer(ctx: Ctx, gangId: string, offerId: number): CommandR
   }
   if (!wallet.canAfford(ctx.state, offer.price)) return notEnoughMoney(offer.price);
   if (activeEncounters(ctx.state).length > 0) return { ok: false, reason: 'Erst die laufende Konfrontation klären.' };
+  // Die Ware kommt in deine Lager in der Stadt der Gang, und nur, wenn sie ganz hineinpasst (Auftrag 33): Sonst
+  // gilt das Angebot weiter, bis du Platz gemacht hast.
+  const warehouses = getWarehouses(ctx.state, gang.cityId);
+  if (warehouses.length === 0) return { ok: false, reason: `Du hast in ${cityName(gang.cityId)} kein Lager.` };
+  const room = warehouses.reduce((sum, w) => sum + fitsInto(ctx.state, w.id, DEFAULT_PRODUCT, offer.amount), 0);
+  if (room < offer.amount) {
+    return { ok: false, reason: `Kein Platz: In deine Lager passen nur noch ${formatAmount(room)}.` };
+  }
   s.offer = null;
   const betrayal = Math.max(0, DEAL_BETRAYAL_BASE + s.hostility / 200 - s.relation / 400);
   if (ctx.chance(betrayal)) {
@@ -336,12 +355,20 @@ export function acceptOffer(ctx: Ctx, gangId: string, offerId: number): CommandR
     return { ok: true };
   }
   wallet.pay(ctx, offer.price, 'dirty', `Ware von ${gang.name}`, 'goods.purchase');
-  store(ctx, {
-    productId: DEFAULT_PRODUCT,
-    amount: offer.amount,
-    quality: gang.traits.goodsQuality,
-    unitCost: offer.price / offer.amount,
-  });
+  let rest = offer.amount;
+  for (const w of warehouses) {
+    const amount = fitsInto(ctx.state, w.id, DEFAULT_PRODUCT, rest);
+    if (amount <= 0) continue;
+    storeFitting(ctx, {
+      productId: DEFAULT_PRODUCT,
+      amount,
+      warehouseId: w.id,
+      quality: gang.traits.goodsQuality,
+      unitCost: offer.price / offer.amount,
+    });
+    rest -= amount;
+    if (rest <= 0) break;
+  }
   s.money += offer.price;
   s.goods = Math.max(0, s.goods - offer.amount);
   addRelation(s, RELATION_ON_DEAL * relationFactor(gang.cityId));

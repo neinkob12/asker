@@ -38,6 +38,7 @@ import {
   contactAvatar,
   firstUnread,
   groupChats,
+  isOpenChat,
   lookOf,
   recentContacts,
   shortContactName,
@@ -192,15 +193,14 @@ function ChatList() {
   const [confirm, setConfirm] = useState<'all' | string | null>(null);
   // `all` ist pro Spielstand dieselbe Liste (chatList ist gemerkt): Filter und Gruppen nur bei Änderung neu bauen.
   const { list, groups, archived, recent, openCount } = useMemo(() => {
-    const list = (filter === 'open' ? all.filter((c) => c.awaitingAnswer || c.unread > 0) : all).filter((c) =>
-      matches(c, query),
-    );
+    const list = (filter === 'open' ? all.filter(isOpenChat) : all).filter((c) => matches(c, query));
     return {
       list,
       groups: groupChats(list),
       archived: list.filter((c) => c.archived),
       recent: recentContacts(all),
-      openCount: all.filter((c) => c.awaitingAnswer).length,
+      // Zählt, was der Filter „Offen“ zeigt.
+      openCount: all.filter(isOpenChat).length,
     };
   }, [all, filter, query]);
   const unread = messages.unreadCount(state);

@@ -140,7 +140,8 @@ export const CROP_PRODUCTS: readonly string[] = [...new Set(Object.values(REGION
 
 /**
  * Pacht ist legal und geht nur mit sauberem Geld. Fehlt es, schreibt der Verpächter am ersten Tag; nach
- * LEASE_LOST_DAYS Tagen ohne Pacht ist das Land weg (die Leute dort gehen). Löhne und Dünger zahlt man notfalls bar
- * (Schwarzgeld); reicht auch das nicht, arbeiten die Leute an dem Tag nicht (die Ernte wird kleiner).
+ * LEASE_LOST_DAYS Tagen ohne Pacht ist das Land weg (die Leute dort gehen). Löhne und Dünger zahlt man bar
+ * (Schwarzgeld), sauber nur so weit, dass die Pacht für einen Tag bleibt; reicht das nicht, arbeiten die Leute an dem
+ * Tag nicht (die Ernte wird kleiner).
  */
 export const LEASE_LOST_DAYS = 5;

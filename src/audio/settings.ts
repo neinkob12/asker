@@ -1,6 +1,7 @@
 // Lautstärke und Stummschalten, gemerkt pro Gerät (localStorage über KeyValueStorage aus dem Kern).
 
 import type { KeyValueStorage } from '../core';
+import { PIPER_VOICES, type PiperVoiceId } from './piper/voices';
 
 export interface AudioSettings {
   /** Gesamtlautstärke 0–1. */
@@ -14,6 +15,8 @@ export interface AudioSettings {
   musicOn: boolean;
   /** Stimmen im Anruf (Sprachausgabe des Browsers). Aus: nur Untertitel. */
   voices: boolean;
+  /** Sprachmodelle, die der Spieler entfernt hat: Sie laden erst wieder über "Laden", nicht beim nächsten Anruf. */
+  removedVoices: PiperVoiceId[];
 }
 
 export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
@@ -23,6 +26,7 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   muted: false,
   musicOn: true,
   voices: true,
+  removedVoices: [],
 };
 
 export const AUDIO_SETTINGS_KEY = 'koeln-tycoon:audio';
@@ -36,6 +40,7 @@ export function loadAudioSettings(storage: KeyValueStorage | null): AudioSetting
     const raw = storage?.getItem(AUDIO_SETTINGS_KEY);
     if (!raw) return { ...d };
     const data = JSON.parse(raw) as Partial<AudioSettings>;
+    const removed: unknown[] = Array.isArray(data.removedVoices) ? data.removedVoices : [];
     return {
       master: volume(data.master, d.master),
       music: volume(data.music, d.music),
@@ -43,6 +48,7 @@ export function loadAudioSettings(storage: KeyValueStorage | null): AudioSetting
       muted: typeof data.muted === 'boolean' ? data.muted : d.muted,
       musicOn: typeof data.musicOn === 'boolean' ? data.musicOn : d.musicOn,
       voices: typeof data.voices === 'boolean' ? data.voices : d.voices,
+      removedVoices: PIPER_VOICES.map((v) => v.id).filter((id) => removed.includes(id)),
     };
   } catch {
     return { ...d };

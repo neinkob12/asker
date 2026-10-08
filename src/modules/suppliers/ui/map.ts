@@ -162,13 +162,14 @@ export const suppliersLayer: MapLayer = {
       },
     });
 
-    // Lieferanten-Marker einmal anlegen.
-    let placed = false;
+    // Lieferanten-Marker je Lieferant einmal anlegen; wer erst später dazukommt (Tutorial), wird nachgetragen.
+    const placed = new Set<string>();
     const placeSuppliers = () => {
       const state = ctx.getState();
-      if (!state || placed) return;
-      placed = true;
+      if (!state) return;
       for (const supplier of getSuppliers(state)) {
+        if (placed.has(supplier.id)) continue;
+        placed.add(supplier.id);
         const { element } = addHtmlMarker(map, {
           position: supplier,
           className: `map-place map-place--${supplier.kind}`,

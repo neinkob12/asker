@@ -179,15 +179,20 @@ export const spotsLayer: MapLayer = {
     };
 
     let lastTime = -1;
+    let lastLayout = '';
     const drawHotspots = (state: GameState, waiting: Map<string, Customer[]>) => {
-      // Nachfrage und Verkäufe ändern sich nur mit der Spielzeit.
-      if (state.time === lastTime) return;
+      // Nachfrage und Verkäufe ändern sich nur mit der Spielzeit. Freischalten, Verlegen oder Aufgeben ändert die Spots
+      // aber auch bei Tempo 0 (gleiche Minute), darum zählen offene Spots und ihre Lage mit.
+      const spots = mapSpots(state);
+      const layout = spots.map((s) => `${s.id}:${isSpotActive(state, s.id) ? 1 : 0}:${s.lng},${s.lat}`).join('|');
+      if (state.time === lastTime && layout === lastLayout) return;
       lastTime = state.time;
-      const list: Hotspot[] = mapSpots(state).map((spot) => ({
+      lastLayout = layout;
+      const list: Hotspot[] = spots.map((spot) => ({
         position: spot,
         intensity: Math.round(spotActivity(state, spot.id, waiting.get(spot.id) ?? []) * HOTSPOT_SCALE * 20) / 20,
       }));
-      const key = list.map((h) => h.intensity).join(',');
+      const key = `${layout}#${list.map((h) => h.intensity).join(',')}`;
       if (key === lastHotspots) return;
       lastHotspots = key;
       hotspots.setHotspots(list);

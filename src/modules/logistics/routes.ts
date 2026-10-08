@@ -11,13 +11,14 @@
 
 import { type CommandResult, type Ctx, clock, type GameState, journal, wallet } from '../../core';
 import { activeCity, cityName, isCityLive } from '../city';
-import { getVehicle, pickVehicle, vehicleSpec } from '../fleet';
+import { getVehicle, isShip, pickVehicle, vehicleSpec } from '../fleet';
 import {
+  fitsInto,
   getProduct,
   getStock,
   getWarehouse,
   productName,
-  store,
+  storeFitting,
   take,
   unitWeight,
   type Warehouse,
@@ -293,6 +294,8 @@ function normalize(state: GameState, id: number, input: RouteInput, base: Route 
   if (vehicleId !== null && !getVehicle(state, vehicleId)) return 'Dieses Fahrzeug gibt es nicht.';
   // Das feste Fahrzeug muss in der Startstadt stehen (unterwegs auf dieser Route darf es woanders sein).
   const fixed = vehicleId !== null ? getVehicle(state, vehicleId) : undefined;
+  // Ein Seeschiff fährt keine Route über die Straße.
+  if (fixed && isShip(fixed)) return 'Schiffe fahren nicht auf der Straße.';
   if (fixed && fixed.tripId === null && fixed.cityId !== from.cityId) {
     return `Das Fahrzeug steht nicht in ${cityName(from.cityId)}.`;
   }
@@ -441,8 +444,19 @@ export function departRoute(ctx: Ctx, routeId: number, why: 'schedule' | 'now'):
   // Fahrzeug (Auftrag 33): das feste, sonst das passende freie für das, was die Route laden würde.
   const fromCity = warehouseCity(from.id);
   let vehicle: number | null | string = null;
+  // Gibt es das feste Fahrzeug nicht mehr (verkauft, nach der Beschlagnahme aus der Liste), fährt die Route ab
+  // jetzt mit dem passenden freien Fahrzeug. Das steht im Journal, statt still mit der toten ID weiterzufahren.
+  if (route.vehicleId !== null && !getVehicle(state, route.vehicleId)) {
+    route.vehicleId = null;
+    journal.add(
+      ctx,
+      `Route ${routeName(state, route)}: Ihr festes Fahrzeug gibt es nicht mehr. Sie fährt jetzt mit dem passenden ` +
+        'freien Fahrzeug oder dem Privatauto.',
+      'bad',
+    );
+  }
   if (route.vehicleId !== null) {
-    vehicle = getVehicle(state, route.vehicleId) ? chooseVehicle(state, fromCity, route.vehicleId, 0) : null;
+    vehicle = chooseVehicle(state, fromCity, route.vehicleId, 0);
     if (typeof vehicle === 'string') return skip(ctx, route, vehicle, why);
   } else {
     // Ohne festes Fahrzeug: das größte freie (oder das Privatauto mit INTERCITY_CAPACITY) bestimmt, was geladen werden
@@ -620,29 +634,47 @@ export function settleRestock(ctx: Ctx): void {
   const s = ctx.state.modules.logistics;
   if (s.restock.length === 0) return;
   const open: RestockDue[] = [];
+  const unpaid: RestockDue[] = [];
+  const noRoom: RestockDue[] = [];
   for (const due of s.restock) {
     const warehouse = getWarehouse(ctx.state, due.warehouseId);
     if (!warehouse) continue;
+    // Nur so viel, wie ins Lager passt (eingelagert mit storeFitting, bezahlt wird nur das); der Rest bleibt offen.
+    const amount = fitsInto(ctx.state, warehouse.id, due.productId, due.amount);
+    if (amount <= 0) {
+      open.push(due);
+      noRoom.push(due);
+      continue;
+    }
     const cityId = warehouseCity(warehouse.id);
     const unit = restockUnitPrice(ctx.state, due.productId, cityId) ?? due.unitCost;
-    const cost = Math.round(unit * due.amount);
+    const cost = Math.round(unit * amount);
     const reason = `Nachkauf ${productName(due.productId)} für ${warehouse.name} (Rechte Hand ${cityName(cityId)})`;
     if (cost > 0 && !wallet.pay(ctx, cost, 'dirty', reason, { category: 'goods.purchase', cityId })) {
       open.push(due);
+      unpaid.push(due);
       continue;
     }
-    store(ctx, {
+    storeFitting(ctx, {
       productId: due.productId,
-      amount: due.amount,
+      amount,
       warehouseId: warehouse.id,
       quality: due.quality,
       cut: 0,
       unitCost: unit,
     });
-    journal.add(ctx, `${reason}: ${itemsText([due])}.`, 'info');
+    if (amount < due.amount) {
+      const rest = { ...due, amount: due.amount - amount };
+      open.push(rest);
+      noRoom.push(rest);
+    }
+    journal.add(ctx, `${reason}: ${itemsText([{ productId: due.productId, amount }])}.`, 'info');
   }
-  if (open.length > 0) {
-    journal.add(ctx, `Für den Nachkauf in den Lagern fehlt Schwarzgeld (${itemsText(open)}).`, 'bad');
+  if (unpaid.length > 0) {
+    journal.add(ctx, `Für den Nachkauf in den Lagern fehlt Schwarzgeld (${itemsText(unpaid)}).`, 'bad');
+  }
+  if (noRoom.length > 0) {
+    journal.add(ctx, `Für den Nachkauf ist im Lager kein Platz (${itemsText(noRoom)}), er bleibt offen.`, 'info');
   }
   s.restock = open;
 }

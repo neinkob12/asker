@@ -29,13 +29,11 @@ import {
   activeRunnerAt,
   assignmentLabel,
   bailCost,
-  effectiveWage,
   expectedWage,
   getStaffMember,
   isAbsent,
   isEmployed,
   isGoodSpecialist,
-  JAIL_WAGE_FACTOR,
   levelProgress,
   MAX_LEVEL,
   RELATIONS,
@@ -53,6 +51,7 @@ import {
   specialistProvider,
   TRAITS,
   traitName,
+  wageDue,
 } from '../index';
 import { AbsenceSheet } from './absence';
 import { effectChips, ORIGIN_NAMES, Portrait, relationLook, StatBars, StatusTag, traitChips } from './common';
@@ -123,7 +122,7 @@ export function StaffProfile(props: { staffId: string }) {
             </>
           }
         />
-        {employed && isAbsent(m) && <KeyValue label="Kostet gerade" value={`${formatEuro(effectiveWage(m))} / Tag`} />}
+        {employed && isAbsent(m) && <KeyValue label="Kostet gerade" value={`${formatEuro(wageDue(state, m))} / Tag`} />}
       </section>
 
       <section class="staff-file__section">
@@ -297,7 +296,7 @@ function ProfileActions(props: { member: StaffMember }) {
         label="Stillhaltegeld in Haft"
         hint={
           m.jailSupport
-            ? `In Haft kostet ${m.name} ${formatEuro(Math.round(m.wage * JAIL_WAGE_FACTOR))} am Tag und hält dicht.`
+            ? `In Haft kostet ${m.name} ${formatEuro(wageDue(state, { ...m, status: 'jailed', jailSupport: true }))} am Tag und hält dicht.`
             : 'Kostet in Haft nichts, aber wer nichts kriegt, wird sauer und redet eher.'
         }
         checked={m.jailSupport}

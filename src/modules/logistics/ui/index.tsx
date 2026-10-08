@@ -10,6 +10,7 @@ import {
   Button,
   Empty,
   Group,
+  Hint,
   ItemContent,
   List,
   ListItem,
@@ -63,15 +64,14 @@ import {
   roomFor,
   type Trip,
   type TripLeg,
-  tripAmount,
   tripProgress,
   tripTouchesCity,
 } from '../index';
+import { logisticsLayer } from './map';
 import { BerthGroup } from './port';
 import { LogisticsLinks } from './routes';
-import { AUTO, ChoiceControl, VehicleSelect, vehicleChoice } from './vehicles';
-import './tracking';
-import { logisticsLayer } from './map';
+import { productTotals, selfPickupBlocked } from './tracking';
+import { AUTO, ChoiceControl, shownVehicle, VehicleSelect, vehicleChoice } from './vehicles';
 import './logistics.css';
 
 /** Was die Fahrt gerade tut (beim Umlagern wird im Lager geladen, nicht am Kai). */
@@ -142,7 +142,12 @@ function TripRow(props: { trip: Trip }) {
         meta={legText(trip, progress.leg, isInterCityTrip(state, trip))}
         tags={[
           { label: who(state, trip.driverId), icon: 'user', color: 'people' },
-          { label: `${tripAmount(trip)} Einheiten`, icon: 'package', color: 'goods' },
+          // Je Ware mit ihrer Einheit (Gramm und Stück nie zu einer Zahl addiert).
+          ...productTotals(trip.items).map((i) => ({
+            label: `${formatProductAmount(i.productId, i.amount)} ${productName(i.productId)}`,
+            icon: 'package' as const,
+            color: 'goods' as const,
+          })),
           trip.vehicleId !== undefined && { label: vehicleName(state, trip.vehicleId), icon: 'truck', color: 'goods' },
           trip.choice &&
             trip.choice !== 'autobahn' && { label: ROUTE_CHOICES[trip.choice].name, icon: 'route', color: 'place' },
@@ -258,6 +263,8 @@ function PortSection() {
   const reserved = reservedCargo(state);
   const chosenDriver = drivers.find((d) => d.id === driverId) ?? drivers[0];
   const busy = playerBusyReason(state);
+  // Was die Auswahl zeigt, fährt auch (das gewählte Fahrzeug kann inzwischen unterwegs oder beschlagnahmt sein).
+  const vehicleId = vehicleChoice(shownVehicle(state, cityId, vehicle));
   return (
     <Group
       icon="ship"
@@ -331,7 +338,7 @@ function PortSection() {
                   by: 'driver',
                   driverId: chosenDriver?.id,
                   warehouseId,
-                  vehicleId: vehicleChoice(vehicle),
+                  vehicleId,
                   choice,
                 },
               })
@@ -346,13 +353,15 @@ function PortSection() {
             onClick={() =>
               dispatch({
                 type: 'logistics.pickup',
-                payload: { by: 'player', warehouseId, vehicleId: vehicleChoice(vehicle), choice },
+                payload: { by: 'player', warehouseId, vehicleId, choice },
               })
             }
           >
             Selbst abholen
           </Button>
         </div>
+        {/* Beide Knöpfe aus: Der Grund steht sichtbar da (am Handy gibt es keinen Tooltip), mit einem Weg, der geht. */}
+        {!chosenDriver && busy && <Hint icon="car">{selfPickupBlocked(state, cityId)}</Hint>}
       </div>
     </Group>
   );
@@ -390,7 +399,7 @@ function WarehouseLogistics(props: { warehouseId: string }) {
         fromId: from.id,
         toId: to.id,
         by,
-        vehicleId: vehicleChoice(vehicle),
+        vehicleId: vehicleChoice(shownVehicle(state, from.cityId, vehicle)),
         choice,
         ...(product ? { productId: product } : {}),
       },
@@ -700,7 +709,8 @@ registerAdvisor({
     if (cargo.length > 0) {
       const driver = freeDrivers(state)[0];
       const risky = cargo.some((c) => cargoRisk(state, c) === 'risky');
-      const busy = playerBusyReason(state);
+      // Der echte Grund mit einem Weg, der geht (Auftrag 43: auch „nicht in dieser Stadt“, nicht nur „unterwegs“).
+      const busy = selfPickupBlocked(state, activeCity(state));
       return {
         id: 'logistics.pickup',
         priority: risky ? 89 : 83,
@@ -709,7 +719,7 @@ registerAdvisor({
         text: driver
           ? `${driver.name} kann sofort los.`
           : busy
-            ? 'Kein Fahrer frei, und du bist unterwegs.'
+            ? `Kein Fahrer frei. ${busy}`
             : 'Kein Fahrer frei. Fahr selbst oder heuer einen an.',
         actionLabel: driver ? 'Fahrer schicken' : busy ? 'Hafen' : 'Selbst abholen',
         action: (ui) => {

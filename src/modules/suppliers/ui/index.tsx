@@ -43,6 +43,7 @@ import {
 } from '../../goods';
 import { cargoAmount, defaultPickupWarehouse, hasBerth, inTransitAmount, portName } from '../../logistics';
 import { indexTrend, purchaseIndex } from '../../market';
+import { specialistFactor } from '../../staff';
 import { tutorialAllows } from '../../tutorial';
 import {
   activeDeal,
@@ -52,6 +53,7 @@ import {
   CHOICE_NAMES,
   canUnlock,
   creditLimit,
+  defaultWarehouse,
   deliversTo,
   expectedArrival,
   forceShipmentProblem,
@@ -403,14 +405,19 @@ function emptyDraft(supplierId: string): OrderDraft {
 }
 
 /** Wohin geliefert wird und ob überhaupt bestellt werden kann (Lager, Liegeplatz, Schulden). */
-function orderTarget(state: GameState, supplier: Supplier, target: string) {
-  const warehouses = getWarehouses(state, activeCity(state));
+function orderTarget(state: GameState, supplier: Supplier, draft: OrderDraft) {
+  const cityId = activeCity(state);
+  const warehouses = getWarehouses(state, cityId);
   const toPort = supplier.kind === 'port';
   // Ohne Lager in der Stadt geht keine Lieferung (Auftrag 43, M8: sonst erst ein Banner nach dem Tippen).
   const noWarehouse = warehouses.length === 0;
-  const picked = warehouses.some((w) => w.id === target) ? target : undefined;
-  // Schiffsware: Ohne Wahl zeigt die Auswahl (und bestellt) das Lager, in das die Abholung ohnehin fährt.
-  const warehouseId = toPort && warehouses.length > 1 ? (picked ?? defaultPickupWarehouse(state)) : picked;
+  const picked = warehouses.some((w) => w.id === draft.target) ? draft.target : undefined;
+  // Ohne Wahl zeigt die Auswahl (und bestellt) das Lager, das der Befehl nehmen würde: Schiffsware das, in das die
+  // Abholung ohnehin fährt, Kurierware das Standardlager, die Sammelbestellung eins, in das alles passt.
+  const weight =
+    draft.mode === 'group' ? orderQuote(state, supplier.id, draftLines(state, supplier, draft), 'group').weight : 0;
+  const fallback = toPort ? defaultPickupWarehouse(state) : (defaultWarehouse(state, cityId, weight) ?? undefined);
+  const warehouseId = warehouses.length > 1 ? (picked ?? fallback) : picked;
   const canOrder = !isBlocked(state, supplier.id) && !noWarehouse && !(toPort && !hasBerth(state));
   return { warehouses, toPort, noWarehouse, warehouseId, canOrder };
 }
@@ -428,7 +435,7 @@ function useGroupOrder(supplier: Supplier, draft: OrderDraft, update: UpdateDraf
   const { state, dispatch } = useGame();
   const ui = useUi();
   return (onCredit: boolean) => {
-    const { warehouseId } = orderTarget(state, supplier, draft.target);
+    const { warehouseId } = orderTarget(state, supplier, draft);
     const r = dispatch({
       type: 'suppliers.orderBatch',
       payload: {
@@ -450,7 +457,7 @@ function GroupOrderBar(props: { supplier: Supplier; draft: OrderDraft; update: U
   const { supplier, draft } = props;
   const quote = orderQuote(state, supplier.id, draftLines(state, supplier, draft), 'group');
   const send = useGroupOrder(supplier, draft, props.update);
-  const { canOrder } = orderTarget(state, supplier, draft.target);
+  const { canOrder } = orderTarget(state, supplier, draft);
   return (
     <div class="sup-bar">
       <span class="sup-bar__sum">
@@ -477,7 +484,7 @@ function GroupOrderBar(props: { supplier: Supplier; draft: OrderDraft; update: U
 function Offer(props: { supplier: Supplier; draft: OrderDraft; update: UpdateDraft }) {
   const { state, dispatch } = useGame();
   const { supplier, draft, update } = props;
-  const { warehouseId, canOrder } = orderTarget(state, supplier, draft.target);
+  const { warehouseId, toPort, canOrder } = orderTarget(state, supplier, draft);
   const offered = new Set(availablePackages(state, supplier.id).map((p) => p.id));
   const limit = creditLimit(state, supplier.id);
   const credit = availableCredit(state, supplier.id);
@@ -503,7 +510,11 @@ function Offer(props: { supplier: Supplier; draft: OrderDraft; update: UpdateDra
     });
 
   const aside = (p: SupplierPackage) => {
-    if (!offered.has(p.id)) return <span class="ui-hint">ab Vertrauen {p.minTrust}</span>;
+    // Nicht angeboten: zu wenig Vertrauen oder (Hafen) noch kein eigener Liegeplatz, den der Hinweis darüber nennt.
+    if (!offered.has(p.id)) {
+      const why = toPort && !hasBerth(state) ? 'nur mit Liegeplatz' : `ab Vertrauen ${p.minTrust ?? 0}`;
+      return <span class="ui-hint">{why}</span>;
+    }
     const price = packagePrice(state, supplier.id, p.id);
     if (draft.mode === 'group') {
       if (p.container) return <span class="ui-hint">nur einzeln</span>;
@@ -664,13 +675,15 @@ function SupplierDetail(props: { supplierId: string; draft: OrderDraft; update: 
       </div>
     );
   }
-  const { warehouses, toPort, noWarehouse, warehouseId } = orderTarget(state, supplier, props.draft.target);
+  const { warehouses, toPort, noWarehouse, warehouseId } = orderTarget(state, supplier, props.draft);
   const rel = getRelation(state, supplier.id);
   const limit = creditLimit(state, supplier.id);
   const credit = availableCredit(state, supplier.id);
   const blocked = isBlocked(state, supplier.id);
   const discount = supplierDiscount(state, supplier.id);
   const shipments = shipmentsInTransit(state, activeCity(state)).filter((s) => s.supplierId === supplier.id);
+  // Auftrag 46e: Ein Polizei-Kontakt in der Stadt mindert die Beschlagnahme samt Zoll, wie beim Wurf der Bestellung.
+  const seizeFactor = specialistFactor(state, 'seizure', cityId);
   return (
     <div class="sup-app">
       <p class="ui-hint">{supplierDescription(supplier, activeCity(state))}</p>
@@ -681,7 +694,7 @@ function SupplierDetail(props: { supplierId: string; draft: OrderDraft; update: 
       {/* Risiko pro Lieferung mit dem Vertrauen von jetzt, Zoll an der Grenze extra genannt (Auftrag 43, L6). */}
       <KeyValue
         label="Beschlagnahme"
-        value={`${formatPercent(seizeChance(supplier, rel.trust))} je Lieferung${supplier.customs ? `, davon Zoll ${formatPercent(supplier.customs)}` : ''}`}
+        value={`${formatPercent(Math.min(1, seizeChance(supplier, rel.trust) * seizeFactor))} je Lieferung${supplier.customs ? `, davon Zoll ${formatPercent(supplier.customs * seizeFactor)}` : ''}`}
       />
       <KeyValue label="Lieferzeit" value={clock.formatDuration(supplier.deliveryTime)} />
       <KeyValue label="Sortiment" value={assortment(supplier).map(productName).join(', ')} />

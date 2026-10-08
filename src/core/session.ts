@@ -5,7 +5,7 @@ import { clock } from './clock';
 import { AUTOSAVE_INTERVAL_SECONDS } from './config';
 import { type FrameScheduler, GameLoop } from './loop';
 import type { ModuleDefinition } from './module';
-import { createSaveFile, loadSimulation, parseSaveFile, serializeSave } from './persistence';
+import { createSaveFile, loadSimulation, parseSaveFile, SaveError, serializeSave } from './persistence';
 import { randomSeed } from './rng';
 import { AUTOSAVE_SLOT, BROKEN_AUTOSAVE_SLOT, type KeyValueStorage, type SaveInfo, SaveStore } from './saves';
 import { Simulation } from './sim';
@@ -123,6 +123,13 @@ export class GameSession {
 
   save(slot: string, label?: string): void {
     const state = this.requireState();
+    // Daten, die das Spiel nicht lesen kann, wirken im Dialog leer: vor dem Überschreiben sichern wie beim Autosave
+    // ("<platz>-defekt"); klappt das nicht, bleibt der Platz unangetastet.
+    if (this.saves.unreadable(slot) && !this.saves.backup(slot, `${slot}-defekt`)) {
+      throw new SaveError(
+        'Auf diesem Speicherplatz liegt ein Stand, den das Spiel nicht lesen kann, und er ließ sich nicht sichern. Nimm einen anderen Platz.',
+      );
+    }
     this.saves.write(slot, state, label ?? defaultLabel(state), this.now());
   }
 

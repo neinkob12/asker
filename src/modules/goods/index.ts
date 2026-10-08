@@ -674,7 +674,8 @@ export function buyWarehouse(ctx: Ctx, warehouseId: string): CommandResult {
   if (!site) return { ok: false, reason: 'Diesen Standort gibt es nicht.' };
   if (isWarehouseOwned(ctx.state, warehouseId)) return { ok: false, reason: `${site.name} gehört dir schon.` };
   if (!isCityUnlocked(ctx.state, site.cityId)) return { ok: false, reason: 'In dieser Stadt bist du noch nicht.' };
-  if (!wallet.pay(ctx, site.cost, 'clean', `Kauf ${site.name}`, 'expansion')) {
+  // Gebucht wird in die Stadt des Standorts (wie beim Ausbau), nicht in die gerade aktive.
+  if (!wallet.pay(ctx, site.cost, 'clean', `Kauf ${site.name}`, { category: 'expansion', cityId: site.cityId })) {
     return {
       ok: false,
       reason: `Dafür brauchst du ${formatEuro(site.cost)} sauberes Geld. Wasch vorher Schwarzgeld.`,

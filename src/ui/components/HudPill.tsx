@@ -20,7 +20,8 @@ export interface HudPillProps {
   children?: ComponentChildren;
   /**
    * Kleine Karte, die beim Drüberfahren oder Antippen unter der Kachel aufklappt (Look "Glas"), z.B. die Aufstellung
-   * des Lagers nach Produkt. Mit onClick öffnet ein Tipp die Karte, ein zweiter Tipp führt zum Ziel.
+   * des Lagers nach Produkt. Ein Tipp auf die Kachel klappt sie auf und wieder zu; mit onClick führt der Knopf unten in
+   * der Karte (detailsAction) zum Ziel.
    */
   details?: ComponentChildren;
   /** Beschriftung des Knopfs unten in der Karte, der onClick auslöst (z.B. "Öffnen"). */

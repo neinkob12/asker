@@ -229,6 +229,8 @@ export interface BrawlState {
   combo: number;
   /** Dein letzter Angriff wurde gepuffert (kam zu früh): so lange gilt er noch. */
   buffered: { attack: AttackId; until: number } | null;
+  /** Tasten-Drücke aus dem Treffer-Stopp: Sie gelten im ersten Bild danach (sonst gingen sie verloren). */
+  held: BrawlInput | null;
 }
 
 /** Was der Spieler in diesem Bild tut. Tasten-Drücke (light, heavy, dodge, lane, special) gelten einmal. */
@@ -508,6 +510,7 @@ export function initBrawl(setup: BrawlSetup): BrawlState {
     endT: 0,
     combo: 0,
     buffered: null,
+    held: null,
   };
 }
 
@@ -1042,6 +1045,19 @@ function advanceState(c: Ctx, f: Fighter, dt: number): void {
   }
 }
 
+/** Eingabe dieses Bildes plus die Tasten-Drücke aus `held` (Richtung und Block gelten nur aus `input`). */
+function withPresses(input: BrawlInput, held: BrawlInput | null): BrawlInput {
+  if (!held) return input;
+  return {
+    ...input,
+    lane: input.lane ?? held.lane ?? null,
+    light: input.light || held.light,
+    heavy: input.heavy || held.heavy,
+    dodge: input.dodge || held.dodge,
+    special: input.special ?? held.special ?? null,
+  };
+}
+
 /**
  * Ein Bild weiter (dt in echten Sekunden). Gibt zurück, was passiert ist (für Ton und Optik). Nach dem Ende läuft nur
  * noch der Abgang (Zeitlupe, Wegrennen); state.endT zählt mit.
@@ -1052,6 +1068,8 @@ export function stepBrawl(setup: BrawlSetup, state: BrawlState, rawDt: number, i
   if (state.end) state.endT += real;
   if (state.hitStop > 0) {
     state.hitStop = Math.max(0, state.hitStop - real);
+    // Was in der Pause gedrückt wird, gilt danach.
+    if (!state.end) state.held = withPresses(input, state.held);
     return c.events;
   }
   let dt = real;
@@ -1064,8 +1082,10 @@ export function stepBrawl(setup: BrawlSetup, state: BrawlState, rawDt: number, i
 
   const p = playerOf(state);
   if (!state.end) {
-    if (input.special) triggerSpecial(c, input.special);
-    playerStep(c, p, input, dt);
+    const now = withPresses(input, state.held);
+    state.held = null;
+    if (now.special) triggerSpecial(c, now.special);
+    playerStep(c, p, now, dt);
   }
   for (const f of state.fighters) {
     if (f.kind !== 'player' && (!state.end || f.state === 'run')) aiStep(c, f, dt);

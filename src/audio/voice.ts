@@ -5,10 +5,13 @@
 
 import type { VoiceSpec } from '../core';
 
-/** Namen deutscher System-Stimmen, die weiblich bzw. männlich klingen (Windows, macOS, Android, Chrome). */
+/**
+ * Namen deutscher System-Stimmen, die weiblich bzw. männlich klingen (Windows, macOS, Android, Chrome). "male" nur
+ * als eigenes Wort: Sonst steckt es in "Female" und schließt jede Frauenstimme mit diesem Namen aus.
+ */
 const FEMININE_VOICES =
   /(anna|katja|hedda|helena|petra|marlene|vicki|amala|seraphina|elke|female|frau|google deutsch$)/i;
-const MASCULINE_VOICES = /(markus|stefan|conrad|yannick|hans|klaus|killian|florian|male|mann|viktor|jonas|reed)/i;
+const MASCULINE_VOICES = /(markus|stefan|conrad|yannick|hans|klaus|killian|florian|\bmale\b|mann|viktor|jonas|reed)/i;
 
 export interface SpeechLike {
   speak(utterance: SpeechSynthesisUtterance): void;

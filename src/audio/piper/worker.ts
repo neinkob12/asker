@@ -248,6 +248,14 @@ interface Loaded {
   used: number;
 }
 
+/**
+ * Die ONNX-Laufzeit ließ sich nicht starten (z.B. ihre WebAssembly-Datei kam nicht): ONNX Runtime Web meldet das als
+ * "no available backend found", auch bei jedem weiteren Versuch in diesem Worker. Ein kaputtes Modell klingt anders.
+ */
+function runtimeFailed(error: unknown): boolean {
+  return /no available backend/i.test(error instanceof Error ? error.message : String(error));
+}
+
 const loaded = new Map<PiperVoiceId, Loaded>();
 const loading = new Map<PiperVoiceId, Promise<Loaded>>();
 let clock = 0;
@@ -281,10 +289,11 @@ function ensureLoaded(voice: VoiceFiles): Promise<Loaded> {
         post({ type: 'progress', voice: voice.id, phase: 'download', loaded: done, total });
       };
       const [configRaw, data] = await Promise.all([fetchJson(voice.config), fetchModel(voice, progress)]);
-      stage = 'init';
       post({ type: 'progress', voice: voice.id, phase: 'init', loaded: voice.bytes, total: voice.bytes });
-      const config = parseConfig(configRaw);
+      // Der Phonemizer (espeak) kommt mit der App, nicht mit dem Modell: Scheitert er (Netz), bleibt das Modell liegen.
       await loadPhonemizer();
+      stage = 'init';
+      const config = parseConfig(configRaw);
       await evictFor(voice.id);
       const session = await ort.InferenceSession.create(data, {
         executionProviders: ['wasm'],
@@ -296,8 +305,9 @@ function ensureLoaded(voice: VoiceFiles): Promise<Loaded> {
       return entry;
     } catch (error) {
       // Das Modell ließ sich nicht starten: Vielleicht liegt ein beschädigter Eintrag im Cache. Löschen, damit der
-      // nächste Versuch neu lädt, statt für immer an derselben Datei zu scheitern.
-      if (stage === 'init') await dropCached(voice);
+      // nächste Versuch neu lädt, statt für immer an derselben Datei zu scheitern. Kam dagegen die ONNX-Laufzeit
+      // selbst nicht hoch (ihre WebAssembly-Datei), liegt es nicht am Modell: Dann bleibt es im Cache.
+      if (stage === 'init' && !runtimeFailed(error)) await dropCached(voice);
       post({ type: 'loadError', voice: voice.id, message: describe(error) });
       throw error;
     } finally {

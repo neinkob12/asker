@@ -485,11 +485,19 @@ export function dismissRightHand(ctx: Ctx, cityId: string = activeCity(ctx.state
   delete h.rightHands[cityId];
   const m = getStaffMember(ctx.state, rh.staffId);
   if (m && isEmployed(ctx.state, m.id)) {
-    assign(ctx, m.id, null);
+    // Auf einer Lieferfahrt behält sie den Einsatz, bis die Lieferung durch ist (customers räumt ihn dann). Sonst wäre
+    // sie sofort frei und stünde an einem Spot, während sie noch ausliefert.
+    const delivering = m.status === 'active' && m.assignment?.kind === 'delivery';
+    if (!delivering) assign(ctx, m.id, null);
     setDemand(ctx, m.id, 1);
     addLoyalty(ctx, m.id, DEMOTION_LOYALTY);
     addCareer(ctx, m.id, 'Als Rechte Hand abberufen.');
-    journal.add(ctx, `${m.name} ist nicht mehr deine Rechte Hand.`, 'info', { staffId: m.id });
+    journal.add(
+      ctx,
+      `${m.name} ist nicht mehr deine Rechte Hand.${delivering ? ' Die Lieferung fährt sie noch zu Ende.' : ''}`,
+      'info',
+      { staffId: m.id },
+    );
   }
   ctx.emit('hierarchy.rightHandDismissed', { staffId: rh.staffId });
   return { ok: true };

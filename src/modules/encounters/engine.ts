@@ -25,6 +25,7 @@ import {
   DEFAULT_PRODUCT,
   getProduct,
   getStock,
+  getWarehouse,
   getWarehouses,
   store,
   take,
@@ -390,8 +391,8 @@ export function resolveNow(ctx: Ctx, encounter: Encounter): void {
 
 /**
  * Die Leute spielen die Runden wie ein guter Spieler (Absicht abwenden, Einsatz schützen, Spezialzüge nutzen; so
- * spielte bisher der Bot), was übrig bleibt, würfeln sie aus. Startet eine Handlung ein Minispiel (du bist dabei,
- * Zuschlagen → Straßenkampf), wartet die Konfrontation auf dessen Ausgang.
+ * spielte bisher der Bot), was übrig bleibt, würfeln sie aus. Dabei startet kein weiteres Minispiel (Auftrag 46d: nach
+ * dem ersten Minispiel spielt der Rest automatisch zu Ende; Zuschlagen und Schlägerei würfeln wie bisher).
  */
 export function playOut(ctx: Ctx, encounter: Encounter): void {
   for (let i = 0; i < 20 && encounter.phase === 'rounds' && !encounter.minigame; i++) {
@@ -401,7 +402,7 @@ export function playOut(ctx: Ctx, encounter: Encounter): void {
       continue;
     }
     const choice = chooseAuto(ctx.state, encounter, true);
-    if (!choice || !act(ctx, encounter.id, choice.actionId, choice.protect ?? undefined).ok) break;
+    if (!choice || !act(ctx, encounter.id, choice.actionId, choice.protect ?? undefined, false).ok) break;
   }
   if (encounter.phase === 'rounds' && !encounter.minigame) autoResolve(ctx, encounter.id);
 }
@@ -534,8 +535,11 @@ export function protect(ctx: Ctx, encounterId: number, stake: StakeId): CommandR
   return { ok: true };
 }
 
-/** Eine Runde spielen (optional mit neuem Schutz). */
-export function act(ctx: Ctx, encounterId: number, actionId: string, guard?: StakeId): CommandResult {
+/**
+ * Eine Runde spielen (optional mit neuem Schutz). Mit minigames false startet keine Handlung und keine Schlägerei ein
+ * Minispiel (playOut: Nach dem ersten Minispiel spielen die Leute den Rest aus, Auftrag 46d).
+ */
+export function act(ctx: Ctx, encounterId: number, actionId: string, guard?: StakeId, minigames = true): CommandResult {
   const encounter = findActive(ctx, encounterId);
   if (!encounter) return { ok: false, reason: 'Diese Konfrontation ist schon vorbei.' };
   if (encounter.phase === 'briefing') return { ok: false, reason: 'Erst entscheiden, ob du selbst hingehst.' };
@@ -554,7 +558,7 @@ export function act(ctx: Ctx, encounterId: number, actionId: string, guard?: Sta
   }
   if (guard !== undefined) encounter.protect = guard;
   // Auftrag 44: Diese Handlung ist ein Minispiel (z.B. Zuschlagen → Straßenkampf), wenn du selbst dabei bist.
-  if (maybeStartMinigame(ctx, encounter, 'action', actionId)) return { ok: true };
+  if (minigames && maybeStartMinigame(ctx, encounter, 'action', actionId)) return { ok: true };
   if (action.costsBribe) {
     wallet.pay(ctx, encounter.bribeCost, 'dirty', 'Bestechung', lossCategory(encounter));
     encounter.bribeSpent += encounter.bribeCost;
@@ -562,7 +566,9 @@ export function act(ctx: Ctx, encounterId: number, actionId: string, guard?: Sta
   const wasBrawl = encounter.brawl;
   playRound(ctx, encounter, kind, actionId, action);
   // Kippt die Aggression in dieser Runde in eine Schlägerei, wird vor der nächsten Runde geprügelt (Minispiel).
-  if (encounter.phase === 'rounds' && encounter.brawl && !wasBrawl) maybeStartMinigame(ctx, encounter, 'brawl');
+  if (minigames && encounter.phase === 'rounds' && encounter.brawl && !wasBrawl) {
+    maybeStartMinigame(ctx, encounter, 'brawl');
+  }
   return { ok: true };
 }
 
@@ -871,6 +877,15 @@ function goodsScope(state: GameState, request: EncounterRequest): { cityId: stri
   return request.warehouseId ? { cityId, warehouseId: request.warehouseId } : { cityId };
 }
 
+/**
+ * Wohin gewonnene Ware geht: ins überfallene Lager, sonst ins erste eigene Lager der Stadt der Konfrontation. Ohne
+ * eigenes Lager dort undefined (dann wie bisher das Standardlager).
+ */
+function gainWarehouse(state: GameState, request: EncounterRequest): string | undefined {
+  if (request.warehouseId && getWarehouse(state, request.warehouseId)) return request.warehouseId;
+  return getWarehouses(state, requestCity(state, request))[0]?.id;
+}
+
 export function loseGoods(ctx: Ctx, amount: number, request: EncounterRequest): number {
   // Überfall auf ein Lager: Ein Tresor schützt einen Teil (goods.warehouseModifiers, Auftrag 33).
   const vault = request.warehouseId ? warehouseModifiers(ctx.state, request.warehouseId).lossFactor : 1;
@@ -931,9 +946,12 @@ function applyEffects(ctx: Ctx, encounter: Encounter, effects: EncounterEffects,
   if (effects.goods !== undefined) goods += roll(ctx, effects.goods);
   if (effects.stakeGoods) goods += Math.round((stakes.goods ?? 0) * effects.stakeGoods);
   if (goods > 0) {
+    // Gewonnene Ware landet wie die verlorene in der Stadt der Konfrontation (nicht im Standardlager in Köln).
+    const warehouseId = gainWarehouse(ctx.state, encounter.request);
     store(ctx, {
       productId: DEFAULT_PRODUCT,
       amount: goods,
+      ...(warehouseId ? { warehouseId } : {}),
       ...(effects.goodsQuality === undefined ? {} : { quality: effects.goodsQuality }),
     });
     result.goods += goods;
@@ -1179,7 +1197,8 @@ export function finish(
     staffInjured: [],
     staffKilled: [],
     staffArrested: [],
-    playerInjured: player?.condition === 'injured',
+    // Auch zu Boden gerissen (Polizei, Zoll: nicht tödlich, condition 'down') zählt als verletzt, nur tot nicht.
+    playerInjured: !!player && player.condition !== 'ok' && !player.killed,
     heat: 0,
     influence: 0,
     reputation: 0,
@@ -1199,9 +1218,7 @@ export function finish(
       result.staffInjured.push(p.id);
     }
   }
-  const effects =
-    override ??
-    (encounter.request.skipEffects ? undefined : (encounter.request.effects?.[outcome] ?? kind?.outcomes[outcome]));
+  const effects = override ?? outcomeEffects(encounter, kind, outcome);
   if (!encounter.playerKilled) {
     if (override) {
       // Wege im Briefing (freikaufen, räumen …): alles gehört zu den Einsätzen, die es betrifft.
@@ -1259,6 +1276,50 @@ export function finish(
     ...(encounter.mode ? { mode: encounter.mode } : {}),
   });
   if (encounter.playerKilled) gameOutcome.gameOver(ctx, 'killed', headline);
+}
+
+/** Folgen eines Ausgangs aus Anfrage oder Anlass (keine, wenn der Auslöser alles selbst regelt: skipEffects). */
+function outcomeEffects(
+  encounter: Encounter,
+  kind: EncounterKind | undefined,
+  outcome: EncounterOutcome,
+): EncounterEffects | undefined {
+  return encounter.request.skipEffects ? undefined : (encounter.request.effects?.[outcome] ?? kind?.outcomes[outcome]);
+}
+
+/**
+ * Folgen, die der Auslöser nach 'encounter.resolved' selbst bucht (die Polizei nach einer verlorenen Flucht:
+ * Beschlagnahme, Festnahme), ins Ergebnis einer entschiedenen Konfrontation nachtragen. Sonst zeigt die Ergebnis-Karte
+ * „gehalten“ und „alle heil“, obwohl Ware und Leute weg sind. Bucht nichts, nur die Anzeige (Text, Chips, Teile).
+ */
+export function addResultLosses(
+  ctx: Ctx,
+  encounterId: number,
+  losses: { goods?: number; money?: number; staffArrested?: readonly string[] },
+): void {
+  const encounter = ctx.state.modules.encounters.history.find((e) => e.id === encounterId);
+  const result = encounter?.result;
+  if (!encounter || !result || encounter.playerKilled) return;
+  result.goods -= Math.max(0, Math.round(losses.goods ?? 0));
+  result.money -= Math.max(0, Math.round(losses.money ?? 0));
+  for (const id of losses.staffArrested ?? []) {
+    if (!result.staffArrested.includes(id)) result.staffArrested.push(id);
+  }
+  const kind = getKind(encounter.kind);
+  const outcome = encounter.outcome ?? 'failure';
+  const headline = fillText(
+    outcomeEffects(encounter, kind, outcome)?.text ?? DEFAULT_TEXT[outcome],
+    textVars(encounter),
+  );
+  result.text = describeResult(encounter, result, headline);
+  if (!result.parts) return;
+  // Ware, Geld und Einfluss gehören ganz zu ihrem Einsatz (splitEffects); Wegwerfen und Bestechung zählen dort nicht.
+  const booked: Booked = {
+    goods: { money: 0, goods: result.goods + encounter.goodsDropped, influence: 0 },
+    cash: { money: result.money + encounter.bribeSpent, goods: 0, influence: 0 },
+    spot: { money: 0, goods: 0, influence: result.influence },
+  };
+  result.parts = resultParts(encounter, kind, result, booked);
 }
 
 // ---------------------------------------------------------------------------------------------

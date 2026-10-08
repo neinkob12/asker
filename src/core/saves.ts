@@ -76,6 +76,26 @@ export class SaveStore {
     }
   }
 
+  /**
+   * Liegen auf dem Platz Daten, die das Spiel nicht lesen kann (beschädigt oder aus einer neueren Version)? read() und
+   * list() sehen darin einen leeren Platz. Ein gesperrter Speicher zählt wie bei read() als leer.
+   */
+  unreadable(slot: string): boolean {
+    let text: string | null;
+    try {
+      text = this.storage.getItem(this.key(slot));
+    } catch {
+      return false;
+    }
+    if (!text) return false;
+    try {
+      parseSaveFile(text);
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
   remove(slot: string): void {
     this.storage.removeItem(this.key(slot));
   }

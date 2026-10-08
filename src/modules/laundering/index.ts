@@ -94,7 +94,14 @@ declare module '../../core' {
       readyAt: number;
       channel: LaunderingChannelId;
     };
-    'laundering.completed': { amount: number; fee: number; batchId?: number; channel?: LaunderingChannelId };
+    'laundering.completed': {
+      amount: number;
+      fee: number;
+      batchId?: number;
+      channel?: LaunderingChannelId;
+      /** Stadt, in der die Wäsche begann (fehlt bei alten Ständen). */
+      cityId?: string;
+    };
     'laundering.unlocked': { channel: LaunderingChannelId; pay: 'clean' | 'dirty'; cost: number };
   }
 }
@@ -212,6 +219,8 @@ export function getLaunderingStats(state: GameState): LaunderingState {
 export function canUnlockChannel(state: GameState, id: LaunderingChannelId): CommandResult {
   const c = getChannel(id);
   if (isChannelUnlocked(state, id)) return { ok: false, reason: 'Schon freigeschaltet.' };
+  // Jansens Reederei kommt nur mit dem Verkauf (business.sold), nicht über den Befehl.
+  if (c.harborOnly) return { ok: false, reason: `${c.name} kommt erst mit Rotterdam.` };
   // Auftrag 46b: Im Tutorial erst der Kiosk, die anderen Wege ab Stufe 9.
   if (!tutorialAllows(state, 'laundering.allWays')) return { ok: false, reason: 'Dazu kommst du später.' };
   if (!c.unlock) return { ok: true };
@@ -367,7 +376,13 @@ function tick(ctx: Ctx): void {
     s.totalLaundered += b.amount;
     s.totalFees += b.fee;
     journal.add(ctx, `${formatEuro(b.amount - b.fee)} sind sauber (Gebühr ${formatEuro(b.fee)}).`, 'good');
-    ctx.emit('laundering.completed', { amount: b.amount, fee: b.fee, batchId: b.id, channel: b.channel });
+    ctx.emit('laundering.completed', {
+      amount: b.amount,
+      fee: b.fee,
+      batchId: b.id,
+      channel: b.channel,
+      ...(b.cityId ? { cityId: b.cityId } : {}),
+    });
   }
 }
 

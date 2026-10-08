@@ -611,7 +611,8 @@ const HAIR_TEXT: Record<HairStyle, (color: string) => string> = {
   ponytail: (c) => `${c} Haare zum Zopf gebunden`,
   bald: () => 'Glatze',
   slick: (c) => `zurückgegelte ${c} Haare`,
-  afro: (c) => `${c} Afro`,
+  // Der Afro ist männlich: "schwarzer Afro".
+  afro: (c) => `${c}r Afro`,
   fade: (c) => `Fade-Cut mit ${c}n Haaren`,
   cornrows: (c) => `${c} Cornrows`,
   undercut: (c) => `Undercut mit ${c}r Strähne`,

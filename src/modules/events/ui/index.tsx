@@ -260,6 +260,8 @@ function EventStartOpener() {
   const pending = pendingStarts.find((p) => !p.shown && p.runId === state.meta.runId) ?? null;
   // Erst, wenn der Spieler frei ist (kein Dialog, kein Menü, am Handy-Bildschirm das Handy zu): popupMayOpen.
   const free = popupMayOpen(ui.state, mobile);
+  // `ui` steht nicht in den Abhängigkeiten: useUi() liefert bei jedem Zeichnen ein neues Objekt (Zustand live,
+  // Funktionen fest). Sonst startete der Timer bei jedem Spielschritt neu und das Pop-up käme nur in der Pause.
   useEffect(() => {
     if (!pending || !free) return;
     const timer = window.setTimeout(() => {
@@ -268,7 +270,7 @@ function EventStartOpener() {
       ui.openDialog('events.started', { eventId: pending.eventId });
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [pending, free, mobile, ui]);
+  }, [pending, free, mobile]);
   return null;
 }
 

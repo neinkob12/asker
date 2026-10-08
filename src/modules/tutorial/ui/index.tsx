@@ -85,23 +85,38 @@ async function runTour(ui: UiApi, key: string, def: TourDef, done: () => void): 
   pending.add(key);
   try {
     const outcome = await ui.tour.start(def);
-    // 'skipped' kommt auch von einem neuen oder geladenen Spiel: dann nichts vermerken, die Tour kommt wieder.
-    if (outcome === 'done' || (def.skippable && ui.tour.active() === null)) done();
+    // Übersprungen zählt als gesehen, wenn die Tour das erlaubt (auch wenn danach gleich eine eingereihte startet).
+    // 'reset' kommt von einem neuen oder geladenen Spiel: nichts vermerken, das Spiel ist ein anderes.
+    if (outcome === 'done' || (outcome === 'skipped' && def.skippable)) done();
   } finally {
     pending.delete(key);
   }
 }
 
-/** Die Tour einer Stufe, falls sie noch fehlt (beim Erreichen der Stufe und nach dem Laden). */
-function startStageTour(ui: UiApi, state: GameState): void {
+/**
+ * Die Stufe, deren Tour jetzt dran ist, sonst null. Stufe 9 startet mit der Beschlagnahme (Moment 'seizure'), nicht
+ * mit der Stufe. Geht das Tutorial ohne sie weiter (keine zweite Lieferung von Jansen in Stufe 9), kommt die Tour der
+ * Stufe 9 mit dem Wechsel der Stufe, vor der Tour der neuen Stufe.
+ */
+function dueTourStage(state: GameState): number | null {
   const t = state.modules.tutorial;
-  if (!t?.enabled || t.skipped || t.stage > LAST_STAGE || tourSeen(state, t.stage)) return;
-  const stage = t.stage;
-  // Stufe 9 startet mit der Beschlagnahme (Moment 'seizure'), nicht mit der Stufe.
-  if (MOMENT_STAGES.includes(stage) && !t.scripted.seizure) return;
+  if (!t?.enabled || t.skipped || t.stage > LAST_STAGE) return null;
+  const missed = MOMENT_STAGES.find((stage) => t.stage > stage && t.stage < LAST_STAGE && !tourSeen(state, stage));
+  if (missed !== undefined) return missed;
+  if (tourSeen(state, t.stage)) return null;
+  if (MOMENT_STAGES.includes(t.stage) && !t.scripted.seizure) return null;
+  return t.stage;
+}
+
+/** Die Tour einer Stufe, falls sie noch fehlt (beim Erreichen der Stufe und nach dem Laden). Exportiert für Tests. */
+export function startStageTour(ui: UiApi, state: GameState): void {
+  const stage = dueTourStage(state);
+  if (stage === null) return;
   const key = `${gameKey(state)}:stage:${stage}`;
   const ctx: TourContext = { ui, state };
   void runTour(ui, key, stageTour(stage, ctx), () => {
+    // „Tutorial beenden“ während der Tour: skip hat alle Touren vermerkt, weiterschalten gibt es nicht mehr.
+    if (state.modules.tutorial.skipped) return;
     ui.dispatch({ type: 'tutorial.tourSeen', payload: { stage } });
     if (EXPLAIN_STAGES.includes(stage)) ui.dispatch({ type: 'tutorial.advance', payload: {} });
     // Direkt nach dem Spielstart steht die Uhr (PR #92, Tempo): Nach der ersten Tour läuft das Spiel.
@@ -120,15 +135,12 @@ function startExtraTour(ui: UiApi, state: GameState, extra: ExtraTour, def: Tour
 function TourStarter() {
   const { state } = useGame();
   const ui = useUi();
-  const t = state.modules.tutorial;
-  const stage = t?.enabled && !t.skipped ? t.stage : -1;
-  const seen = stage >= 0 && tourSeen(state, stage);
-  const seizure = !!t?.scripted.seizure;
+  const due = dueTourStage(state);
   const key = gameKey(state);
   useEffect(() => {
-    if (stage < 0 || seen) return;
+    if (due === null) return;
     startStageTour(ui, state);
-  }, [ui, state, key, stage, seen, seizure]);
+  }, [ui, state, key, due]);
   return null;
 }
 
@@ -145,7 +157,8 @@ onGameEvent('tutorial.scriptedMoment', 'tutorial.moments', (payload, ui, state) 
       return;
     }
     case 'seizure':
-      // Die Tour der Stufe 9 (TourStarter sieht das Flag beim nächsten Neuzeichnen, hier geht es sofort los).
+      // Die Tour der Stufe 9 (TourStarter sieht das Flag beim nächsten Neuzeichnen, hier geht es sofort los). Kommt
+      // die Beschlagnahme erst nach Stufe 9, lief deren Tour schon mit dem Wechsel der Stufe (dueTourStage).
       startStageTour(ui, state);
       return;
     case 'lowStockPopup':

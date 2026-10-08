@@ -4,7 +4,7 @@
 
 import { formatAmount, type GameState } from '../../../core';
 import { Hint, SegmentedControl, Select } from '../../../ui';
-import { freeVehicles, getVehicles, PRIVATE_CAR, vehicleName, vehicleSpec } from '../../fleet';
+import { freeVehicles, getVehicles, isShip, PRIVATE_CAR, vehicleName, vehicleSpec } from '../../fleet';
 import { ROUTE_CHOICE_ORDER, ROUTE_CHOICES, type RouteChoice, type VehicleChoice } from '../index';
 
 export const AUTO = '';
@@ -14,6 +14,16 @@ export function vehicleChoice(value: string): VehicleChoice | undefined {
   if (value === AUTO) return undefined;
   if (value === 'private') return 'private';
   return Number(value);
+}
+
+/**
+ * Was die Auswahl (VehicleSelect ohne all) wirklich zeigt: das gewählte Fahrzeug, solange es frei in der Stadt steht,
+ * sonst „Passendes Fahrzeug“ (es ist unterwegs, beschlagnahmt oder weg). Befehle schicken diesen Wert, nicht den
+ * alten aus dem Zustand, sonst fährt nicht, was angezeigt wird.
+ */
+export function shownVehicle(state: GameState, cityId: string, value: string): string {
+  if (value === AUTO || value === 'private') return value;
+  return freeVehicles(state, cityId).some((v) => String(v.id) === value) ? value : AUTO;
 }
 
 /** Auswahl nur zeigen, wenn es in der Stadt eigene Fahrzeuge gibt (sonst fährt immer das Privatauto). */
@@ -26,8 +36,9 @@ export function VehicleSelect(props: {
   all?: boolean;
   label?: string;
 }) {
+  // Schiffe fahren nie auf der Straße, auch nicht fest auf einer Route.
   const vehicles = props.all
-    ? getVehicles(props.state, props.cityId).filter((v) => v.seizedAt === null)
+    ? getVehicles(props.state, props.cityId).filter((v) => v.seizedAt === null && !isShip(v))
     : freeVehicles(props.state, props.cityId);
   if (getVehicles(props.state, props.cityId).length === 0) return null;
   const options = [

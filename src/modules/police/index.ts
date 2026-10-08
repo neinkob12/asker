@@ -51,7 +51,7 @@ import {
   wallet,
 } from '../../core';
 import { activeCity, isBusinessSold, isVeedelLive, liveVeedel } from '../city';
-import { startEncounter } from '../encounters';
+import { addResultLosses, startEncounter } from '../encounters';
 import { eventFactor, raidsAllowed } from '../events';
 import { getGang } from '../gangs';
 import { allProducts, getLots, getWarehouses, nearestWarehouse, take, warehouseModifiers } from '../goods';
@@ -205,8 +205,10 @@ export interface TipOff {
 
 export interface PoliceStats {
   checks: number;
+  /** Razzien gegen dich (eine Großrazzia zählt einmal); die gegen Gangs stehen in gangRaids. */
   raids: number;
   gangRaids: number;
+  /** Festnahmen, die staff auch vollzieht (nicht wer schon sitzt oder weg ist). */
   arrests: number;
   confiscatedGoods: number;
   confiscatedMoney: number;
@@ -716,7 +718,9 @@ function confiscateMoneyShare(ctx: Ctx, share: number, max: number, stash = 0): 
 }
 
 function arrest(ctx: Ctx, staffId: string, veedelId: string): void {
-  ctx.state.modules.police.stats.arrests += 1;
+  // Nur zählen, wen staff auch in Haft nimmt: wer noch im Team ist und nicht schon sitzt.
+  const member = getStaffMember(ctx.state, staffId);
+  if (member && member.leftAt === null && member.status !== 'jailed') ctx.state.modules.police.stats.arrests += 1;
   ctx.emit('police.arrest', { staffId, veedelId });
 }
 
@@ -838,7 +842,14 @@ function runCheck(ctx: Ctx, veedelId: string, player?: { spotId: string }): void
 }
 
 /** Ergebnis einer Polizeiflucht, die bei einer Kontrolle begonnen hat. */
-function onChaseResolved(ctx: Ctx, outcome: string, veedelId: string, spotId: string | null, staffIds: string[]) {
+function onChaseResolved(
+  ctx: Ctx,
+  encounterId: number,
+  outcome: string,
+  veedelId: string,
+  spotId: string | null,
+  staffIds: string[],
+) {
   const state = ctx.state;
   const place = placeText(state, veedelId, spotId);
   const names = staffIds.map((id) => staffName(state, id)).join(', ');
@@ -852,6 +863,8 @@ function onChaseResolved(ctx: Ctx, outcome: string, veedelId: string, spotId: st
   const goods = confiscateGoods(ctx, ctx.randomInt(CHECK_GOODS.min, CHECK_GOODS.max) * FAILED_CHASE_FACTOR, veedelId);
   const money = confiscateMoney(ctx, ctx.randomInt(CHECK_MONEY.min, CHECK_MONEY.max) * FAILED_CHASE_FACTOR);
   const loss = lossText(goods, money);
+  // Die Ergebnis-Karte der Flucht soll zeigen, was weg ist (sonst „Ware gehalten“ und „alle heil“).
+  addResultLosses(ctx, encounterId, { goods, money, staffArrested: staffIds });
   if (staffIds.length === 0) {
     journal.add(
       ctx,
@@ -908,7 +921,8 @@ function searchPlace(ctx: Ctx, veedelId: string, scope: RaidScope, spotId: strin
   const underground = isLyingLow(state, veedelId);
   // Ist das Veedel abgetaucht, hält sich auch der Leutnant bedeckt.
   let people = activeStaffIn(state, veedelId).filter((m) => !underground || m.assignment?.kind !== 'veedel');
-  if (scope === 'spot') people = people.filter((m) => spotOf(m) === spotId);
+  // Ohne Spot (keiner frei im Veedel) wird bei der Razzia am Spot niemand festgenommen, auch nicht im Lager.
+  if (scope === 'spot') people = spotId ? people.filter((m) => spotOf(m) === spotId) : [];
   const nobody = people.length === 0 && (underground || !hasPlayerPresence(state, veedelId));
   if (nobody && scope !== 'major') return { goods: 0, money: 0, arrested: [], empty: true, saved: 0 };
   const spot = spotId ? getSpot(state, spotId) : undefined;
@@ -949,6 +963,8 @@ function raidPlayer(ctx: Ctx, veedelId: string, plan: PlannedRaid): void {
   const scope: RaidScope = plan.scope;
   const spotId = scope === 'spot' ? plan.spotId : null;
   const stash = plan.stash ?? 0;
+  // stats.raids zählt Razzien gegen dich, eine pro Razzia (Razzien gegen Gangs stehen in gangRaids).
+  state.modules.police.stats.raids += 1;
   const haul = searchPlace(ctx, veedelId, scope, spotId, stash);
   if (haul.empty) {
     finishRaid(ctx, veedelId);
@@ -1024,6 +1040,8 @@ function majorRaid(ctx: Ctx, raid: MajorRaid): void {
   let saved = 0;
   const stash = raid.stash ?? 0;
   const arrested: string[] = [];
+  // Eine Großrazzia zählt einmal, egal wie viele Veedel sie trifft.
+  state.modules.police.stats.raids += 1;
   for (const veedelId of raid.veedelIds) {
     const haul = searchPlace(ctx, veedelId, 'major', null, stash);
     goods += haul.goods;
@@ -1118,7 +1136,6 @@ function finishRaid(ctx: Ctx, veedelId: string): void {
   const police = ctx.state.modules.police;
   police.raidReadyAt[veedelId] = ctx.now + RAID_COOLDOWN;
   police.checkReadyAt[veedelId] = Math.max(police.checkReadyAt[veedelId] ?? 0, ctx.now + CHECK_COOLDOWN);
-  police.stats.raids += 1;
   delete police.tipOffs[veedelId];
   addHeat(ctx, veedelId, -RAID_HEAT_RELIEF);
 }
@@ -1267,7 +1284,8 @@ export default defineModule({
       if (presence === undefined) return;
       const tier = SALE_HEAT_BY_TIER[tierOf(ctx.state, veedelCity(veedelId))];
       const heat = (SALE_HEAT_BASE + SALE_HEAT_PER_UNIT * Math.max(0, amount)) * presence * tier;
-      const event = eventFactor(ctx.state, 'heatPerSale', { veedelId });
+      // Mit Spot, sonst wirken Events, die nur einzelne Spots betreffen (Oktoberfest), nie.
+      const event = eventFactor(ctx.state, 'heatPerSale', { veedelId, ...(spotId ? { spotId } : {}) });
       // Auftrag 23: Die Art eines eigenen Spots (Club, Bahnhof mehr, Späti weniger).
       const kind = spotModifiers(ctx.state, spotId).heatFactor;
       addHeat(ctx, veedelId, heat * event * kind * cautionFactor(ctx.state, sellerId));
@@ -1289,13 +1307,16 @@ export default defineModule({
       // Zivi oder Kunde: Verkauf an einen Zivi ist eine Kontrolle gegen dich am Spot.
       onUndercoverFinished(ctx, payload, {
         addHeat,
-        checkPlayer: (c, veedelId, spotId) => runCheck(c, veedelId, { spotId }),
+        // Auftrag 46b: Im Tutorial gibt es Kontrollen erst ab Stufe 9, vorher bleibt es beim Eintrag im Journal.
+        checkPlayer: (c, veedelId, spotId) => {
+          if (tutorialAllows(c.state, 'police.checks')) runCheck(c, veedelId, { spotId });
+        },
       });
     },
-    'encounter.resolved': (ctx, { kind, outcome, request }) => {
+    'encounter.resolved': (ctx, { encounterId, kind, outcome, request }) => {
       if (request.origin?.module === 'police') {
         if (request.origin.ref === 'check' && request.veedelId) {
-          onChaseResolved(ctx, outcome, request.veedelId, request.spotId ?? null, request.staffIds ?? []);
+          onChaseResolved(ctx, encounterId, outcome, request.veedelId, request.spotId ?? null, request.staffIds ?? []);
         }
         return;
       }

@@ -5,7 +5,7 @@ import { formatEuro, formatPercent } from '../../../core';
 import { Group, ItemContent, List, ListItem, registerPanel, registerSearch, Slot, useGame, useUi } from '../../../ui';
 import { activeCity } from '../../city';
 import { waitingAt } from '../../customers';
-import { getSpots, lockedSpots } from '../../spots';
+import { getSpots, lockedSpots, unlockCostOf } from '../../spots';
 import { allVeedel, getVeedel, neighborsOf, sharesBorder, veedelLinks, veedelName } from '../index';
 import './veedel.css';
 
@@ -71,7 +71,9 @@ function VeedelPanel(props: { veedelId: string }) {
                 icon="pin"
                 color="system"
                 title="Noch kein Spot"
-                meta="Eigene Spots gründest du unter Reviere › Spots."
+                // Jedes Veedel hat vorgegebene Spots; leer ist es nur, solange das Tutorial sie zurückhält. Gründen
+                // ist nur noch ein Shop-Platzhalter (Auftrag 46e), darauf verweist der Hinweis nicht mehr.
+                meta="Die Spots hier kannst du später freischalten."
               />
             </ListItem>
           )}
@@ -88,7 +90,8 @@ function VeedelPanel(props: { veedelId: string }) {
             <ListItem
               key={s.id}
               onClick={() => ui.openPanel('spots.spot', { spotId: s.id })}
-              value={formatEuro(s.unlockCost ?? 0)}
+              // Preis wie im Spot-Panel und beim Kauf: Im Tutorial gilt tutorialSpotCost (Auftrag 46b).
+              value={formatEuro(unlockCostOf(state, s))}
             >
               <ItemContent
                 icon="lock"

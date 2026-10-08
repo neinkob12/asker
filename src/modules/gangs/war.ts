@@ -186,11 +186,12 @@ export function supportWar(ctx: Ctx, warId: number, kind: WarSupport): CommandRe
   if (kind === 'goods') {
     const taken = take(ctx, { productId: DEFAULT_PRODUCT, amount: WAR_GOODS }).taken;
     if (taken < WAR_GOODS) return { ok: false, reason: `Nicht genug Ware (${formatAmount(WAR_GOODS)}).` };
-    const price = Math.round(taken * side.traits.goodsCost);
+    // Bezahlt wird zum Einkaufspreis der Gang: kein großes Geschäft, aber ein Freund. Mehr, als in ihrer Kasse ist,
+    // kann sie nicht zahlen.
+    const price = Math.min(Math.round(taken * side.traits.goodsCost), Math.max(0, s.money));
     s.goods += taken;
-    s.money = Math.max(0, s.money - price);
-    // Bezahlt wird zum Einkaufspreis der Gang: kein großes Geschäft, aber ein Freund.
-    wallet.earn(ctx, price, 'dirty', `Ware an ${side.name}`, 'sales.wholesale');
+    s.money -= price;
+    if (price > 0) wallet.earn(ctx, price, 'dirty', `Ware an ${side.name}`, 'sales.wholesale');
     journal.add(
       ctx,
       `Ware an ${side.name} gegen ${enemy.name}: ${formatAmount(taken)} für ${formatEuro(price)}.`,

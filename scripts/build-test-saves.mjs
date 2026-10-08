@@ -12,6 +12,13 @@ const [{ TEST_SAVES, saveSummary }, core] = await Promise.all([
   load('/src/core/index.ts'),
 ]);
 const wanted = process.argv.slice(2);
+// Unbekannte Kennungen (Tippfehler) nicht still überspringen: abbrechen und die gültigen nennen.
+const unknown = wanted.filter((id) => !TEST_SAVES.some((save) => save.id === id));
+if (unknown.length > 0) {
+  console.error(`Unbekannte Test-Spielstände: ${unknown.join(', ')}`);
+  console.error(`Gültig sind: ${TEST_SAVES.map((save) => save.id).join(', ')}`);
+  process.exit(1);
+}
 mkdirSync('public/spielstaende', { recursive: true });
 for (const save of TEST_SAVES) {
   if (wanted.length > 0 && !wanted.includes(save.id)) continue;

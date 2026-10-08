@@ -336,6 +336,14 @@ export function discovered(s: InterviewState): TraitId[] {
   return s.results.flatMap((r) => (r.exposed ? [r.exposed] : []));
 }
 
+/**
+ * Was neu in die Akte kommt: aufgedeckt und noch nicht bekannt. Eine Antwort verrät auch Bekanntes, wenn die Frage
+ * nichts Unbekanntes mehr trifft (answerFor); das steht schon in der Akte.
+ */
+export function newlyDiscovered(s: InterviewState, known: readonly TraitId[]): TraitId[] {
+  return discovered(s).filter((t) => !known.includes(t));
+}
+
 /** Score 0 bis 1: richtig beurteilte Runden. */
 export function interviewScore(setup: InterviewSetup, s: InterviewState): number {
   const n = Math.max(1, setup.rounds.length);

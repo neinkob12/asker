@@ -203,6 +203,9 @@ export const AWARENESS_FLOOR = 0.35;
 export const AWARENESS_PER_UNIT = 0.0015;
 export const AWARENESS_PER_REGULAR = 0.03;
 export const AWARENESS_PER_STAFFED_DAY = 0.05;
+/** Ruf, bei dem die Zuwächse oben genau gelten (Faktor Ruf/AWARENESS_REPUTATION_BASE), und die Obergrenze des Faktors. */
+export const AWARENESS_REPUTATION_BASE = 50;
+export const AWARENESS_REPUTATION_MAX = 1.5;
 /** Ein Tag ohne Leute dort: so viel weniger (nie unter AWARENESS_MIN). */
 export const AWARENESS_DECAY_PER_DAY = 0.04;
 export const AWARENESS_MIN = 0.1;

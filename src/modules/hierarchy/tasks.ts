@@ -18,10 +18,11 @@ import {
   getWarehouses,
   isWarehouseOwned,
   productName,
+  unitWeight,
   warehouseCity,
 } from '../goods';
 import { amountInProgress, launderingCapacity, MIN_LAUNDERING_AMOUNT } from '../laundering';
-import { freeDrivers, getCargo, harborQuestions, portName } from '../logistics';
+import { freeDrivers, getCargo, harborQuestions, portName, reservedCargo, roomFor } from '../logistics';
 import { atSpot, getSpots } from '../spots';
 import {
   activeRunnerAt,
@@ -167,8 +168,11 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
     }
     const driver = rightHandDriver(state, home);
     if (!driver.ok) {
-      // Unterwegs: Reicht die Frist, bis sie zurück ist, nimmt sie die Anfrage danach.
-      const current = getOrders(state, { status: 'enRoute' }).find((o) => o.courierId === member.id);
+      // Unterwegs: Reicht die Frist, bis sie zurück ist, nimmt sie die Anfrage danach. Ein gekippter Deal ('contested')
+      // ist auch noch ihre Fahrt, bis die Konfrontation ausgeht.
+      const current = getOrders(state).find(
+        (o) => (o.status === 'enRoute' || o.status === 'contested') && o.courierId === member.id,
+      );
       if (current?.arrivesAt !== null && current?.arrivesAt !== undefined && current.arrivesAt + 15 < order.expiresAt) {
         continue;
       }
@@ -200,30 +204,44 @@ function handleOrders(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: A
   }
 }
 
+/** Ware am Kai, die keine geplante Nachtfahrt schon für sich eingeteilt hat (älteste zuerst). */
+function waitingCargo(state: GameState) {
+  const reserved = reservedCargo(state);
+  return getCargo(state).filter((c) => !reserved.has(c.id));
+}
+
 /**
  * Hafen abholen: Liegt Ware am Kai und ist ein Fahrer frei, schickt sie ihn los (eine Fahrt pro Ziel-Lager, die älteste
- * Ware zuerst) und beantwortet die Hafen-Fragen zu dieser Ware.
+ * Ware zuerst) und beantwortet die Hafen-Fragen zu dieser Ware. Was eine Nachtfahrt eingeteilt hat, bleibt für sie
+ *. Das Ziel wählt logistics wie bei deiner Abholung ohne Angabe: das bestellte Lager, ist es voll, das nächste
+ * mit Platz; geht es für eine Gruppe gar nicht, versucht sie die nächste (sonst hing alles an der ersten Gruppe).
  */
 function handlePickup(ctx: Ctx, rh: RightHandPost, member: StaffMember, actor: Actor): void {
   const state = ctx.state;
   if (!isTaskActive(state, 'pickup') || getCargo(state).length === 0 || freeDrivers(state).length === 0) return;
-  const first = getCargo(state)[0];
-  const group = getCargo(state).filter((c) => c.warehouseId === first.warehouseId);
-  const cargoIds = group.map((c) => c.id);
-  const result = ctx.dispatch(
-    {
-      type: 'logistics.pickup',
-      payload: { by: 'driver', cargoIds, ...(first.warehouseId ? { warehouseId: first.warehouseId } : {}) },
-    },
-    { actor },
-  );
-  if (!result.ok) return;
-  for (const m of harborQuestions(state, cargoIds)) {
-    messages.answerAs(ctx, { messageId: m.id, optionId: 'driver', via: VIA });
+  const waiting = waitingCargo(state);
+  for (const target of new Set(waiting.map((c) => c.warehouseId))) {
+    const group = waiting.filter((c) => c.warehouseId === target);
+    const cargoIds = group.map((c) => c.id);
+    const result = ctx.dispatch({ type: 'logistics.pickup', payload: { by: 'driver', cargoIds } }, { actor });
+    if (!result.ok) continue;
+    for (const m of harborQuestions(state, cargoIds)) {
+      messages.answerAs(ctx, { messageId: m.id, optionId: 'driver', via: VIA });
+    }
+    rh.done.pickups += 1;
+    addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
+    log(ctx, rh, `Fahrer zum ${portName(group[0].cityId)} geschickt, die Ware kommt ins Lager.`);
+    return;
   }
-  rh.done.pickups += 1;
-  addRightHandXp(ctx, rh, XP_RIGHT_HAND_TASK, member);
-  log(ctx, rh, `Fahrer zum ${portName(first.cityId)} geschickt, die Ware kommt ins Lager.`);
+}
+
+/** Liegt am Kai Ware, die in kein Lager der Stadt mehr passt? Dann holt auch ein freier Fahrer nichts ab. */
+function pickupBlocked(state: GameState): string | null {
+  const waiting = waitingCargo(state);
+  if (waiting.length === 0) return null;
+  const smallest = Math.min(...waiting.map((c) => unitWeight(c.productId)));
+  if (getWarehouses(state, activeCity(state)).some((w) => roomFor(state, w.id) >= smallest)) return null;
+  return 'Die Ware am Kai passt in kein Lager: Bau Regale ein, lager um oder kauf ein Lager dazu.';
 }
 
 // --- Nachbestellen (jeder Tick), stündlich: Personal, Geldwäsche ---
@@ -401,7 +419,7 @@ export function taskIdleReason(state: GameState, key: RightHandTaskKey): string 
       return driver.ok ? null : driver.reason;
     }
     case 'pickup':
-      if (freeDrivers(state).length > 0) return null;
+      if (freeDrivers(state).length > 0) return pickupBlocked(state);
       return getStaff(state, { role: 'driver', status: 'active', cityId: activeCity(state) }).length === 0
         ? 'Ohne Fahrer holt niemand ab: Heuer einen unter Personal an.'
         : 'Alle Fahrer sind gerade unterwegs.';

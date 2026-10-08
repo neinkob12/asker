@@ -272,6 +272,8 @@ export class UiRuntime {
   }
   private speedBeforeDialog: number | null = null;
   private alertId = 0;
+  /** Hat eine Kartenauswahl das Handy weggelegt? Die zuletzt laufende holt es zurück. */
+  private pickHidPhone = false;
 
   constructor(
     readonly session: GameSession,
@@ -636,16 +638,26 @@ export class UiRuntime {
         // Am Handy-Bildschirm füllt das Handy alles unter dem HUD und deckt die Karte zu: Solange du auf die Karte
         // klickst, liegt es in der Tasche, danach kommt es mit der Seite zurück, von der du kamst.
         const hidePhone = ui.phone.open && isMobileScreen();
+        // Eine neue Auswahl bricht die laufende ab (die Karte löst sie mit null auf). Deren Ende räumt dann nichts weg:
+        // Hinweis und weggelegtes Handy gehören der neuen, die das Handy am Schluss zurückholt.
+        const request = { prompt };
         update(() => {
-          ui.picking = { prompt };
-          if (hidePhone) ui.phone = { ...ui.phone, open: false };
+          ui.picking = request;
+          if (hidePhone) {
+            this.pickHidPhone = true;
+            ui.phone = { ...ui.phone, open: false };
+          }
         });
         try {
           return await this.map.pickLocation();
         } finally {
           update(() => {
+            if (ui.picking !== request) return;
             ui.picking = null;
-            if (hidePhone) ui.phone = { ...ui.phone, open: true };
+            if (this.pickHidPhone) {
+              this.pickHidPhone = false;
+              ui.phone = { ...ui.phone, open: true };
+            }
           });
         }
       },

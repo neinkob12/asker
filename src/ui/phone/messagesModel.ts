@@ -126,6 +126,14 @@ export function groupChats(list: readonly ChatListItem[]): ChatGroup[] {
   return groups;
 }
 
+/**
+ * Steht der Chat im Filter „Offen“? Wartet er auf Antwort oder hat Ungelesenes. Liste und Zähler am Filter fragen
+ * beide hier (der Zähler zählte nur die wartenden, die Liste zeigte auch ungelesene).
+ */
+export function isOpenChat(chat: Pick<ChatListItem, 'awaitingAnswer' | 'unread'>): boolean {
+  return chat.awaitingAnswer || chat.unread > 0;
+}
+
 export type ChatEntry =
   | { type: 'day'; key: string; label: string }
   | { type: 'unread'; key: string }

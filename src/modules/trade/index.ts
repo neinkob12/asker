@@ -669,7 +669,8 @@ export function shareFor(
 
 /**
  * Kosten eines Containers (Schwarzgeld): Ware, Fracht auf dem Linienschiff (auf dem eigenen Schiff keine, own) und
- * Deckladung (Anteil am Warenwert, Auftrag 41).
+ * Deckladung (Anteil am Warenwert, Auftrag 41). grams: was wirklich drin ist (der letzte Container aus dem
+ * Ausfuhrlager darf kleiner sein), ohne Angabe die volle Größe.
  */
 export function containerCost(
   producerId: string,
@@ -677,6 +678,7 @@ export function containerCost(
   size: ContainerSize['id'],
   cover: Cover['id'] = 'none',
   own = false,
+  grams?: number,
 ): {
   goods: number;
   freight: number;
@@ -687,7 +689,8 @@ export function containerCost(
   const share = producer?.products[productId];
   if (!producer || !container || share === undefined) return { goods: 0, freight: 0, cover: 0 };
   const base = getProduct(productId)?.basePrice ?? 0;
-  const value = Math.round((container.grams * base * share) / 10) * 10;
+  const amount = Math.max(0, Math.min(container.grams, grams ?? container.grams));
+  const value = Math.round((amount * base * share) / 10) * 10;
   // Auftrag 42: Eigene Ware ist schon bezahlt (auf der Finca); die Deckladung richtet sich trotzdem nach ihrem Wert.
   const goods = ORIGIN_BY_ID.has(producerId) ? 0 : value;
   return {
@@ -1242,6 +1245,9 @@ export function answerOrder(
   // Gegenangebot: bis zur Preisgrenze. Liegt die Konkurrenz zu deinem Preis vorn, kauft der Kunde dort.
   if (order.guaranteed) return { ok: false, reason: 'Der Abnahmevertrag hat einen festen Preis.' };
   if (!(factor !== undefined && factor > 0 && Number.isFinite(factor))) return { ok: false, reason: 'Welcher Preis?' };
+  // Ein Gegenangebot liegt über ihrem Angebot (die Oberfläche bietet +5 bis +15 %); darunter verkaufst du nur billiger
+  // als mit „Annehmen“, bis hinunter zu fast nichts.
+  if (factor < 1) return { ok: false, reason: 'Ein Gegenangebot liegt über ihrem Angebot. Sonst nimm einfach an.' };
   if (factor > maxFactor(order) + 1e-9) {
     return {
       ok: false,
@@ -1418,6 +1424,11 @@ export function deliver(ctx: Ctx, orderId: number, portId?: string, vehicleId?: 
     const v = getVehicle(ctx.state, vehicleId);
     if (v && isShip(v)) return { ok: false, reason: 'Schiffe fahren nicht auf der Straße.' };
     if (!v || v.cityId !== HARBOR_CITY) return { ok: false, reason: 'Dieser Lkw steht nicht in Rotterdam.' };
+    // Der Lkw fährt dort los, wo er steht (fleet): ab einem anderen Hafen fehlte die Anfahrt, und er stand danach
+    // wieder in Rotterdam. Von dort fährt die Spedition.
+    if (from !== HARBOR_CITY) {
+      return { ok: false, reason: `Dein Lkw steht in Rotterdam, nicht in ${harborPort(from)?.name ?? from}.` };
+    }
     if (vehicleSpec(ctx.state, vehicleId).capacity < grams)
       return { ok: false, reason: 'Das passt nicht in den Wagen.' };
     vehicle = vehicleId;
@@ -1509,11 +1520,38 @@ function checkLoad(
   return { producer, containers };
 }
 
-/** Was eine Ladung kostet (Ware, Fracht auf der Linie, Deckladung). */
-export function loadCost(producerId: string, load: readonly ContainerLoad[], own: boolean): number {
-  return load.reduce((sum, c) => {
-    const cost = containerCost(producerId, c.productId, c.size, c.cover ?? 'none', own);
-    return sum + (cost.goods + cost.freight + cost.cover) * (c.count ?? 1);
+/**
+ * Was eine Ladung kostet (Ware, Fracht auf der Linie, Deckladung). onHand: Bestand im eigenen Ausfuhrlager in Gramm pro
+ * Ware; dann zählt jeder Container nur mit dem, was er wirklich trägt (der letzte ist oft nicht voll, wie in checkLoad).
+ */
+export function loadCost(
+  producerId: string,
+  load: readonly ContainerLoad[],
+  own: boolean,
+  onHand?: Readonly<Record<string, number>>,
+): number {
+  const left = new Map(Object.entries(onHand ?? {}));
+  let total = 0;
+  for (const c of load) {
+    const full = SIZE_BY_ID.get(c.size)?.grams ?? 0;
+    for (let i = 0; i < (c.count ?? 1); i++) {
+      let grams = full;
+      if (onHand) {
+        grams = Math.max(0, Math.min(full, left.get(c.productId) ?? 0));
+        left.set(c.productId, (left.get(c.productId) ?? 0) - grams);
+      }
+      const cost = containerCost(producerId, c.productId, c.size, c.cover ?? 'none', own, grams);
+      total += cost.goods + cost.freight + cost.cover;
+    }
+  }
+  return total;
+}
+
+/** Was die geprüften Container kosten (mit ihren echten Gramm, wie shipContainers sie bezahlt). */
+function loadedCost(producerId: string, containers: readonly Loaded[], own: boolean): number {
+  return containers.reduce((sum, c) => {
+    const cost = containerCost(producerId, c.productId, c.size.id, c.cover.id, own, c.grams);
+    return sum + cost.goods + cost.freight + cost.cover;
   }, 0);
 }
 
@@ -1531,7 +1569,7 @@ function shipContainers(
   const list: TradeShipment[] = [];
   const origin = ORIGIN_BY_ID.get(producer.id);
   for (const c of containers) {
-    const cost = containerCost(producer.id, c.productId, c.size.id, c.cover.id, vesselId !== null);
+    const cost = containerCost(producer.id, c.productId, c.size.id, c.cover.id, vesselId !== null, c.grams);
     if (cost.goods > 0) {
       wallet.pay(ctx, cost.goods, 'dirty', `${c.size.label} ${productName(c.productId)} bei ${producer.name}`, {
         category: 'trade.purchase',
@@ -1598,7 +1636,7 @@ export function buyContainer(
   const load = [{ productId, size, cover, count }];
   const checked = checkLoad(ctx, producerId, portId, load);
   if (typeof checked === 'string') return { ok: false, reason: checked };
-  const total = loadCost(producerId, load, false);
+  const total = loadedCost(producerId, checked.containers, false);
   if (!wallet.canAfford(ctx.state, total, 'dirty')) return { ok: false, reason: `Das kostet ${formatEuro(total)}.` };
   const arrivesAt = ctx.now + shippingMinutes(producerId, portId);
   const list = shipContainers(ctx, checked.producer, portId, checked.containers, null, arrivesAt);
@@ -1636,7 +1674,7 @@ export function sail(
       reason: `${spec.name} fasst ${Math.round(spec.capacity / 1000)} kg, das sind ${Math.round(grams / 1000)} kg.`,
     };
   }
-  const total = loadCost(producerId, load, true) + plan.cost;
+  const total = loadedCost(producerId, checked.containers, true) + plan.cost;
   if (!wallet.canAfford(ctx.state, total, 'dirty')) {
     return { ok: false, reason: `Die Fahrt kostet ${formatEuro(total)}.` };
   }

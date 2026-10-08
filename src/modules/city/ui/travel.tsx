@@ -5,7 +5,17 @@
 
 import { useEffect } from 'preact/hooks';
 import { clock, type LngLat, SPEEDS } from '../../../core';
-import { addHtmlMarker, createVehicle, el, FAR_ZOOM, type MapLayer, onMapFrame, pointAlong } from '../../../map';
+import {
+  addFootpath,
+  addHtmlMarker,
+  createVehicle,
+  el,
+  FAR_ZOOM,
+  type FootpathHandle,
+  type MapLayer,
+  onMapFrame,
+  pointAlong,
+} from '../../../map';
 import {
   Button,
   hourCountdown,
@@ -83,7 +93,14 @@ function TravelCard() {
         <Button small icon="speed3" onClick={skip}>
           Fahrt überspringen
         </Button>
-        <Button small variant="subtle" icon="map" onClick={() => ui.flyToDeutschland()}>
+        <Button
+          small
+          variant="subtle"
+          icon="map"
+          onClick={() => {
+            following = true;
+          }}
+        >
           Folgen
         </Button>
       </div>
@@ -126,6 +143,12 @@ export const travelLayer: MapLayer = {
     // Auto und Kamera laufen im gemeinsamen Kartentakt aus EINEM Wert (shown): So sitzt das Auto immer genau in der Mitte,
     // und es springt nicht von Spielschritt zu Spielschritt.
     let car: ReturnType<typeof createVehicle> | null = null;
+    // Vom Mittelpunkt der Stadt zur Straße und am Ziel zurück geht es zu Fuß (das Auto fährt nur die Straße).
+    let walks: FootpathHandle[] = [];
+    const clearWalks = () => {
+      for (const walk of walks) walk.remove();
+      walks = [];
+    };
     let trip: { key: string; path: LngLat[]; startedAt: number; target: number; shown: number } | null = null;
     let travelling = false;
     let zoom = CLOSE_ZOOM;
@@ -172,6 +195,7 @@ export const travelLayer: MapLayer = {
           element.hidden = true;
           car?.remove();
           car = null;
+          clearWalks();
           trip = null;
           return;
         }
@@ -180,7 +204,10 @@ export const travelLayer: MapLayer = {
         const t = travelProgress(state.time, travel.departedAt, travel.arrivesAt);
         if (!car || !trip || key !== trip.key) {
           car?.remove();
-          const path = interCityRoute(from.center, to.center).path;
+          clearWalks();
+          const route = interCityRoute(from.center, to.center);
+          const path = route.drive;
+          walks = [addFootpath(map, route.walkFrom), addFootpath(map, route.walkTo)];
           car = createVehicle(map, { path, kind: 'car', title: `Du · ${cityName(travel.to)}`, progress: t });
           car.setLabel('Du');
           trip = { key, path, startedAt: performance.now(), target: t, shown: t };
@@ -198,6 +225,7 @@ export const travelLayer: MapLayer = {
         map.off('zoomstart', release);
         stopFrame();
         car?.remove();
+        clearWalks();
         marker.remove();
       },
     };

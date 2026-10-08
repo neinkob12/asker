@@ -35,6 +35,7 @@ import {
   unitWeight,
   warehouseCity,
   warehouseFree,
+  warehousePlace,
 } from '../../goods';
 import { getStaff, getStaffMember, STATUS_NAMES } from '../../staff';
 import {
@@ -51,6 +52,7 @@ import {
   type RouteItem,
   type RouteRun,
   routeName,
+  type Trip,
 } from '../index';
 import { AUTO, ChoiceControl, VehicleSelect } from './vehicles';
 
@@ -603,6 +605,21 @@ function RoutesPanel() {
   );
 }
 
+/**
+ * Was ein Fahrer mit seiner Fahrt gerade tut (Seite „Fahrer“): Eine geplante Nachtfahrt fährt erst noch los, eine Fahrt
+ * am vollen Lager steht dort; nur sonst ist er unterwegs und kommt zu einer Zeit an.
+ */
+export function driverTripText(state: GameState, trip: Trip): { chip: string; color: CategoryColor; meta: string } {
+  const to = placeOf(state, trip.toId)?.name ?? 'Lager';
+  if (trip.status === 'planned') {
+    const at = clock.formatTime(trip.startedAt);
+    return { chip: `ab ${at}`, color: 'goods', meta: `fährt um ${at} nach ${to}` };
+  }
+  if (trip.status === 'waiting')
+    return { chip: 'Lager voll', color: 'warn', meta: `wartet ${warehousePlace(to, 'at')}` };
+  return { chip: `an ${clock.formatTime(trip.arrivesAt)}`, color: 'goods', meta: `fährt nach ${to}` };
+}
+
 /** Seite "Fahrer": wo jeder Fahrer ist, was er gerade fährt, seine nächste Route. */
 function DriversPanel() {
   const { state, dispatch } = useGame();
@@ -618,10 +635,10 @@ function DriversPanel() {
             {drivers.map((m) => {
               const where = driverWhereabouts(state, m.id);
               const trip = where.trip;
+              const doing = trip ? driverTripText(state, trip) : null;
               const chips: ChipSpec[] = [{ label: cityName(where.cityId), icon: 'pin', color: 'place' }];
               if (m.status !== 'active') chips.push({ label: STATUS_NAMES[m.status], color: 'danger' });
-              else if (trip)
-                chips.push({ label: `an ${clock.formatTime(trip.arrivesAt)}`, icon: 'truck', color: 'goods' });
+              else if (doing) chips.push({ label: doing.chip, icon: 'truck', color: doing.color });
               else chips.push({ label: m.assignment ? 'im Einsatz' : 'frei', color: m.assignment ? 'warn' : 'money' });
               if (where.next) {
                 chips.push({
@@ -630,14 +647,13 @@ function DriversPanel() {
                   color: 'system',
                 });
               }
-              const to = trip ? (placeOf(state, trip.toId)?.name ?? 'Lager') : null;
               return (
                 <ListItem key={m.id} onClick={() => ui.openPanel('staff.profile', { staffId: m.id })}>
                   <ItemContent
                     icon="user"
                     color="people"
                     title={m.name}
-                    meta={trip ? `fährt nach ${to}` : where.next ? 'wartet auf die nächste Route' : 'keine Route'}
+                    meta={doing ? doing.meta : where.next ? 'wartet auf die nächste Route' : 'keine Route'}
                     tags={chips}
                   />
                 </ListItem>

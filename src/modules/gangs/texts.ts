@@ -141,7 +141,7 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
     blackmail: [
       'Wir wissen, wo dein {warehouse} is. {amount}, oder die Bullen wissen et auch.',
       'Jupp. {warehouse}. Schöne Adresse. {amount} und ich vergess sie.',
-      '{amount} bis morgen. Sonst kriegt die Polizei die Adresse vom {warehouse}.',
+      '{amount}, aber flott. Sonst kriegt die Polizei die Adresse vom {warehouse}.',
       'Dein {warehouse} is kein Geheimnis mehr. {amount} macht et wieder zu einem.',
       'Ein Anruf und dein {warehouse} is weg. {amount}, dann ruf ich nich an.',
     ],
@@ -599,7 +599,7 @@ export const GANG_VOICES: Readonly<Record<string, GangVoice>> = {
       'Abgelehnt. Wie an der Tür.',
     ],
     offer: [
-      'Ich hab {amount} über, beste Ware vom Kiez. {price}, abholen in {veedel}. Bis Ladenschluss.',
+      'Ich hab {amount} über, beste Ware vom Kiez. {price}, abholen in {veedel}. Gilt nicht lange.',
       'Rocco. {amount} für {price}. Hinterausgang, {veedel}.',
       'Aus der Bar-Kasse: {amount}, {price}. In {veedel}, frag nach dem Portier.',
       'Party war kleiner als gedacht. {amount} übrig, {price}. {veedel}.',
@@ -1060,16 +1060,18 @@ export function gangVariants(gangId: string, key: GangTextKey): readonly string[
 
 /**
  * Texte zu Gang-Aktionen, die nicht der Boss schreibt (Auftrag 23): die Nachbarin am Lager meldet Einbrüche, deine
- * Leute melden Abwerbeversuche und Gang-Leute am Spot. Platzhalter: {warehouse}, {goods}, {gang}, {name}, {extra},
- * {spot}, {atSpot}, {AtSpot} (siehe spotVars in spots).
+ * Leute melden Abwerbeversuche und Gang-Leute am Spot. Platzhalter: {warehouse}, {goods}, {gang}, {crew}, {name},
+ * {extra}, {spot}, {atSpot}, {AtSpot} (siehe spotVars in spots). Die Gang steht als {crew} im Satz (Gang.crew, Plural
+ * mit passendem Artikel: „Leute der Bembel“), nie als „von {gang}“: Namen wie „Die Türsteher“ tragen ihren Artikel
+ * selbst.
  */
 export const INCIDENT_TEXTS = {
   burglaryGang: [
-    'Beim {warehouse} ist die Tür aufgebrochen. {goods} fehlen. Die Leute in der Straße sagen, es waren welche von {gang}.',
-    'Heute Nacht war jemand im {warehouse}. {goods} sind weg. Ich hab Jacken von {gang} gesehen, ganz sicher.',
-    'Ihr {warehouse}: aufgebrochen, {goods} weg. Ein Auto mit Leuten von {gang} stand die halbe Nacht davor.',
-    'Ich will mich ja nicht einmischen, aber im {warehouse} fehlen {goods}. Und {gang} hat gestern rumgefragt.',
-    'Einbruch im {warehouse}, {goods} geklaut. Am Tor klebt ein Aufkleber von {gang}. Frech, oder?',
+    'Beim {warehouse} ist die Tür aufgebrochen. {goods} fehlen. In der Straße sagen alle, es waren {crew}.',
+    'Heute Nacht war jemand im {warehouse}. {goods} sind weg. Das waren {crew}, ich hab die Jacken erkannt, ganz sicher.',
+    'Ihr {warehouse}: aufgebrochen, {goods} weg. Die halbe Nacht standen {crew} in einem Auto davor.',
+    'Ich will mich ja nicht einmischen, aber im {warehouse} fehlen {goods}. Und gestern haben {crew} rumgefragt.',
+    'Einbruch im {warehouse}, {goods} geklaut. Am Tor klebt ein Aufkleber, den kleben sonst {crew} überall hin. Frech, oder?',
   ],
   burglaryJunkies: [
     'Im {warehouse} wurde eingebrochen, {goods} fehlen. Sah nach Junkies aus, die Scheibe war einfach eingeschlagen.',
@@ -1092,17 +1094,17 @@ export const INCIDENT_TEXTS = {
     'Da wollte einer in den {warehouse}. Ihr Aufpasser hat ihn verjagt.',
   ],
   poach: [
-    'Chef, {gang} bietet mir {extra} mehr am Tag. Ich sag’s dir lieber gleich. Was machst du?',
-    'Ehrlich: {gang} will mich haben. {extra} mehr pro Tag. Überzeug mich, dass ich bleiben soll.',
-    'Die von {gang} waren bei mir. {extra} am Tag mehr. Ich hab noch nicht Nein gesagt.',
-    'Chef, ich hab ein Angebot von {gang}. {extra} mehr. Ich mag dich, aber ich hab Rechnungen.',
-    '{gang} zahlt {extra} mehr am Tag. Nur damit du Bescheid weißt.',
+    'Chef, {crew} bieten mir {extra} mehr am Tag. Ich sag’s dir lieber gleich. Was machst du?',
+    'Ehrlich: {crew} wollen mich haben. {extra} mehr pro Tag. Überzeug mich, dass ich bleiben soll.',
+    '{crew} waren bei mir. {extra} am Tag mehr. Ich hab noch nicht Nein gesagt.',
+    'Chef, {crew} haben mir ein Angebot gemacht. {extra} mehr. Ich mag dich, aber ich hab Rechnungen.',
+    '{crew} zahlen mir {extra} mehr am Tag. Nur damit du Bescheid weißt.',
   ],
   intimidationReport: [
-    'Chef, {atSpot} stehen Leute von {gang}. Die Kunden trauen sich nicht mehr her.',
-    'Hier {atSpot} hängen fünf von {gang} rum. Keiner kauft mehr.',
-    'Ärger {atSpot}: {gang} steht da und glotzt jeden Kunden an.',
-    '{gang} hat sich {atSpot} breitgemacht. Ich verkauf hier gerade gar nichts.',
-    '{AtSpot} ist {gang}. Die schicken meine Kunden weg.',
+    'Chef, {atSpot} stehen {crew}. Die Kunden trauen sich nicht mehr her.',
+    'Hier {atSpot} hängen fünf {crew} rum. Keiner kauft mehr.',
+    'Ärger {atSpot}: {crew} stehen da und glotzen jeden Kunden an.',
+    '{crew} haben sich {atSpot} breitgemacht. Ich verkauf hier gerade gar nichts.',
+    '{AtSpot} sind jetzt {crew}. Die schicken meine Kunden weg.',
   ],
 } as const;

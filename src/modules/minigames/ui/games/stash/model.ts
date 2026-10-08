@@ -497,6 +497,12 @@ export function step(setup: StashSetup, state: StashState, dt: number): StashEve
   const wasClosed = streetClosed(setup, state);
   state.time += dt;
   if (!wasClosed && streetClosed(setup, state)) events.push({ type: 'closed' });
+  // Straße zu: Was noch auf dem Weg nach draußen ist, bleibt liegen, wo es gerade ist (wie beim Ablegen). Was dort
+  // schon verstaut wird, ist drin (wie beim Ende der Zeit).
+  const going = state.carry;
+  if (going?.target && going.stowing < 0 && getHide(setup, going.target)?.outside && streetClosed(setup, state)) {
+    state.carry = null;
+  }
   const c = state.carry;
   if (c) {
     const pkg = setup.packages[c.id];

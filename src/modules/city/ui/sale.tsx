@@ -21,7 +21,6 @@ import {
   useGame,
   useUi,
 } from '../../../ui';
-import { cityReport } from '../../finance';
 import { ROTTERDAM_SHARE, SALE_PROFIT_DAYS } from '../config';
 import {
   cityName,
@@ -29,6 +28,7 @@ import {
   jansenContact,
   ownedCities,
   saleBlocker,
+  saleCityDailyProfit,
   saleOffer,
   saleRecord,
   saleStatus,
@@ -127,14 +127,11 @@ function SalePanel() {
         color="money"
         value={formatEuro(offer.dailyProfit)}
         note={`Der Preis: ${SALE_PROFIT_DAYS} Tagesgewinne, Schnitt der letzten sieben Tage.`}
-        more={`Gezählt wird das Ergebnis jeder Stadt vor dem Anteil der Statthalter, ohne einmaligen Ausbau. Rotterdam kostet ${Math.round(ROTTERDAM_SHARE * 100)} Prozent davon: Liegeplatz, Halle, Jansens Leute und Kunden. Die Ware in deinen Lagern bleibt bei den Statthaltern, sie zahlen sie zum Einkaufspreis dazu. Dein Konto bleibt, wie es ist.`}
+        more={`Gezählt wird das Ergebnis jeder Stadt vor dem Anteil der Statthalter, ohne einmaligen Ausbau und ohne Anheuern. Rotterdam kostet ${Math.round(ROTTERDAM_SHARE * 100)} Prozent davon: Liegeplatz, Halle, Jansens Leute und Kunden. Die Ware in deinen Lagern bleibt bei den Statthaltern, sie zahlen sie zum Einkaufspreis dazu. Dein Konto bleibt, wie es ist.`}
       >
         <List>
           {ownedCities(state).map((id) => {
-            const r = cityReport(state, id, 7, 1);
-            const share = r.rows.find((row) => row.category === 'share.righthand')?.amount ?? 0;
-            const expansion = r.rows.find((row) => row.category === 'expansion')?.amount ?? 0;
-            const perDay = Math.round((r.profit - share - expansion) / 7);
+            const perDay = Math.round(saleCityDailyProfit(state, id));
             return (
               <ListItem key={id} value={formatEuro(perDay)}>
                 <ItemContent icon="building" color="place" title={cityName(id)} />

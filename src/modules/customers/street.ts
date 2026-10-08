@@ -11,7 +11,7 @@ import {
   START_TIME,
   wallet,
 } from '../../core';
-import { activeCity, cityOfSpot } from '../city';
+import { activeCity, cityName, cityOfSpot, isPlayerIn } from '../city';
 import { eventFactor } from '../events';
 import { intimidationFactor } from '../gangs';
 import { allProducts, getProduct, getStock, take } from '../goods';
@@ -152,8 +152,21 @@ export function onCityEventChanged(ctx: Ctx, cityId: string): void {
   for (const spot of getSpots(ctx.state, cityId)) {
     const current = s.nextSpawnAt[spot.id];
     if (current === undefined || !Number.isFinite(current)) continue;
-    s.nextSpawnAt[spot.id] = Math.min(current, ctx.now + spawnInterval(ctx, spot, ctx.now));
+    // Ohne Math.min: Sonst bliebe nach dem Ende eines Events (Nachfrage fällt) der schnellere alte Termin stehen. Der
+    // Abstand ist gedächtnislos (exponentialverteilt), neu würfeln ist also in beide Richtungen richtig.
+    s.nextSpawnAt[spot.id] = ctx.now + spawnInterval(ctx, spot, ctx.now);
   }
+}
+
+/**
+ * Ein gesperrter Spot ist wieder frei (Auftrag 46b, z.B. nach tutorial.skip): Die Laufkundschaft fängt jetzt an, ohne
+ * die Sperrzeit nachzuholen (sonst kämen bis zu MAX_CUSTOMERS_PER_SPOT Kunden mit Ankunft in der Vergangenheit, die
+ * gleich wieder gehen und Ruf kosten).
+ */
+export function onSpotUnlocked(ctx: Ctx, spotId: string): void {
+  const s = ctx.state.modules.customers;
+  const next = s.nextSpawnAt[spotId];
+  if (next !== undefined && next < ctx.now) delete s.nextSpawnAt[spotId];
 }
 
 /**
@@ -308,6 +321,11 @@ export function serve(ctx: Ctx, customerId: number, sellerId: string | null): Co
   if (!customer) return { ok: false, reason: 'Kunde ist weg.' };
   const spot = getSpot(ctx.state, customer.spotId);
   if (!spot) return { ok: false, reason: 'Unbekannter Spot.' };
+  // Selbst verkaufen geht nur in der Stadt, in der du bist (Auftrag 30, wie customers.standAt; auf der Fahrt zwischen
+  // zwei Städten bist du in keiner).
+  if (sellerId === null && !isPlayerIn(ctx.state, spotCity(spot))) {
+    return { ok: false, reason: `Du bist nicht in ${cityName(spotCity(spot))}. Dort verkaufen deine Leute.` };
+  }
   // Ware aus dem Lager, das dem Spot am nächsten liegt.
   const { taken, quality, cut, unitCost } = take(ctx, {
     productId: customer.productId,

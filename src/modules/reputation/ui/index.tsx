@@ -65,8 +65,10 @@ function PlayerReputationHud() {
   const { state } = useGame();
   const ui = useUi();
   const value = getReputation(state);
+  // Stufe aus der gezeigten Zahl, sonst stünde bei 59,6 „60 Bekannt“ unter „ab 60: Gefragt“.
+  const shown = Math.round(value);
   const tiers = reputationTiers();
-  const index = tiers.indexOf(reputationTier(value));
+  const index = tiers.indexOf(reputationTier(shown));
   const tier = tiers[index];
   const below = tiers[index - 1];
   const above = tiers[index + 1];
@@ -83,9 +85,9 @@ function PlayerReputationHud() {
       icon="star"
       color="brand"
       label="Ruf · Reviere"
-      value={`${Math.round(value)} ${tier.name}`}
-      tone={value < 20 ? 'bad' : value < 40 ? 'warn' : undefined}
-      title={`Ruf ${Math.round(value)} von 100: ${tier.name}. ${progress.controlled} von ${progress.total} Veedeln.`}
+      value={`${shown} ${tier.name}`}
+      tone={shown < 20 ? 'bad' : shown < 40 ? 'warn' : undefined}
+      title={`Ruf ${shown} von 100: ${tier.name}. ${progress.controlled} von ${progress.total} Veedeln.`}
       onClick={() => ui.selectTab('territory')}
       detailsAction="Reviere öffnen"
       details={
@@ -93,7 +95,7 @@ function PlayerReputationHud() {
           <div class="rep-flyout__now">
             <span class="hud-label is-brand">Ruf</span>
             <strong>
-              {Math.round(value)} · {tier.name}
+              {shown} · {tier.name}
             </strong>
           </div>
           <p class="rep-flyout__text">{tier.effect}</p>
@@ -154,18 +156,20 @@ function PlayerReputationHud() {
 function ReputationSection() {
   const { state } = useGame();
   const value = getReputation(state);
+  // Stufe aus der gezeigten Zahl (wie im HUD).
+  const shown = Math.round(value);
   const recent = recentReputationChanges(state);
   return (
     <Card
-      title={`Ruf: ${reputationLabel(value)}`}
+      title={`Ruf: ${reputationLabel(shown)}`}
       icon="star"
       color="brand"
       status={value < 25 ? 'bad' : value < 45 ? 'warn' : 'good'}
-      summary={Math.round(value)}
+      summary={shown}
     >
       <List>
-        <ListItem value={`${Math.round(value)} von 100`}>
-          <ItemContent icon="star" color="brand" title={reputationLabel(value)}>
+        <ListItem value={`${shown} von 100`}>
+          <ItemContent icon="star" color="brand" title={reputationLabel(shown)}>
             <ProgressBar value={value / 100} tone={value < 25 ? 'bad' : value < 45 ? 'warn' : 'accent'} label="Ruf" />
           </ItemContent>
         </ListItem>
