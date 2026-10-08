@@ -225,6 +225,11 @@ export const STASH_LOTS_MAX = 6;
 
 // --- Zivi oder Kunde (Auftrag 44, Minispiel 'undercover') -------------------------------------------------------
 
+/**
+ * Kommen Zivis von selbst (Wurf pro Stunde, während du am Spot stehst)? Feedback vom 08.10.2026: viel zu oft, erst
+ * einmal aus. Das Minispiel bleibt spielbar (Test-Spielstand minispiel-undercover, Vorschau ?minispiel=undercover).
+ */
+export const UNDERCOVER_SHIFTS = false;
 /** Ab dieser Heat im Veedel schickt die Polizei öfter Zivilfahnder an den Spot, an dem du selbst stehst. */
 export const UNDERCOVER_HEAT = 20;
 /**

@@ -124,6 +124,7 @@ import {
   TICKERS,
   TIP_OFF_DURATION,
   TIP_OFF_RAID_CHANCE_PER_HOUR,
+  UNDERCOVER_SHIFTS,
   VIOLENCE_HEAT,
 } from './config';
 
@@ -1219,7 +1220,8 @@ function tick(ctx: Ctx): void {
     }
   }
   // Auftrag 44: Zivilfahnder am Spot, an dem du selbst stehst (fester Wurf, verschiebt die Würfel oben nicht).
-  if (tutorialAllows(state, 'police.undercover')) maybeStartUndercover(ctx, (veedelId) => getHeat(ctx.state, veedelId));
+  if (UNDERCOVER_SHIFTS && tutorialAllows(state, 'police.undercover'))
+    maybeStartUndercover(ctx, (veedelId) => getHeat(ctx.state, veedelId));
 }
 
 /** Anlässe, bei denen die Polizei selbst die Gegenseite ist. */

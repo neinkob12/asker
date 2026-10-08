@@ -1,7 +1,7 @@
 // Zivi oder Kunde (Auftrag 44, Teil 5): Auslöser am Spot mit Heat, fester Wurf (keine verschobene Würfelfolge),
 // Folgen (Kontrolle bei Verkauf an einen Zivi, weniger Heat, Ruf), Rechte Hand, timeout (wie bisher), Migration.
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { loadSimulation, type Simulation } from '../../core';
 import { createTestGame, eventsOfType, recordEvents } from '../../core/testing';
 import { store } from '../goods';
@@ -16,6 +16,10 @@ import {
   undercoverScore,
   ziviCount,
 } from './index';
+
+// Die Zivis kommen im Spiel gerade nicht von selbst (UNDERCOVER_SHIFTS, Feedback vom 08.10.2026); hier wird der
+// Auslöser mit eingeschaltetem Schalter geprüft, damit er beim Wiedereinschalten noch stimmt.
+vi.mock('./config', async (importOriginal) => ({ ...(await importOriginal<object>()), UNDERCOVER_SHIFTS: true }));
 
 const SPOT = 'venloer';
 const VEEDEL = 'ehrenfeld';
