@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GameEvent, GameSession, GameState } from '../../core';
 import { registerDialog } from '../registry';
-import { UiRuntime } from '../runtime';
+import { UiRuntime, type UiState } from '../runtime';
 import { bindKeys } from '../shell/keys';
 import { type TourHost, TourRunner } from './controller';
 import type { TourDef } from './types';
@@ -26,6 +26,7 @@ function fakeHost(speed = 2): TourHost & { speedValue: number } {
       host.speedValue = value;
     },
     state: () => ({ time: 0, modules: {} }) as unknown as GameState,
+    ui: () => ({ phone: { open: false, app: null, stack: [] } }) as unknown as UiState,
     onEvent: () => () => undefined,
     onChange: () => () => undefined,
     render: () => undefined,
