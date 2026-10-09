@@ -47,7 +47,7 @@ export const TEST_SAVE_FILES: readonly TestSaveInfo[] = [
     id: 'koeln-anfang',
     phase: 'koeln',
     title: 'Die ersten Tage',
-    text: 'Tag 3: vier Spots, zwei Läufer, ein Lager und Peters Aufträge. Noch kein Veedel, noch kein Leutnant.',
+    text: 'Tag 3: vier Spots, zwei Läufer, ein Lager. Noch kein Veedel, noch kein Leutnant.',
   },
   {
     id: 'koeln-veedel',
